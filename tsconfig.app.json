@@ -1,0 +1,25 @@
+{
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "src/**/*.d.ts"],
+  "compilerOptions": {
+    "composite": true,
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "jsx": "preserve", // 必须设为 preserve
+    "jsxImportSource": "vue", // 必须指定 vue 为来源
+    /* 别名设置：直接使用相对路径 */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    /* 严格模式与优化 */
+    "strict": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "lib": ["ESNext", "DOM"],
+    "skipLibCheck": true
+  }
+}

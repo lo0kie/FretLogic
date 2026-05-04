@@ -1,0 +1,73 @@
+// ==========================================
+// 1. 核心配色 (Brand Colors)
+// ==========================================
+@primary-color: #3b82f6; // 主题蓝 (Tailwind Blue 500)
+@primary-hover: #2563eb; // 深蓝
+@success-color: #22c55e; // 成功绿
+@danger-color: #ef4444; // 危险红
+@warning-color: #f59e0b; // 根音高亮/警告橙
+
+// ==========================================
+// 2. 背景与文本 (Surface & Text)
+// ==========================================
+// 浅色模式
+@bg-light: #f8fafc;
+@text-main: #1e293b;
+@text-sub: #64748b;
+
+// 深色模式 (用于 Mixin 中切换)
+@bg-dark: #0f172a;
+@text-dark-main: #f1f5f9;
+@text-dark-sub: #94a3b8;
+
+// ==========================================
+// 3. 布局与装饰 (Layout & Decor)
+// ==========================================
+@radius-xl: 28px; // 大圆角 (Modal, Card)
+@radius-lg: 16px; // 中圆角 (Toast, Button)
+@fret-color: #cbd5e1; // 指板品丝颜色
+@fret-color-dark: #334155; // 深色模式品丝颜色
+
+// ==========================================
+// 4. 混合器 (Mixins - 工程化核心)
+// ==========================================
+
+// 玻璃拟态效果
+.glass-effect() {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+
+  // 自动适配深色模式
+  :global(.dark) & {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  }
+}
+
+// 文本溢出省略
+.text-ellipsis() {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+// 按钮交互缩放
+.active-press() {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+// 隐藏滚动条 (用于分组列表)
+.no-scrollbar() {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

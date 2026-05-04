@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>吉他和弦实验室 - 音名增强版</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+      :root {
+        --bg-color: #f8fafc;
+        --card-color: #ffffff;
+        --text-color: #0f172a;
+        --fret-color: #64748b;
+      }
+      .dark {
+        --bg-color: #020617;
+        --card-color: #0f172a;
+        --text-color: #f1f5f9;
+        --fret-color: #94a3b8;
+      }
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        transition: background-color 0.4s ease;
+        min-height: 100vh;
+        min-width: 1100px;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+        overflow: auto;
+      }
+      .glass-card {
+        background-color: var(--card-color);
+        border-radius: 28px;
+        border: 1px solid rgba(128, 128, 128, 0.15);
+        box-shadow: 0 15px 30px -10px rgba(0, 0, 0, 0.1);
+      }
+      .btn-base {
+        transition: all 0.2s ease;
+        cursor: pointer;
+        position: relative;
+      }
+      .btn-base[data-tooltip]::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: -35px;
+        left: 50%;
+        transform: translateX(-50%) translateY(5px);
+        background: #1e293b;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 10px;
+        font-weight: bold;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.2s;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+      .dark .btn-base[data-tooltip]::after {
+        background: #f1f5f9;
+        color: #0f172a;
+      }
+      .btn-base:hover::after {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      .modern-toggle-group {
+        display: flex;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.05);
+        padding: 4px;
+        border-radius: 12px;
+        height: 32px;
+        position: relative;
+      }
+      .dark .modern-toggle-group {
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .toggle-item {
+        flex: 1;
+        z-index: 2;
+        font-size: 10px;
+        font-weight: 800;
+        text-align: center;
+        transition: color 0.3s;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .toggle-item.active {
+        color: #2563eb;
+      }
+      .dark .toggle-item.active {
+        color: #60a5fa;
+      }
+      .toggle-slider {
+        position: absolute;
+        top: 4px;
+        height: calc(100% - 8px);
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        transition: all 0.4s ease-in-out;
+        z-index: 1;
+      }
+      .dark .toggle-slider {
+        background: #334155;
+      }
+      .input-minimal {
+        width: 100%;
+        text-align: center;
+        font-weight: 900;
+        background: transparent;
+        border: none;
+        outline: none;
+        font-size: 4rem;
+        color: var(--text-color);
+        transition: transform 0.4s ease;
+        line-height: 1.1;
+        transform: translateY(-10px);
+      }
+      .translate-y-active {
+        transform: translateY(15px);
+      }
+      .fretboard-scaler {
+        transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        transform-origin: center center;
+        position: relative;
+        width: 456px;
+      }
+      .fretboard-scaler.scale-down {
+        transform: scale(0.9);
+      }
+      .fretboard-svg-container {
+        position: relative;
+        width: 456px;
+        touch-action: none;
+        cursor: pointer;
+      }
+      .chord-card {
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        backface-visibility: hidden;
+        transform: translateZ(0);
+      }
+      .chord-name-container {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 12px;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .chord-name-text {
+        font-weight: 900;
+        font-style: italic;
+        font-size: 11px;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block;
+        width: 100%;
+      }
+      .del-btn {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        color: #ef4444;
+        opacity: 0;
+        transition: all 0.2s;
+        z-index: 10;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+      }
+      .chord-card:hover .del-btn {
+        opacity: 0.6;
+      }
+      .del-btn:hover {
+        opacity: 1 !important;
+        background: #fee2e2;
+      }
+      .dark .del-btn:hover {
+        background: #450a0a;
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .toast-enter-active,
+      .toast-leave-active {
+        transition: all 0.3s ease;
+      }
+      .toast-enter-from,
+      .toast-leave-to {
+        transform: translateY(-20px);
+        opacity: 0;
+      }
+      .modal-enter-active,
+      .modal-leave-active {
+        transition: opacity 0.3s ease;
+      }
+      .modal-enter-from,
+      .modal-leave-to {
+        opacity: 0;
+      }
+      .modal-content-enter-active {
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      .modal-content-leave-active {
+        transition: all 0.2s ease-in;
+      }
+      .modal-content-enter-from {
+        transform: scale(0.9) translateY(10px);
+        opacity: 0;
+      }
+      .modal-content-leave-to {
+        transform: scale(0.95);
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" :class="{ 'dark': isDarkMode }" class="w-full flex justify-center">
+      <!-- Toast 容器 -->
+      <div class="fixed top-6 left-1/2 -translate-x-1/2 z-[3000] flex flex-col gap-2 items-center pointer-events-none">
+        <transition-group name="toast">
+          <div
+            v-for="toast in toasts"
+            :key="toast.id"
+            class="px-5 py-2.5 rounded-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold shadow-2xl backdrop-blur-md flex items-center gap-3 text-sm pointer-events-auto"
+          >
+            <span>{{ toast.msg }}</span>
+            <button
+              v-if="toast.canUndo"
+              @click="cancelDelete(toast.targetId, toast.id)"
+              class="text-blue-500 hover:text-blue-400 underline"
+            >
+              撤回
+            </button>
+          </div>
+        </transition-group>
+      </div>
+
+      <!-- Modal 容器 -->
+      <transition name="modal">
+        <div v-if="modal.show" class="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="modal.show = false"></div>
+          <transition name="modal-content" appear>
+            <div class="glass-card w-80 p-6 relative z-10 shadow-2xl border-blue-500/20">
+              <h3 class="text-sm font-black mb-4 opacity-50 uppercase tracking-widest">{{ modal.title }}</h3>
+              <template v-if="modal.type === 'input'">
+                <input
+                  v-model="modal.inputValue"
+                  @keyup.enter="modal.onConfirm"
+                  @keyup.esc="modal.show = false"
+                  ref="modalInputRef"
+                  type="text"
+                  :placeholder="modal.placeholder"
+                  class="w-full bg-slate-100 dark:bg-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-500 transition-all mb-4 text-[var(--text-color)]"
+                />
+              </template>
+              <template v-else-if="modal.type === 'select-group'">
+                <div class="flex flex-col gap-2 mb-6 max-h-48 overflow-y-auto no-scrollbar">
+                  <button
+                    v-for="g in groups"
+                    :key="g.id"
+                    @click="modal.selectedGid = g.id"
+                    :class="['w-full py-3 px-4 rounded-xl font-bold text-xs text-left transition-all', modal.selectedGid === g.id ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 opacity-80']"
+                  >
+                    {{ g.name }}
+                  </button>
+                </div>
+              </template>
+              <p v-else class="text-sm font-bold mb-6 opacity-80 leading-relaxed">{{ modal.desc }}</p>
+              <div class="flex gap-2">
+                <button
+                  @click="modal.show = false"
+                  class="flex-1 py-3 rounded-xl font-bold text-xs bg-slate-100 dark:bg-slate-800 opacity-60"
+                >
+                  取消
+                </button>
+                <button
+                  @click="modal.onConfirm"
+                  :class="['flex-1 py-3 rounded-xl font-bold text-xs text-white shadow-lg', modal.danger ? 'bg-red-500 shadow-red-500/30' : 'bg-blue-600 shadow-blue-500/30']"
+                >
+                  {{ modal.confirmText || '确认' }}
+                </button>
+              </div>
+            </div>
+          </transition>
+        </div>
+      </transition>
+
+      <div class="flex flex-row gap-6 items-start">
+        <!-- 左侧指板 -->
+        <div class="glass-card w-[600px] p-6 flex flex-col items-center h-[780px] relative">
+          <div class="flex flex-col items-center justify-evenly w-full flex-1">
+            <input
+              ref="nameInput"
+              v-model="currentChordName"
+              @keyup.esc="$event.target.blur()"
+              type="text"
+              spellcheck="false"
+              class="input-minimal"
+              :class="{ 'translate-y-active': fretCount === 5 }"
+              placeholder="和弦名称"
+            />
+            <div class="fretboard-scaler" :class="{ 'scale-down': fretCount === 5 }">
+              <div
+                class="fretboard-svg-container"
+                :style="{ height: fretCount === 4 ? '560px' : '680px' }"
+                @pointerdown="onFingerDown"
+                @pointermove="onFingerMove"
+                @pointerup="onFingerUp"
+              >
+                <svg
+                  width="456"
+                  :height="fretCount === 4 ? 560 : 680"
+                  :viewBox="fretCount === 4 ? '0 0 456 560' : '0 0 456 680'"
+                  style="overflow: visible"
+                >
+                  <!-- 弦 -->
+                  <line
+                    v-for="s in 6"
+                    :x1="getStrX(s-1)"
+                    y1="60"
+                    :x2="getStrX(s-1)"
+                    :y2="60 + fretCount * 120"
+                    stroke="var(--fret-color)"
+                    stroke-width="3.5"
+                  />
+                  <!-- 品丝 -->
+                  <line
+                    v-for="f in (fretCount + 1)"
+                    x1="38"
+                    :y1="60 + (f-1)*120"
+                    x2="418"
+                    :y2="60 + (f-1)*120"
+                    stroke="var(--fret-color)"
+                    stroke-width="5.5"
+                  />
+                  <!-- 琴枕 -->
+                  <rect x="37" y="52" width="382" height="10" :fill="isDarkMode ? '#f1f5f9' : '#0f172a'" />
+
+                  <!-- Capo 标记 -->
+                  <text
+                    v-if="capo > 0"
+                    x="20"
+                    y="180"
+                    text-anchor="end"
+                    dominant-baseline="central"
+                    font-size="28"
+                    font-weight="900"
+                    :fill="isDarkMode ? '#fbbf24' : '#d97706'"
+                    style="font-style: italic"
+                  >
+                    {{capo}} fr
+                  </text>
+
+                  <!-- 指型圆点与音名 -->
+                  <template v-for="(fret, sIdx) in selectedFrets">
+                    <g v-if="fret > 0 && fret <= fretCount">
+                      <circle
+                        :cx="getStrX(sIdx)"
+                        :cy="60 + (fret-1)*120 + 60"
+                        r="28"
+                        :fill="checkIfRootNote(sIdx, fret) ? '#f59e0b' : '#3b82f6'"
+                      />
+                      <text
+                        :x="getStrX(sIdx)"
+                        :y="60 + (fret-1)*120 + 68"
+                        text-anchor="middle"
+                        fill="white"
+                        font-size="22"
+                        font-weight="900"
+                      >
+                        {{ getNoteLabel(sIdx, fret) }}
+                      </text>
+                    </g>
+                  </template>
+                </svg>
+
+                <!-- 顶部空弦/静音切换控制 [已修改为永久保持不变的音名显示] -->
+                <div class="absolute top-[-20px] left-0 w-full grid grid-cols-6">
+                  <div v-for="sIdx in 6" :key="'os-'+sIdx" class="h-[60px] flex items-center justify-center">
+                    <div
+                      @click.stop="toggleOpenString(sIdx-1)"
+                      class="w-10 h-10 rounded-full border-2 flex items-center justify-center font-black btn-base text-lg transition-colors"
+                      :class="selectedFrets[sIdx-1] === -1
+                        ? 'border-red-500 text-red-500 bg-red-500/10'
+                        : 'border-blue-500 text-blue-500 '"
+                    >
+                      {{ selectedFrets[sIdx-1] === -1 ? '✕' : getNoteLabel(sIdx-1, 0) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧库 -->
+        <div class="glass-card w-[420px] h-[780px] flex flex-col relative overflow-hidden">
+          <div class="p-6 pb-4 border-b border-slate-100 dark:border-slate-800 z-[100]">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-[14px] font-black opacity-30 tracking-widest uppercase">库管理</h2>
+              <div class="flex gap-2">
+                <button
+                  @click="isPreviewMode = !isPreviewMode"
+                  class="w-8 h-8 rounded-lg btn-base flex items-center justify-center text-xs bg-slate-100 dark:bg-slate-800"
+                  :data-tooltip="isPreviewMode ? '关闭预览' : '开启预览'"
+                >
+                  {{ isPreviewMode ? '👁️' : '🕶️' }}
+                </button>
+                <button
+                  @click="openCreateGroupModal"
+                  class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 btn-base flex items-center justify-center text-xs"
+                  data-tooltip="新建分组"
+                >
+                  📁+
+                </button>
+                <button
+                  @click="handleImportClick"
+                  class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 btn-base flex items-center justify-center text-xs"
+                  data-tooltip="导入"
+                >
+                  📂
+                </button>
+                <button
+                  @click="openExportSelectModal"
+                  class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 btn-base flex items-center justify-center text-xs"
+                  data-tooltip="导出"
+                >
+                  💾
+                </button>
+                <button
+                  @click="isDarkMode = !isDarkMode"
+                  class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 btn-base flex items-center justify-center text-xs"
+                  data-tooltip="主题"
+                >
+                  {{ isDarkMode ? '☀️' : '🌙' }}
+                </button>
+              </div>
+            </div>
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-3 z-20">
+                <span class="text-[10px] font-black opacity-50 w-10">范围</span>
+                <div class="modern-toggle-group flex-1">
+                  <div
+                    class="toggle-slider"
+                    :style="{ left: '4px', width: 'calc(50% - 4px)', transform: fretCount === 4 ? 'translateX(0)' : 'translateX(100%)' }"
+                  ></div>
+                  <div
+                    class="toggle-item btn-base"
+                    :class="{ active: fretCount === 4 }"
+                    @click="fretCount = 4"
+                    data-tooltip="展示4个品位"
+                  >
+                    4品
+                  </div>
+                  <div
+                    class="toggle-item btn-base"
+                    :class="{ active: fretCount === 5 }"
+                    @click="fretCount = 5"
+                    data-tooltip="展示5个品位"
+                  >
+                    5品
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 z-10">
+                <span class="text-[10px] font-black opacity-50 w-10">品位</span>
+                <div class="modern-toggle-group flex-1">
+                  <div
+                    class="toggle-slider"
+                    :style="{ left: '4px', width: 'calc(16.66% - 1.33px)', transform: `translateX(${capo * 100}%)` }"
+                  ></div>
+                  <div
+                    v-for="n in 6"
+                    :key="n-1"
+                    class="toggle-item btn-base"
+                    :class="{ active: capo === (n-1) }"
+                    @click="capo = (n-1)"
+                    :data-tooltip="'设置在第'+(n-1)+'品'"
+                  >
+                    {{ n-1 }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 和弦列表 -->
+          <div class="flex-1 overflow-y-auto no-scrollbar p-6">
+            <div v-if="groups.length === 0" class="h-full flex flex-col items-center justify-center opacity-20 py-20">
+              <span class="text-4xl mb-4">📁</span>
+              <p class="text-xs font-black uppercase tracking-widest text-center">暂无分组<br />点击上方 📁+ 新建</p>
+            </div>
+            <div v-else v-for="(group, idx) in groups" :key="group.id">
+              <div
+                class="flex items-center py-2 px-2 justify-between mb-3 group/title cursor-pointer transition-colors rounded-lg"
+                :class="[group.collapsed ? 'hover:bg-slate-50 dark:hover:bg-slate-800/50' : '']"
+                @click="handleGroupHeaderClick(group.id)"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="text-[10px] transition-transform" :class="{ '-rotate-90': group.collapsed }">▼</span>
+                  <span
+                    class="text-sm font-black uppercase tracking-tighter"
+                    :class="selectedGroupId === group.id && !group.collapsed ? 'text-blue-500' : 'opacity-60'"
+                    >{{ group.name }}</span
+                  >
+                  <span class="text-[9px] px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 opacity-50"
+                    >{{ getGroupChords(group.id).length }}</span
+                  >
+                  <button
+                    @click.stop="openRenameGroupModal(group)"
+                    class="text-[10px] text-blue-400 p-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded"
+                    :class="!group.collapsed ? 'opacity-100' : 'opacity-0 group-hover/title:opacity-100'"
+                  >
+                    ✎
+                  </button>
+                </div>
+                <button
+                  @click.stop="openDeleteGroupModal(group)"
+                  class="text-[10px] text-red-500 font-bold hover:underline"
+                  :class="!group.collapsed ? 'opacity-100' : 'opacity-0 group-hover/title:opacity-100'"
+                >
+                  删除
+                </button>
+              </div>
+
+              <div v-show="!group.collapsed" class="pb-6">
+                <div
+                  v-if="getGroupChords(group.id).length === 0"
+                  class="py-6 border-2 border-dashed border-slate-400 rounded-2xl flex items-center justify-center opacity-30"
+                >
+                  <p class="text-[10px] font-bold uppercase tracking-widest">该分组暂无和弦</p>
+                </div>
+                <div v-else class="grid grid-cols-3 gap-2">
+                  <div
+                    v-for="chord in getGroupChords(group.id)"
+                    :key="chord.id"
+                    @click="handleChordClick(chord)"
+                    @mouseenter="onChordHover(chord)"
+                    @mouseleave="onChordUnhover"
+                    :class="['chord-card h-14 rounded-xl border-2 relative flex items-center justify-center overflow-hidden', editingId === chord.id ? 'border-blue-500 bg-blue-50/50' : 'border-transparent bg-slate-100/50 dark:bg-white/5']"
+                  >
+                    <div @click.stop="startDelete(chord.id)" class="del-btn font-black text-[10px]">✕</div>
+                    <div class="chord-name-container"><span class="chord-name-text">{{ chord.chordName }}</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 操作栏 -->
+          <div
+            class="p-6 bg-slate-50/50 dark:bg-black/20 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-3"
+          >
+            <button
+              @click="saveChord()"
+              class="w-full h-14 rounded-xl bg-blue-600 text-white font-black text-lg shadow-lg shadow-blue-500/20 active:scale-95 transition-transform"
+            >
+              {{ editingId ? '✨ 保存修改' : '💾 保存和弦' }}
+            </button>
+            <button
+              @click="resetEditor()"
+              class="w-full h-14 rounded-xl font-black text-lg border shadow-lg active:scale-95 transition-transform"
+              :class="editingId ? 'bg-amber-500/10 text-amber-600 border-amber-500/20 shadow-amber-500/10' : 'bg-red-500/10 text-red-500 border-red-500/20 shadow-red-500/10'"
+            >
+              {{ editingId ? '🚪 放弃修改' : '🗑️ 清空指板' }}
+            </button>
+          </div>
+          <input type="file" ref="fileInput" class="hidden" accept=".json" @change="processImport" />
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const { createApp, ref, watch, onMounted, nextTick } = Vue;
+      createApp({
+        setup() {
+          const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+          const BASES_MAP = [4, 9, 2, 7, 11, 4]; // 映射 6弦(E)-1弦(E)
+
+          const isDarkMode = ref(localStorage.getItem('CHORD_LAB_DARK') === 'true'),
+            isPreviewMode = ref(localStorage.getItem('CHORD_LAB_PREVIEW') !== 'false');
+          const temp = JSON.parse(localStorage.getItem('CHORD_LAB_TEMP') || '{}');
+          const currentChordName = ref(temp.name || ''),
+            selectedFrets = ref(temp.frets || [-1, -1, -1, -1, -1, -1]),
+            fretCount = ref(temp.fCount || 4),
+            capo = ref(temp.capoVal || 0);
+          const editingId = ref(temp.editId || null),
+            selectedGroupId = ref(temp.groupId || null);
+          const savedChordsList = ref(JSON.parse(localStorage.getItem('CHORD_LAB_LIST_V3') || '[]'));
+          const groups = ref(
+            JSON.parse(
+              localStorage.getItem('CHORD_LAB_GROUPS') || '[{"id":"default","name":"默认分组","collapsed":false}]'
+            )
+          );
+          const modal = ref({
+            show: false,
+            type: 'input',
+            title: '',
+            placeholder: '',
+            inputValue: '',
+            desc: '',
+            confirmText: '确认',
+            danger: false,
+            selectedGid: '',
+            targetImportGid: '',
+            onConfirm: () => {},
+          });
+          const modalInputRef = ref(null),
+            toasts = ref([]),
+            isDraggingFinger = ref(false),
+            lastPos = ref(''),
+            originalState = ref(null),
+            nameInput = ref(null),
+            fileInput = ref(null);
+          let undoTimers = {};
+
+          const showToast = (msg, canUndo = false, targetId = null) => {
+            const id = Date.now();
+            toasts.value.push({ id, msg, canUndo, targetId });
+            if (!canUndo) setTimeout(() => (toasts.value = toasts.value.filter(t => t.id !== id)), 2000);
+            return id;
+          };
+          const openModal = config => {
+            modal.value = { ...modal.value, confirmText: '确认', show: true, ...config };
+            if (config.type === 'input') nextTick(() => modalInputRef.value?.focus());
+          };
+          const getGroupChords = gid => savedChordsList.value.filter(c => c.groupId === gid);
+          const getStrX = i => 38 + i * 76;
+
+          // 音名计算[cite: 6]
+          const getNoteLabel = (s, f) => {
+            if (f === -1) return '✕';
+            const offset = capo.value > 0 ? capo.value - 1 : 0;
+            const noteIndex = (BASES_MAP[s] + f + offset) % 12;
+            return NOTES[noteIndex];
+          };
+
+          const handleGroupHeaderClick = gid => {
+            const target = groups.value.find(g => g.id === gid);
+            if (target) {
+              const willBeExpanded = target.collapsed;
+              if (willBeExpanded) {
+                selectedGroupId.value = gid;
+                groups.value.forEach(g => {
+                  if (g.id !== gid) g.collapsed = true;
+                });
+              }
+              target.collapsed = !willBeExpanded;
+            }
+          };
+
+          const openCreateGroupModal = () => {
+            openModal({
+              type: 'input',
+              title: '新建分组',
+              placeholder: '给新组起个名字...',
+              inputValue: '',
+              onConfirm: () => {
+                const name = modal.value.inputValue.trim();
+                if (!name) return showToast('❌ 名称不能为空');
+                if (groups.value.some(g => g.name === name)) return showToast('⚠️ 名称已存在');
+                const id = 'g_' + Date.now();
+                groups.value.push({ id, name, collapsed: true });
+                handleGroupHeaderClick(id);
+                modal.value.show = false;
+                showToast(`📁 分组已创建`);
+              },
+            });
+          };
+
+          const openRenameGroupModal = group => {
+            openModal({
+              type: 'input',
+              title: '修改组名',
+              placeholder: '输入新名称',
+              inputValue: group.name,
+              onConfirm: () => {
+                const name = modal.value.inputValue.trim();
+                if (!name) return showToast('❌ 名称不能为空');
+                group.name = name;
+                modal.value.show = false;
+                showToast(`✅ 已更新`);
+              },
+            });
+          };
+
+          const openDeleteGroupModal = group => {
+            openModal({
+              type: 'confirm',
+              title: '删除分组',
+              desc: `确定删除 "${group.name}" 吗？`,
+              confirmText: '确认删除',
+              danger: true,
+              onConfirm: () => {
+                savedChordsList.value = savedChordsList.value.filter(c => c.groupId !== group.id);
+                groups.value = groups.value.filter(g => g.id !== group.id);
+                if (selectedGroupId.value === group.id)
+                  selectedGroupId.value = groups.value.length ? groups.value[0].id : null;
+                modal.value.show = false;
+                showToast(`🗑️ 分组已删除`);
+              },
+            });
+          };
+
+          const handleImportClick = () => {
+            if (!groups.value.length) return showToast('❌ 请先创建分组');
+            openModal({
+              type: 'select-group',
+              title: '选择导入至',
+              selectedGid: groups.value[0].id,
+              confirmText: '确定并选择文件',
+              onConfirm: () => {
+                modal.value.targetImportGid = modal.value.selectedGid;
+                modal.value.show = false;
+                fileInput.value.click();
+              },
+            });
+          };
+
+          const processImport = e => {
+            const reader = new FileReader();
+            reader.onload = ev => {
+              try {
+                const imported = JSON.parse(ev.target.result);
+                const chords = imported.chords || (Array.isArray(imported) ? imported : []);
+                if (chords.length) {
+                  const mapped = chords.map(c => ({
+                    ...c,
+                    id: Date.now() + Math.random(),
+                    groupId: modal.value.targetImportGid,
+                  }));
+                  savedChordsList.value = [...mapped, ...savedChordsList.value];
+                  showToast(`📂 成功导入 ${chords.length} 个和弦`);
+                }
+              } catch (e) {
+                showToast('❌ 格式错误');
+              }
+            };
+            reader.readAsText(e.target.files[0]);
+            e.target.value = '';
+          };
+
+          const openExportSelectModal = () => {
+            if (!groups.value.length) return showToast('❌ 暂无可导出的分组');
+            openModal({
+              type: 'select-group',
+              title: '选择要导出的分组',
+              selectedGid: selectedGroupId.value || groups.value[0].id,
+              confirmText: '确认导出',
+              onConfirm: () => {
+                const targetGid = modal.value.selectedGid;
+                const targetGroup = groups.value.find(g => g.id === targetGid);
+                const chordsToExport = getGroupChords(targetGid);
+                if (chordsToExport.length === 0) return showToast('⚠️ 该分组下没有和弦');
+                const blob = new Blob([JSON.stringify({ chords: chordsToExport, groups: [targetGroup] }, null, 2)], {
+                  type: 'application/json',
+                });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `${targetGroup.name}_${Date.now()}.json`;
+                link.click();
+                modal.value.show = false;
+                showToast(`💾 "${targetGroup.name}" 已导出`);
+              },
+            });
+          };
+
+          const saveChord = () => {
+            if (!selectedGroupId.value) return showToast('❌ 请先选择展开的分组');
+            const name = currentChordName.value.trim() || '未命名';
+            const payload = {
+              id: editingId.value || Date.now(),
+              chordName: name,
+              selectedFrets: [...selectedFrets.value],
+              fretCount: fretCount.value,
+              capo: capo.value,
+              groupId: selectedGroupId.value,
+            };
+            if (editingId.value) {
+              const idx = savedChordsList.value.findIndex(c => c.id === editingId.value);
+              if (idx !== -1) savedChordsList.value[idx] = payload;
+              showToast(`✨ 修改成功`);
+            } else {
+              savedChordsList.value.unshift(payload);
+              showToast(`💾 已保存`);
+            }
+            resetEditor();
+          };
+
+          const resetEditor = () => {
+            editingId.value = null;
+            selectedFrets.value = [-1, -1, -1, -1, -1, -1];
+            currentChordName.value = '';
+            capo.value = 0;
+            fretCount.value = 4;
+          };
+
+          const handleChordClick = c => {
+            editingId.value = c.id;
+            currentChordName.value = c.chordName === '未命名' ? '' : c.chordName;
+            selectedFrets.value = [...c.selectedFrets];
+            fretCount.value = c.fretCount || 4;
+            capo.value = c.capo || 0;
+            selectedGroupId.value = c.groupId;
+          };
+
+          const onChordHover = c => {
+            if (!isPreviewMode.value) return;
+            if (!originalState.value)
+              originalState.value = {
+                frets: [...selectedFrets.value],
+                name: currentChordName.value,
+                fCount: fretCount.value,
+                capoVal: capo.value,
+              };
+            selectedFrets.value = [...c.selectedFrets];
+            currentChordName.value = c.chordName === '未命名' ? '' : c.chordName;
+            fretCount.value = c.fretCount || 4;
+            capo.value = c.capo || 0;
+          };
+
+          const onChordUnhover = () => {
+            if (originalState.value) {
+              selectedFrets.value = [...originalState.value.frets];
+              currentChordName.value = originalState.value.name;
+              fretCount.value = originalState.value.fCount;
+              capo.value = originalState.value.capoVal;
+              originalState.value = null;
+            }
+          };
+
+          const startDelete = id => {
+            const chord = savedChordsList.value.find(c => c.id === id);
+            const idx = savedChordsList.value.indexOf(chord);
+            savedChordsList.value = savedChordsList.value.filter(c => c.id !== id);
+            const tId = showToast(`🗑️ 已删除 "${chord.chordName}"`, true, id);
+            undoTimers[id] = {
+              timeout: setTimeout(() => (toasts.value = toasts.value.filter(t => t.id !== tId)), 3000),
+              chord,
+              index: idx,
+            };
+          };
+
+          const cancelDelete = (targetId, toastId) => {
+            const task = undoTimers[targetId];
+            if (task) {
+              clearTimeout(task.timeout);
+              savedChordsList.value.splice(task.index, 0, task.chord);
+              toasts.value = toasts.value.filter(t => t.id !== toastId);
+              delete undoTimers[targetId];
+            }
+          };
+
+          // 指板交互
+          const onFingerDown = e => {
+            isDraggingFinger.value = true;
+            const board = document.querySelector('.fretboard-svg-container').getBoundingClientRect();
+            const scale = fretCount.value === 5 ? 0.85 : 1.0;
+            const x = (e.clientX - board.left) / scale,
+              y = (e.clientY - board.top) / scale;
+            const sIdx = Math.round((x - 38) / 76);
+            if (sIdx >= 0 && sIdx <= 5) {
+              let fIdx = y > 60 ? Math.floor((y - 60) / 120) + 1 : 0;
+              if (fIdx >= 1 && fIdx <= fretCount.value) {
+                selectedFrets.value[sIdx] = selectedFrets.value[sIdx] === fIdx ? 0 : fIdx;
+                lastPos.value = `${sIdx}-${fIdx}`;
+              }
+            }
+          };
+
+          const onFingerMove = e => {
+            if (!isDraggingFinger.value) return;
+            const board = document.querySelector('.fretboard-svg-container').getBoundingClientRect();
+            const scale = fretCount.value === 5 ? 0.85 : 1.0;
+            const x = (e.clientX - board.left) / scale,
+              y = (e.clientY - board.top) / scale;
+            const sIdx = Math.round((x - 38) / 76);
+            if (sIdx >= 0 && sIdx <= 5) {
+              let fIdx = y > 60 ? Math.floor((y - 60) / 120) + 1 : 0;
+              if (fIdx >= 1 && fIdx <= fretCount.value && lastPos.value !== `${sIdx}-${fIdx}`) {
+                selectedFrets.value[sIdx] = selectedFrets.value[sIdx] === fIdx ? 0 : fIdx;
+                lastPos.value = `${sIdx}-${fIdx}`;
+              }
+            }
+          };
+
+          const toggleOpenString = i => {
+            selectedFrets.value[i] = selectedFrets.value[i] === 0 ? -1 : 0;
+          };
+
+          const checkIfRootNote = (s, f) => {
+            const rm = currentChordName.value.match(/^[A-G][#b]?/);
+            return rm && getNoteLabel(s, f).toUpperCase() === rm[0].toUpperCase();
+          };
+
+          const persistTemp = () => {
+            localStorage.setItem(
+              'CHORD_LAB_TEMP',
+              JSON.stringify({
+                name: currentChordName.value,
+                frets: selectedFrets.value,
+                fCount: fretCount.value,
+                capoVal: capo.value,
+                editId: editingId.value,
+                groupId: selectedGroupId.value,
+              })
+            );
+          };
+          watch([currentChordName, selectedFrets, fretCount, capo, editingId, selectedGroupId], persistTemp, {
+            deep: true,
+          });
+          watch(isDarkMode, v => {
+            document.body.className = v ? 'dark' : '';
+            localStorage.setItem('CHORD_LAB_DARK', v);
+          });
+          watch(
+            savedChordsList,
+            () => localStorage.setItem('CHORD_LAB_LIST_V3', JSON.stringify(savedChordsList.value)),
+            { deep: true }
+          );
+          watch(groups, () => localStorage.setItem('CHORD_LAB_GROUPS', JSON.stringify(groups.value)), { deep: true });
+
+          onMounted(() => {
+            document.body.className = isDarkMode.value ? 'dark' : '';
+            if (!selectedGroupId.value && groups.value.length > 0) selectedGroupId.value = groups.value[0].id;
+          });
+
+          return {
+            nameInput,
+            fileInput,
+            currentChordName,
+            selectedFrets,
+            isDarkMode,
+            isPreviewMode,
+            savedChordsList,
+            editingId,
+            toasts,
+            fretCount,
+            capo,
+            groups,
+            selectedGroupId,
+            modal,
+            modalInputRef,
+            getGroupChords,
+            getStrX,
+            getNoteLabel,
+            toggleOpenString,
+            openCreateGroupModal,
+            handleGroupHeaderClick,
+            openRenameGroupModal,
+            openDeleteGroupModal,
+            handleImportClick,
+            processImport,
+            saveChord,
+            resetEditor,
+            handleChordClick,
+            onChordHover,
+            onChordUnhover,
+            startDelete,
+            cancelDelete,
+            openExportSelectModal,
+            onFingerDown,
+            onFingerMove,
+            onFingerUp: () => (isDraggingFinger.value = false),
+            checkIfRootNote,
+          };
+        },
+      }).mount('#app');
+    </script>
+  </body>
+</html>
