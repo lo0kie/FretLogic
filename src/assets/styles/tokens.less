@@ -1,0 +1,57 @@
+// ==========================================
+// CHORD LAB 设计系统变量 (Design Tokens)
+// ==========================================
+
+:root {
+  // --- 基础背景与边框 ---
+  --bg-main: #f1f5f9;
+  --bg-panel: #ffffff;
+  --border-color: rgba(15, 23, 42, 0.06);
+  --control-border: rgba(15, 23, 42, 0.1);
+
+  // --- 🌟 核心修复点 1：在这里定义浅色模式下的物理琴弦与品丝颜色 ---
+  --fret-color: #cbd5e1;
+
+  // --- 字体颜色规范 ---
+  --text-title: #0f172a; // 主标题（如 CHORD LAB、和弦输入框）
+  --text-subtitle: #475569; // 次标题 / 标签（如 指板配置、显示范围）
+  --text-body: #1e293b; // 正文 / 列表文字
+
+  // --- 核心强调色规范 ---
+  --brand-primary: #2563eb; // 强调色（如 激活蓝、保存按钮）
+  --brand-secondary: #f59e0b; // 次强调色（如 黄金根音高亮环）
+  --brand-danger: #ef4444; // 危险色（如 删除、静音✕）
+}
+
+.dark {
+  // --- 暗色模式深层重写 ---
+  --bg-main: #090d16;
+  --bg-panel: #111827;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --control-border: rgba(255, 255, 255, 0.12);
+
+  // --- 🌟 核心修复点 2：在这里定义深色模式下的物理琴弦与品丝颜色 ---
+  --fret-color: #475569;
+
+  --text-title: #ffffff; // 暗色下主标题全白
+  --text-subtitle: #94a3b8; // 暗色下副标题呈清爽灰白
+  --text-body: #e2e8f0;
+
+  --brand-primary: #3b82f6; // 提升暗色下的蓝色高亮对比度
+  --brand-secondary: #f59e0b;
+  --brand-danger: #f87171;
+}
+
+// ==========================================
+// 导出给 Less 内部嵌套使用的语义化变量
+// ==========================================
+@text-title: var(--text-title);
+@text-subtitle: var(--text-subtitle);
+@text-body: var(--text-body);
+
+@brand-primary: var(--brand-primary);
+@brand-secondary: var(--brand-secondary);
+@brand-danger: var(--brand-danger);
+
+// --- 🌟 核心修复点 3：通过原生的 CSS 变量映射，确保全局 Less 动态响应线色 ---
+@fret-color: var(--fret-color);
