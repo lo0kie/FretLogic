@@ -8,6 +8,9 @@
       type="text"
       spellcheck="false"
       class="input-chord-name"
+      :style="{
+        color: !chordLabStore.currentChordName ? (chordLabStore.isDarkMode ? '#475569' : '#cbd5e1') : '',
+      }"
       placeholder="CHORD"
     />
   </div>
@@ -31,7 +34,10 @@ const chordLabStore = useChordLabStore();
   outline: none;
   font-size: 3.5rem;
   letter-spacing: -0.04em;
-  color: @text-title; // 🌟 修复：用标准主色取代 --text-main
+
+  // 有字时，正常走你的 Less 主题变量
+  color: @text-title;
+
   caret-color: @brand-primary;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   text-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
@@ -50,6 +56,7 @@ const chordLabStore = useChordLabStore();
 
 .dark {
   .input-chord-name {
+    color: #f8fafc;
     text-shadow: 0 0 20px rgba(37, 99, 235, 0.2);
     &::placeholder {
       color: #475569;
