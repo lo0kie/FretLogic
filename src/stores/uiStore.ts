@@ -122,7 +122,7 @@ export const useUiStore = defineStore('ui', () => {
 
   /**
    * 🌟 满血版核心联动 Action：捕获指板并写入剪切板（带 Toast 提示）
-   * @param selector 目标指板 DOM 的 CSS 选择器（例如 '#fretboard-capture-area'）
+   * @param selector 目标指板 DOM 的 CSS 选择器（例如 '#fretBoard-capture-area'）
    */
   const copyFretBoardToClipboard = async (selector: string) => {
     const el = document.querySelector(selector) as HTMLElement;
