@@ -1,0 +1,34 @@
+@config "../../../tailwind.config.js";
+
+// 🌟 引入刚写好的全局视觉总控中心
+@import './tokens.less';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  font-size: 20.24px;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-body); // 使用我们的正文变量
+  min-width: 1480px;
+  margin: 0;
+  overflow-y: hidden;
+  overflow-x: auto;
+  user-select: none;
+
+  [v-cloak] {
+    display: none !important;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+}
