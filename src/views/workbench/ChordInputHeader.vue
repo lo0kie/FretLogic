@@ -1,7 +1,7 @@
 <template>
   <div
     class="w-full text-center transition-transform duration-300"
-    :style="{ transform: `translateY(${['0', '10%', '20%'][chordLabStore.fretCount - 3]})` }"
+    :style="{ transform: `translateY(${['3%', '5%', '9%'][chordLabStore.fretCount - 3]})` }"
   >
     <input
       v-model="chordLabStore.currentChordName"
@@ -29,12 +29,10 @@ const chordLabStore = useChordLabStore();
   background: transparent;
   border: none;
   outline: none;
-  font-size: 3.75rem;
+  font-size: 3.5rem;
   letter-spacing: -0.04em;
   color: @text-title; // 🌟 修复：用标准主色取代 --text-main
-  line-height: 1.1;
   caret-color: @brand-primary;
-  padding-bottom: 4px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   text-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
 

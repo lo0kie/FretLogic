@@ -3,7 +3,7 @@
     class="p-6 h-[76px] border-b border-slate-100 dark:border-slate-800 flex items-center justify-between min-w-[335px] relative"
   >
     <div>
-      <h1 class="text-lg font-black tracking-tight uppercase text-title">CHORD LAB</h1>
+      <h1 class="text-lg font-black tracking-tight uppercase text-title">FretLogic</h1>
     </div>
 
     <div class="relative flex items-center justify-center">

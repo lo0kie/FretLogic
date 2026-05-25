@@ -1,70 +1,70 @@
 <template>
   <div
-    ref="fretboardRef"
-    class="fretboard-container relative touch-action-none cursor-pointer"
-    :style="{ width: '456px', height: 60 + chordLabStore.fretCount * 120 + 'px' }"
+    ref="fretBoardRef"
+    class="fretBoard-container relative touch-action-none flex flex-col items-center select-none"
+    :style="{
+      width: '456px',
+      height: 80 + chordLabStore.fretCount * 120 + 20 + 'px',
+      transform: `scale(${1 - (chordLabStore.fretCount - 3) * 0.06})`,
+      transformOrigin: 'top center',
+    }"
   >
-    <div
-      class="absolute left-0 right-0 h-[60px] z-50 pointer-events-none flex items-center"
-      :style="{
-        transform: `scale(${1 - (chordLabStore.fretCount - 3) * 0.05})`,
-        top: `${-20 + (chordLabStore.fretCount - 3) * 15}px`,
-      }"
-    >
+    <div class="w-full h-[80px] relative pointer-events-none flex items-end justify-end">
       <template v-for="(item, sIdx) in chordLabStore.openStringsUIState" :key="'os-' + sIdx">
         <button
-          v-show="[-1, 0].includes(item.fretVal)"
           @click.stop="chordLabStore.toggleOpenString(sIdx)"
-          class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[16px] pointer-events-auto shadow-sm active:scale-90 transition-transform duration-100"
+          class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[16px] pointer-events-auto shadow-sm active:scale-90 transition-transform duration-100 open-string-btn"
+          :class="[item.type, { 'opacity-0': ![-1, 0].includes(item.fretVal) }]"
           :style="{
             left: `calc(${getStrX(sIdx)}px - 20px)`,
-            borderColor: item.style.border,
-            color: item.style.text,
-            backgroundColor: item.style.bg,
+            top: '10px',
           }"
         >
-          {{ item.fretVal === -1 ? '✕' : item.noteLabel }}
+          {{ item.fretVal === -1 ? '✕' : ['E', 'A', 'D', 'G', 'B', 'E'][sIdx] }}
         </button>
       </template>
     </div>
 
     <svg
       width="456"
-      :height="60 + chordLabStore.fretCount * 120"
-      :viewBox="`0 0 456 ${60 + chordLabStore.fretCount * 120}`"
+      :height="chordLabStore.fretCount * 120 + 20"
+      :viewBox="`0 0 456 ${chordLabStore.fretCount * 120 + 20}`"
       style="overflow: visible"
-      :style="{ transform: `scale(${1 - (chordLabStore.fretCount - 3) * 0.05})` }"
+      class="w-full"
     >
       <line
         v-for="s in 6"
         :key="'string-' + s"
         :x1="getStrX(s - 1)"
-        y1="60"
+        y1="0"
         :x2="getStrX(s - 1)"
-        :y2="60 + chordLabStore.fretCount * 120"
-        stroke="var(--fret-color)"
-        stroke-width="3"
+        :y2="chordLabStore.fretCount * 120"
+        :stroke="chordLabStore.isDarkMode ? '#475569' : '#94a3b8'"
+        :stroke-width="2 + (6 - s) * 0.4"
       />
+
       <line
         v-for="f in chordLabStore.fretCount + 1"
         :key="'fret-line-' + f"
         x1="45"
-        :y1="60 + (f - 1) * 120"
+        :y1="(f - 1) * 120"
         x2="425"
-        :y2="60 + (f - 1) * 120"
-        stroke="var(--fret-color)"
+        :y2="(f - 1) * 120"
+        :stroke="chordLabStore.isDarkMode ? '#334155' : '#cbd5e1'"
         stroke-width="4"
       />
-      <rect x="44" y="54" width="382" height="8" :fill="chordLabStore.isDarkMode ? '#f8fafc' : '#0f172a'" />
+
+      <rect x="43" y="-6" width="384" height="8" :fill="chordLabStore.isDarkMode ? '#f1f5f9' : '#475569'" />
 
       <template v-for="f in chordLabStore.fretCount + 1" :key="'fret-text-' + f">
         <text
           x="18"
-          :y="60 + (f - 1) * 120"
+          :y="(f - 1) * 120"
           text-anchor="middle"
-          dominant-baseline="central"
-          font-size="24"
+          dy="0.36em"
+          font-size="20"
           font-weight="900"
+          :fill="chordLabStore.isDarkMode ? '#64748b' : '#94a3b8'"
           class="fret-number-text"
           v-if="f > 1 && f <= chordLabStore.fretCount"
         >
@@ -73,25 +73,23 @@
       </template>
 
       <template v-for="(fret, sIdx) in chordLabStore.selectedFrets" :key="'finger-' + sIdx">
-        <g v-if="fret > 0 && fret <= chordLabStore.fretCount">
+        <g v-if="fret > 0 && fret <= chordLabStore.fretCount" class="cursor-pointer">
           <circle
             :cx="getStrX(sIdx)"
-            :cy="60 + (fret - 1) * 120 + 60"
-            r="26"
-            :fill="
-              isRootNote(sIdx, fret, chordLabStore.capo, chordLabStore.currentChordName)
-                ? 'var(--brand-secondary)'
-                : 'var(--brand-primary)'
-            "
-            class="pointer-dot"
+            :cy="(fret - 1) * 120 + 60"
+            r="28"
+            :fill="isRootNote(sIdx, fret, chordLabStore.capo, chordLabStore.currentChordName) ? '#f59e0b' : '#2563eb'"
+            style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))"
           />
           <text
             :x="getStrX(sIdx)"
-            :y="60 + (fret - 1) * 120 + 67"
+            :y="(fret - 1) * 120 + 60"
             text-anchor="middle"
+            dy="0.36em"
             fill="white"
-            font-size="18"
+            font-size="20"
             font-weight="700"
+            class="fret-note-text"
           >
             {{ calcNoteLabel(sIdx, fret, chordLabStore.capo) }}
           </text>
@@ -103,23 +101,36 @@
 
 <script setup lang="ts">
 import { useChordLabStore } from '@/stores/chordLabStore';
+import { calcNoteLabel, isRootNote } from '@/utils/musicTheory';
 import { useEventListener } from '@vueuse/core';
 import { onMounted, ref } from 'vue';
-// 🌟 核心增补：按需导入纯乐理逻辑工具函数
-import { calcNoteLabel, isRootNote } from '@/utils/musicTheory';
 
 const chordLabStore = useChordLabStore();
-const fretboardRef = ref<HTMLDivElement | null>(null);
+const fretBoardRef = ref<HTMLDivElement | null>(null);
 
 const getStrX = (i: number) => 45 + i * 76;
 
 const handleFingerClickLogic = (clientX: number, clientY: number) => {
-  if (!fretboardRef.value) return;
-  const board = fretboardRef.value.getBoundingClientRect();
-  const sIdx = Math.round((clientX - board.left - 45) / 76);
-  const fIdx = clientY - board.top > 60 ? Math.floor((clientY - board.top - 60) / 120) + 1 : 0;
+  if (!fretBoardRef.value) return;
+  const board = fretBoardRef.value.getBoundingClientRect();
 
-  if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount && chordLabStore.lastPos !== `${sIdx}-${fIdx}`) {
+  const scaleX = board.width / 456;
+  const scaleY = board.height / (80 + chordLabStore.fretCount * 120 + 20);
+
+  const canvasX = (clientX - board.left) / scaleX;
+  const canvasY = (clientY - board.top) / scaleY;
+
+  const sIdx = Math.round((canvasX - 45) / 76);
+  const fretAreaY = canvasY - 80;
+  const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / 120) + 1 : 0;
+
+  if (
+    sIdx >= 0 &&
+    sIdx <= 5 &&
+    fIdx >= 1 &&
+    fIdx <= chordLabStore.fretCount &&
+    chordLabStore.lastPos !== `${sIdx}-${fIdx}`
+  ) {
     chordLabStore.selectedFrets[sIdx] = chordLabStore.selectedFrets[sIdx] === fIdx ? 0 : fIdx;
     chordLabStore.lastPos = `${sIdx}-${fIdx}`;
   }
@@ -141,8 +152,8 @@ const handlePointerUp = () => {
 };
 
 onMounted(() => {
-  if (fretboardRef.value) {
-    useEventListener(fretboardRef, 'pointerdown', handlePointerDown);
+  if (fretBoardRef.value) {
+    useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
     useEventListener(window, 'pointermove', handlePointerMove);
     useEventListener(window, 'pointerup', handlePointerUp);
   }
@@ -150,12 +161,64 @@ onMounted(() => {
 </script>
 
 <style scoped lang="less">
-.fretboard-container {
-  .fret-number-text {
-    @apply fill-slate-400 dark:fill-slate-500;
+.fretBoard-container {
+  .fret-number-text,
+  .fret-note-text {
+    font-family:
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
   }
-  .pointer-dot {
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.12));
+
+  // 🌟 顶部的独立空弦按钮样式流（浅色模式）
+  .open-string-btn {
+    border-color: #cbd5e1;
+    color: #334155;
+    background-color: #ffffff;
+
+    &.muted {
+      border-color: rgba(239, 68, 68, 0.3) !important;
+      color: #ef4444 !important;
+      background-color: rgba(239, 68, 68, 0.08) !important;
+    }
+    &.open {
+      border-color: #2563eb50 !important;
+      color: #2563eb !important;
+      background-color: rgba(37, 99, 235, 0.08) !important;
+    }
+    &.root {
+      border-color: #f59e0b50 !important;
+      color: #f59e0b !important;
+      background-color: rgba(245, 158, 11, 0.08) !important;
+    }
+  }
+}
+
+// 🌟 顶部的独立空弦按钮样式流（深色模式）
+.dark {
+  .fretBoard-container {
+    .open-string-btn {
+      border-color: #475569;
+      color: #f8fafc;
+      background-color: #1e293b;
+
+      &.muted {
+        border-color: rgba(239, 68, 68, 0.4) !important;
+        color: #f87171 !important;
+        background-color: rgba(239, 68, 68, 0.15) !important;
+      }
+      &.open {
+        border-color: #3b82f6 !important;
+        color: #3b82f6 !important;
+        background-color: rgba(59, 130, 246, 0.15) !important;
+      }
+      &.root {
+        border-color: #fbbf24 !important;
+        color: #fbbf24 !important;
+        background-color: rgba(251, 191, 36, 0.15) !important;
+      }
+    }
   }
 }
 </style>

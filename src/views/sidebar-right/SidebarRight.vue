@@ -4,14 +4,12 @@
     :style="{
       width: uiStore.isRightOpen ? '335px' : '0px',
       opacity: uiStore.isRightOpen ? 1 : 0,
-      padding: uiStore.isRightOpen ? '24px' : '0px',
+      // 🌟 核心修正：移除外壳的 padding，由内部组件平铺控制，防止底部 Footer 被挤压
       margin: uiStore.isRightOpen ? '12px' : '12px 0',
     }"
   >
-    <div class="flex flex-col gap-4 min-w-[287px]">
-      <div
-        class="h-[76px] border-b border-slate-100 dark:border-slate-800 flex items-center min-w-[287px] -mx-6 px-6 -mt-6 mb-2"
-      >
+    <div class="flex flex-col flex-1 p-6 gap-4 min-w-[335px]">
+      <div class="h-[76px] border-b border-slate-100 dark:border-slate-800 flex items-center -mx-6 px-6 -mt-6 mb-2">
         <h2 class="panel-main-title text-sm font-black tracking-widest uppercase text-title">指板配置</h2>
       </div>
 
@@ -20,17 +18,7 @@
       <RightHelper />
     </div>
 
-    <div class="flex flex-col gap-3 min-w-[287px]">
-      <div class="grid grid-cols-2 gap-2">
-        <ActionButton @click="uiStore.triggerSaveChord()" primary>
-          {{ chordLabStore.editingId ? '更新修改' : '保存和弦' }}
-        </ActionButton>
-
-        <ActionButton @click="chordLabStore.resetEditor()" :danger="!chordLabStore.editingId" :warning="!!chordLabStore.editingId">
-          {{ chordLabStore.editingId ? '放弃本次修改' : '清空指板' }}
-        </ActionButton>
-      </div>
-    </div>
+    <RightPanelFooter />
   </div>
 
   <button
@@ -43,15 +31,13 @@
 </template>
 
 <script setup lang="ts">
-import ActionButton from '@/components/ActionButton.vue';
-import { useChordLabStore } from '@/stores/chordLabStore';
+import { useUiStore } from '@/stores/uiStore';
 import RightCapoWheel from './RightCapoWheel.vue';
 import RightFretSlider from './RightFretSlider.vue';
 import RightHelper from './RightHelper.vue';
-import { useUiStore } from '@/stores/uiStore';
+import RightPanelFooter from './RightPanelFooter.vue';
 
 const uiStore = useUiStore();
-const chordLabStore = useChordLabStore();
 </script>
 
 <style scoped lang="less">

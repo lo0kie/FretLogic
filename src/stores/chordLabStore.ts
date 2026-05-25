@@ -58,14 +58,15 @@ export const useChordLabStore = defineStore('chordLab', () => {
       const noteLabel = calcNoteLabel(sIdx, fretVal, capo.value);
       const isRoot = currentRoot && calcNoteLabel(sIdx, 0, capo.value).toUpperCase() === currentRoot;
 
-      let style = { border: 'var(--border-color)', text: 'var(--text-body)', bg: 'var(--bg-panel)' };
-      if (fretVal === -1) style = { border: '#ef4444', text: '#ef4444', bg: 'rgba(239,68,68,0.1)' };
-      else if (fretVal === 0) {
-        style = isRoot
-          ? { border: 'var(--brand-secondary)', text: 'var(--brand-secondary)', bg: 'rgba(245,158,11,0.1)' }
-          : { border: 'var(--brand-primary)', text: 'var(--brand-primary)', bg: 'rgba(37,99,235,0.1)' };
+      // 🌟 架构解耦修正：只对外输出纯粹的乐理状态，彻底移除 var() 样式污染
+      let type: 'muted' | 'root' | 'open' | 'normal' = 'normal';
+      if (fretVal === -1) {
+        type = 'muted';
+      } else if (fretVal === 0) {
+        type = isRoot ? 'root' : 'open';
       }
-      return { fretVal, noteLabel, style };
+
+      return { fretVal, noteLabel, type };
     });
   });
 

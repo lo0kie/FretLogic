@@ -27,13 +27,13 @@
             ▼
           </span>
           <span
-            class="text-xs font-black tracking-wide uppercase group-name-text"
+            class="text-sm tracking-widest font-black uppercase group-name-text"
             :class="{ 'is-active': chordLabStore.selectedGroupId === group.id && !group.collapsed }"
           >
             {{ group.name }}
           </span>
           <span
-            class="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 opacity-60 border border-slate-200 dark:border-slate-700 text-body"
+            class="text-[12px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 opacity-60 border border-slate-200 dark:border-slate-700 text-body"
           >
             {{ chordLabStore.getGroupChords(group.id).length }}
           </span>
@@ -68,7 +68,7 @@
             v-for="chord in chordLabStore.getGroupChords(group.id)"
             :key="chord.id"
             @click="chordLabStore.handleChordClick(chord)"
-            class="chord-thumb-card h-11 rounded-xl relative flex items-center px-3 justify-between overflow-hidden border transition-all duration-200"
+            class="chord-thumb-card hover:-translate-y-0.5 h-11 rounded-xl relative cursor-pointer flex items-center px-3 justify-between overflow-hidden border transition-all duration-200"
             :class="
               chordLabStore.editingId == chord.id
                 ? 'is-editing bg-blue-50/30 dark:bg-blue-950/40 shadow-sm'

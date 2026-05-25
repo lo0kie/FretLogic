@@ -1,27 +1,31 @@
 {
-  "name": "chord-lab",
+  "name": "FretLogic",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist -r git@github.com:lookiiie/FretLogic.git"
   },
   "dependencies": {
     "@vueuse/core": "^10.9.0",
     "@vueuse/shared": "^10.9.0",
+    "html-to-image": "^1.11.13",
     "pinia": "^2.1.7",
     "vue": "^3.4.21"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
     "autoprefixer": "^10.4.19",
+    "gh-pages": "^6.3.0",
+    "less": "^4.2.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.4.2",
     "vite": "^5.2.0",
-    "vue-tsc": "^2.0.6",
-    "less": "^4.2.0"
+    "vue-tsc": "^2.0.6"
   }
 }

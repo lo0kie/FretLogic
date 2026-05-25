@@ -1,12 +1,12 @@
 <template>
-  <div class="flex-1 h-full flex items-center justify-center p-8 transition-all">
+  <div id="fretBoard-capture-area" class="flex-1 h-full flex items-center justify-center p-8 transition-all">
     <div
       class="workbench-card w-[520px] flex flex-col justify-evenly items-center relative shrink-0"
       :style="{ height: 230 + [350, 440, 510][chordLabStore.fretCount - 3] + 'px' }"
     >
       <ChordInputHeader />
 
-      <FretboardCanvas />
+      <FretBoardCanvas />
     </div>
   </div>
 </template>
@@ -14,7 +14,7 @@
 <script setup lang="ts">
 import { useChordLabStore } from '@/stores/chordLabStore';
 import ChordInputHeader from './ChordInputHeader.vue';
-import FretboardCanvas from './FretboardCanvas.vue';
+import FretBoardCanvas from './FretBoardCanvas.vue';
 
 const chordLabStore = useChordLabStore();
 </script>

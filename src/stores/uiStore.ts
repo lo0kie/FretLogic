@@ -1,4 +1,5 @@
 import { useRefHistory, useToggle } from '@vueuse/core';
+import * as htmlToImage from 'html-to-image'; // 🌟 引入现代化转换器
 import { defineStore } from 'pinia';
 import { ref, toRef } from 'vue';
 import { useChordLabStore, type Chord, type Group } from './chordLabStore';
@@ -19,6 +20,7 @@ export const useUiStore = defineStore('ui', () => {
   // 1. 左右侧边栏框架开合控制
   const isLeftOpen = ref(true);
   const isRightOpen = ref(true);
+  const isCopying = ref(false);
 
   // 2. Capo 独立浮层面板开关
   const isCapoOpen = ref(false);
@@ -42,7 +44,7 @@ export const useUiStore = defineStore('ui', () => {
   const modalInput = ref('');
   const activeTargetGroup = ref<Group | null>(null);
 
-  // 🌟 5. 跨组件拖拽排序临时交互变量 (补齐核心)
+  // 5. 跨组件拖拽排序临时交互变量
   const draggedGroupIdx = ref<number | null>(null);
 
   const openModal = (
@@ -118,10 +120,49 @@ export const useUiStore = defineStore('ui', () => {
     showToast(`🗑️ 已删除 "${chord.chordName}"`, true);
   };
 
+  /**
+   * 🌟 满血版核心联动 Action：捕获指板并写入剪切板（带 Toast 提示）
+   * @param selector 目标指板 DOM 的 CSS 选择器（例如 '#fretboard-capture-area'）
+   */
+  const copyFretBoardToClipboard = async (selector: string) => {
+    const el = document.querySelector(selector) as HTMLElement;
+    if (!el) return showToast('❌ 未找到指板画布区域');
+    if (isCopying.value) return;
+
+    isCopying.value = true;
+    showToast('📸 正在生成指板图片...');
+
+    try {
+      // 直接把 DOM 原生骨架拍成一张超高清 PNG 二进制流
+      const blob = await htmlToImage.toBlob(el, {
+        quality: 0.95,
+        pixelRatio: 2, // 保持 2 倍超采样清晰度
+        cacheBust: true, // 物理刷掉浏览器缓存干扰
+        style: {
+          transform: 'none', // 强制抹平可能处于动画中间态的位移残留
+        },
+      });
+
+      if (!blob) throw new Error('Blob 生成空指针');
+
+      // 写入系统剪切板
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+
+      // 🌟 成功唤回 Toast 提示
+      showToast('✨ 图片已成功复制到剪切板！');
+    } catch (err) {
+      console.error('现代化转录失败:', err);
+      showToast('❌ 浏览器权限拦截，复制失败');
+    } finally {
+      isCopying.value = false;
+    }
+  };
+
   return {
     undo,
     isLeftOpen,
     isRightOpen,
+    isCopying,
     isCapoOpen,
     toggleCapoPanel,
     toasts,
@@ -131,11 +172,11 @@ export const useUiStore = defineStore('ui', () => {
     modalTitle,
     modalInput,
     activeTargetGroup,
+    draggedGroupIdx,
     openModal,
     handleModalConfirm,
     triggerSaveChord,
     triggerDeleteChord,
-    // 🌟 核心修正：在这里将变量优雅地回传提供出去，这样 LeftGroupList.vue 就能正常读写了！
-    draggedGroupIdx,
+    copyFretBoardToClipboard,
   };
 });
