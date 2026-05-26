@@ -1,0 +1,2669 @@
+﻿
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\components\ActionButton.vue ===
+
+<template>
+  <button
+    :disabled="disabled"
+    @click="$emit('click')"
+    class="action-button-base"
+    :class="{
+      'is-primary': primary,
+      'is-danger': danger,
+      'is-warning': warning,
+      'is-default': !primary && !danger && !warning,
+      'is-disabled': disabled,
+    }"
+  >
+    <slot></slot>
+  </button>
+</template>
+
+<script setup lang="ts">
+// 馃専 鎵╁睍 TypeScript 灞炴€у畾涔夛細鍔犲叆鍙€夌殑 disabled 鐘舵€?
+defineProps<{
+  primary?: boolean;
+  danger?: boolean;
+  warning?: boolean;
+  disabled?: boolean;
+}>();
+
+defineEmits<{
+  (e: 'click'): void;
+}>();
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.action-button-base {
+  .mixin-button-base();
+  width: 100%;
+  color: @text-body;
+  background-color: transparent;
+  transition: all 0.2s @bezier-standard;
+
+  /* 1. 涓绘寜閽姸鎬?(is-primary) */
+  &.is-primary {
+    background-color: @brand-primary;
+    border-color: @brand-primary;
+    color: #ffffff;
+    font-weight: 900;
+
+    // 馃専 淇锛氬彧鏈夊湪闈炵鐢ㄧ姸鎬佷笅鎵嶅搷搴旀偓娴墜鍔?
+    &:not(:disabled):hover {
+      opacity: 0.9;
+    }
+    &:not(:disabled):active {
+      opacity: 0.8;
+    }
+  }
+
+  /* 2. 鍗遍櫓/鍒犻櫎鎸夐挳鐘舵€?(is-danger) */
+  &.is-danger {
+    color: @brand-danger;
+    border-color: currentColor;
+    background-color: rgba(239, 68, 68, 0.08);
+
+    &:not(:disabled):hover {
+      background-color: rgba(239, 68, 68, 0.15);
+    }
+
+    :global(.dark) & {
+      background-color: rgba(248, 113, 113, 0.1);
+      &:not(:disabled):hover {
+        background-color: rgba(248, 113, 113, 0.2);
+      }
+    }
+  }
+
+  /* 3. 璀﹀憡鎸夐挳鐘舵€?(is-warning) */
+  &.is-warning {
+    color: @brand-secondary;
+    border-color: currentColor;
+    background-color: rgba(245, 158, 11, 0.08);
+
+    &:not(:disabled):hover {
+      background-color: rgba(245, 158, 11, 0.15);
+    }
+  }
+
+  /* 4. 榛樿/娆¤鎸夐挳鐘舵€?(is-default) */
+  &.is-default {
+    background-color: var(--bg-panel);
+    border-color: var(--control-border);
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+
+    &:not(:disabled):hover {
+      border-color: @brand-primary;
+      color: @brand-primary;
+    }
+  }
+
+  // ==========================================================================
+  // 馃専 鏍稿績澶т竴缁燂細鍏ㄥ眬绂佺敤缃伆涓灑瑙勮寖
+  // ==========================================================================
+  &.is-disabled {
+    opacity: 0.4 !important; // 鏋佽嚧浼橀泤鐨勭┖姘斿崐閫忔槑搴?
+    cursor: not-allowed !important; // 寮哄埗鐗╃悊绂佽榧犳爣鎸囬拡
+    transform: none !important; // 寮鸿搴熼櫎娣峰叆鑷甫鐨?active 鐐瑰嚮缂╂斁褰㈠彉
+    box-shadow: none !important; // 鍓ョ鎮诞鏅繁闃村奖
+    pointer-events: unset; // 褰诲簳鎺愭浠讳綍澶氫綑鐨勫啋娉℃墜鍔?
+
+    // 寮哄埗鎶婃墍鏈夊彉浣撲笅鐨?hover 杈规鍜岃儗鏅叏閮ㄥ喕缁擄紝涓嶅睍绀轰换浣曢珮浜洖棣?
+    &:hover {
+      border-color: inherit;
+      background-color: inherit;
+      color: inherit;
+    }
+  }
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\components\GlobalToast.vue ===
+
+<template>
+  <div class="fixed top-6 right-6 z-[3000] flex flex-col gap-2 items-end pointer-events-none">
+    <TransitionGroup
+      enter-from-class="translate-x-[20px] opacity-0"
+      leave-to-class="translate-x-[20px] opacity-0"
+      enter-active-class="toast-transition"
+      leave-active-class="toast-transition"
+    >
+      <div
+        v-for="toast in uiStore.toasts"
+        :key="toast.id"
+        class="px-4 py-2.5 rounded-xl bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-950 font-bold shadow-2xl flex items-center gap-3 text-xs pointer-events-auto"
+      >
+        <span>{{ toast.msg }}</span>
+
+        <button v-if="toast.canUndo" @click="handleLocalUndo" class="btn-toast-undo font-bold underline text-xs">
+          鎾ゅ洖
+        </button>
+      </div>
+    </TransitionGroup>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { useUiStore } from '@/stores/uiStore';
+
+const uiStore = useUiStore();
+
+const handleLocalUndo = () => {
+  uiStore.undo();
+  uiStore.showToast('鈫╋笍 鍒氭墠鍒犻櫎鐨勫拰寮﹀凡琚畬缇庢仮澶?);
+};
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+// 馃専 鏍稿績浼樺寲 1锛氱户缁部鐢ㄧ郴缁熺骇 @bezier-standard 璐濆灏旈樆灏?
+.toast-transition {
+  transition: all 0.25s @bezier-standard;
+}
+
+// 馃専 鏍稿績浼樺寲 2锛氭挙鍥為珮浜摑鑹茶繛鎺?
+.btn-toast-undo {
+  color: @brand-primary;
+  transition: opacity 0.15s @bezier-standard;
+
+  &:hover {
+    opacity: 0.8;
+  }
+  &:active {
+    opacity: 0.6;
+  }
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\components\GlobalTooltip.vue ===
+
+<template>
+  <div class="relative inline-block w-full" @mouseenter="show = true" @mouseleave="show = false">
+    <slot></slot>
+
+    <Transition name="tooltip-native">
+      <div
+        v-if="show && content"
+        class="tooltip-box absolute whitespace-nowrap px-3 py-1.5 font-black rounded-lg z-[100] text-xs shadow-xl pointer-events-none dark:bg-[#f8fafc] dark:text-[#0f172a] dark:border-[#0F172A]"
+        :data-placement="placement"
+      >
+        {{ content }}
+      </div>
+    </Transition>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue';
+
+withDefaults(
+  defineProps<{
+    content?: string;
+    placement?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-end';
+  }>(),
+  {
+    placement: 'top',
+  }
+);
+
+const show = ref(false);
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.tooltip-box {
+  // 鈽€锔?娴呰壊妯″紡榛樿鍩哄噯
+  background-color: #0f172a;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  // 馃専 鏍稿績鍓旈櫎锛氭殫鑹插彉浣撲氦鐢?HTML 涓婄殑 Tailwind 绾ц仈绠＄悊锛屾澶勪笉鍐嶅啓閲嶅彔閫昏緫
+
+  // ==========================================================================
+  // 馃Л 澶т竴缁熷畾浣嶄腑蹇?
+  // ==========================================================================
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  transform: none;
+
+  &[data-placement='top'] {
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 8px;
+  }
+  &[data-placement='bottom'] {
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 8px;
+  }
+  &[data-placement='left'] {
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-right: 8px;
+  }
+  &[data-placement='right'] {
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-left: 8px;
+  }
+  &[data-placement='bottom-end'] {
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+  }
+
+  // 淇濊瘉骞崇Щ涓庨鑹查兘鑳藉钩婊戣繃娓?
+  transition: all 0.25s @bezier-standard;
+}
+
+// ==========================================================================
+// 馃専 Transition 澶氱淮闃诲凹鍔ㄦ晥涓灑
+// ==========================================================================
+.tooltip-native-enter-active,
+.tooltip-native-leave-active {
+  transition: all 0.25s @bezier-standard;
+}
+
+.tooltip-native-enter-from,
+.tooltip-native-leave-to {
+  opacity: 0;
+}
+
+// A. Top 绫诲瀷 鉃?浠庝笅寰€涓婁紭闆呬笂娴?
+.tooltip-native-enter-from[data-placement='top'],
+.tooltip-native-leave-to[data-placement='top'] {
+  transform: translateX(-50%) translateY(6px) scale(0.92) !important;
+}
+
+// B. Bottom 绫诲瀷 鉃?浠庝笂寰€涓嬮『婊戞帀钀?
+.tooltip-native-enter-from[data-placement='bottom'],
+.tooltip-native-leave-to[data-placement='bottom'] {
+  transform: translateX(-50%) translateY(-6px) scale(0.92) !important;
+}
+
+// 渚ц竟鏍忚创杈圭 (bottom-end)
+.tooltip-native-enter-from[data-placement='bottom-end'],
+.tooltip-native-leave-to[data-placement='bottom-end'] {
+  transform: translateY(-6px) scale(0.92) !important;
+}
+
+// C. Left 绫诲瀷 鉃?浠庡彸鍚戝乏寮瑰叆
+.tooltip-native-enter-from[data-placement='left'],
+.tooltip-native-leave-to[data-placement='left'] {
+  transform: translateY(-50%) translateX(6px) scale(0.92) !important;
+}
+
+// D. Right 绫诲瀷 鉃?浠庡乏鍚戝彸婊戝叆
+.tooltip-native-enter-from[data-placement='right'],
+.tooltip-native-leave-to[data-placement='right'] {
+  transform: translateY(-50%) translateX(-6px) scale(0.92) !important;
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\components\Modal.vue ===
+
+<template>
+  <div class="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+    <div
+      class="modal-overlay absolute inset-0 bg-slate-950/40 dark:bg-slate-950/60"
+      @click="uiStore.modalShow = false"
+    ></div>
+
+    <div class="modal-card rounded-xl w-80 p-6 relative z-10 animate-modal-in">
+      <h3 class="text-xs font-black mb-4 opacity-40 uppercase tracking-widest text-title-style">
+        {{ uiStore.modalTitle }}
+      </h3>
+
+      <template v-if="uiStore.modalType === 'createGroup' || uiStore.modalType === 'renameGroup'">
+        <input
+          v-model="uiStore.modalInput"
+          ref="inputRef"
+          @keyup.enter="uiStore.handleModalConfirm"
+          type="text"
+          class="modal-input-field w-full rounded-2xl px-4 py-3 text-sm font-bold outline-none mb-4"
+          placeholder="璇疯緭鍏?.."
+        />
+      </template>
+
+      <p v-else class="text-sm font-semibold mb-6 opacity-80 leading-relaxed text-body-style">
+        纭畾鎵ц姝ゅ垹闄ゆ搷浣滃悧锛熺粍鍐呮墍鏈夊拰寮﹂兘灏嗚娓呯┖銆?
+      </p>
+
+      <div class="flex gap-2 w-full">
+        <ActionButton @click="uiStore.modalShow = false"> 鍙栨秷 </ActionButton>
+
+        <ActionButton
+          @click="uiStore.handleModalConfirm"
+          :danger="uiStore.modalType === 'deleteGroup'"
+          :primary="uiStore.modalType !== 'deleteGroup'"
+        >
+          纭
+        </ActionButton>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import ActionButton from '@/components/ActionButton.vue'; // 馃専 寮曞叆鏍稿績鍏叡鍔ㄤ綔鎸夐挳
+import { useUiStore } from '@/stores/uiStore';
+import { onMounted, ref } from 'vue';
+
+const uiStore = useUiStore();
+const inputRef = ref<HTMLInputElement | null>(null);
+
+onMounted(() => {
+  // 褰撳脊绐楁縺娲讳笖涓鸿緭鍏ユ妯″紡鏃讹紝鑷姩鑾峰彇鐒︾偣鎻愬崌鏃犻紶鏍囨搷浣滀綋楠?
+  if (['createGroup', 'renameGroup'].includes(uiStore.modalType)) {
+    inputRef.value?.focus();
+  }
+});
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.modal-card {
+  // 馃専 鏍稿績澶嶇敤锛氱洿鎺ュ鐢ㄦ偓娴眰 Mixin锛屾帴绠¤儗鏅彉浣撱€佹帶浠惰竟妗嗐€佸渾瑙掍互鍙婃繁鑹叉ā寮忕殑鏅繁闃村奖
+  .mixin-floating-layer();
+}
+
+.modal-input-field {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--control-border);
+  color: @text-title;
+  transition: all 0.2s @bezier-standard;
+
+  &:focus {
+    border-color: @brand-primary;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); // 鑱氱劍鏃朵紭闆呯殑绌烘皵钃濆鍙戝厜
+  }
+}
+
+// 琛ュ厖瀛楄壊琛€鑴?
+.text-title-style {
+  color: @text-title;
+}
+.body-style {
+  color: @text-body;
+}
+
+// 閰嶅悎绯荤粺鏍囧噯闃诲凹缂撳姩娉ㄥ叆鐨勮繘鍏ュ姩鐢?
+.animate-modal-in {
+  animation: modalSlideIn 0.25s @bezier-standard;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\stores\chordLabStore.ts ===
+
+import { calcNoteLabel, extractRootNote } from '@/utils/musicTheory';
+import { useDark, useStorage } from '@vueuse/core';
+import { defineStore } from 'pinia';
+import { computed, ref } from 'vue';
+
+export interface Chord {
+  id: number;
+  chordName: string;
+  selectedFrets: number[];
+  fretCount: number;
+  capo: number;
+  groupId: string;
+  rootMark: number;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  collapsed: boolean;
+}
+
+export const useChordLabStore = defineStore('chordLab', () => {
+  const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '' });
+
+  // 鏍稿績鎸佷箙鍖栬祫浜?
+  const savedChordsList = useStorage<Chord[]>('CHORD_LAB_LIST_V4', []);
+  const groups = useStorage<Group[]>('CHORD_LAB_GROUPS', [{ id: 'default', name: '榛樿鍒嗙粍', collapsed: false }]);
+
+  // 宸ヤ綔鍖烘牳蹇冪姸鎬?
+  const currentChordName = useStorage('CHORD_LAB_CURR_NAME_V1', '');
+  const selectedFrets = useStorage<number[]>('CHORD_LAB_CURR_FRETS_V1', [-1, -1, -1, -1, -1, -1]);
+  const fretCount = useStorage('CHORD_LAB_CURR_FCOUNT_V1', 3);
+  const capo = useStorage('CHORD_LAB_CURR_CAPO_V1', 0);
+  const rootMark = useStorage<number>('CHORD_LAB_CURR_ROOT_MARK_V1', -1);
+
+  const editingId = useStorage<number | null>('CHORD_LAB_EDITING_ID', null);
+  const selectedGroupId = useStorage<string | null>('CHORD_LAB_CURR_GROUP_ID_V1', null);
+
+  const isDraggingFinger = ref(false);
+  const lastPos = ref('');
+
+  const getGroupChords = (gid: string): Chord[] => {
+    return savedChordsList.value.filter(chord => chord.groupId === gid);
+  };
+
+  const isFretBoardEmpty = computed(() => {
+    return selectedFrets.value.every(fret => (fret ?? -1) < 0);
+  });
+
+  // 馃専 鏍稿績鏂板锛氫负涓绘牴闊虫鍒欏尮閰嶅姞涓€灞傚父椹?Computed 闅旂灞忛殰锛岄槻姝㈡寚鏉挎粦鍔ㄦ椂鍙嶅鎵ц姝ｅ垯鎺ㄦ紨
+  const currentRootNote = computed(() => {
+    return extractRootNote(currentChordName.value);
+  });
+
+  // 琛嶇敓璁＄畻锛氭寚鏉?UI 鐘舵€?
+  const openStringsUIState = computed(() => {
+    // 馃専 鐩存帴娑堣垂鎻愬彇濂界殑缂撳瓨璧勪骇锛屾嫆缁濋珮棰戦噸澶嶈绠?
+    const currentRoot = currentRootNote.value;
+
+    return selectedFrets.value.map((fretVal, sIdx) => {
+      const calcFret = fretVal === -1 ? 0 : fretVal;
+      const noteLabel = calcNoteLabel(sIdx, calcFret, capo.value);
+      const hasManualRoot =
+        rootMark.value !== null && rootMark.value !== undefined && rootMark.value >= 0 && rootMark.value <= 5;
+
+      let isRoot = false;
+      if (hasManualRoot) {
+        isRoot = rootMark.value === sIdx;
+      } else {
+        isRoot = !!(currentRoot && calcNoteLabel(sIdx, 0, capo.value).toUpperCase() === currentRoot);
+      }
+
+      let type: 'muted' | 'root' | 'open' | 'normal' = 'normal';
+      if (fretVal === -1) type = 'muted';
+      else if (fretVal === 0) type = isRoot ? 'root' : 'open';
+
+      return { fretVal, noteLabel, type };
+    });
+  });
+
+  const handleChordClick = (chord: Chord) => {
+    editingId.value = chord.id;
+    currentChordName.value = chord.chordName === '鏈懡鍚? ? '' : chord.chordName;
+    selectedFrets.value = [...chord.selectedFrets];
+    fretCount.value = chord.fretCount ?? 3;
+    capo.value = chord.capo ?? 0;
+    rootMark.value = chord.rootMark !== undefined ? chord.rootMark : -1;
+  };
+
+  const resetEditor = () => {
+    editingId.value = null;
+    selectedFrets.value = [-1, -1, -1, -1, -1, -1];
+    currentChordName.value = '';
+    capo.value = 0;
+    fretCount.value = 3;
+    rootMark.value = -1;
+  };
+
+  const toggleOpenString = (sIdx: number) => {
+    const currentFretVal = selectedFrets.value[sIdx];
+    if (currentFretVal > 0) selectedFrets.value[sIdx] = 0;
+    else if (currentFretVal === 0) {
+      selectedFrets.value[sIdx] = -1;
+      if (rootMark.value === sIdx) rootMark.value = -1;
+    } else selectedFrets.value[sIdx] = 0;
+  };
+
+  const handleGroupHeaderClick = (gid: string) => {
+    const target = groups.value.find(g => g.id === gid);
+    if (target) {
+      if (target.collapsed) {
+        selectedGroupId.value = gid;
+        groups.value.forEach(g => {
+          if (g.id !== gid) g.collapsed = true;
+        });
+      } else if (selectedGroupId.value === gid) {
+        selectedGroupId.value = null;
+      }
+      target.collapsed = !target.collapsed;
+    }
+  };
+
+  if (editingId.value) {
+    const original = savedChordsList.value.find(c => c.id == editingId.value);
+    if (original) {
+      currentChordName.value = original.chordName === '鏈懡鍚? ? '' : original.chordName;
+      selectedFrets.value = [...original.selectedFrets];
+      fretCount.value = original.fretCount ?? 3;
+      capo.value = original.capo ?? 0;
+      rootMark.value = original.rootMark !== undefined ? original.rootMark : -1;
+    } else {
+      editingId.value = null;
+    }
+  }
+
+  return {
+    savedChordsList,
+    groups,
+    isDarkMode,
+    currentChordName,
+    selectedFrets,
+    fretCount,
+    capo,
+    editingId,
+    selectedGroupId,
+    isDraggingFinger,
+    lastPos,
+    rootMark,
+    isFretBoardEmpty,
+    currentRootNote, // 鎶涘嚭闅旂鍚庣殑鏍归煶缂撳瓨
+    openStringsUIState,
+    getGroupChords,
+    toggleOpenString,
+    resetEditor,
+    handleChordClick,
+    handleGroupHeaderClick,
+  };
+});
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\stores\uiStore.ts ===
+
+import { useRefHistory, useToggle } from '@vueuse/core';
+import * as htmlToImage from 'html-to-image';
+import { defineStore } from 'pinia';
+import { ref, toRef } from 'vue';
+import { useChordLabStore, type Chord, type Group } from './chordLabStore';
+
+export interface Toast {
+  id: number;
+  msg: string;
+  canUndo: boolean;
+}
+
+export const useUiStore = defineStore('ui', () => {
+  const chordStore = useChordLabStore();
+
+  const savedChordsRef = toRef(chordStore, 'savedChordsList');
+  const { undo } = useRefHistory(savedChordsRef, { capacity: 10, clone: true });
+
+  const isLeftOpen = ref(true);
+  const isRightOpen = ref(true);
+  const isCopying = ref(false);
+
+  const isCapoOpen = ref(false);
+  const toggleCapoPanel = useToggle(isCapoOpen);
+
+  const toasts = ref<Toast[]>([]);
+
+  const showToast = (msg: string, canUndo = false) => {
+    const id = Date.now();
+    toasts.value.push({ id, msg, canUndo });
+    setTimeout(() => {
+      toasts.value = toasts.value.filter(t => t.id !== id);
+    }, 3000);
+  };
+
+  const modalShow = ref(false);
+  const modalType = ref<'createGroup' | 'renameGroup' | 'deleteGroup' | ''>('');
+  const modalTitle = ref('');
+  const modalInput = ref('');
+  const activeTargetGroup = ref<Group | null>(null);
+
+  const draggedGroupIdx = ref<number | null>(null);
+
+  const openModal = (
+    type: 'createGroup' | 'renameGroup' | 'deleteGroup',
+    title: string,
+    initVal = '',
+    target: Group | null = null
+  ) => {
+    modalType.value = type;
+    modalTitle.value = title;
+    modalInput.value = initVal;
+    activeTargetGroup.value = target;
+    modalShow.value = true;
+  };
+
+  const handleModalConfirm = () => {
+    const val = modalInput.value.trim();
+    if (['createGroup', 'renameGroup'].includes(modalType.value) && !val) {
+      return showToast('鉂?鍚嶇О涓嶈兘涓虹┖');
+    }
+
+    if (modalType.value === 'createGroup') {
+      if (chordStore.groups.some(g => g.name === val)) return showToast('鈿狅笍 鍚嶇О宸插瓨鍦?);
+      const newId = 'g_' + Date.now();
+      chordStore.groups.push({ id: newId, name: val, collapsed: false });
+      chordStore.selectedGroupId = newId;
+    } else if (modalType.value === 'renameGroup' && activeTargetGroup.value) {
+      activeTargetGroup.value.name = val;
+    } else if (modalType.value === 'deleteGroup' && activeTargetGroup.value) {
+      // 鐗╃悊娓呮礂鍜屽鸡鍒楄〃寮曠敤淇濇寔
+      const remainingChords = chordStore.savedChordsList.filter(c => c.groupId !== activeTargetGroup.value!.id);
+      chordStore.savedChordsList.length = 0;
+      chordStore.savedChordsList.push(...remainingChords);
+
+      // 馃専 鏍稿績淇锛氬 groups 鍚屾牱閲囩敤鎸囬拡淇濈暀鑷剤鎶€鏈紝鍐充笉閲嶅啓鏂版暟缁勭牬鍧?useStorage
+      const remainingGroups = chordStore.groups.filter(g => g.id !== activeTargetGroup.value!.id);
+      chordStore.groups.length = 0;
+      chordStore.groups.push(...remainingGroups);
+
+      if (chordStore.selectedGroupId === activeTargetGroup.value.id) {
+        chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
+      }
+    }
+    modalShow.value = false;
+    showToast('鎿嶄綔鎴愬姛');
+  };
+
+  const triggerSaveChord = () => {
+    const cleanName = chordStore.currentChordName.trim();
+    if (!cleanName) {
+      return showToast('鉂?淇濆瓨澶辫触锛氳鍏堣緭鍏ュ拰寮﹀悕绉帮紙濡?C, Am锛?);
+    }
+
+    if (chordStore.isFretBoardEmpty) {
+      return showToast('鉂?淇濆瓨澶辫触锛氭寚鏉夸笂鑷冲皯闇€瑕佹寚瀹氫竴涓湁鏁堟寜鐐规垨寮€寮﹂煶');
+    }
+
+    const currentActiveGroup = chordStore.groups.find(g => g.id === chordStore.selectedGroupId);
+    let targetGroupId = chordStore.selectedGroupId;
+
+    if (chordStore.editingId) {
+      const originalChord = chordStore.savedChordsList.find(c => c.id == chordStore.editingId);
+      if (originalChord) targetGroupId = originalChord.groupId;
+    } else {
+      if (!chordStore.selectedGroupId || (currentActiveGroup && currentActiveGroup.collapsed)) {
+        return showToast('鉂?璇峰厛鍦ㄥ乏渚у睍寮€涓€涓洰鏍囧垎缁?);
+      }
+    }
+
+    const payload: Chord = {
+      id: chordStore.editingId || Date.now(),
+      chordName: cleanName,
+      selectedFrets: [...chordStore.selectedFrets],
+      fretCount: chordStore.fretCount,
+      capo: chordStore.capo,
+      groupId: targetGroupId || 'default',
+      rootMark: chordStore.rootMark,
+    };
+
+    const idx = chordStore.savedChordsList.findIndex(c => c.id == chordStore.editingId);
+    if (idx !== -1) {
+      chordStore.savedChordsList[idx] = payload;
+    } else {
+      chordStore.savedChordsList.unshift(payload);
+    }
+
+    chordStore.resetEditor();
+    showToast('馃憤 宸茬粡鎴愬姛鎸佷箙鍖栦繚瀛橈紒');
+  };
+
+  const triggerDeleteChord = (chord: Chord) => {
+    const filtered = chordStore.savedChordsList.filter(c => c.id !== chord.id);
+    chordStore.savedChordsList.length = 0;
+    chordStore.savedChordsList.push(...filtered);
+    showToast(`馃棏锔?宸插垹闄?"${chord.chordName}"`, true);
+  };
+
+  const copyFretBoardToClipboard = async (selector: string) => {
+    const el = document.querySelector(selector) as HTMLElement;
+    if (!el) return showToast('鉂?鏈壘鍒版寚鏉跨敾甯冨尯鍩?);
+    if (isCopying.value) return;
+
+    isCopying.value = true;
+    showToast('馃摳 姝ｅ湪鐢熸垚鎸囨澘鍥剧墖...');
+
+    try {
+      const blob = await htmlToImage.toBlob(el, {
+        quality: 0.95,
+        pixelRatio: 2,
+        cacheBust: true,
+        style: { transform: 'none' },
+      });
+      if (!blob) throw new Error('Blob 鐢熸垚绌烘寚閽?);
+
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      showToast('鉁?鍥剧墖宸叉垚鍔熷鍒跺埌鍓垏鏉匡紒');
+    } catch (err) {
+      console.error('鐜颁唬鍖栬浆褰曞け璐?', err);
+      showToast('鉂?娴忚鍣ㄦ潈闄愭嫤鎴紝澶嶅埗澶辫触');
+    } finally {
+      isCopying.value = false;
+    }
+  };
+
+  return {
+    undo,
+    isLeftOpen,
+    isRightOpen,
+    isCopying,
+    isCapoOpen,
+    toggleCapoPanel,
+    toasts,
+    showToast,
+    modalShow,
+    modalType,
+    modalTitle,
+    modalInput,
+    activeTargetGroup,
+    draggedGroupIdx,
+    openModal,
+    handleModalConfirm,
+    triggerSaveChord,
+    triggerDeleteChord,
+    copyFretBoardToClipboard,
+  };
+});
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\utils\musicTheory.ts ===
+
+export const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+export const BASE_STRINGS = [4, 9, 2, 7, 11, 4]; // 1-6寮︾┖寮﹂煶绋嬪熀鍑?(E, B, G, D, A, E)
+
+/**
+ * 鏍规嵁鐗╃悊寮﹀彿鍜屽搧浣嶆帹绠楃粷瀵归煶鍚嶆爣绛?
+ */
+export const calcNoteLabel = (sIdx: number, fretVal: number, capoVal: number): string => {
+  if (fretVal === -1) return '鉁?;
+  const base = BASE_STRINGS[sIdx];
+  const offset = capoVal > 0 ? capoVal : 0;
+  return NOTES[(base + fretVal + offset) % 12];
+};
+
+/**
+ * 馃専 缁堟瀬浼樺寲锛氭姏寮冧綆鏁堟鍒欙紝閲囩敤鍘熺敓绾瓧绗︽壂鎻忔寚閽堟墦鎹炴牴闊?
+ * 鏉滅粷浜嗛珮棰戞墦瀛楁椂鍦ㄥ唴瀛樹腑鎴愬崈涓婁竾浜х敓鐨?Match 涓存椂鏁扮粍
+ */
+export const extractRootNote = (chordName: string): string | null => {
+  const trimmed = chordName.trim();
+  if (trimmed.length === 0) return null;
+
+  // 1. 鎶撳彇棣栧瓧姣嶆寚閽?
+  const firstChar = trimmed.charAt(0).toUpperCase();
+  // 鍚変粬鏍归煶娉曞畾鐣岄檺鍙兘鍦?A 鍒?G 涔嬮棿
+  if (firstChar < 'A' || firstChar > 'G') return null;
+
+  // 2. 椤轰綅鍓嶅悜鎵弿绗簩浣嶏細鎺㈡煡鍙橀煶鏍囪 (# 鎴?b)
+  if (trimmed.length > 1) {
+    const secondChar = trimmed.charAt(1);
+    if (secondChar === '#' || secondChar === 'b') {
+      return firstChar + secondChar; // 杩斿洖瀹屾暣鍗囬檷鏍归煶璧勪骇
+    }
+  }
+
+  return firstChar;
+};
+
+/**
+ * 鏍￠獙鐗瑰畾鎸囦綅鏄惁涓哄綋鍓嶅拰寮︾殑鎵嬪姩涓婚煶
+ */
+export const isRootNote = (sIdx: number, rootMark: number | null | undefined): boolean => {
+  if (rootMark == null) return false;
+  return sIdx === rootMark;
+};
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\sidebar-left\LeftFooter.vue ===
+
+<template>
+  <div class="p-4 border-t border-slate-100 dark:border-slate-800 min-w-[335px] bg-slate-50/50 dark:bg-slate-900/20">
+    <input type="file" ref="fileInputRef" accept=".json" @change="processImport" class="hidden" />
+    <div class="grid grid-cols-2 gap-2">
+      <ActionButton @click="handleImportTrigger" class="control-bordered">瀵煎叆澶囦唤</ActionButton>
+      <ActionButton @click="triggerFullExport" class="control-bordered">鍏ㄩ噺瀵煎嚭</ActionButton>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import ActionButton from '@/components/ActionButton.vue';
+import { useChordLabStore, type Chord, type Group } from '@/stores/chordLabStore';
+import { useUiStore } from '@/stores/uiStore';
+import { ref } from 'vue';
+
+const uiStore = useUiStore();
+const chordLabStore = useChordLabStore();
+const fileInputRef = ref<HTMLInputElement | null>(null);
+
+const handleImportTrigger = () => fileInputRef.value?.click();
+
+/**
+ * 鏁版嵁娓呮礂涓庣湅闂ㄧ嫍鍑芥暟
+ */
+const cleanAndValidateData = (
+  data: any,
+  mode: 'import' | 'export' = 'import'
+): data is { groups: Group[]; chords: Chord[] } => {
+  const logPrefix = mode === 'import' ? '馃摜 瀵煎叆鏍￠獙' : '馃摛 瀵煎嚭娓呮礂';
+  if (!data || typeof data !== 'object') {
+    console.error(`鉂?${logPrefix}澶辫触锛氭牴鑺傜偣涓嶆槸瀵硅薄銆俙);
+    return false;
+  }
+  if (!Array.isArray(data.groups) || !Array.isArray(data.chords)) {
+    console.error(`鉂?${logPrefix}澶辫触锛氱己灏?"groups" 鎴?"chords" 鏁扮粍銆俙);
+    return false;
+  }
+
+  let isValid = true;
+
+  // 1. 鏍￠獙骞朵慨琛ュ垎缁?(Group)
+  data.groups.forEach((g: any, index: number) => {
+    if (!g) {
+      console.error(`鉂?${logPrefix} -> 鍒嗙粍鍒楄〃绗?[${index}] 椤规暟鎹负绌虹櫧銆俙);
+      isValid = false;
+      return;
+    }
+
+    const errors: string[] = [];
+    if (typeof g.id !== 'string') errors.push(`id 搴斾负 string锛屽疄闄呬负 ${typeof g.id}`);
+    if (typeof g.name !== 'string') errors.push(`name 搴斾负 string锛屽疄闄呬负 ${typeof g.name}`);
+
+    if (g.collapsed === undefined || g.collapsed === null) {
+      g.collapsed = false;
+    } else if (typeof g.collapsed !== 'boolean') {
+      errors.push(`collapsed 搴斾负 boolean锛屽疄闄呬负 ${typeof g.collapsed}`);
+    }
+
+    if (errors.length > 0) {
+      console.error(
+        `鉂?${logPrefix} -> 鍒嗙粍寮傚父 [绱㈠紩 ${index}, 鍚嶇О "${g.name || '鏈煡'}"]:\n   `,
+        errors.join('\n    ')
+      );
+      isValid = false;
+    }
+  });
+
+  const validGroupIds = new Set<string>(
+    data.groups.filter((g: any) => g && typeof g.id === 'string').map((g: any) => g.id)
+  );
+
+  // 2. 鏍￠獙銆佹竻娲楀苟涓ユ牸杩囨护鍜屽鸡 (Chord)
+  const validChords: any[] = [];
+  data.chords.forEach((c: any, index: number) => {
+    if (!c) {
+      console.error(`鉂?${logPrefix} -> 鍜屽鸡鍒楄〃绗?[${index}] 椤规暟鎹负绌虹櫧銆俙);
+      isValid = false;
+      return;
+    }
+
+    if (c.groupId === null || c.groupId === undefined || String(c.groupId).trim() === '') {
+      console.warn(`馃棏锔?${logPrefix} -> 鍜屽鸡 "${c.chordName || '鏈懡鍚?}" 鍥犵己灏?groupId锛屽凡鎵ц鐗╃悊杩囨护銆俙);
+      return;
+    }
+    if (!validGroupIds.has(String(c.groupId))) {
+      console.warn(
+        `馃棏锔?${logPrefix} -> 鍜屽鸡 "${c.chordName || '鏈懡鍚?}" 鎸囧畾鐨勫垎缁?"${c.groupId}" 涓嶅瓨鍦紝宸叉墽琛岀墿鐞嗚繃婊ゃ€俙
+      );
+      return;
+    }
+
+    const errors: string[] = [];
+    if (typeof c.id !== 'number' && typeof c.id !== 'string')
+      errors.push(`id 搴斾负 number/string锛屽疄闄呬负 ${typeof c.id}`);
+    if (typeof c.chordName !== 'string') errors.push(`chordName 搴斾负 string锛屽疄闄呬负 ${typeof c.chordName}`);
+    if (typeof c.groupId !== 'string') errors.push(`groupId 搴斾负 string锛屽疄闄呬负 ${typeof c.groupId}`);
+
+    // 娆¤瀛楁瀹归敊琛ュ叏
+    if (c.fretCount === undefined || c.fretCount === null) c.fretCount = 3;
+    if (c.capo === undefined || c.capo === null) c.capo = 0;
+
+    // 馃専 璧勪骇鐪嬮棬鐙楁柊澧烇細瀵?rootMark 灞炴€х殑瀹夊叏闃插尽娓呮礂涓庨槻鐖嗛椄
+    if (c.rootMark === undefined || c.rootMark === null) {
+      c.rootMark = null; // 瀹归敊淇ˉ
+    } else if (typeof c.rootMark === 'number') {
+      if (c.rootMark !== -1 && (c.rootMark < 0 || c.rootMark > 5)) {
+        errors.push(`rootMark 鎵嬪姩涓婚煶寮﹀彿瓒呭嚭浜嗗叚寮﹀悎娉曞尯闂?[0, 5]锛屽疄闄呬负: ${c.rootMark}`);
+      }
+    } else {
+      errors.push(`rootMark 瀛楁鍙戠敓鐣稿彉锛屽簲涓?number 鎴?null锛屽疄闄呬负: ${typeof c.rootMark}`);
+    }
+
+    if (typeof c.fretCount !== 'number' || c.fretCount < 3 || c.fretCount > 8) {
+      errors.push(`fretCount 鍝佹牸鏁拌秴鍑哄畨鍏ㄦ樉绀哄尯闂?[3, 8]锛屽疄闄呬负 ${c.fretCount}`);
+    }
+    if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 15) {
+      errors.push(`capo 鍙樿皟澶瑰搧鏁拌秴鍑哄悎鐞嗗悏浠栬寖鍥达紝瀹為檯涓?${c.capo}`);
+    }
+
+    if (!Array.isArray(c.selectedFrets)) {
+      errors.push(`selectedFrets 搴斾负鏁扮粍锛屽疄闄呬负 ${typeof c.selectedFrets}`);
+    } else {
+      if (c.selectedFrets.length !== 6) {
+        errors.push(`selectedFrets 闀垮害搴斾负 6 鏍瑰鸡锛屽疄闄呬负 ${c.selectedFrets.length}`);
+      } else if (!c.selectedFrets.every((f: any) => typeof f === 'number')) {
+        errors.push(`selectedFrets 鍐呴儴瀛樺湪闈炵函鏁板瓧椤筦);
+      } else {
+        const outOfRange = c.selectedFrets.some((fret: number) => fret < -1 || fret > c.fretCount);
+        if (outOfRange) {
+          errors.push(
+            `selectedFrets 瀛樺湪瓒婄晫鍝佷綅鍊硷紝鏈夋晥鍝佷綅椤诲湪 [-1, ${c.fretCount}] 鍐咃紝瀹為檯鏁版嵁涓? [${c.selectedFrets.join(', ')}]`
+          );
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      console.error(
+        `鉂?${logPrefix} -> 鍜屽鸡鏁版嵁涓ラ噸鎹熷潖 [绱㈠紩 ${index}, 鍚嶇О "${c.chordName || '鏈懡鍚?}"]:\n   `,
+        errors.join('\n    ')
+      );
+      isValid = false;
+      return;
+    }
+
+    validChords.push(c);
+  });
+
+  data.chords = validChords;
+  return isValid;
+};
+
+const processImport = (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  if (!target.files || target.files.length === 0) return;
+
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      if (ev.target?.result) {
+        const imported = JSON.parse(ev.target.result as string);
+        if (cleanAndValidateData(imported, 'import')) {
+          chordLabStore.groups = imported.groups;
+          chordLabStore.savedChordsList = imported.chords;
+          if (!chordLabStore.groups.some(g => g.id === chordLabStore.selectedGroupId)) {
+            chordLabStore.selectedGroupId = chordLabStore.groups[0]?.id || null;
+          }
+          uiStore.showToast('馃摜 鏁版嵁鎭㈠鎴愬姛');
+        } else {
+          throw new Error('Import verification failed');
+        }
+      }
+    } catch (err) {
+      console.error('澶囦唤瑙ｆ瀽鎷︽埅:', err);
+      uiStore.showToast('鉂?鏂囦欢闈炴爣鍑嗗拰寮﹀浠芥垨鏍稿績鏁版嵁宸叉崯鍧?);
+    } finally {
+      target.value = '';
+    }
+  };
+  reader.readAsText(target.files[0]);
+};
+
+const triggerFullExport = () => {
+  const originalData = {
+    groups: chordLabStore.groups,
+    chords: chordLabStore.savedChordsList,
+  };
+  if (cleanAndValidateData(originalData, 'export')) {
+    chordLabStore.savedChordsList = originalData.chords;
+    const link = document.createElement('a');
+    const dataString = JSON.stringify({ groups: originalData.groups, chords: originalData.chords });
+
+    link.href = URL.createObjectURL(new Blob([dataString], { type: 'application/json' }));
+    link.download = `鍜屽鸡澶囦唤_${Date.now()}.json`;
+    link.click();
+    uiStore.showToast('馃摛 澶囦唤宸蹭笅杞?);
+  } else {
+    uiStore.showToast('鉂?褰撳墠鏈湴缂撳瓨瀛樺湪涓ラ噸鐮存崯鏁版嵁锛岃妫€鏌ユ帶鍒跺彴');
+  }
+};
+</script>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\sidebar-left\LeftGroupList.vue ===
+
+<template>
+  <div class="chord-scroll-area flex-1 overflow-y-auto no-scrollbar p-4 flex flex-col gap-4 min-w-[335px]">
+    <div
+      v-if="chordLabStore.groups.length === 0"
+      class="h-full flex flex-col items-center justify-center opacity-30 py-20"
+    >
+      <span class="text-2xl mb-2">馃搧</span>
+      <p class="text-[9px] font-black uppercase tracking-widest text-center leading-relaxed text-body">
+        鏆傛棤鍒嗙粍<br />鐐瑰嚮鍙充笂瑙掓柊寤?
+      </p>
+    </div>
+
+    <div
+      v-else
+      v-for="(group, gIdx) in chordLabStore.groups"
+      :key="group.id"
+      class="flex flex-col group-drop-zone transition-all duration-200"
+      @dragover.prevent
+      @drop.stop="handleChordDropToGroup(group.id)"
+    >
+      <div
+        draggable="true"
+        @dragstart="handleGroupDragStart(gIdx, $event)"
+        @dragover.prevent
+        @drop.stop="handleGroupDrop(gIdx)"
+        @click="chordLabStore.handleGroupHeaderClick(group.id)"
+        class="group-title-row flex items-center justify-between py-2 px-2 rounded-xl cursor-grab active:cursor-grabbing"
+      >
+        <div class="flex items-center gap-2">
+          <span
+            class="text-[9px] opacity-30 transition-transform duration-200 text-body"
+            :class="{ '-rotate-90': group.collapsed }"
+          >
+            鈻?
+          </span>
+          <span
+            class="text-sm tracking-widest font-black uppercase group-name-text"
+            :class="{ 'is-active': chordLabStore.selectedGroupId === group.id && !group.collapsed }"
+          >
+            {{ group.name }}
+          </span>
+          <span class="text-[12px] font-bold px-1.5 py-0.5 rounded-md count-badge">
+            {{ chordLabStore.getGroupChords(group.id).length }}
+          </span>
+        </div>
+
+        <div class="action-buttons opacity-0 flex items-center gap-2 transition-opacity">
+          <button
+            @click.stop="uiStore.openModal('renameGroup', '淇敼缁勫悕', group.name, group)"
+            class="text-[14px] text-primary font-semibold hover:underline"
+          >
+            鏀瑰悕
+          </button>
+          <button
+            @click.stop="uiStore.openModal('deleteGroup', '鍒犻櫎鍒嗙粍', '', group)"
+            class="text-[14px] text-danger font-semibold hover:underline"
+          >
+            鍒犻櫎
+          </button>
+        </div>
+      </div>
+
+      <div v-show="!group.collapsed" class="mt-2">
+        <div
+          v-if="chordLabStore.getGroupChords(group.id).length === 0"
+          class="py-4 border border-dashed rounded-xl flex items-center justify-center empty-card-box"
+        >
+          <p class="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">娌℃湁鍜屽鸡</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 items-center">
+          <div
+            v-for="chord in chordLabStore.getGroupChords(group.id)"
+            :key="chord.id"
+            draggable="true"
+            @pointerdown="handleChordPointerDown(chord.id, group.id, $event)"
+            @dragstart.stop="handleChordDragStart(chord.id, group.id, $event)"
+            @dragend="handleChordDragEnd"
+            @dragover.prevent
+            @drop.stop="handleChordDropToSort(chord.id, group.id)"
+            @click="chordLabStore.handleChordClick(chord)"
+            @contextmenu.prevent
+            class="chord-thumb-card hover:-translate-y-0.5 h-11 rounded-xl relative cursor-pointer flex items-center px-3 justify-between overflow-hidden border transition-all duration-200"
+            :class="
+              chordLabStore.editingId == chord.id
+                ? 'is-editing bg-blue-50/30 dark:bg-blue-950/40 shadow-sm'
+                : 'bg-slate-50/50 dark:bg-slate-800/20'
+            "
+          >
+            <span class="chord-name-text text-xs font-black tracking-tight truncate pr-4 block leading-tight">
+              {{ chord.chordName }}
+            </span>
+
+            <button
+              @click.stop="handleLocalDeleteChord(chord)"
+              class="text-[12px] delete-button transition-all w-5 h-5 rounded-full opacity-40 hover:text-white text-danger font-bold"
+            >
+              鉁?
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { useChordLabStore } from '@/stores/chordLabStore';
+import { useUiStore } from '@/stores/uiStore';
+import { ref } from 'vue';
+
+const uiStore = useUiStore();
+const chordLabStore = useChordLabStore();
+
+const draggedChordInfo = ref<{ chordId: number; fromGroupId: string } | null>(null);
+const groupsCollapsedSnapshot = ref<Record<string, boolean>>({});
+
+// ==========================================
+// 馃専 鏍稿績鏂板锛氬垹闄よ嚜鎰堝畧鍗嫤鎴櫒
+// ==========================================
+const handleLocalDeleteChord = (chord: any) => {
+  // 1. 鍒ゆ柇璇ュ拰寮︽槸涓嶆槸褰撳墠鍙充晶宸ヤ綔鍖烘浜潃鐨勨€滄帉闂ㄤ汉鈥?
+  const isEditingCurrent = chordLabStore.editingId == chord.id;
+
+  // 2. 璋冪敤鍘熸眮鍘熷懗鐨?UI 灞傚垹闄ゅ脊绐楁垨鐗╃悊鍒犻櫎閫昏緫
+  uiStore.triggerDeleteChord(chord);
+
+  // 3. 缁濇潃瀹堝崼锛氬鏋滄槸鍚屼竴涓紝寮哄埗涓昏剳鐩存帴閲嶇疆鎸囨澘鐢诲竷锛屾竻闄ゆ墍鏈夐煶鍚嶆爣绛撅紝rootMark 鍥炲綊 -1
+  if (isEditingCurrent) {
+    chordLabStore.resetEditor();
+  }
+};
+
+// ==========================================
+// A. 鍒嗙粍澶ф鎺掑簭
+// ==========================================
+const handleGroupDragStart = (idx: number, e: DragEvent) => {
+  uiStore.draggedGroupIdx = idx;
+  chordLabStore.groups.forEach(g => (g.collapsed = true));
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+};
+
+const handleGroupDrop = (targetIdx: number) => {
+  if (uiStore.draggedGroupIdx !== null && uiStore.draggedGroupIdx !== targetIdx) {
+    const removed = chordLabStore.groups.splice(uiStore.draggedGroupIdx, 1)[0];
+    chordLabStore.groups.splice(targetIdx, 0, removed);
+    uiStore.showToast('鈫曪笍 鍒嗙粍椤哄簭宸叉洿鏂?);
+  }
+  uiStore.draggedGroupIdx = null;
+};
+
+// ==========================================
+// B. 鍜屽鸡鍗＄墖鎷栨嫿涓庡彸閿姌鍙犳帓搴忛€昏緫
+// ==========================================
+const handleChordPointerDown = (chordId: number, fromGroupId: string, e: PointerEvent) => {
+  if (e.button === 2) {
+    e.stopPropagation();
+    e.preventDefault();
+
+    draggedChordInfo.value = { chordId, fromGroupId };
+
+    const snapshot: Record<string, boolean> = {};
+    chordLabStore.groups.forEach(g => {
+      snapshot[g.id] = g.collapsed;
+    });
+    groupsCollapsedSnapshot.value = snapshot;
+
+    chordLabStore.groups.forEach(g => {
+      g.collapsed = true;
+    });
+
+    uiStore.showToast('馃搧 宸茶嚜鍔ㄤ负鎮ㄦ姌鍙犲垎缁勶紝璇风洿鎺ユ嫋鎷芥姇閫?);
+  }
+};
+
+const handleChordDragStart = (chordId: number, fromGroupId: string, e: DragEvent) => {
+  if (!draggedChordInfo.value) {
+    draggedChordInfo.value = { chordId, fromGroupId };
+  }
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+  }
+};
+
+const handleChordDragEnd = () => {
+  if (Object.keys(groupsCollapsedSnapshot.value).length > 0) {
+    chordLabStore.groups.forEach(g => {
+      if (groupsCollapsedSnapshot.value[g.id] !== undefined) {
+        g.collapsed = groupsCollapsedSnapshot.value[g.id];
+      }
+    });
+  }
+  draggedChordInfo.value = null;
+  groupsCollapsedSnapshot.value = {};
+};
+
+const handleChordDropToSort = (targetChordId: number, targetGroupId: string) => {
+  const info = draggedChordInfo.value;
+  if (!info || info.chordId === targetChordId) {
+    handleChordDragEnd();
+    return;
+  }
+
+  const sourceIdx = chordLabStore.savedChordsList.findIndex(c => c.id === info.chordId);
+  const targetIdx = chordLabStore.savedChordsList.findIndex(c => c.id === targetChordId);
+
+  if (sourceIdx !== -1 && targetIdx !== -1) {
+    const [movedChord] = chordLabStore.savedChordsList.splice(sourceIdx, 1);
+
+    if (info.fromGroupId !== targetGroupId) {
+      movedChord.groupId = targetGroupId;
+    }
+
+    chordLabStore.savedChordsList.splice(targetIdx, 0, movedChord);
+    uiStore.showToast('鈿?鍜屽鸡鍗＄墖椤哄簭宸插悓姝?);
+  }
+  handleChordDragEnd();
+};
+
+const handleChordDropToGroup = (targetGroupId: string) => {
+  const info = draggedChordInfo.value;
+  if (!info || info.fromGroupId === targetGroupId) {
+    handleChordDragEnd();
+    return;
+  }
+
+  const sourceIdx = chordLabStore.savedChordsList.findIndex(c => c.id === info.chordId);
+  if (sourceIdx !== -1) {
+    const [movedChord] = chordLabStore.savedChordsList.splice(sourceIdx, 1);
+    movedChord.groupId = targetGroupId;
+    chordLabStore.savedChordsList.push(movedChord);
+    uiStore.showToast(`馃殮 宸叉垚鍔熷垝褰掕嚦鏂板垎缁刞);
+  }
+  handleChordDragEnd();
+};
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.count-badge {
+  background-color: var(--border-color);
+  color: @text-subtitle;
+  opacity: 0.6;
+  border: 1px solid var(--control-border);
+}
+
+.empty-card-box {
+  border-color: var(--control-border);
+  background-color: rgba(30, 41, 59, 0.02);
+}
+
+.group-title-row {
+  .mixin-hover-card();
+  &:hover {
+    .action-buttons {
+      opacity: 1;
+    }
+  }
+  .group-name-text {
+    color: @text-body;
+    &.is-active {
+      color: @brand-primary !important;
+    }
+  }
+}
+
+.group-drop-zone {
+  transition: all 0.2s @bezier-standard;
+  &[dragover] {
+    background-color: rgba(37, 99, 235, 0.03);
+    border-radius: 16px;
+  }
+}
+
+.chord-thumb-card {
+  .mixin-hover-card(); // 馃専 1. 鍏堣皟鐢ㄦ贩鍏ワ紝璁╁畠鐨勫熀纭€閫忔槑閰嶇疆閾哄簳
+
+  // 馃専 2. 鏍稿績淇锛氭槑纭己鍒跺０鏄?3 灞炴€э紝涓斿啓鍦?Mixin 涓嬫柟锛屽交搴曠牳纰庢祻瑙堝櫒鐨勬潈閲嶈糠闆?
+  border: 1px solid color-mix(in srgb, var(--control-border), transparent 80%);
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+  .chord-name-text {
+    color: @text-body;
+  }
+
+  // 婵€娲荤姸鎬侊細楂樹寒鐨囧钃濊竟妗嗕笌鑳屾櫙
+  &.is-editing {
+    border-color: @brand-primary !important;
+    background-color: rgba(37, 99, 235, 0.08);
+    .chord-name-text {
+      color: @brand-primary !important;
+    }
+  }
+
+  .delete-button {
+    &:hover {
+      background-color: var(--brand-danger);
+    }
+  }
+}
+
+:global(.dark) {
+  .chord-thumb-card {
+    background-color: rgba(30, 41, 59, 0.3);
+    &.is-editing {
+      background-color: rgba(37, 99, 235, 0.15) !important;
+      .chord-name-text {
+        color: #60a5fa !important;
+      }
+    }
+  }
+  .group-drop-zone {
+    &[dragover] {
+      background-color: rgba(59, 130, 246, 0.06);
+    }
+  }
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\sidebar-left\LeftHeader.vue ===
+
+<template>
+  <div
+    class="p-4 px-5 h-[76px] border-b border-slate-100 dark:border-slate-800 flex items-center justify-between min-w-[335px] relative"
+  >
+    <div>
+      <h1 class="text-lg font-black tracking-tight uppercase text-title">Fret Logic</h1>
+    </div>
+
+    <div class="relative flex items-center justify-center">
+      <GlobalTooltip placement="bottom-end" content="鏂板缓鍒嗙粍">
+        <button
+          @click="uiStore.openModal('createGroup', '鏂板缓鍒嗙粍')"
+          class="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-primary font-black flex items-center justify-center text-sm border border-slate-200 dark:border-slate-700 active:scale-95 transition-transform"
+        >
+          锛?
+        </button>
+      </GlobalTooltip>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { useUiStore } from '@/stores/uiStore';
+
+const uiStore = useUiStore();
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+// 琛ュ厖瀛楄壊锛屽榻愯璁＄郴缁?
+.text-title {
+  color: @text-title;
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\sidebar-left\SidebarLeft.vue ===
+
+<template>
+  <div
+    class="panel-left h-[calc(100vh-24px)] flex flex-col shrink-0 relative overflow-hidden z-10"
+    :style="{
+      width: uiStore.isLeftOpen ? '335px' : '0px',
+      opacity: uiStore.isLeftOpen ? 1 : 0,
+      margin: uiStore.isLeftOpen ? '12px' : '12px 0',
+    }"
+  >
+    <LeftHeader />
+    <LeftGroupList />
+    <LeftFooter />
+  </div>
+
+  <button
+    @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
+    class="sidebar-toggle-btn sidebar-toggle-btn-left text-[9px] font-black"
+    :style="{ left: uiStore.isLeftOpen ? '347px' : '0px' }"
+  >
+    {{ uiStore.isLeftOpen ? '鈼€' : '鈻? }}
+  </button>
+</template>
+
+<script setup lang="ts">
+import { useUiStore } from '@/stores/uiStore';
+import LeftFooter from './LeftFooter.vue';
+import LeftGroupList from './LeftGroupList.vue';
+import LeftHeader from './LeftHeader.vue';
+
+const uiStore = useUiStore();
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+// 馃専 淇锛氳繖閲屽繀椤绘槸 panel-left
+.panel-left {
+  .mixin-panel-base();
+  transition:
+    width 0.35s @bezier-standard,
+    opacity 0.25s ease,
+    margin 0.35s @bezier-standard;
+}
+
+.sidebar-toggle-btn {
+  .mixin-sidebar-toggle();
+  // 馃専 淇锛氬乏渚ф寜閽殑杞ㄩ亾浣嶇Щ蹇呴』缁戝畾 left
+  transition:
+    all 0.2s ease,
+    left 0.35s @bezier-standard;
+
+  // 馃専 淇锛氳繖閲屽繀椤绘槸 -left
+  &-left {
+    // 馃専 淇锛氬乏渚ф寜閽殑鍦嗚鏄彸杈瑰渾锛屽乏杈瑰钩
+    border-radius: 0 10px 10px 0;
+    transform: translateY(-50%) scale(1);
+    transform-origin: left; // 馃専 淇锛氬姩鐢荤缉鏀惧熀鍑嗙偣鍦ㄥ乏渚?
+    &:active {
+      transform: translateY(-50%) scale(0.93);
+    }
+  }
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\sidebar-right\RightCapoWheel.vue ===
+
+<template>
+  <div class="relative flex flex-col gap-2">
+    <label class="text-xs font-black tracking-widest uppercase text-subtitle">Capo</label>
+    <div class="relative w-full">
+      <GlobalTooltip content="婊氬姩婊氳疆鍒囨崲" placement="top">
+        <div
+          ref="capoWheelRef"
+          @click="uiStore.toggleCapoPanel()"
+          class="capo-trigger-bar w-full h-10 bg-slate-100 dark:bg-slate-800 font-black text-[14px] px-3 rounded-xl flex items-center justify-between border cursor-pointer select-none hover:bg-slate-200/50 dark:hover:bg-slate-700/60"
+        >
+          <span class="capo-value-text"
+            >{{ chordLabStore.capo }} {{ chordLabStore.capo === 0 ? '(绌哄鸡浣?' : '鍝? }}</span
+          >
+          <svg
+            class="w-3 h-3 text-slate-400 transition-transform duration-200"
+            :class="{ 'rotate-180': uiStore.isCapoOpen }"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </GlobalTooltip>
+
+      <div v-if="uiStore.isCapoOpen" class="fixed inset-0 z-[40]" @click="uiStore.isCapoOpen = false"></div>
+
+      <Transition
+        enter-from-class="opacity-0 translate-y-[-10px]"
+        leave-to-class="opacity-0 translate-y-[-10px]"
+        enter-active-class="transition duration-200 ease-out"
+        leave-active-class="transition duration-200 ease-in"
+      >
+        <div
+          v-if="uiStore.isCapoOpen"
+          class="capo-dropdown-box absolute left-0 right-0 mt-1.5 max-h-52 overflow-y-auto no-scrollbar rounded-xl shadow-2xl z-[50] p-1.5 flex flex-col gap-1.5 border"
+        >
+          <div
+            v-for="n in 13"
+            :id="'capo-opt-' + (n - 1)"
+            :key="n - 1"
+            @click="
+              chordLabStore.capo = n - 1;
+              uiStore.isCapoOpen = false;
+            "
+            class="capo-item h-10 px-2.5 py-1 rounded-lg flex items-center text-[14px] font-bold cursor-pointer transition-colors"
+            :class="{ 'is-selected': chordLabStore.capo === n - 1 }"
+          >
+            <span class="w-3.5 text-right mr-1">{{ n - 1 }}</span>
+            <span>{{ n - 1 === 0 ? '(绌哄鸡浣?' : '鍝? }}</span>
+          </div>
+        </div>
+      </Transition>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { useChordLabStore } from '@/stores/chordLabStore';
+import { useUiStore } from '@/stores/uiStore';
+import { useEventListener } from '@vueuse/core';
+import { nextTick, onMounted, ref, watch } from 'vue';
+
+const uiStore = useUiStore();
+const chordLabStore = useChordLabStore();
+const capoWheelRef = ref<HTMLDivElement | null>(null);
+
+watch(
+  () => uiStore.isCapoOpen,
+  isOpen => {
+    if (isOpen) {
+      nextTick(() => {
+        const targetElement = document.getElementById(`capo-opt-${chordLabStore.capo}`);
+        if (targetElement) {
+          targetElement.scrollIntoView({ block: 'center', behavior: 'auto' });
+        }
+      });
+    }
+  }
+);
+
+const handleWheelCapo = (e: WheelEvent) => {
+  e.preventDefault();
+  chordLabStore.capo =
+    e.deltaY < 0
+      ? chordLabStore.capo <= 0
+        ? 12
+        : chordLabStore.capo - 1
+      : chordLabStore.capo >= 12
+        ? 0
+        : chordLabStore.capo + 1;
+};
+
+onMounted(() => {
+  if (capoWheelRef.value) useEventListener(capoWheelRef, 'wheel', handleWheelCapo, { passive: false });
+});
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.capo-trigger-bar {
+  border-color: var(--control-border);
+  .capo-value-text {
+    color: @text-body;
+    opacity: 0.8;
+  }
+  :global(.dark) & .capo-value-text {
+    color: #ffffff !important;
+    opacity: 0.9;
+  }
+}
+
+.capo-dropdown-box {
+  .mixin-floating-layer(); // 涓€閿敞鍏ユ偓娴槾褰卞拰杈规
+
+  .capo-item {
+    color: @text-body;
+    .mixin-hover-card(); // 涓€閿敞鍏ョ粺涓€鐨勬偓娴儗鏅壊
+
+    &.is-selected {
+      background-color: @brand-primary !important;
+      color: white;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+  }
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\sidebar-right\RightFretSlider.vue ===
+
+<template>
+  <div class="panel-right-plate flex flex-col gap-2">
+    <label class="plate-label text-xs font-black uppercase text-subtitle">鏄剧ず鑼冨洿</label>
+    <div
+      ref="fretSliderRef"
+      class="fret-slider-track flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl h-10 relative items-center cursor-pointer touch-none select-none"
+    >
+      <div
+        class="slider-btn"
+        :style="{
+          transform:
+            chordLabStore.fretCount === 3
+              ? 'translateX(0)'
+              : chordLabStore.fretCount === 4
+                ? 'translateX(100%)'
+                : 'translateX(200%)',
+        }"
+      ></div>
+
+      <div
+        v-for="f in [3, 4, 5]"
+        :key="f"
+        @click="chordLabStore.fretCount = f"
+        class="fret-option-text flex-1 text-center text-[16px] font-black z-10 h-full flex items-center justify-center transition-colors"
+        :class="{ 'is-active': chordLabStore.fretCount === f }"
+      >
+        {{ f }} 鍝?
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { useChordLabStore } from '@/stores/chordLabStore';
+import { useEventListener } from '@vueuse/core';
+import { onMounted, ref } from 'vue';
+
+const chordLabStore = useChordLabStore();
+const fretSliderRef = ref<HTMLDivElement | null>(null);
+let isFretDragging = false;
+
+// 馃専 鏍稿績浼樺寲锛氬浐鍖栨粦杞ㄧ墿鐞嗗崱鐗囪竟鐣岋紝褰诲簳椹遍€?Move 鏈熼棿鐨?getBoundingClientRect 鍒哄
+let cachedSliderRect: DOMRect | null = null;
+
+const handleFretSliderPointerDown = (e: PointerEvent) => {
+  if (!fretSliderRef.value) return;
+  isFretDragging = true;
+  fretSliderRef.value.setPointerCapture(e.pointerId);
+
+  // 馃専 鐘舵€佹崟鑾凤細鍦ㄦ寜涓嬬殑鍒归偅閿佸畾鐗╃悊鐩掑瓙澶у皬
+  cachedSliderRect = fretSliderRef.value.getBoundingClientRect();
+  updateFretCountFromX(e.clientX);
+};
+
+const handleFretSliderPointerMove = (e: PointerEvent) => {
+  if (isFretDragging) updateFretCountFromX(e.clientX);
+};
+
+const handleFretSliderPointerUp = (e: PointerEvent) => {
+  isFretDragging = false;
+  if (fretSliderRef.value) fretSliderRef.value.releasePointerCapture(e.pointerId);
+  cachedSliderRect = null; // 馃専 椤烘墜閲婃斁闃插唴瀛樻硠婕?
+};
+
+const updateFretCountFromX = (clientX: number) => {
+  // 馃専 鏋侀€熷懡涓細Move 鎷栨嫿鏈熼棿 100% 娑堣垂缂撳瓨蹇収
+  const rect = cachedSliderRect || (fretSliderRef.value ? fretSliderRef.value.getBoundingClientRect() : null);
+  if (!rect) return;
+
+  const relativeX = clientX - rect.left;
+  const percent = relativeX / rect.width;
+  if (percent < 0.33) chordLabStore.fretCount = 3;
+  else if (percent < 0.66) chordLabStore.fretCount = 4;
+  else chordLabStore.fretCount = 5;
+};
+
+onMounted(() => {
+  if (fretSliderRef.value) {
+    useEventListener(fretSliderRef, 'pointerdown', handleFretSliderPointerDown);
+    useEventListener(fretSliderRef, 'pointermove', handleFretSliderPointerMove);
+    useEventListener(fretSliderRef, 'pointerup', handleFretSliderPointerUp);
+  }
+});
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.fret-slider-track {
+  border: 1px solid var(--control-border);
+
+  .slider-btn {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc(33.33% - 2.66px);
+    background: var(--bg-panel);
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--control-border);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1;
+  }
+
+  .fret-option-text {
+    color: @text-body;
+    opacity: 0.5;
+
+    &.is-active {
+      color: @brand-primary;
+      opacity: 1;
+    }
+  }
+}
+
+.dark {
+  .fret-slider-track {
+    .slider-btn {
+      background: #334155;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+    .fret-option-text.is-active {
+      color: #3b82f6 !important;
+    }
+  }
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\sidebar-right\RightHelper.vue ===
+
+<template>
+  <div class="helper-action-box flex flex-col gap-2">
+    <label class="plate-label text-xs font-black tracking-widest uppercase text-subtitle">绯荤粺杈呭姪</label>
+
+    <div class="flex flex-col gap-4">
+      <ActionButton @click="playCurrentChord" :disabled="chordLabStore.isFretBoardEmpty || isPlaying">
+        <span v-if="chordLabStore.isFretBoardEmpty">璇锋坊鍔犳寚鏉块煶</span>
+        <template v-else>
+          <span class="text-sm leading-none mr-2">{{ isPlaying ? '鈴? : '馃攰' }}</span>
+          <span>{{ isPlaying ? '姝ｅ湪璇曞惉...' : '璇曞惉褰撳墠鍜屽鸡' }}</span>
+        </template>
+      </ActionButton>
+
+      <div class="fret-shift flex flex-col gap-2 p-3 rounded-xl border bg-panel-fallback">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold text-subtitle tracking-wider">鎸囧瀷鏁翠綋骞崇Щ</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <ActionButton @click="handleShiftFret('down')" :disabled="isShiftDownDisabled" class="h-8 rounded-lg text-xs">
+            <span class="text-xs leading-none rotate-90 mr-1">鈼€</span>
+            <span>涓婄Щ</span>
+          </ActionButton>
+
+          <ActionButton @click="handleShiftFret('up')" :disabled="isShiftUpDisabled" class="h-8 rounded-lg text-xs">
+            <span>涓嬬Щ</span>
+            <span class="text-xs leading-none rotate-90 ml-1">鈻?/span>
+          </ActionButton>
+        </div>
+      </div>
+
+      <ActionButton @click="uiStore.copyFretBoardToClipboard('#fretBoard-capture-area')" :disabled="uiStore.isCopying">
+        <span class="text-sm leading-none mr-2">{{ uiStore.isCopying ? '鈴? : '馃摳' }}</span>
+        <span>{{ uiStore.isCopying ? '姝ｅ湪瀵煎嚭...' : '澶嶅埗褰撳墠鍒板壀鍒囨澘' }}</span>
+      </ActionButton>
+
+      <ActionButton @click="chordLabStore.isDarkMode = !chordLabStore.isDarkMode">
+        <span class="text-sm leading-none mr-2">
+          {{ chordLabStore.isDarkMode ? '馃寵' : '鈽€锔? }}
+        </span>
+        <span>
+          {{ chordLabStore.isDarkMode ? '娣辫壊妯″紡' : '娴呰壊妯″紡' }}
+        </span>
+      </ActionButton>
+    </div>
+  </div>
+</template>
+
+<script lang="ts">
+let sharedCtx: AudioContext | null = null;
+let sharedMainMixer: GainNode | null = null;
+let sharedConvolver: ConvolverNode | null = null;
+
+// 鍥哄寲 6 鏍瑰鸡鐨勭嫭绔嬬‖浠剁閬擄紝閬垮厤姣忔鐐瑰嚮鍦ㄥ惊鐜唴棰戠箒鐢宠鍒嗛厤鍐呭瓨
+const staticStringGains: GainNode[] = [];
+const staticModGains: GainNode[] = [];
+
+// 鍏ㄥ眬鍞竴鐨勭湅闂ㄧ嫍瀹氭椂鍣ㄥ彞鏌勶紝涓撻棬鏂╂柇楂橀杩炵画鐐瑰嚮鏃剁殑鐘舵€侀棯鐑佷笌闂寘鍐茬獊
+let playTimer: ReturnType<typeof setTimeout> | null | null = null;
+</script>
+
+<script setup lang="ts">
+import ActionButton from '@/components/ActionButton.vue';
+import { useChordLabStore } from '@/stores/chordLabStore';
+import { useUiStore } from '@/stores/uiStore';
+import { computed, onBeforeUnmount, ref } from 'vue';
+
+const uiStore = useUiStore();
+const chordLabStore = useChordLabStore();
+
+const isPlaying = ref(false);
+
+const hasNoPressedFrets = computed(() => !chordLabStore.selectedFrets.some(fret => fret > 0));
+
+const isShiftDownDisabled = computed(
+  () =>
+    chordLabStore.isFretBoardEmpty || hasNoPressedFrets.value || chordLabStore.selectedFrets.some(fret => fret === 1)
+);
+
+const isShiftUpDisabled = computed(
+  () =>
+    chordLabStore.isFretBoardEmpty ||
+    hasNoPressedFrets.value ||
+    chordLabStore.selectedFrets.some(fret => fret === chordLabStore.fretCount)
+);
+
+const handleShiftFret = (direction: 'up' | 'down') => {
+  if (chordLabStore.isFretBoardEmpty || hasNoPressedFrets.value) return;
+
+  if (direction === 'up') {
+    if (chordLabStore.selectedFrets.some(fret => fret === chordLabStore.fretCount)) return;
+    chordLabStore.selectedFrets = chordLabStore.selectedFrets.map(fret => (fret > 0 ? fret + 1 : fret));
+  } else {
+    if (chordLabStore.selectedFrets.some(fret => fret === 1)) return;
+    chordLabStore.selectedFrets = chordLabStore.selectedFrets.map(fret => (fret > 0 ? fret - 1 : fret));
+  }
+  uiStore.showToast(`馃幍 鍜屽鸡鎸囧瀷宸插畬鎴愭暣浣撳钩绉籤);
+};
+
+// ==========================================================================
+// 馃攰 鍚璇曞惉寮曟搸鏍稿績閫昏緫
+// ==========================================================================
+
+const getReverbBuffer = (ctx: AudioContext, seconds: number): AudioBuffer => {
+  const rate = ctx.sampleRate;
+  const len = rate * seconds;
+  const buffer = ctx.createBuffer(2, len, rate);
+  for (let channel = 0; channel < 2; channel++) {
+    const data = buffer.getChannelData(channel);
+    for (let i = 0; i < len; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+    }
+  }
+  return buffer;
+};
+
+const initAudioEngine = () => {
+  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioContextClass) return null;
+
+  const ctx = new AudioContextClass();
+  const mainMixer = ctx.createGain();
+  mainMixer.gain.setValueAtTime(0.4, ctx.currentTime);
+
+  const convolver = ctx.createConvolver();
+  convolver.buffer = getReverbBuffer(ctx, 2.0);
+
+  const wetGain = ctx.createGain();
+  wetGain.gain.setValueAtTime(0.3, ctx.currentTime);
+
+  mainMixer.connect(ctx.destination);
+  mainMixer.connect(convolver);
+  convolver.connect(wetGain);
+  wetGain.connect(ctx.destination);
+
+  // 鎻愬墠鍒濆鍖栧苟鐒婃帴 6 鏉′箰杞ㄧ殑骞惰仈鍖呯粶涓灑
+  for (let i = 0; i < 6; i++) {
+    const sGain = ctx.createGain();
+    sGain.gain.setValueAtTime(0, ctx.currentTime);
+    sGain.connect(mainMixer);
+    staticStringGains.push(sGain);
+
+    const mGain = ctx.createGain();
+    mGain.gain.setValueAtTime(0, ctx.currentTime);
+    staticModGains.push(mGain);
+  }
+
+  sharedCtx = ctx;
+  sharedMainMixer = mainMixer;
+  sharedConvolver = convolver;
+  return ctx;
+};
+
+const playCurrentChord = async () => {
+  if (isPlaying.value) return;
+
+  let ctx = sharedCtx;
+  if (!ctx || ctx.state === 'closed') {
+    ctx = initAudioEngine();
+  }
+  if (!ctx || !sharedMainMixer) return;
+
+  if (ctx.state === 'suspended') {
+    await ctx.resume();
+  }
+
+  isPlaying.value = true;
+  const fretsSnapshot = [...chordLabStore.selectedFrets].reverse();
+  const capoOffset = chordLabStore.capo > 0 ? chordLabStore.capo : 0;
+  let strumDelay = 0;
+
+  for (let sIdx = 5; sIdx >= 0; sIdx--) {
+    const fretVal = fretsSnapshot[sIdx];
+    if ((fretVal ?? -1) < 0) continue;
+
+    const guitarMidiBase = [64, 59, 55, 50, 45, 40][sIdx];
+    const actualCapoOffset = fretVal > 0 ? capoOffset : 0;
+    const absoluteHalfTones = guitarMidiBase + fretVal + actualCapoOffset;
+    const frequency = 440 * Math.pow(2, (absoluteHalfTones - 69) / 12);
+    const triggerTime = ctx.currentTime + strumDelay;
+
+    const oscMain = ctx.createOscillator();
+    const oscMod = ctx.createOscillator();
+
+    // 浠庢ā鍧楃骇鍗曚緥鏁扮粍涓簿鍑嗘媺鍙栭暱杩炴帴鎬荤嚎
+    const stringGain = staticStringGains[sIdx];
+    const modGain = staticModGains[sIdx];
+
+    oscMain.type = 'triangle';
+    oscMain.frequency.setValueAtTime(frequency, triggerTime);
+    oscMod.type = 'sine';
+    oscMod.frequency.setValueAtTime(frequency * 1.5, triggerTime);
+
+    modGain.gain.setValueAtTime(frequency * 2.5, triggerTime);
+
+    const attackTime = 0.005;
+    const decayTime = 0.15;
+    const sustainLevel = 0.3;
+    const holdDuration = 0.2;
+    const releaseTime = 1.0;
+
+    const envStartTime = triggerTime;
+    const envAttackEndTime = envStartTime + attackTime;
+    const envDecayEndTime = envAttackEndTime + decayTime;
+    const envReleaseStartTime = envStartTime + holdDuration;
+    const envReleaseEndTime = envReleaseStartTime + releaseTime;
+
+    stringGain.gain.setValueAtTime(0, envStartTime);
+    stringGain.gain.linearRampToValueAtTime(1.0, envAttackEndTime);
+    stringGain.gain.linearRampToValueAtTime(sustainLevel, envDecayEndTime);
+    stringGain.gain.setValueAtTime(sustainLevel, envReleaseStartTime);
+    stringGain.gain.exponentialRampToValueAtTime(0.0001, envReleaseEndTime);
+
+    oscMod.connect(modGain);
+    modGain.connect(oscMain.frequency);
+    oscMain.connect(stringGain);
+
+    oscMain.start(envStartTime);
+    oscMod.start(envStartTime);
+    oscMain.stop(envReleaseEndTime);
+    oscMod.stop(envReleaseEndTime);
+
+    strumDelay += 0.2;
+  }
+
+  const totalChordDuration = (strumDelay + 1.2) * 1000;
+
+  // 馃専 鏍稿績鏀硅壇 2锛氭瘡娆℃壂寮﹁捣鑸墠锛屽己鍒舵牳鐔旀懅姣佸墠浠诲畾鏃跺櫒锛岀‘淇濈姸鎬佹寚绀虹粷涓嶉棯鐑?
+  if (playTimer) clearTimeout(playTimer);
+
+  playTimer = setTimeout(() => {
+    isPlaying.value = false;
+  }, totalChordDuration);
+};
+
+onBeforeUnmount(() => {
+  if (playTimer) clearTimeout(playTimer);
+  // 馃専 娉ㄦ剰锛氳繖閲屼笉鍐嶇矖鏆村湴 ctx.close() 娓呯┖鏁翠釜鍗曚緥锛屽惁鍒欎笅娆℃寕杞戒細寮曞彂纭欢鏂眰銆?
+  // 妯″潡浣滅敤鍩熶腑鐨勮祫浜у皢鎸佺画涓哄簲鐢ㄥ父椹绘湇鍔★紝鐩村埌椤甸潰瀹屽叏鍏抽棴銆?
+});
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.fret-shift {
+  border-color: var(--control-border);
+}
+
+.bg-panel-fallback {
+  background-color: var(--bg-panel);
+}
+
+.helper-action-box {
+  button:not(:disabled):hover {
+    border-color: @brand-primary;
+    color: @brand-primary;
+  }
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\sidebar-right\RightPanelFooter.vue ===
+
+<template>
+  <div
+    class="p-4 border-t border-slate-100 dark:border-slate-800 min-w-[335px] bg-slate-50/50 dark:bg-slate-900/20 rounded-b-16"
+  >
+    <div class="grid grid-cols-2 gap-2">
+      <ActionButton @click="uiStore.triggerSaveChord()" :primary="!isSaveDisabled" :disabled="isSaveDisabled">
+        {{ chordLabStore.editingId ? '鏇存柊淇敼' : '淇濆瓨鍜屽鸡' }}
+      </ActionButton>
+
+      <ActionButton
+        @click="chordLabStore.resetEditor()"
+        :danger="!chordLabStore.editingId"
+        :warning="!!chordLabStore.editingId"
+      >
+        {{ chordLabStore.editingId ? '鏀惧純鏈淇敼' : '娓呯┖鎸囨澘' }}
+      </ActionButton>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import ActionButton from '@/components/ActionButton.vue';
+import { useChordLabStore } from '@/stores/chordLabStore';
+import { useUiStore } from '@/stores/uiStore';
+import { computed } from 'vue';
+
+const uiStore = useUiStore();
+const chordLabStore = useChordLabStore();
+
+/**
+ * 鏅鸿兘鍒ゅ畾淇濆瓨/鏇存柊鎸夐挳鏄惁搴旇缃伆绂佺敤
+ * 缁熶竴鏍囧噯锛氭棤鏍稿績璧勪骇鏁版嵁锛堝悕瀛椾负绌?OR 涓昏剳鍒ゅ畾鎸囨澘鍏ㄧ┖锛夋墠绂佺敤
+ */
+const isSaveDisabled = computed(() => {
+  const cleanName = chordLabStore.currentChordName ? chordLabStore.currentChordName.trim() : '';
+
+  // 馃専 鏍稿績鎺ュ叆锛氬共鎺夊師鏈殑灞€閮?.every 寰幆锛?00% 杩為€氫富鑴戝叏灞€绌虹姸鎬?Getter
+  return !cleanName || chordLabStore.isFretBoardEmpty;
+});
+</script>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\sidebar-right\SidebarRight.vue ===
+
+<template>
+  <div
+    class="panel-right h-[calc(100vh-24px)] flex flex-col shrink-0 justify-between overflow-hidden"
+    :class="{ 'is-open': uiStore.isRightOpen }"
+  >
+    <div class="flex flex-col flex-1 min-w-[335px]">
+      <div class="h-[76px] border-b border-control p-4 flex items-center">
+        <h2 class="panel-main-title text-sm font-black tracking-widest uppercase text-title">鎸囨澘閰嶇疆</h2>
+      </div>
+
+      <div class="p-4 flex flex-col gap-4">
+        <RightFretSlider />
+        <RightCapoWheel />
+        <RightHelper />
+      </div>
+    </div>
+
+    <RightPanelFooter />
+  </div>
+
+  <button
+    @click="uiStore.isRightOpen = !uiStore.isRightOpen"
+    class="sidebar-toggle-btn sidebar-toggle-btn-right text-[9px] font-black"
+    :class="{ 'is-open': uiStore.isRightOpen }"
+  >
+    {{ uiStore.isRightOpen ? '鈻? : '鈼€' }}
+  </button>
+</template>
+
+<script setup lang="ts">
+import { useUiStore } from '@/stores/uiStore';
+import RightCapoWheel from './RightCapoWheel.vue';
+import RightFretSlider from './RightFretSlider.vue';
+import RightHelper from './RightHelper.vue';
+import RightPanelFooter from './RightPanelFooter.vue';
+
+const uiStore = useUiStore();
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.border-control {
+  border-color: var(--control-border);
+}
+
+.panel-right {
+  // 馃専 1. 缁濆缁ф壙锛氫竴閿贩鍏ラ潰鏉块鏋讹紒姝ゆ椂 background-color: var(--bg-panel) 鏉冮噸瀹夊叏褰掍綅
+  .mixin-panel-base();
+
+  // 馃専 2. 榛樿鍏抽棴鐘舵€侊紙绾?Less 缂栧啓锛岄槻姝㈠拰琛屽唴浜х敓姝婚攣锛?
+  width: 0px;
+  opacity: 0;
+  margin: 12px 0;
+  transition:
+    width 0.35s @bezier-sidebar,
+    opacity 0.25s ease,
+    margin 0.35s @bezier-sidebar,
+    border-color 0.2s ease; // 杩炶竟妗嗗彉鑹蹭篃涓€璧疯蛋鏍囧噯鏃堕挓
+
+  // 馃専 3. 灞曞紑鐘舵€佹縺娲?
+  &.is-open {
+    width: 335px;
+    opacity: 1;
+    margin: 12px;
+  }
+
+  // 馃専 4. 鍍忕礌绾ф殫鑹插井璋冿細14% 寰厜绌烘皵绾?
+  :global(.dark) & {
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+}
+
+.sidebar-toggle-btn {
+  // 馃専 鏍稿績澶嶇敤锛氭彁鍙栦晶杈规爮鎶婃墜閫氱敤瑙勮寖
+  .mixin-sidebar-toggle();
+
+  // 鎸夐挳榛樿闈犲彸杈圭紭锛堝叧闂椂鐘舵€侊級
+  right: 0px;
+
+  transition:
+    all 0.2s ease,
+    right 0.35s @bezier-sidebar;
+
+  &-right {
+    border-radius: 10px 0 0 10px;
+    transform: translateY(-50%) scale(1);
+    transform-origin: right;
+
+    // 褰撻潰鏉挎墦寮€鏃讹紝鎸夐挳鏍规嵁鐘舵€佸钩绉?
+    &.is-open {
+      right: 347px;
+    }
+
+    &:active {
+      transform: translateY(-50%) scale(0.93);
+    }
+  }
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\workbench\ChordInputHeader.vue ===
+
+<template>
+  <div
+    class="w-full text-center transition-transform"
+    :style="{
+      transform: `translateY(${['3%', '5%', '9%'][chordLabStore.fretCount - 3]})`,
+      transitionDuration: '300ms',
+    }"
+  >
+    <input
+      v-model="chordLabStore.currentChordName"
+      type="text"
+      spellcheck="false"
+      class="input-chord-name"
+      placeholder="CHORD"
+      :style="{
+        color: !chordLabStore.currentChordName ? (chordLabStore.isDarkMode ? '#475569' : '#cbd5e1') : '',
+      }"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { useChordLabStore } from '@/stores/chordLabStore';
+
+const chordLabStore = useChordLabStore();
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.input-chord-name {
+  width: 100%;
+  text-align: center;
+  font-weight: 900;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 3.5rem;
+  letter-spacing: -0.04em;
+
+  // 馃専 鍘熺敓琛€鑴夌浉杩烇細鐩存帴娑堣垂浼氳嚜閫傚簲娣辨祬妯″紡鐨?var(--text-title)
+  color: @text-title;
+  caret-color: @brand-primary;
+
+  // 馃専 鏇茬嚎鏀舵嫝锛氱粺涓€鎺ュ叆绯荤粺绾ф爣鍑嗙紦鍔?
+  transition: all 0.3s @bezier-standard;
+  text-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+
+  &:focus {
+    transform: scale(1.02);
+    text-shadow: 0 4px 20px rgba(37, 99, 235, 0.15);
+  }
+
+  // 馃専 缁堟瀬浼樺寲锛氬悎骞舵繁娴呰壊鍗犱綅绗﹂€昏緫锛岀墿鐞嗗榻愮墿鐞嗙惔寮﹁壊
+  &::placeholder {
+    color: @fret-color;
+    font-weight: 700;
+    opacity: 0.6;
+    transition: color 0.25s @bezier-standard;
+  }
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\workbench\FretBoardCanvas.vue ===
+
+<template>
+  <div
+    ref="fretBoardRef"
+    class="fretBoard-container relative touch-action-none flex flex-col items-center select-none"
+    :style="{
+      width: '456px',
+      height: 80 + chordLabStore.fretCount * 120 + 20 + 'px',
+      transform: `scale(${1 - (chordLabStore.fretCount - 3) * 0.06})`,
+      transformOrigin: 'top center',
+    }"
+    @contextmenu.prevent="handleCanvasRightClick"
+  >
+    <div class="w-full h-[80px] relative pointer-events-none">
+      <template v-for="(fretVal, sIdx) in chordLabStore.selectedFrets" :key="'os-' + sIdx">
+        <button
+          v-if="fretVal === -1"
+          :key="'muted-' + sIdx"
+          @click.stop="chordLabStore.toggleOpenString(sIdx)"
+          @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
+          class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-none open-string-btn muted"
+          :style="{
+            left: `${getStrX(sIdx)}px`,
+            transform: 'translateX(-50%)',
+            top: '10px',
+          }"
+        >
+          <span>鉁?/span>
+        </button>
+
+        <button
+          v-else-if="fretVal === 0"
+          :key="'open-' + sIdx"
+          @click.stop="chordLabStore.toggleOpenString(sIdx)"
+          @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
+          class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-all duration-75 open-string-btn"
+          :class="[chordLabStore.rootMark === sIdx ? 'root' : 'open']"
+          :style="{
+            left: `${getStrX(sIdx)}px`,
+            transform: 'translateX(-50%)',
+            top: '10px',
+          }"
+        >
+          <span>{{ ['E', 'A', 'D', 'G', 'B', 'E'][sIdx] }}</span>
+        </button>
+
+        <button
+          v-else
+          :key="'pressed-shield-' + sIdx"
+          @click.stop="chordLabStore.toggleOpenString(sIdx)"
+          @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
+          class="absolute w-10 h-10 opacity-0 pointer-events-auto bg-transparent border-none outline-none cursor-pointer"
+          :style="{
+            left: `${getStrX(sIdx)}px`,
+            transform: 'translateX(-50%)',
+            top: '20px',
+          }"
+        ></button>
+      </template>
+    </div>
+
+    <svg
+      width="456"
+      :height="chordLabStore.fretCount * 120 + 20"
+      :viewBox="`0 0 456 ${chordLabStore.fretCount * 120 + 20}`"
+      style="overflow: visible"
+      class="w-full pointer-events-auto"
+    >
+      <line
+        v-for="s in 6"
+        :key="'string-' + s"
+        :x1="getStrX(s - 1)"
+        y1="0"
+        :x2="getStrX(s - 1)"
+        :y2="chordLabStore.fretCount * 120"
+        :stroke="chordLabStore.isDarkMode ? '#475569' : '#94a3b8'"
+        stroke-width="4"
+        style="pointer-events: none"
+      />
+
+      <line
+        v-for="f in chordLabStore.fretCount + 1"
+        :key="'fret-line-' + f"
+        x1="45"
+        :y1="(f - 1) * 120"
+        x2="425"
+        :y2="(f - 1) * 120"
+        :stroke="chordLabStore.isDarkMode ? '#334155' : '#cbd5e1'"
+        stroke-width="4"
+        style="pointer-events: none"
+      />
+
+      <rect
+        x="43"
+        y="-6"
+        width="384"
+        height="8"
+        :fill="chordLabStore.isDarkMode ? '#f1f5f9' : '#475569'"
+        style="pointer-events: none"
+      />
+
+      <template v-for="f in chordLabStore.fretCount + 1" :key="'fret-text-' + f">
+        <text
+          x="10"
+          :y="(f - 1) * 120"
+          text-anchor="middle"
+          dy="0.36em"
+          font-size="28"
+          font-weight="900"
+          :fill="chordLabStore.isDarkMode ? '#64748b' : '#94a3b8'"
+          class="fret-number-text"
+          v-if="f > 1 && f <= chordLabStore.fretCount"
+          style="pointer-events: none"
+        >
+          {{ chordLabStore.capo > 0 ? chordLabStore.capo + f - 1 : f - 1 }}
+        </text>
+      </template>
+
+      <template v-for="(fret, sIdx) in chordLabStore.selectedFrets" :key="'finger-' + sIdx">
+        <g
+          v-if="fret > 0 && fret <= chordLabStore.fretCount"
+          class="cursor-pointer"
+          style="pointer-events: auto"
+          @contextmenu.prevent.stop="handleFretRightClick(sIdx)"
+        >
+          <circle
+            :cx="getStrX(sIdx)"
+            :cy="(fret - 1) * 120 + 60"
+            r="28"
+            :fill="chordLabStore.rootMark === sIdx ? '#f59e0b' : '#2563eb'"
+            style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))"
+          />
+          <text
+            :x="getStrX(sIdx)"
+            :y="(fret - 1) * 120 + 60"
+            text-anchor="middle"
+            dy="0.36em"
+            fill="white"
+            font-size="22"
+            font-weight="700"
+            class="fret-note-text"
+          >
+            {{ calcNoteLabel(sIdx, fret, chordLabStore.capo) }}
+          </text>
+        </g>
+      </template>
+    </svg>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { useChordLabStore } from '@/stores/chordLabStore';
+import { calcNoteLabel } from '@/utils/musicTheory';
+import { useEventListener } from '@vueuse/core';
+import { onMounted, ref } from 'vue';
+
+const chordLabStore = useChordLabStore();
+const fretBoardRef = ref<HTMLDivElement | null>(null);
+
+const getStrX = (i: number) => 45 + i * 76;
+
+let lastCancelTime = 0;
+const MUTING_COOL_DOWN = 200;
+
+let lastSIdx = -1;
+let lastFIdx = -1;
+
+let cachedBoardRect: DOMRect | null = null;
+
+// 馃専 涔愮悊鐘舵€佹満锛氳鑼冨彸鍑荤┖寮﹂煶鎺у埗鍖虹殑缁堟瀬闂幆閫昏緫
+const handleOpenStringRightClick = (sIdx: number) => {
+  // 鍒ゅ畾 A锛氬鏋滃綋鍓嶅凡缁忔槸绌哄鸡闊筹紝涓斿畠鏈潵灏辨槸鎵嬪姩涓婚煶锛岄偅鍙冲嚮灏卞彇娑堜富闊虫爣璁?
+  if (chordLabStore.rootMark === sIdx && chordLabStore.selectedFrets[sIdx] === 0) {
+    chordLabStore.rootMark = -1;
+  } else {
+    // 鍒ゅ畾 B锛堜慨澶嶆牳蹇冿級锛氱浣犱箣鍓嶆槸绂佸脊(-1)杩樻槸瀹炰綋鎸夐煶(>0)锛岄€氶€氭帎鏂竻闄わ紝鍘熷湴鍙樹负绌哄鸡涓婚煶锛?
+    chordLabStore.selectedFrets[sIdx] = 0;
+    chordLabStore.rootMark = sIdx;
+  }
+};
+
+const handleFretRightClick = (sIdx: number) => {
+  chordLabStore.rootMark = chordLabStore.rootMark === sIdx ? -1 : sIdx;
+};
+
+const handleCanvasRightClick = (e: MouseEvent) => {
+  if (!fretBoardRef.value) return;
+  const board = fretBoardRef.value.getBoundingClientRect();
+  const scaleX = board.width / 456;
+  const scaleY = board.height / (80 + chordLabStore.fretCount * 120 + 20);
+
+  const canvasX = (e.clientX - board.left) / scaleX;
+  const canvasY = (e.clientY - board.top) / scaleY;
+
+  const sIdx = Math.round((canvasX - 45) / 76);
+  const fretAreaY = canvasY - 80;
+  const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / 120) + 1 : 0;
+
+  if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount) {
+    if (chordLabStore.selectedFrets[sIdx] === fIdx) {
+      handleFretRightClick(sIdx);
+      return;
+    }
+    chordLabStore.selectedFrets[sIdx] = fIdx;
+    chordLabStore.rootMark = sIdx;
+  }
+};
+
+const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = false) => {
+  const board = cachedBoardRect || (fretBoardRef.value ? fretBoardRef.value.getBoundingClientRect() : null);
+  if (!board) return;
+
+  const scaleX = board.width / 456;
+  const scaleY = board.height / (80 + chordLabStore.fretCount * 120 + 20);
+
+  const canvasX = (clientX - board.left) / scaleX;
+  const canvasY = (clientY - board.top) / scaleY;
+
+  const sIdx = Math.round((canvasX - 45) / 76);
+  const fretAreaY = canvasY - 80;
+  const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / 120) + 1 : 0;
+
+  if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount) {
+    if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
+    const isSameFret = chordLabStore.selectedFrets[sIdx] === fIdx;
+    if (isSameFret) {
+      chordLabStore.selectedFrets[sIdx] = -1;
+      lastSIdx = -1;
+      lastFIdx = -1;
+      if (chordLabStore.rootMark === sIdx) {
+        chordLabStore.rootMark = -1;
+      }
+      lastCancelTime = Date.now();
+    } else {
+      if (isMoveEvent && Date.now() - lastCancelTime < MUTING_COOL_DOWN) {
+        lastSIdx = -1;
+        lastFIdx = -1;
+        return;
+      }
+      chordLabStore.selectedFrets[sIdx] = fIdx;
+      lastSIdx = sIdx;
+      lastFIdx = fIdx;
+    }
+  }
+};
+
+const handlePointerDown = (e: PointerEvent) => {
+  if (e.button !== 0) return;
+  if (fretBoardRef.value) {
+    cachedBoardRect = fretBoardRef.value.getBoundingClientRect();
+  }
+  chordLabStore.isDraggingFinger = true;
+  lastSIdx = -1;
+  lastFIdx = -1;
+  handleFingerClickLogic(e.clientX, e.clientY, false);
+};
+
+const handlePointerMove = (e: PointerEvent) => {
+  if (!chordLabStore.isDraggingFinger) return;
+  handleFingerClickLogic(e.clientX, e.clientY, true);
+};
+
+const handlePointerUp = () => {
+  chordLabStore.isDraggingFinger = false;
+  lastSIdx = -1;
+  lastFIdx = -1;
+  cachedBoardRect = null;
+};
+
+onMounted(() => {
+  if (fretBoardRef.value) {
+    useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
+    useEventListener(window, 'pointermove', handlePointerMove);
+    useEventListener(window, 'pointerup', handlePointerUp);
+  }
+});
+</script>
+
+<style scoped lang="less">
+.fretBoard-container {
+  .fret-number-text,
+  .fret-note-text {
+    font-family:
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
+  }
+  .open-string-btn {
+    border-color: #cbd5e1;
+    color: #334155;
+    background-color: #ffffff;
+    transition: all 0.075s cubic-bezier(0.4, 0, 0.2, 1);
+    &.muted {
+      border-color: rgba(239, 68, 68, 0.3) !important;
+      color: #ef4444 !important;
+      background-color: rgba(239, 68, 68, 0.08) !important;
+      transition: none !important;
+    }
+    &.open {
+      border-color: #2563eb50 !important;
+      color: #2563eb !important;
+      background-color: rgba(37, 99, 235, 0.08) !important;
+    }
+    &.root {
+      border-color: #f59e0b !important;
+      color: #ffffff !important;
+      background-color: #f59e0b !important;
+      box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+    }
+  }
+}
+:global(.dark) {
+  .fretBoard-container {
+    .open-string-btn {
+      border-color: #475569;
+      color: #f8fafc;
+      background-color: #1e293b;
+      &.muted {
+        border-color: rgba(239, 68, 68, 0.4) !important;
+        color: #f87171 !important;
+        background-color: rgba(239, 68, 68, 0.15) !important;
+        transition: none !important;
+      }
+      &.open {
+        border-color: #3b82f6 !important;
+        color: #3b82f6 !important;
+        background-color: rgba(59, 130, 246, 0.15) !important;
+      }
+      &.root {
+        border-color: #fbbf24 !important;
+        color: #1e293b !important;
+        background-color: #fbbf24 !important;
+        box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
+      }
+    }
+  }
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\views\workbench\Workbench.vue ===
+
+<template>
+  <div id="fretBoard-capture-area" class="flex-1 h-full flex items-center justify-center p-8 transition-all">
+    <div
+      class="workbench-card w-[520px] rounded-xl flex flex-col justify-evenly items-center relative shrink-0"
+      :style="{ height: 230 + [350, 440, 510][chordLabStore.fretCount - 3] + 'px' }"
+    >
+      <ChordInputHeader />
+
+      <FretBoardCanvas />
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { useChordLabStore } from '@/stores/chordLabStore';
+import ChordInputHeader from './ChordInputHeader.vue';
+import FretBoardCanvas from './FretBoardCanvas.vue';
+
+const chordLabStore = useChordLabStore();
+</script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.workbench-card {
+  .mixin-panel-base(); // 涓€閿敞鍏ヨ儗鏅€佽竟妗嗐€侀槾褰便€佹殫榛戞ā寮?
+
+  font-size: 16px !important;
+  transition:
+    height 0.4s @bezier-standard,
+    background-color 0.3s,
+    border-color 0.3s;
+}
+</style>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\App.vue ===
+
+<template>
+  <div class="w-full h-screen flex relative overflow-y-hidden overflow-x-auto bg-main min-w-[1480px]">
+    <GlobalToast />
+
+    <Transition
+      enter-from-class="opacity-0"
+      leave-to-class="opacity-0"
+      enter-active-class="transition duration-250 ease-out"
+      leave-active-class="transition duration-250 ease-in"
+    >
+      <Modal v-if="uiStore.modalShow" />
+    </Transition>
+
+    <SidebarLeft />
+    <Workbench />
+    <SidebarRight />
+  </div>
+</template>
+
+<script setup lang="ts">
+import GlobalToast from './components/GlobalToast.vue'; // 馃専 寮曞叆鏂版娊绂荤殑缁勪欢
+import Modal from './components/Modal.vue';
+import { useUiStore } from '@/stores/uiStore';
+import SidebarLeft from './views/sidebar-left/SidebarLeft.vue';
+import SidebarRight from './views/sidebar-right/SidebarRight.vue';
+import Workbench from './views/workbench/Workbench.vue';
+
+const uiStore = useUiStore();
+</script>
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\main.ts ===
+
+import { createPinia } from 'pinia';
+import { createApp } from 'vue';
+import App from './App.vue';
+import './assets/styles/main.less'; // 瀵煎叆鍏ㄥ眬鏍峰紡鐨偆
+
+const app = createApp(App);
+const pinia = createPinia();
+
+app.use(pinia);
+app.mount('#app');
+
+
+
+=== FILE: C:\Users\lookie\userspace\coding\fret-logic\src\vite-env.d.ts ===
+
+/**
+ * @Author likan
+ * @Date 2026-05-25 09:31:28
+ * @Filepath fret-logic\src\vite-env.d.ts
+ */
+
+/// <reference types="vite/client" />
+
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue';
+  const component: DefineComponent<{}, {}, any>;
+  export default component;
+}
+

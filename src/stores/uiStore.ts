@@ -1,5 +1,5 @@
 import { useRefHistory, useToggle } from '@vueuse/core';
-import * as htmlToImage from 'html-to-image'; // 🌟 引入现代化转换器
+import * as htmlToImage from 'html-to-image';
 import { defineStore } from 'pinia';
 import { ref, toRef } from 'vue';
 import { useChordLabStore, type Chord, type Group } from './chordLabStore';
@@ -14,19 +14,15 @@ export const useUiStore = defineStore('ui', () => {
   const chordStore = useChordLabStore();
 
   const savedChordsRef = toRef(chordStore, 'savedChordsList');
-  // 核心历史数据回滚能力（在 UI 层做联动撤回控制中心）
   const { undo } = useRefHistory(savedChordsRef, { capacity: 10, clone: true });
 
-  // 1. 左右侧边栏框架开合控制
   const isLeftOpen = ref(true);
   const isRightOpen = ref(true);
   const isCopying = ref(false);
 
-  // 2. Capo 独立浮层面板开关
   const isCapoOpen = ref(false);
   const toggleCapoPanel = useToggle(isCapoOpen);
 
-  // 3. 全局独立 Toasts 提示队列管理
   const toasts = ref<Toast[]>([]);
 
   const showToast = (msg: string, canUndo = false) => {
@@ -37,14 +33,12 @@ export const useUiStore = defineStore('ui', () => {
     }, 3000);
   };
 
-  // 4. 全局模态弹窗（Modal）交互数据模型
   const modalShow = ref(false);
   const modalType = ref<'createGroup' | 'renameGroup' | 'deleteGroup' | ''>('');
   const modalTitle = ref('');
   const modalInput = ref('');
   const activeTargetGroup = ref<Group | null>(null);
 
-  // 5. 跨组件拖拽排序临时交互变量
   const draggedGroupIdx = ref<number | null>(null);
 
   const openModal = (
@@ -74,8 +68,16 @@ export const useUiStore = defineStore('ui', () => {
     } else if (modalType.value === 'renameGroup' && activeTargetGroup.value) {
       activeTargetGroup.value.name = val;
     } else if (modalType.value === 'deleteGroup' && activeTargetGroup.value) {
-      chordStore.savedChordsList = chordStore.savedChordsList.filter(c => c.groupId !== activeTargetGroup.value!.id);
-      chordStore.groups = chordStore.groups.filter(g => g.id !== activeTargetGroup.value!.id);
+      // 物理清洗和弦列表引用保持
+      const remainingChords = chordStore.savedChordsList.filter(c => c.groupId !== activeTargetGroup.value!.id);
+      chordStore.savedChordsList.length = 0;
+      chordStore.savedChordsList.push(...remainingChords);
+
+      // 🌟 核心修正：对 groups 同样采用指针保留自愈技术，决不重写新数组破坏 useStorage
+      const remainingGroups = chordStore.groups.filter(g => g.id !== activeTargetGroup.value!.id);
+      chordStore.groups.length = 0;
+      chordStore.groups.push(...remainingGroups);
+
       if (chordStore.selectedGroupId === activeTargetGroup.value.id) {
         chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
       }
@@ -84,8 +86,16 @@ export const useUiStore = defineStore('ui', () => {
     showToast('操作成功');
   };
 
-  // 6. 跨组件核心联动 Action：保存和弦（内部联动数据主脑）
   const triggerSaveChord = () => {
+    const cleanName = chordStore.currentChordName.trim();
+    if (!cleanName) {
+      return showToast('❌ 保存失败：请先输入和弦名称（如 C, Am）');
+    }
+
+    if (chordStore.isFretBoardEmpty) {
+      return showToast('❌ 保存失败：指板上至少需要指定一个有效按点或开弦音');
+    }
+
     const currentActiveGroup = chordStore.groups.find(g => g.id === chordStore.selectedGroupId);
     let targetGroupId = chordStore.selectedGroupId;
 
@@ -100,32 +110,32 @@ export const useUiStore = defineStore('ui', () => {
 
     const payload: Chord = {
       id: chordStore.editingId || Date.now(),
-      chordName: chordStore.currentChordName.trim() || '未命名',
+      chordName: cleanName,
       selectedFrets: [...chordStore.selectedFrets],
       fretCount: chordStore.fretCount,
       capo: chordStore.capo,
       groupId: targetGroupId || 'default',
-      // 🌟 核心绝杀：必须把当前工作区右键标记的 rootMark 塞进 payload 骨架一并打包！
       rootMark: chordStore.rootMark,
     };
 
     const idx = chordStore.savedChordsList.findIndex(c => c.id == chordStore.editingId);
-    idx !== -1 ? (chordStore.savedChordsList[idx] = payload) : chordStore.savedChordsList.unshift(payload);
+    if (idx !== -1) {
+      chordStore.savedChordsList[idx] = payload;
+    } else {
+      chordStore.savedChordsList.unshift(payload);
+    }
 
     chordStore.resetEditor();
     showToast('👍 已经成功持久化保存！');
   };
 
-  // 7. 跨组件核心联动 Action：删除和弦并弹出带 Undo 的 Toast
   const triggerDeleteChord = (chord: Chord) => {
-    chordStore.savedChordsList = chordStore.savedChordsList.filter(c => c.id !== chord.id);
+    const filtered = chordStore.savedChordsList.filter(c => c.id !== chord.id);
+    chordStore.savedChordsList.length = 0;
+    chordStore.savedChordsList.push(...filtered);
     showToast(`🗑️ 已删除 "${chord.chordName}"`, true);
   };
 
-  /**
-   * 🌟 满血版核心联动 Action：捕获指板并写入剪切板（带 Toast 提示）
-   * @param selector 目标指板 DOM 的 CSS 选择器（例如 '#fretBoard-capture-area'）
-   */
   const copyFretBoardToClipboard = async (selector: string) => {
     const el = document.querySelector(selector) as HTMLElement;
     if (!el) return showToast('❌ 未找到指板画布区域');
@@ -135,22 +145,15 @@ export const useUiStore = defineStore('ui', () => {
     showToast('📸 正在生成指板图片...');
 
     try {
-      // 直接把 DOM 原生骨架拍成一张超高清 PNG 二进制流
       const blob = await htmlToImage.toBlob(el, {
         quality: 0.95,
-        pixelRatio: 2, // 保持 2 倍超采样清晰度
-        cacheBust: true, // 物理刷掉浏览器缓存干扰
-        style: {
-          transform: 'none', // 强制抹平可能处于动画中间态的位移残留
-        },
+        pixelRatio: 2,
+        cacheBust: true,
+        style: { transform: 'none' },
       });
-
       if (!blob) throw new Error('Blob 生成空指针');
 
-      // 写入系统剪切板
       await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-
-      // 🌟 成功唤回 Toast 提示
       showToast('✨ 图片已成功复制到剪切板！');
     } catch (err) {
       console.error('现代化转录失败:', err);

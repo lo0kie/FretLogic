@@ -104,7 +104,7 @@ const cleanAndValidateData = (
     if (c.rootMark === undefined || c.rootMark === null) {
       c.rootMark = null; // 容错修补
     } else if (typeof c.rootMark === 'number') {
-      if (c.rootMark < 0 || c.rootMark > 5) {
+      if (c.rootMark !== -1 && (c.rootMark < 0 || c.rootMark > 5)) {
         errors.push(`rootMark 手动主音弦号超出了六弦合法区间 [0, 5]，实际为: ${c.rootMark}`);
       }
     } else {

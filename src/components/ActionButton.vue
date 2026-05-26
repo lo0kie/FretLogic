@@ -1,5 +1,6 @@
 <template>
   <button
+    :disabled="disabled"
     @click="$emit('click')"
     class="action-button-base"
     :class="{
@@ -7,6 +8,7 @@
       'is-danger': danger,
       'is-warning': warning,
       'is-default': !primary && !danger && !warning,
+      'is-disabled': disabled,
     }"
   >
     <slot></slot>
@@ -14,14 +16,14 @@
 </template>
 
 <script setup lang="ts">
-// 使用 TypeScript 定义严格的组件输入属性
+// 🌟 扩展 TypeScript 属性定义：加入可选的 disabled 状态
 defineProps<{
   primary?: boolean;
   danger?: boolean;
   warning?: boolean;
+  disabled?: boolean;
 }>();
 
-// 声明组件抛出的点击事件
 defineEmits<{
   (e: 'click'): void;
 }>();
@@ -31,7 +33,6 @@ defineEmits<{
 @import '@/assets/styles/tokens.less';
 
 .action-button-base {
-  // 🌟 核心复用：直接套用你声明好的动作按钮 Mixin，省去高度、圆角、阴影和 active 缩放
   .mixin-button-base();
   width: 100%;
   color: @text-body;
@@ -45,10 +46,11 @@ defineEmits<{
     color: #ffffff;
     font-weight: 900;
 
+    // 🌟 修正：只有在非禁用状态下才响应悬浮手势
     &:not(:disabled):hover {
       opacity: 0.9;
     }
-    &:active {
+    &:not(:disabled):active {
       opacity: 0.8;
     }
   }
@@ -56,14 +58,13 @@ defineEmits<{
   /* 2. 危险/删除按钮状态 (is-danger) */
   &.is-danger {
     color: @brand-danger;
-    border-color: currentColor; // 自动读取当前文字颜色作为边框色
+    border-color: currentColor;
     background-color: rgba(239, 68, 68, 0.08);
 
     &:not(:disabled):hover {
       background-color: rgba(239, 68, 68, 0.15);
     }
 
-    // 🌟 物理对齐暗色变体：完美映射你 .dark 里的 --brand-danger 浅红实现自适应
     :global(.dark) & {
       background-color: rgba(248, 113, 113, 0.1);
       &:not(:disabled):hover {
@@ -85,7 +86,6 @@ defineEmits<{
 
   /* 4. 默认/次要按钮状态 (is-default) */
   &.is-default {
-    // 🌟 精准消费：只使用你现有的 var(--bg-panel) 与 var(--control-border) 原生 CSS 变量系统
     background-color: var(--bg-panel);
     border-color: var(--control-border);
     padding-left: 0.5rem;
@@ -94,6 +94,24 @@ defineEmits<{
     &:not(:disabled):hover {
       border-color: @brand-primary;
       color: @brand-primary;
+    }
+  }
+
+  // ==========================================================================
+  // 🌟 核心大一统：全局禁用置灰中枢规范
+  // ==========================================================================
+  &.is-disabled {
+    opacity: 0.4 !important; // 极致优雅的空气半透明度
+    cursor: not-allowed !important; // 强制物理禁行鼠标指针
+    transform: none !important; // 强行废除混入自带的 active 点击缩放形变
+    box-shadow: none !important; // 剥离悬浮景深阴影
+    pointer-events: unset; // 彻底掐死任何多余的冒泡手势
+
+    // 强制把所有变体下的 hover 边框和背景全部冻结，不展示任何高亮回馈
+    &:hover {
+      border-color: inherit;
+      background-color: inherit;
+      color: inherit;
     }
   }
 }

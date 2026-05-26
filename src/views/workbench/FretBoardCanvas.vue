@@ -20,7 +20,7 @@
           class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-none open-string-btn muted"
           :style="{
             left: `${getStrX(sIdx)}px`,
-            transform: 'translateX(-50%)' /* 🌟 乐理几何正解：利用 -50% 物理中轴锁死，不管什么分辨率都绝对完美居中 */,
+            transform: 'translateX(-50%)',
             top: '10px',
           }"
         >
@@ -36,7 +36,7 @@
           :class="[chordLabStore.rootMark === sIdx ? 'root' : 'open']"
           :style="{
             left: `${getStrX(sIdx)}px`,
-            transform: 'translateX(-50%)' /* 🌟 物理对齐：让圆形正中心跟下面的 line 坐标做到纳米级像素重合 */,
+            transform: 'translateX(-50%)',
             top: '10px',
           }"
         >
@@ -47,11 +47,11 @@
           v-else
           :key="'pressed-shield-' + sIdx"
           @click.stop="chordLabStore.toggleOpenString(sIdx)"
-          @contextmenu.prevent.stop="handleFretRightClick(sIdx)"
+          @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
           class="absolute w-10 h-10 opacity-0 pointer-events-auto bg-transparent border-none outline-none cursor-pointer"
           :style="{
             left: `${getStrX(sIdx)}px`,
-            transform: 'translateX(-50%)' /* 🌟 触控区同步居中对齐 */,
+            transform: 'translateX(-50%)',
             top: '20px',
           }"
         ></button>
@@ -129,7 +129,6 @@
             :fill="chordLabStore.rootMark === sIdx ? '#f59e0b' : '#2563eb'"
             style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))"
           />
-
           <text
             :x="getStrX(sIdx)"
             :y="(fret - 1) * 120 + 60"
@@ -159,41 +158,33 @@ const fretBoardRef = ref<HTMLDivElement | null>(null);
 
 const getStrX = (i: number) => 45 + i * 76;
 
-let isMoved = false;
 let lastCancelTime = 0;
 const MUTING_COOL_DOWN = 200;
 
-/**
- * 1. 空弦控制区右键处理中心
- * 再次右键已经是主音的空弦音时，完美切回无标记状态 (-1)
- */
+let lastSIdx = -1;
+let lastFIdx = -1;
+
+let cachedBoardRect: DOMRect | null = null;
+
+// 🌟 乐理状态机：规范右击空弦音控制区的终极闭环逻辑
 const handleOpenStringRightClick = (sIdx: number) => {
+  // 判定 A：如果当前已经是空弦音，且它本来就是手动主音，那右击就取消主音标记
   if (chordLabStore.rootMark === sIdx && chordLabStore.selectedFrets[sIdx] === 0) {
-    chordLabStore.rootMark = -1; // 来回切换：已经是主音则取消标记
+    chordLabStore.rootMark = -1;
   } else {
-    chordLabStore.selectedFrets[sIdx] = 0; // 强行激活
+    // 判定 B（修复核心）：管你之前是禁弹(-1)还是实体按音(>0)，通通掐断清除，原地变为空弦主音！
+    chordLabStore.selectedFrets[sIdx] = 0;
     chordLabStore.rootMark = sIdx;
   }
 };
 
-/**
- * 2. 已存在实体按音时的右键来回切换逻辑
- */
 const handleFretRightClick = (sIdx: number) => {
-  if (chordLabStore.rootMark === sIdx) {
-    chordLabStore.rootMark = -1; // 🌟 闭环：已经是主音，右键切换回普通蓝色
-  } else {
-    chordLabStore.rootMark = sIdx; // 否则涂黄
-  }
+  chordLabStore.rootMark = chordLabStore.rootMark === sIdx ? -1 : sIdx;
 };
 
-/**
- * 3. 指板画布空白处右键劫持中心
- */
 const handleCanvasRightClick = (e: MouseEvent) => {
   if (!fretBoardRef.value) return;
   const board = fretBoardRef.value.getBoundingClientRect();
-
   const scaleX = board.width / 456;
   const scaleY = board.height / (80 + chordLabStore.fretCount * 120 + 20);
 
@@ -205,27 +196,18 @@ const handleCanvasRightClick = (e: MouseEvent) => {
   const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / 120) + 1 : 0;
 
   if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount) {
-    const existingFret = chordLabStore.selectedFrets[sIdx];
-
-    // 🌟 终极双重防打架锁：
-    // 如果右键点的位置，刚好就是这根弦当前已经按下的品位，判定为用户在对已有圆圈进行盲操切换，直接分流出去，坚决不重置它！
-    if (existingFret === fIdx) {
+    if (chordLabStore.selectedFrets[sIdx] === fIdx) {
       handleFretRightClick(sIdx);
       return;
     }
-
-    // 只有点在真正没有任何按点的纯净空白格子时，才触发“闪击一键创建并设为主音”
     chordLabStore.selectedFrets[sIdx] = fIdx;
     chordLabStore.rootMark = sIdx;
   }
 };
 
-/**
- * 4. 左键点击与拖拽手势状态机
- */
 const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = false) => {
-  if (!fretBoardRef.value) return;
-  const board = fretBoardRef.value.getBoundingClientRect();
+  const board = cachedBoardRect || (fretBoardRef.value ? fretBoardRef.value.getBoundingClientRect() : null);
+  if (!board) return;
 
   const scaleX = board.width / 456;
   const scaleY = board.height / (80 + chordLabStore.fretCount * 120 + 20);
@@ -238,52 +220,50 @@ const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = 
   const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / 120) + 1 : 0;
 
   if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount) {
-    const currentPos = `${sIdx}-${fIdx}`;
-
-    if (isMoveEvent && chordLabStore.lastPos === currentPos) return;
-
+    if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
     const isSameFret = chordLabStore.selectedFrets[sIdx] === fIdx;
-
     if (isSameFret) {
       chordLabStore.selectedFrets[sIdx] = -1;
-      chordLabStore.lastPos = '';
-
+      lastSIdx = -1;
+      lastFIdx = -1;
       if (chordLabStore.rootMark === sIdx) {
         chordLabStore.rootMark = -1;
       }
-
       lastCancelTime = Date.now();
     } else {
       if (isMoveEvent && Date.now() - lastCancelTime < MUTING_COOL_DOWN) {
-        chordLabStore.lastPos = '';
+        lastSIdx = -1;
+        lastFIdx = -1;
         return;
       }
-
       chordLabStore.selectedFrets[sIdx] = fIdx;
-      chordLabStore.lastPos = currentPos;
+      lastSIdx = sIdx;
+      lastFIdx = fIdx;
     }
   }
 };
 
 const handlePointerDown = (e: PointerEvent) => {
   if (e.button !== 0) return;
+  if (fretBoardRef.value) {
+    cachedBoardRect = fretBoardRef.value.getBoundingClientRect();
+  }
   chordLabStore.isDraggingFinger = true;
-  chordLabStore.lastPos = '';
-  isMoved = false;
-
+  lastSIdx = -1;
+  lastFIdx = -1;
   handleFingerClickLogic(e.clientX, e.clientY, false);
 };
 
 const handlePointerMove = (e: PointerEvent) => {
   if (!chordLabStore.isDraggingFinger) return;
-  isMoved = true;
   handleFingerClickLogic(e.clientX, e.clientY, true);
 };
 
 const handlePointerUp = () => {
   chordLabStore.isDraggingFinger = false;
-  chordLabStore.lastPos = '';
-  isMoved = false;
+  lastSIdx = -1;
+  lastFIdx = -1;
+  cachedBoardRect = null;
 };
 
 onMounted(() => {
@@ -310,7 +290,6 @@ onMounted(() => {
     color: #334155;
     background-color: #ffffff;
     transition: all 0.075s cubic-bezier(0.4, 0, 0.2, 1);
-
     &.muted {
       border-color: rgba(239, 68, 68, 0.3) !important;
       color: #ef4444 !important;

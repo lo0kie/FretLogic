@@ -3,14 +3,16 @@
     class="panel-right h-[calc(100vh-24px)] flex flex-col shrink-0 justify-between overflow-hidden"
     :class="{ 'is-open': uiStore.isRightOpen }"
   >
-    <div class="flex flex-col flex-1 p-6 gap-4 min-w-[335px]">
-      <div class="h-[76px] border-b border-control flex items-center -mx-6 px-6 -mt-6 mb-2">
+    <div class="flex flex-col flex-1 min-w-[335px]">
+      <div class="h-[76px] border-b border-control p-4 flex items-center">
         <h2 class="panel-main-title text-sm font-black tracking-widest uppercase text-title">指板配置</h2>
       </div>
 
-      <RightFretSlider />
-      <RightCapoWheel />
-      <RightHelper />
+      <div class="p-4 flex flex-col gap-4">
+        <RightFretSlider />
+        <RightCapoWheel />
+        <RightHelper />
+      </div>
     </div>
 
     <RightPanelFooter />
