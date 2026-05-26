@@ -24,7 +24,7 @@ export const useChordLabStore = defineStore('chordLab', () => {
 
   // 核心持久化资产
   const savedChordsList = useStorage<Chord[]>('CHORD_LAB_LIST_V4', []);
-  const groups = useStorage<Group[]>('CHORD_LAB_GROUPS', [{ id: 'default', name: '默认分组', collapsed: false }]);
+  const groups = useStorage<Group[]>('CHORD_LAB_GROUPS', []);
 
   // 工作区核心状态
   const currentChordName = useStorage('CHORD_LAB_CURR_NAME_V1', '');

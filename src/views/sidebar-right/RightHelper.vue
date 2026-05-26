@@ -49,7 +49,6 @@
 <script lang="ts">
 let sharedCtx: AudioContext | null = null;
 let sharedMainMixer: GainNode | null = null;
-let sharedConvolver: ConvolverNode | null = null;
 
 // 固化 6 根弦的独立硬件管道，避免每次点击在循环内频繁申请分配内存
 const staticStringGains: GainNode[] = [];
@@ -147,7 +146,6 @@ const initAudioEngine = () => {
 
   sharedCtx = ctx;
   sharedMainMixer = mainMixer;
-  sharedConvolver = convolver;
   return ctx;
 };
 
