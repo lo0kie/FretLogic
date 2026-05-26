@@ -1,19 +1,19 @@
 <template>
-  <div class="fixed top-6 left-1/2 -translate-x-1/2 z-[3000] flex flex-col gap-2 items-center pointer-events-none">
+  <div class="fixed top-6 right-6 z-[3000] flex flex-col gap-2 items-end pointer-events-none">
     <TransitionGroup
-      enter-from-class="translate-y-[-20px] opacity-0"
-      leave-to-class="translate-y-[-20px] opacity-0"
-      enter-active-class="transition duration-300 ease-out"
-      leave-active-class="transition duration-300 ease-in"
+      enter-from-class="translate-x-[20px] opacity-0"
+      leave-to-class="translate-x-[20px] opacity-0"
+      enter-active-class="toast-transition"
+      leave-active-class="toast-transition"
     >
       <div
         v-for="toast in uiStore.toasts"
         :key="toast.id"
-        class="px-5 py-2.5 rounded-full bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-950 font-bold shadow-2xl flex items-center gap-3 text-xs pointer-events-auto"
+        class="px-4 py-2.5 rounded-xl bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-950 font-bold shadow-2xl flex items-center gap-3 text-xs pointer-events-auto"
       >
-        <span class="toast-message-text">{{ toast.msg }}</span>
+        <span>{{ toast.msg }}</span>
 
-        <button v-if="toast.canUndo" @click="uiStore.undo()" class="text-primary font-bold underline text-[10px]">
+        <button v-if="toast.canUndo" @click="handleLocalUndo" class="btn-toast-undo font-bold underline text-xs">
           撤回
         </button>
       </div>
@@ -25,19 +25,31 @@
 import { useUiStore } from '@/stores/uiStore';
 
 const uiStore = useUiStore();
+
+const handleLocalUndo = () => {
+  uiStore.undo();
+  uiStore.showToast('↩️ 刚才删除的和弦已被完美恢复');
+};
 </script>
 
 <style scoped lang="less">
 @import '@/assets/styles/tokens.less';
 
-.toast-message-text {
-  // 浅色模式下采用 bg-slate-950，字呈亮白；深色模式下采用 bg-slate-100，字反转为深灰黑
-  color: #ffffff;
+// 🌟 核心优化 1：继续沿用系统级 @bezier-standard 贝塞尔阻尼
+.toast-transition {
+  transition: all 0.25s @bezier-standard;
 }
 
-.dark {
-  .toast-message-text {
-    color: #0f172a;
+// 🌟 核心优化 2：撤回高亮蓝色连接
+.btn-toast-undo {
+  color: @brand-primary;
+  transition: opacity 0.15s @bezier-standard;
+
+  &:hover {
+    opacity: 0.8;
+  }
+  &:active {
+    opacity: 0.6;
   }
 }
 </style>

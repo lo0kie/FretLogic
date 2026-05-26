@@ -3,7 +3,6 @@ import { useDark, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
-// 严格的和弦资产类型声明
 export interface Chord {
   id: number;
   chordName: string;
@@ -11,6 +10,7 @@ export interface Chord {
   fretCount: number;
   capo: number;
   groupId: string;
+  rootMark: number;
 }
 
 export interface Group {
@@ -20,59 +20,71 @@ export interface Group {
 }
 
 export const useChordLabStore = defineStore('chordLab', () => {
-  // 1. 系统底层主题基础设施
   const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '' });
 
-  // 2. 核心持久化资产数据
-  const savedChordsList = useStorage<Chord[]>('CHORD_LAB_LIST_V3', []);
-  const groups = useStorage<Group[]>('CHORD_LAB_GROUPS', [{ id: 'default', name: '默认分组', collapsed: false }]);
+  // 核心持久化资产
+  const savedChordsList = useStorage<Chord[]>('CHORD_LAB_LIST_V4', []);
+  const groups = useStorage<Group[]>('CHORD_LAB_GROUPS', []);
 
-  // 3. 当前工作区编辑器快照状态
+  // 工作区核心状态
   const currentChordName = useStorage('CHORD_LAB_CURR_NAME_V1', '');
   const selectedFrets = useStorage<number[]>('CHORD_LAB_CURR_FRETS_V1', [-1, -1, -1, -1, -1, -1]);
   const fretCount = useStorage('CHORD_LAB_CURR_FCOUNT_V1', 3);
   const capo = useStorage('CHORD_LAB_CURR_CAPO_V1', 0);
-  const editingId = useStorage<number | null>('CHORD_LAB_CURR_EDIT_ID_V1', null);
+  const rootMark = useStorage<number>('CHORD_LAB_CURR_ROOT_MARK_V1', -1);
+
+  const editingId = useStorage<number | null>('CHORD_LAB_EDITING_ID', null);
   const selectedGroupId = useStorage<string | null>('CHORD_LAB_CURR_GROUP_ID_V1', null);
 
-  // 4. 指板物理编辑手势临时状态
   const isDraggingFinger = ref(false);
   const lastPos = ref('');
 
-  // --- Getters 衍生状态计算 ---
-  const chordsGroupMap = computed(() => {
-    const map = new Map<string, Chord[]>();
-    savedChordsList.value.forEach(chord => {
-      if (!map.has(chord.groupId)) map.set(chord.groupId, []);
-      map.get(chord.groupId)!.push(chord);
-    });
-    return map;
+  const getGroupChords = (gid: string): Chord[] => {
+    return savedChordsList.value.filter(chord => chord.groupId === gid);
+  };
+
+  const isFretBoardEmpty = computed(() => {
+    return selectedFrets.value.every(fret => (fret ?? -1) < 0);
   });
 
-  const getGroupChords = (gid: string): Chord[] => chordsGroupMap.value.get(gid) || [];
+  // 🌟 核心新增：为主根音正则匹配加一层常驻 Computed 隔离屏障，防止指板滑动时反复执行正则推演
+  const currentRootNote = computed(() => {
+    return extractRootNote(currentChordName.value);
+  });
 
-  // 计算指板顶部悬浮空弦/静音圈的全局高亮映射
+  // 衍生计算：指板 UI 状态
   const openStringsUIState = computed(() => {
-    const currentRoot = extractRootNote(currentChordName.value);
-    return selectedFrets.value.map((fretVal, sIdx) => {
-      const noteLabel = calcNoteLabel(sIdx, fretVal, capo.value);
-      const isRoot = currentRoot && calcNoteLabel(sIdx, 0, capo.value).toUpperCase() === currentRoot;
+    // 🌟 直接消费提取好的缓存资产，拒绝高频重复计算
+    const currentRoot = currentRootNote.value;
 
-      // 🌟 架构解耦修正：只对外输出纯粹的乐理状态，彻底移除 var() 样式污染
-      let type: 'muted' | 'root' | 'open' | 'normal' = 'normal';
-      if (fretVal === -1) {
-        type = 'muted';
-      } else if (fretVal === 0) {
-        type = isRoot ? 'root' : 'open';
+    return selectedFrets.value.map((fretVal, sIdx) => {
+      const calcFret = fretVal === -1 ? 0 : fretVal;
+      const noteLabel = calcNoteLabel(sIdx, calcFret, capo.value);
+      const hasManualRoot =
+        rootMark.value !== null && rootMark.value !== undefined && rootMark.value >= 0 && rootMark.value <= 5;
+
+      let isRoot = false;
+      if (hasManualRoot) {
+        isRoot = rootMark.value === sIdx;
+      } else {
+        isRoot = !!(currentRoot && calcNoteLabel(sIdx, 0, capo.value).toUpperCase() === currentRoot);
       }
+
+      let type: 'muted' | 'root' | 'open' | 'normal' = 'normal';
+      if (fretVal === -1) type = 'muted';
+      else if (fretVal === 0) type = isRoot ? 'root' : 'open';
 
       return { fretVal, noteLabel, type };
     });
   });
 
-  // --- Actions 核心业务方法 ---
-  const toggleOpenString = (i: number) => {
-    selectedFrets.value[i] = selectedFrets.value[i] === 0 ? -1 : 0;
+  const handleChordClick = (chord: Chord) => {
+    editingId.value = chord.id;
+    currentChordName.value = chord.chordName === '未命名' ? '' : chord.chordName;
+    selectedFrets.value = [...chord.selectedFrets];
+    fretCount.value = chord.fretCount ?? 3;
+    capo.value = chord.capo ?? 0;
+    rootMark.value = chord.rootMark !== undefined ? chord.rootMark : -1;
   };
 
   const resetEditor = () => {
@@ -81,14 +93,16 @@ export const useChordLabStore = defineStore('chordLab', () => {
     currentChordName.value = '';
     capo.value = 0;
     fretCount.value = 3;
+    rootMark.value = -1;
   };
 
-  const handleChordClick = (c: Chord) => {
-    editingId.value = c.id;
-    currentChordName.value = c.chordName === '未命名' ? '' : c.chordName;
-    selectedFrets.value = [...c.selectedFrets];
-    fretCount.value = c.fretCount ?? 3;
-    capo.value = c.capo ?? 0;
+  const toggleOpenString = (sIdx: number) => {
+    const currentFretVal = selectedFrets.value[sIdx];
+    if (currentFretVal > 0) selectedFrets.value[sIdx] = 0;
+    else if (currentFretVal === 0) {
+      selectedFrets.value[sIdx] = -1;
+      if (rootMark.value === sIdx) rootMark.value = -1;
+    } else selectedFrets.value[sIdx] = 0;
   };
 
   const handleGroupHeaderClick = (gid: string) => {
@@ -106,9 +120,17 @@ export const useChordLabStore = defineStore('chordLab', () => {
     }
   };
 
-  // 保底初始化
-  if (!selectedGroupId.value && groups.value.length > 0) {
-    selectedGroupId.value = groups.value[0].id;
+  if (editingId.value) {
+    const original = savedChordsList.value.find(c => c.id == editingId.value);
+    if (original) {
+      currentChordName.value = original.chordName === '未命名' ? '' : original.chordName;
+      selectedFrets.value = [...original.selectedFrets];
+      fretCount.value = original.fretCount ?? 3;
+      capo.value = original.capo ?? 0;
+      rootMark.value = original.rootMark !== undefined ? original.rootMark : -1;
+    } else {
+      editingId.value = null;
+    }
   }
 
   return {
@@ -123,6 +145,9 @@ export const useChordLabStore = defineStore('chordLab', () => {
     selectedGroupId,
     isDraggingFinger,
     lastPos,
+    rootMark,
+    isFretBoardEmpty,
+    currentRootNote, // 抛出隔离后的根音缓存
     openStringsUIState,
     getGroupChords,
     toggleOpenString,

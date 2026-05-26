@@ -2,16 +2,11 @@
   <div class="relative inline-block w-full" @mouseenter="show = true" @mouseleave="show = false">
     <slot></slot>
 
-    <Transition name="tooltip">
+    <Transition name="tooltip-native">
       <div
         v-if="show && content"
-        class="absolute whitespace-nowrap px-3 py-1.5 bg-slate-900/95 dark:bg-slate-100/95 text-white dark:text-slate-900 font-black rounded-lg z-[100] text-xs shadow-xl border border-white/10 dark:border-black/5 pointer-events-none"
-        :class="[
-          placement === 'top' ? 'bottom-full left-1/2 -translate-x-1/2 mb-2' : '',
-          placement === 'bottom' ? 'top-full left-1/2 -translate-x-1/2 mt-2' : '',
-          placement === 'left' ? 'right-full top-50% -translate-y-50% mr-2' : '',
-          placement === 'right' ? 'left-full top-50% -translate-y-50% ml-2' : '',
-        ]"
+        class="tooltip-box absolute whitespace-nowrap px-3 py-1.5 font-black rounded-lg z-[3000] text-xs shadow-xl pointer-events-none dark:bg-[#f8fafc] dark:text-[#0f172a] dark:border-[#0F172A]"
+        :data-placement="placement"
       >
         {{ content }}
       </div>
@@ -22,11 +17,10 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
-// 按照组件库级别设计标准的 Props 接口
 withDefaults(
   defineProps<{
-    content?: string; // 🌟 悬浮显示的提示文本
-    placement?: 'top' | 'bottom' | 'left' | 'right'; // 弹出方向
+    content?: string;
+    placement?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-end';
   }>(),
   {
     placement: 'top',
@@ -37,16 +31,71 @@ const show = ref(false);
 </script>
 
 <style scoped lang="less">
-.tooltip- {
-  &enter-active {
-    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+@import '@/assets/styles/tokens.less';
+
+.tooltip-box {
+  // 🌟 回归最稳定的绝对定位坐标系，确保身位绝不脱离按钮
+  position: absolute;
+  background-color: #0f172a;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  transform: none;
+
+  &[data-placement='top'] {
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 8px;
   }
-  &leave-active {
-    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  &[data-placement='bottom'] {
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 8px;
   }
-  &enter-from,
-  &leave-to {
-    opacity: 0;
+  &[data-placement='left'] {
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-right: 8px;
   }
+  &[data-placement='right'] {
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-left: 8px;
+  }
+  &[data-placement='bottom-end'] {
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+  }
+
+  transition: all 0.25s @bezier-standard;
+}
+
+.tooltip-native-enter-active,
+.tooltip-native-leave-active {
+  transition: all 0.25s @bezier-standard;
+}
+
+.tooltip-native-enter-from,
+.tooltip-native-leave-to {
+  opacity: 0;
+}
+
+.tooltip-native-enter-from[data-placement='top'],
+.tooltip-native-leave-to[data-placement='top'] {
+  transform: translateX(-50%) translateY(6px) scale(0.92) !important;
+}
+
+.tooltip-native-enter-from[data-placement='bottom'],
+.tooltip-native-leave-to[data-placement='bottom'] {
+  transform: translateX(-50%) translateY(-6px) scale(0.92) !important;
 }
 </style>

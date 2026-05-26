@@ -1,7 +1,7 @@
 /**
  * @Author likan
  * @Date 2026-05-25 09:31:28
- * @Filepath guitar-chord-lab\src\vite-env.d.ts
+ * @Filepath fret-logic\src\vite-env.d.ts
  */
 
 /// <reference types="vite/client" />
