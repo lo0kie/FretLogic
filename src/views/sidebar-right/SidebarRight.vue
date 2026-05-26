@@ -29,10 +29,10 @@
 
 <script setup lang="ts">
 import { useUiStore } from '@/stores/uiStore';
-import RightCapoWheel from './RightCapoWheel.vue';
-import RightFretSlider from './RightFretSlider.vue';
-import RightHelper from './RightHelper.vue';
-import RightPanelFooter from './RightPanelFooter.vue';
+import RightCapoWheel from '@/views/sidebar-right/RightCapoWheel.vue';
+import RightFretSlider from '@/views/sidebar-right/RightFretSlider.vue';
+import RightHelper from '@/views/sidebar-right/RightHelper.vue';
+import RightPanelFooter from '@/views/sidebar-right/RightPanelFooter.vue';
 
 const uiStore = useUiStore();
 </script>

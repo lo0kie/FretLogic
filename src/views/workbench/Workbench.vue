@@ -13,8 +13,8 @@
 
 <script setup lang="ts">
 import { useChordLabStore } from '@/stores/chordLabStore';
-import ChordInputHeader from './ChordInputHeader.vue';
-import FretBoardCanvas from './FretBoardCanvas.vue';
+import ChordInputHeader from '@/views/workbench/ChordInputHeader.vue';
+import FretBoardCanvas from '@/views/workbench/FretBoardCanvas.vue';
 
 const chordLabStore = useChordLabStore();
 </script>

@@ -1,8 +1,8 @@
+import { useChordLabStore, type Chord, type Group } from '@/stores/chordLabStore';
 import { useRefHistory, useToggle } from '@vueuse/core';
 import * as htmlToImage from 'html-to-image';
 import { defineStore } from 'pinia';
 import { ref, toRef } from 'vue';
-import { useChordLabStore, type Chord, type Group } from './chordLabStore';
 
 export interface Toast {
   id: number;

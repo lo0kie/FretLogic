@@ -23,9 +23,9 @@
 
 <script setup lang="ts">
 import { useUiStore } from '@/stores/uiStore';
-import LeftFooter from './LeftFooter.vue';
-import LeftGroupList from './LeftGroupList.vue';
-import LeftHeader from './LeftHeader.vue';
+import LeftFooter from '@/views/sidebar-left/LeftFooter.vue';
+import LeftGroupList from '@/views/sidebar-left/LeftGroupList.vue';
+import LeftHeader from '@/views/sidebar-left/LeftHeader.vue';
 
 const uiStore = useUiStore();
 </script>
