@@ -8,7 +8,7 @@
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist -r git@github.com:lookiiie/FretLogic.git"
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@vueuse/core": "^10.9.0",
