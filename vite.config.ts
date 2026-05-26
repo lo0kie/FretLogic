@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [vue()],
-  base: '/FretLogic/',
+  base: 'FretLogic',
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
