@@ -1,17 +1,20 @@
 <template>
   <div
-    class="w-full text-center transition-transform duration-300"
-    :style="{ transform: `translateY(${['3%', '5%', '9%'][chordLabStore.fretCount - 3]})` }"
+    class="w-full text-center transition-transform"
+    :style="{
+      transform: `translateY(${['3%', '5%', '9%'][chordLabStore.fretCount - 3]})`,
+      transitionDuration: '300ms',
+    }"
   >
     <input
       v-model="chordLabStore.currentChordName"
       type="text"
       spellcheck="false"
       class="input-chord-name"
+      placeholder="CHORD"
       :style="{
         color: !chordLabStore.currentChordName ? (chordLabStore.isDarkMode ? '#475569' : '#cbd5e1') : '',
       }"
-      placeholder="CHORD"
     />
   </div>
 </template>
@@ -35,11 +38,12 @@ const chordLabStore = useChordLabStore();
   font-size: 3.5rem;
   letter-spacing: -0.04em;
 
-  // 有字时，正常走你的 Less 主题变量
+  // 🌟 原生血脉相连：直接消费会自适应深浅模式的 var(--text-title)
   color: @text-title;
-
   caret-color: @brand-primary;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  // 🌟 曲线收拢：统一接入系统级标准缓动
+  transition: all 0.3s @bezier-standard;
   text-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
 
   &:focus {
@@ -47,21 +51,12 @@ const chordLabStore = useChordLabStore();
     text-shadow: 0 4px 20px rgba(37, 99, 235, 0.15);
   }
 
+  // 🌟 终极优化：合并深浅色占位符逻辑，物理对齐物理琴弦色
   &::placeholder {
-    color: #cbd5e1;
+    color: @fret-color;
     font-weight: 700;
     opacity: 0.6;
-  }
-}
-
-.dark {
-  .input-chord-name {
-    color: #f8fafc;
-    text-shadow: 0 0 20px rgba(37, 99, 235, 0.2);
-    &::placeholder {
-      color: #475569;
-      opacity: 0.8;
-    }
+    transition: color 0.25s @bezier-standard;
   }
 }
 </style>

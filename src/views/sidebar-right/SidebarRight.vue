@@ -1,15 +1,10 @@
 <template>
   <div
     class="panel-right h-[calc(100vh-24px)] flex flex-col shrink-0 justify-between overflow-hidden"
-    :style="{
-      width: uiStore.isRightOpen ? '335px' : '0px',
-      opacity: uiStore.isRightOpen ? 1 : 0,
-      // 🌟 核心修正：移除外壳的 padding，由内部组件平铺控制，防止底部 Footer 被挤压
-      margin: uiStore.isRightOpen ? '12px' : '12px 0',
-    }"
+    :class="{ 'is-open': uiStore.isRightOpen }"
   >
     <div class="flex flex-col flex-1 p-6 gap-4 min-w-[335px]">
-      <div class="h-[76px] border-b border-slate-100 dark:border-slate-800 flex items-center -mx-6 px-6 -mt-6 mb-2">
+      <div class="h-[76px] border-b border-control flex items-center -mx-6 px-6 -mt-6 mb-2">
         <h2 class="panel-main-title text-sm font-black tracking-widest uppercase text-title">指板配置</h2>
       </div>
 
@@ -24,7 +19,7 @@
   <button
     @click="uiStore.isRightOpen = !uiStore.isRightOpen"
     class="sidebar-toggle-btn sidebar-toggle-btn-right text-[9px] font-black"
-    :style="{ right: uiStore.isRightOpen ? '347px' : '0px' }"
+    :class="{ 'is-open': uiStore.isRightOpen }"
   >
     {{ uiStore.isRightOpen ? '▶' : '◀' }}
   </button>
@@ -43,58 +38,61 @@ const uiStore = useUiStore();
 <style scoped lang="less">
 @import '@/assets/styles/tokens.less';
 
+.border-control {
+  border-color: var(--control-border);
+}
+
 .panel-right {
-  background-color: var(--bg-panel);
-  border: 1px solid var(--control-border);
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.04);
-  border-radius: 16px;
+  // 🌟 1. 绝对继承：一键混入面板骨架！此时 background-color: var(--bg-panel) 权重安全归位
+  .mixin-panel-base();
+
+  // 🌟 2. 默认关闭状态（纯 Less 编写，防止和行内产生死锁）
+  width: 0px;
+  opacity: 0;
+  margin: 12px 0;
   transition:
-    width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.35s @bezier-sidebar,
     opacity 0.25s ease,
-    margin 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    margin 0.35s @bezier-sidebar,
+    border-color 0.2s ease; // 连边框变色也一起走标准时钟
+
+  // 🌟 3. 展开状态激活
+  &.is-open {
+    width: 335px;
+    opacity: 1;
+    margin: 12px;
+  }
+
+  // 🌟 4. 像素级暗色微调：14% 微光空气线
+  :global(.dark) & {
+    border-color: rgba(255, 255, 255, 0.14);
+  }
 }
 
 .sidebar-toggle-btn {
-  position: absolute;
-  top: 50%;
-  width: 20px;
-  height: 60px;
-  background-color: var(--bg-panel);
-  border: 1px solid var(--control-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  color: #94a3b8;
-  cursor: pointer;
+  // 🌟 核心复用：提取侧边栏把手通用规范
+  .mixin-sidebar-toggle();
+
+  // 按钮默认靠右边缘（关闭时状态）
+  right: 0px;
+
   transition:
     all 0.2s ease,
-    right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &:hover {
-    color: @brand-primary;
-    border-color: rgba(37, 99, 235, 0.25);
-    background-color: var(--bg-main);
-  }
+    right 0.35s @bezier-sidebar;
 
   &-right {
     border-radius: 10px 0 0 10px;
     transform: translateY(-50%) scale(1);
     transform-origin: right;
+
+    // 当面板打开时，按钮根据状态平移
+    &.is-open {
+      right: 347px;
+    }
+
     &:active {
       transform: translateY(-50%) scale(0.93);
     }
-  }
-}
-
-.dark {
-  .panel-right {
-    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-  }
-  .sidebar-toggle-btn:hover {
-    background-color: #1e293b;
   }
 }
 </style>

@@ -33,58 +33,31 @@ const uiStore = useUiStore();
 <style scoped lang="less">
 @import '@/assets/styles/tokens.less';
 
+// 🌟 修正：这里必须是 panel-left
 .panel-left {
-  background-color: var(--bg-panel);
-  border: 1px solid var(--control-border);
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.04);
-  border-radius: 16px;
+  .mixin-panel-base();
   transition:
-    width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.35s @bezier-standard,
     opacity 0.25s ease,
-    margin 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    margin 0.35s @bezier-standard;
 }
 
 .sidebar-toggle-btn {
-  position: absolute;
-  top: 50%;
-  width: 20px;
-  height: 60px;
-  background-color: var(--bg-panel);
-  border: 1px solid var(--control-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  color: #94a3b8;
-  cursor: pointer;
+  .mixin-sidebar-toggle();
+  // 🌟 修正：左侧按钮的轨道位移必须绑定 left
   transition:
     all 0.2s ease,
-    left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    left 0.35s @bezier-standard;
 
-  &:hover {
-    color: @brand-primary;
-    border-color: rgba(37, 99, 235, 0.25);
-    background-color: var(--bg-main);
-  }
-
+  // 🌟 修正：这里必须是 -left
   &-left {
+    // 🌟 修正：左侧按钮的圆角是右边圆，左边平
     border-radius: 0 10px 10px 0;
     transform: translateY(-50%) scale(1);
-    transform-origin: left;
+    transform-origin: left; // 🌟 修正：动画缩放基准点在左侧
     &:active {
       transform: translateY(-50%) scale(0.93);
     }
-  }
-}
-
-.dark {
-  .panel-left {
-    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-  }
-  .sidebar-toggle-btn:hover {
-    background-color: #1e293b;
   }
 }
 </style>

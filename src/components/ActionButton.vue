@@ -28,28 +28,73 @@ defineEmits<{
 </script>
 
 <style scoped lang="less">
-/* 🌟 基础公共行为：抽离原行内不随动态状态改变的类名 */
+@import '@/assets/styles/tokens.less';
+
 .action-button-base {
-  @apply text-xs h-10 flex items-center justify-center rounded-xl font-bold border shadow-sm select-none transform duration-150 ease-out active:scale-[0.96] transition-colors;
+  // 🌟 核心复用：直接套用你声明好的动作按钮 Mixin，省去高度、圆角、阴影和 active 缩放
+  .mixin-button-base();
+  width: 100%;
+  color: @text-body;
+  background-color: transparent;
+  transition: all 0.2s @bezier-standard;
 
-  /* 主按钮状态 */
+  /* 1. 主按钮状态 (is-primary) */
   &.is-primary {
-    @apply w-full bg-blue-600 text-white font-black border-blue-700 shadow-xl hover:bg-blue-700 hover:shadow-md active:bg-blue-800;
+    background-color: @brand-primary;
+    border-color: @brand-primary;
+    color: #ffffff;
+    font-weight: 900;
+
+    &:not(:disabled):hover {
+      opacity: 0.9;
+    }
+    &:active {
+      opacity: 0.8;
+    }
   }
 
-  /* 危险/删除按钮状态 */
+  /* 2. 危险/删除按钮状态 (is-danger) */
   &.is-danger {
-    @apply w-full  bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20 active:bg-red-500/30;
+    color: @brand-danger;
+    border-color: currentColor; // 自动读取当前文字颜色作为边框色
+    background-color: rgba(239, 68, 68, 0.08);
+
+    &:not(:disabled):hover {
+      background-color: rgba(239, 68, 68, 0.15);
+    }
+
+    // 🌟 物理对齐暗色变体：完美映射你 .dark 里的 --brand-danger 浅红实现自适应
+    :global(.dark) & {
+      background-color: rgba(248, 113, 113, 0.1);
+      &:not(:disabled):hover {
+        background-color: rgba(248, 113, 113, 0.2);
+      }
+    }
   }
 
-  /* 警告按钮状态 */
+  /* 3. 警告按钮状态 (is-warning) */
   &.is-warning {
-    @apply w-full bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20 active:bg-amber-500/30;
+    color: @brand-secondary;
+    border-color: currentColor;
+    background-color: rgba(245, 158, 11, 0.08);
+
+    &:not(:disabled):hover {
+      background-color: rgba(245, 158, 11, 0.15);
+    }
   }
 
-  /* 默认按钮状态（兼容浅色/深色主题继承） */
+  /* 4. 默认/次要按钮状态 (is-default) */
   &.is-default {
-    @apply w-full border  border-slate-400/40 bg-slate-50/50 dark:bg-slate-800/40 px-2 hover:bg-slate-100 dark:hover:bg-slate-800/80;
+    // 🌟 精准消费：只使用你现有的 var(--bg-panel) 与 var(--control-border) 原生 CSS 变量系统
+    background-color: var(--bg-panel);
+    border-color: var(--control-border);
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+
+    &:not(:disabled):hover {
+      border-color: @brand-primary;
+      color: @brand-primary;
+    }
   }
 }
 </style>

@@ -105,13 +105,15 @@ export const useUiStore = defineStore('ui', () => {
       fretCount: chordStore.fretCount,
       capo: chordStore.capo,
       groupId: targetGroupId || 'default',
+      // 🌟 核心绝杀：必须把当前工作区右键标记的 rootMark 塞进 payload 骨架一并打包！
+      rootMark: chordStore.rootMark,
     };
 
     const idx = chordStore.savedChordsList.findIndex(c => c.id == chordStore.editingId);
     idx !== -1 ? (chordStore.savedChordsList[idx] = payload) : chordStore.savedChordsList.unshift(payload);
 
     chordStore.resetEditor();
-    showToast('✨ 已保存');
+    showToast('👍 已经成功持久化保存！');
   };
 
   // 7. 跨组件核心联动 Action：删除和弦并弹出带 Undo 的 Toast

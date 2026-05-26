@@ -119,11 +119,11 @@ const handleDrop = (targetIdx: number) => {
 @import '@/assets/styles/tokens.less';
 
 .group-title-row {
-  &:hover {
-    .action-buttons {
-      opacity: 1;
-    }
+  .mixin-hover-card();
+  &:hover .action-buttons {
+    opacity: 1;
   }
+
   .group-name-text {
     color: @text-body;
     &.is-active {
@@ -133,32 +133,32 @@ const handleDrop = (targetIdx: number) => {
 }
 
 .chord-thumb-card {
-  border-color: var(--border-color);
+  border-color: var(--control-border); // 使用标准控件边框
+  .mixin-hover-card();
+
   .chord-name-text {
     color: @text-body;
   }
 
+  // 激活状态：蓝色边框和背景
   &.is-editing {
     border-color: @brand-primary !important;
+    background-color: rgba(37, 99, 235, 0.08); // 浅色高亮
+
     .chord-name-text {
       color: @brand-primary !important;
     }
   }
 }
 
-.dark {
+:global(.dark) {
   .chord-thumb-card {
     background-color: rgba(30, 41, 59, 0.3);
-    border-color: rgba(255, 255, 255, 0.08);
-    &:hover {
-      border-color: rgba(59, 130, 246, 0.5);
-    }
 
     &.is-editing {
       background-color: rgba(37, 99, 235, 0.15) !important;
-      border-color: @brand-primary !important;
       .chord-name-text {
-        color: #60a5fa !important; // 针对深色高光模式下的蓝字增强，保障对比度
+        color: #60a5fa !important;
       }
     }
   }

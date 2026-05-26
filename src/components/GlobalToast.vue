@@ -3,17 +3,17 @@
     <TransitionGroup
       enter-from-class="translate-y-[-20px] opacity-0"
       leave-to-class="translate-y-[-20px] opacity-0"
-      enter-active-class="transition duration-300 ease-out"
-      leave-active-class="transition duration-300 ease-in"
+      enter-active-class="toast-transition"
+      leave-active-class="toast-transition"
     >
       <div
         v-for="toast in uiStore.toasts"
         :key="toast.id"
         class="px-5 py-2.5 rounded-full bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-950 font-bold shadow-2xl flex items-center gap-3 text-xs pointer-events-auto"
       >
-        <span class="toast-message-text">{{ toast.msg }}</span>
+        <span>{{ toast.msg }}</span>
 
-        <button v-if="toast.canUndo" @click="uiStore.undo()" class="text-primary font-bold underline text-[10px]">
+        <button v-if="toast.canUndo" @click="uiStore.undo()" class="btn-toast-undo font-bold underline text-[10px]">
           撤回
         </button>
       </div>
@@ -30,14 +30,21 @@ const uiStore = useUiStore();
 <style scoped lang="less">
 @import '@/assets/styles/tokens.less';
 
-.toast-message-text {
-  // 浅色模式下采用 bg-slate-950，字呈亮白；深色模式下采用 bg-slate-100，字反转为深灰黑
-  color: #ffffff;
+// 🌟 核心优化 1：动画时序集权，接入设计系统的标准标准缓动
+.toast-transition {
+  transition: all 0.25s @bezier-standard;
 }
 
-.dark {
-  .toast-message-text {
-    color: #0f172a;
+// 🌟 核心优化 2：撤回按钮颜色完美连通全站皇家蓝血脉
+.btn-toast-undo {
+  color: @brand-primary;
+  transition: opacity 0.15s @bezier-standard;
+
+  &:hover {
+    opacity: 0.8;
+  }
+  &:active {
+    opacity: 0.6;
   }
 }
 </style>

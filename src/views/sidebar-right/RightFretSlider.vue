@@ -9,9 +9,14 @@
         class="slider-btn"
         :style="{
           transform:
-            chordLabStore.fretCount === 3 ? 'translateX(0)' : chordLabStore.fretCount === 4 ? 'translateX(100%)' : 'translateX(200%)',
+            chordLabStore.fretCount === 3
+              ? 'translateX(0)'
+              : chordLabStore.fretCount === 4
+                ? 'translateX(100%)'
+                : 'translateX(200%)',
         }"
       ></div>
+
       <div
         v-for="f in [3, 4, 5]"
         :key="f"

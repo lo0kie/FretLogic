@@ -1,6 +1,6 @@
 <template>
-  <div class="panel-right-plate relative flex flex-col gap-2">
-    <label class="plate-label text-xs font-black tracking-widest uppercase text-subtitle">Capo</label>
+  <div class="relative flex flex-col gap-2">
+    <label class="text-xs font-black tracking-widest uppercase text-subtitle">Capo</label>
     <div class="relative w-full">
       <GlobalTooltip content="滚动滚轮切换" placement="top">
         <div
@@ -107,38 +107,23 @@ onMounted(() => {
     color: @text-body;
     opacity: 0.8;
   }
+  :global(.dark) & .capo-value-text {
+    color: #ffffff !important;
+    opacity: 0.9;
+  }
 }
 
 .capo-dropdown-box {
-  background-color: var(--bg-panel);
-  border-color: var(--control-border);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+  .mixin-floating-layer(); // 一键注入悬浮阴影和边框
 
   .capo-item {
     color: @text-body;
-    &:hover {
-      background-color: rgba(15, 23, 42, 0.04);
-    }
+    .mixin-hover-card(); // 一键注入统一的悬浮背景色
+
     &.is-selected {
-      background-color: @brand-primary;
+      background-color: @brand-primary !important;
       color: white;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-    }
-  }
-}
-
-.dark {
-  .capo-trigger-bar {
-    .capo-value-text {
-      color: #ffffff !important;
-      opacity: 0.9;
-    }
-  }
-  .capo-dropdown-box {
-    background-color: #1e293b;
-    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
-    .capo-item:hover {
-      background-color: rgba(255, 255, 255, 0.06);
     }
   }
 }

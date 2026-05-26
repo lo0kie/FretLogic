@@ -1,10 +1,10 @@
 /**
  * @Author likan
  * @Date 2026-05-25 10:52:28
- * @Filepath guitar-chord-lab\src\utils\musicTheory.ts
+ * @Filepath fret-logic\src\utils\musicTheory.ts
  */
 
-// --- 乐理静态常量 ---
+// --- 乐理静态常数 ---
 export const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 export const BASE_STRINGS = [4, 9, 2, 7, 11, 4]; // 1-6弦空弦音程基准 (E, B, G, D, A, E)
 
@@ -27,10 +27,11 @@ export const extractRootNote = (chordName: string): string | null => {
 };
 
 /**
- * 校验特定指位是否为当前和弦的根音
+ * 🌟 完美对齐手动标记版：校验特定指位是否为当前和弦的手动主音
+ * @param sIdx 当前正在遍历的吉他弦索引 (0-5)
+ * @param rootMark 当前和弦资产中持久化存储的主音标记索引 (number | null | undefined)
  */
-export const isRootNote = (sIdx: number, fretVal: number, capoVal: number, chordName: string): boolean => {
-  const currentRoot = extractRootNote(chordName);
-  if (!currentRoot) return false;
-  return calcNoteLabel(sIdx, fretVal, capoVal).toUpperCase() === currentRoot;
+export const isRootNote = (sIdx: number, rootMark: number | null | undefined): boolean => {
+  if (rootMark == null) return false;
+  return sIdx === rootMark;
 };

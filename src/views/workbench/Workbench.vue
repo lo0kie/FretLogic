@@ -20,22 +20,15 @@ const chordLabStore = useChordLabStore();
 </script>
 
 <style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
 .workbench-card {
   font-size: 16px !important;
-  background-color: var(--bg-panel);
-  border: 1px solid var(--control-border);
-  border-radius: 12px;
-  box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.05);
+  .mixin-panel-base(); // 一键注入背景、边框、阴影、暗黑模式
+  border-radius: 12px; // 覆盖默认的 16px 为 12px
   transition:
-    height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.4s @bezier-standard,
     background-color 0.3s,
     border-color 0.3s;
-}
-
-.dark {
-  .workbench-card {
-    box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-  }
 }
 </style>

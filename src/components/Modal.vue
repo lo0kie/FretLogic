@@ -1,6 +1,9 @@
 <template>
   <div class="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-    <div class="modal-overlay absolute inset-0 bg-slate-950/40" @click="uiStore.modalShow = false"></div>
+    <div
+      class="modal-overlay absolute inset-0 bg-slate-950/40 dark:bg-slate-950/60"
+      @click="uiStore.modalShow = false"
+    ></div>
 
     <div
       class="modal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-80 p-6 relative z-10 shadow-2xl control-bordered"
@@ -60,3 +63,11 @@ onMounted(() => {
   }
 });
 </script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.modal-card {
+  .mixin-floating-layer(); // 替换掉你在 HTML 写的控制边框和深色底色
+}
+</style>
