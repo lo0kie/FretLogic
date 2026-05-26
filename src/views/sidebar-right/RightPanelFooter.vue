@@ -3,9 +3,11 @@
     class="p-4 border-t border-slate-100 dark:border-slate-800 min-w-[335px] bg-slate-50/50 dark:bg-slate-900/20 rounded-b-16"
   >
     <div class="grid grid-cols-2 gap-2">
-      <ActionButton @click="uiStore.triggerSaveChord()" :primary="!isSaveDisabled" :disabled="isSaveDisabled">
-        {{ chordLabStore.editingId ? '更新修改' : '保存和弦' }}
-      </ActionButton>
+      <GlobalTooltip :content="saveDisabledReason">
+        <ActionButton @click="uiStore.triggerSaveChord()" :primary="!isSaveDisabled" :disabled="isSaveDisabled">
+          {{ chordLabStore.editingId ? '更新修改' : '保存和弦' }}
+        </ActionButton>
+      </GlobalTooltip>
 
       <ActionButton
         @click="chordLabStore.resetEditor()"
@@ -21,6 +23,7 @@
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
+import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
 import { computed } from 'vue';
@@ -30,20 +33,45 @@ const chordLabStore = useChordLabStore();
 
 /**
  * 智能判定保存/更新按钮是否应该置灰禁用
- * 统一标准：无核心资产数据（名字为空 OR 主脑判定指板全空）才禁用
  */
 const isSaveDisabled = computed(() => {
   const cleanName = chordLabStore.currentChordName ? chordLabStore.currentChordName.trim() : '';
-
-  // 100% 连通主脑全局空状态 Getter，名字为空或指板全空则禁用
   return !cleanName || chordLabStore.isFretBoardEmpty;
 });
 
 /**
- * 🌟 智能判定清空/放弃修改按钮是否应该置灰禁用
- * 逻辑闭环：
- * - 在新建模式下（!editingId），如果主脑判定指板本来就是全空的，直接熔断禁用“清空指板”按钮。
- * - 在编辑模式下（!!editingId），为了防止用户因清空音符而被死锁在编辑状态中，退出通道永远保持畅通，不触发禁用！
+ * 🌟 乐理状态机：动态推演保存被禁用的核心原因
+ * - 只有在按钮确实处于禁用状态时才返回文本，否则返回 undefined 彻底隐藏气泡框
  */
-const isClearDisabled = computed(() => !chordLabStore.editingId && chordLabStore.isFretBoardEmpty);
+const saveDisabledReason = computed(() => {
+  if (!isSaveDisabled.value) return undefined;
+
+  const cleanName = chordLabStore.currentChordName ? chordLabStore.currentChordName.trim() : '';
+
+  // 判定优先级 A：如果连和弦名字都还没填，优先提示输入名字
+  if (!cleanName) {
+    return '请输入和弦名称（如 C, Am）';
+  }
+
+  // 判定优先级 B：名字填了但指板全空，提示添加指板音
+  if (chordLabStore.isFretBoardEmpty) {
+    return '指板上至少需要指定一个有效音符';
+  }
+
+  return undefined;
+});
+
+/**
+ * 智能判定清空/放弃修改按钮是否应该置灰禁用
+ */
+const isClearDisabled = computed(() => {
+  // 如果是编辑模式，永远不禁用退出通道
+  if (chordLabStore.editingId) return false;
+
+  const cleanName = chordLabStore.currentChordName ? chordLabStore.currentChordName.trim() : '';
+  const isNameEmpty = !cleanName;
+
+  // 只有在【名字是空的】并且【指板也是空的】这双重空虚叠加时，才置灰禁用
+  return isNameEmpty && chordLabStore.isFretBoardEmpty;
+});
 </script>

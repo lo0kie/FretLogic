@@ -1,6 +1,6 @@
 <template>
   <div
-    class="panel-left h-[calc(100vh-24px)] flex flex-col shrink-0 relative overflow-hidden z-10"
+    class="panel-left h-[calc(100vh-24px)] flex flex-col shrink-0 relative z-10"
     :style="{
       width: uiStore.isLeftOpen ? '335px' : '0px',
       opacity: uiStore.isLeftOpen ? 1 : 0,

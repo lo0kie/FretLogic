@@ -1,6 +1,6 @@
 <template>
   <div
-    class="panel-right h-[calc(100vh-24px)] flex flex-col shrink-0 justify-between overflow-hidden"
+    class="panel-right h-[calc(100vh-24px)] flex flex-col shrink-0 justify-between"
     :class="{ 'is-open': uiStore.isRightOpen }"
   >
     <div class="flex flex-col flex-1 min-w-[335px]">

@@ -15,7 +15,7 @@
         <button
           v-if="fretVal === -1"
           :key="'muted-' + sIdx"
-          @click.stop="chordLabStore.toggleOpenString(sIdx)"
+          @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
           class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-none open-string-btn muted"
           :style="{
@@ -30,7 +30,7 @@
         <button
           v-else-if="fretVal === 0"
           :key="'open-' + sIdx"
-          @click.stop="chordLabStore.toggleOpenString(sIdx)"
+          @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
           class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-all duration-75 open-string-btn"
           :class="[chordLabStore.rootMark === sIdx ? 'root' : 'open']"
@@ -46,7 +46,7 @@
         <button
           v-else
           :key="'pressed-shield-' + sIdx"
-          @click.stop="chordLabStore.toggleOpenString(sIdx)"
+          @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
           class="absolute w-10 h-10 opacity-0 pointer-events-auto bg-transparent border-none outline-none cursor-pointer"
           :style="{
@@ -166,13 +166,21 @@ let lastFIdx = -1;
 
 let cachedBoardRect: DOMRect | null = null;
 
-// 🌟 乐理状态机：规范右击空弦音控制区的终极闭环逻辑
+/**
+ * 🌟 核心拦截新增：托管空弦音按钮的左键点击切换
+ * 闭环逻辑：只要当前弦被点按进行了空弦/禁弹切换，且它刚好是手动主音，瞬间剥离主音资格！
+ */
+const handleLocalToggleOpenString = (sIdx: number) => {
+  if (chordLabStore.rootMark === sIdx) {
+    chordLabStore.rootMark = -1;
+  }
+  chordLabStore.toggleOpenString(sIdx);
+};
+
 const handleOpenStringRightClick = (sIdx: number) => {
-  // 判定 A：如果当前已经是空弦音，且它本来就是手动主音，那右击就取消主音标记
   if (chordLabStore.rootMark === sIdx && chordLabStore.selectedFrets[sIdx] === 0) {
     chordLabStore.rootMark = -1;
   } else {
-    // 判定 B（修复核心）：管你之前是禁弹(-1)还是实体按音(>0)，通通掐断清除，原地变为空弦主音！
     chordLabStore.selectedFrets[sIdx] = 0;
     chordLabStore.rootMark = sIdx;
   }
@@ -200,6 +208,12 @@ const handleCanvasRightClick = (e: MouseEvent) => {
       handleFretRightClick(sIdx);
       return;
     }
+
+    // 如果右键强制覆写其他格子，且当前弦是主音，也要同步剥离
+    if (chordLabStore.rootMark === sIdx) {
+      chordLabStore.rootMark = -1;
+    }
+
     chordLabStore.selectedFrets[sIdx] = fIdx;
     chordLabStore.rootMark = sIdx;
   }
@@ -222,6 +236,7 @@ const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = 
   if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount) {
     if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
     const isSameFret = chordLabStore.selectedFrets[sIdx] === fIdx;
+
     if (isSameFret) {
       chordLabStore.selectedFrets[sIdx] = -1;
       lastSIdx = -1;
@@ -236,6 +251,12 @@ const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = 
         lastFIdx = -1;
         return;
       }
+
+      // 当在物理网格上点按换品位时，如果本弦存在主音，一并熔断
+      if (chordLabStore.rootMark === sIdx) {
+        chordLabStore.rootMark = -1;
+      }
+
       chordLabStore.selectedFrets[sIdx] = fIdx;
       lastSIdx = sIdx;
       lastFIdx = fIdx;
@@ -276,6 +297,7 @@ onMounted(() => {
 </script>
 
 <style scoped lang="less">
+// 原生 Less Theme 样式原封不动放行
 .fretBoard-container {
   .fret-number-text,
   .fret-note-text {

@@ -7,7 +7,7 @@
     </div>
 
     <div class="relative flex items-center justify-center">
-      <GlobalTooltip placement="bottom-end" content="新建分组">
+      <GlobalTooltip placement="bottom" content="新建分组">
         <button
           @click="uiStore.openModal('createGroup', '新建分组')"
           class="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-primary font-black flex items-center justify-center text-sm border border-slate-200 dark:border-slate-700 active:scale-95 transition-transform"
