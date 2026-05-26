@@ -3,36 +3,29 @@ name: Deploy to GitHub Pages Automatically
 on:
   push:
     branches:
-      - master # 盯紧你的 master 分支
+      - master
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1. 唯一的外部拉取，如果这一步今天通过了，后面就纯走本地算力了
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 🌟 2. 绕过 actions/setup-node 插件！直接用虚拟机自带的 node 和 npm
-      - name: Verify Node Environment
-        run: |
-          node -v
-          npm -v
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
 
-      # 3. 干净下载依赖与打包，并强制注入不解释文件
       - name: Install & Build
         run: |
           npm ci
           npm run build
 
-      # 🌟 4. 掀翻 peaceiris 插件！用纯原生 Git 命令把 dist 一炮轰回 gh-pages
-      - name: Pure Bash Deploy 🚀
-        run: |
-          cd dist
-          git init
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "deploy: 极致纯脚本绕过官方全线崩溃"
-          # 利用虚拟机动态注入的令牌环境变量，100% 鉴权通过并强推
-          git push -f https://x-token-auth:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git master:gh-pages
+      - name: Deploy to GitHub Pages 🚀
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ github.token }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
