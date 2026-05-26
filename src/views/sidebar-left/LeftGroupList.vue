@@ -5,7 +5,7 @@
       class="h-full flex flex-col items-center justify-center opacity-30 py-20"
     >
       <span class="text-2xl mb-2">📁</span>
-      <p class="text-[9px] font-black uppercase tracking-widest text-center leading-relaxed text-body">
+      <p class="text-xs font-black uppercase tracking-widest text-center leading-relaxed text-body">
         暂无分组<br />点击右上角新建
       </p>
     </div>
