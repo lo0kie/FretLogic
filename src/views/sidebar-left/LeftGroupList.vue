@@ -24,7 +24,7 @@
         @dragover.prevent
         @drop.stop="handleGroupDrop(gIdx)"
         @click="chordLabStore.handleGroupHeaderClick(group.id)"
-        class="group-title-row flex items-center justify-between py-2 px-2 rounded-xl cursor-grab active:cursor-grabbing"
+        class="group-title-row dark:hover:bg-slate-800/60 flex items-center justify-between py-2 px-2 rounded-lg cursor-grab active:cursor-grabbing"
       >
         <div class="flex items-center gap-2">
           <span
@@ -63,7 +63,7 @@
       <div v-show="!group.collapsed" class="mt-2">
         <div
           v-if="chordLabStore.getGroupChords(group.id).length === 0"
-          class="py-4 border border-dashed rounded-xl flex items-center justify-center empty-card-box"
+          class="py-4 border border-dashed rounded-lg flex items-center justify-center empty-card-box"
         >
           <p class="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">没有和弦</p>
         </div>
@@ -80,7 +80,7 @@
             @drop.stop="handleChordDropToSort(chord.id, group.id)"
             @click="chordLabStore.handleChordClick(chord)"
             @contextmenu.prevent
-            class="chord-thumb-card hover:-translate-y-0.5 h-11 rounded-xl relative cursor-pointer flex items-center px-3 justify-between overflow-hidden border transition-all duration-200"
+            class="chord-thumb-card active:cursor-grabbing hover:-translate-y-0.5 h-11 rounded-lg relative cursor-pointer flex items-center px-3 justify-between overflow-hidden border transition-all duration-200"
             :class="
               chordLabStore.editingId == chord.id
                 ? 'is-editing bg-blue-50/30 dark:bg-blue-950/40 shadow-sm'
@@ -252,13 +252,16 @@ const handleChordDropToGroup = (targetGroupId: string) => {
 
 .group-title-row {
   .mixin-hover-card();
+
   &:hover {
     .action-buttons {
       opacity: 1;
     }
   }
+
   .group-name-text {
     color: @text-body;
+
     &.is-active {
       color: @brand-primary !important;
     }
@@ -280,9 +283,6 @@ const handleChordDropToGroup = (targetGroupId: string) => {
   border: 1px solid color-mix(in srgb, var(--control-border), transparent 80%);
   cursor: grab;
 
-  &:active {
-    cursor: grabbing;
-  }
   .chord-name-text {
     color: @text-body;
   }
@@ -306,6 +306,7 @@ const handleChordDropToGroup = (targetGroupId: string) => {
 :global(.dark) {
   .chord-thumb-card {
     background-color: rgba(30, 41, 59, 0.3);
+
     &.is-editing {
       background-color: rgba(37, 99, 235, 0.15) !important;
       .chord-name-text {
@@ -313,6 +314,7 @@ const handleChordDropToGroup = (targetGroupId: string) => {
       }
     }
   }
+
   .group-drop-zone {
     &[dragover] {
       background-color: rgba(59, 130, 246, 0.06);
