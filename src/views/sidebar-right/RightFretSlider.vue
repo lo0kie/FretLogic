@@ -9,9 +9,14 @@
         class="slider-btn"
         :style="{
           transform:
-            chordLabStore.fretCount === 3 ? 'translateX(0)' : chordLabStore.fretCount === 4 ? 'translateX(100%)' : 'translateX(200%)',
+            chordLabStore.fretCount === 3
+              ? 'translateX(0)'
+              : chordLabStore.fretCount === 4
+                ? 'translateX(100%)'
+                : 'translateX(200%)',
         }"
       ></div>
+
       <div
         v-for="f in [3, 4, 5]"
         :key="f"
@@ -32,13 +37,18 @@ import { onMounted, ref } from 'vue';
 
 const chordLabStore = useChordLabStore();
 const fretSliderRef = ref<HTMLDivElement | null>(null);
-
 let isFretDragging = false;
+
+// 🌟 核心优化：固化滑轨物理卡片边界，彻底驱逐 Move 期间的 getBoundingClientRect 刺客
+let cachedSliderRect: DOMRect | null = null;
 
 const handleFretSliderPointerDown = (e: PointerEvent) => {
   if (!fretSliderRef.value) return;
   isFretDragging = true;
   fretSliderRef.value.setPointerCapture(e.pointerId);
+
+  // 🌟 状态捕获：在按下的刹那锁定物理盒子大小
+  cachedSliderRect = fretSliderRef.value.getBoundingClientRect();
   updateFretCountFromX(e.clientX);
 };
 
@@ -49,11 +59,14 @@ const handleFretSliderPointerMove = (e: PointerEvent) => {
 const handleFretSliderPointerUp = (e: PointerEvent) => {
   isFretDragging = false;
   if (fretSliderRef.value) fretSliderRef.value.releasePointerCapture(e.pointerId);
+  cachedSliderRect = null; // 🌟 顺手释放防内存泄漏
 };
 
 const updateFretCountFromX = (clientX: number) => {
-  if (!fretSliderRef.value) return;
-  const rect = fretSliderRef.value.getBoundingClientRect();
+  // 🌟 极速命中：Move 拖拽期间 100% 消费缓存快照
+  const rect = cachedSliderRect || (fretSliderRef.value ? fretSliderRef.value.getBoundingClientRect() : null);
+  if (!rect) return;
+
   const relativeX = clientX - rect.left;
   const percent = relativeX / rect.width;
   if (percent < 0.33) chordLabStore.fretCount = 3;
