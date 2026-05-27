@@ -127,13 +127,10 @@
   }
 }
 
-/**
- * 🎯 Mixin 5: 基础公共动作按钮手势与形变规范（🌟 补全到位）
- * 完美对齐：ActionButton.vue 的物理高度、Q弹形变、字号与阴影继承
- */
+// 🎯 Mixin 5: 基础公共动作按钮手势与形变规范
 .mixin-button-base() {
   font-size: 0.75rem; // 12px (text-xs)
-  height: 2.5rem; // 40px (h-10) 完美咬合你原本的系统高度
+  height: 2.5rem; // 40px (h-10)
   display: flex;
   align-items: center;
   justify-content: center;
@@ -142,12 +139,10 @@
   border: 1px solid transparent;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); // shadow-sm
   user-select: none;
-
-  // 接入系统标准的极速弹性反馈曲线
   transition: all 0.15s @bezier-bounce;
 
   &:active {
-    transform: scale(0.96); // 点击时自然的物理内缩形变
+    transform: scale(0.96);
   }
 
   &:disabled {
