@@ -1,6 +1,7 @@
 <template>
-  <div id="fretBoard-capture-area" class="flex-1 h-full flex items-center justify-center p-8 transition-all">
+  <div class="flex-1 h-full flex items-center justify-center p-8 transition-all">
     <div
+      id="fretBoard-capture-area"
       class="workbench-card w-[520px] rounded-xl flex flex-col justify-evenly items-center relative shrink-0"
       :style="{ height: 230 + [350, 440, 510][chordLabStore.fretCount - 3] + 'px' }"
     >

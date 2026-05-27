@@ -24,7 +24,7 @@
         @dragover.prevent
         @drop.stop="handleGroupDrop(gIdx)"
         @click="chordLabStore.handleGroupHeaderClick(group.id)"
-        class="group-title-row dark:hover:bg-slate-800/60 flex items-center justify-between py-2 px-2 rounded-lg cursor-grab active:cursor-grabbing"
+        class="group-title-row dark:hover:bg-slate-800/60 flex items-center justify-between py-2 px-2 rounded-lg cursor-pointer active:cursor-grabbing"
       >
         <div class="flex items-center gap-2">
           <span
@@ -281,7 +281,7 @@ const handleChordDropToGroup = (targetGroupId: string) => {
 
   // 🌟 2. 核心修正：明确强制声明 3 属性，且写在 Mixin 下方，彻底砸碎浏览器的权重迷雾
   border: 1px solid color-mix(in srgb, var(--control-border), transparent 80%);
-  cursor: grab;
+  cursor: pointer;
 
   .chord-name-text {
     color: @text-body;
