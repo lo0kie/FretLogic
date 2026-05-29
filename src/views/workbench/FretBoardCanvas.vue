@@ -3,8 +3,12 @@
     ref="fretBoardRef"
     class="fretBoard-container relative touch-action-none flex flex-col items-center select-none"
     :style="{
-      width: '456px',
-      height: 80 + chordLabStore.fretCount * 120 + 20 + 'px',
+      width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
+      height:
+        CANVAS_CONFIG.OFFSET_Y_TOP +
+        chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT +
+        CANVAS_CONFIG.OFFSET_Y_BOTTOM +
+        'px',
       transform: `scale(${1 - (chordLabStore.fretCount - 3) * 0.06})`,
       transformOrigin: 'top center',
     }"
@@ -17,12 +21,8 @@
           :key="'muted-' + sIdx"
           @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
-          class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-none open-string-btn muted"
-          :style="{
-            left: `${getStrX(sIdx)}px`,
-            transform: 'translateX(-50%)',
-            top: '10px',
-          }"
+          class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-none border-red-500/30 dark:border-red-500/40 text-red-500 dark:text-red-400 bg-red-500/10 dark:bg-red-500/15"
+          :style="{ left: `${getStrX(sIdx)}px`, transform: 'translateX(-50%)', top: '10px' }"
         >
           <span>✕</span>
         </button>
@@ -32,13 +32,13 @@
           :key="'open-' + sIdx"
           @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
-          class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-all duration-75 open-string-btn"
-          :class="[chordLabStore.rootMark === sIdx ? 'root' : 'open']"
-          :style="{
-            left: `${getStrX(sIdx)}px`,
-            transform: 'translateX(-50%)',
-            top: '10px',
-          }"
+          class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-all duration-75"
+          :class="[
+            chordLabStore.rootMark === sIdx
+              ? 'border-amber-500 dark:border-amber-400 text-white dark:text-slate-800 bg-amber-500 dark:bg-amber-400 shadow-[0_2px_4px_rgba(245,158,11,0.3)] dark:shadow-[0_2px_8px_rgba(251,191,36,0.4)]'
+              : 'border-blue-600/30 dark:border-blue-500 text-blue-600 dark:text-blue-500 bg-blue-600/10 dark:bg-blue-500/15',
+          ]"
+          :style="{ left: `${getStrX(sIdx)}px`, transform: 'translateX(-50%)', top: '10px' }"
         >
           <span>{{ ['E', 'A', 'D', 'G', 'B', 'E'][sIdx] }}</span>
         </button>
@@ -49,19 +49,15 @@
           @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
           class="absolute w-10 h-10 opacity-0 pointer-events-auto bg-transparent border-none outline-none cursor-pointer"
-          :style="{
-            left: `${getStrX(sIdx)}px`,
-            transform: 'translateX(-50%)',
-            top: '20px',
-          }"
+          :style="{ left: `${getStrX(sIdx)}px`, transform: 'translateX(-50%)', top: '20px' }"
         ></button>
       </template>
     </div>
 
     <svg
-      width="456"
-      :height="chordLabStore.fretCount * 120 + 20"
-      :viewBox="`0 0 456 ${chordLabStore.fretCount * 120 + 20}`"
+      :width="CANVAS_CONFIG.BOARD_WIDTH"
+      :height="chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
+      :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
       style="overflow: visible"
       class="w-full pointer-events-auto"
     >
@@ -71,7 +67,7 @@
         :x1="getStrX(s - 1)"
         y1="0"
         :x2="getStrX(s - 1)"
-        :y2="chordLabStore.fretCount * 120"
+        :y2="chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT"
         :stroke="chordLabStore.isDarkMode ? '#475569' : '#94a3b8'"
         stroke-width="4"
         style="pointer-events: none"
@@ -80,17 +76,17 @@
       <line
         v-for="f in chordLabStore.fretCount + 1"
         :key="'fret-line-' + f"
-        x1="45"
-        :y1="(f - 1) * 120"
-        x2="425"
-        :y2="(f - 1) * 120"
+        :x1="CANVAS_CONFIG.OFFSET_X"
+        :y1="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
+        :x2="CANVAS_CONFIG.BOARD_WIDTH - 31"
+        :y2="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
         :stroke="chordLabStore.isDarkMode ? '#334155' : '#cbd5e1'"
         stroke-width="4"
         style="pointer-events: none"
       />
 
       <rect
-        x="43"
+        :x="CANVAS_CONFIG.OFFSET_X - 2"
         y="-6"
         width="384"
         height="8"
@@ -101,15 +97,20 @@
       <template v-for="f in chordLabStore.fretCount + 1" :key="'fret-text-' + f">
         <text
           x="10"
-          :y="(f - 1) * 120"
+          :y="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
           text-anchor="middle"
           dy="0.36em"
           font-size="28"
           font-weight="900"
           :fill="chordLabStore.isDarkMode ? '#64748b' : '#94a3b8'"
-          class="fret-number-text"
           v-if="f > 1 && f <= chordLabStore.fretCount"
-          style="pointer-events: none"
+          style="
+            pointer-events: none;
+            font-family:
+              system-ui,
+              -apple-system,
+              sans-serif;
+          "
         >
           {{ chordLabStore.capo > 0 ? chordLabStore.capo + f - 1 : f - 1 }}
         </text>
@@ -124,20 +125,33 @@
         >
           <circle
             :cx="getStrX(sIdx)"
-            :cy="(fret - 1) * 120 + 60"
+            :cy="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
             r="28"
-            :fill="chordLabStore.rootMark === sIdx ? '#f59e0b' : '#2563eb'"
-            style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))"
+            :fill="
+              chordLabStore.rootMark === sIdx
+                ? chordLabStore.isDarkMode
+                  ? '#fbbf24'
+                  : '#f59e0b'
+                : chordLabStore.isDarkMode
+                  ? '#3b82f6'
+                  : '#2563eb'
+            "
+            style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15)); transition: fill 0.15s"
           />
           <text
             :x="getStrX(sIdx)"
-            :y="(fret - 1) * 120 + 60"
+            :y="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
             text-anchor="middle"
             dy="0.36em"
-            fill="white"
             font-size="22"
             font-weight="700"
-            class="fret-note-text"
+            :fill="chordLabStore.rootMark === sIdx && chordLabStore.isDarkMode ? '#1e293b' : '#ffffff'"
+            style="
+              font-family:
+                system-ui,
+                -apple-system,
+                sans-serif;
+            "
           >
             {{ calcNoteLabel(sIdx, fret, chordLabStore.capo) }}
           </text>
@@ -148,213 +162,18 @@
 </template>
 
 <script setup lang="ts">
+import { useFretboardInteraction } from '@/composables/useFretboardInteraction';
+import { CANVAS_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { calcNoteLabel } from '@/utils/musicTheory';
-import { useEventListener } from '@vueuse/core';
-import { onMounted, ref } from 'vue';
+import { ref } from 'vue';
 
 const chordLabStore = useChordLabStore();
 const fretBoardRef = ref<HTMLDivElement | null>(null);
 
-const getStrX = (i: number) => 45 + i * 76;
+const getStrX = (i: number) => CANVAS_CONFIG.OFFSET_X + i * CANVAS_CONFIG.STRING_SPACING;
 
-let lastCancelTime = 0;
-const MUTING_COOL_DOWN = 200;
-
-let lastSIdx = -1;
-let lastFIdx = -1;
-
-let cachedBoardRect: DOMRect | null = null;
-
-/**
- * 🌟 核心拦截新增：托管空弦音按钮的左键点击切换
- * 闭环逻辑：只要当前弦被点按进行了空弦/禁弹切换，且它刚好是手动主音，瞬间剥离主音资格！
- */
-const handleLocalToggleOpenString = (sIdx: number) => {
-  if (chordLabStore.rootMark === sIdx) {
-    chordLabStore.rootMark = -1;
-  }
-  chordLabStore.toggleOpenString(sIdx);
-};
-
-const handleOpenStringRightClick = (sIdx: number) => {
-  if (chordLabStore.rootMark === sIdx && chordLabStore.selectedFrets[sIdx] === 0) {
-    chordLabStore.rootMark = -1;
-  } else {
-    chordLabStore.selectedFrets[sIdx] = 0;
-    chordLabStore.rootMark = sIdx;
-  }
-};
-
-const handleFretRightClick = (sIdx: number) => {
-  chordLabStore.rootMark = chordLabStore.rootMark === sIdx ? -1 : sIdx;
-};
-
-const handleCanvasRightClick = (e: MouseEvent) => {
-  if (!fretBoardRef.value) return;
-  const board = fretBoardRef.value.getBoundingClientRect();
-  const scaleX = board.width / 456;
-  const scaleY = board.height / (80 + chordLabStore.fretCount * 120 + 20);
-
-  const canvasX = (e.clientX - board.left) / scaleX;
-  const canvasY = (e.clientY - board.top) / scaleY;
-
-  const sIdx = Math.round((canvasX - 45) / 76);
-  const fretAreaY = canvasY - 80;
-  const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / 120) + 1 : 0;
-
-  if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount) {
-    if (chordLabStore.selectedFrets[sIdx] === fIdx) {
-      handleFretRightClick(sIdx);
-      return;
-    }
-
-    // 如果右键强制覆写其他格子，且当前弦是主音，也要同步剥离
-    if (chordLabStore.rootMark === sIdx) {
-      chordLabStore.rootMark = -1;
-    }
-
-    chordLabStore.selectedFrets[sIdx] = fIdx;
-    chordLabStore.rootMark = sIdx;
-  }
-};
-
-const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = false) => {
-  const board = cachedBoardRect || (fretBoardRef.value ? fretBoardRef.value.getBoundingClientRect() : null);
-  if (!board) return;
-
-  const scaleX = board.width / 456;
-  const scaleY = board.height / (80 + chordLabStore.fretCount * 120 + 20);
-
-  const canvasX = (clientX - board.left) / scaleX;
-  const canvasY = (clientY - board.top) / scaleY;
-
-  const sIdx = Math.round((canvasX - 45) / 76);
-  const fretAreaY = canvasY - 80;
-  const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / 120) + 1 : 0;
-
-  if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount) {
-    if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
-    const isSameFret = chordLabStore.selectedFrets[sIdx] === fIdx;
-
-    if (isSameFret) {
-      chordLabStore.selectedFrets[sIdx] = -1;
-      lastSIdx = -1;
-      lastFIdx = -1;
-      if (chordLabStore.rootMark === sIdx) {
-        chordLabStore.rootMark = -1;
-      }
-      lastCancelTime = Date.now();
-    } else {
-      if (isMoveEvent && Date.now() - lastCancelTime < MUTING_COOL_DOWN) {
-        lastSIdx = -1;
-        lastFIdx = -1;
-        return;
-      }
-
-      // 当在物理网格上点按换品位时，如果本弦存在主音，一并熔断
-      if (chordLabStore.rootMark === sIdx) {
-        chordLabStore.rootMark = -1;
-      }
-
-      chordLabStore.selectedFrets[sIdx] = fIdx;
-      lastSIdx = sIdx;
-      lastFIdx = fIdx;
-    }
-  }
-};
-
-const handlePointerDown = (e: PointerEvent) => {
-  if (e.button !== 0) return;
-  if (fretBoardRef.value) {
-    cachedBoardRect = fretBoardRef.value.getBoundingClientRect();
-  }
-  chordLabStore.isDraggingFinger = true;
-  lastSIdx = -1;
-  lastFIdx = -1;
-  handleFingerClickLogic(e.clientX, e.clientY, false);
-};
-
-const handlePointerMove = (e: PointerEvent) => {
-  if (!chordLabStore.isDraggingFinger) return;
-  handleFingerClickLogic(e.clientX, e.clientY, true);
-};
-
-const handlePointerUp = () => {
-  chordLabStore.isDraggingFinger = false;
-  lastSIdx = -1;
-  lastFIdx = -1;
-  cachedBoardRect = null;
-};
-
-onMounted(() => {
-  if (fretBoardRef.value) {
-    useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
-    useEventListener(window, 'pointermove', handlePointerMove);
-    useEventListener(window, 'pointerup', handlePointerUp);
-  }
-});
+// 🌟 核心：引入并激活解耦的交互逻辑
+const { handleLocalToggleOpenString, handleOpenStringRightClick, handleFretRightClick, handleCanvasRightClick } =
+  useFretboardInteraction(fretBoardRef);
 </script>
-
-<style scoped lang="less">
-// 原生 Less Theme 样式原封不动放行
-.fretBoard-container {
-  .fret-number-text,
-  .fret-note-text {
-    font-family:
-      system-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      sans-serif;
-  }
-  .open-string-btn {
-    border-color: #cbd5e1;
-    color: #334155;
-    background-color: #ffffff;
-    transition: all 0.075s cubic-bezier(0.4, 0, 0.2, 1);
-    &.muted {
-      border-color: rgba(239, 68, 68, 0.3) !important;
-      color: #ef4444 !important;
-      background-color: rgba(239, 68, 68, 0.08) !important;
-      transition: none !important;
-    }
-    &.open {
-      border-color: #2563eb50 !important;
-      color: #2563eb !important;
-      background-color: rgba(37, 99, 235, 0.08) !important;
-    }
-    &.root {
-      border-color: #f59e0b !important;
-      color: #ffffff !important;
-      background-color: #f59e0b !important;
-      box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
-    }
-  }
-}
-:global(.dark) {
-  .fretBoard-container {
-    .open-string-btn {
-      border-color: #475569;
-      color: #f8fafc;
-      background-color: #1e293b;
-      &.muted {
-        border-color: rgba(239, 68, 68, 0.4) !important;
-        color: #f87171 !important;
-        background-color: rgba(239, 68, 68, 0.15) !important;
-        transition: none !important;
-      }
-      &.open {
-        border-color: #3b82f6 !important;
-        color: #3b82f6 !important;
-        background-color: rgba(59, 130, 246, 0.15) !important;
-      }
-      &.root {
-        border-color: #fbbf24 !important;
-        color: #1e293b !important;
-        background-color: #fbbf24 !important;
-        box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
-      }
-    }
-  }
-}
-</style>

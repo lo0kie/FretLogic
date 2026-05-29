@@ -1,5 +1,6 @@
+import { DEFAULT_CHORD_NAME, STORAGE_KEYS } from '@/constants';
 import { calcNoteLabel, extractRootNote } from '@/utils/musicTheory';
-import { useDark, useStorage } from '@vueuse/core';
+import { debounceFilter, useDark, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
@@ -22,53 +23,60 @@ export interface Group {
 export const useChordLabStore = defineStore('chordLab', () => {
   const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '' });
 
-  // 核心持久化资产
-  const savedChordsList = useStorage<Chord[]>('CHORD_LAB_LIST_V4', []);
-  const groups = useStorage<Group[]>('CHORD_LAB_GROUPS', []);
+  // 🌟 性能极客优化：给极其沉重的海量长列表挂载防抖。鼠标无论怎么疯狂拖拽排序，只有停歇 500ms 后才一次性打包装盘落盘
+  const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage, {
+    eventFilter: debounceFilter(500),
+  });
+  const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage, { eventFilter: debounceFilter(500) });
 
-  // 工作区核心状态
-  const currentChordName = useStorage('CHORD_LAB_CURR_NAME_V1', '');
-  const selectedFrets = useStorage<number[]>('CHORD_LAB_CURR_FRETS_V1', [-1, -1, -1, -1, -1, -1]);
-  const fretCount = useStorage('CHORD_LAB_CURR_FCOUNT_V1', 3);
-  const capo = useStorage('CHORD_LAB_CURR_CAPO_V1', 0);
-  const rootMark = useStorage<number>('CHORD_LAB_CURR_ROOT_MARK_V1', -1);
+  const currentChordName = useStorage(STORAGE_KEYS.CURR_NAME, '', localStorage, { eventFilter: debounceFilter(300) });
+  const selectedFrets = useStorage<number[]>(STORAGE_KEYS.CURR_FRETS, [-1, -1, -1, -1, -1, -1], localStorage, {
+    eventFilter: debounceFilter(300),
+  });
+  const rootMark = useStorage<number>(STORAGE_KEYS.CURR_ROOT_MARK, -1, localStorage, {
+    eventFilter: debounceFilter(300),
+  });
 
-  const editingId = useStorage<number | null>('CHORD_LAB_EDITING_ID', null);
-  const selectedGroupId = useStorage<string | null>('CHORD_LAB_CURR_GROUP_ID_V1', null);
+  const fretCount = useStorage(STORAGE_KEYS.CURR_FCOUNT, 3);
+  const capo = useStorage(STORAGE_KEYS.CURR_CAPO, 0);
+
+  const editingId = useStorage<number | null>(STORAGE_KEYS.EDITING_ID, null);
+  const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
 
   const isDraggingFinger = ref(false);
   const lastPos = ref('');
+
+  const overwriteChords = (newChords: Chord[]) => {
+    savedChordsList.value.length = 0;
+    savedChordsList.value.push(...newChords);
+  };
+
+  const overwriteGroups = (newGroups: Group[]) => {
+    groups.value.length = 0;
+    groups.value.push(...newGroups);
+  };
+
+  const addChord = (chord: Chord) => savedChordsList.value.unshift(chord);
+  const updateChord = (idx: number, chord: Chord) => (savedChordsList.value[idx] = chord);
 
   const getGroupChords = (gid: string): Chord[] => {
     return savedChordsList.value.filter(chord => chord.groupId === gid);
   };
 
-  const isFretBoardEmpty = computed(() => {
-    return selectedFrets.value.every(fret => (fret ?? -1) < 0);
-  });
+  const isFretBoardEmpty = computed(() => selectedFrets.value.every(fret => (fret ?? -1) < 0));
 
-  // 🌟 核心新增：为主根音正则匹配加一层常驻 Computed 隔离屏障，防止指板滑动时反复执行正则推演
-  const currentRootNote = computed(() => {
-    return extractRootNote(currentChordName.value);
-  });
+  const currentRootNote = computed(() => extractRootNote(currentChordName.value));
 
-  // 衍生计算：指板 UI 状态
   const openStringsUIState = computed(() => {
-    // 🌟 直接消费提取好的缓存资产，拒绝高频重复计算
     const currentRoot = currentRootNote.value;
-
     return selectedFrets.value.map((fretVal, sIdx) => {
       const calcFret = fretVal === -1 ? 0 : fretVal;
       const noteLabel = calcNoteLabel(sIdx, calcFret, capo.value);
       const hasManualRoot =
         rootMark.value !== null && rootMark.value !== undefined && rootMark.value >= 0 && rootMark.value <= 5;
-
-      let isRoot = false;
-      if (hasManualRoot) {
-        isRoot = rootMark.value === sIdx;
-      } else {
-        isRoot = !!(currentRoot && calcNoteLabel(sIdx, 0, capo.value).toUpperCase() === currentRoot);
-      }
+      let isRoot = hasManualRoot
+        ? rootMark.value === sIdx
+        : !!(currentRoot && calcNoteLabel(sIdx, 0, capo.value).toUpperCase() === currentRoot);
 
       let type: 'muted' | 'root' | 'open' | 'normal' = 'normal';
       if (fretVal === -1) type = 'muted';
@@ -80,7 +88,7 @@ export const useChordLabStore = defineStore('chordLab', () => {
 
   const handleChordClick = (chord: Chord) => {
     editingId.value = chord.id;
-    currentChordName.value = chord.chordName === '未命名' ? '' : chord.chordName;
+    currentChordName.value = chord.chordName === DEFAULT_CHORD_NAME ? '' : chord.chordName;
     selectedFrets.value = [...chord.selectedFrets];
     fretCount.value = chord.fretCount ?? 3;
     capo.value = chord.capo ?? 0;
@@ -123,7 +131,7 @@ export const useChordLabStore = defineStore('chordLab', () => {
   if (editingId.value) {
     const original = savedChordsList.value.find(c => c.id == editingId.value);
     if (original) {
-      currentChordName.value = original.chordName === '未命名' ? '' : original.chordName;
+      currentChordName.value = original.chordName === DEFAULT_CHORD_NAME ? '' : original.chordName;
       selectedFrets.value = [...original.selectedFrets];
       fretCount.value = original.fretCount ?? 3;
       capo.value = original.capo ?? 0;
@@ -147,8 +155,12 @@ export const useChordLabStore = defineStore('chordLab', () => {
     lastPos,
     rootMark,
     isFretBoardEmpty,
-    currentRootNote, // 抛出隔离后的根音缓存
+    currentRootNote,
     openStringsUIState,
+    overwriteChords,
+    overwriteGroups,
+    addChord,
+    updateChord,
     getGroupChords,
     toggleOpenString,
     resetEditor,

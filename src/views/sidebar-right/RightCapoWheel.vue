@@ -1,18 +1,19 @@
 <template>
   <div class="relative flex flex-col gap-2">
-    <label class="text-xs font-black tracking-widest uppercase text-subtitle">Capo</label>
+    <label class="text-xs font-black tracking-widest uppercase" style="color: var(--text-disabled)">Capo</label>
     <div class="relative w-full">
       <GlobalTooltip content="滚动滚轮切换" placement="top">
         <div
           ref="capoWheelRef"
           @click="uiStore.toggleCapoPanel()"
-          class="capo-trigger-bar w-full h-10 bg-slate-100 dark:bg-slate-800 font-black text-[14px] px-3 rounded-xl flex items-center justify-between border cursor-pointer select-none hover:bg-slate-200/50 dark:hover:bg-slate-700/60"
+          class="capo-trigger-bar flex items-center justify-between px-3 select-none"
         >
-          <span class="capo-value-text"
-            >{{ chordLabStore.capo }} {{ chordLabStore.capo === 0 ? '(空弦位)' : '品' }}</span
-          >
+          <span class="font-black text-[14px] opacity-90" style="color: var(--text-title)">
+            {{ chordLabStore.capo }} {{ chordLabStore.capo === 0 ? '(空弦位)' : '品' }}
+          </span>
           <svg
-            class="w-3 h-3 text-slate-400 transition-transform duration-200"
+            class="w-3 h-3 transition-transform duration-200"
+            style="color: var(--text-disabled)"
             :class="{ 'rotate-180': uiStore.isCapoOpen }"
             fill="none"
             viewBox="0 0 24 24"
@@ -34,7 +35,7 @@
       >
         <div
           v-if="uiStore.isCapoOpen"
-          class="capo-dropdown-box absolute left-0 right-0 mt-1.5 max-h-52 overflow-y-auto no-scrollbar rounded-xl shadow-2xl z-[50] p-1.5 flex flex-col gap-1.5 border"
+          class="capo-dropdown-box absolute left-0 right-0 mt-1.5 max-h-52 overflow-y-auto no-scrollbar z-[50] p-1.5 flex flex-col gap-1"
         >
           <div
             v-for="n in 13"
@@ -44,7 +45,7 @@
               chordLabStore.capo = n - 1;
               uiStore.isCapoOpen = false;
             "
-            class="capo-item h-10 px-2.5 py-1 rounded-lg flex items-center text-[14px] font-bold cursor-pointer transition-colors"
+            class="capo-item h-10 px-2.5 rounded-lg flex items-center text-[14px] font-bold"
             :class="{ 'is-selected': chordLabStore.capo === n - 1 }"
           >
             <span class="w-3.5 text-right mr-1">{{ n - 1 }}</span>
@@ -73,24 +74,24 @@ watch(
     if (isOpen) {
       nextTick(() => {
         const targetElement = document.getElementById(`capo-opt-${chordLabStore.capo}`);
-        if (targetElement) {
-          targetElement.scrollIntoView({ block: 'center', behavior: 'auto' });
-        }
+        if (targetElement) targetElement.scrollIntoView({ block: 'center', behavior: 'auto' });
       });
     }
   }
 );
 
+let wheelAccumulator = 0;
+const WHEEL_THRESHOLD = 40;
+
 const handleWheelCapo = (e: WheelEvent) => {
   e.preventDefault();
-  chordLabStore.capo =
-    e.deltaY < 0
-      ? chordLabStore.capo <= 0
-        ? 12
-        : chordLabStore.capo - 1
-      : chordLabStore.capo >= 12
-        ? 0
-        : chordLabStore.capo + 1;
+  wheelAccumulator += e.deltaY;
+  if (Math.abs(wheelAccumulator) < WHEEL_THRESHOLD) return;
+
+  if (wheelAccumulator < 0) chordLabStore.capo = chordLabStore.capo <= 0 ? 12 : chordLabStore.capo - 1;
+  else chordLabStore.capo = chordLabStore.capo >= 12 ? 0 : chordLabStore.capo + 1;
+
+  wheelAccumulator = 0;
 };
 
 onMounted(() => {
@@ -102,29 +103,23 @@ onMounted(() => {
 @import '@/assets/styles/tokens.less';
 
 .capo-trigger-bar {
-  border-color: var(--control-border);
-  .capo-value-text {
-    color: @text-body;
-    opacity: 0.8;
-  }
-  :global(.dark) & .capo-value-text {
-    color: #ffffff !important;
-    opacity: 0.9;
-  }
+  .mixin-input-base();
+  height: 2.5rem;
+  border-radius: @radius-lg;
+  cursor: pointer;
 }
 
 .capo-dropdown-box {
-  .mixin-floating-layer(); // 一键注入悬浮阴影和边框
+  .mixin-floating-layer();
+}
 
-  .capo-item {
-    color: @text-body;
-    .mixin-hover-card(); // 一键注入统一的悬浮背景色
-
-    &.is-selected {
-      background-color: @brand-primary !important;
-      color: white;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-    }
+.capo-item {
+  .mixin-interactive-card();
+  color: var(--text-body);
+  &.is-selected {
+    background-color: @primary !important;
+    color: white;
+    box-shadow: @shadow-sm;
   }
 }
 </style>
