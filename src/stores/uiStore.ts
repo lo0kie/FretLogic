@@ -1,6 +1,7 @@
+import type { ModalActionType } from '@/constants';
 import { useChordLabStore, type Chord, type Group } from '@/stores/chordLabStore';
+import { copyElementToClipboard } from '@/utils/domExporter';
 import { useRefHistory, useToggle } from '@vueuse/core';
-import * as htmlToImage from 'html-to-image';
 import { defineStore } from 'pinia';
 import { ref, toRef } from 'vue';
 
@@ -34,19 +35,17 @@ export const useUiStore = defineStore('ui', () => {
   };
 
   const modalShow = ref(false);
-  const modalType = ref<'createGroup' | 'renameGroup' | 'deleteGroup' | ''>('');
+
+  // 🌟 优化：应用严格的枚举类型，不再使用散落的字符串字面量
+  const modalType = ref<ModalActionType>('');
   const modalTitle = ref('');
   const modalInput = ref('');
   const activeTargetGroup = ref<Group | null>(null);
 
   const draggedGroupIdx = ref<number | null>(null);
 
-  const openModal = (
-    type: 'createGroup' | 'renameGroup' | 'deleteGroup',
-    title: string,
-    initVal = '',
-    target: Group | null = null
-  ) => {
+  // 🌟 优化：入参类型收窄 (使用 Exclude 排除空字符串)，实现 100% 强类型约束
+  const openModal = (type: Exclude<ModalActionType, ''>, title: string, initVal = '', target: Group | null = null) => {
     modalType.value = type;
     modalTitle.value = title;
     modalInput.value = initVal;
@@ -56,6 +55,8 @@ export const useUiStore = defineStore('ui', () => {
 
   const handleModalConfirm = () => {
     const val = modalInput.value.trim();
+
+    // 🌟 TS会自动识别 modalType.value 的类型
     if (['createGroup', 'renameGroup'].includes(modalType.value) && !val) {
       return showToast('❌ 名称不能为空');
     }
@@ -68,15 +69,10 @@ export const useUiStore = defineStore('ui', () => {
     } else if (modalType.value === 'renameGroup' && activeTargetGroup.value) {
       activeTargetGroup.value.name = val;
     } else if (modalType.value === 'deleteGroup' && activeTargetGroup.value) {
-      // 物理清洗和弦列表引用保持
       const remainingChords = chordStore.savedChordsList.filter(c => c.groupId !== activeTargetGroup.value!.id);
-      chordStore.savedChordsList.length = 0;
-      chordStore.savedChordsList.push(...remainingChords);
-
-      // 🌟 核心修正：对 groups 同样采用指针保留自愈技术，决不重写新数组破坏 useStorage
+      chordStore.overwriteChords(remainingChords);
       const remainingGroups = chordStore.groups.filter(g => g.id !== activeTargetGroup.value!.id);
-      chordStore.groups.length = 0;
-      chordStore.groups.push(...remainingGroups);
+      chordStore.overwriteGroups(remainingGroups);
 
       if (chordStore.selectedGroupId === activeTargetGroup.value.id) {
         chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
@@ -88,13 +84,8 @@ export const useUiStore = defineStore('ui', () => {
 
   const triggerSaveChord = () => {
     const cleanName = chordStore.currentChordName.trim();
-    if (!cleanName) {
-      return showToast('❌ 保存失败：请先输入和弦名称（如 C, Am）');
-    }
-
-    if (chordStore.isFretBoardEmpty) {
-      return showToast('❌ 保存失败：指板上至少需要指定一个有效按点或开弦音');
-    }
+    if (!cleanName) return showToast('❌ 保存失败：请输入和弦名称（如 C, Am）');
+    if (chordStore.isFretBoardEmpty) return showToast('❌ 保存失败：指板上至少需要指定一个有效音符');
 
     const currentActiveGroup = chordStore.groups.find(g => g.id === chordStore.selectedGroupId);
     let targetGroupId = chordStore.selectedGroupId;
@@ -104,7 +95,7 @@ export const useUiStore = defineStore('ui', () => {
       if (originalChord) targetGroupId = originalChord.groupId;
     } else {
       if (!chordStore.selectedGroupId || (currentActiveGroup && currentActiveGroup.collapsed)) {
-        return showToast('❌ 请先在左侧展开一个目标分组');
+        return showToast('❌ 请先选择要保存到哪个分组');
       }
     }
 
@@ -119,11 +110,8 @@ export const useUiStore = defineStore('ui', () => {
     };
 
     const idx = chordStore.savedChordsList.findIndex(c => c.id == chordStore.editingId);
-    if (idx !== -1) {
-      chordStore.savedChordsList[idx] = payload;
-    } else {
-      chordStore.savedChordsList.unshift(payload);
-    }
+    if (idx !== -1) chordStore.updateChord(idx, payload);
+    else chordStore.addChord(payload);
 
     chordStore.resetEditor();
     showToast('👍 已经成功持久化保存！');
@@ -131,32 +119,20 @@ export const useUiStore = defineStore('ui', () => {
 
   const triggerDeleteChord = (chord: Chord) => {
     const filtered = chordStore.savedChordsList.filter(c => c.id !== chord.id);
-    chordStore.savedChordsList.length = 0;
-    chordStore.savedChordsList.push(...filtered);
-    showToast(`🗑️ 已删除 "${chord.chordName}"`, true);
+    chordStore.overwriteChords(filtered);
+    showToast(`🗑️ 已删除"${chord.chordName}"`, true);
   };
 
   const copyFretBoardToClipboard = async (selector: string) => {
-    const el = document.querySelector(selector) as HTMLElement;
-    if (!el) return showToast('❌ 未找到指板画布区域');
     if (isCopying.value) return;
-
     isCopying.value = true;
     showToast('📸 正在生成指板图片...');
 
     try {
-      const blob = await htmlToImage.toBlob(el, {
-        quality: 0.95,
-        pixelRatio: 2,
-        cacheBust: true,
-        style: { transform: 'none' },
-      });
-      if (!blob) throw new Error('Blob 生成空指针');
-
-      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-      showToast('✨ 图片已成功复制到剪切板！');
+      await copyElementToClipboard(selector);
+      showToast('✅ 图片已成功复制到剪切板！');
     } catch (err) {
-      console.error('现代化转录失败:', err);
+      console.error('图片转换失败:', err);
       showToast('❌ 浏览器权限拦截，复制失败');
     } finally {
       isCopying.value = false;
