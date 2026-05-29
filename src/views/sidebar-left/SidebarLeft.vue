@@ -15,6 +15,7 @@
   <button
     @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
     class="sidebar-toggle-btn-left text-[9px] font-black"
+    :title="uiStore.isLeftOpen ? '收起左侧边栏' : '展开左侧边栏'"
     :style="{ left: uiStore.isLeftOpen ? '347px' : '0px' }"
   >
     {{ uiStore.isLeftOpen ? '◀' : '▶' }}
@@ -35,7 +36,6 @@ const uiStore = useUiStore();
 
 .panel-left {
   .mixin-panel-base();
-
   transition:
     width @duration-slow @bezier-standard,
     opacity @duration-base ease,
@@ -50,6 +50,7 @@ const uiStore = useUiStore();
   transition:
     all 0.2s ease,
     left @duration-slow @bezier-standard;
+
   &:active {
     transform: translateY(-50%) scale(0.93);
   }

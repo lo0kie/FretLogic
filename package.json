@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@vueuse/core": "^10.9.0",
-    "@vueuse/shared": "^10.9.0",
     "html-to-image": "^1.11.13",
     "pinia": "^2.1.7",
     "vue": "^3.4.21"
