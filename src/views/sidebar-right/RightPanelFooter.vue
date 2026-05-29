@@ -13,7 +13,7 @@
         :warning="!!chordLabStore.editingId"
         :disabled="isClearDisabled"
       >
-        {{ chordLabStore.editingId ? '放弃本次修改' : '清空指板' }}
+        {{ chordLabStore.editingId ? '放弃本次修改' : '重置' }}
       </ActionButton>
     </div>
   </div>
@@ -43,8 +43,17 @@ const saveDisabledReason = computed(() => {
 });
 
 const isClearDisabled = computed(() => {
+  // 1. 如果正在编辑（editingId 存在），说明是修改模式，必须允许清空（重置）
   if (chordLabStore.editingId) return false;
+
+  // 2. 检查是否处于“初始状态”
   const cleanName = chordLabStore.currentChordName ? chordLabStore.currentChordName.trim() : '';
-  return !cleanName && chordLabStore.isFretBoardEmpty;
+  const isDefaultName = cleanName === '';
+  const isDefaultFretBoard = chordLabStore.isFretBoardEmpty;
+  const isDefaultCapo = chordLabStore.capo === 0;
+  const isDefaultFretCount = chordLabStore.fretCount === 3;
+
+  // 只有当所有属性都是初始值时，才禁用“清空”按钮
+  return isDefaultName && isDefaultFretBoard && isDefaultCapo && isDefaultFretCount;
 });
 </script>

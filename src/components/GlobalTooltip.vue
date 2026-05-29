@@ -37,13 +37,6 @@ const show = ref(false);
   border: 1px solid rgba(255, 255, 255, 0.1);
   transition: @transition-base;
 
-  /* 深色模式下的 tooltip 配色反转 */
-  :global(.dark) & {
-    background-color: #f8fafc;
-    color: #0f172a;
-    border-color: #0f172a;
-  }
-
   &[data-placement='top'] {
     bottom: 100%;
     left: 50%;

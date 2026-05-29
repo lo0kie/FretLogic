@@ -80,7 +80,7 @@
         :y1="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
         :x2="CANVAS_CONFIG.BOARD_WIDTH - 31"
         :y2="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
-        :stroke="chordLabStore.isDarkMode ? '#334155' : '#cbd5e1'"
+        :stroke="chordLabStore.isDarkMode ? '#475569' : '#94a3b8'"
         stroke-width="4"
         style="pointer-events: none"
       />

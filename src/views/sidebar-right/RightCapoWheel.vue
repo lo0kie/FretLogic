@@ -8,9 +8,16 @@
           @click="uiStore.toggleCapoPanel()"
           class="capo-trigger-bar flex items-center justify-between px-3 select-none"
         >
-          <span class="font-black text-[14px] opacity-90" style="color: var(--text-title)">
+          <span
+            class="font-black opacity-90"
+            :style="{
+              color: chordLabStore.capo !== 0 ? 'var(--color-primary)' : 'var(--text-title)',
+              fontSize: chordLabStore.capo !== 0 ? '16px' : '14px',
+            }"
+          >
             {{ chordLabStore.capo }} {{ chordLabStore.capo === 0 ? '(空弦位)' : '品' }}
           </span>
+
           <svg
             class="w-3 h-3 transition-transform duration-200"
             style="color: var(--text-disabled)"
