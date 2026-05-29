@@ -12,7 +12,7 @@
       <button
         v-if="modelValue"
         @click="$emit('update:modelValue', '')"
-        class="absolute right-7 w-4 h-4 rounded-full flex items-center justify-center text-[var(--text-disabled)] hover:text-white hover:bg-[var(--color-danger)] transition-all font-black text-[9px] select-none"
+        class="absolute right-7 w-4 h-4 rounded-full flex items-center justify-center text-[var(--text-disabled)] hover:text-white hover:bg-[var(--color-danger)] transition-all font-black text-[10px] select-none"
       >
         ✕
       </button>

@@ -2,6 +2,7 @@
   <div
     ref="fretBoardRef"
     class="fretBoard-container relative touch-action-none flex flex-col items-center select-none"
+    title="💡 左键点击/滑动：添加按压音符&#10;💡 右键点击：设为根音&#10;💡 鼠标滚轮：切换吉他把位"
     :style="{
       width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
       height:
@@ -19,6 +20,7 @@
         <button
           v-if="fretVal === -1"
           :key="'muted-' + sIdx"
+          title="左键：切换为空弦音&#10;右键：设为根音"
           @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
           class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-none border-red-500/30 dark:border-red-500/40 text-red-500 dark:text-red-400 bg-red-500/10 dark:bg-red-500/15"
@@ -30,6 +32,7 @@
         <button
           v-else-if="fretVal === 0"
           :key="'open-' + sIdx"
+          title="左键：切换为静音(✕)&#10;右键：设为/取消根音"
           @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
           class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-all duration-75"
@@ -46,6 +49,7 @@
         <button
           v-else
           :key="'pressed-shield-' + sIdx"
+          title="左键：取消该品位按压&#10;右键：设为/取消根音"
           @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
           class="absolute w-10 h-10 opacity-0 pointer-events-auto bg-transparent border-none outline-none cursor-pointer"
@@ -70,7 +74,9 @@
         :y2="chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT"
         :stroke="chordLabStore.isDarkMode ? '#475569' : '#94a3b8'"
         stroke-width="4"
+        class="string-line"
         style="pointer-events: none"
+        shape-rendering="crispEdges"
       />
 
       <line
@@ -83,6 +89,7 @@
         :stroke="chordLabStore.isDarkMode ? '#475569' : '#94a3b8'"
         stroke-width="4"
         style="pointer-events: none"
+        shape-rendering="crispEdges"
       />
 
       <rect
@@ -117,45 +124,42 @@
       </template>
 
       <template v-for="(fret, sIdx) in chordLabStore.selectedFrets" :key="'finger-' + sIdx">
-        <g
-          v-if="fret > 0 && fret <= chordLabStore.fretCount"
-          class="cursor-pointer"
-          style="pointer-events: auto"
-          @contextmenu.prevent.stop="handleFretRightClick(sIdx)"
-        >
-          <circle
-            :cx="getStrX(sIdx)"
-            :cy="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-            r="28"
-            :fill="
-              chordLabStore.rootMark === sIdx
-                ? chordLabStore.isDarkMode
-                  ? '#fbbf24'
-                  : '#f59e0b'
-                : chordLabStore.isDarkMode
-                  ? '#3b82f6'
-                  : '#2563eb'
-            "
-            style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15)); transition: fill 0.15s"
-          />
-          <text
-            :x="getStrX(sIdx)"
-            :y="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-            text-anchor="middle"
-            dy="0.36em"
-            font-size="22"
-            font-weight="700"
-            :fill="chordLabStore.rootMark === sIdx && chordLabStore.isDarkMode ? '#1e293b' : '#ffffff'"
-            style="
-              font-family:
-                system-ui,
-                -apple-system,
-                sans-serif;
-            "
+        <Transition name="fade-fast">
+          <g
+            v-if="fret > 0 && fret <= chordLabStore.fretCount"
+            :key="`pos-${fret}`"
+            class="cursor-pointer"
+            style="pointer-events: auto"
+            @contextmenu.prevent.stop="handleFretRightClick(sIdx)"
           >
-            {{ calcNoteLabel(sIdx, fret, chordLabStore.capo) }}
-          </text>
-        </g>
+            <circle
+              :cx="getStrX(sIdx)"
+              :cy="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+              r="28"
+              :fill="getFingerColor(sIdx)"
+              class="finger-circle"
+              style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))"
+            />
+            <text
+              :x="getStrX(sIdx)"
+              :y="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+              text-anchor="middle"
+              dy="0.36em"
+              font-size="22"
+              font-weight="700"
+              :fill="getFingerTextColor(sIdx)"
+              class="finger-text"
+              style="
+                font-family:
+                  system-ui,
+                  -apple-system,
+                  sans-serif;
+              "
+            >
+              {{ calcNoteLabel(sIdx, fret, chordLabStore.capo) }}
+            </text>
+          </g>
+        </Transition>
       </template>
     </svg>
   </div>
@@ -173,7 +177,48 @@ const fretBoardRef = ref<HTMLDivElement | null>(null);
 
 const getStrX = (i: number) => CANVAS_CONFIG.OFFSET_X + i * CANVAS_CONFIG.STRING_SPACING;
 
-// 🌟 核心：引入并激活解耦的交互逻辑
 const { handleLocalToggleOpenString, handleOpenStringRightClick, handleFretRightClick, handleCanvasRightClick } =
   useFretboardInteraction(fretBoardRef);
+
+const getFingerColor = (sIdx: number) => {
+  if (chordLabStore.rootMark === sIdx) {
+    return chordLabStore.isDarkMode ? '#fbbf24' : '#f59e0b';
+  }
+  return chordLabStore.isDarkMode ? '#3b82f6' : '#2563eb';
+};
+
+const getFingerTextColor = (sIdx: number) => {
+  return chordLabStore.rootMark === sIdx && chordLabStore.isDarkMode ? '#1e293b' : '#ffffff';
+};
 </script>
+
+<style scoped lang="less">
+@import '@/assets/styles/tokens.less';
+
+.fretBoard-container {
+  transition:
+    height @duration-slow @bezier-standard,
+    transform @duration-slow @bezier-standard;
+}
+
+.string-line {
+  transition: y2 @duration-slow @bezier-standard;
+}
+
+/* 🌟 取消位移过渡，仅保留变色过渡 */
+.finger-circle,
+.finger-text {
+  transition: fill @duration-fast ease;
+}
+
+/* 🌟 新增：极速淡入淡出动画类 */
+.fade-fast-enter-active,
+.fade-fast-leave-active {
+  transition: opacity 0.15s ease-out;
+}
+
+.fade-fast-enter-from,
+.fade-fast-leave-to {
+  opacity: 0;
+}
+</style>

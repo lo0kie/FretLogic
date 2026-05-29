@@ -11,6 +11,7 @@
   <button
     @click="uiStore.isRightOpen = !uiStore.isRightOpen"
     class="sidebar-toggle-btn-right text-[9px] font-black"
+    :title="uiStore.isRightOpen ? '收起右侧边栏' : '展开右侧边栏'"
     :style="{ right: uiStore.isRightOpen ? '347px' : '0px' }"
   >
     {{ uiStore.isRightOpen ? '▶' : '◀' }}
