@@ -20,9 +20,10 @@
         <div
           v-for="(group, gIdx) in chordLabStore.groups"
           :key="group.id"
+          :id="'group-' + group.id"
           class="flex flex-col group-drop-zone w-full"
           @dragover.prevent
-          @drop.stop="searchQuery ? null : handleChordDropToGroup(group.id)"
+          @drop.stop="searchQuery ? null : handleLocalGroupDrop(gIdx)"
         >
           <div
             title="点击展开/折叠，按住可拖拽排序"
@@ -46,7 +47,6 @@
                 :class="{ 'is-active': chordLabStore.selectedGroupId === group.id && !group.collapsed }"
                 >{{ group.name }}</span
               >
-
               <span
                 class="text-[12px] font-black px-1.5 py-0.5 count-badge transition-all duration-300"
                 :class="{ 'is-searching': searchQuery }"
@@ -56,12 +56,9 @@
                   <span class="opacity-30 mx-0.5">/</span>
                   <span class="opacity-60">{{ chordLabStore.getGroupChords(group.id).length }}</span>
                 </template>
-                <template v-else>
-                  {{ chordLabStore.getGroupChords(group.id).length }}
-                </template>
+                <template v-else>{{ chordLabStore.getGroupChords(group.id).length }}</template>
               </span>
             </div>
-
             <div class="action-buttons opacity-0 flex items-center gap-2 transition-opacity">
               <button
                 @click.stop="uiStore.openModal('renameGroup', '修改组名', group.name, group)"
@@ -89,7 +86,6 @@
                 暂无和弦，请从指板保存
               </p>
             </div>
-
             <div
               v-else-if="filteredChordsMap[group.id].length === 0"
               class="py-4 flex flex-col items-center justify-center empty-card-box border-amber-500/20 dark:border-amber-500/10 bg-amber-500/[0.02]"
@@ -106,9 +102,9 @@
                 :chord="chord"
                 :is-editing="chordLabStore.editingId === chord.id"
                 @delete="handleLocalDeleteChord"
+                @move="handleLocalMoveChord"
                 @click="chordLabStore.handleChordClick(chord)"
                 :draggable="!searchQuery"
-                @pointerdown="handleLocalChordPointerDown(chord.id, group.id, $event)"
                 @dragstart.stop="handleLocalChordDragStart(chord.id, group.id, $event)"
                 @dragend="handleChordDragEnd"
                 @dragover.prevent
@@ -135,15 +131,8 @@ const uiStore = useUiStore();
 const chordLabStore = useChordLabStore();
 const searchQuery = ref('');
 
-const {
-  handleGroupDragStart,
-  handleGroupDrop,
-  handleChordPointerDown,
-  handleChordDragStart,
-  handleChordDragEnd,
-  handleChordDropToSort,
-  handleChordDropToGroup,
-} = useChordDragDrop();
+const { handleGroupDragStart, handleGroupDrop, handleChordDragStart, handleChordDragEnd, handleChordDropToSort } =
+  useChordDragDrop();
 
 const filteredChordsMap = computed(() => {
   const map: Record<string, Chord[]> = {};
@@ -162,17 +151,16 @@ const handleLocalGroupDragStart = (idx: number, e: DragEvent) => {
 
 const handleLocalGroupDrop = (targetIdx: number) => {
   if (searchQuery.value) return;
-  handleGroupDrop(targetIdx);
-};
-
-const handleLocalChordPointerDown = (chordId: number, fromGroupId: string, e: PointerEvent) => {
-  if (searchQuery.value) return;
-  handleChordPointerDown(chordId, fromGroupId, e);
+  if (uiStore.draggedGroupIdx !== null) handleGroupDrop(targetIdx);
 };
 
 const handleLocalChordDragStart = (chordId: number, fromGroupId: string, e: DragEvent) => {
   if (searchQuery.value) return;
   handleChordDragStart(chordId, fromGroupId, e);
+};
+
+const handleLocalMoveChord = (chord: Chord) => {
+  uiStore.openModal('moveChord', '移动至新分组', '', null, chord);
 };
 
 const handleLocalDeleteChord = (chord: Chord) => {
@@ -184,41 +172,34 @@ const handleLocalDeleteChord = (chord: Chord) => {
 
 <style scoped lang="less">
 @import '@/assets/styles/tokens.less';
-
 .group-list-move,
 .chord-list-move {
   transition: transform 0.25s ease-out;
 }
-
 .group-list-enter-active,
 .group-list-leave-active,
 .chord-list-enter-active,
 .chord-list-leave-active {
   transition: all 0.2s ease-out;
 }
-
 .group-list-enter-from,
 .group-list-leave-to {
   opacity: 0;
   transform: translateY(-10px);
 }
-
 .chord-list-enter-from,
 .chord-list-leave-to {
   opacity: 0;
   transform: scale(0.9);
 }
-
 .group-list-leave-active,
 .chord-list-leave-active {
   position: absolute;
   z-index: 0;
 }
-
 .group-list-leave-active {
   width: 100%;
 }
-
 .count-badge {
   background-color: var(--bg-body);
   color: var(--text-muted);
@@ -230,13 +211,11 @@ const handleLocalDeleteChord = (chord: Chord) => {
     background-color: color-mix(in srgb, @primary, transparent 96%);
   }
 }
-
 .empty-card-box {
   border: @border-dashed-base;
   background-color: var(--bg-body);
   border-radius: @radius-md;
 }
-
 .group-title-row {
   .mixin-interactive-card();
   border-radius: @radius-md;
@@ -250,7 +229,6 @@ const handleLocalDeleteChord = (chord: Chord) => {
     }
   }
 }
-
 .group-drop-zone {
   transition: @transition-base;
   &[dragover] {

@@ -25,7 +25,7 @@ export const CANVAS_CONFIG = {
   BOARD_WIDTH: 456,
 } as const;
 
-// 🌟 优化：提取弹窗业务类型
-export type ModalActionType = 'createGroup' | 'renameGroup' | 'deleteGroup' | '';
+// 🌟 新增 'moveChord' 弹窗类型
+export type ModalActionType = 'createGroup' | 'renameGroup' | 'deleteGroup' | 'moveChord' | '';
 
 export const DEFAULT_CHORD_NAME = '未命名';

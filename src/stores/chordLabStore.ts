@@ -2,7 +2,7 @@ import { DEFAULT_CHORD_NAME, STORAGE_KEYS } from '@/constants';
 import { calcNoteLabel, extractRootNote } from '@/utils/musicTheory';
 import { debounceFilter, useDark, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue'; // 🌟 引入 nextTick
 
 export interface Chord {
   id: number;
@@ -23,7 +23,6 @@ export interface Group {
 export const useChordLabStore = defineStore('chordLab', () => {
   const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '' });
 
-  // 🌟 性能极客优化：给极其沉重的海量长列表挂载防抖。鼠标无论怎么疯狂拖拽排序，只有停歇 500ms 后才一次性打包装盘落盘
   const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage, {
     eventFilter: debounceFilter(500),
   });
@@ -40,6 +39,24 @@ export const useChordLabStore = defineStore('chordLab', () => {
   const fretCount = useStorage(STORAGE_KEYS.CURR_FCOUNT, 3);
   const capo = useStorage(STORAGE_KEYS.CURR_CAPO, 0);
 
+  watch(fretCount, (newVal, oldVal) => {
+    if (newVal < oldVal) {
+      let isModified = false;
+      const newFrets = [...selectedFrets.value];
+
+      newFrets.forEach((fret, idx) => {
+        if (fret > newVal) {
+          newFrets[idx] = -1;
+          isModified = true;
+          if (rootMark.value === idx) rootMark.value = -1;
+        }
+      });
+      if (isModified) {
+        selectedFrets.value = newFrets;
+      }
+    }
+  });
+
   const editingId = useStorage<number | null>(STORAGE_KEYS.EDITING_ID, null);
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
 
@@ -49,7 +66,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
   const overwriteChords = (newChords: Chord[]) => {
     savedChordsList.value = [...newChords];
   };
-
   const overwriteGroups = (newGroups: Group[]) => {
     groups.value = [...newGroups];
   };
@@ -118,6 +134,11 @@ export const useChordLabStore = defineStore('chordLab', () => {
         selectedGroupId.value = gid;
         groups.value.forEach(g => {
           if (g.id !== gid) g.collapsed = true;
+        });
+
+        // 🌟 扩展逻辑 3：展开已有分组时，也自动滚动使其对齐到顶部
+        nextTick(() => {
+          document.getElementById(`group-${gid}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       } else if (selectedGroupId.value === gid) {
         selectedGroupId.value = null;
