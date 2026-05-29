@@ -42,7 +42,7 @@
                 "
               >
                 <span>{{ group.name }}</span>
-                <span v-if="isCurrentGroup(group.id)" class="text-[16px] opacity-60">当前分组</span>
+                <span v-if="isCurrentGroup(group.id)" class="text-[10px] opacity-60">当前分组</span>
                 <span v-else-if="uiStore.modalInput === group.id" class="text-[14px]">✓</span>
               </button>
             </div>
@@ -73,12 +73,15 @@ import ActionButton from '@/components/ActionButton.vue';
 import type { ModalActionType } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
-import { useEventListener } from '@vueuse/core';
+import { useEventListener, useScrollLock } from '@vueuse/core';
 import { nextTick, ref, watch } from 'vue';
 
 const uiStore = useUiStore();
 const chordLabStore = useChordLabStore();
 const inputRef = ref<HTMLInputElement | null>(null);
+
+// 🌟 核心修复 2：获取 Body 节点的滚动锁，彻底封杀弹窗时的“背景滚动流血”现象
+const isBodyLocked = useScrollLock(document.body);
 
 const isCurrentGroup = (groupId: string) => {
   return uiStore.activeTargetChord?.groupId === groupId;
@@ -93,10 +96,11 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   if (e.key === 'Escape' && uiStore.modalShow) uiStore.modalShow = false;
 });
 
-// 🌟 修复：抛弃 onMounted，改为使用 watch 监听弹窗显隐来触发 focus 操作
 watch(
   () => uiStore.modalShow,
   async isOpen => {
+    isBodyLocked.value = isOpen; // 🌟 弹窗打开即加锁，关闭即解锁
+
     if (isOpen) {
       await nextTick();
       const inputFocusTypes: ModalActionType[] = ['createGroup', 'renameGroup'];

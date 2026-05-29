@@ -1,13 +1,7 @@
-/**
- * @Author likan
- * @Date 2026-05-29 10:36:32
- * @Filepath fret-logic\src\composables\useFretboardInteraction.ts
- */
-
 import { CANVAS_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useEventListener } from '@vueuse/core';
-import { onMounted, type Ref } from 'vue';
+import { onBeforeUnmount, onMounted, type Ref } from 'vue'; // 🌟 引入 onBeforeUnmount
 
 export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>) {
   const chordLabStore = useChordLabStore();
@@ -107,7 +101,6 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     }
   };
 
-  // 🌟 极客优化：事件按需挂载与 rAF 垃圾帧回收
   let ticking = false;
   let rAF_ID = 0;
 
@@ -129,7 +122,6 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     if (rAF_ID) cancelAnimationFrame(rAF_ID);
     ticking = false;
 
-    // 释放内存与 CPU
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('pointerup', handlePointerUp);
   };
@@ -151,11 +143,9 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     wheelAccumulator += e.deltaY;
     if (Math.abs(wheelAccumulator) < WHEEL_THRESHOLD) return;
 
-    if (wheelAccumulator > 0) {
-      chordLabStore.capo = chordLabStore.capo >= 12 ? 0 : chordLabStore.capo + 1;
-    } else {
-      chordLabStore.capo = chordLabStore.capo <= 0 ? 12 : chordLabStore.capo - 1;
-    }
+    if (wheelAccumulator > 0) chordLabStore.capo = chordLabStore.capo >= 12 ? 0 : chordLabStore.capo + 1;
+    else chordLabStore.capo = chordLabStore.capo <= 0 ? 12 : chordLabStore.capo - 1;
+
     wheelAccumulator = 0;
   };
 
@@ -166,10 +156,12 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     }
   });
 
-  return {
-    handleLocalToggleOpenString,
-    handleOpenStringRightClick,
-    handleFretRightClick,
-    handleCanvasRightClick,
-  };
+  // 🌟 核心修复 3：补齐生命周期终结器，防御因组件销毁导致的“丧尸事件循环”内存泄漏
+  onBeforeUnmount(() => {
+    if (rAF_ID) cancelAnimationFrame(rAF_ID);
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
+  });
+
+  return { handleLocalToggleOpenString, handleOpenStringRightClick, handleFretRightClick, handleCanvasRightClick };
 }
