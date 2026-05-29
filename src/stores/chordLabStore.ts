@@ -47,13 +47,11 @@ export const useChordLabStore = defineStore('chordLab', () => {
   const lastPos = ref('');
 
   const overwriteChords = (newChords: Chord[]) => {
-    savedChordsList.value.length = 0;
-    savedChordsList.value.push(...newChords);
+    savedChordsList.value = [...newChords];
   };
 
   const overwriteGroups = (newGroups: Group[]) => {
-    groups.value.length = 0;
-    groups.value.push(...newGroups);
+    groups.value = [...newGroups];
   };
 
   const addChord = (chord: Chord) => savedChordsList.value.unshift(chord);

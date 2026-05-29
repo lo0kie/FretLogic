@@ -6,7 +6,7 @@
 
 import { CANVAS_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
-import { useEventListener, useThrottleFn } from '@vueuse/core';
+import { useEventListener } from '@vueuse/core';
 import { onMounted, type Ref } from 'vue';
 
 export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>) {
@@ -17,6 +17,9 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
   let lastSIdx = -1;
   let lastFIdx = -1;
   let cachedBoardRect: DOMRect | null = null;
+
+  let wheelAccumulator = 0;
+  const WHEEL_THRESHOLD = 40;
 
   const handleLocalToggleOpenString = (sIdx: number) => {
     if (chordLabStore.rootMark === sIdx) chordLabStore.rootMark = -1;
@@ -104,6 +107,33 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     }
   };
 
+  // 🌟 极客优化：事件按需挂载与 rAF 垃圾帧回收
+  let ticking = false;
+  let rAF_ID = 0;
+
+  const handlePointerMove = (e: PointerEvent) => {
+    if (!chordLabStore.isDraggingFinger || ticking) return;
+    ticking = true;
+    rAF_ID = requestAnimationFrame(() => {
+      handleFingerClickLogic(e.clientX, e.clientY, true);
+      ticking = false;
+    });
+  };
+
+  const handlePointerUp = () => {
+    chordLabStore.isDraggingFinger = false;
+    lastSIdx = -1;
+    lastFIdx = -1;
+    cachedBoardRect = null;
+
+    if (rAF_ID) cancelAnimationFrame(rAF_ID);
+    ticking = false;
+
+    // 释放内存与 CPU
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
+  };
+
   const handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
     if (fretBoardRef.value) cachedBoardRect = fretBoardRef.value.getBoundingClientRect();
@@ -111,25 +141,28 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     lastSIdx = -1;
     lastFIdx = -1;
     handleFingerClickLogic(e.clientX, e.clientY, false);
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
   };
 
-  const handlePointerMove = useThrottleFn((e: PointerEvent) => {
-    if (!chordLabStore.isDraggingFinger) return;
-    handleFingerClickLogic(e.clientX, e.clientY, true);
-  }, 16);
+  const handleWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    wheelAccumulator += e.deltaY;
+    if (Math.abs(wheelAccumulator) < WHEEL_THRESHOLD) return;
 
-  const handlePointerUp = () => {
-    chordLabStore.isDraggingFinger = false;
-    lastSIdx = -1;
-    lastFIdx = -1;
-    cachedBoardRect = null;
+    if (wheelAccumulator > 0) {
+      chordLabStore.capo = chordLabStore.capo >= 12 ? 0 : chordLabStore.capo + 1;
+    } else {
+      chordLabStore.capo = chordLabStore.capo <= 0 ? 12 : chordLabStore.capo - 1;
+    }
+    wheelAccumulator = 0;
   };
 
   onMounted(() => {
     if (fretBoardRef.value) {
       useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
-      useEventListener(window, 'pointermove', handlePointerMove);
-      useEventListener(window, 'pointerup', handlePointerUp);
+      useEventListener(fretBoardRef, 'wheel', handleWheel, { passive: false });
     }
   });
 

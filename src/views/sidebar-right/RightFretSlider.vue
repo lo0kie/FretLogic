@@ -3,6 +3,7 @@
     <label class="text-xs font-black uppercase tracking-widest" style="color: var(--text-disabled)">显示范围</label>
     <div
       ref="fretSliderRef"
+      title="点击或左右拖拽滑块切换显示品数"
       class="fret-slider-track flex p-1 h-10 relative items-center cursor-pointer touch-none select-none"
     >
       <div
@@ -68,6 +69,7 @@ const updateFretCountFromX = (clientX: number) => {
 
   const relativeX = clientX - rect.left;
   const percent = relativeX / rect.width;
+
   if (percent < 0.33) chordLabStore.fretCount = 3;
   else if (percent < 0.66) chordLabStore.fretCount = 4;
   else chordLabStore.fretCount = 5;

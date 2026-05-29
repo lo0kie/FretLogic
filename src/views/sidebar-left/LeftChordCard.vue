@@ -1,15 +1,17 @@
 <template>
   <div
-    class="chord-thumb-card h-11 px-3 flex items-center justify-between active:cursor-grabbing"
+    class="chord-thumb-card h-11 px-3 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
     :class="{ 'is-editing': isEditing }"
+    tabindex="0"
+    @keydown.enter.prevent.stop="e => (e.target as HTMLElement).click()"
   >
     <span class="chord-name-text text-xs font-black tracking-tight truncate pr-4 block leading-tight">
       {{ chord.chordName }}
     </span>
     <button
       @click.stop="$emit('delete', chord)"
-      class="text-[12px] delete-button w-5 h-5 rounded-full font-bold flex items-center justify-center"
-      style="color: var(--color-danger)"
+      aria-label="删除该和弦"
+      class="text-[10px] delete-button text-[var(--text-disabled)] hover:text-white w-4 h-4 rounded-full font-black flex items-center justify-center"
     >
       ✕
     </button>
@@ -42,7 +44,6 @@ defineEmits<{
     transition: @transition-fast;
   }
   .delete-button {
-    opacity: 0.4;
     transition: @transition-fast;
     &:hover {
       background-color: @danger;

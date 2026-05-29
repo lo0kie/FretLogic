@@ -30,6 +30,20 @@ export function useChordDragDrop() {
     uiStore.draggedGroupIdx = null;
   };
 
+  // 🌟 核心：这是之前写了但忘记 return 的函数，用来支持右键/长按盲投折叠
+  const handleChordPointerDown = (chordId: number, fromGroupId: string, e: PointerEvent) => {
+    if (e.button === 2) {
+      e.stopPropagation();
+      e.preventDefault();
+      draggedChordInfo.value = { chordId, fromGroupId };
+      const snapshot: Record<string, boolean> = {};
+      chordLabStore.groups.forEach(g => (snapshot[g.id] = g.collapsed));
+      groupsCollapsedSnapshot.value = snapshot;
+      chordLabStore.groups.forEach(g => (g.collapsed = true));
+      uiStore.showToast('📁 已自动为您折叠分组，请直接拖拽投递');
+    }
+  };
+
   const handleChordDragStart = (chordId: number, fromGroupId: string, e: DragEvent) => {
     if (!draggedChordInfo.value) draggedChordInfo.value = { chordId, fromGroupId };
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
@@ -81,6 +95,7 @@ export function useChordDragDrop() {
   return {
     handleGroupDragStart,
     handleGroupDrop,
+    handleChordPointerDown, // 🌟 修复方案：在这里加上它，对外彻底暴露属性
     handleChordDragStart,
     handleChordDragEnd,
     handleChordDropToSort,

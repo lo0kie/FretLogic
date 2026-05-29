@@ -3,7 +3,7 @@ import { useChordLabStore, type Chord, type Group } from '@/stores/chordLabStore
 import { copyElementToClipboard } from '@/utils/domExporter';
 import { useRefHistory, useToggle } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { ref, toRef } from 'vue';
+import { ref, toRef } from 'vue'; // 🌟 必须引入 toRef
 
 export interface Toast {
   id: number;
@@ -14,8 +14,13 @@ export interface Toast {
 export const useUiStore = defineStore('ui', () => {
   const chordStore = useChordLabStore();
 
+  // 🌟 使用 toRef + deep: true 完美捕获 Pinia 数组内部的深层改变
   const savedChordsRef = toRef(chordStore, 'savedChordsList');
-  const { undo } = useRefHistory(savedChordsRef, { capacity: 10, clone: true });
+  const { undo } = useRefHistory(savedChordsRef, {
+    capacity: 10,
+    clone: true,
+    deep: true,
+  });
 
   const isLeftOpen = ref(true);
   const isRightOpen = ref(true);
@@ -35,8 +40,6 @@ export const useUiStore = defineStore('ui', () => {
   };
 
   const modalShow = ref(false);
-
-  // 🌟 优化：应用严格的枚举类型，不再使用散落的字符串字面量
   const modalType = ref<ModalActionType>('');
   const modalTitle = ref('');
   const modalInput = ref('');
@@ -44,7 +47,6 @@ export const useUiStore = defineStore('ui', () => {
 
   const draggedGroupIdx = ref<number | null>(null);
 
-  // 🌟 优化：入参类型收窄 (使用 Exclude 排除空字符串)，实现 100% 强类型约束
   const openModal = (type: Exclude<ModalActionType, ''>, title: string, initVal = '', target: Group | null = null) => {
     modalType.value = type;
     modalTitle.value = title;
@@ -56,7 +58,6 @@ export const useUiStore = defineStore('ui', () => {
   const handleModalConfirm = () => {
     const val = modalInput.value.trim();
 
-    // 🌟 TS会自动识别 modalType.value 的类型
     if (['createGroup', 'renameGroup'].includes(modalType.value) && !val) {
       return showToast('❌ 名称不能为空');
     }
@@ -95,7 +96,7 @@ export const useUiStore = defineStore('ui', () => {
       if (originalChord) targetGroupId = originalChord.groupId;
     } else {
       if (!chordStore.selectedGroupId || (currentActiveGroup && currentActiveGroup.collapsed)) {
-        return showToast('❌ 请先选择要保存到哪个分组');
+        return showToast('❌ 请先在左侧展开一个目标分组');
       }
     }
 

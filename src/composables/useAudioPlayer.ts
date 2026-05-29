@@ -7,11 +7,16 @@ const staticStringGains: GainNode[] = [];
 const staticModGains: GainNode[] = [];
 let playTimer: ReturnType<typeof setTimeout> | null = null;
 
+// 🌟 核心修复：混响全局单例缓存，阻断高频重复计算
+let cachedReverbBuffer: AudioBuffer | null = null;
+
 export function useAudioPlayer() {
   const chordLabStore = useChordLabStore();
   const isPlaying = ref(false);
 
   const getReverbBuffer = (ctx: AudioContext, seconds: number): AudioBuffer => {
+    if (cachedReverbBuffer) return cachedReverbBuffer;
+
     const rate = ctx.sampleRate;
     const len = rate * seconds;
     const buffer = ctx.createBuffer(2, len, rate);
@@ -19,10 +24,11 @@ export function useAudioPlayer() {
       const data = buffer.getChannelData(channel);
       for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
     }
+
+    cachedReverbBuffer = buffer;
     return buffer;
   };
 
-  // 🌟 优化：设为异步，并在创建新 Context 前，显式销毁旧的硬件资源
   const initAudioEngine = async () => {
     if (sharedCtx && sharedCtx.state !== 'closed') {
       await sharedCtx.close();
@@ -132,6 +138,12 @@ export function useAudioPlayer() {
       oscMod.start(envStartTime);
       oscMain.stop(envReleaseEndTime);
       oscMod.stop(envReleaseEndTime);
+
+      // 🌟 极客优化：主动切断振荡器连接，强制浏览器 V8 引擎立即垃圾回收，防止爆音
+      oscMain.onended = () => {
+        oscMain.disconnect();
+        oscMod.disconnect();
+      };
 
       strumDelay += 0.2;
     }
