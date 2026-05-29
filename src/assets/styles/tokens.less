@@ -1,153 +1,259 @@
 // ==========================================================================
-// CHORD LAB 设计系统变量 (Design Tokens & UI Mixins)
+// 🎨 FRET LOGIC - 终极 Design Tokens & Utilities
+// 这里只存放纯粹的、原子级的设计变量与公共混合宏，绝不包含具体的业务类名
 // ==========================================================================
 
+// --------------------------------------------------------------------------
+// 1. 🌈 动态语义化色彩 (CSS Variables 驱动，无缝衔接深浅色模式)
+// --------------------------------------------------------------------------
 :root {
-  --bg-main: #f1f5f9;
-  --bg-panel: #ffffff;
-  --border-color: rgba(15, 23, 42, 0.06);
+  /* 基础背景 */
+  --bg-main: #f1f5f9; /* slate-100 */
+  --bg-body: #f8fafc; /* slate-50 */
+  --bg-panel: #ffffff; /* white */
+  --bg-panel-hover: #f1f5f9; /* slate-100 */
+
+  /* 边框与分割线 */
+  --border-light: rgba(15, 23, 42, 0.06);
+  --border-base: rgba(15, 23, 42, 0.1);
   --control-border: rgba(15, 23, 42, 0.1);
-  --fret-color: #cbd5e1;
 
-  --text-title: #0f172a;
-  --text-subtitle: #475569;
-  --text-body: #1e293b;
+  /* 文本系统 */
+  --text-title: #0f172a; /* slate-900 */
+  --text-body: #334155; /* slate-700 */
+  --text-muted: #64748b; /* slate-500 */
+  --text-disabled: #94a3b8; /* slate-400 */
 
-  --brand-primary: #2563eb;
-  --brand-secondary: #f59e0b;
-  --brand-danger: #ef4444;
+  /* 品牌与功能色 */
+  --color-primary: #2563eb; /* blue-600 */
+  --color-success: #10b981; /* emerald-500 */
+  --color-warning: #f59e0b; /* amber-500 */
+  --color-danger: #ef4444; /* red-500 */
 }
 
 .dark {
   --bg-main: #090d16;
-  --bg-panel: #111827;
-  --border-color: rgba(255, 255, 255, 0.1);
+  --bg-body: #020617; /* slate-950 */
+  --bg-panel: #0f172a; /* slate-900 */
+  --bg-panel-hover: #1e293b; /* slate-800 */
+
+  --border-light: rgba(255, 255, 255, 0.05);
+  --border-base: rgba(255, 255, 255, 0.1);
   --control-border: rgba(255, 255, 255, 0.12);
-  --fret-color: #475569;
 
-  --text-title: #ffffff;
-  --text-subtitle: #94a3b8;
-  --text-body: #e2e8f0;
+  --text-title: #f8fafc; /* slate-50 */
+  --text-body: #cbd5e1; /* slate-300 */
+  --text-muted: #94a3b8; /* slate-400 */
+  --text-disabled: #64748b; /* slate-500 */
 
-  --brand-primary: #3b82f6;
-  --brand-secondary: #f59e0b;
-  --brand-danger: #f87171;
+  --color-primary: #3b82f6; /* blue-500 */
+  --color-success: #34d399; /* emerald-400 */
+  --color-warning: #fbbf24; /* amber-400 */
+  --color-danger: #f87171; /* red-400 */
 }
 
-// --------------------------------------------------------------------------
-// 1. Less 语义化变量暴露 (供内部组件消费)
-// --------------------------------------------------------------------------
+// 供 Less 计算或 Mixin 调用的变量映射
+@primary: var(--color-primary);
+@brand-primary: var(--color-primary); // 兼容旧写法
+@danger: var(--color-danger);
+@brand-danger: var(--color-danger); // 兼容旧写法
+@warning: var(--color-warning);
+
 @text-title: var(--text-title);
-@text-subtitle: var(--text-subtitle);
 @text-body: var(--text-body);
-@brand-primary: var(--brand-primary);
-@brand-secondary: var(--brand-secondary);
-@brand-danger: var(--brand-danger);
-@fret-color: var(--fret-color);
+@text-subtitle: var(--text-muted);
 
 // --------------------------------------------------------------------------
-// 2. 高阶视觉 Token (阴影、缓动)
+// 2. 📐 空间与边距体系 (Spacing & Padding)
 // --------------------------------------------------------------------------
+@space-xs: 0.25rem; // 4px
+@space-sm: 0.5rem; // 8px
+@space-md: 1rem; // 16px
+@space-lg: 1.5rem; // 24px
+@space-xl: 2rem; // 32px
+
+// --------------------------------------------------------------------------
+// 3. 🔵 圆角体系 (Rounded & Border Radius)
+// --------------------------------------------------------------------------
+@radius-sm: 0.25rem; // 4px
+@radius-md: 0.5rem; // 8px
+@radius-lg: 0.75rem; // 12px
+@radius-xl: 1rem; // 16px
+
+// --------------------------------------------------------------------------
+// 4. 🔲 边框与轮廓体系 (Border)
+// --------------------------------------------------------------------------
+@border-width-base: 1px;
+@border-solid-base: @border-width-base solid var(--border-base);
+@border-solid-light: @border-width-base solid var(--border-light);
+@border-dashed-base: @border-width-base dashed var(--border-base);
+
+@focus-ring-primary: 0 0 0 3px color-mix(in srgb, @primary, transparent 85%);
+
+// --------------------------------------------------------------------------
+// 5. ⛅ 阴影与海拔系统 (Shadows)
+// --------------------------------------------------------------------------
+@shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+@shadow-md:
+  0 4px 6px -1px rgba(0, 0, 0, 0.1),
+  0 2px 4px -1px rgba(0, 0, 0, 0.06);
+@shadow-lg:
+  0 10px 15px -3px rgba(0, 0, 0, 0.1),
+  0 4px 6px -2px rgba(0, 0, 0, 0.05);
+@shadow-xl:
+  0 20px 25px -5px rgba(0, 0, 0, 0.1),
+  0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
 @shadow-panel: 0 10px 30px -10px rgba(0, 0, 0, 0.04);
 @shadow-panel-dark: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-
 @shadow-floating: 0 20px 50px -12px rgba(0, 0, 0, 0.15);
 @shadow-floating-dark: 0 30px 60px -15px rgba(0, 0, 0, 0.6);
 
+// --------------------------------------------------------------------------
+// 6. 🎬 缓动曲线与动画时间 (Transitions)
+// --------------------------------------------------------------------------
+@duration-fast: 0.15s;
+@duration-base: 0.25s;
+@duration-slow: 0.35s;
+
 @bezier-standard: cubic-bezier(0.4, 0, 0.2, 1);
-@bezier-bounce: cubic-bezier(0.25, 1, 0.5, 1);
-@bezier-sidebar: cubic-bezier(0.4, 0, 0.2, 1);
+@bezier-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+@bezier-sidebar: cubic-bezier(0.32, 0.72, 0, 1);
+
+@transition-base: all @duration-base @bezier-standard;
+@transition-fast: all @duration-fast @bezier-standard;
 
 // --------------------------------------------------------------------------
-// 3. 核心可复用 Mixin 骨架
+// 7. 📚 纯净的 UI 混合宏 (UI Mixins)
 // --------------------------------------------------------------------------
 
-// 🎯 Mixin 1: 基础大面板 (侧边栏、中央大画板)
+// 🦴 骨架 1: 基础面板 (侧边栏、工作区底板)
 .mixin-panel-base() {
   background-color: var(--bg-panel);
-  border: 1px solid var(--control-border);
+  border: @border-solid-light;
   box-shadow: @shadow-panel;
-  border-radius: 0.75rem;
 
   :global(.dark) & {
     box-shadow: @shadow-panel-dark;
   }
 }
 
-// 🎯 Mixin 2: 悬浮层/弹窗 (Modal、Capo下拉框)
+// 🦴 骨架 2: 悬浮层 (弹窗、下拉菜单、Tooltip)
 .mixin-floating-layer() {
   background-color: var(--bg-panel);
-  border: 1px solid var(--control-border);
+  border: @border-solid-base;
+  border-radius: @radius-lg;
   box-shadow: @shadow-floating;
-
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   :global(.dark) & {
     box-shadow: @shadow-floating-dark;
   }
 }
 
-// 🎯 Mixin 3: 侧边栏抽屉把手 (Sidebar Toggles)
+// 🦴 骨架 3: 交互式卡片 (列表项、和弦块)
+.mixin-interactive-card() {
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: @radius-md;
+  transition: @transition-fast;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background-color: var(--bg-panel-hover);
+    border-color: var(--border-light);
+  }
+  &:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+}
+
+// （保留给部分旧组件的兼容卡片宏）
+.mixin-hover-card() {
+  transition: @transition-fast;
+  border: 1px solid transparent;
+  &:hover {
+    background-color: rgba(15, 23, 42, 0.04);
+  }
+  :global(.dark) &:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+}
+
+// 🦴 骨架 4: 表单输入框基座
+.mixin-input-base() {
+  background-color: var(--bg-body);
+  border: @border-solid-base;
+  border-radius: @radius-md;
+  color: var(--text-title);
+  padding: @space-sm @space-md;
+  transition: @transition-fast;
+  outline: none;
+
+  &:hover:not(:disabled) {
+    border-color: color-mix(in srgb, @primary, transparent 50%);
+  }
+  &:focus:not(:disabled) {
+    border-color: @primary;
+    box-shadow: @focus-ring-primary;
+    background-color: var(--bg-panel);
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: var(--bg-panel-hover);
+  }
+}
+
+// 🦴 骨架 5: 基础按钮
+.mixin-button-base() {
+  font-size: 0.75rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: @radius-lg;
+  font-weight: 700;
+  border-width: 1px;
+  border-style: solid;
+  box-shadow: @shadow-sm;
+  user-select: none;
+  transition: all @duration-fast @bezier-bounce;
+
+  &:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+// 🦴 骨架 6: 侧边栏把手
 .mixin-sidebar-toggle() {
   position: absolute;
   top: 50%;
   width: 20px;
   height: 60px;
   background-color: var(--bg-panel);
-  border: 1px solid var(--control-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  border: @border-solid-base;
+  box-shadow: @shadow-sm;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 200;
-  color: #94a3b8;
+  color: var(--text-disabled);
   cursor: pointer;
-  transition: all 0.2s @bezier-standard;
+  transition: @transition-base;
 
   &:hover {
-    color: @brand-primary;
-    border-color: rgba(37, 99, 235, 0.25);
+    color: @primary;
+    border-color: color-mix(in srgb, @primary, transparent 75%);
     background-color: var(--bg-main);
   }
-
   :global(.dark) &:hover {
-    background-color: #1e293b;
-  }
-}
-
-// 🎯 Mixin 4: 交互悬浮卡片 (指板卡片、下拉选项)
-.mixin-hover-card() {
-  transition: all 0.2s @bezier-standard;
-  border: 1px solid transparent;
-
-  &:hover {
-    background-color: rgba(15, 23, 42, 0.04);
-  }
-
-  :global(.dark) &:hover {
-    background-color: rgba(255, 255, 255, 0.06);
-  }
-}
-
-// 🎯 Mixin 5: 基础公共动作按钮手势与形变规范
-.mixin-button-base() {
-  font-size: 0.75rem; // 12px (text-xs)
-  height: 2.5rem; // 40px (h-10)
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.75rem; // 12px (rounded-xl)
-  font-weight: 700;
-  border: 1px solid transparent;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); // shadow-sm
-  user-select: none;
-  transition: all 0.15s @bezier-bounce;
-
-  &:active {
-    transform: scale(0.96);
-  }
-
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    transform: scale(1) !important;
+    background-color: var(--bg-panel-hover);
   }
 }

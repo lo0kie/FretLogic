@@ -1,6 +1,6 @@
 <template>
   <div
-    class="panel-left h-[calc(100vh-24px)] flex flex-col shrink-0 relative z-10"
+    class="panel-left h-[calc(100vh-24px)] flex flex-col shrink-0 relative rounded-xl z-10 box-content"
     :style="{
       width: uiStore.isLeftOpen ? '335px' : '0px',
       opacity: uiStore.isLeftOpen ? 1 : 0,
@@ -14,7 +14,7 @@
 
   <button
     @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
-    class="sidebar-toggle-btn sidebar-toggle-btn-left text-[9px] font-black"
+    class="sidebar-toggle-btn-left text-[9px] font-black"
     :style="{ left: uiStore.isLeftOpen ? '347px' : '0px' }"
   >
     {{ uiStore.isLeftOpen ? '◀' : '▶' }}
@@ -33,31 +33,25 @@ const uiStore = useUiStore();
 <style scoped lang="less">
 @import '@/assets/styles/tokens.less';
 
-// 🌟 修正：这里必须是 panel-left
 .panel-left {
   .mixin-panel-base();
+
   transition:
-    width 0.35s @bezier-standard,
-    opacity 0.25s ease,
-    margin 0.35s @bezier-standard;
+    width @duration-slow @bezier-standard,
+    opacity @duration-base ease,
+    margin @duration-slow @bezier-standard;
 }
 
-.sidebar-toggle-btn {
+.sidebar-toggle-btn-left {
   .mixin-sidebar-toggle();
-  // 🌟 修正：左侧按钮的轨道位移必须绑定 left
+  border-radius: 0 10px 10px 0;
+  transform: translateY(-50%) scale(1);
+  transform-origin: left;
   transition:
     all 0.2s ease,
-    left 0.35s @bezier-standard;
-
-  // 🌟 修正：这里必须是 -left
-  &-left {
-    // 🌟 修正：左侧按钮的圆角是右边圆，左边平
-    border-radius: 0 10px 10px 0;
-    transform: translateY(-50%) scale(1);
-    transform-origin: left; // 🌟 修正：动画缩放基准点在左侧
-    &:active {
-      transform: translateY(-50%) scale(0.93);
-    }
+    left @duration-slow @bezier-standard;
+  &:active {
+    transform: translateY(-50%) scale(0.93);
   }
 }
 </style>

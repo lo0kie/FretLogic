@@ -1,6 +1,4 @@
 @config "../../../tailwind.config.js";
-
-// 🌟 引入刚写好的全局视觉总控中心
 @import '@/assets/styles/tokens.less';
 
 @tailwind base;
@@ -13,7 +11,7 @@ html {
 
 body {
   background-color: var(--bg-main);
-  color: var(--text-body); // 使用我们的正文变量
+  color: var(--text-body);
   min-width: 1480px;
   margin: 0;
   overflow-y: hidden;
@@ -23,12 +21,69 @@ body {
   [v-cloak] {
     display: none !important;
   }
+}
 
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-    &::-webkit-scrollbar {
-      display: none;
-    }
+/* ==========================================================================
+   全局工具与动画类名 (Global Utilities & Animations)
+========================================================================== */
+
+/* 隐藏滚动条但保留功能 */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
   }
+}
+
+/* 弹窗进入动画 */
+.animate-modal-in {
+  animation: modalSlideIn @duration-base @bezier-standard;
+}
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Vue <Transition> 全局动画类 */
+.fade-clear-enter-active,
+.fade-clear-leave-active {
+  transition: opacity @duration-fast @bezier-standard;
+}
+.fade-clear-enter-from,
+.fade-clear-leave-to {
+  opacity: 0;
+}
+
+.toast-transition-enter-active,
+.toast-transition-leave-active {
+  transition: all @duration-base @bezier-standard;
+}
+.toast-transition-enter-from,
+.toast-transition-leave-to {
+  transform: translateX(20px);
+  opacity: 0;
+}
+
+.tooltip-native-enter-active,
+.tooltip-native-leave-active {
+  transition: all @duration-base @bezier-standard;
+}
+.tooltip-native-enter-from,
+.tooltip-native-leave-to {
+  opacity: 0;
+}
+.tooltip-native-enter-from[data-placement='top'],
+.tooltip-native-leave-to[data-placement='top'] {
+  transform: translateX(-50%) translateY(6px) scale(0.92) !important;
+}
+.tooltip-native-enter-from[data-placement='bottom'],
+.tooltip-native-leave-to[data-placement='bottom'] {
+  transform: translateX(-50%) translateY(-6px) scale(0.92) !important;
 }
