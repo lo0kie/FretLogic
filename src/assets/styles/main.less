@@ -18,6 +18,32 @@ body {
   overflow-x: auto;
   user-select: none;
 
+  // 英文/数字优先匹配系统级现代字体，中文匹配萍方或原生黑体
+  font-family:
+    'Inter',
+    // 如果用户装了 Inter 优先使用（开发者最爱）
+    -apple-system,
+    BlinkMacSystemFont,
+    // macOS & iOS 顶级字体
+    'Segoe UI',
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    'Open Sans',
+    'Helvetica Neue',
+    // Windows & Linux
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    '微软雅黑',
+    // 中文回退
+    sans-serif;
+
+  // 开启字体抗锯齿，在深色模式下文字会显得更细致、清晰
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
   [v-cloak] {
     display: none !important;
   }

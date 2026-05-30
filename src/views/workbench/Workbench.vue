@@ -6,7 +6,7 @@
 
     <div
       id="fretBoard-capture-area"
-      class="workbench-card w-[520px] flex flex-col items-center justify-evenly relative shrink-0"
+      class="workbench-card rounded-xl w-[520px] flex flex-col items-center justify-evenly relative shrink-0"
       :style="{ height: dynamicHeight }"
     >
       <ChordInputHeader class="z-10 shrink-0" />
@@ -47,7 +47,6 @@ const dynamicHeight = computed(() => {
 
 .workbench-card {
   .mixin-panel-base();
-  border-radius: 28px; /* 更拟物的大圆角 */
   box-shadow: @shadow-floating; /* 拉开 Z 轴层次 */
 
   transition:
