@@ -1,6 +1,6 @@
 <template>
   <div
-    class="chord-thumb-card group h-11 pl-3 pr-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+    class="chord-thumb-card group h-11 pl-3 pr-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)] box-border"
     :class="{ 'is-editing': isEditing }"
     tabindex="0"
     title="💡 左键点击：应用/编辑&#10;💡 右键点击：移动至新分组&#10;💡 按住卡片：拖拽排序"
@@ -15,6 +15,7 @@
 
     <div
       class="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200"
+      :class="{ 'opacity-100': isEditing }"
     >
       <button
         @click.stop="$emit('delete', chord)"
@@ -53,12 +54,12 @@ defineEmits<{
   &.is-editing {
     background-color: color-mix(in srgb, @primary, transparent 90%);
     border-color: @primary !important;
-    box-shadow: @shadow-sm;
+    box-shadow:
+      inset 0 0 0 1px @primary,
+      @shadow-sm;
+
     .chord-name-text {
       color: @primary !important;
-    }
-    .action-button {
-      background-color: color-mix(in srgb, @primary, transparent 85%);
     }
   }
 }

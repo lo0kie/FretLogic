@@ -8,7 +8,6 @@
           @click="uiStore.copyFretBoardToClipboard('#fretBoard-capture-area')"
           :disabled="uiStore.isCopying"
         >
-          <span class="text-sm leading-none mr-2">{{ uiStore.isCopying ? '⌛' : '📸' }}</span>
           <span>{{ uiStore.isCopying ? '正在导出...' : '复制当前到剪切板' }}</span>
         </ActionButton>
       </GlobalTooltip>
