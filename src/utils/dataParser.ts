@@ -1,9 +1,3 @@
-/**
- * @Author likan
- * @Date 2026-05-29 00:42:20
- * @Filepath fret-logic\src\utils\dataParser.ts
- */
-
 import type { Chord, Group } from '@/stores/chordLabStore';
 
 export const cleanAndValidateData = (
@@ -47,8 +41,6 @@ export const cleanAndValidateData = (
   });
 
   const validGroupIds = new Set<string>(groups.filter(g => g && typeof g.id === 'string').map(g => g.id));
-
-  // 🌟 修复 Bug 3：追踪导入的 ID 集合，防止非法篡改导致的主键碰撞崩溃
   const usedChordIds = new Set<number | string>();
   const validChords: any[] = [];
 
@@ -70,6 +62,9 @@ export const cleanAndValidateData = (
     if (c.fretCount === undefined || c.fretCount === null) c.fretCount = 3;
     if (c.capo === undefined || c.capo === null) c.capo = 0;
 
+    if (typeof c.fretCount !== 'number' || c.fretCount < 3 || c.fretCount > 5) errors.push(`fretCount 越界`);
+    if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 15) errors.push(`capo 越界`);
+
     if (c.rootMark === undefined || c.rootMark === null) {
       c.rootMark = -1;
     } else if (typeof c.rootMark === 'number') {
@@ -78,13 +73,20 @@ export const cleanAndValidateData = (
       errors.push(`rootMark 类型异常`);
     }
 
-    // 🌟 修复 Bug 3：将允许最高 8 品改为最高 5 品，彻底杜绝画板排版溢出和碎裂！
-    if (typeof c.fretCount !== 'number' || c.fretCount < 3 || c.fretCount > 5) errors.push(`fretCount 越界`);
-    if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 15) errors.push(`capo 越界`);
+    if (!Array.isArray(c.useFlat) || c.useFlat.length !== 6) {
+      c.useFlat = [false, false, false, false, false, false];
+    } else {
+      c.useFlat = c.useFlat.map((v: any) => !!v);
+    }
 
-    if (!Array.isArray(c.selectedFrets) || c.selectedFrets.length !== 6) errors.push(`selectedFrets 长度异常`);
-    else if (!c.selectedFrets.every((f: any) => typeof f === 'number')) errors.push(`selectedFrets 类型异常`);
-    else {
+    // 补齐 tuning
+    if (typeof c.tuning !== 'string') c.tuning = 'STANDARD';
+
+    if (!Array.isArray(c.selectedFrets) || c.selectedFrets.length !== 6) {
+      errors.push(`selectedFrets 长度异常`);
+    } else if (!c.selectedFrets.every((f: any) => typeof f === 'number')) {
+      errors.push(`selectedFrets 类型异常`);
+    } else {
       const outOfRange = c.selectedFrets.some((fret: number) => fret < -1 || fret > c.fretCount);
       if (outOfRange) errors.push(`selectedFrets 存在越界品位值`);
     }
@@ -95,12 +97,10 @@ export const cleanAndValidateData = (
       return;
     }
 
-    // 🌟 修复 Bug 3：如果发现重复 ID，直接注入随机因子重制它，确保 DOM Key 的绝对纯洁！
     if (usedChordIds.has(c.id)) {
       c.id = Date.now() + Math.floor(Math.random() * 100000);
     }
     usedChordIds.add(c.id);
-
     validChords.push(c);
   });
 

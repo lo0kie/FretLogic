@@ -23,7 +23,6 @@ export function useChordDragDrop() {
     uiStore.draggedGroupIdx = null;
   };
 
-  // 🌟 仅保留基础拖拽属性，砍掉冗余右键识别
   const handleChordDragStart = (chordId: number, fromGroupId: string, e: DragEvent) => {
     draggedChordInfo.value = { chordId, fromGroupId };
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
@@ -44,7 +43,6 @@ export function useChordDragDrop() {
     const targetIdx = chordLabStore.savedChordsList.findIndex(c => c.id === targetChordId);
     if (sourceIdx !== -1 && targetIdx !== -1) {
       const [movedChord] = chordLabStore.savedChordsList.splice(sourceIdx, 1);
-      // 允许自然拖拽排序时更新 groupId
       if (info.fromGroupId !== targetGroupId) movedChord.groupId = targetGroupId;
       chordLabStore.savedChordsList.splice(targetIdx, 0, movedChord);
 
@@ -54,7 +52,6 @@ export function useChordDragDrop() {
     handleChordDragEnd();
   };
 
-  // 返回精简后纯净接口
   return {
     handleGroupDragStart,
     handleGroupDrop,

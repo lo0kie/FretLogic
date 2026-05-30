@@ -2,16 +2,13 @@
   <div
     ref="fretBoardRef"
     class="fretBoard-container relative touch-action-none flex flex-col items-center select-none"
-    title="💡 左键点击/滑动：添加按压音符&#10;💡 右键点击：设为根音&#10;💡 鼠标滚轮：切换吉他把位"
+    title="💡 左键点击/滑动：添加按压音符&#10;💡 右键点击：设为根音&#10;💡 中键点击：切换升降号(如A#⇄Bb)&#10;💡 鼠标滚轮：切换吉他把位"
     :style="{
       width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
-      height:
-        CANVAS_CONFIG.OFFSET_Y_TOP +
-        chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT +
-        CANVAS_CONFIG.OFFSET_Y_BOTTOM +
-        'px',
-      transform: `scale(${1 - (chordLabStore.fretCount - 3) * 0.06})`,
+      height: `${rawHeight}px`,
+      transform: `scale(${fretboardScale})`,
       transformOrigin: 'top center',
+      marginBottom: `-${rawHeight * (1 - fretboardScale)}px`,
     }"
     @contextmenu.prevent="handleCanvasRightClick"
   >
@@ -32,9 +29,10 @@
         <button
           v-else-if="fretVal === 0"
           :key="'open-' + sIdx"
-          title="左键：切换为静音(✕)&#10;右键：设为/取消根音"
+          title="左键：切换为静音(✕)&#10;右键：设为/取消根音&#10;中键：切换等音名(b)"
           @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
+          @mousedown.middle.prevent.stop="handleFretMiddleClick(sIdx)"
           class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-all duration-75"
           :class="[
             chordLabStore.rootMark === sIdx
@@ -43,7 +41,9 @@
           ]"
           :style="{ left: `${getStrX(sIdx)}px`, transform: 'translateX(-50%)', top: '10px' }"
         >
-          <span>{{ ['E', 'A', 'D', 'G', 'B', 'E'][sIdx] }}</span>
+          <span>{{
+            calcNoteLabel(sIdx, 0, chordLabStore.capo, chordLabStore.useFlat[sIdx], chordLabStore.activeBaseStrings)
+          }}</span>
         </button>
 
         <button
@@ -73,7 +73,7 @@
         :x2="getStrX(s - 1)"
         :y2="chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT"
         :stroke="chordLabStore.isDarkMode ? '#475569' : '#94a3b8'"
-        stroke-width="4"
+        :stroke-width="4"
         class="string-line"
         style="pointer-events: none"
         shape-rendering="crispEdges"
@@ -131,6 +131,7 @@
             class="cursor-pointer"
             style="pointer-events: auto"
             @contextmenu.prevent.stop="handleFretRightClick(sIdx)"
+            @mousedown.middle.prevent.stop="handleFretMiddleClick(sIdx)"
           >
             <circle
               :cx="getStrX(sIdx)"
@@ -156,7 +157,15 @@
                   sans-serif;
               "
             >
-              {{ calcNoteLabel(sIdx, fret, chordLabStore.capo) }}
+              {{
+                calcNoteLabel(
+                  sIdx,
+                  fret,
+                  chordLabStore.capo,
+                  chordLabStore.useFlat[sIdx],
+                  chordLabStore.activeBaseStrings
+                )
+              }}
             </text>
           </g>
         </Transition>
@@ -170,20 +179,34 @@ import { useFretboardInteraction } from '@/composables/useFretboardInteraction';
 import { CANVAS_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { calcNoteLabel } from '@/utils/musicTheory';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 const chordLabStore = useChordLabStore();
 const fretBoardRef = ref<HTMLDivElement | null>(null);
 
 const getStrX = (i: number) => CANVAS_CONFIG.OFFSET_X + i * CANVAS_CONFIG.STRING_SPACING;
 
-const { handleLocalToggleOpenString, handleOpenStringRightClick, handleFretRightClick, handleCanvasRightClick } =
-  useFretboardInteraction(fretBoardRef);
+const rawHeight = computed(() => {
+  return (
+    CANVAS_CONFIG.OFFSET_Y_TOP + chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
+  );
+});
+
+const fretboardScale = computed(() => {
+  const scaleMap: Record<number, number> = { 3: 1.0, 4: 0.92, 5: 0.85 };
+  return scaleMap[chordLabStore.fretCount] || 1.0;
+});
+
+const {
+  handleLocalToggleOpenString,
+  handleOpenStringRightClick,
+  handleFretRightClick,
+  handleCanvasRightClick,
+  handleFretMiddleClick,
+} = useFretboardInteraction(fretBoardRef);
 
 const getFingerColor = (sIdx: number) => {
-  if (chordLabStore.rootMark === sIdx) {
-    return chordLabStore.isDarkMode ? '#fbbf24' : '#f59e0b';
-  }
+  if (chordLabStore.rootMark === sIdx) return chordLabStore.isDarkMode ? '#fbbf24' : '#f59e0b';
   return chordLabStore.isDarkMode ? '#3b82f6' : '#2563eb';
 };
 
@@ -194,29 +217,23 @@ const getFingerTextColor = (sIdx: number) => {
 
 <style scoped lang="less">
 @import '@/assets/styles/tokens.less';
-
 .fretBoard-container {
   transition:
     height @duration-slow @bezier-standard,
-    transform @duration-slow @bezier-standard;
+    transform @duration-slow @bezier-standard,
+    margin-bottom @duration-slow @bezier-standard;
 }
-
 .string-line {
   transition: y2 @duration-slow @bezier-standard;
 }
-
-/* 🌟 取消位移过渡，仅保留变色过渡 */
 .finger-circle,
 .finger-text {
   transition: fill @duration-fast ease;
 }
-
-/* 🌟 新增：极速淡入淡出动画类 */
 .fade-fast-enter-active,
 .fade-fast-leave-active {
   transition: opacity 0.15s ease-out;
 }
-
 .fade-fast-enter-from,
 .fade-fast-leave-to {
   opacity: 0;

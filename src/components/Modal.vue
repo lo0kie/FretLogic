@@ -42,7 +42,7 @@
                 "
               >
                 <span>{{ group.name }}</span>
-                <span v-if="isCurrentGroup(group.id)" class="text-[10px] opacity-60">当前分组</span>
+                <span v-if="isCurrentGroup(group.id)" class="text-[16px] opacity-60">当前分组</span>
                 <span v-else-if="uiStore.modalInput === group.id" class="text-[14px]">✓</span>
               </button>
             </div>

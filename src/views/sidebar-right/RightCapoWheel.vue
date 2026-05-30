@@ -1,19 +1,19 @@
 <template>
   <div class="relative flex flex-col gap-2">
-    <label class="text-xs font-black tracking-widest uppercase" style="color: var(--text-disabled)">Capo</label>
+    <label class="text-xs font-black tracking-widest uppercase" style="color: var(--text-disabled)">
+      Capo (把位平移)
+    </label>
     <div class="relative w-full">
-      <GlobalTooltip content="滚动滚轮切换" placement="top">
+      <GlobalTooltip content="点击展开或滚动滚轮切换" placement="top">
         <div
           ref="capoWheelRef"
           @click="uiStore.toggleCapoPanel()"
           class="capo-trigger-bar flex items-center justify-between px-3 select-none"
+          :class="{ 'is-active': uiStore.isCapoOpen }"
         >
           <span
-            class="font-black opacity-90"
-            :style="{
-              color: chordLabStore.capo !== 0 ? 'var(--color-primary)' : 'var(--text-title)',
-              fontSize: chordLabStore.capo !== 0 ? '16px' : '14px',
-            }"
+            class="font-black flex items-center gap-2"
+            :class="[chordLabStore.capo !== 0 ? 'text-[var(--color-primary)] text-[16px]' : 'text-title text-[14px]']"
           >
             {{ chordLabStore.capo }} {{ chordLabStore.capo === 0 ? '(空弦位)' : '品' }}
           </span>
@@ -35,8 +35,8 @@
       <div v-if="uiStore.isCapoOpen" class="fixed inset-0 z-[40]" @click="uiStore.isCapoOpen = false"></div>
 
       <Transition
-        enter-from-class="opacity-0 translate-y-[-10px]"
-        leave-to-class="opacity-0 translate-y-[-10px]"
+        enter-from-class="opacity-0 translate-y-[-8px]"
+        leave-to-class="opacity-0 translate-y-[-8px]"
         enter-active-class="transition duration-200 ease-out"
         leave-active-class="transition duration-200 ease-in"
       >
@@ -52,11 +52,19 @@
               chordLabStore.capo = n - 1;
               uiStore.isCapoOpen = false;
             "
-            class="capo-item h-10 px-2.5 rounded-lg flex items-center text-[14px] font-bold"
+            class="capo-item h-10 px-2.5 py-0.5 flex items-center justify-between text-[13px] font-bold"
             :class="{ 'is-selected': chordLabStore.capo === n - 1 }"
           >
-            <span class="w-3.5 text-right mr-1">{{ n - 1 }}</span>
-            <span>{{ n - 1 === 0 ? '(空弦位)' : '品' }}</span>
+            <div class="flex items-center">
+              <span class="w-4 text-right mr-1.5 font-black">{{ n - 1 }}</span>
+              <span>{{ n - 1 === 0 ? '(空弦位)' : '品' }}</span>
+            </div>
+
+            <span
+              v-if="chordLabStore.capo === n - 1"
+              class="text-[10px] text-white bg-[var(--color-primary)] w-4 h-4 rounded-full flex items-center justify-center font-black"
+              >✓</span
+            >
           </div>
         </div>
       </Transition>
@@ -114,6 +122,16 @@ onMounted(() => {
   height: 2.5rem;
   border-radius: @radius-lg;
   cursor: pointer;
+  background-color: var(--bg-body);
+  transition:
+    border-color @transition-fast,
+    box-shadow @transition-fast;
+
+  // 🌟 视觉对齐：激活下拉菜单时触发条边框高亮变色
+  &.is-active {
+    border-color: @primary;
+    box-shadow: @focus-ring-primary;
+  }
 }
 
 .capo-dropdown-box {
@@ -123,10 +141,12 @@ onMounted(() => {
 .capo-item {
   .mixin-interactive-card();
   color: var(--text-body);
+
+  // 🌟 视觉对齐：抛弃原本生硬的全蓝底色，换用与调音方案一致的 10% 呼吸融色底加打勾
   &.is-selected {
-    background-color: @primary !important;
-    color: white;
-    box-shadow: @shadow-sm;
+    background-color: color-mix(in srgb, @primary, transparent 90%) !important;
+    color: @primary !important;
+    border-color: color-mix(in srgb, @primary, transparent 70%);
   }
 }
 </style>
