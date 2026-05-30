@@ -78,7 +78,6 @@ const onEnter = async () => {
 
 const onLeave = () => {
   show.value = false;
-  tooltipStyle.opacity = 0; // 鼠标离开时同步将不透明度归零
 };
 </script>
 

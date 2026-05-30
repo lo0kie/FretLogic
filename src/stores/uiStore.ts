@@ -166,12 +166,12 @@ export const useUiStore = defineStore('ui', () => {
     showToast(`🗑️ 已删除"${chord.chordName}"`, true);
   };
 
-  const copyFretBoardToClipboard = async (selector: string) => {
+  const copyFretBoardToClipboard = async (selector: string, isTransparent: boolean = true) => {
     if (isCopying.value) return;
     isCopying.value = true;
-    showToast('📸 正在导出...');
+    showToast(isTransparent ? '📸 正在导出透明图...' : '📸 正在导出实底图...');
     try {
-      await copyElementToClipboard(selector);
+      await copyElementToClipboard(selector, isTransparent);
       showToast('✅ 复制成功！');
     } catch {
       showToast('❌ 复制失败');
