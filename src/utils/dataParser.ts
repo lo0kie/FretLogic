@@ -1,9 +1,3 @@
-/**
- * @Author likan
- * @Date 2026-05-30 11:15:00
- * @Filepath fret-logic\src\utils\dataParser.ts
- */
-
 import type { Chord, Group } from '@/stores/chordLabStore';
 
 export const cleanAndValidateData = (
@@ -27,7 +21,6 @@ export const cleanAndValidateData = (
   const groups = d.groups as any[];
   const chords = d.chords as any[];
 
-  // 1. 校验与清洗分组数据 (Groups)
   groups.forEach((g, index) => {
     if (!g) {
       isValid = false;
@@ -48,18 +41,14 @@ export const cleanAndValidateData = (
   });
 
   const validGroupIds = new Set<string>(groups.filter(g => g && typeof g.id === 'string').map(g => g.id));
-
-  // 用于追踪和弦 ID 集合，防止非法篡改/复制导致的主键碰撞
   const usedChordIds = new Set<number | string>();
   const validChords: any[] = [];
 
-  // 2. 校验与清洗和弦数据 (Chords)
   chords.forEach((c, index) => {
     if (!c) {
       isValid = false;
       return;
     }
-    // 过滤掉归属了不存在分组的孤儿和弦
     if (!c.groupId || String(c.groupId).trim() === '' || !validGroupIds.has(String(c.groupId))) {
       console.warn(`⚠️ ${logPrefix} -> 和弦 "${c.chordName || '未命名'}" 分组失效，已过滤。`);
       return;
@@ -70,15 +59,12 @@ export const cleanAndValidateData = (
     if (typeof c.chordName !== 'string') errors.push(`chordName 异常`);
     if (typeof c.groupId !== 'string') errors.push(`groupId 异常`);
 
-    // 品位与把位核心属性纠偏
     if (c.fretCount === undefined || c.fretCount === null) c.fretCount = 3;
     if (c.capo === undefined || c.capo === null) c.capo = 0;
 
-    // 严格类型与界限校验
     if (typeof c.fretCount !== 'number' || c.fretCount < 3 || c.fretCount > 5) errors.push(`fretCount 越界`);
     if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 15) errors.push(`capo 越界`);
 
-    // 根音主键修正，防止 null 穿透导致类型崩溃
     if (c.rootMark === undefined || c.rootMark === null) {
       c.rootMark = -1;
     } else if (typeof c.rootMark === 'number') {
@@ -87,14 +73,15 @@ export const cleanAndValidateData = (
       errors.push(`rootMark 类型异常`);
     }
 
-    // 🌟 核心加固：等音名状态（useFlat）单弦偏好容错抹平，完美向下兼容老数据
     if (!Array.isArray(c.useFlat) || c.useFlat.length !== 6) {
       c.useFlat = [false, false, false, false, false, false];
     } else {
-      c.useFlat = c.useFlat.map((v: any) => !!v); // 强行布尔化，拦截非法的脏注入
+      c.useFlat = c.useFlat.map((v: any) => !!v);
     }
 
-    // 指板手指按压数据验证
+    // 补齐 tuning
+    if (typeof c.tuning !== 'string') c.tuning = 'STANDARD';
+
     if (!Array.isArray(c.selectedFrets) || c.selectedFrets.length !== 6) {
       errors.push(`selectedFrets 长度异常`);
     } else if (!c.selectedFrets.every((f: any) => typeof f === 'number')) {
@@ -110,12 +97,10 @@ export const cleanAndValidateData = (
       return;
     }
 
-    // 如果发现 ID 重复冲突，直接注入当前时间戳加随机因子重制它，确保 Vue v-for 的 Key 绝对纯净
     if (usedChordIds.has(c.id)) {
       c.id = Date.now() + Math.floor(Math.random() * 100000);
     }
     usedChordIds.add(c.id);
-
     validChords.push(c);
   });
 

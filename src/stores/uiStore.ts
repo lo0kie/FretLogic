@@ -40,7 +40,7 @@ export const useUiStore = defineStore('ui', () => {
 
         // 🌟 扩展逻辑 1：恢复分组时，自动滚动到视口顶部
         nextTick(() => {
-          document.getElementById(`group-${targetGroupId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          document.getElementById(`group-${targetGroupId}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
       }
       chordStore.savedChordsList.forEach(c => {
@@ -106,7 +106,7 @@ export const useUiStore = defineStore('ui', () => {
 
       // 🌟 扩展逻辑 2：新建分组时，自动平滑滚动到该分组
       nextTick(() => {
-        document.getElementById(`group-${newId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById(`group-${newId}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
     } else if (modalType.value === 'renameGroup' && activeTargetGroup.value) {
       activeTargetGroup.value.name = val;
@@ -132,7 +132,8 @@ export const useUiStore = defineStore('ui', () => {
     showToast('操作成功');
   };
 
-  // 在 src/stores/uiStore.ts 中，找到 triggerSaveChord 并覆盖替换为以下内容：
+  // 在 src/stores/uiStore.ts 文件中，替换原有的 triggerSaveChord 函数：
+
   const triggerSaveChord = () => {
     const cleanName = chordStore.currentChordName.trim();
     if (!cleanName || chordStore.isFretBoardEmpty) return showToast('❌ 保存失败：请输入名称并指定音符');
@@ -148,7 +149,8 @@ export const useUiStore = defineStore('ui', () => {
       capo: chordStore.capo,
       groupId: targetGroupId || 'default',
       rootMark: chordStore.rootMark,
-      useFlat: [...chordStore.useFlat], // 🌟 新增：打包写入硬盘
+      useFlat: [...chordStore.useFlat],
+      tuning: chordStore.currentTuning, // 🌟 确保当前调音方案被打包写入
     };
 
     const idx = chordStore.savedChordsList.findIndex(c => c.id == chordStore.editingId);

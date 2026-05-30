@@ -1,5 +1,4 @@
 import { useChordLabStore } from '@/stores/chordLabStore';
-import { BASE_STRINGS } from '@/utils/musicTheory'; // 🌟 引入全局物理基准
 import { onBeforeUnmount, ref } from 'vue';
 
 let sharedCtx: AudioContext | null = null;
@@ -7,7 +6,6 @@ let sharedMainMixer: GainNode | null = null;
 const staticStringGains: GainNode[] = [];
 const staticModGains: GainNode[] = [];
 let playTimer: ReturnType<typeof setTimeout> | null = null;
-
 let cachedReverbBuffer: AudioBuffer | null = null;
 
 export function useAudioPlayer() {
@@ -29,7 +27,6 @@ export function useAudioPlayer() {
 
   const initAudioEngine = async () => {
     if (sharedCtx && sharedCtx.state !== 'closed') await sharedCtx.close();
-
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContextClass) return null;
     const ctx = new AudioContextClass();
@@ -98,12 +95,11 @@ export function useAudioPlayer() {
       const fretVal = fretsSnapshot[sIdx];
       if ((fretVal ?? -1) < 0) continue;
 
-      // 🌟 统一调用该物理基准，保持了逻辑上的一致性
-      const guitarMidiBase = BASE_STRINGS[sIdx];
-      const actualCapoOffset = fretVal > 0 ? capoOffset : 0;
-      const frequency = 440 * Math.pow(2, (guitarMidiBase + fretVal + actualCapoOffset - 69) / 12);
-      const triggerTime = now + strumDelay;
+      const guitarMidiBase = chordLabStore.activeBaseStrings[sIdx];
+      const actualOffset = fretVal > 0 ? capoOffset : 0;
+      const frequency = 440 * Math.pow(2, (guitarMidiBase + fretVal + actualOffset - 69) / 12);
 
+      const triggerTime = now + strumDelay;
       const oscMain = ctx.createOscillator();
       const oscMod = ctx.createOscillator();
       const stringGain = staticStringGains[sIdx];
@@ -117,7 +113,6 @@ export function useAudioPlayer() {
 
       const envStartTime = triggerTime;
       const envReleaseEndTime = envStartTime + 0.2 + 1.0;
-
       const humanizeVelocity = 0.85 + Math.random() * 0.15;
 
       stringGain.gain.setValueAtTime(0, envStartTime);

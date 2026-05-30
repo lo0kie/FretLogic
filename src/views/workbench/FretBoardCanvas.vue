@@ -41,7 +41,9 @@
           ]"
           :style="{ left: `${getStrX(sIdx)}px`, transform: 'translateX(-50%)', top: '10px' }"
         >
-          <span>{{ calcNoteLabel(sIdx, 0, chordLabStore.capo, chordLabStore.useFlat[sIdx]) }}</span>
+          <span>{{
+            calcNoteLabel(sIdx, 0, chordLabStore.capo, chordLabStore.useFlat[sIdx], chordLabStore.activeBaseStrings)
+          }}</span>
         </button>
 
         <button
@@ -155,7 +157,15 @@
                   sans-serif;
               "
             >
-              {{ calcNoteLabel(sIdx, fret, chordLabStore.capo, chordLabStore.useFlat[sIdx]) }}
+              {{
+                calcNoteLabel(
+                  sIdx,
+                  fret,
+                  chordLabStore.capo,
+                  chordLabStore.useFlat[sIdx],
+                  chordLabStore.activeBaseStrings
+                )
+              }}
             </text>
           </g>
         </Transition>
@@ -187,7 +197,6 @@ const fretboardScale = computed(() => {
   return scaleMap[chordLabStore.fretCount] || 1.0;
 });
 
-// 🌟 所有控制权外包给可复用的 composition 函数，彻底解耦
 const {
   handleLocalToggleOpenString,
   handleOpenStringRightClick,

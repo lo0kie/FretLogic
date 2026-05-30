@@ -43,17 +43,20 @@ const saveDisabledReason = computed(() => {
 });
 
 const isClearDisabled = computed(() => {
-  // 1. 如果正在编辑（editingId 存在），说明是修改模式，必须允许清空（重置）
+  // 1. 如果正在编辑（editingId 存在），说明是修改模式，必须允许放弃修改（重置编辑器）
   if (chordLabStore.editingId) return false;
 
-  // 2. 检查是否处于“初始状态”
+  // 2. 检查所有编辑器状态是否全部处于“初始状态”
   const cleanName = chordLabStore.currentChordName ? chordLabStore.currentChordName.trim() : '';
   const isDefaultName = cleanName === '';
   const isDefaultFretBoard = chordLabStore.isFretBoardEmpty;
   const isDefaultCapo = chordLabStore.capo === 0;
   const isDefaultFretCount = chordLabStore.fretCount === 3;
 
-  // 只有当所有属性都是初始值时，才禁用“清空”按钮
-  return isDefaultName && isDefaultFretBoard && isDefaultCapo && isDefaultFretCount;
+  // 🌟 新增：检查调音方案是否为标准形态
+  const isDefaultTuning = chordLabStore.currentTuning === 'STANDARD';
+
+  // 只有当所有属性（包含调音方案）都是初始值时，才禁用“重置”按钮
+  return isDefaultName && isDefaultFretBoard && isDefaultCapo && isDefaultFretCount && isDefaultTuning;
 });
 </script>

@@ -1,6 +1,5 @@
 import { CANVAS_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
-import { BASE_STRINGS } from '@/utils/musicTheory';
 import { useEventListener } from '@vueuse/core';
 import { onBeforeUnmount, onMounted, type Ref } from 'vue';
 
@@ -38,11 +37,10 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     if (fretVal === -1) return;
 
     const capoVal = chordLabStore.capo;
-    const base = BASE_STRINGS[sIdx];
+    const base = chordLabStore.activeBaseStrings[sIdx];
     const actualOffset = fretVal > 0 && capoVal > 0 ? capoVal : 0;
     const noteIndex = (base + fretVal + actualOffset) % 12;
 
-    // 钢琴五度圈黑键快速通道：C#(1), D#(3), F#(6), G#(8), A#(10)
     const isAccidental = [1, 3, 6, 8, 10].includes(noteIndex);
     if (isAccidental) {
       chordLabStore.useFlat[sIdx] = !chordLabStore.useFlat[sIdx];
