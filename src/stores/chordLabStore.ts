@@ -1,8 +1,8 @@
 import { DEFAULT_CHORD_NAME, STORAGE_KEYS } from '@/constants';
-import { calcNoteLabel, extractRootNote } from '@/utils/musicTheory';
+import { extractRootNote } from '@/utils/musicTheory';
 import { debounceFilter, useDark, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { computed, nextTick, ref, watch } from 'vue'; // 🌟 引入 nextTick
+import { computed, nextTick, ref, watch } from 'vue';
 
 export interface Chord {
   id: number;
@@ -23,10 +23,8 @@ export interface Group {
 export const useChordLabStore = defineStore('chordLab', () => {
   const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '' });
 
-  const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage, {
-    eventFilter: debounceFilter(500),
-  });
-  const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage, { eventFilter: debounceFilter(500) });
+  const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
+  const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
 
   const currentChordName = useStorage(STORAGE_KEYS.CURR_NAME, '', localStorage, { eventFilter: debounceFilter(300) });
   const selectedFrets = useStorage<number[]>(STORAGE_KEYS.CURR_FRETS, [-1, -1, -1, -1, -1, -1], localStorage, {
@@ -43,7 +41,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
     if (newVal < oldVal) {
       let isModified = false;
       const newFrets = [...selectedFrets.value];
-
       newFrets.forEach((fret, idx) => {
         if (fret > newVal) {
           newFrets[idx] = -1;
@@ -51,9 +48,7 @@ export const useChordLabStore = defineStore('chordLab', () => {
           if (rootMark.value === idx) rootMark.value = -1;
         }
       });
-      if (isModified) {
-        selectedFrets.value = newFrets;
-      }
+      if (isModified) selectedFrets.value = newFrets;
     }
   });
 
@@ -73,32 +68,10 @@ export const useChordLabStore = defineStore('chordLab', () => {
   const addChord = (chord: Chord) => savedChordsList.value.unshift(chord);
   const updateChord = (idx: number, chord: Chord) => (savedChordsList.value[idx] = chord);
 
-  const getGroupChords = (gid: string): Chord[] => {
-    return savedChordsList.value.filter(chord => chord.groupId === gid);
-  };
+  const getGroupChords = (gid: string): Chord[] => savedChordsList.value.filter(chord => chord.groupId === gid);
 
   const isFretBoardEmpty = computed(() => selectedFrets.value.every(fret => (fret ?? -1) < 0));
-
   const currentRootNote = computed(() => extractRootNote(currentChordName.value));
-
-  const openStringsUIState = computed(() => {
-    const currentRoot = currentRootNote.value;
-    return selectedFrets.value.map((fretVal, sIdx) => {
-      const calcFret = fretVal === -1 ? 0 : fretVal;
-      const noteLabel = calcNoteLabel(sIdx, calcFret, capo.value);
-      const hasManualRoot =
-        rootMark.value !== null && rootMark.value !== undefined && rootMark.value >= 0 && rootMark.value <= 5;
-      let isRoot = hasManualRoot
-        ? rootMark.value === sIdx
-        : !!(currentRoot && calcNoteLabel(sIdx, 0, capo.value).toUpperCase() === currentRoot);
-
-      let type: 'muted' | 'root' | 'open' | 'normal' = 'normal';
-      if (fretVal === -1) type = 'muted';
-      else if (fretVal === 0) type = isRoot ? 'root' : 'open';
-
-      return { fretVal, noteLabel, type };
-    });
-  });
 
   const handleChordClick = (chord: Chord) => {
     editingId.value = chord.id;
@@ -135,8 +108,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
         groups.value.forEach(g => {
           if (g.id !== gid) g.collapsed = true;
         });
-
-        // 🌟 扩展逻辑 3：展开已有分组时，也自动滚动使其对齐到顶部
         nextTick(() => {
           document.getElementById(`group-${gid}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
@@ -175,7 +146,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
     rootMark,
     isFretBoardEmpty,
     currentRootNote,
-    openStringsUIState,
     overwriteChords,
     overwriteGroups,
     addChord,

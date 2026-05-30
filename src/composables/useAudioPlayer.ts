@@ -1,4 +1,5 @@
 import { useChordLabStore } from '@/stores/chordLabStore';
+import { BASE_STRINGS } from '@/utils/musicTheory'; // 🌟 引入全局物理基准
 import { onBeforeUnmount, ref } from 'vue';
 
 let sharedCtx: AudioContext | null = null;
@@ -7,7 +8,6 @@ const staticStringGains: GainNode[] = [];
 const staticModGains: GainNode[] = [];
 let playTimer: ReturnType<typeof setTimeout> | null = null;
 
-// 🌟 核心修复：混响全局单例缓存，阻断高频重复计算
 let cachedReverbBuffer: AudioBuffer | null = null;
 
 export function useAudioPlayer() {
@@ -16,7 +16,6 @@ export function useAudioPlayer() {
 
   const getReverbBuffer = (ctx: AudioContext, seconds: number): AudioBuffer => {
     if (cachedReverbBuffer) return cachedReverbBuffer;
-
     const rate = ctx.sampleRate;
     const len = rate * seconds;
     const buffer = ctx.createBuffer(2, len, rate);
@@ -24,15 +23,12 @@ export function useAudioPlayer() {
       const data = buffer.getChannelData(channel);
       for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
     }
-
     cachedReverbBuffer = buffer;
     return buffer;
   };
 
   const initAudioEngine = async () => {
-    if (sharedCtx && sharedCtx.state !== 'closed') {
-      await sharedCtx.close();
-    }
+    if (sharedCtx && sharedCtx.state !== 'closed') await sharedCtx.close();
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContextClass) return null;
@@ -81,11 +77,8 @@ export function useAudioPlayer() {
 
   const playCurrentChord = async () => {
     if (isPlaying.value) return;
-
     let ctx = sharedCtx;
-    if (!ctx || ctx.state === 'closed') {
-      ctx = await initAudioEngine();
-    }
+    if (!ctx || ctx.state === 'closed') ctx = await initAudioEngine();
     if (!ctx || !sharedMainMixer) return;
     if (ctx.state === 'suspended') await ctx.resume();
 
@@ -97,15 +90,16 @@ export function useAudioPlayer() {
       gainNode.gain.setTargetAtTime(0, now, 0.015);
     });
 
-    const fretsSnapshot = [...chordLabStore.selectedFrets].reverse();
+    const fretsSnapshot = [...chordLabStore.selectedFrets];
     const capoOffset = chordLabStore.capo > 0 ? chordLabStore.capo : 0;
     let strumDelay = 0;
 
-    for (let sIdx = 5; sIdx >= 0; sIdx--) {
+    for (let sIdx = 0; sIdx <= 5; sIdx++) {
       const fretVal = fretsSnapshot[sIdx];
       if ((fretVal ?? -1) < 0) continue;
 
-      const guitarMidiBase = [64, 59, 55, 50, 45, 40][sIdx];
+      // 🌟 统一调用该物理基准，保持了逻辑上的一致性
+      const guitarMidiBase = BASE_STRINGS[sIdx];
       const actualCapoOffset = fretVal > 0 ? capoOffset : 0;
       const frequency = 440 * Math.pow(2, (guitarMidiBase + fretVal + actualCapoOffset - 69) / 12);
       const triggerTime = now + strumDelay;
@@ -124,10 +118,12 @@ export function useAudioPlayer() {
       const envStartTime = triggerTime;
       const envReleaseEndTime = envStartTime + 0.2 + 1.0;
 
+      const humanizeVelocity = 0.85 + Math.random() * 0.15;
+
       stringGain.gain.setValueAtTime(0, envStartTime);
-      stringGain.gain.linearRampToValueAtTime(1.0, envStartTime + 0.005);
-      stringGain.gain.linearRampToValueAtTime(0.3, envStartTime + 0.005 + 0.15);
-      stringGain.gain.setValueAtTime(0.3, envStartTime + 0.2);
+      stringGain.gain.linearRampToValueAtTime(1.0 * humanizeVelocity, envStartTime + 0.005);
+      stringGain.gain.linearRampToValueAtTime(0.3 * humanizeVelocity, envStartTime + 0.005 + 0.15);
+      stringGain.gain.setValueAtTime(0.3 * humanizeVelocity, envStartTime + 0.2);
       stringGain.gain.exponentialRampToValueAtTime(0.0001, envReleaseEndTime);
 
       oscMod.connect(modGain);
@@ -139,7 +135,6 @@ export function useAudioPlayer() {
       oscMain.stop(envReleaseEndTime);
       oscMod.stop(envReleaseEndTime);
 
-      // 🌟 极客优化：主动切断振荡器连接，强制浏览器 V8 引擎立即垃圾回收，防止爆音
       oscMain.onended = () => {
         oscMain.disconnect();
         oscMod.disconnect();
