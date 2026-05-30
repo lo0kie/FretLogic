@@ -6,10 +6,13 @@
     <input type="file" ref="fileInputRef" accept=".json" @change="processImport" class="hidden" />
     <div class="grid grid-cols-2 gap-2">
       <ActionButton @click="handleImportTrigger">
-        <Upload :size="18" :stroke-width="3" class="mr-1.5" /> <span>导入备份</span>
+        <Download :size="18" :stroke-width="3" class="mr-2" />
+        <span>导入备份</span>
       </ActionButton>
+
       <ActionButton @click="triggerFullExport">
-        <Download :size="18" :stroke-width="3" class="mr-1.5" /> <span>全量导出</span>
+        <Upload :size="18" :stroke-width="3" class="mr-2" />
+        <span>全量导出</span>
       </ActionButton>
     </div>
   </div>
