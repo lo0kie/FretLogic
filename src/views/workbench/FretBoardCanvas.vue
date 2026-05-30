@@ -2,13 +2,12 @@
   <div
     ref="fretBoardRef"
     class="fretBoard-container relative touch-action-none flex flex-col items-center select-none"
-    title="💡 左键点击/滑动：添加按压音符&#10;💡 右键点击：设为根音&#10;💡 鼠标滚轮：切换吉他把位"
+    title="💡 左键点击/滑动：添加按压音符&#10;💡 右键点击：设为根音&#10;💡 中键点击：切换升降号(如A#⇄Bb)&#10;💡 鼠标滚轮：切换吉他把位"
     :style="{
       width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
       height: `${rawHeight}px`,
       transform: `scale(${fretboardScale})`,
       transformOrigin: 'top center',
-      /* 🌟 核心黑魔法：利用负边距回收缩放后多余的物理空间，彻底防止 Flex 父级切割底部！ */
       marginBottom: `-${rawHeight * (1 - fretboardScale)}px`,
     }"
     @contextmenu.prevent="handleCanvasRightClick"
@@ -30,9 +29,10 @@
         <button
           v-else-if="fretVal === 0"
           :key="'open-' + sIdx"
-          title="左键：切换为静音(✕)&#10;右键：设为/取消根音"
+          title="左键：切换为静音(✕)&#10;右键：设为/取消根音&#10;中键：切换等音名(b)"
           @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
+          @mousedown.middle.prevent.stop="handleFretMiddleClick(sIdx)"
           class="absolute w-10 h-10 rounded-full border flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-all duration-75"
           :class="[
             chordLabStore.rootMark === sIdx
@@ -41,7 +41,7 @@
           ]"
           :style="{ left: `${getStrX(sIdx)}px`, transform: 'translateX(-50%)', top: '10px' }"
         >
-          <span>{{ calcNoteLabel(sIdx, 0, chordLabStore.capo) }}</span>
+          <span>{{ calcNoteLabel(sIdx, 0, chordLabStore.capo, chordLabStore.useFlat[sIdx]) }}</span>
         </button>
 
         <button
@@ -129,6 +129,7 @@
             class="cursor-pointer"
             style="pointer-events: auto"
             @contextmenu.prevent.stop="handleFretRightClick(sIdx)"
+            @mousedown.middle.prevent.stop="handleFretMiddleClick(sIdx)"
           >
             <circle
               :cx="getStrX(sIdx)"
@@ -154,7 +155,7 @@
                   sans-serif;
               "
             >
-              {{ calcNoteLabel(sIdx, fret, chordLabStore.capo) }}
+              {{ calcNoteLabel(sIdx, fret, chordLabStore.capo, chordLabStore.useFlat[sIdx]) }}
             </text>
           </g>
         </Transition>
@@ -182,16 +183,18 @@ const rawHeight = computed(() => {
 });
 
 const fretboardScale = computed(() => {
-  const scaleMap: Record<number, number> = {
-    3: 1.0,
-    4: 0.92,
-    5: 0.85,
-  };
+  const scaleMap: Record<number, number> = { 3: 1.0, 4: 0.92, 5: 0.85 };
   return scaleMap[chordLabStore.fretCount] || 1.0;
 });
 
-const { handleLocalToggleOpenString, handleOpenStringRightClick, handleFretRightClick, handleCanvasRightClick } =
-  useFretboardInteraction(fretBoardRef);
+// 🌟 所有控制权外包给可复用的 composition 函数，彻底解耦
+const {
+  handleLocalToggleOpenString,
+  handleOpenStringRightClick,
+  handleFretRightClick,
+  handleCanvasRightClick,
+  handleFretMiddleClick,
+} = useFretboardInteraction(fretBoardRef);
 
 const getFingerColor = (sIdx: number) => {
   if (chordLabStore.rootMark === sIdx) return chordLabStore.isDarkMode ? '#fbbf24' : '#f59e0b';
@@ -205,14 +208,12 @@ const getFingerTextColor = (sIdx: number) => {
 
 <style scoped lang="less">
 @import '@/assets/styles/tokens.less';
-
 .fretBoard-container {
   transition:
     height @duration-slow @bezier-standard,
     transform @duration-slow @bezier-standard,
     margin-bottom @duration-slow @bezier-standard;
 }
-
 .string-line {
   transition: y2 @duration-slow @bezier-standard;
 }

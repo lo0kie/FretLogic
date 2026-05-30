@@ -1,15 +1,17 @@
-export const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+// 🌟 分别定义升号和降号的 12 平均律音名字典
+export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+export const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
-// 🌟 优化：使用真实的 MIDI 物理音高编号 (6弦 40 到 1弦 64)
 export const BASE_STRINGS = [40, 45, 50, 55, 59, 64];
 
-export const calcNoteLabel = (sIdx: number, fretVal: number, capoVal: number): string => {
+// 🌟 接收一个额外的 preferFlat 参数，智能输出对应的等音名
+export const calcNoteLabel = (sIdx: number, fretVal: number, capoVal: number, preferFlat: boolean = false): string => {
   if (fretVal === -1) return '✕';
   const base = BASE_STRINGS[sIdx];
-  const offset = capoVal > 0 ? capoVal : 0;
+  const actualOffset = fretVal > 0 && capoVal > 0 ? capoVal : 0;
 
-  // 因为 40 % 12 === 4 (E), 45 % 12 === 9 (A)... 所以取余逻辑完美兼容物理音高！
-  return NOTES[(base + fretVal + offset) % 12];
+  const noteIndex = (base + fretVal + actualOffset) % 12;
+  return preferFlat ? NOTES_FLAT[noteIndex] : NOTES_SHARP[noteIndex];
 };
 
 export const extractRootNote = (chordName: string): string | null => {

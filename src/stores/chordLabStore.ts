@@ -12,6 +12,7 @@ export interface Chord {
   capo: number;
   groupId: string;
   rootMark: number;
+  useFlat?: boolean[]; // 🌟 新增：每根弦是否使用降号(b)
 }
 
 export interface Group {
@@ -33,6 +34,16 @@ export const useChordLabStore = defineStore('chordLab', () => {
   const rootMark = useStorage<number>(STORAGE_KEYS.CURR_ROOT_MARK, -1, localStorage, {
     eventFilter: debounceFilter(300),
   });
+
+  // 🌟 新增：记录当前指板 6 根弦的升降号状态
+  const useFlat = useStorage<boolean[]>(
+    STORAGE_KEYS.CURR_USE_FLAT,
+    [false, false, false, false, false, false],
+    localStorage,
+    {
+      eventFilter: debounceFilter(300),
+    }
+  );
 
   const fretCount = useStorage(STORAGE_KEYS.CURR_FCOUNT, 3);
   const capo = useStorage(STORAGE_KEYS.CURR_CAPO, 0);
@@ -80,6 +91,8 @@ export const useChordLabStore = defineStore('chordLab', () => {
     fretCount.value = chord.fretCount ?? 3;
     capo.value = chord.capo ?? 0;
     rootMark.value = chord.rootMark !== undefined ? chord.rootMark : -1;
+    // 🌟 恢复该和弦的等音名配置（向下兼容老数据）
+    useFlat.value = chord.useFlat ? [...chord.useFlat] : [false, false, false, false, false, false];
   };
 
   const resetEditor = () => {
@@ -89,6 +102,7 @@ export const useChordLabStore = defineStore('chordLab', () => {
     capo.value = 0;
     fretCount.value = 3;
     rootMark.value = -1;
+    useFlat.value = [false, false, false, false, false, false]; // 🌟 重置偏好
   };
 
   const toggleOpenString = (sIdx: number) => {
@@ -126,6 +140,7 @@ export const useChordLabStore = defineStore('chordLab', () => {
       fretCount.value = original.fretCount ?? 3;
       capo.value = original.capo ?? 0;
       rootMark.value = original.rootMark !== undefined ? original.rootMark : -1;
+      useFlat.value = original.useFlat ? [...original.useFlat] : [false, false, false, false, false, false];
     } else {
       editingId.value = null;
     }
@@ -144,6 +159,7 @@ export const useChordLabStore = defineStore('chordLab', () => {
     isDraggingFinger,
     lastPos,
     rootMark,
+    useFlat,
     isFretBoardEmpty,
     currentRootNote,
     overwriteChords,

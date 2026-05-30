@@ -132,6 +132,7 @@ export const useUiStore = defineStore('ui', () => {
     showToast('操作成功');
   };
 
+  // 在 src/stores/uiStore.ts 中，找到 triggerSaveChord 并覆盖替换为以下内容：
   const triggerSaveChord = () => {
     const cleanName = chordStore.currentChordName.trim();
     if (!cleanName || chordStore.isFretBoardEmpty) return showToast('❌ 保存失败：请输入名称并指定音符');
@@ -147,6 +148,7 @@ export const useUiStore = defineStore('ui', () => {
       capo: chordStore.capo,
       groupId: targetGroupId || 'default',
       rootMark: chordStore.rootMark,
+      useFlat: [...chordStore.useFlat], // 🌟 新增：打包写入硬盘
     };
 
     const idx = chordStore.savedChordsList.findIndex(c => c.id == chordStore.editingId);

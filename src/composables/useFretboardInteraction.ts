@@ -1,7 +1,8 @@
 import { CANVAS_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
+import { BASE_STRINGS } from '@/utils/musicTheory';
 import { useEventListener } from '@vueuse/core';
-import { onBeforeUnmount, onMounted, type Ref } from 'vue'; // 🌟 引入 onBeforeUnmount
+import { onBeforeUnmount, onMounted, type Ref } from 'vue';
 
 export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>) {
   const chordLabStore = useChordLabStore();
@@ -11,7 +12,6 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
   let lastSIdx = -1;
   let lastFIdx = -1;
   let cachedBoardRect: DOMRect | null = null;
-
   let wheelAccumulator = 0;
   const WHEEL_THRESHOLD = 40;
 
@@ -31,6 +31,22 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
 
   const handleFretRightClick = (sIdx: number) => {
     chordLabStore.rootMark = chordLabStore.rootMark === sIdx ? -1 : sIdx;
+  };
+
+  const handleFretMiddleClick = (sIdx: number) => {
+    const fretVal = chordLabStore.selectedFrets[sIdx];
+    if (fretVal === -1) return;
+
+    const capoVal = chordLabStore.capo;
+    const base = BASE_STRINGS[sIdx];
+    const actualOffset = fretVal > 0 && capoVal > 0 ? capoVal : 0;
+    const noteIndex = (base + fretVal + actualOffset) % 12;
+
+    // 钢琴五度圈黑键快速通道：C#(1), D#(3), F#(6), G#(8), A#(10)
+    const isAccidental = [1, 3, 6, 8, 10].includes(noteIndex);
+    if (isAccidental) {
+      chordLabStore.useFlat[sIdx] = !chordLabStore.useFlat[sIdx];
+    }
   };
 
   const handleCanvasRightClick = (e: MouseEvent) => {
@@ -118,10 +134,8 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     lastSIdx = -1;
     lastFIdx = -1;
     cachedBoardRect = null;
-
     if (rAF_ID) cancelAnimationFrame(rAF_ID);
     ticking = false;
-
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('pointerup', handlePointerUp);
   };
@@ -133,7 +147,6 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     lastSIdx = -1;
     lastFIdx = -1;
     handleFingerClickLogic(e.clientX, e.clientY, false);
-
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
   };
@@ -142,10 +155,8 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     e.preventDefault();
     wheelAccumulator += e.deltaY;
     if (Math.abs(wheelAccumulator) < WHEEL_THRESHOLD) return;
-
     if (wheelAccumulator > 0) chordLabStore.capo = chordLabStore.capo >= 12 ? 0 : chordLabStore.capo + 1;
     else chordLabStore.capo = chordLabStore.capo <= 0 ? 12 : chordLabStore.capo - 1;
-
     wheelAccumulator = 0;
   };
 
@@ -156,12 +167,17 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     }
   });
 
-  // 🌟 核心修复 3：补齐生命周期终结器，防御因组件销毁导致的“丧尸事件循环”内存泄漏
   onBeforeUnmount(() => {
     if (rAF_ID) cancelAnimationFrame(rAF_ID);
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('pointerup', handlePointerUp);
   });
 
-  return { handleLocalToggleOpenString, handleOpenStringRightClick, handleFretRightClick, handleCanvasRightClick };
+  return {
+    handleLocalToggleOpenString,
+    handleOpenStringRightClick,
+    handleFretRightClick,
+    handleCanvasRightClick,
+    handleFretMiddleClick,
+  };
 }
