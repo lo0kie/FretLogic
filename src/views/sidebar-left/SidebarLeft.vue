@@ -10,11 +10,11 @@
 
   <button
     @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
-    class="sidebar-toggle-btn-left text-[9px] font-black"
+    class="sidebar-toggle-btn-left"
     :title="uiStore.isLeftOpen ? '收起左侧边栏' : '展开左侧边栏'"
     :class="{ 'is-open': uiStore.isLeftOpen }"
   >
-    {{ uiStore.isLeftOpen ? '◀' : '▶' }}
+    <Triangle :size="12" fill="currentColor" :style="{ rotate: uiStore.isLeftOpen ? '270deg' : '90deg' }" />
   </button>
 </template>
 
@@ -24,6 +24,7 @@ import { useUiStore } from '@/stores/uiStore';
 import LeftFooter from '@/views/sidebar-left/LeftFooter.vue';
 import LeftGroupList from '@/views/sidebar-left/LeftGroupList.vue';
 import LeftHeader from '@/views/sidebar-left/LeftHeader.vue';
+import { Triangle } from '@lucide/vue';
 
 const uiStore = useUiStore();
 </script>

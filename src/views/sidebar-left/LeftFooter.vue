@@ -5,8 +5,12 @@
   >
     <input type="file" ref="fileInputRef" accept=".json" @change="processImport" class="hidden" />
     <div class="grid grid-cols-2 gap-2">
-      <ActionButton @click="handleImportTrigger">导入备份</ActionButton>
-      <ActionButton @click="triggerFullExport">全量导出</ActionButton>
+      <ActionButton @click="handleImportTrigger">
+        <Upload :size="18" :stroke-width="3" class="mr-1.5" /> <span>导入备份</span>
+      </ActionButton>
+      <ActionButton @click="triggerFullExport">
+        <Download :size="18" :stroke-width="3" class="mr-1.5" /> <span>全量导出</span>
+      </ActionButton>
     </div>
   </div>
 </template>
@@ -17,6 +21,7 @@ import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';
+import { Download, Upload } from '@lucide/vue';
 import { ref } from 'vue';
 
 const uiStore = useUiStore();

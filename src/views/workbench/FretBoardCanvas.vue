@@ -2,7 +2,7 @@
   <div
     ref="fretBoardRef"
     class="fretBoard-container relative touch-action-none flex flex-col items-center select-none"
-    title="💡 左键点击/滑动：添加按压音符&#10;💡 右键点击：设为根音&#10;💡 中键点击：切换升降号(如A#⇄Bb)&#10;💡 鼠标滚轮：切换吉他把位"
+    title="鼠标操作指南：\n左键点击/滑动：添加按压音符\n右键点击：设为根音\n中键点击：切换升降号(如A#⇌Bb)\n鼠标滚轮：切换吉他把位"
     :style="{
       width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
       height: `${rawHeight}px`,
@@ -15,46 +15,34 @@
     <div class="w-full relative pointer-events-none" :style="{ height: `${CANVAS_CONFIG.OFFSET_Y_TOP}px` }">
       <template v-for="(fretVal, sIdx) in chordLabStore.selectedFrets" :key="'os-' + sIdx">
         <button
-          v-if="fretVal === -1"
-          :key="'muted-' + sIdx"
-          title="左键：切换为空弦音&#10;右键：设为根音"
           @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
-          class="absolute w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-[28px] pointer-events-auto shadow-sm active:scale-90 transition-none border-[#dc2626] text-[#dc2626] dark:border-[#f87171] dark:text-[#f87171]"
-          :style="{ left: `${getStrX(sIdx)}px`, transform: 'translateX(-50%)', top: '10px' }"
-        >
-          <span>✕</span>
-        </button>
-
-        <button
-          v-else-if="fretVal === 0"
-          :key="'open-' + sIdx"
-          title="左键：切换为静音(✕)&#10;右键：设为/取消根音&#10;中键：切换等音名(b)"
-          @click.stop="handleLocalToggleOpenString(sIdx)"
-          @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
-          @mousedown.middle.prevent.stop="handleFretMiddleClick(sIdx)"
-          class="absolute w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-[28px] pointer-events-auto shadow-sm active:scale-90 transition-all duration-75 box-content"
+          @mousedown.middle.prevent.stop="fretVal === 0 ? handleFretMiddleClick(sIdx) : null"
+          :title="fretVal > 0 ? undefined : '左键：切换为静音(✕)\\n右键：设为/取消根音\n中键：切换等音名(b)'"
+          class="absolute w-10 h-10 box-border pointer-events-auto shadow-sm transition-all duration-75 flex items-center justify-center"
           :class="[
-            chordLabStore.rootMark === sIdx
-              ? 'bg-[#f59e0b] border-[#f59e0b] text-[#ffffff] shadow-[0_2px_4px_rgba(245,158,11,0.3)] dark:bg-[#fbbf24] dark:border-[#fbbf24] dark:text-[#0f172a] dark:shadow-[0_2px_8px_rgba(251,191,36,0.4)]'
-              : ' border-[#93c5fd] text-[#1d4ed8]  dark:border-[#1e3a8a] dark:text-[#93c5fd]',
-          ]"
-          :style="{ left: `${getStrX(sIdx)}px`, transform: 'translateX(-50%)', top: '10px' }"
-        >
-          <span>{{
-            calcNoteLabel(sIdx, 0, chordLabStore.capo, chordLabStore.useFlat[sIdx], chordLabStore.activeBaseStrings)
-          }}</span>
-        </button>
+            fretVal > 0
+              ? 'opacity-0 bg-transparent border-none outline-none cursor-pointer'
+              : 'rounded-full border-[3px] active:scale-90',
 
-        <button
-          v-else
-          :key="'pressed-shield-' + sIdx"
-          title="左键：取消该品位按压&#10;右键：设为/取消根音"
-          @click.stop="handleLocalToggleOpenString(sIdx)"
-          @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
-          class="absolute w-10 h-10 opacity-0 pointer-events-auto bg-transparent border-none outline-none cursor-pointer"
-          :style="{ left: `${getStrX(sIdx)}px`, transform: 'translateX(-50%)', top: '20px' }"
-        ></button>
+            getOpenStringStatusClass(fretVal, sIdx),
+          ]"
+          :style="{
+            left: `${getStrX(sIdx)}px`,
+            transform: 'translateX(-50%)',
+            top: fretVal > 0 ? '20px' : '10px',
+          }"
+        >
+          <template v-if="fretVal === -1">
+            <X class="w-4.5 h-4.5" stroke-width="3" />
+          </template>
+
+          <span v-else-if="fretVal === 0" class="font-black text-xl tracking-tighter open-note-text">
+            {{
+              calcNoteLabel(sIdx, 0, chordLabStore.capo, chordLabStore.useFlat[sIdx], chordLabStore.activeBaseStrings)
+            }}
+          </span>
+        </button>
       </template>
     </div>
 
@@ -167,6 +155,7 @@ import { useFretboardInteraction } from '@/composables/useFretboardInteraction';
 import { CANVAS_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { calcNoteLabel } from '@/utils/musicTheory';
+import { X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const chordLabStore = useChordLabStore();
@@ -193,6 +182,21 @@ const {
   handleFretMiddleClick,
 } = useFretboardInteraction(fretBoardRef);
 
+const getOpenStringStatusClass = (fretVal: number, sIdx: number) => {
+  if (fretVal === -1) {
+    return 'border-[#dc2626] text-[#dc2626] dark:border-[#f87171] dark:text-[#f87171] bg-transparent';
+  }
+
+  if (fretVal === 0) {
+    if (chordLabStore.rootMark === sIdx) {
+      return 'bg-[#f59e0b] border-[#f59e0b] text-[#ffffff] shadow-[0_2px_4px_rgba(245,158,11,0.3)] dark:bg-[#fbbf24] dark:border-[#fbbf24] dark:text-[#0f172a] dark:shadow-[0_2px_8px_rgba(251,191,36,0.4)]';
+    }
+    return 'border-[#93c5fd] text-[#1d4ed8] dark:border-[#1e3a8a] dark:text-[#93c5fd] bg-transparent';
+  }
+
+  return '';
+};
+
 const getFingerColor = (sIdx: number) => {
   if (chordLabStore.rootMark === sIdx) return chordLabStore.isDarkMode ? '#fbbf24' : '#f59e0b';
   return chordLabStore.isDarkMode ? '#3b82f6' : '#2563eb';
@@ -205,6 +209,14 @@ const getFingerTextColor = (sIdx: number) => {
 
 <style scoped lang="less">
 @import '@/assets/styles/tokens.less';
+
+// 🌟 优化 3：专属物理基线对齐
+.open-note-text {
+  display: inline-block;
+  line-height: 1;
+  margin-bottom: 1.5px;
+}
+
 .fretBoard-container {
   transition:
     height @duration-slow @bezier-standard,

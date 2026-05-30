@@ -1,9 +1,9 @@
 <template>
-  <div class="flex flex-col gap-2">
+  <div ref="tuningContainerRef" class="flex flex-col gap-2">
     <label class="text-xs font-black uppercase tracking-widest" style="color: var(--text-disabled)">调音方案</label>
 
     <div class="relative w-full">
-      <GlobalTooltip content="点击选择不同的琴弦基础调音" placement="top">
+      <GlobalTooltip class="w-full" content="点击选择不同的琴弦基础调音" placement="top">
         <div
           @click="isDropdownOpen = !isDropdownOpen"
           class="tuning-trigger-bar flex items-center justify-between px-3 select-none"
@@ -13,21 +13,15 @@
             {{ TUNING_PRESETS[chordLabStore.currentTuning]?.name || 'Standard' }}
           </span>
 
-          <svg
-            class="w-3 h-3 transition-transform duration-200"
+          <ChevronDown
+            :size="18"
+            :stroke-width="3"
             style="color: var(--text-disabled)"
+            class="transition-transform duration-200"
             :class="{ 'rotate-180': isDropdownOpen }"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2.5"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          />
         </div>
       </GlobalTooltip>
-
-      <div v-if="isDropdownOpen" class="fixed inset-0 z-[40]" @click="isDropdownOpen = false"></div>
 
       <Transition
         enter-from-class="opacity-0 translate-y-[-8px]"
@@ -58,10 +52,17 @@
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { TUNING_PRESETS, type TuningType } from '@/utils/musicTheory';
+import { ChevronDown } from '@lucide/vue';
+import { onClickOutside } from '@vueuse/core';
 import { ref } from 'vue';
 
 const chordLabStore = useChordLabStore();
 const isDropdownOpen = ref(false);
+const tuningContainerRef = ref<HTMLDivElement | null>(null);
+
+onClickOutside(tuningContainerRef, () => {
+  if (isDropdownOpen.value) isDropdownOpen.value = false;
+});
 
 const handleTuningChange = (tuningKey: TuningType) => {
   chordLabStore.currentTuning = tuningKey;
@@ -78,7 +79,6 @@ const handleTuningChange = (tuningKey: TuningType) => {
   border-radius: @radius-lg;
   cursor: pointer;
   background-color: var(--bg-body);
-
   &.is-active {
     border-color: @primary;
     box-shadow: @focus-ring-primary;
@@ -92,7 +92,6 @@ const handleTuningChange = (tuningKey: TuningType) => {
 .tuning-item {
   .mixin-interactive-card();
   color: var(--text-body);
-
   &.is-selected {
     background-color: color-mix(in srgb, @primary, transparent 90%) !important;
     color: @primary !important;

@@ -22,7 +22,7 @@
         title="删除该和弦"
         class="text-[10px] action-button text-[var(--text-disabled)] hover:text-white w-4 h-4 rounded-full font-black flex items-center justify-center bg-[var(--bg-main)] hover:bg-[var(--color-danger)]"
       >
-        ✕
+        <Trash2 :size="12" />
       </button>
     </div>
   </div>
@@ -30,6 +30,7 @@
 
 <script setup lang="ts">
 import type { Chord } from '@/stores/chordLabStore';
+import { Trash2 } from '@lucide/vue';
 
 defineProps<{ chord: Chord; isEditing: boolean }>();
 defineEmits<{
