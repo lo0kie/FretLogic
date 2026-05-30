@@ -1,5 +1,8 @@
 <template>
-  <div class="p-4 border-t border-[var(--control-border)] min-w-[335px] bg-[var(--bg-body)] rounded-b-xl">
+  <div
+    class="p-4 border-t border-[var(--control-border)] bg-[var(--bg-body)] rounded-b-xl"
+    :class="`min-w-[${SIDEBAR_WIDTH_PIXEL}]`"
+  >
     <input type="file" ref="fileInputRef" accept=".json" @change="processImport" class="hidden" />
     <div class="grid grid-cols-2 gap-2">
       <ActionButton @click="handleImportTrigger">导入备份</ActionButton>
@@ -10,6 +13,7 @@
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
+import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';

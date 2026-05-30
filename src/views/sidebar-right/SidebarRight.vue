@@ -12,13 +12,14 @@
     @click="uiStore.isRightOpen = !uiStore.isRightOpen"
     class="sidebar-toggle-btn-right text-[9px] font-black"
     :title="uiStore.isRightOpen ? '收起右侧边栏' : '展开右侧边栏'"
-    :style="{ right: uiStore.isRightOpen ? '347px' : '0px' }"
+    :class="{ 'is-open': uiStore.isRightOpen }"
   >
     {{ uiStore.isRightOpen ? '▶' : '◀' }}
   </button>
 </template>
 
 <script setup lang="ts">
+import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useUiStore } from '@/stores/uiStore';
 import RightContent from '@/views/sidebar-right/RightContent.vue';
 import RightHeader from '@/views/sidebar-right/RightHeader.vue';
@@ -41,7 +42,7 @@ const uiStore = useUiStore();
     margin @duration-slow @bezier-sidebar;
 
   &.is-open {
-    width: 335px;
+    width: v-bind(SIDEBAR_WIDTH_PIXEL);
     opacity: 1;
     margin: 12px;
   }
@@ -52,9 +53,15 @@ const uiStore = useUiStore();
   border-radius: 10px 0 0 10px;
   transform: translateY(-50%) scale(1);
   transform-origin: right;
+  right: 0px; // 🌟 默认收起时贴紧最右边缘
   transition:
     all 0.2s ease,
     right @duration-slow @bezier-sidebar;
+
+  // 🌟 统一逻辑：动态计算按钮悬浮偏移量（侧边栏宽度 + 12px 外边距）
+  &.is-open {
+    right: calc(v-bind(SIDEBAR_WIDTH_PIXEL) + 12px);
+  }
 
   &:active {
     transform: translateY(-50%) scale(0.93);

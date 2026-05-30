@@ -12,7 +12,7 @@
     }"
     @contextmenu.prevent="handleCanvasRightClick"
   >
-    <div class="w-full h-[80px] relative pointer-events-none">
+    <div class="w-full relative pointer-events-none" :style="{ height: `${CANVAS_CONFIG.OFFSET_Y_TOP}px` }">
       <template v-for="(fretVal, sIdx) in chordLabStore.selectedFrets" :key="'os-' + sIdx">
         <button
           v-if="fretVal === -1"
@@ -20,7 +20,7 @@
           title="左键：切换为空弦音&#10;右键：设为根音"
           @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
-          class="absolute w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-none border-[#dc2626] text-[#dc2626] dark:border-[#f87171] dark:text-[#f87171]"
+          class="absolute w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-[28px] pointer-events-auto shadow-sm active:scale-90 transition-none border-[#dc2626] text-[#dc2626] dark:border-[#f87171] dark:text-[#f87171]"
           :style="{ left: `${getStrX(sIdx)}px`, transform: 'translateX(-50%)', top: '10px' }"
         >
           <span>✕</span>
@@ -33,11 +33,11 @@
           @click.stop="handleLocalToggleOpenString(sIdx)"
           @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
           @mousedown.middle.prevent.stop="handleFretMiddleClick(sIdx)"
-          class="absolute w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-[22px] pointer-events-auto shadow-sm active:scale-90 transition-all duration-75"
+          class="absolute w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-[28px] pointer-events-auto shadow-sm active:scale-90 transition-all duration-75 box-content"
           :class="[
             chordLabStore.rootMark === sIdx
               ? 'bg-[#f59e0b] border-[#f59e0b] text-[#ffffff] shadow-[0_2px_4px_rgba(245,158,11,0.3)] dark:bg-[#fbbf24] dark:border-[#fbbf24] dark:text-[#0f172a] dark:shadow-[0_2px_8px_rgba(251,191,36,0.4)]'
-              : 'bg-[#dbeafe] border-[#93c5fd] text-[#1d4ed8] dark:bg-[#13203e] dark:border-[#1e3a8a] dark:text-[#93c5fd]',
+              : ' border-[#93c5fd] text-[#1d4ed8]  dark:border-[#1e3a8a] dark:text-[#93c5fd]',
           ]"
           :style="{ left: `${getStrX(sIdx)}px`, transform: 'translateX(-50%)', top: '10px' }"
         >
@@ -84,7 +84,7 @@
         :key="'fret-line-' + f"
         :x1="CANVAS_CONFIG.OFFSET_X"
         :y1="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
-        :x2="CANVAS_CONFIG.BOARD_WIDTH - 31"
+        :x2="getStrX(5)"
         :y2="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
         :stroke="chordLabStore.isDarkMode ? '#94a3b8' : '#334155'"
         stroke-width="4"
@@ -95,7 +95,7 @@
       <rect
         :x="CANVAS_CONFIG.OFFSET_X - 2"
         y="-6"
-        width="384"
+        :width="5 * CANVAS_CONFIG.STRING_SPACING + 4"
         height="8"
         :fill="chordLabStore.isDarkMode ? '#ffffff' : '#0f172a'"
         style="pointer-events: none"
@@ -103,12 +103,12 @@
 
       <template v-for="f in chordLabStore.fretCount + 1" :key="'fret-text-' + f">
         <text
-          x="10"
+          :x="(CANVAS_CONFIG.OFFSET_X - 28) / 2"
           :y="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
           text-anchor="middle"
           dy="0.36em"
           font-size="36"
-          font-weight="1000"
+          font-weight="900"
           :fill="chordLabStore.isDarkMode ? '#cbd5e1' : '#1e293b'"
           v-if="f > 1 && f <= chordLabStore.fretCount"
           style="pointer-events: none"
@@ -140,7 +140,7 @@
               :y="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
               text-anchor="middle"
               dy="0.36em"
-              font-size="22"
+              font-size="28"
               font-weight="700"
               :fill="getFingerTextColor(sIdx)"
               class="finger-text"

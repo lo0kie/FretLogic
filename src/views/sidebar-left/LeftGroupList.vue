@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col flex-1 overflow-hidden min-w-[335px]">
+  <div class="flex flex-col flex-1 overflow-hidden" :class="`min-w-[${SIDEBAR_WIDTH_PIXEL}]`">
     <LeftSearch v-model="searchQuery" :disabled="chordLabStore.savedChordsList.length === 0" />
 
     <div class="flex-1 overflow-y-auto no-scrollbar p-4">
@@ -121,6 +121,7 @@
 
 <script setup lang="ts">
 import { useChordDragDrop } from '@/composables/useChordDragDrop';
+import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useChordLabStore, type Chord } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
 import LeftChordCard from '@/views/sidebar-left/LeftChordCard.vue';

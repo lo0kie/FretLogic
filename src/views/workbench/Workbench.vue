@@ -6,8 +6,8 @@
 
     <div
       id="fretBoard-capture-area"
-      class="workbench-card rounded-xl w-[520px] flex flex-col items-center justify-evenly relative shrink-0"
-      :style="{ height: dynamicHeight }"
+      class="workbench-card rounded-xl flex flex-col items-center justify-evenly relative shrink-0"
+      :style="{ height: dynamicHeight, width: `${CANVAS_CONFIG.BOARD_WIDTH + 60}px` }"
     >
       <ChordInputHeader class="z-10 shrink-0" />
 
@@ -19,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+import { CANVAS_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import ChordInputHeader from '@/views/workbench/ChordInputHeader.vue';
 import FretBoardCanvas from '@/views/workbench/FretBoardCanvas.vue';
@@ -26,19 +27,21 @@ import { computed } from 'vue';
 
 const chordLabStore = useChordLabStore();
 
+// Workbench.vue 内部的 dynamicHeight 升级
 const dynamicHeight = computed(() => {
-  // 🌟 物理硬计算：pt-14(70.8px) + gap-8(40.5px) + pb-10(50.6px) + ChordInputHeader(70.8px) ≈ 233px
-  const baseVerticalSpace = 234;
+  // 1. 卡片内除指板外的纯物理空间：pt-14(56px) + 标题高度(约56px) + gap-8(32px) + pb-10(40px) = 184px
+  const baseVerticalSpace = 135;
 
-  // 这与 FretBoardCanvas 里的 scaleMap 计算后留出的真实物理高度严格一一对应
-  const scaledCanvasHeightMap: Record<number, number> = {
-    3: 360,
-    4: 420,
-    5: 480,
-  };
+  // 2. 实时还原 FretBoardCanvas 里的原始物理高度公式
+  const rawCanvasHeight =
+    CANVAS_CONFIG.OFFSET_Y_TOP + chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
 
-  const boardHeight = scaledCanvasHeightMap[chordLabStore.fretCount] || 460;
-  return `${baseVerticalSpace + boardHeight}px`;
+  // 3. 乘以对应的缩放系数
+  const scaleMap: Record<number, number> = { 3: 1.0, 4: 0.92, 5: 0.85 };
+  const currentScale = scaleMap[chordLabStore.fretCount] || 1.0;
+
+  const realBoardHeight = rawCanvasHeight * currentScale;
+  return `${baseVerticalSpace + realBoardHeight}px`;
 });
 </script>
 

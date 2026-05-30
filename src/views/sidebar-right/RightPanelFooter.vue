@@ -1,5 +1,8 @@
 <template>
-  <div class="p-4 border-t border-[var(--control-border)] min-w-[335px] bg-[var(--bg-body)] rounded-b-xl">
+  <div
+    class="p-4 border-t border-[var(--control-border)] bg-[var(--bg-body)] rounded-b-xl"
+    :class="`min-w-[${SIDEBAR_WIDTH_PIXEL}]`"
+  >
     <div class="grid grid-cols-2 gap-2">
       <GlobalTooltip :content="saveDisabledReason">
         <ActionButton @click="uiStore.triggerSaveChord()" :primary="!isSaveDisabled" :disabled="isSaveDisabled">
@@ -22,6 +25,7 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
 import { computed } from 'vue';
