@@ -1,6 +1,7 @@
 <template>
   <div
-    class="p-4 px-5 h-[76px] border-b border-[var(--control-border)] flex items-center justify-between min-w-[335px] relative"
+    class="p-4 px-5 h-[76px] border-b border-[var(--control-border)] flex items-center justify-between relative"
+    :class="`min-w-[${SIDEBAR_WIDTH_PIXEL}]`"
   >
     <div>
       <h1 class="text-lg font-black tracking-tight uppercase text-title">Fret Logic</h1>
@@ -21,6 +22,7 @@
 
 <script setup lang="ts">
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useUiStore } from '@/stores/uiStore';
 
 const uiStore = useUiStore();

@@ -3,14 +3,27 @@
     <label class="text-xs font-black tracking-widest uppercase" style="color: var(--text-disabled)">系统辅助</label>
 
     <div class="flex flex-col gap-4">
-      <GlobalTooltip content="生成高清无背景图片并复制" placement="top">
-        <ActionButton
-          @click="uiStore.copyFretBoardToClipboard('#fretBoard-capture-area')"
-          :disabled="uiStore.isCopying"
-        >
-          <span>{{ uiStore.isCopying ? '正在导出...' : '复制当前到剪切板' }}</span>
-        </ActionButton>
-      </GlobalTooltip>
+      <div class="grid grid-cols-2 gap-2">
+        <GlobalTooltip content="生成背景透明的指板图" placement="top">
+          <ActionButton
+            @click="uiStore.copyFretBoardToClipboard('#fretBoard-capture-area', true)"
+            :disabled="uiStore.isCopying"
+            class="text-xs"
+          >
+            <span>{{ uiStore.isCopying ? '导出中...' : '复制 (透明)' }}</span>
+          </ActionButton>
+        </GlobalTooltip>
+
+        <GlobalTooltip content="生成带卡片底色的指板图" placement="top">
+          <ActionButton
+            @click="uiStore.copyFretBoardToClipboard('#fretBoard-capture-area', false)"
+            :disabled="uiStore.isCopying"
+            class="text-xs"
+          >
+            <span>{{ uiStore.isCopying ? '导出中...' : '复制 (带背景)' }}</span>
+          </ActionButton>
+        </GlobalTooltip>
+      </div>
 
       <div class="helper-inner-panel flex flex-col gap-2 p-3 rounded-xl">
         <div class="flex items-center justify-between">
