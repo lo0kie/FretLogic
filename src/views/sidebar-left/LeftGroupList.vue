@@ -20,19 +20,21 @@
         v-else
         v-model="chordLabStore.groups"
         :animation="250"
-        handle=".group-title-row"
+        handle=".drag-handle"
         :disabled="!!searchQuery"
         class="flex flex-col gap-4 relative"
         filter=".action-buttons"
         ghost-class="opacity-0"
+        :touchStartThreshold="12"
+        :swap-threshold="0.5"
       >
         <div v-for="group in chordLabStore.groups" :key="group.id" class="flex flex-col w-full group-box">
           <div
-            class="group-title-row flex items-center justify-between py-2 px-2 cursor-grab active:cursor-grabbing select-none"
+            @click="chordLabStore.handleGroupHeaderClick(group.id)"
+            class="group-title-row flex items-center justify-between py-2 px-2 cursor-pointer select-none"
           >
             <div
-              @click="chordLabStore.handleGroupHeaderClick(group.id)"
-              class="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity w-fit flex-1 mr-4"
+              class="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit flex-1 mr-4"
               title="点击折叠/展开分组"
             >
               <ChevronDown
@@ -46,29 +48,45 @@
               >
                 {{ group.name }}
               </span>
-              <span class="text-[12px] font-black px-1.5 py-0.5 count-badge shrink-0">
-                {{ getGroupChordsCount(group.id) }}
+
+              <span class="text-[12px] font-black px-1.5 py-0.5 count-badge shrink-0 font-mono">
+                <template v-if="searchQuery">
+                  <span style="color: var(--color-primary)">{{ getGroupMatchedCount(group.id) }}</span>
+                  <span> / </span>
+                  <span>{{ getGroupChordsCount(group.id) }}</span>
+                </template>
+
+                <span v-else>{{ getGroupChordsCount(group.id) }}</span>
               </span>
             </div>
 
-            <div
-              class="action-buttons opacity-0 flex items-center gap-2 transition-opacity pointer-events-auto shrink-0"
-              @mousedown.stop
-            >
-              <button
-                @click.stop="uiStore.openModal('renameGroup', '修改组名', group.name, group)"
-                class="text-[14px] font-semibold hover:underline"
-                style="color: var(--color-primary)"
+            <div @click.stop="" class="flex items-center gap-2 shrink-0">
+              <div class="action-buttons opacity-0 flex items-center gap-2 transition-opacity pointer-events-auto">
+                <button
+                  @click="uiStore.openModal('renameGroup', '修改组名', group.name, group)"
+                  class="text-[14px] font-semibold hover:underline"
+                  style="color: var(--color-primary)"
+                >
+                  改名
+                </button>
+
+                <button
+                  @click="uiStore.openModal('deleteGroup', '删除分组', '', group)"
+                  class="text-[14px] font-semibold hover:underline"
+                  style="color: var(--color-danger)"
+                >
+                  删除
+                </button>
+              </div>
+
+              <div
+                class="drag-handle p-1 rounded hover:bg-[var(--bg-panel-hover)] transition-colors cursor-grab active:cursor-grabbing text-[var(--text-disabled)] hover:text-[var(--text-body)] flex items-center justify-center opacity-0"
+                title="按住拖拽排序"
+                :style="{ visibility: searchQuery.length !== 0 ? 'hidden' : 'visible' }"
+                :class="{ 'w-0 px-0': searchQuery.length !== 0 }"
               >
-                改名
-              </button>
-              <button
-                @click.stop="uiStore.openModal('deleteGroup', '删除分组', '', group)"
-                class="text-[14px] font-semibold hover:underline"
-                style="color: var(--color-danger)"
-              >
-                删除
-              </button>
+                <GripVertical :size="16" class="opacity-50" />
+              </div>
             </div>
           </div>
 
@@ -80,6 +98,8 @@
               :disabled="!!searchQuery"
               class="grid grid-cols-2 gap-2 items-center relative z-10 min-h-[64px]"
               @update="e => handleChordSort(e, group.id)"
+              :swap-threshold="0.5"
+              :touchStartThreshold="12"
             >
               <LeftChordCard
                 v-for="chord in searchFilteredChords(group.id)"
@@ -98,15 +118,17 @@
               class="absolute inset-0 flex flex-col items-center justify-center empty-card-box opacity-60 pointer-events-none z-0"
             >
               <p class="text-xs font-bold uppercase tracking-widest" style="color: var(--text-disabled)">
-                暂无和弦或保存
+                暂无保存的和弦
               </p>
             </div>
 
             <div
               v-else-if="searchQuery && searchFilteredChords(group.id).length === 0"
-              class="absolute inset-0 flex flex-col items-center justify-center empty-card-box border-amber-500/20 bg-amber-500/[0.02] pointer-events-none z-0"
+              class="absolute inset-0 flex flex-col items-center justify-center opacity-60 empty-card-box border-amber-500/20 bg-amber-500/[0.02] pointer-events-none z-0"
             >
-              <p class="text-xs font-bold text-amber-600/80">没有匹配的和弦</p>
+              <p class="text-xs font-bold uppercase tracking-widest" style="color: var(--text-disabled)">
+                没有匹配的和弦
+              </p>
             </div>
           </div>
         </div>
@@ -121,7 +143,7 @@ import { useChordLabStore, type Chord } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
 import LeftChordCard from '@/views/sidebar-left/LeftChordCard.vue';
 import LeftSearch from '@/views/sidebar-left/LeftSearch.vue';
-import { ChevronDown, FolderOpen } from '@lucide/vue';
+import { ChevronDown, FolderOpen, GripVertical } from '@lucide/vue';
 import { ref } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 
@@ -138,6 +160,14 @@ const searchFilteredChords = (groupId: string) => {
   const q = searchQuery.value.toLowerCase();
   if (!q) return chords;
   return chords.filter(c => c.chordName.toLowerCase().includes(q));
+};
+
+// 🌟 核心新增：获取当前具体分组下命中检索条件的新数量
+const getGroupMatchedCount = (groupId: string) => {
+  const chords = chordLabStore.savedChordsList.filter(c => c.groupId === groupId);
+  const q = searchQuery.value.toLowerCase();
+  if (!q) return chords.length;
+  return chords.filter(c => c.chordName.toLowerCase().includes(q)).length;
 };
 
 const handleChordSort = (event: any, groupId: string) => {
@@ -187,7 +217,8 @@ const handleLocalDeleteChord = (chord: Chord) => {
   .mixin-interactive-card();
   border-radius: @radius-md;
 
-  &:hover .action-buttons {
+  &:hover .action-buttons,
+  &:hover .drag-handle {
     opacity: 1;
   }
   .group-name-text {
@@ -197,6 +228,9 @@ const handleLocalDeleteChord = (chord: Chord) => {
     }
   }
 
+  &:active:not(:disabled) {
+    transform: none !important;
+  }
   &:has(.action-buttons:active) {
     transform: scale(1) !important;
   }

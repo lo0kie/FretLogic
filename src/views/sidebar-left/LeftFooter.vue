@@ -4,6 +4,7 @@
     :class="`min-w-[${SIDEBAR_WIDTH_PIXEL}]`"
   >
     <input type="file" ref="fileInputRef" accept=".json" @change="processImport" class="hidden" />
+
     <div class="grid grid-cols-2 gap-2">
       <ActionButton @click="handleImportTrigger" class="text-xs">
         <Download :size="18" :stroke-width="3" class="mr-2" />
@@ -32,18 +33,22 @@ const chordLabStore = useChordLabStore();
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
 const handleImportTrigger = () => fileInputRef.value?.click();
+
 const processImport = (e: Event) => {
   const target = e.target as HTMLInputElement;
   if (!target.files || target.files.length === 0) return;
-  if (fileInputRef.value) fileInputRef.value.value = '';
 
   const file = target.files[0];
+
   if (file.size === 0) {
     uiStore.showToast('❌ 导入失败：不能导入空文件');
+    // 🌟 优化：即使失败了，也要清空输入框，防止卡死
+    if (fileInputRef.value) fileInputRef.value.value = '';
     return;
   }
 
   const reader = new FileReader();
+
   reader.onload = ev => {
     try {
       const resultStr = ((ev.target?.result as string) || '').trim();
@@ -51,10 +56,13 @@ const processImport = (e: Event) => {
         uiStore.showToast('❌ 导入失败：文件内容为空');
         return;
       }
+
       const imported = JSON.parse(resultStr);
+
       if (cleanAndValidateData(imported, 'import')) {
         chordLabStore.overwriteGroups(imported.groups);
         chordLabStore.overwriteChords(imported.chords);
+
         if (!chordLabStore.groups.some(g => g.id === chordLabStore.selectedGroupId)) {
           chordLabStore.selectedGroupId = chordLabStore.groups[0]?.id || null;
         }
@@ -65,8 +73,13 @@ const processImport = (e: Event) => {
     } catch (err) {
       console.error('备份解析拦截:', err);
       uiStore.showToast('❌ 文件非标准和弦备份或核心数据已损坏');
+    } finally {
+      // 🌟 终极稳固：等文件安全加载并解析完后，再异步擦除 input 状态，避免底层指针冲突
+      if (fileInputRef.value) fileInputRef.value.value = '';
     }
   };
+
+  // 🌟 核心修复：必须显式调用此方法，正式拉响浏览器的文件文本流读取警报！
   reader.readAsText(file);
 };
 

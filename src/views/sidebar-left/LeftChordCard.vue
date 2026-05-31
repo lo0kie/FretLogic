@@ -1,5 +1,5 @@
 <template>
-  <GlobalTooltip placement="right" content="🖱️ 左键：应用编辑 \n 🖱️ 右键：移动分组 \n 🖱️ 拖拽：调整排序">
+  <div class="chord-card-frame">
     <div
       class="chord-thumb-card group h-11 pl-3 pr-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)] box-border"
       :class="{ 'is-editing': isEditing }"
@@ -25,11 +25,10 @@
         </button>
       </div>
     </div>
-  </GlobalTooltip>
+  </div>
 </template>
 
 <script setup lang="ts">
-import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import type { Chord } from '@/stores/chordLabStore';
 import { Trash2 } from '@lucide/vue';
 
