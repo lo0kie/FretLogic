@@ -72,12 +72,12 @@
       />
 
       <line
-        v-for="f in chordLabStore.fretCount + 1"
+        v-for="f in chordLabStore.fretCount"
         :key="'fret-line-' + f"
         :x1="CANVAS_CONFIG.OFFSET_X"
-        :y1="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
+        :y1="f * CANVAS_CONFIG.FRET_HEIGHT"
         :x2="getStrX(5)"
-        :y2="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
+        :y2="f * CANVAS_CONFIG.FRET_HEIGHT"
         :stroke="chordLabStore.isDarkMode ? '#94a3b8' : '#334155'"
         stroke-width="4"
         style="pointer-events: none"
@@ -86,7 +86,7 @@
 
       <rect
         :x="CANVAS_CONFIG.OFFSET_X - 2"
-        y="-6"
+        y="-4"
         :width="5 * CANVAS_CONFIG.STRING_SPACING + 4"
         height="8"
         :fill="chordLabStore.isDarkMode ? '#ffffff' : '#0f172a'"
