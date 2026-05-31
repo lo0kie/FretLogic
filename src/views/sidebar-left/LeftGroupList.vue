@@ -23,31 +23,38 @@
         handle=".group-title-row"
         :disabled="!!searchQuery"
         class="flex flex-col gap-4 relative"
+        filter=".action-buttons"
+        ghost-class="opacity-0"
       >
         <div v-for="group in chordLabStore.groups" :key="group.id" class="flex flex-col w-full group-box">
           <div
-            @click="chordLabStore.handleGroupHeaderClick(group.id)"
-            class="group-title-row flex items-center justify-between py-2 px-2 cursor-grab active:cursor-grabbing"
+            class="group-title-row flex items-center justify-between py-2 px-2 cursor-grab active:cursor-grabbing select-none"
           >
-            <div class="flex items-center gap-2">
+            <div
+              @click="chordLabStore.handleGroupHeaderClick(group.id)"
+              class="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity w-fit flex-1 mr-4"
+              title="点击折叠/展开分组"
+            >
               <ChevronDown
-                :size="24"
-                class="opacity-40 transition-transform duration-200"
+                :size="16"
+                class="opacity-40 transition-transform duration-200 shrink-0"
                 style="color: var(--text-body)"
                 :class="{ '-rotate-90': group.collapsed }"
               />
               <span
-                class="font-black tracking-widest uppercase group-name-text text-sm"
-                :class="{ 'is-active': chordLabStore.selectedGroupId === group.id && !group.collapsed }"
+                class="font-black tracking-widest uppercase group-name-text text-sm select-none truncate max-w-[140px]"
               >
                 {{ group.name }}
               </span>
-              <span class="text-[12px] font-black px-1.5 py-0.5 count-badge">
+              <span class="text-[12px] font-black px-1.5 py-0.5 count-badge shrink-0">
                 {{ getGroupChordsCount(group.id) }}
               </span>
             </div>
 
-            <div class="action-buttons opacity-0 flex items-center gap-2 transition-opacity" @mousedown.stop>
+            <div
+              class="action-buttons opacity-0 flex items-center gap-2 transition-opacity pointer-events-auto shrink-0"
+              @mousedown.stop
+            >
               <button
                 @click.stop="uiStore.openModal('renameGroup', '修改组名', group.name, group)"
                 class="text-[14px] font-semibold hover:underline"
@@ -69,7 +76,7 @@
             <VueDraggable
               :model-value="searchFilteredChords(group.id)"
               :animation="250"
-              ghost-class="opacity-40"
+              ghost-class="opacity-0"
               :disabled="!!searchQuery"
               class="grid grid-cols-2 gap-2 items-center relative z-10 min-h-[64px]"
               @update="e => handleChordSort(e, group.id)"
@@ -122,12 +129,10 @@ const uiStore = useUiStore();
 const chordLabStore = useChordLabStore();
 const searchQuery = ref('');
 
-// 计算当前组内持有的和弦总数
 const getGroupChordsCount = (groupId: string) => {
   return chordLabStore.savedChordsList.filter(c => c.groupId === groupId).length;
 };
 
-// 获取过滤后的和弦列表
 const searchFilteredChords = (groupId: string) => {
   const chords = chordLabStore.savedChordsList.filter(c => c.groupId === groupId);
   const q = searchQuery.value.toLowerCase();
@@ -135,7 +140,6 @@ const searchFilteredChords = (groupId: string) => {
   return chords.filter(c => c.chordName.toLowerCase().includes(q));
 };
 
-// 处理【组内】卡片无缝排序
 const handleChordSort = (event: any, groupId: string) => {
   const { oldIndex, newIndex } = event;
   if (oldIndex === undefined || newIndex === undefined) return;
@@ -148,7 +152,6 @@ const handleChordSort = (event: any, groupId: string) => {
   chordLabStore.overwriteChords([...otherGroupsChords, ...currentGroupChords]);
 };
 
-// 基础业务逻辑
 const handleLocalMoveChord = (chord: Chord) => {
   uiStore.openModal('moveChord', '移动至新分组', '', null, chord);
 };
@@ -163,7 +166,7 @@ const handleLocalDeleteChord = (chord: Chord) => {
 <style scoped lang="less">
 @import '@/assets/styles/tokens.less';
 
-:deep(.sortable-chosen) {
+:deep(.relative:has(.group-box.sortable-chosen)) {
   .chord-content-wrapper {
     display: none !important;
   }
@@ -183,6 +186,7 @@ const handleLocalDeleteChord = (chord: Chord) => {
 .group-title-row {
   .mixin-interactive-card();
   border-radius: @radius-md;
+
   &:hover .action-buttons {
     opacity: 1;
   }
@@ -191,6 +195,10 @@ const handleLocalDeleteChord = (chord: Chord) => {
     &.is-active {
       color: @primary !important;
     }
+  }
+
+  &:has(.action-buttons:active) {
+    transform: scale(1) !important;
   }
 }
 </style>

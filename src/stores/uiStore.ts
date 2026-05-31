@@ -3,7 +3,7 @@ import { useChordLabStore, type Chord, type Group } from '@/stores/chordLabStore
 import { copyElementToClipboard } from '@/utils/domExporter';
 import { useRefHistory, useToggle } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { nextTick, ref, toRef } from 'vue'; // 🌟 引入 nextTick
+import { nextTick, ref, toRef } from 'vue';
 
 export interface Toast {
   id: number;
@@ -14,7 +14,15 @@ export interface Toast {
 export const useUiStore = defineStore('ui', () => {
   const chordStore = useChordLabStore();
   const savedChordsRef = toRef(chordStore, 'savedChordsList');
-  const { undo: rawUndo } = useRefHistory(savedChordsRef, { capacity: 10, clone: true, deep: true });
+
+  // 🌟 终极修复：放弃对宿主混杂对象敏感的 structuredClone
+  // 🌟 改用最纯净的“脱水/复水”快照机制。这能 100% 剥离任何可能夹带的 Proxy 壳子或隐式宿主引用，确保撤销栈绝对安全稳固！
+  const { undo: rawUndo } = useRefHistory(savedChordsRef, {
+    capacity: 10,
+    clone: v => JSON.parse(JSON.stringify(v)),
+    deep: true,
+  });
+
   const toasts = ref<Toast[]>([]);
 
   const clearUndoToasts = () => {
@@ -38,7 +46,6 @@ export const useUiStore = defineStore('ui', () => {
         chordStore.groups.unshift({ id: targetGroupId, name: '已恢复的和弦', collapsed: false });
         chordStore.selectedGroupId = targetGroupId;
 
-        // 🌟 扩展逻辑 1：恢复分组时，自动滚动到视口顶部
         nextTick(() => {
           document.getElementById(`group-${targetGroupId}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
@@ -57,7 +64,7 @@ export const useUiStore = defineStore('ui', () => {
   const toggleCapoPanel = useToggle(isCapoOpen);
 
   const showToast = (msg: string, canUndo = false) => {
-    const id = Date.now();
+    const id = performance.now();
     if (canUndo) clearUndoToasts();
     toasts.value.push({ id, msg, canUndo });
     setTimeout(() => {
@@ -104,7 +111,6 @@ export const useUiStore = defineStore('ui', () => {
       chordStore.groups.push({ id: newId, name: val, collapsed: false });
       chordStore.selectedGroupId = newId;
 
-      // 🌟 扩展逻辑 2：新建分组时，自动平滑滚动到该分组
       nextTick(() => {
         document.getElementById(`group-${newId}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
@@ -132,11 +138,10 @@ export const useUiStore = defineStore('ui', () => {
     showToast('操作成功');
   };
 
-  // 在 src/stores/uiStore.ts 文件中，替换原有的 triggerSaveChord 函数：
-
   const triggerSaveChord = () => {
     const cleanName = chordStore.currentChordName.trim();
     if (!cleanName || chordStore.isFretBoardEmpty) return showToast('❌ 保存失败：请输入名称并指定音符');
+
     const targetGroupId = chordStore.editingId
       ? chordStore.savedChordsList.find(c => c.id == chordStore.editingId)?.groupId || chordStore.selectedGroupId
       : chordStore.selectedGroupId;
@@ -150,7 +155,7 @@ export const useUiStore = defineStore('ui', () => {
       groupId: targetGroupId || 'default',
       rootMark: chordStore.rootMark,
       useFlat: [...chordStore.useFlat],
-      tuning: chordStore.currentTuning, // 🌟 确保当前调音方案被打包写入
+      tuning: chordStore.currentTuning,
     };
 
     const idx = chordStore.savedChordsList.findIndex(c => c.id == chordStore.editingId);
@@ -163,7 +168,7 @@ export const useUiStore = defineStore('ui', () => {
 
   const triggerDeleteChord = (chord: Chord) => {
     chordStore.overwriteChords(chordStore.savedChordsList.filter(c => c.id !== chord.id));
-    showToast(`🗑️ 已删除"${chord.chordName}"`, true);
+    showToast(`🗑️ 已删除 "${chord.chordName}"`, true);
   };
 
   const copyFretBoardToClipboard = async (selector: string, isTransparent: boolean = true) => {

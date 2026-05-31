@@ -6,22 +6,28 @@ let sharedMainMixer: GainNode | null = null;
 const staticStringGains: GainNode[] = [];
 const staticModGains: GainNode[] = [];
 let playTimer: ReturnType<typeof setTimeout> | null = null;
-let cachedReverbBuffer: AudioBuffer | null = null;
+
+// 🌟 极客优化：绑定宿主 ctx 引用，防止 Safari/Webkit 在重置时引发 InvalidAccessError
+let cachedReverbBuffer: { ctx: AudioContext; buffer: AudioBuffer } | null = null;
 
 export function useAudioPlayer() {
   const chordLabStore = useChordLabStore();
   const isPlaying = ref(false);
 
   const getReverbBuffer = (ctx: AudioContext, seconds: number): AudioBuffer => {
-    if (cachedReverbBuffer) return cachedReverbBuffer;
+    // 只有上下文完全一致时才复用卷积，确保绝对安全
+    if (cachedReverbBuffer && cachedReverbBuffer.ctx === ctx) return cachedReverbBuffer.buffer;
+
     const rate = ctx.sampleRate;
     const len = rate * seconds;
     const buffer = ctx.createBuffer(2, len, rate);
+
     for (let channel = 0; channel < 2; channel++) {
       const data = buffer.getChannelData(channel);
       for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
     }
-    cachedReverbBuffer = buffer;
+
+    cachedReverbBuffer = { ctx, buffer };
     return buffer;
   };
 
@@ -77,6 +83,7 @@ export function useAudioPlayer() {
     let ctx = sharedCtx;
     if (!ctx || ctx.state === 'closed') ctx = await initAudioEngine();
     if (!ctx || !sharedMainMixer) return;
+
     if (ctx.state === 'suspended') await ctx.resume();
 
     isPlaying.value = true;
