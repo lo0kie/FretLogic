@@ -1,10 +1,10 @@
 import { STORAGE_KEYS } from '@/constants';
+import type { BoolTuple, Chord, FretTuple, Group } from '@/stores/types'; // 馃専 挂载全新元组约束
 import type { TuningType } from '@/utils/musicTheory';
 import { extractRootNote, TUNING_PRESETS } from '@/utils/musicTheory';
 import { debounceFilter, useDark, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
-import type { BoolTuple, Chord, FretTuple, Group } from './types'; // 馃専 挂载全新元组约束
 
 export const useChordLabStore = defineStore('chordLab', () => {
   const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '' });
