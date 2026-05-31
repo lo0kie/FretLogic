@@ -21,7 +21,7 @@
           @click.stop="$emit('delete', chord)"
           class="text-[10px] action-button text-[var(--text-disabled)] hover:text-white w-4 h-4 rounded-full font-black flex items-center justify-center bg-[var(--bg-main)] hover:bg-[var(--color-danger)]"
         >
-          <Trash2 class="w-3 h-3" stroke-width="2.5" />
+          <Trash2 class="w-2 h-2" stroke-width="2.5" />
         </button>
       </div>
     </div>
@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Chord } from '@/stores/chordLabStore';
+import { type Chord } from '@/stores/types';
 import { Trash2 } from '@lucide/vue';
 
 defineProps<{ chord: Chord; isEditing: boolean }>();

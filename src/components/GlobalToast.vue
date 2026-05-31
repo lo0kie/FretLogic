@@ -22,7 +22,7 @@ import { useUiStore } from '@/stores/uiStore';
 const uiStore = useUiStore();
 
 const handleLocalUndo = () => {
-  uiStore.undo();
+  uiStore.executeUndoRestore();
   uiStore.showToast('↩️ 刚才删除的和弦已被完美恢复');
 };
 </script>

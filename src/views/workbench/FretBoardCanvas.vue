@@ -15,7 +15,7 @@
       <template v-for="(fretVal, sIdx) in chordLabStore.selectedFrets" :key="'os-' + sIdx">
         <GlobalTooltip
           placement="top"
-          :content="fretVal > 0 ? undefined : '🖱️ 左键：切换静音 | 🖱️ 右键：设为根音 | 🖱️ 中键：等音转换'"
+          :content="fretVal > 0 ? undefined : '🖱️ 左键：切换空弦/静音 \n 🖱️ 右键：设为根音'"
           :style="{
             position: 'absolute',
             left: `${getStrX(sIdx)}px`,
@@ -94,13 +94,14 @@
       />
 
       <text
-        v-for="i in chordLabStore.fretCount - 1"
-        :key="'fret-text-' + (i + 1)"
-        :x="(CANVAS_CONFIG.OFFSET_X - 28) / 2"
+        v-for="i in chordLabStore.fretCount"
+        :key="'fret-text-' + i"
+        :x="(CANVAS_CONFIG.OFFSET_X - 32) / 2"
         :y="i * CANVAS_CONFIG.FRET_HEIGHT"
         text-anchor="middle"
-        dy="0.36em"
-        font-size="36"
+        dominant-baseline="central"
+        dy="-2px"
+        font-size="28"
         font-weight="900"
         :fill="chordLabStore.isDarkMode ? '#cbd5e1' : '#1e293b'"
         style="pointer-events: none"
@@ -109,45 +110,43 @@
       </text>
 
       <template v-for="(fret, sIdx) in chordLabStore.selectedFrets" :key="'finger-' + sIdx">
-        <Transition name="fade-fast">
-          <g
-            v-if="fret > 0 && fret <= chordLabStore.fretCount"
-            :key="`pos-${fret}`"
-            class="cursor-pointer"
-            style="pointer-events: auto"
-            @contextmenu.prevent.stop="handleFretRightClick(sIdx)"
-            @mousedown.middle.prevent.stop="handleFretMiddleClick(sIdx)"
+        <g
+          v-if="fret > 0 && fret <= chordLabStore.fretCount"
+          :key="`pos-${fret}`"
+          class="cursor-pointer"
+          style="pointer-events: auto"
+          @contextmenu.prevent.stop="handleFretRightClick(sIdx)"
+          @mousedown.middle.prevent.stop="handleFretMiddleClick(sIdx)"
+        >
+          <circle
+            :cx="getStrX(sIdx)"
+            :cy="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+            r="28"
+            :fill="getFingerColor(sIdx)"
+            class="finger-circle"
+            style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))"
+          />
+          <text
+            :x="getStrX(sIdx)"
+            :y="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+            text-anchor="middle"
+            dy="0.36em"
+            font-size="24"
+            font-weight="900"
+            :fill="getFingerTextColor(sIdx)"
+            class="finger-text"
           >
-            <circle
-              :cx="getStrX(sIdx)"
-              :cy="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-              r="28"
-              :fill="getFingerColor(sIdx)"
-              class="finger-circle"
-              style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))"
-            />
-            <text
-              :x="getStrX(sIdx)"
-              :y="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-              text-anchor="middle"
-              dy="0.36em"
-              font-size="28"
-              font-weight="700"
-              :fill="getFingerTextColor(sIdx)"
-              class="finger-text"
-            >
-              {{
-                calcNoteLabel(
-                  sIdx,
-                  fret,
-                  chordLabStore.capo,
-                  chordLabStore.useFlat[sIdx],
-                  chordLabStore.activeBaseStrings
-                )
-              }}
-            </text>
-          </g>
-        </Transition>
+            {{
+              calcNoteLabel(
+                sIdx,
+                fret,
+                chordLabStore.capo,
+                chordLabStore.useFlat[sIdx],
+                chordLabStore.activeBaseStrings
+              )
+            }}
+          </text>
+        </g>
       </template>
     </svg>
   </div>
@@ -157,6 +156,7 @@
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useFretboardInteraction } from '@/composables/useFretboardInteraction';
 import { CANVAS_CONFIG } from '@/constants';
+import { FRETBOARD_SCALE_MAP } from '@/constants/fretboard';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { calcNoteLabel } from '@/utils/musicTheory';
 import { X } from '@lucide/vue';
@@ -174,8 +174,7 @@ const rawHeight = computed(() => {
 });
 
 const fretboardScale = computed(() => {
-  const scaleMap: Record<number, number> = { 3: 1.0, 4: 0.92, 5: 0.85 };
-  return scaleMap[chordLabStore.fretCount] || 1.0;
+  return FRETBOARD_SCALE_MAP[chordLabStore.fretCount] || 1.0;
 });
 
 const {
@@ -215,7 +214,7 @@ const getFingerTextColor = (sIdx: number) => {
 .open-note-text {
   display: inline-block;
   line-height: 1;
-  margin-bottom: 1.5px; // 物理居中修复
+  margin-bottom: 1.5px;
 }
 
 .fretBoard-container {
@@ -230,13 +229,5 @@ const getFingerTextColor = (sIdx: number) => {
 .finger-circle,
 .finger-text {
   transition: fill @duration-fast ease;
-}
-.fade-fast-enter-active,
-.fade-fast-leave-active {
-  transition: opacity 0.15s ease-out;
-}
-.fade-fast-enter-from,
-.fade-fast-leave-to {
-  opacity: 0;
 }
 </style>

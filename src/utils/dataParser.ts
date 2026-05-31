@@ -1,4 +1,4 @@
-import type { Chord, Group } from '@/stores/chordLabStore';
+import { Chord, Group } from '@/stores/types';
 
 export const cleanAndValidateData = (
   data: unknown,
