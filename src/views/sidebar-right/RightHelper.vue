@@ -37,7 +37,7 @@
               :disabled="isShiftDownDisabled"
               class="h-8 rounded-lg text-xs"
             >
-              <span class="text-xs leading-none mr-2">▲</span>
+              <ChevronUp :size="18" stroke-width="3" class="mr-2" />
               <span>上移</span>
             </ActionButton>
           </GlobalTooltip>
@@ -45,7 +45,7 @@
           <GlobalTooltip content="将当前指型向低品位移动" placement="top">
             <ActionButton @click="handleShiftFret('up')" :disabled="isShiftUpDisabled" class="h-8 rounded-lg text-xs">
               <span>下移</span>
-              <span class="text-xs leading-none ml-2">▼</span>
+              <ChevronDown :size="18" stroke-width="3" class="ml-2" />
             </ActionButton>
           </GlobalTooltip>
         </div>
@@ -54,13 +54,13 @@
       <ActionButton @click="playCurrentChord" :disabled="chordLabStore.isFretBoardEmpty || isPlaying">
         <span v-if="chordLabStore.isFretBoardEmpty">请添加指板音</span>
         <template v-else>
-          <span class="text-sm leading-none mr-2">{{ isPlaying ? '🎵' : '🔊' }}</span>
+          <component :is="isPlaying ? Square : Play" class="mr-2" :size="18" stroke-width="3" />
           <span>{{ isPlaying ? '正在试听...' : '试听当前和弦' }}</span>
         </template>
       </ActionButton>
 
       <ActionButton @click="chordLabStore.isDarkMode = !chordLabStore.isDarkMode">
-        <span class="text-sm leading-none mr-2">{{ chordLabStore.isDarkMode ? '🌙' : '☀️' }}</span>
+        <component :is="chordLabStore.isDarkMode ? Moon : Sun" class="mr-2" :size="18" stroke-width="3" />
         <span>{{ chordLabStore.isDarkMode ? '深色模式' : '浅色模式' }}</span>
       </ActionButton>
     </div>
@@ -73,6 +73,7 @@ import GlobalTooltip from '@/components/GlobalTooltip.vue'; // 🌟 引入 Toolt
 import { useAudioPlayer } from '@/composables/useAudioPlayer';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
+import { ChevronDown, ChevronUp, Moon, Play, Square, Sun } from '@lucide/vue';
 import { computed } from 'vue';
 
 const uiStore = useUiStore();

@@ -14,7 +14,7 @@
     :title="uiStore.isRightOpen ? '收起右侧边栏' : '展开右侧边栏'"
     :class="{ 'is-open': uiStore.isRightOpen }"
   >
-    {{ uiStore.isRightOpen ? '▶' : '◀' }}
+    <Triangle :size="12" fill="currentColor" :style="{ rotate: uiStore.isRightOpen ? '90deg' : '270deg' }" />
   </button>
 </template>
 
@@ -24,6 +24,7 @@ import { useUiStore } from '@/stores/uiStore';
 import RightContent from '@/views/sidebar-right/RightContent.vue';
 import RightHeader from '@/views/sidebar-right/RightHeader.vue';
 import RightPanelFooter from '@/views/sidebar-right/RightPanelFooter.vue';
+import { Triangle } from '@lucide/vue';
 
 const uiStore = useUiStore();
 </script>

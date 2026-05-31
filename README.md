@@ -1,43 +1,57 @@
-# 🎸 Fret Logic (指板乐理实验室)
+# 🎸 Fret Logic (指板逻辑)
 
-一个为吉他手与音乐人打造的高端交互式和弦指板推演工具。项目采用现代前端硬核技术栈，打通了复杂的乐理状态机计算、跨端大拇指热区交互，并沉淀了工业级自适应工程优化。
+![Vue.js](https://img.shields.io/badge/Vue%203-323330?style=for-the-badge&logo=vue.js&logoColor=4FC08D)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Pinia](https://img.shields.io/badge/Pinia-F6D365?style=for-the-badge&logo=vue.js&logoColor=white)
 
-![Vue3](https://img.shields.io/badge/Vue-3.x-4fc08d?logo=vue.js)
-![Vite](https://img.shields.io/badge/Vite-5.x-646cff?logo=vite)
-![TailwindCSS](https://img.shields.io/badge/Tailwind-3.x-38bdf8?logo=tailwind-css)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript)
+**Fret Logic** 是一个为现代指弹吉他手、编曲人及吉他讲师打造的**高精度乐理与指板可视化 Web 工具**。
 
----
+它不仅仅是一个画图工具，更是一个基于纯数学公式驱动和真实乐理引擎构建的沙盒。无论你是需要记录复杂的 Neo-Soul 和弦指型、探索特殊调弦，还是需要导出透明底色的高清指板图嵌入到 PPT 或文档中，Fret
+Logic 都能提供像素级的完美体验。
 
-## ⚡ 核心硬核特性
+## ✨ 核心特性 (Core Features)
 
-### 1. 🛡️ 精密乐理状态机与核心防线
-* **幽灵状态熔断**：指板网格与空弦控制区深度联动，当按点音高资产在跨品、跨维重组时，手动主音（Root Note）状态秒级解绑卸载，物理闭环消除幽灵继承 Bug。
-* **物理冰封安全框架**：组件支持变体（Primary / Danger / Warning / Default）的高阶自定义状态，对置灰禁用态（Disabled）执行物理防穿帮拦截。
-* **Pointer 事件手势防抖**：底层基于统一的 `PointerEvent` 安全总线，支持物理手势高频横滑顺畅抹音、点按按弦，并内置 `MUTING_COOL_DOWN` 冷却锁死防抖机制。
+- 🎯 **纯数学驱动的自适应指板**：支持 3品 / 4品 /
+  5品 动态无缝切换。指板网格、音符半径、文字大小均采用底层物理数学公式联动计算，极窄弦距下依然保持像素级居中与严丝合缝，彻底告别写死的魔法数字 (Magic
+  Numbers)。
+- 🧠 **硬核乐理引擎**：
+  - 内置支持 **Standard, Drop D, DADGAD, Open G** 等多种特殊调弦。
+  - 完美支持 **Capo（变调夹）** 偏移运算。
+  - 智能推导并切换等音名（如 `A#` ⇆ `Bb`）。
+- 🎧 **原生 Web Audio 物理合成器**：零外部音频文件依赖。通过前端 `AudioContext`
+  实时合成三角波与正弦波，结合动态压缩器 (Compressor) 与空间混响 (Convolver)，还原最真实的吉他下拨扫弦听感。
+- 📸
+  **生产力级高清导出**：利用离屏渲染与沙箱样式重写，支持一键生成**完美剥离底色的全透明 PNG 指板图**或**带精致暗黑/高光质感底板的实底图**。
+- 📂 **丝滑的工作流管理**：
+  - 支持和弦卡片的无限分组与 **HTML5 原生拖拽排序**。
+  - 所有数据通过 LocalStorage 实时本地持久化。
+  - 支持 JSON 格式的全量数据导出备份与安全校验导入。
+- 🌓 **极致的双端 UI/UX**：Tailwind CSS +
+  Less 构筑。深度适配 Dark/Light 暗黑模式，融入精致的弹性果冻动画与全局快捷键逻辑。
 
-### 2. 🖨️ 离屏转录沙箱抗裁剪优化
-* **DOM 抗裁剪剥离**：利用绝对定位状态机与局部溢出放行策略（`overflow: visible`），在不破坏面板基础滚动约束的同时，确保高阶 Tooltip 在极限边缘不被切断。
-* **硬编码抗色变防线**：针对 `html-to-image` 的 Canvas 离屏克隆沙箱机制，通过实体状态类（`.is-empty`）与物理 Hex 色值硬编码死锁，彻底规避了克隆 DOM 树丢失 CSS 全局变量导致的图片褪色与黑屏偏色 Bug。
+## 🕹️ 交互指南 (How to use)
 
-### 3. 📦 编译期二进制压榨与分包
-* **无损平滑分包（Code Splitting）**：在 Rollup 编译层定制 `manualChunks` 函数颗粒化拆包，将 `html-to-image` 等非首屏核心大件剥离，顺着血脉闭环合并核心 Vendor，斩断循环依赖死锁。
-* **0 依赖线上 console 剥离**：摒弃厚重的 Terser，利用内置的 `esbuild.drop` 在生产环境无感蒸发调试日志，兼顾极速编译与极致瘦身。
+在中央的指板工作区，鼠标是你的最佳画笔：
 
----
+- **左键点击/滑动**：在琴弦上添加或取消按压音符；在顶部琴枕处切换空弦或静音 (`✕`)。
+- **右键点击**：将当前音符设定为/取消 **根音 (Root Note)**，自动高亮为特殊醒目色彩。
+- **鼠标中键**：对已按压的音符进行**等音名切换**（用于修正复杂和弦的命名逻辑）。
+- **鼠标滚轮**：在指板区或 Capo 面板滚动，可全局快捷平移变调夹或吉他把位。
 
-## 🛠️ 技术栈母带池
+## 🛠️ 技术栈 (Tech Stack)
 
-* **核心框架**：Vue 3 (Setup + TypeScript 5)
-* **构建工具**：Vite 5 (现代化原生 ESM URL 路径别名解析)
-* **状态管理**：Pinia (主脑全局乐理资产托管)
-* **样式工程**：Tailwind CSS (原子化行内解耦) + Less (核心资产 Mixin 自适应托管)
-* **自动化生态**：GitHub Actions 流水线 + `gh-pages` 本地手动一键双向发布
+- **框架**：Vue 3 (Composition API & `<script setup>`)
+- **语言**：TypeScript
+- **状态管理**：Pinia + VueUse (`useStorage`, `useRefHistory` 等)
+- **样式工程**：Tailwind CSS + Less 预处理器
+- **构建工具**：Vite
+- **核心库**：`html-to-image` (用于纯前端 DOM 矢量快照导出)
 
----
+## 📦 本地开发 (Getting Started)
 
-## 🚀 极速本地拉起
-
-### 1. 安装全量资产
-```bash
-npm install
+1. **克隆项目**
+   ```bash
+   git clone [https://github.com/lo0kie/fret-logic.git](https://github.com/lo0kie/fret-logic.git)
+   cd fret-logic
+   ```

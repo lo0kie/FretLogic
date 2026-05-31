@@ -4,9 +4,17 @@
     :class="`min-w-[${SIDEBAR_WIDTH_PIXEL}]`"
   >
     <input type="file" ref="fileInputRef" accept=".json" @change="processImport" class="hidden" />
+
     <div class="grid grid-cols-2 gap-2">
-      <ActionButton @click="handleImportTrigger">导入备份</ActionButton>
-      <ActionButton @click="triggerFullExport">全量导出</ActionButton>
+      <ActionButton @click="handleImportTrigger" class="text-xs">
+        <Download :size="18" :stroke-width="3" class="mr-2" />
+        <span>导入备份</span>
+      </ActionButton>
+
+      <ActionButton @click="triggerFullExport" class="text-xs">
+        <Upload :size="18" :stroke-width="3" class="mr-2" />
+        <span>全量导出</span>
+      </ActionButton>
     </div>
   </div>
 </template>
@@ -17,11 +25,13 @@ import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';
+import { Download, Upload } from '@lucide/vue';
 import { ref } from 'vue';
 
 const uiStore = useUiStore();
 const chordLabStore = useChordLabStore();
 const fileInputRef = ref<HTMLInputElement | null>(null);
+
 const handleImportTrigger = () => fileInputRef.value?.click();
 
 const processImport = (e: Event) => {
@@ -30,32 +40,33 @@ const processImport = (e: Event) => {
 
   const file = target.files[0];
 
-  // 🌟 拦截 1：物理大小为 0 的空文件
   if (file.size === 0) {
     uiStore.showToast('❌ 导入失败：不能导入空文件');
-    target.value = '';
+    // 🌟 优化：即使失败了，也要清空输入框，防止卡死
+    if (fileInputRef.value) fileInputRef.value.value = '';
     return;
   }
 
   const reader = new FileReader();
+
   reader.onload = ev => {
     try {
       const resultStr = ((ev.target?.result as string) || '').trim();
-
-      // 🌟 拦截 2：内容只有空白字符或完全为空的文件
       if (!resultStr) {
         uiStore.showToast('❌ 导入失败：文件内容为空');
         return;
       }
 
       const imported = JSON.parse(resultStr);
+
       if (cleanAndValidateData(imported, 'import')) {
         chordLabStore.overwriteGroups(imported.groups);
         chordLabStore.overwriteChords(imported.chords);
+
         if (!chordLabStore.groups.some(g => g.id === chordLabStore.selectedGroupId)) {
           chordLabStore.selectedGroupId = chordLabStore.groups[0]?.id || null;
         }
-        uiStore.showToast('📥 数据恢复成功');
+        uiStore.showToast('📦 数据恢复成功');
       } else {
         throw new Error('Import verification failed');
       }
@@ -63,9 +74,12 @@ const processImport = (e: Event) => {
       console.error('备份解析拦截:', err);
       uiStore.showToast('❌ 文件非标准和弦备份或核心数据已损坏');
     } finally {
-      target.value = '';
+      // 🌟 终极稳固：等文件安全加载并解析完后，再异步擦除 input 状态，避免底层指针冲突
+      if (fileInputRef.value) fileInputRef.value.value = '';
     }
   };
+
+  // 🌟 核心修复：必须显式调用此方法，正式拉响浏览器的文件文本流读取警报！
   reader.readAsText(file);
 };
 
@@ -78,7 +92,7 @@ const triggerFullExport = () => {
     link.href = URL.createObjectURL(new Blob([dataString], { type: 'application/json' }));
     link.download = `和弦备份_${Date.now()}.json`;
     link.click();
-    uiStore.showToast('📤 备份已下载');
+    uiStore.showToast('📥 备份已下载');
   } else {
     uiStore.showToast('❌ 当前本地缓存存在严重破损数据，请检查控制台');
   }
