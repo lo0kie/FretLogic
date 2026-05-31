@@ -1,24 +1,24 @@
 <template>
-  <div ref="triggerRef" class="relative inline-block w-full" @mouseenter="onEnter" @mouseleave="onLeave">
+  <div ref="referenceRef" class="relative inline-block" @mouseenter="show = true" @mouseleave="show = false">
     <slot></slot>
 
     <Teleport to="body">
       <Transition name="tooltip-native">
         <div
           v-if="show && content"
-          ref="tooltipRef"
-          class="tooltip-box fixed whitespace-nowrap px-3 py-1.5 font-black rounded-lg z-[9999] text-xs shadow-xl pointer-events-none"
-          :style="tooltipStyle"
-        >
-          {{ content }}
-        </div>
+          ref="floatingRef"
+          class="tooltip-box fixed px-3 py-1.5 font-black rounded-lg text-xs shadow-xl pointer-events-none"
+          :style="floatingStyles"
+          v-html="safeHtmlContent"
+        ></div>
       </Transition>
     </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { nextTick, reactive, ref } from 'vue';
+import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/vue';
+import { computed, ref } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -29,56 +29,28 @@ const props = withDefaults(
 );
 
 const show = ref(false);
-const triggerRef = ref<HTMLElement | null>(null);
-const tooltipRef = ref<HTMLElement | null>(null); // 🌟 新增：Tooltip 自身的引用
 
-// 🌟 初始状态将不透明度设为 0，防止坐标计算那 1 帧发生尴尬的闪烁
-const tooltipStyle = reactive({
-  top: '0px',
-  left: '0px',
-  transform: 'translateX(-50%)',
-  opacity: 0,
+const referenceRef = ref<HTMLElement | null>(null);
+const floatingRef = ref<HTMLElement | null>(null);
+
+// 🌟 核心修复 2：实现极客级数据脱水清洗计算属性
+// 🌟 无论上层传进来的是真正的换行符、被转义的 \\n、还是原生字符串，强行全量替换为标准的 HTML <br /> 标签
+const safeHtmlContent = computed(() => {
+  if (!props.content) return '';
+  return props.content
+    .replace(/\\n/g, '<br />') // 拦截并修复被编译器误转义的 '\\n' 字符串
+    .replace(/\n/g, '<br />'); // 捕获标准的原生换行符
 });
 
-const onEnter = async () => {
-  show.value = true;
-  await nextTick();
+const { floatingStyles } = useFloating(referenceRef, floatingRef, {
+  placement: computed(() => props.placement),
 
-  if (triggerRef.value && tooltipRef.value) {
-    const rect = triggerRef.value.getBoundingClientRect();
-    const tooltipHeight = tooltipRef.value.offsetHeight; // 🌟 实时动态获取 Tooltip 的高度
+  whileElementsMounted: (reference, floating, update) => {
+    return autoUpdate(reference, floating, update);
+  },
 
-    // 计算完成后再放开不透明度
-    tooltipStyle.opacity = 1;
-
-    if (props.placement === 'top') {
-      tooltipStyle.left = `${rect.left + rect.width / 2}px`;
-      // 🌟 动态解法：按钮顶部物理坐标 - Tooltip 自身高度 - 自定义间距(8px)
-      tooltipStyle.top = `${rect.top - tooltipHeight - 8}px`;
-      tooltipStyle.transform = `translateX(-50%)`;
-    } else if (props.placement === 'bottom') {
-      tooltipStyle.left = `${rect.left + rect.width / 2}px`;
-      tooltipStyle.top = `${rect.bottom + 8}px`;
-      tooltipStyle.transform = `translateX(-50%)`;
-    } else if (props.placement === 'left') {
-      tooltipStyle.left = `${rect.left - 8}px`;
-      tooltipStyle.top = `${rect.top + rect.height / 2}px`;
-      tooltipStyle.transform = `translate(-100%, -50%)`;
-    } else if (props.placement === 'right') {
-      tooltipStyle.left = `${rect.right + 8}px`;
-      tooltipStyle.top = `${rect.top + rect.height / 2}px`;
-      tooltipStyle.transform = `translateY(-50%)`;
-    } else if (props.placement === 'bottom-end') {
-      tooltipStyle.left = `${rect.right}px`;
-      tooltipStyle.top = `${rect.bottom + 8}px`;
-      tooltipStyle.transform = `translateX(-100%)`;
-    }
-  }
-};
-
-const onLeave = () => {
-  show.value = false;
-};
+  middleware: [offset(8), flip({ fallbackAxisSideDirection: 'start' }), shift({ padding: 6 })],
+});
 </script>
 
 <style scoped lang="less">
@@ -86,15 +58,20 @@ const onLeave = () => {
   background-color: #0f172a;
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  /* 🌟 这里仅保留颜色和不透明度的渐变，切勿对 top/left 加 transition，否则高刷屏上跟随滑动会有严重的物理拖影 */
-  transition:
-    opacity 0.15s ease-out,
-    fill 0.15s ease;
+  z-index: 9999;
+  transition: opacity 0.12s ease-out;
+
+  /* 🌟 核心修复 3：因为改用了原生 <br />, 样式表回归最干净、最稳定的标准非折行形态 */
+  white-space: nowrap;
+
+  /* 🌟 极致多行排版润色 */
+  line-height: 1.6; /* 稍微拉开多行文本的行高阻尼，消除紧凑感 */
+  text-align: center; /* 居中对齐换行后的文本，视觉重心更稳固 */
 }
 
 .tooltip-native-enter-active,
 .tooltip-native-leave-active {
-  transition: opacity 0.15s ease-out;
+  transition: opacity 0.12s ease-out;
 }
 .tooltip-native-enter-from,
 .tooltip-native-leave-to {

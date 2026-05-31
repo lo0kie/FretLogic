@@ -1,10 +1,11 @@
 <template>
-  <div class="relative flex flex-col gap-2">
+  <div ref="capoContainerRef" class="relative flex flex-col gap-2">
     <label class="text-xs font-black tracking-widest uppercase" style="color: var(--text-disabled)">
       Capo (把位平移)
     </label>
+
     <div class="relative w-full">
-      <GlobalTooltip content="点击展开或滚动滚轮切换" placement="top">
+      <GlobalTooltip class="w-full" content="点击展开或滚动滑轮切换" placement="top">
         <div
           ref="capoWheelRef"
           @click="uiStore.toggleCapoPanel()"
@@ -18,21 +19,15 @@
             {{ chordLabStore.capo }} {{ chordLabStore.capo === 0 ? '(空弦位)' : '品' }}
           </span>
 
-          <svg
-            class="w-3 h-3 transition-transform duration-200"
+          <ChevronDown
+            :size="18"
+            :stroke-width="3"
             style="color: var(--text-disabled)"
+            class="transition-transform duration-200"
             :class="{ 'rotate-180': uiStore.isCapoOpen }"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2.5"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          />
         </div>
       </GlobalTooltip>
-
-      <div v-if="uiStore.isCapoOpen" class="fixed inset-0 z-[40]" @click="uiStore.isCapoOpen = false"></div>
 
       <Transition
         enter-from-class="opacity-0 translate-y-[-8px]"
@@ -52,19 +47,11 @@
               chordLabStore.capo = n - 1;
               uiStore.isCapoOpen = false;
             "
-            class="capo-item h-10 px-2.5 py-0.5 flex items-center justify-between text-[13px] font-bold"
+            class="capo-item h-10 px-2.5 py-0.5 flex items-center text-[13px] font-bold"
             :class="{ 'is-selected': chordLabStore.capo === n - 1 }"
           >
-            <div class="flex items-center">
-              <span class="w-4 text-right mr-1.5 font-black">{{ n - 1 }}</span>
-              <span>{{ n - 1 === 0 ? '(空弦位)' : '品' }}</span>
-            </div>
-
-            <span
-              v-if="chordLabStore.capo === n - 1"
-              class="text-[10px] text-white bg-[var(--color-primary)] w-4 h-4 rounded-full flex items-center justify-center font-black"
-              >✓</span
-            >
+            <span class="w-4 text-right mr-1.5 font-black">{{ n - 1 }}</span>
+            <span>{{ n - 1 === 0 ? '(空弦位)' : '品' }}</span>
           </div>
         </div>
       </Transition>
@@ -76,12 +63,18 @@
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
-import { useEventListener } from '@vueuse/core';
+import { ChevronDown } from '@lucide/vue';
+import { onClickOutside, useEventListener } from '@vueuse/core';
 import { nextTick, onMounted, ref, watch } from 'vue';
 
 const uiStore = useUiStore();
 const chordLabStore = useChordLabStore();
 const capoWheelRef = ref<HTMLDivElement | null>(null);
+const capoContainerRef = ref<HTMLDivElement | null>(null);
+
+onClickOutside(capoContainerRef, () => {
+  if (uiStore.isCapoOpen) uiStore.isCapoOpen = false;
+});
 
 watch(
   () => uiStore.isCapoOpen,
@@ -89,7 +82,7 @@ watch(
     if (isOpen) {
       nextTick(() => {
         const targetElement = document.getElementById(`capo-opt-${chordLabStore.capo}`);
-        if (targetElement) targetElement.scrollIntoView({ block: 'center', behavior: 'auto' });
+        if (targetElement) targetElement.scrollIntoView({ block: 'nearest', behavior: 'auto' });
       });
     }
   }
@@ -127,7 +120,6 @@ onMounted(() => {
     border-color @transition-fast,
     box-shadow @transition-fast;
 
-  // 🌟 视觉对齐：激活下拉菜单时触发条边框高亮变色
   &.is-active {
     border-color: @primary;
     box-shadow: @focus-ring-primary;
@@ -141,8 +133,6 @@ onMounted(() => {
 .capo-item {
   .mixin-interactive-card();
   color: var(--text-body);
-
-  // 🌟 视觉对齐：抛弃原本生硬的全蓝底色，换用与调音方案一致的 10% 呼吸融色底加打勾
   &.is-selected {
     background-color: color-mix(in srgb, @primary, transparent 90%) !important;
     color: @primary !important;
