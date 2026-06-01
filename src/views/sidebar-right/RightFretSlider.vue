@@ -21,7 +21,7 @@
         ></div>
 
         <div
-          v-for="f in [3, 4, 5]"
+          v-for="f in FRET_COUNTS"
           :key="f"
           @click="chordLabStore.fretCount = f"
           class="flex-1 text-center text-[16px] font-black z-20 h-full flex items-center justify-center transition-colors"
@@ -38,6 +38,7 @@
 <script setup lang="ts">
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useChordLabStore } from '@/stores/chordLabStore';
+import { FRET_COUNTS } from '@/types/chord';
 import { useEventListener } from '@vueuse/core';
 import { onMounted, ref } from 'vue';
 

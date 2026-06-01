@@ -4,11 +4,18 @@
       <div
         v-for="toast in uiStore.toasts"
         :key="toast.id"
-        class="px-4 py-2.5 rounded-xl bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-950 font-bold shadow-2xl flex items-center gap-3 text-xs pointer-events-auto"
+        class="px-4 py-2.5 rounded-xl font-bold shadow-2xl flex items-center gap-3 text-xs pointer-events-auto transition-colors duration-300"
+        :class="getToastThemeClass(toast.type)"
       >
+        <Loader2 v-if="toast.type === 'loading'" class="w-4 h-4 animate-spin opacity-80" />
+
         <span>{{ toast.msg }}</span>
 
-        <button v-if="toast.canUndo" @click="handleLocalUndo" class="btn-toast-undo font-bold underline text-xs">
+        <button
+          v-if="toast.canUndo"
+          @click="handleLocalUndo"
+          class="btn-toast-undo font-bold underline text-xs ml-1 opacity-90 hover:opacity-100"
+        >
           撤回
         </button>
       </div>
@@ -18,24 +25,34 @@
 
 <script setup lang="ts">
 import { useUiStore } from '@/stores/uiStore';
+import type { ToastType } from '@/types/chord';
+import { Loader2 } from '@lucide/vue';
 
 const uiStore = useUiStore();
 
 const handleLocalUndo = () => {
   uiStore.executeUndoRestore();
-  uiStore.showToast('↩️ 刚才删除的和弦已被完美恢复');
+  uiStore.showToast('↩️ 刚刚删除的和弦已被完美恢复', false, 'success');
+};
+
+const getToastThemeClass = (type: ToastType) => {
+  switch (type) {
+    case 'success':
+      return 'bg-emerald-500 text-white dark:bg-emerald-400 dark:text-slate-900';
+    case 'error':
+      return 'bg-red-500 text-white dark:bg-red-400 dark:text-slate-900';
+    case 'loading':
+      return 'bg-blue-600 text-white dark:bg-blue-500 dark:text-slate-900';
+    default:
+      return 'bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-950';
+  }
 };
 </script>
 
 <style scoped lang="less">
 @import '@/assets/styles/tokens.less';
-
 .btn-toast-undo {
-  color: @primary;
   transition: opacity @duration-fast @bezier-standard;
-  &:hover {
-    opacity: 0.8;
-  }
   &:active {
     opacity: 0.6;
   }

@@ -12,14 +12,14 @@
     @contextmenu.prevent="handleCanvasRightClick"
   >
     <div class="w-full relative pointer-events-none" :style="{ height: `${CANVAS_CONFIG.OFFSET_Y_TOP}px` }">
-      <template v-for="(fretVal, sIdx) in chordLabStore.selectedFrets" :key="'os-' + sIdx">
+      <template v-for="(str, sIdx) in chordLabStore.strings" :key="'os-' + sIdx">
         <GlobalTooltip
           placement="top"
-          :content="fretVal > 0 ? undefined : '🖱️ 左键：切换空弦/静音 \n 🖱️ 右键：设为根音'"
+          :content="str.fret > 0 ? undefined : '🖱️ 左键：切换空弦/静音 \n 🖱️ 右键：设为根音'"
           :style="{
             position: 'absolute',
             left: `${getStrX(sIdx)}px`,
-            top: fretVal > 0 ? '20px' : '10px',
+            top: str.fret > 0 ? '20px' : '10px',
             transform: 'translateX(-50%)',
             width: 'auto',
           }"
@@ -27,23 +27,21 @@
           <button
             @click.stop="handleLocalToggleOpenString(sIdx)"
             @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
-            @mousedown.middle.prevent.stop="fretVal === 0 ? handleFretMiddleClick(sIdx) : null"
+            @mousedown.middle.prevent.stop="str.fret === 0 ? handleFretMiddleClick(sIdx) : null"
             class="w-10 h-10 box-border pointer-events-auto shadow-sm transition-all duration-75 flex items-center justify-center"
             :class="[
-              fretVal > 0
+              str.fret > 0
                 ? 'opacity-0 bg-transparent border-none outline-none cursor-pointer'
                 : 'rounded-full border-[3px] active:scale-90',
-              getOpenStringStatusClass(fretVal, sIdx),
+              getOpenStringStatusClass(str),
             ]"
           >
-            <template v-if="fretVal === -1">
+            <template v-if="str.fret === -1">
               <X class="w-4.5 h-4.5" stroke-width="2.5" />
             </template>
 
-            <span v-else-if="fretVal === 0" class="font-black text-lg tracking-tighter open-note-text">
-              {{
-                calcNoteLabel(sIdx, 0, chordLabStore.capo, chordLabStore.useFlat[sIdx], chordLabStore.activeBaseStrings)
-              }}
+            <span v-else-if="str.fret === 0" class="font-black text-lg tracking-tighter open-note-text">
+              {{ calcNoteLabel(sIdx, 0, chordLabStore.capo, str.preferFlat, chordLabStore.activeBaseStrings) }}
             </span>
           </button>
         </GlobalTooltip>
@@ -93,26 +91,26 @@
         style="pointer-events: none"
       />
 
-      <text
-        v-for="i in chordLabStore.fretCount"
-        :key="'fret-text-' + i"
-        :x="(CANVAS_CONFIG.OFFSET_X - 32) / 2"
-        :y="i * CANVAS_CONFIG.FRET_HEIGHT"
-        text-anchor="middle"
-        dominant-baseline="central"
-        dy="-2px"
-        font-size="28"
-        font-weight="900"
-        :fill="chordLabStore.isDarkMode ? '#cbd5e1' : '#1e293b'"
-        style="pointer-events: none"
-      >
-        {{ chordLabStore.capo > 0 ? chordLabStore.capo + i : i }}
-      </text>
+      <g v-for="i in chordLabStore.fretCount" :key="'fret-text-' + i">
+        <text
+          :x="(CANVAS_CONFIG.OFFSET_X - 32) / 2"
+          :y="i * CANVAS_CONFIG.FRET_HEIGHT"
+          text-anchor="middle"
+          dominant-baseline="central"
+          dy="-2px"
+          font-size="28"
+          font-weight="900"
+          :fill="chordLabStore.isDarkMode ? '#cbd5e1' : '#1e293b'"
+          style="pointer-events: none"
+        >
+          {{ chordLabStore.capo > 0 ? chordLabStore.capo + i : i }}
+        </text>
+      </g>
 
-      <template v-for="(fret, sIdx) in chordLabStore.selectedFrets" :key="'finger-' + sIdx">
+      <template v-for="(str, sIdx) in chordLabStore.strings" :key="'finger-' + sIdx">
         <g
-          v-if="fret > 0 && fret <= chordLabStore.fretCount"
-          :key="`pos-${fret}`"
+          v-if="str.fret > 0 && str.fret <= chordLabStore.fretCount"
+          :key="`pos-${str.fret}`"
           class="cursor-pointer"
           style="pointer-events: auto"
           @contextmenu.prevent.stop="handleFretRightClick(sIdx)"
@@ -120,31 +118,23 @@
         >
           <circle
             :cx="getStrX(sIdx)"
-            :cy="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+            :cy="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
             r="28"
-            :fill="getFingerColor(sIdx)"
+            :fill="getFingerColor(str)"
             class="finger-circle"
             style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))"
           />
           <text
             :x="getStrX(sIdx)"
-            :y="(fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+            :y="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
             text-anchor="middle"
             dy="0.36em"
             font-size="24"
             font-weight="900"
-            :fill="getFingerTextColor(sIdx)"
+            :fill="getFingerTextColor(str)"
             class="finger-text"
           >
-            {{
-              calcNoteLabel(
-                sIdx,
-                fret,
-                chordLabStore.capo,
-                chordLabStore.useFlat[sIdx],
-                chordLabStore.activeBaseStrings
-              )
-            }}
+            {{ calcNoteLabel(sIdx, str.fret, chordLabStore.capo, str.preferFlat, chordLabStore.activeBaseStrings) }}
           </text>
         </g>
       </template>
@@ -157,7 +147,9 @@ import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useFretboardInteraction } from '@/composables/useFretboardInteraction';
 import { CANVAS_CONFIG } from '@/constants';
 import { FRETBOARD_SCALE_MAP } from '@/constants/fretboard';
+import { FRETBOARD_COLORS } from '@/constants/theme';
 import { useChordLabStore } from '@/stores/chordLabStore';
+import type { GuitarStringEntity } from '@/types/chord';
 import { calcNoteLabel } from '@/utils/musicTheory';
 import { X } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -185,26 +177,26 @@ const {
   handleFretMiddleClick,
 } = useFretboardInteraction(fretBoardRef);
 
-const getOpenStringStatusClass = (fretVal: number, sIdx: number) => {
-  if (fretVal === -1) {
+const getOpenStringStatusClass = (str: GuitarStringEntity) => {
+  if (str.fret === -1) {
     return 'border-[#dc2626] text-[#dc2626] dark:border-[#f87171] dark:text-[#f87171] bg-transparent';
   }
-  if (fretVal === 0) {
-    if (chordLabStore.rootMark === sIdx) {
-      return 'bg-[#f59e0b] border-[#f59e0b] text-[#ffffff] shadow-[0_2px_4px_rgba(245,158,11,0.3)] dark:bg-[#fbbf24] dark:border-[#fbbf24] dark:text-[#0f172a] dark:shadow-[0_2px_8px_rgba(251,191,36,0.4)]';
+  if (str.fret === 0) {
+    if (str.isRoot) {
+      return `bg-[${FRETBOARD_COLORS.openRootBgLight}] border-[${FRETBOARD_COLORS.openRootBgLight}] text-[${FRETBOARD_COLORS.openRootTextLight}] shadow-[0_2px_4px_rgba(245,158,11,0.3)] dark:bg-[${FRETBOARD_COLORS.openRootBgDark}] dark:border-[${FRETBOARD_COLORS.openRootBgDark}] dark:text-[${FRETBOARD_COLORS.openRootTextDark}] dark:shadow-[0_2px_8px_rgba(251,191,36,0.4)]`;
     }
     return 'border-[#93c5fd] text-[#1d4ed8] dark:border-[#1e3a8a] dark:text-[#93c5fd] bg-transparent';
   }
   return '';
 };
 
-const getFingerColor = (sIdx: number) => {
-  if (chordLabStore.rootMark === sIdx) return chordLabStore.isDarkMode ? '#fbbf24' : '#f59e0b';
-  return chordLabStore.isDarkMode ? '#3b82f6' : '#2563eb';
+const getFingerColor = (str: GuitarStringEntity) => {
+  if (str.isRoot) return chordLabStore.isDarkMode ? FRETBOARD_COLORS.rootDark : FRETBOARD_COLORS.rootLight;
+  return chordLabStore.isDarkMode ? FRETBOARD_COLORS.normalDark : FRETBOARD_COLORS.normalLight;
 };
 
-const getFingerTextColor = (sIdx: number) => {
-  return chordLabStore.rootMark === sIdx && chordLabStore.isDarkMode ? '#1e293b' : '#ffffff';
+const getFingerTextColor = (str: GuitarStringEntity) => {
+  return str.isRoot && chordLabStore.isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
 };
 </script>
 
