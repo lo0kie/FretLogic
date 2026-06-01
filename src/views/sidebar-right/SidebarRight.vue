@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
+import { RIGHT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useUiStore } from '@/stores/uiStore';
 import RightContent from '@/views/sidebar-right/RightContent.vue';
 import RightHeader from '@/views/sidebar-right/RightHeader.vue';
@@ -43,7 +43,7 @@ const uiStore = useUiStore();
     margin @duration-slow @bezier-sidebar;
 
   &.is-open {
-    width: v-bind(SIDEBAR_WIDTH_PIXEL);
+    width: v-bind(RIGHT_SIDEBAR_WIDTH_PIXEL);
     opacity: 1;
     margin: 12px;
   }
@@ -61,7 +61,7 @@ const uiStore = useUiStore();
 
   // 🌟 统一逻辑：动态计算按钮悬浮偏移量（侧边栏宽度 + 12px 外边距）
   &.is-open {
-    right: calc(v-bind(SIDEBAR_WIDTH_PIXEL) + 12px);
+    right: calc(v-bind(RIGHT_SIDEBAR_WIDTH_PIXEL) + 12px);
   }
 
   &:active {

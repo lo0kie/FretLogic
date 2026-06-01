@@ -15,35 +15,42 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
   const WHEEL_THRESHOLD = 40;
 
   const handleLocalToggleOpenString = (sIdx: number) => {
-    if (chordLabStore.rootMark === sIdx) chordLabStore.rootMark = -1;
     chordLabStore.toggleOpenString(sIdx);
   };
 
   const handleOpenStringRightClick = (sIdx: number) => {
-    if (chordLabStore.rootMark === sIdx && chordLabStore.selectedFrets[sIdx] === 0) {
-      chordLabStore.rootMark = -1;
+    const str = chordLabStore.strings[sIdx];
+    if (str.isRoot && str.fret === 0) {
+      str.isRoot = false;
     } else {
-      chordLabStore.selectedFrets[sIdx] = 0;
-      chordLabStore.rootMark = sIdx;
+      chordLabStore.strings.forEach(s => {
+        s.isRoot = false;
+      });
+      str.fret = 0;
+      str.isRoot = true;
     }
   };
 
   const handleFretRightClick = (sIdx: number) => {
-    chordLabStore.rootMark = chordLabStore.rootMark === sIdx ? -1 : sIdx;
+    const str = chordLabStore.strings[sIdx];
+    if (str.fret < 0) return;
+    const wasRoot = str.isRoot;
+    chordLabStore.strings.forEach(s => {
+      s.isRoot = false;
+    });
+    str.isRoot = !wasRoot;
   };
 
   const handleFretMiddleClick = (sIdx: number) => {
-    const fretVal = chordLabStore.selectedFrets[sIdx];
-    if (fretVal === -1) return;
+    const str = chordLabStore.strings[sIdx];
+    if (str.fret === -1) return;
 
-    const capoVal = chordLabStore.capo;
     const base = chordLabStore.activeBaseStrings[sIdx];
-    const actualOffset = fretVal > 0 && capoVal > 0 ? capoVal : 0;
-    const noteIndex = (base + fretVal + actualOffset) % 12;
-
+    const actualOffset = str.fret > 0 && chordLabStore.capo > 0 ? chordLabStore.capo : 0;
+    const noteIndex = (base + str.fret + actualOffset) % 12;
     const isAccidental = [1, 3, 6, 8, 10].includes(noteIndex);
     if (isAccidental) {
-      chordLabStore.useFlat[sIdx] = !chordLabStore.useFlat[sIdx];
+      str.preferFlat = !str.preferFlat;
     }
   };
 
@@ -58,19 +65,21 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
         CANVAS_CONFIG.OFFSET_Y_BOTTOM);
     const canvasX = (e.clientX - board.left) / scaleX;
     const canvasY = (e.clientY - board.top) / scaleY;
-
     const sIdx = Math.round((canvasX - CANVAS_CONFIG.OFFSET_X) / CANVAS_CONFIG.STRING_SPACING);
     const fretAreaY = canvasY - CANVAS_CONFIG.OFFSET_Y_TOP;
     const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
 
     if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount) {
-      if (chordLabStore.selectedFrets[sIdx] === fIdx) {
+      const str = chordLabStore.strings[sIdx];
+      if (str.fret === fIdx) {
         handleFretRightClick(sIdx);
         return;
       }
-      if (chordLabStore.rootMark === sIdx) chordLabStore.rootMark = -1;
-      chordLabStore.selectedFrets[sIdx] = fIdx;
-      chordLabStore.rootMark = sIdx;
+      chordLabStore.strings.forEach(s => {
+        s.isRoot = false;
+      });
+      str.fret = fIdx;
+      str.isRoot = true;
     }
   };
 
@@ -86,20 +95,20 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
         CANVAS_CONFIG.OFFSET_Y_BOTTOM);
     const canvasX = (clientX - board.left) / scaleX;
     const canvasY = (clientY - board.top) / scaleY;
-
     const sIdx = Math.round((canvasX - CANVAS_CONFIG.OFFSET_X) / CANVAS_CONFIG.STRING_SPACING);
     const fretAreaY = canvasY - CANVAS_CONFIG.OFFSET_Y_TOP;
     const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
 
     if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount) {
       if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
-      const isSameFret = chordLabStore.selectedFrets[sIdx] === fIdx;
+      const str = chordLabStore.strings[sIdx];
+      const isSameFret = str.fret === fIdx;
 
       if (isSameFret) {
-        chordLabStore.selectedFrets[sIdx] = -1;
+        str.fret = -1;
+        str.isRoot = false;
         lastSIdx = -1;
         lastFIdx = -1;
-        if (chordLabStore.rootMark === sIdx) chordLabStore.rootMark = -1;
         lastCancelTime = Date.now();
       } else {
         if (isMoveEvent && Date.now() - lastCancelTime < MUTING_COOL_DOWN) {
@@ -107,8 +116,8 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
           lastFIdx = -1;
           return;
         }
-        if (chordLabStore.rootMark === sIdx) chordLabStore.rootMark = -1;
-        chordLabStore.selectedFrets[sIdx] = fIdx;
+        str.fret = fIdx;
+        // 鉁?宸插畬缇庢姌鎺夊師鍏?str.isRoot = true 鐨勮嚜鍔ㄨ祴鍊奸€昏緫锛岀‘淇濆惎鍔ㄥ強绗竴娆＄偣鍑讳笉浼氳閿欒鏍昏涓烘牴闊?
         lastSIdx = sIdx;
         lastFIdx = fIdx;
       }
@@ -117,6 +126,7 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
 
   let ticking = false;
   let rAF_ID = 0;
+  const cleanupListeners: (() => void)[] = [];
 
   const handlePointerMove = (e: PointerEvent) => {
     if (!chordLabStore.isDraggingFinger || ticking) return;
@@ -134,8 +144,8 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     cachedBoardRect = null;
     if (rAF_ID) cancelAnimationFrame(rAF_ID);
     ticking = false;
-    window.removeEventListener('pointermove', handlePointerMove);
-    window.removeEventListener('pointerup', handlePointerUp);
+    cleanupListeners.forEach(cleanup => cleanup());
+    cleanupListeners.length = 0;
   };
 
   const handlePointerDown = (e: PointerEvent) => {
@@ -145,8 +155,9 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     lastSIdx = -1;
     lastFIdx = -1;
     handleFingerClickLogic(e.clientX, e.clientY, false);
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
+
+    cleanupListeners.push(useEventListener(window, 'pointermove', handlePointerMove));
+    cleanupListeners.push(useEventListener(window, 'pointerup', handlePointerUp));
   };
 
   const handleWheel = (e: WheelEvent) => {
@@ -167,8 +178,7 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
 
   onBeforeUnmount(() => {
     if (rAF_ID) cancelAnimationFrame(rAF_ID);
-    window.removeEventListener('pointermove', handlePointerMove);
-    window.removeEventListener('pointerup', handlePointerUp);
+    cleanupListeners.forEach(cleanup => cleanup());
   });
 
   return {

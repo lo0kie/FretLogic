@@ -1,4 +1,4 @@
-import { AUDIO_CONFIG } from '@/constants/fretboard'; // 馃专 引入常数配置
+import { AUDIO_CONFIG } from '@/constants/fretboard';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { onBeforeUnmount, ref } from 'vue';
 
@@ -93,17 +93,22 @@ export function useAudioPlayer() {
       gainNode.gain.setTargetAtTime(0, now, 0.01);
     });
 
-    const fretsSnapshot = [...chordLabStore.selectedFrets];
+    // 鉁?核心大白话改动：用新版的 strings 实体快照完全替代掉以前死掉的 selectedFrets
+    const stringsSnapshot = chordLabStore.strings.map(s => ({ fret: s.fret, preferFlat: s.preferFlat }));
     const capoOffset = chordLabStore.capo > 0 ? chordLabStore.capo : 0;
     let strumDelay = 0;
 
     for (let sIdx = 0; sIdx <= 5; sIdx++) {
-      const fretVal = fretsSnapshot[sIdx];
-      if ((fretVal ?? -1) < 0) continue;
+      const targetStr = stringsSnapshot[sIdx];
+
+      // 如果当前弦是哑音（小于 0，即 -1），说明不用弹，直接优雅地略过
+      if (targetStr.fret < 0) continue;
 
       const guitarMidiBase = chordLabStore.activeBaseStrings[sIdx];
-      const actualOffset = fretVal > 0 ? capoOffset : 0;
-      const frequency = 440 * Math.pow(2, (guitarMidiBase + fretVal + actualOffset - 69) / 12);
+      const actualOffset = targetStr.fret > 0 ? capoOffset : 0;
+
+      // 声音频率换算公式
+      const frequency = 440 * Math.pow(2, (guitarMidiBase + targetStr.fret + actualOffset - 69) / 12);
       const triggerTime = now + strumDelay;
 
       // 动态轻量化生成试听高频振荡组件

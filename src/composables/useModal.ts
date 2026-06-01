@@ -1,5 +1,5 @@
 import type { ModalActionType } from '@/constants';
-import type { Chord, Group } from '@/types/types';
+import type { Chord, Group } from '@/types/chord';
 import { ref } from 'vue';
 
 // 🌟 全局单例状态，确保跨组件调用时状态同步

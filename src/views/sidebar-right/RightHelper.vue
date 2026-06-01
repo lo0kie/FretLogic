@@ -1,4 +1,4 @@
-/** * @Author likan * @Date 2026-05-31 * @Filepath fret-logic/src/views/sidebar-right/RightHelper.vue */
+/** * @Author likan * @Date 2026-06-01 * @Filepath fret-logic/src/views/sidebar-right/RightHelper.vue */
 
 <template>
   <div class="helper-action-box flex flex-col gap-2">
@@ -61,7 +61,7 @@
         </template>
       </ActionButton>
 
-      <ActionButton @click="chordLabStore.isDarkMode = !chordLabStore.isDarkMode">
+      <ActionButton @click="executeToggleThemeWithAnimation($event)">
         <component :is="chordLabStore.isDarkMode ? Moon : Sun" class="mr-2" :size="18" stroke-width="3" />
         <span>{{ chordLabStore.isDarkMode ? '深色模式' : '浅色模式' }}</span>
       </ActionButton>
@@ -76,48 +76,93 @@ import { useAudioPlayer } from '@/composables/useAudioPlayer';
 import { useChordService } from '@/services/useChordService';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { FretTuple } from '@/types/types'; // 🌟 引入强类型
+import type { GuitarStringsModel } from '@/types/chord';
 import { ChevronDown, ChevronUp, Moon, Play, Square, Sun } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, toRaw } from 'vue';
 
 const uiStore = useUiStore();
 const chordLabStore = useChordLabStore();
 const chordService = useChordService();
 const { isPlaying, playCurrentChord } = useAudioPlayer();
 
-const hasNoPressedFrets = computed(() => !chordLabStore.selectedFrets.some(fret => fret > 0));
+const hasNoPressedFrets = computed(() => !chordLabStore.strings.some(s => s.fret > 0));
 
 const isShiftDownDisabled = computed(
-  () =>
-    chordLabStore.isFretBoardEmpty || hasNoPressedFrets.value || chordLabStore.selectedFrets.some(fret => fret === 1)
+  () => chordLabStore.isFretBoardEmpty || hasNoPressedFrets.value || chordLabStore.strings.some(s => s.fret === 1)
 );
 
 const isShiftUpDisabled = computed(
   () =>
     chordLabStore.isFretBoardEmpty ||
     hasNoPressedFrets.value ||
-    chordLabStore.selectedFrets.some(fret => fret === chordLabStore.fretCount)
+    chordLabStore.strings.some(s => s.fret === chordLabStore.fretCount)
 );
+
+/**
+ * 🌟 核心防线：安全隔离且带有水波纹切割特效的主题更迭器
+ * 为 event 追加可选标记，防止键盘快捷键或边缘宏触发时没有 MouseEvent 导致空指针
+ */
+const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
+  const rootEl = document.documentElement;
+  rootEl.setAttribute('theme-changing', 'true');
+
+  const disableChangingAttribute = () => {
+    setTimeout(() => {
+      rootEl.removeAttribute('theme-changing');
+    }, 350);
+  };
+
+  const isSupportViewTransition = 'startViewTransition' in document;
+  if (!isSupportViewTransition || !event) {
+    chordLabStore.isDarkMode = !chordLabStore.isDarkMode;
+    disableChangingAttribute();
+    return;
+  }
+
+  const x = event.clientX;
+  const y = event.clientY;
+  const endRadius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+
+  const transition = (document as any).startViewTransition(() => {
+    chordLabStore.isDarkMode = !chordLabStore.isDarkMode;
+  });
+
+  transition.ready.then(() => {
+    document.documentElement.animate(
+      {
+        clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`],
+      },
+      {
+        duration: 350,
+        easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+        pseudoElement: '::view-transition-new(root)',
+      }
+    );
+  });
+
+  transition.finished.then(() => {
+    disableChangingAttribute();
+  });
+};
 
 const handleShiftFret = (direction: 'up' | 'down') => {
   if (chordLabStore.isFretBoardEmpty || hasNoPressedFrets.value) return;
 
-  // 🌟 核心修复：告别 as any，用强类型推断完成元组遍历计算
-  const newFrets = [...chordLabStore.selectedFrets] as FretTuple;
+  const newStrings = structuredClone(toRaw(chordLabStore.strings)) as GuitarStringsModel;
 
   if (direction === 'up') {
-    if (newFrets.some(fret => fret === chordLabStore.fretCount)) return;
-    for (let i = 0; i < 6; i++) {
-      if (newFrets[i] > 0) newFrets[i] += 1;
-    }
+    if (newStrings.some(s => s.fret === chordLabStore.fretCount)) return;
+    newStrings.forEach(s => {
+      if (s.fret > 0) s.fret += 1;
+    });
   } else {
-    if (newFrets.some(fret => fret === 1)) return;
-    for (let i = 0; i < 6; i++) {
-      if (newFrets[i] > 0) newFrets[i] -= 1;
-    }
+    if (newStrings.some(s => s.fret === 1)) return;
+    newStrings.forEach(s => {
+      if (s.fret > 0) s.fret -= 1;
+    });
   }
 
-  chordLabStore.selectedFrets = newFrets;
+  chordLabStore.strings = newStrings;
   uiStore.showToast('🎸 和弦指型已完成整体平移');
 };
 </script>
