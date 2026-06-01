@@ -19,7 +19,7 @@
           :style="{
             position: 'absolute',
             left: `${getStrX(sIdx)}px`,
-            top: str.fret > 0 ? '20px' : '10px',
+            top: '10px',
             transform: 'translateX(-50%)',
             width: 'auto',
           }"
@@ -28,21 +28,22 @@
             @click.stop="handleLocalToggleOpenString(sIdx)"
             @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
             @mousedown.middle.prevent.stop="str.fret === 0 ? handleFretMiddleClick(sIdx) : null"
-            class="w-10 h-10 box-border pointer-events-auto shadow-sm transition-all duration-75 flex items-center justify-center"
+            class="w-10 h-10 box-border pointer-events-auto shadow-sm flex items-center justify-center rounded-full border-[3px]"
             :class="[
-              str.fret > 0
-                ? 'opacity-0 bg-transparent border-none outline-none cursor-pointer'
-                : 'rounded-full border-[3px] active:scale-90',
+              str.fret > 0 ? 'is-fret-pressed active:scale-100' : 'active:scale-90',
               getOpenStringStatusClass(str),
             ]"
+            :style="getOpenStringStyle(str)"
           >
-            <template v-if="str.fret === -1">
-              <X class="w-4.5 h-4.5" stroke-width="2.5" />
-            </template>
+            <template v-if="str.fret <= 0">
+              <template v-if="str.fret === -1">
+                <X class="w-4.5 h-4.5" stroke-width="2.5" />
+              </template>
 
-            <span v-else-if="str.fret === 0" class="font-black text-lg tracking-tighter open-note-text">
-              {{ calcNoteLabel(sIdx, 0, chordLabStore.capo, str.preferFlat, chordLabStore.activeBaseStrings) }}
-            </span>
+              <span v-else-if="str.fret === 0" class="font-black text-lg tracking-tighter open-note-text">
+                {{ calcNoteLabel(sIdx, 0, chordLabStore.capo, str.preferFlat, chordLabStore.activeBaseStrings) }}
+              </span>
+            </template>
           </button>
         </GlobalTooltip>
       </template>
@@ -182,12 +183,27 @@ const getOpenStringStatusClass = (str: GuitarStringEntity) => {
     return 'border-[#dc2626] text-[#dc2626] dark:border-[#f87171] dark:text-[#f87171] bg-transparent';
   }
   if (str.fret === 0) {
-    if (str.isRoot) {
-      return `bg-[${FRETBOARD_COLORS.openRootBgLight}] border-[${FRETBOARD_COLORS.openRootBgLight}] text-[${FRETBOARD_COLORS.openRootTextLight}] shadow-[0_2px_4px_rgba(245,158,11,0.3)] dark:bg-[${FRETBOARD_COLORS.openRootBgDark}] dark:border-[${FRETBOARD_COLORS.openRootBgDark}] dark:text-[${FRETBOARD_COLORS.openRootTextDark}] dark:shadow-[0_2px_8px_rgba(251,191,36,0.4)]`;
-    }
+    if (str.isRoot) return '';
     return 'border-[#93c5fd] text-[#1d4ed8] dark:border-[#1e3a8a] dark:text-[#93c5fd] bg-transparent';
   }
   return '';
+};
+
+const getOpenStringStyle = (str: GuitarStringEntity) => {
+  if (str.fret === 0 && str.isRoot) {
+    const isDark = chordLabStore.isDarkMode;
+    const bg = isDark ? FRETBOARD_COLORS.openRootBgDark : FRETBOARD_COLORS.openRootBgLight;
+    const text = isDark ? FRETBOARD_COLORS.openRootTextDark : FRETBOARD_COLORS.openRootTextLight;
+    const shadowColor = isDark ? 'rgba(251,191,36,0.4)' : 'rgba(245,158,11,0.3)';
+
+    return {
+      backgroundColor: bg,
+      borderColor: bg,
+      color: text,
+      boxShadow: `0 2px ${isDark ? '8px' : '4px'} ${shadowColor}`,
+    };
+  }
+  return {};
 };
 
 const getFingerColor = (str: GuitarStringEntity) => {
@@ -215,6 +231,21 @@ const getFingerTextColor = (str: GuitarStringEntity) => {
     transform @duration-slow @bezier-standard,
     margin-bottom @duration-slow @bezier-standard;
 }
+
+// 🌟 终极修复：把时间轴上的 opacity 过渡动画无情砍掉，仅保留纯粹、极速的微小缩放反馈
+button {
+  transition: transform 0.08s @bezier-standard;
+
+  // 当被按下时，瞬间进行物理隐藏，零延迟，坚决不给任何多余的时差空间
+  &.is-fret-pressed {
+    opacity: 0 !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    pointer-events: auto !important;
+  }
+}
+
 .string-line {
   transition: y2 @duration-slow @bezier-standard;
 }
