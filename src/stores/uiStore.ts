@@ -1,6 +1,6 @@
 import type { ModalActionType } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
-import type { Chord, Group, Toast } from '@/types/types'; // 馃専 锁死统一元组类型引用
+import type { Chord, Group, Toast } from '@/types/chord'; // 馃専 锁死统一元组类型引用
 import { useRefHistory, useToggle } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { nextTick, ref, toRaw, toRef } from 'vue';

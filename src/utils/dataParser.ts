@@ -1,109 +1,133 @@
-import { Chord, Group } from '@/types/types';
+import { Chord, Group, GuitarStringsModel } from '@/types/chord';
+
+// 🌟 新增：显式定义导入/导出时的松散数据载荷契约，用 Record 代替 any
+interface LooseChordPayload {
+  id?: string | number;
+  chordName?: string;
+  groupId?: string | number;
+  fretCount?: number;
+  capo?: number;
+  tuning?: string;
+  barreFret?: number;
+  strings?: GuitarStringsModel;
+  // 以下为旧版向前兼容字段
+  selectedFrets?: unknown[];
+  rootMark?: number;
+  useFlat?: boolean[];
+}
 
 export const cleanAndValidateData = (
   data: unknown,
   mode: 'import' | 'export' = 'import'
 ): data is { groups: Group[]; chords: Chord[] } => {
   const logPrefix = mode === 'import' ? '📥 导入校验' : '📤 导出清洗';
-
   if (!data || typeof data !== 'object') {
-    console.error(`❌ ${logPrefix}失败：根节点不是对象。`);
+    console.error(`❌ ${logPrefix}失败：根节点不是有效对象`);
     return false;
   }
 
   const d = data as Record<string, unknown>;
   if (!Array.isArray(d.groups) || !Array.isArray(d.chords)) {
-    console.error(`❌ ${logPrefix}失败：缺少 "groups" 或 "chords" 数组。`);
+    console.error(`❌ ${logPrefix}失败：数据破损，缺少分组或和弦序列`);
     return false;
   }
 
   let isValid = true;
-  const groups = d.groups as any[];
-  const chords = d.chords as any[];
 
-  groups.forEach((g, index) => {
-    if (!g) {
+  // 🚀 核心重构：将 any[] 平替为标准具有约束力的结构或 unknown
+  const rawGroups = d.groups as unknown[];
+  const rawChords = d.chords as Record<string, any>[]; // 转换为内部可自由写属性的字典对象
+
+  // 1. 物理清洗 Group 序列，强转 ID 为 string，断断绝关系型错位
+  const cleanedGroups: Group[] = [];
+
+  for (const g of rawGroups) {
+    if (!g || typeof g !== 'object') {
       isValid = false;
-      return;
+      continue;
     }
-    const errors: string[] = [];
-    if (typeof g.id !== 'string') errors.push(`id 应为 string`);
-    if (typeof g.name !== 'string') errors.push(`name 应为 string`);
-    if (g.collapsed === undefined || g.collapsed === null) {
-      g.collapsed = false;
-    } else if (typeof g.collapsed !== 'boolean') {
-      errors.push(`collapsed 应为 boolean`);
-    }
-    if (errors.length > 0) {
-      console.error(`❌ ${logPrefix} -> 分组异常 [索引 ${index}]:\n   `, errors.join('\n    '));
+
+    const groupItem = g as Record<string, unknown>;
+    const id = groupItem.id !== undefined ? String(groupItem.id) : crypto.randomUUID().slice(0, 8);
+    const name = typeof groupItem.name === 'string' ? groupItem.name : '未命名分组';
+    const collapsed = groupItem.collapsed !== undefined ? !!groupItem.collapsed : false;
+
+    cleanedGroups.push({ id, name, collapsed });
+  }
+
+  const validGroupIds = new Set<string>(cleanedGroups.map(g => g.id));
+  const usedChordIds = new Set<string>();
+  const validChords: Chord[] = [];
+
+  // 2. 核心铁腕拦截：将旧版本 JSON 的 3 套平行数组无缝转换、补齐为全新单体 Entity 对象数组
+  for (const c of rawChords) {
+    if (!c || typeof c !== 'object') {
       isValid = false;
+      continue;
     }
-  });
 
-  const validGroupIds = new Set<string>(groups.filter(g => g && typeof g.id === 'string').map(g => g.id));
-  const usedChordIds = new Set<number | string>();
-  const validChords: any[] = [];
+    const chordItem = c as LooseChordPayload;
 
-  chords.forEach((c, index) => {
-    if (!c) {
+    // 游离脏数据安全拦截
+    if (
+      !chordItem.groupId ||
+      String(chordItem.groupId).trim() === '' ||
+      !validGroupIds.has(String(chordItem.groupId))
+    ) {
+      console.warn(`⚠️ ${logPrefix} -> 和弦 "${chordItem.chordName || '未命名'}" 分组外键关联失效，执行物理拦截脱离`);
+      continue;
+    }
+
+    const finalId = chordItem.id !== undefined ? String(chordItem.id) : crypto.randomUUID().slice(0, 10);
+    const finalName = typeof chordItem.chordName === 'string' ? chordItem.chordName : '未命名';
+    const finalGroupId = String(chordItem.groupId);
+    const finalFretCount = typeof chordItem.fretCount === 'number' ? chordItem.fretCount : 3;
+    const finalCapo = typeof chordItem.capo === 'number' ? chordItem.capo : 0;
+    const finalTuning = typeof chordItem.tuning === 'string' ? chordItem.tuning : 'STANDARD';
+    const finalBarreFret = typeof chordItem.barreFret === 'number' ? chordItem.barreFret : 0;
+
+    // 🚀 向前兼容转换防线：如果是旧版备份，在运行期动态组装升级
+    if (chordItem.selectedFrets && Array.isArray(chordItem.selectedFrets) && !chordItem.strings) {
+      const rm = typeof chordItem.rootMark === 'number' ? chordItem.rootMark : -1;
+      const uf = Array.isArray(chordItem.useFlat) ? chordItem.useFlat : [false, false, false, false, false, false];
+
+      chordItem.strings = chordItem.selectedFrets.map((fretVal: unknown, idx: number) => ({
+        fret: typeof fretVal === 'number' ? fretVal : -1,
+        isRoot: idx === rm,
+        preferFlat: !!uf[idx],
+      })) as GuitarStringsModel;
+
+      // 干净清除历史残余平行字段，执行 Payload 铁腕瘦身
+      delete chordItem.selectedFrets;
+      delete chordItem.rootMark;
+      delete chordItem.useFlat;
+    }
+
+    // 实体合法性终极契约审查
+    if (!Array.isArray(chordItem.strings) || chordItem.strings.length !== 6) {
+      console.error(`❌ ${logPrefix} -> 和弦 "${finalName}" 核心物理琴弦实体破损`);
       isValid = false;
-      return;
-    }
-    if (!c.groupId || String(c.groupId).trim() === '' || !validGroupIds.has(String(c.groupId))) {
-      console.warn(`⚠️ ${logPrefix} -> 和弦 "${c.chordName || '未命名'}" 分组失效，已过滤。`);
-      return;
+      continue;
     }
 
-    const errors: string[] = [];
-    if (typeof c.id !== 'number' && typeof c.id !== 'string') errors.push(`id 异常`);
-    if (typeof c.chordName !== 'string') errors.push(`chordName 异常`);
-    if (typeof c.groupId !== 'string') errors.push(`groupId 异常`);
+    const finalChord: Chord = {
+      id: usedChordIds.has(finalId) ? 'c_recovery_' + crypto.randomUUID().slice(0, 8) : finalId,
+      chordName: finalName,
+      groupId: finalGroupId,
+      fretCount: finalFretCount,
+      capo: finalCapo,
+      tuning: finalTuning as Chord['tuning'], // 映射到导出的强类型 Presets
+      barreFret: finalBarreFret,
+      strings: chordItem.strings,
+    };
 
-    if (c.fretCount === undefined || c.fretCount === null) c.fretCount = 3;
-    if (c.capo === undefined || c.capo === null) c.capo = 0;
+    usedChordIds.add(finalChord.id as string);
+    validChords.push(finalChord);
+  }
 
-    if (typeof c.fretCount !== 'number' || c.fretCount < 3 || c.fretCount > 5) errors.push(`fretCount 越界`);
-    if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 15) errors.push(`capo 越界`);
-
-    if (c.rootMark === undefined || c.rootMark === null) {
-      c.rootMark = -1;
-    } else if (typeof c.rootMark === 'number') {
-      if (c.rootMark !== -1 && (c.rootMark < 0 || c.rootMark > 5)) errors.push(`rootMark 越界`);
-    } else {
-      errors.push(`rootMark 类型异常`);
-    }
-
-    if (!Array.isArray(c.useFlat) || c.useFlat.length !== 6) {
-      c.useFlat = [false, false, false, false, false, false];
-    } else {
-      c.useFlat = c.useFlat.map((v: any) => !!v);
-    }
-
-    // 补齐 tuning
-    if (typeof c.tuning !== 'string') c.tuning = 'STANDARD';
-
-    if (!Array.isArray(c.selectedFrets) || c.selectedFrets.length !== 6) {
-      errors.push(`selectedFrets 长度异常`);
-    } else if (!c.selectedFrets.every((f: any) => typeof f === 'number')) {
-      errors.push(`selectedFrets 类型异常`);
-    } else {
-      const outOfRange = c.selectedFrets.some((fret: number) => fret < -1 || fret > c.fretCount);
-      if (outOfRange) errors.push(`selectedFrets 存在越界品位值`);
-    }
-
-    if (errors.length > 0) {
-      console.error(`❌ ${logPrefix} -> 和弦数据严重损坏 [索引 ${index}]:\n   `, errors.join('\n    '));
-      isValid = false;
-      return;
-    }
-
-    if (usedChordIds.has(c.id)) {
-      c.id = Date.now() + Math.floor(Math.random() * 100000);
-    }
-    usedChordIds.add(c.id);
-    validChords.push(c);
-  });
-
+  // 映射回宿主载荷
+  d.groups = cleanedGroups;
   d.chords = validChords;
+
   return isValid;
 };

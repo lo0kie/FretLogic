@@ -1,10 +1,12 @@
 import { STORAGE_KEYS } from '@/constants';
-import type { BoolTuple, Chord, FretTuple, Group } from '@/types/types'; // 馃専 挂载全新元组约束
+import type { Chord, Group, GuitarStringsModel } from '@/types/chord';
 import type { TuningType } from '@/utils/musicTheory';
 import { extractRootNote, TUNING_PRESETS } from '@/utils/musicTheory';
 import { debounceFilter, useDark, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { computed, ref, watch } from 'vue';
+import { computed, ref, toRaw, watch } from 'vue';
+
+export type { Chord, Group };
 
 export const useChordLabStore = defineStore('chordLab', () => {
   const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '' });
@@ -13,39 +15,43 @@ export const useChordLabStore = defineStore('chordLab', () => {
   const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
   const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
 
-  // 2. 当前编辑器沙盒隔离的工作流纯状态
+  // 2. 当前编辑器沙盒隔离的工作流高内聚纯状态
+  const defaultStrings: GuitarStringsModel = [
+    { fret: -1, isRoot: false, preferFlat: false },
+    { fret: -1, isRoot: false, preferFlat: false },
+    { fret: -1, isRoot: false, preferFlat: false },
+    { fret: -1, isRoot: false, preferFlat: false },
+    { fret: -1, isRoot: false, preferFlat: false },
+    { fret: -1, isRoot: false, preferFlat: false },
+  ];
+
+  // 🚀 核心三合一实体：完全平替掉原先的三维散落数组
+  const strings = useStorage<GuitarStringsModel>(STORAGE_KEYS.CURR_STRINGS, defaultStrings, localStorage, {
+    eventFilter: debounceFilter(300),
+  });
+
   const currentChordName = useStorage(STORAGE_KEYS.CURR_NAME, '', localStorage, { eventFilter: debounceFilter(300) });
-  const selectedFrets = useStorage<FretTuple>(STORAGE_KEYS.CURR_FRETS, [-1, -1, -1, -1, -1, -1], localStorage, {
-    eventFilter: debounceFilter(300),
-  });
-  const rootMark = useStorage<number>(STORAGE_KEYS.CURR_ROOT_MARK, -1, localStorage, {
-    eventFilter: debounceFilter(300),
-  });
-  const useFlat = useStorage<BoolTuple>(
-    STORAGE_KEYS.CURR_USE_FLAT,
-    [false, false, false, false, false, false],
-    localStorage,
-    { eventFilter: debounceFilter(300) }
-  );
   const currentTuning = useStorage<TuningType>('CHORD_LAB_CURR_TUNING_V1', 'STANDARD', localStorage);
   const editingId = useStorage<number | string | null>(STORAGE_KEYS.EDITING_ID, null);
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
+  const barreFret = useStorage<number>('CHORD_LAB_CURR_BARRE_FRET_V1', 0, localStorage, {
+    eventFilter: debounceFilter(300),
+  });
 
   const isDraggingFinger = ref(false);
   const lastPos = ref('');
-
   const fretCount = useStorage(STORAGE_KEYS.CURR_FCOUNT, 3);
   const capo = useStorage(STORAGE_KEYS.CURR_CAPO, 0);
 
-  // 3. 动态高内聚计算依赖（收拢原本散落在各处的重复 filter 行为）
+  // 3. 动态核心高内聚计算依赖
   const activeBaseStrings = computed(() => {
     return TUNING_PRESETS[currentTuning.value]?.mapping || [40, 45, 50, 55, 59, 64];
   });
 
-  const isFretBoardEmpty = computed(() => selectedFrets.value.every(fret => (fret ?? -1) < 0));
+  const isFretBoardEmpty = computed(() => strings.value.every(s => s.fret < 0));
   const currentRootNote = computed(() => extractRootNote(currentChordName.value));
 
-  // 馃専 性能优化：在 Store 中集中维护一次和弦映射字典，避免大列表下各个组件反复执行大量的 filter 过滤
+  // 馃専 性能拦截防线：在 Store 中集中维护一次和弦映射字典，直接干掉 $O(N \times M)$ 渲染扫描
   const groupChordMap = computed(() => {
     const map = new Map<string, Chord[]>();
     groups.value.forEach(g => map.set(g.id, []));
@@ -54,57 +60,49 @@ export const useChordLabStore = defineStore('chordLab', () => {
       if (list) {
         list.push(chord);
       } else {
-        // 防止脏数据引起的群落游离，建立兜底字典
         map.set(chord.groupId, [chord]);
       }
     });
     return map;
   });
 
-  // 防物品位缩减时越界的安全物理防御
+  // 品位缩减时的实体物理安全防御
   watch(fretCount, (newVal, oldVal) => {
     if (newVal < oldVal) {
-      const newFrets = [...selectedFrets.value] as FretTuple;
-      let isModified = false;
-      newFrets.forEach((fret, idx) => {
-        if (fret > newVal) {
-          newFrets[idx] = -1;
-          isModified = true;
-          if (rootMark.value === idx) rootMark.value = -1;
+      strings.value.forEach(str => {
+        if (str.fret > newVal) {
+          str.fret = -1;
+          str.isRoot = false;
         }
       });
-      if (isModified) selectedFrets.value = newFrets;
+      if (barreFret.value > newVal) barreFret.value = 0;
     }
   });
 
-  // 恢复历史和弦时的底层初始化安全机制
+  // 恢复历史和弦时的底层反序列化安全机制
   if (editingId.value) {
-    const original = savedChordsList.value.find(c => c.id == editingId.value);
+    const original = savedChordsList.value.find(c => c.id === editingId.value);
     if (original) {
       currentChordName.value = original.chordName || '';
-      selectedFrets.value = [...original.selectedFrets] as FretTuple;
+      strings.value = structuredClone(toRaw(original.strings));
       fretCount.value = original.fretCount ?? 3;
       capo.value = original.capo ?? 0;
-      rootMark.value = original.rootMark !== undefined ? original.rootMark : -1;
-      useFlat.value = original.useFlat
-        ? ([...original.useFlat] as BoolTuple)
-        : [false, false, false, false, false, false];
       currentTuning.value = original.tuning || 'STANDARD';
+      barreFret.value = original.barreFret || 0;
     } else {
       editingId.value = null;
     }
   }
 
-  // 4. 原子级纯状态更迭函数（不掺杂任何 Toast 提示、弹窗触发等业务逻辑）
+  // 纯状态沙盒原子级重置
   const resetEditor = () => {
     editingId.value = null;
-    selectedFrets.value = [-1, -1, -1, -1, -1, -1];
+    strings.value = structuredClone(toRaw(defaultStrings));
     currentChordName.value = '';
     capo.value = 0;
     fretCount.value = 3;
-    rootMark.value = -1;
-    useFlat.value = [false, false, false, false, false, false];
     currentTuning.value = 'STANDARD';
+    barreFret.value = 0;
   };
 
   const overwriteChords = (newChords: Chord[]) => {
@@ -115,14 +113,14 @@ export const useChordLabStore = defineStore('chordLab', () => {
   };
 
   const toggleOpenString = (sIdx: number) => {
-    const currentFretVal = selectedFrets.value[sIdx];
-    if (currentFretVal > 0) {
-      selectedFrets.value[sIdx] = 0;
-    } else if (currentFretVal === 0) {
-      selectedFrets.value[sIdx] = -1;
-      if (rootMark.value === sIdx) rootMark.value = -1;
+    const str = strings.value[sIdx];
+    if (str.fret > 0) {
+      str.fret = 0;
+    } else if (str.fret === 0) {
+      str.fret = -1;
+      str.isRoot = false;
     } else {
-      selectedFrets.value[sIdx] = 0;
+      str.fret = 0;
     }
   };
 
@@ -131,20 +129,19 @@ export const useChordLabStore = defineStore('chordLab', () => {
     groups,
     isDarkMode,
     currentChordName,
-    selectedFrets,
+    strings,
     fretCount,
     capo,
     editingId,
     selectedGroupId,
     isDraggingFinger,
     lastPos,
-    rootMark,
-    useFlat,
     currentTuning,
     activeBaseStrings,
     isFretBoardEmpty,
     currentRootNote,
-    groupChordMap, // 馃専 导出高效的字典计算映射
+    groupChordMap,
+    barreFret,
     resetEditor,
     overwriteChords,
     overwriteGroups,

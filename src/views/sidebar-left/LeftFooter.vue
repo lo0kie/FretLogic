@@ -1,5 +1,3 @@
-/** * @Author likan * @Date 2026-05-31 * @Filepath fret-logic/src/views/sidebar-left/LeftFooter.vue */
-
 <template>
   <div
     class="p-4 border-t border-[var(--control-border)] bg-[var(--bg-body)] rounded-b-xl"

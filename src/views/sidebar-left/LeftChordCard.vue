@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { type Chord } from '@/types/types';
+import { type Chord } from '@/types/chord';
 import { Trash2 } from '@lucide/vue';
 
 defineProps<{ chord: Chord; isEditing: boolean }>();
