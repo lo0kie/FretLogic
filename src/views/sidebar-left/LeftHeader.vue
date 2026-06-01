@@ -7,7 +7,7 @@
 
     <GlobalTooltip placement="bottom" content="新建分组">
       <button
-        @click="uiStore.openModal('createGroup', '新建分组')"
+        @click="modal.openModal('createGroup', '新建分组')"
         class="w-7 h-7 rounded-lg text-[var(--color-primary)] flex items-center justify-center active:scale-95 transition-transform header-add-btn"
       >
         <Plus :size="18" :stroke-width="3" />
@@ -18,11 +18,11 @@
 
 <script setup lang="ts">
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { useModal } from '@/composables/useModal'; // 🌟 接入全新独立模态框控制器
 import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
-import { useUiStore } from '@/stores/uiStore';
 import { Plus } from '@lucide/vue';
 
-const uiStore = useUiStore();
+const modal = useModal();
 </script>
 
 <style scoped lang="less">
