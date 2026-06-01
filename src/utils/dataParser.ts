@@ -5,7 +5,7 @@ interface LooseChordPayload {
   id?: string | number;
   chordName?: string;
   groupId?: string | number;
-  fretCount?: number;
+  fretCount?: Chord['fretCount'];
   capo?: number;
   tuning?: string;
   barreFret?: number;
@@ -84,7 +84,6 @@ export const cleanAndValidateData = (
     const finalFretCount = typeof chordItem.fretCount === 'number' ? chordItem.fretCount : 3;
     const finalCapo = typeof chordItem.capo === 'number' ? chordItem.capo : 0;
     const finalTuning = typeof chordItem.tuning === 'string' ? chordItem.tuning : 'STANDARD';
-    const finalBarreFret = typeof chordItem.barreFret === 'number' ? chordItem.barreFret : 0;
 
     // 🚀 向前兼容转换防线：如果是旧版备份，在运行期动态组装升级
     if (chordItem.selectedFrets && Array.isArray(chordItem.selectedFrets) && !chordItem.strings) {
@@ -117,7 +116,6 @@ export const cleanAndValidateData = (
       fretCount: finalFretCount,
       capo: finalCapo,
       tuning: finalTuning as Chord['tuning'], // 映射到导出的强类型 Presets
-      barreFret: finalBarreFret,
       strings: chordItem.strings,
     };
 

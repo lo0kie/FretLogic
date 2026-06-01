@@ -32,15 +32,12 @@ export const useChordLabStore = defineStore('chordLab', () => {
 
   const currentChordName = useStorage(STORAGE_KEYS.CURR_NAME, '', localStorage, { eventFilter: debounceFilter(300) });
   const currentTuning = useStorage<TuningType>('CHORD_LAB_CURR_TUNING_V1', 'STANDARD', localStorage);
-  const editingId = useStorage<number | string | null>(STORAGE_KEYS.EDITING_ID, null);
+  const editingId = useStorage<string>(STORAGE_KEYS.EDITING_ID, null);
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
-  const barreFret = useStorage<number>('CHORD_LAB_CURR_BARRE_FRET_V1', 0, localStorage, {
-    eventFilter: debounceFilter(300),
-  });
 
   const isDraggingFinger = ref(false);
   const lastPos = ref('');
-  const fretCount = useStorage(STORAGE_KEYS.CURR_FCOUNT, 3);
+  const fretCount = useStorage<Chord['fretCount']>(STORAGE_KEYS.CURR_FCOUNT, 3);
   const capo = useStorage(STORAGE_KEYS.CURR_CAPO, 0);
 
   // 3. 动态核心高内聚计算依赖
@@ -75,7 +72,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
           str.isRoot = false;
         }
       });
-      if (barreFret.value > newVal) barreFret.value = 0;
     }
   });
 
@@ -88,7 +84,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
       fretCount.value = original.fretCount ?? 3;
       capo.value = original.capo ?? 0;
       currentTuning.value = original.tuning || 'STANDARD';
-      barreFret.value = original.barreFret || 0;
     } else {
       editingId.value = null;
     }
@@ -102,7 +97,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
     capo.value = 0;
     fretCount.value = 3;
     currentTuning.value = 'STANDARD';
-    barreFret.value = 0;
   };
 
   const overwriteChords = (newChords: Chord[]) => {
@@ -141,7 +135,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
     isFretBoardEmpty,
     currentRootNote,
     groupChordMap,
-    barreFret,
     resetEditor,
     overwriteChords,
     overwriteGroups,

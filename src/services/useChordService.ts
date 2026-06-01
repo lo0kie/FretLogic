@@ -18,7 +18,6 @@ export function useChordService() {
     chordStore.fretCount = chord.fretCount ?? 3;
     chordStore.capo = chord.capo ?? 0;
     chordStore.currentTuning = chord.tuning || 'STANDARD';
-    chordStore.barreFret = chord.barreFret || 0;
   };
 
   /**
@@ -106,7 +105,6 @@ export function useChordService() {
       capo: chordStore.capo,
       groupId: targetGroupId || 'default',
       tuning: chordStore.currentTuning,
-      barreFret: chordStore.barreFret,
     };
 
     const idx = chordStore.savedChordsList.findIndex(c => c.id === chordStore.editingId);

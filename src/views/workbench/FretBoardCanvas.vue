@@ -1,5 +1,3 @@
-/** * @Author likan * @Date 2026-06-01 * @Filepath fret-logic/src/views/workbench/FretBoardCanvas.vue */
-
 <template>
   <div
     ref="fretBoardRef"
@@ -93,21 +91,7 @@
         style="pointer-events: none"
       />
 
-      <g
-        v-for="i in chordLabStore.fretCount"
-        :key="'fret-text-' + i"
-        @click="chordLabStore.barreFret = chordLabStore.barreFret === i ? 0 : i"
-        class="cursor-pointer group"
-        style="pointer-events: auto"
-      >
-        <title>点击手动标记/解除横按 (Barre)</title>
-        <rect
-          :x="0"
-          :y="(i - 1) * CANVAS_CONFIG.FRET_HEIGHT"
-          :width="CANVAS_CONFIG.OFFSET_X - 10"
-          :height="CANVAS_CONFIG.FRET_HEIGHT"
-          fill="transparent"
-        />
+      <g v-for="i in chordLabStore.fretCount" :key="'fret-text-' + i">
         <text
           :x="(CANVAS_CONFIG.OFFSET_X - 32) / 2"
           :y="i * CANVAS_CONFIG.FRET_HEIGHT"
@@ -116,34 +100,12 @@
           dy="-2px"
           font-size="28"
           font-weight="900"
-          :fill="
-            chordLabStore.barreFret === i
-              ? chordLabStore.isDarkMode
-                ? '#60a5fa'
-                : '#3b82f6'
-              : chordLabStore.isDarkMode
-                ? '#cbd5e1'
-                : '#1e293b'
-          "
-          style="pointer-events: none; transition: fill 0.2s ease"
+          :fill="chordLabStore.isDarkMode ? '#cbd5e1' : '#1e293b'"
+          style="pointer-events: none"
         >
           {{ chordLabStore.capo > 0 ? chordLabStore.capo + i : i }}
         </text>
       </g>
-
-      <rect
-        v-for="barre in barreLines"
-        :key="'barre-' + barre.fret"
-        :x="getStrX(barre.minS) - 16"
-        :y="(barre.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2 - 16"
-        :width="getStrX(barre.maxS) - getStrX(barre.minS) + 32"
-        height="32"
-        rx="16"
-        ry="16"
-        :fill="chordLabStore.isDarkMode ? '#3b82f6' : '#2563eb'"
-        class="transition-all duration-200"
-        style="pointer-events: none; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1))"
-      />
 
       <template v-for="(str, sIdx) in chordLabStore.strings" :key="'finger-' + sIdx">
         <g
@@ -185,6 +147,7 @@ import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useFretboardInteraction } from '@/composables/useFretboardInteraction';
 import { CANVAS_CONFIG } from '@/constants';
 import { FRETBOARD_SCALE_MAP } from '@/constants/fretboard';
+import { FRETBOARD_COLORS } from '@/constants/theme';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import type { GuitarStringEntity } from '@/types/chord';
 import { calcNoteLabel } from '@/utils/musicTheory';
@@ -206,31 +169,6 @@ const fretboardScale = computed(() => {
   return FRETBOARD_SCALE_MAP[chordLabStore.fretCount] || 1.0;
 });
 
-// 🌟 手动控制：读取手动指定的 barreFret，并自适应锁定其实际跨越的有效物理琴弦范围
-const barreLines = computed(() => {
-  const f = chordLabStore.barreFret;
-  if (!f || f <= 0 || f > chordLabStore.fretCount) return [];
-
-  const stringsOnFret: number[] = [];
-  // 遍历 6 根实体弦，智能提取被按在此品或被横按涵盖的弦索引
-  chordLabStore.strings.forEach((str, sIdx) => {
-    if (str.fret >= f) stringsOnFret.push(sIdx);
-  });
-
-  if (stringsOnFret.length > 0) {
-    return [
-      {
-        fret: f,
-        minS: Math.min(...stringsOnFret),
-        maxS: Math.max(...stringsOnFret),
-      },
-    ];
-  } else {
-    // 若还没有在该品按弦，默认横按条贯穿全全弦区
-    return [{ fret: f, minS: 0, maxS: 5 }];
-  }
-});
-
 const {
   handleLocalToggleOpenString,
   handleOpenStringRightClick,
@@ -245,7 +183,7 @@ const getOpenStringStatusClass = (str: GuitarStringEntity) => {
   }
   if (str.fret === 0) {
     if (str.isRoot) {
-      return 'bg-[#f59e0b] border-[#f59e0b] text-[#ffffff] shadow-[0_2px_4px_rgba(245,158,11,0.3)] dark:bg-[#fbbf24] dark:border-[#fbbf24] dark:text-[#0f172a] dark:shadow-[0_2px_8px_rgba(251,191,36,0.4)]';
+      return `bg-[${FRETBOARD_COLORS.openRootBgLight}] border-[${FRETBOARD_COLORS.openRootBgLight}] text-[${FRETBOARD_COLORS.openRootTextLight}] shadow-[0_2px_4px_rgba(245,158,11,0.3)] dark:bg-[${FRETBOARD_COLORS.openRootBgDark}] dark:border-[${FRETBOARD_COLORS.openRootBgDark}] dark:text-[${FRETBOARD_COLORS.openRootTextDark}] dark:shadow-[0_2px_8px_rgba(251,191,36,0.4)]`;
     }
     return 'border-[#93c5fd] text-[#1d4ed8] dark:border-[#1e3a8a] dark:text-[#93c5fd] bg-transparent';
   }
@@ -253,12 +191,12 @@ const getOpenStringStatusClass = (str: GuitarStringEntity) => {
 };
 
 const getFingerColor = (str: GuitarStringEntity) => {
-  if (str.isRoot) return chordLabStore.isDarkMode ? '#fbbf24' : '#f59e0b';
-  return chordLabStore.isDarkMode ? '#3b82f6' : '#2563eb';
+  if (str.isRoot) return chordLabStore.isDarkMode ? FRETBOARD_COLORS.rootDark : FRETBOARD_COLORS.rootLight;
+  return chordLabStore.isDarkMode ? FRETBOARD_COLORS.normalDark : FRETBOARD_COLORS.normalLight;
 };
 
 const getFingerTextColor = (str: GuitarStringEntity) => {
-  return str.isRoot && chordLabStore.isDarkMode ? '#1e293b' : '#ffffff';
+  return str.isRoot && chordLabStore.isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
 };
 </script>
 

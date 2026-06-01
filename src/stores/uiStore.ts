@@ -1,6 +1,6 @@
 import type { ModalActionType } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
-import type { Chord, Group, Toast } from '@/types/chord'; // 馃専 锁死统一元组类型引用
+import type { Chord, Group, Toast, ToastType } from '@/types/chord';
 import { useRefHistory, useToggle } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { nextTick, ref, toRaw, toRef } from 'vue';
@@ -9,7 +9,6 @@ export const useUiStore = defineStore('ui', () => {
   const chordStore = useChordLabStore();
   const savedChordsRef = toRef(chordStore, 'savedChordsList');
 
-  // 馃専 全面拥抱浏览器现代原生的 structuredClone，完美切断副作用，让撤销栈稳定度大幅度跃升
   const { undo: rawUndo } = useRefHistory(savedChordsRef, {
     capacity: 10,
     clone: v => structuredClone(toRaw(v.map(toRaw))),
@@ -23,7 +22,6 @@ export const useUiStore = defineStore('ui', () => {
   const isCapoOpen = ref(false);
   const toggleCapoPanel = useToggle(isCapoOpen);
 
-  // 全局弹窗控制中心
   const modalShow = ref(false);
   const modalType = ref<ModalActionType>('');
   const modalTitle = ref('');
@@ -36,21 +34,52 @@ export const useUiStore = defineStore('ui', () => {
     toasts.value = toasts.value.filter(t => !t.canUndo);
   };
 
-  const showToast = (msg: string, canUndo = false) => {
+  // 🌟 支持分类的常规 Toast
+  const showToast = (msg: string, canUndo = false, type: ToastType = 'info') => {
     const id = performance.now();
     if (canUndo) clearUndoToasts();
-    toasts.value.push({ id, msg, canUndo });
+    toasts.value.push({ id, msg, type, canUndo });
     setTimeout(() => {
       toasts.value = toasts.value.filter(t => t.id !== id);
     }, 3000);
   };
 
-  // 馃専 撤销核心动作（保留核心状态联动，方便与未来 Service 无缝对接）
+  // 🚀 核心重构：支持现代化的 Promise Toast，极大提升异步交互体验
+  const promiseToast = async <T>(
+    promise: Promise<T>,
+    messages: { loading: string; success: string; error: string }
+  ): Promise<T> => {
+    const id = performance.now();
+    toasts.value.push({ id, msg: messages.loading, type: 'loading' });
+
+    try {
+      const res = await promise;
+      const target = toasts.value.find(t => t.id === id);
+      if (target) {
+        target.msg = messages.success;
+        target.type = 'success';
+      }
+      setTimeout(() => {
+        toasts.value = toasts.value.filter(x => x.id !== id);
+      }, 3000);
+      return res;
+    } catch (err) {
+      const target = toasts.value.find(t => t.id === id);
+      if (target) {
+        target.msg = messages.error;
+        target.type = 'error';
+      }
+      setTimeout(() => {
+        toasts.value = toasts.value.filter(x => x.id !== id);
+      }, 3500);
+      throw err;
+    }
+  };
+
   const executeUndoRestore = () => {
     rawUndo();
     const validGroupIds = new Set(chordStore.groups.map(g => g.id));
     let hasOrphans = false;
-
     chordStore.savedChordsList.forEach(chord => {
       if (!validGroupIds.has(chord.groupId)) hasOrphans = true;
     });
@@ -58,7 +87,6 @@ export const useUiStore = defineStore('ui', () => {
     if (hasOrphans) {
       let targetGroupId = chordStore.selectedGroupId || chordStore.groups[0]?.id || null;
       if (!targetGroupId) {
-        // 使用标准的加密安全随机种子代替可能产生冲突的 Date.now()
         targetGroupId = 'g_recovery_' + crypto.randomUUID().slice(0, 8);
         chordStore.groups.forEach(g => {
           g.collapsed = true;
@@ -101,6 +129,7 @@ export const useUiStore = defineStore('ui', () => {
     toggleCapoPanel,
     toasts,
     showToast,
+    promiseToast,
     modalShow,
     modalType,
     modalTitle,
