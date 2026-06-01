@@ -20,6 +20,7 @@
 
 <script setup lang="ts">
 import { CANVAS_CONFIG } from '@/constants';
+import { FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/constants/fretboard'; // 🌟 引入单一可信变量
 import { useChordLabStore } from '@/stores/chordLabStore';
 import ChordInputHeader from '@/views/workbench/ChordInputHeader.vue';
 import FretBoardCanvas from '@/views/workbench/FretBoardCanvas.vue';
@@ -27,20 +28,18 @@ import { computed } from 'vue';
 
 const chordLabStore = useChordLabStore();
 
-// Workbench.vue 内部的 dynamicHeight 升级
 const dynamicHeight = computed(() => {
-  // 1. 卡片内除指板外的纯物理空间：pt-14(56px) + 标题高度(约56px) + gap-8(32px) + pb-10(40px) = 184px
-  const baseVerticalSpace = 135;
+  // 1. 卡片内除画布外的纯几何宏观垂直高依赖
+  const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;
 
-  // 2. 实时还原 FretBoardCanvas 里的原始物理高度公式
+  // 2. 指板原始物理高度
   const rawCanvasHeight =
     CANVAS_CONFIG.OFFSET_Y_TOP + chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
 
-  // 3. 乘以对应的缩放系数
-  const scaleMap: Record<number, number> = { 3: 1.0, 4: 0.92, 5: 0.85 };
-  const currentScale = scaleMap[chordLabStore.fretCount] || 1.0;
-
+  // 3. 乘以全量统一的物理微调缩放系数
+  const currentScale = FRETBOARD_SCALE_MAP[chordLabStore.fretCount] || 1.0;
   const realBoardHeight = rawCanvasHeight * currentScale;
+
   return `${baseVerticalSpace + realBoardHeight}px`;
 });
 </script>
@@ -50,11 +49,10 @@ const dynamicHeight = computed(() => {
 
 .workbench-card {
   .mixin-panel-base();
-  box-shadow: @shadow-floating; /* 拉开 Z 轴层次 */
-
+  box-shadow: @shadow-floating;
   transition:
     height @duration-slow @bezier-bounce,
-    /* 🌟 高度伸缩加上 Q 弹果冻动画 */ background-color @duration-base,
+    background-color @duration-base,
     border-color @duration-base,
     box-shadow @duration-base;
 
@@ -62,7 +60,6 @@ const dynamicHeight = computed(() => {
     box-shadow: @shadow-floating-dark;
   }
 
-  /* 🌟 物理打磨：顶部边缘微弱高光 */
   &::before {
     content: '';
     position: absolute;

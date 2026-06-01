@@ -10,10 +10,10 @@
 </template>
 
 <script setup lang="ts">
-import RightCapoWheel from './RightCapoWheel.vue';
-import RightFretSlider from './RightFretSlider.vue';
-import RightHelper from './RightHelper.vue';
-import RightTuningSelector from './RightTuningSelector.vue'; // 🌟 引入新组件
+import RightCapoWheel from '@/views/sidebar-right/RightCapoWheel.vue';
+import RightFretSlider from '@/views/sidebar-right/RightFretSlider.vue';
+import RightHelper from '@/views/sidebar-right/RightHelper.vue';
+import RightTuningSelector from '@/views/sidebar-right/RightTuningSelector.vue'; // 🌟 引入新组件
 </script>
 
 <style scoped lang="less">
