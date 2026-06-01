@@ -31,5 +31,7 @@ export const CANVAS_CONFIG = {
 export type ModalActionType = 'createGroup' | 'renameGroup' | 'deleteGroup' | 'moveChord' | '';
 
 export const DEFAULT_CHORD_NAME = '未命名';
-export const SIDEBAR_WIDTH = 335; // 侧边栏统一物理宽度
-export const SIDEBAR_WIDTH_PIXEL = `${SIDEBAR_WIDTH}px`;
+export const RIGHT_SIDEBAR_WIDTH = 335; // 侧边栏统一物理宽度
+export const LEFT_SIDEBAR_WIDTH = 335; // 侧边栏统一物理宽度
+export const RIGHT_SIDEBAR_WIDTH_PIXEL = `${RIGHT_SIDEBAR_WIDTH}px`;
+export const LEFT_SIDEBAR_WIDTH_PIXEL = `${LEFT_SIDEBAR_WIDTH}px`;

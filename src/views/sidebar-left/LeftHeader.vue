@@ -1,7 +1,7 @@
 <template>
   <div
     class="p-4 px-5 h-[76px] border-b border-[var(--control-border)] flex items-center justify-between relative"
-    :class="`min-w-[${SIDEBAR_WIDTH_PIXEL}]`"
+    :class="`min-w-[${LEFT_SIDEBAR_WIDTH_PIXEL}]`"
   >
     <h1 class="text-lg font-black tracking-tight uppercase text-title">Fret Logic</h1>
 
@@ -19,7 +19,7 @@
 <script setup lang="ts">
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useModal } from '@/composables/useModal'; // 🌟 接入全新独立模态框控制器
-import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
+import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { Plus } from '@lucide/vue';
 
 const modal = useModal();

@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col flex-1 overflow-hidden" :class="`min-w-[${SIDEBAR_WIDTH_PIXEL}]`">
+  <div class="flex flex-col flex-1 overflow-hidden" :class="`min-w-[${LEFT_SIDEBAR_WIDTH_PIXEL}]`">
     <LeftSearch v-model="searchQuery" :disabled="chordLabStore.savedChordsList.length === 0" />
 
     <div class="flex-1 overflow-y-auto no-scrollbar p-4">
@@ -99,7 +99,7 @@
               :animation="250"
               ghost-class="opacity-0"
               :disabled="!!debouncedQuery"
-              class="grid grid-cols-2 gap-2 items-center relative z-10 min-h-[64px]"
+              class="grid grid-cols-3 gap-2 items-center relative z-10 min-h-[64px]"
               @update="e => chordService.handleChordSort(e, group.id)"
               :swap-threshold="0.5"
               :touchStartThreshold="12"
@@ -141,7 +141,7 @@
 </template>
 
 <script setup lang="ts">
-import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
+import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useModal } from '@/composables/useModal'; // 🌟 接入解耦的弹窗服务
 import { useChordService } from '@/services/useChordService';

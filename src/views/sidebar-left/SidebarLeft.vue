@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
+import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useUiStore } from '@/stores/uiStore';
 import LeftFooter from '@/views/sidebar-left/LeftFooter.vue';
 import LeftGroupList from '@/views/sidebar-left/LeftGroupList.vue';
@@ -44,7 +44,7 @@ const uiStore = useUiStore();
 
   // 🌟 统一逻辑：脱离行内绑定，拥抱纯 CSS 类名驱动
   &.is-open {
-    width: v-bind(SIDEBAR_WIDTH_PIXEL);
+    width: v-bind(LEFT_SIDEBAR_WIDTH_PIXEL);
     opacity: 1;
     margin: 12px;
   }
@@ -63,7 +63,7 @@ const uiStore = useUiStore();
 
   // 🌟 统一逻辑：动态计算按钮悬浮偏移量（侧边栏宽度 + 12px 外边距）
   &.is-open {
-    left: calc(v-bind(SIDEBAR_WIDTH_PIXEL) + 12px);
+    left: calc(v-bind(LEFT_SIDEBAR_WIDTH_PIXEL) + 12px);
   }
 
   &:active {

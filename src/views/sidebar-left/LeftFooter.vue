@@ -1,7 +1,7 @@
 <template>
   <div
     class="p-4 border-t border-[var(--control-border)] bg-[var(--bg-body)] rounded-b-xl"
-    :class="`min-w-[${SIDEBAR_WIDTH_PIXEL}]`"
+    :class="`min-w-[${LEFT_SIDEBAR_WIDTH_PIXEL}]`"
   >
     <input type="file" ref="fileInputRef" accept=".json" @change="handleFileChange" class="hidden" />
 
@@ -21,7 +21,7 @@
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
-import { SIDEBAR_WIDTH_PIXEL } from '@/constants';
+import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useImportExportService } from '@/services/useImportExportService';
 import { Download, Upload } from '@lucide/vue';
 import { ref } from 'vue';
