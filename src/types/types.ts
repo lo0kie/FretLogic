@@ -1,7 +1,7 @@
 /**
  * @Author likan
  * @Date 2026-05-31
- * @Filepath fret-logic/src/stores/types.ts
+ * @Filepath fret-logic\src\types\types.ts
  */
 
 import type { TuningType } from '@/utils/musicTheory';

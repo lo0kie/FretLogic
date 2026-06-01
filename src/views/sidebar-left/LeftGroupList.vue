@@ -151,7 +151,7 @@ import { ChevronDown, FolderOpen, GripVertical } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core'; // 🌟 引入 VueUse 防抖核心
 import { ref } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
-import type { Chord } from '@/stores/types'; // 馃専 挂载全新元组约束
+import type { Chord } from '@/types/types'; // 馃専 挂载全新元组约束
 
 const chordLabStore = useChordLabStore();
 const chordService = useChordService();

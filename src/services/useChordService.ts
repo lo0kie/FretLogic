@@ -5,8 +5,8 @@
  */
 
 import { useChordLabStore } from '@/stores/chordLabStore';
-import type { BoolTuple, Chord, FretTuple } from '@/stores/types';
 import { useUiStore } from '@/stores/uiStore';
+import type { BoolTuple, Chord, FretTuple } from '@/types/types';
 import { copyElementToClipboard } from '@/utils/domExporter'; // 🌟 引入物理 DOM 导出工具
 import { nextTick } from 'vue';
 

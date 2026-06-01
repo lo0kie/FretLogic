@@ -75,8 +75,8 @@ import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useAudioPlayer } from '@/composables/useAudioPlayer';
 import { useChordService } from '@/services/useChordService';
 import { useChordLabStore } from '@/stores/chordLabStore';
-import type { FretTuple } from '@/stores/types'; // 🌟 引入强类型
 import { useUiStore } from '@/stores/uiStore';
+import type { FretTuple } from '@/types/types'; // 🌟 引入强类型
 import { ChevronDown, ChevronUp, Moon, Play, Square, Sun } from '@lucide/vue';
 import { computed } from 'vue';
 
