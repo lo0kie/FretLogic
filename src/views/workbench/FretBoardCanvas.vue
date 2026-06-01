@@ -28,19 +28,16 @@
             @click.stop="handleLocalToggleOpenString(sIdx)"
             @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
             @mousedown.middle.prevent.stop="str.fret === 0 ? handleFretMiddleClick(sIdx) : null"
-            class="w-10 h-10 box-border pointer-events-auto shadow-sm flex items-center justify-center rounded-full border-[3px]"
-            :class="[
-              str.fret > 0 ? 'is-fret-pressed active:scale-100' : 'active:scale-90',
-              getOpenStringStatusClass(str),
-            ]"
+            class="w-10 h-10 box-border pointer-events-auto shadow-sm flex items-center justify-center rounded-full"
+            :class="[str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available', getOpenStringStatusClass(str)]"
             :style="getOpenStringStyle(str)"
           >
             <template v-if="str.fret <= 0">
               <template v-if="str.fret === -1">
-                <X class="w-4.5 h-4.5" stroke-width="2.5" />
+                <X class="w-4.5 h-4.5" stroke-width="3" />
               </template>
 
-              <span v-else-if="str.fret === 0" class="font-black text-lg tracking-tighter open-note-text">
+              <span v-else-if="str.fret === 0" class="font-black text-xl tracking-tighter open-note-text">
                 {{ calcNoteLabel(sIdx, 0, chordLabStore.capo, str.preferFlat, chordLabStore.activeBaseStrings) }}
               </span>
             </template>
@@ -222,7 +219,9 @@ const getFingerTextColor = (str: GuitarStringEntity) => {
 .open-note-text {
   display: inline-block;
   line-height: 1;
-  margin-bottom: 1.5px;
+  // 🌟 核心清理：砍掉引起次像素抖动的非整数定位偏置，改用浏览器百分之百原生的 Flex 垂直居中
+  margin-top: 0px;
+  margin-bottom: 0px;
 }
 
 .fretBoard-container {
@@ -232,13 +231,28 @@ const getFingerTextColor = (str: GuitarStringEntity) => {
     margin-bottom @duration-slow @bezier-standard;
 }
 
-// 🌟 终极修复：把时间轴上的 opacity 过渡动画无情砍掉，仅保留纯粹、极速的微小缩放反馈
 button {
-  transition: transform 0.08s @bezier-standard;
+  border-width: 3px;
+  // 🌟 将变动时间进一步缩短至 0.05s 极速响应
+  transition:
+    border-width 0.05s @bezier-standard,
+    background-color 0.05s ease;
 
-  // 当被按下时，瞬间进行物理隐藏，零延迟，坚决不给任何多余的时差空间
+  // 3. 🌟 终极解决方案：在常规激活可用状态下，默认给个 3px 边框
+  &.is-fret-available {
+    border-width: 3px;
+
+    // 4. 🌟 当鼠标按住时（:active），坚决不调用任何 scale 几何缩放！
+    // 我们改用将边框厚度向内增厚到 5px（视觉内缩反馈），文字物理矩阵纹丝不动！
+    &:active {
+      border-width: 5px !important;
+    }
+  }
+
+  // 被按在指板深处时的隐形状态线
   &.is-fret-pressed {
     opacity: 0 !important;
+    transform: scale(1) !important;
     background-color: transparent !important;
     border-color: transparent !important;
     box-shadow: none !important;
