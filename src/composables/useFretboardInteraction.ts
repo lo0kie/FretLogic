@@ -1,5 +1,6 @@
 import { CANVAS_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
+import { isMuted, isOpen } from '@/utils/musicTheory';
 import { useEventListener } from '@vueuse/core';
 import { onBeforeUnmount, onMounted, type Ref } from 'vue';
 
@@ -20,7 +21,7 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
 
   const handleOpenStringRightClick = (sIdx: number) => {
     const str = chordLabStore.strings[sIdx];
-    if (str.isRoot && str.fret === 0) {
+    if (str.isRoot && isOpen(str)) {
       str.isRoot = false;
     } else {
       chordLabStore.strings.forEach(s => {
@@ -43,7 +44,7 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
 
   const handleFretMiddleClick = (sIdx: number) => {
     const str = chordLabStore.strings[sIdx];
-    if (str.fret === -1) return;
+    if (isMuted(str)) return;
 
     const base = chordLabStore.activeBaseStrings[sIdx];
     const actualOffset = str.fret > 0 && chordLabStore.capo > 0 ? chordLabStore.capo : 0;

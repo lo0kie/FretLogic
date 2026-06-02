@@ -27,17 +27,17 @@
           <button
             @click.stop="handleLocalToggleOpenString(sIdx)"
             @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
-            @mousedown.middle.prevent.stop="str.fret === 0 ? handleFretMiddleClick(sIdx) : null"
+            @mousedown.middle.prevent.stop="isOpen(str) ? handleFretMiddleClick(sIdx) : null"
             class="w-10 h-10 box-border pointer-events-auto shadow-sm flex items-center justify-center rounded-full"
             :class="[str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available', getOpenStringStatusClass(str)]"
             :style="getOpenStringStyle(str)"
           >
             <template v-if="str.fret <= 0">
-              <template v-if="str.fret === -1">
+              <template v-if="isMuted(str)">
                 <X class="w-4.5 h-4.5" stroke-width="3" />
               </template>
 
-              <span v-else-if="str.fret === 0" class="font-black text-xl tracking-tighter open-note-text">
+              <span v-else-if="isOpen(str)" class="font-black text-xl tracking-tighter open-note-text">
                 {{ calcNoteLabel(sIdx, 0, chordLabStore.capo, str.preferFlat, chordLabStore.activeBaseStrings) }}
               </span>
             </template>
@@ -148,7 +148,7 @@ import { FRETBOARD_SCALE_MAP } from '@/constants/fretboard';
 import { FRETBOARD_COLORS } from '@/constants/theme';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import type { GuitarStringEntity } from '@/types/chord';
-import { calcNoteLabel } from '@/utils/musicTheory';
+import { calcNoteLabel, isMuted, isOpen } from '@/utils/musicTheory';
 import { X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
@@ -176,10 +176,10 @@ const {
 } = useFretboardInteraction(fretBoardRef);
 
 const getOpenStringStatusClass = (str: GuitarStringEntity) => {
-  if (str.fret === -1) {
+  if (isMuted(str)) {
     return 'border-[#dc2626] text-[#dc2626] dark:border-[#f87171] dark:text-[#f87171] bg-transparent';
   }
-  if (str.fret === 0) {
+  if (isOpen(str)) {
     if (str.isRoot) return '';
     return 'border-[#93c5fd] text-[#1d4ed8] dark:border-[#1e3a8a] dark:text-[#93c5fd] bg-transparent';
   }
@@ -187,7 +187,7 @@ const getOpenStringStatusClass = (str: GuitarStringEntity) => {
 };
 
 const getOpenStringStyle = (str: GuitarStringEntity) => {
-  if (str.fret === 0 && str.isRoot) {
+  if (isOpen(str) && str.isRoot) {
     const isDark = chordLabStore.isDarkMode;
     const bg = isDark ? FRETBOARD_COLORS.openRootBgDark : FRETBOARD_COLORS.openRootBgLight;
     const text = isDark ? FRETBOARD_COLORS.openRootTextDark : FRETBOARD_COLORS.openRootTextLight;
