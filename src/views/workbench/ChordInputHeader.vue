@@ -5,7 +5,7 @@
       type="text"
       spellcheck="false"
       placeholder="CHORD"
-      class="input-chord-name w-full text-center font-black bg-transparent border-none outline-none cursor-pointer select-none caret-blue-600 transition-all duration-300 placeholder-slate-300 dark:placeholder-slate-600 text-[3.5rem] leading-none"
+      class="input-chord-name w-full text-center font-black bg-transparent border-none outline-none cursor-pointer select-none caret-blue-600 transition-all duration-300 placeholder-slate-300 dark:placeholder-slate-600 text-[4rem] leading-none"
       :class="
         chordLabStore.currentChordName
           ? 'text-slate-900 dark:text-slate-50 drop-shadow-sm'
