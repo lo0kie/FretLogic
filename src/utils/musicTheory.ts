@@ -1,3 +1,5 @@
+import { GuitarStringEntity } from '@/types/chord';
+
 export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 export const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
@@ -10,6 +12,15 @@ export const TUNING_PRESETS = {
 } as const;
 
 export type TuningType = keyof typeof TUNING_PRESETS;
+
+export const isMuted = (s: GuitarStringEntity) => s.fret === -1;
+export const isOpen = (s: GuitarStringEntity) => s.fret === 0;
+
+export const createString = (): GuitarStringEntity => ({
+  fret: -1,
+  isRoot: false,
+  preferFlat: false,
+});
 
 export const calcNoteLabel = (
   sIdx: number,

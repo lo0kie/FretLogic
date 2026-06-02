@@ -63,7 +63,7 @@ const uiStore = useUiStore();
 
   // 🌟 统一逻辑：动态计算按钮悬浮偏移量（侧边栏宽度 + 12px 外边距）
   &.is-open {
-    left: calc(v-bind(LEFT_SIDEBAR_WIDTH_PIXEL) + 12px);
+    left: calc(v-bind(LEFT_SIDEBAR_WIDTH_PIXEL) + 13px);
   }
 
   &:active {
