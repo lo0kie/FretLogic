@@ -1,7 +1,7 @@
 import { STORAGE_KEYS } from '@/constants';
 import type { Chord, Group, GuitarStringsModel } from '@/types/chord';
 import type { TuningType } from '@/utils/musicTheory';
-import { extractRootNote, TUNING_PRESETS } from '@/utils/musicTheory';
+import { createString, extractRootNote, isOpen, TUNING_PRESETS } from '@/utils/musicTheory';
 import { debounceFilter, useDark, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref, toRaw, watch } from 'vue';
@@ -11,28 +11,27 @@ export type { Chord, Group };
 export const useChordLabStore = defineStore('chordLab', () => {
   const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '' });
 
-  // 1. 核心持久化响应层（回归纯状态：只负责本地缓存的高效存取与同步）
+  // 1. 核心持久化响应层
   const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
   const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
 
   // 2. 当前编辑器沙盒隔离的工作流高内聚纯状态
   const defaultStrings: GuitarStringsModel = [
-    { fret: -1, isRoot: false, preferFlat: false },
-    { fret: -1, isRoot: false, preferFlat: false },
-    { fret: -1, isRoot: false, preferFlat: false },
-    { fret: -1, isRoot: false, preferFlat: false },
-    { fret: -1, isRoot: false, preferFlat: false },
-    { fret: -1, isRoot: false, preferFlat: false },
+    createString(),
+    createString(),
+    createString(),
+    createString(),
+    createString(),
+    createString(),
   ];
 
-  // 🚀 核心三合一实体：完全平替掉原先的三维散落数组
   const strings = useStorage<GuitarStringsModel>(STORAGE_KEYS.CURR_STRINGS, defaultStrings, localStorage, {
     eventFilter: debounceFilter(300),
   });
 
   const currentChordName = useStorage(STORAGE_KEYS.CURR_NAME, '', localStorage, { eventFilter: debounceFilter(300) });
   const currentTuning = useStorage<TuningType>('CHORD_LAB_CURR_TUNING_V1', 'STANDARD', localStorage);
-  const editingId = useStorage<string>(STORAGE_KEYS.EDITING_ID, null);
+  const editingId = useStorage<string | null>(STORAGE_KEYS.EDITING_ID, null);
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
 
   const isDraggingFinger = ref(false);
@@ -48,7 +47,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
   const isFretBoardEmpty = computed(() => strings.value.every(s => s.fret < 0));
   const currentRootNote = computed(() => extractRootNote(currentChordName.value));
 
-  // 馃専 性能拦截防线：在 Store 中集中维护一次和弦映射字典，直接干掉 $O(N \times M)$ 渲染扫描
   const groupChordMap = computed(() => {
     const map = new Map<string, Chord[]>();
     groups.value.forEach(g => map.set(g.id, []));
@@ -92,7 +90,14 @@ export const useChordLabStore = defineStore('chordLab', () => {
   // 纯状态沙盒原子级重置
   const resetEditor = () => {
     editingId.value = null;
-    strings.value = structuredClone(toRaw(defaultStrings));
+
+    // 🚀 核心修复：采用原地修改（In-place mutation）覆盖属性，彻底杜绝替换整个数组导致的 VueUse 代理断裂问题！
+    strings.value.forEach(s => {
+      s.fret = -1;
+      s.isRoot = false;
+      s.preferFlat = false;
+    });
+
     currentChordName.value = '';
     capo.value = 0;
     fretCount.value = 3;
@@ -102,6 +107,7 @@ export const useChordLabStore = defineStore('chordLab', () => {
   const overwriteChords = (newChords: Chord[]) => {
     savedChordsList.value = [...newChords];
   };
+
   const overwriteGroups = (newGroups: Group[]) => {
     groups.value = [...newGroups];
   };
@@ -110,7 +116,7 @@ export const useChordLabStore = defineStore('chordLab', () => {
     const str = strings.value[sIdx];
     if (str.fret > 0) {
       str.fret = 0;
-    } else if (str.fret === 0) {
+    } else if (isOpen(str)) {
       str.fret = -1;
       str.isRoot = false;
     } else {

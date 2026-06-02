@@ -1,19 +1,14 @@
 import { Chord, Group, GuitarStringsModel } from '@/types/chord';
 
-// 🌟 新增：显式定义导入/导出时的松散数据载荷契约，用 Record 代替 any
+// 🌟 显式定义符合你当前扁平 Chord 契约的导入/导出松散数据载荷
 interface LooseChordPayload {
-  id?: string | number;
-  chordName?: string;
-  groupId?: string | number;
-  fretCount?: Chord['fretCount'];
-  capo?: number;
-  tuning?: string;
-  barreFret?: number;
-  strings?: GuitarStringsModel;
-  // 以下为旧版向前兼容字段
-  selectedFrets?: unknown[];
-  rootMark?: number;
-  useFlat?: boolean[];
+  id: string | number;
+  chordName: string;
+  groupId: string | number;
+  fretCount: Chord['fretCount'];
+  capo: number;
+  tuning: string;
+  strings: GuitarStringsModel;
 }
 
 export const cleanAndValidateData = (
@@ -34,13 +29,11 @@ export const cleanAndValidateData = (
 
   let isValid = true;
 
-  // 🚀 核心重构：将 any[] 平替为标准具有约束力的结构或 unknown
   const rawGroups = d.groups as unknown[];
-  const rawChords = d.chords as Record<string, any>[]; // 转换为内部可自由写属性的字典对象
+  const rawChords = d.chords as Record<string, any>[];
 
-  // 1. 物理清洗 Group 序列，强转 ID 为 string，断断绝关系型错位
+  // 1. 清洗 Group 分组序列
   const cleanedGroups: Group[] = [];
-
   for (const g of rawGroups) {
     if (!g || typeof g !== 'object') {
       isValid = false;
@@ -59,7 +52,7 @@ export const cleanAndValidateData = (
   const usedChordIds = new Set<string>();
   const validChords: Chord[] = [];
 
-  // 2. 核心铁腕拦截：将旧版本 JSON 的 3 套平行数组无缝转换、补齐为全新单体 Entity 对象数组
+  // 2. 清洗扁平的 Chord 和弦序列（无兼容残留，100% 贴合你的 Chord 契约定义）
   for (const c of rawChords) {
     if (!c || typeof c !== 'object') {
       isValid = false;
@@ -68,13 +61,13 @@ export const cleanAndValidateData = (
 
     const chordItem = c as LooseChordPayload;
 
-    // 游离脏数据安全拦截
+    // 游离脏数据安全拦截：如果没有外键 groupId，或者 groupId 在分组里找不到，执行脱离
     if (
       !chordItem.groupId ||
       String(chordItem.groupId).trim() === '' ||
       !validGroupIds.has(String(chordItem.groupId))
     ) {
-      console.warn(`⚠️ ${logPrefix} -> 和弦 "${chordItem.chordName || '未命名'}" 分组外键关联失效，执行物理拦截脱离`);
+      console.warn(`⚠️ ${logPrefix} -> 和弦外键关联失效，执行物理拦截脱离`);
       continue;
     }
 
@@ -85,45 +78,29 @@ export const cleanAndValidateData = (
     const finalCapo = typeof chordItem.capo === 'number' ? chordItem.capo : 0;
     const finalTuning = typeof chordItem.tuning === 'string' ? chordItem.tuning : 'STANDARD';
 
-    // 🚀 向前兼容转换防线：如果是旧版备份，在运行期动态组装升级
-    if (chordItem.selectedFrets && Array.isArray(chordItem.selectedFrets) && !chordItem.strings) {
-      const rm = typeof chordItem.rootMark === 'number' ? chordItem.rootMark : -1;
-      const uf = Array.isArray(chordItem.useFlat) ? chordItem.useFlat : [false, false, false, false, false, false];
-
-      chordItem.strings = chordItem.selectedFrets.map((fretVal: unknown, idx: number) => ({
-        fret: typeof fretVal === 'number' ? fretVal : -1,
-        isRoot: idx === rm,
-        preferFlat: !!uf[idx],
-      })) as GuitarStringsModel;
-
-      // 干净清除历史残余平行字段，执行 Payload 铁腕瘦身
-      delete chordItem.selectedFrets;
-      delete chordItem.rootMark;
-      delete chordItem.useFlat;
-    }
-
-    // 实体合法性终极契约审查
+    // 严格审查每根琴弦实体的合法性
     if (!Array.isArray(chordItem.strings) || chordItem.strings.length !== 6) {
-      console.error(`❌ ${logPrefix} -> 和弦 "${finalName}" 核心物理琴弦实体破损`);
+      console.error(`❌ ${logPrefix} -> 和弦 "${finalName}" 核心物理琴弦实体破损或长度不是6`);
       isValid = false;
       continue;
     }
 
+    // 🌟 核心修正：严格按照你给出的 Chord 接口字段进行对象字面量装配
     const finalChord: Chord = {
       id: usedChordIds.has(finalId) ? 'c_recovery_' + crypto.randomUUID().slice(0, 8) : finalId,
       chordName: finalName,
-      groupId: finalGroupId,
+      strings: chordItem.strings,
       fretCount: finalFretCount,
       capo: finalCapo,
-      tuning: finalTuning as Chord['tuning'], // 映射到导出的强类型 Presets
-      strings: chordItem.strings,
+      groupId: finalGroupId,
+      tuning: finalTuning as Chord['tuning'],
     };
 
     usedChordIds.add(finalChord.id as string);
     validChords.push(finalChord);
   }
 
-  // 映射回宿主载荷
+  // 重新映射回宿主载荷
   d.groups = cleanedGroups;
   d.chords = validChords;
 
