@@ -106,6 +106,5 @@ export const useUiStore = defineStore('ui', () => {
     toasts,
     showToast,
     promiseToast,
-    openModal,
   };
 });
