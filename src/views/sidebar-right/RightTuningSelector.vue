@@ -71,7 +71,7 @@ const handleTuningChange = (tuningKey: TuningType) => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .tuning-trigger-bar {
   .mixin-input-base();

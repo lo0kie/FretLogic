@@ -60,8 +60,8 @@
         y1="0"
         :x2="getStrX(s - 1)"
         :y2="chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT"
-        :stroke="chordLabStore.isDarkMode ? '#cbd5e1' : '#1e293b'"
-        :stroke-width="4"
+        :stroke="chordLabStore.isDarkMode ? '#ffffff' : '#0f172a'"
+        :stroke-width="FRETBOARD_LINE_WIDTH"
         class="string-line"
         style="pointer-events: none"
         shape-rendering="crispEdges"
@@ -74,16 +74,16 @@
         :y1="f * CANVAS_CONFIG.FRET_HEIGHT"
         :x2="getStrX(5)"
         :y2="f * CANVAS_CONFIG.FRET_HEIGHT"
-        :stroke="chordLabStore.isDarkMode ? '#94a3b8' : '#334155'"
-        stroke-width="4"
+        :stroke="chordLabStore.isDarkMode ? '#ffffff' : '#0f172a'"
+        :stroke-width="FRETBOARD_LINE_WIDTH"
         style="pointer-events: none"
         shape-rendering="crispEdges"
       />
 
       <rect
-        :x="CANVAS_CONFIG.OFFSET_X - 2"
+        :x="CANVAS_CONFIG.OFFSET_X - FRETBOARD_LINE_WIDTH / 2"
         y="-4"
-        :width="5 * CANVAS_CONFIG.STRING_SPACING + 4"
+        :width="5 * CANVAS_CONFIG.STRING_SPACING + FRETBOARD_LINE_WIDTH"
         height="8"
         :fill="chordLabStore.isDarkMode ? '#ffffff' : '#0f172a'"
         style="pointer-events: none"
@@ -143,11 +143,9 @@
 <script setup lang="ts">
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useFretboardInteraction } from '@/composables/useFretboardInteraction';
-import { CANVAS_CONFIG } from '@/constants';
-import { FRETBOARD_SCALE_MAP } from '@/constants/fretboard';
-import { FRETBOARD_COLORS } from '@/constants/theme';
+import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_LINE_WIDTH, FRETBOARD_SCALE_MAP } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
-import type { GuitarStringEntity } from '@/types/chord';
+import type { GuitarStringEntity } from '@/types';
 import { calcNoteLabel, isMuted, isOpen } from '@/utils/musicTheory';
 import { X } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -214,7 +212,7 @@ const getFingerTextColor = (str: GuitarStringEntity) => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .open-note-text {
   display: inline-block;

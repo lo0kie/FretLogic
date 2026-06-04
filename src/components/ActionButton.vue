@@ -43,7 +43,7 @@ const themeClasses = computed(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .action-button-base {
   .mixin-button-base();

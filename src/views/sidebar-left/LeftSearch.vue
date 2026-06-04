@@ -41,7 +41,7 @@ defineEmits<{
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .search-input {
   .mixin-input-base();

@@ -1,6 +1,6 @@
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord } from '@/types/chord';
+import type { Chord } from '@/types';
 import { copyElementToClipboard } from '@/utils/domExporter';
 import { nextTick, toRaw } from 'vue';
 

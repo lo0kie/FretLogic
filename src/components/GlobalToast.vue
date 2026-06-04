@@ -25,7 +25,7 @@
 
 <script setup lang="ts">
 import { useUiStore } from '@/stores/uiStore';
-import type { ToastType } from '@/types/chord';
+import type { ToastType } from '@/types';
 import { Loader2 } from '@lucide/vue';
 
 const uiStore = useUiStore();
@@ -50,7 +50,7 @@ const getToastThemeClass = (type: ToastType) => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 .btn-toast-undo {
   transition: opacity @duration-fast @bezier-standard;
   &:active {

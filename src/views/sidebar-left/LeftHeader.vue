@@ -26,7 +26,7 @@ const modal = useModal();
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .header-add-btn {
   background-color: color-mix(in srgb, @primary, transparent 90%);

@@ -27,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { type Chord } from '@/types/chord';
+import { type Chord } from '@/types';
 import { X } from '@lucide/vue';
 
 defineProps<{ chord: Chord; isEditing: boolean }>();
@@ -38,7 +38,7 @@ defineEmits<{
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .chord-thumb-card {
   .mixin-interactive-card();

@@ -1,5 +1,5 @@
 import { STORAGE_KEYS } from '@/constants';
-import type { Chord, Group, GuitarStringsModel } from '@/types/chord';
+import type { Chord, Group, GuitarStringsModel } from '@/types';
 import type { TuningType } from '@/utils/musicTheory';
 import { createString, extractRootNote, isOpen, TUNING_PRESETS } from '@/utils/musicTheory';
 import { debounceFilter, useDark, useStorage } from '@vueuse/core';

@@ -1,4 +1,4 @@
-import { AUDIO_CONFIG } from '@/constants/fretboard';
+import { AUDIO_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { onBeforeUnmount, ref } from 'vue';
 

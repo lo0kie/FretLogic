@@ -5,7 +5,7 @@
 </template>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 .text-title {
   color: var(--text-title);
 }

@@ -37,8 +37,8 @@
 
 <script setup lang="ts">
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { FRET_COUNTS } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
-import { FRET_COUNTS } from '@/types/chord';
 import { useEventListener } from '@vueuse/core';
 import { onMounted, ref } from 'vue';
 
@@ -88,7 +88,7 @@ onMounted(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .fret-slider-track {
   background-color: var(--bg-body);

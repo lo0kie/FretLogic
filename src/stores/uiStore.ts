@@ -1,6 +1,5 @@
-import type { ModalActionType } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
-import type { Chord, Group, Toast, ToastType } from '@/types/chord';
+import type { Toast, ToastType } from '@/types';
 import { useRefHistory, useToggle } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { nextTick, ref, toRaw, toRef } from 'vue';
@@ -21,14 +20,6 @@ export const useUiStore = defineStore('ui', () => {
   const isCopying = ref(false);
   const isCapoOpen = ref(false);
   const toggleCapoPanel = useToggle(isCapoOpen);
-
-  const modalShow = ref(false);
-  const modalType = ref<ModalActionType>('');
-  const modalTitle = ref('');
-  const modalInput = ref('');
-  const activeTargetGroup = ref<Group | null>(null);
-  const activeTargetChord = ref<Chord | null>(null);
-  const draggedGroupIdx = ref<number | null>(null);
 
   const clearUndoToasts = () => {
     toasts.value = toasts.value.filter(t => !t.canUndo);
@@ -104,21 +95,6 @@ export const useUiStore = defineStore('ui', () => {
     clearUndoToasts();
   };
 
-  const openModal = (
-    type: Exclude<ModalActionType, ''>,
-    title: string,
-    initVal = '',
-    targetGroup: Group | null = null,
-    targetChord: Chord | null = null
-  ) => {
-    modalType.value = type;
-    modalTitle.value = title;
-    modalInput.value = initVal;
-    activeTargetGroup.value = targetGroup;
-    activeTargetChord.value = targetChord;
-    modalShow.value = true;
-  };
-
   return {
     executeUndoRestore,
     clearUndoToasts,
@@ -130,13 +106,6 @@ export const useUiStore = defineStore('ui', () => {
     toasts,
     showToast,
     promiseToast,
-    modalShow,
-    modalType,
-    modalTitle,
-    modalInput,
-    activeTargetGroup,
-    activeTargetChord,
-    draggedGroupIdx,
     openModal,
   };
 });

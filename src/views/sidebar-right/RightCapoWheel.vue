@@ -108,7 +108,7 @@ onMounted(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .capo-trigger-bar {
   .mixin-input-base();

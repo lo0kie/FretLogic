@@ -19,8 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { CANVAS_CONFIG } from '@/constants';
-import { FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/constants/fretboard'; // 🌟 引入单一可信变量
+import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import ChordInputHeader from '@/views/workbench/ChordInputHeader.vue';
 import FretBoardCanvas from '@/views/workbench/FretBoardCanvas.vue';
@@ -45,7 +44,7 @@ const dynamicHeight = computed(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .workbench-card {
   .mixin-panel-base();

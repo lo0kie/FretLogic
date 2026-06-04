@@ -30,7 +30,7 @@ const uiStore = useUiStore();
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .panel-right {
   .mixin-panel-base();

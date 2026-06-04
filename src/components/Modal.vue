@@ -72,9 +72,9 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import { useModal } from '@/composables/useModal';
-import type { ModalActionType } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
+import { ModalActionType } from '@/types';
 import { useEventListener, useScrollLock } from '@vueuse/core';
 import { nextTick, ref, watch } from 'vue';
 
@@ -165,7 +165,7 @@ watch(
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 .modal-card {
   .mixin-floating-layer();
 }

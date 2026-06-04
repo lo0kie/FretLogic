@@ -76,7 +76,7 @@ import { useAudioPlayer } from '@/composables/useAudioPlayer';
 import { useChordService } from '@/services/useChordService';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { GuitarStringsModel } from '@/types/chord';
+import type { GuitarStringsModel } from '@/types';
 import { ChevronDown, ChevronUp, Moon, Play, Square, Sun } from '@lucide/vue';
 import { computed, toRaw } from 'vue';
 
@@ -168,7 +168,7 @@ const handleShiftFret = (direction: 'up' | 'down') => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .helper-inner-panel {
   background-color: var(--bg-body);

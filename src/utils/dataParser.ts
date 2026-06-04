@@ -1,4 +1,4 @@
-import { Chord, Group, GuitarStringsModel } from '@/types/chord';
+import { Chord, Group, GuitarStringsModel } from '@/types';
 
 // 🌟 显式定义符合你当前扁平 Chord 契约的导入/导出松散数据载荷
 interface LooseChordPayload {

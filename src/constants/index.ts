@@ -1,37 +1,6 @@
-export const STORAGE_KEYS = {
-  CHORD_LIST: 'CHORD_LAB_LIST_V4',
-  GROUPS: 'CHORD_LAB_GROUPS',
-  CURR_NAME: 'CHORD_LAB_CURR_NAME_V1',
-  CURR_FRETS: 'CHORD_LAB_CURR_FRETS_V1',
-  CURR_FCOUNT: 'CHORD_LAB_CURR_FCOUNT_V1',
-  CURR_CAPO: 'CHORD_LAB_CURR_CAPO_V1',
-  CURR_ROOT_MARK: 'CHORD_LAB_CURR_ROOT_MARK_V1',
-  CURR_USE_FLAT: 'CHORD_LAB_CURR_USE_FLAT_V1',
-  EDITING_ID: 'CHORD_LAB_EDITING_ID',
-  CURR_GROUP_ID: 'CHORD_LAB_CURR_GROUP_ID_V1',
-  CURR_STRINGS: 'CHORD_LAB_CURR_STRINGS_V1', // 🌟 核心补齐：锁死高内聚物理弦聚合体的存储键
-} as const;
-
-const STRING_SPACING = 65; // 竖线（琴弦）间距
-const OFFSET_X = 45; // 左右边界几何微调
-const OFFSET_X_RIGHT = 31;
-const FRET_HEIGHT = 120; // 品格垂直高
-const OFFSET_Y_TOP = 80; // 顶壳触点留白高
-const OFFSET_Y_BOTTOM = 20;
-
-export const CANVAS_CONFIG = {
-  STRING_SPACING,
-  FRET_HEIGHT,
-  OFFSET_X,
-  OFFSET_Y_TOP,
-  OFFSET_Y_BOTTOM,
-  BOARD_WIDTH: OFFSET_X + 5 * STRING_SPACING + OFFSET_X_RIGHT,
-} as const;
-
-export type ModalActionType = 'createGroup' | 'renameGroup' | 'deleteGroup' | 'moveChord' | '';
-
-export const DEFAULT_CHORD_NAME = '未命名';
-export const RIGHT_SIDEBAR_WIDTH = 335; // 侧边栏统一物理宽度
-export const LEFT_SIDEBAR_WIDTH = 335; // 侧边栏统一物理宽度
-export const RIGHT_SIDEBAR_WIDTH_PIXEL = `${RIGHT_SIDEBAR_WIDTH}px`;
-export const LEFT_SIDEBAR_WIDTH_PIXEL = `${LEFT_SIDEBAR_WIDTH}px`;
+export * from './app';
+export * from './audio';
+export * from './fretboard';
+export * from './layout';
+export * from './storage';
+export * from './theme';
