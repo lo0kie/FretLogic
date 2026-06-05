@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="w-full text-center">
     <input
       v-model="chordLabStore.currentChordName"

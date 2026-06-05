@@ -1,4 +1,4 @@
-export type FretCount = 3 | 4 | 5;
+﻿export type FretCount = 3 | 4 | 5;
 
 export interface GuitarStringEntity {
   fret: number;

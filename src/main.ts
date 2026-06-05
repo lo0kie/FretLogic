@@ -1,5 +1,5 @@
-import App from '@/App.vue';
-import '@/assets/main.less'; // 导入全局样式皮肤
+﻿import App from '@/App.vue';
+import '@/assets/main.less';
 import { createPinia } from 'pinia';
 import { createApp } from 'vue';
 

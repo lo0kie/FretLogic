@@ -1,4 +1,4 @@
-/** * @Author likan * @Date 2026-06-01 * @Filepath fret-logic/src/views/sidebar-right/RightHelper.vue */
+﻿/** * @Author likan * @Date 2026-06-01 * @Filepath fret-logic/src/views/sidebar-right/RightHelper.vue */
 
 <template>
   <div class="helper-action-box flex flex-col gap-2">
@@ -98,10 +98,6 @@ const isShiftUpDisabled = computed(
     chordLabStore.strings.some(s => s.fret === chordLabStore.fretCount)
 );
 
-/**
- * 🌟 核心防线：安全隔离且带有水波纹切割特效的主题更迭器
- * 为 event 追加可选标记，防止键盘快捷键或边缘宏触发时没有 MouseEvent 导致空指针
- */
 const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
   const rootEl = document.documentElement;
   rootEl.setAttribute('theme-changing', 'true');

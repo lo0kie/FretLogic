@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="chord-card-frame relative">
     <div
       class="chord-thumb-card group h-10 px-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)] box-border"

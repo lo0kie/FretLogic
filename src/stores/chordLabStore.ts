@@ -1,4 +1,4 @@
-import { STORAGE_KEYS } from '@/constants';
+﻿import { STORAGE_KEYS } from '@/constants';
 import type { Chord, Group, GuitarStringsModel } from '@/types';
 import type { TuningType } from '@/utils/musicTheory';
 import { createString, extractRootNote, isOpen, TUNING_PRESETS } from '@/utils/musicTheory';
@@ -11,11 +11,9 @@ export type { Chord, Group };
 export const useChordLabStore = defineStore('chordLab', () => {
   const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '' });
 
-  // 1. 核心持久化响应层
   const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
   const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
 
-  // 2. 当前编辑器沙盒隔离的工作流高内聚纯状态
   const defaultStrings: GuitarStringsModel = [
     createString(),
     createString(),
@@ -39,7 +37,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
   const fretCount = useStorage<Chord['fretCount']>(STORAGE_KEYS.CURR_FCOUNT, 3);
   const capo = useStorage(STORAGE_KEYS.CURR_CAPO, 0);
 
-  // 3. 动态核心高内聚计算依赖
   const activeBaseStrings = computed(() => {
     return TUNING_PRESETS[currentTuning.value]?.mapping || [40, 45, 50, 55, 59, 64];
   });
@@ -61,7 +58,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
     return map;
   });
 
-  // 品位缩减时的实体物理安全防御
   watch(fretCount, (newVal, oldVal) => {
     if (newVal < oldVal) {
       strings.value.forEach(str => {
@@ -73,7 +69,6 @@ export const useChordLabStore = defineStore('chordLab', () => {
     }
   });
 
-  // 恢复历史和弦时的底层反序列化安全机制
   if (editingId.value) {
     const original = savedChordsList.value.find(c => c.id === editingId.value);
     if (original) {
@@ -87,11 +82,9 @@ export const useChordLabStore = defineStore('chordLab', () => {
     }
   }
 
-  // 纯状态沙盒原子级重置
   const resetEditor = () => {
     editingId.value = null;
 
-    // 🚀 核心修复：采用原地修改（In-place mutation）覆盖属性，彻底杜绝替换整个数组导致的 VueUse 代理断裂问题！
     strings.value.forEach(s => {
       s.fret = -1;
       s.isRoot = false;

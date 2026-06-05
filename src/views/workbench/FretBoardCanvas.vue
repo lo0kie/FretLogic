@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     ref="fretBoardRef"
     class="fretBoard-container relative touch-action-none flex flex-col items-center select-none"
@@ -217,7 +217,7 @@ const getFingerTextColor = (str: GuitarStringEntity) => {
 .open-note-text {
   display: inline-block;
   line-height: 1;
-  // 🌟 核心清理：砍掉引起次像素抖动的非整数定位偏置，改用浏览器百分之百原生的 Flex 垂直居中
+
   margin-top: 0px;
   margin-bottom: 0px;
 }
@@ -231,23 +231,23 @@ const getFingerTextColor = (str: GuitarStringEntity) => {
 
 button {
   border-width: 3px;
-  // 🌟 将变动时间进一步缩短至 0.05s 极速响应
+
   transition:
     border-width 0.05s @bezier-standard,
     background-color 0.05s ease;
 
-  // 3. 🌟 终极解决方案：在常规激活可用状态下，默认给个 3px 边框
+
   &.is-fret-available {
     border-width: 3px;
 
-    // 4. 🌟 当鼠标按住时（:active），坚决不调用任何 scale 几何缩放！
-    // 我们改用将边框厚度向内增厚到 5px（视觉内缩反馈），文字物理矩阵纹丝不动！
+
+
     &:active {
       border-width: 5px !important;
     }
   }
 
-  // 被按在指板深处时的隐形状态线
+
   &.is-fret-pressed {
     opacity: 0 !important;
     transform: scale(1) !important;

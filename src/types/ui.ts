@@ -1,4 +1,4 @@
-export type ModalActionType = 'createGroup' | 'renameGroup' | 'deleteGroup' | 'moveChord' | '';
+﻿export type ModalActionType = 'createGroup' | 'renameGroup' | 'deleteGroup' | 'moveChord' | '';
 
 export type ToastType = 'info' | 'success' | 'error' | 'loading';
 

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="fixed top-6 right-6 z-[3000] flex flex-col gap-2 items-end pointer-events-none">
     <TransitionGroup name="toast-transition">
       <div

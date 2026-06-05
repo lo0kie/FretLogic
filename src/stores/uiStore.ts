@@ -1,4 +1,4 @@
-import { useChordLabStore } from '@/stores/chordLabStore';
+﻿import { useChordLabStore } from '@/stores/chordLabStore';
 import type { Toast, ToastType } from '@/types';
 import { useRefHistory, useToggle } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -25,7 +25,6 @@ export const useUiStore = defineStore('ui', () => {
     toasts.value = toasts.value.filter(t => !t.canUndo);
   };
 
-  // 🌟 支持分类的常规 Toast
   const showToast = (msg: string, canUndo = false, type: ToastType = 'info') => {
     const id = performance.now();
     if (canUndo) clearUndoToasts();
@@ -35,7 +34,6 @@ export const useUiStore = defineStore('ui', () => {
     }, 3000);
   };
 
-  // 🚀 核心重构：支持现代化的 Promise Toast，极大提升异步交互体验
   const promiseToast = async <T>(
     promise: Promise<T>,
     messages: { loading: string; success: string; error: string }

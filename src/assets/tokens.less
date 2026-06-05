@@ -1,88 +1,80 @@
-// ==========================================================================
-// 🎨 FRET LOGIC - 终极 Design Tokens & Utilities
-// 这里只存放纯粹的、原子级的设计变量与公共混合宏，绝不包含具体的业务类名
-// ==========================================================================
+﻿:root {
 
-// --------------------------------------------------------------------------
-// 1. 🌈 动态语义化色彩 (CSS Variables 驱动，无缝衔接深浅色模式)
-// --------------------------------------------------------------------------
-:root {
-  /* 基础背景 */
-  --bg-main: #f1f5f9; /* slate-100 */
-  --bg-body: #f8fafc; /* slate-50 */
-  --bg-panel: #ffffff; /* white */
-  --bg-panel-hover: #f1f5f9; /* slate-100 */
+  --bg-main: #f1f5f9;
+  --bg-body: #f8fafc;
+  --bg-panel: #ffffff;
+  --bg-panel-hover: #f1f5f9;
 
-  /* 边框与分割线 */
+
   --border-light: rgba(15, 23, 42, 0.06);
   --border-base: rgba(15, 23, 42, 0.1);
   --control-border: rgba(15, 23, 42, 0.1);
 
-  /* 文本系统 */
-  --text-title: #0f172a; /* slate-900 */
-  --text-body: #334155; /* slate-700 */
-  --text-muted: #64748b; /* slate-500 */
-  --text-disabled: #94a3b8; /* slate-400 */
 
-  /* 品牌与功能色 */
-  --color-primary: #2563eb; /* blue-600 */
-  --color-success: #10b981; /* emerald-500 */
-  --color-warning: #f59e0b; /* amber-500 */
-  --color-danger: #ef4444; /* red-500 */
+  --text-title: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --text-disabled: #94a3b8;
+
+
+  --color-primary: #2563eb;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
 }
 
 .dark {
   --bg-main: #090d16;
-  --bg-body: #020617; /* slate-950 */
-  --bg-panel: #0f172a; /* slate-900 */
-  --bg-panel-hover: #1e293b; /* slate-800 */
+  --bg-body: #020617;
+  --bg-panel: #0f172a;
+  --bg-panel-hover: #1e293b;
 
   --border-light: rgba(255, 255, 255, 0.05);
   --border-base: rgba(255, 255, 255, 0.1);
   --control-border: rgba(255, 255, 255, 0.12);
 
-  --text-title: #f8fafc; /* slate-50 */
-  --text-body: #cbd5e1; /* slate-300 */
-  --text-muted: #94a3b8; /* slate-400 */
-  --text-disabled: #64748b; /* slate-500 */
+  --text-title: #f8fafc;
+  --text-body: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-disabled: #64748b;
 
-  --color-primary: #3b82f6; /* blue-500 */
-  --color-success: #34d399; /* emerald-400 */
-  --color-warning: #fbbf24; /* amber-400 */
-  --color-danger: #f87171; /* red-400 */
+  --color-primary: #3b82f6;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
 }
 
-// 供 Less 计算或 Mixin 调用的变量映射
+
 @primary: var(--color-primary);
-@brand-primary: var(--color-primary); // 兼容旧写法
+@brand-primary: var(--color-primary);
 @danger: var(--color-danger);
-@brand-danger: var(--color-danger); // 兼容旧写法
+@brand-danger: var(--color-danger);
 @warning: var(--color-warning);
 
 @text-title: var(--text-title);
 @text-body: var(--text-body);
 @text-subtitle: var(--text-muted);
 
-// --------------------------------------------------------------------------
-// 2. 📐 空间与边距体系 (Spacing & Padding)
-// --------------------------------------------------------------------------
-@space-xs: 0.25rem; // 4px
-@space-sm: 0.5rem; // 8px
-@space-md: 1rem; // 16px
-@space-lg: 1.5rem; // 24px
-@space-xl: 2rem; // 32px
 
-// --------------------------------------------------------------------------
-// 3. 🔵 圆角体系 (Rounded & Border Radius)
-// --------------------------------------------------------------------------
-@radius-sm: 0.25rem; // 4px
-@radius-md: 0.5rem; // 8px
-@radius-lg: 0.75rem; // 12px
-@radius-xl: 1rem; // 16px
 
-// --------------------------------------------------------------------------
-// 4. 🔲 边框与轮廓体系 (Border)
-// --------------------------------------------------------------------------
+
+@space-xs: 0.25rem;
+@space-sm: 0.5rem;
+@space-md: 1rem;
+@space-lg: 1.5rem;
+@space-xl: 2rem;
+
+
+
+
+@radius-sm: 0.25rem;
+@radius-md: 0.5rem;
+@radius-lg: 0.75rem;
+@radius-xl: 1rem;
+
+
+
+
 @border-width-base: 1px;
 @border-solid-base: @border-width-base solid var(--border-base);
 @border-solid-light: @border-width-base solid var(--border-light);
@@ -90,9 +82,9 @@
 
 @focus-ring-primary: 0 0 0 3px color-mix(in srgb, @primary, transparent 85%);
 
-// --------------------------------------------------------------------------
-// 5. ⛅ 阴影与海拔系统 (Shadows)
-// --------------------------------------------------------------------------
+
+
+
 @shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 @shadow-md:
   0 4px 6px -1px rgba(0, 0, 0, 0.1),
@@ -109,9 +101,9 @@
 @shadow-floating: 0 20px 50px -12px rgba(0, 0, 0, 0.15);
 @shadow-floating-dark: 0 30px 60px -15px rgba(0, 0, 0, 0.6);
 
-// --------------------------------------------------------------------------
-// 6. 🎬 缓动曲线与动画时间 (Transitions)
-// --------------------------------------------------------------------------
+
+
+
 @duration-fast: 0.15s;
 @duration-base: 0.25s;
 @duration-slow: 0.35s;
@@ -123,11 +115,11 @@
 @transition-base: all @duration-base @bezier-standard;
 @transition-fast: all @duration-fast @bezier-standard;
 
-// --------------------------------------------------------------------------
-// 7. 📚 纯净的 UI 混合宏 (UI Mixins)
-// --------------------------------------------------------------------------
 
-// 🦴 骨架 1: 基础面板 (侧边栏、工作区底板)
+
+
+
+
 .mixin-panel-base() {
   background-color: var(--bg-panel);
   border: @border-solid-light;
@@ -138,7 +130,7 @@
   }
 }
 
-// 🦴 骨架 2: 悬浮层 (弹窗、下拉菜单、Tooltip)
+
 .mixin-floating-layer() {
   background-color: var(--bg-panel);
   border: @border-solid-base;
@@ -151,7 +143,7 @@
   }
 }
 
-// 🦴 骨架 3: 交互式卡片 (列表项、和弦块)
+
 .mixin-interactive-card() {
   background-color: transparent;
   border: 1px solid transparent;
@@ -168,7 +160,7 @@
   }
 }
 
-// （保留给部分旧组件的兼容卡片宏）
+
 .mixin-hover-card() {
   transition: @transition-fast;
   border: 1px solid transparent;
@@ -180,7 +172,7 @@
   }
 }
 
-// 🦴 骨架 4: 表单输入框基座
+
 .mixin-input-base() {
   background-color: var(--bg-body);
   border: @border-solid-base;
@@ -205,7 +197,7 @@
   }
 }
 
-// 🦴 骨架 5: 基础按钮
+
 .mixin-button-base() {
   font-size: 0.75rem;
   height: 2.5rem;
@@ -231,7 +223,7 @@
   }
 }
 
-// 🦴 骨架 6: 侧边栏把手
+
 .mixin-sidebar-toggle() {
   position: absolute;
   top: 50%;

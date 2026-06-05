@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div ref="tuningContainerRef" class="flex flex-col gap-2">
     <label class="text-xs font-black uppercase tracking-widest" style="color: var(--text-disabled)">调音方案</label>
 

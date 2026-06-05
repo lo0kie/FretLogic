@@ -1,6 +1,5 @@
-import { Chord, Group, GuitarStringsModel } from '@/types';
+﻿import { Chord, Group, GuitarStringsModel } from '@/types';
 
-// 🌟 显式定义符合你当前扁平 Chord 契约的导入/导出松散数据载荷
 interface LooseChordPayload {
   id: string | number;
   chordName: string;
@@ -32,7 +31,6 @@ export const cleanAndValidateData = (
   const rawGroups = d.groups as unknown[];
   const rawChords = d.chords as Record<string, any>[];
 
-  // 1. 清洗 Group 分组序列
   const cleanedGroups: Group[] = [];
   for (const g of rawGroups) {
     if (!g || typeof g !== 'object') {
@@ -52,7 +50,6 @@ export const cleanAndValidateData = (
   const usedChordIds = new Set<string>();
   const validChords: Chord[] = [];
 
-  // 2. 清洗扁平的 Chord 和弦序列（无兼容残留，100% 贴合你的 Chord 契约定义）
   for (const c of rawChords) {
     if (!c || typeof c !== 'object') {
       isValid = false;
@@ -61,7 +58,6 @@ export const cleanAndValidateData = (
 
     const chordItem = c as LooseChordPayload;
 
-    // 游离脏数据安全拦截：如果没有外键 groupId，或者 groupId 在分组里找不到，执行脱离
     if (
       !chordItem.groupId ||
       String(chordItem.groupId).trim() === '' ||
@@ -78,14 +74,12 @@ export const cleanAndValidateData = (
     const finalCapo = typeof chordItem.capo === 'number' ? chordItem.capo : 0;
     const finalTuning = typeof chordItem.tuning === 'string' ? chordItem.tuning : 'STANDARD';
 
-    // 严格审查每根琴弦实体的合法性
     if (!Array.isArray(chordItem.strings) || chordItem.strings.length !== 6) {
       console.error(`❌ ${logPrefix} -> 和弦 "${finalName}" 核心物理琴弦实体破损或长度不是6`);
       isValid = false;
       continue;
     }
 
-    // 🌟 核心修正：严格按照你给出的 Chord 接口字段进行对象字面量装配
     const finalChord: Chord = {
       id: usedChordIds.has(finalId) ? 'c_recovery_' + crypto.randomUUID().slice(0, 8) : finalId,
       chordName: finalName,
@@ -100,7 +94,6 @@ export const cleanAndValidateData = (
     validChords.push(finalChord);
   }
 
-  // 重新映射回宿主载荷
   d.groups = cleanedGroups;
   d.chords = validChords;
 

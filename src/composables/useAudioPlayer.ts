@@ -1,8 +1,7 @@
-import { AUDIO_CONFIG } from '@/constants';
+﻿import { AUDIO_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { onBeforeUnmount, ref } from 'vue';
 
-// 🌟 工业级常驻物理隔离单例：确保整个 Web 生命周期音频节点仅创建编译一次
 let sharedCtx: AudioContext | null = null;
 let sharedMainMixer: GainNode | null = null;
 const staticStringGains: GainNode[] = [];
@@ -13,7 +12,6 @@ export function useAudioPlayer() {
   const chordLabStore = useChordLabStore();
   const isPlaying = ref(false);
 
-  // 生成衰减率平滑的白噪原声吉他空间卷积混响 Buffer
   const generateReverbBuffer = (ctx: AudioContext, seconds: number): AudioBuffer => {
     if (cachedReverbBuffer) return cachedReverbBuffer;
     const rate = ctx.sampleRate;
@@ -29,7 +27,6 @@ export function useAudioPlayer() {
     return buffer;
   };
 
-  // 核心单例拓扑搭建
   const initAudioEngine = () => {
     if (sharedCtx) return sharedCtx;
 
@@ -46,7 +43,6 @@ export function useAudioPlayer() {
     const wetGain = ctx.createGain();
     wetGain.gain.setValueAtTime(AUDIO_CONFIG.REVERB_WET_GAIN, ctx.currentTime);
 
-    // 动态限幅压缩器 (Compressor)：强制拦截多弦爆发引起的硬性剪切和耳机爆音
     const compressor = ctx.createDynamicsCompressor();
     compressor.threshold.setValueAtTime(AUDIO_CONFIG.COMPRESSOR_THRESHOLD, ctx.currentTime);
     compressor.knee.setValueAtTime(AUDIO_CONFIG.COMPRESSOR_KNEE, ctx.currentTime);
@@ -54,14 +50,12 @@ export function useAudioPlayer() {
     compressor.attack.setValueAtTime(AUDIO_CONFIG.COMPRESSOR_ATTACK || 0.003, ctx.currentTime);
     compressor.release.setValueAtTime(AUDIO_CONFIG.COMPRESSOR_RELEASE || 0.25, ctx.currentTime);
 
-    // 连接音频通道网
     mainMixer.connect(compressor);
     mainMixer.connect(convolver);
     convolver.connect(wetGain);
     wetGain.connect(compressor);
     compressor.connect(ctx.destination);
 
-    // 预先建立常驻 6 根物理弦控增益池
     staticStringGains.length = 0;
     for (let i = 0; i < 6; i++) {
       const sGain = ctx.createGain();
@@ -87,13 +81,11 @@ export function useAudioPlayer() {
     isPlaying.value = true;
     const now = ctx.currentTime;
 
-    // 清理并在 10 毫秒内淡出历史试听音源计划
     staticStringGains.forEach(gainNode => {
       gainNode.gain.cancelScheduledValues(now);
       gainNode.gain.setTargetAtTime(0, now, 0.01);
     });
 
-    // 鉁?核心大白话改动：用新版的 strings 实体快照完全替代掉以前死掉的 selectedFrets
     const stringsSnapshot = chordLabStore.strings.map(s => ({ fret: s.fret, preferFlat: s.preferFlat }));
     const capoOffset = chordLabStore.capo > 0 ? chordLabStore.capo : 0;
     let strumDelay = 0;
@@ -101,17 +93,14 @@ export function useAudioPlayer() {
     for (let sIdx = 0; sIdx <= 5; sIdx++) {
       const targetStr = stringsSnapshot[sIdx];
 
-      // 如果当前弦是哑音（小于 0，即 -1），说明不用弹，直接优雅地略过
       if (targetStr.fret < 0) continue;
 
       const guitarMidiBase = chordLabStore.activeBaseStrings[sIdx];
       const actualOffset = targetStr.fret > 0 ? capoOffset : 0;
 
-      // 声音频率换算公式
       const frequency = 440 * Math.pow(2, (guitarMidiBase + targetStr.fret + actualOffset - 69) / 12);
       const triggerTime = now + strumDelay;
 
-      // 动态轻量化生成试听高频振荡组件
       const oscMain = ctx.createOscillator();
       const oscMod = ctx.createOscillator();
       const stringGain = staticStringGains[sIdx];
@@ -124,10 +113,9 @@ export function useAudioPlayer() {
       const modGain = ctx.createGain();
       modGain.gain.setValueAtTime(frequency * 2.5, triggerTime);
 
-      // ADSR 原声木吉他物理拨弦包络还原
       const envStartTime = triggerTime;
       const envReleaseEndTime = envStartTime + 0.2 + 1.2;
-      const humanizeVelocity = 0.82 + Math.random() * 0.18; // 增加动态拟真力度感
+      const humanizeVelocity = 0.82 + Math.random() * 0.18;
 
       stringGain.gain.setValueAtTime(0, envStartTime);
       stringGain.gain.linearRampToValueAtTime(1.0 * humanizeVelocity, envStartTime + 0.004);
@@ -150,7 +138,7 @@ export function useAudioPlayer() {
         modGain.disconnect();
       };
 
-      strumDelay += AUDIO_CONFIG.STRUM_DELAY_STEP; // 调度时间指针平移
+      strumDelay += AUDIO_CONFIG.STRUM_DELAY_STEP;
     }
 
     if (playTimer) clearTimeout(playTimer);

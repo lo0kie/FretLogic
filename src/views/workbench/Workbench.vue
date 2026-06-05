@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="flex-1 h-full flex items-center justify-center p-8 transition-all relative overflow-hidden">
     <div
       class="absolute inset-0 bg-gradient-to-b from-[var(--color-primary)]/5 to-transparent pointer-events-none transition-colors duration-500"
@@ -28,14 +28,12 @@ import { computed } from 'vue';
 const chordLabStore = useChordLabStore();
 
 const dynamicHeight = computed(() => {
-  // 1. 卡片内除画布外的纯几何宏观垂直高依赖
+
   const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;
 
-  // 2. 指板原始物理高度
   const rawCanvasHeight =
     CANVAS_CONFIG.OFFSET_Y_TOP + chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
 
-  // 3. 乘以全量统一的物理微调缩放系数
   const currentScale = FRETBOARD_SCALE_MAP[chordLabStore.fretCount] || 1.0;
   const realBoardHeight = rawCanvasHeight * currentScale;
 

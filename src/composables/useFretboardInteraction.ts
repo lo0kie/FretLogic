@@ -1,4 +1,4 @@
-import { CANVAS_CONFIG } from '@/constants';
+﻿import { CANVAS_CONFIG } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { isMuted, isOpen } from '@/utils/musicTheory';
 import { useEventListener } from '@vueuse/core';
@@ -118,7 +118,7 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
           return;
         }
         str.fret = fIdx;
-        // 鉁?宸插畬缇庢姌鎺夊師鍏?str.isRoot = true 鐨勮嚜鍔ㄨ祴鍊奸€昏緫锛岀‘淇濆惎鍔ㄥ強绗竴娆＄偣鍑讳笉浼氳閿欒鏍昏涓烘牴闊?
+
         lastSIdx = sIdx;
         lastFIdx = fIdx;
       }

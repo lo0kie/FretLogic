@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     class="panel-left h-[calc(100vh-24px)] flex flex-col shrink-0 relative rounded-xl z-10 box-content"
     :class="{ 'is-open': uiStore.isLeftOpen }"
@@ -42,7 +42,7 @@ const uiStore = useUiStore();
     opacity @duration-base ease,
     margin @duration-slow @bezier-sidebar;
 
-  // 🌟 统一逻辑：脱离行内绑定，拥抱纯 CSS 类名驱动
+
   &.is-open {
     width: v-bind(LEFT_SIDEBAR_WIDTH_PIXEL);
     opacity: 1;
@@ -56,12 +56,12 @@ const uiStore = useUiStore();
   border-radius: 0 10px 10px 0;
   transform: translateY(-50%) scale(1);
   transform-origin: left;
-  left: 0px; // 🌟 默认收起时贴紧最左边缘
+  left: 0px;
   transition:
     all 0.2s ease,
     left @duration-slow @bezier-sidebar;
 
-  // 🌟 统一逻辑：动态计算按钮悬浮偏移量（侧边栏宽度 + 12px 外边距）
+
   &.is-open {
     left: calc(v-bind(LEFT_SIDEBAR_WIDTH_PIXEL) + 13px);
   }

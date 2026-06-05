@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     class="p-4 border-t border-[var(--control-border)] bg-[var(--bg-body)] rounded-b-xl"
     :class="`min-w-[${RIGHT_SIDEBAR_WIDTH_PIXEL}]`"
@@ -26,7 +26,7 @@
 import ActionButton from '@/components/ActionButton.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { RIGHT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
-import { useChordService } from '@/services/useChordService'; // 🌟 接入无状态服务
+import { useChordService } from '@/services/useChordService';
 import { useChordLabStore } from '@/stores/chordLabStore';
 import { computed } from 'vue';
 

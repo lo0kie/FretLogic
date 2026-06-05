@@ -1,4 +1,4 @@
-import type { TuningType } from '@/utils/musicTheory';
+﻿import type { TuningType } from '@/utils/musicTheory';
 import type { FretCount, GuitarStringsModel } from './fretboard';
 
 export interface Chord {

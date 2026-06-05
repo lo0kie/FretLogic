@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div ref="capoContainerRef" class="relative flex flex-col gap-2">
     <label class="text-xs font-black tracking-widest uppercase" style="color: var(--text-disabled)">
       Capo (把位平移)

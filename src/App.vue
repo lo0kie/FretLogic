@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="w-full h-screen flex relative overflow-y-hidden overflow-x-auto min-w-[1480px]">
     <GlobalToast />
 

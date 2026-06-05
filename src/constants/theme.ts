@@ -1,4 +1,4 @@
-export const FRETBOARD_COLORS = {
+﻿export const FRETBOARD_COLORS = {
   rootLight: '#f59e0b',
   rootDark: '#fbbf24',
   normalLight: '#2563eb',

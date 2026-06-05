@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="flex flex-col flex-1 overflow-hidden" :class="`min-w-[${LEFT_SIDEBAR_WIDTH_PIXEL}]`">
     <LeftSearch v-model="searchQuery" :disabled="chordLabStore.savedChordsList.length === 0" />
 
@@ -143,30 +143,28 @@
 <script setup lang="ts">
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useChordLabStore } from '@/stores/chordLabStore';
-import { useModal } from '@/composables/useModal'; // 🌟 接入解耦的弹窗服务
+import { useModal } from '@/composables/useModal';
 import { useChordService } from '@/services/useChordService';
 import LeftChordCard from '@/views/sidebar-left/LeftChordCard.vue';
 import LeftSearch from '@/views/sidebar-left/LeftSearch.vue';
 import { ChevronDown, FolderOpen, GripVertical } from '@lucide/vue';
-import { refDebounced } from '@vueuse/core'; // 🌟 引入 VueUse 防抖核心
+import { refDebounced } from '@vueuse/core';
 import { ref } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
-import type { Chord } from '@/types'; // 馃専 挂载全新元组约束
+import type { Chord } from '@/types';
 
 const chordLabStore = useChordLabStore();
 const chordService = useChordService();
 const modal = useModal();
 
 const searchQuery = ref('');
-// 🌟 性能护城河：150ms 输入防抖，极大降低重新计算开销
+
 const debouncedQuery = refDebounced(searchQuery, 150);
 
-// 🌟 O(1) 字典直取，彻底消灭全表 filter 扫描
 const getGroupChordsCount = (groupId: string) => {
   return chordLabStore.groupChordMap.get(groupId)?.length || 0;
 };
 
-// 🌟 基于字典 O(1) 取值后再做字符串比对，性能提升百倍
 const searchFilteredChords = (groupId: string) => {
   const chords = chordLabStore.groupChordMap.get(groupId) || [];
   const q = debouncedQuery.value.toLowerCase().trim();

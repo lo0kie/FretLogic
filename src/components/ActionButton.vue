@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <button
     :disabled="disabled"
     @click="handleInternalClick"
@@ -19,7 +19,6 @@ const props = defineProps<{
   disabled?: boolean;
 }>();
 
-// 🌟 核心修复：允许向上派发可选的 MouseEvent 载荷，打通强类型调用链路
 const emit = defineEmits<{
   (e: 'click', event: MouseEvent): void;
 }>();

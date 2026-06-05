@@ -1,4 +1,4 @@
-import { useChordLabStore } from '@/stores/chordLabStore';
+﻿import { useChordLabStore } from '@/stores/chordLabStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';
 
@@ -49,9 +49,8 @@ export function useImportExportService() {
     if (cleanAndValidateData(originalData, 'export')) {
       chordStore.overwriteChords(originalData.chords);
 
-      // 🌟 使用 ISO 标准时间戳生成优雅的文件名 (例如: 2026-05-31_17-03-21)
       const now = new Date();
-      // 获取本地时间的偏移并处理 ISO 字符串
+
       const tzOffset = now.getTimezoneOffset() * 60000;
       const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, -1);
       const dateStr = localISOTime.replace(/T/, '_').replace(/:/g, '-').split('.')[0];
