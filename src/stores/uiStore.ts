@@ -1,11 +1,11 @@
-﻿import { useChordLabStore } from '@/stores/chordLabStore';
-import type { Toast, ToastType } from '@/types';
+﻿import type { Toast, ToastType } from '@/types';
 import { useRefHistory, useToggle } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { nextTick, ref, toRaw, toRef } from 'vue';
+import { ref, toRaw, toRef } from 'vue';
+import { useChordStore } from './chordStore';
 
 export const useUiStore = defineStore('ui', () => {
-  const chordStore = useChordLabStore();
+  const chordStore = useChordStore();
   const savedChordsRef = toRef(chordStore, 'savedChordsList');
 
   const { undo: rawUndo } = useRefHistory(savedChordsRef, {
@@ -82,9 +82,6 @@ export const useUiStore = defineStore('ui', () => {
         });
         chordStore.groups.unshift({ id: targetGroupId, name: '已恢复的和弦', collapsed: false });
         chordStore.selectedGroupId = targetGroupId;
-        nextTick(() => {
-          document.getElementById(`group-${targetGroupId}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        });
       }
       chordStore.savedChordsList.forEach(c => {
         if (!validGroupIds.has(c.groupId)) c.groupId = targetGroupId as string;

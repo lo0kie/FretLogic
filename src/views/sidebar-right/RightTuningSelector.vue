@@ -10,7 +10,7 @@
           :class="{ 'is-active': isDropdownOpen }"
         >
           <span class="font-black text-[14px] text-title flex items-center gap-2">
-            {{ TUNING_PRESETS[chordLabStore.currentTuning]?.name || 'Standard' }}
+            {{ TUNING_PRESETS[editorStore.currentTuning]?.name || 'Standard' }}
           </span>
 
           <ChevronDown
@@ -38,7 +38,7 @@
             :key="key"
             @click="handleTuningChange(key)"
             class="tuning-item h-10 px-2.5 rounded-lg flex items-center text-[13px] font-black"
-            :class="{ 'is-selected': chordLabStore.currentTuning === key }"
+            :class="{ 'is-selected': editorStore.currentTuning === key }"
           >
             <span class="truncate">{{ config.name }}</span>
           </div>
@@ -50,13 +50,13 @@
 
 <script setup lang="ts">
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
-import { useChordLabStore } from '@/stores/chordLabStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { TUNING_PRESETS, type TuningType } from '@/utils/musicTheory';
 import { ChevronDown } from '@lucide/vue';
 import { onClickOutside } from '@vueuse/core';
 import { ref } from 'vue';
 
-const chordLabStore = useChordLabStore();
+const editorStore = useEditorStore();
 const isDropdownOpen = ref(false);
 const tuningContainerRef = ref<HTMLDivElement | null>(null);
 
@@ -65,7 +65,7 @@ onClickOutside(tuningContainerRef, () => {
 });
 
 const handleTuningChange = (tuningKey: TuningType) => {
-  chordLabStore.currentTuning = tuningKey;
+  editorStore.currentTuning = tuningKey;
   isDropdownOpen.value = false;
 };
 </script>

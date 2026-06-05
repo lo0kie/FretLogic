@@ -1,21 +1,17 @@
 ﻿:root {
-
   --bg-main: #f1f5f9;
   --bg-body: #f8fafc;
   --bg-panel: #ffffff;
   --bg-panel-hover: #f1f5f9;
 
-
   --border-light: rgba(15, 23, 42, 0.06);
   --border-base: rgba(15, 23, 42, 0.1);
   --control-border: rgba(15, 23, 42, 0.1);
-
 
   --text-title: #0f172a;
   --text-body: #334155;
   --text-muted: #64748b;
   --text-disabled: #94a3b8;
-
 
   --color-primary: #2563eb;
   --color-success: #10b981;
@@ -44,7 +40,6 @@
   --color-danger: #f87171;
 }
 
-
 @primary: var(--color-primary);
 @brand-primary: var(--color-primary);
 @danger: var(--color-danger);
@@ -55,25 +50,16 @@
 @text-body: var(--text-body);
 @text-subtitle: var(--text-muted);
 
-
-
-
 @space-xs: 0.25rem;
 @space-sm: 0.5rem;
 @space-md: 1rem;
 @space-lg: 1.5rem;
 @space-xl: 2rem;
 
-
-
-
 @radius-sm: 0.25rem;
 @radius-md: 0.5rem;
 @radius-lg: 0.75rem;
 @radius-xl: 1rem;
-
-
-
 
 @border-width-base: 1px;
 @border-solid-base: @border-width-base solid var(--border-base);
@@ -81,9 +67,6 @@
 @border-dashed-base: @border-width-base dashed var(--border-base);
 
 @focus-ring-primary: 0 0 0 3px color-mix(in srgb, @primary, transparent 85%);
-
-
-
 
 @shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 @shadow-md:
@@ -101,9 +84,6 @@
 @shadow-floating: 0 20px 50px -12px rgba(0, 0, 0, 0.15);
 @shadow-floating-dark: 0 30px 60px -15px rgba(0, 0, 0, 0.6);
 
-
-
-
 @duration-fast: 0.15s;
 @duration-base: 0.25s;
 @duration-slow: 0.35s;
@@ -115,11 +95,6 @@
 @transition-base: all @duration-base @bezier-standard;
 @transition-fast: all @duration-fast @bezier-standard;
 
-
-
-
-
-
 .mixin-panel-base() {
   background-color: var(--bg-panel);
   border: @border-solid-light;
@@ -129,7 +104,6 @@
     box-shadow: @shadow-panel-dark;
   }
 }
-
 
 .mixin-floating-layer() {
   background-color: var(--bg-panel);
@@ -142,7 +116,6 @@
     box-shadow: @shadow-floating-dark;
   }
 }
-
 
 .mixin-interactive-card() {
   background-color: transparent;
@@ -160,7 +133,6 @@
   }
 }
 
-
 .mixin-hover-card() {
   transition: @transition-fast;
   border: 1px solid transparent;
@@ -171,7 +143,6 @@
     background-color: rgba(255, 255, 255, 0.06);
   }
 }
-
 
 .mixin-input-base() {
   background-color: var(--bg-body);
@@ -197,7 +168,6 @@
   }
 }
 
-
 .mixin-button-base() {
   font-size: 0.75rem;
   height: 2.5rem;
@@ -222,7 +192,6 @@
     box-shadow: none !important;
   }
 }
-
 
 .mixin-sidebar-toggle() {
   position: absolute;

@@ -28,7 +28,7 @@
           <template v-else-if="modal.modalType.value === 'moveChord'">
             <div class="flex flex-col gap-2 mb-6 overflow-y-auto no-scrollbar pb-1">
               <button
-                v-for="group in chordLabStore.groups"
+                v-for="group in chordStore.groups"
                 :key="group.id"
                 @click="handleGroupSelect(group.id)"
                 :disabled="isCurrentGroup(group.id)"
@@ -72,14 +72,16 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import { useModal } from '@/composables/useModal';
-import { useChordLabStore } from '@/stores/chordLabStore';
+import { useChordStore } from '@/stores/chordStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { ModalActionType } from '@/types';
 import { useEventListener, useScrollLock } from '@vueuse/core';
 import { nextTick, ref, watch } from 'vue';
 
+const editorStore = useEditorStore();
 const uiStore = useUiStore();
-const chordLabStore = useChordLabStore();
+const chordStore = useChordStore();
 const modal = useModal();
 const inputRef = ref<HTMLInputElement | null>(null);
 
@@ -103,45 +105,44 @@ const handleLocalConfirm = () => {
   }
 
   if (modal.modalType.value === 'createGroup') {
-    if (chordLabStore.groups.some(g => g.name === val)) {
+    if (chordStore.groups.some(g => g.name === val)) {
       uiStore.showToast('⚠️ 创建失败：该分组名称已存在');
       return;
     }
     const newId = 'g_' + crypto.randomUUID().slice(0, 8);
-    chordLabStore.groups.forEach(g => {
+    chordStore.groups.forEach(g => {
       g.collapsed = true;
     });
-    chordLabStore.groups.push({ id: newId, name: val, collapsed: false });
-    chordLabStore.selectedGroupId = newId;
-    nextTick(() => {
-      document.getElementById(`group-${newId}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
+    chordStore.groups.push({ id: newId, name: val, collapsed: false });
+    chordStore.selectedGroupId = newId;
   } else if (modal.modalType.value === 'renameGroup' && modal.activeTargetGroup.value) {
     modal.activeTargetGroup.value.name = val;
   } else if (modal.modalType.value === 'deleteGroup' && modal.activeTargetGroup.value) {
     const targetGid = modal.activeTargetGroup.value.id;
-    if (chordLabStore.editingId) {
-      const editingChord = chordLabStore.savedChordsList.find(c => c.id === chordLabStore.editingId);
+
+    if (editorStore.editingId) {
+      const editingChord = chordStore.savedChordsList.find(c => c.id === editorStore.editingId);
       if (editingChord && editingChord.groupId === targetGid) {
-        chordLabStore.resetEditor();
+        editorStore.resetEditor();
       }
     }
-    chordLabStore.overwriteChords(chordLabStore.savedChordsList.filter(c => c.groupId !== targetGid));
-    chordLabStore.overwriteGroups(chordLabStore.groups.filter(g => g.id !== targetGid));
-    if (chordLabStore.selectedGroupId === targetGid) {
-      chordLabStore.selectedGroupId = chordLabStore.groups[0]?.id || null;
+    chordStore.overwriteChords(chordStore.savedChordsList.filter(c => c.groupId !== targetGid));
+    chordStore.overwriteGroups(chordStore.groups.filter(g => g.id !== targetGid));
+
+    if (chordStore.selectedGroupId === targetGid) {
+      chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
     }
     uiStore.clearUndoToasts();
   } else if (modal.modalType.value === 'moveChord' && modal.activeTargetChord.value) {
-    const chordIdx = chordLabStore.savedChordsList.findIndex(c => c.id === modal.activeTargetChord.value!.id);
+    const chordIdx = chordStore.savedChordsList.findIndex(c => c.id === modal.activeTargetChord.value!.id);
     if (chordIdx !== -1) {
-      chordLabStore.savedChordsList[chordIdx].groupId = val;
+      chordStore.savedChordsList[chordIdx].groupId = val;
       uiStore.clearUndoToasts();
     }
   }
 
   modal.closeModal();
-  uiStore.showToast('⚡ 操作成功完成');
+  uiStore.showToast('✅ 操作成功完成');
 };
 
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {

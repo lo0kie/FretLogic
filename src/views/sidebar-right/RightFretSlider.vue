@@ -12,9 +12,9 @@
           style="width: calc(33.33% - 2.66px)"
           :style="{
             transform:
-              chordLabStore.fretCount === 3
+              editorStore.fretCount === 3
                 ? 'translateX(0)'
-                : chordLabStore.fretCount === 4
+                : editorStore.fretCount === 4
                   ? 'translateX(100%)'
                   : 'translateX(200%)',
           }"
@@ -23,10 +23,10 @@
         <div
           v-for="f in FRET_COUNTS"
           :key="f"
-          @click="chordLabStore.fretCount = f"
+          @click="editorStore.fretCount = f"
           class="flex-1 text-center text-[16px] font-black z-20 h-full flex items-center justify-center transition-colors"
-          :class="chordLabStore.fretCount === f ? 'opacity-100' : 'opacity-50'"
-          :style="{ color: chordLabStore.fretCount === f ? 'var(--color-primary)' : 'var(--text-disabled)' }"
+          :class="editorStore.fretCount === f ? 'opacity-100' : 'opacity-50'"
+          :style="{ color: editorStore.fretCount === f ? 'var(--color-primary)' : 'var(--text-disabled)' }"
         >
           {{ f }} 品
         </div>
@@ -38,11 +38,11 @@
 <script setup lang="ts">
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { FRET_COUNTS } from '@/constants';
-import { useChordLabStore } from '@/stores/chordLabStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { useEventListener } from '@vueuse/core';
 import { onMounted, ref } from 'vue';
 
-const chordLabStore = useChordLabStore();
+const editorStore = useEditorStore();
 const fretSliderRef = ref<HTMLDivElement | null>(null);
 let isFretDragging = false;
 let cachedSliderRect: DOMRect | null = null;
@@ -73,9 +73,9 @@ const updateFretCountFromX = (clientX: number) => {
 
   const relativeX = clientX - rect.left;
   const percent = relativeX / rect.width;
-  if (percent < 0.33) chordLabStore.fretCount = 3;
-  else if (percent < 0.66) chordLabStore.fretCount = 4;
-  else chordLabStore.fretCount = 5;
+  if (percent < 0.33) editorStore.fretCount = 3;
+  else if (percent < 0.66) editorStore.fretCount = 4;
+  else editorStore.fretCount = 5;
 };
 
 onMounted(() => {

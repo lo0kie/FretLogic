@@ -6,17 +6,17 @@
     <div class="grid grid-cols-2 gap-2">
       <GlobalTooltip :content="saveDisabledReason">
         <ActionButton @click="chordService.persistCurrentChord()" :primary="!isSaveDisabled" :disabled="isSaveDisabled">
-          {{ chordLabStore.editingId ? '更新修改' : '保存和弦' }}
+          {{ editorStore.editingId ? '更新修改' : '保存和弦' }}
         </ActionButton>
       </GlobalTooltip>
 
       <ActionButton
-        @click="chordLabStore.resetEditor()"
-        :danger="!chordLabStore.editingId"
-        :warning="!!chordLabStore.editingId"
+        @click="editorStore.resetEditor()"
+        :danger="!editorStore.editingId"
+        :warning="!!editorStore.editingId"
         :disabled="isClearDisabled"
       >
-        {{ chordLabStore.editingId ? '放弃本次修改' : '重置' }}
+        {{ editorStore.editingId ? '放弃本次修改' : '重置' }}
       </ActionButton>
     </div>
   </div>
@@ -27,34 +27,34 @@ import ActionButton from '@/components/ActionButton.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { RIGHT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useChordService } from '@/services/useChordService';
-import { useChordLabStore } from '@/stores/chordLabStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { computed } from 'vue';
 
-const chordLabStore = useChordLabStore();
+const editorStore = useEditorStore();
 const chordService = useChordService();
 
 const isSaveDisabled = computed(() => {
-  const cleanName = chordLabStore.currentChordName ? chordLabStore.currentChordName.trim() : '';
-  return !cleanName || chordLabStore.isFretBoardEmpty;
+  const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
+  return !cleanName || editorStore.isFretBoardEmpty;
 });
 
 const saveDisabledReason = computed(() => {
   if (!isSaveDisabled.value) return undefined;
-  const cleanName = chordLabStore.currentChordName ? chordLabStore.currentChordName.trim() : '';
+  const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
   if (!cleanName) return '请输入和弦名称（如 C, Am）';
-  if (chordLabStore.isFretBoardEmpty) return '指板上至少需要指定一个有效音符';
+  if (editorStore.isFretBoardEmpty) return '指板上至少需要指定一个有效音符';
   return undefined;
 });
 
 const isClearDisabled = computed(() => {
-  if (chordLabStore.editingId) return false;
+  if (editorStore.editingId) return false;
 
-  const cleanName = chordLabStore.currentChordName ? chordLabStore.currentChordName.trim() : '';
+  const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
   const isDefaultName = cleanName === '';
-  const isDefaultFretBoard = chordLabStore.isFretBoardEmpty;
-  const isDefaultCapo = chordLabStore.capo === 0;
-  const isDefaultFretCount = chordLabStore.fretCount === 3;
-  const isDefaultTuning = chordLabStore.currentTuning === 'STANDARD';
+  const isDefaultFretBoard = editorStore.isFretBoardEmpty;
+  const isDefaultCapo = editorStore.capo === 0;
+  const isDefaultFretCount = editorStore.fretCount === 3;
+  const isDefaultTuning = editorStore.currentTuning === 'STANDARD';
 
   return isDefaultName && isDefaultFretBoard && isDefaultCapo && isDefaultFretCount && isDefaultTuning;
 });

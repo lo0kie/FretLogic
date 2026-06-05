@@ -1,5 +1,5 @@
 ﻿import { AUDIO_CONFIG } from '@/constants';
-import { useChordLabStore } from '@/stores/chordLabStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { onBeforeUnmount, ref } from 'vue';
 
 let sharedCtx: AudioContext | null = null;
@@ -9,8 +9,8 @@ let playTimer: ReturnType<typeof setTimeout> | null = null;
 let cachedReverbBuffer: AudioBuffer | null = null;
 
 export function useAudioPlayer() {
-  const chordLabStore = useChordLabStore();
   const isPlaying = ref(false);
+  const editorStore = useEditorStore();
 
   const generateReverbBuffer = (ctx: AudioContext, seconds: number): AudioBuffer => {
     if (cachedReverbBuffer) return cachedReverbBuffer;
@@ -86,8 +86,8 @@ export function useAudioPlayer() {
       gainNode.gain.setTargetAtTime(0, now, 0.01);
     });
 
-    const stringsSnapshot = chordLabStore.strings.map(s => ({ fret: s.fret, preferFlat: s.preferFlat }));
-    const capoOffset = chordLabStore.capo > 0 ? chordLabStore.capo : 0;
+    const stringsSnapshot = editorStore.strings.map(s => ({ fret: s.fret, preferFlat: s.preferFlat }));
+    const capoOffset = editorStore.capo > 0 ? editorStore.capo : 0;
     let strumDelay = 0;
 
     for (let sIdx = 0; sIdx <= 5; sIdx++) {
@@ -95,7 +95,7 @@ export function useAudioPlayer() {
 
       if (targetStr.fret < 0) continue;
 
-      const guitarMidiBase = chordLabStore.activeBaseStrings[sIdx];
+      const guitarMidiBase = editorStore.activeBaseStrings[sIdx];
       const actualOffset = targetStr.fret > 0 ? capoOffset : 0;
 
       const frequency = 440 * Math.pow(2, (guitarMidiBase + targetStr.fret + actualOffset - 69) / 12);

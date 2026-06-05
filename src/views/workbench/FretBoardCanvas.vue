@@ -12,7 +12,7 @@
     @contextmenu.prevent="handleCanvasRightClick"
   >
     <div class="w-full relative pointer-events-none" :style="{ height: `${CANVAS_CONFIG.OFFSET_Y_TOP}px` }">
-      <template v-for="(str, sIdx) in chordLabStore.strings" :key="'os-' + sIdx">
+      <template v-for="(str, sIdx) in editorStore.strings" :key="'os-' + sIdx">
         <GlobalTooltip
           placement="top"
           :content="str.fret > 0 ? undefined : '🖱️ 左键：切换空弦/静音 \n 🖱️ 右键：设为根音'"
@@ -38,7 +38,7 @@
               </template>
 
               <span v-else-if="isOpen(str)" class="font-black text-xl tracking-tighter open-note-text">
-                {{ calcNoteLabel(sIdx, 0, chordLabStore.capo, str.preferFlat, chordLabStore.activeBaseStrings) }}
+                {{ calcNoteLabel(sIdx, 0, editorStore.capo, str.preferFlat, editorStore.activeBaseStrings) }}
               </span>
             </template>
           </button>
@@ -48,8 +48,8 @@
 
     <svg
       :width="CANVAS_CONFIG.BOARD_WIDTH"
-      :height="chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
-      :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
+      :height="editorStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
+      :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${editorStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
       style="overflow: visible"
       class="w-full pointer-events-auto"
     >
@@ -59,8 +59,8 @@
         :x1="getStrX(s - 1)"
         y1="0"
         :x2="getStrX(s - 1)"
-        :y2="chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT"
-        :stroke="chordLabStore.isDarkMode ? '#ffffff' : '#0f172a'"
+        :y2="editorStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT"
+        :stroke="settingsStore.isDarkMode ? '#ffffff' : '#0f172a'"
         :stroke-width="FRETBOARD_LINE_WIDTH"
         class="string-line"
         style="pointer-events: none"
@@ -68,13 +68,13 @@
       />
 
       <line
-        v-for="f in chordLabStore.fretCount"
+        v-for="f in editorStore.fretCount"
         :key="'fret-line-' + f"
         :x1="CANVAS_CONFIG.OFFSET_X"
         :y1="f * CANVAS_CONFIG.FRET_HEIGHT"
         :x2="getStrX(5)"
         :y2="f * CANVAS_CONFIG.FRET_HEIGHT"
-        :stroke="chordLabStore.isDarkMode ? '#ffffff' : '#0f172a'"
+        :stroke="settingsStore.isDarkMode ? '#ffffff' : '#0f172a'"
         :stroke-width="FRETBOARD_LINE_WIDTH"
         style="pointer-events: none"
         shape-rendering="crispEdges"
@@ -85,11 +85,11 @@
         y="-4"
         :width="5 * CANVAS_CONFIG.STRING_SPACING + FRETBOARD_LINE_WIDTH"
         height="8"
-        :fill="chordLabStore.isDarkMode ? '#ffffff' : '#0f172a'"
+        :fill="settingsStore.isDarkMode ? '#ffffff' : '#0f172a'"
         style="pointer-events: none"
       />
 
-      <g v-for="i in chordLabStore.fretCount" :key="'fret-text-' + i">
+      <g v-for="i in editorStore.fretCount" :key="'fret-text-' + i">
         <text
           :x="(CANVAS_CONFIG.OFFSET_X - 32) / 2"
           :y="i * CANVAS_CONFIG.FRET_HEIGHT"
@@ -98,16 +98,16 @@
           dy="-2px"
           font-size="28"
           font-weight="900"
-          :fill="chordLabStore.isDarkMode ? '#cbd5e1' : '#1e293b'"
+          :fill="settingsStore.isDarkMode ? '#cbd5e1' : '#1e293b'"
           style="pointer-events: none"
         >
-          {{ chordLabStore.capo > 0 ? chordLabStore.capo + i : i }}
+          {{ editorStore.capo > 0 ? editorStore.capo + i : i }}
         </text>
       </g>
 
-      <template v-for="(str, sIdx) in chordLabStore.strings" :key="'finger-' + sIdx">
+      <template v-for="(str, sIdx) in editorStore.strings" :key="'finger-' + sIdx">
         <g
-          v-if="str.fret > 0 && str.fret <= chordLabStore.fretCount"
+          v-if="str.fret > 0 && str.fret <= editorStore.fretCount"
           :key="`pos-${str.fret}`"
           class="cursor-pointer"
           style="pointer-events: auto"
@@ -132,7 +132,7 @@
             :fill="getFingerTextColor(str)"
             class="finger-text"
           >
-            {{ calcNoteLabel(sIdx, str.fret, chordLabStore.capo, str.preferFlat, chordLabStore.activeBaseStrings) }}
+            {{ calcNoteLabel(sIdx, str.fret, editorStore.capo, str.preferFlat, editorStore.activeBaseStrings) }}
           </text>
         </g>
       </template>
@@ -144,25 +144,25 @@
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useFretboardInteraction } from '@/composables/useFretboardInteraction';
 import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_LINE_WIDTH, FRETBOARD_SCALE_MAP } from '@/constants';
-import { useChordLabStore } from '@/stores/chordLabStore';
+import { useEditorStore } from '@/stores/editorStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import type { GuitarStringEntity } from '@/types';
 import { calcNoteLabel, isMuted, isOpen } from '@/utils/musicTheory';
 import { X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
-const chordLabStore = useChordLabStore();
+const editorStore = useEditorStore();
 const fretBoardRef = ref<HTMLDivElement | null>(null);
+const settingsStore = useSettingsStore();
 
 const getStrX = (i: number) => CANVAS_CONFIG.OFFSET_X + i * CANVAS_CONFIG.STRING_SPACING;
 
 const rawHeight = computed(() => {
-  return (
-    CANVAS_CONFIG.OFFSET_Y_TOP + chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
-  );
+  return CANVAS_CONFIG.OFFSET_Y_TOP + editorStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
 });
 
 const fretboardScale = computed(() => {
-  return FRETBOARD_SCALE_MAP[chordLabStore.fretCount] || 1.0;
+  return FRETBOARD_SCALE_MAP[editorStore.fretCount] || 1.0;
 });
 
 const {
@@ -186,7 +186,7 @@ const getOpenStringStatusClass = (str: GuitarStringEntity) => {
 
 const getOpenStringStyle = (str: GuitarStringEntity) => {
   if (isOpen(str) && str.isRoot) {
-    const isDark = chordLabStore.isDarkMode;
+    const isDark = settingsStore.isDarkMode;
     const bg = isDark ? FRETBOARD_COLORS.openRootBgDark : FRETBOARD_COLORS.openRootBgLight;
     const text = isDark ? FRETBOARD_COLORS.openRootTextDark : FRETBOARD_COLORS.openRootTextLight;
     const shadowColor = isDark ? 'rgba(251,191,36,0.4)' : 'rgba(245,158,11,0.3)';
@@ -202,12 +202,12 @@ const getOpenStringStyle = (str: GuitarStringEntity) => {
 };
 
 const getFingerColor = (str: GuitarStringEntity) => {
-  if (str.isRoot) return chordLabStore.isDarkMode ? FRETBOARD_COLORS.rootDark : FRETBOARD_COLORS.rootLight;
-  return chordLabStore.isDarkMode ? FRETBOARD_COLORS.normalDark : FRETBOARD_COLORS.normalLight;
+  if (str.isRoot) return settingsStore.isDarkMode ? FRETBOARD_COLORS.rootDark : FRETBOARD_COLORS.rootLight;
+  return settingsStore.isDarkMode ? FRETBOARD_COLORS.normalDark : FRETBOARD_COLORS.normalLight;
 };
 
 const getFingerTextColor = (str: GuitarStringEntity) => {
-  return str.isRoot && chordLabStore.isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
+  return str.isRoot && settingsStore.isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
 };
 </script>
 
@@ -236,17 +236,13 @@ button {
     border-width 0.05s @bezier-standard,
     background-color 0.05s ease;
 
-
   &.is-fret-available {
     border-width: 3px;
-
-
 
     &:active {
       border-width: 5px !important;
     }
   }
-
 
   &.is-fret-pressed {
     opacity: 0 !important;

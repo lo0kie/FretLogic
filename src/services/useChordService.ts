@@ -1,20 +1,22 @@
-﻿import { useChordLabStore } from '@/stores/chordLabStore';
+﻿import { useChordStore } from '@/stores/chordStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { copyElementToClipboard } from '@/utils/domExporter';
-import { nextTick, toRaw } from 'vue';
+import { toRaw } from 'vue';
 
 export function useChordService() {
-  const chordStore = useChordLabStore();
+  const chordStore = useChordStore();
+  const editorStore = useEditorStore();
   const uiStore = useUiStore();
 
   const loadChordToEditor = (chord: Chord) => {
-    chordStore.editingId = chord.id;
-    chordStore.currentChordName = chord.chordName === '未命名' ? '' : chord.chordName;
-    chordStore.strings = structuredClone(toRaw(chord.strings));
-    chordStore.fretCount = chord.fretCount ?? 3;
-    chordStore.capo = chord.capo ?? 0;
-    chordStore.currentTuning = chord.tuning || 'STANDARD';
+    editorStore.editingId = chord.id;
+    editorStore.currentChordName = chord.chordName === '未命名' ? '' : chord.chordName;
+    editorStore.strings = structuredClone(toRaw(chord.strings));
+    editorStore.fretCount = chord.fretCount ?? 3;
+    editorStore.capo = chord.capo ?? 0;
+    editorStore.currentTuning = chord.tuning || 'STANDARD';
   };
 
   const executeGroupToggle = (gid: string) => {
@@ -25,9 +27,6 @@ export function useChordService() {
       chordStore.selectedGroupId = gid;
       chordStore.groups.forEach(g => {
         if (g.id !== gid) g.collapsed = true;
-      });
-      nextTick(() => {
-        document.getElementById(`group-${gid}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
     } else if (chordStore.selectedGroupId === gid) {
       chordStore.selectedGroupId = null;
@@ -69,34 +68,34 @@ export function useChordService() {
   };
 
   const persistCurrentChord = () => {
-    const cleanName = chordStore.currentChordName.trim();
-    if (!cleanName || chordStore.isFretBoardEmpty) {
+    const cleanName = editorStore.currentChordName.trim();
+    if (!cleanName || editorStore.isFretBoardEmpty) {
       uiStore.showToast('❌ 保存失败：请输入名称并指定指板有效音符');
       return;
     }
 
-    const targetGroupId = chordStore.editingId
-      ? chordStore.savedChordsList.find(c => c.id === chordStore.editingId)?.groupId || chordStore.selectedGroupId
+    const targetGroupId = editorStore.editingId
+      ? chordStore.savedChordsList.find(c => c.id === editorStore.editingId)?.groupId || chordStore.selectedGroupId
       : chordStore.selectedGroupId;
 
     const payload: Chord = {
-      id: chordStore.editingId || 'c_' + crypto.randomUUID().slice(0, 10),
+      id: editorStore.editingId || 'c_' + crypto.randomUUID().slice(0, 10),
       chordName: cleanName,
-      strings: structuredClone(toRaw(chordStore.strings)),
-      fretCount: chordStore.fretCount,
-      capo: chordStore.capo,
+      strings: structuredClone(toRaw(editorStore.strings)),
+      fretCount: editorStore.fretCount,
+      capo: editorStore.capo,
       groupId: targetGroupId || 'default',
-      tuning: chordStore.currentTuning,
+      tuning: editorStore.currentTuning,
     };
 
-    const idx = chordStore.savedChordsList.findIndex(c => c.id === chordStore.editingId);
+    const idx = chordStore.savedChordsList.findIndex(c => c.id === editorStore.editingId);
     if (idx !== -1) {
       chordStore.savedChordsList[idx] = payload;
     } else {
       chordStore.savedChordsList.unshift(payload);
     }
 
-    chordStore.resetEditor();
+    editorStore.resetEditor();
     uiStore.showToast('👍 和弦已完美封存');
     uiStore.clearUndoToasts();
   };

@@ -53,8 +53,8 @@
         </div>
       </div>
 
-      <ActionButton @click="playCurrentChord" :disabled="chordLabStore.isFretBoardEmpty || isPlaying">
-        <span v-if="chordLabStore.isFretBoardEmpty">请在左侧指板添加有效音符</span>
+      <ActionButton @click="playCurrentChord" :disabled="editorStore.isFretBoardEmpty || isPlaying">
+        <span v-if="editorStore.isFretBoardEmpty">请在左侧指板添加有效音符</span>
         <template v-else>
           <component :is="isPlaying ? Square : Play" class="mr-2" :size="18" stroke-width="3" />
           <span>{{ isPlaying ? '正在试听...' : '试听当前和弦' }}</span>
@@ -62,8 +62,8 @@
       </ActionButton>
 
       <ActionButton @click="executeToggleThemeWithAnimation($event)">
-        <component :is="chordLabStore.isDarkMode ? Moon : Sun" class="mr-2" :size="18" stroke-width="3" />
-        <span>{{ chordLabStore.isDarkMode ? '深色模式' : '浅色模式' }}</span>
+        <component :is="settingsStore.isDarkMode ? Moon : Sun" class="mr-2" :size="18" stroke-width="3" />
+        <span>{{ settingsStore.isDarkMode ? '深色模式' : '浅色模式' }}</span>
       </ActionButton>
     </div>
   </div>
@@ -74,28 +74,30 @@ import ActionButton from '@/components/ActionButton.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useAudioPlayer } from '@/composables/useAudioPlayer';
 import { useChordService } from '@/services/useChordService';
-import { useChordLabStore } from '@/stores/chordLabStore';
+import { useEditorStore } from '@/stores/editorStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { GuitarStringsModel } from '@/types';
 import { ChevronDown, ChevronUp, Moon, Play, Square, Sun } from '@lucide/vue';
 import { computed, toRaw } from 'vue';
 
+const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
-const chordLabStore = useChordLabStore();
+const editorStore = useEditorStore();
 const chordService = useChordService();
 const { isPlaying, playCurrentChord } = useAudioPlayer();
 
-const hasNoPressedFrets = computed(() => !chordLabStore.strings.some(s => s.fret > 0));
+const hasNoPressedFrets = computed(() => !editorStore.strings.some(s => s.fret > 0));
 
 const isShiftDownDisabled = computed(
-  () => chordLabStore.isFretBoardEmpty || hasNoPressedFrets.value || chordLabStore.strings.some(s => s.fret === 1)
+  () => editorStore.isFretBoardEmpty || hasNoPressedFrets.value || editorStore.strings.some(s => s.fret === 1)
 );
 
 const isShiftUpDisabled = computed(
   () =>
-    chordLabStore.isFretBoardEmpty ||
+    editorStore.isFretBoardEmpty ||
     hasNoPressedFrets.value ||
-    chordLabStore.strings.some(s => s.fret === chordLabStore.fretCount)
+    editorStore.strings.some(s => s.fret === editorStore.fretCount)
 );
 
 const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
@@ -110,7 +112,7 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
 
   const isSupportViewTransition = 'startViewTransition' in document;
   if (!isSupportViewTransition || !event) {
-    chordLabStore.isDarkMode = !chordLabStore.isDarkMode;
+    settingsStore.isDarkMode = !settingsStore.isDarkMode;
     disableChangingAttribute();
     return;
   }
@@ -120,7 +122,7 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
   const endRadius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
 
   const transition = (document as any).startViewTransition(() => {
-    chordLabStore.isDarkMode = !chordLabStore.isDarkMode;
+    settingsStore.isDarkMode = !settingsStore.isDarkMode;
   });
 
   transition.ready.then(() => {
@@ -142,12 +144,12 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
 };
 
 const handleShiftFret = (direction: 'up' | 'down') => {
-  if (chordLabStore.isFretBoardEmpty || hasNoPressedFrets.value) return;
+  if (editorStore.isFretBoardEmpty || hasNoPressedFrets.value) return;
 
-  const newStrings = structuredClone(toRaw(chordLabStore.strings)) as GuitarStringsModel;
+  const newStrings = structuredClone(toRaw(editorStore.strings)) as GuitarStringsModel;
 
   if (direction === 'up') {
-    if (newStrings.some(s => s.fret === chordLabStore.fretCount)) return;
+    if (newStrings.some(s => s.fret === editorStore.fretCount)) return;
     newStrings.forEach(s => {
       if (s.fret > 0) s.fret += 1;
     });
@@ -158,7 +160,7 @@ const handleShiftFret = (direction: 'up' | 'down') => {
     });
   }
 
-  chordLabStore.strings = newStrings;
+  editorStore.strings = newStrings;
   uiStore.showToast('🎸 和弦指型已完成整体平移');
 };
 </script>

@@ -20,21 +20,20 @@
 
 <script setup lang="ts">
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/constants';
-import { useChordLabStore } from '@/stores/chordLabStore';
+import { useEditorStore } from '@/stores/editorStore';
 import ChordInputHeader from '@/views/workbench/ChordInputHeader.vue';
 import FretBoardCanvas from '@/views/workbench/FretBoardCanvas.vue';
 import { computed } from 'vue';
 
-const chordLabStore = useChordLabStore();
+const editorStore = useEditorStore();
 
 const dynamicHeight = computed(() => {
-
   const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;
 
   const rawCanvasHeight =
-    CANVAS_CONFIG.OFFSET_Y_TOP + chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
+    CANVAS_CONFIG.OFFSET_Y_TOP + editorStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
 
-  const currentScale = FRETBOARD_SCALE_MAP[chordLabStore.fretCount] || 1.0;
+  const currentScale = FRETBOARD_SCALE_MAP[editorStore.fretCount] || 1.0;
   const realBoardHeight = rawCanvasHeight * currentScale;
 
   return `${baseVerticalSpace + realBoardHeight}px`;

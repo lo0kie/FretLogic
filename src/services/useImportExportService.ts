@@ -1,9 +1,9 @@
-﻿import { useChordLabStore } from '@/stores/chordLabStore';
+﻿import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';
 
 export function useImportExportService() {
-  const chordStore = useChordLabStore();
+  const chordStore = useChordStore();
   const uiStore = useUiStore();
 
   const processImport = (file: File, resetInputCallback: () => void) => {

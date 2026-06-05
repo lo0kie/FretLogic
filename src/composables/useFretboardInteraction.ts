@@ -1,11 +1,11 @@
 ﻿import { CANVAS_CONFIG } from '@/constants';
-import { useChordLabStore } from '@/stores/chordLabStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { isMuted, isOpen } from '@/utils/musicTheory';
 import { useEventListener } from '@vueuse/core';
 import { onBeforeUnmount, onMounted, type Ref } from 'vue';
 
 export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>) {
-  const chordLabStore = useChordLabStore();
+  const editorStore = useEditorStore();
 
   let lastCancelTime = 0;
   const MUTING_COOL_DOWN = 200;
@@ -16,15 +16,15 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
   const WHEEL_THRESHOLD = 40;
 
   const handleLocalToggleOpenString = (sIdx: number) => {
-    chordLabStore.toggleOpenString(sIdx);
+    editorStore.toggleOpenString(sIdx);
   };
 
   const handleOpenStringRightClick = (sIdx: number) => {
-    const str = chordLabStore.strings[sIdx];
+    const str = editorStore.strings[sIdx];
     if (str.isRoot && isOpen(str)) {
       str.isRoot = false;
     } else {
-      chordLabStore.strings.forEach(s => {
+      editorStore.strings.forEach(s => {
         s.isRoot = false;
       });
       str.fret = 0;
@@ -33,21 +33,21 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
   };
 
   const handleFretRightClick = (sIdx: number) => {
-    const str = chordLabStore.strings[sIdx];
+    const str = editorStore.strings[sIdx];
     if (str.fret < 0) return;
     const wasRoot = str.isRoot;
-    chordLabStore.strings.forEach(s => {
+    editorStore.strings.forEach(s => {
       s.isRoot = false;
     });
     str.isRoot = !wasRoot;
   };
 
   const handleFretMiddleClick = (sIdx: number) => {
-    const str = chordLabStore.strings[sIdx];
+    const str = editorStore.strings[sIdx];
     if (isMuted(str)) return;
 
-    const base = chordLabStore.activeBaseStrings[sIdx];
-    const actualOffset = str.fret > 0 && chordLabStore.capo > 0 ? chordLabStore.capo : 0;
+    const base = editorStore.activeBaseStrings[sIdx];
+    const actualOffset = str.fret > 0 && editorStore.capo > 0 ? editorStore.capo : 0;
     const noteIndex = (base + str.fret + actualOffset) % 12;
     const isAccidental = [1, 3, 6, 8, 10].includes(noteIndex);
     if (isAccidental) {
@@ -61,22 +61,20 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     const scaleX = board.width / CANVAS_CONFIG.BOARD_WIDTH;
     const scaleY =
       board.height /
-      (CANVAS_CONFIG.OFFSET_Y_TOP +
-        chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT +
-        CANVAS_CONFIG.OFFSET_Y_BOTTOM);
+      (CANVAS_CONFIG.OFFSET_Y_TOP + editorStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM);
     const canvasX = (e.clientX - board.left) / scaleX;
     const canvasY = (e.clientY - board.top) / scaleY;
     const sIdx = Math.round((canvasX - CANVAS_CONFIG.OFFSET_X) / CANVAS_CONFIG.STRING_SPACING);
     const fretAreaY = canvasY - CANVAS_CONFIG.OFFSET_Y_TOP;
     const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
 
-    if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount) {
-      const str = chordLabStore.strings[sIdx];
+    if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= editorStore.fretCount) {
+      const str = editorStore.strings[sIdx];
       if (str.fret === fIdx) {
         handleFretRightClick(sIdx);
         return;
       }
-      chordLabStore.strings.forEach(s => {
+      editorStore.strings.forEach(s => {
         s.isRoot = false;
       });
       str.fret = fIdx;
@@ -91,18 +89,16 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     const scaleX = board.width / CANVAS_CONFIG.BOARD_WIDTH;
     const scaleY =
       board.height /
-      (CANVAS_CONFIG.OFFSET_Y_TOP +
-        chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT +
-        CANVAS_CONFIG.OFFSET_Y_BOTTOM);
+      (CANVAS_CONFIG.OFFSET_Y_TOP + editorStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM);
     const canvasX = (clientX - board.left) / scaleX;
     const canvasY = (clientY - board.top) / scaleY;
     const sIdx = Math.round((canvasX - CANVAS_CONFIG.OFFSET_X) / CANVAS_CONFIG.STRING_SPACING);
     const fretAreaY = canvasY - CANVAS_CONFIG.OFFSET_Y_TOP;
     const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
 
-    if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= chordLabStore.fretCount) {
+    if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= editorStore.fretCount) {
       if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
-      const str = chordLabStore.strings[sIdx];
+      const str = editorStore.strings[sIdx];
       const isSameFret = str.fret === fIdx;
 
       if (isSameFret) {
@@ -130,7 +126,7 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
   const cleanupListeners: (() => void)[] = [];
 
   const handlePointerMove = (e: PointerEvent) => {
-    if (!chordLabStore.isDraggingFinger || ticking) return;
+    if (!editorStore.isDraggingFinger || ticking) return;
     ticking = true;
     rAF_ID = requestAnimationFrame(() => {
       handleFingerClickLogic(e.clientX, e.clientY, true);
@@ -139,7 +135,7 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
   };
 
   const handlePointerUp = () => {
-    chordLabStore.isDraggingFinger = false;
+    editorStore.isDraggingFinger = false;
     lastSIdx = -1;
     lastFIdx = -1;
     cachedBoardRect = null;
@@ -152,7 +148,7 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
   const handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
     if (fretBoardRef.value) cachedBoardRect = fretBoardRef.value.getBoundingClientRect();
-    chordLabStore.isDraggingFinger = true;
+    editorStore.isDraggingFinger = true;
     lastSIdx = -1;
     lastFIdx = -1;
     handleFingerClickLogic(e.clientX, e.clientY, false);
@@ -165,8 +161,8 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     e.preventDefault();
     wheelAccumulator += e.deltaY;
     if (Math.abs(wheelAccumulator) < WHEEL_THRESHOLD) return;
-    if (wheelAccumulator > 0) chordLabStore.capo = chordLabStore.capo >= 12 ? 0 : chordLabStore.capo + 1;
-    else chordLabStore.capo = chordLabStore.capo <= 0 ? 12 : chordLabStore.capo - 1;
+    if (wheelAccumulator > 0) editorStore.capo = editorStore.capo >= 12 ? 0 : editorStore.capo + 1;
+    else editorStore.capo = editorStore.capo <= 0 ? 12 : editorStore.capo - 1;
     wheelAccumulator = 0;
   };
 
