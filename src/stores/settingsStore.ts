@@ -7,7 +7,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const githubToken = useStorage('CHORD_LAB_GH_TOKEN', '');
   const githubOwner = useStorage('CHORD_LAB_GH_OWNER', 'lo0kie');
   const githubRepo = useStorage('CHORD_LAB_GH_REPO', 'FretLogic');
-  const githubBranch = useStorage('CHORD_LAB_GH_BRANCH', 'master');
+  const githubBranch = useStorage('CHORD_LAB_GH_BRANCH', 'data-sync');
   const githubPath = useStorage('CHORD_LAB_GH_PATH', 'backup/chords.json');
 
   return {
