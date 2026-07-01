@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <button
     :disabled="disabled"
     @click="handleInternalClick"
@@ -19,7 +19,6 @@ const props = defineProps<{
   disabled?: boolean;
 }>();
 
-// 🌟 核心修复：允许向上派发可选的 MouseEvent 载荷，打通强类型调用链路
 const emit = defineEmits<{
   (e: 'click', event: MouseEvent): void;
 }>();
@@ -43,7 +42,7 @@ const themeClasses = computed(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .action-button-base {
   .mixin-button-base();

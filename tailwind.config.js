@@ -4,7 +4,6 @@ export default {
   content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx,less}'],
   theme: {
     extend: {
-      // 🌟 核心增补：将全局 Less/CSS 变量映射为 Tailwind 的语义原子类
       textColor: {
         title: 'var(--text-title)',
         subtitle: 'var(--text-subtitle)',

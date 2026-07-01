@@ -1,28 +1,24 @@
-import { useChordLabStore } from '@/stores/chordLabStore';
+﻿import { useChordStore } from '@/stores/chordStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord } from '@/types/chord';
+import type { Chord } from '@/types';
 import { copyElementToClipboard } from '@/utils/domExporter';
-import { nextTick, toRaw } from 'vue';
+import { toRaw } from 'vue';
 
 export function useChordService() {
-  const chordStore = useChordLabStore();
+  const chordStore = useChordStore();
+  const editorStore = useEditorStore();
   const uiStore = useUiStore();
 
-  /**
-   * 🌟 领域动作 1：恢复高内聚实体模型载入编辑器沙盒
-   */
   const loadChordToEditor = (chord: Chord) => {
-    chordStore.editingId = chord.id;
-    chordStore.currentChordName = chord.chordName === '未命名' ? '' : chord.chordName;
-    chordStore.strings = structuredClone(toRaw(chord.strings)); // 🚀 单一出口深拷贝
-    chordStore.fretCount = chord.fretCount ?? 3;
-    chordStore.capo = chord.capo ?? 0;
-    chordStore.currentTuning = chord.tuning || 'STANDARD';
+    editorStore.editingId = chord.id;
+    editorStore.currentChordName = chord.chordName === '未命名' ? '' : chord.chordName;
+    editorStore.strings = structuredClone(toRaw(chord.strings));
+    editorStore.fretCount = chord.fretCount ?? 3;
+    editorStore.capo = chord.capo ?? 0;
+    editorStore.currentTuning = chord.tuning || 'STANDARD';
   };
 
-  /**
-   * 🌟 领域动作 2：处理分组头部的点击推开折叠，加装平滑滚动对齐
-   */
   const executeGroupToggle = (gid: string) => {
     const target = chordStore.groups.find(g => g.id === gid);
     if (!target) return;
@@ -32,18 +28,12 @@ export function useChordService() {
       chordStore.groups.forEach(g => {
         if (g.id !== gid) g.collapsed = true;
       });
-      nextTick(() => {
-        document.getElementById(`group-${gid}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
     } else if (chordStore.selectedGroupId === gid) {
       chordStore.selectedGroupId = null;
     }
     target.collapsed = !target.collapsed;
   };
 
-  /**
-   * 🌟 领域动作 3：排序后基于 $O(1)$ 字典同步覆盖本地和弦物理序列
-   */
   const handleChordSort = (event: any, groupId: string) => {
     const { oldIndex, newIndex } = event;
     if (oldIndex === undefined || newIndex === undefined) return;
@@ -56,17 +46,11 @@ export function useChordService() {
     chordStore.overwriteChords([...otherGroupsChords, ...currentGroupChords]);
   };
 
-  /**
-   * 🌟 领域动作 4：基于实体更迭触发带撤回线索的物理销毁
-   */
   const triggerDeleteChord = (chord: Chord) => {
     chordStore.overwriteChords(chordStore.savedChordsList.filter(c => c.id !== chord.id));
     uiStore.showToast(`🗑️ 已删除和弦 "${chord.chordName}"`, true);
   };
 
-  /**
-   * 🌟 领域动作 5：多维快照生成与异步剪贴板流分发
-   */
   const exportFretboardImage = async (selector: string, isTransparent: boolean = true) => {
     if (uiStore.isCopying) return;
     uiStore.isCopying = true;
@@ -83,38 +67,35 @@ export function useChordService() {
     }
   };
 
-  /**
-   * 🌟 领域动作 6：铁腕清洗并封存编辑器当前配置实体
-   */
   const persistCurrentChord = () => {
-    const cleanName = chordStore.currentChordName.trim();
-    if (!cleanName || chordStore.isFretBoardEmpty) {
+    const cleanName = editorStore.currentChordName.trim();
+    if (!cleanName || editorStore.isFretBoardEmpty) {
       uiStore.showToast('❌ 保存失败：请输入名称并指定指板有效音符');
       return;
     }
 
-    const targetGroupId = chordStore.editingId
-      ? chordStore.savedChordsList.find(c => c.id === chordStore.editingId)?.groupId || chordStore.selectedGroupId
+    const targetGroupId = editorStore.editingId
+      ? chordStore.savedChordsList.find(c => c.id === editorStore.editingId)?.groupId || chordStore.selectedGroupId
       : chordStore.selectedGroupId;
 
     const payload: Chord = {
-      id: chordStore.editingId || 'c_' + crypto.randomUUID().slice(0, 10),
+      id: editorStore.editingId || 'c_' + crypto.randomUUID().slice(0, 10),
       chordName: cleanName,
-      strings: structuredClone(toRaw(chordStore.strings)), // 🚀 打包物理弦结构
-      fretCount: chordStore.fretCount,
-      capo: chordStore.capo,
+      strings: structuredClone(toRaw(editorStore.strings)),
+      fretCount: editorStore.fretCount,
+      capo: editorStore.capo,
       groupId: targetGroupId || 'default',
-      tuning: chordStore.currentTuning,
+      tuning: editorStore.currentTuning,
     };
 
-    const idx = chordStore.savedChordsList.findIndex(c => c.id === chordStore.editingId);
+    const idx = chordStore.savedChordsList.findIndex(c => c.id === editorStore.editingId);
     if (idx !== -1) {
       chordStore.savedChordsList[idx] = payload;
     } else {
       chordStore.savedChordsList.unshift(payload);
     }
 
-    chordStore.resetEditor();
+    editorStore.resetEditor();
     uiStore.showToast('👍 和弦已完美封存');
     uiStore.clearUndoToasts();
   };

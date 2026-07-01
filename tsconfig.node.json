@@ -3,11 +3,7 @@
     "composite": true,
     "skipLibCheck": true,
     "module": "ESNext",
-
-    /* 模块解析 🌟 核心修复点：将老旧的 node(node10) 升级为现代 Vite 环境专用的 bundler 策略 */
     "moduleResolution": "bundler",
-
-    /* 🌟 新增：配合 bundler 模式，确保 TS 允许在不写默认导出时进行合成解析 */
     "allowSyntheticDefaultImports": true
   },
   "include": ["vite.config.ts"]

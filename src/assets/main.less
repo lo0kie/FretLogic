@@ -1,4 +1,4 @@
-@import '@/assets/styles/tokens.less';
+﻿@import '@/assets/tokens.less';
 
 @tailwind base;
 @tailwind components;
@@ -12,18 +12,15 @@ body {
   background-color: var(--bg-main);
   color: var(--text-body);
   min-width: 1480px;
+  min-height: 800px;
   margin: 0;
-  overflow-y: hidden;
-  overflow-x: auto;
+  overflow: auto;
   user-select: none;
 
-  // 英文/数字优先匹配系统级现代字体，中文匹配萍方或原生黑体
   font-family:
     'Inter',
-    // 如果用户装了 Inter 优先使用（开发者最爱）
     -apple-system,
     BlinkMacSystemFont,
-    // macOS & iOS 顶级字体
     'Segoe UI',
     Roboto,
     Oxygen,
@@ -31,15 +28,12 @@ body {
     Cantarell,
     'Open Sans',
     'Helvetica Neue',
-    // Windows & Linux
     'PingFang SC',
     'Hiragino Sans GB',
     'Microsoft YaHei',
     '微软雅黑',
-    // 中文回退
     sans-serif;
 
-  // 开启字体抗锯齿，在深色模式下文字会显得更细致、清晰
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
@@ -48,11 +42,6 @@ body {
   }
 }
 
-/* ==========================================================================
-   全局工具与动画类名 (Global Utilities & Animations)
-========================================================================== */
-
-/* 隐藏滚动条但保留功能 */
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -61,10 +50,10 @@ body {
   }
 }
 
-/* 弹窗进入动画 */
 .animate-modal-in {
   animation: modalSlideIn @duration-base @bezier-standard;
 }
+
 @keyframes modalSlideIn {
   from {
     opacity: 0;
@@ -76,7 +65,6 @@ body {
   }
 }
 
-/* Vue <Transition> 全局动画类 */
 .fade-clear-enter-active,
 .fade-clear-leave-active {
   transition: opacity @duration-fast @bezier-standard;

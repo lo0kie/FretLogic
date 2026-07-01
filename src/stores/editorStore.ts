@@ -1,21 +1,12 @@
 import { STORAGE_KEYS } from '@/constants';
-import type { Chord, Group, GuitarStringsModel } from '@/types/chord';
-import type { TuningType } from '@/utils/musicTheory';
-import { createString, extractRootNote, isOpen, TUNING_PRESETS } from '@/utils/musicTheory';
-import { debounceFilter, useDark, useStorage } from '@vueuse/core';
+import { useChordStore } from '@/stores/chordStore';
+import type { Chord, GuitarStringsModel } from '@/types';
+import { createString, extractRootNote, isOpen, TUNING_PRESETS, type TuningType } from '@/utils/musicTheory';
+import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref, toRaw, watch } from 'vue';
 
-export type { Chord, Group };
-
-export const useChordLabStore = defineStore('chordLab', () => {
-  const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '' });
-
-  // 1. 核心持久化响应层
-  const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
-  const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
-
-  // 2. 当前编辑器沙盒隔离的工作流高内聚纯状态
+export const useEditorStore = defineStore('editor', () => {
   const defaultStrings: GuitarStringsModel = [
     createString(),
     createString(),
@@ -32,14 +23,12 @@ export const useChordLabStore = defineStore('chordLab', () => {
   const currentChordName = useStorage(STORAGE_KEYS.CURR_NAME, '', localStorage, { eventFilter: debounceFilter(300) });
   const currentTuning = useStorage<TuningType>('CHORD_LAB_CURR_TUNING_V1', 'STANDARD', localStorage);
   const editingId = useStorage<string | null>(STORAGE_KEYS.EDITING_ID, null);
-  const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
 
   const isDraggingFinger = ref(false);
   const lastPos = ref('');
   const fretCount = useStorage<Chord['fretCount']>(STORAGE_KEYS.CURR_FCOUNT, 3);
   const capo = useStorage(STORAGE_KEYS.CURR_CAPO, 0);
 
-  // 3. 动态核心高内聚计算依赖
   const activeBaseStrings = computed(() => {
     return TUNING_PRESETS[currentTuning.value]?.mapping || [40, 45, 50, 55, 59, 64];
   });
@@ -47,21 +36,7 @@ export const useChordLabStore = defineStore('chordLab', () => {
   const isFretBoardEmpty = computed(() => strings.value.every(s => s.fret < 0));
   const currentRootNote = computed(() => extractRootNote(currentChordName.value));
 
-  const groupChordMap = computed(() => {
-    const map = new Map<string, Chord[]>();
-    groups.value.forEach(g => map.set(g.id, []));
-    savedChordsList.value.forEach(chord => {
-      const list = map.get(chord.groupId);
-      if (list) {
-        list.push(chord);
-      } else {
-        map.set(chord.groupId, [chord]);
-      }
-    });
-    return map;
-  });
-
-  // 品位缩减时的实体物理安全防御
+  // 物理品位越界熔断
   watch(fretCount, (newVal, oldVal) => {
     if (newVal < oldVal) {
       strings.value.forEach(str => {
@@ -74,8 +49,9 @@ export const useChordLabStore = defineStore('chordLab', () => {
   });
 
   // 恢复历史和弦时的底层反序列化安全机制
+  const chordStore = useChordStore();
   if (editingId.value) {
-    const original = savedChordsList.value.find(c => c.id === editingId.value);
+    const original = chordStore.savedChordsList.find(c => c.id === editingId.value);
     if (original) {
       currentChordName.value = original.chordName || '';
       strings.value = structuredClone(toRaw(original.strings));
@@ -87,29 +63,17 @@ export const useChordLabStore = defineStore('chordLab', () => {
     }
   }
 
-  // 纯状态沙盒原子级重置
   const resetEditor = () => {
     editingId.value = null;
-
-    // 🚀 核心修复：采用原地修改（In-place mutation）覆盖属性，彻底杜绝替换整个数组导致的 VueUse 代理断裂问题！
     strings.value.forEach(s => {
       s.fret = -1;
       s.isRoot = false;
       s.preferFlat = false;
     });
-
     currentChordName.value = '';
     capo.value = 0;
     fretCount.value = 3;
     currentTuning.value = 'STANDARD';
-  };
-
-  const overwriteChords = (newChords: Chord[]) => {
-    savedChordsList.value = [...newChords];
-  };
-
-  const overwriteGroups = (newGroups: Group[]) => {
-    groups.value = [...newGroups];
   };
 
   const toggleOpenString = (sIdx: number) => {
@@ -125,25 +89,18 @@ export const useChordLabStore = defineStore('chordLab', () => {
   };
 
   return {
-    savedChordsList,
-    groups,
-    isDarkMode,
-    currentChordName,
     strings,
-    fretCount,
-    capo,
+    currentChordName,
+    currentTuning,
     editingId,
-    selectedGroupId,
     isDraggingFinger,
     lastPos,
-    currentTuning,
+    fretCount,
+    capo,
     activeBaseStrings,
     isFretBoardEmpty,
     currentRootNote,
-    groupChordMap,
     resetEditor,
-    overwriteChords,
-    overwriteGroups,
     toggleOpenString,
   };
 });

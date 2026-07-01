@@ -5,25 +5,17 @@
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
-
-    /* 模块解析 🌟 核心升级点：改用完全适配 Vite 打包流的 bundler 策略 */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "preserve",
-
-    /* 🌟 新增：在使用 bundler 时，确保能完美兼容并解析旧版 CommonJS 模块的默认导出 */
     "allowSyntheticDefaultImports": true,
-
-    /* 严格模式守卫 */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
-
-    /* 别名路径映射 */
     "paths": {
       "@/*": ["./src/*"]
     }

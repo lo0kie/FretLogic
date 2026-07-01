@@ -1,12 +1,11 @@
-import type { ModalActionType } from '@/constants';
-import { useChordLabStore } from '@/stores/chordLabStore';
-import type { Chord, Group, Toast, ToastType } from '@/types/chord';
+﻿import type { Toast, ToastType } from '@/types';
 import { useRefHistory, useToggle } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { nextTick, ref, toRaw, toRef } from 'vue';
+import { ref, toRaw, toRef } from 'vue';
+import { useChordStore } from './chordStore';
 
 export const useUiStore = defineStore('ui', () => {
-  const chordStore = useChordLabStore();
+  const chordStore = useChordStore();
   const savedChordsRef = toRef(chordStore, 'savedChordsList');
 
   const { undo: rawUndo } = useRefHistory(savedChordsRef, {
@@ -22,19 +21,10 @@ export const useUiStore = defineStore('ui', () => {
   const isCapoOpen = ref(false);
   const toggleCapoPanel = useToggle(isCapoOpen);
 
-  const modalShow = ref(false);
-  const modalType = ref<ModalActionType>('');
-  const modalTitle = ref('');
-  const modalInput = ref('');
-  const activeTargetGroup = ref<Group | null>(null);
-  const activeTargetChord = ref<Chord | null>(null);
-  const draggedGroupIdx = ref<number | null>(null);
-
   const clearUndoToasts = () => {
     toasts.value = toasts.value.filter(t => !t.canUndo);
   };
 
-  // 🌟 支持分类的常规 Toast
   const showToast = (msg: string, canUndo = false, type: ToastType = 'info') => {
     const id = performance.now();
     if (canUndo) clearUndoToasts();
@@ -44,7 +34,6 @@ export const useUiStore = defineStore('ui', () => {
     }, 3000);
   };
 
-  // 🚀 核心重构：支持现代化的 Promise Toast，极大提升异步交互体验
   const promiseToast = async <T>(
     promise: Promise<T>,
     messages: { loading: string; success: string; error: string }
@@ -93,30 +82,12 @@ export const useUiStore = defineStore('ui', () => {
         });
         chordStore.groups.unshift({ id: targetGroupId, name: '已恢复的和弦', collapsed: false });
         chordStore.selectedGroupId = targetGroupId;
-        nextTick(() => {
-          document.getElementById(`group-${targetGroupId}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        });
       }
       chordStore.savedChordsList.forEach(c => {
         if (!validGroupIds.has(c.groupId)) c.groupId = targetGroupId as string;
       });
     }
     clearUndoToasts();
-  };
-
-  const openModal = (
-    type: Exclude<ModalActionType, ''>,
-    title: string,
-    initVal = '',
-    targetGroup: Group | null = null,
-    targetChord: Chord | null = null
-  ) => {
-    modalType.value = type;
-    modalTitle.value = title;
-    modalInput.value = initVal;
-    activeTargetGroup.value = targetGroup;
-    activeTargetChord.value = targetChord;
-    modalShow.value = true;
   };
 
   return {
@@ -130,13 +101,5 @@ export const useUiStore = defineStore('ui', () => {
     toasts,
     showToast,
     promiseToast,
-    modalShow,
-    modalType,
-    modalTitle,
-    modalInput,
-    activeTargetGroup,
-    activeTargetChord,
-    draggedGroupIdx,
-    openModal,
   };
 });
