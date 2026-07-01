@@ -27,7 +27,6 @@
 </template>
 
 <script setup lang="ts">
-
 import { Search, X } from '@lucide/vue';
 
 defineProps<{
@@ -52,7 +51,6 @@ defineEmits<{
   letter-spacing: 0.04em;
 }
 
-
 .btn-clear-search {
   color: var(--text-disabled);
   background-color: transparent;
@@ -66,7 +64,6 @@ defineEmits<{
     transform: scale(0.9);
   }
 }
-
 
 .fade-standard-enter-active,
 .fade-standard-leave-active {

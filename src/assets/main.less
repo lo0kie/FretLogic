@@ -12,9 +12,9 @@ body {
   background-color: var(--bg-main);
   color: var(--text-body);
   min-width: 1480px;
+  min-height: 800px;
   margin: 0;
-  overflow-y: hidden;
-  overflow-x: auto;
+  overflow: auto;
   user-select: none;
 
   font-family:
@@ -53,6 +53,7 @@ body {
 .animate-modal-in {
   animation: modalSlideIn @duration-base @bezier-standard;
 }
+
 @keyframes modalSlideIn {
   from {
     opacity: 0;

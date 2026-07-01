@@ -1,6 +1,6 @@
 ﻿<template>
   <div
-    class="panel-right h-[calc(100vh-24px)] flex flex-col shrink-0 justify-between relative z-10 rounded-xl box-content"
+    class="panel-right h-[calc(100%-24px)] flex flex-col shrink-0 justify-between relative z-10 rounded-xl box-border"
     :class="{ 'is-open': uiStore.isRightOpen }"
   >
     <RightHeader />
@@ -58,7 +58,6 @@ const uiStore = useUiStore();
   transition:
     all 0.2s ease,
     right @duration-slow @bezier-sidebar;
-
 
   &.is-open {
     right: calc(v-bind(RIGHT_SIDEBAR_WIDTH_PIXEL) + 13px);

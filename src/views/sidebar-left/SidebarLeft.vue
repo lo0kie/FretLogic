@@ -1,6 +1,6 @@
 ﻿<template>
   <div
-    class="panel-left h-[calc(100vh-24px)] flex flex-col shrink-0 relative rounded-xl z-10 box-content"
+    class="panel-left h-[calc(100%-24px)] flex flex-col shrink-0 relative rounded-xl z-10 box-border"
     :class="{ 'is-open': uiStore.isLeftOpen }"
   >
     <LeftHeader />
@@ -42,7 +42,6 @@ const uiStore = useUiStore();
     opacity @duration-base ease,
     margin @duration-slow @bezier-sidebar;
 
-
   &.is-open {
     width: v-bind(LEFT_SIDEBAR_WIDTH_PIXEL);
     opacity: 1;
@@ -60,7 +59,6 @@ const uiStore = useUiStore();
   transition:
     all 0.2s ease,
     left @duration-slow @bezier-sidebar;
-
 
   &.is-open {
     left: calc(v-bind(LEFT_SIDEBAR_WIDTH_PIXEL) + 13px);

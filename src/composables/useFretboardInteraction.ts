@@ -161,8 +161,11 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     e.preventDefault();
     wheelAccumulator += e.deltaY;
     if (Math.abs(wheelAccumulator) < WHEEL_THRESHOLD) return;
-    if (wheelAccumulator > 0) editorStore.capo = editorStore.capo >= 12 ? 0 : editorStore.capo + 1;
-    else editorStore.capo = editorStore.capo <= 0 ? 12 : editorStore.capo - 1;
+
+    // 取消越界滚动触发，锁定边界 [0, 12]
+    if (wheelAccumulator > 0) editorStore.capo = Math.min(12, editorStore.capo + 1);
+    else editorStore.capo = Math.max(0, editorStore.capo - 1);
+
     wheelAccumulator = 0;
   };
 

@@ -9,7 +9,7 @@
         <div
           ref="capoWheelRef"
           @click="uiStore.toggleCapoPanel()"
-          class="capo-trigger-bar flex items-center justify-between px-3 select-none"
+          class="capo-trigger-bar flex items-center justify-between px-3 select-none group"
           :class="{ 'is-active': uiStore.isCapoOpen }"
         >
           <span
@@ -19,12 +19,23 @@
             {{ editorStore.capo }} {{ editorStore.capo === 0 ? '(空弦位)' : '品' }}
           </span>
 
+          <!-- 悬停时显示的清除按钮 -->
+          <X
+            v-if="editorStore.capo !== 0"
+            :size="18"
+            :stroke-width="3"
+            class="hidden group-hover:block text-[var(--text-disabled)] hover:!text-[var(--color-danger)] transition-colors"
+            @click.stop="
+              editorStore.capo = 0;
+              uiStore.isCapoOpen = false;
+            "
+          />
           <ChevronDown
             :size="18"
             :stroke-width="3"
             style="color: var(--text-disabled)"
             class="transition-transform duration-200"
-            :class="{ 'rotate-180': uiStore.isCapoOpen }"
+            :class="[{ 'rotate-180': uiStore.isCapoOpen }, editorStore.capo !== 0 ? 'group-hover:hidden' : '']"
           />
         </div>
       </GlobalTooltip>
@@ -63,7 +74,7 @@
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
-import { ChevronDown } from '@lucide/vue';
+import { ChevronDown, X } from '@lucide/vue';
 import { onClickOutside, useEventListener } from '@vueuse/core';
 import { nextTick, onMounted, ref, watch } from 'vue';
 
@@ -96,8 +107,9 @@ const handleWheelCapo = (e: WheelEvent) => {
   wheelAccumulator += e.deltaY;
   if (Math.abs(wheelAccumulator) < WHEEL_THRESHOLD) return;
 
-  if (wheelAccumulator < 0) editorStore.capo = editorStore.capo <= 0 ? 12 : editorStore.capo - 1;
-  else editorStore.capo = editorStore.capo >= 12 ? 0 : editorStore.capo + 1;
+  // 取消越界滚动触发，锁定边界 [0, 12]
+  if (wheelAccumulator < 0) editorStore.capo = Math.max(0, editorStore.capo - 1);
+  else editorStore.capo = Math.min(12, editorStore.capo + 1);
 
   wheelAccumulator = 0;
 };

@@ -17,6 +17,9 @@
       >
         <button
           @click.stop="$emit('delete', chord)"
+          @mousedown.stop
+          @touchstart.stop
+          @pointerdown.stop
           class="action-button text-[var(--text-disabled)] hover:text-white w-4 h-4 rounded-full flex items-center justify-center bg-[var(--bg-main)] hover:bg-[var(--color-danger)]"
         >
           <X :size="14" stroke-width="3" />
@@ -48,6 +51,10 @@ defineEmits<{
   .chord-name-text,
   .action-button {
     transition: @transition-fast;
+
+    &:active {
+      transform: scale(0.9);
+    }
   }
 
   &.is-editing {

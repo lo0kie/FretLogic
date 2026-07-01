@@ -15,14 +15,27 @@
           </h3>
 
           <template v-if="modal.modalType.value === 'createGroup' || modal.modalType.value === 'renameGroup'">
-            <input
-              v-model="modal.modalInput.value"
-              ref="inputRef"
-              @keyup.enter="handleLocalConfirm"
-              type="text"
-              class="modal-input-field w-full text-sm font-bold mb-4"
-              placeholder="请输入..."
-            />
+            <div class="relative w-full mb-4 group flex items-center">
+              <input
+                v-model="modal.modalInput.value"
+                ref="inputRef"
+                @keyup.enter="handleLocalConfirm"
+                type="text"
+                class="modal-input-field w-full text-sm font-bold pr-9"
+                placeholder="请输入..."
+              />
+              <button
+                v-if="modal.modalInput.value"
+                @click="
+                  modal.modalInput.value = '';
+                  inputRef?.focus();
+                "
+                class="h-4 w-4 absolute right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-[var(--text-disabled)] hover:text-[var(--color-danger)] flex items-center justify-center hover:text-white bg-[var(--bg-main)] hover:bg-[var(--color-danger)] rounded-full active:scale-90 transition-all"
+                title="清空内容"
+              >
+                <X :size="14" stroke-width="3" />
+              </button>
+            </div>
           </template>
 
           <template v-else-if="modal.modalType.value === 'moveChord'">
@@ -76,6 +89,7 @@ import { useChordStore } from '@/stores/chordStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { ModalActionType } from '@/types';
+import { X } from '@lucide/vue';
 import { useEventListener, useScrollLock } from '@vueuse/core';
 import { nextTick, ref, watch } from 'vue';
 
