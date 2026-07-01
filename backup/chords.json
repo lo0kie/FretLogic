@@ -2873,46 +2873,6 @@
       "tuning": "STANDARD"
     },
     {
-      "id": "1780117626093",
-      "chordName": "E",
-      "strings": [
-        {
-          "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 3,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
-    },
-    {
       "id": "c_b4e94e62-8",
       "chordName": "B",
       "strings": [
@@ -2949,6 +2909,46 @@
       ],
       "fretCount": 3,
       "capo": 6,
+      "groupId": "g_1780117616592",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "1780117626093",
+      "chordName": "E",
+      "strings": [
+        {
+          "fret": 0,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 3,
       "groupId": "g_1780117616592",
       "tuning": "STANDARD"
     },
