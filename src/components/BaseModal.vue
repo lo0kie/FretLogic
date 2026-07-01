@@ -12,7 +12,7 @@
           @click="closeOnMask && handleCancel()"
         ></div>
 
-        <div class="modal-card p-6 relative z-10 animate-modal-in flex flex-col gap-4 max-h-[80vh]" :class="width">
+        <div class="modal-card py-5 px-6 relative z-10 animate-modal-in flex flex-col gap-4 max-h-[80vh]" :class="width">
           <h3 v-if="title" class="text-xs font-black opacity-40 uppercase tracking-widest text-title shrink-0">
             {{ title }}
           </h3>

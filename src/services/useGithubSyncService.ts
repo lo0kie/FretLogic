@@ -3,24 +3,29 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';
 
+interface GithubFilePayload {
+  message: string;
+  content: string;
+  branch: string;
+  sha?: string;
+}
+
 export function useGithubSyncService() {
   const uiStore = useUiStore();
   const settingsStore = useSettingsStore();
   const chordStore = useChordStore();
 
-  // 支持中文的 Base64 编码与解码
   const utf8ToBase64 = (str: string) => {
-    return window.btoa(unescape(encodeURIComponent(str)));
+    const bytes = new TextEncoder().encode(str);
+    const binString = Array.from(bytes, byte => String.fromCharCode(byte)).join('');
+    return window.btoa(binString);
   };
-
   const base64ToUtf8 = (str: string) => {
-    return decodeURIComponent(escape(window.atob(str)));
+    const binString = window.atob(str);
+    const bytes = Uint8Array.from(binString, char => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
   };
-
-  // 移除非 ISO-8859-1 字符的安全清洗函数
-  const cleanHeaderString = (str: string) => {
-    return str.trim().replace(/[^\x00-\x7F]/g, '');
-  };
+  const cleanHeaderString = (str: string) => str.trim().replace(/[^\x00-\x7F]/g, '');
 
   const syncToGithub = async (data: object) => {
     const githubToken = cleanHeaderString(settingsStore.githubToken);
@@ -35,7 +40,6 @@ export function useGithubSyncService() {
     }
 
     const apiUrl = `https://api.github.com/repos/${githubOwner}/${githubRepo}/contents/${githubPath}`;
-
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${githubToken}`,
       'Accept': 'application/vnd.github.v3+json',
@@ -56,7 +60,9 @@ export function useGithubSyncService() {
       }
 
       const contentBase64 = utf8ToBase64(JSON.stringify(data, null, 2));
-      const body: any = {
+
+      // 🌟 最佳实践：使用强类型取代 any
+      const body: GithubFilePayload = {
         message: `Auto sync chords data: ${new Date().toLocaleString()}`,
         content: contentBase64,
         branch: githubBranch,
@@ -77,6 +83,14 @@ export function useGithubSyncService() {
       console.error('GitHub Sync Error:', err);
       uiStore.showToast('❌ GitHub 同步失败，请检查网络或配置信息', false, 'error');
     }
+  };
+
+  // 🌟 最佳实践：高度内聚的无参触发器，业务层直接调用，再也不需要手动传 state
+  const triggerGlobalSync = () => {
+    syncToGithub({
+      groups: chordStore.groups,
+      chords: chordStore.savedChordsList,
+    });
   };
 
   const pullFromGithub = async () => {
@@ -131,5 +145,5 @@ export function useGithubSyncService() {
     }
   };
 
-  return { syncToGithub, pullFromGithub };
+  return { syncToGithub, triggerGlobalSync, pullFromGithub };
 }

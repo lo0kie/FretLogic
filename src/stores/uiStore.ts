@@ -9,9 +9,10 @@ export const useUiStore = defineStore('ui', () => {
   const savedChordsRef = toRef(chordStore, 'savedChordsList');
 
   const { undo: rawUndo } = useRefHistory(savedChordsRef, {
-    capacity: 10,
-    clone: v => structuredClone(toRaw(v.map(toRaw))),
+    capacity: 15,
     deep: true,
+    flush: 'post',
+    clone: v => structuredClone(toRaw(v)),
   });
 
   const toasts = ref<Toast[]>([]);
