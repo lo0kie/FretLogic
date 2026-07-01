@@ -42,7 +42,7 @@ const handleInternalClick = (e: MouseEvent) => {
   emit('click', e);
 };
 
-const sizes: Record<(typeof props)['size'], string> = { sm: 'h-8', md: 'h-10', lg: 'h-12' };
+const sizes: Record<(typeof props)['size'], string> = { sm: 'h-[2rem]', md: 'h-[2.25rem]', lg: 'h-[2.5rem]' };
 
 const sizeClasses = computed(() => {
   switch (props.size) {

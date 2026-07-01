@@ -10,7 +10,7 @@ export function useChordService() {
   const chordStore = useChordStore();
   const editorStore = useEditorStore();
   const uiStore = useUiStore();
-  const { syncToGithub } = useGithubSyncService();
+  const { triggerGlobalSync } = useGithubSyncService();
 
   const loadChordToEditor = (chord: Chord) => {
     editorStore.editingId = chord.id;
@@ -48,10 +48,7 @@ export function useChordService() {
     const updatedList = [...otherGroupsChords, ...currentGroupChords];
     chordStore.overwriteChords(updatedList);
 
-    syncToGithub({
-      groups: chordStore.groups,
-      chords: updatedList,
-    });
+    triggerGlobalSync();
   };
 
   const triggerDeleteChord = (chord: Chord) => {
@@ -59,10 +56,7 @@ export function useChordService() {
     chordStore.overwriteChords(updatedList);
     uiStore.showToast(`🗑️ 已删除和弦 "${chord.chordName}"`, true);
 
-    syncToGithub({
-      groups: chordStore.groups,
-      chords: updatedList,
-    });
+    triggerGlobalSync();
   };
 
   const exportFretboardImage = async (selector: string, isTransparent: boolean = true) => {
@@ -113,10 +107,7 @@ export function useChordService() {
     uiStore.showToast('👍 和弦已保存');
     uiStore.clearUndoToasts();
 
-    syncToGithub({
-      groups: chordStore.groups,
-      chords: chordStore.savedChordsList,
-    });
+    triggerGlobalSync();
   };
 
   return {

@@ -6,7 +6,7 @@ import { useGithubSyncService } from './useGithubSyncService';
 export function useImportExportService() {
   const chordStore = useChordStore();
   const uiStore = useUiStore();
-  const { syncToGithub } = useGithubSyncService();
+  const { triggerGlobalSync } = useGithubSyncService();
 
   const processImport = (file: File, resetInputCallback: () => void) => {
     if (file.size === 0) {
@@ -33,11 +33,7 @@ export function useImportExportService() {
           }
           uiStore.showToast('📦 数据恢复成功');
 
-          // 🔄 4. 外部数据成功恢复并写入 Store 后，全量打包并同步到云端仓库
-          syncToGithub({
-            groups: imported.groups,
-            chords: imported.chords,
-          });
+          triggerGlobalSync();
         } else {
           throw new Error('Import verification failed');
         }

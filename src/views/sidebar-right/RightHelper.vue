@@ -29,10 +29,25 @@
         </div>
 
         <div class="helper-inner-panel flex flex-col p-3 rounded-xl">
-          <div class="flex items-center justify-between">
-            <span class="text-[12px] font-bold tracking-wider pb-2" style="color: var(--text-muted)">
-              云端同步配置
-            </span>
+          <div class="flex items-center justify-between pb-2">
+            <span class="text-[12px] font-bold tracking-wider" style="color: var(--text-muted)"> 云端同步配置 </span>
+
+            <div class="text-[12px]">
+              <span
+                class="text-[10px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider"
+                :class="isDevEnv ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'"
+              >
+                {{ isDevEnv ? 'DEV' : 'PROD' }}
+              </span>
+
+              <a
+                class="text-[12px] font-black px-1.5 py-0.5 rounded bg-[var(--color-primary)]/10 text-[var(--color-primary)] cursor-pointer hover:underline font-mono"
+                title="当前数据同步目标分支"
+                :href="`https://github.com/${settingsStore.githubOwner}/${settingsStore.githubRepo}/blob/${settingsStore.githubBranch}/${settingsStore.githubPath}`"
+              >
+                {{ settingsStore.githubBranch }}
+              </a>
+            </div>
           </div>
 
           <GlobalTooltip content="GitHub Token" placement="top" class="w-full mb-2">
@@ -117,11 +132,12 @@ import type { GuitarStringsModel } from '@/types';
 import { ChevronDown, ChevronUp, CloudDownload, CloudUpload } from '@lucide/vue';
 import { computed, ref, toRaw } from 'vue';
 
+const isDevEnv = import.meta.env.DEV;
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 const editorStore = useEditorStore();
 const chordStore = useChordStore();
-const { syncToGithub, pullFromGithub } = useGithubSyncService();
+const { triggerGlobalSync, pullFromGithub } = useGithubSyncService();
 
 const isPullConfirmOpen = ref(false);
 
@@ -160,10 +176,7 @@ const handleShiftFret = (direction: 'up' | 'down') => {
 };
 
 const handleManualPush = () => {
-  syncToGithub({
-    groups: chordStore.groups,
-    chords: chordStore.savedChordsList,
-  });
+  triggerGlobalSync();
 };
 
 const confirmPull = () => {
