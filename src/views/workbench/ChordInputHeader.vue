@@ -8,8 +8,8 @@
       class="input-chord-name w-full text-center font-black bg-transparent border-none outline-none cursor-pointer select-none caret-blue-600 transition-all duration-300 placeholder-slate-300 dark:placeholder-slate-600 text-[4rem] leading-none"
       :class="
         editorStore.currentChordName
-          ? 'text-slate-900 dark:text-slate-50 drop-shadow-sm'
-          : 'text-slate-300 dark:text-slate-600'
+          ? ' text-slate-900 dark:text-slate-50 drop-shadow-sm'
+          : 'opacity-20 text-slate-300 dark:text-slate-600'
       "
     />
   </div>

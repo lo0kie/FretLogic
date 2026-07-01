@@ -2,22 +2,37 @@
   <button
     :disabled="disabled"
     @click="handleInternalClick"
-    class="action-button-base flex items-center justify-center transition-colors duration-200 disabled:pointer-events-auto disabled:cursor-not-allowed"
-    :class="themeClasses"
+    :style="{ height, width }"
+    class="action-button-base w-full flex items-center justify-center font-bold border-solid transition-colors select-none duration-200 disabled:pointer-events-auto disabled:cursor-not-allowed"
+    :class="[themeClasses, sizeClasses]"
   >
-    <slot></slot>
+    <slot name="prefix"></slot>
+
+    <span class="flex items-center justify-center whitespace-nowrap">
+      <slot></slot>
+    </span>
+
+    <slot name="suffix"></slot>
   </button>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
 
-const props = defineProps<{
-  primary?: boolean;
-  danger?: boolean;
-  warning?: boolean;
-  disabled?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    primary?: boolean;
+    danger?: boolean;
+    warning?: boolean;
+    disabled?: boolean;
+    size?: 'sm' | 'md' | 'lg';
+    width?: string;
+    height?: string;
+  }>(),
+  {
+    size: 'md',
+  }
+);
 
 const emit = defineEmits<{
   (e: 'click', event: MouseEvent): void;
@@ -26,6 +41,20 @@ const emit = defineEmits<{
 const handleInternalClick = (e: MouseEvent) => {
   emit('click', e);
 };
+
+const sizes: Record<(typeof props)['size'], string> = { sm: 'h-8', md: 'h-10', lg: 'h-12' };
+
+const sizeClasses = computed(() => {
+  switch (props.size) {
+    case 'sm':
+      return `${sizes[props.size]} px-3 !text-xs gap-1.5`;
+    case 'lg':
+      return `${sizes[props.size]} px-6 !text-base gap-2.5`;
+    case 'md':
+    default:
+      return `${sizes[props.size]} px-4 !text-[15px] gap-2`;
+  }
+});
 
 const themeClasses = computed(() => {
   if (props.primary)
@@ -46,6 +75,5 @@ const themeClasses = computed(() => {
 
 .action-button-base {
   .mixin-button-base();
-  width: 100%;
 }
 </style>
