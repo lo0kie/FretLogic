@@ -7,12 +7,16 @@
 
     <div class="grid grid-cols-2 gap-2">
       <ActionButton @click="handleImportTrigger" class="text-xs">
-        <Download :size="18" :stroke-width="3" class="mr-2" />
+        <template #prefix>
+          <Download :size="18" :stroke-width="3" />
+        </template>
         <span>导入备份</span>
       </ActionButton>
 
       <ActionButton @click="ioService.triggerFullExport()" class="text-xs">
-        <Upload :size="18" :stroke-width="3" class="mr-2" />
+        <template #prefix>
+          <Upload :size="18" :stroke-width="3" />
+        </template>
         <span>全量导出</span>
       </ActionButton>
     </div>

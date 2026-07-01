@@ -5,6 +5,59 @@
     ></div>
 
     <div
+      class="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 p-1.5 bg-[var(--bg-panel)]/80 backdrop-blur-xl shadow-floating border border-[var(--control-border)] rounded-xl z-[100] transition-all"
+    >
+      <GlobalTooltip content="播放/试听当前和弦" placement="bottom">
+        <ActionButton @click="playCurrentChord" :disabled="editorStore.isFretBoardEmpty || isPlaying" size="sm">
+          <template #prefix>
+            <component
+              v-if="!editorStore.isFretBoardEmpty"
+              :is="isPlaying ? Square : Play"
+              :size="16"
+              stroke-width="3"
+            />
+          </template>
+          <span v-if="editorStore.isFretBoardEmpty">添加音符试听</span>
+          <span v-else>{{ isPlaying ? '试听中...' : '试听和弦' }}</span>
+        </ActionButton>
+      </GlobalTooltip>
+
+      <div class="w-px h-4 bg-[var(--control-border)] mx-1"></div>
+      <GlobalTooltip content="生成指板高清切图（背景透明）" placement="bottom">
+        <ActionButton
+          @click="chordService.exportFretboardImage('#fretBoard-capture-area', true)"
+          :disabled="uiStore.isCopying"
+          size="sm"
+        >
+          <template #prefix><Image :size="16" stroke-width="3" /></template>
+          <span>{{ uiStore.isCopying ? '导出中...' : '存为透明图' }}</span>
+        </ActionButton>
+      </GlobalTooltip>
+
+      <GlobalTooltip content="生成完整工作台切图（带卡片底色）" placement="bottom">
+        <ActionButton
+          @click="chordService.exportFretboardImage('#fretBoard-capture-area', false)"
+          :disabled="uiStore.isCopying"
+          size="sm"
+        >
+          <template #prefix><Copy :size="16" stroke-width="3" /></template>
+          <span>{{ uiStore.isCopying ? '导出中...' : '存为卡片图' }}</span>
+        </ActionButton>
+      </GlobalTooltip>
+
+      <div class="w-px h-4 bg-[var(--control-border)] mx-1"></div>
+
+      <GlobalTooltip :content="settingsStore.isDarkMode ? '切换至浅色模式' : '切换至深色模式'" placement="bottom">
+        <ActionButton @click="executeToggleThemeWithAnimation($event)" size="sm">
+          <template #prefix
+            ><component :is="settingsStore.isDarkMode ? Moon : Sun" :size="16" stroke-width="3"
+          /></template>
+          <span>{{ settingsStore.isDarkMode ? '深色' : '浅色' }}</span>
+        </ActionButton>
+      </GlobalTooltip>
+    </div>
+
+    <div
       id="fretBoard-capture-area"
       class="workbench-card rounded-xl flex flex-col items-center justify-evenly relative shrink-0"
       :style="{ height: dynamicHeight, width: `${CANVAS_CONFIG.BOARD_WIDTH + 60}px` }"
@@ -19,13 +72,68 @@
 </template>
 
 <script setup lang="ts">
+import ActionButton from '@/components/ActionButton.vue';
+import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { useAudioPlayer } from '@/composables/useAudioPlayer';
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/constants';
+import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/editorStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { useUiStore } from '@/stores/uiStore';
 import ChordInputHeader from '@/views/workbench/ChordInputHeader.vue';
 import FretBoardCanvas from '@/views/workbench/FretBoardCanvas.vue';
+import { Copy, Image, Moon, Play, Square, Sun } from '@lucide/vue';
 import { computed } from 'vue';
 
 const editorStore = useEditorStore();
+const settingsStore = useSettingsStore();
+const uiStore = useUiStore();
+const chordService = useChordService();
+const { isPlaying, playCurrentChord } = useAudioPlayer();
+
+// 💡 从 RightHelper 移过来的带涟漪动效的主题切换逻辑
+const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
+  const rootEl = document.documentElement;
+  rootEl.setAttribute('theme-changing', 'true');
+
+  const disableChangingAttribute = () => {
+    setTimeout(() => {
+      rootEl.removeAttribute('theme-changing');
+    }, 350);
+  };
+
+  const isSupportViewTransition = 'startViewTransition' in document;
+  if (!isSupportViewTransition || !event) {
+    settingsStore.isDarkMode = !settingsStore.isDarkMode;
+    disableChangingAttribute();
+    return;
+  }
+
+  const x = event.clientX;
+  const y = event.clientY;
+  const endRadius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+
+  const transition = (document as any).startViewTransition(() => {
+    settingsStore.isDarkMode = !settingsStore.isDarkMode;
+  });
+
+  transition.ready.then(() => {
+    document.documentElement.animate(
+      {
+        clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`],
+      },
+      {
+        duration: 350,
+        easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+        pseudoElement: '::view-transition-new(root)',
+      }
+    );
+  });
+
+  transition.finished.then(() => {
+    disableChangingAttribute();
+  });
+};
 
 const dynamicHeight = computed(() => {
   const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;

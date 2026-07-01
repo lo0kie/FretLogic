@@ -4,11 +4,13 @@ import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { copyElementToClipboard } from '@/utils/domExporter';
 import { toRaw } from 'vue';
+import { useGithubSyncService } from './useGithubSyncService';
 
 export function useChordService() {
   const chordStore = useChordStore();
   const editorStore = useEditorStore();
   const uiStore = useUiStore();
+  const { syncToGithub } = useGithubSyncService();
 
   const loadChordToEditor = (chord: Chord) => {
     editorStore.editingId = chord.id;
@@ -43,12 +45,24 @@ export function useChordService() {
     currentGroupChords.splice(newIndex, 0, movedChord);
 
     const otherGroupsChords = chordStore.savedChordsList.filter(c => c.groupId !== groupId);
-    chordStore.overwriteChords([...otherGroupsChords, ...currentGroupChords]);
+    const updatedList = [...otherGroupsChords, ...currentGroupChords];
+    chordStore.overwriteChords(updatedList);
+
+    syncToGithub({
+      groups: chordStore.groups,
+      chords: updatedList,
+    });
   };
 
   const triggerDeleteChord = (chord: Chord) => {
-    chordStore.overwriteChords(chordStore.savedChordsList.filter(c => c.id !== chord.id));
+    const updatedList = chordStore.savedChordsList.filter(c => c.id !== chord.id);
+    chordStore.overwriteChords(updatedList);
     uiStore.showToast(`🗑️ 已删除和弦 "${chord.chordName}"`, true);
+
+    syncToGithub({
+      groups: chordStore.groups,
+      chords: updatedList,
+    });
   };
 
   const exportFretboardImage = async (selector: string, isTransparent: boolean = true) => {
@@ -96,8 +110,13 @@ export function useChordService() {
     }
 
     editorStore.resetEditor();
-    uiStore.showToast('👍 和弦已完美封存');
+    uiStore.showToast('👍 和弦已保存');
     uiStore.clearUndoToasts();
+
+    syncToGithub({
+      groups: chordStore.groups,
+      chords: chordStore.savedChordsList,
+    });
   };
 
   return {
