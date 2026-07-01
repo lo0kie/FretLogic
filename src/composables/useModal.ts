@@ -1,8 +1,6 @@
-import type { ModalActionType } from '@/constants';
-import type { Chord, Group } from '@/types/chord';
+﻿import type { Chord, Group, ModalActionType } from '@/types';
 import { ref } from 'vue';
 
-// 🌟 全局单例状态，确保跨组件调用时状态同步
 const modalShow = ref(false);
 const modalType = ref<ModalActionType>('');
 const modalTitle = ref('');

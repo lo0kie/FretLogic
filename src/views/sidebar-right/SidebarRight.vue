@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <div
-    class="panel-right h-[calc(100vh-24px)] flex flex-col shrink-0 justify-between relative z-10 rounded-xl box-content"
+    class="panel-right h-[calc(100%-24px)] flex flex-col shrink-0 justify-between relative z-10 rounded-xl box-border"
     :class="{ 'is-open': uiStore.isRightOpen }"
   >
     <RightHeader />
@@ -30,7 +30,7 @@ const uiStore = useUiStore();
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .panel-right {
   .mixin-panel-base();
@@ -54,12 +54,11 @@ const uiStore = useUiStore();
   border-radius: 10px 0 0 10px;
   transform: translateY(-50%) scale(1);
   transform-origin: right;
-  right: 0px; // 🌟 默认收起时贴紧最右边缘
+  right: 0px;
   transition:
     all 0.2s ease,
     right @duration-slow @bezier-sidebar;
 
-  // 🌟 统一逻辑：动态计算按钮悬浮偏移量（侧边栏宽度 + 12px 外边距）
   &.is-open {
     right: calc(v-bind(RIGHT_SIDEBAR_WIDTH_PIXEL) + 13px);
   }

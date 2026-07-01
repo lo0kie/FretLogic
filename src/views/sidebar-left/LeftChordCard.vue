@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="chord-card-frame relative">
     <div
       class="chord-thumb-card group h-10 px-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)] box-border"
@@ -17,6 +17,9 @@
       >
         <button
           @click.stop="$emit('delete', chord)"
+          @mousedown.stop
+          @touchstart.stop
+          @pointerdown.stop
           class="action-button text-[var(--text-disabled)] hover:text-white w-4 h-4 rounded-full flex items-center justify-center bg-[var(--bg-main)] hover:bg-[var(--color-danger)]"
         >
           <X :size="14" stroke-width="3" />
@@ -27,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { type Chord } from '@/types/chord';
+import { type Chord } from '@/types';
 import { X } from '@lucide/vue';
 
 defineProps<{ chord: Chord; isEditing: boolean }>();
@@ -38,7 +41,7 @@ defineEmits<{
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .chord-thumb-card {
   .mixin-interactive-card();
@@ -48,6 +51,10 @@ defineEmits<{
   .chord-name-text,
   .action-button {
     transition: @transition-fast;
+
+    &:active {
+      transform: scale(0.9);
+    }
   }
 
   &.is-editing {

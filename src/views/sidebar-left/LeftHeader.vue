@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     class="p-4 px-5 h-[76px] border-b border-[var(--control-border)] flex items-center justify-between relative"
     :class="`min-w-[${LEFT_SIDEBAR_WIDTH_PIXEL}]`"
@@ -18,7 +18,7 @@
 
 <script setup lang="ts">
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
-import { useModal } from '@/composables/useModal'; // 🌟 接入全新独立模态框控制器
+import { useModal } from '@/composables/useModal';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { Plus } from '@lucide/vue';
 
@@ -26,7 +26,7 @@ const modal = useModal();
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .header-add-btn {
   background-color: color-mix(in srgb, @primary, transparent 90%);

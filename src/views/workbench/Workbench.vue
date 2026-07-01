@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="flex-1 h-full flex items-center justify-center p-8 transition-all relative overflow-hidden">
     <div
       class="absolute inset-0 bg-gradient-to-b from-[var(--color-primary)]/5 to-transparent pointer-events-none transition-colors duration-500"
@@ -19,25 +19,21 @@
 </template>
 
 <script setup lang="ts">
-import { CANVAS_CONFIG } from '@/constants';
-import { FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/constants/fretboard'; // 🌟 引入单一可信变量
-import { useChordLabStore } from '@/stores/chordLabStore';
+import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/constants';
+import { useEditorStore } from '@/stores/editorStore';
 import ChordInputHeader from '@/views/workbench/ChordInputHeader.vue';
 import FretBoardCanvas from '@/views/workbench/FretBoardCanvas.vue';
 import { computed } from 'vue';
 
-const chordLabStore = useChordLabStore();
+const editorStore = useEditorStore();
 
 const dynamicHeight = computed(() => {
-  // 1. 卡片内除画布外的纯几何宏观垂直高依赖
   const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;
 
-  // 2. 指板原始物理高度
   const rawCanvasHeight =
-    CANVAS_CONFIG.OFFSET_Y_TOP + chordLabStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
+    CANVAS_CONFIG.OFFSET_Y_TOP + editorStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
 
-  // 3. 乘以全量统一的物理微调缩放系数
-  const currentScale = FRETBOARD_SCALE_MAP[chordLabStore.fretCount] || 1.0;
+  const currentScale = FRETBOARD_SCALE_MAP[editorStore.fretCount] || 1.0;
   const realBoardHeight = rawCanvasHeight * currentScale;
 
   return `${baseVerticalSpace + realBoardHeight}px`;
@@ -45,7 +41,7 @@ const dynamicHeight = computed(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/styles/tokens.less';
+@import '@/assets/tokens.less';
 
 .workbench-card {
   .mixin-panel-base();
