@@ -10,17 +10,13 @@
           </div>
           <div class="grid grid-cols-2 gap-2">
             <GlobalTooltip content="将指板上按下的所有音符往高品位（琴桥方向）推移" placement="top">
-              <ActionButton
-                @click="handleShiftFret('down')"
-                :disabled="isShiftDownDisabled"
-                class="h-8 rounded-lg text-xs"
-              >
+              <ActionButton @click="handleShiftFret('down')" :disabled="isShiftDownDisabled">
                 <template #prefix><ChevronUp :size="18" stroke-width="3" /></template>
                 上移
               </ActionButton>
             </GlobalTooltip>
             <GlobalTooltip content="将指板上按下的所有音符往低品位（琴头方向）推移" placement="top">
-              <ActionButton @click="handleShiftFret('up')" :disabled="isShiftUpDisabled" class="h-8 rounded-lg text-xs">
+              <ActionButton @click="handleShiftFret('up')" :disabled="isShiftUpDisabled">
                 下移
                 <template #suffix><ChevronDown :size="18" stroke-width="3" /></template>
               </ActionButton>
@@ -124,7 +120,6 @@ import ActionButton from '@/components/ActionButton.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useGithubSyncService } from '@/services/useGithubSyncService';
-import { useChordStore } from '@/stores/chordStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -136,7 +131,6 @@ const isDevEnv = import.meta.env.DEV;
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 const editorStore = useEditorStore();
-const chordStore = useChordStore();
 const { triggerGlobalSync, pullFromGithub } = useGithubSyncService();
 
 const isPullConfirmOpen = ref(false);
