@@ -28,410 +28,10 @@
     {
       "id": "g_1780117616592",
       "name": "二十二",
-      "collapsed": true
+      "collapsed": false
     }
   ],
   "chords": [
-    {
-      "id": "c_040bdf6f-7",
-      "chordName": "F#m7",
-      "strings": [
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 0,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "c_b4e94e62-8",
-      "chordName": "B",
-      "strings": [
-        {
-          "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 6,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "1780117626093",
-      "chordName": "E",
-      "strings": [
-        {
-          "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 3,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "1780117655588",
-      "chordName": "G#m7",
-      "strings": [
-        {
-          "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 2,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "1780117685661",
-      "chordName": "C#m7",
-      "strings": [
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 3,
-          "isRoot": true,
-          "preferFlat": false
-        },
-        {
-          "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 4,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 4,
-      "capo": 1,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "1780117751884",
-      "chordName": "Amaj9",
-      "strings": [
-        {
-          "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 3,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "1780117808032",
-      "chordName": "F#m11",
-      "strings": [
-        {
-          "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 0,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "1780117876735",
-      "chordName": "A/B",
-      "strings": [
-        {
-          "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 4,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "1780118048833",
-      "chordName": "A/B",
-      "strings": [
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 0,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "1780118165700",
-      "chordName": "B/D#",
-      "strings": [
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 4,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 4,
-      "capo": 3,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
-    },
     {
       "id": "1779883260280",
       "chordName": "E7",
@@ -3230,6 +2830,406 @@
       "fretCount": 3,
       "capo": 1,
       "groupId": "g_1778079326389",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "c_040bdf6f-7",
+      "chordName": "F#m7",
+      "strings": [
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1780117616592",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "1780117626093",
+      "chordName": "E",
+      "strings": [
+        {
+          "fret": 0,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 3,
+      "groupId": "g_1780117616592",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "c_b4e94e62-8",
+      "chordName": "B",
+      "strings": [
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 6,
+      "groupId": "g_1780117616592",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "1780117655588",
+      "chordName": "G#m7",
+      "strings": [
+        {
+          "fret": 2,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 0,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 2,
+      "groupId": "g_1780117616592",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "1780117685661",
+      "chordName": "C#m7",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 4,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 4,
+      "capo": 1,
+      "groupId": "g_1780117616592",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "1780117751884",
+      "chordName": "Amaj9",
+      "strings": [
+        {
+          "fret": 2,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 3,
+      "groupId": "g_1780117616592",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "1780117808032",
+      "chordName": "F#m11",
+      "strings": [
+        {
+          "fret": 2,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 0,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1780117616592",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "1780117876735",
+      "chordName": "A/B",
+      "strings": [
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 4,
+      "groupId": "g_1780117616592",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "1780118048833",
+      "chordName": "A/B",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1780117616592",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "1780118165700",
+      "chordName": "B/D#",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 4,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 4,
+      "capo": 3,
+      "groupId": "g_1780117616592",
       "tuning": "STANDARD"
     }
   ]
