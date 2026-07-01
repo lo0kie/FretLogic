@@ -1,7 +1,7 @@
 ﻿<template>
   <div
     class="p-4 border-t border-[var(--control-border)] bg-[var(--bg-body)] rounded-b-xl"
-    :class="`min-w-[${RIGHT_SIDEBAR_WIDTH_PIXEL}]`"
+    :style="{ minWidth: RIGHT_SIDEBAR_WIDTH_PIXEL }"
   >
     <div class="grid grid-cols-2 gap-2">
       <GlobalTooltip :content="saveDisabledReason">

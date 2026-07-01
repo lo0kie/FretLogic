@@ -1,7 +1,7 @@
 ﻿<template>
   <div
     class="p-4 border-t border-[var(--control-border)] bg-[var(--bg-body)] rounded-b-xl"
-    :class="`min-w-[${LEFT_SIDEBAR_WIDTH_PIXEL}]`"
+    :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }"
   >
     <input type="file" ref="fileInputRef" accept=".json" @change="handleFileChange" class="hidden" />
 

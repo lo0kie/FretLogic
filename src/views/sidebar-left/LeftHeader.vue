@@ -1,7 +1,7 @@
 ﻿<template>
   <div
     class="p-4 px-5 h-[76px] border-b border-[var(--control-border)] flex items-center justify-between relative"
-    :class="`min-w-[${LEFT_SIDEBAR_WIDTH_PIXEL}]`"
+    :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }"
   >
     <h1 class="text-lg font-black tracking-tight uppercase text-title">Fret Logic</h1>
 
@@ -53,7 +53,7 @@ import { nextTick, ref } from 'vue';
 
 const uiStore = useUiStore();
 const chordStore = useChordStore();
-const { syncToGithub } = useGithubSyncService();
+const { triggerGlobalSync } = useGithubSyncService();
 
 const isCreateModalOpen = ref(false);
 const groupNameInput = ref('');
@@ -88,10 +88,7 @@ const handleCreateGroup = () => {
   isCreateModalOpen.value = false;
   uiStore.showToast('✅ 操作成功完成');
 
-  syncToGithub({
-    groups: chordStore.groups,
-    chords: chordStore.savedChordsList,
-  });
+  triggerGlobalSync();
 };
 </script>
 

@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="flex flex-col flex-1 overflow-hidden" :class="`min-w-[${LEFT_SIDEBAR_WIDTH_PIXEL}]`">
+  <div class="flex flex-col flex-1 overflow-hidden" :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }">
     <LeftSearch v-model="searchQuery" :disabled="chordStore.savedChordsList.length === 0" />
 
     <div class="flex-1 overflow-y-auto no-scrollbar p-4">
@@ -17,7 +17,8 @@
       </div>
 
       <VueDraggable
-        v-model="chordStore.groups"
+        :model-value="chordStore.groups"
+        @update:modelValue="(val: Group[]) => chordStore.overwriteGroups(val)"
         :animation="250"
         handle=".drag-handle"
         :disabled="!!debouncedQuery"
@@ -221,7 +222,7 @@ const editorStore = useEditorStore();
 const chordStore = useChordStore();
 const chordService = useChordService();
 const uiStore = useUiStore();
-const { syncToGithub } = useGithubSyncService();
+const { triggerGlobalSync } = useGithubSyncService();
 
 const searchQuery = ref('');
 const debouncedQuery = refDebounced(searchQuery, 150);
@@ -259,7 +260,7 @@ const handleRenameGroup = () => {
   }
   isRenameModalOpen.value = false;
   uiStore.showToast('✅ 操作成功完成');
-  syncToGithub({ groups: chordStore.groups, chords: chordStore.savedChordsList });
+  triggerGlobalSync();
 };
 
 const openDeleteModal = (group: Group) => {
@@ -287,7 +288,7 @@ const handleDeleteGroup = () => {
   uiStore.clearUndoToasts();
   isDeleteModalOpen.value = false;
   uiStore.showToast('✅ 操作成功完成');
-  syncToGithub({ groups: chordStore.groups, chords: chordStore.savedChordsList });
+  triggerGlobalSync();
 };
 
 const openMoveModal = (chord: Chord) => {
@@ -311,7 +312,7 @@ const handleMoveChord = () => {
 
   isMoveModalOpen.value = false;
   uiStore.showToast('✅ 操作成功完成');
-  syncToGithub({ groups: chordStore.groups, chords: chordStore.savedChordsList });
+  triggerGlobalSync();
 };
 
 // ===== 其他功能逻辑 =====
@@ -333,10 +334,7 @@ const handleLocalDeleteChord = (chord: Chord) => {
 };
 
 const handleGroupDragUpdate = () => {
-  syncToGithub({
-    groups: chordStore.groups,
-    chords: chordStore.savedChordsList,
-  });
+  triggerGlobalSync();
 };
 
 watch(
