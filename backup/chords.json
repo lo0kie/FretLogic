@@ -28,10 +28,55 @@
     {
       "id": "g_1780117616592",
       "name": "二十二",
+      "collapsed": true
+    },
+    {
+      "id": "g_7793d4ed",
+      "name": "123123",
       "collapsed": false
     }
   ],
   "chords": [
+    {
+      "id": "c_cb93e16b-f",
+      "chordName": "1",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_7793d4ed",
+      "tuning": "STANDARD"
+    },
     {
       "id": "c_040bdf6f-7",
       "chordName": "F#m7",
