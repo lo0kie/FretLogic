@@ -61,7 +61,7 @@ const uiStore = useUiStore();
     left @duration-slow @bezier-sidebar;
 
   &.is-open {
-    left: calc(v-bind(LEFT_SIDEBAR_WIDTH_PIXEL) + 13px);
+    left: calc(v-bind(LEFT_SIDEBAR_WIDTH_PIXEL) + 12px);
   }
 
   &:active {

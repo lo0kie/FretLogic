@@ -60,7 +60,7 @@ const uiStore = useUiStore();
     right @duration-slow @bezier-sidebar;
 
   &.is-open {
-    right: calc(v-bind(RIGHT_SIDEBAR_WIDTH_PIXEL) + 13px);
+    right: calc(v-bind(RIGHT_SIDEBAR_WIDTH_PIXEL) + 12px);
   }
 
   &:active {
