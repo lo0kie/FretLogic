@@ -17,7 +17,6 @@
       </div>
 
       <VueDraggable
-        v-else
         v-model="chordStore.groups"
         :animation="250"
         handle=".drag-handle"
@@ -27,6 +26,7 @@
         ghost-class="opacity-0"
         :touchStartThreshold="12"
         :swap-threshold="0.5"
+        @update="handleGroupDragUpdate"
       >
         <div
           v-for="group in chordStore.groups"
@@ -145,23 +145,24 @@
 
 <script setup lang="ts">
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
-import { useChordStore } from '@/stores/chordStore';
 import { useModal } from '@/composables/useModal';
 import { useChordService } from '@/services/useChordService';
+import { useGithubSyncService } from '@/services/useGithubSyncService'; // 👈 引入同步服务 [cite: 204]
+import { useEditorStore } from '@/stores/editorStore';
+import { useChordStore } from '@/stores/chordStore';
+import type { Chord } from '@/types';
 import LeftChordCard from '@/views/sidebar-left/LeftChordCard.vue';
 import LeftSearch from '@/views/sidebar-left/LeftSearch.vue';
 import { ChevronDown, FolderOpen, GripVertical } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
-import { ref, watch, nextTick } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
-import type { Chord } from '@/types';
-import { useEditorStore } from '@/stores/editorStore';
 
 const editorStore = useEditorStore();
-
 const chordStore = useChordStore();
 const chordService = useChordService();
 const modal = useModal();
+const { syncToGithub } = useGithubSyncService(); // 👈 初始化同步服务 [cite: 206]
 
 const searchQuery = ref('');
 const debouncedQuery = refDebounced(searchQuery, 150);
@@ -169,7 +170,6 @@ const debouncedQuery = refDebounced(searchQuery, 150);
 const getGroupChordsCount = (groupId: string) => {
   return chordStore.groupChordMap.get(groupId)?.length || 0;
 };
-
 const searchFilteredChords = (groupId: string) => {
   const chords = chordStore.groupChordMap.get(groupId) || [];
   const q = debouncedQuery.value.toLowerCase().trim();
@@ -185,6 +185,14 @@ const handleLocalDeleteChord = (chord: Chord) => {
   const isEditingCurrent = editorStore.editingId === chord.id;
   chordService.triggerDeleteChord(chord);
   if (isEditingCurrent) editorStore.resetEditor();
+};
+
+// 🔄 分组排序更改后，触发全量云端同步
+const handleGroupDragUpdate = () => {
+  syncToGithub({
+    groups: chordStore.groups,
+    chords: chordStore.savedChordsList,
+  });
 };
 
 watch(

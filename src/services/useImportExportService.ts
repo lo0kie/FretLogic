@@ -1,10 +1,12 @@
 ﻿import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';
+import { useGithubSyncService } from './useGithubSyncService';
 
 export function useImportExportService() {
   const chordStore = useChordStore();
   const uiStore = useUiStore();
+  const { syncToGithub } = useGithubSyncService();
 
   const processImport = (file: File, resetInputCallback: () => void) => {
     if (file.size === 0) {
@@ -30,6 +32,12 @@ export function useImportExportService() {
             chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
           }
           uiStore.showToast('📦 数据恢复成功');
+
+          // 🔄 4. 外部数据成功恢复并写入 Store 后，全量打包并同步到云端仓库
+          syncToGithub({
+            groups: imported.groups,
+            chords: imported.chords,
+          });
         } else {
           throw new Error('Import verification failed');
         }
@@ -50,11 +58,9 @@ export function useImportExportService() {
       chordStore.overwriteChords(originalData.chords);
 
       const now = new Date();
-
       const tzOffset = now.getTimezoneOffset() * 60000;
       const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, -1);
       const dateStr = localISOTime.replace(/T/, '_').replace(/:/g, '-').split('.')[0];
-
       const link = document.createElement('a');
       const dataString = JSON.stringify({ groups: originalData.groups, chords: originalData.chords });
       link.href = URL.createObjectURL(new Blob([dataString], { type: 'application/json' }));

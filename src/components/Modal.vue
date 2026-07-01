@@ -85,6 +85,7 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import { useModal } from '@/composables/useModal';
+import { useGithubSyncService } from '@/services/useGithubSyncService'; // 👈 引入同步服务 [cite: 204]
 import { useChordStore } from '@/stores/chordStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -98,8 +99,8 @@ const uiStore = useUiStore();
 const chordStore = useChordStore();
 const modal = useModal();
 const inputRef = ref<HTMLInputElement | null>(null);
-
 const isBodyLocked = useScrollLock(document.body);
+const { syncToGithub } = useGithubSyncService(); // 👈 初始化同步服务 [cite: 206]
 
 const isCurrentGroup = (groupId: string) => {
   return modal.activeTargetChord.value?.groupId === groupId;
@@ -157,6 +158,12 @@ const handleLocalConfirm = () => {
 
   modal.closeModal();
   uiStore.showToast('✅ 操作成功完成');
+
+  // 🔄 分组创建、重命名、删除或和弦跨组移动成功后，全量同步至云端
+  syncToGithub({
+    groups: chordStore.groups,
+    chords: chordStore.savedChordsList,
+  });
 };
 
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
