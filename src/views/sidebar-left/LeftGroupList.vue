@@ -149,7 +149,6 @@
 import { ref, watch, nextTick } from 'vue';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useChordService } from '@/services/useChordService';
-import { useGithubSyncService } from '@/services/useGithubSyncService';
 import { useChordStore } from '@/stores/chordStore';
 import { useEditorStore } from '@/stores/editorStore';
 import type { Chord, Group } from '@/types';
