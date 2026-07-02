@@ -1,14 +1,14 @@
 {
   "groups": [
     {
-      "id": "g_1778079320204",
-      "name": "A调",
+      "id": "g_1778079326389",
+      "name": "E调",
       "collapsed": true
     },
     {
-      "id": "g_1778079326389",
-      "name": "E调",
-      "collapsed": false
+      "id": "g_1778079320204",
+      "name": "A调",
+      "collapsed": true
     },
     {
       "id": "g_1778079331837",
@@ -2878,46 +2878,6 @@
       "tuning": "STANDARD"
     },
     {
-      "id": "1779024729166",
-      "chordName": "E",
-      "strings": [
-        {
-          "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 2,
-      "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
-    },
-    {
       "id": "1780117582755",
       "chordName": "E",
       "strings": [
@@ -2954,6 +2914,46 @@
       ],
       "fretCount": 3,
       "capo": 3,
+      "groupId": "g_1778079326389",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "1779024729166",
+      "chordName": "E",
+      "strings": [
+        {
+          "fret": 0,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 2,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD"
     },
