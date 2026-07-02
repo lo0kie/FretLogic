@@ -3478,46 +3478,6 @@
       "tuning": "STANDARD"
     },
     {
-      "id": "c_f07ae797-4",
-      "chordName": "G6",
-      "strings": [
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
-        },
-        {
-          "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 1,
-      "groupId": "g_d1fa5636",
-      "tuning": "STANDARD"
-    },
-    {
       "id": "c_71dfd9bd-0",
       "chordName": "Bm11",
       "strings": [
@@ -3594,6 +3554,46 @@
       ],
       "fretCount": 3,
       "capo": 4,
+      "groupId": "g_d1fa5636",
+      "tuning": "STANDARD"
+    },
+    {
+      "id": "c_f07ae797-4",
+      "chordName": "G6",
+      "strings": [
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 1,
       "groupId": "g_d1fa5636",
       "tuning": "STANDARD"
     }
