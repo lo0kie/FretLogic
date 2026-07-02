@@ -1,12 +1,10 @@
 ﻿import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';
-import { useGithubSyncService } from './useGithubSyncService';
 
 export function useImportExportService() {
   const chordStore = useChordStore();
   const uiStore = useUiStore();
-  const { triggerGlobalSync } = useGithubSyncService();
 
   const processImport = (file: File, resetInputCallback: () => void) => {
     if (file.size === 0) {
@@ -32,8 +30,6 @@ export function useImportExportService() {
             chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
           }
           uiStore.showToast('📦 数据恢复成功');
-
-          triggerGlobalSync();
         } else {
           throw new Error('Import verification failed');
         }

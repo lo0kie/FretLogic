@@ -3,19 +3,19 @@ import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { copyElementToClipboard } from '@/utils/domExporter';
+import cloneDeep from 'lodash.clonedeep';
 import { toRaw } from 'vue';
-import { useGithubSyncService } from './useGithubSyncService';
+import { SortableEvent } from 'vue-draggable-plus';
 
 export function useChordService() {
   const chordStore = useChordStore();
   const editorStore = useEditorStore();
   const uiStore = useUiStore();
-  const { triggerGlobalSync } = useGithubSyncService();
 
   const loadChordToEditor = (chord: Chord) => {
     editorStore.editingId = chord.id;
     editorStore.currentChordName = chord.chordName === '未命名' ? '' : chord.chordName;
-    editorStore.strings = structuredClone(toRaw(chord.strings));
+    editorStore.strings = cloneDeep(toRaw(chord.strings));
     editorStore.fretCount = chord.fretCount ?? 3;
     editorStore.capo = chord.capo ?? 0;
     editorStore.currentTuning = chord.tuning || 'STANDARD';
@@ -36,7 +36,7 @@ export function useChordService() {
     target.collapsed = !target.collapsed;
   };
 
-  const handleChordSort = (event: any, groupId: string) => {
+  const handleChordSort = (event: SortableEvent, groupId: string) => {
     const { oldIndex, newIndex } = event;
     if (oldIndex === undefined || newIndex === undefined) return;
 
@@ -47,16 +47,12 @@ export function useChordService() {
     const otherGroupsChords = chordStore.savedChordsList.filter(c => c.groupId !== groupId);
     const updatedList = [...otherGroupsChords, ...currentGroupChords];
     chordStore.overwriteChords(updatedList);
-
-    triggerGlobalSync();
   };
 
   const triggerDeleteChord = (chord: Chord) => {
     const updatedList = chordStore.savedChordsList.filter(c => c.id !== chord.id);
     chordStore.overwriteChords(updatedList);
     uiStore.showToast(`🗑️ 已删除和弦 "${chord.chordName}"`, true);
-
-    triggerGlobalSync();
   };
 
   const exportFretboardImage = async (selector: string, isTransparent: boolean = true) => {
@@ -89,7 +85,7 @@ export function useChordService() {
     const payload: Chord = {
       id: editorStore.editingId || 'c_' + crypto.randomUUID().slice(0, 10),
       chordName: cleanName,
-      strings: structuredClone(toRaw(editorStore.strings)),
+      strings: cloneDeep(toRaw(editorStore.strings)),
       fretCount: editorStore.fretCount,
       capo: editorStore.capo,
       groupId: targetGroupId || 'default',
@@ -106,8 +102,6 @@ export function useChordService() {
     editorStore.resetEditor();
     uiStore.showToast('👍 和弦已保存');
     uiStore.clearUndoToasts();
-
-    triggerGlobalSync();
   };
 
   return {

@@ -6,25 +6,30 @@
     <input type="file" ref="fileInputRef" accept=".json" @change="handleFileChange" class="hidden" />
 
     <div class="grid grid-cols-2 gap-2">
-      <ActionButton @click="handleImportTrigger" class="text-xs">
-        <template #prefix>
-          <Download :size="18" :stroke-width="3" />
-        </template>
-        <span>导入备份</span>
-      </ActionButton>
+      <GlobalTooltip content="从本地选择 JSON 备份恢复数据" placement="top">
+        <ActionButton @click="handleImportTrigger" class="text-xs">
+          <template #prefix>
+            <Download :size="18" :stroke-width="3" />
+          </template>
+          <span>导入备份</span>
+        </ActionButton>
+      </GlobalTooltip>
 
-      <ActionButton @click="ioService.triggerFullExport()" class="text-xs">
-        <template #prefix>
-          <Upload :size="18" :stroke-width="3" />
-        </template>
-        <span>全量导出</span>
-      </ActionButton>
+      <GlobalTooltip content="导出当前所有分组与和弦为本地文件" placement="top">
+        <ActionButton @click="ioService.triggerFullExport()" class="text-xs">
+          <template #prefix>
+            <Upload :size="18" :stroke-width="3" />
+          </template>
+          <span>全量导出</span>
+        </ActionButton>
+      </GlobalTooltip>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
+import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
 import { useImportExportService } from '@/services/useImportExportService';
 import { Download, Upload } from '@lucide/vue';

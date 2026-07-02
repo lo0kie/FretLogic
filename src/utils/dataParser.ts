@@ -29,7 +29,7 @@ export const cleanAndValidateData = (
   let isValid = true;
 
   const rawGroups = d.groups as unknown[];
-  const rawChords = d.chords as Record<string, any>[];
+  const rawChords = d.chords as unknown[];
 
   const cleanedGroups: Group[] = [];
   for (const g of rawGroups) {
@@ -56,7 +56,7 @@ export const cleanAndValidateData = (
       continue;
     }
 
-    const chordItem = c as LooseChordPayload;
+    const chordItem = c as unknown as LooseChordPayload;
 
     if (
       !chordItem.groupId ||
