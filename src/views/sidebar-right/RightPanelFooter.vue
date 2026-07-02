@@ -5,17 +5,12 @@
   >
     <div class="grid grid-cols-2 gap-2">
       <GlobalTooltip :content="saveDisabledReason">
-        <ActionButton @click="chordService.persistCurrentChord()" :primary="!isSaveDisabled" :disabled="isSaveDisabled">
+        <ActionButton @click="$emit('save')" :primary="!isSaveDisabled" :disabled="isSaveDisabled">
           {{ editorStore.editingId ? '更新修改' : '保存和弦' }}
         </ActionButton>
       </GlobalTooltip>
 
-      <ActionButton
-        @click="editorStore.resetEditor()"
-        :danger="!editorStore.editingId"
-        :warning="!!editorStore.editingId"
-        :disabled="isClearDisabled"
-      >
+      <ActionButton @click="$emit('reset')" :disabled="isClearDisabled">
         {{ editorStore.editingId ? '放弃本次修改' : '重置' }}
       </ActionButton>
     </div>
@@ -26,12 +21,15 @@
 import ActionButton from '@/components/ActionButton.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { RIGHT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
-import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/editorStore';
 import { computed } from 'vue';
 
+defineEmits<{
+  (e: 'save'): void;
+  (e: 'reset'): void;
+}>();
+
 const editorStore = useEditorStore();
-const chordService = useChordService();
 
 const isSaveDisabled = computed(() => {
   const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';

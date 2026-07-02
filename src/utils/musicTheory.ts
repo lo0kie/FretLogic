@@ -3,15 +3,24 @@
 export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 export const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
-export const TUNING_PRESETS = {
-  STANDARD: { name: 'Standard (EADGBE)', mapping: [40, 45, 50, 55, 59, 64] },
-  DROP_D: { name: 'Drop D (DADGBE)', mapping: [38, 45, 50, 55, 59, 64] },
-  DADGAD: { name: 'DADGAD', mapping: [38, 45, 50, 55, 57, 62] },
-  OPEN_G: { name: 'Open G (DGDGBD)', mapping: [38, 43, 50, 55, 59, 62] },
-  HALF_STEP: { name: 'Half Step Down', mapping: [39, 44, 49, 54, 58, 63] },
-} as const;
+export enum TuningEnum {
+  STANDARD = 'STANDARD',
+  DROP_D = 'DROP_D',
+  DADGAD = 'DADGAD',
+  OPEN_G = 'OPEN_G',
+  HALF_STEP = 'HALF_STEP',
+}
 
-export type TuningType = keyof typeof TUNING_PRESETS;
+export const TUNING_PRESETS: Record<
+  TuningEnum,
+  { name: string; mapping: [number, number, number, number, number, number] }
+> = {
+  [TuningEnum.STANDARD]: { name: 'Standard (EADGBE)', mapping: [40, 45, 50, 55, 59, 64] },
+  [TuningEnum.DROP_D]: { name: 'Drop D (DADGBE)', mapping: [38, 45, 50, 55, 59, 64] },
+  [TuningEnum.DADGAD]: { name: 'DADGAD', mapping: [38, 45, 50, 55, 57, 62] },
+  [TuningEnum.OPEN_G]: { name: 'Open G (DGDGBD)', mapping: [38, 43, 50, 55, 59, 62] },
+  [TuningEnum.HALF_STEP]: { name: 'Half Step Down', mapping: [39, 44, 49, 54, 58, 63] },
+};
 
 export const isMuted = (s: GuitarStringEntity) => s.fret === -1;
 export const isOpen = (s: GuitarStringEntity) => s.fret === 0;

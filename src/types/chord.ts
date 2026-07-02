@@ -1,4 +1,4 @@
-﻿import type { TuningType } from '@/utils/musicTheory';
+﻿import type { TuningEnum } from '@/utils/musicTheory';
 import type { FretCount, GuitarStringsModel } from './fretboard';
 
 export interface Chord {
@@ -8,7 +8,7 @@ export interface Chord {
   fretCount: FretCount;
   capo: number;
   groupId: string;
-  tuning: TuningType;
+  tuning: TuningEnum;
 }
 
 export interface Group {
