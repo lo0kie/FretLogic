@@ -1,11 +1,15 @@
+// src/stores/editorStore.ts
 import { STORAGE_KEYS } from '@/constants';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, GuitarStringsModel } from '@/types';
+import { GuitarStringsModelSchema } from '@/types';
 import { createString, extractRootNote, isOpen, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
+import { createZodSerializer } from '@/utils/zodStorage';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import cloneDeep from 'lodash.clonedeep';
 import { defineStore } from 'pinia';
 import { computed, ref, toRaw, watch } from 'vue';
+import { z } from 'zod';
 
 export const useEditorStore = defineStore('editor', () => {
   const defaultStrings: GuitarStringsModel = [
@@ -19,14 +23,18 @@ export const useEditorStore = defineStore('editor', () => {
 
   const strings = useStorage<GuitarStringsModel>(STORAGE_KEYS.CURR_STRINGS, defaultStrings, localStorage, {
     eventFilter: debounceFilter(300),
+    serializer: createZodSerializer(GuitarStringsModelSchema, defaultStrings),
   });
 
   const currentChordName = useStorage(STORAGE_KEYS.CURR_NAME, '', localStorage, { eventFilter: debounceFilter(300) });
-  const currentTuning = useStorage<TuningEnum>('CHORD_LAB_CURR_TUNING_V1', TuningEnum.STANDARD, localStorage);
-  const editingId = useStorage<string | null>(STORAGE_KEYS.EDITING_ID, null);
+
+  const currentTuning = useStorage<TuningEnum>(STORAGE_KEYS.CURR_TUNING, TuningEnum.STANDARD, localStorage, {
+    serializer: createZodSerializer(z.nativeEnum(TuningEnum), TuningEnum.STANDARD),
+  });
+
+  const editingId = useStorage<string | null>(STORAGE_KEYS.EDITING_ID, null, localStorage);
 
   const isDraggingFinger = ref(false);
-  const lastPos = ref('');
   const fretCount = useStorage<Chord['fretCount']>(STORAGE_KEYS.CURR_FCOUNT, 3);
   const capo = useStorage(STORAGE_KEYS.CURR_CAPO, 0);
 
@@ -37,7 +45,6 @@ export const useEditorStore = defineStore('editor', () => {
   const isFretBoardEmpty = computed(() => strings.value.every(s => s.fret < 0));
   const currentRootNote = computed(() => extractRootNote(currentChordName.value));
 
-  // 物理品位越界熔断
   watch(fretCount, (newVal, oldVal) => {
     if (newVal < oldVal) {
       strings.value.forEach(str => {
@@ -49,7 +56,6 @@ export const useEditorStore = defineStore('editor', () => {
     }
   });
 
-  // 恢复历史和弦时的底层反序列化安全机制
   const chordStore = useChordStore();
   if (editingId.value) {
     const original = chordStore.savedChordsList.find(c => c.id === editingId.value);
@@ -66,11 +72,7 @@ export const useEditorStore = defineStore('editor', () => {
 
   const resetEditor = () => {
     editingId.value = null;
-    strings.value.forEach(s => {
-      s.fret = -1;
-      s.isRoot = false;
-      s.preferFlat = false;
-    });
+    strings.value = cloneDeep(defaultStrings);
     currentChordName.value = '';
     capo.value = 0;
     fretCount.value = 3;
@@ -95,7 +97,6 @@ export const useEditorStore = defineStore('editor', () => {
     currentTuning,
     editingId,
     isDraggingFinger,
-    lastPos,
     fretCount,
     capo,
     activeBaseStrings,

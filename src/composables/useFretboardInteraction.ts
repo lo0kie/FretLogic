@@ -11,7 +11,6 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
   const MUTING_COOL_DOWN = 200;
   let lastSIdx = -1;
   let lastFIdx = -1;
-  let cachedBoardRect: DOMRect | null = null;
   let wheelAccumulator = 0;
   const WHEEL_THRESHOLD = 40;
 
@@ -83,7 +82,8 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
   };
 
   const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = false) => {
-    const board = cachedBoardRect || (fretBoardRef.value ? fretBoardRef.value.getBoundingClientRect() : null);
+    const board = fretBoardRef.value?.getBoundingClientRect();
+
     if (!board) return;
 
     const scaleX = board.width / CANVAS_CONFIG.BOARD_WIDTH;
@@ -138,7 +138,6 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     editorStore.isDraggingFinger = false;
     lastSIdx = -1;
     lastFIdx = -1;
-    cachedBoardRect = null;
     if (rAF_ID) cancelAnimationFrame(rAF_ID);
     ticking = false;
     cleanupListeners.forEach(cleanup => cleanup());
@@ -147,7 +146,6 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
 
   const handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
-    if (fretBoardRef.value) cachedBoardRect = fretBoardRef.value.getBoundingClientRect();
     editorStore.isDraggingFinger = true;
     lastSIdx = -1;
     lastFIdx = -1;

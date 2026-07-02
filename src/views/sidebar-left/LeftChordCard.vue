@@ -1,8 +1,7 @@
-﻿<!-- src/views/sidebar-left/LeftChordCard.vue -->
-<template>
+﻿<template>
   <div class="chord-card-frame" :title="chord.chordName">
     <div
-      class="chord-thumb-card group h-10 px-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)] box-border relative"
+      class="chord-thumb-card group h-8 px-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)] box-border relative"
       :class="{ 'is-editing': isEditing }"
       tabindex="0"
       @keydown.enter.prevent.stop="e => (e.target as HTMLElement).click()"

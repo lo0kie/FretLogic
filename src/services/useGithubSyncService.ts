@@ -2,7 +2,9 @@
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
+import { SettingsSchema } from '@/types';
 import { cleanAndValidateData } from '@/utils/dataParser';
+import { Base64 } from 'js-base64';
 import { ref } from 'vue';
 
 interface GithubFilePayload {
@@ -20,29 +22,26 @@ export function useGithubSyncService() {
   const settingsStore = useSettingsStore();
   const chordStore = useChordStore();
 
-  const utf8ToBase64 = (str: string) => {
-    const bytes = new TextEncoder().encode(str);
-    const binString = Array.from(bytes, byte => String.fromCharCode(byte)).join('');
-    return window.btoa(binString);
-  };
-  const base64ToUtf8 = (str: string) => {
-    const binString = window.atob(str);
-    const bytes = Uint8Array.from(binString, char => char.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  };
   const cleanHeaderString = (str: string) => str.trim().replace(/[^\x00-\x7F]/g, '');
 
   const syncToGithub = async (data: object) => {
-    const githubToken = cleanHeaderString(settingsStore.githubToken);
-    const githubOwner = settingsStore.githubOwner.trim();
-    const githubRepo = settingsStore.githubRepo.trim();
-    const githubBranch = settingsStore.githubBranch.trim();
-    const githubPath = settingsStore.githubPath.trim();
+    const rawPayload = {
+      githubToken: cleanHeaderString(settingsStore.githubToken),
+      githubOwner: settingsStore.githubOwner.trim(),
+      githubRepo: settingsStore.githubRepo.trim(),
+      githubBranch: settingsStore.githubBranch.trim(),
+      githubPath: settingsStore.githubPath.trim(),
+    };
 
-    if (!githubToken || !githubOwner || !githubRepo || !githubBranch || !githubPath) {
-      uiStore.showToast('同步失败：请先在右侧栏配置完整的 GitHub 信息', false, 'error');
+    const schemaResult = SettingsSchema.safeParse(rawPayload);
+
+    if (!schemaResult.success) {
+      const firstErrorMessage = schemaResult.error.issues[0].message;
+      uiStore.showToast(`同步失败：${firstErrorMessage}`, false, 'error');
       return;
     }
+
+    const { githubToken, githubOwner, githubRepo, githubBranch, githubPath } = schemaResult.data;
 
     const apiUrl = `https://api.github.com/repos/${githubOwner}/${githubRepo}/contents/${githubPath}`;
     const headers: Record<string, string> = {
@@ -65,7 +64,7 @@ export function useGithubSyncService() {
         throw new Error('获取远程文件信息失败');
       }
 
-      const contentBase64 = utf8ToBase64(JSON.stringify(data, null, 2));
+      const contentBase64 = Base64.encode(JSON.stringify(data, null, 2));
 
       const body: GithubFilePayload = {
         message: `Auto sync chords data: ${new Date().toLocaleString()}`,
@@ -86,23 +85,30 @@ export function useGithubSyncService() {
       uiStore.showToast('成功同步至 GitHub 云端', false, 'success');
     } catch (err) {
       console.error('GitHub Sync Error:', err);
-      uiStore.showToast('GitHub 同步失败，请检查 network 或配置信息', false, 'error');
+      uiStore.showToast('GitHub 同步失败，请检查网络或配置信息', false, 'error');
     } finally {
       isSyncing.value = false;
     }
   };
 
   const pullFromGithub = async () => {
-    const githubToken = cleanHeaderString(settingsStore.githubToken);
-    const githubOwner = settingsStore.githubOwner.trim();
-    const githubRepo = settingsStore.githubRepo.trim();
-    const githubBranch = settingsStore.githubBranch.trim();
-    const githubPath = settingsStore.githubPath.trim();
+    const rawPayload = {
+      githubToken: cleanHeaderString(settingsStore.githubToken),
+      githubOwner: settingsStore.githubOwner.trim(),
+      githubRepo: settingsStore.githubRepo.trim(),
+      githubBranch: settingsStore.githubBranch.trim(),
+      githubPath: settingsStore.githubPath.trim(),
+    };
 
-    if (!githubToken || !githubOwner || !githubRepo || !githubBranch || !githubPath) {
-      uiStore.showToast('拉取失败：请先在右侧栏配置完整的 GitHub 信息', false, 'error');
+    const schemaResult = SettingsSchema.safeParse(rawPayload);
+
+    if (!schemaResult.success) {
+      const firstErrorMessage = schemaResult.error.issues[0].message;
+      uiStore.showToast(`拉取失败：${firstErrorMessage}`, false, 'error');
       return;
     }
+
+    const { githubToken, githubOwner, githubRepo, githubBranch, githubPath } = schemaResult.data;
 
     const apiUrl = `https://api.github.com/repos/${githubOwner}/${githubRepo}/contents/${githubPath}?ref=${githubBranch}`;
     const headers: Record<string, string> = {
@@ -110,7 +116,7 @@ export function useGithubSyncService() {
       Accept: 'application/vnd.github.v3+json',
     };
 
-    isPulling.value = true; // 💡 锁死拉取状态
+    isPulling.value = true;
     try {
       uiStore.showToast('正在从云端拉取数据...', false, 'loading');
       const res = await fetch(apiUrl, { method: 'GET', headers });
@@ -124,7 +130,7 @@ export function useGithubSyncService() {
       if (!resJson.content) throw new Error('云端文件内容为空');
 
       const cleanBase64 = resJson.content.replace(/\n/g, '');
-      const decodedStr = base64ToUtf8(cleanBase64);
+      const decodedStr = Base64.decode(cleanBase64);
       const imported = JSON.parse(decodedStr);
 
       if (cleanAndValidateData(imported, 'import')) {
