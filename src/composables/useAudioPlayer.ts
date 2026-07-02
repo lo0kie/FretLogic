@@ -30,7 +30,7 @@ export function useAudioPlayer() {
   const initAudioEngine = () => {
     if (sharedCtx) return sharedCtx;
 
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return null;
 
     const ctx = new AudioContextClass();

@@ -162,7 +162,6 @@ export function useFretboardInteraction(fretBoardRef: Ref<HTMLDivElement | null>
     wheelAccumulator += e.deltaY;
     if (Math.abs(wheelAccumulator) < WHEEL_THRESHOLD) return;
 
-    // 取消越界滚动触发，锁定边界 [0, 12]
     if (wheelAccumulator > 0) editorStore.capo = Math.min(12, editorStore.capo + 1);
     else editorStore.capo = Math.max(0, editorStore.capo - 1);
 

@@ -61,7 +61,6 @@ export function useGithubSyncService() {
 
       const contentBase64 = utf8ToBase64(JSON.stringify(data, null, 2));
 
-      // 🌟 最佳实践：使用强类型取代 any
       const body: GithubFilePayload = {
         message: `Auto sync chords data: ${new Date().toLocaleString()}`,
         content: contentBase64,
@@ -85,7 +84,6 @@ export function useGithubSyncService() {
     }
   };
 
-  // 🌟 最佳实践：高度内聚的无参触发器，业务层直接调用，再也不需要手动传 state
   const triggerGlobalSync = () => {
     syncToGithub({
       groups: chordStore.groups,
@@ -123,12 +121,10 @@ export function useGithubSyncService() {
       const resJson = await res.json();
       if (!resJson.content) throw new Error('云端文件内容为空');
 
-      // GitHub API 返回的 Base64 包含换行符，解码前需将其过滤
       const cleanBase64 = resJson.content.replace(/\n/g, '');
       const decodedStr = base64ToUtf8(cleanBase64);
       const imported = JSON.parse(decodedStr);
 
-      // 严格复用导入校验器，防止 GitHub 上被篡改的数据污染本地
       if (cleanAndValidateData(imported, 'import')) {
         chordStore.overwriteGroups(imported.groups);
         chordStore.overwriteChords(imported.chords);
@@ -139,9 +135,11 @@ export function useGithubSyncService() {
       } else {
         throw new Error('云端数据格式破损，已触发安全拦截');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('GitHub Pull Error:', err);
-      uiStore.showToast(`❌ ${err.message || '拉取失败，请检查网络'}`, false, 'error');
+
+      const errMsg = err instanceof Error ? err.message : '拉取失败，请检查网络';
+      uiStore.showToast(`❌ ${errMsg}`, false, 'error');
     }
   };
 

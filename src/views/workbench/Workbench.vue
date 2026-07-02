@@ -62,7 +62,18 @@
       class="workbench-card rounded-xl flex flex-col items-center justify-evenly relative shrink-0"
       :style="{ height: dynamicHeight, width: `${CANVAS_CONFIG.BOARD_WIDTH + 60}px` }"
     >
-      <ChordInputHeader class="z-10 shrink-0" />
+      <input
+        v-model="editorStore.currentChordName"
+        type="text"
+        spellcheck="false"
+        placeholder="CHORD"
+        class="input-chord-name w-full text-center font-black bg-transparent border-none outline-none cursor-pointer select-none caret-blue-600 transition-all duration-300 placeholder-slate-300 dark:placeholder-slate-600 text-[4rem] leading-none tracking-tight"
+        :class="
+          editorStore.currentChordName
+            ? ' text-slate-900 dark:text-slate-50 drop-shadow-sm'
+            : 'opacity-20 text-slate-300 dark:text-slate-600'
+        "
+      />
 
       <div class="relative w-full flex justify-center z-0 shrink-0">
         <FretBoardCanvas />
@@ -80,7 +91,6 @@ import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
-import ChordInputHeader from '@/views/workbench/ChordInputHeader.vue';
 import FretBoardCanvas from '@/views/workbench/FretBoardCanvas.vue';
 import { Copy, Image, Moon, Play, Square, Sun } from '@lucide/vue';
 import { computed } from 'vue';
@@ -102,8 +112,8 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
     }, 350);
   };
 
-  const isSupportViewTransition = 'startViewTransition' in document;
-  if (!isSupportViewTransition || !event) {
+  // 💡 1. 改变拦截策略：直接作为类型守卫（Type Guard）进行真值判定
+  if (!document.startViewTransition || !event) {
     settingsStore.isDarkMode = !settingsStore.isDarkMode;
     disableChangingAttribute();
     return;
@@ -113,7 +123,7 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
   const y = event.clientY;
   const endRadius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
 
-  const transition = (document as any).startViewTransition(() => {
+  const transition = document.startViewTransition(() => {
     settingsStore.isDarkMode = !settingsStore.isDarkMode;
   });
 
@@ -134,7 +144,6 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
     disableChangingAttribute();
   });
 };
-
 const dynamicHeight = computed(() => {
   const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;
 

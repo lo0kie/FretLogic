@@ -1,7 +1,7 @@
 import { STORAGE_KEYS } from '@/constants';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, GuitarStringsModel } from '@/types';
-import { createString, extractRootNote, isOpen, TUNING_PRESETS, type TuningType } from '@/utils/musicTheory';
+import { createString, extractRootNote, isOpen, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref, toRaw, watch } from 'vue';
@@ -21,7 +21,7 @@ export const useEditorStore = defineStore('editor', () => {
   });
 
   const currentChordName = useStorage(STORAGE_KEYS.CURR_NAME, '', localStorage, { eventFilter: debounceFilter(300) });
-  const currentTuning = useStorage<TuningType>('CHORD_LAB_CURR_TUNING_V1', 'STANDARD', localStorage);
+  const currentTuning = useStorage<TuningEnum>('CHORD_LAB_CURR_TUNING_V1', TuningEnum.STANDARD, localStorage);
   const editingId = useStorage<string | null>(STORAGE_KEYS.EDITING_ID, null);
 
   const isDraggingFinger = ref(false);
@@ -73,7 +73,7 @@ export const useEditorStore = defineStore('editor', () => {
     currentChordName.value = '';
     capo.value = 0;
     fretCount.value = 3;
-    currentTuning.value = 'STANDARD';
+    currentTuning.value = TuningEnum.STANDARD;
   };
 
   const toggleOpenString = (sIdx: number) => {

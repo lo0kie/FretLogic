@@ -4,6 +4,7 @@ import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { copyElementToClipboard } from '@/utils/domExporter';
 import { toRaw } from 'vue';
+import { SortableEvent } from 'vue-draggable-plus';
 import { useGithubSyncService } from './useGithubSyncService';
 
 export function useChordService() {
@@ -36,7 +37,7 @@ export function useChordService() {
     target.collapsed = !target.collapsed;
   };
 
-  const handleChordSort = (event: any, groupId: string) => {
+  const handleChordSort = (event: SortableEvent, groupId: string) => {
     const { oldIndex, newIndex } = event;
     if (oldIndex === undefined || newIndex === undefined) return;
 
