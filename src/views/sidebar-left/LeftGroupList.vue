@@ -27,7 +27,6 @@
         ghost-class="opacity-0"
         :touchStartThreshold="12"
         :swap-threshold="0.5"
-        @update="triggerGlobalSync"
       >
         <div
           v-for="group in chordStore.groups"
@@ -51,11 +50,12 @@
                 :class="{ '-rotate-90': group.collapsed }"
               />
 
-              <BaseMarquee class="flex-1 min-w-0">
+              <BaseMarquee class="min-w-0">
                 <span class="font-black tracking-widest uppercase group-name-text text-sm select-none">
                   {{ group.name }}
                 </span>
               </BaseMarquee>
+
               <span
                 class="text-[12px] font-black px-1.5 py-0.5 count-badge shrink-0 font-mono inline-flex items-center"
               >
@@ -90,7 +90,7 @@
               </div>
 
               <div
-                class="drag-handle p-1 rounded hover:bg-[var(--bg-panel-hover)] transition-all cursor-grab active:cursor-grabbing text-[var(--text-disabled)] hover:text-[var(--text-body)] flex items-center justify-center opacity-0 overflow-visible"
+                class="drag-handle p-1 rounded hover:bg-[var(--bg-panel-hover)] transition-all cursor-grab active:cursor-grabbing text-[var(--text-disabled)] hover:text-[var(--text-body)] flex items-center justify-center opacity-0 overflow-visible touch-none"
                 :class="{ '!w-0 !px-0 pointer-events-none': debouncedQuery.length > 0 }"
                 title="按住拖拽排序"
               >
@@ -118,7 +118,7 @@
                 @delete="handleLocalDeleteChord"
                 @move="$emit('open-move', chord)"
                 @click="chordService.loadChordToEditor(chord)"
-                class="cursor-grab active:cursor-grabbing"
+                class="cursor-grab active:cursor-grabbing touch-none"
               />
             </VueDraggable>
 
@@ -169,7 +169,6 @@ defineEmits<{
 const editorStore = useEditorStore();
 const chordStore = useChordStore();
 const chordService = useChordService();
-const { triggerGlobalSync } = useGithubSyncService();
 
 const searchQuery = ref('');
 const debouncedQuery = refDebounced(searchQuery, 150);

@@ -2,7 +2,7 @@
 <template>
   <div
     ref="containerRef"
-    class="marquee-container w-full overflow-hidden whitespace-nowrap flex items-center"
+    class="marquee-container max-w-full overflow-hidden whitespace-nowrap flex items-center"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
   >

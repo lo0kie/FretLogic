@@ -6,13 +6,11 @@ import { copyElementToClipboard } from '@/utils/domExporter';
 import cloneDeep from 'lodash.clonedeep';
 import { toRaw } from 'vue';
 import { SortableEvent } from 'vue-draggable-plus';
-import { useGithubSyncService } from './useGithubSyncService';
 
 export function useChordService() {
   const chordStore = useChordStore();
   const editorStore = useEditorStore();
   const uiStore = useUiStore();
-  const { triggerGlobalSync } = useGithubSyncService();
 
   const loadChordToEditor = (chord: Chord) => {
     editorStore.editingId = chord.id;
@@ -49,16 +47,12 @@ export function useChordService() {
     const otherGroupsChords = chordStore.savedChordsList.filter(c => c.groupId !== groupId);
     const updatedList = [...otherGroupsChords, ...currentGroupChords];
     chordStore.overwriteChords(updatedList);
-
-    triggerGlobalSync();
   };
 
   const triggerDeleteChord = (chord: Chord) => {
     const updatedList = chordStore.savedChordsList.filter(c => c.id !== chord.id);
     chordStore.overwriteChords(updatedList);
     uiStore.showToast(`🗑️ 已删除和弦 "${chord.chordName}"`, true);
-
-    triggerGlobalSync();
   };
 
   const exportFretboardImage = async (selector: string, isTransparent: boolean = true) => {
@@ -108,8 +102,6 @@ export function useChordService() {
     editorStore.resetEditor();
     uiStore.showToast('👍 和弦已保存');
     uiStore.clearUndoToasts();
-
-    triggerGlobalSync();
   };
 
   return {

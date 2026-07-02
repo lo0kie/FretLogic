@@ -88,7 +88,6 @@
 
 <script setup lang="ts">
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
-import { useGithubSyncService } from '@/services/useGithubSyncService';
 import { useChordStore } from '@/stores/chordStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -105,7 +104,6 @@ import { Plus, Triangle } from '@lucide/vue';
 const uiStore = useUiStore();
 const chordStore = useChordStore();
 const editorStore = useEditorStore();
-const { triggerGlobalSync } = useGithubSyncService();
 
 const modals = reactive({
   create: false,
@@ -150,7 +148,6 @@ const handleCreateGroup = () => {
 
   modals.create = false;
   uiStore.showToast('✅ 操作成功完成');
-  triggerGlobalSync();
 };
 
 const openRename = async (group: Group) => {
@@ -172,7 +169,6 @@ const handleRenameGroup = () => {
   }
   modals.rename = false;
   uiStore.showToast('✅ 操作成功完成');
-  triggerGlobalSync();
 };
 
 const openDelete = (group: Group) => {
@@ -200,7 +196,6 @@ const handleDeleteGroup = () => {
   uiStore.clearUndoToasts();
   modals.delete = false;
   uiStore.showToast('✅ 操作成功完成');
-  triggerGlobalSync();
 };
 
 const openMove = (chord: Chord) => {
@@ -224,7 +219,6 @@ const handleMoveChord = () => {
 
   modals.move = false;
   uiStore.showToast('✅ 操作成功完成');
-  triggerGlobalSync();
 };
 </script>
 
