@@ -1,18 +1,21 @@
-﻿<template>
-  <div class="chord-card-frame relative">
+﻿<!-- src/views/sidebar-left/LeftChordCard.vue -->
+<template>
+  <div class="chord-card-frame" :title="chord.chordName">
     <div
-      class="chord-thumb-card group h-10 px-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)] box-border"
+      class="chord-thumb-card group h-10 px-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)] box-border relative"
       :class="{ 'is-editing': isEditing }"
       tabindex="0"
       @keydown.enter.prevent.stop="e => (e.target as HTMLElement).click()"
       @contextmenu.prevent.stop="$emit('move', chord)"
     >
-      <span class="chord-name-text text-xs font-black tracking-tight truncate leading-tight pointer-events-none">
-        {{ chord.chordName }}
-      </span>
+      <BaseMarquee class="flex-1 min-w-0">
+        <span class="chord-name-text text-xs font-black tracking-tight leading-none pointer-events-none">
+          {{ chord.chordName }}
+        </span>
+      </BaseMarquee>
 
       <div
-        class="absolute top-1 right-1 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200"
+        class="delete-button absolute top-0 right-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200"
         :class="{ 'opacity-100': isEditing }"
       >
         <button
@@ -30,6 +33,7 @@
 </template>
 
 <script setup lang="ts">
+import BaseMarquee from '@/components/BaseMarquee.vue';
 import { type Chord } from '@/types';
 import { X } from '@lucide/vue';
 
@@ -40,6 +44,10 @@ defineEmits<{
 }>();
 </script>
 
+<script lang="ts">
+export default { name: 'LeftChordCard' };
+</script>
+
 <style scoped lang="less">
 @import '@/assets/tokens.less';
 
@@ -47,6 +55,10 @@ defineEmits<{
   .mixin-interactive-card();
   background-color: var(--bg-body);
   border: @border-solid-light;
+
+  .chord-name-text {
+    color: var(--text-body);
+  }
 
   .chord-name-text,
   .action-button {
@@ -66,6 +78,14 @@ defineEmits<{
 
     .chord-name-text {
       color: @primary !important;
+    }
+  }
+
+  .delete-button {
+    transform: translate(40%, -40%);
+
+    .action-button {
+      border: @border-solid-light;
     }
   }
 }

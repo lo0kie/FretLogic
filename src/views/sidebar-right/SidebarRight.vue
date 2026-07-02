@@ -14,7 +14,12 @@
 
       <div class="w-full h-px bg-[var(--control-border)] my-2 opacity-50"></div>
 
-      <RightHelper @pull-request="modals.pullConfirm = true" @push-request="handleManualPush" />
+      <RightHelper
+        :is-syncing="isSyncing"
+        :is-pulling="isPulling"
+        @pull-request="modals.pullConfirm = true"
+        @push-request="handleManualPush"
+      />
     </div>
 
     <RightPanelFooter @save="chordService.persistCurrentChord()" @reset="editorStore.resetEditor()" />
@@ -37,8 +42,7 @@
     @confirm="confirmPull"
   >
     <p class="text-sm font-semibold opacity-80 leading-relaxed text-body">
-      从云端拉取数据将<span class="text-[var(--color-danger)] font-black">完全覆盖</span
-      >您本地的所有和弦与分组记录，且此操作不可撤销！ <br /><br />您确定要继续吗？
+      从云端拉取数据将完全覆盖您本地的所有和弦与分组记录，且此操作不可撤销！ <br /><br />您确定要继续吗？
     </p>
   </BaseModal>
 </template>
@@ -51,7 +55,6 @@ import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { reactive } from 'vue';
 
-// 直接引入原 RightContent 中的核心配置组件
 import RightCapoWheel from '@/views/sidebar-right/RightCapoWheel.vue';
 import RightFretSlider from '@/views/sidebar-right/RightFretSlider.vue';
 import RightHelper from '@/views/sidebar-right/RightHelper.vue';
@@ -64,13 +67,13 @@ import { Triangle } from '@lucide/vue';
 const uiStore = useUiStore();
 const editorStore = useEditorStore();
 const chordService = useChordService();
-const { triggerGlobalSync, pullFromGithub } = useGithubSyncService();
+
+const { triggerGlobalSync, pullFromGithub, isSyncing, isPulling } = useGithubSyncService();
 
 const modals = reactive({
   pullConfirm: false,
 });
 
-// ================= 操作调度方法 =================
 const handleManualPush = () => {
   triggerGlobalSync();
 };

@@ -132,11 +132,11 @@ const openCreate = async () => {
 const handleCreateGroup = () => {
   const val = modalData.inputValue.trim();
   if (!val) {
-    uiStore.showToast('❌ 确认失败：请输入有效内容');
+    uiStore.showToast('确认失败：请输入有效内容', false, 'error');
     return;
   }
   if (chordStore.groups.some(g => g.name === val)) {
-    uiStore.showToast('⚠️ 创建失败：该分组名称已存在');
+    uiStore.showToast('创建失败：该分组名称已存在', false, 'warning');
     return;
   }
   const newId = 'g_' + crypto.randomUUID().slice(0, 8);
@@ -147,7 +147,7 @@ const handleCreateGroup = () => {
   chordStore.selectedGroupId = newId;
 
   modals.create = false;
-  uiStore.showToast('✅ 操作成功完成');
+  uiStore.showToast('操作成功完成', false, 'success');
 };
 
 const openRename = async (group: Group) => {
@@ -161,14 +161,14 @@ const openRename = async (group: Group) => {
 const handleRenameGroup = () => {
   const val = modalData.inputValue.trim();
   if (!val) {
-    uiStore.showToast('❌ 确认失败：请输入有效内容');
+    uiStore.showToast('确认失败：请输入有效内容', false, 'error');
     return;
   }
   if (modalData.activeGroup) {
     modalData.activeGroup.name = val;
   }
   modals.rename = false;
-  uiStore.showToast('✅ 操作成功完成');
+  uiStore.showToast('操作成功完成', false, 'success');
 };
 
 const openDelete = (group: Group) => {
@@ -195,7 +195,7 @@ const handleDeleteGroup = () => {
 
   uiStore.clearUndoToasts();
   modals.delete = false;
-  uiStore.showToast('✅ 操作成功完成');
+  uiStore.showToast('操作成功完成', false, 'success');
 };
 
 const openMove = (chord: Chord) => {
@@ -206,7 +206,7 @@ const openMove = (chord: Chord) => {
 
 const handleMoveChord = () => {
   if (!modalData.moveTargetId) {
-    uiStore.showToast('❌ 确认失败：请选择有效分组');
+    uiStore.showToast('确认失败：请选择有效分组', false, 'error');
     return;
   }
   if (!modalData.activeChord) return;
@@ -218,7 +218,7 @@ const handleMoveChord = () => {
   }
 
   modals.move = false;
-  uiStore.showToast('✅ 操作成功完成');
+  uiStore.showToast('操作成功完成', false, 'success');
 };
 </script>
 

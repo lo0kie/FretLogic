@@ -1,7 +1,9 @@
+// src/services/useGithubSyncService.ts
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';
+import { ref } from 'vue';
 
 interface GithubFilePayload {
   message: string;
@@ -9,6 +11,9 @@ interface GithubFilePayload {
   branch: string;
   sha?: string;
 }
+
+const isSyncing = ref(false);
+const isPulling = ref(false);
 
 export function useGithubSyncService() {
   const uiStore = useUiStore();
@@ -35,7 +40,7 @@ export function useGithubSyncService() {
     const githubPath = settingsStore.githubPath.trim();
 
     if (!githubToken || !githubOwner || !githubRepo || !githubBranch || !githubPath) {
-      uiStore.showToast('❌ 同步失败：请先在右侧栏配置完整的 GitHub 信息', false, 'error');
+      uiStore.showToast('同步失败：请先在右侧栏配置完整的 GitHub 信息', false, 'error');
       return;
     }
 
@@ -46,8 +51,9 @@ export function useGithubSyncService() {
       'Content-Type': 'application/json',
     };
 
+    isSyncing.value = true;
     try {
-      uiStore.showToast('☁️ 正在后台同步到 GitHub...', false, 'loading');
+      uiStore.showToast('正在后台同步到 GitHub...', false, 'loading');
 
       let fileSha = '';
       const getRes = await fetch(`${apiUrl}?ref=${githubBranch}`, { method: 'GET', headers });
@@ -77,18 +83,13 @@ export function useGithubSyncService() {
 
       if (!putRes.ok) throw new Error('推送代码失败');
 
-      uiStore.showToast('✅ 成功同步至 GitHub 云端', false, 'success');
+      uiStore.showToast('成功同步至 GitHub 云端', false, 'success');
     } catch (err) {
       console.error('GitHub Sync Error:', err);
-      uiStore.showToast('❌ GitHub 同步失败，请检查网络或配置信息', false, 'error');
+      uiStore.showToast('GitHub 同步失败，请检查 network 或配置信息', false, 'error');
+    } finally {
+      isSyncing.value = false;
     }
-  };
-
-  const triggerGlobalSync = () => {
-    syncToGithub({
-      groups: chordStore.groups,
-      chords: chordStore.savedChordsList,
-    });
   };
 
   const pullFromGithub = async () => {
@@ -99,7 +100,7 @@ export function useGithubSyncService() {
     const githubPath = settingsStore.githubPath.trim();
 
     if (!githubToken || !githubOwner || !githubRepo || !githubBranch || !githubPath) {
-      uiStore.showToast('❌ 拉取失败：请先在右侧栏配置完整的 GitHub 信息', false, 'error');
+      uiStore.showToast('拉取失败：请先在右侧栏配置完整的 GitHub 信息', false, 'error');
       return;
     }
 
@@ -109,8 +110,9 @@ export function useGithubSyncService() {
       Accept: 'application/vnd.github.v3+json',
     };
 
+    isPulling.value = true; // 💡 锁死拉取状态
     try {
-      uiStore.showToast('☁️ 正在从云端拉取数据...', false, 'loading');
+      uiStore.showToast('正在从云端拉取数据...', false, 'loading');
       const res = await fetch(apiUrl, { method: 'GET', headers });
 
       if (!res.ok) {
@@ -131,17 +133,25 @@ export function useGithubSyncService() {
         if (!chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
           chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
         }
-        uiStore.showToast('✅ 已成功从 GitHub 恢复所有数据', false, 'success');
+        uiStore.showToast('已成功从 GitHub 恢复所有数据', false, 'success');
       } else {
         throw new Error('云端数据格式破损，已触发安全拦截');
       }
     } catch (err) {
       console.error('GitHub Pull Error:', err);
-
       const errMsg = err instanceof Error ? err.message : '拉取失败，请检查网络';
-      uiStore.showToast(`❌ ${errMsg}`, false, 'error');
+      uiStore.showToast(`拉取失败：${errMsg}`, false, 'error');
+    } finally {
+      isPulling.value = false;
     }
   };
 
-  return { syncToGithub, triggerGlobalSync, pullFromGithub };
+  const triggerGlobalSync = () => {
+    syncToGithub({
+      groups: chordStore.groups,
+      chords: chordStore.savedChordsList,
+    });
+  };
+
+  return { syncToGithub, triggerGlobalSync, pullFromGithub, isSyncing, isPulling };
 }
