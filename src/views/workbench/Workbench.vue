@@ -8,7 +8,7 @@
       class="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 p-1.5 bg-[var(--bg-panel)]/80 backdrop-blur-xl shadow-floating border border-[var(--control-border)] rounded-xl z-[100] transition-all"
     >
       <GlobalTooltip content="播放/试听当前和弦" placement="bottom">
-        <ActionButton @click="playCurrentChord" :disabled="editorStore.isFretBoardEmpty || isPlaying" size="sm">
+        <ActionButton @click="playCurrentChord" primary :disabled="editorStore.isFretBoardEmpty || isPlaying" size="sm">
           <template #prefix>
             <component
               v-if="!editorStore.isFretBoardEmpty"

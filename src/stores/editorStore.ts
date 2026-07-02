@@ -3,6 +3,7 @@ import { useChordStore } from '@/stores/chordStore';
 import type { Chord, GuitarStringsModel } from '@/types';
 import { createString, extractRootNote, isOpen, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { debounceFilter, useStorage } from '@vueuse/core';
+import cloneDeep from 'lodash.clonedeep';
 import { defineStore } from 'pinia';
 import { computed, ref, toRaw, watch } from 'vue';
 
@@ -54,7 +55,7 @@ export const useEditorStore = defineStore('editor', () => {
     const original = chordStore.savedChordsList.find(c => c.id === editingId.value);
     if (original) {
       currentChordName.value = original.chordName || '';
-      strings.value = structuredClone(toRaw(original.strings));
+      strings.value = cloneDeep(toRaw(original.strings));
       fretCount.value = original.fretCount ?? 3;
       capo.value = original.capo ?? 0;
       currentTuning.value = original.tuning || 'STANDARD';

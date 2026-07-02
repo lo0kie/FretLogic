@@ -3,6 +3,7 @@ import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { copyElementToClipboard } from '@/utils/domExporter';
+import cloneDeep from 'lodash.clonedeep';
 import { toRaw } from 'vue';
 import { SortableEvent } from 'vue-draggable-plus';
 import { useGithubSyncService } from './useGithubSyncService';
@@ -16,7 +17,7 @@ export function useChordService() {
   const loadChordToEditor = (chord: Chord) => {
     editorStore.editingId = chord.id;
     editorStore.currentChordName = chord.chordName === '未命名' ? '' : chord.chordName;
-    editorStore.strings = structuredClone(toRaw(chord.strings));
+    editorStore.strings = cloneDeep(toRaw(chord.strings));
     editorStore.fretCount = chord.fretCount ?? 3;
     editorStore.capo = chord.capo ?? 0;
     editorStore.currentTuning = chord.tuning || 'STANDARD';
@@ -90,7 +91,7 @@ export function useChordService() {
     const payload: Chord = {
       id: editorStore.editingId || 'c_' + crypto.randomUUID().slice(0, 10),
       chordName: cleanName,
-      strings: structuredClone(toRaw(editorStore.strings)),
+      strings: cloneDeep(toRaw(editorStore.strings)),
       fretCount: editorStore.fretCount,
       capo: editorStore.capo,
       groupId: targetGroupId || 'default',

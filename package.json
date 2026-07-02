@@ -15,11 +15,13 @@
     "@lucide/vue": "^1.17.0",
     "@vueuse/core": "^10.9.0",
     "html-to-image": "^1.11.13",
+    "lodash.clonedeep": "^4.5.0",
     "pinia": "^2.1.7",
     "vue": "^3.4.21",
     "vue-draggable-plus": "^0.6.1"
   },
   "devDependencies": {
+    "@types/lodash.clonedeep": "^4.5.9",
     "@vitejs/plugin-vue": "^5.0.4",
     "autoprefixer": "^10.4.19",
     "gh-pages": "^6.3.0",

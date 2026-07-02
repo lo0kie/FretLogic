@@ -92,7 +92,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'update:modelValue', value?: T): void;
   (e: 'clear'): void;
-  (e: 'wheel-change', direction: 'up' | 'down'): void; // 💡 新增：向外派发经过清洗的滑轮方向
+  (e: 'wheel-change', direction: 'up' | 'down'): void;
 }>();
 
 const isOpen = ref(false);
@@ -104,12 +104,10 @@ const toggleDropdown = () => {
 };
 const isNonDefault = computed(() => props.modelValue !== props.defaultValue);
 
-// 💡 内部高度内聚的滑轮防误触算法
 let wheelAccumulator = 0;
-const WHEEL_THRESHOLD = 35; // 略微调灵敏一点
+const WHEEL_THRESHOLD = 35;
 
 const handleWheel = (e: WheelEvent) => {
-  // 仅在下拉框未展开时允许触发滑轮平移，防止展开后滚动列表时误触发状态改变
   if (isOpen.value) return;
 
   e.preventDefault();
@@ -117,7 +115,6 @@ const handleWheel = (e: WheelEvent) => {
 
   if (Math.abs(wheelAccumulator) < WHEEL_THRESHOLD) return;
 
-  // 向上滚派发 'up'，向下滚派发 'down'
   emit('wheel-change', wheelAccumulator < 0 ? 'up' : 'down');
   wheelAccumulator = 0;
 };

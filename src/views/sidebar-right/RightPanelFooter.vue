@@ -10,12 +10,7 @@
         </ActionButton>
       </GlobalTooltip>
 
-      <ActionButton
-        @click="$emit('reset')"
-        :danger="!editorStore.editingId"
-        :warning="!!editorStore.editingId"
-        :disabled="isClearDisabled"
-      >
+      <ActionButton @click="$emit('reset')" :disabled="isClearDisabled">
         {{ editorStore.editingId ? '放弃本次修改' : '重置' }}
       </ActionButton>
     </div>

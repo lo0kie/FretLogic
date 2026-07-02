@@ -1,5 +1,6 @@
 ﻿import type { Toast, ToastType } from '@/types';
 import { useRefHistory, useToggle } from '@vueuse/core';
+import cloneDeep from 'lodash.clonedeep';
 import { defineStore } from 'pinia';
 import { ref, toRaw, toRef } from 'vue';
 import { useChordStore } from './chordStore';
@@ -12,7 +13,7 @@ export const useUiStore = defineStore('ui', () => {
     capacity: 15,
     deep: true,
     flush: 'post',
-    clone: v => structuredClone(toRaw(v)),
+    clone: v => cloneDeep(toRaw(v)),
   });
 
   const toasts = ref<Toast[]>([]);

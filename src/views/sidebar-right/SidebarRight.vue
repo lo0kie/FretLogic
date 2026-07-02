@@ -11,6 +11,9 @@
       <RightFretSlider />
       <RightTuningSelector />
       <RightCapoWheel />
+
+      <div class="w-full h-px bg-[var(--control-border)] my-2 opacity-50"></div>
+
       <RightHelper @pull-request="modals.pullConfirm = true" @push-request="handleManualPush" />
     </div>
 

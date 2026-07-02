@@ -1,6 +1,9 @@
 <template>
   <div class="relative w-full group flex items-center">
-    <div v-if="$slots.prefix" class="absolute left-3 flex items-center justify-center opacity-40 pointer-events-none">
+    <div
+      v-if="$slots.prefix"
+      class="absolute left-3 top-0 bottom-0 flex items-center justify-center opacity-40 pointer-events-none"
+    >
       <slot name="prefix"></slot>
     </div>
 
@@ -14,8 +17,7 @@
       :disabled="disabled"
       class="base-input-field w-full font-bold cursor-pointer"
       :class="[
-        $slots.prefix ? '!pl-9' : '!pl-3',
-        clearable || isPassword ? '!pr-9' : '!pr-3',
+        { 'has-prefix': $slots.prefix, 'has-suffix': clearable || isPassword },
         isPassword ? 'css-password-field' : '',
         fontClass,
       ]"
@@ -23,7 +25,7 @@
       autocomplete="off"
     />
 
-    <div class="absolute right-2 flex items-center gap-1.5 pointer-events-auto">
+    <div class="absolute right-3 top-0 bottom-0 flex items-center pointer-events-auto">
       <button
         v-if="clearable && modelValue && !disabled"
         type="button"
@@ -104,6 +106,18 @@ export default { name: 'BaseInput' };
 .base-input-field {
   .mixin-input-base();
   height: 2.2rem;
+  box-sizing: border-box;
+
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+
+  &.has-prefix {
+    padding-left: 1.8rem;
+  }
+
+  &.has-suffix {
+    padding-right: 2.1rem;
+  }
 }
 
 .css-password-frame,

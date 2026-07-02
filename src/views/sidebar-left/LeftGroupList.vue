@@ -22,7 +22,7 @@
         :animation="250"
         handle=".drag-handle"
         :disabled="!!debouncedQuery"
-        class="flex flex-col gap-4 relative"
+        class="flex flex-col gap-2 relative"
         filter=".action-buttons"
         ghost-class="opacity-0"
         :touchStartThreshold="12"
@@ -37,10 +37,10 @@
         >
           <div
             @click="chordService.executeGroupToggle(group.id)"
-            class="group-title-row flex items-center justify-between py-2 px-2 cursor-pointer select-none"
+            class="group-title-row flex items-center justify-between p-2 cursor-pointer select-none"
           >
             <div
-              class="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit flex-1 mr-4"
+              class="flex items-center gap-2 hover:opacity-80 transition-opacity flex-1 min-w-0 mr-2"
               title="点击折叠/展开分组"
             >
               <ChevronDown
@@ -50,12 +50,12 @@
                 style="color: var(--text-body)"
                 :class="{ '-rotate-90': group.collapsed }"
               />
-              <span
-                class="font-black tracking-widest uppercase group-name-text text-sm select-none truncate max-w-[140px]"
-              >
-                {{ group.name }}
-              </span>
 
+              <BaseMarquee class="flex-1 min-w-0">
+                <span class="font-black tracking-widest uppercase group-name-text text-sm select-none">
+                  {{ group.name }}
+                </span>
+              </BaseMarquee>
               <span
                 class="text-[12px] font-black px-1.5 py-0.5 count-badge shrink-0 font-mono inline-flex items-center"
               >
@@ -71,18 +71,18 @@
               </span>
             </div>
 
-            <div @click.stop="" class="flex items-center gap-2 shrink-0">
+            <div @click.stop="" class="flex items-center gap-1.5 shrink-0">
               <div class="action-buttons opacity-0 flex items-center gap-2 transition-opacity pointer-events-auto">
                 <button
                   @click="$emit('open-rename', group)"
-                  class="text-[14px] font-semibold hover:underline"
+                  class="text-[13px] font-semibold hover:underline"
                   style="color: var(--color-primary)"
                 >
                   改名
                 </button>
                 <button
                   @click="$emit('open-delete', group)"
-                  class="text-[14px] font-semibold hover:underline"
+                  class="text-[13px] font-semibold hover:underline"
                   style="color: var(--color-danger)"
                 >
                   删除
@@ -158,6 +158,7 @@ import LeftSearch from '@/views/sidebar-left/LeftSearch.vue';
 import { ChevronDown, FolderOpen, GripVertical } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
 import { VueDraggable } from 'vue-draggable-plus';
+import BaseMarquee from '@/components/BaseMarquee.vue';
 
 defineEmits<{
   (e: 'open-rename', group: Group): void;
