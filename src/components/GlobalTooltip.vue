@@ -5,12 +5,20 @@
     <Teleport to="body">
       <Transition name="tooltip-native">
         <div
-          v-if="show && content"
+          v-if="show && (content || $slots.content)"
           ref="floatingRef"
-          class="tooltip-box fixed px-3 py-1.5 font-black rounded-lg text-xs shadow-xl pointer-events-none"
+          class="tooltip-box px-3 py-1.5 fixed font-black rounded-md shadow-2xl pointer-events-none text-xs"
+          :class="[
+            $slots.content
+              ? 'border border-slate-800/80 bg-slate-950 dark:border-white/10 text-white rich-content'
+              : 'pure-text',
+          ]"
           :style="floatingStyles"
-          v-html="sanitizedHtmlContent"
-        ></div>
+        >
+          <slot name="content">
+            <div v-html="sanitizedHtmlContent"></div>
+          </slot>
+        </div>
       </Transition>
     </Teleport>
   </div>
@@ -34,13 +42,10 @@ const floatingRef = ref<HTMLElement | null>(null);
 
 const sanitizedHtmlContent = computed(() => {
   if (!props.content) return '';
-
   const rawHtml = props.content.replace(/\\n/g, '<br />').replace(/\n/g, '<br />');
-
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(`<body>${rawHtml}</body>`, 'text/html');
-
     const scripts = doc.querySelectorAll('script, img, iframe, object, embed, svg');
     scripts.forEach(el => el.remove());
 
@@ -53,7 +58,6 @@ const sanitizedHtmlContent = computed(() => {
         }
       }
     });
-
     return doc.body.innerHTML;
   } catch (e) {
     console.error('Tooltip XSS Sandbox Guard Error:', e);
@@ -77,9 +81,21 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   border: 1px solid rgba(255, 255, 255, 0.1);
   z-index: 9999;
   transition: opacity 0.12s ease-out;
-  white-space: nowrap;
   line-height: 1.6;
   text-align: center;
+
+  &.pure-text {
+    white-space: nowrap;
+  }
+
+  &.rich-content {
+    white-space: normal;
+    width: max-content;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
 }
 
 .tooltip-native-enter-active,

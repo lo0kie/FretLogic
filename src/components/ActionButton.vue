@@ -1,12 +1,13 @@
 ﻿<template>
   <button
-    :disabled="disabled"
+    :disabled="disabled || loading"
     @click="handleInternalClick"
     :style="{ height, width }"
     class="action-button-base w-full flex items-center justify-center font-bold border-solid transition-colors select-none duration-200 disabled:pointer-events-auto disabled:cursor-not-allowed"
     :class="[themeClasses, sizeClasses]"
   >
-    <slot name="prefix"></slot>
+    <Loader2 v-if="loading" class="w-4 h-4 animate-spin shrink-0 opacity-80" />
+    <slot v-else name="prefix"></slot>
 
     <span class="flex items-center justify-center whitespace-nowrap">
       <slot></slot>
@@ -17,6 +18,7 @@
 </template>
 
 <script setup lang="ts">
+import { Loader2 } from '@lucide/vue';
 import { computed } from 'vue';
 
 const props = withDefaults(
@@ -25,12 +27,14 @@ const props = withDefaults(
     danger?: boolean;
     warning?: boolean;
     disabled?: boolean;
+    loading?: boolean;
     size?: 'sm' | 'md' | 'lg';
     width?: string;
     height?: string;
   }>(),
   {
     size: 'md',
+    loading: false,
   }
 );
 

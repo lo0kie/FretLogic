@@ -1,6 +1,15 @@
-﻿export const copyElementToClipboard = async (selector: string, isTransparent: boolean = true): Promise<void> => {
-  const el = document.querySelector(selector) as HTMLElement;
+﻿import { Ref, unref } from 'vue';
+
+export const copyElementToClipboard = async (
+  target: HTMLElement | Ref<HTMLElement | null | undefined> | null | undefined,
+  isTransparent: boolean = true
+): Promise<void> => {
+  const el = unref(target);
+
   if (!el) throw new Error('未找到目标 DOM 节点');
+  if (!navigator.clipboard) {
+    throw new Error('当前浏览器环境受限 (需要 HTTPS)，无法调用剪贴板');
+  }
 
   const getBlobPromise = async () => {
     const htmlToImage = await import('html-to-image');

@@ -59,14 +59,14 @@
 
         <div class="grid grid-cols-2 gap-2 mt-1">
           <GlobalTooltip content="从 GitHub 下载并覆盖本地所有数据" placement="top">
-            <ActionButton @click="$emit('pull-request')" height="2rem">
+            <ActionButton @click="$emit('pull-request')" :loading="isPulling" height="2rem">
               <template #prefix><CloudDownload :size="14" stroke-width="3" /></template>
               拉取
             </ActionButton>
           </GlobalTooltip>
 
           <GlobalTooltip content="将本地数据强制推送到 GitHub" placement="top">
-            <ActionButton @click="$emit('push-request')" height="2rem">
+            <ActionButton @click="$emit('push-request')" :loading="isSyncing" height="2rem">
               <template #prefix><CloudUpload :size="14" stroke-width="3" /></template>
               同步
             </ActionButton>
@@ -87,6 +87,11 @@ import { useUiStore } from '@/stores/uiStore';
 import { ChevronDown, ChevronUp, CloudDownload, CloudUpload } from '@lucide/vue';
 import cloneDeep from 'lodash.clonedeep';
 import { computed, toRaw } from 'vue';
+
+defineProps<{
+  isSyncing: boolean;
+  isPulling: boolean;
+}>();
 
 defineEmits<{
   (e: 'pull-request'): void;

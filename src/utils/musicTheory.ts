@@ -65,8 +65,3 @@ export const extractRootNote = (chordName: string): string | null => {
 
   return firstChar;
 };
-
-export const isRootNote = (sIdx: number, rootMark: number | null | undefined): boolean => {
-  if (rootMark == null) return false;
-  return sIdx === rootMark;
-};

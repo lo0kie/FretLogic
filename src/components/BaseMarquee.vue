@@ -6,7 +6,7 @@
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
   >
-    <span ref="contentRef" class="marquee-content block" :class="{ 'is-scrolling': isScrolling }">
+    <span ref="contentRef" class="marquee-content" :class="{ 'is-scrolling': isScrolling }">
       <slot></slot>
     </span>
   </div>
@@ -45,7 +45,10 @@ const handleMouseLeave = () => {
 }
 
 .marquee-content {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;

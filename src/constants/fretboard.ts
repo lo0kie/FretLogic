@@ -29,5 +29,4 @@ export const CANVAS_CONFIG = {
   BOARD_WIDTH: OFFSET_X + 5 * STRING_SPACING + OFFSET_X_RIGHT,
 } as const;
 
-import type { FretCount } from '@/types';
-export const FRET_COUNTS: FretCount[] = [3, 4, 5];
+export const FRET_COUNTS = [3, 4, 5] as const;

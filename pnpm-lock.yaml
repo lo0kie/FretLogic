@@ -20,6 +20,9 @@ importers:
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13
+      js-base64:
+        specifier: ^3.8.0
+        version: 3.8.0
       lodash.clonedeep:
         specifier: ^4.5.0
         version: 4.5.0
@@ -32,6 +35,9 @@ importers:
       vue-draggable-plus:
         specifier: ^0.6.1
         version: 0.6.1(@types/sortablejs@1.15.9)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/lodash.clonedeep':
         specifier: ^4.5.9
@@ -759,6 +765,9 @@ packages:
     resolution: {integrity: sha512-/imKNG4EbWNrVjoNC/1H5/9GFy+tqjGBHCaSsN+P2RnPqjsLmv6UD3Ej+Kj8nBWaRAwyk7kK5ZUc+OEatnTR3A==}
     hasBin: true
 
+  js-base64@3.8.0:
+    resolution: {integrity: sha512-65kvbemyZhj+ExQt1PEFyBEjL5vAHysu1lJdW1AwhhChkO8ZBPizYk/m9GVrpbS2Je1hF+UYZ+6KywqtZV8mHw==}
+
   jsonfile@6.2.1:
     resolution: {integrity: sha512-zwOTdL3rFQ/lRdBnntKVOX6k5cKJwEc1HdilT71BWEu7J41gXIB2MRp+vxduPSwZJPWBxEzv4yH1wYLJGUHX4Q==}
 
@@ -1216,6 +1225,9 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
 
@@ -1825,6 +1837,8 @@ snapshots:
 
   jiti@1.21.7: {}
 
+  js-base64@3.8.0: {}
+
   jsonfile@6.2.1:
     dependencies:
       universalify: 2.0.1
@@ -2248,3 +2262,5 @@ snapshots:
       '@vue/shared': 3.5.33
     optionalDependencies:
       typescript: 5.9.3
+
+  zod@4.4.3: {}
