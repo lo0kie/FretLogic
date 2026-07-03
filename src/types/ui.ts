@@ -1,6 +1,4 @@
-﻿export type ModalActionType = 'createGroup' | 'renameGroup' | 'deleteGroup' | 'moveChord' | '';
-
-export type ToastType = 'info' | 'success' | 'error' | 'loading' | 'warning';
+﻿export type ToastType = 'info' | 'success' | 'error' | 'loading' | 'warning';
 
 export interface Toast {
   id: number;

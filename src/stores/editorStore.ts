@@ -3,12 +3,12 @@ import { STORAGE_KEYS } from '@/constants';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, GuitarStringsModel } from '@/types';
 import { GuitarStringsModelSchema } from '@/types';
-import { createString, extractRootNote, isOpen, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
+import { createString, isOpen, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { createZodSerializer } from '@/utils/zodStorage';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import cloneDeep from 'lodash.clonedeep';
 import { defineStore } from 'pinia';
-import { computed, ref, toRaw, watch } from 'vue';
+import { computed, toRaw, watch } from 'vue';
 import { z } from 'zod';
 
 export const useEditorStore = defineStore('editor', () => {
@@ -34,7 +34,6 @@ export const useEditorStore = defineStore('editor', () => {
 
   const editingId = useStorage<string | null>(STORAGE_KEYS.EDITING_ID, null, localStorage);
 
-  const isDraggingFinger = ref(false);
   const fretCount = useStorage<Chord['fretCount']>(STORAGE_KEYS.CURR_FCOUNT, 3);
   const capo = useStorage(STORAGE_KEYS.CURR_CAPO, 0);
 
@@ -43,7 +42,6 @@ export const useEditorStore = defineStore('editor', () => {
   });
 
   const isFretBoardEmpty = computed(() => strings.value.every(s => s.fret < 0));
-  const currentRootNote = computed(() => extractRootNote(currentChordName.value));
 
   watch(fretCount, (newVal, oldVal) => {
     if (newVal < oldVal) {
@@ -96,12 +94,10 @@ export const useEditorStore = defineStore('editor', () => {
     currentChordName,
     currentTuning,
     editingId,
-    isDraggingFinger,
     fretCount,
     capo,
     activeBaseStrings,
     isFretBoardEmpty,
-    currentRootNote,
     resetEditor,
     toggleOpenString,
   };

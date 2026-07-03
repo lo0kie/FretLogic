@@ -55,5 +55,4 @@ export type GuitarStringsModel = z.infer<typeof GuitarStringsModelSchema>;
 export type Chord = z.infer<typeof ChordSchema>;
 export type Group = z.infer<typeof GroupSchema>;
 export type ImportExportPayload = z.infer<typeof ImportExportPayloadSchema>;
-export type Settings = z.infer<typeof SettingsSchema>;
 export type FretCount = Chord['fretCount'];

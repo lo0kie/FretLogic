@@ -5,8 +5,6 @@
   normalDark: '#3b82f6',
   textRootLight: '#ffffff',
   textRootDark: '#1e293b',
-  textNormalLight: '#ffffff',
-  textNormalDark: '#ffffff',
   openRootBgLight: '#f59e0b',
   openRootBgDark: '#fbbf24',
   openRootTextLight: '#ffffff',

@@ -76,7 +76,13 @@
       />
 
       <div class="relative w-full flex justify-center z-0 shrink-0">
-        <FretBoardCanvas />
+        <Fretboard
+          v-model:strings="editorStore.strings"
+          v-model:capo="editorStore.capo"
+          :fretCount="editorStore.fretCount"
+          :activeBaseStrings="editorStore.activeBaseStrings"
+          :isDarkMode="settingsStore.isDarkMode"
+        />
       </div>
     </div>
   </div>
@@ -84,6 +90,7 @@
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
+import Fretboard from '@/components/Fretboard.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useAudioPlayer } from '@/composables/useAudioPlayer';
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/constants';
@@ -91,7 +98,6 @@ import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
-import FretBoardCanvas from '@/views/workbench/FretBoardCanvas.vue';
 import { Copy, Image, Moon, Play, Square, Sun } from '@lucide/vue';
 import { computed, ref } from 'vue';
 

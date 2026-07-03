@@ -9,14 +9,26 @@
     >
       <h1 class="text-lg font-black tracking-tight uppercase text-title">Fret Logic</h1>
 
-      <GlobalTooltip placement="bottom" content="新建分组">
-        <button
-          @click="openCreate"
-          class="w-7 h-7 rounded-lg text-[var(--color-primary)] flex items-center justify-center active:scale-95 transition-transform header-add-btn"
-        >
-          <Plus :size="18" :stroke-width="3" />
-        </button>
-      </GlobalTooltip>
+      <div class="flex items-center gap-2 shrink-0">
+        <GlobalTooltip placement="bottom" :content="uiStore.isPreviewEnabled ? '关闭和弦悬浮预览' : '开启和弦悬浮预览'">
+          <button
+            @click="uiStore.isPreviewEnabled = !uiStore.isPreviewEnabled"
+            class="w-7 h-7 rounded-lg flex items-center justify-center active:scale-95 transition-all header-preview-btn"
+            :class="{ 'is-active': uiStore.isPreviewEnabled }"
+          >
+            <component :is="uiStore.isPreviewEnabled ? Eye : EyeOff" :size="16" :stroke-width="2.5" />
+          </button>
+        </GlobalTooltip>
+
+        <GlobalTooltip placement="bottom" content="新建分组">
+          <button
+            @click="openCreate"
+            class="w-7 h-7 rounded-lg text-[var(--color-primary)] flex items-center justify-center active:scale-95 transition-transform header-add-btn"
+          >
+            <Plus :size="18" :stroke-width="3" />
+          </button>
+        </GlobalTooltip>
+      </div>
     </div>
 
     <LeftGroupList @open-rename="openRename" @open-delete="openDelete" @open-move="openMove" />
@@ -59,29 +71,31 @@
   </BaseModal>
 
   <BaseModal v-model:visible="modals.move" title="移动至新分组" @confirm="handleMoveChord">
-    <div class="flex flex-col gap-2 overflow-y-auto no-scrollbar pb-1">
-      <button
+    <div class="grid grid-cols-3 gap-2 overflow-y-auto no-scrollbar max-h-[50vh] p-0.5" v-auto-animate>
+      <GlobalTooltip
         v-for="group in chordStore.groups"
         :key="group.id"
-        @click="modalData.moveTargetId = group.id"
-        :disabled="group.id === modalData.activeChord?.groupId"
-        class="px-4 py-3 rounded-lg text-sm font-bold text-left transition-all border flex items-center justify-between"
-        :class="
-          group.id === modalData.activeChord?.groupId
-            ? 'opacity-40 cursor-not-allowed grayscale bg-[var(--bg-main)] border-[var(--control-border)]'
-            : modalData.moveTargetId === group.id
-              ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-md'
-              : 'bg-[var(--bg-body)] text-[var(--text-body)] border-[var(--control-border)] hover:border-blue-400/50'
-        "
+        :content="group.id === modalData.activeChord?.groupId ? '和弦当前已在此分组中' : ''"
+        placement="top"
+        class="w-full min-w-0 flex"
       >
-        <span>{{ group.name }}</span>
-        <span
-          v-if="group.id === modalData.activeChord?.groupId"
-          class="text-[11px] opacity-60 font-black uppercase tracking-wider"
+        <button
+          :disabled="group.id === modalData.activeChord?.groupId"
+          @click="modalData.moveTargetId = group.id"
+          class="w-full px-3 py-2 rounded-lg text-sm tracking-widest font-bold text-left border flex items-center min-w-0 transition-all duration-200"
+          :class="[
+            group.id === modalData.activeChord?.groupId
+              ? 'opacity-40 cursor-not-allowed grayscale bg-[var(--bg-main)] border-[var(--control-border)]'
+              : modalData.moveTargetId === group.id
+                ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-md'
+                : 'bg-[var(--bg-body)] text-[var(--text-body)] border-[var(--control-border)] hover:border-blue-400/50 hover:shadow-sm',
+          ]"
         >
-          当前分组
-        </span>
-      </button>
+          <BaseMarquee class="min-w-0 w-full">
+            <span class="truncate block">{{ group.name }}</span>
+          </BaseMarquee>
+        </button>
+      </GlobalTooltip>
     </div>
   </BaseModal>
 </template>
@@ -99,7 +113,7 @@ import BaseModal from '@/components/BaseModal.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import LeftGroupList from '@/views/sidebar-left/LeftGroupList.vue';
 import LeftPanelFooter from '@/views/sidebar-left/LeftPanelFooter.vue';
-import { Plus, Triangle } from '@lucide/vue';
+import { Eye, EyeOff, Plus, Triangle } from '@lucide/vue';
 
 const uiStore = useUiStore();
 const chordStore = useChordStore();
@@ -269,7 +283,27 @@ const handleMoveChord = () => {
   }
 }
 
-.modal-input-field {
-  .mixin-input-base();
+.header-preview-btn {
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: var(--text-disabled);
+  transition: @transition-fast;
+
+  &:hover {
+    color: var(--text-muted);
+    background-color: var(--bg-panel-hover);
+    border-color: var(--border-light);
+  }
+
+  &.is-active {
+    color: @primary;
+    background-color: color-mix(in srgb, @primary, transparent 92%);
+    border-color: color-mix(in srgb, @primary, transparent 85%);
+
+    &:hover {
+      background-color: color-mix(in srgb, @primary, transparent 84%);
+      border-color: color-mix(in srgb, @primary, transparent 60%);
+    }
+  }
 }
 </style>
