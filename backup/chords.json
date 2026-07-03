@@ -34,6 +34,21 @@
       "id": "g_1780117616592",
       "name": "二十二",
       "collapsed": true
+    },
+    {
+      "id": "g_90d34ce7",
+      "name": "1",
+      "collapsed": true
+    },
+    {
+      "id": "g_cc6028d5",
+      "name": "2",
+      "collapsed": true
+    },
+    {
+      "id": "g_f9579e23",
+      "name": "3",
+      "collapsed": true
     }
   ],
   "chords": [
@@ -43,33 +58,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -83,33 +98,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -123,33 +138,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 4,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 4,
@@ -163,33 +178,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -203,33 +218,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -243,33 +258,33 @@
       "strings": [
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -283,33 +298,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -323,33 +338,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 4,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 4,
@@ -363,33 +378,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -403,33 +418,33 @@
       "strings": [
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -443,33 +458,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -483,33 +498,33 @@
       "strings": [
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -523,33 +538,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -563,33 +578,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -603,33 +618,33 @@
       "strings": [
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -643,33 +658,33 @@
       "strings": [
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -683,33 +698,33 @@
       "strings": [
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -723,33 +738,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -763,33 +778,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -803,33 +818,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -843,33 +858,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -883,33 +898,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -923,33 +938,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -963,33 +978,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1003,33 +1018,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1043,33 +1058,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1083,33 +1098,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1123,33 +1138,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1163,33 +1178,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1203,33 +1218,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1243,33 +1258,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1283,33 +1298,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1323,33 +1338,33 @@
       "strings": [
         {
           "fret": 3,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1363,33 +1378,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1403,33 +1418,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1443,33 +1458,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1483,33 +1498,33 @@
       "strings": [
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1523,33 +1538,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1563,33 +1578,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1603,33 +1618,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1643,33 +1658,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1683,33 +1698,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1723,33 +1738,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1763,33 +1778,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1803,33 +1818,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1843,33 +1858,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1883,33 +1898,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 4,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 4,
@@ -1923,33 +1938,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -1963,33 +1978,33 @@
       "strings": [
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2003,33 +2018,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2043,33 +2058,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2083,33 +2098,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2123,33 +2138,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2163,33 +2178,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2203,33 +2218,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2243,33 +2258,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2283,33 +2298,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2323,33 +2338,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2363,33 +2378,33 @@
       "strings": [
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2403,33 +2418,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2443,33 +2458,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2483,33 +2498,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2523,33 +2538,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2563,33 +2578,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2603,33 +2618,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2643,33 +2658,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2683,33 +2698,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2723,33 +2738,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2763,33 +2778,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2803,33 +2818,33 @@
       "strings": [
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2843,33 +2858,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2883,33 +2898,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2923,33 +2938,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -2963,33 +2978,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3003,33 +3018,33 @@
       "strings": [
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3043,33 +3058,33 @@
       "strings": [
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3083,33 +3098,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3123,33 +3138,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 4,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 4,
@@ -3163,33 +3178,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 4,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 4,
@@ -3203,33 +3218,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3243,33 +3258,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3283,33 +3298,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3323,33 +3338,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3363,33 +3378,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3403,33 +3418,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3443,33 +3458,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3483,33 +3498,33 @@
       "strings": [
         {
           "fret": 2,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3523,33 +3538,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 3,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
@@ -3563,33 +3578,33 @@
       "strings": [
         {
           "fret": -1,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": true,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": true
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 2,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         },
         {
           "fret": 0,
-          "isRoot": false,
-          "preferFlat": false
+          "preferFlat": false,
+          "isRoot": false
         }
       ],
       "fretCount": 3,
