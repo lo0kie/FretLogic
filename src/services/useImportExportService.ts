@@ -8,7 +8,7 @@ export function useImportExportService() {
 
   const processImport = (file: File, resetInputCallback: () => void) => {
     if (file.size === 0) {
-      uiStore.showToast('❌ 导入失败：不能导入空文件');
+      uiStore.showToast('导入失败：不能导入空文件', false, 'error');
       resetInputCallback();
       return;
     }
@@ -18,7 +18,7 @@ export function useImportExportService() {
       try {
         const resultStr = ((ev.target?.result as string) || '').trim();
         if (!resultStr) {
-          uiStore.showToast('❌ 导入失败：文件内容为空');
+          uiStore.showToast('导入失败：文件内容为空', false, 'error');
           return;
         }
 
@@ -29,18 +29,17 @@ export function useImportExportService() {
           if (!chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
             chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
           }
-          uiStore.showToast('📦 数据恢复成功');
+          uiStore.showToast('数据恢复成功', false, 'success');
         } else {
           throw new Error('Import verification failed');
         }
       } catch (err) {
         console.error('备份解析拦截:', err);
-        uiStore.showToast('❌ 文件非标准和弦备份或核心数据已损坏');
+        uiStore.showToast('文件非标准和弦备份或核心数据已损坏', false, 'error');
       } finally {
         resetInputCallback();
       }
     };
-
     reader.readAsText(file);
   };
 
@@ -58,9 +57,9 @@ export function useImportExportService() {
       link.href = URL.createObjectURL(new Blob([dataString], { type: 'application/json' }));
       link.download = `和弦备份_${dateStr}.json`;
       link.click();
-      uiStore.showToast('📥 备份已下载');
+      uiStore.showToast('备份已下载', false, 'success');
     } else {
-      uiStore.showToast('❌ 当前本地缓存存在严重破损数据，请检查控制台');
+      uiStore.showToast('当前本地缓存存在严重破损数据，请检查控制台', false, 'error');
     }
   };
 

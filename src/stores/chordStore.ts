@@ -1,12 +1,21 @@
 import { STORAGE_KEYS } from '@/constants';
 import type { Chord, Group } from '@/types';
+import { ChordSchema, GroupSchema } from '@/types';
+import { createZodSerializer } from '@/utils/zodStorage';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed } from 'vue';
+import { z } from 'zod';
 
 export const useChordStore = defineStore('chord', () => {
-  const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
-  const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
+  const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage, {
+    serializer: createZodSerializer(z.array(ChordSchema), []),
+  });
+
+  const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage, {
+    serializer: createZodSerializer(z.array(GroupSchema), []),
+  });
+
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
 
   const groupChordMap = computed(() => {

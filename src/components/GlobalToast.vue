@@ -32,7 +32,7 @@ const uiStore = useUiStore();
 
 const handleLocalUndo = () => {
   uiStore.executeUndoRestore();
-  uiStore.showToast('↩️ 刚刚删除的和弦已被完美恢复', false, 'success');
+  uiStore.showToast('刚刚删除的和弦已恢复', false, 'success');
 };
 
 const getToastThemeClass = (type: ToastType) => {
@@ -41,6 +41,8 @@ const getToastThemeClass = (type: ToastType) => {
       return 'bg-emerald-500 text-white dark:bg-emerald-400 dark:text-slate-900';
     case 'error':
       return 'bg-red-500 text-white dark:bg-red-400 dark:text-slate-900';
+    case 'warning':
+      return 'bg-amber-500 text-white dark:bg-amber-400 dark:text-slate-900';
     case 'loading':
       return 'bg-blue-600 text-white dark:bg-blue-500 dark:text-slate-900';
     default:

@@ -120,7 +120,6 @@ export default { name: 'BaseInput' };
   }
 }
 
-.css-password-frame,
 .css-password-field {
   -webkit-text-security: disc !important;
   text-security: disc !important;

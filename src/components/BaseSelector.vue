@@ -144,8 +144,6 @@ watch(isOpen, opened => {
     });
   }
 });
-
-defineExpose({ triggerRef });
 </script>
 
 <style scoped lang="less">

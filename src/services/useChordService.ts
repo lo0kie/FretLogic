@@ -4,7 +4,7 @@ import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { copyElementToClipboard } from '@/utils/domExporter';
 import cloneDeep from 'lodash.clonedeep';
-import { toRaw } from 'vue';
+import { Ref, toRaw, unref } from 'vue';
 import { SortableEvent } from 'vue-draggable-plus';
 
 export function useChordService() {
@@ -52,20 +52,31 @@ export function useChordService() {
   const triggerDeleteChord = (chord: Chord) => {
     const updatedList = chordStore.savedChordsList.filter(c => c.id !== chord.id);
     chordStore.overwriteChords(updatedList);
-    uiStore.showToast(`🗑️ 已删除和弦 "${chord.chordName}"`, true);
+    uiStore.showToast(`已删除和弦 "${chord.chordName}"`, true);
   };
 
-  const exportFretboardImage = async (selector: string, isTransparent: boolean = true) => {
+  const exportFretboardImage = async (
+    target: HTMLElement | Ref<HTMLElement | null | undefined> | null | undefined,
+    isTransparent: boolean = true
+  ) => {
     if (uiStore.isCopying) return;
+
+    const el = unref(target);
+
+    if (!el) {
+      uiStore.showToast('导出失败：指板 DOM 节点尚未渲染完成', false, 'error');
+      return;
+    }
+
     uiStore.isCopying = true;
-    uiStore.showToast(isTransparent ? '📸 正在导出透明底色快照...' : '📸 正在导出带卡片背景快照...');
+    uiStore.showToast(isTransparent ? '正在导出透明底色快照...' : '正在导出带卡片背景快照...');
 
     try {
-      await copyElementToClipboard(selector, isTransparent);
-      uiStore.showToast('✅ 成功复制至系统剪贴板');
+      await copyElementToClipboard(el, isTransparent);
+      uiStore.showToast('成功复制至系统剪贴板');
     } catch (err) {
       console.error('Fretboard Exporter Error:', err);
-      uiStore.showToast('❌ 导出失败：当前浏览器内核环境受限');
+      uiStore.showToast('导出失败：当前浏览器内核环境受限');
     } finally {
       uiStore.isCopying = false;
     }
@@ -74,7 +85,7 @@ export function useChordService() {
   const persistCurrentChord = () => {
     const cleanName = editorStore.currentChordName.trim();
     if (!cleanName || editorStore.isFretBoardEmpty) {
-      uiStore.showToast('❌ 保存失败：请输入名称并指定指板有效音符');
+      uiStore.showToast('保存失败：请输入名称并指定指板有效音符');
       return;
     }
 
@@ -100,7 +111,7 @@ export function useChordService() {
     }
 
     editorStore.resetEditor();
-    uiStore.showToast('👍 和弦已保存');
+    uiStore.showToast('和弦已保存');
     uiStore.clearUndoToasts();
   };
 
