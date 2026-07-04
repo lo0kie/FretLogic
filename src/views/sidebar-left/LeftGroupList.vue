@@ -23,7 +23,6 @@
         handle=".drag-handle"
         :disabled="!!debouncedQuery"
         class="flex flex-col gap-2 relative"
-        filter=".action-buttons"
         ghost-class="opacity-0"
         :touchStartThreshold="12"
         :swap-threshold="0.5"
@@ -34,70 +33,55 @@
           :id="'group-' + group.id"
           class="flex flex-col w-full group-box"
         >
-          <div
-            @click="chordService.executeGroupToggle(group.id)"
-            class="group-title-row flex items-center justify-between p-2 cursor-pointer select-none"
-          >
+          <GlobalContextMenu :items="getGroupMenuItems(group)">
             <div
-              class="flex items-center gap-2 hover:opacity-80 transition-opacity flex-1 min-w-0 mr-2"
-              title="点击折叠/展开分组"
+              @click="chordService.executeGroupToggle(group.id)"
+              class="group-title-row flex items-center justify-between p-2 cursor-pointer select-none"
             >
-              <ChevronDown
-                :size="16"
-                stroke-width="3"
-                class="opacity-40 transition-transform duration-200 shrink-0"
-                style="color: var(--text-body)"
-                :class="{ '-rotate-90': group.collapsed }"
-              />
-
-              <BaseMarquee class="min-w-0">
-                <span class="font-black tracking-widest uppercase group-name-text text-sm select-none">
-                  {{ group.name }}
-                </span>
-              </BaseMarquee>
-
-              <span
-                class="text-[12px] font-black px-1.5 py-0.5 count-badge shrink-0 font-mono inline-flex items-center"
-              >
-                <template v-if="debouncedQuery">
-                  <span style="color: var(--color-primary); line-height: 1">
-                    {{ searchFilteredChords(group.id).length }}
-                  </span>
-                  <span style="line-height: 1">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
-                </template>
-                <template v-else>
-                  {{ getGroupChordsCount(group.id) }}
-                </template>
-              </span>
-            </div>
-
-            <div @click.stop="" class="flex items-center gap-1.5 shrink-0">
-              <div class="action-buttons opacity-0 flex items-center gap-2 transition-opacity pointer-events-auto">
-                <button
-                  @click="$emit('open-rename', group)"
-                  class="text-[13px] font-semibold hover:underline"
-                  style="color: var(--color-primary)"
-                >
-                  改名
-                </button>
-                <button
-                  @click="$emit('open-delete', group)"
-                  class="text-[13px] font-semibold hover:underline"
-                  style="color: var(--color-danger)"
-                >
-                  删除
-                </button>
-              </div>
-
               <div
-                class="drag-handle p-1 rounded hover:bg-[var(--bg-panel-hover)] transition-all cursor-grab active:cursor-grabbing text-[var(--text-disabled)] hover:text-[var(--text-body)] flex items-center justify-center opacity-0 overflow-visible touch-none"
-                :class="{ '!w-0 !px-0 pointer-events-none': debouncedQuery.length > 0 }"
-                title="按住拖拽排序"
+                class="flex items-center gap-2 hover:opacity-80 transition-opacity flex-1 min-w-0 mr-2"
+                title="点击折叠/展开分组"
               >
-                <GripVertical :size="16" class="opacity-50" stroke-width="3" />
+                <ChevronDown
+                  :size="16"
+                  stroke-width="3"
+                  class="opacity-40 transition-transform duration-200 shrink-0"
+                  style="color: var(--text-body)"
+                  :class="{ '-rotate-90': group.collapsed }"
+                />
+
+                <BaseMarquee class="min-w-0">
+                  <span class="font-black tracking-widest uppercase group-name-text text-sm select-none">
+                    {{ group.name }}
+                  </span>
+                </BaseMarquee>
+
+                <span
+                  class="text-[12px] font-black px-1.5 py-0.5 count-badge shrink-0 font-mono inline-flex items-center"
+                >
+                  <template v-if="debouncedQuery">
+                    <span style="color: var(--color-primary); line-height: 1">
+                      {{ searchFilteredChords(group.id).length }}
+                    </span>
+                    <span style="line-height: 1">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
+                  </template>
+                  <template v-else>
+                    {{ getGroupChordsCount(group.id) }}
+                  </template>
+                </span>
+              </div>
+
+              <div @click.stop="" class="flex items-center gap-1.5 shrink-0">
+                <div
+                  class="drag-handle p-1 rounded hover:bg-[var(--bg-panel-hover)] transition-all cursor-grab active:cursor-grabbing text-[var(--text-disabled)] hover:text-[var(--text-body)] flex items-center justify-center opacity-0 overflow-visible touch-none"
+                  :class="{ '!w-0 !px-0 pointer-events-none': debouncedQuery.length > 0 }"
+                  title="按住拖拽排序"
+                >
+                  <GripVertical :size="16" class="opacity-50" stroke-width="3" />
+                </div>
               </div>
             </div>
-          </div>
+          </GlobalContextMenu>
 
           <div v-if="!group.collapsed" class="chord-content-wrapper mt-2 relative">
             <VueDraggable
@@ -154,12 +138,14 @@ import { useEditorStore } from '@/stores/editorStore';
 import type { Chord, Group } from '@/types';
 import LeftChordCard from '@/views/sidebar-left/LeftChordCard.vue';
 import LeftSearch from '@/views/sidebar-left/LeftSearch.vue';
-import { ChevronDown, FolderOpen, GripVertical } from '@lucide/vue';
-import { refDebounced } from '@vueuse/core';
-import { VueDraggable } from 'vue-draggable-plus';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 
-defineEmits<{
+import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
+import { ChevronDown, FolderOpen, Folder, GripVertical, SquarePen, Trash2 } from '@lucide/vue';
+import { VueDraggable } from 'vue-draggable-plus';
+import { refDebounced } from '@vueuse/core';
+
+const emit = defineEmits<{
   (e: 'open-rename', group: Group): void;
   (e: 'open-delete', group: Group): void;
   (e: 'open-move', chord: Chord): void;
@@ -188,6 +174,25 @@ const handleLocalDeleteChord = (chord: Chord) => {
   chordService.triggerDeleteChord(chord);
   if (isEditingCurrent) editorStore.resetEditor();
 };
+
+const getGroupMenuItems = (group: Group): ContextMenuItem[] => [
+  {
+    label: group.collapsed ? '展开分组' : '折叠分组',
+    icon: group.collapsed ? FolderOpen : Folder,
+    action: () => chordService.executeGroupToggle(group.id),
+  },
+  {
+    label: '修改名称',
+    icon: SquarePen,
+    action: () => emit('open-rename', group),
+  },
+  {
+    label: '删除分组',
+    icon: Trash2,
+    danger: true,
+    action: () => emit('open-delete', group),
+  },
+];
 
 watch(
   () => chordStore.selectedGroupId,
@@ -224,7 +229,6 @@ watch(
   .mixin-interactive-card();
   border-radius: @radius-md;
 
-  &:hover .action-buttons,
   &:hover .drag-handle:not(.invisible) {
     opacity: 1;
   }
@@ -237,9 +241,6 @@ watch(
 
   &:active:not(:disabled) {
     transform: none !important;
-  }
-  &:has(.action-buttons:active) {
-    transform: scale(1) !important;
   }
 }
 </style>

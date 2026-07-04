@@ -199,6 +199,22 @@ let ticking = false;
 let rAF_ID = 0;
 const cleanupListeners: (() => void)[] = [];
 
+const getCanvasPoint = (clientX: number, clientY: number) => {
+  const board = fretBoardRef.value?.getBoundingClientRect();
+  if (!board) return null;
+
+  const scaleX = board.width / CANVAS_CONFIG.BOARD_WIDTH;
+  const scaleY = board.height / rawHeight.value;
+  const x = (clientX - board.left) / scaleX;
+  const y = (clientY - board.top) / scaleY;
+
+  const stringIndex = Math.round((x - CANVAS_CONFIG.OFFSET_X) / CANVAS_CONFIG.STRING_SPACING);
+  const fretAreaY = y - CANVAS_CONFIG.OFFSET_Y_TOP;
+  const fretIndex = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
+
+  return { stringIndex, fretIndex };
+};
+
 const getStrX = (i: number) => CANVAS_CONFIG.OFFSET_X + i * CANVAS_CONFIG.STRING_SPACING;
 const rawHeight = computed(
   () => CANVAS_CONFIG.OFFSET_Y_TOP + props.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
@@ -270,66 +286,63 @@ const handleFretMiddleClick = (sIdx: number) => {
 };
 
 const handleCanvasRightClick = (e: MouseEvent) => {
-  if (!props.interactive || !fretBoardRef.value) return;
-  const board = fretBoardRef.value.getBoundingClientRect();
-  const scaleX = board.width / CANVAS_CONFIG.BOARD_WIDTH;
-  const scaleY = board.height / rawHeight.value;
-  const canvasX = (e.clientX - board.left) / scaleX;
-  const canvasY = (e.clientY - board.top) / scaleY;
-  const sIdx = Math.round((canvasX - CANVAS_CONFIG.OFFSET_X) / CANVAS_CONFIG.STRING_SPACING);
-  const fretAreaY = canvasY - CANVAS_CONFIG.OFFSET_Y_TOP;
-  const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
+  if (!props.interactive) return;
+  const point = getCanvasPoint(e.clientX, e.clientY);
+  if (
+    !point ||
+    point.stringIndex < 0 ||
+    point.stringIndex > 5 ||
+    point.fretIndex < 1 ||
+    point.fretIndex > props.fretCount
+  )
+    return;
 
-  if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= props.fretCount) {
-    emitStringsUpdate(cloned => {
-      const str = cloned[sIdx];
-      if (str.fret === fIdx) {
-        handleFretRightClick(sIdx);
-        return;
-      }
-      cloned.forEach(s => {
-        s.isRoot = false;
-      });
-      str.fret = fIdx;
-      str.isRoot = true;
-    });
-  }
+  emitStringsUpdate(cloned => {
+    const str = cloned[point.stringIndex];
+    if (str.fret === point.fretIndex) {
+      handleFretRightClick(point.stringIndex);
+      return;
+    }
+    cloned.forEach(s => (s.isRoot = false));
+    str.fret = point.fretIndex;
+    str.isRoot = true;
+  });
 };
 
 const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = false) => {
-  const board = fretBoardRef.value?.getBoundingClientRect();
-  if (!board) return;
+  const point = getCanvasPoint(clientX, clientY);
+  if (
+    !point ||
+    point.stringIndex < 0 ||
+    point.stringIndex > 5 ||
+    point.fretIndex < 1 ||
+    point.fretIndex > props.fretCount
+  )
+    return;
 
-  const scaleX = board.width / CANVAS_CONFIG.BOARD_WIDTH;
-  const scaleY = board.height / rawHeight.value;
-  const canvasX = (clientX - board.left) / scaleX;
-  const canvasY = (clientY - board.top) / scaleY;
-  const sIdx = Math.round((canvasX - CANVAS_CONFIG.OFFSET_X) / CANVAS_CONFIG.STRING_SPACING);
-  const fretAreaY = canvasY - CANVAS_CONFIG.OFFSET_Y_TOP;
-  const fIdx = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
+  const { stringIndex: sIdx, fretIndex: fIdx } = point;
 
-  if (sIdx >= 0 && sIdx <= 5 && fIdx >= 1 && fIdx <= props.fretCount) {
-    if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
-    emitStringsUpdate(cloned => {
-      const str = cloned[sIdx];
-      if (str.fret === fIdx) {
-        str.fret = -1;
-        str.isRoot = false;
+  if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
+
+  emitStringsUpdate(cloned => {
+    const str = cloned[sIdx];
+    if (str.fret === fIdx) {
+      str.fret = -1;
+      str.isRoot = false;
+      lastSIdx = -1;
+      lastFIdx = -1;
+      lastCancelTime = Date.now();
+    } else {
+      if (isMoveEvent && Date.now() - lastCancelTime < INTERACTION_CONFIG.MUTING_COOL_DOWN) {
         lastSIdx = -1;
         lastFIdx = -1;
-        lastCancelTime = Date.now();
-      } else {
-        if (isMoveEvent && Date.now() - lastCancelTime < INTERACTION_CONFIG.MUTING_COOL_DOWN) {
-          lastSIdx = -1;
-          lastFIdx = -1;
-          return;
-        }
-        str.fret = fIdx;
-        lastSIdx = sIdx;
-        lastFIdx = fIdx;
+        return;
       }
-    });
-  }
+      str.fret = fIdx;
+      lastSIdx = sIdx;
+      lastFIdx = fIdx;
+    }
+  });
 };
 
 const handlePointerMove = (e: PointerEvent) => {
