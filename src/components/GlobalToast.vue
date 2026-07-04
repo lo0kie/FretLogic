@@ -4,7 +4,7 @@
       <div
         v-for="toast in uiStore.toasts"
         :key="toast.id"
-        class="px-4 py-2.5 rounded-xl font-bold shadow-2xl flex items-center gap-3 text-xs pointer-events-auto transition-colors duration-300"
+        class="px-4 py-2.5 rounded-md font-bold shadow-2xl flex items-center gap-3 text-xs pointer-events-auto transition-colors duration-300"
         :class="getToastThemeClass(toast.type)"
       >
         <Loader2 v-if="toast.type === 'loading'" class="w-4 h-4 animate-spin opacity-80" />

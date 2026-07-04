@@ -57,7 +57,7 @@ const props = withDefaults(
     disabled: false,
     clearable: false,
     isPassword: false,
-    fontSize: 'xs',
+    fontSize: 'md',
   }
 );
 
@@ -72,12 +72,12 @@ const inputRef = ref<HTMLInputElement | null>(null);
 const fontClass = computed(() => {
   switch (props.fontSize) {
     case 'xs':
-      return '!text-[0.7rem] [letter-spacing:0.04em]';
+      return '!text-[0.75rem] [letter-spacing:0.04em]';
     case 'lg':
-      return '!text-base';
+      return '!text-[0.85rem]';
     case 'md':
     default:
-      return '!text-sm';
+      return '!text-[0.8rem]';
   }
 });
 

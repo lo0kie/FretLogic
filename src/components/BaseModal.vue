@@ -12,15 +12,12 @@
           @click="closeOnMask && handleCancel()"
         ></div>
 
-        <div
-          class="modal-card py-5 px-6 relative z-10 animate-modal-in flex flex-col gap-4 max-h-[80vh]"
-          :class="width"
-        >
+        <div class="modal-card py-5 px-6 relative z-10 animate-modal-in flex flex-col max-h-[80vh]" :class="width">
           <h3 v-if="title" class="text-xs font-black opacity-40 uppercase tracking-widest text-title shrink-0">
             {{ title }}
           </h3>
 
-          <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar">
+          <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar py-4">
             <slot></slot>
           </div>
 
