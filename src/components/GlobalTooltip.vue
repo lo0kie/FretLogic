@@ -26,6 +26,7 @@
 
 <script setup lang="ts">
 import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/vue';
+import DOMPurify from 'dompurify';
 import { computed, ref } from 'vue';
 
 const props = withDefaults(
@@ -43,26 +44,8 @@ const floatingRef = ref<HTMLElement | null>(null);
 const sanitizedHtmlContent = computed(() => {
   if (!props.content) return '';
   const rawHtml = props.content.replace(/\\n/g, '<br />').replace(/\n/g, '<br />');
-  try {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(`<body>${rawHtml}</body>`, 'text/html');
-    const scripts = doc.querySelectorAll('script, img, iframe, object, embed, svg');
-    scripts.forEach(el => el.remove());
 
-    const allElements = doc.body.querySelectorAll('*');
-    allElements.forEach(el => {
-      const attrs = el.attributes;
-      for (let i = attrs.length - 1; i >= 0; i--) {
-        if (attrs[i].name.startsWith('on')) {
-          el.removeAttribute(attrs[i].name);
-        }
-      }
-    });
-    return doc.body.innerHTML;
-  } catch (e) {
-    console.error('Tooltip XSS Sandbox Guard Error:', e);
-    return '';
-  }
+  return DOMPurify.sanitize(rawHtml);
 });
 
 const { floatingStyles } = useFloating(referenceRef, floatingRef, {

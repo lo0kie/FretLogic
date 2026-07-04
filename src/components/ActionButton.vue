@@ -7,6 +7,7 @@
     :class="[themeClasses, sizeClasses]"
   >
     <Loader2 v-if="loading" class="w-4 h-4 animate-spin shrink-0 opacity-80" />
+
     <slot v-else name="prefix"></slot>
 
     <span class="flex items-center justify-center whitespace-nowrap">
@@ -51,26 +52,35 @@ const sizes: Record<(typeof props)['size'], string> = { sm: 'h-[2rem]', md: 'h-[
 const sizeClasses = computed(() => {
   switch (props.size) {
     case 'sm':
-      return `${sizes[props.size]} px-3 !text-xs gap-1.5`;
+      return `${sizes[props.size]} px-3 !text-[14px] gap-[0.35rem]`;
     case 'lg':
-      return `${sizes[props.size]} px-6 !text-base gap-2.5`;
+      return `${sizes[props.size]} px-6 !text-[16px] gap-[0.4rem]`;
     case 'md':
     default:
-      return `${sizes[props.size]} px-4 !text-[15px] gap-2`;
+      return `${sizes[props.size]} px-4 !text-[15px] gap-[0.45rem]`;
   }
 });
 
+const variants: Record<string, string> = {
+  primary:
+    'bg-blue-600 border-blue-700/30 dark:border-blue-400/30 text-white hover:opacity-90 active:opacity-80 disabled:opacity-40 disabled:hover:opacity-40',
+
+  danger:
+    'text-red-500 border-red-500/20 bg-red-500/10 hover:bg-red-500/20 dark:bg-red-400/10 dark:border-red-400/20 dark:hover:bg-red-400/20 disabled:opacity-50 disabled:hover:bg-red-500/10 dark:disabled:hover:bg-red-400/10',
+
+  warning:
+    'text-amber-500 border-amber-500/20 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-50 disabled:hover:bg-amber-500/10',
+
+  default:
+    'bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-blue-500/30 hover:bg-blue-50/50 hover:text-blue-600 dark:hover:border-blue-400/30 dark:hover:bg-blue-400/10 dark:hover:text-blue-400 disabled:opacity-50 disabled:hover:bg-white dark:disabled:hover:bg-slate-800 disabled:hover:border-slate-200 dark:disabled:hover:border-white/10 disabled:hover:text-slate-700 dark:disabled:hover:text-slate-300',
+};
+
 const themeClasses = computed(() => {
-  if (props.primary)
-    return 'bg-blue-600 border-blue-700/30 dark:border-blue-400/30 text-white hover:opacity-90 active:opacity-80 disabled:opacity-40 disabled:hover:opacity-40';
+  if (props.primary) return variants.primary;
+  if (props.danger) return variants.danger;
+  if (props.warning) return variants.warning;
 
-  if (props.danger)
-    return 'text-red-500 border-red-500/20 bg-red-500/10 hover:bg-red-500/20 dark:bg-red-400/10 dark:border-red-400/20 dark:hover:bg-red-400/20 disabled:opacity-50 disabled:hover:bg-red-500/10 dark:disabled:hover:bg-red-400/10';
-
-  if (props.warning)
-    return 'text-amber-500 border-amber-500/20 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-50 disabled:hover:bg-amber-500/10';
-
-  return 'bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-blue-500/30 hover:bg-blue-50/50 hover:text-blue-600 dark:hover:border-blue-400/30 dark:hover:bg-blue-400/10 dark:hover:text-blue-400 disabled:opacity-50 disabled:hover:bg-white dark:disabled:hover:bg-slate-800 disabled:hover:border-slate-200 dark:disabled:hover:border-white/10 disabled:hover:text-slate-700 dark:disabled:hover:text-slate-300';
+  return variants.default;
 });
 </script>
 

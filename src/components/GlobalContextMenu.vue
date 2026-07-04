@@ -48,11 +48,11 @@ export default { name: 'GlobalContextMenu' };
 
 <script setup lang="ts">
 import { useEventListener } from '@vueuse/core';
-import { nextTick, onBeforeUnmount, ref } from 'vue';
+import { FunctionalComponent, nextTick, onBeforeUnmount, ref } from 'vue';
 
 export interface ContextMenuItem {
   label: string;
-  icon?: any;
+  icon?: FunctionalComponent;
   action: () => void;
   danger?: boolean;
   disabled?: boolean;
