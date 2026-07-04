@@ -20,7 +20,7 @@ export const useUiStore = defineStore('ui', () => {
   const isCopying = ref(false);
   const isLeftOpen = useStorage('CHORD_LAB_UI_LEFT_OPEN', true);
   const isRightOpen = useStorage('CHORD_LAB_UI_RIGHT_OPEN', true);
-  const isPreviewEnabled = useStorage('CHORD_LAB_UI_PREVIEW_ENABLED', true);
+  const isPreviewEnabled = useStorage('CHORD_LAB_UI_PREVIEW_ENABLED', false);
 
   const clearUndoToasts = () => {
     toasts.value = toasts.value.filter(t => !t.canUndo);
