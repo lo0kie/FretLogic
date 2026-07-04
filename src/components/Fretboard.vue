@@ -1,10 +1,7 @@
 <template>
   <div
     class="fretboard-layout-scaler inline-block"
-    :style="{
-      width: `${realScaledWidth}px`,
-      height: `${realScaledHeight}px`,
-    }"
+    :style="{ width: `${realScaledWidth}px`, height: `${realScaledHeight}px` }"
   >
     <div
       ref="fretBoardRef"
@@ -25,7 +22,7 @@
             :content="interactive && str.fret <= 0 ? '左键：切换空弦/静音 \n 右键：设为根音' : undefined"
             :style="{
               position: 'absolute',
-              left: `${getStrX(sIdx)}px`,
+              left: `${stringXPositions[sIdx]}px`,
               top: '10px',
               transform: 'translateX(-50%)',
               width: 'auto',
@@ -61,45 +58,44 @@
         style="overflow: visible"
         class="w-full pointer-events-auto"
       >
-        <line
-          v-for="s in 6"
-          :key="'string-' + s"
-          :x1="getStrX(s - 1)"
-          y1="0"
-          :x2="getStrX(s - 1)"
-          :y2="fretCount * CANVAS_CONFIG.FRET_HEIGHT"
-          :stroke="isDarkMode ? '#ffffff' : '#0f172a'"
-          :stroke-width="FRETBOARD_LINE_WIDTH"
-          class="string-line"
-          style="pointer-events: none"
-          shape-rendering="crispEdges"
-        />
-
-        <line
-          v-for="f in fretCount"
-          :key="'fret-line-' + f"
-          :x1="CANVAS_CONFIG.OFFSET_X"
-          :y1="f * CANVAS_CONFIG.FRET_HEIGHT"
-          :x2="getStrX(5)"
-          :y2="f * CANVAS_CONFIG.FRET_HEIGHT"
-          :stroke="isDarkMode ? '#ffffff' : '#0f172a'"
-          :stroke-width="FRETBOARD_LINE_WIDTH"
-          style="pointer-events: none"
-          shape-rendering="crispEdges"
-        />
-
-        <rect
-          :x="CANVAS_CONFIG.OFFSET_X - FRETBOARD_LINE_WIDTH / 2"
-          y="-4"
-          :width="5 * CANVAS_CONFIG.STRING_SPACING + FRETBOARD_LINE_WIDTH"
-          height="8"
-          :fill="isDarkMode ? '#ffffff' : '#0f172a'"
-          style="pointer-events: none"
-        />
-
-        <g v-for="i in fretCount" :key="'fret-text-' + i">
+        <g v-memo="[fretCount, isDarkMode]">
+          <line
+            v-for="s in 6"
+            :key="'string-' + s"
+            :x1="stringXPositions[s - 1]"
+            y1="0"
+            :x2="stringXPositions[s - 1]"
+            :y2="fretCount * CANVAS_CONFIG.FRET_HEIGHT"
+            :stroke="isDarkMode ? '#ffffff' : '#0f172a'"
+            :stroke-width="FRETBOARD_LINE_WIDTH"
+            class="string-line"
+            style="pointer-events: none"
+            shape-rendering="crispEdges"
+          />
+          <line
+            v-for="f in fretCount"
+            :key="'fret-line-' + f"
+            :x1="CANVAS_CONFIG.OFFSET_X"
+            :y1="f * CANVAS_CONFIG.FRET_HEIGHT"
+            :x2="stringXPositions[5]"
+            :y2="f * CANVAS_CONFIG.FRET_HEIGHT"
+            :stroke="isDarkMode ? '#ffffff' : '#0f172a'"
+            :stroke-width="FRETBOARD_LINE_WIDTH"
+            style="pointer-events: none"
+            shape-rendering="crispEdges"
+          />
+          <rect
+            :x="CANVAS_CONFIG.OFFSET_X - FRETBOARD_LINE_WIDTH / 2"
+            y="-4"
+            :width="5 * CANVAS_CONFIG.STRING_SPACING + FRETBOARD_LINE_WIDTH"
+            height="8"
+            :fill="isDarkMode ? '#ffffff' : '#0f172a'"
+            style="pointer-events: none"
+          />
           <text
-            v-if="i < fretCount"
+            v-for="i in fretCount"
+            :key="'fret-text-' + i"
+            v-show="i < fretCount"
             :x="(CANVAS_CONFIG.OFFSET_X - 32) / 2"
             :y="i * CANVAS_CONFIG.FRET_HEIGHT"
             text-anchor="middle"
@@ -122,7 +118,7 @@
             @mousedown.middle.prevent.stop="handleFretMiddleClick(sIdx)"
           >
             <circle
-              :cx="getStrX(sIdx)"
+              :cx="stringXPositions[sIdx]"
               :cy="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
               r="28"
               :fill="getFingerColor(str)"
@@ -130,7 +126,7 @@
               style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))"
             />
             <text
-              :x="getStrX(sIdx)"
+              :x="stringXPositions[sIdx]"
               :y="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
               text-anchor="middle"
               dy="0.36em"
@@ -151,7 +147,6 @@
 <script setup lang="ts">
 import { X } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
-import cloneDeep from 'lodash.clonedeep';
 import { computed, onBeforeUnmount, onMounted, ref, toRaw } from 'vue';
 
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
@@ -163,7 +158,8 @@ import {
   INTERACTION_CONFIG,
 } from '@/constants';
 import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
-import { calcNoteLabel, isMuted, isOpen } from '@/utils/musicTheory';
+import { cloneDeep } from '@/utils/dataParser';
+import { calcNoteLabel, DEFAULT_TUNING_MAPPING, isMuted, isOpen } from '@/utils/musicTheory';
 
 const props = withDefaults(
   defineProps<{
@@ -175,12 +171,7 @@ const props = withDefaults(
     interactive?: boolean;
     scale?: number;
   }>(),
-  {
-    activeBaseStrings: () => [40, 45, 50, 55, 59, 64],
-    isDarkMode: false,
-    interactive: true,
-    scale: 1.0,
-  }
+  { activeBaseStrings: () => DEFAULT_TUNING_MAPPING, isDarkMode: false, interactive: true, scale: 1.0 }
 );
 
 const emit = defineEmits<{
@@ -199,32 +190,27 @@ let ticking = false;
 let rAF_ID = 0;
 const cleanupListeners: (() => void)[] = [];
 
+const stringXPositions = computed(() =>
+  Array.from({ length: 6 }, (_, i) => CANVAS_CONFIG.OFFSET_X + i * CANVAS_CONFIG.STRING_SPACING)
+);
+
 const getCanvasPoint = (clientX: number, clientY: number) => {
   const board = fretBoardRef.value?.getBoundingClientRect();
   if (!board) return null;
-
   const scaleX = board.width / CANVAS_CONFIG.BOARD_WIDTH;
   const scaleY = board.height / rawHeight.value;
   const x = (clientX - board.left) / scaleX;
   const y = (clientY - board.top) / scaleY;
-
   const stringIndex = Math.round((x - CANVAS_CONFIG.OFFSET_X) / CANVAS_CONFIG.STRING_SPACING);
   const fretAreaY = y - CANVAS_CONFIG.OFFSET_Y_TOP;
   const fretIndex = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
-
   return { stringIndex, fretIndex };
 };
 
-const getStrX = (i: number) => CANVAS_CONFIG.OFFSET_X + i * CANVAS_CONFIG.STRING_SPACING;
 const rawHeight = computed(
   () => CANVAS_CONFIG.OFFSET_Y_TOP + props.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
 );
-
-const fretboardScale = computed(() => {
-  const baseFretScale = FRETBOARD_SCALE_MAP[props.fretCount] || 1.0;
-  return baseFretScale * props.scale;
-});
-
+const fretboardScale = computed(() => (FRETBOARD_SCALE_MAP[props.fretCount] || 1.0) * props.scale);
 const realScaledWidth = computed(() => CANVAS_CONFIG.BOARD_WIDTH * fretboardScale.value);
 const realScaledHeight = computed(() => rawHeight.value * fretboardScale.value);
 
@@ -245,7 +231,6 @@ const handleLocalToggleOpenString = (sIdx: number) => {
     } else str.fret = 0;
   });
 };
-
 const handleOpenStringRightClick = (sIdx: number) => {
   emitStringsUpdate(cloned => {
     const str = cloned[sIdx];
@@ -259,7 +244,6 @@ const handleOpenStringRightClick = (sIdx: number) => {
     }
   });
 };
-
 const handleFretRightClick = (sIdx: number) => {
   emitStringsUpdate(cloned => {
     const str = cloned[sIdx];
@@ -271,7 +255,6 @@ const handleFretRightClick = (sIdx: number) => {
     str.isRoot = !wasRoot;
   });
 };
-
 const handleFretMiddleClick = (sIdx: number) => {
   emitStringsUpdate(cloned => {
     const str = cloned[sIdx];
@@ -296,7 +279,6 @@ const handleCanvasRightClick = (e: MouseEvent) => {
     point.fretIndex > props.fretCount
   )
     return;
-
   emitStringsUpdate(cloned => {
     const str = cloned[point.stringIndex];
     if (str.fret === point.fretIndex) {
@@ -319,9 +301,7 @@ const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = 
     point.fretIndex > props.fretCount
   )
     return;
-
   const { stringIndex: sIdx, fretIndex: fIdx } = point;
-
   if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
 
   emitStringsUpdate(cloned => {
@@ -353,7 +333,6 @@ const handlePointerMove = (e: PointerEvent) => {
     ticking = false;
   });
 };
-
 const handlePointerUp = () => {
   emit('drag-status-change', false);
   lastSIdx = -1;
@@ -363,24 +342,20 @@ const handlePointerUp = () => {
   cleanupListeners.forEach(cleanup => cleanup());
   cleanupListeners.length = 0;
 };
-
 const handlePointerDown = (e: PointerEvent) => {
   if (!props.interactive || e.button !== 0) return;
   emit('drag-status-change', true);
   lastSIdx = -1;
   lastFIdx = -1;
   handleFingerClickLogic(e.clientX, e.clientY, false);
-
   cleanupListeners.push(useEventListener(window, 'pointermove', handlePointerMove));
   cleanupListeners.push(useEventListener(window, 'pointerup', handlePointerUp));
 };
-
 const handleWheel = (e: WheelEvent) => {
   if (!props.interactive) return;
   e.preventDefault();
   wheelAccumulator += e.deltaY;
   if (Math.abs(wheelAccumulator) < INTERACTION_CONFIG.WHEEL_THRESHOLD) return;
-
   if (wheelAccumulator > 0) {
     emit('update:capo', Math.min(INTERACTION_CONFIG.MAX_CAPO_LIMIT, props.capo + 1));
   } else {
@@ -395,7 +370,6 @@ const getOpenStringStatusClass = (str: GuitarStringEntity) => {
     return 'border-[#93c5fd] text-[#1d4ed8] dark:border-[#1e3a8a] dark:text-[#93c5fd] bg-transparent';
   return '';
 };
-
 const getOpenStringStyle = (str: GuitarStringEntity) => {
   if (isOpen(str) && str.isRoot) {
     const bg = props.isDarkMode ? FRETBOARD_COLORS.openRootBgDark : FRETBOARD_COLORS.openRootBgLight;
@@ -408,12 +382,10 @@ const getOpenStringStyle = (str: GuitarStringEntity) => {
   }
   return {};
 };
-
 const getFingerColor = (str: GuitarStringEntity) => {
   if (str.isRoot) return props.isDarkMode ? FRETBOARD_COLORS.rootDark : FRETBOARD_COLORS.rootLight;
   return props.isDarkMode ? FRETBOARD_COLORS.normalDark : FRETBOARD_COLORS.normalLight;
 };
-
 const getFingerTextColor = (str: GuitarStringEntity) => {
   return str.isRoot && props.isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
 };
@@ -424,7 +396,6 @@ onMounted(() => {
     useEventListener(fretBoardRef, 'wheel', handleWheel, { passive: false });
   }
 });
-
 onBeforeUnmount(() => {
   if (rAF_ID) cancelAnimationFrame(rAF_ID);
   cleanupListeners.forEach(cleanup => cleanup());
@@ -432,24 +403,22 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
-
 .open-note-text {
   display: inline-block;
   line-height: 1;
 }
 .fretboard-layout-scaler {
   transition:
-    width @duration-slow @bezier-standard,
-    height @duration-slow @bezier-standard;
+    width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .fretBoard-container {
-  transition: transform @duration-slow @bezier-standard;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 button {
   border-width: 3px;
   transition:
-    border-width 0.05s @bezier-standard,
+    border-width 0.05s cubic-bezier(0.4, 0, 0.2, 1),
     background-color 0.05s ease;
   &.is-fret-available:active {
     border-width: 5px !important;
@@ -464,10 +433,10 @@ button {
   }
 }
 .string-line {
-  transition: y2 @duration-slow @bezier-standard;
+  transition: y2 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .finger-circle,
 .finger-text {
-  transition: fill @duration-fast ease;
+  transition: fill 0.15s ease;
 }
 </style>

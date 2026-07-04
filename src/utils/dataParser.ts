@@ -36,3 +36,66 @@ export const cleanAndValidateData = (
 
   return true;
 };
+
+export function cloneDeep<T>(value: T, cache = new WeakMap()): T {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  let rawValue: any = value;
+  if ((value as any)['__v_raw']) {
+    rawValue = (value as any)['__v_raw'];
+  } else if ((value as any)['__raw__']) {
+    rawValue = (value as any)['__raw__'];
+  }
+
+  if (cache.has(rawValue)) {
+    return cache.get(rawValue);
+  }
+
+  if (rawValue instanceof Date) {
+    return new Date(rawValue.getTime()) as any;
+  }
+
+  if (rawValue instanceof RegExp) {
+    return new RegExp(rawValue.source, rawValue.flags) as any;
+  }
+
+  if (rawValue instanceof Set) {
+    const cloneSet = new Set();
+    cache.set(rawValue, cloneSet);
+    rawValue.forEach(val => {
+      cloneSet.add(cloneDeep(val, cache));
+    });
+    return cloneSet as any;
+  }
+
+  if (rawValue instanceof Map) {
+    const cloneMap = new Map();
+    cache.set(rawValue, cloneMap);
+    rawValue.forEach((val, key) => {
+      cloneMap.set(key, cloneDeep(val, cache));
+    });
+    return cloneMap as any;
+  }
+
+  const cloneTarget = Array.isArray(rawValue) ? [] : Object.create(Object.getPrototypeOf(rawValue));
+
+  cache.set(rawValue, cloneTarget);
+
+  const keys = Reflect.ownKeys(rawValue);
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(rawValue, key);
+
+    if (descriptor) {
+      const clonedValue = cloneDeep(rawValue[key], cache);
+
+      Object.defineProperty(cloneTarget, key, {
+        ...descriptor,
+        value: clonedValue,
+      });
+    }
+  }
+
+  return cloneTarget;
+}

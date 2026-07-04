@@ -1,21 +1,9 @@
 ﻿import type { Toast, ToastType } from '@/types';
-import { useRefHistory, useStorage } from '@vueuse/core';
-import cloneDeep from 'lodash.clonedeep';
+import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { ref, toRaw, toRef } from 'vue';
-import { useChordStore } from './chordStore';
+import { ref } from 'vue';
 
 export const useUiStore = defineStore('ui', () => {
-  const chordStore = useChordStore();
-  const savedChordsRef = toRef(chordStore, 'savedChordsList');
-
-  const { undo: rawUndo } = useRefHistory(savedChordsRef, {
-    capacity: 15,
-    deep: true,
-    flush: 'post',
-    clone: v => cloneDeep(toRaw(v)),
-  });
-
   const toasts = ref<Toast[]>([]);
   const isCopying = ref(false);
   const isLeftOpen = useStorage('CHORD_LAB_UI_LEFT_OPEN', true);
@@ -66,33 +54,7 @@ export const useUiStore = defineStore('ui', () => {
     }
   };
 
-  const executeUndoRestore = () => {
-    rawUndo();
-    const validGroupIds = new Set(chordStore.groups.map(g => g.id));
-    let hasOrphans = false;
-    chordStore.savedChordsList.forEach(chord => {
-      if (!validGroupIds.has(chord.groupId)) hasOrphans = true;
-    });
-
-    if (hasOrphans) {
-      let targetGroupId = chordStore.selectedGroupId || chordStore.groups[0]?.id || null;
-      if (!targetGroupId) {
-        targetGroupId = 'g_recovery_' + crypto.randomUUID().slice(0, 8);
-        chordStore.groups.forEach(g => {
-          g.collapsed = true;
-        });
-        chordStore.groups.unshift({ id: targetGroupId, name: '已恢复的和弦', collapsed: false });
-        chordStore.selectedGroupId = targetGroupId;
-      }
-      chordStore.savedChordsList.forEach(c => {
-        if (!validGroupIds.has(c.groupId)) c.groupId = targetGroupId as string;
-      });
-    }
-    clearUndoToasts();
-  };
-
   return {
-    executeUndoRestore,
     clearUndoToasts,
     isLeftOpen,
     isRightOpen,

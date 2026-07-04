@@ -1,6 +1,6 @@
-import { z } from 'zod';
+import { type ZodSchema } from 'zod';
 
-export const createZodSerializer = <T>(schema: z.ZodSchema<T>, defaultValue: T) => {
+export const createZodSerializer = <T>(schema: ZodSchema<T>, defaultValue: T) => {
   return {
     read: (raw: string): T => {
       try {

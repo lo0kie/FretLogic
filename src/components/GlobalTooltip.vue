@@ -26,7 +26,7 @@
 
 <script setup lang="ts">
 import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/vue';
-import DOMPurify from 'dompurify';
+import { computedAsync } from '@vueuse/core';
 import { computed, ref } from 'vue';
 
 const props = withDefaults(
@@ -41,12 +41,14 @@ const show = ref(false);
 const referenceRef = ref<HTMLElement | null>(null);
 const floatingRef = ref<HTMLElement | null>(null);
 
-const sanitizedHtmlContent = computed(() => {
-  if (!props.content) return '';
+const sanitizedHtmlContent = computedAsync(async () => {
+  if (!show.value || !props.content) return '';
+
   const rawHtml = props.content.replace(/\\n/g, '<br />').replace(/\n/g, '<br />');
+  const { default: DOMPurify } = await import('dompurify');
 
   return DOMPurify.sanitize(rawHtml);
-});
+}, '');
 
 const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   placement: computed(() => props.placement),

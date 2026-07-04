@@ -2,8 +2,8 @@
 import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
+import { cloneDeep } from '@/utils/dataParser';
 import { copyElementToClipboard } from '@/utils/domExporter';
-import cloneDeep from 'lodash.clonedeep';
 import { Ref, toRaw, unref } from 'vue';
 import { SortableEvent } from 'vue-draggable-plus';
 

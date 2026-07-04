@@ -23,6 +23,7 @@ export function useImportExportService() {
         }
 
         const imported = JSON.parse(resultStr);
+
         if (cleanAndValidateData(imported, 'import')) {
           chordStore.overwriteGroups(imported.groups);
           chordStore.overwriteChords(imported.chords);

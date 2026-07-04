@@ -10,7 +10,9 @@
 
 <script setup lang="ts">
 import GlobalToast from '@/components/GlobalToast.vue';
-import SidebarLeft from '@/views/sidebar-left/SidebarLeft.vue';
-import SidebarRight from '@/views/sidebar-right/SidebarRight.vue';
 import Workbench from '@/views/workbench/Workbench.vue';
+import { defineAsyncComponent } from 'vue';
+
+const SidebarLeft = defineAsyncComponent(() => import('@/views/sidebar-left/SidebarLeft.vue'));
+const SidebarRight = defineAsyncComponent(() => import('@/views/sidebar-right/SidebarRight.vue'));
 </script>

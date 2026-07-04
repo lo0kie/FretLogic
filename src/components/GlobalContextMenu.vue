@@ -142,7 +142,7 @@ onBeforeUnmount(() => {
 .menu-fade-enter-active {
   transition:
     opacity 0.12s @bezier-standard,
-    transform 0.12s @bezier-bounce;
+    transform 0.12s @bezier-standard;
 }
 .menu-fade-leave-active {
   transition:

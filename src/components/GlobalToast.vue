@@ -24,14 +24,16 @@
 </template>
 
 <script setup lang="ts">
+import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ToastType } from '@/types';
 import { Loader2 } from '@lucide/vue';
 
 const uiStore = useUiStore();
+const chordStore = useChordStore();
 
 const handleLocalUndo = () => {
-  uiStore.executeUndoRestore();
+  chordStore.executeUndoRestore();
   uiStore.showToast('刚刚删除的和弦已恢复', false, 'success');
 };
 

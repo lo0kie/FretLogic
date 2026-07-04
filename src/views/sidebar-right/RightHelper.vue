@@ -84,8 +84,8 @@ import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
+import { cloneDeep } from '@/utils/dataParser';
 import { ChevronDown, ChevronUp, CloudDownload, CloudUpload } from '@lucide/vue';
-import cloneDeep from 'lodash.clonedeep';
 import { computed, toRaw } from 'vue';
 
 defineProps<{
