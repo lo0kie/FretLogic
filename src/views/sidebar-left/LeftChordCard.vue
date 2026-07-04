@@ -1,35 +1,37 @@
 ﻿<template>
   <GlobalTooltip placement="top">
-    <div class="chord-card-frame" :title="chord.chordName">
-      <div
-        class="chord-thumb-card group h-8 px-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)] box-border relative"
-        :class="{ 'is-editing': isEditing }"
-        tabindex="0"
-        @keydown.enter.prevent.stop="e => (e.target as HTMLElement).click()"
-        @contextmenu.prevent.stop="$emit('move', chord)"
-      >
-        <BaseMarquee class="flex-1 min-w-0">
-          <span class="chord-name-text text-xs font-black tracking-tight leading-none pointer-events-none">
-            {{ chord.chordName }}
-          </span>
-        </BaseMarquee>
-
+    <GlobalContextMenu :items="menuItems">
+      <div class="chord-card-frame" :title="chord.chordName">
         <div
-          class="delete-button absolute top-0 right-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200"
-          :class="{ 'opacity-100': isEditing }"
+          class="chord-thumb-card group h-8 px-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)] box-border relative cursor-pointer"
+          :class="{ 'is-editing': isEditing }"
+          tabindex="0"
+          @click="$emit('click')"
+          @keydown.enter.prevent.stop="e => (e.target as HTMLElement).click()"
         >
-          <button
-            @click.stop="$emit('delete', chord)"
-            @mousedown.stop
-            @touchstart.stop
-            @pointerdown.stop
-            class="action-button text-[var(--text-disabled)] hover:text-white w-4 h-4 rounded-full flex items-center justify-center bg-[var(--bg-main)] hover:bg-[var(--color-danger)]"
+          <BaseMarquee class="flex-1 min-w-0">
+            <span class="chord-name-text text-xs font-black tracking-tight leading-none pointer-events-none">
+              {{ chord.chordName }}
+            </span>
+          </BaseMarquee>
+
+          <div
+            class="delete-button absolute top-0 right-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200"
+            :class="{ 'opacity-100': isEditing }"
           >
-            <X :size="14" stroke-width="3" />
-          </button>
+            <button
+              @click.stop="$emit('delete', chord)"
+              @mousedown.stop
+              @touchstart.stop
+              @pointerdown.stop
+              class="action-button text-[var(--text-disabled)] hover:text-white w-4 h-4 rounded-full flex items-center justify-center bg-[var(--bg-main)] hover:bg-[var(--color-danger)]"
+            >
+              <X :size="14" stroke-width="3" />
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </GlobalContextMenu>
 
     <template #content v-if="uiStore.isPreviewEnabled">
       <Fretboard
@@ -45,20 +47,39 @@
 </template>
 
 <script setup lang="ts">
+import { useUiStore } from '@/stores/uiStore';
+import type { Chord } from '@/types';
+import { computed } from 'vue';
+
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import Fretboard from '@/components/Fretboard.vue';
+import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
-import { useUiStore } from '@/stores/uiStore';
-import { type Chord } from '@/types';
-import { X } from '@lucide/vue';
 
-defineProps<{ chord: Chord; isEditing: boolean }>();
-defineEmits<{
+import { Move, Trash2, X } from '@lucide/vue';
+
+const props = defineProps<{ chord: Chord; isEditing: boolean }>();
+const emit = defineEmits<{
   (e: 'delete', chord: Chord): void;
   (e: 'move', chord: Chord): void;
+  (e: 'click'): void;
 }>();
 
 const uiStore = useUiStore();
+
+const menuItems = computed<ContextMenuItem[]>(() => [
+  {
+    label: '移动',
+    icon: Move,
+    action: () => emit('move', props.chord),
+  },
+  {
+    label: '删除',
+    icon: Trash2,
+    danger: true,
+    action: () => emit('delete', props.chord),
+  },
+]);
 </script>
 
 <script lang="ts">

@@ -71,7 +71,7 @@
   </BaseModal>
 
   <BaseModal v-model:visible="modals.move" title="移动至新分组" @confirm="handleMoveChord">
-    <div class="grid grid-cols-3 gap-2 overflow-y-auto no-scrollbar max-h-[50vh] p-0.5" v-auto-animate>
+    <div class="grid grid-cols-3 gap-2 overflow-y-auto no-scrollbar max-h-[50vh] p-0.5">
       <GlobalTooltip
         v-for="group in chordStore.groups"
         :key="group.id"
@@ -109,6 +109,7 @@ import type { Chord, Group } from '@/types';
 import { nextTick, reactive, ref } from 'vue';
 
 import BaseInput from '@/components/BaseInput.vue';
+import BaseMarquee from '@/components/BaseMarquee.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import LeftGroupList from '@/views/sidebar-left/LeftGroupList.vue';
