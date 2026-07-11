@@ -59,7 +59,7 @@
 
     <div
       ref="FretBoardCaptureArea"
-      class="workbench-card rounded-xl flex flex-col items-center justify-evenly relative shrink-0"
+      class="workbench-card rounded-md flex flex-col items-center justify-evenly relative shrink-0"
       :style="{ height: dynamicHeight, width: `${CANVAS_CONFIG.BOARD_WIDTH + 60}px` }"
     >
       <input

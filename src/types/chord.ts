@@ -1,58 +1,87 @@
-﻿import { TuningEnum } from '@/utils/musicTheory';
-import { z } from 'zod';
+﻿// src/types/chord.ts
+import { TuningEnum } from '@/utils/musicTheory';
 
-export const GuitarStringSchema = z.object({
-  fret: z.number().int(),
-  preferFlat: z.boolean(),
-  isRoot: z.boolean(),
-});
+/**
+ * ⚡ 纯净的 TypeScript 原生接口实体定义（完美保留全项目编译类型推断）
+ */
+export interface GuitarStringEntity {
+  fret: number;
+  preferFlat: boolean;
+  isRoot: boolean;
+}
 
-export const GuitarStringsModelSchema = z.tuple([
-  GuitarStringSchema,
-  GuitarStringSchema,
-  GuitarStringSchema,
-  GuitarStringSchema,
-  GuitarStringSchema,
-  GuitarStringSchema,
-]);
+export type GuitarStringsModel = [
+  GuitarStringEntity,
+  GuitarStringEntity,
+  GuitarStringEntity,
+  GuitarStringEntity,
+  GuitarStringEntity,
+  GuitarStringEntity,
+];
 
-export const ChordSchema = z.object({
-  id: z.string(),
-  chordName: z.string(),
-  strings: GuitarStringsModelSchema,
-  fretCount: z.union([z.literal(3), z.literal(4), z.literal(5)]),
-  capo: z.number().int().min(0).max(12),
-  groupId: z.string(),
-  tuning: z.nativeEnum(TuningEnum),
-});
+export interface Chord {
+  id: string;
+  chordName: string;
+  strings: GuitarStringsModel;
+  fretCount: 3 | 4 | 5;
+  capo: number;
+  groupId: string;
+  tuning: TuningEnum;
+}
 
-export const GroupSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  collapsed: z.boolean().default(false),
-});
+export interface Group {
+  id: string;
+  name: string;
+  collapsed: boolean;
+}
 
-export const ImportExportPayloadSchema = z.object({
-  groups: z.array(GroupSchema),
-  chords: z.array(ChordSchema),
-});
+export interface ImportExportPayload {
+  groups: Group[];
+  chords: Chord[];
+}
 
-export const SettingsSchema = z.object({
-  githubToken: z
-    .string()
-    .trim()
-    .regex(/^ghp_[a-zA-Z0-9]{36}$|^github_pat_[a-zA-Z0-9_]{82}$/, {
-      message: 'GitHub Token 格式不合法',
-    }),
-  githubOwner: z.string().trim().min(1, { message: '账户名称不能为空' }),
-  githubRepo: z.string().trim().min(1, { message: '仓库名称不能为空' }),
-  githubBranch: z.string().trim().default('master'),
-  githubPath: z.string().trim().min(1, { message: '备份路径不能为空' }),
-});
+/**
+ * 原生正则表单平替校验器，完美兼容 github_pat 与经典 ghp Token 资产
+ */
+export const SettingsSchema = {
+  safeParse: (data: {
+    githubToken: string;
+    githubOwner: string;
+    githubRepo: string;
+    githubBranch: string;
+    githubPath: string;
+  }) => {
+    const issues: { message: string }[] = [];
+    const token = data.githubToken.trim();
 
-export type GuitarStringEntity = z.infer<typeof GuitarStringSchema>;
-export type GuitarStringsModel = z.infer<typeof GuitarStringsModelSchema>;
-export type Chord = z.infer<typeof ChordSchema>;
-export type Group = z.infer<typeof GroupSchema>;
-export type ImportExportPayload = z.infer<typeof ImportExportPayloadSchema>;
-export type FretCount = Chord['fretCount'];
+    // 原生经典与Pat双正则匹配
+    const tokenRegex = /^ghp_[a-zA-Z0-9]{36}$|^github_pat_[a-zA-Z0-9_]{82}$/;
+
+    if (!tokenRegex.test(token)) {
+      issues.push({ message: 'GitHub Token 格式不合法' });
+    }
+    if (!data.githubOwner.trim()) {
+      issues.push({ message: '账户名称不能为空' });
+    }
+    if (!data.githubRepo.trim()) {
+      issues.push({ message: '仓库名称不能为空' });
+    }
+    if (!data.githubPath.trim()) {
+      issues.push({ message: '备份路径不能为空' });
+    }
+
+    return {
+      success: issues.length === 0,
+      data: {
+        githubToken: token,
+        githubOwner: data.githubOwner.trim(),
+        githubRepo: data.githubRepo.trim(),
+        githubBranch: data.githubBranch.trim() || 'master',
+        githubPath: data.githubPath.trim(),
+      },
+      error: {
+        issues,
+      },
+    };
+  },
+};

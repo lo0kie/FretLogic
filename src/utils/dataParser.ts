@@ -1,38 +1,102 @@
-﻿import type { ImportExportPayload } from '@/types';
-import { ImportExportPayloadSchema } from '@/types';
+﻿// src/utils/dataParser.ts
+import type { ImportExportPayload } from '@/types';
 
+/**
+ * ⚡ 原生平替版数据结构清洗和安全拦截器（彻底告别 Zod 体积刺客）
+ */
 export const cleanAndValidateData = (
   data: unknown,
   mode: 'import' | 'export' = 'import'
 ): data is ImportExportPayload => {
-  const logPrefix = mode === 'import' ? '📥 Zod 导入校验' : '📤 Zod 导出清洗';
+  const logPrefix = mode === 'import' ? '📥 原生导入校验' : '📤 原生导出清洗';
 
-  const result = ImportExportPayloadSchema.safeParse(data);
+  if (!data || typeof data !== 'object') {
+    console.error(`❌ ${logPrefix}失败！检测到资产并非有效对象。`);
+    return false;
+  }
 
-  if (!result.success) {
-    console.error(`❌ ${logPrefix}失败！检测到核心物理资产结构严重破损。`);
-    console.group(`详细错误报告 (共 ${result.error.issues.length} 项违规):`);
-    result.error.issues.forEach(issue => {
-      console.warn(`路径 [${issue.path.join(' -> ')}]: ${issue.message}`);
+  const payload = data as Record<string, any>;
+  const issues: string[] = [];
+
+  // 1. 校验并清洗 groups 结构
+  if (!Array.isArray(payload.groups)) {
+    issues.push('groups 字段必须为数组');
+  } else {
+    payload.groups = payload.groups.filter((g: any, index: number) => {
+      if (!g || typeof g !== 'object' || typeof g.id !== 'string' || typeof g.name !== 'string') {
+        issues.push(`groups[${index}] 结构损坏缺失必要属性`);
+        return false;
+      }
+      if (g.collapsed === undefined) g.collapsed = false;
+      return true;
     });
+  }
+
+  // 2. 校验并清洗 chords 结构
+  if (!Array.isArray(payload.chords)) {
+    issues.push('chords 字段必须为数组');
+  } else {
+    payload.chords = payload.chords.filter((c: any, index: number) => {
+      if (!c || typeof c !== 'object') {
+        issues.push(`chords[${index}] 不是有效的对象`);
+        return false;
+      }
+      if (typeof c.id !== 'string' || typeof c.chordName !== 'string' || typeof c.groupId !== 'string') {
+        issues.push(`chords[${index}] (${c.id || index}) 缺失基础识别属性`);
+        return false;
+      }
+      if (!Array.isArray(c.strings) || c.strings.length !== 6) {
+        issues.push(`chords[${index}] (${c.id}) 琴弦物理资产数组损坏(必须为6弦)`);
+        return false;
+      }
+
+      // 琴弦子节点细粒度物理资产校对
+      const isStringsValid = c.strings.every((s: any) => {
+        return (
+          s &&
+          typeof s === 'object' &&
+          typeof s.fret === 'number' &&
+          typeof s.preferFlat === 'boolean' &&
+          typeof s.isRoot === 'boolean'
+        );
+      });
+      if (!isStringsValid) {
+        issues.push(`chords[${index}] (${c.id}) 内部存在损坏的琴弦音符节点`);
+        return false;
+      }
+
+      // 品数边界校对
+      if (c.fretCount !== 3 && c.fretCount !== 4 && c.fretCount !== 5) {
+        c.fretCount = 3; // 异常纠偏
+      }
+      // 变调夹范围校对
+      if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 12) {
+        c.capo = 0; // 异常纠偏
+      }
+      if (!c.tuning) c.tuning = 'STANDARD';
+
+      return true;
+    });
+  }
+
+  // 3. 如果存在违规项，打印完全一致的详细错误报告
+  if (issues.length > 0) {
+    console.error(`❌ ${logPrefix}失败！检测到核心物理资产结构严重破损。`);
+    console.group(`详细错误报告 (共 ${issues.length} 项违规):`);
+    issues.forEach(msg => console.warn(msg));
     console.groupEnd();
     return false;
   }
 
-  const validatedData = result.data;
-  const validGroupIds = new Set<string>(validatedData.groups.map(g => g.id));
-
-  const legalChords = validatedData.chords.filter(chord => {
+  // 4. 外键关联失效多余数据解离
+  const validGroupIds = new Set<string>(payload.groups.map((g: any) => g.id));
+  payload.chords = payload.chords.filter((chord: any) => {
     if (!validGroupIds.has(chord.groupId)) {
       console.warn(`⚠️ ${logPrefix} -> 和弦 "${chord.chordName}" (${chord.id}) 外键关联失效，执行物理拦截脱离`);
       return false;
     }
     return true;
   });
-
-  const d = data as Record<string, unknown>;
-  d.groups = validatedData.groups;
-  d.chords = legalChords;
 
   return true;
 };

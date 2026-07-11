@@ -35,7 +35,7 @@
 
     <template #content v-if="uiStore.isPreviewEnabled">
       <Fretboard
-        is-dark-mode
+        :is-dark-mode="settingsStore.isDarkMode"
         :interactive="false"
         :scale="0.5"
         :strings="chord.strings"
@@ -56,6 +56,7 @@ import Fretboard from '@/components/Fretboard.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 
+import { useSettingsStore } from '@/stores/settingsStore';
 import { Move, Trash2, X } from '@lucide/vue';
 
 const props = defineProps<{ chord: Chord; isEditing: boolean }>();
@@ -66,6 +67,7 @@ const emit = defineEmits<{
 }>();
 
 const uiStore = useUiStore();
+const settingsStore = useSettingsStore();
 
 const menuItems = computed<ContextMenuItem[]>(() => [
   {

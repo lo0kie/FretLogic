@@ -1,14 +1,12 @@
+// src/stores/editorStore.ts
 import { STORAGE_KEYS } from '@/constants';
 import { useChordStore } from '@/stores/chordStore';
-import type { Chord, GuitarStringsModel } from '@/types';
-import { GuitarStringsModelSchema } from '@/types';
+import type { Chord, GuitarStringsModel } from '@/types'; // 💡 完美：只作为编译期类型导入
 import { cloneDeep } from '@/utils/dataParser';
 import { createString, DEFAULT_TUNING_MAPPING, isOpen, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
-import { createZodSerializer } from '@/utils/zodStorage';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw, watch } from 'vue';
-import { z } from 'zod';
 
 export const useEditorStore = defineStore('editor', () => {
   const defaultStrings: GuitarStringsModel = [
@@ -20,16 +18,14 @@ export const useEditorStore = defineStore('editor', () => {
     createString(),
   ];
 
+  // 🎯 核心修复：彻底拿掉底层的 serializer 选项，交由 VueUse 自行解析
   const strings = useStorage<GuitarStringsModel>(STORAGE_KEYS.CURR_STRINGS, defaultStrings, localStorage, {
     eventFilter: debounceFilter(300),
-    serializer: createZodSerializer(GuitarStringsModelSchema, defaultStrings),
   });
 
   const currentChordName = useStorage(STORAGE_KEYS.CURR_NAME, '', localStorage, { eventFilter: debounceFilter(300) });
 
-  const currentTuning = useStorage<TuningEnum>(STORAGE_KEYS.CURR_TUNING, TuningEnum.STANDARD, localStorage, {
-    serializer: createZodSerializer(z.nativeEnum(TuningEnum), TuningEnum.STANDARD),
-  });
+  const currentTuning = useStorage<TuningEnum>(STORAGE_KEYS.CURR_TUNING, TuningEnum.STANDARD, localStorage);
 
   const editingId = useStorage<string | null>(STORAGE_KEYS.EDITING_ID, null, localStorage);
 
@@ -61,7 +57,7 @@ export const useEditorStore = defineStore('editor', () => {
       strings.value = cloneDeep(toRaw(original.strings));
       fretCount.value = original.fretCount ?? 3;
       capo.value = original.capo ?? 0;
-      currentTuning.value = original.tuning || 'STANDARD';
+      currentTuning.value = original.tuning || TuningEnum.STANDARD;
     } else {
       editingId.value = null;
     }
