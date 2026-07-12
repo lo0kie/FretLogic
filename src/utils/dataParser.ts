@@ -1,9 +1,5 @@
-﻿// src/utils/dataParser.ts
-import type { ImportExportPayload } from '@/types';
+﻿import type { ImportExportPayload } from '@/types';
 
-/**
- * ⚡ 原生平替版数据结构清洗和安全拦截器（彻底告别 Zod 体积刺客）
- */
 export const cleanAndValidateData = (
   data: unknown,
   mode: 'import' | 'export' = 'import'
@@ -18,7 +14,6 @@ export const cleanAndValidateData = (
   const payload = data as Record<string, any>;
   const issues: string[] = [];
 
-  // 1. 校验并清洗 groups 结构
   if (!Array.isArray(payload.groups)) {
     issues.push('groups 字段必须为数组');
   } else {
@@ -32,7 +27,6 @@ export const cleanAndValidateData = (
     });
   }
 
-  // 2. 校验并清洗 chords 结构
   if (!Array.isArray(payload.chords)) {
     issues.push('chords 字段必须为数组');
   } else {
@@ -50,7 +44,6 @@ export const cleanAndValidateData = (
         return false;
       }
 
-      // 琴弦子节点细粒度物理资产校对
       const isStringsValid = c.strings.every((s: any) => {
         return (
           s &&
@@ -65,13 +58,11 @@ export const cleanAndValidateData = (
         return false;
       }
 
-      // 品数边界校对
       if (c.fretCount !== 3 && c.fretCount !== 4 && c.fretCount !== 5) {
-        c.fretCount = 3; // 异常纠偏
+        c.fretCount = 3;
       }
-      // 变调夹范围校对
       if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 12) {
-        c.capo = 0; // 异常纠偏
+        c.capo = 0;
       }
       if (!c.tuning) c.tuning = 'STANDARD';
 
@@ -79,7 +70,6 @@ export const cleanAndValidateData = (
     });
   }
 
-  // 3. 如果存在违规项，打印完全一致的详细错误报告
   if (issues.length > 0) {
     console.error(`❌ ${logPrefix}失败！检测到核心物理资产结构严重破损。`);
     console.group(`详细错误报告 (共 ${issues.length} 项违规):`);
@@ -88,7 +78,6 @@ export const cleanAndValidateData = (
     return false;
   }
 
-  // 4. 外键关联失效多余数据解离
   const validGroupIds = new Set<string>(payload.groups.map((g: any) => g.id));
   payload.chords = payload.chords.filter((chord: any) => {
     if (!validGroupIds.has(chord.groupId)) {

@@ -3,28 +3,25 @@
     <GlobalContextMenu :items="menuItems">
       <div class="chord-card-frame" :title="chord.chordName">
         <div
-          class="chord-thumb-card group h-8 px-2 flex items-center justify-between outline-none focus:ring-2 focus:ring-[var(--color-primary)] box-border relative cursor-pointer"
+          class="chord-thumb-card group"
           :class="{ 'is-editing': isEditing }"
           tabindex="0"
           @click="$emit('click')"
           @keydown.enter.prevent.stop="e => (e.target as HTMLElement).click()"
         >
-          <BaseMarquee class="flex-1 min-w-0">
-            <span class="chord-name-text text-xs font-black tracking-tight leading-none pointer-events-none">
+          <BaseMarquee class="chord-marquee-wrapper">
+            <span class="chord-name-text">
               {{ chord.chordName }}
             </span>
           </BaseMarquee>
 
-          <div
-            class="delete-button absolute top-0 right-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200"
-            :class="{ 'opacity-100': isEditing }"
-          >
+          <div class="delete-button-container" :class="{ 'is-visible': isEditing }">
             <button
               @click.stop="$emit('delete', chord)"
               @mousedown.stop
               @touchstart.stop
               @pointerdown.stop
-              class="action-button text-[var(--text-disabled)] hover:text-white w-4 h-4 rounded-full flex items-center justify-center bg-[var(--bg-main)] hover:bg-[var(--color-danger)]"
+              class="action-button"
             >
               <X :size="14" stroke-width="3" />
             </button>
@@ -91,22 +88,33 @@ export default { name: 'LeftChordCard' };
 <style scoped lang="less">
 @import '@/assets/tokens.less';
 
+.chord-card-frame {
+  box-sizing: border-box;
+}
+
 .chord-thumb-card {
-  .mixin-interactive-card();
+  height: 2rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  outline: none;
+  position: relative;
+  box-sizing: border-box;
+  cursor: pointer;
   background-color: var(--bg-body);
   border: @border-solid-light;
+  border-radius: @radius-md;
+  transition: @transition-fast;
 
-  .chord-name-text {
-    color: var(--text-body);
+  &:hover:not(:disabled) {
+    background-color: var(--bg-panel-hover);
+    border-color: var(--border-light);
   }
 
-  .chord-name-text,
-  .action-button {
-    transition: @transition-fast;
-
-    &:active {
-      transform: scale(0.9);
-    }
+  &:focus {
+    box-shadow: 0 0 0 2px var(--color-primary);
   }
 
   &.is-editing {
@@ -120,13 +128,61 @@ export default { name: 'LeftChordCard' };
       color: @primary !important;
     }
   }
+}
 
-  .delete-button {
-    transform: translate(40%, -40%);
+.chord-marquee-wrapper {
+  flex: 1;
+  min-width: 0;
+}
 
-    .action-button {
-      border: @border-solid-light;
-    }
+.chord-name-text {
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  pointer-events: none;
+  color: var(--text-body);
+}
+
+.delete-button-container {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  opacity: 0;
+  transform: translate(40%, -40%);
+  transition: opacity 0.2s ease;
+  box-sizing: border-box;
+
+  .group:hover &,
+  &:focus-within,
+  &.is-visible {
+    opacity: 1;
+  }
+}
+
+.action-button {
+  color: var(--text-disabled);
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: @border-solid-light;
+  background-color: var(--bg-main);
+  padding: 0;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: @transition-fast;
+
+  &:hover {
+    color: #ffffff;
+    background-color: var(--color-danger);
+  }
+
+  &:active {
+    transform: scale(0.9);
   }
 }
 </style>

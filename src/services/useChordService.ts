@@ -52,7 +52,16 @@ export function useChordService() {
   const triggerDeleteChord = (chord: Chord) => {
     const updatedList = chordStore.savedChordsList.filter(c => c.id !== chord.id);
     chordStore.overwriteChords(updatedList);
-    uiStore.showToast(`已删除和弦 "${chord.chordName}"`, true);
+
+    /* 🌟 核心重构：利用全新通用 API 挂载对应操作行为，脱离对特定撤回语义的依赖 */
+    uiStore.toast.info(`已删除和弦 "${chord.chordName}"`, {
+      actionText: '撤销',
+      duration: 4000,
+      onAction: () => {
+        chordStore.executeUndoRestore();
+        uiStore.toast.success('已恢复刚才删除的和弦');
+      },
+    });
   };
 
   const exportFretboardImage = async (
@@ -64,19 +73,19 @@ export function useChordService() {
     const el = unref(target);
 
     if (!el) {
-      uiStore.showToast('导出失败：指板 DOM 节点尚未渲染完成', false, 'error');
+      uiStore.toast.error('导出失败：指板 DOM 节点尚未渲染完成');
       return;
     }
 
     uiStore.isCopying = true;
-    uiStore.showToast(isTransparent ? '正在导出透明底色快照...' : '正在导出带卡片背景快照...');
+    uiStore.toast.info(isTransparent ? '正在导出透明底色快照...' : '正在导出带卡片背景快照...');
 
     try {
       await copyElementToClipboard(el, isTransparent);
-      uiStore.showToast('成功复制至系统剪贴板');
+      uiStore.toast.success('成功复制至系统剪贴板');
     } catch (err) {
       console.error('Fretboard Exporter Error:', err);
-      uiStore.showToast('导出失败：当前浏览器内核环境受限');
+      uiStore.toast.error('导出失败：当前浏览器内核环境受限');
     } finally {
       uiStore.isCopying = false;
     }
@@ -85,7 +94,7 @@ export function useChordService() {
   const persistCurrentChord = () => {
     const cleanName = editorStore.currentChordName.trim();
     if (!cleanName || editorStore.isFretBoardEmpty) {
-      uiStore.showToast('保存失败：请输入名称并指定指板有效音符');
+      uiStore.toast.warning('保存失败：请输入名称并指定指板有效音符');
       return;
     }
 
@@ -111,8 +120,8 @@ export function useChordService() {
     }
 
     editorStore.resetEditor();
-    uiStore.showToast('和弦已保存');
-    uiStore.clearUndoToasts();
+    uiStore.toast.success('和弦已保存');
+    uiStore.clearActionToasts();
   };
 
   return {

@@ -1,9 +1,9 @@
 ﻿<template>
-  <div class="flex flex-col gap-2">
-    <label class="text-xs font-black uppercase tracking-widest" style="color: var(--text-disabled)">调音方案</label>
+  <div class="tuning-selector-container">
+    <label class="tuning-label">调音方案</label>
 
-    <div class="relative w-full">
-      <GlobalTooltip class="w-full" content="点击选择不同的琴弦基础调音" placement="top">
+    <div class="selector-wrapper">
+      <GlobalTooltip class="tooltip-full-width" content="点击选择不同的琴弦基础调音" placement="top">
         <BaseSelector
           v-model="editorStore.currentTuning"
           :options="tuningOptions"
@@ -18,7 +18,7 @@
           </template>
 
           <template #option="{ option }">
-            <span class="truncate">{{ TUNING_PRESETS[option]?.name }}</span>
+            <span class="option-text-truncate">{{ TUNING_PRESETS[option]?.name }}</span>
           </template>
         </BaseSelector>
       </GlobalTooltip>
@@ -35,3 +35,38 @@ import { TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 const editorStore = useEditorStore();
 const tuningOptions = Object.values(TuningEnum);
 </script>
+
+<style scoped lang="less">
+@import '@/assets/tokens.less';
+
+.tuning-selector-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  box-sizing: border-box;
+}
+
+.tuning-label {
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-disabled);
+}
+
+.selector-wrapper {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tooltip-full-width {
+  width: 100%;
+}
+
+.option-text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

@@ -1,22 +1,16 @@
 ﻿<template>
-  <div class="fixed top-6 right-6 z-[3000] flex flex-col gap-2 items-end pointer-events-none">
+  <div class="toast-global-container" @mouseenter="uiStore.pauseAllTimers" @mouseleave="uiStore.resumeAllTimers">
     <TransitionGroup name="toast-transition">
-      <div
-        v-for="toast in uiStore.toasts"
-        :key="toast.id"
-        class="px-4 py-2.5 rounded-md font-bold shadow-2xl flex items-center gap-3 text-xs pointer-events-auto transition-colors duration-300"
-        :class="getToastThemeClass(toast.type)"
-      >
-        <Loader2 v-if="toast.type === 'loading'" class="w-4 h-4 animate-spin opacity-80" />
+      <div v-for="item in uiStore.toasts" :key="item.id" class="toast-item-card" :class="getToastThemeClass(item.type)">
+        <Loader2 v-if="item.type === 'loading'" class="toast-loading-spinner" />
+        <span>{{ item.msg }}</span>
 
-        <span>{{ toast.msg }}</span>
+        <button v-if="item.hasAction && item.onAction" @click="handleExecuteAction(item)" class="btn-toast-undo">
+          {{ item.actionText }}
+        </button>
 
-        <button
-          v-if="toast.canUndo"
-          @click="handleLocalUndo"
-          class="btn-toast-undo font-bold underline text-xs ml-1 opacity-90 hover:opacity-100"
-        >
-          撤回
+        <button @click="uiStore.removeToast(item.id)" class="btn-toast-close" title="关闭">
+          <X :size="12" :stroke-width="2.5" />
         </button>
       </div>
     </TransitionGroup>
@@ -24,41 +18,203 @@
 </template>
 
 <script setup lang="ts">
-import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { ToastType } from '@/types';
-import { Loader2 } from '@lucide/vue';
+import type { Toast } from '@/types';
+import { Loader2, X } from '@lucide/vue';
 
 const uiStore = useUiStore();
-const chordStore = useChordStore();
 
-const handleLocalUndo = () => {
-  chordStore.executeUndoRestore();
-  uiStore.showToast('刚刚删除的和弦已恢复', false, 'success');
+const handleExecuteAction = (item: Toast) => {
+  if (item.onAction) {
+    item.onAction();
+    uiStore.removeToast(item.id);
+  }
 };
 
-const getToastThemeClass = (type: ToastType) => {
-  switch (type) {
-    case 'success':
-      return 'bg-emerald-500 text-white dark:bg-emerald-400 dark:text-slate-900';
-    case 'error':
-      return 'bg-red-500 text-white dark:bg-red-400 dark:text-slate-900';
-    case 'warning':
-      return 'bg-amber-500 text-white dark:bg-amber-400 dark:text-slate-900';
-    case 'loading':
-      return 'bg-blue-600 text-white dark:bg-blue-500 dark:text-slate-900';
-    default:
-      return 'bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-950';
-  }
+const getToastThemeClass = (type: string) => {
+  return `theme-${type}`;
 };
 </script>
 
 <style scoped lang="less">
 @import '@/assets/tokens.less';
+
+.toast-global-container {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-end;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.toast-item-card {
+  position: relative;
+  padding-left: 1rem;
+  padding-right: 2.25rem;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+  border-radius: @radius-md;
+  font-weight: 700;
+  box-shadow: @shadow-xl;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  pointer-events: auto;
+  box-sizing: border-box;
+  transition:
+    background-color 0.3s,
+    color 0.3s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-toast-close {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%) scale(1);
+  width: 1.15rem;
+  height: 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 100%;
+  color: currentColor;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 0;
+  transition: @transition-fast;
+
+  &:hover {
+    opacity: 1;
+    transform: translateY(-50%);
+    background-color: color-mix(in srgb, currentColor, transparent 85%);
+  }
+
+  &:active {
+    transform: translateY(-50%);
+    background-color: color-mix(in srgb, currentColor, transparent 75%);
+  }
+
+  svg {
+    transition: @transition-fast;
+  }
+}
+
+.toast-loading-spinner {
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.8;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .btn-toast-undo {
+  font-weight: 700;
+  text-decoration: underline;
+  font-size: 0.7rem;
+  margin-left: 0.25rem;
+  opacity: 0.9;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
   transition: opacity @duration-fast @bezier-standard;
+
+  &:hover {
+    opacity: 1;
+  }
+
   &:active {
     opacity: 0.6;
   }
+}
+
+.theme-success {
+  background-color: #10b981;
+  color: #ffffff;
+
+  :global(.dark) & {
+    background-color: #34d399;
+    color: #0f172a;
+  }
+}
+
+.theme-error {
+  background-color: #ef4444;
+  color: #ffffff;
+
+  :global(.dark) & {
+    background-color: #f87171;
+    color: #0f172a;
+  }
+}
+
+.theme-warning {
+  background-color: #f59e0b;
+  color: #ffffff;
+
+  :global(.dark) & {
+    background-color: #fbbf24;
+    color: #0f172a;
+  }
+}
+
+.theme-loading {
+  background-color: #2563eb;
+  color: #ffffff;
+
+  :global(.dark) & {
+    background-color: #3b82f6;
+    color: #0f172a;
+  }
+}
+
+.theme-info {
+  background-color: var(--bg-panel, #ffffff);
+  color: var(--text-title, #0f172a);
+  border: 1px solid var(--control-border, rgba(15, 23, 42, 0.08));
+
+  :global(.dark) & {
+    background-color: #020617;
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.toast-transition-enter-active,
+.toast-transition-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toast-transition-enter-from,
+.toast-transition-leave-to {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.toast-transition-move {
+  transition: transform 0.3s ease;
+}
+
+.toast-transition-leave-active {
+  position: absolute;
 }
 </style>

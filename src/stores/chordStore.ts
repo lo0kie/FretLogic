@@ -1,18 +1,13 @@
-// src/stores/chordStore.ts
 import { STORAGE_KEYS } from '@/constants';
-import type { Chord, Group } from '@/types'; // 💡 完美：只作为编译期类型导入
+import type { Chord, Group } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
 import { useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw } from 'vue';
 
 export const useChordStore = defineStore('chord', () => {
-  // 🎯 核心修复：彻底拿掉底层的 serializer 选项
-  // VueUse 探测到默认值为数组 []，底层会自动切换到完美免错、免体积的原生标准 JSON 反序列化器
   const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
-
   const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
-
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
 
   const { undo: rawUndo } = useRefHistory(savedChordsList, {

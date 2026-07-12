@@ -1,5 +1,5 @@
 ﻿<template>
-  <div ref="referenceRef" class="relative inline-block" @mouseenter="show = true" @mouseleave="show = false">
+  <div ref="referenceRef" class="tooltip-trigger-container" @mouseenter="show = true" @mouseleave="show = false">
     <slot></slot>
 
     <Teleport to="body">
@@ -7,12 +7,8 @@
         <div
           v-if="show && (content || $slots.content)"
           ref="floatingRef"
-          class="tooltip-box px-3 py-1.5 fixed font-black rounded-md shadow-2xl pointer-events-none text-xs"
-          :class="[
-            // 💡 1. 动态绑定主题类名：theme-dark, theme-light, theme-auto
-            `theme-${theme}`,
-            $slots.content ? 'rich-content' : 'pure-text',
-          ]"
+          class="tooltip-box"
+          :class="[`theme-${theme}`, $slots.content ? 'rich-content' : 'pure-text']"
           :style="floatingStyles"
         >
           <slot name="content">
@@ -29,18 +25,17 @@ import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/vue';
 import { computedAsync } from '@vueuse/core';
 import { computed, ref } from 'vue';
 
-// 💡 2. 定义主题类型
 type TooltipTheme = 'dark' | 'light' | 'auto';
 
 const props = withDefaults(
   defineProps<{
     content?: string;
     placement?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-end';
-    theme?: TooltipTheme; // 💡 3. 新增参数控制状态
+    theme?: TooltipTheme;
   }>(),
   {
     placement: 'top',
-    theme: 'auto', // 💡 4. 默认设为反差暗色，体验最好
+    theme: 'auto',
   }
 );
 
@@ -75,14 +70,28 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
 <style scoped lang="less">
 @import '@/assets/tokens.less';
 
+.tooltip-trigger-container {
+  position: relative;
+  display: inline-block;
+}
+
 .tooltip-box {
+  position: fixed;
   z-index: 9999;
+  padding: 0.375rem 0.75rem;
+  font-weight: 900;
+  border-radius: @radius-md;
+  box-shadow: @shadow-xl;
+  pointer-events: none;
+  font-size: 0.7rem;
+  line-height: 1.6;
+  text-align: center;
+  box-sizing: border-box;
+
   transition:
     opacity 0.12s ease-out,
     background-color 0.15s ease,
     color 0.15s ease;
-  line-height: 1.6;
-  text-align: center;
 
   &.pure-text {
     white-space: nowrap;
@@ -97,32 +106,23 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
     align-items: center;
   }
 
-  // ==========================================
-  // 🎯 核心样式重构：根据 Props 传来的类名进行状态流转
-  // ==========================================
-
-  // 🕶️ 状态一：强制深色模式 (默认)
   &.theme-dark {
-    background-color: #0f172a; // 深 slate 色
+    background-color: #0f172a;
     color: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
-  // ☀️ 状态二：强制浅色模式
   &.theme-light {
     background-color: #ffffff;
     color: #0f172a;
     border: 1px solid rgba(15, 23, 42, 0.08);
   }
 
-  // 🔄 状态三：自适应跟随系统/项目暗黑模式切换
   &.theme-auto {
-    // 默认（浅色时）为白底黑字
     background-color: var(--bg-panel);
     color: var(--text-title);
     border: @border-solid-base;
 
-    // 当页面根节点带有 .dark 时自动切换为黑底白字
     :global(.dark) & {
       background-color: #0f172a;
       color: #ffffff;

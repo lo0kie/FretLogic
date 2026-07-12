@@ -1,19 +1,13 @@
 ﻿<template>
-  <div
-    class="panel-left h-[calc(100%-24px)] flex flex-col shrink-0 relative rounded-xl z-10 box-border"
-    :class="{ 'is-open': uiStore.isLeftOpen }"
-  >
-    <div
-      class="p-4 px-5 h-[76px] border-b border-[var(--control-border)] flex items-center justify-between shrink-0 relative"
-      :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }"
-    >
-      <h1 class="text-lg font-black tracking-tight uppercase text-title">Fret Logic</h1>
+  <div class="panel-left" :class="{ 'is-open': uiStore.isLeftOpen }">
+    <div class="panel-header" :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }">
+      <h1 class="header-title">Fret Logic</h1>
 
-      <div class="flex items-center gap-2 shrink-0">
+      <div class="header-actions">
         <GlobalTooltip placement="bottom" :content="uiStore.isPreviewEnabled ? '关闭和弦悬浮预览' : '开启和弦悬浮预览'">
           <button
             @click="uiStore.isPreviewEnabled = !uiStore.isPreviewEnabled"
-            class="w-7 h-7 rounded-lg flex items-center justify-center active:scale-95 transition-all header-preview-btn"
+            class="header-preview-btn"
             :class="{ 'is-active': uiStore.isPreviewEnabled }"
           >
             <component :is="uiStore.isPreviewEnabled ? Eye : EyeOff" :size="16" :stroke-width="2.5" />
@@ -21,10 +15,7 @@
         </GlobalTooltip>
 
         <GlobalTooltip placement="bottom" content="新建分组">
-          <button
-            @click="openCreate"
-            class="w-7 h-7 rounded-lg text-[var(--color-primary)] flex items-center justify-center active:scale-95 transition-transform header-add-btn"
-          >
+          <button @click="openCreate" class="header-add-btn">
             <Plus :size="18" :stroke-width="3" />
           </button>
         </GlobalTooltip>
@@ -65,34 +56,32 @@
   </BaseModal>
 
   <BaseModal v-model:visible="modals.delete" title="删除分组" confirm-type="danger" @confirm="handleDeleteGroup">
-    <p class="text-sm font-semibold opacity-80 leading-relaxed text-body">
-      确定要执行此删除操作吗？删除后组内的所有和弦资产都将同步清空，且不可恢复。
-    </p>
+    <p class="modal-description-text">确定要执行此删除操作吗？删除后组内的所有和弦资产都将同步清空，且不可恢复。</p>
   </BaseModal>
 
   <BaseModal v-model:visible="modals.move" title="移动至新分组" @confirm="handleMoveChord">
-    <div class="grid grid-cols-3 gap-2 overflow-y-auto no-scrollbar max-h-[50vh] p-0.5">
+    <div class="move-group-grid no-scrollbar">
       <GlobalTooltip
         v-for="group in chordStore.groups"
         :key="group.id"
         :content="group.id === modalData.activeChord?.groupId ? '和弦当前已在此分组中' : ''"
         placement="top"
-        class="w-full min-w-0 flex"
+        class="move-tooltip-item"
       >
         <button
           :disabled="group.id === modalData.activeChord?.groupId"
           @click="modalData.moveTargetId = group.id"
-          class="w-full px-3 py-2 rounded-lg text-sm tracking-widest font-bold text-left border flex items-center min-w-0 transition-all duration-200"
+          class="move-target-btn"
           :class="[
             group.id === modalData.activeChord?.groupId
-              ? 'opacity-40 cursor-not-allowed grayscale bg-[var(--bg-main)] border-[var(--control-border)]'
+              ? 'is-disabled'
               : modalData.moveTargetId === group.id
-                ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-md'
-                : 'bg-[var(--bg-body)] text-[var(--text-body)] border-[var(--control-border)] hover:border-blue-400/50 hover:shadow-sm',
+                ? 'is-selected'
+                : 'is-normal',
           ]"
         >
-          <BaseMarquee class="min-w-0 w-full">
-            <span class="truncate block">{{ group.name }}</span>
+          <BaseMarquee class="move-marquee">
+            <span>{{ group.name }}</span>
           </BaseMarquee>
         </button>
       </GlobalTooltip>
@@ -147,11 +136,11 @@ const openCreate = async () => {
 const handleCreateGroup = () => {
   const val = modalData.inputValue.trim();
   if (!val) {
-    uiStore.showToast('确认失败：请输入有效内容', false, 'error');
+    uiStore.toast.error('确认失败：请输入有效内容');
     return;
   }
   if (chordStore.groups.some(g => g.name === val)) {
-    uiStore.showToast('创建失败：该分组名称已存在', false, 'warning');
+    uiStore.toast.warning('创建失败：该分组名称已存在');
     return;
   }
   const newId = 'g_' + crypto.randomUUID().slice(0, 8);
@@ -162,7 +151,7 @@ const handleCreateGroup = () => {
   chordStore.selectedGroupId = newId;
 
   modals.create = false;
-  uiStore.showToast('操作成功完成', false, 'success');
+  uiStore.toast.success('操作成功完成');
 };
 
 const openRename = async (group: Group) => {
@@ -176,14 +165,14 @@ const openRename = async (group: Group) => {
 const handleRenameGroup = () => {
   const val = modalData.inputValue.trim();
   if (!val) {
-    uiStore.showToast('确认失败：请输入有效内容', false, 'error');
+    uiStore.toast.error('确认失败：请输入有效内容');
     return;
   }
   if (modalData.activeGroup) {
     modalData.activeGroup.name = val;
   }
   modals.rename = false;
-  uiStore.showToast('操作成功完成', false, 'success');
+  uiStore.toast.success('操作成功完成');
 };
 
 const openDelete = (group: Group) => {
@@ -208,9 +197,9 @@ const handleDeleteGroup = () => {
     chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
   }
 
-  uiStore.clearUndoToasts();
+  uiStore.clearActionToasts();
   modals.delete = false;
-  uiStore.showToast('操作成功完成', false, 'success');
+  uiStore.toast.success('操作成功完成');
 };
 
 const openMove = (chord: Chord) => {
@@ -221,7 +210,7 @@ const openMove = (chord: Chord) => {
 
 const handleMoveChord = () => {
   if (!modalData.moveTargetId) {
-    uiStore.showToast('确认失败：请选择有效分组', false, 'error');
+    uiStore.toast.error('确认失败：请选择有效分组');
     return;
   }
   if (!modalData.activeChord) return;
@@ -229,11 +218,11 @@ const handleMoveChord = () => {
   const chordIdx = chordStore.savedChordsList.findIndex(c => c.id === modalData.activeChord!.id);
   if (chordIdx !== -1) {
     chordStore.savedChordsList[chordIdx].groupId = modalData.moveTargetId;
-    uiStore.clearUndoToasts();
+    uiStore.clearActionToasts();
   }
 
   modals.move = false;
-  uiStore.showToast('操作成功完成', false, 'success');
+  uiStore.toast.success('操作成功完成');
 };
 </script>
 
@@ -241,7 +230,18 @@ const handleMoveChord = () => {
 @import '@/assets/tokens.less';
 
 .panel-left {
-  .mixin-panel-base();
+  background-color: var(--bg-panel);
+  border: @border-solid-light;
+  box-shadow: @shadow-panel;
+  height: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 10;
+  border-radius: @radius-xl;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  overflow: hidden;
   width: 0px;
   opacity: 0;
   margin: 12px 0;
@@ -249,6 +249,11 @@ const handleMoveChord = () => {
     width @duration-slow @bezier-sidebar,
     opacity @duration-base ease,
     margin @duration-slow @bezier-sidebar;
+
+  :global(.dark) & {
+    box-shadow: @shadow-panel-dark;
+  }
+
   &.is-open {
     width: v-bind(LEFT_SIDEBAR_WIDTH_PIXEL);
     opacity: 1;
@@ -256,15 +261,69 @@ const handleMoveChord = () => {
   }
 }
 
+.panel-header {
+  padding: 1rem 1.25rem;
+  height: 76px;
+  border-bottom: 1px solid var(--control-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.header-title {
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+  color: var(--text-title);
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .sidebar-toggle-btn-left {
-  .mixin-sidebar-toggle();
+  position: absolute;
+  top: 50%;
+  width: 20px;
+  height: 60px;
+  background-color: var(--bg-panel);
+  border: @border-solid-base;
+  box-shadow: @shadow-sm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  color: var(--text-disabled);
+  cursor: pointer;
   border-radius: 0 6px 6px 0;
   transform: translateY(-50%) scale(1);
   transform-origin: left;
   left: 0px;
   transition:
-    all 0.2s ease,
-    left @duration-slow @bezier-sidebar;
+    color @duration-base @bezier-standard,
+    border-color @duration-base @bezier-standard,
+    background-color @duration-base @bezier-standard,
+    left @duration-slow @bezier-sidebar,
+    transform 0.2s ease;
+
+  &:hover {
+    color: @primary;
+    border-color: color-mix(in srgb, @primary, transparent 75%);
+    background-color: var(--bg-main);
+  }
+
+  :global(.dark) &:hover {
+    background-color: var(--bg-panel-hover);
+  }
+
   &.is-open {
     left: calc(v-bind(LEFT_SIDEBAR_WIDTH_PIXEL) + 12px);
   }
@@ -275,25 +334,51 @@ const handleMoveChord = () => {
 }
 
 .header-add-btn {
-  background-color: color-mix(in srgb, @primary, transparent 90%);
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: @radius-md;
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: @border-solid-light;
+  background-color: color-mix(in srgb, @primary, transparent 90%);
+  padding: 0;
+  cursor: pointer;
   transition: @transition-fast;
+
   &:hover {
     background-color: color-mix(in srgb, @primary, transparent 80%);
     border-color: color-mix(in srgb, @primary, transparent 50%);
   }
+
+  &:active {
+    transform: scale(0.95);
+  }
 }
 
 .header-preview-btn {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: @radius-md;
   background-color: transparent;
   border: 1px solid transparent;
   color: var(--text-disabled);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
   transition: @transition-fast;
 
   &:hover {
     color: var(--text-muted);
     background-color: var(--bg-panel-hover);
     border-color: var(--border-light);
+  }
+
+  &:active {
+    transform: scale(0.95);
   }
 
   &.is-active {
@@ -305,6 +390,105 @@ const handleMoveChord = () => {
       background-color: color-mix(in srgb, @primary, transparent 84%);
       border-color: color-mix(in srgb, @primary, transparent 60%);
     }
+  }
+}
+
+.modal-description-text {
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.8;
+  line-height: 1.625;
+  color: var(--text-body);
+  margin: 0;
+}
+
+.move-group-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  overflow-y: auto;
+  max-height: 50vh;
+  padding: 0.025rem;
+  box-sizing: border-box;
+
+  &.no-scrollbar {
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+}
+
+.move-tooltip-item {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+}
+
+.move-target-btn {
+  width: 100%;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-radius: @radius-md;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  text-align: left;
+  border-style: solid;
+  border-width: 1px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s @bezier-standard;
+
+  &.is-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: grayscale(100%);
+    background-color: var(--bg-main);
+    border-color: var(--control-border);
+    color: #64748b;
+
+    :global(.dark) & {
+      background-color: #1e293b !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      color: #64748b !important;
+    }
+  }
+
+  &.is-selected {
+    background-color: var(--color-primary);
+    color: #ffffff;
+    border-color: var(--color-primary);
+    box-shadow: @shadow-md;
+  }
+
+  &.is-normal {
+    background-color: var(--bg-body);
+    color: var(--text-body);
+    border-color: var(--control-border);
+
+    &:hover {
+      border-color: color-mix(in srgb, #60a5fa, transparent 50%);
+      box-shadow: @shadow-sm;
+    }
+  }
+}
+
+.move-marquee {
+  min-width: 0;
+  width: 100%;
+
+  span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 </style>

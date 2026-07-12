@@ -1,7 +1,6 @@
-// src/stores/editorStore.ts
 import { STORAGE_KEYS } from '@/constants';
 import { useChordStore } from '@/stores/chordStore';
-import type { Chord, GuitarStringsModel } from '@/types'; // 💡 完美：只作为编译期类型导入
+import type { Chord, GuitarStringsModel } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
 import { createString, DEFAULT_TUNING_MAPPING, isOpen, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { debounceFilter, useStorage } from '@vueuse/core';
@@ -18,17 +17,13 @@ export const useEditorStore = defineStore('editor', () => {
     createString(),
   ];
 
-  // 🎯 核心修复：彻底拿掉底层的 serializer 选项，交由 VueUse 自行解析
   const strings = useStorage<GuitarStringsModel>(STORAGE_KEYS.CURR_STRINGS, defaultStrings, localStorage, {
     eventFilter: debounceFilter(300),
   });
 
   const currentChordName = useStorage(STORAGE_KEYS.CURR_NAME, '', localStorage, { eventFilter: debounceFilter(300) });
-
   const currentTuning = useStorage<TuningEnum>(STORAGE_KEYS.CURR_TUNING, TuningEnum.STANDARD, localStorage);
-
   const editingId = useStorage<string | null>(STORAGE_KEYS.EDITING_ID, null, localStorage);
-
   const fretCount = useStorage<Chord['fretCount']>(STORAGE_KEYS.CURR_FCOUNT, 3);
   const capo = useStorage(STORAGE_KEYS.CURR_CAPO, 0);
 

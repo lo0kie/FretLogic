@@ -1,11 +1,5 @@
-<!-- src/components/BaseMarquee.vue -->
 <template>
-  <div
-    ref="containerRef"
-    class="marquee-container max-w-full overflow-hidden whitespace-nowrap flex items-center"
-    @mouseenter="handleMouseEnter"
-    @mouseleave="handleMouseLeave"
-  >
+  <div ref="containerRef" class="marquee-container" @mouseenter="handleMouseEnter" @mouseleave="handleMouseLeave">
     <span ref="contentRef" class="marquee-content" :class="{ 'is-scrolling': isScrolling }">
       <slot></slot>
     </span>
@@ -42,17 +36,23 @@ const handleMouseLeave = () => {
 
 .marquee-container {
   height: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
 }
 
 .marquee-content {
   display: inline-flex;
   align-items: center;
   height: 100%;
-
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  box-sizing: border-box;
 
   &.is-scrolling {
     width: auto;

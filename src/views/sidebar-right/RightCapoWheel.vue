@@ -1,11 +1,9 @@
 ﻿<template>
-  <div class="relative flex flex-col gap-2">
-    <label class="text-xs font-black tracking-widest uppercase" style="color: var(--text-disabled)">
-      Capo (把位平移)
-    </label>
+  <div class="capo-wheel-container">
+    <label class="capo-label"> Capo (把位平移) </label>
 
-    <div class="relative w-full">
-      <GlobalTooltip class="w-full" content="点击展开或滚动滑轮切换" placement="top">
+    <div class="selector-wrapper">
+      <GlobalTooltip class="tooltip-full-width" content="点击展开或滚动滑轮切换" placement="top">
         <BaseSelector
           v-model="editorStore.capo"
           :options="capoOptions"
@@ -18,7 +16,7 @@
           <template #label="{ selected }"> {{ selected }} {{ selected === 0 ? '(空弦位)' : '品' }} </template>
 
           <template #option="{ option }">
-            <span class="w-4 text-right mr-1.5 font-black">{{ option }}</span>
+            <span class="option-number">{{ option }}</span>
             <span>{{ option === 0 ? '(空弦位)' : '品' }}</span>
           </template>
         </BaseSelector>
@@ -43,3 +41,41 @@ const handleCapoWheel = (direction: 'up' | 'down') => {
   }
 };
 </script>
+
+<style scoped lang="less">
+@import '@/assets/tokens.less';
+
+.capo-wheel-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  box-sizing: border-box;
+}
+
+.capo-label {
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-disabled);
+}
+
+.selector-wrapper {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tooltip-full-width {
+  width: 100%;
+}
+
+.option-number {
+  width: 1rem;
+  text-align: right;
+  margin-right: 0.375rem;
+  font-weight: 900;
+  display: inline-block;
+}
+</style>

@@ -1,27 +1,24 @@
 <template>
   <Teleport to="body">
     <Transition
-      enter-from-class="opacity-0"
-      leave-to-class="opacity-0"
-      enter-active-class="transition duration-200 ease-out"
-      leave-active-class="transition duration-200 ease-in"
+      enter-from-class="modal-fade-enter-from"
+      leave-to-class="modal-fade-leave-to"
+      enter-active-class="modal-fade-enter-active"
+      leave-active-class="modal-fade-leave-active"
     >
-      <div v-if="visible" class="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-        <div
-          class="absolute inset-0 bg-slate-950/40 dark:bg-slate-950/60 transition-opacity"
-          @click="closeOnMask && handleCancel()"
-        ></div>
+      <div v-if="visible" class="modal-overlay-container">
+        <div class="modal-mask" @click="closeOnMask && handleCancel()"></div>
 
-        <div class="modal-card py-5 px-6 relative z-10 animate-modal-in flex flex-col max-h-[80vh]" :class="width">
-          <h3 v-if="title" class="text-xs font-black opacity-40 uppercase tracking-widest text-title shrink-0">
+        <div class="modal-card" :class="width">
+          <h3 v-if="title" class="modal-title">
             {{ title }}
           </h3>
 
-          <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar py-4">
+          <div class="modal-body-content no-scrollbar">
             <slot></slot>
           </div>
 
-          <div v-if="showFooter" class="flex justify-end gap-2 w-full shrink-0">
+          <div v-if="showFooter" class="modal-footer-zone">
             <slot name="footer">
               <ActionButton width="auto" @click="handleCancel">{{ cancelText }}</ActionButton>
 
@@ -103,7 +100,100 @@ const handleCancel = () => {
 
 <style scoped lang="less">
 @import '@/assets/tokens.less';
+
+.modal-overlay-container {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.modal-mask {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(2, 6, 23, 0.4);
+  transition: opacity 0.2s @bezier-standard;
+
+  :global(.dark) & {
+    background-color: rgba(2, 6, 23, 0.6);
+  }
+}
+
 .modal-card {
-  .mixin-floating-layer();
+  position: relative;
+  z-index: 10;
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+  box-sizing: border-box;
+  background-color: var(--bg-panel);
+  border: @border-solid-base;
+  border-radius: @radius-lg;
+  box-shadow: @shadow-floating;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: modalSlideIn @duration-base @bezier-standard;
+
+  :global(.dark) & {
+    box-shadow: @shadow-floating-dark;
+  }
+
+  &.w-80 {
+    width: 20rem;
+  }
+}
+
+.modal-title {
+  font-size: 0.75rem;
+  font-weight: 900;
+  opacity: 0.4;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-title);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.modal-body-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  box-sizing: border-box;
+
+  &.no-scrollbar {
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+}
+
+.modal-footer-zone {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  width: 100%;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.2s ease-out;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
 }
 </style>

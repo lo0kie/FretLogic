@@ -1,9 +1,6 @@
 ﻿<template>
-  <div
-    class="p-4 border-t border-[var(--control-border)] bg-[var(--bg-body)] rounded-b-xl"
-    :style="{ minWidth: RIGHT_SIDEBAR_WIDTH_PIXEL }"
-  >
-    <div class="grid grid-cols-2 gap-2">
+  <div class="right-panel-footer" :style="{ minWidth: RIGHT_SIDEBAR_WIDTH_PIXEL }">
+    <div class="footer-grid">
       <GlobalTooltip :content="saveDisabledReason">
         <ActionButton @click="$emit('save')" :primary="!isSaveDisabled" :disabled="isSaveDisabled">
           {{ editorStore.editingId ? '更新修改' : '保存和弦' }}
@@ -57,3 +54,23 @@ const isClearDisabled = computed(() => {
   return isDefaultName && isDefaultFretBoard && isDefaultCapo && isDefaultFretCount && isDefaultTuning;
 });
 </script>
+
+<style scoped lang="less">
+@import '@/assets/tokens.less';
+
+.right-panel-footer {
+  padding: 1rem;
+  border-top: 1px solid var(--control-border);
+  background-color: var(--bg-body);
+  border-bottom-left-radius: @radius-xl;
+  border-bottom-right-radius: @radius-xl;
+  box-sizing: border-box;
+}
+
+.footer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  box-sizing: border-box;
+}
+</style>

@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="pt-4 pb-0 px-4 shrink-0 w-full box-border">
+  <div class="search-input-container">
     <BaseInput
       :model-value="modelValue"
       @update:model-value="val => $emit('update:modelValue', val)"
@@ -8,7 +8,7 @@
       clearable
     >
       <template #prefix>
-        <Search class="w-3.5 h-3.5" :style="{ color: 'var(--text-title)' }" stroke-width="2.5" />
+        <Search class="search-icon" stroke-width="2.5" />
       </template>
     </BaseInput>
   </div>
@@ -28,4 +28,22 @@ defineEmits<{
 }>();
 </script>
 
-<style scoped lang="less"></style>
+<style scoped lang="less">
+@import '@/assets/tokens.less';
+
+.search-input-container {
+  padding-top: 1rem;
+  padding-bottom: 0;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.search-icon {
+  width: 0.7rem;
+  height: 0.7rem;
+  color: var(--text-title);
+}
+</style>

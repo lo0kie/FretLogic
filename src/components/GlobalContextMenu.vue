@@ -1,36 +1,22 @@
 <template>
-  <div ref="triggerRef" @contextmenu.prevent.stop="handleContextMenu" class="w-full">
+  <div ref="triggerRef" @contextmenu.prevent.stop="handleContextMenu" class="context-menu-trigger-wrapper">
     <slot></slot>
   </div>
 
   <Teleport to="body">
     <Transition name="fade-clear">
-      <div
-        v-if="isOpen"
-        class="context-menu-backdrop fixed inset-0 z-[9998]"
-        @pointerdown.prevent.stop="closeMenu"
-      ></div>
+      <div v-if="isOpen" class="context-menu-backdrop" @pointerdown.prevent.stop="closeMenu"></div>
     </Transition>
 
     <Transition name="menu-fade">
-      <div
-        v-if="isOpen"
-        ref="menuRef"
-        class="context-menu-box fixed z-[9999] p-1 flex flex-col gap-0.5 min-w-[140px]"
-        :style="{ left: `${x}px`, top: `${y}px` }"
-      >
+      <div v-if="isOpen" ref="menuRef" class="context-menu-box" :style="{ left: `${x}px`, top: `${y}px` }">
         <button
           v-for="(item, idx) in items"
           :key="idx"
           :disabled="item.disabled"
           @click.stop="handleItemClick(item)"
-          class="menu-item flex items-center gap-2 px-2.5 py-1.5 text-xs font-bold rounded-md transition-colors w-full text-left"
-          :class="[
-            item.danger
-              ? 'text-[var(--color-danger)] hover:bg-red-500/10 dark:hover:bg-red-500/20'
-              : 'text-[var(--text-body)] hover:bg-[var(--bg-panel-hover)] hover:text-[var(--text-title)]',
-            item.disabled ? 'opacity-30 cursor-not-allowed pointer-events-none' : 'cursor-pointer',
-          ]"
+          class="menu-item"
+          :class="[item.danger ? 'is-danger' : 'is-normal', item.disabled ? 'is-disabled' : '']"
         >
           <component :is="item.icon" v-if="item.icon" :size="14" :stroke-width="2.5" />
           <span>{{ item.label }}</span>
@@ -123,7 +109,14 @@ onBeforeUnmount(() => {
 <style scoped lang="less">
 @import '@/assets/tokens.less';
 
+.context-menu-trigger-wrapper {
+  width: 100%;
+}
+
 .context-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
   background-color: color-mix(in srgb, var(--bg-main) 4%, transparent);
 
   :global(.dark) & {
@@ -132,11 +125,73 @@ onBeforeUnmount(() => {
 }
 
 .context-menu-box {
-  .mixin-floating-layer();
+  position: fixed;
+  z-index: 9999;
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 140px;
   background-color: color-mix(in srgb, var(--bg-panel) 94%, transparent);
   border: 1px solid var(--border-base);
+  border-radius: @radius-md;
   box-shadow: @shadow-lg;
-  @apply rounded-md;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-sizing: border-box;
+
+  :global(.dark) & {
+    box-shadow: @shadow-floating-dark;
+  }
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: @radius-md;
+  border: none;
+  background-color: transparent;
+  width: 100%;
+  text-align: left;
+  box-sizing: border-box;
+  transition:
+    background-color @duration-fast,
+    color @duration-fast;
+
+  &.is-normal {
+    color: var(--text-body);
+
+    &:hover {
+      background-color: var(--bg-panel-hover);
+      color: var(--text-title);
+    }
+  }
+
+  &.is-danger {
+    color: var(--color-danger);
+
+    &:hover {
+      background-color: rgba(239, 68, 68, 0.1);
+
+      :global(.dark) & {
+        background-color: rgba(239, 68, 68, 0.2);
+      }
+    }
+  }
+
+  &.is-disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  &:not(.is-disabled) {
+    cursor: pointer;
+  }
 }
 
 .menu-fade-enter-active {
@@ -144,11 +199,13 @@ onBeforeUnmount(() => {
     opacity 0.12s @bezier-standard,
     transform 0.12s @bezier-standard;
 }
+
 .menu-fade-leave-active {
   transition:
     opacity 0.08s @bezier-standard,
     transform 0.08s @bezier-standard;
 }
+
 .menu-fade-enter-from,
 .menu-fade-leave-to {
   opacity: 0;

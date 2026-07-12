@@ -1,13 +1,10 @@
 ﻿<template>
-  <div
-    class="p-4 border-t border-[var(--control-border)] bg-[var(--bg-body)] rounded-b-xl"
-    :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }"
-  >
-    <input type="file" ref="fileInputRef" accept=".json" @change="handleFileChange" class="hidden" />
+  <div class="left-panel-footer" :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }">
+    <input type="file" ref="fileInputRef" accept=".json" @change="handleFileChange" class="hidden-input" />
 
-    <div class="grid grid-cols-2 gap-2">
+    <div class="footer-grid">
       <GlobalTooltip content="从本地选择 JSON 备份恢复数据" placement="top">
-        <ActionButton @click="handleImportTrigger" class="text-xs">
+        <ActionButton @click="handleImportTrigger" size="sm">
           <template #prefix>
             <Download :size="18" :stroke-width="3" />
           </template>
@@ -16,7 +13,7 @@
       </GlobalTooltip>
 
       <GlobalTooltip content="导出当前所有分组与和弦为本地文件" placement="top">
-        <ActionButton @click="ioService.triggerFullExport()" class="text-xs">
+        <ActionButton @click="ioService.triggerFullExport()" size="sm">
           <template #prefix>
             <Upload :size="18" :stroke-width="3" />
           </template>
@@ -52,3 +49,27 @@ const handleFileChange = (e: Event) => {
   ioService.processImport(file, resetInput);
 };
 </script>
+
+<style scoped lang="less">
+@import '@/assets/tokens.less';
+
+.left-panel-footer {
+  padding: 1rem;
+  border-top: 1px solid var(--control-border);
+  background-color: var(--bg-body);
+  border-bottom-left-radius: @radius-xl;
+  border-bottom-right-radius: @radius-xl;
+  box-sizing: border-box;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.footer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  box-sizing: border-box;
+}
+</style>

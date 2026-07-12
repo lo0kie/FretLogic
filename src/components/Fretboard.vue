@@ -1,12 +1,9 @@
 <template>
-  <div
-    class="fretboard-layout-scaler inline-block"
-    :style="{ width: `${realScaledWidth}px`, height: `${realScaledHeight}px` }"
-  >
+  <div class="fretboard-layout-scaler" :style="{ width: `${realScaledWidth}px`, height: `${realScaledHeight}px` }">
     <div
       ref="fretBoardRef"
-      class="fretBoard-container relative flex flex-col items-center select-none"
-      :class="[interactive ? 'touch-action-none' : 'pointer-events-none cursor-default']"
+      class="fretBoard-container"
+      :class="[interactive ? 'is-interactive' : 'is-disabled']"
       :style="{
         width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
         height: `${rawHeight}px`,
@@ -15,7 +12,7 @@
       }"
       @contextmenu.prevent="handleCanvasRightClick"
     >
-      <div class="w-full relative pointer-events-none" :style="{ height: `${CANVAS_CONFIG.OFFSET_Y_TOP}px` }">
+      <div class="open-strings-wrapper" :style="{ height: `${CANVAS_CONFIG.OFFSET_Y_TOP}px` }">
         <template v-for="(str, sIdx) in strings" :key="'os-' + sIdx">
           <GlobalTooltip
             placement="top"
@@ -32,17 +29,17 @@
               @click.stop="handleLocalToggleOpenString(sIdx)"
               @contextmenu.prevent.stop="handleOpenStringRightClick(sIdx)"
               @mousedown.middle.prevent.stop="isOpen(str) ? handleFretMiddleClick(sIdx) : null"
-              class="w-10 h-10 box-border shadow-sm flex items-center justify-center rounded-full"
+              class="open-string-btn"
               :class="[
                 str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available',
                 getOpenStringStatusClass(str),
-                interactive ? 'pointer-events-auto' : 'pointer-events-none',
+                interactive ? 'allow-events' : 'block-events',
               ]"
               :style="getOpenStringStyle(str)"
             >
               <template v-if="str.fret <= 0">
-                <X v-if="isMuted(str)" class="w-4.5 h-4.5" stroke-width="3" />
-                <span v-else-if="isOpen(str)" class="font-black text-xl tracking-tighter open-note-text">
+                <X v-if="isMuted(str)" class="mute-icon" stroke-width="3" />
+                <span v-else-if="isOpen(str)" class="open-note-text">
                   {{ calcNoteLabel(sIdx, 0, capo, str.preferFlat, activeBaseStrings) }}
                 </span>
               </template>
@@ -56,9 +53,9 @@
         :height="fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
         :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
         style="overflow: visible"
-        class="w-full pointer-events-auto"
+        class="fretboard-svg"
       >
-        <g v-memo="[fretCount, isDarkMode]">
+        <g v-memo="[fretCount, isDarkMode, capo]">
           <line
             v-for="s in 6"
             :key="'string-' + s"
@@ -113,7 +110,7 @@
         <template v-for="(str, sIdx) in strings" :key="'finger-' + sIdx">
           <g
             v-if="str.fret > 0 && str.fret <= fretCount"
-            :class="[interactive ? 'cursor-pointer pointer-events-auto' : 'cursor-default pointer-events-none']"
+            :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
             @contextmenu.prevent.stop="handleFretRightClick(sIdx)"
             @mousedown.middle.prevent.stop="handleFretMiddleClick(sIdx)"
           >
@@ -365,9 +362,8 @@ const handleWheel = (e: WheelEvent) => {
 };
 
 const getOpenStringStatusClass = (str: GuitarStringEntity) => {
-  if (isMuted(str)) return 'border-[#dc2626] text-[#dc2626] dark:border-[#f87171] dark:text-[#f87171] bg-transparent';
-  if (isOpen(str) && !str.isRoot)
-    return 'border-[#93c5fd] text-[#1d4ed8] dark:border-[#1e3a8a] dark:text-[#93c5fd] bg-transparent';
+  if (isMuted(str)) return 'is-muted-status';
+  if (isOpen(str) && !str.isRoot) return 'is-open-status';
   return '';
 };
 const getOpenStringStyle = (str: GuitarStringEntity) => {
@@ -403,26 +399,75 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="less">
-.open-note-text {
-  display: inline-block;
-  line-height: 1;
-}
+@import '@/assets/tokens.less';
+
 .fretboard-layout-scaler {
+  display: inline-block;
   transition:
     width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 .fretBoard-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  user-select: none;
+  box-sizing: border-box;
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &.is-interactive {
+    touch-action: none;
+  }
+
+  &.is-disabled {
+    pointer-events: none;
+    cursor: default;
+  }
 }
-button {
+
+.open-strings-wrapper {
+  width: 100%;
+  position: relative;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.open-string-btn {
+  width: 2.5rem;
+  height: 2.5rem;
+  box-sizing: border-box;
+  box-shadow: @shadow-sm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border-style: solid;
   border-width: 3px;
+  background-color: transparent;
+  padding: 0;
+  cursor: pointer;
   transition:
     border-width 0.05s cubic-bezier(0.4, 0, 0.2, 1),
-    background-color 0.05s ease;
+    background-color 0.05s ease,
+    color 0.05s ease,
+    border-color 0.05s ease,
+    box-shadow 0.05s ease,
+    transform 0.05s ease;
+
+  &.allow-events {
+    pointer-events: auto;
+  }
+
+  &.block-events {
+    pointer-events: none;
+  }
+
   &.is-fret-available:active {
     border-width: 5px !important;
   }
+
   &.is-fret-pressed {
     opacity: 0 !important;
     transform: scale(1) !important;
@@ -431,11 +476,65 @@ button {
     box-shadow: none !important;
     pointer-events: auto !important;
   }
+
+  &.is-muted-status {
+    border-color: #dc2626;
+    color: #dc2626;
+
+    :global(.dark) & {
+      border-color: #f87171;
+      color: #f87171;
+    }
+  }
+
+  &.is-open-status {
+    border-color: #93c5fd;
+    color: #1d4ed8;
+
+    :global(.dark) & {
+      border-color: #1e3a8a;
+      color: #93c5fd;
+    }
+  }
 }
+
+.mute-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.open-note-text {
+  display: inline-block;
+  line-height: 1;
+  font-weight: 900;
+  font-size: 1.25rem;
+  letter-spacing: -0.05em;
+}
+
+.fretboard-svg {
+  width: 100%;
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
 .string-line {
   transition: y2 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.finger-circle,
+
+.finger-interactive {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.finger-disabled {
+  cursor: default;
+  pointer-events: none;
+}
+
+.finger-circle {
+  transition: fill 0.15s ease;
+}
+
 .finger-text {
   transition: fill 0.15s ease;
 }

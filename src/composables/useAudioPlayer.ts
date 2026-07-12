@@ -1,7 +1,7 @@
 ﻿import { AUDIO_CONFIG } from '@/constants/audio';
 import { useEditorStore } from '@/stores/editorStore';
 import type { PolySynth } from 'tone';
-import { onBeforeUnmount, ref } from 'vue';
+import { ref } from 'vue';
 
 const isPlaying = ref(false);
 let isEngineInitialized = false;
@@ -109,8 +109,6 @@ export function useAudioPlayer() {
       isPlaying.value = false;
     }
   };
-
-  onBeforeUnmount(() => {});
 
   return { isPlaying, playCurrentChord };
 }

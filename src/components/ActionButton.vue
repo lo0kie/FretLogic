@@ -3,14 +3,14 @@
     :disabled="disabled || loading"
     @click="handleInternalClick"
     :style="{ height, width }"
-    class="action-button-base w-full flex items-center justify-center font-bold border-solid transition-colors select-none duration-200 disabled:pointer-events-auto disabled:cursor-not-allowed"
+    class="action-button-base"
     :class="[themeClasses, sizeClasses]"
   >
-    <Loader2 v-if="loading" class="w-4 h-4 animate-spin shrink-0 opacity-80" />
+    <Loader2 v-if="loading" class="loading-icon" />
 
     <slot v-else name="prefix"></slot>
 
-    <span class="flex items-center justify-center whitespace-nowrap">
+    <span class="button-content">
       <slot></slot>
     </span>
 
@@ -47,40 +47,15 @@ const handleInternalClick = (e: MouseEvent) => {
   emit('click', e);
 };
 
-const sizes: Record<(typeof props)['size'], string> = { sm: 'h-[2rem]', md: 'h-[2.25rem]', lg: 'h-[2.5rem]' };
-
-const sizeClasses = computed(() => {
-  switch (props.size) {
-    case 'sm':
-      return `${sizes[props.size]} px-3 !text-[14px] gap-[0.35rem]`;
-    case 'lg':
-      return `${sizes[props.size]} px-6 !text-[16px] gap-[0.4rem]`;
-    case 'md':
-    default:
-      return `${sizes[props.size]} px-4 !text-[15px] gap-[0.45rem]`;
-  }
+const themeClasses = computed(() => {
+  if (props.primary) return 'theme-primary';
+  if (props.danger) return 'theme-danger';
+  if (props.warning) return 'theme-warning';
+  return 'theme-default';
 });
 
-const variants: Record<string, string> = {
-  primary:
-    'bg-blue-600 border-blue-700/30 dark:border-blue-400/30 text-white hover:opacity-90 active:opacity-80 disabled:opacity-40 disabled:hover:opacity-40',
-
-  danger:
-    'text-red-500 border-red-500/20 bg-red-500/10 hover:bg-red-500/20 dark:bg-red-400/10 dark:border-red-400/20 dark:hover:bg-red-400/20 disabled:opacity-50 disabled:hover:bg-red-500/10 dark:disabled:hover:bg-red-400/10',
-
-  warning:
-    'text-amber-500 border-amber-500/20 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-50 disabled:hover:bg-amber-500/10',
-
-  default:
-    'bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-blue-500/30 hover:bg-blue-50/50 hover:text-blue-600 dark:hover:border-blue-400/30 dark:hover:bg-blue-400/10 dark:hover:text-blue-400 disabled:opacity-50 disabled:hover:bg-white dark:disabled:hover:bg-slate-800 disabled:hover:border-slate-200 dark:disabled:hover:border-white/10 disabled:hover:text-slate-700 dark:disabled:hover:text-slate-300',
-};
-
-const themeClasses = computed(() => {
-  if (props.primary) return variants.primary;
-  if (props.danger) return variants.danger;
-  if (props.warning) return variants.warning;
-
-  return variants.default;
+const sizeClasses = computed(() => {
+  return `size-${props.size}`;
 });
 </script>
 
@@ -88,6 +63,142 @@ const themeClasses = computed(() => {
 @import '@/assets/tokens.less';
 
 .action-button-base {
-  .mixin-button-base();
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border-style: solid;
+  border-width: 1px;
+  border-radius: @radius-md;
+  box-shadow: @shadow-sm;
+  user-select: none;
+  box-sizing: border-box;
+  transition: @transition-fast;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+    pointer-events: auto;
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+}
+
+.loading-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  opacity: 0.8;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.button-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.size-sm {
+  height: 2rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  font-size: 15px !important;
+  gap: 0.35rem;
+}
+
+.size-md {
+  height: 2.25rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  font-size: 16px !important;
+  gap: 0.45rem;
+}
+
+.size-lg {
+  height: 2.5rem;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  font-size: 17px !important;
+  gap: 0.4rem;
+}
+
+.theme-primary {
+  background-color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary), transparent 70%);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  &:active:not(:disabled) {
+    opacity: 0.8;
+  }
+}
+
+.theme-danger {
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger), transparent 80%);
+  background-color: color-mix(in srgb, var(--color-danger), transparent 90%);
+
+  &:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-danger), transparent 80%);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+.theme-warning {
+  color: var(--color-warning);
+  border-color: color-mix(in srgb, var(--color-warning), transparent 80%);
+  background-color: color-mix(in srgb, var(--color-warning), transparent 90%);
+
+  &:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-warning), transparent 80%);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+.theme-default {
+  background-color: var(--bg-body);
+  border-color: var(--border-base);
+  color: var(--text-body);
+
+  &:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--color-primary), transparent 70%);
+    background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
+    color: var(--color-primary);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+
+    &:hover {
+      background-color: var(--bg-body);
+      border-color: var(--border-base);
+      color: var(--text-body);
+    }
+  }
 }
 </style>

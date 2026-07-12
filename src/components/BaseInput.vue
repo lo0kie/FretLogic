@@ -1,9 +1,6 @@
 <template>
-  <div class="relative w-full group flex items-center">
-    <div
-      v-if="$slots.prefix"
-      class="absolute left-3 top-0 bottom-0 flex items-center justify-center opacity-40 pointer-events-none"
-    >
+  <div class="input-wrapper group">
+    <div v-if="$slots.prefix" class="prefix-zone">
       <slot name="prefix"></slot>
     </div>
 
@@ -15,7 +12,7 @@
       type="text"
       :placeholder="placeholder"
       :disabled="disabled"
-      class="base-input-field w-full font-bold cursor-pointer"
+      class="base-input-field"
       :class="[
         { 'has-prefix': $slots.prefix, 'has-suffix': clearable || isPassword },
         isPassword ? 'css-password-field' : '',
@@ -25,12 +22,12 @@
       autocomplete="off"
     />
 
-    <div class="absolute right-3 top-0 bottom-0 flex items-center pointer-events-auto">
+    <div class="suffix-zone">
       <button
         v-if="clearable && modelValue && !disabled"
         type="button"
         @click="handleClear"
-        class="h-4 w-4 opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-[var(--text-disabled)] hover:text-[var(--color-danger)] flex items-center justify-center hover:text-white bg-[var(--bg-main)] hover:bg-[var(--color-danger)] rounded-full active:scale-90 transition-all"
+        class="clear-button"
         title="清空内容"
       >
         <X :size="12" stroke-width="3" />
@@ -72,12 +69,12 @@ const inputRef = ref<HTMLInputElement | null>(null);
 const fontClass = computed(() => {
   switch (props.fontSize) {
     case 'xs':
-      return '!text-[0.75rem] [letter-spacing:0.04em]';
+      return 'text-xs-style';
     case 'lg':
-      return '!text-[0.85rem]';
+      return 'text-lg-style';
     case 'md':
     default:
-      return '!text-[0.8rem]';
+      return 'text-md-style';
   }
 });
 
@@ -103,21 +100,124 @@ export default { name: 'BaseInput' };
 <style scoped lang="less">
 @import '@/assets/tokens.less';
 
-.base-input-field {
-  .mixin-input-base();
-  height: 2.2rem;
+.input-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
   box-sizing: border-box;
 
+  &:hover .clear-button,
+  &:focus-within .clear-button {
+    opacity: 1;
+  }
+}
+
+.prefix-zone {
+  position: absolute;
+  left: 0.75rem;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.suffix-zone {
+  position: absolute;
+  right: 0.5rem;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.clear-button {
+  height: 1rem;
+  width: 1rem;
+  opacity: 0;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-disabled);
+  background-color: var(--bg-main);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: @transition-fast;
+
+  .group:hover &,
+  &:focus {
+    opacity: 1;
+  }
+
+  &:hover {
+    color: #ffffff;
+    background-color: var(--color-danger);
+  }
+
+  &:active {
+    transform: scale(0.9);
+  }
+}
+
+.base-input-field {
+  width: 100%;
+  font-weight: 700;
+  cursor: pointer;
+  height: 2.2rem;
+  box-sizing: border-box;
   padding-left: 0.5rem;
   padding-right: 0.5rem;
+  background-color: var(--bg-body);
+  border: @border-solid-base;
+  border-radius: @radius-md;
+  color: var(--text-title);
+  transition: @transition-fast;
+  outline: none;
+
+  &:hover:not(:disabled) {
+    border-color: color-mix(in srgb, @primary, transparent 50%);
+  }
+
+  &:focus:not(:disabled) {
+    border-color: @primary;
+    box-shadow:
+      inset 0 0 0 1px @primary,
+      inset 0 0 8px color-mix(in srgb, @primary, transparent 75%);
+    background-color: var(--bg-panel);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: var(--bg-panel-hover);
+  }
 
   &.has-prefix {
     padding-left: 1.8rem;
   }
 
   &.has-suffix {
-    padding-right: 2.1rem;
+    padding-right: 1.8rem;
   }
+}
+
+.text-xs-style {
+  font-size: 0.75rem !important;
+  letter-spacing: 0.04em;
+}
+
+.text-md-style {
+  font-size: 0.8rem !important;
+}
+
+.text-lg-style {
+  font-size: 0.85rem !important;
 }
 
 .css-password-field {
