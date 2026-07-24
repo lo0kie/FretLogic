@@ -2,6 +2,13 @@
 
 export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 export const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+export const TUNING_MAPPING_STANDARD = Object.freeze([40, 45, 50, 55, 59, 64] as const);
+export const TUNING_MAPPING_DROP_D = Object.freeze([38, 45, 50, 55, 59, 64] as const);
+export const TUNING_MAPPING_DADGAD = Object.freeze([38, 45, 50, 55, 57, 62] as const);
+export const TUNING_MAPPING_OPEN_G = Object.freeze([38, 43, 50, 55, 59, 62] as const);
+export const TUNING_MAPPING_HALF_STEP = Object.freeze([39, 44, 49, 54, 58, 63] as const);
+
+export const DEFAULT_TUNING_MAPPING = TUNING_MAPPING_STANDARD;
 
 export enum TuningEnum {
   STANDARD = 'STANDARD',
@@ -13,13 +20,13 @@ export enum TuningEnum {
 
 export const TUNING_PRESETS: Record<
   TuningEnum,
-  { name: string; mapping: [number, number, number, number, number, number] }
+  { name: string; mapping: readonly [number, number, number, number, number, number] }
 > = {
-  [TuningEnum.STANDARD]: { name: 'Standard (EADGBE)', mapping: [40, 45, 50, 55, 59, 64] },
-  [TuningEnum.DROP_D]: { name: 'Drop D (DADGBE)', mapping: [38, 45, 50, 55, 59, 64] },
-  [TuningEnum.DADGAD]: { name: 'DADGAD', mapping: [38, 45, 50, 55, 57, 62] },
-  [TuningEnum.OPEN_G]: { name: 'Open G (DGDGBD)', mapping: [38, 43, 50, 55, 59, 62] },
-  [TuningEnum.HALF_STEP]: { name: 'Half Step Down', mapping: [39, 44, 49, 54, 58, 63] },
+  [TuningEnum.STANDARD]: { name: 'Standard (EADGBE)', mapping: TUNING_MAPPING_STANDARD },
+  [TuningEnum.DROP_D]: { name: 'Drop D (DADGBE)', mapping: TUNING_MAPPING_DROP_D },
+  [TuningEnum.DADGAD]: { name: 'DADGAD', mapping: TUNING_MAPPING_DADGAD },
+  [TuningEnum.OPEN_G]: { name: 'Open G (DGDGBD)', mapping: TUNING_MAPPING_OPEN_G },
+  [TuningEnum.HALF_STEP]: { name: 'Half Step Down', mapping: TUNING_MAPPING_HALF_STEP },
 };
 
 export const isMuted = (s: GuitarStringEntity) => s.fret === -1;
@@ -36,7 +43,7 @@ export const calcNoteLabel = (
   fretVal: number,
   capoVal: number,
   preferFlat: boolean = false,
-  baseStrings: readonly number[] = [40, 45, 50, 55, 59, 64]
+  baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
 ): string => {
   if (fretVal === -1) return '✕';
   const base = baseStrings[sIdx];

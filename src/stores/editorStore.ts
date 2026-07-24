@@ -1,15 +1,11 @@
-// src/stores/editorStore.ts
 import { STORAGE_KEYS } from '@/constants';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, GuitarStringsModel } from '@/types';
-import { GuitarStringsModelSchema } from '@/types';
-import { createString, isOpen, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
-import { createZodSerializer } from '@/utils/zodStorage';
+import { cloneDeep } from '@/utils/dataParser';
+import { createString, DEFAULT_TUNING_MAPPING, isOpen, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { debounceFilter, useStorage } from '@vueuse/core';
-import cloneDeep from 'lodash.clonedeep';
 import { defineStore } from 'pinia';
 import { computed, toRaw, watch } from 'vue';
-import { z } from 'zod';
 
 export const useEditorStore = defineStore('editor', () => {
   const defaultStrings: GuitarStringsModel = [
@@ -23,22 +19,16 @@ export const useEditorStore = defineStore('editor', () => {
 
   const strings = useStorage<GuitarStringsModel>(STORAGE_KEYS.CURR_STRINGS, defaultStrings, localStorage, {
     eventFilter: debounceFilter(300),
-    serializer: createZodSerializer(GuitarStringsModelSchema, defaultStrings),
   });
 
   const currentChordName = useStorage(STORAGE_KEYS.CURR_NAME, '', localStorage, { eventFilter: debounceFilter(300) });
-
-  const currentTuning = useStorage<TuningEnum>(STORAGE_KEYS.CURR_TUNING, TuningEnum.STANDARD, localStorage, {
-    serializer: createZodSerializer(z.nativeEnum(TuningEnum), TuningEnum.STANDARD),
-  });
-
+  const currentTuning = useStorage<TuningEnum>(STORAGE_KEYS.CURR_TUNING, TuningEnum.STANDARD, localStorage);
   const editingId = useStorage<string | null>(STORAGE_KEYS.EDITING_ID, null, localStorage);
-
   const fretCount = useStorage<Chord['fretCount']>(STORAGE_KEYS.CURR_FCOUNT, 3);
   const capo = useStorage(STORAGE_KEYS.CURR_CAPO, 0);
 
   const activeBaseStrings = computed(() => {
-    return TUNING_PRESETS[currentTuning.value]?.mapping || [40, 45, 50, 55, 59, 64];
+    return TUNING_PRESETS[currentTuning.value]?.mapping || DEFAULT_TUNING_MAPPING;
   });
 
   const isFretBoardEmpty = computed(() => strings.value.every(s => s.fret < 0));
@@ -62,7 +52,7 @@ export const useEditorStore = defineStore('editor', () => {
       strings.value = cloneDeep(toRaw(original.strings));
       fretCount.value = original.fretCount ?? 3;
       capo.value = original.capo ?? 0;
-      currentTuning.value = original.tuning || 'STANDARD';
+      currentTuning.value = original.tuning || TuningEnum.STANDARD;
     } else {
       editingId.value = null;
     }
