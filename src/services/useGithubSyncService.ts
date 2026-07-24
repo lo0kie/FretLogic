@@ -1,4 +1,3 @@
-// src/services/useGithubSyncService.ts
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -37,7 +36,7 @@ export function useGithubSyncService() {
 
     if (!schemaResult.success) {
       const firstErrorMessage = schemaResult.error.issues[0].message;
-      uiStore.showToast(`同步失败：${firstErrorMessage}`, false, 'error');
+      uiStore.toast.error(`同步失败：${firstErrorMessage}`);
       return;
     }
 
@@ -50,9 +49,10 @@ export function useGithubSyncService() {
       'Content-Type': 'application/json',
     };
 
+    let loadingToastId: number | null = null;
     isSyncing.value = true;
     try {
-      uiStore.showToast('正在后台同步到 GitHub...', false, 'loading');
+      loadingToastId = uiStore.toast.loading('正在后台同步到 GitHub...');
 
       let fileSha = '';
       const getRes = await fetch(`${apiUrl}?ref=${githubBranch}`, { method: 'GET', headers });
@@ -82,10 +82,13 @@ export function useGithubSyncService() {
 
       if (!putRes.ok) throw new Error('推送代码失败');
 
-      uiStore.showToast('成功同步至 GitHub 云端', false, 'success');
+      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
+      uiStore.toast.success('成功同步至 GitHub 云端');
     } catch (err) {
+      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
+
       console.error('GitHub Sync Error:', err);
-      uiStore.showToast('GitHub 同步失败，请检查网络或配置信息', false, 'error');
+      uiStore.toast.error('GitHub 同步失败，请检查网络或配置信息');
     } finally {
       isSyncing.value = false;
     }
@@ -104,7 +107,7 @@ export function useGithubSyncService() {
 
     if (!schemaResult.success) {
       const firstErrorMessage = schemaResult.error.issues[0].message;
-      uiStore.showToast(`拉取失败：${firstErrorMessage}`, false, 'error');
+      uiStore.toast.error(`拉取失败：${firstErrorMessage}`);
       return;
     }
 
@@ -117,8 +120,11 @@ export function useGithubSyncService() {
     };
 
     isPulling.value = true;
+    let loadingToastId: number | null = null;
+
     try {
-      uiStore.showToast('正在从云端拉取数据...', false, 'loading');
+      loadingToastId = uiStore.toast.loading('正在从云端拉取数据...');
+
       const res = await fetch(apiUrl, { method: 'GET', headers });
 
       if (!res.ok) {
@@ -134,19 +140,23 @@ export function useGithubSyncService() {
       const imported = JSON.parse(decodedStr);
 
       if (cleanAndValidateData(imported, 'import')) {
+        if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
+
         chordStore.overwriteGroups(imported.groups);
         chordStore.overwriteChords(imported.chords);
         if (!chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
           chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
         }
-        uiStore.showToast('已成功从 GitHub 恢复所有数据', false, 'success');
+        uiStore.toast.success('已成功从 GitHub 恢复所有数据');
       } else {
         throw new Error('云端数据格式破损，已触发安全拦截');
       }
     } catch (err) {
+      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
+
       console.error('GitHub Pull Error:', err);
       const errMsg = err instanceof Error ? err.message : '拉取失败，请检查网络';
-      uiStore.showToast(`拉取失败：${errMsg}`, false, 'error');
+      uiStore.toast.error(`拉取失败：${errMsg}`);
     } finally {
       isPulling.value = false;
     }

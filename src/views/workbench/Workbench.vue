@@ -1,12 +1,6 @@
-﻿<template>
-  <div class="flex-1 h-full flex items-center justify-center p-8 transition-all relative overflow-hidden">
-    <div
-      class="absolute inset-0 bg-gradient-to-b from-[var(--color-primary)]/5 to-transparent pointer-events-none transition-colors duration-500"
-    ></div>
-
-    <div
-      class="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 p-1.5 bg-[var(--bg-panel)]/80 backdrop-blur-xl shadow-floating border border-[var(--control-border)] rounded-xl z-[100] transition-all"
-    >
+<template>
+  <div class="workbench-layout-wrapper">
+    <div class="workbench-top-toolbar">
       <GlobalTooltip content="播放/试听当前和弦" placement="bottom">
         <ActionButton @click="playCurrentChord" primary :disabled="editorStore.isFretBoardEmpty || isPlaying" size="sm">
           <template #prefix>
@@ -22,7 +16,8 @@
         </ActionButton>
       </GlobalTooltip>
 
-      <div class="w-px h-4 bg-[var(--control-border)] mx-1"></div>
+      <div class="toolbar-divider"></div>
+
       <GlobalTooltip content="生成指板高清切图（背景透明）" placement="bottom">
         <ActionButton
           @click="chordService.exportFretboardImage(FretBoardCaptureArea, true)"
@@ -45,21 +40,26 @@
         </ActionButton>
       </GlobalTooltip>
 
-      <div class="w-px h-4 bg-[var(--control-border)] mx-1"></div>
+      <div class="toolbar-divider"></div>
 
-      <GlobalTooltip :content="settingsStore.isDarkMode ? '切换至浅色模式' : '切换至深色模式'" placement="bottom">
-        <ActionButton @click="executeToggleThemeWithAnimation($event)" size="sm">
-          <template #prefix
-            ><component :is="settingsStore.isDarkMode ? Moon : Sun" :size="16" stroke-width="3"
-          /></template>
-          <span>{{ settingsStore.isDarkMode ? '深色' : '浅色' }}</span>
+      <GlobalTooltip content="所有音符往低品位推移" placement="top">
+        <ActionButton @click="handleShiftFret('down')" :disabled="isShiftDownDisabled" size="sm">
+          <template #prefix><ChevronUp :size="18" stroke-width="3" /></template>
+          上移
+        </ActionButton>
+      </GlobalTooltip>
+
+      <GlobalTooltip content="所有音符往高品位推移" placement="top">
+        <ActionButton @click="handleShiftFret('up')" :disabled="isShiftUpDisabled" size="sm">
+          <template #prefix><ChevronDown :size="18" stroke-width="3" /></template>
+          下移
         </ActionButton>
       </GlobalTooltip>
     </div>
 
     <div
       ref="FretBoardCaptureArea"
-      class="workbench-card rounded-xl flex flex-col items-center justify-evenly relative shrink-0"
+      class="workbench-card"
       :style="{ height: dynamicHeight, width: `${CANVAS_CONFIG.BOARD_WIDTH + 60}px` }"
     >
       <input
@@ -67,15 +67,11 @@
         type="text"
         spellcheck="false"
         placeholder="CHORD"
-        class="input-chord-name px-8 w-full text-center font-black bg-transparent border-none outline-none cursor-pointer select-none caret-blue-600 transition-all duration-300 placeholder-slate-300 dark:placeholder-slate-600 text-[4rem] leading-none tracking-tight"
-        :class="
-          editorStore.currentChordName
-            ? ' text-slate-900 dark:text-slate-50 drop-shadow-sm'
-            : 'opacity-20 text-slate-300 dark:text-slate-600'
-        "
+        class="input-chord-name"
+        :class="editorStore.currentChordName ? 'has-name' : 'is-empty'"
       />
 
-      <div class="relative w-full flex justify-center z-0 shrink-0">
+      <div class="fretboard-render-zone">
         <Fretboard
           v-model:strings="editorStore.strings"
           v-model:capo="editorStore.capo"
@@ -98,8 +94,9 @@ import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
-import { Copy, Image, Moon, Play, Square, Sun } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { cloneDeep } from '@/utils/dataParser';
+import { ChevronDown, ChevronUp, Copy, Image, Play, Square } from '@lucide/vue';
+import { computed, ref, toRaw } from 'vue';
 
 const editorStore = useEditorStore();
 const settingsStore = useSettingsStore();
@@ -108,47 +105,37 @@ const chordService = useChordService();
 const FretBoardCaptureArea = ref<HTMLDivElement>();
 const { isPlaying, playCurrentChord } = useAudioPlayer();
 
-const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
-  const rootEl = document.documentElement;
-  rootEl.setAttribute('theme-changing', 'true');
+const hasNoPressedFrets = computed(() => !editorStore.strings.some(s => s.fret > 0));
+const isShiftDownDisabled = computed(
+  () => editorStore.isFretBoardEmpty || hasNoPressedFrets.value || editorStore.strings.some(s => s.fret === 1)
+);
+const isShiftUpDisabled = computed(
+  () =>
+    editorStore.isFretBoardEmpty ||
+    hasNoPressedFrets.value ||
+    editorStore.strings.some(s => s.fret === editorStore.fretCount)
+);
 
-  const disableChangingAttribute = () => {
-    setTimeout(() => {
-      rootEl.removeAttribute('theme-changing');
-    }, 350);
-  };
+const handleShiftFret = (direction: 'up' | 'down') => {
+  if (editorStore.isFretBoardEmpty || hasNoPressedFrets.value) return;
+  const newStrings = cloneDeep(toRaw(editorStore.strings));
 
-  if (!document.startViewTransition || !event) {
-    settingsStore.isDarkMode = !settingsStore.isDarkMode;
-    disableChangingAttribute();
-    return;
+  if (direction === 'up') {
+    if (newStrings.some(s => s.fret === editorStore.fretCount)) return;
+    newStrings.forEach(s => {
+      if (s.fret > 0) s.fret += 1;
+    });
+  } else {
+    if (newStrings.some(s => s.fret === 1)) return;
+    newStrings.forEach(s => {
+      if (s.fret > 0) s.fret -= 1;
+    });
   }
 
-  const x = event.clientX;
-  const y = event.clientY;
-  const endRadius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
-
-  const transition = document.startViewTransition(() => {
-    settingsStore.isDarkMode = !settingsStore.isDarkMode;
-  });
-
-  transition.ready.then(() => {
-    document.documentElement.animate(
-      {
-        clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`],
-      },
-      {
-        duration: 350,
-        easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
-        pseudoElement: '::view-transition-new(root)',
-      }
-    );
-  });
-
-  transition.finished.then(() => {
-    disableChangingAttribute();
-  });
+  editorStore.strings = newStrings;
+  uiStore.toast.info('和弦指型已平移');
 };
+
 const dynamicHeight = computed(() => {
   const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;
 
@@ -163,11 +150,60 @@ const dynamicHeight = computed(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
+
+.workbench-layout-wrapper {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  transition: @transition-base;
+}
+
+.workbench-top-toolbar {
+  position: absolute;
+  top: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem;
+  background-color: color-mix(in srgb, var(--bg-panel), transparent 20%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: @shadow-floating;
+  border: 1px solid var(--control-border);
+  border-radius: @radius-lg;
+  z-index: 100;
+  transition: @transition-base;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 1rem;
+  background-color: var(--control-border);
+  margin: 0 0.25rem;
+}
 
 .workbench-card {
-  .mixin-panel-base();
+  background-color: var(--bg-panel);
+  border: @border-solid-light;
+  border-radius: @radius-md;
   box-shadow: @shadow-floating;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  position: relative;
+  margin-top: 2rem;
+  box-sizing: border-box;
+  flex-shrink: 0;
   transition:
     height @duration-slow @bezier-bounce,
     background-color @duration-base,
@@ -187,9 +223,59 @@ const dynamicHeight = computed(() => {
     height: 1px;
     background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
     opacity: 0.3;
-    border-top-left-radius: 28px;
-    border-top-right-radius: 28px;
+    border-top-left-radius: @radius-md;
+    border-top-right-radius: @radius-md;
     pointer-events: none;
   }
+}
+
+.input-chord-name {
+  padding-left: 2rem;
+  padding-right: 2rem;
+  width: 100%;
+  text-align: center;
+  font-weight: 900;
+  background-color: transparent;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  user-select: none;
+  caret-color: @primary;
+  font-size: 4rem;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+
+  &::placeholder {
+    color: #cbd5e1;
+  }
+
+  :global(.dark) &::placeholder {
+    color: #334155;
+  }
+
+  &.has-name {
+    color: var(--text-title);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
+  }
+
+  &.is-empty {
+    opacity: 0.2;
+    color: #94a3b8;
+
+    :global(.dark) & {
+      color: #475569;
+    }
+  }
+}
+
+.fretboard-render-zone {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  z-index: 0;
+  flex-shrink: 0;
 }
 </style>
