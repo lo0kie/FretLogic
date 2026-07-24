@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="left-panel-footer" :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }">
     <input type="file" ref="fileInputRef" accept=".json" @change="handleFileChange" class="hidden-input" />
 
@@ -51,7 +51,7 @@ const handleFileChange = (e: Event) => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .left-panel-footer {
   padding: 1rem;

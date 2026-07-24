@@ -81,12 +81,8 @@ const menuItems = computed<ContextMenuItem[]>(() => [
 ]);
 </script>
 
-<script lang="ts">
-export default { name: 'LeftChordCard' };
-</script>
-
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .chord-card-frame {
   box-sizing: border-box;

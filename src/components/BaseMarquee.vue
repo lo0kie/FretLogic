@@ -32,7 +32,7 @@ const handleMouseLeave = () => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .marquee-container {
   height: 100%;

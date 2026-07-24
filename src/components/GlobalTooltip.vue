@@ -68,7 +68,7 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .tooltip-trigger-container {
   position: relative;

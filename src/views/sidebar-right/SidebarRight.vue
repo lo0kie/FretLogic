@@ -133,7 +133,13 @@ const confirmPull = () => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
+
+.panel-header,
+.scroll-container,
+:deep(.panel-footer) {
+  min-width: v-bind(RIGHT_SIDEBAR_WIDTH_PIXEL);
+}
 
 .panel-right {
   background-color: var(--bg-panel);
@@ -218,7 +224,7 @@ const confirmPull = () => {
   padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.5rem;
   min-height: 0;
   box-sizing: border-box;
 
@@ -234,7 +240,6 @@ const confirmPull = () => {
   width: 100%;
   height: 1px;
   background-color: var(--control-border);
-  margin: 0.5rem 0;
   opacity: 0.5;
 }
 
@@ -273,7 +278,7 @@ const confirmPull = () => {
   }
 
   &.is-open {
-    right: calc(v-bind(RIGHT_SIDEBAR_WIDTH_PIXEL) + 12px);
+    right: calc(v-bind(RIGHT_SIDEBAR_WIDTH_PIXEL) + 11px);
   }
 
   &:active {

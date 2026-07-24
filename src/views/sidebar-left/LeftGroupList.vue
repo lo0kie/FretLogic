@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="left-group-list-container" :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }">
     <LeftSearch v-model="searchQuery" :disabled="chordStore.savedChordsList.length === 0" />
 
@@ -205,7 +205,7 @@ watch(
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 :deep(.draggable-group-list:has(.group-box-card.sortable-chosen)) {
   .chord-content-wrapper {

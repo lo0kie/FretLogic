@@ -43,13 +43,13 @@ const handleCapoWheel = (direction: 'up' | 'down') => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .capo-wheel-container {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.8rem;
   box-sizing: border-box;
 }
 

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="fret-slider-container">
     <label class="fret-label">显示范围</label>
 
@@ -7,7 +7,7 @@
         <div
           class="fret-slider-thumb"
           :style="{
-            transform: `translateX(calc(${(editorStore.fretCount - 3) * 100}% + ${0}rem))`,
+            transform: `translateX(${(editorStore.fretCount - 3) * 100}%)`,
           }"
         ></div>
 
@@ -78,12 +78,12 @@ onMounted(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .fret-slider-container {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.8rem;
   box-sizing: border-box;
 }
 

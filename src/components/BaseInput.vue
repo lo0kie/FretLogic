@@ -93,12 +93,8 @@ defineExpose({
 });
 </script>
 
-<script lang="ts">
-export default { name: 'BaseInput' };
-</script>
-
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .input-wrapper {
   position: relative;

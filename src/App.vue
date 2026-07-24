@@ -1,7 +1,7 @@
 ﻿<template>
-  <div class="app-layout-container">
-    <GlobalToast />
+  <GlobalToast />
 
+  <div class="app-layout-container">
     <SidebarLeft />
     <Workbench />
     <SidebarRight />

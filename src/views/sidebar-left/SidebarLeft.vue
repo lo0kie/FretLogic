@@ -1,6 +1,6 @@
-﻿<template>
+<template>
   <div class="panel-left" :class="{ 'is-open': uiStore.isLeftOpen }">
-    <div class="panel-header" :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }">
+    <div class="panel-header">
       <h1 class="header-title">Fret Logic</h1>
 
       <div class="header-actions">
@@ -55,8 +55,13 @@
     />
   </BaseModal>
 
-  <BaseModal v-model:visible="modals.delete" title="删除分组" confirm-type="danger" @confirm="handleDeleteGroup">
-    <p class="modal-description-text">确定要执行此删除操作吗？删除后组内的所有和弦资产都将同步清空，且不可恢复。</p>
+  <BaseModal
+    v-model:visible="modals.delete"
+    :title="`删除分组 ${modalData.activeGroup?.name}`"
+    confirm-type="danger"
+    @confirm="handleDeleteGroup"
+  >
+    <p class="modal-description-text">确定要执行此删除操作吗？删除后组内的所有和弦都将清空。</p>
   </BaseModal>
 
   <BaseModal v-model:visible="modals.move" title="移动至新分组" @confirm="handleMoveChord">
@@ -227,7 +232,13 @@ const handleMoveChord = () => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
+
+.panel-header,
+:deep(.left-group-list),
+:deep(.left-panel-footer) {
+  min-width: v-bind(LEFT_SIDEBAR_WIDTH_PIXEL);
+}
 
 .panel-left {
   background-color: var(--bg-panel);
@@ -325,7 +336,7 @@ const handleMoveChord = () => {
   }
 
   &.is-open {
-    left: calc(v-bind(LEFT_SIDEBAR_WIDTH_PIXEL) + 12px);
+    left: calc(v-bind(LEFT_SIDEBAR_WIDTH_PIXEL) + 11px);
   }
 
   &:active {

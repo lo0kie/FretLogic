@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="search-input-container">
     <BaseInput
       :model-value="modelValue"
@@ -29,7 +29,7 @@ defineEmits<{
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .search-input-container {
   padding-top: 1rem;

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="tuning-selector-container">
     <label class="tuning-label">调音方案</label>
 
@@ -37,12 +37,12 @@ const tuningOptions = Object.values(TuningEnum);
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .tuning-selector-container {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.8rem;
   box-sizing: border-box;
 }
 

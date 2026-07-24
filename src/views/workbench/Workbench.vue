@@ -1,7 +1,5 @@
-﻿<template>
+<template>
   <div class="workbench-layout-wrapper">
-    <div class="workbench-gradient-bg"></div>
-
     <div class="workbench-top-toolbar">
       <GlobalTooltip content="播放/试听当前和弦" placement="bottom">
         <ActionButton @click="playCurrentChord" primary :disabled="editorStore.isFretBoardEmpty || isPlaying" size="sm">
@@ -19,6 +17,7 @@
       </GlobalTooltip>
 
       <div class="toolbar-divider"></div>
+
       <GlobalTooltip content="生成指板高清切图（背景透明）" placement="bottom">
         <ActionButton
           @click="chordService.exportFretboardImage(FretBoardCaptureArea, true)"
@@ -38,6 +37,22 @@
         >
           <template #prefix><Copy :size="16" stroke-width="3" /></template>
           <span>{{ uiStore.isCopying ? '导出中...' : '存为卡片图' }}</span>
+        </ActionButton>
+      </GlobalTooltip>
+
+      <div class="toolbar-divider"></div>
+
+      <GlobalTooltip content="所有音符往低品位推移" placement="top">
+        <ActionButton @click="handleShiftFret('down')" :disabled="isShiftDownDisabled" size="sm">
+          <template #prefix><ChevronUp :size="18" stroke-width="3" /></template>
+          上移
+        </ActionButton>
+      </GlobalTooltip>
+
+      <GlobalTooltip content="所有音符往高品位推移" placement="top">
+        <ActionButton @click="handleShiftFret('up')" :disabled="isShiftUpDisabled" size="sm">
+          <template #prefix><ChevronDown :size="18" stroke-width="3" /></template>
+          下移
         </ActionButton>
       </GlobalTooltip>
     </div>
@@ -79,8 +94,9 @@ import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
-import { Copy, Image, Play, Square } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { cloneDeep } from '@/utils/dataParser';
+import { ChevronDown, ChevronUp, Copy, Image, Play, Square } from '@lucide/vue';
+import { computed, ref, toRaw } from 'vue';
 
 const editorStore = useEditorStore();
 const settingsStore = useSettingsStore();
@@ -88,6 +104,37 @@ const uiStore = useUiStore();
 const chordService = useChordService();
 const FretBoardCaptureArea = ref<HTMLDivElement>();
 const { isPlaying, playCurrentChord } = useAudioPlayer();
+
+const hasNoPressedFrets = computed(() => !editorStore.strings.some(s => s.fret > 0));
+const isShiftDownDisabled = computed(
+  () => editorStore.isFretBoardEmpty || hasNoPressedFrets.value || editorStore.strings.some(s => s.fret === 1)
+);
+const isShiftUpDisabled = computed(
+  () =>
+    editorStore.isFretBoardEmpty ||
+    hasNoPressedFrets.value ||
+    editorStore.strings.some(s => s.fret === editorStore.fretCount)
+);
+
+const handleShiftFret = (direction: 'up' | 'down') => {
+  if (editorStore.isFretBoardEmpty || hasNoPressedFrets.value) return;
+  const newStrings = cloneDeep(toRaw(editorStore.strings));
+
+  if (direction === 'up') {
+    if (newStrings.some(s => s.fret === editorStore.fretCount)) return;
+    newStrings.forEach(s => {
+      if (s.fret > 0) s.fret += 1;
+    });
+  } else {
+    if (newStrings.some(s => s.fret === 1)) return;
+    newStrings.forEach(s => {
+      if (s.fret > 0) s.fret -= 1;
+    });
+  }
+
+  editorStore.strings = newStrings;
+  uiStore.toast.info('和弦指型已平移');
+};
 
 const dynamicHeight = computed(() => {
   const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;
@@ -103,7 +150,7 @@ const dynamicHeight = computed(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .workbench-layout-wrapper {
   flex: 1;
@@ -116,13 +163,6 @@ const dynamicHeight = computed(() => {
   overflow: hidden;
   box-sizing: border-box;
   transition: @transition-base;
-}
-
-.workbench-gradient-bg {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  transition: background-color 0.5s ease;
 }
 
 .workbench-top-toolbar {

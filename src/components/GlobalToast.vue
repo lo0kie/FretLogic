@@ -31,13 +31,11 @@ const handleExecuteAction = (item: Toast) => {
   }
 };
 
-const getToastThemeClass = (type: string) => {
-  return `theme-${type}`;
-};
+const getToastThemeClass = (type: string) => `theme-${type}`;
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .toast-global-container {
   position: fixed;

@@ -99,7 +99,7 @@ const handleCancel = () => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .modal-overlay-container {
   position: fixed;

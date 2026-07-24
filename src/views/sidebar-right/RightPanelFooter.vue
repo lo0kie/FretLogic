@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="right-panel-footer" :style="{ minWidth: RIGHT_SIDEBAR_WIDTH_PIXEL }">
     <div class="footer-grid">
       <GlobalTooltip :content="saveDisabledReason">
@@ -56,7 +56,7 @@ const isClearDisabled = computed(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .right-panel-footer {
   padding: 1rem;

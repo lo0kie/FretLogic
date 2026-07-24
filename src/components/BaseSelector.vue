@@ -160,7 +160,7 @@ watch(isOpen, opened => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .relative-container {
   position: relative;

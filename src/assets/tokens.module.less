@@ -42,7 +42,7 @@
   --color-warning: #fbbf24;
   --color-danger: #f87171;
 
-  --theme-btn-color: #38bdf8; 
+  --theme-btn-color: #38bdf8;
   --theme-btn-bg: #1e293b;
 }
 
@@ -100,3 +100,23 @@
 
 @transition-base: all @duration-base @bezier-standard;
 @transition-fast: all @duration-fast @bezier-standard;
+
+:export {
+  durationFast: @duration-fast;
+  durationBase: @duration-base;
+  durationSlow: @duration-slow;
+
+  radiusSm: @radius-sm;
+  radiusMd: @radius-md;
+  radiusLg: @radius-lg;
+  radiusXl: @radius-xl;
+
+  shadowSm: @shadow-sm;
+  shadowMd: @shadow-md;
+  shadowLg: @shadow-lg;
+  shadowXl: @shadow-xl;
+  shadowPanel: @shadow-panel;
+  shadowPanelDark: @shadow-panel-dark;
+  shadowFloating: @shadow-floating;
+  shadowFloatingDark: @shadow-floating-dark;
+}

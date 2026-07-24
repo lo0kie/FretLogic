@@ -1,5 +1,5 @@
 <template>
-  <div ref="triggerRef" @contextmenu.prevent.stop="handleContextMenu" class="context-menu-trigger-wrapper">
+  <div ref="triggerRef" @contextmenu="handleContextMenu" class="context-menu-trigger-wrapper">
     <slot></slot>
   </div>
 
@@ -44,7 +44,7 @@ export interface ContextMenuItem {
   disabled?: boolean;
 }
 
-defineProps<{
+const props = defineProps<{
   items: ContextMenuItem[];
 }>();
 
@@ -62,17 +62,7 @@ const closeMenu = () => {
   }
 };
 
-const handleContextMenu = (e: MouseEvent) => {
-  if (globalActiveMenuCloseFn.value && globalActiveMenuCloseFn.value !== closeMenu) {
-    globalActiveMenuCloseFn.value();
-  }
-
-  isOpen.value = true;
-  x.value = e.clientX;
-  y.value = e.clientY;
-
-  globalActiveMenuCloseFn.value = closeMenu;
-
+const adjustPosition = () => {
   nextTick(() => {
     if (!menuRef.value) return;
     const menuRect = menuRef.value.getBoundingClientRect();
@@ -84,6 +74,39 @@ const handleContextMenu = (e: MouseEvent) => {
       y.value = window.innerHeight - menuRect.height - 8;
     }
   });
+};
+
+const openMenuManual = (clientX: number, clientY: number) => {
+  if (!props.items || props.items.length === 0) return;
+
+  if (globalActiveMenuCloseFn.value && globalActiveMenuCloseFn.value !== closeMenu) {
+    globalActiveMenuCloseFn.value();
+  }
+
+  isOpen.value = true;
+  x.value = clientX;
+  y.value = clientY;
+
+  globalActiveMenuCloseFn.value = closeMenu;
+  adjustPosition();
+};
+
+const handleContextMenu = (e: MouseEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (!props.items || props.items.length === 0) return;
+
+  if (globalActiveMenuCloseFn.value && globalActiveMenuCloseFn.value !== closeMenu) {
+    globalActiveMenuCloseFn.value();
+  }
+
+  isOpen.value = true;
+  x.value = e.clientX;
+  y.value = e.clientY;
+
+  globalActiveMenuCloseFn.value = closeMenu;
+  adjustPosition();
 };
 
 const handleItemClick = (item: ContextMenuItem) => {
@@ -104,10 +127,16 @@ onBeforeUnmount(() => {
     globalActiveMenuCloseFn.value = null;
   }
 });
+
+defineExpose({
+  open: openMenuManual,
+  close: closeMenu,
+  isOpen,
+});
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .context-menu-trigger-wrapper {
   width: 100%;

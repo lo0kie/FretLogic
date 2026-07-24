@@ -7,9 +7,7 @@
     :class="[themeClasses, sizeClasses]"
   >
     <Loader2 v-if="loading" class="loading-icon" />
-
     <slot v-else name="prefix"></slot>
-
     <span class="button-content">
       <slot></slot>
     </span>
@@ -51,16 +49,15 @@ const themeClasses = computed(() => {
   if (props.primary) return 'theme-primary';
   if (props.danger) return 'theme-danger';
   if (props.warning) return 'theme-warning';
+
   return 'theme-default';
 });
 
-const sizeClasses = computed(() => {
-  return `size-${props.size}`;
-});
+const sizeClasses = computed(() => `size-${props.size}`);
 </script>
 
 <style scoped lang="less">
-@import '@/assets/tokens.less';
+@import '@/assets/tokens.module';
 
 .action-button-base {
   width: 100%;
