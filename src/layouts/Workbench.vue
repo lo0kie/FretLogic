@@ -1,5 +1,6 @@
 <template>
   <div class="workbench-layout-wrapper">
+    <!-- 1. 中间居中指板卡片 -->
     <div
       ref="FretBoardCaptureArea"
       class="workbench-card"
@@ -25,7 +26,10 @@
       </div>
     </div>
 
-    <!-- 🌟 底部动态浮动操作条：在有改动/编辑时平滑浮现 -->
+    <!-- 2. 右侧固定面板：顶部与中间卡片对齐 -->
+    <ChordAnalysisPanel />
+
+    <!-- 3. 底部动态浮动操作条 -->
     <Transition name="floating-bar-fade">
       <div v-if="isFloatingBarVisible" class="floating-action-bar">
         <ActionButton size="md" variant="ghost" :disabled="isClearDisabled" @click="editorStore.resetEditor()">
@@ -45,6 +49,7 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import Fretboard from '@/components/Fretboard.vue';
+import ChordAnalysisPanel from '@/layouts/ChordAnalysisPanel.vue';
 import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -65,7 +70,6 @@ const dynamicHeight = computed(() => {
   return `${baseVerticalSpace + realBoardHeight}px`;
 });
 
-// 🌟 判断浮动条是否显示：只要有正在编辑的id，或者输入了名字、或者指板不是空的、或者是调整了capo/品数，就显示
 const isFloatingBarVisible = computed(() => {
   const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
   const hasModified =
@@ -103,9 +107,10 @@ const isClearDisabled = computed(() => {
   inset: 0;
   z-index: 1;
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  align-items: flex-start; /* 保持顶部对齐 */
+  justify-content: center; /* 中间指板卡片完美居中 */
   padding: 2rem;
+  padding-top: 3.5rem; /* 控制中间与右侧卡片统一的顶部边距 */
   padding-bottom: 6.15rem;
   overflow: hidden;
   box-sizing: border-box;

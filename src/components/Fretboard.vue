@@ -1,185 +1,184 @@
 <template>
   <div class="fretboard-layout-scaler" :style="{ width: `${realScaledWidth}px`, height: `${realScaledHeight}px` }">
-    <GlobalContextMenu ref="contextMenuRef" :items="activeDynamicItems">
-      <div
-        ref="fretBoardRef"
-        class="fretboard-container"
-        :class="[interactive ? 'is-interactive' : 'is-disabled']"
-        :style="{
-          width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
-          height: `${rawHeight}px`,
-          transform: `scale(${fretboardScale})`,
-          transformOrigin: 'top left',
-        }"
-        @contextmenu.prevent.stop="handlePreciseRightClickBus"
-      >
-        <div class="open-strings-wrapper" :style="{ height: `${CANVAS_CONFIG.OFFSET_Y_TOP}px` }">
-          <template v-for="(str, sIdx) in strings" :key="'os-' + sIdx">
-            <GlobalTooltip
-              placement="top"
-              :content="interactive && str.fret <= 0 ? '左键：切换空弦/静音 \n 右键：弹出根音菜单' : undefined"
-              :style="{
-                position: 'absolute',
-                left: `${stringXPositions[sIdx]}px`,
-                top: '10px',
-                transform: 'translateX(-50%)',
-                width: 'auto',
-              }"
-            >
-              <button
-                @click.stop="handleLocalToggleOpenString(sIdx)"
-                @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
-                class="open-string-btn"
-                :class="[
-                  str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available',
-                  getOpenStringStatusClass(str),
-                  interactive ? 'allow-events' : 'block-events',
-                ]"
-                :style="getOpenStringStyle(str)"
-              >
-                <template v-if="str.fret <= 0">
-                  <X v-if="isMuted(str)" class="mute-icon" stroke-width="3" />
-                  <span v-else-if="isOpen(str)" class="open-note-text">
-                    {{ calcNoteLabel(sIdx, 0, capo, str.preferFlat, activeBaseStrings) }}
-                  </span>
-                </template>
-              </button>
-            </GlobalTooltip>
-          </template>
-        </div>
-
-        <svg
-          :width="CANVAS_CONFIG.BOARD_WIDTH"
-          :height="fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
-          :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
-          style="overflow: visible"
-          class="fretboard-svg"
-        >
-          <g v-memo="[fretCount, isDarkMode, capo]">
-            <line
-              v-for="s in 6"
-              :key="'string-' + s"
-              :x1="stringXPositions[s - 1]"
-              y1="0"
-              :x2="stringXPositions[s - 1]"
-              :y2="fretCount * CANVAS_CONFIG.FRET_HEIGHT"
-              :stroke="isDarkMode ? '#ffffff' : '#0f172a'"
-              :stroke-width="FRETBOARD_LINE_WIDTH"
-              class="string-line"
-              style="pointer-events: none"
-              shape-rendering="crispEdges"
-            />
-            <line
-              v-for="f in fretCount"
-              :key="'fret-line-' + f"
-              :x1="CANVAS_CONFIG.OFFSET_X"
-              :y1="f * CANVAS_CONFIG.FRET_HEIGHT"
-              :x2="stringXPositions[5]"
-              :y2="f * CANVAS_CONFIG.FRET_HEIGHT"
-              :stroke="isDarkMode ? '#cbd5e1' : '#334155'"
-              :stroke-width="FRETBOARD_LINE_WIDTH"
-              style="pointer-events: none"
-              shape-rendering="crispEdges"
-            />
-            <rect
-              :x="CANVAS_CONFIG.OFFSET_X - FRETBOARD_LINE_WIDTH / 2"
-              y="-4"
-              :width="5 * CANVAS_CONFIG.STRING_SPACING + FRETBOARD_LINE_WIDTH"
-              height="8"
-              :fill="isDarkMode ? '#ffffff' : '#0f172a'"
-              style="pointer-events: none"
-              rx="2"
-            />
-            <text
-              v-for="i in fretCount"
-              :key="'fret-text-' + i"
-              v-show="i < fretCount"
-              :x="(CANVAS_CONFIG.OFFSET_X - 32) / 2"
-              :y="i * CANVAS_CONFIG.FRET_HEIGHT"
-              text-anchor="middle"
-              dominant-baseline="central"
-              dy="-2px"
-              font-size="28"
-              font-weight="900"
-              :fill="isDarkMode ? '#e2e8f0' : '#475569'"
-              style="pointer-events: none"
-            >
-              {{ capo > 0 ? capo + i : i }}
-            </text>
-          </g>
-
-          <g
-            v-if="
-              interactive &&
-              hoverPoint &&
-              hoverPoint.fretIndex > 0 &&
-              hoverPoint.fretIndex <= fretCount &&
-              hoverPoint.stringIndex >= 0 &&
-              hoverPoint.stringIndex <= 5
+    <div
+      ref="fretBoardRef"
+      class="fretboard-container"
+      :class="[interactive ? 'is-interactive' : 'is-disabled']"
+      :style="{
+        width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
+        height: `${rawHeight}px`,
+        transform: `scale(${fretboardScale})`,
+        transformOrigin: 'top left',
+      }"
+      @contextmenu.prevent.stop="handleRightClickRoot"
+    >
+      <div class="open-strings-wrapper" :style="{ height: `${CANVAS_CONFIG.OFFSET_Y_TOP}px` }">
+        <template v-for="(str, sIdx) in strings" :key="'os-' + sIdx">
+          <GlobalTooltip
+            placement="top"
+            :content="
+              interactive && str.fret <= 0 ? '左键：切换空弦/静音 \n 右键：设为根音 \n 滚轮：切换升降号' : undefined
             "
-            class="finger-predictive"
+            :style="{
+              position: 'absolute',
+              left: `${stringXPositions[sIdx]}px`,
+              top: '10px',
+              transform: 'translateX(-50%)',
+              width: 'auto',
+            }"
+          >
+            <button
+              @click.stop="handleLocalToggleOpenString(sIdx)"
+              @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
+              class="open-string-btn"
+              :class="[
+                str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available',
+                getOpenStringStatusClass(str),
+                interactive ? 'allow-events' : 'block-events',
+              ]"
+              :style="getOpenStringStyle(str)"
+            >
+              <template v-if="str.fret <= 0">
+                <X v-if="isMuted(str)" class="mute-icon" stroke-width="3" />
+                <span v-else-if="isOpen(str)" class="open-note-text">
+                  {{ calcNoteLabel(sIdx, 0, capo, str.preferFlat, activeBaseStrings) }}
+                </span>
+              </template>
+            </button>
+          </GlobalTooltip>
+        </template>
+      </div>
+
+      <svg
+        :width="CANVAS_CONFIG.BOARD_WIDTH"
+        :height="fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
+        :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
+        style="overflow: visible"
+        class="fretboard-svg"
+      >
+        <g v-memo="[fretCount, isDarkMode, capo]">
+          <line
+            v-for="s in 6"
+            :key="'string-' + s"
+            :x1="stringXPositions[s - 1]"
+            y1="0"
+            :x2="stringXPositions[s - 1]"
+            :y2="fretCount * CANVAS_CONFIG.FRET_HEIGHT"
+            :stroke="isDarkMode ? '#ffffff' : '#0f172a'"
+            :stroke-width="FRETBOARD_LINE_WIDTH"
+            class="string-line"
+            style="pointer-events: none"
+            shape-rendering="crispEdges"
+          />
+          <line
+            v-for="f in fretCount"
+            :key="'fret-line-' + f"
+            :x1="CANVAS_CONFIG.OFFSET_X"
+            :y1="f * CANVAS_CONFIG.FRET_HEIGHT"
+            :x2="stringXPositions[5]"
+            :y2="f * CANVAS_CONFIG.FRET_HEIGHT"
+            :stroke="isDarkMode ? '#cbd5e1' : '#334155'"
+            :stroke-width="FRETBOARD_LINE_WIDTH"
+            style="pointer-events: none"
+            shape-rendering="crispEdges"
+          />
+          <rect
+            :x="CANVAS_CONFIG.OFFSET_X - FRETBOARD_LINE_WIDTH / 2"
+            y="-4"
+            :width="5 * CANVAS_CONFIG.STRING_SPACING + FRETBOARD_LINE_WIDTH"
+            height="8"
+            :fill="isDarkMode ? '#ffffff' : '#0f172a'"
+            style="pointer-events: none"
+            rx="2"
+          />
+          <text
+            v-for="i in fretCount"
+            :key="'fret-text-' + i"
+            v-show="i < fretCount"
+            :x="(CANVAS_CONFIG.OFFSET_X - 32) / 2"
+            :y="i * CANVAS_CONFIG.FRET_HEIGHT"
+            text-anchor="middle"
+            dominant-baseline="central"
+            dy="-2px"
+            font-size="28"
+            font-weight="900"
+            :fill="isDarkMode ? '#e2e8f0' : '#475569'"
+            style="pointer-events: none"
+          >
+            {{ capo > 0 ? capo + i : i }}
+          </text>
+        </g>
+
+        <g
+          v-if="
+            interactive &&
+            hoverPoint &&
+            hoverPoint.fretIndex > 0 &&
+            hoverPoint.fretIndex <= fretCount &&
+            hoverPoint.stringIndex >= 0 &&
+            hoverPoint.stringIndex <= 5
+          "
+          class="finger-predictive"
+        >
+          <circle
+            :cx="stringXPositions[hoverPoint.stringIndex]"
+            :cy="(hoverPoint.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+            r="28"
+            :fill="isDarkMode ? '#28282a' : '#ffffff'"
+            style="pointer-events: none"
+          />
+
+          <circle
+            :cx="stringXPositions[hoverPoint.stringIndex]"
+            :cy="(hoverPoint.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+            r="25.5"
+            fill="transparent"
+            :stroke="isDarkMode ? 'rgba(255, 255, 255, 0.45)' : 'rgba(60, 60, 67, 0.35)'"
+            stroke-width="3"
+            stroke-dasharray="4 4"
+            style="pointer-events: none"
+          />
+        </g>
+
+        <template v-for="(str, sIdx) in strings" :key="'finger-' + sIdx">
+          <g
+            v-if="str.fret > 0 && str.fret <= fretCount"
+            :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
+            @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
           >
             <circle
-              :cx="stringXPositions[hoverPoint.stringIndex]"
-              :cy="(hoverPoint.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+              :cx="stringXPositions[sIdx]"
+              :cy="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
               r="28"
-              :fill="isDarkMode ? '#28282a' : '#ffffff'"
-              style="pointer-events: none"
+              :fill="getFingerColor(str)"
+              class="finger-circle"
+              :class="{ 'is-root-glow': str.isRoot }"
             />
-
-            <circle
-              :cx="stringXPositions[hoverPoint.stringIndex]"
-              :cy="(hoverPoint.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-              r="25.5"
-              fill="transparent"
-              :stroke="isDarkMode ? 'rgba(255, 255, 255, 0.45)' : 'rgba(60, 60, 67, 0.35)'"
-              stroke-width="3"
-              stroke-dasharray="4 4"
+            <text
+              :x="stringXPositions[sIdx]"
+              :y="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+              text-anchor="middle"
+              dy="0.36em"
+              font-size="24"
+              font-weight="900"
+              :fill="getFingerTextColor(str)"
+              class="finger-text"
               style="pointer-events: none"
-            />
-          </g>
-
-          <template v-for="(str, sIdx) in strings" :key="'finger-' + sIdx">
-            <g
-              v-if="str.fret > 0 && str.fret <= fretCount"
-              :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
-              @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
             >
-              <circle
-                :cx="stringXPositions[sIdx]"
-                :cy="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-                r="28"
-                :fill="getFingerColor(str)"
-                class="finger-circle"
-                :class="{ 'is-root-glow': str.isRoot }"
-              />
-              <text
-                :x="stringXPositions[sIdx]"
-                :y="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-                text-anchor="middle"
-                dy="0.36em"
-                font-size="24"
-                font-weight="900"
-                :fill="getFingerTextColor(str)"
-                class="finger-text"
-                style="pointer-events: none"
-              >
-                {{ calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings) }}
-              </text>
-            </g>
-          </template>
-        </svg>
-      </div>
-    </GlobalContextMenu>
+              {{ calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings) }}
+            </text>
+          </g>
+        </template>
+      </svg>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { RefreshCw, Star, X } from '@lucide/vue';
+import { X } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, toRaw } from 'vue';
 
-import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
 import {
@@ -212,10 +211,7 @@ const emit = defineEmits<{
 }>();
 
 const fretBoardRef = ref<HTMLDivElement | null>(null);
-const contextMenuRef = ref<InstanceType<typeof GlobalContextMenu> | null>(null);
 const hoverPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
-
-const activeDynamicItems = ref<ContextMenuItem[]>([]);
 
 let lastCancelTime = 0;
 let lastSIdx = -1;
@@ -256,10 +252,8 @@ const emitStringsUpdate = (mutator: (cloned: GuitarStringsModel) => void) => {
   emit('update:strings', cloned);
 };
 
-const handlePreciseRightClickBus = (e: MouseEvent) => {
+const handleRightClickRoot = (e: MouseEvent) => {
   if (!props.interactive) return;
-
-  activeDynamicItems.value = [];
 
   const point = getCanvasPoint(e.clientX, e.clientY);
   if (!point) return;
@@ -278,34 +272,12 @@ const handlePreciseRightClickBus = (e: MouseEvent) => {
 
   if (!isNoteClicked) return;
 
-  const generatedItems: ContextMenuItem[] = [];
-
-  generatedItems.push({
-    label: currentStringAsset.isRoot ? '取消根音标记' : '设为和弦根音',
-    icon: Star,
-    action: () => {
-      emitStringsUpdate(cloned => {
-        const wasRoot = cloned[sIdx].isRoot;
-        cloned.forEach(s => {
-          s.isRoot = false;
-        });
-        cloned[sIdx].isRoot = !wasRoot;
-      });
-    },
-  });
-
-  if (canTogglePitchAccidental(sIdx, currentStringAsset.fret, props.capo, props.activeBaseStrings)) {
-    generatedItems.push({
-      label: `切换为${currentStringAsset.preferFlat ? '升号' : '降号'}`,
-      icon: RefreshCw,
-      action: () => handleTogglePitchName(sIdx),
+  emitStringsUpdate(cloned => {
+    const wasRoot = cloned[sIdx].isRoot;
+    cloned.forEach(s => {
+      s.isRoot = false;
     });
-  }
-
-  activeDynamicItems.value = generatedItems;
-
-  nextTick(() => {
-    contextMenuRef.value?.open(e.clientX, e.clientY);
+    cloned[sIdx].isRoot = !wasRoot;
   });
 };
 
@@ -409,6 +381,24 @@ const handlePointerDown = (e: PointerEvent) => {
 const handleWheel = (e: WheelEvent) => {
   if (!props.interactive) return;
   e.preventDefault();
+
+  const point = getCanvasPoint(e.clientX, e.clientY);
+
+  if (point && point.stringIndex >= 0 && point.stringIndex <= 5) {
+    const { stringIndex: sIdx, fretIndex: fIdx } = point;
+    const currentStr = props.strings[sIdx];
+
+    const isHoveringActiveNote =
+      (fIdx > 0 && fIdx <= props.fretCount && currentStr.fret === fIdx) || (fIdx === 0 && isOpen(currentStr));
+
+    if (isHoveringActiveNote) {
+      if (canTogglePitchAccidental(sIdx, currentStr.fret, props.capo, props.activeBaseStrings)) {
+        handleTogglePitchName(sIdx);
+      }
+      return;
+    }
+  }
+
   wheelAccumulator += e.deltaY;
   if (Math.abs(wheelAccumulator) < INTERACTION_CONFIG.WHEEL_THRESHOLD) return;
   if (wheelAccumulator > 0) {

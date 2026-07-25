@@ -93,8 +93,14 @@ export function useChordService() {
 
   const persistCurrentChord = () => {
     const cleanName = editorStore.currentChordName.trim();
+
     if (!cleanName || editorStore.isFretBoardEmpty) {
       uiStore.toast.warning('保存失败：请输入名称并指定指板有效音符');
+      return;
+    }
+
+    if (!chordStore.selectedGroupId) {
+      uiStore.toast.warning('保存失败：请先展开或选择一个目标分组');
       return;
     }
 
@@ -108,7 +114,7 @@ export function useChordService() {
       strings: cloneDeep(toRaw(editorStore.strings)),
       fretCount: editorStore.fretCount,
       capo: editorStore.capo,
-      groupId: targetGroupId || 'default',
+      groupId: targetGroupId,
       tuning: editorStore.currentTuning,
     };
 
