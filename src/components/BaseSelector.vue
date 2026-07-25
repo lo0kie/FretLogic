@@ -249,7 +249,7 @@ watch(isOpen, opened => {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  background-color: var(--bg-panel);
+  background-color: var(--bg-body);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--glass-border);
@@ -259,10 +259,6 @@ watch(isOpen, opened => {
   padding: 0.25rem;
   gap: 0.15rem;
   max-height: 13.5rem;
-
-  :global(.dark) & {
-    box-shadow: @shadow-floating-dark;
-  }
 }
 
 .selector-item {

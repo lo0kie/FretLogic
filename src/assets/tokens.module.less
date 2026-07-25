@@ -1,8 +1,8 @@
 ﻿:root {
   --bg-main: #f2f2f7;
   --bg-body: #ffffff;
-  --bg-panel: rgba(255, 255, 255, 0.72);
-  --bg-panel-hover: rgba(242, 242, 247, 0.8);
+  --bg-panel: rgba(255, 255, 255, 0.82);
+  --bg-panel-hover: rgba(242, 242, 247, 0.9);
   --glass-border: rgba(60, 60, 67, 0.08);
 
   --border-light: rgba(60, 60, 67, 0.06);
@@ -22,25 +22,34 @@
   --theme-btn-color: #ff9500;
   --theme-btn-bg: rgba(255, 255, 255, 0.8);
 
-  --root-glow: 0 0 16px rgba(255, 149, 0, 0.45);
-  --finger-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+  --root-glow: 0 0 20px rgba(255, 149, 0, 0.4);
+  --finger-shadow: 0 4px 12px rgba(0, 122, 255, 0.25);
+
+  /* 🌟 亮色模式：极轻柔通透的羽化阴影 */
+  --shadow-sm: 0 2px 6px -1px rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 12px 28px -6px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 40px -8px rgba(0, 0, 0, 0.1), 0 6px 18px -4px rgba(0, 0, 0, 0.05);
+
+  --shadow-panel: 0 16px 36px -8px rgba(0, 0, 0, 0.07), 0 4px 16px -4px rgba(0, 0, 0, 0.03);
+  --shadow-floating: 0 28px 64px -12px rgba(0, 0, 0, 0.12), 0 8px 24px -6px rgba(0, 0, 0, 0.06);
 }
 
 .dark {
-  --bg-main: #000000;
+  --bg-main: #121214;
   --bg-body: #1c1c1e;
-  --bg-panel: rgba(28, 28, 30, 0.75);
-  --bg-panel-hover: rgba(44, 44, 46, 0.85);
+  --bg-panel: rgba(44, 44, 46, 0.85);
+  --bg-panel-hover: rgba(58, 58, 60, 0.9);
   --glass-border: rgba(255, 255, 255, 0.12);
 
   --border-light: rgba(235, 235, 245, 0.06);
-  --border-base: rgba(235, 235, 245, 0.15);
-  --control-border: rgba(235, 235, 245, 0.15);
+  --border-base: rgba(235, 235, 245, 0.12);
+  --control-border: rgba(235, 235, 245, 0.12);
 
   --text-title: #ffffff;
   --text-body: #f2f2f7;
   --text-muted: #eca0a0;
-  --text-disabled: #636366;
+  --text-disabled: #8e8e93;
 
   --color-primary: #0a84ff;
   --color-success: #30d158;
@@ -50,8 +59,18 @@
   --theme-btn-color: #64d2ff;
   --theme-btn-bg: rgba(44, 44, 46, 0.8);
 
-  --root-glow: 0 0 20px rgba(255, 214, 10, 0.6);
-  --finger-shadow: 0 4px 16px rgba(10, 132, 255, 0.45);
+  --root-glow: 0 0 24px rgba(255, 214, 10, 0.5);
+  --finger-shadow: 0 6px 18px rgba(10, 132, 255, 0.35);
+
+  /* 🌟 暗色模式：同步降重后的自然柔和暗影（低对比度高光描边 + 适度暗影） */
+  --shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --shadow-lg: 0 14px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-xl: 0 22px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1);
+
+  --shadow-panel: 0 18px 42px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-floating:
+    0 32px 68px -8px rgba(0, 0, 0, 0.65), 0 12px 28px -6px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 @primary: var(--color-primary);
@@ -82,15 +101,13 @@
 
 @focus-ring-primary: 0 0 0 3px color-mix(in srgb, @primary, transparent 80%);
 
-@shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
-@shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
-@shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
-@shadow-xl: 0 20px 48px rgba(0, 0, 0, 0.16);
+@shadow-sm: var(--shadow-sm);
+@shadow-md: var(--shadow-md);
+@shadow-lg: var(--shadow-lg);
+@shadow-xl: var(--shadow-xl);
 
-@shadow-panel: 0 20px 40px -15px rgba(0, 0, 0, 0.07);
-@shadow-panel-dark: 0 24px 48px -12px rgba(0, 0, 0, 0.7);
-@shadow-floating: 0 32px 64px -16px rgba(0, 0, 0, 0.14);
-@shadow-floating-dark: 0 40px 80px -16px rgba(0, 0, 0, 0.85);
+@shadow-panel: var(--shadow-panel);
+@shadow-floating: var(--shadow-floating);
 
 @duration-fast: 0.18s;
 @duration-base: 0.28s;
@@ -118,7 +135,5 @@
   shadowLg: @shadow-lg;
   shadowXl: @shadow-xl;
   shadowPanel: @shadow-panel;
-  shadowPanelDark: @shadow-panel-dark;
   shadowFloating: @shadow-floating;
-  shadowFloatingDark: @shadow-floating-dark;
 }

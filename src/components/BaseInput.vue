@@ -1,6 +1,6 @@
 <template>
   <div class="input-wrapper group">
-    <div v-if="$slots.prefix" class="prefix-zone">
+    <div v-if="$slots.prefix" class="prefix-zone" :class="sizeClass">
       <slot name="prefix"></slot>
     </div>
 
@@ -14,6 +14,7 @@
       :disabled="disabled"
       class="base-input-field"
       :class="[
+        sizeClass,
         { 'has-prefix': $slots.prefix, 'has-suffix': clearable || isPassword, 'css-password-field': isPassword },
         fontClass,
       ]"
@@ -21,7 +22,7 @@
       autocomplete="off"
     />
 
-    <div class="suffix-zone">
+    <div class="suffix-zone" :class="sizeClass">
       <button
         v-if="clearable && modelValue && !disabled"
         type="button"
@@ -46,6 +47,7 @@ const props = withDefaults(
     disabled?: boolean;
     clearable?: boolean;
     isPassword?: boolean;
+    size?: 'sm' | 'md' | 'lg';
     fontSize?: 'xs' | 'md' | 'lg';
   }>(),
   {
@@ -53,6 +55,7 @@ const props = withDefaults(
     disabled: false,
     clearable: false,
     isPassword: false,
+    size: 'md',
     fontSize: 'md',
   }
 );
@@ -64,6 +67,8 @@ const emit = defineEmits<{
 }>();
 
 const inputRef = ref<HTMLInputElement | null>(null);
+
+const sizeClass = computed(() => `size-${props.size}`);
 
 const fontClass = computed(() => {
   switch (props.fontSize) {
@@ -108,9 +113,9 @@ defineExpose({
   }
 }
 
+/* 前缀定位区域 */
 .prefix-zone {
   position: absolute;
-  left: 0.75rem;
   top: 0;
   bottom: 0;
   display: flex;
@@ -118,18 +123,39 @@ defineExpose({
   justify-content: center;
   color: var(--text-disabled);
   pointer-events: none;
+
+  &.size-sm {
+    left: 0.4rem;
+  }
+  &.size-md {
+    left: 0.55rem;
+  }
+  &.size-lg {
+    left: 0.75rem;
+  }
 }
 
+/* 后缀定位区域 */
 .suffix-zone {
   position: absolute;
-  right: 0.5rem;
   top: 0;
   bottom: 0;
   display: flex;
   align-items: center;
   pointer-events: auto;
+
+  &.size-sm {
+    right: 0.35rem;
+  }
+  &.size-md {
+    right: 0.5rem;
+  }
+  &.size-lg {
+    right: 0.65rem;
+  }
 }
 
+/* 清空按钮原生样式 */
 .clear-button {
   height: 1rem;
   width: 1rem;
@@ -155,13 +181,11 @@ defineExpose({
   }
 }
 
+/* 输入框基础样式 */
 .base-input-field {
   width: 100%;
   font-weight: 500;
-  height: 2.1rem;
   box-sizing: border-box;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
   border-radius: 9999px;
@@ -190,12 +214,44 @@ defineExpose({
     cursor: not-allowed;
   }
 
-  &.has-prefix {
-    padding-left: 2rem;
+  /* 尺寸（Size）：与 ActionButton 完全同步 */
+  &.size-sm {
+    height: 1.5rem;
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+
+    &.has-prefix {
+      padding-left: 1.2rem;
+    }
+    &.has-suffix {
+      padding-right: 1.2rem;
+    }
   }
 
-  &.has-suffix {
-    padding-right: 1.8rem;
+  &.size-md {
+    height: 1.75rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+
+    &.has-prefix {
+      padding-left: 1.6rem;
+    }
+    &.has-suffix {
+      padding-right: 1.6rem;
+    }
+  }
+
+  &.size-lg {
+    height: 2.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+
+    &.has-prefix {
+      padding-left: 2rem;
+    }
+    &.has-suffix {
+      padding-right: 2rem;
+    }
   }
 }
 

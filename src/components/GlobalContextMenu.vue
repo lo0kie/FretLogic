@@ -164,10 +164,6 @@ defineExpose({
   border-radius: @radius-lg;
   box-shadow: @shadow-floating;
   box-sizing: border-box;
-
-  :global(.dark) & {
-    box-shadow: @shadow-floating-dark;
-  }
 }
 
 .menu-item {

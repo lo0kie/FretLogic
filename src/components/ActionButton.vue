@@ -4,7 +4,7 @@
     @click="handleInternalClick"
     :style="{ height, width }"
     class="action-button-base"
-    :class="[themeClasses, sizeClasses, variantClasses, { 'is-icon-only': iconOnly, 'is-active': active }]"
+    :class="[sizeClass, themeClass, variantClass, roundedClass, { 'is-icon-only': iconOnly, 'is-active': active }]"
   >
     <Loader2 v-if="loading" class="loading-icon" />
     <slot v-else name="prefix"></slot>
@@ -32,6 +32,7 @@ const props = withDefaults(
     iconOnly?: boolean;
     variant?: 'default' | 'subtle' | 'ghost';
     size?: 'sm' | 'md' | 'lg';
+    rounded?: 'none' | 'sm' | 'md' | 'lg' | 'full';
     width?: string;
     height?: string;
   }>(),
@@ -41,6 +42,7 @@ const props = withDefaults(
     active: false,
     iconOnly: false,
     variant: 'default',
+    rounded: 'full',
   }
 );
 
@@ -52,20 +54,22 @@ const handleInternalClick = (e: MouseEvent) => {
   emit('click', e);
 };
 
-const themeClasses = computed(() => {
+const themeClass = computed(() => {
   if (props.primary) return 'theme-primary';
   if (props.danger) return 'theme-danger';
   if (props.warning) return 'theme-warning';
   return 'theme-default';
 });
 
-const variantClasses = computed(() => `variant-${props.variant}`);
-const sizeClasses = computed(() => `size-${props.size}`);
+const variantClass = computed(() => `variant-${props.variant}`);
+const sizeClass = computed(() => `size-${props.size}`);
+const roundedClass = computed(() => `rounded-${props.rounded}`);
 </script>
 
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 
+/* 1. 基础容器：定义通用结构与动画 */
 .action-button-base {
   display: inline-flex;
   align-items: center;
@@ -73,90 +77,51 @@ const sizeClasses = computed(() => `size-${props.size}`);
   font-weight: 600;
   border-style: solid;
   border-width: 1px;
-  border-radius: 9999px;
   user-select: none;
   box-sizing: border-box;
   transition: @transition-fast;
   cursor: pointer;
+  flex-shrink: 0;
 
   &:disabled {
     opacity: 0.35;
     cursor: not-allowed;
-    transform: none !important;
-    box-shadow: none !important;
+    transform: none;
+    box-shadow: none;
     pointer-events: auto;
   }
 
   &:active:not(:disabled) {
     transform: scale(0.95);
   }
-
-  &.is-icon-only {
-    padding: 0 !important;
-    border-radius: @radius-md;
-    width: 1.6rem;
-    height: 1.6rem;
-  }
-
-  &.is-active {
-    background-color: color-mix(in srgb, var(--color-primary), transparent 88%) !important;
-    color: var(--color-primary) !important;
-    border-color: color-mix(in srgb, var(--color-primary), transparent 75%) !important;
-  }
 }
 
-.loading-icon {
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
-  opacity: 0.8;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.button-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-}
-
+/* 2. 尺寸（Size）：统一控制高度、字体大小与内边距 */
 .size-sm {
   height: 1.5rem;
-  padding-left: 0.65rem;
-  padding-right: 0.65rem;
-  font-size: 0.68rem !important;
+  padding: 0 0.65rem;
+  font-size: 0.68rem;
   gap: 0.3rem;
 }
 
 .size-md {
   height: 1.75rem;
-  padding-left: 1rem;
-  padding-right: 1rem;
-  font-size: 0.72rem !important;
+  padding: 0 1rem;
+  font-size: 0.72rem;
   gap: 0.45rem;
 }
 
 .size-lg {
   height: 2.5rem;
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
-  font-size: 0.75rem !important;
+  padding: 0 1.25rem;
+  font-size: 0.75rem;
   gap: 0.5rem;
 }
 
-/* Variant 变体样式 */
+/* 3. 变体（Variant）样式 */
 .variant-subtle {
   background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
-  border-color: transparent;
+  border-color: color-mix(in srgb, var(--color-primary), transparent 90%);
   color: var(--color-primary);
 
   &:hover:not(:disabled) {
@@ -175,6 +140,7 @@ const sizeClasses = computed(() => `size-${props.size}`);
   }
 }
 
+/* 4. 主题（Theme）样式 */
 .theme-primary {
   background-color: var(--color-primary);
   border-color: transparent;
@@ -216,5 +182,61 @@ const sizeClasses = computed(() => `size-${props.size}`);
     background-color: var(--bg-panel-hover);
     color: var(--text-title);
   }
+}
+
+/* 5. 激活状态（Active） */
+.action-button-base.is-active {
+  background-color: color-mix(in srgb, var(--color-primary), transparent 88%);
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary), transparent 75%);
+}
+
+/* 6. Icon-Only 修正模式：严格保证正方形且继承当前 size 的 height */
+.action-button-base.is-icon-only {
+  padding: 0;
+  width: auto;
+  aspect-ratio: 1 / 1;
+}
+
+/* 7. 圆角（Rounded）：定义在文件最下方以保证 highest CSS priority */
+.action-button-base.rounded-none {
+  border-radius: 0;
+}
+.action-button-base.rounded-sm {
+  border-radius: @radius-sm;
+}
+.action-button-base.rounded-md {
+  border-radius: @radius-md;
+}
+.action-button-base.rounded-lg {
+  border-radius: @radius-lg;
+}
+.action-button-base.rounded-full {
+  border-radius: 9999px;
+}
+
+/* 辅助图标与内容样式 */
+.loading-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  opacity: 0.8;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.button-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
 </style>

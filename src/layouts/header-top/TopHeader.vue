@@ -6,6 +6,7 @@
         <ActionButton
           icon-only
           variant="ghost"
+          size="sm"
           :active="uiStore.isLeftOpen"
           @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
         >
@@ -13,57 +14,56 @@
         </ActionButton>
       </GlobalTooltip>
 
+      <div class="header-divider"></div>
+
       <span class="app-brand-title">Fret Logic</span>
     </div>
 
-    <!-- 2. 中间：试听与导出快捷键 -->
+    <!-- 2. 中间：分段胶囊型工具组 -->
     <div class="header-section section-center">
-      <GlobalTooltip content="播放/试听当前和弦" placement="bottom">
-        <ActionButton
-          size="sm"
-          variant="subtle"
-          :disabled="editorStore.isFretBoardEmpty || isPlaying"
-          @click="playCurrentChord"
-        >
-          <template #prefix>
-            <component
-              v-if="!editorStore.isFretBoardEmpty"
-              :is="isPlaying ? Square : Play"
-              :size="13"
-              stroke-width="2.5"
-            />
-          </template>
-          <span>{{ isPlaying ? '试听中...' : '试听' }}</span>
-        </ActionButton>
-      </GlobalTooltip>
+      <div class="segmented-control-capsule">
+        <GlobalTooltip content="播放/试听当前和弦" placement="bottom">
+          <ActionButton
+            size="sm"
+            variant="subtle"
+            icon-only
+            :disabled="editorStore.isFretBoardEmpty || isPlaying"
+            @click="playCurrentChord"
+          >
+            <component :is="isPlaying ? Square : Play" :size="13" stroke-width="2.5" />
+          </ActionButton>
+        </GlobalTooltip>
 
-      <div class="header-divider"></div>
+        <div class="capsule-divider"></div>
 
-      <GlobalTooltip content="导出透明背景图片" placement="bottom">
-        <ActionButton icon-only variant="ghost" :disabled="uiStore.isCopying" @click="$emit('export-image', true)">
-          <Image :size="15" stroke-width="2" />
-        </ActionButton>
-      </GlobalTooltip>
+        <GlobalTooltip content="导出透明背景图片" placement="bottom">
+          <ActionButton
+            size="sm"
+            icon-only
+            variant="ghost"
+            :disabled="uiStore.isCopying"
+            @click="$emit('export-image', true)"
+          >
+            <Image :size="15" stroke-width="2" />
+          </ActionButton>
+        </GlobalTooltip>
 
-      <GlobalTooltip content="导出带背景卡片切图" placement="bottom">
-        <ActionButton icon-only variant="ghost" :disabled="uiStore.isCopying" @click="$emit('export-image', false)">
-          <Copy :size="15" stroke-width="2" />
-        </ActionButton>
-      </GlobalTooltip>
+        <GlobalTooltip content="导出带背景卡片切图" placement="bottom">
+          <ActionButton
+            size="sm"
+            icon-only
+            variant="ghost"
+            :disabled="uiStore.isCopying"
+            @click="$emit('export-image', false)"
+          >
+            <Copy :size="15" stroke-width="2" />
+          </ActionButton>
+        </GlobalTooltip>
+      </div>
     </div>
 
-    <!-- 3. 右侧：保存/重置 + 指板配置 Popover + 更多设置 -->
+    <!-- 3. 右侧：指板配置 Popover + 更多设置 (已移除顶部保存/重置) -->
     <div class="header-section section-right">
-      <ActionButton size="sm" variant="ghost" :disabled="isClearDisabled" @click="editorStore.resetEditor()">
-        {{ editorStore.editingId ? '放弃' : '重置' }}
-      </ActionButton>
-
-      <ActionButton size="sm" primary :disabled="isSaveDisabled" @click="chordService.persistCurrentChord()">
-        {{ editorStore.editingId ? '更新' : '保存' }}
-      </ActionButton>
-
-      <div class="header-divider"></div>
-
       <!-- 指板属性配置 Popover -->
       <div class="popover-wrapper" ref="configPopoverRef">
         <GlobalTooltip content="指板配置 (品数 / Capo / 调音)" placement="bottom">
@@ -71,6 +71,11 @@
             <SlidersHorizontal :size="16" stroke-width="2.2" />
           </ActionButton>
         </GlobalTooltip>
+
+        <!-- 透明点击拦截层 -->
+        <Teleport to="body">
+          <div v-if="isConfigOpen" class="popover-backdrop-mask" @pointerdown="isConfigOpen = false"></div>
+        </Teleport>
 
         <Transition name="dropdown-fade">
           <div v-if="isConfigOpen" class="config-popover-card">
@@ -144,13 +149,19 @@
       <!-- 主题切换按钮 -->
       <GlobalTooltip :content="settingsStore.isDarkMode ? '切换至浅色模式' : '切换至深色模式'" placement="bottom">
         <ActionButton icon-only variant="ghost" @click="$emit('toggle-theme', $event)">
-          <component :is="settingsStore.isDarkMode ? Moon : Sun" :size="16" stroke-width="2.2" />
+          <component
+            :is="settingsStore.isDarkMode ? Moon : Sun"
+            :size="16"
+            :stroke-width="2.2"
+            :style="{ color: settingsStore.isDarkMode ? '#64d2ff' : '#ff9500' }"
+            class="theme-toggle-icon"
+          />
         </ActionButton>
       </GlobalTooltip>
     </div>
   </header>
 
-  <!-- Modal 部分保持不变 -->
+  <!-- Modal 部分 -->
   <BaseModal v-model:visible="isSyncModalOpen" title="云端同步设置" showFooter width="w-80">
     <SyncSettingsCard
       :is-syncing="isSyncing"
@@ -178,7 +189,6 @@ import BaseSelector from '@/components/BaseSelector.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import SyncSettingsCard from '@/layouts/header-top/SyncSettingsCard.vue';
 import { useAudioPlayer } from '@/services/useAudioPlayer';
-import { useChordService } from '@/services/useChordService';
 import { useGithubSyncService } from '@/services/useGithubSyncService';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -186,8 +196,7 @@ import { useUiStore } from '@/stores/uiStore';
 import { FRET_COUNTS } from '@/utils/constants';
 import { TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { Cloud, Copy, Image, Moon, PanelLeft, Play, SlidersHorizontal, Square, Sun } from '@lucide/vue';
-import { useEventListener } from '@vueuse/core';
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 
 defineEmits<{
   (e: 'export-image', isTransparent: boolean): void;
@@ -197,7 +206,6 @@ defineEmits<{
 const editorStore = useEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
-const chordService = useChordService();
 const { isPlaying, playCurrentChord } = useAudioPlayer();
 const { triggerGlobalSync, pullFromGithub, isSyncing, isPulling } = useGithubSyncService();
 
@@ -206,12 +214,6 @@ const isConfigOpen = ref(false);
 const configPopoverRef = ref<HTMLDivElement | null>(null);
 const isSyncModalOpen = ref(false);
 const isPullConfirmOpen = ref(false);
-
-useEventListener(window, 'pointerdown', e => {
-  if (isConfigOpen.value && configPopoverRef.value && !configPopoverRef.value.contains(e.target as Node)) {
-    isConfigOpen.value = false;
-  }
-});
 
 const handleCapoWheel = (e: WheelEvent) => {
   e.preventDefault();
@@ -227,23 +229,6 @@ const confirmPull = () => {
   isPullConfirmOpen.value = false;
   isSyncModalOpen.value = false;
 };
-
-const isSaveDisabled = computed(() => {
-  const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
-  return !cleanName || editorStore.isFretBoardEmpty;
-});
-
-const isClearDisabled = computed(() => {
-  if (editorStore.editingId) return false;
-  const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
-  return (
-    cleanName === '' &&
-    editorStore.isFretBoardEmpty &&
-    editorStore.capo === 0 &&
-    editorStore.fretCount === 3 &&
-    editorStore.currentTuning === 'STANDARD'
-  );
-});
 </script>
 
 <style scoped lang="less">
@@ -279,12 +264,29 @@ const isClearDisabled = computed(() => {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+}
+
+.segmented-control-capsule {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--glass-border);
+  box-sizing: border-box;
+}
+
+.capsule-divider {
+  width: 1px;
+  height: 0.8rem;
+  background-color: var(--border-base);
+  margin: 0 0.1rem;
+  opacity: 0.5;
 }
 
 .app-brand-title {
   font-size: 0.8rem;
-  font-weight: 900;
+  font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text-title);
   margin-left: 0.2rem;
@@ -292,6 +294,14 @@ const isClearDisabled = computed(() => {
 
 .popover-wrapper {
   position: relative;
+  z-index: 1001;
+}
+
+.popover-backdrop-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background-color: transparent;
 }
 
 .config-popover-card {
@@ -311,10 +321,6 @@ const isClearDisabled = computed(() => {
   gap: 0.8rem;
   z-index: 1100;
   box-sizing: border-box;
-
-  :global(.dark) & {
-    box-shadow: @shadow-floating-dark;
-  }
 }
 
 .config-row {
@@ -346,7 +352,7 @@ const isClearDisabled = computed(() => {
   font-size: 0.68rem;
   font-weight: 600;
   border: none;
-  border-radius: @radius-sm;
+  border-radius: @radius-md;
   background: transparent;
   color: var(--text-disabled);
   cursor: pointer;

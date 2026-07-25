@@ -10,25 +10,26 @@
         fontSize="xs"
       >
         <template #prefix>
-          <Search class="search-icon" stroke-width="2.5" />
+          <Search class="search-icon" :size="16" stroke-width="2.5" />
         </template>
       </BaseInput>
 
       <div class="header-actions-single">
         <GlobalTooltip placement="bottom" :content="uiStore.isPreviewEnabled ? '关闭和弦悬浮预览' : '开启和弦悬浮预览'">
-          <button
+          <ActionButton
             @click="uiStore.isPreviewEnabled = !uiStore.isPreviewEnabled"
-            class="header-preview-btn"
-            :class="{ 'is-active': uiStore.isPreviewEnabled }"
+            :variant="uiStore.isPreviewEnabled ? 'subtle' : 'ghost'"
+            icon-only
+            size="md"
           >
             <component :is="uiStore.isPreviewEnabled ? Eye : EyeOff" :size="16" :stroke-width="2.5" />
-          </button>
+          </ActionButton>
         </GlobalTooltip>
 
         <GlobalTooltip placement="bottom" content="新建分组">
-          <button @click="openCreate" class="header-add-btn">
+          <ActionButton @click="openCreate" variant="subtle" icon-only>
             <Plus :size="18" :stroke-width="3" />
-          </button>
+          </ActionButton>
         </GlobalTooltip>
       </div>
     </div>
@@ -345,49 +346,7 @@ const handleMoveChord = () => {
 }
 
 .search-icon {
-  width: 0.8rem;
-  height: 0.8rem;
   color: var(--text-disabled);
-}
-
-.header-add-btn,
-.header-preview-btn {
-  width: 1.8rem;
-  height: 1.8rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border-light);
-  background-color: var(--bg-body);
-  color: var(--text-disabled);
-  padding: 0;
-  cursor: pointer;
-  transition: @transition-fast;
-
-  &:hover {
-    color: var(--text-title);
-    background-color: var(--bg-panel-hover);
-  }
-
-  &:active {
-    transform: scale(0.92);
-  }
-
-  &.is-active {
-    color: @primary;
-    background-color: color-mix(in srgb, @primary, transparent 90%);
-    border-color: color-mix(in srgb, @primary, transparent 75%);
-  }
-}
-
-.header-add-btn {
-  color: var(--color-primary);
-  background-color: color-mix(in srgb, @primary, transparent 90%);
-
-  &:hover {
-    background-color: color-mix(in srgb, @primary, transparent 80%);
-  }
 }
 
 .left-panel-footer {

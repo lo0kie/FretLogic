@@ -135,10 +135,6 @@ const handleCancel = () => {
   box-shadow: @shadow-floating;
   animation: cardPopIn @duration-base @bezier-bounce forwards;
 
-  :global(.dark) & {
-    box-shadow: @shadow-floating-dark;
-  }
-
   &.w-80 {
     width: 20rem;
   }
@@ -196,7 +192,6 @@ const handleCancel = () => {
   }
 }
 
-/* 🌟 Transition 离开渐隐效果 */
 .modal-fade-leave-active {
   transition: opacity @duration-fast ease-in;
 }

@@ -123,7 +123,7 @@
               :cx="stringXPositions[hoverPoint.stringIndex]"
               :cy="(hoverPoint.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
               r="28"
-              :fill="isDarkMode ? '#1c1c1e' : '#ffffff'"
+              :fill="isDarkMode ? '#28282a' : '#ffffff'"
               style="pointer-events: none"
             />
 
