@@ -18,7 +18,7 @@
           class="menu-item"
           :class="[item.danger ? 'is-danger' : 'is-normal', item.disabled ? 'is-disabled' : '']"
         >
-          <component :is="item.icon" v-if="item.icon" :size="14" :stroke-width="2.5" />
+          <component :is="item.icon" v-if="item.icon" :size="13" :stroke-width="2.5" />
           <span>{{ item.label }}</span>
         </button>
       </div>
@@ -146,27 +146,23 @@ defineExpose({
   position: fixed;
   inset: 0;
   z-index: 9998;
-  background-color: color-mix(in srgb, var(--bg-main) 4%, transparent);
-
-  :global(.dark) & {
-    background-color: color-mix(in srgb, #000000 20%, transparent);
-  }
+  background-color: transparent;
 }
 
 .context-menu-box {
   position: fixed;
   z-index: 9999;
-  padding: 0.25rem;
+  padding: 0.3rem;
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
-  min-width: 140px;
-  background-color: color-mix(in srgb, var(--bg-panel) 94%, transparent);
-  border: 1px solid var(--border-base);
-  border-radius: @radius-md;
-  box-shadow: @shadow-lg;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  gap: 0.1rem;
+  min-width: 130px;
+  background-color: var(--bg-panel);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid var(--glass-border);
+  border-radius: @radius-lg;
+  box-shadow: @shadow-floating;
   box-sizing: border-box;
 
   :global(.dark) & {
@@ -177,26 +173,24 @@ defineExpose({
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.625rem;
-  font-size: 0.7rem;
-  font-weight: 700;
+  gap: 0.45rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.73rem;
+  font-weight: 500;
   border-radius: @radius-md;
   border: none;
   background-color: transparent;
   width: 100%;
   text-align: left;
   box-sizing: border-box;
-  transition:
-    background-color @duration-fast,
-    color @duration-fast;
+  transition: @transition-fast;
 
   &.is-normal {
-    color: var(--text-body);
+    color: var(--text-title);
 
     &:hover {
-      background-color: var(--bg-panel-hover);
-      color: var(--text-title);
+      background-color: var(--color-primary);
+      color: #ffffff;
     }
   }
 
@@ -204,16 +198,13 @@ defineExpose({
     color: var(--color-danger);
 
     &:hover {
-      background-color: rgba(239, 68, 68, 0.1);
-
-      :global(.dark) & {
-        background-color: rgba(239, 68, 68, 0.2);
-      }
+      background-color: var(--color-danger);
+      color: #ffffff;
     }
   }
 
   &.is-disabled {
-    opacity: 0.3;
+    opacity: 0.35;
     cursor: not-allowed;
     pointer-events: none;
   }
@@ -225,19 +216,19 @@ defineExpose({
 
 .menu-fade-enter-active {
   transition:
-    opacity 0.12s @bezier-standard,
-    transform 0.12s @bezier-standard;
+    opacity @duration-fast @bezier-standard,
+    transform @duration-fast @bezier-standard;
 }
 
 .menu-fade-leave-active {
   transition:
-    opacity 0.08s @bezier-standard,
-    transform 0.08s @bezier-standard;
+    opacity @duration-fast @bezier-standard,
+    transform @duration-fast @bezier-standard;
 }
 
 .menu-fade-enter-from,
 .menu-fade-leave-to {
   opacity: 0;
-  transform: scale(0.96) translateY(-4px);
+  transform: scale(0.92) translateY(-4px);
 }
 </style>

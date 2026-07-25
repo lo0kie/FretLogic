@@ -1,9 +1,9 @@
 <template>
   <div class="fretboard-layout-scaler" :style="{ width: `${realScaledWidth}px`, height: `${realScaledHeight}px` }">
-    <GlobalContextMenu ref="contextMenuComponentRef" :items="activeDynamicItems">
+    <GlobalContextMenu ref="contextMenuRef" :items="activeDynamicItems">
       <div
         ref="fretBoardRef"
-        class="fretBoard-container"
+        class="fretboard-container"
         :class="[interactive ? 'is-interactive' : 'is-disabled']"
         :style="{
           width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
@@ -76,7 +76,7 @@
               :y1="f * CANVAS_CONFIG.FRET_HEIGHT"
               :x2="stringXPositions[5]"
               :y2="f * CANVAS_CONFIG.FRET_HEIGHT"
-              :stroke="isDarkMode ? '#ffffff' : '#0f172a'"
+              :stroke="isDarkMode ? '#cbd5e1' : '#334155'"
               :stroke-width="FRETBOARD_LINE_WIDTH"
               style="pointer-events: none"
               shape-rendering="crispEdges"
@@ -88,6 +88,7 @@
               height="8"
               :fill="isDarkMode ? '#ffffff' : '#0f172a'"
               style="pointer-events: none"
+              rx="2"
             />
             <text
               v-for="i in fretCount"
@@ -100,7 +101,7 @@
               dy="-2px"
               font-size="28"
               font-weight="900"
-              :fill="isDarkMode ? '#cbd5e1' : '#1e293b'"
+              :fill="isDarkMode ? '#e2e8f0' : '#475569'"
               style="pointer-events: none"
             >
               {{ capo > 0 ? capo + i : i }}
@@ -122,7 +123,7 @@
               :cx="stringXPositions[hoverPoint.stringIndex]"
               :cy="(hoverPoint.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
               r="28"
-              :fill="isDarkMode ? '#0f172a' : '#ffffff'"
+              :fill="isDarkMode ? '#1c1c1e' : '#ffffff'"
               style="pointer-events: none"
             />
 
@@ -131,8 +132,8 @@
               :cy="(hoverPoint.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
               r="25.5"
               fill="transparent"
-              :stroke="isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(15,23,42,0.25)'"
-              stroke-width="4"
+              :stroke="isDarkMode ? 'rgba(255, 255, 255, 0.45)' : 'rgba(60, 60, 67, 0.35)'"
+              stroke-width="3"
               stroke-dasharray="4 4"
               style="pointer-events: none"
             />
@@ -150,9 +151,8 @@
                 r="28"
                 :fill="getFingerColor(str)"
                 class="finger-circle"
-                style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))"
+                :class="{ 'is-root-glow': str.isRoot }"
               />
-
               <text
                 :x="stringXPositions[sIdx]"
                 :y="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
@@ -181,16 +181,16 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw } from 'vue'
 
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
 import {
   CANVAS_CONFIG,
   FRETBOARD_COLORS,
   FRETBOARD_LINE_WIDTH,
   FRETBOARD_SCALE_MAP,
   INTERACTION_CONFIG,
-} from '@/constants';
-import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
+} from '@/utils/constants';
 import { cloneDeep } from '@/utils/dataParser';
-import { calcNoteLabel, DEFAULT_TUNING_MAPPING, isMuted, isOpen } from '@/utils/musicTheory';
+import { calcNoteLabel, canTogglePitchAccidental, DEFAULT_TUNING_MAPPING, isMuted, isOpen } from '@/utils/musicTheory';
 
 const props = withDefaults(
   defineProps<{
@@ -212,7 +212,7 @@ const emit = defineEmits<{
 }>();
 
 const fretBoardRef = ref<HTMLDivElement | null>(null);
-const contextMenuComponentRef = ref<InstanceType<typeof GlobalContextMenu> | null>(null);
+const contextMenuRef = ref<InstanceType<typeof GlobalContextMenu> | null>(null);
 const hoverPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
 
 const activeDynamicItems = ref<ContextMenuItem[]>([]);
@@ -294,9 +294,7 @@ const handlePreciseRightClickBus = (e: MouseEvent) => {
     },
   });
 
-  const base = props.activeBaseStrings[sIdx];
-  const actualOffset = currentStringAsset.fret > 0 && props.capo > 0 ? props.capo : 0;
-  if ([1, 3, 6, 8, 10].includes((base + currentStringAsset.fret + actualOffset) % 12)) {
+  if (canTogglePitchAccidental(sIdx, currentStringAsset.fret, props.capo, props.activeBaseStrings)) {
     generatedItems.push({
       label: `切换为${currentStringAsset.preferFlat ? '升号' : '降号'}`,
       icon: RefreshCw,
@@ -307,29 +305,30 @@ const handlePreciseRightClickBus = (e: MouseEvent) => {
   activeDynamicItems.value = generatedItems;
 
   nextTick(() => {
-    contextMenuComponentRef.value?.open(e.clientX, e.clientY);
+    contextMenuRef.value?.open(e.clientX, e.clientY);
   });
 };
 
 const handleLocalToggleOpenString = (sIdx: number) => {
   emitStringsUpdate(cloned => {
     const str = cloned[sIdx];
-    if (str.fret > 0) str.fret = 0;
-    else if (isOpen(str)) {
+    if (str.fret > 0) {
+      str.fret = 0;
+      str.isRoot = false;
+    } else if (isOpen(str)) {
       str.fret = -1;
       str.isRoot = false;
-    } else str.fret = 0;
+    } else {
+      str.fret = 0;
+      str.isRoot = false;
+    }
   });
 };
 
 const handleTogglePitchName = (sIdx: number) => {
   emitStringsUpdate(cloned => {
     const str = cloned[sIdx];
-    if (isMuted(str)) return;
-    const base = props.activeBaseStrings[sIdx];
-    const actualOffset = str.fret > 0 && props.capo > 0 ? props.capo : 0;
-    const noteIndex = (base + str.fret + actualOffset) % 12;
-    if ([1, 3, 6, 8, 10].includes(noteIndex)) {
+    if (canTogglePitchAccidental(sIdx, str.fret, props.capo, props.activeBaseStrings)) {
       str.preferFlat = !str.preferFlat;
     }
   });
@@ -345,7 +344,7 @@ const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = 
     point.fretIndex > props.fretCount
   )
     return;
-    
+
   const { stringIndex: sIdx, fretIndex: fIdx } = point;
   if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
 
@@ -364,6 +363,7 @@ const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = 
         return;
       }
       str.fret = fIdx;
+      str.isRoot = false;
       lastSIdx = sIdx;
       lastFIdx = fIdx;
     }
@@ -432,7 +432,7 @@ const getOpenStringStyle = (str: GuitarStringEntity) => {
       backgroundColor: bg,
       borderColor: bg,
       color: props.isDarkMode ? FRETBOARD_COLORS.openRootTextDark : FRETBOARD_COLORS.openRootTextLight,
-      boxShadow: `0 2px ${props.isDarkMode ? '8px' : '4px'} ${props.isDarkMode ? 'rgba(251,191,36,0.4)' : 'rgba(245,158,11,0.3)'}`,
+      boxShadow: 'var(--root-glow)',
     };
   }
   return {};
@@ -471,18 +471,18 @@ onBeforeUnmount(() => {
 .fretboard-layout-scaler {
   display: inline-block;
   transition:
-    width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    width @duration-slow @bezier-sidebar,
+    height @duration-slow @bezier-sidebar;
 }
 
-.fretBoard-container {
+.fretboard-container {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   user-select: none;
   box-sizing: border-box;
-  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform @duration-slow @bezier-sidebar;
 
   &.is-interactive {
     touch-action: none;
@@ -503,8 +503,8 @@ onBeforeUnmount(() => {
 }
 
 .open-string-btn {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
   box-sizing: border-box;
   box-shadow: @shadow-sm;
   display: flex;
@@ -512,17 +512,11 @@ onBeforeUnmount(() => {
   justify-content: center;
   border-radius: 50%;
   border-style: solid;
-  border-width: 3px;
-  background-color: transparent;
+  border-width: 2px;
+  background-color: var(--bg-body);
   padding: 0;
   cursor: pointer;
-  transition:
-    border-width 0.05s cubic-bezier(0.4, 0, 0.2, 1),
-    background-color 0.05s ease,
-    color 0.05s ease,
-    border-color 0.05s ease,
-    box-shadow 0.05s ease,
-    transform 0.05s ease;
+  transition: @transition-fast;
 
   &.allow-events {
     pointer-events: auto;
@@ -533,7 +527,7 @@ onBeforeUnmount(() => {
   }
 
   &.is-fret-available:active {
-    border-width: 5px !important;
+    transform: scale(0.92);
   }
 
   &.is-fret-pressed {
@@ -546,23 +540,15 @@ onBeforeUnmount(() => {
   }
 
   &.is-muted-status {
-    border-color: #dc2626;
-    color: #dc2626;
-
-    :global(.dark) & {
-      border-color: #f87171;
-      color: #f87171;
-    }
+    border-color: color-mix(in srgb, var(--color-danger), transparent 85%);
+    color: var(--color-danger);
+    background-color: color-mix(in srgb, var(--color-danger), transparent 92%);
   }
 
   &.is-open-status {
-    border-color: #93c5fd;
-    color: #1d4ed8;
-
-    :global(.dark) & {
-      border-color: #1e3a8a;
-      color: #93c5fd;
-    }
+    border-color: color-mix(in srgb, var(--color-primary), transparent 85%);
+    color: var(--color-primary);
+    background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
   }
 }
 
@@ -586,7 +572,7 @@ onBeforeUnmount(() => {
 }
 
 .string-line {
-  transition: y2 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: y2 @duration-slow @bezier-sidebar;
 }
 
 .finger-interactive {
@@ -604,10 +590,17 @@ onBeforeUnmount(() => {
 }
 
 .finger-circle {
-  transition: fill 0.15s ease;
+  transition:
+    fill @duration-fast ease,
+    filter @duration-fast ease;
+  filter: var(--finger-shadow);
+
+  &.is-root-glow {
+    filter: var(--root-glow);
+  }
 }
 
 .finger-text {
-  transition: fill 0.15s ease;
+  transition: fill @duration-fast ease;
 }
 </style>

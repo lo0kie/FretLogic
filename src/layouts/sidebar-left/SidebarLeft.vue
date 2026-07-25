@@ -1,9 +1,20 @@
 <template>
   <div class="panel-left" :class="{ 'is-open': uiStore.isLeftOpen }">
+    <!-- 1. 顶栏：搜索与操作区 -->
     <div class="panel-header">
-      <h1 class="header-title">Fret Logic</h1>
+      <BaseInput
+        v-model="searchQuery"
+        :disabled="chordStore.savedChordsList.length === 0"
+        placeholder="搜索和弦..."
+        clearable
+        fontSize="xs"
+      >
+        <template #prefix>
+          <Search class="search-icon" stroke-width="2.5" />
+        </template>
+      </BaseInput>
 
-      <div class="header-actions">
+      <div class="header-actions-single">
         <GlobalTooltip placement="bottom" :content="uiStore.isPreviewEnabled ? '关闭和弦悬浮预览' : '开启和弦悬浮预览'">
           <button
             @click="uiStore.isPreviewEnabled = !uiStore.isPreviewEnabled"
@@ -22,19 +33,41 @@
       </div>
     </div>
 
-    <LeftGroupList @open-rename="openRename" @open-delete="openDelete" @open-move="openMove" />
-    <LeftPanelFooter />
+    <!-- 2. 分组及和弦列表容器 -->
+    <LeftGroupList
+      :search-query="debouncedQuery"
+      @open-rename="openRename"
+      @open-delete="openDelete"
+      @open-move="openMove"
+    />
+
+    <!-- 3. 底栏：导入/导出操作区 (原 LeftPanelFooter 内联) -->
+    <div class="left-panel-footer">
+      <input type="file" ref="fileInputRef" accept=".json" @change="handleFileChange" class="hidden-input" />
+
+      <div class="footer-grid">
+        <GlobalTooltip content="从本地选择 JSON 备份恢复数据" placement="top">
+          <ActionButton width="100%" @click="handleImportTrigger" size="md">
+            <template #prefix>
+              <Download :size="16" :stroke-width="2.5" />
+            </template>
+            <span>导入备份</span>
+          </ActionButton>
+        </GlobalTooltip>
+
+        <GlobalTooltip content="导出当前所有分组与和弦为本地文件" placement="top">
+          <ActionButton width="100%" @click="ioService.triggerFullExport()" size="md">
+            <template #prefix>
+              <Upload :size="16" :stroke-width="2.5" />
+            </template>
+            <span>全量导出</span>
+          </ActionButton>
+        </GlobalTooltip>
+      </div>
+    </div>
   </div>
 
-  <button
-    @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
-    class="sidebar-toggle-btn-left"
-    :title="uiStore.isLeftOpen ? '收起左侧边栏' : '展开左侧边栏'"
-    :class="{ 'is-open': uiStore.isLeftOpen }"
-  >
-    <Triangle :size="12" fill="currentColor" :style="{ rotate: uiStore.isLeftOpen ? '270deg' : '90deg' }" />
-  </button>
-
+  <!-- 4. 各种交互 Modal 弹窗组 -->
   <BaseModal v-model:visible="modals.create" title="新建分组" @confirm="handleCreateGroup">
     <BaseInput
       v-model="modalData.inputValue"
@@ -77,13 +110,7 @@
           :disabled="group.id === modalData.activeChord?.groupId"
           @click="modalData.moveTargetId = group.id"
           class="move-target-btn"
-          :class="[
-            group.id === modalData.activeChord?.groupId
-              ? 'is-disabled'
-              : modalData.moveTargetId === group.id
-                ? 'is-selected'
-                : 'is-normal',
-          ]"
+          :class="getGroupClass(group.id)"
         >
           <BaseMarquee class="move-marquee">
             <span>{{ group.name }}</span>
@@ -95,24 +122,30 @@
 </template>
 
 <script setup lang="ts">
-import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
-import { useChordStore } from '@/stores/chordStore';
-import { useEditorStore } from '@/stores/editorStore';
-import { useUiStore } from '@/stores/uiStore';
-import type { Chord, Group } from '@/types';
-import { nextTick, reactive, ref } from 'vue';
-
+import ActionButton from '@/components/ActionButton.vue';
 import BaseInput from '@/components/BaseInput.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
-import LeftGroupList from '@/views/sidebar-left/LeftGroupList.vue';
-import LeftPanelFooter from '@/views/sidebar-left/LeftPanelFooter.vue';
-import { Eye, EyeOff, Plus, Triangle } from '@lucide/vue';
+import LeftGroupList from '@/layouts/sidebar-left/LeftGroupList.vue';
+import { useImportExportService } from '@/services/useImportExportService';
+import { useChordStore } from '@/stores/chordStore';
+import { useEditorStore } from '@/stores/editorStore';
+import { useUiStore } from '@/stores/uiStore';
+import type { Chord, Group } from '@/types';
+import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/constants';
+import { Download, Eye, EyeOff, Plus, Search, Upload } from '@lucide/vue';
+import { refDebounced } from '@vueuse/core';
+import { computed, nextTick, reactive, ref } from 'vue';
 
 const uiStore = useUiStore();
 const chordStore = useChordStore();
 const editorStore = useEditorStore();
+const ioService = useImportExportService();
+
+const searchQuery = ref('');
+const debouncedQuery = refDebounced(searchQuery, 150);
+const fileInputRef = ref<HTMLInputElement | null>(null);
 
 const modals = reactive({
   create: false,
@@ -130,6 +163,26 @@ const modalData = reactive({
 
 const createInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
 const renameInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
+
+const getGroupClass = computed(() => (groupId: string) => {
+  if (groupId === modalData.activeChord?.groupId) return 'is-disabled';
+  if (modalData.moveTargetId === groupId) return 'is-selected';
+  return 'is-normal';
+});
+
+const handleImportTrigger = () => fileInputRef.value?.click();
+
+const handleFileChange = (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  if (!target.files || target.files.length === 0) return;
+  const file = target.files[0];
+
+  const resetInput = () => {
+    if (fileInputRef.value) fileInputRef.value.value = '';
+  };
+
+  ioService.processImport(file, resetInput);
+};
 
 const openCreate = async () => {
   modalData.inputValue = '';
@@ -235,180 +288,131 @@ const handleMoveChord = () => {
 @import '@/assets/tokens.module';
 
 .panel-header,
-:deep(.left-group-list),
-:deep(.left-panel-footer) {
+.left-panel-footer,
+:deep(.left-group-list) {
   min-width: v-bind(LEFT_SIDEBAR_WIDTH_PIXEL);
 }
 
 .panel-left {
   background-color: var(--bg-panel);
-  border: @border-solid-light;
-  box-shadow: @shadow-panel;
-  height: calc(100% - 24px);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+
+  border-right: 1px solid var(--glass-border);
+  height: 100%;
   display: flex;
   flex-direction: column;
   position: relative;
   z-index: 10;
-  border-radius: @radius-xl;
   box-sizing: border-box;
   flex-shrink: 0;
   overflow: hidden;
   width: 0px;
   opacity: 0;
-  margin: 12px 0;
   transition:
     width @duration-slow @bezier-sidebar,
-    opacity @duration-base ease,
-    margin @duration-slow @bezier-sidebar;
-
-  :global(.dark) & {
-    box-shadow: @shadow-panel-dark;
-  }
+    opacity @duration-base ease;
 
   &.is-open {
     width: v-bind(LEFT_SIDEBAR_WIDTH_PIXEL);
     opacity: 1;
-    margin: 12px;
   }
 }
 
 .panel-header {
-  padding: 1rem 1.25rem;
+  padding: 0 1rem;
   height: 76px;
   border-bottom: 1px solid var(--control-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
   box-sizing: border-box;
   flex-shrink: 0;
   position: relative;
+
+  :deep(.input-wrapper) {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
-.header-title {
-  font-size: 1rem;
-  font-weight: 900;
-  letter-spacing: -0.025em;
-  text-transform: uppercase;
-  color: var(--text-title);
-  margin: 0;
-}
-
-.header-actions {
+.header-actions-single {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   flex-shrink: 0;
 }
 
-.sidebar-toggle-btn-left {
-  position: absolute;
-  top: 50%;
-  width: 20px;
-  height: 60px;
-  background-color: var(--bg-panel);
-  border: @border-solid-base;
-  box-shadow: @shadow-sm;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
+.search-icon {
+  width: 0.8rem;
+  height: 0.8rem;
   color: var(--text-disabled);
-  cursor: pointer;
-  border-radius: 0 6px 6px 0;
-  transform: translateY(-50%) scale(1);
-  transform-origin: left;
-  left: 0px;
-  transition:
-    color @duration-base @bezier-standard,
-    border-color @duration-base @bezier-standard,
-    background-color @duration-base @bezier-standard,
-    left @duration-slow @bezier-sidebar,
-    transform 0.2s ease;
-
-  &:hover {
-    color: @primary;
-    border-color: color-mix(in srgb, @primary, transparent 75%);
-    background-color: var(--bg-main);
-  }
-
-  :global(.dark) &:hover {
-    background-color: var(--bg-panel-hover);
-  }
-
-  &.is-open {
-    left: calc(v-bind(LEFT_SIDEBAR_WIDTH_PIXEL) + 11px);
-  }
-
-  &:active {
-    transform: translateY(-50%) scale(0.93);
-  }
 }
 
-.header-add-btn {
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: @radius-md;
-  color: var(--color-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: @border-solid-light;
-  background-color: color-mix(in srgb, @primary, transparent 90%);
-  padding: 0;
-  cursor: pointer;
-  transition: @transition-fast;
-
-  &:hover {
-    background-color: color-mix(in srgb, @primary, transparent 80%);
-    border-color: color-mix(in srgb, @primary, transparent 50%);
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-}
-
+.header-add-btn,
 .header-preview-btn {
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: @radius-md;
-  background-color: transparent;
-  border: 1px solid transparent;
-  color: var(--text-disabled);
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--border-light);
+  background-color: var(--bg-body);
+  color: var(--text-disabled);
   padding: 0;
   cursor: pointer;
   transition: @transition-fast;
 
   &:hover {
-    color: var(--text-muted);
+    color: var(--text-title);
     background-color: var(--bg-panel-hover);
-    border-color: var(--border-light);
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(0.92);
   }
 
   &.is-active {
     color: @primary;
-    background-color: color-mix(in srgb, @primary, transparent 92%);
-    border-color: color-mix(in srgb, @primary, transparent 85%);
-
-    &:hover {
-      background-color: color-mix(in srgb, @primary, transparent 84%);
-      border-color: color-mix(in srgb, @primary, transparent 60%);
-    }
+    background-color: color-mix(in srgb, @primary, transparent 90%);
+    border-color: color-mix(in srgb, @primary, transparent 75%);
   }
 }
 
+.header-add-btn {
+  color: var(--color-primary);
+  background-color: color-mix(in srgb, @primary, transparent 90%);
+
+  &:hover {
+    background-color: color-mix(in srgb, @primary, transparent 80%);
+  }
+}
+
+.left-panel-footer {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--control-border);
+  background-color: transparent;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.footer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  box-sizing: border-box;
+}
+
 .modal-description-text {
-  font-size: 0.7rem;
-  font-weight: 600;
-  opacity: 0.8;
-  line-height: 1.625;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.6;
   color: var(--text-body);
   margin: 0;
 }
@@ -419,15 +423,8 @@ const handleMoveChord = () => {
   gap: 0.6rem;
   overflow-y: auto;
   max-height: 50vh;
-  padding: 0.025rem;
+  padding: 0.1rem;
   box-sizing: border-box;
-
-  &.no-scrollbar {
-    scrollbar-width: none;
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
 }
 
 .move-tooltip-item {
@@ -438,37 +435,28 @@ const handleMoveChord = () => {
 
 .move-target-btn {
   width: 100%;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
   border-radius: @radius-md;
   font-size: 0.75rem;
-  letter-spacing: 0.05em;
   font-weight: 700;
-  text-align: left;
-  border-style: solid;
-  border-width: 1px;
+  border: 1px solid var(--border-base);
   display: flex;
   align-items: center;
   min-width: 0;
   box-sizing: border-box;
-  padding: 0.5rem 0.75rem;
   cursor: pointer;
-  transition: all 0.2s @bezier-standard;
+  transition: @transition-fast;
 
   &.is-disabled {
-    opacity: 0.4;
+    opacity: 0.5;
     cursor: not-allowed;
-    filter: grayscale(100%);
     background-color: var(--bg-main);
-    border-color: var(--control-border);
-    color: #64748b;
+    border-color: var(--border-light);
+    color: var(--text-disabled);
 
     :global(.dark) & {
-      background-color: #1e293b !important;
-      border-color: rgba(255, 255, 255, 0.08) !important;
-      color: #64748b !important;
+      background-color: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.4);
     }
   }
 
@@ -476,17 +464,16 @@ const handleMoveChord = () => {
     background-color: var(--color-primary);
     color: #ffffff;
     border-color: var(--color-primary);
-    box-shadow: @shadow-md;
+    box-shadow: @shadow-sm;
   }
 
   &.is-normal {
     background-color: var(--bg-body);
     color: var(--text-body);
-    border-color: var(--control-border);
 
     &:hover {
-      border-color: color-mix(in srgb, #60a5fa, transparent 50%);
-      box-shadow: @shadow-sm;
+      border-color: @primary;
+      background-color: var(--bg-panel-hover);
     }
   }
 }

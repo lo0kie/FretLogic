@@ -14,8 +14,7 @@
       :disabled="disabled"
       class="base-input-field"
       :class="[
-        { 'has-prefix': $slots.prefix, 'has-suffix': clearable || isPassword },
-        isPassword ? 'css-password-field' : '',
+        { 'has-prefix': $slots.prefix, 'has-suffix': clearable || isPassword, 'css-password-field': isPassword },
         fontClass,
       ]"
       data-bitwarden-ignore
@@ -30,7 +29,7 @@
         class="clear-button"
         title="清空内容"
       >
-        <X :size="12" stroke-width="3" />
+        <X :size="10" stroke-width="3" />
       </button>
     </div>
   </div>
@@ -117,7 +116,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.4;
+  color: var(--text-disabled);
   pointer-events: none;
 }
 
@@ -141,15 +140,10 @@ defineExpose({
   align-items: center;
   justify-content: center;
   color: var(--text-disabled);
-  background-color: var(--bg-main);
+  background-color: var(--bg-panel-hover);
   border-radius: 50%;
   cursor: pointer;
   transition: @transition-fast;
-
-  .group:hover &,
-  &:focus {
-    opacity: 1;
-  }
 
   &:hover {
     color: #ffffff;
@@ -163,39 +157,41 @@ defineExpose({
 
 .base-input-field {
   width: 100%;
-  font-weight: 700;
-  cursor: pointer;
-  height: 2.2rem;
+  font-weight: 500;
+  height: 2.1rem;
   box-sizing: border-box;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
   background-color: var(--bg-body);
-  border: @border-solid-base;
-  border-radius: @radius-md;
+  border: 1px solid var(--border-light);
+  border-radius: 9999px;
   color: var(--text-title);
   transition: @transition-fast;
   outline: none;
+  cursor: pointer;
+
+  &::placeholder {
+    color: var(--text-disabled);
+    font-weight: 400;
+  }
 
   &:hover:not(:disabled) {
-    border-color: color-mix(in srgb, @primary, transparent 50%);
+    border-color: var(--border-base);
   }
 
   &:focus:not(:disabled) {
     border-color: @primary;
-    box-shadow:
-      inset 0 0 0 1px @primary,
-      inset 0 0 8px color-mix(in srgb, @primary, transparent 75%);
-    background-color: var(--bg-panel);
+    box-shadow: @focus-ring-primary;
+    background-color: var(--bg-body);
   }
 
   &:disabled {
-    opacity: 0.6;
+    opacity: 0.45;
     cursor: not-allowed;
-    background-color: var(--bg-panel-hover);
   }
 
   &.has-prefix {
-    padding-left: 1.8rem;
+    padding-left: 2rem;
   }
 
   &.has-suffix {
@@ -204,12 +200,11 @@ defineExpose({
 }
 
 .text-xs-style {
-  font-size: 0.75rem !important;
-  letter-spacing: 0.04em;
+  font-size: 0.72rem !important;
 }
 
 .text-md-style {
-  font-size: 0.8rem !important;
+  font-size: 0.78rem !important;
 }
 
 .text-lg-style {

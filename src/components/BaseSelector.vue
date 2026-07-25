@@ -12,11 +12,11 @@
         </slot>
       </span>
 
-      <X v-if="clearable && isNonDefault" :size="18" :stroke-width="3" class="clear-icon" @click.stop="handleClear" />
+      <X v-if="clearable && isNonDefault" :size="14" :stroke-width="2.5" class="clear-icon" @click.stop="handleClear" />
 
       <ChevronDown
-        :size="18"
-        :stroke-width="3"
+        :size="14"
+        :stroke-width="2.5"
         class="arrow-icon"
         :class="[{ 'rotate-180': isOpen }, clearable && isNonDefault ? 'has-clear' : '']"
       />
@@ -174,43 +174,39 @@ watch(isOpen, opened => {
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   user-select: none;
-  height: 2.5rem;
-  border-radius: @radius-lg;
+  height: 2.2rem;
+  border-radius: 9999px;
   cursor: pointer;
   background-color: var(--bg-body);
-  border: @border-solid-base;
+  border: 1px solid var(--border-light);
   color: var(--text-title);
   box-sizing: border-box;
-  transition:
-    border-color @transition-fast,
-    box-shadow @transition-fast,
-    background-color @transition-fast;
+  transition: @transition-fast;
 
   &:hover {
-    border-color: color-mix(in srgb, @primary, transparent 50%);
+    border-color: var(--border-base);
   }
 
   &.is-active {
     border-color: @primary;
     box-shadow: @focus-ring-primary;
-    background-color: var(--bg-panel);
   }
 }
 
 .label-zone {
-  font-weight: 900;
+  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 
   &.is-custom {
     color: var(--color-primary);
-    font-size: 0.79rem;
+    font-size: 0.78rem;
   }
 
   &.is-default {
     color: var(--text-title);
-    font-size: 0.692rem;
+    font-size: 0.75rem;
   }
 }
 
@@ -230,7 +226,7 @@ watch(isOpen, opened => {
 
 .arrow-icon {
   color: var(--text-disabled);
-  transition: transform 0.2s @bezier-standard;
+  transition: transform @duration-fast @bezier-standard;
 
   &.rotate-180 {
     transform: rotate(180deg);
@@ -247,50 +243,37 @@ watch(isOpen, opened => {
   position: absolute;
   left: 0;
   right: 0;
-  margin-top: 0.375rem;
+  margin-top: 0.35rem;
   overflow-y: auto;
   z-index: 50;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
   background-color: var(--bg-panel);
-  border: @border-solid-base;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
   border-radius: @radius-lg;
   box-shadow: @shadow-floating;
-  backdrop-filter: blur(0.6rem);
-  -webkit-backdrop-filter: blur(0.6rem);
 
-  /* 🌟 回归原生 padding 区间 */
   padding: 0.25rem;
-  gap: 0.25rem;
-
-  /* 🌟 固定裁剪容纳 6 个选项的最大高度 (13.25rem 内容 + 0.5rem 上下 padding) */
-  max-height: 13.75rem;
+  gap: 0.15rem;
+  max-height: 13.5rem;
 
   :global(.dark) & {
     box-shadow: @shadow-floating-dark;
   }
-
-  &.no-scrollbar {
-    scrollbar-width: none;
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
 }
 
 .selector-item {
-  height: 2rem;
+  height: 1.9rem;
   padding-left: 0.625rem;
   padding-right: 0.625rem;
-  padding-top: 0.025rem;
-  padding-bottom: 0.025rem;
   display: flex;
   align-items: center;
-  font-size: 0.7rem;
+  font-size: 0.73rem;
   color: var(--text-body);
   background-color: transparent;
-  border: 0.05rem solid transparent;
   border-radius: @radius-md;
   box-sizing: border-box;
   cursor: pointer;
@@ -299,39 +282,31 @@ watch(isOpen, opened => {
 
   &:hover {
     background-color: var(--bg-panel-hover);
-    border-color: var(--border-light);
-  }
-
-  &.font-black {
-    font-weight: 900;
-  }
-
-  &.font-bold {
-    font-weight: 700;
+    color: var(--text-title);
   }
 
   &.is-selected {
-    background-color: color-mix(in srgb, @primary, transparent 90%) !important;
+    background-color: color-mix(in srgb, @primary, transparent 88%) !important;
     color: @primary !important;
-    border-color: color-mix(in srgb, @primary, transparent 70%);
+    font-weight: 700;
   }
 }
 
 .dropdown-enter-active {
   transition:
-    opacity 0.2s ease-out,
-    transform 0.2s ease-out;
+    opacity @duration-fast ease-out,
+    transform @duration-fast ease-out;
 }
 
 .dropdown-leave-active {
   transition:
-    opacity 0.2s ease-in,
-    transform 0.2s ease-in;
+    opacity @duration-fast ease-in,
+    transform @duration-fast ease-in;
 }
 
 .dropdown-enter-from,
 .dropdown-leave-to {
   opacity: 0;
-  transform: translateY(-0.4rem);
+  transform: translateY(-0.3rem);
 }
 </style>

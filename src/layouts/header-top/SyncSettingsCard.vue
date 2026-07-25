@@ -12,29 +12,35 @@
     </div>
 
     <GlobalTooltip content="GitHub Token" placement="top" class="full-width-tooltip">
-      <BaseInput v-model="settingsStore.githubToken" placeholder="GitHub Token (ghp_...)" is-password clearable />
+      <BaseInput
+        v-model="settingsStore.githubToken"
+        placeholder="GitHub Token (ghp_...)"
+        is-password
+        clearable
+        fontSize="xs"
+      />
     </GlobalTooltip>
 
     <div class="grid-columns">
       <GlobalTooltip content="GitHub 账号名称" placement="top" class="full-width-tooltip">
-        <BaseInput v-model="settingsStore.githubOwner" placeholder="Username" clearable />
+        <BaseInput v-model="settingsStore.githubOwner" placeholder="Username" clearable fontSize="xs" />
       </GlobalTooltip>
       <GlobalTooltip content="仓库名称" placement="top" class="full-width-tooltip">
-        <BaseInput v-model="settingsStore.githubRepo" placeholder="Repository" clearable />
+        <BaseInput v-model="settingsStore.githubRepo" placeholder="Repository" clearable fontSize="xs" />
       </GlobalTooltip>
     </div>
 
     <div class="grid-columns">
-      <GlobalTooltip content="从 GitHub 下载并覆盖本地所有数据" placement="top">
-        <ActionButton @click="$emit('pull-request')" :loading="isPulling" height="2rem">
-          <template #prefix><CloudDownload :size="14" stroke-width="3" /></template>
+      <GlobalTooltip content="从 GitHub 下载并覆盖本地数据" placement="top">
+        <ActionButton width="100%" @click="$emit('pull-request')" :loading="isPulling" size="sm">
+          <template #prefix><CloudDownload :size="13" stroke-width="2.5" /></template>
           拉取
         </ActionButton>
       </GlobalTooltip>
 
-      <GlobalTooltip content="将本地数据强制推送到 GitHub" placement="top">
-        <ActionButton @click="$emit('push-request')" :loading="isSyncing" height="2rem">
-          <template #prefix><CloudUpload :size="14" stroke-width="3" /></template>
+      <GlobalTooltip content="将本地数据推送到 GitHub" placement="top">
+        <ActionButton width="100%" @click="$emit('push-request')" :loading="isSyncing" size="sm">
+          <template #prefix><CloudUpload :size="13" stroke-width="2.5" /></template>
           同步
         </ActionButton>
       </GlobalTooltip>
@@ -70,35 +76,24 @@ const settingsStore = useSettingsStore();
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  background-color: var(--bg-panel);
+  gap: 0.5rem;
+  background-color: var(--bg-body);
   padding: 0.75rem;
-  border-radius: @radius-md;
+  border-radius: @radius-lg;
   border: 1px solid var(--border-light);
-  box-shadow: @shadow-sm;
   box-sizing: border-box;
-
-  :deep(.theme-default) {
-    :global(.dark) & {
-      background-color: var(--bg-body) !important;
-      border-color: var(--border-base) !important;
-    }
-  }
 }
 
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.2rem;
   box-sizing: border-box;
 }
 
 .panel-title {
-  font-size: 0.7rem;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: var(--text-disabled);
   margin: 0;
 }
@@ -106,7 +101,7 @@ const settingsStore = useSettingsStore();
 .grid-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
+  gap: 0.4rem;
   box-sizing: border-box;
 }
 
@@ -117,41 +112,29 @@ const settingsStore = useSettingsStore();
 .env-badge {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.3rem;
   box-sizing: border-box;
 }
 
 .status-dot {
-  width: 0.3rem;
-  height: 0.3rem;
+  width: 0.35rem;
+  height: 0.35rem;
   border-radius: 50%;
-  background-color: #10b981;
+  background-color: var(--color-success);
 
   &.is-dev {
-    background-color: #f59e0b;
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    background-color: var(--color-warning);
   }
 }
 
 .env-text {
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
+  font-size: 9px;
+  font-weight: 700;
   letter-spacing: 0.05em;
-  color: #10b981;
+  color: var(--color-success);
 
   &.is-dev {
-    color: #f59e0b;
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
+    color: var(--color-warning);
   }
 }
 </style>
