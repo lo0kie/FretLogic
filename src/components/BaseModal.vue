@@ -1,11 +1,6 @@
 <template>
   <Teleport to="body">
-    <Transition
-      enter-from-class="modal-fade-enter-from"
-      leave-to-class="modal-fade-leave-to"
-      enter-active-class="modal-fade-enter-active"
-      leave-active-class="modal-fade-leave-active"
-    >
+    <Transition name="modal-fade">
       <div v-if="visible" class="modal-overlay-container">
         <div class="modal-mask" @click="closeOnMask && handleCancel()"></div>
 
@@ -20,10 +15,11 @@
 
           <div v-if="showFooter" class="modal-footer-zone">
             <slot name="footer">
-              <ActionButton width="auto" @click="handleCancel">{{ cancelText }}</ActionButton>
+              <ActionButton width="auto" @click="handleCancel" size="sm">{{ cancelText }}</ActionButton>
 
               <ActionButton
                 width="auto"
+                size="sm"
                 @click="handleConfirm"
                 :primary="confirmType === 'primary'"
                 :danger="confirmType === 'danger'"
@@ -115,36 +111,29 @@ const handleCancel = () => {
 .modal-mask {
   position: absolute;
   inset: 0;
-  background-color: rgba(2, 6, 23, 0.4);
-  transition: opacity 0.2s @bezier-standard;
+  background-color: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: maskBlurIn @duration-base @bezier-standard forwards;
 
   :global(.dark) & {
-    background-color: rgba(2, 6, 23, 0.6);
+    background-color: rgba(0, 0, 0, 0.55);
   }
 }
 
 .modal-card {
   position: relative;
   z-index: 10;
-  padding-top: 1.25rem;
-  padding-bottom: 1.25rem;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
+  padding: 1.25rem 0;
   display: flex;
   flex-direction: column;
   max-height: 80vh;
   box-sizing: border-box;
   background-color: var(--bg-panel);
-  border: @border-solid-base;
-  border-radius: @radius-lg;
+  border: 1px solid var(--glass-border);
+  border-radius: @radius-xl;
   box-shadow: @shadow-floating;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  animation: modalSlideIn @duration-base @bezier-standard;
-
-  :global(.dark) & {
-    box-shadow: @shadow-floating-dark;
-  }
+  animation: cardPopIn @duration-base @bezier-bounce forwards;
 
   &.w-80 {
     width: 20rem;
@@ -152,33 +141,25 @@ const handleCancel = () => {
 }
 
 .modal-title {
-  font-size: 0.75rem;
-  font-weight: 900;
-  opacity: 0.4;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  padding: 0 1.5rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-title);
   margin: 0;
   flex-shrink: 0;
 }
 
 .modal-body-content {
+  padding: 0.85rem 1.5rem;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-top: 1rem;
-  padding-bottom: 1rem;
   box-sizing: border-box;
-
-  &.no-scrollbar {
-    scrollbar-width: none;
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
 }
 
 .modal-footer-zone {
+  padding: 0 1.5rem;
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
@@ -187,12 +168,34 @@ const handleCancel = () => {
   box-sizing: border-box;
 }
 
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity 0.2s ease-out;
+@keyframes maskBlurIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
 }
 
-.modal-fade-enter-from,
+@keyframes cardPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-fade-leave-active {
+  transition: opacity @duration-fast ease-in;
+}
+
 .modal-fade-leave-to {
   opacity: 0;
 }

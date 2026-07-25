@@ -4,11 +4,12 @@
     @click="handleInternalClick"
     :style="{ height, width }"
     class="action-button-base"
-    :class="[themeClasses, sizeClasses]"
+    :class="[sizeClass, themeClass, variantClass, roundedClass, { 'is-icon-only': iconOnly, 'is-active': active }]"
   >
     <Loader2 v-if="loading" class="loading-icon" />
     <slot v-else name="prefix"></slot>
-    <span class="button-content">
+
+    <span v-if="$slots.default" class="button-content">
       <slot></slot>
     </span>
 
@@ -27,13 +28,21 @@ const props = withDefaults(
     warning?: boolean;
     disabled?: boolean;
     loading?: boolean;
+    active?: boolean;
+    iconOnly?: boolean;
+    variant?: 'default' | 'subtle' | 'ghost';
     size?: 'sm' | 'md' | 'lg';
+    rounded?: 'none' | 'sm' | 'md' | 'lg' | 'full';
     width?: string;
     height?: string;
   }>(),
   {
     size: 'md',
     loading: false,
+    active: false,
+    iconOnly: false,
+    variant: 'default',
+    rounded: 'full',
   }
 );
 
@@ -45,54 +54,174 @@ const handleInternalClick = (e: MouseEvent) => {
   emit('click', e);
 };
 
-const themeClasses = computed(() => {
+const themeClass = computed(() => {
   if (props.primary) return 'theme-primary';
   if (props.danger) return 'theme-danger';
   if (props.warning) return 'theme-warning';
-
   return 'theme-default';
 });
 
-const sizeClasses = computed(() => `size-${props.size}`);
+const variantClass = computed(() => `variant-${props.variant}`);
+const sizeClass = computed(() => `size-${props.size}`);
+const roundedClass = computed(() => `rounded-${props.rounded}`);
 </script>
 
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 
+/* 1. 基础容器：定义通用结构与动画 */
 .action-button-base {
-  width: 100%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
+  font-weight: 600;
   border-style: solid;
   border-width: 1px;
-  border-radius: @radius-md;
-  box-shadow: @shadow-sm;
   user-select: none;
   box-sizing: border-box;
   transition: @transition-fast;
   cursor: pointer;
+  flex-shrink: 0;
 
   &:disabled {
-    opacity: 0.4;
+    opacity: 0.35;
     cursor: not-allowed;
-    transform: none !important;
-    box-shadow: none !important;
+    transform: none;
+    box-shadow: none;
     pointer-events: auto;
   }
 
   &:active:not(:disabled) {
-    transform: scale(0.96);
+    transform: scale(0.95);
   }
 }
 
+/* 2. 尺寸（Size）：统一控制高度、字体大小与内边距 */
+.size-sm {
+  height: 1.5rem;
+  padding: 0 0.65rem;
+  font-size: 0.68rem;
+  gap: 0.3rem;
+}
+
+.size-md {
+  height: 1.75rem;
+  padding: 0 1rem;
+  font-size: 0.72rem;
+  gap: 0.45rem;
+}
+
+.size-lg {
+  height: 2.5rem;
+  padding: 0 1.25rem;
+  font-size: 0.75rem;
+  gap: 0.5rem;
+}
+
+/* 3. 变体（Variant）样式 */
+.variant-subtle {
+  background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
+  border-color: color-mix(in srgb, var(--color-primary), transparent 90%);
+  color: var(--color-primary);
+
+  &:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-primary), transparent 80%);
+  }
+}
+
+.variant-ghost {
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--text-disabled);
+
+  &:hover:not(:disabled) {
+    background-color: var(--bg-panel-hover);
+    color: var(--text-title);
+  }
+}
+
+/* 4. 主题（Theme）样式 */
+.theme-primary {
+  background-color: var(--color-primary);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--color-primary), transparent 60%);
+
+  &:hover:not(:disabled) {
+    opacity: 0.92;
+  }
+}
+
+.theme-danger {
+  color: var(--color-danger);
+  border-color: transparent;
+  background-color: color-mix(in srgb, var(--color-danger), transparent 88%);
+
+  &:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-danger), transparent 78%);
+  }
+}
+
+.theme-warning {
+  color: var(--color-warning);
+  border-color: transparent;
+  background-color: color-mix(in srgb, var(--color-warning), transparent 88%);
+
+  &:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-warning), transparent 78%);
+  }
+}
+
+.theme-default:not(.variant-subtle):not(.variant-ghost) {
+  background-color: var(--bg-body);
+  border-color: var(--border-light);
+  color: var(--text-body);
+
+  &:hover:not(:disabled) {
+    border-color: var(--border-base);
+    background-color: var(--bg-panel-hover);
+    color: var(--text-title);
+  }
+}
+
+/* 5. 激活状态（Active） */
+.action-button-base.is-active {
+  background-color: color-mix(in srgb, var(--color-primary), transparent 88%);
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary), transparent 75%);
+}
+
+/* 6. Icon-Only 修正模式：严格保证正方形且继承当前 size 的 height */
+.action-button-base.is-icon-only {
+  padding: 0;
+  width: auto;
+  aspect-ratio: 1 / 1;
+}
+
+/* 7. 圆角（Rounded）：定义在文件最下方以保证 highest CSS priority */
+.action-button-base.rounded-none {
+  border-radius: 0;
+}
+.action-button-base.rounded-sm {
+  border-radius: @radius-sm;
+}
+.action-button-base.rounded-md {
+  border-radius: @radius-md;
+}
+.action-button-base.rounded-lg {
+  border-radius: @radius-lg;
+}
+.action-button-base.rounded-full {
+  border-radius: 9999px;
+}
+
+/* 辅助图标与内容样式 */
 .loading-icon {
   width: 1rem;
   height: 1rem;
   flex-shrink: 0;
   opacity: 0.8;
-  animation: spin 1s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
@@ -109,93 +238,5 @@ const sizeClasses = computed(() => `size-${props.size}`);
   align-items: center;
   justify-content: center;
   white-space: nowrap;
-}
-
-.size-sm {
-  height: 2rem;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
-  font-size: 15px !important;
-  gap: 0.35rem;
-}
-
-.size-md {
-  height: 2.25rem;
-  padding-left: 1rem;
-  padding-right: 1rem;
-  font-size: 16px !important;
-  gap: 0.45rem;
-}
-
-.size-lg {
-  height: 2.5rem;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
-  font-size: 17px !important;
-  gap: 0.4rem;
-}
-
-.theme-primary {
-  background-color: var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary), transparent 70%);
-  color: #ffffff;
-
-  &:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-
-  &:active:not(:disabled) {
-    opacity: 0.8;
-  }
-}
-
-.theme-danger {
-  color: var(--color-danger);
-  border-color: color-mix(in srgb, var(--color-danger), transparent 80%);
-  background-color: color-mix(in srgb, var(--color-danger), transparent 90%);
-
-  &:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--color-danger), transparent 80%);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-  }
-}
-
-.theme-warning {
-  color: var(--color-warning);
-  border-color: color-mix(in srgb, var(--color-warning), transparent 80%);
-  background-color: color-mix(in srgb, var(--color-warning), transparent 90%);
-
-  &:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--color-warning), transparent 80%);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-  }
-}
-
-.theme-default {
-  background-color: var(--bg-body);
-  border-color: var(--border-base);
-  color: var(--text-body);
-
-  &:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--color-primary), transparent 70%);
-    background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
-    color: var(--color-primary);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-
-    &:hover {
-      background-color: var(--bg-body);
-      border-color: var(--border-base);
-      color: var(--text-body);
-    }
-  }
 }
 </style>

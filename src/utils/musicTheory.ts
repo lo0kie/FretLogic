@@ -38,6 +38,32 @@ export const createString = (): GuitarStringEntity => ({
   preferFlat: false,
 });
 
+export const calcPitchIndex = (
+  sIdx: number,
+  fretVal: number,
+  capoVal: number,
+  baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
+): number => {
+  const base = baseStrings[sIdx];
+  const actualOffset = fretVal > 0 && capoVal > 0 ? capoVal : 0;
+  return (base + fretVal + actualOffset) % 12;
+};
+
+export const isAccidentalNote = (pitchIndex: number): boolean => {
+  return [1, 3, 6, 8, 10].includes(pitchIndex);
+};
+
+export const canTogglePitchAccidental = (
+  sIdx: number,
+  fretVal: number,
+  capoVal: number,
+  baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
+): boolean => {
+  if (fretVal < 0) return false;
+  const pitchIndex = calcPitchIndex(sIdx, fretVal, capoVal, baseStrings);
+  return isAccidentalNote(pitchIndex);
+};
+
 export const calcNoteLabel = (
   sIdx: number,
   fretVal: number,
@@ -46,29 +72,6 @@ export const calcNoteLabel = (
   baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
 ): string => {
   if (fretVal === -1) return '✕';
-  const base = baseStrings[sIdx];
-  const actualOffset = fretVal > 0 && capoVal > 0 ? capoVal : 0;
-
-  const noteIndex = (base + fretVal + actualOffset) % 12;
+  const noteIndex = calcPitchIndex(sIdx, fretVal, capoVal, baseStrings);
   return preferFlat ? NOTES_FLAT[noteIndex] : NOTES_SHARP[noteIndex];
-};
-
-export const extractRootNote = (chordName: string): string | null => {
-  const trimmed = chordName.trim();
-  if (trimmed.length === 0) return null;
-
-  const slashParts = trimmed.split('/');
-  const targetPart = slashParts.length > 1 ? slashParts[1] : slashParts[0];
-
-  const firstChar = targetPart.charAt(0).toUpperCase();
-  if (firstChar < 'A' || firstChar > 'G') return null;
-
-  if (targetPart.length > 1) {
-    const secondChar = targetPart.charAt(1);
-    if (secondChar === '#' || secondChar === 'b') {
-      return firstChar + secondChar;
-    }
-  }
-
-  return firstChar;
 };

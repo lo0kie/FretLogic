@@ -1,7 +1,5 @@
 <template>
-  <div class="left-group-list-container" :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }">
-    <LeftSearch v-model="searchQuery" :disabled="chordStore.savedChordsList.length === 0" />
-
+  <div class="left-group-list-container left-group-list" :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }">
     <div class="scroll-body no-scrollbar">
       <div v-if="chordStore.groups.length === 0" class="empty-groups-view">
         <FolderOpen class="empty-folder-icon" />
@@ -11,9 +9,9 @@
       <VueDraggable
         :model-value="chordStore.groups"
         @update:modelValue="(val: Group[]) => chordStore.overwriteGroups(val)"
-        :animation="250"
+        :animation="200"
         handle=".drag-handle"
-        :disabled="!!debouncedQuery"
+        :disabled="!!searchQuery"
         class="draggable-group-list"
         ghost-class="drag-ghost-opacity"
         :touchStartThreshold="12"
@@ -29,8 +27,8 @@
             <div @click="chordService.executeGroupToggle(group.id)" class="group-title-row">
               <div class="group-info-zone" title="点击折叠/展开分组">
                 <ChevronDown
-                  :size="16"
-                  stroke-width="3"
+                  :size="14"
+                  stroke-width="2.5"
                   class="arrow-toggle-icon"
                   :class="{ 'is-collapsed': group.collapsed }"
                 />
@@ -42,7 +40,7 @@
                 </BaseMarquee>
 
                 <span class="count-badge">
-                  <template v-if="debouncedQuery">
+                  <template v-if="searchQuery">
                     <span class="search-match-count">
                       {{ (filteredChordsGroupMap.get(group.id) || []).length }}
                     </span>
@@ -55,12 +53,8 @@
               </div>
 
               <div @click.stop="" class="drag-action-zone">
-                <div
-                  class="drag-handle"
-                  :class="{ 'is-hidden-by-search': debouncedQuery.length > 0 }"
-                  title="按住拖拽排序"
-                >
-                  <GripVertical :size="16" stroke-width="3" />
+                <div class="drag-handle" :class="{ 'is-hidden-by-search': !!searchQuery }" title="按住拖拽排序">
+                  <GripVertical :size="14" stroke-width="2.5" />
                 </div>
               </div>
             </div>
@@ -69,9 +63,9 @@
           <div v-if="!group.collapsed" class="chord-content-wrapper">
             <VueDraggable
               :model-value="filteredChordsGroupMap.get(group.id) || []"
-              :animation="250"
+              :animation="200"
               ghost-class="drag-ghost-opacity"
-              :disabled="!!debouncedQuery"
+              :disabled="!!searchQuery"
               class="chords-grid-layout"
               @update="e => chordService.handleChordSort(e, group.id)"
               :swap-threshold="0.5"
@@ -90,13 +84,13 @@
             </VueDraggable>
 
             <div v-if="getGroupChordsCount(group.id) === 0" class="empty-placeholder-card z-index-bg">
-              <p class="placeholder-card-text">暂无保存的和弦</p>
+              <p class="placeholder-card-text">暂无和弦</p>
             </div>
             <div
-              v-else-if="debouncedQuery && (filteredChordsGroupMap.get(group.id) || []).length === 0"
+              v-else-if="searchQuery && (filteredChordsGroupMap.get(group.id) || []).length === 0"
               class="empty-placeholder-card is-search-empty z-index-bg"
             >
-              <p class="placeholder-card-text">没有匹配的和弦</p>
+              <p class="placeholder-card-text">无匹配</p>
             </div>
           </div>
         </div>
@@ -106,20 +100,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onBeforeUpdate, computed } from 'vue';
-import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/constants';
+import { watch, nextTick, onBeforeUpdate, computed } from 'vue';
+import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/constants/index.ts';
 import { useChordService } from '@/services/useChordService';
 import { useChordStore } from '@/stores/chordStore';
 import { useEditorStore } from '@/stores/editorStore';
 import type { Chord, Group } from '@/types';
-import LeftChordCard from '@/views/sidebar-left/LeftChordCard.vue';
-import LeftSearch from '@/views/sidebar-left/LeftSearch.vue';
+import LeftChordCard from './LeftChordCard.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { ChevronDown, FolderOpen, GripVertical, SquarePen, Trash2 } from '@lucide/vue';
 import { VueDraggable } from 'vue-draggable-plus';
-import { refDebounced } from '@vueuse/core';
+
+const props = defineProps<{
+  searchQuery: string;
+}>();
 
 const emit = defineEmits<{
   (e: 'open-rename', group: Group): void;
@@ -130,9 +126,6 @@ const emit = defineEmits<{
 const editorStore = useEditorStore();
 const chordStore = useChordStore();
 const chordService = useChordService();
-
-const searchQuery = ref('');
-const debouncedQuery = refDebounced(searchQuery, 150);
 
 const groupCardsMap = new Map<string, HTMLElement>();
 
@@ -152,7 +145,7 @@ const getGroupChordsCount = (groupId: string) => {
 
 const filteredChordsGroupMap = computed(() => {
   const map = new Map<string, Chord[]>();
-  const queryKeyword = debouncedQuery.value.toLowerCase().trim();
+  const queryKeyword = props.searchQuery.toLowerCase().trim();
 
   chordStore.groups.forEach(group => {
     const originalChords = chordStore.groupChordMap.get(group.id) || [];
@@ -224,15 +217,8 @@ watch(
 .scroll-body {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem;
+  padding: 1rem 1rem;
   box-sizing: border-box;
-
-  &.no-scrollbar {
-    scrollbar-width: none;
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
 }
 
 .empty-groups-view {
@@ -241,27 +227,22 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  opacity: 0.3;
-  padding-top: 5rem;
-  padding-bottom: 5rem;
+  opacity: 0.35;
+  padding: 4rem 0;
   box-sizing: border-box;
 }
 
 .empty-folder-icon {
   width: 1.5rem;
   height: 1.5rem;
-  color: var(--text-body);
+  color: var(--text-disabled);
   margin-bottom: 0.5rem;
 }
 
 .empty-groups-text {
-  font-size: 0.6rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  text-align: center;
-  line-height: 1.625;
-  color: var(--text-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-disabled);
   margin: 0;
 }
 
@@ -284,10 +265,9 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem;
+  padding: 0.45rem 0.5rem;
   user-select: none;
   background-color: transparent;
-  border: 1px solid transparent;
   border-radius: @radius-md;
   box-sizing: border-box;
   cursor: pointer;
@@ -295,7 +275,6 @@ watch(
 
   &:hover {
     background-color: var(--bg-panel-hover);
-    border-color: var(--border-light);
 
     .drag-handle:not(.is-hidden-by-search) {
       opacity: 1;
@@ -306,23 +285,17 @@ watch(
 .group-info-zone {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex: 1;
   min-width: 0;
   margin-right: 0.5rem;
   box-sizing: border-box;
-  transition: opacity @transition-fast;
-
-  &:hover {
-    opacity: 0.8;
-  }
 }
 
 .arrow-toggle-icon {
-  opacity: 0.4;
-  color: var(--text-body);
+  color: var(--text-disabled);
   flex-shrink: 0;
-  transition: transform 0.2s @bezier-standard;
+  transition: transform @duration-fast @bezier-standard;
 
   &.is-collapsed {
     transform: rotate(-90deg);
@@ -334,26 +307,21 @@ watch(
 }
 
 .group-name-text {
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-size: 0.9rem;
+  font-weight: 700;
+  font-size: 0.82rem;
   user-select: none;
-  color: var(--text-body);
+  letter-spacing: 1px;
+  color: var(--text-title);
 }
 
 .count-badge {
   background-color: var(--bg-body);
-  color: var(--text-muted);
-  border: @border-solid-base;
-  border-radius: @radius-md;
-  font-size: 12px;
-  font-weight: 900;
-  padding-left: 0.375rem;
-  padding-right: 0.375rem;
-  padding-top: 0.125rem;
-  padding-bottom: 0.125rem;
-  font-family: monospace;
+  color: var(--text-disabled);
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  font-family: inherit;
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
@@ -362,34 +330,30 @@ watch(
 
 .search-match-count {
   color: var(--color-primary);
-  line-height: 1;
 }
 
 .drag-action-zone {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
   flex-shrink: 0;
   box-sizing: border-box;
 }
 
 .drag-handle {
-  padding: 0.25rem;
+  padding: 0.15rem;
   border-radius: @radius-sm;
   color: var(--text-disabled);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  overflow: visible;
   touch-action: none;
   box-sizing: border-box;
   cursor: grab;
   transition: @transition-fast;
 
   &:hover {
-    background-color: var(--bg-panel-hover);
-    color: var(--text-body);
+    color: var(--text-title);
   }
 
   &:active {
@@ -401,14 +365,10 @@ watch(
     padding: 0 !important;
     pointer-events: none;
   }
-
-  svg {
-    opacity: 0.5;
-  }
 }
 
 .chord-content-wrapper {
-  margin-top: 0.5rem;
+  margin-top: 0.4rem;
   position: relative;
   box-sizing: border-box;
 }
@@ -416,11 +376,11 @@ watch(
 .chords-grid-layout {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.4rem;
   align-items: center;
   position: relative;
   z-index: 10;
-  min-height: 64px;
+  min-height: 2.2rem;
   box-sizing: border-box;
 }
 
@@ -437,27 +397,19 @@ watch(
   position: absolute;
   inset: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  opacity: 0.6;
+  opacity: 0.5;
   pointer-events: none;
-  border: @border-dashed-base;
+  border: 1px dashed var(--border-base);
   background-color: var(--bg-body);
   border-radius: @radius-md;
   box-sizing: border-box;
-
-  &.is-search-empty {
-    border-color: rgba(245, 158, 11, 0.2);
-    background-color: rgba(245, 158, 11, 0.02);
-  }
 }
 
 .placeholder-card-text {
-  font-size: 0.6rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  font-size: 0.68rem;
+  font-weight: 500;
   color: var(--text-disabled);
   margin: 0;
 }
