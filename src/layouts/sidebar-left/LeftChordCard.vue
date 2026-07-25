@@ -14,18 +14,6 @@
               {{ chord.chordName }}
             </span>
           </BaseMarquee>
-
-          <div class="delete-button-container" :class="{ 'is-visible': isEditing }">
-            <button
-              @click.stop="$emit('delete', chord)"
-              @mousedown.stop
-              @touchstart.stop
-              @pointerdown.stop
-              class="action-button"
-            >
-              <X :size="14" stroke-width="3" />
-            </button>
-          </div>
         </div>
       </div>
     </GlobalContextMenu>
@@ -54,7 +42,7 @@ import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalCont
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 
 import { useSettingsStore } from '@/stores/settingsStore';
-import { Move, Trash2, X } from '@lucide/vue';
+import { Move, Trash2 } from '@lucide/vue';
 
 const props = defineProps<{ chord: Chord; isEditing: boolean }>();
 const emit = defineEmits<{
@@ -90,8 +78,8 @@ const menuItems = computed<ContextMenuItem[]>(() => [
 
 .chord-thumb-card {
   height: 2rem;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -100,25 +88,19 @@ const menuItems = computed<ContextMenuItem[]>(() => [
   box-sizing: border-box;
   cursor: pointer;
   background-color: var(--bg-body);
-  border: @border-solid-light;
+  border: 1px solid var(--border-light);
   border-radius: @radius-md;
   transition: @transition-fast;
 
   &:hover:not(:disabled) {
     background-color: var(--bg-panel-hover);
-    border-color: var(--border-light);
-  }
-
-  &:focus {
-    box-shadow: 0 0 0 2px var(--color-primary);
+    border-color: var(--border-base);
   }
 
   &.is-editing {
     background-color: color-mix(in srgb, @primary, transparent 90%);
     border-color: @primary !important;
-    box-shadow:
-      inset 0 0 0 1px @primary,
-      @shadow-sm;
+    box-shadow: 0 0 0 1px @primary;
 
     .chord-name-text {
       color: @primary !important;
@@ -132,53 +114,11 @@ const menuItems = computed<ContextMenuItem[]>(() => [
 }
 
 .chord-name-text {
-  font-size: 0.75rem;
-  font-weight: 900;
-  letter-spacing: -0.025em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   line-height: 1;
   pointer-events: none;
   color: var(--text-body);
-}
-
-.delete-button-container {
-  position: absolute;
-  top: 0;
-  right: 0;
-  display: flex;
-  opacity: 0;
-  transform: translate(40%, -40%);
-  transition: opacity 0.2s ease;
-  box-sizing: border-box;
-
-  .group:hover &,
-  &:focus-within,
-  &.is-visible {
-    opacity: 1;
-  }
-}
-
-.action-button {
-  color: var(--text-disabled);
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: @border-solid-light;
-  background-color: var(--bg-main);
-  padding: 0;
-  cursor: pointer;
-  box-sizing: border-box;
-  transition: @transition-fast;
-
-  &:hover {
-    color: #ffffff;
-    background-color: var(--color-danger);
-  }
-
-  &:active {
-    transform: scale(0.9);
-  }
 }
 </style>

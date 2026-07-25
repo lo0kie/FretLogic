@@ -3,19 +3,20 @@
     <slot></slot>
 
     <Teleport to="body">
-      <Transition name="tooltip-native">
-        <div
-          v-if="show && (content || $slots.content)"
-          ref="floatingRef"
-          class="tooltip-box"
-          :class="[`theme-${theme}`, $slots.content ? 'rich-content' : 'pure-text']"
-          :style="floatingStyles"
-        >
-          <slot name="content">
-            <div v-html="sanitizedHtmlContent"></div>
-          </slot>
-        </div>
-      </Transition>
+      <div
+        v-if="show && (content || $slots.content)"
+        ref="floatingRef"
+        class="tooltip-floating-wrapper"
+        :style="floatingStyles"
+      >
+        <Transition name="tooltip-native" appear>
+          <div class="tooltip-box" :class="[`theme-${theme}`, $slots.content ? 'rich-content' : 'pure-text']">
+            <slot name="content">
+              <div v-html="sanitizedHtmlContent"></div>
+            </slot>
+          </div>
+        </Transition>
+      </div>
     </Teleport>
   </div>
 </template>
@@ -75,23 +76,23 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   display: inline-block;
 }
 
-.tooltip-box {
+.tooltip-floating-wrapper {
   position: fixed;
   z-index: 9999;
-  padding: 0.375rem 0.75rem;
-  font-weight: 900;
-  border-radius: @radius-md;
-  box-shadow: @shadow-xl;
   pointer-events: none;
-  font-size: 0.7rem;
-  line-height: 1.6;
+}
+
+.tooltip-box {
+  padding: 0.35rem 0.65rem;
+  font-weight: 500;
+  border-radius: @radius-md;
+  box-shadow: @shadow-lg;
+  font-size: 0.72rem;
+  line-height: 1.45;
   text-align: center;
   box-sizing: border-box;
-
-  transition:
-    opacity 0.12s ease-out,
-    background-color 0.15s ease,
-    color 0.15s ease;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 
   &.pure-text {
     white-space: nowrap;
@@ -107,36 +108,34 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   }
 
   &.theme-dark {
-    background-color: #0f172a;
+    background-color: rgba(28, 28, 30, 0.88);
     color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.12);
   }
 
   &.theme-light {
-    background-color: #ffffff;
-    color: #0f172a;
-    border: 1px solid rgba(15, 23, 42, 0.08);
+    background-color: rgba(255, 255, 255, 0.88);
+    color: #000000;
+    border: 1px solid rgba(0, 0, 0, 0.08);
   }
 
   &.theme-auto {
     background-color: var(--bg-panel);
     color: var(--text-title);
-    border: @border-solid-base;
-
-    :global(.dark) & {
-      background-color: #0f172a;
-      color: #ffffff;
-      border-color: rgba(255, 255, 255, 0.1);
-    }
+    border: 1px solid var(--glass-border);
   }
 }
 
 .tooltip-native-enter-active,
 .tooltip-native-leave-active {
-  transition: opacity 0.12s ease-out;
+  transition:
+    opacity @duration-fast @bezier-standard,
+    transform @duration-fast @bezier-standard;
 }
+
 .tooltip-native-enter-from,
 .tooltip-native-leave-to {
   opacity: 0 !important;
+  transform: scale(0.94) !important;
 }
 </style>

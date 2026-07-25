@@ -10,7 +10,7 @@
         </button>
 
         <button @click="uiStore.removeToast(item.id)" class="btn-toast-close" title="关闭">
-          <X :size="12" :stroke-width="2.5" />
+          <X :size="10" :stroke-width="3" />
         </button>
       </div>
     </TransitionGroup>
@@ -52,22 +52,20 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
 
 .toast-item-card {
   position: relative;
-  padding-left: 1rem;
-  padding-right: 2.25rem;
-  padding-top: 0.625rem;
-  padding-bottom: 0.625rem;
-  border-radius: @radius-md;
-  font-weight: 700;
-  box-shadow: @shadow-xl;
+  padding: 0.55rem 2rem 0.55rem 0.9rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  box-shadow: @shadow-lg;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 0.8rem;
+  gap: 0.5rem;
+  font-size: 0.75rem;
   pointer-events: auto;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
   box-sizing: border-box;
-  transition:
-    background-color 0.3s,
-    color 0.3s;
+  transition: @transition-fast;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -76,42 +74,32 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
   position: absolute;
   top: 50%;
   right: 0.5rem;
-  transform: translateY(-50%) scale(1);
-  width: 1.15rem;
-  height: 1.15rem;
+  transform: translateY(-50%);
+  width: 1.1rem;
+  height: 1.1rem;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 100%;
+  border-radius: 50%;
   color: currentColor;
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: pointer;
   padding: 0;
   transition: @transition-fast;
 
   &:hover {
     opacity: 1;
-    transform: translateY(-50%);
     background-color: color-mix(in srgb, currentColor, transparent 85%);
-  }
-
-  &:active {
-    transform: translateY(-50%);
-    background-color: color-mix(in srgb, currentColor, transparent 75%);
-  }
-
-  svg {
-    transition: @transition-fast;
   }
 }
 
 .toast-loading-spinner {
-  width: 1rem;
-  height: 1rem;
+  width: 0.85rem;
+  height: 0.85rem;
   opacity: 0.8;
-  animation: spin 1s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
@@ -126,7 +114,7 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
 .btn-toast-undo {
   font-weight: 700;
   text-decoration: underline;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   margin-left: 0.25rem;
   opacity: 0.9;
   background: transparent;
@@ -134,85 +122,34 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
   padding: 0;
   color: inherit;
   cursor: pointer;
-  transition: opacity @duration-fast @bezier-standard;
 
   &:hover {
     opacity: 1;
   }
-
-  &:active {
-    opacity: 0.6;
-  }
 }
 
 .theme-success {
-  background-color: #10b981;
-  color: #ffffff;
-
-  :global(.dark) & {
-    background-color: #34d399;
-    color: #0f172a;
-  }
+  background-color: color-mix(in srgb, var(--color-success), transparent 85%);
+  color: var(--color-success);
 }
 
 .theme-error {
-  background-color: #ef4444;
-  color: #ffffff;
-
-  :global(.dark) & {
-    background-color: #f87171;
-    color: #0f172a;
-  }
+  background-color: color-mix(in srgb, var(--color-danger), transparent 85%);
+  color: var(--color-danger);
 }
 
 .theme-warning {
-  background-color: #f59e0b;
-  color: #ffffff;
-
-  :global(.dark) & {
-    background-color: #fbbf24;
-    color: #0f172a;
-  }
+  background-color: color-mix(in srgb, var(--color-warning), transparent 85%);
+  color: var(--color-warning);
 }
 
 .theme-loading {
-  background-color: #2563eb;
-  color: #ffffff;
-
-  :global(.dark) & {
-    background-color: #3b82f6;
-    color: #0f172a;
-  }
+  background-color: color-mix(in srgb, var(--color-primary), transparent 85%);
+  color: var(--color-primary);
 }
 
 .theme-info {
-  background-color: var(--bg-panel, #ffffff);
-  color: var(--text-title, #0f172a);
-  border: 1px solid var(--control-border, rgba(15, 23, 42, 0.08));
-
-  :global(.dark) & {
-    background-color: #020617;
-    color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-}
-
-.toast-transition-enter-active,
-.toast-transition-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.toast-transition-enter-from,
-.toast-transition-leave-to {
-  opacity: 0;
-  transform: translateX(20px);
-}
-
-.toast-transition-move {
-  transition: transform 0.3s ease;
-}
-
-.toast-transition-leave-active {
-  position: absolute;
+  background-color: var(--bg-panel);
+  color: var(--text-title);
 }
 </style>

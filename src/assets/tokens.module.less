@@ -1,49 +1,76 @@
 ﻿:root {
-  --bg-main: #f1f5f9;
-  --bg-body: #f8fafc;
-  --bg-panel: #ffffff;
-  --bg-panel-hover: #f1f5f9;
+  --bg-main: #f2f2f7;
+  --bg-body: #ffffff;
+  --bg-panel: rgba(255, 255, 255, 0.82);
+  --bg-panel-hover: rgba(242, 242, 247, 0.9);
+  --glass-border: rgba(60, 60, 67, 0.08);
 
-  --border-light: rgba(15, 23, 42, 0.06);
-  --border-base: rgba(15, 23, 42, 0.1);
-  --control-border: rgba(15, 23, 42, 0.1);
+  --border-light: rgba(60, 60, 67, 0.06);
+  --border-base: rgba(60, 60, 67, 0.12);
+  --control-border: rgba(60, 60, 67, 0.12);
 
-  --text-title: #0f172a;
-  --text-body: #334155;
-  --text-muted: #64748b;
-  --text-disabled: #94a3b8;
+  --text-title: #000000;
+  --text-body: #1c1c1e;
+  --text-muted: #3c3c43;
+  --text-disabled: #8e8e93;
 
-  --color-primary: #2563eb;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
+  --color-primary: #007aff;
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-danger: #ff3b30;
 
-  --theme-btn-color: #f59e0b;
-  --theme-btn-bg: var(--bg-body);
+  --theme-btn-color: #ff9500;
+  --theme-btn-bg: rgba(255, 255, 255, 0.8);
+
+  --root-glow: 0 0 20px rgba(255, 149, 0, 0.4);
+  --finger-shadow: 0 4px 12px rgba(0, 122, 255, 0.25);
+
+  /* 🌟 亮色模式：极轻柔通透的羽化阴影 */
+  --shadow-sm: 0 2px 6px -1px rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 12px 28px -6px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 40px -8px rgba(0, 0, 0, 0.1), 0 6px 18px -4px rgba(0, 0, 0, 0.05);
+
+  --shadow-panel: 0 16px 36px -8px rgba(0, 0, 0, 0.07), 0 4px 16px -4px rgba(0, 0, 0, 0.03);
+  --shadow-floating: 0 28px 64px -12px rgba(0, 0, 0, 0.12), 0 8px 24px -6px rgba(0, 0, 0, 0.06);
 }
 
 .dark {
-  --bg-main: #090d16;
-  --bg-body: #020617;
-  --bg-panel: #0f172a;
-  --bg-panel-hover: #1e293b;
+  --bg-main: #121214;
+  --bg-body: #1c1c1e;
+  --bg-panel: rgba(44, 44, 46, 0.85);
+  --bg-panel-hover: rgba(58, 58, 60, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.12);
 
-  --border-light: rgba(255, 255, 255, 0.05);
-  --border-base: rgba(255, 255, 255, 0.1);
-  --control-border: rgba(255, 255, 255, 0.12);
+  --border-light: rgba(235, 235, 245, 0.06);
+  --border-base: rgba(235, 235, 245, 0.12);
+  --control-border: rgba(235, 235, 245, 0.12);
 
-  --text-title: #f8fafc;
-  --text-body: #cbd5e1;
-  --text-muted: #94a3b8;
-  --text-disabled: #64748b;
+  --text-title: #ffffff;
+  --text-body: #f2f2f7;
+  --text-muted: #eca0a0;
+  --text-disabled: #8e8e93;
 
-  --color-primary: #3b82f6;
-  --color-success: #34d399;
-  --color-warning: #fbbf24;
-  --color-danger: #f87171;
+  --color-primary: #0a84ff;
+  --color-success: #30d158;
+  --color-warning: #ffd60a;
+  --color-danger: #ff453a;
 
-  --theme-btn-color: #38bdf8;
-  --theme-btn-bg: #1e293b;
+  --theme-btn-color: #64d2ff;
+  --theme-btn-bg: rgba(44, 44, 46, 0.8);
+
+  --root-glow: 0 0 24px rgba(255, 214, 10, 0.5);
+  --finger-shadow: 0 6px 18px rgba(10, 132, 255, 0.35);
+
+  /* 🌟 暗色模式：同步降重后的自然柔和暗影（低对比度高光描边 + 适度暗影） */
+  --shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --shadow-lg: 0 14px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-xl: 0 22px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1);
+
+  --shadow-panel: 0 18px 42px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-floating:
+    0 32px 68px -8px rgba(0, 0, 0, 0.65), 0 12px 28px -6px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 @primary: var(--color-primary);
@@ -62,41 +89,33 @@
 @space-lg: 1.5rem;
 @space-xl: 2rem;
 
-@radius-sm: 0.25rem;
-@radius-md: 0.5rem;
-@radius-lg: 0.75rem;
-@radius-xl: 1rem;
+@radius-sm: 0.375rem;
+@radius-md: 0.625rem;
+@radius-lg: 0.875rem;
+@radius-xl: 1.25rem;
 
 @border-width-base: 1px;
 @border-solid-base: @border-width-base solid var(--border-base);
 @border-solid-light: @border-width-base solid var(--border-light);
 @border-dashed-base: @border-width-base dashed var(--border-base);
 
-@focus-ring-primary: 0 0 0 3px color-mix(in srgb, @primary, transparent 85%);
+@focus-ring-primary: 0 0 0 3px color-mix(in srgb, @primary, transparent 80%);
 
-@shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-@shadow-md:
-  0 4px 6px -1px rgba(0, 0, 0, 0.1),
-  0 2px 4px -1px rgba(0, 0, 0, 0.06);
-@shadow-lg:
-  0 10px 15px -3px rgba(0, 0, 0, 0.1),
-  0 4px 6px -2px rgba(0, 0, 0, 0.05);
-@shadow-xl:
-  0 20px 25px -5px rgba(0, 0, 0, 0.1),
-  0 10px 10px -5px rgba(0, 0, 0, 0.04);
+@shadow-sm: var(--shadow-sm);
+@shadow-md: var(--shadow-md);
+@shadow-lg: var(--shadow-lg);
+@shadow-xl: var(--shadow-xl);
 
-@shadow-panel: 0 10px 30px -10px rgba(0, 0, 0, 0.04);
-@shadow-panel-dark: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-@shadow-floating: 0 20px 50px -12px rgba(0, 0, 0, 0.15);
-@shadow-floating-dark: 0 30px 60px -15px rgba(0, 0, 0, 0.6);
+@shadow-panel: var(--shadow-panel);
+@shadow-floating: var(--shadow-floating);
 
-@duration-fast: 0.15s;
-@duration-base: 0.25s;
-@duration-slow: 0.35s;
+@duration-fast: 0.18s;
+@duration-base: 0.28s;
+@duration-slow: 0.42s;
 
-@bezier-standard: cubic-bezier(0.4, 0, 0.2, 1);
-@bezier-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
-@bezier-sidebar: cubic-bezier(0.32, 0.72, 0, 1);
+@bezier-standard: cubic-bezier(0.25, 1, 0.5, 1);
+@bezier-bounce: cubic-bezier(0.34, 1.4, 0.64, 1);
+@bezier-sidebar: cubic-bezier(0.16, 1, 0.3, 1);
 
 @transition-base: all @duration-base @bezier-standard;
 @transition-fast: all @duration-fast @bezier-standard;
@@ -116,7 +135,5 @@
   shadowLg: @shadow-lg;
   shadowXl: @shadow-xl;
   shadowPanel: @shadow-panel;
-  shadowPanelDark: @shadow-panel-dark;
   shadowFloating: @shadow-floating;
-  shadowFloatingDark: @shadow-floating-dark;
 }

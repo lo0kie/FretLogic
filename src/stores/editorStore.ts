@@ -1,8 +1,8 @@
-import { STORAGE_KEYS } from '@/constants';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, GuitarStringsModel } from '@/types';
+import { STORAGE_KEYS } from '@/utils/constants';
 import { cloneDeep } from '@/utils/dataParser';
-import { createString, DEFAULT_TUNING_MAPPING, isOpen, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
+import { createString, DEFAULT_TUNING_MAPPING, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw, watch } from 'vue';
@@ -67,18 +67,6 @@ export const useEditorStore = defineStore('editor', () => {
     currentTuning.value = TuningEnum.STANDARD;
   };
 
-  const toggleOpenString = (sIdx: number) => {
-    const str = strings.value[sIdx];
-    if (str.fret > 0) {
-      str.fret = 0;
-    } else if (isOpen(str)) {
-      str.fret = -1;
-      str.isRoot = false;
-    } else {
-      str.fret = 0;
-    }
-  };
-
   return {
     strings,
     currentChordName,
@@ -89,6 +77,5 @@ export const useEditorStore = defineStore('editor', () => {
     activeBaseStrings,
     isFretBoardEmpty,
     resetEditor,
-    toggleOpenString,
   };
 });

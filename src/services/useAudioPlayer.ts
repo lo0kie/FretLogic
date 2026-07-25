@@ -1,5 +1,5 @@
-﻿import { AUDIO_CONFIG } from '@/constants/audio';
-import { useEditorStore } from '@/stores/editorStore';
+﻿import { useEditorStore } from '@/stores/editorStore';
+import { AUDIO_CONFIG } from '@/utils/constants/audio';
 import type { PolySynth } from 'tone';
 import { ref } from 'vue';
 
@@ -89,7 +89,7 @@ export function useAudioPlayer() {
         const frequency = tone.Frequency(currentMidiNote, 'midi').toFrequency();
 
         const triggerTime = now + strumDelay;
-        const humanizeVelocity = 0.82 + Math.random() * 0.18;
+        const humanizeVelocity = 0.78 + Math.random() * 0.22;
 
         guitarSynth.triggerAttackRelease(frequency, AUDIO_CONFIG.ENV_RELEASE, triggerTime, humanizeVelocity);
 

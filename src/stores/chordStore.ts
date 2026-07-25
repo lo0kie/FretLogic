@@ -1,5 +1,5 @@
-import { STORAGE_KEYS } from '@/constants';
 import type { Chord, Group } from '@/types';
+import { STORAGE_KEYS } from '@/utils/constants';
 import { cloneDeep } from '@/utils/dataParser';
 import { useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';

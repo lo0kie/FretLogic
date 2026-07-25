@@ -1,5 +1,10 @@
 ﻿// src/types/chord.ts
+import { FRET_COUNTS } from '@/utils/constants';
 import { TuningEnum } from '@/utils/musicTheory';
+
+export type Writable<T> = {
+  -readonly [P in keyof T]: T[P];
+};
 
 /**
  * ⚡ 纯净的 TypeScript 原生接口实体定义（完美保留全项目编译类型推断）
@@ -23,7 +28,7 @@ export interface Chord {
   id: string;
   chordName: string;
   strings: GuitarStringsModel;
-  fretCount: 3 | 4 | 5;
+  fretCount: (typeof FRET_COUNTS)[number];
   capo: number;
   groupId: string;
   tuning: TuningEnum;

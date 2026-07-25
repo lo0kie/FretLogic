@@ -1,4 +1,4 @@
-import { STORAGE_KEYS } from '@/constants';
+import { STORAGE_KEYS } from '@/utils/constants';
 import { useDark, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 

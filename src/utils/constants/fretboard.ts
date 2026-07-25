@@ -29,4 +29,4 @@ export const CANVAS_CONFIG = {
   BOARD_WIDTH: OFFSET_X + 5 * STRING_SPACING + OFFSET_X_RIGHT,
 } as const;
 
-export const FRET_COUNTS = [3, 4, 5] as const;
+export const FRET_COUNTS = [3, 4] as const;

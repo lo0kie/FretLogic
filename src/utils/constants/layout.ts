@@ -1,0 +1,6 @@
+﻿export const LEFT_SIDEBAR_WIDTH = 335;
+export const LEFT_SIDEBAR_WIDTH_PIXEL = `${LEFT_SIDEBAR_WIDTH}px`;
+
+export const WORKBENCH_LAYOUT = {
+  BASE_VERTICAL_PADDING: 135,
+} as const;
