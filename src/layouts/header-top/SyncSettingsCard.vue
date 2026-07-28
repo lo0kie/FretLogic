@@ -77,7 +77,7 @@ const settingsStore = useSettingsStore();
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  background-color: var(--bg-body);
+  background-color: var(--bg-panel);
   padding: 0.75rem;
   border-radius: @radius-lg;
   border: 1px solid var(--border-light);

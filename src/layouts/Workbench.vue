@@ -1,6 +1,5 @@
 <template>
   <div class="workbench-layout-wrapper">
-    <!-- 1. 中间居中指板卡片 -->
     <div
       ref="FretBoardCaptureArea"
       class="workbench-card"
@@ -26,12 +25,10 @@
       </div>
     </div>
 
-    <!-- 2. 右侧固定面板：顶部与中间卡片对齐 -->
     <ChordAnalysisPanel />
 
-    <!-- 3. 底部动态浮动操作条 -->
     <Transition name="floating-bar-fade">
-      <div v-if="isFloatingBarVisible" class="floating-action-bar">
+      <div v-if="isFloatingBarVisible" class="floating-action-bar" :style="{ bottom: barBottomPosition }">
         <ActionButton size="md" variant="ghost" :disabled="isClearDisabled" @click="editorStore.resetEditor()">
           {{ editorStore.editingId ? '放弃修改' : '重置指板' }}
         </ActionButton>
@@ -70,15 +67,17 @@ const dynamicHeight = computed(() => {
   return `${baseVerticalSpace + realBoardHeight}px`;
 });
 
+const barBottomPosition = computed(() => (editorStore.fretCount === 3 ? '3.3rem' : '1.8rem'));
+
 const isFloatingBarVisible = computed(() => {
   const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
-  const hasModified =
+  return (
     cleanName !== '' ||
     !editorStore.isFretBoardEmpty ||
     editorStore.capo > 0 ||
     editorStore.fretCount > 3 ||
-    editorStore.editingId !== null;
-  return hasModified;
+    editorStore.editingId !== null
+  );
 });
 
 const isSaveDisabled = computed(() => {
@@ -107,10 +106,10 @@ const isClearDisabled = computed(() => {
   inset: 0;
   z-index: 1;
   display: flex;
-  align-items: flex-start; /* 保持顶部对齐 */
-  justify-content: center; /* 中间指板卡片完美居中 */
+  align-items: flex-start;
+  justify-content: center;
   padding: 2rem;
-  padding-top: 3.5rem; /* 控制中间与右侧卡片统一的顶部边距 */
+  padding-top: 3.5rem;
   padding-bottom: 6.15rem;
   overflow: hidden;
   box-sizing: border-box;
@@ -141,7 +140,6 @@ const isClearDisabled = computed(() => {
 
 .floating-action-bar {
   position: absolute;
-  bottom: 1.8rem;
   z-index: 10;
   pointer-events: auto;
   display: flex;
@@ -155,6 +153,12 @@ const isClearDisabled = computed(() => {
   border-radius: 9999px;
   box-shadow: @shadow-floating;
   box-sizing: border-box;
+
+  transition:
+    bottom 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.28s ease,
+    border-color 0.28s ease,
+    box-shadow 0.28s ease;
 }
 
 .bar-divider {

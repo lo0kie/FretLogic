@@ -370,6 +370,10 @@ const handlePointerUp = () => {
 
 const handlePointerDown = (e: PointerEvent) => {
   if (!props.interactive || e.button !== 0) return;
+  if (cleanupListeners.length > 0) {
+    cleanupListeners.forEach(cleanup => cleanup());
+    cleanupListeners.length = 0;
+  }
   emit('drag-status-change', true);
   lastSIdx = -1;
   lastFIdx = -1;

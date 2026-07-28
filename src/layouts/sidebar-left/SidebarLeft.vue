@@ -112,6 +112,7 @@
           @click="modalData.moveTargetId = group.id"
           class="move-target-btn"
           :class="getGroupClass(group.id)"
+          :title="group.name"
         >
           <BaseMarquee class="move-marquee">
             <span>{{ group.name }}</span>
@@ -137,7 +138,7 @@ import type { Chord, Group } from '@/types';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/constants';
 import { Download, Eye, EyeOff, Plus, Search, Upload } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
-import { computed, nextTick, reactive, ref } from 'vue';
+import { nextTick, reactive, ref } from 'vue';
 
 const uiStore = useUiStore();
 const chordStore = useChordStore();
@@ -165,11 +166,11 @@ const modalData = reactive({
 const createInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
 const renameInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
 
-const getGroupClass = computed(() => (groupId: string) => {
+const getGroupClass = (groupId: string) => {
   if (groupId === modalData.activeChord?.groupId) return 'is-disabled';
   if (modalData.moveTargetId === groupId) return 'is-selected';
   return 'is-normal';
-});
+};
 
 const handleImportTrigger = () => fileInputRef.value?.click();
 

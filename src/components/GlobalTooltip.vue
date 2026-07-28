@@ -61,9 +61,7 @@ const sanitizedHtmlContent = computedAsync(async () => {
 
 const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   placement: computed(() => props.placement),
-  whileElementsMounted: (reference, floating, update) => {
-    return autoUpdate(reference, floating, update);
-  },
+  whileElementsMounted: (reference, floating, update) => autoUpdate(reference, floating, update),
   middleware: [offset(8), flip({ fallbackAxisSideDirection: 'start' }), shift({ padding: 6 })],
 });
 </script>

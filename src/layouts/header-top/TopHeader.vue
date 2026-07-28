@@ -310,7 +310,7 @@ const confirmPull = () => {
   right: 0;
   width: 15rem;
   padding: 0.8rem 1rem;
-  background-color: var(--bg-body);
+  background-color: var(--bg-panel);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
   border: 1px solid var(--glass-border);

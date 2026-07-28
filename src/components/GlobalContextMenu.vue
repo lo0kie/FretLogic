@@ -8,33 +8,34 @@
       <div v-if="isOpen" class="context-menu-backdrop" @pointerdown.prevent.stop="closeMenu"></div>
     </Transition>
 
-    <Transition name="menu-fade">
-      <div v-if="isOpen" ref="menuRef" class="context-menu-box" :style="{ left: `${x}px`, top: `${y}px` }">
-        <button
-          v-for="(item, idx) in items"
-          :key="idx"
-          :disabled="item.disabled"
-          @click.stop="handleItemClick(item)"
-          class="menu-item"
-          :class="[item.danger ? 'is-danger' : 'is-normal', item.disabled ? 'is-disabled' : '']"
-        >
-          <component :is="item.icon" v-if="item.icon" :size="13" :stroke-width="2.5" />
-          <span>{{ item.label }}</span>
-        </button>
-      </div>
-    </Transition>
+    <div v-if="isOpen" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
+      <Transition name="menu-fade" appear>
+        <div class="context-menu-box">
+          <button
+            v-for="(item, idx) in items"
+            :key="idx"
+            :disabled="item.disabled"
+            @click.stop="handleItemClick(item)"
+            class="menu-item"
+            :class="[item.danger ? 'is-danger' : 'is-normal', item.disabled ? 'is-disabled' : '']"
+          >
+            <component :is="item.icon" v-if="item.icon" :size="13" :stroke-width="2.5" />
+            <span>{{ item.label }}</span>
+          </button>
+        </div>
+      </Transition>
+    </div>
   </Teleport>
 </template>
 
 <script lang="ts">
 const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
-
-export default { name: 'GlobalContextMenu' };
 </script>
 
 <script setup lang="ts">
+import { autoUpdate, flip, shift, useFloating } from '@floating-ui/vue';
 import { useEventListener } from '@vueuse/core';
-import { FunctionalComponent, nextTick, onBeforeUnmount, ref } from 'vue';
+import { FunctionalComponent, onBeforeUnmount, ref, watch } from 'vue';
 
 export interface ContextMenuItem {
   label: string;
@@ -43,6 +44,8 @@ export interface ContextMenuItem {
   danger?: boolean;
   disabled?: boolean;
 }
+
+defineOptions({ name: 'GlobalContextMenu' });
 
 const props = defineProps<{
   items: ContextMenuItem[];
@@ -53,7 +56,30 @@ const x = ref(0);
 const y = ref(0);
 
 const triggerRef = ref<HTMLElement | null>(null);
-const menuRef = ref<HTMLElement | null>(null);
+const floatingRef = ref<HTMLElement | null>(null);
+
+const virtualRef = ref({
+  getBoundingClientRect() {
+    return {
+      x: x.value,
+      y: y.value,
+      top: y.value,
+      left: x.value,
+      bottom: y.value,
+      right: x.value,
+      width: 0,
+      height: 0,
+    };
+  },
+});
+
+const { floatingStyles } = useFloating(virtualRef, floatingRef, {
+  placement: 'bottom-start',
+  whileElementsMounted: (reference, floating, update) => autoUpdate(reference, floating, update),
+  middleware: [flip(), shift({ padding: 8 })],
+});
+
+let stopListeners: (() => void)[] = [];
 
 const closeMenu = () => {
   isOpen.value = false;
@@ -62,51 +88,31 @@ const closeMenu = () => {
   }
 };
 
-const adjustPosition = () => {
-  nextTick(() => {
-    if (!menuRef.value) return;
-    const menuRect = menuRef.value.getBoundingClientRect();
+const openMenuAt = (clientX: number, clientY: number) => {
+  if (!props.items || props.items.length === 0) return;
 
-    if (x.value + menuRect.width > window.innerWidth) {
-      x.value = window.innerWidth - menuRect.width - 8;
-    }
-    if (y.value + menuRect.height > window.innerHeight) {
-      y.value = window.innerHeight - menuRect.height - 8;
-    }
-  });
+  if (globalActiveMenuCloseFn.value && globalActiveMenuCloseFn.value !== closeMenu) {
+    globalActiveMenuCloseFn.value();
+  }
+
+  x.value = clientX;
+  y.value = clientY;
+  isOpen.value = true;
+
+  globalActiveMenuCloseFn.value = closeMenu;
 };
 
 const openMenuManual = (clientX: number, clientY: number) => {
-  if (!props.items || props.items.length === 0) return;
-
-  if (globalActiveMenuCloseFn.value && globalActiveMenuCloseFn.value !== closeMenu) {
-    globalActiveMenuCloseFn.value();
-  }
-
-  isOpen.value = true;
-  x.value = clientX;
-  y.value = clientY;
-
-  globalActiveMenuCloseFn.value = closeMenu;
-  adjustPosition();
+  openMenuAt(clientX, clientY);
 };
 
 const handleContextMenu = (e: MouseEvent) => {
+  if (!props.items || props.items.length === 0) return;
+
   e.preventDefault();
   e.stopPropagation();
 
-  if (!props.items || props.items.length === 0) return;
-
-  if (globalActiveMenuCloseFn.value && globalActiveMenuCloseFn.value !== closeMenu) {
-    globalActiveMenuCloseFn.value();
-  }
-
-  isOpen.value = true;
-  x.value = e.clientX;
-  y.value = e.clientY;
-
-  globalActiveMenuCloseFn.value = closeMenu;
-  adjustPosition();
+  openMenuAt(e.clientX, e.clientY);
 };
 
 const handleItemClick = (item: ContextMenuItem) => {
@@ -115,14 +121,27 @@ const handleItemClick = (item: ContextMenuItem) => {
   closeMenu();
 };
 
-useEventListener(window, 'pointerdown', (e: PointerEvent) => {
-  if (!isOpen.value || !menuRef.value) return;
-  if (!menuRef.value.contains(e.target as Node)) {
-    closeMenu();
+watch(isOpen, open => {
+  stopListeners.forEach(stop => stop());
+  stopListeners = [];
+
+  if (open) {
+    stopListeners.push(
+      useEventListener(window, 'pointerdown', (e: PointerEvent) => {
+        if (!floatingRef.value) return;
+        if (!floatingRef.value.contains(e.target as Node)) {
+          closeMenu();
+        }
+      })
+    );
+    stopListeners.push(useEventListener(window, 'resize', closeMenu));
+    stopListeners.push(useEventListener(window, 'scroll', closeMenu, { capture: true, passive: true }));
   }
 });
 
 onBeforeUnmount(() => {
+  stopListeners.forEach(stop => stop());
+  stopListeners = [];
   if (globalActiveMenuCloseFn.value === closeMenu) {
     globalActiveMenuCloseFn.value = null;
   }
@@ -149,9 +168,12 @@ defineExpose({
   background-color: transparent;
 }
 
-.context-menu-box {
-  position: fixed;
+.floating-position-wrapper {
   z-index: 9999;
+  pointer-events: auto;
+}
+
+.context-menu-box {
   padding: 0.3rem;
   display: flex;
   flex-direction: column;
@@ -164,6 +186,7 @@ defineExpose({
   border-radius: @radius-lg;
   box-shadow: @shadow-floating;
   box-sizing: border-box;
+  transform-origin: top left;
 }
 
 .menu-item {
@@ -210,12 +233,7 @@ defineExpose({
   }
 }
 
-.menu-fade-enter-active {
-  transition:
-    opacity @duration-fast @bezier-standard,
-    transform @duration-fast @bezier-standard;
-}
-
+.menu-fade-enter-active,
 .menu-fade-leave-active {
   transition:
     opacity @duration-fast @bezier-standard,

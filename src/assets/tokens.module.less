@@ -1,17 +1,17 @@
 ﻿:root {
   --bg-main: #f2f2f7;
-  --bg-body: #ffffff;
-  --bg-panel: rgba(255, 255, 255, 0.82);
-  --bg-panel-hover: rgba(242, 242, 247, 0.9);
-  --glass-border: rgba(60, 60, 67, 0.08);
+  --bg-body: #f5f5f5;
+  --bg-panel: #fcfcfd;
+  --bg-panel-hover: #ebebef;
+  --glass-border: #e0e0e5;
 
-  --border-light: rgba(60, 60, 67, 0.06);
-  --border-base: rgba(60, 60, 67, 0.12);
-  --control-border: rgba(60, 60, 67, 0.12);
+  --border-light: #ececef;
+  --border-base: #d8d8df;
+  --control-border: #d8d8df;
 
-  --text-title: #000000;
-  --text-body: #1c1c1e;
-  --text-muted: #3c3c43;
+  --text-title: #1c1c1e;
+  --text-body: #2c2c2e;
+  --text-muted: #545456;
   --text-disabled: #8e8e93;
 
   --color-primary: #007aff;
@@ -20,34 +20,33 @@
   --color-danger: #ff3b30;
 
   --theme-btn-color: #ff9500;
-  --theme-btn-bg: rgba(255, 255, 255, 0.8);
+  --theme-btn-bg: #ebebef;
 
-  --root-glow: 0 0 20px rgba(255, 149, 0, 0.4);
-  --finger-shadow: 0 4px 12px rgba(0, 122, 255, 0.25);
+  --root-glow: 0 0 20px #ffd199;
+  --finger-shadow: 0 4px 12px #bfdcff;
 
-  /* 🌟 亮色模式：极轻柔通透的羽化阴影 */
-  --shadow-sm: 0 2px 6px -1px rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 12px 28px -6px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
-  --shadow-xl: 0 20px 40px -8px rgba(0, 0, 0, 0.1), 0 6px 18px -4px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 2px 6px -1px #e5e5ea, 0 1px 2px 0 #ebebef;
+  --shadow-md: 0 6px 16px -4px #d8d8df, 0 2px 6px -1px #e0e0e5;
+  --shadow-lg: 0 12px 28px -6px #cfcfd5, 0 4px 12px -2px #d8d8df;
+  --shadow-xl: 0 20px 40px -8px #c0c0c7, 0 6px 18px -4px #cfcfd5;
 
-  --shadow-panel: 0 16px 36px -8px rgba(0, 0, 0, 0.07), 0 4px 16px -4px rgba(0, 0, 0, 0.03);
-  --shadow-floating: 0 28px 64px -12px rgba(0, 0, 0, 0.12), 0 8px 24px -6px rgba(0, 0, 0, 0.06);
+  --shadow-panel: 0 16px 36px -8px #d8d8df, 0 4px 16px -4px #e0e0e5;
+  --shadow-floating: 0 28px 64px -12px #cfcfd5, 0 8px 24px -6px #d8d8df;
 }
 
 .dark {
-  --bg-main: #121214;
-  --bg-body: #1c1c1e;
-  --bg-panel: rgba(44, 44, 46, 0.85);
-  --bg-panel-hover: rgba(58, 58, 60, 0.9);
-  --glass-border: rgba(255, 255, 255, 0.12);
+  --bg-main: #18181a;
+  --bg-body: #222224;
+  --bg-panel: #2a2a2c;
+  --bg-panel-hover: #363638;
+  --glass-border: #38383a;
 
-  --border-light: rgba(235, 235, 245, 0.06);
-  --border-base: rgba(235, 235, 245, 0.12);
-  --control-border: rgba(235, 235, 245, 0.12);
+  --border-light: #2c2c2e;
+  --border-base: #404044;
+  --control-border: #404044;
 
-  --text-title: #ffffff;
-  --text-body: #f2f2f7;
+  --text-title: #f2f2f7;
+  --text-body: #e5e5ea;
   --text-muted: #eca0a0;
   --text-disabled: #8e8e93;
 
@@ -57,20 +56,18 @@
   --color-danger: #ff453a;
 
   --theme-btn-color: #64d2ff;
-  --theme-btn-bg: rgba(44, 44, 46, 0.8);
+  --theme-btn-bg: #2a2a2c;
 
-  --root-glow: 0 0 24px rgba(255, 214, 10, 0.5);
-  --finger-shadow: 0 6px 18px rgba(10, 132, 255, 0.35);
+  --root-glow: 0 0 24px #806b05;
+  --finger-shadow: 0 6px 18px #032e52;
 
-  /* 🌟 暗色模式：同步降重后的自然柔和暗影（低对比度高光描边 + 适度暗影） */
-  --shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.07);
-  --shadow-lg: 0 14px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
-  --shadow-xl: 0 22px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --shadow-sm: 0 3px 10px #101012, 0 0 0 1px #323235;
+  --shadow-md: 0 6px 18px #0d0d0e, 0 0 0 1px #323235;
+  --shadow-lg: 0 14px 32px #0a0a0b, 0 0 0 1px #404044;
+  --shadow-xl: 0 22px 48px #080809, 0 0 0 1px #404044;
 
-  --shadow-panel: 0 18px 42px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
-  --shadow-floating:
-    0 32px 68px -8px rgba(0, 0, 0, 0.65), 0 12px 28px -6px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --shadow-panel: 0 18px 42px #0a0a0b, 0 0 0 1px #323235;
+  --shadow-floating: 0 32px 68px -8px #050506, 0 12px 28px -6px #0a0a0b, 0 0 0 1px #404044;
 }
 
 @primary: var(--color-primary);
@@ -99,7 +96,7 @@
 @border-solid-light: @border-width-base solid var(--border-light);
 @border-dashed-base: @border-width-base dashed var(--border-base);
 
-@focus-ring-primary: 0 0 0 3px color-mix(in srgb, @primary, transparent 80%);
+@focus-ring-primary: 0 0 0 1px color-mix(in srgb, @primary, transparent 80%);
 
 @shadow-sm: var(--shadow-sm);
 @shadow-md: var(--shadow-md);

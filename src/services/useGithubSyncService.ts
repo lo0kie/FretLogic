@@ -1,8 +1,8 @@
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
-import { SettingsSchema } from '@/types';
 import { cleanAndValidateData } from '@/utils/dataParser';
+import { SettingsSchema } from '@/utils/validators';
 import { Base64 } from 'js-base64';
 import { ref } from 'vue';
 
