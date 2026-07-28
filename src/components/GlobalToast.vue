@@ -65,7 +65,7 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   box-sizing: border-box;
-  transition: @transition-fast;
+  transition: all @duration-base @bezier-standard;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -151,5 +151,25 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
 .theme-info {
   background-color: var(--bg-panel);
   color: var(--text-title);
+}
+
+/* 🍎 Vue TransitionGroup 完整平滑补位动画 */
+:deep(.toast-transition-enter-from) {
+  opacity: 0;
+  transform: translateY(-12px) scale(0.9);
+}
+
+:deep(.toast-transition-leave-to) {
+  opacity: 0;
+  transform: translateY(-12px) scale(0.9);
+}
+
+:deep(.toast-transition-leave-active) {
+  position: absolute !important;
+  pointer-events: none;
+}
+
+:deep(.toast-transition-move) {
+  transition: transform @duration-base @bezier-standard;
 }
 </style>

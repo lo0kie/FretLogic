@@ -4,7 +4,7 @@
       ref="referenceRef"
       @click="toggleDropdown"
       @wheel="handleWheel"
-      class="selector-trigger-bar group"
+      class="selector-trigger-bar"
       :class="{ 'is-active': isOpen }"
     >
       <span class="label-zone" :class="[isNonDefault ? 'is-custom' : 'is-default']">
@@ -15,12 +15,7 @@
 
       <X v-if="clearable && isNonDefault" :size="14" :stroke-width="2.5" class="clear-icon" @click.stop="handleClear" />
 
-      <ChevronDown
-        :size="14"
-        :stroke-width="2.5"
-        class="arrow-icon"
-        :class="[{ 'rotate-180': isOpen }, clearable && isNonDefault ? 'has-clear' : '']"
-      />
+      <ChevronDown :size="14" :stroke-width="2.5" class="arrow-icon" :class="{ 'rotate-180': isOpen }" />
     </div>
 
     <Teleport to="body">
@@ -244,13 +239,8 @@ watch(isOpen, opened => {
 }
 
 .clear-icon {
-  display: none;
   color: var(--text-disabled);
   transition: color @duration-fast @bezier-standard;
-
-  .group:hover & {
-    display: block;
-  }
 
   &:hover {
     color: var(--color-danger) !important;
@@ -263,12 +253,6 @@ watch(isOpen, opened => {
 
   &.rotate-180 {
     transform: rotate(180deg);
-  }
-
-  &.has-clear {
-    .group:hover & {
-      display: none;
-    }
   }
 }
 

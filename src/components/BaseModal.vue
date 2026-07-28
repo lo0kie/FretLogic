@@ -5,7 +5,7 @@
         <div class="modal-mask" @click="closeOnMask && handleCancel()"></div>
 
         <div class="modal-card" :class="width">
-          <h3 v-if="title" class="modal-title">
+          <h3 v-if="title" class="modal-title" :title="title">
             {{ title }}
           </h3>
 
@@ -148,6 +148,9 @@ const handleCancel = () => {
   color: var(--text-title);
   margin: 0;
   flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .modal-body-content {

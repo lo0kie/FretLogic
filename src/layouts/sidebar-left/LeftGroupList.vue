@@ -13,7 +13,9 @@
         handle=".drag-handle"
         :disabled="!!searchQuery"
         class="draggable-group-list"
-        ghost-class="drag-ghost-opacity"
+        ghost-class="drag-ghost-style"
+        chosen-class="drag-chosen-style"
+        drag-class="drag-active-style"
         :touchStartThreshold="12"
         :swap-threshold="0.5"
       >
@@ -23,8 +25,12 @@
           :ref="el => setGroupCardRef(el, group.id)"
           class="group-box-card"
         >
-          <GlobalContextMenu :items="getGroupMenuItems(group)">
-            <div @click="chordService.executeGroupToggle(group.id)" class="group-title-row">
+          <GlobalContextMenu :ref="el => setContextMenuRef(el, group.id)" :items="getGroupMenuItems(group)">
+            <div
+              @click="chordService.executeGroupToggle(group.id)"
+              class="group-title-row"
+              :class="{ 'is-context-open': isGroupMenuOpen(group.id) }"
+            >
               <div class="group-info-zone" title="点击折叠/展开分组">
                 <ChevronDown
                   :size="14"
@@ -33,7 +39,7 @@
                   :class="{ 'is-collapsed': group.collapsed }"
                 />
 
-                <BaseMarquee class="group-marquee">
+                <BaseMarquee>
                   <span class="group-name-text">
                     {{ group.name }}
                   </span>
@@ -64,7 +70,9 @@
             <VueDraggable
               :model-value="filteredChordsGroupMap.get(group.id) || []"
               :animation="200"
-              ghost-class="drag-ghost-opacity"
+              ghost-class="drag-ghost-style"
+              chosen-class="drag-chosen-style"
+              drag-class="drag-active-style"
               :disabled="!!searchQuery"
               class="chords-grid-layout"
               @update="e => chordService.handleChordSort(e, group.id)"
@@ -88,7 +96,7 @@
             </div>
             <div
               v-else-if="searchQuery && (filteredChordsGroupMap.get(group.id) || []).length === 0"
-              class="empty-placeholder-card is-search-empty z-index-bg"
+              class="empty-placeholder-card z-index-bg"
             >
               <p class="placeholder-card-text">无匹配</p>
             </div>
@@ -100,7 +108,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch, nextTick, onBeforeUpdate, computed } from 'vue';
+import { watch, nextTick, onBeforeUpdate, computed, ref } from 'vue';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/constants/index.ts';
 import { useChordService } from '@/services/useChordService';
 import { useChordStore } from '@/stores/chordStore';
@@ -128,6 +136,7 @@ const chordStore = useChordStore();
 const chordService = useChordService();
 
 const groupCardsMap = new Map<string, HTMLElement>();
+const contextMenuRefsMap = ref<Record<string, InstanceType<typeof GlobalContextMenu>>>({});
 
 const setGroupCardRef = (el: unknown, groupId: string) => {
   if (el) {
@@ -135,8 +144,19 @@ const setGroupCardRef = (el: unknown, groupId: string) => {
   }
 };
 
+const setContextMenuRef = (el: unknown, groupId: string) => {
+  if (el) {
+    contextMenuRefsMap.value[groupId] = el as InstanceType<typeof GlobalContextMenu>;
+  }
+};
+
+const isGroupMenuOpen = (groupId: string) => {
+  return contextMenuRefsMap.value[groupId]?.isOpen ?? false;
+};
+
 onBeforeUpdate(() => {
   groupCardsMap.clear();
+  contextMenuRefsMap.value = {};
 });
 
 const getGroupChordsCount = (groupId: string) => {
@@ -200,7 +220,7 @@ watch(
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 
-:deep(.draggable-group-list:has(.group-box-card.sortable-chosen)) {
+:deep(.draggable-group-list:has(.group-box-card.drag-chosen-style)) {
   .chord-content-wrapper {
     display: none !important;
   }
@@ -271,6 +291,7 @@ watch(
   border-radius: @radius-md;
   box-sizing: border-box;
   cursor: pointer;
+  border: 1px solid transparent;
   transition: @transition-fast;
 
   &:hover {
@@ -279,6 +300,12 @@ watch(
     .drag-handle:not(.is-hidden-by-search) {
       opacity: 1;
     }
+  }
+
+  &.is-context-open {
+    background-color: var(--bg-panel-hover);
+    border-color: var(--border-base);
+    box-shadow: 0 0 0 1px var(--border-base);
   }
 }
 
@@ -300,10 +327,6 @@ watch(
   &.is-collapsed {
     transform: rotate(-90deg);
   }
-}
-
-.group-marquee {
-  min-width: 0;
 }
 
 .group-name-text {
@@ -418,7 +441,36 @@ watch(
   z-index: 0;
 }
 
-.drag-ghost-opacity {
-  opacity: 0;
+:deep(.drag-ghost-style) {
+  opacity: 0.35 !important;
+  background-color: var(--bg-panel-hover) !important;
+  border: 1px dashed var(--color-primary) !important;
+  box-shadow: none !important;
+}
+
+:deep(.drag-chosen-style) {
+  cursor: grabbing !important;
+}
+
+:deep(.drag-active-style) {
+  cursor: grabbing !important;
+  opacity: 0.95 !important;
+  transform: scale(1.03) !important;
+  box-shadow: @shadow-floating !important;
+  z-index: 9999 !important;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease !important;
+
+  .chord-thumb-card {
+    border-color: @primary !important;
+    background-color: var(--bg-panel) !important;
+  }
+
+  .group-title-row {
+    background-color: var(--bg-panel) !important;
+    border-radius: @radius-md;
+    box-shadow: @shadow-md;
+  }
 }
 </style>

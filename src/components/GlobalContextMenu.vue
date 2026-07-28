@@ -11,6 +11,11 @@
     <div v-if="isOpen" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
       <Transition name="menu-fade" appear>
         <div class="context-menu-box">
+          <template v-if="title">
+            <div class="menu-title">{{ title }}</div>
+            <div class="menu-divider"></div>
+          </template>
+
           <button
             v-for="(item, idx) in items"
             :key="idx"
@@ -49,6 +54,7 @@ defineOptions({ name: 'GlobalContextMenu' });
 
 const props = defineProps<{
   items: ContextMenuItem[];
+  title?: string;
 }>();
 
 const isOpen = ref(false);
@@ -102,10 +108,6 @@ const openMenuAt = (clientX: number, clientY: number) => {
   globalActiveMenuCloseFn.value = closeMenu;
 };
 
-const openMenuManual = (clientX: number, clientY: number) => {
-  openMenuAt(clientX, clientY);
-};
-
 const handleContextMenu = (e: MouseEvent) => {
   if (!props.items || props.items.length === 0) return;
 
@@ -148,7 +150,7 @@ onBeforeUnmount(() => {
 });
 
 defineExpose({
-  open: openMenuManual,
+  open: openMenuAt,
   close: closeMenu,
   isOpen,
 });
@@ -187,6 +189,23 @@ defineExpose({
   box-shadow: @shadow-floating;
   box-sizing: border-box;
   transform-origin: top left;
+}
+
+.menu-title {
+  padding: 0.25rem 0.6rem 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-disabled);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+.menu-divider {
+  height: 1px;
+  background-color: var(--border-light);
+  margin: 0.15rem 0.2rem 0.2rem;
 }
 
 .menu-item {

@@ -424,7 +424,12 @@ const handleMoveChord = () => {
     background-color: var(--color-primary);
     color: #ffffff;
     border-color: var(--color-primary);
-    box-shadow: @shadow-sm;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary), transparent 60%);
+    transform: scale(1.02);
+  }
+
+  &:active:not(.is-disabled) {
+    transform: scale(0.95);
   }
 
   &.is-normal {

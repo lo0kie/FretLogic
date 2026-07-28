@@ -27,7 +27,7 @@
       <div class="panel-divider" />
 
       <!-- 2. 构成音明细列表 (Apple List) -->
-      <div class="section-block flex-1 min-h-0">
+      <div class="section-block is-grow">
         <div class="section-label">构成音 (低音 ➔ 高音)</div>
         <div class="notes-list">
           <div v-for="(note, idx) in analysis.notes" :key="idx" class="note-row" :class="{ 'is-root': note.isRoot }">
@@ -210,7 +210,7 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   flex-direction: column;
   gap: 0.35rem;
 
-  &.flex-1 {
+  &.is-grow {
     flex: 1;
     min-height: 0;
   }
@@ -254,11 +254,16 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
     color: var(--text-title);
   }
 
+  &:active {
+    transform: scale(0.92);
+  }
+
   &.is-active {
     background-color: var(--color-primary);
     color: #ffffff;
     border-color: transparent;
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary), transparent 60%);
+    transform: scale(1.04);
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--color-primary), transparent 50%);
   }
 }
 

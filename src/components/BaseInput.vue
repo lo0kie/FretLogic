@@ -1,5 +1,5 @@
 <template>
-  <div class="input-wrapper group">
+  <div class="input-wrapper">
     <div v-if="$slots.prefix" class="prefix-zone" :class="sizeClass">
       <slot name="prefix"></slot>
     </div>
