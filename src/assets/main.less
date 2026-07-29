@@ -34,6 +34,30 @@ body {
   display: none;
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+  animation: themeRippleExpand 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes themeRippleExpand {
+  from {
+    clip-path: circle(0px at var(--ripple-x, 50%) var(--ripple-y, 50%));
+  }
+  to {
+    clip-path: circle(var(--ripple-r, 2000px) at var(--ripple-x, 50%) var(--ripple-y, 50%));
+  }
+}
+
 .animate-modal-in {
   animation: modalSlideIn @duration-base @bezier-standard;
 }

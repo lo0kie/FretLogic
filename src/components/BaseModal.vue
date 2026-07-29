@@ -5,11 +5,11 @@
         <div class="modal-mask" @click="closeOnMask && handleCancel()"></div>
 
         <div class="modal-card" :class="width">
-          <h3 v-if="title" class="modal-title">
+          <h3 v-if="title" class="modal-title" :title="title">
             {{ title }}
           </h3>
 
-          <div class="modal-body-content no-scrollbar">
+          <div class="modal-body-content no-scrollbar" :style="{ paddingBottom: showFooter ? '0.85rem' : ' 1.5rem' }">
             <slot></slot>
           </div>
 
@@ -124,7 +124,6 @@ const handleCancel = () => {
 .modal-card {
   position: relative;
   z-index: 10;
-  padding: 1.25rem 0;
   display: flex;
   flex-direction: column;
   max-height: 80vh;
@@ -141,17 +140,20 @@ const handleCancel = () => {
 }
 
 .modal-title {
-  padding: 0 1.5rem;
+  padding: 1.25rem 1.5rem 0 1.5rem;
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text-title);
   margin: 0;
   flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .modal-body-content {
-  padding: 0.85rem 1.5rem;
+  padding: 0.85rem 1.5rem 1.5rem 1.5rem;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -159,7 +161,7 @@ const handleCancel = () => {
 }
 
 .modal-footer-zone {
-  padding: 0 1.5rem;
+  padding: 0 1.5rem 1.25rem 1.5rem;
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;

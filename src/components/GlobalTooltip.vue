@@ -60,11 +60,10 @@ const sanitizedHtmlContent = computedAsync(async () => {
 }, '');
 
 const { floatingStyles } = useFloating(referenceRef, floatingRef, {
+  strategy: 'fixed',
   placement: computed(() => props.placement),
-  whileElementsMounted: (reference, floating, update) => {
-    return autoUpdate(reference, floating, update);
-  },
-  middleware: [offset(8), flip({ fallbackAxisSideDirection: 'start' }), shift({ padding: 6 })],
+  whileElementsMounted: (reference, floating, update) => autoUpdate(reference, floating, update),
+  middleware: [offset(8), flip({ fallbackAxisSideDirection: 'start' }), shift({ padding: 12 })],
 });
 </script>
 
@@ -77,9 +76,9 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
 }
 
 .tooltip-floating-wrapper {
-  position: fixed;
   z-index: 9999;
   pointer-events: none;
+  box-sizing: border-box;
 }
 
 .tooltip-box {
@@ -93,6 +92,8 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   box-sizing: border-box;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  max-width: calc(100vw - 24px);
+  word-break: break-word;
 
   &.pure-text {
     white-space: nowrap;
@@ -101,6 +102,7 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   &.rich-content {
     white-space: normal;
     width: max-content;
+    max-width: calc(100vw - 24px);
     overflow: hidden;
     display: flex;
     flex-direction: column;

@@ -1,9 +1,10 @@
 <template>
   <div ref="containerRef" class="relative-container">
     <div
+      ref="referenceRef"
       @click="toggleDropdown"
       @wheel="handleWheel"
-      class="selector-trigger-bar group"
+      class="selector-trigger-bar"
       :class="{ 'is-active': isOpen }"
     >
       <span class="label-zone" :class="[isNonDefault ? 'is-custom' : 'is-default']">
@@ -14,43 +15,44 @@
 
       <X v-if="clearable && isNonDefault" :size="14" :stroke-width="2.5" class="clear-icon" @click.stop="handleClear" />
 
-      <ChevronDown
-        :size="14"
-        :stroke-width="2.5"
-        class="arrow-icon"
-        :class="[{ 'rotate-180': isOpen }, clearable && isNonDefault ? 'has-clear' : '']"
-      />
+      <ChevronDown :size="14" :stroke-width="2.5" class="arrow-icon" :class="{ 'rotate-180': isOpen }" />
     </div>
 
-    <Transition
-      enter-from-class="dropdown-enter-from"
-      leave-to-class="dropdown-leave-to"
-      enter-active-class="dropdown-enter-active"
-      leave-active-class="dropdown-leave-active"
-    >
-      <div v-if="isOpen" ref="dropdownRef" class="selector-dropdown-box no-scrollbar">
-        <div
-          v-for="(option, index) in options"
-          :key="index"
-          :ref="el => setOptionRef(el, option)"
-          @click="handleSelect(option)"
-          class="selector-item"
-          :class="{
-            'is-selected': modelValue === option,
-            'font-black': fontBlackItems,
-            'font-bold': !fontBlackItems,
-          }"
+    <Teleport to="body">
+      <div v-if="isOpen" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
+        <Transition
+          enter-from-class="dropdown-enter-from"
+          leave-to-class="dropdown-leave-to"
+          enter-active-class="dropdown-enter-active"
+          leave-active-class="dropdown-leave-active"
+          appear
         >
-          <slot name="option" :option="option" :index="index">
-            {{ option }}
-          </slot>
-        </div>
+          <div ref="dropdownRef" class="selector-dropdown-box no-scrollbar">
+            <div
+              v-for="(option, index) in options"
+              :key="index"
+              :ref="el => setOptionRef(el, option)"
+              @click="handleSelect(option)"
+              class="selector-item"
+              :class="{
+                'is-selected': modelValue === option,
+                'font-black': fontBlackItems,
+                'font-bold': !fontBlackItems,
+              }"
+            >
+              <slot name="option" :option="option" :index="index">
+                {{ option }}
+              </slot>
+            </div>
+          </div>
+        </Transition>
       </div>
-    </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts" generic="T">
+import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue';
 import { ChevronDown, X } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
 import { computed, nextTick, onBeforeUpdate, ref, watch } from 'vue';
@@ -77,7 +79,26 @@ const emit = defineEmits<{
 
 const isOpen = ref(false);
 const containerRef = ref<HTMLDivElement | null>(null);
+const referenceRef = ref<HTMLElement | null>(null);
+const floatingRef = ref<HTMLElement | null>(null);
 const dropdownRef = ref<HTMLDivElement | null>(null);
+
+const { floatingStyles } = useFloating(referenceRef, floatingRef, {
+  placement: 'bottom-start',
+  whileElementsMounted: (reference, floating, update) => autoUpdate(reference, floating, update),
+  middleware: [
+    offset(6),
+    flip(),
+    shift({ padding: 8 }),
+    size({
+      apply({ rects, elements }) {
+        Object.assign(elements.floating.style, {
+          width: `${rects.reference.width}px`,
+        });
+      },
+    }),
+  ],
+});
 
 const optionRefsMap = new Map<T, HTMLElement>();
 
@@ -123,7 +144,14 @@ const handleSelect = (option: T) => {
 };
 
 useEventListener(window, 'pointerdown', e => {
-  if (isOpen.value && containerRef.value && !containerRef.value.contains(e.target as Node)) {
+  const target = e.target as Node;
+  if (
+    isOpen.value &&
+    containerRef.value &&
+    !containerRef.value.contains(target) &&
+    floatingRef.value &&
+    !floatingRef.value.contains(target)
+  ) {
     isOpen.value = false;
   }
 });
@@ -211,13 +239,8 @@ watch(isOpen, opened => {
 }
 
 .clear-icon {
-  display: none;
   color: var(--text-disabled);
   transition: color @duration-fast @bezier-standard;
-
-  .group:hover & {
-    display: block;
-  }
 
   &:hover {
     color: var(--color-danger) !important;
@@ -231,21 +254,17 @@ watch(isOpen, opened => {
   &.rotate-180 {
     transform: rotate(180deg);
   }
+}
 
-  &.has-clear {
-    .group:hover & {
-      display: none;
-    }
-  }
+.floating-position-wrapper {
+  z-index: 9999;
+  pointer-events: auto;
+  box-sizing: border-box;
 }
 
 .selector-dropdown-box {
-  position: absolute;
-  left: 0;
-  right: 0;
-  margin-top: 0.35rem;
+  width: 100%;
   overflow-y: auto;
-  z-index: 50;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -255,10 +274,10 @@ watch(isOpen, opened => {
   border: 1px solid var(--glass-border);
   border-radius: @radius-lg;
   box-shadow: @shadow-floating;
-
   padding: 0.25rem;
   gap: 0.15rem;
   max-height: 13.5rem;
+  transform-origin: top left;
 }
 
 .selector-item {
@@ -303,6 +322,6 @@ watch(isOpen, opened => {
 .dropdown-enter-from,
 .dropdown-leave-to {
   opacity: 0;
-  transform: translateY(-0.3rem);
+  transform: translateY(-0.3rem) scale(0.96);
 }
 </style>

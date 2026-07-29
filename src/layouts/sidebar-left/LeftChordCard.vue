@@ -1,10 +1,13 @@
 ﻿<template>
   <GlobalTooltip placement="top">
-    <GlobalContextMenu :items="menuItems">
+    <GlobalContextMenu ref="contextMenuRef" :items="menuItems">
       <div class="chord-card-frame" :title="chord.chordName">
         <div
-          class="chord-thumb-card group"
-          :class="{ 'is-editing': isEditing }"
+          class="chord-thumb-card"
+          :class="{
+            'is-editing': isEditing,
+            'is-context-open': isMenuOpen,
+          }"
           tabindex="0"
           @click="$emit('click')"
           @keydown.enter.prevent.stop="e => (e.target as HTMLElement).click()"
@@ -25,7 +28,7 @@
         :scale="0.5"
         :strings="chord.strings"
         :capo="chord.capo"
-        :fretCount="chord.fretCount"
+        :fret-count="chord.fretCount"
       />
     </template>
   </GlobalTooltip>
@@ -34,7 +37,7 @@
 <script setup lang="ts">
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import Fretboard from '@/components/Fretboard.vue';
@@ -53,7 +56,9 @@ const emit = defineEmits<{
 
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
+const contextMenuRef = ref<InstanceType<typeof GlobalContextMenu> | null>(null);
 
+const isMenuOpen = computed(() => contextMenuRef.value?.isOpen ?? false);
 const menuItems = computed<ContextMenuItem[]>(() => [
   {
     label: '移动',
@@ -97,10 +102,16 @@ const menuItems = computed<ContextMenuItem[]>(() => [
     border-color: var(--border-base);
   }
 
+  &.is-context-open {
+    background-color: var(--bg-panel-hover);
+    border-color: var(--border-base);
+    box-shadow: 0 0 0 1px var(--border-base);
+  }
+
   &.is-editing {
     background-color: color-mix(in srgb, @primary, transparent 90%);
     border-color: @primary !important;
-    box-shadow: 0 0 0 1px @primary;
+    box-shadow: 0 0 0 1px @primary !important;
 
     .chord-name-text {
       color: @primary !important;

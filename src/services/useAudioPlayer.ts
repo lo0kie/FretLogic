@@ -9,6 +9,18 @@ let guitarSynth: PolySynth | null = null;
 let playTimer: ReturnType<typeof setTimeout> | null = null;
 let ToneInstance: typeof import('tone') | null = null;
 
+// 🌟 MIDI Note 到 Frequency 的内存缓存 Map
+const MIDI_TO_FREQ_CACHE = new Map<number, number>();
+
+const getFrequencyFromMidi = (midiNote: number, tone: typeof import('tone')): number => {
+  let freq = MIDI_TO_FREQ_CACHE.get(midiNote);
+  if (freq === undefined) {
+    freq = tone.Frequency(midiNote, 'midi').toFrequency();
+    MIDI_TO_FREQ_CACHE.set(midiNote, freq);
+  }
+  return freq;
+};
+
 export function useAudioPlayer() {
   const editorStore = useEditorStore();
 
@@ -86,7 +98,8 @@ export function useAudioPlayer() {
         const actualOffset = targetStr.fret > 0 ? capoOffset : 0;
         const currentMidiNote = guitarMidiBase + targetStr.fret + actualOffset;
 
-        const frequency = tone.Frequency(currentMidiNote, 'midi').toFrequency();
+        // 🌟 查表高效获取 Frequency
+        const frequency = getFrequencyFromMidi(currentMidiNote, tone);
 
         const triggerTime = now + strumDelay;
         const humanizeVelocity = 0.78 + Math.random() * 0.22;
