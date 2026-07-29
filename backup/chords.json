@@ -75,7 +75,8 @@
       "fretCount": 3,
       "capo": 3,
       "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1780117616592:E:3:3:STANDARD:0_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "1780117655588",
@@ -115,7 +116,8 @@
       "fretCount": 3,
       "capo": 2,
       "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1780117616592:G#m7:2:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|0_0_0|-1_0_0"
     },
     {
       "id": "1780117685661",
@@ -155,7 +157,8 @@
       "fretCount": 4,
       "capo": 1,
       "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1780117616592:C#m7:1:4:STANDARD:-1_0_0|3_0_1|1_0_0|3_0_0|4_0_0|-1_0_0"
     },
     {
       "id": "1780117751884",
@@ -195,7 +198,8 @@
       "fretCount": 3,
       "capo": 3,
       "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1780117616592:AMaj9:3:3:STANDARD:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "1780117808032",
@@ -235,7 +239,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1780117616592:F#m11:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|0_0_0|-1_0_0"
     },
     {
       "id": "1780117876735",
@@ -275,7 +280,8 @@
       "fretCount": 3,
       "capo": 4,
       "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1780117616592:A/B:4:3:STANDARD:3_0_0|-1_0_0|3_0_1|2_0_0|1_0_0|-1_0_0"
     },
     {
       "id": "1780118048833",
@@ -315,7 +321,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1780117616592:A/B:0:3:STANDARD:-1_0_0|2_0_0|2_0_0|2_0_1|2_0_0|-1_0_0"
     },
     {
       "id": "1780118165700",
@@ -355,7 +362,8 @@
       "fretCount": 4,
       "capo": 3,
       "groupId": "g_1780117616592",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1780117616592:B/D#:3:4:STANDARD:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
     },
     {
       "id": "1779883260280",
@@ -395,7 +403,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:E7:0:3:STANDARD:0_0_1|2_0_0|0_0_0|1_0_0|3_0_0|-1_0_0"
     },
     {
       "id": "1779883063056",
@@ -435,7 +444,8 @@
       "fretCount": 3,
       "capo": 2,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:G:2:3:STANDARD:1_0_1|-1_0_0|3_0_0|2_0_0|1_0_0|-1_0_0"
     },
     {
       "id": "1779883025402",
@@ -475,7 +485,8 @@
       "fretCount": 3,
       "capo": 2,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:CMaj7:2:3:STANDARD:-1_0_0|1_0_1|3_0_0|2_0_0|3_0_0|1_0_0"
     },
     {
       "id": "1779883010043",
@@ -515,7 +526,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:F/G:0:3:STANDARD:3_0_0|-1_0_0|3_0_1|2_0_0|1_0_0|-1_0_0"
     },
     {
       "id": "1779882986919",
@@ -555,7 +567,8 @@
       "fretCount": 3,
       "capo": 4,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:Dm7:4:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
     },
     {
       "id": "1779882954220",
@@ -595,7 +608,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:Em:0:3:STANDARD:0_0_1|2_0_0|2_0_0|0_0_0|0_0_0|-1_0_0"
     },
     {
       "id": "1779882937077",
@@ -635,7 +649,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:G/F:0:3:STANDARD:1_0_0|-1_0_0|0_0_0|0_0_1|0_0_0|-1_0_0"
     },
     {
       "id": "1779882928141",
@@ -675,7 +690,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:Fsus2:0:3:STANDARD:1_0_1|-1_0_0|3_0_0|0_0_0|1_0_0|-1_0_0"
     },
     {
       "id": "1779882901127",
@@ -715,7 +731,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:C/G:0:3:STANDARD:3_0_0|-1_0_0|2_0_0|0_0_0|1_0_1|-1_0_0"
     },
     {
       "id": "1779882883340",
@@ -755,7 +772,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:Am7:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|0_0_0|1_0_0|-1_0_0"
     },
     {
       "id": "1779882869325",
@@ -795,7 +813,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:G/B:0:3:STANDARD:-1_0_0|2_0_0|0_0_0|0_0_1|3_0_0|-1_0_0"
     },
     {
       "id": "1779882853622",
@@ -835,7 +854,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079331837",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079331837:Cadd9:0:3:STANDARD:-1_0_0|3_0_1|2_0_0|0_0_0|3_0_0|-1_0_0"
     },
     {
       "id": "1778768137972",
@@ -875,7 +895,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:D:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|3_0_0|2_0_0"
     },
     {
       "id": "1778767639206",
@@ -915,7 +936,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:D/F#:0:3:STANDARD:2_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0"
     },
     {
       "id": "1778768105332",
@@ -955,7 +977,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:C/D:0:3:STANDARD:-1_0_0|-1_0_0|0_0_0|0_0_0|1_0_1|0_0_0"
     },
     {
       "id": "1778767686473",
@@ -995,7 +1018,8 @@
       "fretCount": 3,
       "capo": 4,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:Dm7:4:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
     },
     {
       "id": "1778768043285",
@@ -1035,7 +1059,8 @@
       "fretCount": 3,
       "capo": 2,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:Dadd11:2:3:STANDARD:-1_0_0|3_0_1|2_0_0|0_0_0|1_0_0|-1_0_0"
     },
     {
       "id": "1778768096581",
@@ -1075,7 +1100,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:Am7:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|0_0_0|1_0_0|0_0_0"
     },
     {
       "id": "1778767646083",
@@ -1115,7 +1141,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:B7:0:3:STANDARD:-1_0_0|2_0_1|1_0_0|2_0_0|0_0_0|-1_0_0"
     },
     {
       "id": "1778768082559",
@@ -1155,7 +1182,8 @@
       "fretCount": 3,
       "capo": 1,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
     },
     {
       "id": "1778768089370",
@@ -1195,7 +1223,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:E7:0:3:STANDARD:0_0_1|2_0_0|0_0_0|1_0_0|3_0_0|0_0_0"
     },
     {
       "id": "1778767664762",
@@ -1235,7 +1264,8 @@
       "fretCount": 3,
       "capo": 1,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:Em7:1:3:STANDARD:0_0_1|-1_0_0|-1_0_0|3_0_0|2_0_0|2_0_0"
     },
     {
       "id": "1778767694930",
@@ -1275,7 +1305,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:C:0:3:STANDARD:-1_0_0|3_0_1|2_0_0|0_0_0|1_0_0|-1_0_0"
     },
     {
       "id": "1778767690879",
@@ -1315,7 +1346,8 @@
       "fretCount": 3,
       "capo": 1,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:G7:1:3:STANDARD:2_0_1|-1_0_0|2_0_0|3_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "1778767629108",
@@ -1355,207 +1387,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079336633",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "c_f814bb57-5",
-      "chordName": "DMaj7",
-      "strings": [
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 0,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 0,
-      "groupId": "g_d1fa5636",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "c_f07ae797-4",
-      "chordName": "G6",
-      "strings": [
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 1,
-      "groupId": "g_d1fa5636",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "c_49102ed0-e",
-      "chordName": "E11",
-      "strings": [
-        {
-          "fret": 0,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 1,
-      "groupId": "g_d1fa5636",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "c_71dfd9bd-0",
-      "chordName": "Bm11",
-      "strings": [
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 4,
-      "groupId": "g_d1fa5636",
-      "tuning": "STANDARD"
-    },
-    {
-      "id": "c_1a02527a-1",
-      "chordName": "DMaj9",
-      "strings": [
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 4,
-      "groupId": "g_d1fa5636",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079336633:Gadd9:0:3:STANDARD:3_0_1|-1_0_0|0_0_0|2_0_0|0_0_0|-1_0_0"
     },
     {
       "id": "1780117582755",
@@ -1595,7 +1428,8 @@
       "fretCount": 3,
       "capo": 3,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:E:3:3:STANDARD:0_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "1779024729166",
@@ -1635,7 +1469,8 @@
       "fretCount": 3,
       "capo": 2,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:E:2:3:STANDARD:0_0_1|-1_0_0|-1_0_0|2_0_0|3_0_0|2_0_0"
     },
     {
       "id": "1778151016179",
@@ -1675,7 +1510,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:E:0:3:STANDARD:0_0_1|2_0_0|2_0_0|1_0_0|0_0_0|0_0_0"
     },
     {
       "id": "1779024821397",
@@ -1715,7 +1551,8 @@
       "fretCount": 3,
       "capo": 4,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:Am6:4:3:STANDARD:1_0_1|-1_0_0|-1_0_0|1_0_0|3_0_0|-1_0_0"
     },
     {
       "id": "1779353924883",
@@ -1755,7 +1592,8 @@
       "fretCount": 3,
       "capo": 1,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:E7:1:3:STANDARD:0_0_1|-1_0_0|-1_0_0|3_0_0|2_0_0|3_0_0"
     },
     {
       "id": "1778503319524",
@@ -1795,7 +1633,8 @@
       "fretCount": 3,
       "capo": 3,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:AMaj9:3:3:STANDARD:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "1778213096852",
@@ -1835,7 +1674,8 @@
       "fretCount": 4,
       "capo": 3,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:B/D#:3:4:STANDARD:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
     },
     {
       "id": "1778212831907",
@@ -1875,7 +1715,8 @@
       "fretCount": 4,
       "capo": 1,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:A/C#:1:4:STANDARD:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
     },
     {
       "id": "1778212445056",
@@ -1915,7 +1756,8 @@
       "fretCount": 3,
       "capo": 1,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:B:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|3_0_0|3_0_0|1_0_0"
     },
     {
       "id": "1778151387822",
@@ -1955,7 +1797,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:D/F#:0:3:STANDARD:2_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|-1_0_0"
     },
     {
       "id": "1778151086602",
@@ -1995,7 +1838,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:Amaj7:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|1_0_0|2_0_0|0_0_0"
     },
     {
       "id": "1778151043682",
@@ -2035,7 +1879,8 @@
       "fretCount": 3,
       "capo": 2,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:E/G#:2:3:STANDARD:2_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|-1_0_0"
     },
     {
       "id": "1778151003508",
@@ -2075,7 +1920,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:A/B:0:3:STANDARD:-1_0_0|2_0_0|2_0_0|2_0_1|2_0_0|-1_0_0"
     },
     {
       "id": "1778150987602",
@@ -2115,7 +1961,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:F#m7:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "1778150949879",
@@ -2155,7 +2002,8 @@
       "fretCount": 3,
       "capo": 3,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:C#m7:3:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
     },
     {
       "id": "1778150933265",
@@ -2195,7 +2043,8 @@
       "fretCount": 3,
       "capo": 2,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:G#m7:2:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "1778150907293",
@@ -2235,7 +2084,8 @@
       "fretCount": 3,
       "capo": 1,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:B/A:1:3:STANDARD:-1_0_0|0_0_0|3_0_0|3_0_1|3_0_0|-1_0_0"
     },
     {
       "id": "1778150887472",
@@ -2275,7 +2125,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079326389",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079326389:A:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0|0_0_0"
     },
     {
       "id": "1779181667930",
@@ -2315,7 +2166,8 @@
       "fretCount": 3,
       "capo": 3,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:AMaj9:3:3:STANDARD:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "1779182078521",
@@ -2355,7 +2207,8 @@
       "fretCount": 3,
       "capo": 3,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:AMaj7:3:3:STANDARD:2_0_1|-1_0_0|3_0_0|3_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "1779181557072",
@@ -2395,7 +2248,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:A7:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|0_0_0|2_0_0|0_0_0"
     },
     {
       "id": "c_fe8bf056-6",
@@ -2435,7 +2289,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:D/E:0:3:STANDARD:0_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0"
     },
     {
       "id": "c_80b7198b-7",
@@ -2475,7 +2330,8 @@
       "fretCount": 3,
       "capo": 4,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:D/E:4:3:STANDARD:-1_0_0|3_0_0|-1_0_0|3_0_1|3_0_0|1_0_0"
     },
     {
       "id": "1779181732627",
@@ -2515,7 +2371,8 @@
       "fretCount": 3,
       "capo": 4,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:D/E:4:3:STANDARD:-1_0_0|3_0_0|3_0_0|3_0_1|3_0_0|-1_0_0"
     },
     {
       "id": "1778847257977",
@@ -2555,7 +2412,8 @@
       "fretCount": 3,
       "capo": 2,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:E/D:2:3:STANDARD:-1_0_0|-1_0_0|0_0_0|2_0_0|3_0_1|2_0_0"
     },
     {
       "id": "1778847229122",
@@ -2595,7 +2453,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:E:0:3:STANDARD:0_0_1|2_0_0|2_0_0|1_0_0|0_0_0|0_0_0"
     },
     {
       "id": "1778847149763",
@@ -2635,7 +2494,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:DMaj7:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0"
     },
     {
       "id": "1778847125830",
@@ -2675,7 +2535,8 @@
       "fretCount": 4,
       "capo": 1,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:A/C#:1:4:STANDARD:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
     },
     {
       "id": "1778847100774",
@@ -2715,7 +2576,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:G/B:0:3:STANDARD:-1_0_0|2_0_0|-1_0_0|0_0_1|3_0_0|-1_0_0"
     },
     {
       "id": "1778413446081",
@@ -2755,7 +2617,8 @@
       "fretCount": 3,
       "capo": 1,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:F#:1:3:STANDARD:1_0_1|-1_0_0|3_0_0|2_0_0|1_0_0|-1_0_0"
     },
     {
       "id": "1778413305045",
@@ -2795,7 +2658,8 @@
       "fretCount": 3,
       "capo": 1,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:Bm7/E:1:3:STANDARD:0_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
     },
     {
       "id": "1778413241701",
@@ -2835,7 +2699,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:Asus4:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|3_0_0|0_0_0"
     },
     {
       "id": "1778413228516",
@@ -2875,7 +2740,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:D/E:0:3:STANDARD:0_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0"
     },
     {
       "id": "1778413193336",
@@ -2915,7 +2781,8 @@
       "fretCount": 3,
       "capo": 1,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
     },
     {
       "id": "1778413182360",
@@ -2955,7 +2822,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:AMaj7:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|1_0_0|2_0_0|0_0_0"
     },
     {
       "id": "1778413121634",
@@ -2995,7 +2863,8 @@
       "fretCount": 3,
       "capo": 3,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:C#m7:3:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
     },
     {
       "id": "1778413048446",
@@ -3035,7 +2904,8 @@
       "fretCount": 3,
       "capo": 4,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:Dm6:4:3:STANDARD:-1_0_0|1_0_1|-1_0_0|3_0_0|2_0_0|3_0_0"
     },
     {
       "id": "1778378689517",
@@ -3075,7 +2945,8 @@
       "fretCount": 3,
       "capo": 3,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:Dm6:3:3:STANDARD:-1_0_0|2_0_1|-1_0_0|1_0_0|3_0_0|2_0_0"
     },
     {
       "id": "1778378684300",
@@ -3115,7 +2986,8 @@
       "fretCount": 3,
       "capo": 4,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:DMaj7:4:3:STANDARD:-1_0_0|1_0_1|3_0_0|2_0_0|3_0_0|1_0_0"
     },
     {
       "id": "1778335028084",
@@ -3155,7 +3027,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:D:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|3_0_0|2_0_0"
     },
     {
       "id": "1778335005638",
@@ -3195,7 +3068,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:A:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0|0_0_0"
     },
     {
       "id": "1778334999706",
@@ -3235,7 +3109,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:F#m7:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "1778334801835",
@@ -3275,7 +3150,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:Bm7/E:0:3:STANDARD:0_0_0|2_0_1|0_0_0|2_0_0|3_0_0|-1_0_0"
     },
     {
       "id": "1778334774803",
@@ -3315,7 +3191,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:Dsus2:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|3_0_0|0_0_0"
     },
     {
       "id": "1778334765915",
@@ -3355,7 +3232,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:F#m11:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|0_0_0|-1_0_0"
     },
     {
       "id": "1778334702170",
@@ -3395,7 +3273,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079320204",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079320204:Asus2:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|0_0_0|0_0_0"
     },
     {
       "id": "c_2ce03eac-6",
@@ -3435,7 +3314,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079341175",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079341175:DMaj9:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|2_0_0|0_0_0"
     },
     {
       "id": "c_0538a2c2-a",
@@ -3475,7 +3355,8 @@
       "fretCount": 3,
       "capo": 1,
       "groupId": "g_1778079341175",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079341175:G6:1:3:STANDARD:2_0_1|-1_0_0|1_0_0|3_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "c_38db0dbb-2",
@@ -3515,7 +3396,8 @@
       "fretCount": 3,
       "capo": 0,
       "groupId": "g_1778079341175",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079341175:Bm9:0:3:STANDARD:-1_0_0|2_0_1|0_0_0|2_0_0|2_0_0|-1_0_0"
     },
     {
       "id": "c_8ec364c9-f",
@@ -3555,7 +3437,213 @@
       "fretCount": 3,
       "capo": 2,
       "groupId": "g_1778079341175",
-      "tuning": "STANDARD"
+      "tuning": "STANDARD",
+      "fingerprint": "g_1778079341175:A13:2:3:STANDARD:3_0_1|-1_0_0|2_0_0|0_0_0|3_0_0|-1_0_0"
+    },
+    {
+      "id": "c_f814bb57-5",
+      "chordName": "DMaj7",
+      "strings": [
+        {
+          "fret": -1,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": -1,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 0,
+          "preferFlat": false,
+          "isRoot": true
+        },
+        {
+          "fret": 2,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 2,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 2,
+          "preferFlat": false,
+          "isRoot": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_d1fa5636",
+      "tuning": "STANDARD",
+      "fingerprint": "g_d1fa5636:DMaj7:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0"
+    },
+    {
+      "id": "c_f07ae797-4",
+      "chordName": "G6",
+      "strings": [
+        {
+          "fret": 2,
+          "preferFlat": false,
+          "isRoot": true
+        },
+        {
+          "fret": -1,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 1,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 3,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 2,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": -1,
+          "preferFlat": false,
+          "isRoot": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 1,
+      "groupId": "g_d1fa5636",
+      "tuning": "STANDARD",
+      "fingerprint": "g_d1fa5636:G6:1:3:STANDARD:2_0_1|-1_0_0|1_0_0|3_0_0|2_0_0|-1_0_0"
+    },
+    {
+      "id": "c_49102ed0-e",
+      "chordName": "E11",
+      "strings": [
+        {
+          "fret": 0,
+          "preferFlat": false,
+          "isRoot": true
+        },
+        {
+          "fret": -1,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 3,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 1,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 2,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": -1,
+          "preferFlat": false,
+          "isRoot": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 1,
+      "groupId": "g_d1fa5636",
+      "tuning": "STANDARD",
+      "fingerprint": "g_d1fa5636:E11:1:3:STANDARD:0_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
+    },
+    {
+      "id": "c_1a02527a-1",
+      "chordName": "DMaj9",
+      "strings": [
+        {
+          "fret": -1,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 1,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 3,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 2,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 1,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": -1,
+          "preferFlat": false,
+          "isRoot": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 4,
+      "groupId": "g_d1fa5636",
+      "tuning": "STANDARD",
+      "fingerprint": "g_d1fa5636:DMaj9:4:3:STANDARD:-1_0_0|1_0_0|3_0_0|2_0_0|1_0_0|-1_0_0"
+    },
+    {
+      "id": "c_71dfd9bd-0",
+      "chordName": "Bm11",
+      "strings": [
+        {
+          "fret": 3,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": -1,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 3,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 3,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": 1,
+          "preferFlat": false,
+          "isRoot": false
+        },
+        {
+          "fret": -1,
+          "preferFlat": false,
+          "isRoot": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 4,
+      "groupId": "g_d1fa5636",
+      "tuning": "STANDARD",
+      "fingerprint": "g_d1fa5636:Bm11:4:3:STANDARD:3_0_0|-1_0_0|3_0_0|3_0_0|1_0_0|-1_0_0"
     }
   ]
 }
