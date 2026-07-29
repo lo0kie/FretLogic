@@ -1,5 +1,5 @@
 <template>
-  <div class="left-group-list-container left-group-list" :style="{ minWidth: LEFT_SIDEBAR_WIDTH_PIXEL }">
+  <div class="left-group-list-container left-group-list">
     <div class="scroll-body no-scrollbar">
       <div v-if="chordStore.groups.length === 0" class="empty-groups-view">
         <FolderOpen class="empty-folder-icon" />
@@ -11,7 +11,7 @@
         @update:modelValue="(val: Group[]) => chordStore.overwriteGroups(val)"
         :animation="200"
         handle=".drag-handle"
-        :disabled="!!searchQuery"
+        :disabled="Boolean(searchQuery) || uiStore.isMobile"
         class="draggable-group-list"
         ghost-class="drag-ghost-style"
         chosen-class="drag-chosen-style"
@@ -58,8 +58,8 @@
                 </span>
               </div>
 
-              <div @click.stop="" class="drag-action-zone">
-                <div class="drag-handle" :class="{ 'is-hidden-by-search': !!searchQuery }" title="按住拖拽排序">
+              <div v-if="!uiStore.isMobile" @click.stop class="drag-action-zone">
+                <div class="drag-handle" :class="{ 'is-hidden-by-search': Boolean(searchQuery) }" title="按住拖拽排序">
                   <GripVertical :size="14" stroke-width="2.5" />
                 </div>
               </div>
@@ -73,7 +73,7 @@
               ghost-class="drag-ghost-style"
               chosen-class="drag-chosen-style"
               drag-class="drag-active-style"
-              :disabled="!!searchQuery"
+              :disabled="Boolean(searchQuery) || uiStore.isMobile"
               class="chords-grid-layout"
               @update="e => chordService.handleChordSort(e, group.id)"
               :swap-threshold="0.5"
@@ -108,18 +108,17 @@
 </template>
 
 <script setup lang="ts">
-import { watch, nextTick, onBeforeUpdate, computed, ref } from 'vue';
-import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/constants/index.ts';
+import BaseMarquee from '@/components/BaseMarquee.vue';
+import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { useChordService } from '@/services/useChordService';
 import { useChordStore } from '@/stores/chordStore';
 import { useEditorStore } from '@/stores/editorStore';
+import { useUiStore } from '@/stores/uiStore.ts';
 import type { Chord, Group } from '@/types';
-import LeftChordCard from './LeftChordCard.vue';
-import BaseMarquee from '@/components/BaseMarquee.vue';
-
-import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { ChevronDown, FolderOpen, GripVertical, SquarePen, Trash2 } from '@lucide/vue';
+import { computed, nextTick, onBeforeUpdate, ref, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
+import LeftChordCard from './LeftChordCard.vue';
 
 const props = defineProps<{
   searchQuery: string;
@@ -134,11 +133,11 @@ const emit = defineEmits<{
 const editorStore = useEditorStore();
 const chordStore = useChordStore();
 const chordService = useChordService();
+const uiStore = useUiStore();
 
 const groupCardsMap = new Map<string, HTMLElement>();
 const contextMenuRefsMap = ref<Record<string, InstanceType<typeof GlobalContextMenu>>>({});
 
-// 🌟 和弦名称小写形式的内存 WeakMap 缓存，无需修改原本持久化的 Chord 类型
 const chordLowerNameCache = new WeakMap<Chord, string>();
 
 const getChordLowerName = (chord: Chord): string => {
@@ -175,7 +174,6 @@ const getGroupChordsCount = (groupId: string) => {
   return chordStore.groupChordMap.get(groupId)?.length || 0;
 };
 
-// 🌟 侧边栏搜索结果 Map 缓存计算
 const filteredChordsGroupMap = computed(() => {
   const map = new Map<string, Chord[]>();
   const queryKeyword = props.searchQuery.toLowerCase().trim();
@@ -243,8 +241,10 @@ watch(
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0; /* 🌟 核心：允许高度向内挤定义，触发布局滚动 */
   overflow: hidden;
   box-sizing: border-box;
+  width: 100%;
 }
 
 .scroll-body {
@@ -315,8 +315,10 @@ watch(
     }
   }
 
+  &:hover,
+  &:active,
   &.is-context-open {
-    background-color: var(--bg-panel-hover);
+    background-color: var(--bg-panel-hover) !important;
     border-color: var(--border-base);
     box-shadow: 0 0 0 1px var(--border-base);
   }
@@ -484,6 +486,52 @@ watch(
     background-color: var(--bg-panel) !important;
     border-radius: @radius-md;
     box-shadow: @shadow-md;
+  }
+}
+
+@media (max-width: 768px) {
+  .scroll-body {
+    padding: 0.8rem 0.75rem;
+  }
+
+  /* 1. 放大分组标题行点击区域与高度 */
+  .group-title-row {
+    padding: 0.65rem 0.6rem;
+    border-radius: @radius-lg;
+  }
+
+  /* 2. 放大组名文字大小 */
+  .group-name-text {
+    font-size: 0.95rem; /* 原 0.82rem */
+    letter-spacing: 0.5px;
+  }
+
+  /* 3. 放大数量胶囊标签 */
+  .count-badge {
+    font-size: 13px; /* 原 11px */
+    padding: 0.15rem 0.55rem;
+  }
+
+  /* 4. 放大展开折叠图标 */
+  .arrow-toggle-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  /* 5. 放大拖拽手势图标 */
+  .drag-handle {
+    padding: 0.3rem;
+
+    svg {
+      width: 1rem;
+      height: 1rem;
+    }
+  }
+
+  /* 6. 调整移动端和弦网格间距 */
+  .chords-grid-layout {
+    gap: 0.55rem;
+    margin-top: 0.5rem;
   }
 }
 </style>

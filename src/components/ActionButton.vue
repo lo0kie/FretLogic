@@ -239,4 +239,24 @@ const roundedClass = computed(() => `rounded-${props.rounded}`);
   justify-content: center;
   white-space: nowrap;
 }
+
+@media (max-width: 768px) {
+  .size-sm {
+    height: 1.85rem;
+    padding: 0 0.75rem;
+    font-size: 0.78rem;
+  }
+
+  .size-md {
+    height: 2.15rem;
+    padding: 0 1.1rem;
+    font-size: 0.82rem;
+  }
+
+  .size-lg {
+    height: 2.85rem;
+    padding: 0 1.4rem;
+    font-size: 0.9rem;
+  }
+}
 </style>

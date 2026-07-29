@@ -6,17 +6,17 @@
         <ActionButton
           icon-only
           variant="ghost"
-          size="sm"
+          :size="uiStore.isMobile ? 'md' : 'sm'"
           :active="uiStore.isLeftOpen"
           @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
         >
-          <PanelLeft :size="16" stroke-width="2.2" />
+          <PanelLeft :size="18" stroke-width="2.2" />
         </ActionButton>
       </GlobalTooltip>
 
-      <div class="header-divider"></div>
+      <div class="header-divider hidden-mobile"></div>
 
-      <span class="app-brand-title">Fret Logic</span>
+      <span class="app-brand-title hidden-mobile">Fret Logic</span>
     </div>
 
     <!-- 2. 中间：分段胶囊型工具组 -->
@@ -30,7 +30,7 @@
             :disabled="editorStore.isFretBoardEmpty || isPlaying"
             @click="playCurrentChord"
           >
-            <component :is="isPlaying ? Square : Play" :size="13" stroke-width="2.5" />
+            <component :is="isPlaying ? Square : Play" :size="15" stroke-width="2.5" />
           </ActionButton>
         </GlobalTooltip>
 
@@ -44,11 +44,11 @@
             :disabled="uiStore.isCopying"
             @click="$emit('export-image', true)"
           >
-            <Image :size="15" stroke-width="2" />
+            <Image :size="16" stroke-width="2" />
           </ActionButton>
         </GlobalTooltip>
 
-        <GlobalTooltip content="导出带背景卡片切图" placement="bottom">
+        <GlobalTooltip content="导出带背景卡片切图" placement="bottom" class="hidden-mobile">
           <ActionButton
             size="sm"
             icon-only
@@ -56,23 +56,22 @@
             :disabled="uiStore.isCopying"
             @click="$emit('export-image', false)"
           >
-            <Copy :size="15" stroke-width="2" />
+            <Copy :size="16" stroke-width="2" />
           </ActionButton>
         </GlobalTooltip>
       </div>
     </div>
 
-    <!-- 3. 右侧：指板配置 Popover + 更多设置 (已移除顶部保存/重置) -->
+    <!-- 3. 右侧：指板配置 Popover + 更多设置 -->
     <div class="header-section section-right">
       <!-- 指板属性配置 Popover -->
       <div class="popover-wrapper" ref="configPopoverRef">
         <GlobalTooltip content="指板配置 (品数 / Capo / 调音)" placement="bottom">
           <ActionButton icon-only variant="ghost" :active="isConfigOpen" @click="isConfigOpen = !isConfigOpen">
-            <SlidersHorizontal :size="16" stroke-width="2.2" />
+            <SlidersHorizontal :size="18" stroke-width="2.2" />
           </ActionButton>
         </GlobalTooltip>
 
-        <!-- 透明点击拦截层 -->
         <Teleport to="body">
           <div v-if="isConfigOpen" class="popover-backdrop-mask" @pointerdown="isConfigOpen = false"></div>
         </Teleport>
@@ -142,7 +141,7 @@
       <!-- 云端同步 Modal 触发按钮 -->
       <GlobalTooltip content="云端备份与拉取" placement="bottom">
         <ActionButton icon-only variant="ghost" @click="isSyncModalOpen = true">
-          <Cloud :size="16" stroke-width="2.2" />
+          <Cloud :size="18" stroke-width="2.2" />
         </ActionButton>
       </GlobalTooltip>
 
@@ -151,7 +150,7 @@
         <ActionButton icon-only variant="ghost" @click="$emit('toggle-theme', $event)">
           <component
             :is="settingsStore.isDarkMode ? Moon : Sun"
-            :size="16"
+            :size="18"
             :stroke-width="2.2"
             :style="{ color: settingsStore.isDarkMode ? '#64d2ff' : '#ff9500' }"
             class="theme-toggle-icon"
@@ -447,5 +446,78 @@ const confirmPull = () => {
   line-height: 1.6;
   color: var(--text-body);
   margin: 0;
+}
+
+/* 📱 移动端 2：放大 Header 基础控件 */
+@media (max-width: 768px) {
+  .app-top-header {
+    height: 3.2rem;
+    padding: 0 0.65rem;
+  }
+
+  .hidden-mobile {
+    display: none !important;
+  }
+
+  /* 🌟 移动端指板配置面板整体放大与定位调整 */
+  .config-popover-card {
+    position: fixed;
+    top: 3.6rem;
+    left: 4rem;
+    right: 1rem;
+    width: auto;
+    max-width: none;
+    padding: 1rem 1.15rem;
+    gap: 1rem;
+    border-radius: calc(@radius-lg * 1.3);
+  }
+
+  .config-row {
+    gap: 1rem;
+  }
+
+  /* 放大配置项文字标签 */
+  .config-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  /* 放大品数选择器 */
+  .fret-segmented-picker {
+    padding: 0.2rem;
+  }
+
+  .fret-picker-item {
+    height: 1.8rem;
+    padding: 0 0.75rem;
+    font-size: 0.78rem;
+  }
+
+  /* 放大变调夹（Capo）调节块 */
+  .capo-quick-picker {
+    height: 2rem;
+    padding: 0 0.3rem;
+  }
+
+  .capo-step-btn {
+    width: 1.6rem;
+    height: 1.6rem;
+    font-size: 0.95rem;
+  }
+
+  .capo-readout-text {
+    font-size: 0.78rem;
+    min-width: 4.5rem;
+  }
+
+  /* 放大调音方案下拉选择触发栏 */
+  .tuning-select-wrapper {
+    :deep(.selector-trigger-bar) {
+      height: 2rem;
+      padding-left: 0.7rem;
+      padding-right: 0.7rem;
+      font-size: 0.78rem;
+    }
+  }
 }
 </style>

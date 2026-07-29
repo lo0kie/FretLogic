@@ -1,32 +1,41 @@
 <template>
   <div class="workbench-layout-wrapper">
-    <div
-      ref="FretBoardCaptureArea"
-      class="workbench-card"
-      :style="{ height: dynamicHeight, width: `${CANVAS_CONFIG.BOARD_WIDTH + 64}px` }"
-    >
-      <input
-        v-model="editorStore.currentChordName"
-        type="text"
-        spellcheck="false"
-        placeholder="CHORD"
-        class="input-chord-name"
-        :class="editorStore.currentChordName ? 'has-name' : 'is-empty'"
-      />
-
-      <div class="fretboard-render-zone">
-        <Fretboard
-          v-model:strings="editorStore.strings"
-          v-model:capo="editorStore.capo"
-          :fret-count="editorStore.fretCount"
-          :active-base-strings="editorStore.activeBaseStrings"
-          :is-dark-mode="settingsStore.isDarkMode"
+    <div class="workbench-scroll-container">
+      <!-- 1. 和弦指板主卡片 -->
+      <div
+        ref="FretBoardCaptureArea"
+        class="workbench-card"
+        :style="{
+          height: uiStore.isMobile ? 'auto' : dynamicHeight,
+          width: uiStore.isMobile ? '100%' : `${CANVAS_CONFIG.BOARD_WIDTH + 64}px`,
+        }"
+      >
+        <input
+          v-model="editorStore.currentChordName"
+          type="text"
+          spellcheck="false"
+          placeholder="CHORD"
+          class="input-chord-name"
+          :class="editorStore.currentChordName ? 'has-name' : 'is-empty'"
         />
+
+        <div class="fretboard-render-zone">
+          <Fretboard
+            v-model:strings="editorStore.strings"
+            v-model:capo="editorStore.capo"
+            :fret-count="editorStore.fretCount"
+            :active-base-strings="editorStore.activeBaseStrings"
+            :is-dark-mode="settingsStore.isDarkMode"
+            :scale="uiStore.isMobile ? mobileScale : 1.0"
+          />
+        </div>
       </div>
+
+      <!-- 2. 实时分析面板：5：直接位于指板正下方 -->
+      <ChordAnalysisPanel />
     </div>
 
-    <ChordAnalysisPanel />
-
+    <!-- 3. 底部吸附操作按钮栏 -->
     <Transition name="floating-bar-fade">
       <div v-if="isFloatingBarVisible" class="floating-action-bar" :style="{ bottom: barBottomPosition }">
         <ActionButton size="md" variant="ghost" :disabled="isClearDisabled" @click="editorStore.resetEditor()">
@@ -50,13 +59,24 @@ import ChordAnalysisPanel from '@/layouts/ChordAnalysisPanel.vue';
 import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useUiStore } from '@/stores/uiStore';
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/utils/constants';
+import { useWindowSize } from '@vueuse/core';
 import { computed, ref } from 'vue';
 
 const editorStore = useEditorStore();
 const settingsStore = useSettingsStore();
+const uiStore = useUiStore();
 const chordService = useChordService();
 const FretBoardCaptureArea = ref<HTMLDivElement>();
+
+const { width: windowWidth } = useWindowSize();
+
+const mobileScale = computed(() => {
+  const targetWidth = windowWidth.value - 32;
+  const baseWidth = CANVAS_CONFIG.BOARD_WIDTH;
+  return Math.min(1.0, Math.max(0.65, targetWidth / baseWidth));
+});
 
 const dynamicHeight = computed(() => {
   const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;
@@ -67,7 +87,10 @@ const dynamicHeight = computed(() => {
   return `${baseVerticalSpace + realBoardHeight}px`;
 });
 
-const barBottomPosition = computed(() => (editorStore.fretCount === 3 ? '3.3rem' : '1.8rem'));
+const barBottomPosition = computed(() => {
+  if (uiStore.isMobile) return '1rem';
+  return editorStore.fretCount === 3 ? '3.3rem' : '1.8rem';
+});
 
 const isFloatingBarVisible = computed(() => {
   const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
@@ -102,12 +125,12 @@ const isClearDisabled = computed(() => {
 @import '@/assets/tokens.module';
 
 .workbench-layout-wrapper {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
   display: flex;
   align-items: flex-start;
   justify-content: center;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   padding: 2rem;
   padding-top: 3.5rem;
   padding-bottom: 6.15rem;
@@ -116,7 +139,24 @@ const isClearDisabled = computed(() => {
   pointer-events: none;
 }
 
+.workbench-scroll-container {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  position: relative;
+
+  > * {
+    margin-top: 0;
+  }
+}
+
 .workbench-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
   pointer-events: auto;
   background-color: var(--bg-panel);
   backdrop-filter: blur(20px);
@@ -124,10 +164,6 @@ const isClearDisabled = computed(() => {
   border: 1px solid var(--glass-border);
   border-radius: @radius-md;
   box-shadow: @shadow-floating;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-evenly;
   position: relative;
   box-sizing: border-box;
   flex-shrink: 0;
@@ -139,11 +175,13 @@ const isClearDisabled = computed(() => {
 }
 
 .floating-action-bar {
-  position: absolute;
-  z-index: 10;
-  pointer-events: auto;
   display: flex;
   align-items: center;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  pointer-events: auto;
   gap: 0.5rem;
   padding: 0.4rem 0.5rem;
   background-color: var(--bg-panel);
@@ -169,8 +207,8 @@ const isClearDisabled = computed(() => {
 }
 
 .input-chord-name {
-  padding-left: 2rem;
-  padding-right: 2rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
   width: 100%;
   text-align: center;
   font-weight: 900;
@@ -202,12 +240,13 @@ const isClearDisabled = computed(() => {
 }
 
 .fretboard-render-zone {
-  position: relative;
-  width: 100%;
   display: flex;
   justify-content: center;
+  position: relative;
+  width: 100%;
   z-index: 0;
   flex-shrink: 0;
+  transform: translateX(-5px);
 }
 
 .floating-bar-fade-enter-active,
@@ -220,6 +259,39 @@ const isClearDisabled = computed(() => {
 .floating-bar-fade-enter-from,
 .floating-bar-fade-leave-to {
   opacity: 0;
-  transform: translateY(20px) scale(0.95);
+  transform: translate(-50%, 20px) scale(0.95);
+}
+
+/* 📱 移动端上下排列，纵向滚动 */
+@media (max-width: 768px) {
+  .workbench-layout-wrapper {
+    padding: 0.5rem;
+    padding-bottom: 5.5rem;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    pointer-events: auto;
+  }
+
+  .workbench-scroll-container {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    height: auto;
+  }
+
+  .workbench-card {
+    padding: 1rem 0.25rem;
+    width: 100% !important;
+  }
+
+  .input-chord-name {
+    font-size: 2.6rem;
+  }
+
+  .fretboard-render-zone {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+  }
 }
 </style>

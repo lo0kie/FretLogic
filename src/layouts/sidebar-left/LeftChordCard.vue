@@ -97,13 +97,10 @@ const menuItems = computed<ContextMenuItem[]>(() => [
   border-radius: @radius-md;
   transition: @transition-fast;
 
-  &:hover:not(:disabled) {
-    background-color: var(--bg-panel-hover);
-    border-color: var(--border-base);
-  }
-
+  &:hover,
+  &:active,
   &.is-context-open {
-    background-color: var(--bg-panel-hover);
+    background-color: var(--bg-panel-hover) !important;
     border-color: var(--border-base);
     box-shadow: 0 0 0 1px var(--border-base);
   }
@@ -131,5 +128,26 @@ const menuItems = computed<ContextMenuItem[]>(() => [
   line-height: 1;
   pointer-events: none;
   color: var(--text-body);
+}
+
+/* 📱 移动端放大与触控优化 */
+@media (max-width: 768px) {
+  .chord-card-frame,
+  .chord-thumb-card {
+    touch-action: pan-y !important;
+    -webkit-user-drag: none !important;
+    user-select: none !important;
+  }
+
+  .chord-thumb-card {
+    height: 2.75rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    border-radius: @radius-lg;
+  }
+
+  .chord-name-text {
+    font-size: 0.85rem;
+  }
 }
 </style>

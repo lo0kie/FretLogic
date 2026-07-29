@@ -2,15 +2,19 @@
 
 html {
   font-size: 22.25px;
+
+  @media (max-width: 768px) {
+    font-size: 16px; // 移动端重置 rem 基准
+  }
 }
 
 body {
   background-color: var(--bg-main);
   color: var(--text-body);
-  min-width: 1628px;
-  min-height: 880px;
+  width: 100vw;
+  height: 100vh;
   margin: 0;
-  overflow: auto;
+  overflow: hidden;
   user-select: none;
 
   font-family:
@@ -19,6 +23,9 @@ body {
 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 [v-cloak] {
@@ -34,63 +41,9 @@ body {
   display: none;
 }
 
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-  mix-blend-mode: normal;
-}
-
-::view-transition-old(root) {
-  z-index: 1;
-}
-
-::view-transition-new(root) {
-  z-index: 9999;
-  animation: themeRippleExpand 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-}
-
-@keyframes themeRippleExpand {
-  from {
-    clip-path: circle(0px at var(--ripple-x, 50%) var(--ripple-y, 50%));
+/* 移动端辅助微调 */
+@media (max-width: 768px) {
+  .tooltip-trigger-container {
+    pointer-events: auto;
   }
-  to {
-    clip-path: circle(var(--ripple-r, 2000px) at var(--ripple-x, 50%) var(--ripple-y, 50%));
-  }
-}
-
-.animate-modal-in {
-  animation: modalSlideIn @duration-base @bezier-standard;
-}
-
-@keyframes modalSlideIn {
-  from {
-    opacity: 0;
-    transform: scale(0.92) translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-.toast-transition-enter-active,
-.toast-transition-leave-active {
-  transition: all @duration-base @bezier-standard;
-}
-
-.toast-transition-enter-from,
-.toast-transition-leave-to {
-  transform: scale(0.9) translateY(-10px);
-  opacity: 0;
-}
-
-.tooltip-native-enter-active,
-.tooltip-native-leave-active {
-  transition: all @duration-fast @bezier-standard;
-}
-
-.tooltip-native-enter-from,
-.tooltip-native-leave-to {
-  opacity: 0;
-  transform: scale(0.95);
 }
