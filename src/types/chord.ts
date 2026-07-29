@@ -28,6 +28,7 @@ export interface Chord {
   capo: number;
   groupId: string;
   tuning: TuningEnum;
+  fingerprint?: string; // 🌟 存储物理特征码
 }
 
 export interface Group {

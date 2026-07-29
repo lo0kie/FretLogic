@@ -138,6 +138,18 @@ const chordService = useChordService();
 const groupCardsMap = new Map<string, HTMLElement>();
 const contextMenuRefsMap = ref<Record<string, InstanceType<typeof GlobalContextMenu>>>({});
 
+// 🌟 和弦名称小写形式的内存 WeakMap 缓存，无需修改原本持久化的 Chord 类型
+const chordLowerNameCache = new WeakMap<Chord, string>();
+
+const getChordLowerName = (chord: Chord): string => {
+  let cached = chordLowerNameCache.get(chord);
+  if (!cached) {
+    cached = chord.chordName.toLowerCase();
+    chordLowerNameCache.set(chord, cached);
+  }
+  return cached;
+};
+
 const setGroupCardRef = (el: unknown, groupId: string) => {
   if (el) {
     groupCardsMap.set(groupId, el as HTMLElement);
@@ -163,6 +175,7 @@ const getGroupChordsCount = (groupId: string) => {
   return chordStore.groupChordMap.get(groupId)?.length || 0;
 };
 
+// 🌟 侧边栏搜索结果 Map 缓存计算
 const filteredChordsGroupMap = computed(() => {
   const map = new Map<string, Chord[]>();
   const queryKeyword = props.searchQuery.toLowerCase().trim();
@@ -175,7 +188,7 @@ const filteredChordsGroupMap = computed(() => {
     } else {
       map.set(
         group.id,
-        originalChords.filter(c => c.chordName.toLowerCase().includes(queryKeyword))
+        originalChords.filter(c => getChordLowerName(c).includes(queryKeyword))
       );
     }
   });

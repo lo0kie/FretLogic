@@ -80,7 +80,7 @@ const settingsStore = useSettingsStore();
   background-color: var(--bg-panel);
   padding: 0.75rem;
   border-radius: @radius-lg;
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--glass-border);
   box-sizing: border-box;
 }
 

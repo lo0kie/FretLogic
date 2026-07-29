@@ -128,14 +128,24 @@ const analysis = computed(() => {
 });
 
 const handleSelectCandidate = (candidate: CandidateResult) => {
-  editorStore.currentChordName = candidate.chordName;
+  const isSelected = editorStore.currentChordName === candidate.chordName;
 
-  editorStore.strings.forEach((str, sIdx) => {
-    if (str.fret >= 0) {
-      const pitch = calcPitchIndex(sIdx, str.fret, editorStore.capo, editorStore.activeBaseStrings);
-      str.isRoot = pitch === candidate.rootPitch;
-    }
-  });
+  if (isSelected) {
+    // 🌟 再次点击已选中的胶囊：清空名字并移除根音标记
+    editorStore.currentChordName = '';
+    editorStore.strings.forEach(str => {
+      str.isRoot = false;
+    });
+  } else {
+    // 🌟 点击未选中的胶囊：应用名称并设置对应根音
+    editorStore.currentChordName = candidate.chordName;
+    editorStore.strings.forEach((str, sIdx) => {
+      if (str.fret >= 0) {
+        const pitch = calcPitchIndex(sIdx, str.fret, editorStore.capo, editorStore.activeBaseStrings);
+        str.isRoot = pitch === candidate.rootPitch;
+      }
+    });
+  }
 };
 </script>
 
@@ -149,11 +159,10 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   transform: none;
 
   width: 13.8rem;
-  height: auto; /* 🌟 改为高度自适应，绝不溢出 */
+  height: auto;
   max-height: calc(100vh - 5rem);
   padding: 0.85rem;
 
-  /* 🍏 Apple 经典超通透毛玻璃卡片 */
   background-color: var(--bg-panel);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
@@ -167,10 +176,9 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   z-index: 10;
   pointer-events: auto;
   box-sizing: border-box;
-  overflow-y: auto; /* 🌟 超出时内部整体滚动，防止破框 */
+  overflow-y: auto;
 }
 
-/* 顶栏图标及标题 */
 .panel-header {
   display: flex;
   align-items: center;
@@ -225,7 +233,6 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   flex-shrink: 0;
 }
 
-/* 🍎 候选和弦胶囊标签组 */
 .candidate-tags {
   display: flex;
   flex-wrap: wrap;
@@ -267,7 +274,6 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   }
 }
 
-/* 🍎 构成音列表 - Apple iOS 列表卡片流 */
 .notes-list {
   display: flex;
   flex-direction: column;
@@ -293,7 +299,6 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
     background-color: var(--bg-panel-hover);
   }
 
-  /* 根音的精细 iOS 亮色方案 */
   &.is-root {
     background-color: color-mix(in srgb, var(--color-warning), transparent 90%);
     border-color: color-mix(in srgb, var(--color-warning), transparent 65%);
@@ -336,7 +341,6 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
 }
 
-/* 🍎 SF 数字音程小胶囊 */
 .interval-tag {
   min-width: 1.25rem;
   height: 1rem;
@@ -355,7 +359,6 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', sans-serif;
 }
 
-/* 空状态 */
 .empty-analysis-state {
   flex: 1;
   display: flex;

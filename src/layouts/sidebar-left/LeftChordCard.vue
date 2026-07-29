@@ -28,7 +28,7 @@
         :scale="0.5"
         :strings="chord.strings"
         :capo="chord.capo"
-        :fretCount="chord.fretCount"
+        :fret-count="chord.fretCount"
       />
     </template>
   </GlobalTooltip>

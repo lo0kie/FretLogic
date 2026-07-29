@@ -18,9 +18,9 @@
         <Fretboard
           v-model:strings="editorStore.strings"
           v-model:capo="editorStore.capo"
-          :fretCount="editorStore.fretCount"
-          :activeBaseStrings="editorStore.activeBaseStrings"
-          :isDarkMode="settingsStore.isDarkMode"
+          :fret-count="editorStore.fretCount"
+          :active-base-strings="editorStore.activeBaseStrings"
+          :is-dark-mode="settingsStore.isDarkMode"
         />
       </div>
     </div>

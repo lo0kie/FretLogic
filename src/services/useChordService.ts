@@ -53,7 +53,6 @@ export function useChordService() {
     const updatedList = chordStore.savedChordsList.filter(c => c.id !== chord.id);
     chordStore.overwriteChords(updatedList);
 
-    /* 🌟 核心重构：利用全新通用 API 挂载对应操作行为，脱离对特定撤回语义的依赖 */
     uiStore.toast.info(`已删除和弦 "${chord.chordName}"`, {
       actionText: '撤销',
       duration: 4000,
@@ -91,6 +90,22 @@ export function useChordService() {
     }
   };
 
+  // 1. 物理特征码计算函数
+  const computeFingerprint = (chord: Omit<Chord, 'fingerprint'>): string => {
+    const strSig = chord.strings.map(s => `${s.fret}_${s.preferFlat ? 1 : 0}_${s.isRoot ? 1 : 0}`).join('|');
+    return `${chord.groupId}:${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${strSig}`;
+  };
+
+  // 2. 获取特征码：若没有，则计算并直接回写给原对象保存！
+  const getChordFingerprint = (chord: Chord): string => {
+    if (chord.fingerprint) return chord.fingerprint;
+
+    // 🌟 补存逻辑：旧数据第一次读取时计算并持久化赋值
+    const fp = computeFingerprint(chord);
+    chord.fingerprint = fp;
+    return fp;
+  };
+
   const persistCurrentChord = () => {
     const cleanName = editorStore.currentChordName.trim();
 
@@ -108,7 +123,7 @@ export function useChordService() {
       ? chordStore.savedChordsList.find(c => c.id === editorStore.editingId)?.groupId || chordStore.selectedGroupId
       : chordStore.selectedGroupId;
 
-    const payload: Chord = {
+    const rawPayload: Omit<Chord, 'fingerprint'> = {
       id: editorStore.editingId || 'c_' + crypto.randomUUID().slice(0, 10),
       chordName: cleanName,
       strings: cloneDeep(toRaw(editorStore.strings)),
@@ -117,6 +132,23 @@ export function useChordService() {
       groupId: targetGroupId,
       tuning: editorStore.currentTuning,
     };
+
+    // 3. 计算最新的特征码
+    const newFingerprint = computeFingerprint(rawPayload);
+    const payload: Chord = {
+      ...rawPayload,
+      fingerprint: newFingerprint,
+    };
+
+    // 4. 比对去重：调用 getChordFingerprint 会自动为没有特征码的旧数据补上并保存
+    const isDuplicate = chordStore.savedChordsList.some(
+      existing => existing.id !== editorStore.editingId && getChordFingerprint(existing) === newFingerprint
+    );
+
+    if (isDuplicate) {
+      uiStore.toast.warning(`保存失败：该分组下已存在一模一样的和弦 "${cleanName}"`);
+      return;
+    }
 
     const idx = chordStore.savedChordsList.findIndex(c => c.id === editorStore.editingId);
     if (idx !== -1) {

@@ -7,12 +7,12 @@ export interface NoteInput {
 export interface AdvancedChordFormula {
   suffix: string;
   category: 'triad' | 'seventh' | 'extended' | 'altered' | 'sus';
-  core: number[]; // 决定和弦基本属性的核心音
-  anchor?: number[]; // 纯五度等支撑音
-  extensions?: number[]; // 延伸音 (9, 11, 13)
-  tolerated?: number[]; // 允许出现的变音
-  conflicts: number[]; // 冲突排他音
-  baseWeight: number; // 固有权重分 (10~200)
+  core: number[];
+  anchor?: number[];
+  extensions?: number[];
+  tolerated?: number[];
+  conflicts: number[];
+  baseWeight: number;
 }
 
 export interface CandidateResult {
@@ -65,13 +65,16 @@ export const ALL_ADVANCED_FORMULAS: AdvancedChordFormula[] = [
 ];
 
 const WEIGHTS = {
-  COVER: 0.4, // 骨架覆盖率权重
-  PURITY: 0.3, // 纯净度权重
-  BASS: 0.15, // 转位置信度权重
-  SIMPLICITY: 0.15, // 认知/表达简洁度权重
+  COVER: 0.4,
+  PURITY: 0.3,
+  BASS: 0.15,
+  SIMPLICITY: 0.15,
 };
 
-export function analyzeChordGraph(
+// 🌟 和弦分析计算结果内存缓存表
+const chordAnalysisCache = new Map<string, { candidates: CandidateResult[]; bestRootPitch: number }>();
+
+function rawAnalyzeChordGraph(
   notes: NoteInput[],
   explicitRootPitch: number | null
 ): { candidates: CandidateResult[]; bestRootPitch: number } {
@@ -90,7 +93,6 @@ export function analyzeChordGraph(
   });
 
   const candidateRootPitches = explicitRootPitch !== null ? [explicitRootPitch] : uniquePitches;
-
   const results: CandidateResult[] = [];
 
   candidateRootPitches.forEach(rootPitch => {
@@ -101,17 +103,14 @@ export function analyzeChordGraph(
     const slashBassLabel = isSlash ? `/${lowestNote.label}` : '';
 
     ALL_ADVANCED_FORMULAS.forEach(formula => {
-      // 1. 骨架覆盖率 (Core Cover Check)
       const coreHitCount = formula.core.filter(i => intervalSet.has(i)).length;
-      if (coreHitCount < formula.core.length) return; // 缺少核心音直接淘汰
+      if (coreHitCount < formula.core.length) return;
 
-      // 2. 排他碰撞检查 (Hard Conflict Check)
       const hasConflict = formula.conflicts.some(i => intervalSet.has(i));
-      if (hasConflict) return; // 存在非法冲突音直接淘汰
+      if (hasConflict) return;
 
       const coverScore = 1.0;
 
-      // 3. 纯净度计算 (Purity Score)
       const knownSet = new Set([
         ...formula.core,
         ...(formula.anchor || []),
@@ -127,24 +126,21 @@ export function analyzeChordGraph(
       });
       const purityScore = validToneCount / intervalSet.size;
 
-      // 4. 低音转位置信度 (Bass Score)
       let bassScore = 1.0;
       if (isSlash) {
         if (explicitRootPitch !== null) {
           bassScore = 1.0;
         } else if (formula.core.includes(lowestInterval) || formula.anchor?.includes(lowestInterval)) {
-          bassScore = 0.92; // 经典内音转位 (如 E7/D)
+          bassScore = 0.92;
         } else if (formula.category === 'triad') {
-          bassScore = 0.85; // 纯三和弦 Over 外音 Bass (如 A/B)
+          bassScore = 0.85;
         } else {
-          bassScore = 0.45; // 复杂延伸和弦 Over 外音 Bass
+          bassScore = 0.45;
         }
       }
 
-      // 5. 表达简洁度 (Simplicity Score)
       const simplicityScore = formula.baseWeight / 200.0;
 
-      // 6. 综合加权得分 (0.0 ~ 100.0)
       const totalScore =
         (coverScore * WEIGHTS.COVER +
           purityScore * WEIGHTS.PURITY +
@@ -176,4 +172,34 @@ export function analyzeChordGraph(
   const bestRootPitch = uniqueCandidates.length > 0 ? uniqueCandidates[0].rootPitch : lowestNote.pitchIndex;
 
   return { candidates: uniqueCandidates, bestRootPitch };
+}
+
+// 🌟 导出带有物理指纹缓存能力的分析函数
+export function analyzeChordGraph(
+  notes: NoteInput[],
+  explicitRootPitch: number | null
+): { candidates: CandidateResult[]; bestRootPitch: number } {
+  if (notes.length === 0) {
+    return { candidates: [], bestRootPitch: 0 };
+  }
+
+  // 1. 生成物理按音调音唯一缓存键
+  const cacheKey = `${explicitRootPitch ?? 'auto'}:${notes.map(n => `${n.stringIndex}_${n.pitchIndex}`).join('|')}`;
+
+  // 2. 命中直接返回
+  if (chordAnalysisCache.has(cacheKey)) {
+    return chordAnalysisCache.get(cacheKey)!;
+  }
+
+  // 3. 未命中调用计算
+  const result = rawAnalyzeChordGraph(notes, explicitRootPitch);
+
+  // LRU 缓存上限控制（最大维护 60 组）
+  if (chordAnalysisCache.size >= 60) {
+    const oldestKey = chordAnalysisCache.keys().next().value;
+    if (oldestKey) chordAnalysisCache.delete(oldestKey);
+  }
+
+  chordAnalysisCache.set(cacheKey, result);
+  return result;
 }
