@@ -6,8 +6,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '', initialValue: 'light' });
 
   const githubToken = useStorage(STORAGE_KEYS.GH_TOKEN, '');
-  const githubOwner = useStorage(STORAGE_KEYS.GH_OWNER, 'lo0kie');
-  const githubRepo = useStorage(STORAGE_KEYS.GH_REPO, 'FretLogic');
+  const githubOwner = useStorage(STORAGE_KEYS.GH_OWNER, '');
+  const githubRepo = useStorage(STORAGE_KEYS.GH_REPO, '');
   const githubBranch = useStorage(STORAGE_KEYS.GH_BRANCH, import.meta.env.VITE_GITHUB_BRANCH || 'master');
   const githubPath = useStorage(STORAGE_KEYS.GH_PATH, 'backup/chords.json');
 

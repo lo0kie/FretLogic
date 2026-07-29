@@ -123,7 +123,7 @@
                 <BaseSelector
                   v-model="editorStore.currentTuning"
                   :options="tuningOptions"
-                  :defaultValue="TuningEnum.STANDARD"
+                  :default-value="TuningEnum.STANDARD"
                 >
                   <template #label="{ selected }">
                     {{ TUNING_PRESETS[selected]?.name || TuningEnum.STANDARD }}
@@ -162,7 +162,7 @@
   </header>
 
   <!-- Modal 部分 -->
-  <BaseModal v-model:visible="isSyncModalOpen" title="云端同步设置" showFooter width="w-80">
+  <BaseModal v-model:visible="isSyncModalOpen" title="云端同步设置" :show-footer="false" width="w-80">
     <SyncSettingsCard
       :is-syncing="isSyncing"
       :is-pulling="isPulling"

@@ -6,7 +6,6 @@
       <SidebarLeft />
 
       <main class="app-main-content">
-        <!-- 🌟 直接在这里渲染 Workbench 并绑定 ref，省去繁琐的插槽透传 -->
         <Workbench ref="workbenchRef" />
       </main>
     </div>
@@ -28,7 +27,6 @@ const chordService = useChordService();
 const workbenchRef = ref<InstanceType<typeof Workbench> | null>(null);
 
 const handleExportImage = (isTransparent: boolean) => {
-  // 🌟 此时 workbenchRef.value 必然存在，可以稳定获取组件 DOM 或 .workbench-card
   const captureEl = workbenchRef.value?.$el?.querySelector('.workbench-card') || workbenchRef.value?.$el;
 
   if (captureEl) {

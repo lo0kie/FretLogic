@@ -18,16 +18,17 @@
         <Fretboard
           v-model:strings="editorStore.strings"
           v-model:capo="editorStore.capo"
-          :fretCount="editorStore.fretCount"
-          :activeBaseStrings="editorStore.activeBaseStrings"
-          :isDarkMode="settingsStore.isDarkMode"
+          :fret-count="editorStore.fretCount"
+          :active-base-strings="editorStore.activeBaseStrings"
+          :is-dark-mode="settingsStore.isDarkMode"
         />
       </div>
     </div>
 
-    <!-- 🌟 底部动态浮动操作条：在有改动/编辑时平滑浮现 -->
+    <ChordAnalysisPanel />
+
     <Transition name="floating-bar-fade">
-      <div v-if="isFloatingBarVisible" class="floating-action-bar">
+      <div v-if="isFloatingBarVisible" class="floating-action-bar" :style="{ bottom: barBottomPosition }">
         <ActionButton size="md" variant="ghost" :disabled="isClearDisabled" @click="editorStore.resetEditor()">
           {{ editorStore.editingId ? '放弃修改' : '重置指板' }}
         </ActionButton>
@@ -45,6 +46,7 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import Fretboard from '@/components/Fretboard.vue';
+import ChordAnalysisPanel from '@/layouts/ChordAnalysisPanel.vue';
 import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -65,16 +67,17 @@ const dynamicHeight = computed(() => {
   return `${baseVerticalSpace + realBoardHeight}px`;
 });
 
-// 🌟 判断浮动条是否显示：只要有正在编辑的id，或者输入了名字、或者指板不是空的、或者是调整了capo/品数，就显示
+const barBottomPosition = computed(() => (editorStore.fretCount === 3 ? '3.3rem' : '1.8rem'));
+
 const isFloatingBarVisible = computed(() => {
   const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
-  const hasModified =
+  return (
     cleanName !== '' ||
     !editorStore.isFretBoardEmpty ||
     editorStore.capo > 0 ||
     editorStore.fretCount > 3 ||
-    editorStore.editingId !== null;
-  return hasModified;
+    editorStore.editingId !== null
+  );
 });
 
 const isSaveDisabled = computed(() => {
@@ -103,9 +106,10 @@ const isClearDisabled = computed(() => {
   inset: 0;
   z-index: 1;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: center;
   padding: 2rem;
+  padding-top: 3.5rem;
   padding-bottom: 6.15rem;
   overflow: hidden;
   box-sizing: border-box;
@@ -136,7 +140,6 @@ const isClearDisabled = computed(() => {
 
 .floating-action-bar {
   position: absolute;
-  bottom: 1.8rem;
   z-index: 10;
   pointer-events: auto;
   display: flex;
@@ -150,6 +153,12 @@ const isClearDisabled = computed(() => {
   border-radius: 9999px;
   box-shadow: @shadow-floating;
   box-sizing: border-box;
+
+  transition:
+    bottom 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.28s ease,
+    border-color 0.28s ease,
+    box-shadow 0.28s ease;
 }
 
 .bar-divider {
