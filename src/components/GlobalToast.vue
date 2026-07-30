@@ -10,7 +10,7 @@
         </button>
 
         <button @click="uiStore.removeToast(item.id)" class="btn-toast-close" title="关闭">
-          <X :size="10" :stroke-width="3" />
+          <X class="close-icon" stroke-width="3" />
         </button>
       </div>
     </TransitionGroup>
@@ -95,6 +95,11 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
   }
 }
 
+.close-icon {
+  width: 0.65rem;
+  height: 0.65rem;
+}
+
 .toast-loading-spinner {
   width: 0.85rem;
   height: 0.85rem;
@@ -153,7 +158,7 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
   color: var(--text-title);
 }
 
-/* 🍎 Vue TransitionGroup 完整平滑补位动画 */
+/* Vue TransitionGroup 平滑补位动画 */
 :deep(.toast-transition-enter-from) {
   opacity: 0;
   transform: translateY(-12px) scale(0.9);
@@ -171,5 +176,56 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
 
 :deep(.toast-transition-move) {
   transition: transform @duration-base @bezier-standard;
+}
+
+/* 📱 移动端放大与顶部居中对齐 */
+@media (max-width: 768px) {
+  .toast-global-container {
+    top: 1rem;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    align-items: center;
+    width: calc(100vw - 2rem);
+    max-width: 22rem;
+  }
+
+  .toast-item-card {
+    padding: 0.65rem 2.4rem 0.65rem 1rem;
+    font-size: 0.85rem;
+    width: auto;
+    max-width: 100%;
+  }
+
+  .btn-toast-close {
+    right: 0.6rem;
+    width: 1.35rem;
+    height: 1.35rem;
+  }
+
+  .close-icon {
+    width: 0.8rem;
+    height: 0.8rem;
+  }
+
+  .btn-toast-undo {
+    font-size: 0.8rem;
+  }
+
+  .toast-loading-spinner {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  /* 📱 移动端动画重置为居中淡入 */
+  :deep(.toast-transition-enter-from) {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+  }
+
+  :deep(.toast-transition-leave-to) {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+  }
 }
 </style>

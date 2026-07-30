@@ -1,6 +1,7 @@
 import type { Chord, Group } from '@/types';
 import { STORAGE_KEYS } from '@/utils/constants';
 import { cloneDeep } from '@/utils/dataParser';
+import { generateUUID } from '@/utils/validators';
 import { useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw } from 'vue';
@@ -48,7 +49,7 @@ export const useChordStore = defineStore('chord', () => {
     if (hasOrphans) {
       let targetGroupId = selectedGroupId.value || groups.value[0]?.id || null;
       if (!targetGroupId) {
-        targetGroupId = 'g_recovery_' + crypto.randomUUID().slice(0, 8);
+        targetGroupId = 'g_recovery_' + generateUUID().slice(0, 8);
         groups.value.forEach(g => {
           g.collapsed = true;
         });

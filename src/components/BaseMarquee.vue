@@ -36,7 +36,9 @@ const handleMouseLeave = () => {
 
 .marquee-container {
   height: 100%;
-  max-width: 100%;
+  width: 100%;
+  min-width: 0; /* 🌟 关键：防止 Flex 子项被长文本无限撑开 */
+  flex: 1;
   overflow: hidden;
   white-space: nowrap;
   display: flex;
@@ -45,23 +47,35 @@ const handleMouseLeave = () => {
 }
 
 .marquee-content {
-  display: inline-flex;
-  align-items: center;
+  display: flex; /* 🌟 恢复 Flex 布局，实现完美的垂直居中 */
+  align-items: center; /* 🌟 垂直居中 */
   height: 100%;
   width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0; /* 🌟 允许 Flex 子项尺寸收缩，防止被文本撑开 */
   box-sizing: border-box;
+
+  /* 内部的 span 处理文本截断与超长省略 */
+  :deep(span) {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2; /* 防止字体行高导致偏离中心 */
+  }
 
   &.is-scrolling {
     width: auto;
     min-width: max-content;
     overflow: visible;
-    text-overflow: clip;
     animation: globalMarqueeAnimate 4s linear infinite alternate;
     animation-delay: 0.5s;
     will-change: transform;
+
+    :deep(span) {
+      overflow: visible;
+      text-overflow: clip;
+    }
   }
 }
 

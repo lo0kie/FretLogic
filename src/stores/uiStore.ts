@@ -1,10 +1,11 @@
 ﻿import type { Toast, ToastOptions, ToastType } from '@/types';
-import { useStorage } from '@vueuse/core';
+import { useMediaQuery, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
 export const useUiStore = defineStore('ui', () => {
   const toasts = ref<Toast[]>([]);
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const isCopying = ref(false);
   const isLeftOpen = useStorage('CHORD_LAB_UI_LEFT_OPEN', true);
   const isPreviewEnabled = useStorage('CHORD_LAB_UI_PREVIEW_ENABLED', false);
@@ -46,7 +47,7 @@ export const useUiStore = defineStore('ui', () => {
 
   const createToast = (msg: string, type: ToastType = 'info', options: ToastOptions = {}) => {
     const id = performance.now();
-    const hasAction = !!options.onAction;
+    const hasAction = Boolean(options.onAction);
     const duration = options.duration ?? 3000;
 
     if (hasAction) clearActionToasts();
@@ -85,5 +86,6 @@ export const useUiStore = defineStore('ui', () => {
     pauseAllTimers,
     resumeAllTimers,
     isPreviewEnabled,
+    isMobile,
   };
 });

@@ -8,6 +8,6 @@
 
 <script setup lang="ts">
 import GlobalToast from '@/components/GlobalToast.vue';
-import { AppLayout } from '@/layouts';
-import Workbench from '@/layouts/Workbench.vue';
+import AppLayout from '@/layouts/AppLayout.vue';
+import Workbench from '@/layouts/workbench/Workbench.vue';
 </script>

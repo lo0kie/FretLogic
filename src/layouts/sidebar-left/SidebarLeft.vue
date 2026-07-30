@@ -1,5 +1,5 @@
 <template>
-  <div class="panel-left" :class="{ 'is-open': uiStore.isLeftOpen }">
+  <div class="panel-left" :class="{ 'is-open': uiStore.isLeftOpen }" v-bind="$attrs">
     <!-- 1. 顶栏：搜索与操作区 -->
     <div class="panel-header">
       <BaseInput
@@ -15,7 +15,11 @@
       </BaseInput>
 
       <div class="header-actions-single">
-        <GlobalTooltip placement="bottom" :content="uiStore.isPreviewEnabled ? '关闭和弦悬浮预览' : '开启和弦悬浮预览'">
+        <GlobalTooltip
+          placement="bottom"
+          :content="uiStore.isPreviewEnabled ? '关闭和弦悬浮预览' : '开启和弦悬浮预览'"
+          class="hidden-mobile"
+        >
           <ActionButton
             @click="uiStore.isPreviewEnabled = !uiStore.isPreviewEnabled"
             :variant="uiStore.isPreviewEnabled ? 'subtle' : 'ghost'"
@@ -34,7 +38,7 @@
       </div>
     </div>
 
-    <!-- 2. 分组及和弦列表容器 -->
+    <!-- 2. 分组及和弦列表容器 (自动撑满剩余高度并内部滚动) -->
     <LeftGroupList
       :search-query="debouncedQuery"
       @open-rename="openRename"
@@ -42,7 +46,7 @@
       @open-move="openMove"
     />
 
-    <!-- 3. 底栏：导入/导出操作区 (原 LeftPanelFooter 内联) -->
+    <!-- 3. 底栏：导入/导出操作区 (绝对锁定在最底端) -->
     <div class="left-panel-footer">
       <input type="file" ref="fileInputRef" accept=".json" @change="handleFileChange" class="hidden-input" />
 
@@ -68,7 +72,7 @@
     </div>
   </div>
 
-  <!-- 4. 各种交互 Modal 弹窗组 -->
+  <!-- Modal 弹窗 -->
   <BaseModal v-model:visible="modals.create" title="新建分组" @confirm="handleCreateGroup">
     <BaseInput
       v-model="modalData.inputValue"
@@ -115,7 +119,7 @@
           :title="group.name"
         >
           <BaseMarquee class="move-marquee">
-            <span>{{ group.name }}</span>
+            <span class="group-btn-text">{{ group.name }}</span>
           </BaseMarquee>
         </button>
       </GlobalTooltip>
@@ -135,10 +139,12 @@ import { useChordStore } from '@/stores/chordStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group } from '@/types';
-import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/constants';
+import { generateUUID } from '@/utils/validators';
 import { Download, Eye, EyeOff, Plus, Search, Upload } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
 import { nextTick, reactive, ref } from 'vue';
+
+defineOptions({ inheritAttrs: false });
 
 const uiStore = useUiStore();
 const chordStore = useChordStore();
@@ -149,13 +155,7 @@ const searchQuery = ref('');
 const debouncedQuery = refDebounced(searchQuery, 150);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
-const modals = reactive({
-  create: false,
-  rename: false,
-  delete: false,
-  move: false,
-});
-
+const modals = reactive({ create: false, rename: false, delete: false, move: false });
 const modalData = reactive({
   inputValue: '',
   activeGroup: null as Group | null,
@@ -178,11 +178,9 @@ const handleFileChange = (e: Event) => {
   const target = e.target as HTMLInputElement;
   if (!target.files || target.files.length === 0) return;
   const file = target.files[0];
-
   const resetInput = () => {
     if (fileInputRef.value) fileInputRef.value.value = '';
   };
-
   ioService.processImport(file, resetInput);
 };
 
@@ -195,6 +193,7 @@ const openCreate = async () => {
 
 const handleCreateGroup = () => {
   const val = modalData.inputValue.trim();
+
   if (!val) {
     uiStore.toast.error('确认失败：请输入有效内容');
     return;
@@ -203,13 +202,13 @@ const handleCreateGroup = () => {
     uiStore.toast.warning('创建失败：该分组名称已存在');
     return;
   }
-  const newId = 'g_' + crypto.randomUUID().slice(0, 8);
+  const newId = 'g_' + generateUUID().slice(0, 8);
   chordStore.groups.forEach(g => {
     g.collapsed = true;
   });
+
   chordStore.groups.push({ id: newId, name: val, collapsed: false });
   chordStore.selectedGroupId = newId;
-
   modals.create = false;
   uiStore.toast.success('操作成功完成');
 };
@@ -228,9 +227,7 @@ const handleRenameGroup = () => {
     uiStore.toast.error('确认失败：请输入有效内容');
     return;
   }
-  if (modalData.activeGroup) {
-    modalData.activeGroup.name = val;
-  }
+  if (modalData.activeGroup) modalData.activeGroup.name = val;
   modals.rename = false;
   uiStore.toast.success('操作成功完成');
 };
@@ -243,20 +240,13 @@ const openDelete = (group: Group) => {
 const handleDeleteGroup = () => {
   if (!modalData.activeGroup) return;
   const targetGid = modalData.activeGroup.id;
-
   if (editorStore.editingId) {
     const editingChord = chordStore.savedChordsList.find(c => c.id === editorStore.editingId);
-    if (editingChord && editingChord.groupId === targetGid) {
-      editorStore.resetEditor();
-    }
+    if (editingChord && editingChord.groupId === targetGid) editorStore.resetEditor();
   }
-
   chordStore.overwriteChords(chordStore.savedChordsList.filter(c => c.groupId !== targetGid));
   chordStore.overwriteGroups(chordStore.groups.filter(g => g.id !== targetGid));
-  if (chordStore.selectedGroupId === targetGid) {
-    chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
-  }
-
+  if (chordStore.selectedGroupId === targetGid) chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
   uiStore.clearActionToasts();
   modals.delete = false;
   uiStore.toast.success('操作成功完成');
@@ -274,13 +264,11 @@ const handleMoveChord = () => {
     return;
   }
   if (!modalData.activeChord) return;
-
   const chordIdx = chordStore.savedChordsList.findIndex(c => c.id === modalData.activeChord!.id);
   if (chordIdx !== -1) {
     chordStore.savedChordsList[chordIdx].groupId = modalData.moveTargetId;
     uiStore.clearActionToasts();
   }
-
   modals.move = false;
   uiStore.toast.success('操作成功完成');
 };
@@ -289,17 +277,10 @@ const handleMoveChord = () => {
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 
-.panel-header,
-.left-panel-footer,
-:deep(.left-group-list) {
-  min-width: v-bind(LEFT_SIDEBAR_WIDTH_PIXEL);
-}
-
 .panel-left {
   background-color: var(--bg-panel);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
-
   border-right: 1px solid var(--glass-border);
   height: 100%;
   display: flex;
@@ -307,7 +288,6 @@ const handleMoveChord = () => {
   position: relative;
   z-index: 10;
   box-sizing: border-box;
-  flex-shrink: 0;
   overflow: hidden;
   width: 0px;
   opacity: 0;
@@ -316,7 +296,7 @@ const handleMoveChord = () => {
     opacity @duration-base ease;
 
   &.is-open {
-    width: v-bind(LEFT_SIDEBAR_WIDTH_PIXEL);
+    width: 335px;
     opacity: 1;
   }
 }
@@ -339,13 +319,19 @@ const handleMoveChord = () => {
   }
 }
 
+:deep(.left-group-list) {
+  flex: 1 !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  overflow-y: auto !important;
+}
+
 .header-actions-single {
   display: flex;
   align-items: center;
   gap: 0.35rem;
   flex-shrink: 0;
 }
-
 .search-icon {
   color: var(--text-disabled);
 }
@@ -353,22 +339,21 @@ const handleMoveChord = () => {
 .left-panel-footer {
   padding: 1rem 1.25rem;
   border-top: 1px solid var(--control-border);
-  background-color: transparent;
+  background-color: var(--bg-panel);
   box-sizing: border-box;
-  flex-shrink: 0;
+  flex-shrink: 0 !important;
+  width: 100%;
 }
 
 .hidden-input {
   display: none;
 }
-
 .footer-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.7rem;
   box-sizing: border-box;
 }
-
 .modal-description-text {
   font-size: 0.75rem;
   font-weight: 500;
@@ -376,7 +361,6 @@ const handleMoveChord = () => {
   color: var(--text-body);
   margin: 0;
 }
-
 .move-group-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -386,13 +370,11 @@ const handleMoveChord = () => {
   padding: 0.1rem;
   box-sizing: border-box;
 }
-
 .move-tooltip-item {
   width: 100%;
   min-width: 0;
   display: flex;
 }
-
 .move-target-btn {
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -413,13 +395,11 @@ const handleMoveChord = () => {
     background-color: var(--bg-main);
     border-color: var(--border-light);
     color: var(--text-disabled);
-
     :global(.dark) & {
       background-color: rgba(255, 255, 255, 0.05);
       color: rgba(255, 255, 255, 0.4);
     }
   }
-
   &.is-selected {
     background-color: var(--color-primary);
     color: #ffffff;
@@ -427,31 +407,71 @@ const handleMoveChord = () => {
     box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary), transparent 60%);
     transform: scale(1.02);
   }
-
   &:active:not(.is-disabled) {
     transform: scale(0.95);
   }
-
   &.is-normal {
     background-color: var(--bg-body);
     color: var(--text-body);
-
     &:hover {
       border-color: @primary;
       background-color: var(--bg-panel-hover);
     }
   }
 }
-
 .move-marquee {
   min-width: 0;
   width: 100%;
-
   span {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+}
+
+/* 📱 移动端自适应适配 */
+@media (max-width: 768px) {
+  .panel-left {
+    height: calc(100vh - 3.2rem) !important;
+  }
+
+  .panel-header {
+    height: 3.5rem !important;
+    padding: 0 0.8rem;
+    display: flex;
+    align-items: center;
+  }
+
+  .left-panel-footer {
+    padding: 0.75rem 1rem;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .panel-left.is-open {
+    width: 85vw !important;
+  }
+
+  .hidden-mobile {
+    display: none !important;
+  }
+
+  .modal-description-text {
+    font-size: 0.85rem;
+    line-height: 1.65;
+  }
+
+  /* 🌟 移动端网格调整为 2列，增大点击与显示空间 */
+  .move-group-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  /* 🌟 移动端分组移动按钮与文本加大 */
+  .move-target-btn {
+    padding: 0.75rem 0.9rem;
+    font-size: 0.88rem;
+    border-radius: calc(@radius-lg * 1.1);
   }
 }
 </style>

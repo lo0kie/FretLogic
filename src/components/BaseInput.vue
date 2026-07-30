@@ -271,4 +271,26 @@ defineExpose({
   -webkit-text-security: disc !important;
   text-security: disc !important;
 }
+
+@media (max-width: 768px) {
+  .base-input-field {
+    &.size-sm {
+      height: 1.85rem;
+    }
+    &.size-md {
+      height: 2.15rem;
+    }
+    &.size-lg {
+      height: 2.85rem;
+    }
+  }
+
+  .text-xs-style {
+    font-size: 0.8rem !important;
+  }
+
+  .text-md-style {
+    font-size: 0.85rem !important;
+  }
+}
 </style>
