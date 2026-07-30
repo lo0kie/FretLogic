@@ -119,6 +119,11 @@ export function useChordService() {
 
     if (!chordStore.selectedGroupId) {
       uiStore.toast.warning('保存失败：请先展开或选择一个目标分组');
+
+      if (uiStore.isMobile) {
+        uiStore.isLeftOpen = true;
+      }
+
       return;
     }
 

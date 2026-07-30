@@ -1,6 +1,6 @@
 <template>
   <header class="app-top-header">
-    <!-- 1. 左侧：侧边栏开关 + 品牌 -->
+    <!-- 1. 左侧：侧边栏开关 + 品牌 / 移动端当前分组 -->
     <div class="header-section section-left">
       <GlobalTooltip :content="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'" placement="bottom">
         <ActionButton
@@ -16,7 +16,21 @@
 
       <div class="header-divider hidden-mobile"></div>
 
+      <!-- PC 端显示品牌 -->
       <span class="app-brand-title hidden-mobile">Fret Logic</span>
+
+      <!-- 📱 移动端显示当前展开/选中的分组名称 -->
+      <Transition name="title-fade">
+        <div
+          v-if="uiStore.isMobile && currentGroupName && !uiStore.isLeftOpen"
+          class="mobile-group-title"
+          @click="uiStore.isLeftOpen = true"
+        >
+          <BaseMarquee>
+            <span>{{ currentGroupName }}</span>
+          </BaseMarquee>
+        </div>
+      </Transition>
     </div>
 
     <!-- 2. 中间：分段胶囊型工具组 -->
@@ -64,7 +78,6 @@
 
     <!-- 3. 右侧：指板配置 Popover + 更多设置 -->
     <div class="header-section section-right">
-      <!-- 🌟 指板属性配置 Popover (已独立抽离) -->
       <HeaderConfigPopover />
 
       <!-- 云端同步 Modal 触发按钮 -->
@@ -112,17 +125,19 @@
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
+import BaseMarquee from '@/components/BaseMarquee.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import HeaderConfigPopover from '@/layouts/header-top/HeaderConfigPopover.vue';
 import SyncSettingsCard from '@/layouts/header-top/SyncSettingsCard.vue';
 import { useAudioPlayer } from '@/services/useAudioPlayer';
 import { useGithubSyncService } from '@/services/useGithubSyncService';
+import { useChordStore } from '@/stores/chordStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { Cloud, Copy, Image, Moon, PanelLeft, Play, Square, Sun } from '@lucide/vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 defineEmits<{
   (e: 'export-image', isTransparent: boolean): void;
@@ -132,11 +147,18 @@ defineEmits<{
 const editorStore = useEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
+const chordStore = useChordStore();
 const { isPlaying, playCurrentChord } = useAudioPlayer();
 const { triggerGlobalSync, pullFromGithub, isSyncing, isPulling } = useGithubSyncService();
 
 const isSyncModalOpen = ref(false);
 const isPullConfirmOpen = ref(false);
+
+const currentGroupName = computed(() => {
+  const activeGroup =
+    chordStore.groups.find(g => !g.collapsed) || chordStore.groups.find(g => g.id === chordStore.selectedGroupId);
+  return activeGroup ? activeGroup.name : '';
+});
 
 const confirmPull = () => {
   pullFromGithub();
@@ -170,6 +192,10 @@ const confirmPull = () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.section-left {
+  min-width: 0;
 }
 
 .section-center {
@@ -230,6 +256,30 @@ const confirmPull = () => {
 
   .hidden-mobile {
     display: none !important;
+  }
+
+  .mobile-group-title {
+    max-width: 4.5rem;
+    min-width: 0;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-title);
+    margin-left: 0.2rem;
+    overflow: hidden;
+    cursor: pointer;
+  }
+
+  .title-fade-enter-active,
+  .title-fade-leave-active {
+    transition:
+      opacity @duration-base @bezier-standard,
+      transform @duration-base @bezier-standard;
+  }
+
+  .title-fade-enter-from,
+  .title-fade-leave-to {
+    opacity: 0;
+    transform: translateX(-8px) scale(0.95);
   }
 }
 </style>

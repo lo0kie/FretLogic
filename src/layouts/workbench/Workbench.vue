@@ -88,8 +88,8 @@ const dynamicHeight = computed(() => {
 });
 
 const barBottomPosition = computed(() => {
-  if (uiStore.isMobile) return '1rem';
-  return editorStore.fretCount === 3 ? '3.3rem' : '1.8rem';
+  if (uiStore.isMobile) return 'calc(1.8rem + env(safe-area-inset-bottom, 0px))';
+  else return editorStore.fretCount === 3 ? '3.3rem' : '1.8rem';
 });
 
 const isFloatingBarVisible = computed(() => {

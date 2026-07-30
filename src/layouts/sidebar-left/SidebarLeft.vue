@@ -118,9 +118,9 @@
           :class="getGroupClass(group.id)"
           :title="group.name"
         >
-          <BaseMarquee class="move-marquee"
-            ><span>{{ group.name }}</span></BaseMarquee
-          >
+          <BaseMarquee class="move-marquee">
+            <span class="group-btn-text">{{ group.name }}</span>
+          </BaseMarquee>
         </button>
       </GlobalTooltip>
     </div>
@@ -319,11 +319,10 @@ const handleMoveChord = () => {
   }
 }
 
-/* 🌟 核心 1：强制中间的列表容器缩回剩余高度，内部溢出滚动 */
 :deep(.left-group-list) {
   flex: 1 !important;
   min-height: 0 !important;
-  height: 0 !important; /* 强制拉回 flex 计算基准 */
+  height: 0 !important;
   overflow-y: auto !important;
 }
 
@@ -342,7 +341,7 @@ const handleMoveChord = () => {
   border-top: 1px solid var(--control-border);
   background-color: var(--bg-panel);
   box-sizing: border-box;
-  flex-shrink: 0 !important; /* 🌟 核心 2：严禁底栏被压缩 */
+  flex-shrink: 0 !important;
   width: 100%;
 }
 
@@ -431,10 +430,10 @@ const handleMoveChord = () => {
   }
 }
 
-/* 📱 移动端抽屉精准高度计算修补 */
+/* 📱 移动端自适应适配 */
 @media (max-width: 768px) {
   .panel-left {
-    height: calc(100vh - 3.2rem) !important; /* 🌟 扣除 Header 高度，保证 Drawer 底部完全落在可视区域以内 */
+    height: calc(100vh - 3.2rem) !important;
   }
 
   .panel-header {
@@ -455,6 +454,24 @@ const handleMoveChord = () => {
 
   .hidden-mobile {
     display: none !important;
+  }
+
+  .modal-description-text {
+    font-size: 0.85rem;
+    line-height: 1.65;
+  }
+
+  /* 🌟 移动端网格调整为 2列，增大点击与显示空间 */
+  .move-group-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  /* 🌟 移动端分组移动按钮与文本加大 */
+  .move-target-btn {
+    padding: 0.75rem 0.9rem;
+    font-size: 0.88rem;
+    border-radius: calc(@radius-lg * 1.1);
   }
 }
 </style>

@@ -1,6 +1,6 @@
 ﻿<template>
   <div class="popover-wrapper" ref="popoverContainerRef">
-    <GlobalTooltip content="鎸囨澘閰嶇疆 (鍝佹暟 / Capo / 璋冮煶)" placement="bottom">
+    <GlobalTooltip content="指板配置 (品数 / Capo / 调音)" placement="bottom">
       <ActionButton icon-only variant="ghost" :active="isConfigOpen" @click="isConfigOpen = !isConfigOpen">
         <SlidersHorizontal :size="18" stroke-width="2.2" />
       </ActionButton>
@@ -9,7 +9,7 @@
     <Transition name="dropdown-fade">
       <div v-if="isConfigOpen" class="config-popover-card" ref="cardRef">
         <div class="config-row">
-          <label class="config-label">鏄剧ず鍝佹暟</label>
+          <label class="config-label">显示品数</label>
           <div class="fret-segmented-picker">
             <button
               v-for="f in FRET_COUNTS"
@@ -18,13 +18,13 @@
               class="fret-picker-item"
               :class="{ 'is-selected': editorStore.fretCount === f }"
             >
-              {{ f }}鍝?
+              {{ f }}品
             </button>
           </div>
         </div>
 
         <div class="config-row">
-          <label class="config-label">鍙樿皟澶?(Capo)</label>
+          <label class="config-label">变调夹 (Capo)</label>
           <div class="capo-quick-picker" @wheel="handleCapoWheel">
             <button
               @click="editorStore.capo = Math.max(0, editorStore.capo - 1)"
@@ -47,7 +47,7 @@
         </div>
 
         <div class="config-row">
-          <label class="config-label">璋冮煶鏂规</label>
+          <label class="config-label">调音方案</label>
           <div class="tuning-select-wrapper">
             <BaseSelector
               v-model="editorStore.currentTuning"

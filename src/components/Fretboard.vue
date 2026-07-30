@@ -607,6 +607,11 @@ onBeforeUnmount(() => {
   .open-string-btn {
     width: 2.75rem;
     height: 2.75rem;
+    transform: translateY(10px);
+
+    &.is-fret-available:active {
+      transform: translateY(10px) scale(0.92);
+    }
   }
 
   .mute-icon {
