@@ -55,7 +55,6 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import Fretboard from '@/components/Fretboard.vue';
-import ChordAnalysisPanel from '@/layouts/ChordAnalysisPanel.vue';
 import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -63,6 +62,7 @@ import { useUiStore } from '@/stores/uiStore';
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/utils/constants';
 import { useWindowSize } from '@vueuse/core';
 import { computed, ref } from 'vue';
+import ChordAnalysisPanel from './ChordAnalysisPanel.vue';
 
 const editorStore = useEditorStore();
 const settingsStore = useSettingsStore();

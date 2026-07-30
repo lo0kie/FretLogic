@@ -1,73 +1,89 @@
 <template>
-  <Transition name="panel-fade">
-    <div class="chord-analysis-panel" v-if="!uiStore.isMobile || analysis.notes.length > 0">
-      <!-- 面板头部 -->
-      <div class="panel-header">
-        <div class="header-icon-wrapper">
-          <Sparkles class="header-icon" :size="13" stroke-width="2.5" />
-        </div>
-        <span class="header-title">和弦实时分析</span>
-      </div>
-
-      <template v-if="analysis.notes.length > 0">
-        <!-- 左右两栏包裹容器 (Flex 布局) -->
-        <div class="analysis-flex-container">
-          <!-- 1. 候选和弦胶囊标签组 (左侧：高度动态绑定右侧) -->
-          <div class="section-block candidates-section">
-            <div class="section-label">推荐候选</div>
-            <div
-              class="candidate-tags no-scrollbar"
-              :style="uiStore.isMobile ? { height: `${rightListHeight}px` } : {}"
-            >
-              <button
-                v-for="(candidate, index) in analysis.candidates"
-                :key="index"
-                class="candidate-badge"
-                :class="{ 'is-active': editorStore.currentChordName === candidate.chordName }"
-                @click="handleSelectCandidate(candidate)"
-              >
-                {{ candidate.chordName }}
-              </button>
-            </div>
+  <div class="chord-analysis-wrapper" :class="{ 'is-empty-hidden': uiStore.isMobile && analysis.notes.length === 0 }">
+    <Transition name="panel-fade">
+      <div class="chord-analysis-panel" v-if="!uiStore.isMobile || analysis.notes.length > 0">
+        <!-- 面板头部 -->
+        <div class="panel-header">
+          <div class="header-icon-wrapper">
+            <Sparkles class="header-icon" :size="13" stroke-width="2.5" />
           </div>
+          <span class="header-title">和弦实时分析</span>
+        </div>
 
-          <div class="panel-divider desktop-divider" />
-
-          <!-- 2. 构成音明细列表 (右侧：作为高度源头) -->
-          <div class="section-block is-grow notes-section">
-            <div class="section-label">构成音 (低音 ➔ 高音)</div>
-            <div class="notes-list" ref="rightSectionRef">
+        <template v-if="analysis.notes.length > 0">
+          <!-- 左右两栏包裹容器 (Flex 布局) -->
+          <div class="analysis-flex-container">
+            <!-- 1. 候选和弦胶囊标签组 -->
+            <div class="section-block candidates-section">
+              <div class="section-label">推荐候选</div>
               <div
-                v-for="(note, idx) in analysis.notes"
-                :key="idx"
-                class="note-row"
-                :class="{ 'is-root': note.isRoot }"
+                class="candidate-tags no-scrollbar"
+                :style="uiStore.isMobile ? { height: `${rightListHeight}px` } : {}"
               >
-                <div class="note-left-group">
-                  <span class="string-indicator">{{ 6 - note.stringIndex }}弦</span>
-                  <span class="note-name-text">{{ note.label }}</span>
+                <template v-if="analysis.candidates.length > 0">
+                  <button
+                    v-for="(candidate, index) in analysis.candidates"
+                    :key="index"
+                    class="candidate-badge"
+                    :class="{ 'is-active': editorStore.currentChordName === candidate.chordName }"
+                    @click="handleSelectCandidate(candidate)"
+                  >
+                    {{ candidate.chordName }}
+                  </button>
+                </template>
+
+                <!-- 无推荐候选时的占位提示 -->
+                <div v-else class="empty-candidate-placeholder">
+                  <span class="empty-candidate-text">暂无匹配和弦</span>
                 </div>
-                <span class="interval-tag">{{ note.interval }}</span>
+              </div>
+            </div>
+
+            <div class="panel-divider desktop-divider" />
+
+            <!-- 2. 构成音明细列表 (PC端纯展示，移动端绑定专属交互) -->
+            <div class="section-block is-grow notes-section">
+              <div class="section-label">构成音 (低音 ➔ 高音)</div>
+              <div class="notes-list" ref="rightSectionRef">
+                <div
+                  v-for="note in analysis.notes"
+                  :key="note.stringIndex"
+                  class="note-row"
+                  :class="{
+                    'is-root': note.isRoot,
+                    'is-mobile-clickable': uiStore.isMobile,
+                  }"
+                  @click="uiStore.isMobile && handleMobileNoteClick(note)"
+                  @touchstart="uiStore.isMobile && handleNoteTouchStart($event, note)"
+                  @touchend="uiStore.isMobile && handleNoteTouchEnd()"
+                  @touchcancel="uiStore.isMobile && handleNoteTouchEnd()"
+                >
+                  <div class="note-left-group">
+                    <span class="string-indicator">{{ 6 - note.stringIndex }}弦</span>
+                    <span class="note-name-text">{{ note.label }}</span>
+                  </div>
+                  <span class="interval-tag">{{ note.interval }}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </template>
+        </template>
 
-      <!-- 空状态 (仅在 PC 端且无按音时显示) -->
-      <div v-else class="empty-analysis-state">
-        <Music :size="24" stroke-width="1.5" class="empty-icon" />
-        <span class="empty-text">在指板上按音以分析</span>
+        <!-- 空状态 -->
+        <div v-else class="empty-analysis-state">
+          <Music :size="24" stroke-width="1.5" class="empty-icon" />
+          <span class="empty-text">在指板上按音以分析</span>
+        </div>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { analyzeChordGraph, type CandidateResult, type NoteInput } from '@/utils/chordEngine';
-import { calcNoteLabel, calcPitchIndex } from '@/utils/musicTheory';
+import { calcNoteLabel, calcPitchIndex, canTogglePitchAccidental } from '@/utils/musicTheory';
 import { Music, Sparkles } from '@lucide/vue';
 import { useElementSize } from '@vueuse/core';
 import { computed, ref } from 'vue';
@@ -75,7 +91,6 @@ import { computed, ref } from 'vue';
 const editorStore = useEditorStore();
 const uiStore = useUiStore();
 
-// 🌟 获取右侧构成音区域的 DOM 引用和实时高度
 const rightSectionRef = ref<HTMLElement | null>(null);
 const { height: rightListHeight } = useElementSize(rightSectionRef);
 
@@ -97,7 +112,11 @@ const EXACT_INTERVAL_MAP: Record<number, string> = {
 interface RenderNoteItem extends NoteInput {
   isRoot: boolean;
   interval: string;
+  canAccidentalToggle: boolean;
 }
+
+let noteLongPressTimer: ReturnType<typeof setTimeout> | null = null;
+let isLongPressHandled = false;
 
 const analysis = computed(() => {
   const strings = editorStore.strings;
@@ -135,10 +154,14 @@ const analysis = computed(() => {
 
   const notes: RenderNoteItem[] = rawNotes.map(n => {
     const semitones = (n.pitchIndex - activeRootPitch + 12) % 12;
+    const stringObj = strings[n.stringIndex];
+    const canToggle = canTogglePitchAccidental(n.stringIndex, stringObj.fret, capo, baseStrings);
+
     return {
       ...n,
       interval: EXACT_INTERVAL_MAP[semitones] || `${semitones}半音`,
       isRoot: n.pitchIndex === activeRootPitch,
+      canAccidentalToggle: canToggle,
     };
   });
 
@@ -147,6 +170,13 @@ const analysis = computed(() => {
     candidates,
   };
 });
+
+const handleTogglePitchName = (sIdx: number) => {
+  const str = editorStore.strings[sIdx];
+  if (canTogglePitchAccidental(sIdx, str.fret, editorStore.capo, editorStore.activeBaseStrings)) {
+    str.preferFlat = !str.preferFlat;
+  }
+};
 
 const handleSelectCandidate = (candidate: CandidateResult) => {
   const isSelected = editorStore.currentChordName === candidate.chordName;
@@ -166,10 +196,56 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
     });
   }
 };
+
+const handleMobileNoteClick = (note: RenderNoteItem) => {
+  if (!uiStore.isMobile) return;
+
+  if (isLongPressHandled) {
+    isLongPressHandled = false;
+    return;
+  }
+
+  editorStore.strings.forEach((str, sIdx) => {
+    str.isRoot = sIdx === note.stringIndex;
+  });
+};
+
+const handleNoteTouchStart = (_e: TouchEvent, note: RenderNoteItem) => {
+  if (!uiStore.isMobile || !note.canAccidentalToggle) return;
+
+  isLongPressHandled = false;
+  if (noteLongPressTimer) clearTimeout(noteLongPressTimer);
+
+  noteLongPressTimer = setTimeout(() => {
+    isLongPressHandled = true;
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(30);
+    }
+    handleTogglePitchName(note.stringIndex);
+  }, 350);
+};
+
+const handleNoteTouchEnd = () => {
+  if (!uiStore.isMobile) return;
+  if (noteLongPressTimer) {
+    clearTimeout(noteLongPressTimer);
+    noteLongPressTimer = null;
+  }
+};
 </script>
 
 <style scoped lang="less">
 @import '@/assets/tokens.module';
+
+.chord-analysis-wrapper {
+  transition:
+    max-height @duration-slow @bezier-sidebar,
+    margin @duration-slow @bezier-sidebar,
+    opacity @duration-fast ease;
+  max-height: 500px;
+  overflow: hidden;
+  opacity: 1;
+}
 
 .chord-analysis-panel {
   position: absolute;
@@ -195,7 +271,6 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   z-index: 10;
   pointer-events: auto;
   box-sizing: border-box;
-  overflow-y: auto;
   overflow: hidden;
 }
 
@@ -304,6 +379,25 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   }
 }
 
+.empty-candidate-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.4rem 0;
+  border-radius: @radius-md;
+  background-color: var(--bg-body);
+  border: 1px dashed var(--border-light);
+  box-sizing: border-box;
+}
+
+.empty-candidate-text {
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: var(--text-disabled);
+  letter-spacing: -0.01em;
+}
+
 .notes-list {
   display: flex;
   flex-direction: column;
@@ -324,9 +418,20 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   transition: @transition-fast;
   box-sizing: border-box;
 
+  cursor: default;
+  user-select: none;
+
   &:hover {
     border-color: var(--border-base);
     background-color: var(--bg-panel-hover);
+  }
+
+  &.is-mobile-clickable {
+    cursor: pointer;
+
+    &:active {
+      transform: scale(0.98);
+    }
   }
 
   &.is-root {
@@ -410,17 +515,31 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
 /* 渐入渐出过渡动画 */
 .panel-fade-enter-active,
 .panel-fade-leave-active {
-  transition: all @duration-base @bezier-standard;
+  transition:
+    opacity @duration-base @bezier-standard,
+    transform @duration-base @bezier-standard;
 }
 
 .panel-fade-enter-from,
 .panel-fade-leave-to {
   opacity: 0;
-  transform: translateY(8px) scale(0.96);
+  transform: translateY(-6px) scale(0.98);
 }
 
 /* 📱 移动端自适应 */
 @media (max-width: 768px) {
+  .chord-analysis-wrapper {
+    width: 100%;
+    margin-bottom: 0.5rem;
+
+    &.is-empty-hidden {
+      max-height: 0;
+      margin-bottom: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+
   .chord-analysis-panel {
     position: relative;
     right: auto;
@@ -439,29 +558,35 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   }
 
   .candidates-section {
-    flex: 1.2;
+    flex: 1.8;
     display: flex;
     flex-direction: column;
   }
 
   .notes-section {
-    flex: 0.8;
+    flex: 0.2;
     display: flex;
     flex-direction: column;
   }
 
-  /* 🌟 左侧标签区域高度直接受右侧动态像素高度控制并支持独立滚动 */
   .candidate-tags {
     max-height: none !important;
     overflow-y: auto;
     box-sizing: border-box;
-    gap: 0.35rem; /* 稍微加大间距防拥挤 */
+    gap: 0.35rem;
   }
 
-  /* 🌟 移动端放大候选和弦胶囊标签 */
   .candidate-badge {
-    font-size: 0.78rem; /* 从 0.68rem 放大 */
-    padding: 0.32rem 0.7rem; /* 增加内边距，扩大触控热区 */
+    font-size: 0.78rem;
+    padding: 0.32rem 0.7rem;
+  }
+
+  .empty-candidate-placeholder {
+    padding: 0.6rem 0;
+  }
+
+  .empty-candidate-text {
+    font-size: 0.75rem;
   }
 
   .desktop-divider {

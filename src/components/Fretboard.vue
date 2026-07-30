@@ -381,7 +381,9 @@ const handlePointerDown = (e: PointerEvent) => {
   emit('drag-status-change', true);
   lastSIdx = -1;
   lastFIdx = -1;
+
   handleFingerClickLogic(e.clientX, e.clientY, false);
+
   cleanupListeners.push(useEventListener(window, 'pointermove', handlePointerMove));
   cleanupListeners.push(useEventListener(window, 'pointerup', handlePointerUp));
 };
@@ -588,9 +590,8 @@ onBeforeUnmount(() => {
 }
 
 .finger-circle {
-  transition:
-    fill @duration-fast ease,
-    filter @duration-fast ease;
+  /* 移除 fill 的渐变动画，确保高频点击状态切换时不会出现颜色插值闪白 */
+  transition: filter @duration-fast ease;
   filter: var(--finger-shadow);
 
   &.is-root-glow {

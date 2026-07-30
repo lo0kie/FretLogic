@@ -27,7 +27,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { defineAsyncComponent, ref, watch } from 'vue';
 import TopHeader from './header-top/TopHeader.vue';
-import Workbench from './Workbench.vue';
+import Workbench from './workbench/Workbench.vue';
 
 const SidebarLeft = defineAsyncComponent(() => import('./sidebar-left/SidebarLeft.vue'));
 
