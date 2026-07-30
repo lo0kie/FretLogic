@@ -3,7 +3,16 @@
     <TopHeader @export-image="handleExportImage" @toggle-theme="executeToggleThemeWithAnimation" />
 
     <div class="app-split-view-body">
-      <SidebarLeft />
+      <!-- 移动端抽屉遮罩 -->
+      <Transition name="drawer-fade">
+        <div
+          v-if="uiStore.isMobile && uiStore.isLeftOpen"
+          class="mobile-drawer-mask"
+          @click="uiStore.isLeftOpen = false"
+        ></div>
+      </Transition>
+
+      <SidebarLeft :class="{ 'is-mobile-drawer': uiStore.isMobile }" />
 
       <main class="app-main-content">
         <Workbench ref="workbenchRef" />
@@ -15,16 +24,26 @@
 <script setup lang="ts">
 import { useChordService } from '@/services/useChordService';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { defineAsyncComponent, ref } from 'vue';
+import { useUiStore } from '@/stores/uiStore';
+import { defineAsyncComponent, ref, watch } from 'vue';
 import TopHeader from './header-top/TopHeader.vue';
-import Workbench from './Workbench.vue';
+import Workbench from './workbench/Workbench.vue';
 
 const SidebarLeft = defineAsyncComponent(() => import('./sidebar-left/SidebarLeft.vue'));
 
+const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
 const chordService = useChordService();
 
 const workbenchRef = ref<InstanceType<typeof Workbench> | null>(null);
+
+watch(
+  () => uiStore.isMobile,
+  mobile => {
+    uiStore.isLeftOpen = !mobile;
+  },
+  { immediate: true }
+);
 
 const handleExportImage = (isTransparent: boolean) => {
   const captureEl = workbenchRef.value?.$el?.querySelector('.workbench-card') || workbenchRef.value?.$el;
@@ -86,8 +105,6 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-width: 1628px;
-  min-height: 880px;
   box-sizing: border-box;
 }
 
@@ -105,5 +122,33 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
   inset: 0;
   z-index: 1;
   pointer-events: none;
+}
+
+.mobile-drawer-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+:deep(.panel-left.is-mobile-drawer) {
+  position: fixed;
+  top: 3.2rem;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-xl);
+}
+
+.drawer-fade-enter-active,
+.drawer-fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.drawer-fade-enter-from,
+.drawer-fade-leave-to {
+  opacity: 0;
 }
 </style>

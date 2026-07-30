@@ -4,7 +4,7 @@
 
     <Teleport to="body">
       <div
-        v-if="show && (content || $slots.content)"
+        v-if="show && !uiStore.isMobile && (content || $slots.content)"
         ref="floatingRef"
         class="tooltip-floating-wrapper"
         :style="floatingStyles"
@@ -22,8 +22,10 @@
 </template>
 
 <script setup lang="ts">
+import { useUiStore } from '@/stores/uiStore';
 import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/vue';
 import { computedAsync } from '@vueuse/core';
+import { DOMPurify } from 'dompurify';
 import { computed, ref } from 'vue';
 
 type TooltipTheme = 'dark' | 'light' | 'auto';
@@ -40,11 +42,12 @@ const props = withDefaults(
   }
 );
 
+const uiStore = useUiStore();
 const show = ref(false);
 const referenceRef = ref<HTMLElement | null>(null);
 const floatingRef = ref<HTMLElement | null>(null);
 
-let cachedDOMPurify: any = null;
+let cachedDOMPurify: DOMPurify | null = null;
 
 const sanitizedHtmlContent = computedAsync(async () => {
   if (!show.value || !props.content) return '';
@@ -56,7 +59,7 @@ const sanitizedHtmlContent = computedAsync(async () => {
     cachedDOMPurify = dompurifyModule.default || dompurifyModule;
   }
 
-  return cachedDOMPurify.sanitize(rawHtml);
+  return cachedDOMPurify.sanitize(rawHtml ?? '');
 }, '');
 
 const { floatingStyles } = useFloating(referenceRef, floatingRef, {

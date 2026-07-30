@@ -4,6 +4,7 @@ import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
 import { copyElementToClipboard } from '@/utils/domExporter';
+import { generateUUID } from '@/utils/validators';
 import { Ref, toRaw, unref } from 'vue';
 import { SortableEvent } from 'vue-draggable-plus';
 
@@ -19,6 +20,8 @@ export function useChordService() {
     editorStore.fretCount = chord.fretCount ?? 3;
     editorStore.capo = chord.capo ?? 0;
     editorStore.currentTuning = chord.tuning || 'STANDARD';
+
+    if (uiStore.isMobile) uiStore.isLeftOpen = false;
   };
 
   const executeGroupToggle = (gid: string) => {
@@ -116,6 +119,11 @@ export function useChordService() {
 
     if (!chordStore.selectedGroupId) {
       uiStore.toast.warning('保存失败：请先展开或选择一个目标分组');
+
+      if (uiStore.isMobile) {
+        uiStore.isLeftOpen = true;
+      }
+
       return;
     }
 
@@ -124,7 +132,7 @@ export function useChordService() {
       : chordStore.selectedGroupId;
 
     const rawPayload: Omit<Chord, 'fingerprint'> = {
-      id: editorStore.editingId || 'c_' + crypto.randomUUID().slice(0, 10),
+      id: editorStore.editingId || 'c_' + generateUUID().slice(0, 10),
       chordName: cleanName,
       strings: cloneDeep(toRaw(editorStore.strings)),
       fretCount: editorStore.fretCount,

@@ -116,7 +116,8 @@
             hoverPoint.fretIndex > 0 &&
             hoverPoint.fretIndex <= fretCount &&
             hoverPoint.stringIndex >= 0 &&
-            hoverPoint.stringIndex <= 5
+            hoverPoint.stringIndex <= 5 &&
+            !uiStore.isMobile
           "
           class="finger-predictive"
         >
@@ -180,6 +181,7 @@ import { useEventListener } from '@vueuse/core';
 import { computed, onBeforeUnmount, onMounted, ref, toRaw } from 'vue';
 
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { useUiStore } from '@/stores/uiStore';
 import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
 import {
   CANVAS_CONFIG,
@@ -203,6 +205,8 @@ const props = withDefaults(
   }>(),
   { activeBaseStrings: () => DEFAULT_TUNING_MAPPING, isDarkMode: false, interactive: true, scale: 1.0 }
 );
+
+const uiStore = useUiStore();
 
 const emit = defineEmits<{
   (e: 'update:strings', value: GuitarStringsModel): void;
@@ -377,7 +381,9 @@ const handlePointerDown = (e: PointerEvent) => {
   emit('drag-status-change', true);
   lastSIdx = -1;
   lastFIdx = -1;
+
   handleFingerClickLogic(e.clientX, e.clientY, false);
+
   cleanupListeners.push(useEventListener(window, 'pointermove', handlePointerMove));
   cleanupListeners.push(useEventListener(window, 'pointerup', handlePointerUp));
 };
@@ -584,9 +590,8 @@ onBeforeUnmount(() => {
 }
 
 .finger-circle {
-  transition:
-    fill @duration-fast ease,
-    filter @duration-fast ease;
+  /* 移除 fill 的渐变动画，确保高频点击状态切换时不会出现颜色插值闪白 */
+  transition: filter @duration-fast ease;
   filter: var(--finger-shadow);
 
   &.is-root-glow {
@@ -596,5 +601,31 @@ onBeforeUnmount(() => {
 
 .finger-text {
   transition: fill @duration-fast ease;
+}
+
+@media (max-width: 768px) {
+  .open-string-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+    transform: translateY(10px);
+
+    &.is-fret-available:active {
+      transform: translateY(10px) scale(0.92);
+    }
+  }
+
+  .mute-icon {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+
+  .open-note-text {
+    font-size: 1.5rem;
+  }
+
+  .fretboard-svg text:not(.finger-text) {
+    transform: translateX(15px);
+    font-size: 18px;
+  }
 }
 </style>

@@ -264,4 +264,30 @@ defineExpose({
   opacity: 0;
   transform: scale(0.92) translateY(-4px);
 }
+
+/* 📱 移动端右键菜单放大适配 */
+@media (max-width: 768px) {
+  .context-menu-box {
+    min-width: 160px; /* 稍微增加最小宽度 */
+    padding: 0.4rem;
+    gap: 0.2rem;
+    border-radius: calc(@radius-lg * 1.2);
+  }
+
+  .menu-title {
+    padding: 0.35rem 0.8rem 0.2rem;
+    font-size: 0.78rem; /* 放大标题字号 */
+  }
+
+  .menu-divider {
+    margin: 0.2rem 0.3rem 0.25rem;
+  }
+
+  .menu-item {
+    padding: 0.65rem 0.85rem; /* 增加上下左右内边距，扩大手指点击热区 */
+    font-size: 0.88rem; /* 从 0.73rem 放大 */
+    gap: 0.6rem;
+    border-radius: calc(@radius-md * 1.2);
+  }
+}
 </style>
