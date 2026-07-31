@@ -1,15 +1,16 @@
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
-      <div v-if="visible" class="modal-overlay-container">
+      <div v-if="visible" class="modal-overlay-container" v-bind="$attrs">
         <div class="modal-mask" @click="closeOnMask && handleCancel()"></div>
 
+        <!-- 🌟 支持传入 w-80、w-wide 等宽度 class -->
         <div class="modal-card" :class="width">
           <h3 v-if="title" class="modal-title" :title="title">
             {{ title }}
           </h3>
 
-          <div class="modal-body-content no-scrollbar" :style="{ paddingBottom: showFooter ? '0.85rem' : ' 1.5rem' }">
+          <div class="modal-body-content no-scrollbar" :style="{ paddingBottom: showFooter ? '0.85rem' : '1.5rem' }">
             <slot></slot>
           </div>
 
@@ -39,6 +40,8 @@
 import { useEventListener, useScrollLock } from '@vueuse/core';
 import { watch } from 'vue';
 import ActionButton from './ActionButton.vue';
+
+defineOptions({ inheritAttrs: false });
 
 const props = withDefaults(
   defineProps<{
@@ -134,8 +137,20 @@ const handleCancel = () => {
   box-shadow: @shadow-floating;
   animation: cardPopIn @duration-base @bezier-bounce forwards;
 
+  /* 🌟 预设宽度配置 */
   &.w-80 {
     width: 20rem;
+  }
+
+  &.w-large {
+    width: 38rem;
+    max-width: 90vw;
+  }
+
+  /* 🌟 4 列指板专用宽弹窗 */
+  &.w-wide {
+    width: 52rem;
+    max-width: 92vw;
   }
 }
 

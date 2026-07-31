@@ -11,6 +11,7 @@ export const useUiStore = defineStore('ui', () => {
   const isPreviewEnabled = useStorage('CHORD_LAB_UI_PREVIEW_ENABLED', false);
 
   const timersMap = new Map<number, ReturnType<typeof setTimeout>>();
+  const scoreActiveTab = ref<'edit' | 'interactive'>('interactive');
 
   const clearActionToasts = () => {
     toasts.value = toasts.value.filter(t => !t.hasAction);
@@ -87,5 +88,6 @@ export const useUiStore = defineStore('ui', () => {
     resumeAllTimers,
     isPreviewEnabled,
     isMobile,
+    scoreActiveTab,
   };
 });

@@ -11,7 +11,6 @@
         </div>
 
         <template v-if="analysis.notes.length > 0">
-          <!-- 左右两栏包裹容器 (Flex 布局) -->
           <div class="analysis-flex-container">
             <!-- 1. 候选和弦胶囊标签组 -->
             <div class="section-block candidates-section">
@@ -32,7 +31,6 @@
                   </button>
                 </template>
 
-                <!-- 无推荐候选时的占位提示 -->
                 <div v-else class="empty-candidate-placeholder">
                   <span class="empty-candidate-text">暂无匹配和弦</span>
                 </div>
@@ -41,7 +39,7 @@
 
             <div class="panel-divider desktop-divider" />
 
-            <!-- 2. 构成音明细列表 (PC端纯展示，移动端绑定专属交互) -->
+            <!-- 2. 构成音明细列表 -->
             <div class="section-block is-grow notes-section">
               <div class="section-label">构成音 (低音 ➔ 高音)</div>
               <div class="notes-list" ref="rightSectionRef">
@@ -512,7 +510,6 @@ const handleNoteTouchEnd = () => {
   letter-spacing: -0.01em;
 }
 
-/* 渐入渐出过渡动画 */
 .panel-fade-enter-active,
 .panel-fade-leave-active {
   transition:
@@ -526,7 +523,6 @@ const handleNoteTouchEnd = () => {
   transform: translateY(-6px) scale(0.98);
 }
 
-/* 📱 移动端自适应 */
 @media (max-width: 768px) {
   .chord-analysis-wrapper {
     width: 100%;
@@ -550,7 +546,6 @@ const handleNoteTouchEnd = () => {
     box-shadow: var(--shadow-md);
   }
 
-  /* 左右两列水平排布 */
   .analysis-flex-container {
     flex-direction: row;
     align-items: flex-start;

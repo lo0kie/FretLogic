@@ -1,44 +1,56 @@
 <template>
   <div class="panel-left" :class="{ 'is-open': uiStore.isLeftOpen }" v-bind="$attrs">
-    <!-- 1. 顶栏：搜索与操作区 -->
+    <!-- 1. 顶栏：根据路由动态显示标题与交互图标 -->
     <div class="panel-header">
-      <BaseInput
-        v-model="searchQuery"
-        :disabled="chordStore.savedChordsList.length === 0"
-        placeholder="搜索和弦..."
-        clearable
-        fontSize="xs"
-      >
-        <template #prefix>
-          <Search class="search-icon" :size="16" stroke-width="2.5" />
-        </template>
-      </BaseInput>
-
-      <div class="header-actions-single">
-        <GlobalTooltip
-          placement="bottom"
-          :content="uiStore.isPreviewEnabled ? '关闭和弦悬浮预览' : '开启和弦悬浮预览'"
-          class="hidden-mobile"
+      <template v-if="route.path === '/'">
+        <BaseInput
+          v-model="searchQuery"
+          :disabled="chordStore.savedChordsList.length === 0"
+          placeholder="搜索和弦..."
+          clearable
+          fontSize="xs"
         >
-          <ActionButton
-            @click="uiStore.isPreviewEnabled = !uiStore.isPreviewEnabled"
-            :variant="uiStore.isPreviewEnabled ? 'subtle' : 'ghost'"
-            icon-only
-            size="md"
-          >
-            <component :is="uiStore.isPreviewEnabled ? Eye : EyeOff" :size="16" :stroke-width="2.5" />
-          </ActionButton>
-        </GlobalTooltip>
+          <template #prefix>
+            <Search class="search-icon" :size="16" stroke-width="2.5" />
+          </template>
+        </BaseInput>
 
-        <GlobalTooltip placement="bottom" content="新建分组">
-          <ActionButton @click="openCreate" variant="subtle" icon-only>
+        <div class="header-actions-single">
+          <GlobalTooltip
+            placement="bottom"
+            :content="uiStore.isPreviewEnabled ? '关闭和弦悬浮预览' : '开启和弦悬浮预览'"
+            class="hidden-mobile"
+          >
+            <ActionButton
+              @click="uiStore.isPreviewEnabled = !uiStore.isPreviewEnabled"
+              :variant="uiStore.isPreviewEnabled ? 'subtle' : 'ghost'"
+              icon-only
+              size="md"
+            >
+              <component :is="uiStore.isPreviewEnabled ? Eye : EyeOff" :size="16" :stroke-width="2.5" />
+            </ActionButton>
+          </GlobalTooltip>
+
+          <GlobalTooltip placement="bottom" content="新建分组">
+            <ActionButton @click="openCreate" variant="subtle" icon-only>
+              <Plus :size="18" :stroke-width="3" />
+            </ActionButton>
+          </GlobalTooltip>
+        </div>
+      </template>
+
+      <!-- 🌟 曲谱页面专属 Sidebar 顶栏 -->
+      <template v-else-if="route.path === '/score'">
+        <span class="sidebar-title">乐谱列表</span>
+        <GlobalTooltip placement="bottom" content="新建乐谱">
+          <ActionButton @click="openCreateSongModal" variant="subtle" icon-only>
             <Plus :size="18" :stroke-width="3" />
           </ActionButton>
         </GlobalTooltip>
-      </div>
+      </template>
     </div>
 
-    <!-- 2. 分组及和弦列表容器 (自动撑满剩余高度并内部滚动) -->
+    <!-- 🌟 2. 共享核心容器组件 LeftGroupList -->
     <LeftGroupList
       :search-query="debouncedQuery"
       @open-rename="openRename"
@@ -46,8 +58,8 @@
       @open-move="openMove"
     />
 
-    <!-- 3. 底栏：导入/导出操作区 (绝对锁定在最底端) -->
-    <div class="left-panel-footer">
+    <!-- 3. 底栏：导入/导出（工作台下渲染） -->
+    <div v-if="route.path === '/'" class="left-panel-footer">
       <input type="file" ref="fileInputRef" accept=".json" @change="handleFileChange" class="hidden-input" />
 
       <div class="footer-grid">
@@ -72,7 +84,7 @@
     </div>
   </div>
 
-  <!-- Modal 弹窗 -->
+  <!-- 和弦分组 Modals -->
   <BaseModal v-model:visible="modals.create" title="新建分组" @confirm="handleCreateGroup">
     <BaseInput
       v-model="modalData.inputValue"
@@ -125,6 +137,17 @@
       </GlobalTooltip>
     </div>
   </BaseModal>
+
+  <!-- 新建乐谱 Modal -->
+  <BaseModal v-model:visible="isSongCreateOpen" title="新建乐谱" @confirm="handleCreateSong">
+    <BaseInput
+      ref="songTitleInputRef"
+      v-model="newSongTitle"
+      placeholder="请输入乐谱名称..."
+      clearable
+      @enter="handleCreateSong"
+    />
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -133,21 +156,25 @@ import BaseInput from '@/components/BaseInput.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
-import LeftGroupList from '@/layouts/sidebar-left/LeftGroupList.vue';
 import { useImportExportService } from '@/services/useImportExportService';
 import { useChordStore } from '@/stores/chordStore';
 import { useEditorStore } from '@/stores/editorStore';
+import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group } from '@/types';
 import { generateUUID } from '@/utils/validators';
 import { Download, Eye, EyeOff, Plus, Search, Upload } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
 import { nextTick, reactive, ref } from 'vue';
+import { useRoute } from 'vue-router';
+import LeftGroupList from './LeftGroupList.vue';
 
 defineOptions({ inheritAttrs: false });
 
+const route = useRoute();
 const uiStore = useUiStore();
 const chordStore = useChordStore();
+const songStore = useSongStore();
 const editorStore = useEditorStore();
 const ioService = useImportExportService();
 
@@ -163,8 +190,26 @@ const modalData = reactive({
   moveTargetId: '',
 });
 
+const isSongCreateOpen = ref(false);
+const newSongTitle = ref('');
+const songTitleInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
+
 const createInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
 const renameInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
+
+const openCreateSongModal = async () => {
+  newSongTitle.value = '';
+  isSongCreateOpen.value = true;
+  await nextTick();
+  setTimeout(() => songTitleInputRef.value?.focus(), 50);
+};
+
+const handleCreateSong = () => {
+  if (!newSongTitle.value.trim()) return;
+  songStore.createSong(newSongTitle.value);
+  newSongTitle.value = '';
+  isSongCreateOpen.value = false;
+};
 
 const getGroupClass = (groupId: string) => {
   if (groupId === modalData.activeChord?.groupId) return 'is-disabled';
@@ -303,7 +348,7 @@ const handleMoveChord = () => {
 
 .panel-header {
   padding: 0 1rem;
-  height: 76px;
+  height: 2.8rem;
   border-bottom: 1px solid var(--control-border);
   display: flex;
   align-items: center;
@@ -319,6 +364,13 @@ const handleMoveChord = () => {
   }
 }
 
+.sidebar-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--text-title);
+  letter-spacing: -0.01em;
+}
+
 :deep(.left-group-list) {
   flex: 1 !important;
   min-height: 0 !important;
@@ -332,12 +384,13 @@ const handleMoveChord = () => {
   gap: 0.35rem;
   flex-shrink: 0;
 }
+
 .search-icon {
   color: var(--text-disabled);
 }
 
 .left-panel-footer {
-  padding: 1rem 1.25rem;
+  padding: 0.8rem 1rem;
   border-top: 1px solid var(--control-border);
   background-color: var(--bg-panel);
   box-sizing: border-box;
@@ -348,12 +401,14 @@ const handleMoveChord = () => {
 .hidden-input {
   display: none;
 }
+
 .footer-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.7rem;
+  gap: 0.5rem;
   box-sizing: border-box;
 }
+
 .modal-description-text {
   font-size: 0.75rem;
   font-weight: 500;
@@ -361,6 +416,7 @@ const handleMoveChord = () => {
   color: var(--text-body);
   margin: 0;
 }
+
 .move-group-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -370,11 +426,13 @@ const handleMoveChord = () => {
   padding: 0.1rem;
   box-sizing: border-box;
 }
+
 .move-tooltip-item {
   width: 100%;
   min-width: 0;
   display: flex;
 }
+
 .move-target-btn {
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -400,6 +458,7 @@ const handleMoveChord = () => {
       color: rgba(255, 255, 255, 0.4);
     }
   }
+
   &.is-selected {
     background-color: var(--color-primary);
     color: #ffffff;
@@ -407,21 +466,26 @@ const handleMoveChord = () => {
     box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary), transparent 60%);
     transform: scale(1.02);
   }
+
   &:active:not(.is-disabled) {
     transform: scale(0.95);
   }
+
   &.is-normal {
     background-color: var(--bg-body);
     color: var(--text-body);
+
     &:hover {
       border-color: @primary;
       background-color: var(--bg-panel-hover);
     }
   }
 }
+
 .move-marquee {
   min-width: 0;
   width: 100%;
+
   span {
     display: block;
     overflow: hidden;
@@ -430,17 +494,14 @@ const handleMoveChord = () => {
   }
 }
 
-/* 📱 移动端自适应适配 */
 @media (max-width: 768px) {
   .panel-left {
     height: calc(100vh - 3.2rem) !important;
   }
 
   .panel-header {
-    height: 3.5rem !important;
+    height: 3.2rem !important;
     padding: 0 0.8rem;
-    display: flex;
-    align-items: center;
   }
 
   .left-panel-footer {
@@ -454,24 +515,6 @@ const handleMoveChord = () => {
 
   .hidden-mobile {
     display: none !important;
-  }
-
-  .modal-description-text {
-    font-size: 0.85rem;
-    line-height: 1.65;
-  }
-
-  /* 🌟 移动端网格调整为 2列，增大点击与显示空间 */
-  .move-group-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
-  }
-
-  /* 🌟 移动端分组移动按钮与文本加大 */
-  .move-target-btn {
-    padding: 0.75rem 0.9rem;
-    font-size: 0.88rem;
-    border-radius: calc(@radius-lg * 1.1);
   }
 }
 </style>
