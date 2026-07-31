@@ -25,8 +25,9 @@
       </div>
     </div>
 
-    <!-- 2. 中间：工作台试听/导出胶囊 -->
+    <!-- 2. 中间：试听 / 导出胶囊 -->
     <div class="header-section section-center">
+      <!-- 工作台模式：试听 + 导出透明/带背景指板 -->
       <div v-if="route.path === '/'" class="segmented-control-capsule">
         <GlobalTooltip content="播放/试听当前和弦" placement="bottom">
           <ActionButton
@@ -63,6 +64,18 @@
             @click="$emit('export-image', false)"
           >
             <Copy :size="16" stroke-width="2" />
+          </ActionButton>
+        </GlobalTooltip>
+      </div>
+
+      <!-- 🌟 乐谱库模式：点击打开导出配置 Modal -->
+      <div v-else-if="route.path === '/score' && songStore.activeSong" class="segmented-control-capsule">
+        <GlobalTooltip content="导出乐谱图片配置" placement="bottom">
+          <ActionButton size="sm" variant="subtle" :disabled="uiStore.isCopying" @click="$emit('open-score-export')">
+            <template #prefix>
+              <Image :size="15" stroke-width="2.5" />
+            </template>
+            导出乐谱图片
           </ActionButton>
         </GlobalTooltip>
       </div>
@@ -135,6 +148,7 @@ import SyncSettingsCard from './SyncSettingsCard.vue';
 
 defineEmits<{
   (e: 'export-image', isTransparent: boolean): void;
+  (e: 'open-score-export'): void;
   (e: 'toggle-theme', event: MouseEvent): void;
 }>();
 

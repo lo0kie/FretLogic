@@ -2,10 +2,13 @@
   <GlobalToast />
 
   <div class="app-window-shell">
-    <TopHeader @export-image="handleExportImage" @toggle-theme="executeToggleThemeWithAnimation" />
+    <TopHeader
+      @export-image="handleExportImage"
+      @open-score-export="handleOpenScoreExport"
+      @toggle-theme="executeToggleThemeWithAnimation"
+    />
 
     <div class="app-split-view-body">
-      <!-- 📱 移动端抽屉遮罩 -->
       <Transition name="drawer-fade">
         <div
           v-if="uiStore.isMobile && uiStore.isLeftOpen && route.meta.showSidebar"
@@ -14,12 +17,13 @@
         ></div>
       </Transition>
 
-      <!-- 🌟 根据路由元信息决定是否渲染左侧侧边栏 -->
       <SidebarLeft :class="{ 'is-mobile-drawer': uiStore.isMobile }" />
 
-      <!-- 主视图路由出口（工作台 / 乐谱库） -->
+      <!-- 主视图路由出口 -->
       <main class="app-main-content">
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <component :is="Component" ref="activeViewRef" />
+        </router-view>
       </main>
     </div>
   </div>
@@ -29,30 +33,42 @@
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import TopHeader from '@/views/header-top/TopHeader.vue';
-import { defineAsyncComponent, watch } from 'vue';
-import { useRoute } from 'vue-router'; // 🌟 引入 useRoute
+import { defineAsyncComponent, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import GlobalToast from './components/GlobalToast.vue';
 
 const SidebarLeft = defineAsyncComponent(() => import('./views/sidebar-left/SidebarLeft.vue'));
 
-const route = useRoute(); // 🌟 获取当前路由实例
+const route = useRoute();
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
 
-watch(
-  () => uiStore.isMobile,
-  mobile => {
-    uiStore.isLeftOpen = !mobile;
-  },
-  { immediate: true }
-);
+// 🌟 抓住当前活跃的路由组件引用 (ScoreView)
+const activeViewRef = ref<any>(null);
+
+const handleOpenScoreExport = () => {
+  // 🌟 优先通过 ScoreView.vue 的 defineExpose({ openExportModal }) 触发
+  if (activeViewRef.value && typeof activeViewRef.value.openExportModal === 'function') {
+    activeViewRef.value.openExportModal();
+  } else {
+    // 降级触发事件机制
+    window.dispatchEvent(new CustomEvent('open-score-export-modal'));
+  }
+};
 
 const handleExportImage = (isTransparent: boolean) => {
-  const workbenchEl = document.querySelector('.workbench-card') as HTMLElement;
-  if (workbenchEl) {
+  let targetEl: HTMLElement | null = null;
+
+  if (route.path === '/') {
+    targetEl = document.querySelector('.workbench-card') as HTMLElement;
+  } else if (route.path === '/score') {
+    targetEl = document.querySelector('.interactive-score-zone') as HTMLElement;
+  }
+
+  if (targetEl) {
     import('@/services/useChordService').then(({ useChordService }) => {
       const chordService = useChordService();
-      chordService.exportFretboardImage(workbenchEl, isTransparent);
+      chordService.exportFretboardImage(targetEl, isTransparent);
     });
   }
 };
