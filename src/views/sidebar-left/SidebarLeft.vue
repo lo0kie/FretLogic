@@ -90,6 +90,7 @@
       ref="groupModals.createInputRef"
       placeholder="请输入分组名称..."
       clearable
+      autofocus
       @enter="groupModals.handleCreateGroup"
     />
   </BaseModal>
@@ -99,6 +100,7 @@
       v-model="groupModals.modalData.inputValue"
       ref="groupModals.renameInputRef"
       placeholder="请输入新名称..."
+      autofocus
       clearable
       @enter="groupModals.handleRenameGroup"
     />
@@ -144,10 +146,10 @@
     @confirm="songModals.handleCreateSong"
   >
     <BaseInput
-      ref="songTitleInputRef"
       v-model="songModals.newSongTitle.value"
       placeholder="请输入乐谱名称..."
       clearable
+      autofocus
       @enter="songModals.handleCreateSong"
     />
   </BaseModal>
@@ -176,7 +178,6 @@ defineOptions({ inheritAttrs: false });
 const searchQuery = ref('');
 const debouncedQuery = refDebounced(searchQuery, 150);
 const fileInputRef = ref<HTMLInputElement | null>(null);
-const songTitleInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
 
 const route = useRoute();
 const uiStore = useUiStore();
@@ -185,7 +186,7 @@ const songStore = useSongStore();
 const ioService = useImportExportService();
 
 const groupModals = useChordGroupModals();
-const songModals = useSongModals(songTitleInputRef);
+const songModals = useSongModals();
 
 const handleImportTrigger = () => fileInputRef.value?.click();
 

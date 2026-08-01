@@ -81,3 +81,5 @@ export const copyElementToClipboard = async (
     await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
   }
 };
+
+export const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));

@@ -25,9 +25,11 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   });
 
   // 🌟 当前乐谱是否有有效歌词
-  const hasLyrics = computed(() => {
-    return Boolean(activeSong.value?.lyrics && activeSong.value.lyrics.trim().length > 0);
-  });
+  const hasLyrics = computed(() => Boolean(activeSong.value?.lyrics && activeSong.value.lyrics.trim().length > 0));
+
+  if (hasLyrics.value) {
+    activeTabRef.value = 'interactive';
+  }
 
   // 🌟 受约束的 activeTabGetter / Setter
   const activeTab = computed({
@@ -118,6 +120,12 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
+  const updatePlayKey = (playKey: string) => {
+    if (activeSong.value) {
+      activeSong.value.playKey = playKey;
+    }
+  };
+
   return {
     activeSongId,
     activeTab,
@@ -127,6 +135,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     isEmpty,
     setActiveSong,
     updateKey,
+    updatePlayKey,
     updateCapo,
     updateLyrics,
     setSlotChord,

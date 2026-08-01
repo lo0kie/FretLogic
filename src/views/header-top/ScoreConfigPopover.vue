@@ -1,6 +1,6 @@
 <template>
   <div class="popover-wrapper" ref="popoverContainerRef">
-    <GlobalTooltip content="曲谱配置 (调性 / Capo / 模式)" placement="bottom">
+    <GlobalTooltip content="曲谱配置 (演唱调 / 指法调 / Capo)" placement="bottom">
       <ActionButton icon-only variant="ghost" :active="isConfigOpen" @click="isConfigOpen = !isConfigOpen">
         <SlidersHorizontal :size="18" stroke-width="2.2" />
       </ActionButton>
@@ -8,20 +8,35 @@
 
     <Transition name="dropdown-fade">
       <div v-if="isConfigOpen && scoreEditor.activeSong" class="config-popover-card" ref="cardRef">
-        <!-- 1. 调性 (Key) 选择 -->
+        <!-- 1. 演唱调 (Key) -->
         <div class="config-row">
-          <label class="config-label">调性 (Key)</label>
+          <label class="config-label">演唱调 (Key)</label>
           <div class="key-select-wrapper">
             <BaseSelector
               :model-value="scoreEditor.activeSong.key || 'C'"
               :options="KEY_OPTIONS"
               default-value="C"
               @update:model-value="val => scoreEditor.updateKey(val)"
+              :labelFormatter="val => `${val} 调`"
             />
           </div>
         </div>
 
-        <!-- 2. 变调夹 (Capo) -->
+        <!-- 2. 指法调式 (PlayKey) -->
+        <div class="config-row">
+          <label class="config-label">指法调 (Play)</label>
+          <div class="key-select-wrapper">
+            <BaseSelector
+              :model-value="scoreEditor.activeSong.playKey || 'C'"
+              :options="KEY_OPTIONS"
+              default-value="C"
+              @update:model-value="val => scoreEditor.updatePlayKey(val)"
+              :labelFormatter="val => `${val} 调`"
+            />
+          </div>
+        </div>
+
+        <!-- 3. 变调夹 (Capo) -->
         <div class="config-row">
           <label class="config-label">变调夹 (Capo)</label>
           <BaseNumberInput
@@ -32,12 +47,6 @@
             @update:model-value="val => scoreEditor.updateCapo(val)"
           />
         </div>
-
-        <!-- 3. 编辑模式 -->
-        <div class="config-row">
-          <label class="config-label">编辑模式</label>
-          <BaseSegmentedControl v-model="scoreEditor.activeTab" :options="scoreModeOptions" @change="handleTabChange" />
-        </div>
       </div>
     </Transition>
   </div>
@@ -46,39 +55,20 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import BaseNumberInput from '@/components/BaseNumberInput.vue';
-import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useUiStore } from '@/stores/uiStore';
 import { SlidersHorizontal } from '@lucide/vue';
 import { onClickOutside } from '@vueuse/core';
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 
 const scoreEditor = useScoreEditorStore();
-const uiStore = useUiStore();
-
-// 🌟 使用 computed 响应式传入 item.disabled 属性
-const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive'>[]>(() => [
-  { label: '编辑歌词', value: 'edit' },
-  {
-    label: '排列和弦',
-    value: 'interactive',
-    disabled: !scoreEditor.hasLyrics, // 无歌词时直接禁用选项
-  },
-]);
 
 const KEY_OPTIONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
 const isConfigOpen = ref(false);
 const popoverContainerRef = ref<HTMLDivElement | null>(null);
 const cardRef = ref<HTMLDivElement | null>(null);
-
-const handleTabChange = (val: 'edit' | 'interactive') => {
-  if (val === 'interactive' && !scoreEditor.hasLyrics) {
-    uiStore.toast.warning('请先在“编辑歌词”模式下输入歌词内容');
-  }
-};
 
 onClickOutside(
   popoverContainerRef,

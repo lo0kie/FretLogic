@@ -35,15 +35,8 @@
               v-model="editorStore.currentTuning"
               :options="tuningOptions"
               :default-value="TuningEnum.STANDARD"
-            >
-              <template #label="{ selected }">
-                {{ TUNING_PRESETS[selected]?.name || TuningEnum.STANDARD }}
-              </template>
-
-              <template #option="{ option }">
-                <span class="option-text-truncate">{{ TUNING_PRESETS[option]?.name }}</span>
-              </template>
-            </BaseSelector>
+              :formatter="val => TUNING_PRESETS[val]?.name || TuningEnum.STANDARD"
+            />
           </div>
         </div>
       </div>

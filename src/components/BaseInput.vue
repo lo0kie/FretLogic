@@ -12,6 +12,7 @@
       type="text"
       :placeholder="placeholder"
       :disabled="disabled"
+      :autofocus="autofocus"
       class="base-input-field"
       :class="[
         sizeClass,
@@ -38,7 +39,7 @@
 
 <script setup lang="ts">
 import { X } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -49,6 +50,8 @@ const props = withDefaults(
     isPassword?: boolean;
     size?: 'sm' | 'md' | 'lg';
     fontSize?: 'xs' | 'md' | 'lg';
+    /** 挂载后自动聚焦 */
+    autofocus?: boolean;
   }>(),
   {
     placeholder: '',
@@ -57,6 +60,7 @@ const props = withDefaults(
     isPassword: false,
     size: 'md',
     fontSize: 'md',
+    autofocus: false,
   }
 );
 
@@ -91,6 +95,15 @@ const handleClear = () => {
   emit('clear');
   inputRef.value?.focus();
 };
+
+onMounted(() => {
+  if (props.autofocus) {
+    // nextTick 确保 DOM 已就绪（尤其在 Modal / Transition 内更可靠）
+    nextTick(() => {
+      inputRef.value?.focus();
+    });
+  }
+});
 
 defineExpose({
   focus: () => inputRef.value?.focus(),

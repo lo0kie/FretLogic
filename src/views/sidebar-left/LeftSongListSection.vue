@@ -31,7 +31,7 @@
           </BaseMarquee>
 
           <div class="song-meta-badges">
-            <span class="meta-tag">{{ song.key || 'C' }}调</span>
+            <span class="meta-tag">{{ song.playKey || 'C' }}调</span>
             <span class="meta-tag">Capo {{ song.capo || 0 }}</span>
           </div>
         </div>
@@ -42,10 +42,10 @@
   <!-- 乐谱重命名 Modal -->
   <BaseModal v-model:visible="isSongRenameOpen" title="重命名乐谱" @confirm="handleRenameSong">
     <BaseInput
-      ref="songRenameInputRef"
       v-model="songRenameTitle"
       placeholder="请输入新的乐谱名称..."
       clearable
+      autofocus
       @enter="handleRenameSong"
     />
   </BaseModal>
@@ -61,7 +61,7 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
 import { Music, SquarePen, Trash2 } from '@lucide/vue';
-import { nextTick, onBeforeUpdate, ref } from 'vue';
+import { onBeforeUpdate, ref } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 
 const songStore = useSongStore();
@@ -71,7 +71,6 @@ const uiStore = useUiStore();
 const isSongRenameOpen = ref(false);
 const songRenameTitle = ref('');
 const targetSong = ref<Song | null>(null);
-const songRenameInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
 
 // 🌟 管理右键菜单的实例引用 Map
 const contextMenuRefsMap = ref<Record<string, InstanceType<typeof GlobalContextMenu>>>({});
@@ -102,12 +101,10 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => [
   {
     label: '重命名',
     icon: SquarePen,
-    action: async () => {
+    action: () => {
       targetSong.value = song;
       songRenameTitle.value = song.title;
       isSongRenameOpen.value = true;
-      await nextTick();
-      setTimeout(() => songRenameInputRef.value?.focus(), 50);
     },
   },
   {
@@ -118,16 +115,38 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => [
       if (scoreEditor.activeSongId === song.id) {
         scoreEditor.setActiveSong(null);
       }
+
+      // 🌟 1. 执行删除
       songStore.deleteSong(song.id);
+
+      // 🌟 2. 弹出带有撤销按钮的 Toast 提示（复用自 triggerDeleteChord 的模式）[cite: 3]
+      uiStore.toast.info(`已删除乐谱 "${song.title}"`, {
+        actionText: '撤销',
+        duration: 4000,
+        onAction: () => {
+          songStore.undoDeleteSong();
+          uiStore.toast.success('已恢复刚才删除的乐谱');
+        },
+      });
     },
   },
 ];
 
 const handleSelectSong = (songId: string) => {
   if (scoreEditor.activeSongId === songId) {
+    // 再次点击同一首 → 取消选中
     scoreEditor.setActiveSong(null);
   } else {
+    // 选中新乐谱
     scoreEditor.setActiveSong(songId);
+
+    // 🌟 根据是否有歌词自动切换模式
+    if (scoreEditor.hasLyrics) {
+      scoreEditor.activeTab = 'interactive'; // 有歌词 → 排列和弦
+    } else {
+      scoreEditor.activeTab = 'edit'; // 无歌词 → 编辑歌词
+    }
+
     if (uiStore.isMobile) {
       uiStore.isLeftOpen = false;
     }

@@ -65,6 +65,15 @@
           </ActionButton>
         </GlobalTooltip>
       </div>
+
+      <div v-else class="header-center">
+        <BaseSegmentedControl
+          v-if="route.path === '/score'"
+          v-model="scoreEditor.activeTab"
+          :options="scoreModeOptions"
+          @change="handleTabChange"
+        />
+      </div>
     </div>
 
     <!-- 3. 右侧：指板配置 Popover / 曲谱配置 Popover -->
@@ -127,7 +136,7 @@ import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { Cloud, Copy, Image, Moon, PanelLeft, Play, Square, Sun } from '@lucide/vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 import ScoreConfigPopover from './ScoreConfigPopover.vue';
@@ -137,6 +146,21 @@ defineEmits<{
   (e: 'export-image', isTransparent: boolean): void;
   (e: 'toggle-theme', event: MouseEvent): void;
 }>();
+
+const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive'>[]>(() => [
+  { label: '编辑歌词', value: 'edit' },
+  {
+    label: '排列和弦',
+    value: 'interactive',
+    disabled: !scoreEditor.hasLyrics,
+  },
+]);
+
+const handleTabChange = (val: 'edit' | 'interactive') => {
+  if (val === 'interactive' && !scoreEditor.hasLyrics) {
+    uiStore.toast.warning('请先在“编辑歌词”模式下输入歌词内容');
+  }
+};
 
 const route = useRoute();
 const router = useRouter();
@@ -191,21 +215,30 @@ const confirmPull = () => {
 }
 
 .section-left {
+  flex: 1 1 0;
   min-width: 0;
+  justify-content: flex-start;
+}
+
+.section-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.section-right {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: flex-end;
 }
 
 .nav-brand-group {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-}
-
-.section-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
 }
 
 .segmented-control-capsule {
@@ -247,5 +280,11 @@ const confirmPull = () => {
   line-height: 1.6;
   color: var(--text-body);
   margin: 0;
+}
+
+@media (max-width: 768px) {
+  .app-top-header {
+    padding: 0 0.75rem;
+  }
 }
 </style>

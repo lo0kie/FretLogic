@@ -9,7 +9,7 @@
     >
       <span class="label-zone" :class="[isNonDefault ? 'is-custom' : 'is-default']">
         <slot name="label" :selected="modelValue">
-          {{ modelValue }}
+          {{ formattedLabel(modelValue) }}
         </slot>
       </span>
 
@@ -27,7 +27,7 @@
           leave-active-class="dropdown-leave-active"
           appear
         >
-          <div ref="dropdownRef" class="selector-dropdown-box no-scrollbar">
+          <div ref="dropdownRef" class="selector-dropdown-box no-scrollbar" :style="{ maxHeight: dropdownMaxHeight }">
             <div
               v-for="(option, index) in options"
               :key="index"
@@ -41,7 +41,7 @@
               }"
             >
               <slot name="option" :option="option" :index="index">
-                {{ option }}
+                {{ formattedOption(option) }}
               </slot>
             </div>
           </div>
@@ -64,10 +64,19 @@ const props = withDefaults(
     clearable?: boolean;
     defaultValue?: T;
     fontBlackItems?: boolean;
+    /** 可视区域内最多显示的选项数量，默认 6 */
+    visibleCount?: number;
+    /** 🌟 通用格式化函数（若未单独指定 labelFormatter/optionFormatter，则两者均使用此函数） */
+    formatter?: (value: T) => string;
+    /** 🌟 专属：仅用于格式化选中后显示在触发栏上的文本 */
+    labelFormatter?: (value: T) => string;
+    /** 🌟 专属：仅用于格式化下拉菜单中每一项的文本 */
+    optionFormatter?: (value: T) => string;
   }>(),
   {
     clearable: false,
     fontBlackItems: false,
+    visibleCount: 6,
   }
 );
 
@@ -83,13 +92,37 @@ const referenceRef = ref<HTMLElement | null>(null);
 const floatingRef = ref<HTMLElement | null>(null);
 const dropdownRef = ref<HTMLDivElement | null>(null);
 
-// src/components/BaseSelector.vue
+// ---------- 文本格式化计算 ----------
+const formattedLabel = (val: T): string => {
+  if (props.labelFormatter) return props.labelFormatter(val);
+  if (props.formatter) return props.formatter(val);
+  return String(val ?? '');
+};
+
+const formattedOption = (opt: T): string => {
+  if (props.optionFormatter) return props.optionFormatter(opt);
+  if (props.formatter) return props.formatter(opt);
+  return String(opt ?? '');
+};
+
+// ---------- 高度计算（与 CSS 保持同步） ----------
+const ITEM_HEIGHT = 1.9; // rem，对应 .selector-item height
+const PADDING_Y = 0.25; // rem，上下各 0.25rem
+const GAP = 0.15; // rem，对应 gap
+
+const dropdownMaxHeight = computed(() => {
+  const n = Math.max(1, props.visibleCount);
+  const height = PADDING_Y * 2 + n * ITEM_HEIGHT + Math.max(0, n - 1) * GAP;
+  return `${height}rem`;
+});
+
+// ---------- Floating UI ----------
 const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   placement: 'bottom-start',
-  strategy: 'fixed', // 🌟 改为 fixed 定位，防止父级 transform 导致错位
+  strategy: 'fixed',
   whileElementsMounted: (reference, floating, update) =>
     autoUpdate(reference, floating, update, {
-      ancestorScroll: true, // 🌟 监听所有祖先元素的滚动
+      ancestorScroll: true,
       elementResize: true,
     }),
   middleware: [
@@ -106,6 +139,7 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   ],
 });
 
+// ---------- 选项 DOM 引用 ----------
 const optionRefsMap = new Map<T, HTMLElement>();
 
 const setOptionRef = (el: unknown, option: T) => {
@@ -118,9 +152,11 @@ onBeforeUpdate(() => {
   optionRefsMap.clear();
 });
 
+// ---------- 交互逻辑 ----------
 const toggleDropdown = () => {
   isOpen.value = !isOpen.value;
 };
+
 const isNonDefault = computed(() => props.modelValue !== props.defaultValue);
 
 let wheelAccumulator = 0;
@@ -149,6 +185,7 @@ const handleSelect = (option: T) => {
   isOpen.value = false;
 };
 
+// 点击外部关闭
 useEventListener(window, 'pointerdown', e => {
   const target = e.target as Node;
   if (
@@ -162,34 +199,32 @@ useEventListener(window, 'pointerdown', e => {
   }
 });
 
+// 打开时滚动到当前选中项
 watch(isOpen, opened => {
-  if (opened) {
-    nextTick(() => {
-      const container = dropdownRef.value;
-      const targetElement = optionRefsMap.get(props.modelValue);
+  if (!opened) return;
 
-      if (!container || !targetElement) return;
+  nextTick(() => {
+    const container = dropdownRef.value;
+    const targetElement = optionRefsMap.get(props.modelValue);
 
-      const computedStyle = window.getComputedStyle(container);
-      const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
-      const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+    if (!container || !targetElement) return;
 
-      const containerRect = container.getBoundingClientRect();
-      const targetRect = targetElement.getBoundingClientRect();
+    const style = window.getComputedStyle(container);
+    const paddingTop = parseFloat(style.paddingTop) || 0;
+    const paddingBottom = parseFloat(style.paddingBottom) || 0;
 
-      const relativeTop = targetRect.top - containerRect.top + container.scrollTop;
-      const relativeBottom = relativeTop + targetRect.height;
+    const itemTop = targetElement.offsetTop;
+    const itemBottom = itemTop + targetElement.offsetHeight;
 
-      const viewVisibleTop = container.scrollTop + paddingTop;
-      const viewVisibleBottom = container.scrollTop + containerRect.height - paddingBottom;
+    const viewTop = container.scrollTop + paddingTop;
+    const viewBottom = container.scrollTop + container.clientHeight - paddingBottom;
 
-      if (relativeTop < viewVisibleTop) {
-        container.scrollTop = relativeTop - paddingTop;
-      } else if (relativeBottom > viewVisibleBottom) {
-        container.scrollTop = relativeBottom - containerRect.height + paddingBottom;
-      }
-    });
-  }
+    if (itemTop < viewTop) {
+      container.scrollTop = itemTop - paddingTop;
+    } else if (itemBottom > viewBottom) {
+      container.scrollTop = itemBottom - container.clientHeight + paddingBottom;
+    }
+  });
 });
 </script>
 
@@ -274,7 +309,7 @@ watch(isOpen, opened => {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  background-color: var(--bg-body);
+  background-color: var(--bg-panel);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--glass-border);
@@ -282,7 +317,6 @@ watch(isOpen, opened => {
   box-shadow: @shadow-floating;
   padding: 0.25rem;
   gap: 0.15rem;
-  max-height: 13.5rem;
   transform-origin: top left;
 }
 
