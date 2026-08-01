@@ -1,5 +1,5 @@
-﻿import { useChordStore } from '@/stores/chordStore';
-import { useEditorStore } from '@/stores/editorStore';
+﻿import { useEditorStore } from '@/stores/chordEditorStore';
+import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';

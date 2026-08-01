@@ -70,6 +70,25 @@ export const cleanAndValidateData = (
     });
   }
 
+  // 🌟 新增 songs 乐谱数组校验与格式化修复
+  if (payload.songs !== undefined) {
+    if (!Array.isArray(payload.songs)) {
+      issues.push('songs 字段必须为数组');
+    } else {
+      payload.songs = payload.songs.filter((s: any, index: number) => {
+        if (!s || typeof s !== 'object' || typeof s.id !== 'string' || typeof s.title !== 'string') {
+          issues.push(`songs[${index}] 结构损坏，缺失必要识别属性`);
+          return false;
+        }
+        if (typeof s.lyrics !== 'string') s.lyrics = '';
+        if (!s.key) s.key = 'C';
+        if (typeof s.capo !== 'number') s.capo = 0;
+        if (!s.chordMap || typeof s.chordMap !== 'object') s.chordMap = {};
+        return true;
+      });
+    }
+  }
+
   if (issues.length > 0) {
     console.error(`❌ ${logPrefix}失败！检测到核心物理资产结构严重破损。`);
     console.group(`详细错误报告 (共 ${issues.length} 项违规):`);
