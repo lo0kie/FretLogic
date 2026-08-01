@@ -30,6 +30,7 @@
 </template>
 
 <script setup lang="ts">
+import { useChordService } from '@/services/useChordService';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import TopHeader from '@/views/header-top/TopHeader.vue';
@@ -42,6 +43,8 @@ const SidebarLeft = defineAsyncComponent(() => import('./views/sidebar-left/Side
 const route = useRoute();
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
+
+const chordService = useChordService();
 
 // 🌟 抓住当前活跃的路由组件引用 (ScoreView)
 const activeViewRef = ref<any>(null);
@@ -65,12 +68,7 @@ const handleExportImage = (isTransparent: boolean) => {
     targetEl = document.querySelector('.interactive-score-zone') as HTMLElement;
   }
 
-  if (targetEl) {
-    import('@/services/useChordService').then(({ useChordService }) => {
-      const chordService = useChordService();
-      chordService.exportFretboardImage(targetEl, isTransparent);
-    });
-  }
+  chordService.exportFretboardImage(targetEl, isTransparent);
 };
 
 const executeToggleThemeWithAnimation = (event?: MouseEvent) => {

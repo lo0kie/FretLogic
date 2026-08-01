@@ -72,7 +72,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value?: T): void;
+  (e: 'update:modelValue', value: T): void;
   (e: 'clear'): void;
   (e: 'wheel-change', direction: 'up' | 'down'): void;
 }>();
@@ -133,7 +133,7 @@ const handleWheel = (e: WheelEvent) => {
 };
 
 const handleClear = () => {
-  emit('update:modelValue', props.defaultValue);
+  emit('update:modelValue', props.defaultValue!);
   emit('clear');
   isOpen.value = false;
 };

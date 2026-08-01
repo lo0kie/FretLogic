@@ -78,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { useEditorStore } from '@/stores/editorStore';
+import { useEditorStore } from '@/stores/chordEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { analyzeChordGraph, type CandidateResult, type NoteInput } from '@/utils/chordEngine';
 import { calcNoteLabel, calcPitchIndex, canTogglePitchAccidental } from '@/utils/musicTheory';

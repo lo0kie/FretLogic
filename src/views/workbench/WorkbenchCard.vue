@@ -31,7 +31,7 @@
 
 <script setup lang="ts">
 import Fretboard from '@/components/Fretboard.vue';
-import { useEditorStore } from '@/stores/editorStore';
+import { useEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/utils/constants';

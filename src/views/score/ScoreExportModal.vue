@@ -14,8 +14,8 @@
         </button>
       </div>
 
-      <!-- 2. 歌词行列表：支持离散多选与按住拖拽划选，支持边缘自动滚动 -->
-      <div class="lines-preview-list no-scrollbar" ref="previewListRef">
+      <!-- 2. 歌词行列表：横向两栏网格布局，支持离散多选与拖拽划选，支持边缘自动滚动 -->
+      <div class="lines-preview-grid no-scrollbar" ref="previewListRef">
         <div
           v-for="(lineText, idx) in previewLines"
           :key="idx"
@@ -31,7 +31,6 @@
 
       <!-- 3. 操作按钮区：常驻整张导出 + 选中区域导出/下载 -->
       <div class="action-footer-grid">
-        <!-- 🌟 常驻按钮 1：整张乐谱全量复制 -->
         <ActionButton width="100%" size="md" :loading="isExporting" @click="handleExportAll">
           <template #prefix>
             <Copy :size="15" stroke-width="2.5" />
@@ -39,7 +38,6 @@
           复制整张乐谱图片
         </ActionButton>
 
-        <!-- 🌟 按钮 2：复制当前选中的行 -->
         <ActionButton
           width="100%"
           variant="subtle"
@@ -54,7 +52,6 @@
           复制所选 {{ selectedLineSet.size }} 行图片
         </ActionButton>
 
-        <!-- 🌟 按钮 3：下载当前选中的行 -->
         <ActionButton
           width="100%"
           variant="ghost"
@@ -66,7 +63,6 @@
           <template #prefix>
             <Download :size="15" stroke-width="2.5" />
           </template>
-
           下载所选 {{ selectedLineSet.size }} 行图片
         </ActionButton>
       </div>
@@ -77,7 +73,7 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import BaseModal from '@/components/BaseModal.vue';
-import { useSongStore } from '@/stores/songStore';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { Copy, Download } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
@@ -96,30 +92,25 @@ const visibleModel = computed({
   set: val => emit('update:visible', val),
 });
 
-const songStore = useSongStore();
+// 🌟 使用重构后的专属 scoreEditorStore
+const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 
 const isExporting = ref<boolean>(false);
-
-// 离散多选模型：使用 Set 存储选中的行索引
 const selectedLineSet = ref<Set<number>>(new Set());
 
 const isDraggingSelection = ref<boolean>(false);
 const dragAnchorLine = ref<number>(-1);
 const pointerDownIdx = ref<number>(-1);
 const isMovedDuringPointerDown = ref<boolean>(false);
-
-// 🌟 记录本次拖拽的意图：true 为批量选中，false 为批量取消
 const isDragSelecting = ref<boolean>(true);
-// 🌟 记录拖拽开始前原本选中的行快照
 const initialSelectedSnapshot = ref<Set<number>>(new Set());
 
 const previewListRef = ref<HTMLElement | null>(null);
 
-// 解析所有歌词行
 const previewLines = computed(() => {
-  if (!songStore.activeSong?.lyrics) return [];
-  return songStore.activeSong.lyrics.split('\n');
+  if (!scoreEditor.activeSong?.lyrics) return [];
+  return scoreEditor.activeSong.lyrics.split('\n');
 });
 
 const totalLines = computed(() => previewLines.value.length);
@@ -128,7 +119,6 @@ const isAllSelected = computed(() => {
   return totalLines.value > 0 && selectedLineSet.value.size === totalLines.value;
 });
 
-// 全选与取消全选
 const toggleSelectAll = () => {
   if (isAllSelected.value) {
     selectedLineSet.value.clear();
@@ -150,7 +140,6 @@ watch(
   }
 );
 
-// 获取鼠标/手指坐标处的行索引
 const getLineIdxFromPoint = (clientX: number, clientY: number): number | null => {
   const target = document.elementFromPoint(clientX, clientY);
   const rowEl = target?.closest('.line-preview-row') as HTMLElement;
@@ -160,7 +149,6 @@ const getLineIdxFromPoint = (clientX: number, clientY: number): number | null =>
   return null;
 };
 
-// 边缘自动滚动
 const checkAndAutoScroll = (clientY: number) => {
   const container = previewListRef.value;
   if (!container) return;
@@ -176,7 +164,6 @@ const checkAndAutoScroll = (clientY: number) => {
   }
 };
 
-// Pointer 事件处理
 const handlePointerDown = (e: PointerEvent, idx: number) => {
   if (e.button !== 0) return;
   isDraggingSelection.value = true;
@@ -184,9 +171,7 @@ const handlePointerDown = (e: PointerEvent, idx: number) => {
   pointerDownIdx.value = idx;
   dragAnchorLine.value = idx;
 
-  // 🌟 1. 按下瞬间判断意图：如果点中的行原本未选中 -> 本次拖拽为“批量选中”；反之则为“批量取消”
   isDragSelecting.value = !selectedLineSet.value.has(idx);
-  // 🌟 2. 备份拖拽前的初始状态，保证滑动划选实时响应
   initialSelectedSnapshot.value = new Set(selectedLineSet.value);
 };
 
@@ -205,7 +190,6 @@ const handlePointerMove = (e: PointerEvent) => {
     const max = Math.max(dragAnchorLine.value, idx);
     const updated = new Set(initialSelectedSnapshot.value);
 
-    // 🌟 3. 根据拖拽意图动态执行 add 或 delete
     for (let i = min; i <= max; i++) {
       if (isDragSelecting.value) {
         updated.add(i);
@@ -220,7 +204,6 @@ const handlePointerMove = (e: PointerEvent) => {
 const handlePointerUp = () => {
   if (!isDraggingSelection.value) return;
 
-  // 🌟 4. 如果是没有发生滑动移位（只是原地点击一下），进行单行选中/取消反选
   if (!isMovedDuringPointerDown.value && pointerDownIdx.value !== -1) {
     const idx = pointerDownIdx.value;
     const updated = new Set(initialSelectedSnapshot.value);
@@ -240,7 +223,6 @@ useEventListener(window, 'pointermove', handlePointerMove);
 useEventListener(window, 'pointerup', handlePointerUp);
 useEventListener(window, 'pointercancel', handlePointerUp);
 
-// 乐谱抓取与渲染导出
 const renderAndExport = async (targetSet: Set<number>, downloadName?: string) => {
   const container = document.querySelector('.lyrics-lines-container') as HTMLElement;
   if (!container) return;
@@ -298,7 +280,6 @@ const renderAndExport = async (targetSet: Set<number>, downloadName?: string) =>
   }
 };
 
-// 1. 导出整张全量乐谱
 const handleExportAll = async () => {
   if (isExporting.value) return;
   isExporting.value = true;
@@ -317,7 +298,6 @@ const handleExportAll = async () => {
   }
 };
 
-// 2. 复制选中的行
 const handleExportSelected = async () => {
   if (isExporting.value || selectedLineSet.value.size === 0) return;
   isExporting.value = true;
@@ -334,14 +314,13 @@ const handleExportSelected = async () => {
   }
 };
 
-// 3. 下载选中的行
 const handleDownloadSelected = async () => {
   if (isExporting.value || selectedLineSet.value.size === 0) return;
   isExporting.value = true;
   uiStore.toast.info('正在下载图片...');
 
   try {
-    const songTitle = songStore.activeSong?.title || '乐谱';
+    const songTitle = scoreEditor.activeSong?.title || '乐谱';
     const fileName = `${songTitle}_选中${selectedLineSet.value.size}行`;
     await renderAndExport(selectedLineSet.value, fileName);
     uiStore.toast.success('图片已成功下载');
@@ -388,35 +367,42 @@ const handleDownloadSelected = async () => {
   }
 }
 
-.lines-preview-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  max-height: 14rem;
+.lines-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 0.5rem;
+  max-height: 15rem;
   overflow-y: auto;
   border: 1px solid var(--border-light);
   border-radius: @radius-md;
-  padding: 0.4rem;
+  padding: 0.5rem;
   background-color: var(--bg-body);
   user-select: none;
   touch-action: none;
+  box-sizing: border-box;
 }
 
 .line-preview-row {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.38rem 0.65rem;
+  gap: 0.5rem;
+  padding: 0.35rem 0.55rem;
   border-radius: @radius-sm;
   cursor: pointer;
   transition: @transition-fast;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  box-sizing: border-box;
+  min-width: 0;
 
   &:hover {
     background-color: var(--bg-panel-hover);
+    border-color: var(--border-base);
   }
 
   &.is-selected {
     background-color: color-mix(in srgb, var(--color-primary), transparent 85%);
+    border-color: color-mix(in srgb, var(--color-primary), transparent 60%);
 
     .preview-line-num {
       color: var(--color-primary);
@@ -430,7 +416,7 @@ const handleDownloadSelected = async () => {
 }
 
 .preview-line-num {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 700;
   font-family: monospace;
   color: var(--text-disabled);
@@ -438,12 +424,14 @@ const handleDownloadSelected = async () => {
 }
 
 .preview-line-content {
-  font-size: 0.75rem;
+  font-size: 0.73rem;
   font-weight: 500;
   color: var(--text-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
 .action-footer-grid {

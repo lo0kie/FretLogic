@@ -7,14 +7,14 @@
   <VueDraggable
     v-else
     :model-value="songStore.songs"
-    @update:modelValue="(val: Song[]) => (songStore.songs = val)"
+    @update:modelValue="(val: Song[]) => songStore.overwriteSongs(val)"
     :animation="200"
     class="draggable-list"
   >
     <GlobalContextMenu v-for="song in songStore.songs" :key="song.id" :items="getSongMenuItems(song)">
       <div
         class="song-card-item"
-        :class="{ 'is-active': songStore.activeSongId === song.id }"
+        :class="{ 'is-active': scoreEditor.activeSongId === song.id }"
         @click="handleSelectSong(song.id)"
       >
         <div class="song-card-content">
@@ -48,6 +48,7 @@ import BaseInput from '@/components/BaseInput.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
@@ -56,6 +57,7 @@ import { nextTick, ref } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 
 const songStore = useSongStore();
+const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 
 const isSongRenameOpen = ref(false);
@@ -87,15 +89,20 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => [
     label: '删除乐谱',
     icon: Trash2,
     danger: true,
-    action: () => songStore.deleteSong(song.id),
+    action: () => {
+      if (scoreEditor.activeSongId === song.id) {
+        scoreEditor.setActiveSong(null);
+      }
+      songStore.deleteSong(song.id);
+    },
   },
 ];
 
 const handleSelectSong = (songId: string) => {
-  if (songStore.activeSongId === songId) {
-    songStore.activeSongId = null;
+  if (scoreEditor.activeSongId === songId) {
+    scoreEditor.setActiveSong(null);
   } else {
-    songStore.activeSongId = songId;
+    scoreEditor.setActiveSong(songId);
     if (uiStore.isMobile) {
       uiStore.isLeftOpen = false;
     }

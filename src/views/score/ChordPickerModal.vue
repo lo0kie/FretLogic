@@ -27,7 +27,7 @@
           </BaseInput>
 
           <button
-            v-if="selectedSlotKey !== null && songStore.activeSong?.chordMap[selectedSlotKey]"
+            v-if="scoreEditor.selectedSlotKey !== null && scoreEditor.activeSong?.chordMap[scoreEditor.selectedSlotKey]"
             class="clear-chord-btn"
             @click="handleRemoveChord"
           >
@@ -37,22 +37,7 @@
 
         <div class="picker-toolbar">
           <div class="group-select-tabs no-scrollbar">
-            <button
-              class="group-tab-item"
-              :class="{ 'is-active': selectedGroupId === 'ALL' }"
-              @click="selectedGroupId = 'ALL'"
-            >
-              全部和弦
-            </button>
-            <button
-              v-for="group in chordStore.groups"
-              :key="group.id"
-              class="group-tab-item"
-              :class="{ 'is-active': selectedGroupId === group.id }"
-              @click="selectedGroupId = group.id"
-            >
-              {{ group.name }}
-            </button>
+            <BaseSegmentedControl v-model="selectedGroupId" :options="groupTabOptions" />
           </div>
         </div>
 
@@ -84,17 +69,17 @@
 <script setup lang="ts">
 import BaseInput from '@/components/BaseInput.vue';
 import BaseModal from '@/components/BaseModal.vue';
+import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
 import Fretboard from '@/components/Fretboard.vue';
 import { useChordStore } from '@/stores/chordStore';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useSongStore } from '@/stores/songStore';
 import type { Chord } from '@/types';
 import { Search } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps<{
   visible: boolean;
-  selectedSlotKey: string | number | null;
 }>();
 
 const emit = defineEmits<{
@@ -107,11 +92,20 @@ const visibleModel = computed({
 });
 
 const chordStore = useChordStore();
-const songStore = useSongStore();
+const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 
 const selectedGroupId = ref<string>('ALL');
 const pickerSearchQuery = ref<string>('');
+
+// 构建分组胶囊选项
+const groupTabOptions = computed<SegmentOption<string>[]>(() => {
+  const options: SegmentOption<string>[] = [{ label: '全部和弦', value: 'ALL' }];
+  chordStore.groups.forEach(g => {
+    options.push({ label: g.name, value: g.id });
+  });
+  return options;
+});
 
 watch(
   () => props.visible,
@@ -140,15 +134,15 @@ const filteredChords = computed(() => {
 });
 
 const handleSelectChord = (chord: Chord) => {
-  if (props.selectedSlotKey !== null && songStore.activeSong) {
-    songStore.setCharChord(songStore.activeSong.id, props.selectedSlotKey, chord);
+  if (scoreEditor.selectedSlotKey !== null && scoreEditor.activeSong) {
+    scoreEditor.setSlotChord(scoreEditor.selectedSlotKey, chord);
   }
   visibleModel.value = false;
 };
 
 const handleRemoveChord = () => {
-  if (props.selectedSlotKey !== null && songStore.activeSong) {
-    songStore.removeCharChord(songStore.activeSong.id, props.selectedSlotKey);
+  if (scoreEditor.selectedSlotKey !== null && scoreEditor.activeSong) {
+    scoreEditor.removeSlotChord(scoreEditor.selectedSlotKey);
   }
   visibleModel.value = false;
 };
@@ -201,29 +195,6 @@ const handleRemoveChord = () => {
   gap: 0.35rem;
   overflow-x: auto;
   padding: 0.1rem;
-}
-
-.group-tab-item {
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.25rem 0.65rem;
-  border-radius: 9999px;
-  border: 1px solid var(--border-light);
-  background-color: var(--bg-body);
-  color: var(--text-body);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: @transition-fast;
-
-  &:hover {
-    border-color: var(--border-base);
-  }
-
-  &.is-active {
-    background-color: var(--color-primary);
-    color: #ffffff;
-    border-color: transparent;
-  }
 }
 
 .empty-chords-tip {

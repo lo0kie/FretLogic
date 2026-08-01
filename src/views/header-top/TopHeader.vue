@@ -18,10 +18,9 @@
 
       <div class="nav-brand-group hidden-mobile">
         <span class="app-brand-title">Fret Logic</span>
-        <div class="header-nav-tabs">
-          <router-link to="/" class="nav-item" active-class="is-active">工作台</router-link>
-          <router-link to="/score" class="nav-item" active-class="is-active">乐谱库</router-link>
-        </div>
+
+        <!-- 🌟 复用通用 BaseSegmentedControl 组件驱动页面路由跳转 -->
+        <BaseSegmentedControl :model-value="route.path" :options="NAV_OPTIONS" @change="path => router.push(path)" />
       </div>
     </div>
 
@@ -69,13 +68,13 @@
       </div>
 
       <!-- 🌟 乐谱库模式：点击打开导出配置 Modal -->
-      <div v-else-if="route.path === '/score' && songStore.activeSong" class="segmented-control-capsule">
+      <div v-else-if="route.path === '/score' && scoreEditor.activeSong" class="segmented-control-capsule">
         <GlobalTooltip content="导出乐谱图片配置" placement="bottom">
-          <ActionButton size="sm" variant="subtle" :disabled="uiStore.isCopying" @click="$emit('open-score-export')">
+          <ActionButton size="sm" variant="ghost" :disabled="uiStore.isCopying" @click="$emit('open-score-export')">
             <template #prefix>
               <Image :size="15" stroke-width="2.5" />
             </template>
-            导出乐谱图片
+            导出乐谱
           </ActionButton>
         </GlobalTooltip>
       </div>
@@ -84,7 +83,7 @@
     <!-- 3. 右侧：指板配置 Popover / 曲谱配置 Popover -->
     <div class="header-section section-right">
       <HeaderConfigPopover v-if="route.path === '/'" />
-      <ScoreConfigPopover v-else-if="route.path === '/score' && songStore.activeSong" />
+      <ScoreConfigPopover v-else-if="route.path === '/score' && scoreEditor.activeSong" />
 
       <!-- 云端同步按钮 -->
       <GlobalTooltip content="云端备份与拉取" placement="bottom">
@@ -132,16 +131,17 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import BaseModal from '@/components/BaseModal.vue';
+import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useAudioPlayer } from '@/services/useAudioPlayer';
 import { useGithubSyncService } from '@/services/useGithubSyncService';
-import { useEditorStore } from '@/stores/editorStore';
+import { useEditorStore } from '@/stores/chordEditorStore.ts';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import { Cloud, Copy, Image, Moon, PanelLeft, Play, Square, Sun } from '@lucide/vue';
 import { ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 import ScoreConfigPopover from './ScoreConfigPopover.vue';
 import SyncSettingsCard from './SyncSettingsCard.vue';
@@ -153,10 +153,18 @@ defineEmits<{
 }>();
 
 const route = useRoute();
+const router = useRouter();
+
+// 🌟 Header 导航参数定义
+const NAV_OPTIONS: SegmentOption<string>[] = [
+  { label: '工作台', value: '/' },
+  { label: '乐谱库', value: '/score' },
+];
+
 const editorStore = useEditorStore();
+const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
-const songStore = useSongStore();
 const { isPlaying, playCurrentChord } = useAudioPlayer();
 const { triggerGlobalSync, pullFromGithub, isSyncing, isPulling } = useGithubSyncService();
 
@@ -205,36 +213,6 @@ const confirmPull = () => {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-}
-
-.header-nav-tabs {
-  display: flex;
-  gap: 0.15rem;
-  background-color: var(--bg-body);
-  padding: 0.12rem;
-  border-radius: 9999px;
-  border: 1px solid var(--border-light);
-}
-
-.nav-item {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--text-disabled);
-  text-decoration: none;
-  padding: 0.12rem 0.55rem;
-  border-radius: 9999px;
-  transition: @transition-fast;
-
-  &:hover {
-    color: var(--text-title);
-  }
-
-  &.is-active {
-    background-color: var(--bg-panel);
-    color: var(--color-primary);
-    font-weight: 700;
-    box-shadow: @shadow-sm;
-  }
 }
 
 .section-center {

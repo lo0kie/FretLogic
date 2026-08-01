@@ -17,7 +17,7 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import { useChordService } from '@/services/useChordService';
-import { useEditorStore } from '@/stores/editorStore';
+import { useEditorStore } from '@/stores/chordEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { computed } from 'vue';
 

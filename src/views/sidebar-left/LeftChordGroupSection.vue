@@ -108,8 +108,8 @@
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { useChordService } from '@/services/useChordService';
+import { useEditorStore } from '@/stores/chordEditorStore.ts';
 import { useChordStore } from '@/stores/chordStore';
-import { useEditorStore } from '@/stores/editorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group } from '@/types';
 import { ChevronDown, FolderOpen, GripVertical, SquarePen, Trash2 } from '@lucide/vue';

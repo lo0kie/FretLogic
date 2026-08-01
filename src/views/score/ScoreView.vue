@@ -1,15 +1,15 @@
 <template>
   <div class="score-view-wrapper">
     <div class="score-main-content">
-      <template v-if="songStore.activeSong">
+      <template v-if="scoreEditor.activeSong">
         <!-- 模式 1：文本编辑 -->
-        <ScoreLyricsEditor v-if="uiStore.scoreActiveTab === 'edit'" />
+        <ScoreLyricsEditor v-if="scoreEditor.activeTab === 'edit'" />
 
         <!-- 模式 2：交互式和弦标注 -->
         <ScoreInteractiveArea v-else @open-picker="openChordPicker" />
       </template>
 
-      <!-- 🌟 修复后的未选择乐谱空状态 -->
+      <!-- 未选择乐谱空状态 -->
       <div v-else class="no-active-song">
         <div class="empty-icon-circle">
           <Music :size="32" stroke-width="2" />
@@ -20,16 +20,12 @@
     </div>
   </div>
 
-  <!-- 和弦选择 Modal 组件 -->
-  <ChordPickerModal v-model:visible="isPickerOpen" :selected-slot-key="selectedSlotKey" />
-
-  <!-- 🌟 导出配置 Modal -->
+  <ChordPickerModal v-model:visible="isPickerOpen" :selected-slot-key="scoreEditor.selectedSlotKey" />
   <ScoreExportModal v-model:visible="isExportModalOpen" />
 </template>
 
 <script setup lang="ts">
-import { useSongStore } from '@/stores/songStore';
-import { useUiStore } from '@/stores/uiStore';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
 import { ref } from 'vue';
@@ -39,19 +35,16 @@ import ScoreExportModal from './ScoreExportModal.vue';
 import ScoreInteractiveArea from './ScoreInteractiveArea.vue';
 import ScoreLyricsEditor from './ScoreLyricsEditor.vue';
 
-const uiStore = useUiStore();
-const songStore = useSongStore();
+const scoreEditor = useScoreEditorStore();
 
 const isPickerOpen = ref(false);
 const isExportModalOpen = ref(false);
-const selectedSlotKey = ref<string | number | null>(null);
 
 const openChordPicker = (slotKey: string | number) => {
-  selectedSlotKey.value = slotKey;
+  scoreEditor.selectedSlotKey = slotKey;
   isPickerOpen.value = true;
 };
 
-// 🌟 供外部或事件直接调用的 openExportModal
 const openExportModal = () => {
   isExportModalOpen.value = true;
 };

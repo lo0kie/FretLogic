@@ -1,5 +1,5 @@
 import ScoreView from '@/views/score/ScoreView.vue';
-import WorkbenchView from '@/views/workbench/WorkbenchView.vue.vue';
+import WorkbenchView from '@/views/workbench/WorkbenchView.vue';
 import { createRouter, createWebHistory } from 'vue-router';
 
 const routes = [

@@ -8,44 +8,26 @@
 
     <Transition name="dropdown-fade">
       <div v-if="isConfigOpen" class="config-popover-card" ref="cardRef">
+        <!-- 1. 显示品数 -->
         <div class="config-row">
           <label class="config-label">显示品数</label>
-          <div class="fret-segmented-picker">
-            <button
-              v-for="f in FRET_COUNTS"
-              :key="f"
-              @click="editorStore.fretCount = f"
-              class="fret-picker-item"
-              :class="{ 'is-selected': editorStore.fretCount === f }"
-            >
-              {{ f }}品
-            </button>
+          <div class="fret-select-wrapper">
+            <BaseSegmentedControl v-model="editorStore.fretCount" :options="FRET_OPTIONS" />
           </div>
         </div>
 
+        <!-- 2. 变调夹 (Capo) 替换为公共 BaseNumberInput 组件 -->
         <div class="config-row">
           <label class="config-label">变调夹 (Capo)</label>
-          <div class="capo-quick-picker" @wheel="handleCapoWheel">
-            <button
-              @click="editorStore.capo = Math.max(0, editorStore.capo - 1)"
-              class="capo-step-btn"
-              :disabled="editorStore.capo === 0"
-            >
-              -
-            </button>
-            <span class="capo-readout-text">
-              {{ editorStore.capo === 0 ? 'CAPO 0' : `CAPO ${editorStore.capo}` }}
-            </span>
-            <button
-              @click="editorStore.capo = Math.min(12, editorStore.capo + 1)"
-              class="capo-step-btn"
-              :disabled="editorStore.capo === 12"
-            >
-              +
-            </button>
-          </div>
+          <BaseNumberInput
+            v-model="editorStore.capo"
+            :min="0"
+            :max="12"
+            :formatter="val => (val === 0 ? 'CAPO 0' : `CAPO ${val}`)"
+          />
         </div>
 
+        <!-- 3. 调音方案 -->
         <div class="config-row">
           <label class="config-label">调音方案</label>
           <div class="tuning-select-wrapper">
@@ -71,9 +53,11 @@
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
+import BaseNumberInput from '@/components/BaseNumberInput.vue';
+import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
-import { useEditorStore } from '@/stores/editorStore';
+import { useEditorStore } from '@/stores/chordEditorStore';
 import { FRET_COUNTS } from '@/utils/constants';
 import { TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { SlidersHorizontal } from '@lucide/vue';
@@ -82,6 +66,12 @@ import { ref } from 'vue';
 
 const editorStore = useEditorStore();
 const tuningOptions = Object.values(TuningEnum);
+
+// 品数配置选项定义
+const FRET_OPTIONS: SegmentOption<number>[] = FRET_COUNTS.map(f => ({
+  label: `${f}品`,
+  value: f,
+}));
 
 const isConfigOpen = ref(false);
 const popoverContainerRef = ref<HTMLDivElement | null>(null);
@@ -92,17 +82,8 @@ onClickOutside(
   () => {
     isConfigOpen.value = false;
   },
-  { ignore: [cardRef] }
+  { ignore: [cardRef, '.floating-position-wrapper'] }
 );
-
-const handleCapoWheel = (e: WheelEvent) => {
-  e.preventDefault();
-  if (e.deltaY < 0) {
-    editorStore.capo = Math.max(0, editorStore.capo - 1);
-  } else {
-    editorStore.capo = Math.min(12, editorStore.capo + 1);
-  }
-};
 </script>
 
 <style scoped lang="less">
@@ -143,74 +124,6 @@ const handleCapoWheel = (e: WheelEvent) => {
   font-size: 0.7rem;
   font-weight: 600;
   color: var(--text-disabled);
-}
-
-.fret-segmented-picker {
-  display: flex;
-  align-items: center;
-  padding: 0.12rem;
-  background-color: var(--bg-body);
-  border: 1px solid var(--border-light);
-  border-radius: 9999px;
-  gap: 0.1rem;
-}
-
-.fret-picker-item {
-  height: 1.35rem;
-  padding: 0 0.5rem;
-  font-size: 0.68rem;
-  font-weight: 600;
-  border: none;
-  border-radius: 9999px;
-  background: transparent;
-  color: var(--text-disabled);
-  cursor: pointer;
-
-  &.is-selected {
-    background-color: var(--bg-panel);
-    color: var(--color-primary);
-    font-weight: 700;
-    box-shadow: @shadow-sm;
-  }
-}
-
-.capo-quick-picker {
-  display: flex;
-  align-items: center;
-  background-color: var(--bg-body);
-  border: 1px solid var(--border-light);
-  border-radius: 9999px;
-  height: 1.5rem;
-  padding: 0 0.2rem;
-  gap: 0.2rem;
-}
-
-.capo-step-btn {
-  border: none;
-  background: transparent;
-  width: 1.1rem;
-  height: 1.1rem;
-  font-weight: 800;
-  font-size: 0.75rem;
-  color: var(--text-title);
-  cursor: pointer;
-  border-radius: @radius-sm;
-
-  &:hover:not(:disabled) {
-    background-color: var(--bg-panel-hover);
-  }
-
-  &:disabled {
-    opacity: 0.3;
-  }
-}
-
-.capo-readout-text {
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  min-width: 3.5rem;
-  text-align: center;
 }
 
 .tuning-select-wrapper {
@@ -263,32 +176,6 @@ const handleCapoWheel = (e: WheelEvent) => {
   .config-label {
     font-size: 0.8rem;
     font-weight: 700;
-  }
-
-  .fret-segmented-picker {
-    padding: 0.2rem;
-  }
-
-  .fret-picker-item {
-    height: 1.8rem;
-    padding: 0 0.75rem;
-    font-size: 0.78rem;
-  }
-
-  .capo-quick-picker {
-    height: 2rem;
-    padding: 0 0.3rem;
-  }
-
-  .capo-step-btn {
-    width: 1.6rem;
-    height: 1.6rem;
-    font-size: 0.95rem;
-  }
-
-  .capo-readout-text {
-    font-size: 0.78rem;
-    min-width: 4.5rem;
   }
 
   .tuning-select-wrapper {

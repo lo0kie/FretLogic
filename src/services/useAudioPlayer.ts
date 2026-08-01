@@ -1,4 +1,4 @@
-﻿import { useEditorStore } from '@/stores/editorStore';
+﻿import { useEditorStore } from '@/stores/chordEditorStore';
 import { AUDIO_CONFIG } from '@/utils/constants/audio';
 import type { PolySynth } from 'tone';
 import { ref } from 'vue';

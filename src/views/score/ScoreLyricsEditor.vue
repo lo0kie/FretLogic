@@ -1,7 +1,7 @@
 <template>
   <div class="lyrics-editor-zone">
     <textarea
-      :value="songStore.activeSong?.lyrics"
+      :value="scoreEditor.activeSong?.lyrics"
       @input="handleInput"
       class="lyrics-textarea no-scrollbar"
       placeholder="在此处输入或粘贴歌词文本..."
@@ -10,15 +10,13 @@
 </template>
 
 <script setup lang="ts">
-import { useSongStore } from '@/stores/songStore';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 
-const songStore = useSongStore();
+const scoreEditor = useScoreEditorStore();
 
 const handleInput = (e: Event) => {
-  if (songStore.activeSong) {
-    const value = (e.target as HTMLTextAreaElement).value;
-    songStore.updateSongLyrics(songStore.activeSong.id, value);
-  }
+  const value = (e.target as HTMLTextAreaElement).value;
+  scoreEditor.updateLyrics(value);
 };
 </script>
 

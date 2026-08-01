@@ -1,6 +1,6 @@
 <template>
   <div class="interactive-score-zone no-scrollbar">
-    <div v-if="!songStore.activeSong?.lyrics.trim()" class="empty-lyrics-tip">请先在“编辑歌词”模式下输入文本内容</div>
+    <div v-if="!scoreEditor.activeSong?.lyrics.trim()" class="empty-lyrics-tip">请先在“编辑歌词”模式下输入文本内容</div>
 
     <div v-else class="lyrics-lines-container">
       <div v-for="(line, lIdx) in lyricsLines" :key="lIdx" class="lyrics-line" @dragover.prevent="handleGlobalDragOver">
@@ -63,16 +63,16 @@
           class="char-box"
           :class="{
             'is-drop-target': dragOverSlotKey === item.globalIndex,
-            'has-chord': Boolean(songStore.activeSong?.chordMap[item.globalIndex]),
+            'has-chord': Boolean(scoreEditor.activeSong?.chordMap[item.globalIndex]),
           }"
           @click="emit('open-picker', item.globalIndex)"
           @dragover.prevent="handleDragOver($event, item.globalIndex)"
           @dragleave="handleDragLeave"
           @drop="handleDrop(item.globalIndex)"
-          :title="songStore.activeSong?.chordMap[item.globalIndex] ? '点击更换或清除和弦' : '点击添加和弦'"
+          :title="scoreEditor.activeSong?.chordMap[item.globalIndex] ? '点击更换或清除和弦' : '点击添加和弦'"
         >
           <div class="chord-display-slot">
-            <template v-if="songStore.activeSong?.chordMap[item.globalIndex]">
+            <template v-if="scoreEditor.activeSong?.chordMap[item.globalIndex]">
               <div
                 class="inline-fretboard-card"
                 draggable="true"
@@ -81,14 +81,14 @@
                 @dragend="handleDragEnd"
               >
                 <span class="inline-chord-name">
-                  {{ songStore.activeSong.chordMap[item.globalIndex].chordName }}
+                  {{ scoreEditor.activeSong.chordMap[item.globalIndex].chordName }}
                 </span>
                 <Fretboard
                   :interactive="false"
                   :scale="0.28"
-                  :strings="songStore.activeSong.chordMap[item.globalIndex].strings"
-                  :capo="songStore.activeSong.chordMap[item.globalIndex].capo"
-                  :fret-count="songStore.activeSong.chordMap[item.globalIndex].fretCount"
+                  :strings="scoreEditor.activeSong.chordMap[item.globalIndex].strings"
+                  :capo="scoreEditor.activeSong.chordMap[item.globalIndex].capo"
+                  :fret-count="scoreEditor.activeSong.chordMap[item.globalIndex].fretCount"
                   :is-dark-mode="settingsStore.isDarkMode"
                 />
               </div>
@@ -154,8 +154,8 @@
 
 <script setup lang="ts">
 import Fretboard from '@/components/Fretboard.vue';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useSongStore } from '@/stores/songStore';
 import type { Chord } from '@/types';
 import { computed, onBeforeUnmount, ref } from 'vue';
 
@@ -163,7 +163,7 @@ const emit = defineEmits<{
   (e: 'open-picker', slotKey: string | number): void;
 }>();
 
-const songStore = useSongStore();
+const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 
 const draggingSlotKey = ref<string | number | null>(null);
@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
 });
 
 const handleDrop = (targetSlotKey: string | number) => {
-  if (!draggingSlotKey.value || !songStore.activeSong) {
+  if (!draggingSlotKey.value || !scoreEditor.activeSong) {
     handleDragEnd();
     return;
   }
@@ -221,19 +221,7 @@ const handleDrop = (targetSlotKey: string | number) => {
     return;
   }
 
-  const map = songStore.activeSong.chordMap || {};
-  const sourceChord = map[sourceKey];
-  const targetChord = map[targetSlotKey];
-
-  if (sourceChord) {
-    songStore.setCharChord(songStore.activeSong.id, targetSlotKey, sourceChord);
-    if (targetChord) {
-      songStore.setCharChord(songStore.activeSong.id, sourceKey, targetChord);
-    } else {
-      songStore.removeCharChord(songStore.activeSong.id, sourceKey);
-    }
-  }
-
+  scoreEditor.swapSlotChords(sourceKey, targetSlotKey);
   handleDragEnd();
 };
 
@@ -253,15 +241,15 @@ const getNextEndSlotKey = (lineIdx: number): string => {
 };
 
 const getEdgeBoundChords = (lineIdx: number, type: 'start' | 'end'): EdgeChordItem[] => {
-  if (!songStore.activeSong || !songStore.activeSong.chordMap) return [];
+  if (!scoreEditor.activeSong || !scoreEditor.activeSong.chordMap) return [];
   const prefix = `line_${lineIdx}_${type}_`;
   const result: EdgeChordItem[] = [];
 
   let count = 0;
-  while (songStore.activeSong.chordMap[`${prefix}${count}`]) {
+  while (scoreEditor.activeSong.chordMap[`${prefix}${count}`]) {
     result.push({
       slotKey: `${prefix}${count}`,
-      chord: songStore.activeSong.chordMap[`${prefix}${count}`],
+      chord: scoreEditor.activeSong.chordMap[`${prefix}${count}`],
     });
     count++;
   }
@@ -278,8 +266,8 @@ interface CharItem {
 }
 
 const lyricsLines = computed(() => {
-  if (!songStore.activeSong) return [];
-  const text = songStore.activeSong.lyrics;
+  if (!scoreEditor.activeSong) return [];
+  const text = scoreEditor.activeSong.lyrics;
   const lines: CharItem[][] = [];
   let currentLine: CharItem[] = [];
 
@@ -415,7 +403,6 @@ const lyricsLines = computed(() => {
       padding-left: 0.2rem;
       padding-right: 0.2rem;
 
-      /* 🌟 1. 移除添加和弦占位符的外层 char-box 悬停高亮 */
       &:hover {
         background-color: transparent !important;
       }
@@ -484,7 +471,6 @@ const lyricsLines = computed(() => {
   &[draggable='true'] {
     cursor: grab !important;
 
-    /* 🌟 2. 和弦卡片按压/激活时设置 opacity: 0.8 */
     &:active {
       cursor: grabbing !important;
       opacity: 0.8 !important;
