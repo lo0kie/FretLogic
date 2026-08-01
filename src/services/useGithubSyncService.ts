@@ -1,5 +1,6 @@
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';
 import { SettingsSchema } from '@/utils/validators';
@@ -20,6 +21,7 @@ export function useGithubSyncService() {
   const uiStore = useUiStore();
   const settingsStore = useSettingsStore();
   const chordStore = useChordStore();
+  const songStore = useSongStore();
 
   const cleanHeaderString = (str: string) => str.trim().replace(/[^\x00-\x7F]/g, '');
 
@@ -67,7 +69,7 @@ export function useGithubSyncService() {
       const contentBase64 = Base64.encode(JSON.stringify(data, null, 2));
 
       const body: GithubFilePayload = {
-        message: `Auto sync chords data: ${new Date().toLocaleString()}`,
+        message: `Auto sync fret-logic data: ${new Date().toLocaleString()}`,
         content: contentBase64,
         branch: githubBranch,
       };
@@ -144,6 +146,12 @@ export function useGithubSyncService() {
 
         chordStore.overwriteGroups(imported.groups);
         chordStore.overwriteChords(imported.chords);
+
+        // 🌟 云端恢复乐谱数据
+        if (imported.songs) {
+          songStore.overwriteSongs(imported.songs);
+        }
+
         if (!chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
           chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
         }
@@ -166,6 +174,7 @@ export function useGithubSyncService() {
     syncToGithub({
       groups: chordStore.groups,
       chords: chordStore.savedChordsList,
+      songs: songStore.songs, // 🌟 云端同步打包乐谱数组
     });
   };
 
