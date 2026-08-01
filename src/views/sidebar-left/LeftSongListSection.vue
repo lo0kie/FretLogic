@@ -11,10 +11,18 @@
     :animation="200"
     class="draggable-list"
   >
-    <GlobalContextMenu v-for="song in songStore.songs" :key="song.id" :items="getSongMenuItems(song)">
+    <GlobalContextMenu
+      v-for="song in songStore.songs"
+      :key="song.id"
+      :ref="el => setContextMenuRef(el, song.id)"
+      :items="getSongMenuItems(song)"
+    >
       <div
         class="song-card-item"
-        :class="{ 'is-active': scoreEditor.activeSongId === song.id }"
+        :class="{
+          'is-active': scoreEditor.activeSongId === song.id,
+          'is-context-open': isSongMenuOpen(song.id),
+        }"
         @click="handleSelectSong(song.id)"
       >
         <div class="song-card-content">
@@ -53,7 +61,7 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
 import { Music, SquarePen, Trash2 } from '@lucide/vue';
-import { nextTick, ref } from 'vue';
+import { nextTick, onBeforeUpdate, ref } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 
 const songStore = useSongStore();
@@ -64,6 +72,23 @@ const isSongRenameOpen = ref(false);
 const songRenameTitle = ref('');
 const targetSong = ref<Song | null>(null);
 const songRenameInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
+
+// 🌟 管理右键菜单的实例引用 Map
+const contextMenuRefsMap = ref<Record<string, InstanceType<typeof GlobalContextMenu>>>({});
+
+const setContextMenuRef = (el: unknown, songId: string) => {
+  if (el) {
+    contextMenuRefsMap.value[songId] = el as InstanceType<typeof GlobalContextMenu>;
+  }
+};
+
+const isSongMenuOpen = (songId: string) => {
+  return contextMenuRefsMap.value[songId]?.isOpen ?? false;
+};
+
+onBeforeUpdate(() => {
+  contextMenuRefsMap.value = {};
+});
 
 const handleRenameSong = () => {
   if (targetSong.value && songRenameTitle.value.trim()) {
@@ -155,9 +180,13 @@ const handleSelectSong = (songId: string) => {
   transition: @transition-fast;
   box-sizing: border-box;
 
-  &:hover {
+  /* 🌟 与分组一致：Hover / Active / ContextMenu 打开时应用高亮反馈 */
+  &:hover,
+  &:active,
+  &.is-context-open {
     background-color: var(--bg-panel-hover);
     border-color: var(--border-base);
+    box-shadow: 0 0 0 1px var(--border-base);
   }
 
   &.is-active {

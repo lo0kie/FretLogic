@@ -13,66 +13,94 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const activeSongId = useStorage<string | null>('CHORD_LAB_ACTIVE_SONG_ID_V1', null);
 
   // 2. 当前视图模式：'edit' (编辑歌词) | 'interactive' (排列和弦)
-  const activeTab = ref<ScoreActiveTab>('interactive');
+  const activeTabRef = ref<ScoreActiveTab>('edit');
 
-  // 3. 当前选中的和弦插槽（用于 ChordPickerModal 或高亮显示）
+  // 3. 当前选中的和弦插槽
   const selectedSlotKey = ref<string | number | null>(null);
 
-  // 🌟 当前激活的完整乐谱对象（响应式计算）
+  // 🌟 当前激活的完整乐谱对象
   const activeSong = computed<Song | null>(() => {
     if (!activeSongId.value) return null;
     return songStore.songs.find(s => s.id === activeSongId.value) || null;
   });
 
-  // 🌟 是否处于空状态（未选择乐谱）
+  // 🌟 当前乐谱是否有有效歌词
+  const hasLyrics = computed(() => {
+    return Boolean(activeSong.value?.lyrics && activeSong.value.lyrics.trim().length > 0);
+  });
+
+  // 🌟 受约束的 activeTabGetter / Setter
+  const activeTab = computed({
+    get: () => {
+      // 核心拦截：如果无歌词，强制返回 'edit'
+      if (!hasLyrics.value) {
+        return 'edit';
+      }
+      return activeTabRef.value;
+    },
+    set: (val: ScoreActiveTab) => {
+      if (val === 'interactive' && !hasLyrics.value) {
+        // 无歌词时阻止切换到排列和弦
+        activeTabRef.value = 'edit';
+        return;
+      }
+      activeTabRef.value = val;
+    },
+  });
+
   const isEmpty = computed(() => !activeSong.value);
 
-  watch(activeSongId, () => {
-    selectedSlotKey.value = null;
-  });
+  // 切换乐谱或歌词被清空时，自动做校验回退
+  watch(
+    [activeSong, hasLyrics],
+    ([_, validLyrics]) => {
+      selectedSlotKey.value = null;
+      if (!validLyrics) {
+        activeTabRef.value = 'edit';
+      }
+    },
+    { immediate: true }
+  );
 
   // --- Actions ---
 
-  // 切换选中乐谱
   const setActiveSong = (id: string | null) => {
     activeSongId.value = id;
     selectedSlotKey.value = null;
   };
 
-  // 更改调性 (Key)
   const updateKey = (key: string) => {
     if (activeSong.value) {
       activeSong.value.key = key;
     }
   };
 
-  // 更改变调夹 (Capo)
   const updateCapo = (capo: number) => {
     if (activeSong.value) {
       activeSong.value.capo = Math.min(12, Math.max(0, capo));
     }
   };
 
-  // 更新歌词（带格式清洗：移除空格与 Tab，保留换行）
   const updateLyrics = (lyrics: string) => {
     if (activeSong.value) {
       songStore.updateSongLyrics(activeSong.value.id, lyrics);
+      // 如果歌词被清空，强制退回编辑歌词模式
+      if (!lyrics.trim()) {
+        activeTabRef.value = 'edit';
+      }
     }
   };
 
-  // 绑定和弦到指定字符/行插槽
   const setSlotChord = (slotKey: string | number, chord: Chord) => {
     if (!activeSong.value) return;
     songStore.setCharChord(activeSong.value.id, slotKey, chord);
   };
 
-  // 移除指定插槽的和弦
   const removeSlotChord = (slotKey: string | number) => {
     if (!activeSong.value) return;
     songStore.removeCharChord(activeSong.value.id, slotKey);
   };
 
-  // 🌟 拖拽/移动交换两个插槽的和弦
   const swapSlotChords = (sourceKey: string | number, targetKey: string | number) => {
     if (!activeSong.value || sourceKey === targetKey) return;
 
@@ -95,6 +123,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     activeTab,
     selectedSlotKey,
     activeSong,
+    hasLyrics,
     isEmpty,
     setActiveSong,
     updateKey,
@@ -102,6 +131,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     updateLyrics,
     setSlotChord,
     removeSlotChord,
-    swapSlotChords, // 🌟 必须在这里正确导出，TS 报错即刻消除
+    swapSlotChords,
   };
 });

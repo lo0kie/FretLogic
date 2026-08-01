@@ -1,5 +1,6 @@
-﻿import { FRET_COUNTS } from '@/utils/constants';
+﻿import { FRET_COUNTS } from '@/constants';
 import { TuningEnum } from '@/utils/musicTheory';
+import type { Song } from './song';
 
 export type Writable<T> = {
   -readonly [P in keyof T]: T[P];
@@ -28,7 +29,7 @@ export interface Chord {
   capo: number;
   groupId: string;
   tuning: TuningEnum;
-  fingerprint?: string; // 🌟 存储物理特征码
+  fingerprint?: string;
 }
 
 export interface Group {
@@ -40,4 +41,5 @@ export interface Group {
 export interface ImportExportPayload {
   groups: Group[];
   chords: Chord[];
+  songs?: Song[]; // 🌟 新增乐谱备份支持
 }

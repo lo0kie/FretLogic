@@ -36,7 +36,7 @@
         <!-- 3. 编辑模式 -->
         <div class="config-row">
           <label class="config-label">编辑模式</label>
-          <BaseSegmentedControl v-model="scoreEditor.activeTab" :options="SCORE_MODE_OPTIONS" />
+          <BaseSegmentedControl v-model="scoreEditor.activeTab" :options="scoreModeOptions" @change="handleTabChange" />
         </div>
       </div>
     </Transition>
@@ -50,22 +50,35 @@ import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegme
 import BaseSelector from '@/components/BaseSelector.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
+import { useUiStore } from '@/stores/uiStore';
 import { SlidersHorizontal } from '@lucide/vue';
 import { onClickOutside } from '@vueuse/core';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 const scoreEditor = useScoreEditorStore();
+const uiStore = useUiStore();
 
-const SCORE_MODE_OPTIONS: SegmentOption<'edit' | 'interactive'>[] = [
+// 🌟 使用 computed 响应式传入 item.disabled 属性
+const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive'>[]>(() => [
   { label: '编辑歌词', value: 'edit' },
-  { label: '排列和弦', value: 'interactive' },
-];
+  {
+    label: '排列和弦',
+    value: 'interactive',
+    disabled: !scoreEditor.hasLyrics, // 无歌词时直接禁用选项
+  },
+]);
 
 const KEY_OPTIONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
 const isConfigOpen = ref(false);
 const popoverContainerRef = ref<HTMLDivElement | null>(null);
 const cardRef = ref<HTMLDivElement | null>(null);
+
+const handleTabChange = (val: 'edit' | 'interactive') => {
+  if (val === 'interactive' && !scoreEditor.hasLyrics) {
+    uiStore.toast.warning('请先在“编辑歌词”模式下输入歌词内容');
+  }
+};
 
 onClickOutside(
   popoverContainerRef,
@@ -126,16 +139,5 @@ onClickOutside(
   }
 }
 
-.dropdown-fade-enter-active,
-.dropdown-fade-leave-active {
-  transition:
-    opacity @duration-fast @bezier-standard,
-    transform @duration-fast @bezier-standard;
-}
-
-.dropdown-fade-enter-from,
-.dropdown-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-6px) scale(0.96);
-}
+.fade-scale-transition(dropdown-fade, -6px, 0.96);
 </style>

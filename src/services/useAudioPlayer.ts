@@ -1,5 +1,5 @@
-﻿import { useEditorStore } from '@/stores/chordEditorStore';
-import { AUDIO_CONFIG } from '@/utils/constants/audio';
+﻿import { AUDIO_CONFIG } from '@/constants/audio';
+import { useEditorStore } from '@/stores/chordEditorStore';
 import type { PolySynth } from 'tone';
 import { ref } from 'vue';
 
@@ -23,6 +23,12 @@ const getFrequencyFromMidi = (midiNote: number, tone: typeof import('tone')): nu
 
 export function useAudioPlayer() {
   const editorStore = useEditorStore();
+
+  if (typeof window !== 'undefined') {
+    import('tone').then(mod => {
+      ToneInstance = mod;
+    });
+  }
 
   const initAudioEngine = async (): Promise<typeof import('tone')> => {
     if (!ToneInstance) {
@@ -70,6 +76,10 @@ export function useAudioPlayer() {
 
   const playCurrentChord = async () => {
     if (isPlaying.value) return;
+
+    if (ToneInstance && ToneInstance.getContext().state !== 'running') {
+      await ToneInstance.start();
+    }
 
     isPlaying.value = true;
 

@@ -57,8 +57,8 @@ import BaseNumberInput from '@/components/BaseNumberInput.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { FRET_COUNTS } from '@/constants';
 import { useEditorStore } from '@/stores/chordEditorStore';
-import { FRET_COUNTS } from '@/utils/constants';
 import { TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { SlidersHorizontal } from '@lucide/vue';
 import { onClickOutside } from '@vueuse/core';
@@ -143,18 +143,7 @@ onClickOutside(
   white-space: nowrap;
 }
 
-.dropdown-fade-enter-active,
-.dropdown-fade-leave-active {
-  transition:
-    opacity @duration-fast @bezier-standard,
-    transform @duration-fast @bezier-standard;
-}
-
-.dropdown-fade-enter-from,
-.dropdown-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-6px) scale(0.96);
-}
+.fade-scale-transition(dropdown-fade, -6px, 0.96);
 
 @media (max-width: 768px) {
   .config-popover-card {

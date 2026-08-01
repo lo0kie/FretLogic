@@ -1,163 +1,158 @@
 <template>
-  <div class="interactive-score-zone no-scrollbar">
+  <div class="interactive-score-zone no-scrollbar" ref="scoreZoneRef">
     <div v-if="!scoreEditor.activeSong?.lyrics.trim()" class="empty-lyrics-tip">请先在“编辑歌词”模式下输入文本内容</div>
 
     <div v-else class="lyrics-lines-container">
-      <div v-for="(line, lIdx) in lyricsLines" :key="lIdx" class="lyrics-line" @dragover.prevent="handleGlobalDragOver">
+      <div
+        v-for="lineData in lyricsLinesWithEdges"
+        :key="lineData.lineIdx"
+        :data-line-idx="lineData.lineIdx"
+        class="lyrics-line"
+        :class="{ 'is-line-selected': !isExporting && selectedLineSet.has(lineData.lineIdx) }"
+        @dragover.prevent="handleGlobalDragOver"
+      >
         <!-- 0. 行号索引 -->
-        <div class="line-index-badge">{{ formatLineIndex(lIdx) }}</div>
-
-        <!-- 1. 行首插槽区域 -->
-        <div class="edge-chords-group" @dragover.prevent="handleGlobalDragOver">
-          <!-- 行首添加按钮 -->
-          <div
-            class="char-box edge-slot add-btn-slot"
-            :class="{ 'is-drop-target': dragOverSlotKey === getNextStartSlotKey(lIdx) }"
-            @click="emit('open-picker', getNextStartSlotKey(lIdx))"
-            @dragover.prevent="handleDragOver($event, getNextStartSlotKey(lIdx))"
-            @dragleave="handleDragLeave"
-            @drop="handleDrop(getNextStartSlotKey(lIdx))"
+        <div class="line-index-badge" title="点击或按住滑动以多选当前行">
+          <span
+            class="index-text-tag"
+            :class="{ 'is-selected': !isExporting && selectedLineSet.has(lineData.lineIdx) }"
+            @pointerdown="e => handlePointerDown(e, lineData.lineIdx)"
           >
-            <div class="chord-display-slot"></div>
-            <span class="add-edge-placeholder" title="点击添加行首和弦">+和弦</span>
-          </div>
-
-          <!-- 已绑定的行首和弦 -->
-          <div
-            v-for="item in getEdgeBoundChords(lIdx, 'start')"
-            :key="item.slotKey"
-            class="char-box edge-slot"
-            :class="{ 'is-drop-target': dragOverSlotKey === item.slotKey }"
-            @click="emit('open-picker', item.slotKey)"
-            @dragover.prevent="handleDragOver($event, item.slotKey)"
-            @dragleave="handleDragLeave"
-            @drop="handleDrop(item.slotKey)"
-          >
-            <div class="chord-display-slot">
-              <div
-                class="inline-fretboard-card"
-                draggable="true"
-                title="点击更换/移除和弦，按住可拖拽换位"
-                @dragstart.stop="handleDragStart(item.slotKey)"
-                @dragend="handleDragEnd"
-              >
-                <span class="inline-chord-name">{{ item.chord.chordName }}</span>
-                <Fretboard
-                  :interactive="false"
-                  :scale="0.28"
-                  :strings="item.chord.strings"
-                  :capo="item.chord.capo"
-                  :fret-count="item.chord.fretCount"
-                  :is-dark-mode="settingsStore.isDarkMode"
-                />
-              </div>
-            </div>
-            <div class="char-baseline-shim"></div>
-          </div>
-        </div>
-
-        <!-- 2. 中间字符和弦区 -->
-        <div
-          v-for="item in line"
-          :key="item.globalIndex"
-          class="char-box"
-          :class="{
-            'is-drop-target': dragOverSlotKey === item.globalIndex,
-            'has-chord': Boolean(scoreEditor.activeSong?.chordMap[item.globalIndex]),
-          }"
-          @click="emit('open-picker', item.globalIndex)"
-          @dragover.prevent="handleDragOver($event, item.globalIndex)"
-          @dragleave="handleDragLeave"
-          @drop="handleDrop(item.globalIndex)"
-          :title="scoreEditor.activeSong?.chordMap[item.globalIndex] ? '点击更换或清除和弦' : '点击添加和弦'"
-        >
-          <div class="chord-display-slot">
-            <template v-if="scoreEditor.activeSong?.chordMap[item.globalIndex]">
-              <div
-                class="inline-fretboard-card"
-                draggable="true"
-                title="点击更换/移除和弦，按住可拖拽换位"
-                @dragstart.stop="handleDragStart(item.globalIndex)"
-                @dragend="handleDragEnd"
-              >
-                <span class="inline-chord-name">
-                  {{ scoreEditor.activeSong.chordMap[item.globalIndex].chordName }}
-                </span>
-                <Fretboard
-                  :interactive="false"
-                  :scale="0.28"
-                  :strings="scoreEditor.activeSong.chordMap[item.globalIndex].strings"
-                  :capo="scoreEditor.activeSong.chordMap[item.globalIndex].capo"
-                  :fret-count="scoreEditor.activeSong.chordMap[item.globalIndex].fretCount"
-                  :is-dark-mode="settingsStore.isDarkMode"
-                />
-              </div>
-            </template>
-          </div>
-          <span class="char-text">
-            {{ item.char }}
+            {{ formatLineIndex(lineData.lineIdx) }}
           </span>
         </div>
 
-        <!-- 3. 行尾插槽区域 -->
+        <!-- 1. 行首插槽区域 -->
         <div class="edge-chords-group" @dragover.prevent="handleGlobalDragOver">
-          <!-- 已绑定的行尾和弦 -->
-          <div
-            v-for="item in getEdgeBoundChords(lIdx, 'end')"
+          <ChordSlotCell
+            variant="add"
+            :slot-key="lineData.nextStartKey"
+            add-placeholder-title="点击添加行首和弦"
+            :is-drop-target="dragOverSlotKey === lineData.nextStartKey"
+            :is-dark-mode="settingsStore.isDarkMode"
+            @click="emit('open-picker', lineData.nextStartKey)"
+            @dragover="handleDragOver($event, lineData.nextStartKey)"
+            @dragleave="handleDragLeave"
+            @drop="handleDrop(lineData.nextStartKey)"
+          />
+
+          <ChordSlotCell
+            v-for="item in lineData.startChords"
             :key="item.slotKey"
-            class="char-box edge-slot"
-            :class="{ 'is-drop-target': dragOverSlotKey === item.slotKey }"
+            variant="edge"
+            :slot-key="item.slotKey"
+            :chord="item.chord"
+            :is-drop-target="dragOverSlotKey === item.slotKey"
+            :is-dark-mode="settingsStore.isDarkMode"
             @click="emit('open-picker', item.slotKey)"
-            @dragover.prevent="handleDragOver($event, item.slotKey)"
+            @dragover="handleDragOver($event, item.slotKey)"
             @dragleave="handleDragLeave"
             @drop="handleDrop(item.slotKey)"
-          >
-            <div class="chord-display-slot">
-              <div
-                class="inline-fretboard-card"
-                draggable="true"
-                title="点击更换/移除和弦，按住可拖拽换位"
-                @dragstart.stop="handleDragStart(item.slotKey)"
-                @dragend="handleDragEnd"
-              >
-                <span class="inline-chord-name">{{ item.chord.chordName }}</span>
-                <Fretboard
-                  :interactive="false"
-                  :scale="0.28"
-                  :strings="item.chord.strings"
-                  :capo="item.chord.capo"
-                  :fret-count="item.chord.fretCount"
-                  :is-dark-mode="settingsStore.isDarkMode"
-                />
-              </div>
-            </div>
-            <div class="char-baseline-shim"></div>
-          </div>
+            @dragstart="handleDragStart(item.slotKey)"
+            @dragend="handleDragEnd"
+          />
+        </div>
 
-          <!-- 行尾添加按钮 -->
-          <div
-            class="char-box edge-slot add-btn-slot"
-            :class="{ 'is-drop-target': dragOverSlotKey === getNextEndSlotKey(lIdx) }"
-            @click="emit('open-picker', getNextEndSlotKey(lIdx))"
-            @dragover.prevent="handleDragOver($event, getNextEndSlotKey(lIdx))"
+        <!-- 2. 中间字符和弦区 -->
+        <ChordSlotCell
+          v-for="item in lineData.chars"
+          :key="item.globalIndex"
+          variant="char"
+          :slot-key="item.globalIndex"
+          :chord="scoreEditor.activeSong?.chordMap[item.globalIndex]"
+          :char="item.char"
+          :is-drop-target="dragOverSlotKey === item.globalIndex"
+          :is-dark-mode="settingsStore.isDarkMode"
+          @click="emit('open-picker', item.globalIndex)"
+          @dragover="handleDragOver($event, item.globalIndex)"
+          @dragleave="handleDragLeave"
+          @drop="handleDrop(item.globalIndex)"
+          @dragstart="handleDragStart(item.globalIndex)"
+          @dragend="handleDragEnd"
+        />
+
+        <!-- 3. 行尾插槽区域 -->
+        <div class="edge-chords-group" @dragover.prevent="handleGlobalDragOver">
+          <ChordSlotCell
+            v-for="item in lineData.endChords"
+            :key="item.slotKey"
+            variant="edge"
+            :slot-key="item.slotKey"
+            :chord="item.chord"
+            :is-drop-target="dragOverSlotKey === item.slotKey"
+            :is-dark-mode="settingsStore.isDarkMode"
+            @click="emit('open-picker', item.slotKey)"
+            @dragover="handleDragOver($event, item.slotKey)"
             @dragleave="handleDragLeave"
-            @drop="handleDrop(getNextEndSlotKey(lIdx))"
-          >
-            <div class="chord-display-slot"></div>
-            <span class="add-edge-placeholder" title="点击添加行尾和弦">+和弦</span>
-          </div>
+            @drop="handleDrop(item.slotKey)"
+            @dragstart="handleDragStart(item.slotKey)"
+            @dragend="handleDragEnd"
+          />
+
+          <ChordSlotCell
+            variant="add"
+            :slot-key="lineData.nextEndKey"
+            add-placeholder-title="点击添加行尾和弦"
+            :is-drop-target="dragOverSlotKey === lineData.nextEndKey"
+            :is-dark-mode="settingsStore.isDarkMode"
+            @click="emit('open-picker', lineData.nextEndKey)"
+            @dragover="handleDragOver($event, lineData.nextEndKey)"
+            @dragleave="handleDragLeave"
+            @drop="handleDrop(lineData.nextEndKey)"
+          />
         </div>
       </div>
     </div>
+
+    <!-- 底部多选导出浮动控制工具栏 -->
+    <Transition name="floating-bar-fade">
+      <div v-if="selectedLineSet.size > 0" class="score-floating-bar">
+        <div class="bar-info-zone">
+          <span class="selected-count-badge">{{ selectedLineSet.size }}</span>
+          <span class="selected-text-tip">已选择行:</span>
+
+          <div class="clickable-indices-list no-scrollbar">
+            <button
+              v-for="lineIdx in sortedSelectedIndices"
+              :key="lineIdx"
+              class="index-item-btn"
+              title="点击取消选择该行"
+              @click="handleRemoveLineIndex(lineIdx)"
+            >
+              {{ lineIdx + 1 }}
+              <X class="remove-icon" :size="10" stroke-width="2.5" />
+            </button>
+          </div>
+        </div>
+
+        <div class="bar-divider"></div>
+
+        <div class="bar-actions-zone">
+          <ActionButton size="sm" variant="ghost" @click="handleToggleSelectAll">
+            {{ isAllSelected ? '全不选' : '全选' }}
+          </ActionButton>
+
+          <ActionButton size="sm" variant="subtle" :loading="isExporting" @click="handleCopySelectedImage">
+            <template #prefix><Copy :size="14" stroke-width="2.5" /></template>
+            复制图片
+          </ActionButton>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import Fretboard from '@/components/Fretboard.vue';
+import ActionButton from '@/components/ActionButton.vue';
+import { useLyricsDragDrop } from '@/services/useLyricsDragDrop';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { Copy, X } from '@lucide/vue';
+import { useEventListener } from '@vueuse/core';
+import { computed, nextTick, ref, watch } from 'vue';
+import ChordSlotCell from './ChordSlotCell.vue';
 
 const emit = defineEmits<{
   (e: 'open-picker', slotKey: string | number): void;
@@ -165,126 +160,306 @@ const emit = defineEmits<{
 
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
+const uiStore = useUiStore();
 
-const draggingSlotKey = ref<string | number | null>(null);
-const dragOverSlotKey = ref<string | number | null>(null);
+const {
+  dragOverSlotKey,
+  handleGlobalDragOver,
+  handleDragStart,
+  handleDragOver,
+  handleDragLeave,
+  handleDragEnd,
+  handleDrop,
+} = useLyricsDragDrop();
+
+const scoreZoneRef = ref<HTMLElement | null>(null);
+
+const selectedLineSet = ref<Set<number>>(new Set());
+const isDraggingSelection = ref(false);
+const dragAnchorLine = ref(-1);
+const pointerDownIdx = ref(-1);
+const isMovedDuringPointerDown = ref(false);
+const isDragSelecting = ref(true);
+const initialSelectedSnapshot = ref<Set<number>>(new Set());
+const isExporting = ref(false);
 
 const formatLineIndex = (index: number) => String(index + 1).padStart(2, '0');
-
-const handleDragStart = (slotKey: string | number) => {
-  draggingSlotKey.value = slotKey;
-  document.body.classList.add('is-global-dragging');
-};
-
-const handleGlobalDragOver = (e: DragEvent) => {
-  if (e.dataTransfer) {
-    e.dataTransfer.dropEffect = 'move';
-  }
-};
-
-const handleDragOver = (e: DragEvent, slotKey: string | number) => {
-  if (e.dataTransfer) {
-    e.dataTransfer.dropEffect = 'move';
-  }
-  if (dragOverSlotKey.value !== slotKey) {
-    dragOverSlotKey.value = slotKey;
-  }
-};
-
-const handleDragLeave = (e: DragEvent) => {
-  const currentTarget = e.currentTarget as HTMLElement;
-  const relatedTarget = e.relatedTarget as HTMLElement;
-  if (!currentTarget || !relatedTarget || !currentTarget.contains(relatedTarget)) {
-    dragOverSlotKey.value = null;
-  }
-};
-
-const handleDragEnd = () => {
-  draggingSlotKey.value = null;
-  dragOverSlotKey.value = null;
-  document.body.classList.remove('is-global-dragging');
-};
-
-onBeforeUnmount(() => {
-  document.body.classList.remove('is-global-dragging');
-});
-
-const handleDrop = (targetSlotKey: string | number) => {
-  if (!draggingSlotKey.value || !scoreEditor.activeSong) {
-    handleDragEnd();
-    return;
-  }
-
-  const sourceKey = draggingSlotKey.value;
-  if (sourceKey === targetSlotKey) {
-    handleDragEnd();
-    return;
-  }
-
-  scoreEditor.swapSlotChords(sourceKey, targetSlotKey);
-  handleDragEnd();
-};
 
 interface EdgeChordItem {
   slotKey: string;
   chord: Chord;
 }
 
-const getNextStartSlotKey = (lineIdx: number): string => {
-  const count = getEdgeBoundChords(lineIdx, 'start').length;
-  return `line_${lineIdx}_start_${count}`;
-};
-
-const getNextEndSlotKey = (lineIdx: number): string => {
-  const count = getEdgeBoundChords(lineIdx, 'end').length;
-  return `line_${lineIdx}_end_${count}`;
-};
-
-const getEdgeBoundChords = (lineIdx: number, type: 'start' | 'end'): EdgeChordItem[] => {
-  if (!scoreEditor.activeSong || !scoreEditor.activeSong.chordMap) return [];
-  const prefix = `line_${lineIdx}_${type}_`;
-  const result: EdgeChordItem[] = [];
-
-  let count = 0;
-  while (scoreEditor.activeSong.chordMap[`${prefix}${count}`]) {
-    result.push({
-      slotKey: `${prefix}${count}`,
-      chord: scoreEditor.activeSong.chordMap[`${prefix}${count}`],
-    });
-    count++;
-  }
-
-  if (type === 'start') {
-    return result.reverse();
-  }
-  return result;
-};
-
 interface CharItem {
   char: string;
   globalIndex: number;
 }
 
-const lyricsLines = computed(() => {
-  if (!scoreEditor.activeSong) return [];
-  const text = scoreEditor.activeSong.lyrics;
-  const lines: CharItem[][] = [];
-  let currentLine: CharItem[] = [];
+interface LineData {
+  lineIdx: number;
+  chars: CharItem[];
+  startChords: EdgeChordItem[];
+  endChords: EdgeChordItem[];
+  nextStartKey: string;
+  nextEndKey: string;
+}
 
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    if (char === '\n') {
-      lines.push(currentLine);
-      currentLine = [];
-    } else {
-      currentLine.push({ char, globalIndex: i });
+const lyricsLinesWithEdges = computed<LineData[]>(() => {
+  if (!scoreEditor.activeSong) return [];
+
+  const text = scoreEditor.activeSong.lyrics;
+  const map = scoreEditor.activeSong.chordMap || {};
+  const rawLines = text.split('\n');
+
+  let globalCharIdx = 0;
+
+  return rawLines.map((lineText, lineIdx) => {
+    const startChords: EdgeChordItem[] = [];
+    let startCount = 0;
+    while (map[`line_${lineIdx}_start_${startCount}`]) {
+      startChords.push({
+        slotKey: `line_${lineIdx}_start_${startCount}`,
+        chord: map[`line_${lineIdx}_start_${startCount}`],
+      });
+      startCount++;
     }
-  }
-  if (currentLine.length > 0) {
-    lines.push(currentLine);
-  }
-  return lines;
+
+    const endChords: EdgeChordItem[] = [];
+    let endCount = 0;
+    while (map[`line_${lineIdx}_end_${endCount}`]) {
+      endChords.push({
+        slotKey: `line_${lineIdx}_end_${endCount}`,
+        chord: map[`line_${lineIdx}_end_${endCount}`],
+      });
+      endCount++;
+    }
+
+    const chars = lineText.split('').map(char => ({
+      char,
+      globalIndex: globalCharIdx++,
+    }));
+
+    globalCharIdx++;
+
+    return {
+      lineIdx,
+      chars,
+      startChords: startChords.reverse(),
+      endChords,
+      nextStartKey: `line_${lineIdx}_start_${startCount}`,
+      nextEndKey: `line_${lineIdx}_end_${endCount}`,
+    };
+  });
 });
+
+const totalLines = computed(() => lyricsLinesWithEdges.value.length);
+const isAllSelected = computed(() => totalLines.value > 0 && selectedLineSet.value.size === totalLines.value);
+
+const sortedSelectedIndices = computed(() => {
+  return Array.from(selectedLineSet.value).sort((a, b) => a - b);
+});
+
+watch(
+  () => scoreEditor.activeSongId,
+  () => {
+    selectedLineSet.value.clear();
+  }
+);
+
+const handleRemoveLineIndex = (lineIdx: number) => {
+  const updated = new Set(selectedLineSet.value);
+  updated.delete(lineIdx);
+  selectedLineSet.value = updated;
+};
+
+const getLineIdxFromPoint = (clientX: number, clientY: number): number | null => {
+  const target = document.elementFromPoint(clientX, clientY);
+  const rowEl = target?.closest('.lyrics-line') as HTMLElement;
+  if (rowEl && rowEl.dataset.lineIdx !== undefined) {
+    return parseInt(rowEl.dataset.lineIdx, 10);
+  }
+  return null;
+};
+
+const checkAndAutoScroll = (clientY: number) => {
+  const container = scoreZoneRef.value;
+  if (!container) return;
+
+  const rect = container.getBoundingClientRect();
+  const EDGE_THRESHOLD = 40;
+  const SCROLL_SPEED = 12;
+
+  if (clientY < rect.top + EDGE_THRESHOLD) {
+    container.scrollTop -= SCROLL_SPEED;
+  } else if (clientY > rect.bottom - EDGE_THRESHOLD) {
+    container.scrollTop += SCROLL_SPEED;
+  }
+};
+
+const handlePointerDown = (e: PointerEvent, idx: number) => {
+  if (e.button !== 0) return;
+  e.stopPropagation();
+
+  isDraggingSelection.value = true;
+  isMovedDuringPointerDown.value = false;
+  pointerDownIdx.value = idx;
+  dragAnchorLine.value = idx;
+
+  isDragSelecting.value = !selectedLineSet.value.has(idx);
+  initialSelectedSnapshot.value = new Set(selectedLineSet.value);
+};
+
+const handlePointerMove = (e: PointerEvent) => {
+  if (!isDraggingSelection.value) return;
+
+  checkAndAutoScroll(e.clientY);
+
+  const idx = getLineIdxFromPoint(e.clientX, e.clientY);
+  if (idx !== null) {
+    if (idx !== pointerDownIdx.value) {
+      isMovedDuringPointerDown.value = true;
+    }
+
+    const min = Math.min(dragAnchorLine.value, idx);
+    const max = Math.max(dragAnchorLine.value, idx);
+    const updated = new Set(initialSelectedSnapshot.value);
+
+    for (let i = min; i <= max; i++) {
+      if (isDragSelecting.value) {
+        updated.add(i);
+      } else {
+        updated.delete(i);
+      }
+    }
+    selectedLineSet.value = updated;
+  }
+};
+
+const handlePointerUp = () => {
+  if (!isDraggingSelection.value) return;
+
+  if (!isMovedDuringPointerDown.value && pointerDownIdx.value !== -1) {
+    const idx = pointerDownIdx.value;
+    const updated = new Set(initialSelectedSnapshot.value);
+    if (updated.has(idx)) {
+      updated.delete(idx);
+    } else {
+      updated.add(idx);
+    }
+    selectedLineSet.value = updated;
+  }
+
+  isDraggingSelection.value = false;
+  pointerDownIdx.value = -1;
+};
+
+useEventListener(window, 'pointermove', handlePointerMove);
+useEventListener(window, 'pointerup', handlePointerUp);
+useEventListener(window, 'pointercancel', handlePointerUp);
+
+const handleToggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedLineSet.value.clear();
+  } else {
+    const all = new Set<number>();
+    for (let i = 0; i < totalLines.value; i++) {
+      all.add(i);
+    }
+    selectedLineSet.value = all;
+  }
+};
+
+// 🌟 导出选中的行图片：精确计算并获取所有选中行中最长的一行作为画布宽度
+const handleCopySelectedImage = async () => {
+  if (isExporting.value || selectedLineSet.value.size === 0) return;
+
+  const container = scoreZoneRef.value?.querySelector('.lyrics-lines-container') as HTMLElement;
+  if (!container) return;
+
+  isExporting.value = true;
+  uiStore.toast.info(`正在生成所选 ${selectedLineSet.value.size} 行图片...`);
+
+  // 1. 设置标记为 true，隐藏页面上的高亮背景色
+  isExporting.value = true;
+  await nextTick(); // 等待 DOM 响应式更新
+
+  const htmlToImage = await import('html-to-image');
+  const lineEls = Array.from(container.querySelectorAll('.lyrics-line')) as HTMLElement[];
+
+  // 临时隐藏未选中的行，并找出被选中行中的“最大行宽”
+  let maxLineWidth = 0;
+  lineEls.forEach((el, idx) => {
+    if (!selectedLineSet.value.has(idx)) {
+      el.style.display = 'none';
+    } else {
+      // 🌟 精准测量当前选中行的实际内容宽度
+      const lineWidth = el.scrollWidth;
+      if (lineWidth > maxLineWidth) {
+        maxLineWidth = lineWidth;
+      }
+    }
+  });
+
+  console.log('[ScoreInteractiveArea.vue: 403]', maxLineWidth);
+
+  const bgColor = getComputedStyle(document.body).getPropertyValue('--bg-main') || '#f2f2f7';
+
+  // 🌟 自定义左右与上下留白 (px)
+  const paddingX = 100; // 左右总留白
+  const paddingY = 140; // 上下总留白
+
+  const fullWidth = maxLineWidth + paddingX; // 图片总宽度 = 最长行宽度 + 左右留白
+  const fullHeight = container.scrollHeight + paddingY;
+
+  try {
+    const exportOptions = {
+      width: fullWidth,
+      height: fullHeight,
+      style: {
+        transform: 'none',
+        overflow: 'visible',
+        backgroundColor: bgColor,
+        width: `${maxLineWidth}px`, // 🌟 锁死内部渲染宽度为最长行宽度
+        height: `${container.scrollHeight}px`,
+        paddingTop: `${paddingY / 2}px`,
+        paddingBottom: `${paddingY / 2}px`,
+        paddingLeft: `${paddingX / 2}px`,
+        paddingRight: `${paddingX / 2}px`,
+        boxSizing: 'content-box',
+      },
+      backgroundColor: bgColor,
+      filter: (domNode: Node) => {
+        if (domNode instanceof HTMLElement && domNode.classList.contains('add-btn-slot')) {
+          return false;
+        }
+        return true;
+      },
+    };
+
+    await htmlToImage.toBlob(container, exportOptions);
+    const blob = await htmlToImage.toBlob(container, {
+      quality: 0.95,
+      pixelRatio: 2,
+      cacheBust: true,
+      ...exportOptions,
+    });
+
+    if (!blob) throw new Error('生成图片失败');
+
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    uiStore.toast.success(`已成功复制所选 ${selectedLineSet.value.size} 行图片至剪贴板`);
+  } catch (err) {
+    console.error('Export Score Lines Error:', err);
+    uiStore.toast.error('导出图片失败');
+  } finally {
+    // 2. 恢复所有行的显示
+    lineEls.forEach(el => {
+      el.style.display = '';
+    });
+    // 3. 关闭导出状态，恢复页面上的高亮显示
+    isExporting.value = false;
+  }
+};
 </script>
 
 <style scoped lang="less">
@@ -292,10 +467,11 @@ const lyricsLines = computed(() => {
 
 .interactive-score-zone {
   flex: 1;
-  padding: 1.2rem 2rem;
+  padding: 1.2rem 2rem 5rem 2rem;
   overflow-y: auto;
   overflow-x: auto;
   box-sizing: border-box;
+  position: relative;
 }
 
 .empty-lyrics-tip {
@@ -310,7 +486,7 @@ const lyricsLines = computed(() => {
 .lyrics-lines-container {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.2rem;
   max-width: 900px;
   margin: 0 auto;
   width: max-content;
@@ -319,207 +495,178 @@ const lyricsLines = computed(() => {
 
 .lyrics-line {
   display: flex;
-  flex-wrap: nowrap !important;
-  gap: 0 !important;
+  flex-wrap: nowrap;
+  gap: 0;
   align-items: stretch;
   width: max-content;
   min-width: 100%;
-  padding: 0.3rem 0.4rem;
+  padding: 0.2rem 0.4rem;
   border-radius: @radius-md;
   transition: background-color @duration-fast ease;
 
   &:hover {
     background-color: var(--bg-panel-hover);
 
-    .line-index-badge {
+    .index-text-tag:not(.is-selected) {
       color: var(--color-primary);
+      background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
     }
 
-    .add-btn-slot .add-edge-placeholder {
+    :deep(.add-btn-slot .add-edge-placeholder) {
       opacity: 1;
       pointer-events: auto;
     }
   }
+
+  &.is-line-selected {
+    background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
+  }
 }
 
 .line-index-badge {
-  font-size: 0.68rem;
-  font-weight: 700;
-  font-family: monospace;
-  color: var(--text-disabled);
-  margin-right: 0.5rem;
   display: flex;
   align-items: flex-end;
   padding-bottom: 0.1rem;
+  margin-right: 0.5rem;
   user-select: none;
   flex-shrink: 0;
-  transition: color @duration-fast ease;
+}
+
+.index-text-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: monospace;
+  color: var(--text-disabled);
+  padding: 0.08rem 0.35rem;
+  border-radius: @radius-sm;
+  cursor: pointer !important;
+  transition:
+    color @duration-fast ease,
+    background-color @duration-fast ease;
+
+  &.is-selected {
+    color: #ffffff !important;
+    background-color: var(--color-primary) !important;
+  }
 }
 
 .edge-chords-group {
   display: flex;
   align-items: stretch;
-  gap: 0 !important;
+  gap: 0;
 }
 
-.char-box {
+.score-floating-bar {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  padding: 0.15rem 0.12rem;
-  align-self: stretch;
-  border-radius: @radius-sm;
+  position: fixed;
+  left: 50%;
+  bottom: 1.8rem;
+  transform: translateX(-50%);
+  z-index: 90;
+  pointer-events: auto;
+  gap: 0.6rem;
+  padding: 0.4rem 0.8rem;
+  background-color: var(--bg-panel);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid var(--glass-border);
+  border-radius: 9999px;
+  box-shadow: @shadow-floating;
   box-sizing: border-box;
-  transition:
-    background-color @duration-fast ease,
-    box-shadow @duration-fast ease;
-  position: relative;
-  cursor: pointer;
-
-  &:hover {
-    background-color: color-mix(in srgb, var(--color-primary), transparent 88%);
-
-    .char-text {
-      color: var(--color-primary);
-    }
-  }
-
-  &.is-drop-target {
-    background-color: color-mix(in srgb, var(--color-primary), transparent 85%) !important;
-    box-shadow: inset 0 0 0 2px var(--color-primary);
-
-    .add-edge-placeholder {
-      opacity: 1 !important;
-      pointer-events: auto !important;
-    }
-  }
-
-  &.edge-slot {
-    opacity: 0.85;
-
-    &.add-btn-slot {
-      opacity: 1;
-      padding-left: 0.2rem;
-      padding-right: 0.2rem;
-
-      &:hover {
-        background-color: transparent !important;
-      }
-    }
-  }
 }
 
-.char-baseline-shim {
-  font-size: 0.95rem;
-  line-height: 1.1;
-  height: 1.25rem;
-  width: 0;
-  visibility: hidden;
-  user-select: none;
-}
-
-.add-edge-placeholder {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.25rem;
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    opacity @duration-fast ease,
-    background-color @duration-fast ease;
-  border: 1px dashed var(--color-primary);
-  background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
-  padding: 0 0.35rem;
-  border-radius: @radius-sm;
-  white-space: nowrap;
-  cursor: pointer;
-  box-sizing: border-box;
-
-  &:hover {
-    background-color: color-mix(in srgb, var(--color-primary), transparent 80%);
-  }
-}
-
-.chord-display-slot {
-  flex: 1;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  width: 100%;
-}
-
-.inline-fretboard-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0.12rem 0.15rem;
-  border-radius: @radius-sm;
-  background-color: transparent;
-  border: 1px solid transparent;
-  transition: @transition-fast;
-  cursor: pointer !important;
-
-  & * {
-    cursor: pointer !important;
-  }
-
-  &[draggable='true'] {
-    cursor: grab !important;
-
-    &:active {
-      cursor: grabbing !important;
-      opacity: 0.8 !important;
-    }
-  }
-
-  &:hover {
-    background-color: color-mix(in srgb, var(--text-title), transparent 90%);
-    border-color: var(--border-light);
-  }
-}
-
-.inline-chord-name {
-  font-size: 0.62rem;
-  font-weight: 800;
-  color: var(--text-title);
-  line-height: 1;
-  margin-bottom: 0.1rem;
-}
-
-.char-text {
+.bar-info-zone {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 100%;
-  font-size: 0.9rem;
+  gap: 0.4rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-title);
-  line-height: 1.15rem;
-  padding: 0 0.08rem;
-  border-radius: 0 !important;
-  transition:
-    color @duration-fast ease,
-    border-color @duration-fast ease;
-  border-bottom: 1.5px solid transparent;
-  box-sizing: border-box;
+}
 
-  .has-chord & {
-    border-bottom: 1.5px dashed var(--text-disabled);
+.selected-count-badge {
+  background-color: var(--color-primary);
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.05rem 0.4rem;
+  border-radius: 9999px;
+}
+
+.selected-text-tip {
+  color: var(--text-title);
+  white-space: nowrap;
+}
+
+.clickable-indices-list {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 12rem;
+  overflow-x: auto;
+  padding: 0.1rem 0;
+}
+
+.index-item-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 9999px;
+  background-color: color-mix(in srgb, var(--color-primary), transparent 88%);
+  color: var(--color-primary);
+  border: 1px solid color-mix(in srgb, var(--color-primary), transparent 75%);
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-family: monospace;
+  cursor: pointer;
+  transition: @transition-fast;
+  white-space: nowrap;
+
+  &:hover {
+    background-color: var(--color-danger);
+    color: #ffffff;
+    border-color: var(--color-danger);
   }
+}
+
+.remove-icon {
+  opacity: 0.7;
+}
+
+.bar-divider {
+  width: 1px;
+  height: 1rem;
+  background-color: var(--border-base);
+  opacity: 0.6;
+}
+
+.bar-actions-zone {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.floating-bar-fade-enter-active,
+.floating-bar-fade-leave-active {
+  transition:
+    opacity 0.25s cubic-bezier(0.25, 1, 0.5, 1),
+    transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.floating-bar-fade-enter-from,
+.floating-bar-fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 20px) scale(0.95);
 }
 </style>
 
 <style lang="less">
 body.is-global-dragging {
-  cursor: grabbing !important;
-
-  * {
-    cursor: grabbing !important;
+  &,
+  & * {
+    cursor: grabbing;
   }
 
   .interactive-score-zone {
@@ -528,11 +675,11 @@ body.is-global-dragging {
     .fretboard-layout-scaler,
     .line-index-badge,
     svg {
-      pointer-events: none !important;
+      pointer-events: none;
     }
 
     .char-box {
-      pointer-events: auto !important;
+      pointer-events: auto;
     }
   }
 }

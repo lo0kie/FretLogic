@@ -19,12 +19,11 @@
       <div class="nav-brand-group hidden-mobile">
         <span class="app-brand-title">Fret Logic</span>
 
-        <!-- 🌟 复用通用 BaseSegmentedControl 组件驱动页面路由跳转 -->
         <BaseSegmentedControl :model-value="route.path" :options="NAV_OPTIONS" @change="path => router.push(path)" />
       </div>
     </div>
 
-    <!-- 2. 中间：试听 / 导出胶囊 -->
+    <!-- 2. 中间：试听 / 导出胶囊 (乐谱库模式已移除旧导出按钮) -->
     <div class="header-section section-center">
       <!-- 工作台模式：试听 + 导出透明/带背景指板 -->
       <div v-if="route.path === '/'" class="segmented-control-capsule">
@@ -63,18 +62,6 @@
             @click="$emit('export-image', false)"
           >
             <Copy :size="16" stroke-width="2" />
-          </ActionButton>
-        </GlobalTooltip>
-      </div>
-
-      <!-- 🌟 乐谱库模式：点击打开导出配置 Modal -->
-      <div v-else-if="route.path === '/score' && scoreEditor.activeSong" class="segmented-control-capsule">
-        <GlobalTooltip content="导出乐谱图片配置" placement="bottom">
-          <ActionButton size="sm" variant="ghost" :disabled="uiStore.isCopying" @click="$emit('open-score-export')">
-            <template #prefix>
-              <Image :size="15" stroke-width="2.5" />
-            </template>
-            导出乐谱
           </ActionButton>
         </GlobalTooltip>
       </div>
@@ -148,14 +135,12 @@ import SyncSettingsCard from './SyncSettingsCard.vue';
 
 defineEmits<{
   (e: 'export-image', isTransparent: boolean): void;
-  (e: 'open-score-export'): void;
   (e: 'toggle-theme', event: MouseEvent): void;
 }>();
 
 const route = useRoute();
 const router = useRouter();
 
-// 🌟 Header 导航参数定义
 const NAV_OPTIONS: SegmentOption<string>[] = [
   { label: '工作台', value: '/' },
   { label: '乐谱库', value: '/score' },

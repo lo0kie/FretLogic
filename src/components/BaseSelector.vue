@@ -83,9 +83,15 @@ const referenceRef = ref<HTMLElement | null>(null);
 const floatingRef = ref<HTMLElement | null>(null);
 const dropdownRef = ref<HTMLDivElement | null>(null);
 
+// src/components/BaseSelector.vue
 const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   placement: 'bottom-start',
-  whileElementsMounted: (reference, floating, update) => autoUpdate(reference, floating, update),
+  strategy: 'fixed', // 🌟 改为 fixed 定位，防止父级 transform 导致错位
+  whileElementsMounted: (reference, floating, update) =>
+    autoUpdate(reference, floating, update, {
+      ancestorScroll: true, // 🌟 监听所有祖先元素的滚动
+      elementResize: true,
+    }),
   middleware: [
     offset(6),
     flip(),

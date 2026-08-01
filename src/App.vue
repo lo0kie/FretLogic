@@ -2,11 +2,7 @@
   <GlobalToast />
 
   <div class="app-window-shell">
-    <TopHeader
-      @export-image="handleExportImage"
-      @open-score-export="handleOpenScoreExport"
-      @toggle-theme="executeToggleThemeWithAnimation"
-    />
+    <TopHeader @export-image="handleExportImage" @toggle-theme="executeToggleThemeWithAnimation" />
 
     <div class="app-split-view-body">
       <Transition name="drawer-fade">
@@ -22,7 +18,7 @@
       <!-- 主视图路由出口 -->
       <main class="app-main-content">
         <router-view v-slot="{ Component }">
-          <component :is="Component" ref="activeViewRef" />
+          <component :is="Component" />
         </router-view>
       </main>
     </div>
@@ -34,7 +30,7 @@ import { useChordService } from '@/services/useChordService';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import TopHeader from '@/views/header-top/TopHeader.vue';
-import { defineAsyncComponent, ref } from 'vue';
+import { defineAsyncComponent } from 'vue';
 import { useRoute } from 'vue-router';
 import GlobalToast from './components/GlobalToast.vue';
 
@@ -45,19 +41,6 @@ const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
 
 const chordService = useChordService();
-
-// 🌟 抓住当前活跃的路由组件引用 (ScoreView)
-const activeViewRef = ref<any>(null);
-
-const handleOpenScoreExport = () => {
-  // 🌟 优先通过 ScoreView.vue 的 defineExpose({ openExportModal }) 触发
-  if (activeViewRef.value && typeof activeViewRef.value.openExportModal === 'function') {
-    activeViewRef.value.openExportModal();
-  } else {
-    // 降级触发事件机制
-    window.dispatchEvent(new CustomEvent('open-score-export-modal'));
-  }
-};
 
 const handleExportImage = (isTransparent: boolean) => {
   let targetEl: HTMLElement | null = null;

@@ -21,45 +21,30 @@
   </div>
 
   <ChordPickerModal v-model:visible="isPickerOpen" :selected-slot-key="scoreEditor.selectedSlotKey" />
-  <ScoreExportModal v-model:visible="isExportModalOpen" />
 </template>
 
 <script setup lang="ts">
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
-import { useEventListener } from '@vueuse/core';
 import { ref } from 'vue';
 
 import ChordPickerModal from './ChordPickerModal.vue';
-import ScoreExportModal from './ScoreExportModal.vue';
 import ScoreInteractiveArea from './ScoreInteractiveArea.vue';
 import ScoreLyricsEditor from './ScoreLyricsEditor.vue';
 
 const scoreEditor = useScoreEditorStore();
 
 const isPickerOpen = ref(false);
-const isExportModalOpen = ref(false);
 
 const openChordPicker = (slotKey: string | number) => {
   scoreEditor.selectedSlotKey = slotKey;
   isPickerOpen.value = true;
 };
-
-const openExportModal = () => {
-  isExportModalOpen.value = true;
-};
-
-useEventListener(window, 'open-score-export-modal', () => {
-  isExportModalOpen.value = true;
-});
-
-defineExpose({ openExportModal });
 </script>
 
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 
-/* 🌟 1. 修复界面滚动：设置 100% 容器宽高与 Flex 弹性，充当滚动域 */
 .score-view-wrapper {
   display: flex;
   width: 100%;
@@ -77,10 +62,9 @@ defineExpose({ openExportModal });
   min-height: 0;
   background-color: var(--bg-main);
   box-sizing: border-box;
-  overflow-y: auto; /* 🌟 开启主区滚动 */
+  overflow-y: auto;
 }
 
-/* 🌟 2. 修复空状态样式 */
 .no-active-song {
   display: flex;
   flex-direction: column;

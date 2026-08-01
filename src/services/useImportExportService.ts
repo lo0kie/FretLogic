@@ -1,9 +1,11 @@
 ﻿import { useChordStore } from '@/stores/chordStore';
+import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';
 
 export function useImportExportService() {
   const chordStore = useChordStore();
+  const songStore = useSongStore();
   const uiStore = useUiStore();
 
   const processImport = (file: File, resetInputCallback: () => void) => {
@@ -27,6 +29,12 @@ export function useImportExportService() {
         if (cleanAndValidateData(imported, 'import')) {
           chordStore.overwriteGroups(imported.groups);
           chordStore.overwriteChords(imported.chords);
+
+          // 🌟 恢复乐谱数据
+          if (imported.songs) {
+            songStore.overwriteSongs(imported.songs);
+          }
+
           if (!chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
             chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
           }
@@ -36,7 +44,7 @@ export function useImportExportService() {
         }
       } catch (err) {
         console.error('备份解析拦截:', err);
-        uiStore.toast.error('文件非标准和弦备份或核心数据已损坏');
+        uiStore.toast.error('文件非标准备份或核心数据已损坏');
       } finally {
         resetInputCallback();
       }
@@ -45,7 +53,12 @@ export function useImportExportService() {
   };
 
   const triggerFullExport = () => {
-    const originalData = { groups: chordStore.groups, chords: chordStore.savedChordsList };
+    const originalData = {
+      groups: chordStore.groups,
+      chords: chordStore.savedChordsList,
+      songs: songStore.songs, // 🌟 打包乐谱数据全量导出
+    };
+
     if (cleanAndValidateData(originalData, 'export')) {
       chordStore.overwriteChords(originalData.chords);
 
@@ -54,9 +67,9 @@ export function useImportExportService() {
       const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, -1);
       const dateStr = localISOTime.replace(/T/, '_').replace(/:/g, '-').split('.')[0];
       const link = document.createElement('a');
-      const dataString = JSON.stringify({ groups: originalData.groups, chords: originalData.chords });
+      const dataString = JSON.stringify(originalData);
       link.href = URL.createObjectURL(new Blob([dataString], { type: 'application/json' }));
-      link.download = `和弦备份_${dateStr}.json`;
+      link.download = `FretLogic备份_${dateStr}.json`;
       link.click();
       uiStore.toast.success('备份已下载');
     } else {
