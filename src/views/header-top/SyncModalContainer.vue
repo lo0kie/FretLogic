@@ -1,12 +1,6 @@
 <template>
   <!-- 1. 云端同步设置 Modal -->
-  <BaseModal
-    :visible="isSyncModalOpen"
-    @update:visible="val => emit('update:isSyncModalOpen', val)"
-    title="云端同步设置"
-    :show-footer="false"
-    width="w-80"
-  >
+  <BaseModal v-model:visible="isSyncModalOpen" title="云端同步设置" :show-footer="false" width="w-80">
     <SyncSettingsCard
       :is-syncing="isSyncing"
       :is-pulling="isPulling"
@@ -33,11 +27,7 @@ import { useGithubSyncService } from '@/services/useGithubSyncService';
 import { ref } from 'vue';
 import SyncSettingsCard from './SyncSettingsCard.vue';
 
-defineProps<{ isSyncModalOpen: boolean }>();
-
-const emit = defineEmits<{
-  (e: 'update:isSyncModalOpen', value: boolean): void;
-}>();
+const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true });
 
 const isPullConfirmOpen = ref(false);
 const { triggerGlobalSync, pullFromGithub, isSyncing, isPulling } = useGithubSyncService();
@@ -45,7 +35,7 @@ const { triggerGlobalSync, pullFromGithub, isSyncing, isPulling } = useGithubSyn
 const confirmPull = () => {
   pullFromGithub();
   isPullConfirmOpen.value = false;
-  emit('update:isSyncModalOpen', false);
+  isSyncModalOpen.value = false;
 };
 </script>
 

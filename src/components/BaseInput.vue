@@ -5,6 +5,7 @@
     </div>
 
     <input
+      :id="inputId"
       :value="modelValue"
       @input="handleInput"
       @keyup.enter="$emit('enter')"
@@ -23,26 +24,26 @@
       autocomplete="off"
     />
 
-    <div class="suffix-zone" :class="sizeClass">
-      <button
-        v-if="clearable && modelValue && !disabled"
-        type="button"
-        @click="handleClear"
-        class="clear-button"
-        title="清空内容"
-      >
-        <X :size="10" stroke-width="3" />
-      </button>
-    </div>
+    <button
+      v-if="clearable && modelValue && !disabled"
+      type="button"
+      @click="handleClear"
+      class="clear-button"
+      title="清空内容"
+      :class="sizeClass"
+    >
+      <X :size="10" stroke-width="3" />
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { X } from '@lucide/vue';
-import { computed, nextTick, onMounted, useTemplateRef } from 'vue';
+import { computed, nextTick, onMounted, useId, useTemplateRef } from 'vue';
+
+const inputId = useId();
 
 const {
-  modelValue,
   placeholder = '',
   disabled = false,
   clearable = false,
@@ -51,7 +52,6 @@ const {
   fontSize = 'md',
   autofocus = false,
 } = defineProps<{
-  modelValue: string;
   placeholder?: string;
   disabled?: boolean;
   clearable?: boolean;
@@ -62,8 +62,9 @@ const {
   autofocus?: boolean;
 }>();
 
+const modelValue = defineModel<string>({ required: true });
+
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: string): void;
   (e: 'enter'): void;
   (e: 'clear'): void;
 }>();
@@ -84,18 +85,17 @@ const fontClass = computed(() => {
 });
 
 const handleInput = (e: Event) => {
-  emit('update:modelValue', (e.target as HTMLInputElement).value);
+  modelValue.value = (e.target as HTMLInputElement).value;
 };
 
 const handleClear = () => {
-  emit('update:modelValue', '');
+  modelValue.value = '';
   emit('clear');
   inputRef.value?.focus();
 };
 
 onMounted(() => {
   if (autofocus) {
-    // nextTick 确保 DOM 已就绪（尤其在 Modal / Transition 内更可靠）
     nextTick(() => {
       inputRef.value?.focus();
     });
@@ -145,28 +145,12 @@ defineExpose({
   }
 }
 
-/* 后缀定位区域 */
-.suffix-zone {
+/* 清空按钮原生样式 */
+.clear-button {
   position: absolute;
   top: 0;
   bottom: 0;
-  display: flex;
-  align-items: center;
-  pointer-events: auto;
-
-  &.size-sm {
-    right: 0.35rem;
-  }
-  &.size-md {
-    right: 0.5rem;
-  }
-  &.size-lg {
-    right: 0.65rem;
-  }
-}
-
-/* 清空按钮原生样式 */
-.clear-button {
+  margin: auto 0;
   height: 1rem;
   width: 1rem;
   opacity: 0;
@@ -180,6 +164,17 @@ defineExpose({
   border-radius: 50%;
   cursor: pointer;
   transition: @transition-fast;
+  pointer-events: auto;
+
+  &.size-sm {
+    right: 0.35rem;
+  }
+  &.size-md {
+    right: 0.5rem;
+  }
+  &.size-lg {
+    right: 0.65rem;
+  }
 
   &:hover {
     color: #ffffff;
@@ -265,21 +260,22 @@ defineExpose({
   }
 }
 
-.text-xs-style {
-  font-size: 0.72rem !important;
+/* 🌟 优化：通过提高选择器特异性移除 !important */
+.base-input-field.text-xs-style {
+  font-size: 0.72rem;
 }
 
-.text-md-style {
-  font-size: 0.78rem !important;
+.base-input-field.text-md-style {
+  font-size: 0.78rem;
 }
 
-.text-lg-style {
-  font-size: 0.85rem !important;
+.base-input-field.text-lg-style {
+  font-size: 0.85rem;
 }
 
-.css-password-field {
-  -webkit-text-security: disc !important;
-  text-security: disc !important;
+.base-input-field.css-password-field {
+  -webkit-text-security: disc;
+  text-security: disc;
 }
 
 @media (max-width: 768px) {
@@ -295,12 +291,13 @@ defineExpose({
     }
   }
 
-  .text-xs-style {
-    font-size: 0.8rem !important;
+  /* 🌟 优化：移动端同样通过嵌套提高特异性 */
+  .base-input-field.text-xs-style {
+    font-size: 0.8rem;
   }
 
-  .text-md-style {
-    font-size: 0.85rem !important;
+  .base-input-field.text-md-style {
+    font-size: 0.85rem;
   }
 }
 </style>

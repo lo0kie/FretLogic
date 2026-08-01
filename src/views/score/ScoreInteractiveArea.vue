@@ -1,5 +1,5 @@
 <template>
-  <div class="interactive-score-zone no-scrollbar" ref="scoreZoneRef" :class="{ 'is-exporting': isExporting }">
+  <div ref="scoreZoneRef" class="interactive-score-zone no-scrollbar">
     <div v-if="!scoreEditor.activeSong?.lyrics.trim()" class="empty-lyrics-tip">请先在“编辑歌词”模式下输入文本内容</div>
 
     <div v-else class="lyrics-lines-container">
@@ -178,19 +178,6 @@ const formatLineIndex = (index: number) => String(index + 1).padStart(2, '0');
   overflow-x: auto;
   box-sizing: border-box;
   position: relative;
-
-  // 🌟 导出截图期间：!important 强制压过 .index-text-tag.is-selected 的 !important 高亮样式，
-  // 保证无论响应式更新时序如何，截图里都不会残留选中态视觉
-  &.is-exporting {
-    .lyrics-line {
-      background-color: transparent !important;
-    }
-
-    .index-text-tag {
-      color: var(--text-disabled) !important;
-      background-color: transparent !important;
-    }
-  }
 }
 
 .empty-lyrics-tip {

@@ -167,26 +167,26 @@ const handleSetRootString = (stringIndex: number) => {
     max-height @duration-slow @bezier-sidebar,
     margin @duration-slow @bezier-sidebar,
     opacity @duration-fast ease;
-  max-height: 500px;
   overflow: hidden;
   opacity: 1;
+  width: 100%; /* 🌟 确保外层包裹器填满父容器 */
 }
 
 .chord-analysis-panel {
-  position: absolute;
-  right: 2rem;
-  top: 3.5rem;
-  transform: none;
-  width: 13.8rem;
+  /* 🌟 移除内部的绝对定位，由外层布局容器统一控制 */
+  position: relative;
+  right: auto;
+  top: auto;
+
+  width: 100%; /* 🌟 填满外层容器，不再固定 13.8rem */
   height: auto;
-  max-height: calc(100vh - 5rem);
+  max-height: calc(100vh - 5rem); /* 保留最大高度限制，防止溢出 */
   padding: 0.85rem;
   background-color: var(--bg-panel);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   border: 1px solid var(--glass-border);
   border-radius: @radius-lg;
-  box-shadow: var(--shadow-floating);
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -269,6 +269,7 @@ const handleSetRootString = (stringIndex: number) => {
   }
 
   .chord-analysis-panel {
+    /* 🌟 移动端同样移除绝对定位 */
     position: relative;
     right: auto;
     top: auto;

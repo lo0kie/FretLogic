@@ -16,7 +16,7 @@
       <SidebarLeft :class="{ 'is-mobile-drawer': uiStore.isMobile }" />
 
       <!-- 主视图路由出口 -->
-      <main class="app-main-content">
+      <main class="app-main-content" :style="{ paddingLeft: mainPaddingLeft }">
         <router-view v-slot="{ Component }">
           <component :is="Component" />
         </router-view>
@@ -30,9 +30,10 @@ import { useChordService } from '@/services/useChordService';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import TopHeader from '@/views/header-top/TopHeader.vue';
-import { defineAsyncComponent } from 'vue';
+import { computed, defineAsyncComponent } from 'vue';
 import { useRoute } from 'vue-router';
 import GlobalToast from './components/GlobalToast.vue';
+import { LEFT_SIDEBAR_WIDTH_PIXEL } from './constants/layout.ts';
 
 const SidebarLeft = defineAsyncComponent(() => import('./views/sidebar-left/SidebarLeft.vue'));
 
@@ -40,6 +41,11 @@ const route = useRoute();
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
 const chordService = useChordService();
+
+const mainPaddingLeft = computed(() => {
+  if (uiStore.isMobile || !uiStore.isLeftOpen || route.meta.overlapSidebar) return '0px';
+  return LEFT_SIDEBAR_WIDTH_PIXEL;
+});
 
 const handleExportImage = (isTransparent: boolean) => {
   let targetEl: HTMLElement | null = null;
@@ -119,10 +125,12 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
 }
 
 .app-main-content {
-  flex: 1;
-  height: 100%;
-  position: relative;
-  min-width: 0;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  // 🌟 添加过渡动画，让 padding 变化不突兀
+  transition: padding-left @duration-slow @bezier-sidebar;
 }
 
 .mobile-drawer-mask {
@@ -132,6 +140,14 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
   background-color: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+}
+
+:deep(.panel-left) {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 50;
 }
 
 :deep(.panel-left.is-mobile-drawer) {

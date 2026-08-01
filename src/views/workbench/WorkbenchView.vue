@@ -1,17 +1,18 @@
 <template>
   <div class="workbench-layout-wrapper">
-    <!-- 1. 指板与分析面板的整体居中容器 -->
+    <!-- 指板与分析面板的容器 -->
     <div class="workbench-scroll-container">
       <div class="workbench-card-center-zone">
         <WorkbenchCard />
       </div>
 
+      <!-- 面板仍在容器内，但通过 CSS 脱离文档流 -->
       <div class="analysis-panel-slot">
         <ChordAnalysisPanel />
       </div>
     </div>
 
-    <!-- 2. 底部吸附操作按钮栏 -->
+    <!-- 底部吸附操作按钮栏 -->
     <FloatingActionBar />
   </div>
 </template>
@@ -29,79 +30,65 @@ import WorkbenchCard from './WorkbenchCard.vue';
   position: absolute;
   inset: 0;
   z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 2rem;
-  padding-top: 3.5rem;
-  padding-bottom: 6.15rem;
   overflow: hidden;
   box-sizing: border-box;
   pointer-events: none;
 }
 
-/* 🌟 核心：以视口宽度满屏居中，不参与左侧栏的 Flex 挤压流 */
+/* 🌟 核心：让指板独占居中流 */
 .workbench-scroll-container {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  position: relative; /* 🌟 作为面板绝对定位的参照物 */
   width: 100%;
   height: 100%;
-  max-width: 1000px; /* 限制整体最大宽度，保证右侧面板不会飞出屏幕外 */
-  margin: 0 auto;
-  gap: 2rem;
+  display: flex;
+  justify-content: center; /* 🌟 指板始终居中 */
+  align-items: flex-start;
+  padding: 3.5rem 2rem 6.15rem 2rem;
+  box-sizing: border-box;
+  overflow-y: auto;
+  pointer-events: auto;
 }
 
 .workbench-card-center-zone {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  flex: 1;
-  pointer-events: auto;
-}
-
-.analysis-panel-slot {
-  width: 13.8rem;
   flex-shrink: 0;
-  pointer-events: auto;
-  position: relative;
+  /* 指板自然居中，不受面板影响 */
 }
 
-@media (max-width: 1100px) {
-  /* 屏幕较小时自动隐藏右侧分析面板槽位，或者让其浮动，避免挤压指板 */
-  .analysis-panel-slot {
-    position: absolute;
-    right: 1.5rem;
-    top: 0;
-  }
+/* 🌟 分析面板：绝对定位浮在右侧，不挤压指板 */
+.analysis-panel-slot {
+  position: absolute; /* 🌟 脱离文档流 */
+  top: 3.5rem; /* 🌟 与容器的 padding-top 保持一致，确保顶部对齐 */
+  right: 2rem;
+  width: 13.8rem; /* 🌟 强制宽度 */
+  min-width: 13.8rem; /* 🌟 防止被压缩 */
+  pointer-events: auto;
+  z-index: 10;
+
+  /* 防止面板过高遮挡底部操作栏 */
+  max-height: calc(100% - 3.5rem - 6.15rem);
+  overflow-y: auto;
 }
 
 @media (max-width: 768px) {
   .workbench-layout-wrapper {
-    padding: 0.5rem;
-    padding-bottom: 5.5rem;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
     pointer-events: auto;
   }
 
   .workbench-scroll-container {
-    flex-direction: column;
+    padding: 0.5rem 0.5rem 5.5rem 0.5rem;
     align-items: center;
-    gap: 0.5rem;
-    height: auto;
-    max-width: 100%;
   }
 
-  .workbench-card-center-zone {
-    width: 100%;
-  }
-
+  /* 移动端：面板改为底部固定 */
   .analysis-panel-slot {
-    position: relative;
-    right: auto;
-    width: 100%;
+    position: fixed;
+    top: auto;
+    bottom: 5.5rem;
+    right: 0.5rem;
+    left: 0.5rem;
+    width: auto;
+    min-width: unset;
+    max-height: 40vh;
   }
 }
 </style>

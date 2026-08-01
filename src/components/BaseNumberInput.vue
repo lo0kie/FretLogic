@@ -18,7 +18,6 @@
 import { computed } from 'vue';
 
 const {
-  modelValue,
   min = 0,
   max = 100,
   step = 1,
@@ -27,7 +26,6 @@ const {
   labelSuffix = '',
   formatter,
 } = defineProps<{
-  modelValue: number;
   min?: number;
   max?: number;
   step?: number;
@@ -37,26 +35,29 @@ const {
   formatter?: (val: number) => string;
 }>();
 
+// 🌟 使用 defineModel 接管双向绑定
+const modelValue = defineModel<number>({ required: true });
+
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: number): void;
+  // 🌟 移除 update:modelValue，由 defineModel 内部自动处理
   (e: 'change', value: number): void;
 }>();
 
 // 🌟 默认格式化展示文本
 const displayText = computed(() => {
   if (formatter) {
-    return formatter(modelValue);
+    return formatter(modelValue.value); // 🌟 修复：script 中必须使用 .value
   }
-  return `${labelPrefix}${modelValue}${labelSuffix}`;
+  return `${labelPrefix}${modelValue.value}${labelSuffix}`; // 🌟 修复：script 中必须使用 .value
 });
 
 const clamp = (val: number) => Math.min(max, Math.max(min, val));
 
 const handleStep = (delta: number) => {
   if (disabled) return;
-  const nextVal = clamp(modelValue + delta);
-  if (nextVal !== modelValue) {
-    emit('update:modelValue', nextVal);
+  const nextVal = clamp(modelValue.value + delta);
+  if (nextVal !== modelValue.value) {
+    modelValue.value = nextVal; // 🌟 修改：直接赋值，替代 emit('update:modelValue')
     emit('change', nextVal);
   }
 };
