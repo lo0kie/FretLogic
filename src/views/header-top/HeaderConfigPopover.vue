@@ -130,12 +130,6 @@ onClickOutside(
   }
 }
 
-.option-text-truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .fade-scale-transition(dropdown-fade, -6px, 0.96);
 
 @media (max-width: 768px) {

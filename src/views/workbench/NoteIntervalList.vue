@@ -27,7 +27,7 @@
 
 <script setup lang="ts">
 import { useLongPress } from '@/services/useLongPress';
-import type { NoteInput } from '@/utils/chordEngine';
+import { NoteInput } from '@/types';
 import { ref } from 'vue';
 
 export interface RenderNoteItem extends NoteInput {

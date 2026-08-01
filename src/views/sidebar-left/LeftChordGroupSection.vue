@@ -18,14 +18,14 @@
     :touchStartThreshold="12"
     :swap-threshold="0.5"
   >
-    <div
-      v-for="group in chordStore.groups"
-      :key="group.id"
-      :ref="el => setGroupCardRef(el, group.id)"
-      class="group-box-card"
-    >
-      <GlobalContextMenu :ref="el => setContextMenuRef(el, group.id)" :items="getGroupMenuItems(group)">
+    <template v-for="group in chordStore.groups" :key="group.id">
+      <GlobalContextMenu
+        :ref="el => setContextMenuRef(el, group.id)"
+        :items="getGroupMenuItems(group)"
+        class="group-box-card"
+      >
         <div
+          :ref="el => setGroupCardRef(el, group.id)"
           @click="chordService.executeGroupToggle(group.id)"
           class="group-title-row"
           :class="{ 'is-context-open': isGroupMenuOpen(group.id) }"
@@ -63,44 +63,44 @@
             </div>
           </div>
         </div>
+
+        <div v-if="!group.collapsed" class="chord-content-wrapper">
+          <VueDraggable
+            :model-value="filteredChordsGroupMap.get(group.id) || []"
+            :animation="200"
+            ghost-class="drag-ghost-style"
+            chosen-class="drag-chosen-style"
+            drag-class="drag-active-style"
+            :disabled="Boolean(searchQuery) || uiStore.isMobile"
+            class="chords-grid-layout"
+            @update="e => chordService.handleChordSort(e, group.id)"
+            :swap-threshold="0.5"
+            :touchStartThreshold="12"
+          >
+            <LeftChordCard
+              v-for="chord in filteredChordsGroupMap.get(group.id) || []"
+              :key="chord.id"
+              :chord="chord"
+              :is-editing="editorStore.editingId === chord.id"
+              @delete="handleLocalDeleteChord"
+              @move="$emit('open-move', chord)"
+              @click="chordService.loadChordToEditor(chord)"
+              class="chord-item-grab-handle"
+            />
+          </VueDraggable>
+
+          <div v-if="getGroupChordsCount(group.id) === 0" class="empty-placeholder-card z-index-bg">
+            <p class="placeholder-card-text">暂无和弦</p>
+          </div>
+          <div
+            v-else-if="searchQuery && (filteredChordsGroupMap.get(group.id) || []).length === 0"
+            class="empty-placeholder-card z-index-bg"
+          >
+            <p class="placeholder-card-text">无匹配</p>
+          </div>
+        </div>
       </GlobalContextMenu>
-
-      <div v-if="!group.collapsed" class="chord-content-wrapper">
-        <VueDraggable
-          :model-value="filteredChordsGroupMap.get(group.id) || []"
-          :animation="200"
-          ghost-class="drag-ghost-style"
-          chosen-class="drag-chosen-style"
-          drag-class="drag-active-style"
-          :disabled="Boolean(searchQuery) || uiStore.isMobile"
-          class="chords-grid-layout"
-          @update="e => chordService.handleChordSort(e, group.id)"
-          :swap-threshold="0.5"
-          :touchStartThreshold="12"
-        >
-          <LeftChordCard
-            v-for="chord in filteredChordsGroupMap.get(group.id) || []"
-            :key="chord.id"
-            :chord="chord"
-            :is-editing="editorStore.editingId === chord.id"
-            @delete="handleLocalDeleteChord"
-            @move="$emit('open-move', chord)"
-            @click="chordService.loadChordToEditor(chord)"
-            class="chord-item-grab-handle"
-          />
-        </VueDraggable>
-
-        <div v-if="getGroupChordsCount(group.id) === 0" class="empty-placeholder-card z-index-bg">
-          <p class="placeholder-card-text">暂无和弦</p>
-        </div>
-        <div
-          v-else-if="searchQuery && (filteredChordsGroupMap.get(group.id) || []).length === 0"
-          class="empty-placeholder-card z-index-bg"
-        >
-          <p class="placeholder-card-text">无匹配</p>
-        </div>
-      </div>
-    </div>
+    </template>
   </VueDraggable>
 </template>
 

@@ -104,7 +104,13 @@ watch(
   val => {
     if (val) {
       pickerSearchQuery.value = '';
-      if (chordStore.selectedGroupId && chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
+
+      const currentSlotKey = scoreEditor.selectedSlotKey;
+      const boundChord = currentSlotKey !== null ? scoreEditor.activeSong?.chordMap[currentSlotKey] : null;
+
+      if (boundChord && boundChord.groupId) {
+        selectedGroupId.value = boundChord.groupId;
+      } else if (chordStore.selectedGroupId && chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
         selectedGroupId.value = chordStore.selectedGroupId;
       } else {
         selectedGroupId.value = 'ALL';

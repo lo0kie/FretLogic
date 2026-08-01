@@ -20,6 +20,7 @@
         class="inline-fretboard-card"
         draggable="true"
         title="点击更换和弦，按住可拖拽换位"
+        @click.stop="emit('click')"
         @dragstart.stop="emit('dragstart')"
         @dragend="emit('dragend')"
       >
@@ -101,7 +102,7 @@ const emit = defineEmits<{
     }
   }
 
-  &.char-box.is-drop-target {
+  &.is-drop-target {
     background-color: color-mix(in srgb, var(--color-primary), transparent 85%);
     box-shadow: inset 0 0 0 2px var(--color-primary);
 

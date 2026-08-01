@@ -3,7 +3,7 @@
     <!-- 1. 指板与分析面板的整体居中容器 -->
     <div class="workbench-scroll-container">
       <div class="workbench-card-center-zone">
-        <WorkbenchCard ref="workbenchCardRef" />
+        <WorkbenchCard />
       </div>
 
       <div class="analysis-panel-slot">
@@ -17,12 +17,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
 import ChordAnalysisPanel from './ChordAnalysisPanel.vue';
 import FloatingActionBar from './FloatingActionBar.vue';
 import WorkbenchCard from './WorkbenchCard.vue';
-
-const workbenchCardRef = ref<InstanceType<typeof WorkbenchCard>>();
 </script>
 
 <style scoped lang="less">

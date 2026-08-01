@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import type { CandidateResult } from '@/utils/chordEngine';
+import { CandidateResult } from '@/types';
 
 defineProps<{
   candidates: CandidateResult[];
@@ -62,8 +62,6 @@ const emit = defineEmits<{
   overflow-y: auto;
   flex-shrink: 0;
   padding: 0.1rem;
-  align-content: flex-start;
-  align-items: flex-start;
 }
 
 .candidate-badge {

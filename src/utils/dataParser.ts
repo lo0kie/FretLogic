@@ -1,4 +1,92 @@
-﻿import type { ImportExportPayload } from '@/types';
+﻿import type { Chord, Group, ImportExportPayload, Song } from '@/types';
+
+// ---------- 1. 独立子校验器 ----------
+
+const validateGroups = (groups: unknown, issues: string[]): Group[] => {
+  if (!Array.isArray(groups)) {
+    issues.push('groups 字段必须为数组');
+    return [];
+  }
+
+  return groups.filter((g: any, index: number) => {
+    if (!g || typeof g !== 'object' || typeof g.id !== 'string' || typeof g.name !== 'string') {
+      issues.push(`groups[${index}] 结构损坏，缺失必要属性`);
+      return false;
+    }
+    if (g.collapsed === undefined) g.collapsed = false;
+    return true;
+  });
+};
+
+const validateChords = (chords: unknown, issues: string[]): Chord[] => {
+  if (!Array.isArray(chords)) {
+    issues.push('chords 字段必须为数组');
+    return [];
+  }
+
+  return chords.filter((c: any, index: number) => {
+    if (!c || typeof c !== 'object') {
+      issues.push(`chords[${index}] 不是有效的对象`);
+      return false;
+    }
+    if (typeof c.id !== 'string' || typeof c.chordName !== 'string' || typeof c.groupId !== 'string') {
+      issues.push(`chords[${index}] (${c.id || index}) 缺失基础识别属性`);
+      return false;
+    }
+    if (!Array.isArray(c.strings) || c.strings.length !== 6) {
+      issues.push(`chords[${index}] (${c.id}) 琴弦物理资产数组损坏 (必须为6弦)`);
+      return false;
+    }
+
+    const isStringsValid = c.strings.every((s: any) => {
+      return (
+        s &&
+        typeof s === 'object' &&
+        typeof s.fret === 'number' &&
+        typeof s.preferFlat === 'boolean' &&
+        typeof s.isRoot === 'boolean'
+      );
+    });
+    if (!isStringsValid) {
+      issues.push(`chords[${index}] (${c.id}) 内部存在损坏的琴弦音符节点`);
+      return false;
+    }
+
+    if (c.fretCount !== 3 && c.fretCount !== 4 && c.fretCount !== 5) {
+      c.fretCount = 3;
+    }
+    if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 12) {
+      c.capo = 0;
+    }
+    if (!c.tuning) c.tuning = 'STANDARD';
+
+    return true;
+  });
+};
+
+const validateSongs = (songs: unknown, issues: string[]): Song[] | undefined => {
+  if (songs === undefined) return undefined;
+
+  if (!Array.isArray(songs)) {
+    issues.push('songs 字段必须为数组');
+    return [];
+  }
+
+  return songs.filter((s: any, index: number) => {
+    if (!s || typeof s !== 'object' || typeof s.id !== 'string' || typeof s.title !== 'string') {
+      issues.push(`songs[${index}] 结构损坏，缺失必要识别属性`);
+      return false;
+    }
+    if (typeof s.lyrics !== 'string') s.lyrics = '';
+    if (!s.key) s.key = 'C';
+    if (!s.playKey) s.playKey = 'C';
+    if (typeof s.capo !== 'number') s.capo = 0;
+    if (!s.chordMap || typeof s.chordMap !== 'object') s.chordMap = {};
+    return true;
+  });
+};
+
+// ---------- 2. 主流线清洗与校验函数 ----------
 
 export const cleanAndValidateData = (
   data: unknown,
@@ -14,79 +102,11 @@ export const cleanAndValidateData = (
   const payload = data as Record<string, any>;
   const issues: string[] = [];
 
-  if (!Array.isArray(payload.groups)) {
-    issues.push('groups 字段必须为数组');
-  } else {
-    payload.groups = payload.groups.filter((g: any, index: number) => {
-      if (!g || typeof g !== 'object' || typeof g.id !== 'string' || typeof g.name !== 'string') {
-        issues.push(`groups[${index}] 结构损坏缺失必要属性`);
-        return false;
-      }
-      if (g.collapsed === undefined) g.collapsed = false;
-      return true;
-    });
-  }
+  payload.groups = validateGroups(payload.groups, issues);
+  payload.chords = validateChords(payload.chords, issues);
 
-  if (!Array.isArray(payload.chords)) {
-    issues.push('chords 字段必须为数组');
-  } else {
-    payload.chords = payload.chords.filter((c: any, index: number) => {
-      if (!c || typeof c !== 'object') {
-        issues.push(`chords[${index}] 不是有效的对象`);
-        return false;
-      }
-      if (typeof c.id !== 'string' || typeof c.chordName !== 'string' || typeof c.groupId !== 'string') {
-        issues.push(`chords[${index}] (${c.id || index}) 缺失基础识别属性`);
-        return false;
-      }
-      if (!Array.isArray(c.strings) || c.strings.length !== 6) {
-        issues.push(`chords[${index}] (${c.id}) 琴弦物理资产数组损坏(必须为6弦)`);
-        return false;
-      }
-
-      const isStringsValid = c.strings.every((s: any) => {
-        return (
-          s &&
-          typeof s === 'object' &&
-          typeof s.fret === 'number' &&
-          typeof s.preferFlat === 'boolean' &&
-          typeof s.isRoot === 'boolean'
-        );
-      });
-      if (!isStringsValid) {
-        issues.push(`chords[${index}] (${c.id}) 内部存在损坏的琴弦音符节点`);
-        return false;
-      }
-
-      if (c.fretCount !== 3 && c.fretCount !== 4 && c.fretCount !== 5) {
-        c.fretCount = 3;
-      }
-      if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 12) {
-        c.capo = 0;
-      }
-      if (!c.tuning) c.tuning = 'STANDARD';
-
-      return true;
-    });
-  }
-
-  // 🌟 新增 songs 乐谱数组校验与格式化修复
   if (payload.songs !== undefined) {
-    if (!Array.isArray(payload.songs)) {
-      issues.push('songs 字段必须为数组');
-    } else {
-      payload.songs = payload.songs.filter((s: any, index: number) => {
-        if (!s || typeof s !== 'object' || typeof s.id !== 'string' || typeof s.title !== 'string') {
-          issues.push(`songs[${index}] 结构损坏，缺失必要识别属性`);
-          return false;
-        }
-        if (typeof s.lyrics !== 'string') s.lyrics = '';
-        if (!s.key) s.key = 'C';
-        if (typeof s.capo !== 'number') s.capo = 0;
-        if (!s.chordMap || typeof s.chordMap !== 'object') s.chordMap = {};
-        return true;
-      });
-    }
+    payload.songs = validateSongs(payload.songs, issues);
   }
 
   if (issues.length > 0) {
@@ -97,8 +117,8 @@ export const cleanAndValidateData = (
     return false;
   }
 
-  const validGroupIds = new Set<string>(payload.groups.map((g: any) => g.id));
-  payload.chords = payload.chords.filter((chord: any) => {
+  const validGroupIds = new Set<string>(payload.groups.map((g: Group) => g.id));
+  payload.chords = payload.chords.filter((chord: Chord) => {
     if (!validGroupIds.has(chord.groupId)) {
       console.warn(`⚠️ ${logPrefix} -> 和弦 "${chord.chordName}" (${chord.id}) 外键关联失效，执行物理拦截脱离`);
       return false;
@@ -108,6 +128,8 @@ export const cleanAndValidateData = (
 
   return true;
 };
+
+// ---------- 3. 通用深拷贝函数 ----------
 
 export function cloneDeep<T>(value: T, cache = new WeakMap()): T {
   if (value === null || typeof value !== 'object') {

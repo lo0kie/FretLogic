@@ -76,11 +76,6 @@ export const useUiStore = defineStore('ui', () => {
     loading: (msg: string, options?: ToastOptions) => createToast(msg, 'loading', options),
   };
 
-  const scoreExportRequestToken = ref(0);
-  const requestScoreExport = () => {
-    scoreExportRequestToken.value++;
-  };
-
   return {
     clearActionToasts,
     isLeftOpen,
@@ -92,7 +87,5 @@ export const useUiStore = defineStore('ui', () => {
     resumeAllTimers,
     isPreviewEnabled,
     isMobile,
-    requestScoreExport,
-    scoreExportRequestToken,
   };
 });

@@ -1,5 +1,5 @@
 <template>
-  <div ref="triggerRef" @contextmenu="handleContextMenu" class="context-menu-trigger-wrapper">
+  <div ref="triggerRef" @contextmenu="handleContextMenu" class="context-menu-trigger-wrapper" v-bind="$attrs">
     <slot></slot>
   </div>
 
@@ -50,7 +50,7 @@ export interface ContextMenuItem {
   disabled?: boolean;
 }
 
-defineOptions({ name: 'GlobalContextMenu' });
+defineOptions({ name: 'GlobalContextMenu', inheritAttrs: false });
 
 const props = defineProps<{
   items: ContextMenuItem[];

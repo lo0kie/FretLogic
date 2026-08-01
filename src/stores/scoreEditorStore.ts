@@ -50,8 +50,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     },
   });
 
-  const isEmpty = computed(() => !activeSong.value);
-
   // 切换乐谱或歌词被清空时，自动做校验回退
   watch(
     [activeSong, hasLyrics],
@@ -132,7 +130,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     selectedSlotKey,
     activeSong,
     hasLyrics,
-    isEmpty,
     setActiveSong,
     updateKey,
     updatePlayKey,

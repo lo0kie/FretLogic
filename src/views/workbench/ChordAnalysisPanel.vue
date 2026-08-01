@@ -47,12 +47,13 @@
 <script setup lang="ts">
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useUiStore } from '@/stores/uiStore';
-import { analyzeChordGraph, type CandidateResult, type NoteInput } from '@/utils/chordEngine';
 import { calcNoteLabel, calcPitchIndex, canTogglePitchAccidental } from '@/utils/musicTheory';
 import { Music, Sparkles } from '@lucide/vue';
 import { useElementSize } from '@vueuse/core';
 import { computed, ref } from 'vue';
 
+import { CandidateResult, NoteInput } from '@/types/engine.ts';
+import { analyzeChordGraph } from '@/utils/chordEngine.ts';
 import CandidateTags from './CandidateTags.vue';
 import NoteIntervalList, { type RenderNoteItem } from './NoteIntervalList.vue';
 
