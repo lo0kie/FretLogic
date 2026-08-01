@@ -1,6 +1,5 @@
 <template>
   <div
-    ref="captureAreaRef"
     class="workbench-card"
     :style="{
       height: uiStore.isMobile ? 'auto' : dynamicHeight,
@@ -36,13 +35,11 @@ import { useEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { useWindowSize } from '@vueuse/core';
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 
 const editorStore = useEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
-
-const captureAreaRef = ref<HTMLDivElement>();
 
 const { width: windowWidth } = useWindowSize();
 
@@ -60,8 +57,6 @@ const dynamicHeight = computed(() => {
   const realBoardHeight = rawCanvasHeight * currentScale;
   return `${baseVerticalSpace + realBoardHeight}px`;
 });
-
-defineExpose({ captureAreaRef });
 </script>
 
 <style scoped lang="less">

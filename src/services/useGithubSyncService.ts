@@ -3,7 +3,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cleanAndValidateData } from '@/utils/dataParser';
-import { SettingsSchema } from '@/utils/validators';
+import { validateSettings } from '@/utils/validators';
 import { Base64 } from 'js-base64';
 import { ref } from 'vue';
 
@@ -34,15 +34,15 @@ export function useGithubSyncService() {
       githubPath: settingsStore.githubPath.trim(),
     };
 
-    const schemaResult = SettingsSchema.safeParse(rawPayload);
+    const validation = validateSettings(rawPayload);
 
-    if (!schemaResult.success) {
-      const firstErrorMessage = schemaResult.error.issues[0].message;
+    if (!validation.isValid) {
+      const firstErrorMessage = validation.errors[0];
       uiStore.toast.error(`同步失败：${firstErrorMessage}`);
       return;
     }
 
-    const { githubToken, githubOwner, githubRepo, githubBranch, githubPath } = schemaResult.data;
+    const { githubToken, githubOwner, githubRepo, githubBranch, githubPath } = validation.data;
 
     const apiUrl = `https://api.github.com/repos/${githubOwner}/${githubRepo}/contents/${githubPath}`;
     const headers: Record<string, string> = {
@@ -105,15 +105,15 @@ export function useGithubSyncService() {
       githubPath: settingsStore.githubPath.trim(),
     };
 
-    const schemaResult = SettingsSchema.safeParse(rawPayload);
+    const validation = validateSettings(rawPayload);
 
-    if (!schemaResult.success) {
-      const firstErrorMessage = schemaResult.error.issues[0].message;
+    if (!validation.isValid) {
+      const firstErrorMessage = validation.errors[0];
       uiStore.toast.error(`拉取失败：${firstErrorMessage}`);
       return;
     }
 
-    const { githubToken, githubOwner, githubRepo, githubBranch, githubPath } = schemaResult.data;
+    const { githubToken, githubOwner, githubRepo, githubBranch, githubPath } = validation.data;
 
     const apiUrl = `https://api.github.com/repos/${githubOwner}/${githubRepo}/contents/${githubPath}?ref=${githubBranch}`;
     const headers: Record<string, string> = {
@@ -147,7 +147,6 @@ export function useGithubSyncService() {
         chordStore.overwriteGroups(imported.groups);
         chordStore.overwriteChords(imported.chords);
 
-        // 🌟 云端恢复乐谱数据
         if (imported.songs) {
           songStore.overwriteSongs(imported.songs);
         }
@@ -174,7 +173,7 @@ export function useGithubSyncService() {
     syncToGithub({
       groups: chordStore.groups,
       chords: chordStore.savedChordsList,
-      songs: songStore.songs, // 🌟 云端同步打包乐谱数组
+      songs: songStore.songs,
     });
   };
 

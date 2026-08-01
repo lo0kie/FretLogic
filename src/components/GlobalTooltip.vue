@@ -25,34 +25,32 @@
 import { useUiStore } from '@/stores/uiStore';
 import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/vue';
 import { computedAsync } from '@vueuse/core';
-import { DOMPurify } from 'dompurify';
-import { computed, ref } from 'vue';
+import { type DOMPurify } from 'dompurify';
+import { computed, ref, useTemplateRef } from 'vue';
 
 type TooltipTheme = 'dark' | 'light' | 'auto';
 
-const props = withDefaults(
-  defineProps<{
-    content?: string;
-    placement?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-end';
-    theme?: TooltipTheme;
-  }>(),
-  {
-    placement: 'top',
-    theme: 'auto',
-  }
-);
+const {
+  content,
+  placement = 'top',
+  theme = 'auto',
+} = defineProps<{
+  content?: string;
+  placement?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-end';
+  theme?: TooltipTheme;
+}>();
 
 const uiStore = useUiStore();
 const show = ref(false);
-const referenceRef = ref<HTMLElement | null>(null);
-const floatingRef = ref<HTMLElement | null>(null);
+const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
+const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 
 let cachedDOMPurify: DOMPurify | null = null;
 
 const sanitizedHtmlContent = computedAsync(async () => {
-  if (!show.value || !props.content) return '';
+  if (!show.value || !content) return '';
 
-  const rawHtml = props.content.replace(/\\n/g, '<br />').replace(/\n/g, '<br />');
+  const rawHtml = content.replace(/\\n/g, '<br />').replace(/\n/g, '<br />');
 
   if (!cachedDOMPurify) {
     const dompurifyModule = await import('dompurify');
@@ -64,7 +62,7 @@ const sanitizedHtmlContent = computedAsync(async () => {
 
 const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   strategy: 'fixed',
-  placement: computed(() => props.placement),
+  placement: computed(() => placement),
   whileElementsMounted: (reference, floating, update) => autoUpdate(reference, floating, update),
   middleware: [offset(8), flip({ fallbackAxisSideDirection: 'start' }), shift({ padding: 12 })],
 });

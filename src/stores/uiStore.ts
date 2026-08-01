@@ -9,7 +9,6 @@ export const useUiStore = defineStore('ui', () => {
   const isCopying = ref(false);
   const isLeftOpen = useStorage('CHORD_LAB_UI_LEFT_OPEN', true);
   const isPreviewEnabled = useStorage('CHORD_LAB_UI_PREVIEW_ENABLED', false);
-
   const timersMap = new Map<number, ReturnType<typeof setTimeout>>();
 
   const clearActionToasts = () => {
@@ -76,11 +75,6 @@ export const useUiStore = defineStore('ui', () => {
     loading: (msg: string, options?: ToastOptions) => createToast(msg, 'loading', options),
   };
 
-  const scoreExportRequestToken = ref(0);
-  const requestScoreExport = () => {
-    scoreExportRequestToken.value++;
-  };
-
   return {
     clearActionToasts,
     isLeftOpen,
@@ -91,8 +85,6 @@ export const useUiStore = defineStore('ui', () => {
     pauseAllTimers,
     resumeAllTimers,
     isPreviewEnabled,
-    isMobile,
-    requestScoreExport,
-    scoreExportRequestToken,
+    // isMobile,
   };
 });

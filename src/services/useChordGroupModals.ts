@@ -1,10 +1,9 @@
-import BaseInput from '@/components/BaseInput.vue';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group } from '@/types';
 import { generateUUID } from '@/utils/validators';
-import { nextTick, reactive, ref } from 'vue';
+import { reactive } from 'vue';
 
 export function useChordGroupModals() {
   const chordStore = useChordStore();
@@ -19,14 +18,9 @@ export function useChordGroupModals() {
     moveTargetId: '',
   });
 
-  const createInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
-  const renameInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
-
-  const openCreate = async () => {
+  const openCreate = () => {
     modalData.inputValue = '';
     modals.create = true;
-    await nextTick();
-    setTimeout(() => createInputRef.value?.focus(), 50);
   };
 
   const handleCreateGroup = () => {
@@ -50,12 +44,10 @@ export function useChordGroupModals() {
     uiStore.toast.success('操作成功完成');
   };
 
-  const openRename = async (group: Group) => {
+  const openRename = (group: Group) => {
     modalData.activeGroup = group;
     modalData.inputValue = group.name;
     modals.rename = true;
-    await nextTick();
-    setTimeout(() => renameInputRef.value?.focus(), 50);
   };
 
   const handleRenameGroup = () => {
@@ -119,8 +111,6 @@ export function useChordGroupModals() {
   return {
     modals,
     modalData,
-    createInputRef,
-    renameInputRef,
     openCreate,
     handleCreateGroup,
     openRename,

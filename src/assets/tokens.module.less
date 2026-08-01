@@ -117,7 +117,6 @@
 @transition-base: all @duration-base @bezier-standard;
 @transition-fast: all @duration-fast @bezier-standard;
 
-// src/assets/main.less
 .fade-scale-transition(@name, @translateY: -6px, @scale: 0.96) {
   .@{name}-enter-active,
   .@{name}-leave-active {
@@ -139,22 +138,4 @@
     opacity: 1;
     transform: translateY(0) scale(1);
   }
-}
-
-:export {
-  durationFast: @duration-fast;
-  durationBase: @duration-base;
-  durationSlow: @duration-slow;
-
-  radiusSm: @radius-sm;
-  radiusMd: @radius-md;
-  radiusLg: @radius-lg;
-  radiusXl: @radius-xl;
-
-  shadowSm: @shadow-sm;
-  shadowMd: @shadow-md;
-  shadowLg: @shadow-lg;
-  shadowXl: @shadow-xl;
-  shadowPanel: @shadow-panel;
-  shadowFloating: @shadow-floating;
 }

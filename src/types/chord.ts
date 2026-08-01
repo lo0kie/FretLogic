@@ -41,5 +41,5 @@ export interface Group {
 export interface ImportExportPayload {
   groups: Group[];
   chords: Chord[];
-  songs?: Song[]; // 🌟 新增乐谱备份支持
+  songs?: Song[];
 }

@@ -17,6 +17,7 @@
         placeholder="GitHub Token (ghp_...)"
         is-password
         clearable
+        autofocus
         fontSize="xs"
       />
     </GlobalTooltip>

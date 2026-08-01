@@ -1,23 +1,16 @@
-import BaseInput from '@/components/BaseInput.vue';
 import { useSongStore } from '@/stores/songStore';
-import { nextTick, ref, type Ref } from 'vue';
+import { ref } from 'vue';
 
 // 🌟 接收外部传入的 inputRef 引用
-export function useSongModals(songTitleInputRef?: Ref<InstanceType<typeof BaseInput> | null>) {
+export function useSongModals() {
   const songStore = useSongStore();
 
   const isSongCreateOpen = ref(false);
   const newSongTitle = ref('');
 
-  const openCreateSongModal = async () => {
+  const openCreateSongModal = () => {
     newSongTitle.value = '';
     isSongCreateOpen.value = true;
-    await nextTick();
-    setTimeout(() => {
-      if (songTitleInputRef?.value) {
-        songTitleInputRef.value.focus();
-      }
-    }, 50);
   };
 
   const handleCreateSong = () => {

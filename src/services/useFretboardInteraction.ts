@@ -1,5 +1,5 @@
 import { useEventListener } from '@vueuse/core';
-import { computed, onBeforeUnmount, onMounted, ref, toRaw } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, toRaw, useTemplateRef } from 'vue';
 
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, INTERACTION_CONFIG } from '@/constants';
 import type { GuitarStringsModel } from '@/types';
@@ -26,7 +26,7 @@ export interface FretboardInteractionEmit {
  * 从 Fretboard.vue 抽出，脱离组件也可以单独写单测。
  */
 export function useFretboardInteraction(props: FretboardInteractionProps, emit: FretboardInteractionEmit) {
-  const fretBoardRef = ref<HTMLDivElement | null>(null);
+  const fretBoardRef = useTemplateRef<HTMLDivElement>('fretBoardRef');
   const hoverPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
 
   let lastCancelTime = 0;

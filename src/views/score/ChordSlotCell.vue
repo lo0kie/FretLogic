@@ -19,10 +19,16 @@
         v-if="chord"
         class="inline-fretboard-card"
         draggable="true"
-        title="点击更换/移除和弦，按住可拖拽换位"
+        title="点击更换和弦，按住可拖拽换位"
+        @click.stop="emit('click')"
         @dragstart.stop="emit('dragstart')"
         @dragend="emit('dragend')"
       >
+        <!-- 🌟 右上角快捷清除按钮 -->
+        <button type="button" class="remove-chord-btn" title="清除当前和弦" @click.stop="emit('remove', slotKey)">
+          <X :size="12" :stroke-width="3" />
+        </button>
+
         <span class="inline-chord-name">{{ chord.chordName }}</span>
         <Fretboard
           :interactive="false"
@@ -47,6 +53,7 @@
 <script setup lang="ts">
 import Fretboard from '@/components/Fretboard.vue';
 import type { Chord } from '@/types';
+import { X } from '@lucide/vue';
 
 defineProps<{
   slotKey: string | number;
@@ -60,6 +67,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'click'): void;
+  (e: 'remove', slotKey: string | number): void;
   (e: 'dragstart'): void;
   (e: 'dragend'): void;
   (e: 'dragover', ev: DragEvent): void;
@@ -75,7 +83,7 @@ const emit = defineEmits<{
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 0.15rem 0.12rem;
   align-self: stretch;
   border-radius: @radius-sm;
@@ -94,7 +102,7 @@ const emit = defineEmits<{
     }
   }
 
-  &.char-box.is-drop-target {
+  &.is-drop-target {
     background-color: color-mix(in srgb, var(--color-primary), transparent 85%);
     box-shadow: inset 0 0 0 2px var(--color-primary);
 
@@ -164,7 +172,7 @@ const emit = defineEmits<{
 .chord-display-slot {
   flex: 1;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: center;
   width: 100%;
 }
@@ -179,6 +187,7 @@ const emit = defineEmits<{
   border: 1px solid transparent;
   transition: @transition-fast;
   cursor: pointer;
+  position: relative; /* 🌟 用于挂载右上角清除按钮的绝对定位 */
 
   & * {
     cursor: pointer;
@@ -196,6 +205,43 @@ const emit = defineEmits<{
   &:hover {
     background-color: color-mix(in srgb, var(--text-title), transparent 90%);
     border-color: var(--border-light);
+
+    /* 🌟 鼠标悬停时显示右上角清除按钮 */
+    .remove-chord-btn {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+}
+
+/* 🌟 右上角小叉号清除按钮样式 */
+.remove-chord-btn {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  background-color: var(--color-danger);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: @transition-fast;
+  z-index: 5;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+
+  &:hover {
+    transform: scale(1.05);
+    background-color: color-mix(in srgb, var(--color-danger), black 15%);
+  }
+
+  &:active {
+    transform: scale(0.95);
   }
 }
 
@@ -223,6 +269,7 @@ const emit = defineEmits<{
     border-color @duration-fast ease;
   border-bottom: 1.5px solid transparent;
   box-sizing: border-box;
+  margin-top: auto;
 
   .has-chord & {
     border-bottom: 1.5px dashed var(--text-disabled);

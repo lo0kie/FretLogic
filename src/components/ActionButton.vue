@@ -21,30 +21,33 @@
 import { Loader2 } from '@lucide/vue';
 import { computed } from 'vue';
 
-const props = withDefaults(
-  defineProps<{
-    primary?: boolean;
-    danger?: boolean;
-    warning?: boolean;
-    disabled?: boolean;
-    loading?: boolean;
-    active?: boolean;
-    iconOnly?: boolean;
-    variant?: 'default' | 'subtle' | 'ghost';
-    size?: 'sm' | 'md' | 'lg';
-    rounded?: 'none' | 'sm' | 'md' | 'lg' | 'full';
-    width?: string;
-    height?: string;
-  }>(),
-  {
-    size: 'md',
-    loading: false,
-    active: false,
-    iconOnly: false,
-    variant: 'default',
-    rounded: 'full',
-  }
-);
+const {
+  primary = false,
+  danger = false,
+  warning = false,
+  disabled = false,
+  loading = false,
+  active = false,
+  iconOnly = false,
+  variant = 'default',
+  size = 'md',
+  rounded = 'full',
+  width,
+  height,
+} = defineProps<{
+  primary?: boolean;
+  danger?: boolean;
+  warning?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
+  active?: boolean;
+  iconOnly?: boolean;
+  variant?: 'default' | 'subtle' | 'ghost';
+  size?: 'sm' | 'md' | 'lg';
+  rounded?: 'none' | 'sm' | 'md' | 'lg' | 'full';
+  width?: string;
+  height?: string;
+}>();
 
 const emit = defineEmits<{
   (e: 'click', event: MouseEvent): void;
@@ -55,15 +58,15 @@ const handleInternalClick = (e: MouseEvent) => {
 };
 
 const themeClass = computed(() => {
-  if (props.primary) return 'theme-primary';
-  if (props.danger) return 'theme-danger';
-  if (props.warning) return 'theme-warning';
+  if (primary) return 'theme-primary';
+  if (danger) return 'theme-danger';
+  if (warning) return 'theme-warning';
   return 'theme-default';
 });
 
-const variantClass = computed(() => `variant-${props.variant}`);
-const sizeClass = computed(() => `size-${props.size}`);
-const roundedClass = computed(() => `rounded-${props.rounded}`);
+const variantClass = computed(() => `variant-${variant}`);
+const sizeClass = computed(() => `size-${size}`);
+const roundedClass = computed(() => `rounded-${rounded}`);
 </script>
 
 <style scoped lang="less">
