@@ -35,15 +35,8 @@
               v-model="editorStore.currentTuning"
               :options="tuningOptions"
               :default-value="TuningEnum.STANDARD"
-            >
-              <template #label="{ selected }">
-                {{ TUNING_PRESETS[selected]?.name || TuningEnum.STANDARD }}
-              </template>
-
-              <template #option="{ option }">
-                <span class="option-text-truncate">{{ TUNING_PRESETS[option]?.name }}</span>
-              </template>
-            </BaseSelector>
+              :formatter="val => TUNING_PRESETS[val]?.name || TuningEnum.STANDARD"
+            />
           </div>
         </div>
       </div>
@@ -62,7 +55,7 @@ import { useEditorStore } from '@/stores/chordEditorStore';
 import { TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { SlidersHorizontal } from '@lucide/vue';
 import { onClickOutside } from '@vueuse/core';
-import { ref } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 
 const editorStore = useEditorStore();
 const tuningOptions = Object.values(TuningEnum);
@@ -74,8 +67,8 @@ const FRET_OPTIONS: SegmentOption<number>[] = FRET_COUNTS.map(f => ({
 }));
 
 const isConfigOpen = ref(false);
-const popoverContainerRef = ref<HTMLDivElement | null>(null);
-const cardRef = ref<HTMLDivElement | null>(null);
+const popoverContainerRef = useTemplateRef<HTMLDivElement>('popoverContainerRef');
+const cardRef = useTemplateRef<HTMLDivElement>('cardRef');
 
 onClickOutside(
   popoverContainerRef,
@@ -135,12 +128,6 @@ onClickOutside(
     padding-left: 0.5rem;
     padding-right: 0.5rem;
   }
-}
-
-.option-text-truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .fade-scale-transition(dropdown-fade, -6px, 0.96);

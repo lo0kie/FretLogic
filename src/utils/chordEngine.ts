@@ -1,30 +1,6 @@
-export interface NoteInput {
-  stringIndex: number;
-  pitchIndex: number; // 0~11
-  label: string;
-}
+import type { AdvancedChordFormula, CandidateResult, NoteInput } from '@/types';
 
-export interface AdvancedChordFormula {
-  suffix: string;
-  category: 'triad' | 'seventh' | 'extended' | 'altered' | 'sus';
-  core: number[];
-  anchor?: number[];
-  extensions?: number[];
-  tolerated?: number[];
-  conflicts: number[];
-  baseWeight: number;
-}
-
-export interface CandidateResult {
-  chordName: string;
-  rootLabel: string;
-  score: number;
-  rootPitch: number;
-}
-
-// 全量拓扑和弦公式定义
 export const ALL_ADVANCED_FORMULAS: AdvancedChordFormula[] = [
-  // --- 三和弦系列 ---
   { suffix: '', category: 'triad', core: [0, 4], anchor: [7], conflicts: [1, 3, 5, 8, 10, 11], baseWeight: 100 },
   { suffix: 'm', category: 'triad', core: [0, 3], anchor: [7], conflicts: [1, 4, 8, 10, 11], baseWeight: 100 },
   { suffix: 'dim', category: 'triad', core: [0, 3, 6], conflicts: [4, 7], baseWeight: 70 },
@@ -33,7 +9,6 @@ export const ALL_ADVANCED_FORMULAS: AdvancedChordFormula[] = [
   { suffix: 'sus2', category: 'sus', core: [0, 2], anchor: [7], conflicts: [3, 4], baseWeight: 80 },
   { suffix: '5', category: 'triad', core: [0, 7], conflicts: [1, 2, 3, 4, 5, 6, 8, 9, 10, 11], baseWeight: 50 },
 
-  // --- 七和弦系列 ---
   { suffix: '7', category: 'seventh', core: [0, 4, 10], anchor: [7], conflicts: [3, 11], baseWeight: 130 },
   { suffix: 'Maj7', category: 'seventh', core: [0, 4, 11], anchor: [7], conflicts: [3, 10], baseWeight: 130 },
   { suffix: 'm7', category: 'seventh', core: [0, 3, 10], anchor: [7], conflicts: [4, 11], baseWeight: 130 },
@@ -43,7 +18,6 @@ export const ALL_ADVANCED_FORMULAS: AdvancedChordFormula[] = [
   { suffix: '7sus4', category: 'sus', core: [0, 5, 10], anchor: [7], conflicts: [3, 4], baseWeight: 110 },
   { suffix: '7sus2', category: 'sus', core: [0, 2, 10], anchor: [7], conflicts: [3, 4], baseWeight: 110 },
 
-  // --- 六和弦与加音和弦 ---
   { suffix: '6', category: 'triad', core: [0, 4, 9], anchor: [7], conflicts: [3, 10, 11], baseWeight: 110 },
   { suffix: 'm6', category: 'triad', core: [0, 3, 9], anchor: [7], conflicts: [4, 10, 11], baseWeight: 110 },
   { suffix: 'add9', category: 'triad', core: [0, 4, 2], anchor: [7], conflicts: [3, 10, 11], baseWeight: 100 },
@@ -51,7 +25,6 @@ export const ALL_ADVANCED_FORMULAS: AdvancedChordFormula[] = [
   { suffix: '6/9', category: 'triad', core: [0, 4, 9, 2], anchor: [7], conflicts: [3, 10, 11], baseWeight: 120 },
   { suffix: 'm6/9', category: 'triad', core: [0, 3, 9, 2], anchor: [7], conflicts: [4, 10, 11], baseWeight: 120 },
 
-  // --- 九和弦与高阶扩展和弦 ---
   { suffix: '9', category: 'extended', core: [0, 4, 10, 2], anchor: [7], conflicts: [3, 11], baseWeight: 160 },
   { suffix: 'Maj9', category: 'extended', core: [0, 11, 2], anchor: [4, 7], conflicts: [3, 10], baseWeight: 160 },
   { suffix: 'm9', category: 'extended', core: [0, 3, 10, 2], anchor: [7], conflicts: [4, 11], baseWeight: 160 },
@@ -71,7 +44,6 @@ const WEIGHTS = {
   SIMPLICITY: 0.15,
 };
 
-// 🌟 和弦分析计算结果内存缓存表
 const chordAnalysisCache = new Map<string, { candidates: CandidateResult[]; bestRootPitch: number }>();
 
 function rawAnalyzeChordGraph(
@@ -174,7 +146,6 @@ function rawAnalyzeChordGraph(
   return { candidates: uniqueCandidates, bestRootPitch };
 }
 
-// 🌟 导出带有物理指纹缓存能力的分析函数
 export function analyzeChordGraph(
   notes: NoteInput[],
   explicitRootPitch: number | null
@@ -183,18 +154,14 @@ export function analyzeChordGraph(
     return { candidates: [], bestRootPitch: 0 };
   }
 
-  // 1. 生成物理按音调音唯一缓存键
   const cacheKey = `${explicitRootPitch ?? 'auto'}:${notes.map(n => `${n.stringIndex}_${n.pitchIndex}`).join('|')}`;
 
-  // 2. 命中直接返回
   if (chordAnalysisCache.has(cacheKey)) {
     return chordAnalysisCache.get(cacheKey)!;
   }
 
-  // 3. 未命中调用计算
   const result = rawAnalyzeChordGraph(notes, explicitRootPitch);
 
-  // LRU 缓存上限控制（最大维护 60 组）
   if (chordAnalysisCache.size >= 60) {
     const oldestKey = chordAnalysisCache.keys().next().value;
     if (oldestKey) chordAnalysisCache.delete(oldestKey);

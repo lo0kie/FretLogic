@@ -17,7 +17,7 @@
               :candidates="analysis.candidates"
               :active-chord-name="editorStore.currentChordName"
               :is-mobile="uiStore.isMobile"
-              :custom-height="rightListHeight"
+              :custom-height="noteListRef?.height"
               @select-candidate="handleSelectCandidate"
             />
 
@@ -47,21 +47,19 @@
 <script setup lang="ts">
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useUiStore } from '@/stores/uiStore';
-import { analyzeChordGraph, type CandidateResult, type NoteInput } from '@/utils/chordEngine';
 import { calcNoteLabel, calcPitchIndex, canTogglePitchAccidental } from '@/utils/musicTheory';
 import { Music, Sparkles } from '@lucide/vue';
-import { useElementSize } from '@vueuse/core';
-import { computed, ref } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 
+import { CandidateResult, NoteInput } from '@/types/engine.ts';
+import { analyzeChordGraph } from '@/utils/chordEngine.ts';
 import CandidateTags from './CandidateTags.vue';
 import NoteIntervalList, { type RenderNoteItem } from './NoteIntervalList.vue';
 
 const editorStore = useEditorStore();
 const uiStore = useUiStore();
 
-const noteListRef = ref<InstanceType<typeof NoteIntervalList> | null>(null);
-const rightSectionRef = computed(() => noteListRef.value?.containerRef || null);
-const { height: rightListHeight } = useElementSize(rightSectionRef);
+const noteListRef = useTemplateRef<InstanceType<typeof NoteIntervalList>>('noteListRef');
 
 const EXACT_INTERVAL_MAP: Record<number, string> = {
   0: '1',
@@ -169,26 +167,26 @@ const handleSetRootString = (stringIndex: number) => {
     max-height @duration-slow @bezier-sidebar,
     margin @duration-slow @bezier-sidebar,
     opacity @duration-fast ease;
-  max-height: 500px;
   overflow: hidden;
   opacity: 1;
+  width: 100%; /* 🌟 确保外层包裹器填满父容器 */
 }
 
 .chord-analysis-panel {
-  position: absolute;
-  right: 2rem;
-  top: 3.5rem;
-  transform: none;
-  width: 13.8rem;
+  /* 🌟 移除内部的绝对定位，由外层布局容器统一控制 */
+  position: relative;
+  right: auto;
+  top: auto;
+
+  width: 100%; /* 🌟 填满外层容器，不再固定 13.8rem */
   height: auto;
-  max-height: calc(100vh - 5rem);
+  max-height: calc(100vh - 5rem); /* 保留最大高度限制，防止溢出 */
   padding: 0.85rem;
   background-color: var(--bg-panel);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   border: 1px solid var(--glass-border);
   border-radius: @radius-lg;
-  box-shadow: var(--shadow-floating);
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -271,6 +269,7 @@ const handleSetRootString = (stringIndex: number) => {
   }
 
   .chord-analysis-panel {
+    /* 🌟 移动端同样移除绝对定位 */
     position: relative;
     right: auto;
     top: auto;

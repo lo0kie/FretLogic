@@ -17,58 +17,58 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-const props = withDefaults(
-  defineProps<{
-    modelValue: number;
-    min?: number;
-    max?: number;
-    step?: number;
-    disabled?: boolean;
-    labelPrefix?: string;
-    labelSuffix?: string;
-    formatter?: (val: number) => string;
-  }>(),
-  {
-    min: 0,
-    max: 100,
-    step: 1,
-    disabled: false,
-    labelPrefix: '',
-    labelSuffix: '',
-  }
-);
+const {
+  min = 0,
+  max = 100,
+  step = 1,
+  disabled = false,
+  labelPrefix = '',
+  labelSuffix = '',
+  formatter,
+} = defineProps<{
+  min?: number;
+  max?: number;
+  step?: number;
+  disabled?: boolean;
+  labelPrefix?: string;
+  labelSuffix?: string;
+  formatter?: (val: number) => string;
+}>();
+
+// 🌟 使用 defineModel 接管双向绑定
+const modelValue = defineModel<number>({ required: true });
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: number): void;
+  // 🌟 移除 update:modelValue，由 defineModel 内部自动处理
   (e: 'change', value: number): void;
 }>();
 
 // 🌟 默认格式化展示文本
 const displayText = computed(() => {
-  if (props.formatter) {
-    return props.formatter(props.modelValue);
+  if (formatter) {
+    return formatter(modelValue.value); // 🌟 修复：script 中必须使用 .value
   }
-  return `${props.labelPrefix}${props.modelValue}${props.labelSuffix}`;
+  return `${labelPrefix}${modelValue.value}${labelSuffix}`; // 🌟 修复：script 中必须使用 .value
 });
 
-const clamp = (val: number) => Math.min(props.max, Math.max(props.min, val));
+const clamp = (val: number) => Math.min(max, Math.max(min, val));
 
 const handleStep = (delta: number) => {
-  if (props.disabled) return;
-  const nextVal = clamp(props.modelValue + delta);
-  if (nextVal !== props.modelValue) {
-    emit('update:modelValue', nextVal);
+  if (disabled) return;
+  const nextVal = clamp(modelValue.value + delta);
+  if (nextVal !== modelValue.value) {
+    modelValue.value = nextVal; // 🌟 修改：直接赋值，替代 emit('update:modelValue')
     emit('change', nextVal);
   }
 };
 
 const handleWheel = (e: WheelEvent) => {
-  if (props.disabled) return;
+  if (disabled) return;
   e.preventDefault();
   if (e.deltaY < 0) {
-    handleStep(props.step);
+    handleStep(step);
   } else if (e.deltaY > 0) {
-    handleStep(-props.step);
+    handleStep(-step);
   }
 };
 </script>

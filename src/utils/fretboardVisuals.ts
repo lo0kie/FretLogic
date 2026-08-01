@@ -2,11 +2,6 @@ import { FRETBOARD_COLORS } from '@/constants';
 import type { GuitarStringEntity } from '@/types';
 import { isMuted, isOpen } from '@/utils/musicTheory';
 
-/**
- * 指板视觉相关的纯函数：颜色、状态 class、内联样式。
- * 从 Fretboard.vue 抽出，不依赖组件实例，FretboardSvg.vue 和 Fretboard.vue 都可以直接引用。
- */
-
 export const getOpenStringStatusClass = (str: GuitarStringEntity): string => {
   if (isMuted(str)) return 'is-muted-status';
   if (isOpen(str) && !str.isRoot) return 'is-open-status';

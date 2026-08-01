@@ -1,21 +1,20 @@
 ﻿import { AUDIO_CONFIG } from '@/constants/audio';
 import { useEditorStore } from '@/stores/chordEditorStore';
-import type { PolySynth } from 'tone';
+import type * as Tone from 'tone';
 import { ref } from 'vue';
 
 const isPlaying = ref(false);
 let isEngineInitialized = false;
-let guitarSynth: PolySynth | null = null;
+let guitarSynth: Tone.PolySynth | null = null;
 let playTimer: ReturnType<typeof setTimeout> | null = null;
-let ToneInstance: typeof import('tone') | null = null;
+let ToneModule: typeof Tone | null = null;
 
-// 🌟 MIDI Note 到 Frequency 的内存缓存 Map
 const MIDI_TO_FREQ_CACHE = new Map<number, number>();
 
-const getFrequencyFromMidi = (midiNote: number, tone: typeof import('tone')): number => {
+const getFrequencyFromMidi = (midiNote: number, toneInstance: typeof Tone): number => {
   let freq = MIDI_TO_FREQ_CACHE.get(midiNote);
   if (freq === undefined) {
-    freq = tone.Frequency(midiNote, 'midi').toFrequency();
+    freq = toneInstance.Frequency(midiNote, 'midi').toFrequency();
     MIDI_TO_FREQ_CACHE.set(midiNote, freq);
   }
   return freq;
@@ -24,29 +23,21 @@ const getFrequencyFromMidi = (midiNote: number, tone: typeof import('tone')): nu
 export function useAudioPlayer() {
   const editorStore = useEditorStore();
 
-  if (typeof window !== 'undefined') {
-    import('tone').then(mod => {
-      ToneInstance = mod;
-    });
-  }
+  const initAudioEngine = async () => {
+    if (isEngineInitialized) return;
 
-  const initAudioEngine = async (): Promise<typeof import('tone')> => {
-    if (!ToneInstance) {
-      ToneInstance = await import('tone');
+    if (!ToneModule) {
+      ToneModule = await import('tone');
     }
 
-    if (isEngineInitialized) return ToneInstance;
-
-    await ToneInstance.start();
-
-    const reverb = new ToneInstance.Reverb({
+    const reverb = new ToneModule.Reverb({
       decay: AUDIO_CONFIG.REVERB_DURATION,
       wet: AUDIO_CONFIG.REVERB_WET_GAIN,
     });
 
     await reverb.generate();
 
-    const compressor = new ToneInstance.Compressor({
+    const compressor = new ToneModule.Compressor({
       threshold: AUDIO_CONFIG.COMPRESSOR_THRESHOLD,
       knee: AUDIO_CONFIG.COMPRESSOR_KNEE,
       ratio: AUDIO_CONFIG.COMPRESSOR_RATIO,
@@ -54,7 +45,7 @@ export function useAudioPlayer() {
       release: AUDIO_CONFIG.COMPRESSOR_RELEASE,
     });
 
-    guitarSynth = new ToneInstance.PolySynth(ToneInstance.FMSynth, {
+    guitarSynth = new ToneModule.PolySynth(ToneModule.FMSynth, {
       harmonicity: AUDIO_CONFIG.SYNTH_HARMONICITY,
       modulationIndex: AUDIO_CONFIG.SYNTH_MODULATION_INDEX,
       oscillator: { type: 'triangle' },
@@ -68,23 +59,27 @@ export function useAudioPlayer() {
     });
 
     guitarSynth.volume.value = AUDIO_CONFIG.MAIN_VOLUME_DB;
-    guitarSynth.chain(compressor, reverb, ToneInstance.Destination);
+    guitarSynth.chain(compressor, reverb, ToneModule.Destination);
 
     isEngineInitialized = true;
-    return ToneInstance;
   };
 
   const playCurrentChord = async () => {
     if (isPlaying.value) return;
 
-    if (ToneInstance && ToneInstance.getContext().state !== 'running') {
-      await ToneInstance.start();
+    if (!ToneModule) {
+      ToneModule = await import('tone');
+    }
+
+    // 🌟 核心修复：必须在任何异步操作（await）之前，在用户点击的同步回调中立即唤醒 AudioContext
+    if (ToneModule.getContext().state !== 'running') {
+      ToneModule.start();
     }
 
     isPlaying.value = true;
 
     try {
-      const tone = await initAudioEngine();
+      await initAudioEngine();
 
       if (!guitarSynth) {
         isPlaying.value = false;
@@ -97,7 +92,7 @@ export function useAudioPlayer() {
       const capoOffset = editorStore.capo > 0 ? editorStore.capo : 0;
 
       let strumDelay = 0;
-      const now = tone.now();
+      const now = ToneModule.now();
 
       for (let sIdx = 0; sIdx <= 5; sIdx++) {
         const targetStr = stringsSnapshot[sIdx];
@@ -108,8 +103,7 @@ export function useAudioPlayer() {
         const actualOffset = targetStr.fret > 0 ? capoOffset : 0;
         const currentMidiNote = guitarMidiBase + targetStr.fret + actualOffset;
 
-        // 🌟 查表高效获取 Frequency
-        const frequency = getFrequencyFromMidi(currentMidiNote, tone);
+        const frequency = getFrequencyFromMidi(currentMidiNote, ToneModule);
 
         const triggerTime = now + strumDelay;
         const humanizeVelocity = 0.78 + Math.random() * 0.22;

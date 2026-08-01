@@ -70,12 +70,12 @@
       <input type="file" ref="fileInputRef" accept=".json" @change="handleFileChange" class="hidden-input" />
 
       <div class="footer-actions-row">
-        <ActionButton width="100%" size="sm" @click="handleImportTrigger">
+        <ActionButton width="100%" @click="handleImportTrigger">
           <template #prefix><Download :size="13" :stroke-width="2" /></template>
           导入备份
         </ActionButton>
 
-        <ActionButton width="100%" size="sm" @click="ioService.triggerFullExport()">
+        <ActionButton width="100%" @click="ioService.triggerFullExport()">
           <template #prefix><Upload :size="13" :stroke-width="2" /></template>
           全量导出
         </ActionButton>
@@ -83,81 +83,14 @@
     </div>
   </div>
 
-  <!-- 和弦分组 Modals -->
-  <BaseModal v-model:visible="groupModals.modals.create" title="新建分组" @confirm="groupModals.handleCreateGroup">
-    <BaseInput
-      v-model="groupModals.modalData.inputValue"
-      ref="groupModals.createInputRef"
-      placeholder="请输入分组名称..."
-      clearable
-      @enter="groupModals.handleCreateGroup"
-    />
-  </BaseModal>
-
-  <BaseModal v-model:visible="groupModals.modals.rename" title="修改组名" @confirm="groupModals.handleRenameGroup">
-    <BaseInput
-      v-model="groupModals.modalData.inputValue"
-      ref="groupModals.renameInputRef"
-      placeholder="请输入新名称..."
-      clearable
-      @enter="groupModals.handleRenameGroup"
-    />
-  </BaseModal>
-
-  <BaseModal
-    v-model:visible="groupModals.modals.delete"
-    :title="`删除分组 ${groupModals.modalData.activeGroup?.name}`"
-    confirm-type="danger"
-    @confirm="groupModals.handleDeleteGroup"
-  >
-    <p class="modal-description-text">确定要执行此删除操作吗？删除后组内的所有和弦都将清空。</p>
-  </BaseModal>
-
-  <BaseModal v-model:visible="groupModals.modals.move" title="移动至新分组" @confirm="groupModals.handleMoveChord">
-    <div class="move-group-grid no-scrollbar">
-      <GlobalTooltip
-        v-for="group in chordStore.groups"
-        :key="group.id"
-        :content="group.id === groupModals.modalData.activeChord?.groupId ? '和弦当前已在此分组中' : ''"
-        placement="top"
-        class="move-tooltip-item"
-      >
-        <button
-          :disabled="group.id === groupModals.modalData.activeChord?.groupId"
-          @click="groupModals.modalData.moveTargetId = group.id"
-          class="move-target-btn"
-          :class="groupModals.getGroupClass(group.id)"
-          :title="group.name"
-        >
-          <BaseMarquee class="move-marquee">
-            <span class="group-btn-text">{{ group.name }}</span>
-          </BaseMarquee>
-        </button>
-      </GlobalTooltip>
-    </div>
-  </BaseModal>
-
-  <!-- 新建乐谱 Modal -->
-  <BaseModal
-    v-model:visible="songModals.isSongCreateOpen.value"
-    title="新建乐谱"
-    @confirm="songModals.handleCreateSong"
-  >
-    <BaseInput
-      ref="songTitleInputRef"
-      v-model="songModals.newSongTitle.value"
-      placeholder="请输入乐谱名称..."
-      clearable
-      @enter="songModals.handleCreateSong"
-    />
-  </BaseModal>
+  <!-- 4. 业务弹窗组件集 -->
+  <GroupModalsContainer :group-modals="groupModals" />
+  <SongCreateModal :song-modals="songModals" />
 </template>
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import BaseInput from '@/components/BaseInput.vue';
-import BaseMarquee from '@/components/BaseMarquee.vue';
-import BaseModal from '@/components/BaseModal.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
 import { useImportExportService } from '@/services/useImportExportService';
@@ -167,16 +100,17 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import { Download, Eye, EyeOff, Plus, Search, Upload } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
-import { ref } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 import { useRoute } from 'vue-router';
+import GroupModalsContainer from './GroupModalsContainer.vue';
 import LeftGroupList from './LeftGroupList.vue';
+import SongCreateModal from './SongCreateModal.vue';
 
 defineOptions({ inheritAttrs: false });
 
 const searchQuery = ref('');
 const debouncedQuery = refDebounced(searchQuery, 150);
-const fileInputRef = ref<HTMLInputElement | null>(null);
-const songTitleInputRef = ref<InstanceType<typeof BaseInput> | null>(null);
+const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef');
 
 const route = useRoute();
 const uiStore = useUiStore();
@@ -185,7 +119,7 @@ const songStore = useSongStore();
 const ioService = useImportExportService();
 
 const groupModals = useChordGroupModals();
-const songModals = useSongModals(songTitleInputRef);
+const songModals = useSongModals();
 
 const handleImportTrigger = () => fileInputRef.value?.click();
 
@@ -278,13 +212,6 @@ const handleFileChange = (e: Event) => {
   color: var(--text-disabled);
 }
 
-:deep(.left-group-list) {
-  flex: 1 !important;
-  min-height: 0 !important;
-  height: 0 !important;
-  overflow-y: auto !important;
-}
-
 .left-panel-footer {
   padding: 0.5rem 0.85rem;
   border-top: 1px solid var(--glass-border);
@@ -301,93 +228,8 @@ const handleFileChange = (e: Event) => {
 .footer-actions-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.4rem;
+  gap: 0.5rem;
   box-sizing: border-box;
-}
-
-.modal-description-text {
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.6;
-  color: var(--text-body);
-  margin: 0;
-}
-
-.move-group-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.6rem;
-  overflow-y: auto;
-  max-height: 50vh;
-  padding: 0.1rem;
-  box-sizing: border-box;
-}
-
-.move-tooltip-item {
-  width: 100%;
-  min-width: 0;
-  display: flex;
-}
-
-.move-target-btn {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  border-radius: @radius-md;
-  font-size: 0.75rem;
-  font-weight: 700;
-  border: 1px solid var(--border-base);
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  box-sizing: border-box;
-  cursor: pointer;
-  transition: @transition-fast;
-
-  &.is-disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    background-color: var(--bg-main);
-    border-color: var(--border-light);
-    color: var(--text-disabled);
-    :global(.dark) & {
-      background-color: rgba(255, 255, 255, 0.05);
-      color: rgba(255, 255, 255, 0.4);
-    }
-  }
-
-  &.is-selected {
-    background-color: var(--color-primary);
-    color: #ffffff;
-    border-color: var(--color-primary);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary), transparent 60%);
-    transform: scale(1.02);
-  }
-
-  &:active:not(.is-disabled) {
-    transform: scale(0.95);
-  }
-
-  &.is-normal {
-    background-color: var(--bg-body);
-    color: var(--text-body);
-
-    &:hover {
-      border-color: @primary;
-      background-color: var(--bg-panel-hover);
-    }
-  }
-}
-
-.move-marquee {
-  min-width: 0;
-  width: 100%;
-
-  span {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 }
 
 @media (max-width: 768px) {

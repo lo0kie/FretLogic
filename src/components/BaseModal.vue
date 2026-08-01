@@ -1,11 +1,8 @@
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
-      <div v-if="visible" class="modal-overlay-container" v-bind="$attrs">
-        <div class="modal-mask" @click="closeOnMask && handleCancel()"></div>
-
-        <!-- 🌟 支持传入 w-80、w-wide 等宽度 class -->
-        <div class="modal-card" :class="width">
+      <div v-if="visible" class="modal-overlay-container" v-bind="$attrs" @click="closeOnMask && handleCancel()">
+        <div class="modal-card" :class="width" @click.stop>
           <h3 v-if="title" class="modal-title" :title="title">
             {{ title }}
           </h3>
@@ -43,38 +40,34 @@ import ActionButton from './ActionButton.vue';
 
 defineOptions({ inheritAttrs: false });
 
-const props = withDefaults(
-  defineProps<{
-    visible: boolean;
-    title?: string;
-    width?: string;
-    showFooter?: boolean;
-    cancelText?: string;
-    confirmText?: string;
-    confirmType?: 'primary' | 'danger' | 'warning' | 'default';
-    closeOnMask?: boolean;
-  }>(),
-  {
-    title: '',
-    width: 'w-80',
-    showFooter: true,
-    cancelText: '取消',
-    confirmText: '确认',
-    confirmType: 'primary',
-    closeOnMask: true,
-  }
-);
+const {
+  title = '',
+  width = 'w-80',
+  showFooter = true,
+  cancelText = '取消',
+  confirmText = '确认',
+  confirmType = 'primary',
+  closeOnMask = true,
+} = defineProps<{
+  title?: string;
+  width?: string;
+  showFooter?: boolean;
+  cancelText?: string;
+  confirmText?: string;
+  confirmType?: 'primary' | 'danger' | 'warning' | 'default';
+  closeOnMask?: boolean;
+}>();
 
 const emit = defineEmits<{
-  (e: 'update:visible', value: boolean): void;
   (e: 'confirm'): void;
   (e: 'cancel'): void;
 }>();
 
+const visible = defineModel<boolean>('visible', { required: true });
 const isBodyLocked = useScrollLock(document.body);
 
 watch(
-  () => props.visible,
+  visible,
   isOpen => {
     isBodyLocked.value = isOpen;
   },
@@ -82,7 +75,7 @@ watch(
 );
 
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && props.visible) {
+  if (e.key === 'Escape' && visible) {
     handleCancel();
   }
 });
@@ -93,7 +86,7 @@ const handleConfirm = () => {
 
 const handleCancel = () => {
   emit('cancel');
-  emit('update:visible', false);
+  visible.value = false;
 };
 </script>
 
@@ -109,15 +102,9 @@ const handleCancel = () => {
   justify-content: center;
   padding: 1rem;
   box-sizing: border-box;
-}
-
-.modal-mask {
-  position: absolute;
-  inset: 0;
   background-color: rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  animation: maskBlurIn @duration-base @bezier-standard forwards;
 
   :global(.dark) & {
     background-color: rgba(0, 0, 0, 0.55);
@@ -137,7 +124,6 @@ const handleCancel = () => {
   box-shadow: @shadow-floating;
   animation: cardPopIn @duration-base @bezier-bounce forwards;
 
-  /* 🌟 预设宽度配置 */
   &.w-80 {
     width: 20rem;
   }
@@ -147,7 +133,6 @@ const handleCancel = () => {
     max-width: 90vw;
   }
 
-  /* 🌟 4 列指板专用宽弹窗 */
   &.w-wide {
     width: 52rem;
     max-width: 92vw;
@@ -185,17 +170,17 @@ const handleCancel = () => {
   box-sizing: border-box;
 }
 
-@keyframes maskBlurIn {
-  from {
-    opacity: 0;
-    backdrop-filter: blur(0px);
-    -webkit-backdrop-filter: blur(0px);
-  }
-  to {
-    opacity: 1;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-  }
+.modal-fade-enter-active {
+  transition: opacity @duration-base @bezier-standard;
+}
+
+.modal-fade-leave-active {
+  transition: opacity @duration-fast ease-in;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
 }
 
 @keyframes cardPopIn {
@@ -207,13 +192,5 @@ const handleCancel = () => {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
-}
-
-.modal-fade-leave-active {
-  transition: opacity @duration-fast ease-in;
-}
-
-.modal-fade-leave-to {
-  opacity: 0;
 }
 </style>

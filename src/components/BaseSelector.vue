@@ -1,95 +1,117 @@
 <template>
-  <div ref="containerRef" class="relative-container">
-    <div
-      ref="referenceRef"
-      @click="toggleDropdown"
-      @wheel="handleWheel"
-      class="selector-trigger-bar"
-      :class="{ 'is-active': isOpen }"
-    >
-      <span class="label-zone" :class="[isNonDefault ? 'is-custom' : 'is-default']">
-        <slot name="label" :selected="modelValue">
-          {{ modelValue }}
-        </slot>
-      </span>
+  <div ref="referenceRef" class="selector-trigger-bar" :class="{ 'is-active': isOpen }" @click="toggleDropdown">
+    <span class="label-zone" :class="[isNonDefault ? 'is-custom' : 'is-default']">
+      <slot name="label" :selected="modelValue">
+        {{ formattedLabel(modelValue) }}
+      </slot>
+    </span>
 
-      <X v-if="clearable && isNonDefault" :size="14" :stroke-width="2.5" class="clear-icon" @click.stop="handleClear" />
+    <X v-if="clearable && isNonDefault" :size="14" :stroke-width="2.5" class="clear-icon" @click.stop="handleClear" />
 
-      <ChevronDown :size="14" :stroke-width="2.5" class="arrow-icon" :class="{ 'rotate-180': isOpen }" />
-    </div>
-
-    <Teleport to="body">
-      <div v-if="isOpen" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
-        <Transition
-          enter-from-class="dropdown-enter-from"
-          leave-to-class="dropdown-leave-to"
-          enter-active-class="dropdown-enter-active"
-          leave-active-class="dropdown-leave-active"
-          appear
-        >
-          <div ref="dropdownRef" class="selector-dropdown-box no-scrollbar">
-            <div
-              v-for="(option, index) in options"
-              :key="index"
-              :ref="el => setOptionRef(el, option)"
-              @click="handleSelect(option)"
-              class="selector-item"
-              :class="{
-                'is-selected': modelValue === option,
-                'font-black': fontBlackItems,
-                'font-bold': !fontBlackItems,
-              }"
-            >
-              <slot name="option" :option="option" :index="index">
-                {{ option }}
-              </slot>
-            </div>
-          </div>
-        </Transition>
-      </div>
-    </Teleport>
+    <ChevronDown :size="14" :stroke-width="2.5" class="arrow-icon" :class="{ 'rotate-180': isOpen }" />
   </div>
+
+  <Teleport to="body">
+    <div v-if="isOpen" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
+      <Transition
+        enter-from-class="dropdown-enter-from"
+        leave-to-class="dropdown-leave-to"
+        enter-active-class="dropdown-enter-active"
+        leave-active-class="dropdown-leave-active"
+        appear
+      >
+        <div ref="dropdownRef" class="selector-dropdown-box no-scrollbar" :style="{ maxHeight: dropdownMaxHeight }">
+          <div
+            v-for="(option, index) in options"
+            :key="index"
+            ref="optionEls"
+            @click="handleSelect(option)"
+            class="selector-item"
+            :class="{
+              'is-selected': modelValue === option,
+              'font-black': fontBlackItems,
+              'font-bold': !fontBlackItems,
+            }"
+          >
+            <slot name="option" :option="option" :index="index">
+              {{ formattedOption(option) }}
+            </slot>
+          </div>
+        </div>
+      </Transition>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts" generic="T">
 import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue';
 import { ChevronDown, X } from '@lucide/vue';
-import { useEventListener } from '@vueuse/core';
-import { computed, nextTick, onBeforeUpdate, ref, watch } from 'vue';
+import { onClickOutside } from '@vueuse/core'; // 🌟 引入 onClickOutside
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 
-const props = withDefaults(
-  defineProps<{
-    modelValue: T;
-    options: T[];
-    clearable?: boolean;
-    defaultValue?: T;
-    fontBlackItems?: boolean;
-  }>(),
-  {
-    clearable: false,
-    fontBlackItems: false,
-  }
-);
+const {
+  options,
+  clearable = false,
+  defaultValue,
+  fontBlackItems = false,
+  visibleCount = 6,
+  formatter,
+  labelFormatter,
+  optionFormatter,
+} = defineProps<{
+  options: T[];
+  clearable?: boolean;
+  defaultValue?: T;
+  fontBlackItems?: boolean;
+  visibleCount?: number;
+  formatter?: (value: T) => string;
+  labelFormatter?: (value: T) => string;
+  optionFormatter?: (value: T) => string;
+}>();
+
+const modelValue = defineModel<T>({ required: true });
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: T): void;
   (e: 'clear'): void;
   (e: 'wheel-change', direction: 'up' | 'down'): void;
 }>();
 
 const isOpen = ref(false);
-const containerRef = ref<HTMLDivElement | null>(null);
-const referenceRef = ref<HTMLElement | null>(null);
-const floatingRef = ref<HTMLElement | null>(null);
-const dropdownRef = ref<HTMLDivElement | null>(null);
+const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
+const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
+const dropdownRef = useTemplateRef<HTMLDivElement>('dropdownRef');
 
-// src/components/BaseSelector.vue
+// ---------- 文本格式化计算 ----------
+const formattedLabel = (val: T): string => {
+  if (labelFormatter) return labelFormatter(val);
+  if (formatter) return formatter(val);
+  return String(val ?? '');
+};
+
+const formattedOption = (opt: T): string => {
+  if (optionFormatter) return optionFormatter(opt);
+  if (formatter) return formatter(opt);
+  return String(opt ?? '');
+};
+
+// ---------- 高度计算（与 CSS 保持同步） ----------
+const ITEM_HEIGHT = 1.9;
+const PADDING_Y = 0.25;
+const GAP = 0.15;
+
+const dropdownMaxHeight = computed(() => {
+  const n = Math.max(1, visibleCount);
+  const height = PADDING_Y * 2 + n * ITEM_HEIGHT + Math.max(0, n - 1) * GAP;
+  return `${height}rem`;
+});
+
+// ---------- Floating UI ----------
 const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   placement: 'bottom-start',
-  strategy: 'fixed', // 🌟 改为 fixed 定位，防止父级 transform 导致错位
+  strategy: 'fixed',
   whileElementsMounted: (reference, floating, update) =>
     autoUpdate(reference, floating, update, {
-      ancestorScroll: true, // 🌟 监听所有祖先元素的滚动
+      ancestorScroll: true,
       elementResize: true,
     }),
   middleware: [
@@ -106,102 +128,76 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   ],
 });
 
-const optionRefsMap = new Map<T, HTMLElement>();
+// ---------- 选项 DOM 引用 ----------
+const optionEls = useTemplateRef<HTMLElement[]>('optionEls');
 
-const setOptionRef = (el: unknown, option: T) => {
-  if (el) {
-    optionRefsMap.set(option, el as HTMLElement);
-  }
-};
-
-onBeforeUpdate(() => {
-  optionRefsMap.clear();
-});
-
+// ---------- 交互逻辑 ----------
 const toggleDropdown = () => {
   isOpen.value = !isOpen.value;
 };
-const isNonDefault = computed(() => props.modelValue !== props.defaultValue);
 
-let wheelAccumulator = 0;
-const WHEEL_THRESHOLD = 35;
-
-const handleWheel = (e: WheelEvent) => {
-  if (isOpen.value) return;
-
-  e.preventDefault();
-  wheelAccumulator += e.deltaY;
-
-  if (Math.abs(wheelAccumulator) < WHEEL_THRESHOLD) return;
-
-  emit('wheel-change', wheelAccumulator < 0 ? 'up' : 'down');
-  wheelAccumulator = 0;
-};
+const isNonDefault = computed(() => modelValue.value !== defaultValue);
 
 const handleClear = () => {
-  emit('update:modelValue', props.defaultValue!);
+  modelValue.value = defaultValue!;
   emit('clear');
   isOpen.value = false;
 };
 
 const handleSelect = (option: T) => {
-  emit('update:modelValue', option);
+  modelValue.value = option;
   isOpen.value = false;
 };
 
-useEventListener(window, 'pointerdown', e => {
-  const target = e.target as Node;
-  if (
-    isOpen.value &&
-    containerRef.value &&
-    !containerRef.value.contains(target) &&
-    floatingRef.value &&
-    !floatingRef.value.contains(target)
-  ) {
-    isOpen.value = false;
-  }
-});
+// 🌟 优化：使用 onClickOutside 替代手动判断
+// 监听 referenceRef 的外部点击，忽略对 floatingRef 的点击
+onClickOutside(
+  referenceRef,
+  () => {
+    if (isOpen.value) {
+      isOpen.value = false;
+    }
+  },
+  { ignore: [floatingRef] }
+);
 
+// 打开时滚动到当前选中项
 watch(isOpen, opened => {
-  if (opened) {
-    nextTick(() => {
-      const container = dropdownRef.value;
-      const targetElement = optionRefsMap.get(props.modelValue);
+  if (!opened) return;
 
-      if (!container || !targetElement) return;
+  nextTick(() => {
+    const container = dropdownRef.value;
+    const idx = options.indexOf(modelValue.value);
+    const targetElement = idx !== -1 ? optionEls.value?.[idx] : null;
 
-      const computedStyle = window.getComputedStyle(container);
-      const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
-      const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+    if (!container || !targetElement) return;
 
-      const containerRect = container.getBoundingClientRect();
-      const targetRect = targetElement.getBoundingClientRect();
+    const style = window.getComputedStyle(container);
+    const paddingTop = parseFloat(style.paddingTop) || 0;
+    const paddingBottom = parseFloat(style.paddingBottom) || 0;
 
-      const relativeTop = targetRect.top - containerRect.top + container.scrollTop;
-      const relativeBottom = relativeTop + targetRect.height;
+    const itemTop = targetElement.offsetTop;
+    const itemBottom = itemTop + targetElement.offsetHeight;
 
-      const viewVisibleTop = container.scrollTop + paddingTop;
-      const viewVisibleBottom = container.scrollTop + containerRect.height - paddingBottom;
+    const viewTop = container.scrollTop + paddingTop;
+    const viewBottom = container.scrollTop + container.clientHeight - paddingBottom;
 
-      if (relativeTop < viewVisibleTop) {
-        container.scrollTop = relativeTop - paddingTop;
-      } else if (relativeBottom > viewVisibleBottom) {
-        container.scrollTop = relativeBottom - containerRect.height + paddingBottom;
-      }
-    });
-  }
+    if (itemTop < viewTop) {
+      container.scrollTop = itemTop - paddingTop;
+    } else if (itemBottom > viewBottom) {
+      container.scrollTop = itemBottom - container.clientHeight + paddingBottom;
+    }
+  });
 });
 </script>
 
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 
-.relative-container {
+.selector-trigger-bar {
   position: relative;
   width: 100%;
-}
 
-.selector-trigger-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -274,7 +270,7 @@ watch(isOpen, opened => {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  background-color: var(--bg-body);
+  background-color: var(--bg-panel);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--glass-border);
@@ -282,7 +278,6 @@ watch(isOpen, opened => {
   box-shadow: @shadow-floating;
   padding: 0.25rem;
   gap: 0.15rem;
-  max-height: 13.5rem;
   transform-origin: top left;
 }
 
@@ -313,21 +308,5 @@ watch(isOpen, opened => {
   }
 }
 
-.dropdown-enter-active {
-  transition:
-    opacity @duration-fast ease-out,
-    transform @duration-fast ease-out;
-}
-
-.dropdown-leave-active {
-  transition:
-    opacity @duration-fast ease-in,
-    transform @duration-fast ease-in;
-}
-
-.dropdown-enter-from,
-.dropdown-leave-to {
-  opacity: 0;
-  transform: translateY(-0.3rem) scale(0.96);
-}
+.fade-scale-transition(dropdown);
 </style>

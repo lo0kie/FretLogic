@@ -1,43 +1,46 @@
-export const SettingsSchema = {
-  safeParse: (data: {
-    githubToken: string;
-    githubOwner: string;
-    githubRepo: string;
-    githubBranch: string;
-    githubPath: string;
-  }) => {
-    const issues: { message: string }[] = [];
-    const token = data.githubToken.trim();
+export interface SettingsPayload {
+  githubToken: string;
+  githubOwner: string;
+  githubRepo: string;
+  githubBranch: string;
+  githubPath: string;
+}
 
-    const tokenRegex = /^(ghp|github_pat|gho|ghu|ghs|ghr)_[a-zA-Z0-9_]{10,}$/;
+export interface ValidationResult {
+  isValid: boolean;
+  data: SettingsPayload;
+  errors: string[];
+}
 
-    if (!tokenRegex.test(token)) {
-      issues.push({ message: 'GitHub Token 格式不合法' });
-    }
-    if (!data.githubOwner.trim()) {
-      issues.push({ message: '账户名称不能为空' });
-    }
-    if (!data.githubRepo.trim()) {
-      issues.push({ message: '仓库名称不能为空' });
-    }
-    if (!data.githubPath.trim()) {
-      issues.push({ message: '备份路径不能为空' });
-    }
+export const validateSettings = (data: SettingsPayload): ValidationResult => {
+  const errors: string[] = [];
+  const token = data.githubToken.trim();
+  const tokenRegex = /^(ghp|github_pat|gho|ghu|ghs|ghr)_[a-zA-Z0-9_]{10,}$/;
 
-    return {
-      success: issues.length === 0,
-      data: {
-        githubToken: token,
-        githubOwner: data.githubOwner.trim(),
-        githubRepo: data.githubRepo.trim(),
-        githubBranch: data.githubBranch.trim() || 'master',
-        githubPath: data.githubPath.trim(),
-      },
-      error: {
-        issues,
-      },
-    };
-  },
+  if (!tokenRegex.test(token)) {
+    errors.push('GitHub Token 格式不合法');
+  }
+  if (!data.githubOwner.trim()) {
+    errors.push('账户名称不能为空');
+  }
+  if (!data.githubRepo.trim()) {
+    errors.push('仓库名称不能为空');
+  }
+  if (!data.githubPath.trim()) {
+    errors.push('备份路径不能为空');
+  }
+
+  return {
+    isValid: errors.length === 0,
+    data: {
+      githubToken: token,
+      githubOwner: data.githubOwner.trim(),
+      githubRepo: data.githubRepo.trim(),
+      githubBranch: data.githubBranch.trim() || 'master',
+      githubPath: data.githubPath.trim(),
+    },
+    errors,
+  };
 };
 
 export const generateUUID = (prefix: string = '', length = 8): string => {
@@ -45,7 +48,6 @@ export const generateUUID = (prefix: string = '', length = 8): string => {
     return (prefix ? `${prefix}_` : '') + crypto.randomUUID().slice(0, length);
   }
 
-  // 📱 非安全上下文 (HTTP/移动端) 的兼容降级算法
   const randomStr = Math.random()
     .toString(36)
     .substring(2, 2 + length);

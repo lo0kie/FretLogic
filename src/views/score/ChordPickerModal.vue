@@ -25,14 +25,6 @@
               <Search class="search-icon" :size="14" stroke-width="2.5" />
             </template>
           </BaseInput>
-
-          <button
-            v-if="scoreEditor.selectedSlotKey !== null && scoreEditor.activeSong?.chordMap[scoreEditor.selectedSlotKey]"
-            class="clear-chord-btn"
-            @click="handleRemoveChord"
-          >
-            清除当前和弦
-          </button>
         </div>
 
         <div class="picker-toolbar">
@@ -48,7 +40,8 @@
             v-for="chord in filteredChords"
             :key="chord.id"
             class="picker-chord-card"
-            @click="handleSelectChord(chord)"
+            :class="{ 'is-current-bound': isCurrentBound(chord) }"
+            @click="!isCurrentBound(chord) && handleSelectChord(chord)"
           >
             <span class="card-name">{{ chord.chordName }}</span>
             <Fretboard
@@ -98,7 +91,6 @@ const settingsStore = useSettingsStore();
 const selectedGroupId = ref<string>('ALL');
 const pickerSearchQuery = ref<string>('');
 
-// 构建分组胶囊选项
 const groupTabOptions = computed<SegmentOption<string>[]>(() => {
   const options: SegmentOption<string>[] = [{ label: '全部和弦', value: 'ALL' }];
   chordStore.groups.forEach(g => {
@@ -112,7 +104,13 @@ watch(
   val => {
     if (val) {
       pickerSearchQuery.value = '';
-      if (chordStore.selectedGroupId && chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
+
+      const currentSlotKey = scoreEditor.selectedSlotKey;
+      const boundChord = currentSlotKey !== null ? scoreEditor.activeSong?.chordMap[currentSlotKey] : null;
+
+      if (boundChord && boundChord.groupId) {
+        selectedGroupId.value = boundChord.groupId;
+      } else if (chordStore.selectedGroupId && chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
         selectedGroupId.value = chordStore.selectedGroupId;
       } else {
         selectedGroupId.value = 'ALL';
@@ -120,6 +118,20 @@ watch(
     }
   }
 );
+
+const currentBoundChord = computed(() => {
+  if (scoreEditor.selectedSlotKey === null || !scoreEditor.activeSong?.chordMap) return null;
+  return scoreEditor.activeSong.chordMap[scoreEditor.selectedSlotKey] || null;
+});
+
+const isCurrentBound = (chord: Chord) => {
+  const bound = currentBoundChord.value;
+  if (!bound) return false;
+  if (chord.id && bound.id) {
+    return chord.id === bound.id;
+  }
+  return chord.fingerprint && bound.fingerprint ? chord.fingerprint === bound.fingerprint : false;
+};
 
 const filteredChords = computed(() => {
   let list = chordStore.savedChordsList;
@@ -136,13 +148,6 @@ const filteredChords = computed(() => {
 const handleSelectChord = (chord: Chord) => {
   if (scoreEditor.selectedSlotKey !== null && scoreEditor.activeSong) {
     scoreEditor.setSlotChord(scoreEditor.selectedSlotKey, chord);
-  }
-  visibleModel.value = false;
-};
-
-const handleRemoveChord = () => {
-  if (scoreEditor.selectedSlotKey !== null && scoreEditor.activeSong) {
-    scoreEditor.removeSlotChord(scoreEditor.selectedSlotKey);
   }
   visibleModel.value = false;
 };
@@ -204,23 +209,6 @@ const handleRemoveChord = () => {
   padding: 2rem 0;
 }
 
-.clear-chord-btn {
-  padding: 0.35rem 0.75rem;
-  border-radius: 9999px;
-  border: 1px solid var(--color-danger);
-  background-color: color-mix(in srgb, var(--color-danger), transparent 90%);
-  color: var(--color-danger);
-  font-weight: 700;
-  font-size: 0.72rem;
-  cursor: pointer;
-  white-space: nowrap;
-
-  &:hover {
-    background-color: var(--color-danger);
-    color: #ffffff;
-  }
-}
-
 .picker-cards-grid-4cols {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -242,6 +230,18 @@ const handleRemoveChord = () => {
     border-color: var(--color-primary);
     transform: translateY(-2px);
     box-shadow: @shadow-md;
+  }
+
+  &.is-current-bound {
+    background-color: color-mix(in srgb, @primary, transparent 88%);
+    border-color: @primary;
+    box-shadow: @focus-ring-primary;
+    cursor: default;
+    pointer-events: none;
+
+    .card-name {
+      color: @primary;
+    }
   }
 }
 

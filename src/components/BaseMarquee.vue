@@ -7,10 +7,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 
-const containerRef = ref<HTMLDivElement | null>(null);
-const contentRef = ref<HTMLSpanElement | null>(null);
+const containerRef = useTemplateRef<HTMLDivElement>('containerRef');
+const contentRef = useTemplateRef<HTMLSpanElement>('contentRef');
 const isScrolling = ref(false);
 
 const handleMouseEnter = () => {

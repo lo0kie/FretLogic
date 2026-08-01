@@ -18,14 +18,10 @@
     :touchStartThreshold="12"
     :swap-threshold="0.5"
   >
-    <div
-      v-for="group in chordStore.groups"
-      :key="group.id"
-      :ref="el => setGroupCardRef(el, group.id)"
-      class="group-box-card"
-    >
-      <GlobalContextMenu :ref="el => setContextMenuRef(el, group.id)" :items="getGroupMenuItems(group)">
+    <template v-for="group in chordStore.groups" :key="group.id">
+      <GlobalContextMenu ref="contextMenuRefs" :items="getGroupMenuItems(group)" class="group-box-card">
         <div
+          ref="groupCardEls"
           @click="chordService.executeGroupToggle(group.id)"
           class="group-title-row"
           :class="{ 'is-context-open': isGroupMenuOpen(group.id) }"
@@ -63,44 +59,44 @@
             </div>
           </div>
         </div>
+
+        <div v-if="!group.collapsed" class="chord-content-wrapper">
+          <VueDraggable
+            :model-value="filteredChordsGroupMap.get(group.id) || []"
+            :animation="200"
+            ghost-class="drag-ghost-style"
+            chosen-class="drag-chosen-style"
+            drag-class="drag-active-style"
+            :disabled="Boolean(searchQuery) || uiStore.isMobile"
+            class="chords-grid-layout"
+            @update="e => chordService.handleChordSort(e, group.id)"
+            :swap-threshold="0.5"
+            :touchStartThreshold="12"
+          >
+            <LeftChordCard
+              v-for="chord in filteredChordsGroupMap.get(group.id) || []"
+              :key="chord.id"
+              :chord="chord"
+              :is-editing="editorStore.editingId === chord.id"
+              @delete="handleLocalDeleteChord"
+              @move="$emit('open-move', chord)"
+              @click="chordService.loadChordToEditor(chord)"
+              class="chord-item-grab-handle"
+            />
+          </VueDraggable>
+
+          <div v-if="getGroupChordsCount(group.id) === 0" class="empty-placeholder-card z-index-bg">
+            <p class="placeholder-card-text">暂无和弦</p>
+          </div>
+          <div
+            v-else-if="searchQuery && (filteredChordsGroupMap.get(group.id) || []).length === 0"
+            class="empty-placeholder-card z-index-bg"
+          >
+            <p class="placeholder-card-text">无匹配</p>
+          </div>
+        </div>
       </GlobalContextMenu>
-
-      <div v-if="!group.collapsed" class="chord-content-wrapper">
-        <VueDraggable
-          :model-value="filteredChordsGroupMap.get(group.id) || []"
-          :animation="200"
-          ghost-class="drag-ghost-style"
-          chosen-class="drag-chosen-style"
-          drag-class="drag-active-style"
-          :disabled="Boolean(searchQuery) || uiStore.isMobile"
-          class="chords-grid-layout"
-          @update="e => chordService.handleChordSort(e, group.id)"
-          :swap-threshold="0.5"
-          :touchStartThreshold="12"
-        >
-          <LeftChordCard
-            v-for="chord in filteredChordsGroupMap.get(group.id) || []"
-            :key="chord.id"
-            :chord="chord"
-            :is-editing="editorStore.editingId === chord.id"
-            @delete="handleLocalDeleteChord"
-            @move="$emit('open-move', chord)"
-            @click="chordService.loadChordToEditor(chord)"
-            class="chord-item-grab-handle"
-          />
-        </VueDraggable>
-
-        <div v-if="getGroupChordsCount(group.id) === 0" class="empty-placeholder-card z-index-bg">
-          <p class="placeholder-card-text">暂无和弦</p>
-        </div>
-        <div
-          v-else-if="searchQuery && (filteredChordsGroupMap.get(group.id) || []).length === 0"
-          class="empty-placeholder-card z-index-bg"
-        >
-          <p class="placeholder-card-text">无匹配</p>
-        </div>
-      </div>
-    </div>
+    </template>
   </VueDraggable>
 </template>
 
@@ -113,7 +109,7 @@ import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group } from '@/types';
 import { ChevronDown, FolderOpen, GripVertical, SquarePen, Trash2 } from '@lucide/vue';
-import { computed, nextTick, onBeforeUpdate, ref, watch } from 'vue';
+import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import LeftChordCard from './LeftChordCard.vue';
 
@@ -132,8 +128,8 @@ const chordStore = useChordStore();
 const chordService = useChordService();
 const uiStore = useUiStore();
 
-const groupCardsMap = new Map<string, HTMLElement>();
-const contextMenuRefsMap = ref<Record<string, InstanceType<typeof GlobalContextMenu>>>({});
+const groupCardEls = useTemplateRef<HTMLElement[]>('groupCardEls');
+const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>('contextMenuRefs');
 
 const chordLowerNameCache = new WeakMap<Chord, string>();
 
@@ -146,26 +142,11 @@ const getChordLowerName = (chord: Chord): string => {
   return cached;
 };
 
-const setGroupCardRef = (el: unknown, groupId: string) => {
-  if (el) {
-    groupCardsMap.set(groupId, el as HTMLElement);
-  }
-};
-
-const setContextMenuRef = (el: unknown, groupId: string) => {
-  if (el) {
-    contextMenuRefsMap.value[groupId] = el as InstanceType<typeof GlobalContextMenu>;
-  }
-};
-
 const isGroupMenuOpen = (groupId: string) => {
-  return contextMenuRefsMap.value[groupId]?.isOpen ?? false;
+  const idx = chordStore.groups.findIndex(g => g.id === groupId);
+  if (idx === -1) return false;
+  return contextMenuRefs.value?.[idx]?.isOpen ?? false;
 };
-
-onBeforeUpdate(() => {
-  groupCardsMap.clear();
-  contextMenuRefsMap.value = {};
-});
 
 const getGroupChordsCount = (groupId: string) => {
   return chordStore.groupChordMap.get(groupId)?.length || 0;
@@ -216,7 +197,10 @@ watch(
   async newId => {
     if (newId) {
       await nextTick();
-      const targetElement = groupCardsMap.get(newId);
+
+      const idx = chordStore.groups.findIndex(g => g.id === newId);
+      const targetElement = idx !== -1 ? groupCardEls.value?.[idx] : null;
+
       if (targetElement) {
         targetElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
