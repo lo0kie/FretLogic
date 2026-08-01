@@ -1,52 +1,50 @@
 <template>
-  <Transition name="floating-bar-fade">
-    <div class="score-floating-bar">
-      <div class="bar-info-zone">
-        <!-- 🌟 根据 selectedCount 动态切换暗淡样式类 -->
-        <span class="selected-count-badge" :class="{ 'is-zero': selectedCount === 0 }">
-          {{ selectedCount }}
-        </span>
-        <span class="selected-text-tip">{{ selectedCount > 0 ? '已选择行:' : '请选择歌词' }}</span>
+  <div class="score-floating-bar">
+    <div class="bar-info-zone">
+      <!-- 🌟 根据 selectedCount 动态切换暗淡样式类 -->
+      <span class="selected-count-badge" :class="{ 'is-zero': selectedCount === 0 }">
+        {{ selectedCount }}
+      </span>
+      <span class="selected-text-tip">{{ selectedCount > 0 ? '已选择行:' : '请选择歌词' }}</span>
 
-        <div ref="scrollContainerRef" class="clickable-indices-list no-scrollbar" @wheel.prevent="handleWheelScroll">
-          <button
-            v-for="lineIdx in sortedIndices"
-            :key="lineIdx"
-            class="index-item-btn"
-            title="点击取消选择该行"
-            @click="emit('remove-index', lineIdx)"
-          >
-            {{ lineIdx + 1 }}
-          </button>
-        </div>
-      </div>
-
-      <div class="bar-divider"></div>
-
-      <div class="bar-actions-zone">
-        <ActionButton size="sm" variant="ghost" @click="emit('toggle-select-all')">
-          {{ isAllSelected ? '全不选' : '全选' }}
-        </ActionButton>
-
-        <ActionButton
-          size="sm"
-          variant="subtle"
-          :disabled="selectedCount === 0"
-          :loading="isExporting"
-          @click="emit('copy-image')"
+      <div ref="scrollContainerRef" class="clickable-indices-list no-scrollbar" @wheel.prevent="handleWheelScroll">
+        <button
+          v-for="lineIdx in sortedIndices"
+          :key="lineIdx"
+          class="index-item-btn"
+          title="点击取消选择该行"
+          @click="emit('remove-index', lineIdx)"
         >
-          <template #prefix><Copy :size="14" stroke-width="2.5" /></template>
-          复制图片
-        </ActionButton>
+          {{ lineIdx + 1 }}
+        </button>
       </div>
     </div>
-  </Transition>
+
+    <div class="bar-divider"></div>
+
+    <div class="bar-actions-zone">
+      <ActionButton size="sm" variant="ghost" @click="emit('toggle-select-all')">
+        {{ isAllSelected ? '全不选' : '全选' }}
+      </ActionButton>
+
+      <ActionButton
+        size="sm"
+        variant="subtle"
+        :disabled="selectedCount === 0"
+        :loading="isExporting"
+        @click="emit('copy-image')"
+      >
+        <template #prefix><Copy :size="14" stroke-width="2.5" /></template>
+        复制图片
+      </ActionButton>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import { Copy } from '@lucide/vue';
-import { ref } from 'vue';
+import { useTemplateRef } from 'vue';
 
 defineProps<{
   selectedCount: number;
@@ -61,16 +59,13 @@ const emit = defineEmits<{
   (e: 'copy-image'): void;
 }>();
 
-const scrollContainerRef = ref<HTMLElement | null>(null);
+const scrollContainerRef = useTemplateRef<HTMLElement>('scrollContainerRef');
 
 const handleWheelScroll = (e: WheelEvent) => {
   if (!scrollContainerRef.value) return;
   const scrollDelta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
 
-  scrollContainerRef.value.scrollBy({
-    left: scrollDelta,
-    behavior: 'smooth',
-  });
+  scrollContainerRef.value.scrollBy({ left: scrollDelta, behavior: 'smooth' });
 };
 </script>
 
@@ -186,18 +181,5 @@ const handleWheelScroll = (e: WheelEvent) => {
   align-items: center;
   gap: 0.4rem;
   flex-shrink: 0;
-}
-
-.floating-bar-fade-enter-active,
-.floating-bar-fade-leave-active {
-  transition:
-    opacity 0.25s cubic-bezier(0.25, 1, 0.5, 1),
-    transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
-}
-
-.floating-bar-fade-enter-from,
-.floating-bar-fade-leave-to {
-  opacity: 0;
-  transform: translate(-50%, 20px) scale(0.95);
 }
 </style>

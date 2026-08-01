@@ -17,7 +17,7 @@
               :candidates="analysis.candidates"
               :active-chord-name="editorStore.currentChordName"
               :is-mobile="uiStore.isMobile"
-              :custom-height="rightListHeight"
+              :custom-height="noteListRef?.height"
               @select-candidate="handleSelectCandidate"
             />
 
@@ -49,8 +49,7 @@ import { useEditorStore } from '@/stores/chordEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { calcNoteLabel, calcPitchIndex, canTogglePitchAccidental } from '@/utils/musicTheory';
 import { Music, Sparkles } from '@lucide/vue';
-import { useElementSize } from '@vueuse/core';
-import { computed, ref } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 
 import { CandidateResult, NoteInput } from '@/types/engine.ts';
 import { analyzeChordGraph } from '@/utils/chordEngine.ts';
@@ -60,9 +59,7 @@ import NoteIntervalList, { type RenderNoteItem } from './NoteIntervalList.vue';
 const editorStore = useEditorStore();
 const uiStore = useUiStore();
 
-const noteListRef = ref<InstanceType<typeof NoteIntervalList> | null>(null);
-const rightSectionRef = computed(() => noteListRef.value?.containerRef || null);
-const { height: rightListHeight } = useElementSize(rightSectionRef);
+const noteListRef = useTemplateRef<InstanceType<typeof NoteIntervalList>>('noteListRef');
 
 const EXACT_INTERVAL_MAP: Record<number, string> = {
   0: '1',

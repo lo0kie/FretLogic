@@ -37,7 +37,7 @@
 <script setup lang="ts">
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
-import { computed, ref } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import Fretboard from '@/components/Fretboard.vue';
@@ -56,7 +56,7 @@ const emit = defineEmits<{
 
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
-const contextMenuRef = ref<InstanceType<typeof GlobalContextMenu> | null>(null);
+const contextMenuRef = useTemplateRef<InstanceType<typeof GlobalContextMenu>>('contextMenuRef');
 
 const isMenuOpen = computed(() => contextMenuRef.value?.isOpen ?? false);
 const menuItems = computed<ContextMenuItem[]>(() => [

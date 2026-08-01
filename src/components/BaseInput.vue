@@ -39,30 +39,28 @@
 
 <script setup lang="ts">
 import { X } from '@lucide/vue';
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, useTemplateRef } from 'vue';
 
-const props = withDefaults(
-  defineProps<{
-    modelValue: string;
-    placeholder?: string;
-    disabled?: boolean;
-    clearable?: boolean;
-    isPassword?: boolean;
-    size?: 'sm' | 'md' | 'lg';
-    fontSize?: 'xs' | 'md' | 'lg';
-    /** 挂载后自动聚焦 */
-    autofocus?: boolean;
-  }>(),
-  {
-    placeholder: '',
-    disabled: false,
-    clearable: false,
-    isPassword: false,
-    size: 'md',
-    fontSize: 'md',
-    autofocus: false,
-  }
-);
+const {
+  modelValue,
+  placeholder = '',
+  disabled = false,
+  clearable = false,
+  isPassword = false,
+  size = 'md',
+  fontSize = 'md',
+  autofocus = false,
+} = defineProps<{
+  modelValue: string;
+  placeholder?: string;
+  disabled?: boolean;
+  clearable?: boolean;
+  isPassword?: boolean;
+  size?: 'sm' | 'md' | 'lg';
+  fontSize?: 'xs' | 'md' | 'lg';
+  /** 挂载后自动聚焦 */
+  autofocus?: boolean;
+}>();
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void;
@@ -70,12 +68,11 @@ const emit = defineEmits<{
   (e: 'clear'): void;
 }>();
 
-const inputRef = ref<HTMLInputElement | null>(null);
-
-const sizeClass = computed(() => `size-${props.size}`);
+const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
+const sizeClass = computed(() => `size-${size}`);
 
 const fontClass = computed(() => {
-  switch (props.fontSize) {
+  switch (fontSize) {
     case 'xs':
       return 'text-xs-style';
     case 'lg':
@@ -97,7 +94,7 @@ const handleClear = () => {
 };
 
 onMounted(() => {
-  if (props.autofocus) {
+  if (autofocus) {
     // nextTick 确保 DOM 已就绪（尤其在 Modal / Transition 内更可靠）
     nextTick(() => {
       inputRef.value?.focus();

@@ -31,7 +31,7 @@
             <div
               v-for="(option, index) in options"
               :key="index"
-              :ref="el => setOptionRef(el, option)"
+              ref="optionEls"
               @click="handleSelect(option)"
               class="selector-item"
               :class="{
@@ -55,30 +55,29 @@
 import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue';
 import { ChevronDown, X } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
-import { computed, nextTick, onBeforeUpdate, ref, watch } from 'vue';
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 
-const props = withDefaults(
-  defineProps<{
-    modelValue: T;
-    options: T[];
-    clearable?: boolean;
-    defaultValue?: T;
-    fontBlackItems?: boolean;
-    /** 可视区域内最多显示的选项数量，默认 6 */
-    visibleCount?: number;
-    /** 🌟 通用格式化函数（若未单独指定 labelFormatter/optionFormatter，则两者均使用此函数） */
-    formatter?: (value: T) => string;
-    /** 🌟 专属：仅用于格式化选中后显示在触发栏上的文本 */
-    labelFormatter?: (value: T) => string;
-    /** 🌟 专属：仅用于格式化下拉菜单中每一项的文本 */
-    optionFormatter?: (value: T) => string;
-  }>(),
-  {
-    clearable: false,
-    fontBlackItems: false,
-    visibleCount: 6,
-  }
-);
+const {
+  modelValue,
+  options,
+  clearable = false,
+  defaultValue,
+  fontBlackItems = false,
+  visibleCount = 6,
+  formatter,
+  labelFormatter,
+  optionFormatter,
+} = defineProps<{
+  modelValue: T;
+  options: T[];
+  clearable?: boolean;
+  defaultValue?: T;
+  fontBlackItems?: boolean;
+  visibleCount?: number;
+  formatter?: (value: T) => string;
+  labelFormatter?: (value: T) => string;
+  optionFormatter?: (value: T) => string;
+}>();
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: T): void;
@@ -87,21 +86,21 @@ const emit = defineEmits<{
 }>();
 
 const isOpen = ref(false);
-const containerRef = ref<HTMLDivElement | null>(null);
-const referenceRef = ref<HTMLElement | null>(null);
-const floatingRef = ref<HTMLElement | null>(null);
-const dropdownRef = ref<HTMLDivElement | null>(null);
+const containerRef = useTemplateRef<HTMLDivElement>('containerRef');
+const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
+const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
+const dropdownRef = useTemplateRef<HTMLDivElement>('dropdownRef');
 
 // ---------- 文本格式化计算 ----------
 const formattedLabel = (val: T): string => {
-  if (props.labelFormatter) return props.labelFormatter(val);
-  if (props.formatter) return props.formatter(val);
+  if (labelFormatter) return labelFormatter(val);
+  if (formatter) return formatter(val);
   return String(val ?? '');
 };
 
 const formattedOption = (opt: T): string => {
-  if (props.optionFormatter) return props.optionFormatter(opt);
-  if (props.formatter) return props.formatter(opt);
+  if (optionFormatter) return optionFormatter(opt);
+  if (formatter) return formatter(opt);
   return String(opt ?? '');
 };
 
@@ -111,7 +110,7 @@ const PADDING_Y = 0.25; // rem，上下各 0.25rem
 const GAP = 0.15; // rem，对应 gap
 
 const dropdownMaxHeight = computed(() => {
-  const n = Math.max(1, props.visibleCount);
+  const n = Math.max(1, visibleCount);
   const height = PADDING_Y * 2 + n * ITEM_HEIGHT + Math.max(0, n - 1) * GAP;
   return `${height}rem`;
 });
@@ -140,24 +139,14 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
 });
 
 // ---------- 选项 DOM 引用 ----------
-const optionRefsMap = new Map<T, HTMLElement>();
-
-const setOptionRef = (el: unknown, option: T) => {
-  if (el) {
-    optionRefsMap.set(option, el as HTMLElement);
-  }
-};
-
-onBeforeUpdate(() => {
-  optionRefsMap.clear();
-});
+const optionEls = useTemplateRef<HTMLElement[]>('optionEls');
 
 // ---------- 交互逻辑 ----------
 const toggleDropdown = () => {
   isOpen.value = !isOpen.value;
 };
 
-const isNonDefault = computed(() => props.modelValue !== props.defaultValue);
+const isNonDefault = computed(() => modelValue !== defaultValue);
 
 let wheelAccumulator = 0;
 const WHEEL_THRESHOLD = 35;
@@ -175,7 +164,7 @@ const handleWheel = (e: WheelEvent) => {
 };
 
 const handleClear = () => {
-  emit('update:modelValue', props.defaultValue!);
+  emit('update:modelValue', defaultValue!);
   emit('clear');
   isOpen.value = false;
 };
@@ -205,7 +194,8 @@ watch(isOpen, opened => {
 
   nextTick(() => {
     const container = dropdownRef.value;
-    const targetElement = optionRefsMap.get(props.modelValue);
+    const idx = options.indexOf(modelValue);
+    const targetElement = idx !== -1 ? optionEls.value?.[idx] : null;
 
     if (!container || !targetElement) return;
 
@@ -347,21 +337,5 @@ watch(isOpen, opened => {
   }
 }
 
-.dropdown-enter-active {
-  transition:
-    opacity @duration-fast ease-out,
-    transform @duration-fast ease-out;
-}
-
-.dropdown-leave-active {
-  transition:
-    opacity @duration-fast ease-in,
-    transform @duration-fast ease-in;
-}
-
-.dropdown-enter-from,
-.dropdown-leave-to {
-  opacity: 0;
-  transform: translateY(-0.3rem) scale(0.96);
-}
+.fade-scale-transition(dropdown);
 </style>

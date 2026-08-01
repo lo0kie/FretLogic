@@ -55,7 +55,7 @@ import { useEditorStore } from '@/stores/chordEditorStore';
 import { TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { SlidersHorizontal } from '@lucide/vue';
 import { onClickOutside } from '@vueuse/core';
-import { ref } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 
 const editorStore = useEditorStore();
 const tuningOptions = Object.values(TuningEnum);
@@ -67,8 +67,8 @@ const FRET_OPTIONS: SegmentOption<number>[] = FRET_COUNTS.map(f => ({
 }));
 
 const isConfigOpen = ref(false);
-const popoverContainerRef = ref<HTMLDivElement | null>(null);
-const cardRef = ref<HTMLDivElement | null>(null);
+const popoverContainerRef = useTemplateRef<HTMLDivElement>('popoverContainerRef');
+const cardRef = useTemplateRef<HTMLDivElement>('cardRef');
 
 onClickOutside(
   popoverContainerRef,

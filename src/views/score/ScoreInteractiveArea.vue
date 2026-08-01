@@ -127,7 +127,7 @@ import { useLyricsLinesData } from '@/services/useLyricsLinesData';
 import { useScoreImageExport } from '@/services/useScoreImageExport';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { computed, ref } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 import ChordSlotCell from './ChordSlotCell.vue';
 import ScoreExportFloatingBar from './ScoreExportFloatingBar.vue';
 
@@ -138,7 +138,7 @@ const emit = defineEmits<{
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 
-const scoreZoneRef = ref<HTMLElement | null>(null);
+const scoreZoneRef = useTemplateRef<HTMLElement>('scoreZoneRef');
 
 const {
   dragOverSlotKey,

@@ -70,12 +70,12 @@
       <input type="file" ref="fileInputRef" accept=".json" @change="handleFileChange" class="hidden-input" />
 
       <div class="footer-actions-row">
-        <ActionButton width="100%" size="sm" @click="handleImportTrigger">
+        <ActionButton width="100%" @click="handleImportTrigger">
           <template #prefix><Download :size="13" :stroke-width="2" /></template>
           导入备份
         </ActionButton>
 
-        <ActionButton width="100%" size="sm" @click="ioService.triggerFullExport()">
+        <ActionButton width="100%" @click="ioService.triggerFullExport()">
           <template #prefix><Upload :size="13" :stroke-width="2" /></template>
           全量导出
         </ActionButton>
@@ -100,7 +100,7 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import { Download, Eye, EyeOff, Plus, Search, Upload } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
-import { ref } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 import { useRoute } from 'vue-router';
 import GroupModalsContainer from './GroupModalsContainer.vue';
 import LeftGroupList from './LeftGroupList.vue';
@@ -110,7 +110,7 @@ defineOptions({ inheritAttrs: false });
 
 const searchQuery = ref('');
 const debouncedQuery = refDebounced(searchQuery, 150);
-const fileInputRef = ref<HTMLInputElement | null>(null);
+const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef');
 
 const route = useRoute();
 const uiStore = useUiStore();
@@ -228,7 +228,7 @@ const handleFileChange = (e: Event) => {
 .footer-actions-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.4rem;
+  gap: 0.5rem;
   box-sizing: border-box;
 }
 

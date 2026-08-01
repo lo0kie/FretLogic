@@ -39,7 +39,6 @@ const SidebarLeft = defineAsyncComponent(() => import('./views/sidebar-left/Side
 const route = useRoute();
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
-
 const chordService = useChordService();
 
 const handleExportImage = (isTransparent: boolean) => {
@@ -98,6 +97,8 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
 </script>
 
 <style scoped lang="less">
+@import '@/assets/tokens.module';
+
 .app-window-shell {
   width: 100vw;
   height: 100vh;
@@ -142,13 +143,5 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
   box-shadow: var(--shadow-xl);
 }
 
-.drawer-fade-enter-active,
-.drawer-fade-leave-active {
-  transition: opacity 0.25s ease;
-}
-
-.drawer-fade-enter-from,
-.drawer-fade-leave-to {
-  opacity: 0;
-}
+.fade-scale-transition(drawer-fade);
 </style>

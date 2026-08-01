@@ -60,15 +60,15 @@ import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { SlidersHorizontal } from '@lucide/vue';
 import { onClickOutside } from '@vueuse/core';
-import { ref } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 
 const scoreEditor = useScoreEditorStore();
 
 const KEY_OPTIONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
 const isConfigOpen = ref(false);
-const popoverContainerRef = ref<HTMLDivElement | null>(null);
-const cardRef = ref<HTMLDivElement | null>(null);
+const popoverContainerRef = useTemplateRef<HTMLDivElement>('popoverContainerRef');
+const cardRef = useTemplateRef<HTMLDivElement>('cardRef');
 
 onClickOutside(
   popoverContainerRef,

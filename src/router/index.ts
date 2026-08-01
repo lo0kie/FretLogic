@@ -1,17 +1,15 @@
-import ScoreView from '@/views/score/ScoreView.vue';
-import WorkbenchView from '@/views/workbench/WorkbenchView.vue';
 import { createRouter, createWebHistory } from 'vue-router';
 
 const routes = [
   {
     path: '/',
     name: 'Workbench',
-    component: WorkbenchView,
+    component: () => import('../views/workbench/WorkbenchView.vue'),
   },
   {
     path: '/score',
     name: 'Score',
-    component: ScoreView,
+    component: () => import('../views/score/ScoreView.vue'),
   },
 ];
 

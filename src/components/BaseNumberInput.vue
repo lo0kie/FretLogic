@@ -17,26 +17,25 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-const props = withDefaults(
-  defineProps<{
-    modelValue: number;
-    min?: number;
-    max?: number;
-    step?: number;
-    disabled?: boolean;
-    labelPrefix?: string;
-    labelSuffix?: string;
-    formatter?: (val: number) => string;
-  }>(),
-  {
-    min: 0,
-    max: 100,
-    step: 1,
-    disabled: false,
-    labelPrefix: '',
-    labelSuffix: '',
-  }
-);
+const {
+  modelValue,
+  min = 0,
+  max = 100,
+  step = 1,
+  disabled = false,
+  labelPrefix = '',
+  labelSuffix = '',
+  formatter,
+} = defineProps<{
+  modelValue: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  disabled?: boolean;
+  labelPrefix?: string;
+  labelSuffix?: string;
+  formatter?: (val: number) => string;
+}>();
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: number): void;
@@ -45,30 +44,30 @@ const emit = defineEmits<{
 
 // 🌟 默认格式化展示文本
 const displayText = computed(() => {
-  if (props.formatter) {
-    return props.formatter(props.modelValue);
+  if (formatter) {
+    return formatter(modelValue);
   }
-  return `${props.labelPrefix}${props.modelValue}${props.labelSuffix}`;
+  return `${labelPrefix}${modelValue}${labelSuffix}`;
 });
 
-const clamp = (val: number) => Math.min(props.max, Math.max(props.min, val));
+const clamp = (val: number) => Math.min(max, Math.max(min, val));
 
 const handleStep = (delta: number) => {
-  if (props.disabled) return;
-  const nextVal = clamp(props.modelValue + delta);
-  if (nextVal !== props.modelValue) {
+  if (disabled) return;
+  const nextVal = clamp(modelValue + delta);
+  if (nextVal !== modelValue) {
     emit('update:modelValue', nextVal);
     emit('change', nextVal);
   }
 };
 
 const handleWheel = (e: WheelEvent) => {
-  if (props.disabled) return;
+  if (disabled) return;
   e.preventDefault();
   if (e.deltaY < 0) {
-    handleStep(props.step);
+    handleStep(step);
   } else if (e.deltaY > 0) {
-    handleStep(-props.step);
+    handleStep(-step);
   }
 };
 </script>

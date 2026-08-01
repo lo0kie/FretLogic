@@ -43,27 +43,25 @@ import ActionButton from './ActionButton.vue';
 
 defineOptions({ inheritAttrs: false });
 
-const props = withDefaults(
-  defineProps<{
-    visible: boolean;
-    title?: string;
-    width?: string;
-    showFooter?: boolean;
-    cancelText?: string;
-    confirmText?: string;
-    confirmType?: 'primary' | 'danger' | 'warning' | 'default';
-    closeOnMask?: boolean;
-  }>(),
-  {
-    title: '',
-    width: 'w-80',
-    showFooter: true,
-    cancelText: '取消',
-    confirmText: '确认',
-    confirmType: 'primary',
-    closeOnMask: true,
-  }
-);
+const {
+  visible,
+  title = '',
+  width = 'w-80',
+  showFooter = true,
+  cancelText = '取消',
+  confirmText = '确认',
+  confirmType = 'primary',
+  closeOnMask = true,
+} = defineProps<{
+  visible: boolean;
+  title?: string;
+  width?: string;
+  showFooter?: boolean;
+  cancelText?: string;
+  confirmText?: string;
+  confirmType?: 'primary' | 'danger' | 'warning' | 'default';
+  closeOnMask?: boolean;
+}>();
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void;
@@ -74,7 +72,7 @@ const emit = defineEmits<{
 const isBodyLocked = useScrollLock(document.body);
 
 watch(
-  () => props.visible,
+  () => visible,
   isOpen => {
     isBodyLocked.value = isOpen;
   },
@@ -82,7 +80,7 @@ watch(
 );
 
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && props.visible) {
+  if (e.key === 'Escape' && visible) {
     handleCancel();
   }
 });

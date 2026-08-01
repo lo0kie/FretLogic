@@ -1,5 +1,5 @@
 <template>
-  <div ref="triggerRef" @contextmenu="handleContextMenu" class="context-menu-trigger-wrapper" v-bind="$attrs">
+  <div @contextmenu="handleContextMenu" class="context-menu-trigger-wrapper" v-bind="$attrs">
     <slot></slot>
   </div>
 
@@ -40,7 +40,7 @@ const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
 <script setup lang="ts">
 import { autoUpdate, flip, shift, useFloating } from '@floating-ui/vue';
 import { useEventListener } from '@vueuse/core';
-import { FunctionalComponent, onBeforeUnmount, ref, watch } from 'vue';
+import { FunctionalComponent, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 export interface ContextMenuItem {
   label: string;
@@ -61,8 +61,7 @@ const isOpen = ref(false);
 const x = ref(0);
 const y = ref(0);
 
-const triggerRef = ref<HTMLElement | null>(null);
-const floatingRef = ref<HTMLElement | null>(null);
+const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 
 const virtualRef = ref({
   getBoundingClientRect() {
@@ -252,18 +251,7 @@ defineExpose({
   }
 }
 
-.menu-fade-enter-active,
-.menu-fade-leave-active {
-  transition:
-    opacity @duration-fast @bezier-standard,
-    transform @duration-fast @bezier-standard;
-}
-
-.menu-fade-enter-from,
-.menu-fade-leave-to {
-  opacity: 0;
-  transform: scale(0.92) translateY(-4px);
-}
+.fade-scale-transition(menu-fade);
 
 /* 📱 移动端右键菜单放大适配 */
 @media (max-width: 768px) {

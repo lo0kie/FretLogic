@@ -14,7 +14,7 @@
     <GlobalContextMenu
       v-for="song in songStore.songs"
       :key="song.id"
-      :ref="el => setContextMenuRef(el, song.id)"
+      ref="contextMenuRefs"
       :items="getSongMenuItems(song)"
     >
       <div
@@ -61,7 +61,7 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
 import { Music, SquarePen, Trash2 } from '@lucide/vue';
-import { onBeforeUpdate, ref } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 
 const songStore = useSongStore();
@@ -72,22 +72,13 @@ const isSongRenameOpen = ref(false);
 const songRenameTitle = ref('');
 const targetSong = ref<Song | null>(null);
 
-// 🌟 管理右键菜单的实例引用 Map
-const contextMenuRefsMap = ref<Record<string, InstanceType<typeof GlobalContextMenu>>>({});
-
-const setContextMenuRef = (el: unknown, songId: string) => {
-  if (el) {
-    contextMenuRefsMap.value[songId] = el as InstanceType<typeof GlobalContextMenu>;
-  }
-};
+const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>('contextMenuRefs');
 
 const isSongMenuOpen = (songId: string) => {
-  return contextMenuRefsMap.value[songId]?.isOpen ?? false;
+  const idx = songStore.songs.findIndex(s => s.id === songId);
+  if (idx === -1) return false;
+  return contextMenuRefs.value?.[idx]?.isOpen ?? false;
 };
-
-onBeforeUpdate(() => {
-  contextMenuRefsMap.value = {};
-});
 
 const handleRenameSong = () => {
   if (targetSong.value && songRenameTitle.value.trim()) {

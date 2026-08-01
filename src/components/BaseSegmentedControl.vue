@@ -4,9 +4,9 @@
     <div class="indicator-pill" :class="{ 'is-animated': isInitialized }" :style="indicatorStyle"></div>
 
     <button
-      v-for="(item, index) in options"
+      v-for="item in options"
       :key="String(item.value)"
-      :ref="el => setItemRef(el, index)"
+      ref="itemRefs"
       class="segmented-item"
       :class="{
         'is-active': modelValue === item.value,
@@ -23,7 +23,7 @@
 </template>
 
 <script setup lang="ts" generic="T extends string | number">
-import { nextTick, onBeforeUnmount, onBeforeUpdate, onMounted, reactive, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref, useTemplateRef, watch } from 'vue';
 
 export interface SegmentOption<ValueType = string | number> {
   label: string;
@@ -31,24 +31,23 @@ export interface SegmentOption<ValueType = string | number> {
   disabled?: boolean;
 }
 
-const props = withDefaults(
-  defineProps<{
-    modelValue: T;
-    options: SegmentOption<T>[];
-    disabled?: boolean;
-  }>(),
-  {
-    disabled: false,
-  }
-);
+const {
+  modelValue,
+  options,
+  disabled = false,
+} = defineProps<{
+  modelValue: T;
+  options: SegmentOption<T>[];
+  disabled?: boolean;
+}>();
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: T): void;
   (e: 'change', value: T): void;
 }>();
 
-const containerRef = ref<HTMLDivElement | null>(null);
-const itemRefs = ref<(HTMLButtonElement | null)[]>([]);
+const containerRef = useTemplateRef<HTMLDivElement>('containerRef');
+const itemRefs = useTemplateRef<HTMLButtonElement[]>('itemRefs');
 
 const isInitialized = ref(false);
 
@@ -60,21 +59,11 @@ const indicatorStyle = reactive({
 
 let resizeObserver: ResizeObserver | null = null;
 
-const setItemRef = (el: unknown, index: number) => {
-  if (el) {
-    itemRefs.value[index] = el as HTMLButtonElement;
-  }
-};
-
-onBeforeUpdate(() => {
-  itemRefs.value = [];
-});
-
 // 🌟 精准更新胶囊滑块位置（含安全容错）
 const updateIndicatorPosition = () => {
   nextTick(() => {
     requestAnimationFrame(() => {
-      const activeIndex = props.options.findIndex(opt => opt.value === props.modelValue);
+      const activeIndex = options.findIndex(opt => opt.value === modelValue);
 
       // 防御：若没匹配到选中的 index，保持之前的逻辑或默认取第一个
       if (activeIndex === -1) {
@@ -82,7 +71,7 @@ const updateIndicatorPosition = () => {
         return;
       }
 
-      const activeEl = itemRefs.value[activeIndex];
+      const activeEl = itemRefs.value?.[activeIndex];
       const containerEl = containerRef.value;
 
       if (activeEl && containerEl) {
@@ -110,15 +99,15 @@ const updateIndicatorPosition = () => {
 };
 
 const handleSelect = (item: SegmentOption<T>) => {
-  if (props.disabled || item.disabled) return;
-  if (props.modelValue !== item.value) {
+  if (disabled || item.disabled) return;
+  if (modelValue !== item.value) {
     emit('update:modelValue', item.value);
     emit('change', item.value);
   }
 };
 
-watch(() => props.modelValue, updateIndicatorPosition);
-watch(() => props.options, updateIndicatorPosition, { deep: true });
+watch(() => modelValue, updateIndicatorPosition);
+watch(() => options, updateIndicatorPosition, { deep: true });
 
 onMounted(() => {
   updateIndicatorPosition();

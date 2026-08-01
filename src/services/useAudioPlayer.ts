@@ -1,12 +1,13 @@
 ﻿import { AUDIO_CONFIG } from '@/constants/audio';
 import { useEditorStore } from '@/stores/chordEditorStore';
-import * as Tone from 'tone';
+import type * as Tone from 'tone';
 import { ref } from 'vue';
 
 const isPlaying = ref(false);
 let isEngineInitialized = false;
 let guitarSynth: Tone.PolySynth | null = null;
 let playTimer: ReturnType<typeof setTimeout> | null = null;
+let ToneModule: typeof Tone | null = null;
 
 const MIDI_TO_FREQ_CACHE = new Map<number, number>();
 
@@ -25,14 +26,18 @@ export function useAudioPlayer() {
   const initAudioEngine = async () => {
     if (isEngineInitialized) return;
 
-    const reverb = new Tone.Reverb({
+    if (!ToneModule) {
+      ToneModule = await import('tone');
+    }
+
+    const reverb = new ToneModule.Reverb({
       decay: AUDIO_CONFIG.REVERB_DURATION,
       wet: AUDIO_CONFIG.REVERB_WET_GAIN,
     });
 
     await reverb.generate();
 
-    const compressor = new Tone.Compressor({
+    const compressor = new ToneModule.Compressor({
       threshold: AUDIO_CONFIG.COMPRESSOR_THRESHOLD,
       knee: AUDIO_CONFIG.COMPRESSOR_KNEE,
       ratio: AUDIO_CONFIG.COMPRESSOR_RATIO,
@@ -40,7 +45,7 @@ export function useAudioPlayer() {
       release: AUDIO_CONFIG.COMPRESSOR_RELEASE,
     });
 
-    guitarSynth = new Tone.PolySynth(Tone.FMSynth, {
+    guitarSynth = new ToneModule.PolySynth(ToneModule.FMSynth, {
       harmonicity: AUDIO_CONFIG.SYNTH_HARMONICITY,
       modulationIndex: AUDIO_CONFIG.SYNTH_MODULATION_INDEX,
       oscillator: { type: 'triangle' },
@@ -54,7 +59,7 @@ export function useAudioPlayer() {
     });
 
     guitarSynth.volume.value = AUDIO_CONFIG.MAIN_VOLUME_DB;
-    guitarSynth.chain(compressor, reverb, Tone.Destination);
+    guitarSynth.chain(compressor, reverb, ToneModule.Destination);
 
     isEngineInitialized = true;
   };
@@ -62,9 +67,13 @@ export function useAudioPlayer() {
   const playCurrentChord = async () => {
     if (isPlaying.value) return;
 
+    if (!ToneModule) {
+      ToneModule = await import('tone');
+    }
+
     // 🌟 核心修复：必须在任何异步操作（await）之前，在用户点击的同步回调中立即唤醒 AudioContext
-    if (Tone.getContext().state !== 'running') {
-      Tone.start();
+    if (ToneModule.getContext().state !== 'running') {
+      ToneModule.start();
     }
 
     isPlaying.value = true;
@@ -83,7 +92,7 @@ export function useAudioPlayer() {
       const capoOffset = editorStore.capo > 0 ? editorStore.capo : 0;
 
       let strumDelay = 0;
-      const now = Tone.now();
+      const now = ToneModule.now();
 
       for (let sIdx = 0; sIdx <= 5; sIdx++) {
         const targetStr = stringsSnapshot[sIdx];
@@ -94,7 +103,7 @@ export function useAudioPlayer() {
         const actualOffset = targetStr.fret > 0 ? capoOffset : 0;
         const currentMidiNote = guitarMidiBase + targetStr.fret + actualOffset;
 
-        const frequency = getFrequencyFromMidi(currentMidiNote, Tone);
+        const frequency = getFrequencyFromMidi(currentMidiNote, ToneModule);
 
         const triggerTime = now + strumDelay;
         const humanizeVelocity = 0.78 + Math.random() * 0.22;

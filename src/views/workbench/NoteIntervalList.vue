@@ -28,7 +28,8 @@
 <script setup lang="ts">
 import { useLongPress } from '@/services/useLongPress';
 import { NoteInput } from '@/types';
-import { ref } from 'vue';
+import { useElementSize } from '@vueuse/core';
+import { ref, useTemplateRef } from 'vue';
 
 export interface RenderNoteItem extends NoteInput {
   isRoot: boolean;
@@ -46,8 +47,9 @@ const emit = defineEmits<{
   (e: 'toggle-pitch-accidental', stringIndex: number): void;
 }>();
 
-const containerRef = ref<HTMLElement | null>(null);
+const containerRef = useTemplateRef<HTMLElement>('containerRef');
 const activeTouchNote = ref<RenderNoteItem | null>(null);
+const { height } = useElementSize(containerRef.value);
 
 // 使用通用长按手势 Composable
 const { isLongPressHandled, handleTouchStart, handleTouchEnd, handleTouchCancel } = useLongPress(
@@ -72,7 +74,7 @@ const handleRowClick = (note: RenderNoteItem) => {
   emit('set-root-string', note.stringIndex);
 };
 
-defineExpose({ containerRef });
+defineExpose({ height });
 </script>
 
 <style scoped lang="less">
