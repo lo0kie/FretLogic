@@ -10,7 +10,8 @@
       @input="handleInput"
       @keyup.enter="$emit('enter')"
       ref="inputRef"
-      type="text"
+      :type="type"
+      :maxlength="maxlength"
       :placeholder="placeholder"
       :disabled="disabled"
       :autofocus="autofocus"
@@ -51,6 +52,8 @@ const {
   size = 'md',
   fontSize = 'md',
   autofocus = false,
+  type = 'text',
+  maxlength,
 } = defineProps<{
   placeholder?: string;
   disabled?: boolean;
@@ -58,8 +61,9 @@ const {
   isPassword?: boolean;
   size?: 'sm' | 'md' | 'lg';
   fontSize?: 'xs' | 'md' | 'lg';
-  /** 挂载后自动聚焦 */
   autofocus?: boolean;
+  type?: string;
+  maxlength?: number;
 }>();
 
 const modelValue = defineModel<string>({ required: true });
@@ -123,7 +127,6 @@ defineExpose({
   }
 }
 
-/* 前缀定位区域 */
 .prefix-zone {
   position: absolute;
   top: 0;
@@ -145,7 +148,6 @@ defineExpose({
   }
 }
 
-/* 清空按钮原生样式 */
 .clear-button {
   position: absolute;
   top: 0;
@@ -186,7 +188,6 @@ defineExpose({
   }
 }
 
-/* 输入框基础样式 */
 .base-input-field {
   width: 100%;
   font-weight: 500;
@@ -219,7 +220,6 @@ defineExpose({
     cursor: not-allowed;
   }
 
-  /* 尺寸（Size）：与 ActionButton 完全同步 */
   &.size-sm {
     height: 1.5rem;
     padding-left: 0.45rem;
@@ -260,7 +260,6 @@ defineExpose({
   }
 }
 
-/* 🌟 优化：通过提高选择器特异性移除 !important */
 .base-input-field.text-xs-style {
   font-size: 0.72rem;
 }
@@ -291,7 +290,6 @@ defineExpose({
     }
   }
 
-  /* 🌟 优化：移动端同样通过嵌套提高特异性 */
   .base-input-field.text-xs-style {
     font-size: 0.8rem;
   }

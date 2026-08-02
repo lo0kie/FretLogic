@@ -139,6 +139,10 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
   };
 
   const handleCopySelectedImage = async () => {
+    if (selectedLineSet.value.size > 20) {
+      uiStore.toast.warning('单次导出行数过多，建议分段选择导出以保证图片清晰度');
+    }
+
     if (isExporting.value || selectedLineSet.value.size === 0) return;
 
     const container = scoreZoneRef.value?.querySelector('.lyrics-lines-container') as HTMLElement;

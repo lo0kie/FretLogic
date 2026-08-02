@@ -18,6 +18,7 @@
             placeholder="搜索和弦..."
             clearable
             size="sm"
+            autofocus
             fontSize="xs"
             class="picker-search-input"
           >

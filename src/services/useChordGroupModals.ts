@@ -97,6 +97,8 @@ export function useChordGroupModals() {
     if (chordIdx !== -1) {
       chordStore.savedChordsList[chordIdx].groupId = modalData.moveTargetId;
       uiStore.clearActionToasts();
+    } else {
+      uiStore.toast.error('移动失败：目标和弦已被删除');
     }
     modals.move = false;
     uiStore.toast.success('操作成功完成');

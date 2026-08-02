@@ -3,9 +3,6 @@ import { type Ref, computed, ref, watch } from 'vue';
 
 /**
  * 曲谱行的多选逻辑：点击/按住拖动选择多行、边缘自动滚动、全选/取消全选。
- * @param scoreZoneRef 滚动容器，用于边缘自动滚动
- * @param totalLines 当前歌词总行数（用于全选判断）
- * @param activeSongId 切换曲谱时清空已选行
  */
 export function useLineSelection(
   scoreZoneRef: Ref<HTMLElement | null>,
@@ -25,6 +22,20 @@ export function useLineSelection(
 
   watch(activeSongId, () => {
     selectedLineSet.value.clear();
+  });
+
+  // 🌟 修复：当歌词总行数变少（例如删行/清空）时，自动剔除越界的已选索引
+  watch(totalLines, newTotal => {
+    if (selectedLineSet.value.size === 0) return;
+    const updated = new Set<number>();
+    selectedLineSet.value.forEach(idx => {
+      if (idx < newTotal) {
+        updated.add(idx);
+      }
+    });
+    if (updated.size !== selectedLineSet.value.size) {
+      selectedLineSet.value = updated;
+    }
   });
 
   const handleRemoveLineIndex = (lineIdx: number) => {

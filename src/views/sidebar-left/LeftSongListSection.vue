@@ -1,8 +1,5 @@
 <template>
-  <div v-if="songStore.songs.length === 0" class="empty-view">
-    <Music :size="22" class="empty-icon" />
-    <p class="empty-text">暂无乐谱，点击右上角新建</p>
-  </div>
+  <EmptyState v-if="songStore.songs.length === 0" :icon="Music" description="暂无乐谱，点击右上角新建" size="md" />
 
   <VueDraggable
     v-else
@@ -31,8 +28,8 @@
           </BaseMarquee>
 
           <div class="song-meta-badges">
-            <span class="meta-tag">{{ song.playKey || 'C' }}调</span>
-            <span class="meta-tag">Capo {{ song.capo || 0 }}</span>
+            <BaseBadge variant="neutral" appearance="filled" size="xs"> {{ song.playKey || 'C' }}调 </BaseBadge>
+            <BaseBadge variant="neutral" appearance="filled" size="xs"> Capo {{ song.capo || 0 }} </BaseBadge>
           </div>
         </div>
       </div>
@@ -52,9 +49,11 @@
 </template>
 
 <script setup lang="ts">
+import BaseBadge from '@/components/BaseBadge.vue'; // 🌟 引入 BaseBadge
 import BaseInput from '@/components/BaseInput.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import BaseModal from '@/components/BaseModal.vue';
+import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
@@ -107,10 +106,8 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => [
         scoreEditor.setActiveSong(null);
       }
 
-      // 🌟 1. 执行删除
       songStore.deleteSong(song.id);
 
-      // 🌟 2. 弹出带有撤销按钮的 Toast 提示（复用自 triggerDeleteChord 的模式）[cite: 3]
       uiStore.toast.info(`已删除乐谱 "${song.title}"`, {
         actionText: '撤销',
         duration: 4000,
@@ -125,17 +122,14 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => [
 
 const handleSelectSong = (songId: string) => {
   if (scoreEditor.activeSongId === songId) {
-    // 再次点击同一首 → 取消选中
     scoreEditor.setActiveSong(null);
   } else {
-    // 选中新乐谱
     scoreEditor.setActiveSong(songId);
 
-    // 🌟 根据是否有歌词自动切换模式
     if (scoreEditor.hasLyrics) {
-      scoreEditor.activeTab = 'interactive'; // 有歌词 → 排列和弦
+      scoreEditor.activeTab = 'interactive';
     } else {
-      scoreEditor.activeTab = 'edit'; // 无歌词 → 编辑歌词
+      scoreEditor.activeTab = 'edit';
     }
 
     if (uiStore.isMobile) {
@@ -147,31 +141,6 @@ const handleSelectSong = (songId: string) => {
 
 <style scoped lang="less">
 @import '@/assets/tokens.module';
-
-.empty-view {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.35;
-  padding: 4rem 0;
-  box-sizing: border-box;
-}
-
-.empty-icon {
-  width: 1.5rem;
-  height: 1.5rem;
-  color: var(--text-disabled);
-  margin-bottom: 0.5rem;
-}
-
-.empty-text {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--text-disabled);
-  margin: 0;
-}
 
 .draggable-list {
   display: flex;
@@ -190,7 +159,6 @@ const handleSelectSong = (songId: string) => {
   transition: @transition-fast;
   box-sizing: border-box;
 
-  /* 🌟 与分组一致：Hover / Active / ContextMenu 打开时应用高亮反馈 */
   &:hover,
   &:active,
   &.is-context-open {
@@ -233,15 +201,5 @@ const handleSelectSong = (songId: string) => {
   display: flex;
   gap: 0.25rem;
   flex-shrink: 0;
-}
-
-.meta-tag {
-  font-size: 0.58rem;
-  font-weight: 700;
-  padding: 0.08rem 0.3rem;
-  border-radius: @radius-sm;
-  background-color: var(--bg-panel);
-  color: var(--text-disabled);
-  border: 1px solid var(--border-light);
 }
 </style>

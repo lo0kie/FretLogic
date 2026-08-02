@@ -1,5 +1,15 @@
 import { useEventListener } from '@vueuse/core';
-import { computed, onBeforeUnmount, onMounted, onWatcherCleanup, ref, toRaw, useTemplateRef, watchEffect } from 'vue';
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  onWatcherCleanup,
+  ref,
+  toRaw,
+  toRefs,
+  useTemplateRef,
+  watchEffect,
+} from 'vue';
 
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, INTERACTION_CONFIG } from '@/constants';
 import type { GuitarStringsModel } from '@/types';
@@ -29,7 +39,9 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   const fretBoardRef = useTemplateRef<HTMLDivElement>('fretBoardRef');
   const hoverPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
 
-  // 🌟 新增：通过响应式状态记录是否正在按下/拖拽
+  // 🌟 使用 toRefs 解构出各属性的 Ref，保证响应式追踪
+  const { strings, fretCount, capo, activeBaseStrings, interactive, scale } = toRefs(props);
+
   const isPointerDown = ref(false);
 
   let lastCancelTime = 0;
@@ -44,9 +56,9 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   );
 
   const rawHeight = computed(
-    () => CANVAS_CONFIG.OFFSET_Y_TOP + props.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
+    () => CANVAS_CONFIG.OFFSET_Y_TOP + fretCount.value * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
   );
-  const fretboardScale = computed(() => (FRETBOARD_SCALE_MAP[props.fretCount] || 1.0) * props.scale);
+  const fretboardScale = computed(() => (FRETBOARD_SCALE_MAP[fretCount.value] || 1.0) * scale.value);
   const realScaledWidth = computed(() => CANVAS_CONFIG.BOARD_WIDTH * fretboardScale.value);
   const realScaledHeight = computed(() => rawHeight.value * fretboardScale.value);
 
@@ -64,14 +76,16 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   };
 
   const emitStringsUpdate = (mutator: (cloned: GuitarStringsModel) => void) => {
-    if (!props.interactive) return;
-    const cloned = cloneDeep(toRaw(props.strings));
+    // 🌟 1. 修复：Ref<boolean> 必须使用 .value 判断
+    if (!interactive.value) return;
+    // 🌟 2. 修复：取 strings.value 的 Raw 再深拷贝
+    const cloned = cloneDeep(toRaw(strings.value));
     mutator(cloned);
     emit('update:strings', cloned);
   };
 
   const handleRightClickRoot = (e: MouseEvent) => {
-    if (!props.interactive) return;
+    if (!interactive.value) return;
 
     const point = getCanvasPoint(e.clientX, e.clientY);
     if (!point) return;
@@ -79,10 +93,10 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
     const { stringIndex: sIdx, fretIndex: fIdx } = point;
     if (sIdx < 0 || sIdx > 5) return;
 
-    const currentStringAsset = props.strings[sIdx];
+    const currentStringAsset = strings.value[sIdx];
     let isNoteClicked = false;
 
-    if (fIdx > 0 && fIdx <= props.fretCount && currentStringAsset.fret === fIdx) {
+    if (fIdx > 0 && fIdx <= fretCount.value && currentStringAsset.fret === fIdx) {
       isNoteClicked = true;
     } else if (fIdx === 0 && isOpen(currentStringAsset)) {
       isNoteClicked = true;
@@ -118,7 +132,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   const handleTogglePitchName = (sIdx: number) => {
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
-      if (canTogglePitchAccidental(sIdx, str.fret, props.capo, props.activeBaseStrings)) {
+      if (canTogglePitchAccidental(sIdx, str.fret, capo.value, activeBaseStrings.value)) {
         str.preferFlat = !str.preferFlat;
       }
     });
@@ -131,7 +145,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
       point.stringIndex < 0 ||
       point.stringIndex > 5 ||
       point.fretIndex < 1 ||
-      point.fretIndex > props.fretCount
+      point.fretIndex > fretCount.value
     )
       return;
 
@@ -177,7 +191,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   };
 
   const handlePointerUp = () => {
-    isPointerDown.value = false; // 🌟 触发清理 watchEffect 内绑定的全局事件
+    isPointerDown.value = false;
     emit('drag-status-change', false);
     lastSIdx = -1;
     lastFIdx = -1;
@@ -186,24 +200,23 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   };
 
   const handlePointerDown = (e: PointerEvent) => {
-    if (!props.interactive || e.button !== 0) return;
+    // 🌟 修复：使用 interactive.value
+    if (!interactive.value || e.button !== 0) return;
 
     emit('drag-status-change', true);
     lastSIdx = -1;
     lastFIdx = -1;
 
     handleFingerClickLogic(e.clientX, e.clientY, false);
-    isPointerDown.value = true; // 🌟 开启 watchEffect 自动监听注册
+    isPointerDown.value = true;
   };
 
-  // 🌟 使用 Vue 3.5 推荐的响应式副作用管理全局全局拖拽事件
   watchEffect(() => {
     if (!isPointerDown.value) return;
 
     const stopMove = useEventListener(window, 'pointermove', handlePointerMove);
     const stopUp = useEventListener(window, 'pointerup', handlePointerUp);
 
-    // 🌟 当 isPointerDown 变成 false 或组件卸载时，Vue 会自动执行 onWatcherCleanup
     onWatcherCleanup(() => {
       stopMove();
       stopUp();
@@ -211,20 +224,21 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   });
 
   const handleWheel = (e: WheelEvent) => {
-    if (!props.interactive) return;
+    // 🌟 修复：使用 interactive.value
+    if (!interactive.value) return;
     e.preventDefault();
 
     const point = getCanvasPoint(e.clientX, e.clientY);
 
     if (point && point.stringIndex >= 0 && point.stringIndex <= 5) {
       const { stringIndex: sIdx, fretIndex: fIdx } = point;
-      const currentStr = props.strings[sIdx];
+      const currentStr = strings.value[sIdx];
 
       const isHoveringActiveNote =
-        (fIdx > 0 && fIdx <= props.fretCount && currentStr.fret === fIdx) || (fIdx === 0 && isOpen(currentStr));
+        (fIdx > 0 && fIdx <= fretCount.value && currentStr.fret === fIdx) || (fIdx === 0 && isOpen(currentStr));
 
       if (isHoveringActiveNote) {
-        if (canTogglePitchAccidental(sIdx, currentStr.fret, props.capo, props.activeBaseStrings)) {
+        if (canTogglePitchAccidental(sIdx, currentStr.fret, capo.value, activeBaseStrings.value)) {
           handleTogglePitchName(sIdx);
         }
         return;
@@ -234,15 +248,14 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
     wheelAccumulator += e.deltaY;
     if (Math.abs(wheelAccumulator) < INTERACTION_CONFIG.WHEEL_THRESHOLD) return;
     if (wheelAccumulator > 0) {
-      emit('update:capo', Math.min(INTERACTION_CONFIG.MAX_CAPO_LIMIT, props.capo + 1));
+      emit('update:capo', Math.min(INTERACTION_CONFIG.MAX_CAPO_LIMIT, capo.value + 1));
     } else {
-      emit('update:capo', Math.max(INTERACTION_CONFIG.MIN_CAPO_LIMIT, props.capo - 1));
+      emit('update:capo', Math.max(INTERACTION_CONFIG.MIN_CAPO_LIMIT, capo.value - 1));
     }
     wheelAccumulator = 0;
   };
 
   onMounted(() => {
-    // 🌟 useEventListener 接收 ref 本身即可自动追踪绑定，不需要再手动判空
     useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
     useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {
       const pt = getCanvasPoint(e.clientX, e.clientY);

@@ -17,7 +17,7 @@ export interface CharItem {
 
 export interface LineData {
   lineIdx: number;
-  lineId: string; // 🌟 引入唯一行 ID
+  lineId: string;
   chars: CharItem[];
   startChords: EdgeChordItem[];
   endChords: EdgeChordItem[];
@@ -30,16 +30,14 @@ export function buildLyricsLinesWithEdges(
   lyrics: string,
   chordMap: Record<string | number, Chord>,
   existingLineIds: string[] = []
-): { lines: LineData[]; updatedLineIds: string[] } {
+): LineData[] {
   const rawLines = lyrics.split('\n');
-  const updatedLineIds: string[] = [];
 
-  const lines = rawLines.map((lineText, lineIdx) => {
-    // 🌟 如果当前行已有稳定 ID 则复用，没有则生成全新 ID
+  return rawLines.map((lineText, lineIdx) => {
+    // 🌟 如果没有对应位置的 lineId，作为兜底生成后使用（纯只读，不做写回操作）
     const lineId = existingLineIds[lineIdx] || 'l_' + generateUUID('', 8);
-    updatedLineIds.push(lineId);
 
-    // 1. 行首和弦组 (基于 lineId 绑定)
+    // 1. 行首和弦组
     const startChords: EdgeChordItem[] = [];
     let startCount = 0;
     while (chordMap[`line_${lineId}_start_${startCount}`]) {
@@ -50,7 +48,7 @@ export function buildLyricsLinesWithEdges(
       startCount++;
     }
 
-    // 2. 行尾和弦组 (基于 lineId 绑定)
+    // 2. 行尾和弦组
     const endChords: EdgeChordItem[] = [];
     let endCount = 0;
     while (chordMap[`line_${lineId}_end_${endCount}`]) {
@@ -61,7 +59,7 @@ export function buildLyricsLinesWithEdges(
       endCount++;
     }
 
-    // 3. 行内字符和弦组 (基于 lineId + charIdx 绑定)
+    // 3. 行内字符和弦组
     const chars: CharItem[] = lineText.split('').map((char, charIdx) => ({
       char,
       slotKey: `line_${lineId}_char_${charIdx}`,
@@ -77,29 +75,20 @@ export function buildLyricsLinesWithEdges(
       nextEndKey: `line_${lineId}_end_${endCount}`,
     };
   });
-
-  return { lines, updatedLineIds };
 }
 
-/** 响应式包装：跟随当前曲谱的歌词与和弦映射自动重算 */
+/** 响应式包装：纯计算属性，绝不包含任何响应式写副作用 */
 export function useLyricsLinesData() {
   const scoreEditor = useScoreEditorStore();
 
   const lyricsLinesWithEdges = computed<LineData[]>(() => {
     if (!scoreEditor.activeSong) return [];
 
-    const { lines, updatedLineIds } = buildLyricsLinesWithEdges(
+    return buildLyricsLinesWithEdges(
       scoreEditor.activeSong.lyrics,
       scoreEditor.activeSong.chordMap || {},
       scoreEditor.activeSong.lineIds || []
     );
-
-    // 🌟 自动同步补全 lineIds，确保 ID 稳定
-    if (JSON.stringify(scoreEditor.activeSong.lineIds) !== JSON.stringify(updatedLineIds)) {
-      scoreEditor.activeSong.lineIds = updatedLineIds;
-    }
-
-    return lines;
   });
 
   return { lyricsLinesWithEdges };

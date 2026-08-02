@@ -26,6 +26,8 @@ export function useGithubSyncService() {
   const cleanHeaderString = (str: string) => str.trim().replace(/[^\x00-\x7F]/g, '');
 
   const syncToGithub = async (data: object) => {
+    if (isSyncing.value) return;
+
     const rawPayload = {
       githubToken: cleanHeaderString(settingsStore.githubToken),
       githubOwner: settingsStore.githubOwner.trim(),
@@ -51,13 +53,22 @@ export function useGithubSyncService() {
       'Content-Type': 'application/json',
     };
 
+    // 🌟 引入请求超时控速 Controller
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     let loadingToastId: number | null = null;
     isSyncing.value = true;
+
     try {
       loadingToastId = uiStore.toast.loading('正在后台同步到 GitHub...');
 
       let fileSha = '';
-      const getRes = await fetch(`${apiUrl}?ref=${githubBranch}`, { method: 'GET', headers });
+      const getRes = await fetch(`${apiUrl}?ref=${githubBranch}`, {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
+      });
 
       if (getRes.ok) {
         const getResJson = await getRes.json();
@@ -80,23 +91,28 @@ export function useGithubSyncService() {
         method: 'PUT',
         headers,
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
 
       if (!putRes.ok) throw new Error('推送代码失败');
 
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
       uiStore.toast.success('成功同步至 GitHub 云端');
-    } catch (err) {
+    } catch (err: any) {
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
 
       console.error('GitHub Sync Error:', err);
-      uiStore.toast.error('GitHub 同步失败，请检查网络或配置信息');
+      const isAbort = err.name === 'AbortError';
+      uiStore.toast.error(isAbort ? '同步超时：请检查网络状况' : 'GitHub 同步失败，请检查网络或配置信息');
     } finally {
+      clearTimeout(timeoutId);
       isSyncing.value = false;
     }
   };
 
   const pullFromGithub = async () => {
+    if (isPulling.value) return;
+
     const rawPayload = {
       githubToken: cleanHeaderString(settingsStore.githubToken),
       githubOwner: settingsStore.githubOwner.trim(),
@@ -121,13 +137,16 @@ export function useGithubSyncService() {
       Accept: 'application/vnd.github.v3+json',
     };
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     isPulling.value = true;
     let loadingToastId: number | null = null;
 
     try {
       loadingToastId = uiStore.toast.loading('正在从云端拉取数据...');
 
-      const res = await fetch(apiUrl, { method: 'GET', headers });
+      const res = await fetch(apiUrl, { method: 'GET', headers, signal: controller.signal });
 
       if (!res.ok) {
         if (res.status === 404) throw new Error('云端文件不存在，请先执行一次同步上传');
@@ -158,13 +177,15 @@ export function useGithubSyncService() {
       } else {
         throw new Error('云端数据格式破损，已触发安全拦截');
       }
-    } catch (err) {
+    } catch (err: any) {
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
 
       console.error('GitHub Pull Error:', err);
-      const errMsg = err instanceof Error ? err.message : '拉取失败，请检查网络';
+      const isAbort = err.name === 'AbortError';
+      const errMsg = isAbort ? '拉取超时，请检查网络' : err instanceof Error ? err.message : '拉取失败，请检查网络';
       uiStore.toast.error(`拉取失败：${errMsg}`);
     } finally {
+      clearTimeout(timeoutId);
       isPulling.value = false;
     }
   };

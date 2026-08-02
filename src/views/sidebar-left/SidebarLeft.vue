@@ -46,7 +46,9 @@
       <template v-else-if="route.path === '/score'">
         <div class="header-title-zone">
           <span class="sidebar-title">乐谱列表</span>
-          <span class="sidebar-count-badge">{{ songStore.songs.length }}</span>
+          <BaseBadge variant="neutral" appearance="filled" size="xs">
+            {{ songStore.songs.length }}
+          </BaseBadge>
         </div>
 
         <GlobalTooltip placement="bottom" content="新建乐谱">
@@ -90,6 +92,7 @@
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
+import BaseBadge from '@/components/BaseBadge.vue'; // 🌟 引入 BaseBadge
 import BaseInput from '@/components/BaseInput.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
@@ -185,16 +188,6 @@ const handleFileChange = (e: Event) => {
   color: var(--text-title);
   letter-spacing: -0.01em;
   white-space: nowrap; /* 🌟 强制文字不换行 */
-}
-
-.sidebar-count-badge {
-  font-size: 0.6rem;
-  font-weight: 700;
-  padding: 0.05rem 0.35rem;
-  border-radius: 9999px;
-  background-color: var(--bg-body);
-  color: var(--text-disabled);
-  border: 1px solid var(--border-light);
 }
 
 .header-search-input {

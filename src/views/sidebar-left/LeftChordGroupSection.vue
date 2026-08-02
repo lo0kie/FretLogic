@@ -1,8 +1,5 @@
 <template>
-  <div v-if="chordStore.groups.length === 0" class="empty-view">
-    <FolderOpen class="empty-icon" />
-    <p class="empty-text">还没有添加分组</p>
-  </div>
+  <EmptyState v-if="chordStore.groups.length === 0" :icon="FolderOpen" description="还没有添加分组" size="md" />
 
   <VueDraggable
     v-else
@@ -40,17 +37,21 @@
               </span>
             </BaseMarquee>
 
-            <span class="count-badge">
-              <template v-if="searchQuery">
-                <span class="search-match-count">
-                  {{ (filteredChordsGroupMap.get(group.id) || []).length }}
-                </span>
-                <span>&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
-              </template>
-              <template v-else>
-                {{ getGroupChordsCount(group.id) }}
-              </template>
-            </span>
+            <BaseBadge
+              v-if="searchQuery"
+              :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
+              :appearance="hasMatchedChords(group.id) ? 'subtle' : 'filled'"
+              size="xs"
+            >
+              <span :class="{ 'search-match-count': hasMatchedChords(group.id) }">
+                {{ getMatchCount(group.id) }}
+              </span>
+              <span>&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
+            </BaseBadge>
+
+            <BaseBadge v-else variant="neutral" appearance="filled" size="xs">
+              {{ getGroupChordsCount(group.id) }}
+            </BaseBadge>
           </div>
 
           <div v-if="!uiStore.isMobile" @click.stop class="drag-action-zone">
@@ -62,6 +63,7 @@
 
         <div v-if="!group.collapsed" class="chord-content-wrapper">
           <VueDraggable
+            v-if="(filteredChordsGroupMap.get(group.id) || []).length > 0"
             :model-value="filteredChordsGroupMap.get(group.id) || []"
             :animation="200"
             ghost-class="drag-ghost-style"
@@ -85,15 +87,9 @@
             />
           </VueDraggable>
 
-          <div v-if="getGroupChordsCount(group.id) === 0" class="empty-placeholder-card z-index-bg">
-            <p class="placeholder-card-text">暂无和弦</p>
-          </div>
-          <div
-            v-else-if="searchQuery && (filteredChordsGroupMap.get(group.id) || []).length === 0"
-            class="empty-placeholder-card z-index-bg"
-          >
-            <p class="placeholder-card-text">无匹配</p>
-          </div>
+          <EmptyState v-else-if="getGroupChordsCount(group.id) === 0" size="sm" description="暂无和弦" />
+
+          <EmptyState v-else-if="searchQuery" size="sm" description="无匹配" />
         </div>
       </GlobalContextMenu>
     </template>
@@ -101,7 +97,9 @@
 </template>
 
 <script setup lang="ts">
+import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
+import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/chordEditorStore.ts';
@@ -133,6 +131,13 @@ const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>
 
 const chordLowerNameCache = new WeakMap<Chord, string>();
 
+const getMatchCount = (groupId: string): number => {
+  return (filteredChordsGroupMap.value.get(groupId) || []).length;
+};
+
+const hasMatchedChords = (groupId: string): boolean => {
+  return getMatchCount(groupId) > 0;
+};
 const getChordLowerName = (chord: Chord): string => {
   let cached = chordLowerNameCache.get(chord);
   if (!cached) {
@@ -218,31 +223,6 @@ watch(
   }
 }
 
-.empty-view {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.35;
-  padding: 4rem 0;
-  box-sizing: border-box;
-}
-
-.empty-icon {
-  width: 1.5rem;
-  height: 1.5rem;
-  color: var(--text-disabled);
-  margin-bottom: 0.5rem;
-}
-
-.empty-text {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--text-disabled);
-  margin: 0;
-}
-
 .draggable-list {
   display: flex;
   flex-direction: column;
@@ -314,18 +294,6 @@ watch(
   user-select: none;
   letter-spacing: 1px;
   color: var(--text-title);
-}
-
-.count-badge {
-  background-color: var(--bg-body);
-  color: var(--text-disabled);
-  border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 0.1rem 0.45rem;
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
 }
 
 .chord-content-wrapper {
