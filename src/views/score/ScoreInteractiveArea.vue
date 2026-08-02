@@ -1,5 +1,9 @@
 <template>
-  <div ref="scoreZoneRef" class="interactive-score-zone no-scrollbar">
+  <div
+    ref="scoreZoneRef"
+    class="interactive-score-zone no-scrollbar"
+    :style="{ '--score-font-scale': scoreEditor.fontScale }"
+  >
     <div v-if="!scoreEditor.activeSong?.lyrics.trim()" class="empty-lyrics-tip">请先在“编辑歌词”模式下输入文本内容</div>
 
     <div v-else class="lyrics-lines-container">
@@ -56,18 +60,18 @@
         <!-- 2. 中间字符和弦区 -->
         <ChordSlotCell
           v-for="item in lineData.chars"
-          :key="item.globalIndex"
+          :key="item.slotKey"
           variant="char"
-          :slot-key="item.globalIndex"
-          :chord="scoreEditor.activeSong?.chordMap[item.globalIndex]"
+          :slot-key="item.slotKey"
+          :chord="scoreEditor.activeSong?.chordMap[item.slotKey]"
           :char="item.char"
-          :is-drop-target="dragOverSlotKey === item.globalIndex"
+          :is-drop-target="dragOverSlotKey === item.slotKey"
           :is-dark-mode="settingsStore.isDarkMode"
-          @click="emit('open-picker', item.globalIndex)"
-          @dragover="handleDragOver($event, item.globalIndex)"
+          @click="emit('open-picker', item.slotKey)"
+          @dragover="handleDragOver($event, item.slotKey)"
           @dragleave="handleDragLeave"
-          @drop="handleDrop(item.globalIndex)"
-          @dragstart="handleDragStart(item.globalIndex)"
+          @drop="handleDrop(item.slotKey)"
+          @dragstart="handleDragStart(item.slotKey)"
           @dragend="handleDragEnd"
           @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
         />

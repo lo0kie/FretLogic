@@ -1,6 +1,5 @@
 <template>
   <div ref="containerRef" class="base-segmented-control" :class="{ 'is-disabled': disabled }">
-    <!-- 🌟 滑动背景胶囊，不再绑定 :style，由 CSS 变量控制 -->
     <div class="indicator-pill" :class="{ 'is-animated': isInitialized }"></div>
 
     <button
@@ -36,7 +35,7 @@ const { options, disabled = false } = defineProps<{
   disabled?: boolean;
 }>();
 
-const modelValue = defineModel<T>({ required: true });
+const modelValue = defineModel<T | null>({ required: true });
 
 const emit = defineEmits<{
   (e: 'change', value: T): void;
@@ -47,7 +46,6 @@ const itemRefs = useTemplateRef<HTMLButtonElement[]>('itemRefs');
 
 const isInitialized = ref(false);
 
-// 🌟 核心优化：直接操作 DOM CSS 变量，绕过 Vue 响应式系统，提升高频更新性能
 const updateIndicatorPosition = async () => {
   await nextTick();
 
@@ -64,16 +62,13 @@ const updateIndicatorPosition = async () => {
   const activeEl = itemRefs.value?.[activeIndex];
   if (!activeEl) return;
 
-  // 🌟 批量读取 DOM 几何属性，避免布局抖动
   const { offsetLeft, offsetWidth } = activeEl;
 
-  // 🌟 批量写入 CSS 变量
   containerEl.style.setProperty('--indicator-width', `${offsetWidth}px`);
   containerEl.style.setProperty('--indicator-x', `${offsetLeft}px`);
   containerEl.style.setProperty('--indicator-opacity', '1');
 
   if (!isInitialized.value) {
-    // 确保初始位置已经渲染后再开启动画，防止闪烁
     requestAnimationFrame(() => {
       isInitialized.value = true;
     });

@@ -1,15 +1,13 @@
-// === FILE: C:\Users\lookie\userspace\coding\fret-logic\src\stores\songStore.ts ===
+// src/stores/songStore.ts
 
 import type { Chord, Song } from '@/types';
 import { generateUUID } from '@/utils/validators';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { ref } from 'vue'; // 确保引入 ref
+import { ref } from 'vue';
 
 export const useSongStore = defineStore('song', () => {
   const songs = useStorage<Song[]>('CHORD_LAB_SONGS_V1', [], localStorage);
-
-  // 🌟 新增：用于临时存放最近被删除的乐谱及其索引，供撤销使用
   const lastDeletedSongInfo = ref<{ song: Song; index: number } | null>(null);
 
   const createSong = (title: string): Song => {
@@ -21,6 +19,7 @@ export const useSongStore = defineStore('song', () => {
       playKey: 'C',
       capo: 0,
       chordMap: {},
+      lineIds: [],
     };
     songs.value.push(newSong);
     return newSong;
@@ -30,7 +29,6 @@ export const useSongStore = defineStore('song', () => {
     const index = songs.value.findIndex(s => s.id === id);
     if (index === -1) return;
 
-    // 记录被删除的曲谱及原位置
     lastDeletedSongInfo.value = {
       song: { ...songs.value[index] },
       index,
@@ -39,12 +37,10 @@ export const useSongStore = defineStore('song', () => {
     songs.value = songs.value.filter(s => s.id !== id);
   };
 
-  // 🌟 新增：执行撤销恢复
   const undoDeleteSong = () => {
     if (!lastDeletedSongInfo.value) return;
     const { song, index } = lastDeletedSongInfo.value;
 
-    // 插入回原来的位置，如果位置越界则直接 push
     if (index >= 0 && index <= songs.value.length) {
       songs.value.splice(index, 0, song);
     } else {
@@ -54,11 +50,20 @@ export const useSongStore = defineStore('song', () => {
     lastDeletedSongInfo.value = null;
   };
 
-  const updateSongLyrics = (id: string, lyrics: string) => {
+  // 🌟 规范化 Action：统一对外暴露乐谱基础元数据的显式修改口径
+  const updateSongMeta = (
+    id: string,
+    payload: Partial<Pick<Song, 'key' | 'playKey' | 'capo' | 'lyrics' | 'lineIds' | 'chordMap'>>
+  ) => {
     const target = songs.value.find(s => s.id === id);
-    if (target) {
-      target.lyrics = lyrics.replace(/[ \t\u3000]/g, '');
-    }
+    if (!target) return;
+
+    if (payload.key !== undefined) target.key = payload.key;
+    if (payload.playKey !== undefined) target.playKey = payload.playKey;
+    if (payload.capo !== undefined) target.capo = payload.capo;
+    if (payload.lyrics !== undefined) target.lyrics = payload.lyrics;
+    if (payload.lineIds !== undefined) target.lineIds = payload.lineIds;
+    if (payload.chordMap !== undefined) target.chordMap = payload.chordMap;
   };
 
   const setCharChord = (songId: string, slotKey: string | number, chord: Chord) => {
@@ -76,7 +81,7 @@ export const useSongStore = defineStore('song', () => {
     const keyStr = String(slotKey);
     if (keyStr.includes('_start_') || keyStr.includes('_end_')) {
       const parts = keyStr.split('_');
-      const lineIdx = parts[1];
+      const lineId = parts[1];
       const type = parts[2];
       const delIdx = parseInt(parts[3], 10);
 
@@ -85,7 +90,7 @@ export const useSongStore = defineStore('song', () => {
       const remaining: Chord[] = [];
       let i = 0;
       while (true) {
-        const currentKey = `line_${lineIdx}_${type}_${i}`;
+        const currentKey = `line_${lineId}_${type}_${i}`;
         if (i !== delIdx) {
           if (target.chordMap[currentKey]) {
             remaining.push(target.chordMap[currentKey]);
@@ -101,7 +106,7 @@ export const useSongStore = defineStore('song', () => {
       }
 
       remaining.forEach((chord, newIdx) => {
-        target.chordMap[`line_${lineIdx}_${type}_${newIdx}`] = chord;
+        target.chordMap[`line_${lineId}_${type}_${newIdx}`] = chord;
       });
     } else {
       delete target.chordMap[slotKey];
@@ -116,8 +121,8 @@ export const useSongStore = defineStore('song', () => {
     songs,
     createSong,
     deleteSong,
-    undoDeleteSong, // 🌟 导出撤销方法
-    updateSongLyrics,
+    undoDeleteSong,
+    updateSongMeta,
     setCharChord,
     removeCharChord,
     overwriteSongs,

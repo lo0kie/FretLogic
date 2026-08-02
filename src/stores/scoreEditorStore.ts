@@ -1,5 +1,8 @@
+// src/stores/scoreEditorStore.ts
+
 import { useSongStore } from '@/stores/songStore';
 import type { Chord, Song } from '@/types';
+import { generateUUID } from '@/utils/validators';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
@@ -9,32 +12,25 @@ export type ScoreActiveTab = 'edit' | 'interactive';
 export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const songStore = useSongStore();
 
-  // 1. 当前激活的乐谱 ID（持久化）
   const activeSongId = useStorage<string | null>('CHORD_LAB_ACTIVE_SONG_ID_V1', null);
-
-  // 2. 当前视图模式：'edit' (编辑歌词) | 'interactive' (排列和弦)
   const activeTabRef = ref<ScoreActiveTab>('edit');
-
-  // 3. 当前选中的和弦插槽
   const selectedSlotKey = ref<string | number | null>(null);
 
-  // 🌟 当前激活的完整乐谱对象
+  const fontScale = useStorage('CHORD_LAB_SCORE_FONT_SCALE_V1', 1.0);
+  const fretboardScale = useStorage('CHORD_LAB_SCORE_FRETBOARD_V1', 1.0);
+
+  // 当前激活的乐谱对象
   const activeSong = computed<Song | null>(() => {
     if (!activeSongId.value) return null;
     return songStore.songs.find(s => s.id === activeSongId.value) || null;
   });
 
-  // 🌟 当前乐谱是否有有效歌词
+  // 校验乐谱是否有有效歌词
   const hasLyrics = computed(() => Boolean(activeSong.value?.lyrics && activeSong.value.lyrics.trim().length > 0));
 
-  if (hasLyrics.value) {
-    activeTabRef.value = 'interactive';
-  }
-
-  // 🌟 受约束的 activeTabGetter / Setter
+  // 受约束的 activeTab 读写拦截器
   const activeTab = computed({
     get: () => {
-      // 核心拦截：如果无歌词，强制返回 'edit'
       if (!hasLyrics.value) {
         return 'edit';
       }
@@ -42,7 +38,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     },
     set: (val: ScoreActiveTab) => {
       if (val === 'interactive' && !hasLyrics.value) {
-        // 无歌词时阻止切换到排列和弦
         activeTabRef.value = 'edit';
         return;
       }
@@ -50,14 +45,19 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     },
   });
 
-  // 切换乐谱或歌词被清空时，自动做校验回退
+  // 🌟 核心修复 1：监听 activeSong 变更（换歌 / 删歌），健全同步 Tab 状态机
   watch(
-    [activeSong, hasLyrics],
-    ([_, validLyrics]) => {
+    activeSong,
+    newSong => {
       selectedSlotKey.value = null;
-      if (!validLyrics) {
+      if (!newSong) {
         activeTabRef.value = 'edit';
+        return;
       }
+
+      // 有歌词 → 排列和弦，无歌词 → 编辑歌词
+      const validLyrics = Boolean(newSong.lyrics && newSong.lyrics.trim().length > 0);
+      activeTabRef.value = validLyrics ? 'interactive' : 'edit';
     },
     { immediate: true }
   );
@@ -69,25 +69,95 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     selectedSlotKey.value = null;
   };
 
+  // 🌟 核心修复 2：所有属性修改统一走 songStore.updateSongMeta
   const updateKey = (key: string) => {
     if (activeSong.value) {
-      activeSong.value.key = key;
+      songStore.updateSongMeta(activeSong.value.id, { key });
+    }
+  };
+
+  const updatePlayKey = (playKey: string) => {
+    if (activeSong.value) {
+      songStore.updateSongMeta(activeSong.value.id, { playKey });
     }
   };
 
   const updateCapo = (capo: number) => {
     if (activeSong.value) {
-      activeSong.value.capo = Math.min(12, Math.max(0, capo));
+      const clampedCapo = Math.min(12, Math.max(0, capo));
+      songStore.updateSongMeta(activeSong.value.id, { capo: clampedCapo });
     }
   };
 
+  // 🌟 核心修复 3：温和的歌词格式化 + 双向指针 Line ID 比对 + 废弃和弦垃圾回收
   const updateLyrics = (lyrics: string) => {
-    if (activeSong.value) {
-      songStore.updateSongLyrics(activeSong.value.id, lyrics);
-      // 如果歌词被清空，强制退回编辑歌词模式
-      if (!lyrics.trim()) {
-        activeTabRef.value = 'edit';
+    if (!activeSong.value) return;
+
+    // 仅剔除行尾空格与全角无用空白，保留英文单词间的标准半角空格[cite: 2]
+    const sanitizedLyrics = lyrics
+      .split('\n')
+      .map(line => line.replace(/[\t\r\u3000]+/g, '').trimEnd())
+      .join('\n');
+
+    const oldLines = activeSong.value.lyrics.split('\n');
+    const newLines = sanitizedLyrics.split('\n');
+    const oldIds = activeSong.value.lineIds || [];
+
+    const newIds: Array<string | null> = new Array(newLines.length).fill(null);
+    const usedOldIndices = new Set<number>();
+
+    // 1. 前向双指针匹配
+    let start = 0;
+    while (start < oldLines.length && start < newLines.length && oldLines[start] === newLines[start]) {
+      newIds[start] = oldIds[start] || 'l_' + generateUUID('', 8);
+      usedOldIndices.add(start);
+      start++;
+    }
+
+    // 2. 后向双指针匹配
+    let oldEnd = oldLines.length - 1;
+    let newEnd = newLines.length - 1;
+    while (oldEnd >= start && newEnd >= start && oldLines[oldEnd] === newLines[newEnd]) {
+      if (!usedOldIndices.has(oldEnd)) {
+        newIds[newEnd] = oldIds[oldEnd] || 'l_' + generateUUID('', 8);
+        usedOldIndices.add(oldEnd);
       }
+      oldEnd--;
+      newEnd--;
+    }
+
+    // 3. 中间新增/修改的行分配全新 ID
+    for (let i = 0; i < newLines.length; i++) {
+      if (!newIds[i]) {
+        newIds[i] = 'l_' + generateUUID('', 8);
+      }
+    }
+
+    // 4. 清理被物理删除的行所遗留的和弦废弃 key，防止 chordMap 污染膨胀
+    const finalIdsSet = new Set(newIds as string[]);
+    const updatedChordMap = { ...(activeSong.value.chordMap || {}) };
+    let hasMapChanged = false;
+
+    Object.keys(updatedChordMap).forEach(key => {
+      if (key.startsWith('line_')) {
+        const parts = key.split('_');
+        const lineId = parts[1];
+        if (lineId && !finalIdsSet.has(lineId)) {
+          delete updatedChordMap[key];
+          hasMapChanged = true;
+        }
+      }
+    });
+
+    // 统一写回 Store，保证 Pinia 侦听与持久化 100% 触发[cite: 2]
+    songStore.updateSongMeta(activeSong.value.id, {
+      lyrics: sanitizedLyrics,
+      lineIds: newIds as string[],
+      chordMap: hasMapChanged ? updatedChordMap : activeSong.value.chordMap,
+    });
+
+    if (!sanitizedLyrics.trim()) {
+      activeTabRef.value = 'edit';
     }
   };
 
@@ -118,12 +188,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
-  const updatePlayKey = (playKey: string) => {
-    if (activeSong.value) {
-      activeSong.value.playKey = playKey;
-    }
-  };
-
   return {
     activeSongId,
     activeTab,
@@ -138,5 +202,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     setSlotChord,
     removeSlotChord,
     swapSlotChords,
+    fontScale,
+    fretboardScale,
   };
 });

@@ -19,7 +19,7 @@
       <div class="nav-brand-group hidden-mobile">
         <span class="app-brand-title">Fret Logic</span>
 
-        <BaseSegmentedControl :model-value="route.path" :options="NAV_OPTIONS" @change="path => router.push(path)" />
+        <BaseSegmentedControl :model-value="activeNavPath" :options="NAV_OPTIONS" @change="path => router.push(path)" />
       </div>
     </div>
 
@@ -68,7 +68,7 @@ import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { Cloud, Moon, PanelLeft, Sun } from '@lucide/vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 import HeaderScoreTools from './HeaderScoreTools.vue';
@@ -84,6 +84,12 @@ const emit = defineEmits<{
 const route = useRoute();
 const router = useRouter();
 
+const activeNavPath = computed(() => {
+  if (!isRouterReady.value) return null;
+  const matched = NAV_OPTIONS.find(opt => opt.value === route.path);
+  return matched ? matched.value : null;
+});
+
 const NAV_OPTIONS: SegmentOption<string>[] = [
   { label: '工作台', value: '/' },
   { label: '乐谱库', value: '/score' },
@@ -94,6 +100,11 @@ const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 
 const isSyncModalOpen = ref(false);
+const isRouterReady = ref(false);
+
+router.isReady().then(() => {
+  isRouterReady.value = true;
+});
 </script>
 
 <style scoped lang="less">
@@ -155,6 +166,7 @@ const isSyncModalOpen = ref(false);
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text-title);
+  white-space: nowrap; /* 🌟 强制文字不换行 */
   margin-left: 0.2rem;
 }
 

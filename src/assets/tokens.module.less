@@ -117,7 +117,7 @@
 @transition-base: all @duration-base @bezier-standard;
 @transition-fast: all @duration-fast @bezier-standard;
 
-.fade-scale-transition(@name, @translateY: -6px, @scale: 0.96) {
+.fade-scale-transition(@name, @translate: -6px, @scale: 0.96, @targetTranslate: ~'0, 0') {
   .@{name}-enter-active,
   .@{name}-leave-active {
     transition:
@@ -129,13 +129,13 @@
   .@{name}-enter-from,
   .@{name}-leave-to {
     opacity: 0;
-    transform: translateY(@translateY) scale(@scale);
+    transform: translate(@translate) scale(@scale);
   }
 
   /* 🌟 显式补全终止状态，保证 iOS Safari 平滑复位 */
   .@{name}-enter-to,
   .@{name}-leave-from {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate(@targetTranslate) scale(1);
   }
 }

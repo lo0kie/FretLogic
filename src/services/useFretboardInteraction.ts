@@ -1,5 +1,5 @@
 import { useEventListener } from '@vueuse/core';
-import { computed, onBeforeUnmount, onMounted, ref, toRaw, useTemplateRef } from 'vue';
+import { computed, onBeforeUnmount, onMounted, onWatcherCleanup, ref, toRaw, useTemplateRef, watchEffect } from 'vue';
 
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, INTERACTION_CONFIG } from '@/constants';
 import type { GuitarStringsModel } from '@/types';
@@ -29,13 +29,15 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   const fretBoardRef = useTemplateRef<HTMLDivElement>('fretBoardRef');
   const hoverPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
 
+  // 🌟 新增：通过响应式状态记录是否正在按下/拖拽
+  const isPointerDown = ref(false);
+
   let lastCancelTime = 0;
   let lastSIdx = -1;
   let lastFIdx = -1;
   let wheelAccumulator = 0;
   let ticking = false;
   let rAF_ID = 0;
-  const cleanupListeners: (() => void)[] = [];
 
   const stringXPositions = computed(() =>
     Array.from({ length: 6 }, (_, i) => CANVAS_CONFIG.OFFSET_X + i * CANVAS_CONFIG.STRING_SPACING)
@@ -175,30 +177,38 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   };
 
   const handlePointerUp = () => {
+    isPointerDown.value = false; // 🌟 触发清理 watchEffect 内绑定的全局事件
     emit('drag-status-change', false);
     lastSIdx = -1;
     lastFIdx = -1;
     if (rAF_ID) cancelAnimationFrame(rAF_ID);
     ticking = false;
-    cleanupListeners.forEach(cleanup => cleanup());
-    cleanupListeners.length = 0;
   };
 
   const handlePointerDown = (e: PointerEvent) => {
     if (!props.interactive || e.button !== 0) return;
-    if (cleanupListeners.length > 0) {
-      cleanupListeners.forEach(cleanup => cleanup());
-      cleanupListeners.length = 0;
-    }
+
     emit('drag-status-change', true);
     lastSIdx = -1;
     lastFIdx = -1;
 
     handleFingerClickLogic(e.clientX, e.clientY, false);
-
-    cleanupListeners.push(useEventListener(window, 'pointermove', handlePointerMove));
-    cleanupListeners.push(useEventListener(window, 'pointerup', handlePointerUp));
+    isPointerDown.value = true; // 🌟 开启 watchEffect 自动监听注册
   };
+
+  // 🌟 使用 Vue 3.5 推荐的响应式副作用管理全局全局拖拽事件
+  watchEffect(() => {
+    if (!isPointerDown.value) return;
+
+    const stopMove = useEventListener(window, 'pointermove', handlePointerMove);
+    const stopUp = useEventListener(window, 'pointerup', handlePointerUp);
+
+    // 🌟 当 isPointerDown 变成 false 或组件卸载时，Vue 会自动执行 onWatcherCleanup
+    onWatcherCleanup(() => {
+      stopMove();
+      stopUp();
+    });
+  });
 
   const handleWheel = (e: WheelEvent) => {
     if (!props.interactive) return;
@@ -244,7 +254,6 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
 
   onBeforeUnmount(() => {
     if (rAF_ID) cancelAnimationFrame(rAF_ID);
-    cleanupListeners.forEach(cleanup => cleanup());
   });
 
   return {

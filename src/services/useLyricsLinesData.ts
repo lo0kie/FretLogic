@@ -1,5 +1,8 @@
+// src/services/useLyricsLinesData.ts
+
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
+import { generateUUID } from '@/utils/validators';
 import { computed } from 'vue';
 
 export interface EdgeChordItem {
@@ -9,11 +12,12 @@ export interface EdgeChordItem {
 
 export interface CharItem {
   char: string;
-  globalIndex: number;
+  slotKey: string;
 }
 
 export interface LineData {
   lineIdx: number;
+  lineId: string; // 🌟 引入唯一行 ID
   chars: CharItem[];
   startChords: EdgeChordItem[];
   endChords: EdgeChordItem[];
@@ -21,48 +25,60 @@ export interface LineData {
   nextEndKey: string;
 }
 
-/** 纯函数：把歌词文本 + chordMap 拆解成按行组织的渲染数据（行首/行尾/行内和弦位）。脱离组件即可单测。 */
-export function buildLyricsLinesWithEdges(lyrics: string, chordMap: Record<string | number, Chord>): LineData[] {
+/** 纯函数：把歌词文本 + Line ID + chordMap 拆解成按 Line ID 绑定的渲染数据 */
+export function buildLyricsLinesWithEdges(
+  lyrics: string,
+  chordMap: Record<string | number, Chord>,
+  existingLineIds: string[] = []
+): { lines: LineData[]; updatedLineIds: string[] } {
   const rawLines = lyrics.split('\n');
-  let globalCharIdx = 0;
+  const updatedLineIds: string[] = [];
 
-  return rawLines.map((lineText, lineIdx) => {
+  const lines = rawLines.map((lineText, lineIdx) => {
+    // 🌟 如果当前行已有稳定 ID 则复用，没有则生成全新 ID
+    const lineId = existingLineIds[lineIdx] || 'l_' + generateUUID('', 8);
+    updatedLineIds.push(lineId);
+
+    // 1. 行首和弦组 (基于 lineId 绑定)
     const startChords: EdgeChordItem[] = [];
     let startCount = 0;
-    while (chordMap[`line_${lineIdx}_start_${startCount}`]) {
+    while (chordMap[`line_${lineId}_start_${startCount}`]) {
       startChords.push({
-        slotKey: `line_${lineIdx}_start_${startCount}`,
-        chord: chordMap[`line_${lineIdx}_start_${startCount}`],
+        slotKey: `line_${lineId}_start_${startCount}`,
+        chord: chordMap[`line_${lineId}_start_${startCount}`],
       });
       startCount++;
     }
 
+    // 2. 行尾和弦组 (基于 lineId 绑定)
     const endChords: EdgeChordItem[] = [];
     let endCount = 0;
-    while (chordMap[`line_${lineIdx}_end_${endCount}`]) {
+    while (chordMap[`line_${lineId}_end_${endCount}`]) {
       endChords.push({
-        slotKey: `line_${lineIdx}_end_${endCount}`,
-        chord: chordMap[`line_${lineIdx}_end_${endCount}`],
+        slotKey: `line_${lineId}_end_${endCount}`,
+        chord: chordMap[`line_${lineId}_end_${endCount}`],
       });
       endCount++;
     }
 
-    const chars = lineText.split('').map(char => ({
+    // 3. 行内字符和弦组 (基于 lineId + charIdx 绑定)
+    const chars: CharItem[] = lineText.split('').map((char, charIdx) => ({
       char,
-      globalIndex: globalCharIdx++,
+      slotKey: `line_${lineId}_char_${charIdx}`,
     }));
-
-    globalCharIdx++; // 换行符本身也占一个全局下标位
 
     return {
       lineIdx,
+      lineId,
       chars,
       startChords: startChords.reverse(),
       endChords,
-      nextStartKey: `line_${lineIdx}_start_${startCount}`,
-      nextEndKey: `line_${lineIdx}_end_${endCount}`,
+      nextStartKey: `line_${lineId}_start_${startCount}`,
+      nextEndKey: `line_${lineId}_end_${endCount}`,
     };
   });
+
+  return { lines, updatedLineIds };
 }
 
 /** 响应式包装：跟随当前曲谱的歌词与和弦映射自动重算 */
@@ -71,7 +87,19 @@ export function useLyricsLinesData() {
 
   const lyricsLinesWithEdges = computed<LineData[]>(() => {
     if (!scoreEditor.activeSong) return [];
-    return buildLyricsLinesWithEdges(scoreEditor.activeSong.lyrics, scoreEditor.activeSong.chordMap || {});
+
+    const { lines, updatedLineIds } = buildLyricsLinesWithEdges(
+      scoreEditor.activeSong.lyrics,
+      scoreEditor.activeSong.chordMap || {},
+      scoreEditor.activeSong.lineIds || []
+    );
+
+    // 🌟 自动同步补全 lineIds，确保 ID 稳定
+    if (JSON.stringify(scoreEditor.activeSong.lineIds) !== JSON.stringify(updatedLineIds)) {
+      scoreEditor.activeSong.lineIds = updatedLineIds;
+    }
+
+    return lines;
   });
 
   return { lyricsLinesWithEdges };

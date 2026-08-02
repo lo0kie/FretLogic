@@ -130,7 +130,7 @@ onClickOutside(
   }
 }
 
-.fade-scale-transition(dropdown-fade, -6px, 0.96);
+.fade-scale-transition(dropdown-fade, ~'0, -6px', 0.96);
 
 @media (max-width: 768px) {
   .config-popover-card {

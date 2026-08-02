@@ -184,6 +184,7 @@ const handleFileChange = (e: Event) => {
   font-weight: 800;
   color: var(--text-title);
   letter-spacing: -0.01em;
+  white-space: nowrap; /* 🌟 强制文字不换行 */
 }
 
 .sidebar-count-badge {

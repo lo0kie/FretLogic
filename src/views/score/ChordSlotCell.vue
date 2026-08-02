@@ -32,7 +32,7 @@
         <span class="inline-chord-name">{{ chord.chordName }}</span>
         <Fretboard
           :interactive="false"
-          :scale="0.28"
+          :scale="0.28 * scoreEditor.fretboardScale"
           :strings="chord.strings"
           :capo="chord.capo"
           :fret-count="chord.fretCount"
@@ -52,6 +52,7 @@
 
 <script setup lang="ts">
 import Fretboard from '@/components/Fretboard.vue';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
 import { X } from '@lucide/vue';
 
@@ -64,6 +65,8 @@ defineProps<{
   isDropTarget: boolean;
   isDarkMode: boolean;
 }>();
+
+const scoreEditor = useScoreEditorStore();
 
 const emit = defineEmits<{
   (e: 'click'): void;
@@ -258,7 +261,7 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   width: 100%;
-  font-size: 0.9rem;
+  font-size: calc(0.9rem * var(--score-font-scale, 1)); // 🌟 动态字号
   font-weight: 600;
   color: var(--text-title);
   line-height: 1.15rem;
@@ -266,6 +269,7 @@ const emit = defineEmits<{
   border-radius: 0;
   transition:
     color @duration-fast ease,
+    font-size @duration-fast ease,
     border-color @duration-fast ease;
   border-bottom: 1.5px solid transparent;
   box-sizing: border-box;

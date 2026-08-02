@@ -8,6 +8,32 @@
 
     <Transition name="dropdown-fade">
       <div v-if="isConfigOpen && scoreEditor.activeSong" class="config-popover-card" ref="cardRef">
+        <div class="config-row">
+          <label class="config-label">字号缩放</label>
+          <BaseScaleSlider
+            readout-position="left"
+            v-model="scoreEditor.fontScale"
+            :showButtons="false"
+            :min="0.6"
+            :max="1.5"
+            :step="0.05"
+            :default-value="1.0"
+          />
+        </div>
+
+        <div class="config-row">
+          <label class="config-label">和弦缩放</label>
+          <BaseScaleSlider
+            readout-position="left"
+            v-model="scoreEditor.fretboardScale"
+            :showButtons="false"
+            :min="0.6"
+            :max="1.5"
+            :step="0.1"
+            :default-value="1.0"
+          />
+        </div>
+
         <!-- 1. 演唱调 (Key) -->
         <div class="config-row">
           <label class="config-label">演唱调 (Key)</label>
@@ -55,6 +81,7 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import BaseNumberInput from '@/components/BaseNumberInput.vue';
+import BaseScaleSlider from '@/components/BaseScaleSlider.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
@@ -129,5 +156,5 @@ onClickOutside(
   }
 }
 
-.fade-scale-transition(dropdown-fade, -6px, 0.96);
+.fade-scale-transition(dropdown-fade, ~'0, -6px', 0.96);
 </style>
