@@ -68,7 +68,6 @@
         <BaseSegmentedControl
           v-model="groupModals.modalData.sortRule"
           :options="[
-            { label: '自定义', value: 'CUSTOM' },
             { label: 'C-B 音名', value: 'ROOT_PITCH' },
             { label: '调内级数', value: 'KEY_DEGREE' },
             { label: '名称 A-Z', value: 'NAME_ASC' },

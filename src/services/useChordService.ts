@@ -5,6 +5,7 @@ import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
 import { copyElementToClipboard } from '@/utils/domExporter';
+import { computeChordFingerprint } from '@/utils/musicTheory';
 import { generateUUID } from '@/utils/validators';
 import { Ref, toRaw, unref } from 'vue';
 import { SortableEvent } from 'vue-draggable-plus';
@@ -118,19 +119,6 @@ export function useChordService() {
     }
   };
 
-  const computeFingerprint = (chord: Omit<Chord, 'fingerprint'>): string => {
-    const strSig = chord.strings.map(s => `${s.fret}_${s.preferFlat ? 1 : 0}_${s.isRoot ? 1 : 0}`).join('|');
-    return `${chord.groupId}:${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${strSig}`;
-  };
-
-  const getChordFingerprint = (chord: Chord): string => {
-    if (chord.fingerprint) return chord.fingerprint;
-
-    const fp = computeFingerprint(chord);
-    chord.fingerprint = fp;
-    return fp;
-  };
-
   const persistCurrentChord = () => {
     const cleanName = editorStore.currentChordName.trim();
 
@@ -163,14 +151,14 @@ export function useChordService() {
       tuning: editorStore.currentTuning,
     };
 
-    const newFingerprint = computeFingerprint(rawPayload);
+    const newFingerprint = computeChordFingerprint(rawPayload);
     const payload: Chord = {
       ...rawPayload,
       fingerprint: newFingerprint,
     };
 
     const isDuplicate = chordStore.savedChordsList.some(
-      existing => existing.id !== editorStore.editingId && getChordFingerprint(existing) === newFingerprint
+      existing => existing.id !== editorStore.editingId && existing.fingerprint === newFingerprint
     );
 
     if (isDuplicate) {

@@ -59,7 +59,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     historyStack.value.push(
       cloneDeep({
         lyrics: target.lyrics,
-        lineIds: target.lineIds || [],
+        lineIds: target.lineIds,
         chordMap: target.chordMap || {},
       })
     );
@@ -201,7 +201,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     const oldLines = activeSong.value.lyrics.split('\n');
     const newLines = sanitizedLyrics.split('\n');
 
-    const newIds = matchLineIds(oldLines, newLines, activeSong.value.lineIds || []);
+    const newIds = matchLineIds(oldLines, newLines, activeSong.value.lineIds ?? []);
     const { map: updatedChordMap, changed } = garbageCollectChordMap(activeSong.value.chordMap || {}, newIds);
 
     songStore.updateSongMeta(activeSong.value.id, {

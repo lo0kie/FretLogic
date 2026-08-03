@@ -25,7 +25,7 @@
         role="button"
         tabindex="0"
         :aria-pressed="scoreEditor.activeSongId === song.id"
-        :aria-label="`乐谱 ${song.title}，${song.playKey || 'C'}调，Capo ${song.capo || 0}${scoreEditor.activeSongId === song.id ? '，已选中' : ''}`"
+        :aria-label="`乐谱 ${song.title}，${song.playKey}调，Capo ${song.capo}${scoreEditor.activeSongId === song.id ? '，已选中' : ''}`"
         @click="handleSelectSong(song.id)"
         @keydown.enter.prevent.stop="handleSelectSong(song.id)"
         @keydown.space.prevent.stop="handleSelectSong(song.id)"
@@ -37,12 +37,12 @@
 
           <div class="song-meta-badges">
             <!-- 🌟 2. Badge 增加无障碍阅读说明 -->
-            <BaseBadge variant="neutral" appearance="filled" size="xs" :aria-label="`调性 ${song.playKey || 'C'} 调`">
-              {{ song.playKey || 'C' }}调
+            <BaseBadge variant="neutral" appearance="filled" size="xs" :aria-label="`调性 ${song.playKey} 调`">
+              {{ song.playKey }}调
             </BaseBadge>
 
-            <BaseBadge variant="neutral" appearance="filled" size="xs" :aria-label="`变调夹 Capo ${song.capo || 0} 品`">
-              Capo {{ song.capo || 0 }}
+            <BaseBadge variant="neutral" appearance="filled" size="xs" :aria-label="`变调夹 Capo ${song.capo} 品`">
+              Capo {{ song.capo }}
             </BaseBadge>
           </div>
         </div>

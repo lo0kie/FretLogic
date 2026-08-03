@@ -23,7 +23,7 @@ export function useChordGroupModals() {
     activeGroup: null as Group | null,
     activeChord: null as Chord | null,
     moveTargetId: '',
-    sortRule: 'CUSTOM' as GroupSortRule,
+    sortRule: 'ROOT_PITCH' as GroupSortRule,
     sortKey: 'C',
   });
 
@@ -47,7 +47,7 @@ export function useChordGroupModals() {
       g.collapsed = true;
     });
 
-    chordStore.groups.push({ id: newId, name: val, collapsed: false });
+    chordStore.groups.push({ id: newId, name: val, collapsed: false, sortRule: 'ROOT_PITCH' });
     chordStore.selectedGroupId = newId;
     modals.create = false;
     uiStore.toast.success('操作成功完成');
@@ -121,7 +121,7 @@ export function useChordGroupModals() {
 
   const openSort = (group: Group) => {
     modalData.activeGroup = group;
-    modalData.sortRule = group.sortRule || 'CUSTOM';
+    modalData.sortRule = group.sortRule || 'ROOT_PITCH';
     modalData.sortKey = group.sortKey || 'C';
     modals.sort = true;
   };

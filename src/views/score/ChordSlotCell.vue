@@ -20,6 +20,7 @@
     @dragover.prevent="emit('dragover', $event)"
     @dragleave="emit('dragleave', $event)"
     @drop="emit('drop')"
+    v-wave
   >
     <div class="chord-display-slot">
       <div

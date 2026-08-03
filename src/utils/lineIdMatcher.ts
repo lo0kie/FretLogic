@@ -14,14 +14,6 @@ export const sanitizeLyricsText = (lyrics: string): string => {
     .join('\n');
 };
 
-const padOldIds = (oldIds: string[], oldLinesLength: number): string[] => {
-  const padded = [...oldIds];
-  for (let i = padded.length; i < oldLinesLength; i++) {
-    padded[i] = String(i);
-  }
-  return padded;
-};
-
 const matchExactLines = (
   oldLines: string[],
   newLines: string[],
@@ -81,11 +73,8 @@ const assignNewIds = (newIds: (string | null)[]): string[] => {
 };
 
 export const matchLineIds = (oldLines: string[], newLines: string[], oldLineIds: string[]): string[] => {
-  const oldIds = padOldIds(oldLineIds, oldLines.length);
-  const { newIds, usedOldIndices } = matchExactLines(oldLines, newLines, oldIds);
-
-  matchSimilarLines(oldLines, newLines, oldIds, newIds, usedOldIndices);
-
+  const { newIds, usedOldIndices } = matchExactLines(oldLines, newLines, oldLineIds);
+  matchSimilarLines(oldLines, newLines, oldLineIds, newIds, usedOldIndices);
   return assignNewIds(newIds);
 };
 

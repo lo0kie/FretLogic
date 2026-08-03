@@ -27,8 +27,8 @@
           <!-- 🌟 2. 补全 role="menuitem" 与 tabindex -->
           <button
             v-wave
-            v-for="(item, idx) in items"
-            :key="idx"
+            v-for="item in items"
+            :key="item.label"
             ref="itemEls"
             type="button"
             role="menuitem"

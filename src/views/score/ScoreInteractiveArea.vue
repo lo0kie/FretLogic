@@ -15,9 +15,9 @@
       <div v-show="isExporting" class="export-header-meta">
         <h1 class="export-song-title">{{ scoreEditor.activeSong?.title }}</h1>
         <div class="export-song-info">
-          <span>{{ scoreEditor.activeSong?.key || 'C' }} 调</span>
+          <span>{{ scoreEditor.activeSong.key }} 调</span>
           <span class="info-divider">|</span>
-          <span>Capo: {{ scoreEditor.activeSong?.capo || 0 }}</span>
+          <span>Capo: {{ scoreEditor.activeSong.capo }}</span>
         </div>
       </div>
 

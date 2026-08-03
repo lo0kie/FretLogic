@@ -53,7 +53,7 @@ export const useChordStore = defineStore('chord', () => {
         groups.value.forEach(g => {
           g.collapsed = true;
         });
-        groups.value.unshift({ id: targetGroupId, name: '已恢复的和弦', collapsed: false });
+        groups.value.unshift({ id: targetGroupId, name: '已恢复的和弦', collapsed: false, sortRule: 'ROOT_PITCH' });
         selectedGroupId.value = targetGroupId;
       }
       savedChordsList.value.forEach(c => {

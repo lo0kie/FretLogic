@@ -1,4 +1,5 @@
-﻿import type { Chord, Group, ImportExportPayload, Song } from '@/types';
+﻿import { FRET_COUNTS } from '@/constants';
+import type { Chord, Group, ImportExportPayload, Song } from '@/types';
 
 const validateGroups = (groups: unknown, issues: string[]): Group[] => {
   if (!Array.isArray(groups)) {
@@ -12,6 +13,10 @@ const validateGroups = (groups: unknown, issues: string[]): Group[] => {
       return false;
     }
     if (g.collapsed === undefined) g.collapsed = false;
+    if (g.sortRule === 'KEY_DEGREE' && !g.sortKey) {
+      g.sortKey = 'C';
+    }
+
     return true;
   });
 };
@@ -50,13 +55,13 @@ const validateChords = (chords: unknown, issues: string[]): Chord[] => {
       return false;
     }
 
-    if (c.fretCount !== 3 && c.fretCount !== 4 && c.fretCount !== 5) {
+    if (!FRET_COUNTS.includes(c.fretCount)) {
       c.fretCount = 3;
     }
+
     if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 12) {
       c.capo = 0;
     }
-    if (!c.tuning) c.tuning = 'STANDARD';
 
     return true;
   });
@@ -76,10 +81,9 @@ const validateSongs = (songs: unknown, issues: string[]): Song[] | undefined => 
       return false;
     }
     if (typeof s.lyrics !== 'string') s.lyrics = '';
-    if (!s.key) s.key = 'C';
-    if (!s.playKey) s.playKey = 'C';
     if (typeof s.capo !== 'number') s.capo = 0;
     if (!s.chordMap || typeof s.chordMap !== 'object') s.chordMap = {};
+    if (!Array.isArray(s.lineIds)) s.lineIds = [];
     return true;
   });
 };

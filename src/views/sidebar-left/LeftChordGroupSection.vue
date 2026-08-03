@@ -49,20 +49,17 @@
               </span>
             </BaseMarquee>
 
-            <!-- 🌟 2. 排序规则外显标签 -->
             <BaseBadge
-              v-if="group.sortRule && group.sortRule !== 'CUSTOM'"
               variant="neutral"
               appearance="outline"
               size="xs"
               class="sort-rule-badge"
-              title="当前分组已启用自动排序 (禁用手动拖拽)"
+              title="排序方法"
               :aria-label="`按${getSortLabel(group)}自动排序`"
             >
               {{ getSortLabel(group) }}
             </BaseBadge>
 
-            <!-- 🌟 3. 搜索匹配数与总数 Badge -->
             <BaseBadge
               v-if="searchQuery"
               :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
@@ -87,7 +84,6 @@
             </BaseBadge>
           </div>
 
-          <!-- 🌟 4. 拖拽把手 -->
           <div v-if="!uiStore.isMobile" class="drag-action-zone">
             <div
               class="drag-handle"
@@ -161,12 +157,10 @@ const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>
 const chordLowerNameCache = new WeakMap<Chord, string>();
 
 const handleSelectChord = (chord: Chord) => {
-  // 点击的正是当前正在编辑的卡片 → 退出编辑
   if (editorStore.editingId === chord.id) {
     editorStore.resetEditor();
     return;
   }
-  // 否则正常加载到编辑器
   chordService.loadChordToEditor(chord);
 };
 
@@ -175,11 +169,12 @@ const getSortLabel = (group: Group): string => {
     case 'ROOT_PITCH':
       return '音名';
     case 'KEY_DEGREE':
-      return `${group.sortKey || 'C'}调`;
+      return `${group.sortKey}调`;
     case 'NAME_ASC':
       return 'A-Z';
     default:
-      return '';
+      group.sortRule = 'ROOT_PITCH';
+      return 'ROOT_PITCH';
   }
 };
 

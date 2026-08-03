@@ -5,7 +5,7 @@
     <button
       v-wave
       v-for="item in options"
-      :key="String(item.value)"
+      :key="`${item.label}-${item.value}`"
       ref="itemRefs"
       class="segmented-item"
       :class="{
@@ -69,10 +69,12 @@ const updateIndicatorPosition = async () => {
   const activeEl = itemRefs.value?.[activeIndex];
   if (!activeEl) return;
 
-  const { offsetLeft, offsetWidth } = activeEl;
+  const { offsetLeft, offsetWidth, offsetTop, offsetHeight } = activeEl;
 
   containerEl.style.setProperty('--indicator-width', `${offsetWidth}px`);
   containerEl.style.setProperty('--indicator-x', `${offsetLeft}px`);
+  containerEl.style.setProperty('--indicator-height', `${offsetHeight}px`);
+  containerEl.style.setProperty('--indicator-y', `${offsetTop}px`);
   containerEl.style.setProperty('--indicator-opacity', '1');
 
   if (!isInitialized.value) {
@@ -137,6 +139,8 @@ watch(() => options, updateIndicatorPosition, { deep: true });
 
   --indicator-width: 0px;
   --indicator-x: 0px;
+  --indicator-height: 0px;
+  --indicator-y: 0px;
   --indicator-opacity: 0;
 
   &.is-disabled {
@@ -153,11 +157,6 @@ watch(() => options, updateIndicatorPosition, { deep: true });
     padding: 0.08rem;
     gap: 0.1rem;
 
-    .indicator-pill {
-      top: 0.08rem;
-      bottom: 0.08rem;
-    }
-
     .segmented-item {
       font-size: 0.62rem;
       padding: 0.1rem 0.45rem;
@@ -168,11 +167,6 @@ watch(() => options, updateIndicatorPosition, { deep: true });
     height: v-bind(HEIGHT_MD);
     padding: 0.12rem;
     gap: 0.15rem;
-
-    .indicator-pill {
-      top: 0.12rem;
-      bottom: 0.12rem;
-    }
 
     .segmented-item {
       font-size: 0.68rem;
@@ -185,11 +179,6 @@ watch(() => options, updateIndicatorPosition, { deep: true });
     padding: 0.15rem;
     gap: 0.2rem;
 
-    .indicator-pill {
-      top: 0.15rem;
-      bottom: 0.15rem;
-    }
-
     .segmented-item {
       font-size: 0.75rem;
       padding: 0.2rem 0.8rem;
@@ -200,22 +189,25 @@ watch(() => options, updateIndicatorPosition, { deep: true });
 .indicator-pill {
   position: absolute;
   left: 0;
+  top: 0;
   border-radius: 9999px;
   background-color: var(--bg-panel);
   box-shadow: @shadow-sm;
   pointer-events: none;
   z-index: 1;
   transition: none;
-  will-change: transform, width, opacity;
+  will-change: transform, width, height, opacity;
 
   width: var(--indicator-width);
-  transform: translateX(var(--indicator-x));
+  height: var(--indicator-height);
+  transform: translate(var(--indicator-x), var(--indicator-y));
   opacity: var(--indicator-opacity);
 
   &.is-animated {
     transition:
       transform @duration-slow @bezier-sidebar,
       width @duration-slow @bezier-sidebar,
+      height @duration-slow @bezier-sidebar,
       opacity @duration-fast ease;
   }
 }

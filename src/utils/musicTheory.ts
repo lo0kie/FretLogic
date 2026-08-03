@@ -105,15 +105,16 @@ export const getChordRootPitch = (chordName: string): number => {
 };
 
 export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey = 'C'): Chord[] => {
-  if (!rule || rule === 'CUSTOM') return chords;
+  const effectiveRule: GroupSortRule = rule && rule !== ('CUSTOM' as any) ? rule : 'ROOT_PITCH';
   const list = [...chords];
-  if (rule === 'NAME_ASC') {
+
+  if (effectiveRule === 'NAME_ASC') {
     return list.sort((a, b) => a.chordName.localeCompare(b.chordName));
   }
-  if (rule === 'ROOT_PITCH') {
+  if (effectiveRule === 'ROOT_PITCH') {
     return list.sort((a, b) => getChordRootPitch(a.chordName) - getChordRootPitch(b.chordName));
   }
-  if (rule === 'KEY_DEGREE') {
+  if (effectiveRule === 'KEY_DEGREE') {
     const keyPitch = ROOT_PITCH_MAP[sortKey] ?? 0;
     return list.sort((a, b) => {
       const pitchA = getChordRootPitch(a.chordName);
@@ -199,6 +200,13 @@ export const transposePhysicalChord = (chord: Chord, semitones: number, newCapo?
   });
 
   newChord.id = 'c_' + Math.random().toString(36).substring(2, 10);
-  newChord.fingerprint = undefined;
+  newChord.fingerprint = computeChordFingerprint(newChord);
   return newChord;
+};
+
+export const computeChordFingerprint = (
+  chord: Pick<Chord, 'groupId' | 'chordName' | 'capo' | 'fretCount' | 'tuning' | 'strings'>
+): string => {
+  const strSig = chord.strings.map(s => `${s.fret}_${s.preferFlat ? 1 : 0}_${s.isRoot ? 1 : 0}`).join('|');
+  return `${chord.groupId}:${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${strSig}`;
 };

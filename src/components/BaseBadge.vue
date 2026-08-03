@@ -16,6 +16,7 @@
     :aria-label="ariaLabelText"
     @keydown.enter="handleKeydown"
     @keydown.space.prevent="handleKeydown"
+    @click="handleClick"
   >
     <!-- 1. 指示圆点 (如状态灯) -->
     <span v-if="showDot && !isDotOnly" class="badge-dot" aria-hidden="true"></span>
@@ -137,6 +138,12 @@ const handleClose = (e: MouseEvent) => {
 };
 
 const handleKeydown = (e: KeyboardEvent) => {
+  if (isInteractive.value) {
+    emit('click', e);
+  }
+};
+
+const handleClick = (e: MouseEvent) => {
   if (isInteractive.value) {
     emit('click', e);
   }

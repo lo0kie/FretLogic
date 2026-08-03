@@ -9,9 +9,9 @@ export interface Song {
   id: string;
   title: string;
   lyrics: string;
-  lineIds?: string[];
+  lineIds: string[];
   key: string;
   playKey: string;
-  capo?: number;
+  capo: number;
   chordMap: Record<string | number, Chord>;
 }

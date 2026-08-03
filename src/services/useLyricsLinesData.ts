@@ -78,7 +78,7 @@ export function useLyricsLinesData() {
     return buildLyricsLinesWithEdges(
       scoreEditor.activeSong.lyrics,
       scoreEditor.activeSong.chordMap || {},
-      scoreEditor.activeSong.lineIds || []
+      scoreEditor.activeSong.lineIds
     );
   });
 
