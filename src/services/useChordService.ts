@@ -1,5 +1,6 @@
 ﻿import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
+import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
@@ -12,6 +13,7 @@ export function useChordService() {
   const chordStore = useChordStore();
   const editorStore = useEditorStore();
   const uiStore = useUiStore();
+  const songStore = useSongStore();
 
   const loadChordToEditor = (chord: Chord) => {
     editorStore.editingId = chord.id;
@@ -55,6 +57,29 @@ export function useChordService() {
   const triggerDeleteChord = (chord: Chord) => {
     const updatedList = chordStore.savedChordsList.filter(c => c.id !== chord.id);
     chordStore.overwriteChords(updatedList);
+
+    songStore.songs.forEach(song => {
+      if (!song.chordMap) return;
+      let hasChanged = false;
+
+      Object.keys(song.chordMap).forEach(key => {
+        const boundChord = song.chordMap[key];
+        if (!boundChord) return;
+
+        const isMatched =
+          boundChord.id === chord.id ||
+          (boundChord.fingerprint && chord.fingerprint && boundChord.fingerprint === chord.fingerprint);
+
+        if (isMatched) {
+          delete song.chordMap[key];
+          hasChanged = true;
+        }
+      });
+
+      if (hasChanged) {
+        song.chordMap = { ...song.chordMap };
+      }
+    });
 
     uiStore.toast.info(`已删除和弦 "${chord.chordName}"`, {
       actionText: '撤销',

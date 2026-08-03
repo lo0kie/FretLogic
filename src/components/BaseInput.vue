@@ -10,7 +10,8 @@
       @input="handleInput"
       @keyup.enter="$emit('enter')"
       ref="inputRef"
-      type="text"
+      :type="type"
+      :maxlength="maxlength"
       :placeholder="placeholder"
       :disabled="disabled"
       :autofocus="autofocus"
@@ -38,6 +39,7 @@
 </template>
 
 <script setup lang="ts">
+import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
 import { X } from '@lucide/vue';
 import { computed, nextTick, onMounted, useId, useTemplateRef } from 'vue';
 
@@ -51,6 +53,8 @@ const {
   size = 'md',
   fontSize = 'md',
   autofocus = false,
+  type = 'text',
+  maxlength,
 } = defineProps<{
   placeholder?: string;
   disabled?: boolean;
@@ -58,8 +62,9 @@ const {
   isPassword?: boolean;
   size?: 'sm' | 'md' | 'lg';
   fontSize?: 'xs' | 'md' | 'lg';
-  /** 挂载后自动聚焦 */
   autofocus?: boolean;
+  type?: string;
+  maxlength?: number;
 }>();
 
 const modelValue = defineModel<string>({ required: true });
@@ -123,7 +128,6 @@ defineExpose({
   }
 }
 
-/* 前缀定位区域 */
 .prefix-zone {
   position: absolute;
   top: 0;
@@ -145,7 +149,6 @@ defineExpose({
   }
 }
 
-/* 清空按钮原生样式 */
 .clear-button {
   position: absolute;
   top: 0;
@@ -186,7 +189,6 @@ defineExpose({
   }
 }
 
-/* 输入框基础样式 */
 .base-input-field {
   width: 100%;
   font-weight: 500;
@@ -219,48 +221,46 @@ defineExpose({
     cursor: not-allowed;
   }
 
-  /* 尺寸（Size）：与 ActionButton 完全同步 */
   &.size-sm {
-    height: 1.5rem;
-    padding-left: 0.45rem;
-    padding-right: 0.45rem;
+    height: v-bind(HEIGHT_SM);
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
 
     &.has-prefix {
-      padding-left: 1.2rem;
+      padding-left: 1.3rem;
     }
     &.has-suffix {
-      padding-right: 1.2rem;
+      padding-right: 1.3rem;
     }
   }
 
   &.size-md {
-    height: 1.75rem;
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
+    height: v-bind(HEIGHT_MD);
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
 
     &.has-prefix {
-      padding-left: 1.6rem;
+      padding-left: 1.5rem;
     }
     &.has-suffix {
-      padding-right: 1.6rem;
+      padding-right: 1.5rem;
     }
   }
 
   &.size-lg {
-    height: 2.5rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
+    height: v-bind(HEIGHT_LG);
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
 
     &.has-prefix {
-      padding-left: 2rem;
+      padding-left: 1.8rem;
     }
     &.has-suffix {
-      padding-right: 2rem;
+      padding-right: 1.8rem;
     }
   }
 }
 
-/* 🌟 优化：通过提高选择器特异性移除 !important */
 .base-input-field.text-xs-style {
   font-size: 0.72rem;
 }
@@ -291,7 +291,6 @@ defineExpose({
     }
   }
 
-  /* 🌟 优化：移动端同样通过嵌套提高特异性 */
   .base-input-field.text-xs-style {
     font-size: 0.8rem;
   }

@@ -46,7 +46,9 @@
       <template v-else-if="route.path === '/score'">
         <div class="header-title-zone">
           <span class="sidebar-title">乐谱列表</span>
-          <span class="sidebar-count-badge">{{ songStore.songs.length }}</span>
+          <BaseBadge variant="neutral" appearance="filled" size="xs">
+            {{ songStore.songs.length }}
+          </BaseBadge>
         </div>
 
         <GlobalTooltip placement="bottom" content="新建乐谱">
@@ -63,6 +65,9 @@
       @open-rename="groupModals.openRename"
       @open-delete="groupModals.openDelete"
       @open-move="groupModals.openMove"
+      @open-sort="groupModals.openSort"
+      @open-config-song="songModals.openConfig"
+      @open-clear-song="songModals.openClear"
     />
 
     <!-- 3. 底栏：统一提供数据备份与恢复 -->
@@ -85,11 +90,12 @@
 
   <!-- 4. 业务弹窗组件集 -->
   <GroupModalsContainer :group-modals="groupModals" />
-  <SongCreateModal :song-modals="songModals" />
+  <SongModalsContainer :song-modals="songModals" />
 </template>
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
+import BaseBadge from '@/components/BaseBadge.vue';
 import BaseInput from '@/components/BaseInput.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
@@ -104,7 +110,7 @@ import { ref, useTemplateRef } from 'vue';
 import { useRoute } from 'vue-router';
 import GroupModalsContainer from './GroupModalsContainer.vue';
 import LeftGroupList from './LeftGroupList.vue';
-import SongCreateModal from './SongCreateModal.vue';
+import SongModalsContainer from './SongModalsContainer.vue';
 
 defineOptions({ inheritAttrs: false });
 
@@ -184,16 +190,7 @@ const handleFileChange = (e: Event) => {
   font-weight: 800;
   color: var(--text-title);
   letter-spacing: -0.01em;
-}
-
-.sidebar-count-badge {
-  font-size: 0.6rem;
-  font-weight: 700;
-  padding: 0.05rem 0.35rem;
-  border-radius: 9999px;
-  background-color: var(--bg-body);
-  color: var(--text-disabled);
-  border: 1px solid var(--border-light);
+  white-space: nowrap;
 }
 
 .header-search-input {

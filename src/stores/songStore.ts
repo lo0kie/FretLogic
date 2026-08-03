@@ -1,15 +1,184 @@
-// === FILE: C:\Users\lookie\userspace\coding\fret-logic\src\stores\songStore.ts ===
-
 import type { Chord, Song } from '@/types';
 import { generateUUID } from '@/utils/validators';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { ref } from 'vue'; // 确保引入 ref
+import { ref } from 'vue';
+
+export interface ParsedSlotKey {
+  lineId: string;
+  type: 'char' | 'start' | 'end';
+  index: number;
+}
+
+export function parseSlotKey(slotKey: string | number): ParsedSlotKey | null {
+  const str = String(slotKey);
+  const match = str.match(/^line_(.+?)_(char|start|end)_(\d+)$/);
+  if (!match) return null;
+  return {
+    lineId: match[1],
+    type: match[2] as 'char' | 'start' | 'end',
+    index: parseInt(match[3], 10),
+  };
+}
+
+export function getEdgeChords(
+  chordMap: Record<string | number, Chord>,
+  lineId: string,
+  type: 'start' | 'end'
+): Chord[] {
+  const result: Chord[] = [];
+  let i = 0;
+  while (chordMap[`line_${lineId}_${type}_${i}`]) {
+    result.push(chordMap[`line_${lineId}_${type}_${i}`]);
+    i++;
+  }
+  return result;
+}
+
+export function setEdgeChords(
+  chordMap: Record<string | number, Chord>,
+  lineId: string,
+  type: 'start' | 'end',
+  chords: Chord[]
+): void {
+  let i = 0;
+  while (chordMap[`line_${lineId}_${type}_${i}`]) {
+    delete chordMap[`line_${lineId}_${type}_${i}`];
+    i++;
+  }
+  for (let j = i; j < i + 10; j++) {
+    delete chordMap[`line_${lineId}_${type}_${j}`];
+  }
+
+  chords.forEach((chord, idx) => {
+    chordMap[`line_${lineId}_${type}_${idx}`] = chord;
+  });
+}
+
+export function removeChordFromSlot(chordMap: Record<string | number, Chord>, slotKey: string | number): Chord | null {
+  const parsed = parseSlotKey(slotKey);
+  if (!parsed) {
+    const removed = chordMap[slotKey] || null;
+    delete chordMap[slotKey];
+    return removed;
+  }
+
+  const { lineId, type, index } = parsed;
+
+  if (type === 'char') {
+    const removed = chordMap[slotKey] || null;
+    delete chordMap[slotKey];
+    return removed;
+  } else {
+    const list = getEdgeChords(chordMap, lineId, type);
+    if (index < 0 || index >= list.length) {
+      return null;
+    }
+    const [removed] = list.splice(index, 1);
+    setEdgeChords(chordMap, lineId, type, list);
+    return removed;
+  }
+}
+
+export function bindNewChordToSlot(
+  chordMap: Record<string | number, Chord>,
+  slotKey: string | number,
+  chord: Chord
+): void {
+  const parsed = parseSlotKey(slotKey);
+  if (!parsed || parsed.type === 'char') {
+    chordMap[slotKey] = chord;
+    return;
+  }
+
+  const { lineId, type, index } = parsed;
+  const list = getEdgeChords(chordMap, lineId, type);
+
+  if (index >= list.length) {
+    if (type === 'start') {
+      list.unshift(chord);
+    } else {
+      list.push(chord);
+    }
+  } else {
+    list[index] = chord;
+  }
+
+  setEdgeChords(chordMap, lineId, type, list);
+}
+
+export function swapOrMoveSlotChords(
+  chordMap: Record<string | number, Chord>,
+  sourceKey: string | number,
+  targetKey: string | number
+): void {
+  if (sourceKey === targetKey) return;
+
+  const sourceParsed = parseSlotKey(sourceKey);
+  const targetParsed = parseSlotKey(targetKey);
+
+  if (!sourceParsed || !targetParsed) return;
+
+  if (
+    sourceParsed.lineId === targetParsed.lineId &&
+    sourceParsed.type === targetParsed.type &&
+    sourceParsed.type !== 'char'
+  ) {
+    const list = getEdgeChords(chordMap, sourceParsed.lineId, sourceParsed.type);
+    const srcIdx = sourceParsed.index;
+    const tgtIdx = targetParsed.index;
+
+    if (srcIdx >= 0 && srcIdx < list.length) {
+      const [movedChord] = list.splice(srcIdx, 1);
+      const insertIdx = Math.min(Math.max(0, tgtIdx), list.length);
+      list.splice(insertIdx, 0, movedChord);
+      setEdgeChords(chordMap, sourceParsed.lineId, sourceParsed.type, list);
+    }
+    return;
+  }
+
+  const peekChord = (parsed: ParsedSlotKey): Chord | null => {
+    if (parsed.type === 'char') {
+      return chordMap[`line_${parsed.lineId}_char_${parsed.index}`] || null;
+    }
+    const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
+    return list[parsed.index] || null;
+  };
+
+  const sourceChord = peekChord(sourceParsed);
+  if (!sourceChord) return;
+
+  const targetChord = peekChord(targetParsed);
+
+  removeChordFromSlot(chordMap, sourceKey);
+  if (targetChord) {
+    removeChordFromSlot(chordMap, targetKey);
+  }
+
+  insertChordAtParsedLocation(chordMap, targetParsed, sourceChord);
+
+  if (targetChord) {
+    insertChordAtParsedLocation(chordMap, sourceParsed, targetChord);
+  }
+}
+
+function insertChordAtParsedLocation(
+  chordMap: Record<string | number, Chord>,
+  parsed: ParsedSlotKey,
+  chord: Chord
+): void {
+  if (parsed.type === 'char') {
+    chordMap[`line_${parsed.lineId}_char_${parsed.index}`] = chord;
+  } else {
+    const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
+    const insertIdx = Math.min(Math.max(0, parsed.index), list.length);
+    list.splice(insertIdx, 0, chord);
+    setEdgeChords(chordMap, parsed.lineId, parsed.type, list);
+  }
+}
 
 export const useSongStore = defineStore('song', () => {
   const songs = useStorage<Song[]>('CHORD_LAB_SONGS_V1', [], localStorage);
-
-  // 🌟 新增：用于临时存放最近被删除的乐谱及其索引，供撤销使用
   const lastDeletedSongInfo = ref<{ song: Song; index: number } | null>(null);
 
   const createSong = (title: string): Song => {
@@ -21,6 +190,7 @@ export const useSongStore = defineStore('song', () => {
       playKey: 'C',
       capo: 0,
       chordMap: {},
+      lineIds: [],
     };
     songs.value.push(newSong);
     return newSong;
@@ -30,7 +200,6 @@ export const useSongStore = defineStore('song', () => {
     const index = songs.value.findIndex(s => s.id === id);
     if (index === -1) return;
 
-    // 记录被删除的曲谱及原位置
     lastDeletedSongInfo.value = {
       song: { ...songs.value[index] },
       index,
@@ -39,12 +208,10 @@ export const useSongStore = defineStore('song', () => {
     songs.value = songs.value.filter(s => s.id !== id);
   };
 
-  // 🌟 新增：执行撤销恢复
   const undoDeleteSong = () => {
     if (!lastDeletedSongInfo.value) return;
     const { song, index } = lastDeletedSongInfo.value;
 
-    // 插入回原来的位置，如果位置越界则直接 push
     if (index >= 0 && index <= songs.value.length) {
       songs.value.splice(index, 0, song);
     } else {
@@ -54,58 +221,45 @@ export const useSongStore = defineStore('song', () => {
     lastDeletedSongInfo.value = null;
   };
 
-  const updateSongLyrics = (id: string, lyrics: string) => {
+  const updateSongMeta = (
+    id: string,
+    payload: Partial<Pick<Song, 'title' | 'key' | 'playKey' | 'capo' | 'lyrics' | 'lineIds' | 'chordMap'>>
+  ) => {
     const target = songs.value.find(s => s.id === id);
-    if (target) {
-      target.lyrics = lyrics.replace(/[ \t\u3000]/g, '');
-    }
+    if (!target) return;
+
+    if (payload.title !== undefined) target.title = payload.title;
+    if (payload.key !== undefined) target.key = payload.key;
+    if (payload.playKey !== undefined) target.playKey = payload.playKey;
+    if (payload.capo !== undefined) target.capo = payload.capo;
+    if (payload.lyrics !== undefined) target.lyrics = payload.lyrics;
+    if (payload.lineIds !== undefined) target.lineIds = payload.lineIds;
+    if (payload.chordMap !== undefined) target.chordMap = payload.chordMap;
   };
 
   const setCharChord = (songId: string, slotKey: string | number, chord: Chord) => {
     const target = songs.value.find(s => s.id === songId);
     if (target) {
       if (!target.chordMap) target.chordMap = {};
-      target.chordMap[slotKey] = chord;
+      bindNewChordToSlot(target.chordMap, slotKey, chord);
+      target.chordMap = { ...target.chordMap };
     }
   };
 
   const removeCharChord = (songId: string, slotKey: string | number) => {
     const target = songs.value.find(s => s.id === songId);
-    if (!target || !target.chordMap || !target.chordMap[slotKey]) return;
+    if (!target || !target.chordMap) return;
 
-    const keyStr = String(slotKey);
-    if (keyStr.includes('_start_') || keyStr.includes('_end_')) {
-      const parts = keyStr.split('_');
-      const lineIdx = parts[1];
-      const type = parts[2];
-      const delIdx = parseInt(parts[3], 10);
+    removeChordFromSlot(target.chordMap, slotKey);
+    target.chordMap = { ...target.chordMap };
+  };
 
-      delete target.chordMap[slotKey];
+  const swapSongSlotChords = (songId: string, sourceKey: string | number, targetKey: string | number) => {
+    const target = songs.value.find(s => s.id === songId);
+    if (!target || !target.chordMap) return;
 
-      const remaining: Chord[] = [];
-      let i = 0;
-      while (true) {
-        const currentKey = `line_${lineIdx}_${type}_${i}`;
-        if (i !== delIdx) {
-          if (target.chordMap[currentKey]) {
-            remaining.push(target.chordMap[currentKey]);
-          }
-        }
-        if (target.chordMap[currentKey]) {
-          delete target.chordMap[currentKey];
-        } else if (i > delIdx + 5) {
-          break;
-        }
-        i++;
-        if (i > 20) break;
-      }
-
-      remaining.forEach((chord, newIdx) => {
-        target.chordMap[`line_${lineIdx}_${type}_${newIdx}`] = chord;
-      });
-    } else {
-      delete target.chordMap[slotKey];
-    }
+    swapOrMoveSlotChords(target.chordMap, sourceKey, targetKey);
+    target.chordMap = { ...target.chordMap };
   };
 
   const overwriteSongs = (newSongs: Song[]) => {
@@ -116,10 +270,11 @@ export const useSongStore = defineStore('song', () => {
     songs,
     createSong,
     deleteSong,
-    undoDeleteSong, // 🌟 导出撤销方法
-    updateSongLyrics,
+    undoDeleteSong,
+    updateSongMeta,
     setCharChord,
     removeCharChord,
+    swapSongSlotChords,
     overwriteSongs,
   };
 });

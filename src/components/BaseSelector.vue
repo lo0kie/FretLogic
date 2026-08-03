@@ -1,12 +1,23 @@
 <template>
-  <div ref="referenceRef" class="selector-trigger-bar" :class="{ 'is-active': isOpen }" @click="toggleDropdown">
+  <div
+    ref="referenceRef"
+    class="selector-trigger-bar"
+    :class="[`size-${size}`, { 'is-active': isOpen, 'is-disabled': disabled }]"
+    @click="toggleDropdown"
+  >
     <span class="label-zone" :class="[isNonDefault ? 'is-custom' : 'is-default']">
       <slot name="label" :selected="modelValue">
         {{ formattedLabel(modelValue) }}
       </slot>
     </span>
 
-    <X v-if="clearable && isNonDefault" :size="14" :stroke-width="2.5" class="clear-icon" @click.stop="handleClear" />
+    <X
+      v-if="clearable && isNonDefault && !disabled"
+      :size="14"
+      :stroke-width="2.5"
+      class="clear-icon"
+      @click.stop="handleClear"
+    />
 
     <ChevronDown :size="14" :stroke-width="2.5" class="arrow-icon" :class="{ 'rotate-180': isOpen }" />
   </div>
@@ -28,7 +39,8 @@
             @click="handleSelect(option)"
             class="selector-item"
             :class="{
-              'is-selected': modelValue === option,
+              'is-selected': modelValue === option || modelValue === getOptionValue(option),
+              'is-item-disabled': isOptionDisabled(option),
               'font-black': fontBlackItems,
               'font-bold': !fontBlackItems,
             }"
@@ -44,24 +56,37 @@
 </template>
 
 <script setup lang="ts" generic="T">
-import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue';
+import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
+import { autoUpdate, flip, size as floatingSize, offset, shift, useFloating } from '@floating-ui/vue';
 import { ChevronDown, X } from '@lucide/vue';
-import { onClickOutside } from '@vueuse/core'; // 🌟 引入 onClickOutside
+import { onClickOutside } from '@vueuse/core';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
+
+export interface SelectorOptionObject<T = any> {
+  label: string;
+  value: T;
+  disabled?: boolean;
+}
 
 const {
   options,
+  size = 'md',
   clearable = false,
+  disabled = false,
   defaultValue,
+  highlightNonDefault = false,
   fontBlackItems = false,
   visibleCount = 6,
   formatter,
   labelFormatter,
   optionFormatter,
 } = defineProps<{
-  options: T[];
+  options: (T | SelectorOptionObject<T>)[];
+  size?: 'sm' | 'md' | 'lg';
   clearable?: boolean;
+  disabled?: boolean;
   defaultValue?: T;
+  highlightNonDefault?: boolean;
   fontBlackItems?: boolean;
   visibleCount?: number;
   formatter?: (value: T) => string;
@@ -73,7 +98,6 @@ const modelValue = defineModel<T>({ required: true });
 
 const emit = defineEmits<{
   (e: 'clear'): void;
-  (e: 'wheel-change', direction: 'up' | 'down'): void;
 }>();
 
 const isOpen = ref(false);
@@ -81,20 +105,20 @@ const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const dropdownRef = useTemplateRef<HTMLDivElement>('dropdownRef');
 
-// ---------- 文本格式化计算 ----------
 const formattedLabel = (val: T): string => {
   if (labelFormatter) return labelFormatter(val);
   if (formatter) return formatter(val);
   return String(val ?? '');
 };
 
-const formattedOption = (opt: T): string => {
-  if (optionFormatter) return optionFormatter(opt);
-  if (formatter) return formatter(opt);
-  return String(opt ?? '');
+const formattedOption = (opt: T | SelectorOptionObject<T>): string => {
+  const value = getOptionValue(opt);
+
+  if (optionFormatter) return optionFormatter(value);
+  if (formatter) return formatter(value);
+  return String(value ?? '');
 };
 
-// ---------- 高度计算（与 CSS 保持同步） ----------
 const ITEM_HEIGHT = 1.9;
 const PADDING_Y = 0.25;
 const GAP = 0.15;
@@ -105,7 +129,6 @@ const dropdownMaxHeight = computed(() => {
   return `${height}rem`;
 });
 
-// ---------- Floating UI ----------
 const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   placement: 'bottom-start',
   strategy: 'fixed',
@@ -118,7 +141,7 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
     offset(6),
     flip(),
     shift({ padding: 8 }),
-    size({
+    floatingSize({
       apply({ rects, elements }) {
         Object.assign(elements.floating.style, {
           width: `${rects.reference.width}px`,
@@ -128,29 +151,24 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   ],
 });
 
-// ---------- 选项 DOM 引用 ----------
 const optionEls = useTemplateRef<HTMLElement[]>('optionEls');
 
-// ---------- 交互逻辑 ----------
 const toggleDropdown = () => {
+  if (disabled) return;
   isOpen.value = !isOpen.value;
 };
 
-const isNonDefault = computed(() => modelValue.value !== defaultValue);
+const isNonDefault = computed(
+  () => highlightNonDefault && defaultValue !== undefined && modelValue.value !== defaultValue
+);
 
 const handleClear = () => {
+  if (disabled) return;
   modelValue.value = defaultValue!;
   emit('clear');
   isOpen.value = false;
 };
 
-const handleSelect = (option: T) => {
-  modelValue.value = option;
-  isOpen.value = false;
-};
-
-// 🌟 优化：使用 onClickOutside 替代手动判断
-// 监听 referenceRef 的外部点击，忽略对 floatingRef 的点击
 onClickOutside(
   referenceRef,
   () => {
@@ -161,7 +179,33 @@ onClickOutside(
   { ignore: [floatingRef] }
 );
 
-// 打开时滚动到当前选中项
+watch(
+  () => disabled,
+  isDisabled => {
+    if (isDisabled) isOpen.value = false;
+  }
+);
+
+const getOptionValue = (opt: T | SelectorOptionObject<T>): T => {
+  if (opt && typeof opt === 'object' && 'value' in opt) {
+    return opt.value;
+  }
+  return opt as T;
+};
+
+const isOptionDisabled = (opt: T | SelectorOptionObject<T>): boolean => {
+  if (opt && typeof opt === 'object' && 'disabled' in opt) {
+    return Boolean(opt.disabled);
+  }
+  return false;
+};
+
+const handleSelect = (option: T | SelectorOptionObject<T>) => {
+  if (disabled || isOptionDisabled(option)) return;
+  modelValue.value = getOptionValue(option);
+  isOpen.value = false;
+};
+
 watch(isOpen, opened => {
   if (!opened) return;
 
@@ -201,10 +245,7 @@ watch(isOpen, opened => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
   user-select: none;
-  height: 2.2rem;
   border-radius: 9999px;
   cursor: pointer;
   background-color: var(--bg-body);
@@ -213,13 +254,46 @@ watch(isOpen, opened => {
   box-sizing: border-box;
   transition: @transition-fast;
 
-  &:hover {
+  &:hover:not(.is-disabled) {
     border-color: var(--border-base);
   }
 
   &.is-active {
     border-color: @primary;
     box-shadow: @focus-ring-primary;
+  }
+
+  &.is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: auto;
+
+    .label-zone,
+    .arrow-icon,
+    .clear-icon {
+      cursor: not-allowed;
+    }
+  }
+
+  &.size-sm {
+    height: v-bind(HEIGHT_SM);
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    font-size: 0.68rem;
+  }
+
+  &.size-md {
+    height: v-bind(HEIGHT_MD);
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+    font-size: 0.72rem;
+  }
+
+  &.size-lg {
+    height: v-bind(HEIGHT_LG);
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+    font-size: 0.78rem;
   }
 }
 
@@ -228,15 +302,14 @@ watch(isOpen, opened => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  white-space: nowrap;
 
   &.is-custom {
     color: var(--color-primary);
-    font-size: 0.78rem;
   }
 
   &.is-default {
     color: var(--text-title);
-    font-size: 0.75rem;
   }
 }
 
@@ -295,6 +368,7 @@ watch(isOpen, opened => {
   cursor: pointer;
   transition: @transition-fast;
   flex-shrink: 0;
+  white-space: nowrap;
 
   &:hover {
     background-color: var(--bg-panel-hover);
@@ -305,6 +379,17 @@ watch(isOpen, opened => {
     background-color: color-mix(in srgb, @primary, transparent 88%) !important;
     color: @primary !important;
     font-weight: 700;
+  }
+
+  &.is-item-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+
+    &:hover {
+      background-color: transparent;
+      color: var(--text-body);
+    }
   }
 }
 

@@ -3,12 +3,16 @@
     <div class="panel-header">
       <h3 class="panel-title">云端同步</h3>
 
-      <div class="env-badge" :title="`目标分支: ${settingsStore.githubBranch}`">
-        <span class="status-dot" :class="{ 'is-dev': isDevEnv }"></span>
-        <span class="env-text" :class="{ 'is-dev': isDevEnv }">
-          {{ isDevEnv ? 'DEV' : 'PROD' }}
-        </span>
-      </div>
+      <!-- 🌟 改用 BaseBadge 替换手写的 .env-badge 结构 -->
+      <BaseBadge
+        :variant="isDevEnv ? 'warning' : 'success'"
+        appearance="subtle"
+        size="xs"
+        show-dot
+        :title="`目标分支: ${settingsStore.githubBranch}`"
+      >
+        {{ isDevEnv ? 'DEV' : 'PROD' }}
+      </BaseBadge>
     </div>
 
     <GlobalTooltip content="GitHub Token" placement="top" class="full-width-tooltip">
@@ -51,6 +55,7 @@
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
+import BaseBadge from '@/components/BaseBadge.vue'; // 🌟 引入 BaseBadge
 import BaseInput from '@/components/BaseInput.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -108,34 +113,5 @@ const settingsStore = useSettingsStore();
 
 .full-width-tooltip {
   width: 100%;
-}
-
-.env-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  box-sizing: border-box;
-}
-
-.status-dot {
-  width: 0.35rem;
-  height: 0.35rem;
-  border-radius: 50%;
-  background-color: var(--color-success);
-
-  &.is-dev {
-    background-color: var(--color-warning);
-  }
-}
-
-.env-text {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--color-success);
-
-  &.is-dev {
-    color: var(--color-warning);
-  }
 }
 </style>

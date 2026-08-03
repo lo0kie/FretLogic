@@ -85,6 +85,6 @@ export const useUiStore = defineStore('ui', () => {
     pauseAllTimers,
     resumeAllTimers,
     isPreviewEnabled,
-    // isMobile,
+    isMobile,
   };
 });

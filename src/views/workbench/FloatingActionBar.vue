@@ -94,16 +94,5 @@ const isClearDisabled = computed(() => {
   opacity: 0.6;
 }
 
-.floating-bar-fade-enter-active,
-.floating-bar-fade-leave-active {
-  transition:
-    opacity 0.25s cubic-bezier(0.25, 1, 0.5, 1),
-    transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
-}
-
-.floating-bar-fade-enter-from,
-.floating-bar-fade-leave-to {
-  opacity: 0;
-  transform: translate(-50%, 20px) scale(0.95);
-}
+.fade-scale-transition(floating-bar-fade, ~'-50%, 20px', 0.95, ~'-50%, 0');
 </style>

@@ -24,15 +24,19 @@
         @dragstart.stop="emit('dragstart')"
         @dragend="emit('dragend')"
       >
-        <!-- 🌟 右上角快捷清除按钮 -->
-        <button type="button" class="remove-chord-btn" title="清除当前和弦" @click.stop="emit('remove', slotKey)">
+        <button
+          type="button"
+          class="remove-chord-btn"
+          title="清除当前和弦"
+          @click.stop.prevent="emit('remove', slotKey)"
+        >
           <X :size="12" :stroke-width="3" />
         </button>
 
         <span class="inline-chord-name">{{ chord.chordName }}</span>
         <Fretboard
           :interactive="false"
-          :scale="0.28"
+          :scale="0.28 * scoreEditor.fretboardScale"
           :strings="chord.strings"
           :capo="chord.capo"
           :fret-count="chord.fretCount"
@@ -43,7 +47,6 @@
       <span v-else-if="variant === 'add'" class="add-edge-placeholder" :title="addPlaceholderTitle">+和弦</span>
     </div>
 
-    <!-- 🌟 只有字符插槽才渲染底部字符 -->
     <template v-if="variant === 'char'">
       <span class="char-text">{{ char }}</span>
     </template>
@@ -52,6 +55,7 @@
 
 <script setup lang="ts">
 import Fretboard from '@/components/Fretboard.vue';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
 import { X } from '@lucide/vue';
 
@@ -64,6 +68,8 @@ defineProps<{
   isDropTarget: boolean;
   isDarkMode: boolean;
 }>();
+
+const scoreEditor = useScoreEditorStore();
 
 const emit = defineEmits<{
   (e: 'click'): void;
@@ -112,20 +118,25 @@ const emit = defineEmits<{
     }
   }
 
-  /* 🌟 行首行尾插槽样式控制 */
   &.edge-slot {
     opacity: 0.85;
 
-    /* 1. 存在和弦时：顶部对齐 */
     &.has-edge-chord {
       justify-content: flex-start;
 
       .chord-display-slot {
         align-items: flex-start;
       }
+
+      &::after {
+        content: '';
+        display: block;
+        width: 100%;
+        height: 1.15rem;
+        flex-shrink: 0;
+      }
     }
 
-    /* 2. "+和弦" 按钮插槽：垂直居中对齐 */
     &.add-btn-slot {
       opacity: 1;
       padding-left: 0.4rem;
@@ -142,7 +153,6 @@ const emit = defineEmits<{
     }
   }
 }
-
 .add-edge-placeholder {
   display: inline-flex;
   align-items: center;
@@ -258,7 +268,7 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   width: 100%;
-  font-size: 0.9rem;
+  font-size: calc(0.9rem * var(--score-font-scale, 1)); // 🌟 动态字号
   font-weight: 600;
   color: var(--text-title);
   line-height: 1.15rem;
@@ -266,6 +276,7 @@ const emit = defineEmits<{
   border-radius: 0;
   transition:
     color @duration-fast ease,
+    font-size @duration-fast ease,
     border-color @duration-fast ease;
   border-bottom: 1.5px solid transparent;
   box-sizing: border-box;
