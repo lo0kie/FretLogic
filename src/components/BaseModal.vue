@@ -8,7 +8,17 @@
         @mousedown="handleMaskMousedown"
         @click.self="handleMaskClick"
       >
-        <div class="modal-card" :class="width" @click.stop>
+        <div
+          ref="modalCardRef"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="title || '对话框'"
+          tabindex="-1"
+          class="modal-card"
+          :class="width"
+          @click.stop
+          @keydown="handleKeydownTrap"
+        >
           <h3 v-if="title" class="modal-title" :title="title">
             {{ title }}
           </h3>
@@ -41,7 +51,7 @@
 
 <script setup lang="ts">
 import { useEventListener, useScrollLock } from '@vueuse/core';
-import { watch } from 'vue';
+import { nextTick, onBeforeUnmount, useTemplateRef, watch } from 'vue';
 import ActionButton from './ActionButton.vue';
 
 defineOptions({ inheritAttrs: false });
@@ -72,19 +82,85 @@ const emit = defineEmits<{
 const visible = defineModel<boolean>('visible', { required: true });
 const isBodyLocked = useScrollLock(document.body);
 
+const modalCardRef = useTemplateRef<HTMLDivElement>('modalCardRef');
+let previousActiveElement: HTMLElement | null = null;
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// 🌟 1. 设置外层节点为 inert（禁掉主应用内所有的键盘/鼠标/读屏焦点）
+const setExternalInert = (isInert: boolean) => {
+  const appEl = document.getElementById('app') || (document.body.firstElementChild as HTMLElement);
+  if (!appEl) return;
+
+  if (isInert) {
+    appEl.setAttribute('inert', '');
+  } else {
+    appEl.removeAttribute('inert');
+  }
+};
+
 watch(
   visible,
-  isOpen => {
+  async isOpen => {
     isBodyLocked.value = isOpen;
+    setExternalInert(isOpen); // 🌟 核心：外层挂载/解挂 inert 属性
+
+    if (isOpen) {
+      previousActiveElement = document.activeElement as HTMLElement;
+
+      await nextTick();
+      if (!modalCardRef.value) return;
+
+      const focusables = modalCardRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+      if (focusables.length > 0) {
+        focusables[0].focus();
+      } else {
+        modalCardRef.value.focus();
+      }
+    } else {
+      previousActiveElement?.focus?.();
+      previousActiveElement = null;
+    }
   },
   { immediate: true }
 );
 
+// 🌟 2. Modal 内部 Tab 循环穿透卡死
+const handleKeydownTrap = (e: KeyboardEvent) => {
+  if (e.key !== 'Tab' || !modalCardRef.value) return;
+
+  const focusables = Array.from(modalCardRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+
+  if (focusables.length === 0) {
+    modalCardRef.value.focus();
+    return;
+  }
+
+  const firstEl = focusables[0];
+  const lastEl = focusables[focusables.length - 1];
+
+  if (e.shiftKey) {
+    if (document.activeElement === firstEl || document.activeElement === modalCardRef.value) {
+      e.preventDefault();
+      lastEl.focus();
+    }
+  } else {
+    if (document.activeElement === lastEl) {
+      e.preventDefault();
+      firstEl.focus();
+    }
+  }
+};
+
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   if (e.key === 'Escape' && visible.value) {
-    // 🌟 已修正为 visible.value
     handleCancel();
   }
+});
+
+onBeforeUnmount(() => {
+  setExternalInert(false);
 });
 
 const handleConfirm = () => {
@@ -96,7 +172,6 @@ const handleCancel = () => {
   visible.value = false;
 };
 
-// 🌟 新增：拦截拖拽关闭的逻辑
 let mousedownTarget: EventTarget | null = null;
 
 const handleMaskMousedown = (e: MouseEvent) => {
@@ -104,11 +179,9 @@ const handleMaskMousedown = (e: MouseEvent) => {
 };
 
 const handleMaskClick = (e: MouseEvent) => {
-  // 只有当 mousedown 和 click 的目标完全一致，且都是蒙版自身时才关闭
   if (closeOnMask && e.target === e.currentTarget && mousedownTarget === e.currentTarget) {
     handleCancel();
   }
-  // 状态复位
   mousedownTarget = null;
 };
 </script>
@@ -149,36 +222,37 @@ const handleMaskClick = (e: MouseEvent) => {
   transition:
     height @duration-base @bezier-standard,
     width @duration-base @bezier-standard;
+  outline: none;
 
   &.w-sm {
-    width: 16rem; /* 256px */
+    width: 16rem;
     max-width: 90vw;
   }
 
   &.w-md,
   &.w-80 {
-    width: 20rem; /* 320px */
+    width: 20rem;
     max-width: 90vw;
   }
 
   &.w-lg {
-    width: 28rem; /* 448px */
+    width: 28rem;
     max-width: 90vw;
   }
 
   &.w-large,
   &.w-xl {
-    width: 38rem; /* 608px */
+    width: 38rem;
     max-width: 90vw;
   }
 
   &.w-wide {
-    width: 52rem; /* 832px */
+    width: 52rem;
     max-width: 92vw;
   }
 
   &.w-full {
-    width: 64rem; /* 1024px */
+    width: 64rem;
     max-width: 95vw;
   }
 }

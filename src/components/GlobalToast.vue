@@ -1,16 +1,44 @@
 ﻿<template>
-  <div class="toast-global-container" @mouseenter="uiStore.pauseAllTimers" @mouseleave="uiStore.resumeAllTimers">
+  <div
+    class="toast-global-container"
+    role="region"
+    aria-label="系统通知"
+    @mouseenter="uiStore.pauseAllTimers"
+    @mouseleave="uiStore.resumeAllTimers"
+  >
     <TransitionGroup name="toast-transition">
-      <div v-for="item in uiStore.toasts" :key="item.id" class="toast-item-card" :class="getToastThemeClass(item.type)">
-        <Loader2 v-if="item.type === 'loading'" class="toast-loading-spinner" />
+      <div
+        v-for="item in uiStore.toasts"
+        :key="item.id"
+        class="toast-item-card"
+        :class="getToastThemeClass(item.type)"
+        :role="item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'"
+        :aria-live="item.type === 'error' || item.type === 'warning' ? 'assertive' : 'polite'"
+        :aria-atomic="true"
+      >
+        <Loader2 v-if="item.type === 'loading'" class="toast-loading-spinner" aria-hidden="true" />
         <span>{{ item.msg }}</span>
 
-        <button v-if="item.hasAction && item.onAction" @click="handleExecuteAction(item)" class="btn-toast-undo">
+        <button
+          v-wave
+          v-if="item.hasAction && item.onAction"
+          type="button"
+          @click="handleExecuteAction(item)"
+          class="btn-toast-undo"
+          :aria-label="`${item.actionText}操作`"
+        >
           {{ item.actionText }}
         </button>
 
-        <button @click="uiStore.removeToast(item.id)" class="btn-toast-close" title="关闭">
-          <X class="close-icon" stroke-width="3" />
+        <button
+          v-wave
+          type="button"
+          @click="uiStore.removeToast(item.id)"
+          class="btn-toast-close"
+          title="关闭"
+          aria-label="关闭通知"
+        >
+          <X class="close-icon" stroke-width="3" aria-hidden="true" />
         </button>
       </div>
     </TransitionGroup>
@@ -68,6 +96,11 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
   transition: all @duration-base @bezier-standard;
   white-space: nowrap;
   flex-shrink: 0;
+  outline: none;
+
+  &:focus-within {
+    box-shadow: @focus-ring-primary;
+  }
 }
 
 .btn-toast-close {
@@ -88,6 +121,13 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
   cursor: pointer;
   padding: 0;
   transition: @transition-fast;
+  outline: none;
+
+  &:focus-visible {
+    opacity: 1;
+    background-color: color-mix(in srgb, currentColor, transparent 80%);
+    box-shadow: 0 0 0 2px currentColor;
+  }
 
   &:hover {
     opacity: 1;
@@ -127,6 +167,13 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
   padding: 0;
   color: inherit;
   cursor: pointer;
+  outline: none;
+  border-radius: @radius-sm;
+
+  &:focus-visible {
+    opacity: 1;
+    box-shadow: 0 0 0 2px currentColor;
+  }
 
   &:hover {
     opacity: 1;
@@ -158,7 +205,6 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
   color: var(--text-title);
 }
 
-/* Vue TransitionGroup 平滑补位动画 */
 :deep(.toast-transition-enter-from) {
   opacity: 0;
   transform: translateY(-12px) scale(0.9);
@@ -178,7 +224,6 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
   transition: transform @duration-base @bezier-standard;
 }
 
-/* 📱 移动端放大与顶部居中对齐 */
 @media (max-width: 768px) {
   .toast-global-container {
     top: 1rem;
@@ -217,7 +262,6 @@ const getToastThemeClass = (type: string) => `theme-${type}`;
     height: 1rem;
   }
 
-  /* 📱 移动端动画重置为居中淡入 */
   :deep(.toast-transition-enter-from) {
     opacity: 0;
     transform: translateY(-12px) scale(0.95);

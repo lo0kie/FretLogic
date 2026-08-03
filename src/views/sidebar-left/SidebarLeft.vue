@@ -3,7 +3,7 @@
     <!-- 1. 规范化顶栏 -->
     <div class="panel-header">
       <!-- 工作台模式 Header -->
-      <template v-if="route.path === '/'">
+      <template v-if="route.path === '/workbench'">
         <BaseInput
           v-model="searchQuery"
           :disabled="chordStore.savedChordsList.length === 0"
@@ -68,6 +68,7 @@
       @open-sort="groupModals.openSort"
       @open-config-song="songModals.openConfig"
       @open-clear-song="songModals.openClear"
+      @open-delete-variants="groupModals.openChordVariantsDelete"
     />
 
     <!-- 3. 底栏：统一提供数据备份与恢复 -->

@@ -1,4 +1,4 @@
-﻿import type { Chord, GroupSortRule, GuitarStringEntity } from '@/types';
+﻿import type { Chord, GroupedChordCard, GroupSortRule, GuitarStringEntity } from '@/types';
 import { cloneDeep } from './dataParser';
 
 export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -105,15 +105,16 @@ export const getChordRootPitch = (chordName: string): number => {
 };
 
 export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey = 'C'): Chord[] => {
-  if (!rule || rule === 'CUSTOM') return chords;
+  const effectiveRule: GroupSortRule = rule && rule !== ('CUSTOM' as any) ? rule : 'ROOT_PITCH';
   const list = [...chords];
-  if (rule === 'NAME_ASC') {
+
+  if (effectiveRule === 'NAME_ASC') {
     return list.sort((a, b) => a.chordName.localeCompare(b.chordName));
   }
-  if (rule === 'ROOT_PITCH') {
+  if (effectiveRule === 'ROOT_PITCH') {
     return list.sort((a, b) => getChordRootPitch(a.chordName) - getChordRootPitch(b.chordName));
   }
-  if (rule === 'KEY_DEGREE') {
+  if (effectiveRule === 'KEY_DEGREE') {
     const keyPitch = ROOT_PITCH_MAP[sortKey] ?? 0;
     return list.sort((a, b) => {
       const pitchA = getChordRootPitch(a.chordName);
@@ -148,6 +149,34 @@ export const getKeySemitones = (key1: string, key2: string): number => {
   return diff;
 };
 
+export const groupChordsByName = (chords: Chord[]): GroupedChordCard[] => {
+  const map = new Map<string, Chord[]>();
+
+  chords.forEach(chord => {
+    const key = chord.chordName.trim().toLowerCase();
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key)!.push(chord);
+  });
+
+  const result: GroupedChordCard[] = [];
+
+  map.forEach(variants => {
+    variants.sort((a, b) => (a.capo ?? 0) - (b.capo ?? 0));
+
+    const mainChord = variants[0];
+    result.push({
+      mainChord,
+      variants,
+      hasVariants: variants.length > 1,
+      variantCount: variants.length,
+    });
+  });
+
+  return result;
+};
+
 export const transposePhysicalChord = (chord: Chord, semitones: number, newCapo?: number, shiftName = true): Chord => {
   if (semitones === 0 && (newCapo === undefined || newCapo === chord.capo)) return chord;
   const newChord = cloneDeep(chord);
@@ -171,6 +200,13 @@ export const transposePhysicalChord = (chord: Chord, semitones: number, newCapo?
   });
 
   newChord.id = 'c_' + Math.random().toString(36).substring(2, 10);
-  newChord.fingerprint = undefined;
+  newChord.fingerprint = computeChordFingerprint(newChord);
   return newChord;
+};
+
+export const computeChordFingerprint = (
+  chord: Pick<Chord, 'groupId' | 'chordName' | 'capo' | 'fretCount' | 'tuning' | 'strings'>
+): string => {
+  const strSig = chord.strings.map(s => `${s.fret}_${s.preferFlat ? 1 : 0}_${s.isRoot ? 1 : 0}`).join('|');
+  return `${chord.groupId}:${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${strSig}`;
 };

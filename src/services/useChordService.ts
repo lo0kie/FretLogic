@@ -5,6 +5,7 @@ import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
 import { copyElementToClipboard } from '@/utils/domExporter';
+import { computeChordFingerprint } from '@/utils/musicTheory';
 import { generateUUID } from '@/utils/validators';
 import { Ref, toRaw, unref } from 'vue';
 import { SortableEvent } from 'vue-draggable-plus';
@@ -54,8 +55,10 @@ export function useChordService() {
     chordStore.overwriteChords(updatedList);
   };
 
-  const triggerDeleteChord = (chord: Chord) => {
-    const updatedList = chordStore.savedChordsList.filter(c => c.id !== chord.id);
+  const triggerDeleteChords = (chords: Chord[]) => {
+    if (chords.length === 0) return;
+    const chordIds = new Set(chords.map(c => c.id));
+    const updatedList = chordStore.savedChordsList.filter(c => !chordIds.has(c.id));
     chordStore.overwriteChords(updatedList);
 
     songStore.songs.forEach(song => {
@@ -66,9 +69,11 @@ export function useChordService() {
         const boundChord = song.chordMap[key];
         if (!boundChord) return;
 
-        const isMatched =
-          boundChord.id === chord.id ||
-          (boundChord.fingerprint && chord.fingerprint && boundChord.fingerprint === chord.fingerprint);
+        const isMatched = chords.some(
+          chord =>
+            boundChord.id === chord.id ||
+            (boundChord.fingerprint && chord.fingerprint && boundChord.fingerprint === chord.fingerprint)
+        );
 
         if (isMatched) {
           delete song.chordMap[key];
@@ -81,7 +86,11 @@ export function useChordService() {
       }
     });
 
-    uiStore.toast.info(`已删除和弦 "${chord.chordName}"`, {
+    if (editorStore.editingId && chords.some(c => c.id === editorStore.editingId)) {
+      editorStore.resetEditor();
+    }
+
+    uiStore.toast.info(`已删除 ${chords.length} 个指法`, {
       actionText: '撤销',
       duration: 4000,
       onAction: () => {
@@ -89,6 +98,10 @@ export function useChordService() {
         uiStore.toast.success('已恢复刚才删除的和弦');
       },
     });
+  };
+
+  const triggerDeleteChord = (chord: Chord) => {
+    triggerDeleteChords([chord]);
   };
 
   const exportFretboardImage = async (
@@ -116,22 +129,6 @@ export function useChordService() {
     } finally {
       uiStore.isCopying = false;
     }
-  };
-
-  // 1. 物理特征码计算函数
-  const computeFingerprint = (chord: Omit<Chord, 'fingerprint'>): string => {
-    const strSig = chord.strings.map(s => `${s.fret}_${s.preferFlat ? 1 : 0}_${s.isRoot ? 1 : 0}`).join('|');
-    return `${chord.groupId}:${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${strSig}`;
-  };
-
-  // 2. 获取特征码：若没有，则计算并直接回写给原对象保存！
-  const getChordFingerprint = (chord: Chord): string => {
-    if (chord.fingerprint) return chord.fingerprint;
-
-    // 🌟 补存逻辑：旧数据第一次读取时计算并持久化赋值
-    const fp = computeFingerprint(chord);
-    chord.fingerprint = fp;
-    return fp;
   };
 
   const persistCurrentChord = () => {
@@ -166,16 +163,14 @@ export function useChordService() {
       tuning: editorStore.currentTuning,
     };
 
-    // 3. 计算最新的特征码
-    const newFingerprint = computeFingerprint(rawPayload);
+    const newFingerprint = computeChordFingerprint(rawPayload);
     const payload: Chord = {
       ...rawPayload,
       fingerprint: newFingerprint,
     };
 
-    // 4. 比对去重：调用 getChordFingerprint 会自动为没有特征码的旧数据补上并保存
     const isDuplicate = chordStore.savedChordsList.some(
-      existing => existing.id !== editorStore.editingId && getChordFingerprint(existing) === newFingerprint
+      existing => existing.id !== editorStore.editingId && existing.fingerprint === newFingerprint
     );
 
     if (isDuplicate) {
@@ -200,6 +195,7 @@ export function useChordService() {
     executeGroupToggle,
     handleChordSort,
     triggerDeleteChord,
+    triggerDeleteChords,
     exportFretboardImage,
     persistCurrentChord,
   };

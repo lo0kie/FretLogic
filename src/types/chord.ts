@@ -21,7 +21,7 @@ export type GuitarStringsModel = [
   GuitarStringEntity,
 ];
 
-export type GroupSortRule = 'CUSTOM' | 'ROOT_PITCH' | 'KEY_DEGREE' | 'NAME_ASC';
+export type GroupSortRule = 'ROOT_PITCH' | 'KEY_DEGREE' | 'NAME_ASC';
 
 export interface Chord {
   id: string;
@@ -31,19 +31,26 @@ export interface Chord {
   capo: number;
   groupId: string;
   tuning: TuningEnum;
-  fingerprint?: string;
+  fingerprint: string;
 }
 
 export interface Group {
   id: string;
   name: string;
   collapsed: boolean;
-  sortRule?: GroupSortRule;
+  sortRule: GroupSortRule;
   sortKey?: string;
 }
 
 export interface ImportExportPayload {
   groups: Group[];
   chords: Chord[];
-  songs?: Song[];
+  songs: Song[];
+}
+
+export interface GroupedChordCard {
+  mainChord: Chord;
+  variants: Chord[];
+  hasVariants: boolean;
+  variantCount: number;
 }

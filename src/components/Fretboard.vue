@@ -27,9 +27,17 @@
               width: 'auto',
             }"
           >
+            <!-- 🌟 1. 动态 tabindex 与 ARIA 无障碍属性 -->
             <button
+              v-wave
+              :tabindex="interactive && str.fret <= 0 ? 0 : -1"
+              role="button"
+              :aria-label="getOpenStringAriaLabel(sIdx, str)"
+              :aria-disabled="!interactive || str.fret > 0"
               @click.stop="handleLocalToggleOpenString(sIdx)"
               @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
+              @keydown.enter.prevent.stop="handleLocalToggleOpenString(sIdx)"
+              @keydown.space.prevent.stop="handleLocalToggleOpenString(sIdx)"
               class="open-string-btn"
               :class="[
                 str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available',
@@ -39,7 +47,7 @@
               :style="getOpenStringStyle(str, isDarkMode)"
             >
               <template v-if="str.fret <= 0">
-                <X v-if="isMuted(str)" class="mute-icon" stroke-width="3" />
+                <X v-if="isMuted(str)" class="mute-icon" stroke-width="3" aria-hidden="true" />
                 <span v-else-if="isOpen(str)" class="open-note-text">
                   {{ calcNoteLabel(sIdx, 0, capo, str.preferFlat, activeBaseStrings) }}
                 </span>
@@ -59,6 +67,7 @@
         :is-mobile="uiStore.isMobile"
         :string-x-positions="stringXPositions"
         :hover-point="hoverPoint"
+        :fret-number-size="fretNumberSize"
         @toggle-pitch="handleTogglePitchName"
       />
     </div>
@@ -86,8 +95,15 @@ const props = withDefaults(
     isDarkMode?: boolean;
     interactive?: boolean;
     scale?: number;
+    fretNumberSize?: 'sm' | 'md' | 'lg';
   }>(),
-  { activeBaseStrings: () => DEFAULT_TUNING_MAPPING, isDarkMode: false, interactive: true, scale: 1.0 }
+  {
+    activeBaseStrings: () => DEFAULT_TUNING_MAPPING,
+    isDarkMode: false,
+    interactive: true,
+    scale: 1.0,
+    fretNumberSize: 'md',
+  }
 );
 
 const emit = defineEmits<{
@@ -110,6 +126,18 @@ const {
   handleLocalToggleOpenString,
   handleTogglePitchName,
 } = useFretboardInteraction(props, emit);
+
+const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) => {
+  const stringNum = 6 - sIdx;
+  if (str.fret > 0) {
+    return `第 ${stringNum} 弦（已按第 ${str.fret} 品）`;
+  }
+  if (isMuted(str)) {
+    return `第 ${stringNum} 弦（静音，点击切换为空弦）`;
+  }
+  const noteName = calcNoteLabel(sIdx, 0, props.capo, str.preferFlat, props.activeBaseStrings);
+  return `第 ${stringNum} 弦（空弦 ${noteName}，点击切换为静音）`;
+};
 </script>
 
 <style scoped lang="less">
@@ -150,8 +178,8 @@ const {
 }
 
 .open-string-btn {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.4rem;
+  height: 2.4rem;
   box-sizing: border-box;
   box-shadow: @shadow-sm;
   display: flex;
@@ -164,6 +192,13 @@ const {
   padding: 0;
   cursor: pointer;
   transition: @transition-fast;
+  outline: none;
+
+  /* 🌟 键盘 Tab 聚焦高亮圈 */
+  &:focus-visible {
+    box-shadow: @focus-ring-primary;
+    border-color: var(--color-primary);
+  }
 
   &.allow-events {
     pointer-events: auto;
@@ -177,13 +212,14 @@ const {
     transform: scale(0.92);
   }
 
+  /* 🌟 3. 当已按品时，屏蔽 pointer-events 与 focus 响应 */
   &.is-fret-pressed {
     opacity: 0 !important;
     transform: scale(1) !important;
     background-color: transparent !important;
     border-color: transparent !important;
     box-shadow: none !important;
-    pointer-events: auto !important;
+    pointer-events: none !important;
   }
 
   &.is-muted-status {
@@ -200,15 +236,15 @@ const {
 }
 
 .mute-icon {
-  width: 1.125rem;
-  height: 1.125rem;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 .open-note-text {
   display: inline-block;
   line-height: 1;
   font-weight: 900;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   letter-spacing: -0.05em;
 }
 

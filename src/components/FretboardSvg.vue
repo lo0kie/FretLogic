@@ -5,8 +5,10 @@
     :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
     style="overflow: visible"
     class="fretboard-svg"
+    role="img"
+    :aria-label="`吉他指板图，共 ${fretCount} 品${capo > 0 ? `，变调夹 Capo ${capo} 品` : ''}`"
   >
-    <g v-memo="[fretCount, isDarkMode, capo]">
+    <g v-memo="[fretCount, isDarkMode, capo, fretNumberSize]">
       <line
         v-for="s in 6"
         :key="'string-' + s"
@@ -50,16 +52,17 @@
         text-anchor="middle"
         dominant-baseline="central"
         dy="-2px"
-        font-size="28"
+        :font-size="fretFontSize"
         font-weight="900"
         :fill="isDarkMode ? '#e2e8f0' : '#475569'"
         style="pointer-events: none"
+        aria-hidden="true"
       >
         {{ capo > 0 ? capo + i : i }}
       </text>
     </g>
 
-    <g v-if="showPredictiveHover" class="finger-predictive">
+    <g v-if="showPredictiveHover" class="finger-predictive" aria-hidden="true">
       <circle
         :cx="stringXPositions[hoverPoint!.stringIndex]"
         :cy="(hoverPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
@@ -84,12 +87,17 @@
       <g
         v-if="str.fret > 0 && str.fret <= fretCount"
         :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
+        :role="interactive ? 'button' : undefined"
+        :tabindex="interactive ? 0 : undefined"
+        :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings)}`"
         @dblclick.prevent.stop="emit('toggle-pitch', sIdx)"
+        @keydown.enter.prevent.stop="interactive && emit('toggle-pitch', sIdx)"
+        @keydown.space.prevent.stop="interactive && emit('toggle-pitch', sIdx)"
       >
         <circle
           :cx="stringXPositions[sIdx]"
           :cy="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-          r="28"
+          r="30"
           :fill="getFingerColor(str, isDarkMode)"
           class="finger-circle"
           :class="{ 'is-root-glow': str.isRoot }"
@@ -99,11 +107,12 @@
           :y="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
           text-anchor="middle"
           dy="0.36em"
-          font-size="24"
+          font-size="30"
           font-weight="900"
           :fill="getFingerTextColor(str, isDarkMode)"
           class="finger-text"
           style="pointer-events: none"
+          aria-hidden="true"
         >
           {{ calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings) }}
         </text>
@@ -119,23 +128,38 @@ import { getFingerColor, getFingerTextColor } from '@/utils/fretboardVisuals';
 import { calcNoteLabel } from '@/utils/musicTheory';
 import { computed } from 'vue';
 
-const props = defineProps<{
-  strings: GuitarStringsModel;
-  fretCount: number;
-  capo: number;
-  activeBaseStrings: readonly number[];
-  isDarkMode: boolean;
-  interactive: boolean;
-  isMobile: boolean;
-  stringXPositions: number[];
-  hoverPoint: { stringIndex: number; fretIndex: number } | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    strings: GuitarStringsModel;
+    fretCount: number;
+    capo: number;
+    activeBaseStrings: readonly number[];
+    isDarkMode: boolean;
+    interactive: boolean;
+    isMobile: boolean;
+    stringXPositions: number[];
+    hoverPoint: { stringIndex: number; fretIndex: number } | null;
+    fretNumberSize?: 'sm' | 'md' | 'lg';
+  }>(),
+  { fretNumberSize: 'md' }
+);
 
 const emit = defineEmits<{
   (e: 'toggle-pitch', stringIndex: number): void;
 }>();
 
-// 🌟 预测性悬浮圆环：仅桌面端、可交互、且指针位置落在有效品格范围内时显示
+const fretFontSize = computed(() => {
+  switch (props.fretNumberSize) {
+    case 'sm':
+      return 20;
+    case 'lg':
+      return 40;
+    case 'md':
+    default:
+      return 30;
+  }
+});
+
 const showPredictiveHover = computed(() => {
   const hp = props.hoverPoint;
   return (
@@ -166,22 +190,25 @@ const showPredictiveHover = computed(() => {
 .finger-interactive {
   cursor: pointer;
   pointer-events: auto;
+  outline: none;
+
+  &:focus-visible {
+    .finger-circle {
+      stroke: var(--color-primary);
+      stroke-width: 4px;
+    }
+  }
 }
 
-// 🌟 finger-predictive 只在 interactive=true 时渲染，
-// cursor 已由父级 .fretboard-container.is-interactive 继承，这里不再重复声明
 .finger-predictive {
   pointer-events: none;
 }
 
-// 🌟 pointer-events 会从父级 .fretboard-container.is-disabled 继承为 none，
-// 这里不用再声明 pointer-events，只保留 cursor 覆盖即可
 .finger-disabled {
   cursor: default;
 }
 
 .finger-circle {
-  /* 移除 fill 的渐变动画，确保高频点击状态切换时不会出现颜色插值闪白 */
   transition: filter @duration-fast ease;
   filter: var(--finger-shadow);
 

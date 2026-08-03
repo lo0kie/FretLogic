@@ -1,11 +1,6 @@
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { onBeforeUnmount, ref } from 'vue';
 
-/**
- * 歌词-和弦格子的拖拽换位逻辑。
- * 从 ScoreInteractiveArea.vue 抽出，方便单独复用/测试，
- * 并把 body.is-global-dragging 的清理收敛到 onBeforeUnmount，避免遗漏。
- */
 export function useLyricsDragDrop() {
   const scoreEditor = useScoreEditorStore();
 
@@ -18,7 +13,6 @@ export function useLyricsDragDrop() {
     }
   };
 
-  // 用于容器级 @dragover，保证整行都能接住拖拽指针（否则浏览器默认不允许 drop）
   const handleGlobalDragOver = (e: DragEvent) => {
     setMoveEffect(e);
   };
