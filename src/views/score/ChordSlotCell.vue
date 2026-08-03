@@ -8,8 +8,15 @@
       'has-chord': variant === 'char' && Boolean(chord),
       'has-edge-chord': variant === 'edge' && Boolean(chord),
     }"
+    role="button"
+    tabindex="0"
+    :aria-label="ariaLabelText"
     :title="variant === 'char' ? (chord ? '点击更换或清除和弦' : '点击添加和弦') : undefined"
     @click="emit('click')"
+    @keydown.enter.prevent="emit('click')"
+    @keydown.space.prevent="emit('click')"
+    @keydown.delete.prevent="chord && emit('remove', slotKey)"
+    @keydown.backspace.prevent="chord && emit('remove', slotKey)"
     @dragover.prevent="emit('dragover', $event)"
     @dragleave="emit('dragleave', $event)"
     @drop="emit('drop')"
@@ -28,9 +35,10 @@
           type="button"
           class="remove-chord-btn"
           title="清除当前和弦"
+          aria-label="清除当前和弦"
           @click.stop.prevent="emit('remove', slotKey)"
         >
-          <X :size="12" :stroke-width="3" />
+          <X :size="12" :stroke-width="3" aria-hidden="true" />
         </button>
 
         <span class="inline-chord-name">{{ chord.chordName }}</span>
@@ -61,8 +69,9 @@ import Fretboard from '@/components/Fretboard.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
 import { X } from '@lucide/vue';
+import { computed } from 'vue';
 
-defineProps<{
+const props = defineProps<{
   slotKey: string | number;
   chord?: Chord;
   char?: string;
@@ -83,6 +92,18 @@ const emit = defineEmits<{
   (e: 'dragleave', ev: DragEvent): void;
   (e: 'drop'): void;
 }>();
+
+/** 🌟 生成精准的无障碍描述 */
+const ariaLabelText = computed(() => {
+  if (props.variant === 'add') {
+    return '添加边缘和弦槽位';
+  }
+  const charDisplay = props.char === ' ' ? '空格' : props.char || '边缘槽位';
+  if (props.chord) {
+    return `字符 ${charDisplay}，当前分配和弦 ${props.chord.chordName}，按 Enter 更换，按 Delete 清除`;
+  }
+  return `字符 ${charDisplay}，未分配和弦，按 Enter 添加`;
+});
 </script>
 
 <style scoped lang="less">
@@ -102,6 +123,18 @@ const emit = defineEmits<{
     box-shadow @duration-fast ease;
   position: relative;
   cursor: pointer;
+  outline: none;
+
+  /* 🌟 Tab 键聚焦高亮 */
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--color-primary);
+    background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
+
+    .remove-chord-btn {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
 
   &:hover {
     background-color: color-mix(in srgb, var(--color-primary), transparent 88%);
@@ -246,6 +279,15 @@ const emit = defineEmits<{
   transition: @transition-fast;
   z-index: 5;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  outline: none;
+
+  &:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+    box-shadow:
+      0 0 0 2px #ffffff,
+      0 0 0 4px var(--color-danger);
+  }
 
   &:hover {
     transform: scale(1.05);

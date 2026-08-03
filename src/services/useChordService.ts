@@ -118,17 +118,14 @@ export function useChordService() {
     }
   };
 
-  // 1. 物理特征码计算函数
   const computeFingerprint = (chord: Omit<Chord, 'fingerprint'>): string => {
     const strSig = chord.strings.map(s => `${s.fret}_${s.preferFlat ? 1 : 0}_${s.isRoot ? 1 : 0}`).join('|');
     return `${chord.groupId}:${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${strSig}`;
   };
 
-  // 2. 获取特征码：若没有，则计算并直接回写给原对象保存！
   const getChordFingerprint = (chord: Chord): string => {
     if (chord.fingerprint) return chord.fingerprint;
 
-    // 🌟 补存逻辑：旧数据第一次读取时计算并持久化赋值
     const fp = computeFingerprint(chord);
     chord.fingerprint = fp;
     return fp;
@@ -166,14 +163,12 @@ export function useChordService() {
       tuning: editorStore.currentTuning,
     };
 
-    // 3. 计算最新的特征码
     const newFingerprint = computeFingerprint(rawPayload);
     const payload: Chord = {
       ...rawPayload,
       fingerprint: newFingerprint,
     };
 
-    // 4. 比对去重：调用 getChordFingerprint 会自动为没有特征码的旧数据补上并保存
     const isDuplicate = chordStore.savedChordsList.some(
       existing => existing.id !== editorStore.editingId && getChordFingerprint(existing) === newFingerprint
     );

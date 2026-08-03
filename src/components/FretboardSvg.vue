@@ -5,6 +5,8 @@
     :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
     style="overflow: visible"
     class="fretboard-svg"
+    role="img"
+    :aria-label="`吉他指板图，共 ${fretCount} 品${capo > 0 ? `，变调夹 Capo ${capo} 品` : ''}`"
   >
     <g v-memo="[fretCount, isDarkMode, capo, fretNumberSize]">
       <line
@@ -54,12 +56,13 @@
         font-weight="900"
         :fill="isDarkMode ? '#e2e8f0' : '#475569'"
         style="pointer-events: none"
+        aria-hidden="true"
       >
         {{ capo > 0 ? capo + i : i }}
       </text>
     </g>
 
-    <g v-if="showPredictiveHover" class="finger-predictive">
+    <g v-if="showPredictiveHover" class="finger-predictive" aria-hidden="true">
       <circle
         :cx="stringXPositions[hoverPoint!.stringIndex]"
         :cy="(hoverPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
@@ -84,7 +87,12 @@
       <g
         v-if="str.fret > 0 && str.fret <= fretCount"
         :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
+        :role="interactive ? 'button' : undefined"
+        :tabindex="interactive ? 0 : undefined"
+        :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings)}`"
         @dblclick.prevent.stop="emit('toggle-pitch', sIdx)"
+        @keydown.enter.prevent.stop="interactive && emit('toggle-pitch', sIdx)"
+        @keydown.space.prevent.stop="interactive && emit('toggle-pitch', sIdx)"
       >
         <circle
           :cx="stringXPositions[sIdx]"
@@ -104,6 +112,7 @@
           :fill="getFingerTextColor(str, isDarkMode)"
           class="finger-text"
           style="pointer-events: none"
+          aria-hidden="true"
         >
           {{ calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings) }}
         </text>
@@ -130,7 +139,7 @@ const props = withDefaults(
     isMobile: boolean;
     stringXPositions: number[];
     hoverPoint: { stringIndex: number; fretIndex: number } | null;
-    fretNumberSize?: 'sm' | 'md' | 'lg'; // 🌟 新增尺寸控制参数
+    fretNumberSize?: 'sm' | 'md' | 'lg';
   }>(),
   { fretNumberSize: 'md' }
 );
@@ -139,16 +148,15 @@ const emit = defineEmits<{
   (e: 'toggle-pitch', stringIndex: number): void;
 }>();
 
-// 🌟 新增：计算动态字体大小预设值
 const fretFontSize = computed(() => {
   switch (props.fretNumberSize) {
     case 'sm':
-      return 20; // 较小的品格数字
+      return 20;
     case 'lg':
-      return 40; // 较大的品格数字
+      return 40;
     case 'md':
     default:
-      return 30; // 原本的默认值
+      return 30;
   }
 });
 
@@ -166,8 +174,6 @@ const showPredictiveHover = computed(() => {
 });
 </script>
 
-<!-- <style> 保持不变 -->
-
 <style scoped lang="less">
 @import '@/assets/tokens.module.less';
 
@@ -184,22 +190,25 @@ const showPredictiveHover = computed(() => {
 .finger-interactive {
   cursor: pointer;
   pointer-events: auto;
+  outline: none;
+
+  &:focus-visible {
+    .finger-circle {
+      stroke: var(--color-primary);
+      stroke-width: 4px;
+    }
+  }
 }
 
-// 🌟 finger-predictive 只在 interactive=true 时渲染，
-// cursor 已由父级 .fretboard-container.is-interactive 继承，这里不再重复声明
 .finger-predictive {
   pointer-events: none;
 }
 
-// 🌟 pointer-events 会从父级 .fretboard-container.is-disabled 继承为 none，
-// 这里不用再声明 pointer-events，只保留 cursor 覆盖即可
 .finger-disabled {
   cursor: default;
 }
 
 .finger-circle {
-  /* 移除 fill 的渐变动画，确保高频点击状态切换时不会出现颜色插值闪白 */
   transition: filter @duration-fast ease;
   filter: var(--finger-shadow);
 

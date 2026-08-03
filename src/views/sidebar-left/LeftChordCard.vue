@@ -2,15 +2,20 @@
   <GlobalTooltip placement="top">
     <GlobalContextMenu ref="contextMenuRef" :items="menuItems">
       <div class="chord-card-frame" :title="chord.chordName">
+        <!-- 🌟 1. 语义化与键盘支持：增加 role="button", tabindex="0", aria-label 与 Space 按键触发 -->
         <div
           class="chord-thumb-card"
           :class="{
             'is-editing': isEditing,
             'is-context-open': isMenuOpen,
           }"
+          role="button"
           tabindex="0"
+          :aria-pressed="isEditing"
+          :aria-label="`和弦 ${chord.chordName}${isEditing ? '（当前正在编辑）' : ''}`"
           @click="$emit('click')"
           @keydown.enter.prevent.stop="e => (e.target as HTMLElement).click()"
+          @keydown.space.prevent.stop="e => (e.target as HTMLElement).click()"
         >
           <BaseMarquee class="chord-marquee-wrapper">
             <span class="chord-name-text">
@@ -105,6 +110,12 @@ const menuItems = computed<ContextMenuItem[]>(() => [
     box-shadow: 0 0 0 1px var(--border-base);
   }
 
+  /* 🌟 2. Tab 键聚焦视觉高亮 */
+  &:focus-visible {
+    border-color: @primary;
+    box-shadow: @focus-ring-primary;
+  }
+
   &.is-editing {
     background-color: color-mix(in srgb, @primary, transparent 90%);
     border-color: @primary !important;
@@ -130,7 +141,6 @@ const menuItems = computed<ContextMenuItem[]>(() => [
   color: var(--text-body);
 }
 
-/* 📱 移动端放大与触控优化 */
 @media (max-width: 768px) {
   .chord-card-frame,
   .chord-thumb-card {

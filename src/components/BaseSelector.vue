@@ -1,9 +1,15 @@
 <template>
+  <!-- 1. 触发条：移除 .prevent.stop，改用函数内精细化拦截 -->
   <div
     ref="referenceRef"
+    tabindex="0"
+    role="combobox"
+    :aria-expanded="isOpen"
+    aria-haspopup="listbox"
     class="selector-trigger-bar"
     :class="[`size-${size}`, { 'is-active': isOpen, 'is-disabled': disabled }]"
     @click="toggleDropdown"
+    @keydown="handleTriggerKeydown"
   >
     <span class="label-zone" :class="[isNonDefault ? 'is-custom' : 'is-default']">
       <slot name="label" :selected="modelValue">
@@ -16,6 +22,7 @@
       :size="14"
       :stroke-width="2.5"
       class="clear-icon"
+      tabindex="-1"
       @click.stop="handleClear"
     />
 
@@ -23,7 +30,14 @@
   </div>
 
   <Teleport to="body">
-    <div v-if="isOpen" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
+    <div
+      v-if="isOpen"
+      v-on-click-outside="[() => (isOpen = false), { ignore: [referenceRef] }]"
+      ref="floatingRef"
+      :style="floatingStyles"
+      class="floating-position-wrapper"
+      data-floating-layer
+    >
       <Transition
         enter-from-class="dropdown-enter-from"
         leave-to-class="dropdown-leave-to"
@@ -31,12 +45,23 @@
         leave-active-class="dropdown-leave-active"
         appear
       >
-        <div ref="dropdownRef" class="selector-dropdown-box no-scrollbar" :style="{ maxHeight: dropdownMaxHeight }">
+        <!-- 2. 下拉容器 -->
+        <div
+          ref="dropdownRef"
+          role="listbox"
+          tabindex="-1"
+          class="selector-dropdown-box no-scrollbar"
+          :style="{ maxHeight: dropdownMaxHeight }"
+          @keydown="handleDropdownKeydown"
+        >
+          <!-- 3. 选项节点：移除模板行的 @keydown.esc.prevent.stop -->
           <div
             v-for="(option, index) in options"
             :key="index"
             ref="optionEls"
-            @click="handleSelect(option)"
+            role="option"
+            :tabindex="isOptionDisabled(option) ? -1 : 0"
+            :aria-selected="modelValue === option || modelValue === getOptionValue(option)"
             class="selector-item"
             :class="{
               'is-selected': modelValue === option || modelValue === getOptionValue(option),
@@ -44,6 +69,9 @@
               'font-black': fontBlackItems,
               'font-bold': !fontBlackItems,
             }"
+            @click="handleSelect(option)"
+            @keydown.enter.prevent.stop="handleSelect(option)"
+            @keydown.space.prevent.stop="handleSelect(option)"
           >
             <slot name="option" :option="option" :index="index">
               {{ formattedOption(option) }}
@@ -59,7 +87,7 @@
 import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
 import { autoUpdate, flip, size as floatingSize, offset, shift, useFloating } from '@floating-ui/vue';
 import { ChevronDown, X } from '@lucide/vue';
-import { onClickOutside } from '@vueuse/core';
+import { vOnClickOutside } from '@vueuse/components';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 
 export interface SelectorOptionObject<T = any> {
@@ -104,6 +132,7 @@ const isOpen = ref(false);
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const dropdownRef = useTemplateRef<HTMLDivElement>('dropdownRef');
+const optionEls = useTemplateRef<HTMLElement[]>('optionEls');
 
 const formattedLabel = (val: T): string => {
   if (labelFormatter) return labelFormatter(val);
@@ -151,8 +180,6 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   ],
 });
 
-const optionEls = useTemplateRef<HTMLElement[]>('optionEls');
-
 const toggleDropdown = () => {
   if (disabled) return;
   isOpen.value = !isOpen.value;
@@ -167,17 +194,8 @@ const handleClear = () => {
   modelValue.value = defaultValue!;
   emit('clear');
   isOpen.value = false;
+  referenceRef.value?.focus();
 };
-
-onClickOutside(
-  referenceRef,
-  () => {
-    if (isOpen.value) {
-      isOpen.value = false;
-    }
-  },
-  { ignore: [floatingRef] }
-);
 
 watch(
   () => disabled,
@@ -204,6 +222,51 @@ const handleSelect = (option: T | SelectorOptionObject<T>) => {
   if (disabled || isOptionDisabled(option)) return;
   modelValue.value = getOptionValue(option);
   isOpen.value = false;
+  referenceRef.value?.focus();
+};
+
+// 🌟 精准按键拦截：仅在需要时 prevent/stop，不误伤 Modal
+const handleTriggerKeydown = (e: KeyboardEvent) => {
+  if (disabled) return;
+
+  if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+    e.preventDefault();
+    if (!isOpen.value) {
+      isOpen.value = true;
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      isOpen.value = false;
+    }
+  } else if (e.key === 'Escape' && isOpen.value) {
+    e.preventDefault();
+    e.stopPropagation();
+    isOpen.value = false;
+  }
+  // 若 isOpen 为 false 且按下 Escape，不拦截，事件向上冒泡给 Modal 关闭自身
+};
+
+const handleDropdownKeydown = (e: KeyboardEvent) => {
+  if (!isOpen.value || !optionEls.value) return;
+
+  const activeElement = document.activeElement as HTMLElement;
+  const currentIndex = optionEls.value.indexOf(activeElement);
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const nextIdx = currentIndex < optionEls.value.length - 1 ? currentIndex + 1 : 0;
+    optionEls.value[nextIdx]?.focus();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const prevIdx = currentIndex > 0 ? currentIndex - 1 : optionEls.value.length - 1;
+    optionEls.value[prevIdx]?.focus();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    isOpen.value = false;
+    referenceRef.value?.focus();
+  } else if (e.key === 'Tab') {
+    isOpen.value = false;
+    referenceRef.value?.focus();
+  }
 };
 
 watch(isOpen, opened => {
@@ -211,8 +274,13 @@ watch(isOpen, opened => {
 
   nextTick(() => {
     const container = dropdownRef.value;
-    const idx = options.indexOf(modelValue.value);
-    const targetElement = idx !== -1 ? optionEls.value?.[idx] : null;
+    const idx = options.findIndex(opt => getOptionValue(opt) === modelValue.value);
+    const targetIdx = idx !== -1 ? idx : 0;
+    const targetElement = optionEls.value?.[targetIdx];
+
+    if (targetElement) {
+      targetElement.focus();
+    }
 
     if (!container || !targetElement) return;
 
@@ -253,11 +321,13 @@ watch(isOpen, opened => {
   color: var(--text-title);
   box-sizing: border-box;
   transition: @transition-fast;
+  outline: none;
 
   &:hover:not(.is-disabled) {
     border-color: var(--border-base);
   }
 
+  &:focus-visible,
   &.is-active {
     border-color: @primary;
     box-shadow: @focus-ring-primary;
@@ -352,6 +422,7 @@ watch(isOpen, opened => {
   padding: 0.25rem;
   gap: 0.15rem;
   transform-origin: top left;
+  outline: none;
 }
 
 .selector-item {
@@ -369,8 +440,10 @@ watch(isOpen, opened => {
   transition: @transition-fast;
   flex-shrink: 0;
   white-space: nowrap;
+  outline: none;
 
-  &:hover {
+  &:hover,
+  &:focus-visible {
     background-color: var(--bg-panel-hover);
     color: var(--text-title);
   }

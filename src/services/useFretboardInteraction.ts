@@ -31,15 +31,10 @@ export interface FretboardInteractionEmit {
   (e: 'drag-status-change', isDragging: boolean): void;
 }
 
-/**
- * 指板全部指针/滚轮交互逻辑：点击/拖拽按弦、右键设根音、滚轮切变调夹与升降号。
- * 从 Fretboard.vue 抽出，脱离组件也可以单独写单测。
- */
 export function useFretboardInteraction(props: FretboardInteractionProps, emit: FretboardInteractionEmit) {
   const fretBoardRef = useTemplateRef<HTMLDivElement>('fretBoardRef');
   const hoverPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
 
-  // 🌟 使用 toRefs 解构出各属性的 Ref，保证响应式追踪
   const { strings, fretCount, capo, activeBaseStrings, interactive, scale } = toRefs(props);
 
   const isPointerDown = ref(false);
@@ -76,9 +71,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   };
 
   const emitStringsUpdate = (mutator: (cloned: GuitarStringsModel) => void) => {
-    // 🌟 1. 修复：Ref<boolean> 必须使用 .value 判断
     if (!interactive.value) return;
-    // 🌟 2. 修复：取 strings.value 的 Raw 再深拷贝
     const cloned = cloneDeep(toRaw(strings.value));
     mutator(cloned);
     emit('update:strings', cloned);

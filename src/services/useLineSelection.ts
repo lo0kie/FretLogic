@@ -1,9 +1,6 @@
 import { useEventListener } from '@vueuse/core';
 import { type Ref, computed, ref, watch } from 'vue';
 
-/**
- * 曲谱行的多选逻辑：点击/按住拖动选择多行、边缘自动滚动、全选/取消全选。
- */
 export function useLineSelection(
   scoreZoneRef: Ref<HTMLElement | null>,
   totalLines: Ref<number>,
@@ -24,7 +21,6 @@ export function useLineSelection(
     selectedLineSet.value.clear();
   });
 
-  // 🌟 修复：当歌词总行数变少（例如删行/清空）时，自动剔除越界的已选索引
   watch(totalLines, newTotal => {
     if (selectedLineSet.value.size === 0) return;
     const updated = new Set<number>();

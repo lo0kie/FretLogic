@@ -1,7 +1,5 @@
 ﻿import type { Chord, Group, ImportExportPayload, Song } from '@/types';
 
-// ---------- 1. 独立子校验器 ----------
-
 const validateGroups = (groups: unknown, issues: string[]): Group[] => {
   if (!Array.isArray(groups)) {
     issues.push('groups 字段必须为数组');
@@ -86,8 +84,6 @@ const validateSongs = (songs: unknown, issues: string[]): Song[] | undefined => 
   });
 };
 
-// ---------- 2. 主流线清洗与校验函数 ----------
-
 export const cleanAndValidateData = (
   data: unknown,
   mode: 'import' | 'export' = 'import'
@@ -128,8 +124,6 @@ export const cleanAndValidateData = (
 
   return true;
 };
-
-// ---------- 3. 通用深拷贝函数 ----------
 
 export function cloneDeep<T>(value: T, cache = new WeakMap()): T {
   if (value === null || typeof value !== 'object') {
@@ -194,8 +188,6 @@ export function cloneDeep<T>(value: T, cache = new WeakMap()): T {
   return cloneTarget;
 }
 
-// ---------- 4. 字符串编辑距离算法 ----------
-// 🌟 用于在歌词变动时，计算新旧行的相似度，从而精准复用 lineId 防丢和弦
 export const getEditDistance = (a: string, b: string): number => {
   if (a.length === 0) return b.length;
   if (b.length === 0) return a.length;

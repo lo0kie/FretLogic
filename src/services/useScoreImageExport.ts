@@ -1,5 +1,3 @@
-// === FILE: C:\Users\lookie\userspace\coding\fret-logic\src\services\useScoreImageExport.ts ===
-
 import { useUiStore } from '@/stores/uiStore';
 import { type Ref, nextTick, ref } from 'vue';
 
@@ -11,7 +9,7 @@ interface ExportOriginals {
     minWidth: string;
     width: string;
     transition: string;
-    tagTransitions: string[]; // 🌟 记录每个行号标签原有的 transition
+    tagTransitions: string[];
   }[];
 }
 
@@ -39,10 +37,8 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
     container.style.width = 'max-content';
 
     lineEls.forEach((el, idx) => {
-      // 🌟 1. 临时关掉行的 transition
       el.style.transition = 'none';
 
-      // 🌟 2. 临时关掉行号标签的 transition，让其瞬间褪色
       const textTag = el.querySelector('.index-text-tag') as HTMLElement;
       if (textTag) {
         textTag.style.transition = 'none';

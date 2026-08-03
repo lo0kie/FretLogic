@@ -17,18 +17,26 @@
   >
     <template v-for="group in chordStore.groups" :key="group.id">
       <GlobalContextMenu ref="contextMenuRefs" :items="getGroupMenuItems(group)" class="group-box-card">
+        <!-- 🌟 1. 语义化与键盘支持：增加 tabindex, role="button", aria-expanded 与 keydown 事件 -->
         <div
           ref="groupCardEls"
+          tabindex="0"
+          role="button"
+          :aria-expanded="!group.collapsed"
+          :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${group.collapsed ? '已折叠' : '已展开'}`"
           @click="chordService.executeGroupToggle(group.id)"
+          @keydown.enter.prevent="chordService.executeGroupToggle(group.id)"
+          @keydown.space.prevent="chordService.executeGroupToggle(group.id)"
           class="group-title-row"
           :class="{ 'is-context-open': isGroupMenuOpen(group.id) }"
         >
           <div class="group-info-zone" title="点击折叠/展开分组">
             <ChevronDown
               :size="14"
-              stroke-width="2.5"
+              :stroke-width="2.5"
               class="arrow-toggle-icon"
               :class="{ 'is-collapsed': group.collapsed }"
+              aria-hidden="true"
             />
 
             <BaseMarquee>
@@ -37,7 +45,7 @@
               </span>
             </BaseMarquee>
 
-            <!-- 🌟 新增：排序规则外显标签 -->
+            <!-- 🌟 2. 排序规则外显标签：补充 ARIA 说明 -->
             <BaseBadge
               v-if="group.sortRule && group.sortRule !== 'CUSTOM'"
               variant="neutral"
@@ -45,29 +53,44 @@
               size="xs"
               class="sort-rule-badge"
               title="当前分组已启用自动排序 (禁用手动拖拽)"
+              :aria-label="`按${getSortLabel(group)}自动排序`"
             >
               {{ getSortLabel(group) }}
             </BaseBadge>
 
+            <!-- 🌟 3. 搜索匹配数与总数 Badge 优化读屏 -->
             <BaseBadge
               v-if="searchQuery"
               :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
               :appearance="hasMatchedChords(group.id) ? 'subtle' : 'filled'"
               size="xs"
+              :aria-label="`匹配 ${getMatchCount(group.id)} 个，共 ${getGroupChordsCount(group.id)} 个和弦`"
             >
               <span :class="{ 'search-match-count': hasMatchedChords(group.id) }">
                 {{ getMatchCount(group.id) }}
               </span>
-              <span>&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
+              <span aria-hidden="true">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
             </BaseBadge>
 
-            <BaseBadge v-else variant="neutral" appearance="filled" size="xs">
+            <BaseBadge
+              v-else
+              variant="neutral"
+              appearance="filled"
+              size="xs"
+              :aria-label="`共 ${getGroupChordsCount(group.id)} 个和弦`"
+            >
               {{ getGroupChordsCount(group.id) }}
             </BaseBadge>
           </div>
 
+          <!-- 🌟 4. 拖拽把手增加 focus 屏蔽与无障碍辅助标记 -->
           <div v-if="!uiStore.isMobile" @click.stop class="drag-action-zone">
-            <div class="drag-handle" :class="{ 'is-hidden-by-search': Boolean(searchQuery) }" title="按住拖拽排序">
+            <div
+              class="drag-handle"
+              :class="{ 'is-hidden-by-search': Boolean(searchQuery) }"
+              title="按住拖拽排序"
+              aria-hidden="true"
+            >
               <GripVertical :size="14" stroke-width="2.5" />
             </div>
           </div>
@@ -114,11 +137,11 @@ import BaseMarquee from '@/components/BaseMarquee.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { useChordService } from '@/services/useChordService';
-import { useEditorStore } from '@/stores/chordEditorStore'; // 修复后缀
+import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group } from '@/types';
-import { sortChordsByRule } from '@/utils/musicTheory'; // 修复后缀
+import { sortChordsByRule } from '@/utils/musicTheory';
 import { ArrowUpDown, ChevronDown, FolderOpen, GripVertical, SquarePen, Trash2 } from '@lucide/vue';
 import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -145,7 +168,6 @@ const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>
 
 const chordLowerNameCache = new WeakMap<Chord, string>();
 
-// 🌟 新增：解析展示具体的排序标签文案
 const getSortLabel = (group: Group): string => {
   switch (group.sortRule) {
     case 'ROOT_PITCH':
@@ -274,12 +296,16 @@ watch(
   padding: 0.45rem 0.5rem;
   user-select: none;
   background-color: transparent;
+
   border-radius: @radius-md;
   box-sizing: border-box;
   cursor: pointer;
   border: 1px solid transparent;
   transition: @transition-fast;
+  outline: none; /* 🌟 避免默认粗蓝框 */
 
+  /* 🌟 键盘 Tab 聚焦与 Hover 逻辑对齐 */
+  &:focus-visible,
   &:hover {
     background-color: var(--bg-panel-hover);
 
@@ -288,12 +314,16 @@ watch(
     }
   }
 
+  &:focus-visible {
+    box-shadow: @focus-ring-primary;
+    border-color: @primary;
+  }
+
   &:hover,
   &:active,
   &.is-context-open {
     background-color: var(--bg-panel-hover) !important;
     border-color: var(--border-base);
-    box-shadow: 0 0 0 1px var(--border-base);
   }
 }
 

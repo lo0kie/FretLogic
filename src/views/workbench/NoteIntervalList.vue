@@ -11,9 +11,7 @@
           'is-mobile-clickable': isMobile,
         }"
         @click="handleRowClick(note)"
-        @touchstart="e => handleTouchStartWithNote(e, note)"
-        @touchend="handleTouchEnd"
-        @touchcancel="handleTouchCancel"
+        v-on-long-press="[() => handleLongPress(note), { delay: 350 }]"
       >
         <div class="note-left-group">
           <span class="string-indicator">{{ 6 - note.stringIndex }}弦</span>
@@ -26,10 +24,10 @@
 </template>
 
 <script setup lang="ts">
-import { useLongPress } from '@/services/useLongPress';
 import { NoteInput } from '@/types';
+import { vOnLongPress } from '@vueuse/components';
 import { useElementSize } from '@vueuse/core';
-import { ref, useTemplateRef } from 'vue';
+import { useTemplateRef } from 'vue';
 
 export interface RenderNoteItem extends NoteInput {
   isRoot: boolean;
@@ -48,30 +46,17 @@ const emit = defineEmits<{
 }>();
 
 const containerRef = useTemplateRef<HTMLElement>('containerRef');
-const activeTouchNote = ref<RenderNoteItem | null>(null);
 const { height } = useElementSize(containerRef.value);
-
-// 使用通用长按手势 Composable
-const { isLongPressHandled, handleTouchStart, handleTouchEnd, handleTouchCancel } = useLongPress(
-  () => {
-    if (activeTouchNote.value) {
-      emit('toggle-pitch-accidental', activeTouchNote.value.stringIndex);
-    }
-  },
-  { delay: 350 }
-);
-
-const handleTouchStartWithNote = (e: TouchEvent, note: RenderNoteItem) => {
-  if (!props.isMobile || !note.canAccidentalToggle) return;
-  activeTouchNote.value = note;
-  handleTouchStart(e);
-};
 
 const handleRowClick = (note: RenderNoteItem) => {
   if (!props.isMobile) return;
-  if (isLongPressHandled.value) return;
 
   emit('set-root-string', note.stringIndex);
+};
+
+const handleLongPress = (note: RenderNoteItem) => {
+  if (!props.isMobile || !note.canAccidentalToggle) return;
+  emit('toggle-pitch-accidental', note.stringIndex);
 };
 
 defineExpose({ height });

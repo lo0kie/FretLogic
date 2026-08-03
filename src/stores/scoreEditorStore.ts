@@ -1,8 +1,8 @@
-import { parseSlotKey, useSongStore } from '@/stores/songStore';
+import { useSongStore } from '@/stores/songStore';
 import type { Chord, Song } from '@/types';
-import { cloneDeep, getEditDistance } from '@/utils/dataParser';
+import { cloneDeep } from '@/utils/dataParser';
+import { garbageCollectChordMap, matchLineIds, sanitizeLyricsText } from '@/utils/lineIdMatcher';
 import { getKeySemitones, transposeChordName, transposePhysicalChord } from '@/utils/musicTheory';
-import { generateUUID } from '@/utils/validators';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
@@ -180,7 +180,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       if (deltaCapo !== 0) {
         Object.keys(newChordMap).forEach(k => {
           if (newChordMap[k]) {
-            // Capo 平移保持指法命名不变，仅平移物理品位
             newChordMap[k] = transposePhysicalChord(newChordMap[k], deltaCapo, clampedCapo, false);
           }
         });
@@ -193,92 +192,22 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
-  // 🌟 P0：编辑歌词，完美保持现有行并执行防重叠的回收
   const updateLyrics = (lyrics: string) => {
     if (!activeSong.value) return;
 
     recordHistory();
 
-    const sanitizedLyrics = lyrics
-      .split('\n')
-      .map(line => line.replace(/[\t\r\u3000]+/g, '').trimEnd())
-      .join('\n');
-
+    const sanitizedLyrics = sanitizeLyricsText(lyrics);
     const oldLines = activeSong.value.lyrics.split('\n');
     const newLines = sanitizedLyrics.split('\n');
 
-    // 对齐补充 oldIds（应对旧数据或初始空数组的情况）
-    const oldIds = [...(activeSong.value.lineIds || [])];
-    if (oldIds.length < oldLines.length) {
-      for (let i = oldIds.length; i < oldLines.length; i++) {
-        oldIds[i] = String(i);
-      }
-    }
-
-    const newIds: Array<string | null> = new Array(newLines.length).fill(null);
-    const usedOldIndices = new Set<number>();
-
-    // 完全一致优先继承
-    for (let i = 0; i < newLines.length; i++) {
-      for (let j = 0; j < oldLines.length; j++) {
-        if (!usedOldIndices.has(j) && newIds[i] === null && oldLines[j] === newLines[i]) {
-          newIds[i] = oldIds[j];
-          usedOldIndices.add(j);
-          break;
-        }
-      }
-    }
-
-    // 编辑距离相近分配
-    for (let i = 0; i < newLines.length; i++) {
-      if (newIds[i] === null) {
-        let bestMatchIdx = -1;
-        let minDistance = Infinity;
-
-        for (let j = 0; j < oldLines.length; j++) {
-          if (!usedOldIndices.has(j)) {
-            const dist = getEditDistance(oldLines[j], newLines[i]);
-            const maxLength = Math.max(oldLines[j].length, newLines[i].length);
-            const similarity = 1 - dist / (maxLength || 1);
-
-            if (similarity >= 0.45 && dist < minDistance) {
-              minDistance = dist;
-              bestMatchIdx = j;
-            }
-          }
-        }
-
-        if (bestMatchIdx !== -1) {
-          newIds[i] = oldIds[bestMatchIdx];
-          usedOldIndices.add(bestMatchIdx);
-        }
-      }
-    }
-
-    // 全新分配
-    for (let i = 0; i < newLines.length; i++) {
-      if (!newIds[i]) {
-        newIds[i] = 'l_' + generateUUID('', 8);
-      }
-    }
-
-    // 使用原生解析器处理的严谨垃圾回收
-    const finalIdsSet = new Set(newIds as string[]);
-    const updatedChordMap = { ...(activeSong.value.chordMap || {}) };
-    let hasMapChanged = false;
-
-    Object.keys(updatedChordMap).forEach(key => {
-      const parsed = parseSlotKey(key);
-      if (parsed && !finalIdsSet.has(parsed.lineId)) {
-        delete updatedChordMap[key];
-        hasMapChanged = true;
-      }
-    });
+    const newIds = matchLineIds(oldLines, newLines, activeSong.value.lineIds || []);
+    const { map: updatedChordMap, changed } = garbageCollectChordMap(activeSong.value.chordMap || {}, newIds);
 
     songStore.updateSongMeta(activeSong.value.id, {
       lyrics: sanitizedLyrics,
-      lineIds: newIds as string[],
-      chordMap: hasMapChanged ? updatedChordMap : activeSong.value.chordMap,
+      lineIds: newIds,
+      chordMap: changed ? updatedChordMap : activeSong.value.chordMap,
     });
 
     if (!sanitizedLyrics.trim()) {

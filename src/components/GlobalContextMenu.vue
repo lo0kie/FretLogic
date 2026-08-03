@@ -10,21 +10,36 @@
 
     <div v-if="isOpen" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
       <Transition name="menu-fade" appear>
-        <div class="context-menu-box">
+        <!-- 🌟 1. 补全 role="menu" 与键盘导航 -->
+        <div
+          ref="menuBoxRef"
+          role="menu"
+          tabindex="-1"
+          aria-label="右键上下文菜单"
+          class="context-menu-box"
+          @keydown="handleMenuKeydown"
+        >
           <template v-if="title">
             <div class="menu-title">{{ title }}</div>
-            <div class="menu-divider"></div>
+            <div class="menu-divider" role="separator"></div>
           </template>
 
+          <!-- 🌟 2. 补全 role="menuitem" 与 tabindex -->
           <button
             v-for="(item, idx) in items"
             :key="idx"
+            ref="itemEls"
+            type="button"
+            role="menuitem"
+            :tabindex="item.disabled ? -1 : 0"
             :disabled="item.disabled"
             @click.stop="handleItemClick(item)"
+            @keydown.enter.prevent.stop="handleItemClick(item)"
+            @keydown.space.prevent.stop="handleItemClick(item)"
             class="menu-item"
             :class="[item.danger ? 'is-danger' : 'is-normal', item.disabled ? 'is-disabled' : '']"
           >
-            <component :is="item.icon" v-if="item.icon" :size="13" :stroke-width="2.5" />
+            <component :is="item.icon" v-if="item.icon" :size="13" :stroke-width="2.5" aria-hidden="true" />
             <span>{{ item.label }}</span>
           </button>
         </div>
@@ -34,13 +49,14 @@
 </template>
 
 <script lang="ts">
+import { nextTick, ref } from 'vue';
 const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
 </script>
 
 <script setup lang="ts">
 import { autoUpdate, flip, shift, useFloating } from '@floating-ui/vue';
 import { useEventListener } from '@vueuse/core';
-import { FunctionalComponent, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+import { FunctionalComponent, onBeforeUnmount, useTemplateRef, watch } from 'vue';
 
 export interface ContextMenuItem {
   label: string;
@@ -62,6 +78,8 @@ const x = ref(0);
 const y = ref(0);
 
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
+const menuBoxRef = useTemplateRef<HTMLDivElement>('menuBoxRef');
+const itemEls = useTemplateRef<HTMLButtonElement[]>('itemEls');
 
 const virtualRef = ref({
   getBoundingClientRect() {
@@ -122,6 +140,43 @@ const handleItemClick = (item: ContextMenuItem) => {
   closeMenu();
 };
 
+// 🌟 键盘方向键与 Esc 逻辑拦截
+const handleMenuKeydown = (e: KeyboardEvent) => {
+  if (!isOpen.value || !itemEls.value) return;
+
+  const activeElement = document.activeElement as HTMLElement;
+  const currentIndex = itemEls.value.indexOf(activeElement as HTMLButtonElement);
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    let nextIdx = currentIndex + 1;
+    while (nextIdx < props.items.length && props.items[nextIdx].disabled) {
+      nextIdx++;
+    }
+    if (nextIdx >= props.items.length) {
+      nextIdx = props.items.findIndex(item => !item.disabled);
+    }
+    if (nextIdx !== -1) itemEls.value[nextIdx]?.focus();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    let prevIdx = currentIndex - 1;
+    while (prevIdx >= 0 && props.items[prevIdx].disabled) {
+      prevIdx--;
+    }
+    if (prevIdx < 0) {
+      prevIdx = props.items.length - 1;
+      while (prevIdx >= 0 && props.items[prevIdx].disabled) {
+        prevIdx--;
+      }
+    }
+    if (prevIdx !== -1) itemEls.value[prevIdx]?.focus();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    closeMenu();
+  }
+};
+
 watch(isOpen, open => {
   stopListeners.forEach(stop => stop());
   stopListeners = [];
@@ -137,6 +192,16 @@ watch(isOpen, open => {
     );
     stopListeners.push(useEventListener(window, 'resize', closeMenu));
     stopListeners.push(useEventListener(window, 'scroll', closeMenu, { capture: true, passive: true }));
+
+    // 🌟 自动聚焦第一个可用菜单项
+    nextTick(() => {
+      const firstEnabledIdx = props.items.findIndex(item => !item.disabled);
+      if (firstEnabledIdx !== -1) {
+        itemEls.value?.[firstEnabledIdx]?.focus();
+      } else {
+        menuBoxRef.value?.focus();
+      }
+    });
   }
 });
 
@@ -188,6 +253,7 @@ defineExpose({
   box-shadow: @shadow-floating;
   box-sizing: border-box;
   transform-origin: top left;
+  outline: none;
 }
 
 .menu-title {
@@ -221,11 +287,13 @@ defineExpose({
   text-align: left;
   box-sizing: border-box;
   transition: @transition-fast;
+  outline: none;
 
   &.is-normal {
     color: var(--text-title);
 
-    &:hover {
+    &:hover,
+    &:focus-visible {
       background-color: var(--color-primary);
       color: #ffffff;
     }
@@ -234,7 +302,8 @@ defineExpose({
   &.is-danger {
     color: var(--color-danger);
 
-    &:hover {
+    &:hover,
+    &:focus-visible {
       background-color: var(--color-danger);
       color: #ffffff;
     }
@@ -253,10 +322,9 @@ defineExpose({
 
 .fade-scale-transition(menu-fade);
 
-/* 📱 移动端右键菜单放大适配 */
 @media (max-width: 768px) {
   .context-menu-box {
-    min-width: 160px; /* 稍微增加最小宽度 */
+    min-width: 160px;
     padding: 0.4rem;
     gap: 0.2rem;
     border-radius: calc(@radius-lg * 1.2);
@@ -264,7 +332,7 @@ defineExpose({
 
   .menu-title {
     padding: 0.35rem 0.8rem 0.2rem;
-    font-size: 0.78rem; /* 放大标题字号 */
+    font-size: 0.78rem;
   }
 
   .menu-divider {
@@ -272,8 +340,8 @@ defineExpose({
   }
 
   .menu-item {
-    padding: 0.65rem 0.85rem; /* 增加上下左右内边距，扩大手指点击热区 */
-    font-size: 0.88rem; /* 从 0.73rem 放大 */
+    padding: 0.65rem 0.85rem;
+    font-size: 0.88rem;
     gap: 0.6rem;
     border-radius: calc(@radius-md * 1.2);
   }

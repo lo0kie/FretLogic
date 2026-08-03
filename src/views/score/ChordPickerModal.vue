@@ -16,15 +16,15 @@
           autofocus
           fontSize="xs"
           class="picker-search-input"
+          aria-label="搜索和弦"
         >
           <template #prefix>
-            <Search class="search-icon" :size="14" stroke-width="2.5" />
+            <Search class="search-icon" :size="14" stroke-width="2.5" aria-hidden="true" />
           </template>
         </BaseInput>
 
-        <!-- 🌟 P1 加入就地新建和弦跳回工作台的功能 -->
         <ActionButton size="sm" variant="subtle" @click="goToWorkbenchToCreate">
-          <template #prefix><Plus :size="14" stroke-width="2.5" /></template>
+          <template #prefix><Plus :size="14" stroke-width="2.5" aria-hidden="true" /></template>
           新建和弦
         </ActionButton>
       </div>
@@ -37,16 +37,32 @@
 
       <EmptyState v-if="filteredChords.length === 0" description="当前搜索或分组下暂无匹配和弦。" size="lg" />
 
-      <div v-else class="picker-cards-grid-4cols">
+      <!-- 🌟 1. 列表容器声明 role="group" -->
+      <div v-else class="picker-cards-grid-4cols" role="group" aria-label="和弦选择列表">
+        <!-- 🌟 2. 卡片补全 role="button"、tabindex、aria-pressed、aria-label 及键盘事件 -->
         <div
           v-for="chord in filteredChords"
           :key="chord.id"
+          v-intersection-observer="
+            ([entry]) => {
+              visibleMap[chord.id] = entry.isIntersecting;
+            }
+          "
+          role="button"
+          :tabindex="isCurrentBound(chord) ? -1 : 0"
+          :aria-pressed="isCurrentBound(chord)"
+          :aria-disabled="isCurrentBound(chord)"
+          :aria-label="`和弦 ${chord.chordName}${isCurrentBound(chord) ? '（当前已绑定）' : ''}`"
           class="picker-chord-card"
           :class="{ 'is-current-bound': isCurrentBound(chord) }"
           @click="!isCurrentBound(chord) && handleSelectChord(chord)"
+          @keydown.enter.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
+          @keydown.space.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
         >
           <span class="card-name">{{ chord.chordName }}</span>
+
           <Fretboard
+            v-if="visibleMap[chord.id]"
             :interactive="false"
             :scale="0.38"
             :strings="chord.strings"
@@ -54,6 +70,7 @@
             :fret-count="chord.fretCount"
             :is-dark-mode="settingsStore.isDarkMode"
           />
+          <div v-else class="fretboard-placeholder" />
         </div>
       </div>
     </div>
@@ -73,8 +90,11 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { Plus, Search } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { vIntersectionObserver } from '@vueuse/components';
+import { computed, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+
+const visibleMap = reactive<Record<string, boolean>>({});
 
 const props = defineProps<{
   visible: boolean;
@@ -231,11 +251,18 @@ const goToWorkbenchToCreate = () => {
   border-radius: @radius-md;
   cursor: pointer;
   transition: @transition-fast;
+  outline: none;
 
-  &:hover {
+  &:hover,
+  &:focus-visible {
     border-color: var(--color-primary);
     transform: translateY(-2px);
     box-shadow: @shadow-md;
+  }
+
+  /* 🌟 3. Tab 键盘聚焦高亮 */
+  &:focus-visible {
+    box-shadow: @focus-ring-primary;
   }
 
   &.is-current-bound {
@@ -256,5 +283,13 @@ const goToWorkbenchToCreate = () => {
   font-weight: 800;
   color: var(--text-title);
   margin-bottom: 0.25rem;
+}
+
+.fretboard-placeholder {
+  width: 100%;
+  height: 120px;
+  background-color: var(--bg-body);
+  border-radius: @radius-sm;
+  opacity: 0.3;
 }
 </style>

@@ -14,13 +14,20 @@
       ref="contextMenuRefs"
       :items="getSongMenuItems(song)"
     >
+      <!-- 🌟 1. 补全角色、tabindex、aria-pressed 及键盘触发生命周期 -->
       <div
         class="song-card-item"
         :class="{
           'is-active': scoreEditor.activeSongId === song.id,
           'is-context-open': isSongMenuOpen(song.id),
         }"
+        role="button"
+        tabindex="0"
+        :aria-pressed="scoreEditor.activeSongId === song.id"
+        :aria-label="`乐谱 ${song.title}，${song.playKey || 'C'}调，Capo ${song.capo || 0}${scoreEditor.activeSongId === song.id ? '，已选中' : ''}`"
         @click="handleSelectSong(song.id)"
+        @keydown.enter.prevent.stop="handleSelectSong(song.id)"
+        @keydown.space.prevent.stop="handleSelectSong(song.id)"
       >
         <div class="song-card-content">
           <BaseMarquee class="song-marquee">
@@ -28,8 +35,14 @@
           </BaseMarquee>
 
           <div class="song-meta-badges">
-            <BaseBadge variant="neutral" appearance="filled" size="xs"> {{ song.playKey || 'C' }}调 </BaseBadge>
-            <BaseBadge variant="neutral" appearance="filled" size="xs"> Capo {{ song.capo || 0 }} </BaseBadge>
+            <!-- 🌟 2. Badge 增加无障碍阅读说明 -->
+            <BaseBadge variant="neutral" appearance="filled" size="xs" :aria-label="`调性 ${song.playKey || 'C'} 调`">
+              {{ song.playKey || 'C' }}调
+            </BaseBadge>
+
+            <BaseBadge variant="neutral" appearance="filled" size="xs" :aria-label="`变调夹 Capo ${song.capo || 0} 品`">
+              Capo {{ song.capo || 0 }}
+            </BaseBadge>
           </div>
         </div>
       </div>
@@ -137,6 +150,7 @@ const handleSelectSong = (songId: string) => {
   cursor: pointer;
   transition: @transition-fast;
   box-sizing: border-box;
+  outline: none;
 
   &:hover,
   &:active,
@@ -144,6 +158,12 @@ const handleSelectSong = (songId: string) => {
     background-color: var(--bg-panel-hover);
     border-color: var(--border-base);
     box-shadow: 0 0 0 1px var(--border-base);
+  }
+
+  /* 🌟 3. 键盘聚焦高亮反馈 */
+  &:focus-visible {
+    border-color: var(--color-primary);
+    box-shadow: @focus-ring-primary;
   }
 
   &.is-active {
