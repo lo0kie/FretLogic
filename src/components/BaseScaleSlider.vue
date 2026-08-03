@@ -1,11 +1,9 @@
 <template>
-  <div class="base-scale-slider" :class="{ 'is-disabled': disabled }">
-    <!-- 1. 左侧文字标签（可选） -->
+  <div class="base-scale-slider" :class="[`size-${size}`, { 'is-disabled': disabled }]">
     <span v-if="label && labelPosition === 'left'" class="slider-label" @click="resetToDefault">
       {{ label }}
     </span>
 
-    <!-- 2. 数值显示在左侧 -->
     <span
       v-if="showReadout && readoutPosition === 'left'"
       class="readout-text"
@@ -15,7 +13,6 @@
       {{ displayText }}
     </span>
 
-    <!-- 3. 缩小按钮 -->
     <button
       v-if="showButtons"
       type="button"
@@ -27,7 +24,6 @@
       <AArrowDown :size="14" stroke-width="2.2" />
     </button>
 
-    <!-- 4. 滑块轨道主体 -->
     <div class="slider-track-wrapper">
       <input
         type="range"
@@ -42,7 +38,6 @@
       />
     </div>
 
-    <!-- 5. 放大按钮 -->
     <button
       v-if="showButtons"
       type="button"
@@ -54,7 +49,6 @@
       <AArrowUp :size="14" stroke-width="2.2" />
     </button>
 
-    <!-- 6. 数值显示在右侧（默认） -->
     <span
       v-if="showReadout && readoutPosition === 'right'"
       class="readout-text"
@@ -64,7 +58,6 @@
       {{ displayText }}
     </span>
 
-    <!-- 7. 右侧文字标签（可选） -->
     <span v-if="label && labelPosition === 'right'" class="slider-label" @click="resetToDefault">
       {{ label }}
     </span>
@@ -72,6 +65,7 @@
 </template>
 
 <script setup lang="ts">
+import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
 import { AArrowDown, AArrowUp } from '@lucide/vue';
 import { computed } from 'vue';
 
@@ -80,6 +74,7 @@ const {
   max = 1.5,
   step = 0.05,
   defaultValue = 1.0,
+  size = 'md',
   disabled = false,
   showButtons = true,
   showReadout = true,
@@ -92,6 +87,7 @@ const {
   max?: number;
   step?: number;
   defaultValue?: number;
+  size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
   showButtons?: boolean;
   showReadout?: boolean;
@@ -144,9 +140,6 @@ const resetToDefault = () => updateValue(defaultValue);
 .base-scale-slider {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  height: 1.6rem;
-  padding: 0 0.4rem;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
   border-radius: 9999px;
@@ -156,6 +149,24 @@ const resetToDefault = () => updateValue(defaultValue);
   &.is-disabled {
     opacity: 0.45;
     cursor: not-allowed;
+  }
+
+  &.size-sm {
+    height: v-bind(HEIGHT_SM);
+    padding: 0 0.3rem;
+    gap: 0.2rem;
+  }
+
+  &.size-md {
+    height: v-bind(HEIGHT_MD);
+    padding: 0 0.4rem;
+    gap: 0.3rem;
+  }
+
+  &.size-lg {
+    height: v-bind(HEIGHT_LG);
+    padding: 0 0.5rem;
+    gap: 0.4rem;
   }
 }
 

@@ -61,7 +61,7 @@
           </div>
         </div>
 
-        <div v-if="!group.collapsed" class="chord-content-wrapper">
+        <div v-if="!group.collapsed" class="chord-content-wrapper" @contextmenu.stop>
           <VueDraggable
             v-if="(filteredChordsGroupMap.get(group.id) || []).length > 0"
             :model-value="filteredChordsGroupMap.get(group.id) || []"
@@ -69,7 +69,7 @@
             ghost-class="drag-ghost-style"
             chosen-class="drag-chosen-style"
             drag-class="drag-active-style"
-            :disabled="Boolean(searchQuery) || uiStore.isMobile"
+            :disabled="Boolean(searchQuery) || uiStore.isMobile || group.sortRule !== 'CUSTOM'"
             class="chords-grid-layout"
             @update="e => chordService.handleChordSort(e, group.id)"
             :swap-threshold="0.5"
@@ -101,12 +101,14 @@ import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
+import { useChordGroupModals } from '@/services/useChordGroupModals.ts';
 import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/chordEditorStore.ts';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group } from '@/types';
-import { ChevronDown, FolderOpen, GripVertical, SquarePen, Trash2 } from '@lucide/vue';
+import { sortChordsByRule } from '@/utils/musicTheory.ts';
+import { ArrowUpDown, ChevronDown, FolderOpen, GripVertical, SquarePen, Trash2 } from '@lucide/vue';
 import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import LeftChordCard from './LeftChordCard.vue';
@@ -119,6 +121,7 @@ const emit = defineEmits<{
   (e: 'open-rename', group: Group): void;
   (e: 'open-delete', group: Group): void;
   (e: 'open-move', chord: Chord): void;
+  (e: 'open-sort', group: Group): void;
 }>();
 
 const editorStore = useEditorStore();
@@ -126,6 +129,7 @@ const chordStore = useChordStore();
 const chordService = useChordService();
 const uiStore = useUiStore();
 
+const groupModals = useChordGroupModals();
 const groupCardEls = useTemplateRef<HTMLElement[]>('groupCardEls');
 const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>('contextMenuRefs');
 
@@ -163,15 +167,10 @@ const filteredChordsGroupMap = computed(() => {
 
   chordStore.groups.forEach(group => {
     const originalChords = chordStore.groupChordMap.get(group.id) || [];
+    let list = queryKeyword ? originalChords.filter(c => getChordLowerName(c).includes(queryKeyword)) : originalChords;
 
-    if (!queryKeyword) {
-      map.set(group.id, originalChords);
-    } else {
-      map.set(
-        group.id,
-        originalChords.filter(c => getChordLowerName(c).includes(queryKeyword))
-      );
-    }
+    list = sortChordsByRule(list, group.sortRule, group.sortKey);
+    map.set(group.id, list);
   });
 
   return map;
@@ -188,6 +187,11 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => [
     label: '修改名称',
     icon: SquarePen,
     action: () => emit('open-rename', group),
+  },
+  {
+    label: '和弦排序',
+    icon: ArrowUpDown,
+    action: () => emit('open-sort', group),
   },
   {
     label: '删除分组',

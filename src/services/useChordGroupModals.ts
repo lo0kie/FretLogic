@@ -1,7 +1,7 @@
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord, Group } from '@/types';
+import type { Chord, Group, GroupSortRule } from '@/types';
 import { generateUUID } from '@/utils/validators';
 import { reactive } from 'vue';
 
@@ -10,12 +10,21 @@ export function useChordGroupModals() {
   const editorStore = useEditorStore();
   const uiStore = useUiStore();
 
-  const modals = reactive({ create: false, rename: false, delete: false, move: false });
+  const modals = reactive({
+    create: false,
+    rename: false,
+    delete: false,
+    move: false,
+    sort: false,
+  });
+
   const modalData = reactive({
     inputValue: '',
     activeGroup: null as Group | null,
     activeChord: null as Chord | null,
     moveTargetId: '',
+    sortRule: 'CUSTOM' as GroupSortRule,
+    sortKey: 'C',
   });
 
   const openCreate = () => {
@@ -110,6 +119,22 @@ export function useChordGroupModals() {
     return 'is-normal';
   };
 
+  const openSort = (group: Group) => {
+    modalData.activeGroup = group;
+    modalData.sortRule = group.sortRule || 'CUSTOM';
+    modalData.sortKey = group.sortKey || 'C';
+    modals.sort = true;
+  };
+
+  const handleSaveSort = () => {
+    if (modalData.activeGroup) {
+      modalData.activeGroup.sortRule = modalData.sortRule;
+      modalData.activeGroup.sortKey = modalData.sortKey;
+    }
+    modals.sort = false;
+    uiStore.toast.success('排序配置已更新');
+  };
+
   return {
     modals,
     modalData,
@@ -122,5 +147,7 @@ export function useChordGroupModals() {
     openMove,
     handleMoveChord,
     getGroupClass,
+    openSort,
+    handleSaveSort,
   };
 }

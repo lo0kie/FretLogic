@@ -89,11 +89,12 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
-  // 🌟 核心修复 3：温和的歌词格式化 + 双向指针 Line ID 比对 + 废弃和弦垃圾回收
+  // FILE: src/stores/scoreEditorStore.ts
+
   const updateLyrics = (lyrics: string) => {
     if (!activeSong.value) return;
 
-    // 仅剔除行尾空格与全角无用空白，保留英文单词间的标准半角空格[cite: 2]
+    // 1. 剔除行尾空格与全角无用空白
     const sanitizedLyrics = lyrics
       .split('\n')
       .map(line => line.replace(/[\t\r\u3000]+/g, '').trimEnd())
@@ -101,39 +102,66 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
 
     const oldLines = activeSong.value.lyrics.split('\n');
     const newLines = sanitizedLyrics.split('\n');
-    const oldIds = activeSong.value.lineIds || [];
+
+    // 🌟 核心修复：保底对齐 oldIds！如果持久化的 lineIds 不存在或长度对不上，立即按原始歌词补齐旧 ID
+    let oldIds = [...(activeSong.value.lineIds || [])];
+    if (oldIds.length < oldLines.length) {
+      for (let i = oldIds.length; i < oldLines.length; i++) {
+        oldIds[i] = 'l_' + generateUUID('', 8);
+      }
+    }
 
     const newIds: Array<string | null> = new Array(newLines.length).fill(null);
     const usedOldIndices = new Set<number>();
 
-    // 1. 前向双指针匹配
+    // A. 前向双指针匹配（内容未变的行，原样继承 ID）
     let start = 0;
     while (start < oldLines.length && start < newLines.length && oldLines[start] === newLines[start]) {
-      newIds[start] = oldIds[start] || 'l_' + generateUUID('', 8);
+      newIds[start] = oldIds[start];
       usedOldIndices.add(start);
       start++;
     }
 
-    // 2. 后向双指针匹配
+    // B. 后向双指针匹配（倒序内容未变的行，原样继承 ID）
     let oldEnd = oldLines.length - 1;
     let newEnd = newLines.length - 1;
     while (oldEnd >= start && newEnd >= start && oldLines[oldEnd] === newLines[newEnd]) {
       if (!usedOldIndices.has(oldEnd)) {
-        newIds[newEnd] = oldIds[oldEnd] || 'l_' + generateUUID('', 8);
+        newIds[newEnd] = oldIds[oldEnd];
         usedOldIndices.add(oldEnd);
       }
       oldEnd--;
       newEnd--;
     }
 
-    // 3. 中间新增/修改的行分配全新 ID
+    // C. 收集中间变动窗口内【尚未被占用】的旧 ID 队列
+    const availableOldIds: string[] = [];
+    for (let i = start; i <= oldEnd; i++) {
+      if (!usedOldIndices.has(i) && oldIds[i]) {
+        availableOldIds.push(oldIds[i]);
+      }
+    }
+
+    // D. 优先把变动窗口内未使用的旧 ID 顺次分配给新窗口的变动行，余下的才分配全新 ID
+    let availIdx = 0;
+    for (let i = start; i <= newEnd; i++) {
+      if (!newIds[i]) {
+        if (availIdx < availableOldIds.length) {
+          newIds[i] = availableOldIds[availIdx++];
+        } else {
+          newIds[i] = 'l_' + generateUUID('', 8);
+        }
+      }
+    }
+
+    // E. 兜底补全
     for (let i = 0; i < newLines.length; i++) {
       if (!newIds[i]) {
         newIds[i] = 'l_' + generateUUID('', 8);
       }
     }
 
-    // 4. 清理被物理删除的行所遗留的和弦废弃 key，防止 chordMap 污染膨胀
+    // F. 垃圾回收：仅物理清理那些真正的“废弃行 ID”
     const finalIdsSet = new Set(newIds as string[]);
     const updatedChordMap = { ...(activeSong.value.chordMap || {}) };
     let hasMapChanged = false;
@@ -149,7 +177,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       }
     });
 
-    // 统一写回 Store，保证 Pinia 侦听与持久化 100% 触发[cite: 2]
+    // 统一写回 Store，持久化 Pinia 状态
     songStore.updateSongMeta(activeSong.value.id, {
       lyrics: sanitizedLyrics,
       lineIds: newIds as string[],
@@ -173,19 +201,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
 
   const swapSlotChords = (sourceKey: string | number, targetKey: string | number) => {
     if (!activeSong.value || sourceKey === targetKey) return;
-
-    const map = activeSong.value.chordMap || {};
-    const sourceChord = map[sourceKey];
-    const targetChord = map[targetKey];
-
-    if (sourceChord) {
-      setSlotChord(targetKey, sourceChord);
-      if (targetChord) {
-        setSlotChord(sourceKey, targetChord);
-      } else {
-        removeSlotChord(sourceKey);
-      }
-    }
+    songStore.swapSongSlotChords(activeSong.value.id, sourceKey, targetKey);
   };
 
   return {

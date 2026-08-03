@@ -24,8 +24,12 @@
         @dragstart.stop="emit('dragstart')"
         @dragend="emit('dragend')"
       >
-        <!-- 🌟 右上角快捷清除按钮 -->
-        <button type="button" class="remove-chord-btn" title="清除当前和弦" @click.stop="emit('remove', slotKey)">
+        <button
+          type="button"
+          class="remove-chord-btn"
+          title="清除当前和弦"
+          @click.stop.prevent="emit('remove', slotKey)"
+        >
           <X :size="12" :stroke-width="3" />
         </button>
 
@@ -43,7 +47,6 @@
       <span v-else-if="variant === 'add'" class="add-edge-placeholder" :title="addPlaceholderTitle">+和弦</span>
     </div>
 
-    <!-- 🌟 只有字符插槽才渲染底部字符 -->
     <template v-if="variant === 'char'">
       <span class="char-text">{{ char }}</span>
     </template>
@@ -115,20 +118,25 @@ const emit = defineEmits<{
     }
   }
 
-  /* 🌟 行首行尾插槽样式控制 */
   &.edge-slot {
     opacity: 0.85;
 
-    /* 1. 存在和弦时：顶部对齐 */
     &.has-edge-chord {
       justify-content: flex-start;
 
       .chord-display-slot {
         align-items: flex-start;
       }
+
+      &::after {
+        content: '';
+        display: block;
+        width: 100%;
+        height: 1.15rem;
+        flex-shrink: 0;
+      }
     }
 
-    /* 2. "+和弦" 按钮插槽：垂直居中对齐 */
     &.add-btn-slot {
       opacity: 1;
       padding-left: 0.4rem;
@@ -145,7 +153,6 @@ const emit = defineEmits<{
     }
   }
 }
-
 .add-edge-placeholder {
   display: inline-flex;
   align-items: center;

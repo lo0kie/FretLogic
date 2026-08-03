@@ -1,4 +1,4 @@
-﻿import type { GuitarStringEntity } from '@/types';
+﻿import type { Chord, GroupSortRule, GuitarStringEntity } from '@/types';
 
 export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 export const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -75,4 +75,52 @@ export const calcNoteLabel = (
   if (fretVal === -1) return '✕';
   const noteIndex = calcPitchIndex(sIdx, fretVal, capoVal, baseStrings);
   return preferFlat ? NOTES_FLAT[noteIndex] : NOTES_SHARP[noteIndex];
+};
+
+const ROOT_PITCH_MAP: Record<string, number> = {
+  'C': 0,
+  'C#': 1,
+  'Db': 1,
+  'D': 2,
+  'D#': 3,
+  'Eb': 3,
+  'E': 4,
+  'F': 5,
+  'F#': 6,
+  'Gb': 6,
+  'G': 7,
+  'G#': 8,
+  'Ab': 8,
+  'A': 9,
+  'A#': 10,
+  'Bb': 10,
+  'B': 11,
+};
+
+export const getChordRootPitch = (chordName: string): number => {
+  const match = chordName.match(/^([A-G][#b]?)/);
+  if (!match) return 99;
+  return ROOT_PITCH_MAP[match[1]] ?? 99;
+};
+
+export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey = 'C'): Chord[] => {
+  if (!rule || rule === 'CUSTOM') return chords;
+  const list = [...chords];
+  if (rule === 'NAME_ASC') {
+    return list.sort((a, b) => a.chordName.localeCompare(b.chordName));
+  }
+  if (rule === 'ROOT_PITCH') {
+    return list.sort((a, b) => getChordRootPitch(a.chordName) - getChordRootPitch(b.chordName));
+  }
+  if (rule === 'KEY_DEGREE') {
+    const keyPitch = ROOT_PITCH_MAP[sortKey] ?? 0;
+    return list.sort((a, b) => {
+      const pitchA = getChordRootPitch(a.chordName);
+      const pitchB = getChordRootPitch(b.chordName);
+      const intervalA = pitchA === 99 ? 99 : (pitchA - keyPitch + 12) % 12;
+      const intervalB = pitchB === 99 ? 99 : (pitchB - keyPitch + 12) % 12;
+      return intervalA - intervalB;
+    });
+  }
+  return list;
 };

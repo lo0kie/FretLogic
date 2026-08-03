@@ -4,7 +4,6 @@
     class="interactive-score-zone no-scrollbar"
     :style="{ '--score-font-scale': scoreEditor.fontScale }"
   >
-    <!-- 🌟 改用 EmptyState 组件替换原有的 .empty-lyrics-tip -->
     <EmptyState
       v-if="!scoreEditor.activeSong?.lyrics.trim()"
       :icon="FileText"

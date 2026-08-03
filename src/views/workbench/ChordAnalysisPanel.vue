@@ -35,9 +35,7 @@
         </template>
 
         <!-- 空状态 -->
-        <div v-else class="empty-analysis-state">
-          <EmptyState :icon="Music" description="在指板上按音以分析" size="md" />
-        </div>
+        <EmptyState v-else :icon="Music" description="在指板上按音以分析" size="md" />
       </div>
     </Transition>
   </div>
@@ -235,18 +233,6 @@ const handleSetRootString = (stringIndex: number) => {
   flex-direction: column;
   gap: 0.65rem;
   width: 100%;
-}
-
-.empty-analysis-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  color: var(--text-disabled);
-  opacity: 0.45;
-  min-height: 10rem;
 }
 
 @media (max-width: 768px) {

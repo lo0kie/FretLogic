@@ -18,6 +18,7 @@
 </template>
 
 <script setup lang="ts">
+import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
 import { Loader2 } from '@lucide/vue';
 import { computed } from 'vue';
 
@@ -101,21 +102,21 @@ const roundedClass = computed(() => `rounded-${rounded}`);
 
 /* 2. 尺寸（Size）：统一控制高度、字体大小与内边距 */
 .size-sm {
-  height: 1.5rem;
+  height: v-bind(HEIGHT_SM);
   padding: 0 0.65rem;
   font-size: 0.68rem;
   gap: 0.3rem;
 }
 
 .size-md {
-  height: 1.75rem;
+  height: v-bind(HEIGHT_MD);
   padding: 0 1rem;
   font-size: 0.72rem;
   gap: 0.45rem;
 }
 
 .size-lg {
-  height: 2.5rem;
+  height: v-bind(HEIGHT_LG);
   padding: 0 1.25rem;
   font-size: 0.75rem;
   gap: 0.5rem;

@@ -2,7 +2,7 @@
   <div
     ref="referenceRef"
     class="selector-trigger-bar"
-    :class="{ 'is-active': isOpen, 'is-disabled': disabled }"
+    :class="[`size-${size}`, { 'is-active': isOpen, 'is-disabled': disabled }]"
     @click="toggleDropdown"
   >
     <span class="label-zone" :class="[isNonDefault ? 'is-custom' : 'is-default']">
@@ -56,7 +56,8 @@
 </template>
 
 <script setup lang="ts" generic="T">
-import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue';
+import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
+import { autoUpdate, flip, size as floatingSize, offset, shift, useFloating } from '@floating-ui/vue';
 import { ChevronDown, X } from '@lucide/vue';
 import { onClickOutside } from '@vueuse/core';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
@@ -69,6 +70,7 @@ export interface SelectorOptionObject<T = any> {
 
 const {
   options,
+  size = 'md',
   clearable = false,
   disabled = false,
   defaultValue,
@@ -79,6 +81,7 @@ const {
   optionFormatter,
 } = defineProps<{
   options: (T | SelectorOptionObject<T>)[];
+  size?: 'sm' | 'md' | 'lg';
   clearable?: boolean;
   disabled?: boolean;
   defaultValue?: T;
@@ -100,7 +103,6 @@ const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const dropdownRef = useTemplateRef<HTMLDivElement>('dropdownRef');
 
-// ---------- 文本格式化计算 ----------
 const formattedLabel = (val: T): string => {
   if (labelFormatter) return labelFormatter(val);
   if (formatter) return formatter(val);
@@ -115,7 +117,6 @@ const formattedOption = (opt: T | SelectorOptionObject<T>): string => {
   return String(value ?? '');
 };
 
-// ---------- 高度计算（与 CSS 保持同步） ----------
 const ITEM_HEIGHT = 1.9;
 const PADDING_Y = 0.25;
 const GAP = 0.15;
@@ -126,7 +127,6 @@ const dropdownMaxHeight = computed(() => {
   return `${height}rem`;
 });
 
-// ---------- Floating UI ----------
 const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   placement: 'bottom-start',
   strategy: 'fixed',
@@ -139,7 +139,7 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
     offset(6),
     flip(),
     shift({ padding: 8 }),
-    size({
+    floatingSize({
       apply({ rects, elements }) {
         Object.assign(elements.floating.style, {
           width: `${rects.reference.width}px`,
@@ -149,10 +149,8 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   ],
 });
 
-// ---------- 选项 DOM 引用 ----------
 const optionEls = useTemplateRef<HTMLElement[]>('optionEls');
 
-// ---------- 交互逻辑 ----------
 const toggleDropdown = () => {
   if (disabled) return;
   isOpen.value = !isOpen.value;
@@ -177,7 +175,6 @@ onClickOutside(
   { ignore: [floatingRef] }
 );
 
-// 🌟 整体禁用状态生效时，如果下拉正处于展开状态，强制关闭
 watch(
   () => disabled,
   isDisabled => {
@@ -191,6 +188,7 @@ const getOptionValue = (opt: T | SelectorOptionObject<T>): T => {
   }
   return opt as T;
 };
+
 const isOptionDisabled = (opt: T | SelectorOptionObject<T>): boolean => {
   if (opt && typeof opt === 'object' && 'disabled' in opt) {
     return Boolean(opt.disabled);
@@ -204,7 +202,6 @@ const handleSelect = (option: T | SelectorOptionObject<T>) => {
   isOpen.value = false;
 };
 
-// 打开时滚动到当前选中项
 watch(isOpen, opened => {
   if (!opened) return;
 
@@ -244,10 +241,7 @@ watch(isOpen, opened => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
   user-select: none;
-  height: 2.2rem;
   border-radius: 9999px;
   cursor: pointer;
   background-color: var(--bg-body);
@@ -265,7 +259,6 @@ watch(isOpen, opened => {
     box-shadow: @focus-ring-primary;
   }
 
-  /* 🌟 禁用状态控制 */
   &.is-disabled {
     opacity: 0.45;
     cursor: not-allowed;
@@ -277,6 +270,27 @@ watch(isOpen, opened => {
       cursor: not-allowed;
     }
   }
+
+  &.size-sm {
+    height: v-bind(HEIGHT_SM);
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    font-size: 0.68rem;
+  }
+
+  &.size-md {
+    height: v-bind(HEIGHT_MD);
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+    font-size: 0.72rem;
+  }
+
+  &.size-lg {
+    height: v-bind(HEIGHT_LG);
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+    font-size: 0.78rem;
+  }
 }
 
 .label-zone {
@@ -287,12 +301,10 @@ watch(isOpen, opened => {
 
   &.is-custom {
     color: var(--color-primary);
-    font-size: 0.78rem;
   }
 
   &.is-default {
     color: var(--text-title);
-    font-size: 0.75rem;
   }
 }
 

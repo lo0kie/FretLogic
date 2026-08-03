@@ -25,7 +25,6 @@ export interface LineData {
   nextEndKey: string;
 }
 
-/** 纯函数：把歌词文本 + Line ID + chordMap 拆解成按 Line ID 绑定的渲染数据 */
 export function buildLyricsLinesWithEdges(
   lyrics: string,
   chordMap: Record<string | number, Chord>,
@@ -34,10 +33,8 @@ export function buildLyricsLinesWithEdges(
   const rawLines = lyrics.split('\n');
 
   return rawLines.map((lineText, lineIdx) => {
-    // 🌟 如果没有对应位置的 lineId，作为兜底生成后使用（纯只读，不做写回操作）
     const lineId = existingLineIds[lineIdx] || 'l_' + generateUUID('', 8);
 
-    // 1. 行首和弦组
     const startChords: EdgeChordItem[] = [];
     let startCount = 0;
     while (chordMap[`line_${lineId}_start_${startCount}`]) {
@@ -48,7 +45,6 @@ export function buildLyricsLinesWithEdges(
       startCount++;
     }
 
-    // 2. 行尾和弦组
     const endChords: EdgeChordItem[] = [];
     let endCount = 0;
     while (chordMap[`line_${lineId}_end_${endCount}`]) {
@@ -59,7 +55,6 @@ export function buildLyricsLinesWithEdges(
       endCount++;
     }
 
-    // 3. 行内字符和弦组
     const chars: CharItem[] = lineText.split('').map((char, charIdx) => ({
       char,
       slotKey: `line_${lineId}_char_${charIdx}`,
@@ -69,7 +64,7 @@ export function buildLyricsLinesWithEdges(
       lineIdx,
       lineId,
       chars,
-      startChords: startChords.reverse(),
+      startChords,
       endChords,
       nextStartKey: `line_${lineId}_start_${startCount}`,
       nextEndKey: `line_${lineId}_end_${endCount}`,

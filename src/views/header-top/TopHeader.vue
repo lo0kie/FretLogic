@@ -19,7 +19,12 @@
       <div class="nav-brand-group hidden-mobile">
         <span class="app-brand-title">Fret Logic</span>
 
-        <BaseSegmentedControl :model-value="activeNavPath" :options="NAV_OPTIONS" @change="path => router.push(path)" />
+        <BaseSegmentedControl
+          :model-value="activeNavPath"
+          size="sm"
+          :options="NAV_OPTIONS"
+          @change="path => router.push(path)"
+        />
       </div>
     </div>
 

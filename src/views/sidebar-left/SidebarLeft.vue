@@ -65,6 +65,7 @@
       @open-rename="groupModals.openRename"
       @open-delete="groupModals.openDelete"
       @open-move="groupModals.openMove"
+      @open-sort="groupModals.openSort"
     />
 
     <!-- 3. 底栏：统一提供数据备份与恢复 -->

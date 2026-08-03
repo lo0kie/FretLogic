@@ -50,7 +50,7 @@ const {
   closeOnMask = true,
 } = defineProps<{
   title?: string;
-  width?: string;
+  width?: 'w-sm' | 'w-md' | 'w-80' | 'w-lg' | 'w-large' | 'w-xl' | 'w-wide' | 'w-full';
   showFooter?: boolean;
   cancelText?: string;
   confirmText?: string;
@@ -124,18 +124,36 @@ const handleCancel = () => {
   box-shadow: @shadow-floating;
   animation: cardPopIn @duration-base @bezier-bounce forwards;
 
-  &.w-80 {
-    width: 20rem;
+  &.w-sm {
+    width: 16rem; /* 256px */
+    max-width: 90vw;
   }
 
-  &.w-large {
-    width: 38rem;
+  &.w-md,
+  &.w-80 {
+    width: 20rem; /* 320px */
+    max-width: 90vw;
+  }
+
+  &.w-lg {
+    width: 28rem; /* 448px */
+    max-width: 90vw;
+  }
+
+  &.w-large,
+  &.w-xl {
+    width: 38rem; /* 608px */
     max-width: 90vw;
   }
 
   &.w-wide {
-    width: 52rem;
+    width: 52rem; /* 832px */
     max-width: 92vw;
+  }
+
+  &.w-full {
+    width: 64rem; /* 1024px */
+    max-width: 95vw;
   }
 }
 

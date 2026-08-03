@@ -7,9 +7,11 @@
     width="w-wide"
   >
     <div class="chord-picker-wrapper no-scrollbar">
-      <div v-if="chordStore.savedChordsList.length === 0" class="empty-chords-tip">
-        当前库中暂无保存的和弦，请先在工作台创建并保存和弦。
-      </div>
+      <EmptyState
+        v-if="chordStore.savedChordsList.length === 0"
+        description="当前库中暂无保存的和弦，请先在工作台创建并保存和弦。"
+        size="lg"
+      />
 
       <template v-else>
         <div class="picker-header-bar">
@@ -34,7 +36,11 @@
           </div>
         </div>
 
-        <div v-if="filteredChords.length === 0" class="empty-chords-tip">未找到匹配的和弦</div>
+        <EmptyState
+          v-if="filteredChords.length === 0"
+          description="当前库中暂无保存的和弦，请先在工作台创建并保存和弦。"
+          size="lg"
+        />
 
         <div v-else class="picker-cards-grid-4cols">
           <div
@@ -64,6 +70,7 @@
 import BaseInput from '@/components/BaseInput.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
+import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
@@ -201,13 +208,6 @@ const handleSelectChord = (chord: Chord) => {
   gap: 0.35rem;
   overflow-x: auto;
   padding: 0.1rem;
-}
-
-.empty-chords-tip {
-  font-size: 0.8rem;
-  color: var(--text-disabled);
-  text-align: center;
-  padding: 2rem 0;
 }
 
 .picker-cards-grid-4cols {

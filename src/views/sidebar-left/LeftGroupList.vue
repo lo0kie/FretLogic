@@ -8,6 +8,7 @@
         @open-rename="group => $emit('open-rename', group)"
         @open-delete="group => $emit('open-delete', group)"
         @open-move="chord => $emit('open-move', chord)"
+        @open-sort="group => $emit('open-sort', group)"
       />
 
       <!-- 🌟 2. 乐谱库模式 (/score)：渲染乐谱列表 -->
@@ -30,6 +31,7 @@ defineEmits<{
   (e: 'open-rename', group: Group): void;
   (e: 'open-delete', group: Group): void;
   (e: 'open-move', chord: Chord): void;
+  (e: 'open-sort', group: Group): void;
 }>();
 
 const route = useRoute();
