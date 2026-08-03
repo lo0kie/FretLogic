@@ -35,10 +35,7 @@
         </template>
 
         <!-- 空状态 -->
-        <div v-else class="empty-analysis-state">
-          <Music :size="24" stroke-width="1.5" class="empty-icon" />
-          <span class="empty-text">在指板上按音以分析</span>
-        </div>
+        <EmptyState v-else :icon="Music" description="在指板上按音以分析" size="md" />
       </div>
     </Transition>
   </div>
@@ -51,6 +48,7 @@ import { calcNoteLabel, calcPitchIndex, canTogglePitchAccidental } from '@/utils
 import { Music, Sparkles } from '@lucide/vue';
 import { computed, useTemplateRef } from 'vue';
 
+import EmptyState from '@/components/EmptyState.vue';
 import { CandidateResult, NoteInput } from '@/types/engine.ts';
 import { analyzeChordGraph } from '@/utils/chordEngine.ts';
 import CandidateTags from './CandidateTags.vue';
@@ -235,24 +233,6 @@ const handleSetRootString = (stringIndex: number) => {
   flex-direction: column;
   gap: 0.65rem;
   width: 100%;
-}
-
-.empty-analysis-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  color: var(--text-disabled);
-  opacity: 0.45;
-  min-height: 10rem;
-}
-
-.empty-text {
-  font-size: 0.68rem;
-  font-weight: 500;
-  letter-spacing: -0.01em;
 }
 
 @media (max-width: 768px) {

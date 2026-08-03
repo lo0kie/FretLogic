@@ -1,7 +1,13 @@
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
-      <div v-if="visible" class="modal-overlay-container" v-bind="$attrs" @click="closeOnMask && handleCancel()">
+      <div
+        v-if="visible"
+        class="modal-overlay-container"
+        v-bind="$attrs"
+        @mousedown="handleMaskMousedown"
+        @click.self="handleMaskClick"
+      >
         <div class="modal-card" :class="width" @click.stop>
           <h3 v-if="title" class="modal-title" :title="title">
             {{ title }}
@@ -50,7 +56,7 @@ const {
   closeOnMask = true,
 } = defineProps<{
   title?: string;
-  width?: string;
+  width?: 'w-sm' | 'w-md' | 'w-80' | 'w-lg' | 'w-large' | 'w-xl' | 'w-wide' | 'w-full';
   showFooter?: boolean;
   cancelText?: string;
   confirmText?: string;
@@ -75,7 +81,8 @@ watch(
 );
 
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && visible) {
+  if (e.key === 'Escape' && visible.value) {
+    // 🌟 已修正为 visible.value
     handleCancel();
   }
 });
@@ -87,6 +94,22 @@ const handleConfirm = () => {
 const handleCancel = () => {
   emit('cancel');
   visible.value = false;
+};
+
+// 🌟 新增：拦截拖拽关闭的逻辑
+let mousedownTarget: EventTarget | null = null;
+
+const handleMaskMousedown = (e: MouseEvent) => {
+  mousedownTarget = e.target;
+};
+
+const handleMaskClick = (e: MouseEvent) => {
+  // 只有当 mousedown 和 click 的目标完全一致，且都是蒙版自身时才关闭
+  if (closeOnMask && e.target === e.currentTarget && mousedownTarget === e.currentTarget) {
+    handleCancel();
+  }
+  // 状态复位
+  mousedownTarget = null;
 };
 </script>
 
@@ -123,19 +146,40 @@ const handleCancel = () => {
   border-radius: @radius-xl;
   box-shadow: @shadow-floating;
   animation: cardPopIn @duration-base @bezier-bounce forwards;
+  transition:
+    height @duration-base @bezier-standard,
+    width @duration-base @bezier-standard;
 
-  &.w-80 {
-    width: 20rem;
+  &.w-sm {
+    width: 16rem; /* 256px */
+    max-width: 90vw;
   }
 
-  &.w-large {
-    width: 38rem;
+  &.w-md,
+  &.w-80 {
+    width: 20rem; /* 320px */
+    max-width: 90vw;
+  }
+
+  &.w-lg {
+    width: 28rem; /* 448px */
+    max-width: 90vw;
+  }
+
+  &.w-large,
+  &.w-xl {
+    width: 38rem; /* 608px */
     max-width: 90vw;
   }
 
   &.w-wide {
-    width: 52rem;
+    width: 52rem; /* 832px */
     max-width: 92vw;
+  }
+
+  &.w-full {
+    width: 64rem; /* 1024px */
+    max-width: 95vw;
   }
 }
 

@@ -127,5 +127,19 @@ export function useAudioPlayer() {
     }
   };
 
-  return { isPlaying, playCurrentChord };
+  const disposeAudioEngine = () => {
+    if (playTimer) {
+      clearTimeout(playTimer);
+      playTimer = null;
+    }
+    if (guitarSynth) {
+      guitarSynth.releaseAll();
+      guitarSynth.dispose();
+      guitarSynth = null;
+    }
+    isEngineInitialized = false;
+    isPlaying.value = false;
+  };
+
+  return { isPlaying, playCurrentChord, disposeAudioEngine };
 }

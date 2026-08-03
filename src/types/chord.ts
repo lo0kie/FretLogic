@@ -21,6 +21,8 @@ export type GuitarStringsModel = [
   GuitarStringEntity,
 ];
 
+export type GroupSortRule = 'CUSTOM' | 'ROOT_PITCH' | 'KEY_DEGREE' | 'NAME_ASC';
+
 export interface Chord {
   id: string;
   chordName: string;
@@ -36,6 +38,8 @@ export interface Group {
   id: string;
   name: string;
   collapsed: boolean;
+  sortRule?: GroupSortRule;
+  sortKey?: string;
 }
 
 export interface ImportExportPayload {
