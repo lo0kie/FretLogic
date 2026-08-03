@@ -1,7 +1,6 @@
 import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
-import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/types';
 import { generateUUID } from '@/utils/validators';
@@ -11,7 +10,6 @@ export function useChordGroupModals() {
   const chordStore = useChordStore();
   const editorStore = useEditorStore();
   const uiStore = useUiStore();
-  const songStore = useSongStore();
   const chordService = useChordService();
 
   const modals = reactive({
