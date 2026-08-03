@@ -129,12 +129,6 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
         boxSizing: 'content-box',
         margin: '0',
       },
-      filter: (node: Node) => {
-        if (node instanceof HTMLElement && node.classList.contains('add-btn-slot')) {
-          return false;
-        }
-        return true;
-      },
     });
   };
 

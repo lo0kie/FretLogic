@@ -11,7 +11,16 @@
       size="lg"
     />
 
-    <div v-else class="lyrics-lines-container">
+    <div v-else class="lyrics-lines-container" :class="{ 'is-export-mode': isExporting }">
+      <div v-show="isExporting" class="export-header-meta">
+        <h1 class="export-song-title">{{ scoreEditor.activeSong?.title }}</h1>
+        <div class="export-song-info">
+          <span>{{ scoreEditor.activeSong?.key || 'C' }} 调</span>
+          <span class="info-divider">|</span>
+          <span>Capo: {{ scoreEditor.activeSong?.capo || 0 }}</span>
+        </div>
+      </div>
+
       <div
         v-for="lineData in lyricsLinesWithEdges"
         :key="lineData.lineIdx"
@@ -19,11 +28,11 @@
         class="lyrics-line"
         :class="{ 'is-line-selected': !isExporting && selectedLineSet.has(lineData.lineIdx) }"
       >
-        <div class="line-index-badge">
+        <div class="line-index-badge" v-show="!isExporting">
           <span
             class="index-text-tag"
             :class="{ 'is-selected': !isExporting && selectedLineSet.has(lineData.lineIdx) }"
-            @pointerdown="e => handlePointerDown(e, lineData.lineIdx)"
+            @pointerdown="e => emit('pointer-down-line', e, lineData.lineIdx)"
           >
             {{ formatLineIndex(lineData.lineIdx) }}
           </span>
@@ -115,35 +124,29 @@
         </div>
       </div>
     </div>
-
-    <!-- 底部多选导出浮动控制工具栏 -->
-    <ScoreExportFloatingBar
-      :selected-count="selectedLineSet.size"
-      :sorted-indices="sortedSelectedIndices"
-      :is-all-selected="isAllSelected"
-      :is-exporting="isExporting"
-      @remove-index="handleRemoveLineIndex"
-      @toggle-select-all="handleToggleSelectAll"
-      @copy-image="handleCopySelectedImage"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import EmptyState from '@/components/EmptyState.vue'; // 🌟 引入 EmptyState
-import { useLineSelection } from '@/services/useLineSelection';
+import EmptyState from '@/components/EmptyState.vue';
 import { useLyricsDragDrop } from '@/services/useLyricsDragDrop';
 import { useLyricsLinesData } from '@/services/useLyricsLinesData';
-import { useScoreImageExport } from '@/services/useScoreImageExport';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { FileText } from '@lucide/vue'; // 🌟 引入 FileText 图标
-import { computed, useTemplateRef } from 'vue';
+import { FileText } from '@lucide/vue';
+import { useTemplateRef } from 'vue';
 import ChordSlotCell from './ChordSlotCell.vue';
-import ScoreExportFloatingBar from './ScoreExportFloatingBar.vue';
+
+defineOptions({ name: 'ScoreInteractiveArea' });
+
+defineProps<{
+  selectedLineSet: Set<number>;
+  isExporting: boolean;
+}>();
 
 const emit = defineEmits<{
   (e: 'open-picker', slotKey: string | number): void;
+  (e: 'pointer-down-line', ev: PointerEvent, lineIdx: number): void;
 }>();
 
 const scoreEditor = useScoreEditorStore();
@@ -162,21 +165,10 @@ const {
 } = useLyricsDragDrop();
 
 const { lyricsLinesWithEdges } = useLyricsLinesData();
-const totalLines = computed(() => lyricsLinesWithEdges.value.length);
-const activeSongId = computed(() => scoreEditor.activeSongId);
-
-const {
-  selectedLineSet,
-  isAllSelected,
-  sortedSelectedIndices,
-  handleRemoveLineIndex,
-  handlePointerDown,
-  handleToggleSelectAll,
-} = useLineSelection(scoreZoneRef, totalLines, activeSongId);
-
-const { isExporting, handleCopySelectedImage } = useScoreImageExport(scoreZoneRef, selectedLineSet);
 
 const formatLineIndex = (index: number) => String(index + 1).padStart(2, '0');
+
+defineExpose({ scoreZoneRef });
 </script>
 
 <style scoped lang="less">
@@ -199,6 +191,45 @@ const formatLineIndex = (index: number) => String(index + 1).padStart(2, '0');
   margin: 0 auto;
   width: max-content;
   min-width: 100%;
+
+  &.is-export-mode {
+    :deep(.add-btn-slot) {
+      display: none !important;
+    }
+  }
+}
+
+/* 🌟 导出时渲染的页头样式 */
+.export-header-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 1.2rem;
+  margin-bottom: 0.8rem;
+  width: 100%;
+}
+
+.export-song-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-title);
+  margin: 0 0 0.4rem 0;
+  letter-spacing: -0.02em;
+}
+
+.export-song-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-body);
+}
+
+.info-divider {
+  color: var(--text-disabled);
+  opacity: 0.5;
 }
 
 .lyrics-line {

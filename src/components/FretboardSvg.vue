@@ -6,7 +6,7 @@
     style="overflow: visible"
     class="fretboard-svg"
   >
-    <g v-memo="[fretCount, isDarkMode, capo]">
+    <g v-memo="[fretCount, isDarkMode, capo, fretNumberSize]">
       <line
         v-for="s in 6"
         :key="'string-' + s"
@@ -50,7 +50,7 @@
         text-anchor="middle"
         dominant-baseline="central"
         dy="-2px"
-        font-size="28"
+        :font-size="fretFontSize"
         font-weight="900"
         :fill="isDarkMode ? '#e2e8f0' : '#475569'"
         style="pointer-events: none"
@@ -89,7 +89,7 @@
         <circle
           :cx="stringXPositions[sIdx]"
           :cy="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-          r="28"
+          r="30"
           :fill="getFingerColor(str, isDarkMode)"
           class="finger-circle"
           :class="{ 'is-root-glow': str.isRoot }"
@@ -99,7 +99,7 @@
           :y="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
           text-anchor="middle"
           dy="0.36em"
-          font-size="24"
+          font-size="30"
           font-weight="900"
           :fill="getFingerTextColor(str, isDarkMode)"
           class="finger-text"
@@ -119,23 +119,39 @@ import { getFingerColor, getFingerTextColor } from '@/utils/fretboardVisuals';
 import { calcNoteLabel } from '@/utils/musicTheory';
 import { computed } from 'vue';
 
-const props = defineProps<{
-  strings: GuitarStringsModel;
-  fretCount: number;
-  capo: number;
-  activeBaseStrings: readonly number[];
-  isDarkMode: boolean;
-  interactive: boolean;
-  isMobile: boolean;
-  stringXPositions: number[];
-  hoverPoint: { stringIndex: number; fretIndex: number } | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    strings: GuitarStringsModel;
+    fretCount: number;
+    capo: number;
+    activeBaseStrings: readonly number[];
+    isDarkMode: boolean;
+    interactive: boolean;
+    isMobile: boolean;
+    stringXPositions: number[];
+    hoverPoint: { stringIndex: number; fretIndex: number } | null;
+    fretNumberSize?: 'sm' | 'md' | 'lg'; // 🌟 新增尺寸控制参数
+  }>(),
+  { fretNumberSize: 'md' }
+);
 
 const emit = defineEmits<{
   (e: 'toggle-pitch', stringIndex: number): void;
 }>();
 
-// 🌟 预测性悬浮圆环：仅桌面端、可交互、且指针位置落在有效品格范围内时显示
+// 🌟 新增：计算动态字体大小预设值
+const fretFontSize = computed(() => {
+  switch (props.fretNumberSize) {
+    case 'sm':
+      return 20; // 较小的品格数字
+    case 'lg':
+      return 40; // 较大的品格数字
+    case 'md':
+    default:
+      return 30; // 原本的默认值
+  }
+});
+
 const showPredictiveHover = computed(() => {
   const hp = props.hoverPoint;
   return (
@@ -149,6 +165,8 @@ const showPredictiveHover = computed(() => {
   );
 });
 </script>
+
+<!-- <style> 保持不变 -->
 
 <style scoped lang="less">
 @import '@/assets/tokens.module.less';

@@ -59,6 +59,7 @@
         :is-mobile="uiStore.isMobile"
         :string-x-positions="stringXPositions"
         :hover-point="hoverPoint"
+        :fret-number-size="fretNumberSize"
         @toggle-pitch="handleTogglePitchName"
       />
     </div>
@@ -86,8 +87,15 @@ const props = withDefaults(
     isDarkMode?: boolean;
     interactive?: boolean;
     scale?: number;
+    fretNumberSize?: 'sm' | 'md' | 'lg';
   }>(),
-  { activeBaseStrings: () => DEFAULT_TUNING_MAPPING, isDarkMode: false, interactive: true, scale: 1.0 }
+  {
+    activeBaseStrings: () => DEFAULT_TUNING_MAPPING,
+    isDarkMode: false,
+    interactive: true,
+    scale: 1.0,
+    fretNumberSize: 'md',
+  }
 );
 
 const emit = defineEmits<{
@@ -150,8 +158,8 @@ const {
 }
 
 .open-string-btn {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.4rem;
+  height: 2.4rem;
   box-sizing: border-box;
   box-shadow: @shadow-sm;
   display: flex;
@@ -200,15 +208,15 @@ const {
 }
 
 .mute-icon {
-  width: 1.125rem;
-  height: 1.125rem;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 .open-note-text {
   display: inline-block;
   line-height: 1;
   font-weight: 900;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   letter-spacing: -0.05em;
 }
 

@@ -41,6 +41,7 @@
           :capo="chord.capo"
           :fret-count="chord.fretCount"
           :is-dark-mode="isDarkMode"
+          fret-number-size="lg"
         />
       </div>
 
@@ -48,7 +49,9 @@
     </div>
 
     <template v-if="variant === 'char'">
-      <span class="char-text">{{ char }}</span>
+      <span class="char-text" :class="{ 'is-space': char === ' ' }">
+        {{ char === ' ' ? '\u00A0' : char }}
+      </span>
     </template>
   </div>
 </template>
@@ -153,6 +156,7 @@ const emit = defineEmits<{
     }
   }
 }
+
 .add-edge-placeholder {
   display: inline-flex;
   align-items: center;
@@ -197,7 +201,7 @@ const emit = defineEmits<{
   border: 1px solid transparent;
   transition: @transition-fast;
   cursor: pointer;
-  position: relative; /* 🌟 用于挂载右上角清除按钮的绝对定位 */
+  position: relative;
 
   & * {
     cursor: pointer;
@@ -216,7 +220,6 @@ const emit = defineEmits<{
     background-color: color-mix(in srgb, var(--text-title), transparent 90%);
     border-color: var(--border-light);
 
-    /* 🌟 鼠标悬停时显示右上角清除按钮 */
     .remove-chord-btn {
       opacity: 1;
       pointer-events: auto;
@@ -224,7 +227,6 @@ const emit = defineEmits<{
   }
 }
 
-/* 🌟 右上角小叉号清除按钮样式 */
 .remove-chord-btn {
   position: absolute;
   top: -2px;
@@ -256,7 +258,7 @@ const emit = defineEmits<{
 }
 
 .inline-chord-name {
-  font-size: 0.62rem;
+  font-size: 0.7rem;
   font-weight: 800;
   color: var(--text-title);
   line-height: 1;
@@ -264,25 +266,30 @@ const emit = defineEmits<{
 }
 
 .char-text {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  font-size: calc(0.9rem * var(--score-font-scale, 1)); // 🌟 动态字号
+
+  font-size: calc(0.9rem * var(--score-font-scale, 1));
   font-weight: 600;
   color: var(--text-title);
   line-height: 1.15rem;
+
+  white-space: pre;
+  min-height: calc(1.15rem * var(--score-font-scale, 1));
+
   padding: 0 0.08rem;
   border-radius: 0;
   transition:
     color @duration-fast ease,
     font-size @duration-fast ease,
+    min-height @duration-fast ease,
     border-color @duration-fast ease;
   border-bottom: 1.5px solid transparent;
   box-sizing: border-box;
   margin-top: auto;
 
-  .has-chord & {
+  .has-chord &:not(.is-space) {
     border-bottom: 1.5px dashed var(--text-disabled);
   }
 }

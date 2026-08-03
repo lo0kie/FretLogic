@@ -12,6 +12,8 @@
 <script setup lang="ts">
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 
+defineOptions({ name: 'ScoreLyricsEditor' });
+
 const scoreEditor = useScoreEditorStore();
 
 const handleInput = (e: Event) => {

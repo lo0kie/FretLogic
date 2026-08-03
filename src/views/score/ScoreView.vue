@@ -2,33 +2,71 @@
   <div class="score-view-wrapper">
     <div class="score-main-content">
       <template v-if="scoreEditor.activeSong">
-        <!-- 模式 1：文本编辑 -->
-        <ScoreLyricsEditor v-if="scoreEditor.activeTab === 'edit'" />
+        <ScoreLyricsEditor v-show="scoreEditor.activeTab === 'edit'" />
 
-        <!-- 模式 2：交互式和弦标注 -->
-        <ScoreInteractiveArea v-else @open-picker="openChordPicker" />
+        <ScoreInteractiveArea
+          v-show="scoreEditor.activeTab !== 'edit'"
+          ref="interactiveAreaRef"
+          :selected-line-set="selectedLineSet"
+          :is-exporting="isExporting"
+          @open-picker="openChordPicker"
+          @pointer-down-line="handlePointerDown"
+        />
       </template>
 
       <EmptyState v-else :icon="Music" title="未选择乐谱" description="请在左侧侧边栏选择或新建一份乐谱" size="lg" />
     </div>
   </div>
 
+  <ScoreExportFloatingBar
+    v-if="scoreEditor.activeSong && scoreEditor.activeTab === 'interactive'"
+    :selected-count="selectedLineSet.size"
+    :sorted-indices="sortedSelectedIndices"
+    :is-all-selected="isAllSelected"
+    :is-exporting="isExporting"
+    @remove-index="handleRemoveLineIndex"
+    @toggle-select-all="handleToggleSelectAll"
+    @copy-image="handleCopySelectedImage"
+  />
+
   <ChordPickerModal v-model:visible="isPickerOpen" />
 </template>
 
 <script setup lang="ts">
 import EmptyState from '@/components/EmptyState.vue';
+import { useLineSelection } from '@/services/useLineSelection';
+import { useLyricsLinesData } from '@/services/useLyricsLinesData';
+import { useScoreImageExport } from '@/services/useScoreImageExport';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
-import { ref } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 
 import ChordPickerModal from './ChordPickerModal.vue';
+import ScoreExportFloatingBar from './ScoreExportFloatingBar.vue';
 import ScoreInteractiveArea from './ScoreInteractiveArea.vue';
 import ScoreLyricsEditor from './ScoreLyricsEditor.vue';
 
 const scoreEditor = useScoreEditorStore();
 const isPickerOpen = ref(false);
+
+const interactiveAreaRef = useTemplateRef<any>('interactiveAreaRef');
+const scoreZoneEl = computed<HTMLElement | null>(() => interactiveAreaRef.value?.scoreZoneRef || null);
+
+const { lyricsLinesWithEdges } = useLyricsLinesData();
+const totalLines = computed(() => lyricsLinesWithEdges.value.length);
+const activeSongId = computed(() => scoreEditor.activeSongId);
+
+const {
+  selectedLineSet,
+  isAllSelected,
+  sortedSelectedIndices,
+  handleRemoveLineIndex,
+  handlePointerDown,
+  handleToggleSelectAll,
+} = useLineSelection(scoreZoneEl, totalLines, activeSongId);
+
+const { isExporting, handleCopySelectedImage } = useScoreImageExport(scoreZoneEl, selectedLineSet);
 
 const openChordPicker = (slotKey: string | number) => {
   scoreEditor.selectedSlotKey = slotKey;

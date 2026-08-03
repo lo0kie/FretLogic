@@ -2,20 +2,17 @@ import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
-import { cleanAndValidateData } from '@/utils/dataParser';
+import type { ImportExportPayload } from '@/types';
+import { cleanAndValidateData, cloneDeep } from '@/utils/dataParser';
 import { validateSettings } from '@/utils/validators';
 import { Base64 } from 'js-base64';
 import { ref } from 'vue';
 
-interface GithubFilePayload {
-  message: string;
-  content: string;
-  branch: string;
-  sha?: string;
-}
-
 const isSyncing = ref(false);
 const isPulling = ref(false);
+
+const isMergeModalOpen = ref(false);
+const pendingCloudData = ref<ImportExportPayload | null>(null);
 
 export function useGithubSyncService() {
   const uiStore = useUiStore();
@@ -53,7 +50,6 @@ export function useGithubSyncService() {
       'Content-Type': 'application/json',
     };
 
-    // 🌟 引入请求超时控速 Controller
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
@@ -79,7 +75,7 @@ export function useGithubSyncService() {
 
       const contentBase64 = Base64.encode(JSON.stringify(data, null, 2));
 
-      const body: GithubFilePayload = {
+      const body: { message: string; content: string; branch: string; sha?: string } = {
         message: `Auto sync fret-logic data: ${new Date().toLocaleString()}`,
         content: contentBase64,
         branch: githubBranch,
@@ -108,6 +104,31 @@ export function useGithubSyncService() {
       clearTimeout(timeoutId);
       isSyncing.value = false;
     }
+  };
+
+  // 🌟 辅助：对比云端与本地是否存在差异
+  const checkHasDifferences = (cloudData: ImportExportPayload): boolean => {
+    const localChords = chordStore.savedChordsList;
+    const cloudChords = cloudData.chords || [];
+
+    // 1. 和弦数量不一致，必定存在差异
+    if (localChords.length !== cloudChords.length) return true;
+
+    // 2. 检查和弦的指纹/物理属性差异
+    const localFps = new Set(localChords.map(c => c.fingerprint || `${c.id}_${c.chordName}`));
+    const hasUnmatchedChord = cloudChords.some(c => !localFps.has(c.fingerprint || `${c.id}_${c.chordName}`));
+    if (hasUnmatchedChord) return true;
+
+    // 3. 检查乐谱 ID/标题差异
+    const localSongs = songStore.songs;
+    const cloudSongs = cloudData.songs || [];
+    if (localSongs.length !== cloudSongs.length) return true;
+
+    const localSongIds = new Set(localSongs.map(s => s.id));
+    const hasUnmatchedSong = cloudSongs.some(s => !localSongIds.has(s.id));
+    if (hasUnmatchedSong) return true;
+
+    return false;
   };
 
   const pullFromGithub = async () => {
@@ -144,7 +165,7 @@ export function useGithubSyncService() {
     let loadingToastId: number | null = null;
 
     try {
-      loadingToastId = uiStore.toast.loading('正在从云端拉取数据...');
+      loadingToastId = uiStore.toast.loading('正在从云端获取数据...');
 
       const res = await fetch(apiUrl, { method: 'GET', headers, signal: controller.signal });
 
@@ -163,17 +184,13 @@ export function useGithubSyncService() {
       if (cleanAndValidateData(imported, 'import')) {
         if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
 
-        chordStore.overwriteGroups(imported.groups);
-        chordStore.overwriteChords(imported.chords);
-
-        if (imported.songs) {
-          songStore.overwriteSongs(imported.songs);
+        // 🌟 核心拦截检查：如果有差异，弹窗面板让用户选择；若数据完全一致则静默同步
+        if (checkHasDifferences(imported)) {
+          pendingCloudData.value = imported;
+          isMergeModalOpen.value = true;
+        } else {
+          uiStore.toast.success('本地数据与云端完全一致，无需合并');
         }
-
-        if (!chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
-          chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
-        }
-        uiStore.toast.success('已成功从 GitHub 恢复所有数据');
       } else {
         throw new Error('云端数据格式破损，已触发安全拦截');
       }
@@ -190,6 +207,69 @@ export function useGithubSyncService() {
     }
   };
 
+  // 🌟 合并动作 1：用云端彻底覆盖本地
+  const applyOverwriteWithCloud = () => {
+    if (!pendingCloudData.value) return;
+
+    const data = pendingCloudData.value;
+    chordStore.overwriteGroups(data.groups);
+    chordStore.overwriteChords(data.chords);
+    if (data.songs) songStore.overwriteSongs(data.songs);
+
+    if (!chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
+      chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
+    }
+
+    isMergeModalOpen.value = false;
+    pendingCloudData.value = null;
+    uiStore.toast.success('已使用云端数据完全覆盖本地');
+  };
+
+  // 🌟 合并动作 2：无冲突增量合并 (Union Set)
+  const applyUnionSetMerge = () => {
+    if (!pendingCloudData.value) return;
+
+    const cloudData = pendingCloudData.value;
+
+    // 1. 分组合并 (补全本地缺失的分组)
+    const localGroupIds = new Set(chordStore.groups.map(g => g.id));
+    const newGroups = [...chordStore.groups];
+    cloudData.groups.forEach(cg => {
+      if (!localGroupIds.has(cg.id)) {
+        newGroups.push(cloneDeep(cg));
+      }
+    });
+
+    // 2. 和弦按指纹去重合并
+    const localFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint || c.id));
+    const newChords = [...chordStore.savedChordsList];
+    cloudData.chords.forEach(cc => {
+      const fp = cc.fingerprint || cc.id;
+      if (!localFps.has(fp)) {
+        newChords.push(cloneDeep(cc));
+      }
+    });
+
+    // 3. 乐谱 ID 去重合并
+    const localSongIds = new Set(songStore.songs.map(s => s.id));
+    const newSongs = [...songStore.songs];
+    if (cloudData.songs) {
+      cloudData.songs.forEach(cs => {
+        if (!localSongIds.has(cs.id)) {
+          newSongs.push(cloneDeep(cs));
+        }
+      });
+    }
+
+    chordStore.overwriteGroups(newGroups);
+    chordStore.overwriteChords(newChords);
+    songStore.overwriteSongs(newSongs);
+
+    isMergeModalOpen.value = false;
+    pendingCloudData.value = null;
+    uiStore.toast.success('已完成两端增量合并 (Union Set)');
+  };
+
   const triggerGlobalSync = () => {
     syncToGithub({
       groups: chordStore.groups,
@@ -198,5 +278,15 @@ export function useGithubSyncService() {
     });
   };
 
-  return { syncToGithub, triggerGlobalSync, pullFromGithub, isSyncing, isPulling };
+  return {
+    syncToGithub,
+    triggerGlobalSync,
+    pullFromGithub,
+    isSyncing,
+    isPulling,
+    isMergeModalOpen,
+    pendingCloudData,
+    applyOverwriteWithCloud,
+    applyUnionSetMerge,
+  };
 }
