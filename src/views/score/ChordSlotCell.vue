@@ -12,7 +12,7 @@
     tabindex="0"
     :aria-label="ariaLabelText"
     :title="variant === 'char' ? (chord ? '点击更换或清除和弦' : '点击添加和弦') : undefined"
-    @click="emit('click')"
+    @click.stop.prevent="emit('click')"
     @keydown.enter.prevent="emit('click')"
     @keydown.space.prevent="emit('click')"
     @keydown.delete.prevent="chord && emit('remove', slotKey)"
@@ -44,6 +44,7 @@
         </button>
 
         <span class="inline-chord-name">{{ chord.chordName }}</span>
+
         <Fretboard
           :interactive="false"
           :scale="0.28 * scoreEditor.fretboardScale"

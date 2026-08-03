@@ -68,6 +68,7 @@
       @open-sort="groupModals.openSort"
       @open-config-song="songModals.openConfig"
       @open-clear-song="songModals.openClear"
+      @open-delete-variants="groupModals.openChordVariantsDelete"
     />
 
     <!-- 3. 底栏：统一提供数据备份与恢复 -->

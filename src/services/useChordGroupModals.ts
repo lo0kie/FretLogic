@@ -1,7 +1,9 @@
+import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
+import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord, Group, GroupSortRule } from '@/types';
+import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/types';
 import { generateUUID } from '@/utils/validators';
 import { reactive } from 'vue';
 
@@ -9,6 +11,8 @@ export function useChordGroupModals() {
   const chordStore = useChordStore();
   const editorStore = useEditorStore();
   const uiStore = useUiStore();
+  const songStore = useSongStore();
+  const chordService = useChordService();
 
   const modals = reactive({
     create: false,
@@ -16,12 +20,15 @@ export function useChordGroupModals() {
     delete: false,
     move: false,
     sort: false,
+    chordVariantsDelete: false,
   });
 
   const modalData = reactive({
     inputValue: '',
     activeGroup: null as Group | null,
     activeChord: null as Chord | null,
+    activeGroupCard: null as GroupedChordCard | null,
+    selectedVariantIds: new Set<string>(),
     moveTargetId: '',
     sortRule: 'ROOT_PITCH' as GroupSortRule,
     sortKey: 'C',
@@ -135,6 +142,37 @@ export function useChordGroupModals() {
     uiStore.toast.success('排序配置已更新');
   };
 
+  const openChordVariantsDelete = (cardData: GroupedChordCard) => {
+    modalData.activeGroupCard = cardData;
+    modalData.selectedVariantIds = new Set<string>();
+    modals.chordVariantsDelete = true;
+  };
+
+  const toggleVariantSelection = (chordId: string) => {
+    const set = modalData.selectedVariantIds;
+    if (set.has(chordId)) {
+      set.delete(chordId);
+    } else {
+      set.add(chordId);
+    }
+  };
+
+  const handleDeleteSelectedVariants = () => {
+    if (!modalData.activeGroupCard || modalData.selectedVariantIds.size === 0) {
+      uiStore.toast.warning('请至少选择一个要删除的指法');
+      return;
+    }
+    const chordsToDelete = modalData.activeGroupCard.variants.filter(v => modalData.selectedVariantIds.has(v.id));
+    chordService.triggerDeleteChords(chordsToDelete);
+    modals.chordVariantsDelete = false;
+  };
+
+  const handleDeleteAllVariants = () => {
+    if (!modalData.activeGroupCard) return;
+    chordService.triggerDeleteChords(modalData.activeGroupCard.variants);
+    modals.chordVariantsDelete = false;
+  };
+
   return {
     modals,
     modalData,
@@ -149,5 +187,9 @@ export function useChordGroupModals() {
     getGroupClass,
     openSort,
     handleSaveSort,
+    openChordVariantsDelete,
+    toggleVariantSelection,
+    handleDeleteSelectedVariants,
+    handleDeleteAllVariants,
   };
 }

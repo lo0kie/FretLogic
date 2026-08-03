@@ -246,6 +246,7 @@ const goToWorkbenchToCreate = () => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   padding: 0.6rem;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
@@ -254,6 +255,12 @@ const goToWorkbenchToCreate = () => {
   transition: @transition-fast;
   outline: none;
 
+  /* 🌟 核心：强制恢复内部指板与按钮的鼠标穿透响应，服从父卡片的 cursor */
+  :deep(*) {
+    cursor: inherit !important;
+    pointer-events: inherit !important;
+  }
+
   &:hover,
   &:focus-visible {
     border-color: var(--color-primary);
@@ -261,7 +268,6 @@ const goToWorkbenchToCreate = () => {
     box-shadow: @shadow-md;
   }
 
-  /* 🌟 3. Tab 键盘聚焦高亮 */
   &:focus-visible {
     box-shadow: @focus-ring-primary;
   }
@@ -270,8 +276,8 @@ const goToWorkbenchToCreate = () => {
     background-color: color-mix(in srgb, @primary, transparent 88%);
     border-color: @primary;
     box-shadow: @focus-ring-primary;
-    cursor: default;
-    pointer-events: none;
+    cursor: default !important;
+    pointer-events: none !important; /* 已绑定卡片彻底禁用 */
 
     .card-name {
       color: @primary;

@@ -6,8 +6,8 @@
     :model-value="chordStore.groups"
     @update:modelValue="(val: Group[]) => chordStore.overwriteGroups(val)"
     :animation="200"
-    handle=".drag-handle"
-    :disabled="Boolean(searchQuery) || uiStore.isMobile"
+    handle=".group-title-row"
+    :disabled="!isAllCollapsed || Boolean(searchQuery) || uiStore.isMobile"
     class="draggable-list"
     ghost-class="drag-ghost-style"
     chosen-class="drag-chosen-style"
@@ -17,7 +17,7 @@
   >
     <template v-for="group in chordStore.groups" :key="group.id">
       <GlobalContextMenu ref="contextMenuRefs" :items="getGroupMenuItems(group)" class="group-box-card">
-        <!-- 🌟 1. 展开高亮 class 绑定 -->
+        <!-- 1. 标题行 -->
         <div
           v-wave
           ref="groupCardEls"
@@ -83,37 +83,45 @@
               {{ getGroupChordsCount(group.id) }}
             </BaseBadge>
           </div>
+        </div>
 
-          <div v-if="!uiStore.isMobile" class="drag-action-zone">
-            <div
-              class="drag-handle"
-              :class="{ 'is-hidden-by-search': Boolean(searchQuery) }"
-              title="按住拖拽排序"
-              aria-hidden="true"
-            >
-              <GripVertical :size="14" stroke-width="2.5" />
+        <!-- 2. 平滑折叠展开区域 -->
+        <Transition
+          name="collapse-expand"
+          @before-enter="onEnterBefore"
+          @enter="onEnter"
+          @after-enter="onEnterAfter"
+          @before-leave="onLeaveBefore"
+          @leave="onLeave"
+          @after-leave="onLeaveAfter"
+        >
+          <div v-show="!group.collapsed" class="chord-content-wrapper" @contextmenu.stop>
+            <div class="chord-content-inner">
+              <TransitionGroup
+                v-if="getGroupedCardData(group.id).length > 0"
+                name="chord-y-fade"
+                tag="div"
+                class="chords-grid-layout"
+              >
+                <LeftChordCard
+                  v-for="cardData in getGroupedCardData(group.id)"
+                  :key="cardData.mainChord.chordName"
+                  :card-data="cardData"
+                  @delete-variants="cardData => $emit('open-delete-variants', cardData)"
+                  :is-editing="cardData.variants.some(c => c.id === editorStore.editingId)"
+                  @delete="handleLocalDeleteChord"
+                  @move="chord => $emit('open-move', chord)"
+                  @select="handleSelectChord"
+                  class="chord-item-grab-handle"
+                />
+              </TransitionGroup>
+
+              <EmptyState v-else-if="getGroupChordsCount(group.id) === 0" size="sm" description="暂无和弦" />
+
+              <EmptyState v-else-if="searchQuery" size="sm" description="无匹配" />
             </div>
           </div>
-        </div>
-
-        <div v-if="!group.collapsed" class="chord-content-wrapper" @contextmenu.stop>
-          <div v-if="getGroupedCardData(group.id).length > 0" class="chords-grid-layout">
-            <LeftChordCard
-              v-for="cardData in getGroupedCardData(group.id)"
-              :key="cardData.mainChord.chordName"
-              :card-data="cardData"
-              :is-editing="cardData.variants.some(c => c.id === editorStore.editingId)"
-              @delete="handleLocalDeleteChord"
-              @move="chord => $emit('open-move', chord)"
-              @select="handleSelectChord"
-              class="chord-item-grab-handle"
-            />
-          </div>
-
-          <EmptyState v-else-if="getGroupChordsCount(group.id) === 0" size="sm" description="暂无和弦" />
-
-          <EmptyState v-else-if="searchQuery" size="sm" description="无匹配" />
-        </div>
+        </Transition>
       </GlobalContextMenu>
     </template>
   </VueDraggable>
@@ -130,7 +138,7 @@ import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
 import { groupChordsByName, sortChordsByRule } from '@/utils/musicTheory';
-import { ArrowUpDown, ChevronDown, FolderOpen, GripVertical, SquarePen, Trash2 } from '@lucide/vue';
+import { ArrowUpDown, ChevronDown, FolderOpen, SquarePen, Trash2 } from '@lucide/vue';
 import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import LeftChordCard from './LeftChordCard.vue';
@@ -144,6 +152,7 @@ const emit = defineEmits<{
   (e: 'open-delete', group: Group): void;
   (e: 'open-move', chord: Chord): void;
   (e: 'open-sort', group: Group): void;
+  (e: 'open-delete-variants', cardData: GroupedChordCard): void;
 }>();
 
 const editorStore = useEditorStore();
@@ -155,6 +164,55 @@ const groupCardEls = useTemplateRef<HTMLElement[]>('groupCardEls');
 const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>('contextMenuRefs');
 
 const chordLowerNameCache = new WeakMap<Chord, string>();
+
+// 只有当所有分组均处于折叠状态时才允许拖拽
+const isAllCollapsed = computed(() => {
+  return chordStore.groups.every(g => g.collapsed);
+});
+
+// 折叠/展开动画钩子：动态计算高度与透明度，兼顾 overflow 解锁
+const onEnterBefore = (el: Element) => {
+  const element = el as HTMLElement;
+  element.style.overflow = 'hidden';
+  element.style.height = '0px';
+  element.style.opacity = '0';
+};
+
+const onEnter = (el: Element) => {
+  const element = el as HTMLElement;
+  requestAnimationFrame(() => {
+    element.style.height = `${element.scrollHeight}px`;
+    element.style.opacity = '1';
+  });
+};
+
+const onEnterAfter = (el: Element) => {
+  const element = el as HTMLElement;
+  element.style.height = 'auto';
+  element.style.opacity = '';
+  element.style.overflow = 'visible'; // 展开完成后解锁 overflow，避免伪元素阴影被裁剪
+};
+
+const onLeaveBefore = (el: Element) => {
+  const element = el as HTMLElement;
+  element.style.overflow = 'hidden';
+  element.style.height = `${element.scrollHeight}px`;
+  element.style.opacity = '1';
+};
+
+const onLeave = (el: Element) => {
+  const element = el as HTMLElement;
+  requestAnimationFrame(() => {
+    element.style.height = '0px';
+    element.style.opacity = '0';
+  });
+};
+
+const onLeaveAfter = (el: Element) => {
+  const element = el as HTMLElement;
+  element.style.height = '';
+  element.style.opacity = '';
+};
 
 const handleSelectChord = (chord: Chord) => {
   if (editorStore.editingId === chord.id) {
@@ -195,10 +253,12 @@ const getChordLowerName = (chord: Chord): string => {
   return cached;
 };
 
-const isGroupMenuOpen = (groupId: string) => {
+const isGroupMenuOpen = (groupId: string): boolean => {
   const idx = chordStore.groups.findIndex(g => g.id === groupId);
-  if (idx === -1) return false;
-  return contextMenuRefs.value?.[idx]?.isOpen ?? false;
+  if (idx === -1 || !contextMenuRefs.value) return false;
+
+  const refs = contextMenuRefs.value as unknown as Record<number, { isOpen?: boolean }>;
+  return Boolean(refs[idx]?.isOpen);
 };
 
 const getGroupChordsCount = (groupId: string) => {
@@ -270,12 +330,6 @@ watch(
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 
-.draggable-list:has(.group-box-card.drag-chosen-style) {
-  .chord-content-wrapper {
-    display: none !important;
-  }
-}
-
 .draggable-list {
   display: flex;
   flex-direction: column;
@@ -295,7 +349,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.45rem 0.5rem;
+  padding: 0.6rem 0.5rem;
   user-select: none;
   background-color: transparent;
 
@@ -309,10 +363,6 @@ watch(
   &:focus-visible,
   &:hover {
     background-color: var(--bg-panel-hover);
-
-    .drag-handle:not(.is-hidden-by-search) {
-      opacity: 1;
-    }
   }
 
   &:focus-visible {
@@ -327,7 +377,6 @@ watch(
     border-color: var(--border-base);
   }
 
-  /* 🌟 中性高亮：使用温和的背景底色加深 + 边框强化，不用 Primary */
   &.is-expanded {
     background-color: color-mix(in srgb, var(--bg-panel-hover), transparent 50%);
     border-color: var(--border-light);
@@ -341,7 +390,6 @@ watch(
   gap: 0.4rem;
   flex: 1;
   min-width: 0;
-  margin-right: 0.5rem;
   box-sizing: border-box;
 }
 
@@ -370,9 +418,24 @@ watch(
   flex-shrink: 0;
 }
 
+/* 折叠/展开动画容器 */
 .chord-content-wrapper {
-  margin-top: 0.4rem;
   position: relative;
+  box-sizing: border-box;
+  will-change: height, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.collapse-expand-enter-active,
+.collapse-expand-leave-active {
+  transition:
+    height @duration-base @bezier-sidebar,
+    opacity @duration-fast ease;
+}
+
+.chord-content-inner {
+  padding-top: 0.4rem;
   box-sizing: border-box;
 }
 
@@ -385,5 +448,35 @@ watch(
   z-index: 10;
   min-height: 2.2rem;
   box-sizing: border-box;
+  padding-right: 6px;
+  padding-bottom: 6px;
+}
+
+/* 搜索/过滤时的 Y 轴渐隐与位置位移动画 */
+.chord-y-fade-enter-active,
+.chord-y-fade-leave-active {
+  transition:
+    opacity @duration-fast ease,
+    transform @duration-fast @bezier-standard;
+}
+
+.chord-y-fade-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.chord-y-fade-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.chord-y-fade-leave-active {
+  position: absolute !important;
+  width: calc((100% - 0.8rem) / 3);
+  pointer-events: none;
+}
+
+.chord-y-fade-move {
+  transition: transform @duration-base @bezier-standard;
 }
 </style>

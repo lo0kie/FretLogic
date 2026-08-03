@@ -269,7 +269,7 @@ const resetToDefault = () => updateValue(defaultValue);
 
   &:focus-visible {
     &::-webkit-slider-thumb {
-      box-shadow: 0 0 0 2px var(--color-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary), transparent 70%);
     }
   }
 
@@ -280,10 +280,17 @@ const resetToDefault = () => updateValue(defaultValue);
     border-radius: 50%;
     background: var(--color-primary);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-    transition: transform @duration-fast ease;
+    transition:
+      transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow @duration-fast ease;
 
     &:hover {
-      transform: scale(1.2);
+      transform: scale(1.25);
+    }
+
+    &:active {
+      transform: scale(1.4);
+      box-shadow: 0 2px 6px color-mix(in srgb, var(--color-primary), transparent 50%);
     }
   }
 }

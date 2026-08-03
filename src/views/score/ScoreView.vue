@@ -10,7 +10,7 @@
           :selected-line-set="selectedLineSet"
           :is-exporting="isExporting"
           @open-picker="openChordPicker"
-          @pointer-down-line="handlePointerDown"
+          @line-click="handleLineClick"
         />
       </template>
 
@@ -62,8 +62,8 @@ const {
   isAllSelected,
   sortedSelectedIndices,
   handleRemoveLineIndex,
-  handlePointerDown,
   handleToggleSelectAll,
+  handleLineClick,
 } = useLineSelection(scoreZoneEl, totalLines, activeSongId);
 
 const { isExporting, handleCopySelectedImage } = useScoreImageExport(scoreZoneEl, selectedLineSet);

@@ -20,6 +20,7 @@
         <span>{{ item.msg }}</span>
 
         <button
+          v-wave
           v-if="item.hasAction && item.onAction"
           type="button"
           @click="handleExecuteAction(item)"

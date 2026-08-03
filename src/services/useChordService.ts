@@ -55,8 +55,10 @@ export function useChordService() {
     chordStore.overwriteChords(updatedList);
   };
 
-  const triggerDeleteChord = (chord: Chord) => {
-    const updatedList = chordStore.savedChordsList.filter(c => c.id !== chord.id);
+  const triggerDeleteChords = (chords: Chord[]) => {
+    if (chords.length === 0) return;
+    const chordIds = new Set(chords.map(c => c.id));
+    const updatedList = chordStore.savedChordsList.filter(c => !chordIds.has(c.id));
     chordStore.overwriteChords(updatedList);
 
     songStore.songs.forEach(song => {
@@ -67,9 +69,11 @@ export function useChordService() {
         const boundChord = song.chordMap[key];
         if (!boundChord) return;
 
-        const isMatched =
-          boundChord.id === chord.id ||
-          (boundChord.fingerprint && chord.fingerprint && boundChord.fingerprint === chord.fingerprint);
+        const isMatched = chords.some(
+          chord =>
+            boundChord.id === chord.id ||
+            (boundChord.fingerprint && chord.fingerprint && boundChord.fingerprint === chord.fingerprint)
+        );
 
         if (isMatched) {
           delete song.chordMap[key];
@@ -82,7 +86,11 @@ export function useChordService() {
       }
     });
 
-    uiStore.toast.info(`已删除和弦 "${chord.chordName}"`, {
+    if (editorStore.editingId && chords.some(c => c.id === editorStore.editingId)) {
+      editorStore.resetEditor();
+    }
+
+    uiStore.toast.info(`已删除 ${chords.length} 个指法`, {
       actionText: '撤销',
       duration: 4000,
       onAction: () => {
@@ -90,6 +98,10 @@ export function useChordService() {
         uiStore.toast.success('已恢复刚才删除的和弦');
       },
     });
+  };
+
+  const triggerDeleteChord = (chord: Chord) => {
+    triggerDeleteChords([chord]);
   };
 
   const exportFretboardImage = async (
@@ -183,6 +195,7 @@ export function useChordService() {
     executeGroupToggle,
     handleChordSort,
     triggerDeleteChord,
+    triggerDeleteChords,
     exportFretboardImage,
     persistCurrentChord,
   };

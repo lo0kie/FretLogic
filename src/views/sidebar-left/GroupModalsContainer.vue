@@ -42,6 +42,7 @@
         class="move-tooltip-item"
       >
         <button
+          v-wave
           :disabled="group.id === groupModals.modalData.activeChord?.groupId"
           @click="groupModals.modalData.moveTargetId = group.id"
           class="move-target-btn"
@@ -56,11 +57,12 @@
     </div>
   </BaseModal>
 
+  <!-- 5. 排序配置 Modal -->
   <BaseModal
     v-model:visible="groupModals.modals.sort"
     title="分组和弦排序配置"
     @confirm="groupModals.handleSaveSort"
-    width="w-lg"
+    width="w-md"
   >
     <div class="sort-modal-body">
       <div class="sort-config-row">
@@ -76,14 +78,74 @@
       </div>
 
       <div v-if="groupModals.modalData.sortRule === 'KEY_DEGREE'" class="sort-config-row">
-        <label class="config-label">设定基准调</label>
+        <label class="config-label">调式设定</label>
         <div class="key-selector-wrapper">
           <BaseSelector
             v-model="groupModals.modalData.sortKey"
             :options="['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']"
             default-value="C"
-            :label-formatter="val => `${val} 调级数 (1-7级)`"
+            :label-formatter="val => `${val} 调`"
           />
+        </div>
+      </div>
+    </div>
+  </BaseModal>
+
+  <!-- 6. 多指法和弦删除选择 Modal -->
+  <BaseModal
+    v-model:visible="groupModals.modals.chordVariantsDelete"
+    :title="`删除和弦 &quot;${groupModals.modalData.activeGroupCard?.mainChord.chordName}&quot; 的指法`"
+    width="w-large"
+    :show-footer="false"
+  >
+    <div class="variants-delete-modal-content">
+      <div class="variants-header-row">
+        <p class="modal-description-text">请点击选择要删除的指法，或点击“全选”</p>
+        <ActionButton :primary="isAllVariantsSelected" size="sm" @click="handleToggleSelectAllVariants">
+          {{ isAllVariantsSelected ? '取消全选' : '全选' }}
+        </ActionButton>
+      </div>
+
+      <div class="variants-checkbox-list no-scrollbar">
+        <div
+          v-for="variant in groupModals.modalData.activeGroupCard?.variants"
+          :key="variant.id"
+          class="variant-checkbox-item"
+          :class="{ 'is-selected': groupModals.modalData.selectedVariantIds.has(variant.id) }"
+          @click="groupModals.toggleVariantSelection(variant.id)"
+          role="button"
+          tabindex="0"
+          v-wave
+        >
+          <div class="variant-meta-info">
+            <span class="variant-details"> capo {{ variant.capo }} </span>
+          </div>
+          <div class="variant-preview-thumb">
+            <Fretboard
+              fret-number-size="lg"
+              :interactive="false"
+              :scale="0.35"
+              :strings="variant.strings"
+              :capo="variant.capo"
+              :fret-count="variant.fretCount"
+              :is-dark-mode="settingsStore.isDarkMode"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer-zone custom-footer">
+        <ActionButton size="sm" @click="groupModals.modals.chordVariantsDelete = false">取消</ActionButton>
+        <div class="actions-right-group">
+          <ActionButton size="sm" danger @click="groupModals.handleDeleteAllVariants()"> 全部删除 </ActionButton>
+          <ActionButton
+            size="sm"
+            danger
+            :disabled="groupModals.modalData.selectedVariantIds.size === 0"
+            @click="groupModals.handleDeleteSelectedVariants()"
+          >
+            确认删除所选 ({{ groupModals.modalData.selectedVariantIds.size }})
+          </ActionButton>
         </div>
       </div>
     </div>
@@ -91,18 +153,42 @@
 </template>
 
 <script setup lang="ts">
+import ActionButton from '@/components/ActionButton.vue';
 import BaseInput from '@/components/BaseInput.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
+import Fretboard from '@/components/Fretboard.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
 import { useChordStore } from '@/stores/chordStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { computed } from 'vue';
 
-defineProps<{ groupModals: ReturnType<typeof useChordGroupModals> }>();
+const props = defineProps<{ groupModals: ReturnType<typeof useChordGroupModals> }>();
 
 const chordStore = useChordStore();
+const settingsStore = useSettingsStore();
+
+// 计算是否已全选当前卡片的所有指法
+const isAllVariantsSelected = computed(() => {
+  const variants = props.groupModals.modalData.activeGroupCard?.variants;
+  if (!variants || variants.length === 0) return false;
+  return variants.every(v => props.groupModals.modalData.selectedVariantIds.has(v.id));
+});
+
+// 一键全选/取消全选逻辑
+const handleToggleSelectAllVariants = () => {
+  const variants = props.groupModals.modalData.activeGroupCard?.variants;
+  if (!variants) return;
+
+  if (isAllVariantsSelected.value) {
+    props.groupModals.modalData.selectedVariantIds.clear();
+  } else {
+    variants.forEach(v => props.groupModals.modalData.selectedVariantIds.add(v.id));
+  }
+};
 </script>
 
 <style scoped lang="less">
@@ -203,12 +289,11 @@ const chordStore = useChordStore();
 .sort-config-row {
   display: flex;
   align-items: center;
-  justify-content: flex-start; /* 🌟 改为左对齐 */
-  gap: 1.2rem; /* 🌟 增大 Label 与控件之间的固定间距 */
+  justify-content: space-between;
 }
 
 .config-label {
-  width: 4.2rem; /* 🌟 固定 Label 宽度，确保上下两行的控件起始位置对齐 */
+  width: 4.2rem;
   flex-shrink: 0;
   font-size: 0.75rem;
   font-weight: 600;
@@ -217,7 +302,126 @@ const chordStore = useChordStore();
 }
 
 .key-selector-wrapper {
-  width: 12rem; /* 🌟 给选择器固定宽度，保持与分段控件视觉协调 */
+  width: 8rem;
+  flex-shrink: 0;
+}
+
+.variants-delete-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.variants-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.variants-checkbox-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.8rem;
+  max-height: 52vh;
+  overflow-y: auto;
+  padding: 0.15rem;
+  box-sizing: border-box;
+}
+
+.variant-checkbox-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 0.5rem 0.55rem;
+  background-color: var(--bg-body);
+  border: 1.5px solid var(--border-light);
+  border-radius: @radius-md;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color @duration-fast ease,
+    border-color @duration-fast ease,
+    box-shadow @duration-fast ease;
+  box-sizing: border-box;
+  outline: none;
+  min-width: 0;
+
+  &:hover {
+    border-color: var(--border-base);
+    background-color: var(--bg-panel-hover);
+  }
+
+  &:focus-visible {
+    box-shadow: @focus-ring-primary;
+    border-color: var(--border-base);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &.is-selected {
+    border-color: var(--color-danger);
+    background-color: color-mix(in srgb, var(--color-danger), transparent 90%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-danger), transparent 50%);
+  }
+
+  :deep(*) {
+    cursor: inherit !important;
+    pointer-events: inherit !important;
+  }
+}
+
+.variant-preview-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.25rem;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: @radius-sm;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.variant-meta-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  min-width: 0;
+
+  .variant-details {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-body);
+    text-align: center;
+    line-height: 1.3;
+
+    &.subtle {
+      color: var(--text-disabled);
+      font-weight: 500;
+    }
+  }
+}
+
+.custom-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0 0.1rem;
+  border-top: 1px solid var(--border-light);
+  margin-top: 0.15rem;
+}
+
+.actions-right-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   flex-shrink: 0;
 }
 </style>

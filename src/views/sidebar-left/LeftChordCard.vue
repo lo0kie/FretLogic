@@ -75,6 +75,7 @@ const emit = defineEmits<{
   (e: 'delete', chord: Chord): void;
   (e: 'move', chord: Chord): void;
   (e: 'select', chord: Chord): void;
+  (e: 'delete-variants', cardData: GroupedChordCard): void;
 }>();
 
 const uiStore = useUiStore();
@@ -151,7 +152,13 @@ const menuItems = computed<ContextMenuItem[]>(() => [
     label: '删除',
     icon: Trash2,
     danger: true,
-    action: () => emit('delete', activeChord.value),
+    action: () => {
+      if (props.cardData.hasVariants) {
+        emit('delete-variants', props.cardData);
+      } else {
+        emit('delete', activeChord.value);
+      }
+    },
   },
 ]);
 

@@ -133,7 +133,7 @@ const handleKeydownTrap = (e: KeyboardEvent) => {
   const focusables = Array.from(modalCardRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
 
   if (focusables.length === 0) {
-    e.preventDefault();
+    modalCardRef.value.focus();
     return;
   }
 
