@@ -30,13 +30,16 @@
 
     <!-- 2. 中间：试听 / 导出胶囊 / 模式切换工具栏 -->
     <div class="header-section section-center">
-      <HeaderWorkbenchTools v-if="route.path === '/'" @export-image="isTrans => emit('export-image', isTrans)" />
+      <HeaderWorkbenchTools
+        v-if="route.path === '/workbench'"
+        @export-image="isTrans => emit('export-image', isTrans)"
+      />
       <HeaderScoreTools v-else-if="route.path === '/score'" />
     </div>
 
     <!-- 3. 右侧：指板配置 Popover / 曲谱配置 Popover -->
     <div class="header-section section-right">
-      <HeaderConfigPopover v-if="route.path === '/'" />
+      <HeaderConfigPopover v-if="route.path === '/workbench'" />
       <ScoreConfigPopover v-else-if="route.path === '/score' && scoreEditor.activeSong" />
 
       <!-- 云端同步按钮 -->
@@ -96,7 +99,7 @@ const activeNavPath = computed(() => {
 });
 
 const NAV_OPTIONS: SegmentOption<string>[] = [
-  { label: '工作台', value: '/' },
+  { label: '工作台', value: '/workbench' },
   { label: '乐谱库', value: '/score' },
 ];
 

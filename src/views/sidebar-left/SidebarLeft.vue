@@ -3,7 +3,7 @@
     <!-- 1. 规范化顶栏 -->
     <div class="panel-header">
       <!-- 工作台模式 Header -->
-      <template v-if="route.path === '/'">
+      <template v-if="route.path === '/workbench'">
         <BaseInput
           v-model="searchQuery"
           :disabled="chordStore.savedChordsList.length === 0"
