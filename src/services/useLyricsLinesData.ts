@@ -2,7 +2,6 @@
 
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
-import { generateUUID } from '@/utils/validators';
 import { computed } from 'vue';
 
 export interface EdgeChordItem {
@@ -33,7 +32,9 @@ export function buildLyricsLinesWithEdges(
   const rawLines = lyrics.split('\n');
 
   return rawLines.map((lineText, lineIdx) => {
-    const lineId = existingLineIds[lineIdx] || 'l_' + generateUUID('', 8);
+    // 🌟 核心修复：纯计算属性绝对不能包含随机 UUID 这种副作用！
+    // 未分配的行严格 fallback 到字符串形式的行号索引，与 Store 保持一致
+    const lineId = existingLineIds[lineIdx] || String(lineIdx);
 
     const startChords: EdgeChordItem[] = [];
     let startCount = 0;

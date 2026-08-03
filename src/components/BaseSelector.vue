@@ -74,6 +74,7 @@ const {
   clearable = false,
   disabled = false,
   defaultValue,
+  highlightNonDefault = false,
   fontBlackItems = false,
   visibleCount = 6,
   formatter,
@@ -85,6 +86,7 @@ const {
   clearable?: boolean;
   disabled?: boolean;
   defaultValue?: T;
+  highlightNonDefault?: boolean;
   fontBlackItems?: boolean;
   visibleCount?: number;
   formatter?: (value: T) => string;
@@ -156,7 +158,9 @@ const toggleDropdown = () => {
   isOpen.value = !isOpen.value;
 };
 
-const isNonDefault = computed(() => modelValue.value !== defaultValue);
+const isNonDefault = computed(
+  () => highlightNonDefault && defaultValue !== undefined && modelValue.value !== defaultValue
+);
 
 const handleClear = () => {
   if (disabled) return;
@@ -298,6 +302,7 @@ watch(isOpen, opened => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  white-space: nowrap;
 
   &.is-custom {
     color: var(--color-primary);
@@ -363,6 +368,7 @@ watch(isOpen, opened => {
   cursor: pointer;
   transition: @transition-fast;
   flex-shrink: 0;
+  white-space: nowrap;
 
   &:hover {
     background-color: var(--bg-panel-hover);

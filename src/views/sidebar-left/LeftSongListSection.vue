@@ -35,41 +35,29 @@
       </div>
     </GlobalContextMenu>
   </VueDraggable>
-
-  <!-- 乐谱重命名 Modal -->
-  <BaseModal v-model:visible="isSongRenameOpen" title="重命名乐谱" @confirm="handleRenameSong">
-    <BaseInput
-      v-model="songRenameTitle"
-      placeholder="请输入新的乐谱名称..."
-      clearable
-      autofocus
-      @enter="handleRenameSong"
-    />
-  </BaseModal>
 </template>
 
 <script setup lang="ts">
-import BaseBadge from '@/components/BaseBadge.vue'; // 🌟 引入 BaseBadge
-import BaseInput from '@/components/BaseInput.vue';
+import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
-import BaseModal from '@/components/BaseModal.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
-import { Music, SquarePen, Trash2 } from '@lucide/vue';
-import { ref, useTemplateRef } from 'vue';
+import { Eraser, Music, SlidersHorizontal, Trash2 } from '@lucide/vue';
+import { useTemplateRef } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
+
+const emit = defineEmits<{
+  (e: 'open-config', song: Song): void;
+  (e: 'open-clear', song: Song): void;
+}>();
 
 const songStore = useSongStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
-
-const isSongRenameOpen = ref(false);
-const songRenameTitle = ref('');
-const targetSong = ref<Song | null>(null);
 
 const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>('contextMenuRefs');
 
@@ -79,23 +67,16 @@ const isSongMenuOpen = (songId: string) => {
   return contextMenuRefs.value?.[idx]?.isOpen ?? false;
 };
 
-const handleRenameSong = () => {
-  if (targetSong.value && songRenameTitle.value.trim()) {
-    targetSong.value.title = songRenameTitle.value.trim();
-  }
-  isSongRenameOpen.value = false;
-  targetSong.value = null;
-};
-
 const getSongMenuItems = (song: Song): ContextMenuItem[] => [
   {
-    label: '重命名',
-    icon: SquarePen,
-    action: () => {
-      targetSong.value = song;
-      songRenameTitle.value = song.title;
-      isSongRenameOpen.value = true;
-    },
+    label: '乐谱配置',
+    icon: SlidersHorizontal,
+    action: () => emit('open-config', song),
+  },
+  {
+    label: '清除所有和弦',
+    icon: Eraser,
+    action: () => emit('open-clear', song),
   },
   {
     label: '删除乐谱',
@@ -105,9 +86,7 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => [
       if (scoreEditor.activeSongId === song.id) {
         scoreEditor.setActiveSong(null);
       }
-
       songStore.deleteSong(song.id);
-
       uiStore.toast.info(`已删除乐谱 "${song.title}"`, {
         actionText: '撤销',
         duration: 4000,

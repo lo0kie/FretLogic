@@ -1,4 +1,5 @@
 ﻿import type { Chord, GroupSortRule, GuitarStringEntity } from '@/types';
+import { cloneDeep } from './dataParser';
 
 export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 export const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -123,4 +124,53 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
     });
   }
   return list;
+};
+
+// 🌟 P3 移调引擎
+export const transposeChordName = (chordName: string, semitones: number): string => {
+  const match = chordName.match(/^([A-G][#b]?)(.*)$/);
+  if (!match) return chordName;
+  const root = match[1];
+  const suffix = match[2];
+  let rootPitch = getChordRootPitch(root);
+  if (rootPitch === 99) return chordName;
+  rootPitch = (rootPitch + semitones + 120) % 12;
+  return NOTES_SHARP[rootPitch] + suffix;
+};
+
+export const getKeySemitones = (key1: string, key2: string): number => {
+  const p1 = getChordRootPitch(key1);
+  const p2 = getChordRootPitch(key2);
+  if (p1 === 99 || p2 === 99) return 0;
+  let diff = p2 - p1;
+  if (diff > 6) diff -= 12;
+  if (diff < -5) diff += 12;
+  return diff;
+};
+
+export const transposePhysicalChord = (chord: Chord, semitones: number, newCapo?: number, shiftName = true): Chord => {
+  if (semitones === 0 && (newCapo === undefined || newCapo === chord.capo)) return chord;
+  const newChord = cloneDeep(chord);
+
+  if (shiftName) {
+    newChord.chordName = transposeChordName(chord.chordName, semitones);
+  }
+
+  if (newCapo !== undefined) {
+    newChord.capo = newCapo;
+  }
+
+  newChord.strings.forEach(str => {
+    if (str.fret >= 0) {
+      str.fret += semitones;
+      if (str.fret < 0) {
+        str.fret = -1;
+        str.isRoot = false;
+      }
+    }
+  });
+
+  newChord.id = 'c_' + Math.random().toString(36).substring(2, 10);
+  newChord.fingerprint = undefined;
+  return newChord;
 };

@@ -1,7 +1,13 @@
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
-      <div v-if="visible" class="modal-overlay-container" v-bind="$attrs" @click="closeOnMask && handleCancel()">
+      <div
+        v-if="visible"
+        class="modal-overlay-container"
+        v-bind="$attrs"
+        @mousedown="handleMaskMousedown"
+        @click.self="handleMaskClick"
+      >
         <div class="modal-card" :class="width" @click.stop>
           <h3 v-if="title" class="modal-title" :title="title">
             {{ title }}
@@ -75,7 +81,8 @@ watch(
 );
 
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && visible) {
+  if (e.key === 'Escape' && visible.value) {
+    // 🌟 已修正为 visible.value
     handleCancel();
   }
 });
@@ -87,6 +94,22 @@ const handleConfirm = () => {
 const handleCancel = () => {
   emit('cancel');
   visible.value = false;
+};
+
+// 🌟 新增：拦截拖拽关闭的逻辑
+let mousedownTarget: EventTarget | null = null;
+
+const handleMaskMousedown = (e: MouseEvent) => {
+  mousedownTarget = e.target;
+};
+
+const handleMaskClick = (e: MouseEvent) => {
+  // 只有当 mousedown 和 click 的目标完全一致，且都是蒙版自身时才关闭
+  if (closeOnMask && e.target === e.currentTarget && mousedownTarget === e.currentTarget) {
+    handleCancel();
+  }
+  // 状态复位
+  mousedownTarget = null;
 };
 </script>
 
@@ -123,6 +146,9 @@ const handleCancel = () => {
   border-radius: @radius-xl;
   box-shadow: @shadow-floating;
   animation: cardPopIn @duration-base @bezier-bounce forwards;
+  transition:
+    height @duration-base @bezier-standard,
+    width @duration-base @bezier-standard;
 
   &.w-sm {
     width: 16rem; /* 256px */

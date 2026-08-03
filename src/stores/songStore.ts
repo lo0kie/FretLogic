@@ -223,11 +223,12 @@ export const useSongStore = defineStore('song', () => {
 
   const updateSongMeta = (
     id: string,
-    payload: Partial<Pick<Song, 'key' | 'playKey' | 'capo' | 'lyrics' | 'lineIds' | 'chordMap'>>
+    payload: Partial<Pick<Song, 'title' | 'key' | 'playKey' | 'capo' | 'lyrics' | 'lineIds' | 'chordMap'>>
   ) => {
     const target = songs.value.find(s => s.id === id);
     if (!target) return;
 
+    if (payload.title !== undefined) target.title = payload.title;
     if (payload.key !== undefined) target.key = payload.key;
     if (payload.playKey !== undefined) target.playKey = payload.playKey;
     if (payload.capo !== undefined) target.capo = payload.capo;

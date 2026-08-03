@@ -79,6 +79,7 @@ const handleWheel = (e: WheelEvent) => {
 .base-number-input {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
   border-radius: 9999px;

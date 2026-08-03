@@ -7,66 +7,61 @@
     width="w-wide"
   >
     <div class="chord-picker-wrapper no-scrollbar">
-      <EmptyState
-        v-if="chordStore.savedChordsList.length === 0"
-        description="当前库中暂无保存的和弦，请先在工作台创建并保存和弦。"
-        size="lg"
-      />
+      <div class="picker-header-bar">
+        <BaseInput
+          v-model="pickerSearchQuery"
+          placeholder="搜索和弦..."
+          clearable
+          size="sm"
+          autofocus
+          fontSize="xs"
+          class="picker-search-input"
+        >
+          <template #prefix>
+            <Search class="search-icon" :size="14" stroke-width="2.5" />
+          </template>
+        </BaseInput>
 
-      <template v-else>
-        <div class="picker-header-bar">
-          <BaseInput
-            v-model="pickerSearchQuery"
-            placeholder="搜索和弦..."
-            clearable
-            size="sm"
-            autofocus
-            fontSize="xs"
-            class="picker-search-input"
-          >
-            <template #prefix>
-              <Search class="search-icon" :size="14" stroke-width="2.5" />
-            </template>
-          </BaseInput>
+        <!-- 🌟 P1 加入就地新建和弦跳回工作台的功能 -->
+        <ActionButton size="sm" variant="subtle" @click="goToWorkbenchToCreate">
+          <template #prefix><Plus :size="14" stroke-width="2.5" /></template>
+          新建和弦
+        </ActionButton>
+      </div>
+
+      <div class="picker-toolbar">
+        <div class="group-select-tabs no-scrollbar">
+          <BaseSegmentedControl v-model="selectedGroupId" :options="groupTabOptions" />
         </div>
+      </div>
 
-        <div class="picker-toolbar">
-          <div class="group-select-tabs no-scrollbar">
-            <BaseSegmentedControl v-model="selectedGroupId" :options="groupTabOptions" />
-          </div>
+      <EmptyState v-if="filteredChords.length === 0" description="当前搜索或分组下暂无匹配和弦。" size="lg" />
+
+      <div v-else class="picker-cards-grid-4cols">
+        <div
+          v-for="chord in filteredChords"
+          :key="chord.id"
+          class="picker-chord-card"
+          :class="{ 'is-current-bound': isCurrentBound(chord) }"
+          @click="!isCurrentBound(chord) && handleSelectChord(chord)"
+        >
+          <span class="card-name">{{ chord.chordName }}</span>
+          <Fretboard
+            :interactive="false"
+            :scale="0.38"
+            :strings="chord.strings"
+            :capo="chord.capo"
+            :fret-count="chord.fretCount"
+            :is-dark-mode="settingsStore.isDarkMode"
+          />
         </div>
-
-        <EmptyState
-          v-if="filteredChords.length === 0"
-          description="当前库中暂无保存的和弦，请先在工作台创建并保存和弦。"
-          size="lg"
-        />
-
-        <div v-else class="picker-cards-grid-4cols">
-          <div
-            v-for="chord in filteredChords"
-            :key="chord.id"
-            class="picker-chord-card"
-            :class="{ 'is-current-bound': isCurrentBound(chord) }"
-            @click="!isCurrentBound(chord) && handleSelectChord(chord)"
-          >
-            <span class="card-name">{{ chord.chordName }}</span>
-            <Fretboard
-              :interactive="false"
-              :scale="0.38"
-              :strings="chord.strings"
-              :capo="chord.capo"
-              :fret-count="chord.fretCount"
-              :is-dark-mode="settingsStore.isDarkMode"
-            />
-          </div>
-        </div>
-      </template>
+      </div>
     </div>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
+import ActionButton from '@/components/ActionButton.vue';
 import BaseInput from '@/components/BaseInput.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
@@ -75,9 +70,11 @@ import Fretboard from '@/components/Fretboard.vue';
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
-import { Search } from '@lucide/vue';
+import { Plus, Search } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 
 const props = defineProps<{
   visible: boolean;
@@ -92,6 +89,8 @@ const visibleModel = computed({
   set: val => emit('update:visible', val),
 });
 
+const router = useRouter();
+const uiStore = useUiStore();
 const chordStore = useChordStore();
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
@@ -158,6 +157,12 @@ const handleSelectChord = (chord: Chord) => {
     scoreEditor.setSlotChord(scoreEditor.selectedSlotKey, chord);
   }
   visibleModel.value = false;
+};
+
+const goToWorkbenchToCreate = () => {
+  visibleModel.value = false;
+  router.push('/');
+  uiStore.toast.info('请在工作台创建和弦，保存后即可在乐谱中使用');
 };
 </script>
 

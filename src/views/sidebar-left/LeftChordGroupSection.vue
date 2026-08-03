@@ -37,6 +37,18 @@
               </span>
             </BaseMarquee>
 
+            <!-- 🌟 新增：排序规则外显标签 -->
+            <BaseBadge
+              v-if="group.sortRule && group.sortRule !== 'CUSTOM'"
+              variant="neutral"
+              appearance="outline"
+              size="xs"
+              class="sort-rule-badge"
+              title="当前分组已启用自动排序 (禁用手动拖拽)"
+            >
+              {{ getSortLabel(group) }}
+            </BaseBadge>
+
             <BaseBadge
               v-if="searchQuery"
               :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
@@ -101,13 +113,12 @@ import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
-import { useChordGroupModals } from '@/services/useChordGroupModals.ts';
 import { useChordService } from '@/services/useChordService';
-import { useEditorStore } from '@/stores/chordEditorStore.ts';
+import { useEditorStore } from '@/stores/chordEditorStore'; // 修复后缀
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group } from '@/types';
-import { sortChordsByRule } from '@/utils/musicTheory.ts';
+import { sortChordsByRule } from '@/utils/musicTheory'; // 修复后缀
 import { ArrowUpDown, ChevronDown, FolderOpen, GripVertical, SquarePen, Trash2 } from '@lucide/vue';
 import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -129,11 +140,24 @@ const chordStore = useChordStore();
 const chordService = useChordService();
 const uiStore = useUiStore();
 
-const groupModals = useChordGroupModals();
 const groupCardEls = useTemplateRef<HTMLElement[]>('groupCardEls');
 const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>('contextMenuRefs');
 
 const chordLowerNameCache = new WeakMap<Chord, string>();
+
+// 🌟 新增：解析展示具体的排序标签文案
+const getSortLabel = (group: Group): string => {
+  switch (group.sortRule) {
+    case 'ROOT_PITCH':
+      return '音名';
+    case 'KEY_DEGREE':
+      return `${group.sortKey || 'C'}调`;
+    case 'NAME_ASC':
+      return 'A-Z';
+    default:
+      return '';
+  }
+};
 
 const getMatchCount = (groupId: string): number => {
   return (filteredChordsGroupMap.value.get(groupId) || []).length;
@@ -142,6 +166,7 @@ const getMatchCount = (groupId: string): number => {
 const hasMatchedChords = (groupId: string): boolean => {
   return getMatchCount(groupId) > 0;
 };
+
 const getChordLowerName = (chord: Chord): string => {
   let cached = chordLowerNameCache.get(chord);
   if (!cached) {
@@ -298,6 +323,10 @@ watch(
   user-select: none;
   letter-spacing: 1px;
   color: var(--text-title);
+}
+
+.sort-rule-badge {
+  flex-shrink: 0;
 }
 
 .chord-content-wrapper {

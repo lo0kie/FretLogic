@@ -17,23 +17,40 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '@/components/EmptyState.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
+import { useEventListener } from '@vueuse/core';
 import { ref } from 'vue';
 
-import EmptyState from '@/components/EmptyState.vue';
 import ChordPickerModal from './ChordPickerModal.vue';
 import ScoreInteractiveArea from './ScoreInteractiveArea.vue';
 import ScoreLyricsEditor from './ScoreLyricsEditor.vue';
 
 const scoreEditor = useScoreEditorStore();
-
 const isPickerOpen = ref(false);
 
 const openChordPicker = (slotKey: string | number) => {
   scoreEditor.selectedSlotKey = slotKey;
   isPickerOpen.value = true;
 };
+
+// 🌟 注册全局快捷键：撤销 (Ctrl+Z) 与 重做 (Ctrl+Y 或 Ctrl+Shift+Z)
+useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+  if (!scoreEditor.activeSong) return;
+
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    if (e.shiftKey) {
+      scoreEditor.redo();
+    } else {
+      scoreEditor.undo();
+    }
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+    e.preventDefault();
+    scoreEditor.redo();
+  }
+});
 </script>
 
 <style scoped lang="less">
