@@ -1,29 +1,48 @@
 <template>
   <div class="base-scale-slider" :class="[`size-${size}`, { 'is-disabled': disabled }]">
-    <span v-if="label && labelPosition === 'left'" class="slider-label" @click="resetToDefault">
+    <!-- 1. 左侧 Label (点击重置) -->
+    <span
+      v-if="label && labelPosition === 'left'"
+      class="slider-label"
+      role="button"
+      tabindex="0"
+      :aria-label="`重置 ${label} 为默认值`"
+      @click="resetToDefault"
+      @keydown.enter.prevent="resetToDefault"
+      @keydown.space.prevent="resetToDefault"
+    >
       {{ label }}
     </span>
 
+    <!-- 2. 左侧数值读出 (点击重置) -->
     <span
       v-if="showReadout && readoutPosition === 'left'"
       class="readout-text"
+      role="button"
+      tabindex="0"
       :title="`当前缩放: ${displayText}，点击恢复默认值`"
+      :aria-label="`当前数值 ${displayText}，点击重置`"
       @click="resetToDefault"
+      @keydown.enter.prevent="resetToDefault"
+      @keydown.space.prevent="resetToDefault"
     >
       {{ displayText }}
     </span>
 
+    <!-- 3. 缩小按钮 -->
     <button
       v-if="showButtons"
       type="button"
       class="icon-btn"
       :disabled="disabled || modelValue <= min"
       title="缩小"
+      aria-label="缩小"
       @click="stepDown"
     >
-      <AArrowDown :size="14" stroke-width="2.2" />
+      <AArrowDown :size="14" stroke-width="2.2" aria-hidden="true" />
     </button>
 
+    <!-- 4. 滑块核心 Input -->
     <div class="slider-track-wrapper">
       <input
         type="range"
@@ -32,33 +51,56 @@
         :step="step"
         :value="modelValue"
         :disabled="disabled"
+        :aria-label="label || '缩放调节'"
+        :aria-valuemin="min"
+        :aria-valuemax="max"
+        :aria-valuenow="modelValue"
+        :aria-valuetext="displayText"
         class="slider-input"
         @input="handleInput"
         @dblclick="resetToDefault"
       />
     </div>
 
+    <!-- 5. 放大按钮 -->
     <button
       v-if="showButtons"
       type="button"
       class="icon-btn"
       :disabled="disabled || modelValue >= max"
       title="放大"
+      aria-label="放大"
       @click="stepUp"
     >
-      <AArrowUp :size="14" stroke-width="2.2" />
+      <AArrowUp :size="14" stroke-width="2.2" aria-hidden="true" />
     </button>
 
+    <!-- 6. 右侧数值读出 (点击重置) -->
     <span
       v-if="showReadout && readoutPosition === 'right'"
       class="readout-text"
+      role="button"
+      tabindex="0"
       :title="`当前缩放: ${displayText}，点击恢复默认值`"
+      :aria-label="`当前数值 ${displayText}，点击重置`"
       @click="resetToDefault"
+      @keydown.enter.prevent="resetToDefault"
+      @keydown.space.prevent="resetToDefault"
     >
       {{ displayText }}
     </span>
 
-    <span v-if="label && labelPosition === 'right'" class="slider-label" @click="resetToDefault">
+    <!-- 7. 右侧 Label (点击重置) -->
+    <span
+      v-if="label && labelPosition === 'right'"
+      class="slider-label"
+      role="button"
+      tabindex="0"
+      :aria-label="`重置 ${label} 为默认值`"
+      @click="resetToDefault"
+      @keydown.enter.prevent="resetToDefault"
+      @keydown.space.prevent="resetToDefault"
+    >
       {{ label }}
     </span>
   </div>
@@ -177,8 +219,11 @@ const resetToDefault = () => updateValue(defaultValue);
   white-space: nowrap;
   cursor: pointer;
   padding: 0 0.1rem;
+  outline: none;
+  border-radius: @radius-sm;
 
-  &:hover {
+  &:hover,
+  &:focus-visible {
     color: var(--text-title);
   }
 }
@@ -193,8 +238,11 @@ const resetToDefault = () => updateValue(defaultValue);
   color: var(--text-disabled);
   cursor: pointer;
   transition: @transition-fast;
+  outline: none;
+  border-radius: 50%;
 
-  &:hover:not(:disabled) {
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
     color: var(--color-primary);
   }
 
@@ -219,6 +267,12 @@ const resetToDefault = () => updateValue(defaultValue);
   outline: none;
   cursor: pointer;
 
+  &:focus-visible {
+    &::-webkit-slider-thumb {
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary), transparent 70%);
+    }
+  }
+
   &::-webkit-slider-thumb {
     appearance: none;
     width: 12px;
@@ -226,10 +280,17 @@ const resetToDefault = () => updateValue(defaultValue);
     border-radius: 50%;
     background: var(--color-primary);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-    transition: transform @duration-fast ease;
+    transition:
+      transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow @duration-fast ease;
 
     &:hover {
-      transform: scale(1.2);
+      transform: scale(1.25);
+    }
+
+    &:active {
+      transform: scale(1.4);
+      box-shadow: 0 2px 6px color-mix(in srgb, var(--color-primary), transparent 50%);
     }
   }
 }
@@ -241,8 +302,11 @@ const resetToDefault = () => updateValue(defaultValue);
   text-align: center;
   font-family: monospace;
   cursor: pointer;
+  outline: none;
+  border-radius: @radius-sm;
 
-  &:hover {
+  &:hover,
+  &:focus-visible {
     color: var(--color-primary);
   }
 }

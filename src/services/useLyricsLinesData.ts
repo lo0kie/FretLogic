@@ -1,5 +1,3 @@
-// src/services/useLyricsLinesData.ts
-
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
 import { computed } from 'vue';
@@ -32,8 +30,6 @@ export function buildLyricsLinesWithEdges(
   const rawLines = lyrics.split('\n');
 
   return rawLines.map((lineText, lineIdx) => {
-    // 🌟 核心修复：纯计算属性绝对不能包含随机 UUID 这种副作用！
-    // 未分配的行严格 fallback 到字符串形式的行号索引，与 Store 保持一致
     const lineId = existingLineIds[lineIdx] || String(lineIdx);
 
     const startChords: EdgeChordItem[] = [];
@@ -73,7 +69,6 @@ export function buildLyricsLinesWithEdges(
   });
 }
 
-/** 响应式包装：纯计算属性，绝不包含任何响应式写副作用 */
 export function useLyricsLinesData() {
   const scoreEditor = useScoreEditorStore();
 
@@ -83,7 +78,7 @@ export function useLyricsLinesData() {
     return buildLyricsLinesWithEdges(
       scoreEditor.activeSong.lyrics,
       scoreEditor.activeSong.chordMap || {},
-      scoreEditor.activeSong.lineIds || []
+      scoreEditor.activeSong.lineIds
     );
   });
 

@@ -6,8 +6,8 @@
     :model-value="chordStore.groups"
     @update:modelValue="(val: Group[]) => chordStore.overwriteGroups(val)"
     :animation="200"
-    handle=".drag-handle"
-    :disabled="Boolean(searchQuery) || uiStore.isMobile"
+    handle=".group-title-row"
+    :disabled="!isAllCollapsed || Boolean(searchQuery) || uiStore.isMobile"
     class="draggable-list"
     ghost-class="drag-ghost-style"
     chosen-class="drag-chosen-style"
@@ -17,18 +17,30 @@
   >
     <template v-for="group in chordStore.groups" :key="group.id">
       <GlobalContextMenu ref="contextMenuRefs" :items="getGroupMenuItems(group)" class="group-box-card">
+        <!-- 1. 标题行 -->
         <div
+          v-wave
           ref="groupCardEls"
+          tabindex="0"
+          role="button"
+          :aria-expanded="!group.collapsed"
+          :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${group.collapsed ? '已折叠' : '已展开'}`"
           @click="chordService.executeGroupToggle(group.id)"
+          @keydown.enter.prevent="chordService.executeGroupToggle(group.id)"
+          @keydown.space.prevent="chordService.executeGroupToggle(group.id)"
           class="group-title-row"
-          :class="{ 'is-context-open': isGroupMenuOpen(group.id) }"
+          :class="{
+            'is-expanded': !group.collapsed,
+            'is-context-open': isGroupMenuOpen(group.id),
+          }"
         >
           <div class="group-info-zone" title="点击折叠/展开分组">
             <ChevronDown
               :size="14"
-              stroke-width="2.5"
+              :stroke-width="2.5"
               class="arrow-toggle-icon"
               :class="{ 'is-collapsed': group.collapsed }"
+              aria-hidden="true"
             />
 
             <BaseMarquee>
@@ -37,14 +49,13 @@
               </span>
             </BaseMarquee>
 
-            <!-- 🌟 新增：排序规则外显标签 -->
             <BaseBadge
-              v-if="group.sortRule && group.sortRule !== 'CUSTOM'"
               variant="neutral"
               appearance="outline"
               size="xs"
               class="sort-rule-badge"
-              title="当前分组已启用自动排序 (禁用手动拖拽)"
+              title="排序方法"
+              :aria-label="`按${getSortLabel(group)}自动排序`"
             >
               {{ getSortLabel(group) }}
             </BaseBadge>
@@ -54,55 +65,63 @@
               :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
               :appearance="hasMatchedChords(group.id) ? 'subtle' : 'filled'"
               size="xs"
+              :aria-label="`匹配 ${getMatchCount(group.id)} 个，共 ${getGroupChordsCount(group.id)} 个和弦`"
             >
               <span :class="{ 'search-match-count': hasMatchedChords(group.id) }">
                 {{ getMatchCount(group.id) }}
               </span>
-              <span>&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
+              <span aria-hidden="true">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
             </BaseBadge>
 
-            <BaseBadge v-else variant="neutral" appearance="filled" size="xs">
+            <BaseBadge
+              v-else
+              variant="neutral"
+              :appearance="!group.collapsed ? 'subtle' : 'filled'"
+              size="xs"
+              :aria-label="`共 ${getGroupChordsCount(group.id)} 个和弦`"
+            >
               {{ getGroupChordsCount(group.id) }}
             </BaseBadge>
           </div>
+        </div>
 
-          <div v-if="!uiStore.isMobile" @click.stop class="drag-action-zone">
-            <div class="drag-handle" :class="{ 'is-hidden-by-search': Boolean(searchQuery) }" title="按住拖拽排序">
-              <GripVertical :size="14" stroke-width="2.5" />
+        <!-- 2. 平滑折叠展开区域 -->
+        <Transition
+          name="collapse-expand"
+          @before-enter="onEnterBefore"
+          @enter="onEnter"
+          @after-enter="onEnterAfter"
+          @before-leave="onLeaveBefore"
+          @leave="onLeave"
+          @after-leave="onLeaveAfter"
+        >
+          <div v-show="!group.collapsed" class="chord-content-wrapper" @contextmenu.stop>
+            <div class="chord-content-inner">
+              <TransitionGroup
+                v-if="getGroupedCardData(group.id).length > 0"
+                name="chord-y-fade"
+                tag="div"
+                class="chords-grid-layout"
+              >
+                <LeftChordCard
+                  v-for="cardData in getGroupedCardData(group.id)"
+                  :key="cardData.mainChord.chordName"
+                  :card-data="cardData"
+                  @delete-variants="cardData => $emit('open-delete-variants', cardData)"
+                  :is-editing="cardData.variants.some(c => c.id === editorStore.editingId)"
+                  @delete="handleLocalDeleteChord"
+                  @move="chord => $emit('open-move', chord)"
+                  @select="handleSelectChord"
+                  class="chord-item-grab-handle"
+                />
+              </TransitionGroup>
+
+              <EmptyState v-else-if="getGroupChordsCount(group.id) === 0" size="sm" description="暂无和弦" />
+
+              <EmptyState v-else-if="searchQuery" size="sm" description="无匹配" />
             </div>
           </div>
-        </div>
-
-        <div v-if="!group.collapsed" class="chord-content-wrapper" @contextmenu.stop>
-          <VueDraggable
-            v-if="(filteredChordsGroupMap.get(group.id) || []).length > 0"
-            :model-value="filteredChordsGroupMap.get(group.id) || []"
-            :animation="200"
-            ghost-class="drag-ghost-style"
-            chosen-class="drag-chosen-style"
-            drag-class="drag-active-style"
-            :disabled="Boolean(searchQuery) || uiStore.isMobile || group.sortRule !== 'CUSTOM'"
-            class="chords-grid-layout"
-            @update="e => chordService.handleChordSort(e, group.id)"
-            :swap-threshold="0.5"
-            :touchStartThreshold="12"
-          >
-            <LeftChordCard
-              v-for="chord in filteredChordsGroupMap.get(group.id) || []"
-              :key="chord.id"
-              :chord="chord"
-              :is-editing="editorStore.editingId === chord.id"
-              @delete="handleLocalDeleteChord"
-              @move="$emit('open-move', chord)"
-              @click="chordService.loadChordToEditor(chord)"
-              class="chord-item-grab-handle"
-            />
-          </VueDraggable>
-
-          <EmptyState v-else-if="getGroupChordsCount(group.id) === 0" size="sm" description="暂无和弦" />
-
-          <EmptyState v-else-if="searchQuery" size="sm" description="无匹配" />
-        </div>
+        </Transition>
       </GlobalContextMenu>
     </template>
   </VueDraggable>
@@ -114,12 +133,12 @@ import BaseMarquee from '@/components/BaseMarquee.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { useChordService } from '@/services/useChordService';
-import { useEditorStore } from '@/stores/chordEditorStore'; // 修复后缀
+import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord, Group } from '@/types';
-import { sortChordsByRule } from '@/utils/musicTheory'; // 修复后缀
-import { ArrowUpDown, ChevronDown, FolderOpen, GripVertical, SquarePen, Trash2 } from '@lucide/vue';
+import type { Chord, Group, GroupedChordCard } from '@/types';
+import { groupChordsByName, sortChordsByRule } from '@/utils/musicTheory';
+import { ArrowUpDown, ChevronDown, FolderOpen, SquarePen, Trash2 } from '@lucide/vue';
 import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import LeftChordCard from './LeftChordCard.vue';
@@ -133,6 +152,7 @@ const emit = defineEmits<{
   (e: 'open-delete', group: Group): void;
   (e: 'open-move', chord: Chord): void;
   (e: 'open-sort', group: Group): void;
+  (e: 'open-delete-variants', cardData: GroupedChordCard): void;
 }>();
 
 const editorStore = useEditorStore();
@@ -145,17 +165,74 @@ const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>
 
 const chordLowerNameCache = new WeakMap<Chord, string>();
 
-// 🌟 新增：解析展示具体的排序标签文案
+// 只有当所有分组均处于折叠状态时才允许拖拽
+const isAllCollapsed = computed(() => {
+  return chordStore.groups.every(g => g.collapsed);
+});
+
+// 折叠/展开动画钩子：动态计算高度与透明度，兼顾 overflow 解锁
+const onEnterBefore = (el: Element) => {
+  const element = el as HTMLElement;
+  element.style.overflow = 'hidden';
+  element.style.height = '0px';
+  element.style.opacity = '0';
+};
+
+const onEnter = (el: Element) => {
+  const element = el as HTMLElement;
+  requestAnimationFrame(() => {
+    element.style.height = `${element.scrollHeight}px`;
+    element.style.opacity = '1';
+  });
+};
+
+const onEnterAfter = (el: Element) => {
+  const element = el as HTMLElement;
+  element.style.height = 'auto';
+  element.style.opacity = '';
+  element.style.overflow = 'visible'; // 展开完成后解锁 overflow，避免伪元素阴影被裁剪
+};
+
+const onLeaveBefore = (el: Element) => {
+  const element = el as HTMLElement;
+  element.style.overflow = 'hidden';
+  element.style.height = `${element.scrollHeight}px`;
+  element.style.opacity = '1';
+};
+
+const onLeave = (el: Element) => {
+  const element = el as HTMLElement;
+  requestAnimationFrame(() => {
+    element.style.height = '0px';
+    element.style.opacity = '0';
+  });
+};
+
+const onLeaveAfter = (el: Element) => {
+  const element = el as HTMLElement;
+  element.style.height = '';
+  element.style.opacity = '';
+};
+
+const handleSelectChord = (chord: Chord) => {
+  if (editorStore.editingId === chord.id) {
+    editorStore.resetEditor();
+    return;
+  }
+  chordService.loadChordToEditor(chord);
+};
+
 const getSortLabel = (group: Group): string => {
   switch (group.sortRule) {
     case 'ROOT_PITCH':
       return '音名';
     case 'KEY_DEGREE':
-      return `${group.sortKey || 'C'}调`;
+      return `${group.sortKey}调`;
     case 'NAME_ASC':
       return 'A-Z';
     default:
-      return '';
+      group.sortRule = 'ROOT_PITCH';
+      return 'ROOT_PITCH';
   }
 };
 
@@ -176,10 +253,12 @@ const getChordLowerName = (chord: Chord): string => {
   return cached;
 };
 
-const isGroupMenuOpen = (groupId: string) => {
+const isGroupMenuOpen = (groupId: string): boolean => {
   const idx = chordStore.groups.findIndex(g => g.id === groupId);
-  if (idx === -1) return false;
-  return contextMenuRefs.value?.[idx]?.isOpen ?? false;
+  if (idx === -1 || !contextMenuRefs.value) return false;
+
+  const refs = contextMenuRefs.value as unknown as Record<number, { isOpen?: boolean }>;
+  return Boolean(refs[idx]?.isOpen);
 };
 
 const getGroupChordsCount = (groupId: string) => {
@@ -200,6 +279,11 @@ const filteredChordsGroupMap = computed(() => {
 
   return map;
 });
+
+const getGroupedCardData = (groupId: string): GroupedChordCard[] => {
+  const chords = filteredChordsGroupMap.value.get(groupId) || [];
+  return groupChordsByName(chords);
+};
 
 const handleLocalDeleteChord = (chord: Chord) => {
   const isEditingCurrent = editorStore.editingId === chord.id;
@@ -246,12 +330,6 @@ watch(
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 
-.draggable-list:has(.group-box-card.drag-chosen-style) {
-  .chord-content-wrapper {
-    display: none !important;
-  }
-}
-
 .draggable-list {
   display: flex;
   flex-direction: column;
@@ -271,21 +349,25 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.45rem 0.5rem;
+  padding: 0.6rem 0.5rem;
   user-select: none;
   background-color: transparent;
+
   border-radius: @radius-md;
   box-sizing: border-box;
   cursor: pointer;
   border: 1px solid transparent;
   transition: @transition-fast;
+  outline: none;
 
+  &:focus-visible,
   &:hover {
     background-color: var(--bg-panel-hover);
+  }
 
-    .drag-handle:not(.is-hidden-by-search) {
-      opacity: 1;
-    }
+  &:focus-visible {
+    box-shadow: @focus-ring-primary;
+    border-color: var(--border-base);
   }
 
   &:hover,
@@ -293,7 +375,12 @@ watch(
   &.is-context-open {
     background-color: var(--bg-panel-hover) !important;
     border-color: var(--border-base);
-    box-shadow: 0 0 0 1px var(--border-base);
+  }
+
+  &.is-expanded {
+    background-color: color-mix(in srgb, var(--bg-panel-hover), transparent 50%);
+    border-color: var(--border-light);
+    border-width: 1px;
   }
 }
 
@@ -303,14 +390,15 @@ watch(
   gap: 0.4rem;
   flex: 1;
   min-width: 0;
-  margin-right: 0.5rem;
   box-sizing: border-box;
 }
 
 .arrow-toggle-icon {
   color: var(--text-disabled);
   flex-shrink: 0;
-  transition: transform @duration-fast @bezier-standard;
+  transition:
+    transform @duration-fast @bezier-standard,
+    color @duration-fast ease;
 
   &.is-collapsed {
     transform: rotate(-90deg);
@@ -322,16 +410,32 @@ watch(
   font-size: 0.82rem;
   user-select: none;
   letter-spacing: 1px;
-  color: var(--text-title);
+  color: var(--text-body);
+  transition: color @duration-fast ease;
 }
 
 .sort-rule-badge {
   flex-shrink: 0;
 }
 
+/* 折叠/展开动画容器 */
 .chord-content-wrapper {
-  margin-top: 0.4rem;
   position: relative;
+  box-sizing: border-box;
+  will-change: height, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.collapse-expand-enter-active,
+.collapse-expand-leave-active {
+  transition:
+    height @duration-base @bezier-sidebar,
+    opacity @duration-fast ease;
+}
+
+.chord-content-inner {
+  padding-top: 0.4rem;
   box-sizing: border-box;
 }
 
@@ -344,5 +448,35 @@ watch(
   z-index: 10;
   min-height: 2.2rem;
   box-sizing: border-box;
+  padding-right: 6px;
+  padding-bottom: 6px;
+}
+
+/* 搜索/过滤时的 Y 轴渐隐与位置位移动画 */
+.chord-y-fade-enter-active,
+.chord-y-fade-leave-active {
+  transition:
+    opacity @duration-fast ease,
+    transform @duration-fast @bezier-standard;
+}
+
+.chord-y-fade-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.chord-y-fade-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.chord-y-fade-leave-active {
+  position: absolute !important;
+  width: calc((100% - 0.8rem) / 3);
+  pointer-events: none;
+}
+
+.chord-y-fade-move {
+  transition: transform @duration-base @bezier-standard;
 }
 </style>

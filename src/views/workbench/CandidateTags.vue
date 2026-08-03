@@ -5,8 +5,9 @@
       <template v-if="candidates.length > 0">
         <!-- 🌟 改用 BaseBadge 替换手写 button -->
         <BaseBadge
-          v-for="(candidate, index) in candidates"
-          :key="index"
+          v-wave
+          v-for="candidate in candidates"
+          :key="candidate.chordName"
           :variant="activeChordName === candidate.chordName ? 'primary' : 'neutral'"
           :appearance="activeChordName === candidate.chordName ? 'filled' : 'subtle'"
           :size="isMobile ? 'sm' : 'xs'"
@@ -24,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import BaseBadge from '@/components/BaseBadge.vue'; // 🌟 引入 BaseBadge
+import BaseBadge from '@/components/BaseBadge.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import type { CandidateResult } from '@/types';
 

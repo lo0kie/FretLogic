@@ -40,8 +40,6 @@ export const useEditorStore = defineStore('editor', () => {
     }
   });
 
-  // 🌟 显式初始化：如果上次退出时正在编辑某个已保存的和弦，回填数据。
-  // 不在 store 创建时自动执行，必须由调用方（main.ts）显式触发一次。
   const initEditor = () => {
     if (!editingId.value) return;
 
@@ -55,7 +53,6 @@ export const useEditorStore = defineStore('editor', () => {
       capo.value = original.capo ?? 0;
       currentTuning.value = original.tuning || TuningEnum.STANDARD;
     } else {
-      // 引用的和弦已被删除，清理脏的 editingId
       editingId.value = null;
     }
   };

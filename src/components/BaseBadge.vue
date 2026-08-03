@@ -1,5 +1,7 @@
 <template>
-  <span
+  <component
+    :is="isInteractive ? 'button' : 'span'"
+    :type="isInteractive ? 'button' : undefined"
     class="base-badge"
     :class="[
       `variant-${variant}`,
@@ -7,12 +9,17 @@
       `appearance-${appearance}`,
       {
         'is-dot-only': isDotOnly,
-        'is-interactive': interactive || $attrs.onClick,
+        'is-interactive': isInteractive,
       },
     ]"
+    :role="isInteractive ? undefined : 'status'"
+    :aria-label="ariaLabelText"
+    @keydown.enter="handleKeydown"
+    @keydown.space.prevent="handleKeydown"
+    @click="handleClick"
   >
     <!-- 1. 指示圆点 (如状态灯) -->
-    <span v-if="showDot && !isDotOnly" class="badge-dot"></span>
+    <span v-if="showDot && !isDotOnly" class="badge-dot" aria-hidden="true"></span>
 
     <!-- 2. 前缀图标插槽 -->
     <slot name="prefix"></slot>
@@ -24,16 +31,23 @@
 
     <!-- 4. 后缀图标 / 清除关闭按钮 -->
     <slot name="suffix">
-      <button v-if="closable" type="button" class="badge-close-btn" title="关闭" @click.stop="handleClose">
-        <X :size="closeIconSize" stroke-width="3" />
+      <button
+        v-if="closable"
+        type="button"
+        class="badge-close-btn"
+        title="关闭"
+        aria-label="关闭"
+        @click.stop="handleClose"
+      >
+        <X :size="closeIconSize" stroke-width="3" aria-hidden="true" />
       </button>
     </slot>
-  </span>
+  </component>
 </template>
 
 <script setup lang="ts">
 import { X } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, useAttrs, useSlots } from 'vue';
 
 export type BadgeVariant = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
 export type BadgeSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -75,10 +89,17 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'close', event: MouseEvent): void;
+  (e: 'click', event: MouseEvent | KeyboardEvent): void;
 }>();
 
+const attrs = useAttrs();
+const slots = useSlots();
+
+/** 是否属于可点击状态 */
+const isInteractive = computed(() => props.interactive || Boolean(attrs.onClick));
+
 /** 纯指示小红点模式：开启 dot 且无默认插槽/文本时 */
-const isDotOnly = computed(() => props.dot && props.content === undefined);
+const isDotOnly = computed(() => props.dot && props.content === undefined && !slots.default);
 
 /** 数字封顶格式化 (如 99+) */
 const formattedContent = computed(() => {
@@ -86,6 +107,16 @@ const formattedContent = computed(() => {
     return `${props.max}+`;
   }
   return props.content;
+});
+
+/** 读屏器友好文本：对于纯圆点或溢出数字（如 99+），提供明确的无障碍描述 */
+const ariaLabelText = computed(() => {
+  if (attrs['aria-label']) return String(attrs['aria-label']);
+  if (isDotOnly.value) return '新消息提示';
+  if (typeof props.content === 'number' && props.max && props.content > props.max) {
+    return `超过 ${props.max} 条未读消息`;
+  }
+  return undefined;
 });
 
 /** 根据 Badge 尺寸自动适配关闭图标大小 */
@@ -104,6 +135,18 @@ const closeIconSize = computed(() => {
 
 const handleClose = (e: MouseEvent) => {
   emit('close', e);
+};
+
+const handleKeydown = (e: KeyboardEvent) => {
+  if (isInteractive.value) {
+    emit('click', e);
+  }
+};
+
+const handleClick = (e: MouseEvent) => {
+  if (isInteractive.value) {
+    emit('click', e);
+  }
 };
 </script>
 
@@ -124,6 +167,7 @@ const handleClose = (e: MouseEvent) => {
   white-space: nowrap;
   user-select: none;
   border: 1px solid transparent;
+  outline: none;
 
   /* 可点击反馈 */
   &.is-interactive {
@@ -132,6 +176,10 @@ const handleClose = (e: MouseEvent) => {
     &:hover {
       opacity: 0.85;
       transform: translateY(-1px);
+    }
+
+    &:focus-visible {
+      box-shadow: @focus-ring-primary;
     }
 
     &:active {
@@ -289,6 +337,12 @@ const handleClose = (e: MouseEvent) => {
   cursor: pointer;
   border-radius: 50%;
   transition: @transition-fast;
+  outline: none;
+
+  &:focus-visible {
+    opacity: 1;
+    box-shadow: 0 0 0 2px currentColor;
+  }
 
   &:hover {
     opacity: 1;

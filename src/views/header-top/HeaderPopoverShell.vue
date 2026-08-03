@@ -1,13 +1,30 @@
 <template>
-  <div class="popover-wrapper" ref="popoverContainerRef">
+  <div class="popover-wrapper">
     <GlobalTooltip :content="tooltip" placement="bottom">
-      <ActionButton icon-only variant="ghost" :active="isOpen" @click="isOpen = !isOpen">
-        <SlidersHorizontal :size="18" stroke-width="2.2" />
+      <ActionButton
+        ref="triggerBtnRef"
+        icon-only
+        variant="ghost"
+        :active="isOpen"
+        :aria-label="tooltip"
+        :aria-expanded="isOpen"
+        aria-haspopup="true"
+        @click="isOpen = !isOpen"
+      >
+        <SlidersHorizontal :size="18" stroke-width="2.2" aria-hidden="true" />
       </ActionButton>
     </GlobalTooltip>
 
     <Transition name="dropdown-fade">
-      <div v-if="isOpen" class="config-popover-card" ref="cardRef">
+      <div
+        v-if="isOpen"
+        v-on-click-outside="[() => (isOpen = false), { ignore: [triggerBtnRef, '[data-floating-layer]'] }]"
+        role="dialog"
+        aria-modal="false"
+        :aria-label="tooltip"
+        class="config-popover-card"
+        @keydown.esc.prevent.stop="handleEsc"
+      >
         <slot></slot>
       </div>
     </Transition>
@@ -18,38 +35,18 @@
 import ActionButton from '@/components/ActionButton.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { SlidersHorizontal } from '@lucide/vue';
-import { onClickOutside, useEventListener } from '@vueuse/core';
-import { ref, useTemplateRef } from 'vue';
+import { vOnClickOutside } from '@vueuse/components';
+import { ComponentPublicInstance, ref, useTemplateRef } from 'vue';
 
-defineProps<{
-  tooltip: string;
-}>();
+defineProps<{ tooltip: string }>();
 
 const isOpen = ref(false);
-const popoverContainerRef = useTemplateRef<HTMLDivElement>('popoverContainerRef');
-const cardRef = useTemplateRef<HTMLDivElement>('cardRef');
+const triggerBtnRef = useTemplateRef<ComponentPublicInstance>('triggerBtnRef');
 
-onClickOutside(popoverContainerRef, () => (isOpen.value = false), { ignore: [cardRef, '.floating-position-wrapper'] });
-
-useEventListener(
-  window,
-  'contextmenu',
-  (e: MouseEvent) => {
-    if (!isOpen.value) return;
-
-    const target = e.target as Node;
-
-    const isInside =
-      popoverContainerRef.value?.contains(target) ||
-      cardRef.value?.contains(target) ||
-      (target instanceof Element && target.closest('.floating-position-wrapper'));
-
-    if (!isInside) {
-      isOpen.value = false;
-    }
-  },
-  { capture: true }
-);
+const handleEsc = () => {
+  isOpen.value = false;
+  (triggerBtnRef.value?.$el as HTMLElement)?.focus?.();
+};
 </script>
 
 <style scoped lang="less">
@@ -77,11 +74,11 @@ useEventListener(
   gap: 0.8rem;
   z-index: 1100;
   box-sizing: border-box;
+  outline: none;
 }
 
 .fade-scale-transition(dropdown-fade, ~'0, -6px', 0.96);
 
-/* 🌟 全局穿透样式：统一规范配置行 (Config Row) 的排版 */
 :deep(.config-row) {
   display: flex;
   align-items: center;
@@ -102,7 +99,6 @@ useEventListener(
   justify-content: flex-end;
   min-width: 0;
 
-  /* 限制输入框、分段控制器等组件占据可用宽度 */
   > * {
     max-width: 10rem;
   }

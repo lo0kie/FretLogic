@@ -1,5 +1,5 @@
 <template>
-  <div ref="containerRef" class="marquee-container" @mouseenter="handleMouseEnter" @mouseleave="handleMouseLeave">
+  <div ref="containerRef" v-element-hover="onHoverChange" class="marquee-container">
     <span ref="contentRef" class="marquee-content" :class="{ 'is-scrolling': isScrolling }">
       <slot></slot>
     </span>
@@ -7,27 +7,28 @@
 </template>
 
 <script setup lang="ts">
+import { vElementHover } from '@vueuse/components';
 import { ref, useTemplateRef } from 'vue';
 
 const containerRef = useTemplateRef<HTMLDivElement>('containerRef');
 const contentRef = useTemplateRef<HTMLSpanElement>('contentRef');
 const isScrolling = ref(false);
 
-const handleMouseEnter = () => {
-  if (!containerRef.value || !contentRef.value) return;
+const onHoverChange = (hovered: boolean) => {
+  if (hovered) {
+    if (!containerRef.value || !contentRef.value) return;
 
-  const clientWidth = containerRef.value.clientWidth;
-  const scrollWidth = contentRef.value.scrollWidth;
+    const clientWidth = containerRef.value.clientWidth;
+    const scrollWidth = contentRef.value.scrollWidth;
 
-  if (scrollWidth > clientWidth) {
-    containerRef.value.style.setProperty('--scroll-dist', `${scrollWidth - clientWidth}px`);
-    isScrolling.value = true;
+    if (scrollWidth > clientWidth) {
+      containerRef.value.style.setProperty('--scroll-dist', `${scrollWidth - clientWidth}px`);
+      isScrolling.value = true;
+    }
+  } else {
+    isScrolling.value = false;
+    containerRef.value?.style.removeProperty('--scroll-dist');
   }
-};
-
-const handleMouseLeave = () => {
-  isScrolling.value = false;
-  containerRef.value?.style.removeProperty('--scroll-dist');
 };
 </script>
 

@@ -1,5 +1,6 @@
 <template>
   <div
+    v-element-size="onResize"
     class="workbench-card"
     :style="{
       height: uiStore.isMobile ? 'auto' : dynamicHeight,
@@ -22,7 +23,7 @@
         :fret-count="editorStore.fretCount"
         :active-base-strings="editorStore.activeBaseStrings"
         :is-dark-mode="settingsStore.isDarkMode"
-        :scale="uiStore.isMobile ? mobileScale : 1.0"
+        :scale="uiStore.isMobile ? cardMobileScale : 1.0"
       />
     </div>
   </div>
@@ -34,17 +35,22 @@ import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/constant
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
-import { useWindowSize } from '@vueuse/core';
-import { computed } from 'vue';
+import { vElementSize } from '@vueuse/components';
+import { computed, ref } from 'vue';
 
 const editorStore = useEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 
-const { width: windowWidth } = useWindowSize();
+const cardWidth = ref(0);
 
-const mobileScale = computed(() => {
-  const targetWidth = windowWidth.value - 32;
+const onResize = ({ width }: { width: number; height: number }) => {
+  cardWidth.value = width;
+};
+
+const cardMobileScale = computed(() => {
+  if (cardWidth.value <= 0) return 1.0;
+  const targetWidth = cardWidth.value - 32;
   const baseWidth = CANVAS_CONFIG.BOARD_WIDTH;
   return Math.min(1.0, Math.max(0.65, targetWidth / baseWidth));
 });

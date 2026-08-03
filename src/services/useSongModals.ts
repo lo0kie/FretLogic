@@ -24,7 +24,6 @@ export function useSongModals() {
     capo: 0,
   });
 
-  // 🌟 将演唱调 key 改为带 getter / setter 的计算属性
   const key = computed({
     get: () => {
       return transposeChordName(modalData.playKey, modalData.capo);
@@ -33,7 +32,6 @@ export function useSongModals() {
       const currentKey = key.value;
       if (newKey === currentKey) return;
 
-      // 计算新旧演唱调的差值，固定 Capo，反推并更新 playKey
       const delta = getKeySemitones(currentKey, newKey);
       modalData.playKey = transposeChordName(modalData.playKey, delta);
     },
@@ -63,7 +61,6 @@ export function useSongModals() {
     modalData.playKey = song.playKey || 'C';
     modalData.capo = song.capo || 0;
 
-    // 如果传入的 song 对象有初始 key 且与当前的“playKey + capo”推算值不符，可以通过赋 set 修正初始 playKey
     if (song.key && song.key !== key.value) {
       key.value = song.key;
     }
@@ -76,7 +73,7 @@ export function useSongModals() {
       const newTitle = modalData.title.trim() || '未命名乐谱';
       songStore.updateSongMeta(modalData.activeSong.id, {
         title: newTitle,
-        key: key.value, // 读取计算属性 key 的推导结果提交
+        key: key.value,
         playKey: modalData.playKey,
         capo: modalData.capo,
       });
@@ -101,7 +98,7 @@ export function useSongModals() {
   return {
     modals,
     modalData,
-    key, // 🌟 直接导出命名为 key 的计算属性
+    key,
     openCreateSongModal,
     handleCreateSong,
     openConfig,

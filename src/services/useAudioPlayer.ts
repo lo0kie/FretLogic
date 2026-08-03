@@ -71,7 +71,6 @@ export function useAudioPlayer() {
       ToneModule = await import('tone');
     }
 
-    // 🌟 核心修复：必须在任何异步操作（await）之前，在用户点击的同步回调中立即唤醒 AudioContext
     if (ToneModule.getContext().state !== 'running') {
       ToneModule.start();
     }

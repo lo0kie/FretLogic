@@ -1,5 +1,6 @@
 ﻿<template>
   <button
+    v-wave
     :disabled="disabled || loading"
     @click="handleInternalClick"
     :style="{ height, width }"

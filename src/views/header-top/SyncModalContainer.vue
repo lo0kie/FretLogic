@@ -1,40 +1,31 @@
+<!-- src/views/header-top/SyncModalContainer.vue -->
 <template>
   <!-- 1. 云端同步设置 Modal -->
   <BaseModal v-model:visible="isSyncModalOpen" title="云端同步设置" :show-footer="false" width="w-80">
     <SyncSettingsCard
       :is-syncing="isSyncing"
       :is-pulling="isPulling"
-      @pull-request="isPullConfirmOpen = true"
+      @pull-request="handlePullClick"
       @push-request="triggerGlobalSync"
     />
   </BaseModal>
 
-  <!-- 2. 覆盖确认 Modal -->
-  <BaseModal
-    v-model:visible="isPullConfirmOpen"
-    title="操作确认"
-    confirm-type="danger"
-    confirm-text="确认覆盖"
-    @confirm="confirmPull"
-  >
-    <p class="modal-text">从云端拉取数据将完全覆盖您本地的所有和弦与分组记录，且此操作不可撤销！确定要继续吗？</p>
-  </BaseModal>
+  <!-- 🌟 2. 挂载数据合并对照 Modal -->
+  <SyncMergeModal />
 </template>
 
 <script setup lang="ts">
 import BaseModal from '@/components/BaseModal.vue';
 import { useGithubSyncService } from '@/services/useGithubSyncService';
-import { ref } from 'vue';
+import SyncMergeModal from './SyncMergeModal.vue'; // 🌟 引入 Modal
 import SyncSettingsCard from './SyncSettingsCard.vue';
 
 const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true });
 
-const isPullConfirmOpen = ref(false);
 const { triggerGlobalSync, pullFromGithub, isSyncing, isPulling } = useGithubSyncService();
 
-const confirmPull = () => {
+const handlePullClick = () => {
   pullFromGithub();
-  isPullConfirmOpen.value = false;
   isSyncModalOpen.value = false;
 };
 </script>

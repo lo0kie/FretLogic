@@ -50,7 +50,7 @@ const mainPaddingLeft = computed(() => {
 const handleExportImage = (isTransparent: boolean) => {
   let targetEl: HTMLElement | null = null;
 
-  if (route.path === '/') {
+  if (route.path === '/workbench') {
     targetEl = document.querySelector('.workbench-card') as HTMLElement;
   } else if (route.path === '/score') {
     targetEl = document.querySelector('.interactive-score-zone') as HTMLElement;

@@ -1,11 +1,25 @@
 ﻿<template>
-  <div ref="referenceRef" class="tooltip-trigger-container" @mouseenter="show = true" @mouseleave="show = false">
-    <slot></slot>
+  <div
+    ref="referenceRef"
+    class="tooltip-trigger-container"
+    role="presentation"
+    @mouseenter="show = true"
+    @mouseleave="show = false"
+    @focus="show = true"
+    @blur="show = false"
+  >
+    <slot :tooltip-id="show ? tooltipId : undefined">
+      <span :aria-describedby="show && (content || $slots.content) ? tooltipId : undefined">
+        <slot name="trigger"></slot>
+      </span>
+    </slot>
 
     <Teleport to="body">
       <div
         v-if="show && !uiStore.isMobile && (content || $slots.content)"
+        :id="tooltipId"
         ref="floatingRef"
+        role="tooltip"
         class="tooltip-floating-wrapper"
         :style="floatingStyles"
       >
@@ -26,7 +40,7 @@ import { useUiStore } from '@/stores/uiStore';
 import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/vue';
 import { computedAsync } from '@vueuse/core';
 import { type DOMPurify } from 'dompurify';
-import { computed, ref, useTemplateRef } from 'vue';
+import { computed, ref, useId, useTemplateRef } from 'vue';
 
 type TooltipTheme = 'dark' | 'light' | 'auto';
 
@@ -42,6 +56,8 @@ const {
 
 const uiStore = useUiStore();
 const show = ref(false);
+const tooltipId = useId();
+
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 
@@ -74,6 +90,7 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
 .tooltip-trigger-container {
   position: relative;
   display: inline-block;
+  outline: none;
 }
 
 .tooltip-floating-wrapper {

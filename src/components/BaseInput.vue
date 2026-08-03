@@ -1,5 +1,5 @@
 <template>
-  <div class="input-wrapper">
+  <div class="input-wrapper" v-wave>
     <div v-if="$slots.prefix" class="prefix-zone" :class="sizeClass">
       <slot name="prefix"></slot>
     </div>
@@ -121,6 +121,7 @@ defineExpose({
   display: flex;
   align-items: center;
   box-sizing: border-box;
+  border-radius: 9999px;
 
   &:hover .clear-button,
   &:focus-within .clear-button {
