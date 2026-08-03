@@ -41,6 +41,7 @@
       <div v-else class="picker-cards-grid-4cols" role="group" aria-label="和弦选择列表">
         <!-- 🌟 2. 卡片补全 role="button"、tabindex、aria-pressed、aria-label 及键盘事件 -->
         <div
+          v-wave
           v-for="chord in filteredChords"
           :key="chord.id"
           v-intersection-observer="

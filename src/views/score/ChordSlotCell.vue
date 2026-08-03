@@ -32,6 +32,7 @@
         @dragend="emit('dragend')"
       >
         <button
+          v-wave
           type="button"
           class="remove-chord-btn"
           title="清除当前和弦"
@@ -53,7 +54,7 @@
         />
       </div>
 
-      <span v-else-if="variant === 'add'" class="add-edge-placeholder" :title="addPlaceholderTitle">+和弦</span>
+      <span v-wave v-else-if="variant === 'add'" class="add-edge-placeholder" :title="addPlaceholderTitle">+和弦</span>
     </div>
 
     <template v-if="variant === 'char'">

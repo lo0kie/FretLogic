@@ -16,6 +16,7 @@
     >
       <!-- 🌟 1. 补全角色、tabindex、aria-pressed 及键盘触发生命周期 -->
       <div
+        v-wave
         class="song-card-item"
         :class="{
           'is-active': scoreEditor.activeSongId === song.id,

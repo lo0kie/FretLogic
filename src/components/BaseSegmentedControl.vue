@@ -3,6 +3,7 @@
     <div class="indicator-pill" :class="{ 'is-animated': isInitialized }"></div>
 
     <button
+      v-wave
       v-for="item in options"
       :key="String(item.value)"
       ref="itemRefs"

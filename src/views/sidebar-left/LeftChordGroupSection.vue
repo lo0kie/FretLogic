@@ -17,8 +17,9 @@
   >
     <template v-for="group in chordStore.groups" :key="group.id">
       <GlobalContextMenu ref="contextMenuRefs" :items="getGroupMenuItems(group)" class="group-box-card">
-        <!-- 🌟 1. 语义化与键盘支持：增加 tabindex, role="button", aria-expanded 与 keydown 事件 -->
+        <!-- 🌟 1. 展开高亮 class 绑定 -->
         <div
+          v-wave
           ref="groupCardEls"
           tabindex="0"
           role="button"
@@ -28,7 +29,10 @@
           @keydown.enter.prevent="chordService.executeGroupToggle(group.id)"
           @keydown.space.prevent="chordService.executeGroupToggle(group.id)"
           class="group-title-row"
-          :class="{ 'is-context-open': isGroupMenuOpen(group.id) }"
+          :class="{
+            'is-expanded': !group.collapsed,
+            'is-context-open': isGroupMenuOpen(group.id),
+          }"
         >
           <div class="group-info-zone" title="点击折叠/展开分组">
             <ChevronDown
@@ -45,7 +49,7 @@
               </span>
             </BaseMarquee>
 
-            <!-- 🌟 2. 排序规则外显标签：补充 ARIA 说明 -->
+            <!-- 🌟 2. 排序规则外显标签 -->
             <BaseBadge
               v-if="group.sortRule && group.sortRule !== 'CUSTOM'"
               variant="neutral"
@@ -58,7 +62,7 @@
               {{ getSortLabel(group) }}
             </BaseBadge>
 
-            <!-- 🌟 3. 搜索匹配数与总数 Badge 优化读屏 -->
+            <!-- 🌟 3. 搜索匹配数与总数 Badge -->
             <BaseBadge
               v-if="searchQuery"
               :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
@@ -75,7 +79,7 @@
             <BaseBadge
               v-else
               variant="neutral"
-              appearance="filled"
+              :appearance="!group.collapsed ? 'subtle' : 'filled'"
               size="xs"
               :aria-label="`共 ${getGroupChordsCount(group.id)} 个和弦`"
             >
@@ -83,8 +87,8 @@
             </BaseBadge>
           </div>
 
-          <!-- 🌟 4. 拖拽把手增加 focus 屏蔽与无障碍辅助标记 -->
-          <div v-if="!uiStore.isMobile" @click.stop class="drag-action-zone">
+          <!-- 🌟 4. 拖拽把手 -->
+          <div v-if="!uiStore.isMobile" class="drag-action-zone">
             <div
               class="drag-handle"
               :class="{ 'is-hidden-by-search': Boolean(searchQuery) }"
@@ -97,30 +101,18 @@
         </div>
 
         <div v-if="!group.collapsed" class="chord-content-wrapper" @contextmenu.stop>
-          <VueDraggable
-            v-if="(filteredChordsGroupMap.get(group.id) || []).length > 0"
-            :model-value="filteredChordsGroupMap.get(group.id) || []"
-            :animation="200"
-            ghost-class="drag-ghost-style"
-            chosen-class="drag-chosen-style"
-            drag-class="drag-active-style"
-            :disabled="Boolean(searchQuery) || uiStore.isMobile || group.sortRule !== 'CUSTOM'"
-            class="chords-grid-layout"
-            @update="e => chordService.handleChordSort(e, group.id)"
-            :swap-threshold="0.5"
-            :touchStartThreshold="12"
-          >
+          <div v-if="getGroupedCardData(group.id).length > 0" class="chords-grid-layout">
             <LeftChordCard
-              v-for="chord in filteredChordsGroupMap.get(group.id) || []"
-              :key="chord.id"
-              :chord="chord"
-              :is-editing="editorStore.editingId === chord.id"
+              v-for="cardData in getGroupedCardData(group.id)"
+              :key="cardData.mainChord.chordName"
+              :card-data="cardData"
+              :is-editing="cardData.variants.some(c => c.id === editorStore.editingId)"
               @delete="handleLocalDeleteChord"
-              @move="$emit('open-move', chord)"
-              @click="chordService.loadChordToEditor(chord)"
+              @move="chord => $emit('open-move', chord)"
+              @select="handleSelectChord"
               class="chord-item-grab-handle"
             />
-          </VueDraggable>
+          </div>
 
           <EmptyState v-else-if="getGroupChordsCount(group.id) === 0" size="sm" description="暂无和弦" />
 
@@ -140,8 +132,8 @@ import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord, Group } from '@/types';
-import { sortChordsByRule } from '@/utils/musicTheory';
+import type { Chord, Group, GroupedChordCard } from '@/types';
+import { groupChordsByName, sortChordsByRule } from '@/utils/musicTheory';
 import { ArrowUpDown, ChevronDown, FolderOpen, GripVertical, SquarePen, Trash2 } from '@lucide/vue';
 import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -167,6 +159,16 @@ const groupCardEls = useTemplateRef<HTMLElement[]>('groupCardEls');
 const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>('contextMenuRefs');
 
 const chordLowerNameCache = new WeakMap<Chord, string>();
+
+const handleSelectChord = (chord: Chord) => {
+  // 点击的正是当前正在编辑的卡片 → 退出编辑
+  if (editorStore.editingId === chord.id) {
+    editorStore.resetEditor();
+    return;
+  }
+  // 否则正常加载到编辑器
+  chordService.loadChordToEditor(chord);
+};
 
 const getSortLabel = (group: Group): string => {
   switch (group.sortRule) {
@@ -222,6 +224,11 @@ const filteredChordsGroupMap = computed(() => {
 
   return map;
 });
+
+const getGroupedCardData = (groupId: string): GroupedChordCard[] => {
+  const chords = filteredChordsGroupMap.value.get(groupId) || [];
+  return groupChordsByName(chords);
+};
 
 const handleLocalDeleteChord = (chord: Chord) => {
   const isEditingCurrent = editorStore.editingId === chord.id;
@@ -302,9 +309,8 @@ watch(
   cursor: pointer;
   border: 1px solid transparent;
   transition: @transition-fast;
-  outline: none; /* 🌟 避免默认粗蓝框 */
+  outline: none;
 
-  /* 🌟 键盘 Tab 聚焦与 Hover 逻辑对齐 */
   &:focus-visible,
   &:hover {
     background-color: var(--bg-panel-hover);
@@ -316,7 +322,7 @@ watch(
 
   &:focus-visible {
     box-shadow: @focus-ring-primary;
-    border-color: @primary;
+    border-color: var(--border-base);
   }
 
   &:hover,
@@ -324,6 +330,13 @@ watch(
   &.is-context-open {
     background-color: var(--bg-panel-hover) !important;
     border-color: var(--border-base);
+  }
+
+  /* 🌟 中性高亮：使用温和的背景底色加深 + 边框强化，不用 Primary */
+  &.is-expanded {
+    background-color: color-mix(in srgb, var(--bg-panel-hover), transparent 50%);
+    border-color: var(--border-light);
+    border-width: 1px;
   }
 }
 
@@ -340,7 +353,9 @@ watch(
 .arrow-toggle-icon {
   color: var(--text-disabled);
   flex-shrink: 0;
-  transition: transform @duration-fast @bezier-standard;
+  transition:
+    transform @duration-fast @bezier-standard,
+    color @duration-fast ease;
 
   &.is-collapsed {
     transform: rotate(-90deg);
@@ -352,7 +367,8 @@ watch(
   font-size: 0.82rem;
   user-select: none;
   letter-spacing: 1px;
-  color: var(--text-title);
+  color: var(--text-body);
+  transition: color @duration-fast ease;
 }
 
 .sort-rule-badge {

@@ -23,6 +23,7 @@
     "js-base64": "^3.8.0",
     "pinia": "^2.1.7",
     "tone": "^15.1.22",
+    "v-wave": "^3.1.1",
     "vue": "3.5.11",
     "vue-draggable-plus": "^0.6.1",
     "vue-router": "^4.6.4"

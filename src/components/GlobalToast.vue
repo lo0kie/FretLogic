@@ -30,6 +30,7 @@
         </button>
 
         <button
+          v-wave
           type="button"
           @click="uiStore.removeToast(item.id)"
           class="btn-toast-close"

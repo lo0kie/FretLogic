@@ -1,4 +1,4 @@
-﻿import type { Chord, GroupSortRule, GuitarStringEntity } from '@/types';
+﻿import type { Chord, GroupedChordCard, GroupSortRule, GuitarStringEntity } from '@/types';
 import { cloneDeep } from './dataParser';
 
 export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -146,6 +146,34 @@ export const getKeySemitones = (key1: string, key2: string): number => {
   if (diff > 6) diff -= 12;
   if (diff < -5) diff += 12;
   return diff;
+};
+
+export const groupChordsByName = (chords: Chord[]): GroupedChordCard[] => {
+  const map = new Map<string, Chord[]>();
+
+  chords.forEach(chord => {
+    const key = chord.chordName.trim().toLowerCase();
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key)!.push(chord);
+  });
+
+  const result: GroupedChordCard[] = [];
+
+  map.forEach(variants => {
+    variants.sort((a, b) => (a.capo ?? 0) - (b.capo ?? 0));
+
+    const mainChord = variants[0];
+    result.push({
+      mainChord,
+      variants,
+      hasVariants: variants.length > 1,
+      variantCount: variants.length,
+    });
+  });
+
+  return result;
 };
 
 export const transposePhysicalChord = (chord: Chord, semitones: number, newCapo?: number, shiftName = true): Chord => {

@@ -3,6 +3,7 @@
     <div class="section-label">构成音 (低音 ➔ 高音)</div>
     <div class="notes-list" ref="containerRef">
       <div
+        v-wave
         v-for="note in notes"
         :key="note.stringIndex"
         class="note-row"

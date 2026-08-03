@@ -1,6 +1,6 @@
 <template>
   <div class="base-number-input" :class="`size-${size}`" @wheel="handleWheel">
-    <button type="button" class="step-btn" :disabled="disabled || modelValue <= min" @click="handleStep(-step)">
+    <button v-wave type="button" class="step-btn" :disabled="disabled || modelValue <= min" @click="handleStep(-step)">
       -
     </button>
 
@@ -8,7 +8,7 @@
       {{ displayText }}
     </span>
 
-    <button type="button" class="step-btn" :disabled="disabled || modelValue >= max" @click="handleStep(step)">
+    <button v-wave type="button" class="step-btn" :disabled="disabled || modelValue >= max" @click="handleStep(step)">
       +
     </button>
   </div>

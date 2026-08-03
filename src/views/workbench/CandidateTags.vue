@@ -5,6 +5,7 @@
       <template v-if="candidates.length > 0">
         <!-- 🌟 改用 BaseBadge 替换手写 button -->
         <BaseBadge
+          v-wave
           v-for="(candidate, index) in candidates"
           :key="index"
           :variant="activeChordName === candidate.chordName ? 'primary' : 'neutral'"

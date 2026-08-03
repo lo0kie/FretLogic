@@ -29,6 +29,7 @@
           >
             <!-- 🌟 1. 动态 tabindex 与 ARIA 无障碍属性 -->
             <button
+              v-wave
               :tabindex="interactive && str.fret <= 0 ? 0 : -1"
               role="button"
               :aria-label="getOpenStringAriaLabel(sIdx, str)"

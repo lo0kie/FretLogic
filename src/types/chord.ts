@@ -47,3 +47,10 @@ export interface ImportExportPayload {
   chords: Chord[];
   songs?: Song[];
 }
+
+export interface GroupedChordCard {
+  mainChord: Chord;
+  variants: Chord[];
+  hasVariants: boolean;
+  variantCount: number;
+}
