@@ -3,7 +3,6 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { cleanAndValidateData, cloneDeep } from '@/utils/dataParser';
-import { computeChordFingerprint, computeIsInverted, TuningEnum } from '@/utils/musicTheory';
 import { reactive, ref } from 'vue';
 
 const pendingImportData = ref<ImportExportPayload | null>(null);
@@ -44,29 +43,6 @@ export function useImportExportService() {
         if (cleanAndValidateData(imported, 'import')) {
           uiStore.removeToast(loadingId);
 
-          // 🌟 1. 归一化待导入数据的转位与指纹，确保与本地对齐后的和弦指纹可精准比对
-          if (imported.chords && Array.isArray(imported.chords)) {
-            imported.chords.forEach(c => {
-              const freshInverted = computeIsInverted(
-                c.strings,
-                c.capo ?? 0,
-                c.tuning || TuningEnum.STANDARD,
-                c.chordName
-              );
-              c.isInverted = freshInverted;
-              c.fingerprint = computeChordFingerprint({
-                groupId: c.groupId,
-                chordName: c.chordName,
-                capo: c.capo ?? 0,
-                fretCount: c.fretCount ?? 3,
-                tuning: c.tuning || TuningEnum.STANDARD,
-                strings: c.strings,
-                isInverted: freshInverted,
-              });
-            });
-          }
-
-          // 🌟 2. 默认全选解析出的数据
           selectedImportState.groupIds = new Set((imported.groups || []).map(g => g.id));
           selectedImportState.chordIds = new Set((imported.chords || []).map(c => c.id));
           selectedImportState.songIds = new Set((imported.songs || []).map(s => s.id));
@@ -87,13 +63,11 @@ export function useImportExportService() {
     reader.readAsText(file);
   };
 
-  // 🌟 确认按需导入选中的项（增量合并，无冲突）
   const applySelectedImport = () => {
     if (!pendingImportData.value) return;
 
     const data = pendingImportData.value;
 
-    // 1. 分组合并
     const newGroupIds = selectedImportState.groupIds;
     const targetGroups = (data.groups || []).filter(g => newGroupIds.has(g.id));
     const localGroupIds = new Set(chordStore.groups.map(g => g.id));
@@ -105,25 +79,18 @@ export function useImportExportService() {
       }
     });
 
-    // 2. 和弦合并：同时使用 ID 与更新后的指纹 double-check 去重
     const newChordIds = selectedImportState.chordIds;
     const targetChords = (data.chords || []).filter(c => newChordIds.has(c.id));
-
-    const localChordIds = new Set(chordStore.savedChordsList.map(c => c.id));
-    const localChordFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint));
-
+    const localChordFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint || c.id));
     const mergedChords = [...chordStore.savedChordsList];
 
     targetChords.forEach(c => {
-      const isExistById = localChordIds.has(c.id);
-      const isExistByFp = c.fingerprint ? localChordFps.has(c.fingerprint) : false;
-
-      if (!isExistById && !isExistByFp) {
+      const key = c.fingerprint || c.id;
+      if (!localChordFps.has(key)) {
         mergedChords.push(cloneDeep(c));
       }
     });
 
-    // 3. 乐谱合并
     const newSongIds = selectedImportState.songIds;
     const targetSongs = (data.songs || []).filter(s => newSongIds.has(s.id));
     const localSongIds = new Set(songStore.songs.map(s => s.id));
@@ -189,3 +156,4 @@ export function useImportExportService() {
     applySelectedImport,
   };
 }
+  

@@ -1,6 +1,6 @@
 ﻿import { FRET_COUNTS } from '@/constants';
 import type { Chord, Group, ImportExportPayload, Song } from '@/types';
-import { computeIsInverted } from '@/utils/musicTheory';
+import { computeChordFingerprint, computeIsInverted } from '@/utils/musicTheory';
 
 const validateGroups = (groups: unknown, issues: string[]): Group[] => {
   if (!Array.isArray(groups)) {
@@ -14,6 +14,7 @@ const validateGroups = (groups: unknown, issues: string[]): Group[] => {
       return false;
     }
     if (typeof g.collapsed !== 'boolean') g.collapsed = false;
+    if (g.sortRule === 'KEY_DEGREE' && !g.sortKey) g.sortKey = 'C';
     return true;
   });
 };
@@ -52,22 +53,13 @@ const validateChords = (chords: unknown, issues: string[]): Chord[] => {
       return false;
     }
 
-    // 🌟 核心修正：如果旧数据缺少这些属性，进行自动补全对齐，而不是拦截丢弃
-    if (!FRET_COUNTS.includes(c.fretCount)) {
-      c.fretCount = 3;
-    }
+    if (!FRET_COUNTS.includes(c.fretCount)) c.fretCount = 3;
+    if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 12) c.capo = 0;
+    if (!c.tuning) c.tuning = 'STANDARD';
 
-    if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 12) {
-      c.capo = 0;
-    }
-
-    if (!c.tuning) {
-      c.tuning = 'STANDARD';
-    }
-
-    if (typeof c.isInverted !== 'boolean') {
-      c.isInverted = computeIsInverted(c.strings, c.capo, c.tuning, c.chordName);
-    }
+    // 🌟 核心修正：无论旧数据有无缺漏，强制归一化转位标识和指纹算法
+    c.isInverted = computeIsInverted(c.strings, c.capo, c.tuning, c.chordName);
+    c.fingerprint = computeChordFingerprint(c as Chord);
 
     return true;
   });

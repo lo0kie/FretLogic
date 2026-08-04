@@ -107,10 +107,10 @@ export const getChordRootPitch = (chordName: string): number => {
 export const computeIsInverted = (
   strings: GuitarStringEntity[],
   capoVal: number,
-  tuning: TuningEnum,
+  tuning: string,
   chordName: string
 ): boolean => {
-  const baseStrings = TUNING_PRESETS[tuning]?.mapping || DEFAULT_TUNING_MAPPING;
+  const baseStrings = TUNING_PRESETS[tuning as TuningEnum]?.mapping || DEFAULT_TUNING_MAPPING;
   let rootPitch = 99;
   let hasMarkedRoot = false;
 
@@ -183,7 +183,7 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
     }
 
     const { colorNoteCount } = getColorNoteCountAndPitches(chord, rootPitch);
-    const isInverted = chord.isInverted;
+    const isInverted = chord.isInverted ?? false;
 
     return { chord, hasMarkedRoot, rootPitch, isInverted, colorNoteCount };
   });
@@ -267,7 +267,13 @@ export const groupChordsByName = (chords: Chord[]): GroupedChordCard[] => {
   const result: GroupedChordCard[] = [];
 
   map.forEach(variants => {
-    variants.sort((a, b) => (a.capo ?? 0) - (b.capo ?? 0));
+    // 🌟 在变体合并展示时，优先把「原位和弦」作为主指法，其次再按 Capo 排序
+    variants.sort((a, b) => {
+      const aInverted = a.isInverted ?? false;
+      const bInverted = b.isInverted ?? false;
+      if (aInverted !== bInverted) return aInverted ? 1 : -1;
+      return (a.capo ?? 0) - (b.capo ?? 0);
+    });
 
     const mainChord = variants[0];
     result.push({
@@ -285,6 +291,7 @@ export const computeChordFingerprint = (
   chord: Pick<Chord, 'groupId' | 'chordName' | 'capo' | 'fretCount' | 'tuning' | 'strings' | 'isInverted'>
 ): string => {
   const strSig = chord.strings.map(s => `${s.fret}_${s.preferFlat ? 1 : 0}_${s.isRoot ? 1 : 0}`).join('|');
+  // 🌟 将 isInverted 混入指纹，对齐去重逻辑
   return `${chord.groupId}:${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${chord.isInverted ? 1 : 0}:${strSig}`;
 };
 
