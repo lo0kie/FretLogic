@@ -50,6 +50,7 @@
 </template>
 
 <script setup lang="ts">
+import { BASE_MODAL_DEFAULTS } from '@/constants/ui.ts';
 import { useEventListener, useScrollLock } from '@vueuse/core';
 import { nextTick, onBeforeUnmount, useTemplateRef, watch } from 'vue';
 import ActionButton from './ActionButton.vue';
@@ -58,12 +59,12 @@ defineOptions({ inheritAttrs: false });
 
 const {
   title = '',
-  width = 'w-80',
-  showFooter = true,
-  cancelText = '取消',
-  confirmText = '确认',
-  confirmType = 'primary',
-  closeOnMask = true,
+  width = BASE_MODAL_DEFAULTS.WIDTH,
+  showFooter = BASE_MODAL_DEFAULTS.SHOW_FOOTER,
+  cancelText = BASE_MODAL_DEFAULTS.CANCEL_TEXT,
+  confirmText = BASE_MODAL_DEFAULTS.CONFIRM_TEXT,
+  confirmType = BASE_MODAL_DEFAULTS.CONFIRM_TYPE,
+  closeOnMask = BASE_MODAL_DEFAULTS.CLOSE_ON_MASK,
 } = defineProps<{
   title?: string;
   width?: 'w-sm' | 'w-md' | 'w-80' | 'w-lg' | 'w-large' | 'w-xl' | 'w-wide' | 'w-full';

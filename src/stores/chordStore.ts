@@ -1,6 +1,7 @@
 import { STORAGE_KEYS } from '@/constants';
 import type { Chord, Group } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
+import { computeChordFingerprint, computeIsInverted, TuningEnum } from '@/utils/musicTheory';
 import { generateUUID } from '@/utils/validators';
 import { useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -10,6 +11,34 @@ export const useChordStore = defineStore('chord', () => {
   const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
   const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
+
+  // 🌟 启动时静默迁移与清洗：保证本地数据的 isInverted 和 fingerprint 绝对正确对齐
+  let needUpdate = false;
+  const alignedChords = savedChordsList.value.map(c => {
+    const capo = c.capo ?? 0;
+    const tuning = c.tuning || TuningEnum.STANDARD;
+    const actualInverted = computeIsInverted(c.strings, capo, tuning, c.chordName);
+
+    const expectedFp = computeChordFingerprint({
+      groupId: c.groupId,
+      chordName: c.chordName,
+      capo,
+      fretCount: c.fretCount ?? 3,
+      tuning,
+      strings: c.strings,
+      isInverted: actualInverted,
+    });
+
+    if (c.isInverted !== actualInverted || c.fingerprint !== expectedFp) {
+      needUpdate = true;
+      return { ...c, isInverted: actualInverted, fingerprint: expectedFp };
+    }
+    return c;
+  });
+
+  if (needUpdate) {
+    savedChordsList.value = alignedChords;
+  }
 
   const { undo: rawUndo } = useRefHistory(savedChordsList, {
     capacity: 15,

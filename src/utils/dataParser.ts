@@ -1,5 +1,6 @@
 ﻿import { FRET_COUNTS } from '@/constants';
 import type { Chord, Group, ImportExportPayload, Song } from '@/types';
+import { computeChordFingerprint, computeIsInverted, TuningEnum } from '@/utils/musicTheory';
 
 const validateGroups = (groups: unknown, issues: string[]): Group[] => {
   if (!Array.isArray(groups)) {
@@ -12,7 +13,12 @@ const validateGroups = (groups: unknown, issues: string[]): Group[] => {
       issues.push(`groups[${index}] 结构损坏，缺失必要属性`);
       return false;
     }
-    if (g.collapsed === undefined) g.collapsed = false;
+    if (typeof g.collapsed !== 'boolean') g.collapsed = true;
+
+    // 🌟 核心拦截 1：非法/缺失的 sortRule 统一重置为 ROOT_PITCH
+    if (!['ROOT_PITCH', 'KEY_DEGREE', 'NAME_ASC'].includes(g.sortRule)) {
+      g.sortRule = 'ROOT_PITCH';
+    }
     if (g.sortRule === 'KEY_DEGREE' && !g.sortKey) {
       g.sortKey = 'C';
     }
@@ -37,7 +43,7 @@ const validateChords = (chords: unknown, issues: string[]): Chord[] => {
       return false;
     }
     if (!Array.isArray(c.strings) || c.strings.length !== 6) {
-      issues.push(`chords[${index}] (${c.id}) 琴弦物理资产数组损坏 (必须为6弦)`);
+      issues.push(`chords[${index}] (${c.id}) 琴弦物理资产数组损坏 (必须为 6 弦)`);
       return false;
     }
 
@@ -55,12 +61,14 @@ const validateChords = (chords: unknown, issues: string[]): Chord[] => {
       return false;
     }
 
-    if (!FRET_COUNTS.includes(c.fretCount)) {
-      c.fretCount = 3;
-    }
+    if (!FRET_COUNTS.includes(c.fretCount)) c.fretCount = 3;
+    if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 12) c.capo = 0;
+    if (!c.tuning) c.tuning = TuningEnum.STANDARD;
 
-    if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 12) {
-      c.capo = 0;
+    // 🌟 核心拦截 2：折中方案 - 仅当旧备份缺失 isInverted 或指纹时，执行一次洗白计算
+    if (typeof c.isInverted !== 'boolean' || !c.fingerprint) {
+      c.isInverted = computeIsInverted(c.strings, c.capo, c.tuning, c.chordName);
+      c.fingerprint = computeChordFingerprint(c as Chord);
     }
 
     return true;
@@ -84,6 +92,11 @@ const validateSongs = (songs: unknown, issues: string[]): Song[] | undefined => 
     if (typeof s.capo !== 'number') s.capo = 0;
     if (!s.chordMap || typeof s.chordMap !== 'object') s.chordMap = {};
     if (!Array.isArray(s.lineIds)) s.lineIds = [];
+
+    // 🌟 核心拦截 3：补齐老乐谱缺失的关键字段，避免引发白屏或空指针
+    if (typeof s.key !== 'string' || !s.key) s.key = 'C';
+    if (typeof s.playKey !== 'string' || !s.playKey) s.playKey = s.key;
+
     return true;
   });
 };
@@ -130,85 +143,49 @@ export const cleanAndValidateData = (
 };
 
 export function cloneDeep<T>(value: T, cache = new WeakMap()): T {
-  if (value === null || typeof value !== 'object') {
-    return value;
-  }
-
+  // ...保持原有 cloneDeep 实现...
+  if (value === null || typeof value !== 'object') return value;
   let rawValue: any = value;
-  if ((value as any)['__v_raw']) {
-    rawValue = (value as any)['__v_raw'];
-  } else if ((value as any)['__raw__']) {
-    rawValue = (value as any)['__raw__'];
-  }
-
-  if (cache.has(rawValue)) {
-    return cache.get(rawValue);
-  }
-
-  if (rawValue instanceof Date) {
-    return new Date(rawValue.getTime()) as any;
-  }
-
-  if (rawValue instanceof RegExp) {
-    return new RegExp(rawValue.source, rawValue.flags) as any;
-  }
-
+  if ((value as any)['__v_raw']) rawValue = (value as any)['__v_raw'];
+  else if ((value as any)['__raw__']) rawValue = (value as any)['__raw__'];
+  if (cache.has(rawValue)) return cache.get(rawValue);
+  if (rawValue instanceof Date) return new Date(rawValue.getTime()) as any;
+  if (rawValue instanceof RegExp) return new RegExp(rawValue.source, rawValue.flags) as any;
   if (rawValue instanceof Set) {
     const cloneSet = new Set();
     cache.set(rawValue, cloneSet);
-    rawValue.forEach(val => {
-      cloneSet.add(cloneDeep(val, cache));
-    });
+    rawValue.forEach(val => cloneSet.add(cloneDeep(val, cache)));
     return cloneSet as any;
   }
-
   if (rawValue instanceof Map) {
     const cloneMap = new Map();
     cache.set(rawValue, cloneMap);
-    rawValue.forEach((val, key) => {
-      cloneMap.set(key, cloneDeep(val, cache));
-    });
+    rawValue.forEach((val, key) => cloneMap.set(key, cloneDeep(val, cache)));
     return cloneMap as any;
   }
-
   const cloneTarget = Array.isArray(rawValue) ? [] : Object.create(Object.getPrototypeOf(rawValue));
-
   cache.set(rawValue, cloneTarget);
-
   const keys = Reflect.ownKeys(rawValue);
   for (const key of keys) {
     const descriptor = Object.getOwnPropertyDescriptor(rawValue, key);
-
     if (descriptor) {
-      const clonedValue = cloneDeep(rawValue[key], cache);
-
-      Object.defineProperty(cloneTarget, key, {
-        ...descriptor,
-        value: clonedValue,
-      });
+      Object.defineProperty(cloneTarget, key, { ...descriptor, value: cloneDeep(rawValue[key], cache) });
     }
   }
-
   return cloneTarget;
 }
 
 export const getEditDistance = (a: string, b: string): number => {
+  // ...保持原有...
   if (a.length === 0) return b.length;
   if (b.length === 0) return a.length;
-
   const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
-
   for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
   for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
-
   for (let i = 1; i <= a.length; i++) {
     for (let j = 1; j <= b.length; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1, // deletion
-        matrix[i][j - 1] + 1, // insertion
-        matrix[i - 1][j - 1] + cost // substitution
-      );
+      matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
     }
   }
   return matrix[a.length][b.length];
