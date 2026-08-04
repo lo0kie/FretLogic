@@ -12,7 +12,7 @@
     />
 
     <div v-else class="lyrics-lines-container" :class="{ 'is-export-mode': isExporting }">
-      <div v-show="isExporting" class="export-header-meta">
+      <div v-show="isExporting && includeMetaBar" class="export-header-meta">
         <h1 class="export-song-title">{{ scoreEditor.activeSong?.title }}</h1>
         <div class="export-song-info">
           <span>{{ scoreEditor.activeSong.key }} 调</span>
@@ -147,6 +147,7 @@ defineOptions({ name: 'ScoreInteractiveArea' });
 const props = defineProps<{
   selectedLineSet: Set<number>;
   isExporting: boolean;
+  includeMetaBar: boolean;
 }>();
 
 const emit = defineEmits<{

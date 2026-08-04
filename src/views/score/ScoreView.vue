@@ -11,6 +11,7 @@
           :is-exporting="isExporting"
           @open-picker="openChordPicker"
           @line-click="handleLineClick"
+          :include-meta-bar="includeMetaBar"
         />
       </template>
 
@@ -27,6 +28,7 @@
     @remove-index="handleRemoveLineIndex"
     @toggle-select-all="handleToggleSelectAll"
     @copy-image="handleCopySelectedImage"
+    v-model:include-meta-bar="includeMetaBar"
   />
 
   <ChordPickerModal v-model:visible="isPickerOpen" />
@@ -66,7 +68,7 @@ const {
   handleLineClick,
 } = useLineSelection(scoreZoneEl, totalLines, activeSongId);
 
-const { isExporting, handleCopySelectedImage } = useScoreImageExport(scoreZoneEl, selectedLineSet);
+const { isExporting, handleCopySelectedImage, includeMetaBar } = useScoreImageExport(scoreZoneEl, selectedLineSet);
 
 const openChordPicker = (slotKey: string | number) => {
   scoreEditor.selectedSlotKey = slotKey;

@@ -167,8 +167,9 @@
     v-model:visible="ioService.isImportSelectionModalOpen.value"
     title="自定义选择导入内容"
     width="w-lg"
-    :confirm-text="`导入 ${totalImportSelectedCount} 个分组`"
+    :confirm-text="importConfirmText"
     @confirm="ioService.applySelectedImport"
+    :confirm-disabled="!hasAnyImportSelection"
   >
     <div class="variants-delete-modal-content">
       <div class="import-tab-bar">
@@ -213,15 +214,9 @@
               tabindex="0"
               v-wave
             >
-              <Transition name="check-badge-pop">
-                <div v-if="ioService.selectedImportState.songIds.has(song.id)" class="selected-check-badge">
-                  <Check :size="12" stroke-width="3" />
-                </div>
-              </Transition>
-
               <div class="import-song-info-box">
                 <span class="import-song-title">{{ song.title }}</span>
-                <span class="import-song-meta">{{ song.playKey }}调 · Capo {{ song.capo }}</span>
+                <span class="import-song-meta">{{ song.key }}调 capo {{ song.capo }}</span>
               </div>
             </div>
           </div>
@@ -247,7 +242,6 @@ import { useImportExportService } from '@/services/useImportExportService';
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { Chord } from '@/types';
-import { Check } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const props = defineProps<{ groupModals: ReturnType<typeof useChordGroupModals> }>();
@@ -276,8 +270,8 @@ const handleToggleSelectAllVariants = () => {
 // 按需导入选择逻辑
 const importActiveTab = ref<'chords' | 'songs'>('chords');
 const IMPORT_TAB_OPTIONS: SegmentOption<'chords' | 'songs'>[] = [
-  { label: '和弦分组', value: 'chords' },
-  { label: '乐谱库', value: 'songs' },
+  { label: '和弦', value: 'chords' },
+  { label: '乐谱', value: 'songs' },
 ];
 
 const getImportGroupChords = (groupId: string): Chord[] => {
@@ -311,9 +305,18 @@ const toggleImportSong = (songId: string) => {
   }
 };
 
-const totalImportSelectedCount = computed(() => {
-  return ioService.selectedImportState.groupIds.size + ioService.selectedImportState.songIds.size;
+// const totalImportSelectedCount = computed(() => ioService.selectedImportState.groupIds.size + ioService.selectedImportState.songIds.size);
+const selectedGroupCount = computed(() => ioService.selectedImportState.groupIds.size);
+const selectedSongCount = computed(() => ioService.selectedImportState.songIds.size);
+
+const importConfirmText = computed(() => {
+  const parts: string[] = [];
+  if (selectedGroupCount.value > 0) parts.push(`${selectedGroupCount.value} 个分组`);
+  if (selectedSongCount.value > 0) parts.push(`${selectedSongCount.value} 首乐谱`);
+  return parts.length > 0 ? `导入 ${parts.join('、')}` : '导入';
 });
+
+const hasAnyImportSelection = computed(() => selectedGroupCount.value + selectedSongCount.value > 0);
 </script>
 
 <style scoped lang="less">
@@ -659,7 +662,7 @@ const totalImportSelectedCount = computed(() => {
 .import-song-info-box {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.18rem;
   min-width: 0;
   flex: 1;
 
