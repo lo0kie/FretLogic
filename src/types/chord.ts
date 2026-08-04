@@ -32,6 +32,7 @@ export interface Chord {
   groupId: string;
   tuning: TuningEnum;
   fingerprint: string;
+  isInverted: boolean;
 }
 
 export interface Group {
@@ -43,6 +44,7 @@ export interface Group {
 }
 
 export interface ImportExportPayload {
+  version?: number; // 🌟 新增 Schema 版本标识
   groups: Group[];
   chords: Chord[];
   songs: Song[];

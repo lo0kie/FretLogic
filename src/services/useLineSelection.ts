@@ -1,7 +1,7 @@
 import { computed, ref, watch, type Ref } from 'vue';
 
 export function useLineSelection(
-  scoreZoneRef: Ref<HTMLElement | null>,
+  _scoreZoneRef: Ref<HTMLElement | null>,
   totalLines: Ref<number>,
   activeSongId: Ref<unknown>
 ) {

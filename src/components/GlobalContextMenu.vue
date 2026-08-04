@@ -226,6 +226,7 @@ defineExpose({
 
 .context-menu-trigger-wrapper {
   width: 100%;
+  cursor: context-menu;
 }
 
 .context-menu-backdrop {

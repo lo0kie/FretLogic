@@ -42,7 +42,7 @@
               size="xs"
               :aria-label="`调性 ${song.playKey} 调`"
             >
-              {{ song.playKey }}调
+              {{ song.key }}调
             </BaseBadge>
 
             <BaseBadge

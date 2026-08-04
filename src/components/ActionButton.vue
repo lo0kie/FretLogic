@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
+import { ACTION_BUTTON_DEFAULTS, HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
 import { Loader2 } from '@lucide/vue';
 import { computed } from 'vue';
 
@@ -31,9 +31,9 @@ const {
   loading = false,
   active = false,
   iconOnly = false,
-  variant = 'default',
-  size = 'md',
-  rounded = 'full',
+  variant = ACTION_BUTTON_DEFAULTS.VARIANT,
+  size = ACTION_BUTTON_DEFAULTS.SIZE,
+  rounded = ACTION_BUTTON_DEFAULTS.ROUNDED,
   width,
   height,
 } = defineProps<{

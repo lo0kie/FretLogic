@@ -83,22 +83,22 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
     settingsStore.isDarkMode = !settingsStore.isDarkMode;
   });
 
-  transition.ready.then(() => {
-    document.documentElement.animate(
-      {
-        clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`],
-      },
-      {
-        duration: 350,
-        easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
-        pseudoElement: '::view-transition-new(root)',
-      }
-    );
-  });
+  transition.ready
+    .then(() => {
+      document.documentElement.animate(
+        {
+          clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`],
+        },
+        {
+          duration: 350,
+          easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+          pseudoElement: '::view-transition-new(root)',
+        }
+      );
+    })
+    .catch(() => {});
 
-  transition.finished.then(() => {
-    disableChangingAttribute();
-  });
+  transition.finished.then(() => disableChangingAttribute()).catch(() => disableChangingAttribute());
 };
 </script>
 

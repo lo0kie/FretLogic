@@ -5,7 +5,7 @@ import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
 import { copyElementToClipboard } from '@/utils/domExporter';
-import { computeChordFingerprint } from '@/utils/musicTheory';
+import { computeChordFingerprint, computeIsInverted } from '@/utils/musicTheory';
 import { generateUUID } from '@/utils/validators';
 import { Ref, toRaw, unref } from 'vue';
 import { SortableEvent } from 'vue-draggable-plus';
@@ -57,8 +57,17 @@ export function useChordService() {
 
   const triggerDeleteChords = (chords: Chord[]) => {
     if (chords.length === 0) return;
-    const chordIds = new Set(chords.map(c => c.id));
-    const updatedList = chordStore.savedChordsList.filter(c => !chordIds.has(c.id));
+
+    // 🌟 1. 拍摄删前的乐谱快照（用于撤销恢复 chordMap 绑定）
+    const songsSnapshot = cloneDeep(songStore.songs);
+
+    const targetIds = new Set<string>();
+    chords.forEach(c => {
+      if (c.id) targetIds.add(c.id);
+      if (c.fingerprint) targetIds.add(c.fingerprint);
+    });
+
+    const updatedList = chordStore.savedChordsList.filter(c => !targetIds.has(c.id));
     chordStore.overwriteChords(updatedList);
 
     songStore.songs.forEach(song => {
@@ -66,16 +75,10 @@ export function useChordService() {
       let hasChanged = false;
 
       Object.keys(song.chordMap).forEach(key => {
-        const boundChord = song.chordMap[key];
-        if (!boundChord) return;
+        const boundChordId = song.chordMap[key];
+        if (!boundChordId) return;
 
-        const isMatched = chords.some(
-          chord =>
-            boundChord.id === chord.id ||
-            (boundChord.fingerprint && chord.fingerprint && boundChord.fingerprint === chord.fingerprint)
-        );
-
-        if (isMatched) {
+        if (targetIds.has(boundChordId)) {
           delete song.chordMap[key];
           hasChanged = true;
         }
@@ -95,7 +98,8 @@ export function useChordService() {
       duration: 4000,
       onAction: () => {
         chordStore.executeUndoRestore();
-        uiStore.toast.success('已恢复刚才删除的和弦');
+        songStore.overwriteSongs(songsSnapshot); // 🌟 2. 同步恢复乐谱快照
+        uiStore.toast.success('已恢复刚才删除的和弦及谱面绑定');
       },
     });
   };
@@ -153,14 +157,19 @@ export function useChordService() {
       ? chordStore.savedChordsList.find(c => c.id === editorStore.editingId)?.groupId || chordStore.selectedGroupId
       : chordStore.selectedGroupId;
 
+    const currentStrings = cloneDeep(toRaw(editorStore.strings));
+
+    const isInvertedState = computeIsInverted(currentStrings, editorStore.capo, editorStore.currentTuning, cleanName);
+
     const rawPayload: Omit<Chord, 'fingerprint'> = {
       id: editorStore.editingId || 'c_' + generateUUID().slice(0, 10),
       chordName: cleanName,
-      strings: cloneDeep(toRaw(editorStore.strings)),
+      strings: currentStrings,
       fretCount: editorStore.fretCount,
       capo: editorStore.capo,
       groupId: targetGroupId,
       tuning: editorStore.currentTuning,
+      isInverted: isInvertedState,
     };
 
     const newFingerprint = computeChordFingerprint(rawPayload);

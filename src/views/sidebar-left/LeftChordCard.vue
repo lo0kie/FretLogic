@@ -35,6 +35,8 @@
           <BaseMarquee class="chord-marquee-wrapper">
             <span class="chord-name-text">
               {{ cardData.mainChord.chordName }}
+              <!-- 🌟 如果为主展示卡片的和弦是转位，显示标志 -->
+              <span v-if="activeChord.isInverted" class="inverted-tag" aria-label="转位">(转)</span>
             </span>
           </BaseMarquee>
         </div>
@@ -102,7 +104,6 @@ const handleCardClick = () => {
 const isSwapping = ref(false);
 let swapTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 先卸掉 class 再挂上，保证连续切换时动画能重播 */
 const triggerSwapAnimation = async () => {
   if (swapTimer) {
     clearTimeout(swapTimer);
@@ -205,16 +206,13 @@ onBeforeUnmount(() => {
       border-radius: inherit;
       pointer-events: none;
       box-shadow: var(--shadow-sm);
-      /* 默认叠层位置 */
       transform: translate(4px, 3px) rotate(0.6deg);
-      /* 只给 hover 用；动画期间会关掉 */
       transition:
         transform 0.18s @bezier-standard,
         border-color @duration-fast ease,
         background-color @duration-fast ease;
     }
 
-    /* 非切换中才响应 hover，避免和 keyframes 抢 transform */
     &:not(.is-swapping):hover::before,
     &:not(.is-swapping).is-context-open::before {
       transform: translate(6px, 5px) rotate(2deg);
@@ -225,7 +223,6 @@ onBeforeUnmount(() => {
       background-color: color-mix(in srgb, @primary, var(--bg-body) 94%);
     }
 
-    /* 切换中：关掉 transition，只跑 animation，结束干净复位 */
     &.is-swapping::before {
       transition: none;
       animation: cardSwapAnimate 0.2s cubic-bezier(0.22, 1.2, 0.36, 1) both;
@@ -249,10 +246,6 @@ onBeforeUnmount(() => {
   }
 }
 
-/*
-  抽出 → 复位
-  终点必须和默认 transform 一致，这样去掉 is-swapping 时不会跳一下
-*/
 @keyframes cardSwapAnimate {
   0% {
     transform: translate(6px, 5px) rotate(2deg);
@@ -296,6 +289,14 @@ onBeforeUnmount(() => {
   color: var(--text-body);
 }
 
+.inverted-tag {
+  font-size: 0.6rem;
+  color: var(--color-warning);
+  vertical-align: top;
+  margin-left: 2px;
+  font-weight: 600;
+}
+
 @media (max-width: 768px) {
   .chord-card-frame,
   .chord-thumb-card {
@@ -322,6 +323,10 @@ onBeforeUnmount(() => {
 
   .chord-name-text {
     font-size: 0.85rem;
+  }
+
+  .inverted-tag {
+    font-size: 0.68rem;
   }
 }
 </style>

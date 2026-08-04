@@ -14,8 +14,8 @@ export const FRETBOARD_SCALE_MAP: Record<number, number> = {
 export const FRETBOARD_LINE_WIDTH = 8;
 
 const STRING_SPACING = 64;
-const OFFSET_X = 45;
-const OFFSET_X_RIGHT = 31;
+const OFFSET_X = 30;
+const OFFSET_X_RIGHT = 30;
 const FRET_HEIGHT = 120;
 const OFFSET_Y_TOP = 80;
 const OFFSET_Y_BOTTOM = 20;

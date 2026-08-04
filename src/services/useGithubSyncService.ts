@@ -2,8 +2,9 @@ import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { ImportExportPayload } from '@/types';
+import type { Chord, ImportExportPayload } from '@/types';
 import { cleanAndValidateData, cloneDeep } from '@/utils/dataParser';
+import { computeChordFingerprint } from '@/utils/musicTheory';
 import { validateSettings } from '@/utils/validators';
 import { Base64 } from 'js-base64';
 import { ref } from 'vue';
@@ -118,20 +119,19 @@ export function useGithubSyncService() {
     }
   };
 
-  // 🌟 辅助：对比云端与本地是否存在差异
   const checkHasDifferences = (cloudData: ImportExportPayload): boolean => {
     const localChords = chordStore.savedChordsList;
     const cloudChords = cloudData.chords || [];
 
-    // 1. 和弦数量不一致，必定存在差异
     if (localChords.length !== cloudChords.length) return true;
 
-    // 2. 检查和弦的指纹/物理属性差异
-    const localFps = new Set(localChords.map(c => c.fingerprint || `${c.id}_${c.chordName}`));
-    const hasUnmatchedChord = cloudChords.some(c => !localFps.has(c.fingerprint || `${c.id}_${c.chordName}`));
+    const getOrComputeFp = (c: Chord) => c.fingerprint || computeChordFingerprint(c);
+
+    const localFps = new Set(localChords.map(getOrComputeFp));
+    const hasUnmatchedChord = cloudChords.some(c => !localFps.has(getOrComputeFp(c)));
+
     if (hasUnmatchedChord) return true;
 
-    // 3. 检查乐谱 ID/标题差异
     const localSongs = songStore.songs;
     const cloudSongs = cloudData.songs || [];
     if (localSongs.length !== cloudSongs.length) return true;
@@ -198,63 +198,83 @@ export function useGithubSyncService() {
     }
   };
 
-  // 🌟 合并动作 1：用云端彻底覆盖本地
   const applyOverwriteWithCloud = () => {
     if (!pendingCloudData.value) return;
 
     const data = pendingCloudData.value;
+
+    let finalSelectedId = chordStore.selectedGroupId;
+    if (!data.groups.some(g => g.id === finalSelectedId)) {
+      finalSelectedId = data.groups[0]?.id || null;
+    }
+    data.groups.forEach(g => {
+      g.collapsed = g.id !== finalSelectedId;
+    });
+
     chordStore.overwriteGroups(data.groups);
     chordStore.overwriteChords(data.chords);
     if (data.songs) songStore.overwriteSongs(data.songs);
 
-    if (!chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
-      chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
-    }
+    chordStore.selectedGroupId = finalSelectedId;
 
     isMergeModalOpen.value = false;
     pendingCloudData.value = null;
     uiStore.toast.success('已使用云端数据完全覆盖本地');
   };
 
-  // 🌟 合并动作 2：无冲突增量合并 (Union Set)
   const applyUnionSetMerge = () => {
     if (!pendingCloudData.value) return;
 
     const cloudData = pendingCloudData.value;
 
-    // 1. 分组合并 (补全本地缺失的分组)
     const localGroupIds = new Set(chordStore.groups.map(g => g.id));
     const newGroups = [...chordStore.groups];
     cloudData.groups.forEach(cg => {
       if (!localGroupIds.has(cg.id)) {
         newGroups.push(cloneDeep(cg));
+        localGroupIds.add(cg.id);
       }
     });
 
-    // 2. 和弦按指纹去重合并
-    const localFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint || c.id));
+    const localChordIds = new Set(chordStore.savedChordsList.map(c => c.id));
+    const localFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint));
     const newChords = [...chordStore.savedChordsList];
+
     cloudData.chords.forEach(cc => {
-      const fp = cc.fingerprint || cc.id;
-      if (!localFps.has(fp)) {
+      const isExistById = localChordIds.has(cc.id);
+      const isExistByFp = cc.fingerprint ? localFps.has(cc.fingerprint) : false;
+
+      if (!isExistById && !isExistByFp) {
         newChords.push(cloneDeep(cc));
+        localChordIds.add(cc.id);
+        if (cc.fingerprint) localFps.add(cc.fingerprint);
       }
     });
 
-    // 3. 乐谱 ID 去重合并
     const localSongIds = new Set(songStore.songs.map(s => s.id));
     const newSongs = [...songStore.songs];
     if (cloudData.songs) {
       cloudData.songs.forEach(cs => {
         if (!localSongIds.has(cs.id)) {
           newSongs.push(cloneDeep(cs));
+          localSongIds.add(cs.id);
         }
       });
     }
 
+    let finalSelectedId = chordStore.selectedGroupId;
+    if (!newGroups.some(g => g.id === finalSelectedId)) {
+      finalSelectedId = newGroups[0]?.id || null;
+    }
+    newGroups.forEach(g => {
+      g.collapsed = g.id !== finalSelectedId;
+    });
+
     chordStore.overwriteGroups(newGroups);
     chordStore.overwriteChords(newChords);
     songStore.overwriteSongs(newSongs);
+
+    chordStore.selectedGroupId = finalSelectedId;
 
     isMergeModalOpen.value = false;
     pendingCloudData.value = null;
@@ -263,6 +283,7 @@ export function useGithubSyncService() {
 
   const triggerGlobalSync = () => {
     syncToGithub({
+      version: 1, // 🌟 附加 Schema 版本号
       groups: chordStore.groups,
       chords: chordStore.savedChordsList,
       songs: songStore.songs,

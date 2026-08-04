@@ -46,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import { BASE_BADGE_DEFAULTS } from '@/constants';
 import { X } from '@lucide/vue';
 import { computed, useAttrs, useSlots } from 'vue';
 
@@ -53,39 +54,27 @@ export type BadgeVariant = 'neutral' | 'primary' | 'success' | 'warning' | 'dang
 export type BadgeSize = 'xs' | 'sm' | 'md' | 'lg';
 export type BadgeAppearance = 'filled' | 'subtle' | 'outline';
 
-const props = withDefaults(
-  defineProps<{
-    /** 主题变体色彩 */
-    variant?: BadgeVariant;
-    /** 尺寸档位 */
-    size?: BadgeSize;
-    /** 视觉形态：filled (实心) | subtle (浅色弱化) | outline (描边) */
-    appearance?: BadgeAppearance;
-    /** 直接传入的文本/数字内容 */
-    content?: string | number;
-    /** 数字显示上限（例如 max=99 时，100 会显示为 99+） */
-    max?: number;
-    /** 是否只展示为小红点/指示点（忽略文字） */
-    dot?: boolean;
-    /** 是否在文本前展示状态指示圆点 */
-    showDot?: boolean;
-    /** 是否显示可关闭按钮 */
-    closable?: boolean;
-    /** 是否为可点击标签形态（提供悬浮高亮反馈） */
-    interactive?: boolean;
-  }>(),
-  {
-    variant: 'neutral',
-    size: 'sm',
-    appearance: 'filled',
-    content: undefined,
-    max: 99,
-    dot: false,
-    showDot: false,
-    closable: false,
-    interactive: false,
-  }
-);
+const {
+  variant = BASE_BADGE_DEFAULTS.VARIANT,
+  size = BASE_BADGE_DEFAULTS.SIZE,
+  appearance = BASE_BADGE_DEFAULTS.APPEARANCE,
+  content = undefined,
+  max = BASE_BADGE_DEFAULTS.MAX,
+  dot = false,
+  showDot = false,
+  closable = false,
+  interactive = false,
+} = defineProps<{
+  variant?: BadgeVariant;
+  size?: BadgeSize;
+  appearance?: BadgeAppearance;
+  content?: string | number;
+  max?: number;
+  dot?: boolean;
+  showDot?: boolean;
+  closable?: boolean;
+  interactive?: boolean;
+}>();
 
 const emit = defineEmits<{
   (e: 'close', event: MouseEvent): void;
@@ -96,32 +85,32 @@ const attrs = useAttrs();
 const slots = useSlots();
 
 /** 是否属于可点击状态 */
-const isInteractive = computed(() => props.interactive || Boolean(attrs.onClick));
+const isInteractive = computed(() => interactive || Boolean(attrs.onClick));
 
 /** 纯指示小红点模式：开启 dot 且无默认插槽/文本时 */
-const isDotOnly = computed(() => props.dot && props.content === undefined && !slots.default);
+const isDotOnly = computed(() => dot && content === undefined && !slots.default);
 
 /** 数字封顶格式化 (如 99+) */
 const formattedContent = computed(() => {
-  if (typeof props.content === 'number' && props.max && props.content > props.max) {
-    return `${props.max}+`;
+  if (typeof content === 'number' && max && content > max) {
+    return `${max}+`;
   }
-  return props.content;
+  return content;
 });
 
 /** 读屏器友好文本：对于纯圆点或溢出数字（如 99+），提供明确的无障碍描述 */
 const ariaLabelText = computed(() => {
   if (attrs['aria-label']) return String(attrs['aria-label']);
   if (isDotOnly.value) return '新消息提示';
-  if (typeof props.content === 'number' && props.max && props.content > props.max) {
-    return `超过 ${props.max} 条未读消息`;
+  if (typeof content === 'number' && max && content > max) {
+    return `超过 ${max} 条未读消息`;
   }
   return undefined;
 });
 
 /** 根据 Badge 尺寸自动适配关闭图标大小 */
 const closeIconSize = computed(() => {
-  switch (props.size) {
+  switch (size) {
     case 'xs':
       return 8;
     case 'lg':

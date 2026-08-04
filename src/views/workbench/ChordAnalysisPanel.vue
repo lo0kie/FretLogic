@@ -129,8 +129,6 @@ const handleTogglePitchName = (sIdx: number) => {
 const handleSelectCandidate = (candidate: CandidateResult) => {
   const isSelected = editorStore.currentChordName === candidate.chordName;
 
-  console.log('[ChordAnalysisPanel.vue: 132]', 12);
-
   if (isSelected) {
     editorStore.currentChordName = '';
     editorStore.strings.forEach(str => {

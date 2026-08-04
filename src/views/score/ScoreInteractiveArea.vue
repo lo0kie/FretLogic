@@ -12,7 +12,7 @@
     />
 
     <div v-else class="lyrics-lines-container" :class="{ 'is-export-mode': isExporting }">
-      <div v-show="isExporting" class="export-header-meta">
+      <div v-show="isExporting && includeMetaBar" class="export-header-meta">
         <h1 class="export-song-title">{{ scoreEditor.activeSong?.title }}</h1>
         <div class="export-song-info">
           <span>{{ scoreEditor.activeSong.key }} 调</span>
@@ -21,7 +21,6 @@
         </div>
       </div>
 
-      <!-- 🌟 整行绑定点击事件，支持水波纹与选中切换 -->
       <div
         v-wave
         v-for="lineData in lyricsLinesWithEdges"
@@ -82,7 +81,7 @@
           :key="item.slotKey"
           variant="char"
           :slot-key="item.slotKey"
-          :chord="scoreEditor.activeSong?.chordMap[item.slotKey]"
+          :chord="getCharChord(item.slotKey)"
           :char="item.char"
           :is-drop-target="dragOverSlotKey === item.slotKey"
           :is-dark-mode="settingsStore.isDarkMode"
@@ -138,6 +137,7 @@ import { useLyricsDragDrop } from '@/services/useLyricsDragDrop';
 import { useLyricsLinesData } from '@/services/useLyricsLinesData';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import type { Chord } from '@/types';
 import { FileText } from '@lucide/vue';
 import { useTemplateRef } from 'vue';
 import ChordSlotCell from './ChordSlotCell.vue';
@@ -147,6 +147,7 @@ defineOptions({ name: 'ScoreInteractiveArea' });
 const props = defineProps<{
   selectedLineSet: Set<number>;
   isExporting: boolean;
+  includeMetaBar: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -169,20 +170,20 @@ const {
   handleDrop,
 } = useLyricsDragDrop();
 
-const { lyricsLinesWithEdges } = useLyricsLinesData();
+const { lyricsLinesWithEdges, chordsLookupMap } = useLyricsLinesData();
 
 const formatLineIndex = (index: number) => String(index + 1).padStart(2, '0');
 
-// 🌟 精准点击判断：点在和弦卡片、删除按钮等交互元素上时放行，其余空白处触发整行选中
+const getCharChord = (slotKey: string): Chord | undefined => {
+  const chordId = scoreEditor.activeSong?.chordMap[slotKey];
+  return chordId ? chordsLookupMap.value.get(chordId) : undefined;
+};
+
 const handleLineClick = (ev: MouseEvent, lineIdx: number) => {
   if (props.isExporting) return;
   const target = ev.target as HTMLElement;
 
-  if (
-    target.closest('.inline-fretboard-card') ||
-    target.closest('.remove-chord-btn') ||
-    target.closest('.add-edge-placeholder')
-  ) {
+  if (target.closest('.chord-slot-cell')) {
     return;
   }
 

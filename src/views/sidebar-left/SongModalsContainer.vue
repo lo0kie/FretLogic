@@ -78,9 +78,8 @@ import BaseInput from '@/components/BaseInput.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import BaseNumberInput from '@/components/BaseNumberInput.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
+import { KEY_OPTIONS } from '@/constants';
 import { useSongModals } from '@/services/useSongModals';
-
-const KEY_OPTIONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
 defineProps<{
   songModals: ReturnType<typeof useSongModals>;

@@ -63,16 +63,15 @@ const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 
 let cachedDOMPurify: DOMPurify | null = null;
 
+const isHtmlContent = computed(() => /[<>&]/.test(content || ''));
+
 const sanitizedHtmlContent = computedAsync(async () => {
   if (!show.value || !content) return '';
+  if (!isHtmlContent.value) return content.replace(/\\n/g, '<br />').replace(/\n/g, '<br />');
+
+  cachedDOMPurify ??= (await import('dompurify')).default;
 
   const rawHtml = content.replace(/\\n/g, '<br />').replace(/\n/g, '<br />');
-
-  if (!cachedDOMPurify) {
-    const dompurifyModule = await import('dompurify');
-    cachedDOMPurify = dompurifyModule.default || dompurifyModule;
-  }
-
   return cachedDOMPurify.sanitize(rawHtml ?? '');
 }, '');
 

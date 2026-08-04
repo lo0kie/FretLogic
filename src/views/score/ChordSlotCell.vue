@@ -43,7 +43,7 @@
           <X :size="12" :stroke-width="3" aria-hidden="true" />
         </button>
 
-        <span class="inline-chord-name">{{ chord.chordName }}</span>
+        <span class="inline-chord-name"> {{ chord.chordName }} </span>
 
         <Fretboard
           :interactive="false"
@@ -303,11 +303,12 @@ const ariaLabelText = computed(() => {
 }
 
 .inline-chord-name {
-  font-size: 0.7rem;
+  font-size: v-bind('`${0.7 * scoreEditor.fretboardScale}rem`');
   font-weight: 800;
   color: var(--text-title);
   line-height: 1;
   margin-bottom: 0.1rem;
+  transition: font-size @duration-fast ease;
 }
 
 .char-text {

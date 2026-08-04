@@ -2,7 +2,7 @@ import { useSongStore } from '@/stores/songStore';
 import type { Chord, Song } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
 import { garbageCollectChordMap, matchLineIds, sanitizeLyricsText } from '@/utils/lineIdMatcher';
-import { getKeySemitones, transposeChordName, transposePhysicalChord } from '@/utils/musicTheory';
+import { getKeySemitones, transposeChordName } from '@/utils/musicTheory';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
@@ -12,7 +12,7 @@ export type ScoreActiveTab = 'edit' | 'interactive';
 interface HistoryState {
   lyrics: string;
   lineIds: string[];
-  chordMap: Record<string | number, Chord>;
+  chordMap: Record<string | number, string>;
 }
 
 export const useScoreEditorStore = defineStore('scoreEditor', () => {
@@ -50,7 +50,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     },
   });
 
-  // 🌟 P2：撤销重做支持
   const recordHistory = (song?: Song) => {
     const target = song || activeSong.value;
     if (!target || isUndoRedoAction.value) return;
@@ -122,25 +121,15 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     historyIndex.value = -1;
   };
 
-  // 🌟 P3：自动计算移调
   const updateKey = (key: string) => {
     if (activeSong.value && activeSong.value.key !== key) {
       recordHistory();
       const delta = getKeySemitones(activeSong.value.key || 'C', key);
       const newPlayKey = transposeChordName(activeSong.value.playKey || 'C', delta);
-      const newChordMap = { ...activeSong.value.chordMap };
 
-      if (delta !== 0) {
-        Object.keys(newChordMap).forEach(k => {
-          if (newChordMap[k]) {
-            newChordMap[k] = transposePhysicalChord(newChordMap[k], delta);
-          }
-        });
-      }
       songStore.updateSongMeta(activeSong.value.id, {
         key,
         playKey: newPlayKey,
-        chordMap: newChordMap,
       });
     }
   };
@@ -151,20 +140,10 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
 
       const delta = getKeySemitones(activeSong.value.playKey || 'C', playKey);
       const newKey = transposeChordName(activeSong.value.key || 'C', delta);
-      const newChordMap = { ...activeSong.value.chordMap };
-
-      if (delta !== 0) {
-        Object.keys(newChordMap).forEach(k => {
-          if (newChordMap[k]) {
-            newChordMap[k] = transposePhysicalChord(newChordMap[k], delta);
-          }
-        });
-      }
 
       songStore.updateSongMeta(activeSong.value.id, {
         playKey,
         key: newKey,
-        chordMap: newChordMap,
       });
     }
   };
@@ -176,18 +155,9 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       const deltaCapo = clampedCapo - (activeSong.value.capo || 0);
       const newKey = transposeChordName(activeSong.value.key || 'C', deltaCapo);
 
-      const newChordMap = { ...activeSong.value.chordMap };
-      if (deltaCapo !== 0) {
-        Object.keys(newChordMap).forEach(k => {
-          if (newChordMap[k]) {
-            newChordMap[k] = transposePhysicalChord(newChordMap[k], deltaCapo, clampedCapo, false);
-          }
-        });
-      }
       songStore.updateSongMeta(activeSong.value.id, {
         capo: clampedCapo,
         key: newKey,
-        chordMap: newChordMap,
       });
     }
   };
@@ -218,7 +188,8 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const setSlotChord = (slotKey: string | number, chord: Chord) => {
     if (!activeSong.value) return;
     recordHistory();
-    songStore.setCharChord(activeSong.value.id, slotKey, chord);
+    // 🌟 核心：存入和弦 ID，实现解耦绑定
+    songStore.setCharChord(activeSong.value.id, slotKey, chord.id);
   };
 
   const removeSlotChord = (slotKey: string | number) => {

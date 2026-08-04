@@ -39,6 +39,22 @@
         {{ isAllSelected ? '全不选' : '全选' }}
       </ActionButton>
 
+      <GlobalTooltip
+        :content="includeMetaBar ? '导出图片将包含歌名/调/Capo 信息' : '导出图片不包含歌曲信息'"
+        placement="top"
+      >
+        <ActionButton
+          size="sm"
+          variant="ghost"
+          icon-only
+          :active="includeMetaBar"
+          :aria-label="includeMetaBar ? '关闭歌曲信息栏' : '开启歌曲信息栏'"
+          @click="includeMetaBar = !includeMetaBar"
+        >
+          <FileText :size="14" stroke-width="2.5" />
+        </ActionButton>
+      </GlobalTooltip>
+
       <ActionButton
         size="sm"
         variant="subtle"
@@ -56,7 +72,8 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import BaseBadge from '@/components/BaseBadge.vue';
-import { Copy } from '@lucide/vue';
+import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { Copy, FileText } from '@lucide/vue';
 import { useTemplateRef } from 'vue';
 
 defineProps<{
@@ -73,6 +90,7 @@ const emit = defineEmits<{
 }>();
 
 const scrollContainerRef = useTemplateRef<HTMLElement>('scrollContainerRef');
+const includeMetaBar = defineModel<boolean>('includeMetaBar', { default: true });
 
 const handleWheelScroll = (e: WheelEvent) => {
   if (!scrollContainerRef.value) return;

@@ -1,59 +1,67 @@
 <template>
-  <div class="fretboard-layout-scaler" :style="{ width: `${realScaledWidth}px`, height: `${realScaledHeight}px` }">
+  <div
+    class="fretboard-layout-scaler"
+    :class="{ 'has-border': bordered }"
+    :style="{ width: `${realScaledWidth}px`, height: `${realScaledHeight}px` }"
+  >
     <div
       ref="fretBoardRef"
       class="fretboard-container"
-      :class="[interactive ? 'is-interactive' : 'is-disabled']"
+      :class="[interactive ? 'is-interactive' : 'is-disabled', { 'is-bordered': bordered }]"
       :style="{
         width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
         height: `${rawHeight}px`,
         transform: `scale(${fretboardScale})`,
         transformOrigin: 'top left',
+        backgroundColor: bgColor,
       }"
       @contextmenu.prevent.stop="handleRightClickRoot"
     >
-      <div class="open-strings-wrapper" :style="{ height: `${CANVAS_CONFIG.OFFSET_Y_TOP}px` }">
-        <template v-for="(str, sIdx) in strings" :key="'os-' + sIdx">
-          <GlobalTooltip
-            placement="top"
-            :content="
-              interactive && str.fret <= 0 ? '左键：切换空弦/静音 \n 右键：设为根音 \n 滚轮：切换升降号' : undefined
-            "
-            :style="{
-              position: 'absolute',
-              left: `${stringXPositions[sIdx]}px`,
-              top: '10px',
-              transform: 'translateX(-50%)',
-              width: 'auto',
-            }"
-          >
-            <!-- 🌟 1. 动态 tabindex 与 ARIA 无障碍属性 -->
-            <button
-              v-wave
-              :tabindex="interactive && str.fret <= 0 ? 0 : -1"
-              role="button"
-              :aria-label="getOpenStringAriaLabel(sIdx, str)"
-              :aria-disabled="!interactive || str.fret > 0"
-              @click.stop="handleLocalToggleOpenString(sIdx)"
-              @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
-              @keydown.enter.prevent.stop="handleLocalToggleOpenString(sIdx)"
-              @keydown.space.prevent.stop="handleLocalToggleOpenString(sIdx)"
-              class="open-string-btn"
-              :class="[
-                str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available',
-                getOpenStringStatusClass(str),
-                interactive ? 'allow-events' : 'block-events',
-              ]"
-              :style="getOpenStringStyle(str, isDarkMode)"
+      <!-- 应用动态的顶部偏移量，并在 showOpenStrings 为 false 时卸载内容 -->
+      <div class="open-strings-wrapper" :style="{ height: `${activeTopOffset}px` }">
+        <template v-if="showOpenStrings">
+          <template v-for="(str, sIdx) in strings" :key="'os-' + sIdx">
+            <GlobalTooltip
+              placement="top"
+              :content="
+                interactive && str.fret <= 0 ? '左键：切换空弦/静音 \n 右键：设为根音 \n 滚轮：切换升降号' : undefined
+              "
+              :style="{
+                position: 'absolute',
+                left: `${stringXPositions[sIdx]}px`,
+                top: '10px',
+                transform: 'translateX(-50%)',
+                width: 'auto',
+              }"
             >
-              <template v-if="str.fret <= 0">
-                <X v-if="isMuted(str)" class="mute-icon" stroke-width="3" aria-hidden="true" />
-                <span v-else-if="isOpen(str)" class="open-note-text">
-                  {{ calcNoteLabel(sIdx, 0, capo, str.preferFlat, activeBaseStrings) }}
-                </span>
-              </template>
-            </button>
-          </GlobalTooltip>
+              <button
+                v-wave
+                :tabindex="interactive && str.fret <= 0 ? 0 : -1"
+                role="button"
+                :aria-label="getOpenStringAriaLabel(sIdx, str)"
+                :aria-disabled="!interactive || str.fret > 0"
+                @click.stop="handleLocalToggleOpenString(sIdx)"
+                @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
+                @keydown.enter.prevent.stop="handleLocalToggleOpenString(sIdx)"
+                @keydown.space.prevent.stop="handleLocalToggleOpenString(sIdx)"
+                class="open-string-btn"
+                :class="[
+                  str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available',
+                  getOpenStringStatusClass(str),
+                  interactive ? 'allow-events' : 'block-events',
+                  { 'no-border': !bordered },
+                ]"
+                :style="{ backgroundColor: bgColor, ...getOpenStringStyle(str, isDarkMode) }"
+              >
+                <template v-if="str.fret <= 0">
+                  <X v-if="isMuted(str)" class="mute-icon" stroke-width="3" aria-hidden="true" />
+                  <span v-else-if="isOpen(str)" class="open-note-text">
+                    {{ calcNoteLabel(sIdx, 0, capo, str.preferFlat, activeBaseStrings) }}
+                  </span>
+                </template>
+              </button>
+            </GlobalTooltip>
+          </template>
         </template>
       </div>
 
@@ -68,6 +76,7 @@
         :string-x-positions="stringXPositions"
         :hover-point="hoverPoint"
         :fret-number-size="fretNumberSize"
+        :show-fret-numbers="showFretNumbers"
         @toggle-pitch="handleTogglePitchName"
       />
     </div>
@@ -96,6 +105,10 @@ const props = withDefaults(
     interactive?: boolean;
     scale?: number;
     fretNumberSize?: 'sm' | 'md' | 'lg';
+    showOpenStrings?: boolean;
+    showFretNumbers?: boolean;
+    bgColor?: string; // 🌟 支持自定义背景色
+    bordered?: boolean;
   }>(),
   {
     activeBaseStrings: () => DEFAULT_TUNING_MAPPING,
@@ -103,6 +116,10 @@ const props = withDefaults(
     interactive: true,
     scale: 1.0,
     fretNumberSize: 'md',
+    showOpenStrings: true,
+    showFretNumbers: true,
+    bgColor: 'transparent',
+    bordered: false,
   }
 );
 
@@ -122,6 +139,7 @@ const {
   fretboardScale,
   realScaledWidth,
   realScaledHeight,
+  activeTopOffset,
   handleRightClickRoot,
   handleLocalToggleOpenString,
   handleTogglePitchName,
@@ -157,7 +175,16 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
   align-items: center;
   user-select: none;
   box-sizing: border-box;
-  transition: transform @duration-slow @bezier-sidebar;
+  transition:
+    transform @duration-slow @bezier-sidebar,
+    background-color @duration-fast ease,
+    border-color @duration-fast ease;
+
+  /* 边框切换 */
+  &.is-bordered {
+    border: 1px solid var(--border-light);
+    border-radius: @radius-md;
+  }
 
   &.is-interactive {
     touch-action: none;
@@ -188,13 +215,16 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
   border-radius: 50%;
   border-style: solid;
   border-width: 2px;
-  background-color: var(--bg-body);
   padding: 0;
   cursor: pointer;
   transition: @transition-fast;
   outline: none;
 
-  /* 🌟 键盘 Tab 聚焦高亮圈 */
+  &.no-border {
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
   &:focus-visible {
     box-shadow: @focus-ring-primary;
     border-color: var(--color-primary);
@@ -212,7 +242,6 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
     transform: scale(0.92);
   }
 
-  /* 🌟 3. 当已按品时，屏蔽 pointer-events 与 focus 响应 */
   &.is-fret-pressed {
     opacity: 0 !important;
     transform: scale(1) !important;
@@ -225,13 +254,13 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
   &.is-muted-status {
     border-color: color-mix(in srgb, var(--color-danger), transparent 85%);
     color: var(--color-danger);
-    background-color: color-mix(in srgb, var(--color-danger), transparent 92%);
+    background-color: color-mix(in srgb, var(--color-danger), transparent 92%) !important;
   }
 
   &.is-open-status {
     border-color: color-mix(in srgb, var(--color-primary), transparent 85%);
     color: var(--color-primary);
-    background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
+    background-color: color-mix(in srgb, var(--color-primary), transparent 92%) !important;
   }
 }
 

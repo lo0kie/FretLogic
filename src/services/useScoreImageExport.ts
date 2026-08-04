@@ -16,6 +16,7 @@ interface ExportOriginals {
 export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selectedLineSet: Ref<Set<number>>) {
   const uiStore = useUiStore();
   const isExporting = ref(false);
+  const includeMetaBar = ref(true);
 
   const prepareForExport = (container: HTMLElement, lineEls: HTMLElement[]): ExportOriginals => {
     const originals: ExportOriginals = {
@@ -154,12 +155,16 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
       const { width, height } = measureSize(container, lineEls);
       const blob = await generateBlob(container, width, height);
       if (!blob) throw new Error('生成图片失败');
+      if (!document.hasFocus()) {
+        throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
+      }
 
       await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
       uiStore.toast.success(`已成功复制所选 ${selectedLineSet.value.size} 行图片`);
     } catch (err) {
       console.error('Export Score Lines Error:', err);
-      uiStore.toast.error('导出图片失败');
+      if (err instanceof Error) uiStore.toast.error(err.message);
+      else uiStore.toast.error('导出图片失败');
     } finally {
       if (originals) {
         restoreAfterExport(container, lineEls, originals);
@@ -168,5 +173,5 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
     }
   };
 
-  return { isExporting, handleCopySelectedImage };
+  return { isExporting, handleCopySelectedImage, includeMetaBar };
 }

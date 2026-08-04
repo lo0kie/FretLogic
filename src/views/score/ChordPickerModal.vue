@@ -37,9 +37,7 @@
 
       <EmptyState v-if="filteredChords.length === 0" description="当前搜索或分组下暂无匹配和弦。" size="lg" />
 
-      <!-- 🌟 1. 列表容器声明 role="group" -->
       <div v-else class="picker-cards-grid-4cols" role="group" aria-label="和弦选择列表">
-        <!-- 🌟 2. 卡片补全 role="button"、tabindex、aria-pressed、aria-label 及键盘事件 -->
         <div
           v-wave
           v-for="chord in filteredChords"
@@ -85,6 +83,7 @@ import BaseModal from '@/components/BaseModal.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
+import { useLyricsLinesData } from '@/services/useLyricsLinesData';
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -115,6 +114,7 @@ const uiStore = useUiStore();
 const chordStore = useChordStore();
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
+const { chordsLookupMap } = useLyricsLinesData();
 
 const selectedGroupId = ref<string>('ALL');
 const pickerSearchQuery = ref<string>('');
@@ -134,7 +134,8 @@ watch(
       pickerSearchQuery.value = '';
 
       const currentSlotKey = scoreEditor.selectedSlotKey;
-      const boundChord = currentSlotKey !== null ? scoreEditor.activeSong?.chordMap[currentSlotKey] : null;
+      const boundChordId = currentSlotKey !== null ? scoreEditor.activeSong?.chordMap[currentSlotKey] : null;
+      const boundChord = boundChordId ? chordsLookupMap.value.get(boundChordId) : null;
 
       if (boundChord && boundChord.groupId) {
         selectedGroupId.value = boundChord.groupId;
@@ -147,18 +148,15 @@ watch(
   }
 );
 
-const currentBoundChord = computed(() => {
+const currentBoundChordId = computed(() => {
   if (scoreEditor.selectedSlotKey === null || !scoreEditor.activeSong?.chordMap) return null;
   return scoreEditor.activeSong.chordMap[scoreEditor.selectedSlotKey] || null;
 });
 
 const isCurrentBound = (chord: Chord) => {
-  const bound = currentBoundChord.value;
-  if (!bound) return false;
-  if (chord.id && bound.id) {
-    return chord.id === bound.id;
-  }
-  return chord.fingerprint && bound.fingerprint ? chord.fingerprint === bound.fingerprint : false;
+  const boundId = currentBoundChordId.value;
+  if (!boundId) return false;
+  return chord.id === boundId || chord.fingerprint === boundId;
 };
 
 const filteredChords = computed(() => {
@@ -255,7 +253,6 @@ const goToWorkbenchToCreate = () => {
   transition: @transition-fast;
   outline: none;
 
-  /* 🌟 核心：强制恢复内部指板与按钮的鼠标穿透响应，服从父卡片的 cursor */
   :deep(*) {
     cursor: inherit !important;
     pointer-events: inherit !important;
@@ -277,7 +274,7 @@ const goToWorkbenchToCreate = () => {
     border-color: @primary;
     box-shadow: @focus-ring-primary;
     cursor: default !important;
-    pointer-events: none !important; /* 已绑定卡片彻底禁用 */
+    pointer-events: none !important;
 
     .card-name {
       color: @primary;
