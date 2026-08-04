@@ -99,6 +99,7 @@ const ROOT_PITCH_MAP: Record<string, number> = {
 };
 
 export const getChordRootPitch = (chordName: string): number => {
+  if (!chordName || typeof chordName !== 'string') return 99;
   const match = chordName.match(/^([A-G][#b]?)/);
   if (!match) return 99;
   return ROOT_PITCH_MAP[match[1]] ?? 99;

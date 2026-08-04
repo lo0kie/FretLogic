@@ -1,6 +1,6 @@
-﻿<template>
+﻿<!-- src/views/header-top/HeaderConfigPopover.vue -->
+<template>
   <HeaderPopoverShell tooltip="指板配置 (品数 / Capo / 调音)">
-    <!-- 1. 显示品数 -->
     <div class="config-row">
       <label class="config-label">显示品数</label>
       <div class="control-wrapper">
@@ -8,7 +8,6 @@
       </div>
     </div>
 
-    <!-- 2. 变调夹 (Capo) -->
     <div class="config-row">
       <label class="config-label">变调夹 (Capo)</label>
       <div class="control-wrapper">
@@ -21,7 +20,6 @@
       </div>
     </div>
 
-    <!-- 3. 调音方案 -->
     <div class="config-row">
       <label class="config-label">调音方案</label>
       <div class="control-wrapper">
@@ -34,6 +32,7 @@
       </div>
     </div>
 
+    <div class="config-divider"></div>
     <div class="config-row">
       <ActionButton size="sm" variant="subtle" width="100%" @click="handleRepairData">
         <template #prefix><Wrench :size="13" stroke-width="2.5" /></template>
@@ -105,9 +104,19 @@ const handleRepairData = () => {
   chordStore.overwriteChords(repairedList);
 
   if (repairedCount > 0) {
-    uiStore.toast.success(`已修复并对齐 ${repairedCount} 个和弦数据`);
+    uiStore.toast.success(`已扫描本地数据，修复并对齐了 ${repairedCount} 个和弦！`);
   } else {
-    uiStore.toast.info('所有和弦数据已处于对齐状态');
+    uiStore.toast.info('所有和弦数据结构完好，已处于最新对齐状态。');
   }
 };
 </script>
+
+<style scoped lang="less">
+@import '@/assets/tokens.module';
+
+.config-divider {
+  height: 1px;
+  background-color: var(--border-light);
+  margin: 0.2rem 0;
+}
+</style>

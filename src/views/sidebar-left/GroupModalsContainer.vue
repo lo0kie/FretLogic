@@ -169,7 +169,6 @@
     width="w-lg"
     :confirm-text="importConfirmText"
     @confirm="ioService.applySelectedImport"
-    :confirm-disabled="!hasAnyImportSelection"
   >
     <div class="variants-delete-modal-content">
       <div class="import-tab-bar">
@@ -305,7 +304,6 @@ const toggleImportSong = (songId: string) => {
   }
 };
 
-// const totalImportSelectedCount = computed(() => ioService.selectedImportState.groupIds.size + ioService.selectedImportState.songIds.size);
 const selectedGroupCount = computed(() => ioService.selectedImportState.groupIds.size);
 const selectedSongCount = computed(() => ioService.selectedImportState.songIds.size);
 
@@ -315,8 +313,6 @@ const importConfirmText = computed(() => {
   if (selectedSongCount.value > 0) parts.push(`${selectedSongCount.value} 首乐谱`);
   return parts.length > 0 ? `导入 ${parts.join('、')}` : '导入';
 });
-
-const hasAnyImportSelection = computed(() => selectedGroupCount.value + selectedSongCount.value > 0);
 </script>
 
 <style scoped lang="less">

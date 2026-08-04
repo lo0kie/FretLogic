@@ -72,7 +72,7 @@ export function useAudioPlayer() {
     }
 
     if (ToneModule.getContext().state !== 'running') {
-      ToneModule.start();
+      await ToneModule.start();
     }
 
     isPlaying.value = true;

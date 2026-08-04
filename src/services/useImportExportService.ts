@@ -76,18 +76,26 @@ export function useImportExportService() {
     targetGroups.forEach(g => {
       if (!localGroupIds.has(g.id)) {
         mergedGroups.push(cloneDeep(g));
+        localGroupIds.add(g.id);
       }
     });
 
     const newChordIds = selectedImportState.chordIds;
     const targetChords = (data.chords || []).filter(c => newChordIds.has(c.id));
-    const localChordFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint || c.id));
+
+    const localChordIds = new Set(chordStore.savedChordsList.map(c => c.id));
+    const localChordFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint));
+
     const mergedChords = [...chordStore.savedChordsList];
 
     targetChords.forEach(c => {
-      const key = c.fingerprint || c.id;
-      if (!localChordFps.has(key)) {
+      const isExistById = localChordIds.has(c.id);
+      const isExistByFp = c.fingerprint ? localChordFps.has(c.fingerprint) : false;
+
+      if (!isExistById && !isExistByFp) {
         mergedChords.push(cloneDeep(c));
+        localChordIds.add(c.id);
+        if (c.fingerprint) localChordFps.add(c.fingerprint);
       }
     });
 
@@ -99,16 +107,23 @@ export function useImportExportService() {
     targetSongs.forEach(s => {
       if (!localSongIds.has(s.id)) {
         mergedSongs.push(cloneDeep(s));
+        localSongIds.add(s.id);
       }
+    });
+
+    let finalSelectedId = chordStore.selectedGroupId;
+    if (!mergedGroups.some(g => g.id === finalSelectedId)) {
+      finalSelectedId = mergedGroups[0]?.id || null;
+    }
+    mergedGroups.forEach(g => {
+      g.collapsed = g.id !== finalSelectedId;
     });
 
     chordStore.overwriteGroups(mergedGroups);
     chordStore.overwriteChords(mergedChords);
     songStore.overwriteSongs(mergedSongs);
 
-    if (!chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
-      chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
-    }
+    chordStore.selectedGroupId = finalSelectedId;
 
     isImportSelectionModalOpen.value = false;
     pendingImportData.value = null;
@@ -117,6 +132,7 @@ export function useImportExportService() {
 
   const triggerFullExport = () => {
     const originalData = {
+      version: 1, // 🌟 附加 Schema 版本号
       groups: chordStore.groups,
       chords: chordStore.savedChordsList,
       songs: songStore.songs,
@@ -156,4 +172,3 @@ export function useImportExportService() {
     applySelectedImport,
   };
 }
-  

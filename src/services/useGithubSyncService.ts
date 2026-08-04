@@ -2,9 +2,9 @@ import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { ImportExportPayload } from '@/types';
+import type { Chord, ImportExportPayload } from '@/types';
 import { cleanAndValidateData, cloneDeep } from '@/utils/dataParser';
-import { computeChordFingerprint, computeIsInverted, TuningEnum } from '@/utils/musicTheory'; // 🌟 新增导入
+import { computeChordFingerprint } from '@/utils/musicTheory';
 import { validateSettings } from '@/utils/validators';
 import { Base64 } from 'js-base64';
 import { ref } from 'vue';
@@ -125,8 +125,11 @@ export function useGithubSyncService() {
 
     if (localChords.length !== cloudChords.length) return true;
 
-    const localFps = new Set(localChords.map(c => c.fingerprint || `${c.id}_${c.chordName}`));
-    const hasUnmatchedChord = cloudChords.some(c => !localFps.has(c.fingerprint || `${c.id}_${c.chordName}`));
+    const getOrComputeFp = (c: Chord) => c.fingerprint || computeChordFingerprint(c);
+
+    const localFps = new Set(localChords.map(getOrComputeFp));
+    const hasUnmatchedChord = cloudChords.some(c => !localFps.has(getOrComputeFp(c)));
+
     if (hasUnmatchedChord) return true;
 
     const localSongs = songStore.songs;
@@ -175,23 +178,6 @@ export function useGithubSyncService() {
         throw new Error('云端数据格式破损，已触发安全拦截');
       }
 
-      // 🌟 核心修复：在这里统一清洗并归一化云端的旧数据指纹，保证在差异比对时不出错
-      if (imported.chords && Array.isArray(imported.chords)) {
-        imported.chords.forEach((c: any) => {
-          const freshInverted = computeIsInverted(c.strings, c.capo ?? 0, c.tuning || TuningEnum.STANDARD, c.chordName);
-          c.isInverted = freshInverted;
-          c.fingerprint = computeChordFingerprint({
-            groupId: c.groupId,
-            chordName: c.chordName,
-            capo: c.capo ?? 0,
-            fretCount: c.fretCount ?? 3,
-            tuning: c.tuning || TuningEnum.STANDARD,
-            strings: c.strings,
-            isInverted: freshInverted,
-          });
-        });
-      }
-
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
 
       if (checkHasDifferences(imported)) {
@@ -216,13 +202,20 @@ export function useGithubSyncService() {
     if (!pendingCloudData.value) return;
 
     const data = pendingCloudData.value;
+
+    let finalSelectedId = chordStore.selectedGroupId;
+    if (!data.groups.some(g => g.id === finalSelectedId)) {
+      finalSelectedId = data.groups[0]?.id || null;
+    }
+    data.groups.forEach(g => {
+      g.collapsed = g.id !== finalSelectedId;
+    });
+
     chordStore.overwriteGroups(data.groups);
     chordStore.overwriteChords(data.chords);
     if (data.songs) songStore.overwriteSongs(data.songs);
 
-    if (!chordStore.groups.some(g => g.id === chordStore.selectedGroupId)) {
-      chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
-    }
+    chordStore.selectedGroupId = finalSelectedId;
 
     isMergeModalOpen.value = false;
     pendingCloudData.value = null;
@@ -239,15 +232,22 @@ export function useGithubSyncService() {
     cloudData.groups.forEach(cg => {
       if (!localGroupIds.has(cg.id)) {
         newGroups.push(cloneDeep(cg));
+        localGroupIds.add(cg.id);
       }
     });
 
-    const localFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint || c.id));
+    const localChordIds = new Set(chordStore.savedChordsList.map(c => c.id));
+    const localFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint));
     const newChords = [...chordStore.savedChordsList];
+
     cloudData.chords.forEach(cc => {
-      const fp = cc.fingerprint || cc.id;
-      if (!localFps.has(fp)) {
+      const isExistById = localChordIds.has(cc.id);
+      const isExistByFp = cc.fingerprint ? localFps.has(cc.fingerprint) : false;
+
+      if (!isExistById && !isExistByFp) {
         newChords.push(cloneDeep(cc));
+        localChordIds.add(cc.id);
+        if (cc.fingerprint) localFps.add(cc.fingerprint);
       }
     });
 
@@ -257,13 +257,24 @@ export function useGithubSyncService() {
       cloudData.songs.forEach(cs => {
         if (!localSongIds.has(cs.id)) {
           newSongs.push(cloneDeep(cs));
+          localSongIds.add(cs.id);
         }
       });
     }
 
+    let finalSelectedId = chordStore.selectedGroupId;
+    if (!newGroups.some(g => g.id === finalSelectedId)) {
+      finalSelectedId = newGroups[0]?.id || null;
+    }
+    newGroups.forEach(g => {
+      g.collapsed = g.id !== finalSelectedId;
+    });
+
     chordStore.overwriteGroups(newGroups);
     chordStore.overwriteChords(newChords);
     songStore.overwriteSongs(newSongs);
+
+    chordStore.selectedGroupId = finalSelectedId;
 
     isMergeModalOpen.value = false;
     pendingCloudData.value = null;
@@ -272,6 +283,7 @@ export function useGithubSyncService() {
 
   const triggerGlobalSync = () => {
     syncToGithub({
+      version: 1, // 🌟 附加 Schema 版本号
       groups: chordStore.groups,
       chords: chordStore.savedChordsList,
       songs: songStore.songs,

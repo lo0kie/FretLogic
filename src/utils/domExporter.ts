@@ -77,13 +77,12 @@ export const copyElementToClipboard = async (
   if (!navigator.clipboard) {
     throw new Error('当前浏览器环境受限 (需要 HTTPS)，无法调用剪贴板');
   }
+  if (!document.hasFocus()) {
+    throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
+  }
 
   try {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        'image/png': renderElementToBlob(el, isTransparent),
-      }),
-    ]);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': renderElementToBlob(el, isTransparent) })]);
   } catch (err) {
     const blob = await renderElementToBlob(el, isTransparent);
     await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);

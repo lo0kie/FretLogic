@@ -63,7 +63,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
 
   const getCanvasPoint = (clientX: number, clientY: number) => {
     const board = fretBoardRef.value?.getBoundingClientRect();
-    if (!board) return null;
+    if (!board || board.width === 0 || board.height === 0) return null;
     const scaleX = board.width / CANVAS_CONFIG.BOARD_WIDTH;
     const scaleY = board.height / rawHeight.value;
     const x = (clientX - board.left) / scaleX;
