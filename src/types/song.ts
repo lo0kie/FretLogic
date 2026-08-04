@@ -1,5 +1,3 @@
-import type { Chord } from './chord';
-
 export interface LyricsLineItem {
   id: string;
   text: string;
@@ -13,5 +11,5 @@ export interface Song {
   key: string;
   playKey: string;
   capo: number;
-  chordMap: Record<string | number, Chord>;
+  chordMap: Record<string | number, string>;
 }

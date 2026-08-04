@@ -1,5 +1,4 @@
 import { parseSlotKey } from '@/stores/songStore';
-import { Chord } from '@/types';
 import { getEditDistance } from '@/utils/dataParser';
 import { generateUUID } from './validators';
 
@@ -79,9 +78,9 @@ export const matchLineIds = (oldLines: string[], newLines: string[], oldLineIds:
 };
 
 export const garbageCollectChordMap = (
-  chordMap: Record<string, Chord>,
+  chordMap: Record<string, string>,
   finalLineIds: string[]
-): { map: Record<string, Chord>; changed: boolean } => {
+): { map: Record<string, string>; changed: boolean } => {
   const finalIdsSet = new Set(finalLineIds);
   const updatedMap = { ...chordMap };
   let changed = false;

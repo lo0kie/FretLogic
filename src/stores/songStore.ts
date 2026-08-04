@@ -1,4 +1,4 @@
-import type { Chord, Song } from '@/types';
+import type { Song } from '@/types';
 import { generateUUID } from '@/utils/validators';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -22,11 +22,11 @@ export function parseSlotKey(slotKey: string | number): ParsedSlotKey | null {
 }
 
 export function getEdgeChords(
-  chordMap: Record<string | number, Chord>,
+  chordMap: Record<string | number, string>,
   lineId: string,
   type: 'start' | 'end'
-): Chord[] {
-  const result: Chord[] = [];
+): string[] {
+  const result: string[] = [];
   let i = 0;
   while (chordMap[`line_${lineId}_${type}_${i}`]) {
     result.push(chordMap[`line_${lineId}_${type}_${i}`]);
@@ -36,10 +36,10 @@ export function getEdgeChords(
 }
 
 export function setEdgeChords(
-  chordMap: Record<string | number, Chord>,
+  chordMap: Record<string | number, string>,
   lineId: string,
   type: 'start' | 'end',
-  chords: Chord[]
+  chordIds: string[]
 ): void {
   let i = 0;
   while (chordMap[`line_${lineId}_${type}_${i}`]) {
@@ -50,12 +50,15 @@ export function setEdgeChords(
     delete chordMap[`line_${lineId}_${type}_${j}`];
   }
 
-  chords.forEach((chord, idx) => {
-    chordMap[`line_${lineId}_${type}_${idx}`] = chord;
+  chordIds.forEach((chordId, idx) => {
+    chordMap[`line_${lineId}_${type}_${idx}`] = chordId;
   });
 }
 
-export function removeChordFromSlot(chordMap: Record<string | number, Chord>, slotKey: string | number): Chord | null {
+export function removeChordFromSlot(
+  chordMap: Record<string | number, string>,
+  slotKey: string | number
+): string | null {
   const parsed = parseSlotKey(slotKey);
   if (!parsed) {
     const removed = chordMap[slotKey] || null;
@@ -81,13 +84,13 @@ export function removeChordFromSlot(chordMap: Record<string | number, Chord>, sl
 }
 
 export function bindNewChordToSlot(
-  chordMap: Record<string | number, Chord>,
+  chordMap: Record<string | number, string>,
   slotKey: string | number,
-  chord: Chord
+  chordId: string
 ): void {
   const parsed = parseSlotKey(slotKey);
   if (!parsed || parsed.type === 'char') {
-    chordMap[slotKey] = chord;
+    chordMap[slotKey] = chordId;
     return;
   }
 
@@ -96,19 +99,19 @@ export function bindNewChordToSlot(
 
   if (index >= list.length) {
     if (type === 'start') {
-      list.unshift(chord);
+      list.unshift(chordId);
     } else {
-      list.push(chord);
+      list.push(chordId);
     }
   } else {
-    list[index] = chord;
+    list[index] = chordId;
   }
 
   setEdgeChords(chordMap, lineId, type, list);
 }
 
 export function swapOrMoveSlotChords(
-  chordMap: Record<string | number, Chord>,
+  chordMap: Record<string | number, string>,
   sourceKey: string | number,
   targetKey: string | number
 ): void {
@@ -129,15 +132,15 @@ export function swapOrMoveSlotChords(
     const tgtIdx = targetParsed.index;
 
     if (srcIdx >= 0 && srcIdx < list.length) {
-      const [movedChord] = list.splice(srcIdx, 1);
+      const [movedChordId] = list.splice(srcIdx, 1);
       const insertIdx = Math.min(Math.max(0, tgtIdx), list.length);
-      list.splice(insertIdx, 0, movedChord);
+      list.splice(insertIdx, 0, movedChordId);
       setEdgeChords(chordMap, sourceParsed.lineId, sourceParsed.type, list);
     }
     return;
   }
 
-  const peekChord = (parsed: ParsedSlotKey): Chord | null => {
+  const peekChordId = (parsed: ParsedSlotKey): string | null => {
     if (parsed.type === 'char') {
       return chordMap[`line_${parsed.lineId}_char_${parsed.index}`] || null;
     }
@@ -145,34 +148,34 @@ export function swapOrMoveSlotChords(
     return list[parsed.index] || null;
   };
 
-  const sourceChord = peekChord(sourceParsed);
-  if (!sourceChord) return;
+  const sourceChordId = peekChordId(sourceParsed);
+  if (!sourceChordId) return;
 
-  const targetChord = peekChord(targetParsed);
+  const targetChordId = peekChordId(targetParsed);
 
   removeChordFromSlot(chordMap, sourceKey);
-  if (targetChord) {
+  if (targetChordId) {
     removeChordFromSlot(chordMap, targetKey);
   }
 
-  insertChordAtParsedLocation(chordMap, targetParsed, sourceChord);
+  insertChordAtParsedLocation(chordMap, targetParsed, sourceChordId);
 
-  if (targetChord) {
-    insertChordAtParsedLocation(chordMap, sourceParsed, targetChord);
+  if (targetChordId) {
+    insertChordAtParsedLocation(chordMap, sourceParsed, targetChordId);
   }
 }
 
 function insertChordAtParsedLocation(
-  chordMap: Record<string | number, Chord>,
+  chordMap: Record<string | number, string>,
   parsed: ParsedSlotKey,
-  chord: Chord
+  chordId: string
 ): void {
   if (parsed.type === 'char') {
-    chordMap[`line_${parsed.lineId}_char_${parsed.index}`] = chord;
+    chordMap[`line_${parsed.lineId}_char_${parsed.index}`] = chordId;
   } else {
     const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
     const insertIdx = Math.min(Math.max(0, parsed.index), list.length);
-    list.splice(insertIdx, 0, chord);
+    list.splice(insertIdx, 0, chordId);
     setEdgeChords(chordMap, parsed.lineId, parsed.type, list);
   }
 }
@@ -237,11 +240,11 @@ export const useSongStore = defineStore('song', () => {
     if (payload.chordMap !== undefined) target.chordMap = payload.chordMap;
   };
 
-  const setCharChord = (songId: string, slotKey: string | number, chord: Chord) => {
+  const setCharChord = (songId: string, slotKey: string | number, chordId: string) => {
     const target = songs.value.find(s => s.id === songId);
     if (target) {
       if (!target.chordMap) target.chordMap = {};
-      bindNewChordToSlot(target.chordMap, slotKey, chord);
+      bindNewChordToSlot(target.chordMap, slotKey, chordId);
       target.chordMap = { ...target.chordMap };
     }
   };

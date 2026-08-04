@@ -57,8 +57,15 @@ export function useChordService() {
 
   const triggerDeleteChords = (chords: Chord[]) => {
     if (chords.length === 0) return;
-    const chordIds = new Set(chords.map(c => c.id));
-    const updatedList = chordStore.savedChordsList.filter(c => !chordIds.has(c.id));
+
+    // 🌟 收集要删除的和弦的 ID 与 指纹 集合
+    const targetIds = new Set<string>();
+    chords.forEach(c => {
+      if (c.id) targetIds.add(c.id);
+      if (c.fingerprint) targetIds.add(c.fingerprint);
+    });
+
+    const updatedList = chordStore.savedChordsList.filter(c => !targetIds.has(c.id));
     chordStore.overwriteChords(updatedList);
 
     songStore.songs.forEach(song => {
@@ -66,16 +73,11 @@ export function useChordService() {
       let hasChanged = false;
 
       Object.keys(song.chordMap).forEach(key => {
-        const boundChord = song.chordMap[key];
-        if (!boundChord) return;
+        const boundChordId = song.chordMap[key];
+        if (!boundChordId) return;
 
-        const isMatched = chords.some(
-          chord =>
-            boundChord.id === chord.id ||
-            (boundChord.fingerprint && chord.fingerprint && boundChord.fingerprint === chord.fingerprint)
-        );
-
-        if (isMatched) {
+        // 🌟 核心修复：直接匹配存入的和弦 ID/指纹 字符串
+        if (targetIds.has(boundChordId)) {
           delete song.chordMap[key];
           hasChanged = true;
         }

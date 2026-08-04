@@ -23,6 +23,7 @@ export interface FretboardInteractionProps {
   activeBaseStrings: readonly number[];
   interactive: boolean;
   scale: number;
+  showOpenStrings?: boolean;
 }
 
 export interface FretboardInteractionEmit {
@@ -35,7 +36,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   const fretBoardRef = useTemplateRef<HTMLDivElement>('fretBoardRef');
   const hoverPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
 
-  const { strings, fretCount, capo, activeBaseStrings, interactive, scale } = toRefs(props);
+  const { strings, fretCount, capo, activeBaseStrings, interactive, scale, showOpenStrings } = toRefs(props);
 
   const isPointerDown = ref(false);
 
@@ -50,8 +51,11 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
     Array.from({ length: 6 }, (_, i) => CANVAS_CONFIG.OFFSET_X + i * CANVAS_CONFIG.STRING_SPACING)
   );
 
+  // 🌟 动态计算顶部偏移量：如果隐藏空弦，则只保留较小的安全内边距
+  const activeTopOffset = computed(() => (showOpenStrings?.value !== false ? CANVAS_CONFIG.OFFSET_Y_TOP : 16));
+
   const rawHeight = computed(
-    () => CANVAS_CONFIG.OFFSET_Y_TOP + fretCount.value * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
+    () => activeTopOffset.value + fretCount.value * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
   );
   const fretboardScale = computed(() => (FRETBOARD_SCALE_MAP[fretCount.value] || 1.0) * scale.value);
   const realScaledWidth = computed(() => CANVAS_CONFIG.BOARD_WIDTH * fretboardScale.value);
@@ -65,7 +69,9 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
     const x = (clientX - board.left) / scaleX;
     const y = (clientY - board.top) / scaleY;
     const stringIndex = Math.round((x - CANVAS_CONFIG.OFFSET_X) / CANVAS_CONFIG.STRING_SPACING);
-    const fretAreaY = y - CANVAS_CONFIG.OFFSET_Y_TOP;
+
+    // 🌟 基于动态偏移量计算当前所处品位
+    const fretAreaY = y - activeTopOffset.value;
     const fretIndex = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
     return { stringIndex, fretIndex };
   };
@@ -193,7 +199,6 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   };
 
   const handlePointerDown = (e: PointerEvent) => {
-    // 🌟 修复：使用 interactive.value
     if (!interactive.value || e.button !== 0) return;
 
     emit('drag-status-change', true);
@@ -217,7 +222,6 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   });
 
   const handleWheel = (e: WheelEvent) => {
-    // 🌟 修复：使用 interactive.value
     if (!interactive.value) return;
     e.preventDefault();
 
@@ -270,6 +274,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
     fretboardScale,
     realScaledWidth,
     realScaledHeight,
+    activeTopOffset,
     handleRightClickRoot,
     handleLocalToggleOpenString,
     handleTogglePitchName,

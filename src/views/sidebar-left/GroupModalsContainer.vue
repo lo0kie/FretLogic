@@ -76,7 +76,6 @@
           ]"
         />
       </div>
-
       <div v-if="groupModals.modalData.sortRule === 'KEY_DEGREE'" class="sort-config-row">
         <label class="config-label">调式设定</label>
         <div class="key-selector-wrapper">
@@ -100,12 +99,17 @@
   >
     <div class="variants-delete-modal-content">
       <div class="variants-header-row">
-        <p class="modal-description-text">请点击选择要删除的指法，或点击“全选”</p>
+        <p class="modal-description-text">
+          请点击选择要删除的指法，共
+          <strong class="variants-count-highlight">
+            {{ groupModals.modalData.activeGroupCard?.variants.length || 0 }}
+          </strong>
+          个
+        </p>
         <ActionButton :primary="isAllVariantsSelected" size="sm" @click="handleToggleSelectAllVariants">
           {{ isAllVariantsSelected ? '取消全选' : '全选' }}
         </ActionButton>
       </div>
-
       <div class="variants-checkbox-list no-scrollbar">
         <div
           v-for="variant in groupModals.modalData.activeGroupCard?.variants"
@@ -122,9 +126,13 @@
           </div>
           <div class="variant-preview-thumb">
             <Fretboard
+              :bordered="false"
+              bg-color="transparent"
               fret-number-size="lg"
               :interactive="false"
-              :scale="0.35"
+              :scale="0.32"
+              :show-open-strings="false"
+              :show-fret-numbers="false"
               :strings="variant.strings"
               :capo="variant.capo"
               :fret-count="variant.fretCount"
@@ -133,11 +141,14 @@
           </div>
         </div>
       </div>
-
       <div class="modal-footer-zone custom-footer">
-        <ActionButton size="sm" @click="groupModals.modals.chordVariantsDelete = false">取消</ActionButton>
+        <ActionButton size="sm" variant="ghost" @click="groupModals.modals.chordVariantsDelete = false">
+          取消
+        </ActionButton>
         <div class="actions-right-group">
-          <ActionButton size="sm" danger @click="groupModals.handleDeleteAllVariants()"> 全部删除 </ActionButton>
+          <ActionButton size="sm" danger variant="subtle" @click="groupModals.handleDeleteAllVariants()">
+            全部删除
+          </ActionButton>
           <ActionButton
             size="sm"
             danger
@@ -150,6 +161,75 @@
       </div>
     </div>
   </BaseModal>
+
+  <!-- 7. 自定义导入内容选择 Modal -->
+  <BaseModal
+    v-model:visible="ioService.isImportSelectionModalOpen.value"
+    title="自定义选择导入内容"
+    width="w-lg"
+    :confirm-text="`导入 ${totalImportSelectedCount} 个分组`"
+    @confirm="ioService.applySelectedImport"
+  >
+    <div class="variants-delete-modal-content">
+      <div class="import-tab-bar">
+        <BaseSegmentedControl v-model="importActiveTab" :options="IMPORT_TAB_OPTIONS" size="sm" />
+      </div>
+
+      <!-- 和弦资产 Tab -->
+      <div v-show="importActiveTab === 'chords'" class="import-panel-scroll no-scrollbar">
+        <div
+          v-if="ioService.pendingImportData.value?.groups && ioService.pendingImportData.value.groups.length > 0"
+          class="import-groups-grid"
+        >
+          <div
+            v-for="group in ioService.pendingImportData.value.groups"
+            :key="group.id"
+            class="import-group-simple-card"
+            :class="{ 'is-selected': isImportGroupAllSelected(group.id) }"
+            @click="toggleImportGroup(group.id)"
+            role="button"
+            tabindex="0"
+            v-wave
+          >
+            <div class="import-group-info-box">
+              <span class="import-group-title">{{ group.name }}</span>
+              <span class="import-group-meta">{{ getImportGroupChords(group.id).length }} 个和弦</span>
+            </div>
+          </div>
+        </div>
+        <EmptyState v-else description="备份文件中未检测到和弦资产" size="sm" />
+      </div>
+
+      <div v-show="importActiveTab === 'songs'" class="import-panel-scroll no-scrollbar">
+        <template v-if="ioService.pendingImportData.value?.songs && ioService.pendingImportData.value.songs.length > 0">
+          <div class="import-songs-grid">
+            <div
+              v-for="song in ioService.pendingImportData.value.songs"
+              :key="song.id"
+              class="import-song-item-card"
+              :class="{ 'is-selected': ioService.selectedImportState.songIds.has(song.id) }"
+              @click="toggleImportSong(song.id)"
+              role="button"
+              tabindex="0"
+              v-wave
+            >
+              <Transition name="check-badge-pop">
+                <div v-if="ioService.selectedImportState.songIds.has(song.id)" class="selected-check-badge">
+                  <Check :size="12" stroke-width="3" />
+                </div>
+              </Transition>
+
+              <div class="import-song-info-box">
+                <span class="import-song-title">{{ song.title }}</span>
+                <span class="import-song-meta">{{ song.playKey }}调 · Capo {{ song.capo }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+        <EmptyState v-else description="备份文件中未检测到乐谱数据" size="sm" />
+      </div>
+    </div>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -157,38 +237,83 @@ import ActionButton from '@/components/ActionButton.vue';
 import BaseInput from '@/components/BaseInput.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import BaseModal from '@/components/BaseModal.vue';
-import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
+import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
+import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
+import { useImportExportService } from '@/services/useImportExportService';
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { computed } from 'vue';
+import type { Chord } from '@/types';
+import { Check } from '@lucide/vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps<{ groupModals: ReturnType<typeof useChordGroupModals> }>();
 
 const chordStore = useChordStore();
 const settingsStore = useSettingsStore();
+const ioService = useImportExportService();
 
-// 计算是否已全选当前卡片的所有指法
+// 多指法和弦删除全选逻辑
 const isAllVariantsSelected = computed(() => {
   const variants = props.groupModals.modalData.activeGroupCard?.variants;
   if (!variants || variants.length === 0) return false;
   return variants.every(v => props.groupModals.modalData.selectedVariantIds.has(v.id));
 });
 
-// 一键全选/取消全选逻辑
 const handleToggleSelectAllVariants = () => {
   const variants = props.groupModals.modalData.activeGroupCard?.variants;
   if (!variants) return;
-
   if (isAllVariantsSelected.value) {
     props.groupModals.modalData.selectedVariantIds.clear();
   } else {
     variants.forEach(v => props.groupModals.modalData.selectedVariantIds.add(v.id));
   }
 };
+
+// 按需导入选择逻辑
+const importActiveTab = ref<'chords' | 'songs'>('chords');
+const IMPORT_TAB_OPTIONS: SegmentOption<'chords' | 'songs'>[] = [
+  { label: '和弦分组', value: 'chords' },
+  { label: '乐谱库', value: 'songs' },
+];
+
+const getImportGroupChords = (groupId: string): Chord[] => {
+  return (ioService.pendingImportData.value?.chords || []).filter(c => c.groupId === groupId);
+};
+
+const isImportGroupAllSelected = (groupId: string) => {
+  const chords = getImportGroupChords(groupId);
+  if (chords.length === 0) return ioService.selectedImportState.groupIds.has(groupId);
+  return chords.every(c => ioService.selectedImportState.chordIds.has(c.id));
+};
+
+const toggleImportGroup = (groupId: string) => {
+  const chords = getImportGroupChords(groupId);
+  const allSelected = isImportGroupAllSelected(groupId);
+
+  if (allSelected) {
+    ioService.selectedImportState.groupIds.delete(groupId);
+    chords.forEach(c => ioService.selectedImportState.chordIds.delete(c.id));
+  } else {
+    ioService.selectedImportState.groupIds.add(groupId);
+    chords.forEach(c => ioService.selectedImportState.chordIds.add(c.id));
+  }
+};
+
+const toggleImportSong = (songId: string) => {
+  if (ioService.selectedImportState.songIds.has(songId)) {
+    ioService.selectedImportState.songIds.delete(songId);
+  } else {
+    ioService.selectedImportState.songIds.add(songId);
+  }
+};
+
+const totalImportSelectedCount = computed(() => {
+  return ioService.selectedImportState.groupIds.size + ioService.selectedImportState.songIds.size;
+});
 </script>
 
 <style scoped lang="less">
@@ -321,8 +446,8 @@ const handleToggleSelectAllVariants = () => {
 
 .variants-checkbox-list {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.8rem;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: 1.2rem 1rem;
   max-height: 52vh;
   overflow-y: auto;
   padding: 0.15rem;
@@ -330,6 +455,7 @@ const handleToggleSelectAllVariants = () => {
 }
 
 .variant-checkbox-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -343,7 +469,8 @@ const handleToggleSelectAllVariants = () => {
   transition:
     background-color @duration-fast ease,
     border-color @duration-fast ease,
-    box-shadow @duration-fast ease;
+    box-shadow @duration-fast ease,
+    transform @duration-fast ease;
   box-sizing: border-box;
   outline: none;
   min-width: 0;
@@ -351,6 +478,7 @@ const handleToggleSelectAllVariants = () => {
   &:hover {
     border-color: var(--border-base);
     background-color: var(--bg-panel-hover);
+    transform: translateY(-1px);
   }
 
   &:focus-visible {
@@ -374,15 +502,35 @@ const handleToggleSelectAllVariants = () => {
   }
 }
 
+.check-badge-pop-enter-active {
+  transition:
+    transform @duration-fast @bezier-bounce,
+    opacity @duration-fast ease;
+}
+
+.check-badge-pop-leave-active {
+  transition:
+    transform @duration-fast ease-in,
+    opacity @duration-fast ease-in;
+}
+
+.check-badge-pop-enter-from,
+.check-badge-pop-leave-to {
+  transform: scale(0.4);
+  opacity: 0;
+}
+
+.variants-count-highlight {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
 .variant-preview-thumb {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 0.25rem;
-  background-color: var(--bg-panel);
-  border: 1px solid var(--border-light);
-  border-radius: @radius-sm;
+  padding: 0.5rem 0.25rem;
   pointer-events: none;
   box-sizing: border-box;
 }
@@ -405,6 +553,129 @@ const handleToggleSelectAllVariants = () => {
       color: var(--text-disabled);
       font-weight: 500;
     }
+  }
+}
+
+/* 🌟 按需导入 Modal 专属交互与排版 */
+.import-tab-bar {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.2rem;
+}
+
+.import-panel-scroll {
+  max-height: 54vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.2rem;
+  box-sizing: border-box;
+}
+
+/* 🌟 更改为固定一行三列网格布局 */
+.import-groups-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.import-group-simple-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0.9rem;
+  background-color: var(--bg-body);
+  border: 1.5px solid var(--border-light);
+  border-radius: @radius-md;
+  cursor: pointer;
+  transition: @transition-fast;
+
+  &:hover {
+    border-color: var(--border-base);
+    background-color: var(--bg-panel-hover);
+    transform: translateY(-1px);
+  }
+
+  &.is-selected {
+    border-color: var(--color-primary);
+    background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
+  }
+}
+
+.import-group-info-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+
+  .import-group-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-title);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .import-group-meta {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--text-disabled);
+  }
+}
+
+/* 🌟 更改为固定一行三列网格布局 */
+.import-songs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.import-song-item-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 0.9rem;
+  background-color: var(--bg-body);
+  border: 1.5px solid var(--border-light);
+  border-radius: @radius-md;
+  cursor: pointer;
+  transition: @transition-fast;
+
+  &:hover {
+    border-color: var(--border-base);
+    background-color: var(--bg-panel-hover);
+    transform: translateY(-1px);
+  }
+
+  &.is-selected {
+    border-color: var(--color-primary);
+    background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
+  }
+}
+
+.import-song-info-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+
+  .import-song-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-title);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .import-song-meta {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--text-disabled);
   }
 }
 

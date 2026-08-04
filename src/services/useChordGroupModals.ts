@@ -1,3 +1,9 @@
+import {
+  DEFAULT_GROUP_SORT_RULE,
+  DEFAULT_SORT_KEY,
+  ID_PREFIXES,
+  MESSAGES
+} from '@/constants';
 import { useChordService } from '@/services/useChordService';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
@@ -28,8 +34,8 @@ export function useChordGroupModals() {
     activeGroupCard: null as GroupedChordCard | null,
     selectedVariantIds: new Set<string>(),
     moveTargetId: '',
-    sortRule: 'ROOT_PITCH' as GroupSortRule,
-    sortKey: 'C',
+    sortRule: DEFAULT_GROUP_SORT_RULE as GroupSortRule,
+    sortKey: DEFAULT_SORT_KEY,
   });
 
   const openCreate = () => {
@@ -47,15 +53,15 @@ export function useChordGroupModals() {
       uiStore.toast.warning('创建失败：该分组名称已存在');
       return;
     }
-    const newId = 'g_' + generateUUID().slice(0, 8);
+    const newId = ID_PREFIXES.GROUP + generateUUID().slice(0, 8);
     chordStore.groups.forEach(g => {
       g.collapsed = true;
     });
 
-    chordStore.groups.push({ id: newId, name: val, collapsed: false, sortRule: 'ROOT_PITCH' });
+    chordStore.groups.push({ id: newId, name: val, collapsed: false, sortRule: DEFAULT_GROUP_SORT_RULE });
     chordStore.selectedGroupId = newId;
     modals.create = false;
-    uiStore.toast.success('操作成功完成');
+    uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
   };
 
   const openRename = (group: Group) => {
@@ -72,7 +78,7 @@ export function useChordGroupModals() {
     }
     if (modalData.activeGroup) modalData.activeGroup.name = val;
     modals.rename = false;
-    uiStore.toast.success('操作成功完成');
+    uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
   };
 
   const openDelete = (group: Group) => {
@@ -92,7 +98,7 @@ export function useChordGroupModals() {
     if (chordStore.selectedGroupId === targetGid) chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
     uiStore.clearActionToasts();
     modals.delete = false;
-    uiStore.toast.success('操作成功完成');
+    uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
   };
 
   const openMove = (chord: Chord) => {
@@ -115,7 +121,7 @@ export function useChordGroupModals() {
       uiStore.toast.error('移动失败：目标和弦已被删除');
     }
     modals.move = false;
-    uiStore.toast.success('操作成功完成');
+    uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
   };
 
   const getGroupClass = (groupId: string) => {
@@ -126,8 +132,8 @@ export function useChordGroupModals() {
 
   const openSort = (group: Group) => {
     modalData.activeGroup = group;
-    modalData.sortRule = group.sortRule || 'ROOT_PITCH';
-    modalData.sortKey = group.sortKey || 'C';
+    modalData.sortRule = group.sortRule || DEFAULT_GROUP_SORT_RULE;
+    modalData.sortKey = group.sortKey || DEFAULT_SORT_KEY;
     modals.sort = true;
   };
 
