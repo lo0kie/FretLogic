@@ -32,6 +32,7 @@ export interface Chord {
   groupId: string;
   tuning: TuningEnum;
   fingerprint: string;
+  isInverted: boolean;
 }
 
 export interface Group {

@@ -4,6 +4,7 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { cleanAndValidateData, cloneDeep } from '@/utils/dataParser';
+import { computeChordFingerprint, computeIsInverted, TuningEnum } from '@/utils/musicTheory'; // 🌟 新增导入
 import { validateSettings } from '@/utils/validators';
 import { Base64 } from 'js-base64';
 import { ref } from 'vue';
@@ -118,20 +119,16 @@ export function useGithubSyncService() {
     }
   };
 
-  // 🌟 辅助：对比云端与本地是否存在差异
   const checkHasDifferences = (cloudData: ImportExportPayload): boolean => {
     const localChords = chordStore.savedChordsList;
     const cloudChords = cloudData.chords || [];
 
-    // 1. 和弦数量不一致，必定存在差异
     if (localChords.length !== cloudChords.length) return true;
 
-    // 2. 检查和弦的指纹/物理属性差异
     const localFps = new Set(localChords.map(c => c.fingerprint || `${c.id}_${c.chordName}`));
     const hasUnmatchedChord = cloudChords.some(c => !localFps.has(c.fingerprint || `${c.id}_${c.chordName}`));
     if (hasUnmatchedChord) return true;
 
-    // 3. 检查乐谱 ID/标题差异
     const localSongs = songStore.songs;
     const cloudSongs = cloudData.songs || [];
     if (localSongs.length !== cloudSongs.length) return true;
@@ -178,6 +175,23 @@ export function useGithubSyncService() {
         throw new Error('云端数据格式破损，已触发安全拦截');
       }
 
+      // 🌟 核心修复：在这里统一清洗并归一化云端的旧数据指纹，保证在差异比对时不出错
+      if (imported.chords && Array.isArray(imported.chords)) {
+        imported.chords.forEach((c: any) => {
+          const freshInverted = computeIsInverted(c.strings, c.capo ?? 0, c.tuning || TuningEnum.STANDARD, c.chordName);
+          c.isInverted = freshInverted;
+          c.fingerprint = computeChordFingerprint({
+            groupId: c.groupId,
+            chordName: c.chordName,
+            capo: c.capo ?? 0,
+            fretCount: c.fretCount ?? 3,
+            tuning: c.tuning || TuningEnum.STANDARD,
+            strings: c.strings,
+            isInverted: freshInverted,
+          });
+        });
+      }
+
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
 
       if (checkHasDifferences(imported)) {
@@ -198,7 +212,6 @@ export function useGithubSyncService() {
     }
   };
 
-  // 🌟 合并动作 1：用云端彻底覆盖本地
   const applyOverwriteWithCloud = () => {
     if (!pendingCloudData.value) return;
 
@@ -216,13 +229,11 @@ export function useGithubSyncService() {
     uiStore.toast.success('已使用云端数据完全覆盖本地');
   };
 
-  // 🌟 合并动作 2：无冲突增量合并 (Union Set)
   const applyUnionSetMerge = () => {
     if (!pendingCloudData.value) return;
 
     const cloudData = pendingCloudData.value;
 
-    // 1. 分组合并 (补全本地缺失的分组)
     const localGroupIds = new Set(chordStore.groups.map(g => g.id));
     const newGroups = [...chordStore.groups];
     cloudData.groups.forEach(cg => {
@@ -231,7 +242,6 @@ export function useGithubSyncService() {
       }
     });
 
-    // 2. 和弦按指纹去重合并
     const localFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint || c.id));
     const newChords = [...chordStore.savedChordsList];
     cloudData.chords.forEach(cc => {
@@ -241,7 +251,6 @@ export function useGithubSyncService() {
       }
     });
 
-    // 3. 乐谱 ID 去重合并
     const localSongIds = new Set(songStore.songs.map(s => s.id));
     const newSongs = [...songStore.songs];
     if (cloudData.songs) {

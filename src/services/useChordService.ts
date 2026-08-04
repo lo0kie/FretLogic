@@ -5,7 +5,7 @@ import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
 import { copyElementToClipboard } from '@/utils/domExporter';
-import { computeChordFingerprint } from '@/utils/musicTheory';
+import { computeChordFingerprint, computeIsInverted } from '@/utils/musicTheory';
 import { generateUUID } from '@/utils/validators';
 import { Ref, toRaw, unref } from 'vue';
 import { SortableEvent } from 'vue-draggable-plus';
@@ -58,7 +58,6 @@ export function useChordService() {
   const triggerDeleteChords = (chords: Chord[]) => {
     if (chords.length === 0) return;
 
-    // 🌟 收集要删除的和弦的 ID 与 指纹 集合
     const targetIds = new Set<string>();
     chords.forEach(c => {
       if (c.id) targetIds.add(c.id);
@@ -76,7 +75,6 @@ export function useChordService() {
         const boundChordId = song.chordMap[key];
         if (!boundChordId) return;
 
-        // 🌟 核心修复：直接匹配存入的和弦 ID/指纹 字符串
         if (targetIds.has(boundChordId)) {
           delete song.chordMap[key];
           hasChanged = true;
@@ -155,14 +153,19 @@ export function useChordService() {
       ? chordStore.savedChordsList.find(c => c.id === editorStore.editingId)?.groupId || chordStore.selectedGroupId
       : chordStore.selectedGroupId;
 
+    const currentStrings = cloneDeep(toRaw(editorStore.strings));
+
+    const isInvertedState = computeIsInverted(currentStrings, editorStore.capo, editorStore.currentTuning, cleanName);
+
     const rawPayload: Omit<Chord, 'fingerprint'> = {
       id: editorStore.editingId || 'c_' + generateUUID().slice(0, 10),
       chordName: cleanName,
-      strings: cloneDeep(toRaw(editorStore.strings)),
+      strings: currentStrings,
       fretCount: editorStore.fretCount,
       capo: editorStore.capo,
       groupId: targetGroupId,
       tuning: editorStore.currentTuning,
+      isInverted: isInvertedState,
     };
 
     const newFingerprint = computeChordFingerprint(rawPayload);

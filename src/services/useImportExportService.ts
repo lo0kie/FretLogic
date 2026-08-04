@@ -3,11 +3,11 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { cleanAndValidateData, cloneDeep } from '@/utils/dataParser';
+import { computeChordFingerprint, computeIsInverted, TuningEnum } from '@/utils/musicTheory';
 import { reactive, ref } from 'vue';
 
 const pendingImportData = ref<ImportExportPayload | null>(null);
 const isImportSelectionModalOpen = ref(false);
-// 🌟 勾选选中的 ID 集合
 const selectedImportState = reactive({
   groupIds: new Set<string>(),
   chordIds: new Set<string>(),
@@ -44,7 +44,29 @@ export function useImportExportService() {
         if (cleanAndValidateData(imported, 'import')) {
           uiStore.removeToast(loadingId);
 
-          // 🌟 默认全选解析出的所有数据
+          // 🌟 1. 归一化待导入数据的转位与指纹，确保与本地对齐后的和弦指纹可精准比对
+          if (imported.chords && Array.isArray(imported.chords)) {
+            imported.chords.forEach(c => {
+              const freshInverted = computeIsInverted(
+                c.strings,
+                c.capo ?? 0,
+                c.tuning || TuningEnum.STANDARD,
+                c.chordName
+              );
+              c.isInverted = freshInverted;
+              c.fingerprint = computeChordFingerprint({
+                groupId: c.groupId,
+                chordName: c.chordName,
+                capo: c.capo ?? 0,
+                fretCount: c.fretCount ?? 3,
+                tuning: c.tuning || TuningEnum.STANDARD,
+                strings: c.strings,
+                isInverted: freshInverted,
+              });
+            });
+          }
+
+          // 🌟 2. 默认全选解析出的数据
           selectedImportState.groupIds = new Set((imported.groups || []).map(g => g.id));
           selectedImportState.chordIds = new Set((imported.chords || []).map(c => c.id));
           selectedImportState.songIds = new Set((imported.songs || []).map(s => s.id));
@@ -83,15 +105,20 @@ export function useImportExportService() {
       }
     });
 
-    // 2. 和弦合并
+    // 2. 和弦合并：同时使用 ID 与更新后的指纹 double-check 去重
     const newChordIds = selectedImportState.chordIds;
     const targetChords = (data.chords || []).filter(c => newChordIds.has(c.id));
-    const localChordFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint || c.id));
+
+    const localChordIds = new Set(chordStore.savedChordsList.map(c => c.id));
+    const localChordFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint));
+
     const mergedChords = [...chordStore.savedChordsList];
 
     targetChords.forEach(c => {
-      const key = c.fingerprint || c.id;
-      if (!localChordFps.has(key)) {
+      const isExistById = localChordIds.has(c.id);
+      const isExistByFp = c.fingerprint ? localChordFps.has(c.fingerprint) : false;
+
+      if (!isExistById && !isExistByFp) {
         mergedChords.push(cloneDeep(c));
       }
     });

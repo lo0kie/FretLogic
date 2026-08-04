@@ -1,5 +1,6 @@
 ﻿import { FRET_COUNTS } from '@/constants';
 import type { Chord, Group, ImportExportPayload, Song } from '@/types';
+import { computeIsInverted } from '@/utils/musicTheory';
 
 const validateGroups = (groups: unknown, issues: string[]): Group[] => {
   if (!Array.isArray(groups)) {
@@ -12,11 +13,7 @@ const validateGroups = (groups: unknown, issues: string[]): Group[] => {
       issues.push(`groups[${index}] 结构损坏，缺失必要属性`);
       return false;
     }
-    if (g.collapsed === undefined) g.collapsed = false;
-    if (g.sortRule === 'KEY_DEGREE' && !g.sortKey) {
-      g.sortKey = 'C';
-    }
-
+    if (typeof g.collapsed !== 'boolean') g.collapsed = false;
     return true;
   });
 };
@@ -37,7 +34,7 @@ const validateChords = (chords: unknown, issues: string[]): Chord[] => {
       return false;
     }
     if (!Array.isArray(c.strings) || c.strings.length !== 6) {
-      issues.push(`chords[${index}] (${c.id}) 琴弦物理资产数组损坏 (必须为6弦)`);
+      issues.push(`chords[${index}] (${c.id}) 琴弦物理资产数组损坏 (必须为 6 弦)`);
       return false;
     }
 
@@ -55,12 +52,21 @@ const validateChords = (chords: unknown, issues: string[]): Chord[] => {
       return false;
     }
 
+    // 🌟 核心修正：如果旧数据缺少这些属性，进行自动补全对齐，而不是拦截丢弃
     if (!FRET_COUNTS.includes(c.fretCount)) {
       c.fretCount = 3;
     }
 
     if (typeof c.capo !== 'number' || c.capo < 0 || c.capo > 12) {
       c.capo = 0;
+    }
+
+    if (!c.tuning) {
+      c.tuning = 'STANDARD';
+    }
+
+    if (typeof c.isInverted !== 'boolean') {
+      c.isInverted = computeIsInverted(c.strings, c.capo, c.tuning, c.chordName);
     }
 
     return true;
@@ -204,11 +210,7 @@ export const getEditDistance = (a: string, b: string): number => {
   for (let i = 1; i <= a.length; i++) {
     for (let j = 1; j <= b.length; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1, // deletion
-        matrix[i][j - 1] + 1, // insertion
-        matrix[i - 1][j - 1] + cost // substitution
-      );
+      matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
     }
   }
   return matrix[a.length][b.length];
