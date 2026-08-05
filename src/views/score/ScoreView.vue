@@ -37,8 +37,8 @@
 <script setup lang="ts">
 import EmptyState from '@/components/EmptyState.vue';
 import { useLineSelection } from '@/services/useLineSelection';
-import { useLyricsLinesData } from '@/services/useLyricsLinesData';
-import { useScoreImageExport } from '@/services/useScoreImageExport';
+import { useScoreImageExport } from '@/services/useScoreExport.ts';
+import { useLyricsLinesData } from '@/services/useScoreLinesData.ts';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';

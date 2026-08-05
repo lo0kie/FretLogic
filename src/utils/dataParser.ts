@@ -142,37 +142,99 @@ export const cleanAndValidateData = (
   return true;
 };
 
-export function cloneDeep<T>(value: T, cache = new WeakMap()): T {
-  // ...保持原有 cloneDeep 实现...
-  if (value === null || typeof value !== 'object') return value;
-  let rawValue: any = value;
-  if ((value as any)['__v_raw']) rawValue = (value as any)['__v_raw'];
-  else if ((value as any)['__raw__']) rawValue = (value as any)['__raw__'];
-  if (cache.has(rawValue)) return cache.get(rawValue);
-  if (rawValue instanceof Date) return new Date(rawValue.getTime()) as any;
-  if (rawValue instanceof RegExp) return new RegExp(rawValue.source, rawValue.flags) as any;
-  if (rawValue instanceof Set) {
-    const cloneSet = new Set();
-    cache.set(rawValue, cloneSet);
-    rawValue.forEach(val => cloneSet.add(cloneDeep(val, cache)));
-    return cloneSet as any;
-  }
-  if (rawValue instanceof Map) {
-    const cloneMap = new Map();
-    cache.set(rawValue, cloneMap);
-    rawValue.forEach((val, key) => cloneMap.set(key, cloneDeep(val, cache)));
-    return cloneMap as any;
-  }
-  const cloneTarget = Array.isArray(rawValue) ? [] : Object.create(Object.getPrototypeOf(rawValue));
-  cache.set(rawValue, cloneTarget);
-  const keys = Reflect.ownKeys(rawValue);
-  for (const key of keys) {
-    const descriptor = Object.getOwnPropertyDescriptor(rawValue, key);
-    if (descriptor) {
-      Object.defineProperty(cloneTarget, key, { ...descriptor, value: cloneDeep(rawValue[key], cache) });
+import { isProxy, toRaw } from 'vue';
+
+/** 剥掉可能存在的多层 Vue Proxy，拿到真正的原始值 */
+function unwrapRaw<T>(value: T): T {
+  let cur: any = value;
+
+  // 最多剥几层，防止异常对象死循环
+  for (let i = 0; i < 8; i++) {
+    if (cur === null || typeof cur !== 'object') break;
+
+    if (isProxy(cur)) {
+      cur = toRaw(cur);
+      continue;
     }
+
+    // 兜底：未走 isProxy 的边界情况
+    const inner = cur.__v_raw ?? cur.__raw__;
+    if (inner && inner !== cur) {
+      cur = inner;
+      continue;
+    }
+
+    break;
   }
-  return cloneTarget;
+
+  return cur as T;
+}
+
+export function cloneDeep<T>(value: T, cache = new WeakMap<object, any>()): T {
+  // 原始类型 / function / symbol 直接返回
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  const raw = unwrapRaw(value as any);
+
+  // unwrap 后可能变成原始类型
+  if (raw === null || typeof raw !== 'object') {
+    return raw;
+  }
+
+  // 循环引用
+  if (cache.has(raw)) {
+    return cache.get(raw);
+  }
+
+  // —— 内置对象 ——
+  if (raw instanceof Date) {
+    return new Date(raw.getTime()) as any;
+  }
+  if (raw instanceof RegExp) {
+    return new RegExp(raw.source, raw.flags) as any;
+  }
+
+  // —— Array：下标快路径（业务里最常见）——
+  if (Array.isArray(raw)) {
+    const len = raw.length;
+    const out = new Array(len);
+    cache.set(raw, out);
+    for (let i = 0; i < len; i++) {
+      out[i] = cloneDeep(raw[i], cache);
+    }
+    return out as any;
+  }
+
+  // —— Set / Map（历史、导入里偶尔会碰到）——
+  if (raw instanceof Set) {
+    const out = new Set<any>();
+    cache.set(raw, out);
+    raw.forEach(item => out.add(cloneDeep(item, cache)));
+    return out as any;
+  }
+  if (raw instanceof Map) {
+    const out = new Map<any, any>();
+    cache.set(raw, out);
+    raw.forEach((v, k) => {
+      out.set(cloneDeep(k, cache), cloneDeep(v, cache));
+    });
+    return out as any;
+  }
+
+  // —— 普通对象：只拷可枚举 string key（和弦 / 乐谱 / HistoryState 足够）——
+  // 不用 Reflect.ownKeys + defineProperty，避免拷 getter / 不可枚举噪声
+  const out: Record<string, any> = {};
+  cache.set(raw, out);
+
+  const keys = Object.keys(raw);
+  for (let i = 0, n = keys.length; i < n; i++) {
+    const key = keys[i];
+    out[key] = cloneDeep((raw as any)[key], cache);
+  }
+
+  return out as any;
 }
 
 export const getEditDistance = (a: string, b: string): number => {

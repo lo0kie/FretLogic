@@ -144,7 +144,7 @@
 <script setup lang="ts">
 import EmptyState from '@/components/EmptyState.vue';
 import { useLyricsDragDrop } from '@/services/useLyricsDragDrop';
-import { useLyricsLinesData } from '@/services/useLyricsLinesData';
+import { useLyricsLinesData } from '@/services/useScoreLinesData.ts';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { Chord } from '@/types';

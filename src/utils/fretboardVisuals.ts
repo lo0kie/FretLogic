@@ -33,18 +33,25 @@ export const getFingerTextColor = (str: GuitarStringEntity, isDarkMode: boolean)
 const placeholderSizeCache = new Map<string, { width: string; height: string }>();
 
 export const getPlaceholderSize = (fretCount: number, customScale = 1.0) => {
-  const cacheKey = `${fretCount}_${customScale}`;
+  const scaleKey = Math.round(customScale * 1000);
+  const cacheKey = `${fretCount}_${scaleKey}`;
+
   const cached = placeholderSizeCache.get(cacheKey);
   if (cached) return cached;
 
   const activeTopOffset = 80;
   const rawHeight = activeTopOffset + fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
-  const fretboardScale = (FRETBOARD_SCALE_MAP[fretCount] ?? 1.0) * 0.28 * customScale;
+  const fretboardScale = (FRETBOARD_SCALE_MAP[fretCount] ?? 1.0) * customScale; // 🌟 去掉内置的 0.28
 
   const size = {
     width: `${CANVAS_CONFIG.BOARD_WIDTH * fretboardScale}px`,
     height: `${rawHeight * fretboardScale}px`,
   };
+
+  if (placeholderSizeCache.size >= 32) {
+    const oldestKey = placeholderSizeCache.keys().next().value;
+    if (oldestKey !== undefined) placeholderSizeCache.delete(oldestKey);
+  }
 
   placeholderSizeCache.set(cacheKey, size);
   return size;

@@ -58,7 +58,6 @@ export function useChordService() {
   const triggerDeleteChords = (chords: Chord[]) => {
     if (chords.length === 0) return;
 
-    // 🌟 1. 拍摄删前的乐谱快照（用于撤销恢复 chordMap 绑定）
     const songsSnapshot = cloneDeep(songStore.songs);
 
     const targetIds = new Set<string>();
@@ -98,7 +97,7 @@ export function useChordService() {
       duration: 4000,
       onAction: () => {
         chordStore.executeUndoRestore();
-        songStore.overwriteSongs(songsSnapshot); // 🌟 2. 同步恢复乐谱快照
+        songStore.overwriteSongs(songsSnapshot);
         uiStore.toast.success('已恢复刚才删除的和弦及谱面绑定');
       },
     });

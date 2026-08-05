@@ -137,10 +137,9 @@ const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fr
 
 const getCalculatedOrCachedSize = (fretCount: number) => {
   const cacheKey = getCacheKey(fretCount);
-  if (fretboardSizeCache[cacheKey]) {
-    return fretboardSizeCache[cacheKey];
-  }
-  return getPlaceholderSize(fretCount, getEffectiveScale());
+
+  if (fretboardSizeCache[cacheKey]) return fretboardSizeCache[cacheKey];
+  else return getPlaceholderSize(fretCount, getEffectiveScale());
 };
 
 const emit = defineEmits<{

@@ -1,4 +1,5 @@
 import { useUiStore } from '@/stores/uiStore';
+import { copyElementToClipboard } from '@/utils/domExporter';
 import { type Ref, nextTick, ref } from 'vue';
 
 interface ExportOriginals {
@@ -98,37 +99,6 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
       });
     });
 
-  const generateBlob = async (container: HTMLElement, contentWidth: number, contentHeight: number) => {
-    const htmlToImage = await import('html-to-image');
-    const bgColor = getComputedStyle(document.body).getPropertyValue('--bg-main').trim() || '#f2f2f7';
-
-    const paddingX = 80;
-    const paddingY = 100;
-
-    return htmlToImage.toBlob(container, {
-      width: contentWidth + paddingX,
-      height: contentHeight + paddingY,
-      backgroundColor: bgColor,
-      pixelRatio: 2,
-      quality: 0.95,
-      cacheBust: true,
-      style: {
-        transform: 'none',
-        overflow: 'visible',
-        backgroundColor: bgColor,
-        width: `${contentWidth}px`,
-        height: `${contentHeight}px`,
-        minWidth: '0',
-        paddingTop: `${paddingY / 2}px`,
-        paddingBottom: `${paddingY / 2}px`,
-        paddingLeft: `${paddingX / 2}px`,
-        paddingRight: `${paddingX / 2}px`,
-        boxSizing: 'content-box',
-        margin: '0',
-      },
-    });
-  };
-
   const handleCopySelectedImage = async () => {
     if (selectedLineSet.value.size > 20) {
       uiStore.toast.warning('单次导出行数过多，建议分段选择导出以保证图片清晰度');
@@ -156,13 +126,35 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
       await waitForPaint();
 
       const { width, height } = measureSize(container, lineEls);
-      const blob = await generateBlob(container, width, height);
-      if (!blob) throw new Error('生成图片失败');
-      if (!document.hasFocus()) {
-        throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
-      }
+      const paddingX = 80;
+      const paddingY = 100;
+      const bgColor = getComputedStyle(document.body).getPropertyValue('--bg-main').trim() || '#f2f2f7';
 
-      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      // 🌟 上层将属于乐谱排版的特有尺寸、样式、filter 算好后，直接传给统一导出引擎
+      await copyElementToClipboard(container, {
+        width: width + paddingX,
+        height: height + paddingY,
+        backgroundColor: bgColor,
+        style: {
+          transform: 'none',
+          overflow: 'visible',
+          backgroundColor: bgColor,
+          width: `${width}px`,
+          height: `${height}px`,
+          minWidth: '0',
+          paddingTop: `${paddingY / 2}px`,
+          paddingBottom: `${paddingY / 2}px`,
+          paddingLeft: `${paddingX / 2}px`,
+          paddingRight: `${paddingX / 2}px`,
+          boxSizing: 'content-box',
+          margin: '0',
+        },
+        filter: (node: Node) => {
+          if (!(node instanceof Element)) return true;
+          return !node.classList.contains('add-btn-slot');
+        },
+      });
+
       uiStore.toast.success(`已成功复制所选 ${selectedLineSet.value.size} 行图片`);
     } catch (err) {
       console.error('Export Score Lines Error:', err);

@@ -1,5 +1,5 @@
-import { parseSlotKey } from '@/stores/songStore';
 import { getEditDistance } from '@/utils/dataParser';
+import { parseSlotKey } from './chordMap';
 import { generateUUID } from './validators';
 
 const SIMILARITY_THRESHOLD = 0.45;
@@ -9,7 +9,12 @@ const createLineId = (): string => 'l_' + generateUUID('', 8);
 export const sanitizeLyricsText = (lyrics: string): string => {
   return lyrics
     .split('\n')
-    .map(line => line.replace(/[\t\r\u3000]+/g, '').trimEnd())
+    .map(line =>
+      line
+        .replace(/[\t\r]+/g, '')
+        .replace(/\u3000/g, ' ')
+        .trim()
+    )
     .join('\n');
 };
 

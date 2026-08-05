@@ -6,64 +6,64 @@ const getBodyBgColor = (): string => {
   return getComputedStyle(document.body).getPropertyValue('--bg-main').trim() || '#f2f2f7';
 };
 
-const getScoreExportOptions = (el: HTMLElement): Options => {
-  const fullWidth = Math.max(el.scrollWidth, el.clientWidth);
-  const fullHeight = Math.max(el.scrollHeight, el.clientHeight);
-  const bgColor = getBodyBgColor();
+const resolvePixelRatio = (el: HTMLElement): number => {
+  const w = Math.max(el.scrollWidth, el.clientWidth);
+  const h = Math.max(el.scrollHeight, el.clientHeight);
+  const area = w * h;
 
-  return {
-    width: fullWidth,
-    height: fullHeight,
-    style: {
-      transform: 'none',
-      overflow: 'visible',
-      height: `${fullHeight}px`,
-      maxHeight: 'none',
-      backgroundColor: bgColor,
-    },
-    backgroundColor: bgColor,
-    filter: (domNode: Node) => {
-      return !(domNode instanceof HTMLElement && domNode.classList.contains('add-btn-slot'));
-    },
-  };
+  if (area > 4_000_000) return 1;
+  if (area > 2_000_000) return 1.5;
+  return Math.min(2, window.devicePixelRatio || 2);
 };
 
-const getFretboardExportOptions = (isTransparent: boolean): Options => {
-  if (isTransparent) {
-    return {
-      style: {
-        transform: 'none',
-        backgroundColor: 'transparent',
-        backgroundImage: 'none',
-        borderColor: 'transparent',
-        boxShadow: 'none',
-      },
-      backgroundColor: undefined,
+const waitFonts = async () => {
+  if (!document.fonts) return;
+  await Promise.race([document.fonts.ready, new Promise<void>(resolve => setTimeout(resolve, 1500))]);
+};
+
+export interface ExportOptions {
+  width?: number;
+  height?: number;
+  backgroundColor?: string;
+  isTransparent?: boolean;
+  style?: Record<string, string>;
+  filter?: (node: Node) => boolean;
+}
+
+export const renderElementToBlob = async (el: HTMLElement, exportOptions: ExportOptions = {}): Promise<Blob> => {
+  const htmlToImage = await import('html-to-image');
+
+  let defaultBgColor: string | undefined = getBodyBgColor();
+  let defaultStyle: Record<string, string> = { transform: 'none' };
+
+  if (exportOptions.isTransparent) {
+    defaultBgColor = undefined;
+    defaultStyle = {
+      transform: 'none',
+      backgroundColor: 'transparent',
+      backgroundImage: 'none',
+      borderColor: 'transparent',
+      boxShadow: 'none',
     };
   }
 
-  return {
-    style: { transform: 'none' },
-    backgroundColor: undefined,
-  };
-};
-
-const renderElementToBlob = async (el: HTMLElement, isTransparent: boolean): Promise<Blob> => {
-  const htmlToImage = await import('html-to-image');
-  const isScoreZone = el.classList.contains('interactive-score-zone');
-
-  const baseOptions = isScoreZone ? getScoreExportOptions(el) : getFretboardExportOptions(isTransparent);
-
-  if (document.fonts) {
-    await document.fonts.ready;
-  }
-
-  const blob = await htmlToImage.toBlob(el, {
+  const finalOptions: Options = {
     quality: 0.95,
-    pixelRatio: 2,
-    cacheBust: true,
-    ...baseOptions,
-  });
+    pixelRatio: resolvePixelRatio(el),
+    cacheBust: false,
+    width: exportOptions.width,
+    height: exportOptions.height,
+    backgroundColor: exportOptions.backgroundColor ?? defaultBgColor,
+    style: {
+      ...defaultStyle,
+      ...exportOptions.style,
+    },
+    filter: exportOptions.filter,
+  };
+
+  await waitFonts();
+
+  const blob = await htmlToImage.toBlob(el, finalOptions);
 
   if (!blob) throw new Error('Blob 图片数据生成失败');
   return blob;
@@ -71,10 +71,9 @@ const renderElementToBlob = async (el: HTMLElement, isTransparent: boolean): Pro
 
 export const copyElementToClipboard = async (
   target: HTMLElement | Ref<HTMLElement | null | undefined> | null | undefined,
-  isTransparent: boolean = true
+  optionsOrTransparent: boolean | ExportOptions = true
 ): Promise<void> => {
   const el = unref(target);
-
   if (!el) throw new Error('未找到目标 DOM 节点');
   if (!navigator.clipboard) {
     throw new Error('当前浏览器环境受限 (需要 HTTPS)，无法调用剪贴板');
@@ -83,11 +82,15 @@ export const copyElementToClipboard = async (
     throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
   }
 
+  const exportOptions: ExportOptions =
+    typeof optionsOrTransparent === 'boolean' ? { isTransparent: optionsOrTransparent } : optionsOrTransparent;
+
+  const blob = await renderElementToBlob(el, exportOptions);
+
   try {
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': renderElementToBlob(el, isTransparent) })]);
-  } catch (err) {
-    const blob = await renderElementToBlob(el, isTransparent);
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  } catch {
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
   }
 };
 

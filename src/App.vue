@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { useChordService } from '@/services/useChordService';
+import { useChordService } from '@/services/useChordActions.ts';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import TopHeader from '@/views/header-top/TopHeader.vue';

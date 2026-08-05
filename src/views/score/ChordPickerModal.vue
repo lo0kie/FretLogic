@@ -101,7 +101,6 @@
 </template>
 
 <script lang="ts">
-
 // 模块级单例缓存：所有 ChordPickerModal 实例共享同一份指板尺寸测量结果
 const fretboardSizeCache = reactive<Record<number, { width: string; height: string }>>({});
 </script>
@@ -115,7 +114,7 @@ import BaseSelector from '@/components/BaseSelector.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
 import { KEY_OPTIONS, PICKER_FRETBOARD_SCALE, SORT_RULE_CONFIG } from '@/constants';
-import { useLyricsLinesData } from '@/services/useLyricsLinesData';
+import { useLyricsLinesData } from '@/services/useScoreLinesData';
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -124,6 +123,7 @@ import type { Chord, GroupSortRule } from '@/types';
 import { getPlaceholderSize } from '@/utils/fretboardVisuals';
 import { sortChordsByRule } from '@/utils/musicTheory';
 import { Plus, Search } from '@lucide/vue';
+import { refDebounced } from '@vueuse/core';
 import { computed, onBeforeUnmount, reactive, ref, useTemplateRef, watch, type ComponentPublicInstance } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -203,10 +203,13 @@ const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fr
   }
 };
 
-const getCalculatedOrCachedSize = (fretCount: number) => fretboardSizeCache[fretCount] ?? getPlaceholderSize(fretCount);
+const getCalculatedOrCachedSize = (fretCount: number) =>
+  fretboardSizeCache[fretCount] ?? getPlaceholderSize(fretCount, PICKER_FRETBOARD_SCALE);
 
 const selectedGroupId = ref<string>('ALL');
 const pickerSearchQuery = ref<string>('');
+
+const debouncedPickerQuery = refDebounced(pickerSearchQuery, 150);
 
 const sortOverride = ref<GroupSortRule>('ROOT_PITCH');
 const tempSortKey = ref<string>('C');
@@ -320,23 +323,20 @@ const isCurrentBound = (chord: Chord) => {
 };
 
 const filteredChords = computed(() => {
-  let list: Chord[] = [];
+  let list =
+    selectedGroupId.value === 'ALL'
+      ? chordStore.savedChordsList
+      : chordStore.savedChordsList.filter(c => c.groupId === selectedGroupId.value);
 
-  if (selectedGroupId.value === 'ALL') {
-    const allChords = chordStore.savedChordsList;
-    list = sortChordsByRule(allChords, sortOverride.value, tempSortKey.value);
-  } else {
-    const activeGroup = chordStore.groups.find(g => g.id === selectedGroupId.value);
-    const groupChords = chordStore.savedChordsList.filter(c => c.groupId === selectedGroupId.value);
-    const effectiveKey = sortOverride.value === 'KEY_DEGREE' ? tempSortKey.value : activeGroup?.sortKey;
-    list = sortChordsByRule(groupChords, sortOverride.value, effectiveKey);
-  }
-
-  const query = pickerSearchQuery.value.trim().toLowerCase();
+  const query = debouncedPickerQuery.value.trim().toLowerCase();
   if (query) {
     list = list.filter(c => c.chordName.toLowerCase().includes(query));
   }
-  return list;
+
+  const activeGroup = chordStore.groups.find(g => g.id === selectedGroupId.value);
+  const effectiveKey = sortOverride.value === 'KEY_DEGREE' ? tempSortKey.value : activeGroup?.sortKey;
+
+  return sortChordsByRule(list, sortOverride.value, effectiveKey);
 });
 
 const handleSelectChord = (chord: Chord) => {

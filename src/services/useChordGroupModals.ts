@@ -1,10 +1,5 @@
-import {
-  DEFAULT_GROUP_SORT_RULE,
-  DEFAULT_SORT_KEY,
-  ID_PREFIXES,
-  MESSAGES
-} from '@/constants';
-import { useChordService } from '@/services/useChordService';
+import { DEFAULT_GROUP_SORT_RULE, DEFAULT_SORT_KEY, ID_PREFIXES, MESSAGES } from '@/constants';
+import { useChordService } from '@/services/useChordActions';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';

@@ -44,6 +44,52 @@ const WEIGHTS = {
   SIMPLICITY: 0.15,
 };
 
+interface CompiledFormula {
+  suffix: string;
+  category: AdvancedChordFormula['category'];
+  baseWeight: number;
+  coreMask: number;
+  conflictMask: number;
+  knownMask: number;
+  anchorMask: number;
+}
+
+const toMask = (intervals: number[] | undefined): number => {
+  if (!intervals || intervals.length === 0) return 0;
+  let m = 0;
+  for (let i = 0; i < intervals.length; i++) {
+    m |= 1 << (((intervals[i] % 12) + 12) % 12);
+  }
+  return m;
+};
+
+// 🌟 1. 模块加载阶段预编译公式掩码，零运行时转换消耗
+const COMPILED_FORMULAS: CompiledFormula[] = ALL_ADVANCED_FORMULAS.map(f => {
+  const coreMask = toMask(f.core);
+  const anchorMask = toMask(f.anchor);
+  const knownMask = coreMask | anchorMask | toMask(f.extensions) | toMask(f.tolerated);
+  return {
+    suffix: f.suffix,
+    category: f.category,
+    baseWeight: f.baseWeight,
+    coreMask,
+    conflictMask: toMask(f.conflicts),
+    knownMask,
+    anchorMask,
+  };
+});
+
+// 🌟 2. 快速计算 12 位二进制中 1 的个数（取代数组 .length 或 Set.size）
+const bitCount12 = (mask: number): number => {
+  let n = 0;
+  let m = mask & 0xfff;
+  while (m) {
+    n += m & 1;
+    m >>= 1;
+  }
+  return n;
+};
+
 const chordAnalysisCache = new Map<string, { candidates: CandidateResult[]; bestRootPitch: number }>();
 
 function rawAnalyzeChordGraph(
@@ -55,54 +101,67 @@ function rawAnalyzeChordGraph(
   }
 
   const lowestNote = notes[0];
-  const uniquePitches = Array.from(new Set(notes.map(n => n.pitchIndex)));
 
-  const pitchToLabelMap = new Map<number, string>();
-  notes.forEach(n => {
-    if (!pitchToLabelMap.has(n.pitchIndex)) {
-      pitchToLabelMap.set(n.pitchIndex, n.label);
+  let pitchMask = 0;
+  const labelByPitch = new Array<string | undefined>(12);
+  for (let i = 0; i < notes.length; i++) {
+    const n = notes[i];
+    const p = ((n.pitchIndex % 12) + 12) % 12;
+    pitchMask |= 1 << p;
+    if (labelByPitch[p] === undefined) labelByPitch[p] = n.label;
+  }
+
+  const rootPitches: number[] = [];
+  if (explicitRootPitch !== null) {
+    rootPitches.push(((explicitRootPitch % 12) + 12) % 12);
+  } else {
+    for (let p = 0; p < 12; p++) {
+      if (pitchMask & (1 << p)) rootPitches.push(p);
     }
-  });
+  }
 
-  const candidateRootPitches = explicitRootPitch !== null ? [explicitRootPitch] : uniquePitches;
   const results: CandidateResult[] = [];
+  const formulas = COMPILED_FORMULAS;
+  const formulaLen = formulas.length;
 
-  candidateRootPitches.forEach(rootPitch => {
-    const rootLabel = pitchToLabelMap.get(rootPitch) || '';
-    const intervalSet = new Set(uniquePitches.map(p => (p - rootPitch + 12) % 12));
+  for (let r = 0; r < rootPitches.length; r++) {
+    const rootPitch = rootPitches[r];
+    const rootLabel = labelByPitch[rootPitch] || '';
+
+    let intervalMask = 0;
+    for (let p = 0; p < 12; p++) {
+      if (pitchMask & (1 << p)) {
+        intervalMask |= 1 << ((p - rootPitch + 12) % 12);
+      }
+    }
+
     const lowestInterval = (lowestNote.pitchIndex - rootPitch + 12) % 12;
     const isSlash = lowestNote.pitchIndex !== rootPitch;
     const slashBassLabel = isSlash ? `/${lowestNote.label}` : '';
+    const intervalCount = bitCount12(intervalMask);
 
-    ALL_ADVANCED_FORMULAS.forEach(formula => {
-      const coreHitCount = formula.core.filter(i => intervalSet.has(i)).length;
-      if (coreHitCount < formula.core.length) return;
+    for (let f = 0; f < formulaLen; f++) {
+      const formula = formulas[f];
 
-      const hasConflict = formula.conflicts.some(i => intervalSet.has(i));
-      if (hasConflict) return;
+      // 核心音必须全中
+      if ((intervalMask & formula.coreMask) !== formula.coreMask) continue;
+      // 不能包含冲突音
+      if (intervalMask & formula.conflictMask) continue;
 
-      const coverScore = 1.0;
-
-      const knownSet = new Set([
-        ...formula.core,
-        ...(formula.anchor || []),
-        ...(formula.extensions || []),
-        ...(formula.tolerated || []),
-      ]);
-
-      let validToneCount = 0;
-      intervalSet.forEach(i => {
-        if (knownSet.has(i) || (isSlash && i === lowestInterval)) {
-          validToneCount++;
-        }
-      });
-      const purityScore = validToneCount / intervalSet.size;
+      let validMask = intervalMask & formula.knownMask;
+      if (isSlash) {
+        validMask |= intervalMask & (1 << lowestInterval);
+      }
+      const purityScore = bitCount12(validMask) / intervalCount;
 
       let bassScore = 1.0;
       if (isSlash) {
         if (explicitRootPitch !== null) {
           bassScore = 1.0;
-        } else if (formula.core.includes(lowestInterval) || formula.anchor?.includes(lowestInterval)) {
+        } else if (
+          (formula.coreMask & (1 << lowestInterval)) !== 0 ||
+          (formula.anchorMask & (1 << lowestInterval)) !== 0
+        ) {
           bassScore = 0.92;
         } else if (formula.category === 'triad') {
           bassScore = 0.85;
@@ -111,10 +170,9 @@ function rawAnalyzeChordGraph(
         }
       }
 
-      const simplicityScore = formula.baseWeight / 200.0;
-
+      const simplicityScore = formula.baseWeight / 200;
       const totalScore =
-        (coverScore * WEIGHTS.COVER +
+        (1.0 * WEIGHTS.COVER +
           purityScore * WEIGHTS.PURITY +
           bassScore * WEIGHTS.BASS +
           simplicityScore * WEIGHTS.SIMPLICITY) *
@@ -126,26 +184,27 @@ function rawAnalyzeChordGraph(
         score: Math.round(totalScore * 10) / 10,
         rootPitch,
       });
-    });
-  });
+    }
+  }
 
   results.sort((a, b) => b.score - a.score);
 
   const uniqueCandidates: CandidateResult[] = [];
   const seenNames = new Set<string>();
-
-  results.forEach(res => {
+  for (let i = 0; i < results.length; i++) {
+    const res = results[i];
     if (!seenNames.has(res.chordName)) {
       seenNames.add(res.chordName);
       uniqueCandidates.push(res);
     }
-  });
+  }
 
   const bestRootPitch = uniqueCandidates.length > 0 ? uniqueCandidates[0].rootPitch : lowestNote.pitchIndex;
 
   return { candidates: uniqueCandidates, bestRootPitch };
 }
 
+// 🌟 3. 补充音符 Label 进入缓存 Key，防止升降号切换误中脏缓存
 export function analyzeChordGraph(
   notes: NoteInput[],
   explicitRootPitch: number | null
@@ -154,7 +213,11 @@ export function analyzeChordGraph(
     return { candidates: [], bestRootPitch: 0 };
   }
 
-  const cacheKey = `${explicitRootPitch ?? 'auto'}:${notes.map(n => `${n.stringIndex}_${n.pitchIndex}`).join('|')}`;
+  let cacheKey = `${explicitRootPitch ?? 'auto'}:`;
+  for (let i = 0; i < notes.length; i++) {
+    const n = notes[i];
+    cacheKey += `${n.stringIndex}_${n.pitchIndex}_${n.label}|`;
+  }
 
   if (chordAnalysisCache.has(cacheKey)) {
     return chordAnalysisCache.get(cacheKey)!;
@@ -164,7 +227,7 @@ export function analyzeChordGraph(
 
   if (chordAnalysisCache.size >= 60) {
     const oldestKey = chordAnalysisCache.keys().next().value;
-    if (oldestKey) chordAnalysisCache.delete(oldestKey);
+    if (oldestKey !== undefined) chordAnalysisCache.delete(oldestKey);
   }
 
   chordAnalysisCache.set(cacheKey, result);

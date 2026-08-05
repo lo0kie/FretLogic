@@ -47,7 +47,7 @@ const emit = defineEmits<{
 }>();
 
 const containerRef = useTemplateRef<HTMLElement>('containerRef');
-const { height } = useElementSize(containerRef.value);
+const { height } = useElementSize(containerRef);
 
 const handleRowClick = (note: RenderNoteItem) => {
   if (!props.isMobile) return;

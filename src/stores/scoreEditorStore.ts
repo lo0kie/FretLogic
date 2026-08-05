@@ -165,9 +165,11 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const updateLyrics = (lyrics: string) => {
     if (!activeSong.value) return;
 
+    const sanitizedLyrics = sanitizeLyricsText(lyrics);
+    if (sanitizedLyrics === activeSong.value.lyrics) return;
+
     recordHistory();
 
-    const sanitizedLyrics = sanitizeLyricsText(lyrics);
     const oldLines = activeSong.value.lyrics.split('\n');
     const newLines = sanitizedLyrics.split('\n');
 
