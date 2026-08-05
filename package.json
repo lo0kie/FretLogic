@@ -22,6 +22,8 @@
     "dompurify": "^3.4.11",
     "html-to-image": "^1.11.13",
     "js-base64": "^3.8.0",
+    "normalize.css": "^8.0.1",
+    "nprogress": "^0.2.0",
     "pinia": "^2.1.7",
     "tone": "^15.1.22",
     "v-wave": "^3.1.1",
@@ -30,6 +32,7 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@types/nprogress": "^0.2.3",
     "@vitejs/plugin-vue": "^5.0.4",
     "gh-pages": "^6.3.0",
     "husky": "^9.1.7",

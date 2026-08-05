@@ -1,4 +1,7 @@
-export const KEY_OPTIONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] ;
+import { SegmentOption } from '@/components/BaseSegmentedControl.vue';
+import { GroupSortRule } from '@/types';
+
+export const KEY_OPTIONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
 export const ACTION_BUTTON_DEFAULTS = {
   VARIANT: 'default' as const,
@@ -31,6 +34,8 @@ export const BASE_SELECTOR_DEFAULTS = {
 export const DEFAULT_GROUP_SORT_RULE = 'ROOT_PITCH' as const;
 export const DEFAULT_SORT_KEY = 'C';
 
+export const PICKER_FRETBOARD_SCALE = 0.38;
+
 export const ID_PREFIXES = {
   GROUP: 'g_',
   CHORD: 'c_',
@@ -41,3 +46,9 @@ export const ID_PREFIXES = {
 export const MESSAGES = {
   SUCCESS_OPERATION: '操作成功完成',
 } as const;
+
+export const SORT_RULE_CONFIG = <SegmentOption<GroupSortRule>[]>[
+  { label: '调内级数', value: 'KEY_DEGREE' },
+  { label: 'C-B', value: 'ROOT_PITCH' },
+  { label: 'A-Z', value: 'NAME_ASC' },
+];

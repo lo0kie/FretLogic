@@ -32,7 +32,6 @@
       </div>
     </div>
 
-    <div class="config-divider"></div>
     <div class="config-row">
       <ActionButton size="sm" variant="subtle" width="100%" @click="handleRepairData">
         <template #prefix><Wrench :size="13" stroke-width="2.5" /></template>
@@ -110,13 +109,3 @@ const handleRepairData = () => {
   }
 };
 </script>
-
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
-.config-divider {
-  height: 1px;
-  background-color: var(--border-light);
-  margin: 0.2rem 0;
-}
-</style>

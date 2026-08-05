@@ -1,7 +1,11 @@
 ﻿<template>
-  <GlobalTooltip placement="top" :content="tooltipText">
+  <!-- 🌟 1. 监听 mouseenter / mouseleave 事件，控制 hover 状态 -->
+  <GlobalTooltip placement="top" :content="tooltipText" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
     <GlobalContextMenu ref="contextMenuRef" :items="menuItems">
-      <div class="chord-card-frame" :title="cardData.mainChord.chordName">
+      <div
+        class="chord-card-frame"
+        :title="`${cardData.mainChord.chordName}${activeChord.isInverted ? ' 转位和弦' : ''}`"
+      >
         <div
           v-wave
           class="chord-thumb-card"
@@ -35,15 +39,14 @@
           <BaseMarquee class="chord-marquee-wrapper">
             <span class="chord-name-text">
               {{ cardData.mainChord.chordName }}
-              <!-- 🌟 如果为主展示卡片的和弦是转位，显示标志 -->
-              <span v-if="activeChord.isInverted" class="inverted-tag" aria-label="转位">(转)</span>
+              <span v-if="activeChord.isInverted" class="inverted-dot" aria-label="转位和弦"></span>
             </span>
           </BaseMarquee>
         </div>
       </div>
     </GlobalContextMenu>
 
-    <template #content v-if="uiStore.isPreviewEnabled">
+    <template #content v-if="uiStore.isPreviewEnabled && isHovered">
       <Fretboard
         :is-dark-mode="settingsStore.isDarkMode"
         :interactive="false"
@@ -66,7 +69,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, GroupedChordCard } from '@/types';
 import { Move, Trash2 } from '@lucide/vue';
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 const props = defineProps<{
   cardData: GroupedChordCard;
@@ -83,7 +86,17 @@ const emit = defineEmits<{
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
 
+const isHovered = ref(false);
+
 const activeVariantIndex = ref(0);
+
+watch(
+  () => props.cardData.mainChord.id,
+  () => {
+    activeVariantIndex.value = 0;
+  }
+);
+
 const activeChord = computed(() => props.cardData.variants[activeVariantIndex.value] || props.cardData.mainChord);
 
 const contextMenuRef = useTemplateRef<InstanceType<typeof GlobalContextMenu>>('contextMenuRef');
@@ -289,12 +302,16 @@ onBeforeUnmount(() => {
   color: var(--text-body);
 }
 
-.inverted-tag {
-  font-size: 0.6rem;
-  color: var(--color-warning);
-  vertical-align: top;
-  margin-left: 2px;
-  font-weight: 600;
+.inverted-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--color-warning);
+  opacity: 0.75;
+  margin-left: 3px;
+  vertical-align: middle;
+  pointer-events: auto;
 }
 
 @media (max-width: 768px) {
@@ -325,8 +342,10 @@ onBeforeUnmount(() => {
     font-size: 0.85rem;
   }
 
-  .inverted-tag {
-    font-size: 0.68rem;
+  .inverted-dot {
+    width: 5px;
+    height: 5px;
+    margin-left: 4px;
   }
 }
 </style>

@@ -143,6 +143,9 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
     isExporting.value = true;
     uiStore.toast.info(`正在生成所选 ${selectedLineSet.value.size} 行图片...`);
 
+    await nextTick();
+    await new Promise(resolve => requestAnimationFrame(() => resolve(undefined)));
+
     let originals: ExportOriginals | null = null;
 
     try {

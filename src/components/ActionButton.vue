@@ -3,7 +3,7 @@
     v-wave
     :disabled="disabled || loading"
     @click="handleInternalClick"
-    :style="{ height, width }"
+    :style="normalizedStyle"
     class="action-button-base"
     :class="[sizeClass, themeClass, variantClass, roundedClass, { 'is-icon-only': iconOnly, 'is-active': active }]"
   >
@@ -64,6 +64,18 @@ const themeClass = computed(() => {
   if (danger) return 'theme-danger';
   if (warning) return 'theme-warning';
   return 'theme-default';
+});
+
+const normalizedStyle = computed(() => {
+  const style: Record<string, string> = {};
+
+  if (width) {
+    style.width = isNaN(Number(width)) ? width : `${width}px`;
+  }
+  if (height) {
+    style.height = isNaN(Number(height)) ? height : `${height}px`;
+  }
+  return style;
 });
 
 const variantClass = computed(() => `variant-${variant}`);

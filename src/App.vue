@@ -15,9 +15,8 @@
 
       <SidebarLeft :class="{ 'is-mobile-drawer': uiStore.isMobile }" />
 
-      <!-- 主视图路由出口 -->
       <main class="app-main-content" :style="{ paddingLeft: mainPaddingLeft }">
-        <router-view v-slot="{ Component }">
+        <router-view #="{ Component }">
           <component :is="Component" />
         </router-view>
       </main>
@@ -69,7 +68,7 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
     }, 350);
   };
 
-  if (!document.startViewTransition || !event) {
+  if (!document.startViewTransition || !event || typeof document.documentElement.animate !== 'function') {
     settingsStore.isDarkMode = !settingsStore.isDarkMode;
     disableChangingAttribute();
     return;
@@ -152,7 +151,7 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
 
 :deep(.panel-left.is-mobile-drawer) {
   position: fixed;
-  top: 3.2rem;
+  top: 2.5rem;
   bottom: 0;
   left: 0;
   z-index: 100;

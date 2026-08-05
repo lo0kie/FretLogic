@@ -222,17 +222,17 @@ const handleSelectChord = (chord: Chord) => {
   chordService.loadChordToEditor(chord);
 };
 
+// 🌟 修复问题 1：保持为纯展示函数，移除 default 分支对响应式数据的直接写操作
 const getSortLabel = (group: Group): string => {
   switch (group.sortRule) {
     case 'ROOT_PITCH':
-      return '音名';
+      return 'C-B';
     case 'KEY_DEGREE':
       return `${group.sortKey}调`;
     case 'NAME_ASC':
       return 'A-Z';
     default:
-      group.sortRule = 'ROOT_PITCH';
-      return 'ROOT_PITCH';
+      return 'C-B';
   }
 };
 

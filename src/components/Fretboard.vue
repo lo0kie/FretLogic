@@ -36,10 +36,11 @@
             >
               <button
                 v-wave
-                :tabindex="interactive && str.fret <= 0 ? 0 : -1"
+                :tabindex="interactive ? 0 : -1"
                 role="button"
                 :aria-label="getOpenStringAriaLabel(sIdx, str)"
-                :aria-disabled="!interactive || str.fret > 0"
+                :aria-disabled="!interactive"
+                :title="str.fret > 0 ? undefined : getOpenStringAriaLabel(sIdx, str)"
                 @click.stop="handleLocalToggleOpenString(sIdx)"
                 @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
                 @keydown.enter.prevent.stop="handleLocalToggleOpenString(sIdx)"
@@ -107,7 +108,7 @@ const props = withDefaults(
     fretNumberSize?: 'sm' | 'md' | 'lg';
     showOpenStrings?: boolean;
     showFretNumbers?: boolean;
-    bgColor?: string; // 🌟 支持自定义背景色
+    bgColor?: string; // 支持自定义背景色
     bordered?: boolean;
   }>(),
   {
@@ -148,7 +149,7 @@ const {
 const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) => {
   const stringNum = 6 - sIdx;
   if (str.fret > 0) {
-    return `第 ${stringNum} 弦（已按第 ${str.fret} 品）`;
+    return `第 ${stringNum} 弦（已按第 ${str.fret} 品，点击清除按音）`;
   }
   if (isMuted(str)) {
     return `第 ${stringNum} 弦（静音，点击切换为空弦）`;
@@ -242,13 +243,13 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
     transform: scale(0.92);
   }
 
+  /* 🌟 修改点 4：按品时透明隐藏，但保留事件响应 (移除 pointer-events: none) */
   &.is-fret-pressed {
     opacity: 0 !important;
     transform: scale(1) !important;
     background-color: transparent !important;
     border-color: transparent !important;
     box-shadow: none !important;
-    pointer-events: none !important;
   }
 
   &.is-muted-status {

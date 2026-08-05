@@ -76,17 +76,14 @@ export const useChordStore = defineStore('chord', () => {
     });
 
     if (hasOrphans) {
-      let targetGroupId = selectedGroupId.value || groups.value[0]?.id || null;
-      if (!targetGroupId) {
-        targetGroupId = 'g_recovery_' + generateUUID().slice(0, 8);
-        groups.value.forEach(g => {
-          g.collapsed = true;
-        });
-        groups.value.unshift({ id: targetGroupId, name: '已恢复的和弦', collapsed: false, sortRule: 'ROOT_PITCH' });
-        selectedGroupId.value = targetGroupId;
+      let recoveryGroup = groups.value.find(g => g.id.startsWith('g_recovery_'));
+      if (!recoveryGroup) {
+        const newId = 'g_recovery_' + generateUUID().slice(0, 8);
+        recoveryGroup = { id: newId, name: '已恢复的和弦', collapsed: false, sortRule: 'ROOT_PITCH' };
+        groups.value.unshift(recoveryGroup);
       }
       savedChordsList.value.forEach(c => {
-        if (!validGroupIds.has(c.groupId)) c.groupId = targetGroupId as string;
+        if (!validGroupIds.has(c.groupId)) c.groupId = recoveryGroup!.id;
       });
     }
   };

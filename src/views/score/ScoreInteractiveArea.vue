@@ -45,6 +45,8 @@
         <!-- 1. 行首插槽区域 -->
         <div class="edge-chords-group" @dragover.prevent="handleGlobalDragOver">
           <ChordSlotCell
+            :is-exporting="isExporting"
+            :scroll-root="scoreZoneRef"
             variant="add"
             :slot-key="lineData.nextStartKey"
             add-placeholder-title="点击添加行首和弦"
@@ -58,6 +60,8 @@
           />
 
           <ChordSlotCell
+            :is-exporting="isExporting"
+            :scroll-root="scoreZoneRef"
             v-for="item in lineData.startChords"
             :key="item.slotKey"
             variant="edge"
@@ -77,6 +81,8 @@
 
         <!-- 2. 中间字符和弦区 -->
         <ChordSlotCell
+          :is-exporting="isExporting"
+          :scroll-root="scoreZoneRef"
           v-for="item in lineData.chars"
           :key="item.slotKey"
           variant="char"
@@ -97,6 +103,8 @@
         <!-- 3. 行尾插槽区域 -->
         <div class="edge-chords-group" @dragover.prevent="handleGlobalDragOver">
           <ChordSlotCell
+            :is-exporting="isExporting"
+            :scroll-root="scoreZoneRef"
             v-for="item in lineData.endChords"
             :key="item.slotKey"
             variant="edge"
@@ -114,6 +122,8 @@
           />
 
           <ChordSlotCell
+            :is-exporting="isExporting"
+            :scroll-root="scoreZoneRef"
             variant="add"
             :slot-key="lineData.nextEndKey"
             add-placeholder-title="点击添加行尾和弦"

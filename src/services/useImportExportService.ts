@@ -132,10 +132,10 @@ export function useImportExportService() {
 
   const triggerFullExport = () => {
     const originalData = {
-      version: 1, // 🌟 附加 Schema 版本号
-      groups: chordStore.groups,
-      chords: chordStore.savedChordsList,
-      songs: songStore.songs,
+      version: 1,
+      groups: cloneDeep(chordStore.groups),
+      chords: cloneDeep(chordStore.savedChordsList),
+      songs: cloneDeep(songStore.songs),
     };
 
     if (cleanAndValidateData(originalData, 'export')) {

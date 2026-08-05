@@ -17,21 +17,21 @@
 
       <EmptyState v-else :icon="Music" title="未选择乐谱" description="请在左侧侧边栏选择或新建一份乐谱" size="lg" />
     </div>
+
+    <ScoreExportFloatingBar
+      v-if="scoreEditor.activeSong && scoreEditor.activeTab === 'interactive'"
+      :selected-count="selectedLineSet.size"
+      :sorted-indices="sortedSelectedIndices"
+      :is-all-selected="isAllSelected"
+      :is-exporting="isExporting"
+      @remove-index="handleRemoveLineIndex"
+      @toggle-select-all="handleToggleSelectAll"
+      @copy-image="handleCopySelectedImage"
+      v-model:include-meta-bar="includeMetaBar"
+    />
+
+    <ChordPickerModal v-model:visible="isPickerOpen" />
   </div>
-
-  <ScoreExportFloatingBar
-    v-if="scoreEditor.activeSong && scoreEditor.activeTab === 'interactive'"
-    :selected-count="selectedLineSet.size"
-    :sorted-indices="sortedSelectedIndices"
-    :is-all-selected="isAllSelected"
-    :is-exporting="isExporting"
-    @remove-index="handleRemoveLineIndex"
-    @toggle-select-all="handleToggleSelectAll"
-    @copy-image="handleCopySelectedImage"
-    v-model:include-meta-bar="includeMetaBar"
-  />
-
-  <ChordPickerModal v-model:visible="isPickerOpen" />
 </template>
 
 <script setup lang="ts">

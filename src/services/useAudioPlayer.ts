@@ -1,7 +1,7 @@
 ﻿import { AUDIO_CONFIG } from '@/constants/audio';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import type * as Tone from 'tone';
-import { ref } from 'vue';
+import { onScopeDispose, ref } from 'vue';
 
 const isPlaying = ref(false);
 let isEngineInitialized = false;
@@ -67,17 +67,17 @@ export function useAudioPlayer() {
   const playCurrentChord = async () => {
     if (isPlaying.value) return;
 
-    if (!ToneModule) {
-      ToneModule = await import('tone');
-    }
-
-    if (ToneModule.getContext().state !== 'running') {
-      await ToneModule.start();
-    }
-
     isPlaying.value = true;
 
     try {
+      if (!ToneModule) {
+        ToneModule = await import('tone');
+      }
+
+      if (ToneModule.getContext().state !== 'running') {
+        await ToneModule.start();
+      }
+
       await initAudioEngine();
 
       if (!guitarSynth) {
@@ -139,6 +139,10 @@ export function useAudioPlayer() {
     isEngineInitialized = false;
     isPlaying.value = false;
   };
+
+  onScopeDispose(() => {
+    disposeAudioEngine();
+  });
 
   return { isPlaying, playCurrentChord, disposeAudioEngine };
 }

@@ -42,7 +42,7 @@ const {
   disabled?: boolean;
 }>();
 
-const modelValue = defineModel<T | null>({ required: true });
+const modelValue = defineModel<T>({ required: true });
 
 const emit = defineEmits<{
   (e: 'change', value: T): void;
@@ -154,34 +154,34 @@ watch(() => options, updateIndicatorPosition, { deep: true });
 
   &.size-sm {
     height: v-bind(HEIGHT_SM);
-    padding: 0.08rem;
+    padding: 0.12rem;
     gap: 0.1rem;
 
     .segmented-item {
       font-size: 0.62rem;
-      padding: 0.1rem 0.45rem;
+      padding: 0 0.45rem;
     }
   }
 
   &.size-md {
     height: v-bind(HEIGHT_MD);
-    padding: 0.12rem;
+    padding: 0.15rem;
     gap: 0.15rem;
 
     .segmented-item {
       font-size: 0.68rem;
-      padding: 0.15rem 0.6rem;
+      padding: 0 0.6rem;
     }
   }
 
   &.size-lg {
     height: v-bind(HEIGHT_LG);
-    padding: 0.15rem;
+    padding: 0.18rem;
     gap: 0.2rem;
 
     .segmented-item {
       font-size: 0.75rem;
-      padding: 0.2rem 0.8rem;
+      padding: 0 0.8rem;
     }
   }
 }
@@ -229,6 +229,8 @@ watch(() => options, updateIndicatorPosition, { deep: true });
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: stretch;
+  height: 100%;
 
   &:hover:not(:disabled):not(.is-item-disabled) {
     color: var(--text-title);

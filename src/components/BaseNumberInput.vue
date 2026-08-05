@@ -1,15 +1,27 @@
 <template>
-  <div class="base-number-input" :class="`size-${size}`" @wheel="handleWheel">
-    <button v-wave type="button" class="step-btn" :disabled="disabled || modelValue <= min" @click="handleStep(-step)">
-      -
+  <div class="base-number-input" :class="`size-${size}`" @wheel.prevent="handleWheel">
+    <button
+      v-wave
+      type="button"
+      class="step-btn"
+      :disabled="disabled || (modelValue <= min && !loopable)"
+      @click="handleStep(-step)"
+    >
+      <slot name="minus">{{ minusText }}</slot>
     </button>
 
     <span class="readout-text">
       {{ displayText }}
     </span>
 
-    <button v-wave type="button" class="step-btn" :disabled="disabled || modelValue >= max" @click="handleStep(step)">
-      +
+    <button
+      v-wave
+      type="button"
+      class="step-btn"
+      :disabled="disabled || (modelValue >= max && !loopable)"
+      @click="handleStep(step)"
+    >
+      <slot name="plus">{{ plusText }}</slot>
     </button>
   </div>
 </template>
@@ -24,6 +36,10 @@ const {
   step = 1,
   size = 'md',
   disabled = false,
+  wheelable = true,
+  loopable = true,
+  plusText = '+',
+  minusText = '-',
   labelPrefix = '',
   labelSuffix = '',
   formatter,
@@ -33,6 +49,10 @@ const {
   step?: number;
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
+  wheelable?: boolean;
+  loopable?: boolean;
+  plusText?: string;
+  minusText?: string;
   labelPrefix?: string;
   labelSuffix?: string;
   formatter?: (val: number) => string;
@@ -51,11 +71,20 @@ const displayText = computed(() => {
   return `${labelPrefix}${modelValue.value}${labelSuffix}`;
 });
 
-const clamp = (val: number) => Math.min(max, Math.max(min, val));
-
 const handleStep = (delta: number) => {
   if (disabled) return;
-  const nextVal = clamp(modelValue.value + delta);
+  let nextVal = modelValue.value + delta;
+
+  if (loopable) {
+    if (nextVal > max) {
+      nextVal = min;
+    } else if (nextVal < min) {
+      nextVal = max;
+    }
+  } else {
+    nextVal = Math.min(max, Math.max(min, nextVal));
+  }
+
   if (nextVal !== modelValue.value) {
     modelValue.value = nextVal;
     emit('change', nextVal);
@@ -63,11 +92,11 @@ const handleStep = (delta: number) => {
 };
 
 const handleWheel = (e: WheelEvent) => {
-  if (disabled) return;
-  e.preventDefault();
-  if (e.deltaY < 0) {
+  if (disabled || !wheelable) return;
+
+  if (e.deltaY > 0) {
     handleStep(step);
-  } else if (e.deltaY > 0) {
+  } else if (e.deltaY < 0) {
     handleStep(-step);
   }
 };

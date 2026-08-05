@@ -1,4 +1,4 @@
-import { FRETBOARD_COLORS } from '@/constants';
+import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_SCALE_MAP } from '@/constants';
 import type { GuitarStringEntity } from '@/types';
 import { isMuted, isOpen } from '@/utils/musicTheory';
 
@@ -28,4 +28,24 @@ export const getFingerColor = (str: GuitarStringEntity, isDarkMode: boolean): st
 
 export const getFingerTextColor = (str: GuitarStringEntity, isDarkMode: boolean): string => {
   return str.isRoot && isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
+};
+
+const placeholderSizeCache = new Map<string, { width: string; height: string }>();
+
+export const getPlaceholderSize = (fretCount: number, customScale = 1.0) => {
+  const cacheKey = `${fretCount}_${customScale}`;
+  const cached = placeholderSizeCache.get(cacheKey);
+  if (cached) return cached;
+
+  const activeTopOffset = 80;
+  const rawHeight = activeTopOffset + fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
+  const fretboardScale = (FRETBOARD_SCALE_MAP[fretCount] ?? 1.0) * 0.28 * customScale;
+
+  const size = {
+    width: `${CANVAS_CONFIG.BOARD_WIDTH * fretboardScale}px`,
+    height: `${rawHeight * fretboardScale}px`,
+  };
+
+  placeholderSizeCache.set(cacheKey, size);
+  return size;
 };

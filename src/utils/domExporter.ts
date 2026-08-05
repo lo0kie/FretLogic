@@ -54,7 +54,9 @@ const renderElementToBlob = async (el: HTMLElement, isTransparent: boolean): Pro
 
   const baseOptions = isScoreZone ? getScoreExportOptions(el) : getFretboardExportOptions(isTransparent);
 
-  await htmlToImage.toBlob(el, baseOptions);
+  if (document.fonts) {
+    await document.fonts.ready;
+  }
 
   const blob = await htmlToImage.toBlob(el, {
     quality: 0.95,

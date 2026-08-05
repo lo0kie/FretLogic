@@ -3,12 +3,11 @@ import {
   computed,
   onBeforeUnmount,
   onMounted,
-  onWatcherCleanup,
   ref,
   toRaw,
   toRefs,
   useTemplateRef,
-  watchEffect,
+  watchEffect
 } from 'vue';
 
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, INTERACTION_CONFIG } from '@/constants';
@@ -209,13 +208,13 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
     isPointerDown.value = true;
   };
 
-  watchEffect(() => {
+  watchEffect(onCleanup => {
     if (!isPointerDown.value) return;
 
     const stopMove = useEventListener(window, 'pointermove', handlePointerMove);
     const stopUp = useEventListener(window, 'pointerup', handlePointerUp);
 
-    onWatcherCleanup(() => {
+    onCleanup(() => {
       stopMove();
       stopUp();
     });

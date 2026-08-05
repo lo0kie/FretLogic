@@ -101,25 +101,24 @@ const setExternalInert = (isInert: boolean) => {
   }
 };
 
+let stopKeydownListener: (() => void) | null = null;
+
 watch(
   visible,
   async isOpen => {
     isBodyLocked.value = isOpen;
-    setExternalInert(isOpen); // 🌟 核心：外层挂载/解挂 inert 属性
+    setExternalInert(isOpen);
 
     if (isOpen) {
+      stopKeydownListener = useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Escape') handleCancel();
+      });
+
       previousActiveElement = document.activeElement as HTMLElement;
-
       await nextTick();
-      if (!modalCardRef.value) return;
-
-      const focusables = modalCardRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
-      if (focusables.length > 0) {
-        focusables[0].focus();
-      } else {
-        modalCardRef.value.focus();
-      }
     } else {
+      stopKeydownListener?.();
+      stopKeydownListener = null;
       previousActiveElement?.focus?.();
       previousActiveElement = null;
     }
@@ -153,12 +152,6 @@ const handleKeydownTrap = (e: KeyboardEvent) => {
     }
   }
 };
-
-useEventListener(window, 'keydown', (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && visible.value) {
-    handleCancel();
-  }
-});
 
 onBeforeUnmount(() => {
   setExternalInert(false);

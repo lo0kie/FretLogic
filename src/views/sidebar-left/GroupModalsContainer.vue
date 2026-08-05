@@ -69,11 +69,7 @@
         <label class="config-label">排序规则</label>
         <BaseSegmentedControl
           v-model="groupModals.modalData.sortRule"
-          :options="[
-            { label: 'C-B 音名', value: 'ROOT_PITCH' },
-            { label: '调内级数', value: 'KEY_DEGREE' },
-            { label: '名称 A-Z', value: 'NAME_ASC' },
-          ]"
+          :options="SORT_RULE_CONFIG"
         />
       </div>
       <div v-if="groupModals.modalData.sortRule === 'KEY_DEGREE'" class="sort-config-row">
@@ -236,6 +232,7 @@ import BaseSelector from '@/components/BaseSelector.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { SORT_RULE_CONFIG } from '@/constants';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
 import { useImportExportService } from '@/services/useImportExportService';
 import { useChordStore } from '@/stores/chordStore';

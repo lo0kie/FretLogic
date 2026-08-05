@@ -1,5 +1,5 @@
 <template>
-  <div class="base-scale-slider" :class="[`size-${size}`, { 'is-disabled': disabled }]">
+  <div class="base-scale-slider" :class="[`size-${size}`, { 'is-disabled': disabled }]" @wheel.prevent="handleWheel">
     <!-- 1. 左侧 Label (点击重置) -->
     <span
       v-if="label && labelPosition === 'left'"
@@ -118,6 +118,7 @@ const {
   defaultValue = 1.0,
   size = 'md',
   disabled = false,
+  wheelable = true,
   showButtons = true,
   showReadout = true,
   readoutPosition = 'right',
@@ -131,6 +132,7 @@ const {
   defaultValue?: number;
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
+  wheelable?: boolean;
   showButtons?: boolean;
   showReadout?: boolean;
   readoutPosition?: 'left' | 'right';
@@ -174,6 +176,16 @@ const stepUp = () => updateValue(modelValue.value + step);
 const stepDown = () => updateValue(modelValue.value - step);
 
 const resetToDefault = () => updateValue(defaultValue);
+
+const handleWheel = (e: WheelEvent) => {
+  if (disabled || !wheelable) return;
+
+  if (e.deltaY > 0) {
+    stepUp();
+  } else if (e.deltaY < 0) {
+    stepDown();
+  }
+};
 </script>
 
 <style scoped lang="less">
@@ -196,19 +208,16 @@ const resetToDefault = () => updateValue(defaultValue);
   &.size-sm {
     height: v-bind(HEIGHT_SM);
     padding: 0 0.3rem;
-    gap: 0.2rem;
   }
 
   &.size-md {
     height: v-bind(HEIGHT_MD);
     padding: 0 0.4rem;
-    gap: 0.3rem;
   }
 
   &.size-lg {
     height: v-bind(HEIGHT_LG);
     padding: 0 0.5rem;
-    gap: 0.4rem;
   }
 }
 
@@ -299,11 +308,14 @@ const resetToDefault = () => updateValue(defaultValue);
   font-size: 0.65rem;
   font-weight: 700;
   color: var(--text-title);
-  text-align: center;
+  text-align: left;
   font-family: monospace;
   cursor: pointer;
   outline: none;
   border-radius: @radius-sm;
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+  min-width: 2rem;
 
   &:hover,
   &:focus-visible {
