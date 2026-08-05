@@ -79,7 +79,7 @@ export function buildLyricsLinesWithEdges(
   });
 }
 
-export function useLyricsLinesData() {
+export function useScoreLinesData() {
   const scoreEditor = useScoreEditorStore();
   const chordStore = useChordStore();
 

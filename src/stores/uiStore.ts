@@ -1,7 +1,7 @@
 ﻿import type { Toast, ToastOptions, ToastType } from '@/types';
 import { useMediaQuery, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 
 export const useUiStore = defineStore('ui', () => {
   const toasts = ref<Toast[]>([]);
@@ -10,6 +10,7 @@ export const useUiStore = defineStore('ui', () => {
   const isLeftOpen = useStorage('CHORD_LAB_UI_LEFT_OPEN', true);
   const isPreviewEnabled = useStorage('CHORD_LAB_UI_PREVIEW_ENABLED', false);
   const timersMap = new Map<number, ReturnType<typeof setTimeout>>();
+  const activeExportTarget = shallowRef<HTMLElement | null>(null);
 
   const clearActionToasts = () => {
     toasts.value = toasts.value.filter(t => !t.hasAction);
@@ -86,5 +87,6 @@ export const useUiStore = defineStore('ui', () => {
     resumeAllTimers,
     isPreviewEnabled,
     isMobile,
+    activeExportTarget,
   };
 });

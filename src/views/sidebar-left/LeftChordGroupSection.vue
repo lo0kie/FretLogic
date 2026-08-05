@@ -25,9 +25,9 @@
           role="button"
           :aria-expanded="!group.collapsed"
           :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${group.collapsed ? '已折叠' : '已展开'}`"
-          @click="chordService.executeGroupToggle(group.id)"
-          @keydown.enter.prevent="chordService.executeGroupToggle(group.id)"
-          @keydown.space.prevent="chordService.executeGroupToggle(group.id)"
+          @click="chordActions.executeGroupToggle(group.id)"
+          @keydown.enter.prevent="chordActions.executeGroupToggle(group.id)"
+          @keydown.space.prevent="chordActions.executeGroupToggle(group.id)"
           class="group-title-row"
           :class="{
             'is-expanded': !group.collapsed,
@@ -133,7 +133,7 @@ import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
-import { useChordService } from '@/services/useChordActions.ts';
+import { useChordActions } from '@/services/useChordActions.ts';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -158,7 +158,7 @@ const emit = defineEmits<{
 
 const editorStore = useEditorStore();
 const chordStore = useChordStore();
-const chordService = useChordService();
+const chordActions = useChordActions();
 const uiStore = useUiStore();
 
 const groupCardEls = useTemplateRef<HTMLElement[]>('groupCardEls');
@@ -218,7 +218,7 @@ const handleSelectChord = (chord: Chord) => {
     editorStore.resetEditor();
     return;
   }
-  chordService.loadChordToEditor(chord);
+  chordActions.loadChordToEditor(chord);
 };
 
 const getSortLabel = (group: Group): string => {
@@ -296,7 +296,7 @@ const getGroupChordsCount = (groupId: string) => {
 
 const handleLocalDeleteChord = (chord: Chord) => {
   const isEditingCurrent = editorStore.editingId === chord.id;
-  chordService.triggerDeleteChord(chord);
+  chordActions.triggerDeleteChord(chord);
   if (isEditingCurrent) editorStore.resetEditor();
 };
 

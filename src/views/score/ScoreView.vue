@@ -38,12 +38,11 @@
 import EmptyState from '@/components/EmptyState.vue';
 import { useLineSelection } from '@/services/useLineSelection';
 import { useScoreImageExport } from '@/services/useScoreExport.ts';
-import { useLyricsLinesData } from '@/services/useScoreLinesData.ts';
+import { useScoreLinesData } from '@/services/useScoreLinesData.ts';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
 import { computed, ref, useTemplateRef } from 'vue';
-
 import ChordPickerModal from './ChordPickerModal.vue';
 import ScoreExportFloatingBar from './ScoreExportFloatingBar.vue';
 import ScoreInteractiveArea from './ScoreInteractiveArea.vue';
@@ -52,10 +51,10 @@ import ScoreLyricsEditor from './ScoreLyricsEditor.vue';
 const scoreEditor = useScoreEditorStore();
 const isPickerOpen = ref(false);
 
-const interactiveAreaRef = useTemplateRef<any>('interactiveAreaRef');
+const interactiveAreaRef = useTemplateRef<InstanceType<typeof ScoreInteractiveArea>>('interactiveAreaRef');
 const scoreZoneEl = computed<HTMLElement | null>(() => interactiveAreaRef.value?.scoreZoneRef || null);
 
-const { lyricsLinesWithEdges } = useLyricsLinesData();
+const { lyricsLinesWithEdges } = useScoreLinesData();
 const totalLines = computed(() => lyricsLinesWithEdges.value.length);
 const activeSongId = computed(() => scoreEditor.activeSongId);
 
@@ -66,7 +65,7 @@ const {
   handleRemoveLineIndex,
   handleToggleSelectAll,
   handleLineClick,
-} = useLineSelection(scoreZoneEl, totalLines, activeSongId);
+} = useLineSelection(totalLines, activeSongId);
 
 const { isExporting, handleCopySelectedImage, includeMetaBar } = useScoreImageExport(scoreZoneEl, selectedLineSet);
 

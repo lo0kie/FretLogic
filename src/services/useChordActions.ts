@@ -4,13 +4,12 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
-import { copyElementToClipboard } from '@/utils/domExporter';
 import { computeChordFingerprint, computeIsInverted } from '@/utils/musicTheory';
 import { generateUUID } from '@/utils/validators';
-import { Ref, toRaw, unref } from 'vue';
+import { toRaw } from 'vue';
 import { SortableEvent } from 'vue-draggable-plus';
 
-export function useChordService() {
+export function useChordActions() {
   const chordStore = useChordStore();
   const editorStore = useEditorStore();
   const uiStore = useUiStore();
@@ -23,8 +22,6 @@ export function useChordService() {
     editorStore.fretCount = chord.fretCount ?? 3;
     editorStore.capo = chord.capo ?? 0;
     editorStore.currentTuning = chord.tuning || 'STANDARD';
-
-    if (uiStore.isMobile) uiStore.isLeftOpen = false;
   };
 
   const executeGroupToggle = (gid: string) => {
@@ -69,24 +66,8 @@ export function useChordService() {
     const updatedList = chordStore.savedChordsList.filter(c => !targetIds.has(c.id));
     chordStore.overwriteChords(updatedList);
 
-    songStore.songs.forEach(song => {
-      if (!song.chordMap) return;
-      let hasChanged = false;
-
-      Object.keys(song.chordMap).forEach(key => {
-        const boundChordId = song.chordMap[key];
-        if (!boundChordId) return;
-
-        if (targetIds.has(boundChordId)) {
-          delete song.chordMap[key];
-          hasChanged = true;
-        }
-      });
-
-      if (hasChanged) {
-        song.chordMap = { ...song.chordMap };
-      }
-    });
+    // 🌟 统一调用 songStore API 进行清理，不再手写嵌套遍历
+    songStore.unbindChordIds(targetIds);
 
     if (editorStore.editingId && chords.some(c => c.id === editorStore.editingId)) {
       editorStore.resetEditor();
@@ -107,33 +88,6 @@ export function useChordService() {
     triggerDeleteChords([chord]);
   };
 
-  const exportFretboardImage = async (
-    target: HTMLElement | Ref<HTMLElement | null | undefined> | null | undefined,
-    isTransparent: boolean = true
-  ) => {
-    if (uiStore.isCopying) return;
-
-    const el = unref(target);
-
-    if (!el) {
-      uiStore.toast.error('导出失败：指板 DOM 节点尚未渲染完成');
-      return;
-    }
-
-    uiStore.isCopying = true;
-    uiStore.toast.info(isTransparent ? '正在导出透明底色快照...' : '正在导出带卡片背景快照...');
-
-    try {
-      await copyElementToClipboard(el, isTransparent);
-      uiStore.toast.success('成功复制至系统剪贴板');
-    } catch (err) {
-      console.error('Fretboard Exporter Error:', err);
-      uiStore.toast.error('导出失败：当前浏览器内核环境受限');
-    } finally {
-      uiStore.isCopying = false;
-    }
-  };
-
   const persistCurrentChord = () => {
     const cleanName = editorStore.currentChordName.trim();
 
@@ -144,11 +98,6 @@ export function useChordService() {
 
     if (!chordStore.selectedGroupId) {
       uiStore.toast.warning('保存失败：请先展开或选择一个目标分组');
-
-      if (uiStore.isMobile) {
-        uiStore.isLeftOpen = true;
-      }
-
       return;
     }
 
@@ -204,7 +153,6 @@ export function useChordService() {
     handleChordSort,
     triggerDeleteChord,
     triggerDeleteChords,
-    exportFretboardImage,
     persistCurrentChord,
   };
 }

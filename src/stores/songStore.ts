@@ -115,6 +115,25 @@ export const useSongStore = defineStore('song', () => {
     songs.value = [...newSongs];
   };
 
+  const unbindChordIds = (targetIds: Set<string>) => {
+    songs.value.forEach(song => {
+      if (!song.chordMap) return;
+      let hasChanged = false;
+
+      Object.keys(song.chordMap).forEach(key => {
+        const boundChordId = song.chordMap[key];
+        if (boundChordId && targetIds.has(boundChordId)) {
+          delete song.chordMap[key];
+          hasChanged = true;
+        }
+      });
+
+      if (hasChanged) {
+        song.chordMap = { ...song.chordMap };
+      }
+    });
+  };
+
   return {
     songs,
     createSong,
@@ -125,5 +144,6 @@ export const useSongStore = defineStore('song', () => {
     removeCharChord,
     swapSongSlotChords,
     overwriteSongs,
+    unbindChordIds,
   };
 });

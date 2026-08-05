@@ -88,6 +88,49 @@ export const useChordStore = defineStore('chord', () => {
     }
   };
 
+  /** 批量校验并修复全量和弦的转位状态与指纹标识 */
+  const repairFingerprints = (): number => {
+    let repairedCount = 0;
+
+    const repairedList = savedChordsList.value.map(chord => {
+      const freshInverted = computeIsInverted(
+        chord.strings,
+        chord.capo ?? 0,
+        chord.tuning || TuningEnum.STANDARD,
+        chord.chordName
+      );
+
+      const freshFingerprint = computeChordFingerprint({
+        groupId: chord.groupId,
+        chordName: chord.chordName,
+        capo: chord.capo ?? 0,
+        fretCount: chord.fretCount ?? 3,
+        tuning: chord.tuning || TuningEnum.STANDARD,
+        strings: chord.strings,
+        isInverted: freshInverted,
+      });
+
+      if (chord.isInverted !== freshInverted || chord.fingerprint !== freshFingerprint) {
+        repairedCount++;
+      }
+
+      return {
+        ...chord,
+        fretCount: chord.fretCount ?? 3,
+        capo: chord.capo ?? 0,
+        tuning: chord.tuning || TuningEnum.STANDARD,
+        isInverted: freshInverted,
+        fingerprint: freshFingerprint,
+      };
+    });
+
+    if (repairedCount > 0) {
+      overwriteChords(repairedList);
+    }
+
+    return repairedCount;
+  };
+
   return {
     savedChordsList,
     groups,
@@ -96,5 +139,6 @@ export const useChordStore = defineStore('chord', () => {
     overwriteChords,
     overwriteGroups,
     executeUndoRestore,
+    repairFingerprints,
   };
 });

@@ -1,19 +1,10 @@
-import { useEventListener } from '@vueuse/core';
-import {
-  computed,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  toRaw,
-  toRefs,
-  useTemplateRef,
-  watchEffect
-} from 'vue';
-
-import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, INTERACTION_CONFIG } from '@/constants';
+import { CANVAS_CONFIG, INTERACTION_CONFIG } from '@/constants';
+import { useFretboardLayout } from '@/services/useFretboardLayout';
 import type { GuitarStringsModel } from '@/types';
 import { cloneDeep } from '@/utils/dataParser';
 import { canTogglePitchAccidental, isOpen } from '@/utils/musicTheory';
+import { useEventListener } from '@vueuse/core';
+import { onBeforeUnmount, onMounted, ref, toRaw, toRefs, useTemplateRef, watchEffect } from 'vue';
 
 export interface FretboardInteractionProps {
   strings: GuitarStringsModel;
@@ -37,6 +28,8 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
 
   const { strings, fretCount, capo, activeBaseStrings, interactive, scale, showOpenStrings } = toRefs(props);
 
+  const layout = useFretboardLayout(fretCount, scale, showOpenStrings);
+
   const isPointerDown = ref(false);
 
   let lastCancelTime = 0;
@@ -46,31 +39,16 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   let ticking = false;
   let rAF_ID = 0;
 
-  const stringXPositions = computed(() =>
-    Array.from({ length: 6 }, (_, i) => CANVAS_CONFIG.OFFSET_X + i * CANVAS_CONFIG.STRING_SPACING)
-  );
-
-  // 🌟 动态计算顶部偏移量：如果隐藏空弦，则只保留较小的安全内边距
-  const activeTopOffset = computed(() => (showOpenStrings?.value !== false ? CANVAS_CONFIG.OFFSET_Y_TOP : 16));
-
-  const rawHeight = computed(
-    () => activeTopOffset.value + fretCount.value * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
-  );
-  const fretboardScale = computed(() => (FRETBOARD_SCALE_MAP[fretCount.value] || 1.0) * scale.value);
-  const realScaledWidth = computed(() => CANVAS_CONFIG.BOARD_WIDTH * fretboardScale.value);
-  const realScaledHeight = computed(() => rawHeight.value * fretboardScale.value);
-
   const getCanvasPoint = (clientX: number, clientY: number) => {
     const board = fretBoardRef.value?.getBoundingClientRect();
     if (!board || board.width === 0 || board.height === 0) return null;
     const scaleX = board.width / CANVAS_CONFIG.BOARD_WIDTH;
-    const scaleY = board.height / rawHeight.value;
+    const scaleY = board.height / layout.rawHeight.value;
     const x = (clientX - board.left) / scaleX;
     const y = (clientY - board.top) / scaleY;
     const stringIndex = Math.round((x - CANVAS_CONFIG.OFFSET_X) / CANVAS_CONFIG.STRING_SPACING);
 
-    // 🌟 基于动态偏移量计算当前所处品位
-    const fretAreaY = y - activeTopOffset.value;
+    const fretAreaY = y - layout.activeTopOffset.value;
     const fretIndex = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
     return { stringIndex, fretIndex };
   };
@@ -246,7 +224,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
     if (wheelAccumulator > 0) {
       emit('update:capo', Math.min(INTERACTION_CONFIG.MAX_CAPO_LIMIT, capo.value + 1));
     } else {
-      emit('update:capo', Math.max(INTERACTION_CONFIG.MIN_CAPO_LIMIT, capo.value - 1));
+      emit('update:capo', Math.max(INTERACTION_CONFIG.MAX_CAPO_LIMIT, capo.value - 1));
     }
     wheelAccumulator = 0;
   };
@@ -268,12 +246,12 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   return {
     fretBoardRef,
     hoverPoint,
-    stringXPositions,
-    rawHeight,
-    fretboardScale,
-    realScaledWidth,
-    realScaledHeight,
-    activeTopOffset,
+    stringXPositions: layout.stringXPositions,
+    rawHeight: layout.rawHeight,
+    fretboardScale: layout.fretboardScale,
+    realScaledWidth: layout.realScaledWidth,
+    realScaledHeight: layout.realScaledHeight,
+    activeTopOffset: layout.activeTopOffset,
     handleRightClickRoot,
     handleLocalToggleOpenString,
     handleTogglePitchName,

@@ -7,7 +7,7 @@
 
       <div class="bar-divider"></div>
 
-      <ActionButton size="md" variant="subtle" :disabled="isSaveDisabled" @click="chordService.persistCurrentChord()">
+      <ActionButton size="md" variant="subtle" :disabled="isSaveDisabled" @click="chordActions.persistCurrentChord()">
         {{ editorStore.editingId ? '更新保存' : '确认保存' }}
       </ActionButton>
     </div>
@@ -16,14 +16,14 @@
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
-import { useChordService } from '@/services/useChordActions';
+import { useChordActions } from '@/services/useChordActions';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { computed } from 'vue';
 
 const editorStore = useEditorStore();
 const uiStore = useUiStore();
-const chordService = useChordService();
+const chordActions = useChordActions();
 
 const barBottomPosition = computed(() => {
   if (uiStore.isMobile) return 'calc(1.8rem + env(safe-area-inset-bottom, 0px))';

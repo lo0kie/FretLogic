@@ -50,7 +50,7 @@ import { FRET_COUNTS } from '@/constants';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
-import { computeChordFingerprint, computeIsInverted, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
+import { TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { Wrench } from '@lucide/vue';
 import HeaderPopoverShell from './HeaderPopoverShell.vue';
 
@@ -66,41 +66,7 @@ const FRET_OPTIONS: SegmentOption<number>[] = FRET_COUNTS.map(f => ({
 }));
 
 const handleRepairData = () => {
-  let repairedCount = 0;
-
-  const repairedList = chordStore.savedChordsList.map(chord => {
-    const freshInverted = computeIsInverted(
-      chord.strings,
-      chord.capo ?? 0,
-      chord.tuning || TuningEnum.STANDARD,
-      chord.chordName
-    );
-
-    const freshFingerprint = computeChordFingerprint({
-      groupId: chord.groupId,
-      chordName: chord.chordName,
-      capo: chord.capo ?? 0,
-      fretCount: chord.fretCount ?? 3,
-      tuning: chord.tuning || TuningEnum.STANDARD,
-      strings: chord.strings,
-      isInverted: freshInverted,
-    });
-
-    if (chord.isInverted !== freshInverted || chord.fingerprint !== freshFingerprint) {
-      repairedCount++;
-    }
-
-    return {
-      ...chord,
-      fretCount: chord.fretCount ?? 3,
-      capo: chord.capo ?? 0,
-      tuning: chord.tuning || TuningEnum.STANDARD,
-      isInverted: freshInverted,
-      fingerprint: freshFingerprint,
-    };
-  });
-
-  chordStore.overwriteChords(repairedList);
+  const repairedCount = chordStore.repairFingerprints();
 
   if (repairedCount > 0) {
     uiStore.toast.success(`已扫描本地数据，修复并对齐了 ${repairedCount} 个和弦！`);

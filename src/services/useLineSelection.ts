@@ -1,10 +1,6 @@
 import { computed, ref, watch, type Ref } from 'vue';
 
-export function useLineSelection(
-  _scoreZoneRef: Ref<HTMLElement | null>,
-  totalLines: Ref<number>,
-  activeSongId: Ref<unknown>
-) {
+export function useLineSelection(totalLines: Ref<number>, activeSongId: Ref<unknown>) {
   const selectedLineSet = ref<Set<number>>(new Set());
 
   const isAllSelected = computed(() => totalLines.value > 0 && selectedLineSet.value.size === totalLines.value);

@@ -89,15 +89,14 @@ let previousActiveElement: HTMLElement | null = null;
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-// 🌟 1. 设置外层节点为 inert（禁掉主应用内所有的键盘/鼠标/读屏焦点）
 const setExternalInert = (isInert: boolean) => {
-  const appEl = document.getElementById('app') || (document.body.firstElementChild as HTMLElement);
-  if (!appEl) return;
+  const targetEl = document.body.firstElementChild as HTMLElement;
+  if (!targetEl) return;
 
   if (isInert) {
-    appEl.setAttribute('inert', '');
+    targetEl.setAttribute('inert', '');
   } else {
-    appEl.removeAttribute('inert');
+    targetEl.removeAttribute('inert');
   }
 };
 

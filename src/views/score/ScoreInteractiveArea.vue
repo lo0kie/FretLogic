@@ -11,7 +11,7 @@
       size="lg"
     />
 
-    <div v-else class="lyrics-lines-container" :class="{ 'is-export-mode': isExporting }">
+    <div v-else class="lyrics-lines-container" :class="{ 'is-export-mode': isExporting }" ref="lyricsRef">
       <div v-show="isExporting && includeMetaBar" class="export-header-meta">
         <h1 class="export-song-title">{{ scoreEditor.activeSong?.title }}</h1>
         <div class="export-song-info">
@@ -144,12 +144,13 @@
 <script setup lang="ts">
 import EmptyState from '@/components/EmptyState.vue';
 import { useLyricsDragDrop } from '@/services/useLyricsDragDrop';
-import { useLyricsLinesData } from '@/services/useScoreLinesData.ts';
+import { useScoreLinesData } from '@/services/useScoreLinesData.ts';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useUiStore } from '@/stores/uiStore.ts';
 import type { Chord } from '@/types';
 import { FileText } from '@lucide/vue';
-import { useTemplateRef } from 'vue';
+import { onBeforeUnmount, onMounted, useTemplateRef } from 'vue';
 import ChordSlotCell from './ChordSlotCell.vue';
 
 defineOptions({ name: 'ScoreInteractiveArea' });
@@ -165,10 +166,12 @@ const emit = defineEmits<{
   (e: 'line-click', lineIdx: number): void;
 }>();
 
+const uiStore = useUiStore();
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 
 const scoreZoneRef = useTemplateRef<HTMLElement>('scoreZoneRef');
+const lyricsRef = useTemplateRef<HTMLElement>('lyricsRef');
 
 const {
   dragOverSlotKey,
@@ -180,7 +183,7 @@ const {
   handleDrop,
 } = useLyricsDragDrop();
 
-const { lyricsLinesWithEdges, chordsLookupMap } = useLyricsLinesData();
+const { lyricsLinesWithEdges, chordsLookupMap } = useScoreLinesData();
 
 const formatLineIndex = (index: number) => String(index + 1).padStart(2, '0');
 
@@ -199,6 +202,14 @@ const handleLineClick = (ev: MouseEvent, lineIdx: number) => {
 
   emit('line-click', lineIdx);
 };
+
+onMounted(() => {
+  uiStore.activeExportTarget = lyricsRef.value ?? null;
+});
+
+onBeforeUnmount(() => {
+  if (uiStore.activeExportTarget === lyricsRef.value) uiStore.activeExportTarget = null;
+});
 
 defineExpose({ scoreZoneRef });
 </script>

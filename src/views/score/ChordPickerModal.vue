@@ -114,7 +114,7 @@ import BaseSelector from '@/components/BaseSelector.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
 import { KEY_OPTIONS, PICKER_FRETBOARD_SCALE, SORT_RULE_CONFIG } from '@/constants';
-import { useLyricsLinesData } from '@/services/useScoreLinesData';
+import { useScoreLinesData } from '@/services/useScoreLinesData';
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -145,7 +145,7 @@ const uiStore = useUiStore();
 const chordStore = useChordStore();
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
-const { chordsLookupMap } = useLyricsLinesData();
+const { chordsLookupMap } = useScoreLinesData();
 
 const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
 

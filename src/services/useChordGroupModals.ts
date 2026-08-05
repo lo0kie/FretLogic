@@ -1,5 +1,5 @@
 import { DEFAULT_GROUP_SORT_RULE, DEFAULT_SORT_KEY, ID_PREFIXES, MESSAGES } from '@/constants';
-import { useChordService } from '@/services/useChordActions';
+import { useChordActions } from '@/services/useChordActions';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -11,7 +11,7 @@ export function useChordGroupModals() {
   const chordStore = useChordStore();
   const editorStore = useEditorStore();
   const uiStore = useUiStore();
-  const chordService = useChordService();
+  const chordActions = useChordActions();
 
   const modals = reactive({
     create: false,
@@ -162,13 +162,13 @@ export function useChordGroupModals() {
       return;
     }
     const chordsToDelete = modalData.activeGroupCard.variants.filter(v => modalData.selectedVariantIds.has(v.id));
-    chordService.triggerDeleteChords(chordsToDelete);
+    chordActions.triggerDeleteChords(chordsToDelete);
     modals.chordVariantsDelete = false;
   };
 
   const handleDeleteAllVariants = () => {
     if (!modalData.activeGroupCard) return;
-    chordService.triggerDeleteChords(modalData.activeGroupCard.variants);
+    chordActions.triggerDeleteChords(modalData.activeGroupCard.variants);
     modals.chordVariantsDelete = false;
   };
 

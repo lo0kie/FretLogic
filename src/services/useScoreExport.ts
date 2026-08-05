@@ -58,6 +58,7 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
     return originals;
   };
 
+  /** 2. 测量排版展开后的实际物理宽高 */
   const measureSize = (container: HTMLElement, lineEls: HTMLElement[]) => {
     let maxWidth = 0;
     lineEls.forEach((el, idx) => {
@@ -74,6 +75,7 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
     };
   };
 
+  /** 3. 导出结束后还原 DOM 节点样式 */
   const restoreAfterExport = (container: HTMLElement, lineEls: HTMLElement[], originals: ExportOriginals) => {
     lineEls.forEach((el, idx) => {
       const ori = originals.lines[idx];
@@ -92,6 +94,7 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
     container.style.width = originals.containerWidth;
   };
 
+  /** 双 rAF 帧等待：保证浏览器视图重绘与样式计算完全完成 */
   const waitForPaint = () =>
     new Promise<void>(resolve => {
       requestAnimationFrame(() => {
@@ -99,39 +102,37 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
       });
     });
 
+  /** 核心执行：复制选中行图片至剪贴板 */
   const handleCopySelectedImage = async () => {
     if (selectedLineSet.value.size > 20) {
       uiStore.toast.warning('单次导出行数过多，建议分段选择导出以保证图片清晰度');
+
+      return;
     }
 
-    if (isExporting.value || selectedLineSet.value.size === 0) return;
-
-    const container = scoreZoneRef.value?.querySelector('.lyrics-lines-container') as HTMLElement;
-    if (!container) return;
-    const lineEls = Array.from(container.querySelectorAll('.lyrics-line')) as HTMLElement[];
+    if (isExporting.value || selectedLineSet.value.size === 0 || !uiStore.activeExportTarget) return;
+    const lineEls = Array.from(uiStore.activeExportTarget.querySelectorAll('.lyrics-line')) as HTMLElement[];
 
     isExporting.value = true;
     uiStore.toast.info(`正在生成所选 ${selectedLineSet.value.size} 行图片...`);
 
-    await nextTick();
-    await new Promise(resolve => requestAnimationFrame(() => resolve(undefined)));
-
     let originals: ExportOriginals | null = null;
 
     try {
+      // 🌟 精简点：一次 nextTick + 一次 waitForPaint 足以确保 isExporting 状态渲染稳定
       await nextTick();
       await waitForPaint();
 
-      originals = prepareForExport(container, lineEls);
+      // 布局现场布置
+      originals = prepareForExport(uiStore.activeExportTarget, lineEls);
       await waitForPaint();
 
-      const { width, height } = measureSize(container, lineEls);
+      const { width, height } = measureSize(uiStore.activeExportTarget, lineEls);
       const paddingX = 80;
       const paddingY = 100;
       const bgColor = getComputedStyle(document.body).getPropertyValue('--bg-main').trim() || '#f2f2f7';
 
-      // 🌟 上层将属于乐谱排版的特有尺寸、样式、filter 算好后，直接传给统一导出引擎
-      await copyElementToClipboard(container, {
+      await copyElementToClipboard(uiStore.activeExportTarget, {
         width: width + paddingX,
         height: height + paddingY,
         backgroundColor: bgColor,
@@ -162,7 +163,7 @@ export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selec
       else uiStore.toast.error('导出图片失败');
     } finally {
       if (originals) {
-        restoreAfterExport(container, lineEls, originals);
+        restoreAfterExport(uiStore.activeExportTarget, lineEls, originals);
       }
       isExporting.value = false;
     }

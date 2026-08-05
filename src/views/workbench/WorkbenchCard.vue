@@ -2,6 +2,7 @@
   <div
     v-element-size="onResize"
     class="workbench-card"
+    ref="cardRef"
     :style="{
       height: uiStore.isMobile ? 'auto' : dynamicHeight,
       width: uiStore.isMobile ? '100%' : `${CANVAS_CONFIG.BOARD_WIDTH + 64}px`,
@@ -36,11 +37,12 @@ import { useEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { vElementSize } from '@vueuse/components';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
 
 const editorStore = useEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
+const cardRef = useTemplateRef<HTMLElement>('cardRef');
 
 const cardWidth = ref(0);
 
@@ -62,6 +64,14 @@ const dynamicHeight = computed(() => {
   const currentScale = FRETBOARD_SCALE_MAP[editorStore.fretCount] || 1.0;
   const realBoardHeight = rawCanvasHeight * currentScale;
   return `${baseVerticalSpace + realBoardHeight}px`;
+});
+
+onMounted(() => {
+  uiStore.activeExportTarget = cardRef.value ?? null;
+});
+
+onBeforeUnmount(() => {
+  if (uiStore.activeExportTarget === cardRef.value) uiStore.activeExportTarget = null;
 });
 </script>
 

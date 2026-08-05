@@ -2,7 +2,7 @@
   <GlobalToast />
 
   <div class="app-window-shell">
-    <TopHeader @export-image="handleExportImage" @toggle-theme="executeToggleThemeWithAnimation" />
+    <TopHeader @toggle-theme="executeToggleThemeWithAnimation" />
 
     <div class="app-split-view-body">
       <Transition name="drawer-fade">
@@ -25,7 +25,6 @@
 </template>
 
 <script setup lang="ts">
-import { useChordService } from '@/services/useChordActions.ts';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import TopHeader from '@/views/header-top/TopHeader.vue';
@@ -39,24 +38,11 @@ const SidebarLeft = defineAsyncComponent(() => import('./views/sidebar-left/Side
 const route = useRoute();
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
-const chordService = useChordService();
 
 const mainPaddingLeft = computed(() => {
   if (uiStore.isMobile || !uiStore.isLeftOpen || route.meta.overlapSidebar) return '0px';
   return LEFT_SIDEBAR_WIDTH_PIXEL;
 });
-
-const handleExportImage = (isTransparent: boolean) => {
-  let targetEl: HTMLElement | null = null;
-
-  if (route.path === '/workbench') {
-    targetEl = document.querySelector('.workbench-card') as HTMLElement;
-  } else if (route.path === '/score') {
-    targetEl = document.querySelector('.interactive-score-zone') as HTMLElement;
-  }
-
-  chordService.exportFretboardImage(targetEl, isTransparent);
-};
 
 const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
   const rootEl = document.documentElement;
@@ -85,14 +71,8 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
   transition.ready
     .then(() => {
       document.documentElement.animate(
-        {
-          clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`],
-        },
-        {
-          duration: 350,
-          easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
-          pseudoElement: '::view-transition-new(root)',
-        }
+        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`] },
+        { duration: 350, easing: 'cubic-bezier(0.25, 1, 0.5, 1)', pseudoElement: '::view-transition-new(root)' }
       );
     })
     .catch(() => {});
