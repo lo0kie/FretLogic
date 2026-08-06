@@ -89,6 +89,12 @@ export const useChordStore = defineStore('chord', () => {
     return repairedCount;
   };
 
+  const collapseAllGroups = () => {
+    groups.value.forEach(g => {
+      g.collapsed = true;
+    });
+  };
+
   return {
     savedChordsList,
     groups,
@@ -98,5 +104,6 @@ export const useChordStore = defineStore('chord', () => {
     overwriteGroups,
     executeUndoRestore,
     repairFingerprints,
+    collapseAllGroups,
   };
 });

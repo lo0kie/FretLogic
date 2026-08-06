@@ -28,7 +28,7 @@
         :data-line-idx="lineData.lineId"
         class="lyrics-line"
         :class="{
-          'is-line-selected': !isExporting && selectedLineSet.has(lineData.lineIdx),
+          'is-line-selected': selectedLineSet.has(lineData.lineIdx),
         }"
         @click="e => handleLineClick(e, lineData.lineIdx)"
       >
@@ -73,7 +73,7 @@
             @dragover="handleDragOver($event, item.slotKey)"
             @dragleave="handleDragLeave"
             @drop="handleDrop(item.slotKey)"
-            @dragstart="handleDragStart(item.slotKey)"
+            @dragstart="handleDragStart($event, item.slotKey)"
             @dragend="handleDragEnd"
             @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
           />
@@ -95,7 +95,7 @@
           @dragover="handleDragOver($event, item.slotKey)"
           @dragleave="handleDragLeave"
           @drop="handleDrop(item.slotKey)"
-          @dragstart="handleDragStart(item.slotKey)"
+          @dragstart="handleDragStart($event, item.slotKey)"
           @dragend="handleDragEnd"
           @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
         />
@@ -116,7 +116,7 @@
             @dragover="handleDragOver($event, item.slotKey)"
             @dragleave="handleDragLeave"
             @drop="handleDrop(item.slotKey)"
-            @dragstart="handleDragStart(item.slotKey)"
+            @dragstart="handleDragStart($event, item.slotKey)"
             @dragend="handleDragEnd"
             @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
           />
@@ -236,8 +236,30 @@ defineExpose({ scoreZoneRef });
   min-width: 100%;
 
   &.is-export-mode {
+    min-width: 0 !important;
+    width: max-content !important;
+
     :deep(.add-btn-slot) {
       display: none !important;
+    }
+
+    .lyrics-line {
+      transition: none !important;
+
+      .index-text-tag {
+        transition: none !important;
+      }
+
+      &:not(.is-line-selected) {
+        display: none !important;
+      }
+
+      &.is-line-selected {
+        min-width: 0 !important;
+        width: max-content !important;
+        background-color: transparent !important;
+        border-color: transparent !important;
+      }
     }
   }
 }

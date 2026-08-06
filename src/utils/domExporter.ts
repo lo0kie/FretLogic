@@ -45,7 +45,10 @@ const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions):
       backgroundColor: 'transparent',
       backgroundImage: 'none',
       borderColor: 'transparent',
+      borderRadius: '0',
+      borderWidth: '0',
       boxShadow: 'none',
+      border: 'none',
     };
   }
 

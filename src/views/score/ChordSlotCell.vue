@@ -30,11 +30,12 @@
         draggable="true"
         title="点击更换和弦，按住可拖拽换位"
         @click.stop="emit('click')"
-        @dragstart.stop="emit('dragstart')"
+        @dragstart.stop="emit('dragstart', $event)"
         @dragend="emit('dragend')"
       >
         <button
           v-wave
+          v-if="isVisible"
           type="button"
           class="remove-chord-btn"
           title="清除当前和弦"
@@ -99,9 +100,18 @@ const props = defineProps<{
   scrollRoot?: HTMLElement | null; // 🌟 新增
 }>();
 
+const emit = defineEmits<{
+  (e: 'click'): void;
+  (e: 'remove', slotKey: string | number): void;
+  (e: 'dragstart', event: DragEvent): void;
+  (e: 'dragend'): void;
+  (e: 'dragover', ev: DragEvent): void;
+  (e: 'dragleave', ev: DragEvent): void;
+  (e: 'drop'): void;
+}>();
+
 const isVisible = ref(false);
 const scoreEditor = useScoreEditorStore();
-
 const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
 
 const { stop: stopObserving } = useIntersectionObserver(
@@ -127,6 +137,7 @@ const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fr
   if (!(domEl instanceof HTMLElement)) return;
 
   const rect = domEl.getBoundingClientRect();
+
   if (rect.width > 0 && rect.height > 0) {
     fretboardSizeCache[cacheKey] = {
       width: `${rect.width}px`,
@@ -141,16 +152,6 @@ const getCalculatedOrCachedSize = (fretCount: number) => {
   if (fretboardSizeCache[cacheKey]) return fretboardSizeCache[cacheKey];
   else return getPlaceholderSize(fretCount, getEffectiveScale());
 };
-
-const emit = defineEmits<{
-  (e: 'click'): void;
-  (e: 'remove', slotKey: string | number): void;
-  (e: 'dragstart'): void;
-  (e: 'dragend'): void;
-  (e: 'dragover', ev: DragEvent): void;
-  (e: 'dragleave', ev: DragEvent): void;
-  (e: 'drop'): void;
-}>();
 
 const ariaLabelText = computed(() => {
   if (props.variant === 'add') {
@@ -302,7 +303,6 @@ unwatchExport = watch(
   padding: 0.12rem 0.15rem;
   border-radius: @radius-sm;
   background-color: transparent;
-  border: 1px solid transparent;
   transition: @transition-fast;
   cursor: pointer;
   position: relative;

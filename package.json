@@ -8,6 +8,7 @@
     "check": "vue-tsc",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
+    "generate-code": "node ./generate_all_code.cjs",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
     "code:check": "vue-tsc --noEmit && pnpm build",

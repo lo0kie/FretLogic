@@ -47,8 +47,8 @@ const {
   variant?: 'default' | 'subtle' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   rounded?: 'none' | 'sm' | 'md' | 'lg' | 'full';
-  width?: string;
-  height?: string;
+  width?: string | number;
+  height?: string | number;
 }>();
 
 const emit = defineEmits<{
@@ -69,11 +69,11 @@ const themeClass = computed(() => {
 const normalizedStyle = computed(() => {
   const style: Record<string, string> = {};
 
-  if (width) {
-    style.width = isNaN(Number(width)) ? width : `${width}px`;
+  if (width !== undefined) {
+    style.width = typeof width === 'number' ? `${width}px` : width;
   }
-  if (height) {
-    style.height = isNaN(Number(height)) ? height : `${height}px`;
+  if (height !== undefined) {
+    style.height = typeof height === 'number' ? `${height}px` : height;
   }
   return style;
 });

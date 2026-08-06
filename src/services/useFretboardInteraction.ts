@@ -4,7 +4,7 @@ import type { GuitarStringsModel } from '@/types';
 import { cloneDeep } from '@/utils/cloneDeep';
 import { canTogglePitchAccidental, isOpen } from '@/utils/musicTheory';
 import { useEventListener } from '@vueuse/core';
-import { onBeforeUnmount, onMounted, ref, toRaw, toRefs, useTemplateRef, watchEffect } from 'vue';
+import { onBeforeUnmount, ref, toRaw, toRefs, useTemplateRef, watchEffect } from 'vue';
 
 export interface FretboardInteractionProps {
   strings: GuitarStringsModel;
@@ -224,20 +224,18 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
     if (wheelAccumulator > 0) {
       emit('update:capo', Math.min(INTERACTION_CONFIG.MAX_CAPO_LIMIT, capo.value + 1));
     } else {
-      emit('update:capo', Math.max(INTERACTION_CONFIG.MAX_CAPO_LIMIT, capo.value - 1));
+      emit('update:capo', Math.max(INTERACTION_CONFIG.MIN_CAPO_LIMIT, capo.value - 1));
     }
     wheelAccumulator = 0;
   };
 
-  onMounted(() => {
-    useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
-    useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {
-      const pt = getCanvasPoint(e.clientX, e.clientY);
-      if (pt) hoverPoint.value = pt;
-    });
-    useEventListener(fretBoardRef, 'pointerleave', handlePointerLeave);
-    useEventListener(fretBoardRef, 'wheel', handleWheel, { passive: false });
+  useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
+  useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {
+    const pt = getCanvasPoint(e.clientX, e.clientY);
+    if (pt) hoverPoint.value = pt;
   });
+  useEventListener(fretBoardRef, 'pointerleave', handlePointerLeave);
+  useEventListener(fretBoardRef, 'wheel', handleWheel, { passive: false });
 
   onBeforeUnmount(() => {
     if (rAF_ID) cancelAnimationFrame(rAF_ID);

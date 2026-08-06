@@ -93,6 +93,7 @@ onBeforeUnmount(() => {
   position: relative;
   box-sizing: border-box;
   flex-shrink: 0;
+
   transition:
     height @duration-slow @bezier-sidebar,
     background-color @duration-base,

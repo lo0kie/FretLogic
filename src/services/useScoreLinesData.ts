@@ -1,6 +1,7 @@
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
+import { buildLyricsLinesWithEdges } from '@/utils/scoreLines';
 import { computed } from 'vue';
 
 export interface EdgeChordItem {
@@ -21,62 +22,6 @@ export interface LineData {
   endChords: EdgeChordItem[];
   nextStartKey: string;
   nextEndKey: string;
-}
-
-export function buildLyricsLinesWithEdges(
-  lyrics: string,
-  chordMap: Record<string | number, string>,
-  chordsLookupMap: Map<string, Chord>,
-  existingLineIds: string[] = []
-): LineData[] {
-  const rawLines = lyrics.split('\n');
-
-  return rawLines.map((lineText, lineIdx) => {
-    const lineId = existingLineIds[lineIdx] || String(lineIdx);
-
-    const startChords: EdgeChordItem[] = [];
-    let startCount = 0;
-    while (chordMap[`line_${lineId}_start_${startCount}`]) {
-      const chordId = chordMap[`line_${lineId}_start_${startCount}`];
-      const foundChord = chordsLookupMap.get(chordId);
-      if (foundChord) {
-        startChords.push({
-          slotKey: `line_${lineId}_start_${startCount}`,
-          chord: foundChord,
-        });
-      }
-      startCount++;
-    }
-
-    const endChords: EdgeChordItem[] = [];
-    let endCount = 0;
-    while (chordMap[`line_${lineId}_end_${endCount}`]) {
-      const chordId = chordMap[`line_${lineId}_end_${endCount}`];
-      const foundChord = chordsLookupMap.get(chordId);
-      if (foundChord) {
-        endChords.push({
-          slotKey: `line_${lineId}_end_${endCount}`,
-          chord: foundChord,
-        });
-      }
-      endCount++;
-    }
-
-    const chars: CharItem[] = lineText.split('').map((char, charIdx) => ({
-      char,
-      slotKey: `line_${lineId}_char_${charIdx}`,
-    }));
-
-    return {
-      lineIdx,
-      lineId,
-      chars,
-      startChords,
-      endChords,
-      nextStartKey: `line_${lineId}_start_${startCount}`,
-      nextEndKey: `line_${lineId}_end_${endCount}`,
-    };
-  });
 }
 
 export function useScoreLinesData() {

@@ -25,9 +25,9 @@
           role="button"
           :aria-expanded="!group.collapsed"
           :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${group.collapsed ? '已折叠' : '已展开'}`"
-          @click="chordActions.executeGroupToggle(group.id)"
-          @keydown.enter.prevent="chordActions.executeGroupToggle(group.id)"
-          @keydown.space.prevent="chordActions.executeGroupToggle(group.id)"
+          @click="chordActions.executeGroupToggle(group)"
+          @keydown.enter.prevent="chordActions.executeGroupToggle(group)"
+          @keydown.space.prevent="chordActions.executeGroupToggle(group)"
           class="group-title-row"
           :class="{
             'is-expanded': !group.collapsed,
@@ -234,24 +234,6 @@ const getSortLabel = (group: Group): string => {
   }
 };
 
-// 🌟 轻量过滤：仅计算角标匹配数量（无需排序和分组聚合）
-const matchCountMap = computed(() => {
-  const map = new Map<string, number>();
-  const queryKeyword = props.searchQuery.toLowerCase().trim();
-
-  chordStore.groups.forEach(group => {
-    const originalChords = chordStore.groupChordMap.get(group.id) || [];
-    if (!queryKeyword) {
-      map.set(group.id, originalChords.length);
-    } else {
-      const count = originalChords.filter(c => c.chordName.toLowerCase().includes(queryKeyword)).length;
-      map.set(group.id, count);
-    }
-  });
-
-  return map;
-});
-
 const getMatchCount = (groupId: string): number => {
   return matchCountMap.value.get(groupId) || 0;
 };
@@ -259,6 +241,34 @@ const getMatchCount = (groupId: string): number => {
 const hasMatchedChords = (groupId: string): boolean => {
   return getMatchCount(groupId) > 0;
 };
+
+const matchCountMap = computed(() => {
+  const map = new Map<string, number>();
+
+  filteredChordsMap.value.forEach((chords, groupId) => {
+    map.set(groupId, chords.length);
+  });
+  return map;
+});
+
+const filteredChordsMap = computed(() => {
+  const map = new Map<string, Chord[]>();
+  const queryKeyword = props.searchQuery.toLowerCase().trim();
+
+  chordStore.groups.forEach(group => {
+    const originalChords = chordStore.groupChordMap.get(group.id) || [];
+    if (!queryKeyword) {
+      map.set(group.id, originalChords);
+    } else {
+      map.set(
+        group.id,
+        originalChords.filter(c => c.chordName.toLowerCase().includes(queryKeyword))
+      );
+    }
+  });
+
+  return map;
+});
 
 const groupedCardsMap = computed(() => {
   const map = new Map<string, GroupedChordCard[]>();
@@ -270,13 +280,9 @@ const groupedCardsMap = computed(() => {
       return;
     }
 
-    const originalChords = chordStore.groupChordMap.get(group.id) || [];
-    let list = queryKeyword
-      ? originalChords.filter(c => c.chordName.toLowerCase().includes(queryKeyword))
-      : originalChords;
-
-    list = sortChordsByRule(list, group.sortRule, group.sortKey);
-    map.set(group.id, groupChordsByName(list));
+    const list = filteredChordsMap.value.get(group.id) || [];
+    const sortedList = sortChordsByRule(list, group.sortRule, group.sortKey);
+    map.set(group.id, groupChordsByName(sortedList));
   });
 
   return map;

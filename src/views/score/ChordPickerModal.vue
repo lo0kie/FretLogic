@@ -148,7 +148,6 @@ const settingsStore = useSettingsStore();
 const { chordsLookupMap } = useScoreLinesData();
 
 const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
-
 const visibleMap = reactive<Record<string, boolean>>({});
 
 // 每张卡片自己的 IntersectionObserver 实例，触发一次后立刻停止并从这里移除
@@ -203,8 +202,16 @@ const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fr
   }
 };
 
-const getCalculatedOrCachedSize = (fretCount: number) =>
-  fretboardSizeCache[fretCount] ?? getPlaceholderSize(fretCount, PICKER_FRETBOARD_SCALE);
+const getCalculatedOrCachedSize = (fretCount: number) => {
+  if (fretboardSizeCache[fretCount]) return fretboardSizeCache[fretCount];
+
+  const coreSize = getPlaceholderSize(fretCount, PICKER_FRETBOARD_SCALE);
+  const coreHeight = parseFloat(coreSize.height);
+  const calculatedSize = { width: `100%`, height: `${coreHeight}px` };
+
+  fretboardSizeCache[fretCount] = calculatedSize;
+  return calculatedSize;
+};
 
 const selectedGroupId = ref<string>('ALL');
 const pickerSearchQuery = ref<string>('');
@@ -476,6 +483,8 @@ onBeforeUnmount(() => {
 .card-name {
   font-size: 0.8rem;
   font-weight: 800;
+  line-height: 1.2rem;
+  height: 1.2rem;
   color: var(--text-title);
   margin-bottom: 0.25rem;
 }

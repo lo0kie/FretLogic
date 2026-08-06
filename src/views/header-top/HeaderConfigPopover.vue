@@ -4,7 +4,11 @@
     <div class="config-row">
       <label class="config-label">显示品数</label>
       <div class="control-wrapper">
-        <BaseSegmentedControl v-model="editorStore.fretCount" :options="FRET_OPTIONS" />
+        <BaseSegmentedControl
+          :model-value="editorStore.fretCount"
+          @update:model-value="editorStore.setFretCount"
+          :options="FRET_OPTIONS"
+        />
       </div>
     </div>
 
@@ -28,6 +32,7 @@
           :options="tuningOptions"
           :default-value="TuningEnum.STANDARD"
           :formatter="val => TUNING_PRESETS[val]?.name || TuningEnum.STANDARD"
+          width="lg"
         />
       </div>
     </div>
@@ -60,7 +65,7 @@ const uiStore = useUiStore();
 
 const tuningOptions = Object.values(TuningEnum);
 
-const FRET_OPTIONS: SegmentOption<number>[] = FRET_COUNTS.map(f => ({
+const FRET_OPTIONS: SegmentOption<3 | 4>[] = FRET_COUNTS.map(f => ({
   label: `${f}品`,
   value: f,
 }));

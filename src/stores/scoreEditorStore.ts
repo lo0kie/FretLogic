@@ -84,15 +84,15 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
-  const redo = () => {
+  const redo = async () => {
     if (historyIndex.value < historyStack.value.length - 1 && activeSong.value) {
       isUndoRedoAction.value = true;
       historyIndex.value++;
       const state = cloneDeep(historyStack.value[historyIndex.value]);
       songStore.updateSongMeta(activeSong.value.id, state);
-      setTimeout(() => {
-        isUndoRedoAction.value = false;
-      }, 50);
+      await nextTick();
+      await nextTick();
+      isUndoRedoAction.value = false;
     }
   };
 

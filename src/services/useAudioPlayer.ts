@@ -1,11 +1,14 @@
 ﻿import { AUDIO_CONFIG } from '@/constants/audio';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import type * as Tone from 'tone';
-import { onScopeDispose, ref } from 'vue';
+import { ref } from 'vue';
 
 const isPlaying = ref(false);
 let isEngineInitialized = false;
+let initPromise: Promise<void> | null = null;
 let guitarSynth: Tone.PolySynth | null = null;
+let reverbNode: Tone.Reverb | null = null;
+let compressorNode: Tone.Compressor | null = null;
 let playTimer: ReturnType<typeof setTimeout> | null = null;
 let ToneModule: typeof Tone | null = null;
 
@@ -20,24 +23,23 @@ const getFrequencyFromMidi = (midiNote: number, toneInstance: typeof Tone): numb
   return freq;
 };
 
-export function useAudioPlayer() {
-  const editorStore = useEditorStore();
+const initAudioEngine = async () => {
+  if (isEngineInitialized) return;
+  if (initPromise) return initPromise;
 
-  const initAudioEngine = async () => {
-    if (isEngineInitialized) return;
-
+  initPromise = (async () => {
     if (!ToneModule) {
       ToneModule = await import('tone');
     }
 
-    const reverb = new ToneModule.Reverb({
+    reverbNode = new ToneModule.Reverb({
       decay: AUDIO_CONFIG.REVERB_DURATION,
       wet: AUDIO_CONFIG.REVERB_WET_GAIN,
     });
 
-    await reverb.generate();
+    await reverbNode.generate();
 
-    const compressor = new ToneModule.Compressor({
+    compressorNode = new ToneModule.Compressor({
       threshold: AUDIO_CONFIG.COMPRESSOR_THRESHOLD,
       knee: AUDIO_CONFIG.COMPRESSOR_KNEE,
       ratio: AUDIO_CONFIG.COMPRESSOR_RATIO,
@@ -59,10 +61,20 @@ export function useAudioPlayer() {
     });
 
     guitarSynth.volume.value = AUDIO_CONFIG.MAIN_VOLUME_DB;
-    guitarSynth.chain(compressor, reverb, ToneModule.Destination);
+    guitarSynth.chain(compressorNode, reverbNode, ToneModule.Destination);
 
     isEngineInitialized = true;
-  };
+  })();
+
+  try {
+    await initPromise;
+  } finally {
+    initPromise = null;
+  }
+};
+
+export function useAudioPlayer() {
+  const editorStore = useEditorStore();
 
   const playCurrentChord = async () => {
     if (isPlaying.value) return;
@@ -91,6 +103,7 @@ export function useAudioPlayer() {
       const capoOffset = editorStore.capo > 0 ? editorStore.capo : 0;
 
       let strumDelay = 0;
+      let notesTriggered = 0;
       const now = ToneModule.now();
 
       for (let sIdx = 0; sIdx <= 5; sIdx++) {
@@ -110,6 +123,12 @@ export function useAudioPlayer() {
         guitarSynth.triggerAttackRelease(frequency, AUDIO_CONFIG.ENV_RELEASE, triggerTime, humanizeVelocity);
 
         strumDelay += AUDIO_CONFIG.STRUM_DELAY_STEP;
+        notesTriggered++;
+      }
+
+      if (notesTriggered === 0) {
+        isPlaying.value = false;
+        return;
       }
 
       if (playTimer) clearTimeout(playTimer);
@@ -136,13 +155,17 @@ export function useAudioPlayer() {
       guitarSynth.dispose();
       guitarSynth = null;
     }
+    if (reverbNode) {
+      reverbNode.dispose();
+      reverbNode = null;
+    }
+    if (compressorNode) {
+      compressorNode.dispose();
+      compressorNode = null;
+    }
     isEngineInitialized = false;
     isPlaying.value = false;
   };
-
-  onScopeDispose(() => {
-    disposeAudioEngine();
-  });
 
   return { isPlaying, playCurrentChord, disposeAudioEngine };
 }

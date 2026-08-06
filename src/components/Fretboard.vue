@@ -236,7 +236,8 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
   }
 
   &.block-events {
-    pointer-events: none;
+    pointer-events: none !important;
+    cursor: default;
   }
 
   &.is-fret-available:active {

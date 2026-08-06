@@ -2,7 +2,7 @@
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord } from '@/types';
+import type { Chord, Group } from '@/types';
 import { cloneDeep } from '@/utils/cloneDeep';
 import { generateUUID } from '@/utils/id';
 import { computeChordFingerprint, computeIsInverted } from '@/utils/musicTheory';
@@ -24,19 +24,17 @@ export function useChordActions() {
     editorStore.currentTuning = chord.tuning || 'STANDARD';
   };
 
-  const executeGroupToggle = (gid: string) => {
-    const target = chordStore.groups.find(g => g.id === gid);
-    if (!target) return;
-
-    if (target.collapsed) {
-      chordStore.selectedGroupId = gid;
-      chordStore.groups.forEach(g => {
-        if (g.id !== gid) g.collapsed = true;
-      });
-    } else if (chordStore.selectedGroupId === gid) {
-      chordStore.selectedGroupId = null;
+  const executeGroupToggle = (group: Group) => {
+    if (group.collapsed) {
+      chordStore.selectedGroupId = group.id;
+      chordStore.collapseAllGroups();
+      group.collapsed = false;
+    } else {
+      if (chordStore.selectedGroupId === group.id) {
+        chordStore.selectedGroupId = null;
+      }
+      group.collapsed = true;
     }
-    target.collapsed = !target.collapsed;
   };
 
   const handleChordSort = (event: SortableEvent, groupId: string) => {
@@ -137,9 +135,11 @@ export function useChordActions() {
 
     const idx = chordStore.savedChordsList.findIndex(c => c.id === editorStore.editingId);
     if (idx !== -1) {
-      chordStore.savedChordsList[idx] = payload;
+      const newList = [...chordStore.savedChordsList];
+      newList[idx] = payload;
+      chordStore.overwriteChords(newList);
     } else {
-      chordStore.savedChordsList.unshift(payload);
+      chordStore.overwriteChords([payload, ...chordStore.savedChordsList]);
     }
 
     editorStore.resetEditor();
