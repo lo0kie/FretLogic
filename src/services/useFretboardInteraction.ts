@@ -1,7 +1,7 @@
 import { CANVAS_CONFIG, INTERACTION_CONFIG } from '@/constants';
 import { useFretboardLayout } from '@/services/useFretboardLayout';
 import type { GuitarStringsModel } from '@/types';
-import { cloneDeep } from '@/utils/dataParser';
+import { cloneDeep } from '@/utils/cloneDeep';
 import { canTogglePitchAccidental, isOpen } from '@/utils/musicTheory';
 import { useEventListener } from '@vueuse/core';
 import { onBeforeUnmount, onMounted, ref, toRaw, toRefs, useTemplateRef, watchEffect } from 'vue';

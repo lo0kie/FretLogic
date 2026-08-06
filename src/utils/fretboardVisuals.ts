@@ -39,8 +39,7 @@ export const getPlaceholderSize = (fretCount: number, customScale = 1.0) => {
   const cached = placeholderSizeCache.get(cacheKey);
   if (cached) return cached;
 
-  const activeTopOffset = 80;
-  const rawHeight = activeTopOffset + fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
+  const rawHeight = CANVAS_CONFIG.OFFSET_Y_TOP + fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
   const fretboardScale = (FRETBOARD_SCALE_MAP[fretCount] ?? 1.0) * customScale; // 🌟 去掉内置的 0.28
 
   const size = {

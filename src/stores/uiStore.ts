@@ -24,29 +24,40 @@ export const useUiStore = defineStore('ui', () => {
     }
   };
 
+  const remainingMap = new Map<number, number>();
+  const startedAtMap = new Map<number, number>();
+
   const scheduleToastRemoval = (id: number, delay: number) => {
     if (timersMap.has(id)) clearTimeout(timersMap.get(id));
-    const timer = setTimeout(() => {
-      removeToast(id);
-    }, delay);
+    startedAtMap.set(id, Date.now());
+    remainingMap.set(id, delay);
+    const timer = setTimeout(() => removeToast(id), delay);
     timersMap.set(id, timer);
   };
 
   const pauseAllTimers = () => {
-    timersMap.forEach(timer => clearTimeout(timer));
+    timersMap.forEach((timer, id) => {
+      clearTimeout(timer);
+      const startedAt = startedAtMap.get(id) ?? Date.now();
+      const total = remainingMap.get(id) ?? 3000;
+      const elapsed = Date.now() - startedAt;
+      remainingMap.set(id, Math.max(0, total - elapsed)); // 记下还剩多少
+    });
     timersMap.clear();
   };
 
   const resumeAllTimers = () => {
     toasts.value.forEach(toast => {
       if (toast.type !== 'loading') {
-        scheduleToastRemoval(toast.id, toast.duration || 3000);
+        scheduleToastRemoval(toast.id, remainingMap.get(toast.id) ?? toast.duration ?? 3000);
       }
     });
   };
 
+  let toastIdCounter = 0;
+
   const createToast = (msg: string, type: ToastType = 'info', options: ToastOptions = {}) => {
-    const id = performance.now();
+    const id = ++toastIdCounter;
     const hasAction = Boolean(options.onAction);
     const duration = options.duration ?? 3000;
 

@@ -34,8 +34,6 @@ export const BASE_SELECTOR_DEFAULTS = {
 export const DEFAULT_GROUP_SORT_RULE = 'ROOT_PITCH' as const;
 export const DEFAULT_SORT_KEY = 'C';
 
-export const PICKER_FRETBOARD_SCALE = 0.38;
-
 export const ID_PREFIXES = {
   GROUP: 'g_',
   CHORD: 'c_',

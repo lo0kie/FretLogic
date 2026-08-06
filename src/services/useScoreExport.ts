@@ -14,7 +14,7 @@ interface ExportOriginals {
   }[];
 }
 
-export function useScoreImageExport(scoreZoneRef: Ref<HTMLElement | null>, selectedLineSet: Ref<Set<number>>) {
+export function useScoreImageExport(selectedLineSet: Ref<Set<number>>) {
   const uiStore = useUiStore();
   const isExporting = ref(false);
   const includeMetaBar = ref(true);

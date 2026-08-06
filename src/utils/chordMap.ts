@@ -1,3 +1,6 @@
+import { Chord } from "@/types";
+import { TuningEnum, computeIsInverted, computeChordFingerprint } from "./musicTheory";
+
 export interface ParsedSlotKey {
   lineId: string;
   type: 'char' | 'start' | 'end';
@@ -136,3 +139,60 @@ function insertChordAtParsedLocation(
     setEdgeChords(chordMap, parsed.lineId, parsed.type, list);
   }
 }
+
+export const garbageCollectChordMap = (
+  chordMap: Record<string, string>,
+  finalLineIds: string[]
+): { map: Record<string, string>; changed: boolean } => {
+  const finalIdsSet = new Set(finalLineIds);
+  const updatedMap = { ...chordMap };
+  let changed = false;
+
+  Object.keys(updatedMap).forEach(key => {
+    const parsed = parseSlotKey(key);
+    if (parsed && !finalIdsSet.has(parsed.lineId)) {
+      delete updatedMap[key];
+      changed = true;
+    }
+  });
+
+  return { map: updatedMap, changed };
+};
+
+/** 纯函数：将和弦数据规范化（补全默认字段、更新转位状态与指纹） */
+export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean } => {
+  const capo = chord.capo ?? 0;
+  const tuning = chord.tuning || TuningEnum.STANDARD;
+  const fretCount = chord.fretCount ?? 3;
+  const isInverted = computeIsInverted(chord.strings, capo, tuning, chord.chordName);
+  const fingerprint = computeChordFingerprint({
+    groupId: chord.groupId,
+    chordName: chord.chordName,
+    capo,
+    fretCount,
+    tuning,
+    strings: chord.strings,
+    isInverted,
+  });
+
+  const changed =
+    chord.capo !== capo ||
+    chord.tuning !== tuning ||
+    chord.fretCount !== fretCount ||
+    chord.isInverted !== isInverted ||
+    chord.fingerprint !== fingerprint;
+
+  if (!changed) return { chord, changed: false };
+
+  return {
+    chord: {
+      ...chord,
+      capo,
+      tuning,
+      fretCount,
+      isInverted,
+      fingerprint,
+    },
+    changed: true,
+  };
+};

@@ -3,9 +3,9 @@ import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
-import { cloneDeep } from '@/utils/dataParser';
+import { cloneDeep } from '@/utils/cloneDeep';
+import { generateUUID } from '@/utils/id';
 import { computeChordFingerprint, computeIsInverted } from '@/utils/musicTheory';
-import { generateUUID } from '@/utils/validators';
 import { toRaw } from 'vue';
 import { SortableEvent } from 'vue-draggable-plus';
 

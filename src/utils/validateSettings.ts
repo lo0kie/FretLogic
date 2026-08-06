@@ -6,13 +6,13 @@ export interface SettingsPayload {
   githubPath: string;
 }
 
-export interface ValidationResult {
+export interface SettingsValidationResult {
   isValid: boolean;
   data: SettingsPayload;
   errors: string[];
 }
 
-export const validateSettings = (data: SettingsPayload): ValidationResult => {
+export const validateSettings = (data: SettingsPayload): SettingsValidationResult => {
   const errors: string[] = [];
   const token = data.githubToken.trim();
   const tokenRegex = /^(ghp|github_pat|gho|ghu|ghs|ghr)_[a-zA-Z0-9_]{10,}$/;
@@ -41,16 +41,4 @@ export const validateSettings = (data: SettingsPayload): ValidationResult => {
     },
     errors,
   };
-};
-
-export const generateUUID = (prefix: string = '', length = 8): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return (prefix ? `${prefix}_` : '') + crypto.randomUUID().slice(0, length);
-  }
-
-  const randomStr = Math.random()
-    .toString(36)
-    .substring(2, 2 + length);
-  const timeStr = Date.now().toString(36).slice(-4);
-  return (prefix ? `${prefix}_` : '') + (randomStr + timeStr).slice(0, length);
 };

@@ -3,9 +3,10 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, ImportExportPayload } from '@/types';
-import { cleanAndValidateData, cloneDeep } from '@/utils/dataParser';
+import { cloneDeep } from '@/utils/cloneDeep';
 import { computeChordFingerprint } from '@/utils/musicTheory';
-import { validateSettings } from '@/utils/validators';
+import { validateImportExportPayload } from '@/utils/validatePayload';
+import { validateSettings } from '@/utils/validateSettings';
 import { Base64 } from 'js-base64';
 import { ref } from 'vue';
 
@@ -174,14 +175,16 @@ export function useGithubSyncService() {
       const decodedStr = Base64.decode(resJson.content.replace(/\n/g, ''));
       const imported = JSON.parse(decodedStr);
 
-      if (!cleanAndValidateData(imported, 'import')) {
+      const { isValid, payload } = validateImportExportPayload(imported);
+
+      if (!isValid || !payload) {
         throw new Error('云端数据格式破损，已触发安全拦截');
       }
 
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
 
-      if (checkHasDifferences(imported)) {
-        pendingCloudData.value = imported;
+      if (checkHasDifferences(payload)) {
+        pendingCloudData.value = payload;
         isMergeModalOpen.value = true;
       } else {
         uiStore.toast.success('本地数据与云端完全一致，无需合并');

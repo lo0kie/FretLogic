@@ -1,11 +1,13 @@
 import { useSongStore } from '@/stores/songStore';
 import type { Chord, Song } from '@/types';
-import { cloneDeep } from '@/utils/dataParser';
-import { garbageCollectChordMap, matchLineIds, sanitizeLyricsText } from '@/utils/lineIdMatcher';
+import { garbageCollectChordMap } from '@/utils/chordMap';
+import { cloneDeep } from '@/utils/cloneDeep';
+import { matchLineIds } from '@/utils/lineIdMatcher';
 import { getKeySemitones, transposeChordName } from '@/utils/musicTheory';
+import { sanitizeLyricsText } from '@/utils/sanitizeLyricsText';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 export type ScoreActiveTab = 'edit' | 'interactive';
 
@@ -69,15 +71,16 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     historyIndex.value = historyStack.value.length - 1;
   };
 
-  const undo = () => {
+  const undo = async () => {
     if (historyIndex.value > 0 && activeSong.value) {
       isUndoRedoAction.value = true;
       historyIndex.value--;
       const state = cloneDeep(historyStack.value[historyIndex.value]);
       songStore.updateSongMeta(activeSong.value.id, state);
-      setTimeout(() => {
-        isUndoRedoAction.value = false;
-      }, 50);
+
+      await nextTick();
+      await nextTick(); // 如果下游还有一层监听器再触发新的响应式更新，多等一轮更稳妥
+      isUndoRedoAction.value = false;
     }
   };
 

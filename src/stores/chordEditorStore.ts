@@ -1,11 +1,11 @@
 import { STORAGE_KEYS } from '@/constants';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, GuitarStringsModel } from '@/types';
-import { cloneDeep } from '@/utils/dataParser';
+import { cloneDeep } from '@/utils/cloneDeep';
 import { createString, DEFAULT_TUNING_MAPPING, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { computed, toRaw, watch } from 'vue';
+import { computed, toRaw } from 'vue';
 
 export const useEditorStore = defineStore('editor', () => {
   const defaultStrings: GuitarStringsModel = [
@@ -29,7 +29,10 @@ export const useEditorStore = defineStore('editor', () => {
   const activeBaseStrings = computed(() => TUNING_PRESETS[currentTuning.value]?.mapping || DEFAULT_TUNING_MAPPING);
   const isFretBoardEmpty = computed(() => strings.value.every(s => s.fret < 0));
 
-  watch(fretCount, (newVal, oldVal) => {
+  const setFretCount = (newVal: Chord['fretCount']) => {
+    const oldVal = fretCount.value;
+    fretCount.value = newVal;
+
     if (newVal < oldVal) {
       strings.value.forEach(str => {
         if (str.fret > newVal) {
@@ -38,7 +41,7 @@ export const useEditorStore = defineStore('editor', () => {
         }
       });
     }
-  });
+  };
 
   const initEditor = () => {
     if (!editingId.value) return;
@@ -53,7 +56,7 @@ export const useEditorStore = defineStore('editor', () => {
       capo.value = original.capo ?? 0;
       currentTuning.value = original.tuning || TuningEnum.STANDARD;
     } else {
-      editingId.value = null;
+      resetEditor();
     }
   };
 
@@ -75,6 +78,7 @@ export const useEditorStore = defineStore('editor', () => {
     capo,
     activeBaseStrings,
     isFretBoardEmpty,
+    setFretCount,
     initEditor,
     resetEditor,
   };

@@ -1,22 +1,8 @@
-import { getEditDistance } from '@/utils/dataParser';
-import { parseSlotKey } from './chordMap';
-import { generateUUID } from './validators';
+import { generateUUID } from './id';
+import { getEditDistance } from './stringDistance';
 
 const SIMILARITY_THRESHOLD = 0.45;
-
 const createLineId = (): string => 'l_' + generateUUID('', 8);
-
-export const sanitizeLyricsText = (lyrics: string): string => {
-  return lyrics
-    .split('\n')
-    .map(line =>
-      line
-        .replace(/[\t\r]+/g, '')
-        .replace(/\u3000/g, ' ')
-        .trim()
-    )
-    .join('\n');
-};
 
 const matchExactLines = (
   oldLines: string[],
@@ -80,23 +66,4 @@ export const matchLineIds = (oldLines: string[], newLines: string[], oldLineIds:
   const { newIds, usedOldIndices } = matchExactLines(oldLines, newLines, oldLineIds);
   matchSimilarLines(oldLines, newLines, oldLineIds, newIds, usedOldIndices);
   return assignNewIds(newIds);
-};
-
-export const garbageCollectChordMap = (
-  chordMap: Record<string, string>,
-  finalLineIds: string[]
-): { map: Record<string, string>; changed: boolean } => {
-  const finalIdsSet = new Set(finalLineIds);
-  const updatedMap = { ...chordMap };
-  let changed = false;
-
-  Object.keys(updatedMap).forEach(key => {
-    const parsed = parseSlotKey(key);
-    if (parsed && !finalIdsSet.has(parsed.lineId)) {
-      delete updatedMap[key];
-      changed = true;
-    }
-  });
-
-  return { map: updatedMap, changed };
 };

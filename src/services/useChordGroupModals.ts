@@ -4,7 +4,7 @@ import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/types';
-import { generateUUID } from '@/utils/validators';
+import { generateUUID } from '@/utils/id';
 import { reactive } from 'vue';
 
 export function useChordGroupModals() {

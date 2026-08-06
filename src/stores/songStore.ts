@@ -1,15 +1,15 @@
 import type { Song } from '@/types';
 import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/chordMap';
-import { generateUUID } from '@/utils/validators';
+import { generateUUID } from '@/utils/id';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 export const useSongStore = defineStore('song', () => {
   const songs = useStorage<Song[]>('CHORD_LAB_SONGS_V1', [], localStorage);
+  const songMap = computed(() => new Map(songs.value.map(s => [s.id, s])));
   const lastDeletedSongInfo = ref<{ song: Song; index: number } | null>(null);
 
-  // 🌟 启动静默迁移：补齐老数据的缺失字段
   let needUpdate = false;
   const alignedSongs = songs.value.map(s => {
     let updated = false;
@@ -74,7 +74,7 @@ export const useSongStore = defineStore('song', () => {
     id: string,
     payload: Partial<Pick<Song, 'title' | 'key' | 'playKey' | 'capo' | 'lyrics' | 'lineIds' | 'chordMap'>>
   ) => {
-    const target = songs.value.find(s => s.id === id);
+    const target = songMap.value.get(id);
     if (!target) return;
 
     if (payload.title !== undefined) target.title = payload.title;
@@ -87,16 +87,17 @@ export const useSongStore = defineStore('song', () => {
   };
 
   const setCharChord = (songId: string, slotKey: string | number, chordId: string) => {
-    const target = songs.value.find(s => s.id === songId);
-    if (target) {
-      if (!target.chordMap) target.chordMap = {};
-      bindNewChordToSlot(target.chordMap, slotKey, chordId);
-      target.chordMap = { ...target.chordMap };
-    }
+    const target = songMap.value.get(songId);
+    if (!target) return;
+
+    target.chordMap ??= {};
+
+    bindNewChordToSlot(target.chordMap, slotKey, chordId);
+    target.chordMap = { ...target.chordMap };
   };
 
   const removeCharChord = (songId: string, slotKey: string | number) => {
-    const target = songs.value.find(s => s.id === songId);
+    const target = songMap.value.get(songId);
     if (!target || !target.chordMap) return;
 
     removeChordFromSlot(target.chordMap, slotKey);
@@ -104,7 +105,7 @@ export const useSongStore = defineStore('song', () => {
   };
 
   const swapSongSlotChords = (songId: string, sourceKey: string | number, targetKey: string | number) => {
-    const target = songs.value.find(s => s.id === songId);
+    const target = songMap.value.get(songId);
     if (!target || !target.chordMap) return;
 
     swapOrMoveSlotChords(target.chordMap, sourceKey, targetKey);

@@ -2,7 +2,8 @@
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
-import { cleanAndValidateData, cloneDeep } from '@/utils/dataParser';
+import { cloneDeep } from '@/utils/cloneDeep';
+import { validateImportExportPayload } from '@/utils/validatePayload';
 import { reactive, ref } from 'vue';
 
 const pendingImportData = ref<ImportExportPayload | null>(null);
@@ -39,15 +40,16 @@ export function useImportExportService() {
         }
 
         const imported = JSON.parse(resultStr);
+        const { isValid, payload } = validateImportExportPayload(imported);
 
-        if (cleanAndValidateData(imported, 'import')) {
+        if (isValid && payload) {
           uiStore.removeToast(loadingId);
 
-          selectedImportState.groupIds = new Set((imported.groups || []).map(g => g.id));
-          selectedImportState.chordIds = new Set((imported.chords || []).map(c => c.id));
-          selectedImportState.songIds = new Set((imported.songs || []).map(s => s.id));
+          selectedImportState.groupIds = new Set((payload.groups || []).map(g => g.id));
+          selectedImportState.chordIds = new Set((payload.chords || []).map(c => c.id));
+          selectedImportState.songIds = new Set((payload.songs || []).map(s => s.id));
 
-          pendingImportData.value = imported;
+          pendingImportData.value = payload;
           isImportSelectionModalOpen.value = true;
         } else {
           throw new Error('Import verification failed');
@@ -138,7 +140,9 @@ export function useImportExportService() {
       songs: cloneDeep(songStore.songs),
     };
 
-    if (cleanAndValidateData(originalData, 'export')) {
+    const { isValid } = validateImportExportPayload(originalData);
+
+    if (isValid) {
       const now = new Date();
       const tzOffset = now.getTimezoneOffset() * 60000;
       const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, -1);
