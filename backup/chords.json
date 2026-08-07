@@ -1,44 +1,519 @@
 {
+  "version": 1,
   "groups": [
-    {
-      "id": "g_1778079320204",
-      "name": "A调",
-      "collapsed": true
-    },
-    {
-      "id": "g_1778079326389",
-      "name": "E调",
-      "collapsed": true
-    },
     {
       "id": "g_1778079331837",
       "name": "C调",
-      "collapsed": true
-    },
-    {
-      "id": "g_1778079336633",
-      "name": "G调",
-      "collapsed": true
+      "collapsed": true,
+      "sortRule": "KEY_DEGREE",
+      "sortKey": "C"
     },
     {
       "id": "g_1778079341175",
       "name": "D调",
-      "collapsed": false,
+      "collapsed": true,
       "sortRule": "KEY_DEGREE",
       "sortKey": "D"
     },
     {
-      "id": "g_1780117616592",
-      "name": "二十二",
-      "collapsed": true
+      "id": "g_1778079326389",
+      "name": "E调",
+      "collapsed": true,
+      "sortRule": "KEY_DEGREE",
+      "sortKey": "E"
     },
     {
-      "id": "g_d1fa5636",
-      "name": "我害怕",
-      "collapsed": true
+      "id": "g_d5047a01",
+      "name": "F调",
+      "collapsed": true,
+      "sortRule": "KEY_DEGREE",
+      "sortKey": "F"
+    },
+    {
+      "id": "g_1778079336633",
+      "name": "G调",
+      "collapsed": true,
+      "sortRule": "KEY_DEGREE",
+      "sortKey": "G"
+    },
+    {
+      "id": "g_1778079320204",
+      "name": "A调",
+      "collapsed": true,
+      "sortRule": "KEY_DEGREE",
+      "sortKey": "A"
+    },
+    {
+      "id": "g_afa36a5c",
+      "name": "B调",
+      "collapsed": true,
+      "sortRule": "KEY_DEGREE",
+      "sortKey": "B"
     }
   ],
   "chords": [
+    {
+      "id": "c_91cbfdf7",
+      "chordName": "A/E",
+      "strings": [
+        {
+          "fret": 0,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1778079320204",
+      "tuning": "STANDARD",
+      "isInverted": true,
+      "fingerprint": "A/E:0:3:STANDARD:1:0_0_0|-1_0_0|2_0_0|2_0_1|2_0_0|-1_0_0"
+    },
+    {
+      "id": "c_fd426ebd",
+      "chordName": "E/G#",
+      "strings": [
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 4,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 4,
+      "capo": 1,
+      "groupId": "g_1778079320204",
+      "tuning": "STANDARD",
+      "isInverted": true,
+      "fingerprint": "E/G#:1:4:STANDARD:1:3_0_0|-1_0_0|1_0_1|3_0_0|4_0_0|-1_0_0"
+    },
+    {
+      "id": "c_10d4023d",
+      "chordName": "C7",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1778079331837",
+      "tuning": "STANDARD",
+      "fingerprint": "C7:0:3:STANDARD:0:-1_0_0|3_0_1|2_0_0|3_0_0|1_0_0|-1_0_0",
+      "isInverted": false
+    },
+    {
+      "id": "c_ccaa1d56",
+      "chordName": "C",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1778079331837",
+      "tuning": "STANDARD",
+      "fingerprint": "C:0:3:STANDARD:0:-1_0_0|3_0_1|2_0_0|-1_0_0|1_0_0|-1_0_0",
+      "isInverted": false
+    },
+    {
+      "id": "c_3c317ece",
+      "chordName": "Em7",
+      "strings": [
+        {
+          "fret": 0,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 1,
+      "groupId": "g_1778079331837",
+      "tuning": "STANDARD",
+      "fingerprint": "Em7:1:3:STANDARD:0:0_0_1|-1_0_0|-1_0_0|3_0_0|2_0_0|2_0_0",
+      "isInverted": false
+    },
+    {
+      "id": "c_0b0eca57",
+      "chordName": "Fm6",
+      "strings": [
+        {
+          "fret": 1,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 0,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1778079331837",
+      "tuning": "STANDARD",
+      "fingerprint": "Fm6:0:3:STANDARD:0:1_0_1|-1_0_0|0_0_0|1_0_0|3_0_0|-1_0_0",
+      "isInverted": false
+    },
+    {
+      "id": "c_ed14b206",
+      "chordName": "C7",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 2,
+      "groupId": "g_1778079331837",
+      "tuning": "STANDARD",
+      "fingerprint": "C7:2:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|1_0_0|3_0_0|1_0_0",
+      "isInverted": false
+    },
+    {
+      "id": "c_0d625e5d",
+      "chordName": "C",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 2,
+      "groupId": "g_1778079331837",
+      "tuning": "STANDARD",
+      "fingerprint": "C:2:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|3_0_0|3_0_0|1_0_0",
+      "isInverted": false
+    },
+    {
+      "id": "c_491c143a",
+      "chordName": "Am7",
+      "strings": [
+        {
+          "fret": 2,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 3,
+      "groupId": "g_1778079331837",
+      "tuning": "STANDARD",
+      "fingerprint": "Am7:3:3:STANDARD:0:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0",
+      "isInverted": false
+    },
+    {
+      "id": "c_bc9033cf",
+      "chordName": "Em7",
+      "strings": [
+        {
+          "fret": 0,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 0,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 0,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1778079331837",
+      "tuning": "STANDARD",
+      "fingerprint": "Em7:0:3:STANDARD:0:0_0_1|2_0_0|2_0_0|0_0_0|3_0_0|0_0_0",
+      "isInverted": false
+    },
+    {
+      "id": "c_5500ffc3",
+      "chordName": "D",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 4,
+      "groupId": "g_1778079341175",
+      "tuning": "STANDARD",
+      "fingerprint": "D:4:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|3_0_0|3_0_0|1_0_0",
+      "isInverted": false
+    },
     {
       "id": "c_2ca5a7b2",
       "chordName": "DMaj9",
@@ -78,7 +553,8 @@
       "capo": 3,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:DMaj9:3:3:STANDARD:-1_0_0|2_0_1|1_0_0|3_0_0|2_0_0|-1_0_0"
+      "fingerprint": "DMaj9:3:3:STANDARD:0:-1_0_0|2_0_1|1_0_0|3_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "c_7d6af997",
@@ -119,7 +595,8 @@
       "capo": 0,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:A:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0|0_0_0"
+      "fingerprint": "A:0:3:STANDARD:0:-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "c_75db7edf",
@@ -160,7 +637,8 @@
       "capo": 1,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:GMaj9/G#:1:3:STANDARD:3_0_0|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
+      "fingerprint": "GMaj9/G#:1:3:STANDARD:1:3_0_0|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "c_29ec3b91",
@@ -201,7 +679,8 @@
       "capo": 2,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:G/A:2:3:STANDARD:3_0_0|-1_0_0|3_0_1|2_0_0|1_0_0|-1_0_0"
+      "fingerprint": "G/A:2:3:STANDARD:1:3_0_0|-1_0_0|3_0_1|2_0_0|1_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "c_7db8e109",
@@ -242,7 +721,8 @@
       "capo": 0,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:Em7:0:3:STANDARD:0_0_1|2_0_0|2_0_0|0_0_0|3_0_0|0_0_0"
+      "fingerprint": "Em7:0:3:STANDARD:0:0_0_1|2_0_0|2_0_0|0_0_0|3_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "c_7037c12d",
@@ -283,7 +763,8 @@
       "capo": 0,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:F#m7:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
+      "fingerprint": "F#m7:0:3:STANDARD:0:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "c_94f00e66",
@@ -324,7 +805,8 @@
       "capo": 1,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:GMaj9:1:3:STANDARD:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
+      "fingerprint": "GMaj9:1:3:STANDARD:0:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "c_c8750067",
@@ -365,7 +847,8 @@
       "capo": 1,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:Bm7/A:1:3:STANDARD:-1_0_0|0_0_0|3_0_0|1_0_0|2_0_0|1_0_0"
+      "fingerprint": "Bm7/A:1:3:STANDARD:1:-1_0_0|0_0_0|3_0_0|1_0_0|2_0_0|1_0_0",
+      "isInverted": true
     },
     {
       "id": "c_b8f313fb",
@@ -406,7 +889,8 @@
       "capo": 1,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
+      "fingerprint": "Bm7:1:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0",
+      "isInverted": false
     },
     {
       "id": "c_8c1b8df4",
@@ -447,7 +931,8 @@
       "capo": 1,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:A/C#:1:4:STANDARD:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
+      "fingerprint": "A/C#:1:4:STANDARD:1:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "c_8a1d4cc9",
@@ -488,335 +973,8 @@
       "capo": 4,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:DMaj7:4:3:STANDARD:-1_0_0|1_0_1|3_0_0|2_0_0|3_0_0|1_0_0"
-    },
-    {
-      "id": "1780117626093",
-      "chordName": "E",
-      "strings": [
-        {
-          "fret": 0,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 3,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD",
-      "fingerprint": "g_1780117616592:E:3:3:STANDARD:0_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
-    },
-    {
-      "id": "1780117655588",
-      "chordName": "G#m7",
-      "strings": [
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 0,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 2,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD",
-      "fingerprint": "g_1780117616592:G#m7:2:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|0_0_0|-1_0_0"
-    },
-    {
-      "id": "1780117685661",
-      "chordName": "C#m7",
-      "strings": [
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 4,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 4,
-      "capo": 1,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD",
-      "fingerprint": "g_1780117616592:C#m7:1:4:STANDARD:-1_0_0|3_0_1|1_0_0|3_0_0|4_0_0|-1_0_0"
-    },
-    {
-      "id": "1780117751884",
-      "chordName": "Amaj9",
-      "strings": [
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 3,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD",
-      "fingerprint": "g_1780117616592:Amaj9:3:3:STANDARD:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
-    },
-    {
-      "id": "1780117808032",
-      "chordName": "F#m11",
-      "strings": [
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 0,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 0,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD",
-      "fingerprint": "g_1780117616592:F#m11:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|0_0_0|-1_0_0"
-    },
-    {
-      "id": "1780117876735",
-      "chordName": "A/B",
-      "strings": [
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 4,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD",
-      "fingerprint": "g_1780117616592:A/B:4:3:STANDARD:3_0_0|-1_0_0|3_0_1|2_0_0|1_0_0|-1_0_0"
-    },
-    {
-      "id": "1780118048833",
-      "chordName": "A/B",
-      "strings": [
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 0,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD",
-      "fingerprint": "g_1780117616592:A/B:0:3:STANDARD:-1_0_0|2_0_0|2_0_0|2_0_1|2_0_0|-1_0_0"
-    },
-    {
-      "id": "1780118165700",
-      "chordName": "B/D#",
-      "strings": [
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": 4,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 4,
-      "capo": 3,
-      "groupId": "g_1780117616592",
-      "tuning": "STANDARD",
-      "fingerprint": "g_1780117616592:B/D#:3:4:STANDARD:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
+      "fingerprint": "DMaj7:4:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|2_0_0|3_0_0|1_0_0",
+      "isInverted": false
     },
     {
       "id": "1780117582755",
@@ -857,7 +1015,8 @@
       "capo": 3,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:E:3:3:STANDARD:0_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
+      "fingerprint": "E:3:3:STANDARD:0:0_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779883260280",
@@ -898,7 +1057,8 @@
       "capo": 0,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:E7:0:3:STANDARD:0_0_1|2_0_0|0_0_0|1_0_0|3_0_0|-1_0_0"
+      "fingerprint": "E7:0:3:STANDARD:0:0_0_1|2_0_0|0_0_0|1_0_0|3_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779883063056",
@@ -939,7 +1099,8 @@
       "capo": 2,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:G:2:3:STANDARD:1_0_1|-1_0_0|3_0_0|2_0_0|1_0_0|-1_0_0"
+      "fingerprint": "G:2:3:STANDARD:0:1_0_1|-1_0_0|3_0_0|2_0_0|1_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779883025402",
@@ -980,7 +1141,8 @@
       "capo": 2,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:Cmaj7:2:3:STANDARD:-1_0_0|1_0_1|3_0_0|2_0_0|3_0_0|1_0_0"
+      "fingerprint": "Cmaj7:2:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|2_0_0|3_0_0|1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779883010043",
@@ -1021,7 +1183,8 @@
       "capo": 0,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:F/G:0:3:STANDARD:3_0_0|-1_0_0|3_0_1|2_0_0|1_0_0|-1_0_0"
+      "fingerprint": "F/G:0:3:STANDARD:1:3_0_0|-1_0_0|3_0_1|2_0_0|1_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1779882986919",
@@ -1062,7 +1225,8 @@
       "capo": 4,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:Dm7:4:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
+      "fingerprint": "Dm7:4:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779882954220",
@@ -1103,7 +1267,8 @@
       "capo": 0,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:Em:0:3:STANDARD:0_0_1|2_0_0|2_0_0|0_0_0|0_0_0|-1_0_0"
+      "fingerprint": "Em:0:3:STANDARD:0:0_0_1|2_0_0|2_0_0|0_0_0|0_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779882937077",
@@ -1144,7 +1309,8 @@
       "capo": 0,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:G/F:0:3:STANDARD:1_0_0|-1_0_0|0_0_0|0_0_1|0_0_0|-1_0_0"
+      "fingerprint": "G/F:0:3:STANDARD:1:1_0_0|-1_0_0|0_0_0|0_0_1|0_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1779882928141",
@@ -1185,7 +1351,8 @@
       "capo": 0,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:Fsus2:0:3:STANDARD:1_0_1|-1_0_0|3_0_0|0_0_0|1_0_0|-1_0_0"
+      "fingerprint": "Fsus2:0:3:STANDARD:0:1_0_1|-1_0_0|3_0_0|0_0_0|1_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779882901127",
@@ -1226,7 +1393,8 @@
       "capo": 0,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:C/G:0:3:STANDARD:3_0_0|-1_0_0|2_0_0|0_0_0|1_0_1|-1_0_0"
+      "fingerprint": "C/G:0:3:STANDARD:1:3_0_0|-1_0_0|2_0_0|0_0_0|1_0_1|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1779882883340",
@@ -1267,7 +1435,8 @@
       "capo": 0,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:Am7:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|0_0_0|1_0_0|-1_0_0"
+      "fingerprint": "Am7:0:3:STANDARD:0:-1_0_0|0_0_1|2_0_0|0_0_0|1_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779882869325",
@@ -1308,7 +1477,8 @@
       "capo": 0,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:G/B:0:3:STANDARD:-1_0_0|2_0_0|0_0_0|0_0_1|3_0_0|-1_0_0"
+      "fingerprint": "G/B:0:3:STANDARD:1:-1_0_0|2_0_0|0_0_0|0_0_1|3_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1779882853622",
@@ -1349,7 +1519,8 @@
       "capo": 0,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079331837:Cadd9:0:3:STANDARD:-1_0_0|3_0_1|2_0_0|0_0_0|3_0_0|-1_0_0"
+      "fingerprint": "Cadd9:0:3:STANDARD:0:-1_0_0|3_0_1|2_0_0|0_0_0|3_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779024729166",
@@ -1390,7 +1561,8 @@
       "capo": 2,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:E:2:3:STANDARD:0_0_1|-1_0_0|-1_0_0|2_0_0|3_0_0|2_0_0"
+      "fingerprint": "E:2:3:STANDARD:0:0_0_1|-1_0_0|-1_0_0|2_0_0|3_0_0|2_0_0",
+      "isInverted": false
     },
     {
       "id": "1778151016179",
@@ -1431,7 +1603,8 @@
       "capo": 0,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:E:0:3:STANDARD:0_0_1|2_0_0|2_0_0|1_0_0|0_0_0|0_0_0"
+      "fingerprint": "E:0:3:STANDARD:0:0_0_1|2_0_0|2_0_0|1_0_0|0_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "1779024821397",
@@ -1472,7 +1645,8 @@
       "capo": 4,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:Am6:4:3:STANDARD:1_0_1|-1_0_0|-1_0_0|1_0_0|3_0_0|-1_0_0"
+      "fingerprint": "Am6:4:3:STANDARD:0:1_0_1|-1_0_0|-1_0_0|1_0_0|3_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779353924883",
@@ -1513,7 +1687,8 @@
       "capo": 1,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:E7:1:3:STANDARD:0_0_1|-1_0_0|-1_0_0|3_0_0|2_0_0|3_0_0"
+      "fingerprint": "E7:1:3:STANDARD:0:0_0_1|-1_0_0|-1_0_0|3_0_0|2_0_0|3_0_0",
+      "isInverted": false
     },
     {
       "id": "1778768137972",
@@ -1554,7 +1729,8 @@
       "capo": 0,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:D:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|3_0_0|2_0_0"
+      "fingerprint": "D:0:3:STANDARD:0:-1_0_0|-1_0_0|0_0_1|2_0_0|3_0_0|2_0_0",
+      "isInverted": false
     },
     {
       "id": "1778767639206",
@@ -1595,7 +1771,8 @@
       "capo": 0,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:D/F#:0:3:STANDARD:2_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0"
+      "fingerprint": "D/F#:0:3:STANDARD:1:2_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0",
+      "isInverted": true
     },
     {
       "id": "1778768105332",
@@ -1636,7 +1813,8 @@
       "capo": 0,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:C/D:0:3:STANDARD:-1_0_0|-1_0_0|0_0_0|0_0_0|1_0_1|0_0_0"
+      "fingerprint": "C/D:0:3:STANDARD:1:-1_0_0|-1_0_0|0_0_0|0_0_0|1_0_1|0_0_0",
+      "isInverted": true
     },
     {
       "id": "1778767686473",
@@ -1677,7 +1855,8 @@
       "capo": 4,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:Dm7:4:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
+      "fingerprint": "Dm7:4:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778768043285",
@@ -1718,7 +1897,8 @@
       "capo": 2,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:D6sus4:2:3:STANDARD:-1_0_0|3_0_1|2_0_0|0_0_0|1_0_0|-1_0_0"
+      "fingerprint": "D6sus4:2:3:STANDARD:0:-1_0_0|3_0_1|2_0_0|0_0_0|1_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778768096581",
@@ -1759,7 +1939,8 @@
       "capo": 0,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:Am7:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|0_0_0|1_0_0|0_0_0"
+      "fingerprint": "Am7:0:3:STANDARD:0:-1_0_0|0_0_1|2_0_0|0_0_0|1_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "1778767646083",
@@ -1800,7 +1981,8 @@
       "capo": 0,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:B7:0:3:STANDARD:-1_0_0|2_0_1|1_0_0|2_0_0|0_0_0|-1_0_0"
+      "fingerprint": "B7:0:3:STANDARD:0:-1_0_0|2_0_1|1_0_0|2_0_0|0_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778768082559",
@@ -1841,7 +2023,8 @@
       "capo": 1,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
+      "fingerprint": "Bm7:1:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778768089370",
@@ -1882,7 +2065,8 @@
       "capo": 0,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:E7:0:3:STANDARD:0_0_1|2_0_0|0_0_0|1_0_0|3_0_0|0_0_0"
+      "fingerprint": "E7:0:3:STANDARD:0:0_0_1|2_0_0|0_0_0|1_0_0|3_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "1778767664762",
@@ -1923,7 +2107,8 @@
       "capo": 2,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:Em7:2:3:STANDARD:0_0_1|-1_0_0|-1_0_0|3_0_0|2_0_0|2_0_0"
+      "fingerprint": "Em7:2:3:STANDARD:0:0_0_1|-1_0_0|-1_0_0|3_0_0|2_0_0|2_0_0",
+      "isInverted": false
     },
     {
       "id": "1778767694930",
@@ -1964,7 +2149,8 @@
       "capo": 0,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:C:0:3:STANDARD:-1_0_0|3_0_1|2_0_0|0_0_0|1_0_0|-1_0_0"
+      "fingerprint": "C:0:3:STANDARD:0:-1_0_0|3_0_1|2_0_0|0_0_0|1_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778767690879",
@@ -2005,7 +2191,8 @@
       "capo": 1,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:G7:1:3:STANDARD:2_0_1|-1_0_0|2_0_0|3_0_0|2_0_0|-1_0_0"
+      "fingerprint": "G7:1:3:STANDARD:0:2_0_1|-1_0_0|2_0_0|3_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778767629108",
@@ -2046,7 +2233,8 @@
       "capo": 0,
       "groupId": "g_1778079336633",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079336633:Gadd9:0:3:STANDARD:3_0_1|-1_0_0|0_0_0|2_0_0|0_0_0|-1_0_0"
+      "fingerprint": "Gadd9:0:3:STANDARD:0:3_0_1|-1_0_0|0_0_0|2_0_0|0_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778503319524",
@@ -2087,7 +2275,8 @@
       "capo": 3,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:Amaj9:3:3:STANDARD:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
+      "fingerprint": "Amaj9:3:3:STANDARD:0:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778213096852",
@@ -2128,7 +2317,8 @@
       "capo": 3,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:B/D#:3:4:STANDARD:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
+      "fingerprint": "B/D#:3:4:STANDARD:1:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1778212831907",
@@ -2169,7 +2359,8 @@
       "capo": 1,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:A/C#:1:4:STANDARD:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
+      "fingerprint": "A/C#:1:4:STANDARD:1:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1778212445056",
@@ -2210,7 +2401,8 @@
       "capo": 1,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:B:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|3_0_0|3_0_0|1_0_0"
+      "fingerprint": "B:1:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|3_0_0|3_0_0|1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778151387822",
@@ -2251,7 +2443,8 @@
       "capo": 0,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:D/F#:0:3:STANDARD:2_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|-1_0_0"
+      "fingerprint": "D/F#:0:3:STANDARD:1:2_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1778151086602",
@@ -2292,7 +2485,8 @@
       "capo": 0,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:Amaj7:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|1_0_0|2_0_0|0_0_0"
+      "fingerprint": "Amaj7:0:3:STANDARD:0:-1_0_0|0_0_1|2_0_0|1_0_0|2_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "1778151043682",
@@ -2333,7 +2527,8 @@
       "capo": 2,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:E/G#:2:3:STANDARD:2_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0"
+      "fingerprint": "E/G#:2:3:STANDARD:1:2_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0",
+      "isInverted": true
     },
     {
       "id": "1778151003508",
@@ -2374,7 +2569,8 @@
       "capo": 0,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:A/B:0:3:STANDARD:-1_0_0|2_0_0|2_0_0|2_0_1|2_0_0|-1_0_0"
+      "fingerprint": "A/B:0:3:STANDARD:1:-1_0_0|2_0_0|2_0_0|2_0_1|2_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1778150987602",
@@ -2415,7 +2611,8 @@
       "capo": 0,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:F#m7:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
+      "fingerprint": "F#m7:0:3:STANDARD:0:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778150949879",
@@ -2456,7 +2653,8 @@
       "capo": 3,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:C#m7:3:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
+      "fingerprint": "C#m7:3:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778150933265",
@@ -2497,7 +2695,8 @@
       "capo": 2,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:G#m7:2:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
+      "fingerprint": "G#m7:2:3:STANDARD:0:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778150907293",
@@ -2538,7 +2737,8 @@
       "capo": 1,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:B/A:1:3:STANDARD:-1_0_0|0_0_0|3_0_0|3_0_0|3_0_0|-1_0_0"
+      "fingerprint": "B/A:1:3:STANDARD:1:-1_0_0|0_0_0|3_0_0|3_0_0|3_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1778150887472",
@@ -2579,7 +2779,8 @@
       "capo": 0,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079326389:A:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0|0_0_0"
+      "fingerprint": "A:0:3:STANDARD:0:-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "c_2ce03eac-6",
@@ -2620,7 +2821,8 @@
       "capo": 0,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:DMaj9:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|2_0_0|0_0_0"
+      "fingerprint": "DMaj9:0:3:STANDARD:0:-1_0_0|-1_0_0|0_0_1|2_0_0|2_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "c_38db0dbb-2",
@@ -2661,7 +2863,8 @@
       "capo": 0,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:Bm9:0:3:STANDARD:-1_0_0|2_0_1|0_0_0|2_0_0|2_0_0|-1_0_0"
+      "fingerprint": "Bm9:0:3:STANDARD:0:-1_0_0|2_0_1|0_0_0|2_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "c_0538a2c2-a",
@@ -2702,7 +2905,8 @@
       "capo": 1,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:G6:1:3:STANDARD:2_0_1|-1_0_0|1_0_0|3_0_0|2_0_0|-1_0_0"
+      "fingerprint": "G6:1:3:STANDARD:0:2_0_1|-1_0_0|1_0_0|3_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "c_8ec364c9-f",
@@ -2743,7 +2947,8 @@
       "capo": 2,
       "groupId": "g_1778079341175",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079341175:A13:2:3:STANDARD:3_0_1|-1_0_0|2_0_0|0_0_0|3_0_0|-1_0_0"
+      "fingerprint": "A13:2:3:STANDARD:0:3_0_1|-1_0_0|2_0_0|0_0_0|3_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779181667930",
@@ -2784,7 +2989,8 @@
       "capo": 3,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:AMaj9:3:3:STANDARD:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
+      "fingerprint": "AMaj9:3:3:STANDARD:0:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779182078521",
@@ -2825,7 +3031,8 @@
       "capo": 3,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:AMaj7:3:3:STANDARD:2_0_1|-1_0_0|3_0_0|3_0_0|2_0_0|-1_0_0"
+      "fingerprint": "AMaj7:3:3:STANDARD:0:2_0_1|-1_0_0|3_0_0|3_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1779181557072",
@@ -2866,7 +3073,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:A7:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|0_0_0|2_0_0|0_0_0"
+      "fingerprint": "A7:0:3:STANDARD:0:-1_0_0|0_0_1|2_0_0|0_0_0|2_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "c_fe8bf056-6",
@@ -2907,7 +3115,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:D/E:0:3:STANDARD:0_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0"
+      "fingerprint": "D/E:0:3:STANDARD:1:0_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0",
+      "isInverted": true
     },
     {
       "id": "c_80b7198b-7",
@@ -2948,7 +3157,8 @@
       "capo": 4,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:D/E:4:3:STANDARD:-1_0_0|3_0_0|-1_0_0|3_0_1|3_0_0|1_0_0"
+      "fingerprint": "D/E:4:3:STANDARD:1:-1_0_0|3_0_0|-1_0_0|3_0_1|3_0_0|1_0_0",
+      "isInverted": true
     },
     {
       "id": "1779181732627",
@@ -2989,7 +3199,8 @@
       "capo": 4,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:D/E:4:3:STANDARD:-1_0_0|3_0_0|3_0_0|3_0_1|3_0_0|-1_0_0"
+      "fingerprint": "D/E:4:3:STANDARD:1:-1_0_0|3_0_0|3_0_0|3_0_1|3_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1778847257977",
@@ -3030,7 +3241,8 @@
       "capo": 2,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:E/D:2:3:STANDARD:-1_0_0|-1_0_0|0_0_0|2_0_0|3_0_1|2_0_0"
+      "fingerprint": "E/D:2:3:STANDARD:1:-1_0_0|-1_0_0|0_0_0|2_0_0|3_0_1|2_0_0",
+      "isInverted": true
     },
     {
       "id": "1778847229122",
@@ -3071,7 +3283,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:E:0:3:STANDARD:0_0_1|2_0_0|2_0_0|1_0_0|0_0_0|0_0_0"
+      "fingerprint": "E:0:3:STANDARD:0:0_0_1|2_0_0|2_0_0|1_0_0|0_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "1778847149763",
@@ -3112,7 +3325,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:Dmaj7:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0"
+      "fingerprint": "Dmaj7:0:3:STANDARD:0:-1_0_0|-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0",
+      "isInverted": false
     },
     {
       "id": "1778847125830",
@@ -3153,7 +3367,8 @@
       "capo": 1,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:A/C#:1:4:STANDARD:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
+      "fingerprint": "A/C#:1:4:STANDARD:1:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1778847100774",
@@ -3194,7 +3409,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:G/B:0:3:STANDARD:-1_0_0|2_0_0|-1_0_0|0_0_1|3_0_0|-1_0_0"
+      "fingerprint": "G/B:0:3:STANDARD:1:-1_0_0|2_0_0|-1_0_0|0_0_1|3_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1778413446081",
@@ -3235,7 +3451,8 @@
       "capo": 1,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:F#:1:3:STANDARD:1_0_1|-1_0_0|3_0_0|2_0_0|1_0_0|-1_0_0"
+      "fingerprint": "F#:1:3:STANDARD:0:1_0_1|-1_0_0|3_0_0|2_0_0|1_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778413305045",
@@ -3276,7 +3493,8 @@
       "capo": 1,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:Bm7/E:1:3:STANDARD:0_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
+      "fingerprint": "Bm7/E:1:3:STANDARD:1:0_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0",
+      "isInverted": true
     },
     {
       "id": "1778413241701",
@@ -3317,7 +3535,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:Asus4:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|3_0_0|0_0_0"
+      "fingerprint": "Asus4:0:3:STANDARD:0:-1_0_0|0_0_1|2_0_0|2_0_0|3_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "1778413228516",
@@ -3358,7 +3577,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:D/E:0:3:STANDARD:0_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0"
+      "fingerprint": "D/E:0:3:STANDARD:1:0_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0",
+      "isInverted": true
     },
     {
       "id": "1778413193336",
@@ -3399,7 +3619,8 @@
       "capo": 1,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
+      "fingerprint": "Bm7:1:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778413182360",
@@ -3440,7 +3661,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:Amaj7:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|1_0_0|2_0_0|0_0_0"
+      "fingerprint": "Amaj7:0:3:STANDARD:0:-1_0_0|0_0_1|2_0_0|1_0_0|2_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "1778413121634",
@@ -3481,7 +3703,8 @@
       "capo": 3,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:C#m7:3:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
+      "fingerprint": "C#m7:3:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778413048446",
@@ -3522,7 +3745,8 @@
       "capo": 4,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:Dm6:4:3:STANDARD:-1_0_0|1_0_1|-1_0_0|3_0_0|2_0_0|3_0_0"
+      "fingerprint": "Dm6:4:3:STANDARD:0:-1_0_0|1_0_1|-1_0_0|3_0_0|2_0_0|3_0_0",
+      "isInverted": false
     },
     {
       "id": "1778378689517",
@@ -3563,7 +3787,8 @@
       "capo": 3,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:Dm6:3:3:STANDARD:-1_0_0|2_0_1|-1_0_0|1_0_0|3_0_0|2_0_0"
+      "fingerprint": "Dm6:3:3:STANDARD:0:-1_0_0|2_0_1|-1_0_0|1_0_0|3_0_0|2_0_0",
+      "isInverted": false
     },
     {
       "id": "1778378684300",
@@ -3604,7 +3829,8 @@
       "capo": 4,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:Dmaj7:4:3:STANDARD:-1_0_0|1_0_1|3_0_0|2_0_0|3_0_0|1_0_0"
+      "fingerprint": "Dmaj7:4:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|2_0_0|3_0_0|1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778335028084",
@@ -3645,7 +3871,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:D:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|3_0_0|2_0_0"
+      "fingerprint": "D:0:3:STANDARD:0:-1_0_0|-1_0_0|0_0_1|2_0_0|3_0_0|2_0_0",
+      "isInverted": false
     },
     {
       "id": "1778335005638",
@@ -3686,7 +3913,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:A:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0|0_0_0"
+      "fingerprint": "A:0:3:STANDARD:0:-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "1778334999706",
@@ -3727,7 +3955,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:F#m7:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
+      "fingerprint": "F#m7:0:3:STANDARD:0:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778334801835",
@@ -3768,7 +3997,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:Bm7/E:0:3:STANDARD:0_0_0|2_0_1|0_0_0|2_0_0|3_0_0|-1_0_0"
+      "fingerprint": "Bm7/E:0:3:STANDARD:1:0_0_0|2_0_1|0_0_0|2_0_0|3_0_0|-1_0_0",
+      "isInverted": true
     },
     {
       "id": "1778334774803",
@@ -3809,7 +4039,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:Dsus2:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|3_0_0|0_0_0"
+      "fingerprint": "Dsus2:0:3:STANDARD:0:-1_0_0|-1_0_0|0_0_1|2_0_0|3_0_0|0_0_0",
+      "isInverted": false
     },
     {
       "id": "1778334765915",
@@ -3850,7 +4081,8 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:F#m11:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|0_0_0|-1_0_0"
+      "fingerprint": "F#m11:0:3:STANDARD:0:2_0_1|-1_0_0|2_0_0|2_0_0|0_0_0|-1_0_0",
+      "isInverted": false
     },
     {
       "id": "1778334702170",
@@ -3891,1716 +4123,154 @@
       "capo": 0,
       "groupId": "g_1778079320204",
       "tuning": "STANDARD",
-      "fingerprint": "g_1778079320204:Asus2:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|0_0_0|0_0_0"
-    },
-    {
-      "id": "c_f814bb57-5",
-      "chordName": "DMaj7",
-      "strings": [
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 0,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 0,
-      "groupId": "g_d1fa5636",
-      "tuning": "STANDARD",
-      "fingerprint": "g_d1fa5636:DMaj7:0:3:STANDARD:-1_0_0|-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0"
-    },
-    {
-      "id": "c_49102ed0-e",
-      "chordName": "E11",
-      "strings": [
-        {
-          "fret": 0,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 1,
-      "groupId": "g_d1fa5636",
-      "tuning": "STANDARD",
-      "fingerprint": "g_d1fa5636:E11:1:3:STANDARD:0_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
-    },
-    {
-      "id": "c_f07ae797-4",
-      "chordName": "G6",
-      "strings": [
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 1,
-      "groupId": "g_d1fa5636",
-      "tuning": "STANDARD",
-      "fingerprint": "g_d1fa5636:G6:1:3:STANDARD:2_0_1|-1_0_0|1_0_0|3_0_0|2_0_0|-1_0_0"
-    },
-    {
-      "id": "c_71dfd9bd-0",
-      "chordName": "Bm11",
-      "strings": [
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 4,
-      "groupId": "g_d1fa5636",
-      "tuning": "STANDARD",
-      "fingerprint": "g_d1fa5636:Bm11:4:3:STANDARD:3_0_1|-1_0_0|3_0_0|3_0_0|1_0_0|-1_0_0"
-    },
-    {
-      "id": "c_1a02527a-1",
-      "chordName": "DMaj9",
-      "strings": [
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 4,
-      "groupId": "g_d1fa5636",
-      "tuning": "STANDARD",
-      "fingerprint": "g_d1fa5636:DMaj9:4:3:STANDARD:-1_0_0|1_0_1|3_0_0|2_0_0|1_0_0|-1_0_0"
+      "fingerprint": "Asus2:0:3:STANDARD:0:-1_0_0|0_0_1|2_0_0|2_0_0|0_0_0|0_0_0",
+      "isInverted": false
     }
   ],
   "songs": [
     {
-      "id": "s_0a0e406e",
+      "id": "s_b70168d9",
       "title": "如果你也听说",
       "lyrics": "夜把心洋葱般剥落\n拿掉防卫 剩下什么\n为什么脆弱时候 想你更多\n如果你也听说 有没有想过我\n像普通旧朋友\n还是你依然会心疼我\n好多好多的话想对你说\n悬着一颗心没着落\n要怎么附和 舍不得 又无可奈何\n如果你也听说 会不会相信我\n对流言会附和\n还是你知道我还是我\n跌跌撞撞才明白了许多\n懂我的人就你一个\n想到你想起我 胸口依然温热",
       "key": "D#",
       "playKey": "D",
       "capo": 1,
       "chordMap": {
-        "line_l_31ae174c_char_2": {
-          "id": "c_7037c12d",
-          "chordName": "F#m7",
-          "strings": [
-            {
-              "fret": 2,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:F#m7:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
-        },
-        "line_l_26bd0f37_char_2": {
-          "id": "c_b8f313fb",
-          "chordName": "Bm7",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_26bd0f37_char_7": {
-          "id": "c_c8750067",
-          "chordName": "Bm7/A",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7/A:1:3:STANDARD:-1_0_0|0_0_0|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_05917dca_char_2": {
-          "id": "c_7db8e109",
-          "chordName": "Em7",
-          "strings": [
-            {
-              "fret": 0,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Em7:0:3:STANDARD:0_0_1|2_0_0|2_0_0|0_0_0|3_0_0|0_0_0"
-        },
-        "line_l_05917dca_char_11": {
-          "id": "c_29ec3b91",
-          "chordName": "G/A",
-          "strings": [
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 2,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:G/A:2:3:STANDARD:3_0_0|-1_0_0|3_0_1|2_0_0|1_0_0|-1_0_0"
-        },
-        "line_l_65c00347_char_3": {
-          "id": "c_8a1d4cc9",
-          "chordName": "DMaj7",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 4,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:DMaj7:4:3:STANDARD:-1_0_0|1_0_1|3_0_0|2_0_0|3_0_0|1_0_0"
-        },
-        "line_l_65c00347_char_6": {
-          "id": "c_8c1b8df4",
-          "chordName": "A/C#",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 4,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 4,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:A/C#:1:4:STANDARD:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
-        },
-        "line_l_65c00347_char_10": {
-          "id": "c_b8f313fb",
-          "chordName": "Bm7",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_65c00347_end_0": {
-          "id": "c_c8750067",
-          "chordName": "Bm7/A",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7/A:1:3:STANDARD:-1_0_0|0_0_0|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_945f8368_char_3": {
-          "id": "c_94f00e66",
-          "chordName": "GMaj9",
-          "strings": [
-            {
-              "fret": 2,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:GMaj9:1:3:STANDARD:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
-        },
-        "line_l_c21bc580_char_0": {
-          "id": "c_7037c12d",
-          "chordName": "F#m7",
-          "strings": [
-            {
-              "fret": 2,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:F#m7:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
-        },
-        "line_l_c21bc580_char_2": {
-          "id": "c_b8f313fb",
-          "chordName": "Bm7",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_c21bc580_char_4": {
-          "id": "c_7db8e109",
-          "chordName": "Em7",
-          "strings": [
-            {
-              "fret": 0,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Em7:0:3:STANDARD:0_0_1|2_0_0|2_0_0|0_0_0|3_0_0|0_0_0"
-        },
-        "line_l_c21bc580_char_8": {
-          "id": "c_7d6af997",
-          "chordName": "A",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:A:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0|0_0_0"
-        },
-        "line_l_ecf094fe_char_4": {
-          "id": "c_7037c12d",
-          "chordName": "F#m7",
-          "strings": [
-            {
-              "fret": 2,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:F#m7:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
-        },
-        "line_l_8fb9cb09_char_2": {
-          "id": "c_b8f313fb",
-          "chordName": "Bm7",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_8fb9cb09_char_6": {
-          "id": "c_c8750067",
-          "chordName": "Bm7/A",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7/A:1:3:STANDARD:-1_0_0|0_0_0|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_bcf90790_char_2": {
-          "id": "c_94f00e66",
-          "chordName": "GMaj9",
-          "strings": [
-            {
-              "fret": 2,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:GMaj9:1:3:STANDARD:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
-        },
-        "line_l_bcf90790_char_6": {
-          "id": "c_75db7edf",
-          "chordName": "GMaj9/G#",
-          "strings": [
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:GMaj9/G#:1:3:STANDARD:3_0_0|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
-        },
-        "line_l_bcf90790_char_10": {
-          "id": "c_29ec3b91",
-          "chordName": "G/A",
-          "strings": [
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 2,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:G/A:2:3:STANDARD:3_0_0|-1_0_0|3_0_1|2_0_0|1_0_0|-1_0_0"
-        },
-        "line_l_bcf90790_end_0": {
-          "id": "c_7d6af997",
-          "chordName": "A",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:A:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0|0_0_0"
-        },
-        "line_l_2ec3fb23_char_3": {
-          "id": "c_8a1d4cc9",
-          "chordName": "DMaj7",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 4,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:DMaj7:4:3:STANDARD:-1_0_0|1_0_1|3_0_0|2_0_0|3_0_0|1_0_0"
-        },
-        "line_l_2ec3fb23_char_6": {
-          "id": "c_8c1b8df4",
-          "chordName": "A/C#",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 4,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 4,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:A/C#:1:4:STANDARD:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
-        },
-        "line_l_2ec3fb23_char_10": {
-          "id": "c_b8f313fb",
-          "chordName": "Bm7",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_2ec3fb23_end_0": {
-          "id": "c_c8750067",
-          "chordName": "Bm7/A",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7/A:1:3:STANDARD:-1_0_0|0_0_0|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_f19927aa_char_3": {
-          "id": "c_94f00e66",
-          "chordName": "GMaj9",
-          "strings": [
-            {
-              "fret": 2,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:GMaj9:1:3:STANDARD:2_0_1|-1_0_0|3_0_0|1_0_0|2_0_0|-1_0_0"
-        },
-        "line_l_0bb7ab65_char_0": {
-          "id": "c_7037c12d",
-          "chordName": "F#m7",
-          "strings": [
-            {
-              "fret": 2,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:F#m7:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
-        },
-        "line_l_0bb7ab65_char_2": {
-          "id": "c_b8f313fb",
-          "chordName": "Bm7",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_0bb7ab65_char_4": {
-          "id": "c_7db8e109",
-          "chordName": "Em7",
-          "strings": [
-            {
-              "fret": 0,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Em7:0:3:STANDARD:0_0_1|2_0_0|2_0_0|0_0_0|3_0_0|0_0_0"
-        },
-        "line_l_0bb7ab65_char_8": {
-          "id": "c_7d6af997",
-          "chordName": "A",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:A:0:3:STANDARD:-1_0_0|0_0_1|2_0_0|2_0_0|2_0_0|0_0_0"
-        },
-        "line_l_dc98a88b_char_4": {
-          "id": "c_7037c12d",
-          "chordName": "F#m7",
-          "strings": [
-            {
-              "fret": 2,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:F#m7:0:3:STANDARD:2_0_1|-1_0_0|2_0_0|2_0_0|2_0_0|-1_0_0"
-        },
-        "line_l_5cdf0f28_char_2": {
-          "id": "c_b8f313fb",
-          "chordName": "Bm7",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7:1:3:STANDARD:-1_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_5cdf0f28_char_6": {
-          "id": "c_c8750067",
-          "chordName": "Bm7/A",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 1,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Bm7/A:1:3:STANDARD:-1_0_0|0_0_0|3_0_0|1_0_0|2_0_0|1_0_0"
-        },
-        "line_l_ab7e92e1_char_3": {
-          "id": "c_7db8e109",
-          "chordName": "Em7",
-          "strings": [
-            {
-              "fret": 0,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 0,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 0,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:Em7:0:3:STANDARD:0_0_1|2_0_0|2_0_0|0_0_0|3_0_0|0_0_0"
-        },
-        "line_l_ab7e92e1_char_6": {
-          "id": "c_29ec3b91",
-          "chordName": "G/A",
-          "strings": [
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 2,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:G/A:2:3:STANDARD:3_0_0|-1_0_0|3_0_1|2_0_0|1_0_0|-1_0_0"
-        },
-        "line_l_ab7e92e1_char_10": {
-          "id": "c_2ca5a7b2",
-          "chordName": "DMaj9",
-          "strings": [
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": true,
-              "preferFlat": false
-            },
-            {
-              "fret": 1,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 3,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": 2,
-              "isRoot": false,
-              "preferFlat": false
-            },
-            {
-              "fret": -1,
-              "isRoot": false,
-              "preferFlat": false
-            }
-          ],
-          "fretCount": 3,
-          "capo": 3,
-          "groupId": "g_1778079341175",
-          "tuning": "STANDARD",
-          "fingerprint": "g_1778079341175:DMaj9:3:3:STANDARD:-1_0_0|2_0_1|1_0_0|3_0_0|2_0_0|-1_0_0"
-        }
+        "line_l_ed040049_char_2": "c_7037c12d",
+        "line_l_81311382_char_2": "c_b8f313fb",
+        "line_l_81311382_char_7": "c_c8750067",
+        "line_l_0b157a2b_char_2": "c_7db8e109",
+        "line_l_0b157a2b_char_11": "c_29ec3b91",
+        "line_l_08c0505d_char_3": "c_8a1d4cc9",
+        "line_l_08c0505d_char_6": "c_8c1b8df4",
+        "line_l_08c0505d_char_10": "c_b8f313fb",
+        "line_l_08c0505d_end_0": "c_c8750067",
+        "line_l_f4f436ec_char_3": "c_94f00e66",
+        "line_l_aa74cdda_char_0": "c_7037c12d",
+        "line_l_aa74cdda_char_2": "c_b8f313fb",
+        "line_l_aa74cdda_char_4": "c_7db8e109",
+        "line_l_aa74cdda_char_8": "c_7d6af997",
+        "line_l_b94a2fa2_char_4": "c_7037c12d",
+        "line_l_1eaae8ce_char_2": "c_b8f313fb",
+        "line_l_1eaae8ce_char_6": "c_c8750067",
+        "line_l_377bee0f_char_2": "c_94f00e66",
+        "line_l_377bee0f_char_6": "c_75db7edf",
+        "line_l_377bee0f_char_10": "c_29ec3b91",
+        "line_l_377bee0f_char_14": "c_7d6af997",
+        "line_l_fc2741ff_char_3": "c_8a1d4cc9",
+        "line_l_fc2741ff_char_6": "c_8c1b8df4",
+        "line_l_fc2741ff_char_10": "c_b8f313fb",
+        "line_l_fc2741ff_end_0": "c_c8750067",
+        "line_l_37ecd03a_char_3": "c_94f00e66",
+        "line_l_d878ae84_char_0": "c_7037c12d",
+        "line_l_d878ae84_char_2": "c_b8f313fb",
+        "line_l_d878ae84_char_4": "c_7db8e109",
+        "line_l_d878ae84_char_8": "c_7d6af997",
+        "line_l_cf3149a5_char_4": "c_7037c12d",
+        "line_l_7e0e67ba_char_2": "c_b8f313fb",
+        "line_l_7e0e67ba_char_6": "c_c8750067",
+        "line_l_c22a9715_char_3": "c_7db8e109",
+        "line_l_c22a9715_char_6": "c_7d6af997",
+        "line_l_c22a9715_char_10": "c_5500ffc3"
       },
       "lineIds": [
-        "l_31ae174c",
-        "l_26bd0f37",
-        "l_05917dca",
-        "l_65c00347",
-        "l_945f8368",
-        "l_c21bc580",
-        "l_ecf094fe",
-        "l_8fb9cb09",
-        "l_bcf90790",
-        "l_2ec3fb23",
-        "l_f19927aa",
-        "l_0bb7ab65",
-        "l_dc98a88b",
-        "l_5cdf0f28",
-        "l_ab7e92e1"
+        "l_ed040049",
+        "l_81311382",
+        "l_0b157a2b",
+        "l_08c0505d",
+        "l_f4f436ec",
+        "l_aa74cdda",
+        "l_b94a2fa2",
+        "l_1eaae8ce",
+        "l_377bee0f",
+        "l_fc2741ff",
+        "l_37ecd03a",
+        "l_d878ae84",
+        "l_cf3149a5",
+        "l_7e0e67ba",
+        "l_c22a9715"
+      ]
+    },
+    {
+      "id": "s_b4274768",
+      "title": "你不知道的事",
+      "lyrics": "我飞行但你坠落之际\n很靠近还听见呼吸\n对不起我却没捉紧你\n你不知道我为什么离开你\n我坚持不能说放任你哭泣\n你的泪滴像倾盆大雨碎了满地\n在心里清晰\n你不知道我为什么狠下心\n盘旋在你看不见的高空里\n多的是你不知道的事",
+      "key": "C#",
+      "playKey": "C",
+      "capo": 1,
+      "chordMap": {
+        "line_l_16b1e790_char_5": "1779882928141",
+        "line_l_16b1e790_char_9": "1779882937077",
+        "line_l_e55689c5_char_5": "c_bc9033cf",
+        "line_l_e55689c5_char_9": "c_491c143a",
+        "line_l_d36ef3e1_char_6": "1779882986919",
+        "line_l_d36ef3e1_char_11": "1779883010043",
+        "line_l_fb26103a_char_0": "c_0d625e5d",
+        "line_l_fb26103a_char_4": "c_ed14b206",
+        "line_l_79ef9eaa_char_5": "1779882928141",
+        "line_l_79ef9eaa_char_9": "c_0b0eca57",
+        "line_l_5ee2cc98_char_5": "c_3c317ece",
+        "line_l_5ee2cc98_char_9": "c_491c143a",
+        "line_l_2488bda3_char_0": "1779882986919",
+        "line_l_2488bda3_char_4": "1779883010043",
+        "line_l_2488bda3_char_8": "c_ccaa1d56",
+        "line_l_d3b8ca91_char_0": "1779882928141",
+        "line_l_d3b8ca91_char_5": "c_ccaa1d56",
+        "line_l_03470f59_char_1": "1779882928141",
+        "line_l_03470f59_char_5": "c_ccaa1d56",
+        "line_l_eabf9943_char_0": "1779882986919",
+        "line_l_eabf9943_char_4": "1779883010043",
+        "line_l_eabf9943_char_8": "c_ccaa1d56",
+        "line_l_eabf9943_end_0": "c_10d4023d"
+      },
+      "lineIds": [
+        "l_d3b8ca91",
+        "l_03470f59",
+        "l_eabf9943",
+        "l_16b1e790",
+        "l_e55689c5",
+        "l_d36ef3e1",
+        "l_fb26103a",
+        "l_79ef9eaa",
+        "l_5ee2cc98",
+        "l_2488bda3"
+      ]
+    },
+    {
+      "id": "s_0538d78b",
+      "title": "爱，请问怎么走",
+      "lyrics": "噢~爱请问怎么走\n我一个人翻过山越过海\n只为你对我好过\n这份爱前所未有\n噢~爱为什么不走\n我也不懂谁劝我谁爱我\n谁可以让我解脱\n你的吻像个温柔的符咒",
+      "key": "C#",
+      "playKey": "A",
+      "capo": 4,
+      "chordMap": {
+        "line_l_d1f0df30_char_2": "1778334702170",
+        "line_l_d1f0df30_char_4": "c_fd426ebd",
+        "line_l_d1f0df30_char_6": "1778334999706",
+        "line_l_d1f0df30_end_0": "c_91cbfdf7",
+        "line_l_78f39e5b_char_4": "1778335028084",
+        "line_l_8f1ffec4_char_0": "1778413121634",
+        "line_l_cb5cf8dc_char_0": "1778413193336",
+        "line_l_cb5cf8dc_char_6": "1778847229122",
+        "line_l_43d33d4c_char_2": "1778334702170",
+        "line_l_43d33d4c_char_4": "c_fd426ebd",
+        "line_l_43d33d4c_char_6": "1778334999706",
+        "line_l_43d33d4c_end_0": "c_91cbfdf7",
+        "line_l_c2685840_char_4": "1778335028084",
+        "line_l_9a643812_char_0": "1778413121634",
+        "line_l_a3db488b_char_0": "1778413193336",
+        "line_l_a3db488b_char_6": "1778847229122",
+        "line_l_a3db488b_char_9": "1778334702170"
+      },
+      "lineIds": [
+        "l_d1f0df30",
+        "l_78f39e5b",
+        "l_8f1ffec4",
+        "l_cb5cf8dc",
+        "l_43d33d4c",
+        "l_c2685840",
+        "l_9a643812",
+        "l_a3db488b"
       ]
     }
   ]
