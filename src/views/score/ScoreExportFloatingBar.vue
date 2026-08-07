@@ -35,19 +35,26 @@
     <div class="bar-divider"></div>
 
     <div class="bar-actions-zone">
-      <ActionButton size="sm" variant="ghost" :primary="isAllSelected" @click="emit('toggle-select-all')">
-        全选
-      </ActionButton>
+      <GlobalTooltip content="选中所有歌词" placement="top">
+        <ActionButton
+          size="sm"
+          :variant="isAllSelected ? 'subtle' : 'ghost'"
+          :primary="isAllSelected"
+          @click="emit('toggle-select-all')"
+        >
+          全选
+        </ActionButton>
+      </GlobalTooltip>
 
       <GlobalTooltip
         :content="includeMetaBar ? '导出图片将包含歌名/调/Capo 信息' : '导出图片不包含歌曲信息'"
         placement="top"
       >
         <ActionButton
-          size="sm"
-          variant="ghost"
           icon-only
-          :active="includeMetaBar"
+          size="sm"
+          :variant="includeMetaBar ? 'subtle' : 'ghost'"
+          :primary="includeMetaBar"
           :aria-label="includeMetaBar ? '关闭歌曲信息栏' : '开启歌曲信息栏'"
           @click="includeMetaBar = !includeMetaBar"
         >

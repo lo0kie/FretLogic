@@ -43,12 +43,14 @@ export function useGithubSyncService() {
     }
     const { githubToken, githubOwner, githubRepo, githubBranch, githubPath } = validation.data;
 
+    const headers: Record<string, string> = { Accept: 'application/vnd.github.v3+json' };
+
+    if (githubToken) {
+      headers['Authorization'] = `Bearer ${githubToken}`;
+    }
     return {
-      apiUrl: `https://api.github.com/repos/${githubOwner}/${githubRepo}/contents/${githubPath.replace(/^\/+/, '')}`,
-      headers: {
-        Authorization: `Bearer ${githubToken}`,
-        Accept: 'application/vnd.github.v3+json',
-      },
+      apiUrl: `https://api.github.com/repos/${githubOwner}/${githubRepo}/contents/${githubPath}`,
+      headers,
       githubBranch,
     };
   };

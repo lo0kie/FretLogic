@@ -123,7 +123,7 @@ export function useChordGroupModals() {
         chordStore.overwriteChords(chordsSnapshot);
         songStore.overwriteSongs(songsSnapshot);
         chordStore.selectedGroupId = targetGid;
-        uiStore.toast.success(`已恢复分组 "${groupName}" 及关联数据`);
+        uiStore.toast.success(`已恢复分组 "${groupName}"`);
       },
     });
   };

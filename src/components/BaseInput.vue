@@ -1,5 +1,5 @@
 <template>
-  <div class="input-wrapper" v-wave>
+  <div class="input-wrapper" v-wave="{ disabled }">
     <div v-if="$slots.prefix" class="prefix-zone" :class="sizeClass">
       <slot name="prefix"></slot>
     </div>

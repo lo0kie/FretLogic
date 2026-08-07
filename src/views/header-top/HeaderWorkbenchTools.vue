@@ -4,6 +4,7 @@
       <ActionButton
         size="sm"
         variant="subtle"
+        primary
         icon-only
         :disabled="editorStore.isFretBoardEmpty || isPlaying"
         @click="playCurrentChord"

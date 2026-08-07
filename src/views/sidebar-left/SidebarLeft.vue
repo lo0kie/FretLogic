@@ -29,6 +29,7 @@
               :variant="uiStore.isPreviewEnabled ? 'subtle' : 'ghost'"
               icon-only
               size="sm"
+              :primary="uiStore.isPreviewEnabled"
             >
               <component :is="uiStore.isPreviewEnabled ? Eye : EyeOff" :size="15" :stroke-width="2.2" />
             </ActionButton>

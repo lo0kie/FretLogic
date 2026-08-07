@@ -36,15 +36,35 @@
     </div>
 
     <div class="grid-columns">
-      <GlobalTooltip content="从 GitHub 下载并覆盖本地数据" placement="top">
-        <ActionButton width="100%" @click="$emit('pull-request')" :loading="isPulling" size="sm">
+      <GlobalTooltip
+        :content="
+          isPulling ? '同步中' : isPullConfigComplete ? '请先填写账号和仓库名' : '从 GitHub 下载并覆盖本地数据 GitHub'
+        "
+        placement="top"
+      >
+        <ActionButton
+          :disabled="isPullConfigComplete || isSyncing"
+          width="100%"
+          @click="$emit('pull-request')"
+          :loading="isPulling"
+          size="sm"
+        >
           <template #prefix><CloudDownload :size="13" stroke-width="2.5" /></template>
           拉取
         </ActionButton>
       </GlobalTooltip>
 
-      <GlobalTooltip content="将本地数据推送到 GitHub" placement="top">
-        <ActionButton width="100%" @click="$emit('push-request')" :loading="isSyncing" size="sm">
+      <GlobalTooltip
+        :content="isSyncing ? '同步中' : isPushConfigComplete ? '请先填写token' : '将本地数据推送到 GitHub'"
+        placement="top"
+      >
+        <ActionButton
+          :disabled="isPushConfigComplete || isSyncing"
+          width="100%"
+          @click="$emit('push-request')"
+          :loading="isSyncing"
+          size="sm"
+        >
           <template #prefix><CloudUpload :size="13" stroke-width="2.5" /></template>
           同步
         </ActionButton>
@@ -60,6 +80,7 @@ import BaseInput from '@/components/BaseInput.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { CloudDownload, CloudUpload } from '@lucide/vue';
+import { computed } from 'vue';
 
 defineProps<{
   isSyncing: boolean;
@@ -73,6 +94,14 @@ defineEmits<{
 
 const isDevEnv = import.meta.env.DEV;
 const settingsStore = useSettingsStore();
+
+const isPullConfigComplete = computed(() => {
+  return !settingsStore.githubOwner.trim() || !settingsStore.githubRepo.trim() || !settingsStore.githubPath.trim();
+});
+
+const isPushConfigComplete = computed(() => {
+  return isPullConfigComplete.value || !settingsStore.githubToken.trim();
+});
 </script>
 
 <style scoped lang="less">

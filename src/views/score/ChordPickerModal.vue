@@ -45,7 +45,7 @@
         </div>
 
         <div class="header-controls-right">
-          <ActionButton size="sm" variant="subtle" @click="goToWorkbenchToCreate">
+          <ActionButton size="sm" variant="subtle" primary @click="goToWorkbenchToCreate">
             <template #prefix><Plus :size="14" stroke-width="2.5" aria-hidden="true" /></template>
             新建和弦
           </ActionButton>
@@ -371,6 +371,7 @@ onBeforeUnmount(() => {
 }
 
 .chord-picker-wrapper {
+  padding: 0.2rem;
   display: flex;
   flex-direction: column;
   gap: 0.8rem;

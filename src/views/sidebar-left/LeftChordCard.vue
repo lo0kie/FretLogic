@@ -59,7 +59,8 @@
 
     <template #content v-if="uiStore.isPreviewEnabled && isHovered">
       <Fretboard
-        :chord="cardData.mainChord"
+        :key="activeChord.id"
+        :chord="activeChord"
         :is-dark-mode="settingsStore.isDarkMode"
         :interactive="false"
         :scale="0.5"
@@ -96,7 +97,6 @@ const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
 
 const isHovered = ref(false);
-
 const activeVariantIndex = ref(0);
 
 watch(

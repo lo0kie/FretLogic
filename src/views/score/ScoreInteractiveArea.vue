@@ -12,7 +12,7 @@
     />
 
     <div v-else class="lyrics-lines-container" :class="{ 'is-export-mode': isExporting }" ref="lyricsRef">
-      <div v-show="isExporting && includeMetaBar" class="export-header-meta">
+      <div v-show="true" class="export-header-meta" ref="exportHeaderMetaRef">
         <h1 class="export-song-title">{{ scoreEditor.activeSong?.title }}</h1>
         <div class="export-song-info">
           <span>{{ scoreEditor.activeSong.key }} 调</span>
@@ -172,6 +172,7 @@ const settingsStore = useSettingsStore();
 
 const scoreZoneRef = useTemplateRef<HTMLElement>('scoreZoneRef');
 const lyricsRef = useTemplateRef<HTMLElement>('lyricsRef');
+const exportHeaderMetaRef = useTemplateRef<HTMLElement>('exportHeaderMetaRef');
 
 const {
   dragOverSlotKey,
@@ -211,7 +212,7 @@ onBeforeUnmount(() => {
   if (uiStore.activeExportTarget === lyricsRef.value) uiStore.activeExportTarget = null;
 });
 
-defineExpose({ scoreZoneRef });
+defineExpose({ scoreZoneRef, exportHeaderMetaRef });
 </script>
 
 <style scoped lang="less">
@@ -269,13 +270,14 @@ defineExpose({ scoreZoneRef });
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
   padding-bottom: 1.2rem;
   margin-bottom: 0.8rem;
   width: 100%;
 }
 
 .export-song-title {
-  font-size: 1.5rem;
+  font-size: v-bind('`${1.5 * scoreEditor.fontScale}rem`');
   font-weight: 800;
   color: var(--text-title);
   margin: 0 0 0.4rem 0;
@@ -286,7 +288,7 @@ defineExpose({ scoreZoneRef });
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-size: 0.75rem;
+  font-size: v-bind('`${0.75 * scoreEditor.fontScale}rem`');
   font-weight: 600;
   color: var(--text-body);
 }

@@ -1,8 +1,8 @@
-import { useUiStore } from "@/stores/uiStore";
-import { copyElementToClipboard } from "@/utils/domExporter";
-import { Ref, ref, nextTick } from "vue";
+import { useUiStore } from '@/stores/uiStore';
+import { copyElementToClipboard } from '@/utils/domExporter';
+import { nextTick, Ref, ref } from 'vue';
 
-export function useScoreImageExport(selectedLineSet: Ref<Set<number>>) {
+export function useScoreImageExport(selectedLineSet: Ref<Set<number>>, metaHeaderRef: Ref<HTMLElement | null>) {
   const uiStore = useUiStore();
   const isExporting = ref(false);
   const includeMetaBar = ref(true);
@@ -14,9 +14,10 @@ export function useScoreImageExport(selectedLineSet: Ref<Set<number>>) {
         maxWidth = Math.max(maxWidth, el.scrollWidth);
       }
     });
-
-    if (maxWidth < 80) maxWidth = 360;
-
+    if (metaHeaderRef.value) {
+      maxWidth = Math.max(maxWidth, metaHeaderRef.value.scrollWidth);
+    }
+    if (maxWidth < 360) maxWidth = 360;
     return {
       width: maxWidth,
       height: container.scrollHeight,
@@ -47,6 +48,9 @@ export function useScoreImageExport(selectedLineSet: Ref<Set<number>>) {
       await waitForPaint();
 
       const { width, height } = measureSize(uiStore.activeExportTarget, lineEls);
+      if (metaHeaderRef.value) {
+        metaHeaderRef.value.style.width = `${width}px`;
+      }
       const paddingX = 80;
       const paddingY = 100;
       const bgColor = getComputedStyle(document.body).getPropertyValue('--bg-main').trim() || '#f2f2f7';
@@ -81,6 +85,9 @@ export function useScoreImageExport(selectedLineSet: Ref<Set<number>>) {
       if (err instanceof Error) uiStore.toast.error(err.message);
       else uiStore.toast.error('导出图片失败');
     } finally {
+      if (metaHeaderRef.value) {
+        metaHeaderRef.value.style.width = '';
+      }
       isExporting.value = false;
     }
   };

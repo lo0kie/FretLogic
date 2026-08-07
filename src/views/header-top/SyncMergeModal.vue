@@ -36,7 +36,7 @@
             <div class="strategy-title">增量合并 (Union Set)</div>
             <div class="strategy-desc">取两端和弦与乐谱的并集，仅补充缺失项，绝不删除或修改现有数据（推荐）</div>
           </div>
-          <ActionButton size="sm" variant="subtle">合并</ActionButton>
+          <ActionButton size="sm" variant="subtle" primary>合并</ActionButton>
         </div>
         <div class="strategy-card danger-card" @click="handleOverwrite">
           <div class="strategy-info">

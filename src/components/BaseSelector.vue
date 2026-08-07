@@ -11,7 +11,7 @@
     @click="toggleDropdown"
     @keydown="handleTriggerKeydown"
     v-bind="$attrs"
-    v-wave
+    v-wave="{ disabled }"
   >
     <span class="label-zone" :class="[isNonDefault ? 'is-custom' : 'is-default']">
       <slot name="label" :selected="modelValue">
@@ -58,7 +58,7 @@
         >
           <!-- 3. 选项节点：移除模板行的 @keydown.esc.prevent.stop -->
           <div
-            v-wave
+            v-wave="{ disabled: isOptionDisabled(option) }"
             v-for="(option, index) in options"
             :key="index"
             ref="optionEls"

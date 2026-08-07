@@ -126,8 +126,6 @@
               :chord="variant"
               :interactive="false"
               :scale="0.32"
-              :show-open-strings="false"
-              :show-fret-numbers="false"
               :is-dark-mode="settingsStore.isDarkMode"
             />
           </div>
@@ -497,7 +495,6 @@ defineExpose({
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.45rem;
   padding: 0.65rem 0.5rem 0.55rem;
   background-color: var(--bg-body);
   border: 1.5px solid var(--border-light);
