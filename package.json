@@ -42,10 +42,5 @@
     "typescript": "^5.4.2",
     "vite": "^5.2.0",
     "vue-tsc": "^2.0.6"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "vue-demi"
-    ]
   }
 }
