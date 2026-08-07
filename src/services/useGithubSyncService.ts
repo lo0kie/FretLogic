@@ -4,6 +4,7 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, ImportExportPayload } from '@/types';
 import { cloneDeep } from '@/utils/cloneDeep';
+import { unionMergePayloads } from '@/utils/dataMerge';
 import { computeChordFingerprint } from '@/utils/musicTheory';
 import { validateImportExportPayload } from '@/utils/validatePayload';
 import { validateSettings } from '@/utils/validateSettings';
@@ -95,11 +96,13 @@ export function useGithubSyncService() {
       if (!putRes.ok) throw new Error('推送代码失败');
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
       uiStore.toast.success('成功同步至 GitHub 云端');
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
       console.error('GitHub Sync Error:', err);
-      const isAbort = err.name === 'AbortError';
-      uiStore.toast.error(isAbort ? '同步超时：请检查网络状况' : 'GitHub 同步失败，请检查网络或配置信息');
+      if (err instanceof Error) {
+        const isAbort = err.name === 'AbortError';
+        uiStore.toast.error(isAbort ? '同步超时：请检查网络状况' : 'GitHub 同步失败，请检查网络或配置信息');
+      }
     } finally {
       clearTimeout(timeoutId);
       isSyncing.value = false;
@@ -159,12 +162,15 @@ export function useGithubSyncService() {
         uiStore.toast.success('本地数据与云端完全一致，无需合并');
         return { hasDifferences: false, cloudData: null };
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
       console.error('GitHub Pull Error:', err);
-      const isAbort = err.name === 'AbortError';
-      const errMsg = isAbort ? '拉取超时，请检查网络' : err instanceof Error ? err.message : '拉取失败，请检查网络';
-      uiStore.toast.error(`拉取失败：${errMsg}`);
+      if (err instanceof Error) {
+        const isAbort = err.name === 'AbortError';
+        const errMsg = isAbort ? '拉取超时，请检查网络' : err instanceof Error ? err.message : '拉取失败，请检查网络';
+        uiStore.toast.error(`拉取失败：${errMsg}`);
+      }
+
       return { hasDifferences: false, cloudData: null };
     } finally {
       clearTimeout(timeoutId);
@@ -189,47 +195,17 @@ export function useGithubSyncService() {
   };
 
   const applyUnionSetMerge = (cloudData: ImportExportPayload) => {
-    const localGroupIds = new Set(chordStore.groups.map(g => g.id));
-    const newGroups = [...chordStore.groups];
-    cloudData.groups.forEach(cg => {
-      if (!localGroupIds.has(cg.id)) {
-        newGroups.push(cloneDeep(cg));
-        localGroupIds.add(cg.id);
-      }
-    });
-    const localChordIds = new Set(chordStore.savedChordsList.map(c => c.id));
-    const localFps = new Set(chordStore.savedChordsList.map(c => c.fingerprint));
-    const newChords = [...chordStore.savedChordsList];
-    cloudData.chords.forEach(cc => {
-      const isExistById = localChordIds.has(cc.id);
-      const isExistByFp = cc.fingerprint ? localFps.has(cc.fingerprint) : false;
-      if (!isExistById && !isExistByFp) {
-        newChords.push(cloneDeep(cc));
-        localChordIds.add(cc.id);
-        if (cc.fingerprint) localFps.add(cc.fingerprint);
-      }
-    });
-    const localSongIds = new Set(songStore.songs.map(s => s.id));
-    const newSongs = [...songStore.songs];
-    if (cloudData.songs) {
-      cloudData.songs.forEach(cs => {
-        if (!localSongIds.has(cs.id)) {
-          newSongs.push(cloneDeep(cs));
-          localSongIds.add(cs.id);
-        }
-      });
-    }
-    let finalSelectedId = chordStore.selectedGroupId;
-    if (!newGroups.some(g => g.id === finalSelectedId)) {
-      finalSelectedId = newGroups[0]?.id || null;
-    }
-    newGroups.forEach(g => {
-      g.collapsed = g.id !== finalSelectedId;
-    });
-    chordStore.overwriteGroups(newGroups);
-    chordStore.overwriteChords(newChords);
-    songStore.overwriteSongs(newSongs);
-    chordStore.selectedGroupId = finalSelectedId;
+    const result = unionMergePayloads(
+      { groups: chordStore.groups, chords: chordStore.savedChordsList, songs: songStore.songs },
+      { groups: cloudData.groups, chords: cloudData.chords, songs: cloudData.songs ?? [] },
+      chordStore.selectedGroupId
+      // 不传 selection，代表全量合并，行为和原来完全一致
+    );
+
+    chordStore.overwriteGroups(result.groups);
+    chordStore.overwriteChords(result.chords);
+    songStore.overwriteSongs(result.songs);
+    chordStore.selectedGroupId = result.selectedGroupId;
     uiStore.toast.success('已完成两端增量合并 (Union Set)');
   };
 

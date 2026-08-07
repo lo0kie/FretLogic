@@ -213,7 +213,7 @@ const buildSortMeta = (chord: Chord): SortMeta => {
 export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey = 'C'): Chord[] => {
   if (chords.length <= 1) return chords.slice();
 
-  const effectiveRule: GroupSortRule = rule && rule !== ('CUSTOM' as any) ? rule : 'ROOT_PITCH';
+  const effectiveRule: GroupSortRule = rule ?? 'ROOT_PITCH';
 
   if (effectiveRule === 'NAME_ASC') {
     return chords.slice().sort((a, b) => a.chordName.localeCompare(b.chordName));
@@ -327,10 +327,10 @@ export const groupChordsByName = (chords: Chord[]): GroupedChordCard[] => {
 };
 
 export const computeChordFingerprint = (
-  chord: Pick<Chord, 'groupId' | 'chordName' | 'capo' | 'fretCount' | 'tuning' | 'strings' | 'isInverted'>
+  chord: Pick<Chord, 'chordName' | 'capo' | 'fretCount' | 'tuning' | 'strings' | 'isInverted'>
 ): string => {
   const strSig = chord.strings.map(s => `${s.fret}_${s.preferFlat ? 1 : 0}_${s.isRoot ? 1 : 0}`).join('|');
-  return `${chord.groupId}:${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${chord.isInverted ? 1 : 0}:${strSig}`;
+  return `${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${chord.isInverted ? 1 : 0}:${strSig}`;
 };
 
 export const transposePhysicalChord = (chord: Chord, semitones: number, newCapo?: number, shiftName = true): Chord => {
@@ -359,4 +359,8 @@ export const transposePhysicalChord = (chord: Chord, semitones: number, newCapo?
   newChord.isInverted = computeIsInverted(newChord.strings, newChord.capo, newChord.tuning, newChord.chordName);
   newChord.fingerprint = computeChordFingerprint(newChord);
   return newChord;
+};
+
+export const getActiveBaseStrings = (tuning: TuningEnum) => {
+  return TUNING_PRESETS[tuning]?.mapping || DEFAULT_TUNING_MAPPING;
 };

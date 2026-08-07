@@ -1,32 +1,29 @@
+import type { FretboardProps } from '@/components/Fretboard.vue';
 import { CANVAS_CONFIG, INTERACTION_CONFIG } from '@/constants';
 import { useFretboardLayout } from '@/services/useFretboardLayout';
 import type { GuitarStringsModel } from '@/types';
 import { cloneDeep } from '@/utils/cloneDeep';
-import { canTogglePitchAccidental, isOpen } from '@/utils/musicTheory';
+import { canTogglePitchAccidental, getActiveBaseStrings, isOpen } from '@/utils/musicTheory';
 import { useEventListener } from '@vueuse/core';
-import { onBeforeUnmount, ref, toRaw, toRefs, useTemplateRef, watchEffect } from 'vue';
+import { computed, onBeforeUnmount, ref, toRaw, useTemplateRef, watchEffect } from 'vue';
 
-export interface FretboardInteractionProps {
-  strings: GuitarStringsModel;
-  fretCount: number;
-  capo: number;
-  activeBaseStrings: readonly number[];
-  interactive: boolean;
-  scale: number;
-  showOpenStrings?: boolean;
-}
-
-export interface FretboardInteractionEmit {
-  (e: 'update:strings', value: GuitarStringsModel): void;
-  (e: 'update:capo', value: number): void;
-  (e: 'drag-status-change', isDragging: boolean): void;
-}
-
-export function useFretboardInteraction(props: FretboardInteractionProps, emit: FretboardInteractionEmit) {
+export function useFretboardInteraction(
+  props: FretboardProps,
+  onCapoChange: (capo: number) => void,
+  onStringsChange: (strings: GuitarStringsModel) => void,
+  onDragStatusChange?: (isDragging: boolean) => void
+) {
   const fretBoardRef = useTemplateRef<HTMLDivElement>('fretBoardRef');
   const hoverPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
 
-  const { strings, fretCount, capo, activeBaseStrings, interactive, scale, showOpenStrings } = toRefs(props);
+  const interactive = computed(() => props.interactive ?? true);
+  const scale = computed(() => props.scale ?? 1.0);
+  const showOpenStrings = computed(() => props.showOpenStrings ?? true);
+
+  const strings = computed(() => props.chord.strings);
+  const fretCount = computed(() => props.chord.fretCount);
+  const capo = computed(() => props.chord.capo);
+  const tuning = computed(() => props.chord.tuning);
 
   const layout = useFretboardLayout(fretCount, scale, showOpenStrings);
 
@@ -48,6 +45,8 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
     const y = (clientY - board.top) / scaleY;
     const stringIndex = Math.round((x - CANVAS_CONFIG.OFFSET_X) / CANVAS_CONFIG.STRING_SPACING);
 
+    if (stringIndex < 0 || stringIndex > 5) return null;
+
     const fretAreaY = y - layout.activeTopOffset.value;
     const fretIndex = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
     return { stringIndex, fretIndex };
@@ -55,9 +54,11 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
 
   const emitStringsUpdate = (mutator: (cloned: GuitarStringsModel) => void) => {
     if (!interactive.value) return;
+
     const cloned = cloneDeep(toRaw(strings.value));
     mutator(cloned);
-    emit('update:strings', cloned);
+
+    onStringsChange(cloned);
   };
 
   const handleRightClickRoot = (e: MouseEvent) => {
@@ -67,7 +68,6 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
     if (!point) return;
 
     const { stringIndex: sIdx, fretIndex: fIdx } = point;
-    if (sIdx < 0 || sIdx > 5) return;
 
     const currentStringAsset = strings.value[sIdx];
     let isNoteClicked = false;
@@ -108,7 +108,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   const handleTogglePitchName = (sIdx: number) => {
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
-      if (canTogglePitchAccidental(sIdx, str.fret, capo.value, activeBaseStrings.value)) {
+      if (canTogglePitchAccidental(sIdx, str.fret, capo.value, getActiveBaseStrings(tuning.value))) {
         str.preferFlat = !str.preferFlat;
       }
     });
@@ -116,14 +116,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
 
   const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = false) => {
     const point = getCanvasPoint(clientX, clientY);
-    if (
-      !point ||
-      point.stringIndex < 0 ||
-      point.stringIndex > 5 ||
-      point.fretIndex < 1 ||
-      point.fretIndex > fretCount.value
-    )
-      return;
+    if (!point || point.fretIndex < 1 || point.fretIndex > fretCount.value) return;
 
     const { stringIndex: sIdx, fretIndex: fIdx } = point;
     if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
@@ -168,7 +161,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
 
   const handlePointerUp = () => {
     isPointerDown.value = false;
-    emit('drag-status-change', false);
+    onDragStatusChange?.(false);
     lastSIdx = -1;
     lastFIdx = -1;
     if (rAF_ID) cancelAnimationFrame(rAF_ID);
@@ -178,7 +171,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
   const handlePointerDown = (e: PointerEvent) => {
     if (!interactive.value || e.button !== 0) return;
 
-    emit('drag-status-change', true);
+    onDragStatusChange?.(true);
     lastSIdx = -1;
     lastFIdx = -1;
 
@@ -204,7 +197,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
 
     const point = getCanvasPoint(e.clientX, e.clientY);
 
-    if (point && point.stringIndex >= 0 && point.stringIndex <= 5) {
+    if (point) {
       const { stringIndex: sIdx, fretIndex: fIdx } = point;
       const currentStr = strings.value[sIdx];
 
@@ -212,7 +205,7 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
         (fIdx > 0 && fIdx <= fretCount.value && currentStr.fret === fIdx) || (fIdx === 0 && isOpen(currentStr));
 
       if (isHoveringActiveNote) {
-        if (canTogglePitchAccidental(sIdx, currentStr.fret, capo.value, activeBaseStrings.value)) {
+        if (canTogglePitchAccidental(sIdx, currentStr.fret, capo.value, getActiveBaseStrings(tuning.value))) {
           handleTogglePitchName(sIdx);
         }
         return;
@@ -221,18 +214,19 @@ export function useFretboardInteraction(props: FretboardInteractionProps, emit: 
 
     wheelAccumulator += e.deltaY;
     if (Math.abs(wheelAccumulator) < INTERACTION_CONFIG.WHEEL_THRESHOLD) return;
+
     if (wheelAccumulator > 0) {
-      emit('update:capo', Math.min(INTERACTION_CONFIG.MAX_CAPO_LIMIT, capo.value + 1));
+      onCapoChange(Math.min(INTERACTION_CONFIG.MAX_CAPO_LIMIT, capo.value + 1));
     } else {
-      emit('update:capo', Math.max(INTERACTION_CONFIG.MIN_CAPO_LIMIT, capo.value - 1));
+      onCapoChange(Math.max(INTERACTION_CONFIG.MIN_CAPO_LIMIT, capo.value - 1));
     }
+
     wheelAccumulator = 0;
   };
 
   useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
   useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {
-    const pt = getCanvasPoint(e.clientX, e.clientY);
-    if (pt) hoverPoint.value = pt;
+    hoverPoint.value = getCanvasPoint(e.clientX, e.clientY);
   });
   useEventListener(fretBoardRef, 'pointerleave', handlePointerLeave);
   useEventListener(fretBoardRef, 'wheel', handleWheel, { passive: false });

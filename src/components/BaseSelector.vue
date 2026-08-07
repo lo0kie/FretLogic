@@ -93,7 +93,7 @@ import { ChevronDown, X } from '@lucide/vue';
 import { vOnClickOutside } from '@vueuse/components';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 
-export interface SelectorOptionObject<T = any> {
+export interface SelectorOptionObject<T> {
   label: string;
   value: T;
   disabled?: boolean;

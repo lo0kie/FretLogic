@@ -49,12 +49,10 @@
 
         <Fretboard
           v-if="isVisible"
+          :chord="chord"
           :ref="el => chord && setFretboardMeasureRef(el, chord.fretCount)"
           :interactive="false"
           :scale="0.28 * scoreEditor.fretboardScale"
-          :strings="chord.strings"
-          :capo="chord.capo"
-          :fret-count="chord.fretCount"
           :is-dark-mode="isDarkMode"
           fret-number-size="lg"
         />

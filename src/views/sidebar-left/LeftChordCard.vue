@@ -2,10 +2,7 @@
   <!-- 🌟 1. 监听 mouseenter / mouseleave 事件，控制 hover 状态 -->
   <GlobalTooltip placement="top" :content="tooltipText" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
     <GlobalContextMenu ref="contextMenuRef" :items="menuItems">
-      <div
-        class="chord-card-frame"
-        :title="`${cardData.mainChord.chordName}${activeChord.isInverted ? ' 转位和弦' : ''}`"
-      >
+      <div class="chord-card-frame" :title="`${cardData.mainChord.chordName} ${dotTitle}`">
         <div
           v-wave
           class="chord-thumb-card"
@@ -24,6 +21,21 @@
           @keydown.enter.prevent.stop="handleCardClick"
           @keydown.space.prevent.stop="handleCardClick"
         >
+          <!-- 左上角：状态标识圆点 -->
+          <span
+            v-if="hasDot"
+            class="status-dot"
+            :class="{
+              'is-root-normal': hasRoot && !isInverted,
+              'is-root-inverted': hasRoot && isInverted,
+              'is-rootless-inverted': !hasRoot && isInverted,
+              'is-rootless-normal': !hasRoot && !isInverted,
+            }"
+            :title="dotTitle"
+            :aria-label="dotTitle"
+          ></span>
+
+          <!-- 右上角：变体指法数量 Badge -->
           <BaseBadge
             v-if="cardData.hasVariants"
             :variant="isEditing ? 'primary' : 'neutral'"
@@ -39,7 +51,6 @@
           <BaseMarquee class="chord-marquee-wrapper">
             <span class="chord-name-text">
               {{ cardData.mainChord.chordName }}
-              <span v-if="activeChord.isInverted" class="inverted-dot" aria-label="转位和弦"></span>
             </span>
           </BaseMarquee>
         </div>
@@ -48,12 +59,10 @@
 
     <template #content v-if="uiStore.isPreviewEnabled && isHovered">
       <Fretboard
+        :chord="cardData.mainChord"
         :is-dark-mode="settingsStore.isDarkMode"
         :interactive="false"
         :scale="0.5"
-        :strings="activeChord.strings"
-        :capo="activeChord.capo"
-        :fret-count="activeChord.fretCount"
       />
     </template>
   </GlobalTooltip>
@@ -175,6 +184,16 @@ const menuItems = computed<ContextMenuItem[]>(() => [
     },
   },
 ]);
+
+const hasRoot = computed(() => activeChord.value.strings.some(s => s.fret >= 0 && s.isRoot));
+const isInverted = computed(() => activeChord.value.isInverted);
+const hasDot = ref(true);
+
+const dotTitle = computed(() => {
+  const rootText = hasRoot.value ? '有根音' : '无根音';
+  const invertText = isInverted.value ? ' + 转位和弦' : '';
+  return `${rootText}${invertText}`;
+});
 
 onBeforeUnmount(() => {
   if (swapTimer) clearTimeout(swapTimer);
@@ -302,16 +321,48 @@ onBeforeUnmount(() => {
   color: var(--text-body);
 }
 
-.inverted-dot {
+.status-dot {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  z-index: 5;
   display: inline-block;
-  width: 4px;
-  height: 4px;
+  width: 0.3rem;
+  height: 0.3rem;
   border-radius: 50%;
-  background-color: var(--color-warning);
-  opacity: 0.75;
-  margin-left: 3px;
-  vertical-align: middle;
-  pointer-events: auto;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+
+  // 1. 有根音 + 无转位 -> 主题色
+  &.is-root-normal {
+    background-color: var(--color-primary);
+  }
+
+  // 2. 有根音 + 有转位 -> 主题色与 Warn 各一半 (渐变)
+  &.is-root-inverted {
+    background: linear-gradient(135deg, var(--color-primary) 50%, var(--color-warning) 50%);
+  }
+
+  // 3. 无根音 + 有转位 -> Warn
+  &.is-rootless-inverted {
+    background-color: var(--color-warning);
+  }
+
+  // 4. 无根音 + 无转位 -> Danger (红色)
+  &.is-rootless-normal {
+    background-color: var(--color-danger);
+  }
+}
+
+/* 移动端尺寸微调 */
+@media (max-width: 768px) {
+  .status-dot {
+    top: -0.3rem;
+    left: -0.3rem;
+    width: 0.62rem;
+    height: 0.62rem;
+  }
 }
 
 @media (max-width: 768px) {
@@ -342,10 +393,11 @@ onBeforeUnmount(() => {
     font-size: 0.85rem;
   }
 
-  .inverted-dot {
-    width: 5px;
-    height: 5px;
-    margin-left: 4px;
+  .status-dot {
+    top: -0.3rem;
+    left: -0.3rem;
+    width: 0.62rem;
+    height: 0.62rem;
   }
 }
 </style>

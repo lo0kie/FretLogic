@@ -51,6 +51,7 @@
         >
           <BaseMarquee class="move-marquee">
             <span class="group-btn-text">{{ group.name }}</span>
+            <span class="group-count-text">({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})</span>
           </BaseMarquee>
         </button>
       </GlobalTooltip>
@@ -122,13 +123,11 @@
               :bordered="false"
               bg-color="transparent"
               fret-number-size="lg"
+              :chord="variant"
               :interactive="false"
               :scale="0.32"
               :show-open-strings="false"
               :show-fret-numbers="false"
-              :strings="variant.strings"
-              :capo="variant.capo"
-              :fret-count="variant.fretCount"
               :is-dark-mode="settingsStore.isDarkMode"
             />
           </div>
@@ -376,7 +375,7 @@ defineExpose({
 
 .move-target-btn {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: 0.6rem 0.75rem;
   border-radius: @radius-md;
   font-size: 0.75rem;
   font-weight: 700;
@@ -427,11 +426,19 @@ defineExpose({
   min-width: 0;
   width: 100%;
 
-  span {
-    display: block;
+  .group-btn-text {
+    font-weight: 700;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .group-count-text {
+    font-size: 0.65rem;
+    font-weight: 600;
+    opacity: 0.65;
+    white-space: nowrap;
+    font-family: monospace;
   }
 }
 

@@ -95,9 +95,8 @@ export function useChordGroupModals() {
     const chordsSnapshot = cloneDeep(chordStore.savedChordsList);
     const songsSnapshot = cloneDeep(songStore.songs);
 
-    if (editorStore.editingId) {
-      const editingChord = chordStore.savedChordsList.find(c => c.id === editorStore.editingId);
-      if (editingChord && editingChord.groupId === targetGid) editorStore.resetEditor();
+    if (editorStore.isEditing && editorStore.draftChord.groupId === targetGid) {
+      editorStore.resetEditor();
     }
 
     const targetChordIds = new Set(

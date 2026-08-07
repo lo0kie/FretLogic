@@ -109,7 +109,7 @@
                   :key="cardData.mainChord.chordName"
                   :card-data="cardData"
                   @delete-variants="cardData => $emit('open-delete-variants', cardData)"
-                  :is-editing="cardData.variants.some(c => c.id === editorStore.editingId)"
+                  :is-editing="cardData.variants.some(c => c.id === editorStore.draftChord.id)"
                   @delete="handleLocalDeleteChord"
                   @move="chord => $emit('open-move', chord)"
                   @select="handleSelectChord"
@@ -214,11 +214,11 @@ const onLeaveAfter = (el: Element) => {
 };
 
 const handleSelectChord = (chord: Chord) => {
-  if (editorStore.editingId === chord.id) {
+  if (editorStore.draftChord.id === chord.id) {
     editorStore.resetEditor();
     return;
   }
-  chordActions.loadChordToEditor(chord);
+  editorStore.setEditor(chord);
 };
 
 const getSortLabel = (group: Group): string => {
@@ -297,11 +297,11 @@ const isGroupMenuOpen = (groupId: string): boolean => {
 };
 
 const getGroupChordsCount = (groupId: string) => {
-  return chordStore.groupChordMap.get(groupId)?.length || 0;
+  return chordStore.groupChordMap.get(groupId)?.length ?? 0;
 };
 
 const handleLocalDeleteChord = (chord: Chord) => {
-  const isEditingCurrent = editorStore.editingId === chord.id;
+  const isEditingCurrent = editorStore.draftChord.id === chord.id;
   chordActions.triggerDeleteChord(chord);
   if (isEditingCurrent) editorStore.resetEditor();
 };

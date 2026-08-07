@@ -1,19 +1,17 @@
-import { Chord } from "@/types";
-import { TuningEnum, computeIsInverted, computeChordFingerprint } from "./musicTheory";
 
+import { Chord } from '@/types';
+import { TuningEnum, computeChordFingerprint, computeIsInverted } from './musicTheory';
 export interface ParsedSlotKey {
   lineId: string;
   type: 'char' | 'start' | 'end';
   index: number;
 }
-
 export function parseSlotKey(slotKey: string | number): ParsedSlotKey | null {
   const str = String(slotKey);
   const match = str.match(/^line_(.+?)_(char|start|end)_(\d+)$/);
   if (!match) return null;
   return { lineId: match[1], type: match[2] as 'char' | 'start' | 'end', index: parseInt(match[3], 10) };
 }
-
 export function getEdgeChords(
   chordMap: Record<string | number, string>,
   lineId: string,
@@ -27,7 +25,6 @@ export function getEdgeChords(
   }
   return result;
 }
-
 export function setEdgeChords(
   chordMap: Record<string | number, string>,
   lineId: string,
@@ -40,12 +37,10 @@ export function setEdgeChords(
       delete chordMap[key];
     }
   });
-
   chordIds.forEach((chordId, idx) => {
     chordMap[`${prefix}${idx}`] = chordId;
   });
 }
-
 export function removeChordFromSlot(
   chordMap: Record<string | number, string>,
   slotKey: string | number
@@ -139,7 +134,6 @@ function insertChordAtParsedLocation(
     setEdgeChords(chordMap, parsed.lineId, parsed.type, list);
   }
 }
-
 export const garbageCollectChordMap = (
   chordMap: Record<string, string>,
   finalLineIds: string[]
@@ -147,7 +141,6 @@ export const garbageCollectChordMap = (
   const finalIdsSet = new Set(finalLineIds);
   const updatedMap = { ...chordMap };
   let changed = false;
-
   Object.keys(updatedMap).forEach(key => {
     const parsed = parseSlotKey(key);
     if (parsed && !finalIdsSet.has(parsed.lineId)) {
@@ -155,18 +148,31 @@ export const garbageCollectChordMap = (
       changed = true;
     }
   });
-
   return { map: updatedMap, changed };
 };
 
-/** 纯函数：将和弦数据规范化（补全默认字段、更新转位状态与指纹） */
+/** 清理 chordMap 中指向不存在和弦 id 的孤儿引用（导入校验 / 删除和弦后使用） */
+export const pruneOrphanChordRefs = (
+  chordMap: Record<string, string>,
+  validChordIds: Set<string>
+): { map: Record<string, string>; changed: boolean } => {
+  const updatedMap = { ...chordMap };
+  let changed = false;
+  Object.keys(updatedMap).forEach(key => {
+    if (!validChordIds.has(updatedMap[key])) {
+      delete updatedMap[key];
+      changed = true;
+    }
+  });
+  return { map: updatedMap, changed };
+};
+
 export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean } => {
   const capo = chord.capo ?? 0;
   const tuning = chord.tuning || TuningEnum.STANDARD;
   const fretCount = chord.fretCount ?? 3;
   const isInverted = computeIsInverted(chord.strings, capo, tuning, chord.chordName);
   const fingerprint = computeChordFingerprint({
-    groupId: chord.groupId,
     chordName: chord.chordName,
     capo,
     fretCount,
@@ -174,16 +180,13 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
     strings: chord.strings,
     isInverted,
   });
-
   const changed =
     chord.capo !== capo ||
     chord.tuning !== tuning ||
     chord.fretCount !== fretCount ||
     chord.isInverted !== isInverted ||
     chord.fingerprint !== fingerprint;
-
   if (!changed) return { chord, changed: false };
-
   return {
     chord: {
       ...chord,

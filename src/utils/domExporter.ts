@@ -36,19 +36,13 @@ const waitForFontsReady = async (): Promise<void> => {
 /** 4. 配置构建：将业务 ExportOptions 转为 html-to-image 的 Options 参数 */
 const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions): Options => {
   let defaultBgColor: string | undefined = getDOMBgColor();
-  let defaultStyle: Record<string, string> = { transform: 'none' };
+  let defaultStyle: Record<string, string> = {};
 
   if (exportOptions.isTransparent) {
     defaultBgColor = undefined;
     defaultStyle = {
-      transform: 'none',
       backgroundColor: 'transparent',
       backgroundImage: 'none',
-      borderColor: 'transparent',
-      borderRadius: '0',
-      borderWidth: '0',
-      boxShadow: 'none',
-      border: 'none',
     };
   }
 
@@ -62,6 +56,12 @@ const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions):
     style: {
       ...defaultStyle,
       ...exportOptions.style,
+      transform: 'none',
+      borderRadius: '0',
+      borderColor: 'transparent',
+      borderWidth: '0',
+      boxShadow: 'none',
+      border: 'none',
     },
     filter: exportOptions.filter,
   };

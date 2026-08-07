@@ -85,12 +85,10 @@
 
           <Fretboard
             v-if="visibleMap[chord.id]"
+            :chord="chord"
             :ref="el => setFretboardMeasureRef(el, chord.fretCount)"
             :interactive="false"
             :scale="PICKER_FRETBOARD_SCALE"
-            :strings="chord.strings"
-            :capo="chord.capo"
-            :fret-count="chord.fretCount"
             :is-dark-mode="settingsStore.isDarkMode"
           />
           <div v-else :style="getCalculatedOrCachedSize(chord.fretCount)" />

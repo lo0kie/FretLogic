@@ -5,7 +5,7 @@
       <label class="config-label">显示品数</label>
       <div class="control-wrapper">
         <BaseSegmentedControl
-          :model-value="editorStore.fretCount"
+          :model-value="editorStore.draftChord.fretCount"
           @update:model-value="editorStore.setFretCount"
           :options="FRET_OPTIONS"
         />
@@ -16,7 +16,7 @@
       <label class="config-label">变调夹 (Capo)</label>
       <div class="control-wrapper">
         <BaseNumberInput
-          v-model="editorStore.capo"
+          v-model="editorStore.draftChord.capo"
           :min="0"
           :max="12"
           :formatter="val => (val === 0 ? 'CAPO 0' : `CAPO ${val}`)"
@@ -28,7 +28,7 @@
       <label class="config-label">调音方案</label>
       <div class="control-wrapper">
         <BaseSelector
-          v-model="editorStore.currentTuning"
+          v-model="editorStore.draftChord.tuning"
           :options="tuningOptions"
           :default-value="TuningEnum.STANDARD"
           :formatter="val => TUNING_PRESETS[val]?.name || TuningEnum.STANDARD"

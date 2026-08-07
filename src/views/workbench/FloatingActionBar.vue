@@ -1,14 +1,20 @@
 <template>
   <Transition name="floating-bar-fade">
-    <div v-if="isFloatingBarVisible" class="floating-action-bar" :style="{ bottom: barBottomPosition }">
-      <ActionButton size="md" variant="ghost" :disabled="isClearDisabled" @click="editorStore.resetEditor()">
-        {{ editorStore.editingId ? '放弃修改' : '重置指板' }}
+    <div v-if="!isPristine" class="floating-action-bar" :style="{ bottom: barBottomPosition }">
+      <ActionButton size="md" variant="ghost" :disabled="isPristine" @click="editorStore.resetEditor">
+        {{ editorStore.isEditing ? '放弃修改' : '重置指板' }}
       </ActionButton>
+
+      <template v-if="editorStore.isEditing">
+        <div class="bar-divider"></div>
+
+        <ActionButton size="md" variant="ghost" @click="chordActions.saveAsNewChord"> 作为新和弦保存 </ActionButton>
+      </template>
 
       <div class="bar-divider"></div>
 
-      <ActionButton size="md" variant="subtle" :disabled="isSaveDisabled" @click="chordActions.persistCurrentChord()">
-        {{ editorStore.editingId ? '更新保存' : '确认保存' }}
+      <ActionButton size="md" variant="subtle" :disabled="isSaveDisabled" @click="chordActions.persistCurrentChord">
+        {{ editorStore.isEditing ? '更新保存' : '确认保存' }}
       </ActionButton>
     </div>
   </Transition>
@@ -27,35 +33,25 @@ const chordActions = useChordActions();
 
 const barBottomPosition = computed(() => {
   if (uiStore.isMobile) return 'calc(1.8rem + env(safe-area-inset-bottom, 0px))';
-  else return editorStore.fretCount === 3 ? '3.3rem' : '1.8rem';
+  else return editorStore.draftChord.fretCount === 3 ? '3.3rem' : '1.8rem';
 });
 
-const isFloatingBarVisible = computed(() => {
-  const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
+const isPristine = computed(() => {
+  const cleanName = editorStore.draftChord.chordName.trim();
   return (
-    cleanName !== '' ||
-    !editorStore.isFretBoardEmpty ||
-    editorStore.capo > 0 ||
-    editorStore.fretCount > 3 ||
-    editorStore.editingId !== null
-  );
-});
-
-const isSaveDisabled = computed(() => {
-  const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
-  return !cleanName || editorStore.isFretBoardEmpty;
-});
-
-const isClearDisabled = computed(() => {
-  if (editorStore.editingId) return false;
-  const cleanName = editorStore.currentChordName ? editorStore.currentChordName.trim() : '';
-  return (
+    !editorStore.isEditing &&
     cleanName === '' &&
     editorStore.isFretBoardEmpty &&
-    editorStore.capo === 0 &&
-    editorStore.fretCount === 3 &&
-    editorStore.currentTuning === 'STANDARD'
+    editorStore.draftChord.capo === 0 &&
+    editorStore.draftChord.fretCount === 3 &&
+    editorStore.draftChord.tuning === 'STANDARD'
   );
+});
+
+// 4. 保存按钮禁用条件
+const isSaveDisabled = computed(() => {
+  const cleanName = editorStore.draftChord.chordName.trim();
+  return !cleanName || editorStore.isFretBoardEmpty;
 });
 </script>
 
