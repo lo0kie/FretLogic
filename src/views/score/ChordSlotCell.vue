@@ -1,6 +1,7 @@
 <template>
   <div
     class="char-box"
+    ref="charBoxRef"
     :class="{
       'edge-slot': variant !== 'char',
       'add-btn-slot': variant === 'add',
@@ -29,11 +30,12 @@
         draggable="true"
         title="点击更换和弦，按住可拖拽换位"
         @click.stop="emit('click')"
-        @dragstart.stop="emit('dragstart')"
+        @dragstart.stop="emit('dragstart', $event)"
         @dragend="emit('dragend')"
       >
         <button
           v-wave
+          v-if="isVisible"
           type="button"
           class="remove-chord-btn"
           title="清除当前和弦"
@@ -46,14 +48,16 @@
         <span class="inline-chord-name"> {{ chord.chordName }} </span>
 
         <Fretboard
+          v-if="isVisible"
+          :chord="chord"
+          :ref="el => chord && setFretboardMeasureRef(el, chord.fretCount)"
           :interactive="false"
           :scale="0.28 * scoreEditor.fretboardScale"
-          :strings="chord.strings"
-          :capo="chord.capo"
-          :fret-count="chord.fretCount"
           :is-dark-mode="isDarkMode"
           fret-number-size="lg"
         />
+
+        <div v-else :style="getCalculatedOrCachedSize(chord.fretCount)" />
       </div>
 
       <span v-wave v-else-if="variant === 'add'" class="add-edge-placeholder" :title="addPlaceholderTitle">+和弦</span>
@@ -67,12 +71,20 @@
   </div>
 </template>
 
+<script lang="ts">
+import { reactive } from 'vue';
+
+const fretboardSizeCache = reactive<Record<string, { width: string; height: string }>>({});
+</script>
+
 <script setup lang="ts">
 import Fretboard from '@/components/Fretboard.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
+import { getPlaceholderSize } from '@/utils/fretboardVisuals';
 import { X } from '@lucide/vue';
-import { computed } from 'vue';
+import { useIntersectionObserver } from '@vueuse/core';
+import { computed, ref, useTemplateRef, watch, type ComponentPublicInstance } from 'vue';
 
 const props = defineProps<{
   slotKey: string | number;
@@ -82,21 +94,63 @@ const props = defineProps<{
   addPlaceholderTitle?: string;
   isDropTarget: boolean;
   isDarkMode: boolean;
+  isExporting: boolean;
+  scrollRoot?: HTMLElement | null; // 🌟 新增
 }>();
-
-const scoreEditor = useScoreEditorStore();
 
 const emit = defineEmits<{
   (e: 'click'): void;
   (e: 'remove', slotKey: string | number): void;
-  (e: 'dragstart'): void;
+  (e: 'dragstart', event: DragEvent): void;
   (e: 'dragend'): void;
   (e: 'dragover', ev: DragEvent): void;
   (e: 'dragleave', ev: DragEvent): void;
   (e: 'drop'): void;
 }>();
 
-/** 🌟 生成精准的无障碍描述 */
+const isVisible = ref(false);
+const scoreEditor = useScoreEditorStore();
+const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
+
+const { stop: stopObserving } = useIntersectionObserver(
+  charBoxRef,
+  ([entry]) => {
+    if (entry.isIntersecting) {
+      isVisible.value = true;
+      stopObserving();
+    }
+  },
+  { root: () => props.scrollRoot ?? undefined }
+);
+
+const getEffectiveScale = () => 0.28 * scoreEditor.fretboardScale;
+const getCacheKey = (fretCount: number) => `${fretCount}_${getEffectiveScale().toFixed(2)}`;
+
+const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fretCount: number) => {
+  if (!el) return;
+  const cacheKey = getCacheKey(fretCount);
+  if (fretboardSizeCache[cacheKey]) return;
+
+  const domEl = (el as ComponentPublicInstance)?.$el ?? el;
+  if (!(domEl instanceof HTMLElement)) return;
+
+  const rect = domEl.getBoundingClientRect();
+
+  if (rect.width > 0 && rect.height > 0) {
+    fretboardSizeCache[cacheKey] = {
+      width: `${rect.width}px`,
+      height: `${rect.height}px`,
+    };
+  }
+};
+
+const getCalculatedOrCachedSize = (fretCount: number) => {
+  const cacheKey = getCacheKey(fretCount);
+
+  if (fretboardSizeCache[cacheKey]) return fretboardSizeCache[cacheKey];
+  else return getPlaceholderSize(fretCount, getEffectiveScale());
+};
+
 const ariaLabelText = computed(() => {
   if (props.variant === 'add') {
     return '添加边缘和弦槽位';
@@ -107,6 +161,20 @@ const ariaLabelText = computed(() => {
   }
   return `字符 ${charDisplay}，未分配和弦，按 Enter 添加`;
 });
+
+let unwatchExport: (() => void) | null = null;
+
+unwatchExport = watch(
+  () => props.isExporting,
+  exporting => {
+    if (exporting) {
+      isVisible.value = true;
+      stopObserving();
+      unwatchExport?.();
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped lang="less">
@@ -128,7 +196,6 @@ const ariaLabelText = computed(() => {
   cursor: pointer;
   outline: none;
 
-  /* 🌟 Tab 键聚焦高亮 */
   &:focus-visible {
     box-shadow: inset 0 0 0 2px var(--color-primary);
     background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
@@ -234,7 +301,6 @@ const ariaLabelText = computed(() => {
   padding: 0.12rem 0.15rem;
   border-radius: @radius-sm;
   background-color: transparent;
-  border: 1px solid transparent;
   transition: @transition-fast;
   cursor: pointer;
   position: relative;

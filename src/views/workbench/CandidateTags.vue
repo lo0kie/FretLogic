@@ -10,7 +10,6 @@
           :key="candidate.chordName"
           :variant="activeChordName === candidate.chordName ? 'primary' : 'neutral'"
           :appearance="activeChordName === candidate.chordName ? 'filled' : 'subtle'"
-          :size="isMobile ? 'sm' : 'xs'"
           interactive
           class="candidate-badge-item"
           @click="emit('select-candidate', candidate)"

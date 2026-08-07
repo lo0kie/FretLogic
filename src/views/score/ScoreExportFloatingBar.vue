@@ -35,8 +35,8 @@
     <div class="bar-divider"></div>
 
     <div class="bar-actions-zone">
-      <ActionButton size="sm" variant="ghost" @click="emit('toggle-select-all')">
-        {{ isAllSelected ? '全不选' : '全选' }}
+      <ActionButton size="sm" variant="ghost" :primary="isAllSelected" @click="emit('toggle-select-all')">
+        全选
       </ActionButton>
 
       <GlobalTooltip

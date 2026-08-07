@@ -89,37 +89,35 @@ let previousActiveElement: HTMLElement | null = null;
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-// 🌟 1. 设置外层节点为 inert（禁掉主应用内所有的键盘/鼠标/读屏焦点）
 const setExternalInert = (isInert: boolean) => {
-  const appEl = document.getElementById('app') || (document.body.firstElementChild as HTMLElement);
-  if (!appEl) return;
+  const targetEl = document.body.firstElementChild as HTMLElement;
+  if (!targetEl) return;
 
   if (isInert) {
-    appEl.setAttribute('inert', '');
+    targetEl.setAttribute('inert', '');
   } else {
-    appEl.removeAttribute('inert');
+    targetEl.removeAttribute('inert');
   }
 };
+
+let stopKeydownListener: (() => void) | null = null;
 
 watch(
   visible,
   async isOpen => {
     isBodyLocked.value = isOpen;
-    setExternalInert(isOpen); // 🌟 核心：外层挂载/解挂 inert 属性
+    setExternalInert(isOpen);
 
     if (isOpen) {
+      stopKeydownListener = useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Escape') handleCancel();
+      });
+
       previousActiveElement = document.activeElement as HTMLElement;
-
       await nextTick();
-      if (!modalCardRef.value) return;
-
-      const focusables = modalCardRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
-      if (focusables.length > 0) {
-        focusables[0].focus();
-      } else {
-        modalCardRef.value.focus();
-      }
     } else {
+      stopKeydownListener?.();
+      stopKeydownListener = null;
       previousActiveElement?.focus?.();
       previousActiveElement = null;
     }
@@ -153,12 +151,6 @@ const handleKeydownTrap = (e: KeyboardEvent) => {
     }
   }
 };
-
-useEventListener(window, 'keydown', (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && visible.value) {
-    handleCancel();
-  }
-});
 
 onBeforeUnmount(() => {
   setExternalInert(false);

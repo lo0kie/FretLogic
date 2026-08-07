@@ -30,3 +30,5 @@ export const CANVAS_CONFIG = {
 } as const;
 
 export const FRET_COUNTS = [3, 4] as const;
+
+export const PICKER_FRETBOARD_SCALE = 0.38;

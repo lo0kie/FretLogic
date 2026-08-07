@@ -1,22 +1,20 @@
-import {
-  DEFAULT_GROUP_SORT_RULE,
-  DEFAULT_SORT_KEY,
-  ID_PREFIXES,
-  MESSAGES
-} from '@/constants';
-import { useChordService } from '@/services/useChordService';
+import { DEFAULT_GROUP_SORT_RULE, DEFAULT_SORT_KEY, ID_PREFIXES, MESSAGES } from '@/constants';
+import { useChordActions } from '@/services/useChordActions';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
+import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/types';
-import { generateUUID } from '@/utils/validators';
+import { cloneDeep } from '@/utils/cloneDeep';
+import { generateUUID } from '@/utils/id';
 import { reactive } from 'vue';
 
 export function useChordGroupModals() {
   const chordStore = useChordStore();
   const editorStore = useEditorStore();
   const uiStore = useUiStore();
-  const chordService = useChordService();
+  const chordActions = useChordActions();
+  const songStore = useSongStore();
 
   const modals = reactive({
     create: false,
@@ -54,11 +52,10 @@ export function useChordGroupModals() {
       return;
     }
     const newId = ID_PREFIXES.GROUP + generateUUID().slice(0, 8);
-    chordStore.groups.forEach(g => {
-      g.collapsed = true;
-    });
+    const updatedGroups = chordStore.groups.map(g => ({ ...g, collapsed: true }));
+    updatedGroups.push({ id: newId, name: val, collapsed: false, sortRule: DEFAULT_GROUP_SORT_RULE });
 
-    chordStore.groups.push({ id: newId, name: val, collapsed: false, sortRule: DEFAULT_GROUP_SORT_RULE });
+    chordStore.overwriteGroups(updatedGroups);
     chordStore.selectedGroupId = newId;
     modals.create = false;
     uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
@@ -76,7 +73,10 @@ export function useChordGroupModals() {
       uiStore.toast.error('确认失败：请输入有效内容');
       return;
     }
-    if (modalData.activeGroup) modalData.activeGroup.name = val;
+    if (modalData.activeGroup) {
+      const updatedGroups = chordStore.groups.map(g => (g.id === modalData.activeGroup!.id ? { ...g, name: val } : g));
+      chordStore.overwriteGroups(updatedGroups);
+    }
     modals.rename = false;
     uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
   };
@@ -89,16 +89,43 @@ export function useChordGroupModals() {
   const handleDeleteGroup = () => {
     if (!modalData.activeGroup) return;
     const targetGid = modalData.activeGroup.id;
-    if (editorStore.editingId) {
-      const editingChord = chordStore.savedChordsList.find(c => c.id === editorStore.editingId);
-      if (editingChord && editingChord.groupId === targetGid) editorStore.resetEditor();
+    const groupName = modalData.activeGroup.name;
+
+    const groupsSnapshot = cloneDeep(chordStore.groups);
+    const chordsSnapshot = cloneDeep(chordStore.savedChordsList);
+    const songsSnapshot = cloneDeep(songStore.songs);
+
+    if (editorStore.isEditing && editorStore.draftChord.groupId === targetGid) {
+      editorStore.resetEditor();
     }
+
+    const targetChordIds = new Set(
+      chordStore.savedChordsList
+        .filter(c => c.groupId === targetGid)
+        .flatMap(c => [c.id, c.fingerprint].filter(Boolean))
+    );
+
     chordStore.overwriteChords(chordStore.savedChordsList.filter(c => c.groupId !== targetGid));
     chordStore.overwriteGroups(chordStore.groups.filter(g => g.id !== targetGid));
-    if (chordStore.selectedGroupId === targetGid) chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
-    uiStore.clearActionToasts();
+    songStore.unbindChordIds(targetChordIds);
+
+    if (chordStore.selectedGroupId === targetGid) {
+      chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
+    }
+
     modals.delete = false;
-    uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
+
+    uiStore.toast.info(`已删除分组 "${groupName}"`, {
+      actionText: '撤销',
+      duration: 4000,
+      onAction: () => {
+        chordStore.overwriteGroups(groupsSnapshot);
+        chordStore.overwriteChords(chordsSnapshot);
+        songStore.overwriteSongs(songsSnapshot);
+        chordStore.selectedGroupId = targetGid;
+        uiStore.toast.success(`已恢复分组 "${groupName}" 及关联数据`);
+      },
+    });
   };
 
   const openMove = (chord: Chord) => {
@@ -113,13 +140,19 @@ export function useChordGroupModals() {
       return;
     }
     if (!modalData.activeChord) return;
-    const chordIdx = chordStore.savedChordsList.findIndex(c => c.id === modalData.activeChord!.id);
-    if (chordIdx !== -1) {
-      chordStore.savedChordsList[chordIdx].groupId = modalData.moveTargetId;
-      uiStore.clearActionToasts();
-    } else {
-      uiStore.toast.error('移动失败：目标和弦已被删除');
-    }
+
+    const targetName = modalData.activeChord.chordName.trim().toLowerCase();
+    const sourceGid = modalData.activeChord.groupId;
+
+    const updatedChords = chordStore.savedChordsList.map(c => {
+      if (c.groupId === sourceGid && c.chordName.trim().toLowerCase() === targetName) {
+        return { ...c, groupId: modalData.moveTargetId };
+      }
+      return c;
+    });
+
+    chordStore.overwriteChords(updatedChords);
+    uiStore.clearActionToasts();
     modals.move = false;
     uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
   };
@@ -139,8 +172,10 @@ export function useChordGroupModals() {
 
   const handleSaveSort = () => {
     if (modalData.activeGroup) {
-      modalData.activeGroup.sortRule = modalData.sortRule;
-      modalData.activeGroup.sortKey = modalData.sortKey;
+      const updatedGroups = chordStore.groups.map(g =>
+        g.id === modalData.activeGroup!.id ? { ...g, sortRule: modalData.sortRule, sortKey: modalData.sortKey } : g
+      );
+      chordStore.overwriteGroups(updatedGroups);
     }
     modals.sort = false;
     uiStore.toast.success('排序配置已更新');
@@ -148,7 +183,7 @@ export function useChordGroupModals() {
 
   const openChordVariantsDelete = (cardData: GroupedChordCard) => {
     modalData.activeGroupCard = cardData;
-    modalData.selectedVariantIds = new Set<string>();
+    modalData.selectedVariantIds.clear();
     modals.chordVariantsDelete = true;
   };
 
@@ -167,13 +202,13 @@ export function useChordGroupModals() {
       return;
     }
     const chordsToDelete = modalData.activeGroupCard.variants.filter(v => modalData.selectedVariantIds.has(v.id));
-    chordService.triggerDeleteChords(chordsToDelete);
+    chordActions.triggerDeleteChords(chordsToDelete);
     modals.chordVariantsDelete = false;
   };
 
   const handleDeleteAllVariants = () => {
     if (!modalData.activeGroupCard) return;
-    chordService.triggerDeleteChords(modalData.activeGroupCard.variants);
+    chordActions.triggerDeleteChords(modalData.activeGroupCard.variants);
     modals.chordVariantsDelete = false;
   };
 

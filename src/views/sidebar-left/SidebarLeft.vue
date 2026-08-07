@@ -81,7 +81,7 @@
           导入备份
         </ActionButton>
 
-        <ActionButton width="100%" @click="ioService.triggerFullExport()">
+        <ActionButton width="100%" @click="ioService.triggerFullExport">
           <template #prefix><Upload :size="13" :stroke-width="2" /></template>
           全量导出
         </ActionButton>
@@ -90,7 +90,7 @@
   </div>
 
   <!-- 4. 业务弹窗组件集 -->
-  <GroupModalsContainer :group-modals="groupModals" />
+  <GroupModalsContainer ref="groupModalsContainerRef" :group-modals="groupModals" />
   <SongModalsContainer :song-modals="songModals" />
 </template>
 
@@ -127,17 +127,21 @@ const ioService = useImportExportService();
 
 const groupModals = useChordGroupModals();
 const songModals = useSongModals();
+const groupModalsContainerRef = useTemplateRef<InstanceType<typeof GroupModalsContainer>>('groupModalsContainerRef');
 
 const handleImportTrigger = () => fileInputRef.value?.click();
 
-const handleFileChange = (e: Event) => {
+const handleFileChange = async (e: Event) => {
   const target = e.target as HTMLInputElement;
   if (!target.files || target.files.length === 0) return;
   const file = target.files[0];
   const resetInput = () => {
     if (fileInputRef.value) fileInputRef.value.value = '';
   };
-  ioService.processImport(file, resetInput);
+  const payload = await ioService.processImport(file, resetInput);
+  if (payload) {
+    groupModalsContainerRef.value?.openImportModal(payload);
+  }
 };
 </script>
 

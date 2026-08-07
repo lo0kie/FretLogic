@@ -1,17 +1,8 @@
-import { parseSlotKey } from '@/stores/songStore';
-import { getEditDistance } from '@/utils/dataParser';
-import { generateUUID } from './validators';
+import { generateUUID } from './id';
+import { getEditDistance } from './stringDistance';
 
 const SIMILARITY_THRESHOLD = 0.45;
-
 const createLineId = (): string => 'l_' + generateUUID('', 8);
-
-export const sanitizeLyricsText = (lyrics: string): string => {
-  return lyrics
-    .split('\n')
-    .map(line => line.replace(/[\t\r\u3000]+/g, '').trimEnd())
-    .join('\n');
-};
 
 const matchExactLines = (
   oldLines: string[],
@@ -21,13 +12,28 @@ const matchExactLines = (
   const newIds: Array<string | null> = new Array(newLines.length).fill(null);
   const usedOldIndices = new Set<number>();
 
+  // 1. 按内容分组，记录每种内容对应的旧行下标（保持原有升序）
+  const contentToIndices = new Map<string, number[]>();
+  for (let j = 0; j < oldLines.length; j++) {
+    const list = contentToIndices.get(oldLines[j]);
+    if (list) list.push(j);
+    else contentToIndices.set(oldLines[j], [j]);
+  }
+
+  // 2. 每种内容各自维护一个"消费到第几个了"的游标
+  const cursors = new Map<string, number>();
+
   for (let i = 0; i < newLines.length; i++) {
-    for (let j = 0; j < oldLines.length; j++) {
-      if (!usedOldIndices.has(j) && newIds[i] === null && oldLines[j] === newLines[i]) {
-        newIds[i] = oldIds[j];
-        usedOldIndices.add(j);
-        break;
-      }
+    const content = newLines[i];
+    const indices = contentToIndices.get(content);
+    if (!indices) continue; // 旧行里压根没有这个内容，跳过
+
+    const cursor = cursors.get(content) ?? 0;
+    if (cursor < indices.length) {
+      const j = indices[cursor];
+      newIds[i] = oldIds[j];
+      usedOldIndices.add(j);
+      cursors.set(content, cursor + 1);
     }
   }
 
@@ -44,19 +50,29 @@ const matchSimilarLines = (
   for (let i = 0; i < newLines.length; i++) {
     if (newIds[i] !== null) continue;
 
+    const newLen = newLines[i].length;
     let bestMatchIdx = -1;
     let minDistance = Infinity;
 
     for (let j = 0; j < oldLines.length; j++) {
       if (usedOldIndices.has(j)) continue;
 
+      const oldLen = oldLines[j].length;
+      const maxLength = Math.max(oldLen, newLen) || 1;
+
+      // 🌟 剪枝：仅凭长度差就能算出相似度上界，上界已经不达标就跳过，
+      // 不用真的去算这一对昂贵的编辑距离
+      const lengthDiff = Math.abs(oldLen - newLen);
+      const maxPossibleSimilarity = 1 - lengthDiff / maxLength;
+      if (maxPossibleSimilarity < SIMILARITY_THRESHOLD) continue;
+
       const dist = getEditDistance(oldLines[j], newLines[i]);
-      const maxLength = Math.max(oldLines[j].length, newLines[i].length);
-      const similarity = 1 - dist / (maxLength || 1);
+      const similarity = 1 - dist / maxLength;
 
       if (similarity >= SIMILARITY_THRESHOLD && dist < minDistance) {
         minDistance = dist;
         bestMatchIdx = j;
+        if (dist === 0) break; // 已经是最好情况，不会有更小的距离了，提前退出内层循环
       }
     }
 
@@ -75,23 +91,4 @@ export const matchLineIds = (oldLines: string[], newLines: string[], oldLineIds:
   const { newIds, usedOldIndices } = matchExactLines(oldLines, newLines, oldLineIds);
   matchSimilarLines(oldLines, newLines, oldLineIds, newIds, usedOldIndices);
   return assignNewIds(newIds);
-};
-
-export const garbageCollectChordMap = (
-  chordMap: Record<string, string>,
-  finalLineIds: string[]
-): { map: Record<string, string>; changed: boolean } => {
-  const finalIdsSet = new Set(finalLineIds);
-  const updatedMap = { ...chordMap };
-  let changed = false;
-
-  Object.keys(updatedMap).forEach(key => {
-    const parsed = parseSlotKey(key);
-    if (parsed && !finalIdsSet.has(parsed.lineId)) {
-      delete updatedMap[key];
-      changed = true;
-    }
-  });
-
-  return { map: updatedMap, changed };
 };

@@ -17,10 +17,9 @@
       }"
       @contextmenu.prevent.stop="handleRightClickRoot"
     >
-      <!-- 应用动态的顶部偏移量，并在 showOpenStrings 为 false 时卸载内容 -->
       <div class="open-strings-wrapper" :style="{ height: `${activeTopOffset}px` }">
         <template v-if="showOpenStrings">
-          <template v-for="(str, sIdx) in strings" :key="'os-' + sIdx">
+          <template v-for="(str, sIdx) in chord.strings" :key="'os-' + sIdx">
             <GlobalTooltip
               placement="top"
               :content="
@@ -36,10 +35,11 @@
             >
               <button
                 v-wave
-                :tabindex="interactive && str.fret <= 0 ? 0 : -1"
+                :tabindex="interactive ? 0 : -1"
                 role="button"
                 :aria-label="getOpenStringAriaLabel(sIdx, str)"
-                :aria-disabled="!interactive || str.fret > 0"
+                :aria-disabled="!interactive"
+                :title="str.fret > 0 ? undefined : getOpenStringAriaLabel(sIdx, str)"
                 @click.stop="handleLocalToggleOpenString(sIdx)"
                 @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
                 @keydown.enter.prevent.stop="handleLocalToggleOpenString(sIdx)"
@@ -56,7 +56,7 @@
                 <template v-if="str.fret <= 0">
                   <X v-if="isMuted(str)" class="mute-icon" stroke-width="3" aria-hidden="true" />
                   <span v-else-if="isOpen(str)" class="open-note-text">
-                    {{ calcNoteLabel(sIdx, 0, capo, str.preferFlat, activeBaseStrings) }}
+                    {{ calcNoteLabel(sIdx, 0, chord.capo, str.preferFlat, getActiveBaseStrings(chord.tuning)) }}
                   </span>
                 </template>
               </button>
@@ -66,10 +66,10 @@
       </div>
 
       <FretboardSvg
-        :strings="strings"
-        :fret-count="fretCount"
-        :capo="capo"
-        :active-base-strings="activeBaseStrings"
+        :strings="chord.strings"
+        :fret-count="chord.fretCount"
+        :capo="chord.capo"
+        :active-base-strings="getActiveBaseStrings(chord.tuning)"
         :is-dark-mode="isDarkMode"
         :interactive="interactive"
         :is-mobile="uiStore.isMobile"
@@ -84,49 +84,43 @@
 </template>
 
 <script setup lang="ts">
-import { X } from '@lucide/vue';
-
 import FretboardSvg from '@/components/FretboardSvg.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { CANVAS_CONFIG } from '@/constants';
 import { useFretboardInteraction } from '@/services/useFretboardInteraction';
 import { useUiStore } from '@/stores/uiStore';
-import type { GuitarStringsModel } from '@/types';
+import type { Chord, GuitarStringsModel } from '@/types';
 import { getOpenStringStatusClass, getOpenStringStyle } from '@/utils/fretboardVisuals';
-import { calcNoteLabel, DEFAULT_TUNING_MAPPING, isMuted, isOpen } from '@/utils/musicTheory';
+import { calcNoteLabel, getActiveBaseStrings, isMuted, isOpen } from '@/utils/musicTheory';
+import { X } from '@lucide/vue';
 
-const props = withDefaults(
-  defineProps<{
-    strings: GuitarStringsModel;
-    fretCount: number;
-    capo: number;
-    activeBaseStrings?: readonly number[];
-    isDarkMode?: boolean;
-    interactive?: boolean;
-    scale?: number;
-    fretNumberSize?: 'sm' | 'md' | 'lg';
-    showOpenStrings?: boolean;
-    showFretNumbers?: boolean;
-    bgColor?: string; // 🌟 支持自定义背景色
-    bordered?: boolean;
-  }>(),
-  {
-    activeBaseStrings: () => DEFAULT_TUNING_MAPPING,
-    isDarkMode: false,
-    interactive: true,
-    scale: 1.0,
-    fretNumberSize: 'md',
-    showOpenStrings: true,
-    showFretNumbers: true,
-    bgColor: 'transparent',
-    bordered: false,
-  }
-);
+export interface FretboardProps {
+  chord: Chord;
+  isDarkMode?: boolean;
+  interactive?: boolean;
+  scale?: number;
+  fretNumberSize?: 'sm' | 'md' | 'lg';
+  showOpenStrings?: boolean;
+  showFretNumbers?: boolean;
+  bgColor?: string;
+  bordered?: boolean;
+}
+
+const props = withDefaults(defineProps<FretboardProps>(), {
+  isDarkMode: false,
+  interactive: true,
+  scale: 1.0,
+  fretNumberSize: 'md',
+  showOpenStrings: true,
+  showFretNumbers: true,
+  bgColor: 'transparent',
+  bordered: false,
+});
 
 const emit = defineEmits<{
-  (e: 'update:strings', value: GuitarStringsModel): void;
-  (e: 'update:capo', value: number): void;
   (e: 'drag-status-change', isDragging: boolean): void;
+  (e: 'update:strings', strings: GuitarStringsModel): void;
+  (e: 'update:capo', capo: number): void;
 }>();
 
 const uiStore = useUiStore();
@@ -143,17 +137,22 @@ const {
   handleRightClickRoot,
   handleLocalToggleOpenString,
   handleTogglePitchName,
-} = useFretboardInteraction(props, emit);
+} = useFretboardInteraction(
+  props,
+  capo => emit('update:capo', capo),
+  strings => emit('update:strings', strings),
+  isDragging => emit('drag-status-change', isDragging)
+);
 
 const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) => {
   const stringNum = 6 - sIdx;
   if (str.fret > 0) {
-    return `第 ${stringNum} 弦（已按第 ${str.fret} 品）`;
+    return `第 ${stringNum} 弦（已按第 ${str.fret} 品，点击清除按音）`;
   }
   if (isMuted(str)) {
     return `第 ${stringNum} 弦（静音，点击切换为空弦）`;
   }
-  const noteName = calcNoteLabel(sIdx, 0, props.capo, str.preferFlat, props.activeBaseStrings);
+  const noteName = calcNoteLabel(sIdx, 0, props.chord.capo, str.preferFlat, getActiveBaseStrings(props.chord.tuning));
   return `第 ${stringNum} 弦（空弦 ${noteName}，点击切换为静音）`;
 };
 </script>
@@ -180,7 +179,6 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
     background-color @duration-fast ease,
     border-color @duration-fast ease;
 
-  /* 边框切换 */
   &.is-bordered {
     border: 1px solid var(--border-light);
     border-radius: @radius-md;
@@ -235,7 +233,8 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
   }
 
   &.block-events {
-    pointer-events: none;
+    pointer-events: none !important;
+    cursor: default;
   }
 
   &.is-fret-available:active {
@@ -248,7 +247,6 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
     background-color: transparent !important;
     border-color: transparent !important;
     box-shadow: none !important;
-    pointer-events: none !important;
   }
 
   &.is-muted-status {

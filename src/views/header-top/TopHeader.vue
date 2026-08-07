@@ -30,10 +30,7 @@
 
     <!-- 2. 中间：试听 / 导出胶囊 / 模式切换工具栏 -->
     <div class="header-section section-center">
-      <HeaderWorkbenchTools
-        v-if="route.path === '/workbench'"
-        @export-image="isTrans => emit('export-image', isTrans)"
-      />
+      <HeaderWorkbenchTools v-if="route.path === '/workbench'" />
       <HeaderScoreTools v-else-if="route.path === '/score'" />
     </div>
 
@@ -85,7 +82,6 @@ import ScoreConfigPopover from './ScoreConfigPopover.vue';
 import SyncModalContainer from './SyncModalContainer.vue';
 
 const emit = defineEmits<{
-  (e: 'export-image', isTransparent: boolean): void;
   (e: 'toggle-theme', event: MouseEvent): void;
 }>();
 
@@ -93,9 +89,8 @@ const route = useRoute();
 const router = useRouter();
 
 const activeNavPath = computed(() => {
-  if (!isRouterReady.value) return null;
   const matched = NAV_OPTIONS.find(opt => opt.value === route.path);
-  return matched ? matched.value : null;
+  return matched?.value ?? '';
 });
 
 const NAV_OPTIONS: SegmentOption<string>[] = [
@@ -106,13 +101,7 @@ const NAV_OPTIONS: SegmentOption<string>[] = [
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
-
 const isSyncModalOpen = ref(false);
-const isRouterReady = ref(false);
-
-router.isReady().then(() => {
-  isRouterReady.value = true;
-});
 </script>
 
 <style scoped lang="less">

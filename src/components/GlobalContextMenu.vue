@@ -1,5 +1,10 @@
 <template>
-  <div @contextmenu="handleContextMenu" class="context-menu-trigger-wrapper" v-bind="$attrs">
+  <div
+    @contextmenu="handleContextMenu"
+    class="context-menu-trigger-wrapper"
+    :class="{ 'is-disabled': disabled }"
+    v-bind="$attrs"
+  >
     <slot></slot>
   </div>
 
@@ -39,6 +44,7 @@
             @keydown.space.prevent.stop="handleItemClick(item)"
             class="menu-item"
             :class="[item.danger ? 'is-danger' : 'is-normal', item.disabled ? 'is-disabled' : '']"
+            :title="item.title"
           >
             <component :is="item.icon" v-if="item.icon" :size="13" :stroke-width="2.5" aria-hidden="true" />
             <span>{{ item.label }}</span>
@@ -65,14 +71,19 @@ export interface ContextMenuItem {
   action: () => void;
   danger?: boolean;
   disabled?: boolean;
+  title?: string;
 }
 
 defineOptions({ name: 'GlobalContextMenu', inheritAttrs: false });
 
-const props = defineProps<{
-  items: ContextMenuItem[];
-  title?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    items: ContextMenuItem[];
+    title?: string;
+    disabled?: boolean;
+  }>(),
+  { disabled: false }
+);
 
 const isOpen = ref(false);
 const x = ref(0);
@@ -113,7 +124,7 @@ const closeMenu = () => {
 };
 
 const openMenuAt = (clientX: number, clientY: number) => {
-  if (!props.items || props.items.length === 0) return;
+  if (props.disabled || !props.items || props.items.length === 0) return;
 
   if (globalActiveMenuCloseFn.value && globalActiveMenuCloseFn.value !== closeMenu) {
     globalActiveMenuCloseFn.value();
@@ -127,7 +138,7 @@ const openMenuAt = (clientX: number, clientY: number) => {
 };
 
 const handleContextMenu = (e: MouseEvent) => {
-  if (!props.items || props.items.length === 0) return;
+  if (props.disabled || !props.items || props.items.length === 0) return;
 
   e.preventDefault();
   e.stopPropagation();
@@ -227,6 +238,9 @@ defineExpose({
 .context-menu-trigger-wrapper {
   width: 100%;
   cursor: context-menu;
+  &.is-disabled {
+    cursor: default;
+  }
 }
 
 .context-menu-backdrop {

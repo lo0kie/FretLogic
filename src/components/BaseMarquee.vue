@@ -1,5 +1,10 @@
 <template>
-  <div ref="containerRef" v-element-hover="onHoverChange" class="marquee-container">
+  <div
+    ref="containerRef"
+    v-element-hover="onHoverChange"
+    class="marquee-container"
+    :style="{ '--scroll-dist': scrollDist }"
+  >
     <span ref="contentRef" class="marquee-content" :class="{ 'is-scrolling': isScrolling }">
       <slot></slot>
     </span>
@@ -13,6 +18,7 @@ import { ref, useTemplateRef } from 'vue';
 const containerRef = useTemplateRef<HTMLDivElement>('containerRef');
 const contentRef = useTemplateRef<HTMLSpanElement>('contentRef');
 const isScrolling = ref(false);
+const scrollDist = ref('0px');
 
 const onHoverChange = (hovered: boolean) => {
   if (hovered) {
@@ -22,12 +28,12 @@ const onHoverChange = (hovered: boolean) => {
     const scrollWidth = contentRef.value.scrollWidth;
 
     if (scrollWidth > clientWidth) {
-      containerRef.value.style.setProperty('--scroll-dist', `${scrollWidth - clientWidth}px`);
+      scrollDist.value = `${scrollWidth - clientWidth}px`;
       isScrolling.value = true;
     }
   } else {
     isScrolling.value = false;
-    containerRef.value?.style.removeProperty('--scroll-dist');
+    scrollDist.value = '0px';
   }
 };
 </script>
