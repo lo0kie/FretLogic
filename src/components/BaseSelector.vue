@@ -10,6 +10,7 @@
     :class="[`size-${size}`, { 'is-active': isOpen, 'is-disabled': disabled }]"
     @click="toggleDropdown"
     @keydown="handleTriggerKeydown"
+    v-bind="$attrs"
     v-wave
   >
     <span class="label-zone" :class="[isNonDefault ? 'is-custom' : 'is-default']">
@@ -92,15 +93,18 @@ import { ChevronDown, X } from '@lucide/vue';
 import { vOnClickOutside } from '@vueuse/components';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 
-export interface SelectorOptionObject<T = any> {
+export interface SelectorOptionObject<T> {
   label: string;
   value: T;
   disabled?: boolean;
 }
 
+defineOptions({ inheritAttrs: false });
+
 const {
   options,
   size = 'md',
+  width = 'auto',
   clearable = false,
   disabled = false,
   defaultValue,
@@ -122,7 +126,27 @@ const {
   formatter?: (value: T) => string;
   labelFormatter?: (value: T) => string;
   optionFormatter?: (value: T) => string;
+  width?: 'auto' | 'full' | 'sm' | 'md' | 'lg';
 }>();
+
+const presetWidth = computed(() => {
+  if (!width) return '100%';
+
+  switch (width) {
+    case 'auto':
+      return 'auto';
+    case 'full':
+      return '100%';
+    case 'sm':
+      return '5.5rem';
+    case 'md':
+      return '8rem';
+    case 'lg':
+      return '11rem';
+    default:
+      return '100%';
+  }
+});
 
 const modelValue = defineModel<T>({ required: true });
 
@@ -310,7 +334,7 @@ watch(isOpen, opened => {
 
 .selector-trigger-bar {
   position: relative;
-  width: 100%;
+  width: v-bind(presetWidth);
 
   display: flex;
   align-items: center;

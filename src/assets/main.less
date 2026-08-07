@@ -1,4 +1,21 @@
 ﻿@import '@/assets/tokens.module';
+@import 'normalize.css';
+@import 'nprogress/nprogress.css';
+
+#nprogress {
+  pointer-events: none;
+
+  .bar {
+    background: color-mix(in srgb, @primary, transparent 20%);
+    height: 3px;
+  }
+
+  .peg {
+    box-shadow:
+      0 0 10px var(--color-primary),
+      0 0 5px var(--color-primary);
+  }
+}
 
 html {
   font-size: 22.25px;

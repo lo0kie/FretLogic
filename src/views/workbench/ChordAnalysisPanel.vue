@@ -15,7 +15,7 @@
             <!-- 1. 推荐候选标签子组件 -->
             <CandidateTags
               :candidates="analysis.candidates"
-              :active-chord-name="editorStore.currentChordName"
+              :active-chord-name="editorStore.draftChord.chordName"
               :is-mobile="uiStore.isMobile"
               :custom-height="noteListRef?.height"
               @select-candidate="handleSelectCandidate"
@@ -75,8 +75,8 @@ const EXACT_INTERVAL_MAP: Record<number, string> = {
 };
 
 const analysis = computed(() => {
-  const strings = editorStore.strings;
-  const capo = editorStore.capo;
+  const strings = editorStore.draftChord.strings;
+  const capo = editorStore.draftChord.capo;
   const baseStrings = editorStore.activeBaseStrings;
 
   const rawNotes: NoteInput[] = [];
@@ -100,7 +100,7 @@ const analysis = computed(() => {
   }
 
   const { candidates, bestRootPitch } = analyzeChordGraph(rawNotes, explicitRootPitch);
-  const selectedCandidate = candidates.find(c => c.chordName === editorStore.currentChordName);
+  const selectedCandidate = candidates.find(c => c.chordName === editorStore.draftChord.chordName);
   const activeRootPitch = selectedCandidate ? selectedCandidate.rootPitch : bestRootPitch;
 
   const notes: RenderNoteItem[] = rawNotes.map(n => {
@@ -120,26 +120,26 @@ const analysis = computed(() => {
 });
 
 const handleTogglePitchName = (sIdx: number) => {
-  const str = editorStore.strings[sIdx];
-  if (canTogglePitchAccidental(sIdx, str.fret, editorStore.capo, editorStore.activeBaseStrings)) {
+  const str = editorStore.draftChord.strings[sIdx];
+  if (canTogglePitchAccidental(sIdx, str.fret, editorStore.draftChord.capo, editorStore.activeBaseStrings)) {
     str.preferFlat = !str.preferFlat;
   }
 };
 
 const handleSelectCandidate = (candidate: CandidateResult) => {
-  const isSelected = editorStore.currentChordName === candidate.chordName;
+  const isSelected = editorStore.draftChord.chordName === candidate.chordName;
 
   if (isSelected) {
-    editorStore.currentChordName = '';
-    editorStore.strings.forEach(str => {
+    editorStore.draftChord.chordName = '';
+    editorStore.draftChord.strings.forEach(str => {
       str.isRoot = false;
     });
   } else {
     let rootAssigned = false;
-    editorStore.currentChordName = candidate.chordName;
-    editorStore.strings.forEach((str, sIdx) => {
+    editorStore.draftChord.chordName = candidate.chordName;
+    editorStore.draftChord.strings.forEach((str, sIdx) => {
       if (str.fret >= 0) {
-        const pitch = calcPitchIndex(sIdx, str.fret, editorStore.capo, editorStore.activeBaseStrings);
+        const pitch = calcPitchIndex(sIdx, str.fret, editorStore.draftChord.capo, editorStore.activeBaseStrings);
         const match = pitch === candidate.rootPitch && !rootAssigned;
         str.isRoot = match;
         if (match) rootAssigned = true;
@@ -151,7 +151,7 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
 };
 
 const handleSetRootString = (stringIndex: number) => {
-  editorStore.strings.forEach((str, sIdx) => {
+  editorStore.draftChord.strings.forEach((str, sIdx) => {
     str.isRoot = sIdx === stringIndex;
   });
 };

@@ -37,21 +37,32 @@ export function useSongModals() {
     },
   });
 
-  const openCreateSongModal = () => {
+  const resetModalData = () => {
+    modalData.activeSong = null;
     modalData.inputValue = '';
+    modalData.title = '';
+    modalData.playKey = 'C';
+    modalData.capo = 0;
+  };
+
+  const openCreateSongModal = () => {
+    resetModalData();
     modals.create = true;
   };
 
   const handleCreateSong = () => {
     const title = modalData.inputValue.trim();
-    if (!title) return;
+    if (!title) {
+      uiStore.toast.warning('创建失败：请输入乐谱名称');
+      return;
+    }
     const newSong = songStore.createSong(title);
 
     scoreEditor.setActiveSong(newSong.id);
     scoreEditor.activeTab = 'edit';
-    if (uiStore.isMobile) uiStore.isLeftOpen = false;
 
     modals.create = false;
+    resetModalData();
     uiStore.toast.success('新建乐谱成功');
   };
 
@@ -80,6 +91,7 @@ export function useSongModals() {
       uiStore.toast.success('乐谱配置已更新');
     }
     modals.config = false;
+    resetModalData();
   };
 
   const openClear = (song: Song) => {
@@ -93,6 +105,7 @@ export function useSongModals() {
       uiStore.toast.success('已清除该乐谱的所有和弦');
     }
     modals.clear = false;
+    resetModalData();
   };
 
   return {

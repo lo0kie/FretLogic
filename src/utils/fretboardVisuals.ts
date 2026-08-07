@@ -1,4 +1,4 @@
-import { FRETBOARD_COLORS } from '@/constants';
+import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_SCALE_MAP } from '@/constants';
 import type { GuitarStringEntity } from '@/types';
 import { isMuted, isOpen } from '@/utils/musicTheory';
 
@@ -28,4 +28,30 @@ export const getFingerColor = (str: GuitarStringEntity, isDarkMode: boolean): st
 
 export const getFingerTextColor = (str: GuitarStringEntity, isDarkMode: boolean): string => {
   return str.isRoot && isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
+};
+
+const placeholderSizeCache = new Map<string, { width: string; height: string }>();
+
+export const getPlaceholderSize = (fretCount: number, customScale = 1.0) => {
+  const scaleKey = Math.round(customScale * 1000);
+  const cacheKey = `${fretCount}_${scaleKey}`;
+
+  const cached = placeholderSizeCache.get(cacheKey);
+  if (cached) return cached;
+
+  const rawHeight = CANVAS_CONFIG.OFFSET_Y_TOP + fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
+  const fretboardScale = (FRETBOARD_SCALE_MAP[fretCount] ?? 1.0) * customScale; // 🌟 去掉内置的 0.28
+
+  const size = {
+    width: `${CANVAS_CONFIG.BOARD_WIDTH * fretboardScale}px`,
+    height: `${rawHeight * fretboardScale}px`,
+  };
+
+  if (placeholderSizeCache.size >= 32) {
+    const oldestKey = placeholderSizeCache.keys().next().value;
+    if (oldestKey !== undefined) placeholderSizeCache.delete(oldestKey);
+  }
+
+  placeholderSizeCache.set(cacheKey, size);
+  return size;
 };

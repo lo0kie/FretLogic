@@ -25,9 +25,9 @@
           role="button"
           :aria-expanded="!group.collapsed"
           :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${group.collapsed ? '已折叠' : '已展开'}`"
-          @click="chordService.executeGroupToggle(group.id)"
-          @keydown.enter.prevent="chordService.executeGroupToggle(group.id)"
-          @keydown.space.prevent="chordService.executeGroupToggle(group.id)"
+          @click="chordActions.executeGroupToggle(group)"
+          @keydown.enter.prevent="chordActions.executeGroupToggle(group)"
+          @keydown.space.prevent="chordActions.executeGroupToggle(group)"
           class="group-title-row"
           :class="{
             'is-expanded': !group.collapsed,
@@ -97,18 +97,19 @@
         >
           <div v-show="!group.collapsed" class="chord-content-wrapper" @contextmenu.stop>
             <div class="chord-content-inner">
+              <!-- 🌟 优化：只读取计算好的 Map，避免双重调用 -->
               <TransitionGroup
-                v-if="getGroupedCardData(group.id).length > 0"
+                v-if="(groupedCardsMap.get(group.id) || []).length > 0"
                 name="chord-y-fade"
                 tag="div"
                 class="chords-grid-layout"
               >
                 <LeftChordCard
-                  v-for="cardData in getGroupedCardData(group.id)"
+                  v-for="cardData in groupedCardsMap.get(group.id) || []"
                   :key="cardData.mainChord.chordName"
                   :card-data="cardData"
                   @delete-variants="cardData => $emit('open-delete-variants', cardData)"
-                  :is-editing="cardData.variants.some(c => c.id === editorStore.editingId)"
+                  :is-editing="cardData.variants.some(c => c.id === editorStore.draftChord.id)"
                   @delete="handleLocalDeleteChord"
                   @move="chord => $emit('open-move', chord)"
                   @select="handleSelectChord"
@@ -132,7 +133,7 @@ import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
-import { useChordService } from '@/services/useChordService';
+import { useChordActions } from '@/services/useChordActions.ts';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -157,20 +158,18 @@ const emit = defineEmits<{
 
 const editorStore = useEditorStore();
 const chordStore = useChordStore();
-const chordService = useChordService();
+const chordActions = useChordActions();
 const uiStore = useUiStore();
 
 const groupCardEls = useTemplateRef<HTMLElement[]>('groupCardEls');
 const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>('contextMenuRefs');
-
-const chordLowerNameCache = new WeakMap<Chord, string>();
 
 // 只有当所有分组均处于折叠状态时才允许拖拽
 const isAllCollapsed = computed(() => {
   return chordStore.groups.every(g => g.collapsed);
 });
 
-// 折叠/展开动画钩子：动态计算高度与透明度，兼顾 overflow 解锁
+// 折叠/展开动画钩子
 const onEnterBefore = (el: Element) => {
   const element = el as HTMLElement;
   element.style.overflow = 'hidden';
@@ -190,7 +189,7 @@ const onEnterAfter = (el: Element) => {
   const element = el as HTMLElement;
   element.style.height = 'auto';
   element.style.opacity = '';
-  element.style.overflow = 'visible'; // 展开完成后解锁 overflow，避免伪元素阴影被裁剪
+  element.style.overflow = 'visible';
 };
 
 const onLeaveBefore = (el: Element) => {
@@ -215,43 +214,79 @@ const onLeaveAfter = (el: Element) => {
 };
 
 const handleSelectChord = (chord: Chord) => {
-  if (editorStore.editingId === chord.id) {
+  if (editorStore.draftChord.id === chord.id) {
     editorStore.resetEditor();
     return;
   }
-  chordService.loadChordToEditor(chord);
+  editorStore.setEditor(chord);
 };
 
 const getSortLabel = (group: Group): string => {
   switch (group.sortRule) {
     case 'ROOT_PITCH':
-      return '音名';
+      return 'C-B';
     case 'KEY_DEGREE':
       return `${group.sortKey}调`;
     case 'NAME_ASC':
       return 'A-Z';
     default:
-      group.sortRule = 'ROOT_PITCH';
-      return 'ROOT_PITCH';
+      return 'C-B';
   }
 };
 
 const getMatchCount = (groupId: string): number => {
-  return (filteredChordsGroupMap.value.get(groupId) || []).length;
+  return matchCountMap.value.get(groupId) || 0;
 };
 
 const hasMatchedChords = (groupId: string): boolean => {
   return getMatchCount(groupId) > 0;
 };
 
-const getChordLowerName = (chord: Chord): string => {
-  let cached = chordLowerNameCache.get(chord);
-  if (!cached) {
-    cached = chord.chordName.toLowerCase();
-    chordLowerNameCache.set(chord, cached);
-  }
-  return cached;
-};
+const matchCountMap = computed(() => {
+  const map = new Map<string, number>();
+
+  filteredChordsMap.value.forEach((chords, groupId) => {
+    map.set(groupId, chords.length);
+  });
+  return map;
+});
+
+const filteredChordsMap = computed(() => {
+  const map = new Map<string, Chord[]>();
+  const queryKeyword = props.searchQuery.toLowerCase().trim();
+
+  chordStore.groups.forEach(group => {
+    const originalChords = chordStore.groupChordMap.get(group.id) || [];
+    if (!queryKeyword) {
+      map.set(group.id, originalChords);
+    } else {
+      map.set(
+        group.id,
+        originalChords.filter(c => c.chordName.toLowerCase().includes(queryKeyword))
+      );
+    }
+  });
+
+  return map;
+});
+
+const groupedCardsMap = computed(() => {
+  const map = new Map<string, GroupedChordCard[]>();
+  const queryKeyword = props.searchQuery.toLowerCase().trim();
+
+  chordStore.groups.forEach(group => {
+    if (group.collapsed && !queryKeyword) {
+      map.set(group.id, []);
+      return;
+    }
+
+    const list = filteredChordsMap.value.get(group.id) || [];
+    const sortedList = sortChordsByRule(list, group.sortRule, group.sortKey);
+    map.set(group.id, groupChordsByName(sortedList));
+  });
+
+  return map;
+});
 
 const isGroupMenuOpen = (groupId: string): boolean => {
   const idx = chordStore.groups.findIndex(g => g.id === groupId);
@@ -262,32 +297,12 @@ const isGroupMenuOpen = (groupId: string): boolean => {
 };
 
 const getGroupChordsCount = (groupId: string) => {
-  return chordStore.groupChordMap.get(groupId)?.length || 0;
-};
-
-const filteredChordsGroupMap = computed(() => {
-  const map = new Map<string, Chord[]>();
-  const queryKeyword = props.searchQuery.toLowerCase().trim();
-
-  chordStore.groups.forEach(group => {
-    const originalChords = chordStore.groupChordMap.get(group.id) || [];
-    let list = queryKeyword ? originalChords.filter(c => getChordLowerName(c).includes(queryKeyword)) : originalChords;
-
-    list = sortChordsByRule(list, group.sortRule, group.sortKey);
-    map.set(group.id, list);
-  });
-
-  return map;
-});
-
-const getGroupedCardData = (groupId: string): GroupedChordCard[] => {
-  const chords = filteredChordsGroupMap.value.get(groupId) || [];
-  return groupChordsByName(chords);
+  return chordStore.groupChordMap.get(groupId)?.length ?? 0;
 };
 
 const handleLocalDeleteChord = (chord: Chord) => {
-  const isEditingCurrent = editorStore.editingId === chord.id;
-  chordService.triggerDeleteChord(chord);
+  const isEditingCurrent = editorStore.draftChord.id === chord.id;
+  chordActions.triggerDeleteChord(chord);
   if (isEditingCurrent) editorStore.resetEditor();
 };
 

@@ -15,25 +15,13 @@
     <div class="capsule-divider"></div>
 
     <GlobalTooltip content="导出透明背景图片" placement="bottom">
-      <ActionButton
-        size="sm"
-        icon-only
-        variant="ghost"
-        :disabled="uiStore.isCopying"
-        @click="emit('export-image', true)"
-      >
+      <ActionButton size="sm" icon-only variant="ghost" :disabled="uiStore.isCopying" @click="handleExport(true)">
         <Image :size="16" stroke-width="2" />
       </ActionButton>
     </GlobalTooltip>
 
     <GlobalTooltip content="导出带背景卡片切图" placement="bottom" class="hidden-mobile">
-      <ActionButton
-        size="sm"
-        icon-only
-        variant="ghost"
-        :disabled="uiStore.isCopying"
-        @click="emit('export-image', false)"
-      >
+      <ActionButton size="sm" icon-only variant="ghost" :disabled="uiStore.isCopying" @click="handleExport(false)">
         <Copy :size="16" stroke-width="2" />
       </ActionButton>
     </GlobalTooltip>
@@ -46,15 +34,36 @@ import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useAudioPlayer } from '@/services/useAudioPlayer';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useUiStore } from '@/stores/uiStore';
+import { copyElementToClipboard } from '@/utils/domExporter';
 import { Copy, Image, Play, Square } from '@lucide/vue';
-
-const emit = defineEmits<{
-  (e: 'export-image', isTransparent: boolean): void;
-}>();
+import { unref } from 'vue';
 
 const editorStore = useEditorStore();
 const uiStore = useUiStore();
 const { isPlaying, playCurrentChord } = useAudioPlayer();
+
+const handleExport = async (isTransparent: boolean) => {
+  if (uiStore.isCopying) return;
+
+  const el = unref(uiStore.activeExportTarget);
+  if (!el) {
+    uiStore.toast.error('导出失败：目标 DOM 节点尚未渲染完成');
+    return;
+  }
+
+  uiStore.isCopying = true;
+  uiStore.toast.info(isTransparent ? '正在导出透明底色快照...' : '正在导出带卡片背景快照...');
+
+  try {
+    await copyElementToClipboard(el, { isTransparent });
+    uiStore.toast.success('成功复制至系统剪贴板');
+  } catch (err) {
+    console.error('Fretboard Exporter Error:', err);
+    uiStore.toast.error('导出失败：当前浏览器内核环境受限');
+  } finally {
+    uiStore.isCopying = false;
+  }
+};
 </script>
 
 <style scoped lang="less">

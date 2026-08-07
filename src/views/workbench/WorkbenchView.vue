@@ -1,18 +1,15 @@
 <template>
   <div class="workbench-layout-wrapper">
-    <!-- 指板与分析面板的容器 -->
     <div class="workbench-scroll-container">
       <div class="workbench-card-center-zone">
         <WorkbenchCard />
       </div>
 
-      <!-- 面板仍在容器内，但通过 CSS 脱离文档流 -->
       <div class="analysis-panel-slot">
         <ChordAnalysisPanel />
       </div>
     </div>
 
-    <!-- 底部吸附操作按钮栏 -->
     <FloatingActionBar />
   </div>
 </template>

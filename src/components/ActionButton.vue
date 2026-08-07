@@ -3,7 +3,7 @@
     v-wave
     :disabled="disabled || loading"
     @click="handleInternalClick"
-    :style="{ height, width }"
+    :style="normalizedStyle"
     class="action-button-base"
     :class="[sizeClass, themeClass, variantClass, roundedClass, { 'is-icon-only': iconOnly, 'is-active': active }]"
   >
@@ -47,8 +47,8 @@ const {
   variant?: 'default' | 'subtle' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   rounded?: 'none' | 'sm' | 'md' | 'lg' | 'full';
-  width?: string;
-  height?: string;
+  width?: string | number;
+  height?: string | number;
 }>();
 
 const emit = defineEmits<{
@@ -66,6 +66,18 @@ const themeClass = computed(() => {
   return 'theme-default';
 });
 
+const normalizedStyle = computed(() => {
+  const style: Record<string, string> = {};
+
+  if (width !== undefined) {
+    style.width = typeof width === 'number' ? `${width}px` : width;
+  }
+  if (height !== undefined) {
+    style.height = typeof height === 'number' ? `${height}px` : height;
+  }
+  return style;
+});
+
 const variantClass = computed(() => `variant-${variant}`);
 const sizeClass = computed(() => `size-${size}`);
 const roundedClass = computed(() => `rounded-${rounded}`);
@@ -74,7 +86,6 @@ const roundedClass = computed(() => `rounded-${rounded}`);
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 
-/* 1. 基础容器：定义通用结构与动画 */
 .action-button-base {
   display: inline-flex;
   align-items: center;
@@ -101,7 +112,6 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   }
 }
 
-/* 2. 尺寸（Size）：统一控制高度、字体大小与内边距 */
 .size-sm {
   height: v-bind(HEIGHT_SM);
   padding: 0 0.65rem;
@@ -123,7 +133,6 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   gap: 0.5rem;
 }
 
-/* 3. 变体（Variant）样式 */
 .variant-subtle {
   background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
   border-color: color-mix(in srgb, var(--color-primary), transparent 90%);
@@ -139,14 +148,22 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   border-color: transparent;
   color: var(--text-disabled);
 
+  &.theme-primary {
+    color: var(--color-primary);
+  }
+  &.theme-danger {
+    color: var(--color-danger);
+  }
+  &.theme-warning {
+    color: var(--color-warning);
+  }
+
   &:hover:not(:disabled) {
     background-color: var(--bg-panel-hover);
-    color: var(--text-title);
   }
 }
 
-/* 4. 主题（Theme）样式 */
-.theme-primary {
+.theme-primary:not(.variant-subtle):not(.variant-ghost) {
   background-color: var(--color-primary);
   border-color: transparent;
   color: #ffffff;
@@ -157,7 +174,7 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   }
 }
 
-.theme-danger {
+.theme-danger:not(.variant-subtle):not(.variant-ghost) {
   color: var(--color-danger);
   border-color: transparent;
   background-color: color-mix(in srgb, var(--color-danger), transparent 88%);
@@ -167,7 +184,7 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   }
 }
 
-.theme-warning {
+.theme-warning:not(.variant-subtle):not(.variant-ghost) {
   color: var(--color-warning);
   border-color: transparent;
   background-color: color-mix(in srgb, var(--color-warning), transparent 88%);
@@ -189,21 +206,18 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   }
 }
 
-/* 5. 激活状态（Active） */
 .action-button-base.is-active {
   background-color: color-mix(in srgb, var(--color-primary), transparent 88%);
   color: var(--color-primary);
   border-color: color-mix(in srgb, var(--color-primary), transparent 75%);
 }
 
-/* 6. Icon-Only 修正模式：严格保证正方形且继承当前 size 的 height */
 .action-button-base.is-icon-only {
   padding: 0;
   width: auto;
   aspect-ratio: 1 / 1;
 }
 
-/* 7. 圆角（Rounded）：定义在文件最下方以保证 highest CSS priority */
 .action-button-base.rounded-none {
   border-radius: 0;
 }
@@ -220,7 +234,6 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   border-radius: 9999px;
 }
 
-/* 辅助图标与内容样式 */
 .loading-icon {
   width: 1rem;
   height: 1rem;

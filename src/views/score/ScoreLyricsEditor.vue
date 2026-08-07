@@ -1,8 +1,7 @@
 <template>
   <div class="lyrics-editor-zone">
     <textarea
-      :value="scoreEditor.activeSong?.lyrics"
-      @input="handleInput"
+      v-model="localLyrics"
       class="lyrics-textarea no-scrollbar"
       placeholder="在此处输入或粘贴歌词文本..."
     ></textarea>
@@ -11,15 +10,39 @@
 
 <script setup lang="ts">
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
+import { useDebounceFn } from '@vueuse/core';
+import { onBeforeUnmount, ref, watch } from 'vue';
 
 defineOptions({ name: 'ScoreLyricsEditor' });
 
 const scoreEditor = useScoreEditorStore();
+const localLyrics = ref(scoreEditor.activeSong?.lyrics ?? '');
 
-const handleInput = (e: Event) => {
-  const value = (e.target as HTMLTextAreaElement).value;
+watch(
+  () => [scoreEditor.activeSongId, scoreEditor.activeSong?.lyrics] as const,
+  ([, lyrics]) => {
+    const next = lyrics ?? '';
+    if (next !== localLyrics.value) {
+      localLyrics.value = next;
+    }
+  }
+);
+
+const commitLyrics = useDebounceFn((value: string) => {
+  if (value === (scoreEditor.activeSong?.lyrics ?? '')) return;
   scoreEditor.updateLyrics(value);
-};
+}, 300);
+
+watch(localLyrics, value => {
+  commitLyrics(value);
+});
+
+onBeforeUnmount(() => {
+  const value = localLyrics.value;
+  if (value !== (scoreEditor.activeSong?.lyrics ?? '')) {
+    scoreEditor.updateLyrics(value);
+  }
+});
 </script>
 
 <style scoped lang="less">

@@ -51,6 +51,7 @@
         >
           <BaseMarquee class="move-marquee">
             <span class="group-btn-text">{{ group.name }}</span>
+            <span class="group-count-text">({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})</span>
           </BaseMarquee>
         </button>
       </GlobalTooltip>
@@ -67,14 +68,7 @@
     <div class="sort-modal-body">
       <div class="sort-config-row">
         <label class="config-label">排序规则</label>
-        <BaseSegmentedControl
-          v-model="groupModals.modalData.sortRule"
-          :options="[
-            { label: 'C-B 音名', value: 'ROOT_PITCH' },
-            { label: '调内级数', value: 'KEY_DEGREE' },
-            { label: '名称 A-Z', value: 'NAME_ASC' },
-          ]"
-        />
+        <BaseSegmentedControl v-model="groupModals.modalData.sortRule" :options="SORT_RULE_CONFIG" />
       </div>
       <div v-if="groupModals.modalData.sortRule === 'KEY_DEGREE'" class="sort-config-row">
         <label class="config-label">调式设定</label>
@@ -129,13 +123,11 @@
               :bordered="false"
               bg-color="transparent"
               fret-number-size="lg"
+              :chord="variant"
               :interactive="false"
               :scale="0.32"
               :show-open-strings="false"
               :show-fret-numbers="false"
-              :strings="variant.strings"
-              :capo="variant.capo"
-              :fret-count="variant.fretCount"
               :is-dark-mode="settingsStore.isDarkMode"
             />
           </div>
@@ -164,25 +156,21 @@
 
   <!-- 7. 自定义导入内容选择 Modal -->
   <BaseModal
-    v-model:visible="ioService.isImportSelectionModalOpen.value"
+    v-model:visible="isImportModalOpen"
     title="自定义选择导入内容"
     width="w-lg"
     :confirm-text="importConfirmText"
-    @confirm="ioService.applySelectedImport"
+    @confirm="handleConfirmImport"
   >
     <div class="variants-delete-modal-content">
       <div class="import-tab-bar">
         <BaseSegmentedControl v-model="importActiveTab" :options="IMPORT_TAB_OPTIONS" size="sm" />
       </div>
 
-      <!-- 和弦资产 Tab -->
       <div v-show="importActiveTab === 'chords'" class="import-panel-scroll no-scrollbar">
-        <div
-          v-if="ioService.pendingImportData.value?.groups && ioService.pendingImportData.value.groups.length > 0"
-          class="import-groups-grid"
-        >
+        <div v-if="pendingImportData?.groups && pendingImportData.groups.length > 0" class="import-groups-grid">
           <div
-            v-for="group in ioService.pendingImportData.value.groups"
+            v-for="group in pendingImportData.groups"
             :key="group.id"
             class="import-group-simple-card"
             :class="{ 'is-selected': isImportGroupAllSelected(group.id) }"
@@ -201,13 +189,13 @@
       </div>
 
       <div v-show="importActiveTab === 'songs'" class="import-panel-scroll no-scrollbar">
-        <template v-if="ioService.pendingImportData.value?.songs && ioService.pendingImportData.value.songs.length > 0">
+        <template v-if="pendingImportData?.songs && pendingImportData.songs.length > 0">
           <div class="import-songs-grid">
             <div
-              v-for="song in ioService.pendingImportData.value.songs"
+              v-for="song in pendingImportData.songs"
               :key="song.id"
               class="import-song-item-card"
-              :class="{ 'is-selected': ioService.selectedImportState.songIds.has(song.id) }"
+              :class="{ 'is-selected': selectedImportState.songIds.has(song.id) }"
               @click="toggleImportSong(song.id)"
               role="button"
               tabindex="0"
@@ -236,12 +224,16 @@ import BaseSelector from '@/components/BaseSelector.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { SORT_RULE_CONFIG } from '@/constants';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
 import { useImportExportService } from '@/services/useImportExportService';
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { Chord } from '@/types';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+
+import type { ImportExportPayload } from '@/types';
+import { reactive } from 'vue';
 
 const props = defineProps<{ groupModals: ReturnType<typeof useChordGroupModals> }>();
 
@@ -249,7 +241,29 @@ const chordStore = useChordStore();
 const settingsStore = useSettingsStore();
 const ioService = useImportExportService();
 
-// 多指法和弦删除全选逻辑
+const isImportModalOpen = ref(false);
+const pendingImportData = ref<ImportExportPayload | null>(null);
+const selectedImportState = reactive({
+  groupIds: new Set<string>(),
+  chordIds: new Set<string>(),
+  songIds: new Set<string>(),
+});
+
+const openImportModal = (payload: ImportExportPayload) => {
+  pendingImportData.value = payload;
+  selectedImportState.groupIds = new Set((payload.groups || []).map(g => g.id));
+  selectedImportState.chordIds = new Set((payload.chords || []).map(c => c.id));
+  selectedImportState.songIds = new Set((payload.songs || []).map(s => s.id));
+  isImportModalOpen.value = true;
+};
+
+const handleConfirmImport = () => {
+  if (!pendingImportData.value) return;
+  ioService.applySelectedImport(pendingImportData.value, selectedImportState);
+  isImportModalOpen.value = false;
+  pendingImportData.value = null;
+};
+
 const isAllVariantsSelected = computed(() => {
   const variants = props.groupModals.modalData.activeGroupCard?.variants;
   if (!variants || variants.length === 0) return false;
@@ -266,7 +280,6 @@ const handleToggleSelectAllVariants = () => {
   }
 };
 
-// 按需导入选择逻辑
 const importActiveTab = ref<'chords' | 'songs'>('chords');
 const IMPORT_TAB_OPTIONS: SegmentOption<'chords' | 'songs'>[] = [
   { label: '和弦', value: 'chords' },
@@ -274,13 +287,13 @@ const IMPORT_TAB_OPTIONS: SegmentOption<'chords' | 'songs'>[] = [
 ];
 
 const getImportGroupChords = (groupId: string): Chord[] => {
-  return (ioService.pendingImportData.value?.chords || []).filter(c => c.groupId === groupId);
+  return (pendingImportData.value?.chords || []).filter(c => c.groupId === groupId);
 };
 
 const isImportGroupAllSelected = (groupId: string) => {
   const chords = getImportGroupChords(groupId);
-  if (chords.length === 0) return ioService.selectedImportState.groupIds.has(groupId);
-  return chords.every(c => ioService.selectedImportState.chordIds.has(c.id));
+  if (chords.length === 0) return selectedImportState.groupIds.has(groupId);
+  return chords.every(c => selectedImportState.chordIds.has(c.id));
 };
 
 const toggleImportGroup = (groupId: string) => {
@@ -288,30 +301,48 @@ const toggleImportGroup = (groupId: string) => {
   const allSelected = isImportGroupAllSelected(groupId);
 
   if (allSelected) {
-    ioService.selectedImportState.groupIds.delete(groupId);
-    chords.forEach(c => ioService.selectedImportState.chordIds.delete(c.id));
+    selectedImportState.groupIds.delete(groupId);
+    chords.forEach(c => selectedImportState.chordIds.delete(c.id));
   } else {
-    ioService.selectedImportState.groupIds.add(groupId);
-    chords.forEach(c => ioService.selectedImportState.chordIds.add(c.id));
+    selectedImportState.groupIds.add(groupId);
+    chords.forEach(c => selectedImportState.chordIds.add(c.id));
   }
 };
 
 const toggleImportSong = (songId: string) => {
-  if (ioService.selectedImportState.songIds.has(songId)) {
-    ioService.selectedImportState.songIds.delete(songId);
+  if (selectedImportState.songIds.has(songId)) {
+    selectedImportState.songIds.delete(songId);
   } else {
-    ioService.selectedImportState.songIds.add(songId);
+    selectedImportState.songIds.add(songId);
   }
 };
 
-const selectedGroupCount = computed(() => ioService.selectedImportState.groupIds.size);
-const selectedSongCount = computed(() => ioService.selectedImportState.songIds.size);
+const selectedGroupCount = computed(() => selectedImportState.groupIds.size);
+const selectedSongCount = computed(() => selectedImportState.songIds.size);
 
 const importConfirmText = computed(() => {
   const parts: string[] = [];
   if (selectedGroupCount.value > 0) parts.push(`${selectedGroupCount.value} 个分组`);
   if (selectedSongCount.value > 0) parts.push(`${selectedSongCount.value} 首乐谱`);
   return parts.length > 0 ? `导入 ${parts.join('、')}` : '导入';
+});
+
+const resetImportState = () => {
+  pendingImportData.value = null;
+  selectedImportState.groupIds.clear();
+  selectedImportState.chordIds.clear();
+  selectedImportState.songIds.clear();
+  importActiveTab.value = 'chords';
+};
+
+watch(isImportModalOpen, isOpen => {
+  if (!isOpen) {
+    resetImportState();
+  }
+});
+
+defineExpose({
+  openImportModal,
 });
 </script>
 
@@ -344,7 +375,7 @@ const importConfirmText = computed(() => {
 
 .move-target-btn {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: 0.6rem 0.75rem;
   border-radius: @radius-md;
   font-size: 0.75rem;
   font-weight: 700;
@@ -395,11 +426,19 @@ const importConfirmText = computed(() => {
   min-width: 0;
   width: 100%;
 
-  span {
-    display: block;
+  .group-btn-text {
+    font-weight: 700;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .group-count-text {
+    font-size: 0.65rem;
+    font-weight: 600;
+    opacity: 0.65;
+    white-space: nowrap;
+    font-family: monospace;
   }
 }
 

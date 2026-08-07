@@ -1,6 +1,4 @@
-<!-- src/views/header-top/SyncModalContainer.vue -->
 <template>
-  <!-- 1. 云端同步设置 Modal -->
   <BaseModal v-model:visible="isSyncModalOpen" title="云端同步设置" :show-footer="false" width="w-80">
     <SyncSettingsCard
       :is-syncing="isSyncing"
@@ -10,32 +8,29 @@
     />
   </BaseModal>
 
-  <!-- 🌟 2. 挂载数据合并对照 Modal -->
-  <SyncMergeModal />
+  <SyncMergeModal v-model:visible="isMergeModalOpen" :pending-cloud-data="pendingCloudData" />
 </template>
 
 <script setup lang="ts">
 import BaseModal from '@/components/BaseModal.vue';
 import { useGithubSyncService } from '@/services/useGithubSyncService';
-import SyncMergeModal from './SyncMergeModal.vue'; // 🌟 引入 Modal
+import type { ImportExportPayload } from '@/types';
+import { ref } from 'vue';
+import SyncMergeModal from './SyncMergeModal.vue';
 import SyncSettingsCard from './SyncSettingsCard.vue';
 
 const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true });
+const isMergeModalOpen = ref(false);
+const pendingCloudData = ref<ImportExportPayload | null>(null);
 
 const { triggerGlobalSync, pullFromGithub, isSyncing, isPulling } = useGithubSyncService();
 
-const handlePullClick = () => {
-  pullFromGithub();
+const handlePullClick = async () => {
+  const result = await pullFromGithub();
   isSyncModalOpen.value = false;
+  if (result.hasDifferences && result.cloudData) {
+    pendingCloudData.value = result.cloudData;
+    isMergeModalOpen.value = true;
+  }
 };
 </script>
-
-<style scoped lang="less">
-.modal-text {
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.6;
-  color: var(--text-body);
-  margin: 0;
-}
-</style>

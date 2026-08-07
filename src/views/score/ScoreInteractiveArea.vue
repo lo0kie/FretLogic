@@ -11,7 +11,7 @@
       size="lg"
     />
 
-    <div v-else class="lyrics-lines-container" :class="{ 'is-export-mode': isExporting }">
+    <div v-else class="lyrics-lines-container" :class="{ 'is-export-mode': isExporting }" ref="lyricsRef">
       <div v-show="isExporting && includeMetaBar" class="export-header-meta">
         <h1 class="export-song-title">{{ scoreEditor.activeSong?.title }}</h1>
         <div class="export-song-info">
@@ -28,7 +28,7 @@
         :data-line-idx="lineData.lineId"
         class="lyrics-line"
         :class="{
-          'is-line-selected': !isExporting && selectedLineSet.has(lineData.lineIdx),
+          'is-line-selected': selectedLineSet.has(lineData.lineIdx),
         }"
         @click="e => handleLineClick(e, lineData.lineIdx)"
       >
@@ -45,6 +45,8 @@
         <!-- 1. 行首插槽区域 -->
         <div class="edge-chords-group" @dragover.prevent="handleGlobalDragOver">
           <ChordSlotCell
+            :is-exporting="isExporting"
+            :scroll-root="scoreZoneRef"
             variant="add"
             :slot-key="lineData.nextStartKey"
             add-placeholder-title="点击添加行首和弦"
@@ -58,6 +60,8 @@
           />
 
           <ChordSlotCell
+            :is-exporting="isExporting"
+            :scroll-root="scoreZoneRef"
             v-for="item in lineData.startChords"
             :key="item.slotKey"
             variant="edge"
@@ -69,7 +73,7 @@
             @dragover="handleDragOver($event, item.slotKey)"
             @dragleave="handleDragLeave"
             @drop="handleDrop(item.slotKey)"
-            @dragstart="handleDragStart(item.slotKey)"
+            @dragstart="handleDragStart($event, item.slotKey)"
             @dragend="handleDragEnd"
             @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
           />
@@ -77,6 +81,8 @@
 
         <!-- 2. 中间字符和弦区 -->
         <ChordSlotCell
+          :is-exporting="isExporting"
+          :scroll-root="scoreZoneRef"
           v-for="item in lineData.chars"
           :key="item.slotKey"
           variant="char"
@@ -89,7 +95,7 @@
           @dragover="handleDragOver($event, item.slotKey)"
           @dragleave="handleDragLeave"
           @drop="handleDrop(item.slotKey)"
-          @dragstart="handleDragStart(item.slotKey)"
+          @dragstart="handleDragStart($event, item.slotKey)"
           @dragend="handleDragEnd"
           @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
         />
@@ -97,6 +103,8 @@
         <!-- 3. 行尾插槽区域 -->
         <div class="edge-chords-group" @dragover.prevent="handleGlobalDragOver">
           <ChordSlotCell
+            :is-exporting="isExporting"
+            :scroll-root="scoreZoneRef"
             v-for="item in lineData.endChords"
             :key="item.slotKey"
             variant="edge"
@@ -108,12 +116,14 @@
             @dragover="handleDragOver($event, item.slotKey)"
             @dragleave="handleDragLeave"
             @drop="handleDrop(item.slotKey)"
-            @dragstart="handleDragStart(item.slotKey)"
+            @dragstart="handleDragStart($event, item.slotKey)"
             @dragend="handleDragEnd"
             @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
           />
 
           <ChordSlotCell
+            :is-exporting="isExporting"
+            :scroll-root="scoreZoneRef"
             variant="add"
             :slot-key="lineData.nextEndKey"
             add-placeholder-title="点击添加行尾和弦"
@@ -134,12 +144,13 @@
 <script setup lang="ts">
 import EmptyState from '@/components/EmptyState.vue';
 import { useLyricsDragDrop } from '@/services/useLyricsDragDrop';
-import { useLyricsLinesData } from '@/services/useLyricsLinesData';
+import { useScoreLinesData } from '@/services/useScoreLinesData.ts';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useUiStore } from '@/stores/uiStore.ts';
 import type { Chord } from '@/types';
 import { FileText } from '@lucide/vue';
-import { useTemplateRef } from 'vue';
+import { onBeforeUnmount, onMounted, useTemplateRef } from 'vue';
 import ChordSlotCell from './ChordSlotCell.vue';
 
 defineOptions({ name: 'ScoreInteractiveArea' });
@@ -155,10 +166,12 @@ const emit = defineEmits<{
   (e: 'line-click', lineIdx: number): void;
 }>();
 
+const uiStore = useUiStore();
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 
 const scoreZoneRef = useTemplateRef<HTMLElement>('scoreZoneRef');
+const lyricsRef = useTemplateRef<HTMLElement>('lyricsRef');
 
 const {
   dragOverSlotKey,
@@ -170,7 +183,7 @@ const {
   handleDrop,
 } = useLyricsDragDrop();
 
-const { lyricsLinesWithEdges, chordsLookupMap } = useLyricsLinesData();
+const { lyricsLinesWithEdges, chordsLookupMap } = useScoreLinesData();
 
 const formatLineIndex = (index: number) => String(index + 1).padStart(2, '0');
 
@@ -189,6 +202,14 @@ const handleLineClick = (ev: MouseEvent, lineIdx: number) => {
 
   emit('line-click', lineIdx);
 };
+
+onMounted(() => {
+  uiStore.activeExportTarget = lyricsRef.value ?? null;
+});
+
+onBeforeUnmount(() => {
+  if (uiStore.activeExportTarget === lyricsRef.value) uiStore.activeExportTarget = null;
+});
 
 defineExpose({ scoreZoneRef });
 </script>
@@ -215,8 +236,30 @@ defineExpose({ scoreZoneRef });
   min-width: 100%;
 
   &.is-export-mode {
+    min-width: 0 !important;
+    width: max-content !important;
+
     :deep(.add-btn-slot) {
       display: none !important;
+    }
+
+    .lyrics-line {
+      transition: none !important;
+
+      .index-text-tag {
+        transition: none !important;
+      }
+
+      &:not(.is-line-selected) {
+        display: none !important;
+      }
+
+      &.is-line-selected {
+        min-width: 0 !important;
+        width: max-content !important;
+        background-color: transparent !important;
+        border-color: transparent !important;
+      }
     }
   }
 }

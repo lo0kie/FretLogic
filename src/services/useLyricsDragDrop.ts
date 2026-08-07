@@ -17,7 +17,10 @@ export function useLyricsDragDrop() {
     setMoveEffect(e);
   };
 
-  const handleDragStart = (slotKey: string | number) => {
+  const handleDragStart = (e: DragEvent, slotKey: string | number) => {
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+    }
     draggingSlotKey.value = slotKey;
     document.body.classList.add('is-global-dragging');
   };

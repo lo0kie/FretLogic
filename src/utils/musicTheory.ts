@@ -1,5 +1,5 @@
 ﻿import type { Chord, GroupedChordCard, GroupSortRule, GuitarStringEntity } from '@/types';
-import { cloneDeep } from './dataParser';
+import { cloneDeep } from './cloneDeep';
 
 export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 export const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -31,6 +31,12 @@ export const TUNING_PRESETS: Record<
   [TuningEnum.HALF_STEP]: { name: 'Half Step Down', mapping: TUNING_MAPPING_HALF_STEP },
 };
 
+/** 半音是否为升降号：C#/Db, D#/Eb, F#/Gb, G#/Ab, A#/Bb 静态位图查表 */
+const ACCIDENTAL_PITCH = Object.freeze([false, true, false, true, false, false, true, false, true, false, true, false]);
+
+/** 自然三和弦音程：1、♭3、3、5 → 相对根音 0/3/4/7 */
+const isChordToneRelative = (rel: number) => rel === 0 || rel === 3 || rel === 4 || rel === 7;
+
 export const isMuted = (s: GuitarStringEntity) => s.fret === -1;
 export const isOpen = (s: GuitarStringEntity) => s.fret === 0;
 
@@ -51,9 +57,7 @@ export const calcPitchIndex = (
   return (base + fretVal + actualOffset) % 12;
 };
 
-export const isAccidentalNote = (pitchIndex: number): boolean => {
-  return [1, 3, 6, 8, 10].includes(pitchIndex);
-};
+export const isAccidentalNote = (pitchIndex: number): boolean => ACCIDENTAL_PITCH[((pitchIndex % 12) + 12) % 12];
 
 export const canTogglePitchAccidental = (
   sIdx: number,
@@ -105,6 +109,7 @@ export const getChordRootPitch = (chordName: string): number => {
   return ROOT_PITCH_MAP[match[1]] ?? 99;
 };
 
+// 🌟 1. 单次循环判定转位：在一次循环内同时搜寻低音（Bass）与显式标记的根音（Root）
 export const computeIsInverted = (
   strings: GuitarStringEntity[],
   capoVal: number,
@@ -112,82 +117,113 @@ export const computeIsInverted = (
   chordName: string
 ): boolean => {
   const baseStrings = TUNING_PRESETS[tuning as TuningEnum]?.mapping || DEFAULT_TUNING_MAPPING;
+
   let rootPitch = 99;
   let hasMarkedRoot = false;
+  let bassPitch = -1;
 
-  strings.forEach((str, sIdx) => {
-    if (str.isRoot && str.fret >= 0) {
+  for (let sIdx = 0; sIdx < strings.length; sIdx++) {
+    const str = strings[sIdx];
+    if (str.fret < 0) continue;
+
+    const p = calcPitchIndex(sIdx, str.fret, capoVal, baseStrings);
+    if (bassPitch === -1) bassPitch = p;
+    if (str.isRoot && !hasMarkedRoot) {
       hasMarkedRoot = true;
-      rootPitch = calcPitchIndex(sIdx, str.fret, capoVal, baseStrings);
+      rootPitch = p;
     }
-  });
+  }
 
   if (!hasMarkedRoot) {
     rootPitch = getChordRootPitch(chordName);
   }
 
-  let bassPitch = -1;
-  strings.forEach((str, sIdx) => {
-    if (str.fret >= 0) {
-      const p = calcPitchIndex(sIdx, str.fret, capoVal, baseStrings);
-      if (bassPitch === -1) bassPitch = p;
-    }
-  });
-
   return bassPitch !== -1 && rootPitch !== 99 && bassPitch !== rootPitch;
 };
 
+// 🌟 2. 位图替代 Set 集合：用 Bitmask 记录音高，零内存分配
 const getColorNoteCountAndPitches = (chord: Chord, rootPitch: number) => {
-  if (rootPitch === 99) return { colorNoteCount: 0, chordPitches: new Set<number>() };
-  const baseStrings = TUNING_PRESETS[chord.tuning]?.mapping || DEFAULT_TUNING_MAPPING;
-  const chordPitches = new Set<number>();
+  if (rootPitch === 99) return { colorNoteCount: 0, pitchMask: 0 };
 
-  chord.strings.forEach((str, sIdx) => {
+  const baseStrings = TUNING_PRESETS[chord.tuning as TuningEnum]?.mapping || DEFAULT_TUNING_MAPPING;
+  let pitchMask = 0;
+
+  const strings = chord.strings;
+  for (let sIdx = 0; sIdx < strings.length; sIdx++) {
+    const str = strings[sIdx];
     if (str.fret >= 0) {
-      chordPitches.add(calcPitchIndex(sIdx, str.fret, chord.capo, baseStrings));
+      const p = calcPitchIndex(sIdx, str.fret, chord.capo, baseStrings);
+      pitchMask |= 1 << p;
     }
-  });
-
-  let count = 0;
-  chordPitches.forEach(p => {
-    const relativeToRoot = (p - rootPitch + 12) % 12;
-    if (![0, 3, 4, 7].includes(relativeToRoot)) {
-      count++;
-    }
-  });
-
-  return { colorNoteCount: count, chordPitches };
-};
-
-export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey = 'C'): Chord[] => {
-  const effectiveRule: GroupSortRule = rule && rule !== ('CUSTOM' as any) ? rule : 'ROOT_PITCH';
-  const list = [...chords];
-
-  if (effectiveRule === 'NAME_ASC') {
-    return list.sort((a, b) => a.chordName.localeCompare(b.chordName));
   }
 
-  const mappedList = list.map(chord => {
-    const baseStrings = TUNING_PRESETS[chord.tuning]?.mapping || DEFAULT_TUNING_MAPPING;
-    let hasMarkedRoot = false;
-    let rootPitch = 99;
+  let count = 0;
+  for (let p = 0; p < 12; p++) {
+    if ((pitchMask & (1 << p)) === 0) continue;
+    const rel = (p - rootPitch + 12) % 12;
+    if (!isChordToneRelative(rel)) count++;
+  }
 
-    chord.strings.forEach((str, sIdx) => {
-      if (str.isRoot && str.fret >= 0) {
-        hasMarkedRoot = true;
-        rootPitch = calcPitchIndex(sIdx, str.fret, chord.capo, baseStrings);
-      }
-    });
+  return { colorNoteCount: count, pitchMask };
+};
 
-    if (!hasMarkedRoot) {
-      rootPitch = getChordRootPitch(chord.chordName);
+const DIATONIC_INTERVALS_MASK = (1 << 0) | (1 << 2) | (1 << 4) | (1 << 5) | (1 << 7) | (1 << 9) | (1 << 11); // 0,2,4,5,7,9,11 自然音阶位图
+
+const DIATONIC_DEGREE_MAP = Object.freeze([1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6, 7]);
+
+interface SortMeta {
+  chord: Chord;
+  hasMarkedRoot: boolean;
+  rootPitch: number;
+  isInverted: boolean;
+  colorNoteCount: number;
+}
+
+const buildSortMeta = (chord: Chord): SortMeta => {
+  const baseStrings = TUNING_PRESETS[chord.tuning as TuningEnum]?.mapping || DEFAULT_TUNING_MAPPING;
+  let hasMarkedRoot = false;
+  let rootPitch = 99;
+
+  const strings = chord.strings;
+  for (let sIdx = 0; sIdx < strings.length; sIdx++) {
+    const str = strings[sIdx];
+    if (str.isRoot && str.fret >= 0) {
+      hasMarkedRoot = true;
+      rootPitch = calcPitchIndex(sIdx, str.fret, chord.capo, baseStrings);
+      break; // 根音只会被标记一次，找到后立刻中断
     }
+  }
 
-    const { colorNoteCount } = getColorNoteCountAndPitches(chord, rootPitch);
-    const isInverted = chord.isInverted ?? false;
+  if (!hasMarkedRoot) {
+    rootPitch = getChordRootPitch(chord.chordName);
+  }
 
-    return { chord, hasMarkedRoot, rootPitch, isInverted, colorNoteCount };
-  });
+  const { colorNoteCount } = getColorNoteCountAndPitches(chord, rootPitch);
+
+  return {
+    chord,
+    hasMarkedRoot,
+    rootPitch,
+    isInverted: chord.isInverted ?? false,
+    colorNoteCount,
+  };
+};
+
+// 🌟 3. 排序高热路径优化：避免中间多余数组构造，支持 ≤1 短数组快速返回
+export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey = 'C'): Chord[] => {
+  if (chords.length <= 1) return chords.slice();
+
+  const effectiveRule: GroupSortRule = rule ?? 'ROOT_PITCH';
+
+  if (effectiveRule === 'NAME_ASC') {
+    return chords.slice().sort((a, b) => a.chordName.localeCompare(b.chordName));
+  }
+
+  const n = chords.length;
+  const mappedList: SortMeta[] = new Array(n);
+  for (let i = 0; i < n; i++) {
+    mappedList[i] = buildSortMeta(chords[i]);
+  }
 
   if (effectiveRule === 'ROOT_PITCH') {
     mappedList.sort((a, b) => {
@@ -197,40 +233,41 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
       if (a.colorNoteCount !== b.colorNoteCount) return a.colorNoteCount - b.colorNoteCount;
       return a.chord.chordName.localeCompare(b.chord.chordName);
     });
-    return mappedList.map(item => item.chord);
-  }
-
-  if (effectiveRule === 'KEY_DEGREE') {
+  } else if (effectiveRule === 'KEY_DEGREE') {
     const keyPitch = ROOT_PITCH_MAP[sortKey] ?? 0;
-    const diatonicIntervals = new Set([0, 2, 4, 5, 7, 9, 11]);
-    const DIATONIC_DEGREE_MAP = [1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6, 7];
 
-    const degreeMappedList = mappedList.map(item => {
-      let isRootDiatonic = false;
-      let degree = 99;
+    mappedList.sort((a, b) => {
+      if (a.hasMarkedRoot !== b.hasMarkedRoot) return a.hasMarkedRoot ? -1 : 1;
 
-      if (item.rootPitch !== 99) {
-        const intervalToKey = (item.rootPitch - keyPitch + 12) % 12;
-        degree = DIATONIC_DEGREE_MAP[intervalToKey];
-        isRootDiatonic = diatonicIntervals.has(intervalToKey);
+      let aDiatonic = false;
+      let bDiatonic = false;
+      let aDegree = 99;
+      let bDegree = 99;
+
+      if (a.rootPitch !== 99) {
+        const ia = (a.rootPitch - keyPitch + 12) % 12;
+        aDegree = DIATONIC_DEGREE_MAP[ia];
+        aDiatonic = (DIATONIC_INTERVALS_MASK & (1 << ia)) !== 0;
+      }
+      if (b.rootPitch !== 99) {
+        const ib = (b.rootPitch - keyPitch + 12) % 12;
+        bDegree = DIATONIC_DEGREE_MAP[ib];
+        bDiatonic = (DIATONIC_INTERVALS_MASK & (1 << ib)) !== 0;
       }
 
-      return { ...item, isRootDiatonic, degree };
-    });
-
-    degreeMappedList.sort((a, b) => {
-      if (a.hasMarkedRoot !== b.hasMarkedRoot) return a.hasMarkedRoot ? -1 : 1;
-      if (a.isRootDiatonic !== b.isRootDiatonic) return a.isRootDiatonic ? -1 : 1;
-      if (a.degree !== b.degree) return a.degree - b.degree;
+      if (aDiatonic !== bDiatonic) return aDiatonic ? -1 : 1;
+      if (aDegree !== bDegree) return aDegree - bDegree;
       if (a.isInverted !== b.isInverted) return a.isInverted ? 1 : -1;
       if (a.colorNoteCount !== b.colorNoteCount) return a.colorNoteCount - b.colorNoteCount;
       return a.chord.chordName.localeCompare(b.chord.chordName);
     });
-
-    return degreeMappedList.map(item => item.chord);
+  } else {
+    return chords.slice();
   }
 
-  return list;
+  const out = new Array<Chord>(n);
+  for (let i = 0; i < n; i++) out[i] = mappedList[i].chord;
+  return out;
 };
 
 export const transposeChordName = (chordName: string, semitones: number): string => {
@@ -254,31 +291,32 @@ export const getKeySemitones = (key1: string, key2: string): number => {
   return diff;
 };
 
+// 🌟 4. 变体指法合并优化：单指法直接跳过 sort
 export const groupChordsByName = (chords: Chord[]): GroupedChordCard[] => {
   const map = new Map<string, Chord[]>();
 
-  chords.forEach(chord => {
+  for (let i = 0; i < chords.length; i++) {
+    const chord = chords[i];
     const key = chord.chordName.trim().toLowerCase();
-    if (!map.has(key)) {
-      map.set(key, []);
-    }
-    map.get(key)!.push(chord);
-  });
+    const bucket = map.get(key);
+    if (bucket) bucket.push(chord);
+    else map.set(key, [chord]);
+  }
 
   const result: GroupedChordCard[] = [];
 
   map.forEach(variants => {
-    // 🌟 在变体合并展示时，优先把「原位和弦」作为主指法，其次再按 Capo 排序
-    variants.sort((a, b) => {
-      const aInverted = a.isInverted ?? false;
-      const bInverted = b.isInverted ?? false;
-      if (aInverted !== bInverted) return aInverted ? 1 : -1;
-      return (a.capo ?? 0) - (b.capo ?? 0);
-    });
+    if (variants.length > 1) {
+      variants.sort((a, b) => {
+        const aInv = a.isInverted ?? false;
+        const bInv = b.isInverted ?? false;
+        if (aInv !== bInv) return aInv ? 1 : -1;
+        return (a.capo ?? 0) - (b.capo ?? 0);
+      });
+    }
 
-    const mainChord = variants[0];
     result.push({
-      mainChord,
+      mainChord: variants[0],
       variants,
       hasVariants: variants.length > 1,
       variantCount: variants.length,
@@ -289,11 +327,10 @@ export const groupChordsByName = (chords: Chord[]): GroupedChordCard[] => {
 };
 
 export const computeChordFingerprint = (
-  chord: Pick<Chord, 'groupId' | 'chordName' | 'capo' | 'fretCount' | 'tuning' | 'strings' | 'isInverted'>
+  chord: Pick<Chord, 'chordName' | 'capo' | 'fretCount' | 'tuning' | 'strings' | 'isInverted'>
 ): string => {
   const strSig = chord.strings.map(s => `${s.fret}_${s.preferFlat ? 1 : 0}_${s.isRoot ? 1 : 0}`).join('|');
-  // 🌟 将 isInverted 混入指纹，对齐去重逻辑
-  return `${chord.groupId}:${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${chord.isInverted ? 1 : 0}:${strSig}`;
+  return `${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${chord.isInverted ? 1 : 0}:${strSig}`;
 };
 
 export const transposePhysicalChord = (chord: Chord, semitones: number, newCapo?: number, shiftName = true): Chord => {
@@ -322,4 +359,8 @@ export const transposePhysicalChord = (chord: Chord, semitones: number, newCapo?
   newChord.isInverted = computeIsInverted(newChord.strings, newChord.capo, newChord.tuning, newChord.chordName);
   newChord.fingerprint = computeChordFingerprint(newChord);
   return newChord;
+};
+
+export const getActiveBaseStrings = (tuning: TuningEnum) => {
+  return TUNING_PRESETS[tuning]?.mapping || DEFAULT_TUNING_MAPPING;
 };

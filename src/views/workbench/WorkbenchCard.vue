@@ -2,28 +2,29 @@
   <div
     v-element-size="onResize"
     class="workbench-card"
+    ref="cardRef"
     :style="{
       height: uiStore.isMobile ? 'auto' : dynamicHeight,
       width: uiStore.isMobile ? '100%' : `${CANVAS_CONFIG.BOARD_WIDTH + 64}px`,
     }"
   >
     <input
-      v-model="editorStore.currentChordName"
+      v-model="editorStore.draftChord.chordName"
       type="text"
       spellcheck="false"
       placeholder="CHORD"
       class="input-chord-name"
-      :class="editorStore.currentChordName ? 'has-name' : 'is-empty'"
+      :class="editorStore.draftChord.chordName ? 'has-name' : 'is-empty'"
+      :maxlength="15"
     />
 
     <div class="fretboard-render-zone">
       <Fretboard
-        v-model:strings="editorStore.strings"
-        v-model:capo="editorStore.capo"
-        :fret-count="editorStore.fretCount"
-        :active-base-strings="editorStore.activeBaseStrings"
+        :chord="editorStore.draftChord"
         :is-dark-mode="settingsStore.isDarkMode"
         :scale="uiStore.isMobile ? cardMobileScale : 1.0"
+        @update:capo="handleCapoUpdate"
+        @update:strings="handleStringsChange"
       />
     </div>
   </div>
@@ -35,14 +36,30 @@ import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/constant
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
+import { GuitarStringsModel } from '@/types';
 import { vElementSize } from '@vueuse/components';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
 
 const editorStore = useEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
+const cardRef = useTemplateRef<HTMLElement>('cardRef');
 
 const cardWidth = ref(0);
+
+const handleCapoUpdate = (capo: number) => {
+  editorStore.draftChord.capo = capo;
+
+  if (!editorStore.isEditing) editorStore.isCreating = true;
+};
+
+const handleStringsChange = (strings: GuitarStringsModel) => {
+  strings.forEach((str, i) => {
+    Object.assign(editorStore.draftChord.strings[i], str);
+  });
+
+  if (!editorStore.isEditing) editorStore.isCreating = true;
+};
 
 const onResize = ({ width }: { width: number; height: number }) => {
   cardWidth.value = width;
@@ -58,10 +75,20 @@ const cardMobileScale = computed(() => {
 const dynamicHeight = computed(() => {
   const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;
   const rawCanvasHeight =
-    CANVAS_CONFIG.OFFSET_Y_TOP + editorStore.fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
-  const currentScale = FRETBOARD_SCALE_MAP[editorStore.fretCount] || 1.0;
+    CANVAS_CONFIG.OFFSET_Y_TOP +
+    editorStore.draftChord.fretCount * CANVAS_CONFIG.FRET_HEIGHT +
+    CANVAS_CONFIG.OFFSET_Y_BOTTOM;
+  const currentScale = FRETBOARD_SCALE_MAP[editorStore.draftChord.fretCount] || 1.0;
   const realBoardHeight = rawCanvasHeight * currentScale;
   return `${baseVerticalSpace + realBoardHeight}px`;
+});
+
+onMounted(() => {
+  uiStore.activeExportTarget = cardRef.value ?? null;
+});
+
+onBeforeUnmount(() => {
+  if (uiStore.activeExportTarget === cardRef.value) uiStore.activeExportTarget = null;
 });
 </script>
 
@@ -83,6 +110,7 @@ const dynamicHeight = computed(() => {
   position: relative;
   box-sizing: border-box;
   flex-shrink: 0;
+
   transition:
     height @duration-slow @bezier-sidebar,
     background-color @duration-base,
