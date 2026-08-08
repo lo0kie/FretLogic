@@ -11,7 +11,7 @@
 <script setup lang="ts">
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useDebounceFn } from '@vueuse/core';
-import { onBeforeUnmount, ref, watch } from 'vue';
+import { onDeactivated, ref, watch } from 'vue';
 
 defineOptions({ name: 'ScoreLyricsEditor' });
 
@@ -37,7 +37,7 @@ watch(localLyrics, value => {
   commitLyrics(value);
 });
 
-onBeforeUnmount(() => {
+onDeactivated(() => {
   const value = localLyrics.value;
   if (value !== (scoreEditor.activeSong?.lyrics ?? '')) {
     scoreEditor.updateLyrics(value);

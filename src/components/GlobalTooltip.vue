@@ -16,15 +16,19 @@
 
     <Teleport to="body">
       <div
-        v-if="show && !uiStore.isMobile && (content || $slots.content)"
+        v-if="isRendered"
         :id="tooltipId"
         ref="floatingRef"
         role="tooltip"
         class="tooltip-floating-wrapper"
         :style="floatingStyles"
       >
-        <Transition name="tooltip-native" appear>
-          <div class="tooltip-box" :class="[`theme-${theme}`, $slots.content ? 'rich-content' : 'pure-text']">
+        <Transition name="tooltip-native" appear @after-leave="onAfterLeave">
+          <div
+            v-if="show"
+            class="tooltip-box"
+            :class="[`theme-${theme}`, $slots.content ? 'rich-content' : 'pure-text']"
+          >
             <slot name="content">
               <div v-html="sanitizedHtmlContent"></div>
             </slot>
@@ -40,7 +44,7 @@ import { useUiStore } from '@/stores/uiStore';
 import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/vue';
 import { computedAsync } from '@vueuse/core';
 import { type DOMPurify } from 'dompurify';
-import { computed, ref, useId, useTemplateRef } from 'vue';
+import { computed, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
 
 type TooltipTheme = 'dark' | 'light' | 'auto';
 
@@ -54,6 +58,7 @@ const {
   theme?: TooltipTheme;
 }>();
 
+const slots = useSlots();
 const uiStore = useUiStore();
 const show = ref(false);
 const tooltipId = useId();
@@ -81,6 +86,19 @@ const { floatingStyles } = useFloating(referenceRef, floatingRef, {
   whileElementsMounted: (reference, floating, update) => autoUpdate(reference, floating, update),
   middleware: [offset(8), flip({ fallbackAxisSideDirection: 'start' }), shift({ padding: 12 })],
 });
+
+const isRendered = ref(false);
+
+watch(
+  () => show.value && !uiStore.isMobile && (content || slots.content),
+  shouldShow => {
+    if (shouldShow) isRendered.value = true;
+  }
+);
+
+const onAfterLeave = () => {
+  isRendered.value = false;
+};
 </script>
 
 <style scoped lang="less">

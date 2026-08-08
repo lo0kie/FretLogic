@@ -8,7 +8,6 @@ export const useUiStore = defineStore('ui', () => {
   const isMobile = useMediaQuery('(max-width: 768px)');
   const isCopying = ref(false);
   const isLeftOpen = useStorage('CHORD_LAB_UI_LEFT_OPEN', true);
-  const isPreviewEnabled = useStorage('CHORD_LAB_UI_PREVIEW_ENABLED', false);
   const timersMap = new Map<number, ReturnType<typeof setTimeout>>();
   const activeExportTarget = shallowRef<HTMLElement | null>(null);
 
@@ -96,7 +95,6 @@ export const useUiStore = defineStore('ui', () => {
     removeToast,
     pauseAllTimers,
     resumeAllTimers,
-    isPreviewEnabled,
     isMobile,
     activeExportTarget,
   };

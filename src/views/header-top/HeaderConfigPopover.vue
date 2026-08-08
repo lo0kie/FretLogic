@@ -38,7 +38,7 @@
     </div>
 
     <div class="config-row">
-      <ActionButton size="sm" variant="subtle" width="100%" @click="handleRepairData">
+      <ActionButton size="sm" variant="subtle" primary width="100%" @click="handleRepairData">
         <template #prefix><Wrench :size="13" stroke-width="2.5" /></template>
         修复与对齐数据
       </ActionButton>

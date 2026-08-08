@@ -7,6 +7,7 @@
       clearable
       autofocus
       @enter="songModals.handleCreateSong"
+      :maxlength="15"
     />
   </BaseModal>
 
@@ -23,6 +24,7 @@
             autofocus
             size="sm"
             @enter="songModals.handleConfigSong"
+            :maxlength="15"
           />
         </div>
       </div>

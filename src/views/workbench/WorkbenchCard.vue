@@ -38,7 +38,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { GuitarStringsModel } from '@/types';
 import { vElementSize } from '@vueuse/components';
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
+import { computed, onActivated, onDeactivated, ref, useTemplateRef } from 'vue';
 
 const editorStore = useEditorStore();
 const settingsStore = useSettingsStore();
@@ -83,11 +83,11 @@ const dynamicHeight = computed(() => {
   return `${baseVerticalSpace + realBoardHeight}px`;
 });
 
-onMounted(() => {
+onActivated(() => {
   uiStore.activeExportTarget = cardRef.value ?? null;
 });
 
-onBeforeUnmount(() => {
+onDeactivated(() => {
   if (uiStore.activeExportTarget === cardRef.value) uiStore.activeExportTarget = null;
 });
 </script>

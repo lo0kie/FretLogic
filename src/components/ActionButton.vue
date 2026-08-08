@@ -1,11 +1,11 @@
 ﻿<template>
   <button
-    v-wave
+    v-wave="{ disabled }"
     :disabled="disabled || loading"
     @click="handleInternalClick"
     :style="normalizedStyle"
     class="action-button-base"
-    :class="[sizeClass, themeClass, variantClass, roundedClass, { 'is-icon-only': iconOnly, 'is-active': active }]"
+    :class="[sizeClass, themeClass, variantClass, roundedClass, { 'is-icon-only': iconOnly }]"
   >
     <Loader2 v-if="loading" class="loading-icon" />
     <slot v-else name="prefix"></slot>
@@ -29,7 +29,6 @@ const {
   warning = false,
   disabled = false,
   loading = false,
-  active = false,
   iconOnly = false,
   variant = ACTION_BUTTON_DEFAULTS.VARIANT,
   size = ACTION_BUTTON_DEFAULTS.SIZE,
@@ -42,7 +41,6 @@ const {
   warning?: boolean;
   disabled?: boolean;
   loading?: boolean;
-  active?: boolean;
   iconOnly?: boolean;
   variant?: 'default' | 'subtle' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
@@ -133,13 +131,42 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   gap: 0.5rem;
 }
 
+/* 🌟 优化 Variant Subtle：适配不同 Theme 变量，避免硬编码 */
 .variant-subtle {
-  background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
-  border-color: color-mix(in srgb, var(--color-primary), transparent 90%);
-  color: var(--color-primary);
+  &.theme-primary {
+    background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
+    border-color: color-mix(in srgb, var(--color-primary), transparent 90%);
+    color: var(--color-primary);
+    &:hover:not(:disabled) {
+      background-color: color-mix(in srgb, var(--color-primary), transparent 80%);
+    }
+  }
 
-  &:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--color-primary), transparent 80%);
+  &.theme-danger {
+    background-color: color-mix(in srgb, var(--color-danger), transparent 90%);
+    border-color: color-mix(in srgb, var(--color-danger), transparent 90%);
+    color: var(--color-danger);
+    &:hover:not(:disabled) {
+      background-color: color-mix(in srgb, var(--color-danger), transparent 80%);
+    }
+  }
+
+  &.theme-warning {
+    background-color: color-mix(in srgb, var(--color-warning), transparent 90%);
+    border-color: color-mix(in srgb, var(--color-warning), transparent 90%);
+    color: var(--color-warning);
+    &:hover:not(:disabled) {
+      background-color: color-mix(in srgb, var(--color-warning), transparent 80%);
+    }
+  }
+
+  &.theme-default {
+    background-color: var(--bg-panel-hover);
+    border-color: var(--border-light);
+    color: var(--text-body);
+    &:hover:not(:disabled) {
+      background-color: var(--border-base);
+    }
   }
 }
 
@@ -204,12 +231,6 @@ const roundedClass = computed(() => `rounded-${rounded}`);
     background-color: var(--bg-panel-hover);
     color: var(--text-title);
   }
-}
-
-.action-button-base.is-active {
-  background-color: color-mix(in srgb, var(--color-primary), transparent 88%);
-  color: var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary), transparent 75%);
 }
 
 .action-button-base.is-icon-only {

@@ -1,5 +1,6 @@
 import NProgress from 'nprogress';
 import { createRouter, createWebHashHistory } from 'vue-router';
+import { setupScrollMemory } from './scrollMemory.ts';
 
 NProgress.configure({ showSpinner: false });
 
@@ -12,6 +13,8 @@ export const router = createRouter({
     { path: '/:pathMatch(.*)*', redirect: '/workbench' },
   ],
 });
+
+setupScrollMemory(router);
 
 router.beforeEach((to, from, next) => {
   if (to.path !== from.path) {

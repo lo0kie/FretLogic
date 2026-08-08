@@ -10,15 +10,17 @@
           v-if="uiStore.isMobile && uiStore.isLeftOpen && route.meta.showSidebar"
           class="mobile-drawer-mask"
           @click="uiStore.isLeftOpen = false"
-        ></div>
+        />
       </Transition>
 
       <SidebarLeft :class="{ 'is-mobile-drawer': uiStore.isMobile }" />
 
       <main class="app-main-content" :style="{ paddingLeft: mainPaddingLeft }">
-        <router-view #="{ Component }">
-          <component :is="Component" />
-        </router-view>
+        <RouterView #="{ Component }">
+          <KeepAlive>
+            <component :is="Component" />
+          </KeepAlive>
+        </RouterView>
       </main>
     </div>
   </div>
@@ -44,8 +46,9 @@ const mainPaddingLeft = computed(() => {
   return LEFT_SIDEBAR_WIDTH_PIXEL;
 });
 
-const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
+const executeToggleThemeWithAnimation = () => {
   const rootEl = document.documentElement;
+
   rootEl.setAttribute('theme-changing', 'true');
 
   const disableChangingAttribute = () => {
@@ -54,28 +57,16 @@ const executeToggleThemeWithAnimation = (event?: MouseEvent) => {
     }, 350);
   };
 
-  if (!document.startViewTransition || !event || typeof document.documentElement.animate !== 'function') {
+  if (!document.startViewTransition) {
     settingsStore.isDarkMode = !settingsStore.isDarkMode;
     disableChangingAttribute();
+
     return;
   }
-
-  const x = event.clientX;
-  const y = event.clientY;
-  const endRadius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
 
   const transition = document.startViewTransition(() => {
     settingsStore.isDarkMode = !settingsStore.isDarkMode;
   });
-
-  transition.ready
-    .then(() => {
-      document.documentElement.animate(
-        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`] },
-        { duration: 350, easing: 'cubic-bezier(0.25, 1, 0.5, 1)', pseudoElement: '::view-transition-new(root)' }
-      );
-    })
-    .catch(() => {});
 
   transition.finished.then(() => disableChangingAttribute()).catch(() => disableChangingAttribute());
 };

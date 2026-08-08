@@ -1,5 +1,5 @@
 <template>
-  <div class="input-wrapper" v-wave>
+  <div class="input-wrapper" v-wave="{ disabled }">
     <div v-if="$slots.prefix" class="prefix-zone" :class="sizeClass">
       <slot name="prefix"></slot>
     </div>
@@ -18,17 +18,35 @@
       class="base-input-field"
       :class="[
         sizeClass,
-        { 'has-prefix': $slots.prefix, 'has-suffix': clearable || isPassword, 'css-password-field': isPassword },
+        {
+          'has-prefix': $slots.prefix,
+          'has-suffix': clearable || isPassword,
+          'has-count': showCount,
+          'css-password-field': isPassword,
+        },
         fontClass,
       ]"
       data-bitwarden-ignore
       autocomplete="off"
     />
 
+    <!-- 🌟 计数器移到输入框内部，靠右、和文字同一行；如果同时有 clear 按钮，会自动往左让位 -->
+    <span
+      v-if="showCount && maxlength && modelValue"
+      class="char-count-indicator"
+      :class="[sizeClass, { 'is-limit-reached': isAtLimit }]"
+    >
+      {{ modelValue.length }}/{{ maxlength }}
+    </span>
+
+    <!-- 🌟 clear 按钮：阻止事件冒泡到外层 wrapper 的 v-wave，自己单独挂一份水波纹 -->
     <button
       v-if="clearable && modelValue && !disabled"
       type="button"
-      @click="handleClear"
+      v-wave
+      @click.stop="handleClear"
+      @pointerdown.stop
+      @mousedown.stop
       class="clear-button"
       title="清空内容"
       :class="sizeClass"
@@ -55,6 +73,7 @@ const {
   autofocus = false,
   type = 'text',
   maxlength,
+  showCount = false,
 } = defineProps<{
   placeholder?: string;
   disabled?: boolean;
@@ -65,9 +84,11 @@ const {
   autofocus?: boolean;
   type?: string;
   maxlength?: number;
+  showCount?: boolean;
 }>();
 
 const modelValue = defineModel<string>({ required: true });
+const isAtLimit = computed(() => Boolean(maxlength) && modelValue.value.length >= (maxlength as number));
 
 const emit = defineEmits<{
   (e: 'enter'): void;
@@ -198,6 +219,7 @@ defineExpose({
   border: 1px solid var(--border-light);
   border-radius: 9999px;
   color: var(--text-title);
+  caret-color: @primary;
   transition: @transition-fast;
   outline: none;
   cursor: pointer;
@@ -231,7 +253,14 @@ defineExpose({
       padding-left: 1.3rem;
     }
     &.has-suffix {
-      padding-right: 1.3rem;
+      padding-right: 1.6rem;
+    }
+    /* 如果同时存在计数器和清空按钮，自动向左推开更多内边距 */
+    &:has(~ .char-count-indicator) {
+      padding-right: 2.3rem;
+      &.has-suffix {
+        padding-right: 3.2rem;
+      }
     }
   }
 
@@ -244,7 +273,13 @@ defineExpose({
       padding-left: 1.5rem;
     }
     &.has-suffix {
-      padding-right: 1.5rem;
+      padding-right: 1.8rem;
+    }
+    &:has(~ .char-count-indicator) {
+      padding-right: 2.6rem;
+      &.has-suffix {
+        padding-right: 3.6rem;
+      }
     }
   }
 
@@ -257,7 +292,13 @@ defineExpose({
       padding-left: 1.8rem;
     }
     &.has-suffix {
-      padding-right: 1.8rem;
+      padding-right: 2.1rem;
+    }
+    &:has(~ .char-count-indicator) {
+      padding-right: 3rem;
+      &.has-suffix {
+        padding-right: 4.1rem;
+      }
     }
   }
 }
@@ -277,6 +318,51 @@ defineExpose({
 .base-input-field.css-password-field {
   -webkit-text-security: disc;
   text-security: disc;
+}
+
+.char-count-indicator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  font-size: 0.5rem;
+  font-weight: 500;
+  color: var(--text-disabled);
+  pointer-events: none;
+  white-space: nowrap;
+  transition:
+    color @duration-fast ease,
+    right @duration-fast ease;
+
+  &.size-sm {
+    right: 0.5rem;
+  }
+  &.size-md {
+    right: 0.65rem;
+  }
+  &.size-lg {
+    right: 0.85rem;
+  }
+
+  &.is-limit-reached {
+    color: var(--color-danger);
+  }
+}
+
+.input-wrapper:hover:has(.clear-button),
+.input-wrapper:focus-within:has(.clear-button) {
+  .char-count-indicator {
+    &.size-sm {
+      right: 1.6rem;
+    }
+    &.size-md {
+      right: 1.75rem;
+    }
+    &.size-lg {
+      right: 1.9rem;
+    }
+  }
 }
 
 @media (max-width: 768px) {

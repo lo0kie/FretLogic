@@ -11,7 +11,7 @@
         v-for="item in uiStore.toasts"
         :key="item.id"
         class="toast-item-card"
-        :class="getToastThemeClass(item.type)"
+        :class="`theme-${item.type}`"
         :role="item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'"
         :aria-live="item.type === 'error' || item.type === 'warning' ? 'assertive' : 'polite'"
         :aria-atomic="true"
@@ -58,8 +58,6 @@ const handleExecuteAction = (item: Toast) => {
     uiStore.removeToast(item.id);
   }
 };
-
-const getToastThemeClass = (type: string) => `theme-${type}`;
 </script>
 
 <style scoped lang="less">

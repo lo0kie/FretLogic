@@ -4,8 +4,8 @@
       <ActionButton
         ref="triggerBtnRef"
         icon-only
-        variant="ghost"
-        :active="isOpen"
+        :variant="isOpen ? 'subtle' : 'ghost'"
+        :primary="isOpen"
         :aria-label="tooltip"
         :aria-expanded="isOpen"
         aria-haspopup="true"

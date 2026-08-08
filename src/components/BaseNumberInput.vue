@@ -1,7 +1,7 @@
 <template>
   <div class="base-number-input" :class="`size-${size}`" @wheel.prevent="handleWheel">
     <button
-      v-wave
+      v-wave="{ disabled }"
       type="button"
       class="step-btn"
       :disabled="disabled || (modelValue <= min && !loopable)"
@@ -15,7 +15,7 @@
     </span>
 
     <button
-      v-wave
+      v-wave="{ disabled }"
       type="button"
       class="step-btn"
       :disabled="disabled || (modelValue >= max && !loopable)"

@@ -71,7 +71,7 @@ export function useChordActions() {
       onAction: () => {
         chordStore.executeUndoRestore();
         songStore.overwriteSongs(songsSnapshot);
-        uiStore.toast.success('已恢复刚才删除的和弦及谱面绑定');
+        uiStore.toast.success('已恢复刚才删除的和弦');
       },
     });
   };
@@ -88,8 +88,13 @@ export function useChordActions() {
       return null;
     }
 
+    if (chordStore.groups.length === 0) {
+      uiStore.toast.warning('保存失败：请先新建分组');
+      return null;
+    }
+
     if (!chordStore.selectedGroupId) {
-      uiStore.toast.warning('保存失败：请先展开或选择一个目标分组');
+      uiStore.toast.warning('保存失败：请先选择目标分组');
       return null;
     }
 
@@ -186,7 +191,7 @@ export function useChordActions() {
 
   const saveAsNewChord = () => {
     editorStore.saveAsNewChord();
-    uiStore.toast.info('已转为新建模式，请选择目标分组后保存');
+    uiStore.toast.info('请选择目标分组后保存');
   };
 
   return {
