@@ -12,6 +12,8 @@
           size="sm"
           fontSize="xs"
           class="header-search-input"
+          :maxlength="15"
+          show-count
         >
           <template #prefix>
             <Search class="search-icon" :size="14" stroke-width="2.5" />
@@ -19,21 +21,6 @@
         </BaseInput>
 
         <div class="header-actions">
-          <GlobalTooltip
-            placement="bottom"
-            :content="uiStore.isPreviewEnabled ? '关闭和弦悬浮预览' : '开启和弦悬浮预览'"
-            class="hidden-mobile"
-          >
-            <ActionButton
-              @click="uiStore.isPreviewEnabled = !uiStore.isPreviewEnabled"
-              :variant="uiStore.isPreviewEnabled ? 'subtle' : 'ghost'"
-              icon-only
-              size="sm"
-            >
-              <component :is="uiStore.isPreviewEnabled ? Eye : EyeOff" :size="15" :stroke-width="2.2" />
-            </ActionButton>
-          </GlobalTooltip>
-
           <GlobalTooltip placement="bottom" content="新建分组">
             <ActionButton @click="groupModals.openCreate" variant="subtle" icon-only size="sm">
               <Plus :size="16" :stroke-width="2.5" />
@@ -90,7 +77,7 @@
   </div>
 
   <!-- 4. 业务弹窗组件集 -->
-  <GroupModalsContainer ref="groupModalsContainerRef" :group-modals="groupModals" />
+  <GroupModalsContainer :group-modals="groupModals" />
   <SongModalsContainer :song-modals="songModals" />
 </template>
 
@@ -105,7 +92,7 @@ import { useSongModals } from '@/services/useSongModals';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
-import { Download, Eye, EyeOff, Plus, Search, Upload } from '@lucide/vue';
+import { Download, Plus, Search, Upload } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
 import { ref, useTemplateRef } from 'vue';
 import { useRoute } from 'vue-router';
@@ -127,21 +114,17 @@ const ioService = useImportExportService();
 
 const groupModals = useChordGroupModals();
 const songModals = useSongModals();
-const groupModalsContainerRef = useTemplateRef<InstanceType<typeof GroupModalsContainer>>('groupModalsContainerRef');
 
 const handleImportTrigger = () => fileInputRef.value?.click();
 
 const handleFileChange = async (e: Event) => {
   const target = e.target as HTMLInputElement;
-  if (!target.files || target.files.length === 0) return;
+  if (!target.files?.length) return;
   const file = target.files[0];
   const resetInput = () => {
     if (fileInputRef.value) fileInputRef.value.value = '';
   };
-  const payload = await ioService.processImport(file, resetInput);
-  if (payload) {
-    groupModalsContainerRef.value?.openImportModal(payload);
-  }
+  await ioService.processImport(file, resetInput);
 };
 </script>
 

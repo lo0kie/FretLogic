@@ -11,7 +11,7 @@
     @click="toggleDropdown"
     @keydown="handleTriggerKeydown"
     v-bind="$attrs"
-    v-wave
+    v-wave="{ disabled }"
   >
     <span class="label-zone" :class="[isNonDefault ? 'is-custom' : 'is-default']">
       <slot name="label" :selected="modelValue">
@@ -33,7 +33,7 @@
 
   <Teleport to="body">
     <div
-      v-if="isOpen"
+      v-if="isRendered"
       v-on-click-outside="[() => (isOpen = false), { ignore: [referenceRef] }]"
       ref="floatingRef"
       :style="floatingStyles"
@@ -49,6 +49,7 @@
       >
         <!-- 2. 下拉容器 -->
         <div
+          v-if="isOpen"
           ref="dropdownRef"
           role="listbox"
           tabindex="-1"
@@ -58,7 +59,7 @@
         >
           <!-- 3. 选项节点：移除模板行的 @keydown.esc.prevent.stop -->
           <div
-            v-wave
+            v-wave="{ disabled: isOptionDisabled(option) }"
             v-for="(option, index) in options"
             :key="index"
             ref="optionEls"
@@ -155,6 +156,8 @@ const emit = defineEmits<{
 }>();
 
 const isOpen = ref(false);
+const isRendered = ref(false);
+
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const dropdownRef = useTemplateRef<HTMLDivElement>('dropdownRef');
@@ -229,6 +232,10 @@ watch(
     if (isDisabled) isOpen.value = false;
   }
 );
+
+watch(isOpen, open => {
+  if (open) isRendered.value = true;
+});
 
 const getOptionValue = (opt: T | SelectorOptionObject<T>): T => {
   if (opt && typeof opt === 'object' && 'value' in opt) {

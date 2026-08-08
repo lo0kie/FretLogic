@@ -16,8 +16,7 @@ export const validateSettings = (data: SettingsPayload): SettingsValidationResul
   const errors: string[] = [];
   const token = data.githubToken.trim();
   const tokenRegex = /^(ghp|github_pat|gho|ghu|ghs|ghr)_[a-zA-Z0-9_]{10,}$/;
-
-  if (!tokenRegex.test(token)) {
+  if (token && !tokenRegex.test(token)) {
     errors.push('GitHub Token 格式不合法');
   }
   if (!data.githubOwner.trim()) {

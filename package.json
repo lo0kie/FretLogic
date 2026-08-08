@@ -16,13 +16,14 @@
   },
   "dependencies": {
     "@floating-ui/vue": "^1.1.11",
+    "@formkit/auto-animate": "^0.10.0",
     "@lucide/vue": "^1.17.0",
-    "@vue/compiler-sfc": "3.5.11",
     "@vueuse/components": "^14.4.0",
     "@vueuse/core": "^10.9.0",
     "dompurify": "^3.4.11",
     "html-to-image": "^1.11.13",
     "js-base64": "^3.8.0",
+    "jspdf": "^4.2.1",
     "normalize.css": "^8.0.1",
     "nprogress": "^0.2.0",
     "pinia": "^2.1.7",
@@ -42,10 +43,5 @@
     "typescript": "^5.4.2",
     "vite": "^5.2.0",
     "vue-tsc": "^2.0.6"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "vue-demi"
-    ]
   }
 }

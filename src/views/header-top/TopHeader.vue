@@ -5,9 +5,9 @@
       <GlobalTooltip :content="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'" placement="bottom">
         <ActionButton
           icon-only
-          variant="ghost"
           :size="uiStore.isMobile ? 'md' : 'sm'"
-          :active="uiStore.isLeftOpen"
+          :variant="uiStore.isLeftOpen ? 'subtle' : 'ghost'"
+          :primary="uiStore.isLeftOpen"
           @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
         >
           <PanelLeft :size="18" stroke-width="2.2" />
@@ -48,7 +48,7 @@
 
       <!-- 主题切换按钮 -->
       <GlobalTooltip :content="settingsStore.isDarkMode ? '切换至浅色模式' : '切换至深色模式'" placement="bottom">
-        <ActionButton icon-only variant="ghost" @click="emit('toggle-theme', $event)">
+        <ActionButton icon-only variant="ghost" @click="emit('toggle-theme')">
           <component
             :is="settingsStore.isDarkMode ? Moon : Sun"
             :size="18"
@@ -82,7 +82,7 @@ import ScoreConfigPopover from './ScoreConfigPopover.vue';
 import SyncModalContainer from './SyncModalContainer.vue';
 
 const emit = defineEmits<{
-  (e: 'toggle-theme', event: MouseEvent): void;
+  (e: 'toggle-theme'): void;
 }>();
 
 const route = useRoute();

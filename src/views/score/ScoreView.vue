@@ -42,7 +42,7 @@ import { useScoreLinesData } from '@/services/useScoreLinesData.ts';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
-import { computed, ref } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import ChordPickerModal from './ChordPickerModal.vue';
 import ScoreExportFloatingBar from './ScoreExportFloatingBar.vue';
 import ScoreInteractiveArea from './ScoreInteractiveArea.vue';
@@ -50,6 +50,8 @@ import ScoreLyricsEditor from './ScoreLyricsEditor.vue';
 
 const scoreEditor = useScoreEditorStore();
 const isPickerOpen = ref(false);
+const interactiveAreaRef = useTemplateRef<InstanceType<typeof ScoreInteractiveArea>>('interactiveAreaRef');
+const exportHeaderMetaRef = computed(() => interactiveAreaRef.value?.exportHeaderMetaRef ?? null);
 
 const { lyricsLinesWithEdges } = useScoreLinesData();
 const totalLines = computed(() => lyricsLinesWithEdges.value.length);
@@ -64,7 +66,10 @@ const {
   handleLineClick,
 } = useLineSelection(totalLines, activeSongId);
 
-const { isExporting, handleCopySelectedImage, includeMetaBar } = useScoreImageExport(selectedLineSet);
+const { isExporting, handleCopySelectedImage, includeMetaBar } = useScoreImageExport(
+  selectedLineSet,
+  exportHeaderMetaRef
+);
 
 const openChordPicker = (slotKey: string | number) => {
   scoreEditor.selectedSlotKey = slotKey;

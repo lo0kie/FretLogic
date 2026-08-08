@@ -13,7 +13,13 @@
 
       <div class="bar-divider"></div>
 
-      <ActionButton size="md" variant="subtle" :disabled="isSaveDisabled" @click="chordActions.persistCurrentChord">
+      <ActionButton
+        size="md"
+        variant="subtle"
+        primary
+        :disabled="isSaveDisabled"
+        @click="chordActions.persistCurrentChord"
+      >
         {{ editorStore.isEditing ? '更新保存' : '确认保存' }}
       </ActionButton>
     </div>

@@ -17,7 +17,9 @@
             autofocus
             fontSize="xs"
             class="picker-search-input"
+            :maxlength="15"
             aria-label="搜索和弦"
+            show-count
           >
             <template #prefix>
               <Search class="search-icon" :size="14" stroke-width="2.5" aria-hidden="true" />
@@ -45,7 +47,7 @@
         </div>
 
         <div class="header-controls-right">
-          <ActionButton size="sm" variant="subtle" @click="goToWorkbenchToCreate">
+          <ActionButton size="sm" variant="subtle" primary @click="goToWorkbenchToCreate">
             <template #prefix><Plus :size="14" stroke-width="2.5" aria-hidden="true" /></template>
             新建和弦
           </ActionButton>
@@ -116,13 +118,20 @@ import { useScoreLinesData } from '@/services/useScoreLinesData';
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useUiStore } from '@/stores/uiStore';
 import type { Chord, GroupSortRule } from '@/types';
 import { getPlaceholderSize } from '@/utils/fretboardVisuals';
 import { sortChordsByRule } from '@/utils/musicTheory';
 import { Plus, Search } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
-import { computed, onBeforeUnmount, reactive, ref, useTemplateRef, watch, type ComponentPublicInstance } from 'vue';
+import {
+  computed,
+  onDeactivated,
+  reactive,
+  ref,
+  useTemplateRef,
+  watch,
+  type ComponentPublicInstance
+} from 'vue';
 import { useRouter } from 'vue-router';
 
 const props = defineProps<{
@@ -139,7 +148,6 @@ const visibleModel = computed({
 });
 
 const router = useRouter();
-const uiStore = useUiStore();
 const chordStore = useChordStore();
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
@@ -354,10 +362,9 @@ const handleSelectChord = (chord: Chord) => {
 const goToWorkbenchToCreate = () => {
   visibleModel.value = false;
   router.push('/');
-  uiStore.toast.info('请在工作台创建和弦，保存后即可在乐谱中使用');
 };
 
-onBeforeUnmount(() => {
+onDeactivated(() => {
   clearAllCardObservers();
 });
 </script>
@@ -371,6 +378,7 @@ onBeforeUnmount(() => {
 }
 
 .chord-picker-wrapper {
+  padding: 0.2rem;
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
