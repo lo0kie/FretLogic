@@ -12,7 +12,7 @@
     />
 
     <div v-else class="lyrics-lines-container" :class="{ 'is-export-mode': isExporting }" ref="lyricsRef">
-      <div v-show="true" class="export-header-meta" ref="exportHeaderMetaRef">
+      <div v-show="isExporting && includeMetaBar" class="export-header-meta" ref="exportHeaderMetaRef">
         <h1 class="export-song-title">{{ scoreEditor.activeSong?.title }}</h1>
         <div class="export-song-info">
           <span>{{ scoreEditor.activeSong.key }} 调</span>
@@ -150,7 +150,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore.ts';
 import type { Chord } from '@/types';
 import { FileText } from '@lucide/vue';
-import { onBeforeUnmount, onMounted, useTemplateRef } from 'vue';
+import { onActivated, onDeactivated, useTemplateRef } from 'vue';
 import ChordSlotCell from './ChordSlotCell.vue';
 
 defineOptions({ name: 'ScoreInteractiveArea' });
@@ -197,18 +197,18 @@ const handleLineClick = (ev: MouseEvent, lineIdx: number) => {
   if (props.isExporting) return;
   const target = ev.target as HTMLElement;
 
-  if (target.closest('.chord-slot-cell')) {
+  if (target.closest('.char-box')) {
     return;
   }
 
   emit('line-click', lineIdx);
 };
 
-onMounted(() => {
+onActivated(() => {
   uiStore.activeExportTarget = lyricsRef.value ?? null;
 });
 
-onBeforeUnmount(() => {
+onDeactivated(() => {
   if (uiStore.activeExportTarget === lyricsRef.value) uiStore.activeExportTarget = null;
 });
 

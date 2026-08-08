@@ -1,8 +1,8 @@
 import { FRET_COUNTS } from '@/constants';
 import type { Chord, Group, ImportExportPayload, Song } from '@/types';
-import { pruneOrphanChordRefs } from '@/utils/chordMap';
+import { normalizeChord, pruneOrphanChordRefs } from '@/utils/chordMap';
 import { cloneDeep } from '@/utils/cloneDeep';
-import { computeChordFingerprint, computeIsInverted, TuningEnum } from '@/utils/musicTheory';
+import { TuningEnum } from '@/utils/musicTheory';
 export interface ValidationResult {
   isValid: boolean;
   payload?: ImportExportPayload;
@@ -28,11 +28,13 @@ const sanitizeGroups = (groups: unknown, issues: string[]): Group[] => {
       sortKey: g.sortRule === 'KEY_DEGREE' && !g.sortKey ? 'C' : g.sortKey,
     }));
 };
+
 const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
   if (!Array.isArray(chords)) {
     issues.push('chords 字段必须为数组');
     return [];
   }
+
   return chords
     .filter((c: any, index: number) => {
       if (!c || typeof c !== 'object') {
@@ -44,7 +46,7 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
         return false;
       }
       if (!Array.isArray(c.strings) || c.strings.length !== 6) {
-        issues.push(`chords[${index}] (${c.id}) 琴弦物理资产数组损坏 (必须为 6 弦)`);
+        issues.push(`chords[${index}] (${c.id}) 琴弦数组损坏 (必须为 6 弦)`);
         return false;
       }
       const isStringsValid = c.strings.every(
@@ -56,7 +58,7 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
           typeof s.isRoot === 'boolean'
       );
       if (!isStringsValid) {
-        issues.push(`chords[${index}] (${c.id}) 内部存在损坏的琴弦音符节点`);
+        issues.push(`chords[${index}] (${c.id}) 内部存在损坏的琴弦节点`);
         return false;
       }
       return true;
@@ -64,15 +66,26 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
     .map((c: any) => {
       const fretCount = FRET_COUNTS.includes(c.fretCount) ? c.fretCount : 3;
       const capo = typeof c.capo === 'number' && c.capo >= 0 && c.capo <= 12 ? c.capo : 0;
-      const tuning = c.tuning || TuningEnum.STANDARD;
-      const isInverted =
-        typeof c.isInverted === 'boolean' ? c.isInverted : computeIsInverted(c.strings, capo, tuning, c.chordName);
-      const fingerprint =
-        c.fingerprint ||
-        computeChordFingerprint({ chordName: c.chordName, capo, fretCount, tuning, strings: c.strings, isInverted });
-      return { ...c, fretCount, capo, tuning, isInverted, fingerprint };
+      const tuning = c.tuning && Object.values(TuningEnum).includes(c.tuning) ? c.tuning : TuningEnum.STANDARD;
+      const chordName = String(c.chordName).trim();
+
+      // 结构字段先收口，再统一重算派生状态（不信任文件里的 isInverted / fingerprint）
+      const draft: Chord = {
+        ...c,
+        chordName,
+        fretCount,
+        capo,
+        tuning,
+        // 占位，下一行会被 normalizeChord 覆盖
+        isInverted: false,
+        fingerprint: '',
+      };
+
+      const { chord } = normalizeChord(draft);
+      return chord;
     });
 };
+
 const sanitizeSongs = (songs: unknown, issues: string[]): Song[] => {
   if (songs === undefined) return [];
   if (!Array.isArray(songs)) {
@@ -110,11 +123,24 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
   if (issues.length > 0) {
     return { isValid: false, issues };
   }
-  const validGroupIds = new Set<string>(groups.map(g => g.id));
-  const filteredChords = chords.filter(chord => validGroupIds.has(chord.groupId));
+  const validGroupIds = new Set(groups.map(g => g.id));
+  const filteredChords = chords.filter(c => validGroupIds.has(c.groupId));
 
-  // 清理 songs.chordMap 中指向已被过滤（结构损坏或所属分组不存在）的和弦 id，避免孤儿引用
-  const validChordIds = new Set<string>(filteredChords.map(c => c.id));
+  // 同组 + 同指纹只保留第一条（与保存时去重语义一致）
+  const seenFpInGroup = new Set<string>();
+  const dedupedChords: Chord[] = [];
+  for (const c of filteredChords) {
+    const key = `${c.groupId}::${c.fingerprint}`;
+    if (seenFpInGroup.has(key)) {
+      // 不写入 issues，避免「仅重复」就整包拒绝；需要可观测可 console.warn
+      console.warn(`[validatePayload] 丢弃同组重复指纹: ${c.chordName} (${c.id})`);
+      continue;
+    }
+    seenFpInGroup.add(key);
+    dedupedChords.push(c);
+  }
+
+  const validChordIds = new Set(dedupedChords.map(c => c.id));
   const cleanedSongs = songs.map(song => {
     const { map, changed } = pruneOrphanChordRefs(song.chordMap as Record<string, string>, validChordIds);
     return changed ? { ...song, chordMap: map } : song;
@@ -125,9 +151,10 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
     payload: {
       version: raw.version || 1,
       groups,
-      chords: filteredChords,
+      chords: dedupedChords,
       songs: cleanedSongs,
     },
     issues: [],
   };
 };
+

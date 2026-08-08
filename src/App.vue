@@ -10,15 +10,17 @@
           v-if="uiStore.isMobile && uiStore.isLeftOpen && route.meta.showSidebar"
           class="mobile-drawer-mask"
           @click="uiStore.isLeftOpen = false"
-        ></div>
+        />
       </Transition>
 
       <SidebarLeft :class="{ 'is-mobile-drawer': uiStore.isMobile }" />
 
       <main class="app-main-content" :style="{ paddingLeft: mainPaddingLeft }">
-        <router-view #="{ Component }">
-          <component :is="Component" />
-        </router-view>
+        <RouterView #="{ Component }">
+          <KeepAlive>
+            <component :is="Component" />
+          </KeepAlive>
+        </RouterView>
       </main>
     </div>
   </div>

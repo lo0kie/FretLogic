@@ -23,15 +23,32 @@
         clearable
         autofocus
         fontSize="xs"
+        :maxlength="100"
+        show-count
       />
     </GlobalTooltip>
 
     <div class="grid-columns">
       <GlobalTooltip content="GitHub 账号名称" placement="top" class="full-width-tooltip">
-        <BaseInput v-model="settingsStore.githubOwner" placeholder="Username" clearable fontSize="xs" />
+        <BaseInput
+          v-model="settingsStore.githubOwner"
+          placeholder="Username"
+          clearable
+          fontSize="xs"
+          :maxlength="39"
+          show-count
+        />
       </GlobalTooltip>
+
       <GlobalTooltip content="仓库名称" placement="top" class="full-width-tooltip">
-        <BaseInput v-model="settingsStore.githubRepo" placeholder="Repository" clearable fontSize="xs" />
+        <BaseInput
+          v-model="settingsStore.githubRepo"
+          placeholder="Repository"
+          clearable
+          fontSize="xs"
+          :maxlength="100"
+          show-count
+        />
       </GlobalTooltip>
     </div>
 

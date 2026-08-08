@@ -110,7 +110,14 @@ export function useChordGroupModals() {
     songStore.unbindChordIds(targetChordIds);
 
     if (chordStore.selectedGroupId === targetGid) {
-      chordStore.selectedGroupId = chordStore.groups[0]?.id || null;
+      const next = chordStore.groups[0];
+      if (next) {
+        chordStore.collapseAllGroups();
+        next.collapsed = false;
+        chordStore.selectedGroupId = next.id;
+      } else {
+        chordStore.selectedGroupId = null;
+      }
     }
 
     modals.delete = false;

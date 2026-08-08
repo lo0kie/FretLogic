@@ -13,10 +13,11 @@
       <div v-if="isOpen" class="context-menu-backdrop" @pointerdown.prevent.stop="closeMenu"></div>
     </Transition>
 
-    <div v-if="isOpen" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
+    <div v-if="isRendered" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
       <Transition name="menu-fade" appear>
         <!-- 🌟 1. 补全 role="menu" 与键盘导航 -->
         <div
+          v-if="isOpen"
           ref="menuBoxRef"
           role="menu"
           tabindex="-1"
@@ -106,6 +107,13 @@ const virtualRef = ref({
       height: 0,
     };
   },
+});
+
+const isRendered = ref(false);
+
+watch(isOpen, open => {
+  if (open) isRendered.value = true;
+  // 关闭交给 @after-leave，动画播完再卸载 wrapper
 });
 
 const { floatingStyles } = useFloating(virtualRef, floatingRef, {

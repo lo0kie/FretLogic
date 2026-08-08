@@ -2,15 +2,17 @@
   <div class="score-floating-bar">
     <div class="bar-info-zone">
       <!-- 🌟 改用 BaseBadge 表示已选行数计数 -->
-      <BaseBadge
-        :variant="selectedCount > 0 ? 'primary' : 'neutral'"
-        :appearance="selectedCount > 0 ? 'filled' : 'subtle'"
-        size="xs"
-      >
-        {{ selectedCount }}
-      </BaseBadge>
+      <div class="bar-counter">
+        <BaseBadge
+          :variant="selectedCount > 0 ? 'primary' : 'neutral'"
+          :appearance="selectedCount > 0 ? 'filled' : 'subtle'"
+          size="xs"
+        >
+          {{ selectedCount }}
+        </BaseBadge>
+      </div>
 
-      <span class="selected-text-tip">{{ selectedCount > 0 ? '已选择行:' : '请选择歌词' }}</span>
+      <span class="selected-text-tip">{{ selectedCount > 0 ? '已选择歌词' : '请选择歌词' }}</span>
 
       <div ref="scrollContainerRef" class="clickable-indices-list no-scrollbar" @wheel.prevent="handleWheelScroll">
         <!-- 🌟 已选索引按钮改用交互式 BaseBadge，并带关闭图标与 Hover 效果 -->
@@ -140,6 +142,10 @@ const handleWheelScroll = (e: WheelEvent) => {
   min-width: 0;
 }
 
+.bar-counter {
+  width: 1.5rem;
+}
+
 .selected-text-tip {
   color: var(--text-title);
   white-space: nowrap;
@@ -150,16 +156,19 @@ const handleWheelScroll = (e: WheelEvent) => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  max-width: 13rem;
+  /* 固定槽位：有没有索引都一样宽 */
+  width: 9rem;
+  min-width: 9rem;
+  max-width: 9rem;
   overflow-x: auto;
   overflow-y: hidden;
   white-space: nowrap;
-  flex-shrink: 1;
+  flex-shrink: 0; /* 不要被挤扁 */
   padding: 0.1rem 0;
-
+  /* 可选：空列表时也能看清是一块区域 */
+  /* min-height: 1.25rem; */
   scrollbar-width: none;
   -ms-overflow-style: none;
-
   &::-webkit-scrollbar {
     display: none;
   }

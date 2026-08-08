@@ -1,82 +1,65 @@
 ﻿<template>
-  <!-- 🌟 1. 监听 mouseenter / mouseleave 事件，控制 hover 状态 -->
-  <GlobalTooltip placement="top" :content="tooltipText" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
-    <GlobalContextMenu ref="contextMenuRef" :items="menuItems">
-      <div class="chord-card-frame" :title="`${cardData.mainChord.chordName} ${dotTitle}`">
-        <div
-          v-wave
-          class="chord-thumb-card"
+  <GlobalContextMenu ref="contextMenuRef" :items="menuItems">
+    <div class="chord-card-frame" :title="`${cardData.mainChord.chordName} ${dotTitle}`">
+      <div
+        v-wave
+        class="chord-thumb-card"
+        :class="{
+          'is-editing': isEditing,
+          'is-context-open': isMenuOpen,
+          'has-variants': cardData.hasVariants,
+          'is-swapping': isSwapping,
+        }"
+        role="button"
+        tabindex="0"
+        :aria-pressed="isEditing"
+        :aria-label="`和弦 ${cardData.mainChord.chordName}${cardData.hasVariants ? `（共 ${cardData.variantCount} 种指法${isEditing ? '，已激活，滚轮可切换' : ''}）` : ''}`"
+        @click="handleCardClick"
+        @wheel="handleWheelScroll"
+        @keydown.enter.prevent.stop="handleCardClick"
+        @keydown.space.prevent.stop="handleCardClick"
+      >
+        <!-- 左上角：状态标识圆点 -->
+        <span
+          v-if="hasDot"
+          class="status-dot"
           :class="{
-            'is-editing': isEditing,
-            'is-context-open': isMenuOpen,
-            'has-variants': cardData.hasVariants,
-            'is-swapping': isSwapping,
+            'is-root-normal': hasRoot && !isInverted,
+            'is-root-inverted': hasRoot && isInverted,
+            'is-rootless-inverted': !hasRoot && isInverted,
+            'is-rootless-normal': !hasRoot && !isInverted,
           }"
-          role="button"
-          tabindex="0"
-          :aria-pressed="isEditing"
-          :aria-label="`和弦 ${cardData.mainChord.chordName}${cardData.hasVariants ? `（共 ${cardData.variantCount} 种指法${isEditing ? '，已激活，滚轮可切换' : ''}）` : ''}`"
-          @click="handleCardClick"
-          @wheel="handleWheelScroll"
-          @keydown.enter.prevent.stop="handleCardClick"
-          @keydown.space.prevent.stop="handleCardClick"
+          :title="dotTitle"
+          :aria-label="dotTitle"
+        ></span>
+
+        <!-- 右上角：变体指法数量 Badge -->
+        <BaseBadge
+          v-if="cardData.hasVariants"
+          :variant="isEditing ? 'primary' : 'neutral'"
+          appearance="filled"
+          size="xs"
+          class="variant-badge-badge"
+          :title="isEditing ? '滚轮切换指法' : undefined"
+          @click.stop="toggleVariantsDropdown"
         >
-          <!-- 左上角：状态标识圆点 -->
-          <span
-            v-if="hasDot"
-            class="status-dot"
-            :class="{
-              'is-root-normal': hasRoot && !isInverted,
-              'is-root-inverted': hasRoot && isInverted,
-              'is-rootless-inverted': !hasRoot && isInverted,
-              'is-rootless-normal': !hasRoot && !isInverted,
-            }"
-            :title="dotTitle"
-            :aria-label="dotTitle"
-          ></span>
+          {{ cardData.variantCount }}
+        </BaseBadge>
 
-          <!-- 右上角：变体指法数量 Badge -->
-          <BaseBadge
-            v-if="cardData.hasVariants"
-            :variant="isEditing ? 'primary' : 'neutral'"
-            appearance="filled"
-            size="xs"
-            class="variant-badge-badge"
-            :title="isEditing ? '滚轮切换指法' : undefined"
-            @click.stop="toggleVariantsDropdown"
-          >
-            {{ cardData.variantCount }}
-          </BaseBadge>
-
-          <BaseMarquee class="chord-marquee-wrapper">
-            <span class="chord-name-text">
-              {{ cardData.mainChord.chordName }}
-            </span>
-          </BaseMarquee>
-        </div>
+        <BaseMarquee class="chord-marquee-wrapper">
+          <span class="chord-name-text">
+            {{ cardData.mainChord.chordName }}
+          </span>
+        </BaseMarquee>
       </div>
-    </GlobalContextMenu>
-
-    <template #content v-if="uiStore.isPreviewEnabled && isHovered">
-      <Fretboard
-        :key="activeChord.id"
-        :chord="activeChord"
-        :is-dark-mode="settingsStore.isDarkMode"
-        :interactive="false"
-        :scale="0.5"
-      />
-    </template>
-  </GlobalTooltip>
+    </div>
+  </GlobalContextMenu>
 </template>
 
 <script setup lang="ts">
 import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
-import Fretboard from '@/components/Fretboard.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
-import GlobalTooltip from '@/components/GlobalTooltip.vue';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { useUiStore } from '@/stores/uiStore';
 import type { Chord, GroupedChordCard } from '@/types';
 import { Move, Trash2 } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
@@ -93,10 +76,6 @@ const emit = defineEmits<{
   (e: 'delete-variants', cardData: GroupedChordCard): void;
 }>();
 
-const uiStore = useUiStore();
-const settingsStore = useSettingsStore();
-
-const isHovered = ref(false);
 const activeVariantIndex = ref(0);
 
 watch(
@@ -110,14 +89,6 @@ const activeChord = computed(() => props.cardData.variants[activeVariantIndex.va
 
 const contextMenuRef = useTemplateRef<InstanceType<typeof GlobalContextMenu>>('contextMenuRef');
 const isMenuOpen = computed(() => contextMenuRef.value?.isOpen ?? false);
-
-const tooltipText = computed(() => {
-  if (!props.cardData.hasVariants) return undefined;
-  if (props.isEditing) {
-    return `和弦 (${activeVariantIndex.value + 1}/${props.cardData.variantCount})，滚动切换`;
-  }
-  return `${props.cardData.variantCount} 种指法`;
-});
 
 const handleCardClick = () => {
   emit('select', activeChord.value);

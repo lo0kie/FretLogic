@@ -7,6 +7,7 @@
       clearable
       autofocus
       @enter="groupModals.handleCreateGroup"
+      :maxlength="15"
     />
   </BaseModal>
 
@@ -18,6 +19,7 @@
       autofocus
       clearable
       @enter="groupModals.handleRenameGroup"
+      :maxlength="15"
     />
   </BaseModal>
 
@@ -70,7 +72,7 @@
         <label class="config-label">排序规则</label>
         <BaseSegmentedControl v-model="groupModals.modalData.sortRule" :options="SORT_RULE_CONFIG" />
       </div>
-      <div v-if="groupModals.modalData.sortRule === 'KEY_DEGREE'" class="sort-config-row">
+      <div class="sort-config-row">
         <label class="config-label">调式设定</label>
         <div class="key-selector-wrapper">
           <BaseSelector
@@ -78,6 +80,7 @@
             :options="['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']"
             default-value="C"
             :label-formatter="val => `${val} 调`"
+            :disabled="groupModals.modalData.sortRule !== 'KEY_DEGREE'"
           />
         </div>
       </div>
@@ -151,65 +154,6 @@
       </div>
     </div>
   </BaseModal>
-
-  <!-- 7. 自定义导入内容选择 Modal -->
-  <BaseModal
-    v-model:visible="isImportModalOpen"
-    title="自定义选择导入内容"
-    width="w-lg"
-    :confirm-text="importConfirmText"
-    @confirm="handleConfirmImport"
-  >
-    <div class="variants-delete-modal-content">
-      <div class="import-tab-bar">
-        <BaseSegmentedControl v-model="importActiveTab" :options="IMPORT_TAB_OPTIONS" size="sm" />
-      </div>
-
-      <div v-show="importActiveTab === 'chords'" class="import-panel-scroll no-scrollbar">
-        <div v-if="pendingImportData?.groups && pendingImportData.groups.length > 0" class="import-groups-grid">
-          <div
-            v-for="group in pendingImportData.groups"
-            :key="group.id"
-            class="import-group-simple-card"
-            :class="{ 'is-selected': isImportGroupAllSelected(group.id) }"
-            @click="toggleImportGroup(group.id)"
-            role="button"
-            tabindex="0"
-            v-wave
-          >
-            <div class="import-group-info-box">
-              <span class="import-group-title">{{ group.name }}</span>
-              <span class="import-group-meta">{{ getImportGroupChords(group.id).length }} 个和弦</span>
-            </div>
-          </div>
-        </div>
-        <EmptyState v-else description="备份文件中未检测到和弦资产" size="sm" />
-      </div>
-
-      <div v-show="importActiveTab === 'songs'" class="import-panel-scroll no-scrollbar">
-        <template v-if="pendingImportData?.songs && pendingImportData.songs.length > 0">
-          <div class="import-songs-grid">
-            <div
-              v-for="song in pendingImportData.songs"
-              :key="song.id"
-              class="import-song-item-card"
-              :class="{ 'is-selected': selectedImportState.songIds.has(song.id) }"
-              @click="toggleImportSong(song.id)"
-              role="button"
-              tabindex="0"
-              v-wave
-            >
-              <div class="import-song-info-box">
-                <span class="import-song-title">{{ song.title }}</span>
-                <span class="import-song-meta">{{ song.key }}调 capo {{ song.capo }}</span>
-              </div>
-            </div>
-          </div>
-        </template>
-        <EmptyState v-else description="备份文件中未检测到乐谱数据" size="sm" />
-      </div>
-    </div>
-  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -217,50 +161,20 @@ import ActionButton from '@/components/ActionButton.vue';
 import BaseInput from '@/components/BaseInput.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import BaseModal from '@/components/BaseModal.vue';
-import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
+import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
-import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { SORT_RULE_CONFIG } from '@/constants';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
-import { useImportExportService } from '@/services/useImportExportService';
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import type { Chord } from '@/types';
-import { computed, ref, watch } from 'vue';
-
-import type { ImportExportPayload } from '@/types';
-import { reactive } from 'vue';
+import { computed } from 'vue';
 
 const props = defineProps<{ groupModals: ReturnType<typeof useChordGroupModals> }>();
 
 const chordStore = useChordStore();
 const settingsStore = useSettingsStore();
-const ioService = useImportExportService();
-
-const isImportModalOpen = ref(false);
-const pendingImportData = ref<ImportExportPayload | null>(null);
-const selectedImportState = reactive({
-  groupIds: new Set<string>(),
-  chordIds: new Set<string>(),
-  songIds: new Set<string>(),
-});
-
-const openImportModal = (payload: ImportExportPayload) => {
-  pendingImportData.value = payload;
-  selectedImportState.groupIds = new Set((payload.groups || []).map(g => g.id));
-  selectedImportState.chordIds = new Set((payload.chords || []).map(c => c.id));
-  selectedImportState.songIds = new Set((payload.songs || []).map(s => s.id));
-  isImportModalOpen.value = true;
-};
-
-const handleConfirmImport = () => {
-  if (!pendingImportData.value) return;
-  ioService.applySelectedImport(pendingImportData.value, selectedImportState);
-  isImportModalOpen.value = false;
-  pendingImportData.value = null;
-};
 
 const isAllVariantsSelected = computed(() => {
   const variants = props.groupModals.modalData.activeGroupCard?.variants;
@@ -277,71 +191,6 @@ const handleToggleSelectAllVariants = () => {
     variants.forEach(v => props.groupModals.modalData.selectedVariantIds.add(v.id));
   }
 };
-
-const importActiveTab = ref<'chords' | 'songs'>('chords');
-const IMPORT_TAB_OPTIONS: SegmentOption<'chords' | 'songs'>[] = [
-  { label: '和弦', value: 'chords' },
-  { label: '乐谱', value: 'songs' },
-];
-
-const getImportGroupChords = (groupId: string): Chord[] => {
-  return (pendingImportData.value?.chords || []).filter(c => c.groupId === groupId);
-};
-
-const isImportGroupAllSelected = (groupId: string) => {
-  const chords = getImportGroupChords(groupId);
-  if (chords.length === 0) return selectedImportState.groupIds.has(groupId);
-  return chords.every(c => selectedImportState.chordIds.has(c.id));
-};
-
-const toggleImportGroup = (groupId: string) => {
-  const chords = getImportGroupChords(groupId);
-  const allSelected = isImportGroupAllSelected(groupId);
-
-  if (allSelected) {
-    selectedImportState.groupIds.delete(groupId);
-    chords.forEach(c => selectedImportState.chordIds.delete(c.id));
-  } else {
-    selectedImportState.groupIds.add(groupId);
-    chords.forEach(c => selectedImportState.chordIds.add(c.id));
-  }
-};
-
-const toggleImportSong = (songId: string) => {
-  if (selectedImportState.songIds.has(songId)) {
-    selectedImportState.songIds.delete(songId);
-  } else {
-    selectedImportState.songIds.add(songId);
-  }
-};
-
-const selectedGroupCount = computed(() => selectedImportState.groupIds.size);
-const selectedSongCount = computed(() => selectedImportState.songIds.size);
-
-const importConfirmText = computed(() => {
-  const parts: string[] = [];
-  if (selectedGroupCount.value > 0) parts.push(`${selectedGroupCount.value} 个分组`);
-  if (selectedSongCount.value > 0) parts.push(`${selectedSongCount.value} 首乐谱`);
-  return parts.length > 0 ? `导入 ${parts.join('、')}` : '导入';
-});
-
-const resetImportState = () => {
-  pendingImportData.value = null;
-  selectedImportState.groupIds.clear();
-  selectedImportState.chordIds.clear();
-  selectedImportState.songIds.clear();
-  importActiveTab.value = 'chords';
-};
-
-watch(isImportModalOpen, isOpen => {
-  if (!isOpen) {
-    resetImportState();
-  }
-});
-
-defineExpose({
-  openImportModal,
-});
 </script>
 
 <style scoped lang="less">

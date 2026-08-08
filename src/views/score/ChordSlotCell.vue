@@ -29,7 +29,7 @@
         class="inline-fretboard-card"
         draggable="true"
         title="点击更换和弦，按住可拖拽换位"
-        @click.stop="emit('click')"
+        @click.stop.prevent="emit('click')"
         @dragstart.stop="emit('dragstart', $event)"
         @dragend="emit('dragend')"
       >
