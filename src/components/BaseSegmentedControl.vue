@@ -128,7 +128,7 @@ watch(() => options, updateIndicatorPosition, { deep: true });
 
 .base-segmented-control {
   position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   background-color: var(--bg-body);
   border-radius: 9999px;

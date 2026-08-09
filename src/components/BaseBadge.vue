@@ -10,8 +10,10 @@
       {
         'is-dot-only': isDotOnly,
         'is-interactive': isInteractive,
+        'has-custom-width': Boolean(width),
       },
     ]"
+    :style="normalizedStyle"
     :role="isInteractive ? undefined : 'status'"
     :aria-label="ariaLabelText"
     @keydown.enter="handleKeydown"
@@ -33,6 +35,7 @@
     <slot name="suffix">
       <button
         v-if="closable"
+        :tabindex="isInteractive ? -1 : 0"
         type="button"
         class="badge-close-btn"
         title="关闭"
@@ -64,6 +67,7 @@ const {
   showDot = false,
   closable = false,
   interactive = false,
+  width = undefined,
 } = defineProps<{
   variant?: BadgeVariant;
   size?: BadgeSize;
@@ -74,6 +78,7 @@ const {
   showDot?: boolean;
   closable?: boolean;
   interactive?: boolean;
+  width?: string | number;
 }>();
 
 const emit = defineEmits<{
@@ -89,6 +94,16 @@ const isInteractive = computed(() => interactive || Boolean(attrs.onClick));
 
 /** 纯指示小红点模式：开启 dot 且无默认插槽/文本时 */
 const isDotOnly = computed(() => dot && content === undefined && !slots.default);
+
+/** 宽度样式处理 */
+const normalizedStyle = computed(() => {
+  if (width === undefined) return {};
+  const parsedWidth = typeof width === 'number' ? `${width}px` : width;
+  return {
+    width: parsedWidth,
+    minWidth: parsedWidth,
+  };
+});
 
 /** 数字封顶格式化 (如 99+) */
 const formattedContent = computed(() => {
@@ -168,7 +183,15 @@ const handleClick = (e: MouseEvent) => {
     }
 
     &:focus-visible {
-      box-shadow: @focus-ring-primary;
+      outline: none;
+      /* 🌟 使用 inset 模拟内边框，不会超出现有元素边界 */
+      box-shadow: inset 0 0 0 2px var(--color-primary);
+      z-index: 2;
+
+      /* 如果是主色填充模式，内边框用白色保证高对比度 */
+      &.variant-primary.appearance-filled {
+        box-shadow: inset 0 0 0 2px #ffffff;
+      }
     }
 
     &:active {
@@ -183,6 +206,12 @@ const handleClick = (e: MouseEvent) => {
     height: 0.5rem !important;
     min-width: unset !important;
     border: none !important;
+  }
+
+  /* 设置自定义宽度时清空内边距防变形 */
+  &.has-custom-width {
+    padding-left: 0;
+    padding-right: 0;
   }
 }
 
@@ -303,6 +332,9 @@ const handleClick = (e: MouseEvent) => {
 .badge-content {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .badge-dot {

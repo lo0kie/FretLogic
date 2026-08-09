@@ -18,7 +18,7 @@
         <BaseNumberInput
           v-model="editorStore.draftChord.capo"
           :min="0"
-          :max="12"
+          :max="11"
           :formatter="val => (val === 0 ? 'CAPO 0' : `CAPO ${val}`)"
         />
       </div>

@@ -1,12 +1,15 @@
 import type { Song } from '@/types';
 import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/chordMap';
 import { generateUUID } from '@/utils/id';
-import { useStorage } from '@vueuse/core';
+import { debounceFilter, useEventListener, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
 export const useSongStore = defineStore('song', () => {
-  const songs = useStorage<Song[]>('CHORD_LAB_SONGS_V1', [], localStorage);
+  const songs = useStorage<Song[]>('CHORD_LAB_SONGS_V1', [], localStorage, {
+    eventFilter: debounceFilter(400, { maxWait: 1500 }), // 🌟 400ms 防抖，但最长 1.5s 必定落盘一次
+  });
+
   const songMap = computed(() => new Map(songs.value.map(s => [s.id, s])));
   const lastDeletedSongInfo = ref<{ song: Song; index: number } | null>(null);
 
@@ -134,6 +137,19 @@ export const useSongStore = defineStore('song', () => {
       }
     });
   };
+
+  const flushSongsNow = () => {
+    try {
+      localStorage.setItem('CHORD_LAB_SONGS_V1', JSON.stringify(songs.value));
+    } catch (err) {
+      console.error('[songStore] flush on unload failed:', err);
+    }
+  };
+
+  useEventListener(window, 'beforeunload', flushSongsNow);
+  useEventListener(document, 'visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushSongsNow();
+  });
 
   return {
     songs,

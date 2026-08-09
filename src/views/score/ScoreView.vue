@@ -8,10 +8,11 @@
           v-show="scoreEditor.activeTab !== 'edit'"
           ref="interactiveAreaRef"
           :selected-line-set="selectedLineSet"
-          :is-exporting="isExporting"
+          :export-page-line-set="exportPageLineSet"
+          :is-exporting="isGenerating"
+          :include-meta-bar="includeMetaBar"
           @open-picker="openChordPicker"
           @line-click="handleLineClick"
-          :include-meta-bar="includeMetaBar"
         />
       </template>
 
@@ -23,35 +24,51 @@
       :selected-count="selectedLineSet.size"
       :sorted-indices="sortedSelectedIndices"
       :is-all-selected="isAllSelected"
-      :is-exporting="isExporting"
       @remove-index="handleRemoveLineIndex"
       @toggle-select-all="handleToggleSelectAll"
-      @copy-image="handleCopySelectedImage"
+      @open-export="previewVisible = true"
       v-model:include-meta-bar="includeMetaBar"
     />
 
     <ChordPickerModal v-model:visible="isPickerOpen" />
+
+    <!-- 🌟 不再让 Modal 自己拿数据，全部由这里派发下去 -->
+    <ScoreExportPreviewModal
+      v-model:visible="previewVisible"
+      v-model:mode="exportMode"
+      :pages="pages"
+      :current-page="currentPage"
+      v-model:current-page-index="currentPageIndex"
+      :is-generating="isGenerating"
+      @copy-current-page="copyCurrentPage"
+      @download-pdf="downloadPdf"
+      @download-current-page="downloadCurrentPage"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import EmptyState from '@/components/EmptyState.vue';
 import { useLineSelection } from '@/services/useLineSelection';
-import { useScoreImageExport } from '@/services/useScoreExport.ts';
+import { useScoreExportPreview } from '@/services/useScoreExportPreview.ts';
 import { useScoreLinesData } from '@/services/useScoreLinesData.ts';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
-import { computed, ref, useTemplateRef } from 'vue';
+import { computed, ref, useTemplateRef, watch } from 'vue';
 import ChordPickerModal from './ChordPickerModal.vue';
 import ScoreExportFloatingBar from './ScoreExportFloatingBar.vue';
+import ScoreExportPreviewModal from './ScoreExportPreviewModal.vue';
 import ScoreInteractiveArea from './ScoreInteractiveArea.vue';
 import ScoreLyricsEditor from './ScoreLyricsEditor.vue';
 
+const exportPageLineSet = ref<Set<number>>(new Set());
 const scoreEditor = useScoreEditorStore();
 const isPickerOpen = ref(false);
+const previewVisible = ref(false);
 const interactiveAreaRef = useTemplateRef<InstanceType<typeof ScoreInteractiveArea>>('interactiveAreaRef');
 const exportHeaderMetaRef = computed(() => interactiveAreaRef.value?.exportHeaderMetaRef ?? null);
+const a4CaptureWrapperRef = computed(() => interactiveAreaRef.value?.a4CaptureWrapperRef ?? null);
 
 const { lyricsLinesWithEdges } = useScoreLinesData();
 const totalLines = computed(() => lyricsLinesWithEdges.value.length);
@@ -66,34 +83,46 @@ const {
   handleLineClick,
 } = useLineSelection(totalLines, activeSongId);
 
-const { isExporting, handleCopySelectedImage, includeMetaBar } = useScoreImageExport(
-  selectedLineSet,
-  exportHeaderMetaRef
-);
+// 🌟 唯一一处实例化，Modal 不再自己调用
+const {
+  mode: exportMode,
+  pages,
+  currentPage,
+  currentPageIndex,
+  isGenerating,
+  includeMetaBar,
+  generatePreview,
+  copyCurrentPage,
+  downloadPdf,
+  clearPreview,
+  downloadCurrentPage,
+} = useScoreExportPreview(sortedSelectedIndices, exportHeaderMetaRef, exportPageLineSet, a4CaptureWrapperRef);
+
+// 🌟 打开时生成、关闭时释放 objectURL；模式/是否带信息栏变化时重新生成
+watch(previewVisible, open => {
+  if (open) generatePreview();
+  else clearPreview();
+});
+watch([exportMode, includeMetaBar], () => {
+  if (previewVisible.value) generatePreview();
+});
 
 const openChordPicker = (slotKey: string | number) => {
   scoreEditor.selectedSlotKey = slotKey;
   isPickerOpen.value = true;
 };
 
-// 🌟 注册全局快捷键：撤销 (Ctrl+Z) 与 重做 (Ctrl+Y 或 Ctrl+Shift+Z)
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   if (!scoreEditor.activeSong) return;
-
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
     e.preventDefault();
-    if (e.shiftKey) {
-      scoreEditor.redo();
-    } else {
-      scoreEditor.undo();
-    }
+    e.shiftKey ? scoreEditor.redo() : scoreEditor.undo();
   } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
     e.preventDefault();
     scoreEditor.redo();
   }
 });
 </script>
-
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 

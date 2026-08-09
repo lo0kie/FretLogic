@@ -1,19 +1,20 @@
 ﻿<template>
-  <GlobalContextMenu ref="contextMenuRef" :items="menuItems">
+  <GlobalContextMenu :items="menuItems" #default="{ isOpen }">
     <div class="chord-card-frame" :title="`${cardData.mainChord.chordName} ${dotTitle}`">
       <div
         v-wave
         class="chord-thumb-card"
         :class="{
-          'is-editing': isEditing,
-          'is-context-open': isMenuOpen,
+          'is-editing': isActiveVariantEditing,
+          'is-stacked-editing': isOtherVariantEditing,
+          'is-context-open': isOpen,
           'has-variants': cardData.hasVariants,
           'is-swapping': isSwapping,
         }"
         role="button"
         tabindex="0"
-        :aria-pressed="isEditing"
-        :aria-label="`和弦 ${cardData.mainChord.chordName}${cardData.hasVariants ? `（共 ${cardData.variantCount} 种指法${isEditing ? '，已激活，滚轮可切换' : ''}）` : ''}`"
+        :aria-pressed="isActiveVariantEditing"
+        :aria-label="`和弦 ${cardData.mainChord.chordName}${cardData.hasVariants ? `（共 ${cardData.variantCount} 种指法${isActiveVariantEditing ? '，已激活，滚轮可切换' : ''}）` : ''}`"
         @click="handleCardClick"
         @wheel="handleWheelScroll"
         @keydown.enter.prevent.stop="handleCardClick"
@@ -36,11 +37,12 @@
         <!-- 右上角：变体指法数量 Badge -->
         <BaseBadge
           v-if="cardData.hasVariants"
-          :variant="isEditing ? 'primary' : 'neutral'"
+          :variant="isActiveVariantEditing || isOtherVariantEditing ? 'primary' : 'neutral'"
           appearance="filled"
           size="xs"
           class="variant-badge-badge"
-          :title="isEditing ? '滚轮切换指法' : undefined"
+          width="0.85rem"
+          :title="isActiveVariantEditing ? '滚轮切换指法' : undefined"
           @click.stop="toggleVariantsDropdown"
         >
           {{ cardData.variantCount }}
@@ -60,9 +62,10 @@
 import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
+import { useEditorStore } from '@/stores/chordEditorStore';
 import type { Chord, GroupedChordCard } from '@/types';
 import { Move, Trash2 } from '@lucide/vue';
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
 const props = defineProps<{
   cardData: GroupedChordCard;
@@ -76,6 +79,7 @@ const emit = defineEmits<{
   (e: 'delete-variants', cardData: GroupedChordCard): void;
 }>();
 
+const editorStore = useEditorStore();
 const activeVariantIndex = ref(0);
 
 watch(
@@ -87,8 +91,15 @@ watch(
 
 const activeChord = computed(() => props.cardData.variants[activeVariantIndex.value] || props.cardData.mainChord);
 
-const contextMenuRef = useTemplateRef<InstanceType<typeof GlobalContextMenu>>('contextMenuRef');
-const isMenuOpen = computed(() => contextMenuRef.value?.isOpen ?? false);
+const isActiveVariantEditing = computed(() => activeChord.value.id === editorStore.draftChord.id);
+
+const isOtherVariantEditing = computed(() => {
+  return (
+    props.cardData.hasVariants &&
+    !isActiveVariantEditing.value &&
+    props.cardData.variants.some(c => c.id === editorStore.draftChord.id)
+  );
+});
 
 const handleCardClick = () => {
   emit('select', activeChord.value);
@@ -191,6 +202,7 @@ onBeforeUnmount(() => {
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
   border-radius: @radius-md;
+  outline: none;
   transition:
     background-color @duration-fast ease,
     border-color @duration-fast ease,
@@ -219,11 +231,26 @@ onBeforeUnmount(() => {
     &:not(.is-swapping):hover::before,
     &:not(.is-swapping).is-context-open::before {
       transform: translate(6px, 5px) rotate(2deg);
+      border-color: var(--border-base);
     }
 
     &.is-editing::before {
       border-color: color-mix(in srgb, @primary, transparent 40%);
       background-color: color-mix(in srgb, @primary, var(--bg-body) 94%);
+    }
+
+    &.is-stacked-editing::before {
+      border-color: @primary;
+      background-color: color-mix(in srgb, @primary, var(--bg-body) 80%);
+      transform: translate(5px, 4px) rotate(1.5deg);
+      box-shadow: 0 0 0 1px color-mix(in srgb, @primary, transparent 50%);
+
+      &:hover,
+      &.is-context-open {
+        border-color: @primary;
+        background-color: color-mix(in srgb, @primary, var(--bg-body) 70%);
+        transform: translate(6px, 5px) rotate(2deg);
+      }
     }
 
     &.is-swapping::before {
@@ -239,12 +266,44 @@ onBeforeUnmount(() => {
     border-color: var(--border-base);
   }
 
+  &:focus-visible {
+    border-color: @primary;
+    box-shadow: 0 0 0 2px color-mix(in srgb, @primary, transparent 60%);
+
+    .variant-badge-badge {
+      transform: scale(1.15);
+      box-shadow:
+        0 0 0 2px var(--bg-body),
+        0 0 0 3px @primary;
+    }
+
+    .status-dot {
+      box-shadow:
+        0 0 0 2px var(--bg-body),
+        0 0 0 3px @primary;
+    }
+  }
+
   &.is-editing {
     background-color: color-mix(in srgb, @primary, var(--bg-body) 88%);
     border-color: @primary;
 
     .chord-name-text {
       color: @primary;
+    }
+
+    &:hover,
+    &:active,
+    &.is-context-open {
+      background-color: color-mix(in srgb, @primary, var(--bg-body) 78%);
+      border-color: @primary;
+      box-shadow: 0 0 0 1px color-mix(in srgb, @primary, transparent 60%);
+    }
+
+    &:focus-visible {
+      box-shadow:
+        0 0 0 1px @primary,
+        0 0 0 3px color-mix(in srgb, @primary, transparent 50%);
     }
   }
 }
@@ -266,7 +325,6 @@ onBeforeUnmount(() => {
   top: -0.28rem;
   right: -0.28rem;
   z-index: 5;
-  min-width: 0.85rem;
   height: 0.85rem;
   padding: 0 0.2rem;
   border-radius: 9999px;
@@ -275,7 +333,9 @@ onBeforeUnmount(() => {
   line-height: 1;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   cursor: pointer;
-  transition: transform @duration-fast ease;
+  transition:
+    transform @duration-fast ease,
+    box-shadow @duration-fast ease;
 }
 
 .chord-marquee-wrapper {
@@ -304,35 +364,22 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   box-sizing: border-box;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: box-shadow @duration-fast ease;
 
-  // 1. 有根音 + 无转位 -> 主题色
   &.is-root-normal {
     background-color: var(--color-primary);
   }
 
-  // 2. 有根音 + 有转位 -> 主题色与 Warn 各一半 (渐变)
   &.is-root-inverted {
     background: linear-gradient(135deg, var(--color-primary) 50%, var(--color-warning) 50%);
   }
 
-  // 3. 无根音 + 有转位 -> Warn
   &.is-rootless-inverted {
     background-color: var(--color-warning);
   }
 
-  // 4. 无根音 + 无转位 -> Danger (红色)
   &.is-rootless-normal {
     background-color: var(--color-danger);
-  }
-}
-
-/* 移动端尺寸微调 */
-@media (max-width: 768px) {
-  .status-dot {
-    top: -0.3rem;
-    left: -0.3rem;
-    width: 0.62rem;
-    height: 0.62rem;
   }
 }
 

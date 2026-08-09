@@ -15,7 +15,7 @@
         transformOrigin: 'top left',
         backgroundColor: bgColor,
       }"
-      @contextmenu.prevent.stop="handleRightClickRoot"
+      @contextmenu="handleRightClickRoot"
     >
       <div class="open-strings-wrapper" :style="{ height: `${activeTopOffset}px` }">
         <template v-if="showOpenStrings">
@@ -35,7 +35,7 @@
             >
               <button
                 v-wave
-                :tabindex="interactive ? 0 : -1"
+                :tabindex="interactive && str.fret <= 0 ? 0 : -1"
                 role="button"
                 :aria-label="getOpenStringAriaLabel(sIdx, str)"
                 :aria-disabled="!interactive"
@@ -259,6 +259,16 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
     border-color: color-mix(in srgb, var(--color-primary), transparent 85%);
     color: var(--color-primary);
     background-color: color-mix(in srgb, var(--color-primary), transparent 92%) !important;
+  }
+
+  &:focus-visible {
+    outline: none;
+    /* 🌟 2px 背景底色隔断 + 2px 高对比度主题色外环 */
+    box-shadow:
+      0 0 0 2px var(--bg-body, #ffffff),
+      0 0 0 4px var(--color-primary) !important;
+    border-color: var(--color-primary) !important;
+    z-index: 2;
   }
 }
 

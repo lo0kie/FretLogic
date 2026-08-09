@@ -62,13 +62,13 @@ export function useFretboardInteraction(
   };
 
   const handleRightClickRoot = (e: MouseEvent) => {
+    // 🌟 非交互模式下直接返回，允许 contextmenu 事件向上冒泡至 GlobalContextMenu
     if (!interactive.value) return;
 
     const point = getCanvasPoint(e.clientX, e.clientY);
     if (!point) return;
 
     const { stringIndex: sIdx, fretIndex: fIdx } = point;
-
     const currentStringAsset = strings.value[sIdx];
     let isNoteClicked = false;
 
@@ -79,6 +79,10 @@ export function useFretboardInteraction(
     }
 
     if (!isNoteClicked) return;
+
+    // 🌟 仅在真正触发根音切换时拦截右键默认菜单和阻止冒泡
+    e.preventDefault();
+    e.stopPropagation();
 
     emitStringsUpdate(cloned => {
       const wasRoot = cloned[sIdx].isRoot;

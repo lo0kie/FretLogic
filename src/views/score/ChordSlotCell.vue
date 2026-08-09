@@ -53,7 +53,7 @@
           :ref="el => chord && setFretboardMeasureRef(el, chord.fretCount)"
           :interactive="false"
           :scale="0.28 * scoreEditor.fretboardScale"
-          :is-dark-mode="isDarkMode"
+          :is-dark-mode="settingsStore.isDarkMode"
           fret-number-size="lg"
         />
 
@@ -80,6 +80,7 @@ const fretboardSizeCache = reactive<Record<string, { width: string; height: stri
 <script setup lang="ts">
 import Fretboard from '@/components/Fretboard.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import type { Chord } from '@/types';
 import { getPlaceholderSize } from '@/utils/fretboardVisuals';
 import { X } from '@lucide/vue';
@@ -93,7 +94,6 @@ const props = defineProps<{
   variant: 'char' | 'edge' | 'add';
   addPlaceholderTitle?: string;
   isDropTarget: boolean;
-  isDarkMode: boolean;
   isExporting: boolean;
   scrollRoot?: HTMLElement | null; // 🌟 新增
 }>();
@@ -110,6 +110,7 @@ const emit = defineEmits<{
 
 const isVisible = ref(false);
 const scoreEditor = useScoreEditorStore();
+const settingsStore = useSettingsStore();
 const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
 
 const { stop: stopObserving } = useIntersectionObserver(

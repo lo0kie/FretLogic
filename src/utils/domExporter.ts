@@ -9,6 +9,7 @@ export interface ExportOptions {
   isTransparent?: boolean;
   style?: Record<string, string>;
   filter?: (node: Node) => boolean;
+  pixelRatio?: number;
 }
 
 /** 1. 辅助计算：根据 DOM 面积计算自适应像素比，防止大图绘制卡死 */
@@ -48,7 +49,7 @@ const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions):
 
   return {
     quality: 0.95,
-    pixelRatio: getCanvasPixelRatio(el),
+    pixelRatio: exportOptions.pixelRatio ?? getCanvasPixelRatio(el),
     cacheBust: false,
     width: exportOptions.width,
     height: exportOptions.height,
@@ -56,7 +57,7 @@ const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions):
     style: {
       ...defaultStyle,
       ...exportOptions.style,
-      transform: 'none',
+      transform: exportOptions.style?.transform ?? 'none',
       borderRadius: '0',
       borderColor: 'transparent',
       borderWidth: '0',
@@ -65,15 +66,6 @@ const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions):
     },
     filter: exportOptions.filter,
   };
-};
-
-/** 5. 系统剪贴板交互：纯粹的 Blob 数据写入与降级尝试 */
-const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
-  try {
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-  } catch {
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
-  }
 };
 
 /** 6. DOM 渲染核心：将指定 Element 渲染为 PNG Blob 数据 */
@@ -91,6 +83,31 @@ export const renderElementToBlob = async (el: HTMLElement, exportOptions: Export
   return blob;
 };
 
+export const renderElementToCanvas = async (
+  el: HTMLElement,
+  exportOptions: ExportOptions = {}
+): Promise<HTMLCanvasElement> => {
+  const htmlToImage = await import('html-to-image');
+  const finalOptions = buildHtmlToImageOptions(el, exportOptions);
+  await waitForFontsReady();
+  return htmlToImage.toCanvas(el, finalOptions);
+};
+
+export const canvasToBlob = (canvas: HTMLCanvasElement, type = 'image/png', quality = 0.95): Promise<Blob> =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Canvas 转 Blob 失败'))), type, quality);
+  });
+
+export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
+  if (!navigator.clipboard) throw new Error('当前浏览器环境受限 (需要 HTTPS)，无法调用剪贴板');
+  if (!document.hasFocus()) throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  } catch {
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+  }
+};
+
 /** 7. 导出复制工具：入口函数，只负责提取 DOM 并触发剪贴板复制 */
 export const copyElementToClipboard = async (
   target: HTMLElement | Ref<HTMLElement | null | undefined> | null | undefined,
@@ -100,13 +117,6 @@ export const copyElementToClipboard = async (
   if (!el) {
     throw new Error('未找到目标 DOM 节点');
   }
-  if (!navigator.clipboard) {
-    throw new Error('当前浏览器环境受限 (需要 HTTPS)，无法调用剪贴板');
-  }
-  if (!document.hasFocus()) {
-    throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
-  }
-
   const blob = await renderElementToBlob(el, exportOptions);
   await writeBlobToClipboard(blob);
 };
