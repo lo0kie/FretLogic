@@ -6,6 +6,7 @@
     :style="normalizedStyle"
     class="action-button-base"
     :class="[sizeClass, themeClass, variantClass, roundedClass, { 'is-icon-only': iconOnly }]"
+    data-focusable-inline
   >
     <Loader2 v-if="loading" class="loading-icon" />
     <slot v-else name="prefix"></slot>

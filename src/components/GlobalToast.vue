@@ -26,6 +26,7 @@
           @click="handleExecuteAction(item)"
           class="btn-toast-undo"
           :aria-label="`${item.actionText}操作`"
+          data-focusable-inline
         >
           {{ item.actionText }}
         </button>
@@ -37,6 +38,7 @@
           class="btn-toast-close"
           title="关闭"
           aria-label="关闭通知"
+          data-focusable-inline
         >
           <X class="close-icon" stroke-width="3" aria-hidden="true" />
         </button>
@@ -121,12 +123,6 @@ const handleExecuteAction = (item: Toast) => {
   transition: @transition-fast;
   outline: none;
 
-  &:focus-visible {
-    opacity: 1;
-    background-color: color-mix(in srgb, currentColor, transparent 80%);
-    box-shadow: 0 0 0 2px currentColor;
-  }
-
   &:hover {
     opacity: 1;
     background-color: color-mix(in srgb, currentColor, transparent 85%);
@@ -167,11 +163,6 @@ const handleExecuteAction = (item: Toast) => {
   cursor: pointer;
   outline: none;
   border-radius: @radius-sm;
-
-  &:focus-visible {
-    opacity: 1;
-    box-shadow: 0 0 0 2px currentColor;
-  }
 
   &:hover {
     opacity: 1;

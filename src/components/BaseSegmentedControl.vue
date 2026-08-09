@@ -1,5 +1,10 @@
 <template>
-  <div ref="containerRef" class="base-segmented-control" :class="[`size-${size}`, { 'is-disabled': disabled }]">
+  <div
+    ref="containerRef"
+    class="base-segmented-control"
+    :class="[`size-${size}`, { 'is-disabled': disabled }]"
+    @keydown="handleKeydown"
+  >
     <div class="indicator-pill" :class="{ 'is-animated': isInitialized }"></div>
 
     <button
@@ -14,6 +19,7 @@
       }"
       :disabled="disabled || item.disabled"
       @click="handleSelect(item)"
+      data-focusable-inline
     >
       <slot name="label" :item="item">
         {{ item.label }}
@@ -24,6 +30,7 @@
 
 <script setup lang="ts" generic="T extends string | number">
 import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
+import { useGridNavigation } from '@/services/useGridNavigation';
 import { nextTick, ref, useTemplateRef, watch, watchEffect } from 'vue';
 
 export interface SegmentOption<ValueType = string | number> {
@@ -51,6 +58,7 @@ const emit = defineEmits<{
 const containerRef = useTemplateRef<HTMLDivElement>('containerRef');
 const itemRefs = useTemplateRef<HTMLButtonElement[]>('itemRefs');
 
+const { handleKeydown } = useGridNavigation(options.length, containerRef);
 const isInitialized = ref(false);
 
 const updateIndicatorPosition = async () => {

@@ -1,64 +1,66 @@
 <template>
   <EmptyState v-if="songStore.songs.length === 0" :icon="Music" description="暂无乐谱，点击右上角新建" size="md" />
 
-  <VueDraggable
-    v-else
-    :model-value="songStore.songs"
-    @update:modelValue="(val: Song[]) => songStore.overwriteSongs(val)"
-    :animation="200"
-    class="draggable-list"
-  >
-    <GlobalContextMenu
-      v-for="song in songStore.songs"
-      :key="song.id"
-      :items="getSongMenuItems(song)"
-      #default="{ isOpen }"
+  <div v-else ref="songListContainerRef" @keydown="handleKeydown">
+    <VueDraggable
+      :model-value="songStore.songs"
+      @update:modelValue="(val: Song[]) => songStore.overwriteSongs(val)"
+      :animation="200"
+      class="draggable-list"
     >
-      <div
-        v-wave
-        class="song-card-item"
-        :class="{
-          'is-active': isSongActive(song.id),
-          'is-context-open': isOpen,
-        }"
-        role="button"
-        tabindex="0"
-        :aria-pressed="isSongActive(song.id)"
-        :aria-label="`乐谱 ${song.title}，${song.playKey}调，Capo ${song.capo}${isSongActive(song.id) ? '，已选中' : ''}`"
-        @click="handleSelectSong(song.id)"
-        @keydown.enter.prevent.stop="handleSelectSong(song.id)"
-        @keydown.space.prevent.stop="handleSelectSong(song.id)"
+      <GlobalContextMenu
+        v-for="song in songStore.songs"
+        :key="song.id"
+        :items="getSongMenuItems(song)"
+        #default="{ isOpen }"
       >
-        <div class="song-card-content">
-          <BaseMarquee class="song-marquee">
-            <span class="song-title-text">{{ song.title }}</span>
-          </BaseMarquee>
+        <div
+          v-wave
+          class="song-card-item"
+          :class="{
+            'is-active': isSongActive(song.id),
+            'is-context-open': isOpen,
+          }"
+          role="button"
+          tabindex="0"
+          data-focusable-inline
+          :aria-pressed="isSongActive(song.id)"
+          :aria-label="`乐谱 ${song.title}，${song.playKey}调，Capo ${song.capo}${isSongActive(song.id) ? '，已选中' : ''}`"
+          @click="handleSelectSong(song.id)"
+          @keydown.enter.prevent.stop="handleSelectSong(song.id)"
+          @keydown.space.prevent.stop="handleSelectSong(song.id)"
+        >
+          <div class="song-card-content">
+            <BaseMarquee class="song-marquee">
+              <span class="song-title-text">{{ song.title }}</span>
+            </BaseMarquee>
 
-          <div class="song-meta-badges">
-            <BaseBadge
-              variant="neutral"
-              :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
-              size="xs"
-              :aria-label="`调性 ${song.playKey} 调`"
-              width="2rem"
-            >
-              {{ song.key }}调
-            </BaseBadge>
+            <div class="song-meta-badges">
+              <BaseBadge
+                variant="neutral"
+                :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
+                size="xs"
+                :aria-label="`调性 ${song.playKey} 调`"
+                width="2rem"
+              >
+                {{ song.key }}调
+              </BaseBadge>
 
-            <BaseBadge
-              variant="neutral"
-              :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
-              size="xs"
-              :aria-label="`变调夹 Capo ${song.capo} 品`"
-              width="2.8rem"
-            >
-              Capo {{ song.capo }}
-            </BaseBadge>
+              <BaseBadge
+                variant="neutral"
+                :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
+                size="xs"
+                :aria-label="`变调夹 Capo ${song.capo} 品`"
+                width="2.8rem"
+              >
+                Capo {{ song.capo }}
+              </BaseBadge>
+            </div>
           </div>
         </div>
-      </div>
-    </GlobalContextMenu>
-  </VueDraggable>
+      </GlobalContextMenu>
+    </VueDraggable>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -66,11 +68,13 @@ import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
+import { useGridNavigation } from '@/services/useGridNavigation';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
 import { Eraser, Music, SlidersHorizontal, Trash2 } from '@lucide/vue';
+import { useTemplateRef } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 
 const emit = defineEmits<{
@@ -81,6 +85,14 @@ const emit = defineEmits<{
 const songStore = useSongStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
+
+// 乐谱列表的单列垂直导航（1列）
+// selector 限定只收集乐谱卡片本身，避免和外层容器里的其它可聚焦元素混在一起
+const songListContainerRef = useTemplateRef<HTMLElement>('songListContainerRef');
+const { handleKeydown } = useGridNavigation(1, songListContainerRef, {
+  selector: '.song-card-item',
+  stop: true,
+});
 
 const isSongActive = (songId: string) => scoreEditor.activeSongId === songId;
 
@@ -163,12 +175,6 @@ const handleSelectSong = (songId: string) => {
   &.is-context-open {
     background-color: var(--bg-panel-hover);
     border-color: var(--border-base);
-  }
-
-  /* 键盘 Focus 反馈 */
-  &:focus-visible {
-    border-color: var(--color-primary);
-    box-shadow: @focus-ring-primary;
   }
 
   /* 当前选中激活态 */

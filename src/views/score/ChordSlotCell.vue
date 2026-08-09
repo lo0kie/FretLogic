@@ -22,6 +22,7 @@
     @dragleave="emit('dragleave', $event)"
     @drop="emit('drop')"
     v-wave
+    data-focusable-inline
   >
     <div class="chord-display-slot">
       <div
@@ -41,6 +42,7 @@
           title="清除当前和弦"
           aria-label="清除当前和弦"
           @click.stop.prevent="emit('remove', slotKey)"
+          data-focusable-inline
         >
           <X :size="12" :stroke-width="3" aria-hidden="true" />
         </button>
@@ -197,16 +199,6 @@ unwatchExport = watch(
   cursor: pointer;
   outline: none;
 
-  &:focus-visible {
-    box-shadow: inset 0 0 0 2px var(--color-primary);
-    background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
-
-    .remove-chord-btn {
-      opacity: 1;
-      pointer-events: auto;
-    }
-  }
-
   &:hover {
     background-color: color-mix(in srgb, var(--color-primary), transparent 88%);
 
@@ -350,14 +342,6 @@ unwatchExport = watch(
   z-index: 5;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   outline: none;
-
-  &:focus-visible {
-    opacity: 1;
-    pointer-events: auto;
-    box-shadow:
-      0 0 0 2px #ffffff,
-      0 0 0 4px var(--color-danger);
-  }
 
   &:hover {
     transform: scale(1.05);

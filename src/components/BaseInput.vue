@@ -29,6 +29,7 @@
       ]"
       data-bitwarden-ignore
       autocomplete="off"
+      data-focusable-inline
     />
 
     <span
@@ -48,6 +49,7 @@
       @mousedown.stop
       class="clear-button"
       title="清空内容"
+      data-focusable-inline
       :class="sizeClass"
     >
       <X :size="10" stroke-width="3" />

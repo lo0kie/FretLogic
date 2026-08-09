@@ -76,12 +76,23 @@
       <div class="picker-scroll-content no-scrollbar" ref="scrollWrapperRef" v-auto-animate>
         <EmptyState v-if="filteredChords.length === 0" description="当前搜索或分组下暂无匹配和弦。" size="lg" />
 
-        <div v-else class="picker-cards-grid-4cols" role="group" aria-label="和弦选择列表" v-auto-animate>
+        <div
+          class="picker-cards-grid-4cols"
+          role="group"
+          aria-label="和弦选择列表"
+          @keydown="handleKeydown"
+          v-auto-animate
+        >
           <div
             v-wave
-            v-for="chord in filteredChords"
+            v-for="(chord, index) in filteredChords"
             :key="chord.id"
-            :ref="el => setCardObserverRef(el, chord.id)"
+            :ref="
+              el => {
+                setCardObserverRef(el, chord.id);
+                setItemRef(el, index);
+              }
+            "
             role="button"
             :tabindex="isCurrentBound(chord) ? -1 : 0"
             :aria-pressed="isCurrentBound(chord)"
@@ -92,9 +103,9 @@
             @click="!isCurrentBound(chord) && handleSelectChord(chord)"
             @keydown.enter.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
             @keydown.space.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
+            data-focusable-inline
           >
             <span class="card-name">{{ chord.chordName }}</span>
-
             <Fretboard
               v-if="visibleMap[chord.id]"
               :chord="chord"
@@ -124,6 +135,7 @@ import BaseSelector from '@/components/BaseSelector.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
 import { KEY_OPTIONS, PICKER_FRETBOARD_SCALE, SORT_RULE_CONFIG } from '@/constants';
+import { useGridNavigation } from '@/services/useGridNavigation';
 import { useScoreLinesData } from '@/services/useScoreLinesData';
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
@@ -160,6 +172,7 @@ const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
 const visibleMap = reactive<Record<string, boolean>>({});
 
 const cardObservers = new Map<string, IntersectionObserver>();
+const { setItemRef, handleKeydown } = useGridNavigation(4, () => filteredChords.value.length);
 
 const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordId: string) => {
   if (!el) {
@@ -477,15 +490,10 @@ onDeactivated(() => {
     pointer-events: inherit !important;
   }
 
-  &:hover,
-  &:focus-visible {
+  &:hover {
     border-color: var(--color-primary);
     transform: translateY(-2px);
     box-shadow: @shadow-md;
-  }
-
-  &:focus-visible {
-    box-shadow: @focus-ring-primary;
   }
 
   &.is-current-bound {

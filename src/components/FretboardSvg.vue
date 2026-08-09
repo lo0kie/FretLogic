@@ -1,6 +1,5 @@
 <template>
   <div class="fretboard-svg-wrapper">
-    <!-- 🌟 HTML 绝对定位浮动层：品位数字脱离 SVG 文档流，完全不占据横向 X 轴空间 -->
     <div v-if="showFretNumbers" class="fret-numbers-overlay" aria-hidden="true">
       <span
         v-for="i in fretCount"
@@ -15,6 +14,8 @@
     </div>
 
     <svg
+      ref="svgContainerRef"
+      @keydown="handleGridKeydown"
       :width="CANVAS_CONFIG.BOARD_WIDTH"
       :height="fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
       :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
@@ -91,6 +92,7 @@
           :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings)}。按 Enter/空格 切换升降号，按 Delete/Backspace 清除按音，按 R 设为根音`"
           @dblclick.prevent.stop="emit('toggle-pitch', sIdx)"
           @keydown="e => handleFingerKeydown(e, sIdx)"
+          data-focusable-outline
         >
           <circle
             :cx="stringXPositions[sIdx]"
@@ -122,10 +124,11 @@
 
 <script setup lang="ts">
 import { CANVAS_CONFIG, FRETBOARD_LINE_WIDTH } from '@/constants';
+import { useGridNavigation } from '@/services/useGridNavigation';
 import type { GuitarStringsModel } from '@/types';
 import { getFingerColor, getFingerTextColor } from '@/utils/fretboardVisuals';
 import { calcNoteLabel } from '@/utils/musicTheory';
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -150,10 +153,12 @@ const emit = defineEmits<{
   (e: 'toggle-root', stringIndex: number): void;
 }>();
 
-// 🌟 计算每个数字在绝对定位浮层中的精准 Y 坐标
+const svgContainerRef = useTemplateRef<SVGSVGElement>('svgContainerRef');
+const { handleKeydown: handleGridKeydown } = useGridNavigation(undefined, svgContainerRef as any);
+
 const getFretNumberStyle = (fretIndex: number) => {
   const yPixel = fretIndex * CANVAS_CONFIG.FRET_HEIGHT;
-  const xPixel = props.stringXPositions[0] - 22; // 固定锚定在最左弦（第6弦）向左偏移 22px 处
+  const xPixel = props.stringXPositions[0] - 22;
   return {
     top: `${yPixel}px`,
     left: `${xPixel}px`,
@@ -173,7 +178,6 @@ const showPredictiveHover = computed(() => {
   );
 });
 
-// 🌟 统一键盘事件响应逻辑
 const handleFingerKeydown = (e: KeyboardEvent, sIdx: number) => {
   if (!props.interactive) return;
 
@@ -209,7 +213,6 @@ const handleFingerKeydown = (e: KeyboardEvent, sIdx: number) => {
   display: block;
 }
 
-/* 🌟 核心：脱离文档流的浮动品位数字层 */
 .fret-numbers-overlay {
   position: absolute;
   inset: 0;
@@ -250,19 +253,6 @@ const handleFingerKeydown = (e: KeyboardEvent, sIdx: number) => {
   cursor: pointer;
   pointer-events: auto;
   outline: none;
-
-  &:focus-visible {
-    .finger-circle {
-      /* 🌟 1. 让边框向外绘制，避免挤压内部音符文本 */
-      paint-order: stroke fill;
-      /* 🌟 2. 继承该节点和弦颜色的虚线外环边框 */
-      stroke: currentColor;
-      stroke-width: 8px;
-      stroke-dasharray: 10 5;
-      /* 🌟 3. 叠加双重高对比发光轮廓 */
-      filter: drop-shadow(0 0 0 2px var(--bg-body, #ffffff)) drop-shadow(0 0 6px currentColor) !important;
-    }
-  }
 }
 
 .finger-predictive {

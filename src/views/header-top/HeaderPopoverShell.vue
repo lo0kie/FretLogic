@@ -9,7 +9,7 @@
         :aria-label="tooltip"
         :aria-expanded="isOpen"
         aria-haspopup="true"
-        @click="isOpen = !isOpen"
+        @click="toggleOpen"
       >
         <SlidersHorizontal :size="18" stroke-width="2.2" aria-hidden="true" />
       </ActionButton>
@@ -23,7 +23,8 @@
         aria-modal="false"
         :aria-label="tooltip"
         class="config-popover-card"
-        @keydown.esc.prevent.stop="handleEsc"
+        tabindex="-1"
+        @focusout="handleFocusOut"
       >
         <slot></slot>
       </div>
@@ -34,8 +35,10 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
+import { useFocusReturn } from '@/services/useFocusReturn';
 import { SlidersHorizontal } from '@lucide/vue';
 import { vOnClickOutside } from '@vueuse/components';
+import { useEventListener } from '@vueuse/core';
 import { ComponentPublicInstance, ref, useTemplateRef } from 'vue';
 
 defineProps<{ tooltip: string }>();
@@ -43,9 +46,67 @@ defineProps<{ tooltip: string }>();
 const isOpen = ref(false);
 const triggerBtnRef = useTemplateRef<ComponentPublicInstance>('triggerBtnRef');
 
+const { captureTrigger, restoreFocusAfter } = useFocusReturn({ warnLabel: '[GlobalConfigPopover]' });
+
+const getTriggerEl = () => triggerBtnRef.value?.$el as HTMLElement | undefined;
+
+const toggleOpen = () => {
+  if (!isOpen.value) {
+    captureTrigger(getTriggerEl());
+  }
+  isOpen.value = !isOpen.value;
+};
+
 const handleEsc = () => {
+  restoreFocusAfter(() => {
+    isOpen.value = false;
+  });
+};
+
+// 用全局 window 监听而非模板 @keydown.esc：
+// 浮层内部（slot 传入的子组件，如 BaseSelector 的下拉框）自身可能在 keydown 时
+// 调用了 stopPropagation()，导致事件冒泡不到这层容器，模板事件修饰符会失效。
+// capture: true 让这层监听在事件到达目标元素之前（冒泡前）就先拿到，
+// 不受任何子组件 stopPropagation 的影响。
+useEventListener(
+  window,
+  'keydown',
+  (e: KeyboardEvent) => {
+    if (!isOpen.value) return;
+    if (e.key !== 'Escape') return;
+
+    // 只有当子组件自己没有处理这次 Escape 时才由 Popover 接管关闭；
+    // 若担心和子组件内部的 Escape 逻辑重复触发，可以按需加白名单判断，
+    // 目前场景下重复调用 isOpen.value = false 是无害的
+    e.stopPropagation();
+    handleEsc();
+  },
+  { capture: true }
+);
+
+const handleFocusOut = (e: FocusEvent) => {
+  const nextFocused = e.relatedTarget as HTMLElement | null;
+  const cardEl = e.currentTarget as HTMLElement;
+
+  // 没有明确的下一个焦点目标（比如切换了窗口/标签页），安全起见直接关闭
+  if (!nextFocused) {
+    isOpen.value = false;
+    return;
+  }
+
+  // 焦点仍停留在浮层内部 → 不关闭
+  if (cardEl.contains(nextFocused)) return;
+
+  // 焦点移向触发按钮本身 → 交给 click handler 处理，这里不重复关闭
+  const triggerEl = getTriggerEl();
+  if (triggerEl?.contains(nextFocused)) return;
+
+  // 焦点移入了 Popover 内部某个子组件自己 Teleport 出去的浮层（如嵌套的 BaseSelector 下拉框、
+  // GlobalContextMenu 等），这些元素在 DOM 结构上脱离了 cardEl，但逻辑上仍属于本次交互，
+  // 不应视为"焦点离开了 Popover"
+  if (nextFocused.closest('[data-floating-layer]')) return;
+
   isOpen.value = false;
-  (triggerBtnRef.value?.$el as HTMLElement)?.focus?.();
 };
 </script>
 

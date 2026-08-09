@@ -121,6 +121,7 @@
           :aria-checked="groupModals.modalData.selectedVariantIds.has(variant.id)"
           :aria-label="`指法 Capo ${variant.capo}`"
           tabindex="0"
+          data-focusable-inline
           v-wave
         >
           <div class="variant-meta-info">
@@ -368,11 +369,6 @@ const handleToggleSelectAllVariants = () => {
     border-color: var(--border-base);
     background-color: var(--bg-panel-hover);
     transform: translateY(-1px);
-  }
-
-  &:focus-visible {
-    box-shadow: @focus-ring-primary;
-    border-color: var(--border-base);
   }
 
   &:active {

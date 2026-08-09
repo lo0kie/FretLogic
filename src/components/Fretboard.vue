@@ -17,7 +17,12 @@
       }"
       @contextmenu="handleRightClickRoot"
     >
-      <div class="open-strings-wrapper" :style="{ height: `${activeTopOffset}px` }">
+      <div
+        ref="openStringsContainerRef"
+        class="open-strings-wrapper"
+        :style="{ height: `${activeTopOffset}px` }"
+        @keydown="handleKeydown"
+      >
         <template v-if="showOpenStrings">
           <template v-for="(str, sIdx) in chord.strings" :key="'os-' + sIdx">
             <GlobalTooltip
@@ -45,6 +50,7 @@
                 @keydown.enter.prevent.stop="handleLocalToggleOpenString(sIdx)"
                 @keydown.space.prevent.stop="handleLocalToggleOpenString(sIdx)"
                 class="open-string-btn"
+                data-focusable-outline
                 :class="[
                   str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available',
                   getOpenStringStatusClass(str),
@@ -88,11 +94,13 @@ import FretboardSvg from '@/components/FretboardSvg.vue';
 import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { CANVAS_CONFIG } from '@/constants';
 import { useFretboardInteraction } from '@/services/useFretboardInteraction';
+import { useGridNavigation } from '@/services/useGridNavigation';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, GuitarStringsModel } from '@/types';
 import { getOpenStringStatusClass, getOpenStringStyle } from '@/utils/fretboardVisuals';
 import { calcNoteLabel, getActiveBaseStrings, isMuted, isOpen } from '@/utils/musicTheory';
 import { X } from '@lucide/vue';
+import { useTemplateRef } from 'vue';
 
 export interface FretboardProps {
   chord: Chord;
@@ -124,6 +132,9 @@ const emit = defineEmits<{
 }>();
 
 const uiStore = useUiStore();
+
+const openStringsContainerRef = useTemplateRef<HTMLElement>('openStringsContainerRef');
+const { handleKeydown } = useGridNavigation(6, openStringsContainerRef);
 
 const {
   fretBoardRef,
@@ -223,11 +234,6 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
     box-shadow: none !important;
   }
 
-  &:focus-visible {
-    box-shadow: @focus-ring-primary;
-    border-color: var(--color-primary);
-  }
-
   &.allow-events {
     pointer-events: auto;
   }
@@ -259,16 +265,6 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
     border-color: color-mix(in srgb, var(--color-primary), transparent 85%);
     color: var(--color-primary);
     background-color: color-mix(in srgb, var(--color-primary), transparent 92%) !important;
-  }
-
-  &:focus-visible {
-    outline: none;
-    /* 🌟 2px 背景底色隔断 + 2px 高对比度主题色外环 */
-    box-shadow:
-      0 0 0 2px var(--bg-body, #ffffff),
-      0 0 0 4px var(--color-primary) !important;
-    border-color: var(--color-primary) !important;
-    z-index: 2;
   }
 }
 

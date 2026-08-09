@@ -1,125 +1,109 @@
 <template>
   <EmptyState v-if="chordStore.groups.length === 0" :icon="FolderOpen" description="还没有添加分组" size="md" />
 
-  <VueDraggable
-    v-else
-    :model-value="chordStore.groups"
-    @update:modelValue="(val: Group[]) => chordStore.overwriteGroups(val)"
-    :animation="200"
-    handle=".group-title-row"
-    :disabled="!isAllCollapsed || Boolean(searchQuery) || uiStore.isMobile"
-    class="draggable-list"
-    ghost-class="drag-ghost-style"
-    chosen-class="drag-chosen-style"
-    drag-class="drag-active-style"
-    :touchStartThreshold="12"
-    :swap-threshold="0.5"
-  >
-    <!-- 🌟 1. 移除 <template v-for>，将 v-for 直接挂在 GlobalContextMenu 上修复拖拽 -->
-    <div v-for="group in chordStore.groups" :key="group.id" class="group-box-card" ref="groupCardEls">
-      <GlobalContextMenu :items="getGroupMenuItems(group)" #default="{ isOpen }">
-        <!-- 1. 标题行 -->
-        <div
-          v-wave
-          tabindex="0"
-          role="button"
-          :aria-expanded="isGroupContentOpen(group)"
-          :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${group.collapsed ? '已折叠' : '已展开'}`"
-          @click="chordActions.executeGroupToggle(group)"
-          @keydown.enter.prevent="chordActions.executeGroupToggle(group)"
-          @keydown.space.prevent="chordActions.executeGroupToggle(group)"
-          class="group-title-row"
-          :class="{
-            'is-expanded': isGroupContentOpen(group),
-            'is-context-open': isOpen,
-          }"
-        >
-          <div class="group-info-zone" title="点击折叠/展开分组">
-            <ChevronDown
-              :size="14"
-              :stroke-width="2.5"
-              class="arrow-toggle-icon"
-              :class="{ 'is-collapsed': !isGroupContentOpen(group) }"
-              aria-hidden="true"
-            />
-            <BaseMarquee>
-              <span class="group-name-text">
-                {{ group.name }}
-              </span>
-            </BaseMarquee>
-
-            <!-- 🌟 2. 右侧 Badge 组：包裹并设置固定宽度实现对齐 -->
-            <div class="group-badges-zone">
-              <BaseBadge
-                variant="neutral"
-                appearance="outline"
-                size="xs"
-                class="sort-rule-badge"
-                title="排序方法"
-                :aria-label="`按${getSortLabel(group)}自动排序`"
-                width="2rem"
-              >
-                {{ getSortLabel(group) }}
-              </BaseBadge>
-
-              <BaseBadge
-                v-if="searchQuery"
-                :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
-                :appearance="hasMatchedChords(group.id) ? 'subtle' : 'filled'"
-                size="xs"
-                :aria-label="`匹配 ${getMatchCount(group.id)} 个，共 ${getGroupChordsCount(group.id)} 个和弦`"
-                width="2.5rem"
-              >
-                <span :class="{ 'search-match-count': hasMatchedChords(group.id) }">
-                  {{ getMatchCount(group.id) }}
-                </span>
-                <span aria-hidden="true">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
-              </BaseBadge>
-
-              <BaseBadge
-                v-else
-                variant="neutral"
-                :appearance="isGroupContentOpen(group) ? 'subtle' : 'filled'"
-                size="xs"
-                width="1.5rem"
-                class="count-badge"
-                :aria-label="`共 ${getGroupChordsCount(group.id)} 个和弦`"
-              >
-                {{ getGroupChordsCount(group.id) }}
-              </BaseBadge>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. 折叠区：CSS grid 0fr/1fr，不用 Vue Transition -->
-        <div
-          ref="contentOuterEls"
-          class="chord-content-outer"
-          :class="{ 'is-open': isGroupContentOpen(group) }"
-          :aria-hidden="!isGroupContentOpen(group)"
-          :inert="group.collapsed"
-        >
-          <div class="chord-content-inner" v-auto-animate @contextmenu.stop>
-            <div v-if="(groupedCardsMap.get(group.id) || []).length > 0" class="chords-grid-layout" v-auto-animate>
-              <LeftChordCard
-                v-for="cardData in groupedCardsMap.get(group.id) || []"
-                :key="cardData.mainChord.chordName"
-                :card-data="cardData"
-                @delete-variants="cardData => $emit('open-delete-variants', cardData)"
-                :is-editing="cardData.variants.some(c => c.id === editorStore.draftChord.id)"
-                @delete="handleLocalDeleteChord"
-                @move="chord => $emit('open-move', chord)"
-                @select="handleSelectChord"
-                class="chord-item-grab-handle"
+  <div v-else ref="groupListContainerRef" @keydown="handleKeydown">
+    <VueDraggable
+      :model-value="chordStore.groups"
+      @update:modelValue="(val: Group[]) => chordStore.overwriteGroups(val)"
+      :animation="200"
+      handle=".group-title-row"
+      :disabled="!isAllCollapsed || Boolean(searchQuery) || uiStore.isMobile"
+      class="draggable-list"
+      ghost-class="drag-ghost-style"
+      chosen-class="drag-chosen-style"
+      drag-class="drag-active-style"
+      :touchStartThreshold="12"
+      :swap-threshold="0.5"
+    >
+      <div v-for="(group, index) in chordStore.groups" :key="group.id" class="group-box-card" ref="groupCardEls">
+        <GlobalContextMenu :items="getGroupMenuItems(group)" #default="{ isOpen }">
+          <!-- 1. 标题行 -->
+          <div
+            v-wave
+            tabindex="0"
+            data-focusable-inline
+            role="button"
+            :aria-expanded="isGroupContentOpen(group)"
+            :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${group.collapsed ? '已折叠' : '已展开'}`"
+            @click="chordActions.executeGroupToggle(group)"
+            @keydown.enter.prevent="chordActions.executeGroupToggle(group)"
+            @keydown.space.prevent="chordActions.executeGroupToggle(group)"
+            class="group-title-row"
+            :class="{
+              'is-expanded': isGroupContentOpen(group),
+              'is-context-open': isOpen,
+            }"
+          >
+            <div class="group-info-zone" title="点击折叠/展开分组">
+              <ChevronDown
+                :size="14"
+                :stroke-width="2.5"
+                class="arrow-toggle-icon"
+                :class="{ 'is-collapsed': !isGroupContentOpen(group) }"
+                aria-hidden="true"
               />
+              <BaseMarquee>
+                <span class="group-name-text">{{ group.name }}</span>
+              </BaseMarquee>
+
+              <!-- 右侧 Badge 组 -->
+              <div class="group-badges-zone">
+                <BaseBadge
+                  variant="neutral"
+                  appearance="outline"
+                  size="xs"
+                  class="sort-rule-badge"
+                  title="排序方法"
+                  :aria-label="`按${getSortLabel(group)}自动排序`"
+                  width="2rem"
+                >
+                  {{ getSortLabel(group) }}
+                </BaseBadge>
+
+                <BaseBadge
+                  v-if="searchQuery"
+                  :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
+                  :appearance="hasMatchedChords(group.id) ? 'subtle' : 'filled'"
+                  size="xs"
+                  :aria-label="`匹配 ${getMatchCount(group.id)} 个，共 ${getGroupChordsCount(group.id)} 个和弦`"
+                  width="2.5rem"
+                >
+                  <span :class="{ 'search-match-count': hasMatchedChords(group.id) }">
+                    {{ getMatchCount(group.id) }}
+                  </span>
+                  <span aria-hidden="true">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
+                </BaseBadge>
+
+                <BaseBadge
+                  v-else
+                  variant="neutral"
+                  :appearance="isGroupContentOpen(group) ? 'subtle' : 'filled'"
+                  size="xs"
+                  width="1.5rem"
+                  class="count-badge"
+                  :aria-label="`共 ${getGroupChordsCount(group.id)} 个和弦`"
+                >
+                  {{ getGroupChordsCount(group.id) }}
+                </BaseBadge>
+              </div>
             </div>
-            <EmptyState v-else-if="getGroupChordsCount(group.id) === 0" size="sm" description="暂无和弦" />
-            <EmptyState v-else-if="searchQuery" size="sm" description="无匹配" />
           </div>
-        </div>
-      </GlobalContextMenu>
-    </div>
-  </VueDraggable>
+
+          <!-- 2. 折叠区内容组件 -->
+          <LeftChordGroupContent
+            :ref="el => setContentOuterRef(el, index)"
+            :group="group"
+            :search-query="searchQuery"
+            :is-open="isGroupContentOpen(group)"
+            @open-move="chord => emit('open-move', chord)"
+            @open-delete-variants="cardData => emit('open-delete-variants', cardData)"
+            @delete-chord="handleLocalDeleteChord"
+            @select-chord="handleSelectChord"
+          />
+        </GlobalContextMenu>
+      </div>
+    </VueDraggable>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -128,16 +112,15 @@ import BaseMarquee from '@/components/BaseMarquee.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { useChordActions } from '@/services/useChordActions.ts';
+import { useGridNavigation } from '@/services/useGridNavigation';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
-import { groupChordsByName, sortChordsByRule } from '@/utils/musicTheory';
-import { vAutoAnimate } from '@formkit/auto-animate';
 import { ArrowUpDown, ChevronDown, FolderOpen, SquarePen, Trash2 } from '@lucide/vue';
-import { computed, nextTick, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, useTemplateRef, watch, type ComponentPublicInstance } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
-import LeftChordCard from './LeftChordCard.vue';
+import LeftChordGroupContent from './LeftChordGroupContent.vue';
 
 const props = defineProps<{
   searchQuery: string;
@@ -156,14 +139,27 @@ const chordStore = useChordStore();
 const chordActions = useChordActions();
 const uiStore = useUiStore();
 
-const contentOuterEls = useTemplateRef<HTMLElement[]>('contentOuterEls');
+// 分组标题行的单列垂直导航（1列）
+// 用原生 div 包裹 VueDraggable，避免拿到组件实例而非 DOM 节点
+// selector 限定只收集分组标题行，避免把展开分组内的和弦卡片一并扫入
+// stop: true 防止事件继续冒泡（此处已是最外层，主要是保持语义一致）
+const groupListContainerRef = useTemplateRef<HTMLElement>('groupListContainerRef');
 const groupCardEls = useTemplateRef<HTMLElement[]>('groupCardEls');
+const contentOuterComponentEls = new Map<number, ComponentPublicInstance | Element | null>();
+
+const { handleKeydown } = useGridNavigation(1, groupListContainerRef, {
+  selector: '.group-title-row',
+  stop: true,
+});
+
+const setContentOuterRef = (el: Element | ComponentPublicInstance | null, index: number) => {
+  if (el) contentOuterComponentEls.set(index, el);
+  else contentOuterComponentEls.delete(index);
+};
+
 const isGroupContentOpen = (group: Group): boolean => !group.collapsed;
 
-/** 只有当所有分组均处于折叠状态时才允许拖拽 */
-const isAllCollapsed = computed(() => {
-  return chordStore.groups.every(g => g.collapsed);
-});
+const isAllCollapsed = computed(() => chordStore.groups.every(g => g.collapsed));
 
 const handleSelectChord = (chord: Chord) => {
   if (editorStore.draftChord.id === chord.id) {
@@ -219,20 +215,6 @@ const filteredChordsMap = computed(() => {
   return map;
 });
 
-/**
- * 折叠时仍保留卡片数据，否则关闭动画时内容已是空的，高度无法过渡。
- * 真正显隐由 .chord-content-outer.is-open 控制。
- */
-const groupedCardsMap = computed(() => {
-  const map = new Map<string, GroupedChordCard[]>();
-  chordStore.groups.forEach(group => {
-    const list = filteredChordsMap.value.get(group.id) || [];
-    const sortedList = sortChordsByRule(list, group.sortRule, group.sortKey);
-    map.set(group.id, groupChordsByName(sortedList));
-  });
-  return map;
-});
-
 const getGroupChordsCount = (groupId: string) => {
   return chordStore.groupChordMap.get(groupId)?.length ?? 0;
 };
@@ -272,12 +254,19 @@ watch(
     if (idx === -1) return;
 
     const targetElement = groupCardEls.value?.[idx];
-    const contentOuter = contentOuterEls.value?.[idx]; // 🌟 不再用 querySelector
+    const contentComponent = contentOuterComponentEls.get(idx);
     if (!targetElement) return;
 
     const scrollToShowContent = () => {
       targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
+
+    if (!contentComponent) {
+      scrollToShowContent();
+      return;
+    }
+
+    const contentOuter = ('$el' in contentComponent ? contentComponent.$el : contentComponent) as HTMLElement | null;
 
     if (!contentOuter) {
       scrollToShowContent();
@@ -327,14 +316,8 @@ watch(
   transition: @transition-fast;
   outline: none;
 
-  &:focus-visible,
   &:hover {
     background-color: var(--bg-panel-hover);
-  }
-
-  &:focus-visible {
-    box-shadow: @focus-ring-primary;
-    border-color: var(--border-base);
   }
 
   &:hover,
@@ -381,44 +364,10 @@ watch(
   transition: color @duration-fast ease;
 }
 
-/* 🌟 Badge 统一靠右对齐区域 */
 .group-badges-zone {
   display: flex;
   align-items: center;
   gap: 0.35rem;
   flex-shrink: 0;
-}
-
-/* —— 折叠动画：grid 0fr ↔ 1fr，无 Vue Transition —— */
-.chord-content-outer {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows @duration-base @bezier-standard;
-  pointer-events: none;
-
-  &.is-open {
-    grid-template-rows: 1fr;
-    pointer-events: auto;
-  }
-}
-
-.chord-content-inner {
-  overflow: hidden;
-  min-height: 0;
-  padding-top: 0;
-  box-sizing: border-box;
-  transition: padding-top @duration-base @bezier-standard;
-}
-
-.chords-grid-layout {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
-  align-items: center;
-  position: relative;
-  z-index: 10;
-  min-height: 2.2rem;
-  box-sizing: border-box;
-  padding: 0.55rem 0.4rem 0.55rem 0.4rem;
 }
 </style>

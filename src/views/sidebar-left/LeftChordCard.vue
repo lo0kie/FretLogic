@@ -19,6 +19,7 @@
         @wheel="handleWheelScroll"
         @keydown.enter.prevent.stop="handleCardClick"
         @keydown.space.prevent.stop="handleCardClick"
+        data-focusable-inline
       >
         <!-- 左上角：状态标识圆点 -->
         <span
@@ -266,24 +267,6 @@ onBeforeUnmount(() => {
     border-color: var(--border-base);
   }
 
-  &:focus-visible {
-    border-color: @primary;
-    box-shadow: 0 0 0 2px color-mix(in srgb, @primary, transparent 60%);
-
-    .variant-badge-badge {
-      transform: scale(1.15);
-      box-shadow:
-        0 0 0 2px var(--bg-body),
-        0 0 0 3px @primary;
-    }
-
-    .status-dot {
-      box-shadow:
-        0 0 0 2px var(--bg-body),
-        0 0 0 3px @primary;
-    }
-  }
-
   &.is-editing {
     background-color: color-mix(in srgb, @primary, var(--bg-body) 88%);
     border-color: @primary;
@@ -298,12 +281,6 @@ onBeforeUnmount(() => {
       background-color: color-mix(in srgb, @primary, var(--bg-body) 78%);
       border-color: @primary;
       box-shadow: 0 0 0 1px color-mix(in srgb, @primary, transparent 60%);
-    }
-
-    &:focus-visible {
-      box-shadow:
-        0 0 0 1px @primary,
-        0 0 0 3px color-mix(in srgb, @primary, transparent 50%);
     }
   }
 }

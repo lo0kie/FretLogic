@@ -10,6 +10,7 @@
       @click="resetToDefault"
       @keydown.enter.prevent="resetToDefault"
       @keydown.space.prevent="resetToDefault"
+      data-focusable-inline
     >
       {{ label }}
     </span>
@@ -25,6 +26,7 @@
       @click="resetToDefault"
       @keydown.enter.prevent="resetToDefault"
       @keydown.space.prevent="resetToDefault"
+      data-focusable-inline
     >
       {{ displayText }}
     </span>
@@ -38,6 +40,7 @@
       title="缩小"
       aria-label="缩小"
       @click="stepDown"
+      data-focusable-inline
     >
       <AArrowDown :size="14" stroke-width="2.2" aria-hidden="true" />
     </button>
@@ -59,6 +62,7 @@
         class="slider-input"
         @input="handleInput"
         @dblclick="resetToDefault"
+        data-focusable-outline
       />
     </div>
 
@@ -231,8 +235,7 @@ const handleWheel = (e: WheelEvent) => {
   outline: none;
   border-radius: @radius-sm;
 
-  &:hover,
-  &:focus-visible {
+  &:hover {
     color: var(--text-title);
   }
 }
@@ -250,8 +253,7 @@ const handleWheel = (e: WheelEvent) => {
   outline: none;
   border-radius: 50%;
 
-  &:hover:not(:disabled),
-  &:focus-visible:not(:disabled) {
+  &:hover:not(:disabled) {
     color: var(--color-primary);
   }
 
@@ -275,12 +277,6 @@ const handleWheel = (e: WheelEvent) => {
   border-radius: 2px;
   outline: none;
   cursor: pointer;
-
-  &:focus-visible {
-    &::-webkit-slider-thumb {
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary), transparent 70%);
-    }
-  }
 
   &::-webkit-slider-thumb {
     appearance: none;
@@ -317,8 +313,7 @@ const handleWheel = (e: WheelEvent) => {
   display: inline-block;
   min-width: 2rem;
 
-  &:hover,
-  &:focus-visible {
+  &:hover {
     color: var(--color-primary);
   }
 }

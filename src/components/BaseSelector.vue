@@ -1,13 +1,14 @@
 <template>
-  <!-- 1. 触发条：移除 .prevent.stop，改用函数内精细化拦截 -->
+  <!-- 1. 触发条：使用原生属性 + data-focusable-inline -->
   <div
     ref="referenceRef"
-    tabindex="0"
+    :tabindex="disabled ? -1 : 0"
     role="combobox"
     :aria-expanded="isOpen"
     aria-haspopup="listbox"
     class="selector-trigger-bar"
     :class="[`size-${size}`, { 'is-active': isOpen, 'is-disabled': disabled }]"
+    data-focusable-inline
     @click="toggleDropdown"
     @keydown="handleTriggerKeydown"
     v-bind="$attrs"
@@ -57,7 +58,7 @@
           :style="{ maxHeight: dropdownMaxHeight }"
           @keydown="handleDropdownKeydown"
         >
-          <!-- 3. 选项节点：移除模板行的 @keydown.esc.prevent.stop -->
+          <!-- 3. 选项节点：使用 data-focusable-inline 统一管理 -->
           <div
             v-wave="{ disabled: isOptionDisabled(option) }"
             v-for="(option, index) in options"
@@ -67,6 +68,7 @@
             :tabindex="isOptionDisabled(option) ? -1 : 0"
             :aria-selected="modelValue === option || modelValue === getOptionValue(option)"
             class="selector-item"
+            data-focusable-inline
             :class="{
               'is-selected': modelValue === option || modelValue === getOptionValue(option),
               'is-item-disabled': isOptionDisabled(option),
@@ -89,6 +91,7 @@
 
 <script setup lang="ts" generic="T">
 import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
+import { useFocusReturn } from '@/services/useFocusReturn';
 import { autoUpdate, flip, size as floatingSize, offset, shift, useFloating } from '@floating-ui/vue';
 import { ChevronDown, X } from '@lucide/vue';
 import { vOnClickOutside } from '@vueuse/components';
@@ -163,6 +166,8 @@ const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const dropdownRef = useTemplateRef<HTMLDivElement>('dropdownRef');
 const optionEls = useTemplateRef<HTMLElement[]>('optionEls');
 
+const { captureTrigger, restoreFocusAfter } = useFocusReturn({ warnLabel: '[BaseSelector]' });
+
 const formattedLabel = (val: T): string => {
   if (labelFormatter) return labelFormatter(val);
   if (formatter) return formatter(val);
@@ -222,8 +227,9 @@ const handleClear = () => {
   if (disabled) return;
   modelValue.value = defaultValue!;
   emit('clear');
-  isOpen.value = false;
-  referenceRef.value?.focus();
+  restoreFocusAfter(() => {
+    isOpen.value = false;
+  });
 };
 
 watch(
@@ -233,8 +239,13 @@ watch(
   }
 );
 
+// isOpen 变为 true 时，记录触发源（此处即 referenceRef 本身，已自带 tabindex）；
+// 供后续 restoreFocusAfter 在关闭下拉框时统一归还焦点
 watch(isOpen, open => {
-  if (open) isRendered.value = true;
+  if (open) {
+    isRendered.value = true;
+    captureTrigger();
+  }
 });
 
 const getOptionValue = (opt: T | SelectorOptionObject<T>): T => {
@@ -254,8 +265,9 @@ const isOptionDisabled = (opt: T | SelectorOptionObject<T>): boolean => {
 const handleSelect = (option: T | SelectorOptionObject<T>) => {
   if (disabled || isOptionDisabled(option)) return;
   modelValue.value = getOptionValue(option);
-  isOpen.value = false;
-  referenceRef.value?.focus();
+  restoreFocusAfter(() => {
+    isOpen.value = false;
+  });
 };
 
 // 🌟 精准按键拦截：仅在需要时 prevent/stop，不误伤 Modal
@@ -294,11 +306,16 @@ const handleDropdownKeydown = (e: KeyboardEvent) => {
   } else if (e.key === 'Escape') {
     e.preventDefault();
     e.stopPropagation();
-    isOpen.value = false;
-    referenceRef.value?.focus();
+    restoreFocusAfter(() => {
+      isOpen.value = false;
+    });
   } else if (e.key === 'Tab') {
-    isOpen.value = false;
-    referenceRef.value?.focus();
+    // 阻止浏览器原生 Tab 默认行为（移动到下一个可聚焦元素），
+    // 我们自己接管：关闭下拉框并把焦点还给触发条本身
+    e.preventDefault();
+    restoreFocusAfter(() => {
+      isOpen.value = false;
+    });
   }
 };
 
@@ -360,7 +377,6 @@ watch(isOpen, opened => {
     border-color: var(--border-base);
   }
 
-  &:focus-visible,
   &.is-active {
     border-color: @primary;
     box-shadow: @focus-ring-primary;
@@ -475,8 +491,7 @@ watch(isOpen, opened => {
   white-space: nowrap;
   outline: none;
 
-  &:hover,
-  &:focus-visible {
+  &:hover {
     background-color: var(--bg-panel-hover);
     color: var(--text-title);
   }
