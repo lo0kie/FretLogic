@@ -3,14 +3,31 @@ import type { Chord, Group } from '@/types';
 import { normalizeChord } from '@/utils/chordMap';
 import { cloneDeep } from '@/utils/cloneDeep';
 import { generateUUID } from '@/utils/id';
-import { useRefHistory, useStorage } from '@vueuse/core';
+import { debounceFilter, useEventListener, useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw } from 'vue';
 
 export const useChordStore = defineStore('chord', () => {
-  const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
-  const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
+  const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage, {
+    eventFilter: debounceFilter(400, { maxWait: 1500 }),
+  });
+  const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage, {
+    eventFilter: debounceFilter(400, { maxWait: 1500 }),
+  });
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
+
+  const flushChordsAndGroupsNow = () => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CHORD_LIST, JSON.stringify(savedChordsList.value));
+      localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(groups.value));
+    } catch (err) {
+      console.error('[chordStore] flush on unload failed:', err);
+    }
+  };
+  useEventListener(window, 'beforeunload', flushChordsAndGroupsNow);
+  useEventListener(document, 'visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushChordsAndGroupsNow();
+  });
 
   // 🌟 启动时静默迁移与清洗：统一使用 normalizeChord 规范化数据
   let needUpdate = false;

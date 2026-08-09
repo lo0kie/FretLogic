@@ -64,15 +64,11 @@
         </ActionButton>
       </GlobalTooltip>
 
-      <ActionButton
-        size="sm"
-        variant="subtle"
-        :disabled="selectedCount === 0"
-        :loading="isExporting"
-        @click="emit('copy-image')"
-      >
-        <template #prefix><Copy :size="14" stroke-width="2.5" /></template>
-        复制图片
+      <ActionButton size="sm" variant="subtle" :disabled="selectedCount === 0" @click="emit('open-export')">
+        <template #prefix>
+          <Copy :size="14" stroke-width="2.5" />
+        </template>
+        导出
       </ActionButton>
     </div>
   </div>
@@ -89,13 +85,12 @@ defineProps<{
   selectedCount: number;
   sortedIndices: number[];
   isAllSelected: boolean;
-  isExporting: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'remove-index', lineIdx: number): void;
   (e: 'toggle-select-all'): void;
-  (e: 'copy-image'): void;
+  (e: 'open-export'): void;
 }>();
 
 const scrollContainerRef = useTemplateRef<HTMLElement>('scrollContainerRef');
