@@ -7,6 +7,7 @@
           :variant="selectedCount > 0 ? 'primary' : 'neutral'"
           :appearance="selectedCount > 0 ? 'filled' : 'subtle'"
           size="xs"
+          width="1.5rem"
         >
           {{ selectedCount }}
         </BaseBadge>
@@ -135,10 +136,6 @@ const handleWheelScroll = (e: WheelEvent) => {
   font-weight: 600;
   color: var(--text-title);
   min-width: 0;
-}
-
-.bar-counter {
-  width: 1.5rem;
 }
 
 .selected-text-tip {

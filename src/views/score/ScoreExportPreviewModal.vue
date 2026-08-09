@@ -1,17 +1,18 @@
 <template>
   <BaseModal
     v-model:visible="visibleModel"
-    title="导出歌词谱"
     :show-footer="false"
     width="w-lg"
     @cancel="modeModel = 'normal'"
     :close-on-mask="!isGenerating"
+    height="h-full"
+    title="导出歌词数据"
   >
-    <div class="export-preview-body">
-      <div class="preview-nav">
-        <BaseSegmentedControl v-model="modeModel" size="sm" :options="modeOptions" class="mode-segmented" />
-      </div>
+    <template #header-extra>
+      <BaseSegmentedControl v-model="modeModel" size="sm" :options="modeOptions" class="mode-segmented" />
+    </template>
 
+    <div class="export-preview-body">
       <div class="preview-stage no-scrollbar">
         <div v-if="isGenerating" class="preview-loading">正在生成预览...</div>
         <EmptyState v-else-if="pages.length === 0" description="暂无预览内容" size="md" />
@@ -24,7 +25,13 @@
         />
       </div>
 
-      <BasePagination v-if="modeModel === 'a4'" v-model="currentPageIndexModel" :total="pages.length" />
+      <BasePagination
+        v-if="modeModel === 'a4'"
+        v-model="currentPageIndexModel"
+        :total="pages.length"
+        :disabled="isGenerating"
+        size="sm"
+      />
 
       <div class="preview-actions-row">
         <ActionButton variant="subtle" :disabled="isActionDisabled" @click="emit('download-current-page')">
@@ -100,17 +107,11 @@ const modeOptions = [
 .export-preview-body {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: 0.75rem;
+  flex: 1; /* 🌟 关键：让自身在父容器中占满剩余高度 */
+  height: 100%; /* 🌟 补全高度继承 */
   min-height: 0;
-}
-
-.mode-segmented {
-  align-self: flex-start;
-}
-
-.preview-nav {
-  display: flex;
-  justify-content: center;
 }
 
 .preview-stage {
@@ -119,9 +120,10 @@ const modeOptions = [
   flex-direction: column;
   align-items: center;
   width: 100%;
+  flex: 1;
+  height: 0;
   min-height: 320px;
-  max-height: 52vh;
-  padding: 1rem;
+  padding: 0.6rem;
   overflow: auto;
   box-sizing: border-box;
   border: 1px solid var(--border-light);
@@ -129,7 +131,6 @@ const modeOptions = [
   background-color: var(--bg-body);
   isolation: isolate;
 
-  /* 🌟 直接将网格挂载在容器上，并调整色值比例替代 opacity */
   @grid-color: color-mix(in srgb, var(--border-base), transparent 85%);
   background-image:
     linear-gradient(45deg, @grid-color 25%, transparent 25%), linear-gradient(-45deg, @grid-color 25%, transparent 25%),
@@ -153,8 +154,8 @@ const modeOptions = [
   display: block;
   width: auto;
   max-width: 100%;
-  height: auto;
-  flex-shrink: 0; /* 🌟 关键：防止图片高度被 Flex 容器强制挤压变形 */
+  height: auto; /* 🌟 常规模式保持原本自适应尺寸 */
+  flex-shrink: 0;
 
   border-radius: @radius-sm;
   box-shadow: var(--shadow-md);
@@ -164,8 +165,10 @@ const modeOptions = [
     box-shadow @duration-fast ease,
     transform @duration-fast ease;
 
+  /* 🌟 仅在 A4 模式下拉满父容器高度 */
   &.is-a4 {
-    max-height: 48vh; /* A4 模式高度限制 */
+    height: 100%;
+    max-height: 100%;
   }
 }
 

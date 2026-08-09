@@ -11,16 +11,15 @@
     <GlobalContextMenu
       v-for="song in songStore.songs"
       :key="song.id"
-      ref="contextMenuRefs"
       :items="getSongMenuItems(song)"
+      #default="{ isOpen }"
     >
-      <!-- 🌟 1. 补全角色、tabindex、aria-pressed 及键盘触发生命周期 -->
       <div
         v-wave
         class="song-card-item"
         :class="{
           'is-active': isSongActive(song.id),
-          'is-context-open': isSongMenuOpen(song.id),
+          'is-context-open': isOpen,
         }"
         role="button"
         tabindex="0"
@@ -41,6 +40,7 @@
               :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
               size="xs"
               :aria-label="`调性 ${song.playKey} 调`"
+              width="2rem"
             >
               {{ song.key }}调
             </BaseBadge>
@@ -50,6 +50,7 @@
               :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
               size="xs"
               :aria-label="`变调夹 Capo ${song.capo} 品`"
+              width="2.8rem"
             >
               Capo {{ song.capo }}
             </BaseBadge>
@@ -70,7 +71,6 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
 import { Eraser, Music, SlidersHorizontal, Trash2 } from '@lucide/vue';
-import { useTemplateRef } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 
 const emit = defineEmits<{
@@ -82,15 +82,7 @@ const songStore = useSongStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 
-const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>('contextMenuRefs');
-
 const isSongActive = (songId: string) => scoreEditor.activeSongId === songId;
-
-const isSongMenuOpen = (songId: string) => {
-  const idx = songStore.songs.findIndex(s => s.id === songId);
-  if (idx === -1) return false;
-  return contextMenuRefs.value?.[idx]?.isOpen ?? false;
-};
 
 const getSongMenuItems = (song: Song): ContextMenuItem[] => [
   {
@@ -99,9 +91,11 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => [
     action: () => emit('open-config', song),
   },
   {
-    label: '清除所有和弦',
+    label: '清除和弦',
     icon: Eraser,
     action: () => emit('open-clear', song),
+    disabled: scoreEditor.activeSong?.id !== song.id,
+    title: '请先加载乐谱',
   },
   {
     label: '删除乐谱',
@@ -164,28 +158,35 @@ const handleSelectSong = (songId: string) => {
   box-sizing: border-box;
   outline: none;
 
+  /* 基础 Hover & 右键打开提示 */
   &:hover,
-  &:active,
   &.is-context-open {
     background-color: var(--bg-panel-hover);
     border-color: var(--border-base);
-    box-shadow: 0 0 0 1px var(--border-base);
   }
 
-  /* 🌟 3. 键盘聚焦高亮反馈 */
+  /* 键盘 Focus 反馈 */
   &:focus-visible {
     border-color: var(--color-primary);
     box-shadow: @focus-ring-primary;
   }
 
+  /* 当前选中激活态 */
   &.is-active {
-    background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
-    border-color: var(--color-primary);
-    box-shadow: @focus-ring-primary;
+    background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
+    border-color: color-mix(in srgb, var(--color-primary), transparent 60%);
 
     .song-title-text {
       color: var(--color-primary) !important;
       font-weight: 700;
+    }
+
+    /* 选中态下的 Hover & 右键提示（增加主题色加深反馈） */
+    &:hover,
+    &.is-context-open {
+      background-color: color-mix(in srgb, var(--color-primary), transparent 82%);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 1px var(--color-primary);
     }
   }
 }
@@ -206,6 +207,7 @@ const handleSelectSong = (songId: string) => {
   font-size: 0.76rem;
   font-weight: 600;
   color: var(--text-title);
+  transition: color @duration-fast ease;
 }
 
 .song-meta-badges {

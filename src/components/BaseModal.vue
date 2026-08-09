@@ -15,15 +15,29 @@
           :aria-label="title || '对话框'"
           tabindex="-1"
           class="modal-card"
-          :class="width"
+          :class="[width, height]"
           @click.stop
           @keydown="handleKeydownTrap"
         >
-          <h3 v-if="title" class="modal-title" :title="title">
-            {{ title }}
-          </h3>
+          <div v-if="hasHeader" class="modal-header-zone">
+            <slot name="header">
+              <div class="modal-header-left">
+                <slot name="title">
+                  <h3 v-if="title" class="modal-title" :title="title">
+                    {{ title }}
+                  </h3>
+                </slot>
+              </div>
+              <div v-if="$slots['header-extra']" class="modal-header-extra">
+                <slot name="header-extra"></slot>
+              </div>
+            </slot>
+          </div>
 
-          <div class="modal-body-content no-scrollbar" :style="{ paddingBottom: showFooter ? '0.85rem' : '1.5rem' }">
+          <div
+            class="modal-body-content no-scrollbar"
+            :class="{ 'has-header': hasHeader, 'has-footer': showFooter }"
+          >
             <slot></slot>
           </div>
 
@@ -52,7 +66,7 @@
 <script setup lang="ts">
 import { BASE_MODAL_DEFAULTS } from '@/constants/ui.ts';
 import { useEventListener, useScrollLock } from '@vueuse/core';
-import { nextTick, onBeforeUnmount, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, useSlots, useTemplateRef, watch } from 'vue';
 import ActionButton from './ActionButton.vue';
 
 defineOptions({ inheritAttrs: false });
@@ -60,6 +74,7 @@ defineOptions({ inheritAttrs: false });
 const {
   title = '',
   width = BASE_MODAL_DEFAULTS.WIDTH,
+  height = 'h-auto',
   showFooter = BASE_MODAL_DEFAULTS.SHOW_FOOTER,
   cancelText = BASE_MODAL_DEFAULTS.CANCEL_TEXT,
   confirmText = BASE_MODAL_DEFAULTS.CONFIRM_TEXT,
@@ -68,6 +83,7 @@ const {
 } = defineProps<{
   title?: string;
   width?: 'w-sm' | 'w-md' | 'w-80' | 'w-lg' | 'w-large' | 'w-xl' | 'w-wide' | 'w-full';
+  height?: 'h-auto' | 'h-sm' | 'h-md' | 'h-lg' | 'h-xl' | 'h-full';
   showFooter?: boolean;
   cancelText?: string;
   confirmText?: string;
@@ -80,6 +96,7 @@ const emit = defineEmits<{
   (e: 'cancel'): void;
 }>();
 
+const slots = useSlots();
 const visible = defineModel<boolean>('visible', { required: true });
 const isBodyLocked = useScrollLock(document.body);
 
@@ -88,6 +105,8 @@ let previousActiveElement: HTMLElement | null = null;
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+const hasHeader = computed(() => Boolean(slots.header || slots['header-extra'] || slots.title || title));
 
 const setExternalInert = (isInert: boolean) => {
   const targetEl = document.body.firstElementChild as HTMLElement;
@@ -125,7 +144,6 @@ watch(
   { immediate: true }
 );
 
-// 🌟 2. Modal 内部 Tab 循环穿透卡死
 const handleKeydownTrap = (e: KeyboardEvent) => {
   if (e.key !== 'Tab' || !modalCardRef.value) return;
 
@@ -205,7 +223,6 @@ const handleMaskClick = (e: MouseEvent) => {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  max-height: 80vh;
   box-sizing: border-box;
   background-color: var(--bg-panel);
   border: 1px solid var(--glass-border);
@@ -248,27 +265,87 @@ const handleMaskClick = (e: MouseEvent) => {
     width: 64rem;
     max-width: 95vw;
   }
+
+  &.h-auto {
+    height: auto;
+    max-height: 80vh;
+  }
+
+  &.h-sm {
+    height: 16rem;
+    max-height: 80vh;
+  }
+
+  &.h-md {
+    height: 24rem;
+    max-height: 80vh;
+  }
+
+  &.h-lg {
+    height: 32rem;
+    max-height: 85vh;
+  }
+
+  &.h-xl {
+    height: 40rem;
+    max-height: 90vh;
+  }
+
+  &.h-full {
+    height: 90vh;
+  }
+}
+
+.modal-header-zone {
+  padding: 1.25rem 1.5rem 0 1.5rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.modal-header-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.modal-header-extra {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .modal-title {
-  padding: 1.25rem 1.5rem 0 1.5rem;
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text-title);
   margin: 0;
-  flex-shrink: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .modal-body-content {
-  padding: 0.85rem 1.5rem 1.5rem 1.5rem;
+  padding: 1.25rem 1.5rem;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+
+  &.has-header {
+    padding-top: 0.85rem;
+  }
+
+  &.has-footer {
+    padding-bottom: 0.85rem;
+  }
 }
 
 .modal-footer-zone {

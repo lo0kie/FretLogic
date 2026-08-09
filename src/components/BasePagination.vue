@@ -1,12 +1,21 @@
 <template>
   <div class="base-pagination" :class="[`size-${size}`]">
-    <ActionButton :size="size" variant="ghost" icon-only :disabled="modelValue <= 0" @click="handlePrev">
+    <ActionButton :size="size" variant="ghost" icon-only :disabled="disabled || modelValue <= 0" @click="handlePrev">
       <ChevronLeft :size="iconSize" />
     </ActionButton>
 
-    <span class="page-indicator">第 {{ modelValue + 1 }} / {{ total }} 页</span>
+    <span class="page-indicator">
+      第 {{ modelValue + 1 }}{{ step > 1 && modelValue + 1 < total ? '-' + Math.min(modelValue + step, total) : '' }} /
+      {{ total }} 页
+    </span>
 
-    <ActionButton :size="size" variant="ghost" icon-only :disabled="modelValue >= total - 1" @click="handleNext">
+    <ActionButton
+      :size="size"
+      variant="ghost"
+      icon-only
+      :disabled="disabled || modelValue + step >= total"
+      @click="handleNext"
+    >
       <ChevronRight :size="iconSize" />
     </ActionButton>
   </div>
@@ -17,9 +26,16 @@ import ActionButton from '@/components/ActionButton.vue';
 import { ChevronLeft, ChevronRight } from '@lucide/vue';
 import { computed } from 'vue';
 
-const { total, size = 'md' } = defineProps<{
+const {
+  total,
+  size = 'md',
+  step = 1,
+  disabled = false,
+} = defineProps<{
   total: number;
   size?: 'sm' | 'md' | 'lg';
+  step?: number;
+  disabled?: boolean;
 }>();
 
 const modelValue = defineModel<number>({ required: true });
@@ -43,19 +59,17 @@ const iconSize = computed(() => {
 });
 
 const handlePrev = () => {
-  if (modelValue.value > 0) {
-    modelValue.value--;
-    emit('prev', modelValue.value);
-    emit('change', modelValue.value);
-  }
+  if (disabled || modelValue.value <= 0) return;
+  modelValue.value = Math.max(0, modelValue.value - step);
+  emit('prev', modelValue.value);
+  emit('change', modelValue.value);
 };
 
 const handleNext = () => {
-  if (modelValue.value < total - 1) {
-    modelValue.value++;
-    emit('next', modelValue.value);
-    emit('change', modelValue.value);
-  }
+  if (disabled || modelValue.value + step >= total) return;
+  modelValue.value = Math.min(total - 1, modelValue.value + step);
+  emit('next', modelValue.value);
+  emit('change', modelValue.value);
 };
 </script>
 

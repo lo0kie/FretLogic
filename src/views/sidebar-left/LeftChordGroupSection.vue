@@ -1,5 +1,6 @@
 <template>
   <EmptyState v-if="chordStore.groups.length === 0" :icon="FolderOpen" description="还没有添加分组" size="md" />
+
   <VueDraggable
     v-else
     :model-value="chordStore.groups"
@@ -14,12 +15,12 @@
     :touchStartThreshold="12"
     :swap-threshold="0.5"
   >
-    <template v-for="group in chordStore.groups" :key="group.id">
-      <GlobalContextMenu ref="contextMenuRefs" :items="getGroupMenuItems(group)" class="group-box-card">
+    <!-- 🌟 1. 移除 <template v-for>，将 v-for 直接挂在 GlobalContextMenu 上修复拖拽 -->
+    <div v-for="group in chordStore.groups" :key="group.id" class="group-box-card" ref="groupCardEls">
+      <GlobalContextMenu :items="getGroupMenuItems(group)" #default="{ isOpen }">
         <!-- 1. 标题行 -->
         <div
           v-wave
-          ref="groupCardEls"
           tabindex="0"
           role="button"
           :aria-expanded="isGroupContentOpen(group)"
@@ -30,7 +31,7 @@
           class="group-title-row"
           :class="{
             'is-expanded': isGroupContentOpen(group),
-            'is-context-open': isGroupMenuOpen(group.id),
+            'is-context-open': isOpen,
           }"
         >
           <div class="group-info-zone" title="点击折叠/展开分组">
@@ -46,45 +47,57 @@
                 {{ group.name }}
               </span>
             </BaseMarquee>
-            <BaseBadge
-              variant="neutral"
-              appearance="outline"
-              size="xs"
-              class="sort-rule-badge"
-              title="排序方法"
-              :aria-label="`按${getSortLabel(group)}自动排序`"
-            >
-              {{ getSortLabel(group) }}
-            </BaseBadge>
-            <BaseBadge
-              v-if="searchQuery"
-              :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
-              :appearance="hasMatchedChords(group.id) ? 'subtle' : 'filled'"
-              size="xs"
-              :aria-label="`匹配 ${getMatchCount(group.id)} 个，共 ${getGroupChordsCount(group.id)} 个和弦`"
-            >
-              <span :class="{ 'search-match-count': hasMatchedChords(group.id) }">
-                {{ getMatchCount(group.id) }}
-              </span>
-              <span aria-hidden="true">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
-            </BaseBadge>
-            <BaseBadge
-              v-else
-              variant="neutral"
-              :appearance="isGroupContentOpen(group) ? 'subtle' : 'filled'"
-              size="xs"
-              :aria-label="`共 ${getGroupChordsCount(group.id)} 个和弦`"
-            >
-              {{ getGroupChordsCount(group.id) }}
-            </BaseBadge>
+
+            <!-- 🌟 2. 右侧 Badge 组：包裹并设置固定宽度实现对齐 -->
+            <div class="group-badges-zone">
+              <BaseBadge
+                variant="neutral"
+                appearance="outline"
+                size="xs"
+                class="sort-rule-badge"
+                title="排序方法"
+                :aria-label="`按${getSortLabel(group)}自动排序`"
+                width="2rem"
+              >
+                {{ getSortLabel(group) }}
+              </BaseBadge>
+
+              <BaseBadge
+                v-if="searchQuery"
+                :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
+                :appearance="hasMatchedChords(group.id) ? 'subtle' : 'filled'"
+                size="xs"
+                :aria-label="`匹配 ${getMatchCount(group.id)} 个，共 ${getGroupChordsCount(group.id)} 个和弦`"
+                width="2.5rem"
+              >
+                <span :class="{ 'search-match-count': hasMatchedChords(group.id) }">
+                  {{ getMatchCount(group.id) }}
+                </span>
+                <span aria-hidden="true">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
+              </BaseBadge>
+
+              <BaseBadge
+                v-else
+                variant="neutral"
+                :appearance="isGroupContentOpen(group) ? 'subtle' : 'filled'"
+                size="xs"
+                width="1.5rem"
+                class="count-badge"
+                :aria-label="`共 ${getGroupChordsCount(group.id)} 个和弦`"
+              >
+                {{ getGroupChordsCount(group.id) }}
+              </BaseBadge>
+            </div>
           </div>
         </div>
 
         <!-- 2. 折叠区：CSS grid 0fr/1fr，不用 Vue Transition -->
         <div
+          ref="contentOuterEls"
           class="chord-content-outer"
           :class="{ 'is-open': isGroupContentOpen(group) }"
           :aria-hidden="!isGroupContentOpen(group)"
+          :inert="group.collapsed"
         >
           <div class="chord-content-inner" v-auto-animate @contextmenu.stop>
             <div v-if="(groupedCardsMap.get(group.id) || []).length > 0" class="chords-grid-layout" v-auto-animate>
@@ -105,7 +118,7 @@
           </div>
         </div>
       </GlobalContextMenu>
-    </template>
+    </div>
   </VueDraggable>
 </template>
 
@@ -143,9 +156,8 @@ const chordStore = useChordStore();
 const chordActions = useChordActions();
 const uiStore = useUiStore();
 
+const contentOuterEls = useTemplateRef<HTMLElement[]>('contentOuterEls');
 const groupCardEls = useTemplateRef<HTMLElement[]>('groupCardEls');
-const contextMenuRefs = useTemplateRef<InstanceType<typeof GlobalContextMenu>[]>('contextMenuRefs');
-
 const isGroupContentOpen = (group: Group): boolean => !group.collapsed;
 
 /** 只有当所有分组均处于折叠状态时才允许拖拽 */
@@ -221,13 +233,6 @@ const groupedCardsMap = computed(() => {
   return map;
 });
 
-const isGroupMenuOpen = (groupId: string): boolean => {
-  const idx = chordStore.groups.findIndex(g => g.id === groupId);
-  if (idx === -1 || !contextMenuRefs.value) return false;
-  const refs = contextMenuRefs.value as unknown as Record<number, { isOpen?: boolean }>;
-  return Boolean(refs[idx]?.isOpen);
-};
-
 const getGroupChordsCount = (groupId: string) => {
   return chordStore.groupChordMap.get(groupId)?.length ?? 0;
 };
@@ -260,14 +265,31 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => [
 watch(
   () => chordStore.selectedGroupId,
   async newId => {
-    if (newId) {
-      await nextTick();
-      const idx = chordStore.groups.findIndex(g => g.id === newId);
-      const targetElement = idx !== -1 ? groupCardEls.value?.[idx] : null;
-      if (targetElement) {
-        targetElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
+    if (!newId) return;
+    await nextTick();
+
+    const idx = chordStore.groups.findIndex(g => g.id === newId);
+    if (idx === -1) return;
+
+    const targetElement = groupCardEls.value?.[idx];
+    const contentOuter = contentOuterEls.value?.[idx]; // 🌟 不再用 querySelector
+    if (!targetElement) return;
+
+    const scrollToShowContent = () => {
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    if (!contentOuter) {
+      scrollToShowContent();
+      return;
     }
+
+    const handleTransitionEnd = (e: TransitionEvent) => {
+      if (e.propertyName !== 'grid-template-rows') return;
+      contentOuter.removeEventListener('transitionend', handleTransitionEnd);
+      scrollToShowContent();
+    };
+    contentOuter.addEventListener('transitionend', handleTransitionEnd);
   }
 );
 </script>
@@ -288,6 +310,7 @@ watch(
   flex-direction: column;
   width: 100%;
   box-sizing: border-box;
+  scroll-margin-top: 0.8rem;
 }
 
 .group-title-row {
@@ -358,7 +381,11 @@ watch(
   transition: color @duration-fast ease;
 }
 
-.sort-rule-badge {
+/* 🌟 Badge 统一靠右对齐区域 */
+.group-badges-zone {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   flex-shrink: 0;
 }
 
@@ -381,10 +408,6 @@ watch(
   padding-top: 0;
   box-sizing: border-box;
   transition: padding-top @duration-base @bezier-standard;
-
-  .chord-content-outer.is-open & {
-    padding-top: 0.4rem;
-  }
 }
 
 .chords-grid-layout {
@@ -396,7 +419,6 @@ watch(
   z-index: 10;
   min-height: 2.2rem;
   box-sizing: border-box;
-  padding-right: 6px;
-  padding-bottom: 6px;
+  padding: 0.55rem 0.4rem 0.55rem 0.4rem;
 }
 </style>

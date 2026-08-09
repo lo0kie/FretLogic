@@ -2,17 +2,13 @@
   <div
     @contextmenu="handleContextMenu"
     class="context-menu-trigger-wrapper"
-    :class="{ 'is-disabled': disabled }"
+    :class="{ 'is-disabled': disabled, 'is-open': isOpen }"
     v-bind="$attrs"
   >
-    <slot></slot>
+    <slot :is-open="isOpen" :open="openMenuAt" :close="closeMenu"></slot>
   </div>
 
   <Teleport to="body">
-    <Transition name="fade-clear">
-      <div v-if="isOpen" class="context-menu-backdrop" @pointerdown.prevent.stop="closeMenu"></div>
-    </Transition>
-
     <div v-if="isRendered" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
       <Transition name="menu-fade" appear>
         <!-- 🌟 1. 补全 role="menu" 与键盘导航 -->
@@ -39,7 +35,7 @@
             type="button"
             role="menuitem"
             :tabindex="item.disabled ? -1 : 0"
-            :disabled="item.disabled"
+            :aria-disabled="item.disabled"
             @click.stop="handleItemClick(item)"
             @keydown.enter.prevent.stop="handleItemClick(item)"
             @keydown.space.prevent.stop="handleItemClick(item)"
@@ -64,7 +60,7 @@ const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
 <script setup lang="ts">
 import { autoUpdate, flip, shift, useFloating } from '@floating-ui/vue';
 import { useEventListener } from '@vueuse/core';
-import { FunctionalComponent, onBeforeUnmount, useTemplateRef, watch } from 'vue';
+import { computed, FunctionalComponent, onBeforeUnmount, useTemplateRef, watch } from 'vue';
 
 export interface ContextMenuItem {
   label: string;
@@ -94,7 +90,7 @@ const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const menuBoxRef = useTemplateRef<HTMLDivElement>('menuBoxRef');
 const itemEls = useTemplateRef<HTMLButtonElement[]>('itemEls');
 
-const virtualRef = ref({
+const virtualRef = computed(() => ({
   getBoundingClientRect() {
     return {
       x: x.value,
@@ -107,6 +103,13 @@ const virtualRef = ref({
       height: 0,
     };
   },
+}));
+
+// 🌟 3. 从 useFloating 解构出 update 方法
+const { floatingStyles, update } = useFloating(virtualRef, floatingRef, {
+  placement: 'bottom-start',
+  whileElementsMounted: (reference, floating, update) => autoUpdate(reference, floating, update),
+  middleware: [flip(), shift({ padding: 8 })],
 });
 
 const isRendered = ref(false);
@@ -114,12 +117,6 @@ const isRendered = ref(false);
 watch(isOpen, open => {
   if (open) isRendered.value = true;
   // 关闭交给 @after-leave，动画播完再卸载 wrapper
-});
-
-const { floatingStyles } = useFloating(virtualRef, floatingRef, {
-  placement: 'bottom-start',
-  whileElementsMounted: (reference, floating, update) => autoUpdate(reference, floating, update),
-  middleware: [flip(), shift({ padding: 8 })],
 });
 
 let stopListeners: (() => void)[] = [];
@@ -131,7 +128,7 @@ const closeMenu = () => {
   }
 };
 
-const openMenuAt = (clientX: number, clientY: number) => {
+const openMenuAt = async (clientX: number, clientY: number) => {
   if (props.disabled || !props.items || props.items.length === 0) return;
 
   if (globalActiveMenuCloseFn.value && globalActiveMenuCloseFn.value !== closeMenu) {
@@ -143,6 +140,11 @@ const openMenuAt = (clientX: number, clientY: number) => {
   isOpen.value = true;
 
   globalActiveMenuCloseFn.value = closeMenu;
+
+  // 🌟 手动通知 Floating UI 根据最新坐标刷新位置
+  await nextTick();
+
+  update();
 };
 
 const handleContextMenu = (e: MouseEvent) => {
@@ -244,18 +246,12 @@ defineExpose({
 @import '@/assets/tokens.module';
 
 .context-menu-trigger-wrapper {
+  display: contents;
   width: 100%;
   cursor: context-menu;
   &.is-disabled {
     cursor: default;
   }
-}
-
-.context-menu-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 9998;
-  background-color: transparent;
 }
 
 .floating-position-wrapper {
@@ -316,8 +312,9 @@ defineExpose({
   &.is-normal {
     color: var(--text-title);
 
-    &:hover,
-    &:focus-visible {
+    /* 🌟 只有非禁用状态下 hover 才触发背景变色 */
+    &:not(.is-disabled):hover,
+    &:not(.is-disabled):focus-visible {
       background-color: var(--color-primary);
       color: #ffffff;
     }
@@ -326,8 +323,9 @@ defineExpose({
   &.is-danger {
     color: var(--color-danger);
 
-    &:hover,
-    &:focus-visible {
+    /* 🌟 只有非禁用状态下 hover 才触发背景变色 */
+    &:not(.is-disabled):hover,
+    &:not(.is-disabled):focus-visible {
       background-color: var(--color-danger);
       color: #ffffff;
     }
@@ -336,7 +334,6 @@ defineExpose({
   &.is-disabled {
     opacity: 0.35;
     cursor: not-allowed;
-    pointer-events: none;
   }
 
   &:not(.is-disabled) {

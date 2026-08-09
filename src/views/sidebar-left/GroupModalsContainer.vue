@@ -20,6 +20,7 @@
       clearable
       @enter="groupModals.handleRenameGroup"
       :maxlength="15"
+      horizontal-wheel
     />
   </BaseModal>
 
@@ -114,7 +115,11 @@
           class="variant-checkbox-item"
           :class="{ 'is-selected': groupModals.modalData.selectedVariantIds.has(variant.id) }"
           @click="groupModals.toggleVariantSelection(variant.id)"
-          role="button"
+          @keydown.enter.prevent="groupModals.toggleVariantSelection(variant.id)"
+          @keydown.space.prevent="groupModals.toggleVariantSelection(variant.id)"
+          role="checkbox"
+          :aria-checked="groupModals.modalData.selectedVariantIds.has(variant.id)"
+          :aria-label="`指法 Capo ${variant.capo}`"
           tabindex="0"
           v-wave
         >
