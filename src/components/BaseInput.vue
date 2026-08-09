@@ -9,6 +9,7 @@
       :value="modelValue"
       @input="handleInput"
       @keyup.enter="$emit('enter')"
+      @wheel="handleWheel"
       ref="inputRef"
       :type="type"
       :maxlength="maxlength"
@@ -30,7 +31,6 @@
       autocomplete="off"
     />
 
-    <!-- 🌟 计数器移到输入框内部，靠右、和文字同一行；如果同时有 clear 按钮，会自动往左让位 -->
     <span
       v-if="showCount && maxlength && modelValue"
       class="char-count-indicator"
@@ -39,7 +39,6 @@
       {{ modelValue.length }}/{{ maxlength }}
     </span>
 
-    <!-- 🌟 clear 按钮：阻止事件冒泡到外层 wrapper 的 v-wave，自己单独挂一份水波纹 -->
     <button
       v-if="clearable && modelValue && !disabled"
       type="button"
@@ -74,6 +73,7 @@ const {
   type = 'text',
   maxlength,
   showCount = false,
+  horizontalWheel = false,
 } = defineProps<{
   placeholder?: string;
   disabled?: boolean;
@@ -85,6 +85,7 @@ const {
   type?: string;
   maxlength?: number;
   showCount?: boolean;
+  horizontalWheel?: boolean;
 }>();
 
 const modelValue = defineModel<string>({ required: true });
@@ -118,6 +119,16 @@ const handleClear = () => {
   modelValue.value = '';
   emit('clear');
   inputRef.value?.focus();
+};
+
+const handleWheel = (e: WheelEvent) => {
+  if (!horizontalWheel || disabled || !inputRef.value) return;
+  e.preventDefault();
+  const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+  inputRef.value.scrollBy({
+    left: delta,
+    behavior: 'smooth',
+  });
 };
 
 onMounted(() => {
@@ -255,7 +266,6 @@ defineExpose({
     &.has-suffix {
       padding-right: 1.6rem;
     }
-    /* 如果同时存在计数器和清空按钮，自动向左推开更多内边距 */
     &:has(~ .char-count-indicator) {
       padding-right: 2.3rem;
       &.has-suffix {

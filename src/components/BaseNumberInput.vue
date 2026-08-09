@@ -10,7 +10,27 @@
       <slot name="minus">{{ minusText }}</slot>
     </button>
 
-    <span class="readout-text">
+    <input
+      v-if="editable && isEditing"
+      ref="inputRef"
+      v-model="tempValue"
+      type="text"
+      inputmode="numeric"
+      class="readout-input"
+      @blur="commitInput"
+      @keydown.enter="commitInput"
+      @keydown.esc="cancelInput"
+    />
+    <span
+      v-else
+      class="readout-text"
+      :class="{ 'is-disabled': disabled, 'is-editable': editable && !disabled }"
+      role="button"
+      :tabindex="disabled || !editable ? -1 : 0"
+      @click="startEditing"
+      @keydown.enter="startEditing"
+      @keydown.space.prevent="startEditing"
+    >
       {{ displayText }}
     </span>
 
@@ -28,7 +48,7 @@
 
 <script setup lang="ts">
 import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
-import { computed } from 'vue';
+import { computed, nextTick, ref, useTemplateRef } from 'vue';
 
 const {
   min = 0,
@@ -38,6 +58,7 @@ const {
   disabled = false,
   wheelable = true,
   loopable = true,
+  editable = true,
   plusText = '+',
   minusText = '-',
   labelPrefix = '',
@@ -51,6 +72,7 @@ const {
   disabled?: boolean;
   wheelable?: boolean;
   loopable?: boolean;
+  editable?: boolean;
   plusText?: string;
   minusText?: string;
   labelPrefix?: string;
@@ -64,12 +86,43 @@ const emit = defineEmits<{
   (e: 'change', value: number): void;
 }>();
 
+const isEditing = ref(false);
+const tempValue = ref('');
+const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
+
 const displayText = computed(() => {
   if (formatter) {
     return formatter(modelValue.value);
   }
   return `${labelPrefix}${modelValue.value}${labelSuffix}`;
 });
+
+const startEditing = () => {
+  if (disabled || !editable) return;
+  tempValue.value = String(modelValue.value);
+  isEditing.value = true;
+  nextTick(() => {
+    inputRef.value?.focus();
+    inputRef.value?.select();
+  });
+};
+
+const commitInput = () => {
+  if (!isEditing.value) return;
+  isEditing.value = false;
+  const parsed = parseFloat(tempValue.value);
+  if (isNaN(parsed)) return;
+
+  let nextVal = Math.min(max, Math.max(min, parsed));
+  if (nextVal !== modelValue.value) {
+    modelValue.value = nextVal;
+    emit('change', nextVal);
+  }
+};
+
+const cancelInput = () => {
+  isEditing.value = false;
+};
 
 const handleStep = (delta: number) => {
   if (disabled) return;
@@ -92,7 +145,7 @@ const handleStep = (delta: number) => {
 };
 
 const handleWheel = (e: WheelEvent) => {
-  if (disabled || !wheelable) return;
+  if (disabled || !wheelable || isEditing.value) return;
 
   if (e.deltaY > 0) {
     handleStep(step);
@@ -126,9 +179,12 @@ const handleWheel = (e: WheelEvent) => {
       font-size: 0.7rem;
     }
 
-    .readout-text {
+    .readout-text,
+    .readout-input {
       font-size: 0.65rem;
       min-width: 3rem;
+      flex: 1; /* 🌟 占据中间剩余空间 */
+      width: 0; /* 🌟 覆盖 input 原生默认宽度 */
     }
   }
 
@@ -143,9 +199,12 @@ const handleWheel = (e: WheelEvent) => {
       font-size: 0.78rem;
     }
 
-    .readout-text {
+    .readout-text,
+    .readout-input {
       font-size: 0.7rem;
       min-width: 3.5rem;
+      flex: 1;
+      width: 0;
     }
   }
 
@@ -154,15 +213,12 @@ const handleWheel = (e: WheelEvent) => {
     padding: 0 0.25rem;
     gap: 0.25rem;
 
-    .step-btn {
-      width: 1.6rem;
-      height: 1.6rem;
-      font-size: 0.88rem;
-    }
-
-    .readout-text {
+    .readout-text,
+    .readout-input {
       font-size: 0.78rem;
       min-width: 4rem;
+      flex: 1;
+      width: 0;
     }
   }
 }
@@ -195,6 +251,37 @@ const handleWheel = (e: WheelEvent) => {
   color: var(--text-title);
   text-align: center;
   white-space: nowrap;
+
+  &.is-editable {
+    cursor: pointer;
+
+    &:hover {
+      color: var(--color-primary);
+    }
+  }
+
+  &.is-disabled {
+    cursor: not-allowed;
+  }
+}
+
+.readout-input {
+  font-weight: 700;
+  color: var(--color-primary);
+  text-align: center;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  box-sizing: border-box;
+
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 }
 
 @media (max-width: 768px) {
@@ -216,7 +303,8 @@ const handleWheel = (e: WheelEvent) => {
     font-size: 0.95rem;
   }
 
-  .readout-text {
+  .readout-text,
+  .readout-input {
     font-size: 0.78rem;
     min-width: 4.5rem;
   }

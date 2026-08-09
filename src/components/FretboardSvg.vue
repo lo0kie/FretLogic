@@ -87,10 +87,10 @@
           :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
           :role="interactive ? 'button' : undefined"
           :tabindex="interactive ? 0 : undefined"
-          :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings)}`"
+          :style="{ color: getFingerColor(str, isDarkMode) }"
+          :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings)}。按 Enter/空格 切换升降号，按 Delete/Backspace 清除按音，按 R 设为根音`"
           @dblclick.prevent.stop="emit('toggle-pitch', sIdx)"
-          @keydown.enter.prevent.stop="interactive && emit('toggle-pitch', sIdx)"
-          @keydown.space.prevent.stop="interactive && emit('toggle-pitch', sIdx)"
+          @keydown="e => handleFingerKeydown(e, sIdx)"
         >
           <circle
             :cx="stringXPositions[sIdx]"
@@ -146,6 +146,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'toggle-pitch', stringIndex: number): void;
+  (e: 'clear-fret', stringIndex: number): void;
+  (e: 'toggle-root', stringIndex: number): void;
 }>();
 
 // 🌟 计算每个数字在绝对定位浮层中的精准 Y 坐标
@@ -170,6 +172,25 @@ const showPredictiveHover = computed(() => {
     !props.isMobile
   );
 });
+
+// 🌟 统一键盘事件响应逻辑
+const handleFingerKeydown = (e: KeyboardEvent, sIdx: number) => {
+  if (!props.interactive) return;
+
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    e.stopPropagation();
+    emit('toggle-pitch', sIdx);
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault();
+    e.stopPropagation();
+    emit('clear-fret', sIdx);
+  } else if (e.key === 'r' || e.key === 'R') {
+    e.preventDefault();
+    e.stopPropagation();
+    emit('toggle-root', sIdx);
+  }
+};
 </script>
 
 <style scoped lang="less">
@@ -232,8 +253,14 @@ const showPredictiveHover = computed(() => {
 
   &:focus-visible {
     .finger-circle {
-      stroke: var(--color-primary);
-      stroke-width: 4px;
+      /* 🌟 1. 让边框向外绘制，避免挤压内部音符文本 */
+      paint-order: stroke fill;
+      /* 🌟 2. 继承该节点和弦颜色的虚线外环边框 */
+      stroke: currentColor;
+      stroke-width: 8px;
+      stroke-dasharray: 10 5;
+      /* 🌟 3. 叠加双重高对比发光轮廓 */
+      filter: drop-shadow(0 0 0 2px var(--bg-body, #ffffff)) drop-shadow(0 0 6px currentColor) !important;
     }
   }
 }

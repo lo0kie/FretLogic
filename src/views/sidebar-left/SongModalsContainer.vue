@@ -24,6 +24,7 @@
             autofocus
             size="sm"
             @enter="songModals.handleConfigSong"
+            horizontal-wheel
             :maxlength="15"
           />
         </div>
@@ -57,7 +58,7 @@
       <div class="config-row">
         <label class="config-label">变调夹 (Capo)</label>
         <div class="control-wrapper">
-          <BaseNumberInput v-model="songModals.modalData.capo" :min="0" :max="12" />
+          <BaseNumberInput v-model="songModals.modalData.capo" :min="0" :max="11" />
         </div>
       </div>
       <p class="config-help-text">注：在此处修改调式不会触发已排布和弦的自动移调。如需整体移调请使用顶部工具栏。</p>
