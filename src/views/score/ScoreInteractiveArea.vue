@@ -52,7 +52,7 @@
             <!-- 1. 行首插槽区域 -->
             <div class="edge-chords-group" @dragover.prevent="handleGlobalDragOver">
               <ChordSlotCell
-                :is-exporting="isExporting"
+                :is-exporting
                 :scroll-root="scoreZoneRef"
                 variant="add"
                 :slot-key="lineData.nextStartKey"
@@ -66,7 +66,7 @@
               />
 
               <ChordSlotCell
-                :is-exporting="isExporting"
+                :is-exporting
                 :scroll-root="scoreZoneRef"
                 v-for="item in lineData.startChords"
                 :key="item.slotKey"
@@ -86,7 +86,7 @@
 
             <!-- 2. 中间字符和弦区 -->
             <ChordSlotCell
-              :is-exporting="isExporting"
+              :is-exporting
               :scroll-root="scoreZoneRef"
               v-for="item in lineData.chars"
               :key="item.slotKey"
@@ -105,7 +105,7 @@
             <!-- 3. 行尾插槽区域 -->
             <div class="edge-chords-group" @dragover.prevent="handleGlobalDragOver">
               <ChordSlotCell
-                :is-exporting="isExporting"
+                :is-exporting
                 :scroll-root="scoreZoneRef"
                 v-for="item in lineData.endChords"
                 :key="item.slotKey"
@@ -123,7 +123,7 @@
               />
 
               <ChordSlotCell
-                :is-exporting="isExporting"
+                :is-exporting
                 :scroll-root="scoreZoneRef"
                 variant="add"
                 :slot-key="lineData.nextEndKey"
@@ -460,8 +460,36 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
     .lyrics-lines-container.is-export-mode {
       flex: 1 1 auto;
       min-height: 0;
-      justify-content: space-between;
+      // justify-content: space-between;
     }
+  }
+}
+
+@media (max-width: 768px) {
+  .interactive-score-zone {
+    /* 🌟 调整移动端的内边距，给底部悬浮栏和安全区留出更多空间 */
+    padding: 0.8rem 0.5rem calc(6.5rem + env(safe-area-inset-bottom, 0px)) 0.5rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .lyrics-lines-container {
+    /* 🌟 移动端允许更灵活的宽度撑开，并防止文字折行错乱 */
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .lyrics-line {
+    padding: 0.15rem 0.25rem;
+  }
+
+  /* 🌟 移动端缩小行号标签，节省水平空间 */
+  .line-index-badge {
+    margin-right: 0.3rem;
+  }
+
+  .index-text-tag {
+    font-size: 0.58rem;
+    padding: 0.05rem 0.25rem;
   }
 }
 </style>

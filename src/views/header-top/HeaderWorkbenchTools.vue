@@ -1,41 +1,49 @@
 <template>
   <div class="segmented-control-capsule">
-    <GlobalTooltip content="播放/试听当前和弦" placement="bottom">
-      <ActionButton
-        size="sm"
-        variant="subtle"
-        primary
-        icon-only
-        :disabled="editorStore.isFretBoardEmpty || isPlaying"
-        @click="playCurrentChord"
-      >
-        <component :is="isPlaying ? Square : Play" :size="15" stroke-width="2.5" />
-      </ActionButton>
-    </GlobalTooltip>
+    <ActionButton
+      v-tooltip="'播放/试听当前和弦'"
+      size="sm"
+      variant="subtle"
+      primary
+      icon-only
+      :disabled="editorStore.isFretBoardEmpty || isPlaying"
+      @click="playCurrentChord"
+    >
+      <component :is="isPlaying ? Square : Play" :size="15" stroke-width="2.5" />
+    </ActionButton>
 
     <div class="capsule-divider"></div>
 
-    <GlobalTooltip content="导出透明背景图片" placement="bottom">
-      <ActionButton size="sm" icon-only variant="ghost" :disabled="uiStore.isCopying" @click="handleExport(true)">
-        <Image :size="16" stroke-width="2" />
-      </ActionButton>
-    </GlobalTooltip>
+    <ActionButton
+      v-tooltip="'导出透明背景图片'"
+      size="sm"
+      icon-only
+      variant="ghost"
+      :disabled="uiStore.isCopying"
+      @click="handleExport(true)"
+    >
+      <Image :size="16" stroke-width="2" />
+    </ActionButton>
 
-    <GlobalTooltip content="导出带背景卡片切图" placement="bottom" class="hidden-mobile">
-      <ActionButton size="sm" icon-only variant="ghost" :disabled="uiStore.isCopying" @click="handleExport(false)">
-        <Copy :size="16" stroke-width="2" />
-      </ActionButton>
-    </GlobalTooltip>
+    <ActionButton
+      v-tooltip="'导出带背景卡片切图'"
+      size="sm"
+      icon-only
+      variant="ghost"
+      :disabled="uiStore.isCopying"
+      @click="handleExport(false)"
+    >
+      <Copy :size="16" stroke-width="2" />
+    </ActionButton>
   </div>
 </template>
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
-import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useAudioPlayer } from '@/services/useAudioPlayer';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useUiStore } from '@/stores/uiStore';
-import { copyElementToClipboard } from '@/utils/domExporter';
+import { renderElementToBlob, writeBlobToClipboard } from '@/utils/domExporter';
 import { Copy, Image, Play, Square } from '@lucide/vue';
 import { unref } from 'vue';
 
@@ -56,11 +64,12 @@ const handleExport = async (isTransparent: boolean) => {
   uiStore.toast.info(isTransparent ? '正在导出透明底色快照...' : '正在导出带卡片背景快照...');
 
   try {
-    await copyElementToClipboard(el, { isTransparent });
+    const blob = await renderElementToBlob(el, { isTransparent });
+    await writeBlobToClipboard(blob);
     uiStore.toast.success('成功复制至系统剪贴板');
   } catch (err) {
     console.error('Fretboard Exporter Error:', err);
-    uiStore.toast.error('导出失败：当前浏览器内核环境受限');
+    uiStore.toast.error(err instanceof Error ? err.message : '导出失败');
   } finally {
     uiStore.isCopying = false;
   }
@@ -75,9 +84,11 @@ const handleExport = async (isTransparent: boolean) => {
   align-items: center;
   gap: 0.2rem;
   padding: 0.25rem;
-  border-radius: 9999px;
-  border: 1px solid var(--glass-border);
-  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 0.12rem;
+    gap: 0.15rem;
+  }
 }
 
 .capsule-divider {

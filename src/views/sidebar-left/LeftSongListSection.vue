@@ -1,64 +1,65 @@
 <template>
   <EmptyState v-if="songStore.songs.length === 0" :icon="Music" description="暂无乐谱，点击右上角新建" size="md" />
 
-  <div v-else ref="songListContainerRef" @keydown="handleKeydown">
+  <div v-else ref="groupListContainerRef" @keydown="handleKeydown">
     <VueDraggable
       :model-value="songStore.songs"
       @update:modelValue="(val: Song[]) => songStore.overwriteSongs(val)"
       :animation="200"
+      ghost-class="drag-ghost-style"
+      chosen-class="drag-chosen-style"
+      drag-class="drag-active-style"
+      :touchStartThreshold="12"
+      :swap-threshold="0.5"
       class="draggable-list"
+      :disabled="scoreEditor.activeSongId !== null"
     >
-      <GlobalContextMenu
-        v-for="song in songStore.songs"
-        :key="song.id"
-        :items="getSongMenuItems(song)"
-        #default="{ isOpen }"
-      >
-        <div
-          v-wave
-          class="song-card-item"
-          :class="{
-            'is-active': isSongActive(song.id),
-            'is-context-open': isOpen,
-          }"
-          role="button"
-          tabindex="0"
-          data-focusable-inline
-          :aria-pressed="isSongActive(song.id)"
-          :aria-label="`乐谱 ${song.title}，${song.playKey}调，Capo ${song.capo}${isSongActive(song.id) ? '，已选中' : ''}`"
-          @click="handleSelectSong(song.id)"
-          @keydown.enter.prevent.stop="handleSelectSong(song.id)"
-          @keydown.space.prevent.stop="handleSelectSong(song.id)"
-        >
-          <div class="song-card-content">
-            <BaseMarquee class="song-marquee">
-              <span class="song-title-text">{{ song.title }}</span>
-            </BaseMarquee>
+      <div v-for="(song, index) in songStore.songs" :key="song.id" class="song-card-wrapper">
+        <GlobalContextMenu :items="getSongMenuItems(song)" #default="{ isOpen }">
+          <div
+            v-wave
+            class="song-card-item"
+            :class="{ 'is-active': isSongActive(song.id), 'is-context-open': isOpen }"
+            role="button"
+            tabindex="0"
+            data-focusable-inline
+            :aria-pressed="isSongActive(song.id)"
+            :aria-label="`乐谱 ${song.title}，${song.playKey}调，Capo ${song.capo}${isSongActive(song.id) ? '，已选中' : ''}`"
+            @click="handleSelectSong(song.id)"
+            @keydown.enter.prevent.stop="handleSelectSong(song.id)"
+            @keydown.space.prevent.stop="handleSelectSong(song.id)"
+            :ref="el => setItemRef(el, index)"
+          >
+            <div class="song-card-content">
+              <BaseMarquee class="song-marquee">
+                <span class="song-title-text">{{ song.title }}</span>
+              </BaseMarquee>
 
-            <div class="song-meta-badges">
-              <BaseBadge
-                variant="neutral"
-                :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
-                size="xs"
-                :aria-label="`调性 ${song.playKey} 调`"
-                width="2rem"
-              >
-                {{ song.key }}调
-              </BaseBadge>
+              <div class="song-meta-badges">
+                <BaseBadge
+                  variant="neutral"
+                  :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
+                  size="xs"
+                  :aria-label="`调性 ${song.playKey} 调`"
+                  width="2rem"
+                >
+                  {{ song.key }}调
+                </BaseBadge>
 
-              <BaseBadge
-                variant="neutral"
-                :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
-                size="xs"
-                :aria-label="`变调夹 Capo ${song.capo} 品`"
-                width="2.8rem"
-              >
-                Capo {{ song.capo }}
-              </BaseBadge>
+                <BaseBadge
+                  variant="neutral"
+                  :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
+                  size="xs"
+                  :aria-label="`变调夹 capo ${song.capo} 品`"
+                  width="2.8rem"
+                >
+                  capo {{ song.capo }}
+                </BaseBadge>
+              </div>
             </div>
           </div>
-        </div>
-      </GlobalContextMenu>
+        </GlobalContextMenu>
+      </div>
     </VueDraggable>
   </div>
 </template>
@@ -74,7 +75,6 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
 import { Eraser, Music, SlidersHorizontal, Trash2 } from '@lucide/vue';
-import { useTemplateRef } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 
 const emit = defineEmits<{
@@ -86,11 +86,8 @@ const songStore = useSongStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 
-// 乐谱列表的单列垂直导航（1列）
-// selector 限定只收集乐谱卡片本身，避免和外层容器里的其它可聚焦元素混在一起
-const songListContainerRef = useTemplateRef<HTMLElement>('songListContainerRef');
-const { handleKeydown } = useGridNavigation(1, songListContainerRef, {
-  selector: '.song-card-item',
+// 乐谱列表的单列垂直导航（使用 Length 模式传入总长度和 setItemRef）
+const { handleKeydown, setItemRef } = useGridNavigation(1, () => songStore.songs.length, {
   stop: true,
 });
 
@@ -160,17 +157,33 @@ const handleSelectSong = (songId: string) => {
   box-sizing: border-box;
 }
 
+.song-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+
+  /* 🌟 核心修复：强制重置 GlobalContextMenu 的包装器为块级盒模型，解决拖拽与右键触发死区问题 */
+  :deep(.context-menu-trigger-wrapper) {
+    display: block;
+    width: 100%;
+  }
+}
+
 .song-card-item {
+  width: 100%;
   padding: 0.55rem 0.75rem;
   border-radius: @radius-md;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
   cursor: pointer;
-  transition: @transition-fast;
   box-sizing: border-box;
   outline: none;
+  transition:
+    background-color @duration-fast ease,
+    border-color @duration-fast ease,
+    box-shadow @duration-fast ease;
 
-  /* 基础 Hover & 右键打开提示 */
   &:hover,
   &.is-context-open {
     background-color: var(--bg-panel-hover);
@@ -187,7 +200,6 @@ const handleSelectSong = (songId: string) => {
       font-weight: 700;
     }
 
-    /* 选中态下的 Hover & 右键提示（增加主题色加深反馈） */
     &:hover,
     &.is-context-open {
       background-color: color-mix(in srgb, var(--color-primary), transparent 82%);
@@ -202,6 +214,7 @@ const handleSelectSong = (songId: string) => {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .song-marquee {

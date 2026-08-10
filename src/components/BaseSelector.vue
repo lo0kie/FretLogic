@@ -62,7 +62,7 @@
           <div
             v-wave="{ disabled: isOptionDisabled(option) }"
             v-for="(option, index) in options"
-            :key="index"
+            :key="typeof getOptionValue(option) === 'object' ? index : String(getOptionValue(option))"
             ref="optionEls"
             role="option"
             :tabindex="isOptionDisabled(option) ? -1 : 0"
@@ -79,7 +79,7 @@
             @keydown.enter.prevent.stop="handleSelect(option)"
             @keydown.space.prevent.stop="handleSelect(option)"
           >
-            <slot name="option" :option="option" :index="index">
+            <slot name="option" :option :index>
               {{ formattedOption(option) }}
             </slot>
           </div>
@@ -379,7 +379,7 @@ watch(isOpen, opened => {
 
   &.is-active {
     border-color: @primary;
-    box-shadow: @focus-ring-primary;
+    box-shadow: inset 0 0 0 1px @primary; // 🌟 换成内衬边框提示，不再向外扩
   }
 
   &.is-disabled {

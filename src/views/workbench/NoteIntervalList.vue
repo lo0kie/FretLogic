@@ -42,7 +42,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'set-root-string', stringIndex: number): void;
+  (e: 'toggle-root-string', stringIndex: number): void;
   (e: 'toggle-pitch-accidental', stringIndex: number): void;
 }>();
 
@@ -52,7 +52,7 @@ const { height } = useElementSize(containerRef);
 const handleRowClick = (note: RenderNoteItem) => {
   if (!props.isMobile) return;
 
-  emit('set-root-string', note.stringIndex);
+  emit('toggle-root-string', note.stringIndex);
 };
 
 const handleLongPress = (note: RenderNoteItem) => {

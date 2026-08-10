@@ -12,10 +12,7 @@
         {{ capo > 0 ? capo + i : i }}
       </span>
     </div>
-
     <svg
-      ref="svgContainerRef"
-      @keydown="handleGridKeydown"
       :width="CANVAS_CONFIG.BOARD_WIDTH"
       :height="fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
       :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
@@ -65,19 +62,22 @@
         <circle
           :cx="stringXPositions[hoverPoint!.stringIndex]"
           :cy="(hoverPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-          r="28"
+          r="33"
           :fill="isDarkMode ? '#28282a' : '#ffffff'"
+          :stroke="isDarkMode ? '#64d2ff' : '#007aff'"
+          stroke-width="3.5"
           style="pointer-events: none"
         />
+      </g>
 
+      <g v-if="showKeyboardFocus" class="finger-keyboard-focus" aria-hidden="true">
         <circle
-          :cx="stringXPositions[hoverPoint!.stringIndex]"
-          :cy="(hoverPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-          r="25.5"
-          fill="transparent"
-          :stroke="isDarkMode ? 'rgba(255, 255, 255, 0.45)' : 'rgba(60, 60, 67, 0.35)'"
-          stroke-width="3"
-          stroke-dasharray="4 4"
+          :cx="stringXPositions[focusPoint!.stringIndex]"
+          :cy="(focusPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+          r="33"
+          :fill="isDarkMode ? '#28282a' : '#ffffff'"
+          :stroke="isDarkMode ? '#64d2ff' : '#007aff'"
+          stroke-width="3.5"
           style="pointer-events: none"
         />
       </g>
@@ -86,13 +86,10 @@
         <g
           v-if="str.fret > 0 && str.fret <= fretCount"
           :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
-          :role="interactive ? 'button' : undefined"
-          :tabindex="interactive ? 0 : undefined"
+          tabindex="-1"
           :style="{ color: getFingerColor(str, isDarkMode) }"
-          :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings)}。按 Enter/空格 切换升降号，按 Delete/Backspace 清除按音，按 R 设为根音`"
+          :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings)}`"
           @dblclick.prevent.stop="emit('toggle-pitch', sIdx)"
-          @keydown="e => handleFingerKeydown(e, sIdx)"
-          data-focusable-outline
         >
           <circle
             :cx="stringXPositions[sIdx]"
@@ -124,11 +121,10 @@
 
 <script setup lang="ts">
 import { CANVAS_CONFIG, FRETBOARD_LINE_WIDTH } from '@/constants';
-import { useGridNavigation } from '@/services/useGridNavigation';
 import type { GuitarStringsModel } from '@/types';
 import { getFingerColor, getFingerTextColor } from '@/utils/fretboardVisuals';
 import { calcNoteLabel } from '@/utils/musicTheory';
-import { computed, useTemplateRef } from 'vue';
+import { computed } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -140,11 +136,17 @@ const props = withDefaults(
     interactive: boolean;
     isMobile: boolean;
     stringXPositions: number[];
-    hoverPoint: { stringIndex: number; fretIndex: number } | null;
+    hoverPoint?: { stringIndex: number; fretIndex: number } | null;
+    focusPoint?: { stringIndex: number; fretIndex: number } | null;
     fretNumberSize?: 'sm' | 'md' | 'lg';
     showFretNumbers?: boolean;
   }>(),
-  { fretNumberSize: 'md', showFretNumbers: true }
+  {
+    fretNumberSize: 'md',
+    showFretNumbers: true,
+    hoverPoint: null,
+    focusPoint: null,
+  }
 );
 
 const emit = defineEmits<{
@@ -152,9 +154,6 @@ const emit = defineEmits<{
   (e: 'clear-fret', stringIndex: number): void;
   (e: 'toggle-root', stringIndex: number): void;
 }>();
-
-const svgContainerRef = useTemplateRef<SVGSVGElement>('svgContainerRef');
-const { handleKeydown: handleGridKeydown } = useGridNavigation(undefined, svgContainerRef as any);
 
 const getFretNumberStyle = (fretIndex: number) => {
   const yPixel = fretIndex * CANVAS_CONFIG.FRET_HEIGHT;
@@ -178,23 +177,17 @@ const showPredictiveHover = computed(() => {
   );
 });
 
-const handleFingerKeydown = (e: KeyboardEvent, sIdx: number) => {
-  if (!props.interactive) return;
-
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    e.stopPropagation();
-    emit('toggle-pitch', sIdx);
-  } else if (e.key === 'Delete' || e.key === 'Backspace') {
-    e.preventDefault();
-    e.stopPropagation();
-    emit('clear-fret', sIdx);
-  } else if (e.key === 'r' || e.key === 'R') {
-    e.preventDefault();
-    e.stopPropagation();
-    emit('toggle-root', sIdx);
-  }
-};
+const showKeyboardFocus = computed(() => {
+  const fp = props.focusPoint;
+  return (
+    props.interactive &&
+    fp !== null &&
+    fp.fretIndex > 0 &&
+    fp.fretIndex <= props.fretCount &&
+    fp.stringIndex >= 0 &&
+    fp.stringIndex <= 5
+  );
+});
 </script>
 
 <style scoped lang="less">
@@ -255,7 +248,8 @@ const handleFingerKeydown = (e: KeyboardEvent, sIdx: number) => {
   outline: none;
 }
 
-.finger-predictive {
+.finger-predictive,
+.finger-keyboard-focus {
   pointer-events: none;
 }
 

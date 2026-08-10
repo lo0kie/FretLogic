@@ -42,6 +42,7 @@ export function useScoreExportPreview(
   const uiStore = useUiStore();
   const scoreEditor = useScoreEditorStore();
 
+  const progress = ref(0);
   const mode = ref<ExportMode>('normal');
   const pages = shallowRef<PreviewPage[]>([]);
   const currentPageIndex = ref(0);
@@ -263,6 +264,7 @@ export function useScoreExportPreview(
     }
 
     try {
+      progress.value = 50;
       const canvas = await renderElementToCanvas(container, {
         width: maxWidth + paddingX,
         height: height + paddingY,
@@ -285,6 +287,7 @@ export function useScoreExportPreview(
       });
 
       await pushPage(canvas);
+      progress.value = 100;
     } finally {
       if (metaHeaderRef.value) {
         metaHeaderRef.value.style.width = '';
@@ -341,17 +344,17 @@ export function useScoreExportPreview(
       A4_CONTENT_HEIGHT - headerHeight,
       A4_CONTENT_HEIGHT
     );
-
+    progress.value = 0;
     wrapper.classList.add('is-a4-capture-mode');
 
     try {
-      for (const chunk of pageChunks) {
+      for (let i = 0; i < pageChunks.length; i++) {
+        const chunk = pageChunks[i];
         exportPageLineSet.value = new Set(chunk.lineIndices);
         if (metaHeaderRef.value) metaHeaderRef.value.style.display = chunk.isFirstPage ? '' : 'none';
         await nextTick();
         await waitForPaint();
 
-        // 🌟 截的是 wrapper，不再是 container；宽高本来就等于 A4 尺寸，不存在谁覆盖谁
         const canvas = await renderElementToCanvas(wrapper, {
           width: A4_WIDTH_PX,
           height: A4_HEIGHT_PX,
@@ -360,6 +363,7 @@ export function useScoreExportPreview(
           filter: skipAddBtnSlot,
         });
         await pushPage(canvas);
+        progress.value = Math.round(((i + 1) / pageChunks.length) * 100);
       }
     } finally {
       wrapper.classList.remove('is-a4-capture-mode');
@@ -392,18 +396,6 @@ export function useScoreExportPreview(
     const currentMode = mode.value;
     const currentDataKey = getDataKey();
 
-    /**
-     * 数据发生变化：
-     *
-     * 例如：
-     * - 换歌
-     * - 修改歌词
-     * - 修改和弦
-     * - 修改选择行
-     * - 开关歌曲信息栏
-     *
-     * 那么之前两套缓存全部失效。
-     */
     if (lastDataKey !== currentDataKey) {
       previewCache.normal = null;
       previewCache.a4 = null;
@@ -412,23 +404,16 @@ export function useScoreExportPreview(
 
     const cached = previewCache[currentMode];
 
-    /**
-     * 命中缓存。
-     *
-     * 这里完全不做：
-     * - DOM 测量
-     * - nextTick
-     * - waitForPaint
-     * - html-to-image
-     * - A4 分页
-     * - Canvas -> Blob
-     */
+    // 🌟 命中缓存：恢复页面，将进度调至 100%，直接返回（此时 isGenerating 仍为 false）
     if (cached?.key === currentDataKey) {
       await restoreCachedPages(cached);
+      progress.value = 100;
       return;
     }
 
+    // 🌟 未命中缓存：开启加载状态并清理旧预览
     isGenerating.value = true;
+    progress.value = 0;
     clearPreview();
 
     try {
@@ -438,17 +423,11 @@ export function useScoreExportPreview(
         await generateA4Preview();
       }
 
-      /**
-       * 生成完成后才写缓存。
-       *
-       * 防止生成过程中发生异常时缓存半成品。
-       */
       if (pages.value.length > 0) {
         saveCurrentPagesToCache(currentDataKey);
       }
     } catch (err) {
       console.error('Generate Export Preview Error:', err);
-
       uiStore.toast.error(err instanceof Error ? err.message : '预览生成失败');
     } finally {
       exportPageLineSet.value = new Set();
@@ -585,5 +564,6 @@ export function useScoreExportPreview(
     downloadPdf,
     clearPreview,
     downloadCurrentPage,
+    progress,
   };
 }

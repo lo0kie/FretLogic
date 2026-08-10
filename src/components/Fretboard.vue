@@ -8,6 +8,8 @@
       ref="fretBoardRef"
       class="fretboard-container"
       :class="[interactive ? 'is-interactive' : 'is-disabled', { 'is-bordered': bordered }]"
+      :tabindex="interactive ? 0 : -1"
+      data-focusable-outline
       :style="{
         width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
         height: `${rawHeight}px`,
@@ -17,72 +19,59 @@
       }"
       @contextmenu="handleRightClickRoot"
     >
-      <div
-        ref="openStringsContainerRef"
-        class="open-strings-wrapper"
-        :style="{ height: `${activeTopOffset}px` }"
-        @keydown="handleKeydown"
-      >
+      <div class="open-strings-wrapper" :style="{ height: `${activeTopOffset}px` }">
         <template v-if="showOpenStrings">
-          <template v-for="(str, sIdx) in chord.strings" :key="'os-' + sIdx">
-            <GlobalTooltip
-              placement="top"
-              :content="
-                interactive && str.fret <= 0 ? '左键：切换空弦/静音 \n 右键：设为根音 \n 滚轮：切换升降号' : undefined
-              "
-              :style="{
-                position: 'absolute',
-                left: `${stringXPositions[sIdx]}px`,
-                top: '10px',
-                transform: 'translateX(-50%)',
-                width: 'auto',
-              }"
-            >
-              <button
-                v-wave
-                :tabindex="interactive && str.fret <= 0 ? 0 : -1"
-                role="button"
-                :aria-label="getOpenStringAriaLabel(sIdx, str)"
-                :aria-disabled="!interactive"
-                :title="str.fret > 0 ? undefined : getOpenStringAriaLabel(sIdx, str)"
-                @click.stop="handleLocalToggleOpenString(sIdx)"
-                @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
-                @keydown.enter.prevent.stop="handleLocalToggleOpenString(sIdx)"
-                @keydown.space.prevent.stop="handleLocalToggleOpenString(sIdx)"
-                class="open-string-btn"
-                data-focusable-outline
-                :class="[
-                  str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available',
-                  getOpenStringStatusClass(str),
-                  interactive ? 'allow-events' : 'block-events',
-                  { 'no-border': !bordered },
-                ]"
-                :style="{ backgroundColor: bgColor, ...getOpenStringStyle(str, isDarkMode) }"
-              >
-                <template v-if="str.fret <= 0">
-                  <X v-if="isMuted(str)" class="mute-icon" stroke-width="3" aria-hidden="true" />
-                  <span v-else-if="isOpen(str)" class="open-note-text">
-                    {{ calcNoteLabel(sIdx, 0, chord.capo, str.preferFlat, getActiveBaseStrings(chord.tuning)) }}
-                  </span>
-                </template>
-              </button>
-            </GlobalTooltip>
-          </template>
+          <button
+            v-wave
+            v-for="(str, sIdx) in chord.strings"
+            :key="'os-' + sIdx"
+            v-tooltip="getOpenStringTooltip(str)"
+            tabindex="-1"
+            role="button"
+            :aria-label="getOpenStringAriaLabel(sIdx, str)"
+            :aria-disabled="!interactive"
+            :title="str.fret > 0 ? undefined : getOpenStringAriaLabel(sIdx, str)"
+            @click.stop="handleLocalToggleOpenString(sIdx)"
+            @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
+            class="open-string-btn"
+            :class="[
+              str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available',
+              getOpenStringStatusClass(str),
+              interactive ? 'allow-events' : 'block-events',
+              {
+                'no-border': !bordered,
+                'is-focused-hover': isFocused && focusPoint?.fretIndex === 0 && focusPoint?.stringIndex === sIdx,
+              },
+            ]"
+            :style="{
+              left: stringXPositions[sIdx] ? `${stringXPositions[sIdx]}px` : `${30 + sIdx * 64}px`,
+              backgroundColor: bgColor,
+              ...getOpenStringStyle(str, isDarkMode),
+            }"
+          >
+            <template v-if="str.fret <= 0">
+              <X v-if="isMuted(str)" class="mute-icon" stroke-width="3" aria-hidden="true" />
+              <span v-else-if="isOpen(str)" class="open-note-text">
+                {{ calcNoteLabel(sIdx, 0, chord.capo, str.preferFlat, getActiveBaseStrings(chord.tuning)) }}
+              </span>
+            </template>
+          </button>
         </template>
       </div>
 
       <FretboardSvg
+        :is-dark-mode
+        :interactive
+        :string-x-positions
+        :hover-point
+        :focus-point
+        :fret-number-size
+        :show-fret-numbers
         :strings="chord.strings"
         :fret-count="chord.fretCount"
         :capo="chord.capo"
         :active-base-strings="getActiveBaseStrings(chord.tuning)"
-        :is-dark-mode="isDarkMode"
-        :interactive="interactive"
         :is-mobile="uiStore.isMobile"
-        :string-x-positions="stringXPositions"
-        :hover-point="hoverPoint"
-        :fret-number-size="fretNumberSize"
-        :show-fret-numbers="showFretNumbers"
         @toggle-pitch="handleTogglePitchName"
       />
     </div>
@@ -91,16 +80,13 @@
 
 <script setup lang="ts">
 import FretboardSvg from '@/components/FretboardSvg.vue';
-import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { CANVAS_CONFIG } from '@/constants';
 import { useFretboardInteraction } from '@/services/useFretboardInteraction';
-import { useGridNavigation } from '@/services/useGridNavigation';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord, GuitarStringsModel } from '@/types';
+import type { Chord, GuitarStringEntity, GuitarStringsModel } from '@/types';
 import { getOpenStringStatusClass, getOpenStringStyle } from '@/utils/fretboardVisuals';
 import { calcNoteLabel, getActiveBaseStrings, isMuted, isOpen } from '@/utils/musicTheory';
 import { X } from '@lucide/vue';
-import { useTemplateRef } from 'vue';
 
 export interface FretboardProps {
   chord: Chord;
@@ -133,12 +119,11 @@ const emit = defineEmits<{
 
 const uiStore = useUiStore();
 
-const openStringsContainerRef = useTemplateRef<HTMLElement>('openStringsContainerRef');
-const { handleKeydown } = useGridNavigation(6, openStringsContainerRef);
-
 const {
   fretBoardRef,
   hoverPoint,
+  focusPoint,
+  isFocused,
   stringXPositions,
   rawHeight,
   fretboardScale,
@@ -154,6 +139,12 @@ const {
   strings => emit('update:strings', strings),
   isDragging => emit('drag-status-change', isDragging)
 );
+
+const getOpenStringTooltip = (str: GuitarStringEntity) => {
+  return props.interactive && str.fret <= 0
+    ? { content: '左键：切换空弦/静音 \n 右键：设为根音 \n 滚轮：切换升降号', placement: 'top' }
+    : undefined;
+};
 
 const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) => {
   const stringNum = 6 - sIdx;
@@ -179,6 +170,7 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
 }
 
 .fretboard-container {
+  --fretboard-focus-color: var(--color-primary);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -214,6 +206,9 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
 }
 
 .open-string-btn {
+  position: absolute;
+  top: 10px;
+  transform: translateX(-50%);
   width: 2.4rem;
   height: 2.4rem;
   box-sizing: border-box;
@@ -226,7 +221,12 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
   border-width: 2px;
   padding: 0;
   cursor: pointer;
-  transition: @transition-fast;
+  transition:
+    background-color @duration-fast ease,
+    border-color @duration-fast ease,
+    transform @duration-fast ease,
+    opacity @duration-fast ease;
+  will-change: transform;
   outline: none;
 
   &.no-border {
@@ -244,12 +244,12 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
   }
 
   &.is-fret-available:active {
-    transform: scale(0.92);
+    transform: translateX(-50%) scale(0.92);
   }
 
   &.is-fret-pressed {
     opacity: 0 !important;
-    transform: scale(1) !important;
+    transform: translateX(-50%) scale(1) !important;
     background-color: transparent !important;
     border-color: transparent !important;
     box-shadow: none !important;
@@ -265,6 +265,12 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
     border-color: color-mix(in srgb, var(--color-primary), transparent 85%);
     color: var(--color-primary);
     background-color: color-mix(in srgb, var(--color-primary), transparent 92%) !important;
+  }
+
+  &.is-focused-hover {
+    opacity: 1 !important;
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 3.5px var(--color-primary) !important;
   }
 }
 
@@ -285,10 +291,10 @@ const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) =
   .open-string-btn {
     width: 2.75rem;
     height: 2.75rem;
-    transform: translateY(10px);
+    transform: translateX(-50%) translateY(10px);
 
     &.is-fret-available:active {
-      transform: translateY(10px) scale(0.92);
+      transform: translateX(-50%) translateY(10px) scale(0.92);
     }
   }
 

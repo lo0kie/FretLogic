@@ -5,7 +5,7 @@
     :class="{ 'is-disabled': disabled, 'is-open': isOpen }"
     v-bind="$attrs"
   >
-    <slot :is-open="isOpen" :open="openMenuAt" :close="closeMenu"></slot>
+    <slot :is-open :open="openMenuAt" :close="closeMenu"></slot>
   </div>
 
   <Teleport to="body">
@@ -248,12 +248,6 @@ onBeforeUnmount(() => {
     globalActiveMenuCloseFn.value = null;
   }
 });
-
-defineExpose({
-  open: openMenuAt,
-  close: closeMenu,
-  isOpen,
-});
 </script>
 
 <style scoped lang="less">
@@ -262,7 +256,7 @@ defineExpose({
 .context-menu-trigger-wrapper {
   display: contents;
   width: 100%;
-  cursor: context-menu;
+
   &.is-disabled {
     cursor: default;
   }

@@ -1,19 +1,19 @@
 <template>
   <div class="popover-wrapper">
-    <GlobalTooltip :content="tooltip" placement="bottom">
-      <ActionButton
-        ref="triggerBtnRef"
-        icon-only
-        :variant="isOpen ? 'subtle' : 'ghost'"
-        :primary="isOpen"
-        :aria-label="tooltip"
-        :aria-expanded="isOpen"
-        aria-haspopup="true"
-        @click="toggleOpen"
-      >
-        <SlidersHorizontal :size="18" stroke-width="2.2" aria-hidden="true" />
-      </ActionButton>
-    </GlobalTooltip>
+    <ActionButton
+      v-tooltip="tooltip"
+      ref="triggerBtnRef"
+      icon-only
+      :variant="isOpen ? 'subtle' : 'ghost'"
+      :primary="isOpen"
+      :aria-label="tooltip"
+      :aria-expanded="isOpen"
+      aria-haspopup="true"
+      @click="toggleOpen"
+      :size="uiSize"
+    >
+      <SlidersHorizontal :size="18" stroke-width="2.2" aria-hidden="true" />
+    </ActionButton>
 
     <Transition name="dropdown-fade">
       <div
@@ -34,12 +34,15 @@
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
-import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useFocusReturn } from '@/services/useFocusReturn';
+import { useUiStore } from '@/stores/uiStore';
 import { SlidersHorizontal } from '@lucide/vue';
 import { vOnClickOutside } from '@vueuse/components';
 import { useEventListener } from '@vueuse/core';
-import { ComponentPublicInstance, ref, useTemplateRef } from 'vue';
+import { ComponentPublicInstance, computed, ref, useTemplateRef } from 'vue';
+
+const uiStore = useUiStore();
+const uiSize = computed(() => (uiStore.isMobile ? 'sm' : 'md'));
 
 defineProps<{ tooltip: string }>();
 

@@ -15,78 +15,67 @@
       </BaseBadge>
     </div>
 
-    <GlobalTooltip content="GitHub Token" placement="top" class="full-width-tooltip">
-      <BaseInput
-        v-model="settingsStore.githubToken"
-        placeholder="GitHub Token (ghp_...)"
-        is-password
-        clearable
-        autofocus
-        fontSize="xs"
-        :maxlength="100"
-        horizontal-wheel
-        show-count
-      />
-    </GlobalTooltip>
+    <BaseInput
+      v-tooltip="'GitHub Token'"
+      v-model="settingsStore.githubToken"
+      placeholder="GitHub Token (ghp_...)"
+      is-password
+      clearable
+      autofocus
+      fontSize="xs"
+      :maxlength="100"
+      horizontal-wheel
+      show-count
+    />
 
     <div class="grid-columns">
-      <GlobalTooltip content="GitHub 账号名称" placement="top" class="full-width-tooltip">
-        <BaseInput
-          v-model="settingsStore.githubOwner"
-          placeholder="Username"
-          clearable
-          fontSize="xs"
-          :maxlength="39"
-          show-count
-        />
-      </GlobalTooltip>
+      <BaseInput
+        v-tooltip="'GitHub 账号名称'"
+        v-model="settingsStore.githubOwner"
+        placeholder="Username"
+        clearable
+        fontSize="xs"
+        :maxlength="39"
+        show-count
+      />
 
-      <GlobalTooltip content="仓库名称" placement="top" class="full-width-tooltip">
-        <BaseInput
-          v-model="settingsStore.githubRepo"
-          placeholder="Repository"
-          clearable
-          fontSize="xs"
-          :maxlength="100"
-          show-count
-        />
-      </GlobalTooltip>
+      <BaseInput
+        v-tooltip="'仓库名称'"
+        v-model="settingsStore.githubRepo"
+        placeholder="Repository"
+        clearable
+        fontSize="xs"
+        :maxlength="100"
+        show-count
+      />
     </div>
 
     <div class="grid-columns">
-      <GlobalTooltip
-        :content="
+      <ActionButton
+        v-tooltip="
           isPulling ? '同步中' : isPullConfigComplete ? '请先填写账号和仓库名' : '从 GitHub 下载并覆盖本地数据 GitHub'
         "
-        placement="top"
+        :disabled="isPullConfigComplete || isSyncing"
+        width="100%"
+        @click="$emit('pull-request')"
+        :loading="isPulling"
+        size="sm"
       >
-        <ActionButton
-          :disabled="isPullConfigComplete || isSyncing"
-          width="100%"
-          @click="$emit('pull-request')"
-          :loading="isPulling"
-          size="sm"
-        >
-          <template #prefix><CloudDownload :size="13" stroke-width="2.5" /></template>
-          拉取
-        </ActionButton>
-      </GlobalTooltip>
+        <template #prefix><CloudDownload :size="13" stroke-width="2.5" /></template>
+        拉取
+      </ActionButton>
 
-      <GlobalTooltip
-        :content="isSyncing ? '同步中' : isPushConfigComplete ? '请先填写token' : '将本地数据推送到 GitHub'"
-        placement="top"
+      <ActionButton
+        v-tooltip="isSyncing ? '同步中' : isPushConfigComplete ? '请先填写token' : '将本地数据推送到 GitHub'"
+        :disabled="isPushConfigComplete || isSyncing"
+        width="100%"
+        @click="$emit('push-request')"
+        :loading="isSyncing"
+        size="sm"
       >
-        <ActionButton
-          :disabled="isPushConfigComplete || isSyncing"
-          width="100%"
-          @click="$emit('push-request')"
-          :loading="isSyncing"
-          size="sm"
-        >
-          <template #prefix><CloudUpload :size="13" stroke-width="2.5" /></template>
-          同步
-        </ActionButton>
-      </GlobalTooltip>
+        <template #prefix><CloudUpload :size="13" stroke-width="2.5" /></template>
+        同步
+      </ActionButton>
     </div>
   </div>
 </template>
@@ -95,7 +84,6 @@
 import ActionButton from '@/components/ActionButton.vue';
 import BaseBadge from '@/components/BaseBadge.vue'; // 🌟 引入 BaseBadge
 import BaseInput from '@/components/BaseInput.vue';
-import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { CloudDownload, CloudUpload } from '@lucide/vue';
 import { computed } from 'vue';

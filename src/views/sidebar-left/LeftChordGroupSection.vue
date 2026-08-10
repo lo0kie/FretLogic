@@ -92,8 +92,8 @@
           <!-- 2. 折叠区内容组件 -->
           <LeftChordGroupContent
             :ref="el => setContentOuterRef(el, index)"
-            :group="group"
-            :search-query="searchQuery"
+            :group
+            :search-query
             :is-open="isGroupContentOpen(group)"
             @open-move="chord => emit('open-move', chord)"
             @open-delete-variants="cardData => emit('open-delete-variants', cardData)"
@@ -164,9 +164,10 @@ const isAllCollapsed = computed(() => chordStore.groups.every(g => g.collapsed))
 const handleSelectChord = (chord: Chord) => {
   if (editorStore.draftChord.id === chord.id) {
     editorStore.resetEditor();
-    return;
+  } else {
+    editorStore.setEditor(chord);
+    if (uiStore.isMobile) uiStore.isLeftOpen = false;
   }
-  editorStore.setEditor(chord);
 };
 
 const getSortLabel = (group: Group): string => {

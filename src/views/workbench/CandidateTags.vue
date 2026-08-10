@@ -70,6 +70,8 @@ const { handleKeydown } = useGridNavigation(undefined, tagsContainerRef);
 .candidate-tags {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;   /* 🌟 1. 阻止子元素（BaseBadge）在行内纵向拉伸 */
+  align-content: flex-start; /* 🌟 2. 阻止多行 Flex 换行后平分并拉伸纵向高度 */
   gap: 0.28rem;
   max-height: 3.8rem;
   overflow-y: auto;
@@ -87,7 +89,7 @@ const { handleKeydown } = useGridNavigation(undefined, tagsContainerRef);
 
 @media (max-width: 768px) {
   .candidates-section {
-    flex: 1.8;
+    flex: 2;
   }
 
   .candidate-tags {

@@ -94,6 +94,7 @@ export function useChordActions() {
     }
 
     if (!chordStore.selectedGroupId) {
+      uiStore.isLeftOpen = true;
       uiStore.toast.warning('保存失败：请先选择目标分组');
       return null;
     }

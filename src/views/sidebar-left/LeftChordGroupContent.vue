@@ -1,3 +1,4 @@
+<!-- src/views/sidebar-left/LeftChordGroupContent.vue -->
 <template>
   <div class="chord-content-outer" :class="{ 'is-open': isOpen }" :aria-hidden="!isOpen" :inert="!isOpen">
     <div class="chord-content-inner" v-auto-animate @contextmenu.stop>
@@ -10,8 +11,8 @@
       >
         <LeftChordCard
           v-for="cardData in groupedCards"
-          :key="cardData.mainChord.chordName"
-          :card-data="cardData"
+          :key="cardData.mainChord.id"
+          :card-data
           @delete-variants="cardData => emit('open-delete-variants', cardData)"
           :is-editing="cardData.variants.some(c => c.id === editorStore.draftChord.id)"
           @delete="chord => emit('delete-chord', chord)"
@@ -32,7 +33,7 @@ import { useGridNavigation } from '@/services/useGridNavigation';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
-import { groupChordsByName, sortChordsByRule } from '@/utils/musicTheory';
+import { sortChordsByRule } from '@/utils/musicTheory.ts';
 import { vAutoAnimate } from '@formkit/auto-animate';
 import { computed, useTemplateRef } from 'vue';
 import LeftChordCard from './LeftChordCard.vue';
@@ -56,21 +57,24 @@ const chordStore = useChordStore();
 const gridContainerRef = useTemplateRef<HTMLElement>('gridContainerRef');
 const chordsCount = computed(() => chordStore.groupChordMap.get(props.group.id)?.length ?? 0);
 
-const filteredChords = computed(() => {
-  const original = chordStore.groupChordMap.get(props.group.id) || [];
+const groupedCards = computed<GroupedChordCard[]>(() => {
+  const groupCards = chordStore.groupedChordMap.get(props.group.id) ?? [];
   const query = props.searchQuery.toLowerCase().trim();
-  if (!query) return original;
-  return original.filter(c => c.chordName.toLowerCase().includes(query));
+
+  const targetCards = query
+    ? groupCards.filter(card => card.mainChord.chordName.toLowerCase().includes(query))
+    : groupCards;
+
+  const cardMap = new Map(targetCards.map(c => [c.mainChord.id, c]));
+  const sortedMainChords = sortChordsByRule(
+    targetCards.map(c => c.mainChord),
+    props.group.sortRule,
+    props.group.sortKey
+  );
+
+  return sortedMainChords.map(main => cardMap.get(main.id)!).filter(Boolean);
 });
 
-const groupedCards = computed(() => {
-  const sorted = sortChordsByRule(filteredChords.value, props.group.sortRule, props.group.sortKey);
-  return groupChordsByName(sorted);
-});
-
-// 绑定容器 ref，自动按 3 列进行上下左右键盘寻路
-// selector 限定只收集本组的和弦卡片，避免与外层分组标题行的导航互相干扰
-// stop: true 阻止事件冒泡到外层 VueDraggable 容器，防止被外层 handleKeydown 二次处理
 const { handleKeydown } = useGridNavigation(3, gridContainerRef, {
   selector: '.chord-thumb-card',
   stop: true,

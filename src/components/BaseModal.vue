@@ -3,8 +3,8 @@
     <Transition name="modal-fade">
       <div
         v-if="visible"
-        class="modal-overlay-container"
         v-bind="$attrs"
+        class="modal-overlay-container"
         @mousedown="handleMaskMousedown"
         @click.self="handleMaskClick"
       >
@@ -23,7 +23,7 @@
             <slot name="header">
               <div class="modal-header-left">
                 <slot name="title">
-                  <h3 v-if="title" class="modal-title" :title="title">
+                  <h3 v-if="title" class="modal-title" :title>
                     {{ title }}
                   </h3>
                 </slot>

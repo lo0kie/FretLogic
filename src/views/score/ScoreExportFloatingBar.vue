@@ -2,16 +2,14 @@
   <div class="score-floating-bar">
     <div class="bar-info-zone">
       <!-- 🌟 改用 BaseBadge 表示已选行数计数 -->
-      <div class="bar-counter">
-        <BaseBadge
-          :variant="selectedCount > 0 ? 'primary' : 'neutral'"
-          :appearance="selectedCount > 0 ? 'filled' : 'subtle'"
-          size="xs"
-          width="1.5rem"
-        >
-          {{ selectedCount }}
-        </BaseBadge>
-      </div>
+      <BaseBadge
+        :variant="selectedCount > 0 ? 'primary' : 'neutral'"
+        :appearance="selectedCount > 0 ? 'filled' : 'subtle'"
+        size="xs"
+        width="1.5rem"
+      >
+        {{ selectedCount }}
+      </BaseBadge>
 
       <span class="selected-text-tip">{{ selectedCount > 0 ? '已选择歌词' : '请选择歌词' }}</span>
 
@@ -38,32 +36,27 @@
     <div class="bar-divider"></div>
 
     <div class="bar-actions-zone">
-      <GlobalTooltip content="选中所有歌词" placement="top">
-        <ActionButton
-          size="sm"
-          :variant="isAllSelected ? 'subtle' : 'ghost'"
-          :primary="isAllSelected"
-          @click="emit('toggle-select-all')"
-        >
-          全选
-        </ActionButton>
-      </GlobalTooltip>
-
-      <GlobalTooltip
-        :content="includeMetaBar ? '导出图片将包含歌名/调/Capo 信息' : '导出图片不包含歌曲信息'"
-        placement="top"
+      <ActionButton
+        v-tooltip="'选中所有歌词'"
+        size="sm"
+        :variant="isAllSelected ? 'subtle' : 'ghost'"
+        :primary="isAllSelected"
+        @click="emit('toggle-select-all')"
       >
-        <ActionButton
-          icon-only
-          size="sm"
-          :variant="includeMetaBar ? 'subtle' : 'ghost'"
-          :primary="includeMetaBar"
-          :aria-label="includeMetaBar ? '关闭歌曲信息栏' : '开启歌曲信息栏'"
-          @click="includeMetaBar = !includeMetaBar"
-        >
-          <FileText :size="14" stroke-width="2.5" />
-        </ActionButton>
-      </GlobalTooltip>
+        全选
+      </ActionButton>
+
+      <ActionButton
+        icon-only
+        v-tooltip="includeMetaBar ? '导出图片将包含歌名/调/Capo 信息' : '导出图片不包含歌曲信息'"
+        size="sm"
+        :variant="includeMetaBar ? 'subtle' : 'ghost'"
+        :primary="includeMetaBar"
+        :aria-label="includeMetaBar ? '关闭歌曲信息栏' : '开启歌曲信息栏'"
+        @click="includeMetaBar = !includeMetaBar"
+      >
+        <FileText :size="14" stroke-width="2.5" />
+      </ActionButton>
 
       <ActionButton size="sm" variant="subtle" :disabled="selectedCount === 0" @click="emit('open-export')">
         <template #prefix>
@@ -78,7 +71,6 @@
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import BaseBadge from '@/components/BaseBadge.vue';
-import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { Copy, FileText } from '@lucide/vue';
 import { useTemplateRef } from 'vue';
 
@@ -156,7 +148,6 @@ const handleWheelScroll = (e: WheelEvent) => {
   overflow-y: hidden;
   white-space: nowrap;
   flex-shrink: 0; /* 不要被挤扁 */
-  padding: 0.1rem 0;
   /* 可选：空列表时也能看清是一块区域 */
   /* min-height: 1.25rem; */
   scrollbar-width: none;
@@ -189,5 +180,34 @@ const handleWheelScroll = (e: WheelEvent) => {
   align-items: center;
   gap: 0.4rem;
   flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .score-floating-bar {
+    bottom: 1rem;
+    padding: 0.25rem 0.5rem;
+    gap: 0.35rem;
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  .bar-info-zone {
+    gap: 0.25rem;
+  }
+
+  /* 移动端隐藏提示文案以节省横向空间 */
+  .selected-text-tip {
+    display: none;
+  }
+
+  /* 缩小已选索引槽位宽度 */
+  .clickable-indices-list {
+    width: 5.5rem;
+    min-width: 5.5rem;
+    max-width: 5.5rem;
+  }
+
+  .bar-actions-zone {
+    gap: 0.25rem;
+  }
 }
 </style>

@@ -48,12 +48,12 @@
     <!-- 4. 滑块核心 Input -->
     <div class="slider-track-wrapper">
       <input
+        :min
+        :max
+        :step
+        :disabled
         type="range"
-        :min="min"
-        :max="max"
-        :step="step"
         :value="modelValue"
-        :disabled="disabled"
         :aria-label="label || '缩放调节'"
         :aria-valuemin="min"
         :aria-valuemax="max"

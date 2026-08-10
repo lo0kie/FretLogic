@@ -141,6 +141,28 @@
   }
 }
 
+[v-clock] {
+  display: none;
+}
+
+[data-hidden-mobile] {
+  @media (max-width: 768px) {
+    display: none !important;
+  }
+}
+
+.drag-ghost-style {
+  opacity: 0;
+}
+
+.drag-chosen-style {
+  // opacity: 0;
+}
+
+.drag-active-style {
+  // opacity: 0;
+}
+
 .fade-scale-transition(@name, @translate: ~'0, 0', @scale: 0.96, @targetTranslate: ~'0, 0') {
   .@{name}-enter-active,
   .@{name}-leave-active {
