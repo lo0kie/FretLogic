@@ -2,28 +2,27 @@
   <header class="app-top-header">
     <!-- 1. 左侧：侧边栏开关 + 品牌导航 -->
     <div class="header-section section-left">
-      <GlobalTooltip :content="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'" placement="bottom">
-        <ActionButton
-          icon-only
-          :size="uiStore.isMobile ? 'md' : 'sm'"
-          :variant="uiStore.isLeftOpen ? 'subtle' : 'ghost'"
-          :primary="uiStore.isLeftOpen"
-          @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
-        >
-          <PanelLeft :size="18" stroke-width="2.2" />
-        </ActionButton>
-      </GlobalTooltip>
+      <ActionButton
+        v-tooltip="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'"
+        icon-only
+        :size="uiSize"
+        :variant="uiStore.isLeftOpen ? 'subtle' : 'ghost'"
+        :primary="uiStore.isLeftOpen"
+        @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
+      >
+        <PanelLeft :size="18" stroke-width="2.2" />
+      </ActionButton>
 
-      <div class="header-divider hidden-mobile"></div>
+      <div class="header-divider" data-hidden-mobile></div>
 
-      <div class="nav-brand-group hidden-mobile">
-        <span class="app-brand-title">Fret Logic</span>
-
+      <div class="nav-brand-group">
+        <span class="app-brand-title" data-hidden-mobile>Fret Logic</span>
         <BaseSegmentedControl
           :model-value="activeNavPath"
-          size="sm"
+          :size="uiSize"
           :options="NAV_OPTIONS"
           @change="path => router.push(path)"
+          :compact="uiStore.isMobile"
         />
       </div>
     </div>
@@ -40,40 +39,45 @@
       <ScoreConfigPopover v-else-if="route.path === '/score' && scoreEditor.activeSong" />
 
       <!-- 云端同步按钮 -->
-      <GlobalTooltip content="云端备份与拉取" placement="bottom">
-        <ActionButton icon-only variant="ghost" @click="isSyncModalOpen = true">
-          <Cloud :size="18" stroke-width="2.2" />
-        </ActionButton>
-      </GlobalTooltip>
+      <ActionButton
+        icon-only
+        variant="ghost"
+        @click="isSyncModalOpen = true"
+        :size="uiSize"
+        v-tooltip="'云端备份与拉取'"
+      >
+        <Cloud :size="18" stroke-width="2.2" />
+      </ActionButton>
 
       <!-- 主题切换按钮 -->
-      <GlobalTooltip :content="settingsStore.isDarkMode ? '切换至浅色模式' : '切换至深色模式'" placement="bottom">
-        <ActionButton icon-only variant="ghost" @click="emit('toggle-theme')">
-          <component
-            :is="settingsStore.isDarkMode ? Moon : Sun"
-            :size="18"
-            :stroke-width="2.2"
-            :style="{ color: settingsStore.isDarkMode ? '#64d2ff' : '#ff9500' }"
-            class="theme-toggle-icon"
-          />
-        </ActionButton>
-      </GlobalTooltip>
+      <ActionButton
+        icon-only
+        variant="ghost"
+        @click="emit('toggle-theme')"
+        :size="uiSize"
+        v-tooltip="settingsStore.isDarkMode ? '切换至浅色模式' : '切换至深色模式'"
+      >
+        <component
+          :is="settingsStore.isDarkMode ? Moon : Sun"
+          :size="18"
+          :stroke-width="2.2"
+          :style="{ color: settingsStore.isDarkMode ? '#64d2ff' : '#ff9500' }"
+          class="theme-toggle-icon"
+        />
+      </ActionButton>
     </div>
   </header>
-
   <!-- 4. 云端同步弹窗容器 -->
   <SyncModalContainer v-model:is-sync-modal-open="isSyncModalOpen" />
 </template>
-
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
-import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { Cloud, Moon, PanelLeft, Sun } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 import HeaderScoreTools from './HeaderScoreTools.vue';
@@ -84,24 +88,25 @@ import SyncModalContainer from './SyncModalContainer.vue';
 const emit = defineEmits<{
   (e: 'toggle-theme'): void;
 }>();
-
 const route = useRoute();
 const router = useRouter();
-
 const activeNavPath = computed(() => {
   const matched = NAV_OPTIONS.find(opt => opt.value === route.path);
   return matched?.value ?? '';
 });
-
 const NAV_OPTIONS: SegmentOption<string>[] = [
-  { label: '工作台', value: '/workbench' },
-  { label: '乐谱库', value: '/score' },
+  { label: '和弦', value: '/workbench' },
+  { label: '乐谱', value: '/score' },
 ];
-
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 const isSyncModalOpen = ref(false);
+const uiSize = computed(() => (uiStore.isMobile ? 'sm' : 'md'));
+
+watch(activeNavPath, () => {
+  if (uiStore.isMobile) uiStore.isLeftOpen = false;
+});
 </script>
 
 <style scoped lang="less">
@@ -163,7 +168,7 @@ const isSyncModalOpen = ref(false);
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text-title);
-  white-space: nowrap; /* 🌟 强制文字不换行 */
+  white-space: nowrap;
   margin-left: 0.2rem;
 }
 
@@ -176,7 +181,27 @@ const isSyncModalOpen = ref(false);
 
 @media (max-width: 768px) {
   .app-top-header {
-    padding: 0 0.75rem;
+    padding: 0 0.4rem;
+  }
+
+  .header-section {
+    gap: 0.2rem;
+  }
+
+  .section-center {
+    position: static;
+    transform: none;
+    flex: 0 1 auto;
+    min-width: 0;
+
+    :deep(.action-button-base) {
+      padding: 0 0.35rem;
+      font-size: 0.7rem;
+    }
+  }
+
+  .nav-brand-group {
+    gap: 0.25rem;
   }
 }
 </style>

@@ -3,8 +3,8 @@
     <Transition name="modal-fade">
       <div
         v-if="visible"
-        class="modal-overlay-container"
         v-bind="$attrs"
+        class="modal-overlay-container"
         @mousedown="handleMaskMousedown"
         @click.self="handleMaskClick"
       >
@@ -23,7 +23,7 @@
             <slot name="header">
               <div class="modal-header-left">
                 <slot name="title">
-                  <h3 v-if="title" class="modal-title" :title="title">
+                  <h3 v-if="title" class="modal-title" :title>
                     {{ title }}
                   </h3>
                 </slot>
@@ -34,10 +34,7 @@
             </slot>
           </div>
 
-          <div
-            class="modal-body-content no-scrollbar"
-            :class="{ 'has-header': hasHeader, 'has-footer': showFooter }"
-          >
+          <div class="modal-body-content no-scrollbar" :class="{ 'has-header': hasHeader, 'has-footer': showFooter }">
             <slot></slot>
           </div>
 
@@ -65,6 +62,7 @@
 
 <script setup lang="ts">
 import { BASE_MODAL_DEFAULTS } from '@/constants/ui.ts';
+import { useFocusReturn } from '@/services/useFocusReturn';
 import { useEventListener, useScrollLock } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, useSlots, useTemplateRef, watch } from 'vue';
 import ActionButton from './ActionButton.vue';
@@ -101,7 +99,8 @@ const visible = defineModel<boolean>('visible', { required: true });
 const isBodyLocked = useScrollLock(document.body);
 
 const modalCardRef = useTemplateRef<HTMLDivElement>('modalCardRef');
-let previousActiveElement: HTMLElement | null = null;
+
+const { captureTrigger, restoreFocusAfter } = useFocusReturn({ warnLabel: '[BaseModal]' });
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -132,13 +131,12 @@ watch(
         if (e.key === 'Escape') handleCancel();
       });
 
-      previousActiveElement = document.activeElement as HTMLElement;
+      // 记录打开前的焦点来源，Modal 关闭后统一归还
+      captureTrigger();
       await nextTick();
     } else {
       stopKeydownListener?.();
       stopKeydownListener = null;
-      previousActiveElement?.focus?.();
-      previousActiveElement = null;
     }
   },
   { immediate: true }
@@ -180,7 +178,9 @@ const handleConfirm = () => {
 
 const handleCancel = () => {
   emit('cancel');
-  visible.value = false;
+  restoreFocusAfter(() => {
+    visible.value = false;
+  });
 };
 
 let mousedownTarget: EventTarget | null = null;

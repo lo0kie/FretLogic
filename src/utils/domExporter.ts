@@ -99,12 +99,23 @@ export const canvasToBlob = (canvas: HTMLCanvasElement, type = 'image/png', qual
   });
 
 export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
-  if (!navigator.clipboard) throw new Error('当前浏览器环境受限 (需要 HTTPS)，无法调用剪贴板');
-  if (!document.hasFocus()) throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
+  if (!navigator.clipboard || typeof navigator.clipboard.write !== 'function' || typeof ClipboardItem === 'undefined') {
+    throw new Error('当前浏览器环境不支持复制图片到剪贴板');
+  }
+  if (!document.hasFocus()) {
+    throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
+  }
+
+  const mimeType = blob.type || 'image/png';
+
   try {
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    await navigator.clipboard.write([new ClipboardItem({ [mimeType]: blob })]);
   } catch {
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    } catch {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': Promise.resolve(blob) })]);
+    }
   }
 };
 

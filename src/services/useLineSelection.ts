@@ -1,6 +1,7 @@
+import type { Song } from '@/types';
 import { computed, shallowRef, watch, type Ref } from 'vue';
 
-export function useLineSelection(totalLines: Ref<number>, activeSongId: Ref<unknown>) {
+export function useLineSelection(totalLines: Ref<number>, activeSong: Ref<Song | null>) {
   const selectedLineSet = shallowRef<Set<number>>(new Set());
 
   const isAllSelected = computed(() => totalLines.value > 0 && selectedLineSet.value.size === totalLines.value);
@@ -38,7 +39,7 @@ export function useLineSelection(totalLines: Ref<number>, activeSongId: Ref<unkn
     selectedLineSet.value = new Set();
   };
 
-  watch(activeSongId, clearSelection);
+  watch(activeSong, clearSelection);
 
   watch(totalLines, newTotal => {
     if (selectedLineSet.value.size === 0) return;

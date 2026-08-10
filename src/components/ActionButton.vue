@@ -5,7 +5,8 @@
     @click="handleInternalClick"
     :style="normalizedStyle"
     class="action-button-base"
-    :class="[sizeClass, themeClass, variantClass, roundedClass, { 'is-icon-only': iconOnly }]"
+    :class="[sizeClass, themeClass, variantClass, roundedClass, { 'is-icon-only': iconOnly, 'is-texted': texted }]"
+    data-focusable-inline
   >
     <Loader2 v-if="loading" class="loading-icon" />
     <slot v-else name="prefix"></slot>
@@ -30,6 +31,7 @@ const {
   disabled = false,
   loading = false,
   iconOnly = false,
+  texted = false,
   variant = ACTION_BUTTON_DEFAULTS.VARIANT,
   size = ACTION_BUTTON_DEFAULTS.SIZE,
   rounded = ACTION_BUTTON_DEFAULTS.ROUNDED,
@@ -42,6 +44,7 @@ const {
   disabled?: boolean;
   loading?: boolean;
   iconOnly?: boolean;
+  texted?: boolean;
   variant?: 'default' | 'subtle' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   rounded?: 'none' | 'sm' | 'md' | 'lg' | 'full';
@@ -107,6 +110,29 @@ const roundedClass = computed(() => `rounded-${rounded}`);
 
   &:active:not(:disabled) {
     transform: scale(0.95);
+  }
+}
+
+.action-button-base.is-texted {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+
+  &.theme-primary {
+    color: var(--color-primary);
+  }
+  &.theme-danger {
+    color: var(--color-danger);
+  }
+  &.theme-warning {
+    color: var(--color-warning);
+  }
+  &.theme-default {
+    color: var(--text-body);
+  }
+
+  &:hover:not(:disabled) {
+    background-color: var(--bg-panel-hover) !important;
   }
 }
 

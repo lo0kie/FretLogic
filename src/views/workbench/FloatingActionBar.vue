@@ -97,4 +97,16 @@ const isSaveDisabled = computed(() => {
 }
 
 .fade-scale-transition(floating-bar-fade, ~'-50%, 20px', 0.95, ~'-50%, 0');
+
+@media (max-width: 768px) {
+  .floating-action-bar {
+    padding: 0.3rem 0.4rem;
+    gap: 0.35rem;
+  }
+
+  .bar-divider {
+    height: 0.8rem;
+    margin: 0;
+  }
+}
 </style>

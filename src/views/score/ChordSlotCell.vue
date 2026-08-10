@@ -22,12 +22,13 @@
     @dragleave="emit('dragleave', $event)"
     @drop="emit('drop')"
     v-wave
+    data-focusable-inline
   >
     <div class="chord-display-slot">
       <div
         v-if="chord"
-        class="inline-fretboard-card"
         draggable="true"
+        class="inline-fretboard-card"
         title="点击更换和弦，按住可拖拽换位"
         @click.stop.prevent="emit('click')"
         @dragstart.stop="emit('dragstart', $event)"
@@ -35,12 +36,14 @@
       >
         <button
           v-wave
-          v-if="isVisible"
+          v-if="isVisible && !isExporting"
           type="button"
           class="remove-chord-btn"
           title="清除当前和弦"
           aria-label="清除当前和弦"
+          :style="{ opacity: uiStore.isMobile ? 1 : undefined }"
           @click.stop.prevent="emit('remove', slotKey)"
+          data-focusable-inline
         >
           <X :size="12" :stroke-width="3" aria-hidden="true" />
         </button>
@@ -49,7 +52,7 @@
 
         <Fretboard
           v-if="isVisible"
-          :chord="chord"
+          :chord
           :ref="el => chord && setFretboardMeasureRef(el, chord.fretCount)"
           :interactive="false"
           :scale="0.28 * scoreEditor.fretboardScale"
@@ -60,7 +63,9 @@
         <div v-else :style="getCalculatedOrCachedSize(chord.fretCount)" />
       </div>
 
-      <span v-wave v-else-if="variant === 'add'" class="add-edge-placeholder" :title="addPlaceholderTitle">+和弦</span>
+      <span v-wave v-else-if="variant === 'add'" class="add-edge-placeholder" :title="addPlaceholderTitle">
+        <Plus :size="uiStore.isMobile ? 12 : 18" :stroke-width="3" />
+      </span>
     </div>
 
     <template v-if="variant === 'char'">
@@ -81,9 +86,10 @@ const fretboardSizeCache = reactive<Record<string, { width: string; height: stri
 import Fretboard from '@/components/Fretboard.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { getPlaceholderSize } from '@/utils/fretboardVisuals';
-import { X } from '@lucide/vue';
+import { Plus, X } from '@lucide/vue';
 import { useIntersectionObserver } from '@vueuse/core';
 import { computed, ref, useTemplateRef, watch, type ComponentPublicInstance } from 'vue';
 
@@ -109,9 +115,11 @@ const emit = defineEmits<{
 }>();
 
 const isVisible = ref(false);
+const uiStore = useUiStore();
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
+const chordNameFontSize = computed(() => `${0.7 * scoreEditor.fretboardScale}rem`);
 
 const { stop: stopObserving } = useIntersectionObserver(
   charBoxRef,
@@ -196,16 +204,6 @@ unwatchExport = watch(
   position: relative;
   cursor: pointer;
   outline: none;
-
-  &:focus-visible {
-    box-shadow: inset 0 0 0 2px var(--color-primary);
-    background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
-
-    .remove-chord-btn {
-      opacity: 1;
-      pointer-events: auto;
-    }
-  }
 
   &:hover {
     background-color: color-mix(in srgb, var(--color-primary), transparent 88%);
@@ -324,7 +322,7 @@ unwatchExport = watch(
     border-color: var(--border-light);
 
     .remove-chord-btn {
-      opacity: 1;
+      opacity: 1 !important;
       pointer-events: auto;
     }
   }
@@ -332,8 +330,8 @@ unwatchExport = watch(
 
 .remove-chord-btn {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: -5px;
+  right: -5px;
   width: 0.95rem;
   height: 0.95rem;
   border-radius: 50%;
@@ -344,20 +342,12 @@ unwatchExport = watch(
   align-items: center;
   justify-content: center;
   padding: 0;
-  opacity: 0;
   pointer-events: none;
   transition: @transition-fast;
   z-index: 5;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   outline: none;
-
-  &:focus-visible {
-    opacity: 1;
-    pointer-events: auto;
-    box-shadow:
-      0 0 0 2px #ffffff,
-      0 0 0 4px var(--color-danger);
-  }
+  opacity: 0;
 
   &:hover {
     transform: scale(1.05);
@@ -370,7 +360,7 @@ unwatchExport = watch(
 }
 
 .inline-chord-name {
-  font-size: v-bind('`${0.7 * scoreEditor.fretboardScale}rem`');
+  font-size: v-bind(chordNameFontSize);
   font-weight: 800;
   color: var(--text-title);
   line-height: 1;

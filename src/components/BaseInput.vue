@@ -5,17 +5,17 @@
     </div>
 
     <input
-      :id="inputId"
+      :id
+      :type
+      :disabled
+      :autofocus
+      :maxlength
+      :placeholder
       :value="modelValue"
       @input="handleInput"
       @keyup.enter="$emit('enter')"
       @wheel="handleWheel"
       ref="inputRef"
-      :type="type"
-      :maxlength="maxlength"
-      :placeholder="placeholder"
-      :disabled="disabled"
-      :autofocus="autofocus"
       class="base-input-field"
       :class="[
         sizeClass,
@@ -29,6 +29,7 @@
       ]"
       data-bitwarden-ignore
       autocomplete="off"
+      data-focusable-inline
     />
 
     <span
@@ -48,6 +49,7 @@
       @mousedown.stop
       class="clear-button"
       title="清空内容"
+      data-focusable-inline
       :class="sizeClass"
     >
       <X :size="10" stroke-width="3" />
@@ -60,7 +62,7 @@ import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
 import { X } from '@lucide/vue';
 import { computed, nextTick, onMounted, useId, useTemplateRef } from 'vue';
 
-const inputId = useId();
+const id = useId();
 
 const {
   placeholder = '',
@@ -137,10 +139,6 @@ onMounted(() => {
       inputRef.value?.focus();
     });
   }
-});
-
-defineExpose({
-  focus: () => inputRef.value?.focus(),
 });
 </script>
 
@@ -245,8 +243,6 @@ defineExpose({
   }
 
   &:focus:not(:disabled) {
-    border-color: @primary;
-    box-shadow: @focus-ring-primary;
     background-color: var(--bg-body);
   }
 

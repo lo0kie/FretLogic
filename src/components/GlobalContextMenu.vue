@@ -5,7 +5,7 @@
     :class="{ 'is-disabled': disabled, 'is-open': isOpen }"
     v-bind="$attrs"
   >
-    <slot :is-open="isOpen" :open="openMenuAt" :close="closeMenu"></slot>
+    <slot :is-open :open="openMenuAt" :close="closeMenu"></slot>
   </div>
 
   <Teleport to="body">
@@ -27,6 +27,7 @@
           </template>
 
           <!-- 🌟 2. 补全 role="menuitem" 与 tabindex -->
+          <!-- 模板中的菜单项 -->
           <button
             v-wave="{ disabled: item.disabled }"
             v-for="item in items"
@@ -36,6 +37,7 @@
             role="menuitem"
             :tabindex="item.disabled ? -1 : 0"
             :aria-disabled="item.disabled"
+            data-focusable-inline
             @click.stop="handleItemClick(item)"
             @keydown.enter.prevent.stop="handleItemClick(item)"
             @keydown.space.prevent.stop="handleItemClick(item)"
@@ -58,6 +60,7 @@ const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
 </script>
 
 <script setup lang="ts">
+import { useFocusReturn } from '@/services/useFocusReturn';
 import { autoUpdate, flip, shift, useFloating } from '@floating-ui/vue';
 import { useEventListener } from '@vueuse/core';
 import { computed, FunctionalComponent, onBeforeUnmount, useTemplateRef, watch } from 'vue';
@@ -90,6 +93,8 @@ const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const menuBoxRef = useTemplateRef<HTMLDivElement>('menuBoxRef');
 const itemEls = useTemplateRef<HTMLButtonElement[]>('itemEls');
 
+const { captureTrigger, restoreFocusAfter } = useFocusReturn({ warnLabel: '[GlobalContextMenu]' });
+
 const virtualRef = computed(() => ({
   getBoundingClientRect() {
     return {
@@ -105,7 +110,6 @@ const virtualRef = computed(() => ({
   },
 }));
 
-// 🌟 3. 从 useFloating 解构出 update 方法
 const { floatingStyles, update } = useFloating(virtualRef, floatingRef, {
   placement: 'bottom-start',
   whileElementsMounted: (reference, floating, update) => autoUpdate(reference, floating, update),
@@ -116,7 +120,6 @@ const isRendered = ref(false);
 
 watch(isOpen, open => {
   if (open) isRendered.value = true;
-  // 关闭交给 @after-leave，动画播完再卸载 wrapper
 });
 
 let stopListeners: (() => void)[] = [];
@@ -128,12 +131,14 @@ const closeMenu = () => {
   }
 };
 
-const openMenuAt = async (clientX: number, clientY: number) => {
+const openMenuAt = async (clientX: number, clientY: number, sourceEl?: HTMLElement | null) => {
   if (props.disabled || !props.items || props.items.length === 0) return;
 
   if (globalActiveMenuCloseFn.value && globalActiveMenuCloseFn.value !== closeMenu) {
     globalActiveMenuCloseFn.value();
   }
+
+  captureTrigger(sourceEl);
 
   x.value = clientX;
   y.value = clientY;
@@ -141,7 +146,6 @@ const openMenuAt = async (clientX: number, clientY: number) => {
 
   globalActiveMenuCloseFn.value = closeMenu;
 
-  // 🌟 手动通知 Floating UI 根据最新坐标刷新位置
   await nextTick();
 
   update();
@@ -153,7 +157,9 @@ const handleContextMenu = (e: MouseEvent) => {
   e.preventDefault();
   e.stopPropagation();
 
-  openMenuAt(e.clientX, e.clientY);
+  // wrapper 本身是 display:contents，不可聚焦；真正可交互的元素在 slot 内部，
+  // useFocusReturn 内部会自动向下查找，这里直接传 wrapper 即可
+  openMenuAt(e.clientX, e.clientY, e.currentTarget as HTMLElement);
 };
 
 const handleItemClick = (item: ContextMenuItem) => {
@@ -162,7 +168,10 @@ const handleItemClick = (item: ContextMenuItem) => {
   closeMenu();
 };
 
-// 🌟 键盘方向键与 Esc 逻辑拦截
+const closeMenuAndRestoreFocus = () => {
+  restoreFocusAfter(closeMenu);
+};
+
 const handleMenuKeydown = (e: KeyboardEvent) => {
   if (!isOpen.value || !itemEls.value) return;
 
@@ -195,7 +204,13 @@ const handleMenuKeydown = (e: KeyboardEvent) => {
   } else if (e.key === 'Escape') {
     e.preventDefault();
     e.stopPropagation();
-    closeMenu();
+    closeMenuAndRestoreFocus();
+  } else if (e.key === 'Tab') {
+    // 标准菜单行为：Tab 不在菜单内循环，而是关闭菜单并让焦点离开。
+    // 菜单被 Teleport 到 body 末尾，脱离原文档流位置，必须手动把焦点送回触发元素，
+    // 否则焦点会飞到 body 末尾之后（通常是地址栏）
+    e.preventDefault();
+    closeMenuAndRestoreFocus();
   }
 };
 
@@ -215,7 +230,6 @@ watch(isOpen, open => {
     stopListeners.push(useEventListener(window, 'resize', closeMenu));
     stopListeners.push(useEventListener(window, 'scroll', closeMenu, { capture: true, passive: true }));
 
-    // 🌟 自动聚焦第一个可用菜单项
     nextTick(() => {
       const firstEnabledIdx = props.items.findIndex(item => !item.disabled);
       if (firstEnabledIdx !== -1) {
@@ -234,12 +248,6 @@ onBeforeUnmount(() => {
     globalActiveMenuCloseFn.value = null;
   }
 });
-
-defineExpose({
-  open: openMenuAt,
-  close: closeMenu,
-  isOpen,
-});
 </script>
 
 <style scoped lang="less">
@@ -248,7 +256,7 @@ defineExpose({
 .context-menu-trigger-wrapper {
   display: contents;
   width: 100%;
-  cursor: context-menu;
+
   &.is-disabled {
     cursor: default;
   }
@@ -307,14 +315,12 @@ defineExpose({
   text-align: left;
   box-sizing: border-box;
   transition: @transition-fast;
-  outline: none;
+  /* 统一交给 data-focusable-inline 或保留通用控制 */
 
   &.is-normal {
     color: var(--text-title);
 
-    /* 🌟 只有非禁用状态下 hover 才触发背景变色 */
-    &:not(.is-disabled):hover,
-    &:not(.is-disabled):focus-visible {
+    &:not(.is-disabled):hover {
       background-color: var(--color-primary);
       color: #ffffff;
     }
@@ -323,9 +329,7 @@ defineExpose({
   &.is-danger {
     color: var(--color-danger);
 
-    /* 🌟 只有非禁用状态下 hover 才触发背景变色 */
-    &:not(.is-disabled):hover,
-    &:not(.is-disabled):focus-visible {
+    &:not(.is-disabled):hover {
       background-color: var(--color-danger);
       color: #ffffff;
     }

@@ -4,7 +4,7 @@
       <!-- 🌟 1. 工作台模式 (/)：渲染和弦分组与拖拽排序 -->
       <LeftChordGroupSection
         v-if="route.path === '/workbench'"
-        :search-query="searchQuery"
+        :search-query
         @open-rename="group => $emit('open-rename', group)"
         @open-delete="group => $emit('open-delete', group)"
         @open-move="chord => $emit('open-move', chord)"

@@ -1,9 +1,13 @@
 <template>
   <div class="section-block candidates-section">
     <div class="section-label">推荐候选</div>
-    <div class="candidate-tags no-scrollbar" :style="isMobile && customHeight ? { height: `${customHeight}px` } : {}">
+    <div
+      ref="tagsContainerRef"
+      class="candidate-tags no-scrollbar"
+      :style="isMobile && customHeight ? { height: `${customHeight}px` } : {}"
+      @keydown="handleKeydown"
+    >
       <template v-if="candidates.length > 0">
-        <!-- 🌟 改用 BaseBadge 替换手写 button -->
         <BaseBadge
           v-wave
           v-for="candidate in candidates"
@@ -26,7 +30,9 @@
 <script setup lang="ts">
 import BaseBadge from '@/components/BaseBadge.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import { useGridNavigation } from '@/services/useGridNavigation';
 import type { CandidateResult } from '@/types';
+import { useTemplateRef } from 'vue';
 
 defineProps<{
   candidates: CandidateResult[];
@@ -38,6 +44,9 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'select-candidate', candidate: CandidateResult): void;
 }>();
+
+const tagsContainerRef = useTemplateRef<HTMLElement>('tagsContainerRef');
+const { handleKeydown } = useGridNavigation(undefined, tagsContainerRef);
 </script>
 
 <style scoped lang="less">
@@ -61,6 +70,8 @@ const emit = defineEmits<{
 .candidate-tags {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;   /* 🌟 1. 阻止子元素（BaseBadge）在行内纵向拉伸 */
+  align-content: flex-start; /* 🌟 2. 阻止多行 Flex 换行后平分并拉伸纵向高度 */
   gap: 0.28rem;
   max-height: 3.8rem;
   overflow-y: auto;
@@ -78,7 +89,7 @@ const emit = defineEmits<{
 
 @media (max-width: 768px) {
   .candidates-section {
-    flex: 1.8;
+    flex: 2;
   }
 
   .candidate-tags {

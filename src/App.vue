@@ -7,7 +7,7 @@
     <div class="app-split-view-body">
       <Transition name="drawer-fade">
         <div
-          v-if="uiStore.isMobile && uiStore.isLeftOpen && route.meta.showSidebar"
+          v-if="uiStore.isMobile && uiStore.isLeftOpen"
           class="mobile-drawer-mask"
           @click="uiStore.isLeftOpen = false"
         />
@@ -30,7 +30,7 @@
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import TopHeader from '@/views/header-top/TopHeader.vue';
-import { computed, defineAsyncComponent } from 'vue';
+import { computed, defineAsyncComponent, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import GlobalToast from './components/GlobalToast.vue';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from './constants/layout.ts';
@@ -70,6 +70,14 @@ const executeToggleThemeWithAnimation = () => {
 
   transition.finished.then(() => disableChangingAttribute()).catch(() => disableChangingAttribute());
 };
+
+watch(
+  () => uiStore.isMobile,
+  isMobile => {
+    uiStore.isLeftOpen = !isMobile;
+  },
+  { immediate: true } // 初始化时也检查一次
+);
 </script>
 
 <style scoped lang="less">

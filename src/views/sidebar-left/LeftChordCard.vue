@@ -19,6 +19,7 @@
         @wheel="handleWheelScroll"
         @keydown.enter.prevent.stop="handleCardClick"
         @keydown.space.prevent.stop="handleCardClick"
+        data-focusable-inline
       >
         <!-- 左上角：状态标识圆点 -->
         <span
@@ -65,7 +66,7 @@ import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalCont
 import { useEditorStore } from '@/stores/chordEditorStore';
 import type { Chord, GroupedChordCard } from '@/types';
 import { Move, Trash2 } from '@lucide/vue';
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 
 const props = defineProps<{
   cardData: GroupedChordCard;
@@ -80,25 +81,32 @@ const emit = defineEmits<{
 }>();
 
 const editorStore = useEditorStore();
-const activeVariantIndex = ref(0);
+const localVariantIndex = ref(0);
 
-watch(
-  () => props.cardData.mainChord.id,
-  () => {
-    activeVariantIndex.value = 0;
-  }
-);
+// 1. 判断当前卡片是否包含正在被 editorStore 编辑的和弦
+const isCurrentCardActive = computed(() => {
+  return props.cardData.variants.some(c => c.id === editorStore.draftChord.id);
+});
+
+// 2. 动态激活索引：激活状态下直接驱动自 editorStore，非激活状态维持本地索引
+const activeVariantIndex = computed({
+  get: () => {
+    if (isCurrentCardActive.value) {
+      return editorStore.currentMultiFingeringIndex;
+    }
+    return localVariantIndex.value;
+  },
+  set: val => {
+    localVariantIndex.value = val;
+  },
+});
 
 const activeChord = computed(() => props.cardData.variants[activeVariantIndex.value] || props.cardData.mainChord);
 
 const isActiveVariantEditing = computed(() => activeChord.value.id === editorStore.draftChord.id);
 
 const isOtherVariantEditing = computed(() => {
-  return (
-    props.cardData.hasVariants &&
-    !isActiveVariantEditing.value &&
-    props.cardData.variants.some(c => c.id === editorStore.draftChord.id)
-  );
+  return props.cardData.hasVariants && !isActiveVariantEditing.value && isCurrentCardActive.value;
 });
 
 const handleCardClick = () => {
@@ -127,8 +135,14 @@ const triggerSwapAnimation = async () => {
 const toggleVariantsDropdown = () => {
   if (!props.cardData.hasVariants) return;
   triggerSwapAnimation();
-  activeVariantIndex.value = (activeVariantIndex.value + 1) % props.cardData.variantCount;
-  emit('select', activeChord.value);
+  const nextIdx = (activeVariantIndex.value + 1) % props.cardData.variantCount;
+
+  if (isCurrentCardActive.value) {
+    editorStore.setMultiFingeringIndex(nextIdx);
+  } else {
+    activeVariantIndex.value = nextIdx;
+    emit('select', activeChord.value);
+  }
 };
 
 const handleWheelScroll = (e: WheelEvent) => {
@@ -139,12 +153,19 @@ const handleWheelScroll = (e: WheelEvent) => {
   triggerSwapAnimation();
 
   const total = props.cardData.variantCount;
+  let nextIdx = activeVariantIndex.value;
   if (e.deltaY > 0) {
-    activeVariantIndex.value = (activeVariantIndex.value + 1) % total;
+    nextIdx = (nextIdx + 1) % total;
   } else if (e.deltaY < 0) {
-    activeVariantIndex.value = (activeVariantIndex.value - 1 + total) % total;
+    nextIdx = (nextIdx - 1 + total) % total;
   }
-  emit('select', activeChord.value);
+
+  if (isCurrentCardActive.value) {
+    editorStore.setMultiFingeringIndex(nextIdx);
+  } else {
+    activeVariantIndex.value = nextIdx;
+    emit('select', activeChord.value);
+  }
 };
 
 const menuItems = computed<ContextMenuItem[]>(() => [
@@ -266,24 +287,6 @@ onBeforeUnmount(() => {
     border-color: var(--border-base);
   }
 
-  &:focus-visible {
-    border-color: @primary;
-    box-shadow: 0 0 0 2px color-mix(in srgb, @primary, transparent 60%);
-
-    .variant-badge-badge {
-      transform: scale(1.15);
-      box-shadow:
-        0 0 0 2px var(--bg-body),
-        0 0 0 3px @primary;
-    }
-
-    .status-dot {
-      box-shadow:
-        0 0 0 2px var(--bg-body),
-        0 0 0 3px @primary;
-    }
-  }
-
   &.is-editing {
     background-color: color-mix(in srgb, @primary, var(--bg-body) 88%);
     border-color: @primary;
@@ -298,12 +301,6 @@ onBeforeUnmount(() => {
       background-color: color-mix(in srgb, @primary, var(--bg-body) 78%);
       border-color: @primary;
       box-shadow: 0 0 0 1px color-mix(in srgb, @primary, transparent 60%);
-    }
-
-    &:focus-visible {
-      box-shadow:
-        0 0 0 1px @primary,
-        0 0 0 3px color-mix(in srgb, @primary, transparent 50%);
     }
   }
 }
