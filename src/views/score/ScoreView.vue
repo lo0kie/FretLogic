@@ -7,10 +7,10 @@
         <ScoreInteractiveArea
           v-show="scoreEditor.activeTab !== 'edit'"
           ref="interactiveAreaRef"
-          :selected-line-set="selectedLineSet"
-          :export-page-line-set="exportPageLineSet"
+          :selected-line-set
+          :export-page-line-set
+          :include-meta-bar
           :is-exporting="isGenerating"
-          :include-meta-bar="includeMetaBar"
           @open-picker="openChordPicker"
           @line-click="handleLineClick"
         />
@@ -21,9 +21,9 @@
 
     <ScoreExportFloatingBar
       v-if="scoreEditor.activeSong && scoreEditor.activeTab === 'interactive'"
+      :is-all-selected
       :selected-count="selectedLineSet.size"
       :sorted-indices="sortedSelectedIndices"
-      :is-all-selected="isAllSelected"
       @remove-index="handleRemoveLineIndex"
       @toggle-select-all="handleToggleSelectAll"
       @open-export="previewVisible = true"
@@ -36,10 +36,11 @@
     <ScoreExportPreviewModal
       v-model:visible="previewVisible"
       v-model:mode="exportMode"
-      :pages="pages"
-      :current-page="currentPage"
       v-model:current-page-index="currentPageIndex"
-      :is-generating="isGenerating"
+      :pages
+      :progress
+      :current-page
+      :is-generating
       @copy-current-page="copyCurrentPage"
       @download-pdf="downloadPdf"
       @download-current-page="downloadCurrentPage"
@@ -72,7 +73,6 @@ const a4CaptureWrapperRef = computed(() => interactiveAreaRef.value?.a4CaptureWr
 
 const { lyricsLinesWithEdges } = useScoreLinesData();
 const totalLines = computed(() => lyricsLinesWithEdges.value.length);
-const activeSongId = computed(() => scoreEditor.activeSongId);
 
 const {
   selectedLineSet,
@@ -81,7 +81,10 @@ const {
   handleRemoveLineIndex,
   handleToggleSelectAll,
   handleLineClick,
-} = useLineSelection(totalLines, activeSongId);
+} = useLineSelection(
+  totalLines,
+  computed(() => scoreEditor.activeSong)
+);
 
 // 🌟 唯一一处实例化，Modal 不再自己调用
 const {
@@ -91,6 +94,7 @@ const {
   currentPageIndex,
   isGenerating,
   includeMetaBar,
+  progress,
   generatePreview,
   copyCurrentPage,
   downloadPdf,

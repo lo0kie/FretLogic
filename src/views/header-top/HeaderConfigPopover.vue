@@ -20,6 +20,7 @@
           :min="0"
           :max="11"
           :formatter="val => (val === 0 ? 'CAPO 0' : `CAPO ${val}`)"
+          :editable="!uiStore.isMobile"
         />
       </div>
     </div>

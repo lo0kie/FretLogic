@@ -16,4 +16,7 @@
   IS_EDITING: 'CHORD_LAB_IS_EDITING',
   EDITING_DRAFT: 'CHORD_LAB_EDITING_DRAFT',
   IS_CREATING: 'CHORD_LAB_IS_CREATING',
+  IS_MULTI_FINGERING: 'chord-is-multi-fingering',
+  MULTI_FINGERING_INDEX: 'chord-multi-fingering-index',
+  MULTI_FINGERING_CHORDS: 'chord-multi-fingering-chords',
 } as const;

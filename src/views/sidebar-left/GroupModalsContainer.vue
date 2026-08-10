@@ -37,27 +37,22 @@
   <!-- 4. 移动分组 Modal -->
   <BaseModal v-model:visible="groupModals.modals.move" title="移动至新分组" @confirm="groupModals.handleMoveChord">
     <div class="move-group-grid no-scrollbar">
-      <GlobalTooltip
+      <button
         v-for="group in chordStore.groups"
         :key="group.id"
-        :content="group.id === groupModals.modalData.activeChord?.groupId ? '和弦当前已在此分组中' : ''"
-        placement="top"
-        class="move-tooltip-item"
+        v-wave
+        v-tooltip="group.id === groupModals.modalData.activeChord?.groupId ? '和弦当前已在此分组中' : ''"
+        :disabled="group.id === groupModals.modalData.activeChord?.groupId"
+        @click="groupModals.modalData.moveTargetId = group.id"
+        class="move-target-btn"
+        :class="groupModals.getGroupClass(group.id)"
+        :title="group.name"
       >
-        <button
-          v-wave
-          :disabled="group.id === groupModals.modalData.activeChord?.groupId"
-          @click="groupModals.modalData.moveTargetId = group.id"
-          class="move-target-btn"
-          :class="groupModals.getGroupClass(group.id)"
-          :title="group.name"
-        >
-          <BaseMarquee class="move-marquee">
-            <span class="group-btn-text">{{ group.name }}</span>
-            <span class="group-count-text">({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})</span>
-          </BaseMarquee>
-        </button>
-      </GlobalTooltip>
+        <BaseMarquee class="move-marquee">
+          <span class="group-btn-text">{{ group.name }}</span>
+          <span class="group-count-text">({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})</span>
+        </BaseMarquee>
+      </button>
     </div>
   </BaseModal>
 
@@ -121,6 +116,7 @@
           :aria-checked="groupModals.modalData.selectedVariantIds.has(variant.id)"
           :aria-label="`指法 Capo ${variant.capo}`"
           tabindex="0"
+          data-focusable-inline
           v-wave
         >
           <div class="variant-meta-info">
@@ -169,7 +165,6 @@ import BaseModal from '@/components/BaseModal.vue';
 import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
 import Fretboard from '@/components/Fretboard.vue';
-import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { SORT_RULE_CONFIG } from '@/constants';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
 import { useChordStore } from '@/stores/chordStore';
@@ -255,7 +250,6 @@ const handleToggleSelectAllVariants = () => {
     background-color: var(--color-primary);
     color: #ffffff;
     border-color: var(--color-primary);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary), transparent 60%);
     transform: scale(1.02);
   }
 
@@ -337,7 +331,7 @@ const handleToggleSelectAllVariants = () => {
 .variants-checkbox-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
-  gap: 1.2rem 1rem;
+  gap: 1rem;
   max-height: 52vh;
   overflow-y: auto;
   padding: 0.15rem;
@@ -368,11 +362,6 @@ const handleToggleSelectAllVariants = () => {
     border-color: var(--border-base);
     background-color: var(--bg-panel-hover);
     transform: translateY(-1px);
-  }
-
-  &:focus-visible {
-    box-shadow: @focus-ring-primary;
-    border-color: var(--border-base);
   }
 
   &:active {
@@ -583,5 +572,11 @@ const handleToggleSelectAllVariants = () => {
   align-items: center;
   gap: 0.45rem;
   flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .variants-checkbox-list {
+    gap: 0.8rem;
+  }
 }
 </style>

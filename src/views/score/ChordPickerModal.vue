@@ -36,7 +36,7 @@
           </div>
 
           <div class="sort-action-group">
-            <span class="sort-label">排序</span>
+            <span class="sort-label" data-hidden-mobile>排序</span>
 
             <BaseSegmentedControl
               v-model="sortOverride"
@@ -76,12 +76,23 @@
       <div class="picker-scroll-content no-scrollbar" ref="scrollWrapperRef" v-auto-animate>
         <EmptyState v-if="filteredChords.length === 0" description="当前搜索或分组下暂无匹配和弦。" size="lg" />
 
-        <div v-else class="picker-cards-grid-4cols" role="group" aria-label="和弦选择列表" v-auto-animate>
+        <div
+          class="picker-cards-grid-cols"
+          role="group"
+          aria-label="和弦选择列表"
+          @keydown="handleKeydown"
+          v-auto-animate
+        >
           <div
             v-wave
-            v-for="chord in filteredChords"
+            v-for="(chord, index) in filteredChords"
             :key="chord.id"
-            :ref="el => setCardObserverRef(el, chord.id)"
+            :ref="
+              el => {
+                setCardObserverRef(el, chord.id);
+                setItemRef(el, index);
+              }
+            "
             role="button"
             :tabindex="isCurrentBound(chord) ? -1 : 0"
             :aria-pressed="isCurrentBound(chord)"
@@ -92,15 +103,15 @@
             @click="!isCurrentBound(chord) && handleSelectChord(chord)"
             @keydown.enter.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
             @keydown.space.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
+            data-focusable-inline
           >
             <span class="card-name">{{ chord.chordName }}</span>
-
             <Fretboard
               v-if="visibleMap[chord.id]"
-              :chord="chord"
+              :chord
               :ref="el => setFretboardMeasureRef(el, chord.fretCount)"
               :interactive="false"
-              :scale="PICKER_FRETBOARD_SCALE"
+              :scale="pickerScale"
               :is-dark-mode="settingsStore.isDarkMode"
             />
             <div v-else :style="getCalculatedOrCachedSize(chord.fretCount)" />
@@ -112,7 +123,7 @@
 </template>
 
 <script lang="ts">
-const fretboardSizeCache = reactive<Record<number, { width: string; height: string }>>({});
+const fretboardSizeCache = reactive<Record<string, { width: string; height: string }>>({});
 </script>
 
 <script setup lang="ts">
@@ -123,11 +134,14 @@ import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegme
 import BaseSelector from '@/components/BaseSelector.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
-import { KEY_OPTIONS, PICKER_FRETBOARD_SCALE, SORT_RULE_CONFIG } from '@/constants';
+import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/constants';
+import { useGridNavigation } from '@/services/useGridNavigation';
 import { useScoreLinesData } from '@/services/useScoreLinesData';
+import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useUiStore } from '@/stores/uiStore';
 import type { Chord, GroupSortRule } from '@/types';
 import { getPlaceholderSize } from '@/utils/fretboardVisuals';
 import { sortChordsByRule } from '@/utils/musicTheory';
@@ -137,10 +151,12 @@ import { refDebounced } from '@vueuse/core';
 import { computed, onDeactivated, reactive, ref, useTemplateRef, watch, type ComponentPublicInstance } from 'vue';
 import { useRouter } from 'vue-router';
 
+const uiStore = useUiStore();
+const pickerScale = computed(() => (uiStore.isMobile ? 0.26 : 0.32));
 const props = defineProps<{
   visible: boolean;
 }>();
-
+const getCacheKey = (fretCount: number) => `${fretCount}_${pickerScale.value}`;
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void;
 }>();
@@ -151,6 +167,7 @@ const visibleModel = computed({
 });
 
 const router = useRouter();
+const editorStore = useEditorStore();
 const chordStore = useChordStore();
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
@@ -160,6 +177,7 @@ const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
 const visibleMap = reactive<Record<string, boolean>>({});
 
 const cardObservers = new Map<string, IntersectionObserver>();
+const { setItemRef, handleKeydown } = useGridNavigation(4, () => filteredChords.value.length);
 
 const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordId: string) => {
   if (!el) {
@@ -194,14 +212,15 @@ const clearAllCardObservers = () => {
 };
 
 const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fretCount: number) => {
-  if (!el || fretboardSizeCache[fretCount]) return;
+  const cacheKey = getCacheKey(fretCount);
+  if (!el || fretboardSizeCache[cacheKey]) return;
 
   const domEl = (el as ComponentPublicInstance)?.$el ?? el;
   if (!(domEl instanceof HTMLElement)) return;
 
   const rect = domEl.getBoundingClientRect();
   if (rect.width > 0 && rect.height > 0) {
-    fretboardSizeCache[fretCount] = {
+    fretboardSizeCache[cacheKey] = {
       width: `${rect.width}px`,
       height: `${rect.height}px`,
     };
@@ -209,13 +228,14 @@ const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fr
 };
 
 const getCalculatedOrCachedSize = (fretCount: number) => {
-  if (fretboardSizeCache[fretCount]) return fretboardSizeCache[fretCount];
+  const cacheKey = getCacheKey(fretCount);
+  if (fretboardSizeCache[cacheKey]) return fretboardSizeCache[cacheKey];
 
-  const coreSize = getPlaceholderSize(fretCount, PICKER_FRETBOARD_SCALE);
+  const coreSize = getPlaceholderSize(fretCount, pickerScale.value);
   const coreHeight = parseFloat(coreSize.height);
   const calculatedSize = { width: `100%`, height: `${coreHeight}px` };
 
-  fretboardSizeCache[fretCount] = calculatedSize;
+  fretboardSizeCache[cacheKey] = calculatedSize;
   return calculatedSize;
 };
 
@@ -350,6 +370,7 @@ const handleSelectChord = (chord: Chord) => {
 
 const goToWorkbenchToCreate = () => {
   visibleModel.value = false;
+  editorStore.resetEditor();
   router.push('/');
 };
 
@@ -447,7 +468,7 @@ onDeactivated(() => {
   padding: 0.2rem;
 }
 
-.picker-cards-grid-4cols {
+.picker-cards-grid-cols {
   display: grid;
   align-items: start;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -477,15 +498,10 @@ onDeactivated(() => {
     pointer-events: inherit !important;
   }
 
-  &:hover,
-  &:focus-visible {
+  &:hover {
     border-color: var(--color-primary);
     transform: translateY(-2px);
     box-shadow: @shadow-md;
-  }
-
-  &:focus-visible {
-    box-shadow: @focus-ring-primary;
   }
 
   &.is-current-bound {
@@ -508,5 +524,27 @@ onDeactivated(() => {
   height: 1.2rem;
   color: var(--text-title);
   margin-bottom: 0.25rem;
+}
+
+@media (max-width: 768px) {
+  .picker-controls-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .search-input-wrapper {
+    max-width: none;
+  }
+
+  .sort-action-group {
+    justify-content: space-between;
+  }
+
+  /* 🌟 移动端将 4 列网格切为 2 列 */
+  .picker-cards-grid-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
 }
 </style>

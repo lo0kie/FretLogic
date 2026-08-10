@@ -21,11 +21,9 @@
         </BaseInput>
 
         <div class="header-actions">
-          <GlobalTooltip placement="bottom" content="新建分组">
-            <ActionButton @click="groupModals.openCreate" variant="subtle" icon-only size="sm">
-              <Plus :size="16" :stroke-width="2.5" />
-            </ActionButton>
-          </GlobalTooltip>
+          <ActionButton @click="groupModals.openCreate" variant="subtle" icon-only size="sm" v-tooltip="'新建分组'">
+            <Plus :size="16" :stroke-width="2.5" />
+          </ActionButton>
         </div>
       </template>
 
@@ -38,11 +36,15 @@
           </BaseBadge>
         </div>
 
-        <GlobalTooltip placement="bottom" content="新建乐谱">
-          <ActionButton @click="songModals.openCreateSongModal" variant="subtle" icon-only size="sm">
-            <Plus :size="16" :stroke-width="2.5" />
-          </ActionButton>
-        </GlobalTooltip>
+        <ActionButton
+          @click="songModals.openCreateSongModal"
+          variant="subtle"
+          icon-only
+          size="sm"
+          v-tooltip="'新建乐谱'"
+        >
+          <Plus :size="16" :stroke-width="2.5" />
+        </ActionButton>
       </template>
     </div>
 
@@ -77,15 +79,14 @@
   </div>
 
   <!-- 4. 业务弹窗组件集 -->
-  <GroupModalsContainer :group-modals="groupModals" />
-  <SongModalsContainer :song-modals="songModals" />
+  <GroupModalsContainer :group-modals />
+  <SongModalsContainer :song-modals />
 </template>
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import BaseBadge from '@/components/BaseBadge.vue';
 import BaseInput from '@/components/BaseInput.vue';
-import GlobalTooltip from '@/components/GlobalTooltip.vue';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
 import { useImportExportService } from '@/services/useImportExportService';
 import { useSongModals } from '@/services/useSongModals';
@@ -219,7 +220,7 @@ const handleFileChange = async (e: Event) => {
 
 @media (max-width: 768px) {
   .panel-left {
-    height: calc(100vh - 3.2rem) !important;
+    height: calc(100vh - 2.5rem) !important;
   }
 
   .panel-header {
@@ -236,8 +237,8 @@ const handleFileChange = async (e: Event) => {
     width: 85vw !important;
   }
 
-  .hidden-mobile {
-    display: none !important;
+  .sidebar-title {
+    font-size: 0.9rem;
   }
 }
 </style>

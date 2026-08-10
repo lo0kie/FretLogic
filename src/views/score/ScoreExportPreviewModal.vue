@@ -5,7 +5,7 @@
     width="w-lg"
     @cancel="modeModel = 'normal'"
     :close-on-mask="!isGenerating"
-    height="h-full"
+    :height="uiStore.isMobile ? 'h-lg' : 'h-full'"
     title="导出歌词数据"
   >
     <template #header-extra>
@@ -13,8 +13,11 @@
     </template>
 
     <div class="export-preview-body">
+      <!-- 🌟 中间预览舞台：flex: 1 自动填满剩余空间，超出内部滚动 -->
       <div class="preview-stage no-scrollbar">
-        <div v-if="isGenerating" class="preview-loading">正在生成预览...</div>
+        <div v-if="isGenerating" class="preview-loading">
+          正在生成预览{{ progress > 0 ? ` (${progress}%)` : '' }}...
+        </div>
         <EmptyState v-else-if="pages.length === 0" description="暂无预览内容" size="md" />
         <img
           v-else
@@ -25,29 +28,43 @@
         />
       </div>
 
-      <BasePagination
-        v-if="modeModel === 'a4'"
-        v-model="currentPageIndexModel"
-        :total="pages.length"
-        :disabled="isGenerating"
-        size="sm"
-      />
+      <!-- 底部固定组件区：禁止收缩 (flex-shrink: 0) -->
+      <div class="preview-footer-zone">
+        <BasePagination
+          v-if="modeModel === 'a4'"
+          v-model="currentPageIndexModel"
+          :total="pages.length"
+          :disabled="isGenerating"
+          size="sm"
+          :formatter="(current, total) => `第 ${current} / ${total} 张`"
+        />
 
-      <div class="preview-actions-row">
-        <ActionButton variant="subtle" :disabled="isActionDisabled" @click="emit('download-current-page')">
-          <template #prefix><Download :size="14" stroke-width="2.5" /></template>
-          下载
-        </ActionButton>
+        <div class="preview-actions-row">
+          <ActionButton
+            variant="subtle"
+            :disabled="isActionDisabled"
+            @click="emit('download-current-page')"
+            :size="buttonSize"
+          >
+            <template #prefix><Download :size="14" stroke-width="2.5" /></template>
+            下载
+          </ActionButton>
 
-        <ActionButton variant="subtle" :disabled="isActionDisabled" @click="emit('copy-current-page')">
-          <template #prefix><Copy :size="14" stroke-width="2.5" /></template>
-          复制
-        </ActionButton>
+          <ActionButton
+            variant="subtle"
+            :disabled="isActionDisabled"
+            @click="emit('copy-current-page')"
+            :size="buttonSize"
+          >
+            <template #prefix><Copy :size="14" stroke-width="2.5" /></template>
+            复制
+          </ActionButton>
 
-        <ActionButton primary :disabled="isActionDisabled" @click="emit('download-pdf')">
-          <template #prefix><FileDown :size="14" stroke-width="2.5" /></template>
-          生成 PDF
-        </ActionButton>
+          <ActionButton primary :disabled="isActionDisabled" @click="emit('download-pdf')" :size="buttonSize">
+            <template #prefix><FileDown :size="14" stroke-width="2.5" /></template>
+            生成 PDF
+          </ActionButton>
+        </div>
       </div>
     </div>
   </BaseModal>
@@ -60,6 +77,7 @@ import BasePagination from '@/components/BasePagination.vue';
 import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import type { ExportMode, PreviewPage } from '@/services/useScoreExportPreview';
+import { useUiStore } from '@/stores/uiStore';
 import { Copy, Download, FileDown } from '@lucide/vue';
 import { computed } from 'vue';
 
@@ -70,6 +88,7 @@ const props = defineProps<{
   currentPage: PreviewPage | null;
   currentPageIndex: number;
   isGenerating: boolean;
+  progress: number;
 }>();
 
 const emit = defineEmits<{
@@ -81,6 +100,8 @@ const emit = defineEmits<{
   (e: 'download-current-page'): void;
 }>();
 
+const uiStore = useUiStore();
+const buttonSize = computed(() => (uiStore.isMobile ? 'sm' : 'md'));
 const isActionDisabled = computed(() => props.pages.length === 0 || props.isGenerating);
 const visibleModel = computed({
   get: () => props.visible,
@@ -96,7 +117,7 @@ const currentPageIndexModel = computed({
 });
 
 const modeOptions = [
-  { label: '常规', value: 'normal' },
+  { label: '长图', value: 'normal' },
   { label: 'A4', value: 'a4' },
 ];
 </script>
@@ -107,10 +128,9 @@ const modeOptions = [
 .export-preview-body {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   gap: 0.75rem;
-  flex: 1; /* 🌟 关键：让自身在父容器中占满剩余高度 */
-  height: 100%; /* 🌟 补全高度继承 */
+  flex: 1;
+  height: 100%;
   min-height: 0;
 }
 
@@ -120,11 +140,11 @@ const modeOptions = [
   flex-direction: column;
   align-items: center;
   width: 100%;
-  flex: 1;
-  height: 0;
-  min-height: 320px;
+  flex: 1; /* 🌟 自动占满所有剩余高度 */
+  height: 0; /* 🌟 配合 flex: 1 确保正确压缩与计算 */
+  min-height: 0;
   padding: 0.6rem;
-  overflow: auto;
+  overflow: auto; /* 🌟 超出时内部滚动 */
   box-sizing: border-box;
   border: 1px solid var(--border-light);
   border-radius: @radius-lg;
@@ -147,6 +167,14 @@ const modeOptions = [
   }
 }
 
+/* 底部固定区包裹层 */
+.preview-footer-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex-shrink: 0; /* 🌟 绝不被压缩，固定在底部 */
+}
+
 /* =========================
  * Preview Image
  * ========================= */
@@ -154,7 +182,7 @@ const modeOptions = [
   display: block;
   width: auto;
   max-width: 100%;
-  height: auto; /* 🌟 常规模式保持原本自适应尺寸 */
+  height: auto;
   flex-shrink: 0;
 
   border-radius: @radius-sm;
@@ -165,10 +193,12 @@ const modeOptions = [
     box-shadow @duration-fast ease,
     transform @duration-fast ease;
 
-  /* 🌟 仅在 A4 模式下拉满父容器高度 */
   &.is-a4 {
+    width: auto;
     height: 100%;
+    max-width: 100%;
     max-height: 100%;
+    object-fit: contain; /* 确保等比包含 */
   }
 }
 
@@ -211,17 +241,6 @@ const modeOptions = [
 }
 
 @media (max-width: 640px) {
-  .preview-stage {
-    min-height: 260px;
-    max-height: 45vh;
-    padding: 0.75rem;
-    border-radius: @radius-md;
-  }
-
-  .preview-image.is-a4 {
-    max-height: 42vh;
-  }
-
   .preview-actions-row {
     justify-content: stretch;
     > * {

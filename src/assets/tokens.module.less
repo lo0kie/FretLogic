@@ -117,6 +117,52 @@
 @transition-base: all @duration-base @bezier-standard;
 @transition-fast: all @duration-fast @bezier-standard;
 
+/* 统一清除默认样式并加入过渡 */
+[data-focusable-outline],
+[data-focusable-inline] {
+  outline: none !important;
+  transition: @transition-fast;
+}
+
+/* 1. 外部描边模式 (Outline) - 类似输入框或卡片外扩的聚焦框 */
+[data-focusable-outline]:focus-visible {
+  color: var(--fretboard-focus-color);
+  outline: 2px solid currentColor !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+
+/* 2. 内部阴影环模式 (Inline) - 类似按钮、Badge、圆形图标等不希望撑开布局的紧凑元素 */
+[data-focusable-inline] {
+  &:focus-visible {
+    outline: none !important;
+    // 使用不透明的局部变量，瞬间响应且清晰
+    box-shadow: inset 0 0 0 2px currentColor !important;
+  }
+}
+
+[v-clock] {
+  display: none;
+}
+
+[data-hidden-mobile] {
+  @media (max-width: 768px) {
+    display: none !important;
+  }
+}
+
+.drag-ghost-style {
+  opacity: 0;
+}
+
+.drag-chosen-style {
+  // opacity: 0;
+}
+
+.drag-active-style {
+  // opacity: 0;
+}
+
 .fade-scale-transition(@name, @translate: ~'0, 0', @scale: 0.96, @targetTranslate: ~'0, 0') {
   .@{name}-enter-active,
   .@{name}-leave-active {

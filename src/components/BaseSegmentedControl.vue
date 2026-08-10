@@ -1,5 +1,38 @@
 <template>
-  <div ref="containerRef" class="base-segmented-control" :class="[`size-${size}`, { 'is-disabled': disabled }]">
+  <!-- 🌟 如果开启了 texted 模式，直接渲染整齐排列的 ActionButton 组合 -->
+  <div
+    v-if="texted"
+    ref="containerRef"
+    class="base-segmented-control is-texted"
+    :class="[`size-${size}`, { 'is-disabled': disabled, 'is-compact': compact }]"
+    @keydown="handleKeydown"
+  >
+    <ActionButton
+      :size
+      :texted
+      v-for="item in options"
+      :key="`${item.label}-${item.value}`"
+      ref="itemRefs"
+      :disabled="disabled || item.disabled"
+      :variant="modelValue === item.value ? 'subtle' : 'ghost'"
+      :primary="modelValue === item.value"
+      @click="handleSelect(item)"
+      data-focusable-inline
+    >
+      <slot name="label" :item>
+        {{ item.label }}
+      </slot>
+    </ActionButton>
+  </div>
+
+  <!-- 🌟 原有的滑块式 SegmentedControl 保持不变 -->
+  <div
+    v-else
+    ref="containerRef"
+    class="base-segmented-control"
+    :class="[`size-${size}`, { 'is-disabled': disabled, 'is-compact': compact }]"
+    @keydown="handleKeydown"
+  >
     <div class="indicator-pill" :class="{ 'is-animated': isInitialized }"></div>
 
     <button
@@ -14,8 +47,9 @@
       }"
       :disabled="disabled || item.disabled"
       @click="handleSelect(item)"
+      data-focusable-inline
     >
-      <slot name="label" :item="item">
+      <slot name="label" :item>
         {{ item.label }}
       </slot>
     </button>
@@ -23,7 +57,9 @@
 </template>
 
 <script setup lang="ts" generic="T extends string | number">
+import ActionButton from '@/components/ActionButton.vue';
 import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
+import { useGridNavigation } from '@/services/useGridNavigation';
 import { nextTick, ref, useTemplateRef, watch, watchEffect } from 'vue';
 
 export interface SegmentOption<ValueType = string | number> {
@@ -32,15 +68,21 @@ export interface SegmentOption<ValueType = string | number> {
   disabled?: boolean;
 }
 
-const {
-  options,
-  size = 'md',
-  disabled = false,
-} = defineProps<{
-  options: SegmentOption<T>[];
-  size?: 'sm' | 'md' | 'lg';
-  disabled?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    options: SegmentOption<T>[];
+    size?: 'sm' | 'md' | 'lg';
+    disabled?: boolean;
+    compact?: boolean;
+    texted?: boolean;
+  }>(),
+  {
+    size: 'md',
+    disabled: false,
+    compact: false,
+    texted: false,
+  }
+);
 
 const modelValue = defineModel<T>({ required: true });
 
@@ -49,25 +91,29 @@ const emit = defineEmits<{
 }>();
 
 const containerRef = useTemplateRef<HTMLDivElement>('containerRef');
-const itemRefs = useTemplateRef<HTMLButtonElement[]>('itemRefs');
+// itemRefs 需要同时兼容原生 button 和 ActionButton 组件实例
+const itemRefs = useTemplateRef<any[]>('itemRefs');
 
+const { handleKeydown } = useGridNavigation(props.options.length, containerRef);
 const isInitialized = ref(false);
 
 const updateIndicatorPosition = async () => {
+  if (props.texted) return;
   await nextTick();
 
   const containerEl = containerRef.value;
   if (!containerEl) return;
 
-  const activeIndex = options.findIndex(opt => opt.value === modelValue.value);
+  const activeIndex = props.options.findIndex(opt => opt.value === modelValue.value);
 
   if (activeIndex === -1) {
     containerEl.style.setProperty('--indicator-opacity', '0');
     return;
   }
 
-  const activeEl = itemRefs.value?.[activeIndex];
-  if (!activeEl) return;
+  const rawEl = itemRefs.value?.[activeIndex];
+  const activeEl = rawEl?.$el ?? rawEl;
+  if (!(activeEl instanceof HTMLElement)) return;
 
   const { offsetLeft, offsetWidth, offsetTop, offsetHeight } = activeEl;
 
@@ -85,7 +131,7 @@ const updateIndicatorPosition = async () => {
 };
 
 const handleSelect = (item: SegmentOption<T>) => {
-  if (disabled || item.disabled) return;
+  if (props.disabled || item.disabled) return;
   if (modelValue.value !== item.value) {
     modelValue.value = item.value;
     emit('change', item.value);
@@ -95,6 +141,7 @@ const handleSelect = (item: SegmentOption<T>) => {
 let resizeRafId: number | null = null;
 
 const debouncedUpdateIndicator = () => {
+  if (props.texted) return;
   if (resizeRafId !== null) {
     cancelAnimationFrame(resizeRafId);
   }
@@ -105,22 +152,24 @@ const debouncedUpdateIndicator = () => {
 };
 
 watchEffect(onCleanup => {
-  updateIndicatorPosition();
-  const el = containerRef.value;
+  if (!props.texted) {
+    updateIndicatorPosition();
+    const el = containerRef.value;
 
-  if (el && typeof ResizeObserver !== 'undefined') {
-    const observer = new ResizeObserver(() => debouncedUpdateIndicator());
-    observer.observe(el);
+    if (el && typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => debouncedUpdateIndicator());
+      observer.observe(el);
 
-    onCleanup(() => {
-      if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
-      observer.disconnect();
-    });
+      onCleanup(() => {
+        if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
+        observer.disconnect();
+      });
+    }
   }
 });
 
 watch(modelValue, updateIndicatorPosition);
-watch(() => options, updateIndicatorPosition, { deep: true });
+watch(() => props.options, updateIndicatorPosition, { deep: true });
 </script>
 
 <style scoped lang="less">
@@ -150,6 +199,14 @@ watch(() => options, updateIndicatorPosition, { deep: true });
     .segmented-item {
       cursor: not-allowed;
     }
+  }
+
+  /* 🌟 texted 模式：无外框背景，直接以 ActionButton 组合呈现 */
+  &.is-texted {
+    background-color: transparent;
+    border: none;
+    padding: 0;
+    gap: 0.2rem;
   }
 
   &.size-sm {
@@ -182,6 +239,23 @@ watch(() => options, updateIndicatorPosition, { deep: true });
     .segmented-item {
       font-size: 0.75rem;
       padding: 0 0.8rem;
+    }
+  }
+
+  &.is-compact {
+    padding: 0.08rem;
+    gap: 0.08rem;
+
+    &.size-sm .segmented-item {
+      padding: 0 0.3rem;
+    }
+
+    &.size-md .segmented-item {
+      padding: 0 0.4rem;
+    }
+
+    &.size-lg .segmented-item {
+      padding: 0 0.55rem;
     }
   }
 }
@@ -224,7 +298,8 @@ watch(() => options, updateIndicatorPosition, { deep: true });
   cursor: pointer;
   transition:
     color @duration-fast ease,
-    opacity @duration-fast ease;
+    opacity @duration-fast ease,
+    background-color @duration-fast ease;
   white-space: nowrap;
   display: inline-flex;
   align-items: center;

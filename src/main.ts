@@ -6,6 +6,7 @@ import VWave from 'v-wave';
 import { createApp } from 'vue';
 
 import '@/assets/main.less';
+import { vTooltip } from './directives/vTooltip';
 
 const app = createApp(App);
 const pinia = createPinia();
@@ -13,6 +14,7 @@ const pinia = createPinia();
 app.use(pinia);
 app.use(VWave, { easing: 'ease-out' });
 app.use(router);
+app.directive('tooltip', vTooltip);
 app.mount('#app');
 
 try {

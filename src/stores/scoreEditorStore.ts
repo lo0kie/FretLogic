@@ -26,6 +26,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
 
   const fontScale = useStorage('CHORD_LAB_SCORE_FONT_SCALE_V1', 1.0);
   const fretboardScale = useStorage('CHORD_LAB_SCORE_FRETBOARD_V1', 1.0);
+  const mobileScale = useStorage('CHORD_LAB_SCORE_MOBILE_SCALE_V1', 0.7);
 
   const historyStack = ref<HistoryState[]>([]);
   const historyIndex = ref(-1);
@@ -79,7 +80,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       songStore.updateSongMeta(activeSong.value.id, state);
 
       await nextTick();
-      await nextTick(); // 如果下游还有一层监听器再触发新的响应式更新，多等一轮更稳妥
+      await nextTick();
       isUndoRedoAction.value = false;
     }
   };
@@ -90,6 +91,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       historyIndex.value++;
       const state = cloneDeep(historyStack.value[historyIndex.value]);
       songStore.updateSongMeta(activeSong.value.id, state);
+
       await nextTick();
       await nextTick();
       isUndoRedoAction.value = false;
@@ -100,14 +102,15 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     activeSong,
     newSong => {
       selectedSlotKey.value = null;
+      historyStack.value = [];
+      historyIndex.value = -1;
+
       if (!newSong) {
         activeTabRef.value = 'edit';
-        historyStack.value = [];
-        historyIndex.value = -1;
         return;
       }
 
-      if (!isUndoRedoAction.value && historyStack.value.length === 0) {
+      if (!isUndoRedoAction.value) {
         recordHistory(newSong);
       }
 
@@ -119,9 +122,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
 
   const setActiveSong = (id: string | null) => {
     activeSongId.value = id;
-    selectedSlotKey.value = null;
-    historyStack.value = [];
-    historyIndex.value = -1;
   };
 
   const updateKey = (key: string) => {
@@ -193,7 +193,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const setSlotChord = (slotKey: string | number, chord: Chord) => {
     if (!activeSong.value) return;
     recordHistory();
-    // 🌟 核心：存入和弦 ID，实现解耦绑定
     songStore.setCharChord(activeSong.value.id, slotKey, chord.id);
   };
 
@@ -227,5 +226,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     fretboardScale,
     undo,
     redo,
+    mobileScale,
   };
 });

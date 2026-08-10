@@ -19,6 +19,7 @@
     @keydown.enter="handleKeydown"
     @keydown.space.prevent="handleKeydown"
     @click="handleClick"
+    data-focusable-inline
   >
     <!-- 1. 指示圆点 (如状态灯) -->
     <span v-if="showDot && !isDotOnly" class="badge-dot" aria-hidden="true"></span>
@@ -180,18 +181,6 @@ const handleClick = (e: MouseEvent) => {
     &:hover {
       opacity: 0.85;
       transform: translateY(-1px);
-    }
-
-    &:focus-visible {
-      outline: none;
-      /* 🌟 使用 inset 模拟内边框，不会超出现有元素边界 */
-      box-shadow: inset 0 0 0 2px var(--color-primary);
-      z-index: 2;
-
-      /* 如果是主色填充模式，内边框用白色保证高对比度 */
-      &.variant-primary.appearance-filled {
-        box-shadow: inset 0 0 0 2px #ffffff;
-      }
     }
 
     &:active {
@@ -359,11 +348,6 @@ const handleClick = (e: MouseEvent) => {
   border-radius: 50%;
   transition: @transition-fast;
   outline: none;
-
-  &:focus-visible {
-    opacity: 1;
-    box-shadow: 0 0 0 2px currentColor;
-  }
 
   &:hover {
     opacity: 1;

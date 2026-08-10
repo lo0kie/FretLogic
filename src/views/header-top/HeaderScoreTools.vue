@@ -1,5 +1,12 @@
 <template>
-  <BaseSegmentedControl v-model="scoreEditor.activeTab" :options="scoreModeOptions" @change="handleTabChange" />
+  <BaseSegmentedControl
+    v-model="scoreEditor.activeTab"
+    :options="scoreModeOptions"
+    @change="handleTabChange"
+    :size="uiStore.isMobile ? 'sm' : 'md'"
+    :compact="uiStore.isMobile"
+    texted
+  />
 </template>
 
 <script setup lang="ts">

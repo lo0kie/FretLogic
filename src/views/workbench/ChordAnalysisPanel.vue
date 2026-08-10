@@ -28,13 +28,13 @@
               ref="noteListRef"
               :notes="analysis.notes"
               :is-mobile="uiStore.isMobile"
-              @set-root-string="handleSetRootString"
+              @toggle-root-string="handleSetRootString"
               @toggle-pitch-accidental="handleTogglePitchName"
             />
           </div>
         </template>
 
-        <!-- 空状态 -->
+        <!-- PC端空状态 -->
         <EmptyState v-else :icon="Music" description="在指板上按音以分析" size="md" />
       </div>
     </Transition>
@@ -42,15 +42,14 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '@/components/EmptyState.vue';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useUiStore } from '@/stores/uiStore';
+import { CandidateResult, NoteInput } from '@/types/engine.ts';
+import { analyzeChordGraph } from '@/utils/chordEngine.ts';
 import { calcNoteLabel, calcPitchIndex, canTogglePitchAccidental } from '@/utils/musicTheory';
 import { Music, Sparkles } from '@lucide/vue';
 import { computed, useTemplateRef } from 'vue';
-
-import EmptyState from '@/components/EmptyState.vue';
-import { CandidateResult, NoteInput } from '@/types/engine.ts';
-import { analyzeChordGraph } from '@/utils/chordEngine.ts';
 import CandidateTags from './CandidateTags.vue';
 import NoteIntervalList, { type RenderNoteItem } from './NoteIntervalList.vue';
 
@@ -151,8 +150,10 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
 };
 
 const handleSetRootString = (stringIndex: number) => {
+  const wasRoot = editorStore.draftChord.strings[stringIndex]?.isRoot;
+
   editorStore.draftChord.strings.forEach((str, sIdx) => {
-    str.isRoot = sIdx === stringIndex;
+    str.isRoot = sIdx === stringIndex ? !wasRoot : false;
   });
 };
 </script>
@@ -167,18 +168,16 @@ const handleSetRootString = (stringIndex: number) => {
     opacity @duration-fast ease;
   overflow: hidden;
   opacity: 1;
-  width: 100%; /* 🌟 确保外层包裹器填满父容器 */
+  width: 100%;
 }
 
 .chord-analysis-panel {
-  /* 🌟 移除内部的绝对定位，由外层布局容器统一控制 */
   position: relative;
   right: auto;
   top: auto;
-
-  width: 100%; /* 🌟 填满外层容器，不再固定 13.8rem */
+  width: 100%;
   height: auto;
-  max-height: calc(100vh - 5rem); /* 保留最大高度限制，防止溢出 */
+  max-height: calc(100vh - 5rem);
   padding: 0.85rem;
   background-color: var(--bg-panel);
   backdrop-filter: blur(28px) saturate(190%);
@@ -239,6 +238,8 @@ const handleSetRootString = (stringIndex: number) => {
   .chord-analysis-wrapper {
     width: 100%;
     margin-bottom: 0.5rem;
+    max-height: none;
+    overflow: visible;
 
     &.is-empty-hidden {
       max-height: 0;
@@ -249,13 +250,14 @@ const handleSetRootString = (stringIndex: number) => {
   }
 
   .chord-analysis-panel {
-    /* 🌟 移动端同样移除绝对定位 */
     position: relative;
     right: auto;
     top: auto;
     width: 100%;
     margin-top: 0;
     max-height: none;
+    overflow: visible;
+    padding: 0.75rem;
     box-shadow: var(--shadow-md);
   }
 
@@ -263,6 +265,15 @@ const handleSetRootString = (stringIndex: number) => {
     flex-direction: row;
     align-items: flex-start;
     gap: 0.75rem;
+    max-height: none;
+    overflow: visible;
+
+    > :deep(:first-child),
+    > :deep(:last-child) {
+      min-width: 0;
+      max-height: none;
+      overflow: visible;
+    }
   }
 
   .desktop-divider {

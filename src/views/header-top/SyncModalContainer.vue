@@ -6,12 +6,7 @@
     width="w-80"
     :close-on-mask="!isSyncing && !isPulling"
   >
-    <SyncSettingsCard
-      :is-syncing="isSyncing"
-      :is-pulling="isPulling"
-      @pull-request="handlePullClick"
-      @push-request="triggerGlobalSync"
-    />
+    <SyncSettingsCard :is-syncing :is-pulling @pull-request="handlePullClick" @push-request="triggerGlobalSync" />
   </BaseModal>
 </template>
 

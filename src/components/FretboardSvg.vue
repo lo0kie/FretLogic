@@ -1,6 +1,5 @@
 <template>
   <div class="fretboard-svg-wrapper">
-    <!-- 🌟 HTML 绝对定位浮动层：品位数字脱离 SVG 文档流，完全不占据横向 X 轴空间 -->
     <div v-if="showFretNumbers" class="fret-numbers-overlay" aria-hidden="true">
       <span
         v-for="i in fretCount"
@@ -13,7 +12,6 @@
         {{ capo > 0 ? capo + i : i }}
       </span>
     </div>
-
     <svg
       :width="CANVAS_CONFIG.BOARD_WIDTH"
       :height="fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
@@ -64,19 +62,22 @@
         <circle
           :cx="stringXPositions[hoverPoint!.stringIndex]"
           :cy="(hoverPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-          r="28"
+          r="33"
           :fill="isDarkMode ? '#28282a' : '#ffffff'"
+          :stroke="isDarkMode ? '#64d2ff' : '#007aff'"
+          stroke-width="3.5"
           style="pointer-events: none"
         />
+      </g>
 
+      <g v-if="showKeyboardFocus" class="finger-keyboard-focus" aria-hidden="true">
         <circle
-          :cx="stringXPositions[hoverPoint!.stringIndex]"
-          :cy="(hoverPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-          r="25.5"
-          fill="transparent"
-          :stroke="isDarkMode ? 'rgba(255, 255, 255, 0.45)' : 'rgba(60, 60, 67, 0.35)'"
-          stroke-width="3"
-          stroke-dasharray="4 4"
+          :cx="stringXPositions[focusPoint!.stringIndex]"
+          :cy="(focusPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+          r="33"
+          :fill="isDarkMode ? '#28282a' : '#ffffff'"
+          :stroke="isDarkMode ? '#64d2ff' : '#007aff'"
+          stroke-width="3.5"
           style="pointer-events: none"
         />
       </g>
@@ -85,12 +86,10 @@
         <g
           v-if="str.fret > 0 && str.fret <= fretCount"
           :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
-          :role="interactive ? 'button' : undefined"
-          :tabindex="interactive ? 0 : undefined"
+          tabindex="-1"
           :style="{ color: getFingerColor(str, isDarkMode) }"
-          :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings)}。按 Enter/空格 切换升降号，按 Delete/Backspace 清除按音，按 R 设为根音`"
+          :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings)}`"
           @dblclick.prevent.stop="emit('toggle-pitch', sIdx)"
-          @keydown="e => handleFingerKeydown(e, sIdx)"
         >
           <circle
             :cx="stringXPositions[sIdx]"
@@ -137,11 +136,17 @@ const props = withDefaults(
     interactive: boolean;
     isMobile: boolean;
     stringXPositions: number[];
-    hoverPoint: { stringIndex: number; fretIndex: number } | null;
+    hoverPoint?: { stringIndex: number; fretIndex: number } | null;
+    focusPoint?: { stringIndex: number; fretIndex: number } | null;
     fretNumberSize?: 'sm' | 'md' | 'lg';
     showFretNumbers?: boolean;
   }>(),
-  { fretNumberSize: 'md', showFretNumbers: true }
+  {
+    fretNumberSize: 'md',
+    showFretNumbers: true,
+    hoverPoint: null,
+    focusPoint: null,
+  }
 );
 
 const emit = defineEmits<{
@@ -150,10 +155,9 @@ const emit = defineEmits<{
   (e: 'toggle-root', stringIndex: number): void;
 }>();
 
-// 🌟 计算每个数字在绝对定位浮层中的精准 Y 坐标
 const getFretNumberStyle = (fretIndex: number) => {
   const yPixel = fretIndex * CANVAS_CONFIG.FRET_HEIGHT;
-  const xPixel = props.stringXPositions[0] - 22; // 固定锚定在最左弦（第6弦）向左偏移 22px 处
+  const xPixel = props.stringXPositions[0] - 22;
   return {
     top: `${yPixel}px`,
     left: `${xPixel}px`,
@@ -173,24 +177,17 @@ const showPredictiveHover = computed(() => {
   );
 });
 
-// 🌟 统一键盘事件响应逻辑
-const handleFingerKeydown = (e: KeyboardEvent, sIdx: number) => {
-  if (!props.interactive) return;
-
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    e.stopPropagation();
-    emit('toggle-pitch', sIdx);
-  } else if (e.key === 'Delete' || e.key === 'Backspace') {
-    e.preventDefault();
-    e.stopPropagation();
-    emit('clear-fret', sIdx);
-  } else if (e.key === 'r' || e.key === 'R') {
-    e.preventDefault();
-    e.stopPropagation();
-    emit('toggle-root', sIdx);
-  }
-};
+const showKeyboardFocus = computed(() => {
+  const fp = props.focusPoint;
+  return (
+    props.interactive &&
+    fp !== null &&
+    fp.fretIndex > 0 &&
+    fp.fretIndex <= props.fretCount &&
+    fp.stringIndex >= 0 &&
+    fp.stringIndex <= 5
+  );
+});
 </script>
 
 <style scoped lang="less">
@@ -209,7 +206,6 @@ const handleFingerKeydown = (e: KeyboardEvent, sIdx: number) => {
   display: block;
 }
 
-/* 🌟 核心：脱离文档流的浮动品位数字层 */
 .fret-numbers-overlay {
   position: absolute;
   inset: 0;
@@ -250,22 +246,10 @@ const handleFingerKeydown = (e: KeyboardEvent, sIdx: number) => {
   cursor: pointer;
   pointer-events: auto;
   outline: none;
-
-  &:focus-visible {
-    .finger-circle {
-      /* 🌟 1. 让边框向外绘制，避免挤压内部音符文本 */
-      paint-order: stroke fill;
-      /* 🌟 2. 继承该节点和弦颜色的虚线外环边框 */
-      stroke: currentColor;
-      stroke-width: 8px;
-      stroke-dasharray: 10 5;
-      /* 🌟 3. 叠加双重高对比发光轮廓 */
-      filter: drop-shadow(0 0 0 2px var(--bg-body, #ffffff)) drop-shadow(0 0 6px currentColor) !important;
-    }
-  }
 }
 
-.finger-predictive {
+.finger-predictive,
+.finger-keyboard-focus {
   pointer-events: none;
 }
 
