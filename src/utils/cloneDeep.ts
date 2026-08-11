@@ -1,3 +1,4 @@
+import { GuitarStringsModel } from '@/types';
 import { isProxy, isRef, toRaw, unref } from 'vue';
 
 /**
@@ -30,4 +31,9 @@ export function cloneDeep<T>(value: T): T {
     // 注意：JSON 方法会丢失 Date/RegExp/循环引用，但你的数据不包含这些，完全够用
     return JSON.parse(JSON.stringify(raw));
   }
+}
+
+export function cloneGuitarStrings(strings: GuitarStringsModel): GuitarStringsModel {
+  const raw = toRaw(strings);
+  return [{ ...raw[0] }, { ...raw[1] }, { ...raw[2] }, { ...raw[3] }, { ...raw[4] }, { ...raw[5] }];
 }

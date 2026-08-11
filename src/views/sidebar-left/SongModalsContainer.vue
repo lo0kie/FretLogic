@@ -24,7 +24,6 @@
             autofocus
             size="sm"
             @enter="songModals.handleConfigSong"
-            horizontal-wheel
             :maxlength="15"
           />
         </div>

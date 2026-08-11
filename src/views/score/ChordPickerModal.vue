@@ -13,7 +13,6 @@
         新建和弦
       </ActionButton>
     </template>
-
     <div class="chord-picker-wrapper">
       <div class="picker-fixed-header">
         <div class="picker-controls-row">
@@ -34,17 +33,14 @@
               </template>
             </BaseInput>
           </div>
-
           <div class="sort-action-group">
             <span class="sort-label" data-hidden-mobile>排序</span>
-
             <BaseSegmentedControl
               v-model="sortOverride"
               size="sm"
               :options="SORT_RULE_CONFIG"
               @update:model-value="handleSortRuleChange"
             />
-
             <BaseSelector
               :disabled="sortOverride !== 'KEY_DEGREE'"
               v-model="tempSortKey"
@@ -58,7 +54,6 @@
             />
           </div>
         </div>
-
         <div class="picker-group-pills-bar no-scrollbar">
           <ActionButton
             v-for="group in groupTabOptions"
@@ -72,10 +67,8 @@
           </ActionButton>
         </div>
       </div>
-
       <div class="picker-scroll-content no-scrollbar" ref="scrollWrapperRef" v-auto-animate>
         <EmptyState v-if="filteredChords.length === 0" description="当前搜索或分组下暂无匹配和弦。" size="lg" />
-
         <div
           class="picker-cards-grid-cols"
           role="group"
@@ -86,6 +79,14 @@
           <div
             v-wave
             v-for="(chord, index) in filteredChords"
+            v-memo="[
+              chord.id,
+              chord.fingerprint,
+              visibleMap[chord.id],
+              isCurrentBound(chord),
+              pickerScale,
+              settingsStore.isDarkMode,
+            ]"
             :key="chord.id"
             :ref="
               el => {
@@ -121,11 +122,9 @@
     </div>
   </BaseModal>
 </template>
-
 <script lang="ts">
 const fretboardSizeCache = reactive<Record<string, { width: string; height: string }>>({});
 </script>
-
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
 import BaseInput from '@/components/BaseInput.vue';
@@ -144,7 +143,6 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, GroupSortRule } from '@/types';
 import { getPlaceholderSize } from '@/utils/fretboardVisuals';
-import { sortChordsByRule } from '@/utils/musicTheory';
 import { vAutoAnimate } from '@formkit/auto-animate';
 import { Plus, Search } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
@@ -160,12 +158,10 @@ const getCacheKey = (fretCount: number) => `${fretCount}_${pickerScale.value}`;
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void;
 }>();
-
 const visibleModel = computed({
   get: () => props.visible,
   set: val => emit('update:visible', val),
 });
-
 const router = useRouter();
 const editorStore = useEditorStore();
 const chordStore = useChordStore();
@@ -175,7 +171,6 @@ const { chordsLookupMap } = useScoreLinesData();
 
 const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
 const visibleMap = reactive<Record<string, boolean>>({});
-
 const cardObservers = new Map<string, IntersectionObserver>();
 const { setItemRef, handleKeydown } = useGridNavigation(4, () => filteredChords.value.length);
 
@@ -185,12 +180,9 @@ const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordI
     cardObservers.delete(chordId);
     return;
   }
-
   const domEl = (el as ComponentPublicInstance)?.$el ?? el;
   if (!(domEl instanceof HTMLElement)) return;
-
   if (visibleMap[chordId] || cardObservers.has(chordId)) return;
-
   const observer = new IntersectionObserver(
     ([entry]) => {
       if (entry.isIntersecting) {
@@ -201,7 +193,6 @@ const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordI
     },
     { root: scrollWrapperRef.value }
   );
-
   observer.observe(domEl);
   cardObservers.set(chordId, observer);
 };
@@ -214,10 +205,8 @@ const clearAllCardObservers = () => {
 const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fretCount: number) => {
   const cacheKey = getCacheKey(fretCount);
   if (!el || fretboardSizeCache[cacheKey]) return;
-
   const domEl = (el as ComponentPublicInstance)?.$el ?? el;
   if (!(domEl instanceof HTMLElement)) return;
-
   const rect = domEl.getBoundingClientRect();
   if (rect.width > 0 && rect.height > 0) {
     fretboardSizeCache[cacheKey] = {
@@ -230,23 +219,18 @@ const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fr
 const getCalculatedOrCachedSize = (fretCount: number) => {
   const cacheKey = getCacheKey(fretCount);
   if (fretboardSizeCache[cacheKey]) return fretboardSizeCache[cacheKey];
-
   const coreSize = getPlaceholderSize(fretCount, pickerScale.value);
   const coreHeight = parseFloat(coreSize.height);
   const calculatedSize = { width: `100%`, height: `${coreHeight}px` };
-
   fretboardSizeCache[cacheKey] = calculatedSize;
   return calculatedSize;
 };
 
 const selectedGroupId = ref<string>('ALL');
 const pickerSearchQuery = ref<string>('');
-
 const debouncedPickerQuery = refDebounced(pickerSearchQuery, 150);
-
 const sortOverride = ref<GroupSortRule>('ROOT_PITCH');
 const tempSortKey = ref<string>('C');
-
 const savedUserPickerState = ref<{
   groupId: string;
   sortRule: GroupSortRule;
@@ -260,6 +244,20 @@ const groupTabOptions = computed<SegmentOption<string>[]>(() => {
   });
   return options;
 });
+
+const boundId = computed(() => {
+  if (scoreEditor.selectedSlotKey == null) return null;
+  return scoreEditor.activeSong?.chordMap?.[scoreEditor.selectedSlotKey] ?? null;
+});
+
+const boundFingerprint = computed(() => {
+  const id = boundId.value;
+  if (!id) return null;
+  return chordsLookupMap.value.get(id)?.fingerprint ?? null;
+});
+
+const isCurrentBound = (chord: Chord) =>
+  chord.id === boundId.value || (!!chord.fingerprint && chord.fingerprint === boundFingerprint.value);
 
 const getDefaultSortForGroup = (groupId: string): { sortRule: GroupSortRule; sortKey: string } => {
   if (groupId === 'ALL') return { sortRule: 'ROOT_PITCH', sortKey: 'C' };
@@ -307,15 +305,14 @@ watch(
   () => props.visible,
   val => {
     if (!val) return;
-
     pickerSearchQuery.value = '';
-    Object.keys(fretboardSizeCache).forEach(key => delete fretboardSizeCache[Number(key)]);
+    Object.keys(fretboardSizeCache).forEach(key => {
+      delete fretboardSizeCache[key];
+    });
     clearAllCardObservers();
-
     const currentSlotKey = scoreEditor.selectedSlotKey;
     const boundChordId = currentSlotKey !== null ? scoreEditor.activeSong?.chordMap[currentSlotKey] : null;
     const boundChord = boundChordId ? chordsLookupMap.value.get(boundChordId) : null;
-
     if (boundChord && boundChord.groupId) {
       selectedGroupId.value = boundChord.groupId;
       const { sortRule, sortKey } = getDefaultSortForGroup(boundChord.groupId);
@@ -333,32 +330,14 @@ watch(
   }
 );
 
-const currentBoundChordId = computed(() => {
-  if (scoreEditor.selectedSlotKey === null || !scoreEditor.activeSong?.chordMap) return null;
-  return scoreEditor.activeSong.chordMap[scoreEditor.selectedSlotKey] || null;
-});
-
-const isCurrentBound = (chord: Chord) => {
-  const boundId = currentBoundChordId.value;
-  if (!boundId) return false;
-  return chord.id === boundId || chord.fingerprint === boundId;
-};
-
 const filteredChords = computed(() => {
-  let list =
-    selectedGroupId.value === 'ALL'
-      ? chordStore.savedChordsList
-      : chordStore.savedChordsList.filter(c => c.groupId === selectedGroupId.value);
-
-  const query = debouncedPickerQuery.value.trim().toLowerCase();
-  if (query) {
-    list = list.filter(c => c.chordName.toLowerCase().includes(query));
-  }
-
   const activeGroup = chordStore.groups.find(g => g.id === selectedGroupId.value);
   const effectiveKey = sortOverride.value === 'KEY_DEGREE' ? tempSortKey.value : activeGroup?.sortKey;
-
-  return sortChordsByRule(list, sortOverride.value, effectiveKey);
+  return chordStore.getFilteredChords(selectedGroupId.value, {
+    searchQuery: debouncedPickerQuery.value,
+    sortRule: sortOverride.value,
+    sortKey: effectiveKey,
+  });
 });
 
 const handleSelectChord = (chord: Chord) => {
@@ -378,15 +357,12 @@ onDeactivated(() => {
   clearAllCardObservers();
 });
 </script>
-
 <style scoped lang="less">
 @import '@/assets/tokens.module';
-
 :deep(.chord-picker-modal .modal-card) {
   width: 56rem !important;
   max-width: 95vw;
 }
-
 .chord-picker-wrapper {
   display: flex;
   flex-direction: column;
@@ -394,7 +370,6 @@ onDeactivated(() => {
   min-height: 0;
   overflow: hidden;
 }
-
 .picker-fixed-header {
   display: flex;
   flex-direction: column;
@@ -405,40 +380,33 @@ onDeactivated(() => {
   background-color: var(--bg-panel);
   border-bottom: 1px solid var(--border-light);
 }
-
 .picker-controls-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
-
 .search-input-wrapper {
   flex: 1;
   max-width: 16rem;
 }
-
 .search-icon {
   color: var(--text-disabled);
 }
-
 .sort-action-group {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
-
 .sort-label {
   font-size: 0.7rem;
   font-weight: 600;
   color: var(--text-disabled);
   white-space: nowrap;
 }
-
 .picker-key-selector {
   width: 5.2rem;
 }
-
 .picker-group-pills-bar {
   display: flex;
   align-items: center;
@@ -447,34 +415,29 @@ onDeactivated(() => {
   padding: 0.1rem 0;
   scroll-behavior: smooth;
 }
-
 .selector-pop-enter-active,
 .selector-pop-leave-active {
   transition:
     opacity @duration-fast ease,
     transform @duration-fast @bezier-standard;
 }
-
 .selector-pop-enter-from,
 .selector-pop-leave-to {
   opacity: 0;
   transform: translateX(-6px) scale(0.95);
 }
-
 .picker-scroll-content {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 0.2rem;
 }
-
 .picker-cards-grid-cols {
   display: grid;
   align-items: start;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.85rem;
 }
-
 .picker-chord-card {
   display: flex;
   flex-direction: column;
@@ -492,31 +455,26 @@ onDeactivated(() => {
     box-shadow @duration-fast ease,
     transform @duration-fast ease;
   outline: none;
-
   :deep(*) {
     cursor: inherit !important;
     pointer-events: inherit !important;
   }
-
   &:hover {
     border-color: var(--color-primary);
     transform: translateY(-2px);
     box-shadow: @shadow-md;
   }
-
   &.is-current-bound {
     background-color: color-mix(in srgb, @primary, transparent 88%);
     border-color: @primary;
     box-shadow: @focus-ring-primary;
     cursor: default !important;
     pointer-events: none !important;
-
     .card-name {
       color: @primary;
     }
   }
 }
-
 .card-name {
   font-size: 0.8rem;
   font-weight: 800;
@@ -525,26 +483,21 @@ onDeactivated(() => {
   color: var(--text-title);
   margin-bottom: 0.25rem;
 }
-
 @media (max-width: 768px) {
   .picker-controls-row {
     flex-direction: column;
     align-items: stretch;
     gap: 0.5rem;
   }
-
   .search-input-wrapper {
     max-width: none;
   }
-
   .sort-action-group {
     justify-content: space-between;
   }
-
-  /* 🌟 移动端将 4 列网格切为 2 列 */
   .picker-cards-grid-cols {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.5rem;
+    gap: 0.85rem;
   }
 }
 </style>

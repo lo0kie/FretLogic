@@ -169,16 +169,12 @@ export function useGithubSyncService() {
   };
 
   const applyOverwriteWithCloud = (cloudData: ImportExportPayload) => {
-    const groups = cloneDeep(cloudData.groups ?? []).map(g => ({
-      ...g,
-      collapsed: true,
-    }));
-    const chords = cloneDeep(cloudData.chords ?? []);
-    const songs = cloneDeep(cloudData.songs ?? []);
+    chordStore.replaceAllData({
+      groups: cloneDeep(cloudData.groups ?? []),
+      chords: cloneDeep(cloudData.chords ?? []),
+    });
 
-    chordStore.selectedGroupId = null;
-    chordStore.overwriteGroups(groups);
-    chordStore.overwriteChords(chords);
+    const songs = cloneDeep(cloudData.songs ?? []);
     if (cloudData.songs) songStore.overwriteSongs(songs);
     uiStore.toast.success('已使用云端数据完全覆盖本地');
   };

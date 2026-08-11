@@ -7,12 +7,10 @@ import { computed, ref } from 'vue';
 
 export const useSongStore = defineStore('song', () => {
   const songs = useStorage<Song[]>('CHORD_LAB_SONGS_V1', [], localStorage, {
-    eventFilter: debounceFilter(400, { maxWait: 1500 }), // 🌟 400ms 防抖，但最长 1.5s 必定落盘一次
+    eventFilter: debounceFilter(400, { maxWait: 1500 }),
   });
-
   const songMap = computed(() => new Map(songs.value.map(s => [s.id, s])));
   const lastDeletedSongInfo = ref<{ song: Song; index: number } | null>(null);
-
   let needUpdate = false;
   const alignedSongs = songs.value.map(s => {
     let updated = false;
@@ -25,10 +23,13 @@ export const useSongStore = defineStore('song', () => {
       newSong.playKey = newSong.key;
       updated = true;
     }
+    if (typeof newSong.version !== 'number') {
+      newSong.version = 1;
+      updated = true;
+    }
     if (updated) needUpdate = true;
     return newSong;
   });
-
   if (needUpdate) {
     songs.value = alignedSongs;
   }
@@ -43,6 +44,7 @@ export const useSongStore = defineStore('song', () => {
       capo: 0,
       chordMap: {},
       lineIds: [],
+      version: 1,
     };
     songs.value.push(newSong);
     return newSong;
@@ -51,25 +53,21 @@ export const useSongStore = defineStore('song', () => {
   const deleteSong = (id: string) => {
     const index = songs.value.findIndex(s => s.id === id);
     if (index === -1) return;
-
     lastDeletedSongInfo.value = {
       song: { ...songs.value[index] },
       index,
     };
-
     songs.value = songs.value.filter(s => s.id !== id);
   };
 
   const undoDeleteSong = () => {
     if (!lastDeletedSongInfo.value) return;
     const { song, index } = lastDeletedSongInfo.value;
-
     if (index >= 0 && index <= songs.value.length) {
       songs.value.splice(index, 0, song);
     } else {
       songs.value.push(song);
     }
-
     lastDeletedSongInfo.value = null;
   };
 
@@ -79,7 +77,6 @@ export const useSongStore = defineStore('song', () => {
   ) => {
     const target = songMap.value.get(id);
     if (!target) return;
-
     if (payload.title !== undefined) target.title = payload.title;
     if (payload.key !== undefined) target.key = payload.key;
     if (payload.playKey !== undefined) target.playKey = payload.playKey;
@@ -87,32 +84,32 @@ export const useSongStore = defineStore('song', () => {
     if (payload.lyrics !== undefined) target.lyrics = payload.lyrics;
     if (payload.lineIds !== undefined) target.lineIds = payload.lineIds;
     if (payload.chordMap !== undefined) target.chordMap = payload.chordMap;
+    target.version = (target.version ?? 1) + 1;
   };
 
   const setCharChord = (songId: string, slotKey: string | number, chordId: string) => {
     const target = songMap.value.get(songId);
     if (!target) return;
-
     target.chordMap ??= {};
-
     bindNewChordToSlot(target.chordMap, slotKey, chordId);
     target.chordMap = { ...target.chordMap };
+    target.version = (target.version ?? 1) + 1;
   };
 
   const removeCharChord = (songId: string, slotKey: string | number) => {
     const target = songMap.value.get(songId);
     if (!target || !target.chordMap) return;
-
     removeChordFromSlot(target.chordMap, slotKey);
     target.chordMap = { ...target.chordMap };
+    target.version = (target.version ?? 1) + 1;
   };
 
   const swapSongSlotChords = (songId: string, sourceKey: string | number, targetKey: string | number) => {
     const target = songMap.value.get(songId);
     if (!target || !target.chordMap) return;
-
     swapOrMoveSlotChords(target.chordMap, sourceKey, targetKey);
     target.chordMap = { ...target.chordMap };
+    target.version = (target.version ?? 1) + 1;
   };
 
   const overwriteSongs = (newSongs: Song[]) => {
@@ -123,7 +120,6 @@ export const useSongStore = defineStore('song', () => {
     songs.value.forEach(song => {
       if (!song.chordMap) return;
       let hasChanged = false;
-
       Object.keys(song.chordMap).forEach(key => {
         const boundChordId = song.chordMap[key];
         if (boundChordId && targetIds.has(boundChordId)) {
@@ -131,9 +127,9 @@ export const useSongStore = defineStore('song', () => {
           hasChanged = true;
         }
       });
-
       if (hasChanged) {
         song.chordMap = { ...song.chordMap };
+        song.version = (song.version ?? 1) + 1;
       }
     });
   };

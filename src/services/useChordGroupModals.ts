@@ -1,4 +1,4 @@
-import { DEFAULT_GROUP_SORT_RULE, DEFAULT_SORT_KEY, ID_PREFIXES, MESSAGES } from '@/constants';
+import { DEFAULT_GROUP_SORT_RULE, DEFAULT_SORT_KEY, MESSAGES } from '@/constants';
 import { useChordActions } from '@/services/useChordActions';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
@@ -6,7 +6,6 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/types';
 import { cloneDeep } from '@/utils/cloneDeep';
-import { generateUUID } from '@/utils/id';
 import { reactive } from 'vue';
 
 export function useChordGroupModals() {
@@ -51,12 +50,7 @@ export function useChordGroupModals() {
       uiStore.toast.warning('创建失败：该分组名称已存在');
       return;
     }
-    const newId = ID_PREFIXES.GROUP + generateUUID().slice(0, 8);
-    const updatedGroups = chordStore.groups.map(g => ({ ...g, collapsed: true }));
-    updatedGroups.push({ id: newId, name: val, collapsed: false, sortRule: DEFAULT_GROUP_SORT_RULE });
-
-    chordStore.overwriteGroups(updatedGroups);
-    chordStore.selectedGroupId = newId;
+    chordStore.addGroup(val);
     modals.create = false;
     uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
   };
@@ -74,8 +68,7 @@ export function useChordGroupModals() {
       return;
     }
     if (modalData.activeGroup) {
-      const updatedGroups = chordStore.groups.map(g => (g.id === modalData.activeGroup!.id ? { ...g, name: val } : g));
-      chordStore.overwriteGroups(updatedGroups);
+      chordStore.renameGroup(modalData.activeGroup.id, val);
     }
     modals.rename = false;
     uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
@@ -90,7 +83,6 @@ export function useChordGroupModals() {
     if (!modalData.activeGroup) return;
     const targetGid = modalData.activeGroup.id;
     const groupName = modalData.activeGroup.name;
-
     const groupsSnapshot = cloneDeep(chordStore.groups);
     const chordsSnapshot = cloneDeep(chordStore.savedChordsList);
     const songsSnapshot = cloneDeep(songStore.songs);
@@ -105,23 +97,10 @@ export function useChordGroupModals() {
         .flatMap(c => [c.id, c.fingerprint].filter(Boolean))
     );
 
-    chordStore.overwriteChords(chordStore.savedChordsList.filter(c => c.groupId !== targetGid));
-    chordStore.overwriteGroups(chordStore.groups.filter(g => g.id !== targetGid));
+    chordStore.deleteGroup(targetGid);
     songStore.unbindChordIds(targetChordIds);
 
-    if (chordStore.selectedGroupId === targetGid) {
-      const next = chordStore.groups[0];
-      if (next) {
-        chordStore.collapseAllGroups();
-        next.collapsed = false;
-        chordStore.selectedGroupId = next.id;
-      } else {
-        chordStore.selectedGroupId = null;
-      }
-    }
-
     modals.delete = false;
-
     uiStore.toast.info(`已删除分组 "${groupName}"`, {
       actionText: '撤销',
       duration: 4000,
@@ -148,17 +127,12 @@ export function useChordGroupModals() {
     }
     if (!modalData.activeChord) return;
 
-    const targetName = modalData.activeChord.chordName.trim().toLowerCase();
-    const sourceGid = modalData.activeChord.groupId;
+    chordStore.moveVariantsByName(
+      modalData.activeChord.groupId,
+      modalData.activeChord.chordName,
+      modalData.moveTargetId
+    );
 
-    const updatedChords = chordStore.savedChordsList.map(c => {
-      if (c.groupId === sourceGid && c.chordName.trim().toLowerCase() === targetName) {
-        return { ...c, groupId: modalData.moveTargetId };
-      }
-      return c;
-    });
-
-    chordStore.overwriteChords(updatedChords);
     uiStore.clearActionToasts();
     modals.move = false;
     uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
@@ -179,10 +153,7 @@ export function useChordGroupModals() {
 
   const handleSaveSort = () => {
     if (modalData.activeGroup) {
-      const updatedGroups = chordStore.groups.map(g =>
-        g.id === modalData.activeGroup!.id ? { ...g, sortRule: modalData.sortRule, sortKey: modalData.sortKey } : g
-      );
-      chordStore.overwriteGroups(updatedGroups);
+      chordStore.updateGroupSort(modalData.activeGroup.id, modalData.sortRule, modalData.sortKey);
     }
     modals.sort = false;
     uiStore.toast.success('排序配置已更新');

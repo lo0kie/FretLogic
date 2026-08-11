@@ -68,7 +68,7 @@ const executeToggleThemeWithAnimation = () => {
     settingsStore.isDarkMode = !settingsStore.isDarkMode;
   });
 
-  transition.finished.then(() => disableChangingAttribute()).catch(() => disableChangingAttribute());
+  transition.finished.then(disableChangingAttribute).catch(disableChangingAttribute);
 };
 
 watch(
