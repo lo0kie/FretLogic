@@ -139,7 +139,7 @@ const handleSelectSong = (songId: string) => {
       scoreEditor.activeTab = 'edit';
     }
 
-    if (uiStore.isMobile) {
+    if (uiStore.isMobile && uiStore.isLeftOpen) {
       uiStore.isLeftOpen = false;
     }
   }

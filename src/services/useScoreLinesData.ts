@@ -1,28 +1,8 @@
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
-import { buildLyricsLinesWithEdges } from '@/utils/scoreLines';
-import { computed } from 'vue';
-
-export interface EdgeChordItem {
-  slotKey: string;
-  chord: Chord;
-}
-
-export interface CharItem {
-  char: string;
-  slotKey: string;
-}
-
-export interface LineData {
-  lineIdx: number;
-  lineId: string;
-  chars: CharItem[];
-  startChords: EdgeChordItem[];
-  endChords: EdgeChordItem[];
-  nextStartKey: string;
-  nextEndKey: string;
-}
+import { buildLyricsLinesWithEdges, clearLyricsLineCharsCache, type LineData } from '@/utils/scoreLines';
+import { computed, watch } from 'vue';
 
 export function useScoreLinesData() {
   const scoreEditor = useScoreEditorStore();
@@ -47,6 +27,11 @@ export function useScoreLinesData() {
       scoreEditor.activeSong.lineIds
     );
   });
+
+  watch(
+    () => scoreEditor.activeSongId,
+    () => clearLyricsLineCharsCache()
+  );
 
   return { lyricsLinesWithEdges, chordsLookupMap };
 }

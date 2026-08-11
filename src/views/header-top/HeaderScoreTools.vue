@@ -31,5 +31,9 @@ const handleTabChange = (val: 'edit' | 'interactive') => {
   if (val === 'interactive' && !scoreEditor.hasLyrics) {
     uiStore.toast.warning('请先在“编辑歌词”模式下输入歌词内容');
   }
+
+  if (uiStore.isMobile && uiStore.isLeftOpen) {
+    uiStore.isLeftOpen = false;
+  }
 };
 </script>

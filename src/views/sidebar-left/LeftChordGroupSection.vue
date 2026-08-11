@@ -1,6 +1,5 @@
 <template>
   <EmptyState v-if="chordStore.groups.length === 0" :icon="FolderOpen" description="还没有添加分组" size="md" />
-
   <div v-else ref="groupListContainerRef" @keydown="handleKeydown">
     <VueDraggable
       :model-value="chordStore.groups"
@@ -17,7 +16,6 @@
     >
       <div v-for="(group, index) in chordStore.groups" :key="group.id" class="group-box-card" ref="groupCardEls">
         <GlobalContextMenu :items="getGroupMenuItems(group)" #default="{ isOpen }">
-          <!-- 1. 标题行 -->
           <div
             v-wave
             tabindex="0"
@@ -45,8 +43,6 @@
               <BaseMarquee>
                 <span class="group-name-text">{{ group.name }}</span>
               </BaseMarquee>
-
-              <!-- 右侧 Badge 组 -->
               <div class="group-badges-zone">
                 <BaseBadge
                   variant="neutral"
@@ -59,7 +55,6 @@
                 >
                   {{ getSortLabel(group) }}
                 </BaseBadge>
-
                 <BaseBadge
                   v-if="searchQuery"
                   :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
@@ -73,7 +68,6 @@
                   </span>
                   <span aria-hidden="true">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
                 </BaseBadge>
-
                 <BaseBadge
                   v-else
                   variant="neutral"
@@ -88,8 +82,6 @@
               </div>
             </div>
           </div>
-
-          <!-- 2. 折叠区内容组件 -->
           <LeftChordGroupContent
             :ref="el => setContentOuterRef(el, index)"
             :group
@@ -105,7 +97,6 @@
     </VueDraggable>
   </div>
 </template>
-
 <script setup lang="ts">
 import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
@@ -125,7 +116,6 @@ import LeftChordGroupContent from './LeftChordGroupContent.vue';
 const props = defineProps<{
   searchQuery: string;
 }>();
-
 const emit = defineEmits<{
   (e: 'open-rename', group: Group): void;
   (e: 'open-delete', group: Group): void;
@@ -139,10 +129,6 @@ const chordStore = useChordStore();
 const chordActions = useChordActions();
 const uiStore = useUiStore();
 
-// 分组标题行的单列垂直导航（1列）
-// 用原生 div 包裹 VueDraggable，避免拿到组件实例而非 DOM 节点
-// selector 限定只收集分组标题行，避免把展开分组内的和弦卡片一并扫入
-// stop: true 防止事件继续冒泡（此处已是最外层，主要是保持语义一致）
 const groupListContainerRef = useTemplateRef<HTMLElement>('groupListContainerRef');
 const groupCardEls = useTemplateRef<HTMLElement[]>('groupCardEls');
 const contentOuterComponentEls = new Map<number, ComponentPublicInstance | Element | null>();
@@ -158,7 +144,6 @@ const setContentOuterRef = (el: Element | ComponentPublicInstance | null, index:
 };
 
 const isGroupContentOpen = (group: Group): boolean => !group.collapsed;
-
 const isAllCollapsed = computed(() => chordStore.groups.every(g => g.collapsed));
 
 const handleSelectChord = (chord: Chord) => {
@@ -166,9 +151,30 @@ const handleSelectChord = (chord: Chord) => {
     editorStore.resetEditor();
   } else {
     editorStore.setEditor(chord);
-    if (uiStore.isMobile) uiStore.isLeftOpen = false;
+    if (uiStore.isMobile && uiStore.isLeftOpen) uiStore.isLeftOpen = false;
   }
 };
+
+const groupMatchCountsMap = computed(() => {
+  const map = new Map<string, number>();
+  const q = props.searchQuery.trim();
+
+  if (!q) {
+    chordStore.groups.forEach(g => {
+      map.set(g.id, chordStore.groupedChordMap.get(g.id)?.length ?? 0);
+    });
+    return map;
+  }
+
+  chordStore.groups.forEach(g => {
+    map.set(g.id, chordStore.getGroupedCards(g.id, q).length);
+  });
+
+  return map;
+});
+
+const getMatchCount = (groupId: string): number => groupMatchCountsMap.value.get(groupId) ?? 0;
+const hasMatchedChords = (groupId: string): boolean => getMatchCount(groupId) > 0;
 
 const getSortLabel = (group: Group): string => {
   switch (group.sortRule) {
@@ -182,39 +188,6 @@ const getSortLabel = (group: Group): string => {
       return 'C-B';
   }
 };
-
-const getMatchCount = (groupId: string): number => {
-  return matchCountMap.value.get(groupId) || 0;
-};
-
-const hasMatchedChords = (groupId: string): boolean => {
-  return getMatchCount(groupId) > 0;
-};
-
-const matchCountMap = computed(() => {
-  const map = new Map<string, number>();
-  filteredChordsMap.value.forEach((chords, groupId) => {
-    map.set(groupId, chords.length);
-  });
-  return map;
-});
-
-const filteredChordsMap = computed(() => {
-  const map = new Map<string, Chord[]>();
-  const queryKeyword = props.searchQuery.toLowerCase().trim();
-  chordStore.groups.forEach(group => {
-    const originalChords = chordStore.groupChordMap.get(group.id) || [];
-    if (!queryKeyword) {
-      map.set(group.id, originalChords);
-    } else {
-      map.set(
-        group.id,
-        originalChords.filter(c => c.chordName.toLowerCase().includes(queryKeyword))
-      );
-    }
-  });
-  return map;
-});
 
 const getGroupChordsCount = (groupId: string) => {
   return chordStore.groupChordMap.get(groupId)?.length ?? 0;
@@ -250,30 +223,23 @@ watch(
   async newId => {
     if (!newId) return;
     await nextTick();
-
     const idx = chordStore.groups.findIndex(g => g.id === newId);
     if (idx === -1) return;
-
     const targetElement = groupCardEls.value?.[idx];
     const contentComponent = contentOuterComponentEls.get(idx);
     if (!targetElement) return;
-
     const scrollToShowContent = () => {
       targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
-
     if (!contentComponent) {
       scrollToShowContent();
       return;
     }
-
     const contentOuter = ('$el' in contentComponent ? contentComponent.$el : contentComponent) as HTMLElement | null;
-
     if (!contentOuter) {
       scrollToShowContent();
       return;
     }
-
     const handleTransitionEnd = (e: TransitionEvent) => {
       if (e.propertyName !== 'grid-template-rows') return;
       contentOuter.removeEventListener('transitionend', handleTransitionEnd);
@@ -283,92 +249,98 @@ watch(
   }
 );
 </script>
-
 <style scoped lang="less">
 @import '@/assets/tokens.module';
-
 .draggable-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  position: relative;
+  gap: 0.4rem;
   box-sizing: border-box;
 }
-
 .group-box-card {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
+  border-radius: @radius-lg;
+  border: 1px solid var(--border-light);
   box-sizing: border-box;
-  scroll-margin-top: 0.8rem;
 }
-
 .group-title-row {
+  height: 2.2rem;
+  padding-left: 0.65rem;
+  padding-right: 0.65rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 0.5rem;
-  user-select: none;
-  background-color: transparent;
-  border-radius: @radius-md;
-  box-sizing: border-box;
   cursor: pointer;
-  border: 1px solid transparent;
+  border-radius: @radius-lg;
+  user-select: none;
+  box-sizing: border-box;
   transition: @transition-fast;
   outline: none;
-
-  &:hover {
-    background-color: var(--bg-panel-hover);
-  }
-
   &:hover,
-  &:active,
   &.is-context-open {
-    background-color: var(--bg-panel-hover) !important;
-    border-color: var(--border-base);
+    background-color: var(--bg-panel-hover);
+    .arrow-toggle-icon {
+      color: var(--text-title);
+    }
   }
-
   &.is-expanded {
-    background-color: color-mix(in srgb, var(--bg-panel-hover), transparent 50%);
-    border-color: var(--border-light);
-    border-width: 1px;
+    .arrow-toggle-icon {
+      color: var(--color-primary);
+    }
   }
 }
-
 .group-info-zone {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  flex: 1;
+  gap: 0.45rem;
   min-width: 0;
-  box-sizing: border-box;
+  flex: 1;
 }
-
 .arrow-toggle-icon {
   color: var(--text-disabled);
+  transition: transform @duration-fast ease;
   flex-shrink: 0;
-  transition:
-    transform @duration-fast @bezier-standard,
-    color @duration-fast ease;
-
   &.is-collapsed {
     transform: rotate(-90deg);
   }
 }
-
 .group-name-text {
+  font-size: 0.78rem;
   font-weight: 700;
-  font-size: 0.82rem;
-  user-select: none;
-  letter-spacing: 1px;
-  color: var(--text-body);
-  transition: color @duration-fast ease;
+  color: var(--text-title);
+  white-space: nowrap;
 }
-
 .group-badges-zone {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  margin-left: auto;
   flex-shrink: 0;
+}
+.sort-rule-badge {
+  font-size: 0.55rem;
+  opacity: 0.8;
+}
+.count-badge {
+  font-family: monospace;
+}
+.search-match-count {
+  font-weight: 800;
+}
+@media (max-width: 768px) {
+  .group-title-row {
+    height: 2.85rem;
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+    border-radius: calc(@radius-lg * 1.2);
+  }
+  .group-name-text {
+    font-size: 0.92rem;
+  }
+  .sort-rule-badge {
+    font-size: 0.68rem;
+  }
+  .count-badge {
+    font-size: 0.75rem;
+  }
 }
 </style>

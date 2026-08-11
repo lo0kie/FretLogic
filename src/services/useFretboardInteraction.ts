@@ -2,10 +2,10 @@ import type { FretboardProps } from '@/components/Fretboard.vue';
 import { CANVAS_CONFIG, INTERACTION_CONFIG } from '@/constants';
 import { useFretboardLayout } from '@/services/useFretboardLayout';
 import type { GuitarStringsModel } from '@/types';
-import { cloneDeep } from '@/utils/cloneDeep';
+import { cloneGuitarStrings } from '@/utils/cloneDeep';
 import { canTogglePitchAccidental, getActiveBaseStrings, isOpen } from '@/utils/musicTheory';
 import { useEventListener } from '@vueuse/core';
-import { computed, onBeforeUnmount, ref, toRaw, useTemplateRef, watchEffect } from 'vue';
+import { computed, onBeforeUnmount, ref, useTemplateRef, watchEffect } from 'vue';
 
 export function useFretboardInteraction(
   props: FretboardProps,
@@ -51,7 +51,7 @@ export function useFretboardInteraction(
 
   const emitStringsUpdate = (mutator: (cloned: GuitarStringsModel) => void) => {
     if (!interactive.value) return;
-    const cloned = cloneDeep(toRaw(strings.value));
+    const cloned = cloneGuitarStrings(strings.value);
     mutator(cloned);
     onStringsChange(cloned);
   };
@@ -223,9 +223,27 @@ export function useFretboardInteraction(
     }
   };
 
+  const updateHoverFromEvent = (clientX: number, clientY: number) => {
+    const pt = getCanvasPoint(clientX, clientY);
+    const prev = hoverPoint.value;
+    const changed = !pt || !prev || pt.stringIndex !== prev.stringIndex || pt.fretIndex !== prev.fretIndex;
+    if (changed) hoverPoint.value = pt;
+  };
+
+  let hoverRafId = 0;
+  let pendingEvent: { clientX: number; clientY: number } | null = null;
+
+  const scheduleHoverUpdate = (clientX: number, clientY: number) => {
+    pendingEvent = { clientX, clientY };
+    if (hoverRafId) return;
+    hoverRafId = requestAnimationFrame(() => {
+      if (pendingEvent) updateHoverFromEvent(pendingEvent.clientX, pendingEvent.clientY);
+      hoverRafId = 0;
+    });
+  };
+
   const handlePointerMove = (e: PointerEvent) => {
-    const pt = getCanvasPoint(e.clientX, e.clientY);
-    if (pt) hoverPoint.value = pt;
+    scheduleHoverUpdate(e.clientX, e.clientY);
     if (ticking) return;
     ticking = true;
     rAF_ID = requestAnimationFrame(() => {
@@ -311,8 +329,9 @@ export function useFretboardInteraction(
 
   useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
   useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {
-    hoverPoint.value = getCanvasPoint(e.clientX, e.clientY);
+    scheduleHoverUpdate(e.clientX, e.clientY);
   });
+
   useEventListener(fretBoardRef, 'pointerleave', handlePointerLeave);
   useEventListener(fretBoardRef, 'wheel', handleWheel, { passive: false });
   useEventListener(fretBoardRef, 'keydown', handleKeydown);
@@ -320,7 +339,10 @@ export function useFretboardInteraction(
   useEventListener(fretBoardRef, 'blur', handleBlur);
 
   onBeforeUnmount(() => {
-    if (rAF_ID) cancelAnimationFrame(rAF_ID);
+    if (rAF_ID) {
+      cancelAnimationFrame(rAF_ID);
+      cancelAnimationFrame(hoverRafId);
+    }
   });
 
   return {

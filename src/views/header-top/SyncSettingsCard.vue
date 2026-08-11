@@ -24,7 +24,6 @@
       autofocus
       fontSize="xs"
       :maxlength="100"
-      horizontal-wheel
       show-count
     />
 

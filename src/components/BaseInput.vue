@@ -75,7 +75,7 @@ const {
   type = 'text',
   maxlength,
   showCount = false,
-  horizontalWheel = false,
+  horizontalWheel = true,
 } = defineProps<{
   placeholder?: string;
   disabled?: boolean;
@@ -185,8 +185,7 @@ onMounted(() => {
   top: 0;
   bottom: 0;
   margin: auto 0;
-  height: 1rem;
-  width: 1rem;
+
   opacity: 0;
   border: none;
   padding: 0;
@@ -201,13 +200,19 @@ onMounted(() => {
   pointer-events: auto;
 
   &.size-sm {
-    right: 0.35rem;
+    right: 0.4rem;
+    height: 0.7rem;
+    width: 0.7rem;
   }
   &.size-md {
     right: 0.5rem;
+    height: 0.8rem;
+    width: 0.8rem;
   }
   &.size-lg {
     right: 0.65rem;
+    height: 0.9rem;
+    width: 0.9rem;
   }
 
   &:hover {

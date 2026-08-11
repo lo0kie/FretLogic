@@ -14,12 +14,11 @@ export function useImportExportService() {
 
   /** 清洗后的 payload 全量覆盖本地 */
   const applyFullOverwrite = (data: ImportExportPayload) => {
-    const groups = cloneDeep(data.groups ?? []);
-    const chords = cloneDeep(data.chords ?? []);
+    chordStore.replaceAllData({
+      groups: cloneDeep(data.groups ?? []),
+      chords: cloneDeep(data.chords ?? []),
+    });
     const songs = cloneDeep(data.songs ?? []);
-
-    chordStore.overwriteGroups(groups);
-    chordStore.overwriteChords(chords);
     songStore.overwriteSongs(songs);
     chordStore.selectedGroupId = null;
   };

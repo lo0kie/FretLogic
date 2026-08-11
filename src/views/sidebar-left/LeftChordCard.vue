@@ -1,27 +1,37 @@
 ﻿<template>
   <GlobalContextMenu :items="menuItems" #default="{ isOpen }">
-    <div class="chord-card-frame" :title="`${cardData.mainChord.chordName} ${dotTitle}`">
+    <div
+      class="chord-card-frame"
+      v-memo="[
+        cardData.mainChord.id,
+        activeChord.id,
+        activeChord.fingerprint,
+        cardData.variantCount,
+        isActive,
+        cardData.hasVariants,
+        isSwapping,
+      ]"
+      :title="`${activeChord.chordName} ${dotTitle}`"
+    >
       <div
         v-wave
         class="chord-thumb-card"
         :class="{
-          'is-editing': isActiveVariantEditing,
-          'is-stacked-editing': isOtherVariantEditing,
+          'is-editing': isActive,
           'is-context-open': isOpen,
           'has-variants': cardData.hasVariants,
           'is-swapping': isSwapping,
         }"
         role="button"
         tabindex="0"
-        :aria-pressed="isActiveVariantEditing"
-        :aria-label="`和弦 ${cardData.mainChord.chordName}${cardData.hasVariants ? `（共 ${cardData.variantCount} 种指法${isActiveVariantEditing ? '，已激活，滚轮可切换' : ''}）` : ''}`"
+        :aria-pressed="isActive"
+        :aria-label="ariaLabel"
         @click="handleCardClick"
         @wheel="handleWheelScroll"
         @keydown.enter.prevent.stop="handleCardClick"
         @keydown.space.prevent.stop="handleCardClick"
         data-focusable-inline
       >
-        <!-- 左上角：状态标识圆点 -->
         <span
           v-if="hasDot"
           class="status-dot"
@@ -35,24 +45,22 @@
           :aria-label="dotTitle"
         ></span>
 
-        <!-- 右上角：变体指法数量 Badge -->
         <BaseBadge
           v-if="cardData.hasVariants"
-          :variant="isActiveVariantEditing || isOtherVariantEditing ? 'primary' : 'neutral'"
+          :variant="isActive ? 'primary' : 'neutral'"
           appearance="filled"
           size="xs"
           class="variant-badge-badge"
-          width="0.85rem"
-          :title="isActiveVariantEditing ? '滚轮切换指法' : undefined"
+          :width="isActive ? '1.5rem' : '0.85rem'"
+          :title="isActive ? '滚轮切换指法' : undefined"
           @click.stop="toggleVariantsDropdown"
         >
-          {{ cardData.variantCount }}
+          <span v-if="isActive">{{ activeVariantIndex + 1 }}/{{ cardData.variantCount }}</span>
+          <span v-else>{{ cardData.variantCount }}</span>
         </BaseBadge>
 
         <BaseMarquee class="chord-marquee-wrapper">
-          <span class="chord-name-text">
-            {{ cardData.mainChord.chordName }}
-          </span>
+          <span class="chord-name-text">{{ activeChord.chordName }}</span>
         </BaseMarquee>
       </div>
     </div>
@@ -70,7 +78,7 @@ import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 
 const props = defineProps<{
   cardData: GroupedChordCard;
-  isEditing: boolean;
+  isActive: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -81,32 +89,17 @@ const emit = defineEmits<{
 }>();
 
 const editorStore = useEditorStore();
+
+/** 未激活时的本地预览索引；激活后索引以 store 为准 */
 const localVariantIndex = ref(0);
 
-// 1. 判断当前卡片是否包含正在被 editorStore 编辑的和弦
-const isCurrentCardActive = computed(() => {
-  return props.cardData.variants.some(c => c.id === editorStore.draftChord.id);
-});
+const activeVariantIndex = computed(() =>
+  props.isActive ? editorStore.currentMultiFingeringIndex : localVariantIndex.value
+);
 
-// 2. 动态激活索引：激活状态下直接驱动自 editorStore，非激活状态维持本地索引
-const activeVariantIndex = computed({
-  get: () => {
-    if (isCurrentCardActive.value) {
-      return editorStore.currentMultiFingeringIndex;
-    }
-    return localVariantIndex.value;
-  },
-  set: val => {
-    localVariantIndex.value = val;
-  },
-});
-
-const activeChord = computed(() => props.cardData.variants[activeVariantIndex.value] || props.cardData.mainChord);
-
-const isActiveVariantEditing = computed(() => activeChord.value.id === editorStore.draftChord.id);
-
-const isOtherVariantEditing = computed(() => {
-  return props.cardData.hasVariants && !isActiveVariantEditing.value && isCurrentCardActive.value;
+const activeChord = computed(() => {
+  if (props.isActive) return editorStore.draftChord;
+  return props.cardData.variants[localVariantIndex.value] ?? props.cardData.mainChord;
 });
 
 const handleCardClick = () => {
@@ -121,10 +114,8 @@ const triggerSwapAnimation = async () => {
     clearTimeout(swapTimer);
     swapTimer = null;
   }
-
   isSwapping.value = false;
   await nextTick();
-
   isSwapping.value = true;
   swapTimer = setTimeout(() => {
     isSwapping.value = false;
@@ -132,40 +123,32 @@ const triggerSwapAnimation = async () => {
   }, 200);
 };
 
+const switchVariant = (nextIdx: number) => {
+  triggerSwapAnimation();
+  if (props.isActive) {
+    editorStore.setMultiFingeringIndex(nextIdx);
+    return;
+  }
+  localVariantIndex.value = nextIdx;
+  emit('select', props.cardData.variants[nextIdx] ?? props.cardData.mainChord);
+};
+
 const toggleVariantsDropdown = () => {
   if (!props.cardData.hasVariants) return;
-  triggerSwapAnimation();
   const nextIdx = (activeVariantIndex.value + 1) % props.cardData.variantCount;
-
-  if (isCurrentCardActive.value) {
-    editorStore.setMultiFingeringIndex(nextIdx);
-  } else {
-    activeVariantIndex.value = nextIdx;
-    emit('select', activeChord.value);
-  }
+  switchVariant(nextIdx);
 };
 
 const handleWheelScroll = (e: WheelEvent) => {
-  if (!props.cardData.hasVariants || !props.isEditing) return;
+  if (!props.cardData.hasVariants || !props.isActive) return;
   e.preventDefault();
   e.stopPropagation();
-
-  triggerSwapAnimation();
-
   const total = props.cardData.variantCount;
-  let nextIdx = activeVariantIndex.value;
-  if (e.deltaY > 0) {
-    nextIdx = (nextIdx + 1) % total;
-  } else if (e.deltaY < 0) {
-    nextIdx = (nextIdx - 1 + total) % total;
-  }
-
-  if (isCurrentCardActive.value) {
-    editorStore.setMultiFingeringIndex(nextIdx);
-  } else {
-    activeVariantIndex.value = nextIdx;
-    emit('select', activeChord.value);
-  }
+  const cur = activeVariantIndex.value;
+  let nextIdx = cur;
+  if (e.deltaY > 0) nextIdx = (cur + 1) % total;
+  else if (e.deltaY < 0) nextIdx = (cur - 1 + total) % total;
+  if (nextIdx !== cur) switchVariant(nextIdx);
 };
 
 const menuItems = computed<ContextMenuItem[]>(() => [
@@ -189,13 +172,21 @@ const menuItems = computed<ContextMenuItem[]>(() => [
 ]);
 
 const hasRoot = computed(() => activeChord.value.strings.some(s => s.fret >= 0 && s.isRoot));
-const isInverted = computed(() => activeChord.value.isInverted);
-const hasDot = ref(true);
+const isInverted = computed(() => !!activeChord.value.isInverted);
+const hasDot = true;
 
 const dotTitle = computed(() => {
   const rootText = hasRoot.value ? '有根音' : '无根音';
   const invertText = isInverted.value ? ' + 转位和弦' : '';
   return `${rootText}${invertText}`;
+});
+
+const ariaLabel = computed(() => {
+  const name = activeChord.value.chordName;
+  if (!props.cardData.hasVariants) return `和弦 ${name}`;
+  const parts = [`和弦 ${name}`, `共 ${props.cardData.variantCount} 种指法`];
+  if (props.isActive) parts.push('已激活，滚轮可切换');
+  return parts.join('，');
 });
 
 onBeforeUnmount(() => {
@@ -258,20 +249,6 @@ onBeforeUnmount(() => {
     &.is-editing::before {
       border-color: color-mix(in srgb, @primary, transparent 40%);
       background-color: color-mix(in srgb, @primary, var(--bg-body) 94%);
-    }
-
-    &.is-stacked-editing::before {
-      border-color: @primary;
-      background-color: color-mix(in srgb, @primary, var(--bg-body) 80%);
-      transform: translate(5px, 4px) rotate(1.5deg);
-      box-shadow: 0 0 0 1px color-mix(in srgb, @primary, transparent 50%);
-
-      &:hover,
-      &.is-context-open {
-        border-color: @primary;
-        background-color: color-mix(in srgb, @primary, var(--bg-body) 70%);
-        transform: translate(6px, 5px) rotate(2deg);
-      }
     }
 
     &.is-swapping::before {
@@ -366,15 +343,12 @@ onBeforeUnmount(() => {
   &.is-root-normal {
     background-color: var(--color-primary);
   }
-
   &.is-root-inverted {
     background: linear-gradient(135deg, var(--color-primary) 50%, var(--color-warning) 50%);
   }
-
   &.is-rootless-inverted {
     background-color: var(--color-warning);
   }
-
   &.is-rootless-normal {
     background-color: var(--color-danger);
   }
@@ -409,8 +383,8 @@ onBeforeUnmount(() => {
   }
 
   .status-dot {
-    top: -0.3rem;
-    left: -0.3rem;
+    top: 0.25rem;
+    left: 0.25rem;
     width: 0.62rem;
     height: 0.62rem;
   }
