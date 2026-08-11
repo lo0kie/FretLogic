@@ -2,7 +2,6 @@ export interface LyricsLineItem {
   id: string;
   text: string;
 }
-
 export interface Song {
   id: string;
   title: string;
@@ -12,4 +11,5 @@ export interface Song {
   playKey: string;
   capo: number;
   chordMap: Record<string | number, string>;
+  version?: number;
 }

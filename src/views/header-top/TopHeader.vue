@@ -36,7 +36,9 @@
     <!-- 3. 右侧：指板配置 Popover / 曲谱配置 Popover -->
     <div class="header-section section-right">
       <HeaderConfigPopover v-if="route.path === '/workbench'" />
-      <ScoreConfigPopover v-else-if="route.path === '/score' && scoreEditor.activeSong" />
+      <ScoreConfigPopover
+        v-else-if="route.path === '/score' && scoreEditor.activeSong && scoreEditor.activeTab === 'interactive'"
+      />
 
       <!-- 云端同步按钮 -->
       <ActionButton
@@ -88,6 +90,7 @@ import SyncModalContainer from './SyncModalContainer.vue';
 const emit = defineEmits<{
   (e: 'toggle-theme'): void;
 }>();
+
 const route = useRoute();
 const router = useRouter();
 const activeNavPath = computed(() => {
@@ -98,6 +101,7 @@ const NAV_OPTIONS: SegmentOption<string>[] = [
   { label: '和弦', value: '/workbench' },
   { label: '乐谱', value: '/score' },
 ];
+
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
@@ -105,7 +109,7 @@ const isSyncModalOpen = ref(false);
 const uiSize = computed(() => (uiStore.isMobile ? 'sm' : 'md'));
 
 watch(activeNavPath, () => {
-  if (uiStore.isMobile) uiStore.isLeftOpen = false;
+  if (uiStore.isMobile && uiStore.isLeftOpen) uiStore.isLeftOpen = false;
 });
 </script>
 

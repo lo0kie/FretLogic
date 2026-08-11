@@ -33,28 +33,24 @@ export const useEditorStore = defineStore('editor', () => {
   const draftChord = useStorage<Chord>(STORAGE_KEYS.EDITING_DRAFT, createDefaultChord(), localStorage, {
     eventFilter: debounceFilter(300),
   });
-
   const isEditing = useStorage(STORAGE_KEYS.IS_EDITING, false);
   const isCreating = useStorage(STORAGE_KEYS.IS_CREATING, false);
 
   const isFretBoardEmpty = computed(() => draftChord.value.strings.every(s => s.fret < 0));
   const activeBaseStrings = computed(() => TUNING_PRESETS[draftChord.value.tuning]?.mapping || DEFAULT_TUNING_MAPPING);
 
-  // 🌟 从 chordStore 集中获取当前编辑和弦的多指法数据
+  /** 多指法：只查 chordStore，nameKey 规则不在这里重复 */
   const currentMultiFingering = computed(() => {
     const chord = draftChord.value;
     if (!chord.id || !chord.groupId || !chord.chordName) return null;
-    const groupData = chordStore.multiFingeringData.get(chord.groupId);
-    if (!groupData) return null;
-    return groupData.get(chord.chordName.trim().toLowerCase()) ?? null;
+    return chordStore.getMultiFingering(chord.groupId, chord.chordName);
   });
 
   const isMultiFingering = computed(() => currentMultiFingering.value?.hasVariants ?? false);
   const currentMultiFingeringChords = computed<Chord[]>(() => currentMultiFingering.value?.variants ?? []);
-
   const currentMultiFingeringIndex = computed(() => {
     if (!isMultiFingering.value) return 0;
-    const index = currentMultiFingeringChords.value.findIndex(chord => chord.id === draftChord.value.id);
+    const index = currentMultiFingeringChords.value.findIndex(c => c.id === draftChord.value.id);
     return index >= 0 ? index : 0;
   });
 

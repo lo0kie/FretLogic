@@ -85,6 +85,16 @@
       <template v-for="(str, sIdx) in strings" :key="'finger-' + sIdx">
         <g
           v-if="str.fret > 0 && str.fret <= fretCount"
+          v-memo="[
+            str.fret,
+            str.preferFlat,
+            str.isRoot,
+            interactive,
+            isDarkMode,
+            capo,
+            activeBaseStrings[sIdx],
+            stringXPositions[sIdx],
+          ]"
           :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
           tabindex="-1"
           :style="{ color: getFingerColor(str, isDarkMode) }"

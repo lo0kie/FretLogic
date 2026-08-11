@@ -23,20 +23,30 @@
         <template v-if="showOpenStrings">
           <button
             v-wave
+            v-memo="[
+              str.fret,
+              str.preferFlat,
+              str.isRoot,
+              interactive,
+              isDarkMode,
+              bordered,
+              isFocused && focusPoint?.fretIndex === 0 && focusPoint?.stringIndex === sIdx,
+              focusPoint?.stringIndex === sIdx,
+            ]"
             v-for="(str, sIdx) in chord.strings"
             :key="'os-' + sIdx"
-            v-tooltip="getOpenStringTooltip(str)"
+            v-tooltip="openStringTooltips[sIdx]"
             tabindex="-1"
             role="button"
-            :aria-label="getOpenStringAriaLabel(sIdx, str)"
+            :aria-label="openStringAriaLabels[sIdx]"
             :aria-disabled="!interactive"
-            :title="str.fret > 0 ? undefined : getOpenStringAriaLabel(sIdx, str)"
+            :title="str.fret > 0 ? undefined : openStringAriaLabels[sIdx]"
             @click.stop="handleLocalToggleOpenString(sIdx)"
             @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
             class="open-string-btn"
             :class="[
               str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available',
-              getOpenStringStatusClass(str),
+              openStringStatusClasses[sIdx],
               interactive ? 'allow-events' : 'block-events',
               {
                 'no-border': !bordered,
@@ -46,7 +56,7 @@
             :style="{
               left: stringXPositions[sIdx] ? `${stringXPositions[sIdx]}px` : `${30 + sIdx * 64}px`,
               backgroundColor: bgColor,
-              ...getOpenStringStyle(str, isDarkMode),
+              ...openStringStyles[sIdx],
             }"
           >
             <template v-if="str.fret <= 0">
@@ -83,10 +93,11 @@ import FretboardSvg from '@/components/FretboardSvg.vue';
 import { CANVAS_CONFIG } from '@/constants';
 import { useFretboardInteraction } from '@/services/useFretboardInteraction';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord, GuitarStringEntity, GuitarStringsModel } from '@/types';
+import type { Chord, GuitarStringsModel } from '@/types';
 import { getOpenStringStatusClass, getOpenStringStyle } from '@/utils/fretboardVisuals';
 import { calcNoteLabel, getActiveBaseStrings, isMuted, isOpen } from '@/utils/musicTheory';
 import { X } from '@lucide/vue';
+import { computed } from 'vue';
 
 export interface FretboardProps {
   chord: Chord;
@@ -140,23 +151,38 @@ const {
   isDragging => emit('drag-status-change', isDragging)
 );
 
-const getOpenStringTooltip = (str: GuitarStringEntity) => {
-  return props.interactive && str.fret <= 0
-    ? { content: '左键：切换空弦/静音 \n 右键：设为根音 \n 滚轮：切换升降号', placement: 'top' }
-    : undefined;
-};
+// 将 tooltip 也改为计算属性缓存
+const openStringTooltips = computed(() => {
+  return props.chord.strings.map(str => {
+    return props.interactive && str.fret <= 0
+      ? { content: '左键：切换空弦/静音 \n 右键：设为根音 \n 滚轮：切换升降号', placement: 'top' }
+      : undefined;
+  });
+});
 
-const getOpenStringAriaLabel = (sIdx: number, str: GuitarStringsModel[number]) => {
-  const stringNum = 6 - sIdx;
-  if (str.fret > 0) {
-    return `第 ${stringNum} 弦（已按第 ${str.fret} 品，点击清除按音）`;
-  }
-  if (isMuted(str)) {
-    return `第 ${stringNum} 弦（静音，点击切换为空弦）`;
-  }
-  const noteName = calcNoteLabel(sIdx, 0, props.chord.capo, str.preferFlat, getActiveBaseStrings(props.chord.tuning));
-  return `第 ${stringNum} 弦（空弦 ${noteName}，点击切换为静音）`;
-};
+// 将状态类名改为计算属性缓存
+const openStringStatusClasses = computed(() => {
+  return props.chord.strings.map(str => getOpenStringStatusClass(str));
+});
+
+// 将样式改为计算属性缓存
+const openStringStyles = computed(() => {
+  return props.chord.strings.map(str => getOpenStringStyle(str, props.isDarkMode));
+});
+
+const openStringAriaLabels = computed(() => {
+  return props.chord.strings.map((str, sIdx) => {
+    const stringNum = 6 - sIdx;
+    if (str.fret > 0) {
+      return `第 ${stringNum} 弦（已按第 ${str.fret} 品，点击清除按音）`;
+    }
+    if (isMuted(str)) {
+      return `第 ${stringNum} 弦（静音，点击切换为空弦）`;
+    }
+    const noteName = calcNoteLabel(sIdx, 0, props.chord.capo, str.preferFlat, getActiveBaseStrings(props.chord.tuning));
+    return `第 ${stringNum} 弦（空弦 ${noteName}，点击切换为静音）`;
+  });
+});
 </script>
 
 <style scoped lang="less">

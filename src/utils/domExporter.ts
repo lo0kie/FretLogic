@@ -12,33 +12,28 @@ export interface ExportOptions {
   pixelRatio?: number;
 }
 
-/** 1. 辅助计算：根据 DOM 面积计算自适应像素比，防止大图绘制卡死 */
 const getCanvasPixelRatio = (el: HTMLElement): number => {
   const w = Math.max(el.scrollWidth, el.clientWidth);
   const h = Math.max(el.scrollHeight, el.clientHeight);
   const area = w * h;
-
   if (area > 4_000_000) return 1;
   if (area > 2_000_000) return 1.5;
   return Math.min(2, window.devicePixelRatio || 2);
 };
 
-/** 2. 样式读取：获取页面主背景色 */
 const getDOMBgColor = (): string => {
-  return getComputedStyle(document.body).getPropertyValue('--bg-main').trim() || '#f2f2f7';
+  const isDark = document.documentElement.classList.contains('dark');
+  return isDark ? '#18181a' : '#f2f2f7';
 };
 
-/** 3. 字体加载：带 1.5 秒超时保护的字体就绪等待 */
 const waitForFontsReady = async (): Promise<void> => {
   if (!document.fonts) return;
   await Promise.race([document.fonts.ready, new Promise<void>(resolve => setTimeout(resolve, 1500))]);
 };
 
-/** 4. 配置构建：将业务 ExportOptions 转为 html-to-image 的 Options 参数 */
 const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions): Options => {
   let defaultBgColor: string | undefined = getDOMBgColor();
   let defaultStyle: Record<string, string> = {};
-
   if (exportOptions.isTransparent) {
     defaultBgColor = undefined;
     defaultStyle = {
@@ -46,7 +41,6 @@ const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions):
       backgroundImage: 'none',
     };
   }
-
   return {
     quality: 0.95,
     pixelRatio: exportOptions.pixelRatio ?? getCanvasPixelRatio(el),
@@ -68,15 +62,11 @@ const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions):
   };
 };
 
-/** 6. DOM 渲染核心：将指定 Element 渲染为 PNG Blob 数据 */
 export const renderElementToBlob = async (el: HTMLElement, exportOptions: ExportOptions = {}): Promise<Blob> => {
   const htmlToImage = await import('html-to-image');
   const finalOptions = buildHtmlToImageOptions(el, exportOptions);
-
   await waitForFontsReady();
-
   const blob = await htmlToImage.toBlob(el, finalOptions);
-
   if (!blob) {
     throw new Error('Blob 图片数据生成失败');
   }
@@ -105,9 +95,7 @@ export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
   if (!document.hasFocus()) {
     throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
   }
-
   const mimeType = blob.type || 'image/png';
-
   try {
     await navigator.clipboard.write([new ClipboardItem({ [mimeType]: blob })]);
   } catch {
@@ -119,7 +107,6 @@ export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
   }
 };
 
-/** 7. 导出复制工具：入口函数，只负责提取 DOM 并触发剪贴板复制 */
 export const copyElementToClipboard = async (
   target: HTMLElement | Ref<HTMLElement | null | undefined> | null | undefined,
   exportOptions: ExportOptions = {}

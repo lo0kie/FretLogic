@@ -11,7 +11,6 @@
         description="请先在“编辑歌词”模式下输入文本内容"
         size="lg"
       />
-
       <div v-else class="lyrics-lines-container" :class="{ 'is-export-mode': isExporting }" ref="lyricsRef">
         <div v-show="isExporting && includeMetaBar" class="export-header-meta" ref="exportHeaderMetaRef">
           <h1 class="export-song-title">{{ scoreEditor.activeSong?.title }}</h1>
@@ -21,7 +20,6 @@
             <span>Capo: {{ scoreEditor.activeSong.capo }}</span>
           </div>
         </div>
-
         <GlobalContextMenu
           v-for="lineData in lyricsLinesWithEdges"
           :key="lineData.lineId"
@@ -32,6 +30,16 @@
           <div
             v-wave
             :data-line-idx="lineData.lineId"
+            v-memo="[
+              lineData,
+              isLineVisibleInExport(lineData.lineIdx),
+              selectedLineSet.has(lineData.lineIdx),
+              dragOverSlotKey,
+              isExporting,
+              includeMetaBar,
+              scoreEditor.fontScale,
+              scoreEditor.fretboardScale,
+            ]"
             class="lyrics-line"
             :class="{
               'is-line-selected': isLineVisibleInExport(lineData.lineIdx),
@@ -48,7 +56,6 @@
                 {{ formatLineIndex(lineData.lineIdx) }}
               </span>
             </div>
-
             <!-- 1. 行首插槽区域 -->
             <div class="edge-chords-group" @dragover.prevent="handleGlobalDragOver">
               <ChordSlotCell
@@ -64,7 +71,6 @@
                 @drop="handleDrop(lineData.nextStartKey)"
                 @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
               />
-
               <ChordSlotCell
                 :is-exporting
                 :scroll-root="scoreZoneRef"
@@ -83,7 +89,6 @@
                 @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
               />
             </div>
-
             <!-- 2. 中间字符和弦区 -->
             <ChordSlotCell
               :is-exporting
@@ -101,7 +106,6 @@
               @drop="handleDrop(item.slotKey)"
               @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
             />
-
             <!-- 3. 行尾插槽区域 -->
             <div class="edge-chords-group" @dragover.prevent="handleGlobalDragOver">
               <ChordSlotCell
@@ -121,7 +125,6 @@
                 @dragend="handleDragEnd"
                 @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
               />
-
               <ChordSlotCell
                 :is-exporting
                 :scroll-root="scoreZoneRef"
@@ -142,18 +145,18 @@
     </div>
   </div>
 </template>
-
 <script setup lang="ts">
 import EmptyState from '@/components/EmptyState.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { A4_HEIGHT_PX, A4_MARGIN_PX, A4_WIDTH_PX } from '@/constants/print';
 import { useLyricsDragDrop } from '@/services/useLyricsDragDrop';
-import { useScoreLinesData, type LineData } from '@/services/useScoreLinesData.ts';
+import { useScoreLinesData } from '@/services/useScoreLinesData.ts';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore.ts';
 import type { Chord } from '@/types';
+import type { LineData } from '@/utils/scoreLines.ts';
 import { Eraser, FileText, Trash2 } from '@lucide/vue';
-import { onActivated, onDeactivated, useTemplateRef } from 'vue';
+import { computed, onActivated, onDeactivated, useTemplateRef } from 'vue';
 import ChordSlotCell from './ChordSlotCell.vue';
 
 defineOptions({ name: 'ScoreInteractiveArea' });
@@ -172,7 +175,6 @@ const emit = defineEmits<{
 
 const uiStore = useUiStore();
 const scoreEditor = useScoreEditorStore();
-
 const scoreZoneRef = useTemplateRef<HTMLElement>('scoreZoneRef');
 const lyricsRef = useTemplateRef<HTMLElement>('lyricsRef');
 const exportHeaderMetaRef = useTemplateRef<HTMLElement>('exportHeaderMetaRef');
@@ -189,41 +191,45 @@ const {
 } = useLyricsDragDrop();
 
 const { lyricsLinesWithEdges, chordsLookupMap } = useScoreLinesData();
+
 const formatLineIndex = (index: number) => String(index + 1).padStart(2, '0');
 
 const isLineVisibleInExport = (lineIdx: number) => {
   if (props.isExporting && props.exportPageLineSet && props.exportPageLineSet.size > 0) {
     return props.exportPageLineSet.has(lineIdx);
   }
+
   return props.selectedLineSet.has(lineIdx);
 };
 
-const getCharChord = (slotKey: string): Chord | undefined => {
-  const chordId = scoreEditor.activeSong?.chordMap[slotKey];
-  return chordId ? chordsLookupMap.value.get(chordId) : undefined;
-};
+const slotChordMap = computed(() => {
+  const map = new Map<string | number, Chord>();
+  const chordMap = scoreEditor.activeSong?.chordMap;
+
+  if (!chordMap) return map;
+
+  for (const [slotKey, chordId] of Object.entries(chordMap)) {
+    const chord = chordsLookupMap.value.get(chordId);
+    if (chord) map.set(slotKey, chord);
+  }
+
+  return map;
+});
+
+const getCharChord = (slotKey: string | number) => slotChordMap.value.get(slotKey);
 
 const handleLineClick = (ev: MouseEvent, lineIdx: number) => {
   if (props.isExporting) return;
-  const target = ev.target as HTMLElement;
 
+  const target = ev.target as HTMLElement;
   if (target.closest('.char-box')) {
     return;
   }
-
   emit('line-click', lineIdx);
 };
 
 const clearLineChords = (lineData: LineData) => {
-  const linePrefix = `line_${lineData.lineId}_`;
-  const chordMap = scoreEditor.activeSong?.chordMap;
-  if (!chordMap) return;
-
-  Object.keys(chordMap).forEach(slotKey => {
-    if (slotKey.startsWith(linePrefix)) {
-      scoreEditor.removeSlotChord(slotKey);
-    }
-  });
+  scoreEditor.clearLineChords(lineData.lineId);
 
   uiStore.toast.success(`已清除第 ${lineData.lineIdx + 1} 行的和弦`, {
     actionText: '撤销',
@@ -278,10 +284,8 @@ onDeactivated(() => {
 
 defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
 </script>
-
 <style scoped lang="less">
 @import '@/assets/tokens.module';
-
 .interactive-score-zone {
   flex: 1;
   padding: 1.2rem 2rem 6rem 2rem;
@@ -290,7 +294,6 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   box-sizing: border-box;
   position: relative;
 }
-
 .lyrics-lines-container {
   display: flex;
   flex-direction: column;
@@ -299,26 +302,20 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   margin: 0 auto;
   width: max-content;
   min-width: 100%;
-
   &.is-export-mode {
     min-width: 0 !important;
     width: max-content !important;
-
     :deep(.add-btn-slot) {
       display: none !important;
     }
-
     .lyrics-line {
       transition: none !important;
-
       .index-text-tag {
         transition: none !important;
       }
-
       &:not(.is-line-selected) {
         display: none !important;
       }
-
       &.is-line-selected {
         min-width: 0 !important;
         width: max-content !important;
@@ -328,7 +325,6 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
     }
   }
 }
-
 .export-header-meta {
   display: flex;
   flex-direction: column;
@@ -339,7 +335,6 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   margin-bottom: 0.8rem;
   width: 100%;
 }
-
 .export-song-title {
   font-size: v-bind('`${1.5 * scoreEditor.fontScale}rem`');
   font-weight: 800;
@@ -347,7 +342,6 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   margin: 0 0 0.4rem 0;
   letter-spacing: -0.02em;
 }
-
 .export-song-info {
   display: flex;
   align-items: center;
@@ -356,12 +350,10 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   font-weight: 600;
   color: var(--text-body);
 }
-
 .info-divider {
   color: var(--text-disabled);
   opacity: 0.5;
 }
-
 .lyrics-line {
   display: flex;
   flex-wrap: nowrap;
@@ -379,29 +371,24 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   user-select: none;
   box-sizing: border-box;
   border: 1px solid transparent;
-
   &:hover,
   &:focus-within,
   &.is-context-open {
     background-color: var(--bg-panel-hover);
     border-color: var(--border-base);
-
     .index-text-tag:not(.is-selected) {
       color: var(--color-primary);
       background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
     }
-
     :deep(.add-btn-slot .add-edge-placeholder),
     :deep(.remove-chord-btn) {
       opacity: 1;
       pointer-events: auto;
     }
   }
-
   &.is-line-selected {
     background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
     border-color: color-mix(in srgb, var(--color-primary), transparent 60%);
-
     &:hover,
     &:focus-within,
     &.is-context-open {
@@ -411,7 +398,6 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
     }
   }
 }
-
 .line-index-badge {
   display: flex;
   align-items: flex-end;
@@ -420,7 +406,6 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   user-select: none;
   flex-shrink: 0;
 }
-
 .index-text-tag {
   font-size: 0.65rem;
   font-weight: 700;
@@ -431,22 +416,18 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   transition:
     color @duration-fast ease,
     background-color @duration-fast ease;
-
   &.is-selected {
     color: #ffffff !important;
     background-color: var(--color-primary) !important;
   }
 }
-
 .edge-chords-group {
   display: flex;
   align-items: stretch;
   gap: 0;
 }
-
 .a4-capture-wrapper {
   display: contents;
-
   &.is-a4-capture-mode {
     display: flex;
     flex-direction: column;
@@ -456,51 +437,39 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
     height: v-bind('A4_HEIGHT_PX + "px"');
     padding: v-bind('A4_MARGIN_PX + "px"');
     overflow: hidden;
-
     .lyrics-lines-container.is-export-mode {
       flex: 1 1 auto;
       min-height: 0;
-      // justify-content: space-between;
     }
   }
 }
-
 @media (max-width: 768px) {
   .interactive-score-zone {
-    /* 🌟 调整移动端的内边距，给底部悬浮栏和安全区留出更多空间 */
     padding: 0.8rem 0.5rem calc(6.5rem + env(safe-area-inset-bottom, 0px)) 0.5rem;
     -webkit-overflow-scrolling: touch;
   }
-
   .lyrics-lines-container {
-    /* 🌟 移动端允许更灵活的宽度撑开，并防止文字折行错乱 */
     width: max-content;
     min-width: 100%;
   }
-
   .lyrics-line {
     padding: 0.15rem 0.25rem;
   }
-
-  /* 🌟 移动端缩小行号标签，节省水平空间 */
   .line-index-badge {
     margin-right: 0.3rem;
   }
-
   .index-text-tag {
     font-size: 0.58rem;
     padding: 0.05rem 0.25rem;
   }
 }
 </style>
-
 <style lang="less">
 body.is-global-dragging {
   &,
   & * {
     cursor: grabbing;
   }
-
   .interactive-score-zone {
     .char-text,
     .inline-chord-name,
@@ -509,7 +478,6 @@ body.is-global-dragging {
     svg {
       pointer-events: none;
     }
-
     .char-box {
       pointer-events: auto;
     }

@@ -20,7 +20,6 @@
       clearable
       @enter="groupModals.handleRenameGroup"
       :maxlength="15"
-      horizontal-wheel
     />
   </BaseModal>
 
@@ -178,13 +177,16 @@ const settingsStore = useSettingsStore();
 
 const isAllVariantsSelected = computed(() => {
   const variants = props.groupModals.modalData.activeGroupCard?.variants;
+
   if (!variants || variants.length === 0) return false;
   return variants.every(v => props.groupModals.modalData.selectedVariantIds.has(v.id));
 });
 
 const handleToggleSelectAllVariants = () => {
   const variants = props.groupModals.modalData.activeGroupCard?.variants;
+
   if (!variants) return;
+
   if (isAllVariantsSelected.value) {
     props.groupModals.modalData.selectedVariantIds.clear();
   } else {
