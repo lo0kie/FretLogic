@@ -257,11 +257,11 @@ watch(
   gap: 0.4rem;
   box-sizing: border-box;
 }
+
 .group-box-card {
-  border-radius: @radius-lg;
-  border: 1px solid var(--border-light);
   box-sizing: border-box;
 }
+
 .group-title-row {
   height: 2.2rem;
   padding-left: 0.65rem;
@@ -270,7 +270,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
-  border-radius: @radius-lg;
+  border-radius: @radius-md;
   user-select: none;
   box-sizing: border-box;
   transition: @transition-fast;
