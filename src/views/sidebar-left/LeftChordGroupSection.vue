@@ -277,15 +277,13 @@ watch(
   outline: none;
   &:hover,
   &.is-context-open {
-    background-color: var(--bg-panel-hover);
+    background-color: color-mix(in srgb, var(--bg-panel-hover), transparent 30%);
     .arrow-toggle-icon {
       color: var(--text-title);
     }
   }
   &.is-expanded {
-    .arrow-toggle-icon {
-      color: var(--color-primary);
-    }
+    background-color: color-mix(in srgb, var(--bg-panel-hover), transparent 50%);
   }
 }
 .group-info-zone {

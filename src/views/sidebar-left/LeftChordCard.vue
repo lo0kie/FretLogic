@@ -51,7 +51,7 @@
           appearance="filled"
           size="xs"
           class="variant-badge-badge"
-          :width="isActive ? '1.5rem' : '0.85rem'"
+          :width="isActive ? '1.8rem' : '1.2rem'"
           :title="isActive ? '滚轮切换指法' : undefined"
           @click.stop="toggleVariantsDropdown"
         >
