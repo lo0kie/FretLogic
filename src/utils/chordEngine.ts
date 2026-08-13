@@ -1,235 +1,405 @@
-import type { AdvancedChordFormula, CandidateResult, NoteInput } from '@/types';
+import type { CandidateResult, NoteInput } from '@/types';
+import { GRAMMAR_TEMPLATES } from './grammar';
 
-export const ALL_ADVANCED_FORMULAS: AdvancedChordFormula[] = [
-  { suffix: '', category: 'triad', core: [0, 4], anchor: [7], conflicts: [1, 3, 5, 8, 10, 11], baseWeight: 100 },
-  { suffix: 'm', category: 'triad', core: [0, 3], anchor: [7], conflicts: [1, 4, 8, 10, 11], baseWeight: 100 },
-  { suffix: 'dim', category: 'triad', core: [0, 3, 6], conflicts: [4, 7], baseWeight: 70 },
-  { suffix: 'aug', category: 'triad', core: [0, 4, 8], conflicts: [3, 7], baseWeight: 70 },
-  { suffix: 'sus4', category: 'sus', core: [0, 5], anchor: [7], conflicts: [3, 4], baseWeight: 80 },
-  { suffix: 'sus2', category: 'sus', core: [0, 2], anchor: [7], conflicts: [3, 4], baseWeight: 80 },
-  { suffix: '5', category: 'triad', core: [0, 7], conflicts: [1, 2, 3, 4, 5, 6, 8, 9, 10, 11], baseWeight: 50 },
+export type ChordSlot =
+  | 'root'
+  | 'third_major'
+  | 'third_minor'
+  | 'sus2'
+  | 'sus4'
+  | 'fifth_perfect'
+  | 'fifth_dim'
+  | 'fifth_aug'
+  | 'seventh_minor'
+  | 'seventh_major'
+  | 'seventh_dim'
+  | 'ninth'
+  | 'ninth_flat'
+  | 'ninth_sharp'
+  | 'eleventh'
+  | 'eleventh_sharp'
+  | 'thirteenth'
+  | 'thirteenth_flat'
+  | 'sixth'
+  | 'slash_bass'
+  | 'extra';
 
-  { suffix: '7', category: 'seventh', core: [0, 4, 10], anchor: [7], conflicts: [3, 11], baseWeight: 130 },
-  { suffix: 'Maj7', category: 'seventh', core: [0, 4, 11], anchor: [7], conflicts: [3, 10], baseWeight: 130 },
-  { suffix: 'm7', category: 'seventh', core: [0, 3, 10], anchor: [7], conflicts: [4, 11], baseWeight: 130 },
-  { suffix: 'mMaj7', category: 'seventh', core: [0, 3, 11], anchor: [7], conflicts: [4, 10], baseWeight: 120 },
-  { suffix: 'm7b5', category: 'seventh', core: [0, 3, 6, 10], conflicts: [4, 7, 11], baseWeight: 120 },
-  { suffix: 'dim7', category: 'seventh', core: [0, 3, 6, 9], conflicts: [4, 7, 10, 11], baseWeight: 120 },
-  { suffix: '7sus4', category: 'sus', core: [0, 5, 10], anchor: [7], conflicts: [3, 4], baseWeight: 110 },
-  { suffix: '7sus2', category: 'sus', core: [0, 2, 10], anchor: [7], conflicts: [3, 4], baseWeight: 110 },
+export type RoleConfidence = 'core' | 'anchor' | 'optional' | 'extra';
 
-  { suffix: '6', category: 'triad', core: [0, 4, 9], anchor: [7], conflicts: [3, 10, 11], baseWeight: 110 },
-  { suffix: 'm6', category: 'triad', core: [0, 3, 9], anchor: [7], conflicts: [4, 10, 11], baseWeight: 110 },
-  { suffix: 'add9', category: 'triad', core: [0, 4, 2], anchor: [7], conflicts: [3, 10, 11], baseWeight: 100 },
-  { suffix: 'madd9', category: 'triad', core: [0, 3, 2], anchor: [7], conflicts: [4, 10, 11], baseWeight: 100 },
-  { suffix: '6/9', category: 'triad', core: [0, 4, 9, 2], anchor: [7], conflicts: [3, 10, 11], baseWeight: 120 },
-  { suffix: 'm6/9', category: 'triad', core: [0, 3, 9, 2], anchor: [7], conflicts: [4, 10, 11], baseWeight: 120 },
-
-  { suffix: '9', category: 'extended', core: [0, 4, 10, 2], anchor: [7], conflicts: [3, 11], baseWeight: 160 },
-  { suffix: 'Maj9', category: 'extended', core: [0, 11, 2], anchor: [4, 7], conflicts: [3, 10], baseWeight: 160 },
-  { suffix: 'm9', category: 'extended', core: [0, 3, 10, 2], anchor: [7], conflicts: [4, 11], baseWeight: 160 },
-  { suffix: '9sus4', category: 'sus', core: [0, 5, 10, 2], anchor: [7], conflicts: [3, 4], baseWeight: 150 },
-  { suffix: '7(#9)', category: 'altered', core: [0, 4, 10, 3], anchor: [7], conflicts: [11], baseWeight: 150 },
-  { suffix: '7(b9)', category: 'altered', core: [0, 4, 10, 1], anchor: [7], conflicts: [11], baseWeight: 150 },
-  { suffix: '11', category: 'extended', core: [0, 10, 5], anchor: [2, 7], conflicts: [3], baseWeight: 170 },
-  { suffix: 'm11', category: 'extended', core: [0, 3, 10, 5], anchor: [2, 7], conflicts: [4], baseWeight: 170 },
-  { suffix: '13', category: 'extended', core: [0, 10, 9], anchor: [2, 4, 7], conflicts: [3], baseWeight: 180 },
-  { suffix: 'Maj13', category: 'extended', core: [0, 11, 9], anchor: [2, 4, 7], conflicts: [3], baseWeight: 180 },
-];
-
-const WEIGHTS = {
-  COVER: 0.4,
-  PURITY: 0.3,
-  BASS: 0.15,
-  SIMPLICITY: 0.15,
-};
-
-interface CompiledFormula {
-  suffix: string;
-  category: AdvancedChordFormula['category'];
-  baseWeight: number;
-  coreMask: number;
-  conflictMask: number;
-  knownMask: number;
-  anchorMask: number;
+export interface RoleAssignment {
+  noteLabel: string;
+  pitchIndex: number;
+  interval: number;
+  role: ChordSlot;
+  confidence: RoleConfidence;
 }
 
-const toMask = (intervals: number[] | undefined): number => {
-  if (!intervals || intervals.length === 0) return 0;
-  let m = 0;
-  for (let i = 0; i < intervals.length; i++) {
-    m |= 1 << (((intervals[i] % 12) + 12) % 12);
-  }
-  return m;
-};
+export interface ChordCandidate {
+  chordName: string;
+  rootLabel: string;
+  rootPitch: number;
+  suffix: string;
+  category: 'triad' | 'seventh' | 'extended' | 'altered' | 'sus' | 'power';
+  roles: RoleAssignment[];
+  purity: number;
+  extraCount: number;
+  score: number;
+  tier: 'best' | 'alternative' | 'theoretical';
+}
 
-// 🌟 1. 模块加载阶段预编译公式掩码，零运行时转换消耗
-const COMPILED_FORMULAS: CompiledFormula[] = ALL_ADVANCED_FORMULAS.map(f => {
-  const coreMask = toMask(f.core);
-  const anchorMask = toMask(f.anchor);
-  const knownMask = coreMask | anchorMask | toMask(f.extensions) | toMask(f.tolerated);
-  return {
-    suffix: f.suffix,
-    category: f.category,
-    baseWeight: f.baseWeight,
-    coreMask,
-    conflictMask: toMask(f.conflicts),
-    knownMask,
-    anchorMask,
-  };
+export interface AnalyzeResult {
+  candidates: ChordCandidate[];
+  bestRootPitch: number;
+  best?: ChordCandidate;
+  alternatives: ChordCandidate[];
+  theoretical: ChordCandidate[];
+}
+
+interface SlotDef {
+  interval: number;
+  role: ChordSlot;
+  confidence: RoleConfidence;
+}
+
+export interface GrammarTemplate {
+  suffix: string;
+  category: ChordCandidate['category'];
+  baseWeight: number;
+  required: SlotDef[];
+  optional?: SlotDef[];
+  conflicts: number[];
+}
+
+interface CompiledTemplate {
+  template: GrammarTemplate;
+  reqMask: number;
+  optMask: number;
+  conflictMask: number;
+}
+
+const COMPILED_TEMPLATES: CompiledTemplate[] = GRAMMAR_TEMPLATES.map(t => {
+  let reqMask = 0;
+  for (const r of t.required) reqMask |= 1 << r.interval;
+  let optMask = 0;
+  if (t.optional) {
+    for (const o of t.optional) optMask |= 1 << o.interval;
+  }
+  let conflictMask = 0;
+  for (const c of t.conflicts) conflictMask |= 1 << c;
+  return { template: t, reqMask, optMask, conflictMask };
 });
 
-// 🌟 2. 快速计算 12 位二进制中 1 的个数（取代数组 .length 或 Set.size）
-const bitCount12 = (mask: number): number => {
-  let n = 0;
-  let m = mask & 0xfff;
-  while (m) {
-    n += m & 1;
-    m >>= 1;
-  }
-  return n;
+const WEIGHTS = {
+  PURITY: 0.42,
+  BASS: 0.28,
+  COMMONNESS: 0.18,
+  EXTRA_PENALTY: 0.25,
 };
 
-const chordAnalysisCache = new Map<string, { candidates: CandidateResult[]; bestRootPitch: number }>();
+const MIN_PURITY = 0.62;
+const BEST_GAP = 6;
+const TOP_EVALUATE_LIMIT = 10;
 
-function rawAnalyzeChordGraph(
-  notes: NoteInput[],
-  explicitRootPitch: number | null
-): { candidates: CandidateResult[]; bestRootPitch: number } {
+const normalizePitch = (p: number) => ((p % 12) + 12) % 12;
+
+const toIntervalMask = (pitchMask: number, root: number): number => {
+  const r = root % 12;
+  if (r === 0) return pitchMask & 0xfff;
+  return ((pitchMask >>> r) | (pitchMask << (12 - r))) & 0xfff;
+};
+
+const POPCOUNT = (() => {
+  const t = new Uint8Array(4096);
+  for (let i = 0; i < 4096; i++) {
+    let n = 0,
+      m = i;
+    while (m) {
+      n += m & 1;
+      m >>= 1;
+    }
+    t[i] = n;
+  }
+  return t;
+})();
+
+const bitCount = (m: number) => POPCOUNT[m & 0xfff];
+
+interface RawHitCandidate {
+  template: GrammarTemplate;
+  rootPitch: number;
+  rootLabel: string;
+  intervalMask: number;
+  lowestInterval: number;
+  isSlash: boolean;
+  slashBassLabel: string;
+  purity: number;
+  extraCount: number;
+  score: number;
+}
+
+function fastSoftScore(
+  purity: number,
+  extraCount: number,
+  isSlash: boolean,
+  lowestInterval: number,
+  explicitRoot: boolean,
+  template: GrammarTemplate
+): number {
+  let bassScore = 1.0;
+
+  if (isSlash) {
+    if (explicitRoot) {
+      bassScore = 1.0;
+    } else {
+      const bassInCore = template.required.some(r => r.interval === lowestInterval);
+      const bassInOpt = template.optional?.some(r => r.interval === lowestInterval) ?? false;
+
+      if (bassInCore) {
+        bassScore = 0.78;
+      } else if (bassInOpt) {
+        bassScore = 0.68;
+      } else if (template.category === 'triad' || template.category === 'power') {
+        bassScore = 0.55;
+      } else {
+        bassScore = 0.35;
+      }
+    }
+  }
+
+  const commonness = template.baseWeight / 200;
+  const extraPenalty = Math.min(extraCount * WEIGHTS.EXTRA_PENALTY, 0.75);
+
+  let naturalBonus = 0;
+  if (!isSlash && purity >= 0.95) {
+    naturalBonus = 0.04;
+  }
+
+  const total =
+    purity * WEIGHTS.PURITY + bassScore * WEIGHTS.BASS + commonness * WEIGHTS.COMMONNESS - extraPenalty + naturalBonus;
+
+  return Math.round(total * 1000) / 10;
+}
+
+function populateRoles(hit: RawHitCandidate, labelByPitch: (string | undefined)[]): ChordCandidate {
+  const { rootPitch, rootLabel, intervalMask, lowestInterval, isSlash, slashBassLabel, template } = hit;
+  const roles: RoleAssignment[] = [];
+  const usedIntervals = new Set<number>();
+
+  for (const req of template.required) {
+    const p = (rootPitch + req.interval) % 12;
+    roles.push({
+      noteLabel: labelByPitch[p] || '',
+      pitchIndex: p,
+      interval: req.interval,
+      role: req.role,
+      confidence: req.confidence,
+    });
+    usedIntervals.add(req.interval);
+  }
+
+  if (template.optional) {
+    for (const opt of template.optional) {
+      if (intervalMask & (1 << opt.interval) && !usedIntervals.has(opt.interval)) {
+        const p = (rootPitch + opt.interval) % 12;
+        roles.push({
+          noteLabel: labelByPitch[p] || '',
+          pitchIndex: p,
+          interval: opt.interval,
+          role: opt.role,
+          confidence: opt.confidence,
+        });
+        usedIntervals.add(opt.interval);
+      }
+    }
+  }
+
+  if (isSlash && !usedIntervals.has(lowestInterval)) {
+    const p = (rootPitch + lowestInterval) % 12;
+    roles.push({
+      noteLabel: labelByPitch[p] || '',
+      pitchIndex: p,
+      interval: lowestInterval,
+      role: 'slash_bass',
+      confidence: 'optional',
+    });
+    usedIntervals.add(lowestInterval);
+  }
+
+  for (let i = 0; i < 12; i++) {
+    if (intervalMask & (1 << i) && !usedIntervals.has(i)) {
+      const p = (rootPitch + i) % 12;
+      roles.push({
+        noteLabel: labelByPitch[p] || '',
+        pitchIndex: p,
+        interval: i,
+        role: 'extra',
+        confidence: 'extra',
+      });
+    }
+  }
+
+  return {
+    chordName: `${rootLabel}${template.suffix}${slashBassLabel}`,
+    rootLabel,
+    rootPitch,
+    suffix: template.suffix,
+    category: template.category,
+    roles,
+    purity: hit.purity,
+    extraCount: hit.extraCount,
+    score: hit.score,
+    tier: 'theoretical',
+  };
+}
+
+function assignTiers(candidates: ChordCandidate[]): void {
+  if (candidates.length === 0) return;
+  const bestScore = candidates[0].score;
+
+  for (const c of candidates) {
+    const gap = bestScore - c.score;
+    if (gap <= 0.5) c.tier = 'best';
+    else if (gap <= BEST_GAP) c.tier = 'alternative';
+    else c.tier = 'theoretical';
+  }
+}
+
+const cache = new Map<string, AnalyzeResult>();
+const CACHE_LIMIT = 80;
+
+function rawAnalyze(notes: NoteInput[], explicitRootPitch: number | null): AnalyzeResult {
   if (notes.length === 0) {
-    return { candidates: [], bestRootPitch: 0 };
+    return { candidates: [], bestRootPitch: 0, alternatives: [], theoretical: [] };
   }
 
   const lowestNote = notes[0];
-
   let pitchMask = 0;
-  const labelByPitch = new Array<string | undefined>(12);
-  for (let i = 0; i < notes.length; i++) {
-    const n = notes[i];
-    const p = ((n.pitchIndex % 12) + 12) % 12;
+  const labelByPitch: (string | undefined)[] = new Array(12);
+
+  for (const n of notes) {
+    const p = normalizePitch(n.pitchIndex);
     pitchMask |= 1 << p;
     if (labelByPitch[p] === undefined) labelByPitch[p] = n.label;
   }
 
+  const totalInputNotes = bitCount(pitchMask);
   const rootPitches: number[] = [];
+
   if (explicitRootPitch !== null) {
-    rootPitches.push(((explicitRootPitch % 12) + 12) % 12);
+    rootPitches.push(normalizePitch(explicitRootPitch));
   } else {
     for (let p = 0; p < 12; p++) {
       if (pitchMask & (1 << p)) rootPitches.push(p);
     }
   }
 
-  const results: CandidateResult[] = [];
-  const formulas = COMPILED_FORMULAS;
-  const formulaLen = formulas.length;
+  const rawHits: RawHitCandidate[] = [];
 
-  for (let r = 0; r < rootPitches.length; r++) {
-    const rootPitch = rootPitches[r];
+  for (const rootPitch of rootPitches) {
     const rootLabel = labelByPitch[rootPitch] || '';
-
-    let intervalMask = 0;
-    for (let p = 0; p < 12; p++) {
-      if (pitchMask & (1 << p)) {
-        intervalMask |= 1 << ((p - rootPitch + 12) % 12);
-      }
-    }
-
-    const lowestInterval = (lowestNote.pitchIndex - rootPitch + 12) % 12;
-    const isSlash = lowestNote.pitchIndex !== rootPitch;
+    const intervalMask = toIntervalMask(pitchMask, rootPitch);
+    const lowestInterval = normalizePitch(lowestNote.pitchIndex - rootPitch);
+    const isSlash = normalizePitch(lowestNote.pitchIndex) !== rootPitch;
     const slashBassLabel = isSlash ? `/${lowestNote.label}` : '';
-    const intervalCount = bitCount12(intervalMask);
 
-    for (let f = 0; f < formulaLen; f++) {
-      const formula = formulas[f];
+    for (const comp of COMPILED_TEMPLATES) {
+      if ((intervalMask & comp.conflictMask) !== 0) continue;
+      if ((intervalMask & comp.reqMask) !== comp.reqMask) continue;
 
-      // 核心音必须全中
-      if ((intervalMask & formula.coreMask) !== formula.coreMask) continue;
-      // 不能包含冲突音
-      if (intervalMask & formula.conflictMask) continue;
+      let explainedMask = intervalMask & (comp.reqMask | comp.optMask);
+      if (isSlash) explainedMask |= intervalMask & (1 << lowestInterval);
 
-      let validMask = intervalMask & formula.knownMask;
-      if (isSlash) {
-        validMask |= intervalMask & (1 << lowestInterval);
-      }
-      const purityScore = bitCount12(validMask) / intervalCount;
+      const explainedCount = bitCount(explainedMask);
+      const purity = totalInputNotes === 0 ? 0 : explainedCount / totalInputNotes;
 
-      let bassScore = 1.0;
-      if (isSlash) {
-        if (explicitRootPitch !== null) {
-          bassScore = 1.0;
-        } else if (
-          (formula.coreMask & (1 << lowestInterval)) !== 0 ||
-          (formula.anchorMask & (1 << lowestInterval)) !== 0
-        ) {
-          bassScore = 0.92;
-        } else if (formula.category === 'triad') {
-          bassScore = 0.85;
-        } else {
-          bassScore = 0.45;
-        }
-      }
+      if (purity < MIN_PURITY) continue;
 
-      const simplicityScore = formula.baseWeight / 200;
-      const totalScore =
-        (1.0 * WEIGHTS.COVER +
-          purityScore * WEIGHTS.PURITY +
-          bassScore * WEIGHTS.BASS +
-          simplicityScore * WEIGHTS.SIMPLICITY) *
-        100;
+      const extraCount = totalInputNotes - explainedCount;
+      const score = fastSoftScore(
+        purity,
+        extraCount,
+        isSlash,
+        lowestInterval,
+        explicitRootPitch !== null,
+        comp.template
+      );
 
-      results.push({
-        chordName: `${rootLabel}${formula.suffix}${slashBassLabel}`,
-        rootLabel,
-        score: Math.round(totalScore * 10) / 10,
+      rawHits.push({
+        template: comp.template,
         rootPitch,
+        rootLabel,
+        intervalMask,
+        lowestInterval,
+        isSlash,
+        slashBassLabel,
+        purity,
+        extraCount,
+        score,
       });
     }
   }
 
-  results.sort((a, b) => b.score - a.score);
+  rawHits.sort((a, b) => b.score - a.score);
 
-  const uniqueCandidates: CandidateResult[] = [];
-  const seenNames = new Set<string>();
-  for (let i = 0; i < results.length; i++) {
-    const res = results[i];
-    if (!seenNames.has(res.chordName)) {
-      seenNames.add(res.chordName);
-      uniqueCandidates.push(res);
+  const seen = new Set<string>();
+  const topHits: RawHitCandidate[] = [];
+  for (const h of rawHits) {
+    const name = `${h.rootLabel}${h.template.suffix}${h.slashBassLabel}`;
+    if (!seen.has(name)) {
+      seen.add(name);
+      topHits.push(h);
+      if (topHits.length >= TOP_EVALUATE_LIMIT) break;
     }
   }
 
-  const bestRootPitch = uniqueCandidates.length > 0 ? uniqueCandidates[0].rootPitch : lowestNote.pitchIndex;
+  const uniqueCandidates: ChordCandidate[] = topHits.map(h => populateRoles(h, labelByPitch));
 
-  return { candidates: uniqueCandidates, bestRootPitch };
+  assignTiers(uniqueCandidates);
+
+  const bestRootPitch =
+    uniqueCandidates.length > 0 ? uniqueCandidates[0].rootPitch : normalizePitch(lowestNote.pitchIndex);
+
+  const best = uniqueCandidates.find(c => c.tier === 'best');
+  const alternatives = uniqueCandidates.filter(c => c.tier === 'alternative');
+  const theoretical = uniqueCandidates.filter(c => c.tier === 'theoretical');
+
+  return {
+    candidates: uniqueCandidates,
+    bestRootPitch,
+    best,
+    alternatives,
+    theoretical,
+  };
 }
 
-// 🌟 3. 补充音符 Label 进入缓存 Key，防止升降号切换误中脏缓存
-export function analyzeChordGraph(
-  notes: NoteInput[],
-  explicitRootPitch: number | null
-): { candidates: CandidateResult[]; bestRootPitch: number } {
+export function analyzeChordGraph(notes: NoteInput[], explicitRootPitch: number | null = null): AnalyzeResult {
   if (notes.length === 0) {
-    return { candidates: [], bestRootPitch: 0 };
+    return { candidates: [], bestRootPitch: 0, alternatives: [], theoretical: [] };
   }
 
-  let cacheKey = `${explicitRootPitch ?? 'auto'}:`;
-  for (let i = 0; i < notes.length; i++) {
-    const n = notes[i];
-    cacheKey += `${n.stringIndex}_${n.pitchIndex}_${n.label}|`;
+  let key = `${explicitRootPitch ?? 'auto'}:`;
+  for (const n of notes) {
+    key += `${n.stringIndex}_${n.pitchIndex}_${n.label}|`;
   }
 
-  if (chordAnalysisCache.has(cacheKey)) {
-    return chordAnalysisCache.get(cacheKey)!;
+  const hit = cache.get(key);
+  if (hit) return hit;
+
+  const result = rawAnalyze(notes, explicitRootPitch);
+
+  if (cache.size >= CACHE_LIMIT) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
   }
-
-  const result = rawAnalyzeChordGraph(notes, explicitRootPitch);
-
-  if (chordAnalysisCache.size >= 60) {
-    const oldestKey = chordAnalysisCache.keys().next().value;
-    if (oldestKey !== undefined) chordAnalysisCache.delete(oldestKey);
-  }
-
-  chordAnalysisCache.set(cacheKey, result);
+  cache.set(key, result);
   return result;
+}
+
+export function toLegacyCandidates(result: AnalyzeResult): CandidateResult[] {
+  return result.candidates.map(c => ({
+    chordName: c.chordName,
+    rootLabel: c.rootLabel,
+    score: c.score,
+    rootPitch: c.rootPitch,
+  }));
 }

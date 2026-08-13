@@ -20,7 +20,7 @@
           :min="0"
           :max="11"
           :formatter="val => (val === 0 ? 'CAPO 0' : `CAPO ${val}`)"
-          :editable="!uiStore.isMobile"
+          :editable="false"
         />
       </div>
     </div>
@@ -33,13 +33,13 @@
           :options="tuningOptions"
           :default-value="TuningEnum.STANDARD"
           :formatter="val => TUNING_PRESETS[val]?.name || TuningEnum.STANDARD"
-          width="lg"
+          width="full"
         />
       </div>
     </div>
 
     <div class="config-row">
-      <ActionButton size="sm" variant="subtle" primary width="100%" @click="handleRepairData">
+      <ActionButton variant="subtle" primary width="100%" @click="handleRepairData">
         <template #prefix><Wrench :size="13" stroke-width="2.5" /></template>
         修复与对齐数据
       </ActionButton>

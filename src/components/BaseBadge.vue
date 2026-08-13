@@ -165,8 +165,9 @@ const handleClick = (e: MouseEvent) => {
   justify-content: center;
   flex-shrink: 0;
   border-radius: 9999px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
+  letter-spacing: -0.01em;
   transition: @transition-fast;
   box-sizing: border-box;
   white-space: nowrap;
@@ -206,14 +207,14 @@ const handleClick = (e: MouseEvent) => {
 
 /* 2. 尺寸档位控制 (Size) */
 .size-xs {
-  font-size: 0.55rem;
-  padding: 0.05rem 0.3rem;
+  font-size: 0.58rem;
+  padding: 0.06rem 0.32rem;
   gap: 0.2rem;
 }
 
 .size-sm {
   font-size: 0.65rem;
-  padding: 0.08rem 0.42rem;
+  padding: 0.1rem 0.4rem;
   gap: 0.25rem;
 }
 

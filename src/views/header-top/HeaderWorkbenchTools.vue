@@ -12,7 +12,7 @@
       <component :is="isPlaying ? Square : Play" :size="15" stroke-width="2.5" />
     </ActionButton>
 
-    <div class="capsule-divider"></div>
+    <div class="capsule-divider" data-hidden-mobile></div>
 
     <ActionButton
       v-tooltip="'导出透明背景图片'"
@@ -21,6 +21,7 @@
       variant="ghost"
       :disabled="uiStore.isCopying"
       @click="handleExport(true)"
+      data-hidden-mobile
     >
       <Image :size="16" stroke-width="2" />
     </ActionButton>
@@ -32,6 +33,7 @@
       variant="ghost"
       :disabled="uiStore.isCopying"
       @click="handleExport(false)"
+      data-hidden-mobile
     >
       <Copy :size="16" stroke-width="2" />
     </ActionButton>

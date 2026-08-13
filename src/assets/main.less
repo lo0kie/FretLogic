@@ -1,30 +1,24 @@
 ﻿@import '@/assets/tokens.module';
 @import 'normalize.css';
 @import 'nprogress/nprogress.css';
-
 #nprogress {
   pointer-events: none;
-
   .bar {
     background: color-mix(in srgb, @primary, transparent 20%);
     height: 3px;
   }
-
   .peg {
     box-shadow:
       0 0 10px var(--color-primary),
       0 0 5px var(--color-primary);
   }
 }
-
 html {
   font-size: 22.25px;
-
   @media (max-width: 768px) {
     font-size: 16px;
   }
 }
-
 body {
   background-color: var(--bg-main);
   color: var(--text-body);
@@ -33,33 +27,79 @@ body {
   margin: 0;
   overflow: hidden;
   user-select: none;
-
   font-family:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-
+    -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    sans-serif;
+  font-feature-settings:
+    'kern' 1,
+    'liga' 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
 }
-
+.divider,
+.panel-divider {
+  background-color: var(--separator);
+  opacity: 1;
+}
 [v-cloak] {
   display: none !important;
 }
-
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 
+/* 统一清除默认样式并加入过渡 */
+[data-focusable-outline],
+[data-focusable-inline] {
+  outline: none !important;
+  transition: @transition-fast;
+}
+
+/* 1. 外部描边模式 (Outline) - 类似输入框或卡片外扩的聚焦框 */
+[data-focusable-outline]:focus-visible {
+  color: var(--fretboard-focus-color);
+  outline: 2px solid currentColor !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+
+/* 2. 内部阴影环模式 (Inline) - 类似按钮、Badge、圆形图标等不希望撑开布局的紧凑元素 */
+[data-focusable-inline] {
+  &:focus-visible {
+    outline: none !important;
+    // 使用不透明的局部变量，瞬间响应且清晰
+    box-shadow: inset 0 0 0 2px currentColor !important;
+  }
+}
+
+[data-hidden-mobile] {
+  @media (max-width: 768px) {
+    display: none !important;
+  }
+}
+
+.drag-ghost-style {
+  opacity: 0;
+}
 @media (max-width: 768px) {
   .tooltip-trigger-container {
     pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

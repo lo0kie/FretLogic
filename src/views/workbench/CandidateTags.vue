@@ -61,7 +61,7 @@ const { handleKeydown } = useGridNavigation(undefined, tagsContainerRef);
 .section-label {
   font-size: 0.58rem;
   font-weight: 600;
-  color: var(--text-disabled);
+  color: var(--text-muted);
   letter-spacing: 0.02em;
   padding-left: 0.2rem;
   flex-shrink: 0;
@@ -70,10 +70,10 @@ const { handleKeydown } = useGridNavigation(undefined, tagsContainerRef);
 .candidate-tags {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;   /* 🌟 1. 阻止子元素（BaseBadge）在行内纵向拉伸 */
-  align-content: flex-start; /* 🌟 2. 阻止多行 Flex 换行后平分并拉伸纵向高度 */
-  gap: 0.28rem;
-  max-height: 3.8rem;
+  align-items: flex-start;
+  align-content: flex-start;
+  gap: 0.35rem;
+  max-height: 4.2rem;
   overflow-y: auto;
   flex-shrink: 0;
   padding: 0.1rem;
@@ -83,7 +83,7 @@ const { handleKeydown } = useGridNavigation(undefined, tagsContainerRef);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 
   &.variant-primary {
-    transform: scale(1.04);
+    transform: scale(1.02);
   }
 }
 

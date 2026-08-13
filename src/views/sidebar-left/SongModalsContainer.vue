@@ -22,7 +22,6 @@
             placeholder="请输入名称"
             clearable
             autofocus
-            size="sm"
             @enter="songModals.handleConfigSong"
             :maxlength="15"
           />
@@ -41,7 +40,6 @@
         </div>
       </div>
 
-      <!-- 🌟 直接 v-model 绑定暴露出名字为 key 的 computed -->
       <div class="config-row">
         <label class="config-label">演唱调 (Key)</label>
         <div class="control-wrapper">

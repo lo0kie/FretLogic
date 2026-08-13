@@ -32,7 +32,6 @@
 
     <ChordPickerModal v-model:visible="isPickerOpen" />
 
-    <!-- 🌟 不再让 Modal 自己拿数据，全部由这里派发下去 -->
     <ScoreExportPreviewModal
       v-model:visible="previewVisible"
       v-model:mode="exportMode"
@@ -86,7 +85,6 @@ const {
   computed(() => scoreEditor.activeSong)
 );
 
-// 🌟 唯一一处实例化，Modal 不再自己调用
 const {
   mode: exportMode,
   pages,
@@ -102,7 +100,6 @@ const {
   downloadCurrentPage,
 } = useScoreExportPreview(sortedSelectedIndices, exportHeaderMetaRef, exportPageLineSet, a4CaptureWrapperRef);
 
-// 🌟 打开时生成、关闭时释放 objectURL；模式/是否带信息栏变化时重新生成
 watch(previewVisible, open => {
   if (open) generatePreview();
   else clearPreview();
