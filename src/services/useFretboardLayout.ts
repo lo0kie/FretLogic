@@ -12,7 +12,6 @@ export function useFretboardLayout(
   showOpenStrings?: Ref<boolean | undefined>
 ) {
   const stringXPositions = computed(() => STRING_X_POSITIONS);
-
   const activeTopOffset = computed(() => (showOpenStrings?.value !== false ? CANVAS_CONFIG.OFFSET_Y_TOP : 16));
 
   const rawHeight = computed(

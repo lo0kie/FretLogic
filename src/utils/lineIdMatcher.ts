@@ -60,7 +60,6 @@ const matchSimilarLines = (
       const oldLen = oldLines[j].length;
       const maxLength = Math.max(oldLen, newLen) || 1;
 
-      // 🌟 剪枝：仅凭长度差就能算出相似度上界，上界已经不达标就跳过，
       // 不用真的去算这一对昂贵的编辑距离
       const lengthDiff = Math.abs(oldLen - newLen);
       const maxPossibleSimilarity = 1 - lengthDiff / maxLength;

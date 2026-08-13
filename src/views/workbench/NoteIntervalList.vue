@@ -80,7 +80,7 @@ defineExpose({ height });
 .section-label {
   font-size: 0.58rem;
   font-weight: 600;
-  color: var(--text-disabled);
+  color: var(--text-muted);
   letter-spacing: 0.02em;
   padding-left: 0.2rem;
   flex-shrink: 0;
@@ -89,7 +89,7 @@ defineExpose({ height });
 .notes-list {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
   overflow: visible;
   flex: 1;
 }
@@ -98,8 +98,8 @@ defineExpose({ height });
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 1.8rem;
-  padding: 0 0.65rem;
+  height: 2.1rem;
+  padding: 0 0.75rem;
   border-radius: @radius-md;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);

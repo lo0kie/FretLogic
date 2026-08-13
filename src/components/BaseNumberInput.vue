@@ -169,7 +169,7 @@ const handleWheel = (e: WheelEvent) => {
   user-select: none;
 
   &.size-sm {
-    height: v-bind(HEIGHT_SM);
+    height: v-bind('HEIGHT_SM');
     padding: 0 0.15rem;
     gap: 0.15rem;
 
@@ -183,13 +183,13 @@ const handleWheel = (e: WheelEvent) => {
     .readout-input {
       font-size: 0.65rem;
       min-width: 3rem;
-      flex: 1; /* 🌟 占据中间剩余空间 */
-      width: 0; /* 🌟 覆盖 input 原生默认宽度 */
+      flex: 1;
+      width: 0;
     }
   }
 
   &.size-md {
-    height: v-bind(HEIGHT_MD);
+    height: v-bind('HEIGHT_MD');
     padding: 0 0.2rem;
     gap: 0.2rem;
 
@@ -209,7 +209,7 @@ const handleWheel = (e: WheelEvent) => {
   }
 
   &.size-lg {
-    height: v-bind(HEIGHT_LG);
+    height: v-bind('HEIGHT_LG');
     padding: 0 0.25rem;
     gap: 0.25rem;
 
@@ -221,13 +221,19 @@ const handleWheel = (e: WheelEvent) => {
       width: 0;
     }
   }
+
+  &:hover {
+    .step-btn {
+      color: var(--text-title);
+    }
+  }
 }
 
 .step-btn {
   border: none;
   background: transparent;
   font-weight: 800;
-  color: var(--text-title);
+  color: var(--text-muted);
   cursor: pointer;
   border-radius: 50%;
   display: flex;

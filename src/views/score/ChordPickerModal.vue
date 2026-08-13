@@ -8,7 +8,7 @@
     height="h-full"
   >
     <template #header-extra>
-      <ActionButton size="sm" variant="subtle" primary @click="goToWorkbenchToCreate">
+      <ActionButton variant="subtle" primary @click="goToWorkbenchToCreate">
         <template #prefix><Plus :size="14" stroke-width="2.5" aria-hidden="true" /></template>
         新建和弦
       </ActionButton>
@@ -21,7 +21,6 @@
               v-model="pickerSearchQuery"
               placeholder="搜索和弦名称..."
               clearable
-              size="sm"
               autofocus
               fontSize="xs"
               :maxlength="15"
@@ -37,14 +36,12 @@
             <span class="sort-label" data-hidden-mobile>排序</span>
             <BaseSegmentedControl
               v-model="sortOverride"
-              size="sm"
               :options="SORT_RULE_CONFIG"
               @update:model-value="handleSortRuleChange"
             />
             <BaseSelector
               :disabled="sortOverride !== 'KEY_DEGREE'"
               v-model="tempSortKey"
-              size="sm"
               :options="KEY_OPTIONS"
               default-value="C"
               :label-formatter="val => `${val} 调`"
@@ -58,7 +55,6 @@
           <ActionButton
             v-for="group in groupTabOptions"
             :key="String(group.value)"
-            size="sm"
             :variant="selectedGroupId === group.value ? 'subtle' : 'ghost'"
             :primary="selectedGroupId === group.value"
             @click="handleGroupTabChange(String(group.value))"
@@ -377,7 +373,6 @@ onDeactivated(() => {
   flex-shrink: 0;
   padding-bottom: 0.6rem;
   margin-bottom: 0.6rem;
-  background-color: var(--bg-panel);
   border-bottom: 1px solid var(--border-light);
 }
 .picker-controls-row {

@@ -30,9 +30,6 @@ pnpm dev
 pnpm build
 ```
 
-```
-
 ## License
 
 [MIT](https://www.google.com/search?q=LICENSE)
-```

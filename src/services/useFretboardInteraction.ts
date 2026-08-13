@@ -280,6 +280,7 @@ export function useFretboardInteraction(
   };
 
   const handleFocus = () => {
+    if (!interactive.value) return;
     isFocused.value = true;
     if (!focusPoint.value) {
       focusPoint.value = { stringIndex: 0, fretIndex: showOpenStrings.value ? 0 : 1 };

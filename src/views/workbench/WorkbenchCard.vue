@@ -123,7 +123,7 @@ onDeactivated(() => {
   padding-right: 1rem;
   width: 100%;
   text-align: center;
-  font-weight: 900;
+  font-weight: 700;
   background-color: transparent;
   border: none;
   outline: none;
@@ -132,7 +132,7 @@ onDeactivated(() => {
   caret-color: @primary;
   font-size: 3.8rem;
   line-height: 1;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
   box-sizing: border-box;
   transition: all 0.25s ease;
 

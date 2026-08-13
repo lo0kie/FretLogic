@@ -98,7 +98,7 @@
           </strong>
           个
         </p>
-        <ActionButton :primary="isAllVariantsSelected" size="sm" @click="handleToggleSelectAllVariants">
+        <ActionButton :primary="isAllVariantsSelected" @click="handleToggleSelectAllVariants">
           {{ isAllVariantsSelected ? '取消全选' : '全选' }}
         </ActionButton>
       </div>
@@ -135,15 +135,10 @@
         </div>
       </div>
       <div class="modal-footer-zone custom-footer">
-        <ActionButton size="sm" variant="ghost" @click="groupModals.modals.chordVariantsDelete = false">
-          取消
-        </ActionButton>
+        <ActionButton variant="ghost" @click="groupModals.modals.chordVariantsDelete = false"> 取消 </ActionButton>
         <div class="actions-right-group">
-          <ActionButton size="sm" danger variant="subtle" @click="groupModals.handleDeleteAllVariants()">
-            全部删除
-          </ActionButton>
+          <ActionButton danger variant="subtle" @click="groupModals.handleDeleteAllVariants()"> 全部删除 </ActionButton>
           <ActionButton
-            size="sm"
             danger
             :disabled="groupModals.modalData.selectedVariantIds.size === 0"
             @click="groupModals.handleDeleteSelectedVariants()"
@@ -436,7 +431,6 @@ const handleToggleSelectAllVariants = () => {
   }
 }
 
-/* 🌟 按需导入 Modal 专属交互与排版 */
 .import-tab-bar {
   display: flex;
   justify-content: center;
@@ -453,7 +447,6 @@ const handleToggleSelectAllVariants = () => {
   box-sizing: border-box;
 }
 
-/* 🌟 更改为固定一行三列网格布局 */
 .import-groups-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -506,7 +499,6 @@ const handleToggleSelectAllVariants = () => {
   }
 }
 
-/* 🌟 更改为固定一行三列网格布局 */
 .import-songs-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

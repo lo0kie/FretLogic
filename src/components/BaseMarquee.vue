@@ -44,7 +44,7 @@ const onHoverChange = (hovered: boolean) => {
 .marquee-container {
   height: 100%;
   width: 100%;
-  min-width: 0; /* 🌟 关键：防止 Flex 子项被长文本无限撑开 */
+  min-width: 0;
   flex: 1;
   overflow: hidden;
   white-space: nowrap;
@@ -54,14 +54,13 @@ const onHoverChange = (hovered: boolean) => {
 }
 
 .marquee-content {
-  display: flex; /* 🌟 恢复 Flex 布局，实现完美的垂直居中 */
-  align-items: center; /* 🌟 垂直居中 */
+  display: flex;
+  align-items: center;
   height: 100%;
   width: 100%;
-  min-width: 0; /* 🌟 允许 Flex 子项尺寸收缩，防止被文本撑开 */
+  min-width: 0;
   box-sizing: border-box;
 
-  /* 内部的 span 处理文本截断与超长省略 */
   :deep(span) {
     display: inline-block;
     max-width: 100%;

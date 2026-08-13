@@ -1,9 +1,9 @@
 <template>
   <header class="app-top-header">
-    <!-- 1. 左侧：侧边栏开关 + 品牌导航 -->
     <div class="header-section section-left">
       <ActionButton
         v-tooltip="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'"
+        aria-label="切换侧边栏"
         icon-only
         :size="uiSize"
         :variant="uiStore.isLeftOpen ? 'subtle' : 'ghost'"
@@ -12,9 +12,7 @@
       >
         <PanelLeft :size="18" stroke-width="2.2" />
       </ActionButton>
-
       <div class="header-divider" data-hidden-mobile></div>
-
       <div class="nav-brand-group">
         <span class="app-brand-title" data-hidden-mobile>Fret Logic</span>
         <BaseSegmentedControl
@@ -26,35 +24,29 @@
         />
       </div>
     </div>
-
-    <!-- 2. 中间：试听 / 导出胶囊 / 模式切换工具栏 -->
     <div class="header-section section-center">
       <HeaderWorkbenchTools v-if="route.path === '/workbench'" />
       <HeaderScoreTools v-else-if="route.path === '/score'" />
     </div>
-
-    <!-- 3. 右侧：指板配置 Popover / 曲谱配置 Popover -->
     <div class="header-section section-right">
       <HeaderConfigPopover v-if="route.path === '/workbench'" />
       <ScoreConfigPopover
         v-else-if="route.path === '/score' && scoreEditor.activeSong && scoreEditor.activeTab === 'interactive'"
       />
-
-      <!-- 云端同步按钮 -->
       <ActionButton
         icon-only
         variant="ghost"
+        aria-label="云端同步"
         @click="isSyncModalOpen = true"
         :size="uiSize"
         v-tooltip="'云端备份与拉取'"
       >
         <Cloud :size="18" stroke-width="2.2" />
       </ActionButton>
-
-      <!-- 主题切换按钮 -->
       <ActionButton
         icon-only
         variant="ghost"
+        :aria-label="settingsStore.isDarkMode ? '切换至浅色模式' : '切换至深色模式'"
         @click="emit('toggle-theme')"
         :size="uiSize"
         v-tooltip="settingsStore.isDarkMode ? '切换至浅色模式' : '切换至深色模式'"
@@ -69,7 +61,6 @@
       </ActionButton>
     </div>
   </header>
-  <!-- 4. 云端同步弹窗容器 -->
   <SyncModalContainer v-model:is-sync-modal-open="isSyncModalOpen" />
 </template>
 <script setup lang="ts">
@@ -90,7 +81,6 @@ import SyncModalContainer from './SyncModalContainer.vue';
 const emit = defineEmits<{
   (e: 'toggle-theme'): void;
 }>();
-
 const route = useRoute();
 const router = useRouter();
 const activeNavPath = computed(() => {
@@ -101,25 +91,23 @@ const NAV_OPTIONS: SegmentOption<string>[] = [
   { label: '和弦', value: '/workbench' },
   { label: '乐谱', value: '/score' },
 ];
-
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 const isSyncModalOpen = ref(false);
 const uiSize = computed(() => (uiStore.isMobile ? 'sm' : 'md'));
-
 watch(activeNavPath, () => {
   if (uiStore.isMobile && uiStore.isLeftOpen) uiStore.isLeftOpen = false;
 });
 </script>
-
 <style scoped lang="less">
 @import '@/assets/tokens.module';
-
 .app-top-header {
-  height: 2.5rem;
+  min-height: calc(2.5rem + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
   width: 100%;
-  padding: 0 1rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -133,19 +121,16 @@ watch(activeNavPath, () => {
   z-index: 1000;
   flex-shrink: 0;
 }
-
 .header-section {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
-
 .section-left {
   flex: 1 1 0;
   min-width: 0;
   justify-content: flex-start;
 }
-
 .section-center {
   position: absolute;
   left: 50%;
@@ -154,19 +139,16 @@ watch(activeNavPath, () => {
   z-index: 2;
   pointer-events: auto;
 }
-
 .section-right {
   flex: 1 1 0;
   min-width: 0;
   justify-content: flex-end;
 }
-
 .nav-brand-group {
   display: flex;
   align-items: center;
   gap: 0.8rem;
 }
-
 .app-brand-title {
   font-size: 0.8rem;
   font-weight: 800;
@@ -175,35 +157,29 @@ watch(activeNavPath, () => {
   white-space: nowrap;
   margin-left: 0.2rem;
 }
-
 .header-divider {
   width: 1px;
   height: 0.7rem;
   background-color: var(--glass-border);
   margin: 0 0.1rem;
 }
-
 @media (max-width: 768px) {
   .app-top-header {
-    padding: 0 0.4rem;
+    height: calc(52px + env(safe-area-inset-top, 0px)) !important;
+    min-height: calc(52px + env(safe-area-inset-top, 0px)) !important;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
   }
-
   .header-section {
-    gap: 0.2rem;
+    gap: 0.5rem;
   }
-
   .section-center {
     position: static;
     transform: none;
     flex: 0 1 auto;
     min-width: 0;
-
-    :deep(.action-button-base) {
-      padding: 0 0.35rem;
-      font-size: 0.7rem;
-    }
   }
-
   .nav-brand-group {
     gap: 0.25rem;
   }

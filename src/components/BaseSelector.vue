@@ -48,41 +48,57 @@
         leave-active-class="dropdown-leave-active"
         appear
       >
-        <!-- 2. 下拉容器 -->
-        <div
-          v-if="isOpen"
-          ref="dropdownRef"
-          role="listbox"
-          tabindex="-1"
-          class="selector-dropdown-box no-scrollbar"
-          :style="{ maxHeight: dropdownMaxHeight }"
-          @keydown="handleDropdownKeydown"
-        >
-          <!-- 3. 选项节点：使用 data-focusable-inline 统一管理 -->
+        <div v-if="isOpen" class="dropdown-inner-container">
+          <!-- 顶部贴边滚动提示 -->
+          <Transition name="hint-fade">
+            <div v-if="canScrollUp" class="scroll-hint hint-top" aria-hidden="true">
+              <ChevronUp :size="9" stroke-width="3" />
+            </div>
+          </Transition>
+
+          <!-- 2. 下拉容器 -->
           <div
-            v-wave="{ disabled: isOptionDisabled(option) }"
-            v-for="(option, index) in options"
-            :key="typeof getOptionValue(option) === 'object' ? index : String(getOptionValue(option))"
-            ref="optionEls"
-            role="option"
-            :tabindex="isOptionDisabled(option) ? -1 : 0"
-            :aria-selected="modelValue === option || modelValue === getOptionValue(option)"
-            class="selector-item"
-            data-focusable-inline
-            :class="{
-              'is-selected': modelValue === option || modelValue === getOptionValue(option),
-              'is-item-disabled': isOptionDisabled(option),
-              'font-black': fontBlackItems,
-              'font-bold': !fontBlackItems,
-            }"
-            @click="handleSelect(option)"
-            @keydown.enter.prevent.stop="handleSelect(option)"
-            @keydown.space.prevent.stop="handleSelect(option)"
+            ref="dropdownRef"
+            role="listbox"
+            tabindex="-1"
+            class="selector-dropdown-box no-scrollbar"
+            :style="{ maxHeight: dropdownMaxHeight }"
+            @scroll.passive="checkScroll"
+            @keydown="handleDropdownKeydown"
           >
-            <slot name="option" :option :index>
-              {{ formattedOption(option) }}
-            </slot>
+            <!-- 3. 选项节点：使用 data-focusable-inline 统一管理 -->
+            <div
+              v-wave="{ disabled: isOptionDisabled(option) }"
+              v-for="(option, index) in options"
+              :key="typeof getOptionValue(option) === 'object' ? index : String(getOptionValue(option))"
+              ref="optionEls"
+              role="option"
+              :tabindex="isOptionDisabled(option) ? -1 : 0"
+              :aria-selected="modelValue === option || modelValue === getOptionValue(option)"
+              class="selector-item"
+              data-focusable-inline
+              :class="{
+                'is-selected': modelValue === option || modelValue === getOptionValue(option),
+                'is-item-disabled': isOptionDisabled(option),
+                'font-black': fontBlackItems,
+                'font-bold': !fontBlackItems,
+              }"
+              @click="handleSelect(option)"
+              @keydown.enter.prevent.stop="handleSelect(option)"
+              @keydown.space.prevent.stop="handleSelect(option)"
+            >
+              <slot name="option" :option :index>
+                {{ formattedOption(option) }}
+              </slot>
+            </div>
           </div>
+
+          <!-- 底部贴边滚动提示 -->
+          <Transition name="hint-fade">
+            <div v-if="canScrollDown" class="scroll-hint hint-bottom" aria-hidden="true">
+              <ChevronDown :size="9" stroke-width="3" />
+            </div>
+          </Transition>
         </div>
       </Transition>
     </div>
@@ -93,7 +109,7 @@
 import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
 import { useFocusReturn } from '@/services/useFocusReturn';
 import { autoUpdate, flip, size as floatingSize, offset, shift, useFloating } from '@floating-ui/vue';
-import { ChevronDown, X } from '@lucide/vue';
+import { ChevronDown, ChevronUp, X } from '@lucide/vue';
 import { vOnClickOutside } from '@vueuse/components';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 
@@ -160,6 +176,8 @@ const emit = defineEmits<{
 
 const isOpen = ref(false);
 const isRendered = ref(false);
+const canScrollUp = ref(false);
+const canScrollDown = ref(false);
 
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
@@ -167,6 +185,14 @@ const dropdownRef = useTemplateRef<HTMLDivElement>('dropdownRef');
 const optionEls = useTemplateRef<HTMLElement[]>('optionEls');
 
 const { captureTrigger, restoreFocusAfter } = useFocusReturn({ warnLabel: '[BaseSelector]' });
+
+const checkScroll = () => {
+  const el = dropdownRef.value;
+  if (!el) return;
+  const { scrollTop, scrollHeight, clientHeight } = el;
+  canScrollUp.value = scrollTop > 2;
+  canScrollDown.value = scrollTop + clientHeight < scrollHeight - 2;
+};
 
 const formattedLabel = (val: T): string => {
   if (labelFormatter) return labelFormatter(val);
@@ -239,8 +265,6 @@ watch(
   }
 );
 
-// isOpen 变为 true 时，记录触发源（此处即 referenceRef 本身，已自带 tabindex）；
-// 供后续 restoreFocusAfter 在关闭下拉框时统一归还焦点
 watch(isOpen, open => {
   if (open) {
     isRendered.value = true;
@@ -270,7 +294,6 @@ const handleSelect = (option: T | SelectorOptionObject<T>) => {
   });
 };
 
-// 🌟 精准按键拦截：仅在需要时 prevent/stop，不误伤 Modal
 const handleTriggerKeydown = (e: KeyboardEvent) => {
   if (disabled) return;
 
@@ -286,7 +309,6 @@ const handleTriggerKeydown = (e: KeyboardEvent) => {
     e.stopPropagation();
     isOpen.value = false;
   }
-  // 若 isOpen 为 false 且按下 Escape，不拦截，事件向上冒泡给 Modal 关闭自身
 };
 
 const handleDropdownKeydown = (e: KeyboardEvent) => {
@@ -310,8 +332,6 @@ const handleDropdownKeydown = (e: KeyboardEvent) => {
       isOpen.value = false;
     });
   } else if (e.key === 'Tab') {
-    // 阻止浏览器原生 Tab 默认行为（移动到下一个可聚焦元素），
-    // 我们自己接管：关闭下拉框并把焦点还给触发条本身
     e.preventDefault();
     restoreFocusAfter(() => {
       isOpen.value = false;
@@ -349,8 +369,20 @@ watch(isOpen, opened => {
     } else if (itemBottom > viewBottom) {
       container.scrollTop = itemBottom - container.clientHeight + paddingBottom;
     }
+
+    checkScroll();
   });
 });
+
+watch(
+  () => options,
+  () => {
+    if (isOpen.value) {
+      nextTick(checkScroll);
+    }
+  },
+  { deep: true }
+);
 </script>
 
 <style scoped lang="less">
@@ -371,7 +403,6 @@ watch(isOpen, opened => {
   color: var(--text-title);
   box-sizing: border-box;
   transition: @transition-fast;
-  outline: none;
 
   &:hover:not(.is-disabled) {
     border-color: var(--border-base);
@@ -379,7 +410,7 @@ watch(isOpen, opened => {
 
   &.is-active {
     border-color: @primary;
-    box-shadow: inset 0 0 0 1px @primary; // 🌟 换成内衬边框提示，不再向外扩
+    box-shadow: inset 0 0 0 1px @primary;
   }
 
   &.is-disabled {
@@ -456,6 +487,42 @@ watch(isOpen, opened => {
   box-sizing: border-box;
 }
 
+.dropdown-inner-container {
+  position: relative;
+  width: 100%;
+}
+
+.scroll-hint {
+  position: absolute;
+  left: 0.25rem;
+  right: 0.25rem;
+  height: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  z-index: 10;
+  color: var(--text-disabled);
+  pointer-events: none;
+  transition: color @duration-fast ease;
+
+  &.hint-top {
+    top: 0.25rem;
+
+    &::after {
+      bottom: 0;
+    }
+  }
+
+  &.hint-bottom {
+    bottom: 0.25rem;
+
+    &::after {
+      top: 0;
+    }
+  }
+}
+
 .selector-dropdown-box {
   width: 100%;
   overflow-y: auto;
@@ -515,4 +582,5 @@ watch(isOpen, opened => {
 }
 
 .fade-scale-transition(dropdown);
+.fade-scale-transition(hint-fade);
 </style>

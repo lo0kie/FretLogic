@@ -257,57 +257,69 @@ onMounted(() => {
   }
 
   &.size-sm {
-    height: v-bind(HEIGHT_SM);
+    height: v-bind('HEIGHT_SM');
     padding-left: 0.5rem;
     padding-right: 0.5rem;
 
     &.has-prefix {
       padding-left: 1.3rem;
     }
-    &.has-suffix {
-      padding-right: 1.6rem;
-    }
+
     &:has(~ .char-count-indicator) {
       padding-right: 2.3rem;
-      &.has-suffix {
+    }
+
+    .input-wrapper:hover &:has(~ .clear-button),
+    .input-wrapper:focus-within &:has(~ .clear-button) {
+      padding-right: 1.6rem;
+
+      &:has(~ .char-count-indicator) {
         padding-right: 3.2rem;
       }
     }
   }
 
   &.size-md {
-    height: v-bind(HEIGHT_MD);
+    height: v-bind('HEIGHT_MD');
     padding-left: 0.65rem;
     padding-right: 0.65rem;
 
     &.has-prefix {
       padding-left: 1.5rem;
     }
-    &.has-suffix {
-      padding-right: 1.8rem;
-    }
+
     &:has(~ .char-count-indicator) {
       padding-right: 2.6rem;
-      &.has-suffix {
+    }
+
+    .input-wrapper:hover &:has(~ .clear-button),
+    .input-wrapper:focus-within &:has(~ .clear-button) {
+      padding-right: 1.8rem;
+
+      &:has(~ .char-count-indicator) {
         padding-right: 3.6rem;
       }
     }
   }
 
   &.size-lg {
-    height: v-bind(HEIGHT_LG);
+    height: v-bind('HEIGHT_LG');
     padding-left: 0.85rem;
     padding-right: 0.85rem;
 
     &.has-prefix {
       padding-left: 1.8rem;
     }
-    &.has-suffix {
-      padding-right: 2.1rem;
-    }
+
     &:has(~ .char-count-indicator) {
       padding-right: 3rem;
-      &.has-suffix {
+    }
+
+    .input-wrapper:hover &:has(~ .clear-button),
+    .input-wrapper:focus-within &:has(~ .clear-button) {
+      padding-right: 2.1rem;
+
+      &:has(~ .char-count-indicator) {
         padding-right: 4.1rem;
       }
     }
@@ -337,6 +349,7 @@ onMounted(() => {
   bottom: 0;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   font-size: 0.5rem;
   font-weight: 500;
   color: var(--text-disabled);
@@ -347,13 +360,13 @@ onMounted(() => {
     right @duration-fast ease;
 
   &.size-sm {
-    right: 0.5rem;
+    right: 0.45rem;
   }
   &.size-md {
-    right: 0.65rem;
+    right: 0.6rem;
   }
   &.size-lg {
-    right: 0.85rem;
+    right: 0.75rem;
   }
 
   &.is-limit-reached {
@@ -365,30 +378,18 @@ onMounted(() => {
 .input-wrapper:focus-within:has(.clear-button) {
   .char-count-indicator {
     &.size-sm {
-      right: 1.6rem;
+      right: 1.5rem;
     }
     &.size-md {
-      right: 1.75rem;
+      right: 1.6rem;
     }
     &.size-lg {
-      right: 1.9rem;
+      right: 1.75rem;
     }
   }
 }
 
 @media (max-width: 768px) {
-  .base-input-field {
-    &.size-sm {
-      height: 1.85rem;
-    }
-    &.size-md {
-      height: 2.15rem;
-    }
-    &.size-lg {
-      height: 2.85rem;
-    }
-  }
-
   .base-input-field.text-xs-style {
     font-size: 0.8rem;
   }

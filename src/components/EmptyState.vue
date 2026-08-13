@@ -80,7 +80,7 @@ const iconSize = computed(() => {
 
 /* 尺寸变体控制 */
 .size-sm {
-  padding: 0.4rem 0;
+  padding: 0.8rem 0;
 
   .icon-zone {
     margin-bottom: 0.2rem;

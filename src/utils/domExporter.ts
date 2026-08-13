@@ -119,4 +119,4 @@ export const copyElementToClipboard = async (
   await writeBlobToClipboard(blob);
 };
 
-export const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+export const wait = (ms = 0) => new Promise<void>(resolve => setTimeout(resolve, ms));

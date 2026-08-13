@@ -14,8 +14,8 @@
       :touchStartThreshold="12"
       :swap-threshold="0.5"
     >
-      <div v-for="(group, index) in chordStore.groups" :key="group.id" class="group-box-card" ref="groupCardEls">
-        <GlobalContextMenu :items="getGroupMenuItems(group)" #default="{ isOpen }">
+      <div v-for="(group, index) in chordStore.groups" :key="group.id" class="group-box-card">
+        <GlobalContextMenu :items="getGroupMenuItems(group)" #="{ isOpen }">
           <div
             v-wave
             tabindex="0"
@@ -109,7 +109,7 @@ import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
 import { ArrowUpDown, ChevronDown, FolderOpen, SquarePen, Trash2 } from '@lucide/vue';
-import { computed, nextTick, useTemplateRef, watch, type ComponentPublicInstance } from 'vue';
+import { computed, useTemplateRef, type ComponentPublicInstance } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import LeftChordGroupContent from './LeftChordGroupContent.vue';
 
@@ -130,7 +130,6 @@ const chordActions = useChordActions();
 const uiStore = useUiStore();
 
 const groupListContainerRef = useTemplateRef<HTMLElement>('groupListContainerRef');
-const groupCardEls = useTemplateRef<HTMLElement[]>('groupCardEls');
 const contentOuterComponentEls = new Map<number, ComponentPublicInstance | Element | null>();
 
 const { handleKeydown } = useGridNavigation(1, groupListContainerRef, {
@@ -217,38 +216,8 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => [
     action: () => emit('open-delete', group),
   },
 ];
-
-watch(
-  () => chordStore.selectedGroupId,
-  async newId => {
-    if (!newId) return;
-    await nextTick();
-    const idx = chordStore.groups.findIndex(g => g.id === newId);
-    if (idx === -1) return;
-    const targetElement = groupCardEls.value?.[idx];
-    const contentComponent = contentOuterComponentEls.get(idx);
-    if (!targetElement) return;
-    const scrollToShowContent = () => {
-      targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-    if (!contentComponent) {
-      scrollToShowContent();
-      return;
-    }
-    const contentOuter = ('$el' in contentComponent ? contentComponent.$el : contentComponent) as HTMLElement | null;
-    if (!contentOuter) {
-      scrollToShowContent();
-      return;
-    }
-    const handleTransitionEnd = (e: TransitionEvent) => {
-      if (e.propertyName !== 'grid-template-rows') return;
-      contentOuter.removeEventListener('transitionend', handleTransitionEnd);
-      scrollToShowContent();
-    };
-    contentOuter.addEventListener('transitionend', handleTransitionEnd);
-  }
-);
 </script>
+
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 .draggable-list {
@@ -263,9 +232,9 @@ watch(
 }
 
 .group-title-row {
-  height: 2.2rem;
-  padding-left: 0.65rem;
-  padding-right: 0.65rem;
+  height: 2.4rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: space-between;

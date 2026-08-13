@@ -3,7 +3,7 @@ import { useDark, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
 export const useSettingsStore = defineStore('settings', () => {
-  const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '', initialValue: 'light' });
+  const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '', initialValue: 'auto' });
 
   const githubToken = useStorage(STORAGE_KEYS.GH_TOKEN, '');
   const githubOwner = useStorage(STORAGE_KEYS.GH_OWNER, '');
