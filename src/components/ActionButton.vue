@@ -10,15 +10,12 @@
   >
     <Loader2 v-if="loading" class="loading-icon" />
     <slot v-else name="prefix"></slot>
-
     <span v-if="$slots.default" class="button-content">
       <slot></slot>
     </span>
-
     <slot name="suffix"></slot>
   </button>
 </template>
-
 <script setup lang="ts">
 import { ACTION_BUTTON_DEFAULTS, HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
 import { Loader2 } from '@lucide/vue';
@@ -69,7 +66,6 @@ const themeClass = computed(() => {
 
 const normalizedStyle = computed(() => {
   const style: Record<string, string> = {};
-
   if (width !== undefined) {
     style.width = typeof width === 'number' ? `${width}px` : width;
   }
@@ -83,10 +79,8 @@ const variantClass = computed(() => `variant-${variant}`);
 const sizeClass = computed(() => `size-${size}`);
 const roundedClass = computed(() => `rounded-${rounded}`);
 </script>
-
 <style scoped lang="less">
 @import '@/assets/tokens.module';
-
 .action-button-base {
   display: inline-flex;
   align-items: center;
@@ -99,7 +93,6 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   transition: @transition-fast;
   cursor: pointer;
   flex-shrink: 0;
-
   &:disabled {
     opacity: 0.35;
     cursor: not-allowed;
@@ -107,16 +100,17 @@ const roundedClass = computed(() => `rounded-${rounded}`);
     box-shadow: none;
     pointer-events: auto;
   }
-
   &:active:not(:disabled) {
-    transform: scale(0.95);
+    transform: scale(0.97);
+    transition-duration: 0.1s;
   }
 }
-
 .action-button-base.is-texted {
   background-color: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
+  padding-left: 0.3rem; 
+  padding-right: 0.3rem;
 
   &.theme-primary {
     color: var(--color-primary);
@@ -130,34 +124,28 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   &.theme-default {
     color: var(--text-body);
   }
-
   &:hover:not(:disabled) {
     background-color: var(--bg-panel-hover) !important;
   }
 }
-
 .size-sm {
-  height: v-bind(HEIGHT_SM);
-  padding: 0 0.65rem;
-  font-size: 0.68rem;
+  height: v-bind('HEIGHT_SM');
+  padding: 0 0.7rem;
+  font-size: 0.72rem;
   gap: 0.3rem;
 }
-
 .size-md {
-  height: v-bind(HEIGHT_MD);
+  height: v-bind('HEIGHT_MD');
   padding: 0 1rem;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
+  gap: 0.4rem;
+}
+.size-lg {
+  height: v-bind('HEIGHT_LG');
+  padding: 0 1.2rem;
+  font-size: 0.85rem;
   gap: 0.45rem;
 }
-
-.size-lg {
-  height: v-bind(HEIGHT_LG);
-  padding: 0 1.25rem;
-  font-size: 0.75rem;
-  gap: 0.5rem;
-}
-
-/* 🌟 优化 Variant Subtle：适配不同 Theme 变量，避免硬编码 */
 .variant-subtle {
   &.theme-primary {
     background-color: color-mix(in srgb, var(--color-primary), transparent 90%);
@@ -167,7 +155,6 @@ const roundedClass = computed(() => `rounded-${rounded}`);
       background-color: color-mix(in srgb, var(--color-primary), transparent 80%);
     }
   }
-
   &.theme-danger {
     background-color: color-mix(in srgb, var(--color-danger), transparent 90%);
     border-color: color-mix(in srgb, var(--color-danger), transparent 90%);
@@ -176,7 +163,6 @@ const roundedClass = computed(() => `rounded-${rounded}`);
       background-color: color-mix(in srgb, var(--color-danger), transparent 80%);
     }
   }
-
   &.theme-warning {
     background-color: color-mix(in srgb, var(--color-warning), transparent 90%);
     border-color: color-mix(in srgb, var(--color-warning), transparent 90%);
@@ -185,7 +171,6 @@ const roundedClass = computed(() => `rounded-${rounded}`);
       background-color: color-mix(in srgb, var(--color-warning), transparent 80%);
     }
   }
-
   &.theme-default {
     background-color: var(--bg-panel-hover);
     border-color: var(--border-light);
@@ -195,12 +180,10 @@ const roundedClass = computed(() => `rounded-${rounded}`);
     }
   }
 }
-
 .variant-ghost {
   background-color: transparent;
   border-color: transparent;
   color: var(--text-disabled);
-
   &.theme-primary {
     color: var(--color-primary);
   }
@@ -210,61 +193,50 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   &.theme-warning {
     color: var(--color-warning);
   }
-
   &:hover:not(:disabled) {
     background-color: var(--bg-panel-hover);
   }
 }
-
 .theme-primary:not(.variant-subtle):not(.variant-ghost) {
   background-color: var(--color-primary);
   border-color: transparent;
   color: #ffffff;
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--color-primary), transparent 60%);
-
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--color-primary), transparent 70%);
   &:hover:not(:disabled) {
     opacity: 0.92;
   }
 }
-
 .theme-danger:not(.variant-subtle):not(.variant-ghost) {
   color: var(--color-danger);
   border-color: transparent;
   background-color: color-mix(in srgb, var(--color-danger), transparent 88%);
-
   &:hover:not(:disabled) {
     background-color: color-mix(in srgb, var(--color-danger), transparent 78%);
   }
 }
-
 .theme-warning:not(.variant-subtle):not(.variant-ghost) {
   color: var(--color-warning);
   border-color: transparent;
   background-color: color-mix(in srgb, var(--color-warning), transparent 88%);
-
   &:hover:not(:disabled) {
     background-color: color-mix(in srgb, var(--color-warning), transparent 78%);
   }
 }
-
 .theme-default:not(.variant-subtle):not(.variant-ghost) {
   background-color: var(--bg-body);
   border-color: var(--border-light);
   color: var(--text-body);
-
   &:hover:not(:disabled) {
     border-color: var(--border-base);
     background-color: var(--bg-panel-hover);
     color: var(--text-title);
   }
 }
-
 .action-button-base.is-icon-only {
   padding: 0;
   width: auto;
   aspect-ratio: 1 / 1;
 }
-
 .action-button-base.rounded-none {
   border-radius: 0;
 }
@@ -280,7 +252,6 @@ const roundedClass = computed(() => `rounded-${rounded}`);
 .action-button-base.rounded-full {
   border-radius: 9999px;
 }
-
 .loading-icon {
   width: 1rem;
   height: 1rem;
@@ -288,7 +259,6 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   opacity: 0.8;
   animation: spin 0.8s linear infinite;
 }
-
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -297,30 +267,20 @@ const roundedClass = computed(() => `rounded-${rounded}`);
     transform: rotate(360deg);
   }
 }
-
 .button-content {
   display: flex;
   align-items: center;
   justify-content: center;
   white-space: nowrap;
 }
-
-@media (max-width: 768px) {
+@media (pointer: coarse), (max-width: 768px) {
   .size-sm {
-    height: 1.85rem;
-    padding: 0 0.75rem;
     font-size: 0.78rem;
   }
-
   .size-md {
-    height: 2.15rem;
-    padding: 0 1.1rem;
     font-size: 0.82rem;
   }
-
   .size-lg {
-    height: 2.85rem;
-    padding: 0 1.4rem;
     font-size: 0.9rem;
   }
 }

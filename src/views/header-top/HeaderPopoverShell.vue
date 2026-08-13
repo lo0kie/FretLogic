@@ -126,19 +126,19 @@ const handleFocusOut = (e: FocusEvent) => {
   top: calc(100% + 1rem);
   right: 0;
   width: 15rem;
-  padding: 0.8rem 1rem;
-  background-color: var(--bg-panel);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  padding: 0.9rem 1.1rem;
+  background-color: var(--bg-elevated);
   border: 1px solid var(--glass-border);
   border-radius: @radius-lg;
   box-shadow: @shadow-floating;
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.9rem;
   z-index: 1100;
   box-sizing: border-box;
   outline: none;
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
 }
 
 .fade-scale-transition(dropdown-fade, ~'0, -6px', 0.96);
@@ -147,13 +147,13 @@ const handleFocusOut = (e: FocusEvent) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.6rem;
 }
 
 :deep(.config-label) {
   font-size: 0.7rem;
   font-weight: 600;
-  color: var(--text-disabled);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -166,12 +166,6 @@ const handleFocusOut = (e: FocusEvent) => {
   > * {
     max-width: 10rem;
   }
-}
-
-:deep(.selector-trigger-bar) {
-  height: 1.5rem !important;
-  padding-left: 0.5rem !important;
-  padding-right: 0.5rem !important;
 }
 
 @media (max-width: 768px) {
@@ -188,19 +182,12 @@ const handleFocusOut = (e: FocusEvent) => {
   }
 
   :deep(.config-row) {
-    gap: 1rem;
+    gap: 0.6rem;
   }
 
   :deep(.config-label) {
     font-size: 0.8rem;
     font-weight: 700;
-  }
-
-  :deep(.selector-trigger-bar) {
-    height: 2rem !important;
-    padding-left: 0.7rem !important;
-    padding-right: 0.7rem !important;
-    font-size: 0.78rem !important;
   }
 }
 </style>

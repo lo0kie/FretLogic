@@ -210,17 +210,17 @@ const handleWheel = (e: WheelEvent) => {
   }
 
   &.size-sm {
-    height: v-bind(HEIGHT_SM);
+    height: v-bind('HEIGHT_SM');
     padding: 0 0.3rem;
   }
 
   &.size-md {
-    height: v-bind(HEIGHT_MD);
+    height: v-bind('HEIGHT_MD');
     padding: 0 0.4rem;
   }
 
   &.size-lg {
-    height: v-bind(HEIGHT_LG);
+    height: v-bind('HEIGHT_LG');
     padding: 0 0.5rem;
   }
 }

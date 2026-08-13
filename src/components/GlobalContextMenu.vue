@@ -11,7 +11,6 @@
   <Teleport to="body">
     <div v-if="isRendered" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
       <Transition name="menu-fade" appear>
-        <!-- 🌟 1. 补全 role="menu" 与键盘导航 -->
         <div
           v-if="isOpen"
           ref="menuBoxRef"
@@ -20,13 +19,13 @@
           aria-label="右键上下文菜单"
           class="context-menu-box"
           @keydown="handleMenuKeydown"
+          :class="sizeClass"
         >
           <template v-if="title">
             <div class="menu-title">{{ title }}</div>
             <div class="menu-divider" role="separator"></div>
           </template>
 
-          <!-- 🌟 2. 补全 role="menuitem" 与 tabindex -->
           <!-- 模板中的菜单项 -->
           <button
             v-wave="{ disabled: item.disabled }"
@@ -60,6 +59,7 @@ const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
 </script>
 
 <script setup lang="ts">
+import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
 import { useFocusReturn } from '@/services/useFocusReturn';
 import { autoUpdate, flip, shift, useFloating } from '@floating-ui/vue';
 import { useEventListener } from '@vueuse/core';
@@ -81,8 +81,9 @@ const props = withDefaults(
     items: ContextMenuItem[];
     title?: string;
     disabled?: boolean;
+    size?: 'sm' | 'md' | 'lg';
   }>(),
-  { disabled: false }
+  { disabled: false, size: 'md' }
 );
 
 const isOpen = ref(false);
@@ -109,6 +110,7 @@ const virtualRef = computed(() => ({
     };
   },
 }));
+const sizeClass = computed(() => `size-${props.size}`);
 
 const { floatingStyles, update } = useFloating(virtualRef, floatingRef, {
   placement: 'bottom-start',
@@ -206,9 +208,6 @@ const handleMenuKeydown = (e: KeyboardEvent) => {
     e.stopPropagation();
     closeMenuAndRestoreFocus();
   } else if (e.key === 'Tab') {
-    // 标准菜单行为：Tab 不在菜单内循环，而是关闭菜单并让焦点离开。
-    // 菜单被 Teleport 到 body 末尾，脱离原文档流位置，必须手动把焦点送回触发元素，
-    // 否则焦点会飞到 body 末尾之后（通常是地址栏）
     e.preventDefault();
     closeMenuAndRestoreFocus();
   }
@@ -304,9 +303,6 @@ onBeforeUnmount(() => {
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.4rem 0.6rem;
-  font-size: 0.73rem;
   font-weight: 500;
   border-radius: @radius-md;
   border: none;
@@ -315,7 +311,27 @@ onBeforeUnmount(() => {
   text-align: left;
   box-sizing: border-box;
   transition: @transition-fast;
-  /* 统一交给 data-focusable-inline 或保留通用控制 */
+
+  .size-sm & {
+    height: v-bind('HEIGHT_SM');
+    padding: 0 0.5rem;
+    font-size: 0.68rem;
+    gap: 0.35rem;
+  }
+
+  .size-md & {
+    height: v-bind('HEIGHT_MD');
+    padding: 0 0.6rem;
+    font-size: 0.73rem;
+    gap: 0.45rem;
+  }
+
+  .size-lg & {
+    height: v-bind('HEIGHT_LG');
+    padding: 0 0.75rem;
+    font-size: 0.8rem;
+    gap: 0.55rem;
+  }
 
   &.is-normal {
     color: var(--text-title);

@@ -6,6 +6,13 @@ import type { Chord, Group } from '@/types';
 import { cloneDeep } from '@/utils/cloneDeep';
 import type { SortableEvent } from 'vue-draggable-plus';
 
+const warningMessages: Record<string, string> = {
+  DUPLICATE_FINGERPRINT: '保存失败：该分组下已存在一模一样的和弦',
+  EMPTY_NAME: '保存失败：请输入名称并指定指板有效音符',
+  NO_GROUPS: '保存失败：请先新建分组',
+  NO_SELECTED_GROUP: '保存失败：请先选择目标分组',
+};
+
 export function useChordActions() {
   const chordStore = useChordStore();
   const editorStore = useEditorStore();
@@ -57,16 +64,19 @@ export function useChordActions() {
     const result = chordStore.buildChordForSave(editorStore.draftChord, editorStore.isEditing);
 
     if (!result.ok) {
-      if (result.reason === 'DUPLICATE_FINGERPRINT') {
-        uiStore.toast.warning(`保存失败：该分组下已存在一模一样的和弦 "${result.cleanName}"`);
-      } else if (result.reason === 'EMPTY_NAME') {
-        uiStore.toast.warning('保存失败：请输入名称并指定指板有效音符');
-      } else if (result.reason === 'NO_GROUPS') {
-        uiStore.toast.warning('保存失败：请先新建分组');
-      } else if (result.reason === 'NO_SELECTED_GROUP') {
-        uiStore.isLeftOpen = true;
-        uiStore.toast.warning('保存失败：请先选择目标分组');
+      if (result.reason === 'UNCHANGED') {
+        uiStore.toast.success('和弦已更新');
+        editorStore.resetEditor();
+        uiStore.clearActionToasts();
+        return;
       }
+
+      if (result.reason === 'NO_SELECTED_GROUP' && uiStore.isMobile) {
+        uiStore.isLeftOpen = true;
+      }
+
+      const msg = warningMessages[result.reason];
+      if (msg) uiStore.toast.warning(msg);
       return;
     }
 

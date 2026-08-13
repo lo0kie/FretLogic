@@ -178,10 +178,10 @@ const handleSetRootString = (stringIndex: number) => {
   width: 100%;
   height: auto;
   max-height: calc(100vh - 5rem);
-  padding: 0.85rem;
+  padding: 0.9rem;
   background-color: var(--bg-panel);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
   border: 1px solid var(--glass-border);
   border-radius: @radius-lg;
   display: flex;

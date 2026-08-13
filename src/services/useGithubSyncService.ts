@@ -180,7 +180,7 @@ export function useGithubSyncService() {
   };
 
   const triggerGlobalSync = () => {
-    void syncToGithub();
+    return syncToGithub();
   };
 
   return {

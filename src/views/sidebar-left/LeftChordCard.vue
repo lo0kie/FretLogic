@@ -1,5 +1,5 @@
 ﻿<template>
-  <GlobalContextMenu :items="menuItems" #default="{ isOpen }">
+  <GlobalContextMenu :items="menuItems" #="{ isOpen }">
     <div
       class="chord-card-frame"
       v-memo="[
@@ -10,8 +10,9 @@
         isActive,
         cardData.hasVariants,
         isSwapping,
+        isOpen,
       ]"
-      :title="`${activeChord.chordName} ${dotTitle}`"
+      :title="activeChord.chordName"
     >
       <div
         v-wave
@@ -41,8 +42,8 @@
             'is-rootless-inverted': !hasRoot && isInverted,
             'is-rootless-normal': !hasRoot && !isInverted,
           }"
-          :title="dotTitle"
-          :aria-label="dotTitle"
+          :title="activeChord.chordName"
+          :aria-label="activeChord.chordName"
         ></span>
 
         <BaseBadge
@@ -51,7 +52,7 @@
           appearance="filled"
           size="xs"
           class="variant-badge-badge"
-          :width="isActive ? '1.8rem' : '1.2rem'"
+          :width="isActive ? '1.6rem' : '1.2rem'"
           :title="isActive ? '滚轮切换指法' : undefined"
           @click.stop="toggleVariantsDropdown"
         >
@@ -93,13 +94,16 @@ const editorStore = useEditorStore();
 /** 未激活时的本地预览索引；激活后索引以 store 为准 */
 const localVariantIndex = ref(0);
 
-const activeVariantIndex = computed(() =>
-  props.isActive ? editorStore.currentMultiFingeringIndex : localVariantIndex.value
-);
+const activeVariantIndex = computed(() => {
+  if (props.isActive) {
+    const idx = props.cardData.variants.findIndex(v => v.id === editorStore.draftChord.id);
+    return idx >= 0 ? idx : localVariantIndex.value;
+  }
+  return localVariantIndex.value;
+});
 
 const activeChord = computed(() => {
-  if (props.isActive) return editorStore.draftChord;
-  return props.cardData.variants[localVariantIndex.value] ?? props.cardData.mainChord;
+  return props.cardData.variants[activeVariantIndex.value] ?? props.cardData.mainChord;
 });
 
 const handleCardClick = () => {
@@ -125,12 +129,9 @@ const triggerSwapAnimation = async () => {
 
 const switchVariant = (nextIdx: number) => {
   triggerSwapAnimation();
-  if (props.isActive) {
-    editorStore.setMultiFingeringIndex(nextIdx);
-    return;
-  }
+  const targetChord = props.cardData.variants[nextIdx] ?? props.cardData.mainChord;
   localVariantIndex.value = nextIdx;
-  emit('select', props.cardData.variants[nextIdx] ?? props.cardData.mainChord);
+  emit('select', targetChord);
 };
 
 const toggleVariantsDropdown = () => {
@@ -175,12 +176,6 @@ const hasRoot = computed(() => activeChord.value.strings.some(s => s.fret >= 0 &
 const isInverted = computed(() => !!activeChord.value.isInverted);
 const hasDot = true;
 
-const dotTitle = computed(() => {
-  const rootText = hasRoot.value ? '有根音' : '无根音';
-  const invertText = isInverted.value ? ' + 转位和弦' : '';
-  return `${rootText}${invertText}`;
-});
-
 const ariaLabel = computed(() => {
   const name = activeChord.value.chordName;
   if (!props.cardData.hasVariants) return `和弦 ${name}`;
@@ -202,9 +197,9 @@ onBeforeUnmount(() => {
 }
 
 .chord-thumb-card {
-  height: 2rem;
-  padding-left: 0.6rem;
-  padding-right: 0.6rem;
+  height: 2.25rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -265,8 +260,9 @@ onBeforeUnmount(() => {
   }
 
   &.is-editing {
-    background-color: color-mix(in srgb, @primary, var(--bg-body) 88%);
-    border-color: @primary;
+    background-color: color-mix(in srgb, var(--color-primary), var(--bg-body) 93%);
+    border-color: color-mix(in srgb, var(--color-primary), transparent 45%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary), transparent 75%);
 
     .chord-name-text {
       color: @primary;
@@ -332,13 +328,13 @@ onBeforeUnmount(() => {
   left: 0.25rem;
   z-index: 5;
   display: inline-block;
-  width: 0.3rem;
-  height: 0.3rem;
   border-radius: 50%;
   flex-shrink: 0;
   box-sizing: border-box;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   transition: box-shadow @duration-fast ease;
+  width: 0.32rem;
+  height: 0.32rem;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, currentColor, transparent 65%);
 
   &.is-root-normal {
     background-color: var(--color-primary);
@@ -364,8 +360,8 @@ onBeforeUnmount(() => {
 
   .chord-thumb-card {
     height: 2.75rem;
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
+    padding-left: 1.1rem;
+    padding-right: 1.1rem;
     border-radius: @radius-lg;
   }
 

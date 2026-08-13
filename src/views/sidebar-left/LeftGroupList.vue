@@ -1,7 +1,6 @@
 <template>
   <div class="left-group-list-container left-group-list">
     <div class="scroll-body no-scrollbar">
-      <!-- 🌟 1. 工作台模式 (/)：渲染和弦分组与拖拽排序 -->
       <LeftChordGroupSection
         v-if="route.path === '/workbench'"
         :search-query
@@ -12,7 +11,6 @@
         @open-delete-variants="cardData => $emit('open-delete-variants', cardData)"
       />
 
-      <!-- 🌟 2. 乐谱库模式 (/score)：渲染乐谱列表 -->
       <LeftSongListSection
         v-else-if="route.path === '/score'"
         @open-config="song => $emit('open-config-song', song)"

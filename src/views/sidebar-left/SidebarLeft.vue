@@ -9,7 +9,6 @@
           :disabled="chordStore.savedChordsList.length === 0"
           placeholder="搜索和弦..."
           clearable
-          size="sm"
           fontSize="xs"
           class="header-search-input"
           :maxlength="15"
@@ -21,7 +20,7 @@
         </BaseInput>
 
         <div class="header-actions">
-          <ActionButton @click="groupModals.openCreate" variant="subtle" icon-only size="sm" v-tooltip="'新建分组'">
+          <ActionButton @click="groupModals.openCreate" variant="ghost" icon-only v-tooltip="'新建分组'">
             <Plus :size="16" :stroke-width="2.5" />
           </ActionButton>
         </div>
@@ -36,13 +35,7 @@
           </BaseBadge>
         </div>
 
-        <ActionButton
-          @click="songModals.openCreateSongModal"
-          variant="subtle"
-          icon-only
-          size="sm"
-          v-tooltip="'新建乐谱'"
-        >
+        <ActionButton @click="songModals.openCreateSongModal" variant="ghost" icon-only v-tooltip="'新建乐谱'">
           <Plus :size="16" :stroke-width="2.5" />
         </ActionButton>
       </template>
@@ -133,15 +126,18 @@ const handleFileChange = async (e: Event) => {
 @import '@/assets/tokens.module';
 
 .panel-left {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 50;
   background-color: var(--bg-panel);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
   border-right: 1px solid var(--glass-border);
   height: 100%;
   display: flex;
   flex-direction: column;
-  position: relative;
-  z-index: 10;
   box-sizing: border-box;
   overflow: hidden;
   width: 0px;
@@ -176,7 +172,7 @@ const handleFileChange = async (e: Event) => {
 
 .sidebar-title {
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-title);
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -199,9 +195,8 @@ const handleFileChange = async (e: Event) => {
 }
 
 .left-panel-footer {
-  padding: 0.5rem 0.85rem;
+  padding: 0.8rem;
   border-top: 1px solid var(--glass-border);
-  background-color: var(--bg-panel);
   box-sizing: border-box;
   flex-shrink: 0;
   width: 100%;
@@ -219,8 +214,14 @@ const handleFileChange = async (e: Event) => {
 }
 
 @media (max-width: 768px) {
-  .panel-left {
-    height: calc(100vh - 2.5rem) !important;
+  .panel-left.is-mobile-drawer {
+    position: fixed;
+    top: calc(52px + env(safe-area-inset-top, 0px)) !important;
+    bottom: 0;
+    left: 0;
+    height: calc(100vh - 52px - env(safe-area-inset-top, 0px)) !important;
+    z-index: 100;
+    box-shadow: var(--shadow-xl);
   }
 
   .panel-header {

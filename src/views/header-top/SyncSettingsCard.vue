@@ -3,7 +3,6 @@
     <div class="panel-header">
       <h3 class="panel-title">云端同步</h3>
 
-      <!-- 🌟 改用 BaseBadge 替换手写的 .env-badge 结构 -->
       <BaseBadge
         :variant="isDevEnv ? 'warning' : 'success'"
         appearance="subtle"
@@ -22,7 +21,6 @@
       is-password
       clearable
       autofocus
-      fontSize="xs"
       :maxlength="100"
       show-count
     />
@@ -33,7 +31,6 @@
         v-model="settingsStore.githubOwner"
         placeholder="Username"
         clearable
-        fontSize="xs"
         :maxlength="39"
         show-count
       />
@@ -43,7 +40,6 @@
         v-model="settingsStore.githubRepo"
         placeholder="Repository"
         clearable
-        fontSize="xs"
         :maxlength="100"
         show-count
       />
@@ -58,7 +54,6 @@
         width="100%"
         @click="$emit('pull-request')"
         :loading="isPulling"
-        size="sm"
       >
         <template #prefix><CloudDownload :size="13" stroke-width="2.5" /></template>
         拉取
@@ -70,7 +65,6 @@
         width="100%"
         @click="$emit('push-request')"
         :loading="isSyncing"
-        size="sm"
       >
         <template #prefix><CloudUpload :size="13" stroke-width="2.5" /></template>
         同步
@@ -81,7 +75,7 @@
 
 <script setup lang="ts">
 import ActionButton from '@/components/ActionButton.vue';
-import BaseBadge from '@/components/BaseBadge.vue'; // 🌟 引入 BaseBadge
+import BaseBadge from '@/components/BaseBadge.vue';
 import BaseInput from '@/components/BaseInput.vue';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { CloudDownload, CloudUpload } from '@lucide/vue';

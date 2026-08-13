@@ -15,7 +15,7 @@
       :disabled="scoreEditor.activeSongId !== null"
     >
       <div v-for="(song, index) in songStore.songs" :key="song.id" class="song-card-wrapper">
-        <GlobalContextMenu :items="getSongMenuItems(song)" #default="{ isOpen }">
+        <GlobalContextMenu :items="getSongMenuItems(song)" #="{ isOpen }">
           <div
             v-wave
             class="song-card-item"
@@ -162,17 +162,11 @@ const handleSelectSong = (songId: string) => {
   flex-direction: column;
   width: 100%;
   box-sizing: border-box;
-
-  /* 🌟 核心修复：强制重置 GlobalContextMenu 的包装器为块级盒模型，解决拖拽与右键触发死区问题 */
-  :deep(.context-menu-trigger-wrapper) {
-    display: block;
-    width: 100%;
-  }
 }
 
 .song-card-item {
   width: 100%;
-  padding: 0.55rem 0.75rem;
+  padding: 0.65rem 0.8rem;
   border-radius: @radius-md;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);

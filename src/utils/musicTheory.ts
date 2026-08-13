@@ -3,11 +3,18 @@ import { cloneDeep } from './cloneDeep';
 
 export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 export const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
 export const TUNING_MAPPING_STANDARD = Object.freeze([40, 45, 50, 55, 59, 64] as const);
 export const TUNING_MAPPING_DROP_D = Object.freeze([38, 45, 50, 55, 59, 64] as const);
 export const TUNING_MAPPING_DADGAD = Object.freeze([38, 45, 50, 55, 57, 62] as const);
 export const TUNING_MAPPING_OPEN_G = Object.freeze([38, 43, 50, 55, 59, 62] as const);
 export const TUNING_MAPPING_HALF_STEP = Object.freeze([39, 44, 49, 54, 58, 63] as const);
+// 新增：Open D (D A D F# A D)
+export const TUNING_MAPPING_OPEN_D = Object.freeze([38, 45, 50, 54, 57, 62] as const);
+// 新增：Open C (C G C G C E)
+export const TUNING_MAPPING_OPEN_C = Object.freeze([36, 43, 48, 55, 60, 64] as const);
+// 新增：Drop C (C G C F A D) — 即 Drop D 整体降全音
+export const TUNING_MAPPING_DROP_C = Object.freeze([36, 43, 48, 53, 57, 62] as const);
 export const DEFAULT_TUNING_MAPPING = TUNING_MAPPING_STANDARD;
 
 export enum TuningEnum {
@@ -16,6 +23,9 @@ export enum TuningEnum {
   DADGAD = 'DADGAD',
   OPEN_G = 'OPEN_G',
   HALF_STEP = 'HALF_STEP',
+  OPEN_D = 'OPEN_D',
+  OPEN_C = 'OPEN_C',
+  DROP_C = 'DROP_C',
 }
 
 export const TUNING_PRESETS: Record<
@@ -27,6 +37,9 @@ export const TUNING_PRESETS: Record<
   [TuningEnum.DADGAD]: { name: 'DADGAD', mapping: TUNING_MAPPING_DADGAD },
   [TuningEnum.OPEN_G]: { name: 'Open G (DGDGBD)', mapping: TUNING_MAPPING_OPEN_G },
   [TuningEnum.HALF_STEP]: { name: 'Half Step Down', mapping: TUNING_MAPPING_HALF_STEP },
+  [TuningEnum.OPEN_D]: { name: 'Open D (DADF#AD)', mapping: TUNING_MAPPING_OPEN_D },
+  [TuningEnum.OPEN_C]: { name: 'Open C (CGCGCE)', mapping: TUNING_MAPPING_OPEN_C },
+  [TuningEnum.DROP_C]: { name: 'Drop C (CGCFAD)', mapping: TUNING_MAPPING_DROP_C },
 };
 
 const ACCIDENTAL_PITCH = Object.freeze([false, true, false, true, false, false, true, false, true, false, true, false]);
@@ -76,6 +89,7 @@ export const calcNoteLabel = (
   return preferFlat ? NOTES_FLAT[noteIndex] : NOTES_SHARP[noteIndex];
 };
 
+// 补齐等音异名（E#/Fb/B#/Cb），让根音解析对少见但合法的记谱更健壮
 const ROOT_PITCH_MAP: Record<string, number> = {
   'C': 0,
   'C#': 1,
@@ -84,6 +98,8 @@ const ROOT_PITCH_MAP: Record<string, number> = {
   'D#': 3,
   'Eb': 3,
   'E': 4,
+  'E#': 5,
+  'Fb': 4,
   'F': 5,
   'F#': 6,
   'Gb': 6,
@@ -94,6 +110,8 @@ const ROOT_PITCH_MAP: Record<string, number> = {
   'A#': 10,
   'Bb': 10,
   'B': 11,
+  'B#': 0,
+  'Cb': 11,
 };
 
 const rootPitchCache = new Map<string, number>();

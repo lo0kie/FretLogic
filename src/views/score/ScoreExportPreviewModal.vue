@@ -13,7 +13,6 @@
     </template>
 
     <div class="export-preview-body">
-      <!-- 🌟 中间预览舞台：flex: 1 自动填满剩余空间，超出内部滚动 -->
       <div class="preview-stage no-scrollbar">
         <div v-if="isGenerating" class="preview-loading">
           正在生成预览{{ progress > 0 ? ` (${progress}%)` : '' }}...
@@ -140,11 +139,11 @@ const modeOptions = [
   flex-direction: column;
   align-items: center;
   width: 100%;
-  flex: 1; /* 🌟 自动占满所有剩余高度 */
-  height: 0; /* 🌟 配合 flex: 1 确保正确压缩与计算 */
+  flex: 1;
+  height: 0;
   min-height: 0;
   padding: 0.6rem;
-  overflow: auto; /* 🌟 超出时内部滚动 */
+  overflow: auto;
   box-sizing: border-box;
   border: 1px solid var(--border-light);
   border-radius: @radius-lg;
@@ -172,7 +171,7 @@ const modeOptions = [
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  flex-shrink: 0; /* 🌟 绝不被压缩，固定在底部 */
+  flex-shrink: 0;
 }
 
 /* =========================

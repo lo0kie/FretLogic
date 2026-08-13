@@ -1,7 +1,6 @@
 <template>
   <div class="score-floating-bar">
     <div class="bar-info-zone">
-      <!-- 🌟 改用 BaseBadge 表示已选行数计数 -->
       <BaseBadge
         :variant="selectedCount > 0 ? 'primary' : 'neutral'"
         :appearance="selectedCount > 0 ? 'filled' : 'subtle'"
@@ -14,7 +13,6 @@
       <span class="selected-text-tip">{{ selectedCount > 0 ? '已选择歌词' : '请选择歌词' }}</span>
 
       <div ref="scrollContainerRef" class="clickable-indices-list no-scrollbar" @wheel.prevent="handleWheelScroll">
-        <!-- 🌟 已选索引按钮改用交互式 BaseBadge，并带关闭图标与 Hover 效果 -->
         <BaseBadge
           v-for="lineIdx in sortedIndices"
           :key="lineIdx"
@@ -141,9 +139,9 @@ const handleWheelScroll = (e: WheelEvent) => {
   align-items: center;
   gap: 0.25rem;
   /* 固定槽位：有没有索引都一样宽 */
-  width: 9rem;
-  min-width: 9rem;
-  max-width: 9rem;
+  width: 7.5rem;
+  min-width: 7.5rem;
+  max-width: 7.5rem;
   overflow-x: auto;
   overflow-y: hidden;
   white-space: nowrap;

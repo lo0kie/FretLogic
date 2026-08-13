@@ -56,12 +56,23 @@ const gridContainerRef = useTemplateRef<HTMLElement>('gridContainerRef');
 const chordsCount = computed(() => chordStore.groupChordMap.get(props.group.id)?.length ?? 0);
 const groupedCards = computed(() => chordStore.getGroupedCards(props.group.id, props.searchQuery));
 
-/** 本分组内：当前 draft 落在哪张卡（只查一次） */
 const activeMainId = computed(() => {
-  const id = editorStore.draftChord.id;
-  if (!id) return null;
-  for (const card of groupedCards.value) {
-    if (card.variants.some(v => v.id === id)) return card.mainChord.id;
+  const draft = editorStore.draftChord;
+  if (draft.id) {
+    for (const card of groupedCards.value) {
+      if (card.variants.some(v => v.id === draft.id)) return card.mainChord.id;
+    }
+  }
+  // 仅在编辑已有和弦时按名称匹配，新建模式（isCreating）下不匹配任何已有卡片
+  if (editorStore.isEditing) {
+    const draftName = draft.chordName.trim().toLowerCase();
+    if (draftName) {
+      for (const card of groupedCards.value) {
+        if (card.mainChord.groupId === draft.groupId && card.mainChord.chordName.trim().toLowerCase() === draftName) {
+          return card.mainChord.id;
+        }
+      }
+    }
   }
   return null;
 });
@@ -98,12 +109,12 @@ const { handleKeydown } = useGridNavigation(3, gridContainerRef, {
 .chords-grid-layout {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
+  gap: 0.55rem;
+  padding: 0.65rem 0.5rem;
   align-items: center;
   position: relative;
   z-index: 10;
   min-height: 2.2rem;
   box-sizing: border-box;
-  padding: 0.55rem 0.4rem 0.55rem 0.4rem;
 }
 </style>

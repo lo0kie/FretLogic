@@ -1,5 +1,4 @@
 <template>
-  <!-- 🌟 如果开启了 texted 模式，直接渲染整齐排列的 ActionButton 组合 -->
   <div
     v-if="texted"
     ref="containerRef"
@@ -25,7 +24,6 @@
     </ActionButton>
   </div>
 
-  <!-- 🌟 原有的滑块式 SegmentedControl 保持不变 -->
   <div
     v-else
     ref="containerRef"
@@ -201,7 +199,6 @@ watch(() => props.options, updateIndicatorPosition, { deep: true });
     }
   }
 
-  /* 🌟 texted 模式：无外框背景，直接以 ActionButton 组合呈现 */
   &.is-texted {
     background-color: transparent;
     border: none;
@@ -210,7 +207,7 @@ watch(() => props.options, updateIndicatorPosition, { deep: true });
   }
 
   &.size-sm {
-    height: v-bind(HEIGHT_SM);
+    height: v-bind('HEIGHT_SM');
     padding: 0.12rem;
     gap: 0.1rem;
 
@@ -221,7 +218,7 @@ watch(() => props.options, updateIndicatorPosition, { deep: true });
   }
 
   &.size-md {
-    height: v-bind(HEIGHT_MD);
+    height: v-bind('HEIGHT_MD');
     padding: 0.15rem;
     gap: 0.15rem;
 
@@ -232,7 +229,7 @@ watch(() => props.options, updateIndicatorPosition, { deep: true });
   }
 
   &.size-lg {
-    height: v-bind(HEIGHT_LG);
+    height: v-bind('HEIGHT_LG');
     padding: 0.18rem;
     gap: 0.2rem;
 
@@ -271,6 +268,8 @@ watch(() => props.options, updateIndicatorPosition, { deep: true });
   z-index: 1;
   transition: none;
   will-change: transform, width, height, opacity;
+  box-sizing: border-box;
+  border: 1px solid var(--border-light);
 
   width: var(--indicator-width);
   height: var(--indicator-height);

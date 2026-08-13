@@ -77,20 +77,47 @@ export const useSongStore = defineStore('song', () => {
   ) => {
     const target = songMap.value.get(id);
     if (!target) return;
-    if (payload.title !== undefined) target.title = payload.title;
-    if (payload.key !== undefined) target.key = payload.key;
-    if (payload.playKey !== undefined) target.playKey = payload.playKey;
-    if (payload.capo !== undefined) target.capo = payload.capo;
-    if (payload.lyrics !== undefined) target.lyrics = payload.lyrics;
-    if (payload.lineIds !== undefined) target.lineIds = payload.lineIds;
-    if (payload.chordMap !== undefined) target.chordMap = payload.chordMap;
-    target.version = (target.version ?? 1) + 1;
+
+    let hasChanged = false;
+    if (payload.title !== undefined && target.title !== payload.title) {
+      target.title = payload.title;
+      hasChanged = true;
+    }
+    if (payload.key !== undefined && target.key !== payload.key) {
+      target.key = payload.key;
+      hasChanged = true;
+    }
+    if (payload.playKey !== undefined && target.playKey !== payload.playKey) {
+      target.playKey = payload.playKey;
+      hasChanged = true;
+    }
+    if (payload.capo !== undefined && target.capo !== payload.capo) {
+      target.capo = payload.capo;
+      hasChanged = true;
+    }
+    if (payload.lyrics !== undefined && target.lyrics !== payload.lyrics) {
+      target.lyrics = payload.lyrics;
+      hasChanged = true;
+    }
+    if (payload.lineIds !== undefined && JSON.stringify(target.lineIds) !== JSON.stringify(payload.lineIds)) {
+      target.lineIds = payload.lineIds;
+      hasChanged = true;
+    }
+    if (payload.chordMap !== undefined && target.chordMap !== payload.chordMap) {
+      target.chordMap = payload.chordMap;
+      hasChanged = true;
+    }
+
+    if (hasChanged) {
+      target.version = (target.version ?? 1) + 1;
+    }
   };
 
   const setCharChord = (songId: string, slotKey: string | number, chordId: string) => {
     const target = songMap.value.get(songId);
     if (!target) return;
     target.chordMap ??= {};
+    if (target.chordMap[slotKey] === chordId) return;
     bindNewChordToSlot(target.chordMap, slotKey, chordId);
     target.chordMap = { ...target.chordMap };
     target.version = (target.version ?? 1) + 1;
@@ -99,7 +126,8 @@ export const useSongStore = defineStore('song', () => {
   const removeCharChord = (songId: string, slotKey: string | number) => {
     const target = songMap.value.get(songId);
     if (!target || !target.chordMap) return;
-    removeChordFromSlot(target.chordMap, slotKey);
+    const removed = removeChordFromSlot(target.chordMap, slotKey);
+    if (!removed) return;
     target.chordMap = { ...target.chordMap };
     target.version = (target.version ?? 1) + 1;
   };

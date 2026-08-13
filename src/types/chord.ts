@@ -44,7 +44,7 @@ export interface Group {
 }
 
 export interface ImportExportPayload {
-  version?: number; // 🌟 新增 Schema 版本标识
+  version?: number;
   groups: Group[];
   chords: Chord[];
   songs: Song[];

@@ -5,7 +5,6 @@
         <WorkbenchCard />
       </div>
 
-      <!-- 🌟 移动端多指法分页器 -->
       <div v-if="uiStore.isMobile && editorStore.isMultiFingering" class="mobile-variants-pagination">
         <BasePagination
           :model-value="editorStore.currentMultiFingeringIndex"
@@ -15,7 +14,7 @@
         />
       </div>
 
-      <div class="analysis-panel-slot">
+      <div class="analysis-panel-slot no-scrollbar">
         <ChordAnalysisPanel />
       </div>
     </div>

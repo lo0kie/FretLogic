@@ -101,7 +101,7 @@ const props = defineProps<{
   addPlaceholderTitle?: string;
   isDropTarget: boolean;
   isExporting: boolean;
-  scrollRoot?: HTMLElement | null; // 🌟 新增
+  scrollRoot?: HTMLElement | null;
 }>();
 
 const emit = defineEmits<{

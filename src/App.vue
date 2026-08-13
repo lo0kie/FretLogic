@@ -107,7 +107,6 @@ watch(
   inset: 0;
   z-index: 1;
   box-sizing: border-box;
-  // 🌟 添加过渡动画，让 padding 变化不突兀
   transition: padding-left @duration-slow @bezier-sidebar;
 }
 
@@ -118,23 +117,6 @@ watch(
   background-color: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-}
-
-:deep(.panel-left) {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 50;
-}
-
-:deep(.panel-left.is-mobile-drawer) {
-  position: fixed;
-  top: 2.5rem;
-  bottom: 0;
-  left: 0;
-  z-index: 100;
-  box-shadow: var(--shadow-xl);
 }
 
 .fade-scale-transition(drawer-fade);

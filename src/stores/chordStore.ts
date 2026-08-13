@@ -14,7 +14,7 @@ export type ChordValidationResult =
   | { ok: true; payload: Chord; cleanName: string }
   | {
       ok: false;
-      reason: 'EMPTY_NAME' | 'NO_GROUPS' | 'NO_SELECTED_GROUP' | 'DUPLICATE_FINGERPRINT';
+      reason: 'EMPTY_NAME' | 'NO_GROUPS' | 'NO_SELECTED_GROUP' | 'DUPLICATE_FINGERPRINT' | 'UNCHANGED';
       cleanName?: string;
     };
 
@@ -235,15 +235,18 @@ export const useChordStore = defineStore('chord', () => {
 
   const renameGroup = (groupId: string, name: string) => {
     const g = groups.value.find(x => x.id === groupId);
-    if (g) g.name = name;
+    if (!g || g.name === name) return;
+    g.name = name;
   };
 
   const updateGroupSort = (groupId: string, sortRule: GroupSortRule, sortKey?: string) => {
     const g = groups.value.find(x => x.id === groupId);
     if (!g) return;
+    const targetKey = sortRule === 'KEY_DEGREE' ? sortKey || g.sortKey || 'C' : g.sortKey;
+    if (g.sortRule === sortRule && g.sortKey === targetKey) return;
     g.sortRule = sortRule;
     if (sortRule === 'KEY_DEGREE') {
-      g.sortKey = sortKey || g.sortKey || 'C';
+      g.sortKey = targetKey;
     }
   };
 
@@ -401,6 +404,13 @@ export const useChordStore = defineStore('chord', () => {
       isInverted: isInvertedState,
     };
     const payload: Chord = { ...rawPayload, fingerprint: computeChordFingerprint(rawPayload) };
+
+    if (isEditing) {
+      const original = savedChordsList.value.find(c => c.id === id);
+      if (original && original.fingerprint === payload.fingerprint) {
+        return { ok: false, reason: 'UNCHANGED' };
+      }
+    }
 
     const isDuplicate = savedChordsList.value.some(
       existing =>
