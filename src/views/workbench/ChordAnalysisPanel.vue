@@ -232,6 +232,9 @@ const handleSetRootString = (stringIndex: number) => {
   flex-direction: column;
   gap: 0.65rem;
   width: 100%;
+  min-height: 0;   // 允许 flex item 正常收缩
+  flex: 1;
+  overflow-y: auto; // 视口不足时内部出现平滑滚动条，避免被砍脚
 }
 
 @media (max-width: 768px) {

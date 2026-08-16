@@ -100,7 +100,6 @@ const handleWheelScroll = (e: WheelEvent) => {
 
 .score-floating-bar {
   display: flex;
-  align-items: center;
   position: fixed;
   left: 50%;
   bottom: 1.8rem;

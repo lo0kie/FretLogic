@@ -129,7 +129,7 @@
               :chord="variant"
               :interactive="false"
               :scale="0.32"
-              :is-dark-mode="settingsStore.isDarkMode"
+              :is-dark-mode="globalDarkMode"
             />
           </div>
         </div>
@@ -162,13 +162,12 @@ import Fretboard from '@/components/Fretboard.vue';
 import { SORT_RULE_CONFIG } from '@/constants';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
 import { useChordStore } from '@/stores/chordStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { globalDarkMode } from '@/stores/globalState';
 import { computed } from 'vue';
 
 const props = defineProps<{ groupModals: ReturnType<typeof useChordGroupModals> }>();
 
 const chordStore = useChordStore();
-const settingsStore = useSettingsStore();
 
 const isAllVariantsSelected = computed(() => {
   const variants = props.groupModals.modalData.activeGroupCard?.variants;

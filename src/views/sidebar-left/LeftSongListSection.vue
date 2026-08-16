@@ -53,7 +53,7 @@
                   :aria-label="`变调夹 capo ${song.capo} 品`"
                   width="2.8rem"
                 >
-                  capo {{ song.capo }}
+                  Capo {{ song.capo }}
                 </BaseBadge>
               </div>
             </div>

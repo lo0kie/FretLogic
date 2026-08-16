@@ -1,3 +1,4 @@
+import { STORAGE_KEYS } from '@/constants';
 import type { Song } from '@/types';
 import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/chordMap';
 import { generateUUID } from '@/utils/id';
@@ -6,7 +7,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
 export const useSongStore = defineStore('song', () => {
-  const songs = useStorage<Song[]>('CHORD_LAB_SONGS_V1', [], localStorage, {
+  const songs = useStorage<Song[]>(STORAGE_KEYS.SONGS, [], localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
   });
   const songMap = computed(() => new Map(songs.value.map(s => [s.id, s])));
@@ -164,7 +165,7 @@ export const useSongStore = defineStore('song', () => {
 
   const flushSongsNow = () => {
     try {
-      localStorage.setItem('CHORD_LAB_SONGS_V1', JSON.stringify(songs.value));
+      localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(songs.value));
     } catch (err) {
       console.error('[songStore] flush on unload failed:', err);
     }

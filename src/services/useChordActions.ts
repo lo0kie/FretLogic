@@ -65,7 +65,9 @@ export function useChordActions() {
 
     if (!result.ok) {
       if (result.reason === 'UNCHANGED') {
-        uiStore.toast.success('和弦已更新');
+        const targetGroup = chordStore.groups.find(g => g.id === editorStore.draftChord.groupId);
+        const groupTip = !uiStore.isLeftOpen && targetGroup ? `至分组 "${targetGroup.name}"` : '';
+        uiStore.toast.success(`和弦已更新${groupTip}`);
         editorStore.resetEditor();
         uiStore.clearActionToasts();
         return;
@@ -80,12 +82,15 @@ export function useChordActions() {
       return;
     }
 
+    const targetGroup = chordStore.groups.find(g => g.id === result.payload.groupId);
+    const groupTip = !uiStore.isLeftOpen && targetGroup ? `至分组 "${targetGroup.name}"` : '';
+
     if (editorStore.isEditing) {
       chordStore.updateChord(result.payload);
-      uiStore.toast.success('和弦已更新');
+      uiStore.toast.success(`和弦已更新${groupTip}`);
     } else {
       chordStore.addChord(result.payload);
-      uiStore.toast.success('和弦已保存');
+      uiStore.toast.success(`和弦已保存${groupTip}`);
     }
 
     editorStore.resetEditor();

@@ -81,7 +81,7 @@
               visibleMap[chord.id],
               isCurrentBound(chord),
               pickerScale,
-              settingsStore.isDarkMode,
+              globalDarkMode,
             ]"
             :key="chord.id"
             :ref="
@@ -109,7 +109,7 @@
               :ref="el => setFretboardMeasureRef(el, chord.fretCount)"
               :interactive="false"
               :scale="pickerScale"
-              :is-dark-mode="settingsStore.isDarkMode"
+              :is-dark-mode="globalDarkMode"
             />
             <div v-else :style="getCalculatedOrCachedSize(chord.fretCount)" />
           </div>
@@ -134,8 +134,8 @@ import { useGridNavigation } from '@/services/useGridNavigation';
 import { useScoreLinesData } from '@/services/useScoreLinesData';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
+import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, GroupSortRule } from '@/types';
 import { getPlaceholderSize } from '@/utils/fretboardVisuals';
@@ -162,7 +162,6 @@ const router = useRouter();
 const editorStore = useEditorStore();
 const chordStore = useChordStore();
 const scoreEditor = useScoreEditorStore();
-const settingsStore = useSettingsStore();
 const { chordsLookupMap } = useScoreLinesData();
 
 const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');

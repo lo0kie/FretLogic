@@ -1,6 +1,5 @@
 <template>
-  <div class="base-scale-slider" :class="[`size-${size}`, { 'is-disabled': disabled }]" @wheel.prevent="handleWheel">
-    <!-- 1. 左侧 Label (点击重置) -->
+  <div class="base-slider" :class="[`size-${size}`, { 'is-disabled': disabled }]" @wheel.prevent="handleWheel">
     <span
       v-if="label && labelPosition === 'left'"
       class="slider-label"
@@ -15,13 +14,12 @@
       {{ label }}
     </span>
 
-    <!-- 2. 左侧数值读出 (点击重置) -->
     <span
       v-if="showReadout && readoutPosition === 'left'"
       class="readout-text"
       role="button"
       tabindex="0"
-      :title="`当前缩放: ${displayText}，点击恢复默认值`"
+      :title="`当前数值: ${displayText}，点击恢复默认值`"
       :aria-label="`当前数值 ${displayText}，点击重置`"
       @click="resetToDefault"
       @keydown.enter.prevent="resetToDefault"
@@ -31,21 +29,19 @@
       {{ displayText }}
     </span>
 
-    <!-- 3. 缩小按钮 -->
     <button
       v-if="showButtons"
       type="button"
       class="icon-btn"
       :disabled="disabled || modelValue <= min"
-      title="缩小"
-      aria-label="缩小"
+      title="减少"
+      aria-label="减少"
       @click="stepDown"
       data-focusable-inline
     >
-      <AArrowDown :size="14" stroke-width="2.2" aria-hidden="true" />
+      <Minus :size="14" stroke-width="2.2" aria-hidden="true" />
     </button>
 
-    <!-- 4. 滑块核心 Input -->
     <div class="slider-track-wrapper">
       <input
         :min
@@ -54,7 +50,7 @@
         :disabled
         type="range"
         :value="modelValue"
-        :aria-label="label || '缩放调节'"
+        :aria-label="label || '数值调节'"
         :aria-valuemin="min"
         :aria-valuemax="max"
         :aria-valuenow="modelValue"
@@ -66,35 +62,34 @@
       />
     </div>
 
-    <!-- 5. 放大按钮 -->
     <button
       v-if="showButtons"
       type="button"
       class="icon-btn"
       :disabled="disabled || modelValue >= max"
-      title="放大"
-      aria-label="放大"
+      title="增加"
+      aria-label="增加"
       @click="stepUp"
+      data-focusable-inline
     >
-      <AArrowUp :size="14" stroke-width="2.2" aria-hidden="true" />
+      <Plus :size="14" stroke-width="2.2" aria-hidden="true" />
     </button>
 
-    <!-- 6. 右侧数值读出 (点击重置) -->
     <span
       v-if="showReadout && readoutPosition === 'right'"
       class="readout-text"
       role="button"
       tabindex="0"
-      :title="`当前缩放: ${displayText}，点击恢复默认值`"
+      :title="`当前数值: ${displayText}，点击恢复默认值`"
       :aria-label="`当前数值 ${displayText}，点击重置`"
       @click="resetToDefault"
       @keydown.enter.prevent="resetToDefault"
       @keydown.space.prevent="resetToDefault"
+      data-focusable-inline
     >
       {{ displayText }}
     </span>
 
-    <!-- 7. 右侧 Label (点击重置) -->
     <span
       v-if="label && labelPosition === 'right'"
       class="slider-label"
@@ -104,6 +99,7 @@
       @click="resetToDefault"
       @keydown.enter.prevent="resetToDefault"
       @keydown.space.prevent="resetToDefault"
+      data-focusable-inline
     >
       {{ label }}
     </span>
@@ -112,14 +108,14 @@
 
 <script setup lang="ts">
 import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
-import { AArrowDown, AArrowUp } from '@lucide/vue';
+import { Minus, Plus } from '@lucide/vue';
 import { computed } from 'vue';
 
 const {
-  min = 0.6,
-  max = 1.5,
-  step = 0.05,
-  defaultValue = 1.0,
+  min = 0,
+  max = 100,
+  step = 1,
+  defaultValue = 0,
   size = 'md',
   disabled = false,
   wheelable = true,
@@ -153,13 +149,18 @@ const emit = defineEmits<{
 
 const displayText = computed(() => {
   if (formatter) return formatter(modelValue.value);
-  return `${Math.round(modelValue.value * 100)}%`;
+  return String(modelValue.value);
 });
 
+const getPrecision = (num: number) => {
+  const parts = String(num).split('.');
+  return parts[1] ? parts[1].length : 0;
+};
+
 const clamp = (val: number) => {
-  const precision = 100;
+  const precision = getPrecision(step);
   const clamped = Math.min(max, Math.max(min, val));
-  return Math.round(clamped * precision) / precision;
+  return Number(clamped.toFixed(precision));
 };
 
 const updateValue = (nextVal: number) => {
@@ -195,7 +196,7 @@ const handleWheel = (e: WheelEvent) => {
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 
-.base-scale-slider {
+.base-slider {
   display: inline-flex;
   align-items: center;
   background-color: var(--bg-body);
@@ -203,10 +204,20 @@ const handleWheel = (e: WheelEvent) => {
   border-radius: 9999px;
   box-sizing: border-box;
   user-select: none;
+  gap: 0.4rem;
 
   &.is-disabled {
     opacity: 0.45;
     cursor: not-allowed;
+
+    .slider-label,
+    .readout-text {
+      cursor: not-allowed;
+
+      &:hover {
+        color: inherit;
+      }
+    }
   }
 
   &.size-sm {
@@ -278,6 +289,16 @@ const handleWheel = (e: WheelEvent) => {
   outline: none;
   cursor: pointer;
 
+  &:disabled {
+    cursor: not-allowed;
+
+    &::-webkit-slider-thumb {
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none !important;
+    }
+  }
+
   &::-webkit-slider-thumb {
     appearance: none;
     width: 12px;
@@ -288,15 +309,15 @@ const handleWheel = (e: WheelEvent) => {
     transition:
       transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
       box-shadow @duration-fast ease;
+  }
 
-    &:hover {
-      transform: scale(1.25);
-    }
+  &:not(:disabled):hover::-webkit-slider-thumb {
+    transform: scale(1.25);
+  }
 
-    &:active {
-      transform: scale(1.4);
-      box-shadow: 0 2px 6px color-mix(in srgb, var(--color-primary), transparent 50%);
-    }
+  &:not(:disabled):active::-webkit-slider-thumb {
+    transform: scale(1.4);
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--color-primary), transparent 50%);
   }
 }
 
@@ -304,7 +325,7 @@ const handleWheel = (e: WheelEvent) => {
   font-size: 0.65rem;
   font-weight: 700;
   color: var(--text-title);
-  text-align: left;
+  text-align: center;
   font-family: monospace;
   cursor: pointer;
   outline: none;

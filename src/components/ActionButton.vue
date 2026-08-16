@@ -11,7 +11,7 @@
     <Loader2 v-if="loading" class="loading-icon" />
     <slot v-else name="prefix"></slot>
     <span v-if="$slots.default" class="button-content">
-      <slot></slot>
+      <slot :disabled></slot>
     </span>
     <slot name="suffix"></slot>
   </button>
@@ -109,7 +109,7 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   background-color: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
-  padding-left: 0.3rem; 
+  padding-left: 0.3rem;
   padding-right: 0.3rem;
 
   &.theme-primary {

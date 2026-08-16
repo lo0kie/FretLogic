@@ -254,9 +254,7 @@ export const useChordStore = defineStore('chord', () => {
     savedChordsList.value = savedChordsList.value.filter(c => c.groupId !== groupId);
     groups.value = groups.value.filter(g => g.id !== groupId);
     if (selectedGroupId.value === groupId) {
-      const next = groups.value[0];
-      if (next) selectAndExpandGroup(next.id);
-      else selectedGroupId.value = null;
+      selectedGroupId.value = null;
     }
   };
 

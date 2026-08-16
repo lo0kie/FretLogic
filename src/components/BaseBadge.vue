@@ -166,7 +166,7 @@ const handleClick = (e: MouseEvent) => {
   flex-shrink: 0;
   border-radius: 9999px;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.4;
   letter-spacing: -0.01em;
   transition: @transition-fast;
   box-sizing: border-box;

@@ -1,6 +1,6 @@
 import { A4_CONTENT_HEIGHT, A4_CONTENT_WIDTH, A4_HEIGHT_PX, A4_WIDTH_PX } from '@/constants/print';
+import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { canvasToBlob, renderElementToCanvas, writeBlobToClipboard } from '@/utils/domExporter';
 import { paginateLinesByHeight } from '@/utils/paginateLines';
@@ -30,7 +30,6 @@ export function useScoreExportPreview(
   exportPageLineSet: Ref<Set<number>>,
   a4WrapperRef: Ref<HTMLElement | null>
 ) {
-  const settingStore = useSettingsStore();
   const uiStore = useUiStore();
   const scoreEditor = useScoreEditorStore();
   const progress = ref(0);
@@ -126,7 +125,7 @@ export function useScoreExportPreview(
     const container = uiStore.activeExportTarget!;
     const paddingX = 80;
     const paddingY = 100;
-    const bgColor = settingStore.isDarkMode ? '#18181a' : '#f2f2f7';
+    const bgColor = globalDarkMode.value ? '#18181a' : '#f2f2f7';
     exportPageLineSet.value = new Set(sortedSelectedIndices.value);
     await nextTick();
     await waitForPaint();
@@ -180,7 +179,7 @@ export function useScoreExportPreview(
     const container = uiStore.activeExportTarget!;
     const wrapper = a4WrapperRef.value;
     if (!wrapper) return;
-    const bgColor = settingStore.isDarkMode ? '#18181a' : '#f2f2f7';
+    const bgColor = globalDarkMode.value ? '#18181a' : '#f2f2f7';
     const originalFontScale = scoreEditor.fontScale;
     const originalFretboardScale = scoreEditor.fretboardScale;
     exportPageLineSet.value = new Set(sortedSelectedIndices.value);
@@ -338,7 +337,7 @@ export function useScoreExportPreview(
 
   watch(mode, generatePreview);
   watch(
-    () => settingStore.isDarkMode,
+    () => globalDarkMode.value,
     () => {
       previewCache.normal = null;
       previewCache.a4 = null;

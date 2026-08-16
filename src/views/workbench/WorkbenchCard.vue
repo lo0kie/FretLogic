@@ -14,17 +14,19 @@
       spellcheck="false"
       placeholder="CHORD"
       class="input-chord-name"
-      :class="editorStore.draftChord.chordName ? 'has-name' : 'is-empty'"
+      :class="[editorStore.draftChord.chordName ? 'has-name' : 'is-empty', { 'is-readonly': !isGlobalEditable }]"
       :maxlength="15"
+      :readonly="!isGlobalEditable"
     />
 
     <div class="fretboard-render-zone">
       <Fretboard
         :chord="editorStore.draftChord"
-        :is-dark-mode="settingsStore.isDarkMode"
+        :is-dark-mode="globalDarkMode"
         :scale="uiStore.isMobile ? cardMobileScale : 1.0"
         @update:capo="handleCapoUpdate"
         @update:strings="handleStringsChange"
+        :interactive="isGlobalEditable"
       />
     </div>
   </div>
@@ -34,14 +36,13 @@
 import Fretboard from '@/components/Fretboard.vue';
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/constants';
 import { useEditorStore } from '@/stores/chordEditorStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
 import { useUiStore } from '@/stores/uiStore';
 import { GuitarStringsModel } from '@/types';
 import { vElementSize } from '@vueuse/components';
 import { computed, onActivated, onDeactivated, ref, useTemplateRef } from 'vue';
 
 const editorStore = useEditorStore();
-const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 const cardRef = useTemplateRef<HTMLElement>('cardRef');
 
@@ -127,7 +128,7 @@ onDeactivated(() => {
   background-color: transparent;
   border: none;
   outline: none;
-  cursor: pointer;
+  cursor: pointe;
   user-select: none;
   caret-color: @primary;
   font-size: 3.8rem;
@@ -148,6 +149,12 @@ onDeactivated(() => {
 
   &.is-empty {
     color: var(--text-disabled);
+  }
+
+  &.is-readonly {
+    cursor: unset;
+    caret-color: transparent;
+    pointer-events: none;
   }
 }
 

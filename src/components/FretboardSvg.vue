@@ -96,7 +96,7 @@
             stringXPositions[sIdx],
           ]"
           :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
-          tabindex="-1"
+          :tabindex="interactive ? -1 : undefined"
           :style="{ color: getFingerColor(str, isDarkMode) }"
           :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings)}`"
           @dblclick.prevent.stop="emit('toggle-pitch', sIdx)"
@@ -209,13 +209,6 @@ const showKeyboardFocus = computed(() => {
   display: inline-block;
 }
 
-.fretboard-svg {
-  width: 100%;
-  pointer-events: auto;
-  box-sizing: border-box;
-  display: block;
-}
-
 .fret-numbers-overlay {
   position: absolute;
   inset: 0;
@@ -263,8 +256,17 @@ const showKeyboardFocus = computed(() => {
   pointer-events: none;
 }
 
+.fretboard-svg {
+  width: 100%;
+  pointer-events: none;
+  box-sizing: border-box;
+  display: block;
+}
+
 .finger-disabled {
   cursor: default;
+  pointer-events: none;
+  outline: none;
 }
 
 .finger-circle {

@@ -1,3 +1,4 @@
+import { STORAGE_KEYS } from '@/constants';
 import { useSongStore } from '@/stores/songStore';
 import type { Chord, Song } from '@/types';
 import { garbageCollectChordMap } from '@/utils/chordMap';
@@ -19,15 +20,16 @@ interface HistoryState {
 
 export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const songStore = useSongStore();
-  const activeSongId = useStorage<string | null>('CHORD_LAB_ACTIVE_SONG_ID_V1', null);
+  const activeSongId = useStorage<string | null>(STORAGE_KEYS.ACTIVE_SONG_ID, null);
   const activeTabRef = ref<ScoreActiveTab>('edit');
   const selectedSlotKey = ref<string | number | null>(null);
-  const fontScale = useStorage('CHORD_LAB_SCORE_FONT_SCALE_V1', 1.0);
-  const fretboardScale = useStorage('CHORD_LAB_SCORE_FRETBOARD_V1', 1.0);
-  const mobileScale = useStorage('CHORD_LAB_SCORE_MOBILE_SCALE_V1', 0.7);
+  const fontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 1.0);
+  const fretboardScale = useStorage(STORAGE_KEYS.SCORE_FRETBOARD_SCALE, 1.0);
+  const mobileScale = useStorage(STORAGE_KEYS.SCORE_MOBILE_SCALE, 0.7);
   const historyStack = ref<HistoryState[]>([]);
   const historyIndex = ref(-1);
   const isUndoRedoAction = ref(false);
+  const scrollSpeed = useStorage(STORAGE_KEYS.SCORE_SCROLL_SPEED, 60);
 
   const activeSong = computed<Song | null>(() => {
     if (!activeSongId.value) return null;
@@ -141,7 +143,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const updateCapo = (capo: number) => {
     if (activeSong.value && activeSong.value.capo !== capo) {
       recordHistory();
-      const clampedCapo = Math.min(12, Math.max(0, capo));
+      const clampedCapo = Math.min(11, Math.max(0, capo));
       const deltaCapo = clampedCapo - (activeSong.value.capo || 0);
       const newKey = transposeChordName(activeSong.value.key || 'C', deltaCapo);
       songStore.updateSongMeta(activeSong.value.id, {
@@ -225,5 +227,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     undo,
     redo,
     mobileScale,
+    scrollSpeed,
   };
 });

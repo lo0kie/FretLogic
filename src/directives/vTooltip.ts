@@ -7,134 +7,139 @@ export interface TooltipOptions {
   content?: string;
   placement?: Placement;
 }
-
 export type TooltipBinding = string | TooltipOptions | undefined;
 
 const normalize = (value: TooltipBinding): TooltipOptions =>
   typeof value === 'string' ? { content: value } : (value ?? {});
 
-interface TooltipState {
-  box: HTMLDivElement;
+// 全局单例 DOM 与状态
+let globalBox: HTMLDivElement | null = null;
+let currentTargetEl: HTMLElement | null = null;
+let cleanupAutoUpdate: (() => void) | null = null;
+let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+const getOrCreateGlobalBox = (): HTMLDivElement => {
+  if (!globalBox) {
+    globalBox = document.createElement('div');
+    globalBox.className = 'v-tooltip-box';
+    globalBox.setAttribute('role', 'tooltip');
+    globalBox.style.cssText =
+      'position:fixed;top:0;left:0;z-index:9999;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .15s ease;';
+    document.body.appendChild(globalBox);
+  }
+  return globalBox;
+};
+
+const updatePosition = (el: HTMLElement, opts: TooltipOptions) => {
+  if (!globalBox) return;
+  computePosition(el, globalBox, {
+    placement: opts.placement ?? 'top',
+    middleware: [offset(8), flip({ fallbackAxisSideDirection: 'start' }), shift({ padding: 12 })],
+  }).then(({ x, y }) => {
+    if (globalBox && currentTargetEl === el) {
+      globalBox.style.left = `${x}px`;
+      globalBox.style.top = `${y}px`;
+    }
+  });
+};
+
+const showTooltip = (el: HTMLElement, opts: TooltipOptions) => {
+  const uiStore = useUiStore();
+  if (!opts.content || uiStore.isMobile) return;
+
+  if (hideTimer) {
+    clearTimeout(hideTimer);
+    hideTimer = null;
+  }
+
+  currentTargetEl = el;
+  const box = getOrCreateGlobalBox();
+  box.textContent = opts.content;
+  box.style.visibility = 'visible';
+  box.style.opacity = '1';
+
+  updatePosition(el, opts);
+
+  cleanupAutoUpdate?.();
+  cleanupAutoUpdate = autoUpdate(el, box, () => updatePosition(el, opts));
+};
+
+const hideTooltip = (el: HTMLElement) => {
+  if (currentTargetEl !== el) return;
+
+  if (globalBox) {
+    globalBox.style.opacity = '0';
+  }
+  cleanupAutoUpdate?.();
+  cleanupAutoUpdate = null;
+
+  if (hideTimer) clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => {
+    if (globalBox && globalBox.style.opacity === '0') {
+      globalBox.style.visibility = 'hidden';
+      currentTargetEl = null;
+    }
+  }, 150);
+};
+
+interface TooltipHandler {
   opts: TooltipOptions;
-  show: () => void;
-  hide: () => void;
-  cleanupAutoUpdate: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onFocus: () => void;
   onBlur: () => void;
-  onClick: () => void;
 }
 
-const stateMap = new WeakMap<HTMLElement, TooltipState>();
-
-const createState = (el: HTMLElement, initialOpts: TooltipOptions): TooltipState => {
-  const box = document.createElement('div');
-  box.className = 'v-tooltip-box';
-  box.setAttribute('role', 'tooltip');
-  box.style.cssText =
-    'position:fixed;top:0;left:0;z-index:9999;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .15s ease;';
-  document.body.appendChild(box);
-
-  let cleanupAutoUpdate = () => {};
-  let isHovered = false;
-
-  const hide = () => {
-    box.style.opacity = '0';
-    cleanupAutoUpdate();
-    cleanupAutoUpdate = () => {};
-
-    setTimeout(() => {
-      if (box.style.opacity === '0') {
-        box.style.visibility = 'hidden';
-      }
-    }, 150);
-  };
-
-  const state: TooltipState = {
-    box,
-    opts: initialOpts,
-    show: () => {},
-    hide: () => {},
-    cleanupAutoUpdate: () => cleanupAutoUpdate(),
-    onMouseEnter: () => {},
-    onMouseLeave: () => {},
-    onFocus: () => {},
-    onBlur: hide,
-    onClick: hide,
-  };
-
-  const updatePosition = () => {
-    computePosition(el, box, {
-      placement: state.opts.placement ?? 'top',
-      middleware: [offset(8), flip({ fallbackAxisSideDirection: 'start' }), shift({ padding: 12 })],
-    }).then(({ x, y }) => {
-      box.style.left = `${x}px`;
-      box.style.top = `${y}px`;
-    });
-  };
-
-  const show = () => {
-    const uiStore = useUiStore();
-    if (!state.opts.content || uiStore.isMobile) return;
-    box.textContent = state.opts.content;
-    box.style.visibility = 'visible';
-    box.style.opacity = '1';
-    cleanupAutoUpdate();
-    cleanupAutoUpdate = autoUpdate(el, box, updatePosition);
-  };
-
-  state.show = show;
-  state.hide = hide;
-  state.onMouseEnter = () => {
-    isHovered = true;
-    show();
-  };
-  state.onMouseLeave = () => {
-    isHovered = false;
-    hide();
-  };
-  state.onFocus = () => {
-    if (isHovered) {
-      show();
-    }
-  };
-  state.onBlur = hide;
-
-  return state;
-};
+const handlerMap = new WeakMap<HTMLElement, TooltipHandler>();
 
 export const vTooltip: Directive<HTMLElement, TooltipBinding> = {
   mounted(el, binding) {
-    const state = createState(el, normalize(binding.value));
-    stateMap.set(el, state);
-    el.addEventListener('mouseenter', state.onMouseEnter);
-    el.addEventListener('mouseleave', state.onMouseLeave);
-    el.addEventListener('focus', state.onFocus);
-    el.addEventListener('blur', state.onBlur);
-    el.addEventListener('click', state.onClick);
+    const opts = normalize(binding.value);
+    const handler: TooltipHandler = {
+      opts,
+      onMouseEnter: () => showTooltip(el, handler.opts),
+      onMouseLeave: () => hideTooltip(el),
+      onFocus: () => {
+        if (el.matches(':hover')) showTooltip(el, handler.opts);
+      },
+      onBlur: () => hideTooltip(el),
+    };
+
+    handlerMap.set(el, handler);
+    el.addEventListener('mouseenter', handler.onMouseEnter);
+    el.addEventListener('mouseleave', handler.onMouseLeave);
+    el.addEventListener('focus', handler.onFocus);
+    el.addEventListener('blur', handler.onBlur);
+
+    if (el.matches(':hover')) {
+      showTooltip(el, handler.opts);
+    }
   },
   updated(el, binding) {
-    const state = stateMap.get(el);
-    if (!state) return;
+    const handler = handlerMap.get(el);
+    if (!handler) return;
+    handler.opts = normalize(binding.value);
 
-    const nextOpts = normalize(binding.value);
-    state.opts = nextOpts;
-
-    if (!nextOpts.content && state.box.style.visibility === 'visible') {
-      state.hide();
+    if (currentTargetEl === el) {
+      if (!handler.opts.content) {
+        hideTooltip(el);
+      } else if (globalBox) {
+        globalBox.textContent = handler.opts.content;
+        updatePosition(el, handler.opts);
+      }
     }
   },
   unmounted(el) {
-    const state = stateMap.get(el);
-    if (!state) return;
-    state.cleanupAutoUpdate();
-    state.box.remove();
-    el.removeEventListener('mouseenter', state.onMouseEnter);
-    el.removeEventListener('mouseleave', state.onMouseLeave);
-    el.removeEventListener('focus', state.onFocus);
-    el.removeEventListener('blur', state.onBlur);
-    el.removeEventListener('click', state.onClick);
-    stateMap.delete(el);
+    const handler = handlerMap.get(el);
+    if (handler) {
+      el.removeEventListener('mouseenter', handler.onMouseEnter);
+      el.removeEventListener('mouseleave', handler.onMouseLeave);
+      el.removeEventListener('focus', handler.onFocus);
+      el.removeEventListener('blur', handler.onBlur);
+      handlerMap.delete(el);
+    }
+    if (currentTargetEl === el) {
+      hideTooltip(el);
+    }
   },
 };

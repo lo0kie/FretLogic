@@ -223,7 +223,7 @@ const handleWheel = (e: WheelEvent) => {
   }
 
   &:hover {
-    .step-btn {
+    .step-btn:not(:disabled) {
       color: var(--text-title);
     }
   }
@@ -267,6 +267,7 @@ const handleWheel = (e: WheelEvent) => {
   }
 
   &.is-disabled {
+    color: var(--text-disabled);
     cursor: not-allowed;
   }
 }
