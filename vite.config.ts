@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     vue(),
     visualizer({
-      open: true,
+      open: process.env.ANALYZE === 'true',
       filename: 'stats.html',
       gzipSize: true,
       brotliSize: true,
@@ -17,6 +17,18 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
+    },
+  },
+  build: {
+    target: 'es2020',
+    rollupOptions: {
+      output: {
+        // 拆出稳定的 vendor 分组：业务代码迭代不再导致框架层缓存全量失效
+        manualChunks: {
+          vue: ['vue', 'vue-router', 'pinia'],
+          vueuse: ['@vueuse/core', '@vueuse/components'],
+        },
+      },
     },
   },
   server: {

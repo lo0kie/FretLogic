@@ -76,8 +76,8 @@ const isSaveDisabled = computed(() => {
   gap: 0.5rem;
   padding: 0.4rem 0.5rem;
   background-color: var(--bg-panel);
-  backdrop-filter: blur(40px) saturate(200%);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
   border: 1px solid var(--glass-border);
   border-radius: 9999px;
   box-shadow: @shadow-floating;

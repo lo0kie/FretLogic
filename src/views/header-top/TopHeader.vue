@@ -107,13 +107,14 @@ import { globalDarkMode, isGlobalEditable, toggleEditable } from '@/stores/globa
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { Cloud, Moon, PanelLeft, Pause, Pencil, PencilOff, Play, Sun } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 import HeaderScoreTools from './HeaderScoreTools.vue';
 import HeaderWorkbenchTools from './HeaderWorkbenchTools.vue';
 import ScoreConfigPopover from './ScoreConfigPopover.vue';
-import SyncModalContainer from './SyncModalContainer.vue';
+// 同步弹窗链会拉入 js-base64 等依赖，异步加载以移出首屏 chunk
+const SyncModalContainer = defineAsyncComponent(() => import('./SyncModalContainer.vue'));
 
 const emit = defineEmits<{
   (e: 'toggle-theme'): void;
@@ -152,8 +153,8 @@ watch(activeNavPath, () => {
   justify-content: space-between;
   position: relative;
   background-color: var(--bg-panel);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--glass-border);
   box-sizing: border-box;
   user-select: none;

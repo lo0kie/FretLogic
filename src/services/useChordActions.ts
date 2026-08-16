@@ -3,7 +3,6 @@ import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group } from '@/types';
-import { cloneDeep } from '@/utils/cloneDeep';
 import type { SortableEvent } from 'vue-draggable-plus';
 
 const warningMessages: Record<string, string> = {
@@ -37,9 +36,9 @@ export function useChordActions() {
   const triggerDeleteChords = (chords: Chord[]) => {
     if (chords.length === 0) return;
 
-    const songsSnapshot = cloneDeep(songStore.songs);
     const targetIds = chordStore.removeChords(chords);
-    songStore.unbindChordIds(targetIds);
+    // 记录被解绑的槽位绑定用于撤销，替代对全部歌曲的 cloneDeep 快照
+    const removedBindings = songStore.unbindChordIds(targetIds);
 
     if (editorStore.isEditing && chords.some(c => c.id === editorStore.draftChord.id)) {
       editorStore.resetEditor();
@@ -50,7 +49,7 @@ export function useChordActions() {
       duration: 4000,
       onAction: () => {
         chordStore.executeUndoRestore();
-        songStore.overwriteSongs(songsSnapshot);
+        songStore.restoreChordBindings(removedBindings);
         uiStore.toast.success('已恢复刚才删除的和弦');
       },
     });

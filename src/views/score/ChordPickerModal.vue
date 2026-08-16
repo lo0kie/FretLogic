@@ -63,7 +63,7 @@
           </ActionButton>
         </div>
       </div>
-      <div class="picker-scroll-content no-scrollbar" ref="scrollWrapperRef" v-auto-animate>
+      <div class="picker-scroll-content no-scrollbar" ref="scrollWrapperRef">
         <EmptyState v-if="filteredChords.length === 0" description="当前搜索或分组下暂无匹配和弦。" size="lg" />
         <div
           class="picker-cards-grid-cols"
@@ -139,6 +139,7 @@ import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, GroupSortRule } from '@/types';
 import { getPlaceholderSize } from '@/utils/fretboardVisuals';
+import { observeVisibility } from '@/utils/observeVisibility';
 import { vAutoAnimate } from '@formkit/auto-animate';
 import { Plus, Search } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
@@ -166,35 +167,36 @@ const { chordsLookupMap } = useScoreLinesData();
 
 const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
 const visibleMap = reactive<Record<string, boolean>>({});
-const cardObservers = new Map<string, IntersectionObserver>();
+const cardObserverStops = new Map<string, () => void>();
 const { setItemRef, handleKeydown } = useGridNavigation(4, () => filteredChords.value.length);
 
+// 所有卡片共享同一个 IntersectionObserver（见 observeVisibility），命中即停
 const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordId: string) => {
   if (!el) {
-    cardObservers.get(chordId)?.disconnect();
-    cardObservers.delete(chordId);
+    cardObserverStops.get(chordId)?.();
+    cardObserverStops.delete(chordId);
     return;
   }
   const domEl = (el as ComponentPublicInstance)?.$el ?? el;
   if (!(domEl instanceof HTMLElement)) return;
-  if (visibleMap[chordId] || cardObservers.has(chordId)) return;
-  const observer = new IntersectionObserver(
-    ([entry]) => {
-      if (entry.isIntersecting) {
+  if (visibleMap[chordId] || cardObserverStops.has(chordId)) return;
+  const stop = observeVisibility(
+    domEl,
+    visible => {
+      if (visible) {
         visibleMap[chordId] = true;
-        observer.disconnect();
-        cardObservers.delete(chordId);
+        stop();
+        cardObserverStops.delete(chordId);
       }
     },
-    { root: scrollWrapperRef.value }
+    scrollWrapperRef.value
   );
-  observer.observe(domEl);
-  cardObservers.set(chordId, observer);
+  cardObserverStops.set(chordId, stop);
 };
 
 const clearAllCardObservers = () => {
-  cardObservers.forEach(observer => observer.disconnect());
-  cardObservers.clear();
+  cardObserverStops.forEach(stop => stop());
+  cardObserverStops.clear();
 };
 
 const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fretCount: number) => {
@@ -301,10 +303,7 @@ watch(
   val => {
     if (!val) return;
     pickerSearchQuery.value = '';
-    Object.keys(fretboardSizeCache).forEach(key => {
-      delete fretboardSizeCache[key];
-    });
-    clearAllCardObservers();
+    // fretboardSizeCache 按弦数_缩放键控（最多几项），保留可避免重开时重新测量
     const currentSlotKey = scoreEditor.selectedSlotKey;
     const boundChordId = currentSlotKey !== null ? scoreEditor.activeSong?.chordMap[currentSlotKey] : null;
     const boundChord = boundChordId ? chordsLookupMap.value.get(boundChordId) : null;

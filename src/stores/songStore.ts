@@ -2,37 +2,169 @@ import { STORAGE_KEYS } from '@/constants';
 import type { Song } from '@/types';
 import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/chordMap';
 import { generateUUID } from '@/utils/id';
-import { debounceFilter, useEventListener, useStorage } from '@vueuse/core';
+import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
+const SONG_ENTRY_PREFIX = `${STORAGE_KEYS.SONG_ENTRY}:`;
+const SONG_ENTRY_KEY = (id: string) => `${SONG_ENTRY_PREFIX}${id}`;
+
+const FLUSH_DELAY = 400;
+const FLUSH_MAX_WAIT = 1500;
+
+const lineIdsEqual = (a: string[], b: string[]) => {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every((v, i) => v === b[i]);
+};
+
+const readSongEntry = (id: string): Song | null => {
+  try {
+    const raw = localStorage.getItem(SONG_ENTRY_KEY(id));
+    if (!raw) return null;
+    const song = JSON.parse(raw);
+    return song && typeof song === 'object' && song.id === id ? (song as Song) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const useSongStore = defineStore('song', () => {
-  const songs = useStorage<Song[]>(STORAGE_KEYS.SONGS, [], localStorage, {
-    eventFilter: debounceFilter(400, { maxWait: 1500 }),
-  });
+  // 按歌曲拆分持久化：编辑一首歌只序列化那一首，避免每次改动全量 JSON.stringify 所有歌曲。
+  // 旧版单键（SONGS）数据在首次加载时自动迁移，迁移成功后清除。
+  const songs = ref<Song[]>([]);
   const songMap = computed(() => new Map(songs.value.map(s => [s.id, s])));
   const lastDeletedSongInfo = ref<{ song: Song; index: number } | null>(null);
-  let needUpdate = false;
-  const alignedSongs = songs.value.map(s => {
-    let updated = false;
-    const newSong = { ...s };
-    if (typeof newSong.key !== 'string' || !newSong.key) {
-      newSong.key = 'C';
-      updated = true;
+
+  let migratedFromLegacy = false;
+
+  const loadInitialSongs = (): Song[] => {
+    const indexRaw = localStorage.getItem(STORAGE_KEYS.SONGS_INDEX);
+    if (indexRaw) {
+      try {
+        const ids = JSON.parse(indexRaw);
+        if (Array.isArray(ids)) {
+          // 索引存在说明已完成拆键迁移，旧单键数据已失效，直接清除
+          if (localStorage.getItem(STORAGE_KEYS.SONGS) !== null) {
+            localStorage.removeItem(STORAGE_KEYS.SONGS);
+          }
+          return ids
+            .map(id => (typeof id === 'string' ? readSongEntry(id) : null))
+            .filter((s): s is Song => s !== null);
+        }
+      } catch {
+        /* 索引损坏，回退旧单键 */
+      }
     }
-    if (typeof newSong.playKey !== 'string' || !newSong.playKey) {
-      newSong.playKey = newSong.key;
-      updated = true;
+    const legacyRaw = localStorage.getItem(STORAGE_KEYS.SONGS);
+    if (legacyRaw) {
+      try {
+        const legacy = JSON.parse(legacyRaw);
+        if (Array.isArray(legacy)) {
+          const loaded = legacy.filter(s => s && typeof s === 'object' && typeof s.id === 'string') as Song[];
+          if (loaded.length > 0) migratedFromLegacy = true;
+          return loaded;
+        }
+      } catch {
+        /* 旧数据损坏，视为空 */
+      }
     }
-    if (typeof newSong.version !== 'number') {
-      newSong.version = 1;
-      updated = true;
+    return [];
+  };
+
+  songs.value = loadInitialSongs();
+
+  // ---- 持久化层：脏标记 + 防抖刷写（400ms / 最长 1500ms） ----
+  const dirtySongIds = new Set<string>();
+  const removedSongIds = new Set<string>();
+  let indexDirty = false;
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+  let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const flushSongsNow = () => {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
     }
-    if (updated) needUpdate = true;
-    return newSong;
-  });
-  if (needUpdate) {
-    songs.value = alignedSongs;
+    if (maxWaitTimer) {
+      clearTimeout(maxWaitTimer);
+      maxWaitTimer = null;
+    }
+    try {
+      removedSongIds.forEach(id => localStorage.removeItem(SONG_ENTRY_KEY(id)));
+      removedSongIds.clear();
+
+      const byId = new Map(songs.value.map(s => [s.id, s]));
+      dirtySongIds.forEach(id => {
+        const song = byId.get(id);
+        if (song) {
+          localStorage.setItem(SONG_ENTRY_KEY(id), JSON.stringify(song));
+        } else {
+          localStorage.removeItem(SONG_ENTRY_KEY(id));
+        }
+      });
+      dirtySongIds.clear();
+
+      if (indexDirty) {
+        localStorage.setItem(STORAGE_KEYS.SONGS_INDEX, JSON.stringify(songs.value.map(s => s.id)));
+        indexDirty = false;
+      }
+
+      if (migratedFromLegacy) {
+        localStorage.removeItem(STORAGE_KEYS.SONGS);
+        migratedFromLegacy = false;
+      }
+    } catch (err) {
+      console.error('[songStore] flush failed:', err);
+    }
+  };
+
+  const scheduleFlush = () => {
+    if (!maxWaitTimer) {
+      maxWaitTimer = setTimeout(() => {
+        maxWaitTimer = null;
+        flushSongsNow();
+      }, FLUSH_MAX_WAIT);
+    }
+    if (flushTimer) clearTimeout(flushTimer);
+    flushTimer = setTimeout(() => {
+      flushTimer = null;
+      flushSongsNow();
+    }, FLUSH_DELAY);
+  };
+
+  const markSongDirty = (id: string) => {
+    dirtySongIds.add(id);
+    scheduleFlush();
+  };
+
+  const markIndexDirty = () => {
+    indexDirty = true;
+    scheduleFlush();
+  };
+
+  {
+    let hasAnyUpdate = false;
+    songs.value.forEach(s => {
+      let songUpdated = false;
+      if (typeof s.key !== 'string' || !s.key) {
+        s.key = 'C';
+        songUpdated = true;
+      }
+      if (typeof s.playKey !== 'string' || !s.playKey) {
+        s.playKey = s.key;
+        songUpdated = true;
+      }
+      if (typeof s.version !== 'number') {
+        s.version = 1;
+        songUpdated = true;
+      }
+      if (songUpdated) {
+        hasAnyUpdate = true;
+        markSongDirty(s.id);
+      }
+    });
+    if (hasAnyUpdate) markIndexDirty();
   }
 
   const createSong = (title: string): Song => {
@@ -48,6 +180,8 @@ export const useSongStore = defineStore('song', () => {
       version: 1,
     };
     songs.value.push(newSong);
+    markSongDirty(newSong.id);
+    markIndexDirty();
     return newSong;
   };
 
@@ -59,6 +193,9 @@ export const useSongStore = defineStore('song', () => {
       index,
     };
     songs.value = songs.value.filter(s => s.id !== id);
+    dirtySongIds.delete(id);
+    removedSongIds.add(id);
+    markIndexDirty();
   };
 
   const undoDeleteSong = () => {
@@ -69,6 +206,9 @@ export const useSongStore = defineStore('song', () => {
     } else {
       songs.value.push(song);
     }
+    removedSongIds.delete(song.id);
+    markSongDirty(song.id);
+    markIndexDirty();
     lastDeletedSongInfo.value = null;
   };
 
@@ -100,7 +240,7 @@ export const useSongStore = defineStore('song', () => {
       target.lyrics = payload.lyrics;
       hasChanged = true;
     }
-    if (payload.lineIds !== undefined && JSON.stringify(target.lineIds) !== JSON.stringify(payload.lineIds)) {
+    if (payload.lineIds !== undefined && !lineIdsEqual(target.lineIds, payload.lineIds)) {
       target.lineIds = payload.lineIds;
       hasChanged = true;
     }
@@ -111,6 +251,7 @@ export const useSongStore = defineStore('song', () => {
 
     if (hasChanged) {
       target.version = (target.version ?? 1) + 1;
+      markSongDirty(id);
     }
   };
 
@@ -122,6 +263,7 @@ export const useSongStore = defineStore('song', () => {
     bindNewChordToSlot(target.chordMap, slotKey, chordId);
     target.chordMap = { ...target.chordMap };
     target.version = (target.version ?? 1) + 1;
+    markSongDirty(songId);
   };
 
   const removeCharChord = (songId: string, slotKey: string | number) => {
@@ -131,6 +273,7 @@ export const useSongStore = defineStore('song', () => {
     if (!removed) return;
     target.chordMap = { ...target.chordMap };
     target.version = (target.version ?? 1) + 1;
+    markSongDirty(songId);
   };
 
   const swapSongSlotChords = (songId: string, sourceKey: string | number, targetKey: string | number) => {
@@ -139,19 +282,47 @@ export const useSongStore = defineStore('song', () => {
     swapOrMoveSlotChords(target.chordMap, sourceKey, targetKey);
     target.chordMap = { ...target.chordMap };
     target.version = (target.version ?? 1) + 1;
+    markSongDirty(songId);
   };
 
   const overwriteSongs = (newSongs: Song[]) => {
+    const newIds = new Set(newSongs.map(s => s.id));
+    // 清理存储中不属于新集合的孤立歌曲键（全量覆盖是罕见操作，扫描一遍可接受）
+    const orphanKeys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(SONG_ENTRY_PREFIX) && !newIds.has(key.slice(SONG_ENTRY_PREFIX.length))) {
+        orphanKeys.push(key);
+      }
+    }
+    orphanKeys.forEach(key => localStorage.removeItem(key));
+
+    songs.value.forEach(s => {
+      if (!newIds.has(s.id)) removedSongIds.add(s.id);
+    });
     songs.value = [...newSongs];
+    dirtySongIds.clear();
+    newSongs.forEach(s => markSongDirty(s.id));
+    markIndexDirty();
+    // 全量覆盖后立即落盘，不等防抖
+    flushSongsNow();
   };
 
-  const unbindChordIds = (targetIds: Set<string>) => {
+  interface RemovedChordBinding {
+    songId: string;
+    slotKey: string;
+    chordId: string;
+  }
+
+  const unbindChordIds = (targetIds: Set<string>): RemovedChordBinding[] => {
+    const removedBindings: RemovedChordBinding[] = [];
     songs.value.forEach(song => {
       if (!song.chordMap) return;
       let hasChanged = false;
       Object.keys(song.chordMap).forEach(key => {
         const boundChordId = song.chordMap[key];
         if (boundChordId && targetIds.has(boundChordId)) {
+          removedBindings.push({ songId: song.id, slotKey: key, chordId: boundChordId });
           delete song.chordMap[key];
           hasChanged = true;
         }
@@ -159,16 +330,25 @@ export const useSongStore = defineStore('song', () => {
       if (hasChanged) {
         song.chordMap = { ...song.chordMap };
         song.version = (song.version ?? 1) + 1;
+        markSongDirty(song.id);
       }
     });
+    return removedBindings;
   };
 
-  const flushSongsNow = () => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(songs.value));
-    } catch (err) {
-      console.error('[songStore] flush on unload failed:', err);
-    }
+  /** 撤销删除和弦/分组时，把此前被解绑的槽位绑定恢复回去 */
+  const restoreChordBindings = (bindings: RemovedChordBinding[]) => {
+    if (bindings.length === 0) return;
+    bindings.forEach(({ songId, slotKey, chordId }) => {
+      const target = songMap.value.get(songId);
+      if (!target) return;
+      target.chordMap ??= {};
+      if (target.chordMap[slotKey] === undefined) {
+        target.chordMap[slotKey] = chordId;
+        target.version = (target.version ?? 1) + 1;
+        markSongDirty(songId);
+      }
+    });
   };
 
   useEventListener(window, 'beforeunload', flushSongsNow);
@@ -187,5 +367,7 @@ export const useSongStore = defineStore('song', () => {
     swapSongSlotChords,
     overwriteSongs,
     unbindChordIds,
+    restoreChordBindings,
+    flushSongsNow,
   };
 });

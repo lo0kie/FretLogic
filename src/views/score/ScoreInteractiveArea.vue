@@ -2,7 +2,7 @@
   <div
     ref="scoreZoneRef"
     class="interactive-score-zone no-scrollbar"
-    :style="{ '--score-font-scale': scoreEditor.fontScale }"
+    :style="{ '--score-font-scale': scoreEditor.effectiveFontScale }"
   >
     <div ref="a4CaptureWrapperRef" class="a4-capture-wrapper">
       <EmptyState
@@ -35,13 +35,11 @@
                 lineData.chars.length,
                 lineData.startChords.length,
                 lineData.endChords.length,
+                getLineChordSignature(lineData),
                 isLineVisibleInExport(lineData.lineIdx),
                 selectedLineSet.has(lineData.lineIdx),
-                dragOverSlotKey,
-                draggingSlotKey,
                 isExporting,
-                scoreEditor.fontScale,
-                scoreEditor.fretboardScale,
+                scoreEditor.effectiveFretboardScale,
               ]"
               class="lyrics-line"
               :class="{
@@ -65,8 +63,6 @@
                   variant="add"
                   :slot-key="lineData.nextStartKey"
                   add-placeholder-title="点击添加行首和弦"
-                  :is-drop-target="dragOverSlotKey === lineData.nextStartKey"
-                  :is-dragging-source="draggingSlotKey === lineData.nextStartKey"
                   @click="emit('open-picker', lineData.nextStartKey)"
                   @pointerdown="handlePointerDown"
                   @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
@@ -79,8 +75,6 @@
                   variant="edge"
                   :slot-key="item.slotKey"
                   :chord="item.chord"
-                  :is-drop-target="dragOverSlotKey === item.slotKey"
-                  :is-dragging-source="draggingSlotKey === item.slotKey"
                   @click="emit('open-picker', item.slotKey)"
                   @pointerdown="handlePointerDown"
                   @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
@@ -95,8 +89,6 @@
                 :slot-key="item.slotKey"
                 :chord="getCharChord(item.slotKey)"
                 :char="item.char"
-                :is-drop-target="dragOverSlotKey === item.slotKey"
-                :is-dragging-source="draggingSlotKey === item.slotKey"
                 @click="emit('open-picker', item.slotKey)"
                 @pointerdown="handlePointerDown"
                 @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
@@ -110,8 +102,6 @@
                   variant="edge"
                   :slot-key="item.slotKey"
                   :chord="item.chord"
-                  :is-drop-target="dragOverSlotKey === item.slotKey"
-                  :is-dragging-source="draggingSlotKey === item.slotKey"
                   @click="emit('open-picker', item.slotKey)"
                   @pointerdown="handlePointerDown"
                   @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
@@ -122,8 +112,6 @@
                   variant="add"
                   :slot-key="lineData.nextEndKey"
                   add-placeholder-title="点击添加行尾和弦"
-                  :is-drop-target="dragOverSlotKey === lineData.nextEndKey"
-                  :is-dragging-source="draggingSlotKey === lineData.nextEndKey"
                   @click="emit('open-picker', lineData.nextEndKey)"
                   @pointerdown="handlePointerDown"
                   @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
@@ -137,13 +125,7 @@
       </div>
     </div>
     <Teleport to="body">
-      <div
-        v-if="isDragging"
-        class="drag-ghost-floating"
-        :style="{
-          transform: `translate3d(${ghostPos.x}px, ${ghostPos.y}px, 0)`,
-        }"
-      >
+      <div v-if="isDragging" class="drag-ghost-floating" :ref="setGhostEl">
         <div class="drag-ghost-card">
           <span class="ghost-chord-name">{{ ghostChordName }}</span>
         </div>
@@ -189,8 +171,9 @@ const lyricsRef = useTemplateRef<HTMLElement>('lyricsRef');
 const exportHeaderMetaRef = useTemplateRef<HTMLElement>('exportHeaderMetaRef');
 const a4CaptureWrapperRef = useTemplateRef<HTMLElement>('a4CaptureWrapperRef');
 
-const { isDragging, draggingSlotKey, dragOverSlotKey, ghostChordName, ghostPos, handlePointerDown } =
-  useLyricsDragDrop(scoreZoneRef);
+// 拖拽高亮（is-drop-target / is-dragging-source）由 useLyricsDragDrop 直接操作 DOM class，
+// 不进响应式渲染链路；这里只保留低频的 isDragging（拖拽起止各变一次）
+const { isDragging, ghostChordName, setGhostEl, handlePointerDown } = useLyricsDragDrop(scoreZoneRef);
 const { lyricsLinesWithEdges, chordsLookupMap } = useScoreLinesData();
 
 useAutoScroll(scoreZoneRef);
@@ -216,6 +199,16 @@ const slotChordMap = computed(() => {
 });
 
 const getCharChord = (slotKey: string | number) => slotChordMap.value.get(slotKey);
+
+const getLineChordSignature = (lineData: LineData) => {
+  const chordMap = scoreEditor.activeSong?.chordMap;
+  if (!chordMap) return '';
+  let sig = '';
+  for (const item of lineData.startChords) sig += chordMap[item.slotKey] ?? '_';
+  for (const item of lineData.chars) sig += chordMap[item.slotKey] ?? '_';
+  for (const item of lineData.endChords) sig += chordMap[item.slotKey] ?? '_';
+  return sig;
+};
 
 const handleLineClick = (ev: MouseEvent, lineIdx: number) => {
   if (props.isExporting) return;
@@ -254,7 +247,7 @@ const deleteLine = (lineData: LineData) => {
   });
 };
 
-const getLineMenuItems = (lineData: LineData): ContextMenuItem[] => [
+const buildLineMenuItems = (lineData: LineData): ContextMenuItem[] => [
   {
     label: '清除和弦',
     icon: Eraser,
@@ -267,6 +260,24 @@ const getLineMenuItems = (lineData: LineData): ContextMenuItem[] => [
     action: () => deleteLine(lineData),
   },
 ];
+
+// 行集合（顺序）不变时复用同一批 items 数组，避免每次渲染为每行生成新引用导致 N 个菜单组件级联重渲染
+const lineIdSignature = computed(() => lyricsLinesWithEdges.value.map(l => l.lineId).join('\u0000'));
+let lineMenuItemsCache = new Map<string, ContextMenuItem[]>();
+let lineMenuItemsCacheSig = '';
+
+const getLineMenuItems = (lineData: LineData): ContextMenuItem[] => {
+  const sig = lineIdSignature.value;
+  if (sig !== lineMenuItemsCacheSig) {
+    const map = new Map<string, ContextMenuItem[]>();
+    for (const ld of lyricsLinesWithEdges.value) {
+      map.set(ld.lineId, buildLineMenuItems(ld));
+    }
+    lineMenuItemsCache = map;
+    lineMenuItemsCacheSig = sig;
+  }
+  return lineMenuItemsCache.get(lineData.lineId) ?? [];
+};
 
 watch(
   lyricsRef,
@@ -317,6 +328,11 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   &.is-export-mode {
     min-width: 0 !important;
     width: max-content !important;
+
+    /* 导出捕获需要完整布局，禁用屏外行的渲染跳过与相关过渡 */
+    .line-row {
+      content-visibility: visible;
+    }
 
     :deep(.add-btn-slot),
     .line-row-gutter {
@@ -386,6 +402,10 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   align-items: stretch;
   width: max-content;
   min-width: 100%;
+  /* 屏外行跳过布局与绘制（长歌词的渲染级虚拟化）；auto 让浏览器记住已渲染行的真实高度。
+     估值取带指板行的高度（偏大）：偏小会导致自动滚动因 scrollHeight 低估而提前触底 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 9rem;
 }
 
 .line-row-gutter {
@@ -514,8 +534,8 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   border: 1.5px solid var(--color-primary);
   border-radius: @radius-md;
   box-shadow: @shadow-floating;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;

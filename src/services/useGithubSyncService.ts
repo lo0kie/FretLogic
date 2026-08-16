@@ -4,7 +4,6 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { buildSanitizedBackupPayload } from '@/utils/buildSanitizedBackupPayload';
-import { cloneDeep } from '@/utils/cloneDeep';
 import { validateImportExportPayload } from '@/utils/validatePayload';
 import { validateSettings } from '@/utils/validateSettings';
 import { Base64 } from 'js-base64';
@@ -169,12 +168,13 @@ export function useGithubSyncService() {
   };
 
   const applyOverwriteWithCloud = (cloudData: ImportExportPayload) => {
+    // 入参是 validateImportExportPayload 的产物（全新对象图），可直接被 store 接管
     chordStore.replaceAllData({
-      groups: cloneDeep(cloudData.groups ?? []),
-      chords: cloneDeep(cloudData.chords ?? []),
+      groups: cloudData.groups ?? [],
+      chords: cloudData.chords ?? [],
     });
 
-    const songs = cloneDeep(cloudData.songs ?? []);
+    const songs = cloudData.songs ?? [];
     if (cloudData.songs) songStore.overwriteSongs(songs);
     uiStore.toast.success('已使用云端数据完全覆盖本地');
   };

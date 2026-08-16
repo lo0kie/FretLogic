@@ -89,11 +89,11 @@ const handleExecuteAction = (item: Toast) => {
   gap: 0.5rem;
   font-size: 0.75rem;
   pointer-events: auto;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   box-sizing: border-box;
-  transition: all @duration-base @bezier-standard;
+  transition:
+    transform @duration-base @bezier-standard,
+    opacity @duration-base @bezier-standard;
   white-space: nowrap;
   flex-shrink: 0;
   outline: none;
@@ -169,23 +169,24 @@ const handleExecuteAction = (item: Toast) => {
   }
 }
 
+/* 去 blur 后背景需不透明：用主题色向面板色混合（82% 面板 + 18% 主题色）保证文字可读 */
 .theme-success {
-  background-color: color-mix(in srgb, var(--color-success), transparent 85%);
+  background-color: color-mix(in srgb, var(--color-success), var(--bg-panel) 82%);
   color: var(--color-success);
 }
 
 .theme-error {
-  background-color: color-mix(in srgb, var(--color-danger), transparent 85%);
+  background-color: color-mix(in srgb, var(--color-danger), var(--bg-panel) 82%);
   color: var(--color-danger);
 }
 
 .theme-warning {
-  background-color: color-mix(in srgb, var(--color-warning), transparent 85%);
+  background-color: color-mix(in srgb, var(--color-warning), var(--bg-panel) 82%);
   color: var(--color-warning);
 }
 
 .theme-loading {
-  background-color: color-mix(in srgb, var(--color-primary), transparent 85%);
+  background-color: color-mix(in srgb, var(--color-primary), var(--bg-panel) 82%);
   color: var(--color-primary);
 }
 

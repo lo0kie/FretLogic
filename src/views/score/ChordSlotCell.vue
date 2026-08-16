@@ -21,7 +21,7 @@
     @keydown.space="handleKeydown"
     @keydown.delete="handleDelete"
     @keydown.backspace="handleDelete"
-    v-wave="{ disabled: !isGlobalEditable }"
+    v-wave="{ disabled: !isGlobalEditable || (uiStore.isMobile && !chord) }"
     :data-focusable-inline="isGlobalEditable || undefined"
   >
     <div class="chord-display-slot">
@@ -51,7 +51,7 @@
           :chord
           :ref="el => chord && setFretboardMeasureRef(el, chord.fretCount)"
           :interactive="false"
-          :scale="0.28 * scoreEditor.fretboardScale"
+          :scale="0.28 * scoreEditor.effectiveFretboardScale"
           :is-dark-mode="globalDarkMode"
           fret-number-size="lg"
         />
@@ -86,9 +86,9 @@ import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord } from '@/types';
 import { getPlaceholderSize } from '@/utils/fretboardVisuals';
+import { observeVisibility } from '@/utils/observeVisibility';
 import { Plus, X } from '@lucide/vue';
-import { useIntersectionObserver } from '@vueuse/core';
-import { computed, ref, useTemplateRef, watch, type ComponentPublicInstance } from 'vue';
+import { computed, ref, useTemplateRef, watch, watchEffect, type ComponentPublicInstance } from 'vue';
 
 const props = defineProps<{
   slotKey: string | number;
@@ -96,7 +96,8 @@ const props = defineProps<{
   char?: string;
   variant: 'char' | 'edge' | 'add';
   addPlaceholderTitle?: string;
-  isDropTarget: boolean;
+  /** 拖拽高亮已改为由 useLyricsDragDrop 直接切换 DOM class，此 prop 仅作预留 */
+  isDropTarget?: boolean;
   isDraggingSource?: boolean;
   isExporting: boolean;
   scrollRoot?: HTMLElement | null;
@@ -112,20 +113,23 @@ const isVisible = ref(false);
 const uiStore = useUiStore();
 const scoreEditor = useScoreEditorStore();
 const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
-const chordNameFontSize = computed(() => `${0.7 * scoreEditor.fretboardScale}rem`);
+const chordNameFontSize = computed(() => `${0.7 * scoreEditor.effectiveFretboardScale}rem`);
 
-const { stop: stopObserving } = useIntersectionObserver(
-  charBoxRef,
-  ([entry]) => {
-    if (entry.isIntersecting) {
-      isVisible.value = true;
-      stopObserving();
-    }
-  },
-  { root: () => props.scrollRoot ?? undefined }
-);
+// 所有字符槽共享同一个 IntersectionObserver（按 scrollRoot 复用），命中即停
+watchEffect(onCleanup => {
+  const el = charBoxRef.value;
+  if (!el || isVisible.value) return;
+  const stop = observeVisibility(
+    el,
+    visible => {
+      if (visible) isVisible.value = true;
+    },
+    props.scrollRoot ?? null
+  );
+  onCleanup(stop);
+});
 
-const getEffectiveScale = () => 0.28 * scoreEditor.fretboardScale;
+const getEffectiveScale = () => 0.28 * scoreEditor.effectiveFretboardScale;
 const getCacheKey = (fretCount: number) => `${fretCount}_${getEffectiveScale().toFixed(2)}`;
 
 const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fretCount: number) => {
@@ -191,8 +195,8 @@ unwatchExport = watch(
   () => props.isExporting,
   exporting => {
     if (exporting) {
+      // isVisible 置 true 后上方 watchEffect 会自动停止观察
       isVisible.value = true;
-      stopObserving();
       unwatchExport?.();
     }
   },

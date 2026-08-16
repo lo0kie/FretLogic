@@ -47,6 +47,7 @@
         enter-active-class="dropdown-enter-active"
         leave-active-class="dropdown-leave-active"
         appear
+        @after-leave="isRendered = false"
       >
         <div v-if="isOpen" class="dropdown-inner-container">
           <!-- 顶部贴边滚动提示 -->
@@ -374,14 +375,14 @@ watch(isOpen, opened => {
   });
 });
 
+// options 为静态选项数组，引用变化即可触发重算滚动提示，无需 deep 遍历
 watch(
   () => options,
   () => {
     if (isOpen.value) {
       nextTick(checkScroll);
     }
-  },
-  { deep: true }
+  }
 );
 </script>
 
@@ -530,8 +531,8 @@ watch(
   flex-direction: column;
   box-sizing: border-box;
   background-color: var(--bg-panel);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--glass-border);
   border-radius: @radius-lg;
   box-shadow: @shadow-floating;

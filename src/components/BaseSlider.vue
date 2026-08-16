@@ -57,6 +57,7 @@
         :aria-valuetext="displayText"
         class="slider-input"
         @input="handleInput"
+        @change="handleNativeCommit"
         @dblclick="resetToDefault"
         data-focusable-outline
       />
@@ -145,6 +146,8 @@ const modelValue = defineModel<number>({ required: true });
 
 const emit = defineEmits<{
   (e: 'change', value: number): void;
+  /** 用户完成一次离散/拖拽结束的提交（拖动时仅在松手触发一次，键盘/步进/滚轮每次触发） */
+  (e: 'commit', value: number): void;
 }>();
 
 const displayText = computed(() => {
@@ -163,12 +166,13 @@ const clamp = (val: number) => {
   return Number(clamped.toFixed(precision));
 };
 
-const updateValue = (nextVal: number) => {
+const updateValue = (nextVal: number, options?: { commit?: boolean }) => {
   if (disabled) return;
   const target = clamp(nextVal);
   if (target !== modelValue.value) {
     modelValue.value = target;
     emit('change', target);
+    if (options?.commit) emit('commit', target);
   }
 };
 
@@ -177,10 +181,15 @@ const handleInput = (e: Event) => {
   updateValue(val);
 };
 
-const stepUp = () => updateValue(modelValue.value + step);
-const stepDown = () => updateValue(modelValue.value - step);
+// 原生 change 在拖动释放（及键盘步进）时触发一次，作为拖动的提交信号
+const handleNativeCommit = () => {
+  emit('commit', modelValue.value);
+};
 
-const resetToDefault = () => updateValue(defaultValue);
+const stepUp = () => updateValue(modelValue.value + step, { commit: true });
+const stepDown = () => updateValue(modelValue.value - step, { commit: true });
+
+const resetToDefault = () => updateValue(defaultValue, { commit: true });
 
 const handleWheel = (e: WheelEvent) => {
   if (disabled || !wheelable) return;

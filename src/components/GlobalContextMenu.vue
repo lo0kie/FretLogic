@@ -10,7 +10,7 @@
 
   <Teleport to="body">
     <div v-if="isRendered" ref="floatingRef" :style="floatingStyles" class="floating-position-wrapper">
-      <Transition name="menu-fade" appear>
+      <Transition name="menu-fade" appear @after-leave="isRendered = false">
         <div
           v-if="isOpen"
           ref="menuBoxRef"
@@ -273,8 +273,8 @@ onBeforeUnmount(() => {
   gap: 0.1rem;
   min-width: 130px;
   background-color: var(--bg-panel);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--glass-border);
   border-radius: @radius-lg;
   box-shadow: @shadow-floating;

@@ -1,6 +1,6 @@
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useEventListener } from '@vueuse/core';
-import { onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue';
+import { onBeforeUnmount, onDeactivated, ref, shallowRef, watch, type Ref } from 'vue';
 
 const isAutoScrolling = ref(false);
 const globalScrollContainer = shallowRef<HTMLElement | null>(null);
@@ -118,6 +118,11 @@ export function useAutoScroll(containerRef?: Ref<HTMLElement | null>) {
     useEventListener(containerRef, 'wheel', stopAutoScroll, { passive: true });
     useEventListener(containerRef, 'touchstart', stopAutoScroll, { passive: true });
   }
+
+  // KeepAlive 缓存页面切走（deactivated）时停止 rAF 循环，避免后台每帧写隐藏容器的 scrollTop
+  onDeactivated(() => {
+    stopAutoScroll();
+  });
 
   onBeforeUnmount(() => {
     stopAutoScroll();

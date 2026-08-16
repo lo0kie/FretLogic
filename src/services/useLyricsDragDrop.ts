@@ -1,7 +1,7 @@
 import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
-import { onBeforeUnmount, ref, type Ref } from 'vue';
+import { onBeforeUnmount, ref, type ComponentPublicInstance, type Ref } from 'vue';
 
 export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) {
   const scoreEditor = useScoreEditorStore();
@@ -9,7 +9,6 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   const dragOverSlotKey = ref<string | number | null>(null);
   const isDragging = ref(false);
   const ghostChordName = ref('');
-  const ghostPos = ref({ x: 0, y: 0 });
   let wasDraggingInSession = false;
 
   let startPointer = { x: 0, y: 0, pointerId: -1, pointerType: '' };
@@ -18,6 +17,9 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   let activeChord: Chord | null = null;
   let autoScrollRafId: number | null = null;
   let currentPointerPos = { x: 0, y: 0 };
+  let ghostEl: HTMLElement | null = null;
+  let dragUpdateRafId = 0;
+  let pendingDragPos: { x: number; y: number } | null = null;
 
   const DRAG_THRESHOLD = 5;
   const LONG_PRESS_DELAY = 180;
@@ -94,15 +96,87 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     const el = document.elementFromPoint(clientX, clientY);
     if (!el) {
       dragOverSlotKey.value = null;
+      applyDropHighlight(null);
       return;
     }
     const slotEl = el.closest('[data-slot-key]');
     if (slotEl instanceof HTMLElement) {
       const key = slotEl.dataset.slotKey;
       dragOverSlotKey.value = key ?? null;
+      applyDropHighlight(dragOverSlotKey.value);
     } else {
       dragOverSlotKey.value = null;
+      applyDropHighlight(null);
     }
+  };
+
+  // ---- 拖拽高亮走原生 class 切换 ----
+  // dragOverSlotKey/draggingSlotKey 已从行级 v-memo 依赖中移除，
+  // 跨槽位边界时若走 Vue 渲染会让所有行重渲染；直接操作 DOM 零渲染开销
+  let currentDropKey: string | number | null = null;
+  let sourceKey: string | number | null = null;
+
+  const findSlotEls = (key: string | number) =>
+    document.querySelectorAll<HTMLElement>(`[data-slot-key="${CSS.escape(String(key))}"]`);
+
+  const applyDropHighlight = (key: string | number | null) => {
+    if (key === currentDropKey) return;
+    if (currentDropKey !== null) {
+      findSlotEls(currentDropKey).forEach(el => el.classList.remove('is-drop-target'));
+    }
+    currentDropKey = key;
+    if (key !== null) {
+      findSlotEls(key).forEach(el => el.classList.add('is-drop-target'));
+    }
+  };
+
+  const markDragSource = (key: string | number) => {
+    sourceKey = key;
+    findSlotEls(key).forEach(el => el.classList.add('is-dragging-source'));
+  };
+
+  const clearDragClasses = () => {
+    applyDropHighlight(null);
+    if (sourceKey !== null) {
+      findSlotEls(sourceKey).forEach(el => el.classList.remove('is-dragging-source'));
+      sourceKey = null;
+    }
+  };
+
+  const setGhostEl = (el: Element | ComponentPublicInstance | null) => {
+    ghostEl = el instanceof HTMLElement ? el : null;
+  };
+
+  const applyDragUpdate = () => {
+    dragUpdateRafId = 0;
+    const pos = pendingDragPos;
+    pendingDragPos = null;
+    if (!pos || !isDragging.value) return;
+    if (ghostEl) {
+      ghostEl.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
+    }
+    updateDropTarget(pos.x, pos.y);
+  };
+
+  const scheduleDragUpdate = (clientX: number, clientY: number) => {
+    pendingDragPos = { x: clientX, y: clientY };
+    if (dragUpdateRafId) return;
+    dragUpdateRafId = requestAnimationFrame(applyDragUpdate);
+  };
+
+  const flushDragUpdate = () => {
+    if (dragUpdateRafId) {
+      cancelAnimationFrame(dragUpdateRafId);
+      applyDragUpdate();
+    }
+  };
+
+  const cancelDragUpdate = () => {
+    if (dragUpdateRafId) {
+      cancelAnimationFrame(dragUpdateRafId);
+      dragUpdateRafId = 0;
+    }
+    pendingDragPos = null;
   };
 
   const startDrag = (clientX: number, clientY: number) => {
@@ -110,15 +184,15 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     isDragging.value = true;
     wasDraggingInSession = true;
     draggingSlotKey.value = activeSourceKey;
+    markDragSource(activeSourceKey);
     ghostChordName.value = activeChord.chordName;
-    ghostPos.value = { x: clientX, y: clientY };
     document.body.classList.add('is-global-dragging');
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try {
         navigator.vibrate(20);
       } catch {}
     }
-    updateDropTarget(clientX, clientY);
+    scheduleDragUpdate(clientX, clientY);
   };
 
   const handleGlobalPointerMove = (e: PointerEvent) => {
@@ -145,8 +219,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     }
 
     e.preventDefault();
-    ghostPos.value = { x: e.clientX, y: e.clientY };
-    updateDropTarget(e.clientX, e.clientY);
+    scheduleDragUpdate(e.clientX, e.clientY);
 
     if (autoScrollRafId === null) {
       checkAutoScroll();
@@ -171,6 +244,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     }
 
     stopAutoScroll();
+    flushDragUpdate();
     cleanupListeners();
 
     const hadDrag = isDragging.value || wasDraggingInSession;
@@ -196,6 +270,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     activeSourceKey = null;
     activeChord = null;
     startPointer = { x: 0, y: 0, pointerId: -1, pointerType: '' };
+    clearDragClasses();
     document.body.classList.remove('is-global-dragging');
   };
 
@@ -206,6 +281,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       longPressTimer = null;
     }
     stopAutoScroll();
+    cancelDragUpdate();
     cleanupListeners();
     if (isDragging.value || wasDraggingInSession) {
       suppressNextClick();
@@ -216,6 +292,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     activeSourceKey = null;
     activeChord = null;
     startPointer = { x: 0, y: 0, pointerId: -1, pointerType: '' };
+    clearDragClasses();
     document.body.classList.remove('is-global-dragging');
   };
 
@@ -258,7 +335,9 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   onBeforeUnmount(() => {
     if (longPressTimer) clearTimeout(longPressTimer);
     stopAutoScroll();
+    cancelDragUpdate();
     cleanupListeners();
+    clearDragClasses();
     document.body.classList.remove('is-global-dragging');
   });
 
@@ -267,7 +346,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     draggingSlotKey,
     dragOverSlotKey,
     ghostChordName,
-    ghostPos,
+    setGhostEl,
     handlePointerDown,
   };
 }

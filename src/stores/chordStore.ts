@@ -73,8 +73,9 @@ export const useChordStore = defineStore('chord', () => {
     if (needUpdate) savedChordsList.value = aligned;
   }
 
+  // 每次提交都会克隆整个和弦列表，容量控制在 8 份以限制内存驻留
   const { undo: rawUndo } = useRefHistory(savedChordsList, {
-    capacity: 15,
+    capacity: 8,
     deep: true,
     flush: 'post',
     clone: v => cloneDeep(toRaw(v)),

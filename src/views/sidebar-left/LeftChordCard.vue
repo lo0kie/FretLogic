@@ -91,6 +91,9 @@ const emit = defineEmits<{
 
 const editorStore = useEditorStore();
 
+// 滚轮切换指法的增量阈值：鼠标滚轮一格（±100+）立即切换，触控板惯性按累积量切换
+const WHEEL_SWITCH_THRESHOLD = 60;
+
 /** 未激活时的本地预览索引；激活后索引以 store 为准 */
 const localVariantIndex = ref(0);
 
@@ -140,10 +143,17 @@ const toggleVariantsDropdown = () => {
   switchVariant(nextIdx);
 };
 
+let wheelAccumulator = 0;
+
 const handleWheelScroll = (e: WheelEvent) => {
   if (!props.cardData.hasVariants || !props.isActive) return;
   e.preventDefault();
   e.stopPropagation();
+  // 触控板惯性滚动事件频率极高，累积增量达到阈值才切换一次指法
+  if (Math.sign(e.deltaY) !== Math.sign(wheelAccumulator)) wheelAccumulator = 0;
+  wheelAccumulator += e.deltaY;
+  if (Math.abs(wheelAccumulator) < WHEEL_SWITCH_THRESHOLD) return;
+  wheelAccumulator = 0;
   const total = props.cardData.variantCount;
   const cur = activeVariantIndex.value;
   let nextIdx = cur;

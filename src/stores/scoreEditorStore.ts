@@ -6,7 +6,7 @@ import { cloneDeep } from '@/utils/cloneDeep';
 import { matchLineIds } from '@/utils/lineIdMatcher';
 import { getKeySemitones, transposeChordName } from '@/utils/musicTheory';
 import { sanitizeLyricsText } from '@/utils/sanitizeLyricsText';
-import { useStorage } from '@vueuse/core';
+import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, nextTick, ref, watch } from 'vue';
 
@@ -23,12 +23,21 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const activeSongId = useStorage<string | null>(STORAGE_KEYS.ACTIVE_SONG_ID, null);
   const activeTabRef = ref<ScoreActiveTab>('edit');
   const selectedSlotKey = ref<string | number | null>(null);
-  const fontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 1.0);
-  const fretboardScale = useStorage(STORAGE_KEYS.SCORE_FRETBOARD_SCALE, 1.0);
+  const fontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 1.0, localStorage, {
+    eventFilter: debounceFilter(400, { maxWait: 1500 }),
+  });
+  const fretboardScale = useStorage(STORAGE_KEYS.SCORE_FRETBOARD_SCALE, 1.0, localStorage, {
+    eventFilter: debounceFilter(400, { maxWait: 1500 }),
+  });
+  // A4 导出适配用的非持久化倍率：不写 localStorage，导出结束后归位
+  const exportScaleMultiplier = ref(1);
+  const effectiveFontScale = computed(() => fontScale.value * exportScaleMultiplier.value);
+  const effectiveFretboardScale = computed(() => fretboardScale.value * exportScaleMultiplier.value);
   const mobileScale = useStorage(STORAGE_KEYS.SCORE_MOBILE_SCALE, 0.7);
-  const historyStack = ref<HistoryState[]>([]);
-  const historyIndex = ref(-1);
+  const historyStack: HistoryState[] = [];
+  let historyIndex = -1;
   const isUndoRedoAction = ref(false);
+  const HISTORY_CAPACITY = 20;
   const scrollSpeed = useStorage(STORAGE_KEYS.SCORE_SCROLL_SPEED, 60);
 
   const activeSong = computed<Song | null>(() => {
@@ -55,25 +64,26 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const recordHistory = (song?: Song) => {
     const target = song || activeSong.value;
     if (!target || isUndoRedoAction.value) return;
-    historyStack.value.splice(historyIndex.value + 1);
-    historyStack.value.push(
+    historyStack.splice(historyIndex + 1);
+    historyStack.push(
       cloneDeep({
         lyrics: target.lyrics,
         lineIds: target.lineIds,
         chordMap: target.chordMap || {},
       })
     );
-    if (historyStack.value.length > 50) {
-      historyStack.value.shift();
+    if (historyStack.length > HISTORY_CAPACITY) {
+      historyStack.shift();
     }
-    historyIndex.value = historyStack.value.length - 1;
+    historyIndex = historyStack.length - 1;
   };
 
   const undo = async () => {
-    if (historyIndex.value > 0 && activeSong.value) {
+    if (historyIndex > 0 && activeSong.value) {
       isUndoRedoAction.value = true;
-      historyIndex.value--;
-      const state = cloneDeep(historyStack.value[historyIndex.value]);
+      historyIndex--;
+      // 快照可能被 songStore 以引用方式接管（chordMap 会被原地修改），恢复时必须克隆
+      const state = cloneDeep(historyStack[historyIndex]);
       songStore.updateSongMeta(activeSong.value.id, state);
       await nextTick();
       await nextTick();
@@ -82,10 +92,10 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   };
 
   const redo = async () => {
-    if (historyIndex.value < historyStack.value.length - 1 && activeSong.value) {
+    if (historyIndex < historyStack.length - 1 && activeSong.value) {
       isUndoRedoAction.value = true;
-      historyIndex.value++;
-      const state = cloneDeep(historyStack.value[historyIndex.value]);
+      historyIndex++;
+      const state = cloneDeep(historyStack[historyIndex]);
       songStore.updateSongMeta(activeSong.value.id, state);
       await nextTick();
       await nextTick();
@@ -97,8 +107,8 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     activeSong,
     newSong => {
       selectedSlotKey.value = null;
-      historyStack.value = [];
-      historyIndex.value = -1;
+      historyStack.length = 0;
+      historyIndex = -1;
       if (!newSong) {
         activeTabRef.value = 'edit';
         return;
@@ -224,6 +234,9 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     swapSlotChords,
     fontScale,
     fretboardScale,
+    exportScaleMultiplier,
+    effectiveFontScale,
+    effectiveFretboardScale,
     undo,
     redo,
     mobileScale,

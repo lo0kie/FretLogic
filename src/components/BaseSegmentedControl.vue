@@ -166,8 +166,10 @@ watchEffect(onCleanup => {
   }
 });
 
+// updateIndicatorPosition 首行即 await，watchEffect 追踪不到其内部读取，需显式 watch；
+// options 是静态选项数组，引用变化已足够触发，无需 deep 遍历
 watch(modelValue, updateIndicatorPosition);
-watch(() => props.options, updateIndicatorPosition, { deep: true });
+watch(() => props.options, updateIndicatorPosition);
 </script>
 
 <style scoped lang="less">

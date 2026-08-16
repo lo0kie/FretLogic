@@ -302,10 +302,18 @@ export function useFretboardInteraction(
     });
   });
 
-  const handleWheel = (e: WheelEvent) => {
-    if (!interactive.value) return;
-    e.preventDefault();
-    const point = getCanvasPoint(e.clientX, e.clientY);
+  // wheel 与 pointermove 同样按帧合帧：触控板惯性下每秒几十次事件，
+  // getCanvasPoint 内含 getBoundingClientRect 布局读取，无需每事件执行
+  let wheelRafId = 0;
+  let pendingWheel: { clientX: number; clientY: number; deltaY: number } | null = null;
+
+  const processWheel = () => {
+    wheelRafId = 0;
+    const pending = pendingWheel;
+    pendingWheel = null;
+    if (!pending || !interactive.value) return;
+
+    const point = getCanvasPoint(pending.clientX, pending.clientY);
     if (point) {
       const { stringIndex: sIdx, fretIndex: fIdx } = point;
       const currentStr = strings.value[sIdx];
@@ -318,7 +326,7 @@ export function useFretboardInteraction(
         return;
       }
     }
-    wheelAccumulator += e.deltaY;
+    wheelAccumulator += pending.deltaY;
     if (Math.abs(wheelAccumulator) < INTERACTION_CONFIG.WHEEL_THRESHOLD) return;
     if (wheelAccumulator > 0) {
       onCapoChange(Math.min(INTERACTION_CONFIG.MAX_CAPO_LIMIT, capo.value + 1));
@@ -326,6 +334,14 @@ export function useFretboardInteraction(
       onCapoChange(Math.max(INTERACTION_CONFIG.MIN_CAPO_LIMIT, capo.value - 1));
     }
     wheelAccumulator = 0;
+  };
+
+  const handleWheel = (e: WheelEvent) => {
+    if (!interactive.value) return;
+    e.preventDefault();
+    pendingWheel = { clientX: e.clientX, clientY: e.clientY, deltaY: e.deltaY };
+    if (wheelRafId) return;
+    wheelRafId = requestAnimationFrame(processWheel);
   };
 
   useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
@@ -340,10 +356,9 @@ export function useFretboardInteraction(
   useEventListener(fretBoardRef, 'blur', handleBlur);
 
   onBeforeUnmount(() => {
-    if (rAF_ID) {
-      cancelAnimationFrame(rAF_ID);
-      cancelAnimationFrame(hoverRafId);
-    }
+    if (rAF_ID) cancelAnimationFrame(rAF_ID);
+    if (hoverRafId) cancelAnimationFrame(hoverRafId);
+    if (wheelRafId) cancelAnimationFrame(wheelRafId);
   });
 
   return {

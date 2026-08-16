@@ -103,8 +103,8 @@ onDeactivated(() => {
   justify-content: space-evenly;
   pointer-events: auto;
   background-color: var(--bg-panel);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--glass-border);
   border-radius: @radius-md;
   box-shadow: @shadow-floating;
