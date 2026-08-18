@@ -18,7 +18,7 @@
     {
       "id": "g_1778079326389",
       "name": "E调",
-      "collapsed": true,
+      "collapsed": false,
       "sortRule": "KEY_DEGREE",
       "sortKey": "E"
     },
@@ -52,6 +52,90 @@
     }
   ],
   "chords": [
+    {
+      "id": "c_6346b558",
+      "chordName": "AMaj7",
+      "strings": [
+        {
+          "fret": 2,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 3,
+      "groupId": "g_1778079326389",
+      "tuning": "STANDARD",
+      "isInverted": false,
+      "fingerprint": "AMaj7:3:3:STANDARD:0:2_0_1|-1_0_0|3_0_0|3_0_0|2_0_0|-1_0_0"
+    },
+    {
+      "id": "c_1ae45bff",
+      "chordName": "E7",
+      "strings": [
+        {
+          "fret": 0,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 0,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 0,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1778079326389",
+      "tuning": "STANDARD",
+      "isInverted": false,
+      "fingerprint": "E7:0:3:STANDARD:0:0_0_1|2_0_0|0_0_0|1_0_0|3_0_0|0_0_0"
+    },
     {
       "id": "c_37feaf0b",
       "chordName": "E",
@@ -4510,15 +4594,52 @@
       "version": 50
     },
     {
-      "id": "s_d540591d",
-      "title": "太聪明",
-      "lyrics": "",
-      "key": "A#",
-      "playKey": "G",
-      "capo": 3,
-      "chordMap": {},
-      "lineIds": [],
-      "version": 2
+      "id": "s_a05351e7",
+      "title": "爱情转移",
+      "lyrics": "烛光照亮了晚餐\n照不出个答案\n恋爱不是温馨的请客吃饭\n床单上铺满花瓣\n拥抱让它成长\n太拥挤就开到了别的土壤\n感情需要人接班\n接近换来期望\n期望带来失望的恶性循环\n短暂的总是浪漫\n漫长总会不满\n烧完美好青春换一个老伴\n把一个人的温暖\n转移到另一个的胸膛\n让上次犯的错反省出梦想\n每个人都是这样\n享受过提心吊胆\n才拒绝做爱情待罪的羔羊\n回忆是抓不到的月光握紧就变黑暗\n等虚假的背影消失于晴朗\n阳光在身上流转\n等所有业障被原谅\n爱情不停站\n想开往地老天荒\n需要多勇敢",
+      "key": "F",
+      "playKey": "E",
+      "capo": 1,
+      "chordMap": {
+        "line_l_0b5d81e9_char_5": "1778151016179",
+        "line_l_0fe2fc81_char_4": "1778213096852",
+        "line_l_8850de7c_char_0": "c_ed28b810",
+        "line_l_8850de7c_char_4": "1778150949879",
+        "line_l_8850de7c_char_10": "c_2e830ba5",
+        "line_l_00d5dd78_char_1": "c_1ae45bff",
+        "line_l_00d5dd78_char_5": "c_6346b558",
+        "line_l_bc1c389f_char_4": "1778150933265",
+        "line_l_e9d53d67_char_4": "1778150987602",
+        "line_l_e9d53d67_char_10": "c_197dffe3"
+      },
+      "lineIds": [
+        "l_0b5d81e9",
+        "l_0fe2fc81",
+        "l_8850de7c",
+        "l_00d5dd78",
+        "l_bc1c389f",
+        "l_e9d53d67",
+        "l_421e8ebd",
+        "l_551dcaca",
+        "l_c80a2a90",
+        "l_0ef80085",
+        "l_48b1c4dc",
+        "l_116ad98c",
+        "l_f1c7f779",
+        "l_39288574",
+        "l_138987c9",
+        "l_fb6fcde4",
+        "l_d33ce8f3",
+        "l_186a8e16",
+        "l_5d24c204",
+        "l_b509b42c",
+        "l_81b4294b",
+        "l_1ebe9de8",
+        "l_d7b4e06c",
+        "l_685bcb62",
+        "l_1bfe1444"
+      ],
+      "version": 13
     }
   ]
 }
