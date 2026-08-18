@@ -11,6 +11,7 @@
 
 <script setup lang="ts">
 import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
+import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { computed } from 'vue';
@@ -19,7 +20,7 @@ const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 
 const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive'>[]>(() => [
-  { label: '编辑歌词', value: 'edit' },
+  { label: '编辑歌词', value: 'edit', disabled: !isGlobalEditable.value },
   {
     label: '排列和弦',
     value: 'interactive',

@@ -9,7 +9,7 @@
       class="fretboard-container"
       :class="[interactive ? 'is-interactive' : 'is-disabled', { 'is-bordered': bordered }]"
       :tabindex="interactive ? 0 : -1"
-      data-focusable-outline
+      :data-focusable-outline="interactive || undefined"
       :style="{
         width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
         height: `${rawHeight}px`,
@@ -22,7 +22,7 @@
       <div class="open-strings-wrapper" :style="{ height: `${activeTopOffset}px` }">
         <template v-if="showOpenStrings">
           <button
-            v-wave
+            v-wave="{ disabled: !interactive }"
             v-memo="[
               str.fret,
               str.preferFlat,
@@ -219,8 +219,9 @@ const openStringAriaLabels = computed(() => {
   }
 
   &.is-disabled {
-    pointer-events: none;
+    pointer-events: none !important;
     cursor: default;
+    outline: none !important;
   }
 }
 

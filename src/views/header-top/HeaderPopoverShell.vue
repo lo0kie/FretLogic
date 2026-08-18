@@ -137,8 +137,8 @@ const handleFocusOut = (e: FocusEvent) => {
   z-index: 1100;
   box-sizing: border-box;
   outline: none;
-  backdrop-filter: blur(40px) saturate(200%);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
 }
 
 .fade-scale-transition(dropdown-fade, ~'0, -6px', 0.96);

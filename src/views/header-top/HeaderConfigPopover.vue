@@ -8,6 +8,7 @@
           :model-value="editorStore.draftChord.fretCount"
           @update:model-value="editorStore.setFretCount"
           :options="FRET_OPTIONS"
+          :disabled="!isGlobalEditable"
         />
       </div>
     </div>
@@ -18,9 +19,10 @@
         <BaseNumberInput
           v-model="editorStore.draftChord.capo"
           :min="0"
-          :max="11"
+          :max="INTERACTION_CONFIG.MAX_CAPO_LIMIT"
           :formatter="val => (val === 0 ? 'CAPO 0' : `CAPO ${val}`)"
           :editable="false"
+          :disabled="!isGlobalEditable"
         />
       </div>
     </div>
@@ -34,12 +36,13 @@
           :default-value="TuningEnum.STANDARD"
           :formatter="val => TUNING_PRESETS[val]?.name || TuningEnum.STANDARD"
           width="full"
+          :disabled="!isGlobalEditable"
         />
       </div>
     </div>
 
     <div class="config-row">
-      <ActionButton variant="subtle" primary width="100%" @click="handleRepairData">
+      <ActionButton variant="subtle" primary width="100%" @click="handleRepairData" :disabled="!isGlobalEditable">
         <template #prefix><Wrench :size="13" stroke-width="2.5" /></template>
         修复与对齐数据
       </ActionButton>
@@ -52,9 +55,10 @@ import ActionButton from '@/components/ActionButton.vue';
 import BaseNumberInput from '@/components/BaseNumberInput.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
-import { FRET_COUNTS } from '@/constants';
+import { FRET_COUNTS, INTERACTION_CONFIG } from '@/constants';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
+import { isGlobalEditable } from '@/stores/globalState.ts';
 import { useUiStore } from '@/stores/uiStore';
 import { TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
 import { Wrench } from '@lucide/vue';

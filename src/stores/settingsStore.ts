@@ -1,10 +1,8 @@
 import { STORAGE_KEYS } from '@/constants';
-import { useDark, useStorage } from '@vueuse/core';
+import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
 export const useSettingsStore = defineStore('settings', () => {
-  const isDarkMode = useDark({ attribute: 'class', valueDark: 'dark', valueLight: '', initialValue: 'auto' });
-
   const githubToken = useStorage(STORAGE_KEYS.GH_TOKEN, '');
   const githubOwner = useStorage(STORAGE_KEYS.GH_OWNER, '');
   const githubRepo = useStorage(STORAGE_KEYS.GH_REPO, '');
@@ -12,7 +10,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const githubPath = useStorage(STORAGE_KEYS.GH_PATH, 'backup/chords.json');
 
   return {
-    isDarkMode,
     githubToken,
     githubOwner,
     githubRepo,

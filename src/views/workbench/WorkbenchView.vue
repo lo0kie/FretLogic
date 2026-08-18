@@ -76,7 +76,6 @@ const uiStore = useUiStore();
   min-width: 13.8rem;
   pointer-events: auto;
   z-index: 10;
-  max-height: calc(100% - 3.5rem - 6.15rem);
   overflow-y: auto;
 }
 

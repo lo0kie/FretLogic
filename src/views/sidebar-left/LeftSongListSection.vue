@@ -53,7 +53,7 @@
                   :aria-label="`变调夹 capo ${song.capo} 品`"
                   width="2.8rem"
                 >
-                  capo {{ song.capo }}
+                  Capo {{ song.capo }}
                 </BaseBadge>
               </div>
             </div>
@@ -75,6 +75,7 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
 import { Eraser, Music, SlidersHorizontal, Trash2 } from '@lucide/vue';
+import { computed, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 
 const emit = defineEmits<{
@@ -93,39 +94,63 @@ const { handleKeydown, setItemRef } = useGridNavigation(1, () => songStore.songs
 
 const isSongActive = (songId: string) => scoreEditor.activeSongId === songId;
 
-const getSongMenuItems = (song: Song): ContextMenuItem[] => [
-  {
-    label: '乐谱配置',
-    icon: SlidersHorizontal,
-    action: () => emit('open-config', song),
-  },
-  {
-    label: '清除和弦',
-    icon: Eraser,
-    action: () => emit('open-clear', song),
-    disabled: scoreEditor.activeSong?.id !== song.id,
-    title: '请先加载乐谱',
-  },
-  {
-    label: '删除乐谱',
-    icon: Trash2,
-    danger: true,
-    action: () => {
-      if (scoreEditor.activeSongId === song.id) {
-        scoreEditor.setActiveSong(null);
-      }
-      songStore.deleteSong(song.id);
-      uiStore.toast.info(`已删除乐谱 "${song.title}"`, {
-        actionText: '撤销',
-        duration: 4000,
-        onAction: () => {
-          songStore.undoDeleteSong();
-          uiStore.toast.success('已恢复刚才删除的乐谱');
-        },
-      });
+// 按 songId 缓存 items；「清除和弦」的 disabled 依赖当前激活乐谱，签名需包含 activeSongId。
+// 动作执行时再解析最新的 song 对象，避免闭包持有被 overwriteSongs 替换的旧引用
+const songMenuItemsMap = new Map<string, ContextMenuItem[]>();
+const songStateSignature = computed(
+  () => songStore.songs.map(s => s.id).join('\u0000') + '|' + String(scoreEditor.activeSongId)
+);
+watch(songStateSignature, () => songMenuItemsMap.clear());
+
+const resolveSong = (songId: string): Song | null => songStore.songs.find(s => s.id === songId) ?? null;
+
+const getSongMenuItems = (song: Song): ContextMenuItem[] => {
+  const cached = songMenuItemsMap.get(song.id);
+  if (cached) return cached;
+  const items: ContextMenuItem[] = [
+    {
+      label: '乐谱配置',
+      icon: SlidersHorizontal,
+      action: () => {
+        const s = resolveSong(song.id);
+        if (s) emit('open-config', s);
+      },
     },
-  },
-];
+    {
+      label: '清除和弦',
+      icon: Eraser,
+      action: () => {
+        const s = resolveSong(song.id);
+        if (s) emit('open-clear', s);
+      },
+      disabled: scoreEditor.activeSong?.id !== song.id,
+      title: '请先加载乐谱',
+    },
+    {
+      label: '删除乐谱',
+      icon: Trash2,
+      danger: true,
+      action: () => {
+        const s = resolveSong(song.id);
+        if (!s) return;
+        if (scoreEditor.activeSongId === s.id) {
+          scoreEditor.setActiveSong(null);
+        }
+        songStore.deleteSong(s.id);
+        uiStore.toast.info(`已删除乐谱 "${s.title}"`, {
+          actionText: '撤销',
+          duration: 4000,
+          onAction: () => {
+            songStore.undoDeleteSong();
+            uiStore.toast.success('已恢复刚才删除的乐谱');
+          },
+        });
+      },
+    },
+  ];
+  songMenuItemsMap.set(song.id, items);
+  return items;
+};
 
 const handleSelectSong = (songId: string) => {
   if (scoreEditor.activeSongId === songId) {

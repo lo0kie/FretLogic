@@ -73,8 +73,9 @@ export const useChordStore = defineStore('chord', () => {
     if (needUpdate) savedChordsList.value = aligned;
   }
 
+  // 每次提交都会克隆整个和弦列表，容量控制在 8 份以限制内存驻留
   const { undo: rawUndo } = useRefHistory(savedChordsList, {
-    capacity: 15,
+    capacity: 8,
     deep: true,
     flush: 'post',
     clone: v => cloneDeep(toRaw(v)),
@@ -254,9 +255,7 @@ export const useChordStore = defineStore('chord', () => {
     savedChordsList.value = savedChordsList.value.filter(c => c.groupId !== groupId);
     groups.value = groups.value.filter(g => g.id !== groupId);
     if (selectedGroupId.value === groupId) {
-      const next = groups.value[0];
-      if (next) selectAndExpandGroup(next.id);
-      else selectedGroupId.value = null;
+      selectedGroupId.value = null;
     }
   };
 

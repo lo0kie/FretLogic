@@ -1,4 +1,5 @@
-﻿import type { Toast, ToastOptions, ToastType } from '@/types';
+﻿import { STORAGE_KEYS } from '@/constants';
+import type { Toast, ToastOptions, ToastType } from '@/types';
 import { useMediaQuery, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
@@ -7,7 +8,7 @@ export const useUiStore = defineStore('ui', () => {
   const toasts = ref<Toast[]>([]);
   const isMobile = useMediaQuery('(max-width: 768px)');
   const isCopying = ref(false);
-  const isLeftOpen = useStorage('CHORD_LAB_UI_LEFT_OPEN', true);
+  const isLeftOpen = useStorage(STORAGE_KEYS.UI_LEFT_OPEN, true);
   const timersMap = new Map<number, ReturnType<typeof setTimeout>>();
   const activeExportTarget = shallowRef<HTMLElement | null>(null);
 
@@ -40,7 +41,7 @@ export const useUiStore = defineStore('ui', () => {
       const startedAt = startedAtMap.get(id) ?? Date.now();
       const total = remainingMap.get(id) ?? 3000;
       const elapsed = Date.now() - startedAt;
-      remainingMap.set(id, Math.max(0, total - elapsed)); // 记下还剩多少
+      remainingMap.set(id, Math.max(0, total - elapsed));
     });
     timersMap.clear();
   };
@@ -70,6 +71,7 @@ export const useUiStore = defineStore('ui', () => {
       actionText: options.actionText || '确定',
       onAction: options.onAction,
       duration,
+      closable: options.closable ?? true,
     });
 
     if (type !== 'loading') {

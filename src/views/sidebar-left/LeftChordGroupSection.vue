@@ -109,7 +109,7 @@ import { useChordStore } from '@/stores/chordStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
 import { ArrowUpDown, ChevronDown, FolderOpen, SquarePen, Trash2 } from '@lucide/vue';
-import { computed, useTemplateRef, type ComponentPublicInstance } from 'vue';
+import { computed, useTemplateRef, watch, type ComponentPublicInstance } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import LeftChordGroupContent from './LeftChordGroupContent.vue';
 
@@ -198,24 +198,47 @@ const handleLocalDeleteChord = (chord: Chord) => {
   if (isEditingCurrent) editorStore.resetEditor();
 };
 
-const getGroupMenuItems = (group: Group): ContextMenuItem[] => [
-  {
-    label: '修改名称',
-    icon: SquarePen,
-    action: () => emit('open-rename', group),
-  },
-  {
-    label: '和弦排序',
-    icon: ArrowUpDown,
-    action: () => emit('open-sort', group),
-  },
-  {
-    label: '删除分组',
-    icon: Trash2,
-    danger: true,
-    action: () => emit('open-delete', group),
-  },
-];
+// 按 groupId 缓存 items，动作执行时再解析最新的 group 对象；
+// 分组集合变化时清缓存，避免残留已删除分组的条目
+const groupMenuItemsMap = new Map<string, ContextMenuItem[]>();
+const groupIdsSignature = computed(() => chordStore.groups.map(g => g.id).join('\u0000'));
+watch(groupIdsSignature, () => groupMenuItemsMap.clear());
+
+const resolveGroup = (groupId: string): Group | null => chordStore.groups.find(g => g.id === groupId) ?? null;
+
+const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
+  const cached = groupMenuItemsMap.get(group.id);
+  if (cached) return cached;
+  const items: ContextMenuItem[] = [
+    {
+      label: '修改名称',
+      icon: SquarePen,
+      action: () => {
+        const g = resolveGroup(group.id);
+        if (g) emit('open-rename', g);
+      },
+    },
+    {
+      label: '和弦排序',
+      icon: ArrowUpDown,
+      action: () => {
+        const g = resolveGroup(group.id);
+        if (g) emit('open-sort', g);
+      },
+    },
+    {
+      label: '删除分组',
+      icon: Trash2,
+      danger: true,
+      action: () => {
+        const g = resolveGroup(group.id);
+        if (g) emit('open-delete', g);
+      },
+    },
+  ];
+  groupMenuItemsMap.set(group.id, items);
+  return items;
+};
 </script>
 
 <style scoped lang="less">

@@ -146,8 +146,18 @@ export function useGridNavigation(
         break;
       }
 
-      // 2. 上下按固定列数或基于真实视觉空间寻找最近节点
+      // 2. 上下导航：单列直接线性取相邻项（避免空间扫描的 O(n) 布局读取）；
+      //    多列优先固定列距，退化为真实视觉空间寻找最近节点
       case 'ArrowUp': {
+        if (cols === 1) {
+          for (let idx = currentIndex - 1; idx >= 0; idx--) {
+            if (entries[idx].eligible) {
+              nextIndex = idx;
+              break;
+            }
+          }
+          break;
+        }
         if (cols && cols > 1) {
           const targetIdx = currentIndex - cols;
           if (targetIdx >= 0 && entries[targetIdx]?.eligible) {
@@ -160,6 +170,15 @@ export function useGridNavigation(
       }
 
       case 'ArrowDown': {
+        if (cols === 1) {
+          for (let idx = currentIndex + 1; idx < total; idx++) {
+            if (entries[idx].eligible) {
+              nextIndex = idx;
+              break;
+            }
+          }
+          break;
+        }
         if (cols && cols > 1) {
           const targetIdx = currentIndex + cols;
           if (targetIdx < total && entries[targetIdx]?.eligible) {

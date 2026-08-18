@@ -1,6 +1,6 @@
 import { A4_CONTENT_HEIGHT, A4_CONTENT_WIDTH, A4_HEIGHT_PX, A4_WIDTH_PX } from '@/constants/print';
+import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { canvasToBlob, renderElementToCanvas, writeBlobToClipboard } from '@/utils/domExporter';
 import { paginateLinesByHeight } from '@/utils/paginateLines';
@@ -9,13 +9,13 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Ref }
 export type ExportMode = 'normal' | 'a4';
 
 export interface PreviewPage {
-  canvas: HTMLCanvasElement;
+  /** 仅刚生成时持有；从缓存恢复的页面为 null，复制时按需从 blob 解码 */
+  canvas: HTMLCanvasElement | null;
   blob: Blob;
   objectUrl: string;
 }
 
 interface CachedPreviewPage {
-  canvas: HTMLCanvasElement;
   blob: Blob;
 }
 
@@ -30,7 +30,6 @@ export function useScoreExportPreview(
   exportPageLineSet: Ref<Set<number>>,
   a4WrapperRef: Ref<HTMLElement | null>
 ) {
-  const settingStore = useSettingsStore();
   const uiStore = useUiStore();
   const scoreEditor = useScoreEditorStore();
   const progress = ref(0);
@@ -82,7 +81,7 @@ export function useScoreExportPreview(
 
   const restoreCachedPages = async (cache: PreviewCache) => {
     const nextPages = cache.pages.map(page => ({
-      canvas: page.canvas,
+      canvas: null,
       blob: page.blob,
       objectUrl: URL.createObjectURL(page.blob),
     }));
@@ -108,10 +107,10 @@ export function useScoreExportPreview(
   };
 
   const saveCurrentPagesToCache = (cacheKey: string) => {
+    // 只缓存 blob：全分辨率 canvas 每页可达十几 MB，双模式常驻会吃掉上百 MB 内存
     previewCache[mode.value] = {
       key: cacheKey,
       pages: pages.value.map(page => ({
-        canvas: page.canvas,
         blob: page.blob,
       })),
     };
@@ -126,7 +125,7 @@ export function useScoreExportPreview(
     const container = uiStore.activeExportTarget!;
     const paddingX = 80;
     const paddingY = 100;
-    const bgColor = settingStore.isDarkMode ? '#18181a' : '#f2f2f7';
+    const bgColor = globalDarkMode.value ? '#18181a' : '#f2f2f7';
     exportPageLineSet.value = new Set(sortedSelectedIndices.value);
     await nextTick();
     await waitForPaint();
@@ -180,9 +179,7 @@ export function useScoreExportPreview(
     const container = uiStore.activeExportTarget!;
     const wrapper = a4WrapperRef.value;
     if (!wrapper) return;
-    const bgColor = settingStore.isDarkMode ? '#18181a' : '#f2f2f7';
-    const originalFontScale = scoreEditor.fontScale;
-    const originalFretboardScale = scoreEditor.fretboardScale;
+    const bgColor = globalDarkMode.value ? '#18181a' : '#f2f2f7';
     exportPageLineSet.value = new Set(sortedSelectedIndices.value);
     await nextTick();
     await waitForPaint();
@@ -193,8 +190,8 @@ export function useScoreExportPreview(
     });
     if (metaHeaderRef.value) naturalMaxWidth = Math.max(naturalMaxWidth, metaHeaderRef.value.scrollWidth);
     const fitScale = Math.min(1, A4_CONTENT_WIDTH / Math.max(naturalMaxWidth, 1));
-    scoreEditor.fontScale = originalFontScale * fitScale;
-    scoreEditor.fretboardScale = originalFretboardScale * fitScale;
+    // 用非持久化倍率适配宽度，不再临时改写用户的缩放设置（也不会刷进 localStorage）
+    scoreEditor.exportScaleMultiplier = fitScale;
     await nextTick();
     await waitForPaint();
     const scaledHeights = new Map<number, number>();
@@ -229,8 +226,7 @@ export function useScoreExportPreview(
       }
     } finally {
       wrapper.classList.remove('is-a4-capture-mode');
-      scoreEditor.fontScale = originalFontScale;
-      scoreEditor.fretboardScale = originalFretboardScale;
+      scoreEditor.exportScaleMultiplier = 1;
       if (metaHeaderRef.value) metaHeaderRef.value.style.display = '';
     }
   };
@@ -273,13 +269,24 @@ export function useScoreExportPreview(
     }
   };
 
+  const decodeBlobToCanvas = async (blob: Blob): Promise<HTMLCanvasElement> => {
+    const bmp = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    canvas.getContext('2d')!.drawImage(bmp, 0, 0);
+    bmp.close();
+    return canvas;
+  };
+
   const copyCurrentPage = async () => {
     const page = currentPage.value;
     if (!page) {
       return;
     }
     try {
-      const pngBlob = await canvasToBlob(page.canvas, 'image/png');
+      const source = page.canvas ?? (await decodeBlobToCanvas(page.blob));
+      const pngBlob = await canvasToBlob(source, 'image/png');
       await writeBlobToClipboard(pngBlob);
       uiStore.toast.success(
         pages.value.length > 1 ? `已复制第 ${currentPageIndex.value + 1} 页图片` : '已成功复制至系统剪贴板'
@@ -338,7 +345,7 @@ export function useScoreExportPreview(
 
   watch(mode, generatePreview);
   watch(
-    () => settingStore.isDarkMode,
+    () => globalDarkMode.value,
     () => {
       previewCache.normal = null;
       previewCache.a4 = null;

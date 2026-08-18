@@ -1,6 +1,6 @@
 <template>
   <Transition name="floating-bar-fade">
-    <div v-if="!isPristine" class="floating-action-bar" :style="{ bottom: barBottomPosition }">
+    <div v-if="!isPristine && isGlobalEditable" class="floating-action-bar" :style="{ bottom: barBottomPosition }">
       <ActionButton size="md" variant="ghost" :disabled="isPristine" @click="editorStore.resetEditor">
         {{ editorStore.isEditing ? '放弃修改' : '重置指板' }}
       </ActionButton>
@@ -30,6 +30,7 @@
 import ActionButton from '@/components/ActionButton.vue';
 import { useChordActions } from '@/services/useChordActions';
 import { useEditorStore } from '@/stores/chordEditorStore';
+import { isGlobalEditable } from '@/stores/globalState';
 import { useUiStore } from '@/stores/uiStore';
 import { computed } from 'vue';
 
@@ -75,8 +76,8 @@ const isSaveDisabled = computed(() => {
   gap: 0.5rem;
   padding: 0.4rem 0.5rem;
   background-color: var(--bg-panel);
-  backdrop-filter: blur(40px) saturate(200%);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
   border: 1px solid var(--glass-border);
   border-radius: 9999px;
   box-shadow: @shadow-floating;

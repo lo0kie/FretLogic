@@ -73,7 +73,8 @@ const EXACT_INTERVAL_MAP: Record<number, string> = {
   11: '7',
 };
 
-const analysis = computed(() => {
+// 图分析只依赖指板音（strings/capo/调音），与和弦名无关——名字输入时不重算
+const graphAnalysis = computed(() => {
   const strings = editorStore.draftChord.strings;
   const capo = editorStore.draftChord.capo;
   const baseStrings = editorStore.activeBaseStrings;
@@ -95,10 +96,19 @@ const analysis = computed(() => {
   });
 
   if (rawNotes.length === 0) {
-    return { notes: [], candidates: [] };
+    return null;
   }
 
   const { candidates, bestRootPitch } = analyzeChordGraph(rawNotes, explicitRootPitch);
+  return { strings, capo, baseStrings, rawNotes, candidates, bestRootPitch };
+});
+
+// 仅依赖和弦名的轻链路：输入名字时只重算选中候选与音级映射
+const analysis = computed(() => {
+  const graph = graphAnalysis.value;
+  if (!graph) return { notes: [] as RenderNoteItem[], candidates: [] as CandidateResult[] };
+
+  const { strings, capo, baseStrings, rawNotes, candidates, bestRootPitch } = graph;
   const selectedCandidate = candidates.find(c => c.chordName === editorStore.draftChord.chordName);
   const activeRootPitch = selectedCandidate ? selectedCandidate.rootPitch : bestRootPitch;
 
@@ -180,8 +190,8 @@ const handleSetRootString = (stringIndex: number) => {
   max-height: calc(100vh - 5rem);
   padding: 0.9rem;
   background-color: var(--bg-panel);
-  backdrop-filter: blur(40px) saturate(200%);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
   border: 1px solid var(--glass-border);
   border-radius: @radius-lg;
   display: flex;
@@ -232,6 +242,9 @@ const handleSetRootString = (stringIndex: number) => {
   flex-direction: column;
   gap: 0.65rem;
   width: 100%;
+  min-height: 0;   // 允许 flex item 正常收缩
+  flex: 1;
+  overflow-y: auto; // 视口不足时内部出现平滑滚动条，避免被砍脚
 }
 
 @media (max-width: 768px) {

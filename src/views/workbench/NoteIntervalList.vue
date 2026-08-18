@@ -1,7 +1,7 @@
 <template>
   <div class="section-block is-grow notes-section">
     <div class="section-label">构成音 (低音 ➔ 高音)</div>
-    <div class="notes-list" ref="containerRef">
+    <div class="notes-list no-scrollbar" ref="containerRef">
       <div
         v-wave
         v-for="note in notes"
@@ -74,6 +74,8 @@ defineExpose({ height });
   &.is-grow {
     flex: 1;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 }
 
@@ -89,16 +91,16 @@ defineExpose({ height });
 .notes-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  overflow: visible;
+  gap: 0.35rem;     // 适度缩小间距（原 0.5rem 偏大）
+  overflow-y: auto; // 允许内部滚动
   flex: 1;
+  min-height: 0;
 }
 
 .note-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 2.1rem;
   padding: 0 0.75rem;
   border-radius: @radius-md;
   background-color: var(--bg-body);
@@ -107,6 +109,10 @@ defineExpose({ height });
   box-sizing: border-box;
   cursor: default;
   user-select: none;
+  min-height: 1.85rem; // 将固定 height 改为 min-height
+  height: auto;
+  padding: 0.25rem 0.65rem;
+  flex-shrink: 0;
 
   &:hover {
     border-color: var(--border-base);

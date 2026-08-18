@@ -1,6 +1,6 @@
 <template>
   <div class="chord-content-outer" :class="{ 'is-open': isOpen }" :aria-hidden="!isOpen" :inert="!isOpen">
-    <div class="chord-content-inner" v-auto-animate @contextmenu.stop>
+    <div class="chord-content-inner" @contextmenu.stop>
       <div
         v-if="groupedCards.length > 0"
         ref="gridContainerRef"

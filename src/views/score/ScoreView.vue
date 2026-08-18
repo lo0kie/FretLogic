@@ -55,7 +55,7 @@ import { useScoreLinesData } from '@/services/useScoreLinesData.ts';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
-import { computed, ref, useTemplateRef, watch } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
 import ChordPickerModal from './ChordPickerModal.vue';
 import ScoreExportFloatingBar from './ScoreExportFloatingBar.vue';
 import ScoreExportPreviewModal from './ScoreExportPreviewModal.vue';
@@ -113,7 +113,9 @@ const openChordPicker = (slotKey: string | number) => {
   isPickerOpen.value = true;
 };
 
-useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+// KeepAlive 缓存页面：仅在本页激活时拦截 Ctrl+Z / Ctrl+Y，切走后移除监听
+let stopUndoKeydown: (() => void) | null = null;
+const handleUndoKeydown = (e: KeyboardEvent) => {
   if (!scoreEditor.activeSong) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
     e.preventDefault();
@@ -122,6 +124,19 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
     e.preventDefault();
     scoreEditor.redo();
   }
+};
+onActivated(() => {
+  if (!stopUndoKeydown) {
+    stopUndoKeydown = useEventListener(window, 'keydown', handleUndoKeydown);
+  }
+});
+onDeactivated(() => {
+  stopUndoKeydown?.();
+  stopUndoKeydown = null;
+});
+onBeforeUnmount(() => {
+  stopUndoKeydown?.();
+  stopUndoKeydown = null;
 });
 </script>
 <style scoped lang="less">

@@ -6,6 +6,7 @@ export interface ToastOptions {
   actionText?: string;
   onAction?: () => void;
   duration?: number;
+  closable?: boolean;
 }
 
 export interface Toast {
@@ -16,6 +17,7 @@ export interface Toast {
   actionText: string;
   onAction?: () => void;
   duration: number;
+  closable?: boolean;
 }
 
 export interface ContextMenuItem {

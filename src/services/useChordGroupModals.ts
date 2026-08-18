@@ -5,7 +5,6 @@ import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/types';
-import { cloneDeep } from '@/utils/cloneDeep';
 import { reactive } from 'vue';
 
 export function useChordGroupModals() {
@@ -83,9 +82,9 @@ export function useChordGroupModals() {
     if (!modalData.activeGroup) return;
     const targetGid = modalData.activeGroup.id;
     const groupName = modalData.activeGroup.name;
-    const groupsSnapshot = cloneDeep(chordStore.groups);
-    const chordsSnapshot = cloneDeep(chordStore.savedChordsList);
-    const songsSnapshot = cloneDeep(songStore.songs);
+    // 分组对象是扁平结构，浅拷贝即可作为撤销快照；和弦列表走 chordStore 自身的撤销历史；
+    // 歌曲侧只记录被解绑的槽位绑定，避免全库 cloneDeep
+    const groupsSnapshot = chordStore.groups.map(g => ({ ...g }));
 
     if (editorStore.isEditing && editorStore.draftChord.groupId === targetGid) {
       editorStore.resetEditor();
@@ -98,7 +97,7 @@ export function useChordGroupModals() {
     );
 
     chordStore.deleteGroup(targetGid);
-    songStore.unbindChordIds(targetChordIds);
+    const removedBindings = songStore.unbindChordIds(targetChordIds);
 
     modals.delete = false;
     uiStore.toast.info(`已删除分组 "${groupName}"`, {
@@ -106,8 +105,8 @@ export function useChordGroupModals() {
       duration: 4000,
       onAction: () => {
         chordStore.overwriteGroups(groupsSnapshot);
-        chordStore.overwriteChords(chordsSnapshot);
-        songStore.overwriteSongs(songsSnapshot);
+        chordStore.executeUndoRestore();
+        songStore.restoreChordBindings(removedBindings);
         chordStore.selectedGroupId = targetGid;
         uiStore.toast.success(`已恢复分组 "${groupName}"`);
       },

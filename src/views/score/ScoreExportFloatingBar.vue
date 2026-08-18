@@ -100,7 +100,6 @@ const handleWheelScroll = (e: WheelEvent) => {
 
 .score-floating-bar {
   display: flex;
-  align-items: center;
   position: fixed;
   left: 50%;
   bottom: 1.8rem;
@@ -110,8 +109,8 @@ const handleWheelScroll = (e: WheelEvent) => {
   gap: 0.6rem;
   padding: 0.4rem 0.8rem;
   background-color: var(--bg-panel);
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--glass-border);
   border-radius: 9999px;
   box-shadow: @shadow-floating;

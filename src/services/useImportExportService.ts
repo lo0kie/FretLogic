@@ -3,7 +3,6 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { buildSanitizedBackupPayload } from '@/utils/buildSanitizedBackupPayload';
-import { cloneDeep } from '@/utils/cloneDeep';
 import { wait } from '@/utils/domExporter';
 import { validateImportExportPayload } from '@/utils/validatePayload';
 
@@ -12,13 +11,13 @@ export function useImportExportService() {
   const songStore = useSongStore();
   const uiStore = useUiStore();
 
-  /** 清洗后的 payload 全量覆盖本地 */
+  /** 清洗后的 payload 全量覆盖本地（入参是 validateImportExportPayload 的全新对象图，可直接接管） */
   const applyFullOverwrite = (data: ImportExportPayload) => {
     chordStore.replaceAllData({
-      groups: cloneDeep(data.groups ?? []),
-      chords: cloneDeep(data.chords ?? []),
+      groups: data.groups ?? [],
+      chords: data.chords ?? [],
     });
-    const songs = cloneDeep(data.songs ?? []);
+    const songs = data.songs ?? [];
     songStore.overwriteSongs(songs);
     chordStore.selectedGroupId = null;
   };
