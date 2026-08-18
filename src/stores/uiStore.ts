@@ -71,6 +71,7 @@ export const useUiStore = defineStore('ui', () => {
       actionText: options.actionText || '确定',
       onAction: options.onAction,
       duration,
+      closable: options.closable ?? true,
     });
 
     if (type !== 'loading') {

@@ -11,7 +11,7 @@
         v-for="item in uiStore.toasts"
         :key="item.id"
         class="toast-item-card"
-        :class="`theme-${item.type}`"
+        :class="[`theme-${item.type}`, { 'has-close': item.closable }]"
         :role="item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'"
         :aria-live="item.type === 'error' || item.type === 'warning' ? 'assertive' : 'polite'"
         :aria-atomic="true"
@@ -32,6 +32,7 @@
         </button>
 
         <button
+          v-if="item.closable"
           v-wave
           type="button"
           @click="uiStore.removeToast(item.id)"
@@ -80,7 +81,7 @@ const handleExecuteAction = (item: Toast) => {
 
 .toast-item-card {
   position: relative;
-  padding: 0.55rem 2rem 0.55rem 0.9rem;
+  padding: 0.55rem 0.9rem;
   border-radius: 9999px;
   font-weight: 600;
   box-shadow: @shadow-lg;
@@ -100,6 +101,10 @@ const handleExecuteAction = (item: Toast) => {
 
   &:focus-within {
     box-shadow: @focus-ring-primary;
+  }
+
+  &.has-close {
+    padding-right: 2rem;
   }
 }
 
@@ -226,10 +231,14 @@ const handleExecuteAction = (item: Toast) => {
   }
 
   .toast-item-card {
-    padding: 0.65rem 2.4rem 0.65rem 1rem;
+    padding: 0.65rem 1rem;
     font-size: 0.85rem;
     width: auto;
     max-width: 100%;
+
+    &.has-close {
+      padding-right: 2.4rem;
+    }
   }
 
   .btn-toast-close {

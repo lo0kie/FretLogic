@@ -147,7 +147,7 @@ import { useUiStore } from '@/stores/uiStore.ts';
 import type { Chord } from '@/types';
 import type { LineData } from '@/utils/scoreLines.ts';
 import { Eraser, FileText, Trash2 } from '@lucide/vue';
-import { computed, onDeactivated, useTemplateRef, watch } from 'vue';
+import { computed, onActivated, onDeactivated, useTemplateRef, watch } from 'vue';
 import ChordSlotCell from './ChordSlotCell.vue';
 
 defineOptions({ name: 'ScoreInteractiveArea' });
@@ -292,6 +292,12 @@ watch(
 watch([() => props.isExporting, () => props.selectedLineSet.size], ([exporting, selectedCount]) => {
   if (exporting || selectedCount > 0) {
     stopAutoScroll();
+  }
+});
+
+onActivated(() => {
+  if (lyricsRef.value) {
+    uiStore.activeExportTarget = lyricsRef.value;
   }
 });
 

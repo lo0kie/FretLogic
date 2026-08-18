@@ -16,6 +16,7 @@
     <slot name="suffix"></slot>
   </button>
 </template>
+
 <script setup lang="ts">
 import { ACTION_BUTTON_DEFAULTS, HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/constants';
 import { Loader2 } from '@lucide/vue';
@@ -79,6 +80,7 @@ const variantClass = computed(() => `variant-${variant}`);
 const sizeClass = computed(() => `size-${size}`);
 const roundedClass = computed(() => `rounded-${rounded}`);
 </script>
+
 <style scoped lang="less">
 @import '@/assets/tokens.module';
 .action-button-base {

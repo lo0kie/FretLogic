@@ -86,7 +86,7 @@ export function useGithubSyncService() {
     let loadingToastId: number | null = null;
     isSyncing.value = true;
     try {
-      loadingToastId = uiStore.toast.loading('正在后台同步到 GitHub...');
+      loadingToastId = uiStore.toast.loading('正在后台同步到 GitHub...', { closable: false });
       const fileSha = await fetchExistingFileSha(ctx.apiUrl, ctx.githubBranch, ctx.headers, controller.signal);
       const body: { message: string; content: string; branch: string; sha?: string } = {
         message: `Auto sync fret-logic data: ${new Date().toLocaleString()}`,
@@ -127,7 +127,7 @@ export function useGithubSyncService() {
     let loadingToastId: number | null = null;
 
     try {
-      loadingToastId = uiStore.toast.loading('正在从云端获取数据...');
+      loadingToastId = uiStore.toast.loading('正在从云端获取数据...', { closable: false });
       const res = await fetch(`${ctx.apiUrl}?ref=${ctx.githubBranch}`, {
         method: 'GET',
         headers: ctx.headers,
