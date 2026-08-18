@@ -53,6 +53,216 @@
   ],
   "chords": [
     {
+      "id": "c_37feaf0b",
+      "chordName": "E",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 6,
+      "groupId": "g_1778079326389",
+      "tuning": "STANDARD",
+      "isInverted": false,
+      "fingerprint": "E:6:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|3_0_0|3_0_0|1_0_0"
+    },
+    {
+      "id": "c_197dffe3",
+      "chordName": "A/B",
+      "strings": [
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 4,
+      "groupId": "g_1778079326389",
+      "tuning": "STANDARD",
+      "isInverted": true,
+      "fingerprint": "A/B:4:3:STANDARD:1:3_0_0|-1_0_0|3_0_1|2_0_0|1_0_0|-1_0_0"
+    },
+    {
+      "id": "c_7820a644",
+      "chordName": "B9",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1778079326389",
+      "tuning": "STANDARD",
+      "isInverted": false,
+      "fingerprint": "B9:0:3:STANDARD:0:-1_0_0|2_0_1|1_0_0|2_0_0|2_0_0|-1_0_0"
+    },
+    {
+      "id": "c_2e830ba5",
+      "chordName": "C#m7/B",
+      "strings": [
+        {
+          "fret": 4,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 4,
+      "capo": 3,
+      "groupId": "g_1778079326389",
+      "tuning": "STANDARD",
+      "isInverted": true,
+      "fingerprint": "C#m7/B:3:4:STANDARD:1:4_0_0|1_0_1|3_0_0|1_0_0|2_0_0|1_0_0"
+    },
+    {
+      "id": "c_ed28b810",
+      "chordName": "G#/C",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 4,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 4,
+      "capo": 0,
+      "groupId": "g_1778079326389",
+      "tuning": "STANDARD",
+      "isInverted": true,
+      "fingerprint": "G#/C:0:4:STANDARD:1:-1_0_0|3_0_0|-1_0_0|1_0_1|4_0_0|-1_0_0"
+    },
+    {
       "id": "c_91cbfdf7",
       "chordName": "A/E",
       "strings": [
@@ -2720,7 +2930,7 @@
         {
           "fret": 3,
           "preferFlat": false,
-          "isRoot": false
+          "isRoot": true
         },
         {
           "fret": 3,
@@ -2737,8 +2947,8 @@
       "capo": 1,
       "groupId": "g_1778079326389",
       "tuning": "STANDARD",
-      "fingerprint": "B/A:1:3:STANDARD:1:-1_0_0|0_0_0|3_0_0|3_0_0|3_0_0|-1_0_0",
-      "isInverted": true
+      "isInverted": true,
+      "fingerprint": "B/A:1:3:STANDARD:1:-1_0_0|0_0_0|3_0_0|3_0_1|3_0_0|-1_0_0"
     },
     {
       "id": "1778150887472",
@@ -3539,48 +3749,6 @@
       "isInverted": false
     },
     {
-      "id": "1778413228516",
-      "chordName": "D/E",
-      "strings": [
-        {
-          "fret": 0,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": -1,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        },
-        {
-          "fret": 3,
-          "preferFlat": false,
-          "isRoot": true
-        },
-        {
-          "fret": 2,
-          "preferFlat": false,
-          "isRoot": false
-        }
-      ],
-      "fretCount": 3,
-      "capo": 0,
-      "groupId": "g_1778079320204",
-      "tuning": "STANDARD",
-      "fingerprint": "D/E:0:3:STANDARD:1:0_0_0|-1_0_0|-1_0_0|2_0_0|3_0_1|2_0_0",
-      "isInverted": true
-    },
-    {
       "id": "1778413193336",
       "chordName": "Bm7",
       "strings": [
@@ -4189,7 +4357,8 @@
         "l_cf3149a5",
         "l_7e0e67ba",
         "l_c22a9715"
-      ]
+      ],
+      "version": 1
     },
     {
       "id": "s_b4274768",
@@ -4234,7 +4403,8 @@
         "l_79ef9eaa",
         "l_5ee2cc98",
         "l_2488bda3"
-      ]
+      ],
+      "version": 1
     },
     {
       "id": "s_0538d78b",
@@ -4271,7 +4441,84 @@
         "l_c2685840",
         "l_9a643812",
         "l_a3db488b"
-      ]
+      ],
+      "version": 1
+    },
+    {
+      "id": "s_f3312ddf",
+      "title": "下一个天亮",
+      "lyrics": "用简单的言语\n解开超载的心\n有些情绪是该说给\n懂的人听\n你的热泪比我激动怜惜\n我发誓要更努力更有勇气\n等下一个天亮\n去上次牵手赏花那里散步好吗\n有些积雪会自己融化\n你的肩膀是我豁达的天堂\n等下一个天亮\n把偷拍我看海的照片送我好吗\n我喜欢我飞舞的头发\n和飘着雨还是眺望的眼光",
+      "key": "G",
+      "playKey": "E",
+      "capo": 3,
+      "chordMap": {
+        "line_l_daf1d120_char_1": "1778151016179",
+        "line_l_daf1d120_char_5": "1778213096852",
+        "line_l_daf1d120_end_0": "c_ed28b810",
+        "line_l_ef408ef0_char_0": "1778150949879",
+        "line_l_ef408ef0_char_5": "c_2e830ba5",
+        "line_l_9bb37724_char_0": "1778503319524",
+        "line_l_9bb37724_char_4": "1778150933265",
+        "line_l_9bb37724_char_6": "1778150949879",
+        "line_l_9bb37724_char_8": "1778150987602",
+        "line_l_9bb37724_char_12": "c_7820a644",
+        "line_l_c6489a30_char_3": "c_7820a644",
+        "line_l_c6489a30_end_0": "1778212445056",
+        "line_l_d98b361a_char_0": "1778503319524",
+        "line_l_d98b361a_char_6": "1778150933265",
+        "line_l_d98b361a_char_9": "1778150949879",
+        "line_l_f3f68888_char_3": "1778150987602",
+        "line_l_f3f68888_char_7": "c_197dffe3",
+        "line_l_f3f68888_char_10": "c_37feaf0b",
+        "line_l_8e850a0f_char_1": "1778151016179",
+        "line_l_9bb37724_end_0": "1778150987602",
+        "line_l_8e850a0f_end_0": "1778150933265",
+        "line_l_125d4f93_char_7": "1778150949879",
+        "line_l_125d4f93_char_11": "c_2e830ba5",
+        "line_l_0f1d6aaa_char_2": "1778503319524",
+        "line_l_0f1d6aaa_char_8": "1778150933265",
+        "line_l_0f1d6aaa_end_0": "1778150949879",
+        "line_l_72a761fe_char_3": "1778150987602",
+        "line_l_72a761fe_char_9": "c_197dffe3",
+        "line_l_711947c9_char_1": "1778151016179",
+        "line_l_711947c9_end_0": "1778150933265",
+        "line_l_37efed14_char_7": "1778150949879",
+        "line_l_37efed14_char_11": "c_2e830ba5",
+        "line_l_ebd2b288_char_2": "1778503319524",
+        "line_l_ebd2b288_char_8": "1778150933265",
+        "line_l_ebd2b288_end_0": "1778150949879",
+        "line_l_64d7c073_char_3": "1778150987602",
+        "line_l_64d7c073_char_6": "c_197dffe3",
+        "line_l_64d7c073_end_0": "1778151016179"
+      },
+      "lineIds": [
+        "l_daf1d120",
+        "l_ef408ef0",
+        "l_9bb37724",
+        "l_c6489a30",
+        "l_d98b361a",
+        "l_f3f68888",
+        "l_8e850a0f",
+        "l_125d4f93",
+        "l_0f1d6aaa",
+        "l_72a761fe",
+        "l_711947c9",
+        "l_37efed14",
+        "l_ebd2b288",
+        "l_64d7c073"
+      ],
+      "version": 50
+    },
+    {
+      "id": "s_d540591d",
+      "title": "太聪明",
+      "lyrics": "",
+      "key": "A#",
+      "playKey": "G",
+      "capo": 3,
+      "chordMap": {},
+      "lineIds": [],
+      "version": 2
     }
   ]
 }
