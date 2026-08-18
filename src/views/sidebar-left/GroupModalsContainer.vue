@@ -72,7 +72,7 @@
         <div class="key-selector-wrapper">
           <BaseSelector
             v-model="groupModals.modalData.sortKey"
-            :options="['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']"
+            :options="KEY_OPTIONS"
             default-value="C"
             :label-formatter="val => `${val} 调`"
             :disabled="groupModals.modalData.sortRule !== 'KEY_DEGREE'"
@@ -129,7 +129,7 @@
               :chord="variant"
               :interactive="false"
               :scale="0.32"
-              :is-dark-mode="settingsStore.isDarkMode"
+              :is-dark-mode="globalDarkMode"
             />
           </div>
         </div>
@@ -159,16 +159,15 @@ import BaseModal from '@/components/BaseModal.vue';
 import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
 import Fretboard from '@/components/Fretboard.vue';
-import { SORT_RULE_CONFIG } from '@/constants';
+import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/constants';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
 import { useChordStore } from '@/stores/chordStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { globalDarkMode } from '@/stores/globalState';
 import { computed } from 'vue';
 
 const props = defineProps<{ groupModals: ReturnType<typeof useChordGroupModals> }>();
 
 const chordStore = useChordStore();
-const settingsStore = useSettingsStore();
 
 const isAllVariantsSelected = computed(() => {
   const variants = props.groupModals.modalData.activeGroupCard?.variants;

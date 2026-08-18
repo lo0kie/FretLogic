@@ -2,6 +2,8 @@ import { generateUUID } from './id';
 import { getEditDistance } from './stringDistance';
 
 const SIMILARITY_THRESHOLD = 0.45;
+// 未匹配行数超过该值时（整段替换/大粘贴），逐对编辑距离的成本失控，直接分配新 id
+const MAX_SIMILAR_MATCH_LINES = 60;
 const createLineId = (): string => 'l_' + generateUUID('', 8);
 
 const matchExactLines = (
@@ -88,6 +90,9 @@ const assignNewIds = (newIds: (string | null)[]): string[] => {
 
 export const matchLineIds = (oldLines: string[], newLines: string[], oldLineIds: string[]): string[] => {
   const { newIds, usedOldIndices } = matchExactLines(oldLines, newLines, oldLineIds);
-  matchSimilarLines(oldLines, newLines, oldLineIds, newIds, usedOldIndices);
+  const unmatchedCount = newIds.reduce((count, id) => (id === null ? count + 1 : count), 0);
+  if (unmatchedCount <= MAX_SIMILAR_MATCH_LINES) {
+    matchSimilarLines(oldLines, newLines, oldLineIds, newIds, usedOldIndices);
+  }
   return assignNewIds(newIds);
 };

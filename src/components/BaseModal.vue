@@ -180,11 +180,10 @@ const handleMaskClick = (e: MouseEvent) => {
   justify-content: center;
   padding: 1rem;
   box-sizing: border-box;
-  background-color: rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  /* 全屏遮罩不做 backdrop-filter：大面积实时模糊在内容滚动/动画时每帧重采样，代价过高 */
+  background-color: rgba(0, 0, 0, 0.32);
   :global(.dark) & {
-    background-color: rgba(0, 0, 0, 0.45);
+    background-color: rgba(0, 0, 0, 0.55);
   }
 }
 .modal-card {

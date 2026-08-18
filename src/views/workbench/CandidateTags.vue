@@ -9,12 +9,12 @@
     >
       <template v-if="candidates.length > 0">
         <BaseBadge
-          v-wave
+          v-wave="{ disabled: !isGlobalEditable }"
           v-for="candidate in candidates"
           :key="candidate.chordName"
           :variant="activeChordName === candidate.chordName ? 'primary' : 'neutral'"
           :appearance="activeChordName === candidate.chordName ? 'filled' : 'subtle'"
-          interactive
+          :interactive="isGlobalEditable"
           class="candidate-badge-item"
           @click="emit('select-candidate', candidate)"
         >
@@ -31,6 +31,7 @@
 import BaseBadge from '@/components/BaseBadge.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import { useGridNavigation } from '@/services/useGridNavigation';
+import { isGlobalEditable } from '@/stores/globalState';
 import type { CandidateResult } from '@/types';
 import { useTemplateRef } from 'vue';
 
@@ -73,10 +74,11 @@ const { handleKeydown } = useGridNavigation(undefined, tagsContainerRef);
   align-items: flex-start;
   align-content: flex-start;
   gap: 0.35rem;
-  max-height: 4.2rem;
+  max-height: 5rem;
   overflow-y: auto;
-  flex-shrink: 0;
   padding: 0.1rem;
+  min-height: 0;
+  flex-shrink: 0;
 }
 
 .candidate-badge-item {

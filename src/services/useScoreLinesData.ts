@@ -4,7 +4,11 @@ import type { Chord } from '@/types';
 import { buildLyricsLinesWithEdges, clearLyricsLineCharsCache, type LineData } from '@/utils/scoreLines';
 import { computed, watch } from 'vue';
 
-export function useScoreLinesData() {
+// 模块级单例：ScoreView 与 ScoreInteractiveArea 共享同一套 computed，
+// 避免 chordsLookupMap / lyricsLinesWithEdges 各自重复构建与双份依赖追踪
+let singleton: ReturnType<typeof buildSingleton> | null = null;
+
+function buildSingleton() {
   const scoreEditor = useScoreEditorStore();
   const chordStore = useChordStore();
 
@@ -34,4 +38,11 @@ export function useScoreLinesData() {
   );
 
   return { lyricsLinesWithEdges, chordsLookupMap };
+}
+
+export function useScoreLinesData() {
+  if (!singleton) {
+    singleton = buildSingleton();
+  }
+  return singleton;
 }

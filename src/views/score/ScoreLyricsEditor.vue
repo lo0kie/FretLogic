@@ -2,6 +2,7 @@
   <div class="lyrics-editor-zone">
     <textarea
       v-model="localLyrics"
+      :readonly="!isGlobalEditable"
       class="lyrics-textarea no-scrollbar"
       placeholder="在此处输入或粘贴歌词文本..."
     ></textarea>
@@ -9,6 +10,7 @@
 </template>
 
 <script setup lang="ts">
+import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useDebounceFn } from '@vueuse/core';
 import { onDeactivated, ref, watch } from 'vue';
@@ -69,8 +71,13 @@ onDeactivated(() => {
   box-sizing: border-box;
   font-family: inherit;
 
-  &:focus {
+  &:focus:not(:read-only) {
     border-color: var(--color-primary);
+  }
+
+  &:read-only {
+    cursor: default;
+    user-select: none;
   }
 }
 </style>

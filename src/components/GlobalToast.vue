@@ -11,7 +11,7 @@
         v-for="item in uiStore.toasts"
         :key="item.id"
         class="toast-item-card"
-        :class="`theme-${item.type}`"
+        :class="[`theme-${item.type}`, { 'has-close': item.closable }]"
         :role="item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'"
         :aria-live="item.type === 'error' || item.type === 'warning' ? 'assertive' : 'polite'"
         :aria-atomic="true"
@@ -32,6 +32,7 @@
         </button>
 
         <button
+          v-if="item.closable"
           v-wave
           type="button"
           @click="uiStore.removeToast(item.id)"
@@ -80,7 +81,7 @@ const handleExecuteAction = (item: Toast) => {
 
 .toast-item-card {
   position: relative;
-  padding: 0.55rem 2rem 0.55rem 0.9rem;
+  padding: 0.55rem 0.9rem;
   border-radius: 9999px;
   font-weight: 600;
   box-shadow: @shadow-lg;
@@ -89,17 +90,21 @@ const handleExecuteAction = (item: Toast) => {
   gap: 0.5rem;
   font-size: 0.75rem;
   pointer-events: auto;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   box-sizing: border-box;
-  transition: all @duration-base @bezier-standard;
+  transition:
+    transform @duration-base @bezier-standard,
+    opacity @duration-base @bezier-standard;
   white-space: nowrap;
   flex-shrink: 0;
   outline: none;
 
   &:focus-within {
     box-shadow: @focus-ring-primary;
+  }
+
+  &.has-close {
+    padding-right: 2rem;
   }
 }
 
@@ -169,23 +174,24 @@ const handleExecuteAction = (item: Toast) => {
   }
 }
 
+/* 去 blur 后背景需不透明：用主题色向面板色混合（82% 面板 + 18% 主题色）保证文字可读 */
 .theme-success {
-  background-color: color-mix(in srgb, var(--color-success), transparent 85%);
+  background-color: color-mix(in srgb, var(--color-success), var(--bg-panel) 82%);
   color: var(--color-success);
 }
 
 .theme-error {
-  background-color: color-mix(in srgb, var(--color-danger), transparent 85%);
+  background-color: color-mix(in srgb, var(--color-danger), var(--bg-panel) 82%);
   color: var(--color-danger);
 }
 
 .theme-warning {
-  background-color: color-mix(in srgb, var(--color-warning), transparent 85%);
+  background-color: color-mix(in srgb, var(--color-warning), var(--bg-panel) 82%);
   color: var(--color-warning);
 }
 
 .theme-loading {
-  background-color: color-mix(in srgb, var(--color-primary), transparent 85%);
+  background-color: color-mix(in srgb, var(--color-primary), var(--bg-panel) 82%);
   color: var(--color-primary);
 }
 
@@ -225,10 +231,14 @@ const handleExecuteAction = (item: Toast) => {
   }
 
   .toast-item-card {
-    padding: 0.65rem 2.4rem 0.65rem 1rem;
+    padding: 0.65rem 1rem;
     font-size: 0.85rem;
     width: auto;
     max-width: 100%;
+
+    &.has-close {
+      padding-right: 2.4rem;
+    }
   }
 
   .btn-toast-close {

@@ -132,8 +132,8 @@ const handleFileChange = async (e: Event) => {
   left: 0;
   z-index: 50;
   background-color: var(--bg-panel);
-  backdrop-filter: blur(32px) saturate(180%);
-  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
   border-right: 1px solid var(--glass-border);
   height: 100%;
   display: flex;

@@ -27,19 +27,18 @@
 </template>
 
 <script setup lang="ts">
-import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import TopHeader from '@/views/header-top/TopHeader.vue';
 import { computed, defineAsyncComponent, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import GlobalToast from './components/GlobalToast.vue';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from './constants/layout.ts';
+import { toggleDarkMode } from './stores/globalState.ts';
 
 const SidebarLeft = defineAsyncComponent(() => import('./views/sidebar-left/SidebarLeft.vue'));
 
 const route = useRoute();
 const uiStore = useUiStore();
-const settingsStore = useSettingsStore();
 
 const mainPaddingLeft = computed(() => {
   if (uiStore.isMobile || !uiStore.isLeftOpen || route.meta.overlapSidebar) return '0px';
@@ -58,15 +57,13 @@ const executeToggleThemeWithAnimation = () => {
   };
 
   if (!document.startViewTransition) {
-    settingsStore.isDarkMode = !settingsStore.isDarkMode;
+    toggleDarkMode();
     disableChangingAttribute();
 
     return;
   }
 
-  const transition = document.startViewTransition(() => {
-    settingsStore.isDarkMode = !settingsStore.isDarkMode;
-  });
+  const transition = document.startViewTransition(toggleDarkMode);
 
   transition.finished.then(disableChangingAttribute).catch(disableChangingAttribute);
 };
