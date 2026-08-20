@@ -1,6 +1,7 @@
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
+import { computeChordFingerprint } from '@/utils/musicTheory';
 import { buildLyricsLinesWithEdges, clearLyricsLineCharsCache, type LineData } from '@/utils/scoreLines';
 import { computed, watch } from 'vue';
 
@@ -16,7 +17,7 @@ function buildSingleton() {
     const map = new Map<string, Chord>();
     chordStore.savedChordsList.forEach(c => {
       if (c.id) map.set(c.id, c);
-      if (c.fingerprint) map.set(c.fingerprint, c);
+      map.set(computeChordFingerprint(c), c);
     });
     return map;
   });

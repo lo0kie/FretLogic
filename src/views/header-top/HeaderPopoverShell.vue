@@ -49,7 +49,9 @@ defineProps<{ tooltip: string }>();
 const isOpen = ref(false);
 const triggerBtnRef = useTemplateRef<ComponentPublicInstance>('triggerBtnRef');
 
-const { captureTrigger, restoreFocusAfter } = useFocusReturn({ warnLabel: '[GlobalConfigPopover]' });
+const { captureTrigger, restoreFocusAfter } = useFocusReturn({
+  warnLabel: '[GlobalConfigPopover]',
+});
 
 const getTriggerEl = () => triggerBtnRef.value?.$el as HTMLElement | undefined;
 

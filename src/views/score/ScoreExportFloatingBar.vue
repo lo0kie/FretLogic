@@ -85,7 +85,9 @@ const emit = defineEmits<{
 }>();
 
 const scrollContainerRef = useTemplateRef<HTMLElement>('scrollContainerRef');
-const includeMetaBar = defineModel<boolean>('includeMetaBar', { default: true });
+const includeMetaBar = defineModel<boolean>('includeMetaBar', {
+  default: true,
+});
 
 const handleWheelScroll = (e: WheelEvent) => {
   if (!scrollContainerRef.value) return;

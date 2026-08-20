@@ -91,7 +91,7 @@ defineExpose({ height });
 .notes-list {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;     // 适度缩小间距（原 0.5rem 偏大）
+  gap: 0.35rem; // 适度缩小间距（原 0.5rem 偏大）
   overflow-y: auto; // 允许内部滚动
   flex: 1;
   min-height: 0;

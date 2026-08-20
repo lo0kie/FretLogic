@@ -138,8 +138,4 @@ const isPushConfigComplete = computed(() => {
   gap: 0.4rem;
   box-sizing: border-box;
 }
-
-.full-width-tooltip {
-  width: 100%;
-}
 </style>

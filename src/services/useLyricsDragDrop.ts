@@ -5,15 +5,15 @@ import { onBeforeUnmount, ref, type ComponentPublicInstance, type Ref } from 'vu
 
 export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) {
   const scoreEditor = useScoreEditorStore();
-  const draggingSlotKey = ref<string | number | null>(null);
-  const dragOverSlotKey = ref<string | number | null>(null);
+  const draggingSlotKey = ref<string | null>(null);
+  const dragOverSlotKey = ref<string | null>(null);
   const isDragging = ref(false);
   const ghostChordName = ref('');
   let wasDraggingInSession = false;
 
   let startPointer = { x: 0, y: 0, pointerId: -1, pointerType: '' };
   let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-  let activeSourceKey: string | number | null = null;
+  let activeSourceKey: string | null = null;
   let activeChord: Chord | null = null;
   let autoScrollRafId: number | null = null;
   let currentPointerPos = { x: 0, y: 0 };
@@ -113,13 +113,12 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   // ---- 拖拽高亮走原生 class 切换 ----
   // dragOverSlotKey/draggingSlotKey 已从行级 v-memo 依赖中移除，
   // 跨槽位边界时若走 Vue 渲染会让所有行重渲染；直接操作 DOM 零渲染开销
-  let currentDropKey: string | number | null = null;
-  let sourceKey: string | number | null = null;
+  let currentDropKey: string | null = null;
+  let sourceKey: string | null = null;
 
-  const findSlotEls = (key: string | number) =>
-    document.querySelectorAll<HTMLElement>(`[data-slot-key="${CSS.escape(String(key))}"]`);
+  const findSlotEls = (key: string) => document.querySelectorAll<HTMLElement>(`[data-slot-key="${CSS.escape(key)}"]`);
 
-  const applyDropHighlight = (key: string | number | null) => {
+  const applyDropHighlight = (key: string | null) => {
     if (key === currentDropKey) return;
     if (currentDropKey !== null) {
       findSlotEls(currentDropKey).forEach(el => el.classList.remove('is-drop-target'));
@@ -130,7 +129,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     }
   };
 
-  const markDragSource = (key: string | number) => {
+  const markDragSource = (key: string) => {
     sourceKey = key;
     findSlotEls(key).forEach(el => el.classList.add('is-dragging-source'));
   };
@@ -153,7 +152,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     pendingDragPos = null;
     if (!pos || !isDragging.value) return;
     if (ghostEl) {
-      ghostEl.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
+      ghostEl.style.transform = `translate3d(${pos.x}px, ${pos.y - 20}px, 0)`;
     }
     updateDropTarget(pos.x, pos.y);
   };
@@ -296,7 +295,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     document.body.classList.remove('is-global-dragging');
   };
 
-  const handlePointerDown = (e: PointerEvent, slotKey: string | number, chord: Chord) => {
+  const handlePointerDown = (e: PointerEvent, slotKey: string, chord: Chord) => {
     if (!isGlobalEditable.value) return;
     if (activeSourceKey !== null) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -319,7 +318,9 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     activeSourceKey = slotKey;
     activeChord = chord;
 
-    window.addEventListener('pointermove', handleGlobalPointerMove, { passive: false });
+    window.addEventListener('pointermove', handleGlobalPointerMove, {
+      passive: false,
+    });
     window.addEventListener('pointerup', handleGlobalPointerUp);
     window.addEventListener('pointercancel', handleGlobalPointerCancel);
     window.addEventListener('contextmenu', preventContextMenu, true);

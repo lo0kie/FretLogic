@@ -1,4 +1,5 @@
 import { useChordStore } from '@/stores/chordStore';
+import { useEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -40,7 +41,9 @@ export function useGithubSyncService() {
       return null;
     }
     const { githubToken, githubOwner, githubRepo, githubBranch, githubPath } = validation.data;
-    const headers: Record<string, string> = { Accept: 'application/vnd.github.v3+json' };
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github.v3+json',
+    };
     if (githubToken) {
       headers['Authorization'] = `Bearer ${githubToken}`;
     }
@@ -57,7 +60,11 @@ export function useGithubSyncService() {
     headers: Record<string, string>,
     signal: AbortSignal
   ): Promise<string> => {
-    const getRes = await fetch(`${apiUrl}?ref=${githubBranch}`, { method: 'GET', headers, signal });
+    const getRes = await fetch(`${apiUrl}?ref=${githubBranch}`, {
+      method: 'GET',
+      headers,
+      signal,
+    });
     if (getRes.ok) {
       const getResJson = await getRes.json();
       return getResJson.sha;
@@ -86,9 +93,16 @@ export function useGithubSyncService() {
     let loadingToastId: number | null = null;
     isSyncing.value = true;
     try {
-      loadingToastId = uiStore.toast.loading('正在后台同步到 GitHub...', { closable: false });
+      loadingToastId = uiStore.toast.loading('正在后台同步到 GitHub...', {
+        closable: false,
+      });
       const fileSha = await fetchExistingFileSha(ctx.apiUrl, ctx.githubBranch, ctx.headers, controller.signal);
-      const body: { message: string; content: string; branch: string; sha?: string } = {
+      const body: {
+        message: string;
+        content: string;
+        branch: string;
+        sha?: string;
+      } = {
         message: `Auto sync fret-logic data: ${new Date().toLocaleString()}`,
         content: Base64.encode(JSON.stringify(payload, null, 2)),
         branch: ctx.githubBranch,
@@ -127,7 +141,9 @@ export function useGithubSyncService() {
     let loadingToastId: number | null = null;
 
     try {
-      loadingToastId = uiStore.toast.loading('正在从云端获取数据...', { closable: false });
+      loadingToastId = uiStore.toast.loading('正在从云端获取数据...', {
+        closable: false,
+      });
       const res = await fetch(`${ctx.apiUrl}?ref=${ctx.githubBranch}`, {
         method: 'GET',
         headers: ctx.headers,
@@ -177,6 +193,8 @@ export function useGithubSyncService() {
     const songs = cloudData.songs ?? [];
     if (cloudData.songs) songStore.overwriteSongs(songs);
     uiStore.toast.success('已使用云端数据完全覆盖本地');
+    // 拉取后清空指板编辑草稿（全部静音），避免残留旧指法
+    useEditorStore().resetEditor();
   };
 
   const triggerGlobalSync = () => {

@@ -1,16 +1,17 @@
 import { STORAGE_KEYS } from '@/constants';
-import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/types';
+import type { Chord, Group, GroupedChordCard } from '@/types';
+import { GroupSortRule } from '@/types';
 import { normalizeChord } from '@/utils/chordMap';
 import { cloneDeep, cloneGuitarStrings } from '@/utils/cloneDeep';
 import { generateUUID } from '@/utils/id';
 import { computeChordFingerprint, computeIsInverted, sortChordsByRule } from '@/utils/musicTheory';
 import { debounceFilter, useEventListener, useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { computed, toRaw } from 'vue';
+import { computed, ref, toRaw } from 'vue';
 
-const DEFAULT_SORT_RULE: GroupSortRule = 'ROOT_PITCH';
+const DEFAULT_SORT_RULE: GroupSortRule = GroupSortRule.ROOT_PITCH;
 
-export type ChordValidationResult =
+type ChordValidationResult =
   | { ok: true; payload: Chord; cleanName: string }
   | {
       ok: false;
@@ -24,8 +25,8 @@ function nameKeyOf(chordName: string): string {
 
 function sortVariants(variants: Chord[]): Chord[] {
   return [...variants].sort((a, b) => {
-    const aInv = a.isInverted ?? false;
-    const bInv = b.isInverted ?? false;
+    const aInv = computeIsInverted(a.strings, a.capo, a.tuning, a.chordName, a.rootStringIndex);
+    const bInv = computeIsInverted(b.strings, b.capo, b.tuning, b.chordName, b.rootStringIndex);
     if (aInv !== bInv) return aInv ? 1 : -1;
     return (a.capo ?? 0) - (b.capo ?? 0);
   });
@@ -49,6 +50,10 @@ export const useChordStore = defineStore('chord', () => {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
   });
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
+  // 只允许同时展开一个分组：单一展开状态为会话级（不持久化），刷新后自动重置为全部折叠
+  const expandedGroupId = ref<string | null>(null);
+  const isGroupCollapsed = (groupId: string): boolean => expandedGroupId.value !== groupId;
+  const isAnyGroupExpanded = computed(() => expandedGroupId.value !== null);
 
   const flushChordsAndGroupsNow = () => {
     try {
@@ -158,7 +163,11 @@ export const useChordStore = defineStore('chord', () => {
 
   const getFilteredChords = (
     groupId: string,
-    options: { searchQuery?: string; sortRule?: GroupSortRule; sortKey?: string } = {}
+    options: {
+      searchQuery?: string;
+      sortRule?: GroupSortRule;
+      sortKey?: string;
+    } = {}
   ): Chord[] => {
     const { searchQuery = '', sortRule, sortKey } = options;
     const q = searchQuery.toLowerCase().trim();
@@ -194,9 +203,7 @@ export const useChordStore = defineStore('chord', () => {
   };
 
   const collapseAllGroups = () => {
-    groups.value.forEach(g => {
-      g.collapsed = true;
-    });
+    expandedGroupId.value = null;
   };
 
   const selectAndExpandGroup = (id: string | null) => {
@@ -205,20 +212,21 @@ export const useChordStore = defineStore('chord', () => {
       selectedGroupId.value = null;
       return;
     }
-    groups.value.forEach(g => {
-      g.collapsed = g.id !== id;
-    });
+    expandedGroupId.value = id;
     selectedGroupId.value = id;
   };
 
   const toggleGroupCollapsed = (groupId: string) => {
     const g = groups.value.find(x => x.id === groupId);
     if (!g) return;
-    if (g.collapsed) {
-      selectAndExpandGroup(groupId);
-    } else {
-      g.collapsed = true;
+    if (expandedGroupId.value === groupId) {
+      // 折叠当前展开的分组
+      expandedGroupId.value = null;
       if (selectedGroupId.value === groupId) selectedGroupId.value = null;
+    } else {
+      // 展开该分组（同时只展开这一个，其余自动折叠）
+      expandedGroupId.value = groupId;
+      selectedGroupId.value = groupId;
     }
   };
 
@@ -226,10 +234,10 @@ export const useChordStore = defineStore('chord', () => {
     const group: Group = {
       id: generateUUID(),
       name,
-      collapsed: false,
       sortRule,
     };
-    groups.value = [...groups.value.map(g => ({ ...g, collapsed: true })), { ...group, collapsed: false }];
+    expandedGroupId.value = group.id;
+    groups.value = [...groups.value, group];
     selectedGroupId.value = group.id;
     return group;
   };
@@ -243,17 +251,21 @@ export const useChordStore = defineStore('chord', () => {
   const updateGroupSort = (groupId: string, sortRule: GroupSortRule, sortKey?: string) => {
     const g = groups.value.find(x => x.id === groupId);
     if (!g) return;
-    const targetKey = sortRule === 'KEY_DEGREE' ? sortKey || g.sortKey || 'C' : g.sortKey;
+    const targetKey = sortRule === GroupSortRule.KEY_DEGREE ? sortKey || g.sortKey || 'C' : undefined;
     if (g.sortRule === sortRule && g.sortKey === targetKey) return;
     g.sortRule = sortRule;
-    if (sortRule === 'KEY_DEGREE') {
+    if (sortRule === GroupSortRule.KEY_DEGREE) {
       g.sortKey = targetKey;
+    } else {
+      // 非 KEY_DEGREE 排序不依赖调性键，清理避免残留
+      g.sortKey = undefined;
     }
   };
 
   const deleteGroup = (groupId: string) => {
     savedChordsList.value = savedChordsList.value.filter(c => c.groupId !== groupId);
     groups.value = groups.value.filter(g => g.id !== groupId);
+    if (expandedGroupId.value === groupId) expandedGroupId.value = null;
     if (selectedGroupId.value === groupId) {
       selectedGroupId.value = null;
     }
@@ -264,8 +276,8 @@ export const useChordStore = defineStore('chord', () => {
     options: { collapseAll?: boolean; clearSelection?: boolean } = {}
   ) => {
     const { collapseAll = true, clearSelection = true } = options;
-    const nextGroups = collapseAll ? data.groups.map(g => ({ ...g, collapsed: true })) : data.groups;
-    groups.value = [...nextGroups];
+    groups.value = [...data.groups];
+    expandedGroupId.value = collapseAll ? null : (data.groups[0]?.id ?? null);
     savedChordsList.value = [...data.chords];
     if (clearSelection) selectedGroupId.value = null;
   };
@@ -328,7 +340,6 @@ export const useChordStore = defineStore('chord', () => {
       recoveryGroup = {
         id: 'g_recovery_' + generateUUID().slice(0, 8),
         name: '已恢复的和弦',
-        collapsed: false,
         sortRule: DEFAULT_SORT_RULE,
       };
       groups.value = [recoveryGroup, ...groups.value];
@@ -338,7 +349,7 @@ export const useChordStore = defineStore('chord', () => {
     });
   };
 
-  const repairFingerprints = (): number => {
+  const repairData = (): number => {
     let repairedCount = 0;
     const repairedList = savedChordsList.value.map(c => {
       const { chord, changed } = normalizeChord(c);
@@ -353,10 +364,12 @@ export const useChordStore = defineStore('chord', () => {
     const targetIds = new Set<string>();
     chords.forEach(c => {
       if (c.id) targetIds.add(c.id);
-      if (c.fingerprint) targetIds.add(c.fingerprint);
+      targetIds.add(computeChordFingerprint(c));
     });
     if (targetIds.size === 0) return targetIds;
-    savedChordsList.value = savedChordsList.value.filter(c => !targetIds.has(c.id) && !targetIds.has(c.fingerprint));
+    savedChordsList.value = savedChordsList.value.filter(
+      c => !targetIds.has(c.id) && !targetIds.has(computeChordFingerprint(c))
+    );
     return targetIds;
   };
 
@@ -390,9 +403,17 @@ export const useChordStore = defineStore('chord', () => {
       : selectedGroupId.value;
 
     const currentStrings = cloneGuitarStrings(draft.strings);
-    const isInvertedState = computeIsInverted(currentStrings, draft.capo, draft.tuning, cleanName);
+    // 根音标记须指向有效且已按音的弦，否则按未指定处理
+    const rootStringIndex =
+      draft.rootStringIndex !== null &&
+      draft.rootStringIndex !== undefined &&
+      draft.rootStringIndex >= 0 &&
+      draft.rootStringIndex < currentStrings.length &&
+      currentStrings[draft.rootStringIndex].fret >= 0
+        ? draft.rootStringIndex
+        : null;
 
-    const rawPayload: Omit<Chord, 'fingerprint'> = {
+    const payload: Chord = {
       id: id || 'c_' + generateUUID().slice(0, 10),
       chordName: cleanName,
       strings: currentStrings,
@@ -400,20 +421,20 @@ export const useChordStore = defineStore('chord', () => {
       capo: draft.capo,
       groupId: targetGroupId,
       tuning: draft.tuning,
-      isInverted: isInvertedState,
+      rootStringIndex,
     };
-    const payload: Chord = { ...rawPayload, fingerprint: computeChordFingerprint(rawPayload) };
+    const fingerprint = computeChordFingerprint(payload);
 
     if (isEditing) {
       const original = savedChordsList.value.find(c => c.id === id);
-      if (original && original.fingerprint === payload.fingerprint) {
+      if (original && computeChordFingerprint(original) === fingerprint) {
         return { ok: false, reason: 'UNCHANGED' };
       }
     }
 
     const isDuplicate = savedChordsList.value.some(
       existing =>
-        existing.id !== id && existing.groupId === payload.groupId && existing.fingerprint === payload.fingerprint
+        existing.id !== id && existing.groupId === payload.groupId && computeChordFingerprint(existing) === fingerprint
     );
     if (isDuplicate) {
       return { ok: false, reason: 'DUPLICATE_FINGERPRINT', cleanName };
@@ -434,6 +455,8 @@ export const useChordStore = defineStore('chord', () => {
     getFilteredChords,
     overwriteChords,
     overwriteGroups,
+    isGroupCollapsed,
+    isAnyGroupExpanded,
     setSelectedGroupId,
     selectAndExpandGroup,
     toggleGroupCollapsed,
@@ -448,7 +471,7 @@ export const useChordStore = defineStore('chord', () => {
     moveChordsToGroup,
     moveVariantsByName,
     executeUndoRestore,
-    repairFingerprints,
+    repairData,
     reorderGroupChords,
     removeChords,
     removeVariantsByName,

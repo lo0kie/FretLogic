@@ -107,7 +107,9 @@
           v-for="variant in groupModals.modalData.activeGroupCard?.variants"
           :key="variant.id"
           class="variant-checkbox-item"
-          :class="{ 'is-selected': groupModals.modalData.selectedVariantIds.has(variant.id) }"
+          :class="{
+            'is-selected': groupModals.modalData.selectedVariantIds.has(variant.id),
+          }"
           @click="groupModals.toggleVariantSelection(variant.id)"
           @keydown.enter.prevent="groupModals.toggleVariantSelection(variant.id)"
           @keydown.space.prevent="groupModals.toggleVariantSelection(variant.id)"
@@ -159,13 +161,15 @@ import BaseModal from '@/components/BaseModal.vue';
 import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
 import Fretboard from '@/components/Fretboard.vue';
-import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/constants';
+import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/utils/musicTheory';
 import { useChordGroupModals } from '@/services/useChordGroupModals';
 import { useChordStore } from '@/stores/chordStore';
 import { globalDarkMode } from '@/stores/globalState';
 import { computed } from 'vue';
 
-const props = defineProps<{ groupModals: ReturnType<typeof useChordGroupModals> }>();
+const props = defineProps<{
+  groupModals: ReturnType<typeof useChordGroupModals>;
+}>();
 
 const chordStore = useChordStore();
 
@@ -208,12 +212,6 @@ const handleToggleSelectAllVariants = () => {
   max-height: 50vh;
   padding: 0.1rem;
   box-sizing: border-box;
-}
-
-.move-tooltip-item {
-  width: 100%;
-  min-width: 0;
-  display: flex;
 }
 
 .move-target-btn {
@@ -376,24 +374,6 @@ const handleToggleSelectAllVariants = () => {
   }
 }
 
-.check-badge-pop-enter-active {
-  transition:
-    transform @duration-fast @bezier-bounce,
-    opacity @duration-fast ease;
-}
-
-.check-badge-pop-leave-active {
-  transition:
-    transform @duration-fast ease-in,
-    opacity @duration-fast ease-in;
-}
-
-.check-badge-pop-enter-from,
-.check-badge-pop-leave-to {
-  transform: scale(0.4);
-  opacity: 0;
-}
-
 .variants-count-highlight {
   color: var(--color-danger);
   font-weight: 700;
@@ -422,131 +402,6 @@ const handleToggleSelectAllVariants = () => {
     color: var(--text-body);
     text-align: center;
     line-height: 1.3;
-
-    &.subtle {
-      color: var(--text-disabled);
-      font-weight: 500;
-    }
-  }
-}
-
-.import-tab-bar {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 0.2rem;
-}
-
-.import-panel-scroll {
-  max-height: 54vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  padding: 0.2rem;
-  box-sizing: border-box;
-}
-
-.import-groups-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.import-group-simple-card {
-  position: relative;
-  display: flex;
-  align-items: center;
-  padding: 0.4rem 0.9rem;
-  background-color: var(--bg-body);
-  border: 1.5px solid var(--border-light);
-  border-radius: @radius-md;
-  cursor: pointer;
-  transition: @transition-fast;
-
-  &:hover {
-    border-color: var(--border-base);
-    background-color: var(--bg-panel-hover);
-    transform: translateY(-1px);
-  }
-
-  &.is-selected {
-    border-color: var(--color-primary);
-    background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
-  }
-}
-
-.import-group-info-box {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 0;
-  flex: 1;
-
-  .import-group-title {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--text-title);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .import-group-meta {
-    font-size: 0.68rem;
-    font-weight: 500;
-    color: var(--text-disabled);
-  }
-}
-
-.import-songs-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.import-song-item-card {
-  position: relative;
-  display: flex;
-  align-items: center;
-  padding: 0.75rem 0.9rem;
-  background-color: var(--bg-body);
-  border: 1.5px solid var(--border-light);
-  border-radius: @radius-md;
-  cursor: pointer;
-  transition: @transition-fast;
-
-  &:hover {
-    border-color: var(--border-base);
-    background-color: var(--bg-panel-hover);
-    transform: translateY(-1px);
-  }
-
-  &.is-selected {
-    border-color: var(--color-primary);
-    background-color: color-mix(in srgb, var(--color-primary), transparent 92%);
-  }
-}
-
-.import-song-info-box {
-  display: flex;
-  flex-direction: column;
-  gap: 0.18rem;
-  min-width: 0;
-  flex: 1;
-
-  .import-song-title {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--text-title);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .import-song-meta {
-    font-size: 0.68rem;
-    font-weight: 500;
-    color: var(--text-disabled);
   }
 }
 
