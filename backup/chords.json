@@ -32,7 +32,7 @@
     {
       "id": "g_1778079336633",
       "name": "G调",
-      "collapsed": true,
+      "collapsed": false,
       "sortRule": "KEY_DEGREE",
       "sortKey": "G"
     },
@@ -46,12 +46,180 @@
     {
       "id": "g_afa36a5c",
       "name": "B调",
-      "collapsed": false,
+      "collapsed": true,
       "sortRule": "KEY_DEGREE",
       "sortKey": "B"
     }
   ],
   "chords": [
+    {
+      "id": "c_4ca3f1a1",
+      "chordName": "B",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 1,
+      "groupId": "g_1778079336633",
+      "tuning": "STANDARD",
+      "isInverted": false,
+      "fingerprint": "B:1:3:STANDARD:0:-1_0_0|1_0_1|3_0_0|3_0_0|3_0_0|1_0_0"
+    },
+    {
+      "id": "c_b577a908",
+      "chordName": "GMaj7",
+      "strings": [
+        {
+          "fret": 2,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 3,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 1,
+      "groupId": "g_1778079336633",
+      "tuning": "STANDARD",
+      "isInverted": false,
+      "fingerprint": "GMaj7:1:3:STANDARD:0:2_0_1|-1_0_0|3_0_0|3_0_0|2_0_0|-1_0_0"
+    },
+    {
+      "id": "c_aeb5ea92",
+      "chordName": "D7",
+      "strings": [
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 0,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1778079336633",
+      "tuning": "STANDARD",
+      "isInverted": false,
+      "fingerprint": "D7:0:3:STANDARD:0:-1_0_0|-1_0_0|0_0_1|2_0_0|1_0_0|2_0_0"
+    },
+    {
+      "id": "c_5cd119b6",
+      "chordName": "F#dim7",
+      "strings": [
+        {
+          "fret": 2,
+          "isRoot": true,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 2,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": 1,
+          "isRoot": false,
+          "preferFlat": false
+        },
+        {
+          "fret": -1,
+          "isRoot": false,
+          "preferFlat": false
+        }
+      ],
+      "fretCount": 3,
+      "capo": 0,
+      "groupId": "g_1778079336633",
+      "tuning": "STANDARD",
+      "isInverted": false,
+      "fingerprint": "F#dim7:0:3:STANDARD:0:2_0_1|-1_0_0|1_0_0|2_0_0|1_0_0|-1_0_0"
+    },
     {
       "id": "c_84839c4b",
       "chordName": "C",
@@ -4804,54 +4972,6 @@
       "version": 50
     },
     {
-      "id": "s_a05351e7",
-      "title": "爱情转移",
-      "lyrics": "烛光照亮了晚餐\n照不出个答案\n恋爱不是温馨的请客吃饭\n床单上铺满花瓣\n拥抱让它成长\n太拥挤就开到了别的土壤\n感情需要人接班\n接近换来期望\n期望带来失望的恶性循环\n短暂的总是浪漫\n漫长总会不满\n烧完美好青春换一个老伴\n把一个人的温暖\n转移到另一个的胸膛\n让上次犯的错反省出梦想\n每个人都是这样\n享受过提心吊胆\n才拒绝做爱情待罪的羔羊\n回忆是抓不到的月光握紧就变黑暗\n等虚假的背影消失于晴朗\n阳光在身上流转\n等所有业障被原谅\n爱情不停站\n想开往地老天荒\n需要多勇敢",
-      "key": "F",
-      "playKey": "E",
-      "capo": 1,
-      "chordMap": {
-        "line_l_0b5d81e9_char_5": "1778151016179",
-        "line_l_0fe2fc81_char_4": "1778213096852",
-        "line_l_8850de7c_char_0": "c_ed28b810",
-        "line_l_8850de7c_char_4": "1778150949879",
-        "line_l_8850de7c_char_10": "c_2e830ba5",
-        "line_l_00d5dd78_char_1": "c_1ae45bff",
-        "line_l_00d5dd78_char_5": "c_6346b558",
-        "line_l_bc1c389f_char_4": "1778150933265",
-        "line_l_e9d53d67_char_4": "1778150987602",
-        "line_l_e9d53d67_char_10": "c_197dffe3"
-      },
-      "lineIds": [
-        "l_0b5d81e9",
-        "l_0fe2fc81",
-        "l_8850de7c",
-        "l_00d5dd78",
-        "l_bc1c389f",
-        "l_e9d53d67",
-        "l_421e8ebd",
-        "l_551dcaca",
-        "l_c80a2a90",
-        "l_0ef80085",
-        "l_48b1c4dc",
-        "l_116ad98c",
-        "l_f1c7f779",
-        "l_39288574",
-        "l_138987c9",
-        "l_fb6fcde4",
-        "l_d33ce8f3",
-        "l_186a8e16",
-        "l_5d24c204",
-        "l_b509b42c",
-        "l_81b4294b",
-        "l_1ebe9de8",
-        "l_d7b4e06c",
-        "l_685bcb62",
-        "l_1bfe1444"
-      ],
-      "version": 13
-    },
-    {
       "id": "s_f945ed48",
       "title": "消散对白",
       "lyrics": "原谅我真的不太会告别\n也没想过有这一天\n以为你随口承诺的永远\n就可以敌过时间\n可你眼中深情的对白 如烟花短暂\n新鲜感终归不是爱\n回忆在倒带 要怎么释怀\n说着放下却陷入无限循环\n可你眼中无情的对白 泪都流干\n却不说答案\n顺其自然 随冷风消散\n可过了这么久你怎么还是\n我的短板",
@@ -4867,7 +4987,23 @@
         "line_l_9ac34c7c_char_3": "c_84839c4b",
         "line_l_9ac34c7c_char_9": "1778768082559",
         "line_l_c7332f6f_char_5": "1778768096581",
-        "line_l_c7332f6f_char_10": "1778768043285"
+        "line_l_c7332f6f_char_10": "1778768043285",
+        "line_l_e330e9df_char_5": "c_e47ab7e5",
+        "line_l_e330e9df_char_10": "c_5cd119b6",
+        "line_l_e330e9df_char_12": "c_a035169a",
+        "line_l_7011bc07_char_0": "c_8c77c08b",
+        "line_l_7011bc07_char_4": "c_aeb5ea92",
+        "line_l_d218f591_char_2": "c_84839c4b",
+        "line_l_120a0e3e_char_5": "1778768096581",
+        "line_l_120a0e3e_char_10": "1778768043285",
+        "line_l_a3368041_char_3": "c_b577a908",
+        "line_l_d218f591_char_8": "c_8c77c08b",
+        "line_l_d218f591_end_0": "c_4ca3f1a1",
+        "line_l_18709edc_start_0": "c_8c77c08b",
+        "line_l_862aa5cb_start_0": "1778768082559",
+        "line_l_a3109597_start_0": "1778768096581",
+        "line_l_6f9f14e0_char_0": "1778768043285",
+        "line_l_d218f591_char_0": "1778767690879"
       },
       "lineIds": [
         "l_18709edc",
@@ -4884,7 +5020,7 @@
         "l_120a0e3e",
         "l_a3368041"
       ],
-      "version": 13
+      "version": 31
     }
   ]
 }
