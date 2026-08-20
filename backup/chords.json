@@ -23,16 +23,9 @@
       "sortKey": "E"
     },
     {
-      "id": "g_d5047a01",
-      "name": "F调",
-      "collapsed": true,
-      "sortRule": "KEY_DEGREE",
-      "sortKey": "F"
-    },
-    {
       "id": "g_1778079336633",
       "name": "G调",
-      "collapsed": false,
+      "collapsed": true,
       "sortRule": "KEY_DEGREE",
       "sortKey": "G"
     },
@@ -42,13 +35,6 @@
       "collapsed": true,
       "sortRule": "KEY_DEGREE",
       "sortKey": "A"
-    },
-    {
-      "id": "g_afa36a5c",
-      "name": "B调",
-      "collapsed": true,
-      "sortRule": "KEY_DEGREE",
-      "sortKey": "B"
     }
   ],
   "chords": [
@@ -912,7 +898,7 @@
           "preferFlat": false
         },
         {
-          "fret": -1,
+          "fret": 0,
           "isRoot": false,
           "preferFlat": false
         },
@@ -922,7 +908,7 @@
           "preferFlat": false
         },
         {
-          "fret": -1,
+          "fret": 0,
           "isRoot": false,
           "preferFlat": false
         }
@@ -931,8 +917,8 @@
       "capo": 0,
       "groupId": "g_1778079331837",
       "tuning": "STANDARD",
-      "fingerprint": "C:0:3:STANDARD:0:-1_0_0|3_0_1|2_0_0|-1_0_0|1_0_0|-1_0_0",
-      "isInverted": false
+      "isInverted": false,
+      "fingerprint": "C:0:3:STANDARD:0:-1_0_0|3_0_1|2_0_0|0_0_0|1_0_0|0_0_0"
     },
     {
       "id": "c_3c317ece",
