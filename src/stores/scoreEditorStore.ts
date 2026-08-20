@@ -10,19 +10,19 @@ import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, nextTick, ref, watch } from 'vue';
 
-export type ScoreActiveTab = 'edit' | 'interactive';
+type ScoreActiveTab = 'edit' | 'interactive';
 
 interface HistoryState {
   lyrics: string;
   lineIds: string[];
-  chordMap: Record<string | number, string>;
+  chordMap: Record<string, string>;
 }
 
 export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const songStore = useSongStore();
   const activeSongId = useStorage<string | null>(STORAGE_KEYS.ACTIVE_SONG_ID, null);
   const activeTabRef = ref<ScoreActiveTab>('edit');
-  const selectedSlotKey = ref<string | number | null>(null);
+  const selectedSlotKey = ref<string | null>(null);
   const fontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 1.0, localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
   });
@@ -182,13 +182,13 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
-  const setSlotChord = (slotKey: string | number, chord: Chord) => {
+  const setSlotChord = (slotKey: string, chord: Chord) => {
     if (!activeSong.value) return;
     recordHistory();
     songStore.setCharChord(activeSong.value.id, slotKey, chord.id);
   };
 
-  const removeSlotChord = (slotKey: string | number) => {
+  const removeSlotChord = (slotKey: string) => {
     if (!activeSong.value) return;
     recordHistory();
     songStore.removeCharChord(activeSong.value.id, slotKey);
@@ -211,7 +211,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
-  const swapSlotChords = (sourceKey: string | number, targetKey: string | number) => {
+  const swapSlotChords = (sourceKey: string, targetKey: string) => {
     if (!activeSong.value || sourceKey === targetKey) return;
     recordHistory();
     songStore.swapSongSlotChords(activeSong.value.id, sourceKey, targetKey);

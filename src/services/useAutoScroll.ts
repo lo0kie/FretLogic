@@ -116,7 +116,9 @@ export function useAutoScroll(containerRef?: Ref<HTMLElement | null>) {
     );
 
     useEventListener(containerRef, 'wheel', stopAutoScroll, { passive: true });
-    useEventListener(containerRef, 'touchstart', stopAutoScroll, { passive: true });
+    useEventListener(containerRef, 'touchstart', stopAutoScroll, {
+      passive: true,
+    });
   }
 
   // KeepAlive 缓存页面切走（deactivated）时停止 rAF 循环，避免后台每帧写隐藏容器的 scrollTop

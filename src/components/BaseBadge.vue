@@ -50,20 +50,19 @@
 </template>
 
 <script setup lang="ts">
-import { BASE_BADGE_DEFAULTS } from '@/constants';
 import { X } from '@lucide/vue';
 import { computed, useAttrs, useSlots } from 'vue';
 
-export type BadgeVariant = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
-export type BadgeSize = 'xs' | 'sm' | 'md' | 'lg';
-export type BadgeAppearance = 'filled' | 'subtle' | 'outline';
+type BadgeVariant = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
+type BadgeSize = 'xs' | 'sm' | 'md' | 'lg';
+type BadgeAppearance = 'filled' | 'subtle' | 'outline';
 
 const {
-  variant = BASE_BADGE_DEFAULTS.VARIANT,
-  size = BASE_BADGE_DEFAULTS.SIZE,
-  appearance = BASE_BADGE_DEFAULTS.APPEARANCE,
+  variant = 'neutral',
+  size = 'sm',
+  appearance = 'filled',
   content = undefined,
-  max = BASE_BADGE_DEFAULTS.MAX,
+  max = 99,
   dot = false,
   showDot = false,
   closable = false,

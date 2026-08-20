@@ -108,7 +108,7 @@ watch([exportMode, includeMetaBar], () => {
   if (previewVisible.value) generatePreview();
 });
 
-const openChordPicker = (slotKey: string | number) => {
+const openChordPicker = (slotKey: string) => {
   scoreEditor.selectedSlotKey = slotKey;
   isPickerOpen.value = true;
 };

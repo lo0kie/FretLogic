@@ -3,13 +3,13 @@ import { STORAGE_KEYS } from '@/constants';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, GuitarStringsModel } from '@/types';
 import { cloneDeep } from '@/utils/cloneDeep';
-import { createString, DEFAULT_TUNING_MAPPING, TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
+import { createString, DEFAULT_TUNING_MAPPING, Tuning, TUNING_PRESETS } from '@/utils/musicTheory';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw } from 'vue';
 
 const createDefaultChord = (): Chord => ({
-  id: null as any,
+  id: '',
   chordName: '',
   strings: [
     createString(),
@@ -21,10 +21,9 @@ const createDefaultChord = (): Chord => ({
   ] as GuitarStringsModel,
   fretCount: 3,
   capo: 0,
-  tuning: TuningEnum.STANDARD,
+  tuning: Tuning.STANDARD,
   groupId: '',
-  isInverted: false,
-  fingerprint: '',
+  rootStringIndex: null,
 });
 
 export const useEditorStore = defineStore('editor', () => {
@@ -33,6 +32,22 @@ export const useEditorStore = defineStore('editor', () => {
   const draftChord = useStorage<Chord>(STORAGE_KEYS.EDITING_DRAFT, createDefaultChord(), localStorage, {
     eventFilter: debounceFilter(300),
   });
+  // 迁移：旧草稿每根弦各自维护 isRoot，统一为单点 rootStringIndex
+  if (draftChord.value.rootStringIndex === undefined || draftChord.value.rootStringIndex === null) {
+    const legacyRootIdx = (draftChord.value.strings as unknown as { isRoot?: boolean; fret: number }[]).findIndex(
+      s => s.isRoot && s.fret >= 0
+    );
+    draftChord.value.rootStringIndex = legacyRootIdx >= 0 ? legacyRootIdx : null;
+  }
+  // 清理旧字段：每弦 isRoot/label/isAccidental，和弦级 isInverted/fingerprint
+  (draftChord.value.strings as unknown as { isRoot?: boolean; label?: string; isAccidental?: boolean }[]).forEach(s => {
+    delete s.isRoot;
+    delete s.label;
+    delete s.isAccidental;
+  });
+  const legacyDraft = draftChord.value as unknown as { isInverted?: boolean; fingerprint?: string };
+  delete legacyDraft.isInverted;
+  delete legacyDraft.fingerprint;
   const isEditing = useStorage(STORAGE_KEYS.IS_EDITING, false);
   const isCreating = useStorage(STORAGE_KEYS.IS_CREATING, false);
 
@@ -69,9 +84,15 @@ export const useEditorStore = defineStore('editor', () => {
       draftChord.value.strings.forEach(str => {
         if (str.fret > newVal) {
           str.fret = -1;
-          str.isRoot = false;
         }
       });
+      // 根音所在弦被清除时，根标记一并失效
+      if (
+        draftChord.value.rootStringIndex !== null &&
+        draftChord.value.strings[draftChord.value.rootStringIndex].fret < 0
+      ) {
+        draftChord.value.rootStringIndex = null;
+      }
     }
   };
 

@@ -22,7 +22,7 @@
             data-focusable-inline
             role="button"
             :aria-expanded="isGroupContentOpen(group)"
-            :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${group.collapsed ? '已折叠' : '已展开'}`"
+            :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${chordStore.isGroupCollapsed(group.id) ? '已折叠' : '已展开'}`"
             @click="chordActions.executeGroupToggle(group)"
             @keydown.enter.prevent="chordActions.executeGroupToggle(group)"
             @keydown.space.prevent="chordActions.executeGroupToggle(group)"
@@ -63,7 +63,11 @@
                   :aria-label="`匹配 ${getMatchCount(group.id)} 个，共 ${getGroupChordsCount(group.id)} 个和弦`"
                   width="2.5rem"
                 >
-                  <span :class="{ 'search-match-count': hasMatchedChords(group.id) }">
+                  <span
+                    :class="{
+                      'search-match-count': hasMatchedChords(group.id),
+                    }"
+                  >
                     {{ getMatchCount(group.id) }}
                   </span>
                   <span aria-hidden="true">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
@@ -142,8 +146,8 @@ const setContentOuterRef = (el: Element | ComponentPublicInstance | null, index:
   else contentOuterComponentEls.delete(index);
 };
 
-const isGroupContentOpen = (group: Group): boolean => !group.collapsed;
-const isAllCollapsed = computed(() => chordStore.groups.every(g => g.collapsed));
+const isGroupContentOpen = (group: Group): boolean => !chordStore.isGroupCollapsed(group.id);
+const isAllCollapsed = computed(() => chordStore.groups.every(g => chordStore.isGroupCollapsed(g.id)));
 
 const handleSelectChord = (chord: Chord) => {
   if (editorStore.draftChord.id === chord.id) {
