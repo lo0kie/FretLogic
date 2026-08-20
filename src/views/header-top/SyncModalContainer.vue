@@ -15,7 +15,9 @@ import BaseModal from '@/components/BaseModal.vue';
 import { useGithubSyncService } from '@/services/useGithubSyncService';
 import SyncSettingsCard from './SyncSettingsCard.vue';
 
-const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true });
+const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', {
+  required: true,
+});
 
 const { triggerGlobalSync, pullFromGithub, isSyncing, isPulling } = useGithubSyncService();
 

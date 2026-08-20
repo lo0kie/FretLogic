@@ -1,27 +1,29 @@
 <template>
   <Transition name="floating-bar-fade">
-    <div v-if="!isPristine && isGlobalEditable" class="floating-action-bar" :style="{ bottom: barBottomPosition }">
+    <div v-if="!isPristine" class="floating-action-bar" :style="{ bottom: barBottomPosition }">
       <ActionButton size="md" variant="ghost" :disabled="isPristine" @click="editorStore.resetEditor">
         {{ editorStore.isEditing ? '放弃修改' : '重置指板' }}
       </ActionButton>
 
-      <template v-if="editorStore.isEditing">
+      <template v-if="isGlobalEditable">
+        <template v-if="editorStore.isEditing">
+          <div class="bar-divider"></div>
+
+          <ActionButton size="md" variant="ghost" @click="chordActions.saveAsNewChord"> 作为新和弦保存 </ActionButton>
+        </template>
+
         <div class="bar-divider"></div>
 
-        <ActionButton size="md" variant="ghost" @click="chordActions.saveAsNewChord"> 作为新和弦保存 </ActionButton>
+        <ActionButton
+          size="md"
+          variant="subtle"
+          primary
+          :disabled="isSaveDisabled"
+          @click="chordActions.persistCurrentChord"
+        >
+          {{ editorStore.isEditing ? '更新保存' : '确认保存' }}
+        </ActionButton>
       </template>
-
-      <div class="bar-divider"></div>
-
-      <ActionButton
-        size="md"
-        variant="subtle"
-        primary
-        :disabled="isSaveDisabled"
-        @click="chordActions.persistCurrentChord"
-      >
-        {{ editorStore.isEditing ? '更新保存' : '确认保存' }}
-      </ActionButton>
     </div>
   </Transition>
 </template>
@@ -40,7 +42,7 @@ const chordActions = useChordActions();
 
 const barBottomPosition = computed(() => {
   if (uiStore.isMobile) return 'calc(1.8rem + env(safe-area-inset-bottom, 0px))';
-  else return editorStore.draftChord.fretCount === 3 ? '3.3rem' : '1.8rem';
+  else return editorStore.draftChord.fretCount === 3 ? '4rem' : '2.2rem';
 });
 
 const isPristine = computed(() => {

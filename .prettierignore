@@ -1,0 +1,17 @@
+# 依赖与构建产物
+node_modules
+dist
+dist-ssr
+*.local
+
+# 锁文件
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# 自动生成 / 导出文件
+all_code.txt
+stats.html
+
+# 暂存调试脚本目录（按项目规则永久保留，不格式化）
+.temp

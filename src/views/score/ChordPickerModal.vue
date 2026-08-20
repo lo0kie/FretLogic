@@ -40,7 +40,7 @@
               @update:model-value="handleSortRuleChange"
             />
             <BaseSelector
-              :disabled="sortOverride !== 'KEY_DEGREE'"
+              :disabled="sortOverride !== GroupSortRule.KEY_DEGREE"
               v-model="tempSortKey"
               :options="KEY_OPTIONS"
               default-value="C"
@@ -77,7 +77,7 @@
             v-for="(chord, index) in filteredChords"
             v-memo="[
               chord.id,
-              chord.fingerprint,
+              computeChordFingerprint(chord),
               visibleMap[chord.id],
               isCurrentBound(chord),
               pickerScale,
@@ -102,7 +102,6 @@
             @keydown.space.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
             data-focusable-inline
           >
-            <span class="card-name">{{ chord.chordName }}</span>
             <Fretboard
               v-if="visibleMap[chord.id]"
               :chord
@@ -110,6 +109,7 @@
               :interactive="false"
               :scale="pickerScale"
               :is-dark-mode="globalDarkMode"
+              fret-number-size="lg"
             />
             <div v-else :style="getCalculatedOrCachedSize(chord.fretCount)" />
           </div>
@@ -129,7 +129,7 @@ import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegme
 import BaseSelector from '@/components/BaseSelector.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
-import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/constants';
+import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/utils/musicTheory';
 import { useGridNavigation } from '@/services/useGridNavigation';
 import { useScoreLinesData } from '@/services/useScoreLinesData';
 import { useEditorStore } from '@/stores/chordEditorStore';
@@ -137,8 +137,10 @@ import { useChordStore } from '@/stores/chordStore';
 import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord, GroupSortRule } from '@/types';
+import type { Chord } from '@/types';
+import { GroupSortRule } from '@/types';
 import { getPlaceholderSize } from '@/utils/fretboardVisuals';
+import { computeChordFingerprint } from '@/utils/musicTheory';
 import { observeVisibility } from '@/utils/observeVisibility';
 import { vAutoAnimate } from '@formkit/auto-animate';
 import { Plus, Search } from '@lucide/vue';
@@ -226,7 +228,7 @@ const getCalculatedOrCachedSize = (fretCount: number) => {
 const selectedGroupId = ref<string>('ALL');
 const pickerSearchQuery = ref<string>('');
 const debouncedPickerQuery = refDebounced(pickerSearchQuery, 150);
-const sortOverride = ref<GroupSortRule>('ROOT_PITCH');
+const sortOverride = ref<GroupSortRule>(GroupSortRule.ROOT_PITCH);
 const tempSortKey = ref<string>('C');
 const savedUserPickerState = ref<{
   groupId: string;
@@ -250,17 +252,18 @@ const boundId = computed(() => {
 const boundFingerprint = computed(() => {
   const id = boundId.value;
   if (!id) return null;
-  return chordsLookupMap.value.get(id)?.fingerprint ?? null;
+  const boundChord = chordsLookupMap.value.get(id);
+  return boundChord ? computeChordFingerprint(boundChord) : null;
 });
 
 const isCurrentBound = (chord: Chord) =>
-  chord.id === boundId.value || (!!chord.fingerprint && chord.fingerprint === boundFingerprint.value);
+  chord.id === boundId.value || (!!boundFingerprint.value && computeChordFingerprint(chord) === boundFingerprint.value);
 
 const getDefaultSortForGroup = (groupId: string): { sortRule: GroupSortRule; sortKey: string } => {
-  if (groupId === 'ALL') return { sortRule: 'ROOT_PITCH', sortKey: 'C' };
+  if (groupId === 'ALL') return { sortRule: GroupSortRule.ROOT_PITCH, sortKey: 'C' };
   const targetGroup = chordStore.groups.find(g => g.id === groupId);
   return {
-    sortRule: targetGroup?.sortRule || 'ROOT_PITCH',
+    sortRule: targetGroup?.sortRule || GroupSortRule.ROOT_PITCH,
     sortKey: targetGroup?.sortKey || 'C',
   };
 };
@@ -318,7 +321,7 @@ watch(
       tempSortKey.value = savedUserPickerState.value.sortKey;
     } else {
       selectedGroupId.value = 'ALL';
-      sortOverride.value = 'ROOT_PITCH';
+      sortOverride.value = GroupSortRule.ROOT_PITCH;
       tempSortKey.value = 'C';
     }
   }
@@ -326,7 +329,7 @@ watch(
 
 const filteredChords = computed(() => {
   const activeGroup = chordStore.groups.find(g => g.id === selectedGroupId.value);
-  const effectiveKey = sortOverride.value === 'KEY_DEGREE' ? tempSortKey.value : activeGroup?.sortKey;
+  const effectiveKey = sortOverride.value === GroupSortRule.KEY_DEGREE ? tempSortKey.value : activeGroup?.sortKey;
   return chordStore.getFilteredChords(selectedGroupId.value, {
     searchQuery: debouncedPickerQuery.value,
     sortRule: sortOverride.value,
@@ -408,17 +411,6 @@ onDeactivated(() => {
   padding: 0.1rem 0;
   scroll-behavior: smooth;
 }
-.selector-pop-enter-active,
-.selector-pop-leave-active {
-  transition:
-    opacity @duration-fast ease,
-    transform @duration-fast @bezier-standard;
-}
-.selector-pop-enter-from,
-.selector-pop-leave-to {
-  opacity: 0;
-  transform: translateX(-6px) scale(0.95);
-}
 .picker-scroll-content {
   flex: 1;
   min-height: 0;
@@ -428,7 +420,7 @@ onDeactivated(() => {
 .picker-cards-grid-cols {
   display: grid;
   align-items: start;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.85rem;
 }
 .picker-chord-card {
@@ -463,19 +455,9 @@ onDeactivated(() => {
     box-shadow: @focus-ring-primary;
     cursor: default !important;
     pointer-events: none !important;
-    .card-name {
-      color: @primary;
-    }
   }
 }
-.card-name {
-  font-size: 0.8rem;
-  font-weight: 800;
-  line-height: 1.2rem;
-  height: 1.2rem;
-  color: var(--text-title);
-  margin-bottom: 0.25rem;
-}
+
 @media (max-width: 768px) {
   .picker-controls-row {
     flex-direction: column;

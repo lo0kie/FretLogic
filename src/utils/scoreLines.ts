@@ -24,7 +24,7 @@ const prevCharsByLineId = new Map<string, { text: string; chars: CharItem[] }>()
 const prevEdgeChordsCache = new Map<string, { sig: string; chords: EdgeChordItem[] }>();
 
 function getEdgeChordsWithNextKey(
-  chordMap: Record<string | number, string>,
+  chordMap: Record<string, string>,
   lineId: string,
   type: 'start' | 'end',
   chordsLookupMap: Map<string, Chord>
@@ -79,7 +79,7 @@ function buildChars(lineId: string, lineText: string): CharItem[] {
 
 export function buildLyricsLinesWithEdges(
   lyrics: string,
-  chordMap: Record<string | number, string>,
+  chordMap: Record<string, string>,
   chordsLookupMap: Map<string, Chord>,
   existingLineIds: string[] = []
 ): LineData[] {

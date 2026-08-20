@@ -33,8 +33,8 @@
         <BaseSelector
           v-model="editorStore.draftChord.tuning"
           :options="tuningOptions"
-          :default-value="TuningEnum.STANDARD"
-          :formatter="val => TUNING_PRESETS[val]?.name || TuningEnum.STANDARD"
+          :default-value="Tuning.STANDARD"
+          :formatter="val => TUNING_PRESETS[val]?.name || Tuning.STANDARD"
           width="full"
           :disabled="!isGlobalEditable"
         />
@@ -60,7 +60,7 @@ import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { isGlobalEditable } from '@/stores/globalState.ts';
 import { useUiStore } from '@/stores/uiStore';
-import { TUNING_PRESETS, TuningEnum } from '@/utils/musicTheory';
+import { TUNING_PRESETS, Tuning } from '@/utils/musicTheory';
 import { Wrench } from '@lucide/vue';
 import HeaderPopoverShell from './HeaderPopoverShell.vue';
 
@@ -68,7 +68,7 @@ const editorStore = useEditorStore();
 const chordStore = useChordStore();
 const uiStore = useUiStore();
 
-const tuningOptions = Object.values(TuningEnum);
+const tuningOptions = Object.values(Tuning);
 
 const FRET_OPTIONS: SegmentOption<3 | 4>[] = FRET_COUNTS.map(f => ({
   label: `${f}品`,
@@ -76,7 +76,7 @@ const FRET_OPTIONS: SegmentOption<3 | 4>[] = FRET_COUNTS.map(f => ({
 }));
 
 const handleRepairData = () => {
-  const repairedCount = chordStore.repairFingerprints();
+  const repairedCount = chordStore.repairData();
 
   if (repairedCount > 0) {
     uiStore.toast.success(`已扫描本地数据，修复并对齐了 ${repairedCount} 个和弦！`);

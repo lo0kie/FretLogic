@@ -38,7 +38,7 @@
         <line
           v-for="f in fretCount"
           :key="'fret-line-' + f"
-          :x1="CANVAS_CONFIG.OFFSET_X"
+          :x1="CANVAS_CONFIG.OFFSET_X_LEFT"
           :y1="f * CANVAS_CONFIG.FRET_HEIGHT"
           :x2="stringXPositions[5]"
           :y2="f * CANVAS_CONFIG.FRET_HEIGHT"
@@ -48,7 +48,7 @@
           shape-rendering="crispEdges"
         />
         <rect
-          :x="CANVAS_CONFIG.OFFSET_X - FRETBOARD_LINE_WIDTH / 2"
+          :x="CANVAS_CONFIG.OFFSET_X_LEFT - FRETBOARD_LINE_WIDTH / 2"
           y="-4"
           :width="5 * CANVAS_CONFIG.STRING_SPACING + FRETBOARD_LINE_WIDTH"
           height="8"
@@ -88,7 +88,7 @@
           v-memo="[
             str.fret,
             str.preferFlat,
-            str.isRoot,
+            rootStringIndex,
             interactive,
             isDarkMode,
             capo,
@@ -97,31 +97,42 @@
           ]"
           :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
           :tabindex="interactive ? -1 : undefined"
-          :style="{ color: getFingerColor(str, isDarkMode) }"
-          :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings)}`"
+          :style="{ color: getFingerColor(isRoot(sIdx), isDarkMode) }"
+          :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${formatStringLabel(sIdx, str.fret, str.preferFlat, capo, activeBaseStrings)}`"
           @dblclick.prevent.stop="emit('toggle-pitch', sIdx)"
         >
           <circle
             :cx="stringXPositions[sIdx]"
             :cy="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-            r="30"
-            :fill="getFingerColor(str, isDarkMode)"
+            :r="NOTE_DISPLAY.FINGER_DOT_RADIUS"
+            :fill="getFingerColor(isRoot(sIdx), isDarkMode)"
             class="finger-circle"
-            :class="{ 'is-root-glow': str.isRoot }"
+            :class="{ 'is-root-glow': isRoot(sIdx) }"
           />
           <text
             :x="stringXPositions[sIdx]"
             :y="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
             text-anchor="middle"
             dy="0.36em"
-            font-size="30"
-            font-weight="900"
-            :fill="getFingerTextColor(str, isDarkMode)"
+            :font-size="NOTE_DISPLAY.FINGER_FONT_SIZE"
+            font-weight="600"
+            :fill="getFingerTextColor(isRoot(sIdx), isDarkMode)"
             class="finger-text"
             style="pointer-events: none"
             aria-hidden="true"
           >
-            {{ calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, activeBaseStrings) }}
+            <template v-if="str.fret < 0">✕</template>
+            <template v-else>
+              <tspan>{{ noteInfo(sIdx, str).label }}</tspan>
+              <tspan
+                v-if="noteInfo(sIdx, str).isAccidental"
+                class="finger-accidental"
+                :font-size="String(Math.round(NOTE_DISPLAY.FINGER_FONT_SIZE * NOTE_DISPLAY.ACCIDENTAL_SCALE))"
+                :dy="String(-NOTE_DISPLAY.FINGER_FONT_SIZE * NOTE_DISPLAY.ACCIDENTAL_RAISE_RATIO)"
+              >
+                {{ str.preferFlat ? 'b' : '#' }}
+              </tspan>
+            </template>
           </text>
         </g>
       </template>
@@ -130,10 +141,10 @@
 </template>
 
 <script setup lang="ts">
-import { CANVAS_CONFIG, FRETBOARD_LINE_WIDTH } from '@/constants';
-import type { GuitarStringsModel } from '@/types';
+import { CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '@/constants';
+import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
 import { getFingerColor, getFingerTextColor } from '@/utils/fretboardVisuals';
-import { calcNoteLabel } from '@/utils/musicTheory';
+import { computeStringLabelAccidental, formatStringLabel } from '@/utils/musicTheory';
 import { computed } from 'vue';
 
 const props = withDefaults(
@@ -142,6 +153,7 @@ const props = withDefaults(
     fretCount: number;
     capo: number;
     activeBaseStrings: readonly number[];
+    rootStringIndex?: number | null;
     isDarkMode: boolean;
     interactive: boolean;
     isMobile: boolean;
@@ -156,6 +168,7 @@ const props = withDefaults(
     showFretNumbers: true,
     hoverPoint: null,
     focusPoint: null,
+    rootStringIndex: null,
   }
 );
 
@@ -173,6 +186,13 @@ const getFretNumberStyle = (fretIndex: number) => {
     left: `${xPixel}px`,
   };
 };
+
+/** 单点根音标记：某弦是否为根音 */
+const isRoot = (sIdx: number) => props.rootStringIndex === sIdx;
+
+/** 实时派生某弦音名（label + 是否变化音级），不依赖存储字段 */
+const noteInfo = (sIdx: number, str: GuitarStringEntity) =>
+  computeStringLabelAccidental(sIdx, str.fret, props.capo, str.preferFlat, props.activeBaseStrings);
 
 const showPredictiveHover = computed(() => {
   const hp = props.hoverPoint;
@@ -219,10 +239,11 @@ const showKeyboardFocus = computed(() => {
 .fret-number-badge {
   position: absolute;
   transform: translate(-100%, -50%);
-  font-weight: 900;
+  font-weight: 800;
   line-height: 1;
   color: #475569;
   user-select: none;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
 
   &.is-dark {
     color: #e2e8f0;
@@ -279,6 +300,7 @@ const showKeyboardFocus = computed(() => {
 }
 
 .finger-text {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
   transition: fill @duration-fast ease;
 }
 </style>

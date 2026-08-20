@@ -1,6 +1,4 @@
 ﻿import type { Options } from 'html-to-image/lib/types';
-import type { Ref } from 'vue';
-import { unref } from 'vue';
 
 export interface ExportOptions {
   width?: number;
@@ -13,12 +11,10 @@ export interface ExportOptions {
 }
 
 const getCanvasPixelRatio = (el: HTMLElement): number => {
-  const w = Math.max(el.scrollWidth, el.clientWidth);
-  const h = Math.max(el.scrollHeight, el.clientHeight);
-  const area = w * h;
-  if (area > 4_000_000) return 1;
-  if (area > 2_000_000) return 1.5;
-  return Math.min(2, window.devicePixelRatio || 2);
+  const area = el.scrollWidth * el.scrollHeight;
+  if (area > 8_000_000) return 1.5;
+
+  return 2.5;
 };
 
 const getDOMBgColor = (): string => {
@@ -105,18 +101,6 @@ export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': Promise.resolve(blob) })]);
     }
   }
-};
-
-export const copyElementToClipboard = async (
-  target: HTMLElement | Ref<HTMLElement | null | undefined> | null | undefined,
-  exportOptions: ExportOptions = {}
-): Promise<void> => {
-  const el = unref(target);
-  if (!el) {
-    throw new Error('未找到目标 DOM 节点');
-  }
-  const blob = await renderElementToBlob(el, exportOptions);
-  await writeBlobToClipboard(blob);
 };
 
 export const wait = (ms = 0) => new Promise<void>(resolve => setTimeout(resolve, ms));

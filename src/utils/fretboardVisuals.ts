@@ -2,14 +2,14 @@ import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_SCALE_MAP } from '@/constant
 import type { GuitarStringEntity } from '@/types';
 import { isMuted, isOpen } from '@/utils/musicTheory';
 
-export const getOpenStringStatusClass = (str: GuitarStringEntity): string => {
+export const getOpenStringStatusClass = (str: GuitarStringEntity, isRoot: boolean): string => {
   if (isMuted(str)) return 'is-muted-status';
-  if (isOpen(str) && !str.isRoot) return 'is-open-status';
+  if (isOpen(str) && !isRoot) return 'is-open-status';
   return '';
 };
 
-export const getOpenStringStyle = (str: GuitarStringEntity, isDarkMode: boolean) => {
-  if (isOpen(str) && str.isRoot) {
+export const getOpenStringStyle = (str: GuitarStringEntity, isRoot: boolean, isDarkMode: boolean) => {
+  if (isOpen(str) && isRoot) {
     const bg = isDarkMode ? FRETBOARD_COLORS.openRootBgDark : FRETBOARD_COLORS.openRootBgLight;
     return {
       backgroundColor: bg,
@@ -21,13 +21,13 @@ export const getOpenStringStyle = (str: GuitarStringEntity, isDarkMode: boolean)
   return {};
 };
 
-export const getFingerColor = (str: GuitarStringEntity, isDarkMode: boolean): string => {
-  if (str.isRoot) return isDarkMode ? FRETBOARD_COLORS.rootDark : FRETBOARD_COLORS.rootLight;
+export const getFingerColor = (isRoot: boolean, isDarkMode: boolean): string => {
+  if (isRoot) return isDarkMode ? FRETBOARD_COLORS.rootDark : FRETBOARD_COLORS.rootLight;
   return isDarkMode ? FRETBOARD_COLORS.normalDark : FRETBOARD_COLORS.normalLight;
 };
 
-export const getFingerTextColor = (str: GuitarStringEntity, isDarkMode: boolean): string => {
-  return str.isRoot && isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
+export const getFingerTextColor = (isRoot: boolean, isDarkMode: boolean): string => {
+  return isRoot && isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
 };
 
 const placeholderSizeCache = new Map<string, { width: string; height: string }>();

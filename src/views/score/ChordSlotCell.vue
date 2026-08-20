@@ -11,6 +11,7 @@
       'is-readonly': !isGlobalEditable,
       'has-chord': variant === 'char' && Boolean(chord),
       'has-edge-chord': variant === 'edge' && Boolean(chord),
+      'has-left-chord-gap': leftChordGap,
     }"
     :role="isGlobalEditable ? 'button' : undefined"
     :tabindex="isGlobalEditable ? 0 : -1"
@@ -45,13 +46,13 @@
         >
           <X :size="12" :stroke-width="3" aria-hidden="true" />
         </button>
-        <span class="inline-chord-name"> {{ chord.chordName }} </span>
         <Fretboard
           v-if="isVisible"
+          :chordNameEditable="false"
           :chord
           :ref="el => chord && setFretboardMeasureRef(el, chord.fretCount)"
           :interactive="false"
-          :scale="0.28 * scoreEditor.effectiveFretboardScale"
+          :scale="0.25 * scoreEditor.effectiveFretboardScale"
           :is-dark-mode="globalDarkMode"
           fret-number-size="lg"
         />
@@ -91,7 +92,7 @@ import { Plus, X } from '@lucide/vue';
 import { computed, ref, useTemplateRef, watch, watchEffect, type ComponentPublicInstance } from 'vue';
 
 const props = defineProps<{
-  slotKey: string | number;
+  slotKey: string;
   chord?: Chord;
   char?: string;
   variant: 'char' | 'edge' | 'add';
@@ -101,19 +102,20 @@ const props = defineProps<{
   isDraggingSource?: boolean;
   isExporting: boolean;
   scrollRoot?: HTMLElement | null;
+  /** 左侧相邻字符也分配了和弦时，为靠右的和弦留出横向间距 */
+  leftChordGap?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'click'): void;
-  (e: 'remove', slotKey: string | number): void;
-  (e: 'pointerdown', event: PointerEvent, slotKey: string | number, chord: Chord): void;
+  (e: 'remove', slotKey: string): void;
+  (e: 'pointerdown', event: PointerEvent, slotKey: string, chord: Chord): void;
 }>();
 
 const isVisible = ref(false);
 const uiStore = useUiStore();
 const scoreEditor = useScoreEditorStore();
 const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
-const chordNameFontSize = computed(() => `${0.7 * scoreEditor.effectiveFretboardScale}rem`);
 
 // 所有字符槽共享同一个 IntersectionObserver（按 scrollRoot 复用），命中即停
 watchEffect(onCleanup => {
@@ -129,7 +131,7 @@ watchEffect(onCleanup => {
   onCleanup(stop);
 });
 
-const getEffectiveScale = () => 0.28 * scoreEditor.effectiveFretboardScale;
+const getEffectiveScale = () => 0.25 * scoreEditor.effectiveFretboardScale;
 const getCacheKey = (fretCount: number) => `${fretCount}_${getEffectiveScale().toFixed(2)}`;
 
 const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fretCount: number) => {
@@ -255,6 +257,11 @@ unwatchExport = watch(
     opacity: 0.35;
   }
 
+  /* 连续字符都有和弦时，靠右的和弦与左侧和弦拉开间距 */
+  &.has-left-chord-gap {
+    margin-left: 0.42rem;
+  }
+
   &.edge-slot {
     opacity: 0.85;
     &.has-edge-chord {
@@ -327,7 +334,7 @@ unwatchExport = watch(
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0.12rem 0.15rem;
+  padding: 0.12rem;
   border-radius: @radius-sm;
   background-color: transparent;
   transition: @transition-fast;
@@ -380,15 +387,6 @@ unwatchExport = watch(
   &:active {
     transform: scale(0.95);
   }
-}
-
-.inline-chord-name {
-  font-size: v-bind(chordNameFontSize);
-  font-weight: 800;
-  color: var(--text-title);
-  line-height: 1;
-  margin-bottom: 0.1rem;
-  transition: font-size @duration-fast ease;
 }
 
 .char-text {

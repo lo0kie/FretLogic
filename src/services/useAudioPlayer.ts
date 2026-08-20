@@ -99,7 +99,10 @@ export function useAudioPlayer() {
 
       guitarSynth.releaseAll();
 
-      const stringsSnapshot = editorStore.draftChord.strings.map(s => ({ fret: s.fret, preferFlat: s.preferFlat }));
+      const stringsSnapshot = editorStore.draftChord.strings.map(s => ({
+        fret: s.fret,
+        preferFlat: s.preferFlat,
+      }));
       const capoOffset = editorStore.draftChord.capo > 0 ? editorStore.draftChord.capo : 0;
 
       let strumDelay = 0;

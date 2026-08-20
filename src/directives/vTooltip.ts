@@ -3,7 +3,7 @@ import { autoUpdate, computePosition, flip, offset, shift, type Placement } from
 import type { Directive } from 'vue';
 import './vTooltip.less';
 
-export interface TooltipOptions {
+interface TooltipOptions {
   content?: string;
   placement?: Placement;
 }

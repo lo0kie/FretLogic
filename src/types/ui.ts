@@ -1,6 +1,11 @@
-﻿import type { FunctionalComponent } from 'vue';
-
-export type ToastType = 'info' | 'success' | 'error' | 'loading' | 'warning';
+﻿/** Toast 提示类型 */
+export enum ToastType {
+  INFO = 'info',
+  SUCCESS = 'success',
+  ERROR = 'error',
+  LOADING = 'loading',
+  WARNING = 'warning',
+}
 
 export interface ToastOptions {
   actionText?: string;
@@ -18,12 +23,4 @@ export interface Toast {
   onAction?: () => void;
   duration: number;
   closable?: boolean;
-}
-
-export interface ContextMenuItem {
-  label: string;
-  icon?: FunctionalComponent;
-  action: () => void;
-  danger?: boolean;
-  disabled?: boolean;
 }

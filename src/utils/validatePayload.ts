@@ -1,8 +1,34 @@
 import { FRET_COUNTS } from '@/constants';
 import type { Chord, Group, ImportExportPayload, Song } from '@/types';
+import { GroupSortRule } from '@/types';
 import { normalizeChord, pruneOrphanChordRefs } from '@/utils/chordMap';
 import { cloneDeep } from '@/utils/cloneDeep';
-import { TuningEnum } from '@/utils/musicTheory';
+import { computeChordFingerprint, Tuning } from '@/utils/musicTheory';
+
+/** 备份包结构版本：每次结构变更（字段迁移/删除/语义调整）递增 */
+export const CURRENT_PAYLOAD_VERSION = 2;
+
+/**
+ * 版本迁移：把任意旧版本 payload 逐级升级到当前版本。
+ * 每档迁移负责一个具体结构变更，结构稳定后保留空实现作为版本标记。
+ */
+const PAYLOAD_MIGRATIONS: Record<number, (payload: ImportExportPayload) => void> = {
+  1: () => {
+    // v1 -> v2：isRoot/label/isAccidental/isInverted/fingerprint 等派生字段已移除，
+    // 由 normalizeChord 在 sanitize 阶段统一清理，此处无需额外处理。
+  },
+};
+
+/** 把输入 payload 版本抬升到当前版本（原地修改 + 返回新 version） */
+const migratePayloadVersion = (payload: ImportExportPayload): ImportExportPayload => {
+  let version = payload.version ?? 1;
+  while (version < CURRENT_PAYLOAD_VERSION) {
+    PAYLOAD_MIGRATIONS[version]?.(payload);
+    version += 1;
+  }
+  return { ...payload, version: CURRENT_PAYLOAD_VERSION };
+};
+
 export interface ValidationResult {
   isValid: boolean;
   payload?: ImportExportPayload;
@@ -21,12 +47,15 @@ const sanitizeGroups = (groups: unknown, issues: string[]): Group[] => {
       }
       return true;
     })
-    .map((g: any) => ({
-      ...g,
-      collapsed: typeof g.collapsed === 'boolean' ? g.collapsed : true,
-      sortRule: ['ROOT_PITCH', 'KEY_DEGREE', 'NAME_ASC'].includes(g.sortRule) ? g.sortRule : 'ROOT_PITCH',
-      sortKey: g.sortRule === 'KEY_DEGREE' && !g.sortKey ? 'C' : g.sortKey,
-    }));
+    .map((g: any) => {
+      // 折叠状态为会话级，不再持久化；丢弃旧数据遗留的 collapsed 字段
+      delete g.collapsed;
+      return {
+        ...g,
+        sortRule: Object.values(GroupSortRule).includes(g.sortRule) ? g.sortRule : GroupSortRule.ROOT_PITCH,
+        sortKey: g.sortRule === GroupSortRule.KEY_DEGREE && !g.sortKey ? 'C' : g.sortKey,
+      };
+    });
 };
 
 const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
@@ -50,12 +79,7 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
         return false;
       }
       const isStringsValid = c.strings.every(
-        (s: any) =>
-          s &&
-          typeof s === 'object' &&
-          typeof s.fret === 'number' &&
-          typeof s.preferFlat === 'boolean' &&
-          typeof s.isRoot === 'boolean'
+        (s: any) => s && typeof s === 'object' && typeof s.fret === 'number' && typeof s.preferFlat === 'boolean'
       );
       if (!isStringsValid) {
         issues.push(`chords[${index}] (${c.id}) 内部存在损坏的琴弦节点`);
@@ -66,19 +90,16 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
     .map((c: any) => {
       const fretCount = FRET_COUNTS.includes(c.fretCount) ? c.fretCount : 3;
       const capo = typeof c.capo === 'number' && c.capo >= 0 && c.capo <= 12 ? c.capo : 0;
-      const tuning = c.tuning && Object.values(TuningEnum).includes(c.tuning) ? c.tuning : TuningEnum.STANDARD;
+      const tuning = c.tuning && Object.values(Tuning).includes(c.tuning) ? c.tuning : Tuning.STANDARD;
       const chordName = String(c.chordName).trim();
 
-      // 结构字段先收口，再统一重算派生状态（不信任文件里的 isInverted / fingerprint）
+      // 结构字段先收口；isInverted / fingerprint 已不再存储，normalizeChord 会清理旧数据遗留字段
       const draft: Chord = {
         ...c,
         chordName,
         fretCount,
         capo,
         tuning,
-        // 占位，下一行会被 normalizeChord 覆盖
-        isInverted: false,
-        fingerprint: '',
       };
 
       const { chord } = normalizeChord(draft);
@@ -130,7 +151,7 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
   const seenFpInGroup = new Set<string>();
   const dedupedChords: Chord[] = [];
   for (const c of filteredChords) {
-    const key = `${c.groupId}::${c.fingerprint}`;
+    const key = `${c.groupId}::${computeChordFingerprint(c)}`;
     if (seenFpInGroup.has(key)) {
       // 不写入 issues，避免「仅重复」就整包拒绝；需要可观测可 console.warn
       console.warn(`[validatePayload] 丢弃同组重复指纹: ${c.chordName} (${c.id})`);
@@ -148,13 +169,12 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
 
   return {
     isValid: true,
-    payload: {
+    payload: migratePayloadVersion({
       version: raw.version || 1,
       groups,
       chords: dedupedChords,
       songs: cleanedSongs,
-    },
+    }),
     issues: [],
   };
 };
-

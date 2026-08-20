@@ -6,7 +6,11 @@ import { canvasToBlob, renderElementToCanvas, writeBlobToClipboard } from '@/uti
 import { paginateLinesByHeight } from '@/utils/paginateLines';
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue';
 
-export type ExportMode = 'normal' | 'a4';
+/** 谱面导出预览模式 */
+export enum ExportMode {
+  NORMAL = 'normal',
+  A4 = 'a4',
+}
 
 export interface PreviewPage {
   /** 仅刚生成时持有；从缓存恢复的页面为 null，复制时按需从 blob 解码 */
@@ -33,15 +37,15 @@ export function useScoreExportPreview(
   const uiStore = useUiStore();
   const scoreEditor = useScoreEditorStore();
   const progress = ref(0);
-  const mode = ref<ExportMode>('normal');
+  const mode = ref<ExportMode>(ExportMode.NORMAL);
   const pages = shallowRef<PreviewPage[]>([]);
   const currentPageIndex = ref(0);
   const isGenerating = ref(false);
   const currentPage = computed(() => pages.value[currentPageIndex.value] ?? null);
   const includeMetaBar = ref(true);
   const previewCache: Record<ExportMode, PreviewCache | null> = {
-    normal: null,
-    a4: null,
+    [ExportMode.NORMAL]: null,
+    [ExportMode.A4]: null,
   };
   let lastDataKey = '';
 
@@ -74,8 +78,8 @@ export function useScoreExportPreview(
   };
 
   const clearPreviewCache = () => {
-    previewCache.normal = null;
-    previewCache.a4 = null;
+    previewCache[ExportMode.NORMAL] = null;
+    previewCache[ExportMode.A4] = null;
     lastDataKey = '';
   };
 
@@ -238,8 +242,8 @@ export function useScoreExportPreview(
     const currentMode = mode.value;
     const currentDataKey = getDataKey();
     if (lastDataKey !== currentDataKey) {
-      previewCache.normal = null;
-      previewCache.a4 = null;
+      previewCache[ExportMode.NORMAL] = null;
+      previewCache[ExportMode.A4] = null;
       lastDataKey = currentDataKey;
     }
     const cached = previewCache[currentMode];
@@ -252,7 +256,7 @@ export function useScoreExportPreview(
     progress.value = 0;
     clearPreview();
     try {
-      if (currentMode === 'normal') {
+      if (currentMode === ExportMode.NORMAL) {
         await generateNormalPreview();
       } else {
         await generateA4Preview();
@@ -298,9 +302,9 @@ export function useScoreExportPreview(
 
   const downloadPdf = async () => {
     if (isGenerating.value) return;
-    if (mode.value === 'normal') {
+    if (mode.value === ExportMode.NORMAL) {
       uiStore.toast.info('正在为您自动切换至 A4 分页模式...');
-      mode.value = 'a4';
+      mode.value = ExportMode.A4;
       await generatePreview();
     }
     if (pages.value.length === 0) {
@@ -347,8 +351,8 @@ export function useScoreExportPreview(
   watch(
     () => globalDarkMode.value,
     () => {
-      previewCache.normal = null;
-      previewCache.a4 = null;
+      previewCache[ExportMode.NORMAL] = null;
+      previewCache[ExportMode.A4] = null;
       lastDataKey = '';
     }
   );

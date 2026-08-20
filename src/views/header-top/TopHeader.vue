@@ -57,7 +57,9 @@
           :is="isGlobalEditable ? Pencil : PencilOff"
           :size="17"
           stroke-width="2.2"
-          :style="{ color: isGlobalEditable ? 'var(--color-primary)' : 'var(--text-disabled)' }"
+          :style="{
+            color: isGlobalEditable ? 'var(--color-primary)' : 'var(--text-disabled)',
+          }"
         />
       </ActionButton>
 
@@ -89,7 +91,9 @@
           :is="globalDarkMode ? Moon : Sun"
           :size="18"
           :stroke-width="2.2"
-          :style="{ color: globalDarkMode ? 'var(--color-primary)' : 'var(--color-warning)' }"
+          :style="{
+            color: globalDarkMode ? 'var(--color-primary)' : 'var(--color-warning)',
+          }"
           class="theme-toggle-icon"
         />
       </ActionButton>
@@ -195,7 +199,6 @@ watch(activeNavPath, () => {
   letter-spacing: -0.02em;
   color: var(--text-title);
   white-space: nowrap;
-  margin-left: 0.2rem;
 }
 .header-divider {
   width: 1px;

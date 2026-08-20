@@ -255,7 +255,7 @@ export const useSongStore = defineStore('song', () => {
     }
   };
 
-  const setCharChord = (songId: string, slotKey: string | number, chordId: string) => {
+  const setCharChord = (songId: string, slotKey: string, chordId: string) => {
     const target = songMap.value.get(songId);
     if (!target) return;
     target.chordMap ??= {};
@@ -266,7 +266,7 @@ export const useSongStore = defineStore('song', () => {
     markSongDirty(songId);
   };
 
-  const removeCharChord = (songId: string, slotKey: string | number) => {
+  const removeCharChord = (songId: string, slotKey: string) => {
     const target = songMap.value.get(songId);
     if (!target || !target.chordMap) return;
     const removed = removeChordFromSlot(target.chordMap, slotKey);
@@ -276,7 +276,7 @@ export const useSongStore = defineStore('song', () => {
     markSongDirty(songId);
   };
 
-  const swapSongSlotChords = (songId: string, sourceKey: string | number, targetKey: string | number) => {
+  const swapSongSlotChords = (songId: string, sourceKey: string, targetKey: string) => {
     const target = songMap.value.get(songId);
     if (!target || !target.chordMap) return;
     swapOrMoveSlotChords(target.chordMap, sourceKey, targetKey);
@@ -322,7 +322,11 @@ export const useSongStore = defineStore('song', () => {
       Object.keys(song.chordMap).forEach(key => {
         const boundChordId = song.chordMap[key];
         if (boundChordId && targetIds.has(boundChordId)) {
-          removedBindings.push({ songId: song.id, slotKey: key, chordId: boundChordId });
+          removedBindings.push({
+            songId: song.id,
+            slotKey: key,
+            chordId: boundChordId,
+          });
           delete song.chordMap[key];
           hasChanged = true;
         }

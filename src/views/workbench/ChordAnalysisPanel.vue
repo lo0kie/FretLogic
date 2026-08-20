@@ -1,5 +1,10 @@
 <template>
-  <div class="chord-analysis-wrapper" :class="{ 'is-empty-hidden': uiStore.isMobile && analysis.notes.length === 0 }">
+  <div
+    class="chord-analysis-wrapper"
+    :class="{
+      'is-empty-hidden': uiStore.isMobile && analysis.notes.length === 0,
+    }"
+  >
     <Transition name="panel-fade">
       <div class="chord-analysis-panel" v-if="!uiStore.isMobile || analysis.notes.length > 0">
         <!-- 面板头部 -->
@@ -47,7 +52,12 @@ import { useEditorStore } from '@/stores/chordEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import { CandidateResult, NoteInput } from '@/types/engine.ts';
 import { analyzeChordGraph } from '@/utils/chordEngine.ts';
-import { calcNoteLabel, calcPitchIndex, canTogglePitchAccidental } from '@/utils/musicTheory';
+import {
+  calcPitchIndex,
+  canTogglePitchAccidental,
+  composeNoteLabel,
+  computeStringLabelAccidental,
+} from '@/utils/musicTheory';
 import { Music, Sparkles } from '@lucide/vue';
 import { computed, useTemplateRef } from 'vue';
 import CandidateTags from './CandidateTags.vue';
@@ -85,9 +95,16 @@ const graphAnalysis = computed(() => {
   strings.forEach((str, sIdx) => {
     if (str.fret >= 0) {
       const pitch = calcPitchIndex(sIdx, str.fret, capo, baseStrings);
-      const label = calcNoteLabel(sIdx, str.fret, capo, str.preferFlat, baseStrings);
+      const { label: naturalLabel, isAccidental } = computeStringLabelAccidental(
+        sIdx,
+        str.fret,
+        capo,
+        str.preferFlat,
+        baseStrings
+      );
+      const label = composeNoteLabel(naturalLabel, isAccidental, str.preferFlat);
 
-      if (str.isRoot && explicitRootPitch === null) {
+      if (sIdx === editorStore.draftChord.rootStringIndex && explicitRootPitch === null) {
         explicitRootPitch = pitch;
       }
 
@@ -106,7 +123,11 @@ const graphAnalysis = computed(() => {
 // 仅依赖和弦名的轻链路：输入名字时只重算选中候选与音级映射
 const analysis = computed(() => {
   const graph = graphAnalysis.value;
-  if (!graph) return { notes: [] as RenderNoteItem[], candidates: [] as CandidateResult[] };
+  if (!graph)
+    return {
+      notes: [] as RenderNoteItem[],
+      candidates: [] as CandidateResult[],
+    };
 
   const { strings, capo, baseStrings, rawNotes, candidates, bestRootPitch } = graph;
   const selectedCandidate = candidates.find(c => c.chordName === editorStore.draftChord.chordName);
@@ -140,31 +161,25 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
 
   if (isSelected) {
     editorStore.draftChord.chordName = '';
-    editorStore.draftChord.strings.forEach(str => {
-      str.isRoot = false;
-    });
+    editorStore.draftChord.rootStringIndex = null;
   } else {
     let rootAssigned = false;
     editorStore.draftChord.chordName = candidate.chordName;
     editorStore.draftChord.strings.forEach((str, sIdx) => {
-      if (str.fret >= 0) {
+      if (str.fret >= 0 && !rootAssigned) {
         const pitch = calcPitchIndex(sIdx, str.fret, editorStore.draftChord.capo, editorStore.activeBaseStrings);
-        const match = pitch === candidate.rootPitch && !rootAssigned;
-        str.isRoot = match;
-        if (match) rootAssigned = true;
-      } else {
-        str.isRoot = false;
+        if (pitch === candidate.rootPitch) {
+          editorStore.draftChord.rootStringIndex = sIdx;
+          rootAssigned = true;
+        }
       }
     });
+    if (!rootAssigned) editorStore.draftChord.rootStringIndex = null;
   }
 };
 
 const handleSetRootString = (stringIndex: number) => {
-  const wasRoot = editorStore.draftChord.strings[stringIndex]?.isRoot;
-
-  editorStore.draftChord.strings.forEach((str, sIdx) => {
-    str.isRoot = sIdx === stringIndex ? !wasRoot : false;
-  });
+  editorStore.draftChord.rootStringIndex = editorStore.draftChord.rootStringIndex === stringIndex ? null : stringIndex;
 };
 </script>
 
@@ -242,7 +257,7 @@ const handleSetRootString = (stringIndex: number) => {
   flex-direction: column;
   gap: 0.65rem;
   width: 100%;
-  min-height: 0;   // 允许 flex item 正常收缩
+  min-height: 0; // 允许 flex item 正常收缩
   flex: 1;
   overflow-y: auto; // 视口不足时内部出现平滑滚动条，避免被砍脚
 }

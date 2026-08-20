@@ -19,7 +19,10 @@
           <div
             v-wave
             class="song-card-item"
-            :class="{ 'is-active': isSongActive(song.id), 'is-context-open': isOpen }"
+            :class="{
+              'is-active': isSongActive(song.id),
+              'is-context-open': isOpen,
+            }"
             role="button"
             tabindex="0"
             data-focusable-inline

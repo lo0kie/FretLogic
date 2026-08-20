@@ -1,11 +1,17 @@
-import { DEFAULT_GROUP_SORT_RULE, DEFAULT_SORT_KEY, MESSAGES } from '@/constants';
 import { useChordActions } from '@/services/useChordActions';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/types';
+import { computeChordFingerprint } from '@/utils/musicTheory';
 import { reactive } from 'vue';
+
+const DEFAULT_GROUP_SORT_RULE = 'ROOT_PITCH' as const;
+const DEFAULT_SORT_KEY = 'C';
+const MESSAGES = {
+  SUCCESS_OPERATION: '操作成功完成',
+} as const;
 
 export function useChordGroupModals() {
   const chordStore = useChordStore();
@@ -91,9 +97,7 @@ export function useChordGroupModals() {
     }
 
     const targetChordIds = new Set(
-      chordStore.savedChordsList
-        .filter(c => c.groupId === targetGid)
-        .flatMap(c => [c.id, c.fingerprint].filter(Boolean))
+      chordStore.savedChordsList.filter(c => c.groupId === targetGid).flatMap(c => [c.id, computeChordFingerprint(c)])
     );
 
     chordStore.deleteGroup(targetGid);

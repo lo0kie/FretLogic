@@ -94,7 +94,9 @@ const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const menuBoxRef = useTemplateRef<HTMLDivElement>('menuBoxRef');
 const itemEls = useTemplateRef<HTMLButtonElement[]>('itemEls');
 
-const { captureTrigger, restoreFocusAfter } = useFocusReturn({ warnLabel: '[GlobalContextMenu]' });
+const { captureTrigger, restoreFocusAfter } = useFocusReturn({
+  warnLabel: '[GlobalContextMenu]',
+});
 
 const virtualRef = computed(() => ({
   getBoundingClientRect() {
@@ -227,7 +229,12 @@ watch(isOpen, open => {
       })
     );
     stopListeners.push(useEventListener(window, 'resize', closeMenu));
-    stopListeners.push(useEventListener(window, 'scroll', closeMenu, { capture: true, passive: true }));
+    stopListeners.push(
+      useEventListener(window, 'scroll', closeMenu, {
+        capture: true,
+        passive: true,
+      })
+    );
 
     nextTick(() => {
       const firstEnabledIdx = props.items.findIndex(item => !item.disabled);

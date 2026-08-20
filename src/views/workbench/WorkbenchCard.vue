@@ -8,25 +8,18 @@
       width: uiStore.isMobile ? '100%' : `${CANVAS_CONFIG.BOARD_WIDTH + 64}px`,
     }"
   >
-    <input
-      v-model="editorStore.draftChord.chordName"
-      type="text"
-      spellcheck="false"
-      placeholder="CHORD"
-      class="input-chord-name"
-      :class="[editorStore.draftChord.chordName ? 'has-name' : 'is-empty', { 'is-readonly': !isGlobalEditable }]"
-      :maxlength="15"
-      :readonly="!isGlobalEditable"
-    />
-
     <div class="fretboard-render-zone">
       <Fretboard
         :chord="editorStore.draftChord"
         :is-dark-mode="globalDarkMode"
         :scale="uiStore.isMobile ? cardMobileScale : 1.0"
+        :interactive="isGlobalEditable"
+        chord-name-editable
         @update:capo="handleCapoUpdate"
         @update:strings="handleStringsChange"
-        :interactive="isGlobalEditable"
+        @update:root-string-index="handleRootStringChange"
+        @update:chord-name="handleChordNameChange"
+        chord-name-font-size="lg"
       />
     </div>
   </div>
@@ -62,6 +55,16 @@ const handleStringsChange = (strings: GuitarStringsModel) => {
   if (!editorStore.isEditing) editorStore.isCreating = true;
 };
 
+const handleRootStringChange = (index: number | null) => {
+  editorStore.draftChord.rootStringIndex = index;
+  if (!editorStore.isEditing) editorStore.isCreating = true;
+};
+
+const handleChordNameChange = (name: string) => {
+  editorStore.draftChord.chordName = name;
+  if (!editorStore.isEditing) editorStore.isCreating = true;
+};
+
 const onResize = ({ width }: { width: number; height: number }) => {
   cardWidth.value = width;
 };
@@ -75,6 +78,7 @@ const cardMobileScale = computed(() => {
 
 const dynamicHeight = computed(() => {
   const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;
+  // Fretboard 内部布局已计入和弦名区高度（extraTopHeight），这里不重复加
   const rawCanvasHeight =
     CANVAS_CONFIG.OFFSET_Y_TOP +
     editorStore.draftChord.fretCount * CANVAS_CONFIG.FRET_HEIGHT +
@@ -109,7 +113,7 @@ onDeactivated(() => {
   border-radius: @radius-md;
   box-shadow: @shadow-floating;
   position: relative;
-  box-sizing: border-box;
+  padding: 0 0.5rem;
   flex-shrink: 0;
 
   transition:
@@ -117,45 +121,6 @@ onDeactivated(() => {
     background-color @duration-base,
     border-color @duration-base,
     box-shadow @duration-base;
-}
-
-.input-chord-name {
-  padding-left: 1rem;
-  padding-right: 1rem;
-  width: 100%;
-  text-align: center;
-  font-weight: 700;
-  background-color: transparent;
-  border: none;
-  outline: none;
-  cursor: pointe;
-  user-select: none;
-  caret-color: @primary;
-  font-size: 3.8rem;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  box-sizing: border-box;
-  transition: all 0.25s ease;
-
-  &::placeholder {
-    color: var(--text-disabled);
-    opacity: 0.22;
-    font-weight: 700;
-  }
-
-  &.has-name {
-    color: var(--text-title);
-  }
-
-  &.is-empty {
-    color: var(--text-disabled);
-  }
-
-  &.is-readonly {
-    cursor: unset;
-    caret-color: transparent;
-    pointer-events: none;
-  }
 }
 
 .fretboard-render-zone {
@@ -171,10 +136,6 @@ onDeactivated(() => {
   .workbench-card {
     padding: 1rem 0.25rem;
     width: 100% !important;
-  }
-
-  .input-chord-name {
-    font-size: 2.6rem;
   }
 
   .fretboard-render-zone {

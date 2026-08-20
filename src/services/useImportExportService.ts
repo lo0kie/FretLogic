@@ -1,5 +1,6 @@
 ﻿import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
+import { useEditorStore } from '@/stores/chordEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { buildSanitizedBackupPayload } from '@/utils/buildSanitizedBackupPayload';
@@ -20,6 +21,8 @@ export function useImportExportService() {
     const songs = data.songs ?? [];
     songStore.overwriteSongs(songs);
     chordStore.selectedGroupId = null;
+    // 导入后清空指板编辑草稿（全部静音），避免残留旧指法
+    useEditorStore().resetEditor();
   };
 
   const processImport = (file: File, resetInputCallback: () => void): Promise<boolean> => {
@@ -76,7 +79,9 @@ export function useImportExportService() {
     const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, -1);
     const dateStr = localISOTime.replace(/T/, '_').replace(/:/g, '-').split('.')[0];
     const link = document.createElement('a');
-    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(payload)], {
+      type: 'application/json',
+    });
     const objectUrl = URL.createObjectURL(blob);
     link.href = objectUrl;
     link.download = `FretLogic备份_${dateStr}.json`;

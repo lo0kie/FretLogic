@@ -51,7 +51,9 @@
               <div class="line-index-badge" v-show="!isExporting">
                 <span
                   class="index-text-tag"
-                  :class="{ 'is-selected': !isExporting && selectedLineSet.has(lineData.lineIdx) }"
+                  :class="{
+                    'is-selected': !isExporting && selectedLineSet.has(lineData.lineIdx),
+                  }"
                 >
                   {{ formatLineIndex(lineData.lineIdx) }}
                 </span>
@@ -83,12 +85,13 @@
               <ChordSlotCell
                 :is-exporting
                 :scroll-root="scoreZoneRef"
-                v-for="item in lineData.chars"
+                v-for="(item, index) in lineData.chars"
                 :key="item.slotKey"
                 variant="char"
                 :slot-key="item.slotKey"
                 :chord="getCharChord(item.slotKey)"
                 :char="item.char"
+                :left-chord-gap="isLeftAdjacentChord(lineData, index)"
                 @click="emit('open-picker', item.slotKey)"
                 @pointerdown="handlePointerDown"
                 @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
@@ -97,11 +100,12 @@
                 <ChordSlotCell
                   :is-exporting
                   :scroll-root="scoreZoneRef"
-                  v-for="item in lineData.endChords"
+                  v-for="(item, index) in lineData.endChords"
                   :key="item.slotKey"
                   variant="edge"
                   :slot-key="item.slotKey"
                   :chord="item.chord"
+                  :left-chord-gap="isEndEdgeGap(lineData, index)"
                   @click="emit('open-picker', item.slotKey)"
                   @pointerdown="handlePointerDown"
                   @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
@@ -160,7 +164,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'open-picker', slotKey: string | number): void;
+  (e: 'open-picker', slotKey: string): void;
   (e: 'line-click', lineIdx: number): void;
 }>();
 
@@ -188,7 +192,7 @@ const isLineVisibleInExport = (lineIdx: number) => {
 };
 
 const slotChordMap = computed(() => {
-  const map = new Map<string | number, Chord>();
+  const map = new Map<string, Chord>();
   const chordMap = scoreEditor.activeSong?.chordMap;
   if (!chordMap) return map;
   for (const [slotKey, chordId] of Object.entries(chordMap)) {
@@ -198,7 +202,32 @@ const slotChordMap = computed(() => {
   return map;
 });
 
-const getCharChord = (slotKey: string | number) => slotChordMap.value.get(slotKey);
+const getCharChord = (slotKey: string) => slotChordMap.value.get(slotKey);
+
+/** 连续字符都分配了和弦时，靠右的那个需要横向间距，避免和弦卡片互相紧贴 */
+const isLeftAdjacentChord = (lineData: LineData, index: number): boolean => {
+  const cur = lineData.chars[index];
+  if (!cur) return false;
+  if (index === 0) {
+    // 行首：若行首 edge 和弦紧邻第一个字符，同样需要间距
+    const startEdgeHasChord = lineData.startChords.some(edge => Boolean(edge.chord));
+    return startEdgeHasChord && Boolean(getCharChord(cur.slotKey));
+  }
+  const prev = lineData.chars[index - 1];
+  return Boolean(getCharChord(prev.slotKey)) && Boolean(getCharChord(cur.slotKey));
+};
+
+/** 行尾 edge 和弦：若紧邻的最后一个字符也有和弦，需要横向间距 */
+const isEndEdgeGap = (lineData: LineData, index: number): boolean => {
+  const edge = lineData.endChords[index];
+  if (!edge || !edge.chord) return false;
+  if (index === 0) {
+    const lastChar = lineData.chars[lineData.chars.length - 1];
+    return Boolean(lastChar && getCharChord(lastChar.slotKey));
+  }
+  // 多个行尾和弦相邻时，靠右的同样需要间距
+  return Boolean(lineData.endChords[index - 1]?.chord);
+};
 
 const getLineChordSignature = (lineData: LineData) => {
   const chordMap = scoreEditor.activeSong?.chordMap;
@@ -334,6 +363,7 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   &.is-export-mode {
     min-width: 0 !important;
     width: max-content !important;
+    gap: 0;
 
     /* 导出捕获需要完整布局，禁用屏外行的渲染跳过与相关过渡 */
     .line-row {
@@ -351,6 +381,7 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
 
     .lyrics-line {
       transition: none !important;
+      padding: 0 !important;
 
       .index-text-tag {
         transition: none !important;
@@ -377,7 +408,6 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   justify-content: center;
   gap: 0.5rem;
   padding-bottom: 1.2rem;
-  margin-bottom: 0.8rem;
   width: 100%;
 }
 

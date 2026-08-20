@@ -1,15 +1,10 @@
 ﻿import { FRET_COUNTS } from '@/constants';
-import { TuningEnum } from '@/utils/musicTheory';
+import { Tuning } from '@/utils/musicTheory';
 import type { Song } from './song';
-
-export type Writable<T> = {
-  -readonly [P in keyof T]: T[P];
-};
 
 export interface GuitarStringEntity {
   fret: number;
   preferFlat: boolean;
-  isRoot: boolean;
 }
 
 export type GuitarStringsModel = [
@@ -21,7 +16,12 @@ export type GuitarStringsModel = [
   GuitarStringEntity,
 ];
 
-export type GroupSortRule = 'ROOT_PITCH' | 'KEY_DEGREE' | 'NAME_ASC';
+/** 分组排序规则 */
+export enum GroupSortRule {
+  ROOT_PITCH = 'ROOT_PITCH',
+  KEY_DEGREE = 'KEY_DEGREE',
+  NAME_ASC = 'NAME_ASC',
+}
 
 export interface Chord {
   id: string;
@@ -30,15 +30,14 @@ export interface Chord {
   fretCount: (typeof FRET_COUNTS)[number];
   capo: number;
   groupId: string;
-  tuning: TuningEnum;
-  fingerprint: string;
-  isInverted: boolean;
+  tuning: Tuning;
+  /** 根音所在弦的索引（单点标记，替代原来每根弦各自维护的 isRoot）；null 表示未指定根音 */
+  rootStringIndex: number | null;
 }
 
 export interface Group {
   id: string;
   name: string;
-  collapsed: boolean;
   sortRule: GroupSortRule;
   sortKey?: string;
 }

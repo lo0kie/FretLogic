@@ -1,5 +1,6 @@
 ﻿import { STORAGE_KEYS } from '@/constants';
-import type { Toast, ToastOptions, ToastType } from '@/types';
+import type { Toast, ToastOptions } from '@/types';
+import { ToastType } from '@/types';
 import { useMediaQuery, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
@@ -48,7 +49,7 @@ export const useUiStore = defineStore('ui', () => {
 
   const resumeAllTimers = () => {
     toasts.value.forEach(toast => {
-      if (toast.type !== 'loading') {
+      if (toast.type !== ToastType.LOADING) {
         scheduleToastRemoval(toast.id, remainingMap.get(toast.id) ?? toast.duration ?? 3000);
       }
     });
@@ -56,7 +57,7 @@ export const useUiStore = defineStore('ui', () => {
 
   let toastIdCounter = 0;
 
-  const createToast = (msg: string, type: ToastType = 'info', options: ToastOptions = {}) => {
+  const createToast = (msg: string, type: ToastType = ToastType.INFO, options: ToastOptions = {}) => {
     const id = ++toastIdCounter;
     const hasAction = Boolean(options.onAction);
     const duration = options.duration ?? 3000;
@@ -74,18 +75,18 @@ export const useUiStore = defineStore('ui', () => {
       closable: options.closable ?? true,
     });
 
-    if (type !== 'loading') {
+    if (type !== ToastType.LOADING) {
       scheduleToastRemoval(id, duration);
     }
     return id;
   };
 
   const toast = {
-    info: (msg: string, options?: ToastOptions) => createToast(msg, 'info', options),
-    success: (msg: string, options?: ToastOptions) => createToast(msg, 'success', options),
-    error: (msg: string, options?: ToastOptions) => createToast(msg, 'error', options),
-    warning: (msg: string, options?: ToastOptions) => createToast(msg, 'warning', options),
-    loading: (msg: string, options?: ToastOptions) => createToast(msg, 'loading', options),
+    info: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.INFO, options),
+    success: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.SUCCESS, options),
+    error: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.ERROR, options),
+    warning: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.WARNING, options),
+    loading: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.LOADING, options),
   };
 
   return {

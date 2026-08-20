@@ -78,7 +78,7 @@ import BaseInput from '@/components/BaseInput.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import BaseNumberInput from '@/components/BaseNumberInput.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
-import { KEY_OPTIONS } from '@/constants';
+import { KEY_OPTIONS } from '@/utils/musicTheory';
 import { useSongModals } from '@/services/useSongModals';
 
 defineProps<{

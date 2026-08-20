@@ -3,7 +3,7 @@
     v-model:visible="visibleModel"
     :show-footer="false"
     width="w-lg"
-    @cancel="modeModel = 'normal'"
+    @cancel="modeModel = ExportMode.NORMAL"
     :close-on-mask="!isGenerating"
     :height="uiStore.isMobile ? 'h-lg' : 'h-full'"
     title="导出歌词数据"
@@ -22,7 +22,7 @@
           v-else
           :src="currentPage?.objectUrl"
           class="preview-image"
-          :class="{ 'is-a4': mode === 'a4' }"
+          :class="{ 'is-a4': mode === ExportMode.A4 }"
           alt="导出预览"
         />
       </div>
@@ -30,7 +30,7 @@
       <!-- 底部固定组件区：禁止收缩 (flex-shrink: 0) -->
       <div class="preview-footer-zone">
         <BasePagination
-          v-if="modeModel === 'a4'"
+          v-if="modeModel === ExportMode.A4"
           v-model="currentPageIndexModel"
           :total="pages.length"
           :disabled="isGenerating"
@@ -75,7 +75,7 @@ import BaseModal from '@/components/BaseModal.vue';
 import BasePagination from '@/components/BasePagination.vue';
 import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
 import EmptyState from '@/components/EmptyState.vue';
-import type { ExportMode, PreviewPage } from '@/services/useScoreExportPreview';
+import { ExportMode, type PreviewPage } from '@/services/useScoreExportPreview';
 import { useUiStore } from '@/stores/uiStore';
 import { Copy, Download, FileDown } from '@lucide/vue';
 import { computed } from 'vue';
@@ -116,8 +116,8 @@ const currentPageIndexModel = computed({
 });
 
 const modeOptions = [
-  { label: '长图', value: 'normal' },
-  { label: 'A4', value: 'a4' },
+  { label: '长图', value: ExportMode.NORMAL },
+  { label: 'A4', value: ExportMode.A4 },
 ];
 </script>
 

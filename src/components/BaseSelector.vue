@@ -114,7 +114,7 @@ import { ChevronDown, ChevronUp, X } from '@lucide/vue';
 import { vOnClickOutside } from '@vueuse/components';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 
-export interface SelectorOptionObject<T> {
+interface SelectorOptionObject<T> {
   label: string;
   value: T;
   disabled?: boolean;
@@ -185,7 +185,9 @@ const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const dropdownRef = useTemplateRef<HTMLDivElement>('dropdownRef');
 const optionEls = useTemplateRef<HTMLElement[]>('optionEls');
 
-const { captureTrigger, restoreFocusAfter } = useFocusReturn({ warnLabel: '[BaseSelector]' });
+const { captureTrigger, restoreFocusAfter } = useFocusReturn({
+  warnLabel: '[BaseSelector]',
+});
 
 const checkScroll = () => {
   const el = dropdownRef.value;

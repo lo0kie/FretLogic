@@ -5,7 +5,7 @@
       v-memo="[
         cardData.mainChord.id,
         activeChord.id,
-        activeChord.fingerprint,
+        computeChordFingerprint(activeChord),
         cardData.variantCount,
         isActive,
         cardData.hasVariants,
@@ -33,19 +33,6 @@
         @keydown.space.prevent.stop="handleCardClick"
         data-focusable-inline
       >
-        <span
-          v-if="hasDot"
-          class="status-dot"
-          :class="{
-            'is-root-normal': hasRoot && !isInverted,
-            'is-root-inverted': hasRoot && isInverted,
-            'is-rootless-inverted': !hasRoot && isInverted,
-            'is-rootless-normal': !hasRoot && !isInverted,
-          }"
-          :title="activeChord.chordName"
-          :aria-label="activeChord.chordName"
-        ></span>
-
         <BaseBadge
           v-if="cardData.hasVariants"
           :variant="isActive ? 'primary' : 'neutral'"
@@ -74,6 +61,7 @@ import BaseMarquee from '@/components/BaseMarquee.vue';
 import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import type { Chord, GroupedChordCard } from '@/types';
+import { computeChordFingerprint } from '@/utils/musicTheory';
 import { Move, Trash2 } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 
@@ -181,10 +169,6 @@ const menuItems = computed<ContextMenuItem[]>(() => [
     },
   },
 ]);
-
-const hasRoot = computed(() => activeChord.value.strings.some(s => s.fret >= 0 && s.isRoot));
-const isInverted = computed(() => !!activeChord.value.isInverted);
-const hasDot = true;
 
 const ariaLabel = computed(() => {
   const name = activeChord.value.chordName;
@@ -332,34 +316,6 @@ onBeforeUnmount(() => {
   color: var(--text-body);
 }
 
-.status-dot {
-  position: absolute;
-  top: 0.25rem;
-  left: 0.25rem;
-  z-index: 5;
-  display: inline-block;
-  border-radius: 50%;
-  flex-shrink: 0;
-  box-sizing: border-box;
-  transition: box-shadow @duration-fast ease;
-  width: 0.32rem;
-  height: 0.32rem;
-  box-shadow: 0 0 0 1.5px color-mix(in srgb, currentColor, transparent 65%);
-
-  &.is-root-normal {
-    background-color: var(--color-primary);
-  }
-  &.is-root-inverted {
-    background: linear-gradient(135deg, var(--color-primary) 50%, var(--color-warning) 50%);
-  }
-  &.is-rootless-inverted {
-    background-color: var(--color-warning);
-  }
-  &.is-rootless-normal {
-    background-color: var(--color-danger);
-  }
-}
-
 @media (max-width: 768px) {
   .chord-card-frame,
   .chord-thumb-card {
@@ -386,13 +342,6 @@ onBeforeUnmount(() => {
 
   .chord-name-text {
     font-size: 0.85rem;
-  }
-
-  .status-dot {
-    top: 0.25rem;
-    left: 0.25rem;
-    width: 0.62rem;
-    height: 0.62rem;
   }
 }
 </style>

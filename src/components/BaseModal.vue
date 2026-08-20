@@ -57,7 +57,6 @@
   </Teleport>
 </template>
 <script setup lang="ts">
-import { BASE_MODAL_DEFAULTS } from '@/constants/ui.ts';
 import { useFocusReturn } from '@/services/useFocusReturn';
 import { useUiStore } from '@/stores/uiStore';
 import { useEventListener, useScrollLock } from '@vueuse/core';
@@ -65,15 +64,16 @@ import { computed, nextTick, onBeforeUnmount, useSlots, useTemplateRef, watch } 
 import ActionButton from './ActionButton.vue';
 
 defineOptions({ inheritAttrs: false });
+
 const {
   title = '',
-  width = BASE_MODAL_DEFAULTS.WIDTH,
+  width = 'w-80',
   height = 'h-auto',
-  showFooter = BASE_MODAL_DEFAULTS.SHOW_FOOTER,
-  cancelText = BASE_MODAL_DEFAULTS.CANCEL_TEXT,
-  confirmText = BASE_MODAL_DEFAULTS.CONFIRM_TEXT,
-  confirmType = BASE_MODAL_DEFAULTS.CONFIRM_TYPE,
-  closeOnMask = BASE_MODAL_DEFAULTS.CLOSE_ON_MASK,
+  showFooter = true,
+  cancelText = '取消',
+  confirmText = '确认',
+  confirmType = 'primary',
+  closeOnMask = true,
 } = defineProps<{
   title?: string;
   width?: 'w-sm' | 'w-md' | 'w-80' | 'w-lg' | 'w-large' | 'w-xl' | 'w-wide' | 'w-full';
@@ -93,7 +93,9 @@ const visible = defineModel<boolean>('visible', { required: true });
 const uiStore = useUiStore();
 const isBodyLocked = useScrollLock(document.body);
 const modalCardRef = useTemplateRef<HTMLDivElement>('modalCardRef');
-const { captureTrigger, restoreFocusAfter } = useFocusReturn({ warnLabel: '[BaseModal]' });
+const { captureTrigger, restoreFocusAfter } = useFocusReturn({
+  warnLabel: '[BaseModal]',
+});
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const hasHeader = computed(() => Boolean(slots.header || slots['header-extra'] || slots.title || title));

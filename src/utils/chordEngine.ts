@@ -1,4 +1,4 @@
-import type { CandidateResult, NoteInput } from '@/types';
+import type { NoteInput } from '@/types';
 import { GRAMMAR_TEMPLATES } from './grammar';
 
 export type ChordSlot =
@@ -269,11 +269,16 @@ const CACHE_LIMIT = 80;
 
 function rawAnalyze(notes: NoteInput[], explicitRootPitch: number | null): AnalyzeResult {
   if (notes.length === 0) {
-    return { candidates: [], bestRootPitch: 0, alternatives: [], theoretical: [] };
+    return {
+      candidates: [],
+      bestRootPitch: 0,
+      alternatives: [],
+      theoretical: [],
+    };
   }
 
-  const lowestNote = notes[0];
   let pitchMask = 0;
+  const lowestNote = notes.reduce((min, n) => (n.stringIndex < min.stringIndex ? n : min), notes[0]);
   const labelByPitch: (string | undefined)[] = new Array(12);
 
   for (const n of notes) {
@@ -374,7 +379,12 @@ function rawAnalyze(notes: NoteInput[], explicitRootPitch: number | null): Analy
 
 export function analyzeChordGraph(notes: NoteInput[], explicitRootPitch: number | null = null): AnalyzeResult {
   if (notes.length === 0) {
-    return { candidates: [], bestRootPitch: 0, alternatives: [], theoretical: [] };
+    return {
+      candidates: [],
+      bestRootPitch: 0,
+      alternatives: [],
+      theoretical: [],
+    };
   }
 
   let key = `${explicitRootPitch ?? 'auto'}:`;
@@ -393,13 +403,4 @@ export function analyzeChordGraph(notes: NoteInput[], explicitRootPitch: number 
   }
   cache.set(key, result);
   return result;
-}
-
-export function toLegacyCandidates(result: AnalyzeResult): CandidateResult[] {
-  return result.candidates.map(c => ({
-    chordName: c.chordName,
-    rootLabel: c.rootLabel,
-    score: c.score,
-    rootPitch: c.rootPitch,
-  }));
 }
