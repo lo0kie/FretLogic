@@ -28,10 +28,11 @@ export function useFretboardInteraction(
   const tuning = computed(() => props.chord.tuning);
   const rootStringIndex = computed(() => props.chord.rootStringIndex);
   // 和弦名区始终显示，高度恒计入布局
-  const chordNameZoneHeight = computed(() => CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT);
+  const showChordName = computed(() => props.showChordName ?? true);
+  const chordNameZoneHeight = computed(() => (showChordName.value ? CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT : 0));
+  const isPointerDown = ref(false);
   const layout = useFretboardLayout(fretCount, scale, showOpenStrings, chordNameZoneHeight);
 
-  const isPointerDown = ref(false);
   let lastCancelTime = 0;
   let lastSIdx = -1;
   let lastFIdx = -1;
@@ -82,7 +83,7 @@ export function useFretboardInteraction(
     const { stringIndex: sIdx, fretIndex: fIdx } = point;
     const currentStringAsset = strings.value[sIdx];
     let isNoteClicked = false;
-    if (fIdx > 0 && fIdx <= fretCount.value && currentStringAsset.fret === fIdx) {
+    if (fIdx > 0 && fIdx <= fretCount.value && currentStringAsset[0] === fIdx) {
       isNoteClicked = true;
     } else if (fIdx === 0 && isOpen(currentStringAsset)) {
       isNoteClicked = true;
@@ -101,12 +102,12 @@ export function useFretboardInteraction(
     emitStringsUpdate(
       cloned => {
         const str = cloned[sIdx];
-        if (str.fret > 0) {
-          str.fret = 0;
+        if (str[0] > 0) {
+          str[0] = 0;
         } else if (isOpen(str)) {
-          str.fret = -1;
+          str[0] = -1;
         } else {
-          str.fret = 0;
+          str[0] = 0;
         }
       },
       currentRoot => (currentRoot === sIdx ? null : currentRoot)
@@ -116,7 +117,7 @@ export function useFretboardInteraction(
   const handleTogglePitchName = (sIdx: number) => {
     if (interactive.value) {
       fretBoardRef.value?.focus();
-      const currentFret = strings.value[sIdx]?.fret;
+      const currentFret = strings.value[sIdx]?.[0];
       focusPoint.value = {
         stringIndex: sIdx,
         fretIndex: currentFret > 0 ? currentFret : 0,
@@ -124,8 +125,8 @@ export function useFretboardInteraction(
     }
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
-      if (canTogglePitchAccidental(sIdx, str.fret, capo.value, getActiveBaseStrings(tuning.value))) {
-        str.preferFlat = !str.preferFlat;
+      if (canTogglePitchAccidental(sIdx, str[0], capo.value, getActiveBaseStrings(tuning.value))) {
+        str[1] = !str[1];
       }
     });
   };
@@ -138,8 +139,8 @@ export function useFretboardInteraction(
     emitStringsUpdate(
       cloned => {
         const str = cloned[sIdx];
-        if (str.fret === fIdx) {
-          str.fret = -1;
+        if (str[0] === fIdx) {
+          str[0] = -1;
           lastSIdx = -1;
           lastFIdx = -1;
           lastCancelTime = Date.now();
@@ -149,13 +150,12 @@ export function useFretboardInteraction(
             lastFIdx = -1;
             return;
           }
-          str.fret = fIdx;
+          str[0] = fIdx;
           lastSIdx = sIdx;
           lastFIdx = fIdx;
         }
       },
-      (currentRoot, cloned) =>
-        currentRoot === sIdx && cloned[sIdx].fret !== strings.value[sIdx].fret ? null : currentRoot
+      (currentRoot, cloned) => (currentRoot === sIdx && cloned[sIdx][0] !== strings.value[sIdx][0] ? null : currentRoot)
     );
   };
 
@@ -197,7 +197,7 @@ export function useFretboardInteraction(
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         emitStringsUpdate(
           cloned => {
-            cloned[stringIndex].fret = -1;
+            cloned[stringIndex][0] = -1;
           },
           currentRoot => (currentRoot === stringIndex ? null : currentRoot)
         );
@@ -213,27 +213,23 @@ export function useFretboardInteraction(
       emitStringsUpdate(
         cloned => {
           const str = cloned[stringIndex];
-          str.fret = str.fret === fretIndex ? -1 : fretIndex;
+          str[0] = str[0] === fretIndex ? -1 : fretIndex;
         },
         (currentRoot, cloned) =>
-          currentRoot === stringIndex && cloned[stringIndex].fret !== strings.value[stringIndex].fret
-            ? null
-            : currentRoot
+          currentRoot === stringIndex && cloned[stringIndex][0] !== strings.value[stringIndex][0] ? null : currentRoot
       );
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
       emitStringsUpdate(
         cloned => {
-          if (cloned[stringIndex].fret === fretIndex) {
-            cloned[stringIndex].fret = -1;
+          if (cloned[stringIndex][0] === fretIndex) {
+            cloned[stringIndex][0] = -1;
           }
         },
         (currentRoot, cloned) =>
-          currentRoot === stringIndex && cloned[stringIndex].fret !== strings.value[stringIndex].fret
-            ? null
-            : currentRoot
+          currentRoot === stringIndex && cloned[stringIndex][0] !== strings.value[stringIndex][0] ? null : currentRoot
       );
     } else if (e.key === 'r' || e.key === 'R') {
-      if (strings.value[stringIndex].fret === fretIndex) {
+      if (strings.value[stringIndex][0] === fretIndex) {
         emitToggleRootString(stringIndex);
       }
     }
@@ -342,9 +338,9 @@ export function useFretboardInteraction(
       const currentStr = strings.value[sIdx];
       // 悬停在已按音符上（含空弦 open 音符）：切换升降号，不触发 capo
       const isHoveringActiveNote =
-        (fIdx > 0 && fIdx <= fretCount.value && currentStr.fret === fIdx) || (fIdx === 0 && isOpen(currentStr));
+        (fIdx > 0 && fIdx <= fretCount.value && currentStr[0] === fIdx) || (fIdx === 0 && isOpen(currentStr));
       if (isHoveringActiveNote) {
-        if (canTogglePitchAccidental(sIdx, currentStr.fret, capo.value, getActiveBaseStrings(tuning.value))) {
+        if (canTogglePitchAccidental(sIdx, currentStr[0], capo.value, getActiveBaseStrings(tuning.value))) {
           handleTogglePitchName(sIdx);
         }
         return;

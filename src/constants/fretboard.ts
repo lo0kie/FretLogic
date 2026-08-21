@@ -57,6 +57,11 @@ export const CANVAS_CONFIG = {
 /** 可选品数（指板支持 3 或 4 品） */
 export const FRET_COUNTS = [3, 4] as const;
 
+const FINGER_DOT_RADIUS = 28;
+const OPEN_DOT_SIZE_PX = FINGER_DOT_RADIUS * 2;
+const FINGER_OUTLINE_RADIUS = 32;
+const FINGER_OUTLINE_WIDTH = 3;
+
 /**
  * 音符整体显示尺寸（空弦与指板统一引用，避免两处散落字面量）。
  * 指板 SVG 为 1 user 单位 = 1px（width 与 viewBox 同值，无缩放），
@@ -64,14 +69,18 @@ export const FRET_COUNTS = [3, 4] as const;
  * 二者同处 scale(fretboardScale) 容器，缩放等比，因此静止与缩放时都保持一致。
  */
 export const NOTE_DISPLAY = {
-  /** 指板手指音符圆点半径（px，直径 60） */
-  FINGER_DOT_RADIUS: 28,
+  /** 指板音符圆点半径 */
+  FINGER_DOT_RADIUS,
+  /** 指板音符圆点直径 */
+  OPEN_DOT_SIZE_PX,
+  /** 指板外边框的半径 */
+  FINGER_OUTLINE_RADIUS,
+  /** 指板外边框的宽度 */
+  FINGER_OUTLINE_WIDTH,
+  /** 外边框相对距离 */
+  FINGER_OUTLINE_OFFSET: FINGER_OUTLINE_RADIUS - FINGER_DOT_RADIUS - FINGER_OUTLINE_WIDTH / 2,
   /** 指板手指音符基础字号（px） */
   FINGER_FONT_SIZE: 40,
-  /** 空弦音符按钮直径（px，与指板圆点等大） */
-  OPEN_DOT_SIZE_PX: 56,
-  /** 空弦音符基础字号（px，与指板音符等大） */
-  OPEN_FONT_SIZE_PX: 40,
   /** 升降号相对基础字号的缩放比例（两者共用） */
   ACCIDENTAL_SCALE: 0.62,
   /** 指板升降号相对基础字号的垂直上移比例（正值向上） */

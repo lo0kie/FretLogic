@@ -6,7 +6,7 @@ import { cloneDeep } from '@/utils/cloneDeep';
 import { computeChordFingerprint, Tuning } from '@/utils/musicTheory';
 
 /** 备份包结构版本：每次结构变更（字段迁移/删除/语义调整）递增 */
-export const CURRENT_PAYLOAD_VERSION = 2;
+export const CURRENT_PAYLOAD_VERSION = 4;
 
 /**
  * 版本迁移：把任意旧版本 payload 逐级升级到当前版本。
@@ -16,6 +16,38 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: ImportExportPayload) => void>
   1: () => {
     // v1 -> v2：isRoot/label/isAccidental/isInverted/fingerprint 等派生字段已移除，
     // 由 normalizeChord 在 sanitize 阶段统一清理，此处无需额外处理。
+  },
+  2: (payload: ImportExportPayload) => {
+    // v2 -> v3：strings 由对象数组 [{fret, preferFlat}] 改为二维数组 [[fret, preferFlat]]；
+    // 同时把历史遗留的数字 id 规范化为字符串（songs.chordMap 引用均为字符串，需保持匹配）
+    payload.chords?.forEach(chord => {
+      if (!chord || typeof chord !== 'object') return;
+      if (typeof (chord as any).id === 'number') {
+        (chord as any).id = String((chord as any).id);
+      }
+      if (
+        Array.isArray(chord.strings) &&
+        chord.strings.length === 6 &&
+        chord.strings.some((s: any) => !Array.isArray(s))
+      ) {
+        chord.strings = chord.strings.map((s: any) => [
+          typeof s?.fret === 'number' ? s.fret : -1,
+          !!s?.preferFlat,
+        ]) as Chord['strings'];
+      }
+    });
+  },
+  3: (payload: ImportExportPayload) => {
+    // v3 -> v4：song.key 移除，改由 playKey + capo 实时派生。
+    // sanitizeSongs 会兜底 playKey 并丢弃 key，此处防御性清理旧数据。
+    payload.songs?.forEach((song: any) => {
+      if (song && typeof song === 'object' && 'key' in song) {
+        if (typeof song.playKey !== 'string' || !song.playKey) {
+          song.playKey = typeof song.key === 'string' && song.key ? song.key : 'C';
+        }
+        delete song.key;
+      }
+    });
   },
 };
 
@@ -78,8 +110,9 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
         issues.push(`chords[${index}] (${c.id}) 琴弦数组损坏 (必须为 6 弦)`);
         return false;
       }
+      // 二维数组校验：每项必须是 [fret, preferFlat] 元组
       const isStringsValid = c.strings.every(
-        (s: any) => s && typeof s === 'object' && typeof s.fret === 'number' && typeof s.preferFlat === 'boolean'
+        (s: any) => Array.isArray(s) && s.length === 2 && typeof s[0] === 'number' && typeof s[1] === 'boolean'
       );
       if (!isStringsValid) {
         issues.push(`chords[${index}] (${c.id}) 内部存在损坏的琴弦节点`);
@@ -121,16 +154,20 @@ const sanitizeSongs = (songs: unknown, issues: string[]): Song[] => {
       }
       return true;
     })
-    .map((s: any) => ({
-      ...s,
-      lyrics: typeof s.lyrics === 'string' ? s.lyrics : '',
-      capo: typeof s.capo === 'number' ? s.capo : 0,
-      chordMap: s.chordMap && typeof s.chordMap === 'object' ? s.chordMap : {},
-      lineIds: Array.isArray(s.lineIds) ? s.lineIds : [],
-      key: typeof s.key === 'string' && s.key ? s.key : 'C',
-      playKey:
-        typeof s.playKey === 'string' && s.playKey ? s.playKey : typeof s.key === 'string' && s.key ? s.key : 'C',
-    }));
+    .map((s: any) => {
+      // key 已改为由 playKey + capo 实时派生：旧数据若带 key 且 playKey 缺失则用 key 兜底，随后丢弃
+      const legacyKey = typeof s.key === 'string' && s.key ? s.key : 'C';
+      const cleaned = {
+        ...s,
+        lyrics: typeof s.lyrics === 'string' ? s.lyrics : '',
+        capo: typeof s.capo === 'number' ? s.capo : 0,
+        chordMap: s.chordMap && typeof s.chordMap === 'object' ? s.chordMap : {},
+        lineIds: Array.isArray(s.lineIds) ? s.lineIds : [],
+        playKey: typeof s.playKey === 'string' && s.playKey ? s.playKey : legacyKey,
+      };
+      delete cleaned.key;
+      return cleaned;
+    });
 };
 export const validateImportExportPayload = (data: unknown): ValidationResult => {
   if (!data || typeof data !== 'object') {
@@ -138,9 +175,11 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
   }
   const issues: string[] = [];
   const raw = cloneDeep(data as Record<string, any>);
-  const groups = sanitizeGroups(raw.groups, issues);
-  const chords = sanitizeChords(raw.chords, issues);
-  const songs = raw.songs !== undefined ? sanitizeSongs(raw.songs, issues) : [];
+  // 先迁移旧版本到当前格式，再做结构校验（校验只认当前格式）
+  const migrated = migratePayloadVersion(raw as unknown as ImportExportPayload);
+  const groups = sanitizeGroups(migrated.groups, issues);
+  const chords = sanitizeChords(migrated.chords, issues);
+  const songs = migrated.songs !== undefined ? sanitizeSongs(migrated.songs, issues) : [];
   if (issues.length > 0) {
     return { isValid: false, issues };
   }
@@ -169,12 +208,12 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
 
   return {
     isValid: true,
-    payload: migratePayloadVersion({
-      version: raw.version || 1,
+    payload: {
+      version: CURRENT_PAYLOAD_VERSION,
       groups,
       chords: dedupedChords,
       songs: cleanedSongs,
-    }),
+    },
     issues: [],
   };
 };

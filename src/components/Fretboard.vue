@@ -19,7 +19,12 @@
       }"
       @contextmenu="handleRightClickRoot"
     >
-      <div class="chord-name-zone" :class="[canEditChordName ? 'is-editable' : 'is-readonly']" @pointerdown.stop>
+      <div
+        v-if="showChordName"
+        class="chord-name-zone"
+        :class="[canEditChordName ? 'is-editable' : 'is-readonly']"
+        @pointerdown.stop
+      >
         <input
           v-model="chordNameValue"
           type="text"
@@ -33,55 +38,35 @@
         />
       </div>
       <div class="open-strings-wrapper" :style="{ height: `${activeTopOffset}px` }">
-        <template v-if="showOpenStrings">
-          <button
-            v-wave="{ disabled: !interactive }"
+        <svg
+          v-if="showOpenStrings"
+          :width="CANVAS_CONFIG.BOARD_WIDTH"
+          :height="activeTopOffset"
+          :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${activeTopOffset}`"
+          style="overflow: visible; width: 100%; height: 100%; display: block"
+        >
+          <FretboardNote
             v-for="(str, sIdx) in chord.strings"
             :key="'os-' + sIdx"
             v-tooltip="openStringTooltips[sIdx]"
-            tabindex="-1"
-            role="button"
+            :x="stringXPositions[sIdx] || 30 + sIdx * 64"
+            :y="activeTopOffset / 2"
+            is-open-string
+            :is-root="isRoot(sIdx)"
+            :is-dark-mode="isDarkMode"
+            :interactive="interactive"
+            :is-pressed="str[0] > 0"
+            :is-muted="isMuted(str)"
+            :is-hovered="hoverPoint?.fretIndex === 0 && hoverPoint?.stringIndex === sIdx"
+            :is-focused="isFocused && focusPoint?.fretIndex === 0 && focusPoint?.stringIndex === sIdx"
+            :label="openNoteInfo(sIdx).label"
+            :is-accidental="openNoteInfo(sIdx).isAccidental"
+            :prefer-flat="str[1]"
             :aria-label="openStringAriaLabels[sIdx]"
-            :aria-disabled="!interactive"
-            :title="str.fret > 0 ? undefined : openStringAriaLabels[sIdx]"
-            @click.stop="handleLocalToggleOpenString(sIdx)"
-            @dblclick.prevent.stop="handleTogglePitchName(sIdx)"
-            class="open-string-btn"
-            :class="[
-              str.fret > 0 ? 'is-fret-pressed' : 'is-fret-available',
-              openStringStatusClasses[sIdx],
-              interactive ? 'allow-events' : 'block-events',
-              {
-                'no-border': !bordered,
-                'is-focused-hover': isFocused && focusPoint?.fretIndex === 0 && focusPoint?.stringIndex === sIdx,
-              },
-            ]"
-            :style="{
-              left: stringXPositions[sIdx] ? `${stringXPositions[sIdx]}px` : `${30 + sIdx * 64}px`,
-              backgroundColor: bgColor,
-              ...openStringStyles[sIdx],
-              width: NOTE_DISPLAY.OPEN_DOT_SIZE_PX + 'px',
-              height: NOTE_DISPLAY.OPEN_DOT_SIZE_PX + 'px',
-            }"
-          >
-            <template v-if="str.fret <= 0">
-              <X v-if="isMuted(str)" class="mute-icon" stroke-width="3" aria-hidden="true" />
-              <span
-                v-else-if="isOpen(str)"
-                class="open-note-text"
-                :style="{ fontSize: NOTE_DISPLAY.OPEN_FONT_SIZE_PX + 'px' }"
-              >
-                <template v-if="openNoteInfo(sIdx).isAccidental">
-                  <span class="note-label">{{ openNoteInfo(sIdx).label }}</span>
-                  <span class="accidental" :style="{ fontSize: NOTE_DISPLAY.ACCIDENTAL_SCALE * 100 + '%' }">
-                    {{ openNoteInfo(sIdx).preferFlat ? 'b' : '#' }}
-                  </span>
-                </template>
-                <template v-else>{{ openNoteInfo(sIdx).label }}</template>
-              </span>
-            </template>
-          </button>
-        </template>
+            @click="handleLocalToggleOpenString(sIdx)"
+            @toggle-pitch="handleTogglePitchName(sIdx)"
+          />
+        </svg>
       </div>
 
       <FretboardSvg
@@ -106,20 +91,13 @@
 
 <script setup lang="ts">
 import FretboardSvg from '@/components/FretboardSvg.vue';
-import { CANVAS_CONFIG, CHORD_NAME_FONT_SIZE_MAP, NOTE_DISPLAY, type ChordNameFontSize } from '@/constants';
+import { CANVAS_CONFIG, CHORD_NAME_FONT_SIZE_MAP, type ChordNameFontSize } from '@/constants';
 import { useFretboardInteraction } from '@/services/useFretboardInteraction';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, GuitarStringsModel } from '@/types';
-import { getOpenStringStatusClass, getOpenStringStyle } from '@/utils/fretboardVisuals';
-import {
-  calcNoteLabel,
-  computeStringLabelAccidental,
-  getActiveBaseStrings,
-  isMuted,
-  isOpen,
-} from '@/utils/musicTheory';
-import { X } from '@lucide/vue';
+import { calcNoteLabel, computeStringLabelAccidental, getActiveBaseStrings, isMuted } from '@/utils/musicTheory';
 import { computed, type CSSProperties } from 'vue';
+import FretboardNote from './FretboardNote.vue';
 
 export interface FretboardProps {
   chord: Chord;
@@ -135,6 +113,7 @@ export interface FretboardProps {
   chordNameEditable?: boolean;
   /** 和弦名预设字号（sm/md/lg），默认 md */
   chordNameFontSize?: ChordNameFontSize;
+  showChordName?: boolean;
 }
 
 const props = withDefaults(defineProps<FretboardProps>(), {
@@ -145,6 +124,7 @@ const props = withDefaults(defineProps<FretboardProps>(), {
   showOpenStrings: true,
   showFretNumbers: true,
   bgColor: 'transparent',
+  showChordName: true,
   bordered: false,
   chordNameEditable: false,
   chordNameFontSize: 'md',
@@ -201,7 +181,7 @@ const {
 // 将 tooltip 也改为计算属性缓存
 const openStringTooltips = computed(() => {
   return props.chord.strings.map(str => {
-    return props.interactive && str.fret <= 0
+    return props.interactive && str[0] <= 0
       ? {
           content: '左键：切换空弦/静音 \n 右键：设为根音 \n 滚轮：切换升降号',
           placement: 'top',
@@ -213,26 +193,16 @@ const openStringTooltips = computed(() => {
 /** 单点根音标记：某弦是否为根音 */
 const isRoot = (sIdx: number) => props.chord.rootStringIndex === sIdx;
 
-// 将状态类名改为计算属性缓存
-const openStringStatusClasses = computed(() => {
-  return props.chord.strings.map((str, sIdx) => getOpenStringStatusClass(str, isRoot(sIdx)));
-});
-
-// 将样式改为计算属性缓存
-const openStringStyles = computed(() => {
-  return props.chord.strings.map((str, sIdx) => getOpenStringStyle(str, isRoot(sIdx), props.isDarkMode));
-});
-
 const openStringAriaLabels = computed(() => {
   return props.chord.strings.map((str, sIdx) => {
     const stringNum = 6 - sIdx;
-    if (str.fret > 0) {
-      return `第 ${stringNum} 弦（已按第 ${str.fret} 品，点击清除按音）`;
+    if (str[0] > 0) {
+      return `第 ${stringNum} 弦（已按第 ${str[0]} 品，点击清除按音）`;
     }
     if (isMuted(str)) {
       return `第 ${stringNum} 弦（静音，点击切换为空弦）`;
     }
-    const noteName = calcNoteLabel(sIdx, 0, props.chord.capo, str.preferFlat, getActiveBaseStrings(props.chord.tuning));
+    const noteName = calcNoteLabel(sIdx, 0, props.chord.capo, str[1], getActiveBaseStrings(props.chord.tuning));
     return `第 ${stringNum} 弦（空弦 ${noteName}，点击切换为静音）`;
   });
 });
@@ -244,10 +214,10 @@ const openNoteInfo = (sIdx: number): { label: string; isAccidental: boolean; pre
     sIdx,
     0,
     props.chord.capo,
-    str.preferFlat,
+    str[1],
     getActiveBaseStrings(props.chord.tuning)
   );
-  return { label, isAccidental, preferFlat: str.preferFlat };
+  return { label, isAccidental, preferFlat: str[1] };
 };
 </script>
 
@@ -343,111 +313,9 @@ const openNoteInfo = (sIdx: number): { label: string; isAccidental: boolean; pre
   position: relative;
   pointer-events: none;
   box-sizing: border-box;
-}
 
-.open-string-btn {
-  position: absolute;
-  top: 6px;
-  transform: translateX(-50%);
-  box-sizing: border-box;
-  box-shadow: @shadow-sm;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border-style: solid;
-  border-width: 2px;
-  padding: 0;
-  cursor: pointer;
-  transition:
-    background-color @duration-fast ease,
-    border-color @duration-fast ease,
-    transform @duration-fast ease,
-    opacity @duration-fast ease;
-  will-change: transform;
-  outline: none;
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-
-  &.no-border {
-    border-color: transparent !important;
-    box-shadow: none !important;
-  }
-
-  &.allow-events {
+  svg {
     pointer-events: auto;
-  }
-
-  &.block-events {
-    pointer-events: none !important;
-    cursor: default;
-  }
-
-  &.is-fret-available:active {
-    transform: translateX(-50%) scale(0.92);
-  }
-
-  &.is-fret-pressed {
-    opacity: 0 !important;
-    transform: translateX(-50%) scale(1) !important;
-    background-color: transparent !important;
-    border-color: transparent !important;
-    box-shadow: none !important;
-  }
-
-  &.is-muted-status {
-    border-color: color-mix(in srgb, var(--color-danger), transparent 85%);
-    color: var(--color-danger);
-    background-color: color-mix(in srgb, var(--color-danger), transparent 92%) !important;
-  }
-
-  &.is-open-status {
-    border-color: color-mix(in srgb, var(--color-primary), transparent 85%);
-    color: var(--color-primary);
-    background-color: color-mix(in srgb, var(--color-primary), transparent 92%) !important;
-  }
-
-  &.is-focused-hover {
-    opacity: 1 !important;
-    border-color: var(--color-primary) !important;
-    box-shadow: 0 0 0 3.5px var(--color-primary) !important;
-  }
-}
-
-.mute-icon {
-  width: 2.2rem;
-  height: 2.2rem;
-}
-
-.open-note-text {
-  display: inline-block;
-  line-height: 1;
-  font-weight: 600;
-  white-space: nowrap;
-
-  .accidental {
-    vertical-align: super;
-    margin-left: 0.04em;
-  }
-}
-
-@media (max-width: 768px) {
-  .open-string-btn {
-    width: 2.75rem;
-    height: 2.75rem;
-    transform: translateX(-50%) translateY(2px);
-
-    &.is-fret-available:active {
-      transform: translateX(-50%) translateY(2px) scale(0.92);
-    }
-  }
-
-  .mute-icon {
-    width: 2.2rem;
-    height: 2.2rem;
-  }
-
-  .open-note-text {
-    font-size: 1.5rem;
   }
 }
 </style>

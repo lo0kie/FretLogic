@@ -15,7 +15,7 @@
         <div v-show="isExporting && includeMetaBar" class="export-header-meta" ref="exportHeaderMetaRef">
           <h1 class="export-song-title">{{ scoreEditor.activeSong?.title }}</h1>
           <div class="export-song-info">
-            <span>{{ scoreEditor.activeSong.key }} 调</span>
+            <span>{{ computeSongKey(scoreEditor.activeSong.playKey, scoreEditor.activeSong.capo) }} 调</span>
             <span class="info-divider">|</span>
             <span>Capo: {{ scoreEditor.activeSong.capo }}</span>
           </div>
@@ -150,6 +150,7 @@ import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore.ts';
 import type { Chord } from '@/types';
 import type { LineData } from '@/utils/scoreLines.ts';
+import { computeSongKey } from '@/utils/musicTheory';
 import { Eraser, FileText, Trash2 } from '@lucide/vue';
 import { computed, onActivated, onDeactivated, useTemplateRef, watch } from 'vue';
 import ChordSlotCell from './ChordSlotCell.vue';

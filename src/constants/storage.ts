@@ -9,6 +9,8 @@ export const STORAGE_KEYS = {
   EDITING_ID: 'CHORD_LAB_EDITING_ID',
   /** 当前选中的分组 id */
   CURR_GROUP_ID: 'CHORD_LAB_CURR_GROUP_ID_V1',
+  /** 当前展开的分组 id（单一展开，持久化） */
+  EXPANDED_GROUP_ID: 'CHORD_LAB_EXPANDED_GROUP_ID_V1',
 
   // ---- GitHub 同步配置 ----
   /** GitHub Token */
