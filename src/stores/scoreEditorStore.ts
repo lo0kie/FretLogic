@@ -4,7 +4,7 @@ import type { Chord, Song } from '@/types';
 import { garbageCollectChordMap } from '@/utils/chordMap';
 import { cloneDeep } from '@/utils/cloneDeep';
 import { matchLineIds } from '@/utils/lineIdMatcher';
-import { getKeySemitones, transposeChordName } from '@/utils/musicTheory';
+import { computeSongKey, getKeySemitones, transposeChordName } from '@/utils/musicTheory';
 import { sanitizeLyricsText } from '@/utils/sanitizeLyricsText';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -127,12 +127,13 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   };
 
   const updateKey = (key: string) => {
-    if (activeSong.value && activeSong.value.key !== key) {
+    if (!activeSong.value) return;
+    const currentKey = computeSongKey(activeSong.value.playKey, activeSong.value.capo);
+    if (currentKey !== key) {
       recordHistory();
-      const delta = getKeySemitones(activeSong.value.key || 'C', key);
+      const delta = getKeySemitones(currentKey, key);
       const newPlayKey = transposeChordName(activeSong.value.playKey || 'C', delta);
       songStore.updateSongMeta(activeSong.value.id, {
-        key,
         playKey: newPlayKey,
       });
     }
@@ -141,11 +142,8 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const updatePlayKey = (playKey: string) => {
     if (activeSong.value && activeSong.value.playKey !== playKey) {
       recordHistory();
-      const delta = getKeySemitones(activeSong.value.playKey || 'C', playKey);
-      const newKey = transposeChordName(activeSong.value.key || 'C', delta);
       songStore.updateSongMeta(activeSong.value.id, {
         playKey,
-        key: newKey,
       });
     }
   };
@@ -154,11 +152,8 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     if (activeSong.value && activeSong.value.capo !== capo) {
       recordHistory();
       const clampedCapo = Math.min(11, Math.max(0, capo));
-      const deltaCapo = clampedCapo - (activeSong.value.capo || 0);
-      const newKey = transposeChordName(activeSong.value.key || 'C', deltaCapo);
       songStore.updateSongMeta(activeSong.value.id, {
         capo: clampedCapo,
-        key: newKey,
       });
     }
   };

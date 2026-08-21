@@ -35,5 +35,12 @@ export function cloneDeep<T>(value: T): T {
 
 export function cloneGuitarStrings(strings: GuitarStringsModel): GuitarStringsModel {
   const raw = toRaw(strings);
-  return [{ ...raw[0] }, { ...raw[1] }, { ...raw[2] }, { ...raw[3] }, { ...raw[4] }, { ...raw[5] }];
+  return [
+    [raw[0][0], raw[0][1]],
+    [raw[1][0], raw[1][1]],
+    [raw[2][0], raw[2][1]],
+    [raw[3][0], raw[3][1]],
+    [raw[4][0], raw[4][1]],
+    [raw[5][0], raw[5][1]],
+  ];
 }

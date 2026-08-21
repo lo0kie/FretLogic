@@ -109,8 +109,8 @@ const { handleKeydown } = useGridNavigation(3, gridContainerRef, {
 .chords-grid-layout {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.55rem;
-  padding: 0.65rem 0.5rem;
+  gap: 0.5rem;
+  padding: 0.6rem 0.5rem 0 0.5rem;
   align-items: center;
   position: relative;
   z-index: 10;

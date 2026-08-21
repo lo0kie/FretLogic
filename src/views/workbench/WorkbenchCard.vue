@@ -49,7 +49,7 @@ const handleCapoUpdate = (capo: number) => {
 
 const handleStringsChange = (strings: GuitarStringsModel) => {
   strings.forEach((str, i) => {
-    Object.assign(editorStore.draftChord.strings[i], str);
+    editorStore.draftChord.strings[i] = [str[0], str[1]];
   });
 
   if (!editorStore.isEditing) editorStore.isCreating = true;

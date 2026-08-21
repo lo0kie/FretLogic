@@ -99,10 +99,7 @@ export function useAudioPlayer() {
 
       guitarSynth.releaseAll();
 
-      const stringsSnapshot = editorStore.draftChord.strings.map(s => ({
-        fret: s.fret,
-        preferFlat: s.preferFlat,
-      }));
+      const stringsSnapshot = editorStore.draftChord.strings.map(s => [...s] as [number, boolean]);
       const capoOffset = editorStore.draftChord.capo > 0 ? editorStore.draftChord.capo : 0;
 
       let strumDelay = 0;
@@ -112,11 +109,11 @@ export function useAudioPlayer() {
       for (let sIdx = 0; sIdx <= 5; sIdx++) {
         const targetStr = stringsSnapshot[sIdx];
 
-        if (targetStr.fret < 0) continue;
+        if (targetStr[0] < 0) continue;
 
         const guitarMidiBase = editorStore.activeBaseStrings[sIdx];
-        const actualOffset = targetStr.fret > 0 ? capoOffset : 0;
-        const currentMidiNote = guitarMidiBase + targetStr.fret + actualOffset;
+        const actualOffset = targetStr[0] > 0 ? capoOffset : 0;
+        const currentMidiNote = guitarMidiBase + targetStr[0] + actualOffset;
 
         const frequency = getFrequencyFromMidi(currentMidiNote, ToneModule);
 

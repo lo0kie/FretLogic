@@ -3,7 +3,6 @@ export interface Song {
   title: string;
   lyrics: string;
   lineIds: string[];
-  key: string;
   playKey: string;
   capo: number;
   chordMap: Record<string, string>;

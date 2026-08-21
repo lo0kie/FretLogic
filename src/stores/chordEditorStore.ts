@@ -26,32 +26,47 @@ const createDefaultChord = (): Chord => ({
   rootStringIndex: null,
 });
 
+/** 迁移：把旧草稿（对象数组 / isRoot 散列）升级为二维数组 + 单点根音 */
+const normalizeDraftStrings = (draft: Chord): void => {
+  // 旧对象数组 -> 二维数组
+  if (draft.strings.length === 6 && draft.strings.some((s: any) => !Array.isArray(s))) {
+    draft.strings = draft.strings.map((s: any) => [
+      typeof s?.fret === 'number' ? s.fret : -1,
+      !!s?.preferFlat,
+    ]) as GuitarStringsModel;
+  }
+  // 旧草稿每根弦各自维护 isRoot -> 单点 rootStringIndex
+  if (draft.rootStringIndex === undefined || draft.rootStringIndex === null) {
+    const legacyRootIdx = (draft.strings as unknown as { isRoot?: boolean; fret: number }[]).findIndex(
+      s => (s as any).isRoot && s.fret >= 0
+    );
+    draft.rootStringIndex = legacyRootIdx >= 0 ? legacyRootIdx : null;
+  }
+  // 清理旧字段：每弦 isRoot/label/isAccidental，和弦级 isInverted/fingerprint
+  (draft.strings as unknown as { isRoot?: boolean; label?: string; isAccidental?: boolean }[]).forEach(s => {
+    if (s && typeof s === 'object' && !Array.isArray(s)) {
+      delete s.isRoot;
+      delete s.label;
+      delete s.isAccidental;
+    }
+  });
+  const legacyDraft = draft as unknown as { isInverted?: boolean; fingerprint?: string };
+  delete legacyDraft.isInverted;
+  delete legacyDraft.fingerprint;
+};
+
 export const useEditorStore = defineStore('editor', () => {
   const chordStore = useChordStore();
 
   const draftChord = useStorage<Chord>(STORAGE_KEYS.EDITING_DRAFT, createDefaultChord(), localStorage, {
     eventFilter: debounceFilter(300),
   });
-  // 迁移：旧草稿每根弦各自维护 isRoot，统一为单点 rootStringIndex
-  if (draftChord.value.rootStringIndex === undefined || draftChord.value.rootStringIndex === null) {
-    const legacyRootIdx = (draftChord.value.strings as unknown as { isRoot?: boolean; fret: number }[]).findIndex(
-      s => s.isRoot && s.fret >= 0
-    );
-    draftChord.value.rootStringIndex = legacyRootIdx >= 0 ? legacyRootIdx : null;
-  }
-  // 清理旧字段：每弦 isRoot/label/isAccidental，和弦级 isInverted/fingerprint
-  (draftChord.value.strings as unknown as { isRoot?: boolean; label?: string; isAccidental?: boolean }[]).forEach(s => {
-    delete s.isRoot;
-    delete s.label;
-    delete s.isAccidental;
-  });
-  const legacyDraft = draftChord.value as unknown as { isInverted?: boolean; fingerprint?: string };
-  delete legacyDraft.isInverted;
-  delete legacyDraft.fingerprint;
+  // 迁移：旧草稿（对象数组 / isRoot 散列）升级为二维数组 + 单点根音
+  normalizeDraftStrings(draftChord.value);
   const isEditing = useStorage(STORAGE_KEYS.IS_EDITING, false);
   const isCreating = useStorage(STORAGE_KEYS.IS_CREATING, false);
 
-  const isFretBoardEmpty = computed(() => draftChord.value.strings.every(s => s.fret < 0));
+  const isFretBoardEmpty = computed(() => draftChord.value.strings.every(s => s[0] < 0));
   const activeBaseStrings = computed(() => TUNING_PRESETS[draftChord.value.tuning]?.mapping || DEFAULT_TUNING_MAPPING);
 
   /** 多指法：只查 chordStore，nameKey 规则不在这里重复 */
@@ -82,14 +97,14 @@ export const useEditorStore = defineStore('editor', () => {
     draftChord.value.fretCount = newVal;
     if (newVal < oldVal) {
       draftChord.value.strings.forEach(str => {
-        if (str.fret > newVal) {
-          str.fret = -1;
+        if (str[0] > newVal) {
+          str[0] = -1;
         }
       });
       // 根音所在弦被清除时，根标记一并失效
       if (
         draftChord.value.rootStringIndex !== null &&
-        draftChord.value.strings[draftChord.value.rootStringIndex].fret < 0
+        draftChord.value.strings[draftChord.value.rootStringIndex][0] < 0
       ) {
         draftChord.value.rootStringIndex = null;
       }

@@ -4,15 +4,20 @@ import { GroupSortRule } from '@/types';
 import { normalizeChord } from '@/utils/chordMap';
 import { cloneDeep, cloneGuitarStrings } from '@/utils/cloneDeep';
 import { generateUUID } from '@/utils/id';
-import { computeChordFingerprint, computeIsInverted, sortChordsByRule } from '@/utils/musicTheory';
+import {
+  computeChordFingerprint,
+  computeIsInverted,
+  sortChordsByRule,
+  validateBassConsistency,
+} from '@/utils/musicTheory';
 import { debounceFilter, useEventListener, useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { computed, ref, toRaw } from 'vue';
+import { computed, toRaw } from 'vue';
 
 const DEFAULT_SORT_RULE: GroupSortRule = GroupSortRule.ROOT_PITCH;
 
 type ChordValidationResult =
-  | { ok: true; payload: Chord; cleanName: string }
+  | { ok: true; payload: Chord; cleanName: string; warn?: string | null }
   | {
       ok: false;
       reason: 'EMPTY_NAME' | 'NO_GROUPS' | 'NO_SELECTED_GROUP' | 'DUPLICATE_FINGERPRINT' | 'UNCHANGED';
@@ -50,8 +55,8 @@ export const useChordStore = defineStore('chord', () => {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
   });
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
-  // 只允许同时展开一个分组：单一展开状态为会话级（不持久化），刷新后自动重置为全部折叠
-  const expandedGroupId = ref<string | null>(null);
+  // 只允许同时展开一个分组：单一展开状态持久化，刷新后恢复
+  const expandedGroupId = useStorage<string | null>(STORAGE_KEYS.EXPANDED_GROUP_ID, null);
   const isGroupCollapsed = (groupId: string): boolean => expandedGroupId.value !== groupId;
   const isAnyGroupExpanded = computed(() => expandedGroupId.value !== null);
 
@@ -386,7 +391,7 @@ export const useChordStore = defineStore('chord', () => {
 
   const buildChordForSave = (draft: Chord, isEditing: boolean): ChordValidationResult => {
     const cleanName = draft.chordName.trim();
-    const isFretBoardEmpty = draft.strings.every(s => s.fret < 0);
+    const isFretBoardEmpty = draft.strings.every(s => s[0] < 0);
     if (!cleanName || isFretBoardEmpty) {
       return { ok: false, reason: 'EMPTY_NAME' };
     }
@@ -409,7 +414,7 @@ export const useChordStore = defineStore('chord', () => {
       draft.rootStringIndex !== undefined &&
       draft.rootStringIndex >= 0 &&
       draft.rootStringIndex < currentStrings.length &&
-      currentStrings[draft.rootStringIndex].fret >= 0
+      currentStrings[draft.rootStringIndex][0] >= 0
         ? draft.rootStringIndex
         : null;
 
@@ -440,7 +445,8 @@ export const useChordStore = defineStore('chord', () => {
       return { ok: false, reason: 'DUPLICATE_FINGERPRINT', cleanName };
     }
 
-    return { ok: true, payload, cleanName };
+    const bassWarn = validateBassConsistency(payload.strings, payload.capo, payload.tuning, payload.chordName);
+    return { ok: true, payload, cleanName, warn: bassWarn };
   };
 
   return {

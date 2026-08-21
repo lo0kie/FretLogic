@@ -1,4 +1,4 @@
-import type { Chord, GuitarStringsModel } from '@/types';
+import type { Chord, GuitarStringEntity, GuitarStringsModel } from '@/types';
 import { Tuning } from './musicTheory';
 export interface ParsedSlotKey {
   lineId: string;
@@ -156,10 +156,22 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   const tuning = chord.tuning || Tuning.STANDARD;
   const fretCount = chord.fretCount ?? 3;
 
+  // 迁移：strings 由旧对象数组 [{fret, preferFlat}] 升级为二维数组 [[fret, preferFlat]]
+  // 注意：fret 合法值是 -1/0/正整数，不能用 `|| -1` 兜底（0 是空弦，会被误判为 -1 静音）
+  let stringsMigrated = false;
+  const strings = (chord.strings as unknown[]).map(s => {
+    if (Array.isArray(s)) {
+      return [typeof s[0] === 'number' && Number.isFinite(s[0]) ? s[0] : -1, Boolean(s[1])] as GuitarStringEntity;
+    }
+    stringsMigrated = true;
+    const legacy = s as { fret?: number; preferFlat?: boolean; isRoot?: boolean };
+    return [typeof legacy?.fret === 'number' ? legacy.fret : -1, !!legacy?.preferFlat] as GuitarStringEntity;
+  }) as GuitarStringsModel;
+
   // 迁移：旧数据每根弦各自维护 isRoot，统一为单点 rootStringIndex
   let rootStringIndex: number | null = chord.rootStringIndex ?? null;
-  const legacyRoots = chord.strings
-    .map((s, idx) => ((s as unknown as { isRoot?: boolean }).isRoot ? idx : -1))
+  const legacyRoots = (chord.strings as unknown[])
+    .map((s, idx) => ((s as { isRoot?: boolean }).isRoot ? idx : -1))
     .filter(idx => idx >= 0);
   if (rootStringIndex === null && legacyRoots.length > 0) {
     rootStringIndex = legacyRoots[0];
@@ -167,23 +179,14 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   // 校验：rootStringIndex 必须落在有效且已按音的弦上，否则清空
   if (
     rootStringIndex !== null &&
-    (rootStringIndex < 0 || rootStringIndex >= chord.strings.length || chord.strings[rootStringIndex].fret < 0)
+    (rootStringIndex < 0 || rootStringIndex >= strings.length || strings[rootStringIndex][0] < 0)
   ) {
     rootStringIndex = null;
   }
 
-  // 清理旧字段：每弦的 isRoot / label / isAccidental（现已移除，全部实时派生）
-  let fieldsCleaned = false;
-  chord.strings.forEach(s => {
-    const legacy = s as unknown as { isRoot?: boolean; label?: string; isAccidental?: boolean };
-    if ('isRoot' in legacy || 'label' in legacy || 'isAccidental' in legacy) {
-      fieldsCleaned = true;
-      delete legacy.isRoot;
-      delete legacy.label;
-      delete legacy.isAccidental;
-    }
-  });
+  // 清理旧字段：和弦级 isInverted / fingerprint（现已移除，全部实时派生）
   const legacyChord = chord as unknown as { isInverted?: boolean; fingerprint?: string };
+  let fieldsCleaned = false;
   if ('isInverted' in legacyChord || 'fingerprint' in legacyChord) {
     fieldsCleaned = true;
     delete legacyChord.isInverted;
@@ -191,6 +194,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   }
 
   const changed =
+    stringsMigrated ||
     chord.capo !== capo ||
     chord.tuning !== tuning ||
     chord.fretCount !== fretCount ||
@@ -204,7 +208,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
       tuning,
       fretCount,
       rootStringIndex,
-      strings: chord.strings as GuitarStringsModel,
+      strings,
     },
     changed: true,
   };

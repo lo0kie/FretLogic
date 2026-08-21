@@ -92,6 +92,10 @@ export function useChordActions() {
       uiStore.toast.success(`和弦已保存${groupTip}`);
     }
 
+    if (result.warn) {
+      uiStore.toast.warning(result.warn);
+    }
+
     editorStore.resetEditor();
     uiStore.clearActionToasts();
   };

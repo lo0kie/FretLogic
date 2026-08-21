@@ -65,25 +65,50 @@ src/
 ```ts
 interface Chord {
   id: string;
-  chordName: string;        // 和弦名，如 "Cmaj7"
+  chordName: string; // 和弦名，如 "Cmaj7"
   strings: GuitarStringEntity[]; // 六根弦，固定 6 项
-  fretCount: 3 | 4;         // 指板品数
-  capo: number;             // 变调夹
-  groupId: string;          // 所属分组
-  tuning: Tuning;           // 调音枚举（STANDARD / DROP_D / ...）
+  fretCount: 3 | 4; // 指板品数
+  capo: number; // 变调夹
+  groupId: string; // 所属分组
+  tuning: Tuning; // 调音枚举（STANDARD / DROP_D / ...）
   rootStringIndex: number | null; // 根音所在弦索引，null 表示未指定
 }
 
-interface GuitarStringEntity {
-  fret: number;        // -1 静音，0 空弦，>=1 按品
-  preferFlat: boolean; // 该弦音名偏好降号（如 Bb 而非 A#）
-}
+// 每根弦为二元组：[fret, preferFlat]
+type GuitarStringEntity = [fret: number, preferFlat: boolean];
+// 六根弦为固定长度 6 的二维数组
+type GuitarStringsModel = [
+  GuitarStringEntity,
+  GuitarStringEntity,
+  GuitarStringEntity,
+  GuitarStringEntity,
+  GuitarStringEntity,
+  GuitarStringEntity,
+];
+```
+
+琴弦数据示例（二维数组）：
+
+```ts
+strings: [
+  [-1, false], // 静音
+  [0, false], // 空弦
+  [3, false], // 3 品，升号偏好
+  [5, true], // 5 品，降号偏好（Bb 而非 A#）
+  [0, false],
+  [2, false],
+];
 ```
 
 设计要点：
 
+- **琴弦二维数组**：每根弦是 `[fret, preferFlat]` 元组，`fret` 为 -1 静音 / 0 空弦 / >=1 按品，`preferFlat`
+  决定升降号拼写，不再使用对象字段。
 - **单点根音标记**：根音用 `rootStringIndex` 单点标记，不再每根弦各自维护 `isRoot`。
-- **派生字段实时计算**：音名标签、转位判定、指纹等均为派生数据，由 `src/utils/musicTheory.ts` 实时计算，不落盘存储，杜绝不一致。
+- **无根音转位解析**：当指板上没有可标记的 B 类根音（如 `A F# A D F#` 的 `Bm7/A`）时，按「`rootStringIndex`
+  → 解析和弦名根音（`Bm7/A` 取 B）→ `analyzeChordGraph` 推导」三级回退确定根音，保证无根音转位和弦也能正常排序与分析。
+- **派生字段实时计算**：音名标签、转位判定、指纹等均为派生数据，由 `src/utils/musicTheory.ts`
+  实时计算，不落盘存储，杜绝不一致。
 - **版本化迁移**：数据带 `version` 字段，`migratePayloadVersion` + `PAYLOAD_MIGRATIONS` 负责旧版本数据自动升级。
 
 ### Group（分组）
@@ -92,8 +117,8 @@ interface GuitarStringEntity {
 interface Group {
   id: string;
   name: string;
-  sortRule: GroupSortRule;  // 枚举：ROOT_PITCH / KEY_DEGREE / NAME_ASC
-  sortKey?: string;         // 调内级数排序时的目标调性
+  sortRule: GroupSortRule; // 枚举：ROOT_PITCH / KEY_DEGREE / NAME_ASC
+  sortKey?: string; // 调内级数排序时的目标调性
 }
 ```
 
@@ -104,18 +129,23 @@ interface Song {
   id: string;
   title: string;
   lyrics: string;
-  lineIds: string[];        // 行顺序索引
-  key: string;              // 原调
-  playKey: string;          // 实际演奏调
+  lineIds: string[]; // 行顺序索引
+  playKey: string; // 实际演奏调
   capo: number;
   chordMap: Record<string, string>; // 行/字符 → 和弦名映射
+  version?: number;
 }
 ```
 
+- **调性实时派生**：`key`（原调）不再落盘，由 `computeSongKey(playKey, capo)` 实时算出（`playKey` 整体按 `capo`
+  平移），杜绝派生字段与实际数据不一致。导入旧数据时，遗留的 `key` 会被用来回填 `playKey`。
+
 ## 🔧 关键约定
 
-- **尺寸预设**：尺寸类属性遵循项目 `'sm' | 'md' | 'lg'` 预设约定，映射关系集中在 `constants/fretboard.ts`（如 `CHORD_NAME_FONT_SIZE_MAP`）。
-- **枚举强约束**：可枚举的字符串联合（排序规则 / Toast 类型 / 导出模式等）统一使用字符串枚举，配合 `Object.values()` 做运行时校验。
+- **尺寸预设**：尺寸类属性遵循项目 `'sm' | 'md' | 'lg'` 预设约定，映射关系集中在 `constants/fretboard.ts`（如
+  `CHORD_NAME_FONT_SIZE_MAP`）。
+- **枚举强约束**：可枚举的字符串联合（排序规则 / Toast 类型 / 导出模式等）统一使用字符串枚举，配合 `Object.values()`
+  做运行时校验。
 - **常量集中管理**：所有魔法数字/字符串收拢到 `src/constants/` 并附中文注释，杜绝散落字面量。
 - **单一事实源**：存储层只保存最小不可再分的数据，展示/排序类信息一律派生。
 
