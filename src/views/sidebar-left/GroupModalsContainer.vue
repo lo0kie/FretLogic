@@ -132,6 +132,7 @@
               :interactive="false"
               :scale="0.32"
               :is-dark-mode="globalDarkMode"
+              :show-chord-name="false"
             />
           </div>
         </div>

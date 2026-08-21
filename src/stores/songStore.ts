@@ -144,15 +144,22 @@ export const useSongStore = defineStore('song', () => {
   };
 
   {
+    // 旧数据迁移：key 已改为由 playKey + capo 实时派生，不再持久化。
+    // 若旧数据带 key 且 playKey 缺失，则用 key 兜底 playKey（key === playKey + capo 的逆向近似），
+    // 随后丢弃 key 字段，避免存储冗余。
     let hasAnyUpdate = false;
     songs.value.forEach(s => {
+      const legacy = s as unknown as { key?: unknown };
       let songUpdated = false;
-      if (typeof s.key !== 'string' || !s.key) {
-        s.key = 'C';
+      if (legacy.key !== undefined) {
+        if (typeof s.playKey !== 'string' || !s.playKey) {
+          s.playKey = typeof legacy.key === 'string' && legacy.key ? legacy.key : 'C';
+        }
+        delete legacy.key;
         songUpdated = true;
       }
       if (typeof s.playKey !== 'string' || !s.playKey) {
-        s.playKey = s.key;
+        s.playKey = 'C';
         songUpdated = true;
       }
       if (typeof s.version !== 'number') {
@@ -172,7 +179,6 @@ export const useSongStore = defineStore('song', () => {
       id: 's_' + generateUUID().slice(0, 8),
       title: title.trim() || '未命名乐谱',
       lyrics: '',
-      key: 'C',
       playKey: 'C',
       capo: 0,
       chordMap: {},
@@ -214,7 +220,7 @@ export const useSongStore = defineStore('song', () => {
 
   const updateSongMeta = (
     id: string,
-    payload: Partial<Pick<Song, 'title' | 'key' | 'playKey' | 'capo' | 'lyrics' | 'lineIds' | 'chordMap'>>
+    payload: Partial<Pick<Song, 'title' | 'playKey' | 'capo' | 'lyrics' | 'lineIds' | 'chordMap'>>
   ) => {
     const target = songMap.value.get(id);
     if (!target) return;
@@ -222,10 +228,6 @@ export const useSongStore = defineStore('song', () => {
     let hasChanged = false;
     if (payload.title !== undefined && target.title !== payload.title) {
       target.title = payload.title;
-      hasChanged = true;
-    }
-    if (payload.key !== undefined && target.key !== payload.key) {
-      target.key = payload.key;
       hasChanged = true;
     }
     if (payload.playKey !== undefined && target.playKey !== payload.playKey) {

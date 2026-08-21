@@ -9,7 +9,6 @@
         cardData.variantCount,
         isActive,
         cardData.hasVariants,
-        isSwapping,
         isOpen,
       ]"
       :title="activeChord.chordName"
@@ -20,8 +19,6 @@
         :class="{
           'is-editing': isActive,
           'is-context-open': isOpen,
-          'has-variants': cardData.hasVariants,
-          'is-swapping': isSwapping,
         }"
         role="button"
         tabindex="0"
@@ -39,7 +36,6 @@
           appearance="filled"
           size="xs"
           class="variant-badge-badge"
-          :width="isActive ? '1.6rem' : '1.2rem'"
           :title="isActive ? '滚轮切换指法' : undefined"
           @click.stop="toggleVariantsDropdown"
         >
@@ -63,7 +59,7 @@ import { useEditorStore } from '@/stores/chordEditorStore';
 import type { Chord, GroupedChordCard } from '@/types';
 import { computeChordFingerprint } from '@/utils/musicTheory';
 import { Move, Trash2 } from '@lucide/vue';
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps<{
   cardData: GroupedChordCard;
@@ -101,25 +97,7 @@ const handleCardClick = () => {
   emit('select', activeChord.value);
 };
 
-const isSwapping = ref(false);
-let swapTimer: ReturnType<typeof setTimeout> | null = null;
-
-const triggerSwapAnimation = async () => {
-  if (swapTimer) {
-    clearTimeout(swapTimer);
-    swapTimer = null;
-  }
-  isSwapping.value = false;
-  await nextTick();
-  isSwapping.value = true;
-  swapTimer = setTimeout(() => {
-    isSwapping.value = false;
-    swapTimer = null;
-  }, 200);
-};
-
 const switchVariant = (nextIdx: number) => {
-  triggerSwapAnimation();
   const targetChord = props.cardData.variants[nextIdx] ?? props.cardData.mainChord;
   localVariantIndex.value = nextIdx;
   emit('select', targetChord);
@@ -177,10 +155,6 @@ const ariaLabel = computed(() => {
   if (props.isActive) parts.push('已激活，滚轮可切换');
   return parts.join('，');
 });
-
-onBeforeUnmount(() => {
-  if (swapTimer) clearTimeout(swapTimer);
-});
 </script>
 
 <style scoped lang="less">
@@ -209,43 +183,6 @@ onBeforeUnmount(() => {
     border-color @duration-fast ease,
     box-shadow @duration-fast ease;
 
-  &.has-variants {
-    box-shadow: var(--shadow-sm);
-
-    &::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      z-index: -1;
-      background-color: var(--bg-body);
-      border: 1px solid var(--border-light);
-      border-radius: inherit;
-      pointer-events: none;
-      box-shadow: var(--shadow-sm);
-      transform: translate(4px, 3px) rotate(0.6deg);
-      transition:
-        transform 0.18s @bezier-standard,
-        border-color @duration-fast ease,
-        background-color @duration-fast ease;
-    }
-
-    &:not(.is-swapping):hover::before,
-    &:not(.is-swapping).is-context-open::before {
-      transform: translate(6px, 5px) rotate(2deg);
-      border-color: var(--border-base);
-    }
-
-    &.is-editing::before {
-      border-color: color-mix(in srgb, @primary, transparent 40%);
-      background-color: color-mix(in srgb, @primary, var(--bg-body) 94%);
-    }
-
-    &.is-swapping::before {
-      transition: none;
-      animation: cardSwapAnimate 0.2s cubic-bezier(0.22, 1.2, 0.36, 1) both;
-    }
-  }
-
   &:hover,
   &:active,
   &.is-context-open {
@@ -272,34 +209,26 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes cardSwapAnimate {
-  0% {
-    transform: translate(6px, 5px) rotate(2deg);
-  }
-  40% {
-    transform: translate(0, 0) rotate(0);
-  }
-  100% {
-    transform: translate(6px, 5px) rotate(2deg);
-  }
-}
-
 .variant-badge-badge {
   position: absolute;
-  top: -0.28rem;
-  right: -0.28rem;
+  top: -0.32rem;
+  right: -0.32rem;
   z-index: 5;
-  height: 0.85rem;
-  padding: 0 0.2rem;
+  height: 0.9rem;
+  min-width: 0.9rem;
+  padding: 0 0.26rem;
   border-radius: 9999px;
-  font-size: 0.52rem;
-  font-weight: 800;
+  font-size: 0.58rem;
+  font-weight: 700;
   line-height: 1;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
+  /* 用卡片同底色描边与卡片分离，避免悬浮感缺失 */
+  border: 1px solid var(--bg-body);
   cursor: pointer;
   transition:
-    transform @duration-fast ease,
-    box-shadow @duration-fast ease;
+    transform @duration-fast @bezier-bounce,
+    box-shadow @duration-fast ease,
+    background-color @duration-fast ease;
 }
 
 .chord-marquee-wrapper {
@@ -332,12 +261,12 @@ onBeforeUnmount(() => {
   }
 
   .variant-badge-badge {
-    top: -0.35rem;
-    right: -0.35rem;
+    top: -0.4rem;
+    right: -0.4rem;
     left: auto;
-    min-width: 1.1rem;
-    height: 1.1rem;
-    font-size: 0.65rem;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    font-size: 0.66rem;
   }
 
   .chord-name-text {

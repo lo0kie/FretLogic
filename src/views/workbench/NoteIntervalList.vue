@@ -1,6 +1,6 @@
 <template>
   <div class="section-block is-grow notes-section">
-    <div class="section-label">构成音 (低音 ➔ 高音)</div>
+    <div class="section-label">构成音</div>
     <div class="notes-list no-scrollbar" ref="containerRef">
       <div
         v-wave

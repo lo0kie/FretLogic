@@ -72,10 +72,7 @@ export function useSongModals() {
     modalData.playKey = song.playKey || 'C';
     modalData.capo = song.capo || 0;
 
-    if (song.key && song.key !== key.value) {
-      key.value = song.key;
-    }
-
+    // key 由 playKey + capo 实时派生，无需单独读取持久化字段
     modals.config = true;
   };
 
@@ -84,7 +81,6 @@ export function useSongModals() {
       const newTitle = modalData.title.trim() || '未命名乐谱';
       songStore.updateSongMeta(modalData.activeSong.id, {
         title: newTitle,
-        key: key.value,
         playKey: modalData.playKey,
         capo: modalData.capo,
       });

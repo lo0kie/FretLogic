@@ -43,10 +43,10 @@
                   variant="neutral"
                   :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
                   size="xs"
-                  :aria-label="`调性 ${song.playKey} 调`"
+                  :aria-label="`调性 ${computeSongKey(song.playKey, song.capo)} 调`"
                   width="2rem"
                 >
-                  {{ song.key }}调
+                  {{ computeSongKey(song.playKey, song.capo) }}调
                 </BaseBadge>
 
                 <BaseBadge
@@ -77,6 +77,7 @@ import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
+import { computeSongKey } from '@/utils/musicTheory';
 import { Eraser, Music, SlidersHorizontal, Trash2 } from '@lucide/vue';
 import { computed, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';

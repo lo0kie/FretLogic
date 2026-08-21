@@ -12,7 +12,7 @@
           <div class="header-icon-wrapper">
             <Sparkles class="header-icon" :size="13" stroke-width="2.5" />
           </div>
-          <span class="header-title">和弦实时分析</span>
+          <span class="header-title">和弦分析</span>
         </div>
 
         <template v-if="analysis.notes.length > 0">
@@ -93,16 +93,16 @@ const graphAnalysis = computed(() => {
   let explicitRootPitch: number | null = null;
 
   strings.forEach((str, sIdx) => {
-    if (str.fret >= 0) {
-      const pitch = calcPitchIndex(sIdx, str.fret, capo, baseStrings);
+    if (str[0] >= 0) {
+      const pitch = calcPitchIndex(sIdx, str[0], capo, baseStrings);
       const { label: naturalLabel, isAccidental } = computeStringLabelAccidental(
         sIdx,
-        str.fret,
+        str[0],
         capo,
-        str.preferFlat,
+        str[1],
         baseStrings
       );
-      const label = composeNoteLabel(naturalLabel, isAccidental, str.preferFlat);
+      const label = composeNoteLabel(naturalLabel, isAccidental, str[1]);
 
       if (sIdx === editorStore.draftChord.rootStringIndex && explicitRootPitch === null) {
         explicitRootPitch = pitch;
@@ -133,26 +133,30 @@ const analysis = computed(() => {
   const selectedCandidate = candidates.find(c => c.chordName === editorStore.draftChord.chordName);
   const activeRootPitch = selectedCandidate ? selectedCandidate.rootPitch : bestRootPitch;
 
-  const notes: RenderNoteItem[] = rawNotes.map(n => {
-    const semitones = (n.pitchIndex - activeRootPitch + 12) % 12;
-    const stringObj = strings[n.stringIndex];
-    const canToggle = canTogglePitchAccidental(n.stringIndex, stringObj.fret, capo, baseStrings);
+  // rawNotes 按弦索引 0(六弦)→5(一弦) 收集，倒序后一弦在上、六弦在下（贴合指板视觉习惯）
+  const notes: RenderNoteItem[] = rawNotes
+    .map(n => {
+      const semitones = (n.pitchIndex - activeRootPitch + 12) % 12;
+      const stringObj = strings[n.stringIndex];
+      const canToggle = canTogglePitchAccidental(n.stringIndex, stringObj[0], capo, baseStrings);
 
-    return {
-      ...n,
-      interval: EXACT_INTERVAL_MAP[semitones] || `${semitones}半音`,
-      isRoot: n.pitchIndex === activeRootPitch,
-      canAccidentalToggle: canToggle,
-    };
-  });
+      return {
+        ...n,
+        interval: EXACT_INTERVAL_MAP[semitones] || `${semitones}半音`,
+        // 只强调被标记为主音的弦（rootStringIndex），而非所有根音音高的弦
+        isRoot: n.stringIndex === editorStore.draftChord.rootStringIndex,
+        canAccidentalToggle: canToggle,
+      };
+    })
+    .reverse();
 
   return { notes, candidates };
 });
 
 const handleTogglePitchName = (sIdx: number) => {
   const str = editorStore.draftChord.strings[sIdx];
-  if (canTogglePitchAccidental(sIdx, str.fret, editorStore.draftChord.capo, editorStore.activeBaseStrings)) {
-    str.preferFlat = !str.preferFlat;
+  if (canTogglePitchAccidental(sIdx, str[0], editorStore.draftChord.capo, editorStore.activeBaseStrings)) {
+    str[1] = !str[1];
   }
 };
 
@@ -166,8 +170,8 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
     let rootAssigned = false;
     editorStore.draftChord.chordName = candidate.chordName;
     editorStore.draftChord.strings.forEach((str, sIdx) => {
-      if (str.fret >= 0 && !rootAssigned) {
-        const pitch = calcPitchIndex(sIdx, str.fret, editorStore.draftChord.capo, editorStore.activeBaseStrings);
+      if (str[0] >= 0 && !rootAssigned) {
+        const pitch = calcPitchIndex(sIdx, str[0], editorStore.draftChord.capo, editorStore.activeBaseStrings);
         if (pitch === candidate.rootPitch) {
           editorStore.draftChord.rootStringIndex = sIdx;
           rootAssigned = true;
@@ -245,21 +249,40 @@ const handleSetRootString = (stringIndex: number) => {
 }
 
 .panel-divider {
-  height: 1px;
+  width: 1px;
+  height: auto;
   background-color: var(--border-light);
   opacity: 0.5;
   flex-shrink: 0;
-  margin: 0.1rem 0;
+  align-self: stretch;
+  margin: 0;
 }
 
 .analysis-flex-container {
   display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
+  flex-direction: row; // 左右布局：候选标签 | 构成音
+  align-items: stretch;
+  gap: 0.75rem;
   width: 100%;
   min-height: 0; // 允许 flex item 正常收缩
   flex: 1;
   overflow-y: auto; // 视口不足时内部出现平滑滚动条，避免被砍脚
+
+  > :deep(.candidates-section) {
+    flex: 0 0 45%;
+    min-width: 0;
+  }
+
+  > :deep(.candidates-section .candidate-tags) {
+    max-height: none;
+    flex: 1;
+    min-height: 0;
+  }
+
+  > :deep(.notes-section) {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 @media (max-width: 768px) {
@@ -291,16 +314,17 @@ const handleSetRootString = (stringIndex: number) => {
 
   .analysis-flex-container {
     flex-direction: row;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 0.75rem;
     max-height: none;
     overflow: visible;
 
-    > :deep(:first-child),
-    > :deep(:last-child) {
-      min-width: 0;
-      max-height: none;
-      overflow: visible;
+    > :deep(.candidates-section) {
+      flex: 2;
+    }
+
+    > :deep(.notes-section) {
+      flex: 0.2;
     }
   }
 

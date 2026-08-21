@@ -58,83 +58,60 @@
         />
       </g>
 
-      <g v-if="showPredictiveHover" class="finger-predictive" aria-hidden="true">
-        <circle
-          :cx="stringXPositions[hoverPoint!.stringIndex]"
-          :cy="(hoverPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-          r="33"
-          :fill="isDarkMode ? '#28282a' : '#ffffff'"
-          :stroke="isDarkMode ? '#64d2ff' : '#007aff'"
-          stroke-width="3.5"
-          style="pointer-events: none"
-        />
-      </g>
+      <!-- 动态预测 Hover / 键盘 Focus 游标（当目标为空白品位时显示） -->
+      <circle
+        v-if="showEmptyHoverRing"
+        :cx="stringXPositions[hoverPoint!.stringIndex]"
+        :cy="(hoverPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+        :r="NOTE_DISPLAY.FINGER_OUTLINE_RADIUS"
+        :fill="hoverFillColor"
+        stroke="var(--color-primary)"
+        :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
+        class="finger-predictive"
+        style="pointer-events: none"
+      />
 
-      <g v-if="showKeyboardFocus" class="finger-keyboard-focus" aria-hidden="true">
-        <circle
-          :cx="stringXPositions[focusPoint!.stringIndex]"
-          :cy="(focusPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-          r="33"
-          :fill="isDarkMode ? '#28282a' : '#ffffff'"
-          :stroke="isDarkMode ? '#64d2ff' : '#007aff'"
-          stroke-width="3.5"
-          style="pointer-events: none"
-        />
-      </g>
+      <circle
+        v-if="showEmptyFocusRing"
+        :cx="stringXPositions[focusPoint!.stringIndex]"
+        :cy="(focusPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+        :r="NOTE_DISPLAY.FINGER_OUTLINE_RADIUS"
+        :fill="hoverFillColor"
+        stroke="var(--color-primary)"
+        :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
+        class="finger-keyboard-focus"
+        style="pointer-events: none"
+      />
 
+      <!-- 指板音符列表 -->
       <template v-for="(str, sIdx) in strings" :key="'finger-' + sIdx">
-        <g
-          v-if="str.fret > 0 && str.fret <= fretCount"
+        <FretboardNote
+          v-if="str[0] > 0 && str[0] <= fretCount"
           v-memo="[
-            str.fret,
-            str.preferFlat,
+            str[0],
+            str[1],
             rootStringIndex,
             interactive,
             isDarkMode,
             capo,
             activeBaseStrings[sIdx],
             stringXPositions[sIdx],
+            isNoteHovered(sIdx, str[0]),
+            isNoteFocused(sIdx, str[0]),
           ]"
-          :class="[interactive ? 'finger-interactive' : 'finger-disabled']"
-          :tabindex="interactive ? -1 : undefined"
-          :style="{ color: getFingerColor(isRoot(sIdx), isDarkMode) }"
-          :aria-label="`第 ${6 - sIdx} 弦第 ${str.fret} 品，音名 ${formatStringLabel(sIdx, str.fret, str.preferFlat, capo, activeBaseStrings)}`"
-          @dblclick.prevent.stop="emit('toggle-pitch', sIdx)"
-        >
-          <circle
-            :cx="stringXPositions[sIdx]"
-            :cy="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-            :r="NOTE_DISPLAY.FINGER_DOT_RADIUS"
-            :fill="getFingerColor(isRoot(sIdx), isDarkMode)"
-            class="finger-circle"
-            :class="{ 'is-root-glow': isRoot(sIdx) }"
-          />
-          <text
-            :x="stringXPositions[sIdx]"
-            :y="(str.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-            text-anchor="middle"
-            dy="0.36em"
-            :font-size="NOTE_DISPLAY.FINGER_FONT_SIZE"
-            font-weight="600"
-            :fill="getFingerTextColor(isRoot(sIdx), isDarkMode)"
-            class="finger-text"
-            style="pointer-events: none"
-            aria-hidden="true"
-          >
-            <template v-if="str.fret < 0">✕</template>
-            <template v-else>
-              <tspan>{{ noteInfo(sIdx, str).label }}</tspan>
-              <tspan
-                v-if="noteInfo(sIdx, str).isAccidental"
-                class="finger-accidental"
-                :font-size="String(Math.round(NOTE_DISPLAY.FINGER_FONT_SIZE * NOTE_DISPLAY.ACCIDENTAL_SCALE))"
-                :dy="String(-NOTE_DISPLAY.FINGER_FONT_SIZE * NOTE_DISPLAY.ACCIDENTAL_RAISE_RATIO)"
-              >
-                {{ str.preferFlat ? 'b' : '#' }}
-              </tspan>
-            </template>
-          </text>
-        </g>
+          :x="stringXPositions[sIdx]"
+          :y="(str[0] - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
+          :is-root="isRoot(sIdx)"
+          :is-dark-mode="isDarkMode"
+          :interactive="interactive"
+          :is-hovered="isNoteHovered(sIdx, str[0])"
+          :is-focused="isNoteFocused(sIdx, str[0])"
+          :label="noteInfo(sIdx, str).label"
+          :is-accidental="noteInfo(sIdx, str).isAccidental"
+          :prefer-flat="str[1]"
+          :aria-label="`第 ${6 - sIdx} 弦第 ${str[0]} 品，音名 ${formatStringLabel(sIdx, str[0], str[1], capo, activeBaseStrings)}`"
+          @toggle-pitch="emit('toggle-pitch', sIdx)"
+        />
       </template>
     </svg>
   </div>
@@ -143,9 +120,9 @@
 <script setup lang="ts">
 import { CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '@/constants';
 import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
-import { getFingerColor, getFingerTextColor } from '@/utils/fretboardVisuals';
 import { computeStringLabelAccidental, formatStringLabel } from '@/utils/musicTheory';
 import { computed } from 'vue';
+import FretboardNote from './FretboardNote.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -189,34 +166,28 @@ const getFretNumberStyle = (fretIndex: number) => {
 
 /** 单点根音标记：某弦是否为根音 */
 const isRoot = (sIdx: number) => props.rootStringIndex === sIdx;
+const hoverFillColor = computed(() => (props.isDarkMode ? '#28282a' : '#ffffff'));
 
 /** 实时派生某弦音名（label + 是否变化音级），不依赖存储字段 */
 const noteInfo = (sIdx: number, str: GuitarStringEntity) =>
-  computeStringLabelAccidental(sIdx, str.fret, props.capo, str.preferFlat, props.activeBaseStrings);
+  computeStringLabelAccidental(sIdx, str[0], props.capo, str[1], props.activeBaseStrings);
 
-const showPredictiveHover = computed(() => {
+const isNoteHovered = (sIdx: number, fret: number) =>
+  !props.isMobile && props.hoverPoint?.stringIndex === sIdx && props.hoverPoint?.fretIndex === fret;
+
+const isNoteFocused = (sIdx: number, fret: number) =>
+  props.focusPoint?.stringIndex === sIdx && props.focusPoint?.fretIndex === fret;
+
+const showEmptyHoverRing = computed(() => {
   const hp = props.hoverPoint;
-  return (
-    props.interactive &&
-    hp !== null &&
-    hp.fretIndex > 0 &&
-    hp.fretIndex <= props.fretCount &&
-    hp.stringIndex >= 0 &&
-    hp.stringIndex <= 5 &&
-    !props.isMobile
-  );
+  if (!props.interactive || !hp || hp.fretIndex <= 0 || hp.fretIndex > props.fretCount || props.isMobile) return false;
+  return props.strings[hp.stringIndex]?.[0] !== hp.fretIndex;
 });
 
-const showKeyboardFocus = computed(() => {
+const showEmptyFocusRing = computed(() => {
   const fp = props.focusPoint;
-  return (
-    props.interactive &&
-    fp !== null &&
-    fp.fretIndex > 0 &&
-    fp.fretIndex <= props.fretCount &&
-    fp.stringIndex >= 0 &&
-    fp.stringIndex <= 5
-  );
+  if (!props.interactive || !fp || fp.fretIndex <= 0 || fp.fretIndex > props.fretCount) return false;
+  return props.strings[fp.stringIndex]?.[0] !== fp.fretIndex;
 });
 </script>
 
@@ -266,12 +237,6 @@ const showKeyboardFocus = computed(() => {
   transition: y2 @duration-slow @bezier-sidebar;
 }
 
-.finger-interactive {
-  cursor: pointer;
-  pointer-events: auto;
-  outline: none;
-}
-
 .finger-predictive,
 .finger-keyboard-focus {
   pointer-events: none;
@@ -282,25 +247,5 @@ const showKeyboardFocus = computed(() => {
   pointer-events: none;
   box-sizing: border-box;
   display: block;
-}
-
-.finger-disabled {
-  cursor: default;
-  pointer-events: none;
-  outline: none;
-}
-
-.finger-circle {
-  transition: filter @duration-fast ease;
-  filter: var(--finger-shadow);
-
-  &.is-root-glow {
-    filter: var(--root-glow);
-  }
-}
-
-.finger-text {
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-  transition: fill @duration-fast ease;
 }
 </style>
