@@ -22,3 +22,11 @@ export const HEIGHT_SM = FORM_COMPONENT_HEIGHT_MAP.sm;
 export const HEIGHT_MD = FORM_COMPONENT_HEIGHT_MAP.md;
 /** 大档高度（= FORM_COMPONENT_HEIGHT_MAP.lg） */
 export const HEIGHT_LG = FORM_COMPONENT_HEIGHT_MAP.lg;
+
+/** 间距 token（rem，与 tokens.module.less 的 @space-* 保持一致，供脚本侧计算使用） */
+export const SPACE_REM = {
+  /** @space-2xs */
+  XS_2: 0.125,
+  /** @space-xs */
+  XS: 0.25,
+} as const;

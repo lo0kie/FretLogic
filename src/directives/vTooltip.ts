@@ -1,4 +1,3 @@
-import { useUiStore } from '@/stores/uiStore';
 import { autoUpdate, computePosition, flip, offset, shift, type Placement } from '@floating-ui/dom';
 import type { Directive } from 'vue';
 import './vTooltip.less';
@@ -44,8 +43,7 @@ const updatePosition = (el: HTMLElement, opts: TooltipOptions) => {
 };
 
 const showTooltip = (el: HTMLElement, opts: TooltipOptions) => {
-  const uiStore = useUiStore();
-  if (!opts.content || uiStore.isMobile) return;
+  if (!opts.content) return;
 
   if (hideTimer) {
     clearTimeout(hideTimer);
