@@ -1,1 +1,0 @@
-import{Z as e,a4 as i,a6 as d}from"./index-DGsSFJ9K.js";function c(){const o=e(),r=i(),a={version:1,groups:o.groups,chords:o.savedChordsList,songs:r.songs},{isValid:t,payload:s,issues:n}=d(a);return!t||!s?(console.error("[buildSanitizedBackupPayload] invalid:",n),null):s}export{c as b};
