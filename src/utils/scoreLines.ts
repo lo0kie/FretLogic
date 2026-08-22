@@ -47,7 +47,7 @@ function getEdgeChordsWithNextKey(
   const chords: EdgeChordItem[] = [];
   let i = 0;
   while (chordMap[`line_${lineId}_${type}_${i}`]) {
-    const chordId = chordMap[`line_${lineId}_${type}_${i}`];
+    const chordId = chordMap[`line_${lineId}_${type}_${i}`] ?? '';
     const foundChord = chordsLookupMap.get(chordId);
     if (foundChord) {
       chords.push({

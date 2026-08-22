@@ -27,3 +27,10 @@ stats.html
 all_code.txt
 
 .temp/
+test-results/
+playwright-report/
+blob-report/
+
+# Generated planning and audit documents
+docs/
+coverage/

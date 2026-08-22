@@ -11,12 +11,12 @@ export const router = createRouter({
     {
       path: '/workbench',
       name: 'FretboardWorkbench',
-      component: () => import('../views/workbench/WorkbenchView.vue'),
+      component: () => import('../ui/views/workbench/WorkbenchView.vue'),
     },
     {
       path: '/score',
       name: 'InteractiveScore',
-      component: () => import('../views/score/ScoreView.vue'),
+      component: () => import('../ui/views/score/ScoreView.vue'),
     },
     { path: '/:pathMatch(.*)*', redirect: '/workbench' },
   ],

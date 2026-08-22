@@ -4,7 +4,7 @@
 #nprogress {
   pointer-events: none;
   .bar {
-    background: color-mix(in srgb, @primary, transparent 20%);
+    background: var(--tint-primary-20);
     height: 3px;
   }
   .peg {
@@ -15,17 +15,16 @@
 }
 html {
   font-size: 22.25px;
-  @media (max-width: 768px) {
-    font-size: 16px;
-  }
 }
 body {
   background-color: var(--bg-main);
   color: var(--text-body);
   width: 100vw;
+  min-width: @app-min-width;
   height: 100vh;
   margin: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   user-select: none;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
@@ -36,7 +35,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior: none;
-  -webkit-tap-highlight-color: transparent;
 }
 .panel-divider {
   background-color: var(--separator);
@@ -70,16 +68,9 @@ body {
 
 /* 2. 内部阴影环模式 (Inline) - 类似按钮、Badge、圆形图标等不希望撑开布局的紧凑元素 */
 [data-focusable-inline] {
-  &:focus-visible {
+  &:focus {
     outline: none !important;
-    // 使用不透明的局部变量，瞬间响应且清晰
-    box-shadow: inset 0 0 0 2px currentColor !important;
-  }
-}
-
-[data-hidden-mobile] {
-  @media (max-width: 768px) {
-    display: none !important;
+    box-shadow: var(--focus-ring) !important;
   }
 }
 

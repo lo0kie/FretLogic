@@ -2,12 +2,10 @@ import { STORAGE_KEYS } from '@/constants';
 import type { Song } from '@/types';
 import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/chordMap';
 import { generateUUID } from '@/utils/id';
+import { createSongRepository } from '@/data/repositories';
 import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-
-const SONG_ENTRY_PREFIX = `${STORAGE_KEYS.SONG_ENTRY}:`;
-const SONG_ENTRY_KEY = (id: string) => `${SONG_ENTRY_PREFIX}${id}`;
 
 const FLUSH_DELAY = 400;
 const FLUSH_MAX_WAIT = 1500;
@@ -18,18 +16,17 @@ const lineIdsEqual = (a: string[], b: string[]) => {
   return a.every((v, i) => v === b[i]);
 };
 
-const readSongEntry = (id: string): Song | null => {
+const readJsonSongIds = (raw: string): string[] | null => {
   try {
-    const raw = localStorage.getItem(SONG_ENTRY_KEY(id));
-    if (!raw) return null;
-    const song = JSON.parse(raw);
-    return song && typeof song === 'object' && song.id === id ? (song as Song) : null;
+    const ids = JSON.parse(raw);
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : null;
   } catch {
     return null;
   }
 };
 
 export const useSongStore = defineStore('song', () => {
+  const songRepository = createSongRepository(localStorage);
   // 按歌曲拆分持久化：编辑一首歌只序列化那一首，避免每次改动全量 JSON.stringify 所有歌曲。
   // 旧版单键（SONGS）数据在首次加载时自动迁移，迁移成功后清除。
   const songs = ref<Song[]>([]);
@@ -39,22 +36,17 @@ export const useSongStore = defineStore('song', () => {
   let migratedFromLegacy = false;
 
   const loadInitialSongs = (): Song[] => {
-    const indexRaw = localStorage.getItem(STORAGE_KEYS.SONGS_INDEX);
-    if (indexRaw) {
-      try {
-        const ids = JSON.parse(indexRaw);
-        if (Array.isArray(ids)) {
-          // 索引存在说明已完成拆键迁移，旧单键数据已失效，直接清除
-          if (localStorage.getItem(STORAGE_KEYS.SONGS) !== null) {
-            localStorage.removeItem(STORAGE_KEYS.SONGS);
-          }
-          return ids
-            .map(id => (typeof id === 'string' ? readSongEntry(id) : null))
-            .filter((s): s is Song => s !== null);
+    try {
+      const indexRaw = localStorage.getItem(STORAGE_KEYS.SONGS_INDEX);
+      if (indexRaw) {
+        const ids = readJsonSongIds(indexRaw);
+        if (ids) {
+          songRepository.removeLegacySongs();
+          return songRepository.loadSongs();
         }
-      } catch {
-        /* 索引损坏，回退旧单键 */
       }
+    } catch {
+      /* 索引损坏，回退旧单键 */
     }
     const legacyRaw = localStorage.getItem(STORAGE_KEYS.SONGS);
     if (legacyRaw) {
@@ -91,27 +83,24 @@ export const useSongStore = defineStore('song', () => {
       maxWaitTimer = null;
     }
     try {
-      removedSongIds.forEach(id => localStorage.removeItem(SONG_ENTRY_KEY(id)));
+      removedSongIds.forEach(id => songRepository.removeSong(id));
       removedSongIds.clear();
 
       const byId = new Map(songs.value.map(s => [s.id, s]));
       dirtySongIds.forEach(id => {
         const song = byId.get(id);
-        if (song) {
-          localStorage.setItem(SONG_ENTRY_KEY(id), JSON.stringify(song));
-        } else {
-          localStorage.removeItem(SONG_ENTRY_KEY(id));
-        }
+        if (song) songRepository.saveSong(song);
+        else songRepository.removeSong(id);
       });
       dirtySongIds.clear();
 
       if (indexDirty) {
-        localStorage.setItem(STORAGE_KEYS.SONGS_INDEX, JSON.stringify(songs.value.map(s => s.id)));
+        songRepository.saveSongIds(songs.value.map(s => s.id));
         indexDirty = false;
       }
 
       if (migratedFromLegacy) {
-        localStorage.removeItem(STORAGE_KEYS.SONGS);
+        songRepository.removeLegacySongs();
         migratedFromLegacy = false;
       }
     } catch (err) {
@@ -195,7 +184,7 @@ export const useSongStore = defineStore('song', () => {
     const index = songs.value.findIndex(s => s.id === id);
     if (index === -1) return;
     lastDeletedSongInfo.value = {
-      song: { ...songs.value[index] },
+      song: { ...songs.value[index]! },
       index,
     };
     songs.value = songs.value.filter(s => s.id !== id);
@@ -289,15 +278,10 @@ export const useSongStore = defineStore('song', () => {
 
   const overwriteSongs = (newSongs: Song[]) => {
     const newIds = new Set(newSongs.map(s => s.id));
+
     // 清理存储中不属于新集合的孤立歌曲键（全量覆盖是罕见操作，扫描一遍可接受）
-    const orphanKeys: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith(SONG_ENTRY_PREFIX) && !newIds.has(key.slice(SONG_ENTRY_PREFIX.length))) {
-        orphanKeys.push(key);
-      }
-    }
-    orphanKeys.forEach(key => localStorage.removeItem(key));
+    const orphanIds = new Set(songRepository.listSongIds().filter(id => !newIds.has(id)));
+    orphanIds.forEach(id => songRepository.removeSong(id));
 
     songs.value.forEach(s => {
       if (!newIds.has(s.id)) removedSongIds.add(s.id);

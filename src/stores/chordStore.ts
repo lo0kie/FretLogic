@@ -4,13 +4,14 @@ import { GroupSortRule } from '@/types';
 import { normalizeChord } from '@/utils/chordMap';
 import { cloneDeep, cloneGuitarStrings } from '@/utils/cloneDeep';
 import { generateUUID } from '@/utils/id';
+import { createChordRepository } from '@/data/repositories';
 import {
   computeChordFingerprint,
   computeIsInverted,
   sortChordsByRule,
   validateBassConsistency,
 } from '@/utils/musicTheory';
-import { debounceFilter, useEventListener, useRefHistory, useStorage } from '@vueuse/core';
+import { debounceFilter, useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw } from 'vue';
 
@@ -40,7 +41,7 @@ function sortVariants(variants: Chord[]): Chord[] {
 function toGroupedCard(variants: Chord[]): GroupedChordCard {
   const sorted = variants.length > 1 ? sortVariants(variants) : variants;
   return {
-    mainChord: sorted[0],
+    mainChord: sorted[0]!,
     variants: sorted,
     hasVariants: sorted.length > 1,
     variantCount: sorted.length,
@@ -48,6 +49,7 @@ function toGroupedCard(variants: Chord[]): GroupedChordCard {
 }
 
 export const useChordStore = defineStore('chord', () => {
+  const chordRepository = createChordRepository(localStorage);
   const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
   });
@@ -60,27 +62,13 @@ export const useChordStore = defineStore('chord', () => {
   const isGroupCollapsed = (groupId: string): boolean => expandedGroupId.value !== groupId;
   const isAnyGroupExpanded = computed(() => expandedGroupId.value !== null);
 
-  const flushChordsAndGroupsNow = () => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.CHORD_LIST, JSON.stringify(savedChordsList.value));
-      localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(groups.value));
-    } catch (err) {
-      console.error('[chordStore] flush on unload failed:', err);
-    }
-  };
-  useEventListener(window, 'beforeunload', flushChordsAndGroupsNow);
-  useEventListener(document, 'visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flushChordsAndGroupsNow();
-  });
+  // 数据通过 useStorage 自动持久化，无需手动 flush（原空实现移除）
 
   {
-    let needUpdate = false;
-    const aligned = savedChordsList.value.map(c => {
-      const { chord, changed } = normalizeChord(c);
-      if (changed) needUpdate = true;
-      return chord;
-    });
-    if (needUpdate) savedChordsList.value = aligned;
+    const sanitized = chordRepository.load();
+    if (JSON.stringify(sanitized.groups) !== JSON.stringify(groups.value)) groups.value = sanitized.groups;
+    if (JSON.stringify(sanitized.chords) !== JSON.stringify(savedChordsList.value))
+      savedChordsList.value = sanitized.chords;
   }
 
   // 每次提交都会克隆整个和弦列表，容量控制在 8 份以限制内存驻留
@@ -256,14 +244,15 @@ export const useChordStore = defineStore('chord', () => {
   const updateGroupSort = (groupId: string, sortRule: GroupSortRule, sortKey?: string) => {
     const g = groups.value.find(x => x.id === groupId);
     if (!g) return;
-    const targetKey = sortRule === GroupSortRule.KEY_DEGREE ? sortKey || g.sortKey || 'C' : undefined;
-    if (g.sortRule === sortRule && g.sortKey === targetKey) return;
-    g.sortRule = sortRule;
     if (sortRule === GroupSortRule.KEY_DEGREE) {
+      const targetKey = sortKey || g.sortKey || 'C';
+      if (g.sortRule === sortRule && g.sortKey === targetKey) return;
+      g.sortRule = sortRule;
       g.sortKey = targetKey;
     } else {
-      // 非 KEY_DEGREE 排序不依赖调性键，清理避免残留
-      g.sortKey = undefined;
+      if (g.sortRule === sortRule && g.sortKey === undefined) return;
+      g.sortRule = sortRule;
+      delete g.sortKey;
     }
   };
 
@@ -326,6 +315,7 @@ export const useChordStore = defineStore('chord', () => {
     const groupChords = savedChordsList.value.filter(c => c.groupId === groupId);
     if (oldIndex < 0 || oldIndex >= groupChords.length || newIndex < 0 || newIndex >= groupChords.length) return;
     const [moved] = groupChords.splice(oldIndex, 1);
+    if (moved === undefined) return;
     groupChords.splice(newIndex, 0, moved);
     const otherGroupsChords = savedChordsList.value.filter(c => c.groupId !== groupId);
     savedChordsList.value = [...otherGroupsChords, ...groupChords];
@@ -414,7 +404,7 @@ export const useChordStore = defineStore('chord', () => {
       draft.rootStringIndex !== undefined &&
       draft.rootStringIndex >= 0 &&
       draft.rootStringIndex < currentStrings.length &&
-      currentStrings[draft.rootStringIndex][0] >= 0
+      (currentStrings[draft.rootStringIndex]?.[0] ?? -1) >= 0
         ? draft.rootStringIndex
         : null;
 

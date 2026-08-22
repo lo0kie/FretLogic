@@ -33,7 +33,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const exportScaleMultiplier = ref(1);
   const effectiveFontScale = computed(() => fontScale.value * exportScaleMultiplier.value);
   const effectiveFretboardScale = computed(() => fretboardScale.value * exportScaleMultiplier.value);
-  const mobileScale = useStorage(STORAGE_KEYS.SCORE_MOBILE_SCALE, 0.7);
   const historyStack: HistoryState[] = [];
   let historyIndex = -1;
   const isUndoRedoAction = ref(false);
@@ -83,7 +82,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       isUndoRedoAction.value = true;
       historyIndex--;
       // 快照可能被 songStore 以引用方式接管（chordMap 会被原地修改），恢复时必须克隆
-      const state = cloneDeep(historyStack[historyIndex]);
+      const state = cloneDeep(historyStack[historyIndex]!);
       songStore.updateSongMeta(activeSong.value.id, state);
       await nextTick();
       await nextTick();
@@ -95,7 +94,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     if (historyIndex < historyStack.length - 1 && activeSong.value) {
       isUndoRedoAction.value = true;
       historyIndex++;
-      const state = cloneDeep(historyStack[historyIndex]);
+      const state = cloneDeep(historyStack[historyIndex]!);
       songStore.updateSongMeta(activeSong.value.id, state);
       await nextTick();
       await nextTick();
@@ -234,7 +233,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     effectiveFretboardScale,
     undo,
     redo,
-    mobileScale,
     scrollSpeed,
   };
 });

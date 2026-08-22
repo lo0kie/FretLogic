@@ -17,25 +17,29 @@ const matchExactLines = (
   // 1. 按内容分组，记录每种内容对应的旧行下标（保持原有升序）
   const contentToIndices = new Map<string, number[]>();
   for (let j = 0; j < oldLines.length; j++) {
-    const list = contentToIndices.get(oldLines[j]);
+    const line = oldLines[j] ?? '';
+    const list = contentToIndices.get(line);
     if (list) list.push(j);
-    else contentToIndices.set(oldLines[j], [j]);
+    else contentToIndices.set(line, [j]);
   }
 
   // 2. 每种内容各自维护一个"消费到第几个了"的游标
   const cursors = new Map<string, number>();
 
   for (let i = 0; i < newLines.length; i++) {
-    const content = newLines[i];
+    const content = newLines[i] ?? '';
     const indices = contentToIndices.get(content);
     if (!indices) continue; // 旧行里压根没有这个内容，跳过
 
     const cursor = cursors.get(content) ?? 0;
     if (cursor < indices.length) {
-      const j = indices[cursor];
-      newIds[i] = oldIds[j];
-      usedOldIndices.add(j);
-      cursors.set(content, cursor + 1);
+      const j = indices[cursor]!;
+      const oldId = oldIds[j];
+      if (oldId !== undefined) {
+        newIds[i] = oldId;
+        usedOldIndices.add(j);
+        cursors.set(content, cursor + 1);
+      }
     }
   }
 
@@ -52,14 +56,16 @@ const matchSimilarLines = (
   for (let i = 0; i < newLines.length; i++) {
     if (newIds[i] !== null) continue;
 
-    const newLen = newLines[i].length;
+    const newLen = newLines[i]?.length ?? 0;
     let bestMatchIdx = -1;
     let minDistance = Infinity;
 
     for (let j = 0; j < oldLines.length; j++) {
       if (usedOldIndices.has(j)) continue;
 
-      const oldLen = oldLines[j].length;
+      const oldLine = oldLines[j] ?? '';
+      const newLine = newLines[i] ?? '';
+      const oldLen = oldLine.length;
       const maxLength = Math.max(oldLen, newLen) || 1;
 
       // 不用真的去算这一对昂贵的编辑距离
@@ -67,7 +73,7 @@ const matchSimilarLines = (
       const maxPossibleSimilarity = 1 - lengthDiff / maxLength;
       if (maxPossibleSimilarity < SIMILARITY_THRESHOLD) continue;
 
-      const dist = getEditDistance(oldLines[j], newLines[i]);
+      const dist = getEditDistance(oldLine, newLine);
       const similarity = 1 - dist / maxLength;
 
       if (similarity >= SIMILARITY_THRESHOLD && dist < minDistance) {
@@ -78,8 +84,11 @@ const matchSimilarLines = (
     }
 
     if (bestMatchIdx !== -1) {
-      newIds[i] = oldIds[bestMatchIdx];
-      usedOldIndices.add(bestMatchIdx);
+      const oldId = oldIds[bestMatchIdx];
+      if (oldId !== undefined) {
+        newIds[i] = oldId;
+        usedOldIndices.add(bestMatchIdx);
+      }
     }
   }
 };

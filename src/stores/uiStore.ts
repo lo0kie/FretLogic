@@ -1,13 +1,12 @@
 ﻿import { STORAGE_KEYS } from '@/constants';
 import type { Toast, ToastOptions } from '@/types';
 import { ToastType } from '@/types';
-import { useMediaQuery, useStorage } from '@vueuse/core';
+import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
 
 export const useUiStore = defineStore('ui', () => {
   const toasts = ref<Toast[]>([]);
-  const isMobile = useMediaQuery('(max-width: 768px)');
   const isCopying = ref(false);
   const isLeftOpen = useStorage(STORAGE_KEYS.UI_LEFT_OPEN, true);
   const timersMap = new Map<number, ReturnType<typeof setTimeout>>();
@@ -70,7 +69,7 @@ export const useUiStore = defineStore('ui', () => {
       type,
       hasAction,
       actionText: options.actionText || '确定',
-      onAction: options.onAction,
+      ...(options.onAction !== undefined ? { onAction: options.onAction } : {}),
       duration,
       closable: options.closable ?? true,
     });
@@ -98,7 +97,6 @@ export const useUiStore = defineStore('ui', () => {
     removeToast,
     pauseAllTimers,
     resumeAllTimers,
-    isMobile,
     activeExportTarget,
   };
 });
