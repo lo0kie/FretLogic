@@ -1,0 +1,64 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createGithubSyncProvider } from '@/features/sync/services/githubSyncProvider';
+import type { SyncConfig } from '@/features/sync/services/provider';
+
+const config: SyncConfig = {
+  token: 'ghp_abcdefghijklmnop',
+  owner: 'owner',
+  repo: 'repo',
+  branch: 'main',
+  path: 'backup/data.json',
+};
+
+const payload = {
+  version: 4,
+  groups: [{ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' }],
+  chords: [],
+  songs: [],
+};
+
+const jsonResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('github sync provider', () => {
+  it('pushes a validated snapshot and includes sha for existing files', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ sha: 'file-sha' }))
+      .mockResolvedValueOnce(jsonResponse({ commit: { sha: 'commit-sha' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = createGithubSyncProvider(config);
+    const result = await provider.push(payload);
+
+    expect(result).toEqual({ sha: 'commit-sha' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const putInit = fetchMock.mock.calls[1][1] as RequestInit;
+    const body = JSON.parse(String(putInit.body));
+    expect(body.sha).toBe('file-sha');
+    expect(body.branch).toBe('main');
+    expect((putInit.headers as Record<string, string>).Authorization).toBe('Bearer ghp_abcdefghijklmnop');
+  });
+
+  it('pulls and validates remote content', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ content: btoa(JSON.stringify(payload)) })));
+    const provider = createGithubSyncProvider(config);
+    await expect(provider.pull()).resolves.toEqual(payload);
+  });
+
+  it('throws FILE_NOT_FOUND on 404', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not found', { status: 404 })));
+    const provider = createGithubSyncProvider(config);
+    await expect(provider.pull()).rejects.toThrowError('FILE_NOT_FOUND');
+  });
+
+  it('maps invalid cloud payloads to INVALID_CLOUD_DATA', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ content: btoa(JSON.stringify({ version: 4 })) })));
+    const provider = createGithubSyncProvider(config);
+    await expect(provider.pull()).rejects.toThrowError('INVALID_CLOUD_DATA');
+  });
+});

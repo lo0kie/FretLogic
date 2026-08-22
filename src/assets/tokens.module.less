@@ -1,17 +1,25 @@
-﻿:root {
-  /* ===== 背景 ===== */
+﻿/* ============================================================
+   统一设计令牌（单一来源，集中管理）
+   经 vite additionalData 全局注入，任意 .vue <style lang="less"> 与 .less 均可直接使用。
+   - 颜色 / 阴影 / 动画：保留原有主题系统
+   - 间距 / 圆角 / 字号：收敛为少数成比例、互相协调的档位，形成视觉节奏
+     要调整整体密度 / 圆润度 / 字号层级，改这一份即可。
+   ============================================================ */
+
+:root {
+  /* ===== 背景（实色：原为半透明玻璃面板，按页面底色合成去掉透明） ===== */
   --bg-main: #f2f2f7;
   --bg-body: #ffffff;
-  --bg-panel: rgba(252, 252, 253, 0.94);
+  --bg-panel: #fbfbfd;
   --bg-panel-hover: #ebebef;
-  --bg-elevated: rgba(252, 252, 253, 0.94); /* 原来可能更透 */
+  --bg-elevated: #fbfbfd;
 
-  /* ===== 边框 / 分隔 ===== */
-  --glass-border: rgba(0, 0, 0, 0.08);
-  --border-light: rgba(60, 60, 67, 0.12);
-  --border-base: rgba(60, 60, 67, 0.18);
-  --control-border: rgba(60, 60, 67, 0.18);
-  --separator: rgba(60, 60, 67, 0.12);
+  /* ===== 边框 / 分隔（实色：按面板底色合成去掉透明） ===== */
+  --glass-border: #dfdfe3;
+  --border-light: #dcdce1;
+  --border-base: #d1d1d7;
+  --control-border: #d1d1d7;
+  --separator: #dcdce1;
 
   /* ===== 文字（更接近系统语义） ===== */
   --text-title: #1c1c1e;
@@ -24,6 +32,16 @@
   --color-success: #34c759;
   --color-warning: #ff9500;
   --color-danger: #ff3b30;
+
+  /* 强调色（按钮 / 徽章 / 标签）上的文字，默认白 */
+  --text-on-accent: #ffffff;
+
+  /* 指板画布调色板：跟随主题切换的绘制色 */
+  --fb-line: #0f172a; /* 主网格 / 品丝 */
+  --fb-line-dim: #334155; /* 次要网格 */
+  --fb-note: #0f172a; /* 音符填充 */
+  --fb-hover: #ffffff; /* hover 高亮填充（浅色底） */
+  --fb-label: #475569; /* 品位数字（浅色态） */
 
   /* ===== 其他 ===== */
   --theme-btn-color: #ff9500;
@@ -38,20 +56,86 @@
   --shadow-xl: 0 16px 36px rgba(0, 0, 0, 0.1), 0 6px 12px rgba(0, 0, 0, 0.05);
   --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04);
   --shadow-floating: 0 20px 48px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.06);
+  --focus-ring: 0 0 0 2px var(--bg-panel), 0 0 0 4px color-mix(in srgb, var(--color-primary) 72%, transparent);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --overlay-bg: #919294; /* 原 rgba(0,0,0,0.4) 遮罩：按页面底色合成实色 */
+
+  /* ===== 动效时长 / 缓动 ===== */
+  --duration-fast: 0.1s;
+  --duration-base: 0.18s;
+  --duration-slow: 0.35s;
+  --bezier-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --bezier-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ===== 背景模糊 ===== */
+  --blur-xs: blur(4px);
+  --blur-md: blur(12px);
+  --blur-lg: blur(14px);
+  --blur-xl: blur(16px) saturate(150%);
+
+  /* ===== 层次（z-index）体系：单一来源，避免各组件自行其是 ===== */
+  --z-base: 0; /* 基础内容层 / 建立层叠上下文 */
+  --z-content: 1; /* 普通内容 */
+  --z-inner: 2; /* 内容内浮起（原 z:2） */
+  --z-card: 5; /* 卡片内浮起（原 z:5） */
+  --z-panel: 10; /* 面板内浮层（原 z:10） */
+  --z-sidebar: 50; /* 侧栏（原 z:50） */
+  --z-fab: 90; /* 悬浮操作条（原 z:90） */
+  --z-scrim: 99; /* 移动端抽屉遮罩（需高于顶栏，确保全屏遮罩可点击） */
+  --z-sidebar-top: 100; /* 移动端抽屉（需高于遮罩） */
+  --z-header: 90; /* 顶栏（低于移动遮罩，桌面不受影响） */
+  --z-popover: 91; /* 顶栏下拉锚点 */
+  --z-popover-top: 92; /* 顶栏下拉内容 */
+  --z-overlay: 2000; /* 模态遮罩（原 z:2000） */
+  --z-toast: 3000; /* 全局提示（原 z:3000） */
+  --z-menu: 9999; /* 右键菜单 / 选择器下拉（原 z:9999） */
+  --z-top: 10000; /* 最高层：谱面导出抽屉等（原 z:10000） */
+
+  /* === SOLID TINTS LIGHT START === */
+  --tint-borderbase-85: #ededf2;
+  --tint-current-82: #d1d1d5;
+  --tint-current-85: #d6d6db;
+  --tint-danger-75: #f5c4c5;
+  --tint-danger-78: #f5cacb;
+  --tint-danger-80: #f5cdcf;
+  --tint-danger-82: #f4d1d3;
+  --tint-danger-88: #f4dcdf;
+  --tint-danger-90: #f3e0e3;
+  --tint-panelhover-30: #ededf1;
+  --tint-panelhover-50: #efeff3;
+  --tint-primary-20: #3092fd;
+  --tint-primary-45: #6db0fb;
+  --tint-primary-60: #91c2fa;
+  --tint-primary-80: #c2daf9;
+  --tint-primary-82: #c6dcf8;
+  --tint-primary-85: #cee0f8;
+  --tint-primary-88: #d5e4f8;
+  --tint-primary-90: #dae6f8;
+  --tint-primary-92: #dfe8f8;
+  --tint-success-82: #d0eadb;
+  --tint-success-88: #dbede4;
+  --tint-texttitle-90: #dddde1;
+  --tint-warning-65: #f7d1a1;
+  --tint-warning-78: #f5dec1;
+  --tint-warning-80: #f5dfc6;
+  --tint-warning-82: #f4e1cb;
+  --tint-warning-88: #f4e7d9;
+  --tint-warning-90: #f3e9de;
+  /* === SOLID TINTS LIGHT END === */
 }
 
 .dark {
   --bg-main: #000000;
   --bg-body: #1c1c1e;
-  --bg-panel: rgba(28, 28, 30, 0.94);
+  --bg-panel: #1c1c1e;
   --bg-panel-hover: #2c2c2e;
-  --bg-elevated: rgba(28, 28, 30, 0.94);
+  --bg-elevated: #1c1c1e;
 
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --border-light: rgba(84, 84, 88, 0.45);
-  --border-base: rgba(84, 84, 88, 0.55);
-  --control-border: rgba(84, 84, 88, 0.55);
-  --separator: rgba(84, 84, 88, 0.55);
+  --glass-border: #2c2c2e;
+  --border-light: #343437;
+  --border-base: #3a3a3d;
+  --control-border: #3a3a3d;
+  --separator: #3a3a3d;
 
   --text-title: #f5f5f7;
   --text-body: #ebebf5;
@@ -62,6 +146,13 @@
   --color-success: #30d158;
   --color-warning: #ffd60a;
   --color-danger: #ff453a;
+
+  --text-on-accent: #ffffff;
+  --fb-line: #ffffff;
+  --fb-line-dim: #cbd5e1;
+  --fb-note: #ffffff;
+  --fb-hover: #28282a;
+  --fb-label: #e2e8f0;
 
   --theme-btn-color: #64d2ff;
   --theme-btn-bg: #2c2c2e;
@@ -74,6 +165,69 @@
   --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --shadow-panel: 0 10px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
   --shadow-floating: 0 24px 56px rgba(0, 0, 0, 0.6), 0 8px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --overlay-bg: #0a0a0b; /* 原 rgba(0,0,0,0.6) 遮罩：按页面底色合成实色 */
+
+  /* === SOLID TINTS DARK START === */
+  --tint-borderbase-85: #1f1f21;
+  --tint-current-82: #404043;
+  --tint-current-85: #39393d;
+  --tint-danger-75: #532524;
+  --tint-danger-78: #4c2323;
+  --tint-danger-80: #482322;
+  --tint-danger-82: #432221;
+  --tint-danger-88: #351f20;
+  --tint-danger-90: #311e1f;
+  --tint-panelhover-30: #272729;
+  --tint-panelhover-50: #232325;
+  --tint-primary-20: #0d6fd2;
+  --tint-primary-45: #115499;
+  --tint-primary-60: #144477;
+  --tint-primary-80: #172f49;
+  --tint-primary-82: #172d45;
+  --tint-primary-85: #182a3e;
+  --tint-primary-88: #182737;
+  --tint-primary-90: #182533;
+  --tint-primary-92: #19222e;
+  --tint-success-82: #1e3b27;
+  --tint-success-88: #1d3023;
+  --tint-texttitle-90: #303032;
+  --tint-warning-65: #6a5c16;
+  --tint-warning-78: #4c4318;
+  --tint-warning-80: #484018;
+  --tint-warning-82: #433c19;
+  --tint-warning-88: #35311a;
+  --tint-warning-90: #312d1a;
+  /* === SOLID TINTS DARK END === */
+  --focus-ring: 0 0 0 2px var(--bg-panel), 0 0 0 4px color-mix(in srgb, var(--color-primary) 88%, transparent);
+}
+
+/* ===== 高对比主题：仅覆盖语义色，保持布局/动效/层级不变 ===== */
+[data-theme='high-contrast'] {
+  --bg-main: #000000;
+  --bg-body: #0a0a0c;
+  --bg-panel: #121214;
+  --bg-panel-hover: #1e1e22;
+  --bg-elevated: #1a1a1e;
+
+  --glass-border: #ffffff;
+  --border-light: #4a4a52;
+  --border-base: #6b6b76;
+  --control-border: #6b6b76;
+  --separator: #4a4a52;
+
+  --text-title: #ffffff;
+  --text-body: #f2f2f7;
+  --text-muted: #b9b9c4;
+  --text-disabled: #8e8e96;
+
+  --color-primary: #3da5ff;
+  --color-success: #3ddc84;
+  --color-warning: #ffd60a;
+  --color-danger: #ff6961;
+
+  --text-on-accent: #000000;
+  --overlay-bg: #000000;
 }
 
 @primary: var(--color-primary);
@@ -86,24 +240,42 @@
 @text-body: var(--text-body);
 @text-subtitle: var(--text-muted);
 
-/* 间距系统（8pt 网格）保持不变，但使用时更统一 */
-@space-xs: 0.25rem;
-@space-sm: 0.5rem;
-@space-md: 1rem;
-@space-lg: 1.5rem;
-@space-xl: 2rem;
+/* ===== 间距系统：4px 节奏（收敛为协调的 8 档，2px 用于极紧间隙） ===== */
+@space-2xs: 0.125rem; /* 2px  */
+@space-xs: 0.25rem; /* 4px  */
+@space-sm: 0.5rem; /* 8px  */
+@space-md: 0.75rem; /* 12px */
+@space-lg: 1rem; /* 16px */
+@space-xl: 1.5rem; /* 24px */
+@space-2xl: 2rem; /* 32px */
+@space-3xl: 3rem; /* 48px */
 
-@radius-sm: 0.375rem;
-@radius-md: 0.625rem;
-@radius-lg: 0.875rem;
-@radius-xl: 1.25rem;
+/* ===== 桌面端最小宽度：低于此宽度应用不再收缩，而是保持该宽度并横向滚动 ===== */
+@app-min-width: 1024px;
+
+/* ===== 圆角系统：小(控件) / 中 / 大(卡片) / 胶囊 ===== */
+@radius-sm: 0.375rem; /* 6px  控件、标签 */
+@radius-md: 0.625rem; /* 10px 按钮、输入框 */
+@radius-lg: 1rem; /* 16px 卡片、弹窗 */
+@radius-pill: 9999px; /* 胶囊 */
+
+/* ===== 字号系统：密集 UI 的类型阶梯（1.25 → 1.5 → 2.25 → 3.2 平滑过渡） ===== */
+@fs-sup: 0.46rem; /* 上角标（音程标记） */
+@fs-2xs: 0.625rem; /* 极小说明文字 */
+@fs-xs: 0.75rem; /* 次要文字 */
+@fs-sm: 0.875rem; /* 默认小字 UI */
+@fs-base: 1rem; /* 正文 / 中等 */
+@fs-lg: 1.25rem; /* 标题 */
+@fs-xl: 1.5rem; /* 次级强调 */
+@fs-2xl: 2.25rem; /* 大标题 */
+@fs-display: 3.2rem; /* 大数字（和弦名 / 品位） */
 
 @border-width-base: 1px;
 @border-solid-base: @border-width-base solid var(--border-base);
 @border-solid-light: @border-width-base solid var(--border-light);
 @border-dashed-base: @border-width-base dashed var(--border-base);
 
-@focus-ring-primary: 0 0 0 1px color-mix(in srgb, @primary, transparent 80%);
+@focus-ring-primary: 0 0 0 1px color-mix(in srgb, @primary, var(--bg-panel) 80%);
 
 @shadow-sm: var(--shadow-sm);
 @shadow-md: var(--shadow-md);
@@ -112,6 +284,7 @@
 
 @shadow-panel: var(--shadow-panel);
 @shadow-floating: var(--shadow-floating);
+@shadow-xs: var(--shadow-xs);
 
 @duration-fast: 0.16s;
 @duration-base: 0.28s;
@@ -122,6 +295,11 @@
 
 @transition-base: all @duration-base @bezier-standard;
 @transition-fast: all @duration-fast @bezier-standard;
+
+.interactive-surface-hover() {
+  border-color: color-mix(in srgb, var(--border-base), transparent 18%);
+  box-shadow: @shadow-md;
+}
 
 .fade-scale-transition(@name, @translate: ~'0, 0', @scale: 0.96, @targetTranslate: ~'0, 0') {
   .@{name}-enter-active,

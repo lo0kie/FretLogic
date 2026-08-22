@@ -37,13 +37,17 @@ const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions):
       backgroundImage: 'none',
     };
   }
+  const width = exportOptions.width;
+  const height = exportOptions.height;
+  const backgroundColor = exportOptions.backgroundColor ?? defaultBgColor;
+  const filter = exportOptions.filter;
   return {
     quality: 0.95,
     pixelRatio: exportOptions.pixelRatio ?? getCanvasPixelRatio(el),
     cacheBust: false,
-    width: exportOptions.width,
-    height: exportOptions.height,
-    backgroundColor: exportOptions.backgroundColor ?? defaultBgColor,
+    ...(width !== undefined ? { width } : {}),
+    ...(height !== undefined ? { height } : {}),
+    ...(backgroundColor !== undefined ? { backgroundColor } : {}),
     style: {
       ...defaultStyle,
       ...exportOptions.style,
@@ -54,7 +58,7 @@ const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions):
       boxShadow: 'none',
       border: 'none',
     },
-    filter: exportOptions.filter,
+    ...(filter !== undefined ? { filter } : {}),
   };
 };
 

@@ -1,4 +1,4 @@
-﻿/** localStorage 存储键统一管理（避免魔法字符串散落） */
+/** localStorage 存储键统一管理（避免魔法字符串散落） */
 export const STORAGE_KEYS = {
   // ---- 和弦库数据 ----
   /** 已保存和弦列表（V4 版本化键名） */
@@ -13,8 +13,6 @@ export const STORAGE_KEYS = {
   EXPANDED_GROUP_ID: 'CHORD_LAB_EXPANDED_GROUP_ID_V1',
 
   // ---- GitHub 同步配置 ----
-  /** GitHub Token */
-  GH_TOKEN: 'CHORD_LAB_GH_TOKEN',
   /** GitHub 仓库 owner */
   GH_OWNER: 'CHORD_LAB_GH_OWNER',
   /** GitHub 仓库名 */
@@ -57,8 +55,6 @@ export const STORAGE_KEYS = {
   SCORE_FONT_SCALE: 'CHORD_LAB_SCORE_FONT_SCALE_V1',
   /** 谱面内嵌指板缩放 */
   SCORE_FRETBOARD_SCALE: 'CHORD_LAB_SCORE_FRETBOARD_SCALE_V1',
-  /** 谱面移动端缩放 */
-  SCORE_MOBILE_SCALE: 'CHORD_LAB_SCORE_MOBILE_SCALE_V1',
   /** 谱面滚动速度 */
   SCORE_SCROLL_SPEED: 'CHORD_LAB_SCORE_SCROLL_SPEED_V1',
   /** 左侧栏开合状态 */

@@ -1,9 +1,10 @@
 import { STORAGE_KEYS } from '@/constants';
 import { useStorage } from '@vueuse/core';
+import { ref } from 'vue';
 import { defineStore } from 'pinia';
 
 export const useSettingsStore = defineStore('settings', () => {
-  const githubToken = useStorage(STORAGE_KEYS.GH_TOKEN, '');
+  const githubToken = ref('');
   const githubOwner = useStorage(STORAGE_KEYS.GH_OWNER, '');
   const githubRepo = useStorage(STORAGE_KEYS.GH_REPO, '');
   const githubBranch = useStorage(STORAGE_KEYS.GH_BRANCH, import.meta.env.VITE_GITHUB_BRANCH || 'master');

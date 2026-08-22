@@ -15,3 +15,7 @@ stats.html
 
 # 暂存调试脚本目录（按项目规则永久保留，不格式化）
 .temp
+
+# Generated planning and audit documents
+docs/superpowers/
+
