@@ -1,7 +1,10 @@
+packages:
+  - '.'
+
 allowBuilds:
   core-js: false
   esbuild: true
-  unrs-resolver: set this to true or false
+  unrs-resolver: true
   vue-demi: true
 
 overrides:
