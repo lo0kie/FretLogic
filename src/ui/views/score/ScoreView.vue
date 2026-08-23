@@ -36,6 +36,7 @@
       v-model:visible="previewVisible"
       v-model:mode="exportMode"
       v-model:current-page-index="currentPageIndex"
+      v-model:quality="quality"
       :pages
       :progress
       :current-page
@@ -43,16 +44,17 @@
       @copy-current-page="copyCurrentPage"
       @download-pdf="downloadPdf"
       @download-current-page="downloadCurrentPage"
+      @commit-quality="applyQuality"
     />
   </div>
 </template>
 
 <script setup lang="ts">
+import { useScoreExportPreview } from '@/features/export';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import EmptyState from '@/ui/components/EmptyState.vue';
 import { useLineSelection } from '@/ui/composables/useLineSelection';
-import { useScoreExportPreview } from '@/features/export';
 import { useScoreLinesData } from '@/ui/composables/useScoreLinesData.ts';
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
 import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
@@ -98,6 +100,8 @@ const {
   downloadPdf,
   clearPreview,
   downloadCurrentPage,
+  applyQuality,
+  quality,
 } = useScoreExportPreview(sortedSelectedIndices, exportHeaderMetaRef, exportPageLineSet, a4CaptureWrapperRef);
 
 watch(previewVisible, open => {

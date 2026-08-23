@@ -1,35 +1,33 @@
 <template>
   <div class="chord-analysis-wrapper">
-    <Transition name="panel-fade">
-      <div class="chord-analysis-panel">
-        <!-- 面板头部 -->
-        <div class="panel-header">
-          <div class="header-icon-wrapper">
-            <Sparkles class="header-icon" :size="13" stroke-width="2.5" />
-          </div>
-          <span class="header-title">和弦分析</span>
+    <div class="chord-analysis-panel">
+      <!-- 面板头部 -->
+      <div class="panel-header">
+        <div class="header-icon-wrapper">
+          <Sparkles class="header-icon" :size="13" stroke-width="2.5" />
         </div>
-
-        <template v-if="analysis.notes.length > 0">
-          <div class="analysis-flex-container">
-            <!-- 1. 推荐候选标签子组件 -->
-            <CandidateTags
-              :candidates="analysis.candidates"
-              :active-chord-name="editorStore.draftChord.chordName"
-              @select-candidate="handleSelectCandidate"
-            />
-
-            <div class="panel-divider" />
-
-            <!-- 2. 构成音列表子组件 -->
-            <NoteIntervalList :notes="analysis.notes" />
-          </div>
-        </template>
-
-        <!-- PC端空状态 -->
-        <EmptyState v-else :icon="Music" description="在指板上按音以分析" size="md" />
+        <span class="header-title">和弦分析</span>
       </div>
-    </Transition>
+
+      <template v-if="analysis.notes.length > 0">
+        <div class="analysis-flex-container">
+          <!-- 1. 推荐候选标签子组件 -->
+          <CandidateTags
+            :candidates="analysis.candidates"
+            :active-chord-name="editorStore.draftChord.chordName"
+            @select-candidate="handleSelectCandidate"
+          />
+
+          <div class="panel-divider" />
+
+          <!-- 2. 构成音列表子组件 -->
+          <NoteIntervalList :notes="analysis.notes" />
+        </div>
+      </template>
+
+      <!-- PC端空状态 -->
+      <EmptyState v-else :icon="Music" description="在指板上按音以分析" size="md" />
+    </div>
   </div>
 </template>
 

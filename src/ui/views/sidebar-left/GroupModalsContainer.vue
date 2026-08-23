@@ -35,7 +35,7 @@
 
   <!-- 4. 移动分组 Modal -->
   <BaseModal v-model:visible="groupModals.modals.move" title="移动至新分组" @confirm="groupModals.handleMoveChord">
-    <div class="move-group-grid no-scrollbar" ref="groupContainer" @keydown="handleKeydown">
+    <div ref="groupContainer" class="move-group-grid no-scrollbar" @keydown="handleKeydown">
       <button
         v-for="group in chordStore.groups"
         :key="group.id"

@@ -103,6 +103,7 @@ const handleWheelScroll = (e: WheelEvent) => {
 
 .score-floating-bar {
   display: flex;
+  align-items: center;
   position: fixed;
   left: 50%;
   bottom: 1.8rem;
@@ -180,7 +181,7 @@ const handleWheelScroll = (e: WheelEvent) => {
 }
 
 .bar-divider {
-  width: 1px;
+  width: 2px;
   height: 1rem;
   background-color: var(--border-base);
   opacity: 0.6;

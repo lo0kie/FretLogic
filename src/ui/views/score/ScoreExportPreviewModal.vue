@@ -34,8 +34,21 @@
           v-model="currentPageIndexModel"
           :total="pages.length"
           :disabled="isGenerating"
-          size="sm"
+          size="md"
           :formatter="(current, total) => `第 ${current} / ${total} 张`"
+        />
+
+        <BaseSlider
+          v-model="qualityDisplayPercent"
+          label="导出质量"
+          :min="5"
+          :max="100"
+          :step="5"
+          :default-value="85"
+          size="md"
+          :formatter="val => `${val}%`"
+          :disabled="isGenerating"
+          @commit="val => emit('commit-quality', val / 100)"
         />
 
         <div class="preview-actions-row">
@@ -76,15 +89,16 @@
 </template>
 
 <script setup lang="ts">
+import type { PreviewPage } from '@/features/export';
+import { ExportMode } from '@/features/export';
 import ActionButton from '@/ui/components/ActionButton.vue';
 import BaseModal from '@/ui/components/BaseModal.vue';
 import BasePagination from '@/ui/components/BasePagination.vue';
 import BaseSegmentedControl from '@/ui/components/BaseSegmentedControl.vue';
+import BaseSlider from '@/ui/components/BaseSlider.vue';
 import EmptyState from '@/ui/components/EmptyState.vue';
-import { ExportMode } from '@/features/export';
-import type { PreviewPage } from '@/features/export';
 import { Copy, Download, FileDown } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps<{
   visible: boolean;
@@ -94,6 +108,7 @@ const props = defineProps<{
   currentPageIndex: number;
   isGenerating: boolean;
   progress: number;
+  quality: number;
 }>();
 
 const emit = defineEmits<{
@@ -103,7 +118,20 @@ const emit = defineEmits<{
   (e: 'copy-current-page'): void;
   (e: 'download-pdf'): void;
   (e: 'download-current-page'): void;
+  (e: 'commit-quality', value: number): void;
 }>();
+
+// 拖动过程中只更新这个本地显示值（滑块位置和百分比文字实时跟手）
+// 不直接触发 update:quality，避免每帧都重新编码
+const qualityDisplayPercent = ref(Math.round(props.quality * 100));
+
+// 父组件的 quality 从外部变化时（比如别处重置），同步一下显示值
+watch(
+  () => props.quality,
+  val => {
+    qualityDisplayPercent.value = Math.round(val * 100);
+  }
+);
 
 const buttonSize = 'md';
 const isActionDisabled = computed(() => props.pages.length === 0 || props.isGenerating);

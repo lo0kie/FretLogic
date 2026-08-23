@@ -1,5 +1,5 @@
 ﻿/** 左侧栏宽度（px） */
-export const LEFT_SIDEBAR_WIDTH = 335;
+export const LEFT_SIDEBAR_WIDTH = 344;
 /** 左侧栏宽度（px 字符串形式，供 CSS 绑定） */
 export const LEFT_SIDEBAR_WIDTH_PIXEL = `${LEFT_SIDEBAR_WIDTH}px`;
 

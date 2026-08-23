@@ -104,6 +104,16 @@ export const toggleAutoScroll = () => {
 };
 
 export function useAutoScroll(containerRef?: Ref<HTMLElement | null>) {
+  const scoreEditor = getScoreEditor();
+
+  // 切换当前激活乐谱时自动停止滚动
+  watch(
+    () => scoreEditor.activeSongId,
+    () => {
+      stopAutoScroll();
+    }
+  );
+
   if (containerRef) {
     watch(
       containerRef,
