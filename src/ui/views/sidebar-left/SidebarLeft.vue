@@ -82,14 +82,14 @@
 </template>
 
 <script setup lang="ts">
+import { useChordStore } from '@/features/chords';
+import { useImportExportService } from '@/features/export';
+import { useSongModals, useSongStore } from '@/features/songs';
+import { useUiStore } from '@/stores/uiStore';
 import ActionButton from '@/ui/components/ActionButton.vue';
 import BaseBadge from '@/ui/components/BaseBadge.vue';
 import BaseInput from '@/ui/components/BaseInput.vue';
-import { useChordStore } from '@/features/chords';
-import { useSongModals, useSongStore } from '@/features/songs';
 import { useChordGroupModals } from '@/ui/composables/useChordGroupModals';
-import { useImportExportService } from '@/features/export';
-import { useUiStore } from '@/stores/uiStore';
 import { Download, Plus, Search, Upload } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
 import { provide, ref, useTemplateRef } from 'vue';

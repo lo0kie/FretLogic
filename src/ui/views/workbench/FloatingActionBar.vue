@@ -29,10 +29,10 @@
 </template>
 
 <script setup lang="ts">
-import ActionButton from '@/ui/components/ActionButton.vue';
-import { useChordActions } from '@/ui/composables/useChordActions';
 import { useEditorStore } from '@/stores/chordEditorStore';
 import { isGlobalEditable } from '@/stores/globalState';
+import ActionButton from '@/ui/components/ActionButton.vue';
+import { useChordActions } from '@/ui/composables/useChordActions';
 import { computed } from 'vue';
 
 const editorStore = useEditorStore();

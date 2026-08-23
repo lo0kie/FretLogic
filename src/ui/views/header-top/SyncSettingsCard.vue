@@ -114,7 +114,7 @@ const isPushConfigComplete = computed(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: @space-sm;
+  gap: @space-md;
   background-color: var(--bg-panel);
   padding: @space-md;
   border-radius: @radius-lg;
@@ -139,7 +139,7 @@ const isPushConfigComplete = computed(() => {
 .grid-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: @space-sm;
+  gap: @space-md;
   box-sizing: border-box;
 }
 </style>
