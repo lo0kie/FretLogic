@@ -207,6 +207,7 @@ const handleWheel = (e: WheelEvent) => {
 .base-slider {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
   border-radius: @radius-pill;
@@ -295,27 +296,24 @@ const handleWheel = (e: WheelEvent) => {
 
 .slider-input {
   width: 100%;
-  height: 4px;
+  height: 20px; /* 1. 撑高整体区域，吸收滑块放大带来的溢出，避免布局抖动 */
   appearance: none;
-  background: var(--border-base);
-  border-radius: @radius-sm;
+  background: transparent; /* 2. 背景透明，交由 track 渲染 */
   outline: none;
   cursor: pointer;
 
-  &:disabled {
-    cursor: not-allowed;
-
-    &::-webkit-slider-thumb {
-      cursor: not-allowed;
-      box-shadow: none;
-      transform: none !important;
-    }
+  /* 3. 规范化：单独渲染 Webkit 轨道 */
+  &::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-base);
   }
 
   &::-webkit-slider-thumb {
     appearance: none;
     width: 12px;
     height: 12px;
+    margin-top: -4px; /* 4. 关键：(轨道高4px - 滑块高12px) / 2 = -4px，完美居中 */
     border-radius: 50%;
     background: var(--color-primary);
     box-shadow: var(--shadow-sm);
@@ -327,8 +325,32 @@ const handleWheel = (e: WheelEvent) => {
   &:not(:disabled):hover::-webkit-slider-thumb {
     transform: scale(1.25);
   }
-
   &:not(:disabled):active::-webkit-slider-thumb {
+    transform: scale(1.4);
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--color-primary), transparent 50%);
+  }
+
+  /* 5. 补充 Firefox 的轨道与滑块支持 */
+  &::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-base);
+  }
+  &::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border: none;
+    border-radius: 50%;
+    background: var(--color-primary);
+    box-shadow: var(--shadow-sm);
+    transition:
+      transform var(--duration-base) var(--bezier-spring),
+      box-shadow @duration-fast ease;
+  }
+  &:not(:disabled):hover::-moz-range-thumb {
+    transform: scale(1.25);
+  }
+  &:not(:disabled):active::-moz-range-thumb {
     transform: scale(1.4);
     box-shadow: 0 2px 6px color-mix(in srgb, var(--color-primary), transparent 50%);
   }

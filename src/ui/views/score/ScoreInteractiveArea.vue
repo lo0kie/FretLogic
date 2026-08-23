@@ -17,9 +17,11 @@
             {{ scoreEditor.activeSong?.title }}
           </h1>
           <div class="export-song-info">
-            <span>{{ computeSongKey(scoreEditor.activeSong.playKey, scoreEditor.activeSong.capo) }} 调</span>
+            <span class="info-side info-side-left">
+              {{ computeSongKey(scoreEditor.activeSong.playKey, scoreEditor.activeSong.capo) }} 调
+            </span>
             <span class="info-divider">|</span>
-            <span>Capo: {{ scoreEditor.activeSong.capo }}</span>
+            <span class="info-side info-side-right">Capo: {{ scoreEditor.activeSong.capo }}</span>
           </div>
         </div>
 
@@ -405,15 +407,27 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
 .export-song-info {
   display: flex;
   align-items: center;
-  gap: @space-md;
+  justify-content: center;
+  width: 100%;
   font-size: calc(0.75rem * var(--score-font-scale, 1));
   font-weight: 600;
   color: var(--text-body);
 }
-
+.info-side {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.info-side-left {
+  text-align: right;
+}
+.info-side-right {
+  text-align: left;
+}
 .info-divider {
   color: var(--text-disabled);
   opacity: 0.5;
+  padding: 0 @space-md; // 原来的 gap: @space-md 去掉，改用 padding 控制左右间距
+  flex: 0 0 auto;
 }
 
 .line-row {
@@ -421,7 +435,6 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   align-items: stretch;
   /* 原生虚拟渲染：跳过屏外行的渲染/布局（保持 DOM 与交互完整），
      大幅降低长谱面的渲染成本；导出模式已用 content-visibility: visible 覆盖 */
-  content-visibility: auto;
   width: max-content;
   min-width: 100%;
   /* 屏外行跳过布局与绘制（长歌词的渲染级虚拟化）；auto 让浏览器记住已渲染行的真实高度。
@@ -501,7 +514,7 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   font-family: monospace;
   color: var(--text-disabled);
   padding: @space-xs @space-sm;
-  border-radius: @radius-sm;
+  border-radius: @radius-lg;
   transition:
     color @duration-fast ease,
     background-color @duration-fast ease;

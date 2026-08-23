@@ -18,48 +18,56 @@
       class="note-outline-ring"
     />
 
-    <!-- 音符主体（未按品被隐藏时显示） -->
-    <template v-if="!isPressed">
-      <circle
-        :cx="x"
-        :cy="y"
-        :r="NOTE_DISPLAY.FINGER_DOT_RADIUS"
-        :fill="noteBgColor"
-        :stroke="noteStrokeColor"
-        :stroke-width="noteStrokeWidth"
-        class="note-circle"
-        :class="{ 'is-root-glow': isRoot }"
-      />
+    <!-- 音符圆圈背景 -->
+    <circle
+      v-if="!isPressed"
+      :cx="x"
+      :cy="y"
+      :r="NOTE_DISPLAY.FINGER_DOT_RADIUS"
+      :fill="noteBgColor"
+      :stroke="noteStrokeColor"
+      :stroke-width="noteStrokeWidth"
+      class="note-circle"
+      :class="{ 'is-root-glow': isRoot }"
+    />
 
-      <text
-        :x="x"
-        :y="y"
-        text-anchor="middle"
-        dy="0.36em"
-        :font-size="NOTE_DISPLAY.FINGER_FONT_SIZE"
-        font-weight="600"
-        :fill="noteTextColor"
-        class="note-text"
-        style="pointer-events: none"
-        aria-hidden="true"
+    <!-- 静音状态：原生 SVG 画 X，不用图标组件/foreignObject -->
+    <g v-if="!isPressed && isMuted" class="note-mute-x" :stroke="noteTextColor" stroke-width="4" stroke-linecap="round">
+      <line :x1="x - muteXHalf" :y1="y - muteXHalf" :x2="x + muteXHalf" :y2="y + muteXHalf" />
+      <line :x1="x + muteXHalf" :y1="y - muteXHalf" :x2="x - muteXHalf" :y2="y + muteXHalf" />
+    </g>
+
+    <!-- 音名文字：原生 SVG <text>，不再用 foreignObject 包 HTML -->
+    <!-- 垂直居中用 dy 手动算偏移，不用 dominant-baseline：
+         html-to-image 导出时会把 SVG 序列化成字符串再用 <img> 重新加载解析，
+         这个"重新解析"过程里浏览器对 dominant-baseline 的支持经常和实时 DOM 渲染不一致，
+         容易退化回默认 alphabetic 基线，导致导出图片里文字往下沉、不居中。
+         dy 是纯数值偏移，序列化前后表现一致，更稳。 -->
+    <text
+      v-else-if="!isPressed"
+      :x="x"
+      :y="y"
+      text-anchor="middle"
+      :dy="labelVerticalOffset"
+      :fill="noteTextColor"
+      :font-size="svgFontSize"
+      font-weight="700"
+      class="note-svg-label"
+    >
+      <tspan>{{ label }}</tspan>
+      <tspan
+        v-if="isAccidental"
+        :dx="accidentalDx"
+        :dy="accidentalDy"
+        :font-size="svgAccidentalFontSize"
+        font-weight="700"
+        class="note-svg-accidental"
       >
-        <template v-if="isMuted"> ✕ </template>
-        <template v-else>
-          <tspan>{{ label }}</tspan>
-          <tspan
-            v-if="isAccidental"
-            class="note-accidental"
-            :font-size="String(Math.round(NOTE_DISPLAY.FINGER_FONT_SIZE * NOTE_DISPLAY.ACCIDENTAL_SCALE))"
-            :dy="String(-NOTE_DISPLAY.FINGER_FONT_SIZE * NOTE_DISPLAY.ACCIDENTAL_RAISE_RATIO)"
-          >
-            {{ preferFlat ? 'b' : '#' }}
-          </tspan>
-        </template>
-      </text>
-    </template>
+        {{ preferFlat ? 'b' : '#' }}
+      </tspan>
+    </text>
 
-    <!-- 始终存在的透明命中区：即便按品隐藏(is-pressed)也保留可点击区域，
-         使弦内有品内音符时仍可点击空弦音切换回空弦/静音 -->
+    <!-- 始终存在的透明命中区 -->
     <circle
       class="note-hit-area"
       :cx="x"
@@ -113,6 +121,23 @@ defineEmits<{
   (e: 'click', event: MouseEvent): void;
   (e: 'toggle-pitch'): void;
 }>();
+
+// 静音 X 的半边长，按字号比例走，字号变了 X 的大小也跟着变
+const muteXHalf = computed(() => NOTE_DISPLAY.FINGER_FONT_SIZE * 0.28);
+
+// 把原来给 HTML 用的字号折算成 SVG <text> 的等效大小
+const SVG_FONT_SIZE_RATIO = 0.9;
+const svgFontSize = computed(() => NOTE_DISPLAY.FINGER_FONT_SIZE * SVG_FONT_SIZE_RATIO);
+const svgAccidentalFontSize = computed(() => svgFontSize.value * 0.6);
+
+// 主字符垂直居中偏移：约等于字号的 0.35 倍（经验值，适配大多数西文/数字字形的视觉居中），
+// 比 dominant-baseline="central" 更稳，导出截图和实时显示效果一致。
+// 如果还是偏上/偏下，只调这一个数字：调大→文字往下移，调小→文字往上移。
+const labelVerticalOffset = computed(() => svgFontSize.value * 0.35);
+
+// 升降号相对主字符的偏移：dx 往右挪一点，dy 负值往上顶
+const accidentalDx = computed(() => svgFontSize.value * 0.03);
+const accidentalDy = computed(() => -svgFontSize.value * 0.22);
 
 const hoverFillColor = computed(() => 'var(--fb-hover)');
 
@@ -176,9 +201,9 @@ const noteTextColor = computed(() => {
 }
 
 .is-pressed-hidden {
-  // 当按品隐藏时，自身主体不显示，但如果有 hover / focus，外圈依然可见
   .note-circle,
-  .note-text {
+  .note-svg-label,
+  .note-mute-x {
     display: none;
   }
 }
@@ -195,10 +220,18 @@ const noteTextColor = computed(() => {
   }
 }
 
-.note-text {
+.note-mute-x {
+  pointer-events: none;
+}
+
+.note-svg-label {
   font-family: 'Helvetica Neue', Arial, sans-serif;
-  transition: fill @duration-fast ease;
   user-select: none;
+  pointer-events: none;
+}
+
+.note-svg-accidental {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
 }
 
 .note-outline-ring {

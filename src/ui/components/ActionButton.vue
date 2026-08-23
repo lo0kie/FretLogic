@@ -116,11 +116,22 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   }
 }
 .action-button-base.is-texted {
-  background-color: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
   padding-left: 0.3rem;
   padding-right: 0.3rem;
+  background-color: transparent !important;
+  border-color: transparent;
+
+  // 1. 鼠标点击/聚焦时的外边框高亮
+  &:focus,
+  &:active:not(:disabled) {
+    border-color: var(--color-primary) !important;
+  }
+
+  // 2. 键盘 Tab 导航聚焦时的双重外边框环
+  &:focus-visible {
+    border-color: var(--color-primary) !important;
+    box-shadow: var(--focus-ring) !important;
+  }
 
   &.theme-primary {
     color: var(--color-primary);
