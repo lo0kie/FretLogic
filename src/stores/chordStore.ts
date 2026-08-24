@@ -1,10 +1,10 @@
-import { STORAGE_KEYS } from '@/constants';
+import { STORAGE_KEYS } from '@/utils/constants';
 import type { Chord, Group, GroupedChordCard } from '@/types';
 import { GroupSortRule } from '@/types';
-import { normalizeChord } from '@/utils/chordMap';
-import { cloneDeep, cloneGuitarStrings } from '@/utils/cloneDeep';
-import { generateUUID } from '@/utils/id';
-import { createChordRepository } from '@/data/repositories';
+import { normalizeChord } from '@/utils/chord-fretboard';
+import { cloneDeep, cloneGuitarStrings } from '@/utils/common';
+import { generateUUID } from '@/utils/common';
+import { createChordRepository } from '@/services/repositories';
 import {
   computeChordFingerprint,
   computeIsInverted,

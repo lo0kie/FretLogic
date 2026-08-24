@@ -21,21 +21,17 @@
 </template>
 
 <script setup lang="ts">
-import { AppShell } from '@/app';
+import AppShell from '@/components/AppShell.vue';
 import { useUiStore } from '@/stores/uiStore';
-import TopHeader from '@/ui/views/header-top/TopHeader.vue';
+import TopHeader from '@/views/header-top/TopHeader.vue';
 import { computed, defineAsyncComponent } from 'vue';
-import { LEFT_SIDEBAR_WIDTH_PIXEL } from './constants/layout.ts';
+import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/constants';
 import { toggleDarkMode } from './stores/globalState.ts';
-import GlobalToast from './ui/components/GlobalToast.vue';
-
-const SidebarLeft = defineAsyncComponent(() => import('./ui/views/sidebar-left/SidebarLeft.vue'));
+import GlobalToast from '@/components/GlobalToast.vue';
 
 const uiStore = useUiStore();
-
-const mainPaddingLeft = computed(() => {
-  return uiStore.isLeftOpen ? LEFT_SIDEBAR_WIDTH_PIXEL : '0px';
-});
+const SidebarLeft = defineAsyncComponent(() => import('@/views/sidebar-left/SidebarLeft.vue'));
+const mainPaddingLeft = computed(() => (uiStore.isLeftOpen ? LEFT_SIDEBAR_WIDTH_PIXEL.value : '0px'));
 
 const executeToggleThemeWithAnimation = () => {
   const rootEl = document.documentElement;

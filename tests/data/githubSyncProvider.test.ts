@@ -1,8 +1,9 @@
+import { createGithubSyncProvider } from '@/services/sync/githubSyncProvider';
+import type { GithubSyncConfig } from '@/services/sync/provider';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createGithubSyncProvider } from '@/features/sync/services/githubSyncProvider';
-import type { SyncConfig } from '@/features/sync/services/provider';
 
-const config: SyncConfig = {
+const config: GithubSyncConfig = {
+  kind: 'github',
   token: 'ghp_abcdefghijklmnop',
   owner: 'owner',
   repo: 'repo',
@@ -53,12 +54,12 @@ describe('github sync provider', () => {
   it('throws FILE_NOT_FOUND on 404', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not found', { status: 404 })));
     const provider = createGithubSyncProvider(config);
-    await expect(provider.pull()).rejects.toThrowError('FILE_NOT_FOUND');
+    await expect(provider.pull()).rejects.toMatchObject({ code: 'FILE_NOT_FOUND' });
   });
 
   it('maps invalid cloud payloads to INVALID_CLOUD_DATA', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ content: btoa(JSON.stringify({ version: 4 })) })));
     const provider = createGithubSyncProvider(config);
-    await expect(provider.pull()).rejects.toThrowError('INVALID_CLOUD_DATA');
+    await expect(provider.pull()).rejects.toMatchObject({ code: 'INVALID_CLOUD_DATA' });
   });
 });

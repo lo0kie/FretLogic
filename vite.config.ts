@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process';
 import { resolve } from 'path';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 // 读取当前 git 提交短 SHA，作为随代码自动变化、真实有意义的构建标识。
 // 非 git 环境（或取不到时）回退为 unknown。
@@ -21,6 +22,32 @@ export default defineConfig({
       filename: 'stats.html',
       gzipSize: true,
       brotliSize: true,
+    }),
+    VitePWA({
+      registerType: 'autoUpdate', // 自动更新 Service Worker
+      manifest: {
+        name: 'Fret Logic', // 应用完整名称
+        short_name: 'FretLogic', // 应用简短名称（显示在桌面上）
+        description: '你的吉他与乐谱助手',
+        theme_color: '#007aff', // 主题颜色
+        background_color: '#f2f2f7', // 背景色
+        display: 'standalone', // 独立应用模式（隐藏浏览器地址栏）
+        display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
+        start_url: './', // 启动路径
+        scope: './',
+        icons: [
+          {
+            src: '/FretLogic/pwa-192x192.png', // 需在 public 目录下准备对应图标
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: '/FretLogic/pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+        ],
+      },
     }),
   ],
   base: '/FretLogic/',

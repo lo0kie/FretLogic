@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { validateImportExportPayload } from '@/domain/validation/payload';
-import { sanitizePersistedData } from '@/domain/validation/persistedData';
+import { validateImportExportPayload } from '@/services/validation/payload';
+import { sanitizePersistedData } from '@/services/validation/persistedData';
 
 const group = { id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' };
 const strings = [

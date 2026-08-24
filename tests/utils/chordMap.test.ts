@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getEdgeChords, parseSlotKey, removeChordFromSlot, setEdgeChords } from '@/utils/chordMap';
+import { getEdgeChords, parseSlotKey, removeChordFromSlot, setEdgeChords } from '@/utils/chord-fretboard';
 
 describe('chordMap: 槽位键解析', () => {
   it('解析合法 char 槽位', () => {

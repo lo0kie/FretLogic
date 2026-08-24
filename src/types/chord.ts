@@ -1,4 +1,4 @@
-﻿import type { FRET_COUNTS } from '@/constants';
+﻿import type { FRET_COUNTS } from '@/utils/constants';
 import type { Tuning } from '@/utils/musicTheory';
 import type { Song } from './song';
 

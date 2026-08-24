@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
-import ChordSlotCell from '@/ui/views/score/ChordSlotCell.vue';
+import ChordSlotCell from '@/views/score/ChordSlotCell.vue';
 
 // stub 全局指令与重型依赖
 const globalStubs = {

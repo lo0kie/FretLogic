@@ -1,8 +1,8 @@
 // src/stores/chordEditorStore.ts
-import { STORAGE_KEYS } from '@/constants';
+import { STORAGE_KEYS } from '@/utils/constants';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, GuitarStringEntity, GuitarStringsModel } from '@/types';
-import { cloneDeep } from '@/utils/cloneDeep';
+import { cloneDeep } from '@/utils/common';
 import { createString, DEFAULT_TUNING_MAPPING, Tuning, TUNING_PRESETS } from '@/utils/musicTheory';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -56,7 +56,7 @@ const normalizeDraftStrings = (draft: Chord): void => {
   delete legacyDraft.fingerprint;
 };
 
-export const useEditorStore = defineStore('editor', () => {
+export const useChordEditorStore = defineStore('editor', () => {
   const chordStore = useChordStore();
 
   const draftChord = useStorage<Chord>(STORAGE_KEYS.EDITING_DRAFT, createDefaultChord(), localStorage, {

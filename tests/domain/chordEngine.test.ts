@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeChordGraph } from '@/utils/chordEngine';
+import { analyzeChordGraph } from '@/services/music/chordEngine';
 import type { NoteInput } from '@/types';
 
 const note = (stringIndex: number, pitchIndex: number, label: string): NoteInput => ({

@@ -18,35 +18,35 @@ export default defineConfig({
       reporter: ['text'],
       clean: false,
       // 分层覆盖率门槛（基于当前可达水平设定，可随测试补齐提升）：
-      // - 领域层（domain/music/validation）核心算法 ≥85%
-      // - 数据层（IDB 仓库/迁移）≥80%
-      // - core 基础设施（errors/storage/composables/theme）≥55%
+      // - 领域层（services/music、services/validation）核心算法 ≥85%/80%
+      // - 数据仓储层（services/repositories）≥80%
+      // - 服务基础设施（services/*：errors/storage/data/sync）≥55%
       // - 全局 ≥70%（设计文档原目标，ui/views 后续 phase 提升）
       thresholds: {
         'perFile': false,
-        'src/domain/music/**': {
+        'src/services/music/**': {
           lines: 85,
           functions: 70,
           statements: 85,
           branches: 60,
         },
-        'src/domain/validation/**': {
+        'src/services/validation/**': {
           lines: 80,
           functions: 80,
           statements: 80,
           branches: 60,
         },
-        'src/core/**': {
+        'src/services/repositories/**': {
+          lines: 80,
+          functions: 80,
+          statements: 80,
+          branches: 60,
+        },
+        'src/services/**': {
           lines: 55,
           functions: 50,
           statements: 55,
           branches: 50,
-        },
-        'src/data/**': {
-          lines: 80,
-          functions: 80,
-          statements: 80,
-          branches: 60,
         },
       },
     },

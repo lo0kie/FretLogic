@@ -17,7 +17,7 @@
 - **歌词和弦谱编辑器**：逐字对齐的歌词行 + 和弦槽位，支持拖拽、撤销重做、自动滚动
 - **音频试听**：基于 WebAudio 的和弦弹奏预览
 - **导出**：PDF / PNG（html-to-image + jsPDF）
-- **GitHub 云同步**：把和弦库与曲库备份到你的 GitHub 仓库
+- **云同步**：把和弦库与曲库备份到 GitHub 仓库或 WebDAV 服务器（支持 CORS 代理）
 - **多主题**：浅色 / 深色 / 高对比，可跟随系统
 
 ## 🚀 快速开始
@@ -28,6 +28,21 @@ pnpm dev
 ```
 
 打开 `http://localhost:5173`。
+
+### WebDAV 同步（开发期）
+
+浏览器直连多数 WebDAV 服务器（如坚果云）受跨域（CORS）限制。开发时可用随仓库附带的 Node 代理转发请求：
+
+```bash
+# 终端 A：启动转发代理
+pnpm dev:proxy
+
+# 终端 B：启动开发服务器
+pnpm dev
+```
+
+然后在「云端同步设置 → WebDAV」中将 **CORS 代理** 填为
+`http://localhost:8787`，其余（服务器地址 / 账号 / 密码 / 远程路径）照常填写。生产环境需自行部署一个返回 CORS 头的服务端转发。
 
 ## 🛠️ 技术栈
 
@@ -47,26 +62,30 @@ pnpm dev
 
 ```
 src/
-  app/          # 应用壳（main、AppShell、路由）
-  core/         # 跨特性基础设施（tokens、基础组件、composables、errors、storage）
-  features/     # 业务特性（chords/songs/score/fretboard/audio/export/sync）
-  domain/       # 领域逻辑（乐理、和弦引擎、校验）
-  data/         # 数据访问层
-  ui/           # 视图组件与 composables
-  utils/        # 通用工具
+  components/   # 可复用 Vue 组件（.vue）
+  views/        # 页面级视图（TopHeader、ScoreView、SidebarLeft、WorkbenchView、各 Modal）
+  composables/  # Vue 组合式函数（use*）
+  services/     # 服务层：sync providers、repositories、领域逻辑、errors、storage、data bootstrap
+  stores/       # Pinia stores
+  router/       # 路由
+  directives/   # 指令（vTooltip）
+  assets/       # 静态资源与样式
+  types/        # 全局类型
+  utils/        # 通用工具与全局常量（constants.ts）
 ```
 
 ## 📦 脚本
 
-| 命令             | 说明       |
-| ---------------- | ---------- |
-| `pnpm dev`       | 开发服务器 |
-| `pnpm build`     | 生产构建   |
-| `pnpm typecheck` | 类型检查   |
-| `pnpm lint`      | ESLint     |
-| `pnpm test`      | 单元测试   |
-| `pnpm test:e2e`  | E2E 测试   |
-| `pnpm coverage`  | 覆盖率     |
+| 命令             | 说明                 |
+| ---------------- | -------------------- |
+| `pnpm dev`       | 开发服务器           |
+| `pnpm dev:proxy` | WebDAV CORS 转发代理 |
+| `pnpm build`     | 生产构建             |
+| `pnpm typecheck` | 类型检查             |
+| `pnpm lint`      | ESLint               |
+| `pnpm test`      | 单元测试             |
+| `pnpm test:e2e`  | E2E 测试             |
+| `pnpm coverage`  | 覆盖率               |
 
 ## 🤝 贡献
 

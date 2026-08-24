@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calcPitchIndex, formatStringLabel, isAccidentalNote } from '@/domain/music/theory';
+import { calcPitchIndex, formatStringLabel, isAccidentalNote } from '@/services/music/theory';
 
 describe('theory: 音高计算', () => {
   it('标准调弦下 6 弦空弦为 E (pitch 4)', () => {

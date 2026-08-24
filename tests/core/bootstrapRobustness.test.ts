@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/core/data/bootstrap';
-import { songRepository } from '@/core/data';
-import { logger } from '@/core/logger';
-import { STORAGE_KEYS } from '@/constants';
-import { idb } from '@/core/storage';
+import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
+import { songRepository } from '@/services/data';
+import { logger } from '@/utils/logger';
+import { STORAGE_KEYS } from '@/utils/constants';
+import { idb } from '@/services/storage';
 import type { Group, Song } from '@/types';
 
 class MemoryStorage implements Storage {
