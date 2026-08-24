@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createChordRepository, createSongRepository } from '@/data/repositories';
+import { createChordRepository, createSongRepository } from '@/services/repositories';
 import type { Chord, Group, Song } from '@/types';
 
 class MemoryStorage implements Storage {

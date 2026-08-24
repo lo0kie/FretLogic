@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AppError, ErrorCode, errors, toAppError } from '@/core/errors';
+import { AppError, ErrorCode, errors, toAppError } from '@/services/errors';
 
 describe('AppError / toAppError', () => {
   it('工厂函数构造带分类的错误', () => {

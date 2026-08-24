@@ -1,29 +1,11 @@
 // Fret-Logic ESLint 扁平配置（ESLint 10）
-// 架构约束：feature 之间只允许通过彼此的 index.ts 公共出口互访。
+// 扁平目录结构下的架构约定见 CONTRIBUTING.md：跨层依赖方向为单向
+// views/components → composables → stores/services → utils。
 import eslint from '@eslint/js';
 import vue from 'eslint-plugin-vue';
 import importPlugin from 'eslint-plugin-import';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
-
-const featureRoots = ['chords', 'songs', 'score', 'fretboard', 'audio', 'export', 'sync'];
-
-/** 生成 feature 目录与其 index.ts 白名单，用于 no-restricted-paths */
-function buildFeatureRestrictions() {
-  const rules = [];
-  for (const src of featureRoots) {
-    for (const dst of featureRoots) {
-      if (src === dst) continue;
-      rules.push({
-        from: `src/features/${src}/`,
-        target: `src/features/${dst}/`,
-        message: `feature "${src}" 不得直接导入 feature "${dst}" 的内部文件；请通过 ${dst}/index.ts 公共出口导入。`,
-        except: [`src/features/${dst}/index.ts`],
-      });
-    }
-  }
-  return rules;
-}
 
 export default tseslint.config(
   {
@@ -58,8 +40,9 @@ export default tseslint.config(
       },
     },
     rules: {
-      // ---- 架构约束：feature 隔离 ----
-      'import/no-restricted-paths': ['error', { zones: buildFeatureRestrictions() }],
+      // ---- 架构约束：扁平分层 ----
+      // 历史上用 import/no-restricted-paths 强制 feature 隔离；改为扁平结构后，
+      // 跨层方向（views/components → composables → stores/services → utils）由约定与代码评审保障。
       // ---- 代码质量 ----
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],

@@ -1,9 +1,9 @@
 import App from '@/App.vue';
-import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/core/data/bootstrap';
-import { logger } from '@/core/logger';
-import { useTheme } from '@/core/theme';
+import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
+import { logger } from '@/utils/logger';
+import { useTheme } from '@/composables/useTheme';
 import { router } from '@/router';
-import { useEditorStore } from '@/stores/chordEditorStore';
+import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { createPinia } from 'pinia';
 import VWave from 'v-wave';
 import { createApp } from 'vue';
@@ -23,7 +23,7 @@ app.directive('tooltip', vTooltip);
 
 const initializeEditor = () => {
   try {
-    useEditorStore(pinia).initEditor();
+    useChordEditorStore(pinia).initEditor();
   } catch (error) {
     logger.error('main', '初始化编辑器时出错', error);
   }

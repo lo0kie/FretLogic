@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { idb } from '@/core/storage';
-import { chordRepository, songRepository } from '@/core/data';
-import { isLegacyMigrationDone, migrateLegacyData } from '@/core/data/migrateLegacy';
+import { idb } from '@/services/storage';
+import { chordRepository, songRepository } from '@/services/data';
+import { isLegacyMigrationDone, migrateLegacyData } from '@/services/data/migrateLegacy';
 import type { Song } from '@/types';
 
 class MemoryStorage implements Storage {

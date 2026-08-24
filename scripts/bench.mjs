@@ -11,8 +11,8 @@
 import { execSync } from 'node:child_process';
 
 const SCRIPT = `
-import { analyzeChordGraph } from '@/domain/music/chordEngine';
-import { getActiveBaseStrings } from '@/domain/music/theory';
+import { analyzeChordGraph } from '@/services/music/chordEngine';
+import { getActiveBaseStrings } from '@/services/music/theory';
 
 function bench(name, fn, iterations = 2000) {
   // 预热

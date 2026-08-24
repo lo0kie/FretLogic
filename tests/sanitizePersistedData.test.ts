@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { Tuning } from '@/utils/musicTheory';
-import { sanitizePersistedData } from '@/domain/validation/persistedData';
+import { sanitizePersistedData } from '@/services/validation/persistedData';
 import type { Chord, Group, Song } from '@/types';
 
 const group: Group = { id: 'group-1', name: 'C', sortRule: 'ROOT_PITCH' };

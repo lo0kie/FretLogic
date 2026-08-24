@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:proxy": "node ./scripts/dev-webdav-proxy.mjs",
     "check": "vue-tsc",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
-    "generate-code": "node ./scripts/generate-all-code.cjs",
+    "generate-code": "node ./scripts/generate-all-code.mjs",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
     "code:check": "vue-tsc --noEmit && pnpm build",
@@ -24,7 +25,8 @@
     "coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "bench": "node scripts/bench.mjs",
-    "verify": "pnpm format:check && pnpm test && pnpm typecheck && pnpm build:budget && pnpm audit --prod"
+    "verify": "pnpm format:check && pnpm test && pnpm typecheck && pnpm build:budget && pnpm audit --prod",
+    "generate-icon": "node ./scripts/compress-images.mjs"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.8.0",
@@ -66,10 +68,12 @@
     "playwright": "^1.62.1",
     "prettier": "^3.4.2",
     "rollup-plugin-visualizer": "^7.0.1",
+    "sharp": "^0.35.3",
     "typescript": "^5.4.2",
     "typescript-eslint": "^8.67.0",
     "vite": "^5.2.0",
     "vite-node": "^6.0.0",
+    "vite-plugin-pwa": "^1.3.0",
     "vitest": "3.2.4",
     "vue-tsc": "^2.0.6"
   }
