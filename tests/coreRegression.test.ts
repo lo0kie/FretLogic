@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { validateImportExportPayload } from '@/utils/validatePayload';
-import { analyzeChordGraph } from '@/utils/chordEngine';
+import { validateImportExportPayload } from '@/services/validation/payload';
+import { analyzeChordGraph } from '@/services/music/chordEngine';
 import { computeSongKey } from '@/utils/musicTheory';
 
 const legacyPayload = {

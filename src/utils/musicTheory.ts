@@ -1,1 +1,1 @@
-export * from '@/domain/music/theory';
+export * from '@/services/music/theory';

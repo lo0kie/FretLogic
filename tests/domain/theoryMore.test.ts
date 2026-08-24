@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeChordFingerprint, getActiveBaseStrings, getKeySemitones } from '@/domain/music/theory';
+import { computeChordFingerprint, getActiveBaseStrings, getKeySemitones } from '@/services/music/theory';
 
 describe('theory: 调性音程差', () => {
   it('同调为 0', () => {

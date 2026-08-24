@@ -1,11 +1,11 @@
-import { STORAGE_KEYS } from '@/constants';
+import { STORAGE_KEYS } from '@/utils/constants';
 import { useSongStore } from '@/stores/songStore';
 import type { Chord, Song } from '@/types';
-import { garbageCollectChordMap } from '@/utils/chordMap';
-import { cloneDeep } from '@/utils/cloneDeep';
-import { matchLineIds } from '@/utils/lineIdMatcher';
+import { garbageCollectChordMap } from '@/utils/chord-fretboard';
+import { cloneDeep } from '@/utils/common';
+import { matchLineIds } from '@/utils/common';
 import { computeSongKey, getKeySemitones, transposeChordName } from '@/utils/musicTheory';
-import { sanitizeLyricsText } from '@/utils/sanitizeLyricsText';
+import { sanitizeLyricsText } from '@/utils/common';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, nextTick, ref, watch } from 'vue';
@@ -38,6 +38,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const isUndoRedoAction = ref(false);
   const HISTORY_CAPACITY = 20;
   const scrollSpeed = useStorage(STORAGE_KEYS.SCORE_SCROLL_SPEED, 60);
+  const exportQuality = useStorage(STORAGE_KEYS.EXPORT_QUALITY, 0.85);
 
   const activeSong = computed<Song | null>(() => {
     if (!activeSongId.value) return null;
@@ -234,5 +235,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     undo,
     redo,
     scrollSpeed,
+    exportQuality,
   };
 });

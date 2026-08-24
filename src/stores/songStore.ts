@@ -1,8 +1,8 @@
-import { STORAGE_KEYS } from '@/constants';
+import { STORAGE_KEYS } from '@/utils/constants';
 import type { Song } from '@/types';
-import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/chordMap';
-import { generateUUID } from '@/utils/id';
-import { createSongRepository } from '@/data/repositories';
+import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/chord-fretboard';
+import { generateUUID } from '@/utils/common';
+import { createSongRepository } from '@/services/repositories';
 import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';

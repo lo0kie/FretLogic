@@ -1,5 +1,5 @@
-import { STORAGE_KEYS } from '@/constants';
-import { useTheme } from '@/core/theme';
+import { STORAGE_KEYS } from '@/utils/constants';
+import { useTheme } from '@/composables/useTheme';
 import { useStorage } from '@vueuse/core';
 import { computed } from 'vue';
 
@@ -11,7 +11,7 @@ export function toggleEditable() {
 }
 
 /**
- * 全局暗色状态：委托给 core/theme（单一来源）。
+ * 全局暗色状态：委托给 composables/useTheme（单一来源）。
  * 兼容旧组件中的 `globalDarkMode` 布尔判断；high-contrast 亦视为暗色。
  */
 const theme = useTheme();
