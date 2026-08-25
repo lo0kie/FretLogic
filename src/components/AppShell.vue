@@ -28,12 +28,10 @@
 // 移动端由外部 slot 决定如何呈现抽屉（遮罩/过渡由使用者组合）。
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .app-shell {
   width: 100vw;
-  min-width: @app-min-width;
+  min-width: $app-min-width;
   height: 100vh;
   display: flex;
   flex-direction: column;

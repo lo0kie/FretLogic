@@ -1,10 +1,10 @@
+import { useChordActions } from '@/composables/useChordActions';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/types';
-import { useChordActions } from '@/composables/useChordActions';
-import { computeChordFingerprint } from '@/utils/musicTheory';
+import { computeChordFingerprint, getChordName } from '@/utils/musicTheory';
 import { reactive } from 'vue';
 
 const DEFAULT_GROUP_SORT_RULE = 'ROOT_PITCH' as const;
@@ -136,7 +136,7 @@ export function useChordGroupModals() {
 
     chordStore.moveVariantsByName(
       modalData.activeChord.groupId,
-      modalData.activeChord.chordName,
+      getChordName(modalData.activeChord),
       modalData.moveTargetId
     );
 
@@ -200,7 +200,7 @@ export function useChordGroupModals() {
   const openChordReferences = (cardData: GroupedChordCard) => {
     const ids = [cardData.mainChord.id, ...cardData.variants.map(v => v.id)];
     modalData.referenceChordIds = ids;
-    modalData.referenceChordName = cardData.mainChord.chordName;
+    modalData.referenceChordName = getChordName(cardData.mainChord);
     modals.chordReferences = true;
   };
 

@@ -1,5 +1,6 @@
-﻿import { AUDIO_CONFIG } from '@/utils/constants';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
+import { AUDIO_CONFIG } from '@/utils/constants';
+import { calcNoteMidi } from '@/utils/musicTheory';
 import type * as Tone from 'tone';
 import { ref } from 'vue';
 
@@ -100,7 +101,6 @@ export function useAudioPlayer() {
       guitarSynth.releaseAll();
 
       const stringsSnapshot = editorStore.draftChord.strings.map(s => [...s] as [number, boolean]);
-      const capoOffset = editorStore.draftChord.capo > 0 ? editorStore.draftChord.capo : 0;
 
       let strumDelay = 0;
       let notesTriggered = 0;
@@ -108,12 +108,14 @@ export function useAudioPlayer() {
 
       for (let sIdx = 0; sIdx <= 5; sIdx++) {
         const targetStr = stringsSnapshot[sIdx];
-        const guitarMidiBase = editorStore.activeBaseStrings[sIdx];
-        if (!targetStr || guitarMidiBase === undefined) continue;
-        if (targetStr[0] < 0) continue;
+        if (!targetStr || targetStr[0] < 0) continue;
 
-        const actualOffset = targetStr[0] > 0 ? capoOffset : 0;
-        const currentMidiNote = guitarMidiBase + targetStr[0] + actualOffset;
+        const currentMidiNote = calcNoteMidi(
+          sIdx,
+          targetStr[0],
+          editorStore.draftChord.capo,
+          editorStore.activeBaseStrings
+        );
 
         const frequency = getFrequencyFromMidi(currentMidiNote, ToneModule);
 

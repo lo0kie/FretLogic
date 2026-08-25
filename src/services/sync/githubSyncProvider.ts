@@ -1,6 +1,6 @@
 import { validateImportExportPayload } from '@/services/validation/payload';
 import type { ImportExportPayload } from '@/types';
-import { Base64 } from 'js-base64';
+import { base64DecodeUtf8, base64EncodeUtf8 } from '@/utils/common';
 import { SyncError, type GithubSyncConfig, type SyncBranchesProvider } from './provider';
 
 const TIMEOUT_MS = 15000;
@@ -34,7 +34,7 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranches
   const decodePayload = async (response: Response): Promise<ImportExportPayload> => {
     const body = await response.json();
     if (!body.content) throw new SyncError('INVALID_CLOUD_DATA', '云端文件内容为空');
-    const raw = JSON.parse(Base64.decode(String(body.content).replace(/\n/g, '')));
+    const raw = JSON.parse(base64DecodeUtf8(String(body.content).replace(/\n/g, '')));
     const result = validateImportExportPayload(raw);
     if (!result.isValid || !result.payload) throw new SyncError('INVALID_CLOUD_DATA', '云端数据格式校验失败');
     return result.payload;
@@ -68,7 +68,7 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranches
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: `Auto sync fret-logic data: ${new Date().toLocaleString()}`,
-            content: Base64.encode(JSON.stringify(payload, null, 2)),
+            content: base64EncodeUtf8(JSON.stringify(payload, null, 2)),
             branch: config.branch,
             ...(sha ? { sha } : {}),
           }),

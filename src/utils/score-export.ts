@@ -1,3 +1,4 @@
+import { globalDarkMode } from '@/stores/globalState';
 import type { Chord } from '@/types';
 import type { Options } from 'html-to-image/lib/types';
 
@@ -189,7 +190,7 @@ const getCanvasPixelRatio = (el: HTMLElement): number => {
 };
 
 const getDOMBgColor = (): string => {
-  const isDark = document.documentElement.classList.contains('dark');
+  const isDark = globalDarkMode.value;
   return isDark ? '#18181a' : '#f2f2f7';
 };
 

@@ -14,7 +14,7 @@
 import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useDebounceFn } from '@vueuse/core';
-import { onDeactivated, ref, watch } from 'vue';
+import { onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
 
 defineOptions({ name: 'ScoreLyricsEditor' });
 
@@ -53,31 +53,32 @@ watch(localLyrics, value => {
   commitLyrics(value);
 });
 
-onDeactivated(() => {
+const flushLyrics = () => {
   const value = localLyrics.value;
   if (value !== (scoreEditor.activeSong?.lyrics ?? '')) {
     scoreEditor.updateLyrics(value);
   }
-});
+};
+
+onDeactivated(flushLyrics);
+onBeforeUnmount(flushLyrics);
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .lyrics-editor-zone {
   flex: 1;
-  padding: @space-xl @space-2xl;
+  padding: $space-xl $space-2xl;
   box-sizing: border-box;
 }
 
 .lyrics-meta {
   position: absolute;
-  right: @space-xl * 1.5;
-  bottom: @space-xl * 1.5;
-  font-size: @fs-sm;
+  right: $space-xl * 1.5;
+  bottom: $space-xl * 1.5;
+  font-size: $fs-sm;
   color: var(--text-muted);
   padding: 2px 8px;
-  border-radius: @radius-sm;
+  border-radius: $radius-sm;
   pointer-events: none;
   opacity: 0.8;
 }
@@ -87,9 +88,9 @@ onDeactivated(() => {
   height: 100%;
   background-color: var(--bg-panel);
   border: 1px solid var(--glass-border);
-  border-radius: @radius-lg;
-  padding: @space-xl;
-  font-size: @fs-base;
+  border-radius: $radius-lg;
+  padding: $space-xl;
+  font-size: $fs-base;
   line-height: 1.8;
   color: var(--text-title);
   outline: none;
@@ -97,8 +98,8 @@ onDeactivated(() => {
   box-sizing: border-box;
   font-family: inherit;
   transition:
-    border-color @duration-base,
-    box-shadow @duration-base;
+    border-color $duration-base,
+    box-shadow $duration-base;
 
   &:focus:not(:read-only) {
     border-color: var(--color-primary);

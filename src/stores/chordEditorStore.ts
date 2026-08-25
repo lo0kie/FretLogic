@@ -1,16 +1,17 @@
 // src/stores/chordEditorStore.ts
-import { STORAGE_KEYS } from '@/utils/constants';
 import { useChordStore } from '@/stores/chordStore';
-import type { Chord, GuitarStringEntity, GuitarStringsModel } from '@/types';
+import type { Chord, GuitarStringsModel } from '@/types';
+import { normalizeChord } from '@/utils/chord-fretboard';
 import { cloneDeep } from '@/utils/common';
-import { createString, DEFAULT_TUNING_MAPPING, Tuning, TUNING_PRESETS } from '@/utils/musicTheory';
+import { STORAGE_KEYS } from '@/utils/constants';
+import { createString, DEFAULT_TUNING_MAPPING, getChordName, Tuning, TUNING_PRESETS } from '@/utils/musicTheory';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw, watch } from 'vue';
 
 const createDefaultChord = (): Chord => ({
   id: '',
-  chordName: '',
+  nameSegments: null,
   strings: [
     createString(),
     createString(),
@@ -26,34 +27,22 @@ const createDefaultChord = (): Chord => ({
   rootStringIndex: null,
 });
 
-/** 迁移：把旧草稿（对象数组 / isRoot 散列）升级为二维数组 + 单点根音 */
-const normalizeDraftStrings = (draft: Chord): void => {
-  // 旧对象数组 -> 二维数组
-  const legacyStrings = draft.strings as unknown[];
-  if (draft.strings.length === 6 && legacyStrings.some(value => !Array.isArray(value))) {
-    draft.strings = legacyStrings.map(value => {
-      const legacy = value as { fret?: unknown; preferFlat?: unknown };
-      return [typeof legacy?.fret === 'number' ? legacy.fret : -1, Boolean(legacy?.preferFlat)] as GuitarStringEntity;
-    }) as GuitarStringsModel;
-  }
-  // 旧草稿每根弦各自维护 isRoot -> 单点 rootStringIndex
-  if (draft.rootStringIndex === undefined || draft.rootStringIndex === null) {
-    const legacyRootIdx = (draft.strings as unknown as { isRoot?: boolean; fret: number }[]).findIndex(
-      value => value.isRoot === true && typeof value.fret === 'number' && value.fret >= 0
-    );
-    draft.rootStringIndex = legacyRootIdx >= 0 ? legacyRootIdx : null;
-  }
-  // 清理旧字段：每弦 isRoot/label/isAccidental，和弦级 isInverted/fingerprint
-  (draft.strings as unknown as { isRoot?: boolean; label?: string; isAccidental?: boolean }[]).forEach(s => {
-    if (s && typeof s === 'object' && !Array.isArray(s)) {
-      delete s.isRoot;
-      delete s.label;
-      delete s.isAccidental;
+/** 规范化草稿：复用统一的 normalizeChord 并在空白草稿时清理残留 C 分片 */
+const normalizeDraftChord = (draft: Chord): Chord => {
+  const { chord } = normalizeChord(draft);
+  if (!chord.id && Array.isArray(chord.strings) && chord.strings.every(s => Array.isArray(s) && s[0] < 0)) {
+    if (
+      chord.nameSegments &&
+      chord.nameSegments.root?.[0] === 'C' &&
+      chord.nameSegments.root?.[1] === 0 &&
+      !chord.nameSegments.quality &&
+      !chord.nameSegments.extensions &&
+      !chord.nameSegments.bass
+    ) {
+      chord.nameSegments = null;
     }
-  });
-  const legacyDraft = draft as unknown as { isInverted?: boolean; fingerprint?: string };
-  delete legacyDraft.isInverted;
-  delete legacyDraft.fingerprint;
+  }
+  return chord;
 };
 
 export const useChordEditorStore = defineStore('editor', () => {
@@ -62,8 +51,7 @@ export const useChordEditorStore = defineStore('editor', () => {
   const draftChord = useStorage<Chord>(STORAGE_KEYS.EDITING_DRAFT, createDefaultChord(), localStorage, {
     eventFilter: debounceFilter(300),
   });
-  // 迁移：旧草稿（对象数组 / isRoot 散列）升级为二维数组 + 单点根音
-  normalizeDraftStrings(draftChord.value);
+  draftChord.value = normalizeDraftChord(draftChord.value);
   const isEditing = useStorage(STORAGE_KEYS.IS_EDITING, false);
   const isCreating = useStorage(STORAGE_KEYS.IS_CREATING, false);
 
@@ -88,8 +76,9 @@ export const useChordEditorStore = defineStore('editor', () => {
   /** 多指法：只查 chordStore，nameKey 规则不在这里重复 */
   const currentMultiFingering = computed(() => {
     const chord = draftChord.value;
-    if (!chord.id || !chord.groupId || !chord.chordName) return null;
-    return chordStore.getMultiFingering(chord.groupId, chord.chordName);
+    const name = getChordName(chord);
+    if (!chord.id || !chord.groupId || !name) return null;
+    return chordStore.getMultiFingering(chord.groupId, name);
   });
 
   const isMultiFingering = computed(() => currentMultiFingering.value?.hasVariants ?? false);

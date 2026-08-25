@@ -6,7 +6,7 @@
         v-show="i < fretCount"
         :key="'fret-num-' + i"
         class="fret-number-badge"
-        :class="[`size-${fretNumberSize}`, { 'is-dark': isDarkMode }]"
+        :class="`size-${fretNumberSize}`"
         :style="getFretNumberStyle(i)"
       >
         {{ capo > 0 ? capo + i : i }}
@@ -21,7 +21,7 @@
       role="img"
       :aria-label="`吉他指板图，共 ${fretCount} 品${capo > 0 ? `，变调夹 Capo ${capo} 品` : ''}`"
     >
-      <g v-memo="[fretCount, isDarkMode]">
+      <g>
         <line
           v-for="s in 6"
           :key="'string-' + s"
@@ -101,8 +101,8 @@
 </template>
 
 <script setup lang="ts">
-import { CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '@/utils/constants';
 import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
+import { CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '@/utils/constants';
 import { computeStringLabelAccidental, formatStringLabel } from '@/utils/musicTheory';
 import { computed } from 'vue';
 import FretboardNote from './FretboardNote.vue';
@@ -133,8 +133,6 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'toggle-pitch', stringIndex: number): void;
-  (e: 'clear-fret', stringIndex: number): void;
-  (e: 'toggle-root', stringIndex: number): void;
 }>();
 
 const getFretNumberStyle = (fretIndex: number) => {
@@ -170,13 +168,14 @@ const showEmptyHoverRing = computed(() => {
 const showEmptyFocusRing = computed(() => {
   const fp = props.focusPoint;
   if (!props.interactive || !fp || fp.fretIndex <= 0 || fp.fretIndex > props.fretCount) return false;
+  if (props.hoverPoint && props.hoverPoint.stringIndex === fp.stringIndex && props.hoverPoint.fretIndex === fp.fretIndex) {
+    return false;
+  }
   return props.strings[fp.stringIndex]?.[0] !== fp.fretIndex;
 });
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module.less';
-
+<style scoped lang="scss">
 .fretboard-svg-wrapper {
   position: relative;
   width: 100%;
@@ -199,25 +198,21 @@ const showEmptyFocusRing = computed(() => {
   user-select: none;
   font-family: 'Helvetica Neue', Arial, sans-serif;
 
-  &.is-dark {
-    color: var(--fb-label);
-  }
-
   &.size-sm {
-    font-size: @fs-lg;
+    font-size: $fs-lg;
   }
 
   &.size-md {
-    font-size: @fs-xl;
+    font-size: $fs-xl;
   }
 
   &.size-lg {
-    font-size: @fs-2xl;
+    font-size: $fs-2xl;
   }
 }
 
 .string-line {
-  transition: y2 @duration-slow @bezier-sidebar;
+  transition: y2 $duration-slow $bezier-sidebar;
 }
 
 .finger-predictive,

@@ -1,9 +1,8 @@
-import { A4_CONTENT_HEIGHT, A4_CONTENT_WIDTH, A4_HEIGHT_PX, A4_WIDTH_PX } from '@/utils/constants';
 import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
-import { canvasToBlob, renderElementToCanvas, writeBlobToClipboard } from '@/utils/score-export';
-import { paginateLinesByHeight } from '@/utils/score-export';
+import { A4_CONTENT_HEIGHT, A4_CONTENT_WIDTH, A4_HEIGHT_PX, A4_WIDTH_PX } from '@/utils/constants';
+import { canvasToBlob, paginateLinesByHeight, renderElementToCanvas, writeBlobToClipboard } from '@/utils/score-export';
 import { useDebounceFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue';
 

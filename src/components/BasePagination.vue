@@ -88,7 +88,7 @@ const handleNext = () => {
 };
 </script>
 
-<style scoped lang="less">
+<style scoped lang="scss">
 .base-pagination {
   display: flex;
   align-items: center;
@@ -96,25 +96,25 @@ const handleNext = () => {
   min-height: 1.8rem;
 
   &.size-sm {
-    gap: @space-sm;
+    gap: $space-sm;
     .page-indicator {
-      font-size: @fs-xs;
+      font-size: $fs-xs;
       min-width: 4.5rem;
     }
   }
 
   &.size-md {
-    gap: @space-sm;
+    gap: $space-sm;
     .page-indicator {
-      font-size: @fs-xs;
+      font-size: $fs-xs;
       min-width: 5.5rem;
     }
   }
 
   &.size-lg {
-    gap: @space-md;
+    gap: $space-md;
     .page-indicator {
-      font-size: @fs-sm;
+      font-size: $fs-sm;
       min-width: 6.5rem;
     }
   }

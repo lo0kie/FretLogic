@@ -81,12 +81,13 @@ const fretboardSizeCache = reactive<Record<string, { width: string; height: stri
 </script>
 
 <script setup lang="ts">
+import Fretboard from '@/components/Fretboard.vue';
 import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
-import Fretboard from '@/components/Fretboard.vue';
 import { getPlaceholderSize } from '@/utils/chord-fretboard';
 import { observeVisibility } from '@/utils/common';
+import { getChordName } from '@/utils/musicTheory';
 import { Plus, X } from '@lucide/vue';
 import { computed, ref, useTemplateRef, watch, watchEffect, type ComponentPublicInstance } from 'vue';
 
@@ -183,9 +184,10 @@ const ariaLabelText = computed(() => {
   }
   const charDisplay = props.char === ' ' ? '空格' : props.char || '边缘槽位';
   if (props.chord) {
+    const chordName = getChordName(props.chord);
     return isGlobalEditable.value
-      ? `字符 ${charDisplay}，当前分配和弦 ${props.chord.chordName}，按 Enter 更换，按 Delete 清除`
-      : `字符 ${charDisplay}，和弦 ${props.chord.chordName}`;
+      ? `字符 ${charDisplay}，当前分配和弦 ${chordName}，按 Enter 更换，按 Delete 清除`
+      : `字符 ${charDisplay}，和弦 ${chordName}`;
   }
   return isGlobalEditable.value ? `字符 ${charDisplay}，未分配和弦，按 Enter 添加` : undefined;
 });
@@ -204,22 +206,20 @@ unwatchExport = watch(
 );
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .char-box {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: @space-2xs @space-2xs;
+  padding: $space-2xs $space-2xs;
   align-self: stretch;
-  border-radius: @radius-sm;
+  border-radius: $radius-sm;
   box-sizing: border-box;
   transition:
-    background-color @duration-fast ease,
-    box-shadow @duration-fast ease,
-    opacity @duration-fast ease;
+    background-color $duration-fast ease,
+    box-shadow $duration-fast ease,
+    opacity $duration-fast ease;
   position: relative;
   cursor: pointer;
   outline: none;
@@ -299,24 +299,29 @@ unwatchExport = watch(
   align-items: center;
   justify-content: center;
   height: 1.25rem;
-  font-size: @fs-2xs;
+  font-size: $fs-2xs;
   font-weight: 700;
   color: var(--color-primary);
   opacity: 0;
   pointer-events: none;
   transition:
-    opacity @duration-fast ease,
-    background-color @duration-fast ease;
+    opacity $duration-fast ease,
+    background-color $duration-fast ease;
   border: 1px dashed var(--color-primary);
   background-color: var(--tint-primary-92);
-  padding: 0 @space-sm;
-  border-radius: @radius-sm;
+  padding: 0 $space-sm;
+  border-radius: $radius-sm;
   white-space: nowrap;
   cursor: pointer;
   box-sizing: border-box;
 
   &:hover {
     background-color: var(--tint-primary-80);
+  }
+
+  :global(.lyrics-line:hover) & {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 
@@ -332,10 +337,10 @@ unwatchExport = watch(
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: @space-xs;
-  border-radius: @radius-sm;
+  padding: $space-xs;
+  border-radius: $radius-sm;
   background-color: transparent;
-  transition: @transition-fast;
+  transition: $transition-fast;
   position: relative;
   user-select: none;
   -webkit-user-select: none;
@@ -370,7 +375,7 @@ unwatchExport = watch(
   padding: 0;
   cursor: pointer;
   pointer-events: none;
-  transition: @transition-fast;
+  transition: $transition-fast;
   z-index: var(--z-card);
   box-shadow: var(--shadow-sm);
   outline: none;
@@ -390,19 +395,19 @@ unwatchExport = watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: calc(@fs-sm * var(--score-font-scale, 1));
+  font-size: calc($fs-sm * var(--score-font-scale, 1));
   font-weight: 600;
   color: var(--text-title);
   line-height: 1.15rem;
   white-space: pre;
   min-height: calc(1.15rem * var(--score-font-scale, 1));
-  padding: 0 @space-2xs;
+  padding: 0 $space-2xs;
   border-radius: 0;
   transition:
-    color @duration-fast ease,
-    font-size @duration-fast ease,
-    min-height @duration-fast ease,
-    border-color @duration-fast ease;
+    color $duration-fast ease,
+    font-size $duration-fast ease,
+    min-height $duration-fast ease,
+    border-color $duration-fast ease;
   border-bottom: 1.5px solid transparent;
   box-sizing: border-box;
   margin-top: auto;

@@ -29,6 +29,7 @@
       data-focusable-inline
       @input="handleInput"
       @keyup.enter="$emit('enter')"
+      @keydown="handleKeydown"
       @wheel="handleWheel"
     />
 
@@ -117,6 +118,11 @@ const handleInput = (e: Event) => {
   modelValue.value = (e.target as HTMLInputElement).value;
 };
 
+const handleKeydown = (e: KeyboardEvent) => {
+  // 非 ESC 按键阻止冒泡，避免输入时触发全局快捷键；ESC 放行，让外层 Modal 等能正常捕获并关闭
+  if (e.key !== 'Escape') e.stopPropagation();
+};
+
 const handleClear = () => {
   modelValue.value = '';
   emit('clear');
@@ -142,16 +148,14 @@ onMounted(() => {
 });
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .input-wrapper {
   position: relative;
   width: 100%;
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  border-radius: @radius-pill;
+  border-radius: $radius-pill;
 
   &:hover .clear-button,
   &:focus-within .clear-button {
@@ -196,7 +200,7 @@ onMounted(() => {
   background-color: var(--bg-panel-hover);
   border-radius: 50%;
   cursor: pointer;
-  transition: @transition-fast;
+  transition: $transition-fast;
   pointer-events: auto;
 
   &.size-sm {
@@ -228,13 +232,15 @@ onMounted(() => {
 .base-input-field {
   width: 100%;
   font-weight: 500;
+  line-height: normal;
+  font-family: inherit;
   box-sizing: border-box;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
-  border-radius: @radius-pill;
+  border-radius: $radius-pill;
   color: var(--text-title);
-  caret-color: @primary;
-  transition: @transition-fast;
+  caret-color: $primary;
+  transition: $transition-fast;
   outline: none;
   cursor: pointer;
   min-width: 0;
@@ -332,15 +338,15 @@ onMounted(() => {
 }
 
 .base-input-field.text-xs-style {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
 }
 
 .base-input-field.text-md-style {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
 }
 
 .base-input-field.text-lg-style {
-  font-size: @fs-sm;
+  font-size: $fs-sm;
 }
 
 .base-input-field.css-password-field {
@@ -355,14 +361,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  font-size: @fs-2xs;
+  font-size: $fs-2xs;
   font-weight: 500;
   color: var(--text-disabled);
   pointer-events: none;
   white-space: nowrap;
   transition:
-    color @duration-fast ease,
-    right @duration-fast ease;
+    color $duration-fast ease,
+    right $duration-fast ease;
 
   &.size-sm {
     right: 0.45rem;

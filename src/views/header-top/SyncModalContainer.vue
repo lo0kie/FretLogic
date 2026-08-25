@@ -19,10 +19,10 @@
         <BaseInput
           v-model="settingsStore.githubToken"
           v-tooltip="'GitHub Token'"
+          v-focus
           placeholder="GitHub Token (ghp_...)"
           is-password
           clearable
-          autofocus
           :maxlength="100"
           show-count
         />
@@ -141,14 +141,14 @@
 </template>
 
 <script setup lang="ts">
-import { useSyncService } from '@/composables/useSyncService';
-import type { SyncProviderKind } from '@/services/sync/provider';
-import { useSettingsStore } from '@/stores/settingsStore';
 import ActionButton from '@/components/ActionButton.vue';
 import BaseInput from '@/components/BaseInput.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
+import { useSyncService } from '@/composables/useSyncService';
+import type { SyncProviderKind } from '@/services/sync/provider';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { CloudDownload, CloudUpload } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
@@ -211,17 +211,15 @@ const handleFetchBranchesClick = async () => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .sync-panel-card {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: @space-md;
+  gap: $space-md;
   background-color: var(--bg-panel);
-  padding: @space-md;
-  border-radius: @radius-lg;
+  padding: $space-md;
+  border-radius: $radius-lg;
   border: 1px solid var(--glass-border);
   box-sizing: border-box;
 }
@@ -234,7 +232,7 @@ const handleFetchBranchesClick = async () => {
 }
 
 .panel-title {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   font-weight: 600;
   color: var(--text-disabled);
   margin: 0;
@@ -243,13 +241,13 @@ const handleFetchBranchesClick = async () => {
 .grid-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: @space-md;
+  gap: $space-md;
   box-sizing: border-box;
 }
 
 .sync-hint {
   margin: 0;
-  font-size: @fs-2xs;
+  font-size: $fs-2xs;
   line-height: 1.5;
   color: var(--text-disabled);
 }

@@ -142,24 +142,39 @@
         <Cloud :size="18" stroke-width="2.2" />
       </ActionButton>
 
-      <ActionButton
-        v-tooltip="globalDarkMode ? '切换至浅色模式' : '切换至深色模式'"
-        icon-only
-        variant="ghost"
-        :aria-label="globalDarkMode ? '切换至浅色模式' : '切换至深色模式'"
-        :size="uiSize"
-        @click="emit('toggle-theme')"
-      >
-        <component
-          :is="globalDarkMode ? Moon : Sun"
-          :size="18"
-          :stroke-width="2.2"
-          :style="{
-            color: globalDarkMode ? 'var(--color-primary)' : 'var(--color-warning)',
-          }"
-          class="theme-toggle-icon"
-        />
-      </ActionButton>
+      <!-- 主题切换 Popover -->
+      <BasePopover trigger="hover" placement="bottom-end">
+        <template #trigger="{ isOpen, open }">
+          <ActionButton
+            icon-only
+            :variant="isOpen ? 'subtle' : 'ghost'"
+            :primary="isOpen"
+            aria-label="外观设置"
+            aria-haspopup="menu"
+            :size="uiSize"
+            @click="open()"
+          >
+            <component
+              :is="globalDarkMode ? Moon : Sun"
+              :size="18"
+              :stroke-width="2.2"
+              :style="{ color: globalDarkMode ? 'var(--color-primary)' : 'var(--color-warning)' }"
+            />
+          </ActionButton>
+        </template>
+
+        <template #default="{ close }">
+          <ContextMenuItems
+            :items="themeMenuItems"
+            @select="
+              item => {
+                item.action();
+                close();
+              }
+            "
+          />
+        </template>
+      </BasePopover>
 
       <ActionButton v-tooltip="buildInfoTooltip" icon-only variant="ghost" aria-label="构建信息" :size="uiSize">
         <Info :size="17" stroke-width="2.2" />
@@ -171,21 +186,23 @@
 </template>
 
 <script setup lang="ts">
-import { useAudioPlayer } from '@/composables/useAudioPlayer';
-import { useChordEditorStore } from '@/stores/chordEditorStore';
-import { globalDarkMode, isGlobalEditable, toggleEditable } from '@/stores/globalState.ts';
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useUiStore } from '@/stores/uiStore';
 import ActionButton from '@/components/ActionButton.vue';
 import BasePopover from '@/components/BasePopover.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
+import ContextMenuItems, { type ContextMenuItem } from '@/components/ContextMenuItems.vue';
+import { useAudioPlayer } from '@/composables/useAudioPlayer';
 import { useAutoScroll } from '@/composables/useAutoScroll.ts';
+import { useChordEditorStore } from '@/stores/chordEditorStore';
+import { globalDarkMode, isGlobalEditable, themePreference, toggleEditable } from '@/stores/globalState.ts';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
+import { useUiStore } from '@/stores/uiStore';
 import { renderElementToBlob, writeBlobToClipboard } from '@/utils/score-export';
 import {
   Cloud,
   Copy,
   Image,
   Info,
+  Laptop,
   Moon,
   PanelLeft,
   Pause,
@@ -201,7 +218,7 @@ import { useRoute, useRouter } from 'vue-router';
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 
 const emit = defineEmits<{
-  (e: 'toggle-theme'): void;
+  (e: 'toggle-theme', mode?: 'light' | 'dark' | 'auto'): void;
 }>();
 
 const route = useRoute();
@@ -221,6 +238,30 @@ const NAV_OPTIONS: SegmentOption<string>[] = [
   { label: '和弦', value: '/workbench' },
   { label: '乐谱', value: '/score' },
 ];
+
+const themeMenuItems = computed<ContextMenuItem[]>(() => [
+  {
+    label: '浅色模式',
+    icon: Sun,
+    color: 'var(--color-warning)',
+    checked: themePreference.value === 'light',
+    action: () => emit('toggle-theme', 'light'),
+  },
+  {
+    label: '深色模式',
+    icon: Moon,
+    color: 'var(--color-primary)',
+    checked: themePreference.value === 'dark',
+    action: () => emit('toggle-theme', 'dark'),
+  },
+  {
+    label: '跟随系统',
+    icon: Laptop,
+    color: 'var(--text-title)',
+    checked: themePreference.value === 'auto',
+    action: () => emit('toggle-theme', 'auto'),
+  },
+]);
 
 const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive'>[]>(() => [
   { label: '编辑歌词', value: 'edit', disabled: !isGlobalEditable.value },
@@ -268,9 +309,7 @@ const buildInfoTooltip = computed(() => {
 });
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .app-top-header {
   min-height: 2.5rem;
   width: 100%;
@@ -299,7 +338,7 @@ const buildInfoTooltip = computed(() => {
   flex: 1 1 0;
   min-width: 0;
   justify-content: flex-start;
-  gap: @space-sm;
+  gap: $space-sm;
 }
 
 .section-center {
@@ -315,17 +354,17 @@ const buildInfoTooltip = computed(() => {
   flex: 1 1 0;
   min-width: 0;
   justify-content: flex-end;
-  gap: @space-xs;
+  gap: $space-xs;
 }
 
 .nav-brand-group {
   display: flex;
   align-items: center;
-  gap: @space-md;
+  gap: $space-md;
 }
 
 .app-brand-title {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text-title);
@@ -343,8 +382,8 @@ const buildInfoTooltip = computed(() => {
 .segmented-control-capsule {
   display: flex;
   align-items: center;
-  gap: @space-xs;
-  padding: @space-xs;
+  gap: $space-xs;
+  padding: $space-xs;
 }
 
 .capsule-divider {
@@ -353,5 +392,29 @@ const buildInfoTooltip = computed(() => {
   background-color: var(--border-base);
   margin: 0 0.1rem;
   opacity: 0.5;
+}
+
+@media (display-mode: window-controls-overlay) {
+  .app-top-header {
+    -webkit-app-region: drag;
+    app-region: drag;
+    min-height: max(2.5rem, env(titlebar-area-height, 2.5rem));
+    padding-left: max(env(titlebar-area-inset-left, 0px), 1rem);
+    padding-right: max(env(titlebar-area-inset-right, 0px), 1rem);
+  }
+
+  .section-left,
+  .section-center,
+  .section-right {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+
+  .section-center {
+    transform: translate(
+      calc(-50% + (env(titlebar-area-inset-left, 0px) - env(titlebar-area-inset-right, 0px)) / 2),
+      -50%
+    );
+  }
 }
 </style>

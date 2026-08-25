@@ -14,7 +14,7 @@
       @update:model-value="(val: Song[]) => songStore.overwriteSongs(val)"
     >
       <div v-for="(song, index) in songStore.songs" :key="song.id" class="song-card-wrapper">
-        <GlobalContextMenu :items="getSongMenuItems(song)" #="{ isOpen }">
+        <ContextMenu :items="getSongMenuItems(song)" #="{ isOpen }">
           <div
             :ref="el => setItemRef(el, index)"
             v-wave
@@ -60,7 +60,7 @@
               </div>
             </div>
           </div>
-        </GlobalContextMenu>
+        </ContextMenu>
       </div>
     </VueDraggable>
   </div>
@@ -69,8 +69,9 @@
 <script setup lang="ts">
 import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
+import ContextMenu from '@/components/ContextMenu.vue';
+import type { ContextMenuItem } from '@/components/ContextMenuItems.vue';
 import EmptyState from '@/components/EmptyState.vue';
-import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
 import { useGridNavigation } from '@/composables/useGridNavigation';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
@@ -170,13 +171,11 @@ const handleSelectSong = (songId: string) => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .draggable-list {
   display: flex;
   flex-direction: column;
-  gap: @space-sm;
+  gap: $space-sm;
   position: relative;
   box-sizing: border-box;
 }
@@ -190,17 +189,17 @@ const handleSelectSong = (songId: string) => {
 
 .song-card-item {
   width: 100%;
-  padding: @space-sm @space-md;
-  border-radius: @radius-md;
+  padding: $space-sm $space-md;
+  border-radius: $radius-md;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
   cursor: pointer;
   box-sizing: border-box;
   outline: none;
   transition:
-    background-color @duration-fast ease,
-    border-color @duration-fast ease,
-    box-shadow @duration-fast ease;
+    background-color $duration-fast ease,
+    border-color $duration-fast ease,
+    box-shadow $duration-fast ease;
 
   &:hover,
   &.is-context-open {
@@ -231,7 +230,7 @@ const handleSelectSong = (songId: string) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: @space-sm;
+  gap: $space-sm;
   width: 100%;
 }
 
@@ -241,15 +240,15 @@ const handleSelectSong = (songId: string) => {
 }
 
 .song-title-text {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   font-weight: 600;
   color: var(--text-title);
-  transition: color @duration-fast ease;
+  transition: color $duration-fast ease;
 }
 
 .song-meta-badges {
   display: flex;
-  gap: @space-xs;
+  gap: $space-xs;
   flex-shrink: 0;
 }
 </style>

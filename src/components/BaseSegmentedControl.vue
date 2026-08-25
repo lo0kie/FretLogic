@@ -56,8 +56,8 @@
 
 <script setup lang="ts" generic="T extends string | number">
 import ActionButton from '@/components/ActionButton.vue';
-import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/utils/constants';
 import { useGridNavigation } from '@/composables/useGridNavigation';
+import { HEIGHT_LG, HEIGHT_MD, HEIGHT_SM } from '@/utils/constants';
 import { nextTick, ref, useTemplateRef, watch, watchEffect } from 'vue';
 
 export interface SegmentOption<ValueType = string | number> {
@@ -172,19 +172,17 @@ watch(modelValue, updateIndicatorPosition);
 watch(() => props.options, updateIndicatorPosition);
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .base-segmented-control {
   position: relative;
   display: inline-flex;
   align-items: center;
   background-color: var(--bg-body);
-  border-radius: @radius-pill;
+  border-radius: $radius-pill;
   border: 1px solid var(--border-light);
   box-sizing: border-box;
   user-select: none;
-  transition: opacity @duration-fast ease;
+  transition: opacity $duration-fast ease;
 
   --indicator-width: 0px;
   --indicator-x: 0px;
@@ -205,56 +203,56 @@ watch(() => props.options, updateIndicatorPosition);
     background-color: transparent;
     border: none;
     padding: 0;
-    gap: @space-xs;
+    gap: $space-xs;
   }
 
   &.size-sm {
     height: v-bind('HEIGHT_SM');
-    padding: @space-2xs;
-    gap: @space-xs;
+    padding: $space-2xs;
+    gap: $space-xs;
 
     .segmented-item {
-      font-size: @fs-2xs;
-      padding: 0 @space-sm;
+      font-size: $fs-2xs;
+      padding: 0 $space-sm;
     }
   }
 
   &.size-md {
     height: v-bind('HEIGHT_MD');
-    padding: @space-2xs;
-    gap: @space-xs;
+    padding: $space-2xs;
+    gap: $space-xs;
 
     .segmented-item {
-      font-size: @fs-2xs;
-      padding: 0 @space-md;
+      font-size: $fs-2xs;
+      padding: 0 $space-md;
     }
   }
 
   &.size-lg {
     height: v-bind('HEIGHT_LG');
-    padding: @space-2xs;
-    gap: @space-xs;
+    padding: $space-2xs;
+    gap: $space-xs;
 
     .segmented-item {
-      font-size: @fs-xs;
-      padding: 0 @space-md;
+      font-size: $fs-xs;
+      padding: 0 $space-md;
     }
   }
 
   &.is-compact {
-    padding: @space-xs;
-    gap: @space-xs;
+    padding: $space-xs;
+    gap: $space-xs;
 
     &.size-sm .segmented-item {
-      padding: 0 @space-xs;
+      padding: 0 $space-xs;
     }
 
     &.size-md .segmented-item {
-      padding: 0 @space-sm;
+      padding: 0 $space-sm;
     }
 
     &.size-lg .segmented-item {
-      padding: 0 @space-sm;
+      padding: 0 $space-sm;
     }
   }
 }
@@ -263,9 +261,9 @@ watch(() => props.options, updateIndicatorPosition);
   position: absolute;
   left: 0;
   top: 0;
-  border-radius: @radius-pill;
+  border-radius: $radius-pill;
   background-color: var(--bg-panel);
-  box-shadow: @shadow-sm;
+  box-shadow: $shadow-sm;
   pointer-events: none;
   z-index: var(--z-content);
   transition: none;
@@ -280,10 +278,10 @@ watch(() => props.options, updateIndicatorPosition);
 
   &.is-animated {
     transition:
-      transform @duration-slow @bezier-sidebar,
-      width @duration-slow @bezier-sidebar,
-      height @duration-slow @bezier-sidebar,
-      opacity @duration-fast ease;
+      transform $duration-base $bezier-spring,
+      width $duration-base $bezier-spring,
+      height $duration-base $bezier-spring,
+      opacity $duration-fast $bezier-standard;
   }
 }
 
@@ -292,15 +290,15 @@ watch(() => props.options, updateIndicatorPosition);
   z-index: var(--z-inner);
   font-weight: 600;
   color: var(--text-disabled);
-  border-radius: @radius-pill;
+  border-radius: $radius-pill;
   border: none;
   background: transparent !important;
   box-shadow: none !important;
   cursor: pointer;
   transition:
-    color @duration-fast ease,
-    opacity @duration-fast ease,
-    background-color @duration-fast ease;
+    color $duration-fast ease,
+    opacity $duration-fast ease,
+    background-color $duration-fast ease;
   white-space: nowrap;
   display: inline-flex;
   align-items: center;

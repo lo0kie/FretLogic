@@ -28,8 +28,15 @@
     <slot name="prefix" />
 
     <!-- 3. 主内容区域 (仅小红点模式时不渲染) -->
-    <span v-if="!isDotOnly && ($slots.default || content !== undefined)" class="badge-content">
-      <slot>{{ formattedContent }}</slot>
+    <span
+      v-if="!isDotOnly && ($slots.default || content !== undefined)"
+      class="badge-content"
+      :class="{ 'is-hover-close': hoverClose }"
+    >
+      <span class="badge-text" :class="{ 'has-hover-swap': hoverClose }">
+        <slot>{{ formattedContent }}</slot>
+      </span>
+      <X v-if="hoverClose" :size="closeIconSize" :stroke-width="3" class="badge-hover-close-icon" aria-hidden="true" />
     </span>
 
     <!-- 4. 后缀图标 / 清除关闭按钮 -->
@@ -66,6 +73,7 @@ const {
   dot = false,
   showDot = false,
   closable = false,
+  hoverClose = false,
   interactive = false,
   width = undefined,
 } = defineProps<{
@@ -77,6 +85,7 @@ const {
   dot?: boolean;
   showDot?: boolean;
   closable?: boolean;
+  hoverClose?: boolean;
   interactive?: boolean;
   width?: string | number;
 }>();
@@ -90,7 +99,7 @@ const attrs = useAttrs();
 const slots = useSlots();
 
 /** 是否属于可点击状态 */
-const isInteractive = computed(() => interactive || Boolean(attrs.onClick));
+const isInteractive = computed(() => interactive || hoverClose || Boolean(attrs.onClick));
 
 /** 纯指示小红点模式：开启 dot 且无默认插槽/文本时 */
 const isDotOnly = computed(() => dot && content === undefined && !slots.default);
@@ -154,20 +163,18 @@ const handleClick = (e: MouseEvent) => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 /* 1. 基础容器样式 */
 .base-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: @radius-pill;
+  border-radius: $radius-pill;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1;
   letter-spacing: -0.01em;
-  transition: @transition-fast;
+  transition: $transition-fast;
   box-sizing: border-box;
   white-space: nowrap;
   user-select: none;
@@ -206,27 +213,31 @@ const handleClick = (e: MouseEvent) => {
 
 /* 2. 尺寸档位控制 (Size) */
 .size-xs {
-  font-size: @fs-2xs;
-  padding: @space-2xs @space-sm;
-  gap: @space-xs;
+  font-size: $fs-2xs;
+  height: 1.15rem;
+  padding: 0 0.4rem;
+  gap: $space-2xs;
 }
 
 .size-sm {
-  font-size: @fs-2xs;
-  padding: @space-2xs @space-sm;
-  gap: @space-xs;
+  font-size: $fs-2xs;
+  height: 1.35rem;
+  padding: 0 0.5rem;
+  gap: $space-xs;
 }
 
 .size-md {
-  font-size: @fs-xs;
-  padding: @space-xs @space-sm;
-  gap: @space-xs;
+  font-size: $fs-xs;
+  height: 1.55rem;
+  padding: 0 0.6rem;
+  gap: $space-xs;
 }
 
 .size-lg {
-  font-size: @fs-xs;
-  padding: @space-xs @space-md;
-  gap: @space-sm;
+  font-size: $fs-xs;
+  height: 1.8rem;
+  padding: 0 0.75rem;
+  gap: $space-sm;
 }
 
 /* 3. 主题色彩与形态 (Variant & Appearance) */
@@ -324,6 +335,56 @@ const handleClick = (e: MouseEvent) => {
   justify-content: center;
   overflow: hidden;
   text-overflow: ellipsis;
+  height: 100%;
+  line-height: 1;
+
+  .badge-text {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    line-height: 1;
+  }
+
+  &.is-hover-close {
+    position: relative;
+    width: 100%;
+    height: 100%;
+
+    .badge-text {
+      transition: opacity $duration-fast ease;
+      pointer-events: none;
+    }
+
+    .badge-hover-close-icon {
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity $duration-fast ease;
+      pointer-events: none;
+    }
+  }
+}
+
+.base-badge:has(.is-hover-close):hover,
+.base-badge:has(.is-hover-close):focus-visible {
+  background-color: var(--tint-danger-88) !important;
+  color: var(--color-danger) !important;
+  border-color: var(--tint-danger-75) !important;
+
+  .badge-content.is-hover-close {
+    .badge-text {
+      opacity: 0;
+    }
+
+    .badge-hover-close-icon {
+      opacity: 1;
+    }
+  }
 }
 
 .badge-dot {
@@ -346,7 +407,7 @@ const handleClick = (e: MouseEvent) => {
   opacity: 0.65;
   cursor: pointer;
   border-radius: 50%;
-  transition: @transition-fast;
+  transition: $transition-fast;
   outline: none;
 
   &:hover {

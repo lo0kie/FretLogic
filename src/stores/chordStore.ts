@@ -1,13 +1,16 @@
-import { STORAGE_KEYS } from '@/utils/constants';
-import type { Chord, Group, GroupedChordCard } from '@/types';
+import { createChordRepository } from '@/services/repositories';
+import type { Chord, ChordNameSegments, Group, GroupedChordCard } from '@/types';
 import { GroupSortRule } from '@/types';
 import { normalizeChord } from '@/utils/chord-fretboard';
-import { cloneDeep, cloneGuitarStrings } from '@/utils/common';
-import { generateUUID } from '@/utils/common';
-import { createChordRepository } from '@/services/repositories';
+import { cloneDeep, cloneGuitarStrings, generateUUID } from '@/utils/common';
+import { STORAGE_KEYS } from '@/utils/constants';
 import {
   computeChordFingerprint,
   computeIsInverted,
+  getChordName,
+  isValidChordName,
+  matchChordSearch,
+  segmentsToString,
   sortChordsByRule,
   validateBassConsistency,
 } from '@/utils/musicTheory';
@@ -21,18 +24,25 @@ type ChordValidationResult =
   | { ok: true; payload: Chord; cleanName: string; warn?: string | null }
   | {
       ok: false;
-      reason: 'EMPTY_NAME' | 'NO_GROUPS' | 'NO_SELECTED_GROUP' | 'DUPLICATE_FINGERPRINT' | 'UNCHANGED';
+      reason:
+        | 'EMPTY_NAME'
+        | 'INVALID_CHORD_SYNTAX'
+        | 'NO_GROUPS'
+        | 'NO_SELECTED_GROUP'
+        | 'DUPLICATE_FINGERPRINT'
+        | 'UNCHANGED';
       cleanName?: string;
     };
 
-function nameKeyOf(chordName: string): string {
-  return chordName.trim().toLowerCase();
+function nameKeyOf(chordOrName: string | { nameSegments?: ChordNameSegments | null; chordName?: string }): string {
+  if (typeof chordOrName === 'string') return chordOrName.trim().toLowerCase();
+  return getChordName(chordOrName).trim().toLowerCase();
 }
 
 function sortVariants(variants: Chord[]): Chord[] {
   return [...variants].sort((a, b) => {
-    const aInv = computeIsInverted(a.strings, a.capo, a.tuning, a.chordName, a.rootStringIndex);
-    const bInv = computeIsInverted(b.strings, b.capo, b.tuning, b.chordName, b.rootStringIndex);
+    const aInv = computeIsInverted(a.strings, a.capo, a.tuning, a, a.rootStringIndex);
+    const bInv = computeIsInverted(b.strings, b.capo, b.tuning, b, b.rootStringIndex);
     if (aInv !== bInv) return aInv ? 1 : -1;
     return (a.capo ?? 0) - (b.capo ?? 0);
   });
@@ -81,7 +91,6 @@ export const useChordStore = defineStore('chord', () => {
 
   const groupChordMap = computed(() => {
     const map = new Map<string, Chord[]>();
-    groups.value.forEach(g => map.set(g.id, []));
     savedChordsList.value.forEach(chord => {
       const list = map.get(chord.groupId);
       if (list) list.push(chord);
@@ -93,7 +102,7 @@ export const useChordStore = defineStore('chord', () => {
   const multiFingeringData = computed(() => {
     const byGroup = new Map<string, Map<string, Chord[]>>();
     savedChordsList.value.forEach(chord => {
-      const key = nameKeyOf(chord.chordName);
+      const key = nameKeyOf(chord);
       let nameMap = byGroup.get(chord.groupId);
       if (!nameMap) {
         nameMap = new Map();
@@ -130,7 +139,7 @@ export const useChordStore = defineStore('chord', () => {
       const cards: GroupedChordCard[] = [];
 
       chords.forEach(chord => {
-        const key = nameKeyOf(chord.chordName);
+        const key = nameKeyOf(chord);
         if (visited.has(key)) return;
         visited.add(key);
         cards.push(multi?.get(key) ?? toGroupedCard([chord]));
@@ -149,9 +158,9 @@ export const useChordStore = defineStore('chord', () => {
 
   const getGroupedCards = (groupId: string, searchQuery = ''): GroupedChordCard[] => {
     const cards = groupedChordMap.value.get(groupId) ?? [];
-    const q = searchQuery.toLowerCase().trim();
+    const q = searchQuery.trim();
     if (!q) return cards;
-    return cards.filter(c => c.mainChord.chordName.toLowerCase().includes(q));
+    return cards.filter(card => matchChordSearch(card.mainChord, q));
   };
 
   const getFilteredChords = (
@@ -163,7 +172,7 @@ export const useChordStore = defineStore('chord', () => {
     } = {}
   ): Chord[] => {
     const { searchQuery = '', sortRule, sortKey } = options;
-    const q = searchQuery.toLowerCase().trim();
+    const q = searchQuery.trim();
 
     if (groupId !== 'ALL') {
       const group = groups.value.find(g => g.id === groupId);
@@ -176,7 +185,7 @@ export const useChordStore = defineStore('chord', () => {
 
     let list = savedChordsList.value;
     if (q) {
-      list = list.filter(c => c.chordName.toLowerCase().includes(q));
+      list = list.filter(c => matchChordSearch(c, q));
     }
     const effectiveRule = sortRule ?? DEFAULT_SORT_RULE;
     const effectiveKey = sortKey ?? 'C';
@@ -304,7 +313,7 @@ export const useChordStore = defineStore('chord', () => {
     if (!groups.value.some(g => g.id === targetGroupId)) return;
     const targetName = nameKeyOf(chordName);
     savedChordsList.value = savedChordsList.value.map(c => {
-      if (c.groupId === sourceGroupId && nameKeyOf(c.chordName) === targetName) {
+      if (c.groupId === sourceGroupId && nameKeyOf(c) === targetName) {
         return { ...c, groupId: targetGroupId };
       }
       return c;
@@ -371,7 +380,7 @@ export const useChordStore = defineStore('chord', () => {
   const removeVariantsByName = (groupId: string, chordName: string): string[] => {
     const targetName = nameKeyOf(chordName);
     const matchedIds = savedChordsList.value
-      .filter(c => c.groupId === groupId && nameKeyOf(c.chordName) === targetName)
+      .filter(c => c.groupId === groupId && nameKeyOf(c) === targetName)
       .map(c => c.id);
     if (matchedIds.length === 0) return matchedIds;
     const idSet = new Set(matchedIds);
@@ -380,10 +389,14 @@ export const useChordStore = defineStore('chord', () => {
   };
 
   const buildChordForSave = (draft: Chord, isEditing: boolean): ChordValidationResult => {
-    const cleanName = draft.chordName.trim();
+    const nameSegments = draft.nameSegments;
+    const cleanName = nameSegments ? segmentsToString(nameSegments) : '';
     const isFretBoardEmpty = draft.strings.every(s => s[0] < 0);
     if (!cleanName || isFretBoardEmpty) {
       return { ok: false, reason: 'EMPTY_NAME' };
+    }
+    if (!nameSegments || !isValidChordName(cleanName)) {
+      return { ok: false, reason: 'INVALID_CHORD_SYNTAX', cleanName };
     }
     if (groups.value.length === 0) {
       return { ok: false, reason: 'NO_GROUPS' };
@@ -410,7 +423,7 @@ export const useChordStore = defineStore('chord', () => {
 
     const payload: Chord = {
       id: id || 'c_' + generateUUID().slice(0, 10),
-      chordName: cleanName,
+      nameSegments,
       strings: currentStrings,
       fretCount: draft.fretCount,
       capo: draft.capo,
@@ -435,7 +448,7 @@ export const useChordStore = defineStore('chord', () => {
       return { ok: false, reason: 'DUPLICATE_FINGERPRINT', cleanName };
     }
 
-    const bassWarn = validateBassConsistency(payload.strings, payload.capo, payload.tuning, payload.chordName);
+    const bassWarn = validateBassConsistency(payload.strings, payload.capo, payload.tuning, payload);
     return { ok: true, payload, cleanName, warn: bassWarn };
   };
 

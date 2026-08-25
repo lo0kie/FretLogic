@@ -12,7 +12,7 @@
       <template v-if="analysis.notes.length > 0">
         <ChordAnalysisContent
           :candidates="analysis.candidates"
-          :active-chord-name="editorStore.draftChord.chordName"
+          :active-chord-name="getChordName(editorStore.draftChord)"
           :notes="analysis.notes"
           @select-candidate="handleSelectCandidate"
         />
@@ -25,15 +25,17 @@
 </template>
 
 <script setup lang="ts">
-import { useChordEditorStore } from '@/stores/chordEditorStore';
-import type { CandidateResult, NoteInput } from '@/types/engine.ts';
 import EmptyState from '@/components/EmptyState.vue';
 import { analyzeChordGraph } from '@/services/music/chordEngine';
+import { useChordEditorStore } from '@/stores/chordEditorStore';
+import type { CandidateResult } from '@/types/engine.ts';
 import {
   calcPitchIndex,
   canTogglePitchAccidental,
-  composeNoteLabel,
-  computeStringLabelAccidental,
+  collectChordNotes,
+  getChordName,
+  nameToSegments,
+  segmentsToString,
 } from '@/utils/musicTheory';
 import { Music, Sparkles } from '@lucide/vue';
 import { computed } from 'vue';
@@ -43,7 +45,7 @@ const editorStore = useChordEditorStore();
 
 const INTERVAL_MAP: Record<number, { degree: string; acc: '' | 'b' | '#' }> = {
   0: { degree: '1', acc: '' },
-  1: { degree: '2·9', acc: '' },
+  1: { degree: '2·9', acc: 'b' },
   2: { degree: '2·9', acc: '' },
   3: { degree: '3', acc: 'b' },
   4: { degree: '3', acc: '' },
@@ -61,31 +63,15 @@ const graphAnalysis = computed(() => {
   const capo = editorStore.draftChord.capo;
   const baseStrings = editorStore.activeBaseStrings;
 
-  const rawNotes: NoteInput[] = [];
-  let explicitRootPitch: number | null = null;
-
-  strings.forEach((str, sIdx) => {
-    if (str[0] >= 0) {
-      const pitch = calcPitchIndex(sIdx, str[0], capo, baseStrings);
-      const { label: naturalLabel, isAccidental } = computeStringLabelAccidental(
-        sIdx,
-        str[0],
-        capo,
-        str[1],
-        baseStrings
-      );
-      const label = composeNoteLabel(naturalLabel, isAccidental, str[1]);
-
-      if (sIdx === editorStore.draftChord.rootStringIndex && explicitRootPitch === null) {
-        explicitRootPitch = pitch;
-      }
-
-      rawNotes.push({ stringIndex: sIdx, pitchIndex: pitch, label });
-    }
-  });
-
+  const { notes: rawNotes } = collectChordNotes(strings, capo, baseStrings);
   if (rawNotes.length === 0) {
     return null;
+  }
+
+  let explicitRootPitch: number | null = null;
+  const rootIdx = editorStore.draftChord.rootStringIndex;
+  if (rootIdx !== null && strings[rootIdx]?.[0] !== undefined && strings[rootIdx]![0] >= 0) {
+    explicitRootPitch = calcPitchIndex(rootIdx, strings[rootIdx]![0], capo, baseStrings);
   }
 
   const { candidates, bestRootPitch } = analyzeChordGraph(rawNotes, explicitRootPitch);
@@ -101,7 +87,8 @@ const analysis = computed(() => {
     };
 
   const { strings, capo, baseStrings, rawNotes, candidates, bestRootPitch } = graph;
-  const selectedCandidate = candidates.find(c => c.chordName === editorStore.draftChord.chordName);
+  const currentDraftName = getChordName(editorStore.draftChord);
+  const selectedCandidate = candidates.find(c => c.chordName === currentDraftName);
   const activeRootPitch = selectedCandidate ? selectedCandidate.rootPitch : bestRootPitch;
 
   const notes: RenderNoteItem[] = rawNotes
@@ -125,15 +112,28 @@ const analysis = computed(() => {
   return { notes, candidates };
 });
 
+const isCandidateSelected = (candidate: CandidateResult): boolean => {
+  const currentDraftName = getChordName(editorStore.draftChord).trim();
+  if (!currentDraftName) return false;
+  if (currentDraftName === candidate.chordName.trim()) return true;
+  const candidateFormatted = candidate.segments ? segmentsToString(candidate.segments).trim() : '';
+  return candidateFormatted === currentDraftName;
+};
+
 const handleSelectCandidate = (candidate: CandidateResult) => {
-  const isSelected = editorStore.draftChord.chordName === candidate.chordName;
+  const isSelected = isCandidateSelected(candidate);
 
   if (isSelected) {
-    editorStore.draftChord.chordName = '';
+    editorStore.draftChord.nameSegments = null;
     editorStore.draftChord.rootStringIndex = null;
   } else {
     let rootAssigned = false;
-    editorStore.draftChord.chordName = candidate.chordName;
+    if (candidate.segments) {
+      editorStore.draftChord.nameSegments = candidate.segments;
+    } else {
+      const segs = nameToSegments(candidate.chordName);
+      editorStore.draftChord.nameSegments = segs;
+    }
     editorStore.draftChord.strings.forEach((str, sIdx) => {
       if (str[0] >= 0 && !rootAssigned) {
         const pitch = calcPitchIndex(sIdx, str[0], editorStore.draftChord.capo, editorStore.activeBaseStrings);
@@ -148,14 +148,12 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .chord-analysis-wrapper {
   transition:
-    max-height @duration-slow @bezier-sidebar,
-    margin @duration-slow @bezier-sidebar,
-    opacity @duration-fast ease;
+    max-height $duration-slow $bezier-sidebar,
+    margin $duration-slow $bezier-sidebar,
+    opacity $duration-fast ease;
   overflow: hidden;
   opacity: 1;
   width: 100%;
@@ -167,15 +165,15 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   top: auto;
   width: 100%;
   height: auto;
-  padding: @space-md;
+  padding: $space-md;
   background-color: var(--bg-panel);
   backdrop-filter: var(--blur-xl);
   -webkit-backdrop-filter: var(--blur-xl);
   border: 1px solid var(--glass-border);
-  border-radius: @radius-lg;
+  border-radius: $radius-lg;
   display: flex;
   flex-direction: column;
-  gap: @space-sm;
+  gap: $space-sm;
   z-index: var(--z-panel);
   pointer-events: auto;
   box-sizing: border-box;
@@ -185,9 +183,9 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
 .panel-header {
   display: flex;
   align-items: center;
-  gap: @space-sm;
+  gap: $space-sm;
   flex-shrink: 0;
-  padding: @space-xs 0 @space-sm 0;
+  padding: $space-xs 0 $space-sm 0;
   border-bottom: 1px solid color-mix(in srgb, var(--separator), transparent 45%);
 }
 
@@ -197,13 +195,13 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   justify-content: center;
   width: 1.25rem;
   height: 1.25rem;
-  border-radius: @radius-sm;
+  border-radius: $radius-sm;
   background-color: var(--tint-primary-88);
   color: var(--color-primary);
 }
 
 .header-title {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   font-weight: 700;
   color: var(--text-title);
   letter-spacing: -0.01em;
