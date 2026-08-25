@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@floating-ui/dom": "^1.8.0",
-    "@floating-ui/vue": "^1.1.11",
+    "@floating-ui/vue": "^2.0.1",
     "@lucide/vue": "^1.17.0",
     "@vueuse/components": "^14.4.0",
     "@vueuse/core": "^14.4.0",
