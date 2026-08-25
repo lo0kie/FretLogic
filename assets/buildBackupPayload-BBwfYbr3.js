@@ -1,1 +1,0 @@
-import{af as e,ak as d,am as u}from"./index-ES0VsWnk.js";function c(){const o=e(),r=d(),a={version:1,groups:o.groups,chords:o.savedChordsList,songs:r.songs},{isValid:t,payload:s,issues:n}=u(a);return!t||!s?(console.error("[buildBackupPayload] invalid:",n),null):s}export{c as b};
