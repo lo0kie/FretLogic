@@ -243,6 +243,8 @@ export const STORAGE_KEYS = {
   // ---- 应用级偏好 ----
   /** 全局是否可编辑（false = 仅预览） */
   IS_GLOBAL_EDITABLE: 'CHORD_LAB_IS_GLOBAL_EDITABLE',
+  /** 是否启用和弦名简写（如 maj7->Δ7, dim->° 等） */
+  USE_CHORD_SHORTHAND: 'CHORD_LAB_USE_CHORD_SHORTHAND_V1',
 
   // ---- 歌曲数据（按歌曲拆键持久化） ----
   /** 旧版歌曲数据（迁移源） */

@@ -1,6 +1,6 @@
 import type { Chord, GuitarStringEntity, GuitarStringsModel } from '@/types';
 import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_SCALE_MAP } from '@/utils/constants';
-import { Tuning, isMuted, isOpen } from '@/utils/musicTheory';
+import { Tuning, isMuted, isOpen, nameToSegments } from '@/utils/musicTheory';
 
 // ===== chordMap: 和弦槽位映射与和弦数据归一化 =====
 
@@ -195,17 +195,27 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
     rootStringIndex = null;
   }
 
-  // 清理旧字段：和弦级 isInverted / fingerprint（现已移除，全部实时派生）
-  const legacyChord = chord as unknown as { isInverted?: boolean; fingerprint?: string };
+  // 清理旧字段：和弦级 isInverted / fingerprint / chordName（现已由 nameSegments 替代）
+  const legacyChord = chord as unknown as { isInverted?: boolean; fingerprint?: string; chordName?: string };
   let fieldsCleaned = false;
-  if ('isInverted' in legacyChord || 'fingerprint' in legacyChord) {
+  if ('isInverted' in legacyChord || 'fingerprint' in legacyChord || 'chordName' in legacyChord) {
     fieldsCleaned = true;
     delete legacyChord.isInverted;
     delete legacyChord.fingerprint;
   }
 
+  let nameSegments = chord.nameSegments;
+  let nameMigrated = false;
+  if (nameSegments === undefined) {
+    nameMigrated = true;
+    const rawName = legacyChord.chordName?.trim() || '';
+    nameSegments = rawName ? (nameToSegments(rawName) ?? null) : null;
+  }
+  delete legacyChord.chordName;
+
   const changed =
     stringsMigrated ||
+    nameMigrated ||
     chord.capo !== capo ||
     chord.tuning !== tuning ||
     chord.fretCount !== fretCount ||
@@ -215,6 +225,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   return {
     chord: {
       ...chord,
+      nameSegments,
       capo,
       tuning,
       fretCount,
@@ -257,14 +268,15 @@ export const getFingerTextColor = (isRoot: boolean, isDarkMode: boolean): string
 
 const placeholderSizeCache = new Map<string, { width: string; height: string }>();
 
-export const getPlaceholderSize = (fretCount: number, customScale = 1.0) => {
+export const getPlaceholderSize = (fretCount: number, customScale = 1.0, showChordName = true) => {
   const scaleKey = Math.round(customScale * 1000);
-  const cacheKey = `${fretCount}_${scaleKey}`;
+  const cacheKey = `${fretCount}_${scaleKey}_${showChordName ? 1 : 0}`;
 
   const cached = placeholderSizeCache.get(cacheKey);
   if (cached) return cached;
 
-  const rawHeight = CANVAS_CONFIG.OFFSET_Y_TOP + fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
+  const topOffset = (showChordName ? CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT : 0) + CANVAS_CONFIG.OFFSET_Y_TOP;
+  const rawHeight = topOffset + fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
   const fretboardScale = (FRETBOARD_SCALE_MAP[fretCount] ?? 1.0) * customScale;
 
   const size = {

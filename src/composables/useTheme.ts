@@ -4,8 +4,8 @@
  * 实现方式：在 `<html>` 上设置 `data-theme` 属性；dark 同时保留 `.dark` class
  * （兼容现有组件中 `:is-dark-mode` 的布尔判断与旧样式选择器）。
  */
-import { computed, ref, watch } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
+import { computed, ref, watch } from 'vue';
 
 export type ThemeMode = 'light' | 'dark' | 'high-contrast';
 export type ThemePreference = ThemeMode | 'auto';
@@ -75,11 +75,17 @@ const isDark = computed(() => activeTheme.value !== 'light');
 
 function setTheme(pref: ThemePreference) {
   preference.value = pref;
+  apply(resolve(pref));
+  try {
+    localStorage.setItem(PREFERENCE_KEY, pref);
+  } catch {
+    /* 忽略 */
+  }
 }
 
 function toggleDark() {
   const next = activeTheme.value === 'dark' ? 'light' : 'dark';
-  preference.value = next;
+  setTheme(next);
 }
 
 export const useTheme = () => ({

@@ -9,6 +9,18 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler',
+        additionalData: (source: string, filePath: string) => {
+          if (filePath.includes('tokens.scss')) return source;
+          if (source.includes('assets/tokens')) return source;
+          return `@use "@/assets/tokens" as *;\n${source.replace(/^\uFEFF/, '')}`;
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     include: ['tests/**/*.test.ts'],

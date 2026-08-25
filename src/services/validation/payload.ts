@@ -1,14 +1,14 @@
-import type { Chord, Group, ImportExportPayload, Song } from '@/types';
+import type { Chord, ChordNameSegments, Group, ImportExportPayload, Song } from '@/types';
 import { GroupSortRule } from '@/types';
+import { normalizeChord, pruneOrphanChordRefs } from '@/utils/chord-fretboard';
+import { cloneDeep } from '@/utils/common';
+import { computeChordFingerprint, getChordName, nameToSegments, Tuning } from '@/utils/musicTheory';
 
 /** 旧/未知结构的数据（含历史遗留字段），用于防御性清洗 */
 type RawRecord = Record<string, unknown>;
 type RawGroup = Partial<Group> & RawRecord;
 type RawChord = Partial<Chord> & RawRecord;
 type RawSong = Partial<Song> & RawRecord;
-import { normalizeChord, pruneOrphanChordRefs } from '@/utils/chord-fretboard';
-import { cloneDeep } from '@/utils/common';
-import { computeChordFingerprint, Tuning } from '@/utils/musicTheory';
 
 /** 备份包结构版本：每次结构变更（字段迁移/删除/语义调整）递增 */
 export const CURRENT_PAYLOAD_VERSION = 4;
@@ -106,15 +106,12 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
 
   return chords
     .filter(
-      (
-        c: RawChord,
-        index: number
-      ): c is RawChord & { id: string; chordName: string; groupId: string; strings: [number, boolean][] } => {
+      (c: RawChord, index: number): c is RawChord & { id: string; groupId: string; strings: [number, boolean][] } => {
         if (!c || typeof c !== 'object') {
           issues.push(`chords[${index}] 不是有效的对象`);
           return false;
         }
-        if (typeof c.id !== 'string' || typeof c.chordName !== 'string' || typeof c.groupId !== 'string') {
+        if (typeof c.id !== 'string' || typeof c.groupId !== 'string' || (!c.chordName && !c.nameSegments)) {
           issues.push(`chords[${index}] (${c.id || index}) 缺失基础识别属性`);
           return false;
         }
@@ -138,17 +135,19 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
       const fretCount: 3 | 4 = c.fretCount === 3 || c.fretCount === 4 ? c.fretCount : 3;
       const capo = typeof c.capo === 'number' && c.capo >= 0 && c.capo <= 12 ? c.capo : 0;
       const tuning = c.tuning && Object.values(Tuning).includes(c.tuning) ? c.tuning : Tuning.STANDARD;
-      const chordName = String(c.chordName).trim();
+      const rawName = typeof c.chordName === 'string' ? c.chordName.trim() : '';
+      const nameSegments: ChordNameSegments = c.nameSegments ??
+        (rawName ? (nameToSegments(rawName) ?? null) : null) ?? { root: ['C', 0] };
 
       // 结构字段先收口；isInverted / fingerprint 已不再存储，normalizeChord 会清理旧数据遗留字段
-      const draft: Chord = {
+      const draft = {
         ...c,
-        chordName,
+        nameSegments,
         fretCount,
         capo,
         tuning,
         rootStringIndex: c.rootStringIndex === undefined ? null : c.rootStringIndex,
-      };
+      } as unknown as Chord;
 
       const { chord } = normalizeChord(draft);
       return chord;
@@ -209,7 +208,7 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
     const key = `${c.groupId}::${computeChordFingerprint(c)}`;
     if (seenFpInGroup.has(key)) {
       // 不写入 issues，避免「仅重复」就整包拒绝；需要可观测可 console.warn
-      console.warn(`[validatePayload] 丢弃同组重复指纹: ${c.chordName} (${c.id})`);
+      console.warn(`[validatePayload] 丢弃同组重复指纹: ${getChordName(c)} (${c.id})`);
       continue;
     }
     seenFpInGroup.add(key);

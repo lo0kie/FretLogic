@@ -1,10 +1,11 @@
 <template>
   <div class="chord-content-outer" :class="{ 'is-open': isOpen }" :aria-hidden="!isOpen" :inert="!isOpen">
     <div class="chord-content-inner" @contextmenu.stop>
-      <div
+      <TransitionGroup
         v-if="groupedCards.length > 0"
         ref="gridContainerRef"
-        v-auto-animate
+        name="left-chord-card"
+        tag="div"
         class="chords-grid-layout"
         @keydown="handleKeydown"
       >
@@ -20,7 +21,7 @@
           @select="chord => emit('select-chord', chord)"
           @open-references="cardData => emit('open-references', cardData)"
         />
-      </div>
+      </TransitionGroup>
       <EmptyState v-else-if="chordsCount === 0" size="sm" description="暂无和弦" />
       <EmptyState v-else-if="searchQuery" size="sm" description="无匹配" />
     </div>
@@ -28,12 +29,12 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '@/components/EmptyState.vue';
+import { useGridNavigation } from '@/composables/useGridNavigation';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
-import EmptyState from '@/components/EmptyState.vue';
-import { useGridNavigation } from '@/composables/useGridNavigation';
-import { vAutoAnimate } from '@formkit/auto-animate';
+import { getChordName } from '@/utils/musicTheory';
 import { computed, useTemplateRef } from 'vue';
 import LeftChordCard from './ChordCard.vue';
 
@@ -69,10 +70,13 @@ const activeMainId = computed(() => {
   }
   // 仅在编辑已有和弦时按名称匹配，新建模式（isCreating）下不匹配任何已有卡片
   if (editorStore.isEditing) {
-    const draftName = draft.chordName.trim().toLowerCase();
+    const draftName = getChordName(draft).trim().toLowerCase();
     if (draftName) {
       for (const card of groupedCards.value) {
-        if (card.mainChord.groupId === draft.groupId && card.mainChord.chordName.trim().toLowerCase() === draftName) {
+        if (
+          card.mainChord.groupId === draft.groupId &&
+          getChordName(card.mainChord).trim().toLowerCase() === draftName
+        ) {
           return card.mainChord.id;
         }
       }
@@ -87,13 +91,11 @@ const { handleKeydown } = useGridNavigation(gridCols, gridContainerRef, {
 });
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .chord-content-outer {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows @duration-base @bezier-standard;
+  transition: grid-template-rows $duration-base $bezier-standard;
   pointer-events: none;
 
   &.is-open {
@@ -107,18 +109,55 @@ const { handleKeydown } = useGridNavigation(gridCols, gridContainerRef, {
   min-height: 0;
   padding-top: 0;
   box-sizing: border-box;
-  transition: padding-top @duration-base @bezier-standard;
+  transition: padding-top $duration-base $bezier-standard;
 }
 
 .chords-grid-layout {
   display: grid;
   grid-template-columns: repeat(v-bind('gridCols'), minmax(0, 1fr));
-  gap: @space-sm;
-  padding: @space-md @space-sm @space-xs @space-sm;
+  gap: $space-sm;
+  padding: $space-md $space-sm $space-xs $space-sm;
   align-items: center;
   position: relative;
   z-index: var(--z-panel);
   min-height: 2.2rem;
   box-sizing: border-box;
+}
+
+.empty-status-box {
+  position: relative;
+  z-index: 2;
+}
+
+// 左侧卡片 FLIP 重排 GPU 加速动画
+.left-chord-card-move {
+  transition: transform 0.28s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+.left-chord-card-enter-active {
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.left-chord-card-leave-active {
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+  position: absolute;
+  width: calc((100% - 2 * $space-sm) / 3);
+  pointer-events: none;
+  z-index: 0 !important;
+}
+
+.left-chord-card-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.left-chord-card-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
 }
 </style>

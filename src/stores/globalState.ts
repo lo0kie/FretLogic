@@ -1,5 +1,5 @@
-import { STORAGE_KEYS } from '@/utils/constants';
 import { useTheme } from '@/composables/useTheme';
+import { STORAGE_KEYS } from '@/utils/constants';
 import { useStorage } from '@vueuse/core';
 import { computed } from 'vue';
 
@@ -10,17 +10,20 @@ export function toggleEditable() {
   isGlobalEditable.value = !isGlobalEditable.value;
 }
 
-/**
- * 全局暗色状态：委托给 composables/useTheme（单一来源）。
- * 兼容旧组件中的 `globalDarkMode` 布尔判断；high-contrast 亦视为暗色。
- */
 const theme = useTheme();
+
 export const globalDarkMode = computed(() => theme.isDark.value);
 
-export function toggleDarkMode() {
-  theme.toggleDark();
-}
+export const setThemeMode = (mode: Parameters<typeof theme.setTheme>[0]) => {
+  theme.setTheme(mode);
+};
 
-/** 显式设置主题（light/dark/high-contrast/auto），供设置界面使用 */
-export const setThemeMode = theme.setTheme;
 export const themePreference = theme.preference;
+
+export function toggleDarkMode(mode?: 'light' | 'dark' | 'auto') {
+  if (mode) {
+    theme.setTheme(mode);
+  } else {
+    theme.toggleDark();
+  }
+}

@@ -38,9 +38,7 @@ const onHoverChange = (hovered: boolean) => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .marquee-container {
   height: 100%;
   width: 100%;
@@ -61,13 +59,14 @@ const onHoverChange = (hovered: boolean) => {
   min-width: 0;
   box-sizing: border-box;
 
-  :deep(span) {
+  :slotted(*) {
     display: inline-block;
+    vertical-align: baseline;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: 1.2; /* 防止字体行高导致偏离中心 */
+    line-height: normal;
   }
 
   &.is-scrolling {
@@ -78,7 +77,8 @@ const onHoverChange = (hovered: boolean) => {
     animation-delay: 0.5s;
     will-change: transform;
 
-    :deep(span) {
+    :slotted(*) {
+      display: inline-block;
       overflow: visible;
       text-overflow: clip;
     }

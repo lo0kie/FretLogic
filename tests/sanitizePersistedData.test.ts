@@ -9,7 +9,7 @@ import type { Chord, Group, Song } from '@/types';
 const group: Group = { id: 'group-1', name: 'C', sortRule: 'ROOT_PITCH' };
 const validChord: Chord = {
   id: 'chord-1',
-  chordName: 'C',
+  nameSegments: { root: ['C', 0] },
   strings: [
     [-1, false],
     [3, false],

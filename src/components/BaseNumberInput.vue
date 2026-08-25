@@ -162,33 +162,43 @@ const handleWheel = (e: WheelEvent) => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .base-number-input {
   display: flex;
   align-items: center;
   justify-content: space-between;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
-  border-radius: @radius-pill;
+  border-radius: $radius-pill;
   box-sizing: border-box;
   user-select: none;
+  transition:
+    border-color $duration-fast $bezier-standard,
+    box-shadow $duration-fast $bezier-standard;
+
+  &:hover {
+    border-color: var(--border-base);
+  }
+
+  &:focus-within {
+    border-color: $primary;
+    box-shadow: var(--focus-ring);
+  }
 
   &.size-sm {
     height: v-bind('HEIGHT_SM');
-    padding: 0 @space-xs;
-    gap: @space-xs;
+    padding: 0 $space-xs;
+    gap: $space-xs;
 
     .step-btn {
       width: 1.1rem;
       height: 1.1rem;
-      font-size: @fs-xs;
+      font-size: $fs-xs;
     }
 
     .readout-text,
     .readout-input {
-      font-size: @fs-2xs;
+      font-size: $fs-2xs;
       min-width: 3rem;
       flex: 1;
       width: 0;
@@ -197,18 +207,18 @@ const handleWheel = (e: WheelEvent) => {
 
   &.size-md {
     height: v-bind('HEIGHT_MD');
-    padding: 0 @space-xs;
-    gap: @space-xs;
+    padding: 0 $space-xs;
+    gap: $space-xs;
 
     .step-btn {
       width: 1.3rem;
       height: 1.3rem;
-      font-size: @fs-xs;
+      font-size: $fs-xs;
     }
 
     .readout-text,
     .readout-input {
-      font-size: @fs-xs;
+      font-size: $fs-xs;
       min-width: 3.5rem;
       flex: 1;
       width: 0;
@@ -217,12 +227,12 @@ const handleWheel = (e: WheelEvent) => {
 
   &.size-lg {
     height: v-bind('HEIGHT_LG');
-    padding: 0 @space-xs;
-    gap: @space-xs;
+    padding: 0 $space-xs;
+    gap: $space-xs;
 
     .readout-text,
     .readout-input {
-      font-size: @fs-xs;
+      font-size: $fs-xs;
       min-width: 4rem;
       flex: 1;
       width: 0;
@@ -247,10 +257,17 @@ const handleWheel = (e: WheelEvent) => {
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: @transition-fast;
+  transition:
+    background-color $duration-fast $bezier-standard,
+    color $duration-fast $bezier-standard,
+    transform $duration-fast $bezier-standard;
 
   &:hover:not(:disabled) {
     background-color: var(--bg-panel-hover);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.9);
   }
 
   &:disabled {

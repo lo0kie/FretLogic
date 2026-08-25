@@ -1,11 +1,24 @@
 <template>
   <div class="score-view-wrapper">
     <div class="score-main-content">
-      <template v-if="scoreEditor.activeSong">
-        <ScoreLyricsEditor v-show="scoreEditor.activeTab === 'edit'" />
+      <Transition name="score-tab" mode="out-in">
+        <EmptyState
+          v-if="!scoreEditor.activeSong"
+          key="empty"
+          :icon="Music"
+          title="未选择乐谱"
+          description="请在左侧侧边栏选择或新建一份乐谱"
+          size="lg"
+        />
+
+        <ScoreLyricsEditor
+          v-else-if="scoreEditor.activeTab === 'edit'"
+          :key="`lyrics-editor-${scoreEditor.activeSong.id}`"
+        />
 
         <ScoreInteractiveArea
-          v-show="scoreEditor.activeTab !== 'edit'"
+          v-else
+          :key="`interactive-area-${scoreEditor.activeSong.id}`"
           ref="interactiveAreaRef"
           :selected-line-set
           :export-page-line-set
@@ -14,14 +27,12 @@
           @open-picker="openChordPicker"
           @line-click="handleLineClick"
         />
-      </template>
-
-      <EmptyState v-else :icon="Music" title="未选择乐谱" description="请在左侧侧边栏选择或新建一份乐谱" size="lg" />
+      </Transition>
     </div>
 
     <ScoreExportFloatingBar
-      v-if="scoreEditor.activeSong && scoreEditor.activeTab === 'interactive'"
       v-model:include-meta-bar="includeMetaBar"
+      :visible="Boolean(scoreEditor.activeSong && scoreEditor.activeTab === 'interactive')"
       :is-all-selected
       :selected-count="selectedLineSet.size"
       :sorted-indices="sortedSelectedIndices"
@@ -50,11 +61,11 @@
 </template>
 
 <script setup lang="ts">
-import { useScoreExportPreview } from '@/composables/useScoreExportPreview';
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import EmptyState from '@/components/EmptyState.vue';
 import { useLineSelection } from '@/composables/useLineSelection';
+import { useScoreExportPreview } from '@/composables/useScoreExportPreview';
 import { useScoreLinesData } from '@/composables/useScoreLinesData.ts';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
 import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
@@ -120,6 +131,10 @@ const openChordPicker = (slotKey: string) => {
 let stopUndoKeydown: (() => void) | null = null;
 const handleUndoKeydown = (e: KeyboardEvent) => {
   if (!scoreEditor.activeSong) return;
+  const target = e.target as HTMLElement | null;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
     e.preventDefault();
     if (e.shiftKey) scoreEditor.redo();
@@ -143,10 +158,9 @@ onBeforeUnmount(() => {
   stopUndoKeydown = null;
 });
 </script>
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .score-view-wrapper {
+  position: relative;
   display: flex;
   width: 100%;
   height: 100%;
@@ -164,5 +178,17 @@ onBeforeUnmount(() => {
   background-color: var(--bg-main);
   box-sizing: border-box;
   overflow-y: auto;
+  position: relative;
+}
+
+// 乐谱编辑（编辑歌词 - 排列和弦）平滑切换过渡
+.score-tab-enter-active,
+.score-tab-leave-active {
+  transition: opacity $duration-fast $bezier-standard;
+}
+
+.score-tab-enter-from,
+.score-tab-leave-to {
+  opacity: 0;
 }
 </style>

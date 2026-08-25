@@ -62,9 +62,7 @@ const iconSize = computed(() => {
 });
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .empty-state-wrapper {
   display: flex;
   flex-direction: column;
@@ -78,48 +76,48 @@ const iconSize = computed(() => {
 
   &.is-bordered {
     border: 1px dashed var(--border-light);
-    border-radius: @radius-md;
+    border-radius: $radius-md;
     background-color: var(--bg-body);
   }
 }
 
 /* 尺寸变体控制 */
 .size-sm {
-  padding: @space-md 0;
+  padding: $space-md 0;
 
   .icon-zone {
     margin-bottom: 0.2rem;
   }
 
   .title-text {
-    font-size: @fs-2xs;
+    font-size: $fs-2xs;
     font-weight: 500;
   }
 
   .description-text {
-    font-size: @fs-2xs;
+    font-size: $fs-2xs;
   }
 }
 
 .size-md {
-  padding: @space-3xl @space-lg;
+  padding: $space-3xl $space-lg;
 
   .icon-zone {
     margin-bottom: 0.5rem;
   }
 
   .title-text {
-    font-size: @fs-xs;
+    font-size: $fs-xs;
     font-weight: 600;
   }
 
   .description-text {
-    font-size: @fs-2xs;
+    font-size: $fs-2xs;
   }
 }
 
 .size-lg {
-  padding: @space-3xl @space-xl;
+  padding: $space-3xl $space-xl;
 
   .icon-zone {
     width: 4rem;
@@ -133,12 +131,12 @@ const iconSize = computed(() => {
   }
 
   .title-text {
-    font-size: @fs-base;
+    font-size: $fs-base;
     font-weight: 700;
   }
 
   .description-text {
-    font-size: @fs-xs;
+    font-size: $fs-xs;
     margin-top: 0.3rem;
   }
 }

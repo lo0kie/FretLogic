@@ -1,5 +1,11 @@
 <template>
   <EmptyState v-if="chordStore.groups.length === 0" :icon="FolderOpen" description="还没有添加分组" size="md" />
+  <EmptyState
+    v-else-if="searchQuery && totalMatchCount === 0"
+    :icon="Search"
+    description="未找到匹配的和弦"
+    size="md"
+  />
   <div v-else ref="groupListContainerRef" @keydown="handleKeydown">
     <VueDraggable
       :model-value="chordStore.groups"
@@ -14,7 +20,7 @@
       @update:model-value="(val: Group[]) => chordStore.overwriteGroups(val)"
     >
       <div v-for="(group, index) in chordStore.groups" :key="group.id" class="group-box-card">
-        <GlobalContextMenu :items="getGroupMenuItems(group)" #="{ isOpen }">
+        <ContextMenu :items="getGroupMenuItems(group)" #="{ isOpen }">
           <div
             v-wave
             tabindex="0"
@@ -96,23 +102,24 @@
             @delete-chord="handleLocalDeleteChord"
             @select-chord="handleSelectChord"
           />
-        </GlobalContextMenu>
+        </ContextMenu>
       </div>
     </VueDraggable>
   </div>
 </template>
 
 <script setup lang="ts">
+import BaseBadge from '@/components/BaseBadge.vue';
+import BaseMarquee from '@/components/BaseMarquee.vue';
+import ContextMenu from '@/components/ContextMenu.vue';
+import type { ContextMenuItem } from '@/components/ContextMenuItems.vue';
+import EmptyState from '@/components/EmptyState.vue';
+import { useChordActions } from '@/composables/useChordActions.ts';
+import { useGridNavigation } from '@/composables/useGridNavigation';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
-import BaseBadge from '@/components/BaseBadge.vue';
-import BaseMarquee from '@/components/BaseMarquee.vue';
-import EmptyState from '@/components/EmptyState.vue';
-import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
-import { useChordActions } from '@/composables/useChordActions.ts';
-import { useGridNavigation } from '@/composables/useGridNavigation';
-import { ArrowUpDown, ChevronDown, FolderOpen, SquarePen, Trash2 } from '@lucide/vue';
+import { ArrowUpDown, ChevronDown, FolderOpen, Search, SquarePen, Trash2 } from '@lucide/vue';
 import { computed, useTemplateRef, watch, type ComponentPublicInstance } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import LeftChordGroupContent from './GroupContent.vue';
@@ -173,6 +180,11 @@ const groupMatchCountsMap = computed(() => {
   });
 
   return map;
+});
+
+const totalMatchCount = computed(() => {
+  if (!props.searchQuery.trim()) return chordStore.savedChordsList.length;
+  return Array.from(groupMatchCountsMap.value.values()).reduce((sum, c) => sum + c, 0);
 });
 
 const getMatchCount = (groupId: string): number => groupMatchCountsMap.value.get(groupId) ?? 0;
@@ -244,12 +256,11 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
+<style scoped lang="scss">
 .draggable-list {
   display: flex;
   flex-direction: column;
-  gap: @space-sm;
+  gap: $space-sm;
   box-sizing: border-box;
 }
 
@@ -265,10 +276,10 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
-  border-radius: @radius-md;
+  border-radius: $radius-md;
   user-select: none;
   box-sizing: border-box;
-  transition: @transition-fast;
+  transition: $transition-fast;
   outline: none;
   &:hover,
   &.is-context-open {
@@ -284,20 +295,20 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
 .group-info-zone {
   display: flex;
   align-items: center;
-  gap: @space-sm;
+  gap: $space-sm;
   min-width: 0;
   flex: 1;
 }
 .arrow-toggle-icon {
   color: var(--text-disabled);
-  transition: transform @duration-fast ease;
+  transition: transform $duration-fast ease;
   flex-shrink: 0;
   &.is-collapsed {
     transform: rotate(-90deg);
   }
 }
 .group-name-text {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   font-weight: 700;
   color: var(--text-title);
   white-space: nowrap;
@@ -305,12 +316,12 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
 .group-badges-zone {
   display: flex;
   align-items: center;
-  gap: @space-sm;
+  gap: $space-sm;
   margin-left: auto;
   flex-shrink: 0;
 }
 .sort-rule-badge {
-  font-size: @fs-2xs;
+  font-size: $fs-2xs;
   opacity: 0.8;
 }
 .count-badge {

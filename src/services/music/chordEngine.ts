@@ -1,5 +1,6 @@
-import type { NoteInput } from '@/types';
+import type { ChordNameSegments, NoteInput } from '@/types';
 import { GRAMMAR_TEMPLATES } from './grammar';
+import { nameToSegments } from './theory';
 
 export type ChordSlot =
   | 'root'
@@ -45,6 +46,7 @@ export interface ChordCandidate {
   extraCount: number;
   score: number;
   tier: 'best' | 'alternative' | 'theoretical';
+  segments?: ChordNameSegments;
 }
 
 export interface AnalyzeResult {
@@ -238,8 +240,10 @@ function populateRoles(hit: RawHitCandidate, labelByPitch: (string | undefined)[
     }
   }
 
+  const chordName = `${rootLabel}${template.suffix}${slashBassLabel}`;
+
   return {
-    chordName: `${rootLabel}${template.suffix}${slashBassLabel}`,
+    chordName,
     rootLabel,
     rootPitch,
     suffix: template.suffix,
@@ -249,6 +253,7 @@ function populateRoles(hit: RawHitCandidate, labelByPitch: (string | undefined)[
     extraCount: hit.extraCount,
     score: hit.score,
     tier: 'theoretical',
+    segments: nameToSegments(chordName) ?? undefined,
   };
 }
 

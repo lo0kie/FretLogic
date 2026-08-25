@@ -1,4 +1,4 @@
-﻿import type { FRET_COUNTS } from '@/utils/constants';
+import type { FRET_COUNTS } from '@/utils/constants';
 import type { Tuning } from '@/utils/musicTheory';
 import type { Song } from './song';
 
@@ -22,9 +22,30 @@ export enum GroupSortRule {
   NAME_ASC = 'NAME_ASC',
 }
 
+/** 升降状态：0: 还原/无, 1: 升号(#/♯), -1: 降号(b/♭) */
+export type AccidentalType = 0 | 1 | -1;
+
+/** 基础音名 */
+export type NaturalPitchLetter = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
+
+/** 根音/低音分片：[基础自然音名, 升降状态] */
+export type RootSegment = [natural: NaturalPitchLetter, accidental: AccidentalType];
+
+/** 扩展音/变化音分片：如 [#9] -> [9, 1], [b5] -> [5, -1], [maj7] -> ['maj7', 0] */
+export type ExtensionSegment = [degree: number | string, accidental?: AccidentalType];
+
+/** 结构化和弦名分片 */
+export interface ChordNameSegments {
+  root: RootSegment;
+  quality?: string;
+  extensions?: ExtensionSegment[];
+  bass?: RootSegment;
+}
+
 export interface Chord {
   id: string;
-  chordName: string;
+  /** 结构化和弦名分片（唯一核心语义真实源），未指定和弦名时为 null */
+  nameSegments: ChordNameSegments | null;
   strings: GuitarStringsModel;
   fretCount: (typeof FRET_COUNTS)[number];
   capo: number;

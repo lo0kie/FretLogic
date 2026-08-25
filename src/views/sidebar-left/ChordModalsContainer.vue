@@ -25,7 +25,7 @@
   <!-- 2. 多指法和弦删除选择 Modal -->
   <BaseModal
     v-model:visible="groupModals.modals.chordVariantsDelete"
-    :title="`删除和弦 &quot;${groupModals.modalData.activeGroupCard?.mainChord.chordName}&quot; 的指法`"
+    :title="`删除和弦 &quot;${getChordName(groupModals.modalData.activeGroupCard?.mainChord)}&quot; 的指法`"
     width="w-large"
     :show-footer="false"
   >
@@ -120,11 +120,6 @@
 </template>
 
 <script setup lang="ts">
-import { useChordStore } from '@/stores/chordStore';
-import { globalDarkMode } from '@/stores/globalState';
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useSongStore } from '@/stores/songStore';
-import type { Song } from '@/types';
 import ActionButton from '@/components/ActionButton.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
 import BaseModal from '@/components/BaseModal.vue';
@@ -132,7 +127,12 @@ import EmptyState from '@/components/EmptyState.vue';
 import Fretboard from '@/components/Fretboard.vue';
 import type { useChordGroupModals } from '@/composables/useChordGroupModals';
 import { useGridNavigation } from '@/composables/useGridNavigation';
-import { computeSongKey } from '@/utils/musicTheory';
+import { useChordStore } from '@/stores/chordStore';
+import { globalDarkMode } from '@/stores/globalState';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
+import { useSongStore } from '@/stores/songStore';
+import type { Song } from '@/types';
+import { computeSongKey, getChordName } from '@/utils/musicTheory';
 import { FileText, Music } from '@lucide/vue';
 import { computed, inject, useTemplateRef } from 'vue';
 import { useRouter } from 'vue-router';
@@ -190,11 +190,9 @@ const handleOpenSong = (songId: string) => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .modal-description-text {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   font-weight: 500;
   line-height: 1.6;
   color: var(--text-body);
@@ -204,18 +202,18 @@ const handleOpenSong = (songId: string) => {
 .move-group-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: @space-md;
+  gap: $space-md;
   overflow-y: auto;
   max-height: 50vh;
-  padding: @space-xs;
+  padding: $space-xs;
   box-sizing: border-box;
 }
 
 .move-target-btn {
   width: 100%;
-  padding: @space-md @space-md;
-  border-radius: @radius-md;
-  font-size: @fs-xs;
+  padding: $space-md $space-md;
+  border-radius: $radius-md;
+  font-size: $fs-xs;
   font-weight: 700;
   border: 1px solid var(--border-base);
   display: flex;
@@ -223,7 +221,7 @@ const handleOpenSong = (songId: string) => {
   min-width: 0;
   box-sizing: border-box;
   cursor: pointer;
-  transition: @transition-fast;
+  transition: $transition-fast;
 
   &.is-disabled {
     opacity: 0.5;
@@ -253,7 +251,7 @@ const handleOpenSong = (songId: string) => {
     color: var(--text-body);
 
     &:hover {
-      border-color: @primary;
+      border-color: $primary;
       background-color: var(--bg-panel-hover);
     }
   }
@@ -271,7 +269,7 @@ const handleOpenSong = (songId: string) => {
   }
 
   .group-count-text {
-    font-size: @fs-2xs;
+    font-size: $fs-2xs;
     font-weight: 600;
     opacity: 0.65;
     white-space: nowrap;
@@ -282,23 +280,23 @@ const handleOpenSong = (songId: string) => {
 .variants-delete-modal-content {
   display: flex;
   flex-direction: column;
-  gap: @space-md;
+  gap: $space-md;
 }
 
 .variants-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: @space-lg;
+  gap: $space-lg;
 }
 
 .variants-checkbox-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
-  gap: @space-lg;
+  gap: $space-lg;
   max-height: 52vh;
   overflow-y: auto;
-  padding: @space-xs;
+  padding: $space-xs;
   box-sizing: border-box;
 }
 
@@ -307,17 +305,17 @@ const handleOpenSong = (songId: string) => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: @space-md @space-sm @space-sm;
+  padding: $space-md $space-sm $space-sm;
   background-color: var(--bg-body);
   border: 1.5px solid var(--border-light);
-  border-radius: @radius-md;
+  border-radius: $radius-md;
   cursor: pointer;
   user-select: none;
   transition:
-    background-color @duration-fast ease,
-    border-color @duration-fast ease,
-    box-shadow @duration-fast ease,
-    transform @duration-fast ease;
+    background-color $duration-fast ease,
+    border-color $duration-fast ease,
+    box-shadow $duration-fast ease,
+    transform $duration-fast ease;
   box-sizing: border-box;
   outline: none;
   min-width: 0;
@@ -337,11 +335,6 @@ const handleOpenSong = (songId: string) => {
     background-color: var(--tint-danger-90);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-danger), transparent 50%);
   }
-
-  :deep(*) {
-    cursor: inherit !important;
-    pointer-events: inherit !important;
-  }
 }
 
 .variants-count-highlight {
@@ -354,7 +347,7 @@ const handleOpenSong = (songId: string) => {
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: @space-xs;
+  padding: $space-xs;
   pointer-events: none;
   box-sizing: border-box;
 }
@@ -363,8 +356,8 @@ const handleOpenSong = (songId: string) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: @space-md;
-  padding: @space-md 0 @space-xs;
+  gap: $space-md;
+  padding: $space-md 0 $space-xs;
   border-top: 1px solid var(--border-light);
   margin-top: 0.15rem;
 }
@@ -372,14 +365,14 @@ const handleOpenSong = (songId: string) => {
 .actions-right-group {
   display: flex;
   align-items: center;
-  gap: @space-sm;
+  gap: $space-sm;
   flex-shrink: 0;
 }
 
 .references-body {
   max-height: 60vh;
   overflow-y: auto;
-  padding: @space-xs;
+  padding: $space-xs;
   box-sizing: border-box;
 }
 
@@ -389,24 +382,24 @@ const handleOpenSong = (songId: string) => {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: @space-sm;
+  gap: $space-sm;
 }
 
 .reference-row {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: @space-sm;
-  padding: @space-sm @space-md;
+  gap: $space-sm;
+  padding: $space-sm $space-md;
   border: 1px solid var(--border-light);
-  border-radius: @radius-md;
+  border-radius: $radius-md;
   background-color: var(--bg-body);
   cursor: pointer;
   text-align: left;
   color: var(--text-body);
   transition:
-    background-color @duration-fast ease,
-    border-color @duration-fast ease;
+    background-color $duration-fast ease,
+    border-color $duration-fast ease;
 
   &:hover {
     background-color: var(--bg-panel-hover);
@@ -422,7 +415,7 @@ const handleOpenSong = (songId: string) => {
 .reference-title {
   flex: 1;
   min-width: 0;
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -431,17 +424,17 @@ const handleOpenSong = (songId: string) => {
 
 .reference-key {
   flex: none;
-  font-size: @fs-2xs;
+  font-size: $fs-2xs;
   font-weight: 700;
-  color: @primary;
+  color: $primary;
   background-color: var(--tint-primary-88);
-  padding: @space-xs @space-sm;
-  border-radius: @radius-pill;
+  padding: $space-xs $space-sm;
+  border-radius: $radius-pill;
 }
 
 .reference-count {
   flex: none;
-  font-size: @fs-2xs;
+  font-size: $fs-2xs;
   color: var(--text-muted);
 }
 </style>

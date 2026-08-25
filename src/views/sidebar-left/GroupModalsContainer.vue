@@ -3,9 +3,9 @@
   <BaseModal v-model:visible="groupModals.modals.create" title="新建分组" @confirm="groupModals.handleCreateGroup">
     <BaseInput
       v-model="groupModals.modalData.inputValue"
+      v-focus
       placeholder="请输入分组名称..."
       clearable
-      autofocus
       :maxlength="15"
       @enter="groupModals.handleCreateGroup"
     />
@@ -15,8 +15,8 @@
   <BaseModal v-model:visible="groupModals.modals.rename" title="修改组名" @confirm="groupModals.handleRenameGroup">
     <BaseInput
       v-model="groupModals.modalData.inputValue"
+      v-focus.select
       placeholder="请输入新名称..."
-      autofocus
       clearable
       :maxlength="15"
       @enter="groupModals.handleRenameGroup"
@@ -41,12 +41,11 @@
     @confirm="groupModals.handleSaveSort"
   >
     <div class="sort-modal-body">
-      <div class="sort-config-row">
-        <label class="config-label">排序规则</label>
+      <BaseFormRow label="排序规则" label-width="4.2rem">
         <BaseSegmentedControl v-model="groupModals.modalData.sortRule" :options="SORT_RULE_CONFIG" />
-      </div>
-      <div class="sort-config-row">
-        <label class="config-label">调式设定</label>
+      </BaseFormRow>
+
+      <BaseFormRow label="调式设定" label-width="4.2rem">
         <div class="key-selector-wrapper">
           <BaseSelector
             v-model="groupModals.modalData.sortKey"
@@ -56,12 +55,13 @@
             :disabled="groupModals.modalData.sortRule !== 'KEY_DEGREE'"
           />
         </div>
-      </div>
+      </BaseFormRow>
     </div>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
+import BaseFormRow from '@/components/BaseFormRow.vue';
 import BaseInput from '@/components/BaseInput.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
@@ -74,11 +74,9 @@ type GroupModals = ReturnType<typeof useChordGroupModals>;
 const groupModals = inject<GroupModals>('groupModals')!;
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .modal-description-text {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   font-weight: 500;
   line-height: 1.6;
   color: var(--text-body);
@@ -88,23 +86,8 @@ const groupModals = inject<GroupModals>('groupModals')!;
 .sort-modal-body {
   display: flex;
   flex-direction: column;
-  gap: @space-lg;
-  padding: @space-xs 0;
-}
-
-.sort-config-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.config-label {
-  width: 4.2rem;
-  flex-shrink: 0;
-  font-size: @fs-xs;
-  font-weight: 600;
-  color: var(--text-title);
-  white-space: nowrap;
+  gap: $space-lg;
+  padding: $space-xs 0;
 }
 
 .key-selector-wrapper {

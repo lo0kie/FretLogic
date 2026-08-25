@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <button
     v-wave="{ disabled }"
     :disabled="disabled || loading"
@@ -81,8 +81,7 @@ const sizeClass = computed(() => `size-${size}`);
 const roundedClass = computed(() => `rounded-${rounded}`);
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
+<style scoped lang="scss">
 .action-button-base {
   display: inline-flex;
   align-items: center;
@@ -92,19 +91,23 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   border-width: 1px;
   user-select: none;
   box-sizing: border-box;
-  transition: @transition-fast;
+  transition:
+    background-color $duration-fast $bezier-standard,
+    border-color $duration-fast $bezier-standard,
+    color $duration-fast $bezier-standard,
+    box-shadow $duration-fast $bezier-standard,
+    filter $duration-fast $bezier-standard,
+    opacity $duration-fast $bezier-standard;
   cursor: pointer;
   flex-shrink: 0;
   &:disabled {
     opacity: 0.35;
     cursor: not-allowed;
-    transform: none;
     box-shadow: none;
     pointer-events: auto;
   }
   &:active:not(:disabled) {
-    transform: scale(0.97);
-    transition-duration: var(--duration-fast);
+    filter: brightness(0.92);
   }
   &:focus-visible {
     box-shadow: var(--focus-ring);
@@ -146,21 +149,21 @@ const roundedClass = computed(() => `rounded-${rounded}`);
 }
 .size-sm {
   height: v-bind('HEIGHT_SM');
-  padding: 0 @space-md;
-  font-size: @fs-xs;
-  gap: @space-xs;
+  padding: 0 $space-md;
+  font-size: $fs-xs;
+  gap: $space-xs;
 }
 .size-md {
   height: v-bind('HEIGHT_MD');
-  padding: 0 @space-lg;
-  font-size: @fs-xs;
-  gap: @space-sm;
+  padding: 0 $space-lg;
+  font-size: $fs-xs;
+  gap: $space-sm;
 }
 .size-lg {
   height: v-bind('HEIGHT_LG');
-  padding: 0 @space-xl;
-  font-size: @fs-sm;
-  gap: @space-sm;
+  padding: 0 $space-xl;
+  font-size: $fs-sm;
+  gap: $space-sm;
 }
 .variant-subtle {
   &.theme-primary {
@@ -246,7 +249,7 @@ const roundedClass = computed(() => `rounded-${rounded}`);
     border-color: var(--border-base);
     background-color: var(--bg-panel-hover);
     color: var(--text-title);
-    box-shadow: @shadow-xs;
+    box-shadow: $shadow-xs;
   }
 }
 .action-button-base.is-icon-only {
@@ -258,16 +261,16 @@ const roundedClass = computed(() => `rounded-${rounded}`);
   border-radius: 0;
 }
 .action-button-base.rounded-sm {
-  border-radius: @radius-sm;
+  border-radius: $radius-sm;
 }
 .action-button-base.rounded-md {
-  border-radius: @radius-md;
+  border-radius: $radius-md;
 }
 .action-button-base.rounded-lg {
-  border-radius: @radius-lg;
+  border-radius: $radius-lg;
 }
 .action-button-base.rounded-full {
-  border-radius: @radius-pill;
+  border-radius: $radius-pill;
 }
 .loading-icon {
   width: 1rem;

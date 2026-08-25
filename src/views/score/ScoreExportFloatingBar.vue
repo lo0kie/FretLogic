@@ -1,5 +1,5 @@
 <template>
-  <BaseFloatingBar bottom="1.8rem" #="{ divider }">
+  <BaseFloatingBar :visible="visible" bottom="1.8rem" #="{ divider }">
     <div class="bar-info-zone">
       <BaseBadge
         :variant="selectedCount > 0 ? 'primary' : 'neutral'"
@@ -12,23 +12,19 @@
 
       <span class="selected-text-tip">{{ selectedCount > 0 ? '已选择歌词' : '请选择歌词' }}</span>
 
-      <div ref="scrollContainerRef" class="clickable-indices-list no-scrollbar" @wheel.prevent="handleWheelScroll">
+      <div v-wheel-scroll.smooth class="clickable-indices-list no-scrollbar">
         <BaseBadge
           v-for="lineIdx in sortedIndices"
           :key="lineIdx"
+          :content="lineIdx + 1"
           variant="primary"
           appearance="subtle"
           size="xs"
-          interactive
+          width="1.5rem"
+          hover-close
           title="点击取消选择该行"
-          class="index-badge-item"
           @click="emit('remove-index', lineIdx)"
-        >
-          <span>{{ lineIdx + 1 }}</span>
-          <template #suffix>
-            <X :size="10" class="index-clear-icon" aria-hidden="true" />
-          </template>
-        </BaseBadge>
+        />
       </div>
     </div>
 
@@ -59,9 +55,9 @@
 
       <ActionButton size="sm" variant="subtle" :disabled="selectedCount === 0" @click="emit('open-export')">
         <template #prefix>
-          <Copy :size="14" stroke-width="2.5" />
+          <Copy :size="14" stroke-width="2.5" aria-hidden="true" />
         </template>
-        导出
+        导出图片
       </ActionButton>
     </div>
   </BaseFloatingBar>
@@ -71,14 +67,18 @@
 import ActionButton from '@/components/ActionButton.vue';
 import BaseBadge from '@/components/BaseBadge.vue';
 import BaseFloatingBar from '@/components/BaseFloatingBar.vue';
-import { Copy, FileText, X } from '@lucide/vue';
-import { useTemplateRef } from 'vue';
-
-defineProps<{
-  selectedCount: number;
-  sortedIndices: number[];
-  isAllSelected: boolean;
-}>();
+import { FileText } from '@lucide/vue';
+withDefaults(
+  defineProps<{
+    visible?: boolean;
+    selectedCount: number;
+    sortedIndices: number[];
+    isAllSelected: boolean;
+  }>(),
+  {
+    visible: true,
+  }
+);
 
 const emit = defineEmits<{
   (e: 'remove-index', lineIdx: number): void;
@@ -86,24 +86,15 @@ const emit = defineEmits<{
   (e: 'open-export'): void;
 }>();
 
-const scrollContainerRef = useTemplateRef<HTMLElement>('scrollContainerRef');
 const includeMetaBar = defineModel<boolean>('includeMetaBar', { default: true });
-
-const handleWheelScroll = (e: WheelEvent) => {
-  if (!scrollContainerRef.value) return;
-  const scrollDelta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
-  scrollContainerRef.value.scrollBy({ left: scrollDelta, behavior: 'smooth' });
-};
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .bar-info-zone {
   display: flex;
   align-items: center;
-  gap: @space-sm;
-  font-size: @fs-xs;
+  gap: $space-sm;
+  font-size: $fs-xs;
   font-weight: 600;
   color: var(--text-title);
   min-width: 0;
@@ -118,7 +109,7 @@ const handleWheelScroll = (e: WheelEvent) => {
 .clickable-indices-list {
   display: flex;
   align-items: center;
-  gap: @space-xs;
+  gap: $space-xs;
   width: 7.5rem;
   min-width: 7.5rem;
   max-width: 7.5rem;
@@ -129,33 +120,12 @@ const handleWheelScroll = (e: WheelEvent) => {
   white-space: nowrap;
   flex-shrink: 0;
   padding: 4px 6px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  &::-webkit-scrollbar {
-    display: none;
-  }
-}
-
-.index-badge-item {
-  font-family: monospace;
-
-  &:hover {
-    background-color: var(--tint-danger-88) !important;
-    color: var(--color-danger) !important;
-    border-color: var(--tint-danger-75) !important;
-  }
-}
-
-.index-clear-icon {
-  margin-left: 0.15rem;
-  opacity: 0.6;
-  pointer-events: none;
 }
 
 .bar-actions-zone {
   display: flex;
   align-items: center;
-  gap: @space-sm;
+  gap: $space-sm;
   flex-shrink: 0;
 }
 </style>

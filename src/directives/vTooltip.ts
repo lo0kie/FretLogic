@@ -1,15 +1,81 @@
 import { autoUpdate, computePosition, flip, offset, shift, type Placement } from '@floating-ui/dom';
 import type { Directive } from 'vue';
-import './vTooltip.less';
+import './vTooltip.scss';
 
 interface TooltipOptions {
   content?: string;
   placement?: Placement;
 }
+
+export type TooltipModifiers =
+  | 'top'
+  | 'top-start'
+  | 'top-end'
+  | 'bottom'
+  | 'bottom-start'
+  | 'bottom-end'
+  | 'left'
+  | 'left-start'
+  | 'left-end'
+  | 'right'
+  | 'right-start'
+  | 'right-end'
+  | 'start'
+  | 'end'
+  | (string & Record<never, never>);
+
 export type TooltipBinding = string | TooltipOptions | undefined;
 
-const normalize = (value: TooltipBinding): TooltipOptions =>
-  typeof value === 'string' ? { content: value } : (value ?? {});
+const VALID_PLACEMENTS: Placement[] = [
+  'top',
+  'top-start',
+  'top-end',
+  'bottom',
+  'bottom-start',
+  'bottom-end',
+  'left',
+  'left-start',
+  'left-end',
+  'right',
+  'right-start',
+  'right-end',
+];
+
+const getPlacementFromModifiers = (modifiers?: Record<string, boolean>): Placement | undefined => {
+  if (!modifiers) return undefined;
+  const keys = Object.keys(modifiers);
+  if (keys.length === 0) return undefined;
+
+  // 1. 直接全词匹配（如 v-tooltip.bottom-start / v-tooltip.top-end）
+  for (const key of keys) {
+    if (VALID_PLACEMENTS.includes(key as Placement)) {
+      return key as Placement;
+    }
+  }
+
+  // 2. 组合修饰符拆分解析（如 v-tooltip.bottom.start -> 'bottom-start'）
+  const baseSide = ['top', 'bottom', 'left', 'right'].find(side => modifiers[side]);
+  if (baseSide) {
+    const alignment = ['start', 'end'].find(align => modifiers[align]);
+    if (alignment) {
+      return `${baseSide}-${alignment}` as Placement;
+    }
+    return baseSide as Placement;
+  }
+
+  return undefined;
+};
+
+const normalize = (value: TooltipBinding, modifiers?: Record<string, boolean>): TooltipOptions => {
+  const base = typeof value === 'string' ? { content: value } : { ...value };
+  if (!base.placement) {
+    const modifierPlacement = getPlacementFromModifiers(modifiers);
+    if (modifierPlacement) {
+      base.placement = modifierPlacement;
+    }
+  }
+  return base;
+};
 
 // 全局单例 DOM 与状态
 let globalBox: HTMLDivElement | null = null;
@@ -90,9 +156,9 @@ interface TooltipHandler {
 
 const handlerMap = new WeakMap<HTMLElement, TooltipHandler>();
 
-export const vTooltip: Directive<HTMLElement, TooltipBinding> = {
+export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> = {
   mounted(el, binding) {
-    const opts = normalize(binding.value);
+    const opts = normalize(binding.value, binding.modifiers);
     const handler: TooltipHandler = {
       opts,
       onMouseEnter: () => showTooltip(el, handler.opts),
@@ -116,7 +182,7 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding> = {
   updated(el, binding) {
     const handler = handlerMap.get(el);
     if (!handler) return;
-    handler.opts = normalize(binding.value);
+    handler.opts = normalize(binding.value, binding.modifiers);
 
     if (currentTargetEl === el) {
       if (!handler.opts.content) {

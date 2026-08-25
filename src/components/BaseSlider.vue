@@ -201,19 +201,17 @@ const handleWheel = (e: WheelEvent) => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .base-slider {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
-  border-radius: @radius-pill;
+  border-radius: $radius-pill;
   box-sizing: border-box;
   user-select: none;
-  gap: @space-sm;
+  gap: $space-sm;
 
   &.is-disabled {
     opacity: 0.45;
@@ -231,17 +229,17 @@ const handleWheel = (e: WheelEvent) => {
 
   &.size-sm {
     height: v-bind('HEIGHT_SM');
-    padding: 0 @space-xs;
+    padding: 0 $space-xs;
   }
 
   &.size-md {
     height: v-bind('HEIGHT_MD');
-    padding: 0 @space-sm;
+    padding: 0 $space-sm;
   }
 
   &.size-lg {
     height: v-bind('HEIGHT_LG');
-    padding: 0 @space-sm;
+    padding: 0 $space-sm;
   }
 }
 
@@ -251,14 +249,14 @@ const handleWheel = (e: WheelEvent) => {
 }
 
 .slider-label {
-  font-size: @fs-2xs;
+  font-size: $fs-2xs;
   font-weight: 600;
   color: var(--text-disabled);
   white-space: nowrap;
   cursor: pointer;
-  padding: 0 @space-xs;
+  padding: 0 $space-xs;
   outline: none;
-  border-radius: @radius-sm;
+  border-radius: $radius-sm;
 
   &:hover {
     color: var(--text-title);
@@ -274,7 +272,7 @@ const handleWheel = (e: WheelEvent) => {
   justify-content: center;
   color: var(--text-disabled);
   cursor: pointer;
-  transition: @transition-fast;
+  transition: $transition-fast;
   outline: none;
   border-radius: 50%;
 
@@ -318,16 +316,16 @@ const handleWheel = (e: WheelEvent) => {
     background: var(--color-primary);
     box-shadow: var(--shadow-sm);
     transition:
-      transform var(--duration-base) var(--bezier-spring),
-      box-shadow @duration-fast ease;
+      transform $duration-base $bezier-spring,
+      box-shadow $duration-fast $bezier-standard;
   }
 
   &:not(:disabled):hover::-webkit-slider-thumb {
     transform: scale(1.25);
   }
   &:not(:disabled):active::-webkit-slider-thumb {
-    transform: scale(1.4);
-    box-shadow: 0 2px 6px color-mix(in srgb, var(--color-primary), transparent 50%);
+    transform: scale(1.35);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary), transparent 45%);
   }
 
   /* 5. 补充 Firefox 的轨道与滑块支持 */
@@ -344,27 +342,27 @@ const handleWheel = (e: WheelEvent) => {
     background: var(--color-primary);
     box-shadow: var(--shadow-sm);
     transition:
-      transform var(--duration-base) var(--bezier-spring),
-      box-shadow @duration-fast ease;
+      transform $duration-base $bezier-spring,
+      box-shadow $duration-fast $bezier-standard;
   }
   &:not(:disabled):hover::-moz-range-thumb {
     transform: scale(1.25);
   }
   &:not(:disabled):active::-moz-range-thumb {
-    transform: scale(1.4);
-    box-shadow: 0 2px 6px color-mix(in srgb, var(--color-primary), transparent 50%);
+    transform: scale(1.35);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary), transparent 45%);
   }
 }
 
 .readout-text {
-  font-size: @fs-2xs;
+  font-size: $fs-2xs;
   font-weight: 700;
   color: var(--text-title);
   text-align: center;
   font-family: monospace;
   cursor: pointer;
   outline: none;
-  border-radius: @radius-sm;
+  border-radius: $radius-sm;
   font-variant-numeric: tabular-nums;
   display: inline-block;
   min-width: 2rem;

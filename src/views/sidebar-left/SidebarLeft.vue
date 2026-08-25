@@ -46,7 +46,7 @@
       <div class="scroll-body no-scrollbar">
         <LeftChordGroupSection
           v-if="route.path === '/workbench'"
-          :search-query="debouncedQuery"
+          :search-query="searchQuery"
           @open-rename="groupModals.openRename"
           @open-delete="groupModals.openDelete"
           @open-move="groupModals.openMove"
@@ -92,30 +92,28 @@
 </template>
 
 <script setup lang="ts">
-import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/constants';
-import { useChordStore } from '@/stores/chordStore';
-import { useImportExportService } from '@/composables/useImportExportService';
-import { useSongStore } from '@/stores/songStore';
-import { useSongModals } from '@/composables/useSongModals';
-import { useUiStore } from '@/stores/uiStore';
 import ActionButton from '@/components/ActionButton.vue';
 import BaseBadge from '@/components/BaseBadge.vue';
 import BaseInput from '@/components/BaseInput.vue';
 import { useChordGroupModals } from '@/composables/useChordGroupModals';
+import { useImportExportService } from '@/composables/useImportExportService';
+import { useSongModals } from '@/composables/useSongModals';
+import { useChordStore } from '@/stores/chordStore';
+import { useSongStore } from '@/stores/songStore';
+import { useUiStore } from '@/stores/uiStore';
+import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/constants';
 import { Download, Plus, Search, Upload } from '@lucide/vue';
-import { refDebounced } from '@vueuse/core';
 import { provide, ref, useTemplateRef } from 'vue';
 import { useRoute } from 'vue-router';
 import ChordModalsContainer from './ChordModalsContainer.vue';
 import GroupModalsContainer from './GroupModalsContainer.vue';
 import LeftChordGroupSection from './GroupSection.vue';
-import LeftSongListSection from './SongListSection.vue';
 import SongModalsContainer from './SongModalsContainer.vue';
+import LeftSongListSection from './SongSection.vue';
 
 defineOptions({ inheritAttrs: false });
 
 const searchQuery = ref('');
-const debouncedQuery = refDebounced(searchQuery, 150);
 const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef');
 
 const route = useRoute();
@@ -144,9 +142,7 @@ const handleFileChange = async (e: Event) => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .panel-left {
   position: absolute;
   top: 0;
@@ -165,8 +161,8 @@ const handleFileChange = async (e: Event) => {
   width: 0px;
   opacity: 0;
   transition:
-    width @duration-slow @bezier-sidebar,
-    opacity @duration-base ease;
+    width $duration-slow $bezier-sidebar,
+    opacity $duration-base ease;
 
   &.is-open {
     width: v-bind('LEFT_SIDEBAR_WIDTH_PIXEL');
@@ -176,13 +172,13 @@ const handleFileChange = async (e: Event) => {
 }
 
 .panel-header {
-  padding: 0 @space-lg;
+  padding: 0 $space-lg;
   height: 2.5rem;
   border-bottom: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: @space-sm;
+  gap: $space-sm;
   box-sizing: border-box;
   flex-shrink: 0;
 }
@@ -190,11 +186,11 @@ const handleFileChange = async (e: Event) => {
 .header-title-zone {
   display: flex;
   align-items: center;
-  gap: @space-sm;
+  gap: $space-sm;
 }
 
 .sidebar-title {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   font-weight: 700;
   color: var(--text-title);
   letter-spacing: -0.01em;
@@ -209,7 +205,7 @@ const handleFileChange = async (e: Event) => {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: @space-xs;
+  gap: $space-xs;
   flex-shrink: 0;
 }
 
@@ -230,12 +226,12 @@ const handleFileChange = async (e: Event) => {
 .scroll-body {
   flex: 1;
   overflow-y: auto;
-  padding: @space-md @space-md;
+  padding: $space-md $space-md;
   box-sizing: border-box;
 }
 
 .left-panel-footer {
-  padding: @space-md @space-lg;
+  padding: $space-md $space-lg;
   border-top: 1px solid var(--glass-border);
   box-sizing: border-box;
   flex-shrink: 0;
@@ -249,7 +245,7 @@ const handleFileChange = async (e: Event) => {
 .footer-actions-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: @space-sm;
+  gap: $space-sm;
   align-items: stretch;
   box-sizing: border-box;
 }

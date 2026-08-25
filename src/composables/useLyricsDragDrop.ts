@@ -1,6 +1,7 @@
 import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
+import { getChordName } from '@/utils/musicTheory';
 import { onBeforeUnmount, ref, type ComponentPublicInstance, type Ref } from 'vue';
 
 export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) {
@@ -184,7 +185,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     wasDraggingInSession = true;
     draggingSlotKey.value = activeSourceKey;
     markDragSource(activeSourceKey);
-    ghostChordName.value = activeChord.chordName;
+    ghostChordName.value = getChordName(activeChord);
     document.body.classList.add('is-global-dragging');
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try {

@@ -1,18 +1,18 @@
-// directives/vTooltip.less
-@import '@/assets/tokens.module';
+// directives/vTooltip.scss
+@use '@/assets/tokens' as *;
 
 .v-tooltip-box {
-  padding: @space-sm @space-md;
+  padding: $space-sm $space-md;
   font-weight: 500;
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   line-height: 1.45;
   text-align: center;
   white-space: pre-line; // 支持字符串里的真实 \n 换行，不用再走 v-html/dompurify
   word-break: break-word;
   max-width: calc(100vw - 24px);
   box-sizing: border-box;
-  border-radius: @radius-md;
-  box-shadow: @shadow-lg;
+  border-radius: $radius-md;
+  box-shadow: $shadow-lg;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   background-color: var(--bg-panel);

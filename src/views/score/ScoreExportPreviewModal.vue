@@ -154,13 +154,11 @@ const modeOptions = [
 ];
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .export-preview-body {
   display: flex;
   flex-direction: column;
-  gap: @space-md;
+  gap: $space-md;
   flex: 1;
   height: 100%;
   min-height: 0;
@@ -175,24 +173,15 @@ const modeOptions = [
   flex: 1;
   height: 0;
   min-height: 0;
-  padding: @space-md;
+  padding: $space-md;
   overflow: auto;
   box-sizing: border-box;
   border: 1px solid var(--border-light);
-  border-radius: @radius-lg;
+  border-radius: $radius-lg;
   background-color: var(--bg-body);
   isolation: isolate;
 
-  @grid-color: var(--tint-borderbase-85);
-  background-image:
-    linear-gradient(45deg, @grid-color 25%, transparent 25%), linear-gradient(-45deg, @grid-color 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, @grid-color 75%), linear-gradient(-45deg, transparent 75%, @grid-color 75%);
-  background-size: 16px 16px;
-  background-position:
-    0 0,
-    0 8px,
-    8px -8px,
-    -8px 0;
+  @include checkerboard-grid(var(--tint-borderbase-85), 16px);
 
   > :not(.preview-image) {
     margin: auto;
@@ -203,7 +192,7 @@ const modeOptions = [
 .preview-footer-zone {
   display: flex;
   flex-direction: column;
-  gap: @space-sm;
+  gap: $space-sm;
   flex-shrink: 0;
 }
 
@@ -217,13 +206,13 @@ const modeOptions = [
   height: auto;
   flex-shrink: 0;
 
-  border-radius: @radius-sm;
+  border-radius: $radius-sm;
   box-shadow: var(--shadow-md);
   background-color: var(--bg-main);
   object-fit: contain;
   transition:
-    box-shadow @duration-fast ease,
-    transform @duration-fast ease;
+    box-shadow $duration-fast ease,
+    transform $duration-fast ease;
 
   &.is-a4 {
     width: auto;
@@ -244,7 +233,7 @@ const modeOptions = [
   width: 100%;
   min-height: 260px;
   color: var(--text-disabled);
-  font-size: @fs-sm;
+  font-size: $fs-sm;
   line-height: 1.5;
 
   &::before {
@@ -269,6 +258,6 @@ const modeOptions = [
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: @space-sm;
+  gap: $space-sm;
 }
 </style>

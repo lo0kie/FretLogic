@@ -1,4 +1,4 @@
-﻿import { useChordEditorStore } from '@/stores/chordEditorStore';
+import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -8,6 +8,7 @@ import type { SortableEvent } from 'vue-draggable-plus';
 const warningMessages: Record<string, string> = {
   DUPLICATE_FINGERPRINT: '保存失败：该分组下已存在一模一样的和弦',
   EMPTY_NAME: '保存失败：请输入名称并指定指板有效音符',
+  INVALID_CHORD_SYNTAX: '保存失败：和弦格式不合法（如 C、Am7、G7/B）',
   NO_GROUPS: '保存失败：请先新建分组',
   NO_SELECTED_GROUP: '保存失败：请先选择目标分组',
 };

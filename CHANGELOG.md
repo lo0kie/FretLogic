@@ -5,6 +5,42 @@
 
 ## [Unreleased]
 
+### 重构（2026-08 · 组件抽取与交互归一化）
+
+一次性合并自上一批重构以来的全部未推送提交，并补齐工作区收尾改动，形成一条干净的重构提交。
+
+**基础组件与交互**
+
+- 右键菜单组件化：新增 `ContextMenu` / `ContextMenuItems` 替代旧 `GlobalContextMenu`，卡片与谱面行统一接入；TopHeader 主题菜单复用
+- 基础组件重构：`BasePopover` / `BaseSelector` 基于 floating-ui 重写并补齐无障碍角色；新增 `BaseSwitch`、`ChordNameDisplay`、`BaseMarquee`、`BaseFormRow`
+- 指板交互重写：`Fretboard` / `FretboardSvg` / `useFretboardInteraction` 右键直达动作与命中逻辑调整
+- ChordPicker 重写：`ChordPickerModal` 重构；修复“已绑定”判定未带分组条件，同指纹跨组和弦被误判为选中
+
+**样式体系：LESS → SCSS**
+
+- 设计令牌迁移至 `src/assets/tokens.scss`，由 vite `additionalData` 全局注入 `@use "@/assets/tokens" as *`
+- 组件样式统一迁移 `<style lang="scss">`；移除 `less` 依赖，引入 `sass-embedded`（modern-compiler）；vitest 同步接入 SCSS 预处理器
+
+**新指令**
+
+- `vFocus`：声明式自动聚焦，支持 `.select` / `.delay` 修饰符与配置对象
+- `vWheelScroll`：滚轮横向滚动，支持速度 / 反向 / 平滑
+
+**修复与优化**
+
+- `BaseInput`：输入聚焦时 ESC 不再被 `@keydown.stop` 拦截，可正常关闭弹窗
+- `ChordPickerModal`：滚动高亮改为 rAF 节流 + 分区元素缓存，减少强制重排；预计算 `chordMeta`，避免模板重复计算指纹与和弦名；移除懒加载列表上的 `v-auto-animate` FLIP 测量开销
+- 移除 `js-base64`，改用原生 `btoa` / `atob` + `TextEncoder` / `TextDecoder`（`base64EncodeUtf8` / `base64DecodeUtf8`），保持 UTF-8 安全
+
+**构建 / PWA**
+
+- vite 产物文件名改为纯哈希
+- TopHeader 适配 `window-controls-overlay`，标题栏可拖拽并避让系统控制按钮
+
+**质量保障**
+
+- 新增测试：`tests/domain/chordSearch.test.ts`，`tests/ui/BaseBadge`、`BaseFormRow`、`vFocus`、`vWheelScroll`、`vTooltip`、`BaseSwitch`、`chordSegments` 等
+
 ### 新增（2026-08）
 
 **云同步扩展**

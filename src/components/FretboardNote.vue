@@ -60,7 +60,7 @@
         font-weight="700"
         class="note-svg-accidental"
       >
-        {{ preferFlat ? 'b' : '#' }}
+        {{ preferFlat ? '♭' : '♯' }}
       </tspan>
     </text>
     <!-- 始终存在的透明命中区 -->
@@ -69,8 +69,8 @@
 </template>
 
 <script setup lang="ts">
-import { FRETBOARD_COLORS, NOTE_DISPLAY } from '@/utils/constants';
 import { getFingerColor, getFingerTextColor } from '@/utils/chord-fretboard';
+import { FRETBOARD_COLORS, NOTE_DISPLAY } from '@/utils/constants';
 import { computed } from 'vue';
 const props = withDefaults(
   defineProps<{
@@ -116,7 +116,7 @@ const svgFontSize = computed(() => NOTE_DISPLAY.FINGER_FONT_SIZE * SVG_FONT_SIZE
 const svgAccidentalFontSize = computed(() => svgFontSize.value * 0.6);
 const labelVerticalOffset = computed(() => svgFontSize.value * 0.35);
 const accidentalDx = computed(() => svgFontSize.value * 0.03);
-const accidentalDy = computed(() => -svgFontSize.value * 0.22);
+const accidentalDy = computed(() => -svgFontSize.value * 0.3);
 const hoverFillColor = computed(() => 'var(--fb-hover)');
 
 /** interactive 模式下不再用黄色高亮根音，统一按普通音（蓝色）处理；
@@ -169,8 +169,7 @@ const noteTextColor = computed(() => {
 });
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module.less';
+<style scoped lang="scss">
 .note-interactive {
   cursor: pointer;
   pointer-events: auto;
@@ -202,9 +201,9 @@ const noteTextColor = computed(() => {
 
 .note-circle {
   transition:
-    filter @duration-fast ease,
-    fill @duration-fast ease,
-    stroke @duration-fast ease;
+    filter $duration-fast ease,
+    fill $duration-fast ease,
+    stroke $duration-fast ease;
   filter: var(--finger-shadow);
   &.is-root-glow {
     filter: var(--root-glow);
@@ -228,7 +227,7 @@ const noteTextColor = computed(() => {
 .note-outline-ring {
   pointer-events: none;
   transition:
-    fill @duration-fast ease,
-    stroke @duration-fast ease;
+    fill $duration-fast ease,
+    stroke $duration-fast ease;
 }
 </style>

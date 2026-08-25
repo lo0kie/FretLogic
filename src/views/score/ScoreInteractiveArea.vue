@@ -26,7 +26,7 @@
         </div>
 
         <div v-for="lineData in lyricsLinesWithEdges" :key="lineData.lineId" class="line-row">
-          <GlobalContextMenu
+          <ContextMenu
             :items="getLineMenuItems(lineData)"
             :disabled="isExporting || isDragging || !isGlobalEditable"
             #="{ isOpen }"
@@ -115,7 +115,7 @@
                 />
               </div>
             </div>
-          </GlobalContextMenu>
+          </ContextMenu>
 
           <div class="line-row-gutter" aria-hidden="true" />
         </div>
@@ -132,16 +132,17 @@
 </template>
 
 <script setup lang="ts">
-import { A4_HEIGHT_PX, A4_MARGIN_PX, A4_WIDTH_PX } from '@/utils/constants';
+import ContextMenu from '@/components/ContextMenu.vue';
+import type { ContextMenuItem } from '@/components/ContextMenuItems.vue';
+import EmptyState from '@/components/EmptyState.vue';
+import { stopAutoScroll, useAutoScroll } from '@/composables/useAutoScroll.ts';
+import { useLyricsDragDrop } from '@/composables/useLyricsDragDrop';
+import { useScoreLinesData } from '@/composables/useScoreLinesData.ts';
 import { isGlobalEditable } from '@/stores/globalState.ts';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore.ts';
 import type { Chord } from '@/types';
-import EmptyState from '@/components/EmptyState.vue';
-import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
-import { stopAutoScroll, useAutoScroll } from '@/composables/useAutoScroll.ts';
-import { useLyricsDragDrop } from '@/composables/useLyricsDragDrop';
-import { useScoreLinesData } from '@/composables/useScoreLinesData.ts';
+import { A4_HEIGHT_PX, A4_MARGIN_PX, A4_WIDTH_PX } from '@/utils/constants';
 import { computeSongKey } from '@/utils/musicTheory';
 import type { LineData } from '@/utils/score-export';
 import { Eraser, FileText, Trash2 } from '@lucide/vue';
@@ -324,12 +325,10 @@ onDeactivated(() => {
 defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .interactive-score-zone {
   flex: 1;
-  padding: @space-xl 0 (@space-3xl * 2) @space-2xl; /* 底部留出空间，避免内容被悬浮操作栏遮挡 */
+  padding: $space-xl 0 ($space-3xl * 2) $space-2xl; /* 底部留出空间，避免内容被悬浮操作栏遮挡 */
   overflow-y: auto;
   overflow-x: auto;
   box-sizing: border-box;
@@ -339,7 +338,7 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
 .lyrics-lines-container {
   display: flex;
   flex-direction: column;
-  gap: @space-xs;
+  gap: $space-xs;
   max-width: 900px;
   margin: 0 auto;
   width: max-content;
@@ -355,7 +354,6 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
       content-visibility: visible;
     }
 
-    :deep(.add-btn-slot),
     .line-row-gutter {
       display: none !important;
     }
@@ -391,16 +389,16 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: @space-sm;
+  gap: $space-sm;
   padding-bottom: 1.2rem;
   width: 100%;
 }
 
 .export-song-title {
-  font-size: calc(@fs-xl * var(--score-font-scale, 1));
+  font-size: calc($fs-xl * var(--score-font-scale, 1));
   font-weight: 800;
   color: var(--text-title);
-  margin: 0 0 @space-sm 0;
+  margin: 0 0 $space-sm 0;
   letter-spacing: -0.02em;
 }
 
@@ -426,7 +424,7 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
 .info-divider {
   color: var(--text-disabled);
   opacity: 0.5;
-  padding: 0 @space-md; // 原来的 gap: @space-md 去掉，改用 padding 控制左右间距
+  padding: 0 $space-md; // 原来的 gap: $space-md 去掉，改用 padding 控制左右间距
   flex: 0 0 auto;
 }
 
@@ -457,12 +455,12 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
   width: max-content;
   min-width: 0;
   flex: 1 1 auto;
-  padding: @space-xs @space-sm;
-  border-radius: @radius-md;
+  padding: $space-xs $space-sm;
+  border-radius: $radius-md;
   transition:
-    background-color @duration-fast ease,
-    border-color @duration-fast ease,
-    box-shadow @duration-fast ease;
+    background-color $duration-fast ease,
+    border-color $duration-fast ease,
+    box-shadow $duration-fast ease;
   cursor: pointer;
   user-select: none;
   box-sizing: border-box;
@@ -477,12 +475,6 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
     .index-text-tag:not(.is-selected) {
       color: var(--color-primary);
       background-color: var(--tint-primary-90);
-    }
-
-    :deep(.add-btn-slot .add-edge-placeholder),
-    :deep(.remove-chord-btn) {
-      opacity: 1;
-      pointer-events: auto;
     }
   }
 
@@ -509,15 +501,15 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
 }
 
 .index-text-tag {
-  font-size: @fs-2xs;
+  font-size: $fs-2xs;
   font-weight: 700;
   font-family: monospace;
   color: var(--text-disabled);
-  padding: @space-xs @space-sm;
-  border-radius: @radius-lg;
+  padding: $space-xs $space-sm;
+  border-radius: $radius-lg;
   transition:
-    color @duration-fast ease,
-    background-color @duration-fast ease;
+    color $duration-fast ease,
+    background-color $duration-fast ease;
 
   &.is-selected {
     color: var(--text-on-accent) !important;
@@ -563,11 +555,11 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
 
 .drag-ghost-card {
   transform: translate(-50%, -50%) scale(1.08);
-  padding: @space-sm @space-md;
+  padding: $space-sm $space-md;
   background-color: var(--bg-panel);
   border: 1.5px solid var(--color-primary);
-  border-radius: @radius-md;
-  box-shadow: @shadow-floating;
+  border-radius: $radius-md;
+  box-shadow: $shadow-floating;
   backdrop-filter: var(--blur-md);
   -webkit-backdrop-filter: var(--blur-md);
   display: flex;
@@ -576,14 +568,14 @@ defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
 }
 
 .ghost-chord-name {
-  font-size: @fs-sm;
+  font-size: $fs-sm;
   font-weight: 800;
   color: var(--color-primary);
   line-height: 1;
 }
 </style>
 
-<style lang="less">
+<style lang="scss">
 body.is-global-dragging {
   &,
   & * {

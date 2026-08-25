@@ -1,8 +1,8 @@
-import { CANVAS_CONFIG, INTERACTION_CONFIG } from '@/utils/constants';
-import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
 import type { FretboardProps } from '@/components/Fretboard.vue';
 import { useFretboardLayout } from '@/composables/useFretboardLayout';
+import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
 import { cloneGuitarStrings } from '@/utils/common';
+import { CANVAS_CONFIG, INTERACTION_CONFIG } from '@/utils/constants';
 import { canTogglePitchAccidental, getActiveBaseStrings, isOpen } from '@/utils/musicTheory';
 import { useEventListener } from '@vueuse/core';
 import { computed, onBeforeUnmount, ref, useTemplateRef, watchEffect } from 'vue';
@@ -49,9 +49,12 @@ export function useFretboardInteraction(
     const y = (clientY - board.top) / scaleY;
     const stringIndex = Math.round((x - CANVAS_CONFIG.OFFSET_X_LEFT) / CANVAS_CONFIG.STRING_SPACING);
     if (stringIndex < 0 || stringIndex > 5) return null;
+    // 处于和弦名区域时不触发音符/空弦悬停
+    if (y < chordNameZoneHeight.value) return null;
     // SVG 实际从 和弦名区高度 + 空弦区高度 之后才开始，坐标换算需计入额外顶部高度
     const fretAreaY = y - layout.contentTopOffset.value;
     const fretIndex = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
+    if (fretIndex > fretCount.value) return null;
     return { stringIndex, fretIndex };
   };
 
@@ -165,6 +168,7 @@ export function useFretboardInteraction(
     const point = getCanvasPoint(clientX, clientY);
     if (!point || point.fretIndex < 1 || point.fretIndex > fretCount.value) return;
     const { stringIndex: sIdx, fretIndex: fIdx } = point;
+    focusPoint.value = point;
     if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
@@ -188,6 +192,11 @@ export function useFretboardInteraction(
 
   const handleKeydown = (e: KeyboardEvent) => {
     if (!interactive.value) return;
+
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      return;
+    }
 
     const isNavKey = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key);
     const isActionKey = ['Enter', ' ', 'Delete', 'Backspace', 'r', 'R'].includes(e.key);
@@ -266,7 +275,10 @@ export function useFretboardInteraction(
     pendingEvent = { clientX, clientY };
     if (hoverRafId) return;
     hoverRafId = requestAnimationFrame(() => {
-      if (pendingEvent) updateHoverFromEvent(pendingEvent.clientX, pendingEvent.clientY);
+      if (pendingEvent) {
+        updateHoverFromEvent(pendingEvent.clientX, pendingEvent.clientY);
+        pendingEvent = null;
+      }
       hoverRafId = 0;
     });
   };
@@ -282,6 +294,11 @@ export function useFretboardInteraction(
   };
 
   const handlePointerLeave = () => {
+    pendingEvent = null;
+    if (hoverRafId) {
+      cancelAnimationFrame(hoverRafId);
+      hoverRafId = 0;
+    }
     hoverPoint.value = null;
   };
 
@@ -413,6 +430,7 @@ export function useFretboardInteraction(
     hoverPoint,
     focusPoint,
     isFocused,
+    isPointerDown,
     stringXPositions: layout.stringXPositions,
     rawHeight: layout.rawHeight,
     fretboardScale: layout.fretboardScale,
