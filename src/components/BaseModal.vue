@@ -118,6 +118,14 @@ watch(
       });
       captureTrigger();
       await nextTick();
+      const autoFocusEl = modalCardRef.value?.querySelector<HTMLElement>(
+        '[autofocus], input:not([disabled]), textarea:not([disabled]), button:not([disabled]), select:not([disabled])'
+      );
+      if (autoFocusEl) {
+        autoFocusEl.focus();
+      } else {
+        modalCardRef.value?.focus();
+      }
     } else {
       stopKeydownListener?.();
       stopKeydownListener = null;
@@ -169,8 +177,7 @@ const handleMaskClick = (e: MouseEvent) => {
   mousedownTarget = null;
 };
 </script>
-<style scoped lang="less">
-@import '@/assets/tokens.module';
+<style scoped lang="scss">
 .modal-overlay-container {
   position: fixed;
   inset: 0;
@@ -178,7 +185,7 @@ const handleMaskClick = (e: MouseEvent) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: @space-lg;
+  padding: $space-lg;
   box-sizing: border-box;
   /* 全屏遮罩不做 backdrop-filter：大面积实时模糊在内容滚动/动画时每帧重采样，代价过高 */
   background-color: #00000080;
@@ -191,12 +198,11 @@ const handleMaskClick = (e: MouseEvent) => {
   box-sizing: border-box;
   background-color: var(--bg-panel);
   border: 1px solid var(--glass-border);
-  border-radius: @radius-lg;
+  border-radius: $radius-lg;
   box-shadow: var(--shadow-floating);
-  animation: cardPopIn @duration-base @bezier-bounce forwards;
   transition:
-    height @duration-base @bezier-standard,
-    width @duration-base @bezier-standard;
+    height $duration-base $bezier-standard,
+    width $duration-base $bezier-standard;
   outline: none;
 
   &.w-sm {
@@ -262,12 +268,12 @@ const handleMaskClick = (e: MouseEvent) => {
   }
 }
 .modal-header-zone {
-  padding: @space-xl @space-xl 0 @space-xl;
+  padding: $space-xl $space-xl 0 $space-xl;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: @space-lg;
+  gap: $space-lg;
 }
 .modal-header-left {
   display: flex;
@@ -278,11 +284,11 @@ const handleMaskClick = (e: MouseEvent) => {
 .modal-header-extra {
   display: flex;
   align-items: center;
-  gap: @space-sm;
+  gap: $space-sm;
   flex-shrink: 0;
 }
 .modal-title {
-  font-size: @fs-sm;
+  font-size: $fs-sm;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text-title);
@@ -292,7 +298,7 @@ const handleMaskClick = (e: MouseEvent) => {
   text-overflow: ellipsis;
 }
 .modal-body-content {
-  padding: @space-xl @space-xl;
+  padding: $space-xl $space-xl;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -307,32 +313,49 @@ const handleMaskClick = (e: MouseEvent) => {
   }
 }
 .modal-footer-zone {
-  padding: 0 @space-xl @space-xl @space-xl;
+  padding: 0 $space-xl $space-xl $space-xl;
   display: flex;
   justify-content: flex-end;
-  gap: @space-sm;
+  gap: $space-sm;
   width: 100%;
   flex-shrink: 0;
   box-sizing: border-box;
 }
 .modal-fade-enter-active {
-  transition: opacity @duration-base @bezier-standard;
+  transition: opacity $duration-base $bezier-standard;
+
+  .modal-card {
+    transition:
+      transform $duration-base $bezier-spring,
+      opacity $duration-base $bezier-standard;
+  }
 }
+
 .modal-fade-leave-active {
-  transition: opacity @duration-fast ease-in;
+  transition: opacity $duration-fast $bezier-standard;
+
+  .modal-card {
+    transition:
+      transform $duration-fast $bezier-standard,
+      opacity $duration-fast $bezier-standard;
+  }
 }
-.modal-fade-enter-from,
+
+.modal-fade-enter-from {
+  opacity: 0;
+
+  .modal-card {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+}
+
 .modal-fade-leave-to {
   opacity: 0;
-}
-@keyframes cardPopIn {
-  from {
+
+  .modal-card {
     opacity: 0;
-    transform: scale(0.9) translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: scale(0.96) translateY(6px);
   }
 }
 </style>

@@ -26,11 +26,12 @@
 </template>
 
 <script setup lang="ts">
-import { useChordEditorStore } from '@/stores/chordEditorStore';
-import { isGlobalEditable } from '@/stores/globalState';
 import ActionButton from '@/components/ActionButton.vue';
 import BaseFloatingBar from '@/components/BaseFloatingBar.vue';
 import { useChordActions } from '@/composables/useChordActions';
+import { useChordEditorStore } from '@/stores/chordEditorStore';
+import { isGlobalEditable } from '@/stores/globalState';
+import { getChordName } from '@/utils/musicTheory';
 import { computed } from 'vue';
 
 const editorStore = useChordEditorStore();
@@ -38,7 +39,7 @@ const chordActions = useChordActions();
 
 const barBottomPosition = computed(() => (editorStore.draftChord.fretCount === 3 ? '5rem' : '3.5rem'));
 const isPristine = computed(() => {
-  const cleanName = editorStore.draftChord.chordName.trim();
+  const cleanName = getChordName(editorStore.draftChord).trim();
   return (
     !editorStore.isEditing &&
     cleanName === '' &&
@@ -50,11 +51,9 @@ const isPristine = computed(() => {
 });
 
 const isSaveDisabled = computed(() => {
-  const cleanName = editorStore.draftChord.chordName.trim();
+  const cleanName = getChordName(editorStore.draftChord).trim();
   return !cleanName || editorStore.isFretBoardEmpty;
 });
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-</style>
+<style scoped lang="scss"></style>

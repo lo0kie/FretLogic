@@ -20,9 +20,7 @@ import WorkbenchCard from './WorkbenchCard.vue';
 import WorkbenchFloatingBar from './WorkbenchFloatingBar.vue';
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .workbench-layout-wrapper {
   position: absolute;
   inset: 0;
@@ -39,7 +37,7 @@ import WorkbenchFloatingBar from './WorkbenchFloatingBar.vue';
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: @space-3xl @space-2xl @space-3xl @space-2xl;
+  padding: $space-3xl $space-2xl $space-3xl $space-2xl;
   box-sizing: border-box;
   overflow-y: auto;
 }
@@ -57,6 +55,7 @@ import WorkbenchFloatingBar from './WorkbenchFloatingBar.vue';
   pointer-events: auto;
   z-index: var(--z-panel);
   overflow-y: auto;
+  transition: width $bezier-bounce $duration-fast;
 }
 
 @media (max-width: 1400px) {

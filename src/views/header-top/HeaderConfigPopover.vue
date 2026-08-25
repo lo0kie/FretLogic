@@ -1,48 +1,46 @@
 <template>
   <div class="config-popover-card">
     <template v-if="currentMode === 'fretboard'">
-      <div class="config-row">
-        <label class="config-label">显示品数</label>
-        <div class="control-wrapper">
-          <BaseSegmentedControl
-            :model-value="editorStore.draftChord.fretCount"
-            :options="FRET_OPTIONS"
-            :disabled="!isGlobalEditable"
-            @update:model-value="editorStore.setFretCount"
-          />
-        </div>
-      </div>
+      <BaseFormRow label="显示品数">
+        <BaseSegmentedControl
+          :model-value="editorStore.draftChord.fretCount"
+          :options="FRET_OPTIONS"
+          :disabled="!isGlobalEditable"
+          @update:model-value="editorStore.setFretCount"
+        />
+      </BaseFormRow>
 
-      <div class="config-row">
-        <label class="config-label">变调夹 (Capo)</label>
-        <div class="control-wrapper">
-          <BaseNumberInput
-            v-model="editorStore.draftChord.capo"
-            :min="0"
-            :max="INTERACTION_CONFIG.MAX_CAPO_LIMIT"
-            :formatter="val => (val === 0 ? 'CAPO 0' : `CAPO ${val}`)"
-            :editable="false"
-            :disabled="!isGlobalEditable"
-          />
-        </div>
-      </div>
+      <BaseFormRow label="变调夹 (Capo)">
+        <BaseNumberInput
+          v-model="editorStore.draftChord.capo"
+          :min="0"
+          :max="INTERACTION_CONFIG.MAX_CAPO_LIMIT"
+          :formatter="val => (val === 0 ? 'CAPO 0' : `CAPO ${val}`)"
+          :editable="false"
+          :disabled="!isGlobalEditable"
+        />
+      </BaseFormRow>
 
-      <div class="config-row">
-        <label class="config-label">调音方案</label>
-        <div class="control-wrapper">
-          <BaseSelector
-            v-model="editorStore.draftChord.tuning"
-            :options="tuningOptions"
-            :default-value="Tuning.STANDARD"
-            :formatter="val => TUNING_PRESETS[val]?.name || Tuning.STANDARD"
-            width="full"
-            :disabled="!isGlobalEditable"
-            clearable
-          />
-        </div>
-      </div>
+      <BaseFormRow label="调音方案">
+        <BaseSelector
+          v-model="editorStore.draftChord.tuning"
+          :options="tuningOptions"
+          :default-value="Tuning.STANDARD"
+          :formatter="val => TUNING_PRESETS[val]?.name || Tuning.STANDARD"
+          width="full"
+          :disabled="!isGlobalEditable"
+          clearable
+        />
+      </BaseFormRow>
 
-      <div class="config-row">
+      <BaseFormRow>
+        <template #label>
+          <span title="开启后 maj7/dim/m7b5/aug 将简写为 M7/°/ø7/+">符号简写 (M/°/+)</span>
+        </template>
+        <BaseSwitch v-model="settingsStore.useChordShorthand" aria-label="符号简写" />
+      </BaseFormRow>
+
+      <div class="action-full-row">
         <ActionButton variant="subtle" primary width="100%" :disabled="!isGlobalEditable" @click="handleRepairData">
           <template #prefix>
             <Wrench :size="13" stroke-width="2.5" />
@@ -53,69 +51,63 @@
     </template>
 
     <template v-else-if="currentMode === 'score'">
-      <div class="config-row">
-        <label class="config-label">滚动速度</label>
-        <div class="control-wrapper">
-          <BaseSlider
-            v-model="scoreEditor.scrollSpeed"
-            readout-position="left"
-            :show-buttons="false"
-            :min="40"
-            :max="120"
-            :step="5"
-            :default-value="60"
-          />
-        </div>
-      </div>
+      <BaseFormRow label="滚动速度">
+        <BaseSlider
+          v-model="scoreEditor.scrollSpeed"
+          readout-position="left"
+          :show-buttons="false"
+          :min="40"
+          :max="120"
+          :step="5"
+          :default-value="60"
+        />
+      </BaseFormRow>
 
-      <div class="config-row">
-        <label class="config-label">字号缩放</label>
-        <div class="control-wrapper">
-          <BaseSlider
-            v-model="scoreEditor.fontScale"
-            readout-position="left"
-            :show-buttons="false"
-            :min="0.6"
-            :max="1.5"
-            :step="0.05"
-            :default-value="1.0"
-            :formatter="val => `${Math.round(val * 100)}%`"
-          />
-        </div>
-      </div>
+      <BaseFormRow label="字号缩放">
+        <BaseSlider
+          v-model="scoreEditor.fontScale"
+          readout-position="left"
+          :show-buttons="false"
+          :min="0.6"
+          :max="1.5"
+          :step="0.05"
+          :default-value="1.0"
+          :formatter="val => `${Math.round(val * 100)}%`"
+        />
+      </BaseFormRow>
 
-      <div class="config-row">
-        <label class="config-label">和弦缩放</label>
-        <div class="control-wrapper">
-          <BaseSlider
-            v-model="localFretboardScale"
-            readout-position="left"
-            :show-buttons="false"
-            :min="0.6"
-            :max="1.5"
-            :step="0.1"
-            :default-value="1.0"
-            :formatter="val => `${Math.round(val * 100)}%`"
-            @commit="commitFretboardScale"
-          />
-        </div>
-      </div>
+      <BaseFormRow label="和弦缩放">
+        <BaseSlider
+          v-model="localFretboardScale"
+          readout-position="left"
+          :show-buttons="false"
+          :min="0.6"
+          :max="1.5"
+          :step="0.1"
+          :default-value="1.0"
+          :formatter="val => `${Math.round(val * 100)}%`"
+          @commit="commitFretboardScale"
+        />
+      </BaseFormRow>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { FRET_COUNTS, INTERACTION_CONFIG } from '@/utils/constants';
-import { useChordEditorStore } from '@/stores/chordEditorStore';
-import { useChordStore } from '@/stores/chordStore';
-import { isGlobalEditable } from '@/stores/globalState';
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useUiStore } from '@/stores/uiStore';
 import ActionButton from '@/components/ActionButton.vue';
+import BaseFormRow from '@/components/BaseFormRow.vue';
 import BaseNumberInput from '@/components/BaseNumberInput.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
 import BaseSlider from '@/components/BaseSlider.vue';
+import BaseSwitch from '@/components/BaseSwitch.vue';
+import { useChordEditorStore } from '@/stores/chordEditorStore';
+import { useChordStore } from '@/stores/chordStore';
+import { isGlobalEditable } from '@/stores/globalState';
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { useUiStore } from '@/stores/uiStore';
+import { FRET_COUNTS, INTERACTION_CONFIG } from '@/utils/constants';
 import { TUNING_PRESETS, Tuning } from '@/utils/musicTheory';
 import { Wrench } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
@@ -125,6 +117,7 @@ const route = useRoute();
 const editorStore = useChordEditorStore();
 const chordStore = useChordStore();
 const scoreEditor = useScoreEditorStore();
+const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 
 const currentMode = computed<'fretboard' | 'score'>(() => {
@@ -160,43 +153,18 @@ const handleRepairData = () => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .config-popover-card {
-  padding: @space-lg @space-lg;
-  background-color: var(--bg-elevated);
-  border: 1px solid var(--glass-border);
-  border-radius: @radius-lg;
-  box-shadow: @shadow-floating;
+  width: 360px; /* 固定的面板宽度，不再随内部控件变化而跳动 */
+  padding: $space-lg;
   display: flex;
   flex-direction: column;
-  gap: @space-lg;
-  z-index: var(--z-popover-top);
+  gap: $space-lg;
   box-sizing: border-box;
   outline: none;
-  backdrop-filter: var(--blur-xl);
-  -webkit-backdrop-filter: var(--blur-xl);
 }
 
-.config-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: @space-md;
-}
-
-.config-label {
-  font-size: @fs-xs;
-  font-weight: 600;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.control-wrapper {
-  flex: 1;
-  display: flex;
-  justify-content: flex-end;
-  min-width: 0;
+.action-full-row {
+  width: 100%;
 }
 </style>

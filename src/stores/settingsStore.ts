@@ -1,5 +1,5 @@
-import { STORAGE_KEYS } from '@/utils/constants';
 import type { SyncProviderKind } from '@/services/sync/provider';
+import { STORAGE_KEYS } from '@/utils/constants';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
@@ -21,6 +21,9 @@ export const useSettingsStore = defineStore('settings', () => {
   const webdavPassword = useStorage(STORAGE_KEYS.WEBDAV_PASSWORD, '');
   const webdavProxyUrl = useStorage(STORAGE_KEYS.WEBDAV_PROXY_URL, '');
 
+  // 乐理显示偏好
+  const useChordShorthand = useStorage<boolean>(STORAGE_KEYS.USE_CHORD_SHORTHAND, false);
+
   return {
     syncTarget,
     githubToken,
@@ -33,5 +36,6 @@ export const useSettingsStore = defineStore('settings', () => {
     webdavUsername,
     webdavPassword,
     webdavProxyUrl,
+    useChordShorthand,
   };
 });

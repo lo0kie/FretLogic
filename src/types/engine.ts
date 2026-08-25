@@ -1,3 +1,5 @@
+import type { ChordNameSegments } from './chord';
+
 export interface NoteInput {
   stringIndex: number;
   pitchIndex: number;
@@ -9,4 +11,5 @@ export interface CandidateResult {
   rootLabel: string;
   score: number;
   rootPitch: number;
+  segments?: ChordNameSegments;
 }

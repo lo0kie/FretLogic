@@ -2,10 +2,10 @@
 // 扁平目录结构下的架构约定见 CONTRIBUTING.md：跨层依赖方向为单向
 // views/components → composables → stores/services → utils。
 import eslint from '@eslint/js';
+import importPlugin from 'eslint-plugin-import-x';
 import vue from 'eslint-plugin-vue';
-import importPlugin from 'eslint-plugin-import';
-import tseslint from 'typescript-eslint';
 import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {

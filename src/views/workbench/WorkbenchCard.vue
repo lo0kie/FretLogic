@@ -19,18 +19,20 @@
         @update:strings="handleStringsChange"
         @update:root-string-index="handleRootStringChange"
         @update:chord-name="handleChordNameChange"
+        @update:name-segments="handleNameSegmentsChange"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/utils/constants';
+import Fretboard from '@/components/Fretboard.vue';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
 import { useUiStore } from '@/stores/uiStore';
-import type { GuitarStringsModel } from '@/types';
-import Fretboard from '@/components/Fretboard.vue';
+import type { ChordNameSegments, GuitarStringsModel } from '@/types';
+import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/utils/constants';
+import { nameToSegments } from '@/utils/musicTheory';
 import { computed, onActivated, onDeactivated, useTemplateRef } from 'vue';
 
 const editorStore = useChordEditorStore();
@@ -59,7 +61,13 @@ const handleRootStringChange = (index: number | null) => {
 };
 
 const handleChordNameChange = (name: string) => {
-  editorStore.draftChord.chordName = name;
+  const segs = name ? nameToSegments(name) : null;
+  editorStore.draftChord.nameSegments = segs;
+  if (!editorStore.isEditing) editorStore.isCreating = true;
+};
+
+const handleNameSegmentsChange = (segments: ChordNameSegments | null) => {
+  editorStore.draftChord.nameSegments = segments;
   if (!editorStore.isEditing) editorStore.isCreating = true;
 };
 
@@ -84,9 +92,7 @@ onDeactivated(() => {
 });
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .workbench-card {
   display: flex;
   flex-direction: column;
@@ -97,22 +103,22 @@ onDeactivated(() => {
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
   border: 1px solid var(--glass-border);
-  border-radius: @radius-md;
-  box-shadow: @shadow-panel;
+  border-radius: $radius-md;
+  box-shadow: $shadow-panel;
   position: relative;
-  padding: 0 @space-sm;
+  padding: 0 $space-sm;
   flex-shrink: 0;
 
   transition:
-    height @duration-slow @bezier-sidebar,
-    background-color @duration-base,
-    border-color @duration-base,
-    box-shadow @duration-base;
+    height $duration-slow $bezier-sidebar,
+    background-color $duration-base,
+    border-color $duration-base,
+    box-shadow $duration-base;
 }
 
 .workbench-card:hover {
   border-color: color-mix(in srgb, var(--border-base), transparent 12%);
-  box-shadow: @shadow-lg;
+  box-shadow: $shadow-lg;
 }
 
 .fretboard-render-zone {

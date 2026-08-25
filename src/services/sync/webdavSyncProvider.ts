@@ -1,6 +1,6 @@
 import { validateImportExportPayload } from '@/services/validation/payload';
 import type { ImportExportPayload } from '@/types';
-import { Base64 } from 'js-base64';
+import { base64EncodeUtf8 } from '@/utils/common';
 import { SyncError, type SyncProvider, type WebdavSyncConfig } from './provider';
 
 const TIMEOUT_MS = 15000;
@@ -26,7 +26,7 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
     config.proxyUrl ? `${config.proxyUrl.replace(/\/+$/, '')}?url=${encodeURIComponent(resourceUrl)}` : resourceUrl;
 
   const headers: Record<string, string> = config.username
-    ? { Authorization: `Basic ${Base64.encode(`${config.username}:${config.password ?? ''}`)}` }
+    ? { Authorization: `Basic ${base64EncodeUtf8(`${config.username}:${config.password ?? ''}`)}` }
     : {};
 
   const request = async (init: RequestInit, resourceUrl: string = fileUrl): Promise<Response> => {

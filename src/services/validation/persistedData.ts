@@ -1,7 +1,7 @@
 import type { Chord, Group, Song } from '@/types';
 import { GroupSortRule } from '@/types';
-import { FRET_COUNTS } from '@/utils/constants';
 import { normalizeChord, pruneOrphanChordRefs } from '@/utils/chord-fretboard';
+import { FRET_COUNTS } from '@/utils/constants';
 import { computeChordFingerprint, Tuning } from '@/utils/musicTheory';
 
 type RawRecord = Record<string, unknown>;
@@ -64,14 +64,15 @@ const sanitizeChords = (chords: unknown, validGroupIds: Set<string>): Chord[] =>
 
   for (const rawChord of chords) {
     if (!isRecord(rawChord)) continue;
-    if (typeof rawChord.id !== 'string' || typeof rawChord.chordName !== 'string') continue;
+    if (typeof rawChord.id !== 'string') continue;
+    if (!rawChord.chordName && !rawChord.nameSegments) continue;
     if (typeof rawChord.groupId !== 'string' || !validGroupIds.has(rawChord.groupId)) continue;
     if (!Array.isArray(rawChord.strings) || rawChord.strings.length !== 6) continue;
     if (!rawChord.strings.every(isValidStringEntity)) continue;
 
     const draft: Chord = {
       ...(rawChord as unknown as Chord),
-      chordName: rawChord.chordName.trim(),
+      nameSegments: (rawChord.nameSegments as Chord['nameSegments']) ?? null,
       fretCount: FRET_COUNTS.includes(rawChord.fretCount as Chord['fretCount'])
         ? (rawChord.fretCount as Chord['fretCount'])
         : 3,

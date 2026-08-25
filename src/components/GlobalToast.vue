@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div
     class="toast-global-container"
     role="region"
@@ -63,9 +63,7 @@ const handleExecuteAction = (item: Toast) => {
 };
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .toast-global-container {
   position: fixed;
   top: 1.5rem;
@@ -73,7 +71,7 @@ const handleExecuteAction = (item: Toast) => {
   z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
-  gap: @space-sm;
+  gap: $space-sm;
   align-items: flex-end;
   pointer-events: none;
   box-sizing: border-box;
@@ -81,26 +79,26 @@ const handleExecuteAction = (item: Toast) => {
 
 .toast-item-card {
   position: relative;
-  padding: @space-sm @space-lg;
-  border-radius: @radius-pill;
+  padding: $space-sm $space-lg;
+  border-radius: $radius-pill;
   font-weight: 600;
-  box-shadow: @shadow-lg;
+  box-shadow: $shadow-lg;
   display: flex;
   align-items: center;
-  gap: @space-sm;
-  font-size: @fs-xs;
+  gap: $space-sm;
+  font-size: $fs-xs;
   pointer-events: auto;
   border: 1px solid var(--glass-border);
   box-sizing: border-box;
   transition:
-    transform @duration-base @bezier-standard,
-    opacity @duration-base @bezier-standard;
+    transform $duration-base $bezier-standard,
+    opacity $duration-base $bezier-standard;
   white-space: nowrap;
   flex-shrink: 0;
   outline: none;
 
   &:focus-within {
-    box-shadow: @focus-ring-primary;
+    box-shadow: $focus-ring-primary;
   }
 
   &.has-close {
@@ -125,7 +123,7 @@ const handleExecuteAction = (item: Toast) => {
   opacity: 0.5;
   cursor: pointer;
   padding: 0;
-  transition: @transition-fast;
+  transition: $transition-fast;
   outline: none;
 
   &:hover {
@@ -158,7 +156,7 @@ const handleExecuteAction = (item: Toast) => {
 .btn-toast-undo {
   font-weight: 700;
   text-decoration: underline;
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   margin-left: 0.25rem;
   opacity: 0.9;
   background: transparent;
@@ -167,7 +165,7 @@ const handleExecuteAction = (item: Toast) => {
   color: inherit;
   cursor: pointer;
   outline: none;
-  border-radius: @radius-sm;
+  border-radius: $radius-sm;
 
   &:hover {
     opacity: 1;
@@ -200,22 +198,31 @@ const handleExecuteAction = (item: Toast) => {
   color: var(--text-title);
 }
 
-.toast-transition-enter-from {
-  opacity: 0;
-  transform: translateY(-12px) scale(0.9);
-}
-
-.toast-transition-leave-to {
-  opacity: 0;
-  transform: translateY(-12px) scale(0.9);
+.toast-transition-enter-active {
+  transition:
+    transform $duration-base $bezier-spring,
+    opacity $duration-base $bezier-standard;
 }
 
 .toast-transition-leave-active {
+  transition:
+    transform $duration-fast $bezier-standard,
+    opacity $duration-fast $bezier-standard;
   position: absolute !important;
   pointer-events: none;
 }
 
+.toast-transition-enter-from {
+  opacity: 0;
+  transform: translateY(-16px) scale(0.92);
+}
+
+.toast-transition-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
+}
+
 .toast-transition-move {
-  transition: transform @duration-base @bezier-standard;
+  transition: transform $duration-base $bezier-spring;
 }
 </style>

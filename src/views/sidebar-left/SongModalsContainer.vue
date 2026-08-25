@@ -3,9 +3,9 @@
   <BaseModal v-model:visible="songModals.modals.create" title="新建乐谱" @confirm="songModals.handleCreateSong">
     <BaseInput
       v-model="songModals.modalData.inputValue"
+      v-focus
       placeholder="请输入乐谱名称..."
       clearable
-      autofocus
       :maxlength="15"
       @enter="songModals.handleCreateSong"
     />
@@ -14,22 +14,20 @@
   <!-- 2. 乐谱综合配置 Modal -->
   <BaseModal v-model:visible="songModals.modals.config" title="乐谱配置" @confirm="songModals.handleConfigSong">
     <div class="config-modal-body">
-      <div class="config-row">
-        <label class="config-label">乐谱名称</label>
+      <BaseFormRow label="乐谱名称" label-width="5rem">
         <div class="control-wrapper">
           <BaseInput
             v-model="songModals.modalData.title"
+            v-focus.select
             placeholder="请输入名称"
             clearable
-            autofocus
             :maxlength="15"
             @enter="songModals.handleConfigSong"
           />
         </div>
-      </div>
+      </BaseFormRow>
 
-      <div class="config-row">
-        <label class="config-label">指法调 (Play)</label>
+      <BaseFormRow label="指法调 (Play)" label-width="5rem">
         <div class="control-wrapper">
           <BaseSelector
             v-model="songModals.modalData.playKey"
@@ -38,10 +36,9 @@
             :label-formatter="val => `${val} 调`"
           />
         </div>
-      </div>
+      </BaseFormRow>
 
-      <div class="config-row">
-        <label class="config-label">演唱调 (Key)</label>
+      <BaseFormRow label="演唱调 (Key)" label-width="5rem">
         <div class="control-wrapper">
           <BaseSelector
             v-model="songModals.key.value"
@@ -50,14 +47,13 @@
             :label-formatter="val => `${val} 调`"
           />
         </div>
-      </div>
+      </BaseFormRow>
 
-      <div class="config-row">
-        <label class="config-label">变调夹 (Capo)</label>
+      <BaseFormRow label="变调夹 (Capo)" label-width="5rem">
         <div class="control-wrapper">
           <BaseNumberInput v-model="songModals.modalData.capo" :min="0" :max="11" />
         </div>
-      </div>
+      </BaseFormRow>
       <p class="config-help-text">注：在此处修改调式不会触发已排布和弦的自动移调。如需整体移调请使用顶部工具栏。</p>
     </div>
   </BaseModal>
@@ -74,23 +70,22 @@
 </template>
 
 <script setup lang="ts">
+import BaseFormRow from '@/components/BaseFormRow.vue';
 import BaseInput from '@/components/BaseInput.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import BaseNumberInput from '@/components/BaseNumberInput.vue';
 import BaseSelector from '@/components/BaseSelector.vue';
-import { KEY_OPTIONS } from '@/utils/musicTheory';
 import type { useSongModals } from '@/composables/useSongModals';
+import { KEY_OPTIONS } from '@/utils/musicTheory';
 import { inject } from 'vue';
 
 type SongModals = ReturnType<typeof useSongModals>;
 const songModals = inject<SongModals>('songModals')!;
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
-
+<style scoped lang="scss">
 .modal-description-text {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   font-weight: 500;
   line-height: 1.6;
   color: var(--text-body);
@@ -100,24 +95,8 @@ const songModals = inject<SongModals>('songModals')!;
 .config-modal-body {
   display: flex;
   flex-direction: column;
-  gap: @space-lg;
-  padding: @space-xs 0;
-}
-
-.config-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: @space-xl;
-}
-
-.config-label {
-  width: 5rem;
-  flex-shrink: 0;
-  font-size: @fs-xs;
-  font-weight: 600;
-  color: var(--text-title);
-  white-space: nowrap;
+  gap: $space-lg;
+  padding: $space-xs 0;
 }
 
 .control-wrapper {
@@ -126,7 +105,7 @@ const songModals = inject<SongModals>('songModals')!;
 }
 
 .config-help-text {
-  font-size: @fs-2xs;
+  font-size: $fs-2xs;
   color: var(--text-disabled);
   margin: 0.5rem 0 0 0;
   line-height: 1.4;

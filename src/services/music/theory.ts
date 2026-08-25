@@ -1,5 +1,15 @@
 import type { SegmentOption } from '@/components/BaseSegmentedControl.vue';
-import type { Chord, GuitarStringEntity, NoteInput } from '@/types';
+import type {
+  AccidentalType,
+  Chord,
+  ChordNameSegments,
+  ExtensionSegment,
+  GuitarStringEntity,
+  GuitarStringsModel,
+  NaturalPitchLetter,
+  NoteInput,
+  RootSegment,
+} from '@/types';
 import { GroupSortRule } from '@/types';
 import { analyzeChordGraph } from './chordEngine';
 
@@ -114,7 +124,7 @@ export const formatStringLabel = (
 export const composeNoteLabel = (label: string, isAccidental: boolean, preferFlat: boolean): string =>
   isAccidental ? label + (preferFlat ? 'b' : '#') : label;
 
-export const calcPitchIndex = (
+export const calcNoteMidi = (
   sIdx: number,
   fretVal: number,
   capoVal: number,
@@ -122,7 +132,16 @@ export const calcPitchIndex = (
 ): number => {
   const base = baseStrings[sIdx] ?? 0;
   const actualOffset = fretVal > 0 && capoVal > 0 ? capoVal : 0;
-  return (base + fretVal + actualOffset) % 12;
+  return base + fretVal + actualOffset;
+};
+
+export const calcPitchIndex = (
+  sIdx: number,
+  fretVal: number,
+  capoVal: number,
+  baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
+): number => {
+  return calcNoteMidi(sIdx, fretVal, capoVal, baseStrings) % 12;
 };
 
 export const isAccidentalNote = (pitchIndex: number): boolean =>
@@ -189,13 +208,413 @@ export interface ParsedChordName {
   suffix: string;
 }
 
-const parsePitchLabel = (label: string): number => ROOT_PITCH_MAP[label] ?? 99;
+/**
+ * 格式化升降号：统一支持数字（1/-1）、字符（# / b / ♯ / ♭）输入
+ */
+export const formatAccidental = (acc: AccidentalType | string | number | undefined, useUnicode = true): string => {
+  if (acc === 1 || acc === '1' || acc === '#' || acc === '♯') return useUnicode ? '♯' : '#';
+  if (acc === -1 || acc === '-1' || acc === 'b' || acc === '♭') return useUnicode ? '♭' : 'b';
+  return '';
+};
 
 /**
- * 解析和弦名：拆出根音、斜杠低音与和弦后缀。
- * "Bm7/A" -> { rootLabel:'B', rootPitch:11, bassLabel:'A', bassPitch:9, hasBass:true, suffix:'m7' }
- * 相比旧 getChordRootPitch（只取开头），斜杠低音被完整解析，供转位判定与一致性校验使用。
+ * 拆解音名标签为基础字母与升降号（如 "C#" -> { letter: "C", accidental: "♯" }）
  */
+export const parseNoteLabel = (label: string, useUnicode = true): { letter: string; accidental: string } => {
+  if (!label) return { letter: '', accidental: '' };
+  const letter = label[0] || '';
+  const accChar = label.slice(1);
+  const accidental = formatAccidental(accChar, useUnicode);
+  return { letter, accidental };
+};
+
+/** 将音名字符串（如 "C#", "Db", "F♯", "G"）解析为 RootSegment 元组 [natural, accidental] */
+export const parsePitchSegment = (pitchStr: string): RootSegment | null => {
+  if (!pitchStr) return null;
+  const match = pitchStr.match(/^([A-G])([#b♯♭])?$/i);
+  if (!match) return null;
+  const natural = match[1]!.toUpperCase() as NaturalPitchLetter;
+  const accChar = match[2];
+  const accidental: AccidentalType =
+    accChar === '#' || accChar === '♯' ? 1 : accChar === 'b' || accChar === '♭' ? -1 : 0;
+  return [natural, accidental];
+};
+
+/** 序列化 PitchSegment 为字符串 */
+export const pitchSegmentToString = (seg: RootSegment, useUnicode = false): string => {
+  const [natural, acc] = seg;
+  return `${natural}${formatAccidental(acc, useUnicode)}`;
+};
+
+const nameSegmentsCache = new Map<string, ChordNameSegments | null>();
+
+/** 将任意和弦名文本解析为结构化分片 ChordNameSegments */
+export const nameToSegments = (chordName: string): ChordNameSegments | null => {
+  if (!chordName || typeof chordName !== 'string') return null;
+  const trimmed = chordName.trim();
+  if (!trimmed) return null;
+
+  const cached = nameSegmentsCache.get(trimmed);
+  if (cached !== undefined) return cached;
+
+  // 1. 根音：从开头提取 [A-G][#b♯♭]?
+  const rootMatch = trimmed.match(/^([A-G][#b♯♭]?)/i);
+  if (!rootMatch) {
+    if (nameSegmentsCache.size >= 512) {
+      const oldestKey = nameSegmentsCache.keys().next().value;
+      if (oldestKey !== undefined) nameSegmentsCache.delete(oldestKey);
+    }
+    nameSegmentsCache.set(trimmed, null);
+    return null;
+  }
+  const root = parsePitchSegment(rootMatch[1]!);
+  if (!root) {
+    if (nameSegmentsCache.size >= 512) {
+      const oldestKey = nameSegmentsCache.keys().next().value;
+      if (oldestKey !== undefined) nameSegmentsCache.delete(oldestKey);
+    }
+    nameSegmentsCache.set(trimmed, null);
+    return null;
+  }
+
+  let remaining = trimmed.slice(rootMatch[0].length);
+
+  // 2. 斜杠低音：从末尾提取 /[A-G][#b♯♭]?（注意避免将 6/9 中的 /9 误判为斜杠低音）
+  let bass: RootSegment | undefined = undefined;
+  const bassMatch = remaining.match(/\/([A-G][#b♯♭]?)$/i);
+  if (bassMatch && bassMatch.index !== undefined) {
+    const parsedBass = parsePitchSegment(bassMatch[1]!);
+    if (parsedBass) {
+      bass = parsedBass;
+      remaining = remaining.slice(0, bassMatch.index);
+    }
+  }
+
+  const rest = remaining.trim();
+
+  // 提取 extensions / tensions，例如 (#9), #9, b5, #11, b13, b9 等
+  const extensions: ExtensionSegment[] = [];
+  const tensionRegex = /\(?([#b♯♭])([0-9]+)\)?/g;
+  let tMatch: RegExpExecArray | null;
+  const matchedTensionRanges: [number, number][] = [];
+
+  while ((tMatch = tensionRegex.exec(rest)) !== null) {
+    const accChar = tMatch[1];
+    const deg = parseInt(tMatch[2]!, 10);
+    const acc: AccidentalType = accChar === '#' || accChar === '♯' ? 1 : accChar === 'b' || accChar === '♭' ? -1 : 0;
+    extensions.push([deg, acc]);
+    matchedTensionRanges.push([tMatch.index, tMatch.index + tMatch[0].length]);
+  }
+
+  let quality = rest;
+  if (extensions.length > 0) {
+    for (let i = matchedTensionRanges.length - 1; i >= 0; i--) {
+      const [start, end] = matchedTensionRanges[i]!;
+      quality = quality.slice(0, start) + quality.slice(end);
+    }
+    quality = quality.trim();
+  }
+
+  const result: ChordNameSegments = {
+    root,
+    quality: quality || undefined,
+    extensions: extensions.length > 0 ? extensions : undefined,
+    bass: bass ?? undefined,
+  };
+  if (nameSegmentsCache.size >= 512) {
+    const oldestKey = nameSegmentsCache.keys().next().value;
+    if (oldestKey !== undefined) nameSegmentsCache.delete(oldestKey);
+  }
+  nameSegmentsCache.set(trimmed, result);
+  return result;
+};
+
+/** 已知的标准乐理和弦性质集合 */
+export const KNOWN_QUALITIES: string[] = [
+  '',
+  'm',
+  'min',
+  '-',
+  'maj',
+  'Maj',
+  'M',
+  'Δ',
+  '7',
+  'maj7',
+  'Maj7',
+  'M7',
+  'Δ7',
+  'm7',
+  'min7',
+  '-7',
+  'dim',
+  'dim7',
+  '°',
+  '°7',
+  'aug',
+  'aug7',
+  '+',
+  '+7',
+  'sus',
+  'sus4',
+  'sus2',
+  '7sus4',
+  '7sus2',
+  '9sus4',
+  '5',
+  '6',
+  'm6',
+  'min6',
+  '-6',
+  '6/9',
+  '69',
+  'm6/9',
+  'm69',
+  'min6/9',
+  'add9',
+  'add2',
+  'add4',
+  'add11',
+  'madd9',
+  'madd11',
+  'madd4',
+  'madd2',
+  '9',
+  'm9',
+  'min9',
+  '-9',
+  'maj9',
+  'Maj9',
+  'M9',
+  'Δ9',
+  '11',
+  'm11',
+  'min11',
+  '-11',
+  'maj11',
+  'Maj11',
+  'M11',
+  'Δ11',
+  '13',
+  'm13',
+  'min13',
+  '-13',
+  'maj13',
+  'Maj13',
+  'M13',
+  'Δ13',
+  'm7b5',
+  'm7(b5)',
+  'ø',
+  'ø7',
+  'mMaj7',
+  'mmaj7',
+  'mM7',
+  'mΔ7',
+  '-M7',
+  '-Δ7',
+  'dimMaj7',
+  'dimmaj7',
+  '°M7',
+  '°Δ7',
+  'augMaj7',
+  'augmaj7',
+  '+M7',
+  '+Δ7',
+  'alt',
+  '7alt',
+  'no3',
+  '(no3)',
+  'no5',
+  '(no5)',
+];
+
+const KNOWN_QUALITIES_SET = new Set(KNOWN_QUALITIES.map(q => q.toLowerCase()));
+
+/**
+ * 校验和弦名称是否在乐理与语法上合法：
+ * 1. 必须能解析出有效的根音（A~G，可选升降号）
+ * 2. 和弦性质必须符合通用乐理词汇体系
+ * 3. 变化/扩展音度数必须在合理范围（2~13）
+ * 4. 斜杠低音必须有效
+ */
+export const isValidChordName = (chordName: string): boolean => {
+  if (!chordName || typeof chordName !== 'string') return false;
+  const trimmed = chordName.trim();
+  if (!trimmed) return false;
+
+  const segments = nameToSegments(trimmed);
+  if (!segments || !segments.root) return false;
+
+  if (segments.quality) {
+    const q = segments.quality.trim().toLowerCase();
+    if (!KNOWN_QUALITIES_SET.has(q)) {
+      return false;
+    }
+  }
+
+  if (segments.extensions && segments.extensions.length > 0) {
+    const validDegrees = new Set([2, 4, 5, 6, 7, 9, 11, 13]);
+    const allExtsValid = segments.extensions.every(([deg]) => validDegrees.has(Number(deg)));
+    if (!allExtsValid) return false;
+  }
+
+  return true;
+};
+
+/** 和弦性质简写/符号映射（如 maj7 -> M7, dim -> °, aug -> +, dimMaj7 -> °M7） */
+export const SHORTHAND_QUALITY_MAP: Record<string, string> = {
+  'maj7': 'M7',
+  'maj9': 'M9',
+  'maj11': 'M11',
+  'maj13': 'M13',
+  'maj': 'M',
+  'dim': '°',
+  'dim7': '°7',
+  'dimMaj7': '°M7',
+  'dimmaj7': '°M7',
+  'dim(maj7)': '°M7',
+  'dim(M7)': '°M7',
+  'mMaj7': 'mM7',
+  'mmaj7': 'mM7',
+  'm(maj7)': 'mM7',
+  'm(M7)': 'mM7',
+  'augMaj7': '+M7',
+  'augmaj7': '+M7',
+  'aug(maj7)': '+M7',
+  'm7b5': 'ø7',
+  'm7(b5)': 'ø7',
+  'aug': '+',
+  'aug7': '+7',
+  'sus4': 'sus',
+  '7sus4': '7sus',
+  '9sus4': '9sus',
+};
+
+/** 格式化和弦性质（根据是否开启简写） */
+export const formatChordQuality = (quality?: string, shorthand = false): string => {
+  if (!quality) return '';
+  if (!shorthand) return quality;
+  return SHORTHAND_QUALITY_MAP[quality] ?? SHORTHAND_QUALITY_MAP[quality.toLowerCase()] ?? quality;
+};
+
+/** 将分片结构还原为标准和弦字符串 */
+export const segmentsToString = (
+  segments: ChordNameSegments,
+  options: { useUnicode?: boolean; shorthand?: boolean } | boolean = false
+): string => {
+  const useUnicode = typeof options === 'boolean' ? options : (options.useUnicode ?? false);
+  const shorthand = typeof options === 'boolean' ? false : (options.shorthand ?? false);
+
+  const rootStr = pitchSegmentToString(segments.root, useUnicode);
+  let quality = segments.quality ?? '';
+  let extensions = segments.extensions ?? [];
+
+  if (shorthand) {
+    const b5Idx = extensions.findIndex(([deg, acc]) => (deg === 5 || deg === '5') && acc === -1);
+    if ((quality === 'm7' || quality === 'm') && b5Idx >= 0) {
+      quality = 'ø7';
+      extensions = extensions.filter((_, idx) => idx !== b5Idx);
+    } else {
+      quality = formatChordQuality(quality, true);
+    }
+  }
+
+  const extsStr = extensions
+    .map(([deg, acc]) => {
+      const accStr = acc === 1 ? (useUnicode ? '♯' : '#') : acc === -1 ? (useUnicode ? '♭' : 'b') : '';
+      return `${accStr}${deg}`;
+    })
+    .join('');
+  const bassStr = segments.bass ? `/${pitchSegmentToString(segments.bass, useUnicode)}` : '';
+  return `${rootStr}${quality}${extsStr}${bassStr}`;
+};
+
+/**
+ * 获取和弦的标准名称字符串（以 AST nameSegments 为唯一真实源，支持 options）
+ */
+export const getChordName = (
+  chord: { nameSegments?: ChordNameSegments | null; chordName?: string } | null | undefined,
+  options?: { shorthand?: boolean; useUnicode?: boolean }
+): string => {
+  if (!chord || !chord.nameSegments) return chord?.chordName || '';
+  return segmentsToString(chord.nameSegments, options);
+};
+
+/**
+ * 智能模糊匹配和弦名称（支持全称、简写缩写、Unicode/ASCII 变音记号互通）
+ * 例如：搜索 CM7 / CΔ7 / Cmaj7 均能匹配到 Cmaj7；
+ *       搜索 C+ / Caug 均能匹配到 Caug；
+ *       搜索 Cø / Cø7 / Cm7b5 均能匹配到 Cm7(b5)；
+ *       搜索 C° / Cdim 均能匹配到 Cdim；
+ *       搜索 F# / F♯ / Bb / B♭ 自动互通。
+ */
+export const matchChordSearch = (
+  chord: { nameSegments?: ChordNameSegments | null; chordName?: string } | null | undefined,
+  query: string
+): boolean => {
+  if (!chord) return false;
+  const rawQ = query.trim();
+  if (!rawQ) return true;
+
+  const qLower = rawQ.toLowerCase();
+
+  // 1. 收集和弦的所有等价别名字符串
+  const candidateNames = new Set<string>();
+
+  if (chord.chordName) {
+    candidateNames.add(chord.chordName.toLowerCase());
+  }
+
+  // 标准全称 (ASCII & Unicode)
+  const fullNameAscii = getChordName(chord, { shorthand: false, useUnicode: false }).toLowerCase();
+  const fullNameUnicode = getChordName(chord, { shorthand: false, useUnicode: true }).toLowerCase();
+  if (fullNameAscii) candidateNames.add(fullNameAscii);
+  if (fullNameUnicode) candidateNames.add(fullNameUnicode);
+
+  // 简写名称 (ASCII & Unicode, 如 CM7, C°, Cø7, C+)
+  const shortNameAscii = getChordName(chord, { shorthand: true, useUnicode: false }).toLowerCase();
+  const shortNameUnicode = getChordName(chord, { shorthand: true, useUnicode: true }).toLowerCase();
+  if (shortNameAscii) candidateNames.add(shortNameAscii);
+  if (shortNameUnicode) candidateNames.add(shortNameUnicode);
+
+  // 扩展特殊符号别名 (如 Δ7 对应 M7 / maj7)
+  if (fullNameAscii.includes('maj')) {
+    candidateNames.add(fullNameAscii.replace(/maj/g, 'δ').toLowerCase());
+    candidateNames.add(fullNameAscii.replace(/maj/g, 'Δ').toLowerCase());
+    candidateNames.add(fullNameAscii.replace(/maj/g, 'm').toLowerCase());
+  }
+  if (shortNameAscii.includes('m7')) {
+    candidateNames.add(shortNameAscii.replace(/m7/g, 'δ7').toLowerCase());
+    candidateNames.add(shortNameAscii.replace(/m7/g, 'Δ7').toLowerCase());
+  }
+
+  // 2. 生成查询词的变体 (ASCII 变音符 & Unicode 变音符 & 符号替换)
+  const queryVariants = [
+    qLower,
+    qLower.replace(/♯/g, '#').replace(/♭/g, 'b'),
+    qLower.replace(/#/g, '♯').replace(/b/g, '♭'),
+    qLower.replace(/δ|Δ/g, 'maj').replace(/♯/g, '#').replace(/♭/g, 'b'),
+    qLower.replace(/δ|Δ/g, 'm').replace(/♯/g, '#').replace(/♭/g, 'b'),
+    qLower.replace(/ø|ø7/g, 'm7b5').replace(/♯/g, '#').replace(/♭/g, 'b'),
+    qLower.replace(/°/g, 'dim').replace(/♯/g, '#').replace(/♭/g, 'b'),
+  ];
+
+  // 3. 检查任意候选名称是否包含任意查询词变体
+  for (const name of candidateNames) {
+    for (const q of queryVariants) {
+      if (name.includes(q)) return true;
+    }
+  }
+
+  return false;
+};
+/**
+ * 解析和弦名：基于 AST 分片拆出根音、斜杠低音与和弦后缀。
+ * "Bm7/A" -> { rootLabel:'B', rootPitch:11, bassLabel:'A', bassPitch:9, hasBass:true, suffix:'m7' }
+ */
+const parsedChordNameCache = new Map<string, ParsedChordName>();
+
 export const parseChordName = (chordName: string): ParsedChordName => {
   const empty: ParsedChordName = {
     rootLabel: '',
@@ -206,20 +625,54 @@ export const parseChordName = (chordName: string): ParsedChordName => {
     suffix: '',
   };
   if (!chordName || typeof chordName !== 'string') return empty;
-  // 根音（可含 #/b）+ 后缀 + 可选 /低音
-  const match = chordName.match(/^([A-G][#b]?)([^/]*?)(?:\/([A-G][#b]?))?$/);
-  if (!match) return empty;
-  const rootLabel = match[1] ?? '';
-  const suffix = match[2] ?? '';
-  const bassLabel = match[3];
-  return {
+  const trimmed = chordName.trim();
+  if (!trimmed) return empty;
+
+  const cached = parsedChordNameCache.get(trimmed);
+  if (cached !== undefined) return cached;
+
+  const segs = nameToSegments(trimmed);
+  if (!segs || !segs.root) {
+    if (parsedChordNameCache.size >= 512) {
+      const oldestKey = parsedChordNameCache.keys().next().value;
+      if (oldestKey !== undefined) parsedChordNameCache.delete(oldestKey);
+    }
+    parsedChordNameCache.set(trimmed, empty);
+    return empty;
+  }
+
+  const rootLabel = pitchSegmentToString(segs.root, false);
+  const rootPitch = ROOT_PITCH_MAP[rootLabel] ?? 99;
+
+  let bassLabel = '';
+  let bassPitch = 99;
+  let hasBass = false;
+  if (segs.bass) {
+    hasBass = true;
+    bassLabel = pitchSegmentToString(segs.bass, false);
+    bassPitch = ROOT_PITCH_MAP[bassLabel] ?? 99;
+  }
+
+  const extsStr = segs.extensions
+    ? segs.extensions.map(([deg, acc]) => `${acc === 1 ? '#' : acc === -1 ? 'b' : ''}${deg}`).join('')
+    : '';
+  const suffix = `${segs.quality ?? ''}${extsStr}`;
+
+  const result: ParsedChordName = {
     rootLabel,
-    rootPitch: rootLabel ? parsePitchLabel(rootLabel) : 99,
-    bassLabel: bassLabel ?? '',
-    bassPitch: bassLabel ? parsePitchLabel(bassLabel) : 99,
-    hasBass: !!bassLabel,
+    rootPitch,
+    bassLabel,
+    bassPitch,
+    hasBass,
     suffix,
   };
+
+  if (parsedChordNameCache.size >= 512) {
+    const oldestKey = parsedChordNameCache.keys().next().value;
+    if (oldestKey !== undefined) parsedChordNameCache.delete(oldestKey);
+  }
+  parsedChordNameCache.set(trimmed, result);
+  return result;
 };
 
 const rootPitchCache = new Map<string, number>();
@@ -236,12 +689,12 @@ export const getChordRootPitch = (chordName: string): number => {
 
 /**
  * 收集指板音集为 NoteInput[]（含弦位/音高/音名），并返回物理最低音高。
- * 供根音推导与转位判定统一使用，避免各处重复遍历。
+ * 供根音推导、转位判定与分析面板统一使用，避免各处重复遍历。
  */
-const collectNotes = (
+export const collectChordNotes = (
   strings: GuitarStringEntity[],
   capoVal: number,
-  baseStrings: readonly number[]
+  baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
 ): { notes: NoteInput[]; bassPitch: number } => {
   const notes: NoteInput[] = [];
   let bassPitch = -1;
@@ -262,6 +715,8 @@ const collectNotes = (
   return { notes, bassPitch };
 };
 
+const collectNotes = collectChordNotes;
+
 /**
  * 解析和弦根音音高（三级兜底）：
  * 1. rootStringIndex 手动标记的弦音高
@@ -273,7 +728,7 @@ export const resolveChordRootPitch = (
   strings: GuitarStringEntity[],
   capoVal: number,
   tuning: Tuning | string,
-  chordName: string,
+  chordOrName: string | { nameSegments?: ChordNameSegments | null; chordName?: string },
   rootStringIndex: number | null = null
 ): number => {
   const baseStrings = TUNING_PRESETS[tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
@@ -284,7 +739,8 @@ export const resolveChordRootPitch = (
       return calcPitchIndex(rootStringIndex, markedStr[0], capoVal, baseStrings);
     }
   }
-  // 2. 名字解析
+  // 2. 名字/分片解析
+  const chordName = typeof chordOrName === 'string' ? chordOrName : getChordName(chordOrName);
   const namePitch = getChordRootPitch(chordName);
   if (namePitch !== 99) return namePitch;
   // 3. 自动推导（基于指板音集）
@@ -301,12 +757,12 @@ export const computeIsInverted = (
   strings: GuitarStringEntity[],
   capoVal: number,
   tuning: string,
-  chordName: string,
+  chordOrName: string | { nameSegments?: ChordNameSegments | null; chordName?: string },
   rootStringIndex: number | null = null
 ): boolean => {
   const baseStrings = TUNING_PRESETS[tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
   const { bassPitch } = collectNotes(strings, capoVal, baseStrings);
-  const rootPitch = resolveChordRootPitch(strings, capoVal, tuning, chordName, rootStringIndex);
+  const rootPitch = resolveChordRootPitch(strings, capoVal, tuning, chordOrName, rootStringIndex);
   return bassPitch !== -1 && rootPitch !== 99 && bassPitch !== rootPitch;
 };
 
@@ -324,8 +780,9 @@ export const validateBassConsistency = (
   strings: GuitarStringEntity[],
   capoVal: number,
   tuning: Tuning | string,
-  chordName: string
+  chordOrName: string | { nameSegments?: ChordNameSegments | null; chordName?: string }
 ): string | null => {
+  const chordName = typeof chordOrName === 'string' ? chordOrName : getChordName(chordOrName);
   const parsed = parseChordName(chordName);
   if (!parsed.hasBass || parsed.bassPitch === 99) return null;
   const baseStrings = TUNING_PRESETS[tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
@@ -376,9 +833,11 @@ const getComplexityRank = (suffix: string): number => {
  */
 const isMinorFlavored = (suffix: string): boolean => {
   if (!suffix) return false;
-  if (/^maj/i.test(suffix)) return false; // 大七系列非小调
-  if (/^(m|min|dim|mb5)/i.test(suffix)) return true;
-  if (/dim/i.test(suffix)) return true;
+  // 大和弦体系：maj, Maj, M7, M9, M11, M13, Δ 等绝非小调
+  if (/^(maj|M|Δ)/.test(suffix)) return false;
+  // 小调体系：m, min, - 开头（且非 M/maj），减和弦 dim, °, 半减七 ø, ø7, m7b5 等
+  if (/^(m|min|-)/.test(suffix)) return true;
+  if (/^(dim|°|ø|m7b5)/.test(suffix)) return true;
   return false;
 };
 
@@ -395,19 +854,17 @@ interface SortMeta {
 }
 
 const buildSortMeta = (chord: Chord): SortMeta => {
-  const rootPitch = resolveChordRootPitch(
-    chord.strings,
-    chord.capo,
-    chord.tuning,
-    chord.chordName,
-    chord.rootStringIndex
-  );
+  const name = getChordName(chord);
+  const parsed = parseChordName(name);
+  const rootPitch =
+    parsed.rootPitch !== 99
+      ? parsed.rootPitch
+      : resolveChordRootPitch(chord.strings, chord.capo, chord.tuning, chord, chord.rootStringIndex);
   const { colorNoteCount } = getColorNoteCountAndPitches(chord, rootPitch);
-  const parsed = parseChordName(chord.chordName);
   return {
     chord,
     rootPitch,
-    isInverted: computeIsInverted(chord.strings, chord.capo, chord.tuning, chord.chordName, chord.rootStringIndex),
+    isInverted: computeIsInverted(chord.strings, chord.capo, chord.tuning, chord, chord.rootStringIndex),
     colorNoteCount,
     complexityRank: getComplexityRank(parsed.suffix),
     qualityRank: isMinorFlavored(parsed.suffix) ? 0 : 1,
@@ -425,7 +882,7 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
   if (chords.length <= 1) return chords.slice();
   const effectiveRule: GroupSortRule = rule ?? GroupSortRule.ROOT_PITCH;
   if (effectiveRule === GroupSortRule.NAME_ASC) {
-    return chords.slice().sort((a, b) => a.chordName.localeCompare(b.chordName));
+    return chords.slice().sort((a, b) => getChordName(a).localeCompare(getChordName(b)));
   }
   const n = chords.length;
   const mappedList: SortMeta[] = new Array(n);
@@ -439,7 +896,7 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
       if (a.complexityRank !== b.complexityRank) return a.complexityRank - b.complexityRank;
       if (a.qualityRank !== b.qualityRank) return a.qualityRank - b.qualityRank;
       if (a.colorNoteCount !== b.colorNoteCount) return a.colorNoteCount - b.colorNoteCount;
-      return a.chord.chordName.localeCompare(b.chord.chordName);
+      return getChordName(a.chord).localeCompare(getChordName(b.chord));
     });
   } else if (effectiveRule === GroupSortRule.KEY_DEGREE) {
     const keyPitch = ROOT_PITCH_MAP[sortKey] ?? 0;
@@ -464,7 +921,7 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
       if (a.complexityRank !== b.complexityRank) return a.complexityRank - b.complexityRank;
       if (a.qualityRank !== b.qualityRank) return a.qualityRank - b.qualityRank;
       if (a.colorNoteCount !== b.colorNoteCount) return a.colorNoteCount - b.colorNoteCount;
-      return a.chord.chordName.localeCompare(b.chord.chordName);
+      return getChordName(a.chord).localeCompare(getChordName(b.chord));
     });
   } else {
     return chords.slice();
@@ -495,12 +952,29 @@ export const getKeySemitones = (key1: string, key2: string): number => {
   return diff;
 };
 
-export const computeChordFingerprint = (
-  chord: Pick<Chord, 'chordName' | 'capo' | 'fretCount' | 'tuning' | 'strings' | 'rootStringIndex'>
-): string => {
-  const isInverted = computeIsInverted(chord.strings, chord.capo, chord.tuning, chord.chordName, chord.rootStringIndex);
+const chordFingerprintCache = new WeakMap<object, string>();
+
+export const computeChordFingerprint = (chord: {
+  chordName?: string;
+  nameSegments?: ChordNameSegments | null;
+  capo: number;
+  fretCount: number;
+  tuning: Tuning | string;
+  strings: GuitarStringsModel;
+  rootStringIndex: number | null;
+}): string => {
+  if (chord && typeof chord === 'object') {
+    const cached = chordFingerprintCache.get(chord);
+    if (cached !== undefined) return cached;
+  }
+  const name = getChordName(chord);
+  const isInverted = computeIsInverted(chord.strings, chord.capo, chord.tuning, chord, chord.rootStringIndex);
   const strSig = chord.strings.map(s => `${s[0]}_${s[1] ? 1 : 0}`).join('|');
-  return `${chord.chordName.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${isInverted ? 1 : 0}:${String(chord.rootStringIndex)}:${strSig}`;
+  const fp = `${name.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${isInverted ? 1 : 0}:${String(chord.rootStringIndex)}:${strSig}`;
+  if (chord && typeof chord === 'object') {
+    chordFingerprintCache.set(chord, fp);
+  }
+  return fp;
 };
 
 export const getActiveBaseStrings = (tuning: Tuning) => {

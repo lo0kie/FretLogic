@@ -1,11 +1,9 @@
-import { STORAGE_KEYS } from '@/utils/constants';
 import { useSongStore } from '@/stores/songStore';
 import type { Chord, Song } from '@/types';
 import { garbageCollectChordMap } from '@/utils/chord-fretboard';
-import { cloneDeep } from '@/utils/common';
-import { matchLineIds } from '@/utils/common';
+import { cloneDeep, matchLineIds, sanitizeLyricsText } from '@/utils/common';
+import { STORAGE_KEYS } from '@/utils/constants';
 import { computeSongKey, getKeySemitones, transposeChordName } from '@/utils/musicTheory';
-import { sanitizeLyricsText } from '@/utils/common';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, nextTick, ref, watch } from 'vue';

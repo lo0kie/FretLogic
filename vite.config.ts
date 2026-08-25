@@ -66,18 +66,15 @@ export default defineConfig({
   },
   css: {
     preprocessorOptions: {
-      less: {
-        // 全局注入设计令牌，使任意 .vue <style lang="less"> 与 .less 文件都能直接使用 @space-* / @radius-* / @fs-* 等变量，
-        // 无需每个文件手动 @import。
-        // - 跳过 tokens 文件自身，避免循环注入；
-        // - 已手动引入 tokens 的文件（如 main.less）直接返回，避免重复注入；
-        // - 剥离文件开头的 UTF-8 BOM，否则注入后 BOM 被挤到第二行导致 LESS 解析失败。
+      scss: {
+        api: 'modern-compiler',
+        // 全局注入设计令牌，使任意 .vue <style lang="scss"> 与 .scss 文件都能直接使用 $space-* / $radius-* / $fs-* 等变量与 mixin，
+        // 无需每个文件手动 @use。
         additionalData: (source: string, filePath: string) => {
-          if (filePath.includes('tokens.module')) return source;
-          if (source.includes('assets/tokens.module')) return source;
-          return `@import '@/assets/tokens.module';\n${source.replace(/^\uFEFF/, '')}`;
+          if (filePath.includes('tokens.scss')) return source;
+          if (source.includes('assets/tokens')) return source;
+          return `@use "@/assets/tokens" as *;\n${source.replace(/^\uFEFF/, '')}`;
         },
-        javascriptEnabled: true,
       },
     },
   },
@@ -85,6 +82,10 @@ export default defineConfig({
     target: 'es2020',
     rollupOptions: {
       output: {
+        // 文件名纯哈希化：去除源文件名前缀（BaseFloatingBar / ScoreView / Fretboard 等），避免从产物名反推模块结构
+        entryFileNames: 'assets/[hash].js',
+        chunkFileNames: 'assets/[hash].js',
+        assetFileNames: 'assets/[hash][extname]',
         // 拆出稳定的 vendor 分组：业务代码迭代不再导致框架层缓存全量失效
         manualChunks: {
           vue: ['vue', 'vue-router', 'pinia'],

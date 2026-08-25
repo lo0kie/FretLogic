@@ -1,63 +1,60 @@
 <template>
-  <GlobalContextMenu :items="menuItems" #="{ isOpen }">
-    <div
-      v-memo="[
-        cardData.mainChord.id,
-        activeChord.id,
-        computeChordFingerprint(activeChord),
-        cardData.variantCount,
-        isActive,
-        cardData.hasVariants,
-        isOpen,
-      ]"
-      class="chord-card-frame"
-      :title="activeChord.chordName"
-    >
-      <div
-        v-wave
-        class="chord-thumb-card"
-        :class="{
-          'is-editing': isActive,
-          'is-context-open': isOpen,
-        }"
-        role="button"
-        tabindex="0"
-        :aria-pressed="isActive"
-        :aria-label="ariaLabel"
-        data-focusable-inline
-        @click="handleCardClick"
-        @wheel="handleWheelScroll"
-        @keydown.enter.prevent.stop="handleCardClick"
-        @keydown.space.prevent.stop="handleCardClick"
-      >
-        <BaseBadge
-          v-if="cardData.hasVariants"
-          :variant="isActive ? 'primary' : 'neutral'"
-          appearance="filled"
-          size="xs"
-          class="variant-badge-badge"
-          :title="isActive ? '滚轮切换指法' : undefined"
-          @click.stop="toggleVariantsDropdown"
+  <div class="chord-card-wrapper">
+    <ContextMenu :items="menuItems" #="{ isOpen }">
+      <div class="chord-card-frame" :title="getChordName(activeChord)">
+        <div
+          v-wave
+          class="chord-thumb-card"
+          :class="{
+            'is-editing': isActive,
+            'is-context-open': isOpen,
+          }"
+          role="button"
+          tabindex="0"
+          :aria-pressed="isActive"
+          :aria-label="ariaLabel"
+          data-focusable-inline
+          @click="handleCardClick"
+          @wheel="handleWheelScroll"
+          @keydown.enter.prevent.stop="handleCardClick"
+          @keydown.space.prevent.stop="handleCardClick"
         >
-          <span v-if="isActive">{{ activeVariantIndex + 1 }}/{{ cardData.variantCount }}</span>
-          <span v-else>{{ cardData.variantCount }}</span>
-        </BaseBadge>
+          <BaseBadge
+            v-if="cardData.hasVariants"
+            :variant="isActive ? 'primary' : 'neutral'"
+            appearance="filled"
+            size="xs"
+            class="variant-badge-badge"
+            :title="isActive ? '滚轮切换指法' : undefined"
+            @click.stop="toggleVariantsDropdown"
+          >
+            <span v-if="isActive">{{ activeVariantIndex + 1 }}/{{ cardData.variantCount }}</span>
+            <span v-else>{{ cardData.variantCount }}</span>
+          </BaseBadge>
 
-        <BaseMarquee class="chord-marquee-wrapper">
-          <span class="chord-name-text">{{ activeChord.chordName }}</span>
-        </BaseMarquee>
+          <BaseMarquee class="chord-marquee-wrapper">
+            <ChordNameDisplay
+              :chord="activeChord"
+              :shorthand="settingsStore.useChordShorthand"
+              class="chord-name-text"
+            />
+          </BaseMarquee>
+        </div>
       </div>
-    </div>
-  </GlobalContextMenu>
+    </ContextMenu>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { useChordEditorStore } from '@/stores/chordEditorStore';
-import type { Chord, GroupedChordCard } from '@/types';
 import BaseBadge from '@/components/BaseBadge.vue';
 import BaseMarquee from '@/components/BaseMarquee.vue';
-import GlobalContextMenu, { type ContextMenuItem } from '@/components/GlobalContextMenu.vue';
-import { computeChordFingerprint } from '@/utils/musicTheory';
+import ChordNameDisplay from '@/components/ChordNameDisplay.vue';
+import ContextMenu from '@/components/ContextMenu.vue';
+import type { ContextMenuItem } from '@/components/ContextMenuItems.vue';
+import { useChordEditorStore } from '@/stores/chordEditorStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import type { Chord, GroupedChordCard } from '@/types';
+import { getChordName } from '@/utils/musicTheory';
 import { Link2, Move, Trash2 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
@@ -75,6 +72,7 @@ const emit = defineEmits<{
 }>();
 
 const editorStore = useChordEditorStore();
+const settingsStore = useSettingsStore();
 
 // 滚轮切换指法的增量阈值：鼠标滚轮一格（±100+）立即切换，触控板惯性按累积量切换
 const WHEEL_SWITCH_THRESHOLD = 60;
@@ -98,10 +96,13 @@ const handleCardClick = () => {
   emit('select', activeChord.value);
 };
 
-const switchVariant = (nextIdx: number) => {
-  const targetChord = props.cardData.variants[nextIdx] ?? props.cardData.mainChord;
-  localVariantIndex.value = nextIdx;
-  emit('select', targetChord);
+const switchVariant = (newIndex: number) => {
+  if (props.isActive) {
+    const target = props.cardData.variants[newIndex];
+    if (target) editorStore.setEditor(target);
+  } else {
+    localVariantIndex.value = newIndex;
+  }
 };
 
 const toggleVariantsDropdown = () => {
@@ -155,7 +156,7 @@ const menuItems = computed<ContextMenuItem[]>(() => [
 ]);
 
 const ariaLabel = computed(() => {
-  const name = activeChord.value.chordName;
+  const name = getChordName(activeChord.value);
   if (!props.cardData.hasVariants) return `和弦 ${name}`;
   const parts = [`和弦 ${name}`, `共 ${props.cardData.variantCount} 种指法`];
   if (props.isActive) parts.push('已激活，滚轮可切换');
@@ -163,11 +164,18 @@ const ariaLabel = computed(() => {
 });
 </script>
 
-<style scoped lang="less">
-@import '@/assets/tokens.module';
+<style scoped lang="scss">
+.chord-card-wrapper {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
 
 .chord-card-frame {
   box-sizing: border-box;
+  width: 100%;
 }
 
 .chord-thumb-card {
@@ -182,12 +190,12 @@ const ariaLabel = computed(() => {
   cursor: pointer;
   background-color: var(--bg-body);
   border: 1px solid var(--border-light);
-  border-radius: @radius-md;
+  border-radius: $radius-md;
   outline: none;
   transition:
-    background-color @duration-fast ease,
-    border-color @duration-fast ease,
-    box-shadow @duration-fast ease;
+    background-color $duration-fast ease,
+    border-color $duration-fast ease,
+    box-shadow $duration-fast ease;
 
   &:hover,
   &:active,
@@ -202,15 +210,15 @@ const ariaLabel = computed(() => {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary), transparent 75%);
 
     .chord-name-text {
-      color: @primary;
+      color: $primary;
     }
 
     &:hover,
     &:active,
     &.is-context-open {
-      background-color: color-mix(in srgb, @primary, var(--bg-body) 78%);
-      border-color: @primary;
-      box-shadow: 0 0 0 1px color-mix(in srgb, @primary, transparent 60%);
+      background-color: color-mix(in srgb, $primary, var(--bg-body) 78%);
+      border-color: $primary;
+      box-shadow: 0 0 0 1px color-mix(in srgb, $primary, transparent 60%);
     }
   }
 }
@@ -222,9 +230,9 @@ const ariaLabel = computed(() => {
   z-index: var(--z-card);
   height: 0.9rem;
   min-width: 0.9rem;
-  padding: 0 @space-xs;
-  border-radius: @radius-pill;
-  font-size: @fs-2xs;
+  padding: 0 $space-xs;
+  border-radius: $radius-pill;
+  font-size: $fs-2xs;
   font-weight: 700;
   line-height: 1;
   box-shadow: var(--shadow-sm);
@@ -232,9 +240,9 @@ const ariaLabel = computed(() => {
   border: 1px solid var(--bg-body);
   cursor: pointer;
   transition:
-    transform @duration-fast @bezier-bounce,
-    box-shadow @duration-fast ease,
-    background-color @duration-fast ease;
+    transform $duration-fast $bezier-bounce,
+    box-shadow $duration-fast ease,
+    background-color $duration-fast ease;
 }
 
 .chord-marquee-wrapper {
@@ -243,10 +251,10 @@ const ariaLabel = computed(() => {
 }
 
 .chord-name-text {
-  font-size: @fs-xs;
+  font-size: $fs-xs;
   font-weight: 700;
   letter-spacing: -0.01em;
-  line-height: 1;
+  line-height: normal;
   pointer-events: none;
   color: var(--text-body);
 }

@@ -256,3 +256,27 @@ export function observeVisibility(el: Element, cb: VisibilityCallback, root?: El
     observer.unobserve(el);
   };
 }
+
+// ===== base64: UTF-8 安全的 base64 编解码（替代 js-base64）=====
+
+/**
+ * UTF-8 安全的 base64 编码，与原 js-base64 的 `Base64.encode` 行为一致。
+ * 分块处理，避免超长字符串在展开为参数时超出调用栈限制。
+ */
+export const base64EncodeUtf8 = (str: string): string => {
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+};
+
+/** UTF-8 安全的 base64 解码，与原 js-base64 的 `Base64.decode` 行为一致。 */
+export const base64DecodeUtf8 = (b64: string): string => {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+};
