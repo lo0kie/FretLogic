@@ -88,6 +88,8 @@ export function useChordActions() {
       chordStore.addChord(result.payload);
       uiStore.toast.success(`和弦已保存${groupTip}`);
     }
+    // 立即落盘（绕过 useStorage 防抖），保证保存后刷新不丢失横按等数据
+    chordStore.flushChordsToStorage();
 
     if (result.warn) {
       uiStore.toast.warning(result.warn);
