@@ -1,7 +1,9 @@
 <template>
-  <div class="score-view-wrapper">
-    <div class="score-main-content">
-      <Transition name="score-tab" mode="out-in">
+  <div class="score-view-wrapper relative flex w-full h-full box-border overflow-hidden">
+    <div
+      class="score-main-content flex-1 h-full flex flex-col min-w-0 min-h-0 bg-bg-main box-border overflow-y-auto relative"
+    >
+      <Transition name="v-transition-fade" mode="out-in">
         <EmptyState
           v-if="!scoreEditor.activeSong"
           key="empty"
@@ -61,10 +63,10 @@
 </template>
 
 <script setup lang="ts">
-import EmptyState from '@/components/EmptyState.vue';
-import { useLineSelection } from '@/composables/useLineSelection';
-import { useScoreExportPreview } from '@/composables/useScoreExportPreview';
-import { useScoreLinesData } from '@/composables/useScoreLinesData.ts';
+import EmptyState from '@/components/base/EmptyState.vue';
+import { useLineSelection } from '@/composables/score/useLineSelection';
+import { useScoreExportPreview } from '@/composables/score/useScoreExportPreview';
+import { useScoreLinesData } from '@/composables/score/useScoreLinesData';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { Music } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
@@ -158,37 +160,3 @@ onBeforeUnmount(() => {
   stopUndoKeydown = null;
 });
 </script>
-<style scoped lang="scss">
-.score-view-wrapper {
-  position: relative;
-  display: flex;
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.score-main-content {
-  flex: 1;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  background-color: var(--bg-main);
-  box-sizing: border-box;
-  overflow-y: auto;
-  position: relative;
-}
-
-// 乐谱编辑（编辑歌词 - 排列和弦）平滑切换过渡
-.score-tab-enter-active,
-.score-tab-leave-active {
-  transition: opacity $duration-fast $bezier-standard;
-}
-
-.score-tab-enter-from,
-.score-tab-leave-to {
-  opacity: 0;
-}
-</style>

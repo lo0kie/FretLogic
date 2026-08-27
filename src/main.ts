@@ -1,15 +1,18 @@
 import App from '@/App.vue';
-import { useTheme } from '@/composables/useTheme';
+import { useTheme } from '@/composables/app/useTheme';
 import { router } from '@/router';
 import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
-import { logger } from '@/utils/logger';
+import { logger } from '@/utils/core/logger';
 import { createPinia } from 'pinia';
 import VWave from 'v-wave';
 import { createApp } from 'vue';
 
 import '@/assets/main.scss';
+import '@/assets/tailwind.css';
 import { vFocus } from './directives/vFocus';
+import { vGridNav } from './directives/vGridNav';
+import { vScrollCache } from './directives/vScrollCache';
 import { vTooltip } from './directives/vTooltip';
 import { vWheelScroll } from './directives/vWheelScroll';
 
@@ -24,6 +27,8 @@ app.use(router);
 app.directive('tooltip', vTooltip);
 app.directive('wheel-scroll', vWheelScroll);
 app.directive('focus', vFocus);
+app.directive('scroll-cache', vScrollCache);
+app.directive('grid-nav', vGridNav);
 
 const initializeEditor = () => {
   try {

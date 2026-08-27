@@ -1,8 +1,8 @@
 import type { Chord, Group, Song } from '@/types';
 import { GroupSortRule } from '@/types';
-import { normalizeChord, pruneOrphanChordRefs } from '@/utils/chord-fretboard';
-import { FRET_COUNTS } from '@/utils/constants';
-import { computeChordFingerprint, Tuning } from '@/utils/musicTheory';
+import { normalizeChord, pruneOrphanChordRefs } from '@/utils/music/chord-fretboard';
+import { FRET_COUNTS } from '@/utils/core/constants';
+import { computeChordFingerprint, Tuning } from '@/utils/music/musicTheory';
 
 type RawRecord = Record<string, unknown>;
 

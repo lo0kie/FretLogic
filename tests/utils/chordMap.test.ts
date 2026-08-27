@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { getEdgeChords, parseSlotKey, removeChordFromSlot, setEdgeChords } from '@/utils/chord-fretboard';
+import {
+  getEdgeChords,
+  parseSlotKey,
+  removeChordFromSlot,
+  setEdgeChords,
+  swapOrMoveSlotChords,
+} from '@/utils/music/chord-fretboard';
 
 describe('chordMap: 槽位键解析', () => {
   it('解析合法 char 槽位', () => {
@@ -40,5 +46,18 @@ describe('chordMap: 边缘和弦读写', () => {
     const map: Record<string, string> = { line_l1_char_2: 'c1' };
     expect(removeChordFromSlot(map, 'line_l1_char_2')).toBe('c1');
     expect(map).toEqual({});
+  });
+
+  it('swapOrMoveSlotChords 拖动到行首添加按钮时插入到已有和弦的左侧(0位)', () => {
+    const map: Record<string, string> = {
+      line_l1_start_0: 'chordExisting',
+      line_l1_char_3: 'chordMoving',
+    };
+    // 拖动 chordMoving 到行首添加按钮 (line_l1_start_1)
+    swapOrMoveSlotChords(map, 'line_l1_char_3', 'line_l1_start_1');
+    expect(map).toEqual({
+      line_l1_start_0: 'chordMoving',
+      line_l1_start_1: 'chordExisting',
+    });
   });
 });

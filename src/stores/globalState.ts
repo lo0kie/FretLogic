@@ -1,5 +1,5 @@
-import { useTheme } from '@/composables/useTheme';
-import { STORAGE_KEYS } from '@/utils/constants';
+import { useTheme } from '@/composables/app/useTheme';
+import { STORAGE_KEYS } from '@/utils/core/constants';
 import { useStorage } from '@vueuse/core';
 import { computed } from 'vue';
 

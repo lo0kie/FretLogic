@@ -1,5 +1,5 @@
 import type { SyncProviderKind } from '@/services/sync/provider';
-import { STORAGE_KEYS } from '@/utils/constants';
+import { STORAGE_KEYS } from '@/utils/core/constants';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';

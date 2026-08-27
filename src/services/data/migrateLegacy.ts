@@ -6,7 +6,7 @@
  * - 迁移成功后在 IDB 写入标记，避免重复导入；
  * - 迁移为「只读读取旧数据 + 清洗 + 写入 IDB」，不删除旧 localStorage（保留回退能力）。
  */
-import { STORAGE_KEYS } from '@/utils/constants';
+import { STORAGE_KEYS } from '@/utils/core/constants';
 import { validateImportExportPayload } from '@/services/validation/payload';
 import { sanitizePersistedData } from '@/services/validation/persistedData';
 import { idb } from '@/services/storage';

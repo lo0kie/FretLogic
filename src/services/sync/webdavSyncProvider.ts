@@ -1,7 +1,6 @@
-import { validateImportExportPayload } from '@/services/validation/payload';
-import type { ImportExportPayload } from '@/types';
-import { base64EncodeUtf8 } from '@/utils/common';
+import { base64EncodeUtf8 } from '@/utils/core/common';
 import { SyncError, type SyncProvider, type WebdavSyncConfig } from './provider';
+import { createSyncProviderBase } from './syncBase';
 
 const TIMEOUT_MS = 15000;
 const WEBDAV_REMOTE_FILE_PATH = 'FretLogic/chords.json'; // 内部写死
@@ -25,36 +24,28 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
   const buildRequestUrl = (resourceUrl: string): string =>
     config.proxyUrl ? `${config.proxyUrl.replace(/\/+$/, '')}?url=${encodeURIComponent(resourceUrl)}` : resourceUrl;
 
-  const headers: Record<string, string> = config.username
+  const baseHeaders: Record<string, string> = config.username
     ? { Authorization: `Basic ${base64EncodeUtf8(`${config.username}:${config.password ?? ''}`)}` }
     : {};
 
-  const request = async (init: RequestInit, resourceUrl: string = fileUrl): Promise<Response> => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    try {
-      return await fetch(buildRequestUrl(resourceUrl), {
-        ...init,
-        headers: { ...headers, ...(init.headers as Record<string, string>) },
-        signal: controller.signal,
-      });
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw new SyncError('TIMEOUT', '请求超时');
-      }
-      // 浏览器对跨域/CORS 或连接失败都只抛出模糊的 TypeError，无法严格区分。
-      // 用「是否已配置代理」来给出更精准的引导：
-      //  - 已配代理却失败 → 多半是本地代理没启动 / 地址不通（而非目标服务器 CORS）
-      //  - 未配代理失败 → 多半是目标服务器跨域 CORS 限制
+  const { request, decodePayload } = createSyncProviderBase({
+    baseHeaders,
+    defaultUrl: fileUrl,
+    buildUrl: buildRequestUrl,
+    // 浏览器对跨域/CORS 或连接失败都只抛出模糊的 TypeError，无法严格区分。
+    // 用「是否已配置代理」来给出更精准的引导：
+    //  - 已配代理却失败 → 多半是本地代理没启动 / 地址不通（而非目标服务器 CORS）
+    //  - 未配代理失败 → 多半是目标服务器跨域 CORS 限制
+    classifyNetworkError: err => {
       if (config.proxyUrl) {
         const detail = err instanceof Error ? err.message : String(err);
-        throw new SyncError('NETWORK', `经代理的请求失败：请检查代理状态。底层错误：${detail}`);
+        return new SyncError('NETWORK', `经代理的请求失败：请检查代理状态。底层错误：${detail}`);
       }
-      throw new SyncError('CORS', 'WebDAV 请求被浏览器拦截（通常为跨域 CORS 限制）');
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  };
+      return new SyncError('CORS', 'WebDAV 请求被浏览器拦截（通常为跨域 CORS 限制）');
+    },
+    readRaw: async response => response.text(),
+    timeoutMs: TIMEOUT_MS,
+  });
 
   // PUT 前确保父集合存在：自顶向下对每个祖先目录发 MKCOL。
   // 201=已创建，405=已存在（均可视为成功）；401/403 视为权限错误抛出。
@@ -71,19 +62,6 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
         throw new SyncError('REQUEST_FAILED', `WebDAV 创建目录失败（状态码 ${res.status}），请检查账号权限`);
       }
     }
-  };
-
-  const decodePayload = async (response: Response): Promise<ImportExportPayload> => {
-    const raw = await response.text();
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      throw new SyncError('INVALID_CLOUD_DATA', '云端数据不是合法的 JSON');
-    }
-    const result = validateImportExportPayload(parsed);
-    if (!result.isValid || !result.payload) throw new SyncError('INVALID_CLOUD_DATA', '云端数据格式校验失败');
-    return result.payload;
   };
 
   return {

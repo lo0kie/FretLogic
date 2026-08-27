@@ -1,4 +1,5 @@
 @use '@/assets/tokens' as *;
+@use './transitions.scss';
 @import 'normalize.css';
 @import 'nprogress/nprogress.css';
 
@@ -79,6 +80,14 @@ body {
   opacity: 0;
 }
 
+.form-hint,
+.modal-hint {
+  margin: 0;
+  font-size: $fs-2xs;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
@@ -87,5 +96,29 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+body.is-global-dragging {
+  &,
+  & * {
+    cursor: grabbing !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+  }
+
+  .interactive-score-zone {
+    .char-text,
+    .inline-chord-name,
+    .fretboard-layout-scaler,
+    .line-index-badge,
+    svg {
+      pointer-events: none;
+    }
+
+    .char-box,
+    [data-slot-key] {
+      pointer-events: auto;
+    }
   }
 }

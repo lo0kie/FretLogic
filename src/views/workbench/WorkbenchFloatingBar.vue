@@ -26,12 +26,12 @@
 </template>
 
 <script setup lang="ts">
-import ActionButton from '@/components/ActionButton.vue';
-import BaseFloatingBar from '@/components/BaseFloatingBar.vue';
-import { useChordActions } from '@/composables/useChordActions';
+import ActionButton from '@/components/base/ActionButton.vue';
+import BaseFloatingBar from '@/components/base/BaseFloatingBar.vue';
+import { useChordActions } from '@/composables/fretboard/useChordActions';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { isGlobalEditable } from '@/stores/globalState';
-import { getChordName } from '@/utils/musicTheory';
+import { getChordName } from '@/utils/music/musicTheory';
 import { computed } from 'vue';
 
 const editorStore = useChordEditorStore();
@@ -55,5 +55,3 @@ const isSaveDisabled = computed(() => {
   return !cleanName || editorStore.isFretBoardEmpty;
 });
 </script>
-
-<style scoped lang="scss"></style>

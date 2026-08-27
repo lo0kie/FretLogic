@@ -1,4 +1,5 @@
 import type { ChordNameSegments, NoteInput } from '@/types';
+import { createLruCache } from '@/utils/core/lruCache';
 import { GRAMMAR_TEMPLATES } from './grammar';
 import { nameToSegments } from './theory';
 
@@ -269,8 +270,7 @@ function assignTiers(candidates: ChordCandidate[]): void {
   }
 }
 
-const cache = new Map<string, AnalyzeResult>();
-const CACHE_LIMIT = 80;
+const cache = createLruCache<AnalyzeResult>(80);
 
 function rawAnalyze(notes: NoteInput[], explicitRootPitch: number | null): AnalyzeResult {
   if (notes.length === 0) {
@@ -404,10 +404,6 @@ export function analyzeChordGraph(notes: NoteInput[], explicitRootPitch: number 
 
   const result = rawAnalyze(notes, explicitRootPitch);
 
-  if (cache.size >= CACHE_LIMIT) {
-    const oldest = cache.keys().next().value;
-    if (oldest !== undefined) cache.delete(oldest);
-  }
   cache.set(key, result);
   return result;
 }

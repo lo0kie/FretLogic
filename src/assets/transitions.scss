@@ -1,0 +1,248 @@
+@use '@/assets/tokens' as *;
+
+// =============================================================================
+// 1. 通用淡入淡出 (Fade) - 页面切换 / Tab 切换 / 遮罩层
+// =============================================================================
+.v-transition-fade-enter-active,
+.v-transition-fade-leave-active {
+  transition: opacity $duration-fast $bezier-standard;
+}
+
+.v-transition-fade-enter-from,
+.v-transition-fade-leave-to {
+  opacity: 0;
+}
+
+// =============================================================================
+// 2. 缩放微弹淡入淡出 (Scale) - 浮层 / Popover / 下拉菜单
+// =============================================================================
+.v-transition-scale-enter-active,
+.v-transition-scale-leave-active {
+  transition:
+    opacity $duration-fast $bezier-standard,
+    transform $duration-fast $bezier-bounce;
+  will-change: opacity, transform;
+}
+
+.v-transition-scale-enter-from,
+.v-transition-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.v-transition-scale-enter-to,
+.v-transition-scale-leave-from {
+  opacity: 1;
+  transform: scale(1);
+}
+
+// =============================================================================
+// 3. 对话框弹窗动画 (Modal) - 遮罩层渐隐 + 居中卡片微缩放平移
+// =============================================================================
+.v-transition-modal-enter-active,
+.v-transition-modal-leave-active {
+  transition: opacity $duration-base $bezier-standard;
+
+  .modal-card {
+    transition:
+      transform $duration-base $bezier-standard,
+      opacity $duration-base $bezier-standard;
+  }
+}
+
+.v-transition-modal-enter-from {
+  opacity: 0;
+
+  .modal-card {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+}
+
+.v-transition-modal-leave-from {
+  opacity: 1;
+
+  .modal-card {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.v-transition-modal-leave-to {
+  opacity: 0;
+
+  .modal-card {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+}
+
+// =============================================================================
+// 4. 底部居中悬浮条动画 (Floating Bar) - 严格保持 X 轴 -50% 居中，Y 轴平移渐现
+// =============================================================================
+.v-transition-floating-bar-enter-active,
+.v-transition-floating-bar-leave-active {
+  transition:
+    opacity $duration-fast $bezier-standard,
+    transform $duration-fast $bezier-standard;
+  will-change: opacity, transform;
+}
+
+.v-transition-floating-bar-enter-from,
+.v-transition-floating-bar-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 20px) scale(0.95);
+}
+
+.v-transition-floating-bar-enter-to,
+.v-transition-floating-bar-leave-from {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+// =============================================================================
+// 5. 向上滑动淡入淡出 (Slide Up) - 全局轻提示 Toast / 底部抽屉
+// =============================================================================
+.v-transition-slide-up-enter-active,
+.v-transition-slide-up-leave-active {
+  transition:
+    opacity $duration-fast $bezier-standard,
+    transform $duration-fast $bezier-standard;
+  will-change: opacity, transform;
+}
+
+.v-transition-slide-up-leave-active {
+  position: absolute !important;
+}
+
+.v-transition-slide-up-enter-from,
+.v-transition-slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+.v-transition-slide-up-enter-to,
+.v-transition-slide-up-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.v-transition-slide-up-move {
+  transition: transform $duration-base $bezier-spring;
+}
+
+// =============================================================================
+// 6. 向下滑动淡入淡出 (Slide Down) - 顶部通知 Toast / 顶部下拉横幅
+// =============================================================================
+.v-transition-slide-down-enter-active,
+.v-transition-slide-down-leave-active {
+  transition:
+    opacity $duration-fast $bezier-standard,
+    transform $duration-fast $bezier-spring;
+  will-change: opacity, transform;
+}
+
+.v-transition-slide-down-leave-active {
+  position: absolute !important;
+  pointer-events: none;
+}
+
+.v-transition-slide-down-enter-from {
+  opacity: 0;
+  transform: translateY(-16px) scale(0.92);
+}
+
+.v-transition-slide-down-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
+}
+
+.v-transition-slide-down-enter-to,
+.v-transition-slide-down-leave-from {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.v-transition-slide-down-move {
+  transition: transform $duration-base $bezier-spring;
+}
+
+// =============================================================================
+// 7. 侧边栏抽屉滑动 (Drawer Left) - 移动端侧边抽屉展开/收起
+// =============================================================================
+.v-transition-drawer-left-enter-active,
+.v-transition-drawer-left-leave-active {
+  transition: transform $duration-slow $bezier-sidebar;
+}
+
+.v-transition-drawer-left-enter-from,
+.v-transition-drawer-left-leave-to {
+  transform: translateX(-100%);
+}
+
+// =============================================================================
+// 8. 列表 FLIP 排版平移动画 (List Move) - 用于 TransitionGroup 列表增删/重排
+// =============================================================================
+.v-transition-list-enter-active,
+.v-transition-list-leave-active {
+  transition:
+    opacity $duration-fast $bezier-standard,
+    transform $duration-base $bezier-sidebar;
+}
+
+.v-transition-list-leave-active {
+  position: absolute !important;
+}
+
+.v-transition-list-enter-from,
+.v-transition-list-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.v-transition-list-enter-to,
+.v-transition-list-leave-from {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.v-transition-list-move {
+  transition: transform $duration-base $bezier-sidebar;
+}
+
+// =============================================================================
+// 9. 水平横向滑动淡入淡出 (Slide Left / Slide Right)
+// =============================================================================
+.v-transition-slide-left-enter-active,
+.v-transition-slide-left-leave-active,
+.v-transition-slide-right-enter-active,
+.v-transition-slide-right-leave-active {
+  transition:
+    opacity $duration-fast $bezier-standard,
+    transform $duration-fast $bezier-standard;
+  will-change: opacity, transform;
+}
+
+.v-transition-slide-left-enter-from,
+.v-transition-slide-left-leave-to {
+  opacity: 0;
+  transform: translateX(-16px);
+}
+
+.v-transition-slide-left-enter-to,
+.v-transition-slide-left-leave-from {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.v-transition-slide-right-enter-from,
+.v-transition-slide-right-leave-to {
+  opacity: 0;
+  transform: translateX(16px);
+}
+
+.v-transition-slide-right-enter-to,
+.v-transition-slide-right-leave-from {
+  opacity: 1;
+  transform: translateX(0);
+}

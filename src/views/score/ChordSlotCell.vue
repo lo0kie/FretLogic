@@ -2,18 +2,21 @@
   <div
     ref="charBoxRef"
     v-wave="{ disabled: !isGlobalEditable }"
-    class="char-box"
+    class="char-box group flex flex-col items-center justify-start p-0.5 self-stretch rounded-sm box-border relative cursor-pointer outline-none transition-all duration-fast [touch-action:pan-x_pan-y] [&.is-drop-target]:!bg-tint-primary-85 [&.is-drop-target]:!shadow-[inset_0_0_0_2px_var(--color-primary)] [&.is-dragging-source]:!opacity-35"
     :data-slot-key="slotKey"
-    :class="{
-      'edge-slot': variant !== 'char',
-      'add-btn-slot': variant === 'add',
-      'is-drop-target': isDropTarget,
-      'is-dragging-source': isDraggingSource,
-      'is-readonly': !isGlobalEditable,
-      'has-chord': variant === 'char' && Boolean(chord),
-      'has-edge-chord': variant === 'edge' && Boolean(chord),
-      'has-left-chord-gap': leftChordGap,
-    }"
+    :class="[
+      isGlobalEditable
+        ? 'hover:bg-tint-primary-88'
+        : 'cursor-default [&_.inline-fretboard-card]:pointer-events-none [&_.chord-display-slot]:pointer-events-none [&_.char-text]:pointer-events-none',
+      {
+        'opacity-85': variant !== 'char' && !(variant === 'edge' && chord) && variant !== 'add',
+        'opacity-100 justify-start after:content-[\'\'] after:block after:w-full after:h-[1.15rem] after:shrink-0':
+          variant === 'edge' && Boolean(chord),
+        'opacity-100 px-[0.4rem] justify-center hover:!bg-transparent': variant === 'add',
+        '!hidden': variant === 'add' && !isGlobalEditable,
+        'ml-[0.42rem]': leftChordGap,
+      },
+    ]"
     :role="isGlobalEditable ? 'button' : undefined"
     :tabindex="isGlobalEditable ? 0 : -1"
     :aria-label="ariaLabelText"
@@ -25,12 +28,15 @@
     @keydown.delete="handleDelete"
     @keydown.backspace="handleDelete"
   >
-    <div class="chord-display-slot">
+    <div
+      class="chord-display-slot flex-1 flex justify-center w-full"
+      :class="variant === 'edge' && chord ? 'items-start' : variant === 'add' ? 'items-center' : 'items-start'"
+    >
       <div
         v-if="chord"
         v-wave="{ disabled: !isGlobalEditable }"
-        class="inline-fretboard-card"
-        :class="{ 'is-draggable': isGlobalEditable }"
+        class="inline-fretboard-card flex flex-col items-center p-xs rounded-sm bg-transparent relative select-none transition-all duration-fast"
+        :class="{ 'cursor-pointer [touch-action:none]': isGlobalEditable }"
         :title="isGlobalEditable ? '点击更换和弦，按住可拖拽换位' : undefined"
         @pointerdown.stop="isGlobalEditable && emit('pointerdown', $event, slotKey, chord)"
       >
@@ -38,7 +44,7 @@
           v-if="isVisible && !isExporting && isGlobalEditable"
           v-wave
           type="button"
-          class="remove-chord-btn"
+          class="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-danger text-text-on-accent border-none flex items-center justify-center p-0 cursor-pointer pointer-events-none group-hover:pointer-events-auto group-hover:!opacity-100 z-card shadow-sm outline-none opacity-0 transition-all duration-fast hover:scale-105 active:scale-95"
           title="清除当前和弦"
           aria-label="清除当前和弦"
           data-focusable-inline
@@ -48,7 +54,7 @@
         </button>
         <Fretboard
           v-if="isVisible"
-          :ref="el => chord && setFretboardMeasureRef(el, chord.fretCount)"
+          :ref="setFretboardMeasureRef"
           :chord-name-editable="false"
           :chord
           :interactive="false"
@@ -56,19 +62,31 @@
           :is-dark-mode="globalDarkMode"
           fret-number-size="lg"
         />
-        <div v-else :style="getCalculatedOrCachedSize(chord.fretCount)" />
+        <div v-else :style="chord ? getCalculatedOrCachedSize(chord.fretCount) : undefined" />
       </div>
       <span
         v-else-if="variant === 'add' && isGlobalEditable"
         v-wave
-        class="add-edge-placeholder"
+        class="inline-flex items-center justify-center h-5 text-2xs font-bold text-primary opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-[.is-drop-target]:!opacity-100 group-[.is-drop-target]:!pointer-events-auto border border-dashed border-primary bg-tint-primary-92 px-sm rounded-sm whitespace-nowrap cursor-pointer box-border transition-all duration-fast hover:bg-tint-primary-80"
+        :class="{ '!opacity-100 !pointer-events-auto': lineHovered }"
         :title="addPlaceholderTitle"
+        role="button"
+        tabindex="-1"
       >
         <Plus :size="18" :stroke-width="3" />
       </span>
     </div>
     <template v-if="variant === 'char'">
-      <span class="char-text" :class="{ 'is-space': char === ' ' }">
+      <span
+        class="char-text inline-flex items-center justify-center font-semibold text-text-title px-0.5 box-border mt-auto transition-all duration-fast text-[calc(0.875rem*var(--score-font-scale,1))] leading-[1.15rem] min-h-[calc(1.15rem*var(--score-font-scale,1))] whitespace-pre group-hover:text-primary"
+        :class="[
+          char === ' '
+            ? ''
+            : chord
+              ? 'underline decoration-dashed decoration-text-disabled/80 underline-offset-[3px]'
+              : '',
+        ]"
+      >
         {{ char === ' ' ? '\u00A0' : char }}
       </span>
     </template>
@@ -81,13 +99,13 @@ const fretboardSizeCache = reactive<Record<string, { width: string; height: stri
 </script>
 
 <script setup lang="ts">
-import Fretboard from '@/components/Fretboard.vue';
+import Fretboard from '@/components/fretboard/Fretboard.vue';
 import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
-import { getPlaceholderSize } from '@/utils/chord-fretboard';
-import { observeVisibility } from '@/utils/common';
-import { getChordName } from '@/utils/musicTheory';
+import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
+import { observeVisibility } from '@/utils/core/common';
+import { getChordName } from '@/utils/music/musicTheory';
 import { Plus, X } from '@lucide/vue';
 import { computed, ref, useTemplateRef, watch, watchEffect, type ComponentPublicInstance } from 'vue';
 
@@ -97,13 +115,12 @@ const props = defineProps<{
   char?: string;
   variant: 'char' | 'edge' | 'add';
   addPlaceholderTitle?: string;
-  /** 拖拽高亮已改为由 useLyricsDragDrop 直接切换 DOM class，此 prop 仅作预留 */
   isDropTarget?: boolean;
   isDraggingSource?: boolean;
   isExporting: boolean;
   scrollRoot?: HTMLElement | null;
-  /** 左侧相邻字符也分配了和弦时，为靠右的和弦留出横向间距 */
   leftChordGap?: boolean;
+  lineHovered?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -133,9 +150,9 @@ watchEffect(onCleanup => {
 const getEffectiveScale = () => 0.25 * scoreEditor.effectiveFretboardScale;
 const getCacheKey = (fretCount: number) => `${fretCount}_${getEffectiveScale().toFixed(2)}`;
 
-const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fretCount: number) => {
-  if (!el) return;
-  const cacheKey = getCacheKey(fretCount);
+const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null) => {
+  if (!el || !props.chord) return;
+  const cacheKey = getCacheKey(props.chord.fretCount);
   if (fretboardSizeCache[cacheKey]) return;
   const domEl = (el as ComponentPublicInstance)?.$el ?? el;
   if (!(domEl instanceof HTMLElement)) return;
@@ -151,7 +168,7 @@ const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fr
 const getCalculatedOrCachedSize = (fretCount: number) => {
   const cacheKey = getCacheKey(fretCount);
   if (fretboardSizeCache[cacheKey]) return fretboardSizeCache[cacheKey];
-  else return getPlaceholderSize(fretCount, getEffectiveScale());
+  else return getPlaceholderSize(fretCount, getEffectiveScale(), true, true);
 };
 
 const handleClick = (e: MouseEvent) => {
@@ -197,7 +214,6 @@ unwatchExport = watch(
   () => props.isExporting,
   exporting => {
     if (exporting) {
-      // isVisible 置 true 后上方 watchEffect 会自动停止观察
       isVisible.value = true;
       unwatchExport?.();
     }
@@ -205,215 +221,3 @@ unwatchExport = watch(
   { immediate: true }
 );
 </script>
-
-<style scoped lang="scss">
-.char-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  padding: $space-2xs $space-2xs;
-  align-self: stretch;
-  border-radius: $radius-sm;
-  box-sizing: border-box;
-  transition:
-    background-color $duration-fast ease,
-    box-shadow $duration-fast ease,
-    opacity $duration-fast ease;
-  position: relative;
-  cursor: pointer;
-  outline: none;
-  touch-action: pan-x pan-y;
-
-  &:hover:not(.is-readonly) {
-    background-color: var(--tint-primary-88);
-    .char-text {
-      color: var(--color-primary);
-    }
-  }
-
-  &.is-readonly {
-    cursor: unset;
-
-    .inline-fretboard-card,
-    .chord-display-slot,
-    .char-text {
-      pointer-events: none; // 让鼠标/触摸事件直接穿透至外层 .lyrics-line 触发 v-wave
-    }
-  }
-
-  &.is-drop-target {
-    background-color: var(--tint-primary-85);
-    box-shadow: inset 0 0 0 2px var(--color-primary);
-    .add-edge-placeholder {
-      opacity: 1;
-      pointer-events: auto;
-    }
-  }
-
-  &.is-dragging-source {
-    opacity: 0.35;
-  }
-
-  /* 连续字符都有和弦时，靠右的和弦与左侧和弦拉开间距 */
-  &.has-left-chord-gap {
-    margin-left: 0.42rem;
-  }
-
-  &.edge-slot {
-    opacity: 0.85;
-    &.has-edge-chord {
-      opacity: 1;
-      justify-content: flex-start;
-      .chord-display-slot {
-        align-items: flex-start;
-      }
-      &::after {
-        content: '';
-        display: block;
-        width: 100%;
-        height: 1.15rem;
-        flex-shrink: 0;
-      }
-    }
-    &.add-btn-slot {
-      opacity: 1;
-      padding-left: 0.4rem;
-      padding-right: 0.4rem;
-      justify-content: center;
-      .chord-display-slot {
-        align-items: center;
-      }
-      &:hover {
-        background-color: transparent;
-      }
-      &.is-readonly {
-        display: none !important;
-      }
-    }
-  }
-}
-
-.add-edge-placeholder {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.25rem;
-  font-size: $fs-2xs;
-  font-weight: 700;
-  color: var(--color-primary);
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    opacity $duration-fast ease,
-    background-color $duration-fast ease;
-  border: 1px dashed var(--color-primary);
-  background-color: var(--tint-primary-92);
-  padding: 0 $space-sm;
-  border-radius: $radius-sm;
-  white-space: nowrap;
-  cursor: pointer;
-  box-sizing: border-box;
-
-  &:hover {
-    background-color: var(--tint-primary-80);
-  }
-
-  :global(.lyrics-line:hover) & {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-
-.chord-display-slot {
-  flex: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  width: 100%;
-}
-
-.inline-fretboard-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: $space-xs;
-  border-radius: $radius-sm;
-  background-color: transparent;
-  transition: $transition-fast;
-  position: relative;
-  user-select: none;
-  -webkit-user-select: none;
-  cursor: default;
-
-  &.is-draggable {
-    cursor: pointer;
-    touch-action: none;
-
-    &:hover {
-      .remove-chord-btn {
-        opacity: 1 !important;
-        pointer-events: auto;
-      }
-    }
-  }
-}
-
-.remove-chord-btn {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  width: 0.95rem;
-  height: 0.95rem;
-  border-radius: 50%;
-  background-color: var(--color-danger);
-  color: var(--text-on-accent);
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  cursor: pointer;
-  pointer-events: none;
-  transition: $transition-fast;
-  z-index: var(--z-card);
-  box-shadow: var(--shadow-sm);
-  outline: none;
-  opacity: 0;
-
-  &:hover {
-    transform: scale(1.05);
-    background-color: color-mix(in srgb, var(--color-danger), black 15%);
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-}
-
-.char-text {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: calc($fs-sm * var(--score-font-scale, 1));
-  font-weight: 600;
-  color: var(--text-title);
-  line-height: 1.15rem;
-  white-space: pre;
-  min-height: calc(1.15rem * var(--score-font-scale, 1));
-  padding: 0 $space-2xs;
-  border-radius: 0;
-  transition:
-    color $duration-fast ease,
-    font-size $duration-fast ease,
-    min-height $duration-fast ease,
-    border-color $duration-fast ease;
-  border-bottom: 1.5px solid transparent;
-  box-sizing: border-box;
-  margin-top: auto;
-
-  .has-chord &:not(.is-space) {
-    border-bottom: 1.5px dashed var(--text-disabled);
-  }
-}
-</style>

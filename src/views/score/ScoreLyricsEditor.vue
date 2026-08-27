@@ -1,12 +1,16 @@
 <template>
-  <div class="lyrics-editor-zone">
+  <div class="flex-1 p-xl px-2xl box-border relative">
     <textarea
       v-model="localLyrics"
       :readonly="!isGlobalEditable"
-      class="lyrics-textarea no-scrollbar"
+      class="no-scrollbar w-full h-full bg-bg-panel border border-glass-border rounded-lg p-xl text-base leading-relaxed text-text-title outline-none resize-none box-border font-inherit transition-all duration-base focus:not-read-only:border-primary focus:not-read-only:ring-2 focus:not-read-only:ring-primary/70 read-only:cursor-default read-only:select-none read-only:bg-bg-main"
       placeholder="在此处输入或粘贴歌词文本..."
     />
-    <div class="lyrics-meta">{{ localLyrics.length }} 字</div>
+    <div
+      class="absolute right-9 bottom-9 text-sm text-text-muted py-0.5 px-2 rounded-sm pointer-events-none opacity-80"
+    >
+      {{ localLyrics.length }} 字
+    </div>
   </div>
 </template>
 
@@ -63,53 +67,3 @@ const flushLyrics = () => {
 onDeactivated(flushLyrics);
 onBeforeUnmount(flushLyrics);
 </script>
-
-<style scoped lang="scss">
-.lyrics-editor-zone {
-  flex: 1;
-  padding: $space-xl $space-2xl;
-  box-sizing: border-box;
-}
-
-.lyrics-meta {
-  position: absolute;
-  right: $space-xl * 1.5;
-  bottom: $space-xl * 1.5;
-  font-size: $fs-sm;
-  color: var(--text-muted);
-  padding: 2px 8px;
-  border-radius: $radius-sm;
-  pointer-events: none;
-  opacity: 0.8;
-}
-
-.lyrics-textarea {
-  width: 100%;
-  height: 100%;
-  background-color: var(--bg-panel);
-  border: 1px solid var(--glass-border);
-  border-radius: $radius-lg;
-  padding: $space-xl;
-  font-size: $fs-base;
-  line-height: 1.8;
-  color: var(--text-title);
-  outline: none;
-  resize: none;
-  box-sizing: border-box;
-  font-family: inherit;
-  transition:
-    border-color $duration-base,
-    box-shadow $duration-base;
-
-  &:focus:not(:read-only) {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--tint-primary-90);
-  }
-
-  &:read-only {
-    cursor: default;
-    user-select: none;
-    background-color: var(--bg-main);
-  }
-}
-</style>

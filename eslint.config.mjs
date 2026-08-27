@@ -53,6 +53,9 @@ export default tseslint.config(
       // 遗留模式：GroupModalsContainer/SongModalsContainer 以 prop 传递共享响应式对象并改嵌套字段，
       // 已重构为 provide/inject，恢复 error。
       'vue/no-mutating-props': 'error',
+      // 类型式 defineProps 配合 Vue 3.5 解构默认值（const { x = d } = defineProps()）时，
+      // 该规则无法识别解构里的默认值，会对所有可选 prop 误报；而 TS 类型已表达可选性，故关闭。
+      'vue/require-default-prop': 'off',
       'import/no-duplicates': 'error',
       'vue/max-attributes-per-line': 'off',
       'vue/singleline-html-element-content-newline': 'off',

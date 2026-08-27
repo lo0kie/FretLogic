@@ -56,10 +56,7 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
         const multiplier = (handler.opts.reverse ? -1 : 1) * (handler.opts.speed ?? 1);
         const scrollAmount = delta * multiplier;
 
-        el.scrollBy({
-          left: scrollAmount,
-          behavior: handler.opts.smooth ? 'smooth' : 'auto',
-        });
+        el.scrollBy({ left: scrollAmount, behavior: handler.opts.smooth ? 'smooth' : 'auto' });
       },
     };
 

@@ -1,12 +1,16 @@
 <template>
-  <div class="chord-analysis-wrapper">
-    <div class="chord-analysis-panel">
+  <div class="overflow-hidden opacity-100 w-full transition-[max-height,margin,opacity] duration-slow ease-sidebar">
+    <div
+      class="@container relative w-full h-auto p-3 bg-bg-panel border border-glass-border rounded-lg flex flex-col gap-2 z-panel pointer-events-auto box-border overflow-hidden [container-type:inline-size]"
+    >
       <!-- 面板头部 -->
-      <div class="panel-header">
-        <div class="header-icon-wrapper">
-          <Sparkles class="header-icon" :size="13" stroke-width="2.5" />
+      <div class="flex items-center justify-between gap-2 shrink-0 pb-1.5 border-b border-border-light">
+        <div class="flex items-center gap-1.5">
+          <div class="flex items-center justify-center w-5 h-5 rounded-md bg-tint-primary-88 text-primary">
+            <Sparkles :size="13" stroke-width="2.5" />
+          </div>
+          <span class="text-xs font-extrabold text-text-title tracking-tight">和弦分析</span>
         </div>
-        <span class="header-title">和弦分析</span>
       </div>
 
       <template v-if="analysis.notes.length > 0">
@@ -19,13 +23,13 @@
       </template>
 
       <!-- PC端空状态 -->
-      <EmptyState v-else :icon="Music" description="在指板上按音以分析" size="md" />
+      <EmptyState v-else :icon="Music" description="在指板上按音以分析" size="sm" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import EmptyState from '@/components/EmptyState.vue';
+import EmptyState from '@/components/base/EmptyState.vue';
 import { analyzeChordGraph } from '@/services/music/chordEngine';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import type { CandidateResult } from '@/types/engine.ts';
@@ -36,7 +40,7 @@ import {
   getChordName,
   nameToSegments,
   segmentsToString,
-} from '@/utils/musicTheory';
+} from '@/utils/music/musicTheory';
 import { Music, Sparkles } from '@lucide/vue';
 import { computed } from 'vue';
 import ChordAnalysisContent, { type RenderNoteItem } from './ChordAnalysisContent.vue';
@@ -147,63 +151,3 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   }
 };
 </script>
-
-<style scoped lang="scss">
-.chord-analysis-wrapper {
-  transition:
-    max-height $duration-slow $bezier-sidebar,
-    margin $duration-slow $bezier-sidebar,
-    opacity $duration-fast ease;
-  overflow: hidden;
-  opacity: 1;
-  width: 100%;
-}
-
-.chord-analysis-panel {
-  position: relative;
-  right: auto;
-  top: auto;
-  width: 100%;
-  height: auto;
-  padding: $space-md;
-  background-color: var(--bg-panel);
-  backdrop-filter: var(--blur-xl);
-  -webkit-backdrop-filter: var(--blur-xl);
-  border: 1px solid var(--glass-border);
-  border-radius: $radius-lg;
-  display: flex;
-  flex-direction: column;
-  gap: $space-sm;
-  z-index: var(--z-panel);
-  pointer-events: auto;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  gap: $space-sm;
-  flex-shrink: 0;
-  padding: $space-xs 0 $space-sm 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--separator), transparent 45%);
-}
-
-.header-icon-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: $radius-sm;
-  background-color: var(--tint-primary-88);
-  color: var(--color-primary);
-}
-
-.header-title {
-  font-size: $fs-xs;
-  font-weight: 700;
-  color: var(--text-title);
-  letter-spacing: -0.01em;
-}
-</style>

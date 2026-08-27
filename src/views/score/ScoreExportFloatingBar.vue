@@ -1,6 +1,6 @@
 <template>
   <BaseFloatingBar :visible="visible" bottom="1.8rem" #="{ divider }">
-    <div class="bar-info-zone">
+    <div class="bar-info-zone flex items-center gap-sm text-xs font-semibold text-text-title min-w-0">
       <BaseBadge
         :variant="selectedCount > 0 ? 'primary' : 'neutral'"
         :appearance="selectedCount > 0 ? 'filled' : 'subtle'"
@@ -10,9 +10,14 @@
         {{ selectedCount }}
       </BaseBadge>
 
-      <span class="selected-text-tip">{{ selectedCount > 0 ? '已选择歌词' : '请选择歌词' }}</span>
+      <span class="selected-text-tip text-text-title whitespace-nowrap shrink-0">
+        {{ selectedCount > 0 ? '已选择歌词' : '请选择歌词' }}
+      </span>
 
-      <div v-wheel-scroll.smooth class="clickable-indices-list no-scrollbar">
+      <div
+        v-wheel-scroll.smooth
+        class="clickable-indices-list no-scrollbar flex items-center gap-xs w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] min-h-[1.75rem] box-border overflow-x-auto overflow-y-hidden whitespace-nowrap shrink-0 py-1 px-1.5"
+      >
         <BaseBadge
           v-for="lineIdx in sortedIndices"
           :key="lineIdx"
@@ -30,7 +35,7 @@
 
     <component :is="divider" />
 
-    <div class="bar-actions-zone">
+    <div class="bar-actions-zone flex items-center gap-sm shrink-0">
       <ActionButton
         v-tooltip="'选中所有歌词'"
         size="sm"
@@ -64,21 +69,22 @@
 </template>
 
 <script setup lang="ts">
-import ActionButton from '@/components/ActionButton.vue';
-import BaseBadge from '@/components/BaseBadge.vue';
-import BaseFloatingBar from '@/components/BaseFloatingBar.vue';
-import { FileText } from '@lucide/vue';
-withDefaults(
-  defineProps<{
-    visible?: boolean;
-    selectedCount: number;
-    sortedIndices: number[];
-    isAllSelected: boolean;
-  }>(),
-  {
-    visible: true,
-  }
-);
+import ActionButton from '@/components/base/ActionButton.vue';
+import BaseBadge from '@/components/base/BaseBadge.vue';
+import BaseFloatingBar from '@/components/base/BaseFloatingBar.vue';
+import { Copy, FileText } from '@lucide/vue';
+
+const {
+  visible = true,
+  selectedCount,
+  sortedIndices,
+  isAllSelected,
+} = defineProps<{
+  visible?: boolean;
+  selectedCount: number;
+  sortedIndices: number[];
+  isAllSelected: boolean;
+}>();
 
 const emit = defineEmits<{
   (e: 'remove-index', lineIdx: number): void;
@@ -88,44 +94,3 @@ const emit = defineEmits<{
 
 const includeMetaBar = defineModel<boolean>('includeMetaBar', { default: true });
 </script>
-
-<style scoped lang="scss">
-.bar-info-zone {
-  display: flex;
-  align-items: center;
-  gap: $space-sm;
-  font-size: $fs-xs;
-  font-weight: 600;
-  color: var(--text-title);
-  min-width: 0;
-}
-
-.selected-text-tip {
-  color: var(--text-title);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.clickable-indices-list {
-  display: flex;
-  align-items: center;
-  gap: $space-xs;
-  width: 7.5rem;
-  min-width: 7.5rem;
-  max-width: 7.5rem;
-  min-height: 1.75rem;
-  box-sizing: border-box;
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-  flex-shrink: 0;
-  padding: 4px 6px;
-}
-
-.bar-actions-zone {
-  display: flex;
-  align-items: center;
-  gap: $space-sm;
-  flex-shrink: 0;
-}
-</style>

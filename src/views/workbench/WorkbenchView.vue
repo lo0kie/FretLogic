@@ -1,11 +1,20 @@
 <template>
-  <div class="workbench-layout-wrapper">
-    <div class="workbench-scroll-container no-scrollbar">
-      <div class="workbench-card-center-zone">
+  <div class="absolute inset-0 z-content overflow-hidden box-border pointer-events-auto">
+    <div
+      class="no-scrollbar relative w-full h-full flex justify-center items-start py-3xl px-2xl box-border overflow-y-auto"
+    >
+      <div class="shrink-0">
         <WorkbenchCard />
       </div>
 
-      <div class="analysis-panel-slot no-scrollbar">
+      <div
+        class="no-scrollbar absolute top-14 right-8 pointer-events-auto z-panel overflow-y-auto transition-[width,min-width] duration-slow ease-sidebar"
+        :class="
+          hasNotes
+            ? 'w-[21rem] min-w-[21rem] [@media(max-width:1400px)]:w-[21.5rem] [@media(max-width:1400px)]:min-w-[21.5rem] [@media(max-width:1250px)]:w-[20.5rem] [@media(max-width:1250px)]:min-w-[20.5rem] [@media(max-width:1100px)]:w-[13rem] [@media(max-width:1100px)]:min-w-[13rem]'
+            : 'w-[13rem] min-w-[13rem] [@media(max-width:1400px)]:w-[12rem] [@media(max-width:1400px)]:min-w-[12rem] [@media(max-width:1250px)]:w-[11rem] [@media(max-width:1250px)]:min-w-[11rem] [@media(max-width:1100px)]:w-[9rem] [@media(max-width:1100px)]:min-w-[9rem]'
+        "
+      >
         <ChordAnalysisPanel />
       </div>
     </div>
@@ -15,68 +24,21 @@
 </template>
 
 <script setup lang="ts">
+import { useChordEditorStore } from '@/stores/chordEditorStore';
+import { collectChordNotes } from '@/utils/music/musicTheory';
+import { computed } from 'vue';
 import ChordAnalysisPanel from './ChordAnalysisPanel.vue';
 import WorkbenchCard from './WorkbenchCard.vue';
 import WorkbenchFloatingBar from './WorkbenchFloatingBar.vue';
+
+const editorStore = useChordEditorStore();
+
+const hasNotes = computed(() => {
+  const { notes } = collectChordNotes(
+    editorStore.draftChord.strings,
+    editorStore.draftChord.capo,
+    editorStore.activeBaseStrings
+  );
+  return notes.length > 0;
+});
 </script>
-
-<style scoped lang="scss">
-.workbench-layout-wrapper {
-  position: absolute;
-  inset: 0;
-  z-index: var(--z-content);
-  overflow: hidden;
-  box-sizing: border-box;
-  pointer-events: auto;
-}
-
-.workbench-scroll-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: $space-3xl $space-2xl $space-3xl $space-2xl;
-  box-sizing: border-box;
-  overflow-y: auto;
-}
-
-.workbench-card-center-zone {
-  flex-shrink: 0;
-}
-
-.analysis-panel-slot {
-  position: absolute;
-  top: 3.5rem;
-  right: 2rem;
-  width: 20rem;
-  min-width: 20rem;
-  pointer-events: auto;
-  z-index: var(--z-panel);
-  overflow-y: auto;
-  transition: width $bezier-bounce $duration-fast;
-}
-
-@media (max-width: 1400px) {
-  .analysis-panel-slot {
-    width: 18rem;
-    min-width: 18rem;
-  }
-}
-
-@media (max-width: 1300px) {
-  .analysis-panel-slot {
-    width: 17rem;
-    min-width: 17rem;
-  }
-}
-
-// 窗口放大到一定程度时，分析面板收窄，为中央指板让出空间
-@media (max-width: 1150px) {
-  .analysis-panel-slot {
-    width: 12rem;
-    min-width: 12rem;
-  }
-}
-</style>

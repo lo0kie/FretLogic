@@ -1,3 +1,4 @@
+import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
 import { execSync } from 'node:child_process';
 import { resolve } from 'path';
@@ -16,7 +17,22 @@ try {
 
 export default defineConfig({
   plugins: [
-    vue(),
+    tailwindcss(),
+    vue({
+      template: {
+        compilerOptions: {
+          whitespace: 'condense',
+          // 彻底剔除标签之间的纯空格与换行文本节点，由 CSS gap / margin 精确接管布局
+          nodeTransforms: [
+            node => {
+              if (node.type === 2 /* NodeTypes.TEXT */ && !node.content.trim()) {
+                node.content = '';
+              }
+            },
+          ],
+        },
+      },
+    }),
     visualizer({
       open: process.env.ANALYZE === 'true',
       filename: 'stats.html',
@@ -95,7 +111,9 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    // 注意：Windows 的 Hyper-V/Winnat 保留端口段包含 2977-3076，3000 在其中会导致监听 EACCES；
+    // 故使用保留段之外的端口（5173）。如需本机固定为 3000 需先释放系统保留段（如 netsh 删除后重启 winnat）。
+    port: 5173,
     open: true,
     host: '0.0.0.0',
   },

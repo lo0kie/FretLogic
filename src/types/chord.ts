@@ -1,5 +1,5 @@
-import type { FRET_COUNTS } from '@/utils/constants';
-import type { Tuning } from '@/utils/musicTheory';
+import type { FRET_COUNTS } from '@/utils/core/constants';
+import type { Tuning } from '@/utils/music/musicTheory';
 import type { Song } from './song';
 
 /** 单根琴弦：[0] 品位（-1 静音 / 0 空弦 / >=1 按品），[1] 是否偏好降号 */

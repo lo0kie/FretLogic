@@ -1,7 +1,8 @@
 /// <reference types="vite/client" />
 
-import type { Directive } from 'vue';
 import type { FocusBinding, FocusModifiers } from './directives/vFocus';
+import type { GridNavBinding, GridNavModifiers } from './directives/vGridNav';
+import type { ScrollCacheBinding } from './directives/vScrollCache';
 import type { TooltipBinding, TooltipModifiers } from './directives/vTooltip';
 import type { WheelScrollBinding, WheelScrollModifiers } from './directives/vWheelScroll';
 
@@ -15,28 +16,122 @@ declare global {
   };
 }
 
+import type { ComponentPublicInstance, VNode } from 'vue';
+
+export type TypedDirective<Host = HTMLElement, Value = unknown, Modifiers extends string = string> =
+  | {
+      created?: (
+        el: Host,
+        binding: TypedDirectiveBinding<Value, Modifiers>,
+        vnode: VNode<unknown, Host>,
+        prevVNode: VNode<unknown, Host> | null
+      ) => void;
+      beforeMount?: (
+        el: Host,
+        binding: TypedDirectiveBinding<Value, Modifiers>,
+        vnode: VNode<unknown, Host>,
+        prevVNode: VNode<unknown, Host> | null
+      ) => void;
+      mounted?: (
+        el: Host,
+        binding: TypedDirectiveBinding<Value, Modifiers>,
+        vnode: VNode<unknown, Host>,
+        prevVNode: VNode<unknown, Host> | null
+      ) => void;
+      beforeUpdate?: (
+        el: Host,
+        binding: TypedDirectiveBinding<Value, Modifiers>,
+        vnode: VNode<unknown, Host>,
+        prevVNode: VNode<unknown, Host> | null
+      ) => void;
+      updated?: (
+        el: Host,
+        binding: TypedDirectiveBinding<Value, Modifiers>,
+        vnode: VNode<unknown, Host>,
+        prevVNode: VNode<unknown, Host> | null
+      ) => void;
+      beforeUnmount?: (
+        el: Host,
+        binding: TypedDirectiveBinding<Value, Modifiers>,
+        vnode: VNode<unknown, Host>,
+        prevVNode: VNode<unknown, Host> | null
+      ) => void;
+      unmounted?: (
+        el: Host,
+        binding: TypedDirectiveBinding<Value, Modifiers>,
+        vnode: VNode<unknown, Host>,
+        prevVNode: VNode<unknown, Host> | null
+      ) => void;
+      getSSRProps?: (
+        binding: TypedDirectiveBinding<Value, Modifiers>,
+        vnode: VNode<unknown, Host>
+      ) => Record<string, unknown> | undefined;
+      deep?: boolean;
+    }
+  | ((
+      el: Host,
+      binding: TypedDirectiveBinding<Value, Modifiers>,
+      vnode: VNode<unknown, Host>,
+      prevVNode: VNode<unknown, Host> | null
+    ) => void);
+
+export interface TypedDirectiveBinding<Value = unknown, Modifiers extends string = string> {
+  instance: ComponentPublicInstance | null;
+  value: Value;
+  oldValue: Value | null;
+  arg?: string;
+  modifiers: { [K in Modifiers]?: boolean } & Record<string, boolean>;
+  dir: unknown;
+}
+
 declare module '@vue/runtime-core' {
+  export interface GlobalDirectives {
+    vTooltip: TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
+    vWheelScroll: TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
+    vFocus: TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
+    vScrollCache: TypedDirective<HTMLElement, ScrollCacheBinding, string>;
+    vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    vWave: TypedDirective<HTMLElement, unknown, string>;
+  }
+
   export interface ComponentCustomDirectives {
-    'vTooltip': Directive<HTMLElement, TooltipBinding, TooltipModifiers>;
-    'v-tooltip': Directive<HTMLElement, TooltipBinding, TooltipModifiers>;
-    'vWheelScroll': Directive<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
-    'v-wheel-scroll': Directive<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
-    'vFocus': Directive<HTMLElement, FocusBinding, FocusModifiers>;
-    'v-focus': Directive<HTMLElement, FocusBinding, FocusModifiers>;
-    'vWave': Directive<HTMLElement, unknown>;
-    'v-wave': Directive<HTMLElement, unknown>;
+    'vTooltip': TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
+    'v-tooltip': TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
+    'vWheelScroll': TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
+    'v-wheel-scroll': TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
+    'vFocus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
+    'v-focus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
+    'vWave': TypedDirective<HTMLElement, unknown, string>;
+    'v-wave': TypedDirective<HTMLElement, unknown, string>;
+    'vScrollCache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
+    'v-scroll-cache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
+    'vGridNav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
   }
 }
 
 declare module 'vue' {
+  export interface GlobalDirectives {
+    vTooltip: TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
+    vWheelScroll: TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
+    vFocus: TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
+    vScrollCache: TypedDirective<HTMLElement, ScrollCacheBinding, string>;
+    vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    vWave: TypedDirective<HTMLElement, unknown, string>;
+  }
+
   export interface ComponentCustomDirectives {
-    'vTooltip': Directive<HTMLElement, TooltipBinding, TooltipModifiers>;
-    'v-tooltip': Directive<HTMLElement, TooltipBinding, TooltipModifiers>;
-    'vWheelScroll': Directive<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
-    'v-wheel-scroll': Directive<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
-    'vFocus': Directive<HTMLElement, FocusBinding, FocusModifiers>;
-    'v-focus': Directive<HTMLElement, FocusBinding, FocusModifiers>;
-    'vWave': Directive<HTMLElement, unknown>;
-    'v-wave': Directive<HTMLElement, unknown>;
+    'vTooltip': TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
+    'v-tooltip': TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
+    'vWheelScroll': TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
+    'v-wheel-scroll': TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
+    'vFocus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
+    'v-focus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
+    'vWave': TypedDirective<HTMLElement, unknown, string>;
+    'v-wave': TypedDirective<HTMLElement, unknown, string>;
+    'vScrollCache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
+    'v-scroll-cache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
+    'vGridNav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
   }
 }
