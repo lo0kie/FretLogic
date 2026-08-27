@@ -30,6 +30,8 @@ export const createChord = (input: {
   groupId: string;
   tuning: Chord['tuning'];
   rootStringIndex: number | null;
+  /** 显式横按配置（可选，仅自定义横按时传入） */
+  barres?: Chord['barres'];
   /** 编辑既有和弦时传入原 id，否则自动生成 */
   id?: string | null;
 }): Chord => ({
@@ -41,4 +43,5 @@ export const createChord = (input: {
   groupId: input.groupId,
   tuning: input.tuning,
   rootStringIndex: input.rootStringIndex,
+  ...(input.barres !== undefined && input.barres.length > 0 ? { barres: input.barres } : {}),
 });

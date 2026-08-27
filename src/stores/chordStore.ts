@@ -1,9 +1,9 @@
 import { createChordRepository } from '@/services/repositories';
 import type { Chord, Group, GroupedChordCard } from '@/types';
 import { GroupSortRule } from '@/types';
-import { normalizeChord } from '@/utils/music/chord-fretboard';
 import { cloneDeep, cloneGuitarStrings, generateUUID } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
+import { normalizeChord } from '@/utils/music/chord-fretboard';
 import { createChord, createGroup } from '@/utils/music/entityFactories';
 import {
   type ChordOrName,
@@ -440,12 +440,15 @@ export const useChordStore = defineStore('chord', () => {
       groupId: targetGroupId,
       tuning: draft.tuning,
       rootStringIndex,
+      barres: draft.barres,
     });
     const fingerprint = computeChordFingerprint(payload);
 
     if (isEditing) {
       const original = savedChordsList.value.find(c => c.id === id);
-      if (original && computeChordFingerprint(original) === fingerprint) {
+      // 指纹不含 barres，因此"仅修改横按"时指纹不变；需同时比较 barres 才能识别真正的无修改
+      const sameBarres = JSON.stringify(original?.barres ?? undefined) === JSON.stringify(payload.barres ?? undefined);
+      if (original && computeChordFingerprint(original) === fingerprint && sameBarres) {
         return { ok: false, reason: 'UNCHANGED' };
       }
     }

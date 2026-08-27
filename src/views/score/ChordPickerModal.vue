@@ -116,7 +116,7 @@
                 :aria-pressed="isCurrentBound(chord)"
                 :aria-disabled="isCurrentBound(chord)"
                 :aria-label="`和弦 ${chordMeta.get(chord.id)?.name ?? ''}${isCurrentBound(chord) ? '（当前已绑定）' : ''}`"
-                class="picker-chord-card flex flex-col items-center justify-center self-start w-full box-border relative z-card p-md bg-bg-body border border-border-light rounded-md cursor-pointer outline-none transition-all duration-fast hover:border-primary hover:shadow-md active:scale-[0.97]"
+                class="picker-chord-card group flex flex-col items-center justify-center self-start w-full box-border relative z-card p-md bg-bg-body border border-border-light rounded-md cursor-pointer outline-none transition-all duration-fast hover:border-primary hover:shadow-md active:scale-[0.97] [&:has(.picker-edit-btn:active)]:scale-100"
                 :class="{
                   '!bg-tint-primary-88 !border-primary cursor-default !pointer-events-none ring-2 ring-primary/70 !shadow-none !active:scale-100':
                     isCurrentBound(chord),
@@ -126,7 +126,30 @@
                 @click="!isCurrentBound(chord) && handleSelectChord(chord)"
                 @keydown.enter.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
                 @keydown.space.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
+                @mouseenter="editHoverMap[chord.id] = true"
+                @mouseleave="editHoverMap[chord.id] = false"
               >
+                <ActionButton
+                  variant="ghost"
+                  size="sm"
+                  icon-only
+                  :tabindex="editHoverMap[chord.id] ? 0 : -1"
+                  aria-label="去修改该和弦"
+                  title="去修改该和弦"
+                  class="picker-edit-btn absolute top-1 right-1 z-20 pointer-events-auto opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-fast !p-1.5"
+                  @pointerdown.stop
+                  @mousedown.stop
+                  @click.stop="goToWorkbenchToEdit(chord)"
+                >
+                  <Pencil :size="13" stroke-width="2.2" />
+                </ActionButton>
+                <span
+                  v-if="selectedGroupId === 'ALL' && getSourceGroupName(chord)"
+                  class="picker-source-group absolute top-1 left-1 z-10 max-w-[60%] truncate px-1 py-0.5 rounded-sm bg-bg-panel/90 border border-border-light text-2xs font-medium text-text-muted leading-none pointer-events-none select-none"
+                  :title="getSourceGroupName(chord)"
+                >
+                  {{ getSourceGroupName(chord) }}
+                </span>
                 <Fretboard
                   v-if="visibleMap[chord.id]"
                   :ref="el => setFretboardMeasureRef(el, chord.fretCount)"
@@ -196,8 +219,8 @@ import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
 import { GroupSortRule } from '@/types';
-import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
 import { observeVisibility } from '@/utils/core/common';
+import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
 import {
   KEY_OPTIONS,
   SORT_RULE_CONFIG,
@@ -206,7 +229,7 @@ import {
   parseChordName,
   resolveChordRootPitch,
 } from '@/utils/music/musicTheory';
-import { Plus, Search } from '@lucide/vue';
+import { Pencil, Plus, Search } from '@lucide/vue';
 import {
   computed,
   nextTick,
@@ -239,6 +262,8 @@ const { chordsLookupMap } = useScoreLinesData();
 
 const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
 const visibleMap = reactive<Record<string, boolean>>({});
+/** 卡片 hover 态：编辑按钮仅在 hover 时显示并进入 Tab 序列，隐藏时不抢占焦点 */
+const editHoverMap = reactive<Record<string, boolean>>({});
 const cardObserverStops = new Map<string, () => void>();
 
 const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordId: string) => {
@@ -423,6 +448,10 @@ watch(
   }
 );
 
+/** 分组 id → 名称映射（供"全部"tab 显示来源分组） */
+const groupNameMap = computed(() => new Map(chordStore.groups.map(g => [g.id, g.name])));
+const getSourceGroupName = (chord: Chord) => groupNameMap.value.get(chord.groupId) ?? '';
+
 const filteredChords = computed(() => {
   const activeGroup = chordStore.groups.find(g => g.id === selectedGroupId.value);
   const effectiveKey = sortOverride.value === GroupSortRule.KEY_DEGREE ? tempSortKey.value : activeGroup?.sortKey;
@@ -545,6 +574,14 @@ const goToWorkbenchToCreate = () => {
     chordStore.collapseAllGroups();
     chordStore.setSelectedGroupId(null);
   }
+  router.push('/');
+};
+
+/** 跳转工作台并载入指定和弦进行修改 */
+const goToWorkbenchToEdit = (chord: Chord) => {
+  visibleModel.value = false;
+  editorStore.setEditor(chord);
+  chordStore.selectAndExpandGroup(chord.groupId);
   router.push('/');
 };
 

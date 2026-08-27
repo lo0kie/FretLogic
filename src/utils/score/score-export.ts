@@ -1,5 +1,6 @@
 import { globalDarkMode } from '@/stores/globalState';
 import type { Chord } from '@/types';
+import { computeChordFingerprint } from '@/utils/music/musicTheory';
 import { charKey, chordSlotKey, collectEdgeChordIds } from '@/utils/score/scoreModel';
 import type { Options } from 'html-to-image/lib/types';
 
@@ -35,7 +36,14 @@ function getEdgeChordsWithNextKey(
   chordsLookupMap: Map<string, Chord>
 ) {
   const ids = collectEdgeChordIds(chordMap, lineId, type);
-  const sig = ids.map((id, idx) => `${idx}:${id}|`).join('');
+  // 签名必须包含和弦内容（指纹 + barres），否则编辑同一 id 的和弦后缓存命中旧对象，乐谱行首/行尾不刷新
+  const sig = ids
+    .map((id, idx) => {
+      const chord = chordsLookupMap.get(id);
+      const contentSig = chord ? `${computeChordFingerprint(chord)}:${JSON.stringify(chord.barres ?? null)}` : '-';
+      return `${idx}:${id}:${contentSig}|`;
+    })
+    .join('');
   const cacheKey = `${lineId}_${type}`;
   const cached = prevEdgeChordsCache.get(cacheKey);
   if (cached && cached.sig === sig) {

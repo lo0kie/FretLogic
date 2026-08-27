@@ -1,6 +1,6 @@
 // src/stores/chordEditorStore.ts
 import { useChordStore } from '@/stores/chordStore';
-import type { Chord, GuitarStringsModel } from '@/types';
+import type { BarreEntity, Chord, GuitarStringsModel } from '@/types';
 import { normalizeChord } from '@/utils/music/chord-fretboard';
 import { cloneDeep } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
@@ -113,13 +113,46 @@ export const useChordEditorStore = defineStore('editor', () => {
       ) {
         draftChord.value.rootStringIndex = null;
       }
+      // 缩品位时同步清理越界横按，保持数据自洽
+      if (draftChord.value.barres) {
+        const kept = draftChord.value.barres.filter(b => b.fret <= newVal);
+        if (kept.length !== draftChord.value.barres.length) {
+          draftChord.value.barres = kept.length > 0 ? kept : undefined;
+        }
+      }
     }
   };
 
+  /** 设置显式横按列表（undefined / 空数组表示清除横按标记） */
+  const setBarres = (barres: BarreEntity[] | undefined) => {
+    if (!barres || barres.length === 0) {
+      if (draftChord.value.barres !== undefined) draftChord.value.barres = undefined;
+      return;
+    }
+    draftChord.value.barres = barres;
+  };
+
+  // 程序性整体替换（加载/重置和弦）时跳过横按清除，避免误清已保存的横按
+  let isProgrammaticStringsChange = false;
+
+  // 指板音符变化时，已标记横按可能失效：清除横按，候选由渲染层按新指板自动重新计算
+  watch(
+    () => draftChord.value.strings,
+    () => {
+      if (isProgrammaticStringsChange) return;
+      if (draftChord.value.barres !== undefined) {
+        draftChord.value.barres = undefined;
+      }
+    },
+    { deep: true, flush: 'sync' }
+  );
+
   const setEditor = (chord: Chord) => {
+    isProgrammaticStringsChange = true;
     isCreating.value = false;
     isEditing.value = true;
     draftChord.value = cloneDeep(toRaw(chord));
+    isProgrammaticStringsChange = false;
   };
 
   const initEditor = () => {
@@ -130,7 +163,9 @@ export const useChordEditorStore = defineStore('editor', () => {
   };
 
   const resetEditor = () => {
+    isProgrammaticStringsChange = true;
     draftChord.value = createDefaultChord();
+    isProgrammaticStringsChange = false;
     isCreating.value = false;
     isEditing.value = false;
   };
@@ -151,6 +186,7 @@ export const useChordEditorStore = defineStore('editor', () => {
     currentMultiFingeringChords,
     currentMultiFingeringIndex,
     setFretCount,
+    setBarres,
     setEditor,
     initEditor,
     resetEditor,

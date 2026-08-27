@@ -27,6 +27,8 @@
     @keydown.space="handleKeydown"
     @keydown.delete="handleDelete"
     @keydown.backspace="handleDelete"
+    @mouseenter="isHovered = true"
+    @mouseleave="isHovered = false"
   >
     <div
       class="chord-display-slot flex-1 flex justify-center w-full"
@@ -44,10 +46,12 @@
           v-if="isVisible && !isExporting && isGlobalEditable"
           v-wave
           type="button"
+          :tabindex="isButtonRevealed ? 0 : -1"
           class="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-danger text-text-on-accent border-none flex items-center justify-center p-0 cursor-pointer pointer-events-none group-hover:pointer-events-auto group-hover:!opacity-100 z-card shadow-sm outline-none opacity-0 transition-all duration-fast hover:scale-105 active:scale-95"
           title="清除当前和弦"
           aria-label="清除当前和弦"
           data-focusable-inline
+          @pointerdown.stop
           @click.stop.prevent="emit('remove', slotKey)"
         >
           <X :size="12" :stroke-width="3" aria-hidden="true" />
@@ -104,8 +108,8 @@ import Fretboard from '@/components/fretboard/Fretboard.vue';
 import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
-import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
 import { observeVisibility } from '@/utils/core/common';
+import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
 import { getChordName } from '@/utils/music/musicTheory';
 import { Plus, X } from '@lucide/vue';
 import { computed, ref, useTemplateRef, watch, watchEffect, type ComponentPublicInstance } from 'vue';
@@ -131,6 +135,9 @@ const emit = defineEmits<{
 }>();
 
 const isVisible = ref(false);
+const isHovered = ref(false);
+// 清除按钮仅在父容器 hover 时显示；隐藏时不进入 Tab 焦点序列，避免抢占键盘导航
+const isButtonRevealed = computed(() => isHovered.value && isGlobalEditable);
 const scoreEditor = useScoreEditorStore();
 const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
 

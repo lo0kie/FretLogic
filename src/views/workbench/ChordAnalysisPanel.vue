@@ -1,5 +1,5 @@
 <template>
-  <div class="overflow-hidden opacity-100 w-full transition-[max-height,margin,opacity] duration-slow ease-sidebar">
+  <div class="overflow-hidden opacity-100 w-full transition-[margin,opacity] duration-slow ease-sidebar">
     <div
       class="@container relative w-full h-auto p-3 bg-bg-panel border border-glass-border rounded-lg flex flex-col gap-2 z-panel pointer-events-auto box-border overflow-hidden [container-type:inline-size]"
     >
@@ -13,17 +13,15 @@
         </div>
       </div>
 
-      <template v-if="analysis.notes.length > 0">
+      <EmptyState v-if="analysis.notes.length === 0" :icon="Music" description="在指板上按音以分析" size="sm" />
+      <div v-else>
         <ChordAnalysisContent
           :candidates="analysis.candidates"
           :active-chord-name="getChordName(editorStore.draftChord)"
           :notes="analysis.notes"
           @select-candidate="handleSelectCandidate"
         />
-      </template>
-
-      <!-- PC端空状态 -->
-      <EmptyState v-else :icon="Music" description="在指板上按音以分析" size="sm" />
+      </div>
     </div>
   </div>
 </template>
