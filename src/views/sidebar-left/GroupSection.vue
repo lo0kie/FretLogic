@@ -45,11 +45,11 @@
                 :class="{ '-rotate-90': !isGroupContentOpen(group) }"
                 aria-hidden="true"
               />
-              <BaseMarquee>
+              <div v-marquee>
                 <span class="text-xs font-bold text-text-title whitespace-nowrap">
                   {{ group.name }}
                 </span>
-              </BaseMarquee>
+              </div>
               <div class="flex items-center gap-sm ml-auto shrink-0">
                 <BaseBadge
                   variant="neutral"
@@ -112,10 +112,9 @@
 
 <script setup lang="ts">
 import BaseBadge from '@/components/base/BaseBadge.vue';
-import BaseMarquee from '@/components/base/BaseMarquee.vue';
+import EmptyState from '@/components/base/EmptyState.vue';
 import ContextMenu from '@/components/context-menu/ContextMenu.vue';
 import type { ContextMenuItem } from '@/components/context-menu/ContextMenuItems.vue';
-import EmptyState from '@/components/base/EmptyState.vue';
 import { useChordActions } from '@/composables/fretboard/useChordActions';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';

@@ -526,11 +526,18 @@ export const segmentsToString = (
  * 获取和弦的标准名称字符串（以 AST nameSegments 为唯一真实源，支持 options）
  */
 export const getChordName = (
-  chord: ChordOrName | null | undefined,
+  chord: (ChordOrName & { name?: string; customName?: string }) | null | undefined,
   options?: { shorthand?: boolean; useUnicode?: boolean }
 ): string => {
-  if (!chord || !chord.nameSegments) return chord?.chordName || '';
-  return segmentsToString(chord.nameSegments, options);
+  if (!chord) return '';
+  if (chord.nameSegments) return segmentsToString(chord.nameSegments, options);
+  const rawName = chord.chordName || chord.name || chord.customName || '';
+  if (rawName) {
+    const segs = nameToSegments(rawName);
+    if (segs) return segmentsToString(segs, options);
+    return rawName;
+  }
+  return '';
 };
 
 /**

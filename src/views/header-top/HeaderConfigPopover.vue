@@ -32,15 +32,22 @@
         />
       </BaseFormRow>
 
-      <BaseFormRow>
-        <template #label>
-          <span title="开启后 maj7/dim/m7b5/aug 将简写为 M7/°/ø7/+">符号简写 (M/°/+)</span>
-        </template>
-        <BaseSwitch v-model="settingsStore.useChordShorthand" aria-label="符号简写" />
+      <BaseFormRow label="符号简写 (M/°/+)" help="仅工作台生效">
+        <BaseSwitch v-model="settingsStore.workbenchChordShorthand" aria-label="工作台符号简写" />
+      </BaseFormRow>
+
+      <BaseFormRow label="显示音名" help="仅工作台生效">
+        <BaseSwitch v-model="settingsStore.workbenchShowPitchNames" aria-label="工作台显示音名" />
       </BaseFormRow>
 
       <div class="action-full-row w-full">
-        <ActionButton variant="subtle" primary width="100%" :disabled="!isGlobalEditable" @click="handleRepairData">
+        <ActionButton
+          variant="subtle"
+          color="primary"
+          width="100%"
+          :disabled="!isGlobalEditable"
+          @click="handleRepairData"
+        >
           <template #prefix>
             <Wrench :size="13" stroke-width="2.5" />
           </template>
@@ -77,7 +84,7 @@
 
       <BaseFormRow label="和弦缩放">
         <BaseSlider
-          v-model="localFretboardScale"
+          v-model="scoreEditor.fretboardScale"
           readout-position="left"
           :show-buttons="false"
           :min="0.6"
@@ -85,8 +92,15 @@
           :step="0.1"
           :default-value="1.0"
           :formatter="val => `${Math.round(val * 100)}%`"
-          @commit="commitFretboardScale"
         />
+      </BaseFormRow>
+
+      <BaseFormRow label="符号简写 (M/°/+)" help="仅乐谱生效">
+        <BaseSwitch v-model="settingsStore.scoreChordShorthand" aria-label="乐谱符号简写" />
+      </BaseFormRow>
+
+      <BaseFormRow label="显示音名" help="仅乐谱生效">
+        <BaseSwitch v-model="settingsStore.scoreShowPitchNames" aria-label="乐谱显示音名" />
       </BaseFormRow>
     </template>
   </div>
@@ -109,7 +123,7 @@ import { useUiStore } from '@/stores/uiStore';
 import { FRET_COUNTS, INTERACTION_CONFIG } from '@/utils/core/constants';
 import { TUNING_PRESETS, Tuning } from '@/utils/music/musicTheory';
 import { Wrench } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
 const route = useRoute();
@@ -128,19 +142,6 @@ const FRET_OPTIONS: SegmentOption<3 | 4>[] = FRET_COUNTS.map(f => ({
   label: `${f}品`,
   value: f,
 }));
-
-const localFretboardScale = ref(scoreEditor.fretboardScale);
-
-watch(
-  () => scoreEditor.fretboardScale,
-  val => {
-    if (val !== localFretboardScale.value) localFretboardScale.value = val;
-  }
-);
-
-const commitFretboardScale = (val: number) => {
-  if (val !== scoreEditor.fretboardScale) scoreEditor.fretboardScale = val;
-};
 
 const handleRepairData = () => {
   const repairedCount = chordStore.repairData();

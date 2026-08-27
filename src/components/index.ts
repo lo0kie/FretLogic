@@ -4,7 +4,6 @@ export { default as BaseBadge } from './base/BaseBadge.vue';
 export { default as BaseFloatingBar } from './base/BaseFloatingBar.vue';
 export { default as BaseFormRow } from './base/BaseFormRow.vue';
 export { default as BaseInput } from './base/BaseInput.vue';
-export { default as BaseMarquee } from './base/BaseMarquee.vue';
 export { default as BaseModal } from './base/BaseModal.vue';
 export { default as BaseNumberInput } from './base/BaseNumberInput.vue';
 export { default as BasePagination } from './base/BasePagination.vue';

@@ -8,7 +8,7 @@
     height="h-full"
   >
     <template #header-extra>
-      <ActionButton variant="subtle" primary @click="goToWorkbenchToCreate">
+      <ActionButton variant="subtle" color="primary" @click="goToWorkbenchToCreate">
         <template #prefix>
           <Plus :size="14" stroke-width="2.5" aria-hidden="true" />
         </template>
@@ -62,7 +62,7 @@
             v-for="group in groupTabOptions"
             :key="String(group.value)"
             :variant="selectedGroupId === group.value ? 'subtle' : 'ghost'"
-            :primary="selectedGroupId === group.value"
+            :color="selectedGroupId === group.value ? 'primary' : 'default'"
             @click="handleGroupTabChange(String(group.value))"
           >
             <span class="group-label text-xs font-semibold"> {{ group.label }} </span>
@@ -132,6 +132,7 @@
                   :ref="el => setFretboardMeasureRef(el, chord.fretCount)"
                   :chord
                   :interactive="false"
+                  :is-score-mode="true"
                   :scale="pickerScale"
                   :is-dark-mode="globalDarkMode"
                   fret-number-size="lg"
@@ -155,7 +156,7 @@
           v-for="section in chordSections"
           :key="section.id"
           :variant="activeSectionId === section.id ? 'subtle' : 'ghost'"
-          :primary="activeSectionId === section.id"
+          :color="activeSectionId === section.id ? 'primary' : 'default'"
           size="sm"
           class="section-nav-chip shrink-0"
           :aria-label="`跳转到 ${section.title} 区`"
@@ -365,10 +366,12 @@ const handleSortRuleChange = (newRule: GroupSortRule) => {
   resetScrollTop();
 };
 
-const handleSortKeyChange = (newKey: string) => {
-  tempSortKey.value = newKey;
-  saveUserPickerState();
-  resetScrollTop();
+const handleSortKeyChange = (newKey: string | string[]) => {
+  if (typeof newKey === 'string') {
+    tempSortKey.value = newKey;
+    saveUserPickerState();
+    resetScrollTop();
+  }
 };
 
 watch(

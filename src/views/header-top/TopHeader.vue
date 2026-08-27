@@ -11,7 +11,7 @@
         icon-only
         :size="uiSize"
         :variant="uiStore.isLeftOpen ? 'subtle' : 'ghost'"
-        :primary="uiStore.isLeftOpen"
+        :color="uiStore.isLeftOpen ? 'primary' : 'default'"
         @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
       >
         <PanelLeft :size="18" stroke-width="2.2" />
@@ -44,7 +44,7 @@
           v-tooltip="'播放/试听当前和弦'"
           size="sm"
           variant="subtle"
-          primary
+          color="primary"
           icon-only
           :disabled="editorStore.isFretBoardEmpty || isPlaying"
           @click="playCurrentChord"
@@ -83,6 +83,7 @@
         v-model="scoreEditor.activeTab"
         :options="scoreModeOptions"
         size="md"
+        :disabled="!scoreEditor.activeSong"
         @change="handleScoreTabChange"
       />
     </div>
@@ -112,18 +113,17 @@
       </ActionButton>
 
       <BasePopover>
-        <template #trigger="{ isOpen, toggle }">
+        <template #trigger="{ isOpen }">
           <ActionButton
             ref="triggerBtnRef"
             v-tooltip="computedTooltip"
             icon-only
             :variant="isOpen ? 'subtle' : 'ghost'"
-            :primary="isOpen"
+            :color="isOpen ? 'primary' : 'default'"
             :aria-label="computedTooltip"
             :aria-expanded="isOpen"
             aria-haspopup="true"
             :size="uiSize"
-            @click="toggle"
           >
             <SlidersHorizontal :size="18" stroke-width="2.2" aria-hidden="true" />
           </ActionButton>
@@ -149,7 +149,7 @@
           <ActionButton
             icon-only
             :variant="isOpen ? 'subtle' : 'ghost'"
-            :primary="isOpen"
+            :color="isOpen ? 'primary' : 'default'"
             aria-label="外观设置"
             aria-haspopup="menu"
             :size="uiSize"
@@ -165,7 +165,7 @@
         </template>
 
         <template #default="{ close }">
-          <ContextMenuItems :items="themeMenuItems" @select="item => (item.action(), close())" />
+          <ContextMenuItems :items="themeMenuItems" @select="item => (item.action?.(), close())" />
         </template>
       </BasePopover>
 

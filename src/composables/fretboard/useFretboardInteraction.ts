@@ -11,8 +11,7 @@ export function useFretboardInteraction(
   props: FretboardProps,
   onCapoChange: (capo: number) => void,
   onStringsChange: (strings: GuitarStringsModel) => void,
-  onRootStringChange?: (index: number | null) => void,
-  onDragStatusChange?: (isDragging: boolean) => void
+  onRootStringChange?: (index: number | null) => void
 ) {
   const fretBoardRef = useTemplateRef<HTMLDivElement>('fretBoardRef');
   const hoverPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
@@ -30,15 +29,9 @@ export function useFretboardInteraction(
   // 和弦名区始终显示，高度恒计入布局
   const showChordName = computed(() => props.showChordName ?? true);
   const chordNameZoneHeight = computed(() => (showChordName.value ? CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT : 0));
-  const isPointerDown = ref(false);
   const layout = useFretboardLayout(fretCount, scale, showOpenStrings, chordNameZoneHeight);
 
-  let lastCancelTime = 0;
-  let lastSIdx = -1;
-  let lastFIdx = -1;
   let wheelAccumulator = 0;
-  let ticking = false;
-  let rAF_ID = 0;
 
   const getCanvasPoint = (clientX: number, clientY: number) => {
     const board = fretBoardRef.value?.getBoundingClientRect();
@@ -47,7 +40,8 @@ export function useFretboardInteraction(
     const scaleY = board.height / layout.rawHeight.value;
     const x = (clientX - board.left) / scaleX;
     const y = (clientY - board.top) / scaleY;
-    const stringIndex = Math.round((x - CANVAS_CONFIG.OFFSET_X_LEFT) / CANVAS_CONFIG.STRING_SPACING);
+    const rawStringFloat = (x - CANVAS_CONFIG.OFFSET_X_LEFT) / CANVAS_CONFIG.STRING_SPACING;
+    const stringIndex = Math.round(rawStringFloat);
     if (stringIndex < 0 || stringIndex > 5) return null;
     // 处于和弦名区域时不触发音符/空弦悬停
     if (y < chordNameZoneHeight.value) return null;
@@ -55,7 +49,7 @@ export function useFretboardInteraction(
     const fretAreaY = y - layout.contentTopOffset.value;
     const fretIndex = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
     if (fretIndex > fretCount.value) return null;
-    return { stringIndex, fretIndex };
+    return { stringIndex, fretIndex, rawStringFloat };
   };
 
   const emitStringsUpdate = (
@@ -107,6 +101,9 @@ export function useFretboardInteraction(
     const { stringIndex: sIdx, fretIndex: fIdx } = point;
     const currentStringAsset = strings.value[sIdx];
 
+    fretBoardRef.value?.focus();
+    focusPoint.value = { stringIndex: sIdx, fretIndex: fIdx };
+
     // 指板上的品位
     if (fIdx > 0 && fIdx <= fretCount.value) {
       if (currentStringAsset?.[0] === fIdx) {
@@ -121,10 +118,14 @@ export function useFretboardInteraction(
       return;
     }
 
-    // 空弦区：无论当前是否有按音/静音，右键都清除并按空弦(可用)+主音处理
+    // 空弦区
     if (fIdx === 0 && currentStringAsset !== undefined) {
       e.stopPropagation();
-      setAvailableAndRoot(sIdx, 0);
+      if (currentStringAsset[0] === 0) {
+        emitToggleRootString(sIdx);
+      } else {
+        setAvailableAndRoot(sIdx, 0);
+      }
       return;
     }
   };
@@ -164,32 +165,6 @@ export function useFretboardInteraction(
     });
   };
 
-  const handleFingerClickLogic = (clientX: number, clientY: number, isMoveEvent = false) => {
-    const point = getCanvasPoint(clientX, clientY);
-    if (!point || point.fretIndex < 1 || point.fretIndex > fretCount.value) return;
-    const { stringIndex: sIdx, fretIndex: fIdx } = point;
-    focusPoint.value = point;
-    if (isMoveEvent && lastSIdx === sIdx && lastFIdx === fIdx) return;
-    emitStringsUpdate(cloned => {
-      const str = cloned[sIdx];
-      if (str && str[0] === fIdx) {
-        setStringFret(str, -1);
-        lastSIdx = -1;
-        lastFIdx = -1;
-        lastCancelTime = Date.now();
-      } else if (str) {
-        if (isMoveEvent && Date.now() - lastCancelTime < INTERACTION_CONFIG.MUTING_COOL_DOWN) {
-          lastSIdx = -1;
-          lastFIdx = -1;
-          return;
-        }
-        setStringFret(str, fIdx);
-        lastSIdx = sIdx;
-        lastFIdx = fIdx;
-      }
-    });
-  };
-
   const handleKeydown = (e: KeyboardEvent) => {
     if (!interactive.value) return;
 
@@ -198,65 +173,112 @@ export function useFretboardInteraction(
       return;
     }
 
-    const isNavKey = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key);
-    const isActionKey = ['Enter', ' ', 'Delete', 'Backspace', 'r', 'R'].includes(e.key);
-
-    if (!isNavKey && !isActionKey) return;
-
-    e.preventDefault();
+    const minFret = showOpenStrings.value ? 0 : 1;
+    const maxFret = fretCount.value;
 
     if (!focusPoint.value) {
-      focusPoint.value = {
-        stringIndex: 0,
-        fretIndex: showOpenStrings.value ? 0 : 1,
-      };
-    }
-
-    if (isNavKey) {
-      let { stringIndex, fretIndex } = focusPoint.value;
-      const minFret = showOpenStrings.value ? 0 : 1;
-
-      if (e.key === 'ArrowLeft') stringIndex = Math.max(0, stringIndex - 1);
-      if (e.key === 'ArrowRight') stringIndex = Math.min(5, stringIndex + 1);
-      if (e.key === 'ArrowUp') fretIndex = Math.max(minFret, fretIndex - 1);
-      if (e.key === 'ArrowDown') fretIndex = Math.min(fretCount.value, fretIndex + 1);
-
-      focusPoint.value = { stringIndex, fretIndex };
-      return;
-    }
-
-    const { stringIndex, fretIndex } = focusPoint.value;
-
-    if (fretIndex === 0) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        handleLocalToggleOpenString(stringIndex);
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        emitStringsUpdate(cloned => {
-          setStringFret(cloned[stringIndex]!, -1);
-        });
-      } else if (e.key === 'r' || e.key === 'R') {
-        if (isOpen(strings.value[stringIndex]!)) {
-          emitToggleRootString(stringIndex);
-        }
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
+        e.preventDefault();
+        focusPoint.value = {
+          stringIndex: 0,
+          fretIndex: showOpenStrings.value ? 0 : 1,
+        };
+        return;
       }
-      return;
     }
 
-    if (e.key === 'Enter' || e.key === ' ') {
-      emitStringsUpdate(cloned => {
-        const str = cloned[stringIndex];
-        if (!str) return;
-        setStringFret(str, str[0] === fretIndex ? -1 : fretIndex);
-      });
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
-      emitStringsUpdate(cloned => {
-        if (cloned[stringIndex]![0] === fretIndex) {
-          setStringFret(cloned[stringIndex]!, -1);
+    const current = focusPoint.value || {
+      stringIndex: 0,
+      fretIndex: showOpenStrings.value ? 0 : 1,
+    };
+
+    switch (e.key) {
+      case 'ArrowUp':
+        e.preventDefault();
+        focusPoint.value = {
+          stringIndex: current.stringIndex,
+          fretIndex: Math.max(minFret, current.fretIndex - 1),
+        };
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        focusPoint.value = {
+          stringIndex: current.stringIndex,
+          fretIndex: Math.min(maxFret, current.fretIndex + 1),
+        };
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        focusPoint.value = {
+          stringIndex: Math.max(0, current.stringIndex - 1),
+          fretIndex: current.fretIndex,
+        };
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        focusPoint.value = {
+          stringIndex: Math.min(5, current.stringIndex + 1),
+          fretIndex: current.fretIndex,
+        };
+        break;
+      case 'Home':
+        e.preventDefault();
+        focusPoint.value = {
+          stringIndex: 0,
+          fretIndex: current.fretIndex,
+        };
+        break;
+      case 'End':
+        e.preventDefault();
+        focusPoint.value = {
+          stringIndex: 5,
+          fretIndex: current.fretIndex,
+        };
+        break;
+      case 'PageUp':
+        e.preventDefault();
+        focusPoint.value = {
+          stringIndex: current.stringIndex,
+          fretIndex: minFret,
+        };
+        break;
+      case 'PageDown':
+        e.preventDefault();
+        focusPoint.value = {
+          stringIndex: current.stringIndex,
+          fretIndex: maxFret,
+        };
+        break;
+      case 'Enter':
+      case ' ': {
+        e.preventDefault();
+        const pt = focusPoint.value;
+        if (!pt) break;
+        if (pt.fretIndex === 0) {
+          handleLocalToggleOpenString(pt.stringIndex);
+        } else {
+          emitStringsUpdate(cloned => {
+            const str = cloned[pt.stringIndex];
+            if (!str) return;
+            if (str[0] === pt.fretIndex) {
+              setStringFret(str, -1);
+            } else {
+              setStringFret(str, pt.fretIndex);
+            }
+          });
         }
-      });
-    } else if (e.key === 'r' || e.key === 'R') {
-      if (strings.value[stringIndex]![0] === fretIndex) {
-        emitToggleRootString(stringIndex);
+        break;
+      }
+      case 'Delete':
+      case 'Backspace': {
+        e.preventDefault();
+        const pt = focusPoint.value;
+        if (!pt) break;
+        emitStringsUpdate(cloned => {
+          const str = cloned[pt.stringIndex];
+          if (str) setStringFret(str, -1);
+        });
+        break;
       }
     }
   };
@@ -283,16 +305,6 @@ export function useFretboardInteraction(
     });
   };
 
-  const handlePointerMove = (e: PointerEvent) => {
-    scheduleHoverUpdate(e.clientX, e.clientY);
-    if (ticking) return;
-    ticking = true;
-    rAF_ID = requestAnimationFrame(() => {
-      handleFingerClickLogic(e.clientX, e.clientY, true);
-      ticking = false;
-    });
-  };
-
   const handlePointerLeave = () => {
     pendingEvent = null;
     if (hoverRafId) {
@@ -302,27 +314,31 @@ export function useFretboardInteraction(
     hoverPoint.value = null;
   };
 
-  const handlePointerUp = () => {
-    isPointerDown.value = false;
-    onDragStatusChange?.(false);
-    lastSIdx = -1;
-    lastFIdx = -1;
-    if (rAF_ID) cancelAnimationFrame(rAF_ID);
-    ticking = false;
-  };
-
   const handlePointerDown = (e: PointerEvent) => {
     if (!interactive.value || e.button !== 0) return;
     fretBoardRef.value?.focus();
     const pt = getCanvasPoint(e.clientX, e.clientY);
-    if (pt) {
-      focusPoint.value = pt;
+    if (!pt) return;
+    focusPoint.value = pt;
+
+    // 空弦区域点击（品位 0）
+    if (pt.fretIndex === 0) {
+      handleLocalToggleOpenString(pt.stringIndex);
+      return;
     }
-    onDragStatusChange?.(true);
-    lastSIdx = -1;
-    lastFIdx = -1;
-    handleFingerClickLogic(e.clientX, e.clientY, false);
-    isPointerDown.value = true;
+
+    if (pt.fretIndex < 1 || pt.fretIndex > fretCount.value) return;
+
+    // 单击品位：切换音符（已有则清除 -1，无则设置为该品位）
+    emitStringsUpdate(cloned => {
+      const str = cloned[pt.stringIndex];
+      if (!str) return;
+      if (str[0] === pt.fretIndex) {
+        setStringFret(str, -1);
+      } else {
+        setStringFret(str, pt.fretIndex);
+      }
+    });
   };
 
   const handleFocus = () => {
@@ -341,20 +357,7 @@ export function useFretboardInteraction(
     focusPoint.value = null;
   };
 
-  watchEffect(onCleanup => {
-    if (!isPointerDown.value) return;
-    const stopMove = useEventListener(window, 'pointermove', handlePointerMove);
-    const stopUp = useEventListener(window, 'pointerup', handlePointerUp);
-    const stopCancel = useEventListener(window, 'pointercancel', handlePointerUp);
-    onCleanup(() => {
-      stopMove();
-      stopUp();
-      stopCancel();
-    });
-  });
-
-  // wheel 与 pointermove 同样按帧合帧：触控板惯性下每秒几十次事件，
-  // getCanvasPoint 内含 getBoundingClientRect 布局读取，无需每事件执行
+  // wheel 按帧合帧
   let wheelRafId = 0;
   let pendingWheel: {
     clientX: number;
@@ -420,7 +423,6 @@ export function useFretboardInteraction(
   useEventListener(fretBoardRef, 'blur', handleBlur);
 
   onBeforeUnmount(() => {
-    if (rAF_ID) cancelAnimationFrame(rAF_ID);
     if (hoverRafId) cancelAnimationFrame(hoverRafId);
     if (wheelRafId) cancelAnimationFrame(wheelRafId);
   });
@@ -430,7 +432,6 @@ export function useFretboardInteraction(
     hoverPoint,
     focusPoint,
     isFocused,
-    isPointerDown,
     stringXPositions: layout.stringXPositions,
     rawHeight: layout.rawHeight,
     fretboardScale: layout.fretboardScale,

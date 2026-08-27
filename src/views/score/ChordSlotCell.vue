@@ -58,6 +58,7 @@
           :chord-name-editable="false"
           :chord
           :interactive="false"
+          :is-score-mode="true"
           :scale="0.25 * scoreEditor.effectiveFretboardScale"
           :is-dark-mode="globalDarkMode"
           fret-number-size="lg"

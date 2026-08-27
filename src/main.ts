@@ -12,6 +12,7 @@ import '@/assets/main.scss';
 import '@/assets/tailwind.css';
 import { vFocus } from './directives/vFocus';
 import { vGridNav } from './directives/vGridNav';
+import { vMarquee } from './directives/vMarquee';
 import { vScrollCache } from './directives/vScrollCache';
 import { vTooltip } from './directives/vTooltip';
 import { vWheelScroll } from './directives/vWheelScroll';
@@ -29,6 +30,7 @@ app.directive('wheel-scroll', vWheelScroll);
 app.directive('focus', vFocus);
 app.directive('scroll-cache', vScrollCache);
 app.directive('grid-nav', vGridNav);
+app.directive('marquee', vMarquee);
 
 const initializeEditor = () => {
   try {
