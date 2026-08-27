@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
-import { Tuning } from '@/utils/musicTheory';
+import { Tuning } from '@/utils/music/musicTheory';
 import { sanitizePersistedData } from '@/services/validation/persistedData';
 import type { Chord, Group, Song } from '@/types';
 

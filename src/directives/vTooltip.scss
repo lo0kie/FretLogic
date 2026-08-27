@@ -7,16 +7,16 @@
   font-size: $fs-xs;
   line-height: 1.45;
   text-align: center;
-  white-space: pre-line; // 支持字符串里的真实 \n 换行，不用再走 v-html/dompurify
+  white-space: pre-line; // 支持字符串里的真实 \n 换行
   word-break: break-word;
-  max-width: calc(100vw - 24px);
+  width: max-content;
+  max-width: min(320px, calc(100vw - 24px));
   box-sizing: border-box;
   border-radius: $radius-md;
   box-shadow: $shadow-lg;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: var(--blur-xl);
+  -webkit-backdrop-filter: var(--blur-xl);
   background-color: var(--bg-panel);
   color: var(--text-title);
   border: 1px solid var(--glass-border);
-  transition: opacity 0.15s ease;
 }

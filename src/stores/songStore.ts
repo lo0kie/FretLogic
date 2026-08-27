@@ -1,8 +1,8 @@
-import { STORAGE_KEYS } from '@/utils/constants';
-import type { Song } from '@/types';
-import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/chord-fretboard';
-import { generateUUID } from '@/utils/common';
 import { createSongRepository } from '@/services/repositories';
+import type { Song } from '@/types';
+import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/music/chord-fretboard';
+import { STORAGE_KEYS } from '@/utils/core/constants';
+import { createSong as createSongEntity } from '@/utils/music/entityFactories';
 import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
@@ -164,16 +164,7 @@ export const useSongStore = defineStore('song', () => {
   }
 
   const createSong = (title: string): Song => {
-    const newSong: Song = {
-      id: 's_' + generateUUID().slice(0, 8),
-      title: title.trim() || '未命名乐谱',
-      lyrics: '',
-      playKey: 'C',
-      capo: 0,
-      chordMap: {},
-      lineIds: [],
-      version: 1,
-    };
+    const newSong = createSongEntity(title);
     songs.value.push(newSong);
     markSongDirty(newSong.id);
     markIndexDirty();

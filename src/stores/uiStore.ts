@@ -1,4 +1,4 @@
-﻿import { STORAGE_KEYS } from '@/utils/constants';
+﻿import { STORAGE_KEYS } from '@/utils/core/constants';
 import type { Toast, ToastOptions } from '@/types';
 import { ToastType } from '@/types';
 import { useStorage } from '@vueuse/core';

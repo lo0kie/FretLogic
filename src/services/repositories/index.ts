@@ -1,6 +1,6 @@
 import type { Chord, Group, Song } from '@/types';
 import { sanitizePersistedData } from '@/services/validation/persistedData';
-import { STORAGE_KEYS } from '@/utils/constants';
+import { STORAGE_KEYS } from '@/utils/core/constants';
 
 export interface ChordLibrarySnapshot {
   groups: Group[];

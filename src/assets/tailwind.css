@@ -1,0 +1,139 @@
+@import 'tailwindcss/theme.css';
+@import 'tailwindcss/utilities.css';
+
+@theme {
+  --color-primary: var(--color-primary);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
+
+  --color-color-primary: var(--color-primary);
+  --color-color-success: var(--color-success);
+  --color-color-warning: var(--color-warning);
+  --color-color-danger: var(--color-danger);
+
+  --color-bg-main: var(--bg-main);
+  --color-bg-body: var(--bg-body);
+  --color-bg-panel: var(--bg-panel);
+  --color-bg-panel-hover: var(--bg-panel-hover);
+  --color-bg-elevated: var(--bg-elevated);
+
+  --color-glass-border: var(--glass-border);
+  --color-border-light: var(--border-light);
+  --color-border-base: var(--border-base);
+  --color-control-border: var(--control-border);
+  --color-separator: var(--separator);
+
+  --color-text-title: var(--text-title);
+  --color-text-body: var(--text-body);
+  --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
+  --color-text-on-accent: var(--text-on-accent);
+
+  --color-tint-primary-20: var(--tint-primary-20);
+  --color-tint-primary-45: var(--tint-primary-45);
+  --color-tint-primary-60: var(--tint-primary-60);
+  --color-tint-primary-80: var(--tint-primary-80);
+  --color-tint-primary-82: var(--tint-primary-82);
+  --color-tint-primary-85: var(--tint-primary-85);
+  --color-tint-primary-88: var(--tint-primary-88);
+  --color-tint-primary-90: var(--tint-primary-90);
+  --color-tint-primary-92: var(--tint-primary-92);
+
+  --color-tint-success-82: var(--tint-success-82);
+  --color-tint-success-88: var(--tint-success-88);
+
+  --color-tint-warning-65: var(--tint-warning-65);
+  --color-tint-warning-78: var(--tint-warning-78);
+  --color-tint-warning-80: var(--tint-warning-80);
+  --color-tint-warning-82: var(--tint-warning-82);
+  --color-tint-warning-88: var(--tint-warning-88);
+  --color-tint-warning-90: var(--tint-warning-90);
+
+  --color-tint-danger-75: var(--tint-danger-75);
+  --color-tint-danger-78: var(--tint-danger-78);
+  --color-tint-danger-80: var(--tint-danger-80);
+  --color-tint-danger-82: var(--tint-danger-82);
+  --color-tint-danger-88: var(--tint-danger-88);
+  --color-tint-danger-90: var(--tint-danger-90);
+
+  --color-tint-current-82: var(--tint-current-82);
+  --color-tint-current-85: var(--tint-current-85);
+  --color-tint-borderbase-85: var(--tint-borderbase-85);
+
+  --color-fb-line: var(--fb-line);
+  --color-fb-line-dim: var(--fb-line-dim);
+  --color-fb-note: var(--fb-note);
+  --color-fb-hover: var(--fb-hover);
+  --color-fb-label: var(--fb-label);
+
+  --spacing-3xs: 0.125rem;
+  --spacing-2xs: 0.25rem;
+  --spacing-xs: 0.375rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 0.75rem;
+  --spacing-lg: 1rem;
+  --spacing-xl: 1.5rem;
+  --spacing-2xl: 2rem;
+  --spacing-3xl: 3rem;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-pill: 9999px;
+
+  --text-sup: 0.46rem;
+  --text-2xs: 0.625rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2.25rem;
+  --text-display: 3.2rem;
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-panel: var(--shadow-panel);
+  --shadow-floating: var(--shadow-floating);
+
+  --ease-spring: var(--bezier-spring);
+  --ease-bounce: var(--bezier-bounce);
+  --ease-standard: var(--bezier-standard);
+  --ease-sidebar: var(--bezier-sidebar);
+
+  --duration-fast: var(--duration-fast);
+  --duration-base: var(--duration-base);
+  --duration-slow: var(--duration-slow);
+
+  --z-index-base: var(--z-base);
+  --z-index-inner: var(--z-inner);
+  --z-index-content: var(--z-content);
+  --z-index-card: var(--z-card);
+  --z-index-panel: var(--z-panel);
+  --z-index-fab: var(--z-fab);
+  --z-index-sidebar: var(--z-sidebar);
+  --z-index-scrim: var(--z-scrim);
+  --z-index-sidebar-top: var(--z-sidebar-top);
+  --z-index-header: var(--z-header);
+  --z-index-popover: var(--z-popover);
+  --z-index-popover-top: var(--z-popover-top);
+  --z-index-overlay: var(--z-overlay);
+  --z-index-menu: var(--z-menu);
+  --z-index-top: var(--z-top);
+  --z-index-toast: var(--z-toast);
+}
+
+@keyframes marquee-slide {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+  88%,
+  100% {
+    transform: translateX(calc(-1 * var(--scroll-dist, 0px)));
+  }
+}

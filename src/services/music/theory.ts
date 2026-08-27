@@ -1,4 +1,4 @@
-import type { SegmentOption } from '@/components/BaseSegmentedControl.vue';
+import type { SegmentOption } from '@/components/base/BaseSegmentedControl.vue';
 import type {
   AccidentalType,
   Chord,
@@ -11,7 +11,11 @@ import type {
   RootSegment,
 } from '@/types';
 import { GroupSortRule } from '@/types';
+import { createLruCache } from '@/utils/core/lruCache';
 import { analyzeChordGraph } from './chordEngine';
+
+/** 接受"和弦实体或名称字符串"的通用入参形态，统一多处多态签名 */
+export type ChordOrName = { nameSegments?: ChordNameSegments | null; chordName?: string };
 
 const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -246,7 +250,7 @@ export const pitchSegmentToString = (seg: RootSegment, useUnicode = false): stri
   return `${natural}${formatAccidental(acc, useUnicode)}`;
 };
 
-const nameSegmentsCache = new Map<string, ChordNameSegments | null>();
+const nameSegmentsCache = createLruCache<ChordNameSegments | null>(512);
 
 /** 将任意和弦名文本解析为结构化分片 ChordNameSegments */
 export const nameToSegments = (chordName: string): ChordNameSegments | null => {
@@ -260,19 +264,11 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
   // 1. 根音：从开头提取 [A-G][#b♯♭]?
   const rootMatch = trimmed.match(/^([A-G][#b♯♭]?)/i);
   if (!rootMatch) {
-    if (nameSegmentsCache.size >= 512) {
-      const oldestKey = nameSegmentsCache.keys().next().value;
-      if (oldestKey !== undefined) nameSegmentsCache.delete(oldestKey);
-    }
     nameSegmentsCache.set(trimmed, null);
     return null;
   }
   const root = parsePitchSegment(rootMatch[1]!);
   if (!root) {
-    if (nameSegmentsCache.size >= 512) {
-      const oldestKey = nameSegmentsCache.keys().next().value;
-      if (oldestKey !== undefined) nameSegmentsCache.delete(oldestKey);
-    }
     nameSegmentsCache.set(trimmed, null);
     return null;
   }
@@ -321,10 +317,6 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
     extensions: extensions.length > 0 ? extensions : undefined,
     bass: bass ?? undefined,
   };
-  if (nameSegmentsCache.size >= 512) {
-    const oldestKey = nameSegmentsCache.keys().next().value;
-    if (oldestKey !== undefined) nameSegmentsCache.delete(oldestKey);
-  }
   nameSegmentsCache.set(trimmed, result);
   return result;
 };
@@ -534,7 +526,7 @@ export const segmentsToString = (
  * 获取和弦的标准名称字符串（以 AST nameSegments 为唯一真实源，支持 options）
  */
 export const getChordName = (
-  chord: { nameSegments?: ChordNameSegments | null; chordName?: string } | null | undefined,
+  chord: ChordOrName | null | undefined,
   options?: { shorthand?: boolean; useUnicode?: boolean }
 ): string => {
   if (!chord || !chord.nameSegments) return chord?.chordName || '';
@@ -613,7 +605,7 @@ export const matchChordSearch = (
  * 解析和弦名：基于 AST 分片拆出根音、斜杠低音与和弦后缀。
  * "Bm7/A" -> { rootLabel:'B', rootPitch:11, bassLabel:'A', bassPitch:9, hasBass:true, suffix:'m7' }
  */
-const parsedChordNameCache = new Map<string, ParsedChordName>();
+const parsedChordNameCache = createLruCache<ParsedChordName>(512);
 
 export const parseChordName = (chordName: string): ParsedChordName => {
   const empty: ParsedChordName = {
@@ -633,10 +625,6 @@ export const parseChordName = (chordName: string): ParsedChordName => {
 
   const segs = nameToSegments(trimmed);
   if (!segs || !segs.root) {
-    if (parsedChordNameCache.size >= 512) {
-      const oldestKey = parsedChordNameCache.keys().next().value;
-      if (oldestKey !== undefined) parsedChordNameCache.delete(oldestKey);
-    }
     parsedChordNameCache.set(trimmed, empty);
     return empty;
   }
@@ -667,15 +655,11 @@ export const parseChordName = (chordName: string): ParsedChordName => {
     suffix,
   };
 
-  if (parsedChordNameCache.size >= 512) {
-    const oldestKey = parsedChordNameCache.keys().next().value;
-    if (oldestKey !== undefined) parsedChordNameCache.delete(oldestKey);
-  }
   parsedChordNameCache.set(trimmed, result);
   return result;
 };
 
-const rootPitchCache = new Map<string, number>();
+const rootPitchCache = createLruCache<number>(512);
 
 /** 兼容旧 API：只取和弦名的根音音高（含斜杠低音时仍取斜杠前的根音） */
 export const getChordRootPitch = (chordName: string): number => {
@@ -728,7 +712,7 @@ export const resolveChordRootPitch = (
   strings: GuitarStringEntity[],
   capoVal: number,
   tuning: Tuning | string,
-  chordOrName: string | { nameSegments?: ChordNameSegments | null; chordName?: string },
+  chordOrName: string | ChordOrName,
   rootStringIndex: number | null = null
 ): number => {
   const baseStrings = TUNING_PRESETS[tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
@@ -757,7 +741,7 @@ export const computeIsInverted = (
   strings: GuitarStringEntity[],
   capoVal: number,
   tuning: string,
-  chordOrName: string | { nameSegments?: ChordNameSegments | null; chordName?: string },
+  chordOrName: string | ChordOrName,
   rootStringIndex: number | null = null
 ): boolean => {
   const baseStrings = TUNING_PRESETS[tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;

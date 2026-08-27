@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
 import { songRepository } from '@/services/data';
-import { logger } from '@/utils/logger';
-import { STORAGE_KEYS } from '@/utils/constants';
+import { logger } from '@/utils/core/logger';
+import { STORAGE_KEYS } from '@/utils/core/constants';
 import { idb } from '@/services/storage';
 import type { Group, Song } from '@/types';
 

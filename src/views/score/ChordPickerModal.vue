@@ -15,10 +15,11 @@
         新建和弦
       </ActionButton>
     </template>
-    <div class="chord-picker-wrapper">
-      <div class="picker-fixed-header">
-        <div class="picker-controls-row">
-          <div class="search-input-wrapper">
+
+    <div class="chord-picker-wrapper flex flex-col h-full overflow-hidden box-border">
+      <div class="picker-fixed-header flex flex-col gap-md shrink-0 pb-2.5 mb-2.5 border-b border-border-light">
+        <div class="picker-controls-row p-1 flex items-center justify-between gap-lg">
+          <div class="search-input-wrapper flex-1 max-w-64 min-w-0">
             <BaseInput
               v-model="pickerSearchQuery"
               v-focus
@@ -30,12 +31,12 @@
               show-count
             >
               <template #prefix>
-                <Search class="search-icon" :size="14" stroke-width="2.5" aria-hidden="true" />
+                <Search class="search-icon text-text-disabled" :size="14" stroke-width="2.5" aria-hidden="true" />
               </template>
             </BaseInput>
           </div>
-          <div class="sort-action-group">
-            <span class="sort-label">排序</span>
+          <div class="sort-action-group flex items-center gap-sm shrink-0">
+            <span class="sort-label text-xs font-semibold text-text-disabled whitespace-nowrap">排序</span>
             <BaseSegmentedControl
               v-model="sortOverride"
               :options="SORT_RULE_CONFIG"
@@ -46,14 +47,17 @@
               :disabled="sortOverride !== GroupSortRule.KEY_DEGREE"
               :options="KEY_OPTIONS"
               default-value="C"
-              :label-formatter="val => `${val} 调`"
-              class="picker-key-selector"
-              width="sm"
+              :format-option="(val: any) => `${val} 调`"
+              class="picker-key-selector w-20"
+              width="md"
               @update:model-value="handleSortKeyChange"
             />
           </div>
         </div>
-        <div v-wheel-scroll.smooth class="picker-group-pills-bar no-scrollbar">
+        <div
+          v-wheel-scroll.smooth
+          class="picker-group-pills-bar no-scrollbar flex items-center gap-sm overflow-x-auto py-xs pl-xs scroll-smooth"
+        >
           <ActionButton
             v-for="group in groupTabOptions"
             :key="String(group.value)"
@@ -61,33 +65,46 @@
             :primary="selectedGroupId === group.value"
             @click="handleGroupTabChange(String(group.value))"
           >
-            <span class="group-label">{{ group.label }}</span>
-            <span class="group-count" :class="{ 'is-selected': selectedGroupId === group.value }">
+            <span class="group-label text-xs font-semibold"> {{ group.label }} </span>
+            <span
+              class="group-count pl-2 text-2xs font-semibold"
+              :class="{ 'is-selected font-extrabold': selectedGroupId === group.value }"
+            >
               {{ group.count }}
             </span>
           </ActionButton>
         </div>
       </div>
-      <div ref="scrollWrapperRef" class="picker-scroll-content no-scrollbar">
+      <div
+        ref="scrollWrapperRef"
+        v-grid-nav="{ cols: 5, selector: '.picker-chord-card' }"
+        class="picker-scroll-content no-scrollbar flex-1 min-h-0 overflow-y-auto p-xs"
+      >
         <EmptyState v-if="filteredChords.length === 0" description="当前搜索或分组下暂无匹配和弦。" size="lg" />
-        <TransitionGroup v-else name="picker-section" tag="div" class="picker-sections-list">
+        <TransitionGroup
+          v-else
+          name="v-transition-list"
+          tag="div"
+          class="picker-sections-list flex flex-col gap-xl w-full relative"
+        >
           <div
             v-for="section in chordSections"
             :key="section.id"
-            class="picker-section-block"
+            class="picker-section-block flex flex-col gap-sm"
             :data-section-id="section.id"
           >
-            <div class="picker-section-header">
-              <span class="picker-section-title">{{ section.title }}</span>
-              <BaseBadge appearance="outline">{{ section.chords.length }}</BaseBadge>
+            <div class="picker-section-header flex items-center gap-md py-md select-none">
+              <span class="picker-section-title text-sm font-extrabold text-text-title tracking-tight">
+                {{ section.title }}
+              </span>
+              <BaseBadge appearance="outline"> {{ section.chords.length }} </BaseBadge>
             </div>
             <TransitionGroup
-              name="picker-card"
+              name="v-transition-list"
               tag="div"
-              class="picker-cards-grid-cols"
+              class="picker-cards-grid-cols grid grid-cols-5 gap-lg items-start relative"
               role="group"
               :aria-label="`${section.title} 和弦组`"
-              @keydown="handleKeydown"
             >
               <div
                 v-for="chord in section.chords"
@@ -99,8 +116,11 @@
                 :aria-pressed="isCurrentBound(chord)"
                 :aria-disabled="isCurrentBound(chord)"
                 :aria-label="`和弦 ${chordMeta.get(chord.id)?.name ?? ''}${isCurrentBound(chord) ? '（当前已绑定）' : ''}`"
-                class="picker-chord-card"
-                :class="{ 'is-current-bound': isCurrentBound(chord) }"
+                class="picker-chord-card flex flex-col items-center justify-center self-start w-full box-border relative z-card p-md bg-bg-body border border-border-light rounded-md cursor-pointer outline-none transition-all duration-fast hover:border-primary hover:shadow-md active:scale-[0.97]"
+                :class="{
+                  '!bg-tint-primary-88 !border-primary cursor-default !pointer-events-none ring-2 ring-primary/70 !shadow-none !active:scale-100':
+                    isCurrentBound(chord),
+                }"
                 :data-chord-id="chord.id"
                 data-focusable-inline
                 @click="!isCurrentBound(chord) && handleSelectChord(chord)"
@@ -127,7 +147,7 @@
     <template #footer>
       <div
         v-wheel-scroll.smooth
-        class="picker-section-nav no-scrollbar"
+        class="picker-section-nav no-scrollbar flex items-center justify-center gap-sm w-full overflow-x-auto py-xs scroll-smooth"
         role="navigation"
         aria-label="和弦分区快速跳转"
       >
@@ -137,13 +157,16 @@
           :variant="activeSectionId === section.id ? 'subtle' : 'ghost'"
           :primary="activeSectionId === section.id"
           size="sm"
-          class="section-nav-chip"
+          class="section-nav-chip shrink-0"
           :aria-label="`跳转到 ${section.title} 区`"
           :aria-current="activeSectionId === section.id ? 'true' : undefined"
           @click="scrollToSection(section.id)"
         >
-          <span class="group-label">{{ section.title }}</span>
-          <span class="group-count" :class="{ 'is-selected': activeSectionId === section.id }">
+          <span class="group-label text-xs font-semibold"> {{ section.title }} </span>
+          <span
+            class="group-count pl-2 text-2xs font-semibold"
+            :class="{ 'is-selected font-extrabold': activeSectionId === section.id }"
+          >
             {{ section.chords.length }}
           </span>
         </ActionButton>
@@ -157,24 +180,23 @@ const fretboardSizeCache = reactive<Record<string, { width: string; height: stri
 </script>
 
 <script setup lang="ts">
-import ActionButton from '@/components/ActionButton.vue';
-import BaseBadge from '@/components/BaseBadge.vue';
-import BaseInput from '@/components/BaseInput.vue';
-import BaseModal from '@/components/BaseModal.vue';
-import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
-import BaseSelector from '@/components/BaseSelector.vue';
-import EmptyState from '@/components/EmptyState.vue';
-import Fretboard from '@/components/Fretboard.vue';
-import { useGridNavigation } from '@/composables/useGridNavigation';
-import { useScoreLinesData } from '@/composables/useScoreLinesData';
+import ActionButton from '@/components/base/ActionButton.vue';
+import BaseBadge from '@/components/base/BaseBadge.vue';
+import BaseInput from '@/components/base/BaseInput.vue';
+import BaseModal from '@/components/base/BaseModal.vue';
+import BaseSegmentedControl from '@/components/base/BaseSegmentedControl.vue';
+import BaseSelector from '@/components/base/BaseSelector.vue';
+import EmptyState from '@/components/base/EmptyState.vue';
+import Fretboard from '@/components/fretboard/Fretboard.vue';
+import { useScoreLinesData } from '@/composables/score/useScoreLinesData';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
 import { GroupSortRule } from '@/types';
-import { getPlaceholderSize } from '@/utils/chord-fretboard';
-import { observeVisibility } from '@/utils/common';
+import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
+import { observeVisibility } from '@/utils/core/common';
 import {
   KEY_OPTIONS,
   SORT_RULE_CONFIG,
@@ -182,7 +204,7 @@ import {
   getChordName,
   parseChordName,
   resolveChordRootPitch,
-} from '@/utils/musicTheory';
+} from '@/utils/music/musicTheory';
 import { Plus, Search } from '@lucide/vue';
 import {
   computed,
@@ -217,7 +239,6 @@ const { chordsLookupMap } = useScoreLinesData();
 const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
 const visibleMap = reactive<Record<string, boolean>>({});
 const cardObserverStops = new Map<string, () => void>();
-const { handleKeydown } = useGridNavigation(5, scrollWrapperRef, { selector: '.picker-chord-card' });
 
 const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordId: string) => {
   if (!el) {
@@ -264,7 +285,7 @@ const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fr
 const getCalculatedOrCachedSize = (fretCount: number) => {
   const cacheKey = getCacheKey(fretCount);
   if (fretboardSizeCache[cacheKey]) return fretboardSizeCache[cacheKey];
-  const coreSize = getPlaceholderSize(fretCount, pickerScale);
+  const coreSize = getPlaceholderSize(fretCount, pickerScale, true, true);
   fretboardSizeCache[cacheKey] = coreSize;
   return coreSize;
 };
@@ -591,260 +612,3 @@ onDeactivated(() => {
   scrollWrapperRef.value?.removeEventListener('scroll', handleScroll);
 });
 </script>
-
-<style scoped lang="scss">
-.chord-picker-wrapper {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  padding: $space-sm;
-}
-
-.picker-fixed-header {
-  display: flex;
-  flex-direction: column;
-  gap: $space-md;
-  flex-shrink: 0;
-  padding-bottom: 0.6rem;
-  margin-bottom: 0.6rem;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.picker-controls-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: $space-lg;
-}
-
-.search-input-wrapper {
-  flex: 1;
-  max-width: 16rem;
-}
-
-.search-icon {
-  color: var(--text-disabled);
-}
-
-.sort-action-group {
-  display: flex;
-  align-items: center;
-  gap: $space-sm;
-}
-
-.sort-label {
-  font-size: $fs-xs;
-  font-weight: 600;
-  color: var(--text-disabled);
-  white-space: nowrap;
-}
-
-.picker-key-selector {
-  width: 5.2rem;
-}
-
-.picker-group-pills-bar {
-  display: flex;
-  align-items: center;
-  gap: $space-sm;
-  overflow-x: auto;
-  padding: $space-xs 0 $space-xs $space-xs;
-  scroll-behavior: smooth;
-
-  .group-label {
-    font-size: $fs-xs;
-    font-weight: 600;
-  }
-
-  .group-count {
-    padding-left: $space-sm;
-    font-size: $fs-2xs;
-    font-weight: 600;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', sans-serif;
-
-    &.is-selected {
-      font-weight: 800;
-    }
-  }
-}
-
-.picker-scroll-content {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: $space-xs;
-}
-
-.picker-sections-list {
-  display: flex;
-  flex-direction: column;
-  gap: $space-xl;
-  width: 100%;
-  position: relative;
-}
-
-.picker-section-block {
-  display: flex;
-  flex-direction: column;
-  gap: $space-sm;
-}
-
-// Section FLIP 动画
-.picker-section-move {
-  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.picker-section-enter-active,
-.picker-section-leave-active {
-  transition: opacity 0.22s ease;
-}
-
-.picker-section-enter-from,
-.picker-section-leave-to {
-  opacity: 0;
-}
-
-.picker-section-leave-active {
-  position: absolute;
-  width: 100%;
-  pointer-events: none;
-}
-
-.picker-section-header {
-  display: flex;
-  align-items: center;
-  gap: $space-md;
-  padding: $space-md 0;
-  user-select: none;
-}
-
-.picker-section-title {
-  font-size: $fs-sm;
-  font-weight: 800;
-  color: var(--text-title);
-  letter-spacing: -0.01em;
-}
-
-.picker-section-count {
-  font-size: $fs-2xs;
-  font-weight: 700;
-  color: var(--text-disabled);
-  background-color: var(--bg-panel-hover);
-  padding: 0.1rem 0.4rem;
-  border-radius: $radius-pill;
-  line-height: 1.2;
-}
-
-.picker-cards-grid-cols {
-  display: grid;
-  align-items: start;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: $space-lg;
-  position: relative;
-}
-
-// 卡片 FLIP 重排高性能 GPU 动画（严格保持 Grid 单元格宽度，绝不拉伸）
-.picker-card-move {
-  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-  will-change: transform;
-}
-
-.picker-card-enter-active {
-  transition:
-    opacity 0.25s ease,
-    transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.picker-card-leave-active {
-  transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
-  position: absolute;
-  width: calc((100% - 4 * $space-lg) / 5);
-  pointer-events: none;
-  z-index: 0 !important;
-}
-
-.picker-card-enter-from {
-  opacity: 0;
-  transform: translateY(6px);
-}
-
-.picker-card-leave-to {
-  opacity: 0;
-  transform: scale(0.92);
-}
-
-.picker-chord-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  align-self: start;
-  width: 100%;
-  box-sizing: border-box;
-  position: relative;
-  z-index: 1;
-  padding: $space-md;
-  background-color: var(--bg-body);
-  border: 1px solid var(--border-light);
-  border-radius: $radius-md;
-  cursor: pointer;
-  transition:
-    border-color $duration-fast ease,
-    background-color $duration-fast ease,
-    box-shadow $duration-fast ease;
-  outline: none;
-
-  &:hover {
-    border-color: var(--color-primary);
-    box-shadow: $shadow-md;
-  }
-
-  &.is-current-bound {
-    background-color: var(--tint-primary-88);
-    border-color: $primary;
-    box-shadow: $focus-ring-primary;
-    cursor: default !important;
-    pointer-events: none !important;
-  }
-}
-
-.tab-count-badge {
-  font-size: $fs-2xs;
-  padding: 0 0.3rem;
-  min-width: 1.4em;
-  height: 1.4em;
-  line-height: 1.4em;
-  opacity: 0.72;
-}
-
-.picker-section-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: $space-sm;
-  width: 100%;
-  overflow-x: auto;
-  padding: $space-xs 0;
-  scroll-behavior: smooth;
-
-  .section-nav-chip {
-    flex-shrink: 0;
-  }
-
-  .group-label {
-    font-size: $fs-xs;
-    font-weight: 600;
-  }
-
-  .group-count {
-    padding-left: $space-sm;
-    font-size: $fs-2xs;
-    font-weight: 600;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', sans-serif;
-  }
-}
-</style>

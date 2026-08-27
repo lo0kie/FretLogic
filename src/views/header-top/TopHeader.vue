@@ -1,6 +1,10 @@
 <template>
-  <header class="app-top-header">
-    <div class="header-section section-left">
+  <header
+    class="relative z-header flex min-h-10 w-full shrink-0 select-none items-center justify-between border-b border-glass-border bg-bg-panel/90 backdrop-blur-lg px-4 box-border @media(display-mode:window-controls-overlay):[-webkit-app-region:drag] @media(display-mode:window-controls-overlay):[app-region:drag] @media(display-mode:window-controls-overlay):min-h-[max(2.5rem,env(titlebar-area-height,2.5rem))] @media(display-mode:window-controls-overlay):pl-[max(env(titlebar-area-inset-left,0px),1rem)] @media(display-mode:window-controls-overlay):pr-[max(env(titlebar-area-inset-right,0px),1rem)]"
+  >
+    <div
+      class="flex flex-1 min-w-0 items-center justify-start gap-sm @media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag]"
+    >
       <ActionButton
         v-tooltip="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'"
         aria-label="切换侧边栏"
@@ -13,10 +17,14 @@
         <PanelLeft :size="18" stroke-width="2.2" />
       </ActionButton>
 
-      <div class="header-divider" />
+      <div class="w-px h-[0.7rem] bg-glass-border mx-[0.1rem]" />
 
-      <div class="nav-brand-group">
-        <span class="app-brand-title">Fret Logic</span>
+      <div class="flex items-center gap-md">
+        <span
+          class="text-xs font-extrabold tracking-tight text-text-title whitespace-nowrap [font-feature-settings:'ss01'_1]"
+        >
+          Fret Logic
+        </span>
         <BaseSegmentedControl
           :model-value="activeNavPath"
           :size="uiSize"
@@ -27,9 +35,11 @@
     </div>
 
     <!-- 中部工具栏 -->
-    <div class="header-section section-center">
+    <div
+      class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-inner pointer-events-auto flex items-center @media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag] @media(display-mode:window-controls-overlay):-translate-x-[calc(50%-(env(titlebar-area-inset-left,0px)-env(titlebar-area-inset-right,0px))/2)]"
+    >
       <!-- 1. 工作台工具 -->
-      <div v-if="route.path === '/workbench'" class="segmented-control-capsule">
+      <div v-if="route.path === '/workbench'" class="flex items-center gap-xs p-xs">
         <ActionButton
           v-tooltip="'播放/试听当前和弦'"
           size="sm"
@@ -42,7 +52,7 @@
           <component :is="isPlaying ? Square : Play" :size="15" stroke-width="2.5" />
         </ActionButton>
 
-        <div class="capsule-divider" />
+        <div class="w-px h-[0.8rem] bg-border-base mx-[0.1rem] opacity-50" />
 
         <ActionButton
           v-tooltip="'导出透明背景图片'"
@@ -77,36 +87,27 @@
       />
     </div>
 
-    <div class="header-section section-right">
+    <div
+      class="flex flex-1 min-w-0 items-center justify-end gap-xs @media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag]"
+    >
       <ActionButton
         v-if="scoreEditor.activeTab === 'interactive' && route.path === '/score'"
         v-tooltip="isAutoScrolling ? '暂停滚动' : '开始自动滚动'"
         size="sm"
         variant="ghost"
+        icon-only
         :title="isAutoScrolling ? '暂停滚动' : '开始自动滚动'"
         @click="toggleAutoScroll"
       >
-        <template #suffix>
-          {{ scoreEditor.scrollSpeed }}
-        </template>
         <component :is="isAutoScrolling ? Pause : Play" :size="15" stroke-width="2.5" />
       </ActionButton>
 
-      <ActionButton
-        v-tooltip="isGlobalEditable ? '退出编辑模式' : '进入编辑模式'"
-        icon-only
-        variant="ghost"
-        aria-label="切换编辑模式"
-        :size="uiSize"
-        @click="toggleEditable"
-      >
+      <ActionButton icon-only variant="ghost" @click="toggleEditable">
         <component
           :is="isGlobalEditable ? Pencil : PencilOff"
           :size="17"
           stroke-width="2.2"
-          :style="{
-            color: isGlobalEditable ? 'var(--color-primary)' : 'var(--text-disabled)',
-          }"
+          :class="isGlobalEditable ? 'text-color-primary' : 'text-text-disabled'"
         />
       </ActionButton>
 
@@ -158,21 +159,13 @@
               :is="globalDarkMode ? Moon : Sun"
               :size="18"
               :stroke-width="2.2"
-              :style="{ color: globalDarkMode ? 'var(--color-primary)' : 'var(--color-warning)' }"
+              :class="globalDarkMode ? 'text-color-primary' : 'text-color-warning'"
             />
           </ActionButton>
         </template>
 
         <template #default="{ close }">
-          <ContextMenuItems
-            :items="themeMenuItems"
-            @select="
-              item => {
-                item.action();
-                close();
-              }
-            "
-          />
+          <ContextMenuItems :items="themeMenuItems" @select="item => (item.action(), close())" />
         </template>
       </BasePopover>
 
@@ -186,17 +179,17 @@
 </template>
 
 <script setup lang="ts">
-import ActionButton from '@/components/ActionButton.vue';
-import BasePopover from '@/components/BasePopover.vue';
-import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
-import ContextMenuItems, { type ContextMenuItem } from '@/components/ContextMenuItems.vue';
-import { useAudioPlayer } from '@/composables/useAudioPlayer';
-import { useAutoScroll } from '@/composables/useAutoScroll.ts';
+import ActionButton from '@/components/base/ActionButton.vue';
+import BasePopover from '@/components/base/BasePopover.vue';
+import BaseSegmentedControl, { type SegmentOption } from '@/components/base/BaseSegmentedControl.vue';
+import ContextMenuItems, { type ContextMenuItem } from '@/components/context-menu/ContextMenuItems.vue';
+import { useAudioPlayer } from '@/composables/fretboard/useAudioPlayer';
+import { useAutoScroll } from '@/composables/score/useAutoScroll';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
-import { globalDarkMode, isGlobalEditable, themePreference, toggleEditable } from '@/stores/globalState.ts';
+import { globalDarkMode, isGlobalEditable, setThemeMode, themePreference, toggleEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
-import { renderElementToBlob, writeBlobToClipboard } from '@/utils/score-export';
+import { renderElementToBlob, writeBlobToClipboard } from '@/utils/score/score-export';
 import {
   Cloud,
   Copy,
@@ -245,21 +238,30 @@ const themeMenuItems = computed<ContextMenuItem[]>(() => [
     icon: Sun,
     color: 'var(--color-warning)',
     checked: themePreference.value === 'light',
-    action: () => emit('toggle-theme', 'light'),
+    action: () => {
+      setThemeMode('light');
+      emit('toggle-theme', 'light');
+    },
   },
   {
     label: '深色模式',
     icon: Moon,
     color: 'var(--color-primary)',
     checked: themePreference.value === 'dark',
-    action: () => emit('toggle-theme', 'dark'),
+    action: () => {
+      setThemeMode('dark');
+      emit('toggle-theme', 'dark');
+    },
   },
   {
     label: '跟随系统',
     icon: Laptop,
     color: 'var(--text-title)',
     checked: themePreference.value === 'auto',
-    action: () => emit('toggle-theme', 'auto'),
+    action: () => {
+      setThemeMode('auto');
+      emit('toggle-theme', 'auto');
+    },
   },
 ]);
 
@@ -280,7 +282,9 @@ const handleScoreTabChange = (val: 'edit' | 'interactive') => {
 
 const handleExport = async (isTransparent: boolean) => {
   if (uiStore.isCopying) return;
-  const el = unref(uiStore.activeExportTarget);
+  const el =
+    unref(uiStore.activeExportTarget) ||
+    document.querySelector<HTMLElement>('.workbench-card, .score-lyrics-interactive');
   if (!el) {
     uiStore.toast.error('导出失败：目标 DOM 节点尚未渲染完成');
     return;
@@ -308,113 +312,3 @@ const buildInfoTooltip = computed(() => {
   return `Fret Logic\n版本：${__BUILD_INFO__.commit}\n构建时间：${builtAt}`;
 });
 </script>
-
-<style scoped lang="scss">
-.app-top-header {
-  min-height: 2.5rem;
-  width: 100%;
-  padding-left: 1rem;
-  padding-right: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: relative;
-  background-color: var(--bg-panel);
-  backdrop-filter: var(--blur-lg);
-  -webkit-backdrop-filter: var(--blur-lg);
-  border-bottom: 1px solid var(--glass-border);
-  box-sizing: border-box;
-  user-select: none;
-  z-index: var(--z-header);
-  flex-shrink: 0;
-}
-
-.header-section {
-  display: flex;
-  align-items: center;
-}
-
-.section-left {
-  flex: 1 1 0;
-  min-width: 0;
-  justify-content: flex-start;
-  gap: $space-sm;
-}
-
-.section-center {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: var(--z-inner);
-  pointer-events: auto;
-}
-
-.section-right {
-  flex: 1 1 0;
-  min-width: 0;
-  justify-content: flex-end;
-  gap: $space-xs;
-}
-
-.nav-brand-group {
-  display: flex;
-  align-items: center;
-  gap: $space-md;
-}
-
-.app-brand-title {
-  font-size: $fs-xs;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--text-title);
-  white-space: nowrap;
-  font-feature-settings: 'ss01' 1;
-}
-
-.header-divider {
-  width: 1px;
-  height: 0.7rem;
-  background-color: var(--glass-border);
-  margin: 0 0.1rem;
-}
-
-.segmented-control-capsule {
-  display: flex;
-  align-items: center;
-  gap: $space-xs;
-  padding: $space-xs;
-}
-
-.capsule-divider {
-  width: 1px;
-  height: 0.8rem;
-  background-color: var(--border-base);
-  margin: 0 0.1rem;
-  opacity: 0.5;
-}
-
-@media (display-mode: window-controls-overlay) {
-  .app-top-header {
-    -webkit-app-region: drag;
-    app-region: drag;
-    min-height: max(2.5rem, env(titlebar-area-height, 2.5rem));
-    padding-left: max(env(titlebar-area-inset-left, 0px), 1rem);
-    padding-right: max(env(titlebar-area-inset-right, 0px), 1rem);
-  }
-
-  .section-left,
-  .section-center,
-  .section-right {
-    -webkit-app-region: no-drag;
-    app-region: no-drag;
-  }
-
-  .section-center {
-    transform: translate(
-      calc(-50% + (env(titlebar-area-inset-left, 0px) - env(titlebar-area-inset-right, 0px)) / 2),
-      -50%
-    );
-  }
-}
-</style>
