@@ -1,11 +1,11 @@
-﻿import { useChordEditorStore } from '@/stores/chordEditorStore';
+﻿import { validateImportExportPayload } from '@/services/validation/payload';
+import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { buildBackupPayload } from '@/utils/core/buildBackupPayload';
 import { wait } from '@/utils/score/score-export';
-import { validateImportExportPayload } from '@/services/validation/payload';
 
 export function useImportExportService() {
   const chordStore = useChordStore();
@@ -72,6 +72,13 @@ export function useImportExportService() {
     const payload = buildBackupPayload();
     if (!payload) {
       uiStore.toast.error('当前本地缓存存在严重破损数据，请检查控制台');
+      return;
+    }
+    // 没有任何数据时不执行导出，仅提示
+    const isEmpty =
+      (payload.groups?.length ?? 0) === 0 && (payload.chords?.length ?? 0) === 0 && (payload.songs?.length ?? 0) === 0;
+    if (isEmpty) {
+      uiStore.toast.warning('没有可导出的数据，请先创建分组、和弦或乐谱');
       return;
     }
     const now = new Date();

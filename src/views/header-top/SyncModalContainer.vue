@@ -50,7 +50,7 @@
             <BaseSelector
               v-model="settingsStore.githubBranch"
               clearable
-              placeholder="请选择或获取分支"
+              placeholder="请选择分支"
               :options="settingsStore.githubBranches"
               default-value=""
             />

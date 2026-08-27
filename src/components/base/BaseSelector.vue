@@ -134,7 +134,11 @@
           tabindex="-1"
           :aria-multiselectable="isMultiple || undefined"
           class="no-scrollbar w-full overflow-y-auto flex flex-col box-border p-xs gap-0.5 outline-none"
-          :style="{ maxHeight: dropdownMaxHeight }"
+          :style="{
+            maxHeight: dropdownMaxHeight,
+            // 空选项时禁止滚动（空占位可能略高于容器，避免出现可滚动的空面板）
+            ...(filteredOptions.length === 0 ? { overflow: 'hidden' } : {}),
+          }"
           @scroll.passive="checkScroll"
           @keydown="handleDropdownKeydown($event, close)"
         >
@@ -538,7 +542,8 @@ watch(
 
 const checkScroll = () => {
   const el = dropdownRef.value;
-  if (!el) {
+  // 空选项时不显示滚动提示箭头（空占位可能略高于容器，但面板禁止滚动）
+  if (!el || filteredOptions.value.length === 0) {
     canScrollUp.value = false;
     canScrollDown.value = false;
     return;

@@ -5,7 +5,7 @@ import { normalizeChord } from '@/utils/music/chord-fretboard';
 import { cloneDeep } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { createString, DEFAULT_TUNING_MAPPING, getChordName, Tuning, TUNING_PRESETS } from '@/utils/music/musicTheory';
-import { debounceFilter, useStorage } from '@vueuse/core';
+import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw, watch } from 'vue';
 
@@ -48,9 +48,7 @@ const normalizeDraftChord = (draft: Chord): Chord => {
 export const useChordEditorStore = defineStore('editor', () => {
   const chordStore = useChordStore();
 
-  const draftChord = useStorage<Chord>(STORAGE_KEYS.EDITING_DRAFT, createDefaultChord(), localStorage, {
-    eventFilter: debounceFilter(300),
-  });
+  const draftChord = useStorage<Chord>(STORAGE_KEYS.EDITING_DRAFT, createDefaultChord(), localStorage);
   draftChord.value = normalizeDraftChord(draftChord.value);
   const isEditing = useStorage(STORAGE_KEYS.IS_EDITING, false);
   const isCreating = useStorage(STORAGE_KEYS.IS_CREATING, false);

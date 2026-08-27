@@ -16,7 +16,7 @@ import {
   sortChordsByRule,
   validateBassConsistency,
 } from '@/utils/music/musicTheory';
-import { debounceFilter, useRefHistory, useStorage } from '@vueuse/core';
+import { useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw } from 'vue';
 
@@ -62,12 +62,10 @@ function toGroupedCard(variants: Chord[]): GroupedChordCard {
 
 export const useChordStore = defineStore('chord', () => {
   const chordRepository = createChordRepository(localStorage);
-  const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage, {
-    eventFilter: debounceFilter(400, { maxWait: 1500 }),
-  });
-  const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage, {
-    eventFilter: debounceFilter(400, { maxWait: 1500 }),
-  });
+  // 不启用防抖：任何变更（保存/删除/排序/换组）立即写入 localStorage，
+  // 避免刷新时落入防抖窗口导致数据回退
+  const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
+  const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
   // 只允许同时展开一个分组：单一展开状态持久化，刷新后恢复
   const expandedGroupId = useStorage<string | null>(STORAGE_KEYS.EXPANDED_GROUP_ID, null);
@@ -302,6 +300,18 @@ export const useChordStore = defineStore('chord', () => {
     savedChordsList.value = next;
   };
 
+  /**
+   * 立即将和弦列表写入 localStorage（绕过 useStorage 的 400ms 防抖）。
+   * 供保存动作成功后调用，避免用户保存后立刻刷新时横按等数据尚未落盘而丢失。
+   */
+  const flushChordsToStorage = () => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CHORD_LIST, JSON.stringify(toRaw(savedChordsList.value)));
+    } catch {
+      // 存储失败静默忽略（与 useStorage 行为一致）
+    }
+  };
+
   const removeChordsByIds = (ids: string[]) => {
     if (ids.length === 0) return;
     const set = new Set(ids);
@@ -489,6 +499,7 @@ export const useChordStore = defineStore('chord', () => {
     deleteGroup,
     addChord,
     updateChord,
+    flushChordsToStorage,
     removeChordsByIds,
     moveChordsToGroup,
     moveVariantsByName,

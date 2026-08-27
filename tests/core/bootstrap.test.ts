@@ -114,14 +114,15 @@ describe('bootstrap 数据层引导', () => {
     expect(await songRepository.loadSongs()).toEqual([song]);
   });
 
-  it('IDB 曲库为空时清理过期的 localStorage 歌曲', async () => {
+  it('IDB 曲库为空时保留 localStorage 歌曲（localStorage 是实时权威源）', async () => {
     await chordRepository.saveGroups([{ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' }]);
     storage.setItem('CHORD_LAB_SONGS_INDEX_V1', JSON.stringify(['stale']));
     storage.setItem('CHORD_LAB_SONG_ENTRY_V1:stale', JSON.stringify({ ...song, id: 'stale' }));
 
     await bootstrapDataLayer(storage);
 
-    expect(storage.getItem('CHORD_LAB_SONGS_INDEX_V1')).toBeNull();
-    expect(storage.getItem('CHORD_LAB_SONG_ENTRY_V1:stale')).toBeNull();
+    // IDB 为空只代表备份尚未同步，不得据此清空 localStorage 的实时数据（避免刷新竞态丢数据）
+    expect(storage.getItem('CHORD_LAB_SONGS_INDEX_V1')).toContain('stale');
+    expect(storage.getItem('CHORD_LAB_SONG_ENTRY_V1:stale')).toBeTruthy();
   });
 });
