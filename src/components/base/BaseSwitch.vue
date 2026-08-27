@@ -22,7 +22,8 @@
   >
     <span
       ref="trackRef"
-      class="switch-track relative inline-flex items-center rounded-full box-border shrink-0 transition-all duration-base group-focus-visible:ring-2 group-focus-visible:ring-primary/70 overflow-hidden"
+      v-wave="{ disabled: disabled || isCurrentLoading }"
+      class="switch-track relative inline-flex items-center rounded-full box-border shrink-0 transition-all duration-base group-focus-visible:ring-2 group-focus-visible:ring-primary/70 overflow-hidden active:scale-[0.92]"
       :class="[currentConfig.trackClass, trackColorClass]"
     >
       <!-- 轨道两端状态文字 -->
@@ -39,8 +40,8 @@
 
       <span
         ref="thumbRef"
-        class="switch-thumb absolute top-1/2 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] box-border transition-transform duration-base ease-spring inline-flex items-center justify-center pointer-events-none"
-        :class="currentConfig.thumbClass"
+        class="switch-thumb rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] box-border transition-transform duration-base ease-spring inline-flex items-center justify-center pointer-events-none"
+        :class="[currentConfig.thumbClass, !isDragging && (isChecked ? currentConfig.checkedClass : 'translate-x-0')]"
         :style="thumbStyle"
       >
         <!-- 滑块内图标插槽 -->
@@ -100,24 +101,33 @@ const COLOR_CLASS: Record<string, { on: string; off: string }> = {
 
 const SWITCH_CONFIG: Record<
   'sm' | 'md' | 'lg',
-  { trackClass: string; thumbClass: string; travel: string; spinnerSize: number }
+  {
+    trackClass: string;
+    thumbClass: string;
+    checkedClass: string;
+    travelPx: number;
+    spinnerSize: number;
+  }
 > = {
   sm: {
-    trackClass: 'w-[1.85rem] h-[1.1rem]',
-    thumbClass: 'w-[0.85rem] h-[0.85rem] left-[0.125rem]',
-    travel: '0.75rem',
+    trackClass: 'w-7 h-4 p-0.5',
+    thumbClass: 'w-3 h-3',
+    checkedClass: 'translate-x-3',
+    travelPx: 12,
     spinnerSize: 9,
   },
   md: {
-    trackClass: 'w-[2.25rem] h-[1.35rem]',
-    thumbClass: 'w-[1.05rem] h-[1.05rem] left-[0.15rem]',
-    travel: '0.9rem',
+    trackClass: 'w-9 h-5 p-0.5',
+    thumbClass: 'w-4 h-4',
+    checkedClass: 'translate-x-4',
+    travelPx: 16,
     spinnerSize: 11,
   },
   lg: {
-    trackClass: 'w-[2.75rem] h-[1.6rem]',
-    thumbClass: 'w-[1.3rem] h-[1.3rem] left-[0.15rem]',
-    travel: '1.15rem',
+    trackClass: 'w-11 h-6 p-0.5',
+    thumbClass: 'w-5 h-5',
+    checkedClass: 'translate-x-5',
+    travelPx: 20,
     spinnerSize: 13,
   },
 };
@@ -161,9 +171,9 @@ const resolvedInactiveValue = computed<T>(() =>
 );
 
 const autoId = useId();
-const resolvedId = computed(() => props.id ?? autoId);
+const resolvedId = computed(() => props.id || autoId);
 
-const switchBtnRef = useTemplateRef<HTMLElement>('switchBtnRef');
+const switchBtnRef = useTemplateRef<HTMLButtonElement>('switchBtnRef');
 const trackRef = useTemplateRef<HTMLElement>('trackRef');
 const thumbRef = useTemplateRef<HTMLElement>('thumbRef');
 
@@ -230,35 +240,39 @@ const handleClick = () => {
 const handlePointerDown = (e: PointerEvent) => {
   if (props.disabled || isCurrentLoading.value || e.button !== 0) return;
 
-  const trackEl = trackRef.value;
-  const thumbEl = thumbRef.value;
+  if (trackRef.value && thumbRef.value) {
+    const style = window.getComputedStyle(trackRef.value);
+    const padLeft = parseFloat(style.paddingLeft) || 0;
+    const padRight = parseFloat(style.paddingRight) || 0;
 
-  if (trackEl && thumbEl) {
-    const trackWidth = trackEl.offsetWidth;
-    const thumbWidth = thumbEl.offsetWidth;
-    const padding = thumbEl.offsetLeft || 2.4;
-    maxTravelDistance.value = Math.max(8, trackWidth - thumbWidth - padding * 2);
+    // clientWidth 包含 padding，减去 thumb 宽度及两侧 padding 即为内容区域最大行程
+    const calculatedTravel = trackRef.value.clientWidth - thumbRef.value.offsetWidth - (padLeft + padRight);
+    maxTravelDistance.value = Math.max(0, calculatedTravel);
+  } else {
+    maxTravelDistance.value = currentConfig.value.travelPx;
   }
 
-  isDragging.value = true;
   dragStartX.value = e.clientX;
   dragCurrentX.value = e.clientX;
   startValue.value = isChecked.value;
   hasMovedSignificantly.value = false;
-
   (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
 };
 
 const handlePointerMove = (e: PointerEvent) => {
-  if (!isDragging.value) return;
+  if (e.buttons === 0) {
+    if (isDragging.value) isDragging.value = false;
+    return;
+  }
   dragCurrentX.value = e.clientX;
-  if (Math.abs(dragCurrentX.value - dragStartX.value) > 3) {
+  if (!isDragging.value && Math.abs(dragCurrentX.value - dragStartX.value) > 4) {
+    isDragging.value = true;
     hasMovedSignificantly.value = true;
   }
 };
 
 const handlePointerUp = async (e: PointerEvent) => {
-  if (!isDragging.value) return;
+  const wasDragging = isDragging.value;
   isDragging.value = false;
 
   try {
@@ -269,7 +283,7 @@ const handlePointerUp = async (e: PointerEvent) => {
 
   const deltaX = dragCurrentX.value - dragStartX.value;
 
-  if (hasMovedSignificantly.value) {
+  if (wasDragging && hasMovedSignificantly.value) {
     const initialPos = startValue.value ? maxTravelDistance.value : 0;
     const targetPos = Math.min(Math.max(0, initialPos + deltaX), maxTravelDistance.value);
     const finalChecked = targetPos >= maxTravelDistance.value * 0.5;
@@ -296,7 +310,6 @@ const handlePointerUp = async (e: PointerEvent) => {
 };
 
 const handlePointerCancel = (e: PointerEvent) => {
-  if (!isDragging.value) return;
   isDragging.value = false;
   try {
     (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);
@@ -306,18 +319,16 @@ const handlePointerCancel = (e: PointerEvent) => {
 };
 
 const thumbStyle = computed(() => {
-  if (isDragging.value) {
+  if (isDragging.value && hasMovedSignificantly.value) {
     const deltaX = dragCurrentX.value - dragStartX.value;
     const initialPos = startValue.value ? maxTravelDistance.value : 0;
+    // 限制在 [0, maxTravelDistance] 区间，向右绝不溢出，向左绝不小于 0
     const clampedX = Math.min(Math.max(0, initialPos + deltaX), maxTravelDistance.value);
     return {
-      transform: `translate(${clampedX}px, -50%)`,
+      transform: `translateX(${clampedX}px)`,
       transition: 'none',
     };
   }
-  const travel = currentConfig.value.travel;
-  return {
-    transform: isChecked.value ? `translate(${travel}, -50%)` : 'translate(0, -50%)',
-  };
+  return {};
 });
 </script>

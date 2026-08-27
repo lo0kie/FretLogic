@@ -29,7 +29,6 @@
         <div
           v-if="isShown"
           ref="panelRef"
-          v-on-click-outside="[handleClickOutside, { ignore: [referenceRef] }]"
           role="dialog"
           :aria-modal="false"
           :aria-label="ariaLabel"
@@ -42,7 +41,6 @@
           @focusout="handleFocusOut"
           @keydown="handlePanelKeydown"
         >
-          <!-- 箭头置于 Transition 内部，与面板过渡/透明度严格保持同步 -->
           <div v-if="showArrow" ref="arrowRef" class="popover-arrow pointer-events-none" :style="arrowStyle" />
           <slot :close="close" />
         </div>
@@ -52,15 +50,14 @@
 </template>
 
 <script lang="ts">
-// 模块级全局共享：维护所有浮层宿主 -> 对应触发器元素的全局关系树（支持跨多层嵌套 Popover / Selector / ContextMenu 的层级识别）
 const globalFloatingReferenceMap = new WeakMap<HTMLElement, HTMLElement>();
 </script>
 
 <script setup lang="ts">
 import {
-  arrow as floatingArrow,
   autoUpdate,
   flip,
+  arrow as floatingArrow,
   size as floatingSize,
   limitShift,
   offset,
@@ -70,7 +67,6 @@ import {
   type Placement,
   type VirtualElement,
 } from '@floating-ui/vue';
-import { vOnClickOutside } from '@vueuse/components';
 import { useEventListener } from '@vueuse/core';
 import {
   computed,
@@ -127,7 +123,6 @@ const {
   panelStyle?: CSSProperties;
   transitionName?: string;
   virtualRef?: MaybeRef<VirtualElement | null>;
-  /** 打开后是否自动聚焦面板内首个可聚焦元素 */
   autoFocus?: boolean;
 }>();
 
@@ -137,17 +132,16 @@ const emit = defineEmits<{
 }>();
 
 const model = defineModel<boolean>({ default: false });
-
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const panelRef = useTemplateRef<HTMLDivElement>('panelRef');
 const arrowRef = useTemplateRef<HTMLElement>('arrowRef');
-
 const isMounted = ref(false);
 const isShown = ref(false);
-
-// contextmenu 右键模式下光标虚拟元素
 const contextMenuVirtualRef = ref<VirtualElement | null>(null);
+
+/** 当前是否有指针按住（用于忽略拖拽过程中的 focusout） */
+const isPointerDown = ref(false);
 
 const activeReference = computed(() => unref(virtualRef) || contextMenuVirtualRef.value || referenceRef.value);
 
@@ -160,7 +154,6 @@ const middlewareList = computed(() => {
     }),
     shift({ padding: 12, limiter: limitShift() }),
   ];
-
   if (matchTriggerWidth) {
     m.push(
       floatingSize({
@@ -178,7 +171,6 @@ const middlewareList = computed(() => {
       })
     );
   }
-
   if (showArrow) {
     m.push(floatingArrow({ element: () => arrowRef.value, padding: 6 }));
   }
@@ -201,7 +193,6 @@ const floatingStyles = computed<CSSProperties>(() => ({
   ...computedFloatingStyles.value,
 }));
 
-// 基于 useFloating 响应式 currentPlacement 计算箭头方向，防止 flip 翻转时箭头错位
 const arrowStyle = computed<CSSProperties>(() => {
   if (!showArrow || !middlewareData.value.arrow) return {};
   const { x, y } = middlewareData.value.arrow;
@@ -230,7 +221,6 @@ const arrowStyle = computed<CSSProperties>(() => {
 });
 
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
-
 const clearHoverTimer = () => {
   if (hoverTimer) {
     clearTimeout(hoverTimer);
@@ -256,7 +246,6 @@ watch(model, async val => {
     update();
     if (!model.value) return;
     isShown.value = true;
-
     if (autoFocus) {
       await nextTick();
       const firstFocusable = panelRef.value?.querySelector<HTMLElement>(
@@ -269,13 +258,11 @@ watch(model, async val => {
 
 const open = async () => {
   if (disabled) return;
-
   if (model.value) {
     update();
     isShown.value = true;
     return;
   }
-
   isMounted.value = true;
   model.value = true;
   emit('open');
@@ -375,20 +362,48 @@ const isChildFloatingLayer = (el: HTMLElement | null): boolean => {
   return false;
 };
 
-const handleClickOutside = (event: MouseEvent) => {
-  if (!closeOnClickOutside || !model.value || !isShown.value) return;
-  // 放行右键，让 ContextMenu 有机会接管
-  if (event?.button === 2 || event?.type === 'contextmenu') return;
-
-  const target = event.target as HTMLElement | null;
-  if (!target) return;
-
-  if (referenceRef.value?.contains(target)) return;
-  if (panelRef.value?.contains(target)) return;
-  if (isChildFloatingLayer(target)) return;
-
-  close();
+const isEventInside = (target: EventTarget | null): boolean => {
+  if (!(target instanceof Node)) return false;
+  if (referenceRef.value?.contains(target)) return true;
+  if (panelRef.value?.contains(target)) return true;
+  if (target instanceof HTMLElement && isChildFloatingLayer(target)) return true;
+  return false;
 };
+
+// ─── 关键：用 pointerdown 做 outside，而不是 click ───
+// 只有「按下点」在外部才关闭 → 内按下、外松开不会关
+useEventListener(
+  window,
+  'pointerdown',
+  (e: PointerEvent) => {
+    isPointerDown.value = true;
+
+    if (!closeOnClickOutside || !model.value || !isShown.value) return;
+    if (e.button === 2) return; // 右键留给 ContextMenu
+    if (isEventInside(e.target)) return;
+
+    close();
+  },
+  true
+);
+
+useEventListener(
+  window,
+  'pointerup',
+  () => {
+    isPointerDown.value = false;
+  },
+  true
+);
+
+useEventListener(
+  window,
+  'pointercancel',
+  () => {
+    isPointerDown.value = false;
+  },
+  true
+);
 
 useEventListener(
   window,
@@ -404,32 +419,24 @@ useEventListener(
 
 const handleFocusOut = (e: FocusEvent) => {
   if (!closeOnFocusOut || !model.value) return;
+  // 鼠标拖拽过程中的失焦不关（例如选项 focus 后拖到外面松开）
+  if (isPointerDown.value) return;
 
   const nextFocused = e.relatedTarget as HTMLElement | null;
-  const cardEl = e.currentTarget as HTMLElement;
-
   if (nextFocused) {
-    if (cardEl.contains(nextFocused)) return;
-    if (referenceRef.value?.contains(nextFocused)) return;
-    if (isChildFloatingLayer(nextFocused)) return;
+    if (isEventInside(nextFocused)) return;
     close();
   }
 };
 
 const handleTriggerFocusOut = (e: FocusEvent) => {
   if (!closeOnFocusOut || !model.value) return;
+  if (isPointerDown.value) return;
+  if (trigger !== 'focus') return;
 
   const nextFocused = e.relatedTarget as HTMLElement | null;
-  if (nextFocused) {
-    if (referenceRef.value?.contains(nextFocused)) return;
-    if (panelRef.value?.contains(nextFocused)) return;
-    if (isChildFloatingLayer(nextFocused)) return;
-  }
-
-  // 仅在 trigger 为 'focus' 时响应触发器失焦自动关闭，防止 click 模式下意外抢先关闭
-  if (trigger === 'focus') {
-    close();
-  }
+  if (nextFocused && isEventInside(nextFocused)) return;
+  close();
 };
 
 const handlePanelKeydown = (e: KeyboardEvent) => {

@@ -42,6 +42,18 @@ export interface ChordNameSegments {
   bass?: RootSegment;
 }
 
+/** 横按描述实体 */
+export interface BarreEntity {
+  /** 横按所在品格（>= 1；0 品为变调夹/空弦不属于横按） */
+  fret: number;
+  /** 横按起始弦索引（0~5，0 代表 6 弦，5 代表 1 弦） */
+  fromString: number;
+  /** 横按终止弦索引（0~5，必须 >= fromString） */
+  toString: number;
+  /** 可选：指法指序（通常为 1 指 / 食指） */
+  finger?: 1 | 2 | 3 | 4;
+}
+
 export interface Chord {
   id: string;
   /** 结构化和弦名分片（唯一核心语义真实源），未指定和弦名时为 null */
@@ -53,6 +65,8 @@ export interface Chord {
   tuning: Tuning;
   /** 根音所在弦的索引（单点标记，替代原来每根弦各自维护的 isRoot）；null 表示未指定根音 */
   rootStringIndex: number | null;
+  /** 横按配置列表（仅手动标记，支持多横按如双横按和弦）；未标记则为空 */
+  barres?: BarreEntity[];
 }
 
 export interface Group {

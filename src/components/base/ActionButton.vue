@@ -2,6 +2,7 @@
   <button
     v-wave="{ disabled: disabled || loading }"
     :type="type"
+    :tabindex="tabindex"
     :disabled="disabled || loading"
     :aria-disabled="disabled || loading || undefined"
     :aria-busy="loading || undefined"
@@ -67,6 +68,8 @@ const {
   block?: boolean;
   width?: string | number;
   height?: string | number;
+  /** 原生 button 的 tabindex（不传则保持按钮默认可聚焦） */
+  tabindex?: number;
 }>();
 
 const emit = defineEmits<{
@@ -128,36 +131,38 @@ const ROUNDED_MAP: Record<string, string> = {
 };
 
 const TEXT_THEME_MAP: Record<ThemeType, string> = {
-  primary: 'text-primary hover:bg-bg-panel-hover',
-  danger: 'text-danger hover:bg-bg-panel-hover',
-  warning: 'text-warning hover:bg-bg-panel-hover',
-  success: 'text-success hover:bg-bg-panel-hover',
-  default: 'text-text-body hover:bg-bg-panel-hover',
+  primary: 'text-primary hover:enabled:bg-bg-panel-hover',
+  danger: 'text-danger hover:enabled:bg-bg-panel-hover',
+  warning: 'text-warning hover:enabled:bg-bg-panel-hover',
+  success: 'text-success hover:enabled:bg-bg-panel-hover',
+  default: 'text-text-body hover:enabled:bg-bg-panel-hover',
 };
 
 const GHOST_THEME_MAP: Record<ThemeType, string> = {
-  primary: 'text-primary hover:bg-bg-panel-hover',
-  danger: 'text-danger hover:bg-bg-panel-hover',
-  warning: 'text-warning hover:bg-bg-panel-hover',
-  success: 'text-success hover:bg-bg-panel-hover',
-  default: 'text-text-disabled hover:text-text-body hover:bg-bg-panel-hover',
+  primary: 'text-primary hover:enabled:bg-bg-panel-hover',
+  danger: 'text-danger hover:enabled:bg-bg-panel-hover',
+  warning: 'text-warning hover:enabled:bg-bg-panel-hover',
+  success: 'text-success hover:enabled:bg-bg-panel-hover',
+  default: 'text-text-disabled hover:enabled:text-text-body hover:enabled:bg-bg-panel-hover',
 };
 
 const SUBTLE_THEME_MAP: Record<ThemeType, string> = {
-  primary: 'bg-tint-primary-90 border-tint-primary-90 text-primary hover:bg-tint-primary-80',
-  danger: 'bg-tint-danger-90 border-tint-danger-90 text-danger hover:bg-tint-danger-80',
-  warning: 'bg-tint-warning-90 border-tint-warning-90 text-warning hover:bg-tint-warning-80',
-  success: 'bg-tint-success-88 border-tint-success-88 text-success hover:bg-tint-success-82',
-  default: 'bg-bg-panel-hover border-border-light text-text-body hover:bg-border-base',
+  primary: 'bg-tint-primary-90 border-tint-primary-90 text-primary hover:enabled:bg-tint-primary-80',
+  danger: 'bg-tint-danger-90 border-tint-danger-90 text-danger hover:enabled:bg-tint-danger-80',
+  warning: 'bg-tint-warning-90 border-tint-warning-90 text-warning hover:enabled:bg-tint-warning-80',
+  success: 'bg-tint-success-88 border-tint-success-88 text-success hover:enabled:bg-tint-success-82',
+  default: 'bg-bg-panel-hover border-border-light text-text-body hover:enabled:bg-border-base',
 };
 
 const DEFAULT_THEME_MAP: Record<ThemeType, string> = {
-  primary: 'bg-primary border-transparent text-text-on-accent shadow-[0_1px_4px_rgba(0,122,255,0.3)] hover:opacity-90',
-  danger: 'bg-tint-danger-88 border-transparent text-danger hover:bg-tint-danger-78',
-  warning: 'bg-tint-warning-88 border-transparent text-warning hover:bg-tint-warning-78',
-  success: 'bg-success border-transparent text-text-on-accent shadow-[0_1px_4px_rgba(52,199,89,0.3)] hover:opacity-90',
+  primary:
+    'bg-primary border-transparent text-text-on-accent shadow-[0_1px_4px_rgba(0,122,255,0.3)] hover:enabled:opacity-90',
+  danger: 'bg-tint-danger-88 border-transparent text-danger hover:enabled:bg-tint-danger-78',
+  warning: 'bg-tint-warning-88 border-transparent text-warning hover:enabled:bg-tint-warning-78',
+  success:
+    'bg-success border-transparent text-text-on-accent shadow-[0_1px_4px_rgba(52,199,89,0.3)] hover:enabled:opacity-90',
   default:
-    'bg-bg-body border-border-light text-text-body hover:border-border-base hover:bg-bg-panel-hover hover:text-text-title hover:shadow-xs',
+    'bg-bg-body border-border-light text-text-body hover:enabled:border-border-base hover:enabled:bg-bg-panel-hover hover:enabled:text-text-title hover:enabled:shadow-xs',
 };
 
 const sizeClasses = computed(() => {

@@ -1,21 +1,19 @@
 <template>
   <div class="absolute inset-0 z-content overflow-hidden box-border pointer-events-auto">
     <div
-      class="no-scrollbar relative w-full h-full flex justify-center items-start py-3xl px-2xl box-border overflow-y-auto"
+      class="no-scrollbar relative w-full h-full flex justify-center items-start pt-2xl pb-3xl px-2xl box-border overflow-y-auto"
     >
       <div class="shrink-0">
         <WorkbenchCard />
       </div>
 
       <div
-        class="no-scrollbar absolute top-14 right-8 pointer-events-auto z-panel overflow-y-auto transition-[width,min-width] duration-slow ease-sidebar"
-        :class="
-          hasNotes
-            ? 'w-[21rem] min-w-[21rem] [@media(max-width:1400px)]:w-[21.5rem] [@media(max-width:1400px)]:min-w-[21.5rem] [@media(max-width:1250px)]:w-[20.5rem] [@media(max-width:1250px)]:min-w-[20.5rem] [@media(max-width:1100px)]:w-[13rem] [@media(max-width:1100px)]:min-w-[13rem]'
-            : 'w-[13rem] min-w-[13rem] [@media(max-width:1400px)]:w-[12rem] [@media(max-width:1400px)]:min-w-[12rem] [@media(max-width:1250px)]:w-[11rem] [@media(max-width:1250px)]:min-w-[11rem] [@media(max-width:1100px)]:w-[9rem] [@media(max-width:1100px)]:min-w-[9rem]'
-        "
+        class="no-scrollbar absolute top-8 right-8 bottom-8 pointer-events-auto z-panel overflow-y-auto flex flex-col gap-lg [&>*]:shrink-0 duration-slow ease-sidebar transition-[width,min-width]"
+        :class="hasNotes ? 'w-[19rem] min-w-[19rem]' : 'w-[13rem] min-w-[13rem]'"
       >
+        <!-- ★ 只在这里做高度动画 -->
         <ChordAnalysisPanel />
+        <BarrePanel />
       </div>
     </div>
 
@@ -27,6 +25,7 @@
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { collectChordNotes } from '@/utils/music/musicTheory';
 import { computed } from 'vue';
+import BarrePanel from './BarrePanel.vue';
 import ChordAnalysisPanel from './ChordAnalysisPanel.vue';
 import WorkbenchCard from './WorkbenchCard.vue';
 import WorkbenchFloatingBar from './WorkbenchFloatingBar.vue';

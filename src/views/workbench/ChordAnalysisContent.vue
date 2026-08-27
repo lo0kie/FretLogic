@@ -1,10 +1,10 @@
 <template>
-  <div
-    class="flex flex-col @[320px]:flex-row items-stretch gap-1 @[320px]:gap-2 overflow-hidden box-border w-full min-h-0"
-  >
+  <div class="flex flex-row items-stretch gap-2 overflow-hidden box-border w-full min-h-0">
     <!-- 1. 推荐候选区域 -->
-    <div class="flex flex-col gap-1 min-w-0 @[320px]:flex-[0_0_54%]">
-      <div class="text-2xs font-bold text-text-disabled tracking-wider select-none px-0.5">推荐候选</div>
+    <div class="flex flex-col gap-1 min-w-0 flex-[0_0_55%]">
+      <div class="text-2xs font-bold text-text-disabled tracking-wider select-none px-0.5 whitespace-nowrap">
+        推荐候选
+      </div>
       <div v-wheel-scroll.smooth v-grid-nav class="no-scrollbar flex flex-wrap gap-1 p-1 min-h-0 overflow-y-auto">
         <template v-if="candidates.length > 0">
           <BaseBadge
@@ -25,13 +25,13 @@
     </div>
 
     <!-- 中间分隔线 -->
-    <div
-      class="shrink-0 bg-border-light w-full h-px my-0.5 @[320px]:w-px @[320px]:h-auto @[320px]:self-stretch @[320px]:my-0"
-    />
+    <div class="shrink-0 bg-border-light w-px h-auto self-stretch my-0" />
 
     <!-- 2. 构成音区域 -->
-    <div class="flex flex-col gap-1 min-w-0 @[320px]:flex-[1_1_46%] @[320px]:min-w-[128px]">
-      <div class="text-2xs font-bold text-text-disabled tracking-wider select-none px-0.5">构成音</div>
+    <div class="flex flex-col gap-1 min-w-0 flex-1">
+      <div class="text-2xs font-bold text-text-disabled tracking-wider select-none px-0.5 whitespace-nowrap">
+        构成音
+      </div>
       <div v-wheel-scroll.smooth class="no-scrollbar flex flex-col gap-1 p-0.5 min-h-0 overflow-y-auto">
         <div
           v-for="note in notes"

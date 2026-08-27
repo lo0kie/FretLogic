@@ -5,32 +5,107 @@
 
 ## [Unreleased]
 
+### 修复与优化（2026-08-27 · 焦点管理与交互细节）
+
+- `ActionButton` 新增 `tabindex` prop 并显式绑定到原生 `<button>`，外部可精确控制焦点序列；
+- 乐谱清除按钮（`ChordSlotCell`）与和弦选择器「去修改」按钮（`ChordPickerModal`）隐藏时自动 `tabindex=-1`
+  退出 Tab 序列（父容器 hover 显示时恢复），避免隐藏态按钮抢占键盘导航焦点；
+- `BaseSelector` 禁用态光标修正为 `cursor-not-allowed`（原基础 `cursor-pointer` 与禁用类同优先级冲突，手型优先）；
+- `ChordPickerModal`「全部」tab 下，和弦卡片左上角显示来源分组徽标，按根音混排时便于识别和弦归属；
+- 工作台整体上移（顶部内边距与右侧面板定位同步收紧 16px），右侧「和弦分析 + 横按」面板固定上下边界并在
+  面板内独立滚动，不再撑开整个工作区；
+- `FretboardSvg` 指板渲染优化：0 品粗琴枕（仅 Capo 为 0 时显示）、品线改为 `fretCount + 1` 根横向闭合线、
+  琴弦统一 `crispEdges` 锐利渲染。
+
+### 新增（2026-08-27 · 横按标记功能）
+
+为指板与和弦谱体系加入**手动横按（Barre）标记**，数据层向后兼容，同时修复谱面行首/行尾和弦编辑后不刷新与横按候选计算问题。
+
+**数据层（向后兼容）**
+
+- `Chord` 新增可选 `barres?: BarreEntity[]`（支持多横按，如双横按和弦），完全兼容历史数据与旧 IDB 存储；新增
+  `BarreEntity` 描述实体（`fret` 品格 / `fromString`~`toString` 弦范围 / 可选 `finger` 指序）；
+- `createChord` 支持透传 `barres`，空数组不落库；`normalizeBarres` 过滤非法条目（品格/弦序越界、`from > to`）；
+- `buildChordForSave` 保存时携带 `barres`；「无修改」判定同时比较 `barres`（指纹不含横按，仅改横按也能正确识别保存）；
+- `chordEditorStore` 新增
+  `setBarres`；缩品位自动清理越界横按；指板音符变化自动清除失效横按（程序性加载/重置跳过，避免误清已保存横按）。
+
+**工作台交互**
+
+- 新增 `BarrePanel` 横按标记面板：指板实时预览 + 候选拾取模式（`barrePickMode` /
+  `barreCandidates`），候选横按以半透明虚线梁展示，点击即标记、再次点击清除，支持多条横按；候选由
+  `computeBarreCandidates` 随指板实时计算；
+- `FretboardSvg` 新增横按渲染：已标记横按以实心梁画在音符下层，拾取模式派发 `barre-click`；
+- `ChordPickerModal` 新增「去修改」入口，从谱面直达工作台编辑横按与和弦。
+
+**修复**
+
+- 横按候选按连续可覆盖子段拆分：同品弦被空弦/静音/更低品位隔断时仍能产出可横按的连续段候选（如 `2x222x`
+  现可标记 4/3/2 弦的 2 品横按）；
+- 新增「隔静音弦」横按候选：两根同品弦之间全部为静音弦（x）时也可横按（食指覆盖、中间闷音），仅限
+  两端均为未被连续段覆盖的孤立弦，不与其他横按共用琴弦（如 `11x1x1` 可标记 3 弦~1 弦；
+  `22x222` 仅产出 6/5 弦与 4/3/2 弦两组，5 弦~3 弦的 `2x2` 因共享琴弦被剔除）；
+- 乐谱行首/行尾（edge）和弦缓存签名加入内容指纹与 `barres`，编辑同一 id 的和弦后谱面即时刷新；
+- `BaseSwitch` 拖拽 thumb 位置限制在有效区间，右拖不溢出、左拖不越界；
+- `ChordSlotCell` 清除按钮增加 `@pointerdown.stop`，避免与拖拽命中冲突；
+- `BasePopover` 移除 `v-on-click-outside` 指令依赖，改用自有的 `window pointerdown`
+  全局守卫（按下点判定，内按下外松开不误关）。
+
 ### 组件 API 完善与健壮性修复（2026-08-27 · 表单类组件审查 + marquee 指令化）
 
-基于对 `src/components/base/` 通用组件的使用审查，完成 API 完善、无障碍与健壮性修复，并将 `BaseMarquee` 迁移为 `v-marquee` 指令。
+基于对 `src/components/base/` 通用组件的使用审查，完成 API 完善、无障碍与健壮性修复，并将 `BaseMarquee` 迁移为
+`v-marquee` 指令。
 
 **BaseMarquee → v-marquee 指令**
 
-- 删除 `BaseMarquee.vue`，新增 `src/directives/vMarquee.ts` 并全局注册为 `v-marquee`；`tailwind.css` 同步新增 `.marquee-viewport` / `.marquee-inner` 基础类；
-- 支持 `mode: 'hover' | 'always' | 'none'`、`loopMode: 'pingpong' | 'continuous'`、`speed`（px/秒）/ `duration`（毫秒）、`gap`、`delay`、`direction`、`pauseOnEdges` / `pauseDuration`、`fade`（两端羽化遮罩）；
-- 派发 `marquee-start` / `marquee-end` / `marquee-overflow-change` 生命周期事件；`ResizeObserver` 同时观察容器与内容，内部文本变化即时触发测量；尊重 `prefers-reduced-motion`；支持 `hover` / `always` / `left` / `right` / `continuous` / `fade` 等修饰符。
+- 删除 `BaseMarquee.vue`，新增 `src/directives/vMarquee.ts` 并全局注册为 `v-marquee`；`tailwind.css` 同步新增
+  `.marquee-viewport` / `.marquee-inner` 基础类；
+- 支持 `mode: 'hover' | 'always' | 'none'`、`loopMode: 'pingpong' | 'continuous'`、`speed`（px/秒）/
+  `duration`（毫秒）、`gap`、`delay`、`direction`、`pauseOnEdges` / `pauseDuration`、`fade`（两端羽化遮罩）；
+- 派发 `marquee-start` / `marquee-end` / `marquee-overflow-change` 生命周期事件；`ResizeObserver`
+  同时观察容器与内容，内部文本变化即时触发测量；尊重 `prefers-reduced-motion`；支持 `hover` / `always` / `left` /
+  `right` / `continuous` / `fade` 等修饰符。
 
 **组件 API 完善与修复**
 
-- `BaseModal`：新增 `confirmLoading`（确认按钮 loading 并防重复触发）与 `beforeClose`（返回 `false` 可拦截关闭）；内置右上角关闭按钮 `showClose`；`width` / `height` 支持任意 `number`（按 px）与字符串值；新增 `open` / `opened` / `close` / `closed` 生命周期事件；`setExternalInert` 改为遍历 `body` 子节点并排除自身、保留既有 `inert`，SSR 环境守卫；标题以 `aria-labelledby` 关联唯一 ID；
-- `BaseNumberInput`：`loopable` 默认改为 `false`，`wheelable` 默认 `false` 且仅聚焦生效；新增 `precision` 独立精度与 `parser` 自定义解析；`Shift`（10x）/ `Alt`（0.1x）修饰键步长；补 `role="spinbutton"` 与 `aria-valuenow/min/max`；小数位推导兼容科学计数法；非法输入恢复当前值展示；滚轮方向修正为向上增、向下减；
-- `BasePagination`：统一为 `defineModel`；新增 `base: 0 | 1` 索引基准（默认 `0`，兼容数组下标场景）、`pageSize`、`showJumper` 页码跳转、`hideOnSinglePage`；步进改为按步长区间（chunk）对齐，避免末尾截断导致偏差；根节点改为 `<nav aria-label="分页导航">` 并补齐翻页按钮 `aria-label`；
-- `BasePopover`：`trigger` 扩展 `'focus'` / `'contextmenu'`；`trigger="click"` 由组件统一接管点击切换（调用方不再重复绑定 `toggle`）；新增 `teleportTo` / `disabledTeleport`、`showArrow`（接入 Floating UI `arrow` 中间件）、`matchTriggerWidthStrategy: 'width' | 'minWidth'`；浮层宿主→触发器引用改用 `WeakMap`；`hoverTimer` 卸载时清理；点击外部守卫 `isShown` 避免退场动效期间重复触发；
-- `BaseSegmentedControl`：泛型扩展支持 `boolean`，`options` 兼容纯原始类型数组；`texted` 收敛为 `variant: 'pill' | 'text'`；新增 `item-icon` / `item-suffix` 插槽与方向键导航；补 `role="radiogroup"` / `role="radio"` + `aria-checked`；`toEl` 兼容组件实例 `$el`；`v-wave` 合并全局禁用态；逐项 `ResizeObserver` 修复字体加载导致滑块错位；
-- `BaseSelector`：新增 `fieldNames` 字段映射、`filterable` + `filterMethod` 搜索过滤、`multiple` 多选（数组绑定 + 标签展示）、`prefix` / `suffix` / `header` / `footer` 插槽；打开后面板自动聚焦当前项（filterable 时聚焦搜索框）；对象类型 value 用 `equalsValue` 稳健比较；选项高度按 `size` 自适应，修正 `dropdownMaxHeight` 估算偏差；
-- `BaseSlider`：新增 `marks` / `showTicks` 刻度与文本标签、`editable` 可编辑数值输入；`wheelable` 默认 `false` 且聚焦生效、滚轮方向修正；`Shift` / `Alt` 修饰键步长；轨道按百分比渐变填充（Webkit）与 `-moz-range-progress`（Firefox）；Label / Readout 移除 `role="button"` 焦点冗余，重置收敛为滑块双击；小数位推导兼容科学计数法；
+- `BaseModal`：新增 `confirmLoading`（确认按钮 loading 并防重复触发）与 `beforeClose`（返回 `false`
+  可拦截关闭）；内置右上角关闭按钮 `showClose`；`width` / `height` 支持任意 `number`（按 px）与字符串值；新增 `open` /
+  `opened` / `close` / `closed` 生命周期事件；`setExternalInert` 改为遍历 `body` 子节点并排除自身、保留既有
+  `inert`，SSR 环境守卫；标题以 `aria-labelledby` 关联唯一 ID；
+- `BaseNumberInput`：`loopable` 默认改为 `false`，`wheelable` 默认 `false` 且仅聚焦生效；新增 `precision` 独立精度与
+  `parser` 自定义解析；`Shift`（10x）/ `Alt`（0.1x）修饰键步长；补 `role="spinbutton"` 与
+  `aria-valuenow/min/max`；小数位推导兼容科学计数法；非法输入恢复当前值展示；滚轮方向修正为向上增、向下减；
+- `BasePagination`：统一为 `defineModel`；新增 `base: 0 | 1` 索引基准（默认
+  `0`，兼容数组下标场景）、`pageSize`、`showJumper`
+  页码跳转、`hideOnSinglePage`；步进改为按步长区间（chunk）对齐，避免末尾截断导致偏差；根节点改为
+  `<nav aria-label="分页导航">` 并补齐翻页按钮 `aria-label`；
+- `BasePopover`：`trigger` 扩展 `'focus'` / `'contextmenu'`；`trigger="click"`
+  由组件统一接管点击切换（调用方不再重复绑定 `toggle`）；新增 `teleportTo` /
+  `disabledTeleport`、`showArrow`（接入 Floating UI `arrow`
+  中间件）、`matchTriggerWidthStrategy: 'width' | 'minWidth'`；浮层宿主→触发器引用改用 `WeakMap`；`hoverTimer`
+  卸载时清理；点击外部守卫 `isShown` 避免退场动效期间重复触发；
+- `BaseSegmentedControl`：泛型扩展支持 `boolean`，`options` 兼容纯原始类型数组；`texted` 收敛为
+  `variant: 'pill' | 'text'`；新增 `item-icon` / `item-suffix` 插槽与方向键导航；补 `role="radiogroup"` /
+  `role="radio"` + `aria-checked`；`toEl` 兼容组件实例 `$el`；`v-wave` 合并全局禁用态；逐项 `ResizeObserver`
+  修复字体加载导致滑块错位；
+- `BaseSelector`：新增 `fieldNames` 字段映射、`filterable` + `filterMethod` 搜索过滤、`multiple`
+  多选（数组绑定 + 标签展示）、`prefix` / `suffix` / `header` / `footer`
+  插槽；打开后面板自动聚焦当前项（filterable 时聚焦搜索框）；对象类型 value 用 `equalsValue` 稳健比较；选项高度按 `size`
+  自适应，修正 `dropdownMaxHeight` 估算偏差；
+- `BaseSlider`：新增 `marks` / `showTicks` 刻度与文本标签、`editable` 可编辑数值输入；`wheelable` 默认 `false`
+  且聚焦生效、滚轮方向修正；`Shift` / `Alt` 修饰键步长；轨道按百分比渐变填充（Webkit）与
+  `-moz-range-progress`（Firefox）；Label / Readout 移除 `role="button"`
+  焦点冗余，重置收敛为滑块双击；小数位推导兼容科学计数法；
 - `BaseFloatingBar`：修复浮条不显示问题（`isViewActive` 初始置 `true`，避免激活钩子未触发时被隐藏）。
 
 **其他完善**
 
-- `EmptyState`：新增 `title` / `description` / `action` 插槽与属性、自定义插画 `image`（加载失败自动降级）与 `icon` 插槽、`role="status"` + `aria-live`；
-- Toast：`ToastOptions` / `Toast` 增加 `description`、`customClass`，`onAction` 支持异步；`uiStore` 新增 `clear()` 与 `promise()`（loading → success / error 自动收尾）；
-- 乐理显示偏好拆分：`settingsStore` 新增工作台（`workbenchChordShorthand` / `workbenchShowPitchNames`）与乐谱（`scoreChordShorthand` / `scoreShowPitchNames`）两组独立开关，并保留兼容别名；
+- `EmptyState`：新增 `title` / `description` / `action` 插槽与属性、自定义插画 `image`（加载失败自动降级）与 `icon`
+  插槽、`role="status"` + `aria-live`；
+- Toast：`ToastOptions` / `Toast` 增加 `description`、`customClass`，`onAction` 支持异步；`uiStore` 新增 `clear()` 与
+  `promise()`（loading → success / error 自动收尾）；
+- 乐理显示偏好拆分：`settingsStore` 新增工作台（`workbenchChordShorthand` /
+  `workbenchShowPitchNames`）与乐谱（`scoreChordShorthand` / `scoreShowPitchNames`）两组独立开关，并保留兼容别名；
 - `getChordName` 支持无 `nameSegments` 的输入（`chordName` / `name` / `customName` 兜底并尝试 `nameToSegments` 解析）；
 - 空弦根音按钮配色调整：浅 / 深色主题的背景、边框、文字独立令牌化。
 
