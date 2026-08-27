@@ -1,27 +1,35 @@
 <template>
   <button
-    v-wave="{ disabled }"
+    v-wave="{ disabled: disabled || loading }"
     :type="type"
     :disabled="disabled || loading"
+    :aria-disabled="disabled || loading || undefined"
     :aria-busy="loading || undefined"
     :aria-label="ariaLabel"
     :style="normalizedStyle"
     class="inline-flex items-center justify-center font-semibold border border-solid select-none box-border cursor-pointer shrink-0 outline-none transition-all duration-fast disabled:opacity-35 disabled:cursor-not-allowed disabled:shadow-none disabled:pointer-events-auto active:not-disabled:brightness-95 focus-visible:ring-2 focus-visible:ring-primary/70"
-    :class="[sizeClasses, themeVariantClasses, roundedClasses, { '!p-0 !w-auto aspect-square': iconOnly }]"
+    :class="[
+      sizeClasses,
+      themeVariantClasses,
+      roundedClasses,
+      {
+        'w-full': block,
+      },
+    ]"
     data-focusable-inline
     @click="handleInternalClick"
   >
     <Loader2 v-if="loading" :class="['loading-icon shrink-0 opacity-80 animate-spin', loaderSizeClass]" />
-    <slot v-else name="prefix" />
+    <slot v-else name="prefix" :disabled="disabled" :loading="loading" :size="size" />
 
     <span
       v-if="$slots.default && (!loading || !iconOnly)"
       class="button-content flex items-center justify-center whitespace-nowrap"
     >
-      <slot :disabled />
+      <slot :disabled="disabled" :loading="loading" :size="size" />
     </span>
 
-    <slot v-if="!loading || !iconOnly" name="suffix" />
+    <slot v-if="!loading || !iconOnly" name="suffix" :disabled="disabled" :loading="loading" :size="size" />
   </button>
 </template>
 
@@ -32,9 +40,6 @@ import { computed, watch } from 'vue';
 const {
   type = 'button',
   color = 'default',
-  primary = false,
-  danger = false,
-  warning = false,
   disabled = false,
   loading = false,
   iconOnly = false,
@@ -42,19 +47,14 @@ const {
   ariaLabel,
   size = 'md',
   rounded = 'full',
+  block = false,
   width = undefined,
   height = undefined,
 } = defineProps<{
   /** 原生 button 的 type，默认 'button' 避免在表单内意外触发表单提交 */
   type?: 'button' | 'submit' | 'reset';
-  /** 统一主题色；显式传入时优先级高于 primary/danger/warning 布尔语法糖 */
+  /** 统一主题色 */
   color?: 'default' | 'primary' | 'danger' | 'warning' | 'success';
-  /** @deprecated 语法糖，建议改用 color */
-  primary?: boolean;
-  /** @deprecated 语法糖，建议改用 color */
-  danger?: boolean;
-  /** @deprecated 语法糖，建议改用 color */
-  warning?: boolean;
   disabled?: boolean;
   loading?: boolean;
   iconOnly?: boolean;
@@ -63,6 +63,8 @@ const {
   ariaLabel?: string;
   size?: 'sm' | 'md' | 'lg';
   rounded?: 'none' | 'sm' | 'md' | 'lg' | 'full';
+  /** 是否占满父容器宽度 (w-full) */
+  block?: boolean;
   width?: string | number;
   height?: string | number;
 }>();
@@ -72,9 +74,11 @@ const emit = defineEmits<{
 }>();
 
 const handleInternalClick = (e: MouseEvent) => {
-  // 禁用或加载中时拦截点击，避免样式覆盖/特殊事件触发导致意外冒泡
+  // 禁用或加载中时彻底拦截点击，阻断事件冒泡与后续监听器执行
   if (disabled || loading) {
     e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
     return;
   }
   emit('click', e);
@@ -82,29 +86,31 @@ const handleInternalClick = (e: MouseEvent) => {
 
 type ThemeType = 'default' | 'primary' | 'danger' | 'warning' | 'success';
 
-const resolvedColor = computed<ThemeType>(() => {
-  if (color && color !== 'default') return color;
-  if (primary) return 'primary';
-  if (danger) return 'danger';
-  if (warning) return 'warning';
-  return 'default';
-});
+const resolvedColor = computed<ThemeType>(() => color ?? 'default');
 
-// iconOnly 但缺少 aria-label 时给出开发期警告，提示补充无障碍标签
-watch(
-  () => [iconOnly, ariaLabel] as const,
-  ([io, label]) => {
-    if (import.meta.env.DEV && io && !label) {
-      console.warn('[ActionButton] iconOnly 为 true 时应传入 ariaLabel，否则屏幕阅读器无法识别该按钮。');
-    }
-  },
-  { immediate: true }
-);
+// 仅在开发环境中注册 a11y 警告监听，生产环境构建时被完全 Tree-shaking
+if (import.meta.env.DEV) {
+  watch(
+    () => [iconOnly, ariaLabel] as const,
+    ([io, label]) => {
+      if (io && !label) {
+        console.warn('[ActionButton] iconOnly 为 true 时应传入 ariaLabel，否则屏幕阅读器无法识别该按钮。');
+      }
+    },
+    { immediate: true }
+  );
+}
 
 const SIZE_MAP: Record<string, string> = {
   sm: 'h-[1.6rem] px-md text-xs gap-xs',
   md: 'h-[1.9rem] px-lg text-xs gap-sm',
   lg: 'h-[2.3rem] px-xl text-sm gap-sm',
+};
+
+const ICON_ONLY_SIZE_MAP: Record<string, string> = {
+  sm: '!p-0 w-[1.6rem] h-[1.6rem] aspect-square',
+  md: '!p-0 w-[1.9rem] h-[1.9rem] aspect-square',
+  lg: '!p-0 w-[2.3rem] h-[2.3rem] aspect-square',
 };
 
 const LOADER_SIZE_MAP: Record<string, string> = {
@@ -154,7 +160,13 @@ const DEFAULT_THEME_MAP: Record<ThemeType, string> = {
     'bg-bg-body border-border-light text-text-body hover:border-border-base hover:bg-bg-panel-hover hover:text-text-title hover:shadow-xs',
 };
 
-const sizeClasses = computed(() => SIZE_MAP[size] ?? SIZE_MAP.md);
+const sizeClasses = computed(() => {
+  if (iconOnly) {
+    return ICON_ONLY_SIZE_MAP[size] ?? ICON_ONLY_SIZE_MAP.md;
+  }
+  return SIZE_MAP[size] ?? SIZE_MAP.md;
+});
+
 const loaderSizeClass = computed(() => LOADER_SIZE_MAP[size] ?? LOADER_SIZE_MAP.md);
 const roundedClasses = computed(() => ROUNDED_MAP[rounded] ?? ROUNDED_MAP.full);
 

@@ -21,8 +21,13 @@ export const useSettingsStore = defineStore('settings', () => {
   const webdavPassword = useStorage(STORAGE_KEYS.WEBDAV_PASSWORD, '');
   const webdavProxyUrl = useStorage(STORAGE_KEYS.WEBDAV_PROXY_URL, '');
 
-  // 乐理显示偏好
-  const useChordShorthand = useStorage<boolean>(STORAGE_KEYS.USE_CHORD_SHORTHAND, false);
+  // 工作台乐理显示偏好
+  const workbenchChordShorthand = useStorage<boolean>(STORAGE_KEYS.WORKBENCH_CHORD_SHORTHAND, false);
+  const workbenchShowPitchNames = useStorage<boolean>(STORAGE_KEYS.WORKBENCH_SHOW_PITCH_NAMES, true);
+
+  // 乐谱乐理显示偏好
+  const scoreChordShorthand = useStorage<boolean>(STORAGE_KEYS.SCORE_CHORD_SHORTHAND, false);
+  const scoreShowPitchNames = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_PITCH_NAMES, true);
 
   return {
     syncTarget,
@@ -36,6 +41,12 @@ export const useSettingsStore = defineStore('settings', () => {
     webdavUsername,
     webdavPassword,
     webdavProxyUrl,
-    useChordShorthand,
+    workbenchChordShorthand,
+    workbenchShowPitchNames,
+    scoreChordShorthand,
+    scoreShowPitchNames,
+    // 兼容别名（默认指向工作台）
+    useChordShorthand: workbenchChordShorthand,
+    showPitchNames: workbenchShowPitchNames,
   };
 });

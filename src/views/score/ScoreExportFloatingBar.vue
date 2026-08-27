@@ -40,7 +40,7 @@
         v-tooltip="'选中所有歌词'"
         size="sm"
         :variant="isAllSelected ? 'subtle' : 'ghost'"
-        :primary="isAllSelected"
+        :color="isAllSelected ? 'primary' : 'default'"
         @click="emit('toggle-select-all')"
       >
         全选
@@ -51,7 +51,7 @@
         icon-only
         size="sm"
         :variant="includeMetaBar ? 'subtle' : 'ghost'"
-        :primary="includeMetaBar"
+        :color="includeMetaBar ? 'primary' : 'default'"
         :aria-label="includeMetaBar ? '关闭歌曲信息栏' : '开启歌曲信息栏'"
         @click="includeMetaBar = !includeMetaBar"
       >

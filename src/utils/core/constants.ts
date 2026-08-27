@@ -268,8 +268,17 @@ export const STORAGE_KEYS = {
   // ---- 应用级偏好 ----
   /** 全局是否可编辑（false = 仅预览） */
   IS_GLOBAL_EDITABLE: 'CHORD_LAB_IS_GLOBAL_EDITABLE',
-  /** 是否启用和弦名简写（如 maj7->Δ7, dim->° 等） */
+  /** 工作台：是否启用和弦名简写（如 maj7->M7, dim->° 等） */
+  WORKBENCH_CHORD_SHORTHAND: 'CHORD_LAB_WORKBENCH_CHORD_SHORTHAND_V1',
+  /** 工作台：是否在指板音符圆点上显示音名（如 C, D, E 等） */
+  WORKBENCH_SHOW_PITCH_NAMES: 'CHORD_LAB_WORKBENCH_SHOW_PITCH_NAMES_V1',
+  /** 乐谱：是否启用和弦名简写（如 maj7->M7, dim->° 等） */
+  SCORE_CHORD_SHORTHAND: 'CHORD_LAB_SCORE_CHORD_SHORTHAND_V1',
+  /** 乐谱：是否在指板音符圆点上显示音名（如 C, D, E 等） */
+  SCORE_SHOW_PITCH_NAMES: 'CHORD_LAB_SCORE_SHOW_PITCH_NAMES_V1',
+  /** [兼容历史键] */
   USE_CHORD_SHORTHAND: 'CHORD_LAB_USE_CHORD_SHORTHAND_V1',
+  SHOW_PITCH_NAMES: 'CHORD_LAB_SHOW_PITCH_NAMES_V1',
 
   // ---- 歌曲数据（按歌曲拆键持久化） ----
   /** [已废弃 / 历史迁移源] 旧版歌曲单键整表数据（仅用于从早期版本向分片结构迁移，运行时不再读写） */
@@ -313,14 +322,19 @@ export const FRETBOARD_COLORS = {
   textRootDark: '#29323d',
 
   /** 空弦根音按钮背景（浅色主题） */
-  openRootBgLight: '#d89a3d',
+  openRootBgLight: '#fff7ed',
   /** 空弦根音按钮背景（深色主题） */
-  openRootBgDark: '#d6a447',
+  openRootBgDark: '#2d2012',
+
+  /** 空弦根音边框（浅色主题） */
+  openRootBorderLight: '#fed7aa',
+  /** 空弦根音边框（深色主题） */
+  openRootBorderDark: '#6b4712',
 
   /** 空弦根音按钮文字（浅色主题） */
-  openRootTextLight: '#ffedd5',
+  openRootTextLight: '#ff9500',
   /** 空弦根音按钮文字（深色主题） */
-  openRootTextDark: '#29323d',
+  openRootTextDark: '#ffd60a',
 
   // 专门用于 focus/currentColor
   /** 聚焦高亮色（浅色主题） */

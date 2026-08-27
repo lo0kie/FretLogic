@@ -18,43 +18,41 @@
       v-if="isHovered || isFocused"
       :cx="x"
       :cy="y"
-      :r="NOTE_DISPLAY.FINGER_OUTLINE_RADIUS"
+      :r="outlineRadius"
       :fill="hoverFillColor"
       :style="{ stroke: noteRingColor }"
       :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
       class="note-outline-ring transition-[fill,stroke] duration-fast"
     />
+
     <!-- 音符圆圈背景 -->
     <circle
-      v-if="!isPressed"
+      v-if="!isPressed && (showPitchNames || !isMuted)"
       :cx="x"
       :cy="y"
-      :r="NOTE_DISPLAY.FINGER_DOT_RADIUS"
+      :r="dotRadius"
       :fill="noteBgColor"
       :style="{ stroke: noteStrokeColor }"
       :stroke-width="noteStrokeWidth"
-      class="note-circle transition-[filter,fill,stroke] duration-fast [filter:var(--finger-shadow)]"
-      :class="{ '[filter:var(--root-glow)]': isRoot && !interactive }"
+      class="note-circle transition-[fill,stroke] duration-fast [filter:var(--finger-shadow)]"
+      :class="{ '[filter:var(--root-glow)]': showRootStyle && !interactive }"
     />
-    <!-- 静音状态：原生 SVG 画 X，不用图标组件/foreignObject -->
+
+    <!-- 静音/禁用状态：原生 SVG 画 X -->
     <g
       v-if="!isPressed && isMuted"
       class="note-mute-x pointer-events-none"
-      :stroke="noteTextColor"
-      stroke-width="4"
+      :stroke="muteStrokeColor"
+      :stroke-width="muteStrokeWidth"
       stroke-linecap="round"
     >
       <line :x1="x - muteXHalf" :y1="y - muteXHalf" :x2="x + muteXHalf" :y2="y + muteXHalf" />
       <line :x1="x + muteXHalf" :y1="y - muteXHalf" :x2="x - muteXHalf" :y2="y + muteXHalf" />
     </g>
-    <!-- 音名文字：原生 SVG <text>，不再用 foreignObject 包 HTML -->
-    <!-- 垂直居中用 dy 手动算偏移，不用 dominant-baseline：
-         html-to-image 导出时会把 SVG 序列化成字符串再用 <img> 重新加载解析，
-         这个"重新解析"过程里浏览器对 dominant-baseline 的支持经常和实时 DOM 渲染不一致，
-         容易退化回默认 alphabetic 基线，导致导出图片里文字往下沉、不居中。
-         dy 是纯数值偏移，序列化前后表现一致，更稳。 -->
+
+    <!-- 音名文字：原生 SVG <text> -->
     <text
-      v-else-if="!isPressed"
+      v-else-if="!isPressed && label"
       :x="x"
       :y="y"
       text-anchor="middle"
@@ -75,6 +73,7 @@
         {{ preferFlat ? '♭' : '♯' }}
       </tspan>
     </text>
+
     <!-- 始终存在的透明命中区 -->
     <circle
       class="pointer-events-auto cursor-pointer"
@@ -87,8 +86,8 @@
 </template>
 
 <script setup lang="ts">
-import { getFingerColor, getFingerTextColor } from '@/utils/music/chord-fretboard';
 import { FRETBOARD_COLORS, NOTE_DISPLAY } from '@/utils/core/constants';
+import { getFingerColor, getFingerTextColor } from '@/utils/music/chord-fretboard';
 import { computed } from 'vue';
 
 const {
@@ -105,6 +104,7 @@ const {
   interactive = true,
   isHovered = false,
   isFocused = false,
+  showPitchNames = true,
   ariaLabel = '',
 } = defineProps<{
   x: number;
@@ -120,6 +120,7 @@ const {
   interactive?: boolean;
   isHovered?: boolean;
   isFocused?: boolean;
+  showPitchNames?: boolean;
   ariaLabel?: string;
 }>();
 
@@ -128,7 +129,34 @@ defineEmits<{
   (e: 'toggle-pitch'): void;
 }>();
 
-const muteXHalf = computed(() => NOTE_DISPLAY.FINGER_FONT_SIZE * 0.28);
+/** 主音强调仅在显示音名时生效；不显示音名状态下主音不强调 */
+const showRootStyle = computed(() => showPitchNames && isRoot);
+
+/** 圆点半径：不显示音名时指板按品圆点为 20，空弦圈为 16；显示音名时统一为 28 */
+const dotRadius = computed(() => {
+  if (!showPitchNames) {
+    return isOpenString ? 16 : 24;
+  }
+  return NOTE_DISPLAY.FINGER_DOT_RADIUS;
+});
+
+const outlineRadius = computed(() => {
+  if (!showPitchNames) {
+    return isOpenString ? 20 : 28;
+  }
+  return NOTE_DISPLAY.FINGER_OUTLINE_RADIUS;
+});
+
+const muteXHalf = computed(() => {
+  if (isOpenString && !showPitchNames) return 12;
+  return NOTE_DISPLAY.FINGER_FONT_SIZE * 0.28;
+});
+
+const muteStrokeWidth = computed(() => {
+  if (isOpenString && !showPitchNames) return 3.5;
+  return 3;
+});
+
 const SVG_FONT_SIZE_RATIO = 0.9;
 const svgFontSize = computed(() => NOTE_DISPLAY.FINGER_FONT_SIZE * SVG_FONT_SIZE_RATIO);
 const svgAccidentalFontSize = computed(() => svgFontSize.value * 0.6);
@@ -137,34 +165,48 @@ const accidentalDx = computed(() => svgFontSize.value * 0.03);
 const accidentalDy = computed(() => -svgFontSize.value * 0.3);
 const hoverFillColor = computed(() => 'var(--fb-hover)');
 
-/** interactive 模式下不再用黄色高亮根音，统一按普通音（蓝色）处理；
- *  非 interactive（乐谱展示/导出等静态场景）仍保留原本的根音黄色标记 */
-const showRootStyle = computed(() => isRoot && interactive);
 const noteBgColor = computed(() => {
-  if (showRootStyle.value) {
-    return isDarkMode ? FRETBOARD_COLORS.rootDark : FRETBOARD_COLORS.rootLight;
-  }
   if (isOpenString) {
     if (isMuted) {
-      return isDarkMode ? '#351f20' : '#ffefee';
+      return !showPitchNames ? 'transparent' : isDarkMode ? '#351f20' : '#ffefee';
     }
-    return isDarkMode ? '#182737' : '#ebf4ff';
+    if (showRootStyle.value) {
+      return isDarkMode ? FRETBOARD_COLORS.openRootBgDark : FRETBOARD_COLORS.openRootBgLight;
+    }
+    return !showPitchNames ? 'transparent' : isDarkMode ? '#182737' : '#ebf4ff';
+  }
+  if (!showPitchNames) {
+    return 'var(--fb-line)';
   }
   return getFingerColor(showRootStyle.value, isDarkMode);
 });
 
 const noteStrokeColor = computed(() => {
-  if (showRootStyle.value) return 'transparent';
   if (isOpenString) {
     if (isMuted) {
-      return isDarkMode ? '#762b28' : '#ffc4c1';
+      return !showPitchNames ? 'transparent' : isDarkMode ? '#762b28' : '#ffc4c1';
     }
-    return isDarkMode ? '#144477' : '#b3d7ff';
+    if (showRootStyle.value) {
+      return isDarkMode ? FRETBOARD_COLORS.openRootBorderDark : FRETBOARD_COLORS.openRootBorderLight;
+    }
+    return !showPitchNames ? 'var(--fb-line)' : isDarkMode ? '#144477' : '#b3d7ff';
   }
   return 'transparent';
 });
 
-const noteStrokeWidth = computed(() => (isOpenString && !showRootStyle.value ? 2 : 0));
+const noteStrokeWidth = computed(() => {
+  if (isOpenString) {
+    if (!showPitchNames && isMuted) return 0;
+    return 2;
+  }
+  return 0;
+});
+
+const muteStrokeColor = computed(() => {
+  if (!showPitchNames) return 'var(--fb-line)';
+  return 'var(--color-danger)';
+});
+
 const noteRingColor = computed(() => {
   if (showRootStyle.value) return 'var(--color-warning)';
   if (isOpenString && isMuted) return 'var(--color-danger)';
@@ -172,17 +214,13 @@ const noteRingColor = computed(() => {
 });
 
 const noteTextColor = computed(() => {
-  if (showRootStyle.value) {
-    return getFingerTextColor(true, isDarkMode);
-  }
-
   if (isOpenString) {
-    if (isMuted) {
-      return 'var(--color-danger)';
+    if (isMuted) return 'var(--color-danger)';
+    if (showRootStyle.value) {
+      return isDarkMode ? FRETBOARD_COLORS.openRootTextDark : FRETBOARD_COLORS.openRootTextLight;
     }
-
     return 'var(--color-primary)';
   }
-  return getFingerTextColor(false, isDarkMode);
+  return getFingerTextColor(showRootStyle.value, isDarkMode);
 });
 </script>

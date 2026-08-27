@@ -358,5 +358,21 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
       // Unicode derivation
       expect(getChordName(chordWithoutName, { shorthand: true, useUnicode: true })).toBe('F♯ø7/A');
     });
+
+    it('should derive chord name and shorthand for string-only chord objects', async () => {
+      const { getChordName } = await import('@/services/music/theory');
+
+      const chordWithNameOnly = {
+        name: 'Cmaj7',
+      };
+      expect(getChordName(chordWithNameOnly)).toBe('Cmaj7');
+      expect(getChordName(chordWithNameOnly, { shorthand: true })).toBe('CM7');
+
+      const chordWithChordName = {
+        chordName: 'Am7b5',
+      };
+      expect(getChordName(chordWithChordName)).toBe('Am7b5');
+      expect(getChordName(chordWithChordName, { shorthand: true })).toBe('Aø7');
+    });
   });
 });

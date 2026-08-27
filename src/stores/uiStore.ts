@@ -1,4 +1,4 @@
-﻿import { STORAGE_KEYS } from '@/utils/core/constants';
+import { STORAGE_KEYS } from '@/utils/core/constants';
 import type { Toast, ToastOptions } from '@/types';
 import { ToastType } from '@/types';
 import { useStorage } from '@vueuse/core';
@@ -66,12 +66,14 @@ export const useUiStore = defineStore('ui', () => {
     toasts.value.push({
       id,
       msg,
+      description: options.description,
       type,
       hasAction,
       actionText: options.actionText || '确定',
       ...(options.onAction !== undefined ? { onAction: options.onAction } : {}),
       duration,
       closable: options.closable ?? true,
+      customClass: options.customClass,
     });
 
     if (type !== ToastType.LOADING) {
@@ -86,6 +88,33 @@ export const useUiStore = defineStore('ui', () => {
     error: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.ERROR, options),
     warning: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.WARNING, options),
     loading: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.LOADING, options),
+    clear: () => {
+      toasts.value.forEach(t => removeToast(t.id));
+      toasts.value = [];
+    },
+    promise: async <T>(
+      promise: Promise<T>,
+      messages: {
+        loading: string;
+        success: string | ((data: T) => string);
+        error: string | ((err: unknown) => string);
+      },
+      options?: ToastOptions
+    ): Promise<T> => {
+      const id = createToast(messages.loading, ToastType.LOADING, options);
+      try {
+        const res = await promise;
+        removeToast(id);
+        const successMsg = typeof messages.success === 'function' ? messages.success(res) : messages.success;
+        createToast(successMsg, ToastType.SUCCESS, options);
+        return res;
+      } catch (err) {
+        removeToast(id);
+        const errorMsg = typeof messages.error === 'function' ? messages.error(err) : messages.error;
+        createToast(errorMsg, ToastType.ERROR, options);
+        throw err;
+      }
+    },
   };
 
   return {

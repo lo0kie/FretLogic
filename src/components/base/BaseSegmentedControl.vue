@@ -1,112 +1,76 @@
 <template>
   <div
-    v-if="texted"
     ref="containerRef"
-    v-grid-nav="options.length"
-    class="relative inline-flex items-center rounded-full box-border select-none max-w-full gap-1 p-0 bg-transparent border-0"
-    :class="[
-      currentConfig.wrapperClass,
-      {
-        'opacity-50 cursor-not-allowed': disabled,
-        'w-full': isFullWidth,
-      },
-    ]"
+    class="segmented-control relative inline-flex items-center box-border select-none"
+    :class="controlClasses"
     :style="resolvedWidth ? { width: resolvedWidth } : undefined"
+    role="radiogroup"
+    aria-orientation="horizontal"
+    :aria-disabled="disabled || undefined"
+    :aria-label="ariaLabel"
+    @keydown="handleKeydown"
   >
-    <ActionButton
-      v-for="item in options"
-      :key="`${item.label}-${item.value}`"
-      ref="itemRefs"
-      :size
-      :texted="1"
-      :disabled="disabled || item.disabled"
-      :variant="modelValue === item.value ? 'subtle' : 'ghost'"
-      :primary="modelValue === item.value"
-      :class="[
-        modelValue === item.value ? 'font-bold text-primary' : 'font-medium text-text-muted',
-        { 'flex-1': isFullWidth },
-      ]"
-      data-focusable-inline
-      @click="handleSelect(item)"
-    >
-      <slot name="label" :item> {{ item.label }} </slot>
-    </ActionButton>
-  </div>
-
-  <div
-    v-else
-    ref="containerRef"
-    v-grid-nav="options.length"
-    class="relative inline-flex items-center rounded-full bg-bg-body border border-border-light box-border select-none max-w-full p-0.5 gap-1 transition-opacity"
-    :class="[
-      currentConfig.wrapperClass,
-      {
-        'opacity-50 cursor-not-allowed': disabled,
-        'w-full': isFullWidth,
-      },
-    ]"
-    :style="resolvedWidth ? { width: resolvedWidth } : undefined"
-  >
-    <div
-      class="absolute left-0 top-0 rounded-full bg-tint-primary-88 shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)] pointer-events-none z-10 box-border border border-tint-primary-60 will-change-transform"
-      :class="{ 'transition-all duration-base ease-spring': isInitialized }"
+    <span
+      v-if="showSlider"
+      class="segmented-slider absolute left-0 top-0 rounded-full bg-tint-primary-88 border border-tint-primary-60 shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)] pointer-events-none z-0 box-border will-change-transform"
+      :class="{ 'transition-all duration-200 ease-out': isInitialized }"
       :style="indicatorStyle"
+      aria-hidden="true"
     />
 
-    <button
-      v-for="item in options"
-      :key="`${item.label}-${item.value}`"
-      ref="itemRefs"
-      v-wave="{ disabled: item.disabled }"
-      class="relative z-20 font-bold text-text-muted rounded-full border-none bg-transparent shadow-none cursor-pointer whitespace-nowrap inline-flex items-center justify-center self-stretch h-full transition-colors outline-none hover:text-text-title"
-      :class="[
-        compact ? currentConfig.compactItemPadding : currentConfig.itemPadding,
-        {
-          '!text-primary font-extrabold': modelValue === item.value,
-          'opacity-40 cursor-not-allowed pointer-events-auto': item.disabled || disabled,
-          'flex-1': isFullWidth,
-        },
-      ]"
-      :disabled="disabled || item.disabled"
-      data-focusable-inline
-      @click="handleSelect(item)"
-    >
-      <slot name="label" :item> {{ item.label }} </slot>
-    </button>
+    <template v-for="(opt, i) in normalizedOptions" :key="String(opt.value)">
+      <button
+        :ref="el => setItemRef(el, i)"
+        v-wave="{ disabled: disabled || opt.disabled }"
+        type="button"
+        class="segmented-item relative z-20 font-bold text-text-muted rounded-full border-none bg-transparent shadow-none whitespace-nowrap inline-flex items-center justify-center self-stretch h-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/70 leading-none enabled:cursor-pointer enabled:hover:text-text-title disabled:cursor-not-allowed disabled:opacity-40"
+        :class="itemClasses(opt)"
+        role="radio"
+        :aria-checked="isSelected(opt.value)"
+        :disabled="disabled || opt.disabled"
+        :tabindex="getTabindex(opt, i)"
+        @click="select(opt, i)"
+      >
+        <slot name="item-icon" :option="opt" :index="i" />
+        <span class="segmented-item-label inline-flex items-center justify-center leading-none">{{ opt.label }}</span>
+        <slot name="item-suffix" :option="opt" :index="i" />
+      </button>
+    </template>
   </div>
 </template>
 
-<script setup lang="ts" generic="T extends string | number">
-import ActionButton from '@/components/base/ActionButton.vue';
+<script setup lang="ts" generic="T extends string | number | boolean">
 import { type FormComponentWidth, resolveComponentWidth } from '@/utils/core/constants';
-import { computed, nextTick, ref, useTemplateRef, watch, watchEffect } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onBeforeUpdate, onMounted, ref, useTemplateRef, watch } from 'vue';
 
-export interface SegmentOption<ValueType = string | number> {
+export interface SegmentOption<T> {
   label: string;
-  value: ValueType;
+  value: T;
   disabled?: boolean;
 }
 
-const {
-  options,
-  size = 'md',
-  width = 'auto',
-  block = false,
-  disabled = false,
-  compact = false,
-  texted = false,
-} = defineProps<{
-  options: SegmentOption<T>[];
-  size?: 'sm' | 'md' | 'lg';
-  width?: FormComponentWidth;
-  block?: boolean;
-  disabled?: boolean;
-  compact?: boolean;
-  texted?: boolean;
-}>();
+type OptionInput<T> = T | SegmentOption<T>;
 
-const resolvedWidth = computed(() => (block ? '100%' : resolveComponentWidth(width)));
-const isFullWidth = computed(() => block || resolvedWidth.value === '100%');
+const props = withDefaults(
+  defineProps<{
+    options: OptionInput<T>[];
+    size?: 'sm' | 'md' | 'lg';
+    variant?: 'pill' | 'text';
+    disabled?: boolean;
+    closeable?: boolean;
+    block?: boolean;
+    width?: FormComponentWidth;
+    ariaLabel?: string;
+  }>(),
+  {
+    size: 'md',
+    variant: 'pill',
+    disabled: false,
+    closeable: false,
+    block: false,
+    width: 'auto',
+  }
+);
 
 const modelValue = defineModel<T>({ required: true });
 
@@ -114,34 +78,55 @@ const emit = defineEmits<{
   (e: 'change', value: T): void;
 }>();
 
-const containerRef = useTemplateRef<HTMLDivElement>('containerRef');
-const itemRefs = useTemplateRef<Array<HTMLElement | { $el?: HTMLElement }>>('itemRefs');
+const containerRef = useTemplateRef<HTMLElement>('containerRef');
+const items = ref<Array<HTMLElement | null>>([]);
 
+const setItemRef = (el: unknown, index: number) => {
+  if (el) {
+    items.value[index] = toEl(el);
+  }
+};
+
+onBeforeUpdate(() => {
+  items.value = [];
+});
+
+// 首次渲染无动画，后续移动带平滑缓动
 const isInitialized = ref(false);
 const indicatorPosition = ref({ width: 0, height: 0, x: 0, y: 0, opacity: 0 });
 
-const SEGMENT_CONFIG: Record<
-  'sm' | 'md' | 'lg',
-  { wrapperClass: string; itemPadding: string; compactItemPadding: string }
-> = {
-  sm: {
-    wrapperClass: 'h-[1.6rem]',
-    itemPadding: 'text-2xs px-2',
-    compactItemPadding: 'text-2xs px-1',
-  },
-  md: {
-    wrapperClass: 'h-[1.9rem]',
-    itemPadding: 'text-2xs px-3',
-    compactItemPadding: 'text-2xs px-2',
-  },
-  lg: {
-    wrapperClass: 'h-[2.3rem]',
-    itemPadding: 'text-xs px-3',
-    compactItemPadding: 'text-xs px-2',
-  },
+const resolvedWidth = computed(() => (props.block ? '100%' : resolveComponentWidth(props.width)));
+const isFullWidth = computed(() => props.block || resolvedWidth.value === '100%');
+
+const isSelected = (val: unknown) => Object.is(modelValue.value, val);
+
+const SIZE_MAP: Record<'sm' | 'md' | 'lg', { wrapper: string; item: string; textItem: string }> = {
+  sm: { wrapper: 'h-[1.6rem]', item: 'text-2xs px-2', textItem: 'px-2 py-1 text-2xs' },
+  md: { wrapper: 'h-[1.9rem]', item: 'text-2xs px-3', textItem: 'px-2.5 py-1 text-xs' },
+  lg: { wrapper: 'h-[2.3rem]', item: 'text-xs px-3', textItem: 'px-3 py-1.5 text-sm' },
 };
 
-const currentConfig = computed(() => SEGMENT_CONFIG[size] ?? SEGMENT_CONFIG.md);
+const normalizedOptions = computed<SegmentOption<T>[]>(() =>
+  props.options.map(o => {
+    if (o !== null && typeof o === 'object' && 'value' in (o as object)) {
+      return o as SegmentOption<T>;
+    }
+    return { label: String(o), value: o as T };
+  })
+);
+
+const activeIndex = computed(() => normalizedOptions.value.findIndex(o => isSelected(o.value)));
+const showSlider = computed(() => props.variant === 'pill' && activeIndex.value >= 0);
+
+const firstFocusableIndex = computed(() => normalizedOptions.value.findIndex(o => !o.disabled && !props.disabled));
+
+const getTabindex = (opt: SegmentOption<T>, i: number): number => {
+  if (props.disabled || opt.disabled) return -1;
+  if (activeIndex.value >= 0) {
+    return isSelected(opt.value) ? 0 : -1;
+  }
+  return i === firstFocusableIndex.value ? 0 : -1;
+};
 
 const indicatorStyle = computed(() => ({
   width: `${indicatorPosition.value.width}px`,
@@ -150,25 +135,63 @@ const indicatorStyle = computed(() => ({
   opacity: indicatorPosition.value.opacity,
 }));
 
+const controlClasses = computed(() => [
+  SIZE_MAP[props.size].wrapper,
+  props.variant === 'pill'
+    ? 'bg-bg-body border border-border-light rounded-full p-0.5 gap-1 transition-opacity'
+    : 'bg-transparent gap-xs',
+  props.disabled ? 'opacity-50 cursor-not-allowed' : '',
+  isFullWidth.value ? 'w-full' : '',
+]);
+
+const itemClasses = (opt: SegmentOption<T>): (string | Record<string, boolean>)[] => {
+  const active = isSelected(opt.value);
+  const isExpand = isFullWidth.value;
+
+  if (props.variant === 'pill') {
+    return [SIZE_MAP[props.size].item, active ? '!text-primary font-extrabold' : '', { 'flex-1': isExpand }];
+  }
+  // text variant
+  return [
+    SIZE_MAP[props.size].textItem,
+    'rounded-lg font-medium',
+    active
+      ? 'text-primary font-semibold bg-primary/10'
+      : 'text-text-muted enabled:hover:text-text-title enabled:hover:bg-bg-panel-hover/50',
+    { 'flex-1': isExpand },
+  ];
+};
+
+// 兼容组件实例（$el）与原生元素（el）
+const toEl = (raw: unknown): HTMLElement | null => {
+  if (!raw) return null;
+  if (raw instanceof HTMLElement) return raw;
+  if (raw && typeof raw === 'object') {
+    const r = raw as Record<string, unknown>;
+    if (r.$el instanceof HTMLElement) return r.$el;
+    if (r.el instanceof HTMLElement) return r.el;
+  }
+  return null;
+};
+
 const updateIndicatorPosition = async () => {
-  if (texted) return;
+  if (props.variant !== 'pill') return;
   await nextTick();
 
-  const containerEl = containerRef.value;
-  if (!containerEl) return;
-
-  const activeIndex = options.findIndex(opt => opt.value === modelValue.value);
-
-  if (activeIndex === -1) {
+  if (activeIndex.value < 0) {
     indicatorPosition.value.opacity = 0;
     return;
   }
 
-  const rawEl = itemRefs.value?.[activeIndex];
-  const activeEl = rawEl && 'el' in rawEl ? rawEl.el : rawEl;
-  if (!(activeEl instanceof HTMLElement)) return;
+  const activeButton = toEl(items.value[activeIndex.value]);
+  if (!activeButton || !containerRef.value) {
+    return;
+  }
 
-  const { offsetLeft, offsetWidth, offsetTop, offsetHeight } = activeEl;
+  const { offsetLeft, offsetWidth, offsetTop, offsetHeight } = activeButton;
+  if (offsetWidth === 0 && offsetHeight === 0) {
+    return;
+  }
 
   indicatorPosition.value = {
     width: offsetWidth,
@@ -185,44 +208,96 @@ const updateIndicatorPosition = async () => {
   }
 };
 
-const handleSelect = (item: SegmentOption<T>) => {
-  if (disabled || item.disabled) return;
-  if (modelValue.value !== item.value) {
-    modelValue.value = item.value;
-    emit('change', item.value);
+const select = (opt: SegmentOption<T>, index: number) => {
+  if (props.disabled || opt.disabled) return;
+  if (isSelected(opt.value)) {
+    if (props.closeable) {
+      modelValue.value = undefined as unknown as T;
+      emit('change', undefined as unknown as T);
+      nextTick(() => {
+        updateIndicatorPosition();
+        items.value[index]?.focus();
+      });
+    }
+    return;
+  }
+  modelValue.value = opt.value;
+  emit('change', opt.value);
+  nextTick(() => {
+    updateIndicatorPosition();
+    items.value[index]?.focus();
+  });
+};
+
+const handleKeydown = (e: KeyboardEvent) => {
+  if (props.disabled) return;
+  const opts = normalizedOptions.value;
+  if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(e.key)) return;
+  e.preventDefault();
+  const forward = e.key === 'ArrowRight' || e.key === 'ArrowDown';
+  const curIdx = activeIndex.value < 0 ? 0 : activeIndex.value;
+  const len = opts.length;
+  for (let k = 1; k <= len; k++) {
+    const idx = forward ? (curIdx + k) % len : (curIdx - k + len) % len;
+    const opt = opts[idx];
+    if (opt && !opt.disabled) {
+      select(opt, idx);
+      return;
+    }
   }
 };
 
-let resizeRafId: number | null = null;
+// 监听值变化实时更新滑块位置
+watch(
+  () => modelValue.value,
+  () => {
+    updateIndicatorPosition();
+  },
+  { immediate: true }
+);
 
-const debouncedUpdateIndicator = () => {
-  if (texted) return;
-  if (resizeRafId !== null) {
-    cancelAnimationFrame(resizeRafId);
-  }
+// 同时观察容器与每个子项，使用 requestAnimationFrame 进行防抖合并
+let resizeRafId: number | null = null;
+let ro: ResizeObserver | null = null;
+
+const debouncedUpdate = () => {
+  if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
   resizeRafId = requestAnimationFrame(() => {
     updateIndicatorPosition();
     resizeRafId = null;
   });
 };
 
-watchEffect(onCleanup => {
-  if (!texted) {
+const observeItems = () => {
+  if (typeof ResizeObserver === 'undefined') return;
+  ro?.disconnect();
+  ro = new ResizeObserver(() => debouncedUpdate());
+  if (containerRef.value) ro.observe(containerRef.value);
+  items.value.forEach(dom => {
+    if (dom) ro!.observe(dom);
+  });
+  updateIndicatorPosition();
+};
+
+watch(normalizedOptions, () => {
+  nextTick(() => {
+    observeItems();
     updateIndicatorPosition();
-    const el = containerRef.value;
-
-    if (el && typeof ResizeObserver !== 'undefined') {
-      const observer = new ResizeObserver(() => debouncedUpdateIndicator());
-      observer.observe(el);
-
-      onCleanup(() => {
-        if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
-        observer.disconnect();
-      });
-    }
-  }
+  });
 });
 
-watch(modelValue, updateIndicatorPosition);
-watch(() => options, updateIndicatorPosition);
+onMounted(() => {
+  nextTick(() => {
+    observeItems();
+    updateIndicatorPosition();
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      document.fonts.ready.then(() => nextTick(updateIndicatorPosition));
+    }
+  });
+});
+
+onBeforeUnmount(() => {
+  if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
+  ro?.disconnect();
+});
 </script>

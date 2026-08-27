@@ -5,7 +5,7 @@
     <!-- 1. 推荐候选区域 -->
     <div class="flex flex-col gap-1 min-w-0 @[320px]:flex-[0_0_54%]">
       <div class="text-2xs font-bold text-text-disabled tracking-wider select-none px-0.5">推荐候选</div>
-      <div v-wheel-scroll.smooth v-grid-nav class="no-scrollbar flex flex-wrap gap-1 p-0.5 min-h-0 overflow-y-auto">
+      <div v-wheel-scroll.smooth v-grid-nav class="no-scrollbar flex flex-wrap gap-1 p-1 min-h-0 overflow-y-auto">
         <template v-if="candidates.length > 0">
           <BaseBadge
             v-for="candidate in candidates"
@@ -93,8 +93,8 @@
 
 <script setup lang="ts">
 import BaseBadge from '@/components/base/BaseBadge.vue';
-import ChordNameDisplay from '@/components/fretboard/ChordNameDisplay.vue';
 import EmptyState from '@/components/base/EmptyState.vue';
+import ChordNameDisplay from '@/components/fretboard/ChordNameDisplay.vue';
 import { isGlobalEditable } from '@/stores/globalState';
 import type { CandidateResult, NoteInput } from '@/types';
 import { formatAccidental, parseNoteLabel, segmentsToString } from '@/utils/music/musicTheory';

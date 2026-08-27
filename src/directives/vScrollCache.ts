@@ -1,66 +1,170 @@
 import type { DirectiveBinding, DirectiveHook, ObjectDirective } from 'vue';
 
-export type ScrollCacheBinding = string | undefined;
+export interface ScrollPosition {
+  top: number;
+  left: number;
+}
+
+export interface ScrollCacheOptions {
+  key?: string;
+  /** 滚动方向：'y' 仅纵向 | 'x' 仅横向 | 'both' 双向同时记录 */
+  axis?: 'x' | 'y' | 'both';
+  /** 还原完成后的回调 */
+  onRestored?: (pos: ScrollPosition) => void;
+}
+
+export type ScrollCacheBinding = string | ScrollCacheOptions | undefined;
+export type ScrollCacheModifiers = 'x' | 'y' | 'both' | (string & Record<never, never>);
 
 export interface ScrollCacheDirective extends ObjectDirective<HTMLElement, ScrollCacheBinding> {
   activated?: DirectiveHook<HTMLElement, null, ScrollCacheBinding>;
   deactivated?: DirectiveHook<HTMLElement, null, ScrollCacheBinding>;
 }
 
-const scrollPositions = new Map<string, number>();
+const scrollPositions = new Map<string, ScrollPosition>();
 const elKeys = new WeakMap<HTMLElement, string>();
-const elIds = new WeakMap<HTMLElement, string>();
 const elHandlers = new WeakMap<HTMLElement, () => void>();
-let autoId = 0;
 
-const resolveKey = (el: HTMLElement, binding: DirectiveBinding<ScrollCacheBinding>): string => {
-  if (typeof binding.value === 'string' && binding.value) return binding.value;
-  let id = elIds.get(el);
-  if (!id) {
-    id = `el:${++autoId}`;
-    elIds.set(el, id);
+interface ActiveRestore {
+  observer: ResizeObserver | null;
+  timer: ReturnType<typeof setTimeout> | null;
+  raf: number | null;
+}
+const activeRestoreMap = new WeakMap<HTMLElement, ActiveRestore>();
+
+/**
+ * 手动清理滚动缓存
+ * @param key 可选。传入特定 key 清除单项，不传则清空全部缓存
+ */
+export const clearScrollCache = (key?: string) => {
+  if (key) {
+    scrollPositions.delete(key);
+  } else {
+    scrollPositions.clear();
   }
-  return id;
 };
 
-const save = (el: HTMLElement) => {
-  if (!el.isConnected) return;
+const resolveOptions = (
+  el: HTMLElement,
+  binding: DirectiveBinding<ScrollCacheBinding>
+): { key: string; axis: 'x' | 'y' | 'both'; onRestored?: (pos: ScrollPosition) => void } => {
+  const val = binding.value;
+  const mods = binding.modifiers;
+
+  let key = '';
+  let axis: 'x' | 'y' | 'both' = 'both';
+  let onRestored: ((pos: ScrollPosition) => void) | undefined;
+
+  if (typeof val === 'string' && val.trim()) {
+    key = val.trim();
+  } else if (val && typeof val === 'object') {
+    if (val.key) key = val.key;
+    if (val.axis) axis = val.axis;
+    if (val.onRestored) onRestored = val.onRestored;
+  }
+
+  if (mods.x) axis = 'x';
+  if (mods.y) axis = 'y';
+  if (mods.both) axis = 'both';
+
+  if (!key) {
+    // 优先使用 DOM 上的稳定特征标识（id、name、data-key、类名与层级特征）
+    const domKey = el.dataset.scrollCacheKey || el.id || el.getAttribute('name');
+    if (domKey) {
+      key = `dom:${domKey}`;
+    } else {
+      key = `loc:${window.location.pathname}:${el.tagName}:${el.className.slice(0, 20)}`;
+    }
+  }
+
+  return { key, axis, onRestored };
+};
+
+const cancelActiveRestore = (el: HTMLElement) => {
+  const active = activeRestoreMap.get(el);
+  if (active) {
+    if (active.observer) active.observer.disconnect();
+    if (active.timer) clearTimeout(active.timer);
+    if (active.raf) cancelAnimationFrame(active.raf);
+    activeRestoreMap.delete(el);
+  }
+};
+
+const save = (el: HTMLElement, axis: 'x' | 'y' | 'both' = 'both') => {
   const key = elKeys.get(el);
-  if (key !== undefined) {
-    scrollPositions.set(key, el.scrollTop);
-  }
+  if (!key) return;
+
+  const current = scrollPositions.get(key) || { top: 0, left: 0 };
+  const newPos: ScrollPosition = {
+    top: axis === 'x' ? current.top : el.scrollTop,
+    left: axis === 'y' ? current.left : el.scrollLeft,
+  };
+  scrollPositions.set(key, newPos);
 };
 
-const restoreScroll = (el: HTMLElement, savedTop: number) => {
-  if (!savedTop) {
-    el.scrollTop = 0;
+const restoreScroll = (
+  el: HTMLElement,
+  savedPos: ScrollPosition,
+  axis: 'x' | 'y' | 'both',
+  onRestored?: (pos: ScrollPosition) => void
+) => {
+  cancelActiveRestore(el);
+
+  const shouldRestoreY = axis !== 'x';
+  const shouldRestoreX = axis !== 'y';
+
+  if (!savedPos.top && !savedPos.left) {
+    if (shouldRestoreY) el.scrollTop = 0;
+    if (shouldRestoreX) el.scrollLeft = 0;
     return;
   }
+
   const MAX_DURATION = 1200;
   const startTime = performance.now();
   let resizeObserver: ResizeObserver | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let raf: number | null = null;
+
+  const finish = () => {
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
+    }
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    activeRestoreMap.delete(el);
+
+    const detail: ScrollPosition = { top: el.scrollTop, left: el.scrollLeft };
+    el.dispatchEvent(new CustomEvent('scroll-restored', { detail, bubbles: false }));
+    onRestored?.(detail);
+  };
 
   const start = () => {
-    el.scrollTop = savedTop;
+    if (shouldRestoreY) el.scrollTop = savedPos.top;
+    if (shouldRestoreX) el.scrollLeft = savedPos.left;
 
     resizeObserver = new ResizeObserver(() => {
       const isTimeout = performance.now() - startTime > MAX_DURATION;
-      const isReached = Math.abs(el.scrollTop - savedTop) < 2;
+      const isReachedY = !shouldRestoreY || Math.abs(el.scrollTop - savedPos.top) < 2;
+      const isReachedX = !shouldRestoreX || Math.abs(el.scrollLeft - savedPos.left) < 2;
 
-      if (isTimeout || (isReached && el.scrollHeight > el.clientHeight)) {
-        resizeObserver?.disconnect();
-        resizeObserver = null;
+      if (isTimeout || (isReachedY && isReachedX && el.scrollHeight > el.clientHeight)) {
+        finish();
         return;
       }
-      el.scrollTop = savedTop;
+      if (shouldRestoreY) el.scrollTop = savedPos.top;
+      if (shouldRestoreX) el.scrollLeft = savedPos.left;
     });
 
     resizeObserver.observe(el);
 
-    setTimeout(() => {
-      resizeObserver?.disconnect();
-      resizeObserver = null;
+    timer = setTimeout(() => {
+      finish();
     }, MAX_DURATION + 200);
+
+    activeRestoreMap.set(el, { observer: resizeObserver, timer, raf });
   };
 
   if (!el.isConnected) {
@@ -68,50 +172,69 @@ const restoreScroll = (el: HTMLElement, savedTop: number) => {
       if (el.isConnected) {
         start();
       } else if (performance.now() - startTime < MAX_DURATION) {
-        requestAnimationFrame(wait);
+        raf = requestAnimationFrame(wait);
+        activeRestoreMap.set(el, { observer: null, timer: null, raf });
       }
     };
-    requestAnimationFrame(wait);
+    raf = requestAnimationFrame(wait);
+    activeRestoreMap.set(el, { observer: null, timer: null, raf });
   } else {
     start();
   }
 };
 
 const restore = (el: HTMLElement, binding: DirectiveBinding<ScrollCacheBinding>) => {
-  const key = resolveKey(el, binding);
+  const { key, axis, onRestored } = resolveOptions(el, binding);
   elKeys.set(el, key);
-  const savedTop = scrollPositions.get(key);
-  if (savedTop !== undefined) {
+  const savedPos = scrollPositions.get(key);
+  if (savedPos !== undefined) {
     requestAnimationFrame(() => {
-      restoreScroll(el, savedTop);
+      restoreScroll(el, savedPos, axis, onRestored);
     });
   }
 };
 
 export const vScrollCache: ScrollCacheDirective = {
   mounted(el, binding) {
+    const { axis } = resolveOptions(el, binding);
     restore(el, binding);
-    const onScroll = () => save(el);
+
+    let saveRaf: number | null = null;
+    const onScroll = () => {
+      if (saveRaf !== null) return;
+      saveRaf = requestAnimationFrame(() => {
+        save(el, axis);
+        saveRaf = null;
+      });
+    };
+
     elHandlers.set(el, onScroll);
     el.addEventListener('scroll', onScroll, { passive: true });
   },
   activated(el, binding) {
     restore(el, binding);
   },
-  deactivated(el) {
-    save(el);
+  deactivated(el, binding) {
+    const { axis } = resolveOptions(el, binding);
+    save(el, axis);
+    cancelActiveRestore(el);
   },
   beforeUpdate(el, binding) {
     if (binding.value !== binding.oldValue) {
-      // 关键：在子内容被 v-if 卸载冲掉高度前，保存旧 key 滚动位置
-      save(el);
+      const { axis } = resolveOptions(el, binding);
+      save(el, axis);
     }
   },
   updated(el, binding) {
     if (binding.value !== binding.oldValue) {
-      // 切换新 key 并恢复
       restore(el, binding);
     }
+  },
+  beforeUnmount(el, binding) {
+    // 关键：在节点脱离 DOM 树（isConnected 变 false）前提前保存最终滚动位置
+    const { axis } = resolveOptions(el, binding);
+    save(el, axis);
+    cancelActiveRestore(el);
   },
   unmounted(el) {
     const onScroll = elHandlers.get(el);
@@ -119,8 +242,7 @@ export const vScrollCache: ScrollCacheDirective = {
       el.removeEventListener('scroll', onScroll);
       elHandlers.delete(el);
     }
-    save(el);
+    cancelActiveRestore(el);
     elKeys.delete(el);
-    elIds.delete(el);
   },
 };

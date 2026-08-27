@@ -60,7 +60,7 @@
         v-if="showEmptyHoverRing"
         :cx="stringXPositions[hoverPoint!.stringIndex]"
         :cy="(hoverPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-        :r="NOTE_DISPLAY.FINGER_OUTLINE_RADIUS"
+        :r="emptyRingRadius"
         :fill="hoverFillColor"
         stroke="var(--color-primary)"
         :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
@@ -71,7 +71,7 @@
         v-if="showEmptyFocusRing"
         :cx="stringXPositions[focusPoint!.stringIndex]"
         :cy="(focusPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-        :r="NOTE_DISPLAY.FINGER_OUTLINE_RADIUS"
+        :r="emptyRingRadius"
         :fill="hoverFillColor"
         stroke="var(--color-primary)"
         :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
@@ -89,8 +89,9 @@
           :interactive="interactive"
           :is-hovered="isNoteHovered(sIdx, str[0])"
           :is-focused="isNoteFocused(sIdx, str[0])"
-          :label="noteInfo(sIdx, str).label"
-          :is-accidental="noteInfo(sIdx, str).isAccidental"
+          :show-pitch-names="showPitchNames"
+          :label="showPitchNames ? noteInfo(sIdx, str).label : ''"
+          :is-accidental="showPitchNames && noteInfo(sIdx, str).isAccidental"
           :prefer-flat="str[1]"
           :aria-label="`第 ${6 - sIdx} 弦第 ${str[0]} 品，音名 ${formatStringLabel(sIdx, str[0], str[1], capo, activeBaseStrings)}`"
           @toggle-pitch="emit('toggle-pitch', sIdx)"
@@ -116,6 +117,7 @@ const FRET_SIZE_MAP: Record<string, string> = {
 const {
   fretNumberSize = 'md',
   showFretNumbers = true,
+  showPitchNames = true,
   hoverPoint = null,
   focusPoint = null,
   rootStringIndex = null,
@@ -139,6 +141,7 @@ const {
   focusPoint?: { stringIndex: number; fretIndex: number } | null;
   fretNumberSize?: 'sm' | 'md' | 'lg';
   showFretNumbers?: boolean;
+  showPitchNames?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -156,6 +159,7 @@ const getFretNumberStyle = (fretIndex: number) => {
 
 const isRoot = (sIdx: number) => rootStringIndex === sIdx;
 const hoverFillColor = computed(() => 'var(--fb-hover)');
+const emptyRingRadius = computed(() => (showPitchNames ? NOTE_DISPLAY.FINGER_OUTLINE_RADIUS : 28));
 
 const noteInfo = (sIdx: number, str: GuitarStringEntity) =>
   computeStringLabelAccidental(sIdx, str[0], capo, str[1], activeBaseStrings);

@@ -18,10 +18,10 @@
         data-focusable-inline
         @click="groupModals.modalData.moveTargetId = group.id"
       >
-        <BaseMarquee>
+        <div v-marquee>
           <span> {{ group.name }} </span>
           <span class="pl-1 text-text-disabled">({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})</span>
-        </BaseMarquee>
+        </div>
       </button>
     </div>
   </BaseModal>
@@ -34,7 +34,7 @@
     :show-footer="false"
   >
     <template #header-extra>
-      <ActionButton :primary="isAllVariantsSelected" @click="handleToggleSelectAllVariants">
+      <ActionButton :color="isAllVariantsSelected ? 'primary' : 'default'" @click="handleToggleSelectAllVariants">
         {{ isAllVariantsSelected ? '取消全选' : '全选' }}
       </ActionButton>
     </template>
@@ -88,9 +88,11 @@
       <div class="flex items-center justify-between gap-md pt-md pb-xs border-t border-border-light mt-[0.15rem]">
         <ActionButton variant="ghost" @click="groupModals.modals.chordVariantsDelete = false"> 取消 </ActionButton>
         <div class="flex items-center gap-sm">
-          <ActionButton danger variant="subtle" @click="groupModals.handleDeleteAllVariants()"> 全部删除 </ActionButton>
+          <ActionButton color="danger" variant="subtle" @click="groupModals.handleDeleteAllVariants()">
+            全部删除
+          </ActionButton>
           <ActionButton
-            danger
+            color="danger"
             :disabled="groupModals.modalData.selectedVariantIds.size === 0"
             @click="groupModals.handleDeleteSelectedVariants()"
           >
@@ -137,7 +139,6 @@
 <script setup lang="ts">
 import ActionButton from '@/components/base/ActionButton.vue';
 import BaseBadge from '@/components/base/BaseBadge.vue';
-import BaseMarquee from '@/components/base/BaseMarquee.vue';
 import BaseModal from '@/components/base/BaseModal.vue';
 import EmptyState from '@/components/base/EmptyState.vue';
 import Fretboard from '@/components/fretboard/Fretboard.vue';

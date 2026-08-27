@@ -15,7 +15,7 @@
       <ActionButton
         size="md"
         variant="subtle"
-        primary
+        color="primary"
         :disabled="isSaveDisabled"
         @click="chordActions.persistCurrentChord"
       >

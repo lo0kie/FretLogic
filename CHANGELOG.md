@@ -5,23 +5,58 @@
 
 ## [Unreleased]
 
+### 组件 API 完善与健壮性修复（2026-08-27 · 表单类组件审查 + marquee 指令化）
+
+基于对 `src/components/base/` 通用组件的使用审查，完成 API 完善、无障碍与健壮性修复，并将 `BaseMarquee` 迁移为 `v-marquee` 指令。
+
+**BaseMarquee → v-marquee 指令**
+
+- 删除 `BaseMarquee.vue`，新增 `src/directives/vMarquee.ts` 并全局注册为 `v-marquee`；`tailwind.css` 同步新增 `.marquee-viewport` / `.marquee-inner` 基础类；
+- 支持 `mode: 'hover' | 'always' | 'none'`、`loopMode: 'pingpong' | 'continuous'`、`speed`（px/秒）/ `duration`（毫秒）、`gap`、`delay`、`direction`、`pauseOnEdges` / `pauseDuration`、`fade`（两端羽化遮罩）；
+- 派发 `marquee-start` / `marquee-end` / `marquee-overflow-change` 生命周期事件；`ResizeObserver` 同时观察容器与内容，内部文本变化即时触发测量；尊重 `prefers-reduced-motion`；支持 `hover` / `always` / `left` / `right` / `continuous` / `fade` 等修饰符。
+
+**组件 API 完善与修复**
+
+- `BaseModal`：新增 `confirmLoading`（确认按钮 loading 并防重复触发）与 `beforeClose`（返回 `false` 可拦截关闭）；内置右上角关闭按钮 `showClose`；`width` / `height` 支持任意 `number`（按 px）与字符串值；新增 `open` / `opened` / `close` / `closed` 生命周期事件；`setExternalInert` 改为遍历 `body` 子节点并排除自身、保留既有 `inert`，SSR 环境守卫；标题以 `aria-labelledby` 关联唯一 ID；
+- `BaseNumberInput`：`loopable` 默认改为 `false`，`wheelable` 默认 `false` 且仅聚焦生效；新增 `precision` 独立精度与 `parser` 自定义解析；`Shift`（10x）/ `Alt`（0.1x）修饰键步长；补 `role="spinbutton"` 与 `aria-valuenow/min/max`；小数位推导兼容科学计数法；非法输入恢复当前值展示；滚轮方向修正为向上增、向下减；
+- `BasePagination`：统一为 `defineModel`；新增 `base: 0 | 1` 索引基准（默认 `0`，兼容数组下标场景）、`pageSize`、`showJumper` 页码跳转、`hideOnSinglePage`；步进改为按步长区间（chunk）对齐，避免末尾截断导致偏差；根节点改为 `<nav aria-label="分页导航">` 并补齐翻页按钮 `aria-label`；
+- `BasePopover`：`trigger` 扩展 `'focus'` / `'contextmenu'`；`trigger="click"` 由组件统一接管点击切换（调用方不再重复绑定 `toggle`）；新增 `teleportTo` / `disabledTeleport`、`showArrow`（接入 Floating UI `arrow` 中间件）、`matchTriggerWidthStrategy: 'width' | 'minWidth'`；浮层宿主→触发器引用改用 `WeakMap`；`hoverTimer` 卸载时清理；点击外部守卫 `isShown` 避免退场动效期间重复触发；
+- `BaseSegmentedControl`：泛型扩展支持 `boolean`，`options` 兼容纯原始类型数组；`texted` 收敛为 `variant: 'pill' | 'text'`；新增 `item-icon` / `item-suffix` 插槽与方向键导航；补 `role="radiogroup"` / `role="radio"` + `aria-checked`；`toEl` 兼容组件实例 `$el`；`v-wave` 合并全局禁用态；逐项 `ResizeObserver` 修复字体加载导致滑块错位；
+- `BaseSelector`：新增 `fieldNames` 字段映射、`filterable` + `filterMethod` 搜索过滤、`multiple` 多选（数组绑定 + 标签展示）、`prefix` / `suffix` / `header` / `footer` 插槽；打开后面板自动聚焦当前项（filterable 时聚焦搜索框）；对象类型 value 用 `equalsValue` 稳健比较；选项高度按 `size` 自适应，修正 `dropdownMaxHeight` 估算偏差；
+- `BaseSlider`：新增 `marks` / `showTicks` 刻度与文本标签、`editable` 可编辑数值输入；`wheelable` 默认 `false` 且聚焦生效、滚轮方向修正；`Shift` / `Alt` 修饰键步长；轨道按百分比渐变填充（Webkit）与 `-moz-range-progress`（Firefox）；Label / Readout 移除 `role="button"` 焦点冗余，重置收敛为滑块双击；小数位推导兼容科学计数法；
+- `BaseFloatingBar`：修复浮条不显示问题（`isViewActive` 初始置 `true`，避免激活钩子未触发时被隐藏）。
+
+**其他完善**
+
+- `EmptyState`：新增 `title` / `description` / `action` 插槽与属性、自定义插画 `image`（加载失败自动降级）与 `icon` 插槽、`role="status"` + `aria-live`；
+- Toast：`ToastOptions` / `Toast` 增加 `description`、`customClass`，`onAction` 支持异步；`uiStore` 新增 `clear()` 与 `promise()`（loading → success / error 自动收尾）；
+- 乐理显示偏好拆分：`settingsStore` 新增工作台（`workbenchChordShorthand` / `workbenchShowPitchNames`）与乐谱（`scoreChordShorthand` / `scoreShowPitchNames`）两组独立开关，并保留兼容别名；
+- `getChordName` 支持无 `nameSegments` 的输入（`chordName` / `name` / `customName` 兜底并尝试 `nameToSegments` 解析）；
+- 空弦根音按钮配色调整：浅 / 深色主题的背景、边框、文字独立令牌化。
+
 ### 重构（2026-08-27 · 目录结构重组 / 抽象层清理 / 同步基础设施）
 
 合并本轮工作区全部未推送改动：对通用抽象层做大幅重组与瘦身，并按领域拆分目录结构。
 
 **组件目录重组（移动，非删除）**
 
-- `src/components/Base*` 通用组件整体移至 `src/components/base/`；右键菜单 `ContextMenu` / `ContextMenuItems` 移至 `context-menu/`；指板相关 `Fretboard` / `FretboardSvg` / `FretboardNote` / `ChordNameDisplay` 移至 `fretboard/`；新增各层 `index.ts` 桶文件统一导出；
+- `src/components/Base*` 通用组件整体移至 `src/components/base/`；右键菜单 `ContextMenu` / `ContextMenuItems` 移至
+  `context-menu/`；指板相关 `Fretboard` / `FretboardSvg` / `FretboardNote` / `ChordNameDisplay` 移至
+  `fretboard/`；新增各层 `index.ts` 桶文件统一导出；
 - 删除 `AppShell.vue`，三栏布局收拢至 `App.vue`（详见下方更早条目）。
 
 **组合式函数与路由重组**
 
-- `composables` 按领域拆分到 `composables/{app,fretboard,score}`，`score` 下新增 `lyrics-drag/` 拖拽子模块；真实删除的仅 `useGridNavigation`（由 `vGridNav` 指令取代）、`useFocusReturn`、旧的 `useLyricsDragDrop`（重写为 `composables/score/useLyricsDragDrop.ts`）；
-- `router` 由 `src/router/index.ts` 扁平化为 `src/router.ts`，并删除 `src/router/scrollMemory.ts`；导航改为状态/单视图驱动。
+- `composables` 按领域拆分到 `composables/{app,fretboard,score}`，`score` 下新增 `lyrics-drag/` 拖拽子模块；真实删除的仅
+  `useGridNavigation`（由 `vGridNav` 指令取代）、`useFocusReturn`、旧的 `useLyricsDragDrop`（重写为
+  `composables/score/useLyricsDragDrop.ts`）；
+- `router` 由 `src/router/index.ts` 扁平化为 `src/router.ts`，并删除
+  `src/router/scrollMemory.ts`；导航改为状态/单视图驱动。
 
 **工具函数按领域重组**
 
-- `src/utils/*` 按领域拆分到 `src/utils/core`（通用）、`src/utils/music`（和弦指板/乐理）、`src/utils/score`，并新增 `utils/index.ts` 桶文件；文件实为移动/重命名，未做内容裁撤。
+- `src/utils/*` 按领域拆分到 `src/utils/core`（通用）、`src/utils/music`（和弦指板/乐理）、`src/utils/score`，并新增
+  `utils/index.ts` 桶文件；文件实为移动/重命名，未做内容裁撤。
 
 **新增指令与同步基础设施**
 
@@ -32,8 +67,10 @@
 
 **测试对齐**
 
-- 将因模块移动而失效的 7 个测试（`coreRegression` / `sanitizePersistedData` / `domain/models` / `bootstrapRobustness` / `BaseBadge` / `BaseFormRow` / `BaseSwitch`）的 import 重定向至新路径；
-- `ChordSlotCell` 测试断言对齐重构后的 Tailwind 结构；`BaseSwitch` / `BaseBadge` 组件测试改用 `role` / `aria-*` / 根元素标签 / 内联样式等稳定断言（原语义 class 已改为 Tailwind 工具类）；
+- 将因模块移动而失效的 7 个测试（`coreRegression` / `sanitizePersistedData` / `domain/models` / `bootstrapRobustness` /
+  `BaseBadge` / `BaseFormRow` / `BaseSwitch`）的 import 重定向至新路径；
+- `ChordSlotCell` 测试断言对齐重构后的 Tailwind 结构；`BaseSwitch` / `BaseBadge` 组件测试改用 `role` / `aria-*`
+  / 根元素标签 / 内联样式等稳定断言（原语义 class 已改为 Tailwind 工具类）；
 - 全量 113 项测试通过。
 
 ### 组件 API 完善（2026-08-27 · ActionButton 健壮性增强）
@@ -41,11 +78,32 @@
 针对 `src/components/base/ActionButton.vue` 的 API 完善与健壮性增强：
 
 - **新增 `type` 属性**：`'button' | 'submit' | 'reset'`，默认 `'button'`，避免原生 `<button>` 在表单内意外提交；
-- **主题统一为 `color` 枚举**：`color?: 'default' | 'primary' | 'danger' | 'warning' | 'success'`（设计系统暂无 `info` 令牌，故未纳入）；保留 `primary` / `danger` / `warning` 布尔作为语法糖，显式 `color` 优先级更高，消除多布尔同时传入的覆盖隐患；
-- **`variant` 合并 `text`**：移除冗余的 `texted` 布尔，将 `'text'` 并入 `variant: 'default' | 'subtle' | 'ghost' | 'text'`；
-- **A11y 增强**：`loading` 时输出 `aria-busy="true"`；新增 `ariaLabel` 属性，`iconOnly` 且缺省时开发期告警提示补充无障碍标签；
-- **点击拦截**：`handleInternalClick` 增加 `disabled || loading` 守卫（`preventDefault` 并提前返回），防止禁用/加载态下样式覆盖或特殊事件触发导致误冒泡；
-- **Icon-Only 加载占位尺寸一致**：`loading` 时 Loader 尺寸随 `size`（`sm/md/lg` → `w-3.5/h-3.5` / `w-4/h-4` / `w-5/h-5`）统一，避免与默认插槽图标尺寸不一致产生跳动。
+- **主题统一为 `color` 枚举**：`color?: 'default' | 'primary' | 'danger' | 'warning' | 'success'`（设计系统暂无 `info`
+  令牌，故未纳入）；已彻底移除 `primary` / `danger` / `warning` 布尔语法糖，所有调用方统一改为 `color`；
+- **`variant` 合并 `text`**：移除冗余的 `texted` 布尔，将 `'text'` 并入
+  `variant: 'default' | 'subtle' | 'ghost' | 'text'`；`BaseSegmentedControl` 透传给 `ActionButton` 的 `:texted` 已改为
+  `variant="text"`；
+- **A11y 增强**：`loading` 时输出 `aria-busy="true"`；新增 `ariaLabel` 属性，`iconOnly`
+  且缺省时开发期告警提示补充无障碍标签；
+- **点击拦截**：`handleInternalClick` 增加 `disabled || loading` 守卫（`preventDefault`
+  并提前返回），防止禁用/加载态下样式覆盖或特殊事件触发导致误冒泡；
+- **Icon-Only 加载占位尺寸一致**：`loading` 时 Loader 尺寸随 `size`（`sm/md/lg` → `w-3.5/h-3.5` / `w-4/h-4` /
+  `w-5/h-5`）统一，避免与默认插槽图标尺寸不一致产生跳动。
+
+### 组件 API 完善（2026-08-27 · BaseBadge 解耦与健壮性）
+
+针对 `src/components/base/BaseBadge.vue` 的 API 解耦与合法性修复：
+
+- **`dot` 与 `statusDot` 解耦**：`dot` 仅渲染无内容的小红点（Dot 模式，忽略 `content`）；`statusDot`
+  专门在文字前显示状态指示灯（前缀圆点），二者不再通过 `isDotOnly` / `hasDot` 耦合派生；
+- **`hoverClose` 专有 `close` 事件**：开启 `hoverClose` 时点击徽标语义为“关闭”，改派发专有 `close` 事件（而非
+  `click`），调用方可明确区分；`closable` 关闭按钮同样派发 `close`；
+- **A11y 文案泛化**：移除硬编码业务文案（“新消息提示”“未读消息”）；通用描述交由外部 `aria-label` 传入，仅在 `max`
+  截断时补充数字文本（`${max}+`），避免在作为状态标签（如“进行中”“已完成”）时产生误导；
+- **消除非法 DOM 嵌套**：`closable` 关闭按钮统一渲染为 `<span role="button">`，杜绝外层
+  `<button>`（`isInteractive`）内嵌 `<button>` 的非法结构及事件冒泡异常；
+- **避免键盘事件重复触发**：外层渲染为原生 `<button>` 时移除多余的 `@keydown.enter` / `@keydown.space`
+  监听，依赖浏览器原生单次 `click`，消除 Enter/Space 单次激活触发两次 `click` 的问题。
 
 ### 重构与交互优化（2026-08 · 指令化改造 / 交互与体验完善 / 工程化校验）
 

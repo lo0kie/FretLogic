@@ -63,7 +63,8 @@ import {
   getChordName,
   nameToSegments,
 } from '@/utils/music/musicTheory';
-import { computed } from 'vue';
+import { computed, getCurrentInstance } from 'vue';
+import { useRoute } from 'vue-router';
 
 interface Props {
   chord?: Chord | null;
@@ -72,26 +73,42 @@ interface Props {
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'inherit';
   useUnicode?: boolean;
   shorthand?: boolean;
+  isScoreMode?: boolean;
 }
 
-const {
-  chord = null,
-  segments = null,
-  name = null,
-  size = 'inherit',
-  useUnicode = true,
-  shorthand,
-} = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  chord: null,
+  segments: null,
+  name: null,
+  size: 'inherit',
+  useUnicode: true,
+  shorthand: undefined,
+  isScoreMode: undefined,
+});
 
+let routeInstance: ReturnType<typeof useRoute> | null = null;
+try {
+  const instance = getCurrentInstance();
+  if (instance?.appContext.config.globalProperties.$route) {
+    routeInstance = useRoute();
+  }
+} catch {
+  routeInstance = null;
+}
+
+const isScoreMode = computed(() => {
+  if (props.isScoreMode !== undefined) return props.isScoreMode;
+  return routeInstance?.path === '/score';
+});
 const settingsStore = useSettingsStore();
 
 const effectiveShorthand = computed(() => {
-  if (shorthand !== undefined) return shorthand;
-  return settingsStore.useChordShorthand;
+  if (props.shorthand !== undefined) return props.shorthand;
+  return isScoreMode.value ? settingsStore.scoreChordShorthand : settingsStore.workbenchChordShorthand;
 });
 
 const sizeClass = computed(() => {
-  switch (size) {
+  switch (props.size) {
     case 'xs':
       return 'text-[11px]';
     case 'sm':
@@ -106,9 +123,13 @@ const sizeClass = computed(() => {
 });
 
 const resolvedSegments = computed<ChordNameSegments | null>(() => {
-  if (segments) return segments;
-  if (chord?.nameSegments) return chord.nameSegments;
-  if (name) return nameToSegments(name);
+  if (props.segments) return props.segments;
+  if (props.chord?.nameSegments) return props.chord.nameSegments;
+  if (props.name) return nameToSegments(props.name);
+  if (props.chord) {
+    const rawName = getChordName(props.chord);
+    if (rawName) return nameToSegments(rawName);
+  }
   return null;
 });
 
@@ -130,8 +151,8 @@ const formattedData = computed<{ quality: string; extensions: ExtensionSegment[]
 });
 
 const fallbackText = computed(() => {
-  return name || (chord ? getChordName(chord) : '');
+  return props.name || (props.chord ? getChordName(props.chord, { shorthand: effectiveShorthand.value }) : '');
 });
 
-const formatAccidental = (acc: AccidentalType) => formatAccidentalTheory(acc, useUnicode);
+const formatAccidental = (acc: AccidentalType) => formatAccidentalTheory(acc, props.useUnicode);
 </script>

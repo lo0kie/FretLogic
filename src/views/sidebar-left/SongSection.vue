@@ -33,14 +33,14 @@
             @keydown.space.prevent.stop="handleSelectSong(song.id)"
           >
             <div class="flex items-center justify-between gap-sm w-full">
-              <BaseMarquee class="flex-1 min-w-0">
+              <div v-marquee class="flex-1 min-w-0">
                 <span
                   class="text-xs font-semibold"
                   :class="isSongActive(song.id) ? '!text-primary font-bold' : 'text-text-title'"
                 >
                   {{ song.title }}
                 </span>
-              </BaseMarquee>
+              </div>
 
               <div class="flex gap-xs shrink-0">
                 <BaseBadge
@@ -73,10 +73,9 @@
 
 <script setup lang="ts">
 import BaseBadge from '@/components/base/BaseBadge.vue';
-import BaseMarquee from '@/components/base/BaseMarquee.vue';
+import EmptyState from '@/components/base/EmptyState.vue';
 import ContextMenu from '@/components/context-menu/ContextMenu.vue';
 import type { ContextMenuItem } from '@/components/context-menu/ContextMenuItems.vue';
-import EmptyState from '@/components/base/EmptyState.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';

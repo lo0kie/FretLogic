@@ -1,7 +1,7 @@
 <template>
   <div
     ref="triggerWrapperRef"
-    class="context-menu-trigger-wrapper contents w-full"
+    class="context-menu-trigger-wrapper contents"
     :class="{ 'cursor-default': disabled }"
     @contextmenu="handleContextMenu"
   >
@@ -33,10 +33,10 @@
 </template>
 
 <script lang="ts">
-import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 import BasePopover from '@/components/base/BasePopover.vue';
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
-// 记录全局当前打开的菜单，用于互斥互斥
+// 记录全局当前打开的菜单，用于互斥关闭
 const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
 </script>
 
@@ -95,7 +95,7 @@ const closeMenu = () => {
 const openMenuAt = async (clientX: number, clientY: number, _sourceEl?: HTMLElement | null) => {
   if (disabled || !items?.length) return;
 
-  // 1. 如果有其他菜单打开，关掉它
+  // 如果有其他菜单打开，关掉它
   if (globalActiveMenuCloseFn.value && globalActiveMenuCloseFn.value !== closeMenu) {
     globalActiveMenuCloseFn.value();
   }
@@ -107,12 +107,8 @@ const openMenuAt = async (clientX: number, clientY: number, _sourceEl?: HTMLElem
 
   await nextTick();
   popoverRef.value?.update();
-
-  const firstEnabledIndex = items.findIndex(item => !item.disabled);
-  if (firstEnabledIndex !== -1) {
-    const itemEls = itemsRef.value?.itemEls || [];
-    itemEls[firstEnabledIndex]?.focus();
-  }
+  // 自动聚焦首个有效菜单项
+  itemsRef.value?.focusFirstItem();
 };
 
 const handleContextMenu = (e: MouseEvent) => {
@@ -123,7 +119,7 @@ const handleContextMenu = (e: MouseEvent) => {
 };
 
 const handleItemSelect = (item: ContextMenuItem) => {
-  item.action();
+  item.action?.();
   closeMenu();
 };
 
@@ -162,6 +158,12 @@ const handleMenuKeydown = (e: KeyboardEvent) => {
 
 watch(isOpen, val => {
   if (!val && globalActiveMenuCloseFn.value === closeMenu) {
+    globalActiveMenuCloseFn.value = null;
+  }
+});
+
+onBeforeUnmount(() => {
+  if (globalActiveMenuCloseFn.value === closeMenu) {
     globalActiveMenuCloseFn.value = null;
   }
 });

@@ -1,10 +1,19 @@
 <template>
-  <Teleport to="body">
-    <Transition name="v-transition-modal">
+  <Teleport :to="teleportTo" :disabled="disabledTeleport">
+    <Transition
+      name="v-transition-modal"
+      @before-enter="emit('open')"
+      @after-enter="emit('opened')"
+      @before-leave="emit('close')"
+      @after-leave="emit('closed')"
+    >
       <div
-        v-if="visible"
+        v-if="destroyOnClose ? visible : true"
+        v-show="visible"
         v-bind="$attrs"
-        class="modal-overlay-container fixed inset-0 z-overlay flex items-center justify-center p-md box-border bg-black/50"
+        ref="overlayRef"
+        class="modal-overlay-container fixed inset-0 z-overlay flex p-md box-border bg-black/50 overflow-y-auto"
+        :class="overlayAlignClass"
         @mousedown="handleMaskMousedown"
         @click.self="handleMaskClick"
       >
@@ -12,28 +21,41 @@
           ref="modalCardRef"
           role="dialog"
           aria-modal="true"
-          :aria-label="title || '对话框'"
+          :aria-labelledby="title || $slots.title ? titleId : undefined"
+          :aria-label="title || $slots.title ? undefined : '对话框'"
           tabindex="-1"
           class="modal-card relative z-panel flex flex-col box-border bg-bg-panel border border-glass-border rounded-lg shadow-floating outline-none transition-[width,height] duration-base"
-          :class="[computedWidthClass, computedHeightClass]"
+          :style="[sizeStyle, topStyle]"
           @click.stop
           @keydown="handleKeydownTrap"
         >
           <div v-if="hasHeader" class="modal-header-zone pt-xl px-xl shrink-0 flex items-center justify-between gap-lg">
-            <slot name="header">
+            <slot name="header" :title-id="titleId">
               <div class="modal-header-left flex items-center min-w-0 flex-1">
-                <slot name="title">
+                <slot name="title" :title-id="titleId">
                   <h3
                     v-if="title"
+                    :id="titleId"
                     class="modal-title text-sm font-bold tracking-tight text-text-title m-0 whitespace-nowrap overflow-hidden text-ellipsis"
-                    :title
+                    :title="title"
                   >
                     {{ title }}
                   </h3>
                 </slot>
               </div>
-              <div v-if="$slots['header-extra']" class="modal-header-extra flex items-center gap-sm shrink-0">
+              <div class="modal-header-right flex items-center gap-sm shrink-0">
                 <slot name="header-extra" />
+                <ActionButton
+                  v-if="showClose"
+                  variant="ghost"
+                  size="sm"
+                  icon-only
+                  aria-label="关闭"
+                  class="!p-1.5"
+                  @click="close"
+                >
+                  <X :size="16" />
+                </ActionButton>
               </div>
             </slot>
           </div>
@@ -51,17 +73,17 @@
           >
             <slot name="footer">
               <slot name="cancel-btn">
-                <ActionButton variant="default" size="md" @click="handleCancel">
+                <ActionButton variant="default" size="md" :disabled="confirmLoading" @click="close">
                   {{ cancelText }}
                 </ActionButton>
               </slot>
               <slot name="confirm-btn">
                 <ActionButton
                   variant="subtle"
-                  :primary="confirmType === 'primary'"
-                  :danger="confirmType === 'danger'"
-                  :warning="confirmType === 'warning'"
+                  :color="confirmType"
                   size="md"
+                  :loading="confirmLoading"
+                  :disabled="confirmLoading"
                   @click="handleConfirm"
                 >
                   {{ confirmText }}
@@ -76,8 +98,9 @@
 </template>
 
 <script setup lang="ts">
+import { X } from '@lucide/vue';
 import { useEventListener, useScrollLock } from '@vueuse/core';
-import { computed, nextTick, onBeforeUnmount, useSlots, useTemplateRef, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
 import ActionButton from './ActionButton.vue';
 
 defineOptions({ inheritAttrs: false });
@@ -85,94 +108,190 @@ defineOptions({ inheritAttrs: false });
 const props = withDefaults(
   defineProps<{
     title?: string;
-    width?: 'w-sm' | 'w-md' | 'w-80' | 'w-lg' | 'w-large' | 'w-xl' | 'w-wide' | 'w-full';
-    height?: 'h-auto' | 'h-sm' | 'h-md' | 'h-lg' | 'h-xl' | 'h-full';
+    /** 预设别名或任意自定义值：number 视为 px，字符串如 "520px" 直接生效 */
+    width?: 'w-sm' | 'w-md' | 'w-80' | 'w-lg' | 'w-large' | 'w-xl' | 'w-wide' | 'w-full' | (string & {}) | number;
+    height?: 'h-auto' | 'h-sm' | 'h-md' | 'h-lg' | 'h-xl' | 'h-full' | (string & {}) | number;
     showFooter?: boolean;
+    /** 是否显示右上角关闭（X）按钮，默认 true */
+    showClose?: boolean;
     cancelText?: string;
     confirmText?: string;
     confirmType?: 'primary' | 'danger' | 'warning' | 'default';
     closeOnMask?: boolean;
+    /** 确认按钮 Loading 态：为 true 时确认按钮显示加载并禁止重复触发，同时屏蔽遮罩/ESC 关闭 */
+    confirmLoading?: boolean;
+    /** 关闭前拦截：返回 false 或 Promise<false> 可阻止关闭（取消按钮、遮罩、ESC、X 均生效） */
+    beforeClose?: () => boolean | Promise<boolean>;
+    /** Teleport 挂载目标，默认 'body' */
+    teleportTo?: string | HTMLElement;
+    /** 禁用 Teleport，在当前父节点就地渲染 */
+    disabledTeleport?: boolean;
+    /** 垂直方向是否居中展示，默认 true */
+    centered?: boolean;
+    /** 自定义顶部距离（如 "100px" 或 100），传入后自动顶部对齐 */
+    top?: string | number;
+    /** 关闭时是否彻底销毁内部 DOM，默认 true */
+    destroyOnClose?: boolean;
   }>(),
   {
     title: '',
     width: 'w-80',
     height: 'h-auto',
     showFooter: true,
+    showClose: true,
     cancelText: '取消',
     confirmText: '确认',
     confirmType: 'primary',
     closeOnMask: true,
+    confirmLoading: false,
+    teleportTo: 'body',
+    disabledTeleport: false,
+    centered: true,
+    top: undefined,
+    destroyOnClose: true,
   }
 );
 
 const emit = defineEmits<{
   (e: 'confirm'): void;
   (e: 'cancel'): void;
+  (e: 'open'): void;
+  (e: 'opened'): void;
+  (e: 'close'): void;
+  (e: 'closed'): void;
 }>();
 
 const slots = useSlots();
 const visible = defineModel<boolean>('visible', { required: true });
-const isBodyLocked = useScrollLock(document.body);
+const overlayRef = useTemplateRef<HTMLDivElement>('overlayRef');
 const modalCardRef = useTemplateRef<HTMLDivElement>('modalCardRef');
+const titleId = `base-modal-title-${useId()}`;
 
+// SSR 安全：服务端无 document，降级为普通 ref，避免运行时崩溃
+const isClient = typeof document !== 'undefined';
+const isBodyLocked = isClient ? useScrollLock(document.body) : ref(false);
+
+const isCentered = computed(() => props.centered && props.top === undefined);
+
+const overlayAlignClass = computed(() => {
+  if (isCentered.value) {
+    return 'items-center justify-center';
+  }
+  return 'items-start justify-center';
+});
+
+const topStyle = computed(() => {
+  if (props.top !== undefined) {
+    const t = typeof props.top === 'number' ? `${props.top}px` : props.top;
+    return { marginTop: t };
+  }
+  if (!props.centered) {
+    return { marginTop: '10vh' };
+  }
+  return {};
+});
+
+// 预设尺寸映射：width|maxWidth / height|maxHeight
 const WIDTH_MAP: Record<string, string> = {
-  'w-sm': 'w-[380px] max-w-[90vw]',
-  'w-md': 'w-[480px] max-w-[90vw]',
-  'w-80': 'w-[480px] max-w-[90vw]',
-  'w-lg': 'w-[640px] max-w-[90vw]',
-  'w-large': 'w-[840px] max-w-[90vw]',
-  'w-xl': 'w-[840px] max-w-[90vw]',
-  'w-wide': 'w-[1080px] max-w-[92vw]',
-  'w-full': 'w-[1320px] max-w-[95vw]',
+  'w-sm': '380px|90vw',
+  'w-md': '480px|90vw',
+  'w-80': '480px|90vw',
+  'w-lg': '640px|90vw',
+  'w-large': '840px|90vw',
+  'w-xl': '840px|90vw',
+  'w-wide': '1080px|92vw',
+  'w-full': '1320px|95vw',
 };
-
 const HEIGHT_MAP: Record<string, string> = {
-  'h-auto': 'h-auto max-h-[80vh]',
-  'h-sm': 'h-[320px] max-h-[80vh]',
-  'h-md': 'h-[480px] max-h-[80vh]',
-  'h-lg': 'h-[640px] max-h-[85vh]',
-  'h-xl': 'h-[800px] max-h-[90vh]',
-  'h-full': 'h-[90vh]',
+  'h-auto': 'auto|80vh',
+  'h-sm': '320px|80vh',
+  'h-md': '480px|80vh',
+  'h-lg': '640px|85vh',
+  'h-xl': '800px|90vh',
+  'h-full': '90vh|90vh',
 };
 
-const computedWidthClass = computed(() => WIDTH_MAP[props.width] ?? props.width);
-const computedHeightClass = computed(() => HEIGHT_MAP[props.height] ?? props.height);
+const sizeStyle = computed<Record<string, string>>(() => {
+  const style: Record<string, string> = {};
+  const w = props.width;
+  if (typeof w === 'number') {
+    style.width = `${w}px`;
+    style.maxWidth = '90vw';
+  } else if (w && WIDTH_MAP[w]) {
+    const parts = WIDTH_MAP[w].split('|');
+    if (parts[0]) style.width = parts[0];
+    if (parts[1]) style.maxWidth = parts[1];
+  } else if (typeof w === 'string' && w) {
+    style.width = w;
+  }
+  const h = props.height;
+  if (typeof h === 'number') {
+    style.height = `${h}px`;
+    style.maxHeight = '90vh';
+  } else if (h && HEIGHT_MAP[h]) {
+    const parts = HEIGHT_MAP[h].split('|');
+    if (parts[0]) style.height = parts[0];
+    if (parts[1]) style.maxHeight = parts[1];
+  } else if (typeof h === 'string' && h) {
+    style.height = h;
+  }
+  return style;
+});
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-const hasHeader = computed(() => Boolean(slots.header || slots['header-extra'] || slots.title || props.title));
-const setExternalInert = (isInert: boolean) => {
-  const targetEl = document.body.firstElementChild as HTMLElement;
-  if (!targetEl) return;
-  if (isInert) {
-    targetEl.setAttribute('inert', '');
-  } else {
-    targetEl.removeAttribute('inert');
-  }
+const hasHeader = computed(() =>
+  Boolean(slots.header || slots['header-extra'] || slots.title || props.title || props.showClose)
+);
+
+// 全局弹窗层级栈：解决多层弹窗叠加时的 inert 竞争与恢复错误
+const activeModalOverlays = new Set<HTMLElement>();
+
+const updateGlobalInertState = () => {
+  if (!isClient) return;
+  const currentTopOverlay = Array.from(activeModalOverlays).pop();
+
+  document.body.childNodes.forEach(node => {
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as HTMLElement;
+    if (currentTopOverlay && el === currentTopOverlay) {
+      el.removeAttribute('inert');
+    } else if (activeModalOverlays.size > 0) {
+      el.setAttribute('inert', '');
+    } else {
+      el.removeAttribute('inert');
+    }
+  });
 };
 
 let stopKeydownListener: (() => void) | null = null;
+const clearListeners = () => {
+  stopKeydownListener?.();
+  stopKeydownListener = null;
+};
+
 watch(
   visible,
   async isOpen => {
-    isBodyLocked.value = isOpen;
-    setExternalInert(isOpen);
-    if (isOpen) {
-      stopKeydownListener = useEventListener(window, 'keydown', (e: KeyboardEvent) => {
-        if (e.key === 'Escape') handleCancel();
-      });
-      await nextTick();
-      const autoFocusEl = modalCardRef.value?.querySelector<HTMLElement>(
-        '[autofocus], input:not([disabled]), textarea:not([disabled]), button:not([disabled]), select:not([disabled])'
-      );
-      if (autoFocusEl) {
-        autoFocusEl.focus();
-      } else {
-        modalCardRef.value?.focus();
+    if (!isOpen) {
+      clearListeners();
+      if (overlayRef.value) {
+        activeModalOverlays.delete(overlayRef.value);
+        updateGlobalInertState();
       }
+      isBodyLocked.value = activeModalOverlays.size > 0;
     } else {
-      stopKeydownListener?.();
-      stopKeydownListener = null;
+      isBodyLocked.value = true;
+      stopKeydownListener = useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Escape') close();
+      });
+      // 待 DOM 挂载后加入激活栈
+      setTimeout(() => {
+        if (overlayRef.value) {
+          activeModalOverlays.add(overlayRef.value);
+          updateGlobalInertState();
+        }
+      }, 0);
     }
   },
   { immediate: true }
@@ -201,16 +320,28 @@ const handleKeydownTrap = (e: KeyboardEvent) => {
 };
 
 onBeforeUnmount(() => {
-  setExternalInert(false);
+  clearListeners();
+  if (overlayRef.value) {
+    activeModalOverlays.delete(overlayRef.value);
+    updateGlobalInertState();
+  }
+  isBodyLocked.value = activeModalOverlays.size > 0;
 });
 
-const handleConfirm = () => {
-  emit('confirm');
-};
-
-const handleCancel = () => {
+// 统一关闭入口：加载中禁止关闭，并支持 beforeClose 拦截
+const close = async () => {
+  if (props.confirmLoading) return;
+  if (props.beforeClose) {
+    const ok = await props.beforeClose();
+    if (ok === false) return;
+  }
   emit('cancel');
   visible.value = false;
+};
+
+const handleConfirm = () => {
+  if (props.confirmLoading) return; // 防止重复触发
+  emit('confirm');
 };
 
 let mousedownTarget: EventTarget | null = null;
@@ -219,7 +350,7 @@ const handleMaskMousedown = (e: MouseEvent) => {
 };
 const handleMaskClick = (e: MouseEvent) => {
   if (props.closeOnMask && e.target === e.currentTarget && mousedownTarget === e.currentTarget) {
-    handleCancel();
+    close();
   }
   mousedownTarget = null;
 };
