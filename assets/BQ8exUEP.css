@@ -1,0 +1,1 @@
+.v-floating-bar-slide-enter-active,.v-floating-bar-slide-leave-active{transition:opacity .2s cubic-bezier(0,0,.2,1),transform .2s cubic-bezier(0,0,.2,1)}.v-floating-bar-slide-enter-from,.v-floating-bar-slide-leave-to{opacity:0;transform:translateY(16px) scale(.96)}.v-floating-bar-slide-enter-to,.v-floating-bar-slide-leave-from{opacity:1;transform:translateY(0) scale(1)}

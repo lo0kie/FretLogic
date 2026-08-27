@@ -1,1 +1,0 @@
-import{ap as e,au as u,ax as d}from"./CTdeYSYb.js";function c(){const o=e(),r=u(),a={version:1,groups:o.groups,chords:o.savedChordsList,songs:r.songs},{isValid:t,payload:s,issues:n}=d(a);return!t||!s?(console.error("[buildBackupPayload] invalid:",n),null):s}export{c as b};
