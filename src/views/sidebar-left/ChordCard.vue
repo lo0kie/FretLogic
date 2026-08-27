@@ -1,13 +1,14 @@
 <template>
-  <div class="chord-card-wrapper">
+  <div class="w-full box-border">
     <ContextMenu :items="menuItems" #="{ isOpen }">
-      <div class="chord-card-frame" :title="getChordName(activeChord)">
+      <div class="w-full" :title="getChordName(activeChord)">
         <div
           v-wave
-          class="chord-thumb-card"
+          class="w-full h-[2.2rem] px-2 flex items-center justify-between relative box-border cursor-pointer rounded-md outline-none transition-all duration-fast bg-bg-body border border-border-light hover:bg-bg-panel-hover hover:border-border-base active:bg-bg-panel-hover active:border-border-base"
           :class="{
-            'is-editing': isActive,
-            'is-context-open': isOpen,
+            '!bg-tint-primary-92 !border-tint-primary-45 shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.25)] hover:!bg-tint-primary-80 hover:!border-primary hover:shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.4)]':
+              isActive,
+            'bg-bg-panel-hover border-border-base': isOpen,
           }"
           role="button"
           tabindex="0"
@@ -24,19 +25,20 @@
             :variant="isActive ? 'primary' : 'neutral'"
             appearance="filled"
             size="xs"
-            class="variant-badge-badge"
+            class="absolute -top-1.5 -right-1.5 z-card border border-bg-body shadow-sm cursor-pointer transition-all duration-fast ease-bounce"
             :title="isActive ? '滚轮切换指法' : undefined"
             @click.stop="toggleVariantsDropdown"
           >
-            <span v-if="isActive">{{ activeVariantIndex + 1 }}/{{ cardData.variantCount }}</span>
-            <span v-else>{{ cardData.variantCount }}</span>
+            <span v-if="isActive"> {{ activeVariantIndex + 1 }}/{{ cardData.variantCount }} </span>
+            <span v-else> {{ cardData.variantCount }} </span>
           </BaseBadge>
 
-          <BaseMarquee class="chord-marquee-wrapper">
+          <BaseMarquee class="flex-1 min-w-0">
             <ChordNameDisplay
               :chord="activeChord"
               :shorthand="settingsStore.useChordShorthand"
-              class="chord-name-text"
+              class="text-xs font-bold tracking-tight pointer-events-none"
+              :class="isActive ? 'text-primary' : 'text-text-body'"
             />
           </BaseMarquee>
         </div>
@@ -46,15 +48,15 @@
 </template>
 
 <script setup lang="ts">
-import BaseBadge from '@/components/BaseBadge.vue';
-import BaseMarquee from '@/components/BaseMarquee.vue';
-import ChordNameDisplay from '@/components/ChordNameDisplay.vue';
-import ContextMenu from '@/components/ContextMenu.vue';
-import type { ContextMenuItem } from '@/components/ContextMenuItems.vue';
+import BaseBadge from '@/components/base/BaseBadge.vue';
+import BaseMarquee from '@/components/base/BaseMarquee.vue';
+import ChordNameDisplay from '@/components/fretboard/ChordNameDisplay.vue';
+import ContextMenu from '@/components/context-menu/ContextMenu.vue';
+import type { ContextMenuItem } from '@/components/context-menu/ContextMenuItems.vue';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { Chord, GroupedChordCard } from '@/types';
-import { getChordName } from '@/utils/musicTheory';
+import { getChordName } from '@/utils/music/musicTheory';
 import { Link2, Move, Trash2 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
@@ -74,10 +76,8 @@ const emit = defineEmits<{
 const editorStore = useChordEditorStore();
 const settingsStore = useSettingsStore();
 
-// 滚轮切换指法的增量阈值：鼠标滚轮一格（±100+）立即切换，触控板惯性按累积量切换
 const WHEEL_SWITCH_THRESHOLD = 60;
 
-/** 未激活时的本地预览索引；激活后索引以 store 为准 */
 const localVariantIndex = ref(0);
 
 const activeVariantIndex = computed(() => {
@@ -106,50 +106,53 @@ const switchVariant = (newIndex: number) => {
 };
 
 const toggleVariantsDropdown = () => {
-  if (!props.cardData.hasVariants) return;
-  const nextIdx = (activeVariantIndex.value + 1) % props.cardData.variantCount;
+  const nextIdx = (activeVariantIndex.value + 1) % props.cardData.variants.length;
   switchVariant(nextIdx);
 };
 
-let wheelAccumulator = 0;
+let accumulatedDelta = 0;
+let lastWheelTime = 0;
 
 const handleWheelScroll = (e: WheelEvent) => {
-  if (!props.cardData.hasVariants || !props.isActive) return;
+  if (!props.cardData.hasVariants) return;
   e.preventDefault();
   e.stopPropagation();
-  // 触控板惯性滚动事件频率极高，累积增量达到阈值才切换一次指法
-  if (Math.sign(e.deltaY) !== Math.sign(wheelAccumulator)) wheelAccumulator = 0;
-  wheelAccumulator += e.deltaY;
-  if (Math.abs(wheelAccumulator) < WHEEL_SWITCH_THRESHOLD) return;
-  wheelAccumulator = 0;
-  const total = props.cardData.variantCount;
-  const cur = activeVariantIndex.value;
-  let nextIdx = cur;
-  if (e.deltaY > 0) nextIdx = (cur + 1) % total;
-  else if (e.deltaY < 0) nextIdx = (cur - 1 + total) % total;
-  if (nextIdx !== cur) switchVariant(nextIdx);
+
+  const now = Date.now();
+  if (now - lastWheelTime > 300) accumulatedDelta = 0;
+  lastWheelTime = now;
+
+  accumulatedDelta += e.deltaY;
+  if (Math.abs(accumulatedDelta) < WHEEL_SWITCH_THRESHOLD) return;
+
+  const step = accumulatedDelta > 0 ? 1 : -1;
+  accumulatedDelta = 0;
+
+  const count = props.cardData.variants.length;
+  const nextIdx = (activeVariantIndex.value + step + count) % count;
+  switchVariant(nextIdx);
 };
 
 const menuItems = computed<ContextMenuItem[]>(() => [
   {
-    label: '移动',
+    label: '移动分组',
     icon: Move,
     action: () => emit('move', activeChord.value),
   },
   {
-    label: '查看引用',
+    label: '引用反查',
     icon: Link2,
     action: () => emit('open-references', props.cardData),
   },
   {
-    label: '删除',
+    label: '删除和弦',
     icon: Trash2,
     danger: true,
     action: () => {
       if (props.cardData.hasVariants) {
         emit('delete-variants', props.cardData);
       } else {
-        emit('delete', activeChord.value);
+        emit('delete', props.cardData.mainChord);
       }
     },
   },
@@ -163,99 +166,3 @@ const ariaLabel = computed(() => {
   return parts.join('，');
 });
 </script>
-
-<style scoped lang="scss">
-.chord-card-wrapper {
-  width: 100%;
-  box-sizing: border-box;
-  min-width: 0;
-  position: relative;
-  z-index: 1;
-}
-
-.chord-card-frame {
-  box-sizing: border-box;
-  width: 100%;
-}
-
-.chord-thumb-card {
-  height: 2.25rem;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: relative;
-  box-sizing: border-box;
-  cursor: pointer;
-  background-color: var(--bg-body);
-  border: 1px solid var(--border-light);
-  border-radius: $radius-md;
-  outline: none;
-  transition:
-    background-color $duration-fast ease,
-    border-color $duration-fast ease,
-    box-shadow $duration-fast ease;
-
-  &:hover,
-  &:active,
-  &.is-context-open {
-    background-color: var(--bg-panel-hover);
-    border-color: var(--border-base);
-  }
-
-  &.is-editing {
-    background-color: color-mix(in srgb, var(--color-primary), var(--bg-body) 93%);
-    border-color: var(--tint-primary-45);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary), transparent 75%);
-
-    .chord-name-text {
-      color: $primary;
-    }
-
-    &:hover,
-    &:active,
-    &.is-context-open {
-      background-color: color-mix(in srgb, $primary, var(--bg-body) 78%);
-      border-color: $primary;
-      box-shadow: 0 0 0 1px color-mix(in srgb, $primary, transparent 60%);
-    }
-  }
-}
-
-.variant-badge-badge {
-  position: absolute;
-  top: -0.32rem;
-  right: -0.32rem;
-  z-index: var(--z-card);
-  height: 0.9rem;
-  min-width: 0.9rem;
-  padding: 0 $space-xs;
-  border-radius: $radius-pill;
-  font-size: $fs-2xs;
-  font-weight: 700;
-  line-height: 1;
-  box-shadow: var(--shadow-sm);
-  /* 用卡片同底色描边与卡片分离，避免悬浮感缺失 */
-  border: 1px solid var(--bg-body);
-  cursor: pointer;
-  transition:
-    transform $duration-fast $bezier-bounce,
-    box-shadow $duration-fast ease,
-    background-color $duration-fast ease;
-}
-
-.chord-marquee-wrapper {
-  flex: 1;
-  min-width: 0;
-}
-
-.chord-name-text {
-  font-size: $fs-xs;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: normal;
-  pointer-events: none;
-  color: var(--text-body);
-}
-</style>

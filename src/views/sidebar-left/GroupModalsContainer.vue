@@ -30,7 +30,9 @@
     confirm-type="danger"
     @confirm="groupModals.handleDeleteGroup"
   >
-    <p class="modal-description-text">确定要执行此删除操作吗？删除后组内的所有和弦都将清空。</p>
+    <p class="modal-description-text text-xs font-medium leading-relaxed text-text-body m-0">
+      确定要执行此删除操作吗？删除后组内的所有和弦都将清空。
+    </p>
   </BaseModal>
 
   <!-- 4. 排序配置 Modal -->
@@ -40,58 +42,35 @@
     width="w-md"
     @confirm="groupModals.handleSaveSort"
   >
-    <div class="sort-modal-body">
+    <div class="sort-modal-body flex flex-col gap-lg py-xs">
       <BaseFormRow label="排序规则" label-width="4.2rem">
         <BaseSegmentedControl v-model="groupModals.modalData.sortRule" :options="SORT_RULE_CONFIG" />
       </BaseFormRow>
 
       <BaseFormRow label="调式设定" label-width="4.2rem">
-        <div class="key-selector-wrapper">
-          <BaseSelector
-            v-model="groupModals.modalData.sortKey"
-            :options="KEY_OPTIONS"
-            default-value="C"
-            :label-formatter="val => `${val} 调`"
-            :disabled="groupModals.modalData.sortRule !== 'KEY_DEGREE'"
-          />
-        </div>
+        <BaseSelector
+          v-model="groupModals.modalData.sortKey"
+          :options="KEY_OPTIONS"
+          default-value="C"
+          :format-option="(val: any) => `${val} 调`"
+          :disabled="groupModals.modalData.sortRule !== 'KEY_DEGREE'"
+          width="md"
+        />
       </BaseFormRow>
     </div>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
-import BaseFormRow from '@/components/BaseFormRow.vue';
-import BaseInput from '@/components/BaseInput.vue';
-import BaseModal from '@/components/BaseModal.vue';
-import BaseSegmentedControl from '@/components/BaseSegmentedControl.vue';
-import BaseSelector from '@/components/BaseSelector.vue';
-import type { useChordGroupModals } from '@/composables/useChordGroupModals';
-import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/utils/musicTheory';
+import BaseFormRow from '@/components/base/BaseFormRow.vue';
+import BaseInput from '@/components/base/BaseInput.vue';
+import BaseModal from '@/components/base/BaseModal.vue';
+import BaseSegmentedControl from '@/components/base/BaseSegmentedControl.vue';
+import BaseSelector from '@/components/base/BaseSelector.vue';
+import type { useChordGroupModals } from '@/composables/app/useChordGroupModals';
+import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/utils/music/musicTheory';
 import { inject } from 'vue';
 
 type GroupModals = ReturnType<typeof useChordGroupModals>;
 const groupModals = inject<GroupModals>('groupModals')!;
 </script>
-
-<style scoped lang="scss">
-.modal-description-text {
-  font-size: $fs-xs;
-  font-weight: 500;
-  line-height: 1.6;
-  color: var(--text-body);
-  margin: 0;
-}
-
-.sort-modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: $space-lg;
-  padding: $space-xs 0;
-}
-
-.key-selector-wrapper {
-  width: 8rem;
-  flex-shrink: 0;
-}
-</style>

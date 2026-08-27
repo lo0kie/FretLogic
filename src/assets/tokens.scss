@@ -296,6 +296,16 @@ $bezier-sidebar: cubic-bezier(0.2, 0.8, 0.2, 1);
 
 $transition-base: all $duration-base $bezier-standard;
 $transition-fast: all $duration-fast $bezier-standard;
+$transition-interactive:
+  background-color $duration-fast ease,
+  border-color $duration-fast ease,
+  box-shadow $duration-fast ease,
+  color $duration-fast ease;
+$transition-colors:
+  background-color $duration-fast ease,
+  border-color $duration-fast ease,
+  color $duration-fast ease;
+$transition-spring: transform $duration-base $bezier-spring;
 
 @mixin text-ellipsis {
   overflow: hidden;
@@ -338,26 +348,4 @@ $transition-fast: all $duration-fast $bezier-standard;
 @mixin interactive-surface-hover {
   border-color: color-mix(in srgb, var(--border-base), transparent 18%);
   box-shadow: $shadow-md;
-}
-
-@mixin fade-scale-transition($name, $translate: '0, 0', $scale: 0.96, $targetTranslate: '0, 0') {
-  .#{$name}-enter-active,
-  .#{$name}-leave-active {
-    transition:
-      opacity $duration-fast $bezier-standard,
-      transform $duration-fast $bezier-standard;
-    will-change: opacity, transform;
-  }
-
-  .#{$name}-enter-from,
-  .#{$name}-leave-to {
-    opacity: 0;
-    transform: translate(#{$translate}) scale($scale);
-  }
-
-  .#{$name}-enter-to,
-  .#{$name}-leave-from {
-    opacity: 1;
-    transform: translate(#{$targetTranslate}) scale(1);
-  }
 }

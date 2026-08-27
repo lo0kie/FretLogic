@@ -1,0 +1,28 @@
+# 自动检测文本文件并统一在 Git 中规范化为 LF
+* text=auto eol=lf
+
+# 源码与文本配置
+*.vue text eol=lf
+*.ts text eol=lf
+*.js text eol=lf
+*.cjs text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.scss text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.svg text eol=lf
+
+# 二进制资源文件
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary

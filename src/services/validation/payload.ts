@@ -1,8 +1,8 @@
 import type { Chord, ChordNameSegments, Group, ImportExportPayload, Song } from '@/types';
 import { GroupSortRule } from '@/types';
-import { normalizeChord, pruneOrphanChordRefs } from '@/utils/chord-fretboard';
-import { cloneDeep } from '@/utils/common';
-import { computeChordFingerprint, getChordName, nameToSegments, Tuning } from '@/utils/musicTheory';
+import { normalizeChord, pruneOrphanChordRefs } from '@/utils/music/chord-fretboard';
+import { cloneDeep } from '@/utils/core/common';
+import { computeChordFingerprint, getChordName, nameToSegments, Tuning } from '@/utils/music/musicTheory';
 
 /** 旧/未知结构的数据（含历史遗留字段），用于防御性清洗 */
 type RawRecord = Record<string, unknown>;

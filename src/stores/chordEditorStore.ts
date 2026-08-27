@@ -1,10 +1,10 @@
 // src/stores/chordEditorStore.ts
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, GuitarStringsModel } from '@/types';
-import { normalizeChord } from '@/utils/chord-fretboard';
-import { cloneDeep } from '@/utils/common';
-import { STORAGE_KEYS } from '@/utils/constants';
-import { createString, DEFAULT_TUNING_MAPPING, getChordName, Tuning, TUNING_PRESETS } from '@/utils/musicTheory';
+import { normalizeChord } from '@/utils/music/chord-fretboard';
+import { cloneDeep } from '@/utils/core/common';
+import { STORAGE_KEYS } from '@/utils/core/constants';
+import { createString, DEFAULT_TUNING_MAPPING, getChordName, Tuning, TUNING_PRESETS } from '@/utils/music/musicTheory';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw, watch } from 'vue';

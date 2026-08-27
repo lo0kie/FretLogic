@@ -6,20 +6,20 @@
     description="未找到匹配的和弦"
     size="md"
   />
-  <div v-else ref="groupListContainerRef" @keydown="handleKeydown">
+  <div v-else v-grid-nav.stop="{ cols: 1, selector: '.group-title-row' }">
     <VueDraggable
       :model-value="chordStore.groups"
       :animation="200"
       handle=".group-title-row"
       :disabled="!isAllCollapsed || Boolean(searchQuery)"
-      class="draggable-list"
+      class="draggable-list flex flex-col gap-sm box-border"
       ghost-class="drag-ghost-style"
       chosen-class="drag-chosen-style"
       drag-class="drag-active-style"
       :swap-threshold="0.5"
       @update:model-value="(val: Group[]) => chordStore.overwriteGroups(val)"
     >
-      <div v-for="(group, index) in chordStore.groups" :key="group.id" class="group-box-card">
+      <div v-for="(group, index) in chordStore.groups" :key="group.id" class="box-border">
         <ContextMenu :items="getGroupMenuItems(group)" #="{ isOpen }">
           <div
             v-wave
@@ -28,32 +28,34 @@
             role="button"
             :aria-expanded="isGroupContentOpen(group)"
             :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${chordStore.isGroupCollapsed(group.id) ? '已折叠' : '已展开'}`"
-            class="group-title-row"
+            class="group-title-row group/row h-[2.4rem] px-3 flex items-center justify-between cursor-pointer rounded-md select-none box-border outline-none transition-colors duration-fast hover:bg-tint-panelhover-30"
             :class="{
-              'is-expanded': isGroupContentOpen(group),
-              'is-context-open': isOpen,
+              '!bg-tint-panelhover-50': isGroupContentOpen(group),
+              '!bg-tint-panelhover-30': isOpen,
             }"
             @click="chordActions.executeGroupToggle(group)"
             @keydown.enter.prevent="chordActions.executeGroupToggle(group)"
             @keydown.space.prevent="chordActions.executeGroupToggle(group)"
           >
-            <div class="group-info-zone" title="点击折叠/展开分组">
+            <div class="flex items-center gap-sm min-w-0 flex-1" title="点击折叠/展开分组">
               <ChevronDown
                 :size="14"
                 :stroke-width="2.5"
-                class="arrow-toggle-icon"
-                :class="{ 'is-collapsed': !isGroupContentOpen(group) }"
+                class="text-text-disabled shrink-0 transition-transform duration-fast group-hover/row:text-text-title"
+                :class="{ '-rotate-90': !isGroupContentOpen(group) }"
                 aria-hidden="true"
               />
               <BaseMarquee>
-                <span class="group-name-text">{{ group.name }}</span>
+                <span class="text-xs font-bold text-text-title whitespace-nowrap">
+                  {{ group.name }}
+                </span>
               </BaseMarquee>
-              <div class="group-badges-zone">
+              <div class="flex items-center gap-sm ml-auto shrink-0">
                 <BaseBadge
                   variant="neutral"
                   appearance="outline"
                   size="xs"
-                  class="sort-rule-badge"
+                  class="opacity-80"
                   title="排序方法"
                   :aria-label="`按${getSortLabel(group)}自动排序`"
                   width="2rem"
@@ -70,12 +72,12 @@
                 >
                   <span
                     :class="{
-                      'search-match-count': hasMatchedChords(group.id),
+                      'font-extrabold': hasMatchedChords(group.id),
                     }"
                   >
                     {{ getMatchCount(group.id) }}
                   </span>
-                  <span aria-hidden="true">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }}</span>
+                  <span aria-hidden="true">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }} </span>
                 </BaseBadge>
                 <BaseBadge
                   v-else
@@ -83,7 +85,7 @@
                   :appearance="isGroupContentOpen(group) ? 'subtle' : 'filled'"
                   size="xs"
                   width="1.5rem"
-                  class="count-badge"
+                  class="font-mono"
                   :aria-label="`共 ${getGroupChordsCount(group.id)} 个和弦`"
                 >
                   {{ getGroupChordsCount(group.id) }}
@@ -109,18 +111,17 @@
 </template>
 
 <script setup lang="ts">
-import BaseBadge from '@/components/BaseBadge.vue';
-import BaseMarquee from '@/components/BaseMarquee.vue';
-import ContextMenu from '@/components/ContextMenu.vue';
-import type { ContextMenuItem } from '@/components/ContextMenuItems.vue';
-import EmptyState from '@/components/EmptyState.vue';
-import { useChordActions } from '@/composables/useChordActions.ts';
-import { useGridNavigation } from '@/composables/useGridNavigation';
+import BaseBadge from '@/components/base/BaseBadge.vue';
+import BaseMarquee from '@/components/base/BaseMarquee.vue';
+import ContextMenu from '@/components/context-menu/ContextMenu.vue';
+import type { ContextMenuItem } from '@/components/context-menu/ContextMenuItems.vue';
+import EmptyState from '@/components/base/EmptyState.vue';
+import { useChordActions } from '@/composables/fretboard/useChordActions';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
 import { ArrowUpDown, ChevronDown, FolderOpen, Search, SquarePen, Trash2 } from '@lucide/vue';
-import { computed, useTemplateRef, watch, type ComponentPublicInstance } from 'vue';
+import { computed, watch, type ComponentPublicInstance } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import LeftChordGroupContent from './GroupContent.vue';
 
@@ -136,17 +137,11 @@ const emit = defineEmits<{
   (e: 'open-references', cardData: GroupedChordCard): void;
 }>();
 
-const editorStore = useChordEditorStore();
 const chordStore = useChordStore();
+const editorStore = useChordEditorStore();
 const chordActions = useChordActions();
 
-const groupListContainerRef = useTemplateRef<HTMLElement>('groupListContainerRef');
 const contentOuterComponentEls = new Map<number, ComponentPublicInstance | Element | null>();
-
-const { handleKeydown } = useGridNavigation(1, groupListContainerRef, {
-  selector: '.group-title-row',
-  stop: true,
-});
 
 const setContentOuterRef = (el: Element | ComponentPublicInstance | null, index: number) => {
   if (el) contentOuterComponentEls.set(index, el);
@@ -190,18 +185,13 @@ const totalMatchCount = computed(() => {
 const getMatchCount = (groupId: string): number => groupMatchCountsMap.value.get(groupId) ?? 0;
 const hasMatchedChords = (groupId: string): boolean => getMatchCount(groupId) > 0;
 
-const getSortLabel = (group: Group): string => {
-  switch (group.sortRule) {
-    case 'ROOT_PITCH':
-      return 'C-B';
-    case 'KEY_DEGREE':
-      return `${group.sortKey}调`;
-    case 'NAME_ASC':
-      return 'A-Z';
-    default:
-      return 'C-B';
-  }
+const sortLabelStrategies: Record<Group['sortRule'], (group: Group) => string> = {
+  ROOT_PITCH: () => 'C-B',
+  KEY_DEGREE: group => `${group.sortKey}调`,
+  NAME_ASC: () => 'A-Z',
 };
+
+const getSortLabel = (group: Group): string => sortLabelStrategies[group.sortRule]?.(group) ?? 'C-B';
 
 const getGroupChordsCount = (groupId: string) => {
   return chordStore.groupChordMap.get(groupId)?.length ?? 0;
@@ -213,8 +203,6 @@ const handleLocalDeleteChord = (chord: Chord) => {
   if (isEditingCurrent) editorStore.resetEditor();
 };
 
-// 按 groupId 缓存 items，动作执行时再解析最新的 group 对象；
-// 分组集合变化时清缓存，避免残留已删除分组的条目
 const groupMenuItemsMap = new Map<string, ContextMenuItem[]>();
 const groupIdsSignature = computed(() => chordStore.groups.map(g => g.id).join('\u0000'));
 watch(groupIdsSignature, () => groupMenuItemsMap.clear());
@@ -255,79 +243,3 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
   return items;
 };
 </script>
-
-<style scoped lang="scss">
-.draggable-list {
-  display: flex;
-  flex-direction: column;
-  gap: $space-sm;
-  box-sizing: border-box;
-}
-
-.group-box-card {
-  box-sizing: border-box;
-}
-
-.group-title-row {
-  height: 2.4rem;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  border-radius: $radius-md;
-  user-select: none;
-  box-sizing: border-box;
-  transition: $transition-fast;
-  outline: none;
-  &:hover,
-  &.is-context-open {
-    background-color: var(--tint-panelhover-30);
-    .arrow-toggle-icon {
-      color: var(--text-title);
-    }
-  }
-  &.is-expanded {
-    background-color: var(--tint-panelhover-50);
-  }
-}
-.group-info-zone {
-  display: flex;
-  align-items: center;
-  gap: $space-sm;
-  min-width: 0;
-  flex: 1;
-}
-.arrow-toggle-icon {
-  color: var(--text-disabled);
-  transition: transform $duration-fast ease;
-  flex-shrink: 0;
-  &.is-collapsed {
-    transform: rotate(-90deg);
-  }
-}
-.group-name-text {
-  font-size: $fs-xs;
-  font-weight: 700;
-  color: var(--text-title);
-  white-space: nowrap;
-}
-.group-badges-zone {
-  display: flex;
-  align-items: center;
-  gap: $space-sm;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-.sort-rule-badge {
-  font-size: $fs-2xs;
-  opacity: 0.8;
-}
-.count-badge {
-  font-family: monospace;
-}
-.search-match-count {
-  font-weight: 800;
-}
-</style>

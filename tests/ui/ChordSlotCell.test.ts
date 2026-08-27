@@ -59,8 +59,10 @@ describe('ChordSlotCell 谱面槽位', () => {
       props: { slotKey: 'line_l1_start_0', variant: 'edge', chord, isExporting: false },
       global: globalStubs,
     });
-    expect(wrapper.classes()).toContain('edge-slot');
-    expect(wrapper.classes()).toContain('has-edge-chord');
+    // 重构后改用 Tailwind 工具类，不再有 edge-slot/has-edge-chord 这类语义 class；
+    // 稳定结构：始终渲染 chord-display-slot，且带和弦时内含 inline-fretboard-card
+    expect(wrapper.find('.chord-display-slot').exists()).toBe(true);
+    expect(wrapper.find('.inline-fretboard-card').exists()).toBe(true);
   });
 
   it('add 槽位渲染添加按钮样式', () => {
@@ -73,6 +75,8 @@ describe('ChordSlotCell 谱面槽位', () => {
       },
       global: globalStubs,
     });
-    expect(wrapper.classes()).toContain('add-btn-slot');
+    // 重构后 add 变体不再有 add-btn-slot 语义 class；稳定结构为 chord-display-slot 内含带 Plus 图标的占位按钮
+    expect(wrapper.find('.chord-display-slot').exists()).toBe(true);
+    expect(wrapper.find('.chord-display-slot span').exists()).toBe(true);
   });
 });

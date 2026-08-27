@@ -10,8 +10,8 @@
  * 这样：迁移导入的数据被 UI 采用；IDB 始终持有完整副本，
  * 为将来 store 切换到 v2 契约（Phase 3 逐 feature 迁移）备好数据源。
  */
-import { STORAGE_KEYS } from '@/utils/constants';
-import { logger } from '@/utils/logger';
+import { STORAGE_KEYS } from '@/utils/core/constants';
+import { logger } from '@/utils/core/logger';
 import { migrateLegacyData } from './migrateLegacy';
 import { chordRepository, songRepository } from './repositories';
 import type { Chord, Group, Song } from '@/types';
@@ -71,8 +71,31 @@ export async function syncLocalStorageToIdb(storage: Storage = window.localStora
   try {
     const groups = readJson<Group>(STORAGE_KEYS.GROUPS, storage);
     const chords = readJson<Chord>(STORAGE_KEYS.CHORD_LIST, storage);
-    const songs = readJson<Song>(STORAGE_KEYS.SONGS, storage);
-    // 歌曲可能是按 ID 分键存储：SONGS 为空时尝试聚合单曲键
+    const songs: Song[] = [];
+
+    // 歌曲按分片存储（SONGS_INDEX + SONG_ENTRY:{id}）
+    const indexRaw = storage.getItem(STORAGE_KEYS.SONGS_INDEX);
+    if (indexRaw) {
+      try {
+        const ids = JSON.parse(indexRaw);
+        if (Array.isArray(ids)) {
+          for (const id of ids) {
+            const raw = storage.getItem(`${STORAGE_KEYS.SONG_ENTRY}:${id}`);
+            if (raw) {
+              try {
+                songs.push(JSON.parse(raw) as Song);
+              } catch {
+                /* 跳过损坏单曲 */
+              }
+            }
+          }
+        }
+      } catch {
+        /* 索引损坏 */
+      }
+    }
+
+    // fallback: 索引丢失时通过前缀扫描所有已存单曲
     if (songs.length === 0) {
       const prefix = `${STORAGE_KEYS.SONG_ENTRY}:`;
       for (let i = 0; i < storage.length; i += 1) {
@@ -81,8 +104,7 @@ export async function syncLocalStorageToIdb(storage: Storage = window.localStora
           const raw = storage.getItem(key);
           if (raw) {
             try {
-              const song = JSON.parse(raw) as Song;
-              songs.push(song);
+              songs.push(JSON.parse(raw) as Song);
             } catch {
               /* 跳过损坏单曲 */
             }
@@ -90,6 +112,7 @@ export async function syncLocalStorageToIdb(storage: Storage = window.localStora
         }
       }
     }
+
     await chordRepository.saveGroups(groups);
     await chordRepository.saveChords(chords);
     await songRepository.saveSongs(songs);

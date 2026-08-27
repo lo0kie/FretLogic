@@ -1,10 +1,12 @@
 import { createChordRepository } from '@/services/repositories';
-import type { Chord, ChordNameSegments, Group, GroupedChordCard } from '@/types';
+import type { Chord, Group, GroupedChordCard } from '@/types';
 import { GroupSortRule } from '@/types';
-import { normalizeChord } from '@/utils/chord-fretboard';
-import { cloneDeep, cloneGuitarStrings, generateUUID } from '@/utils/common';
-import { STORAGE_KEYS } from '@/utils/constants';
+import { normalizeChord } from '@/utils/music/chord-fretboard';
+import { cloneDeep, cloneGuitarStrings, generateUUID } from '@/utils/core/common';
+import { STORAGE_KEYS } from '@/utils/core/constants';
+import { createChord, createGroup } from '@/utils/music/entityFactories';
 import {
+  type ChordOrName,
   computeChordFingerprint,
   computeIsInverted,
   getChordName,
@@ -13,7 +15,7 @@ import {
   segmentsToString,
   sortChordsByRule,
   validateBassConsistency,
-} from '@/utils/musicTheory';
+} from '@/utils/music/musicTheory';
 import { debounceFilter, useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw } from 'vue';
@@ -34,7 +36,7 @@ type ChordValidationResult =
       cleanName?: string;
     };
 
-function nameKeyOf(chordOrName: string | { nameSegments?: ChordNameSegments | null; chordName?: string }): string {
+function nameKeyOf(chordOrName: string | ChordOrName): string {
   if (typeof chordOrName === 'string') return chordOrName.trim().toLowerCase();
   return getChordName(chordOrName).trim().toLowerCase();
 }
@@ -233,11 +235,7 @@ export const useChordStore = defineStore('chord', () => {
   };
 
   const addGroup = (name: string, sortRule: GroupSortRule = DEFAULT_SORT_RULE): Group => {
-    const group: Group = {
-      id: generateUUID(),
-      name,
-      sortRule,
-    };
+    const group = createGroup(name, sortRule);
     expandedGroupId.value = group.id;
     groups.value = [...groups.value, group];
     selectedGroupId.value = group.id;
@@ -245,9 +243,11 @@ export const useChordStore = defineStore('chord', () => {
   };
 
   const renameGroup = (groupId: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
     const g = groups.value.find(x => x.id === groupId);
-    if (!g || g.name === name) return;
-    g.name = name;
+    if (!g || g.name === trimmed) return;
+    groups.value = groups.value.map(item => (item.id === groupId ? { ...item, name: trimmed } : item));
   };
 
   const updateGroupSort = (groupId: string, sortRule: GroupSortRule, sortKey?: string) => {
@@ -256,12 +256,19 @@ export const useChordStore = defineStore('chord', () => {
     if (sortRule === GroupSortRule.KEY_DEGREE) {
       const targetKey = sortKey || g.sortKey || 'C';
       if (g.sortRule === sortRule && g.sortKey === targetKey) return;
-      g.sortRule = sortRule;
-      g.sortKey = targetKey;
+      groups.value = groups.value.map(item =>
+        item.id === groupId ? { ...item, sortRule, sortKey: targetKey } : item
+      );
     } else {
       if (g.sortRule === sortRule && g.sortKey === undefined) return;
-      g.sortRule = sortRule;
-      delete g.sortKey;
+      groups.value = groups.value.map(item => {
+        if (item.id === groupId) {
+          const updated = { ...item, sortRule };
+          delete updated.sortKey;
+          return updated;
+        }
+        return item;
+      });
     }
   };
 
@@ -364,16 +371,21 @@ export const useChordStore = defineStore('chord', () => {
     return repairedCount;
   };
 
+  /**
+   * 按 id 精确删除指定和弦列表。
+   *
+   * 注意：此函数被 triggerDeleteChords（UI 删除选中项）调用，
+   * 必须严格按 id 匹配，不使用指纹兜底——避免两个指法相同但 id 不同的和弦
+   * 在用户只删其一时被连带误删。
+   * 返回被删除的 id 集合，供调用方同步解绑歌曲中的引用。
+   */
   const removeChords = (chords: Chord[]): Set<string> => {
     const targetIds = new Set<string>();
     chords.forEach(c => {
       if (c.id) targetIds.add(c.id);
-      targetIds.add(computeChordFingerprint(c));
     });
     if (targetIds.size === 0) return targetIds;
-    savedChordsList.value = savedChordsList.value.filter(
-      c => !targetIds.has(c.id) && !targetIds.has(computeChordFingerprint(c))
-    );
+    savedChordsList.value = savedChordsList.value.filter(c => !targetIds.has(c.id));
     return targetIds;
   };
 
@@ -421,8 +433,8 @@ export const useChordStore = defineStore('chord', () => {
         ? draft.rootStringIndex
         : null;
 
-    const payload: Chord = {
-      id: id || 'c_' + generateUUID().slice(0, 10),
+    const payload = createChord({
+      id,
       nameSegments,
       strings: currentStrings,
       fretCount: draft.fretCount,
@@ -430,7 +442,7 @@ export const useChordStore = defineStore('chord', () => {
       groupId: targetGroupId,
       tuning: draft.tuning,
       rootStringIndex,
-    };
+    });
     const fingerprint = computeChordFingerprint(payload);
 
     if (isEditing) {

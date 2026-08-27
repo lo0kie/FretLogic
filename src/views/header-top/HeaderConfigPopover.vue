@@ -1,5 +1,5 @@
 <template>
-  <div class="config-popover-card">
+  <div class="config-popover-card w-[360px] p-lg flex flex-col gap-lg box-border outline-none">
     <template v-if="currentMode === 'fretboard'">
       <BaseFormRow label="显示品数">
         <BaseSegmentedControl
@@ -26,8 +26,7 @@
           v-model="editorStore.draftChord.tuning"
           :options="tuningOptions"
           :default-value="Tuning.STANDARD"
-          :formatter="val => TUNING_PRESETS[val]?.name || Tuning.STANDARD"
-          width="full"
+          :format-option="(val: any) => TUNING_PRESETS[val as Tuning]?.name || Tuning.STANDARD"
           :disabled="!isGlobalEditable"
           clearable
         />
@@ -40,7 +39,7 @@
         <BaseSwitch v-model="settingsStore.useChordShorthand" aria-label="符号简写" />
       </BaseFormRow>
 
-      <div class="action-full-row">
+      <div class="action-full-row w-full">
         <ActionButton variant="subtle" primary width="100%" :disabled="!isGlobalEditable" @click="handleRepairData">
           <template #prefix>
             <Wrench :size="13" stroke-width="2.5" />
@@ -94,21 +93,21 @@
 </template>
 
 <script setup lang="ts">
-import ActionButton from '@/components/ActionButton.vue';
-import BaseFormRow from '@/components/BaseFormRow.vue';
-import BaseNumberInput from '@/components/BaseNumberInput.vue';
-import BaseSegmentedControl, { type SegmentOption } from '@/components/BaseSegmentedControl.vue';
-import BaseSelector from '@/components/BaseSelector.vue';
-import BaseSlider from '@/components/BaseSlider.vue';
-import BaseSwitch from '@/components/BaseSwitch.vue';
+import ActionButton from '@/components/base/ActionButton.vue';
+import BaseFormRow from '@/components/base/BaseFormRow.vue';
+import BaseNumberInput from '@/components/base/BaseNumberInput.vue';
+import BaseSegmentedControl, { type SegmentOption } from '@/components/base/BaseSegmentedControl.vue';
+import BaseSelector from '@/components/base/BaseSelector.vue';
+import BaseSlider from '@/components/base/BaseSlider.vue';
+import BaseSwitch from '@/components/base/BaseSwitch.vue';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
-import { FRET_COUNTS, INTERACTION_CONFIG } from '@/utils/constants';
-import { TUNING_PRESETS, Tuning } from '@/utils/musicTheory';
+import { FRET_COUNTS, INTERACTION_CONFIG } from '@/utils/core/constants';
+import { TUNING_PRESETS, Tuning } from '@/utils/music/musicTheory';
 import { Wrench } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
@@ -152,19 +151,3 @@ const handleRepairData = () => {
   }
 };
 </script>
-
-<style scoped lang="scss">
-.config-popover-card {
-  width: 360px; /* 固定的面板宽度，不再随内部控件变化而跳动 */
-  padding: $space-lg;
-  display: flex;
-  flex-direction: column;
-  gap: $space-lg;
-  box-sizing: border-box;
-  outline: none;
-}
-
-.action-full-row {
-  width: 100%;
-}
-</style>

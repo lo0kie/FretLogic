@@ -1,44 +1,26 @@
-import { validateImportExportPayload } from '@/services/validation/payload';
-import type { ImportExportPayload } from '@/types';
-import { base64DecodeUtf8, base64EncodeUtf8 } from '@/utils/common';
+import { base64DecodeUtf8, base64EncodeUtf8 } from '@/utils/core/common';
 import { SyncError, type GithubSyncConfig, type SyncBranchesProvider } from './provider';
+import { createSyncProviderBase } from './syncBase';
 
 const TIMEOUT_MS = 15000;
 
 export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranchesProvider {
   const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
-  const headers: Record<string, string> = {
+  const baseHeaders: Record<string, string> = {
     Accept: 'application/vnd.github.v3+json',
     ...(config.token ? { Authorization: `Bearer ${config.token}` } : {}),
   };
 
-  const request = async (init: RequestInit, url: string = `${apiUrl}?ref=${config.branch}`): Promise<Response> => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    try {
-      return await fetch(url, {
-        ...init,
-        headers: { ...headers, ...(init.headers as Record<string, string>) },
-        signal: controller.signal,
-      });
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw new SyncError('TIMEOUT', '请求超时');
-      }
-      throw new SyncError('NETWORK', '网络请求失败');
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  };
-
-  const decodePayload = async (response: Response): Promise<ImportExportPayload> => {
-    const body = await response.json();
-    if (!body.content) throw new SyncError('INVALID_CLOUD_DATA', '云端文件内容为空');
-    const raw = JSON.parse(base64DecodeUtf8(String(body.content).replace(/\n/g, '')));
-    const result = validateImportExportPayload(raw);
-    if (!result.isValid || !result.payload) throw new SyncError('INVALID_CLOUD_DATA', '云端数据格式校验失败');
-    return result.payload;
-  };
+  const { request, decodePayload } = createSyncProviderBase({
+    baseHeaders,
+    defaultUrl: `${apiUrl}?ref=${config.branch}`,
+    readRaw: async response => {
+      const body = await response.json();
+      if (!body.content) throw new SyncError('INVALID_CLOUD_DATA', '云端文件内容为空');
+      return base64DecodeUtf8(String(body.content).replace(/\n/g, ''));
+    },
+    timeoutMs: TIMEOUT_MS,
+  });
 
   return {
     async pull() {
