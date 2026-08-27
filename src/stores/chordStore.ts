@@ -256,9 +256,7 @@ export const useChordStore = defineStore('chord', () => {
     if (sortRule === GroupSortRule.KEY_DEGREE) {
       const targetKey = sortKey || g.sortKey || 'C';
       if (g.sortRule === sortRule && g.sortKey === targetKey) return;
-      groups.value = groups.value.map(item =>
-        item.id === groupId ? { ...item, sortRule, sortKey: targetKey } : item
-      );
+      groups.value = groups.value.map(item => (item.id === groupId ? { ...item, sortRule, sortKey: targetKey } : item));
     } else {
       if (g.sortRule === sortRule && g.sortKey === undefined) return;
       groups.value = groups.value.map(item => {

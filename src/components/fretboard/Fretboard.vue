@@ -27,7 +27,7 @@
         v-if="showChordName"
         class="w-full max-w-full flex items-center justify-center shrink-0 box-border select-none overflow-hidden whitespace-nowrap px-sm cursor-default font-[Helvetica_Neue,Arial,sans-serif]"
         :class="[canEditChordName ? 'cursor-text' : '']"
-        :style="{ height: `${CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT}px` }"
+        :style="{ height: `${CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT}px`, paddingTop: isShowPitchNames ? '0px' : '16px' }"
         @pointerdown.stop
         @contextmenu.stop
       >
@@ -60,7 +60,7 @@
           class="flex items-center justify-center w-full max-w-full h-full min-h-0 leading-normal font-bold text-text-title box-border outline-none cursor-inherit whitespace-nowrap overflow-hidden text-ellipsis px-0.5 font-[Helvetica_Neue,Arial,sans-serif]"
           :style="chordNameFontSizeStyle"
         >
-          <ChordNameDisplay v-if="displayChordName" :chord="chord" size="inherit" />
+          <ChordNameDisplay v-if="displayChordName" :chord="chord" :shorthand="isUseShorthand" size="inherit" />
           <span v-else class="text-text-disabled opacity-35 font-bold">CHORD</span>
         </div>
       </div>
@@ -81,7 +81,7 @@
             :key="'os-' + sIdx"
             v-tooltip="getOpenStringTooltip(sIdx)"
             :x="stringXPositions[sIdx] || 30 + sIdx * 64"
-            :y="OPEN_STRING_MARKER_Y"
+            :y="openStringMarkerY"
             is-open-string
             :is-root="isRoot(sIdx)"
             :is-dark-mode="isDarkMode"
@@ -90,11 +90,11 @@
             :is-muted="isMuted(str)"
             :is-hovered="hoverPoint?.fretIndex === 0 && hoverPoint?.stringIndex === sIdx"
             :is-focused="isFocused && focusPoint?.fretIndex === 0 && focusPoint?.stringIndex === sIdx"
-            :label="openNoteInfo(sIdx).label"
-            :is-accidental="openNoteInfo(sIdx).isAccidental"
+            :show-pitch-names="isShowPitchNames"
+            :label="isShowPitchNames ? openNoteInfo(sIdx).label : ''"
+            :is-accidental="isShowPitchNames && openNoteInfo(sIdx).isAccidental"
             :prefer-flat="str[1]"
             :aria-label="openStringAriaLabels[sIdx]"
-            @click="handleLocalToggleOpenString(sIdx)"
             @toggle-pitch="handleTogglePitchName(sIdx)"
           />
         </svg>
@@ -105,9 +105,10 @@
         :interactive="interactive"
         :string-x-positions="stringXPositions"
         :hover-point="hoverPoint"
-        :focus-point="isFocused && !isPointerDown ? focusPoint : null"
+        :focus-point="isFocused ? focusPoint : null"
         :fret-number-size="fretNumberSize"
         :show-fret-numbers="showFretNumbers"
+        :show-pitch-names="isShowPitchNames"
         :strings="chord.strings"
         :fret-count="chord.fretCount"
         :capo="chord.capo"
@@ -124,6 +125,7 @@ import ChordNameDisplay from '@/components/fretboard/ChordNameDisplay.vue';
 import FretboardSvg from '@/components/fretboard/FretboardSvg.vue';
 import { useFretboardInteraction } from '@/composables/fretboard/useFretboardInteraction';
 import { vTooltip } from '@/directives/vTooltip.ts';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, ChordNameSegments, GuitarStringsModel } from '@/types';
 import {
@@ -142,7 +144,8 @@ import {
   nameToSegments,
   segmentsToString,
 } from '@/utils/music/musicTheory';
-import { computed, nextTick, ref, useTemplateRef, watch, type CSSProperties } from 'vue';
+import { computed, getCurrentInstance, nextTick, ref, useTemplateRef, watch, type CSSProperties } from 'vue';
+import { useRoute } from 'vue-router';
 import FretboardNote from './FretboardNote.vue';
 
 export interface FretboardProps {
@@ -153,6 +156,8 @@ export interface FretboardProps {
   fretNumberSize?: 'sm' | 'md' | 'lg';
   showOpenStrings?: boolean;
   showFretNumbers?: boolean;
+  showPitchNames?: boolean;
+  isScoreMode?: boolean;
   bgColor?: string;
   bordered?: boolean;
   /** 是否自带和弦名显示 + input 切换编辑（仅编辑主场景开启，缩略图/谱面/选择器不受影响） */
@@ -169,6 +174,8 @@ const props = withDefaults(defineProps<FretboardProps>(), {
   fretNumberSize: 'md',
   showOpenStrings: true,
   showFretNumbers: true,
+  showPitchNames: undefined,
+  isScoreMode: undefined,
   bgColor: 'transparent',
   showChordName: true,
   bordered: false,
@@ -177,7 +184,6 @@ const props = withDefaults(defineProps<FretboardProps>(), {
 });
 
 const emit = defineEmits<{
-  (e: 'drag-status-change', isDragging: boolean): void;
   (e: 'update:strings', strings: GuitarStringsModel): void;
   (e: 'update:capo', capo: number): void;
   (e: 'update:root-string-index', index: number | null): void;
@@ -185,7 +191,34 @@ const emit = defineEmits<{
   (e: 'update:name-segments', segments: ChordNameSegments | null): void;
 }>();
 
+let routeInstance: ReturnType<typeof useRoute> | null = null;
+try {
+  const instance = getCurrentInstance();
+  if (instance?.appContext.config.globalProperties.$route) {
+    routeInstance = useRoute();
+  }
+} catch {
+  routeInstance = null;
+}
+
+const isScoreMode = computed(() => {
+  if (props.isScoreMode !== undefined) return props.isScoreMode;
+  return routeInstance?.path === '/score';
+});
+
 const uiStore = useUiStore();
+const settingsStore = useSettingsStore();
+
+const isShowPitchNames = computed(() => {
+  if (props.showPitchNames !== undefined) return props.showPitchNames;
+  return isScoreMode.value ? settingsStore.scoreShowPitchNames : settingsStore.workbenchShowPitchNames;
+});
+
+const openStringMarkerY = computed(() => (isShowPitchNames.value ? OPEN_STRING_MARKER_Y : 42));
+
+const isUseShorthand = computed(() => {
+  return isScoreMode.value ? settingsStore.scoreChordShorthand : settingsStore.workbenchChordShorthand;
+});
 
 /** 是否允许编辑和弦名：chordNameEditable 且 interactive */
 const canEditChordName = computed(() => props.chordNameEditable && props.interactive);
@@ -193,7 +226,7 @@ const canEditChordName = computed(() => props.chordNameEditable && props.interac
 const chordNameInputRef = useTemplateRef<HTMLDivElement>('chordNameInputRef');
 const isInputFocused = ref(false);
 
-const displayChordName = computed(() => getChordName(props.chord));
+const displayChordName = computed(() => getChordName(props.chord, { shorthand: isUseShorthand.value }));
 const inputChordName = ref(displayChordName.value);
 
 // 当非聚焦状态下外部和弦数据变更（如选中和弦卡片/重置指板/撤销重做），自动同步 input 内容
@@ -342,7 +375,6 @@ const {
   hoverPoint,
   focusPoint,
   isFocused,
-  isPointerDown,
   stringXPositions,
   rawHeight,
   fretboardScale,
@@ -350,14 +382,12 @@ const {
   realScaledHeight,
   activeTopOffset,
   handleRightClickRoot,
-  handleLocalToggleOpenString,
   handleTogglePitchName,
 } = useFretboardInteraction(
   props,
   capo => emit('update:capo', capo),
   strings => emit('update:strings', strings),
-  index => emit('update:root-string-index', index),
-  isDragging => emit('drag-status-change', isDragging)
+  index => emit('update:root-string-index', index)
 );
 
 const getOpenStringTooltip = (sIdx: number) => {

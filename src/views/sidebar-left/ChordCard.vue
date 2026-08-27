@@ -1,7 +1,7 @@
 <template>
   <div class="w-full box-border">
     <ContextMenu :items="menuItems" #="{ isOpen }">
-      <div class="w-full" :title="getChordName(activeChord)">
+      <div class="w-full" :title="getChordName(activeChord, { shorthand: settingsStore.workbenchChordShorthand })">
         <div
           v-wave
           class="w-full h-[2.2rem] px-2 flex items-center justify-between relative box-border cursor-pointer rounded-md outline-none transition-all duration-fast bg-bg-body border border-border-light hover:bg-bg-panel-hover hover:border-border-base active:bg-bg-panel-hover active:border-border-base"
@@ -33,14 +33,14 @@
             <span v-else> {{ cardData.variantCount }} </span>
           </BaseBadge>
 
-          <BaseMarquee class="flex-1 min-w-0">
+          <div v-marquee class="flex-1 min-w-0">
             <ChordNameDisplay
               :chord="activeChord"
-              :shorthand="settingsStore.useChordShorthand"
+              :shorthand="settingsStore.workbenchChordShorthand"
               class="text-xs font-bold tracking-tight pointer-events-none"
               :class="isActive ? 'text-primary' : 'text-text-body'"
             />
-          </BaseMarquee>
+          </div>
         </div>
       </div>
     </ContextMenu>
@@ -49,10 +49,9 @@
 
 <script setup lang="ts">
 import BaseBadge from '@/components/base/BaseBadge.vue';
-import BaseMarquee from '@/components/base/BaseMarquee.vue';
-import ChordNameDisplay from '@/components/fretboard/ChordNameDisplay.vue';
 import ContextMenu from '@/components/context-menu/ContextMenu.vue';
 import type { ContextMenuItem } from '@/components/context-menu/ContextMenuItems.vue';
+import ChordNameDisplay from '@/components/fretboard/ChordNameDisplay.vue';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { Chord, GroupedChordCard } from '@/types';

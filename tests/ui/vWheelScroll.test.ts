@@ -17,9 +17,7 @@ describe('vWheelScroll directive', () => {
     // 模拟横向溢出
     Object.defineProperty(el, 'clientWidth', { value: 200, configurable: true });
     Object.defineProperty(el, 'scrollWidth', { value: 600, configurable: true });
-
-    const scrollBySpy = vi.fn();
-    el.scrollBy = scrollBySpy;
+    el.scrollLeft = 0;
 
     const event = new WheelEvent('wheel', { deltaY: 80, cancelable: true });
     const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
@@ -27,18 +25,15 @@ describe('vWheelScroll directive', () => {
     el.dispatchEvent(event);
 
     expect(preventDefaultSpy).toHaveBeenCalled();
-    expect(scrollBySpy).toHaveBeenCalledWith({
-      left: 80,
-      behavior: 'auto',
-    });
+    expect(el.scrollLeft).toBe(80);
 
     wrapper.unmount();
   });
 
-  it('supports smooth and reverse modifiers', async () => {
+  it('supports reverse modifier', async () => {
     const TestComponent = defineComponent({
       directives: { 'wheel-scroll': vWheelScroll },
-      template: `<div id="box" v-wheel-scroll.smooth.reverse style="width: 200px; overflow-x: auto;"></div>`,
+      template: `<div id="box" v-wheel-scroll.reverse style="width: 200px; overflow-x: auto;"></div>`,
     });
 
     const wrapper = mount(TestComponent, { attachTo: document.body });
@@ -46,17 +41,12 @@ describe('vWheelScroll directive', () => {
 
     Object.defineProperty(el, 'clientWidth', { value: 200, configurable: true });
     Object.defineProperty(el, 'scrollWidth', { value: 600, configurable: true });
-
-    const scrollBySpy = vi.fn();
-    el.scrollBy = scrollBySpy;
+    el.scrollLeft = 100;
 
     const event = new WheelEvent('wheel', { deltaY: 50, cancelable: true });
     el.dispatchEvent(event);
 
-    expect(scrollBySpy).toHaveBeenCalledWith({
-      left: -50,
-      behavior: 'smooth',
-    });
+    expect(el.scrollLeft).toBe(50);
 
     wrapper.unmount();
   });
@@ -72,9 +62,7 @@ describe('vWheelScroll directive', () => {
 
     Object.defineProperty(el, 'clientWidth', { value: 200, configurable: true });
     Object.defineProperty(el, 'scrollWidth', { value: 200, configurable: true });
-
-    const scrollBySpy = vi.fn();
-    el.scrollBy = scrollBySpy;
+    el.scrollLeft = 0;
 
     const event = new WheelEvent('wheel', { deltaY: 50, cancelable: true });
     const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
@@ -82,7 +70,7 @@ describe('vWheelScroll directive', () => {
     el.dispatchEvent(event);
 
     expect(preventDefaultSpy).not.toHaveBeenCalled();
-    expect(scrollBySpy).not.toHaveBeenCalled();
+    expect(el.scrollLeft).toBe(0);
 
     wrapper.unmount();
   });

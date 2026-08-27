@@ -2,6 +2,7 @@
 
 import type { FocusBinding, FocusModifiers } from './directives/vFocus';
 import type { GridNavBinding, GridNavModifiers } from './directives/vGridNav';
+import type { MarqueeBinding, MarqueeModifiers } from './directives/vMarquee';
 import type { ScrollCacheBinding } from './directives/vScrollCache';
 import type { TooltipBinding, TooltipModifiers } from './directives/vTooltip';
 import type { WheelScrollBinding, WheelScrollModifiers } from './directives/vWheelScroll';
@@ -91,6 +92,7 @@ declare module '@vue/runtime-core' {
     vFocus: TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
     vScrollCache: TypedDirective<HTMLElement, ScrollCacheBinding, string>;
     vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
     vWave: TypedDirective<HTMLElement, unknown, string>;
   }
 
@@ -107,6 +109,8 @@ declare module '@vue/runtime-core' {
     'v-scroll-cache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
     'vGridNav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    'vMarquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
+    'v-marquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
   }
 }
 
@@ -117,6 +121,7 @@ declare module 'vue' {
     vFocus: TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
     vScrollCache: TypedDirective<HTMLElement, ScrollCacheBinding, string>;
     vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
     vWave: TypedDirective<HTMLElement, unknown, string>;
   }
 
@@ -133,5 +138,7 @@ declare module 'vue' {
     'v-scroll-cache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
     'vGridNav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
+    'vMarquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
+    'v-marquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
   }
 }

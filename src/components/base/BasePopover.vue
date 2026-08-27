@@ -8,13 +8,16 @@
       aria-haspopup="dialog"
       @mouseenter="handleTriggerMouseEnter"
       @mouseleave="handleTriggerMouseLeave"
+      @focusin="handleTriggerFocusIn"
       @focusout="handleTriggerFocusOut"
+      @click="handleTriggerClick"
+      @contextmenu="handleTriggerContextMenu"
     >
       <slot name="trigger" :is-open="model" :toggle="toggle" :open="open" :close="close" />
     </div>
   </div>
 
-  <Teleport to="body">
+  <Teleport :to="teleportTo ?? 'body'" :disabled="disabledTeleport">
     <div
       v-if="isMounted"
       ref="floatingRef"
@@ -30,7 +33,7 @@
           role="dialog"
           :aria-modal="false"
           :aria-label="ariaLabel"
-          class="popover-panel box-border outline-none bg-bg-elevated border border-glass-border rounded-md shadow-floating backdrop-blur-xl origin-top"
+          class="popover-panel relative z-10 box-border outline-none bg-bg-elevated border border-glass-border rounded-md shadow-floating backdrop-blur-xl origin-top"
           :class="panelClass"
           :style="panelStyle"
           tabindex="-1"
@@ -39,6 +42,8 @@
           @focusout="handleFocusOut"
           @keydown="handlePanelKeydown"
         >
+          <!-- 箭头置于 Transition 内部，与面板过渡/透明度严格保持同步 -->
+          <div v-if="showArrow" ref="arrowRef" class="popover-arrow pointer-events-none" :style="arrowStyle" />
           <slot :close="close" />
         </div>
       </Transition>
@@ -46,8 +51,14 @@
   </Teleport>
 </template>
 
+<script lang="ts">
+// 模块级全局共享：维护所有浮层宿主 -> 对应触发器元素的全局关系树（支持跨多层嵌套 Popover / Selector / ContextMenu 的层级识别）
+const globalFloatingReferenceMap = new WeakMap<HTMLElement, HTMLElement>();
+</script>
+
 <script setup lang="ts">
 import {
+  arrow as floatingArrow,
   autoUpdate,
   flip,
   size as floatingSize,
@@ -61,10 +72,18 @@ import {
 } from '@floating-ui/vue';
 import { vOnClickOutside } from '@vueuse/components';
 import { useEventListener } from '@vueuse/core';
-import type { CSSProperties, MaybeRef } from 'vue';
-import { computed, nextTick, ref, unref, useTemplateRef, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  ref,
+  unref,
+  useTemplateRef,
+  watch,
+  type CSSProperties,
+  type MaybeRef,
+} from 'vue';
 
-// 解构默认值（本组件无"默认值需要访问其它 props"的项，故全部以解构默认值设置）
 const {
   trigger = 'click',
   hoverOpenDelay = 50,
@@ -75,16 +94,20 @@ const {
   closeOnClickOutside = true,
   closeOnEsc = true,
   closeOnFocusOut = true,
-  autoFocus = true,
   matchTriggerWidth = false,
+  matchTriggerWidthStrategy = 'width',
+  showArrow = false,
   block = false,
+  teleportTo = 'body',
+  disabledTeleport = false,
   ariaLabel = '弹出面板',
   panelClass = '',
   panelStyle = {},
   transitionName = 'v-transition-scale',
   virtualRef = null,
+  autoFocus = false,
 } = defineProps<{
-  trigger?: 'click' | 'hover';
+  trigger?: 'click' | 'hover' | 'focus' | 'contextmenu';
   hoverOpenDelay?: number;
   hoverCloseDelay?: number;
   placement?: Placement;
@@ -92,15 +115,20 @@ const {
   offsetDistance?: number;
   closeOnClickOutside?: boolean;
   closeOnEsc?: boolean;
-  closeOnFocusOut?: boolean; // 是否在失去焦点时关闭
-  autoFocus?: boolean; // 打开时是否自动聚焦内部
-  matchTriggerWidth?: boolean; // 浮层宽度是否与触发器保持一致 (如下拉框)
-  block?: boolean; // 触发器是否占满父级宽度
+  closeOnFocusOut?: boolean;
+  matchTriggerWidth?: boolean;
+  matchTriggerWidthStrategy?: 'width' | 'minWidth';
+  showArrow?: boolean;
+  block?: boolean;
+  teleportTo?: string | HTMLElement;
+  disabledTeleport?: boolean;
   ariaLabel?: string;
   panelClass?: string | string[] | Record<string, boolean>;
   panelStyle?: CSSProperties;
   transitionName?: string;
   virtualRef?: MaybeRef<VirtualElement | null>;
+  /** 打开后是否自动聚焦面板内首个可聚焦元素 */
+  autoFocus?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -113,11 +141,15 @@ const model = defineModel<boolean>({ default: false });
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const panelRef = useTemplateRef<HTMLDivElement>('panelRef');
+const arrowRef = useTemplateRef<HTMLElement>('arrowRef');
 
 const isMounted = ref(false);
 const isShown = ref(false);
 
-const activeReference = computed(() => unref(virtualRef) || referenceRef.value);
+// contextmenu 右键模式下光标虚拟元素
+const contextMenuVirtualRef = ref<VirtualElement | null>(null);
+
+const activeReference = computed(() => unref(virtualRef) || contextMenuVirtualRef.value || referenceRef.value);
 
 const middlewareList = computed(() => {
   const m: Middleware[] = [
@@ -133,17 +165,32 @@ const middlewareList = computed(() => {
     m.push(
       floatingSize({
         apply({ rects, elements }) {
-          Object.assign(elements.floating.style, {
-            width: `${rects.reference.width}px`,
-          });
+          if (matchTriggerWidthStrategy === 'minWidth') {
+            Object.assign(elements.floating.style, {
+              minWidth: `${rects.reference.width}px`,
+            });
+          } else {
+            Object.assign(elements.floating.style, {
+              width: `${rects.reference.width}px`,
+            });
+          }
         },
       })
     );
   }
+
+  if (showArrow) {
+    m.push(floatingArrow({ element: () => arrowRef.value, padding: 6 }));
+  }
   return m;
 });
 
-const { floatingStyles: computedFloatingStyles, update } = useFloating(activeReference, floatingRef, {
+const {
+  floatingStyles: computedFloatingStyles,
+  middlewareData,
+  placement: currentPlacement,
+  update,
+} = useFloating(activeReference, floatingRef, {
   strategy: 'fixed',
   placement: computed(() => placement),
   whileElementsMounted: autoUpdate,
@@ -154,17 +201,33 @@ const floatingStyles = computed<CSSProperties>(() => ({
   ...computedFloatingStyles.value,
 }));
 
-const focusPanelContent = () => {
-  if (!panelRef.value) return;
-  const focusable = panelRef.value.querySelector<HTMLElement>(
-    'button:not([disabled]):not([aria-disabled="true"]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-  );
-  if (focusable) {
-    focusable.focus();
-  } else {
-    panelRef.value.focus();
-  }
-};
+// 基于 useFloating 响应式 currentPlacement 计算箭头方向，防止 flip 翻转时箭头错位
+const arrowStyle = computed<CSSProperties>(() => {
+  if (!showArrow || !middlewareData.value.arrow) return {};
+  const { x, y } = middlewareData.value.arrow;
+  const activeSide = (currentPlacement.value || placement).split('-')[0] as 'top' | 'bottom' | 'left' | 'right';
+  const staticSide = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' }[activeSide];
+  const border: Record<string, string> = {
+    borderTopWidth: staticSide === 'top' ? '0px' : '1px',
+    borderBottomWidth: staticSide === 'bottom' ? '0px' : '1px',
+    borderLeftWidth: staticSide === 'left' ? '0px' : '1px',
+    borderRightWidth: staticSide === 'right' ? '0px' : '1px',
+  };
+  return {
+    position: 'absolute',
+    width: '8px',
+    height: '8px',
+    background: 'var(--color-bg-elevated)',
+    borderStyle: 'solid',
+    borderColor: 'var(--color-glass-border)',
+    transform: 'rotate(45deg)',
+    zIndex: 0,
+    left: x != null ? `${x}px` : '',
+    top: y != null ? `${y}px` : '',
+    [staticSide]: '-4px',
+    ...border,
+  };
+});
 
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -174,6 +237,14 @@ const clearHoverTimer = () => {
     hoverTimer = null;
   }
 };
+
+watch(
+  [floatingRef, activeReference],
+  ([el, refEl]) => {
+    if (el && refEl instanceof HTMLElement) globalFloatingReferenceMap.set(el, refEl);
+  },
+  { immediate: true }
+);
 
 watch(model, async val => {
   if (!val) {
@@ -186,10 +257,12 @@ watch(model, async val => {
     if (!model.value) return;
     isShown.value = true;
 
-    if (autoFocus && trigger !== 'hover') {
+    if (autoFocus) {
       await nextTick();
-      if (!model.value) return;
-      focusPanelContent();
+      const firstFocusable = panelRef.value?.querySelector<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      (firstFocusable || panelRef.value)?.focus();
     }
   }
 });
@@ -212,6 +285,7 @@ const close = () => {
   if (!model.value && !isShown.value) return;
   isShown.value = false;
   model.value = false;
+  contextMenuVirtualRef.value = null;
   emit('close');
 };
 
@@ -226,6 +300,36 @@ const toggle = () => {
   } else {
     open();
   }
+};
+
+const handleTriggerClick = () => {
+  if (trigger !== 'click' || disabled) return;
+  toggle();
+};
+
+const handleTriggerContextMenu = (e: MouseEvent) => {
+  if (trigger !== 'contextmenu' || disabled) return;
+  e.preventDefault();
+  contextMenuVirtualRef.value = {
+    getBoundingClientRect() {
+      return {
+        x: e.clientX,
+        y: e.clientY,
+        top: e.clientY,
+        bottom: e.clientY,
+        left: e.clientX,
+        right: e.clientX,
+        width: 0,
+        height: 0,
+      };
+    },
+  };
+  open();
+};
+
+const handleTriggerFocusIn = () => {
+  if (trigger !== 'focus' || disabled) return;
+  open();
 };
 
 const handleTriggerMouseEnter = () => {
@@ -257,22 +361,11 @@ const handlePanelMouseLeave = () => {
   }, hoverCloseDelay);
 };
 
-watch(
-  [floatingRef, activeReference],
-  ([el, refEl]) => {
-    if (el) {
-      (el as unknown as { __popoverReference?: HTMLElement | null }).__popoverReference =
-        (refEl as HTMLElement | null) || referenceRef.value;
-    }
-  },
-  { immediate: true }
-);
-
 const isChildFloatingLayer = (el: HTMLElement | null): boolean => {
   if (!el) return false;
   let targetFloating = el.closest<HTMLElement>('[data-floating-layer]');
   while (targetFloating && targetFloating !== floatingRef.value) {
-    const childTrigger = (targetFloating as unknown as { __popoverReference?: HTMLElement | null }).__popoverReference;
+    const childTrigger = globalFloatingReferenceMap.get(targetFloating);
     if (!childTrigger) return false;
     if (panelRef.value?.contains(childTrigger) || referenceRef.value?.contains(childTrigger)) {
       return true;
@@ -283,7 +376,7 @@ const isChildFloatingLayer = (el: HTMLElement | null): boolean => {
 };
 
 const handleClickOutside = (event: MouseEvent) => {
-  if (!closeOnClickOutside || !model.value) return;
+  if (!closeOnClickOutside || !model.value || !isShown.value) return;
   // 放行右键，让 ContextMenu 有机会接管
   if (event?.button === 2 || event?.type === 'contextmenu') return;
 
@@ -319,9 +412,8 @@ const handleFocusOut = (e: FocusEvent) => {
     if (cardEl.contains(nextFocused)) return;
     if (referenceRef.value?.contains(nextFocused)) return;
     if (isChildFloatingLayer(nextFocused)) return;
+    close();
   }
-
-  close();
 };
 
 const handleTriggerFocusOut = (e: FocusEvent) => {
@@ -334,7 +426,8 @@ const handleTriggerFocusOut = (e: FocusEvent) => {
     if (isChildFloatingLayer(nextFocused)) return;
   }
 
-  if (trigger !== 'hover') {
+  // 仅在 trigger 为 'focus' 时响应触发器失焦自动关闭，防止 click 模式下意外抢先关闭
+  if (trigger === 'focus') {
     close();
   }
 };
@@ -346,6 +439,8 @@ const handlePanelKeydown = (e: KeyboardEvent) => {
     close();
   }
 };
+
+onBeforeUnmount(clearHoverTimer);
 
 defineExpose({ open, close, toggle, update });
 </script>

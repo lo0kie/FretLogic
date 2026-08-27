@@ -60,8 +60,11 @@
               :data-line-idx="lineData.lineId"
               class="lyrics-line relative flex flex-nowrap gap-0 items-stretch w-max min-w-0 flex-[1_1_auto] py-xs px-sm rounded-md box-border cursor-pointer select-none border border-transparent transition-all duration-base hover:bg-bg-panel-hover hover:border-border-base focus-within:bg-bg-panel-hover focus-within:border-border-base"
               :class="{
+                'is-line-selected': isExporting
+                  ? isLineVisibleInExport(lineData.lineIdx)
+                  : selectedLineSet.has(lineData.lineIdx),
                 '!bg-tint-primary-92 !border-tint-primary-60 hover:!bg-tint-primary-80 hover:!border-primary':
-                  isLineVisibleInExport(lineData.lineIdx),
+                  !isExporting && selectedLineSet.has(lineData.lineIdx),
                 'bg-bg-panel-hover border-border-base': isOpen,
               }"
               @click="e => handleLineClick(e, lineData.lineIdx)"
@@ -104,6 +107,7 @@
                   @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
                 />
               </div>
+
               <ChordSlotCell
                 v-for="(item, index) in lineData.chars"
                 :key="item.slotKey"
@@ -112,8 +116,8 @@
                 :scroll-root="scoreZoneRef"
                 variant="char"
                 :slot-key="item.slotKey"
-                :chord="getCharChord(item.slotKey) ?? undefined"
                 :char="item.char"
+                :chord="getCharChord(item.slotKey) ?? undefined"
                 :left-chord-gap="isLeftAdjacentChord(lineData, index)"
                 @click="handleOpenPicker(item.slotKey)"
                 @pointerdown="handlePointerDown"

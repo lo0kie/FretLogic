@@ -20,7 +20,6 @@
         <template v-if="settingsStore.syncTarget === 'github'">
           <BaseInput
             v-model="settingsStore.githubToken"
-            v-tooltip="'GitHub Token'"
             v-focus
             placeholder="GitHub Token (ghp_...)"
             is-password
@@ -32,7 +31,6 @@
           <div class="grid-columns grid grid-cols-2 gap-md box-border">
             <BaseInput
               v-model="settingsStore.githubOwner"
-              v-tooltip="'GitHub 账号名称'"
               placeholder="Username"
               clearable
               :maxlength="39"
@@ -41,7 +39,6 @@
 
             <BaseInput
               v-model="settingsStore.githubRepo"
-              v-tooltip="'仓库名称'"
               placeholder="Repository"
               clearable
               :maxlength="100"
@@ -59,7 +56,6 @@
             />
 
             <ActionButton
-              v-tooltip="isFetchBranchesDisabled ? '请先填写 Token、账号和仓库名' : '获取远程仓库分支列表'"
               :disabled="isFetchBranchesDisabled"
               :loading="isFetchingBranches"
               @click="handleFetchBranchesClick"
@@ -72,24 +68,16 @@
         <template v-else>
           <BaseInput
             v-model="settingsStore.webdavServerUrl"
-            v-tooltip="'WebDAV 地址'"
             placeholder="WebDAV 地址"
             clearable
             :maxlength="200"
             show-count
           />
 
-          <BaseInput
-            v-model="settingsStore.webdavUsername"
-            v-tooltip="'用户名'"
-            placeholder="用户名"
-            clearable
-            :maxlength="100"
-          />
+          <BaseInput v-model="settingsStore.webdavUsername" placeholder="用户名" clearable :maxlength="100" />
 
           <BaseInput
             v-model="settingsStore.webdavPassword"
-            v-tooltip="'密码'"
             placeholder="密码"
             is-password
             clearable

@@ -127,13 +127,20 @@
   --z-index-toast: var(--z-toast);
 }
 
-@keyframes marquee-slide {
-  0%,
-  12% {
-    transform: translateX(0);
-  }
-  88%,
-  100% {
-    transform: translateX(calc(-1 * var(--scroll-dist, 0px)));
-  }
+.marquee-viewport {
+  overflow: hidden;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.marquee-inner {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  width: max-content;
+  max-width: none;
+  flex: none;
+  will-change: transform;
 }

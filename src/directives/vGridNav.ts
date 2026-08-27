@@ -1,20 +1,31 @@
 import type { Directive, DirectiveBinding } from 'vue';
 
+export type GridNavOrientation = 'horizontal' | 'vertical' | 'both';
+
 export interface GridNavOptions {
   /** 指定列数（为 1 时上下与左右等价；未指定时按视觉几何空间最近匹配） */
   cols?: number;
   /** 限定收集可聚焦元素的选择器 */
   selector?: string;
+  /** 允许的方向限制：'horizontal' 仅水平 | 'vertical' 仅垂直 | 'both' 二维全方向 */
+  orientation?: GridNavOrientation;
   /** 处理完按键后是否阻止事件继续冒泡 */
   stop?: boolean;
   /** 是否禁用键盘网格导航 */
   disabled?: boolean;
   /** 是否在边界循环导航 */
   loop?: boolean;
+  /** 聚焦时是否阻止原生页面跳跃滚动 */
+  preventScroll?: boolean;
+  /** 聚焦后是否自动将目标元素平滑滚入可见区域，默认 true */
+  autoScroll?: boolean;
+  /** 导航切换焦点时的回调钩子 */
+  onNavigate?: (toEl: HTMLElement, fromEl: HTMLElement) => void;
 }
 
 export type GridNavBinding = number | GridNavOptions | boolean | undefined;
-export type GridNavModifiers = 'stop' | 'loop' | (string & Record<never, never>);
+export type GridNavModifiers =
+  'stop' | 'loop' | 'horizontal' | 'vertical' | 'preventScroll' | 'prevent_scroll' | (string & Record<never, never>);
 
 interface Entry {
   el: HTMLElement;
@@ -26,13 +37,23 @@ const DEFAULT_SELECTOR =
 
 const isTestEnv = typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test';
 
-const isEligible = (el: HTMLElement): boolean => {
-  if (el.hasAttribute('disabled')) return false;
-  if (el.getAttribute('tabindex') === '-1') return false;
-  if (el.getAttribute('aria-disabled') === 'true') return false;
-  if (el.offsetParent === null && !isTestEnv) {
+const isVisible = (el: HTMLElement): boolean => {
+  if (isTestEnv) return true;
+  if (el.offsetParent !== null) return true;
+  // 处理 position: fixed / sticky 等 offsetParent 为 null 但依然正常可见的节点
+  try {
+    const style = window.getComputedStyle(el);
+    return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+  } catch {
     return false;
   }
+};
+
+const isEligible = (el: HTMLElement): boolean => {
+  if (el.hasAttribute('disabled') || (el as HTMLButtonElement).disabled) return false;
+  if (el.getAttribute('tabindex') === '-1') return false;
+  if (el.getAttribute('aria-disabled') === 'true') return false;
+  if (!isVisible(el)) return false;
   if (el.closest('[inert]')) return false;
   return true;
 };
@@ -52,7 +73,13 @@ const resolveOptions = (binding: DirectiveBinding<GridNavBinding>): GridNavOptio
 
   if (mods.stop) opts.stop = true;
   if (mods.loop) opts.loop = true;
+  if (mods.horizontal) opts.orientation = 'horizontal';
+  if (mods.vertical) opts.orientation = 'vertical';
+  if (mods.preventScroll || mods.prevent_scroll) opts.preventScroll = true;
+
   if (!opts.selector) opts.selector = DEFAULT_SELECTOR;
+  if (!opts.orientation) opts.orientation = 'both';
+  if (opts.autoScroll === undefined) opts.autoScroll = true;
 
   return opts;
 };
@@ -137,13 +164,21 @@ const navStrategies: Record<string, (ctx: NavContext) => number> = {
       return idx >= 0 ? idx : currentIndex;
     }
     if (cols && cols > 1) {
-      const targetIdx = currentIndex - cols;
+      let targetIdx = currentIndex - cols;
+      while (targetIdx >= 0 && !entries[targetIdx]?.eligible) {
+        targetIdx -= cols;
+      }
       if (targetIdx >= 0 && entries[targetIdx]?.eligible) return targetIdx;
-      if (loop && targetIdx < 0) {
+
+      if (loop) {
         let loopedIdx = currentIndex;
         while (loopedIdx + cols < entries.length) loopedIdx += cols;
-        if (entries[loopedIdx]?.eligible) return loopedIdx;
+        while (loopedIdx >= 0 && !entries[loopedIdx]?.eligible) {
+          loopedIdx -= cols;
+        }
+        if (loopedIdx >= 0 && entries[loopedIdx]?.eligible) return loopedIdx;
       }
+      return currentIndex;
     }
     return getSpatialNextIndex(currentIndex, 'up', entries);
   },
@@ -153,13 +188,20 @@ const navStrategies: Record<string, (ctx: NavContext) => number> = {
       return idx >= 0 ? idx : currentIndex;
     }
     if (cols && cols > 1) {
-      const targetIdx = currentIndex + cols;
-      if (targetIdx < total && entries[targetIdx]?.eligible) return targetIdx;
-      if (loop && targetIdx >= total) {
-        let loopedIdx = currentIndex;
-        while (loopedIdx - cols >= 0) loopedIdx -= cols;
-        if (entries[loopedIdx]?.eligible) return loopedIdx;
+      let targetIdx = currentIndex + cols;
+      while (targetIdx < total && !entries[targetIdx]?.eligible) {
+        targetIdx += cols;
       }
+      if (targetIdx < total && entries[targetIdx]?.eligible) return targetIdx;
+
+      if (loop) {
+        let loopedIdx = currentIndex % cols;
+        while (loopedIdx < total && !entries[loopedIdx]?.eligible) {
+          loopedIdx += cols;
+        }
+        if (loopedIdx < total && entries[loopedIdx]?.eligible) return loopedIdx;
+      }
+      return currentIndex;
     }
     return getSpatialNextIndex(currentIndex, 'down', entries);
   },
@@ -193,8 +235,17 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
     return;
   }
 
-  const isNavKey = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key);
+  const isHorizontalKey = ['ArrowLeft', 'ArrowRight'].includes(e.key);
+  const isVerticalKey = ['ArrowUp', 'ArrowDown'].includes(e.key);
+  const isBoundaryKey = ['Home', 'End'].includes(e.key);
+
+  const isNavKey = isHorizontalKey || isVerticalKey || isBoundaryKey;
   if (!isNavKey) return;
+
+  // 方向过滤判断
+  const orientation = state.options.orientation || 'both';
+  if (orientation === 'horizontal' && isVerticalKey) return;
+  if (orientation === 'vertical' && isHorizontalKey) return;
 
   const selector = state.options.selector || DEFAULT_SELECTOR;
   const rawElements = Array.from(containerEl.querySelectorAll<HTMLElement>(selector));
@@ -229,29 +280,23 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
   const strategy = navStrategies[e.key];
   if (strategy) {
     const targetIdx = strategy(ctx);
-    if (targetIdx >= 0 && entries[targetIdx]?.el) {
-      entries[targetIdx].el.focus();
+    if (targetIdx >= 0 && targetIdx !== currentIndex && entries[targetIdx]?.el) {
+      const toEl = entries[targetIdx].el;
+      const fromEl = entries[currentIndex]?.el || activeEl;
+
+      toEl.focus({ preventScroll: state.options.preventScroll });
+
+      if (state.options.autoScroll && typeof toEl.scrollIntoView === 'function') {
+        toEl.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+      }
+
+      state.options.onNavigate?.(toEl, fromEl);
     }
   }
 };
 
 /**
  * 网格 / 列表二维键盘方向键与快捷键导航指令
- *
- * @example
- * ```html
- * <!-- 1. 自动根据空间视觉位置导航 -->
- * <div v-grid-nav> ... </div>
- *
- * <!-- 2. 指定固定列数（如 3 列） -->
- * <div v-grid-nav="3"> ... </div>
- *
- * <!-- 3. 对象配置选项 -->
- * <div v-grid-nav="{ cols: 5, selector: '.chord-card' }"> ... </div>
- *
- * <!-- 4. 修饰符 -->
- * <div v-grid-nav.stop.loop="3"> ... </div>
- * ```
  */
 export const vGridNav: Directive<HTMLElement, GridNavBinding, GridNavModifiers> = {
   mounted(el, binding) {
