@@ -8,12 +8,14 @@
       ref="fretBoardRef"
       class="relative flex flex-col items-center select-none box-border outline-none transition-[transform,background-color,border-color] duration-slow ease-sidebar"
       :class="[
-        interactive ? '[touch-action:none] cursor-default' : 'pointer-events-none cursor-default outline-none',
+        interactive || barrePickMode
+          ? '[touch-action:none] cursor-default'
+          : 'pointer-events-none cursor-default outline-none',
         { 'border border-border-light rounded-md': bordered },
       ]"
       :tabindex="interactive ? 0 : undefined"
       :data-focusable-outline="interactive || undefined"
-      :inert="!interactive || undefined"
+      :inert="!(interactive || barrePickMode) || undefined"
       :style="{
         width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
         height: `${rawHeight}px`,
@@ -114,7 +116,11 @@
         :capo="chord.capo"
         :root-string-index="chord.rootStringIndex"
         :active-base-strings="getActiveBaseStrings(chord.tuning)"
+        :barres="effectiveBarres"
+        :barre-candidates="barreCandidates"
+        :barre-pick-mode="barrePickMode"
         @toggle-pitch="handleTogglePitchName"
+        @barre-click="emit('barre-click', $event)"
       />
     </div>
   </div>
@@ -127,7 +133,7 @@ import { useFretboardInteraction } from '@/composables/fretboard/useFretboardInt
 import { vTooltip } from '@/directives/vTooltip.ts';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord, ChordNameSegments, GuitarStringsModel } from '@/types';
+import type { BarreEntity, Chord, ChordNameSegments, GuitarStringsModel } from '@/types';
 import {
   CANVAS_CONFIG,
   CHORD_NAME_FONT_SIZE_MAP,
@@ -165,6 +171,10 @@ export interface FretboardProps {
   /** 和弦名预设字号（sm/md/lg），默认 md */
   chordNameFontSize?: ChordNameFontSize;
   showChordName?: boolean;
+  /** 横按拾取模式：候选横按梁可点击派发 barre-click（音符保持不可编辑） */
+  barrePickMode?: boolean;
+  /** 可点击的候选横按列表（barrePickMode 时展示） */
+  barreCandidates?: BarreEntity[];
 }
 
 const props = withDefaults(defineProps<FretboardProps>(), {
@@ -181,6 +191,8 @@ const props = withDefaults(defineProps<FretboardProps>(), {
   bordered: false,
   chordNameEditable: false,
   chordNameFontSize: 'md',
+  barrePickMode: false,
+  barreCandidates: () => [],
 });
 
 const emit = defineEmits<{
@@ -189,6 +201,7 @@ const emit = defineEmits<{
   (e: 'update:root-string-index', index: number | null): void;
   (e: 'update:chord-name', name: string): void;
   (e: 'update:name-segments', segments: ChordNameSegments | null): void;
+  (e: 'barre-click', barre: BarreEntity): void;
 }>();
 
 let routeInstance: ReturnType<typeof useRoute> | null = null;
@@ -213,6 +226,9 @@ const isShowPitchNames = computed(() => {
   if (props.showPitchNames !== undefined) return props.showPitchNames;
   return isScoreMode.value ? settingsStore.scoreShowPitchNames : settingsStore.workbenchShowPitchNames;
 });
+
+/** 生效横按：仅采用显式手动标记（不做自动推导） */
+const effectiveBarres = computed<BarreEntity[]>(() => props.chord.barres ?? []);
 
 const openStringMarkerY = computed(() => (isShowPitchNames.value ? OPEN_STRING_MARKER_Y : 42));
 

@@ -19,11 +19,11 @@
         :aria-expanded="_isOpen"
         aria-haspopup="listbox"
         :style="{ width: presetWidth }"
-        class="group relative flex items-center justify-between select-none rounded-full cursor-pointer bg-bg-body border border-border-light text-text-title box-border transition-all duration-150 outline-none hover:border-border-base focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/70"
+        class="group relative flex items-center justify-between select-none rounded-full bg-bg-body border border-border-light text-text-title box-border transition-all duration-150 outline-none hover:border-border-base focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/70"
         :class="[
           currentConfig.triggerClass,
           _isOpen ? 'border-primary ring-1 ring-primary' : '',
-          { 'opacity-45 cursor-not-allowed': disabled },
+          disabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer',
         ]"
         :data-focusable-inline="!disabled || undefined"
         v-bind="$attrs"

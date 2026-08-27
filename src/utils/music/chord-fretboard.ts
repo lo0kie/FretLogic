@@ -1,7 +1,96 @@
-import type { Chord, GuitarStringEntity, GuitarStringsModel } from '@/types';
+import type { BarreEntity, Chord, GuitarStringEntity, GuitarStringsModel } from '@/types';
 import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_SCALE_MAP } from '@/utils/core/constants';
 import { Tuning, isMuted, isOpen, nameToSegments } from '@/utils/music/musicTheory';
 import { charKey, chordSlotKey, collectEdgeChordIds, edgeSlotPrefix } from '@/utils/score/scoreModel';
+
+/**
+ * 计算当前指板「可被手动标记的横按」候选列表（供横按编辑弹窗展示，用户选择后写入 barres，不自动应用）。
+ *
+ * 对每个品位 F（1..fretCount），取**恰好按在 F 品**的弦，生成两类候选（候选之间不共用琴弦）：
+ * 1. 连续子段：端点之间允许更高品位的音符（食指垫底，如 F/Bb 大横按），但空弦 / 静音 / 更低品位会
+ *    切断候选，每个长度 >= 2 的连续子段单独生成候选（例：2x222x 产出 6/5 弦与 4/3/2 弦两组横按）；
+ * 2. 隔静音弦：两根同品弦之间全部为静音弦（x）时仍可横按（食指覆盖、中间闷音），仅限两端都是
+ *    未被连续段覆盖的孤立弦，避免与其他横按共用琴弦（例：11x1x1 产出 6/5 弦与 3~1 弦两组；
+ *    22x222 的 5 弦~3 弦因共享 5 弦/3 弦被剔除）。
+ */
+export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: number): BarreEntity[] => {
+  const out: BarreEntity[] = [];
+  for (let fret = 1; fret <= fretCount; fret++) {
+    const atFret: number[] = [];
+    for (let s = 0; s < 6; s++) {
+      if (strings[s]![0] === fret) atFret.push(s);
+    }
+    if (atFret.length < 2) continue;
+
+    // 1) 连续同品子段（记录被覆盖的琴弦，用于剔除与之共弦的隔静音弦候选）
+    const groupedStrings = new Set<number>();
+    let segmentStart = 0;
+    for (let i = 0; i < atFret.length; i++) {
+      const isLast = i === atFret.length - 1;
+      // 当前弦到下一根同品弦之间若存在空弦/静音/更低品位，则在此处切断子段
+      const isBroken = !isLast && !canBarreCover(strings, atFret[i]!, atFret[i + 1]!, fret);
+      if (isLast || isBroken) {
+        const from = atFret[segmentStart]!;
+        const to = atFret[i]!;
+        if (to - from >= 1) {
+          out.push({ fret, fromString: from, toString: to, finger: 1 });
+          for (let s = from; s <= to; s++) groupedStrings.add(s);
+        }
+        segmentStart = i + 1;
+      }
+    }
+
+    // 2) 隔静音弦候选：两根同品弦之间全部为静音弦（x）时可横按（食指覆盖、中间闷音），
+    //    但端点不得与已产出的连续段横按共弦（横按标记不能与其他横按共用，如 22x222 只产出
+    //    6/5 弦与 4/3/2 弦两组，5 弦~3 弦的 2x2 因共享 5 弦/3 弦被剔除）
+    for (let i = 0; i < atFret.length; i++) {
+      for (let j = i + 1; j < atFret.length; j++) {
+        const from = atFret[i]!;
+        const to = atFret[j]!;
+        if (to - from <= 1) continue;
+        if (!isAllMutedBetween(strings, from, to)) continue;
+        if (groupedStrings.has(from) || groupedStrings.has(to)) continue;
+        out.push({ fret, fromString: from, toString: to, finger: 1 });
+      }
+    }
+  }
+  return out;
+};
+
+/** 判断两根同品弦之间的所有弦是否都能被横按食指覆盖（品位 >= fret 即可，更高品视为垫底） */
+const canBarreCover = (strings: GuitarStringsModel, from: number, to: number, fret: number): boolean => {
+  for (let s = from + 1; s < to; s++) {
+    if (strings[s]![0] < fret) return false;
+  }
+  return true;
+};
+
+/** 判断两根弦之间的所有弦是否全部为静音（x，即品位 -1） */
+const isAllMutedBetween = (strings: GuitarStringsModel, from: number, to: number): boolean => {
+  for (let s = from + 1; s < to; s++) {
+    if (strings[s]![0] !== -1) return false;
+  }
+  return true;
+};
+
+/** 规范化显式横按列表：过滤非法条目（品格/弦序越界、from > to），返回 undefined 表示无有效横按 */
+const normalizeBarres = (barres: unknown): BarreEntity[] | undefined => {
+  if (!Array.isArray(barres)) return undefined;
+  const out: BarreEntity[] = [];
+  for (const raw of barres) {
+    if (!raw || typeof raw !== 'object') continue;
+    const b = raw as Partial<BarreEntity>;
+    const fret = typeof b.fret === 'number' && Number.isFinite(b.fret) ? Math.floor(b.fret) : NaN;
+    const fromString =
+      typeof b.fromString === 'number' && Number.isFinite(b.fromString) ? Math.floor(b.fromString) : NaN;
+    const toString = typeof b.toString === 'number' && Number.isFinite(b.toString) ? Math.floor(b.toString) : NaN;
+    if (fret < 1 || fromString < 0 || toString > 5 || fromString > toString) continue;
+    const item: BarreEntity = { fret, fromString, toString };
+    if (b.finger === 1 || b.finger === 2 || b.finger === 3 || b.finger === 4) item.finger = b.finger;
+    out.push(item);
+  }
+  return out.length > 0 ? out : undefined;
+};
 
 // ===== chordMap: 和弦槽位映射与和弦数据归一化 =====
 
@@ -242,6 +331,10 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
     delete legacyChord.fingerprint;
   }
 
+  // 横按规范化：过滤非法条目；未变化时不触发迁移
+  const barres = normalizeBarres(chord.barres);
+  const barresChanged = JSON.stringify(chord.barres ?? undefined) !== JSON.stringify(barres);
+
   let nameSegments = chord.nameSegments;
   let nameMigrated = false;
   if (nameSegments === undefined) {
@@ -258,7 +351,8 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
     chord.tuning !== tuning ||
     chord.fretCount !== fretCount ||
     chord.rootStringIndex !== rootStringIndex ||
-    fieldsCleaned;
+    fieldsCleaned ||
+    barresChanged;
   if (!changed) return { chord, changed: false };
   return {
     chord: {
@@ -269,6 +363,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
       fretCount,
       rootStringIndex,
       strings,
+      ...(barres !== undefined ? { barres } : {}),
     },
     changed: true,
   };

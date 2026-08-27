@@ -74,9 +74,10 @@
       </tspan>
     </text>
 
-    <!-- 始终存在的透明命中区 -->
+    <!-- 透明命中区：仅交互模式下拦截点击放大命中；非交互/拾取预览时放行，避免遮挡下层可点击元素（如候选横按梁） -->
     <circle
-      class="pointer-events-auto cursor-pointer"
+      class="transition-[pointer-events]"
+      :class="interactive ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'"
       :cx="x"
       :cy="y"
       :r="NOTE_DISPLAY.FINGER_DOT_RADIUS"

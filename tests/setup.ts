@@ -60,3 +60,10 @@ if (!('IntersectionObserver' in globalThis)) {
     writable: true,
   });
 }
+
+import { config } from '@vue/test-utils';
+config.global.directives = {
+  ...config.global.directives,
+  wave: () => {},
+  tooltip: () => {},
+};
