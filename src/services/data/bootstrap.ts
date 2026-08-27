@@ -10,11 +10,11 @@
  * 这样：迁移导入的数据被 UI 采用；IDB 始终持有完整副本，
  * 为将来 store 切换到 v2 契约（Phase 3 逐 feature 迁移）备好数据源。
  */
+import type { Chord, Group, Song } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { logger } from '@/utils/core/logger';
 import { migrateLegacyData } from './migrateLegacy';
 import { chordRepository, songRepository } from './repositories';
-import type { Chord, Group, Song } from '@/types';
 
 function readJson<T>(key: string, storage: Storage): T[] {
   try {
@@ -33,25 +33,25 @@ export async function bootstrapDataLayer(storage: Storage = window.localStorage)
     // 1. 旧 localStorage → IDB（一次性迁移）
     await migrateLegacyData(storage);
 
-    // 2. IDB → localStorage 回填：只要 IDB 有数据，就作为 UI 数据源回填
-    // （迁移量可能为 0，但 IDB 可能已有此前同步的权威备份）
+    // 2. IDB → localStorage 回填：仅当 localStorage 为空时回填（localStorage 是 UI 实时权威源，
+    //    IDB 只是备份；若 localStorage 已有数据则保留，避免用过期 IDB 备份覆盖用户刚保存的数据）
     const [groups, chords, songs] = await Promise.all([
       chordRepository.loadGroups(),
       chordRepository.loadChords(),
       songRepository.loadSongs(),
     ]);
-    if (groups.length > 0) storage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(groups));
-    if (chords.length > 0) storage.setItem(STORAGE_KEYS.CHORD_LIST, JSON.stringify(chords));
-    if (songs.length > 0) {
+    // 判断 localStorage 里是否已有键：仅当完全缺失时才回填，避免用过期 IDB 备份覆盖实时数据
+    const hasLocalGroups = storage.getItem(STORAGE_KEYS.GROUPS) !== null;
+    const hasLocalChords = storage.getItem(STORAGE_KEYS.CHORD_LIST) !== null;
+    if (groups.length > 0 && !hasLocalGroups) storage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(groups));
+    if (chords.length > 0 && !hasLocalChords) storage.setItem(STORAGE_KEYS.CHORD_LIST, JSON.stringify(chords));
+    // 歌曲同样仅在 localStorage 缺失索引时才回填；IDB 为空时不得删除 localStorage 的歌曲
+    // （syncLocalStorageToIdb 是异步写 IDB，刷新/退出时可能未完成，IDB 为空只是"尚未同步"，不代表应清空）
+    const hasLocalSongsIndex = storage.getItem(STORAGE_KEYS.SONGS_INDEX) !== null;
+    if (songs.length > 0 && !hasLocalSongsIndex) {
       storage.setItem(STORAGE_KEYS.SONGS_INDEX, JSON.stringify(songs.map(s => s.id)));
       for (const song of songs) {
         storage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:${song.id}`, JSON.stringify(song));
-      }
-    } else {
-      storage.removeItem(STORAGE_KEYS.SONGS_INDEX);
-      for (let index = storage.length - 1; index >= 0; index -= 1) {
-        const key = storage.key(index);
-        if (key?.startsWith(`${STORAGE_KEYS.SONG_ENTRY}:`)) storage.removeItem(key);
       }
     }
     if (groups.length + chords.length + songs.length > 0) {
