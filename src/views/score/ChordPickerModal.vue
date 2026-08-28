@@ -10,7 +10,7 @@
     <template #header-extra>
       <ActionButton variant="subtle" color="primary" @click="goToWorkbenchToCreate">
         <template #prefix>
-          <Plus :size="14" stroke-width="2.5" aria-hidden="true" />
+          <Plus :size="14" :stroke-width="2.5" aria-hidden="true" />
         </template>
         新建和弦
       </ActionButton>
@@ -31,7 +31,7 @@
               show-count
             >
               <template #prefix>
-                <Search class="search-icon text-text-disabled" :size="14" stroke-width="2.5" aria-hidden="true" />
+                <Search class="search-icon text-text-disabled" :size="14" :stroke-width="2.5" aria-hidden="true" />
               </template>
             </BaseInput>
           </div>
@@ -141,11 +141,11 @@
                   @mousedown.stop
                   @click.stop="goToWorkbenchToEdit(chord)"
                 >
-                  <Pencil :size="13" stroke-width="2.2" />
+                  <Pencil :size="13" :stroke-width="2.2" />
                 </ActionButton>
                 <span
                   v-if="selectedGroupId === 'ALL' && getSourceGroupName(chord)"
-                  class="picker-source-group absolute top-1 left-1 z-10 max-w-[60%] truncate px-1 py-0.5 rounded-sm bg-bg-panel/90 border border-border-light text-2xs font-medium text-text-muted leading-none pointer-events-none select-none"
+                  class="picker-source-group absolute top-1 left-1 z-10 max-w-[60%] truncate px-1 py-0.5 rounded-sm bg-bg-panel/90 border border-border-light text-2xs font-semibold text-text-muted leading-none pointer-events-none select-none"
                   :title="getSourceGroupName(chord)"
                 >
                   {{ getSourceGroupName(chord) }}

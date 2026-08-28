@@ -93,7 +93,7 @@ const CHORD_NAME_ZONE_HEIGHT = 80;
 export const CHORD_NAME_FONT_SIZE_MAP = {
   sm: 32,
   md: 40,
-  lg: 60,
+  lg: 56,
 } as const;
 export type ChordNameFontSize = keyof typeof CHORD_NAME_FONT_SIZE_MAP;
 

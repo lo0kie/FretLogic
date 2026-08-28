@@ -88,7 +88,7 @@
           char === ' '
             ? ''
             : chord
-              ? 'underline decoration-dashed decoration-text-disabled/80 underline-offset-[3px]'
+              ? 'underline decoration-dashed decoration-text-disabled/80 underline-offset-[8px]'
               : '',
         ]"
       >

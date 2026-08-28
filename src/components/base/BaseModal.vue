@@ -54,7 +54,7 @@
                   class="!p-1.5"
                   @click="close"
                 >
-                  <X :size="16" />
+                  <X :size="20" :stroke-width="3" />
                 </ActionButton>
               </div>
             </slot>

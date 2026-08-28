@@ -25,7 +25,7 @@
           show-count
         >
           <template #prefix>
-            <Search class="search-icon text-text-disabled" :size="14" stroke-width="2.5" />
+            <Search class="search-icon text-text-disabled" :size="14" :stroke-width="2.5" />
           </template>
         </BaseInput>
 

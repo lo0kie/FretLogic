@@ -40,21 +40,27 @@ const initializeEditor = () => {
   }
 };
 
-bootstrapDataLayer(window.localStorage)
-  .then(() => {
-    app.mount('#app');
-    initializeEditor();
-  })
-  .catch(error => {
+const initApp = async () => {
+  try {
+    await bootstrapDataLayer(window.localStorage);
+  } catch (error) {
     logger.error('main', '数据层引导失败', error);
+  } finally {
     app.mount('#app');
     initializeEditor();
-  });
-
-const syncOnExit = () => {
-  syncLocalStorageToIdb(window.localStorage).catch(() => {});
+  }
 };
-window.addEventListener('pagehide', syncOnExit);
+
+void initApp();
+
+const syncOnExit = async () => {
+  try {
+    await syncLocalStorageToIdb(window.localStorage);
+  } catch {
+    // 页面退出/切后台时同步异常不中断生命周期
+  }
+};
+window.addEventListener('pagehide', () => void syncOnExit());
 window.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') syncOnExit();
+  if (document.visibilityState === 'hidden') void syncOnExit();
 });

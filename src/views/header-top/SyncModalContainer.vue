@@ -87,7 +87,6 @@
 
           <BaseInput
             v-model="settingsStore.webdavProxyUrl"
-            v-tooltip="'可选：CORS 代理地址，用于绕开浏览器跨域限制'"
             placeholder="CORS 非必填"
             clearable
             :maxlength="200"
@@ -109,7 +108,7 @@
         @click="handlePullClick"
       >
         <template #prefix>
-          <CloudDownload :size="13" stroke-width="2.5" />
+          <CloudDownload :size="13" :stroke-width="2.5" />
         </template>
         拉取
       </ActionButton>
@@ -121,7 +120,7 @@
         @click="handleSyncClick"
       >
         <template #prefix>
-          <CloudUpload :size="13" stroke-width="2.5" />
+          <CloudUpload :size="13" :stroke-width="2.5" />
         </template>
         同步
       </ActionButton>

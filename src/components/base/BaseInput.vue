@@ -31,7 +31,11 @@
         $slots.prefix ? currentConfig.prefixPadding : currentConfig.basePaddingLeft,
       ]"
       :style="{ paddingRight: computedPaddingRight }"
-      data-bitwarden-ignore
+      data-bwignore="true"
+      data-1p-ignore="true"
+      data-lpignore="true"
+      data-protonpass-ignore="true"
+      data-form-type="other"
       data-focusable-inline
       @input="handleInput"
       @compositionstart="handleCompositionStart"
@@ -44,7 +48,7 @@
 
     <!-- 右侧装饰：计数 / 清空 / 后缀(密码眼睛)，密码眼睛固定在最右侧，清空按钮在左侧展开不引起眼睛位移 -->
     <div
-      v-if="hasCount || hasSuffix || hasClear"
+      v-if="hasCount || hasSuffix || isClearAvailable"
       class="absolute inset-y-0 right-2 flex items-center gap-1.5 pointer-events-none"
     >
       <span
@@ -57,30 +61,40 @@
       </span>
 
       <button
-        v-if="clearable && modelValue && !disabled && !readonly"
+        v-if="isClearAvailable"
         v-wave
         type="button"
-        class="pointer-events-auto flex items-center justify-center text-text-disabled bg-bg-panel-hover rounded-full border-none p-0 cursor-pointer overflow-hidden transition-all duration-fast hover:text-text-on-accent hover:bg-danger active:scale-90 w-0 opacity-0 h-4 group-hover:w-4 group-focus-within:w-4 group-hover:opacity-100 group-focus-within:opacity-100"
+        class="pointer-events-auto flex items-center justify-center text-text-disabled bg-bg-panel-hover rounded-full border-none p-0 cursor-pointer overflow-hidden transition-all duration-200 hover:text-text-on-accent hover:bg-danger active:scale-90 outline-none"
+        :class="
+          modelValue
+            ? 'w-4 h-4 opacity-80 hover:opacity-100 scale-100'
+            : 'w-0 h-4 opacity-0 scale-0 pointer-events-none -mr-1.5'
+        "
         title="清空内容"
         data-focusable-inline
+        :tabindex="modelValue ? 0 : -1"
         @click.stop="handleClear"
         @pointerdown.stop
         @mousedown.stop
       >
-        <X :size="10" stroke-width="3" />
+        <X :size="14" stroke-width="3" />
       </button>
 
       <div v-if="isPasswordMode || $slots.suffix" class="flex items-center justify-center pointer-events-none">
         <slot name="suffix">
           <button
             v-if="isPasswordMode"
+            v-wave
+            data-focusable-inline
             type="button"
-            class="pointer-events-auto flex items-center justify-center text-text-disabled hover:text-text-body cursor-pointer transition-colors duration-fast bg-transparent border-none p-0"
+            class="pointer-events-auto flex items-center justify-center w-4 h-4 rounded-full text-text-disabled hover:text-text-title hover:bg-bg-panel-hover active:scale-90 cursor-pointer transition-all duration-fast bg-transparent border-none p-0 outline-none"
             :title="showPassword ? '隐藏密码' : '显示密码'"
             :aria-label="showPassword ? '隐藏密码' : '显示密码'"
             @click.stop="showPassword = !showPassword"
+            @pointerdown.stop
+            @mousedown.stop
           >
-            <component :is="showPassword ? Eye : EyeOff" :size="14" stroke-width="2.5" />
+            <component :is="showPassword ? Eye : EyeOff" :size="11" stroke-width="2.5" />
           </button>
         </slot>
       </div>
@@ -173,7 +187,7 @@ const resolvedType = computed(() => {
 
 const isAtLimit = computed(() => Boolean(maxlength) && (modelValue.value?.length ?? 0) >= (maxlength as number));
 
-const hasClear = computed(() => clearable && modelValue.value && !disabled && !readonly);
+const isClearAvailable = computed(() => clearable && !disabled && !readonly);
 const hasCount = computed(() => showCount && maxlength !== undefined);
 const hasSuffix = computed(() => Boolean(slots.suffix) || isPasswordMode.value);
 
