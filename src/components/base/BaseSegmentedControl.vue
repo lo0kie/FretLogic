@@ -138,7 +138,7 @@ const indicatorStyle = computed(() => ({
 const controlClasses = computed(() => [
   SIZE_MAP[props.size].wrapper,
   props.variant === 'pill'
-    ? 'bg-bg-body border border-border-light rounded-full p-0.5 gap-1 transition-opacity'
+    ? 'bg-bg-body border border-border-light rounded-full p-1 gap-1 transition-opacity'
     : 'bg-transparent gap-xs',
   props.disabled ? 'opacity-50 cursor-not-allowed' : '',
   isFullWidth.value ? 'w-full' : '',
@@ -208,25 +208,23 @@ const updateIndicatorPosition = async () => {
   }
 };
 
-const select = (opt: SegmentOption<T>, index: number) => {
+const select = async (opt: SegmentOption<T>, index: number) => {
   if (props.disabled || opt.disabled) return;
   if (isSelected(opt.value)) {
     if (props.closeable) {
       modelValue.value = undefined as unknown as T;
       emit('change', undefined as unknown as T);
-      nextTick(() => {
-        updateIndicatorPosition();
-        items.value[index]?.focus();
-      });
+      await nextTick();
+      updateIndicatorPosition();
+      items.value[index]?.focus();
     }
     return;
   }
   modelValue.value = opt.value;
   emit('change', opt.value);
-  nextTick(() => {
-    updateIndicatorPosition();
-    items.value[index]?.focus();
-  });
+  await nextTick();
+  updateIndicatorPosition();
+  items.value[index]?.focus();
 };
 
 const handleKeydown = (e: KeyboardEvent) => {
@@ -279,21 +277,21 @@ const observeItems = () => {
   updateIndicatorPosition();
 };
 
-watch(normalizedOptions, () => {
-  nextTick(() => {
-    observeItems();
-    updateIndicatorPosition();
-  });
+watch(normalizedOptions, async () => {
+  await nextTick();
+  observeItems();
+  updateIndicatorPosition();
 });
 
-onMounted(() => {
-  nextTick(() => {
-    observeItems();
+onMounted(async () => {
+  await nextTick();
+  observeItems();
+  updateIndicatorPosition();
+  if (typeof document !== 'undefined' && document.fonts?.ready) {
+    await document.fonts.ready;
+    await nextTick();
     updateIndicatorPosition();
-    if (typeof document !== 'undefined' && document.fonts?.ready) {
-      document.fonts.ready.then(() => nextTick(updateIndicatorPosition));
-    }
-  });
+  }
 });
 
 onBeforeUnmount(() => {

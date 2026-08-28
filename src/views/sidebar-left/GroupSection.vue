@@ -28,7 +28,7 @@
             role="button"
             :aria-expanded="isGroupContentOpen(group)"
             :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${chordStore.isGroupCollapsed(group.id) ? '已折叠' : '已展开'}`"
-            class="group-title-row group/row h-[2.4rem] px-3 flex items-center justify-between cursor-pointer rounded-md select-none box-border outline-none transition-colors duration-fast hover:bg-tint-panelhover-30"
+            class="group-title-row group/row h-[2.4rem] px-3 flex items-center justify-between cursor-pointer rounded-md select-none box-border outline-none border border-transparent transition-all duration-fast hover:bg-bg-panel-hover hover:border-border-base"
             :class="{
               '!bg-tint-panelhover-50': isGroupContentOpen(group),
               '!bg-tint-panelhover-30': isOpen,

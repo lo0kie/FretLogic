@@ -7,9 +7,9 @@
 
 ### 修复与优化（2026-08-28 · 持久化可靠性 + 交互细节）
 
-- **修复刷新/退出后数据回退**：移除和弦列表、分组、编辑草稿的 `useStorage` 防抖，保存/删除/排序等任何变更立即写入
-  localStorage；`bootstrapDataLayer` 的 IDB 回填改为仅当 localStorage 对应键缺失时执行，IDB 为空时不再删除
-  localStorage 的歌曲，避免异步备份未完成时用旧/空数据覆盖实时数据；
+- **修复刷新/退出后数据回退**：移除和弦列表、分组、编辑草稿的 `useStorage`
+  防抖，保存/删除/排序等任何变更立即写入localStorage；`bootstrapDataLayer`
+  的 IDB 回填改为仅当 localStorage 对应键缺失时执行，IDB 为空时不再删除 localStorage 的歌曲，避免异步备份未完成时用旧/空数据覆盖实时数据；
 - 保存和弦成功后立即落盘 localStorage（`flushChordsToStorage`），配合无防抖写入保证刷新不丢；
 - 全量导出增加空数据校验：分组/和弦/乐谱均为空时提示「没有可导出的数据」并中止，不再下载空备份文件；
 - `BaseSelector` 空选项时禁止下拉面板滚动，并隐藏滚动提示箭头（空占位略高于容器导致的伪滚动）；

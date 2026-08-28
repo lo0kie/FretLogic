@@ -53,6 +53,7 @@
           size="md"
           :formatter="val => `${val}%`"
           :disabled="isGenerating"
+          @change="handleQualityCommit"
         />
 
         <div class="flex items-center justify-center gap-sm">
@@ -63,7 +64,7 @@
             @click="emit('download-current-page')"
           >
             <template #prefix>
-              <Download :size="14" stroke-width="2.5" />
+              <Download :size="14" :stroke-width="2.5" />
             </template>
             下载
           </ActionButton>
@@ -75,7 +76,7 @@
             @click="emit('copy-current-page')"
           >
             <template #prefix>
-              <Copy :size="14" stroke-width="2.5" />
+              <Copy :size="14" :stroke-width="2.5" />
             </template>
             复制图片
           </ActionButton>
@@ -88,7 +89,7 @@
             @click="emit('download-all-zip')"
           >
             <template #prefix>
-              <Archive :size="14" stroke-width="2.5" />
+              <Archive :size="14" :stroke-width="2.5" />
             </template>
             下载全部 (ZIP)
           </ActionButton>
@@ -101,7 +102,7 @@
             @click="emit('download-pdf')"
           >
             <template #prefix>
-              <FileDown :size="14" stroke-width="2.5" />
+              <FileDown :size="14" :stroke-width="2.5" />
             </template>
             下载 PDF
           </ActionButton>
@@ -120,7 +121,7 @@ import BaseSlider from '@/components/base/BaseSlider.vue';
 import EmptyState from '@/components/base/EmptyState.vue';
 import { ExportMode, type PreviewPage } from '@/composables/score/useScoreExportPreview';
 import { Archive, Copy, Download, FileDown, Loader2 } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps<{
   visible: boolean;
@@ -149,10 +150,18 @@ const buttonSize = computed(() => props.buttonSize || 'md');
 
 const isActionDisabled = computed(() => props.isGenerating || props.pages.length === 0);
 
-const qualityDisplayPercent = computed({
-  get: () => Math.round(props.quality * 100),
-  set: val => emit('commit-quality', val / 100),
-});
+// 滑块本地显示值：拖动中只更新显示，松手（change）才提交 commit-quality，避免拖动时反复重新生成
+const qualityDisplayPercent = ref(Math.round(props.quality * 100));
+watch(
+  () => props.quality,
+  v => {
+    qualityDisplayPercent.value = Math.round(v * 100);
+  }
+);
+const handleQualityCommit = (val: number | [number, number]) => {
+  const numericVal = Array.isArray(val) ? (val[0] ?? 100) : val;
+  emit('commit-quality', numericVal / 100);
+};
 
 const visibleModel = computed({
   get: () => props.visible,

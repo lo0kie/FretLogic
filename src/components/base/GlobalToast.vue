@@ -82,7 +82,7 @@
               data-focusable-inline
               @click="uiStore.removeToast(item.id)"
             >
-              <X :size="14" stroke-width="2.5" aria-hidden="true" />
+              <X :size="14" :stroke-width="2.5" aria-hidden="true" />
             </button>
           </slot>
         </div>

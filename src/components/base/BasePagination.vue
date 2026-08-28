@@ -1,7 +1,7 @@
 <template>
   <nav
     v-if="pageCount > 0 && !(hideOnSinglePage && isSinglePage)"
-    class="inline-flex items-center gap-sm box-border select-none"
+    class="inline-flex items-center justify-center gap-sm box-border select-none"
     aria-label="分页导航"
   >
     <!-- 首页按钮 -->

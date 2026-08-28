@@ -49,7 +49,7 @@
           @click="handleRepairData"
         >
           <template #prefix>
-            <Wrench :size="13" stroke-width="2.5" />
+            <Wrench :size="13" :stroke-width="2.5" />
           </template>
           修复与对齐数据
         </ActionButton>

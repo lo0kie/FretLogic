@@ -177,17 +177,9 @@ const handleToggleSelectAllVariants = () => {
 };
 
 const references = computed<{ song: Song; count: number }[]>(() => {
-  const ids = new Set(groupModals.modalData.referenceChordIds);
-  if (ids.size === 0) return [];
-  const result: { song: Song; count: number }[] = [];
-  for (const song of songStore.songs) {
-    let count = 0;
-    for (const boundId of Object.values(song.chordMap)) {
-      if (ids.has(boundId)) count++;
-    }
-    if (count > 0) result.push({ song, count });
-  }
-  return result;
+  const ids = groupModals.modalData.referenceChordIds;
+  if (!ids || ids.length === 0) return [];
+  return songStore.getChordReferences(ids);
 });
 
 const handleOpenSong = (songId: string) => {

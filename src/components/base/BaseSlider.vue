@@ -57,7 +57,7 @@
       data-focusable-inline
       @click="stepBy(-1, $event)"
     >
-      <Minus :size="14" stroke-width="2.2" aria-hidden="true" />
+      <Minus :size="14" :stroke-width="2.2" aria-hidden="true" />
     </button>
 
     <!-- 轨道主体区域 -->
@@ -211,7 +211,7 @@
       data-focusable-inline
       @click="stepBy(1, $event)"
     >
-      <Plus :size="14" stroke-width="2.2" aria-hidden="true" />
+      <Plus :size="14" :stroke-width="2.2" aria-hidden="true" />
     </button>
 
     <!-- 数值输入 / 显示：右侧/底部 -->

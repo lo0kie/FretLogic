@@ -51,9 +51,9 @@
           shape-rendering="crispEdges"
         />
 
-        <!-- Capo 为 0 时的粗琴枕（完全向上画，底边对准 y=0，不挤占任何网格高度） -->
+        <!-- Capo 为 0 且启用加宽时的粗琴枕（完全向上画，底边对准 y=0，不挤占任何网格高度） -->
         <rect
-          v-if="capo === 0"
+          v-if="capo === 0 && isWideNut"
           :x="(stringXPositions[0] ?? 0) - FRETBOARD_LINE_WIDTH / 2"
           :y="-12"
           :width="(stringXPositions[5] ?? 0) - (stringXPositions[0] ?? 0) + FRETBOARD_LINE_WIDTH"
@@ -207,6 +207,9 @@ const {
   interactive,
   capo,
   isDarkMode,
+  wideNut = false,
+  wideZeroFret = false,
+  thickNut = false,
   barres = [],
   barreCandidates = [],
   barrePickMode = false,
@@ -224,6 +227,12 @@ const {
   fretNumberSize?: 'sm' | 'md' | 'lg';
   showFretNumbers?: boolean;
   showPitchNames?: boolean;
+  /** 零品品丝是否加宽（粗琴枕效果），默认 false */
+  wideNut?: boolean;
+  /** 别名兼容 */
+  wideZeroFret?: boolean;
+  /** 别名兼容 */
+  thickNut?: boolean;
   /** 横按列表（显式配置或自动推导），绘制在音符下方 */
   barres?: BarreEntity[];
   /** 可点击的候选横按列表（横按拾取模式展示） */
@@ -231,6 +240,8 @@ const {
   /** 横按拾取模式：候选梁可点击派发 barre-click（音符保持不可交互） */
   barrePickMode?: boolean;
 }>();
+
+const isWideNut = computed(() => Boolean(wideNut || wideZeroFret || thickNut));
 
 const emit = defineEmits<{
   (e: 'toggle-pitch', stringIndex: number): void;

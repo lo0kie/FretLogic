@@ -19,6 +19,12 @@
         <LeftChordCard
           v-for="cardData in groupedCards"
           :key="cardData.mainChord.id"
+          v-memo="[
+            cardData.mainChord,
+            cardData.variantCount,
+            cardData.mainChord.id === activeMainId,
+            settingsStore.workbenchChordShorthand,
+          ]"
           :card-data="cardData"
           :is-active="cardData.mainChord.id === activeMainId"
           @delete-variants="data => emit('open-delete-variants', data)"
@@ -38,6 +44,7 @@
 import EmptyState from '@/components/base/EmptyState.vue';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
 import { getChordName } from '@/utils/music/musicTheory';
 import { computed } from 'vue';
@@ -61,6 +68,7 @@ const emit = defineEmits<{
 
 const chordStore = useChordStore();
 const editorStore = useChordEditorStore();
+const settingsStore = useSettingsStore();
 
 const chordsCount = computed(() => chordStore.groupChordMap.get(props.group.id)?.length ?? 0);
 const groupedCards = computed(() => chordStore.getGroupedCards(props.group.id, props.searchQuery));
