@@ -124,7 +124,7 @@
             class="absolute left-1 right-1 top-1 h-2 flex items-center justify-center z-panel text-text-disabled pointer-events-none transition-colors"
             aria-hidden="true"
           >
-            <ChevronUp :size="9" stroke-width="3" />
+            <ChevronUp :size="9" :stroke-width="3" />
           </div>
         </Transition>
 
@@ -193,7 +193,7 @@
             class="absolute left-1 right-1 bottom-1 h-2 flex items-center justify-center z-panel text-text-disabled pointer-events-none transition-colors"
             aria-hidden="true"
           >
-            <ChevronDown :size="9" stroke-width="3" />
+            <ChevronDown :size="9" :stroke-width="3" />
           </div>
         </Transition>
 

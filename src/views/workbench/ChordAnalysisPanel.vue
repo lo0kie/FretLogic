@@ -7,7 +7,7 @@
       <div class="flex items-center justify-between gap-2 shrink-0 pb-1.5 border-b border-border-light">
         <div class="flex items-center gap-1.5">
           <div class="flex items-center justify-center w-5 h-5 rounded-md bg-tint-primary-88 text-primary">
-            <Sparkles :size="13" stroke-width="2.5" />
+            <Sparkles :size="13" :stroke-width="2.5" />
           </div>
           <span class="text-xs font-extrabold text-text-title tracking-tight">和弦分析</span>
         </div>

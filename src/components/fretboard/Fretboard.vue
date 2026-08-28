@@ -119,6 +119,7 @@
         :barres="effectiveBarres"
         :barre-candidates="barreCandidates"
         :barre-pick-mode="barrePickMode"
+        :wide-nut="isWideNut"
         @toggle-pitch="handleTogglePitchName"
         @barre-click="emit('barre-click', $event)"
       />
@@ -171,6 +172,12 @@ export interface FretboardProps {
   /** 和弦名预设字号（sm/md/lg），默认 md */
   chordNameFontSize?: ChordNameFontSize;
   showChordName?: boolean;
+  /** 零品品丝是否加宽（粗琴枕效果），默认 false */
+  wideNut?: boolean;
+  /** 别名兼容：零品品丝是否加宽 */
+  wideZeroFret?: boolean;
+  /** 别名兼容：零品品丝是否加宽 */
+  thickNut?: boolean;
   /** 横按拾取模式：候选横按梁可点击派发 barre-click（音符保持不可编辑） */
   barrePickMode?: boolean;
   /** 可点击的候选横按列表（barrePickMode 时展示） */
@@ -191,6 +198,7 @@ const props = withDefaults(defineProps<FretboardProps>(), {
   bordered: false,
   chordNameEditable: false,
   chordNameFontSize: 'md',
+  wideNut: true,
   barrePickMode: false,
   barreCandidates: () => [],
 });
@@ -226,6 +234,8 @@ const isShowPitchNames = computed(() => {
   if (props.showPitchNames !== undefined) return props.showPitchNames;
   return isScoreMode.value ? settingsStore.scoreShowPitchNames : settingsStore.workbenchShowPitchNames;
 });
+
+const isWideNut = computed(() => Boolean(props.wideNut || props.wideZeroFret || props.thickNut));
 
 /** 生效横按：仅采用显式手动标记（不做自动推导） */
 const effectiveBarres = computed<BarreEntity[]>(() => props.chord.barres ?? []);
@@ -370,9 +380,15 @@ const handleEscape = () => {
   });
 };
 
-/** 和弦名字号：仅在可编辑输入模式下对长名称自适应缩放；纯展示模式保持标准预设字号 */
+/** 和弦名字号：展示模式（非交互）下提升一档更醒目；可编辑输入模式下对长名称自适应缩放 */
 const chordNameFontSizeStyle = computed<CSSProperties>(() => {
-  const basePx = CHORD_NAME_FONT_SIZE_MAP[props.chordNameFontSize];
+  // 展示模式字号提升一档：sm→md、md/lg→lg
+  const sizeKey: ChordNameFontSize = props.interactive
+    ? props.chordNameFontSize
+    : props.chordNameFontSize === 'sm'
+      ? 'md'
+      : 'lg';
+  const basePx = CHORD_NAME_FONT_SIZE_MAP[sizeKey];
   if (!canEditChordName.value) {
     return {
       fontSize: `${basePx / 16}rem`,

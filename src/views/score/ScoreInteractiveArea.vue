@@ -2,7 +2,7 @@
   <div
     ref="scoreZoneRef"
     v-scroll-cache="'score-interactive-scroll'"
-    class="interactive-score-zone flex-1 relative box-border overflow-x-auto overflow-y-auto min-w-0 pt-xl pb-[8rem] pl-2xl pr-0 max-md:pl-sm max-md:pt-sm max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]"
+    class="no-scrollbar interactive-score-zone flex-1 relative box-border overflow-x-auto overflow-y-auto min-w-0 pt-xl pb-[8rem] pl-2xl pr-0 max-md:pl-sm max-md:pt-sm max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]"
     :style="{ '--score-font-scale': scoreEditor.effectiveFontScale }"
   >
     <div
@@ -48,6 +48,17 @@
         <div
           v-for="lineData in lyricsLinesWithEdges"
           :key="lineData.lineId"
+          v-memo="[
+            lineData.lineId,
+            lineData.startChords,
+            lineData.chars,
+            lineData.endChords,
+            isExporting ? isLineVisibleInExport(lineData.lineIdx) : selectedLineSet.has(lineData.lineIdx),
+            hoveredLineKey === lineData.lineId,
+            isExporting,
+            isGlobalEditable,
+            isDragging,
+          ]"
           class="line-row flex items-stretch w-max min-w-full"
         >
           <ContextMenu
@@ -175,9 +186,9 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '@/components/base/EmptyState.vue';
 import ContextMenu from '@/components/context-menu/ContextMenu.vue';
 import type { ContextMenuItem } from '@/components/context-menu/ContextMenuItems.vue';
-import EmptyState from '@/components/base/EmptyState.vue';
 import { useAutoScroll } from '@/composables/score/useAutoScroll';
 import { useLyricsDragDrop } from '@/composables/score/useLyricsDragDrop';
 import { useScoreLinesData } from '@/composables/score/useScoreLinesData';

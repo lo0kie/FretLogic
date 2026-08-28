@@ -4,7 +4,7 @@
     <div class="flex items-center justify-between gap-2 shrink-0 h-7 border-b border-border-light pb-1.5">
       <div class="flex items-center gap-1.5">
         <div class="flex items-center justify-center w-5 h-5 rounded-md bg-tint-primary-88 text-primary">
-          <MoveHorizontal :size="13" stroke-width="2.5" />
+          <MoveHorizontal :size="13" :stroke-width="2.5" />
         </div>
         <span class="text-xs font-extrabold text-text-title tracking-tight">横按标记</span>
       </div>
@@ -21,12 +21,15 @@
     <div v-else class="flex flex-col gap-1">
       <div class="flex justify-center py-1 box-border">
         <Fretboard
+          :wide-nut="false"
           :chord="editorStore.draftChord"
           :interactive="false"
           :show-pitch-names="false"
           :show-chord-name="false"
           :scale="0.6"
           :barre-pick-mode="true"
+          :show-fret-numbers="false"
+          :show-open-strings="false"
           :barre-candidates="candidates"
           @barre-click="handleBarreClick"
         />

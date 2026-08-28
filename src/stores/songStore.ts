@@ -1,7 +1,7 @@
 import { createSongRepository } from '@/services/repositories';
 import type { Song } from '@/types';
-import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/music/chord-fretboard';
 import { STORAGE_KEYS } from '@/utils/core/constants';
+import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/music/chord-fretboard';
 import { createSong as createSongEntity } from '@/utils/music/entityFactories';
 import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -32,6 +32,53 @@ export const useSongStore = defineStore('song', () => {
   const songs = ref<Song[]>([]);
   const songMap = computed(() => new Map(songs.value.map(s => [s.id, s])));
   const lastDeletedSongInfo = ref<{ song: Song; index: number } | null>(null);
+
+  /**
+   * 响应式全局和弦引用倒排索引（Inverted Index）：
+   * 建立 chordId -> { song: Song, count: number }[] 的映射
+   * 在歌曲发生增删或绑定变更时自动由 computed 更新并缓存，反查复杂度为 O(1)。
+   */
+  const chordReferencesIndex = computed<Map<string, { song: Song; count: number }[]>>(() => {
+    const index = new Map<string, { song: Song; count: number }[]>();
+    for (const song of songs.value) {
+      if (!song.chordMap) continue;
+      const countMap = new Map<string, number>();
+      for (const chordId of Object.values(song.chordMap)) {
+        if (!chordId) continue;
+        countMap.set(chordId, (countMap.get(chordId) ?? 0) + 1);
+      }
+      for (const [chordId, count] of countMap.entries()) {
+        let list = index.get(chordId);
+        if (!list) {
+          list = [];
+          index.set(chordId, list);
+        }
+        list.push({ song, count });
+      }
+    }
+    return index;
+  });
+
+  /**
+   * 快速反查一组和弦 ID 关联的歌曲引用列表（去重合并同歌曲内多指法的引用次数）
+   */
+  const getChordReferences = (chordIds: Iterable<string>): { song: Song; count: number }[] => {
+    const songCountMap = new Map<string, { song: Song; count: number }>();
+    const idx = chordReferencesIndex.value;
+    for (const chordId of chordIds) {
+      const refs = idx.get(chordId);
+      if (!refs) continue;
+      for (const { song, count } of refs) {
+        const existing = songCountMap.get(song.id);
+        if (existing) {
+          existing.count += count;
+        } else {
+          songCountMap.set(song.id, { song, count });
+        }
+      }
+    }
+    return Array.from(songCountMap.values());
+  };
 
   let migratedFromLegacy = false;
 
@@ -339,6 +386,8 @@ export const useSongStore = defineStore('song', () => {
 
   return {
     songs,
+    chordReferencesIndex,
+    getChordReferences,
     createSong,
     deleteSong,
     undoDeleteSong,

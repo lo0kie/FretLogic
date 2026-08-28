@@ -63,7 +63,7 @@
             cy="12"
             r="10"
             stroke="currentColor"
-            stroke-width="3"
+            :stroke-width="3"
             stroke-linecap="round"
             stroke-dasharray="47 17"
           />

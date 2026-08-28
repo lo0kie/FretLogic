@@ -55,12 +55,12 @@
         :aria-label="includeMetaBar ? '关闭歌曲信息栏' : '开启歌曲信息栏'"
         @click="includeMetaBar = !includeMetaBar"
       >
-        <FileText :size="14" stroke-width="2.5" />
+        <FileText :size="14" :stroke-width="2.5" />
       </ActionButton>
 
       <ActionButton size="sm" variant="subtle" :disabled="selectedCount === 0" @click="emit('open-export')">
         <template #prefix>
-          <Copy :size="14" stroke-width="2.5" aria-hidden="true" />
+          <Copy :size="14" :stroke-width="2.5" aria-hidden="true" />
         </template>
         导出图片
       </ActionButton>

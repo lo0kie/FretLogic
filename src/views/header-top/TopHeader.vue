@@ -14,7 +14,7 @@
         :color="uiStore.isLeftOpen ? 'primary' : 'default'"
         @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
       >
-        <PanelLeft :size="18" stroke-width="2.2" />
+        <PanelLeft :size="18" :stroke-width="2.2" />
       </ActionButton>
 
       <div class="w-px h-[0.7rem] bg-glass-border mx-[0.1rem]" />
@@ -49,7 +49,7 @@
           :disabled="editorStore.isFretBoardEmpty || isPlaying"
           @click="playCurrentChord"
         >
-          <component :is="isPlaying ? Square : Play" :size="15" stroke-width="2.5" />
+          <component :is="isPlaying ? Square : Play" :size="15" :stroke-width="2.5" />
         </ActionButton>
 
         <div class="w-px h-[0.8rem] bg-border-base mx-[0.1rem] opacity-50" />
@@ -62,7 +62,7 @@
           :disabled="uiStore.isCopying"
           @click="handleExport(true)"
         >
-          <component :is="Image" :size="15" stroke-width="2.5" />
+          <component :is="Image" :size="15" :stroke-width="2.5" />
         </ActionButton>
 
         <ActionButton
@@ -73,7 +73,7 @@
           :disabled="uiStore.isCopying"
           @click="handleExport(false)"
         >
-          <component :is="Copy" :size="15" stroke-width="2.5" />
+          <component :is="Copy" :size="15" :stroke-width="2.5" />
         </ActionButton>
       </div>
 
@@ -100,14 +100,14 @@
         :title="isAutoScrolling ? '暂停滚动' : '开始自动滚动'"
         @click="toggleAutoScroll"
       >
-        <component :is="isAutoScrolling ? Pause : Play" :size="15" stroke-width="2.5" />
+        <component :is="isAutoScrolling ? Pause : Play" :size="15" :stroke-width="2.5" />
       </ActionButton>
 
       <ActionButton icon-only variant="ghost" @click="toggleEditable">
         <component
           :is="isGlobalEditable ? Pencil : PencilOff"
           :size="17"
-          stroke-width="2.2"
+          :stroke-width="2.2"
           :class="isGlobalEditable ? 'text-color-primary' : 'text-text-disabled'"
         />
       </ActionButton>
@@ -125,7 +125,7 @@
             aria-haspopup="true"
             :size="uiSize"
           >
-            <SlidersHorizontal :size="18" stroke-width="2.2" aria-hidden="true" />
+            <SlidersHorizontal :size="18" :stroke-width="2.2" aria-hidden="true" />
           </ActionButton>
         </template>
 
@@ -140,7 +140,7 @@
         :size="uiSize"
         @click="isSyncModalOpen = true"
       >
-        <Cloud :size="18" stroke-width="2.2" />
+        <Cloud :size="18" :stroke-width="2.2" />
       </ActionButton>
 
       <!-- 主题切换 Popover -->
@@ -158,7 +158,7 @@
             <component
               :is="globalDarkMode ? Moon : Sun"
               :size="18"
-              :stroke-width="2.2"
+              ::stroke-width="2.2"
               :class="globalDarkMode ? 'text-color-primary' : 'text-color-warning'"
             />
           </ActionButton>
@@ -170,7 +170,7 @@
       </BasePopover>
 
       <ActionButton v-tooltip="buildInfoTooltip" icon-only variant="ghost" aria-label="构建信息" :size="uiSize">
-        <Info :size="17" stroke-width="2.2" />
+        <Info :size="17" :stroke-width="2.2" />
       </ActionButton>
     </div>
   </header>

@@ -22,7 +22,7 @@
           @error="isImageError = true"
         />
         <!-- 传入或预设 Lucide 组件 -->
-        <component :is="resolvedIcon" v-else :size="iconSize" stroke-width="1.8" class="empty-icon" />
+        <component :is="resolvedIcon" v-else :size="iconSize" :stroke-width="1.8" class="empty-icon" />
       </slot>
     </div>
 

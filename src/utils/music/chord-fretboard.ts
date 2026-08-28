@@ -2,18 +2,22 @@ import type { BarreEntity, Chord, GuitarStringEntity, GuitarStringsModel } from 
 import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_SCALE_MAP } from '@/utils/core/constants';
 import { Tuning, isMuted, isOpen, nameToSegments } from '@/utils/music/musicTheory';
 import { charKey, chordSlotKey, collectEdgeChordIds, edgeSlotPrefix } from '@/utils/score/scoreModel';
+import { createLruCache } from '../core/lruCache';
+
+const barreCandidatesCache = createLruCache<BarreEntity[]>(64);
 
 /**
  * 计算当前指板「可被手动标记的横按」候选列表（供横按编辑弹窗展示，用户选择后写入 barres，不自动应用）。
  *
- * 对每个品位 F（1..fretCount），取**恰好按在 F 品**的弦，生成两类候选（候选之间不共用琴弦）：
- * 1. 连续子段：端点之间允许更高品位的音符（食指垫底，如 F/Bb 大横按），但空弦 / 静音 / 更低品位会
- *    切断候选，每个长度 >= 2 的连续子段单独生成候选（例：2x222x 产出 6/5 弦与 4/3/2 弦两组横按）；
- * 2. 隔静音弦：两根同品弦之间全部为静音弦（x）时仍可横按（食指覆盖、中间闷音），仅限两端都是
- *    未被连续段覆盖的孤立弦，避免与其他横按共用琴弦（例：11x1x1 产出 6/5 弦与 3~1 弦两组；
- *    22x222 的 5 弦~3 弦因共享 5 弦/3 弦被剔除）。
+ * 对每个品位 F（1..fretCount），取**恰好按在 F 品**的弦，生成候选（候选之间不共用琴弦）：
+ * 连续子段：端点之间允许更高品位的音符（食指垫底，如 F/Bb 大横按），但空弦 / 静音 / 更低品位会
+ * 切断候选，每个长度 >= 2 的连续子段单独生成候选（例：2x222x 产出 4/3/2 弦横按；22x222 产出 6/5 弦与 4/3/2 弦两组横按）。
  */
 export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: number): BarreEntity[] => {
+  const cacheKey = `${strings.map(s => s[0]).join(',')}_${fretCount}`;
+  const cached = barreCandidatesCache.get(cacheKey);
+  if (cached) return cached;
+
   const out: BarreEntity[] = [];
   for (let fret = 1; fret <= fretCount; fret++) {
     const atFret: number[] = [];
@@ -22,55 +26,73 @@ export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: n
     }
     if (atFret.length < 2) continue;
 
-    // 1) 连续同品子段（记录被覆盖的琴弦，用于剔除与之共弦的隔静音弦候选）
-    const groupedStrings = new Set<number>();
     let segmentStart = 0;
     for (let i = 0; i < atFret.length; i++) {
       const isLast = i === atFret.length - 1;
-      // 当前弦到下一根同品弦之间若存在空弦/静音/更低品位，则在此处切断子段
       const isBroken = !isLast && !canBarreCover(strings, atFret[i]!, atFret[i + 1]!, fret);
-      if (isLast || isBroken) {
+
+      if (isBroken || isLast) {
         const from = atFret[segmentStart]!;
         const to = atFret[i]!;
-        if (to - from >= 1) {
+        if (to > from) {
           out.push({ fret, fromString: from, toString: to, finger: 1 });
-          for (let s = from; s <= to; s++) groupedStrings.add(s);
         }
         segmentStart = i + 1;
       }
     }
-
-    // 2) 隔静音弦候选：两根同品弦之间全部为静音弦（x）时可横按（食指覆盖、中间闷音），
-    //    但端点不得与已产出的连续段横按共弦（横按标记不能与其他横按共用，如 22x222 只产出
-    //    6/5 弦与 4/3/2 弦两组，5 弦~3 弦的 2x2 因共享 5 弦/3 弦被剔除）
-    for (let i = 0; i < atFret.length; i++) {
-      for (let j = i + 1; j < atFret.length; j++) {
-        const from = atFret[i]!;
-        const to = atFret[j]!;
-        if (to - from <= 1) continue;
-        if (!isAllMutedBetween(strings, from, to)) continue;
-        if (groupedStrings.has(from) || groupedStrings.has(to)) continue;
-        out.push({ fret, fromString: from, toString: to, finger: 1 });
-      }
-    }
   }
+
+  barreCandidatesCache.set(cacheKey, out);
   return out;
 };
 
-/** 判断两根同品弦之间的所有弦是否都能被横按食指覆盖（品位 >= fret 即可，更高品视为垫底） */
+/** 判断两根同品弦之间的所有弦是否都能被横按食指覆盖（品位 >= fret 即可，更高品视为垫底，空弦/静音弦会切断） */
 const canBarreCover = (strings: GuitarStringsModel, from: number, to: number, fret: number): boolean => {
   for (let s = from + 1; s < to; s++) {
-    if (strings[s]![0] < fret) return false;
+    const f = strings[s]?.[0];
+    if (f !== undefined && f < fret) {
+      return false;
+    }
   }
   return true;
 };
 
-/** 判断两根弦之间的所有弦是否全部为静音（x，即品位 -1） */
-const isAllMutedBetween = (strings: GuitarStringsModel, from: number, to: number): boolean => {
-  for (let s = from + 1; s < to; s++) {
-    if (strings[s]![0] !== -1) return false;
+/**
+ * 判断横按在当前指板下是否仍然有效：
+ * - 覆盖范围内存在品位 === barre.fret 的弦（横按有实际按压点，否则悬空无意义）；
+ * - 覆盖范围内不存在品位 < fret 的弦（空弦/静音/更低品位会被食指误压或阻断连贯性）。
+ */
+export const isBarreStillValid = (strings: GuitarStringsModel, barre: BarreEntity): boolean => {
+  // 1. 基础校验：横按至少需要跨越两根弦
+  if (barre.fret <= 0 || barre.fromString >= barre.toString) {
+    return false;
   }
-  return true;
+
+  // 2. 严格边界校验：横按的两端（起始弦和终止弦）必须严格保留在该品位。
+  // 只要两端任意一个音符被移走（移动到其他品位或静音），横按范围即被破坏，判定失效。
+  const startFret = strings[barre.fromString]?.[0];
+  const endFret = strings[barre.toString]?.[0];
+  if (startFret !== barre.fret || endFret !== barre.fret) {
+    return false;
+  }
+
+  let anchorCount = 0;
+  for (let s = barre.fromString; s <= barre.toString; s++) {
+    const f = strings[s]?.[0];
+    if (f === undefined) {
+      return false;
+    }
+
+    if (f === barre.fret) {
+      anchorCount++;
+    } else if (f < barre.fret) {
+      return false;
+    }
+  }
+
+  const isValid = anchorCount >= 2;
+
+  return isValid;
 };
 
 /** 规范化显式横按列表：过滤非法条目（品格/弦序越界、from > to），返回 undefined 表示无有效横按 */
@@ -163,17 +185,10 @@ export function bindNewChordToSlot(chordMap: Record<string, string>, slotKey: st
   setEdgeChords(chordMap, lineId, type, list);
 }
 export function swapOrMoveSlotChords(chordMap: Record<string, string>, sourceKey: string, targetKey: string): void {
-  console.log('[LyricsDrag:Store] 🔀 swapOrMoveSlotChords:', sourceKey, '->', targetKey);
   if (sourceKey === targetKey) return;
   const sourceParsed = parseSlotKey(sourceKey);
   const targetParsed = parseSlotKey(targetKey);
   if (!sourceParsed || !targetParsed) {
-    console.warn('[LyricsDrag:Store] ⚠️ Failed to parse slot keys:', {
-      sourceKey,
-      targetKey,
-      sourceParsed,
-      targetParsed,
-    });
     return;
   }
   if (
@@ -331,9 +346,12 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
     delete legacyChord.fingerprint;
   }
 
-  // 横按规范化：过滤非法条目；未变化时不触发迁移
-  const barres = normalizeBarres(chord.barres);
-  const barresChanged = JSON.stringify(chord.barres ?? undefined) !== JSON.stringify(barres);
+  // 横按规范化：过滤非法条目与物理非法项；未变化时不触发迁移
+  const rawBarres = normalizeBarres(chord.barres);
+  const validBarres = rawBarres?.filter(b => isBarreStillValid(strings, b));
+  const finalBarres = validBarres && validBarres.length > 0 ? validBarres : undefined;
+
+  const barresChanged = JSON.stringify(chord.barres ?? undefined) !== JSON.stringify(finalBarres);
 
   let nameSegments = chord.nameSegments;
   let nameMigrated = false;
@@ -363,7 +381,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
       fretCount,
       rootStringIndex,
       strings,
-      ...(barres !== undefined ? { barres } : {}),
+      ...(finalBarres !== undefined ? { barres: finalBarres } : {}),
     },
     changed: true,
   };
@@ -399,7 +417,7 @@ export const getFingerTextColor = (isRoot: boolean, isDarkMode: boolean): string
   return isRoot && isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
 };
 
-const placeholderSizeCache = new Map<string, { width: string; height: string }>();
+const placeholderSizeCache = createLruCache<{ width: string; height: string }>(32);
 
 export const getPlaceholderSize = (
   fretCount: number,
@@ -422,11 +440,6 @@ export const getPlaceholderSize = (
     width: `${CANVAS_CONFIG.BOARD_WIDTH * fretboardScale}px`,
     height: `${rawHeight * fretboardScale}px`,
   };
-
-  if (placeholderSizeCache.size >= 32) {
-    const oldestKey = placeholderSizeCache.keys().next().value;
-    if (oldestKey !== undefined) placeholderSizeCache.delete(oldestKey);
-  }
 
   placeholderSizeCache.set(cacheKey, size);
   return size;
