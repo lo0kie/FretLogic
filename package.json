@@ -13,6 +13,7 @@
     "format": "prettier --write --cache --cache-location node_modules/.cache/prettier/.prettiercache .",
     "format:check": "prettier --check --cache --cache-location node_modules/.cache/prettier/.prettiercache .",
     "build": "vite build",
+    "build:analyze": "vite build --mode analyze",
     "build:budget": "node ./scripts/check-bundle.mjs",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "test": "vitest run",
