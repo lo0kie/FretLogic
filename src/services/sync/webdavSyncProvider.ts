@@ -1,4 +1,4 @@
-import { base64EncodeUtf8 } from '@/utils/core/common';
+import { base64EncodeUtf8, serializeForStorage } from '@/utils/core/common';
 import { SyncError, type SyncProvider, type WebdavSyncConfig } from './provider';
 import { createSyncProviderBase } from './syncBase';
 
@@ -89,7 +89,7 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload, null, 2),
+          body: serializeForStorage(payload),
         },
         fileUrl
       );

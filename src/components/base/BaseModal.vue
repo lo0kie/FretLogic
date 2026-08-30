@@ -21,8 +21,8 @@
           ref="modalCardRef"
           role="dialog"
           aria-modal="true"
-          :aria-labelledby="title || $slots.title ? titleId : undefined"
-          :aria-label="title || $slots.title ? undefined : '对话框'"
+          :aria-labelledby="title || $slots['title'] ? titleId : undefined"
+          :aria-label="title || $slots['title'] ? undefined : '对话框'"
           tabindex="-1"
           class="modal-card relative z-panel flex flex-col box-border bg-bg-panel border border-glass-border rounded-lg shadow-floating outline-none transition-[width,height] duration-base"
           :style="[sizeStyle, topStyle]"
@@ -97,6 +97,30 @@
   </Teleport>
 </template>
 
+<script lang="ts">
+// 全局弹窗层级栈：必须放在模块作用域（<script setup> 体每次实例化都会重新执行），
+// 否则每个实例各自持有独立 Set，多层弹窗的 inert 协调与 Esc 栈顶判断都会失效
+const activeModalOverlays = new Set<HTMLElement>();
+const isClient = typeof document !== 'undefined';
+
+const updateGlobalInertState = () => {
+  if (!isClient) return;
+  const currentTopOverlay = Array.from(activeModalOverlays).pop();
+
+  document.body.childNodes.forEach(node => {
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as HTMLElement;
+    if (currentTopOverlay && el === currentTopOverlay) {
+      el.removeAttribute('inert');
+    } else if (activeModalOverlays.size > 0) {
+      el.setAttribute('inert', '');
+    } else {
+      el.removeAttribute('inert');
+    }
+  });
+};
+</script>
+
 <script setup lang="ts">
 import { X } from '@lucide/vue';
 import { useEventListener, useScrollLock } from '@vueuse/core';
@@ -118,6 +142,8 @@ const props = withDefaults(
     confirmText?: string;
     confirmType?: 'primary' | 'danger' | 'warning' | 'default';
     closeOnMask?: boolean;
+    /** 是否允许 Esc 键关闭，默认 true；关闭后仅能通过遮罩/按钮关闭 */
+    keyboard?: boolean;
     /** 确认按钮 Loading 态：为 true 时确认按钮显示加载并禁止重复触发，同时屏蔽遮罩/ESC 关闭 */
     confirmLoading?: boolean;
     /** 关闭前拦截：返回 false 或 Promise<false> 可阻止关闭（取消按钮、遮罩、ESC、X 均生效） */
@@ -143,6 +169,7 @@ const props = withDefaults(
     confirmText: '确认',
     confirmType: 'primary',
     closeOnMask: true,
+    keyboard: true,
     confirmLoading: false,
     teleportTo: 'body',
     disabledTeleport: false,
@@ -168,7 +195,6 @@ const modalCardRef = useTemplateRef<HTMLDivElement>('modalCardRef');
 const titleId = `base-modal-title-${useId()}`;
 
 // SSR 安全：服务端无 document，降级为普通 ref，避免运行时崩溃
-const isClient = typeof document !== 'undefined';
 const isBodyLocked = isClient ? useScrollLock(document.body) : ref(false);
 
 const isCentered = computed(() => props.centered && props.top === undefined);
@@ -215,25 +241,25 @@ const sizeStyle = computed<Record<string, string>>(() => {
   const style: Record<string, string> = {};
   const w = props.width;
   if (typeof w === 'number') {
-    style.width = `${w}px`;
-    style.maxWidth = '90vw';
+    style['width'] = `${w}px`;
+    style['maxWidth'] = '90vw';
   } else if (w && WIDTH_MAP[w]) {
     const parts = WIDTH_MAP[w].split('|');
-    if (parts[0]) style.width = parts[0];
-    if (parts[1]) style.maxWidth = parts[1];
+    if (parts[0]) style['width'] = parts[0];
+    if (parts[1]) style['maxWidth'] = parts[1];
   } else if (typeof w === 'string' && w) {
-    style.width = w;
+    style['width'] = w;
   }
   const h = props.height;
   if (typeof h === 'number') {
-    style.height = `${h}px`;
-    style.maxHeight = '90vh';
+    style['height'] = `${h}px`;
+    style['maxHeight'] = '90vh';
   } else if (h && HEIGHT_MAP[h]) {
     const parts = HEIGHT_MAP[h].split('|');
-    if (parts[0]) style.height = parts[0];
-    if (parts[1]) style.maxHeight = parts[1];
+    if (parts[0]) style['height'] = parts[0];
+    if (parts[1]) style['maxHeight'] = parts[1];
   } else if (typeof h === 'string' && h) {
-    style.height = h;
+    style['height'] = h;
   }
   return style;
 });
@@ -241,33 +267,27 @@ const sizeStyle = computed<Record<string, string>>(() => {
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const hasHeader = computed(() =>
-  Boolean(slots.header || slots['header-extra'] || slots.title || props.title || props.showClose)
+  Boolean(slots['header'] || slots['header-extra'] || slots['title'] || props.title || props.showClose)
 );
-
-// 全局弹窗层级栈：解决多层弹窗叠加时的 inert 竞争与恢复错误
-const activeModalOverlays = new Set<HTMLElement>();
-
-const updateGlobalInertState = () => {
-  if (!isClient) return;
-  const currentTopOverlay = Array.from(activeModalOverlays).pop();
-
-  document.body.childNodes.forEach(node => {
-    if (node.nodeType !== Node.ELEMENT_NODE) return;
-    const el = node as HTMLElement;
-    if (currentTopOverlay && el === currentTopOverlay) {
-      el.removeAttribute('inert');
-    } else if (activeModalOverlays.size > 0) {
-      el.setAttribute('inert', '');
-    } else {
-      el.removeAttribute('inert');
-    }
-  });
-};
 
 let stopKeydownListener: (() => void) | null = null;
 const clearListeners = () => {
   stopKeydownListener?.();
   stopKeydownListener = null;
+};
+
+// 仅当自身位于弹窗栈顶时才响应 Esc，避免一次按键同时关闭所有层叠弹窗
+const isTopOverlay = () => {
+  if (!overlayRef.value) return false;
+  // 刚打开还未入栈（setTimeout 入队间隙）时视为栈顶
+  if (!activeModalOverlays.has(overlayRef.value)) return true;
+  return Array.from(activeModalOverlays).pop() === overlayRef.value;
+};
+
+const handleEscape = (e: KeyboardEvent) => {
+  if (e.key !== 'Escape') return;
+  if (!props.keyboard || !isTopOverlay()) return;
+  close();
 };
 
 watch(
@@ -282,9 +302,7 @@ watch(
       isBodyLocked.value = activeModalOverlays.size > 0;
     } else {
       isBodyLocked.value = true;
-      stopKeydownListener = useEventListener(window, 'keydown', (e: KeyboardEvent) => {
-        if (e.key === 'Escape') close();
-      });
+      stopKeydownListener = useEventListener(window, 'keydown', handleEscape);
       // 待 DOM 挂载后加入激活栈
       setTimeout(() => {
         if (overlayRef.value) {

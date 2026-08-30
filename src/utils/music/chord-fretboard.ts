@@ -1,4 +1,14 @@
-import type { BarreEntity, Chord, GuitarStringEntity, GuitarStringsModel } from '@/types';
+import type {
+  BarreEntity,
+  BarreFret,
+  Capo,
+  Chord,
+  ChordId,
+  GuitarStringEntity,
+  GuitarStringsModel,
+  SlotKey,
+  StringIndex,
+} from '@/types';
 import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_SCALE_MAP } from '@/utils/core/constants';
 import { Tuning, isMuted, isOpen, nameToSegments } from '@/utils/music/musicTheory';
 import { charKey, chordSlotKey, collectEdgeChordIds, edgeSlotPrefix } from '@/utils/score/scoreModel';
@@ -35,7 +45,13 @@ export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: n
         const from = atFret[segmentStart]!;
         const to = atFret[i]!;
         if (to > from) {
-          out.push({ fret, fromString: from, toString: to, finger: 1 });
+          // from/to 来自弦索引循环（0~5），值域由构造保证；fret 来自 1..fretCount 循环，恒 >= 1
+          out.push({
+            fret: fret as BarreFret,
+            fromString: from as StringIndex,
+            toString: to as StringIndex,
+            finger: 1,
+          });
         }
         segmentStart = i + 1;
       }
@@ -45,6 +61,16 @@ export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: n
   barreCandidatesCache.set(cacheKey, out);
   return out;
 };
+
+/** 数值收窄：变调夹品位（0~12，截断取整） */
+export const toCapo = (value: number): Capo => Math.min(12, Math.max(0, Math.trunc(value))) as Capo;
+
+/** 数值收窄：琴弦索引（0~5，截断取整） */
+export const toStringIndex = (value: number): StringIndex => Math.min(5, Math.max(0, Math.trunc(value))) as StringIndex;
+
+/** 值域校验：变调夹品位（清洗层用，用于区分"非法值"与"合法 0 品"） */
+export const isCapoValue = (value: unknown): value is Capo =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 12;
 
 /** 判断两根同品弦之间的所有弦是否都能被横按食指覆盖（品位 >= fret 即可，更高品视为垫底，空弦/静音弦会切断） */
 const canBarreCover = (strings: GuitarStringsModel, from: number, to: number, fret: number): boolean => {
@@ -107,7 +133,12 @@ const normalizeBarres = (barres: unknown): BarreEntity[] | undefined => {
       typeof b.fromString === 'number' && Number.isFinite(b.fromString) ? Math.floor(b.fromString) : NaN;
     const toString = typeof b.toString === 'number' && Number.isFinite(b.toString) ? Math.floor(b.toString) : NaN;
     if (fret < 1 || fromString < 0 || toString > 5 || fromString > toString) continue;
-    const item: BarreEntity = { fret, fromString, toString };
+    // 上一行已完成 0~5 值域校验，此处收窄为 StringIndex；fret 已通过 >= 1 校验收窄为 BarreFret
+    const item: BarreEntity = {
+      fret: fret as BarreFret,
+      fromString: fromString as StringIndex,
+      toString: toString as StringIndex,
+    };
     if (b.finger === 1 || b.finger === 2 || b.finger === 3 || b.finger === 4) item.finger = b.finger;
     out.push(item);
   }
@@ -131,36 +162,41 @@ export function parseSlotKey(slotKey: string): ParsedSlotKey | null {
     index: parseInt(match[3] ?? '0', 10),
   };
 }
-export function getEdgeChords(chordMap: Record<string, string>, lineId: string, type: 'start' | 'end'): string[] {
-  return collectEdgeChordIds(chordMap, lineId, type);
+export function getEdgeChords(
+  chordMap: ReadonlyMap<SlotKey, ChordId>,
+  lineId: string,
+  type: 'start' | 'end'
+): ChordId[] {
+  // key/value 在 Song.chordMap 中已品牌化，此处仅按前缀过滤排序
+  return collectEdgeChordIds(chordMap, lineId, type) as ChordId[];
 }
 export function setEdgeChords(
-  chordMap: Record<string, string>,
+  chordMap: Map<SlotKey, ChordId>,
   lineId: string,
   type: 'start' | 'end',
-  chordIds: string[]
+  chordIds: ChordId[]
 ): void {
   const prefix = edgeSlotPrefix(lineId, type);
-  Object.keys(chordMap).forEach(key => {
+  for (const key of [...chordMap.keys()]) {
     if (key.startsWith(prefix)) {
-      delete chordMap[key];
+      chordMap.delete(key);
     }
-  });
+  }
   chordIds.forEach((chordId, idx) => {
-    chordMap[chordSlotKey(lineId, type, idx)] = chordId;
+    chordMap.set(chordSlotKey(lineId, type, idx), chordId);
   });
 }
-export function removeChordFromSlot(chordMap: Record<string, string>, slotKey: string): string | null {
+export function removeChordFromSlot(chordMap: Map<SlotKey, ChordId>, slotKey: SlotKey): ChordId | null {
   const parsed = parseSlotKey(slotKey);
   if (!parsed) {
-    const removed = chordMap[slotKey] || null;
-    delete chordMap[slotKey];
+    const removed = chordMap.get(slotKey) ?? null;
+    chordMap.delete(slotKey);
     return removed;
   }
   const { lineId, type, index } = parsed;
   if (type === 'char') {
-    const removed = chordMap[slotKey] || null;
-    delete chordMap[slotKey];
+    const removed = chordMap.get(slotKey) ?? null;
+    chordMap.delete(slotKey);
     return removed;
   } else {
     const list = getEdgeChords(chordMap, lineId, type);
@@ -170,10 +206,10 @@ export function removeChordFromSlot(chordMap: Record<string, string>, slotKey: s
     return removed ?? null;
   }
 }
-export function bindNewChordToSlot(chordMap: Record<string, string>, slotKey: string, chordId: string): void {
+export function bindNewChordToSlot(chordMap: Map<SlotKey, ChordId>, slotKey: SlotKey, chordId: ChordId): void {
   const parsed = parseSlotKey(slotKey);
   if (!parsed || parsed.type === 'char') {
-    chordMap[slotKey] = chordId;
+    chordMap.set(slotKey, chordId);
     return;
   }
   const { lineId, type, index } = parsed;
@@ -184,7 +220,7 @@ export function bindNewChordToSlot(chordMap: Record<string, string>, slotKey: st
   } else list[index] = chordId;
   setEdgeChords(chordMap, lineId, type, list);
 }
-export function swapOrMoveSlotChords(chordMap: Record<string, string>, sourceKey: string, targetKey: string): void {
+export function swapOrMoveSlotChords(chordMap: Map<SlotKey, ChordId>, sourceKey: SlotKey, targetKey: SlotKey): void {
   if (sourceKey === targetKey) return;
   const sourceParsed = parseSlotKey(sourceKey);
   const targetParsed = parseSlotKey(targetKey);
@@ -216,8 +252,8 @@ export function swapOrMoveSlotChords(chordMap: Record<string, string>, sourceKey
     }
     return;
   }
-  const peekChordId = (parsed: ParsedSlotKey): string | null => {
-    if (parsed.type === 'char') return chordMap[charKey(parsed.lineId, parsed.index)] || null;
+  const peekChordId = (parsed: ParsedSlotKey): ChordId | null => {
+    if (parsed.type === 'char') return chordMap.get(charKey(parsed.lineId, parsed.index)) ?? null;
     const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
     return list[parsed.index] || null;
   };
@@ -227,9 +263,9 @@ export function swapOrMoveSlotChords(chordMap: Record<string, string>, sourceKey
 
   // 2. 两处都有和弦：纯 SWAP（原地互换位置内容，绝不缩减或打乱边和弦列表顺序）
   if (targetChordId) {
-    const setSlotChordDirect = (parsed: ParsedSlotKey, chordId: string) => {
+    const setSlotChordDirect = (parsed: ParsedSlotKey, chordId: ChordId) => {
       if (parsed.type === 'char') {
-        chordMap[charKey(parsed.lineId, parsed.index)] = chordId;
+        chordMap.set(charKey(parsed.lineId, parsed.index), chordId);
       } else {
         const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
         if (parsed.index < list.length) {
@@ -250,9 +286,9 @@ export function swapOrMoveSlotChords(chordMap: Record<string, string>, sourceKey
   removeChordFromSlot(chordMap, sourceKey);
   insertChordAtParsedLocation(chordMap, targetParsed, sourceChordId);
 }
-function insertChordAtParsedLocation(chordMap: Record<string, string>, parsed: ParsedSlotKey, chordId: string): void {
+function insertChordAtParsedLocation(chordMap: Map<SlotKey, ChordId>, parsed: ParsedSlotKey, chordId: ChordId): void {
   if (parsed.type === 'char') {
-    chordMap[charKey(parsed.lineId, parsed.index)] = chordId;
+    chordMap.set(charKey(parsed.lineId, parsed.index), chordId);
   } else {
     const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
     let insertIdx: number;
@@ -267,38 +303,57 @@ function insertChordAtParsedLocation(chordMap: Record<string, string>, parsed: P
   }
 }
 export const garbageCollectChordMap = (
-  chordMap: Record<string, string>,
+  chordMap: Map<SlotKey, ChordId>,
   finalLineIds: string[]
-): { map: Record<string, string>; changed: boolean } => {
+): { map: Map<SlotKey, ChordId>; changed: boolean } => {
   const finalIdsSet = new Set(finalLineIds);
-  const updatedMap = { ...chordMap };
+  const updatedMap = new Map(chordMap);
   let changed = false;
-  Object.keys(updatedMap).forEach(key => {
+  for (const key of updatedMap.keys()) {
     const parsed = parseSlotKey(key);
     if (parsed && !finalIdsSet.has(parsed.lineId)) {
-      delete updatedMap[key];
+      updatedMap.delete(key);
       changed = true;
     }
-  });
+  }
   return { map: updatedMap, changed };
 };
 
 /** 清理 chordMap 中指向不存在和弦 id 的孤儿引用（导入校验 / 删除和弦后使用） */
 export const pruneOrphanChordRefs = (
-  chordMap: Record<string, string>,
+  chordMap: Map<SlotKey, ChordId>,
   validChordIds: Set<string>,
   options?: { preserveUnknown?: boolean }
-): { map: Record<string, string>; changed: boolean } => {
-  const updatedMap = { ...chordMap };
+): { map: Map<SlotKey, ChordId>; changed: boolean } => {
+  const updatedMap = new Map(chordMap);
   let changed = false;
-  Object.keys(updatedMap).forEach(key => {
-    const id = updatedMap[key];
+  for (const [key, id] of updatedMap) {
     if (id !== undefined && !validChordIds.has(id) && !(options?.preserveUnknown && validChordIds.size === 0)) {
-      delete updatedMap[key];
+      updatedMap.delete(key);
       changed = true;
     }
-  });
+  }
   return { map: updatedMap, changed };
+};
+
+// ===== 序列化边界：内存统一用 Map，JSON/持久化用普通对象 =====
+
+/** Map -> 普通对象（localStorage / 备份 / 同步序列化用） */
+export const chordMapToPlain = (chordMap: ReadonlyMap<SlotKey, ChordId>): Record<string, string> =>
+  Object.fromEntries(chordMap);
+
+/** 普通对象 -> Map（读取 localStorage / 导入备份 / 同步拉取用），容忍非法条目；
+ *  key/value 已通过 string 类型过滤，品牌收窄信任该过滤 */
+export const plainToChordMap = (raw: unknown): Map<SlotKey, ChordId> => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return new Map();
+  return new Map(
+    Object.entries(raw as Record<string, unknown>)
+      .filter(
+        (entry): entry is [string, string] =>
+          typeof entry[0] === 'string' && entry[0].length > 0 && typeof entry[1] === 'string' && entry[1].length > 0
+      )
+      .map(([k, v]) => [k as SlotKey, v as ChordId])
+  );
 };
 
 export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean } => {
@@ -319,12 +374,13 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   }) as GuitarStringsModel;
 
   // 迁移：旧数据每根弦各自维护 isRoot，统一为单点 rootStringIndex
-  let rootStringIndex: number | null = chord.rootStringIndex ?? null;
+  let rootStringIndex = (chord.rootStringIndex ?? null) as StringIndex | null;
   const legacyRoots = (chord.strings as unknown[])
     .map((s, idx) => ((s as { isRoot?: boolean }).isRoot ? idx : -1))
     .filter(idx => idx >= 0);
   if (rootStringIndex === null && legacyRoots.length > 0) {
-    rootStringIndex = legacyRoots[0] ?? null;
+    // legacyRoots 是弦索引数组（0~5），取首个后收窄
+    rootStringIndex = (legacyRoots[0] ?? null) as StringIndex | null;
   }
   // 校验：rootStringIndex 必须落在有效且已按音的弦上，否则清空
   if (

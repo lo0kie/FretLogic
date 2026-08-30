@@ -1,4 +1,4 @@
-import type { GuitarStringsModel } from '@/types';
+import type { GuitarStringsModel, LineId } from '@/types';
 import { isProxy, isRef, toRaw, unref } from 'vue';
 
 // ===== id: 唯一 id 生成 =====
@@ -44,10 +44,18 @@ export function cloneDeep<T>(value: T): T {
     return structuredClone(raw) as T;
   } catch {
     // 5. 兜底：极少数旧浏览器或遇到不可克隆类型（如 Symbol）
-    // 注意：JSON 方法会丢失 Date/RegExp/循环引用，但你的数据不包含这些，完全够用
-    return JSON.parse(JSON.stringify(raw)) as T;
+    // 注意：JSON 方法会丢失 Date/RegExp/循环引用，但你的数据不包含这些，完全够用；
+    // Map（chordMap）必须转普通对象，否则会静默变成 {}
+    return JSON.parse(JSON.stringify(raw, (_key, val) => (val instanceof Map ? Object.fromEntries(val) : val))) as T;
   }
 }
+
+/**
+ * 持久化/备份/同步专用 JSON 序列化：把嵌套的 Map（如 Song.chordMap）转为普通对象。
+ * 直接 JSON.stringify(Map) 会得到 {}，造成静默数据丢失。
+ */
+export const serializeForStorage = (value: unknown): string =>
+  JSON.stringify(value, (_key, val) => (val instanceof Map ? Object.fromEntries(val) : val));
 
 export function cloneGuitarStrings(strings: GuitarStringsModel): GuitarStringsModel {
   const raw = toRaw(strings);
@@ -192,13 +200,14 @@ const assignNewIds = (newIds: (string | null)[]): string[] => {
   return newIds.map(id => id || createLineId());
 };
 
-export const matchLineIds = (oldLines: string[], newLines: string[], oldLineIds: string[]): string[] => {
+/** 行 id 匹配（旧歌词行 → 新歌词行），生成的 id 是 LineId 的唯一合法来源 */
+export const matchLineIds = (oldLines: string[], newLines: string[], oldLineIds: string[]): LineId[] => {
   const { newIds, usedOldIndices } = matchExactLines(oldLines, newLines, oldLineIds);
   const unmatchedCount = newIds.reduce((count, id) => (id === null ? count + 1 : count), 0);
   if (unmatchedCount <= MAX_SIMILAR_MATCH_LINES) {
     matchSimilarLines(oldLines, newLines, oldLineIds, newIds, usedOldIndices);
   }
-  return assignNewIds(newIds);
+  return assignNewIds(newIds) as LineId[];
 };
 
 // ===== sanitizeLyricsText: 歌词文本清洗 =====

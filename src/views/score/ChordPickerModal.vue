@@ -47,7 +47,7 @@
               :disabled="sortOverride !== GroupSortRule.KEY_DEGREE"
               :options="KEY_OPTIONS"
               default-value="C"
-              :format-option="(val: any) => `${val} 调`"
+              :format-option="(val: string | number) => `${val} 调`"
               class="picker-key-selector w-20"
               width="md"
               @update:model-value="handleSortKeyChange"
@@ -126,14 +126,14 @@
                 @click="!isCurrentBound(chord) && handleSelectChord(chord)"
                 @keydown.enter.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
                 @keydown.space.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
-                @mouseenter="editHoverMap[chord.id] = true"
-                @mouseleave="editHoverMap[chord.id] = false"
+                @mouseenter="editHoverMap.set(chord.id, true)"
+                @mouseleave="editHoverMap.set(chord.id, false)"
               >
                 <ActionButton
                   variant="ghost"
                   size="sm"
                   icon-only
-                  :tabindex="editHoverMap[chord.id] ? 0 : -1"
+                  :tabindex="editHoverMap.get(chord.id) ? 0 : -1"
                   aria-label="去修改该和弦"
                   title="去修改该和弦"
                   class="picker-edit-btn absolute top-1 right-1 z-20 pointer-events-auto opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-fast !p-1.5"
@@ -151,7 +151,7 @@
                   {{ getSourceGroupName(chord) }}
                 </span>
                 <Fretboard
-                  v-if="visibleMap[chord.id]"
+                  v-if="visibleMap.get(chord.id)"
                   :ref="el => setFretboardMeasureRef(el, chord.fretCount)"
                   :chord
                   :interactive="false"
@@ -200,7 +200,7 @@
 </template>
 
 <script lang="ts">
-const fretboardSizeCache = reactive<Record<string, { width: string; height: string }>>({});
+const fretboardSizeCache = reactive(new Map<string, { width: string; height: string }>());
 </script>
 
 <script setup lang="ts">
@@ -221,6 +221,7 @@ import type { Chord } from '@/types';
 import { GroupSortRule } from '@/types';
 import { observeVisibility } from '@/utils/core/common';
 import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
+import { getGroupSortKey, toGroupId } from '@/utils/music/entityFactories';
 import {
   KEY_OPTIONS,
   SORT_RULE_CONFIG,
@@ -261,9 +262,8 @@ const scoreEditor = useScoreEditorStore();
 const { chordsLookupMap } = useScoreLinesData();
 
 const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
-const visibleMap = reactive<Record<string, boolean>>({});
-/** 卡片 hover 态：编辑按钮仅在 hover 时显示并进入 Tab 序列，隐藏时不抢占焦点 */
-const editHoverMap = reactive<Record<string, boolean>>({});
+const visibleMap = reactive(new Map<string, boolean>());
+const editHoverMap = reactive(new Map<string, boolean>());
 const cardObserverStops = new Map<string, () => void>();
 
 const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordId: string) => {
@@ -274,12 +274,12 @@ const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordI
   }
   const domEl = (el as ComponentPublicInstance)?.$el ?? el;
   if (!(domEl instanceof HTMLElement)) return;
-  if (visibleMap[chordId] || cardObserverStops.has(chordId)) return;
+  if (visibleMap.get(chordId) || cardObserverStops.has(chordId)) return;
   const stop = observeVisibility(
     domEl,
     visible => {
       if (visible) {
-        visibleMap[chordId] = true;
+        visibleMap.set(chordId, true);
         stop();
         cardObserverStops.delete(chordId);
       }
@@ -296,23 +296,24 @@ const clearAllCardObservers = () => {
 
 const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fretCount: number) => {
   const cacheKey = getCacheKey(fretCount);
-  if (!el || fretboardSizeCache[cacheKey]) return;
+  if (!el || fretboardSizeCache.has(cacheKey)) return;
   const domEl = (el as ComponentPublicInstance)?.$el ?? el;
   if (!(domEl instanceof HTMLElement)) return;
   const rect = domEl.getBoundingClientRect();
   if (rect.width > 0 && rect.height > 0) {
-    fretboardSizeCache[cacheKey] = {
+    fretboardSizeCache.set(cacheKey, {
       width: `${rect.width}px`,
       height: `${rect.height}px`,
-    };
+    });
   }
 };
 
 const getCalculatedOrCachedSize = (fretCount: number) => {
   const cacheKey = getCacheKey(fretCount);
-  if (fretboardSizeCache[cacheKey]) return fretboardSizeCache[cacheKey];
+  const cached = fretboardSizeCache.get(cacheKey);
+  if (cached) return cached;
   const coreSize = getPlaceholderSize(fretCount, pickerScale, true, true);
-  fretboardSizeCache[cacheKey] = coreSize;
+  fretboardSizeCache.set(cacheKey, coreSize);
   return coreSize;
 };
 
@@ -340,7 +341,7 @@ const groupTabOptions = computed(() => {
 
 const boundChord = computed(() => {
   if (scoreEditor.selectedSlotKey == null) return null;
-  const id = scoreEditor.activeSong?.chordMap?.[scoreEditor.selectedSlotKey] ?? null;
+  const id = scoreEditor.activeSong?.chordMap.get(scoreEditor.selectedSlotKey) ?? null;
   return id ? (chordsLookupMap.value.get(id) ?? null) : null;
 });
 
@@ -354,7 +355,7 @@ const getDefaultSortForGroup = (groupId: string): { sortRule: GroupSortRule; sor
   const targetGroup = chordStore.groups.find(g => g.id === groupId);
   return {
     sortRule: targetGroup?.sortRule || GroupSortRule.ROOT_PITCH,
-    sortKey: targetGroup?.sortKey || 'C',
+    sortKey: targetGroup ? getGroupSortKey(targetGroup) || 'C' : 'C',
   };
 };
 
@@ -366,12 +367,13 @@ const saveUserPickerState = () => {
   };
 };
 
-// 切换分组/排序/调后回到顶部并刷新分区高亮
 const resetScrollTop = () => {
+  const scrollEl = scrollWrapperRef.value;
+  if (scrollEl) scrollEl.scrollTop = 0;
+  if (chordSections.value.length > 0) {
+    activeSectionId.value = chordSections.value[0]!.id;
+  }
   nextTick(() => {
-    const scrollEl = scrollWrapperRef.value;
-    if (scrollEl) scrollEl.scrollTop = 0;
-    rebuildSectionEls();
     updateActiveSection();
   });
 };
@@ -382,6 +384,12 @@ const handleGroupTabChange = (newGid: string) => {
   sortOverride.value = sortRule;
   tempSortKey.value = sortKey;
   saveUserPickerState();
+
+  nextTick(() => {
+    if (chordSections.value.length > 0) {
+      activeSectionId.value = chordSections.value[0]?.id ?? null;
+    }
+  });
   resetScrollTop();
 };
 
@@ -416,7 +424,8 @@ watch(
     }
     pickerSearchQuery.value = '';
     const currentSlotKey = scoreEditor.selectedSlotKey;
-    const boundChordId = currentSlotKey !== null ? scoreEditor.activeSong?.chordMap[currentSlotKey] : null;
+    const boundChordId =
+      currentSlotKey !== null ? (scoreEditor.activeSong?.chordMap.get(currentSlotKey) ?? null) : null;
     const boundChord = boundChordId ? chordsLookupMap.value.get(boundChordId) : null;
     if (boundChord && boundChord.groupId) {
       selectedGroupId.value = boundChord.groupId;
@@ -445,16 +454,27 @@ watch(
     scrollWrapperRef.value?.addEventListener('scroll', handleScroll, { passive: true });
     rebuildSectionEls();
     updateActiveSection();
+    if (!boundChordId && chordSections.value.length > 0) {
+      activeSectionId.value = chordSections.value[0]?.id ?? null;
+    }
+    setTimeout(() => {
+      rebuildSectionEls();
+      updateActiveSection();
+    }, 150);
   }
 );
 
-/** 分组 id → 名称映射（供"全部"tab 显示来源分组） */
 const groupNameMap = computed(() => new Map(chordStore.groups.map(g => [g.id, g.name])));
 const getSourceGroupName = (chord: Chord) => groupNameMap.value.get(chord.groupId) ?? '';
 
 const filteredChords = computed(() => {
   const activeGroup = chordStore.groups.find(g => g.id === selectedGroupId.value);
-  const effectiveKey = sortOverride.value === GroupSortRule.KEY_DEGREE ? tempSortKey.value : activeGroup?.sortKey;
+  const effectiveKey =
+    sortOverride.value === GroupSortRule.KEY_DEGREE
+      ? tempSortKey.value
+      : activeGroup
+        ? getGroupSortKey(activeGroup)
+        : undefined;
   return chordStore.getFilteredChords(selectedGroupId.value, {
     searchQuery: pickerSearchQuery.value,
     sortRule: sortOverride.value,
@@ -462,7 +482,6 @@ const filteredChords = computed(() => {
   });
 });
 
-// 预计算每个和弦的展示名与“是否已绑定”，模板只查表，避免重复 computeChordFingerprint / getChordName
 const chordMeta = computed(() => {
   const map = new Map<string, { name: string; isBound: boolean }>();
   const bChord = boundChord.value;
@@ -569,7 +588,7 @@ const goToWorkbenchToCreate = () => {
   editorStore.resetEditor();
   if (selectedGroupId.value && selectedGroupId.value !== 'ALL') {
     chordStore.selectAndExpandGroup(selectedGroupId.value);
-    editorStore.draftChord.groupId = selectedGroupId.value;
+    editorStore.draftChord.groupId = toGroupId(selectedGroupId.value);
   } else {
     chordStore.collapseAllGroups();
     chordStore.setSelectedGroupId(null);
@@ -577,7 +596,6 @@ const goToWorkbenchToCreate = () => {
   router.push('/');
 };
 
-/** 跳转工作台并载入指定和弦进行修改 */
 const goToWorkbenchToEdit = (chord: Chord) => {
   visibleModel.value = false;
   editorStore.setEditor(chord);
@@ -585,51 +603,57 @@ const goToWorkbenchToEdit = (chord: Chord) => {
   router.push('/');
 };
 
-// 点击 footer 分区导航，平滑滚动到对应分区块
 const scrollToSection = (sectionId: string) => {
   const scrollEl = scrollWrapperRef.value;
   if (!scrollEl) return;
   const target = scrollEl.querySelector<HTMLElement>(`[data-section-id="${sectionId}"]`);
-  target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!target) return;
+
+  activeSectionId.value = sectionId;
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
-// 滚动联动 footer 分区导航：高亮当前可见分区对应的 button
 const activeSectionId = ref<string | null>(null);
 
-// 缓存分区 DOM 元素，避免滚动时反复 querySelectorAll（原强制重排的主要来源）
-let sectionElsCache: HTMLElement[] = [];
-const rebuildSectionEls = () => {
-  const scrollEl = scrollWrapperRef.value;
-  sectionElsCache = scrollEl ? Array.from(scrollEl.querySelectorAll<HTMLElement>('[data-section-id]')) : [];
-};
-
 let scrollRafId = 0;
+const rebuildSectionEls = () => {};
+
 const updateActiveSection = () => {
   const scrollEl = scrollWrapperRef.value;
-  if (!scrollEl) return;
-  const sections = sectionElsCache;
-  if (sections.length === 0) {
+  if (!scrollEl || chordSections.value.length === 0) {
     activeSectionId.value = null;
     return;
   }
-  // 触底时直接高亮最后一个分区
-  const lastSection = sections[sections.length - 1];
-  if (lastSection && scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 1) {
-    activeSectionId.value = lastSection.dataset.sectionId ?? null;
+
+  if (scrollEl.scrollTop <= 10) {
+    activeSectionId.value = chordSections.value[0]!.id;
     return;
   }
-  const containerTop = scrollEl.getBoundingClientRect().top;
-  let current: string | null = null;
-  for (const sec of sections) {
-    const top = sec.getBoundingClientRect().top - containerTop;
-    if (top <= 1) current = sec.dataset.sectionId ?? current;
-    else break;
+
+  if (scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 6) {
+    activeSectionId.value = chordSections.value[chordSections.value.length - 1]!.id;
+    return;
   }
-  const firstSection = sections[0];
-  activeSectionId.value = current ?? firstSection?.dataset.sectionId ?? null;
+
+  const sections = Array.from(scrollEl.querySelectorAll<HTMLElement>('[data-section-id]'));
+  if (sections.length === 0) {
+    activeSectionId.value = chordSections.value[0]!.id;
+    return;
+  }
+
+  const containerRect = scrollEl.getBoundingClientRect();
+  let currentId: string | null = null;
+
+  for (const sec of sections) {
+    const rect = sec.getBoundingClientRect();
+    if (rect.top - containerRect.top <= 80) {
+      currentId = sec.getAttribute('data-section-id');
+    }
+  }
+
+  activeSectionId.value = currentId ?? chordSections.value[0]!.id;
 };
 
-// rAF 节流：滚动事件合并到每帧至多一次，避免一滑触发几十次强制重排
 const handleScroll = () => {
   if (scrollRafId) return;
   scrollRafId = requestAnimationFrame(() => {
@@ -638,13 +662,22 @@ const handleScroll = () => {
   });
 };
 
-// 分区内容（搜索/分组/排序）变化导致重排后，重新计算高亮
-watch(chordSections, () => {
-  nextTick(() => {
-    rebuildSectionEls();
-    updateActiveSection();
-  });
-});
+watch(
+  chordSections,
+  newSections => {
+    if (newSections.length > 0) {
+      if (!newSections.some(s => s.id === activeSectionId.value)) {
+        activeSectionId.value = newSections[0]!.id;
+      }
+    } else {
+      activeSectionId.value = null;
+    }
+    nextTick(() => {
+      updateActiveSection();
+    });
+  },
+  { immediate: true }
+);
 
 onDeactivated(() => {
   clearAllCardObservers();

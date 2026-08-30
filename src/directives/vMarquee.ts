@@ -79,15 +79,15 @@ function resolveOptions(binding: MarqueeBinding, modifiers?: Record<string, bool
   const base: MarqueeOptions = binding && typeof binding === 'object' ? { ...binding } : {};
 
   if (modifiers) {
-    if (modifiers.hover) base.mode = 'hover';
-    if (modifiers.always) base.mode = 'always';
-    if (modifiers.none) base.mode = 'none';
-    if (modifiers.left) base.direction = 'left';
-    if (modifiers.right) base.direction = 'right';
+    if (modifiers['hover']) base.mode = 'hover';
+    if (modifiers['always']) base.mode = 'always';
+    if (modifiers['none']) base.mode = 'none';
+    if (modifiers['left']) base.direction = 'left';
+    if (modifiers['right']) base.direction = 'right';
     if (modifiers['no-pause']) base.pauseOnEdges = false;
-    if (modifiers.continuous) base.loopMode = 'continuous';
-    if (modifiers.pingpong) base.loopMode = 'pingpong';
-    if (modifiers.fade) base.fade = true;
+    if (modifiers['continuous']) base.loopMode = 'continuous';
+    if (modifiers['pingpong']) base.loopMode = 'pingpong';
+    if (modifiers['fade']) base.fade = true;
   }
 
   return { ...DEFAULTS, ...base };

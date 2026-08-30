@@ -54,6 +54,7 @@ import type { ContextMenuItem } from '@/components/context-menu/ContextMenuItems
 import ChordNameDisplay from '@/components/fretboard/ChordNameDisplay.vue';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useSongStore } from '@/stores/songStore';
 import type { Chord, GroupedChordCard } from '@/types';
 import { getChordName } from '@/utils/music/musicTheory';
 import { Link2, Move, Trash2 } from '@lucide/vue';
@@ -74,6 +75,7 @@ const emit = defineEmits<{
 
 const editorStore = useChordEditorStore();
 const settingsStore = useSettingsStore();
+const songStore = useSongStore();
 
 const WHEEL_SWITCH_THRESHOLD = 60;
 
@@ -132,30 +134,35 @@ const handleWheelScroll = (e: WheelEvent) => {
   switchVariant(nextIdx);
 };
 
-const menuItems = computed<ContextMenuItem[]>(() => [
-  {
-    label: '移动分组',
-    icon: Move,
-    action: () => emit('move', activeChord.value),
-  },
-  {
-    label: '引用反查',
-    icon: Link2,
-    action: () => emit('open-references', props.cardData),
-  },
-  {
-    label: '删除和弦',
-    icon: Trash2,
-    danger: true,
-    action: () => {
-      if (props.cardData.hasVariants) {
-        emit('delete-variants', props.cardData);
-      } else {
-        emit('delete', props.cardData.mainChord);
-      }
+const menuItems = computed<ContextMenuItem[]>(() => {
+  const variantIds = props.cardData.variants.map(v => v.id);
+  const hasReferences = songStore.getChordReferences(variantIds).length > 0;
+  return [
+    {
+      label: '移动分组',
+      icon: Move,
+      action: () => emit('move', activeChord.value),
     },
-  },
-]);
+    {
+      label: '引用反查',
+      icon: Link2,
+      disabled: !hasReferences,
+      action: () => emit('open-references', props.cardData),
+    },
+    {
+      label: '删除和弦',
+      icon: Trash2,
+      danger: true,
+      action: () => {
+        if (props.cardData.hasVariants) {
+          emit('delete-variants', props.cardData);
+        } else {
+          emit('delete', props.cardData.mainChord);
+        }
+      },
+    },
+  ];
+});
 
 const ariaLabel = computed(() => {
   const name = getChordName(activeChord.value);

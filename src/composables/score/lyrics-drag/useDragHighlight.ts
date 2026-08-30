@@ -35,9 +35,6 @@ export function useDragHighlight() {
   const updateDropTarget = (clientX: number, clientY: number): string | null => {
     const el = document.elementFromPoint(clientX, clientY);
     if (!el) {
-      if (dragOverSlotKey.value !== null) {
-        console.log('[LyricsDrag:Highlight] Target: null (no element)');
-      }
       dragOverSlotKey.value = null;
       applyDropHighlight(null);
       return null;
@@ -45,10 +42,7 @@ export function useDragHighlight() {
 
     const slotEl = el.closest('[data-slot-key]');
     if (slotEl instanceof HTMLElement) {
-      const key = slotEl.dataset.slotKey ?? null;
-      if (dragOverSlotKey.value !== key) {
-        console.log('[LyricsDrag:Highlight] Target directly hit slot:', key);
-      }
+      const key = slotEl.dataset['slotKey'] ?? null;
       dragOverSlotKey.value = key;
       applyDropHighlight(key);
       return key;
@@ -63,10 +57,7 @@ export function useDragHighlight() {
       if (allSlots.length > 0) {
         const targetSlot = isRightSide ? allSlots[allSlots.length - 1] : allSlots[0];
         if (targetSlot) {
-          const key = targetSlot.dataset.slotKey ?? null;
-          if (dragOverSlotKey.value !== key) {
-            console.log('[LyricsDrag:Highlight] Target snap to line edge:', isRightSide ? 'end' : 'start', '->', key);
-          }
+          const key = targetSlot.dataset['slotKey'] ?? null;
           dragOverSlotKey.value = key;
           applyDropHighlight(key);
           return key;
@@ -74,9 +65,6 @@ export function useDragHighlight() {
       }
     }
 
-    if (dragOverSlotKey.value !== null) {
-      console.log('[LyricsDrag:Highlight] Target: null (outside slots)');
-    }
     dragOverSlotKey.value = null;
     applyDropHighlight(null);
     return null;

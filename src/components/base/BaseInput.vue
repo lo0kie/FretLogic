@@ -1,7 +1,7 @@
 <template>
   <div class="group relative flex items-center box-border rounded-full" :style="{ width: resolvedWidth }">
     <div
-      v-if="$slots.prefix"
+      v-if="$slots['prefix']"
       class="absolute inset-y-0 flex items-center justify-center text-text-disabled pointer-events-none"
       :class="currentConfig.prefixClass"
     >
@@ -24,11 +24,12 @@
       :placeholder="placeholder"
       :value="modelValue"
       :aria-invalid="invalid || undefined"
-      class="w-full font-medium font-[inherit] box-border bg-bg-body border border-border-light rounded-full text-text-title caret-primary outline-none cursor-text min-w-0 overflow-hidden text-ellipsis transition-all duration-fast placeholder:text-text-disabled placeholder:font-normal placeholder:truncate hover:enabled:border-border-base focus:enabled:border-primary focus:enabled:bg-bg-body focus-visible:ring-2 focus-visible:ring-primary/70 disabled:opacity-45 disabled:cursor-not-allowed"
+      class="w-full font-medium font-[inherit] box-border bg-bg-body border border-solid rounded-full text-text-title caret-primary outline-none cursor-text min-w-0 overflow-hidden text-ellipsis transition-all duration-fast placeholder:text-text-disabled placeholder:font-normal placeholder:truncate focus:enabled:bg-bg-body focus-visible:ring-2 disabled:opacity-45 disabled:cursor-not-allowed"
       :class="[
         currentConfig.inputClass,
         fontClass,
-        $slots.prefix ? currentConfig.prefixPadding : currentConfig.basePaddingLeft,
+        stateBorderClasses,
+        $slots['prefix'] ? currentConfig.prefixPadding : currentConfig.basePaddingLeft,
       ]"
       :style="{ paddingRight: computedPaddingRight }"
       data-bwignore="true"
@@ -80,7 +81,7 @@
         <X :size="14" stroke-width="3" />
       </button>
 
-      <div v-if="isPasswordMode || $slots.suffix" class="flex items-center justify-center pointer-events-none">
+      <div v-if="isPasswordMode || $slots['suffix']" class="flex items-center justify-center pointer-events-none">
         <slot name="suffix">
           <button
             v-if="isPasswordMode"
@@ -187,9 +188,16 @@ const resolvedType = computed(() => {
 
 const isAtLimit = computed(() => Boolean(maxlength) && (modelValue.value?.length ?? 0) >= (maxlength as number));
 
+// 边框/焦点环配色按校验状态二选一，避免两组同权重 Tailwind 类共存时由 CSS 顺序决定胜者
+const stateBorderClasses = computed(() =>
+  invalid
+    ? 'border-danger hover:enabled:border-danger focus:enabled:border-danger focus-visible:ring-danger/70'
+    : 'border-border-light hover:enabled:border-border-base focus:enabled:border-primary focus-visible:ring-primary/70'
+);
+
 const isClearAvailable = computed(() => clearable && !disabled && !readonly);
 const hasCount = computed(() => showCount && maxlength !== undefined);
-const hasSuffix = computed(() => Boolean(slots.suffix) || isPasswordMode.value);
+const hasSuffix = computed(() => Boolean(slots['suffix']) || isPasswordMode.value);
 
 // 右内边距预留：按配置能力稳定预占空间，避免输入首字符时产生 padding 跳变与文字抖动
 const PR_BASE: Record<string, number> = { sm: 8, md: 10, lg: 12 };

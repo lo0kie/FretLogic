@@ -6,7 +6,7 @@
         v-show="i < fretCount"
         :key="'fret-num-' + i"
         class="absolute -translate-x-full -translate-y-1/2 font-extrabold leading-none select-none text-[var(--fb-label)] font-[Helvetica_Neue,Arial,sans-serif]"
-        :class="FRET_SIZE_MAP[fretNumberSize] || FRET_SIZE_MAP.md"
+        :class="FRET_SIZE_MAP[fretNumberSize] || FRET_SIZE_MAP['md']"
         :style="getFretNumberStyle(i)"
       >
         {{ capo > 0 ? capo + i : i }}
@@ -65,7 +65,7 @@
 
       <!-- 候选横按梁（Barre Pick）：仅极简模式 + 拾取模式下渲染，弱化显示且可点击标记 -->
       <g v-if="!showPitchNames && barrePickMode && renderBarreCandidates.length">
-        <!-- 外扩虚线轮廓 -->
+        <!-- 外扩虚线轮廓：hover 或键盘聚焦时强调显示（加深不透明度并加粗描边） -->
         <rect
           v-for="c in renderBarreCandidates"
           :key="`barre-cand-dash-${c.fret}-${c.fromString}-${c.toString}`"
@@ -76,9 +76,9 @@
           :rx="barreDashGeometry(c).rx"
           fill="none"
           :stroke="barreCandidateFill"
-          :stroke-width="2"
+          :stroke-width="isBarreHighlighted(c) ? 6 : 4"
           :stroke-dasharray="'8 6'"
-          :stroke-opacity="activeBarreHit === `${c.fret}-${c.fromString}-${c.toString}` ? 1 : 0.6"
+          :stroke-opacity="isBarreHighlighted(c) ? 1 : 0.6"
           class="transition-[stroke-opacity] duration-fast"
         />
         <!-- 淡色填充主体 -->
@@ -91,11 +91,11 @@
           :height="barreThickness"
           :rx="barreThickness / 2"
           :fill="barreCandidateFill"
-          :fill-opacity="activeBarreHit === `${c.fret}-${c.fromString}-${c.toString}` ? 0.5 : 0.2"
+          :fill-opacity="isBarreHighlighted(c) ? 0.5 : 0.2"
           :title="barreCandidateTitle(c)"
           class="pointer-events-none cursor-pointer transition-[fill-opacity] duration-fast"
         />
-        <!-- 命中放大区：扩大点击/悬停热区，避免细梁难点 -->
+        <!-- 命中放大区：扩大点击/悬停热区，避免细梁难点；具备按钮语义，支持键盘 Enter/Space 标记 -->
         <rect
           v-for="c in renderBarreCandidates"
           :key="`barre-cand-hit-${c.fret}-${c.fromString}-${c.toString}`"
@@ -104,9 +104,16 @@
           :width="barreGeometry(c).width"
           :height="barreHitThickness"
           fill="transparent"
-          class="pointer-events-auto cursor-pointer"
+          role="button"
+          tabindex="0"
+          :aria-label="barreCandidateTitle(c)"
+          class="pointer-events-auto cursor-pointer outline-none"
           @click.stop="emit('barre-click', c)"
-          @mouseenter="activeBarreHit = c.fret + '-' + c.fromString + '-' + c.toString"
+          @keydown.enter.prevent="emit('barre-click', c)"
+          @keydown.space.prevent="emit('barre-click', c)"
+          @focus="focusedBarreHit = barreKey(c)"
+          @blur="focusedBarreHit = null"
+          @mouseenter="activeBarreHit = barreKey(c)"
           @mouseleave="activeBarreHit = null"
         />
       </g>
@@ -186,6 +193,15 @@ const barreHitThickness = 24 * 2 + 8;
 
 /** 当前 hover 的候选梁标识（`fret-from-to`），用于可见梁提亮提示 */
 const activeBarreHit = ref<string | null>(null);
+/** 当前键盘聚焦的候选梁标识，聚焦强调走外扩虚线框而非浏览器默认描边 */
+const focusedBarreHit = ref<string | null>(null);
+
+const barreKey = (b: BarreEntity) => `${b.fret}-${b.fromString}-${b.toString}`;
+/** 候选梁是否处于 hover 或键盘聚焦的强调态 */
+const isBarreHighlighted = (b: BarreEntity) => {
+  const key = barreKey(b);
+  return activeBarreHit.value === key || focusedBarreHit.value === key;
+};
 
 const FRET_SIZE_MAP: Record<string, string> = {
   sm: 'text-lg',
@@ -274,7 +290,7 @@ const barreGeometry = (barre: BarreEntity) => {
 };
 
 /** 候选横按梁的外扩虚线轮廓（四向外扩 DASH_PAD，虚线框比主体大一圈） */
-const BARRE_DASH_PAD = 4;
+const BARRE_DASH_PAD = 10;
 const barreDashGeometry = (barre: BarreEntity) => {
   const base = barreGeometry(barre);
   const h = barreThickness + BARRE_DASH_PAD * 2;

@@ -54,8 +54,12 @@
                   class="cursor-pointer opacity-60 hover:opacity-100 hover:text-danger shrink-0"
                   title="移除"
                   aria-label="移除选项"
+                  role="button"
+                  tabindex="0"
                   @pointerdown.stop.prevent
                   @mousedown.stop.prevent
+                  @keydown.enter.prevent.stop="handleRemoveTag(opt)"
+                  @keydown.space.prevent.stop="handleRemoveTag(opt)"
                   @click.stop.prevent="handleRemoveTag(opt)"
                 />
               </span>
@@ -76,11 +80,14 @@
             :size="14"
             :stroke-width="2.5"
             class="hidden group-hover:block group-focus-within:block cursor-pointer text-text-disabled hover:text-danger transition-colors shrink-0 bg-bg-body"
-            tabindex="-1"
             title="清空"
             aria-label="清空选择"
+            role="button"
+            tabindex="0"
             @pointerdown.stop.prevent
             @mousedown.stop.prevent
+            @keydown.enter.prevent.stop="handleClear"
+            @keydown.space.prevent.stop="handleClear"
             @click.stop.prevent="handleClear"
           />
           <ChevronDown
@@ -102,7 +109,7 @@
 
     <template #default="{ close }">
       <div class="dropdown-inner-container relative w-full flex flex-col">
-        <div v-if="$slots.header || filterable" class="shrink-0 border-b border-glass-border">
+        <div v-if="$slots['header'] || filterable" class="shrink-0 border-b border-glass-border">
           <div v-if="filterable" class="px-2 py-1.5">
             <input
               ref="filterInputRef"
@@ -197,7 +204,7 @@
           </div>
         </Transition>
 
-        <slot v-if="$slots.footer" name="footer" />
+        <slot v-if="$slots['footer']" name="footer" />
       </div>
     </template>
   </BasePopover>
@@ -249,7 +256,8 @@ const {
   displayItems?: number;
   defaultValue?: T;
   fontBlackItems?: boolean;
-  formatOption?: (opt: AnyOption) => string;
+  /** 自定义选项展示文本（仅原始值选项；对象选项走 fieldNames.label） */
+  formatOption?: (opt: string | number) => string;
   multiple?: boolean;
   /** 多选模式下最多展示的 Tag 数量 */
   maxTagCount?: number;
@@ -351,7 +359,7 @@ const isOptionDisabled = (option: AnyOption): boolean => {
 };
 
 const formattedOption = (option: AnyOption): string => {
-  if (formatOption) return formatOption(option);
+  if (formatOption && (typeof option === 'string' || typeof option === 'number')) return formatOption(option);
   return getOptionLabel(option);
 };
 

@@ -26,7 +26,10 @@
           v-model="editorStore.draftChord.tuning"
           :options="tuningOptions"
           :default-value="Tuning.STANDARD"
-          :format-option="(val: any) => TUNING_PRESETS[val as Tuning]?.name || Tuning.STANDARD"
+          :format-option="
+            (val: string | number) =>
+              (typeof val === 'string' ? TUNING_PRESETS[val as Tuning]?.name : undefined) || Tuning.STANDARD
+          "
           :disabled="!isGlobalEditable"
           clearable
         />

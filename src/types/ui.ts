@@ -7,24 +7,19 @@ export enum ToastType {
   WARNING = 'warning',
 }
 
-export interface ToastOptions {
-  description?: string;
-  actionText?: string;
-  onAction?: () => void | Promise<void>;
-  duration?: number;
-  closable?: boolean;
-  customClass?: string;
-}
-
 export interface Toast {
   id: number;
   msg: string;
-  description?: string;
   type: ToastType;
-  hasAction: boolean;
-  actionText: string;
+  description?: string;
+  /** 操作按钮回调；存在即渲染按钮（取代原先冗余的 hasAction 布尔标记） */
   onAction?: () => void | Promise<void>;
+  /** 操作按钮文案；缺省由展示层兜底 */
+  actionText?: string;
   duration: number;
   closable?: boolean;
   customClass?: string;
 }
+
+/** 创建 toast 的入参：id / msg / type 由 store 生成，duration 可缺省 */
+export type ToastOptions = Omit<Toast, 'id' | 'msg' | 'type' | 'duration'> & { duration?: number };

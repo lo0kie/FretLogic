@@ -29,10 +29,11 @@
             role="menuitem"
             :aria-haspopup="true"
             :aria-expanded="isSubOpen"
+            :disabled="item.disabled"
             :tabindex="item.disabled ? -1 : 0"
             :aria-disabled="item.disabled"
             data-focusable-inline
-            class="group flex items-center rounded-md border-none bg-transparent w-full text-left box-border relative select-none cursor-pointer transition-colors duration-fast outline-none disabled:opacity-35 disabled:cursor-not-allowed disabled:pointer-events-none hover:bg-(--item-hover-bg,var(--bg-panel-hover)) focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover))"
+            class="group flex items-center rounded-md border-none bg-transparent w-full text-left box-border relative select-none cursor-pointer transition-colors duration-fast outline-none disabled:opacity-35 disabled:cursor-not-allowed enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover))"
             :class="[
               currentSizeClass,
               isSubOpen ? 'bg-bg-panel-hover' : '',
@@ -69,11 +70,12 @@
         v-wave="{ disabled: item.disabled }"
         type="button"
         :role="item.checked !== undefined ? 'menuitemradio' : 'menuitem'"
+        :disabled="item.disabled"
         :tabindex="item.disabled ? -1 : 0"
         :aria-disabled="item.disabled"
         :aria-checked="item.checked"
         data-focusable-inline
-        class="group flex items-center rounded-md border-none bg-transparent w-full text-left box-border relative select-none cursor-pointer transition-colors duration-fast outline-none disabled:opacity-35 disabled:cursor-not-allowed disabled:pointer-events-none hover:bg-(--item-hover-bg,var(--bg-panel-hover)) focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover))"
+        class="group flex items-center rounded-md border-none bg-transparent w-full text-left box-border relative select-none cursor-pointer transition-colors duration-fast outline-none disabled:opacity-35 disabled:cursor-not-allowed enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover))"
         :class="[
           currentSizeClass,
           item.danger

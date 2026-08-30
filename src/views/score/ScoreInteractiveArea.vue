@@ -195,7 +195,7 @@ import { useScoreLinesData } from '@/composables/score/useScoreLinesData';
 import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord } from '@/types';
+import type { Chord, SlotKey } from '@/types';
 import { computeSongKey } from '@/utils/music/musicTheory';
 import type { LineData } from '@/utils/score/score-export';
 import { Eraser, FileText, Trash2 } from '@lucide/vue';
@@ -212,7 +212,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'open-picker', slotKey: string): void;
+  (e: 'open-picker', slotKey: SlotKey): void;
   (e: 'line-click', lineIdx: number): void;
 }>();
 
@@ -230,10 +230,10 @@ const { lyricsLinesWithEdges, chordsLookupMap } = useScoreLinesData();
 
 const formatLineIndex = (index: number) => String(index + 1).padStart(2, '0');
 
-const getCharChord = (slotKey: string): Chord | null => {
+const getCharChord = (slotKey: SlotKey): Chord | null => {
   const song = scoreEditor.activeSong;
   if (!song) return null;
-  const chordId = song.chordMap[slotKey];
+  const chordId = song.chordMap.get(slotKey);
   if (!chordId) return null;
   return chordsLookupMap.value.get(chordId) ?? null;
 };
@@ -305,10 +305,25 @@ const deleteLine = (lineData: LineData) => {
   });
 };
 
-const buildLineMenuItems = (lineData: LineData): ContextMenuItem[] => [
+/** 统计每行占用的和弦槽数（行首/行尾/字符槽），用于"清除和弦"的禁用判断 */
+const lineChordCountMap = computed(() => {
+  const counts = new Map<string, number>();
+  const song = scoreEditor.activeSong;
+  if (!song) return counts;
+  for (const [key, chordId] of song.chordMap) {
+    if (!chordId) continue;
+    const m = key.match(/^line_(.+)_(?:start|end|char)_\d+$/);
+    const lineId = m?.[1];
+    if (lineId) counts.set(lineId, (counts.get(lineId) ?? 0) + 1);
+  }
+  return counts;
+});
+
+const buildLineMenuItems = (lineData: LineData, hasChords: boolean): ContextMenuItem[] => [
   {
     label: '清除和弦',
     icon: Eraser,
+    disabled: !hasChords,
     action: () => clearLineChords(lineData),
   },
   {
@@ -319,7 +334,9 @@ const buildLineMenuItems = (lineData: LineData): ContextMenuItem[] => [
   },
 ];
 
-const lineIdSignature = computed(() => lyricsLinesWithEdges.value.map(l => l.lineId).join('\u0000'));
+const lineIdSignature = computed(() =>
+  lyricsLinesWithEdges.value.map(l => `${l.lineId}:${lineChordCountMap.value.get(l.lineId) ?? 0}`).join('\u0000')
+);
 let lineMenuItemsCache = new Map<string, ContextMenuItem[]>();
 let lineMenuItemsCacheSig = '';
 
@@ -328,7 +345,7 @@ const getLineMenuItems = (lineData: LineData): ContextMenuItem[] => {
   if (sig !== lineMenuItemsCacheSig) {
     const map = new Map<string, ContextMenuItem[]>();
     for (const ld of lyricsLinesWithEdges.value) {
-      map.set(ld.lineId, buildLineMenuItems(ld));
+      map.set(ld.lineId, buildLineMenuItems(ld, (lineChordCountMap.value.get(ld.lineId) ?? 0) > 0));
     }
     lineMenuItemsCache = map;
     lineMenuItemsCacheSig = sig;
@@ -339,7 +356,7 @@ const getLineMenuItems = (lineData: LineData): ContextMenuItem[] => {
 const { isDragging, isSuppressingClick, ghostChordName, setGhostEl, handlePointerDown } =
   useLyricsDragDrop(scoreZoneRef);
 
-const handleOpenPicker = (slotKey: string) => {
+const handleOpenPicker = (slotKey: SlotKey) => {
   if (isDragging.value || isSuppressingClick.value) return;
   emit('open-picker', slotKey);
 };

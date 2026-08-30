@@ -134,7 +134,7 @@ const resolvedSegments = computed<ChordNameSegments | null>(() => {
 });
 
 const formattedData = computed<{ quality: string; extensions: ExtensionSegment[] }>(() => {
-  let quality = resolvedSegments.value?.quality ?? '';
+  let quality = resolvedSegments.value?.quality ?? resolvedSegments.value?.unknownQuality ?? '';
   let extensions = resolvedSegments.value?.extensions ?? [];
 
   if (effectiveShorthand.value) {

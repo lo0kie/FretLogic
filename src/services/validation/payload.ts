@@ -1,7 +1,9 @@
-import type { Chord, ChordNameSegments, Group, ImportExportPayload, Song } from '@/types';
+import type { Chord, ChordNameSegments, Group, ImportExportPayload, LineId, Song, SyncSettingsBackup } from '@/types';
 import { GroupSortRule } from '@/types';
-import { normalizeChord, pruneOrphanChordRefs } from '@/utils/music/chord-fretboard';
 import { cloneDeep } from '@/utils/core/common';
+import { fillMissingTimestamps, type SongDraft } from '@/services/validation/persistedData';
+import { buildGroupVariant } from '@/utils/music/entityFactories';
+import { normalizeChord, plainToChordMap, pruneOrphanChordRefs } from '@/utils/music/chord-fretboard';
 import { computeChordFingerprint, getChordName, nameToSegments, Tuning } from '@/utils/music/musicTheory';
 
 /** 旧/未知结构的数据（含历史遗留字段），用于防御性清洗 */
@@ -11,7 +13,7 @@ type RawChord = Partial<Chord> & RawRecord;
 type RawSong = Partial<Song> & RawRecord;
 
 /** 备份包结构版本：每次结构变更（字段迁移/删除/语义调整）递增 */
-export const CURRENT_PAYLOAD_VERSION = 4;
+export const CURRENT_PAYLOAD_VERSION = 5;
 
 /**
  * 版本迁移：把任意旧版本 payload 逐级升级到当前版本。
@@ -46,11 +48,14 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: ImportExportPayload) => void>
       if (song && typeof song === 'object' && 'key' in song) {
         const legacy = song as unknown as RawSong;
         if (typeof legacy.playKey !== 'string' || !legacy.playKey) {
-          legacy.playKey = typeof legacy.key === 'string' && legacy.key ? legacy.key : 'C';
+          legacy.playKey = typeof legacy['key'] === 'string' && legacy['key'] ? legacy['key'] : 'C';
         }
-        delete legacy.key;
+        delete legacy['key'];
       }
     });
+  },
+  4: () => {
+    // v4 -> v5：新增可选 syncSettings（云端同步配置随备份导出/导入），旧包无此字段，无需处理。
   },
 };
 
@@ -84,17 +89,15 @@ const sanitizeGroups = (groups: unknown, issues: string[]): Group[] => {
     })
     .map(g => {
       // 折叠状态为会话级，不再持久化；丢弃旧数据遗留的 collapsed 字段
-      delete g.collapsed;
+      delete g['collapsed'];
       const sortRule: GroupSortRule =
         g.sortRule !== undefined && Object.values(GroupSortRule).includes(g.sortRule)
           ? g.sortRule
           : GroupSortRule.ROOT_PITCH;
-      const sortKey: string | undefined = sortRule === GroupSortRule.KEY_DEGREE && !g.sortKey ? 'C' : g.sortKey;
-      return {
-        ...g,
-        sortRule,
-        ...(sortKey !== undefined ? { sortKey } : {}),
-      };
+      const now = Date.now();
+      const createdAt = typeof g.createdAt === 'number' && Number.isFinite(g.createdAt) ? g.createdAt : now;
+      const updatedAt = typeof g.updatedAt === 'number' && Number.isFinite(g.updatedAt) ? g.updatedAt : createdAt;
+      return buildGroupVariant({ id: g.id, name: g.name, createdAt, updatedAt }, sortRule, g.sortKey);
     });
 };
 
@@ -111,7 +114,7 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
           issues.push(`chords[${index}] 不是有效的对象`);
           return false;
         }
-        if (typeof c.id !== 'string' || typeof c.groupId !== 'string' || (!c.chordName && !c.nameSegments)) {
+        if (typeof c.id !== 'string' || typeof c.groupId !== 'string' || (!c['chordName'] && !c.nameSegments)) {
           issues.push(`chords[${index}] (${c.id || index}) 缺失基础识别属性`);
           return false;
         }
@@ -135,7 +138,7 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
       const fretCount: 3 | 4 = c.fretCount === 3 || c.fretCount === 4 ? c.fretCount : 3;
       const capo = typeof c.capo === 'number' && c.capo >= 0 && c.capo <= 12 ? c.capo : 0;
       const tuning = c.tuning && Object.values(Tuning).includes(c.tuning) ? c.tuning : Tuning.STANDARD;
-      const rawName = typeof c.chordName === 'string' ? c.chordName.trim() : '';
+      const rawName = typeof c['chordName'] === 'string' ? c['chordName'].trim() : '';
       const nameSegments: ChordNameSegments = c.nameSegments ??
         (rawName ? (nameToSegments(rawName) ?? null) : null) ?? { root: ['C', 0] };
 
@@ -154,7 +157,7 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
     });
 };
 
-const sanitizeSongs = (songs: unknown, issues: string[]): Song[] => {
+const sanitizeSongs = (songs: unknown, issues: string[]): SongDraft[] => {
   if (songs === undefined) return [];
   if (!Array.isArray(songs)) {
     issues.push('songs 字段必须为数组');
@@ -170,20 +173,55 @@ const sanitizeSongs = (songs: unknown, issues: string[]): Song[] => {
     })
     .map(s => {
       // key 已改为由 playKey + capo 实时派生：旧数据若带 key 且 playKey 缺失则用 key 兜底，随后丢弃
-      const legacyKey = typeof s.key === 'string' && s.key ? s.key : 'C';
+      const legacyKey = typeof s['key'] === 'string' && s['key'] ? s['key'] : 'C';
       const { key: _legacyKey, ...rest } = s;
       void _legacyKey;
-      const cleaned: Song = {
+      const cleaned: SongDraft = {
         ...rest,
         lyrics: typeof s.lyrics === 'string' ? s.lyrics : '',
         capo: typeof s.capo === 'number' ? s.capo : 0,
-        chordMap: s.chordMap && typeof s.chordMap === 'object' ? (s.chordMap as Record<string, string>) : {},
-        lineIds: Array.isArray(s.lineIds) ? (s.lineIds as string[]) : [],
+        version: typeof s.version === 'number' && Number.isFinite(s.version) ? s.version : 1,
+        chordMap: plainToChordMap(s.chordMap),
+        lineIds: Array.isArray(s.lineIds)
+          ? s.lineIds.filter((v): v is LineId => typeof v === 'string' && v.length > 0)
+          : [],
         playKey: typeof s.playKey === 'string' && s.playKey ? s.playKey : legacyKey,
       };
       return cleaned;
     });
 };
+/**
+ * 防御性清洗 syncSettings：同步配置属辅助数据，字段损坏只丢弃该字段，
+ * 绝不因配置问题拒绝整包导入。仅保留已知字符串字段与合法的 syncTarget。
+ */
+const SYNC_STRING_FIELDS = [
+  'githubToken',
+  'githubOwner',
+  'githubRepo',
+  'githubBranch',
+  'githubPath',
+  'webdavServerUrl',
+  'webdavUsername',
+  'webdavPassword',
+  'webdavProxyUrl',
+] as const;
+
+const sanitizeSyncSettings = (raw: unknown): SyncSettingsBackup | undefined => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const source = raw as RawRecord;
+  const result: SyncSettingsBackup = {};
+  if (source['syncTarget'] === 'github' || source['syncTarget'] === 'webdav') {
+    result.syncTarget = source['syncTarget'];
+  }
+  for (const field of SYNC_STRING_FIELDS) {
+    const value = source[field];
+    if (typeof value === 'string') {
+      result[field] = value;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+};
+
 export const validateImportExportPayload = (data: unknown): ValidationResult => {
   if (!data || typeof data !== 'object') {
     return { isValid: false, issues: ['检测到数据资产并非有效对象'] };
@@ -192,9 +230,11 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
   const raw = cloneDeep(data as RawRecord);
   // 先迁移旧版本到当前格式，再做结构校验（校验只认当前格式）
   const migrated = migratePayloadVersion(raw as unknown as ImportExportPayload);
-  const groups = sanitizeGroups(migrated.groups, issues);
-  const chords = sanitizeChords(migrated.chords, issues);
-  const songs = migrated.songs !== undefined ? sanitizeSongs(migrated.songs, issues) : [];
+  const now = Date.now();
+  const groups = fillMissingTimestamps(sanitizeGroups(migrated.groups, issues), now);
+  const chords = fillMissingTimestamps(sanitizeChords(migrated.chords, issues), now);
+  const songs = migrated.songs !== undefined ? fillMissingTimestamps(sanitizeSongs(migrated.songs, issues), now) : [];
+  const syncSettings = sanitizeSyncSettings(migrated.syncSettings);
   if (issues.length > 0) {
     return { isValid: false, issues };
   }
@@ -217,7 +257,7 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
 
   const validChordIds = new Set(dedupedChords.map(c => c.id));
   const cleanedSongs = songs.map(song => {
-    const { map, changed } = pruneOrphanChordRefs(song.chordMap as Record<string, string>, validChordIds);
+    const { map, changed } = pruneOrphanChordRefs(song.chordMap, validChordIds);
     return changed ? { ...song, chordMap: map } : song;
   });
 
@@ -228,6 +268,7 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
       groups,
       chords: dedupedChords,
       songs: cleanedSongs,
+      ...(syncSettings ? { syncSettings } : {}),
     },
     issues: [],
   };

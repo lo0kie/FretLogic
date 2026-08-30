@@ -30,8 +30,9 @@ import Fretboard from '@/components/fretboard/Fretboard.vue';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
 import { useUiStore } from '@/stores/uiStore';
-import type { ChordNameSegments, GuitarStringsModel } from '@/types';
+import type { ChordNameSegments, GuitarStringsModel, StringIndex } from '@/types';
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/utils/core/constants';
+import { toCapo, toStringIndex } from '@/utils/music/chord-fretboard';
 import { nameToSegments } from '@/utils/music/musicTheory';
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, useTemplateRef, watch } from 'vue';
 
@@ -68,7 +69,7 @@ onBeforeUnmount(() => {
 });
 
 const handleCapoUpdate = (capo: number) => {
-  editorStore.draftChord.capo = capo;
+  editorStore.draftChord.capo = toCapo(capo);
   if (!editorStore.isEditing) editorStore.isCreating = true;
 };
 
@@ -80,7 +81,8 @@ const handleStringsChange = (strings: GuitarStringsModel) => {
 };
 
 const handleRootStringChange = (index: number | null) => {
-  const validIndex = index !== null && (editorStore.draftChord.strings[index]?.[0] ?? -1) >= 0 ? index : null;
+  const validIndex: StringIndex | null =
+    index !== null && (editorStore.draftChord.strings[index]?.[0] ?? -1) >= 0 ? toStringIndex(index) : null;
   editorStore.draftChord.rootStringIndex = validIndex;
   if (!editorStore.isEditing) editorStore.isCreating = true;
 };

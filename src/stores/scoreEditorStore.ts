@@ -1,6 +1,6 @@
 import { useSongStore } from '@/stores/songStore';
-import type { Chord, Song } from '@/types';
-import { garbageCollectChordMap } from '@/utils/music/chord-fretboard';
+import type { Chord, ChordId, LineId, SlotKey, Song } from '@/types';
+import { garbageCollectChordMap, toCapo } from '@/utils/music/chord-fretboard';
 import { cloneDeep, matchLineIds, sanitizeLyricsText } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { computeSongKey, getKeySemitones, transposeChordName } from '@/utils/music/musicTheory';
@@ -12,15 +12,15 @@ type ScoreActiveTab = 'edit' | 'interactive';
 
 interface HistoryState {
   lyrics: string;
-  lineIds: string[];
-  chordMap: Record<string, string>;
+  lineIds: LineId[];
+  chordMap: Map<SlotKey, ChordId>;
 }
 
 export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const songStore = useSongStore();
   const activeSongId = useStorage<string | null>(STORAGE_KEYS.ACTIVE_SONG_ID, null);
   const activeTabRef = ref<ScoreActiveTab>('edit');
-  const selectedSlotKey = ref<string | null>(null);
+  const selectedSlotKey = ref<SlotKey | null>(null);
   const fontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 1.0, localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
   });
@@ -67,7 +67,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       cloneDeep({
         lyrics: target.lyrics,
         lineIds: target.lineIds,
-        chordMap: target.chordMap || {},
+        chordMap: target.chordMap,
       })
     );
     if (historyStack.length > HISTORY_CAPACITY) {
@@ -149,9 +149,8 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const updateCapo = (capo: number) => {
     if (activeSong.value && activeSong.value.capo !== capo) {
       recordHistory();
-      const clampedCapo = Math.min(11, Math.max(0, capo));
       songStore.updateSongMeta(activeSong.value.id, {
-        capo: clampedCapo,
+        capo: toCapo(capo),
       });
     }
   };
@@ -164,7 +163,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     const oldLines = activeSong.value.lyrics.split('\n');
     const newLines = sanitizedLyrics.split('\n');
     const newIds = matchLineIds(oldLines, newLines, activeSong.value.lineIds ?? []);
-    const { map: updatedChordMap, changed } = garbageCollectChordMap(activeSong.value.chordMap || {}, newIds);
+    const { map: updatedChordMap, changed } = garbageCollectChordMap(activeSong.value.chordMap, newIds);
     songStore.updateSongMeta(activeSong.value.id, {
       lyrics: sanitizedLyrics,
       lineIds: newIds,
@@ -175,13 +174,13 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
-  const setSlotChord = (slotKey: string, chord: Chord) => {
+  const setSlotChord = (slotKey: SlotKey, chord: Chord) => {
     if (!activeSong.value) return;
     recordHistory();
     songStore.setCharChord(activeSong.value.id, slotKey, chord.id);
   };
 
-  const removeSlotChord = (slotKey: string) => {
+  const removeSlotChord = (slotKey: SlotKey) => {
     if (!activeSong.value) return;
     recordHistory();
     songStore.removeCharChord(activeSong.value.id, slotKey);
@@ -191,21 +190,24 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     if (!activeSong.value || !activeSong.value.chordMap) return;
     recordHistory();
     const linePrefix = `line_${lineId}_`;
-    const updatedMap = { ...activeSong.value.chordMap };
+    const updatedMap = new Map(activeSong.value.chordMap);
     let changed = false;
-    Object.keys(updatedMap).forEach(key => {
+    for (const key of updatedMap.keys()) {
       if (key.startsWith(linePrefix)) {
-        delete updatedMap[key];
+        updatedMap.delete(key);
         changed = true;
       }
-    });
+    }
     if (changed) {
       songStore.updateSongMeta(activeSong.value.id, { chordMap: updatedMap });
     }
   };
 
+  /** 拖拽来源是 DOM data-slot-key（不可信边界）：校验前缀后再信任收窄 */
+  const isSlotKey = (value: string): value is SlotKey => value.startsWith('line_');
   const swapSlotChords = (sourceKey: string, targetKey: string) => {
     if (!activeSong.value || sourceKey === targetKey) return;
+    if (!isSlotKey(sourceKey) || !isSlotKey(targetKey)) return;
     recordHistory();
     songStore.swapSongSlotChords(activeSong.value.id, sourceKey, targetKey);
   };

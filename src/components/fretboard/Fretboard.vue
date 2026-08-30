@@ -426,7 +426,7 @@ const getOpenStringTooltip = (sIdx: number) => {
   const str = props.chord.strings[sIdx];
   if (!str || !props.interactive || str[0] > 0) return undefined;
   return {
-    content: '左键：切换空弦/静音 \n 右键：设为根音（静音时先恢复为可用） \n 滚轮：切换升降号',
+    content: '左键：切换空弦 \n 右键：设为根音 \n 滚轮：切换升降号',
     placement: 'top' as const,
   };
 };

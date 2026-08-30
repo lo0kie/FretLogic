@@ -29,7 +29,7 @@
     <!-- 文字说明容器 -->
     <div v-if="hasText" class="text-zone flex flex-col items-center gap-1">
       <div
-        v-if="title || $slots.title"
+        v-if="title || $slots['title']"
         class="title-text text-text-title leading-tight max-w-[18rem] break-words"
         :class="titleClass"
       >
@@ -37,7 +37,7 @@
       </div>
 
       <div
-        v-if="resolvedDescription || $slots.default"
+        v-if="resolvedDescription || $slots['default']"
         class="description-text text-text-disabled font-medium leading-relaxed max-w-[22rem] break-words"
         :class="descriptionClass"
       >
@@ -46,7 +46,7 @@
     </div>
 
     <!-- 操作区：复用全局 ActionButton 保持风格统一 -->
-    <div v-if="$slots.action || actionText" class="action-zone">
+    <div v-if="$slots['action'] || actionText" class="action-zone">
       <slot name="action">
         <ActionButton
           v-if="actionText"

@@ -1,11 +1,9 @@
 <template>
-  <div v-if="$slots.trigger" class="popover-wrapper relative inline-flex" :class="{ 'flex w-full': block }">
+  <div v-if="$slots['trigger']" class="popover-wrapper relative inline-flex" :class="{ 'flex w-full': block }">
     <div
       ref="referenceRef"
       class="popover-trigger inline-flex"
       :class="{ 'flex flex-1 w-full': block }"
-      :aria-expanded="model"
-      aria-haspopup="dialog"
       @mouseenter="handleTriggerMouseEnter"
       @mouseleave="handleTriggerMouseLeave"
       @focusin="handleTriggerFocusIn"
@@ -13,7 +11,9 @@
       @click="handleTriggerClick"
       @contextmenu="handleTriggerContextMenu"
     >
-      <slot name="trigger" :is-open="model" :toggle="toggle" :open="open" :close="close" />
+      <!-- aria-expanded / aria-haspopup 由触发插槽内的真实交互元素承载（插槽已提供 isOpen），
+           包裹层 div 无角色时不允许挂载这两个属性（axe: aria-allowed-attr） -->
+      <slot name="trigger" :is-open="model" :toggle="toggle" :open="open" :close="close" :pin-toggle="pinToggle" />
     </div>
   </div>
 
@@ -22,8 +22,8 @@
       v-if="isMounted"
       ref="floatingRef"
       data-floating-layer
-      class="popover-floating-host z-menu pointer-events-auto"
-      :style="floatingStyles"
+      class="popover-floating-host pointer-events-auto"
+      :style="[floatingStyles, { zIndex: floatingZIndex }]"
     >
       <Transition appear :name="transitionName" @after-leave="handleAfterLeave">
         <div
@@ -51,9 +51,19 @@
 
 <script lang="ts">
 const globalFloatingReferenceMap = new WeakMap<HTMLElement, HTMLElement>();
+
+interface PopoverLayerEntry {
+  el: HTMLElement | null;
+  z: number;
+}
+
+/** 打开中的浮层实例登记（供 bring-to-front 时计算后代层级预算，保证父面板不反超打开中的子浮层） */
+const openedPopovers = new Set<PopoverLayerEntry>();
 </script>
 
 <script setup lang="ts">
+import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
+import { acquireFloatingZ, FLOATING_Z_BASE, releaseFloatingZ } from '@/utils/ui/floatingZ';
 import {
   autoUpdate,
   flip,
@@ -143,11 +153,16 @@ const contextMenuVirtualRef = ref<VirtualElement | null>(null);
 /** 当前是否有指针按住（用于忽略拖拽过程中的 focusout） */
 const isPointerDown = ref(false);
 
+// 本实例在打开中浮层登记表（模块级 openedPopovers）里的条目（el 由 floatingRef watch 填充）
+const ownLayerEntry: PopoverLayerEntry = { el: null, z: FLOATING_Z_BASE };
+
 const activeReference = computed(() => unref(virtualRef) || contextMenuVirtualRef.value || referenceRef.value);
 
 const middlewareList = computed(() => {
+  // showArrow 时箭头外露 ≈ size·√2/2 - 1（size=14 → ≈9px），浮层间距需大于外露量，否则箭头会戳到触发元素
+  const effectiveOffset = showArrow ? Math.max(offsetDistance, 12) : offsetDistance;
   const m: Middleware[] = [
-    offset(offsetDistance),
+    offset(effectiveOffset),
     flip({
       fallbackPlacements: ['top', 'bottom-end', 'bottom-start', 'top-end', 'top-start', 'left', 'right'],
       padding: 8,
@@ -196,28 +211,16 @@ const floatingStyles = computed<CSSProperties>(() => ({
 const arrowStyle = computed<CSSProperties>(() => {
   if (!showArrow || !middlewareData.value.arrow) return {};
   const { x, y } = middlewareData.value.arrow;
-  const activeSide = (currentPlacement.value || placement).split('-')[0] as 'top' | 'bottom' | 'left' | 'right';
-  const staticSide = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' }[activeSide];
-  const border: Record<string, string> = {
-    borderTopWidth: staticSide === 'top' ? '0px' : '1px',
-    borderBottomWidth: staticSide === 'bottom' ? '0px' : '1px',
-    borderLeftWidth: staticSide === 'left' ? '0px' : '1px',
-    borderRightWidth: staticSide === 'right' ? '0px' : '1px',
-  };
-  return {
-    position: 'absolute',
-    width: '8px',
-    height: '8px',
+
+  return buildFloatingArrowStyle({
+    arrowX: x,
+    arrowY: y,
+    placement: currentPlacement.value || placement,
     background: 'var(--color-bg-elevated)',
-    borderStyle: 'solid',
     borderColor: 'var(--color-glass-border)',
-    transform: 'rotate(45deg)',
-    zIndex: 0,
-    left: x != null ? `${x}px` : '',
-    top: y != null ? `${y}px` : '',
-    [staticSide]: '-4px',
-    ...border,
-  };
+    backdropFilter: 'var(--blur-xl)',
+    borderWidth: 1, // 直接告诉构建函数：父容器有 1px 边框，帮我修掉偏差
+  });
 });
 
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
@@ -231,6 +234,7 @@ const clearHoverTimer = () => {
 watch(
   [floatingRef, activeReference],
   ([el, refEl]) => {
+    ownLayerEntry.el = el ?? null;
     if (el && refEl instanceof HTMLElement) globalFloatingReferenceMap.set(el, refEl);
   },
   { immediate: true }
@@ -241,6 +245,12 @@ watch(model, async val => {
     clearHoverTimer();
     isShown.value = false;
   } else {
+    // v-model 外部置 true 的打开路径不经过 open()，必须在这里补层级分配，
+    // 否则浮层停留在兜底层号 9999，会被任何已打开的浮层压住
+    if (!zOwned) {
+      acquireOwnedZ();
+      openedPopovers.add(ownLayerEntry);
+    }
     isMounted.value = true;
     await nextTick();
     update();
@@ -263,6 +273,10 @@ const open = async () => {
     isShown.value = true;
     return;
   }
+  // 释放上次可能未清理的层号（离场动画被打断时 afterLeave 不会触发），再分配新的最高层
+  releaseOwnedZ();
+  acquireOwnedZ();
+  openedPopovers.add(ownLayerEntry);
   isMounted.value = true;
   model.value = true;
   emit('open');
@@ -272,6 +286,7 @@ const close = () => {
   if (!model.value && !isShown.value) return;
   isShown.value = false;
   model.value = false;
+  pinned.value = false;
   contextMenuVirtualRef.value = null;
   emit('close');
 };
@@ -279,12 +294,59 @@ const close = () => {
 const handleAfterLeave = () => {
   if (model.value || isShown.value) return;
   isMounted.value = false;
+  openedPopovers.delete(ownLayerEntry);
+  releaseOwnedZ();
+};
+
+const floatingZIndex = ref<number>(FLOATING_Z_BASE);
+// 标记本实例当前是否在层级池中持有层号。
+// 组件实例常驻不卸载，floatingZIndex 会残留上次分配的旧值；
+// 若不做标记就无条件 release，会把池中他人占用的同号层误删。
+let zOwned = false;
+
+const acquireOwnedZ = () => {
+  // 后代预算：面板内打开中的直接后代浮层（如 Selector 下拉）必须保持在本面板之上，
+  // 置顶时层号不得超过其中最低者，否则父面板会反超并盖住子浮层
+  let budget = Number.POSITIVE_INFINITY;
+  if (panelRef.value) {
+    for (const entry of openedPopovers) {
+      if (entry === ownLayerEntry || !entry.el) continue;
+      const trigger = globalFloatingReferenceMap.get(entry.el);
+      if (trigger && panelRef.value.contains(trigger)) {
+        budget = Math.min(budget, entry.z);
+      }
+    }
+  }
+  floatingZIndex.value = acquireFloatingZ(budget === Number.POSITIVE_INFINITY ? undefined : budget - 1);
+  ownLayerEntry.z = floatingZIndex.value;
+  zOwned = true;
+  return floatingZIndex.value;
+};
+
+const releaseOwnedZ = () => {
+  if (!zOwned) return;
+  releaseFloatingZ(floatingZIndex.value);
+  zOwned = false;
 };
 
 const toggle = () => {
   if (model.value) {
     close();
   } else {
+    open();
+  }
+};
+
+/**
+ * hover 模式的「钉住」切换：打开并钉住（悬停关闭失效，仅点击外部关闭）；
+ * 已钉住时再次点击则关闭。
+ */
+const pinned = ref(false);
+const pinToggle = () => {
+  if (model.value && pinned.value) {
+    close();
+  } else {
+    pinned.value = true;
     open();
   }
 };
@@ -325,10 +387,12 @@ const handleTriggerMouseEnter = () => {
   hoverTimer = setTimeout(() => {
     open();
   }, hoverOpenDelay);
+  // 已打开的浮层（如被钉住的）在鼠标再次进入时置顶，保证「最近交互者在上」
+  bringToFront();
 };
 
 const handleTriggerMouseLeave = () => {
-  if (trigger !== 'hover') return;
+  if (trigger !== 'hover' || pinned.value) return;
   clearHoverTimer();
   hoverTimer = setTimeout(() => {
     close();
@@ -338,15 +402,45 @@ const handleTriggerMouseLeave = () => {
 const handlePanelMouseEnter = () => {
   if (trigger !== 'hover') return;
   clearHoverTimer();
+  // 从别的浮层移入本面板时置顶（「最近交互者在上」）
+  bringToFront();
+};
+
+/** 已打开的浮层重新分配当前最高层级（bring-to-front）；未打开时为空操作 */
+const bringToFront = () => {
+  if (!model.value) return;
+  releaseOwnedZ();
+  acquireOwnedZ();
 };
 
 const handlePanelMouseLeave = () => {
-  if (trigger !== 'hover') return;
+  if (trigger !== 'hover' || pinned.value) return;
   clearHoverTimer();
   hoverTimer = setTimeout(() => {
     close();
   }, hoverCloseDelay);
 };
+
+/**
+ * hover 模式全局 hover 路由：鼠标落在任何「合法区域」（trigger / panel / 嵌套子浮层链，
+ * 如面板内 Selector 的下拉菜单）内时取消关闭计时；落在区域外时确保计时存在。
+ * 解决「鼠标从面板移入子浮层瞬间，父面板因 mouseleave 计时到期被关闭」的问题。
+ */
+useEventListener(
+  window,
+  'mouseover',
+  (e: MouseEvent) => {
+    if (trigger !== 'hover' || !model.value || pinned.value) return;
+    if (isEventInside(e.target)) {
+      clearHoverTimer();
+    } else if (!hoverTimer) {
+      hoverTimer = setTimeout(() => {
+        close();
+      }, hoverCloseDelay);
+    }
+  },
+  true
+);
 
 const isChildFloatingLayer = (el: HTMLElement | null): boolean => {
   if (!el) return false;
@@ -447,7 +541,11 @@ const handlePanelKeydown = (e: KeyboardEvent) => {
   }
 };
 
-onBeforeUnmount(clearHoverTimer);
+onBeforeUnmount(() => {
+  clearHoverTimer();
+  openedPopovers.delete(ownLayerEntry);
+  releaseOwnedZ();
+});
 
-defineExpose({ open, close, toggle, update });
+defineExpose({ open, close, toggle, pinToggle, update });
 </script>

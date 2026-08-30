@@ -3,15 +3,18 @@ import { useChordStore } from '@/stores/chordStore';
 import type { BarreEntity, Chord, GuitarStringsModel } from '@/types';
 import { cloneDeep } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
-import { computeBarreCandidates, normalizeChord } from '@/utils/music/chord-fretboard';
+import { computeBarreCandidates, isBarreStillValid, normalizeChord } from '@/utils/music/chord-fretboard';
+import { toChordId, toGuitarStringsModel, toGroupId } from '@/utils/music/entityFactories';
 import { createString, DEFAULT_TUNING_MAPPING, getChordName, Tuning, TUNING_PRESETS } from '@/utils/music/musicTheory';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { computed, ref, toRaw, watch } from 'vue';
+import { computed, toRaw, watch } from 'vue';
 
 const createDefaultChord = (): Chord => ({
-  id: '',
+  id: toChordId(''),
   nameSegments: null,
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
   strings: [
     createString(),
     createString(),
@@ -23,11 +26,16 @@ const createDefaultChord = (): Chord => ({
   fretCount: 3,
   capo: 0,
   tuning: Tuning.STANDARD,
-  groupId: '',
+  groupId: toGroupId(''),
   rootStringIndex: null,
 });
 
-const reconcileBarres = (
+/**
+ * 音符变化时精准修正既有横按：外侧锚点被移除则边界向内收缩，剩余范围的有效性
+ * 统一复用 isBarreStillValid 判定（范围内出现静音弦/空弦/更低品位即废弃），
+ * 保证与 normalizeChord 持久化校验语义一致。
+ */
+export const reconcileBarres = (
   newFrets: number[],
   oldFrets: number[] | undefined,
   oldBarres: BarreEntity[]
@@ -39,13 +47,16 @@ const reconcileBarres = (
 
   if (changed.size === 0) return oldBarres;
 
+  // 以新品位构造临时弦模型，供 isBarreStillValid 做统一校验
+  const newStrings = toGuitarStringsModel(newFrets.map((f): [number, boolean] => [f, false]));
+
   const newBarres: BarreEntity[] = [];
 
   oldBarres.forEach(oldBarre => {
     let newFrom = oldBarre.fromString;
     let newTo = oldBarre.toString;
 
-    // 1. 智能边界收缩：如果横按最外侧的锚点音符被移除了，自动向内收缩边界
+    // 智能边界收缩：如果横按最外侧的锚点音符被移除了，自动向内收缩边界
     while (newFrom <= newTo && (newFrets[newFrom] ?? -1) !== oldBarre.fret) {
       newFrom++;
     }
@@ -53,32 +64,18 @@ const reconcileBarres = (
       newTo--;
     }
 
-    // 2. 如果收缩后，跨度不足以覆盖至少两根弦，直接废弃该横按
-    if (newFrom >= newTo) {
+    // 收缩后为空（全部锚点消失）直接废弃
+    if (newFrom > newTo) {
       return;
     }
 
-    // 3. 校验剩余区间是否仍然合法
-    let isValid = true;
-    let anchorCount = 0;
-    for (let s = newFrom; s <= newTo; s++) {
-      const f = newFrets[s] ?? -1; // 增加 ?? -1 兜底，解决 ts(18048)
-      if (f === oldBarre.fret) {
-        anchorCount++;
-      } else if (f !== -1 && f < oldBarre.fret) {
-        isValid = false;
-        break;
-      }
-    }
-
-    // 4. 必须至少有 2 个实按锚点才保留（2x2 会被判定保留，如果觉得 2x2 也该删，可将此改为 >= 3）
-    if (isValid && anchorCount >= 2) {
-      const reconciled = {
-        fret: oldBarre.fret,
-        fromString: newFrom,
-        toString: newTo,
-        finger: oldBarre.finger,
-      };
+    const reconciled: BarreEntity = {
+      fret: oldBarre.fret,
+      fromString: newFrom,
+      toString: newTo,
+      finger: oldBarre.finger,
+    };
+    if (isBarreStillValid(newStrings, reconciled)) {
       newBarres.push(reconciled);
     }
   });
@@ -94,8 +91,9 @@ const reconcileBarres = (
   return newBarres.length > 0 ? newBarres : undefined;
 };
 
-/** 规范化草稿：复用统一的 normalizeChord 并在空白草稿时清理残留 C 分片 */
-const normalizeDraftChord = (draft: Chord): Chord => {
+/** 规范化草稿：复用统一的 normalizeChord 并在空白草稿时清理残留 C 分片 */ const normalizeDraftChord = (
+  draft: Chord
+): Chord => {
   const { chord } = normalizeChord(draft);
   if (!chord.id && Array.isArray(chord.strings) && chord.strings.every(s => Array.isArray(s) && s[0] < 0)) {
     if (
@@ -103,6 +101,7 @@ const normalizeDraftChord = (draft: Chord): Chord => {
       chord.nameSegments.root?.[0] === 'C' &&
       chord.nameSegments.root?.[1] === 0 &&
       !chord.nameSegments.quality &&
+      !chord.nameSegments.unknownQuality &&
       !chord.nameSegments.extensions &&
       !chord.nameSegments.bass
     ) {
@@ -119,7 +118,7 @@ export const useChordEditorStore = defineStore('editor', () => {
   const isEditing = useStorage(STORAGE_KEYS.IS_EDITING, false);
   const isCreating = useStorage(STORAGE_KEYS.IS_CREATING, false);
 
-  const autoBarre = ref(true);
+  const autoBarre = useStorage(STORAGE_KEYS.AUTO_BARRE, true);
 
   const isFretBoardEmpty = computed(() => draftChord.value.strings.every(s => s[0] < 0));
   const activeBaseStrings = computed(() => TUNING_PRESETS[draftChord.value.tuning]?.mapping || DEFAULT_TUNING_MAPPING);
@@ -189,12 +188,8 @@ export const useChordEditorStore = defineStore('editor', () => {
     }
   };
 
-  /** 设置显式横按列表（undefined / 空数组表示清除横按标记） */
+  /** 设置显式横按列表（undefined / 空数组表示清除横按标记）；不改变自动横按开关状态 */
   const setBarres = (barres: BarreEntity[] | undefined) => {
-    if (autoBarre.value) {
-      autoBarre.value = false;
-    }
-
     if (!barres || barres.length === 0) {
       if (draftChord.value.barres !== undefined) draftChord.value.barres = undefined;
       return;
@@ -286,7 +281,7 @@ export const useChordEditorStore = defineStore('editor', () => {
   };
 
   const saveAsNewChord = () => {
-    draftChord.value = { ...draftChord.value, id: '' };
+    draftChord.value = { ...draftChord.value, id: toChordId('') };
     isEditing.value = false;
     isCreating.value = true;
   };

@@ -1,5 +1,6 @@
 <template>
   <g
+    role="img"
     :class="[
       interactive
         ? 'cursor-pointer pointer-events-auto outline-none [&:hover_.note-outline-ring]:opacity-100'

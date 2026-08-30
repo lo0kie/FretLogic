@@ -168,8 +168,8 @@ const toEl = (raw: unknown): HTMLElement | null => {
   if (raw instanceof HTMLElement) return raw;
   if (raw && typeof raw === 'object') {
     const r = raw as Record<string, unknown>;
-    if (r.$el instanceof HTMLElement) return r.$el;
-    if (r.el instanceof HTMLElement) return r.el;
+    if (r['$el'] instanceof HTMLElement) return r['$el'];
+    if (r['el'] instanceof HTMLElement) return r['el'];
   }
   return null;
 };

@@ -11,7 +11,6 @@
     :style="wrapperStyle"
     @wheel="handleWheel"
   >
-    <!-- 标签：左侧/顶部 -->
     <span
       v-if="label && (labelPosition === 'left' || (vertical && labelPosition !== 'right'))"
       class="text-2xs font-semibold text-text-disabled whitespace-nowrap px-xs"
@@ -20,7 +19,6 @@
       {{ label }}
     </span>
 
-    <!-- 数值输入 / 显示：左侧/顶部 -->
     <input
       v-if="showReadout && !isRange && readoutPosition === 'left' && isEditing"
       ref="readoutInputRef"
@@ -40,13 +38,17 @@
       v-else-if="showReadout && !isRange && readoutPosition === 'left'"
       class="text-2xs font-bold text-text-title text-center font-mono rounded-sm tabular-nums inline-block min-w-8"
       :class="editable && !disabled ? 'cursor-text hover:text-primary' : ''"
+      :role="editable && !disabled ? 'button' : undefined"
+      :tabindex="editable && !disabled ? 0 : -1"
+      :aria-label="editable && !disabled ? '输入精确数值' : undefined"
       :title="editable && !disabled ? '点击输入精确数值' : ''"
       @click="startEdit"
+      @keydown.enter.prevent="startEdit"
+      @keydown.space.prevent="startEdit"
     >
       {{ singleDisplayText }}
     </span>
 
-    <!-- 减少按钮 -->
     <button
       v-if="showButtons && !isRange && !vertical"
       type="button"
@@ -63,30 +65,39 @@
     <!-- 轨道主体区域 -->
     <div
       ref="trackRef"
-      class="relative flex items-center justify-center"
-      :class="[vertical ? 'w-5 flex-1 min-h-24 h-full my-1' : isCustomWidth ? 'flex-1 min-w-16 w-full' : 'w-24']"
+      class="relative flex items-center justify-center group touch-none before:absolute before:content-[''] before:z-0"
+      :class="[
+        vertical
+          ? 'w-5 flex-1 min-h-24 h-full my-1 before:-inset-x-4 before:inset-y-0'
+          : isCustomWidth
+            ? 'flex-1 min-w-16 w-full before:-inset-y-4 before:inset-x-0'
+            : 'w-24 before:-inset-y-4 before:inset-x-0',
+        disabled ? '' : 'cursor-pointer',
+      ]"
       @pointerdown="handleTrackPointerDown"
+      @mouseenter="isTrackHovered = true"
+      @mouseleave="isTrackHovered = false"
     >
-      <!-- 背景轨道 -->
       <div
         class="absolute rounded-full bg-border-base transition-colors"
         :class="vertical ? 'w-1 inset-y-0 left-1/2 -translate-x-1/2' : 'h-1 inset-x-0 top-1/2 -translate-y-1/2'"
       />
 
-      <!-- 激活填充条 -->
       <div
         class="absolute rounded-full bg-primary pointer-events-none"
-        :class="vertical ? 'w-1 left-1/2 -translate-x-1/2' : 'h-1 top-1/2 -translate-y-1/2'"
+        :class="[
+          vertical ? 'w-1 left-1/2 -translate-x-1/2' : 'h-1 top-1/2 -translate-y-1/2',
+          isDragging === null ? 'transition-all duration-75' : '',
+        ]"
         :style="activeBarStyle"
       />
 
-      <!-- 单滑块模式 Thumb -->
       <div
         v-if="!isRange"
-        class="absolute z-10 w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none transition-transform duration-75 hover:scale-125 active:scale-135"
+        class="absolute w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none hover:scale-125 group-hover:scale-125 active:scale-135"
         :class="[
           vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-          { 'ring-2 ring-primary/70 scale-125': isDragging === 0 },
+          isDragging === 0 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-transform duration-75',
         ]"
         :style="singleThumbStyle"
         tabindex="0"
@@ -101,7 +112,6 @@
         @mouseleave="isHovered = false"
         @pointerdown.stop="startDrag(0)"
       >
-        <!-- 跟随气泡 Tooltip -->
         <Transition name="v-transition-fade">
           <div
             v-if="shouldShowTooltip(0)"
@@ -113,13 +123,12 @@
         </Transition>
       </div>
 
-      <!-- 双滑块区间模式 Thumb 0 (Min) 与 Thumb 1 (Max) -->
       <template v-else>
         <div
-          class="absolute z-10 w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none transition-transform duration-75 hover:scale-125 active:scale-135"
+          class="absolute w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none hover:scale-125 group-hover:scale-125 active:scale-135"
           :class="[
             vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-            { 'ring-2 ring-primary/70 scale-125': isDragging === 0 },
+            isDragging === 0 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-transform duration-75',
           ]"
           :style="rangeThumb0Style"
           tabindex="0"
@@ -147,10 +156,10 @@
         </div>
 
         <div
-          class="absolute z-10 w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none transition-transform duration-75 hover:scale-125 active:scale-135"
+          class="absolute w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none hover:scale-125 group-hover:scale-125 active:scale-135"
           :class="[
             vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-            { 'ring-2 ring-primary/70 scale-125': isDragging === 1 },
+            isDragging === 1 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-transform duration-75',
           ]"
           :style="rangeThumb1Style"
           tabindex="0"
@@ -178,7 +187,6 @@
         </div>
       </template>
 
-      <!-- 刻度与标记 -->
       <div
         v-if="tickValues.length"
         class="absolute pointer-events-none"
@@ -200,7 +208,6 @@
       </div>
     </div>
 
-    <!-- 增加按钮 -->
     <button
       v-if="showButtons && !isRange && !vertical"
       type="button"
@@ -214,7 +221,6 @@
       <Plus :size="14" :stroke-width="2.2" aria-hidden="true" />
     </button>
 
-    <!-- 数值输入 / 显示：右侧/底部 -->
     <input
       v-if="showReadout && !isRange && readoutPosition === 'right' && isEditing"
       ref="readoutInputRef"
@@ -234,13 +240,17 @@
       v-else-if="showReadout && !isRange && readoutPosition === 'right'"
       class="text-2xs font-bold text-text-title text-center font-mono rounded-sm tabular-nums inline-block min-w-8"
       :class="editable && !disabled ? 'cursor-text hover:text-primary' : ''"
+      :role="editable && !disabled ? 'button' : undefined"
+      :tabindex="editable && !disabled ? 0 : -1"
+      :aria-label="editable && !disabled ? '输入精确数值' : undefined"
       :title="editable && !disabled ? '点击输入精确数值' : ''"
       @click="startEdit"
+      @keydown.enter.prevent="startEdit"
+      @keydown.space.prevent="startEdit"
     >
       {{ singleDisplayText }}
     </span>
 
-    <!-- 标签：右侧 -->
     <span
       v-if="label && labelPosition === 'right' && !vertical"
       class="text-2xs font-semibold text-text-disabled whitespace-nowrap px-xs"
@@ -251,10 +261,10 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends number | [number, number]">
 import { type FormComponentWidth, resolveComponentWidth } from '@/utils/core/constants';
 import { Minus, Plus } from '@lucide/vue';
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -263,7 +273,6 @@ const props = withDefaults(
     step?: number;
     size?: 'sm' | 'md' | 'lg';
     width?: FormComponentWidth;
-    /** 垂直高度（仅垂直模式生效，默认 '10rem'） */
     height?: string | number;
     label?: string;
     labelPosition?: 'left' | 'right';
@@ -274,11 +283,8 @@ const props = withDefaults(
     disabled?: boolean;
     wheelable?: boolean;
     editable?: boolean;
-    /** 是否开启双滑块区间选择模式 */
     range?: boolean;
-    /** 是否开启垂直方向排布模式 */
     vertical?: boolean;
-    /** Tooltip 浮动气泡展示模式：'always' 常驻 | 'hover' 悬停 | 'drag' 拖拽时 | 'never' 隐藏 */
     showTooltip?: 'always' | 'hover' | 'drag' | 'never';
     formatter?: (val: number) => string;
     marks?: Record<number, string>;
@@ -309,15 +315,26 @@ const props = withDefaults(
   }
 );
 
-const modelValue = defineModel<number | [number, number]>({ required: true });
+const modelValue = defineModel<T>({ required: true });
 
 const emit = defineEmits<{
-  (e: 'change', value: number | [number, number]): void;
+  (e: 'change', value: T): void;
+  (e: 'drag-start', index: number): void;
+  (e: 'drag-end', value: T): void;
 }>();
 
 const wrapperRef = useTemplateRef<HTMLDivElement>('wrapperRef');
 const trackRef = useTemplateRef<HTMLDivElement>('trackRef');
 const readoutInputRef = useTemplateRef<HTMLInputElement>('readoutInputRef');
+
+defineExpose({
+  focus: () => wrapperRef.value?.querySelector<HTMLElement>('[role="slider"]')?.focus(),
+  blur: () => {
+    if (wrapperRef.value?.contains(document.activeElement) && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  },
+});
 
 const isEditing = ref(false);
 const editValue = ref('');
@@ -326,10 +343,10 @@ const isHovered = ref(false);
 const isHoveredThumb0 = ref(false);
 const isHoveredThumb1 = ref(false);
 const isDragging = ref<number | null>(null);
+const dragStartValue = ref<T | null>(null);
 
 const isRange = computed(() => props.range);
 
-// 提取当前数值
 const singleValue = computed<number>(() =>
   typeof modelValue.value === 'number' ? modelValue.value : (modelValue.value?.[0] ?? props.min)
 );
@@ -360,7 +377,6 @@ const SLIDER_CONFIG: Record<'sm' | 'md' | 'lg', { wrapperClass: string }> = {
 
 const currentConfig = computed(() => SLIDER_CONFIG[props.size] ?? SLIDER_CONFIG.md);
 
-// 健壮的小数位推导：兼容小写/大写科学计数法（如 1e-4 或 1E-4）
 const countDecimals = (n: number): number => {
   if (!isFinite(n)) return 0;
   const s = String(n).toLowerCase();
@@ -374,24 +390,16 @@ const countDecimals = (n: number): number => {
   return dot === -1 ? 0 : s.length - dot - 1;
 };
 
+const isTrackHovered = ref(false);
 const stepDecimals = computed(() => countDecimals(props.step));
 
-/**
- * 将数值吸附对齐到 step 步长上（基于 min 的整数倍），并处理浮点精度与消除 -0
- */
 const snapToStep = (val: number): number => {
   if (!isFinite(val)) return props.min;
   const step = props.step > 0 ? props.step : 1;
   const min = props.min;
-
-  // 关键：吸附到离 min + k * step 最近的有效步长
   const steps = Math.round((val - min) / step);
   const rawSnapped = min + steps * step;
-
-  // 严格约束在 [min, max] 范围内
   const clamped = Math.min(props.max, Math.max(props.min, rawSnapped));
-
-  // 处理浮点精度并消除 -0
   const decimals = stepDecimals.value;
   const rounded = decimals === 0 ? Math.round(clamped) : Number(clamped.toFixed(decimals));
   return Object.is(rounded, -0) ? 0 : rounded;
@@ -447,12 +455,11 @@ const activeBarStyle = computed(() => {
   return { left: '0%', width: `${pct}%` };
 });
 
-// Tooltip 显示逻辑
 const shouldShowTooltip = (index: number) => {
   if (props.showTooltip === 'never') return false;
   if (props.showTooltip === 'always') return true;
   if (props.showTooltip === 'drag') return isDragging.value === index;
-  if (props.showTooltip === 'hover') return isHovered.value || isDragging.value === index;
+  if (props.showTooltip === 'hover') return isHovered.value || isTrackHovered.value || isDragging.value === index;
   return false;
 };
 
@@ -461,12 +468,15 @@ const shouldShowRangeTooltip = (index: number) => {
   if (props.showTooltip === 'always') return true;
   if (props.showTooltip === 'drag') return isDragging.value === index;
   if (props.showTooltip === 'hover') {
-    return (index === 0 ? isHoveredThumb0.value : isHoveredThumb1.value) || isDragging.value === index;
+    return (
+      (index === 0 ? isHoveredThumb0.value : isHoveredThumb1.value) ||
+      isTrackHovered.value ||
+      isDragging.value === index
+    );
   }
   return false;
 };
 
-// 刻度列表
 const tickValues = computed<number[]>(() => {
   if (props.marks && Object.keys(props.marks).length) {
     return Object.keys(props.marks)
@@ -491,7 +501,6 @@ const getTickPositionStyle = (v: number) => {
 
 const markLabel = (v: number) => (props.marks ? (props.marks[v] ?? String(v)) : String(v));
 
-// 步进与更新
 const updateValue = (rawNextVal: number | [number, number], options?: { commit?: boolean }) => {
   if (props.disabled) return;
   if (isRange.value) {
@@ -500,15 +509,15 @@ const updateValue = (rawNextVal: number | [number, number], options?: { commit?:
     const c0 = snapToStep(Math.min(props.max, Math.max(props.min, raw0)));
     const c1 = snapToStep(Math.min(props.max, Math.max(props.min, raw1)));
     const nextArr: [number, number] = [Math.min(c0, c1), Math.max(c0, c1)];
-    modelValue.value = nextArr;
-    if (options?.commit) emit('change', nextArr);
+    modelValue.value = nextArr as T;
+    if (options?.commit) emit('change', nextArr as T);
   } else {
     const raw = typeof rawNextVal === 'number' ? rawNextVal : (rawNextVal[0] ?? props.min);
     const snapped = snapToStep(raw);
     if (snapped !== modelValue.value) {
-      modelValue.value = snapped;
+      modelValue.value = snapped as T;
     }
-    if (options?.commit) emit('change', snapped);
+    if (options?.commit) emit('change', snapped as T);
   }
 };
 
@@ -540,7 +549,6 @@ const handleRangeKeydown = (e: KeyboardEvent, thumbIdx = 0) => {
   }
 };
 
-// 拖拽逻辑
 const calculateValueFromPointer = (e: PointerEvent): number => {
   if (!trackRef.value) return props.min;
   const rect = trackRef.value.getBoundingClientRect();
@@ -567,10 +575,33 @@ const onPointerMove = (e: PointerEvent) => {
   }
 };
 
+const isValueEqual = (v1: unknown, v2: unknown) => {
+  if (Array.isArray(v1) && Array.isArray(v2)) {
+    return v1[0] === v2[0] && v1[1] === v2[1];
+  }
+  return v1 === v2;
+};
+
+// 仅在开发环境中提示非法区间，生产构建时被完全 Tree-shaking
+if (import.meta.env.DEV) {
+  watch(
+    () => [props.min, props.max] as const,
+    ([min, max]) => {
+      if (min > max) {
+        console.warn(`[BaseSlider] min (${min}) 不应大于 max (${max})，滑块取值区间将坍缩为 max。`);
+      }
+    },
+    { immediate: true }
+  );
+}
+
 const onPointerUp = () => {
   if (isDragging.value !== null) {
     isDragging.value = null;
-    emit('change', modelValue.value);
+    emit('drag-end', modelValue.value);
+    if (!isValueEqual(dragStartValue.value, modelValue.value)) {
+      emit('change', modelValue.value);
+    }
   }
   window.removeEventListener('pointermove', onPointerMove);
   window.removeEventListener('pointerup', onPointerUp);
@@ -579,6 +610,8 @@ const onPointerUp = () => {
 const startDrag = (thumbIndex: number) => {
   if (props.disabled) return;
   isDragging.value = thumbIndex;
+  dragStartValue.value = (Array.isArray(modelValue.value) ? [...modelValue.value] : modelValue.value) as T;
+  emit('drag-start', thumbIndex);
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
 };
@@ -600,7 +633,6 @@ const handleTrackPointerDown = (e: PointerEvent) => {
   }
 };
 
-// 滚轮调节
 const handleWheel = (e: WheelEvent) => {
   if (props.disabled || !props.wheelable || isEditing.value) return;
   if (!wrapperRef.value?.contains(document.activeElement)) return;
@@ -609,7 +641,6 @@ const handleWheel = (e: WheelEvent) => {
   else if (e.deltaY < 0) stepBy(1, e);
 };
 
-// 单值精确编辑
 const startEdit = () => {
   if (!props.editable || props.disabled || isRange.value) return;
   editValue.value = String(singleValue.value);

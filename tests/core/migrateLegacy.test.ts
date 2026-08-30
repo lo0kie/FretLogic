@@ -84,7 +84,10 @@ describe('legacy localStorage migration', () => {
     expect(result).toEqual({ groups: 1, chords: 1, songs: 1 });
     expect(await chordRepository.loadGroups()).toHaveLength(1);
     expect(await chordRepository.loadChords()).toHaveLength(1);
-    expect(await songRepository.loadSongs()).toEqual([song]);
+    const loadedSongs = await songRepository.loadSongs();
+    expect(loadedSongs).toHaveLength(1);
+    expect(loadedSongs[0]?.id).toBe('s1');
+    expect(loadedSongs[0]?.chordMap).toEqual(new Map([['line_l1_char_0', 'c1']]));
   });
 
   it('重复迁移是幂等的（第二次直接跳过）', async () => {

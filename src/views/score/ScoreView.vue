@@ -68,6 +68,7 @@ import { useLineSelection } from '@/composables/score/useLineSelection';
 import { useScoreExportPreview } from '@/composables/score/useScoreExportPreview';
 import { useScoreLinesData } from '@/composables/score/useScoreLinesData';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
+import type { SlotKey } from '@/types';
 import { Music } from '@lucide/vue';
 import { useEventListener } from '@vueuse/core';
 import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
@@ -124,7 +125,7 @@ watch([exportMode, includeMetaBar], () => {
   if (previewVisible.value) generatePreview();
 });
 
-const openChordPicker = (slotKey: string) => {
+const openChordPicker = (slotKey: SlotKey) => {
   scoreEditor.selectedSlotKey = slotKey;
   isPickerOpen.value = true;
 };

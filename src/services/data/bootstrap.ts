@@ -11,6 +11,7 @@
  * 为将来 store 切换到 v2 契约（Phase 3 逐 feature 迁移）备好数据源。
  */
 import type { Chord, Group, Song } from '@/types';
+import { serializeForStorage } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { logger } from '@/utils/core/logger';
 import { migrateLegacyData } from './migrateLegacy';
@@ -51,7 +52,7 @@ export async function bootstrapDataLayer(storage: Storage = window.localStorage)
     if (songs.length > 0 && !hasLocalSongsIndex) {
       storage.setItem(STORAGE_KEYS.SONGS_INDEX, JSON.stringify(songs.map(s => s.id)));
       for (const song of songs) {
-        storage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:${song.id}`, JSON.stringify(song));
+        storage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:${song.id}`, serializeForStorage(song));
       }
     }
     if (groups.length + chords.length + songs.length > 0) {

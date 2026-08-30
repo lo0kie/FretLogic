@@ -1,4 +1,4 @@
-import { base64DecodeUtf8, base64EncodeUtf8 } from '@/utils/core/common';
+import { base64DecodeUtf8, base64EncodeUtf8, serializeForStorage } from '@/utils/core/common';
 import { SyncError, type GithubSyncConfig, type SyncBranchesProvider } from './provider';
 import { createSyncProviderBase } from './syncBase';
 
@@ -50,7 +50,7 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranches
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: `Auto sync fret-logic data: ${new Date().toLocaleString()}`,
-            content: base64EncodeUtf8(JSON.stringify(payload, null, 2)),
+            content: base64EncodeUtf8(serializeForStorage(payload)),
             branch: config.branch,
             ...(sha ? { sha } : {}),
           }),

@@ -1,13 +1,15 @@
 // ===== 槽位 key 编码：单一真相源，替换散落的 `line_${...}` / `char_${...}` 模板 =====
 
+import type { SlotKey } from '@/types';
+
 export type EdgeSlotType = 'start' | 'end';
 
 /** 边和弦（行首/行尾）槽位的存储 key */
-export const chordSlotKey = (lineId: string, type: EdgeSlotType, index: number): string =>
-  `line_${lineId}_${type}_${index}`;
+export const chordSlotKey = (lineId: string, type: EdgeSlotType, index: number): SlotKey =>
+  `line_${lineId}_${type}_${index}` as SlotKey;
 
 /** 字符槽位的存储 key */
-export const charKey = (lineId: string, index: number): string => `line_${lineId}_char_${index}`;
+export const charKey = (lineId: string, index: number): SlotKey => `line_${lineId}_char_${index}` as SlotKey;
 
 /** 边和弦槽位的前缀，用于整体清除某行某侧的槽位 */
 export const edgeSlotPrefix = (lineId: string, type: EdgeSlotType): string => `line_${lineId}_${type}_`;
@@ -16,13 +18,13 @@ export const edgeSlotPrefix = (lineId: string, type: EdgeSlotType): string => `l
 // 用统一节点结构替代"扁平 chordMap + 字符串 key 解析"，并提供多态遍历。
 
 export type ScoreNode =
-  | { kind: 'char'; lineId: string; index: number; char: string; key: string }
+  | { kind: 'char'; lineId: string; index: number; char: string; key: SlotKey }
   | {
       kind: 'chord';
       lineId: string;
       slot: EdgeSlotType;
       index: number;
-      key: string;
+      key: SlotKey;
       chordId: string | null;
     };
 
@@ -37,16 +39,20 @@ export interface ScoreLine {
   endChords: ScoreNode[];
 }
 
-/** 按序收集某行某侧边和弦槽位中存储的和弦 id（组合结构的底层构建块） */
-export const collectEdgeChordIds = (chordMap: Record<string, string>, lineId: string, type: EdgeSlotType): string[] => {
+/** 按序收集某行某侧边和弦槽位中存储的和弦 id（组合结构的底层构建块；只读，兼容裸 Map） */
+export const collectEdgeChordIds = (
+  chordMap: ReadonlyMap<string, string>,
+  lineId: string,
+  type: EdgeSlotType
+): string[] => {
   const prefix = `line_${lineId}_${type}_`;
   const entries: { index: number; id: string }[] = [];
-  for (const k of Object.keys(chordMap)) {
+  for (const [k, id] of chordMap) {
     if (k.startsWith(prefix)) {
       const idxStr = k.slice(prefix.length);
       const idx = parseInt(idxStr, 10);
-      if (!isNaN(idx) && chordMap[k]) {
-        entries.push({ index: idx, id: chordMap[k]! });
+      if (!isNaN(idx) && id) {
+        entries.push({ index: idx, id });
       }
     }
   }
@@ -57,7 +63,7 @@ export const collectEdgeChordIds = (chordMap: Record<string, string>, lineId: st
 /** 由扁平 chordMap 构建谱面组合树（Song → Line → 节点） */
 export const buildScoreTree = (
   lyrics: string,
-  chordMap: Record<string, string>,
+  chordMap: ReadonlyMap<string, string>,
   existingLineIds: string[] = []
 ): ScoreLine[] =>
   lyrics.split('\n').map((lineText, lineIdx) => {

@@ -41,6 +41,7 @@ import {
 } from '@/utils/music/musicTheory';
 import { Music, Sparkles } from '@lucide/vue';
 import { computed } from 'vue';
+import { toStringIndex } from '@/utils/music/chord-fretboard';
 import ChordAnalysisContent, { type RenderNoteItem } from './ChordAnalysisContent.vue';
 
 const editorStore = useChordEditorStore();
@@ -140,7 +141,7 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
       if (str[0] >= 0 && !rootAssigned) {
         const pitch = calcPitchIndex(sIdx, str[0], editorStore.draftChord.capo, editorStore.activeBaseStrings);
         if (pitch === candidate.rootPitch) {
-          editorStore.draftChord.rootStringIndex = sIdx;
+          editorStore.draftChord.rootStringIndex = toStringIndex(sIdx);
           rootAssigned = true;
         }
       }

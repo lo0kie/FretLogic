@@ -46,6 +46,7 @@
           variant="subtle"
           color="primary"
           icon-only
+          aria-label="播放/试听当前和弦"
           :disabled="editorStore.isFretBoardEmpty || isPlaying"
           @click="playCurrentChord"
         >
@@ -59,6 +60,7 @@
           size="sm"
           icon-only
           variant="ghost"
+          aria-label="导出透明背景图片"
           :disabled="uiStore.isCopying"
           @click="handleExport(true)"
         >
@@ -70,6 +72,7 @@
           size="sm"
           icon-only
           variant="ghost"
+          aria-label="导出带背景卡片切图"
           :disabled="uiStore.isCopying"
           @click="handleExport(false)"
         >
@@ -93,17 +96,23 @@
     >
       <ActionButton
         v-if="scoreEditor.activeTab === 'interactive' && route.path === '/score'"
-        v-tooltip="isAutoScrolling ? '暂停滚动' : '开始自动滚动'"
+        v-tooltip="isAutoScrolling ? '暂停滚动' : '开始滚动'"
         size="sm"
         variant="ghost"
         icon-only
-        :title="isAutoScrolling ? '暂停滚动' : '开始自动滚动'"
+        :aria-label="isAutoScrolling ? '暂停滚动' : '开始滚动'"
+        :title="isAutoScrolling ? '暂停滚动' : '开始滚动'"
         @click="toggleAutoScroll"
       >
         <component :is="isAutoScrolling ? Pause : Play" :size="15" :stroke-width="2.5" />
       </ActionButton>
 
-      <ActionButton icon-only variant="ghost" @click="toggleEditable">
+      <ActionButton
+        icon-only
+        variant="ghost"
+        :aria-label="isGlobalEditable ? '退出全局编辑' : '开启全局编辑'"
+        @click="toggleEditable"
+      >
         <component
           :is="isGlobalEditable ? Pencil : PencilOff"
           :size="17"
@@ -112,18 +121,18 @@
         />
       </ActionButton>
 
-      <BasePopover>
-        <template #trigger="{ isOpen }">
+      <BasePopover trigger="hover" placement="bottom-end">
+        <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
             ref="triggerBtnRef"
-            v-tooltip="computedTooltip"
             icon-only
             :variant="isOpen ? 'subtle' : 'ghost'"
             :color="isOpen ? 'primary' : 'default'"
-            :aria-label="computedTooltip"
+            aria-label="设置面板"
             :aria-expanded="isOpen"
             aria-haspopup="true"
             :size="uiSize"
+            @click="pinToggle()"
           >
             <SlidersHorizontal :size="18" :stroke-width="2.2" aria-hidden="true" />
           </ActionButton>
@@ -145,15 +154,16 @@
 
       <!-- 主题切换 Popover -->
       <BasePopover trigger="hover" placement="bottom-end">
-        <template #trigger="{ isOpen, open }">
+        <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
             icon-only
             :variant="isOpen ? 'subtle' : 'ghost'"
             :color="isOpen ? 'primary' : 'default'"
             aria-label="外观设置"
             aria-haspopup="menu"
+            :aria-expanded="isOpen"
             :size="uiSize"
-            @click="open()"
+            @click="pinToggle()"
           >
             <component
               :is="globalDarkMode ? Moon : Sun"
@@ -306,7 +316,6 @@ const handleExport = async (isTransparent: boolean) => {
 const isSyncModalOpen = ref(false);
 const uiSize = 'md';
 const SyncModalContainer = defineAsyncComponent(() => import('./SyncModalContainer.vue'));
-const computedTooltip = computed(() => (route.path === '/score' ? '曲谱配置' : '指板配置'));
 const buildInfoTooltip = computed(() => {
   const builtAt = new Date(__BUILD_INFO__.time).toLocaleString('zh-CN', { hour12: false });
   return `Fret Logic\n版本：${__BUILD_INFO__.commit}\n构建时间：${builtAt}`;

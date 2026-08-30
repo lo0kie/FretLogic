@@ -100,6 +100,7 @@ import ActionButton from './ActionButton.vue';
 
 const props = withDefaults(
   defineProps<{
+    /** 总页数（注意：不是总条数）；组件直接以页码为模型，总条数请在业务侧换算后再传入 */
     total: number;
     step?: number;
     size?: 'sm' | 'md' | 'lg';

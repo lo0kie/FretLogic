@@ -33,7 +33,7 @@ describe('payload validation migration matrix', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.version).toBe(4);
+    expect(result.payload?.version).toBe(5);
     expect(result.payload?.groups[0]).not.toHaveProperty('collapsed');
     expect(result.payload?.chords[0]).not.toHaveProperty('isInverted');
     expect(result.payload?.chords[0]).not.toHaveProperty('fingerprint');
@@ -139,6 +139,6 @@ describe('payload validation migration matrix', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.songs[0].chordMap).toEqual({});
+    expect(result.payload?.songs[0].chordMap).toEqual(new Map());
   });
 });

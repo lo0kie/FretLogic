@@ -1,16 +1,19 @@
-﻿import { validateImportExportPayload } from '@/services/validation/payload';
+import { validateImportExportPayload } from '@/services/validation/payload';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { buildBackupPayload } from '@/utils/core/buildBackupPayload';
+import { serializeForStorage } from '@/utils/core/common';
 import { wait } from '@/utils/score/score-export';
 
 export function useImportExportService() {
   const chordStore = useChordStore();
   const songStore = useSongStore();
   const uiStore = useUiStore();
+  const settingsStore = useSettingsStore();
 
   /** 清洗后的 payload 全量覆盖本地（入参是 validateImportExportPayload 的全新对象图，可直接接管） */
   const applyFullOverwrite = (data: ImportExportPayload) => {
@@ -20,6 +23,8 @@ export function useImportExportService() {
     });
     const songs = data.songs ?? [];
     songStore.overwriteSongs(songs);
+    // v5 起备份包携带同步配置，导入时一并恢复
+    settingsStore.applySyncBackup(data.syncSettings);
     chordStore.selectedGroupId = null;
     // 导入后清空指板编辑草稿（全部静音），避免残留旧指法
     useChordEditorStore().resetEditor();
@@ -86,7 +91,7 @@ export function useImportExportService() {
     const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, -1);
     const dateStr = localISOTime.replace(/T/, '_').replace(/:/g, '-').split('.')[0];
     const link = document.createElement('a');
-    const blob = new Blob([JSON.stringify(payload)], {
+    const blob = new Blob([serializeForStorage(payload)], {
       type: 'application/json',
     });
     const objectUrl = URL.createObjectURL(blob);

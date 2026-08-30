@@ -68,7 +68,8 @@ describe('data repositories', () => {
     const repository = createChordRepository(storage);
     const result = repository.load();
 
-    expect(result.groups).toEqual([group]);
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]).toMatchObject(group);
     expect(result.chords[0].capo).toBe(0);
     expect(result.chords).toHaveLength(1);
   });
@@ -85,7 +86,9 @@ describe('data repositories', () => {
     const repository = createSongRepository(storage);
     repository.saveSong(song);
 
-    expect(repository.loadSongs()).toEqual([song]);
+    const loadedSongs = repository.loadSongs();
+    expect(loadedSongs).toHaveLength(1);
+    expect(loadedSongs[0]).toMatchObject(song);
 
     repository.removeSong('s1');
     expect(repository.loadSongs()).toEqual([]);

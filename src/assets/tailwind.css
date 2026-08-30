@@ -119,8 +119,6 @@
   --z-index-scrim: var(--z-scrim);
   --z-index-sidebar-top: var(--z-sidebar-top);
   --z-index-header: var(--z-header);
-  --z-index-popover: var(--z-popover);
-  --z-index-popover-top: var(--z-popover-top);
   --z-index-overlay: var(--z-overlay);
   --z-index-menu: var(--z-menu);
   --z-index-top: var(--z-top);
