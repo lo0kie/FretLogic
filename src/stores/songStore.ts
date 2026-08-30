@@ -1,5 +1,6 @@
 import { createSongRepository } from '@/services/repositories';
-import type { Song } from '@/types';
+import { sanitizePersistedData } from '@/services/validation/persistedData';
+import type { ChordId, SlotKey, Song } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/music/chord-fretboard';
 import { createSong as createSongEntity } from '@/utils/music/entityFactories';
@@ -30,7 +31,7 @@ export const useSongStore = defineStore('song', () => {
   // 按歌曲拆分持久化：编辑一首歌只序列化那一首，避免每次改动全量 JSON.stringify 所有歌曲。
   // 旧版单键（SONGS）数据在首次加载时自动迁移，迁移成功后清除。
   const songs = ref<Song[]>([]);
-  const songMap = computed(() => new Map(songs.value.map(s => [s.id, s])));
+  const songMap = computed(() => new Map<string, Song>(songs.value.map(s => [s.id, s])));
   const lastDeletedSongInfo = ref<{ song: Song; index: number } | null>(null);
 
   /**
@@ -41,9 +42,8 @@ export const useSongStore = defineStore('song', () => {
   const chordReferencesIndex = computed<Map<string, { song: Song; count: number }[]>>(() => {
     const index = new Map<string, { song: Song; count: number }[]>();
     for (const song of songs.value) {
-      if (!song.chordMap) continue;
       const countMap = new Map<string, number>();
-      for (const chordId of Object.values(song.chordMap)) {
+      for (const chordId of song.chordMap.values()) {
         if (!chordId) continue;
         countMap.set(chordId, (countMap.get(chordId) ?? 0) + 1);
       }
@@ -100,7 +100,8 @@ export const useSongStore = defineStore('song', () => {
       try {
         const legacy = JSON.parse(legacyRaw);
         if (Array.isArray(legacy)) {
-          const loaded = legacy.filter(s => s && typeof s === 'object' && typeof s.id === 'string') as Song[];
+          // 旧单键格式统一走清洗层（逐字段校验 + chordMap Map 化 + 时间戳补齐）
+          const loaded = sanitizePersistedData({ songs: legacy }).songs;
           if (loaded.length > 0) migratedFromLegacy = true;
           return loaded;
         }
@@ -133,7 +134,7 @@ export const useSongStore = defineStore('song', () => {
       removedSongIds.forEach(id => songRepository.removeSong(id));
       removedSongIds.clear();
 
-      const byId = new Map(songs.value.map(s => [s.id, s]));
+      const byId = new Map<string, Song>(songs.value.map(s => [s.id, s]));
       dirtySongIds.forEach(id => {
         const song = byId.get(id);
         if (song) songRepository.saveSong(song);
@@ -280,42 +281,45 @@ export const useSongStore = defineStore('song', () => {
 
     if (hasChanged) {
       target.version = (target.version ?? 1) + 1;
+      target.updatedAt = Date.now();
       markSongDirty(id);
     }
   };
 
-  const setCharChord = (songId: string, slotKey: string, chordId: string) => {
+  const setCharChord = (songId: string, slotKey: SlotKey, chordId: ChordId) => {
     const target = songMap.value.get(songId);
     if (!target) return;
-    target.chordMap ??= {};
-    if (target.chordMap[slotKey] === chordId) return;
+    if (target.chordMap.get(slotKey) === chordId) return;
     bindNewChordToSlot(target.chordMap, slotKey, chordId);
-    target.chordMap = { ...target.chordMap };
+    target.chordMap = new Map(target.chordMap);
     target.version = (target.version ?? 1) + 1;
+    target.updatedAt = Date.now();
     markSongDirty(songId);
   };
 
-  const removeCharChord = (songId: string, slotKey: string) => {
+  const removeCharChord = (songId: string, slotKey: SlotKey) => {
     const target = songMap.value.get(songId);
-    if (!target || !target.chordMap) return;
+    if (!target) return;
     const removed = removeChordFromSlot(target.chordMap, slotKey);
     if (!removed) return;
-    target.chordMap = { ...target.chordMap };
+    target.chordMap = new Map(target.chordMap);
     target.version = (target.version ?? 1) + 1;
+    target.updatedAt = Date.now();
     markSongDirty(songId);
   };
 
-  const swapSongSlotChords = (songId: string, sourceKey: string, targetKey: string) => {
+  const swapSongSlotChords = (songId: string, sourceKey: SlotKey, targetKey: SlotKey) => {
     const target = songMap.value.get(songId);
-    if (!target || !target.chordMap) return;
+    if (!target) return;
     swapOrMoveSlotChords(target.chordMap, sourceKey, targetKey);
-    target.chordMap = { ...target.chordMap };
+    target.chordMap = new Map(target.chordMap);
     target.version = (target.version ?? 1) + 1;
+    target.updatedAt = Date.now();
     markSongDirty(songId);
   };
 
   const overwriteSongs = (newSongs: Song[]) => {
-    const newIds = new Set(newSongs.map(s => s.id));
+    const newIds = new Set<string>(newSongs.map(s => s.id));
 
     // 清理存储中不属于新集合的孤立歌曲键（全量覆盖是罕见操作，扫描一遍可接受）
     const orphanIds = new Set(songRepository.listSongIds().filter(id => !newIds.has(id)));
@@ -334,30 +338,29 @@ export const useSongStore = defineStore('song', () => {
 
   interface RemovedChordBinding {
     songId: string;
-    slotKey: string;
-    chordId: string;
+    slotKey: SlotKey;
+    chordId: ChordId;
   }
 
   const unbindChordIds = (targetIds: Set<string>): RemovedChordBinding[] => {
     const removedBindings: RemovedChordBinding[] = [];
     songs.value.forEach(song => {
-      if (!song.chordMap) return;
       let hasChanged = false;
-      Object.keys(song.chordMap).forEach(key => {
-        const boundChordId = song.chordMap[key];
+      for (const [key, boundChordId] of song.chordMap) {
         if (boundChordId && targetIds.has(boundChordId)) {
           removedBindings.push({
             songId: song.id,
             slotKey: key,
             chordId: boundChordId,
           });
-          delete song.chordMap[key];
+          song.chordMap.delete(key);
           hasChanged = true;
         }
-      });
+      }
       if (hasChanged) {
-        song.chordMap = { ...song.chordMap };
+        song.chordMap = new Map(song.chordMap);
         song.version = (song.version ?? 1) + 1;
+        song.updatedAt = Date.now();
         markSongDirty(song.id);
       }
     });
@@ -370,10 +373,10 @@ export const useSongStore = defineStore('song', () => {
     bindings.forEach(({ songId, slotKey, chordId }) => {
       const target = songMap.value.get(songId);
       if (!target) return;
-      target.chordMap ??= {};
-      if (target.chordMap[slotKey] === undefined) {
-        target.chordMap[slotKey] = chordId;
+      if (target.chordMap.get(slotKey) === undefined) {
+        target.chordMap.set(slotKey, chordId);
         target.version = (target.version ?? 1) + 1;
+        target.updatedAt = Date.now();
         markSongDirty(songId);
       }
     });

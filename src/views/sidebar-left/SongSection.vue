@@ -97,7 +97,10 @@ const uiStore = useUiStore();
 const isSongActive = (songId: string) => scoreEditor.activeSongId === songId;
 
 const songMenuItemsMap = new Map<string, ContextMenuItem[]>();
-const songIdsSignature = computed(() => songStore.songs.map(s => s.id).join('\u0000'));
+// 签名需包含和弦数与当前乐谱 id，否则清空/添加和弦、切换当前乐谱后禁用态不会刷新
+const songIdsSignature = computed(() =>
+  [scoreEditor.activeSongId ?? '', ...songStore.songs.map(s => `${s.id}:${s.chordMap.size}`)].join('\u0000')
+);
 watch(songIdsSignature, () => songMenuItemsMap.clear());
 
 const resolveSong = (songId: string): Song | null => songStore.songs.find(s => s.id === songId) ?? null;
@@ -117,6 +120,7 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => {
     {
       label: '清空和弦',
       icon: Eraser,
+      disabled: song.chordMap.size === 0 || song.id !== scoreEditor.activeSongId,
       action: () => {
         const s = resolveSong(song.id);
         if (s) emit('open-clear', s);

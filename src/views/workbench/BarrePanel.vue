@@ -6,9 +6,22 @@
         <div class="flex items-center justify-center w-5 h-5 rounded-md bg-tint-primary-88 text-primary">
           <MoveHorizontal :size="13" :stroke-width="2.5" />
         </div>
-        <span class="text-xs font-extrabold text-text-title tracking-tight">横按标记</span>
+        <span class="text-xs font-extrabold text-text-title tracking-tight break-keep">横按标记</span>
       </div>
-      <ActionButton variant="ghost" size="sm" :disabled="barres.length === 0" @click="clearBarre"> 清除 </ActionButton>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <ActionButton
+          v-tooltip="'自动标记横按'"
+          compacted
+          variant="ghost"
+          size="sm"
+          :color="editorStore.autoBarre ? 'primary' : 'default'"
+          title="自动标记横按"
+          @click="toggleAutoBarre"
+        >
+          自动
+        </ActionButton>
+      </div>
     </div>
 
     <EmptyState
@@ -37,6 +50,7 @@
       <p v-if="candidates.length === 0" class="form-hint">
         当前指板没有可横按的弦组：同一品位至少按 2 根弦，且跨距内无空弦/静音。
       </p>
+      <p v-else-if="showPitchNamesOn" class="form-hint">显示音名模式下主指板不渲染横按条，关闭后可查看。</p>
       <p v-else class="form-hint">点击指板上的半透明横按条即可标记，再次点击已标记的横按可清除。</p>
     </div>
   </div>
@@ -47,12 +61,17 @@ import ActionButton from '@/components/base/ActionButton.vue';
 import EmptyState from '@/components/base/EmptyState.vue';
 import Fretboard from '@/components/fretboard/Fretboard.vue';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import type { BarreEntity } from '@/types';
 import { computeBarreCandidates } from '@/utils/music/chord-fretboard';
 import { MoveHorizontal } from '@lucide/vue';
 import { computed } from 'vue';
 
 const editorStore = useChordEditorStore();
+const settingsStore = useSettingsStore();
+
+/** 工作台「显示音名」是否开启：开启时主指板不渲染横按条，需要文字提示 */
+const showPitchNamesOn = computed(() => settingsStore.workbenchShowPitchNames);
 
 /** 已标记横按列表（支持多条，如双横按和弦） */
 const barres = computed<BarreEntity[]>(() => editorStore.draftChord.barres ?? []);
@@ -65,7 +84,7 @@ const candidates = computed<BarreEntity[]>(() =>
 const isActiveBarre = (b: BarreEntity) =>
   barres.value.some(x => x.fret === b.fret && x.fromString === b.fromString && x.toString === b.toString);
 
-/** 点击指板上的横按梁：未标记则追加标记；已标记则从列表移除（支持多横按） */
+/** 点击指板上的横按梁：已标记则整条取消；未标记则标记并替换同品位的旧横按（同一品位只保留一条） */
 const handleBarreClick = (barre: BarreEntity) => {
   const current = barres.value;
   if (isActiveBarre(barre)) {
@@ -75,11 +94,12 @@ const handleBarreClick = (barre: BarreEntity) => {
       )
     );
   } else {
-    editorStore.setBarres([...current, barre]);
+    editorStore.setBarres([...current.filter(x => x.fret !== barre.fret), barre]);
   }
 };
 
-const clearBarre = () => {
-  editorStore.setBarres(undefined);
+/** 切换横按自动标记开关（持久化，由 chordEditorStore 的 autoBarre 负责写入 localStorage） */
+const toggleAutoBarre = () => {
+  editorStore.autoBarre = !editorStore.autoBarre;
 };
 </script>

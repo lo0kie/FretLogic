@@ -27,7 +27,7 @@ function buildSingleton() {
 
     return buildLyricsLinesWithEdges(
       scoreEditor.activeSong.lyrics,
-      scoreEditor.activeSong.chordMap || {},
+      scoreEditor.activeSong.chordMap,
       chordsLookupMap.value,
       scoreEditor.activeSong.lineIds
     );

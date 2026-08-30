@@ -1,5 +1,6 @@
 import type { Chord, Group, Song } from '@/types';
 import { sanitizePersistedData } from '@/services/validation/persistedData';
+import { serializeForStorage } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 
 export interface ChordLibrarySnapshot {
@@ -34,7 +35,7 @@ const readJson = (storage: Storage, key: string): unknown => {
 
 const writeJson = (storage: Storage, key: string, value: unknown): void => {
   try {
-    storage.setItem(key, JSON.stringify(value));
+    storage.setItem(key, serializeForStorage(value));
   } catch (error) {
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
       const quotaError: Error & { cause?: unknown } = new Error('PERSISTENCE_QUOTA_EXCEEDED');

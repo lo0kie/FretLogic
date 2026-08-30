@@ -1,7 +1,6 @@
 import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
-import { getChordName } from '@/utils/music/musicTheory';
 import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from 'vue';
 import { useDragAutoScroll } from './lyrics-drag/useDragAutoScroll';
 import { useDragGhost } from './lyrics-drag/useDragGhost';
@@ -58,7 +57,6 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
   const startDrag = (clientX: number, clientY: number) => {
     if (!activeSourceKey || !activeChord) return;
-    console.log('[LyricsDrag] 🚀 StartDrag from:', activeSourceKey, 'chord:', getChordName(activeChord));
     isDragging.value = true;
     wasDraggingInSession = true;
     draggingSlotKey.value = activeSourceKey;
@@ -137,10 +135,6 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     }
 
     const hadDrag = isDragging.value || wasDraggingInSession;
-    const srcKey = draggingSlotKey.value;
-    const tgtKey = dragOverSlotKey.value;
-
-    console.log('[LyricsDrag] 🏁 PointerUp -> hadDrag:', hadDrag, 'source:', srcKey, 'target:', tgtKey);
 
     try {
       stopAutoScroll();
@@ -154,13 +148,10 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
         draggingSlotKey.value !== dragOverSlotKey.value &&
         scoreEditor.activeSong
       ) {
-        console.log('[LyricsDrag] 🔄 Executing swapSlotChords:', draggingSlotKey.value, '->', dragOverSlotKey.value);
         scoreEditor.swapSlotChords(draggingSlotKey.value, dragOverSlotKey.value);
-      } else if (isDragging.value) {
-        console.log('[LyricsDrag] ⚠️ Drag finished without swap (same or null target)');
       }
-    } catch (err) {
-      console.error('[LyricsDrag] ❌ Failed to swap chords:', err);
+    } catch {
+      /* 交换失败则忽略 */
     } finally {
       if (hadDrag) {
         triggerClickSuppression();
@@ -173,7 +164,6 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       clearDragClasses();
       document.body.classList.remove('is-global-dragging');
       window.removeEventListener('contextmenu', preventContextMenu, true);
-      console.log('[LyricsDrag] ✅ Cleanup completed. isDragging = false');
     }
   };
 
@@ -194,13 +184,12 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     }
 
     const hadDrag = isDragging.value || wasDraggingInSession;
-    console.warn('[LyricsDrag] ⚠️ PointerCancel -> hadDrag:', hadDrag);
 
     try {
       stopAutoScroll();
       cancelGhostPos();
-    } catch (err) {
-      console.error('[LyricsDrag] ❌ Failed to cancel drag:', err);
+    } catch {
+      /* 取消失败则忽略 */
     } finally {
       if (hadDrag) {
         triggerClickSuppression();
@@ -213,13 +202,11 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       clearDragClasses();
       document.body.classList.remove('is-global-dragging');
       window.removeEventListener('contextmenu', preventContextMenu, true);
-      console.log('[LyricsDrag] ✅ Cancel cleanup completed.');
     }
   };
 
   const handleWindowBlur = () => {
     if (isDragging.value || activeSourceKey !== null) {
-      console.warn('[LyricsDrag] ⚠️ Window blur during active drag/session');
       handleGlobalPointerCancel(new PointerEvent('pointercancel'));
     }
   };
@@ -230,8 +217,6 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const target = e.target as HTMLElement;
     if (target.closest('.remove-chord-btn')) return;
-
-    console.log('[LyricsDrag] 👆 PointerDown on slot:', slotKey, 'chord:', getChordName(chord), 'type:', e.pointerType);
 
     if (longPressTimer) {
       clearTimeout(longPressTimer);

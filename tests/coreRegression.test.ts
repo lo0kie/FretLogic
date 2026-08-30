@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { validateImportExportPayload } from '@/services/validation/payload';
 import { analyzeChordGraph } from '@/services/music/chordEngine';
 import { computeSongKey } from '@/utils/music/musicTheory';
@@ -34,11 +34,44 @@ describe('backup payload migration', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.version).toBe(4);
+    expect(result.payload?.version).toBe(5);
     expect(result.payload?.chords[0].id).toBe('1');
     expect(result.payload?.chords[0].strings[0]).toEqual([-1, false]);
     expect(result.payload?.songs[0].playKey).toBe('G');
     expect(result.payload?.songs[0]).not.toHaveProperty('key');
+  });
+
+  it('syncSettings 随备份往返：合法字段保留，非法字段丢弃', () => {
+    const base = {
+      version: 5,
+      groups: [],
+      chords: [],
+      songs: [],
+    };
+    const result = validateImportExportPayload({
+      ...base,
+      syncSettings: {
+        syncTarget: 'webdav',
+        webdavServerUrl: 'https://dav.jianguoyun.com/dav/',
+        webdavPassword: 123 as unknown as string, // 非字符串 → 丢弃
+        evilField: 'x', // 未知字段 → 丢弃
+      },
+    });
+    expect(result.isValid).toBe(true);
+    expect(result.payload?.syncSettings).toEqual({
+      syncTarget: 'webdav',
+      webdavServerUrl: 'https://dav.jianguoyun.com/dav/',
+    });
+
+    // 完全损坏的 syncSettings → 整体丢弃，不影响导入
+    const bad = validateImportExportPayload({ ...base, syncSettings: 'garbage' });
+    expect(bad.isValid).toBe(true);
+    expect(bad.payload?.syncSettings).toBeUndefined();
+
+    // 无 syncSettings 的旧包 → 字段缺省
+    const legacy = validateImportExportPayload({ version: 4, groups: [], chords: [], songs: [] });
+    expect(legacy.isValid).toBe(true);
+    expect(legacy.payload?.syncSettings).toBeUndefined();
   });
 });
 

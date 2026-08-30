@@ -83,7 +83,7 @@
 
 <script setup lang="ts">
 import { type FormComponentWidth, resolveComponentWidth } from '@/utils/core/constants';
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -137,6 +137,21 @@ const modelValue = defineModel<number>({ required: true });
 const emit = defineEmits<{
   (e: 'change', value: number): void;
 }>();
+
+// 仅在开发环境中提示非法区间，生产构建时被完全 Tree-shaking
+if (import.meta.env.DEV) {
+  watch(
+    () => [props.min, props.max] as const,
+    ([min, max]) => {
+      if (min > max) {
+        console.warn(
+          `[BaseNumberInput] min (${min}) 不应大于 max (${max})，此时 clamp 结果将恒为 max，步进与循环行为均不可预期。`
+        );
+      }
+    },
+    { immediate: true }
+  );
+}
 
 const isEditing = ref(false);
 const tempValue = ref('');

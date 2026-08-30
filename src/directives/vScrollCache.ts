@@ -63,13 +63,13 @@ const resolveOptions = (
     if (val.onRestored) onRestored = val.onRestored;
   }
 
-  if (mods.x) axis = 'x';
-  if (mods.y) axis = 'y';
-  if (mods.both) axis = 'both';
+  if (mods['x']) axis = 'x';
+  if (mods['y']) axis = 'y';
+  if (mods['both']) axis = 'both';
 
   if (!key) {
     // 优先使用 DOM 上的稳定特征标识（id、name、data-key、类名与层级特征）
-    const domKey = el.dataset.scrollCacheKey || el.id || el.getAttribute('name');
+    const domKey = el.dataset['scrollCacheKey'] || el.id || el.getAttribute('name');
     if (domKey) {
       key = `dom:${domKey}`;
     } else {

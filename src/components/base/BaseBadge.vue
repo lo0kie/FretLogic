@@ -1,5 +1,5 @@
 <template>
-  <span v-if="$slots.target" class="relative inline-flex shrink-0">
+  <span v-if="$slots['target']" class="relative inline-flex shrink-0">
     <slot name="target" />
     <span
       v-if="!isHidden"
@@ -57,7 +57,7 @@
 
     <!-- 3. 主内容区域（小红点模式不渲染内容） -->
     <span
-      v-if="!isDotOnly && ($slots.default || content !== undefined)"
+      v-if="!isDotOnly && ($slots['default'] || content !== undefined)"
       class="inline-flex items-center justify-center overflow-hidden text-ellipsis h-full leading-none"
       :class="{ 'relative w-full h-full': hoverClose }"
     >

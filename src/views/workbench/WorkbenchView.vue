@@ -9,7 +9,7 @@
 
       <div
         class="no-scrollbar absolute top-8 right-8 bottom-8 pointer-events-auto z-panel overflow-y-auto flex flex-col gap-lg [&>*]:shrink-0 duration-slow ease-sidebar transition-[width,min-width]"
-        :class="hasNotes ? 'w-[19rem] min-w-[19rem]' : 'w-[13rem] min-w-[13rem]'"
+        :class="hasNotes ? 'w-[19rem] min-w-[19rem]' : 'w-[14rem] min-w-[14rem]'"
       >
         <!-- ★ 只在这里做高度动画 -->
         <ChordAnalysisPanel />

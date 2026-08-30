@@ -100,14 +100,14 @@
 
 <script lang="ts">
 import { reactive } from 'vue';
-const fretboardSizeCache = reactive<Record<string, { width: string; height: string }>>({});
+const fretboardSizeCache = reactive(new Map<string, { width: string; height: string }>());
 </script>
 
 <script setup lang="ts">
 import Fretboard from '@/components/fretboard/Fretboard.vue';
 import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import type { Chord } from '@/types';
+import type { Chord, SlotKey } from '@/types';
 import { observeVisibility } from '@/utils/core/common';
 import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
 import { getChordName } from '@/utils/music/musicTheory';
@@ -115,7 +115,7 @@ import { Plus, X } from '@lucide/vue';
 import { computed, ref, useTemplateRef, watch, watchEffect, type ComponentPublicInstance } from 'vue';
 
 const props = defineProps<{
-  slotKey: string;
+  slotKey: SlotKey;
   chord?: Chord;
   char?: string;
   variant: 'char' | 'edge' | 'add';
@@ -130,8 +130,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'click'): void;
-  (e: 'remove', slotKey: string): void;
-  (e: 'pointerdown', event: PointerEvent, slotKey: string, chord: Chord): void;
+  (e: 'remove', slotKey: SlotKey): void;
+  (e: 'pointerdown', event: PointerEvent, slotKey: SlotKey, chord: Chord): void;
 }>();
 
 const isVisible = ref(false);
@@ -161,21 +161,22 @@ const getCacheKey = (fretCount: number) => `${fretCount}_${getEffectiveScale().t
 const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null) => {
   if (!el || !props.chord) return;
   const cacheKey = getCacheKey(props.chord.fretCount);
-  if (fretboardSizeCache[cacheKey]) return;
+  if (fretboardSizeCache.has(cacheKey)) return;
   const domEl = (el as ComponentPublicInstance)?.$el ?? el;
   if (!(domEl instanceof HTMLElement)) return;
   const rect = domEl.getBoundingClientRect();
   if (rect.width > 0 && rect.height > 0) {
-    fretboardSizeCache[cacheKey] = {
+    fretboardSizeCache.set(cacheKey, {
       width: `${rect.width}px`,
       height: `${rect.height}px`,
-    };
+    });
   }
 };
 
 const getCalculatedOrCachedSize = (fretCount: number) => {
   const cacheKey = getCacheKey(fretCount);
-  if (fretboardSizeCache[cacheKey]) return fretboardSizeCache[cacheKey];
+  const cached = fretboardSizeCache.get(cacheKey);
+  if (cached) return cached;
   else return getPlaceholderSize(fretCount, getEffectiveScale(), true, true);
 };
 

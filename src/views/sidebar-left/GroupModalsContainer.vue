@@ -52,7 +52,7 @@
           v-model="groupModals.modalData.sortKey"
           :options="KEY_OPTIONS"
           default-value="C"
-          :format-option="(val: any) => `${val} 调`"
+          :format-option="(val: string | number) => `${val} 调`"
           :disabled="groupModals.modalData.sortRule !== 'KEY_DEGREE'"
           width="md"
         />

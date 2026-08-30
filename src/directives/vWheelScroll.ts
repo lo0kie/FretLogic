@@ -35,12 +35,12 @@ const normalize = (value: WheelScrollBinding, modifiers?: Record<string, boolean
   }
 
   if (modifiers) {
-    if (modifiers.smooth !== undefined) opts.smooth = Boolean(modifiers.smooth);
-    if (modifiers.reverse !== undefined) opts.reverse = Boolean(modifiers.reverse);
-    if (modifiers.prevent !== undefined) opts.prevent = Boolean(modifiers.prevent);
-    if (modifiers.stop !== undefined) opts.stop = Boolean(modifiers.stop);
-    if (modifiers.contain) opts.overscroll = 'contain';
-    if (modifiers.auto) opts.overscroll = 'auto';
+    if (modifiers['smooth'] !== undefined) opts.smooth = Boolean(modifiers['smooth']);
+    if (modifiers['reverse'] !== undefined) opts.reverse = Boolean(modifiers['reverse']);
+    if (modifiers['prevent'] !== undefined) opts.prevent = Boolean(modifiers['prevent']);
+    if (modifiers['stop'] !== undefined) opts.stop = Boolean(modifiers['stop']);
+    if (modifiers['contain']) opts.overscroll = 'contain';
+    if (modifiers['auto']) opts.overscroll = 'auto';
   }
 
   opts.speed = opts.speed ?? 1;

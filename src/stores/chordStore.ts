@@ -4,7 +4,7 @@ import { GroupSortRule } from '@/types';
 import { cloneDeep, cloneGuitarStrings, generateUUID } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { normalizeChord } from '@/utils/music/chord-fretboard';
-import { createChord, createGroup } from '@/utils/music/entityFactories';
+import { buildGroupVariant, createChord, createGroup, getGroupSortKey, toGroupId } from '@/utils/music/entityFactories';
 import {
   type ChordOrName,
   computeChordFingerprint,
@@ -148,7 +148,7 @@ export const useChordStore = defineStore('chord', () => {
       const sortedMains = sortChordsByRule(
         cards.map(c => c.mainChord),
         group.sortRule ?? DEFAULT_SORT_RULE,
-        group.sortKey ?? 'C'
+        getGroupSortKey(group) ?? 'C'
       );
       const byMainId = new Map(cards.map(c => [c.mainChord.id, c]));
       result.set(group.id, sortedMains.map(m => byMainId.get(m.id)!).filter(Boolean));
@@ -177,7 +177,7 @@ export const useChordStore = defineStore('chord', () => {
     if (groupId !== 'ALL') {
       const group = groups.value.find(g => g.id === groupId);
       const effectiveRule = sortRule ?? group?.sortRule ?? DEFAULT_SORT_RULE;
-      const effectiveKey = sortKey ?? group?.sortKey ?? 'C';
+      const effectiveKey = sortKey ?? (group ? getGroupSortKey(group) : undefined) ?? 'C';
       const cards = getGroupedCards(groupId, q);
       const chords = cards.flatMap(card => card.variants);
       return sortChordsByRule(chords, effectiveRule, effectiveKey);
@@ -245,26 +245,36 @@ export const useChordStore = defineStore('chord', () => {
     if (!trimmed) return;
     const g = groups.value.find(x => x.id === groupId);
     if (!g || g.name === trimmed) return;
-    groups.value = groups.value.map(item => (item.id === groupId ? { ...item, name: trimmed } : item));
+    groups.value = groups.value.map(item =>
+      item.id === groupId ? { ...item, name: trimmed, updatedAt: Date.now() } : item
+    );
   };
 
   const updateGroupSort = (groupId: string, sortRule: GroupSortRule, sortKey?: string) => {
     const g = groups.value.find(x => x.id === groupId);
     if (!g) return;
     if (sortRule === GroupSortRule.KEY_DEGREE) {
-      const targetKey = sortKey || g.sortKey || 'C';
-      if (g.sortRule === sortRule && g.sortKey === targetKey) return;
-      groups.value = groups.value.map(item => (item.id === groupId ? { ...item, sortRule, sortKey: targetKey } : item));
+      const targetKey = sortKey || getGroupSortKey(g) || 'C';
+      if (g.sortRule === sortRule && getGroupSortKey(g) === targetKey) return;
+      groups.value = groups.value.map(item =>
+        item.id === groupId
+          ? buildGroupVariant(
+              { id: item.id, name: item.name, createdAt: item.createdAt, updatedAt: Date.now() },
+              sortRule,
+              targetKey
+            )
+          : item
+      );
     } else {
-      if (g.sortRule === sortRule && g.sortKey === undefined) return;
-      groups.value = groups.value.map(item => {
-        if (item.id === groupId) {
-          const updated = { ...item, sortRule };
-          delete updated.sortKey;
-          return updated;
-        }
-        return item;
-      });
+      if (g.sortRule === sortRule && getGroupSortKey(g) === undefined) return;
+      groups.value = groups.value.map(item =>
+        item.id === groupId
+          ? buildGroupVariant(
+              { id: item.id, name: item.name, createdAt: item.createdAt, updatedAt: Date.now() },
+              sortRule
+            )
+          : item
+      );
     }
   };
 
@@ -321,15 +331,19 @@ export const useChordStore = defineStore('chord', () => {
   const moveChordsToGroup = (chordIds: string[], targetGroupId: string) => {
     if (!groups.value.some(g => g.id === targetGroupId)) return;
     const set = new Set(chordIds);
-    savedChordsList.value = savedChordsList.value.map(c => (set.has(c.id) ? { ...c, groupId: targetGroupId } : c));
+    const now = Date.now();
+    savedChordsList.value = savedChordsList.value.map(c =>
+      set.has(c.id) ? { ...c, groupId: toGroupId(targetGroupId), updatedAt: now } : c
+    );
   };
 
   const moveVariantsByName = (sourceGroupId: string, chordName: string, targetGroupId: string) => {
     if (!groups.value.some(g => g.id === targetGroupId)) return;
     const targetName = nameKeyOf(chordName);
+    const now = Date.now();
     savedChordsList.value = savedChordsList.value.map(c => {
       if (c.groupId === sourceGroupId && nameKeyOf(c) === targetName) {
-        return { ...c, groupId: targetGroupId };
+        return { ...c, groupId: toGroupId(targetGroupId), updatedAt: now };
       }
       return c;
     });
@@ -357,9 +371,11 @@ export const useChordStore = defineStore('chord', () => {
     let recoveryGroup = groups.value.find(g => g.id.startsWith('g_recovery_'));
     if (!recoveryGroup) {
       recoveryGroup = {
-        id: 'g_recovery_' + generateUUID().slice(0, 8),
+        id: toGroupId('g_recovery_' + generateUUID().slice(0, 8)),
         name: '已恢复的和弦',
         sortRule: DEFAULT_SORT_RULE,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       };
       groups.value = [recoveryGroup, ...groups.value];
     }
@@ -461,6 +477,9 @@ export const useChordStore = defineStore('chord', () => {
       if (original && computeChordFingerprint(original) === fingerprint && sameBarres) {
         return { ok: false, reason: 'UNCHANGED' };
       }
+      // 编辑保存：保留最初创建时间，刷新更新时间
+      if (original?.createdAt !== undefined) payload.createdAt = original.createdAt;
+      payload.updatedAt = Date.now();
     }
 
     const isDuplicate = savedChordsList.value.some(

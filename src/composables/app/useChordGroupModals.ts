@@ -4,6 +4,7 @@ import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/types';
+import { getGroupSortKey } from '@/utils/music/entityFactories';
 import { computeChordFingerprint, getChordName } from '@/utils/music/musicTheory';
 import { reactive } from 'vue';
 
@@ -154,7 +155,7 @@ export function useChordGroupModals() {
   const openSort = (group: Group) => {
     modalData.activeGroup = group;
     modalData.sortRule = group.sortRule || DEFAULT_GROUP_SORT_RULE;
-    modalData.sortKey = group.sortKey || DEFAULT_SORT_KEY;
+    modalData.sortKey = getGroupSortKey(group) || DEFAULT_SORT_KEY;
     modals.sort = true;
   };
 
@@ -198,7 +199,7 @@ export function useChordGroupModals() {
   };
 
   const openChordReferences = (cardData: GroupedChordCard) => {
-    const ids = [cardData.mainChord.id, ...cardData.variants.map(v => v.id)];
+    const ids = Array.from(new Set(cardData.variants.map(v => v.id)));
     modalData.referenceChordIds = ids;
     modalData.referenceChordName = getChordName(cardData.mainChord);
     modals.chordReferences = true;

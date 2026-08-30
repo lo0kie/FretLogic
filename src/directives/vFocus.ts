@@ -39,16 +39,18 @@ const executeFocus = (el: HTMLElement, modifiers?: Record<string, boolean>, opti
   const target = findFocusTarget(el);
   if (!target) return;
 
-  const preventScroll = Boolean(modifiers?.preventScroll || modifiers?.prevent_scroll || options?.preventScroll);
+  const preventScroll = Boolean(
+    modifiers?.['preventScroll'] || modifiers?.['prevent_scroll'] || options?.preventScroll
+  );
   target.focus({ preventScroll });
 
   const cursorMode: 'start' | 'end' | 'all' | undefined =
     options?.cursor ||
-    (modifiers?.start
+    (modifiers?.['start']
       ? 'start'
-      : modifiers?.end
+      : modifiers?.['end']
         ? 'end'
-        : modifiers?.select || modifiers?.all || options?.select
+        : modifiers?.['select'] || modifiers?.['all'] || options?.select
           ? 'all'
           : undefined);
 
@@ -89,7 +91,7 @@ const triggerFocusWithTiming = (el: HTMLElement, modifiers?: Record<string, bool
     timerMap.delete(el);
   }
 
-  const hasDelay = Boolean(modifiers?.delay || options?.delay);
+  const hasDelay = Boolean(modifiers?.['delay'] || options?.delay);
   const delayMs = typeof options?.delay === 'number' ? options.delay : hasDelay ? 60 : 0;
 
   if (delayMs > 0) {

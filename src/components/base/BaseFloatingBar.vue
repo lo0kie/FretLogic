@@ -104,7 +104,7 @@ const outerStyle = computed(() => {
     bottom: props.safeAreaInset ? `calc(${b} + env(safe-area-inset-bottom, 0px))` : b,
   };
   if (typeof props.zIndex === 'number') {
-    style.zIndex = props.zIndex;
+    style['zIndex'] = props.zIndex;
   }
   return style;
 });

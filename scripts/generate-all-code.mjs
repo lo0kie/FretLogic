@@ -26,10 +26,85 @@ function collectFiles(dir, fileList = []) {
   return fileList;
 }
 
+function stripComments(content) {
+  let result = '';
+  let i = 0;
+  const len = content.length;
+
+  while (i < len) {
+    const ch = content[i];
+    const next = content[i + 1];
+
+    if (ch === '"' || ch === "'") {
+      const quote = ch;
+      let str = ch;
+      i++;
+      while (i < len) {
+        if (content[i] === '\\' && i + 1 < len) {
+          str += content[i] + content[i + 1];
+          i += 2;
+          continue;
+        }
+        if (content[i] === quote) {
+          str += content[i];
+          i++;
+          break;
+        }
+        if (content[i] === '\n') break;
+        str += content[i];
+        i++;
+      }
+      result += str;
+      continue;
+    }
+
+    if (ch === '`') {
+      let str = ch;
+      i++;
+      while (i < len) {
+        if (content[i] === '\\' && i + 1 < len) {
+          str += content[i] + content[i + 1];
+          i += 2;
+          continue;
+        }
+        if (content[i] === '`') {
+          str += content[i];
+          i++;
+          break;
+        }
+        str += content[i];
+        i++;
+      }
+      result += str;
+      continue;
+    }
+
+    if (ch === '/' && next === '*') {
+      i += 2;
+      while (i < len && !(content[i] === '*' && content[i + 1] === '/')) {
+        i++;
+      }
+      i += 2;
+      continue;
+    }
+
+    if (ch === '/' && next === '/') {
+      while (i < len && content[i] !== '\n') {
+        i++;
+      }
+      continue;
+    }
+
+    result += ch;
+    i++;
+  }
+
+  return result;
+}
+
 function removeCommentsAndBlankLines(content) {
   content = content.replace(/<!--[\s\S]*?-->/g, '');
-  content = content.replace(/\/\*[\s\S]*?\*\//g, '');
-  content = content.replace(/\/\/.*$/gm, '');
+  content = stripComments(content);
   const lines = content.split('\n');
   const filtered = lines.filter(line => line.trim() !== '');
   return filtered.join('\n');

@@ -84,12 +84,11 @@
   --z-scrim: 99; /* 移动端抽屉遮罩（需高于顶栏，确保全屏遮罩可点击） */
   --z-sidebar-top: 100; /* 移动端抽屉（需高于遮罩） */
   --z-header: 90; /* 顶栏（低于移动遮罩，桌面不受影响） */
-  --z-popover: 91; /* 顶栏下拉锚点 */
-  --z-popover-top: 92; /* 顶栏下拉内容 */
   --z-overlay: 2000; /* 模态遮罩（原 z:2000） */
-  --z-menu: 9999; /* 右键菜单 / 选择器下拉 / Popover 浮层（原 z:9999） */
-  --z-top: 10000; /* 最高层：谱面导出抽屉等（原 z:10000） */
-  --z-toast: 11000; /* 全局提示（高于 popover、menu 和 modal） */
+  --z-menu: 9999; /* 右键菜单 / 选择器下拉 / Popover 浮层（原 z:9999），动态池基准 */
+  /* 动态池（floatingZ.ts）在 9999 基础上「最高占用 +1」递增，软上限 11000（见 FLOATING_Z_CEILING） */
+  --z-top: 12000; /* 最高静态层：拖拽幽灵 / 谱面导出抽屉等（高于动态池上限） */
+  --z-toast: 13000; /* 全局提示（高于 popover、menu、modal 和动态池） */
 
   /* === SOLID TINTS LIGHT START === */
   --tint-borderbase-85: #ededf2;
@@ -140,7 +139,8 @@
   --text-title: #f5f5f7;
   --text-body: #ebebf5;
   --text-muted: #98989d;
-  --text-disabled: #636366;
+  /* 暗色下需满足 4.5:1 对比（axe color-contrast）：#636366 在深底上仅 2.9:1，提升至 #8e8e96（≈5.3:1） */
+  --text-disabled: #8e8e96;
 
   --color-primary: #0a84ff;
   --color-success: #30d158;

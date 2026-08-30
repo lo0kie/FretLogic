@@ -10,7 +10,7 @@ import type {
   NoteInput,
   RootSegment,
 } from '@/types';
-import { GroupSortRule } from '@/types';
+import { CHORD_QUALITIES, GroupSortRule } from '@/types';
 import { createLruCache } from '@/utils/core/lruCache';
 import { analyzeChordGraph } from './chordEngine';
 
@@ -313,7 +313,12 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
 
   const result: ChordNameSegments = {
     root,
-    quality: quality || undefined,
+    ...(quality
+      ? // 已知性质收窄为 ChordQuality；未知残余降级落 unknownQuality（仅展示兜底）
+        KNOWN_QUALITIES_SET.has(quality.toLowerCase())
+        ? { quality: quality as ChordNameSegments['quality'] }
+        : { unknownQuality: quality }
+      : {}),
     extensions: extensions.length > 0 ? extensions : undefined,
     bass: bass ?? undefined,
   };
@@ -321,105 +326,8 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
   return result;
 };
 
-/** 已知的标准乐理和弦性质集合 */
-export const KNOWN_QUALITIES: string[] = [
-  '',
-  'm',
-  'min',
-  '-',
-  'maj',
-  'Maj',
-  'M',
-  'Δ',
-  '7',
-  'maj7',
-  'Maj7',
-  'M7',
-  'Δ7',
-  'm7',
-  'min7',
-  '-7',
-  'dim',
-  'dim7',
-  '°',
-  '°7',
-  'aug',
-  'aug7',
-  '+',
-  '+7',
-  'sus',
-  'sus4',
-  'sus2',
-  '7sus4',
-  '7sus2',
-  '9sus4',
-  '5',
-  '6',
-  'm6',
-  'min6',
-  '-6',
-  '6/9',
-  '69',
-  'm6/9',
-  'm69',
-  'min6/9',
-  'add9',
-  'add2',
-  'add4',
-  'add11',
-  'madd9',
-  'madd11',
-  'madd4',
-  'madd2',
-  '9',
-  'm9',
-  'min9',
-  '-9',
-  'maj9',
-  'Maj9',
-  'M9',
-  'Δ9',
-  '11',
-  'm11',
-  'min11',
-  '-11',
-  'maj11',
-  'Maj11',
-  'M11',
-  'Δ11',
-  '13',
-  'm13',
-  'min13',
-  '-13',
-  'maj13',
-  'Maj13',
-  'M13',
-  'Δ13',
-  'm7b5',
-  'm7(b5)',
-  'ø',
-  'ø7',
-  'mMaj7',
-  'mmaj7',
-  'mM7',
-  'mΔ7',
-  '-M7',
-  '-Δ7',
-  'dimMaj7',
-  'dimmaj7',
-  '°M7',
-  '°Δ7',
-  'augMaj7',
-  'augmaj7',
-  '+M7',
-  '+Δ7',
-  'alt',
-  '7alt',
-  'no3',
-  '(no3)',
-  'no5',
-  '(no5)',
-];
+/** 已知的标准乐理和弦性质集合（值域真相源在 types/chord.ts 的 CHORD_QUALITIES，此处附空串并保持 string 形态供小写比对） */
+export const KNOWN_QUALITIES: string[] = ['', ...CHORD_QUALITIES];
 
 const KNOWN_QUALITIES_SET = new Set(KNOWN_QUALITIES.map(q => q.toLowerCase()));
 
@@ -438,11 +346,9 @@ export const isValidChordName = (chordName: string): boolean => {
   const segments = nameToSegments(trimmed);
   if (!segments || !segments.root) return false;
 
-  if (segments.quality) {
-    const q = segments.quality.trim().toLowerCase();
-    if (!KNOWN_QUALITIES_SET.has(q)) {
-      return false;
-    }
+  // quality 已由解析器收窄为已知集合；出现 unknownQuality 说明性质不在已知值域内
+  if (segments.unknownQuality) {
+    return false;
   }
 
   if (segments.extensions && segments.extensions.length > 0) {
@@ -499,7 +405,7 @@ export const segmentsToString = (
   const shorthand = typeof options === 'boolean' ? false : (options.shorthand ?? false);
 
   const rootStr = pitchSegmentToString(segments.root, useUnicode);
-  let quality = segments.quality ?? '';
+  let quality = segments.quality ?? segments.unknownQuality ?? '';
   let extensions = segments.extensions ?? [];
 
   if (shorthand) {
@@ -651,7 +557,7 @@ export const parseChordName = (chordName: string): ParsedChordName => {
   const extsStr = segs.extensions
     ? segs.extensions.map(([deg, acc]) => `${acc === 1 ? '#' : acc === -1 ? 'b' : ''}${deg}`).join('')
     : '';
-  const suffix = `${segs.quality ?? ''}${extsStr}`;
+  const suffix = `${segs.quality ?? segs.unknownQuality ?? ''}${extsStr}`;
 
   const result: ParsedChordName = {
     rootLabel,

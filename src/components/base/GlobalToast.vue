@@ -58,11 +58,11 @@
             <!-- 操作按钮 -->
             <slot name="action" :item="item">
               <button
-                v-if="item.hasAction && item.onAction"
+                v-if="item.onAction"
                 v-wave
                 type="button"
                 class="font-bold underline text-xs ml-sm opacity-90 bg-transparent border-none p-0 text-inherit cursor-pointer outline-none rounded-sm hover:opacity-100 shrink-0 self-center whitespace-nowrap"
-                :aria-label="`${item.actionText}操作`"
+                :aria-label="`${item.actionText ?? '确定'}操作`"
                 data-focusable-inline
                 @click="handleExecuteAction(item)"
               >

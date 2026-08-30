@@ -258,6 +258,8 @@ export const STORAGE_KEYS = {
   EDITING_DRAFT: 'CHORD_LAB_EDITING_DRAFT',
   /** 是否处于创建模式 */
   IS_CREATING: 'CHORD_LAB_IS_CREATING',
+  /** 横按自动标记开关（持久化，刷新后保留） */
+  AUTO_BARRE: 'CHORD_LAB_AUTO_BARRE',
   /** 是否处于多指法选择模式 */
   IS_MULTI_FINGERING: 'CHORD_LAB_IS_MULTI_FINGERING',
   /** 多指法当前选中索引 */

@@ -23,7 +23,7 @@ describe('BaseFormRow component', () => {
       props: {
         labelWidth: '100px',
         align: 'top',
-        compact: true,
+        compacted: true,
       },
       slots: {
         label: '<span class="custom-label">自定义</span>',
@@ -33,6 +33,25 @@ describe('BaseFormRow component', () => {
 
     expect(wrapper.find('.custom-label').exists()).toBe(true);
     expect(wrapper.classes()).toContain('align-top');
-    expect(wrapper.classes()).toContain('is-compact');
+    expect(wrapper.classes()).toContain('is-compacted');
+  });
+
+  it('通过插槽 props 透传 id、disabled 与 required', () => {
+    const wrapper = mount(BaseFormRow, {
+      props: {
+        label: '必填项',
+        required: true,
+        disabled: true,
+      },
+      slots: {
+        default:
+          '<template #default="{ id, disabled, required }"><input :data-id="id" :data-disabled="String(disabled)" :data-required="String(required)" /></template>',
+      },
+    });
+
+    const input = wrapper.find('input');
+    expect(input.attributes('data-required')).toBe('true');
+    expect(input.attributes('data-disabled')).toBe('true');
+    expect(input.attributes('data-id')).toBeTruthy();
   });
 });

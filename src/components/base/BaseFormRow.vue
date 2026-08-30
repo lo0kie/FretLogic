@@ -2,7 +2,7 @@
   <div
     class="base-form-row flex flex-col w-full box-border"
     :class="[
-      { 'is-disabled opacity-60': disabled, 'is-compact': compact },
+      { 'is-disabled opacity-60': disabled, 'is-compacted': compacted },
       align === 'top' ? 'align-top' : 'align-center',
     ]"
   >
@@ -12,11 +12,11 @@
       :class="[
         layout === 'vertical'
           ? 'flex-col items-start gap-1.5'
-          : [align === 'top' ? 'items-start' : 'items-center', compact ? 'is-compact gap-sm' : 'gap-md'],
+          : [align === 'top' ? 'items-start' : 'items-center', compacted ? 'is-compacted gap-sm' : 'gap-md'],
       ]"
     >
       <label
-        v-if="label || $slots.label"
+        v-if="label || $slots['label']"
         class="form-row-label text-xs font-semibold text-text-muted whitespace-nowrap shrink-0 select-none overflow-hidden text-ellipsis"
         :class="[
           layout === 'horizontal' && align === 'top' ? 'pt-[calc(0.5rem+1px)]' : '',
@@ -37,13 +37,13 @@
         ]"
         :style="controlStyle"
       >
-        <slot :id="effectiveForId" :disabled="disabled" />
+        <slot :id="effectiveForId" :disabled="disabled" :required="required" />
       </div>
     </div>
 
     <!-- 反馈区：错误提示或说明文案，独立位于主体下方，避免 Flex 挤占 -->
     <div
-      v-if="resolvedHelp || resolvedError || $slots.help || $slots.error"
+      v-if="resolvedHelp || resolvedError || $slots['help'] || $slots['error']"
       class="form-row-feedback w-full mt-1 text-2xs leading-relaxed"
       :class="[resolvedError ? 'text-danger' : 'text-text-disabled']"
       :style="feedbackStyle"
@@ -71,7 +71,7 @@ const {
   labelWidth,
   controlWidth,
   controlAlign = 'end',
-  compact = false,
+  compacted = false,
   required = false,
   disabled = false,
   error,
@@ -88,8 +88,8 @@ const {
   labelWidth?: string | number;
   controlWidth?: FormComponentWidth;
   controlAlign?: 'start' | 'center' | 'end';
-  compact?: boolean;
-  /** 必填标记：显示 * 并输出 aria-required */
+  compacted?: boolean;
+  /** 必填标记：显示 *，并通过默认插槽 props 透传 required（控件侧据此输出 aria-required / 原生 required） */
   required?: boolean;
   /** 禁用态：label 置灰且透传 disabled 状态 */
   disabled?: boolean;
@@ -127,7 +127,7 @@ const feedbackStyle = computed(() => {
     return {};
   }
   return {
-    paddingLeft: `calc(${normalizedLabelWidth.value} + ${compact ? '0.5rem' : '0.75rem'})`,
+    paddingLeft: `calc(${normalizedLabelWidth.value} + ${compacted ? '0.5rem' : '0.75rem'})`,
   };
 });
 
