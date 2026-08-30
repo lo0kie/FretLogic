@@ -7,7 +7,7 @@
   font-size: $fs-xs;
   line-height: 1.45;
   text-align: center;
-  white-space: pre-line; // 支持字符串里的真实 \n 换行
+  white-space: pre-line;
   word-break: break-word;
   width: max-content;
   max-width: min(320px, calc(100vw - 24px));
@@ -19,4 +19,8 @@
   background-color: var(--bg-panel);
   color: var(--text-title);
   border: 1px solid var(--glass-border);
+}
+
+.v-tooltip-arrow {
+  box-sizing: border-box;
 }

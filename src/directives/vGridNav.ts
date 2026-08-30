@@ -71,11 +71,11 @@ const resolveOptions = (binding: DirectiveBinding<GridNavBinding>): GridNavOptio
     opts.disabled = true;
   }
 
-  if (mods.stop) opts.stop = true;
-  if (mods.loop) opts.loop = true;
-  if (mods.horizontal) opts.orientation = 'horizontal';
-  if (mods.vertical) opts.orientation = 'vertical';
-  if (mods.preventScroll || mods.prevent_scroll) opts.preventScroll = true;
+  if (mods['stop']) opts.stop = true;
+  if (mods['loop']) opts.loop = true;
+  if (mods['horizontal']) opts.orientation = 'horizontal';
+  if (mods['vertical']) opts.orientation = 'vertical';
+  if (mods['preventScroll'] || mods['prevent_scroll']) opts.preventScroll = true;
 
   if (!opts.selector) opts.selector = DEFAULT_SELECTOR;
   if (!opts.orientation) opts.orientation = 'both';

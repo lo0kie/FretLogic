@@ -13,7 +13,7 @@ export const useUiStore = defineStore('ui', () => {
   const activeExportTarget = shallowRef<HTMLElement | null>(null);
 
   const clearActionToasts = () => {
-    toasts.value = toasts.value.filter(t => !t.hasAction);
+    toasts.value = toasts.value.filter(t => !t.onAction);
   };
 
   const removeToast = (id: number) => {
@@ -58,18 +58,16 @@ export const useUiStore = defineStore('ui', () => {
 
   const createToast = (msg: string, type: ToastType = ToastType.INFO, options: ToastOptions = {}) => {
     const id = ++toastIdCounter;
-    const hasAction = Boolean(options.onAction);
     const duration = options.duration ?? 3000;
 
-    if (hasAction) clearActionToasts();
+    if (options.onAction) clearActionToasts();
 
     toasts.value.push({
       id,
       msg,
       description: options.description,
       type,
-      hasAction,
-      actionText: options.actionText || '确定',
+      actionText: options.actionText,
       ...(options.onAction !== undefined ? { onAction: options.onAction } : {}),
       duration,
       closable: options.closable ?? true,

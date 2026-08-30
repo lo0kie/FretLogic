@@ -52,7 +52,8 @@ export function useSyncService() {
     if (isSyncing.value) return false;
     const provider = resolveProvider('同步失败');
     if (!provider) return false;
-    const payload = buildBackupPayload();
+    // 云端推送不携带同步配置（含 Token/密码等凭据），仅手动备份导出才包含
+    const payload = buildBackupPayload({ includeSyncSettings: false });
     if (!payload) {
       uiStore.toast.error('数据校验失败，已取消同步');
       return false;

@@ -1,6 +1,7 @@
 <template>
-  <div
+  <aside
     class="panel-left absolute top-0 bottom-0 left-0 z-sidebar bg-bg-panel/90 backdrop-blur-xl border-r border-glass-border h-full box-border overflow-hidden flex flex-col transition-[width,opacity] duration-slow ease-sidebar"
+    :aria-label="route.path === '/score' ? '乐谱库' : '指法库'"
     :style="{
       width: uiStore.isLeftOpen ? LEFT_SIDEBAR_WIDTH_PIXEL : '0px',
       opacity: uiStore.isLeftOpen ? 1 : 0,
@@ -30,7 +31,13 @@
         </BaseInput>
 
         <div class="header-actions flex items-center gap-xs shrink-0">
-          <ActionButton v-tooltip="'新建分组'" variant="ghost" icon-only @click="groupModals.openCreate">
+          <ActionButton
+            v-tooltip="'新建分组'"
+            variant="ghost"
+            icon-only
+            aria-label="新建分组"
+            @click="groupModals.openCreate"
+          >
             <Plus :size="16" :stroke-width="2.5" />
           </ActionButton>
         </div>
@@ -45,7 +52,13 @@
           </BaseBadge>
         </div>
 
-        <ActionButton v-tooltip="'新建乐谱'" variant="ghost" icon-only @click="songModals.openCreateSongModal">
+        <ActionButton
+          v-tooltip="'新建乐谱'"
+          variant="ghost"
+          icon-only
+          aria-label="新建乐谱"
+          @click="songModals.openCreateSongModal"
+        >
           <Plus :size="16" :stroke-width="2.5" />
         </ActionButton>
       </template>
@@ -98,7 +111,7 @@
         </ActionButton>
       </div>
     </div>
-  </div>
+  </aside>
 
   <!-- 4. 业务弹窗组件集 -->
   <GroupModalsContainer />

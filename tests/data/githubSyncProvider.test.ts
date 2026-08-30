@@ -48,7 +48,13 @@ describe('github sync provider', () => {
   it('pulls and validates remote content', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ content: btoa(JSON.stringify(payload)) })));
     const provider = createGithubSyncProvider(config);
-    await expect(provider.pull()).resolves.toEqual(payload);
+    const result = await provider.pull();
+    // 校验层会把 v4 迁移到当前版本（v5），并补齐实体时间戳
+    expect(result?.version).toBe(5);
+    expect(result?.groups).toHaveLength(1);
+    expect(result?.groups[0]).toMatchObject({ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' });
+    expect(result?.groups[0]?.createdAt).toBeTypeOf('number');
+    expect(result?.groups[0]?.updatedAt).toBeTypeOf('number');
   });
 
   it('throws FILE_NOT_FOUND on 404', async () => {

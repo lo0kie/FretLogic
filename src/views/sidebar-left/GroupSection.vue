@@ -120,6 +120,7 @@ import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
 import { ArrowUpDown, ChevronDown, FolderOpen, Search, SquarePen, Trash2 } from '@lucide/vue';
+import { getGroupSortKey } from '@/utils/music/entityFactories';
 import { computed, watch, type ComponentPublicInstance } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import LeftChordGroupContent from './GroupContent.vue';
@@ -186,7 +187,7 @@ const hasMatchedChords = (groupId: string): boolean => getMatchCount(groupId) > 
 
 const sortLabelStrategies: Record<Group['sortRule'], (group: Group) => string> = {
   ROOT_PITCH: () => 'C-B',
-  KEY_DEGREE: group => `${group.sortKey}调`,
+  KEY_DEGREE: group => `${getGroupSortKey(group) ?? 'C'}调`,
   NAME_ASC: () => 'A-Z',
 };
 
@@ -203,7 +204,10 @@ const handleLocalDeleteChord = (chord: Chord) => {
 };
 
 const groupMenuItemsMap = new Map<string, ContextMenuItem[]>();
-const groupIdsSignature = computed(() => chordStore.groups.map(g => g.id).join('\u0000'));
+// 签名需包含组内和弦数，否则增删和弦后禁用态不会刷新
+const groupIdsSignature = computed(() =>
+  chordStore.groups.map(g => `${g.id}:${chordStore.groupChordMap.get(g.id)?.length ?? 0}`).join('\u0000')
+);
 watch(groupIdsSignature, () => groupMenuItemsMap.clear());
 
 const resolveGroup = (groupId: string): Group | null => chordStore.groups.find(g => g.id === groupId) ?? null;
@@ -223,6 +227,7 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
     {
       label: '和弦排序',
       icon: ArrowUpDown,
+      disabled: getGroupChordsCount(group.id) === 0,
       action: () => {
         const g = resolveGroup(group.id);
         if (g) emit('open-sort', g);

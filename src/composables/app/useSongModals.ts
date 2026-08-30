@@ -2,6 +2,7 @@ import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
+import { toCapo } from '@/utils/music/chord-fretboard';
 import { getKeySemitones, transposeChordName } from '@/utils/music/musicTheory';
 import { computed, reactive } from 'vue';
 
@@ -82,7 +83,7 @@ export function useSongModals() {
       songStore.updateSongMeta(modalData.activeSong.id, {
         title: newTitle,
         playKey: modalData.playKey,
-        capo: modalData.capo,
+        capo: toCapo(modalData.capo ?? 0),
       });
       uiStore.toast.success('乐谱配置已更新');
     }
@@ -97,7 +98,7 @@ export function useSongModals() {
 
   const handleClearChords = () => {
     if (modalData.activeSong) {
-      songStore.updateSongMeta(modalData.activeSong.id, { chordMap: {} });
+      songStore.updateSongMeta(modalData.activeSong.id, { chordMap: new Map() });
       uiStore.toast.success('已清除该乐谱的所有和弦');
     }
     modals.clear = false;

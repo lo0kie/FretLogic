@@ -30,7 +30,7 @@
           v-model="songModals.modalData.playKey"
           :options="KEY_OPTIONS"
           default-value="C"
-          :format-option="(val: any) => `${val} 调`"
+          :format-option="(val: string | number) => `${val} 调`"
         />
       </BaseFormRow>
 
@@ -39,7 +39,7 @@
           v-model="songModals.key.value"
           :options="KEY_OPTIONS"
           default-value="C"
-          :format-option="(val: any) => `${val} 调`"
+          :format-option="(val: string | number) => `${val} 调`"
         />
       </BaseFormRow>
 

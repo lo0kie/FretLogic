@@ -1,6 +1,7 @@
-import type { Chord, Group, Song } from '@/types';
+import type { Chord, Group, LineId, SlotKey, ChordId, Song, StringIndex } from '@/types';
 import { GroupSortRule } from '@/types';
-import { normalizeChord, pruneOrphanChordRefs } from '@/utils/music/chord-fretboard';
+import { isCapoValue, normalizeChord, pruneOrphanChordRefs } from '@/utils/music/chord-fretboard';
+import { buildGroupVariant, toSongId } from '@/utils/music/entityFactories';
 import { FRET_COUNTS } from '@/utils/core/constants';
 import { computeChordFingerprint, Tuning } from '@/utils/music/musicTheory';
 
@@ -9,6 +10,10 @@ type RawRecord = Record<string, unknown>;
 const isRecord = (value: unknown): value is RawRecord => !!value && typeof value === 'object' && !Array.isArray(value);
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+
+/** 合法毫秒时间戳：有限数字且为正 */
+const isValidTimestamp = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0;
 
 const isBoundedNumber = (value: unknown, min: number, max: number): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
@@ -24,36 +29,123 @@ const isValidStringEntity = (value: unknown): value is [number, boolean] => {
   );
 };
 
-const sanitizeGroups = (groups: unknown): Group[] => {
-  if (!Array.isArray(groups)) return [];
+// ===== 实体级校验内核（单一真相源） =====
+// persistedData（localStorage，静默丢弃）与 payload（导入/导出/云同步，issues 收集整包拒绝）
+// 共用同一套实体内核，仅在外层包裹不同的失败语义，避免双轨实现漂移。
 
-  return groups
-    .filter((group): group is RawRecord => {
-      if (!isRecord(group)) return false;
-      return typeof group.id === 'string' && typeof group.name === 'string';
-    })
-    .map((group): Group => {
-      const sortRule = Object.values(GroupSortRule).includes(group.sortRule as GroupSortRule)
-        ? (group.sortRule as GroupSortRule)
-        : GroupSortRule.ROOT_PITCH;
-      const hasValidSortKey =
-        sortRule === GroupSortRule.KEY_DEGREE && typeof group.sortKey === 'string' && !!group.sortKey;
+/** 清洗中间态：时间戳可能缺失，由 fillMissingTimestamps 补齐后得到完整实体 */
+export type GroupDraft = Omit<Group, 'createdAt' | 'updatedAt'> & Partial<Pick<Group, 'createdAt' | 'updatedAt'>>;
 
-      return {
-        id: group.id as string,
-        name: group.name as string,
-        sortRule,
-        ...(hasValidSortKey ? { sortKey: group.sortKey as string } : {}),
-      };
-    });
+/** 单个分组清洗内核：非法结构返回 null；时间戳保留合法值，缺失交由 fillMissingTimestamps 补齐 */
+export const sanitizeGroupEntity = (raw: unknown): GroupDraft | null => {
+  if (!isRecord(raw)) return null;
+  if (typeof raw['id'] !== 'string' || typeof raw['name'] !== 'string') return null;
+
+  const sortRule = Object.values(GroupSortRule).includes(raw['sortRule'] as GroupSortRule)
+    ? (raw['sortRule'] as GroupSortRule)
+    : GroupSortRule.ROOT_PITCH;
+  // buildGroupVariant 显式构造变体，旧数据遗留字段（如 collapsed）不会透传
+  const draft = buildGroupVariant({ id: raw['id'], name: raw['name'] }, sortRule, raw['sortKey']);
+  if (isValidTimestamp(raw['createdAt'])) draft.createdAt = raw['createdAt'];
+  if (isValidTimestamp(raw['updatedAt'])) draft.updatedAt = raw['updatedAt'];
+  return draft;
 };
 
-const resolveRootStringIndex = (chord: RawRecord): number | null => {
-  const index = chord.rootStringIndex;
-  if (!isBoundedNumber(index, 0, 5) || !Array.isArray(chord.strings)) return null;
+const resolveRootStringIndex = (chord: RawRecord): StringIndex | null => {
+  const index = chord['rootStringIndex'];
+  if (!isBoundedNumber(index, 0, 5) || !Array.isArray(chord['strings'])) return null;
 
-  const stringEntity = chord.strings[index];
-  return Array.isArray(stringEntity) && typeof stringEntity[0] === 'number' && stringEntity[0] >= 0 ? index : null;
+  const stringEntity = chord['strings'][index];
+  // isBoundedNumber 已保证 0~5 整数，此处收窄为 StringIndex
+  return Array.isArray(stringEntity) && typeof stringEntity[0] === 'number' && stringEntity[0] >= 0
+    ? (index as StringIndex)
+    : null;
+};
+
+/**
+ * 单个和弦清洗内核：非法结构返回 null。
+ * - strict（localStorage 默认）：品位必须为有限数字，否则丢弃；
+ * - repair（导入/同步）：允许品位异常，交由 normalizeChord 兜底为 -1。
+ * 内核中的展开透传是刻意的迁移边界：旧字段（chordName/isRoot 等）需进入 normalizeChord 完成升级清理。
+ */
+export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 'repair' }): Chord | null => {
+  const mode = options?.mode ?? 'strict';
+  if (!isRecord(raw)) return null;
+  if (typeof raw['id'] !== 'string' || !raw['id']) return null;
+  if (typeof raw['groupId'] !== 'string' || !raw['groupId']) return null;
+  if (!raw['chordName'] && !raw['nameSegments']) return null;
+  if (!Array.isArray(raw['strings']) || raw['strings'].length !== 6) return null;
+
+  if (mode === 'strict') {
+    if (!raw['strings'].every(isValidStringEntity)) return null;
+  } else {
+    const isStringsValid = raw['strings'].every(
+      (s): s is [number, boolean] =>
+        Array.isArray(s) && s.length === 2 && typeof s[0] === 'number' && typeof s[1] === 'boolean'
+    );
+    if (!isStringsValid) return null;
+  }
+
+  const draft: Chord = {
+    ...(raw as unknown as Chord),
+    nameSegments: (raw['nameSegments'] as Chord['nameSegments']) ?? null,
+    fretCount: FRET_COUNTS.includes(raw['fretCount'] as Chord['fretCount'])
+      ? (raw['fretCount'] as Chord['fretCount'])
+      : 3,
+    capo: isCapoValue(raw['capo']) ? raw['capo'] : 0,
+    tuning: Object.values(Tuning).includes(raw['tuning'] as Tuning) ? (raw['tuning'] as Tuning) : Tuning.STANDARD,
+    rootStringIndex: resolveRootStringIndex(raw),
+  };
+  const { chord } = normalizeChord(draft);
+  return chord;
+};
+
+const sanitizeChordMap = (chordMap: unknown): Map<SlotKey, ChordId> => {
+  const collect = (entries: Iterable<[unknown, unknown]>): Map<SlotKey, ChordId> => {
+    const out = new Map<SlotKey, ChordId>();
+    for (const [key, chordId] of entries) {
+      // key/value 校验为非空 string 后信任收窄（SlotKey/ChordId 运行时就是 string）
+      if (isNonEmptyString(key) && isNonEmptyString(chordId)) out.set(key as SlotKey, chordId as ChordId);
+    }
+    return out;
+  };
+
+  if (chordMap instanceof Map) return collect(chordMap);
+  if (!isRecord(chordMap)) return new Map();
+  return collect(Object.entries(chordMap));
+};
+
+/** 清洗中间态：时间戳可能缺失，由 fillMissingTimestamps 补齐后得到完整实体 */
+export type SongDraft = Omit<Song, 'createdAt' | 'updatedAt'> & Partial<Pick<Song, 'createdAt' | 'updatedAt'>>;
+
+/** 单个乐谱清洗内核：非法结构返回 null；显式构造全部已知字段，不透传未知字段 */
+export const sanitizeSongEntity = (raw: unknown): SongDraft | null => {
+  if (!isRecord(raw)) return null;
+  if (typeof raw['id'] !== 'string' || !raw['id']) return null;
+  if (typeof raw['title'] !== 'string') return null;
+
+  // key 已改为由 playKey + capo 实时派生：旧数据若带 key 且 playKey 缺失则用 key 兜底，随后丢弃
+  const legacyKey = typeof raw['key'] === 'string' && raw['key'] ? raw['key'] : 'C';
+  const song: SongDraft = {
+    id: toSongId(raw['id']),
+    title: raw['title'],
+    lyrics: typeof raw['lyrics'] === 'string' ? raw['lyrics'] : '',
+    lineIds: Array.isArray(raw['lineIds']) ? (raw['lineIds'].filter(isNonEmptyString) as LineId[]) : [],
+    playKey: typeof raw['playKey'] === 'string' && raw['playKey'] ? raw['playKey'] : legacyKey,
+    capo: isCapoValue(raw['capo']) ? raw['capo'] : 0,
+    chordMap: sanitizeChordMap(raw['chordMap']),
+    version: typeof raw['version'] === 'number' && Number.isFinite(raw['version']) ? raw['version'] : 1,
+    ...(isValidTimestamp(raw['createdAt']) ? { createdAt: raw['createdAt'] } : {}),
+    ...(isValidTimestamp(raw['updatedAt']) ? { updatedAt: raw['updatedAt'] } : {}),
+  };
+  return song;
+};
+
+// ===== 数组级清洗（localStorage 链路：静默丢弃非法条目） =====
+
+const sanitizeGroups = (groups: unknown): GroupDraft[] => {
+  if (!Array.isArray(groups)) return [];
+  return groups.map(sanitizeGroupEntity).filter((group): group is GroupDraft => group !== null);
 };
 
 const sanitizeChords = (chords: unknown, validGroupIds: Set<string>): Chord[] => {
@@ -63,24 +155,10 @@ const sanitizeChords = (chords: unknown, validGroupIds: Set<string>): Chord[] =>
   const seenFingerprints = new Set<string>();
 
   for (const rawChord of chords) {
-    if (!isRecord(rawChord)) continue;
-    if (typeof rawChord.id !== 'string') continue;
-    if (!rawChord.chordName && !rawChord.nameSegments) continue;
-    if (typeof rawChord.groupId !== 'string' || !validGroupIds.has(rawChord.groupId)) continue;
-    if (!Array.isArray(rawChord.strings) || rawChord.strings.length !== 6) continue;
-    if (!rawChord.strings.every(isValidStringEntity)) continue;
+    const chord = sanitizeChordEntity(rawChord);
+    if (!chord) continue;
+    if (!validGroupIds.has(chord.groupId)) continue;
 
-    const draft: Chord = {
-      ...(rawChord as unknown as Chord),
-      nameSegments: (rawChord.nameSegments as Chord['nameSegments']) ?? null,
-      fretCount: FRET_COUNTS.includes(rawChord.fretCount as Chord['fretCount'])
-        ? (rawChord.fretCount as Chord['fretCount'])
-        : 3,
-      capo: isBoundedNumber(rawChord.capo, 0, 12) ? rawChord.capo : 0,
-      tuning: Object.values(Tuning).includes(rawChord.tuning as Tuning) ? (rawChord.tuning as Tuning) : Tuning.STANDARD,
-      rootStringIndex: resolveRootStringIndex(rawChord),
-    };
-    const { chord } = normalizeChord(draft);
     const fingerprint = `${chord.groupId}::${computeChordFingerprint(chord)}`;
     if (seenFingerprints.has(fingerprint)) continue;
 
@@ -91,56 +169,62 @@ const sanitizeChords = (chords: unknown, validGroupIds: Set<string>): Chord[] =>
   return sanitizedChords;
 };
 
-const sanitizeChordMap = (chordMap: unknown): Record<string, string> => {
-  if (!isRecord(chordMap)) return {};
-
-  const entries: [string, string][] = [];
-
-  for (const [key, chordId] of Object.entries(chordMap)) {
-    if (isNonEmptyString(key) && isNonEmptyString(chordId)) entries.push([key, chordId]);
-  }
-
-  return Object.fromEntries(entries);
-};
-
-const sanitizeSongs = (songs: unknown): Song[] => {
+const sanitizeSongs = (songs: unknown): SongDraft[] => {
   if (!Array.isArray(songs)) return [];
 
   const validSongIds = new Set<string>();
-
-  return songs.flatMap((rawSong): Song[] => {
-    if (!isRecord(rawSong)) return [];
-    if (typeof rawSong.id !== 'string' || !rawSong.id || validSongIds.has(rawSong.id)) return [];
-    if (typeof rawSong.title !== 'string') return [];
-
-    const legacyKey = typeof rawSong.key === 'string' && rawSong.key ? rawSong.key : 'C';
-    const song: Song = {
-      id: rawSong.id,
-      title: rawSong.title,
-      lyrics: typeof rawSong.lyrics === 'string' ? rawSong.lyrics : '',
-      lineIds: Array.isArray(rawSong.lineIds) ? rawSong.lineIds.filter(isNonEmptyString) : [],
-      playKey: typeof rawSong.playKey === 'string' && rawSong.playKey ? rawSong.playKey : legacyKey,
-      capo: isBoundedNumber(rawSong.capo, 0, 12) ? rawSong.capo : 0,
-      chordMap: sanitizeChordMap(rawSong.chordMap),
-      version: typeof rawSong.version === 'number' && Number.isFinite(rawSong.version) ? rawSong.version : 1,
-    };
-
+  const out: SongDraft[] = [];
+  for (const rawSong of songs) {
+    const song = sanitizeSongEntity(rawSong);
+    if (!song || validSongIds.has(song.id)) continue;
     validSongIds.add(song.id);
-    return [song];
+    out.push(song);
+  }
+  return out;
+};
+
+export interface Timestamped {
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+/**
+ * 按数组顺序补全缺失的时间戳：保留已有合法值，缺失项取游标 +1ms。
+ * 游标以 now 为起点并吸收已遇到的合法时间戳，保证补全值沿数组严格递增，
+ * 且不会造出早于既有数据的时间。
+ */
+export const fillMissingTimestamps = <T extends Timestamped>(
+  items: T[],
+  now: number
+): (T & Required<Timestamped>)[] => {
+  let cursor = now;
+
+  return items.map(item => {
+    cursor = isValidTimestamp(item.createdAt) ? Math.max(cursor, item.createdAt) : cursor + 1;
+
+    const createdAt = isValidTimestamp(item.createdAt) ? item.createdAt : cursor;
+    const updatedAt = isValidTimestamp(item.updatedAt) ? item.updatedAt : createdAt;
+
+    return { ...item, createdAt, updatedAt } as T & Required<Timestamped>;
   });
 };
 
 export const sanitizePersistedData = (data: { groups?: unknown; chords?: unknown | null; songs?: unknown }) => {
-  const groups = sanitizeGroups(data.groups);
+  const now = Date.now();
+  // Group 为判别联合，交叉类型无法被 TS 自动收敛，时间戳补齐后信任收窄（校验边界）
+  const groups = fillMissingTimestamps(sanitizeGroups(data.groups), now) as Group[];
   const hasChordSnapshot = data.chords !== null;
-  const chords = sanitizeChords(data.chords, new Set(groups.map(group => group.id)));
+  const chords = fillMissingTimestamps(sanitizeChords(data.chords, new Set(groups.map(group => group.id))), now);
   const validChordIds = new Set(chords.map(chord => chord.id));
-  const songs = hasChordSnapshot
-    ? sanitizeSongs(data.songs).map(song => {
-        const { map } = pruneOrphanChordRefs(song.chordMap, validChordIds, { preserveUnknown: true });
-        return { ...song, chordMap: map };
-      })
-    : sanitizeSongs(data.songs);
+  const songs = fillMissingTimestamps(
+    hasChordSnapshot
+      ? sanitizeSongs(data.songs).map(song => {
+          const { map } = pruneOrphanChordRefs(song.chordMap, validChordIds, { preserveUnknown: true });
+          return { ...song, chordMap: map };
+        })
+      : sanitizeSongs(data.songs),
+    now
+  );
 
   return { groups, chords, songs };
 };

@@ -71,7 +71,7 @@
       </span>
     </span>
 
-    <span v-if="label || $slots.default" class="switch-label text-xs font-medium text-text-body leading-none">
+    <span v-if="label || $slots['default']" class="switch-label text-xs font-medium text-text-body leading-none">
       <slot> {{ label }} </slot>
     </span>
   </button>

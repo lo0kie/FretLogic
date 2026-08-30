@@ -1,5 +1,5 @@
 import { globalDarkMode } from '@/stores/globalState';
-import type { Chord } from '@/types';
+import type { Chord, SlotKey } from '@/types';
 import { computeChordFingerprint } from '@/utils/music/musicTheory';
 import { charKey, chordSlotKey, collectEdgeChordIds } from '@/utils/score/scoreModel';
 import type { Options } from 'html-to-image/lib/types';
@@ -7,13 +7,13 @@ import type { Options } from 'html-to-image/lib/types';
 // ===== scoreLines: 谱面行数据与缓存 =====
 
 export interface EdgeChordItem {
-  slotKey: string;
+  slotKey: SlotKey;
   chord: Chord;
 }
 
 export interface CharItem {
   char: string;
-  slotKey: string;
+  slotKey: SlotKey;
 }
 
 export interface LineData {
@@ -22,15 +22,15 @@ export interface LineData {
   chars: CharItem[];
   startChords: EdgeChordItem[];
   endChords: EdgeChordItem[];
-  nextStartKey: string;
-  nextEndKey: string;
+  nextStartKey: SlotKey;
+  nextEndKey: SlotKey;
 }
 
 const prevCharsByLineId = new Map<string, { text: string; chars: CharItem[] }>();
 const prevEdgeChordsCache = new Map<string, { sig: string; chords: EdgeChordItem[] }>();
 
 function getEdgeChordsWithNextKey(
-  chordMap: Record<string, string>,
+  chordMap: Map<string, string>,
   lineId: string,
   type: 'start' | 'end',
   chordsLookupMap: Map<string, Chord>
@@ -76,7 +76,7 @@ function buildChars(lineId: string, lineText: string): CharItem[] {
 
 export function buildLyricsLinesWithEdges(
   lyrics: string,
-  chordMap: Record<string, string>,
+  chordMap: Map<string, string>,
   chordsLookupMap: Map<string, Chord>,
   existingLineIds: string[] = []
 ): LineData[] {
@@ -216,7 +216,7 @@ const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions):
     style: {
       ...defaultStyle,
       ...exportOptions.style,
-      transform: exportOptions.style?.transform ?? 'none',
+      transform: exportOptions.style?.['transform'] ?? 'none',
       borderRadius: '0',
       borderColor: 'transparent',
       borderWidth: '0',
