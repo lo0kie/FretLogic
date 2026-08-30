@@ -15,7 +15,7 @@ try {
   gitCommit = 'unknown';
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     tailwindcss(),
     vue({
@@ -33,12 +33,18 @@ export default defineConfig({
         },
       },
     }),
-    visualizer({
-      open: process.env.ANALYZE === 'true',
-      filename: 'stats.html',
-      gzipSize: true,
-      brotliSize: true,
-    }),
+    // 产物体积分析按需生成：仅 `pnpm build:analyze`（--mode analyze）时注册插件，
+    // 日常构建跳过 gzip/brotli 统计与 stats.html 写盘（产物变了分析必须重算，无缓存可言）
+    ...(mode === 'analyze'
+      ? [
+          visualizer({
+            open: true,
+            filename: 'stats.html',
+            gzipSize: true,
+            brotliSize: true,
+          }),
+        ]
+      : []),
     VitePWA({
       registerType: 'autoUpdate', // 自动更新 Service Worker
       manifest: {
@@ -117,4 +123,4 @@ export default defineConfig({
     open: true,
     host: '0.0.0.0',
   },
-});
+}));
