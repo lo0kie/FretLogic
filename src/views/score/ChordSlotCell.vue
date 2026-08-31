@@ -15,12 +15,14 @@
         'opacity-100 px-[0.4rem] justify-center hover:!bg-transparent': variant === 'add',
         '!hidden': variant === 'add' && !isGlobalEditable,
         'ml-[0.42rem]': leftChordGap,
+        // 聚焦时和弦自身保持外边框（焦点会落到组内按钮，故用 isFocused 状态而非 :focus）
+        '!shadow-[0_0_0_2px_var(--bg-panel),0_0_0_4px_var(--color-primary)]': isFocused,
       },
     ]"
     :role="isGlobalEditable ? 'button' : undefined"
     :tabindex="isGlobalEditable ? 0 : -1"
     :aria-label="ariaLabelText"
-    :title="isGlobalEditable && variant === 'char' ? (chord ? '点击更换或清除和弦' : '点击添加和弦') : undefined"
+    :title="slotTitle"
     :data-focusable-inline="isGlobalEditable || undefined"
     @click="handleClick"
     @keydown.enter="handleKeydown"
@@ -29,6 +31,8 @@
     @keydown.backspace="handleDelete"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
+    @focusin="handleFocusIn"
+    @focusout="handleFocusOut"
   >
     <div
       class="chord-display-slot flex-1 flex justify-center w-full"
@@ -36,26 +40,74 @@
     >
       <div
         v-if="chord"
-        v-wave="{ disabled: !isGlobalEditable }"
         class="inline-fretboard-card flex flex-col items-center p-xs rounded-sm bg-transparent relative select-none transition-all duration-fast"
-        :class="{ 'cursor-pointer [touch-action:none]': isGlobalEditable }"
-        :title="isGlobalEditable ? '点击更换和弦，按住可拖拽换位' : undefined"
-        @pointerdown.stop="isGlobalEditable && emit('pointerdown', $event, slotKey, chord)"
       >
-        <button
-          v-if="isVisible && !isExporting && isGlobalEditable"
-          v-wave
-          type="button"
-          :tabindex="isButtonRevealed ? 0 : -1"
-          class="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-danger text-text-on-accent border-none flex items-center justify-center p-0 cursor-pointer pointer-events-none group-hover:pointer-events-auto group-hover:!opacity-100 z-card shadow-sm outline-none opacity-0 transition-all duration-fast hover:scale-105 active:scale-95"
-          title="清除当前和弦"
-          aria-label="清除当前和弦"
-          data-focusable-inline
-          @pointerdown.stop
-          @click.stop.prevent="emit('remove', slotKey)"
+        <div
+          v-if="isVisible && isGlobalEditable && !isExporting"
+          class="absolute inset-0 rounded-sm bg-black/30 pointer-events-none transition-all duration-fast z-[2]"
+          :class="isActive ? 'opacity-100' : 'opacity-0'"
         >
-          <X :size="12" :stroke-width="3" aria-hidden="true" />
-        </button>
+          <div
+            v-if="isVisible && !isExporting && isGlobalEditable"
+            ref="actionGroupEl"
+            class="absolute inset-0 z-card transition-all duration-fast flex flex-col items-stretch justify-center gap-1.5 p-2"
+            :class="isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'"
+            @keydown="handleActionKeydown"
+          >
+            <ActionButton
+              ref="editButtonEl"
+              v-wave
+              color="primary"
+              variant="subtle"
+              size="sm"
+              block
+              :tabindex="-1"
+              :aria-label="editButtonTitle"
+              :title="editButtonTitle"
+              class="!pointer-events-auto"
+              @pointerdown.stop
+              @click.stop.prevent="emit('click')"
+            >
+              <Pencil :size="16" :stroke-width="2.5" class="shrink-0" />
+              <span class="font-bold">{{ editButtonLabel }}</span>
+            </ActionButton>
+            <ActionButton
+              ref="copyButtonEl"
+              v-wave
+              color="success"
+              variant="subtle"
+              size="sm"
+              block
+              :tabindex="-1"
+              :aria-label="moveButtonTitle"
+              :title="moveButtonTitle"
+              class="!pointer-events-auto cursor-grab active:cursor-grabbing"
+              @pointerdown.stop.prevent="emit('copyPointerdown', $event, slotKey, chord)"
+              @mouseup.stop.prevent
+              @click.stop.prevent
+            >
+              <GripVertical :size="16" :stroke-width="2.5" class="shrink-0" />
+              <span class="font-bold">{{ moveButtonLabel }}</span>
+            </ActionButton>
+            <ActionButton
+              ref="removeButtonEl"
+              v-wave
+              color="danger"
+              variant="subtle"
+              size="sm"
+              block
+              :tabindex="-1"
+              :aria-label="removeButtonTitle"
+              :title="removeButtonTitle"
+              class="!pointer-events-auto"
+              @pointerdown.stop
+              @click.stop.prevent="emit('remove', slotKey)"
+            >
+              <X :size="16" :stroke-width="2.5" class="shrink-0" />
+              <span class="font-bold">{{ removeButtonLabel }}</span>
+            </ActionButton>
+          </div>
+        </div>
         <Fretboard
           v-if="isVisible"
           :ref="setFretboardMeasureRef"
@@ -69,17 +121,19 @@
         />
         <div v-else :style="chord ? getCalculatedOrCachedSize(chord.fretCount) : undefined" />
       </div>
-      <span
+
+      <ActionButton
         v-else-if="variant === 'add' && isGlobalEditable"
-        v-wave
-        class="inline-flex items-center justify-center h-5 text-2xs font-bold text-primary opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-[.is-drop-target]:!opacity-100 group-[.is-drop-target]:!pointer-events-auto border border-dashed border-primary bg-tint-primary-92 px-sm rounded-sm whitespace-nowrap cursor-pointer box-border transition-all duration-fast hover:bg-tint-primary-80"
-        :class="{ '!opacity-100 !pointer-events-auto': lineHovered }"
+        ref="addButtonEl"
+        icon-only
+        variant="subtle"
+        :tabindex="-1"
+        :aria-label="addPlaceholderTitle"
         :title="addPlaceholderTitle"
-        role="button"
-        tabindex="-1"
+        :class="isActive || lineHovered ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'"
       >
-        <Plus :size="18" :stroke-width="3" />
-      </span>
+        <Plus :size="18" :stroke-width="3" class="text-primary" />
+      </ActionButton>
     </div>
     <template v-if="variant === 'char'">
       <span
@@ -104,6 +158,7 @@ const fretboardSizeCache = reactive(new Map<string, { width: string; height: str
 </script>
 
 <script setup lang="ts">
+import ActionButton from '@/components/base/ActionButton.vue';
 import Fretboard from '@/components/fretboard/Fretboard.vue';
 import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
@@ -111,8 +166,8 @@ import type { Chord, SlotKey } from '@/types';
 import { observeVisibility } from '@/utils/core/common';
 import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
 import { getChordName } from '@/utils/music/musicTheory';
-import { Plus, X } from '@lucide/vue';
-import { computed, ref, useTemplateRef, watch, watchEffect, type ComponentPublicInstance } from 'vue';
+import { GripVertical, Pencil, Plus, X } from '@lucide/vue';
+import { computed, nextTick, ref, useTemplateRef, watch, watchEffect, type ComponentPublicInstance } from 'vue';
 
 const props = defineProps<{
   slotKey: SlotKey;
@@ -132,12 +187,57 @@ const emit = defineEmits<{
   (e: 'click'): void;
   (e: 'remove', slotKey: SlotKey): void;
   (e: 'pointerdown', event: PointerEvent, slotKey: SlotKey, chord: Chord): void;
+  (e: 'copyPointerdown', event: PointerEvent, slotKey: SlotKey, chord: Chord): void;
 }>();
 
 const isVisible = ref(false);
 const isHovered = ref(false);
-// 清除按钮仅在父容器 hover 时显示；隐藏时不进入 Tab 焦点序列，避免抢占键盘导航
-const isButtonRevealed = computed(() => isHovered.value && isGlobalEditable);
+const isFocused = ref(false);
+// 操作按钮组引用：作为单一可聚焦节点，方向键在其内部按钮间切换
+const actionGroupEl = useTemplateRef<HTMLElement>('actionGroupEl');
+const editButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('editButtonEl');
+const copyButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('copyButtonEl');
+const removeButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('removeButtonEl');
+const addButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('addButtonEl');
+// 当前激活的操作按钮下标（0 修改 / 1 复制 / 2 删除），支持上下方向键切换
+const activeActionIndex = ref(0);
+// 覆盖层（操作按钮/遮罩/添加槽提示）在 hover 或聚焦时显示
+const isActive = computed(() => isHovered.value || isFocused.value);
+
+// 焦点进入本槽（含进入内部按钮）时标记为激活；避免 blur 在焦点移入按钮时误关闭
+const handleFocusIn = (e: FocusEvent) => {
+  isFocused.value = true;
+  // 仅当焦点直接落在根槽（Tab/程序聚焦）时才同步到内部按钮；
+  // 鼠标点击或槽内按钮间移动时不得重聚焦，否则会把焦点拉回 activeActionIndex 所指按钮
+  if ((e.target as HTMLElement) !== charBoxRef.value) return;
+  if (!isGlobalEditable.value) return;
+  if (props.variant === 'add') {
+    // 添加槽与字符槽共享焦点模型：根槽聚焦时把焦点同步到内部"+"按钮（反向经 focusin 冒泡已天然生效）
+    nextTick(() => addButtonEl.value?.$el.focus());
+    return;
+  }
+  if (props.chord) {
+    // 有和弦：让焦点同步落到当前激活按钮，方便方向键直接切换
+    nextTick(() => focusButton(activeActionIndex.value));
+  }
+};
+// 仅当焦点真正离开本槽子树时才取消激活
+const handleFocusOut = (e: FocusEvent) => {
+  const next = e.relatedTarget as Node | null;
+  if (next && charBoxRef.value?.contains(next)) return;
+  isFocused.value = false;
+};
+/** 字符槽 title：可编辑时按是否已有和弦给出点击提示 */
+const slotTitle = computed(() =>
+  isGlobalEditable.value && props.variant === 'char' ? (props.chord ? '点击更换或清除和弦' : '点击添加和弦') : undefined
+);
+/** 修改/复制/删除大按钮的标签与提示文案 */
+const editButtonLabel = '修改';
+const editButtonTitle = '打开和弦编辑器';
+const moveButtonLabel = '移动';
+const moveButtonTitle = '按住拖拽，松开后可选择复制或移位';
+const removeButtonLabel = '删除';
+const removeButtonTitle = '清除当前和弦';
 const scoreEditor = useScoreEditorStore();
 const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
 
@@ -181,7 +281,8 @@ const getCalculatedOrCachedSize = (fretCount: number) => {
 };
 
 const handleClick = (e: MouseEvent) => {
-  if (isGlobalEditable.value) {
+  // 空槽（无和弦）点击用于添加；有和弦的交互收敛到 hover 浮出的操作按钮
+  if (isGlobalEditable.value && !props.chord) {
     e.stopPropagation();
     e.preventDefault();
     emit('click');
@@ -189,10 +290,52 @@ const handleClick = (e: MouseEvent) => {
 };
 
 const handleKeydown = (e: KeyboardEvent) => {
-  if (isGlobalEditable.value) {
-    e.stopPropagation();
-    e.preventDefault();
+  if (!isGlobalEditable.value) return;
+  // 焦点已落在组内操作按钮上时，交给按钮原生处理（回车/空格触发对应操作），避免重复拦截
+  const target = e.target as HTMLElement | null;
+  if (actionGroupEl.value?.contains(target)) return;
+  e.stopPropagation();
+  e.preventDefault();
+  if (props.variant === 'add') {
+    // 行首行尾的添加槽与空字符槽共享行为：回车/空格直接打开添加 picker
     emit('click');
+    return;
+  }
+  if (!props.chord) {
+    // 无和弦的字符槽：打开添加 picker
+    emit('click');
+    return;
+  }
+  // 有和弦：不再弹出 picker，唤起操作按钮组，焦点停在按钮组节点上由用户用方向键切换
+  isFocused.value = true;
+  activeActionIndex.value = 0;
+  nextTick(() => focusButton(activeActionIndex.value));
+};
+
+// 三个操作按钮的 DOM 引用，按下标取用
+const actionButtons = () =>
+  [editButtonEl.value, copyButtonEl.value, removeButtonEl.value].filter(Boolean) as Array<{
+    $el: HTMLButtonElement;
+  }>;
+const focusButton = (index: number) => {
+  const btn = actionButtons()[index];
+  btn?.$el.focus();
+};
+
+// 上下方向键在按钮组内循环切换，回车/空格触发当前按钮的对应事件
+const handleActionKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    e.stopPropagation();
+    const delta = e.key === 'ArrowDown' ? 1 : -1;
+    const len = 3;
+    activeActionIndex.value = (activeActionIndex.value + delta + len) % len;
+    focusButton(activeActionIndex.value);
+    return;
+  }
+  // 回车/空格保留默认行为（触发当前聚焦按钮的原生 click），仅阻止冒泡
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.stopPropagation();
   }
 };
 

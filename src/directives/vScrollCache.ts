@@ -1,4 +1,5 @@
 import type { DirectiveBinding, DirectiveHook, ObjectDirective } from 'vue';
+import { SCROLL_RESTORE_BUFFER_MS, SCROLL_RESTORE_MAX_DURATION_MS } from '@/utils/core/constants';
 
 export interface ScrollPosition {
   top: number;
@@ -119,7 +120,7 @@ const restoreScroll = (
     return;
   }
 
-  const MAX_DURATION = 1200;
+  const MAX_DURATION = SCROLL_RESTORE_MAX_DURATION_MS;
   const startTime = performance.now();
   let resizeObserver: ResizeObserver | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -162,7 +163,7 @@ const restoreScroll = (
 
     timer = setTimeout(() => {
       finish();
-    }, MAX_DURATION + 200);
+    }, MAX_DURATION + SCROLL_RESTORE_BUFFER_MS);
 
     activeRestoreMap.set(el, { observer: resizeObserver, timer, raf });
   };

@@ -1,6 +1,6 @@
 import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import type { Chord } from '@/types';
+import type { Chord, SlotKey } from '@/types';
 import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from 'vue';
 import { useDragAutoScroll } from './lyrics-drag/useDragAutoScroll';
 import { useDragGhost } from './lyrics-drag/useDragGhost';
@@ -12,6 +12,10 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   const isDragging = ref(false);
   const isSuppressingClick = ref(false);
   const draggingSlotKey = ref<string | null>(null);
+  /** 当前拖拽的操作模式：swap 为换位，copy 为复制拖拽（落点后弹窗询问复制/移位） */
+  const dragMoveMode = ref<'swap' | 'copy'>('swap');
+  /** 复制拖拽的待决落点：拖拽结束后由弹窗选择「复制」或「移位」再落地 */
+  const pendingCopyDrop = ref<{ sourceKey: SlotKey; targetKey: string } | null>(null);
 
   const {
     ghostChordName,
@@ -60,7 +64,10 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     isDragging.value = true;
     wasDraggingInSession = true;
     draggingSlotKey.value = activeSourceKey;
-    markDragSource(activeSourceKey);
+    // 换位模式下虚化源和弦以提示将被移走；复制模式源和弦保留，无需虚化
+    if (dragMoveMode.value === 'swap') {
+      markDragSource(activeSourceKey);
+    }
     setGhostChord(activeChord);
     document.body.classList.add('is-global-dragging');
 
@@ -148,7 +155,13 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
         draggingSlotKey.value !== dragOverSlotKey.value &&
         scoreEditor.activeSong
       ) {
-        scoreEditor.swapSlotChords(draggingSlotKey.value, dragOverSlotKey.value);
+        if (dragMoveMode.value === 'copy') {
+          // 复制拖拽不立即落地：记录待决落点，由弹窗选择「复制」或「移位」。
+          // sourceKey 源自 data-slot-key，store 动作内会再做 isSlotKey 前缀校验
+          pendingCopyDrop.value = { sourceKey: draggingSlotKey.value as SlotKey, targetKey: dragOverSlotKey.value };
+        } else {
+          scoreEditor.swapSlotChords(draggingSlotKey.value, dragOverSlotKey.value);
+        }
       }
     } catch {
       /* 交换失败则忽略 */
@@ -211,7 +224,28 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     }
   };
 
-  const handlePointerDown = (e: PointerEvent, slotKey: string, chord: Chord) => {
+  /** 弹窗选择「复制」：源槽位保留，目标槽位插入副本 */
+  const resolveCopyDropAsCopy = () => {
+    const pending = pendingCopyDrop.value;
+    if (!pending) return;
+    scoreEditor.copySlotChord(pending.sourceKey, pending.targetKey);
+    pendingCopyDrop.value = null;
+  };
+
+  /** 弹窗选择「移位」：源槽位和弦移动到目标槽位（单条撤销记录） */
+  const resolveCopyDropAsMove = () => {
+    const pending = pendingCopyDrop.value;
+    if (!pending) return;
+    scoreEditor.moveSlotChord(pending.sourceKey, pending.targetKey);
+    pendingCopyDrop.value = null;
+  };
+
+  /** 取消待决落点（弹窗关闭） */
+  const cancelCopyDrop = () => {
+    pendingCopyDrop.value = null;
+  };
+
+  const handlePointerDown = (e: PointerEvent, slotKey: string, chord: Chord, mode: 'swap' | 'copy' = 'swap') => {
     if (!isGlobalEditable.value) return;
     if (activeSourceKey !== null) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -224,6 +258,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     }
 
     wasDraggingInSession = false;
+    dragMoveMode.value = mode;
     startPointer = {
       x: e.clientX,
       y: e.clientY,
@@ -270,6 +305,11 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     isSuppressingClick,
     draggingSlotKey,
     dragOverSlotKey,
+    dragMoveMode,
+    pendingCopyDrop,
+    resolveCopyDropAsCopy,
+    resolveCopyDropAsMove,
+    cancelCopyDrop,
     ghostChordName,
     setGhostEl,
     handlePointerDown,

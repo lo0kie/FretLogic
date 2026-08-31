@@ -9,19 +9,19 @@
     </div>
 
     <input
-      :id="id"
+      :id
       ref="inputRef"
       :type="resolvedType"
-      :disabled="disabled"
-      :readonly="readonly"
-      :name="name"
-      :minlength="minlength"
-      :maxlength="maxlength"
-      :pattern="pattern"
-      :inputmode="inputmode"
-      :required="required"
-      :autocomplete="autocomplete"
-      :placeholder="placeholder"
+      :disabled
+      :readonly
+      :name
+      :minlength
+      :maxlength
+      :pattern
+      :inputmode
+      :required
+      :autocomplete
+      :placeholder
       :value="modelValue"
       :aria-invalid="invalid || undefined"
       class="w-full font-medium font-[inherit] box-border bg-bg-body border border-solid rounded-full text-text-title caret-primary outline-none cursor-text min-w-0 overflow-hidden text-ellipsis transition-all duration-fast placeholder:text-text-disabled placeholder:font-normal placeholder:truncate focus:enabled:bg-bg-body focus-visible:ring-2 disabled:opacity-45 disabled:cursor-not-allowed"

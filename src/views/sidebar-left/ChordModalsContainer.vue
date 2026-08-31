@@ -27,7 +27,7 @@
 
   <BaseModal
     v-model:visible="groupModals.modals.chordVariantsDelete"
-    :title="`删除和弦 &quot;${getChordName(groupModals.modalData.activeGroupCard?.mainChord)}&quot; 的指法`"
+    :title="deleteVariantsTitle"
     width="w-large"
     :show-footer="false"
   >
@@ -163,6 +163,11 @@ const isAllVariantsSelected = computed(() => {
   if (variants.length === 0) return false;
   return variants.every(v => groupModals.modalData.selectedVariantIds.has(v.id));
 });
+
+/** 删除指法弹窗标题：拼接主和弦名 */
+const deleteVariantsTitle = computed(
+  () => `删除和弦 "${getChordName(groupModals.modalData.activeGroupCard?.mainChord)}" 的指法`
+);
 
 const handleToggleSelectAllVariants = () => {
   const variants = groupModals.modalData.activeGroupCard?.variants ?? [];

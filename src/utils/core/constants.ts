@@ -34,6 +34,10 @@ export const AUDIO_CONFIG = {
   STRUM_DELAY_STEP: 0.06,
   /** 音符释放后额外静音等待（s，防止尾音截断） */
   AUDIO_RELEASE_TAIL: 0.6,
+  /** 扫弦力度随机区间：下限（0~1，模拟不同力度） */
+  STRUM_VELOCITY_MIN: 0.78,
+  /** 扫弦力度随机区间：宽度（0~1，叠加下限构成上限） */
+  STRUM_VELOCITY_RANGE: 0.22,
 
   /** 合成器泛音比 */
   SYNTH_HARMONICITY: 1.5,
@@ -304,6 +308,26 @@ export const STORAGE_KEYS = {
   /** 左侧栏开合状态 */
   UI_LEFT_OPEN: 'CHORD_LAB_UI_LEFT_OPEN',
 } as const;
+
+// ===================== 界面提示 / 交互延时 =====================
+/** Toast 默认展示时长（ms） */
+export const TOAST_DEFAULT_DURATION_MS = 3000;
+/** 聚焦默认延迟（ms，v-focus 未指定 delay 时使用） */
+export const FOCUS_DEFAULT_DELAY_MS = 60;
+/** 悬浮提示隐藏后清理 DOM 的延迟（ms，配合淡出过渡，v-tooltip 使用） */
+export const TOOLTIP_HIDE_CLEANUP_DELAY_MS = 80;
+
+/** 滚动位置恢复动画：最长恢复时长（ms，v-scroll-cache 使用） */
+export const SCROLL_RESTORE_MAX_DURATION_MS = 1200;
+/** 滚动位置恢复动画：额外缓冲（ms，防止 resize 观察器回调在超时前未触发） */
+export const SCROLL_RESTORE_BUFFER_MS = 200;
+
+/** 跑马灯 continuous 模式：最小单程时长（ms） */
+export const MARQUEE_MIN_DURATION_CONTINUOUS_MS = 800;
+/** 跑马灯 pingpong 模式：最小单程时长（ms） */
+export const MARQUEE_MIN_DURATION_PINGPONG_MS = 500;
+/** 跑马灯 fade 模式：默认羽化宽度（px） */
+export const MARQUEE_DEFAULT_FADE_WIDTH = 16;
 
 // ===================== 主题配色 =====================
 /** 指板配色（明暗双主题） */

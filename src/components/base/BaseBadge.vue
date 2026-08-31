@@ -76,7 +76,7 @@
     <button
       v-if="closable && !hoverClose"
       type="button"
-      :disabled="disabled"
+      :disabled
       title="关闭"
       aria-label="关闭"
       class="p-0 ml-0.5 border-none bg-transparent text-current opacity-65 flex items-center justify-center cursor-pointer outline-none rounded-full transition-all duration-fast hover:opacity-100 hover:bg-tint-current-82 disabled:cursor-not-allowed disabled:opacity-40"

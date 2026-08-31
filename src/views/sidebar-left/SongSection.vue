@@ -27,7 +27,7 @@
             tabindex="0"
             data-focusable-inline
             :aria-pressed="isSongActive(song.id)"
-            :aria-label="`乐谱 ${song.title}，${song.playKey}调，Capo ${song.capo}${isSongActive(song.id) ? '，已选中' : ''}`"
+            :aria-label="songCardAriaLabel(song)"
             @click="handleSelectSong(song.id)"
             @keydown.enter.prevent.stop="handleSelectSong(song.id)"
             @keydown.space.prevent.stop="handleSelectSong(song.id)"
@@ -47,7 +47,7 @@
                   variant="neutral"
                   :appearance="isSongActive(song.id) ? 'subtle' : 'filled'"
                   size="xs"
-                  :aria-label="`调性 ${computeSongKey(song.playKey, song.capo)} 调`"
+                  :aria-label="songKeyAriaLabel(song)"
                   width="2rem"
                 >
                   {{ computeSongKey(song.playKey, song.capo) }}调
@@ -95,6 +95,12 @@ const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 
 const isSongActive = (songId: string) => scoreEditor.activeSongId === songId;
+
+/** 乐谱卡无障碍描述：标题、调性与 Capo，选中时追加状态 */
+const songCardAriaLabel = (song: Song): string =>
+  `乐谱 ${song.title}，${song.playKey}调，Capo ${song.capo}${isSongActive(song.id) ? '，已选中' : ''}`;
+/** 调性徽标无障碍描述：最终计算调 */
+const songKeyAriaLabel = (song: Song): string => `调性 ${computeSongKey(song.playKey, song.capo)} 调`;
 
 const songMenuItemsMap = new Map<string, ContextMenuItem[]>();
 // 签名需包含和弦数与当前乐谱 id，否则清空/添加和弦、切换当前乐谱后禁用态不会刷新

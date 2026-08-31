@@ -10,7 +10,7 @@
       },
     ]"
     tabindex="-1"
-    :aria-label="ariaLabel"
+    :aria-label
     @click.stop="interactive && $emit('click', $event)"
     @dblclick.prevent.stop="interactive && $emit('toggle-pitch')"
   >
@@ -50,8 +50,8 @@
 
     <text
       v-else-if="!isPressed && label"
-      :x="x"
-      :y="y"
+      :x
+      :y
       text-anchor="middle"
       :dy="labelVerticalOffset"
       :fill="noteTextColor"

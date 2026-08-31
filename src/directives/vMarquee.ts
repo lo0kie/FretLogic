@@ -1,4 +1,9 @@
 import type { Directive } from 'vue';
+import {
+  MARQUEE_DEFAULT_FADE_WIDTH,
+  MARQUEE_MIN_DURATION_CONTINUOUS_MS,
+  MARQUEE_MIN_DURATION_PINGPONG_MS,
+} from '@/utils/core/constants';
 
 export interface MarqueeOptions {
   /** 触发模式：hover 悬停/聚焦时滚动，always 常驻轮播，none 永不滚动 */
@@ -110,7 +115,7 @@ function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
     el.style.webkitMaskImage = '';
     return;
   }
-  const fadeWidth = typeof state.options.fade === 'number' ? state.options.fade : 16;
+  const fadeWidth = typeof state.options.fade === 'number' ? state.options.fade : MARQUEE_DEFAULT_FADE_WIDTH;
   const mask = `linear-gradient(to right, transparent 0px, black ${fadeWidth}px, black calc(100% - ${fadeWidth}px), transparent 100%)`;
   el.style.maskImage = mask;
   el.style.webkitMaskImage = mask;
@@ -157,7 +162,10 @@ function update(el: HTMLElement): void {
 
     if (isContinuous) {
       const travelDist = inner.scrollWidth + options.gap;
-      const moveMs = options.duration != null ? options.duration : Math.max(800, (travelDist / options.speed) * 1000);
+      const moveMs =
+        options.duration != null
+          ? options.duration
+          : Math.max(MARQUEE_MIN_DURATION_CONTINUOUS_MS, (travelDist / options.speed) * 1000);
       const frames =
         options.direction === 'right'
           ? [
@@ -182,7 +190,10 @@ function update(el: HTMLElement): void {
       }
     } else {
       // Ping-pong 往返摆动模式
-      const moveMs = options.duration != null ? options.duration : Math.max(500, (dist / options.speed) * 1000);
+      const moveMs =
+        options.duration != null
+          ? options.duration
+          : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / options.speed) * 1000);
       const pauseMs = options.pauseOnEdges ? Math.max(0, options.pauseDuration) : 0;
       const total = 2 * moveMs + 2 * pauseMs;
       const moveFrac = moveMs / total;

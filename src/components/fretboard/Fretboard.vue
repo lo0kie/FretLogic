@@ -62,7 +62,7 @@
           class="flex items-center justify-center w-full max-w-full h-full min-h-0 leading-normal font-bold text-text-title box-border outline-none cursor-inherit whitespace-nowrap overflow-hidden text-ellipsis px-0.5 font-[Helvetica_Neue,Arial,sans-serif]"
           :style="chordNameFontSizeStyle"
         >
-          <ChordNameDisplay v-if="displayChordName" :chord="chord" :shorthand="isUseShorthand" size="inherit" />
+          <ChordNameDisplay v-if="displayChordName" :chord :shorthand="isUseShorthand" size="inherit" />
           <span v-else class="text-text-disabled opacity-35 font-bold">CHORD</span>
         </div>
       </div>
@@ -86,8 +86,8 @@
             :y="openStringMarkerY"
             is-open-string
             :is-root="isRoot(sIdx)"
-            :is-dark-mode="isDarkMode"
-            :interactive="interactive"
+            :is-dark-mode
+            :interactive
             :is-pressed="str[0] > 0"
             :is-muted="isMuted(str)"
             :is-hovered="hoverPoint?.fretIndex === 0 && hoverPoint?.stringIndex === sIdx"
@@ -103,13 +103,13 @@
       </div>
 
       <FretboardSvg
-        :is-dark-mode="isDarkMode"
-        :interactive="interactive"
-        :string-x-positions="stringXPositions"
-        :hover-point="hoverPoint"
+        :is-dark-mode
+        :interactive
+        :string-x-positions
+        :hover-point
         :focus-point="isFocused ? focusPoint : null"
-        :fret-number-size="fretNumberSize"
-        :show-fret-numbers="showFretNumbers"
+        :fret-number-size
+        :show-fret-numbers
         :show-pitch-names="isShowPitchNames"
         :strings="chord.strings"
         :fret-count="chord.fretCount"
@@ -117,8 +117,8 @@
         :root-string-index="chord.rootStringIndex"
         :active-base-strings="getActiveBaseStrings(chord.tuning)"
         :barres="effectiveBarres"
-        :barre-candidates="barreCandidates"
-        :barre-pick-mode="barrePickMode"
+        :barre-candidates
+        :barre-pick-mode
         :wide-nut="isWideNut"
         @toggle-pitch="handleTogglePitchName"
         @barre-click="emit('barre-click', $event)"

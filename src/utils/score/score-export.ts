@@ -1,6 +1,7 @@
 import { globalDarkMode } from '@/stores/globalState';
 import type { Chord, SlotKey } from '@/types';
 import { computeChordFingerprint } from '@/utils/music/musicTheory';
+import { plainToChordMap } from '@/utils/music/chord-fretboard';
 import { charKey, chordSlotKey, collectEdgeChordIds } from '@/utils/score/scoreModel';
 import type { Options } from 'html-to-image/lib/types';
 
@@ -80,19 +81,22 @@ export function buildLyricsLinesWithEdges(
   chordsLookupMap: Map<string, Chord>,
   existingLineIds: string[] = []
 ): LineData[] {
+  // 序列化边界守卫：内存契约要求 chordMap 为 Map；若从持久化/同步链路拿到普通对象，
+  // 在此归一化为 Map，避免 collectEdgeChordIds 迭代直接抛错。纯等价转换，不改语义。
+  const normalizedChordMap = chordMap instanceof Map ? chordMap : plainToChordMap(chordMap);
   const rawLines = lyrics.split('\n');
   const activeIds = new Set<string>();
   const result = rawLines.map((lineText, lineIdx) => {
     const lineId = existingLineIds[lineIdx] || String(lineIdx);
     activeIds.add(lineId);
     const { chords: startChords, nextKey: nextStartKey } = getEdgeChordsWithNextKey(
-      chordMap,
+      normalizedChordMap,
       lineId,
       'start',
       chordsLookupMap
     );
     const { chords: endChords, nextKey: nextEndKey } = getEdgeChordsWithNextKey(
-      chordMap,
+      normalizedChordMap,
       lineId,
       'end',
       chordsLookupMap

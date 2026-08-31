@@ -1,19 +1,24 @@
+import {
+  dedupeChordsByFingerprint,
+  fillMissingTimestamps,
+  sanitizeChordEntity,
+  sanitizeGroupEntity,
+  sanitizeSongEntity,
+  type GroupDraft,
+  type SongDraft,
+} from '@/services/validation/persistedData';
 import type {
   AppPreferencesBackup,
   Chord,
   ChordNameSegments,
   Group,
   ImportExportPayload,
-  LineId,
   Song,
   SyncSettingsBackup,
 } from '@/types';
-import { GroupSortRule } from '@/types';
 import { cloneDeep } from '@/utils/core/common';
-import { fillMissingTimestamps, type SongDraft } from '@/services/validation/persistedData';
-import { buildGroupVariant } from '@/utils/music/entityFactories';
-import { normalizeChord, plainToChordMap, pruneOrphanChordRefs } from '@/utils/music/chord-fretboard';
-import { computeChordFingerprint, getChordName, nameToSegments, Tuning } from '@/utils/music/musicTheory';
+import { pruneOrphanChordRefs } from '@/utils/music/chord-fretboard';
+import { getChordName, nameToSegments } from '@/utils/music/musicTheory';
 
 /** 旧/未知结构的数据（含历史遗留字段），用于防御性清洗 */
 type RawRecord = Record<string, unknown>;
@@ -86,7 +91,7 @@ export interface ValidationResult {
   payload?: ImportExportPayload;
   issues: string[];
 }
-const sanitizeGroups = (groups: unknown, issues: string[]): Group[] => {
+const sanitizeGroups = (groups: unknown, issues: string[]): GroupDraft[] => {
   if (!Array.isArray(groups)) {
     issues.push('groups 字段必须为数组');
     return [];
@@ -100,16 +105,8 @@ const sanitizeGroups = (groups: unknown, issues: string[]): Group[] => {
       return true;
     })
     .map(g => {
-      // 折叠状态为会话级，不再持久化；丢弃旧数据遗留的 collapsed 字段
-      delete g['collapsed'];
-      const sortRule: GroupSortRule =
-        g.sortRule !== undefined && Object.values(GroupSortRule).includes(g.sortRule)
-          ? g.sortRule
-          : GroupSortRule.ROOT_PITCH;
-      const now = Date.now();
-      const createdAt = typeof g.createdAt === 'number' && Number.isFinite(g.createdAt) ? g.createdAt : now;
-      const updatedAt = typeof g.updatedAt === 'number' && Number.isFinite(g.updatedAt) ? g.updatedAt : createdAt;
-      return buildGroupVariant({ id: g.id, name: g.name, createdAt, updatedAt }, sortRule, g.sortKey);
+      // 分组构造与旧字段清理统一交由共享实体内核（过滤已保证 id/name 合法，内核不会返回 null）
+      return sanitizeGroupEntity(g)!;
     });
 };
 
@@ -119,54 +116,46 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
     return [];
   }
 
-  return chords
-    .filter(
-      (c: RawChord, index: number): c is RawChord & { id: string; groupId: string; strings: [number, boolean][] } => {
-        if (!c || typeof c !== 'object') {
-          issues.push(`chords[${index}] 不是有效的对象`);
-          return false;
+  return (
+    chords
+      .filter(
+        (c: RawChord, index: number): c is RawChord & { id: string; groupId: string; strings: [number, boolean][] } => {
+          if (!c || typeof c !== 'object') {
+            issues.push(`chords[${index}] 不是有效的对象`);
+            return false;
+          }
+          if (typeof c.id !== 'string' || typeof c.groupId !== 'string' || (!c['chordName'] && !c.nameSegments)) {
+            issues.push(`chords[${index}] (${c.id || index}) 缺失基础识别属性`);
+            return false;
+          }
+          if (!Array.isArray(c.strings) || c.strings.length !== 6) {
+            issues.push(`chords[${index}] (${c.id}) 琴弦数组损坏 (必须为 6 弦)`);
+            return false;
+          }
+          // 二维数组校验：每项必须是 [fret, preferFlat] 元组
+          const isStringsValid = c.strings.every(
+            (s): s is [number, boolean] =>
+              Array.isArray(s) && s.length === 2 && typeof s[0] === 'number' && typeof s[1] === 'boolean'
+          );
+          if (!isStringsValid) {
+            issues.push(`chords[${index}] (${c.id}) 内部存在损坏的琴弦节点`);
+            return false;
+          }
+          return true;
         }
-        if (typeof c.id !== 'string' || typeof c.groupId !== 'string' || (!c['chordName'] && !c.nameSegments)) {
-          issues.push(`chords[${index}] (${c.id || index}) 缺失基础识别属性`);
-          return false;
-        }
-        if (!Array.isArray(c.strings) || c.strings.length !== 6) {
-          issues.push(`chords[${index}] (${c.id}) 琴弦数组损坏 (必须为 6 弦)`);
-          return false;
-        }
-        // 二维数组校验：每项必须是 [fret, preferFlat] 元组
-        const isStringsValid = c.strings.every(
-          (s): s is [number, boolean] =>
-            Array.isArray(s) && s.length === 2 && typeof s[0] === 'number' && typeof s[1] === 'boolean'
-        );
-        if (!isStringsValid) {
-          issues.push(`chords[${index}] (${c.id}) 内部存在损坏的琴弦节点`);
-          return false;
-        }
-        return true;
-      }
-    )
-    .map(c => {
-      const fretCount: 3 | 4 = c.fretCount === 3 || c.fretCount === 4 ? c.fretCount : 3;
-      const capo = typeof c.capo === 'number' && c.capo >= 0 && c.capo <= 12 ? c.capo : 0;
-      const tuning = c.tuning && Object.values(Tuning).includes(c.tuning) ? c.tuning : Tuning.STANDARD;
-      const rawName = typeof c['chordName'] === 'string' ? c['chordName'].trim() : '';
-      const nameSegments: ChordNameSegments = c.nameSegments ??
-        (rawName ? (nameToSegments(rawName) ?? null) : null) ?? { root: ['C', 0] };
+      )
+      .map(c => {
+        // 兼容边界：旧数据可能仅有 chordName，先兜底出 nameSegments 再进清洗内核
+        const rawName = typeof c['chordName'] === 'string' ? c['chordName'].trim() : '';
+        const nameSegments: ChordNameSegments = c.nameSegments ??
+          (rawName ? (nameToSegments(rawName) ?? null) : null) ?? { root: ['C', 0] };
 
-      // 结构字段先收口；isInverted / fingerprint 已不再存储，normalizeChord 会清理旧数据遗留字段
-      const draft = {
-        ...c,
-        nameSegments,
-        fretCount,
-        capo,
-        tuning,
-        rootStringIndex: c.rootStringIndex === undefined ? null : c.rootStringIndex,
-      } as unknown as Chord;
-
-      const { chord } = normalizeChord(draft);
-      return chord;
-    });
+        // 字段收口与旧字段清理统一交由共享实体内核（repair 模式）
+        return sanitizeChordEntity({ ...c, nameSegments }, { mode: 'repair' });
+      })
+      // 空 id 等内核级非法实体在此静默丢弃（与 localStorage 链路语义一致，不进入整包拒绝集合）
+      .filter((chord): chord is Chord => chord !== null)
+  );
 };
 
 const sanitizeSongs = (songs: unknown, issues: string[]): SongDraft[] => {
@@ -175,32 +164,22 @@ const sanitizeSongs = (songs: unknown, issues: string[]): SongDraft[] => {
     issues.push('songs 字段必须为数组');
     return [];
   }
-  return songs
-    .filter((s: RawSong, index: number): s is RawSong & { id: string; title: string } => {
-      if (!s || typeof s !== 'object' || typeof s.id !== 'string' || typeof s.title !== 'string') {
-        issues.push(`songs[${index}] 结构损坏，缺失必要识别属性`);
-        return false;
-      }
-      return true;
-    })
-    .map(s => {
-      // key 已改为由 playKey + capo 实时派生：旧数据若带 key 且 playKey 缺失则用 key 兜底，随后丢弃
-      const legacyKey = typeof s['key'] === 'string' && s['key'] ? s['key'] : 'C';
-      const { key: _legacyKey, ...rest } = s;
-      void _legacyKey;
-      const cleaned: SongDraft = {
-        ...rest,
-        lyrics: typeof s.lyrics === 'string' ? s.lyrics : '',
-        capo: typeof s.capo === 'number' ? s.capo : 0,
-        version: typeof s.version === 'number' && Number.isFinite(s.version) ? s.version : 1,
-        chordMap: plainToChordMap(s.chordMap),
-        lineIds: Array.isArray(s.lineIds)
-          ? s.lineIds.filter((v): v is LineId => typeof v === 'string' && v.length > 0)
-          : [],
-        playKey: typeof s.playKey === 'string' && s.playKey ? s.playKey : legacyKey,
-      };
-      return cleaned;
-    });
+  return (
+    songs
+      .filter((s: RawSong, index: number): s is RawSong & { id: string; title: string } => {
+        if (!s || typeof s !== 'object' || typeof s.id !== 'string' || typeof s.title !== 'string') {
+          issues.push(`songs[${index}] 结构损坏，缺失必要识别属性`);
+          return false;
+        }
+        return true;
+      })
+      .map(s => {
+        // playKey 兜底、字段收口与旧字段清理统一交由共享实体内核
+        return sanitizeSongEntity(s);
+      })
+      // 空 id 等内核级非法实体在此静默丢弃（与 localStorage 链路语义一致，不进入整包拒绝集合）
+      .filter((song): song is SongDraft => song !== null)
+  );
 };
 /**
  * 防御性清洗 syncSettings：同步配置属辅助数据，字段损坏只丢弃该字段，
@@ -268,7 +247,8 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
   // 先迁移旧版本到当前格式，再做结构校验（校验只认当前格式）
   const migrated = migratePayloadVersion(raw as unknown as ImportExportPayload);
   const now = Date.now();
-  const groups = fillMissingTimestamps(sanitizeGroups(migrated.groups, issues), now);
+  // Group 为判别联合，交叉类型无法被 TS 自动收敛，时间戳补齐后信任收窄（校验边界）
+  const groups = fillMissingTimestamps(sanitizeGroups(migrated.groups, issues), now) as Group[];
   const chords = fillMissingTimestamps(sanitizeChords(migrated.chords, issues), now);
   const songs = migrated.songs !== undefined ? fillMissingTimestamps(sanitizeSongs(migrated.songs, issues), now) : [];
   const syncSettings = sanitizeSyncSettings(migrated.syncSettings);
@@ -279,19 +259,10 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
   const validGroupIds = new Set(groups.map(g => g.id));
   const filteredChords = chords.filter(c => validGroupIds.has(c.groupId));
 
-  // 同组 + 同指纹只保留第一条（与保存时去重语义一致）
-  const seenFpInGroup = new Set<string>();
-  const dedupedChords: Chord[] = [];
-  for (const c of filteredChords) {
-    const key = `${c.groupId}::${computeChordFingerprint(c)}`;
-    if (seenFpInGroup.has(key)) {
-      // 不写入 issues，避免「仅重复」就整包拒绝；需要可观测可 console.warn
-      console.warn(`[validatePayload] 丢弃同组重复指纹: ${getChordName(c)} (${c.id})`);
-      continue;
-    }
-    seenFpInGroup.add(key);
-    dedupedChords.push(c);
-  }
+  // 同组 + 同指纹去重（与保存及 localStorage 链路共用同一套去重逻辑）
+  const { kept: dedupedChords, dupes } = dedupeChordsByFingerprint(filteredChords);
+  // 重复项不写入 issues，避免「仅重复」就整包拒绝；需要可观测可 console.warn
+  dupes.forEach(c => console.warn(`[validatePayload] 丢弃同组重复指纹: ${getChordName(c)} (${c.id})`));
 
   const validChordIds = new Set(dedupedChords.map(c => c.id));
   const cleanedSongs = songs.map(song => {

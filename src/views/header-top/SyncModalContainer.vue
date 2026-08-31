@@ -104,9 +104,7 @@
 
     <template #footer>
       <ActionButton
-        v-tooltip="
-          isTestingConnection ? '测试中' : isTestDisabled ? '请先填写必要配置' : '验证云端地址与凭据（不读写数据）'
-        "
+        v-tooltip="testConnectionTooltip"
         :disabled="isTestDisabled || isSyncing || isPulling"
         :loading="isTestingConnection"
         @click="handleTestConnectionClick"
@@ -118,7 +116,7 @@
       </ActionButton>
 
       <ActionButton
-        v-tooltip="isPulling ? '同步中' : isPullConfigComplete ? '请先填写配置' : '从云端下载并覆盖本地数据'"
+        v-tooltip="pullTooltip"
         :disabled="isPullConfigComplete || isSyncing"
         :loading="isPulling"
         @click="handlePullClick"
@@ -130,7 +128,7 @@
       </ActionButton>
 
       <ActionButton
-        v-tooltip="isSyncing ? '同步中' : isPushConfigComplete ? '请先填写配置' : '将本地数据推送到云端'"
+        v-tooltip="syncTooltip"
         :disabled="isPushConfigComplete || isSyncing"
         :loading="isSyncing"
         @click="handleSyncClick"
@@ -222,4 +220,17 @@ const isTestDisabled = computed(() => {
 
   return !settingsStore.githubOwner.trim() || !settingsStore.githubRepo.trim();
 });
+
+/** 测试连接按钮提示：按测试中状态与配置完整性给说明 */
+const testConnectionTooltip = computed(() =>
+  isTestingConnection.value ? '测试中' : isTestDisabled.value ? '请先填写必要配置' : '验证云端地址与凭据（不读写数据）'
+);
+/** 拉取按钮提示：按拉取状态与配置完整性给说明 */
+const pullTooltip = computed(() =>
+  isPulling.value ? '同步中' : isPullConfigComplete.value ? '请先填写配置' : '从云端下载并覆盖本地数据'
+);
+/** 同步按钮提示：按同步状态与配置完整性给说明 */
+const syncTooltip = computed(() =>
+  isSyncing.value ? '同步中' : isPushConfigComplete.value ? '请先填写配置' : '将本地数据推送到云端'
+);
 </script>

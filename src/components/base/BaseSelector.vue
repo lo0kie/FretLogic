@@ -3,7 +3,7 @@
     v-model="isOpen"
     placement="bottom-start"
     :offset-distance="6"
-    :disabled="disabled"
+    :disabled
     match-trigger-width
     :block="width === 'full'"
     panel-class="p-0 overflow-hidden"
@@ -179,7 +179,7 @@
               @keydown.space.prevent.stop="handleSelect(option, close)"
             >
               <span class="truncate flex-1 min-w-0 max-w-full">
-                <slot name="option" :option="option" :index="index">
+                <slot name="option" :option :index>
                   {{ formattedOption(option) }}
                 </slot>
               </span>

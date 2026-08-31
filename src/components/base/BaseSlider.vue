@@ -24,9 +24,9 @@
       ref="readoutInputRef"
       v-model="editValue"
       type="number"
-      :min="min"
-      :max="max"
-      :step="step"
+      :min
+      :max
+      :step
       class="text-2xs font-bold text-primary text-center font-mono outline-none rounded-sm tabular-nums w-16 h-5 bg-bg-body border border-border-light focus:border-primary focus:ring-1 focus:ring-primary/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
       aria-label="输入精确数值"
       @blur="commitEdit"

@@ -4,7 +4,7 @@
     ref="switchBtnRef"
     type="button"
     role="switch"
-    :name="name"
+    :name
     :aria-checked="isChecked"
     :aria-disabled="disabled || isCurrentLoading"
     :aria-label="ariaLabel || label"
@@ -23,7 +23,7 @@
     <span
       ref="trackRef"
       v-wave="{ disabled: disabled || isCurrentLoading }"
-      class="switch-track relative inline-flex items-center rounded-full box-border shrink-0 transition-all duration-base group-focus-visible:ring-2 group-focus-visible:ring-primary/70 overflow-hidden active:scale-[0.92]"
+      class="switch-track relative inline-flex items-center rounded-full box-border shrink-0 transition-all duration-base group-focus-visible:ring-2 group-focus-visible:ring-primary/70 overflow-hidden"
       :class="[currentConfig.trackClass, trackColorClass]"
     >
       <span
@@ -40,8 +40,12 @@
       <span
         ref="thumbRef"
         class="switch-thumb rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] box-border transition-transform duration-base ease-spring inline-flex items-center justify-center pointer-events-none"
-        :class="[currentConfig.thumbClass, !isDragging && (isChecked ? currentConfig.checkedClass : 'translate-x-0')]"
-        :style="thumbStyle"
+        :class="[
+          currentConfig.thumbClass,
+          !isDragging && (isChecked ? currentConfig.checkedClass : 'translate-x-0'),
+          isPressed && !isDragging && !hasMovedSignificantly && 'scale-y-[0.82]',
+        ]"
+        :style="dragThumbStyle"
       >
         <slot v-if="isChecked" name="checked-icon" />
         <slot v-else name="unchecked-icon" />
@@ -181,14 +185,14 @@ const startValue = ref(false);
 const maxTravelDistance = ref(16);
 const hasMovedSignificantly = ref(false);
 const isPending = ref(false);
-
+const isPressed = ref(false);
+const pressBasePos = ref(0);
 const isCurrentLoading = computed(() => props.loading || loadingModel.value || isPending.value);
 
 const isChecked = computed(() => Object.is(modelValue.value, resolvedActiveValue.value));
 
 const currentConfig = computed(() => SWITCH_CONFIG[props.size] ?? SWITCH_CONFIG.md);
 
-// 拖拽时实时计算"是否已过半"，用于轨道颜色联动
 const isDragPastHalf = computed(() => {
   if (!isDragging.value) return null;
   const deltaX = dragCurrentX.value - dragStartX.value;
@@ -241,18 +245,19 @@ const handlePointerDown = (e: PointerEvent) => {
     const style = window.getComputedStyle(trackRef.value);
     const padLeft = parseFloat(style.paddingLeft) || 0;
     const padRight = parseFloat(style.paddingRight) || 0;
-
-    // clientWidth 包含 padding，减去 thumb 宽度及两侧 padding 即为内容区域最大行程
     const calculatedTravel = trackRef.value.clientWidth - thumbRef.value.offsetWidth - (padLeft + padRight);
     maxTravelDistance.value = Math.max(0, calculatedTravel);
   } else {
     maxTravelDistance.value = currentConfig.value.travelPx;
   }
 
+  pressBasePos.value = isChecked.value ? maxTravelDistance.value : 0;
+
   dragStartX.value = e.clientX;
   dragCurrentX.value = e.clientX;
   startValue.value = isChecked.value;
   hasMovedSignificantly.value = false;
+  isPressed.value = true;
   (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
 };
 
@@ -271,6 +276,7 @@ const handlePointerMove = (e: PointerEvent) => {
 const handlePointerUp = async (e: PointerEvent) => {
   const wasDragging = isDragging.value;
   isDragging.value = false;
+  isPressed.value = false;
 
   try {
     (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);
@@ -308,6 +314,7 @@ const handlePointerUp = async (e: PointerEvent) => {
 
 const handlePointerCancel = (e: PointerEvent) => {
   isDragging.value = false;
+  isPressed.value = false;
   try {
     (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);
   } catch {
@@ -315,14 +322,29 @@ const handlePointerCancel = (e: PointerEvent) => {
   }
 };
 
-const thumbStyle = computed(() => {
+const THUMB_PX: Record<'sm' | 'md' | 'lg', number> = { sm: 12, md: 16, lg: 20 };
+
+const dragThumbStyle = computed(() => {
   if (isDragging.value && hasMovedSignificantly.value) {
     const deltaX = dragCurrentX.value - dragStartX.value;
-    const initialPos = startValue.value ? maxTravelDistance.value : 0;
-    // 限制在 [0, maxTravelDistance] 区间，向右绝不溢出，向左绝不小于 0
+    const initialPos = pressBasePos.value;
     const clampedX = Math.min(Math.max(0, initialPos + deltaX), maxTravelDistance.value);
+
+    const dir = deltaX >= 0 ? 1 : -1;
+    const travelRatio = maxTravelDistance.value > 0 ? Math.min(Math.abs(deltaX) / maxTravelDistance.value, 1) : 0;
+
+    const thumbSize = THUMB_PX[props.size] ?? 16;
+    const desiredStretch = 1 + travelRatio * 0.18;
+    const desiredSqueeze = 1 - travelRatio * 0.08;
+
+    const remainingSpace = dir > 0 ? maxTravelDistance.value - clampedX : clampedX;
+    const maxAllowedStretch = thumbSize > 0 ? 1 + Math.max(0, remainingSpace) / thumbSize : desiredStretch;
+
+    const stretch = Math.min(desiredStretch, maxAllowedStretch);
+
     return {
-      transform: `translateX(${clampedX}px)`,
+      transform: `translateX(${clampedX}px) scaleX(${stretch}) scaleY(${desiredSqueeze})`,
+      transformOrigin: dir > 0 ? 'left center' : 'right center',
       transition: 'none',
     };
   }

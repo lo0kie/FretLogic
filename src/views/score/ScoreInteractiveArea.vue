@@ -50,9 +50,13 @@
           :key="lineData.lineId"
           v-memo="[
             lineData.lineId,
+            lineData.lineIdx,
             lineData.startChords,
             lineData.chars,
             lineData.endChords,
+            // 行内槽位和弦在子树中经 getCharChord 实时读取，必须依赖 chordMap 引用（每次变更为新 Map），
+            // 否则删除/更换行中段和弦时 chars 等依赖不变，memo 命中导致旧和弦残留显示
+            scoreEditor.activeSong?.chordMap,
             isExporting ? isLineVisibleInExport(lineData.lineIdx) : selectedLineSet.has(lineData.lineIdx),
             hoveredLineKey === lineData.lineId,
             isExporting,
@@ -61,108 +65,119 @@
           ]"
           class="line-row flex items-stretch w-max min-w-full"
         >
-          <ContextMenu
-            :items="getLineMenuItems(lineData)"
-            :disabled="isExporting || isDragging || !isGlobalEditable"
-            #="{ isOpen }"
+          <div
+            v-wave
+            :data-line-idx="lineData.lineId"
+            class="lyrics-line relative flex flex-nowrap gap-0 items-stretch w-max min-w-0 flex-[1_1_auto] py-xs px-sm rounded-md box-border cursor-pointer select-none border border-transparent transition-all duration-base hover:bg-bg-panel-hover hover:border-border-base focus-within:bg-bg-panel-hover focus-within:border-border-base"
+            :class="{
+              'is-line-selected': isExporting
+                ? isLineVisibleInExport(lineData.lineIdx)
+                : selectedLineSet.has(lineData.lineIdx),
+              '!bg-tint-primary-92 !border-tint-primary-60 hover:!bg-tint-primary-80 hover:!border-primary':
+                !isExporting && selectedLineSet.has(lineData.lineIdx),
+            }"
+            @click="e => handleLineClick(e, lineData.lineIdx)"
+            @mouseenter="hoveredLineKey = lineData.lineId"
+            @mouseleave="hoveredLineKey = null"
           >
-            <div
-              v-wave
-              :data-line-idx="lineData.lineId"
-              class="lyrics-line relative flex flex-nowrap gap-0 items-stretch w-max min-w-0 flex-[1_1_auto] py-xs px-sm rounded-md box-border cursor-pointer select-none border border-transparent transition-all duration-base hover:bg-bg-panel-hover hover:border-border-base focus-within:bg-bg-panel-hover focus-within:border-border-base"
-              :class="{
-                'is-line-selected': isExporting
-                  ? isLineVisibleInExport(lineData.lineIdx)
-                  : selectedLineSet.has(lineData.lineIdx),
-                '!bg-tint-primary-92 !border-tint-primary-60 hover:!bg-tint-primary-80 hover:!border-primary':
-                  !isExporting && selectedLineSet.has(lineData.lineIdx),
-                'bg-bg-panel-hover border-border-base': isOpen,
-              }"
-              @click="e => handleLineClick(e, lineData.lineIdx)"
-              @mouseenter="hoveredLineKey = lineData.lineId"
-              @mouseleave="hoveredLineKey = null"
-            >
-              <div v-show="!isExporting" class="flex items-end pb-0.5 mr-2 select-none shrink-0">
-                <span
-                  class="text-2xs font-bold font-mono text-text-disabled py-2xs px-xs rounded-lg transition-colors duration-fast"
-                  :class="{
-                    '!text-text-on-accent !bg-primary': !isExporting && selectedLineSet.has(lineData.lineIdx),
-                  }"
-                >
-                  {{ formatLineIndex(lineData.lineIdx) }}
-                </span>
-              </div>
-              <div class="flex items-stretch gap-0 shrink-0">
-                <ChordSlotCell
-                  :is-exporting
-                  :line-hovered="hoveredLineKey === lineData.lineId"
-                  :scroll-root="scoreZoneRef"
-                  variant="add"
-                  :slot-key="lineData.nextStartKey"
-                  add-placeholder-title="点击添加行首和弦"
-                  @click="handleOpenPicker(lineData.nextStartKey)"
-                  @pointerdown="handlePointerDown"
-                  @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
-                />
-                <ChordSlotCell
-                  v-for="item in lineData.startChords"
-                  :key="item.slotKey"
-                  :is-exporting
-                  :line-hovered="hoveredLineKey === lineData.lineId"
-                  :scroll-root="scoreZoneRef"
-                  variant="edge"
-                  :slot-key="item.slotKey"
-                  :chord="item.chord"
-                  @click="handleOpenPicker(item.slotKey)"
-                  @pointerdown="handlePointerDown"
-                  @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
-                />
-              </div>
-
+            <div v-show="!isExporting" class="flex items-end pb-0.5 mr-2 select-none shrink-0">
+              <span
+                class="text-2xs font-bold font-mono text-text-disabled py-2xs px-xs rounded-lg transition-colors duration-fast"
+                :class="{ '!text-text-on-accent !bg-primary': !isExporting && selectedLineSet.has(lineData.lineIdx) }"
+              >
+                {{ formatLineIndex(lineData.lineIdx) }}
+              </span>
+            </div>
+            <div class="flex items-stretch gap-0 shrink-0">
               <ChordSlotCell
-                v-for="(item, index) in lineData.chars"
+                :is-exporting
+                :line-hovered="hoveredLineKey === lineData.lineId"
+                :scroll-root="scoreZoneRef"
+                variant="add"
+                :slot-key="lineData.nextStartKey"
+                add-placeholder-title="点击添加行首和弦"
+                @click="handleOpenPicker(lineData.nextStartKey)"
+                @pointerdown="handlePointerDown"
+                @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
+              />
+              <ChordSlotCell
+                v-for="item in lineData.startChords"
                 :key="item.slotKey"
                 :is-exporting
                 :line-hovered="hoveredLineKey === lineData.lineId"
                 :scroll-root="scoreZoneRef"
-                variant="char"
+                variant="edge"
                 :slot-key="item.slotKey"
-                :char="item.char"
-                :chord="getCharChord(item.slotKey) ?? undefined"
-                :left-chord-gap="isLeftAdjacentChord(lineData, index)"
+                :chord="item.chord"
                 @click="handleOpenPicker(item.slotKey)"
+                @pointerdown="handlePointerDown"
+                @copy-pointerdown="handleCopyPointerDown"
+                @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
+              />
+            </div>
+
+            <ChordSlotCell
+              v-for="(item, index) in lineData.chars"
+              :key="item.slotKey"
+              :is-exporting
+              :line-hovered="hoveredLineKey === lineData.lineId"
+              :scroll-root="scoreZoneRef"
+              variant="char"
+              :slot-key="item.slotKey"
+              :char="item.char"
+              :chord="getCharChord(item.slotKey) ?? undefined"
+              :left-chord-gap="isLeftAdjacentChord(lineData, index)"
+              @click="handleOpenPicker(item.slotKey)"
+              @pointerdown="handlePointerDown"
+              @copy-pointerdown="handleCopyPointerDown"
+              @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
+            />
+            <div class="flex items-stretch gap-0 shrink-0">
+              <ChordSlotCell
+                v-for="(item, index) in lineData.endChords"
+                :key="item.slotKey"
+                :is-exporting
+                :line-hovered="hoveredLineKey === lineData.lineId"
+                :scroll-root="scoreZoneRef"
+                variant="edge"
+                :slot-key="item.slotKey"
+                :chord="item.chord"
+                :left-chord-gap="isEndEdgeGap(lineData, index)"
+                @click="handleOpenPicker(item.slotKey)"
+                @pointerdown="handlePointerDown"
+                @copy-pointerdown="handleCopyPointerDown"
+                @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
+              />
+              <ChordSlotCell
+                :is-exporting
+                :line-hovered="hoveredLineKey === lineData.lineId"
+                :scroll-root="scoreZoneRef"
+                variant="add"
+                :slot-key="lineData.nextEndKey"
+                add-placeholder-title="点击添加行尾和弦"
+                @click="handleOpenPicker(lineData.nextEndKey)"
                 @pointerdown="handlePointerDown"
                 @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
               />
-              <div class="flex items-stretch gap-0 shrink-0">
-                <ChordSlotCell
-                  v-for="(item, index) in lineData.endChords"
-                  :key="item.slotKey"
-                  :is-exporting
-                  :line-hovered="hoveredLineKey === lineData.lineId"
-                  :scroll-root="scoreZoneRef"
-                  variant="edge"
-                  :slot-key="item.slotKey"
-                  :chord="item.chord"
-                  :left-chord-gap="isEndEdgeGap(lineData, index)"
-                  @click="handleOpenPicker(item.slotKey)"
-                  @pointerdown="handlePointerDown"
-                  @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
-                />
-                <ChordSlotCell
-                  :is-exporting
-                  :line-hovered="hoveredLineKey === lineData.lineId"
-                  :scroll-root="scoreZoneRef"
-                  variant="add"
-                  :slot-key="lineData.nextEndKey"
-                  add-placeholder-title="点击添加行尾和弦"
-                  @click="handleOpenPicker(lineData.nextEndKey)"
-                  @pointerdown="handlePointerDown"
-                  @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
-                />
-              </div>
             </div>
-          </ContextMenu>
+
+            <ActionButton
+              v-if="isGlobalEditable && !isExporting"
+              icon-only
+              size="lg"
+              variant="subtle"
+              class="self-center ml-auto pl-sm shrink-0 text-danger transition-opacity duration-fast"
+              :class="hoveredLineKey === lineData.lineId ? 'opacity-100' : 'opacity-0'"
+              :tabindex="hoveredLineKey === lineData.lineId ? 0 : -1"
+              :title="deleteLineButtonTitle"
+              :aria-label="deleteLineButtonTitle"
+              :aria-hidden="hoveredLineKey !== lineData.lineId"
+              @pointerdown.stop
+              @click.stop="deleteLine(lineData)"
+            >
+              <Trash2 :size="18" :stroke-width="2.2" />
+            </ActionButton>
+          </div>
 
           <div class="line-row-gutter shrink-0 w-8 max-md:w-2" aria-hidden="true" />
         </div>
@@ -177,29 +192,46 @@
       >
         <div
           class="-translate-x-1/2 -translate-y-1/2 scale-105 py-sm px-md bg-bg-panel/95 border-[1.5px] border-primary rounded-md shadow-floating backdrop-blur-md flex items-center justify-center"
+          :class="dragMoveMode === 'copy' ? 'border-success' : ''"
         >
-          <span class="text-sm font-extrabold text-primary leading-none"> {{ ghostChordName }} </span>
+          <span
+            class="text-sm font-extrabold leading-none"
+            :class="dragMoveMode === 'copy' ? 'text-success' : 'text-primary'"
+          >
+            {{ ghostChordName }}
+          </span>
         </div>
       </div>
     </Teleport>
+
+    <BaseModal
+      v-model:visible="copyDropVisible"
+      title="选择操作"
+      width="w-sm"
+      cancel-text="复制"
+      confirm-text="移动"
+      @cancel="$event === 'cancel' && resolveCopyDropAsCopy()"
+      @confirm="resolveCopyDropAsMove"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import ActionButton from '@/components/base/ActionButton.vue';
+import BaseModal from '@/components/base/BaseModal.vue';
 import EmptyState from '@/components/base/EmptyState.vue';
-import ContextMenu from '@/components/context-menu/ContextMenu.vue';
-import type { ContextMenuItem } from '@/components/context-menu/ContextMenuItems.vue';
+import { useActiveExportTarget } from '@/composables/app/useActiveExportTarget';
 import { useAutoScroll } from '@/composables/score/useAutoScroll';
 import { useLyricsDragDrop } from '@/composables/score/useLyricsDragDrop';
 import { useScoreLinesData } from '@/composables/score/useScoreLinesData';
 import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { Chord, SlotKey } from '@/types';
+import type { Chord, LineId, SlotKey } from '@/types';
 import { computeSongKey } from '@/utils/music/musicTheory';
 import type { LineData } from '@/utils/score/score-export';
-import { Eraser, FileText, Trash2 } from '@lucide/vue';
-import { computed, onActivated, onDeactivated, ref, useTemplateRef, watch } from 'vue';
+import { FileText, Trash2 } from '@lucide/vue';
+import { computed, ref, useTemplateRef, watch } from 'vue';
 import ChordSlotCell from './ChordSlotCell.vue';
 
 defineOptions({ name: 'ScoreInteractiveArea' });
@@ -225,6 +257,8 @@ const a4CaptureWrapperRef = useTemplateRef<HTMLElement>('a4CaptureWrapperRef');
 const exportHeaderMetaRef = useTemplateRef<HTMLElement>('exportHeaderMetaRef');
 
 const hoveredLineKey = ref<string | null>(null);
+/** 删除行按钮的无障碍文本与悬停提示 */
+const deleteLineButtonTitle = '删除此行';
 
 const { lyricsLinesWithEdges, chordsLookupMap } = useScoreLinesData();
 
@@ -277,25 +311,16 @@ const handleLineClick = (ev: MouseEvent, lineIdx: number) => {
   emit('line-click', lineIdx);
 };
 
-const clearLineChords = (lineData: LineData) => {
-  scoreEditor.clearLineChords(lineData.lineId);
-  uiStore.toast.success(`已清除第 ${lineData.lineIdx + 1} 行的和弦`, {
-    actionText: '撤销',
-    duration: 4000,
-    onAction: () => {
-      scoreEditor.undo();
-      uiStore.toast.success('已恢复数据');
-    },
-  });
-};
-
+/** 删除歌词行：按 lineId 实时反查索引，避免 v-memo 缓存 vnode 中陈旧 lineIdx 闭包删错行 */
 const deleteLine = (lineData: LineData) => {
-  if (!scoreEditor.activeSong) return;
-  const lines = scoreEditor.activeSong.lyrics.split('\n');
-  if (lineData.lineIdx < 0 || lineData.lineIdx >= lines.length) return;
-  lines.splice(lineData.lineIdx, 1);
+  const song = scoreEditor.activeSong;
+  if (!song) return;
+  const lines = song.lyrics.split('\n');
+  const lineIdx = song.lineIds.indexOf(lineData.lineId as LineId);
+  if (lineIdx < 0 || lineIdx >= lines.length) return;
+  lines.splice(lineIdx, 1);
   scoreEditor.updateLyrics(lines.join('\n'));
-  uiStore.toast.info(`已删除第 ${lineData.lineIdx + 1} 行`, {
+  uiStore.toast.info(`已删除第 ${lineIdx + 1} 行`, {
     actionText: '撤销',
     duration: 4000,
     onAction: () => {
@@ -305,56 +330,31 @@ const deleteLine = (lineData: LineData) => {
   });
 };
 
-/** 统计每行占用的和弦槽数（行首/行尾/字符槽），用于"清除和弦"的禁用判断 */
-const lineChordCountMap = computed(() => {
-  const counts = new Map<string, number>();
-  const song = scoreEditor.activeSong;
-  if (!song) return counts;
-  for (const [key, chordId] of song.chordMap) {
-    if (!chordId) continue;
-    const m = key.match(/^line_(.+)_(?:start|end|char)_\d+$/);
-    const lineId = m?.[1];
-    if (lineId) counts.set(lineId, (counts.get(lineId) ?? 0) + 1);
-  }
-  return counts;
-});
+const {
+  isDragging,
+  isSuppressingClick,
+  dragMoveMode,
+  pendingCopyDrop,
+  resolveCopyDropAsCopy,
+  resolveCopyDropAsMove,
+  cancelCopyDrop,
+  ghostChordName,
+  setGhostEl,
+  handlePointerDown,
+} = useLyricsDragDrop(scoreZoneRef);
 
-const buildLineMenuItems = (lineData: LineData, hasChords: boolean): ContextMenuItem[] => [
-  {
-    label: '清除和弦',
-    icon: Eraser,
-    disabled: !hasChords,
-    action: () => clearLineChords(lineData),
-  },
-  {
-    label: '删除此行',
-    icon: Trash2,
-    danger: true,
-    action: () => deleteLine(lineData),
-  },
-];
-
-const lineIdSignature = computed(() =>
-  lyricsLinesWithEdges.value.map(l => `${l.lineId}:${lineChordCountMap.value.get(l.lineId) ?? 0}`).join('\u0000')
-);
-let lineMenuItemsCache = new Map<string, ContextMenuItem[]>();
-let lineMenuItemsCacheSig = '';
-
-const getLineMenuItems = (lineData: LineData): ContextMenuItem[] => {
-  const sig = lineIdSignature.value;
-  if (sig !== lineMenuItemsCacheSig) {
-    const map = new Map<string, ContextMenuItem[]>();
-    for (const ld of lyricsLinesWithEdges.value) {
-      map.set(ld.lineId, buildLineMenuItems(ld, (lineChordCountMap.value.get(ld.lineId) ?? 0) > 0));
-    }
-    lineMenuItemsCache = map;
-    lineMenuItemsCacheSig = sig;
-  }
-  return lineMenuItemsCache.get(lineData.lineId) ?? [];
+/** 复制拖拽：复用同一套拖拽流程，落点后弹窗询问「复制 / 移位」 */
+const handleCopyPointerDown = (e: PointerEvent, slotKey: string, chord: Chord) => {
+  handlePointerDown(e, slotKey, chord, 'copy');
 };
 
-const { isDragging, isSuppressingClick, ghostChordName, setGhostEl, handlePointerDown } =
-  useLyricsDragDrop(scoreZoneRef);
+/** 待决落点弹窗显隐：关闭即取消（ESC / 点击遮罩） */
+const copyDropVisible = computed({
+  get: () => pendingCopyDrop.value !== null,
+  set: (visible: boolean) => {
+    if (!visible) cancelCopyDrop();
+  },
+});
 
 const handleOpenPicker = (slotKey: SlotKey) => {
   if (isDragging.value || isSuppressingClick.value) return;
@@ -363,31 +363,11 @@ const handleOpenPicker = (slotKey: SlotKey) => {
 
 const { stopAutoScroll } = useAutoScroll(scoreZoneRef);
 
-watch(
-  lyricsRef,
-  el => {
-    if (el) {
-      uiStore.activeExportTarget = el;
-    }
-  },
-  { immediate: true }
-);
+useActiveExportTarget(lyricsRef);
 
 watch([() => props.isExporting, () => props.selectedLineSet.size], ([exporting, selectedCount]) => {
   if (exporting || selectedCount > 0) {
     stopAutoScroll();
-  }
-});
-
-onActivated(() => {
-  if (lyricsRef.value) {
-    uiStore.activeExportTarget = lyricsRef.value;
-  }
-});
-
-onDeactivated(() => {
-  if (uiStore.activeExportTarget === lyricsRef.value) {
-    uiStore.activeExportTarget = null;
   }
 });
 

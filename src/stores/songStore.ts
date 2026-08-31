@@ -118,6 +118,18 @@ export const useSongStore = defineStore('song', () => {
 
   songs.value = loadInitialSongs();
 
+  // 与 chordStore 的 useStorage 行为对齐：监听外部对 localStorage 的变更（DevTools 清空 / 其他标签页写入）。
+  // 本页自身写 localStorage 不会触发 storage 事件（规范），因此不会自我循环；
+  // 外部整体 clear 时 e.key 为 null，命中后重载为空 → 乐谱与和弦库一样能对外部清空即时响应，无需刷新。
+  useEventListener(window, 'storage', (event: StorageEvent) => {
+    const key = event.key;
+    const songEntryPrefix = `${STORAGE_KEYS.SONG_ENTRY}:`;
+    const isSongKey =
+      key === null || key === STORAGE_KEYS.SONGS_INDEX || (typeof key === 'string' && key.startsWith(songEntryPrefix));
+    if (!isSongKey) return;
+    songs.value = songRepository.loadSongs();
+  });
+
   // ---- 持久化层：脏标记 + 防抖刷写（400ms / 最长 1500ms） ----
   const dirtySongIds = new Set<string>();
   const removedSongIds = new Set<string>();
@@ -257,6 +269,16 @@ export const useSongStore = defineStore('song', () => {
       target.updatedAt = Date.now();
       markSongDirty(id);
     }
+    // [PROBE] 临时写入探针：记录每次更新目标与歌词字段，用于定位跨歌串写
+    if (typeof window !== 'undefined') {
+      ((window as unknown as { __w?: unknown[] }).__w ??= []).push({
+        t: Date.now(),
+        id,
+        isLyricsEdit: payload.lyrics !== undefined,
+        lyrics: payload.lyrics ?? target.lyrics,
+        lineIds: payload.lineIds ?? target.lineIds,
+      });
+    }
   };
 
   const setCharChord = (songId: string, slotKey: SlotKey, chordId: ChordId) => {
@@ -354,11 +376,6 @@ export const useSongStore = defineStore('song', () => {
       }
     });
   };
-
-  useEventListener(window, 'beforeunload', flushSongsNow);
-  useEventListener(document, 'visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flushSongsNow();
-  });
 
   return {
     songs,

@@ -1,3 +1,4 @@
+import { TOOLTIP_HIDE_CLEANUP_DELAY_MS } from '@/utils/core/constants';
 import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
 import { acquireFloatingZ, releaseFloatingZ } from '@/utils/ui/floatingZ';
 import {
@@ -300,7 +301,7 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
             globalBox.style.visibility = 'hidden';
             currentTargetEl = null;
           }
-        }, 80);
+        }, TOOLTIP_HIDE_CLEANUP_DELAY_MS);
       }
       hideTimer = null;
     }, delayMs);

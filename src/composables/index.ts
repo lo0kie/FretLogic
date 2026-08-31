@@ -15,6 +15,7 @@ export * from './fretboard/useFretboardInteraction';
 export * from './fretboard/useFretboardLayout';
 
 // App & Service Composables
+export * from './app/useActiveExportTarget';
 export * from './app/useChordGroupModals';
 export * from './app/useImportExportService';
 export * from './app/useSongModals';

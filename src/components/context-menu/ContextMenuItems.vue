@@ -56,7 +56,7 @@
 
         <template #default>
           <div class="context-menu-inner flex flex-col gap-xs outline-none" :class="`context-menu-size-${size}`">
-            <ContextMenuItems :items="item.children" :size="size" @select="emit('select', $event)" />
+            <ContextMenuItems :items="item.children" :size @select="emit('select', $event)" />
           </div>
         </template>
       </BasePopover>

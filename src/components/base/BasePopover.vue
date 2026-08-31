@@ -11,7 +11,7 @@
       @click="handleTriggerClick"
       @contextmenu="handleTriggerContextMenu"
     >
-      <slot name="trigger" :is-open="model" :toggle="toggle" :open="open" :close="close" :pin-toggle="pinToggle" />
+      <slot name="trigger" :is-open="model" :toggle :open :close :pin-toggle />
     </div>
   </div>
 
@@ -29,7 +29,7 @@
           ref="panelRef"
           role="dialog"
           :aria-modal="false"
-          :aria-label="ariaLabel"
+          :aria-label
           class="popover-panel relative z-10 box-border outline-none bg-bg-elevated border border-glass-border rounded-md shadow-floating backdrop-blur-xl origin-top"
           :class="panelClass"
           :style="panelStyle"
@@ -40,7 +40,7 @@
           @keydown="handlePanelKeydown"
         >
           <div v-if="showArrow" ref="arrowRef" class="popover-arrow pointer-events-none" :style="arrowStyle" />
-          <slot :close="close" />
+          <slot :close />
         </div>
       </Transition>
     </div>

@@ -3,6 +3,7 @@
  * 支持光标定位（start/end/all）、延时触发与 preventScroll 等选项。
  */
 import { nextTick, type Directive } from 'vue';
+import { FOCUS_DEFAULT_DELAY_MS } from '@/utils/core/constants';
 
 export type FocusModifiers =
   'select' | 'delay' | 'start' | 'end' | 'all' | 'preventScroll' | 'prevent_scroll' | (string & Record<never, never>);
@@ -96,7 +97,7 @@ const triggerFocusWithTiming = (el: HTMLElement, modifiers?: Record<string, bool
   }
 
   const hasDelay = Boolean(modifiers?.['delay'] || options?.delay);
-  const delayMs = typeof options?.delay === 'number' ? options.delay : hasDelay ? 60 : 0;
+  const delayMs = typeof options?.delay === 'number' ? options.delay : hasDelay ? FOCUS_DEFAULT_DELAY_MS : 0;
 
   if (delayMs > 0) {
     const timer = window.setTimeout(() => {
