@@ -26,7 +26,6 @@
       class="switch-track relative inline-flex items-center rounded-full box-border shrink-0 transition-all duration-base group-focus-visible:ring-2 group-focus-visible:ring-primary/70 overflow-hidden active:scale-[0.92]"
       :class="[currentConfig.trackClass, trackColorClass]"
     >
-      <!-- 轨道两端状态文字 -->
       <span
         v-if="$slots['checked-text'] || $slots['unchecked-text']"
         class="absolute inset-0 flex items-center pointer-events-none text-2xs font-bold leading-none text-white select-none overflow-hidden px-1.5"
@@ -44,11 +43,9 @@
         :class="[currentConfig.thumbClass, !isDragging && (isChecked ? currentConfig.checkedClass : 'translate-x-0')]"
         :style="thumbStyle"
       >
-        <!-- 滑块内图标插槽 -->
         <slot v-if="isChecked" name="checked-icon" />
         <slot v-else name="unchecked-icon" />
 
-        <!-- loading 旋转动效 -->
         <svg
           v-if="isCurrentLoading"
           class="animate-spin text-primary"

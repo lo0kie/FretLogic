@@ -33,7 +33,7 @@ describe('payload validation migration matrix', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.version).toBe(5);
+    expect(result.payload?.version).toBe(6);
     expect(result.payload?.groups[0]).not.toHaveProperty('collapsed');
     expect(result.payload?.chords[0]).not.toHaveProperty('isInverted');
     expect(result.payload?.chords[0]).not.toHaveProperty('fingerprint');
@@ -140,5 +140,43 @@ describe('payload validation migration matrix', () => {
 
     expect(result.isValid).toBe(true);
     expect(result.payload?.songs[0].chordMap).toEqual(new Map());
+  });
+
+  it('keeps valid preferences and drops corrupt ones without rejecting the payload (v6)', () => {
+    const base = {
+      groups: [group],
+      chords: [],
+      songs: [],
+    };
+
+    const valid = validateImportExportPayload({
+      ...base,
+      preferences: {
+        workbenchChordShorthand: true,
+        workbenchShowPitchNames: false,
+        scoreChordShorthand: false,
+        scoreShowPitchNames: true,
+      },
+    });
+    expect(valid.isValid).toBe(true);
+    expect(valid.payload?.preferences).toEqual({
+      workbenchChordShorthand: true,
+      workbenchShowPitchNames: false,
+      scoreChordShorthand: false,
+      scoreShowPitchNames: true,
+    });
+
+    // 非法值逐字段剔除，未提及字段不出现
+    const partial = validateImportExportPayload({
+      ...base,
+      preferences: { workbenchChordShorthand: 'yes', scoreShowPitchNames: false } as Record<string, unknown>,
+    });
+    expect(partial.isValid).toBe(true);
+    expect(partial.payload?.preferences).toEqual({ scoreShowPitchNames: false });
+
+    // 整个 preferences 损坏（数组/标量）→ 丢弃字段，不影响整包
+    const corrupt = validateImportExportPayload({ ...base, preferences: ['broken'] });
+    expect(corrupt.isValid).toBe(true);
+    expect(corrupt.payload?.preferences).toBeUndefined();
   });
 });

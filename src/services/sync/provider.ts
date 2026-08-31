@@ -30,6 +30,11 @@ export interface SyncProvider {
   pull(): Promise<ImportExportPayload>;
   push(payload: ImportExportPayload): Promise<{ sha: string }>;
   exists(): Promise<boolean>;
+  /**
+   * 测试远端连通性与凭据有效性（不发数据写请求）。
+   * 返回人类可读的成功描述（供 toast 展示）；失败抛 SyncError，按 code 细分原因。
+   */
+  testConnection(): Promise<string>;
 }
 
 /**

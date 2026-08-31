@@ -9,10 +9,8 @@
       { 'is-bordered border border-dashed border-border-light rounded-md bg-bg-body': bordered },
     ]"
   >
-    <!-- 图标区 / 自定义插画 -->
     <div class="icon-zone text-text-disabled opacity-80 shrink-0" :class="zoneClass">
       <slot name="icon" :size="iconSize">
-        <!-- 自定义插画 URL（带加载失败自动降级） -->
         <img
           v-if="image && !isImageError"
           :src="image"
@@ -21,12 +19,10 @@
           aria-hidden="true"
           @error="isImageError = true"
         />
-        <!-- 传入或预设 Lucide 组件 -->
         <component :is="resolvedIcon" v-else :size="iconSize" :stroke-width="1.8" class="empty-icon" />
       </slot>
     </div>
 
-    <!-- 文字说明容器 -->
     <div v-if="hasText" class="text-zone flex flex-col items-center gap-1">
       <div
         v-if="title || $slots['title']"
@@ -45,7 +41,6 @@
       </div>
     </div>
 
-    <!-- 操作区：复用全局 ActionButton 保持风格统一 -->
     <div v-if="$slots['action'] || actionText" class="action-zone">
       <slot name="action">
         <ActionButton

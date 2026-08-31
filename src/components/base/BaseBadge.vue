@@ -49,13 +49,10 @@
     data-focusable-inline
     @click="handleClick"
   >
-    <!-- 1. 状态指示灯（仅在有内容时作为前缀圆点） -->
     <span v-if="hasDot" class="w-1.5 h-1.5 rounded-full bg-current shrink-0" aria-hidden="true" />
 
-    <!-- 2. 前缀图标插槽 -->
     <slot name="prefix" />
 
-    <!-- 3. 主内容区域（小红点模式不渲染内容） -->
     <span
       v-if="!isDotOnly && ($slots['default'] || content !== undefined)"
       class="inline-flex items-center justify-center overflow-hidden text-ellipsis h-full leading-none"
@@ -76,7 +73,6 @@
       />
     </span>
 
-    <!-- 4. 关闭按钮：当 closable 时独立渲染，使用 button 保证键盘 A11y Tab 可达 -->
     <button
       v-if="closable && !hoverClose"
       type="button"

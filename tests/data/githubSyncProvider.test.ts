@@ -49,8 +49,8 @@ describe('github sync provider', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ content: btoa(JSON.stringify(payload)) })));
     const provider = createGithubSyncProvider(config);
     const result = await provider.pull();
-    // 校验层会把 v4 迁移到当前版本（v5），并补齐实体时间戳
-    expect(result?.version).toBe(5);
+    // 校验层会把 v4 迁移到当前版本（v6），并补齐实体时间戳
+    expect(result?.version).toBe(6);
     expect(result?.groups).toHaveLength(1);
     expect(result?.groups[0]).toMatchObject({ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' });
     expect(result?.groups[0]?.createdAt).toBeTypeOf('number');

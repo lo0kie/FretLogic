@@ -228,8 +228,20 @@ export interface SyncSettingsBackup {
   webdavProxyUrl?: string;
 }
 
+/** 备份包内嵌的偏好设置（v6 起随备份导出/导入；不含凭据，云端同步也安全携带） */
+export interface AppPreferencesBackup {
+  /** 工作台：和弦名使用缩写标记 */
+  workbenchChordShorthand?: boolean;
+  /** 工作台：显示音名 */
+  workbenchShowPitchNames?: boolean;
+  /** 乐谱：和弦名使用缩写标记 */
+  scoreChordShorthand?: boolean;
+  /** 乐谱：显示音名 */
+  scoreShowPitchNames?: boolean;
+}
+
 /** 备份包结构版本；历史包可能是任意旧版本，迁移链逐级升级到 CURRENT_PAYLOAD_VERSION */
-export type PayloadVersion = 1 | 2 | 3 | 4 | 5;
+export type PayloadVersion = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface ImportExportPayload {
   version?: PayloadVersion;
@@ -237,6 +249,7 @@ export interface ImportExportPayload {
   chords: Chord[];
   songs: Song[];
   syncSettings?: SyncSettingsBackup;
+  preferences?: AppPreferencesBackup;
 }
 
 export interface GroupedChordCard {

@@ -1,3 +1,6 @@
+/**
+ * 全局状态：跨页面共享的应用级开关（当前仅「编辑模式」开关，持久化到 localStorage）。
+ */
 import { useTheme } from '@/composables/app/useTheme';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { useStorage } from '@vueuse/core';

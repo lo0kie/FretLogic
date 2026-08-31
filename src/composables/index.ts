@@ -1,3 +1,6 @@
+/**
+ * composables 公共出口：按 score（谱面）、fretboard（指法板）、app（应用级服务）分组导出。
+ */
 // Score Composables
 export * from './score/useAutoScroll';
 export * from './score/useLineSelection';

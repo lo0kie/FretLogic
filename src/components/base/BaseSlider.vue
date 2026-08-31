@@ -62,7 +62,6 @@
       <Minus :size="14" :stroke-width="2.2" aria-hidden="true" />
     </button>
 
-    <!-- 轨道主体区域 -->
     <div
       ref="trackRef"
       class="relative flex items-center justify-center group touch-none before:absolute before:content-[''] before:z-0"

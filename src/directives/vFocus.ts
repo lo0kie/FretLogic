@@ -1,3 +1,7 @@
+/**
+ * v-focus 指令：元素挂载或绑定值激活时自动聚焦。
+ * 支持光标定位（start/end/all）、延时触发与 preventScroll 等选项。
+ */
 import { nextTick, type Directive } from 'vue';
 
 export type FocusModifiers =

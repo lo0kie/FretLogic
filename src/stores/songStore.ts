@@ -1,3 +1,7 @@
+/**
+ * 歌曲 store：歌曲列表的加载、增删改与分片持久化（localStorage 按歌曲单键存储）。
+ * 提供和弦引用反查倒排索引；旧版单键（SONGS）数据在首次加载时自动迁移后清除。
+ */
 import { createSongRepository } from '@/services/repositories';
 import { sanitizePersistedData } from '@/services/validation/persistedData';
 import type { ChordId, SlotKey, Song } from '@/types';
@@ -179,37 +183,6 @@ export const useSongStore = defineStore('song', () => {
     indexDirty = true;
     scheduleFlush();
   };
-
-  {
-    // 旧数据迁移：key 已改为由 playKey + capo 实时派生，不再持久化。
-    // 若旧数据带 key 且 playKey 缺失，则用 key 兜底 playKey（key === playKey + capo 的逆向近似），
-    // 随后丢弃 key 字段，避免存储冗余。
-    let hasAnyUpdate = false;
-    songs.value.forEach(s => {
-      const legacy = s as unknown as { key?: unknown };
-      let songUpdated = false;
-      if (legacy.key !== undefined) {
-        if (typeof s.playKey !== 'string' || !s.playKey) {
-          s.playKey = typeof legacy.key === 'string' && legacy.key ? legacy.key : 'C';
-        }
-        delete legacy.key;
-        songUpdated = true;
-      }
-      if (typeof s.playKey !== 'string' || !s.playKey) {
-        s.playKey = 'C';
-        songUpdated = true;
-      }
-      if (typeof s.version !== 'number') {
-        s.version = 1;
-        songUpdated = true;
-      }
-      if (songUpdated) {
-        hasAnyUpdate = true;
-        markSongDirty(s.id);
-      }
-    });
-    if (hasAnyUpdate) markIndexDirty();
-  }
 
   const createSong = (title: string): Song => {
     const newSong = createSongEntity(title);

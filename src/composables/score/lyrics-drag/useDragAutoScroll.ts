@@ -1,3 +1,6 @@
+/**
+ * 歌词拖拽自动滚动：指针接近容器边缘时以 rAF 驱动渐加速滚动，拖拽结束即停。
+ */
 export function useDragAutoScroll() {
   let autoScrollRafId: number | null = null;
 

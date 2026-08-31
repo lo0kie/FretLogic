@@ -10,10 +10,8 @@
     </template>
 
     <template v-for="(item, index) in items" :key="item.label + index">
-      <!-- 项间分割线 -->
       <div v-if="item.divided" class="h-px bg-border-light my-0.5 mx-1" role="separator" />
 
-      <!-- 嵌套子菜单（Submenu） -->
       <BasePopover
         v-if="item.children && item.children.length"
         trigger="hover"
@@ -63,7 +61,6 @@
         </template>
       </BasePopover>
 
-      <!-- 普通可点击项 -->
       <button
         v-else
         :ref="el => setItemEl(el, index)"
@@ -115,7 +112,6 @@
 
         <span class="flex-1 min-w-0 whitespace-nowrap"> {{ item.label }} </span>
 
-        <!-- 快捷键提示 -->
         <span v-if="item.shortcut" class="text-2xs opacity-45 font-mono tracking-tight ml-3 shrink-0 select-none">
           {{ item.shortcut }}
         </span>

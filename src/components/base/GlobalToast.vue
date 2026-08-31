@@ -24,9 +24,7 @@
           ]"
           :role="item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'"
         >
-          <!-- 作用域插槽：提供完全替换卡片内容的能力，或使用子插槽 -->
           <slot name="card" :item="item">
-            <!-- 状态前缀图标 -->
             <div class="shrink-0 flex items-center justify-center pt-0.5" :class="{ '!pt-3xs': item.description }">
               <slot name="icon" :item="item">
                 <Loader2 v-if="item.type === 'loading'" :size="16" class="opacity-80 animate-spin" aria-hidden="true" />
@@ -37,7 +35,6 @@
               </slot>
             </div>
 
-            <!-- 文本与描述内容区（单行消息绝对禁止折行，宽度完全由文本自适应撑开） -->
             <div
               class="flex flex-col shrink-0"
               :class="item.description ? '!shrink !flex-1 min-w-0 max-w-sm' : 'whitespace-nowrap'"
@@ -55,7 +52,6 @@
               </slot>
             </div>
 
-            <!-- 操作按钮 -->
             <slot name="action" :item="item">
               <button
                 v-if="item.onAction"
@@ -70,7 +66,6 @@
               </button>
             </slot>
 
-            <!-- 关闭按钮 -->
             <button
               v-if="item.closable"
               v-wave

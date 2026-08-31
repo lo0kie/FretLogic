@@ -3,7 +3,6 @@
     <div
       class="@container relative w-full h-auto p-3 bg-bg-panel border border-glass-border rounded-lg flex flex-col gap-2 z-panel pointer-events-auto box-border overflow-hidden [container-type:inline-size]"
     >
-      <!-- 面板头部 -->
       <div class="flex items-center justify-between gap-2 shrink-0 pb-1.5 border-b border-border-light">
         <div class="flex items-center gap-1.5">
           <div class="flex items-center justify-center w-5 h-5 rounded-md bg-tint-primary-88 text-primary">

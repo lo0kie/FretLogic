@@ -1,4 +1,13 @@
-import type { Chord, ChordNameSegments, Group, ImportExportPayload, LineId, Song, SyncSettingsBackup } from '@/types';
+import type {
+  AppPreferencesBackup,
+  Chord,
+  ChordNameSegments,
+  Group,
+  ImportExportPayload,
+  LineId,
+  Song,
+  SyncSettingsBackup,
+} from '@/types';
 import { GroupSortRule } from '@/types';
 import { cloneDeep } from '@/utils/core/common';
 import { fillMissingTimestamps, type SongDraft } from '@/services/validation/persistedData';
@@ -13,7 +22,7 @@ type RawChord = Partial<Chord> & RawRecord;
 type RawSong = Partial<Song> & RawRecord;
 
 /** 备份包结构版本：每次结构变更（字段迁移/删除/语义调整）递增 */
-export const CURRENT_PAYLOAD_VERSION = 5;
+export const CURRENT_PAYLOAD_VERSION = 6;
 
 /**
  * 版本迁移：把任意旧版本 payload 逐级升级到当前版本。
@@ -56,6 +65,9 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: ImportExportPayload) => void>
   },
   4: () => {
     // v4 -> v5：新增可选 syncSettings（云端同步配置随备份导出/导入），旧包无此字段，无需处理。
+  },
+  5: () => {
+    // v5 -> v6：新增可选 preferences（偏好设置随备份导出/导入），旧包无此字段，无需处理。
   },
 };
 
@@ -222,6 +234,31 @@ const sanitizeSyncSettings = (raw: unknown): SyncSettingsBackup | undefined => {
   return Object.keys(result).length > 0 ? result : undefined;
 };
 
+/** 偏好设置字段（全部 boolean） */
+const PREFERENCE_BOOLEAN_FIELDS = [
+  'workbenchChordShorthand',
+  'workbenchShowPitchNames',
+  'scoreChordShorthand',
+  'scoreShowPitchNames',
+] as const;
+
+/**
+ * 防御性清洗 preferences：偏好属辅助数据，字段损坏只丢弃该字段，
+ * 绝不因偏好问题拒绝整包导入。仅保留已知 boolean 字段。
+ */
+const sanitizePreferences = (raw: unknown): AppPreferencesBackup | undefined => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const source = raw as RawRecord;
+  const result: AppPreferencesBackup = {};
+  for (const field of PREFERENCE_BOOLEAN_FIELDS) {
+    const value = source[field];
+    if (typeof value === 'boolean') {
+      result[field] = value;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+};
+
 export const validateImportExportPayload = (data: unknown): ValidationResult => {
   if (!data || typeof data !== 'object') {
     return { isValid: false, issues: ['检测到数据资产并非有效对象'] };
@@ -235,6 +272,7 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
   const chords = fillMissingTimestamps(sanitizeChords(migrated.chords, issues), now);
   const songs = migrated.songs !== undefined ? fillMissingTimestamps(sanitizeSongs(migrated.songs, issues), now) : [];
   const syncSettings = sanitizeSyncSettings(migrated.syncSettings);
+  const preferences = sanitizePreferences(migrated.preferences);
   if (issues.length > 0) {
     return { isValid: false, issues };
   }
@@ -269,6 +307,7 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
       chords: dedupedChords,
       songs: cleanedSongs,
       ...(syncSettings ? { syncSettings } : {}),
+      ...(preferences ? { preferences } : {}),
     },
     issues: [],
   };

@@ -1,3 +1,7 @@
+/**
+ * 云同步服务：基于 Provider（GitHub / WebDAV）的推拉同步、连接测试与分支列表获取。
+ * 推送使用不含凭据的 selection（见 buildBackupPayload），拉取结果走统一清洗层后应用。
+ */
 import { SyncError, type SyncBranchesProvider, type SyncProvider } from '@/services/sync/provider';
 import { syncProviderRegistry } from '@/services/sync/registry';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
@@ -7,10 +11,13 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { buildBackupPayload } from '@/utils/core/buildBackupPayload';
+import { FULL_BACKUP_SELECTION } from '@/composables/app/useImportExportService';
 import { ref } from 'vue';
 
 const isSyncing = ref(false);
 const isPulling = ref(false);
+const isTestingConnection = ref(false);
+const isFetchingBranches = ref(false);
 
 export function useSyncService() {
   const uiStore = useUiStore();
@@ -53,7 +60,7 @@ export function useSyncService() {
     const provider = resolveProvider('同步失败');
     if (!provider) return false;
     // 云端推送不携带同步配置（含 Token/密码等凭据），仅手动备份导出才包含
-    const payload = buildBackupPayload({ includeSyncSettings: false });
+    const payload = buildBackupPayload({ selection: { ...FULL_BACKUP_SELECTION, syncSettings: false } });
     if (!payload) {
       uiStore.toast.error('数据校验失败，已取消同步');
       return false;
@@ -106,6 +113,8 @@ export function useSyncService() {
 
     const songs = cloudData.songs ?? [];
     if (cloudData.songs) songStore.overwriteSongs(songs);
+    // v6 起云端包携带偏好设置（不含凭据），拉取时一并恢复
+    settingsStore.applyPreferencesBackup(cloudData.preferences);
     uiStore.toast.success('已使用云端数据完全覆盖本地');
     // 拉取后清空指板编辑草稿（全部静音），避免残留旧指法
     editorStore.resetEditor();
@@ -113,11 +122,16 @@ export function useSyncService() {
 
   const fetchGithubBranches = async (): Promise<boolean> => {
     const factory = syncProviderRegistry[settingsStore.syncTarget];
-    if (!factory.supportsBranches) return false; // 仅 GitHub 支持分支列表
+    if (!factory.supportsBranches || isFetchingBranches.value) return false; // 仅 GitHub 支持分支列表
     const provider = resolveProvider('获取分支失败');
     if (!provider) return false;
     const branchesProvider = provider as SyncBranchesProvider;
 
+    // 重新获取前重置已有分支选择，避免下拉框残留失效选项
+    settingsStore.githubBranches = [];
+    settingsStore.githubBranch = '';
+
+    isFetchingBranches.value = true;
     let loadingToastId: number | null = null;
     try {
       loadingToastId = uiStore.toast.loading('正在获取远程分支列表...', { closable: false });
@@ -131,10 +145,40 @@ export function useSyncService() {
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
       showSyncError('获取分支失败', err);
       return false;
+    } finally {
+      isFetchingBranches.value = false;
     }
   };
 
   const triggerGlobalSync = () => syncToRemote();
+
+  /** 测试当前同步后端的连通性（探测请求，不读写业务数据） */
+  const testConnection = async (): Promise<boolean> => {
+    if (isTestingConnection.value) return false;
+    const factory = syncProviderRegistry[settingsStore.syncTarget];
+    const resolved = factory.resolveTestConfig(settingsStore);
+    if (resolved.error || !resolved.config) {
+      uiStore.toast.error(`测试连接失败：${resolved.error ?? '配置无效'}`);
+      return false;
+    }
+    const provider = factory.create(resolved.config);
+
+    isTestingConnection.value = true;
+    let loadingToastId: number | null = null;
+    try {
+      loadingToastId = uiStore.toast.loading('正在测试连接...', { closable: false });
+      const detail = await provider.testConnection();
+      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
+      uiStore.toast.success(`连接成功：${detail}`);
+      return true;
+    } catch (err: unknown) {
+      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
+      showSyncError('测试连接失败', err);
+      return false;
+    } finally {
+      isTestingConnection.value = false;
+    }
+  };
 
   return {
     syncToRemote,
@@ -144,5 +188,8 @@ export function useSyncService() {
     isPulling,
     applyOverwriteWithCloud,
     fetchGithubBranches,
+    testConnection,
+    isTestingConnection,
+    isFetchingBranches,
   };
 }

@@ -574,9 +574,9 @@ export const parseChordName = (chordName: string): ParsedChordName => {
 
 const rootPitchCache = createLruCache<number>(512);
 
-/** 兼容旧 API：只取和弦名的根音音高（含斜杠低音时仍取斜杠前的根音） */
+/** 取和弦名的根音音高（含斜杠低音时仍取斜杠前的根音），带 LRU 缓存 */
 export const getChordRootPitch = (chordName: string): number => {
-  if (!chordName || typeof chordName !== 'string') return 99;
+  if (!chordName) return 99;
   const cached = rootPitchCache.get(chordName);
   if (cached !== undefined) return cached;
   const pitch = parseChordName(chordName).rootPitch;

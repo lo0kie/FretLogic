@@ -1,8 +1,8 @@
 /**
  * 统一主题管理：light / dark / high-contrast / auto（跟随系统）。
  *
- * 实现方式：在 `<html>` 上设置 `data-theme` 属性；dark 同时保留 `.dark` class
- * （兼容现有组件中 `:is-dark-mode` 的布尔判断与旧样式选择器）。
+ * 实现方式：在 `<html>` 上设置 `data-theme` 属性；dark 同时挂载 `.dark` class
+ * （tokens.scss 的暗色选择器与组件中 `:is-dark-mode` 布尔判断均依赖）。
  */
 import { useMediaQuery } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
@@ -35,7 +35,7 @@ function resolve(pref: ThemePreference): ThemeMode {
 function apply(mode: ThemeMode) {
   const root = document.documentElement;
   root.setAttribute('data-theme', mode);
-  // 兼容旧逻辑：.dark class 与 data-theme="dark" 等价
+  // tokens.scss 中暗色主题选择器为 `.dark`，与 data-theme="dark" 同步挂载
   root.classList.toggle('dark', mode === 'dark');
   activeTheme.value = mode;
 }

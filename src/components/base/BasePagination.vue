@@ -4,7 +4,6 @@
     class="inline-flex items-center justify-center gap-sm box-border select-none"
     aria-label="分页导航"
   >
-    <!-- 首页按钮 -->
     <ActionButton
       v-if="showFirstLast && !simple"
       variant="ghost"
@@ -18,7 +17,6 @@
       <ChevronsLeft :size="iconSize" />
     </ActionButton>
 
-    <!-- 上一页按钮 -->
     <ActionButton
       variant="ghost"
       icon-only
@@ -31,12 +29,10 @@
       <ChevronLeft :size="iconSize" />
     </ActionButton>
 
-    <!-- 页码说明文本 / 精简模式 -->
     <span class="pagination-label text-xs text-text-secondary whitespace-nowrap select-none font-medium">
       {{ displayText }}
     </span>
 
-    <!-- 快速跳页输入框 -->
     <input
       v-if="showJumper && !simple"
       ref="jumperRef"
@@ -52,7 +48,6 @@
       @blur="commitJumper"
     />
 
-    <!-- 下一页按钮 -->
     <ActionButton
       variant="ghost"
       icon-only
@@ -65,7 +60,6 @@
       <ChevronRight :size="iconSize" />
     </ActionButton>
 
-    <!-- 尾页按钮 -->
     <ActionButton
       v-if="showFirstLast && !simple"
       variant="ghost"
@@ -79,7 +73,6 @@
       <ChevronsRight :size="iconSize" />
     </ActionButton>
 
-    <!-- 每页条数选择器 -->
     <select
       v-if="pageSizes && pageSizes.length > 0 && !simple"
       class="pagination-page-size text-xs h-7 px-1.5 rounded border border-border-light bg-bg-body text-text-title font-medium outline-none cursor-pointer focus:border-primary focus:ring-1 focus:ring-primary/50"

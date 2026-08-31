@@ -1,5 +1,9 @@
+/**
+ * 同步与偏好设置 store：同步目标（GitHub / WebDAV）凭据与路径、应用偏好项。
+ * 敏感字段（token/密码）仅驻留内存，不参与云同步推送。
+ */
 import type { SyncProviderKind } from '@/services/sync/provider';
-import type { SyncSettingsBackup } from '@/types';
+import type { AppPreferencesBackup, SyncSettingsBackup } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -46,6 +50,17 @@ export const useSettingsStore = defineStore('settings', () => {
     githubBranches.value = [];
   };
 
+  /** 从备份包恢复偏好设置（导入备份/云端拉取时调用）。仅覆盖包中携带的字段。 */
+  const applyPreferencesBackup = (prefs?: AppPreferencesBackup) => {
+    if (!prefs) return;
+    if (typeof prefs.workbenchChordShorthand === 'boolean')
+      workbenchChordShorthand.value = prefs.workbenchChordShorthand;
+    if (typeof prefs.workbenchShowPitchNames === 'boolean')
+      workbenchShowPitchNames.value = prefs.workbenchShowPitchNames;
+    if (typeof prefs.scoreChordShorthand === 'boolean') scoreChordShorthand.value = prefs.scoreChordShorthand;
+    if (typeof prefs.scoreShowPitchNames === 'boolean') scoreShowPitchNames.value = prefs.scoreShowPitchNames;
+  };
+
   return {
     syncTarget,
     githubToken,
@@ -63,8 +78,6 @@ export const useSettingsStore = defineStore('settings', () => {
     scoreChordShorthand,
     scoreShowPitchNames,
     applySyncBackup,
-    // 兼容别名（默认指向工作台）
-    useChordShorthand: workbenchChordShorthand,
-    showPitchNames: workbenchShowPitchNames,
+    applyPreferencesBackup,
   };
 });

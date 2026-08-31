@@ -4,7 +4,6 @@
     class="chord-name-display inline-flex items-baseline align-middle leading-none max-w-full overflow-hidden text-ellipsis select-none whitespace-nowrap tabular-nums"
     :class="sizeClass"
   >
-    <!-- 根音 -->
     <span class="chord-root-group inline align-baseline whitespace-nowrap">
       <span class="chord-root-letter">{{ resolvedSegments.root[0] }}</span>
       <span
@@ -15,10 +14,8 @@
       </span>
     </span>
 
-    <!-- 和弦性质/后缀 (m, maj7, sus4, dim 等 / 简写 Δ7, °, +) -->
     <span v-if="formattedData.quality" class="chord-quality font-[inherit]">{{ formattedData.quality }}</span>
 
-    <!-- 扩展/变化音分片 (#9, b5 等) -->
     <template v-if="formattedData.extensions.length > 0">
       <span
         v-for="(ext, idx) in formattedData.extensions"
@@ -35,7 +32,6 @@
       </span>
     </template>
 
-    <!-- 斜杠低音 (/G, /C# 等) -->
     <template v-if="resolvedSegments.bass">
       <span class="chord-slash mx-px opacity-85">/</span>
       <span class="chord-bass-group inline align-baseline whitespace-nowrap">

@@ -1,5 +1,4 @@
 <template>
-  <!-- 1. 新建分组 Modal -->
   <BaseModal v-model:visible="groupModals.modals.create" title="新建分组" @confirm="groupModals.handleCreateGroup">
     <BaseInput
       v-model="groupModals.modalData.inputValue"
@@ -11,7 +10,6 @@
     />
   </BaseModal>
 
-  <!-- 2. 重命名分组 Modal -->
   <BaseModal v-model:visible="groupModals.modals.rename" title="修改组名" @confirm="groupModals.handleRenameGroup">
     <BaseInput
       v-model="groupModals.modalData.inputValue"
@@ -23,7 +21,6 @@
     />
   </BaseModal>
 
-  <!-- 3. 删除分组 Modal -->
   <BaseModal
     v-model:visible="groupModals.modals.delete"
     :title="`删除分组 ${groupModals.modalData.activeGroup?.name}`"
@@ -35,7 +32,6 @@
     </p>
   </BaseModal>
 
-  <!-- 4. 排序配置 Modal -->
   <BaseModal
     v-model:visible="groupModals.modals.sort"
     title="分组和弦排序配置"

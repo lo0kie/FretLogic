@@ -2,17 +2,13 @@
   <GlobalToast />
 
   <div class="w-screen h-screen min-w-[320px] flex flex-col overflow-hidden box-border">
-    <!-- 顶部栏（TopHeader 内部的 <header> 是唯一的 banner 地标） -->
     <div class="shrink-0">
       <TopHeader />
     </div>
 
-    <!-- 主体：侧栏 + 内容 -->
     <div class="flex-1 min-h-0 flex relative overflow-hidden">
-      <!-- 左侧栏（桌面常驻 / 移动端抽屉） -->
       <SidebarLeft />
 
-      <!-- 主内容区 -->
       <main class="flex-1 min-w-0 min-h-0 relative overflow-hidden">
         <div
           class="absolute inset-0 box-border transition-[padding-left] duration-slow ease-sidebar"

@@ -17,6 +17,11 @@ export interface ProviderFactory {
   /** 从设置解析并校验配置；校验失败返回 error，否则返回 config */
   resolveConfig: (settings: SettingsStore) => { config?: SyncConfig; error?: string };
   create: (config: SyncConfig) => SyncProvider;
+  /**
+   * 「测试连接」专用宽松解析：只要求发起探测请求的最小字段
+   *（GitHub 仅 owner/repo，WebDAV 仅 serverUrl），分支/路径等完整配置不强制。
+   */
+  resolveTestConfig: (settings: SettingsStore) => { config?: SyncConfig; error?: string };
 }
 
 export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
@@ -44,6 +49,22 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
       };
     },
     create: config => createGithubSyncProvider(config as GithubSyncConfig),
+    // 测试连接只需 owner/repo（Token 与公开性在探测时自动区分），branch/path 不参与
+    resolveTestConfig: s => {
+      const owner = s.githubOwner.trim();
+      const repo = s.githubRepo.trim();
+      if (!owner || !repo) return { error: '请先填写用户名与仓库名' };
+      return {
+        config: {
+          kind: 'github',
+          token: s.githubToken.trim() || undefined,
+          owner,
+          repo,
+          branch: 'main',
+          path: '',
+        },
+      };
+    },
   },
   webdav: {
     resolveConfig: s => {
@@ -66,5 +87,21 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
       };
     },
     create: config => createWebdavSyncProvider(config as WebdavSyncConfig),
+    // 测试连接只需 serverUrl（账号密码可选，认证失败在探测时反馈）
+    resolveTestConfig: s => {
+      const serverUrl = s.webdavServerUrl.trim();
+      if (!serverUrl) return { error: '请先填写 WebDAV 服务器地址' };
+      if (!/^https?:\/\/.+/.test(serverUrl)) return { error: 'WebDAV 服务器地址需以 http(s):// 开头' };
+      const proxyUrl = s.webdavProxyUrl.trim();
+      return {
+        config: {
+          kind: 'webdav',
+          serverUrl,
+          username: s.webdavUsername.trim() || undefined,
+          password: s.webdavPassword || undefined,
+          ...(proxyUrl ? { proxyUrl } : {}),
+        },
+      };
+    },
   },
 };

@@ -34,11 +34,9 @@
       </div>
     </div>
 
-    <!-- 中部工具栏 -->
     <div
       class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-inner pointer-events-auto flex items-center @media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag] @media(display-mode:window-controls-overlay):-translate-x-[calc(50%-(env(titlebar-area-inset-left,0px)-env(titlebar-area-inset-right,0px))/2)]"
     >
-      <!-- 1. 工作台工具 -->
       <div v-if="route.path === '/workbench'" class="flex items-center gap-xs p-xs">
         <ActionButton
           v-tooltip="'播放/试听当前和弦'"
@@ -80,7 +78,6 @@
         </ActionButton>
       </div>
 
-      <!-- 2. 歌词乐谱工具 -->
       <BaseSegmentedControl
         v-else-if="route.path === '/score'"
         v-model="scoreEditor.activeTab"
@@ -152,7 +149,6 @@
         <Cloud :size="18" :stroke-width="2.2" />
       </ActionButton>
 
-      <!-- 主题切换 Popover -->
       <BasePopover trigger="hover" placement="bottom-end">
         <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
