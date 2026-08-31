@@ -34,7 +34,7 @@ describe('backup payload migration', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.version).toBe(5);
+    expect(result.payload?.version).toBe(6);
     expect(result.payload?.chords[0].id).toBe('1');
     expect(result.payload?.chords[0].strings[0]).toEqual([-1, false]);
     expect(result.payload?.songs[0].playKey).toBe('G');

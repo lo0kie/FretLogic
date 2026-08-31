@@ -6,7 +6,6 @@
       align === 'top' ? 'align-top' : 'align-center',
     ]"
   >
-    <!-- 主体：水平或垂直排布 Label 与 Control -->
     <div
       class="form-row-main flex w-full box-border"
       :class="[
@@ -41,7 +40,6 @@
       </div>
     </div>
 
-    <!-- 反馈区：错误提示或说明文案，独立位于主体下方，避免 Flex 挤占 -->
     <div
       v-if="resolvedHelp || resolvedError || $slots['help'] || $slots['error']"
       class="form-row-feedback w-full mt-1 text-2xs leading-relaxed"

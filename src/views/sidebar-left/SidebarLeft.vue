@@ -9,11 +9,9 @@
     }"
     v-bind="$attrs"
   >
-    <!-- 1. 规范化顶栏 -->
     <div
       class="panel-header px-lg h-10 border-b border-glass-border flex items-center justify-between gap-sm box-border shrink-0"
     >
-      <!-- 工作台模式 Header -->
       <template v-if="route.path === '/workbench'">
         <BaseInput
           v-model="searchQuery"
@@ -43,7 +41,6 @@
         </div>
       </template>
 
-      <!-- 乐谱库模式 Header -->
       <template v-else-if="route.path === '/score'">
         <div class="header-title-zone flex items-center gap-sm">
           <span class="sidebar-title text-xs font-bold text-text-title tracking-tight whitespace-nowrap">乐谱列表</span>
@@ -64,7 +61,6 @@
       </template>
     </div>
 
-    <!-- 2. 内容主体列表 -->
     <div
       class="left-group-list-container left-group-list flex flex-col flex-1 min-h-0 overflow-hidden box-border w-full"
     >
@@ -91,7 +87,6 @@
       </div>
     </div>
 
-    <!-- 3. 底栏：统一提供数据备份与恢复 -->
     <div class="left-panel-footer p-md px-lg border-t border-glass-border box-border shrink-0 w-full">
       <input ref="fileInputRef" type="file" accept=".json" class="hidden-input hidden" @change="handleFileChange" />
 
@@ -103,28 +98,28 @@
           导入备份
         </ActionButton>
 
-        <ActionButton width="100%" @click="ioService.triggerFullExport">
+        <ActionButton width="100%" @click="backupModals.openExport">
           <template #prefix>
             <Upload :size="13" :stroke-width="2" />
           </template>
-          全量导出
+          导出备份
         </ActionButton>
       </div>
     </div>
   </aside>
 
-  <!-- 4. 业务弹窗组件集 -->
   <GroupModalsContainer />
   <ChordModalsContainer />
   <SongModalsContainer />
+  <BackupModalsContainer />
 </template>
 
 <script setup lang="ts">
 import ActionButton from '@/components/base/ActionButton.vue';
 import BaseBadge from '@/components/base/BaseBadge.vue';
 import BaseInput from '@/components/base/BaseInput.vue';
+import { useBackupModals } from '@/composables/app/useBackupModals';
 import { useChordGroupModals } from '@/composables/app/useChordGroupModals';
-import { useImportExportService } from '@/composables/app/useImportExportService';
 import { useSongModals } from '@/composables/app/useSongModals';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
@@ -133,6 +128,7 @@ import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/core/constants';
 import { Download, Plus, Search, Upload } from '@lucide/vue';
 import { provide, ref, useTemplateRef } from 'vue';
 import { useRoute } from 'vue-router';
+import BackupModalsContainer from './BackupModalsContainer.vue';
 import ChordModalsContainer from './ChordModalsContainer.vue';
 import GroupModalsContainer from './GroupModalsContainer.vue';
 import LeftChordGroupSection from './GroupSection.vue';
@@ -148,13 +144,14 @@ const route = useRoute();
 const uiStore = useUiStore();
 const chordStore = useChordStore();
 const songStore = useSongStore();
-const ioService = useImportExportService();
 
 const groupModals = useChordGroupModals();
 const songModals = useSongModals();
+const backupModals = useBackupModals();
 
 provide('groupModals', groupModals);
 provide('songModals', songModals);
+provide('backupModals', backupModals);
 
 const handleImportTrigger = () => fileInputRef.value?.click();
 
@@ -166,6 +163,6 @@ const handleFileChange = async (e: Event) => {
   const resetInput = () => {
     if (fileInputRef.value) fileInputRef.value.value = '';
   };
-  await ioService.processImport(file, resetInput);
+  await backupModals.handleFileChange(file, resetInput);
 };
 </script>

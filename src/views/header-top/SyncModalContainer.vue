@@ -3,10 +3,12 @@
     v-model:visible="isSyncModalOpen"
     title="云端同步设置"
     width="w-80"
-    :close-on-mask="!isSyncing && !isPulling && !isFetchingBranches"
+    :close-on-mask="modalCloseable"
+    :show-close="modalCloseable"
+    :keyboard="modalCloseable"
   >
     <template #header-extra>
-      <BaseSegmentedControl v-model="settingsStore.syncTarget" :options="providerOptions" />
+      <BaseSegmentedControl v-model="settingsStore.syncTarget" :disabled="!modalCloseable" :options="providerOptions" />
     </template>
 
     <template #default>
@@ -58,7 +60,7 @@
             <ActionButton
               :disabled="isFetchBranchesDisabled"
               :loading="isFetchingBranches"
-              @click="handleFetchBranchesClick"
+              @click="fetchGithubBranches"
             >
               查询分支
             </ActionButton>
@@ -102,6 +104,20 @@
 
     <template #footer>
       <ActionButton
+        v-tooltip="
+          isTestingConnection ? '测试中' : isTestDisabled ? '请先填写必要配置' : '验证云端地址与凭据（不读写数据）'
+        "
+        :disabled="isTestDisabled || isSyncing || isPulling"
+        :loading="isTestingConnection"
+        @click="handleTestConnectionClick"
+      >
+        <template #prefix>
+          <PlugZap :size="13" :stroke-width="2.5" />
+        </template>
+        测试连接
+      </ActionButton>
+
+      <ActionButton
         v-tooltip="isPulling ? '同步中' : isPullConfigComplete ? '请先填写配置' : '从云端下载并覆盖本地数据'"
         :disabled="isPullConfigComplete || isSyncing"
         :loading="isPulling"
@@ -137,13 +153,21 @@ import BaseSelector from '@/components/base/BaseSelector.vue';
 import { useSyncService } from '@/composables/app/useSyncService';
 import type { SyncProviderKind } from '@/services/sync/provider';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { CloudDownload, CloudUpload } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { CloudDownload, CloudUpload, PlugZap } from '@lucide/vue';
+import { computed } from 'vue';
 
 const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true });
-const { triggerGlobalSync, pullFromRemote, fetchGithubBranches, isSyncing, isPulling } = useSyncService();
+const {
+  triggerGlobalSync,
+  pullFromRemote,
+  fetchGithubBranches,
+  testConnection,
+  isSyncing,
+  isPulling,
+  isTestingConnection,
+  isFetchingBranches,
+} = useSyncService();
 const settingsStore = useSettingsStore();
-const isFetchingBranches = ref(false);
 
 const handleSyncClick = async () => {
   const ok = await triggerGlobalSync();
@@ -160,16 +184,19 @@ const providerOptions: { label: string; value: SyncProviderKind }[] = [
   { label: 'WebDAV', value: 'webdav' },
 ];
 
+const modalCloseable = computed(
+  () => !isSyncing.value && !isPulling.value && !isFetchingBranches.value && !isTestingConnection.value
+);
+
 // 控制获取分支按钮的禁用状态（只要填了账号和仓库名即可获取，不需要 Token）
-const isFetchBranchesDisabled = computed(() => {
-  return !settingsStore.githubOwner.trim() || !settingsStore.githubRepo.trim() || isFetchingBranches.value;
-});
+const isFetchBranchesDisabled = computed(
+  () => !settingsStore.githubOwner.trim() || !settingsStore.githubRepo.trim() || isFetchingBranches.value
+);
 
 // 拉取只需要账号、仓库、分支和文件路径（公开仓库无需 Token）
 const isPullConfigComplete = computed(() => {
-  if (settingsStore.syncTarget === 'webdav') {
-    return !settingsStore.webdavServerUrl.trim();
-  }
+  if (settingsStore.syncTarget === 'webdav') return !settingsStore.webdavServerUrl.trim();
+
   return (
     !settingsStore.githubOwner.trim() ||
     !settingsStore.githubRepo.trim() ||
@@ -180,21 +207,19 @@ const isPullConfigComplete = computed(() => {
 
 // 同步（推送）写回仓库，因此必须校验 Token 是否填写
 const isPushConfigComplete = computed(() => {
-  if (settingsStore.syncTarget === 'webdav') {
-    return isPullConfigComplete.value;
-  }
+  if (settingsStore.syncTarget === 'webdav') return isPullConfigComplete.value;
+
   return isPullConfigComplete.value || !settingsStore.githubToken.trim();
 });
 
-const handleFetchBranchesClick = async () => {
-  isFetchingBranches.value = true;
-  settingsStore.githubBranches = [];
-  settingsStore.githubBranch = '';
-
-  try {
-    await fetchGithubBranches();
-  } finally {
-    isFetchingBranches.value = false;
-  }
+const handleTestConnectionClick = async () => {
+  await testConnection();
 };
+
+// 测试连接的最小配置要求：GitHub 只需账号与仓库，WebDAV 只需服务器地址
+const isTestDisabled = computed(() => {
+  if (settingsStore.syncTarget === 'webdav') return !settingsStore.webdavServerUrl.trim();
+
+  return !settingsStore.githubOwner.trim() || !settingsStore.githubRepo.trim();
+});
 </script>

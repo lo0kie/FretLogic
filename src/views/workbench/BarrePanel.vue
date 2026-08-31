@@ -1,6 +1,5 @@
 <template>
   <div class="w-full h-auto p-3 bg-bg-panel border border-glass-border rounded-lg flex flex-col gap-2 box-border">
-    <!-- 面板头部：固定高度，图标/标题/状态垂直居中 -->
     <div class="flex items-center justify-between gap-2 shrink-0 h-7 border-b border-border-light pb-1.5">
       <div class="flex items-center gap-1.5">
         <div class="flex items-center justify-center w-5 h-5 rounded-md bg-tint-primary-88 text-primary">

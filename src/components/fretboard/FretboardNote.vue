@@ -14,7 +14,6 @@
     @click.stop="interactive && $emit('click', $event)"
     @dblclick.prevent.stop="interactive && $emit('toggle-pitch')"
   >
-    <!-- 统一的外边框环（Hover / Focus / 键盘聚焦） -->
     <circle
       v-if="isHovered || isFocused"
       :cx="x"
@@ -26,7 +25,6 @@
       class="note-outline-ring transition-[fill,stroke] duration-fast"
     />
 
-    <!-- 音符圆圈背景 -->
     <circle
       v-if="!isPressed && (showPitchNames || !isMuted)"
       :cx="x"
@@ -39,7 +37,6 @@
       :class="{ '[filter:var(--root-glow)]': showRootStyle && !interactive }"
     />
 
-    <!-- 静音/禁用状态：原生 SVG 画 X -->
     <g
       v-if="!isPressed && isMuted"
       class="note-mute-x pointer-events-none"
@@ -51,7 +48,6 @@
       <line :x1="x + muteXHalf" :y1="y - muteXHalf" :x2="x - muteXHalf" :y2="y + muteXHalf" />
     </g>
 
-    <!-- 音名文字：原生 SVG <text> -->
     <text
       v-else-if="!isPressed && label"
       :x="x"
@@ -75,7 +71,6 @@
       </tspan>
     </text>
 
-    <!-- 透明命中区：仅交互模式下拦截点击放大命中；非交互/拾取预览时放行，避免遮挡下层可点击元素（如候选横按梁） -->
     <circle
       class="transition-[pointer-events]"
       :class="interactive ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'"

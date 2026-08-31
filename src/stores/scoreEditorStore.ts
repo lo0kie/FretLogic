@@ -1,3 +1,7 @@
+/**
+ * 乐谱编辑器 store：当前编辑歌曲的歌词 / 和弦槽位 / 谱面状态管理，
+ * 含撤销-重做历史栈、调性变换（transpose/capo）与编辑态持久化。
+ */
 import { useSongStore } from '@/stores/songStore';
 import type { Chord, ChordId, LineId, SlotKey, Song } from '@/types';
 import { garbageCollectChordMap, toCapo } from '@/utils/music/chord-fretboard';

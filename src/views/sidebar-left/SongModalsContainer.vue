@@ -1,5 +1,4 @@
 <template>
-  <!-- 1. 新建乐谱 Modal -->
   <BaseModal v-model:visible="songModals.modals.create" title="新建乐谱" @confirm="songModals.handleCreateSong">
     <BaseInput
       v-model="songModals.modalData.inputValue"
@@ -11,7 +10,6 @@
     />
   </BaseModal>
 
-  <!-- 2. 乐谱综合配置 Modal -->
   <BaseModal v-model:visible="songModals.modals.config" title="乐谱配置" @confirm="songModals.handleConfigSong">
     <div class="config-modal-body flex flex-col gap-lg py-xs">
       <BaseFormRow label="乐谱名称" label-width="5rem">
@@ -52,7 +50,6 @@
     </div>
   </BaseModal>
 
-  <!-- 3. 清除和弦确认 Modal -->
   <BaseModal
     v-model:visible="songModals.modals.clear"
     title="清除所有和弦"

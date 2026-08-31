@@ -1,5 +1,4 @@
 <template>
-  <!-- 1. 移动分组 Modal -->
   <BaseModal v-model:visible="groupModals.modals.move" title="移动至新分组" @confirm="groupModals.handleMoveChord">
     <div v-grid-nav="3" class="grid grid-cols-3 gap-md no-scrollbar max-h-[50vh]">
       <button
@@ -26,7 +25,6 @@
     </div>
   </BaseModal>
 
-  <!-- 2. 多指法和弦删除选择 Modal -->
   <BaseModal
     v-model:visible="groupModals.modals.chordVariantsDelete"
     :title="`删除和弦 &quot;${getChordName(groupModals.modalData.activeGroupCard?.mainChord)}&quot; 的指法`"
@@ -103,7 +101,6 @@
     </div>
   </BaseModal>
 
-  <!-- 3. 和弦引用反查 Modal -->
   <BaseModal
     v-model:visible="groupModals.modals.chordReferences"
     :title="`和弦引用 · ${groupModals.modalData.referenceChordName}`"

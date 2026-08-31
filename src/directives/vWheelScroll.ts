@@ -1,3 +1,7 @@
+/**
+ * v-wheel-scroll 指令：横向滚轮劫持滚动（触控板/鼠标滚轮自适应）。
+ * 支持速度倍率、平滑惯性缓动、方向反转与边界穿透策略（contain/auto）。
+ */
 import type { Directive } from 'vue';
 
 export type WheelScrollModifiers =

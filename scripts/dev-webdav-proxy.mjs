@@ -28,14 +28,19 @@ import { URL } from 'node:url';
 import { lookup } from 'node:dns/promises';
 
 const PORT = Number(process.env.PROXY_PORT ?? 9003);
-// 默认只绑定回环地址，避免局域网内其他机器访问本代理（可用 PROXY_HOST 放宽）
-const HOST = process.env.PROXY_HOST ?? '127.0.0.1';
+// 默认双栈监听（'::' 同时接受 IPv6 与 IPv4-mapped 连接）：
+// Windows 上浏览器把 localhost 优先解析为 IPv6 ::1，若只绑 127.0.0.1 会导致浏览器连不上代理（fetch 报 TypeError）。
+// 可用 PROXY_HOST 收窄（如 127.0.0.1）。
+const HOST = process.env.PROXY_HOST ?? '::';
 const ALLOWED_HOSTS = (process.env.PROXY_ALLOWED_HOSTS ?? '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
 // 默认拒绝转发到内网/回环地址（SSRF 防护）；设置 PROXY_ALLOW_PRIVATE=1 可放开
 const ALLOW_PRIVATE = process.env.PROXY_ALLOW_PRIVATE === '1';
+// 重定向跟随：3xx 由代理在服务端消化，避免浏览器跟随重定向直连目标被 CORS 拦截
+const MAX_REDIRECT_HOPS = 5;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 /**
  * 判断地址是否为内网/回环/链路本地等不应被代理访问的目标（SSRF 防护）。
@@ -157,8 +162,6 @@ async function forward(req, res) {
     return;
   }
 
-  const isHttps = parsed.protocol === 'https:';
-  const lib = isHttps ? https : http;
   // 转发给目标时去掉浏览器侧与 CORS 相关的请求头，避免目标服务器困惑
   const headers = { ...req.headers, host: parsed.host };
   delete headers['access-control-request-headers'];
@@ -166,23 +169,87 @@ async function forward(req, res) {
   delete headers['origin'];
   delete headers['referer'];
 
-  const options = {
-    method: req.method,
-    hostname: parsed.hostname,
-    port: parsed.port || (isHttps ? 443 : 80),
-    path: parsed.pathname + parsed.search,
-    headers,
-  };
+  // 先缓冲请求体：重定向需要原样重发（WebDAV 的 PROPFIND/PUT body 都不大，缓冲无压力）
+  const body = await new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
 
-  const upstream = lib.request(options, upRes => {
-    res.writeHead(upRes.statusCode ?? 502, { ...upRes.headers, ...corsHeaders(req) });
-    upRes.pipe(res);
-  });
-  upstream.on('error', err => {
-    res.writeHead(502, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
+  // 服务端跟随重定向（最多 5 跳）：浏览器 fetch 会自动跟随 3xx，
+  // 若把重定向透传给浏览器，浏览器将直连目标服务器而被 CORS 拦截
+  // （典型场景：TeraCloud 对 /dav 返回 301 -> /dav/）。
+  let current = parsed;
+  try {
+    for (let hop = 0; ; hop++) {
+      if (hop > MAX_REDIRECT_HOPS) {
+        res.writeHead(502, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
+        res.end(`Too many redirects (> ${MAX_REDIRECT_HOPS})`);
+        return;
+      }
+      if (current.protocol !== 'http:' && current.protocol !== 'https:') {
+        res.writeHead(400, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
+        res.end('Only http(s) targets allowed');
+        return;
+      }
+      if (ALLOWED_HOSTS.length && !ALLOWED_HOSTS.includes(current.host)) {
+        res.writeHead(403, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
+        res.end(`Target host not allowed: ${current.host}`);
+        return;
+      }
+      try {
+        await assertTargetAllowed(current);
+      } catch (err) {
+        console.warn(`[dev-webdav-proxy] blocked request to ${current.host}: ${err.message}`);
+        res.writeHead(403, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
+        res.end(`Target blocked: ${err.message}`);
+        return;
+      }
+
+      const isHttps = current.protocol === 'https:';
+      const lib = isHttps ? https : http;
+      // host 头随每跳更新；跨 host 重定向剥离 Authorization，避免凭据外泄
+      const hopHeaders = { ...headers, host: current.host };
+      if (current.host !== parsed.host) delete hopHeaders.authorization;
+
+      const outcome = await new Promise((resolve, reject) => {
+        const upstream = lib.request(
+          {
+            method: req.method,
+            hostname: current.hostname,
+            port: current.port || (isHttps ? 443 : 80),
+            path: current.pathname + current.search,
+            headers: hopHeaders,
+          },
+          upRes => {
+            const code = upRes.statusCode ?? 502;
+            if (REDIRECT_STATUSES.has(code) && upRes.headers.location) {
+              upRes.resume(); // 丢弃重定向响应体，继续下一跳
+              resolve({ code, location: upRes.headers.location });
+              return;
+            }
+            res.writeHead(code, { ...upRes.headers, ...corsHeaders(req) });
+            upRes.pipe(res);
+            resolve({ code, location: null });
+          }
+        );
+        upstream.on('error', reject);
+        if (body.length) upstream.write(body);
+        upstream.end();
+      });
+
+      if (!outcome.location) return;
+      const next = new URL(outcome.location, current);
+      console.log(`[dev-webdav-proxy] ${outcome.code} ${current} -> ${next}`);
+      current = next;
+    }
+  } catch (err) {
+    if (!res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
+    }
     res.end(`Proxy upstream error: ${err.message}`);
-  });
-  req.pipe(upstream);
+  }
 }
 
 const server = http.createServer((req, res) => {
@@ -215,7 +282,8 @@ server.listen(PORT, HOST, () => {
     ? ` (仅允许: ${ALLOWED_HOSTS.join(', ')})`
     : ' (未设置 PROXY_ALLOWED_HOSTS：仅拦截内网目标，公网目标不限制)';
   const privateNote = ALLOW_PRIVATE ? ' [已放开内网拦截]' : ' [已拦截内网目标]';
-  console.log(`[dev-webdav-proxy] listening on http://${HOST}:${PORT}  (?url=<target>)${hosts}${privateNote}`);
+  const displayHost = HOST === '::' ? '[::]' : HOST;
+  console.log(`[dev-webdav-proxy] listening on http://${displayHost}:${PORT}  (?url=<target>)${hosts}${privateNote}`);
   console.log(
     '[dev-webdav-proxy] 仅限本地开发使用，请勿暴露到公网。可用环境变量：PROXY_PORT / PROXY_HOST / PROXY_ALLOWED_HOSTS / PROXY_ALLOWED_ORIGINS / PROXY_ALLOW_PRIVATE'
   );

@@ -97,5 +97,23 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
       const etag = response.headers.get('ETag') ?? '';
       return { sha: etag };
     },
+    async testConnection(): Promise<string> {
+      // PROPFIND 根集合（Depth: 0）是 WebDAV 标准连通性探测：同时验证地址、账号密码与服务器支持。
+      // 消息区分「直连」与「经代理转发」，帮助定位 CORS 问题出自哪一环。
+      const viaProxy = Boolean(config.proxyUrl);
+      const channel = viaProxy ? '经代理转发' : '直连';
+      const response = await request({ method: 'PROPFIND', headers: { Depth: '0' } }, serverBase);
+      if (response.ok || response.status === 207) {
+        return config.username ? `WebDAV ${channel}可达，账号密码有效` : `WebDAV ${channel}可达（未配置账号）`;
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new SyncError('REQUEST_FAILED', '认证失败：请检查用户名与密码');
+      }
+      if (response.status === 405) {
+        // 服务器不支持 PROPFIND（非标准 WebDAV 实现），但服务本身有响应
+        return `WebDAV ${channel}有响应（不支持 PROPFIND，请以实际同步结果为准）`;
+      }
+      throw new SyncError('REQUEST_FAILED', `WebDAV 服务器返回错误状态码：${response.status}`);
+    },
   };
 }

@@ -47,7 +47,6 @@
       @change="(e: Event) => $emit('change', e)"
     />
 
-    <!-- 右侧装饰：计数 / 清空 / 后缀(密码眼睛)，密码眼睛固定在最右侧，清空按钮在左侧展开不引起眼睛位移 -->
     <div
       v-if="hasCount || hasSuffix || isClearAvailable"
       class="absolute inset-y-0 right-2 flex items-center gap-1.5 pointer-events-none"

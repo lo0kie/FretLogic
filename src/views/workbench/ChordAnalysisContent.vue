@@ -1,6 +1,5 @@
 <template>
   <div class="flex flex-row items-stretch gap-2 overflow-hidden box-border w-full min-h-0">
-    <!-- 1. 推荐候选区域 -->
     <div class="flex flex-col gap-1 min-w-0 flex-[0_0_55%]">
       <div class="text-2xs font-bold text-text-disabled tracking-wider select-none px-0.5 whitespace-nowrap">
         推荐候选
@@ -24,10 +23,8 @@
       </div>
     </div>
 
-    <!-- 中间分隔线 -->
     <div class="shrink-0 bg-border-light w-px h-auto self-stretch my-0" />
 
-    <!-- 2. 构成音区域 -->
     <div class="flex flex-col gap-1 min-w-0 flex-1">
       <div class="text-2xs font-bold text-text-disabled tracking-wider select-none px-0.5 whitespace-nowrap">
         构成音

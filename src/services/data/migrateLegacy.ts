@@ -8,7 +8,6 @@
  */
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { validateImportExportPayload } from '@/services/validation/payload';
-import { sanitizePersistedData } from '@/services/validation/persistedData';
 import { idb } from '@/services/storage';
 import { chordRepository, songRepository } from './repositories';
 import type { Chord, Group, Song } from '@/types';
@@ -85,13 +84,3 @@ export async function migrateLegacyData(storage: Storage): Promise<{ groups: num
   await idb.put('syncMeta', { name: MIGRATION_FLAG_KEY, done: true });
   return { groups: 0, chords: 0, songs: 0 };
 }
-
-/** 二次保险：清洗并保存，供 store 层初始化时调用（幂等） */
-export async function ensureChordDataInitialized(): Promise<{ groups: Group[]; chords: Chord[] }> {
-  const groups = await chordRepository.loadGroups();
-  const chords = await chordRepository.loadChords();
-  return { groups, chords };
-}
-
-// 保留旧仓库接口的兼容导入（供现有 store 在切换期间使用）
-export { sanitizePersistedData };

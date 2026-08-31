@@ -73,7 +73,12 @@
           >
             <slot name="footer">
               <slot name="cancel-btn">
-                <ActionButton variant="default" size="md" :disabled="confirmLoading" @click="close">
+                <ActionButton
+                  variant="default"
+                  size="md"
+                  :disabled="cancelButtonDisabled || confirmLoading"
+                  @click="close"
+                >
                   {{ cancelText }}
                 </ActionButton>
               </slot>
@@ -83,7 +88,7 @@
                   :color="confirmType"
                   size="md"
                   :loading="confirmLoading"
-                  :disabled="confirmLoading"
+                  :disabled="confirmButtonDisabled || confirmLoading"
                   @click="handleConfirm"
                 >
                   {{ confirmText }}
@@ -146,6 +151,10 @@ const props = withDefaults(
     keyboard?: boolean;
     /** 确认按钮 Loading 态：为 true 时确认按钮显示加载并禁止重复触发，同时屏蔽遮罩/ESC 关闭 */
     confirmLoading?: boolean;
+    /** 禁用确认按钮（不阻塞遮罩/ESC 关闭） */
+    confirmButtonDisabled?: boolean;
+    /** 禁用取消按钮 */
+    cancelButtonDisabled?: boolean;
     /** 关闭前拦截：返回 false 或 Promise<false> 可阻止关闭（取消按钮、遮罩、ESC、X 均生效） */
     beforeClose?: () => boolean | Promise<boolean>;
     /** Teleport 挂载目标，默认 'body' */
@@ -171,6 +180,8 @@ const props = withDefaults(
     closeOnMask: true,
     keyboard: true,
     confirmLoading: false,
+    confirmButtonDisabled: false,
+    cancelButtonDisabled: false,
     teleportTo: 'body',
     disabledTeleport: false,
     centered: true,

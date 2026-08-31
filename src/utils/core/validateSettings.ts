@@ -1,3 +1,6 @@
+/**
+ * 同步设置载荷类型与校验结果结构：GitHub / WebDAV 连接配置的表单校验契约。
+ */
 export interface GithubSettingsPayload {
   githubToken: string;
   githubOwner: string;

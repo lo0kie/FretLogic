@@ -11,8 +11,6 @@
       @click="handleTriggerClick"
       @contextmenu="handleTriggerContextMenu"
     >
-      <!-- aria-expanded / aria-haspopup 由触发插槽内的真实交互元素承载（插槽已提供 isOpen），
-           包裹层 div 无角色时不允许挂载这两个属性（axe: aria-allowed-attr） -->
       <slot name="trigger" :is-open="model" :toggle="toggle" :open="open" :close="close" :pin-toggle="pinToggle" />
     </div>
   </div>
@@ -381,6 +379,8 @@ const handleTriggerFocusIn = () => {
   open();
 };
 
+// a11y：aria-expanded / aria-haspopup 由触发插槽内的真实交互元素承载（插槽已提供 isOpen），
+// 包裹层 div 无角色时不允许挂载这两个属性（axe: aria-allowed-attr）
 const handleTriggerMouseEnter = () => {
   if (trigger !== 'hover' || disabled) return;
   clearHoverTimer();

@@ -1,3 +1,6 @@
+/**
+ * 歌词拖拽高亮：管理拖拽源/落点槽位的 DOM class 高亮（is-drop-target / is-drag-source）。
+ */
 import { ref } from 'vue';
 
 export function useDragHighlight() {

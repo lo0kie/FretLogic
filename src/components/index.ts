@@ -7,6 +7,7 @@ export { default as BaseInput } from './base/BaseInput.vue';
 export { default as BaseModal } from './base/BaseModal.vue';
 export { default as BaseNumberInput } from './base/BaseNumberInput.vue';
 export { default as BasePagination } from './base/BasePagination.vue';
+export { default as BasePopconfirm } from './base/BasePopconfirm.vue';
 export { default as BasePopover } from './base/BasePopover.vue';
 export { default as BaseSegmentedControl } from './base/BaseSegmentedControl.vue';
 export { default as BaseSelector } from './base/BaseSelector.vue';

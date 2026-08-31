@@ -1,3 +1,6 @@
+/**
+ * utils 公共出口：按 music（乐理/和弦）、score（谱面模型/导出）、core（通用工具）分组导出。
+ */
 // Music Theory & Chords
 export * from './music/chord-fretboard';
 export * from './music/entityFactories';

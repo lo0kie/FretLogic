@@ -33,7 +33,6 @@
         />
       </div>
 
-      <!-- 底部固定组件区：禁止收缩 (flex-shrink: 0) -->
       <div class="flex flex-col gap-sm shrink-0">
         <BasePagination
           v-if="modeModel === ExportMode.A4"

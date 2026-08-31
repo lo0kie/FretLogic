@@ -1,3 +1,7 @@
+/**
+ * 和弦 store：和弦与分组数据的加载、增删改、排序及持久化。
+ * 维护分组-和弦卡片视图模型（GroupedChordCard）与和弦指法历史（撤销-重做）。
+ */
 import { createChordRepository } from '@/services/repositories';
 import type { Chord, Group, GroupedChordCard } from '@/types';
 import { GroupSortRule } from '@/types';

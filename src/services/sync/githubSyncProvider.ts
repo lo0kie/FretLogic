@@ -72,5 +72,20 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranches
       const branches: Array<{ name: string }> = await response.json();
       return branches.map(b => b.name).filter(name => !name.startsWith('dependabot/'));
     },
+    async testConnection(): Promise<string> {
+      // 仅探测仓库可达性与 Token 有效性，不依赖 branch/path（分支与文件路径由「查询分支」/拉取负责）
+      const response = await request({ method: 'GET' }, `https://api.github.com/repos/${config.owner}/${config.repo}`);
+      if (response.ok) {
+        return config.token ? 'GitHub 仓库可达，Token 有效' : 'GitHub 仓库可达（公开仓库，未配置 Token）';
+      }
+      if (response.status === 401) throw new SyncError('REQUEST_FAILED', 'Token 无效或已过期');
+      if (response.status === 404) {
+        throw new SyncError(
+          'REQUEST_FAILED',
+          config.token ? '仓库不存在，或 Token 无该仓库权限' : '仓库不存在或为私有仓库（私有需配置 Token）'
+        );
+      }
+      throw new SyncError('REQUEST_FAILED', `GitHub 返回错误状态码：${response.status}`);
+    },
   };
 }

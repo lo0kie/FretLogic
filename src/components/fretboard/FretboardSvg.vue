@@ -23,7 +23,6 @@
       :aria-label="`吉他指板图，共 ${fretCount} 品${capo > 0 ? `，变调夹 Capo ${capo} 品` : ''}`"
     >
       <g>
-        <!-- 6 根琴弦（纵向线）：垂直精准贯穿 0 到最后一品 -->
         <line
           v-for="s in 6"
           :key="'string-' + s"
@@ -37,7 +36,6 @@
           shape-rendering="crispEdges"
         />
 
-        <!-- 所有横向品线（0 品顶线至最后一品底线）：每一条坐标严格间隔 FRET_HEIGHT，两端通过 square 端点闭合 -->
         <line
           v-for="f in fretCount + 1"
           :key="'fret-line-' + (f - 1)"
@@ -51,7 +49,6 @@
           shape-rendering="crispEdges"
         />
 
-        <!-- Capo 为 0 且启用加宽时的粗琴枕（完全向上画，底边对准 y=0，不挤占任何网格高度） -->
         <rect
           v-if="capo === 0 && isWideNut"
           :x="(stringXPositions[0] ?? 0) - FRETBOARD_LINE_WIDTH / 2"
@@ -63,9 +60,7 @@
         />
       </g>
 
-      <!-- 候选横按梁（Barre Pick）：仅极简模式 + 拾取模式下渲染，弱化显示且可点击标记 -->
       <g v-if="!showPitchNames && barrePickMode && renderBarreCandidates.length">
-        <!-- 外扩虚线轮廓：hover 或键盘聚焦时强调显示（加深不透明度并加粗描边） -->
         <rect
           v-for="c in renderBarreCandidates"
           :key="`barre-cand-dash-${c.fret}-${c.fromString}-${c.toString}`"
@@ -81,7 +76,6 @@
           :stroke-opacity="isBarreHighlighted(c) ? 1 : 0.6"
           class="transition-[stroke-opacity] duration-fast"
         />
-        <!-- 淡色填充主体 -->
         <rect
           v-for="c in renderBarreCandidates"
           :key="`barre-cand-${c.fret}-${c.fromString}-${c.toString}`"
@@ -95,7 +89,6 @@
           :title="barreCandidateTitle(c)"
           class="pointer-events-none cursor-pointer transition-[fill-opacity] duration-fast"
         />
-        <!-- 命中放大区：扩大点击/悬停热区，避免细梁难点；具备按钮语义，支持键盘 Enter/Space 标记 -->
         <rect
           v-for="c in renderBarreCandidates"
           :key="`barre-cand-hit-${c.fret}-${c.fromString}-${c.toString}`"
@@ -118,7 +111,6 @@
         />
       </g>
 
-      <!-- 横按梁（Barre）：仅极简模式（不显示音名）下渲染，绘制在音符下方作为连接底衬 -->
       <g v-if="!showPitchNames && renderBarres.length" aria-hidden="true">
         <rect
           v-for="barre in renderBarres"
@@ -133,7 +125,6 @@
         />
       </g>
 
-      <!-- 动态预测 Hover / 键盘 Focus 游标（当目标为空白品位时显示），置于横按梁之上 -->
       <circle
         v-if="showEmptyHoverRing"
         :cx="stringXPositions[hoverPoint!.stringIndex]"
@@ -156,7 +147,6 @@
         class="pointer-events-auto cursor-pointer"
       />
 
-      <!-- 指板音符列表 -->
       <template v-for="(str, sIdx) in strings" :key="'finger-' + sIdx">
         <FretboardNote
           v-if="str[0] > 0 && str[0] <= fretCount"
@@ -224,8 +214,6 @@ const {
   capo,
   isDarkMode,
   wideNut = false,
-  wideZeroFret = false,
-  thickNut = false,
   barres = [],
   barreCandidates = [],
   barrePickMode = false,
@@ -245,10 +233,6 @@ const {
   showPitchNames?: boolean;
   /** 零品品丝是否加宽（粗琴枕效果），默认 false */
   wideNut?: boolean;
-  /** 别名兼容 */
-  wideZeroFret?: boolean;
-  /** 别名兼容 */
-  thickNut?: boolean;
   /** 横按列表（显式配置或自动推导），绘制在音符下方 */
   barres?: BarreEntity[];
   /** 可点击的候选横按列表（横按拾取模式展示） */
@@ -257,7 +241,7 @@ const {
   barrePickMode?: boolean;
 }>();
 
-const isWideNut = computed(() => Boolean(wideNut || wideZeroFret || thickNut));
+const isWideNut = computed(() => Boolean(wideNut));
 
 const emit = defineEmits<{
   (e: 'toggle-pitch', stringIndex: number): void;

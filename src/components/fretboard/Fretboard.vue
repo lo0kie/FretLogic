@@ -174,10 +174,6 @@ export interface FretboardProps {
   showChordName?: boolean;
   /** 零品品丝是否加宽（粗琴枕效果），默认 false */
   wideNut?: boolean;
-  /** 别名兼容：零品品丝是否加宽 */
-  wideZeroFret?: boolean;
-  /** 别名兼容：零品品丝是否加宽 */
-  thickNut?: boolean;
   /** 横按拾取模式：候选横按梁可点击派发 barre-click（音符保持不可编辑） */
   barrePickMode?: boolean;
   /** 可点击的候选横按列表（barrePickMode 时展示） */
@@ -235,7 +231,7 @@ const isShowPitchNames = computed(() => {
   return isScoreMode.value ? settingsStore.scoreShowPitchNames : settingsStore.workbenchShowPitchNames;
 });
 
-const isWideNut = computed(() => Boolean(props.wideNut || props.wideZeroFret || props.thickNut));
+const isWideNut = computed(() => Boolean(props.wideNut));
 
 /** 生效横按：仅采用显式手动标记（不做自动推导） */
 const effectiveBarres = computed<BarreEntity[]>(() => props.chord.barres ?? []);
