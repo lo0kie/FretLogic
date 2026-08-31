@@ -83,6 +83,13 @@ export async function syncLocalStorageToIdb(storage: Storage = window.localStora
       }
     }
 
+    // 守卫：源数据整体为空时不得覆盖 IDB 备份。
+    // localStorage 被清空或读取异常时，若照写会把完好备份抹掉，导致数据无法找回。
+    if (groups.length === 0 && chords.length === 0 && songs.length === 0) {
+      logger.warn('sync', 'localStorage 无数据，跳过写入 IndexedDB（保留既有备份）');
+      return;
+    }
+
     await chordRepository.saveGroups(groups);
     await chordRepository.saveChords(chords);
     await songRepository.saveSongs(songs);

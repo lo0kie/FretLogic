@@ -2,7 +2,7 @@
   <div
     ref="charBoxRef"
     v-wave="{ disabled: !isGlobalEditable }"
-    class="char-box group flex flex-col items-center justify-start p-0.5 self-stretch rounded-sm box-border relative cursor-pointer outline-none transition-all duration-fast [touch-action:pan-x_pan-y] [&.is-drop-target]:!bg-tint-primary-85 [&.is-drop-target]:!shadow-[inset_0_0_0_2px_var(--color-primary)] [&.is-dragging-source]:!opacity-35"
+    class="char-box group flex flex-col items-center justify-start p-0.5 self-stretch rounded-sm box-border relative cursor-pointer outline-none transition-all duration-fast [touch-action:pan-x_pan-y] [&.is-drop-target]:!bg-tint-primary-85 [&.is-dragging-source]:!opacity-35 [&.is-dragging-source]:!shadow-[0_0_0_2px_var(--bg-panel),0_0_0_4px_var(--color-primary)] [&.is-dragging-copy-source]:!shadow-[0_0_0_2px_var(--bg-panel),0_0_0_4px_var(--color-primary)]"
     :data-slot-key="slotKey"
     :class="[
       isGlobalEditable
@@ -15,6 +15,9 @@
         'opacity-100 px-[0.4rem] justify-center hover:!bg-transparent': variant === 'add',
         '!hidden': variant === 'add' && !isGlobalEditable,
         'ml-[0.42rem]': leftChordGap,
+        // 拖拽期间整行空字符槽统一撑开（isDragActive 全程恒定）：
+        // 若跟随 dropZone 逐槽增缩会推动整行来回顶、产生抽动
+        'is-drop-widened': !chord && isDragActive,
         // 聚焦时和弦自身保持外边框（焦点会落到组内按钮，故用 isFocused 状态而非 :focus）
         '!shadow-[0_0_0_2px_var(--bg-panel),0_0_0_4px_var(--color-primary)]': isFocused,
       },
@@ -38,19 +41,56 @@
       class="chord-display-slot flex-1 flex justify-center w-full"
       :class="variant === 'edge' && chord ? 'items-start' : variant === 'add' ? 'items-center' : 'items-start'"
     >
+      <!-- 拖拽分区落点：本槽位为当前落点时，上下两块分区即松手后将执行的动作（光标所在分区放大）。
+           层级说明：z-[3] 低于操作按钮层 z-card(5)，因拖拽中操作层被 isDragActive 抑制为
+           opacity-0 + pointer-events-none，且分区层自身 pointer-events-none，二者无交互冲突。
+           外层 Transition 负责分区整体出现/消失的透明度过渡 -->
+      <Transition
+        enter-active-class="transition-[opacity,scale] duration-[160ms]"
+        enter-from-class="opacity-0 scale-100"
+        leave-active-class="transition-[opacity,scale] duration-[160ms]"
+        leave-to-class="opacity-0 scale-100"
+      >
+        <div
+          v-if="dropZone"
+          class="absolute inset-0 z-[3] flex flex-col gap-[4px] p-[2px] overflow-hidden rounded-[6px] pointer-events-none"
+        >
+          <!-- 有和弦的落点：整槽压暗提示将被影响（位于分区之下） -->
+          <div v-if="chord" class="absolute inset-0 -z-[1] rounded-[6px] bg-black/30 pointer-events-none" />
+          <div class="flex items-center justify-center transition-all duration-[160ms]" :class="zoneShellClass('top')">
+            <span
+              class="font-bold leading-none transition-all duration-[160ms] break-keep"
+              :class="zoneLabelClass('top')"
+            >
+              {{ zoneLabel('top') }}
+            </span>
+          </div>
+          <div
+            class="flex items-center justify-center transition-all duration-[160ms]"
+            :class="zoneShellClass('bottom')"
+          >
+            <span
+              class="font-bold leading-none transition-all duration-[160ms] break-keep"
+              :class="zoneLabelClass('bottom')"
+            >
+              {{ zoneLabel('bottom') }}
+            </span>
+          </div>
+        </div>
+      </Transition>
       <div
         v-if="chord"
         class="inline-fretboard-card flex flex-col items-center p-xs rounded-sm bg-transparent relative select-none transition-all duration-fast"
       >
         <div
           v-if="isVisible && isGlobalEditable && !isExporting"
-          class="absolute inset-0 rounded-sm bg-black/30 pointer-events-none transition-all duration-fast z-[2]"
+          class="absolute inset-0 rounded-sm bg-black/30 pointer-events-none transition-all duration-[160ms] z-[2]"
           :class="isActive ? 'opacity-100' : 'opacity-0'"
         >
           <div
             v-if="isVisible && !isExporting && isGlobalEditable"
             ref="actionGroupEl"
-            class="absolute inset-0 z-card transition-all duration-fast flex flex-col items-stretch justify-center gap-1.5 p-2"
+            class="absolute inset-0 z-card transition-all duration-[160ms] flex flex-col items-stretch justify-center gap-1.5 p-2"
             :class="isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'"
             @keydown="handleActionKeydown"
           >
@@ -65,6 +105,7 @@
               :aria-label="editButtonTitle"
               :title="editButtonTitle"
               class="!pointer-events-auto"
+              :class="actionButtonTransition(0)"
               @pointerdown.stop
               @click.stop.prevent="emit('click')"
             >
@@ -82,6 +123,7 @@
               :aria-label="moveButtonTitle"
               :title="moveButtonTitle"
               class="!pointer-events-auto cursor-grab active:cursor-grabbing"
+              :class="actionButtonTransition(1)"
               @pointerdown.stop.prevent="emit('copyPointerdown', $event, slotKey, chord)"
               @mouseup.stop.prevent
               @click.stop.prevent
@@ -100,6 +142,7 @@
               :aria-label="removeButtonTitle"
               :title="removeButtonTitle"
               class="!pointer-events-auto"
+              :class="actionButtonTransition(2)"
               @pointerdown.stop
               @click.stop.prevent="emit('remove', slotKey)"
             >
@@ -137,8 +180,10 @@
     </div>
     <template v-if="variant === 'char'">
       <span
-        class="char-text inline-flex items-center justify-center font-semibold text-text-title px-0.5 box-border mt-auto transition-all duration-fast text-[calc(0.875rem*var(--score-font-scale,1))] leading-[1.15rem] min-h-[calc(1.15rem*var(--score-font-scale,1))] whitespace-pre group-hover:text-primary"
+        class="char-text inline-flex items-center justify-center font-semibold text-text-title px-0.5 box-border mt-auto transition-all duration-fast text-[calc(0.875rem*var(--score-font-scale,1))] leading-[1.15rem] min-h-[calc(1.15rem*var(--score-font-scale,1))] whitespace-pre"
         :class="[
+          // 拖拽中字符 hover 不染主题色（避免与分区高亮抢注意力），正常 hover 仍保留
+          { 'group-hover:text-primary': !isDragActive },
           char === ' '
             ? ''
             : chord
@@ -160,6 +205,7 @@ const fretboardSizeCache = reactive(new Map<string, { width: string; height: str
 <script setup lang="ts">
 import ActionButton from '@/components/base/ActionButton.vue';
 import Fretboard from '@/components/fretboard/Fretboard.vue';
+import { resolveDropAction, type DropAction, type DropZone } from '@/composables/score/lyrics-drag/dropZone';
 import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord, SlotKey } from '@/types';
@@ -181,6 +227,10 @@ const props = defineProps<{
   scrollRoot?: HTMLElement | null;
   leftChordGap?: boolean;
   lineHovered?: boolean;
+  /** 全局是否正在拖拽和弦：拖拽中抑制 hover/focus 触发的操作层（压暗遮罩与按钮），避免干扰落点视觉 */
+  isDragActive?: boolean;
+  /** 拖拽落点分区：本槽位为当前落点时指示指针所在分区（null 表示非落点，不渲染分区层） */
+  dropZone?: DropZone | null;
 }>();
 
 const emit = defineEmits<{
@@ -201,8 +251,64 @@ const removeButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('removeButtonE
 const addButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('addButtonEl');
 // 当前激活的操作按钮下标（0 修改 / 1 复制 / 2 删除），支持上下方向键切换
 const activeActionIndex = ref(0);
-// 覆盖层（操作按钮/遮罩/添加槽提示）在 hover 或聚焦时显示
-const isActive = computed(() => isHovered.value || isFocused.value);
+// 覆盖层（操作按钮/遮罩/添加槽提示）在 hover 或聚焦时显示；拖拽进行中一律抑制，
+// 防止指针划过的和弦弹出压暗遮罩与按钮、盖住落点高亮
+const isActive = computed(() => (isHovered.value || isFocused.value) && !props.isDragActive);
+
+// 三个操作按钮的级联过渡类（完整类名需静态写出供 Tailwind 扫描）：
+// 显示时按 修改 → 移动 → 删除 依次延迟淡入并上移归位，隐藏时统一无延迟淡出。
+// 注意覆盖层随 isVisible 懒挂载后不再重挂，出场动画只能靠 isActive 驱动的过渡实现
+const ACTION_BUTTON_SHOW_CLASSES = [
+  'opacity-100 translate-y-0 scale-100',
+  'opacity-100 translate-y-0 scale-100 [transition-delay:50ms]',
+  'opacity-100 translate-y-0 scale-100 [transition-delay:100ms]',
+] as const;
+const actionButtonTransition = (index: number): string =>
+  isActive.value ? (ACTION_BUTTON_SHOW_CLASSES[index] ?? '') : 'opacity-0 translate-y-2 scale-95';
+
+// 分区落点样式：上区=主色（交换/复制），下区=警示色（替换/移位），颜色上区分动作类型；
+// 光标所在分区放大（约 65%）并加强（描边+亮字），另一分区同色系压暗收缩。
+// 命中判定仍以槽位垂直中点为界，放大只推向非活动侧，与判定不会错位
+// 分区按动作语义配色/命名（由 resolveDropAction 统一派生，避免位置与动作双套映射）：
+// 交换/复制 → 主色蓝，移动/替换 → success 绿。
+// 活动/非活动分区同色不压暗，仅靠大小（flex-[1.86] vs flex-1）与描边区分光标所在分区。
+// 命中判定仍以槽位垂直中点为界，放大只推向非活动侧，与判定不会错位
+const ACTION_LABELS: Record<DropAction, string> = {
+  swap: '交换',
+  replace: '替换',
+  copy: '复制',
+  move: '移动',
+};
+// 活动/非活动均用 border 描边（仅宽度/透明度差异），避免 box-shadow ring ↔ border
+// 切换时过渡出现白闪
+const ZONE_ACTIVE_CLASSES: Record<DropAction, string> = {
+  swap: 'flex-[1.86] bg-tint-primary-88 border-2 border-primary rounded-[5px]',
+  replace: 'flex-[1.86] bg-tint-success-88 border-2 border-success rounded-[5px]',
+  copy: 'flex-[1.86] bg-tint-primary-88 border-2 border-primary rounded-[5px]',
+  move: 'flex-[1.86] bg-tint-success-88 border-2 border-success rounded-[5px]',
+};
+const ZONE_INACTIVE_CLASSES: Record<DropAction, string> = {
+  swap: 'flex-1 bg-tint-primary-88 rounded-[5px] border border-primary/40',
+  replace: 'flex-1 bg-tint-success-88 rounded-[5px] border border-success/40',
+  copy: 'flex-1 bg-tint-primary-88 rounded-[5px] border border-primary/40',
+  move: 'flex-1 bg-tint-success-88 rounded-[5px] border border-success/40',
+};
+const ZONE_LABEL_CLASSES: Record<DropAction, { active: string; inactive: string }> = {
+  swap: { active: 'text-xs text-primary', inactive: 'text-2xs text-primary' },
+  replace: { active: 'text-xs text-success', inactive: 'text-2xs text-success' },
+  copy: { active: 'text-xs text-primary', inactive: 'text-2xs text-primary' },
+  move: { active: 'text-xs text-success', inactive: 'text-2xs text-success' },
+};
+const zoneAction = (zone: DropZone): DropAction => resolveDropAction(zone, Boolean(props.chord));
+const zoneLabel = (zone: DropZone): string => ACTION_LABELS[zoneAction(zone)];
+const zoneShellClass = (zone: DropZone): string => {
+  const action = zoneAction(zone);
+  return props.dropZone === zone ? ZONE_ACTIVE_CLASSES[action] : ZONE_INACTIVE_CLASSES[action];
+};
+const zoneLabelClass = (zone: DropZone): string => {
+  const cls = ZONE_LABEL_CLASSES[zoneAction(zone)];
+  return props.dropZone === zone ? cls.active : cls.inactive;
+};
 
 // 焦点进入本槽（含进入内部按钮）时标记为激活；避免 blur 在焦点移入按钮时误关闭
 const handleFocusIn = (e: FocusEvent) => {
@@ -235,7 +341,7 @@ const slotTitle = computed(() =>
 const editButtonLabel = '修改';
 const editButtonTitle = '打开和弦编辑器';
 const moveButtonLabel = '移动';
-const moveButtonTitle = '按住拖拽，松开后可选择复制或移位';
+const moveButtonTitle = '按住拖拽：落到和弦上可交换或替换，落到空位可复制或移位';
 const removeButtonLabel = '删除';
 const removeButtonTitle = '清除当前和弦';
 const scoreEditor = useScoreEditorStore();
@@ -373,3 +479,23 @@ unwatchExport = watch(
   { immediate: true }
 );
 </script>
+
+<style scoped lang="scss">
+/* 拖拽经过的空槽位撑开：直接加宽字符槽 + X 轴外边距推开相邻字符，
+   min-width 只作下限、不缩窄；宽度/外边距变化带过渡 */
+.is-drop-widened {
+  box-sizing: content-box;
+  min-width: 58px;
+  margin-left: 6px;
+  margin-right: 6px;
+  transition:
+    min-width 0.18s cubic-bezier(0.25, 0.1, 0.25, 1),
+    margin 0.18s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* 触摸长按等待期的按压反馈：源槽位渐显主色描边并轻微放大，提示即将进入拖拽 */
+.char-box.is-press-arming {
+  box-shadow: 0 0 0 2px var(--color-primary);
+  transform: scale(1.04);
+}
+</style>

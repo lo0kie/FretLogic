@@ -62,6 +62,10 @@
             isExporting,
             isGlobalEditable,
             isDragging,
+            // 拖拽分区落点：按行归约后再进依赖，缺了分区层会被 v-memo 冻住；
+            // 若直接放全局 dragOverSlotKey/dropZone，则任意落点变化会使所有行失效全量重渲染
+            isDragging ? lineDropTargetKey(lineData.lineId) : null,
+            isDragging ? lineDropZone(lineData.lineId) : null,
           ]"
           class="line-row flex items-stretch w-max min-w-full"
         >
@@ -91,10 +95,12 @@
             <div class="flex items-stretch gap-0 shrink-0">
               <ChordSlotCell
                 :is-exporting
+                :is-drag-active="isDragging"
                 :line-hovered="hoveredLineKey === lineData.lineId"
                 :scroll-root="scoreZoneRef"
                 variant="add"
                 :slot-key="lineData.nextStartKey"
+                :drop-zone="dropZoneFor(lineData.nextStartKey)"
                 add-placeholder-title="点击添加行首和弦"
                 @click="handleOpenPicker(lineData.nextStartKey)"
                 @pointerdown="handlePointerDown"
@@ -104,11 +110,13 @@
                 v-for="item in lineData.startChords"
                 :key="item.slotKey"
                 :is-exporting
+                :is-drag-active="isDragging"
                 :line-hovered="hoveredLineKey === lineData.lineId"
                 :scroll-root="scoreZoneRef"
                 variant="edge"
                 :slot-key="item.slotKey"
                 :chord="item.chord"
+                :drop-zone="dropZoneFor(item.slotKey)"
                 @click="handleOpenPicker(item.slotKey)"
                 @pointerdown="handlePointerDown"
                 @copy-pointerdown="handleCopyPointerDown"
@@ -120,12 +128,14 @@
               v-for="(item, index) in lineData.chars"
               :key="item.slotKey"
               :is-exporting
+              :is-drag-active="isDragging"
               :line-hovered="hoveredLineKey === lineData.lineId"
               :scroll-root="scoreZoneRef"
               variant="char"
               :slot-key="item.slotKey"
               :char="item.char"
               :chord="getCharChord(item.slotKey) ?? undefined"
+              :drop-zone="dropZoneFor(item.slotKey)"
               :left-chord-gap="isLeftAdjacentChord(lineData, index)"
               @click="handleOpenPicker(item.slotKey)"
               @pointerdown="handlePointerDown"
@@ -137,12 +147,14 @@
                 v-for="(item, index) in lineData.endChords"
                 :key="item.slotKey"
                 :is-exporting
+                :is-drag-active="isDragging"
                 :line-hovered="hoveredLineKey === lineData.lineId"
                 :scroll-root="scoreZoneRef"
                 variant="edge"
                 :slot-key="item.slotKey"
                 :chord="item.chord"
                 :left-chord-gap="isEndEdgeGap(lineData, index)"
+                :drop-zone="dropZoneFor(item.slotKey)"
                 @click="handleOpenPicker(item.slotKey)"
                 @pointerdown="handlePointerDown"
                 @copy-pointerdown="handleCopyPointerDown"
@@ -150,10 +162,12 @@
               />
               <ChordSlotCell
                 :is-exporting
+                :is-drag-active="isDragging"
                 :line-hovered="hoveredLineKey === lineData.lineId"
                 :scroll-root="scoreZoneRef"
                 variant="add"
                 :slot-key="lineData.nextEndKey"
+                :drop-zone="dropZoneFor(lineData.nextEndKey)"
                 add-placeholder-title="点击添加行尾和弦"
                 @click="handleOpenPicker(lineData.nextEndKey)"
                 @pointerdown="handlePointerDown"
@@ -203,26 +217,16 @@
         </div>
       </div>
     </Teleport>
-
-    <BaseModal
-      v-model:visible="copyDropVisible"
-      title="选择操作"
-      width="w-sm"
-      cancel-text="复制"
-      confirm-text="移动"
-      @cancel="$event === 'cancel' && resolveCopyDropAsCopy()"
-      @confirm="resolveCopyDropAsMove"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
 import ActionButton from '@/components/base/ActionButton.vue';
-import BaseModal from '@/components/base/BaseModal.vue';
 import EmptyState from '@/components/base/EmptyState.vue';
 import { useActiveExportTarget } from '@/composables/app/useActiveExportTarget';
 import { useAutoScroll } from '@/composables/score/useAutoScroll';
 import { useLyricsDragDrop } from '@/composables/score/useLyricsDragDrop';
+import type { DropZone } from '@/composables/score/lyrics-drag/dropZone';
 import { useScoreLinesData } from '@/composables/score/useScoreLinesData';
 import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
@@ -231,7 +235,7 @@ import type { Chord, LineId, SlotKey } from '@/types';
 import { computeSongKey } from '@/utils/music/musicTheory';
 import type { LineData } from '@/utils/score/score-export';
 import { FileText, Trash2 } from '@lucide/vue';
-import { computed, ref, useTemplateRef, watch } from 'vue';
+import { onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 import ChordSlotCell from './ChordSlotCell.vue';
 
 defineOptions({ name: 'ScoreInteractiveArea' });
@@ -304,6 +308,9 @@ const isLineVisibleInExport = (lineIdx: number): boolean => {
 
 const handleLineClick = (ev: MouseEvent, lineIdx: number) => {
   if (props.isExporting) return;
+  // 拖拽落点在起始行内时，浏览器会以行容器为公共祖先合成一次 click，
+  // 若不拦截会误触发行选中切换（isSuppressingClick 在松手后短暂保持，恰好覆盖该 click）
+  if (isDragging.value || isSuppressingClick.value) return;
   const target = ev.target as HTMLElement;
   if (isGlobalEditable.value && target.closest('[data-slot-key], .char-box')) {
     return;
@@ -333,27 +340,49 @@ const deleteLine = (lineData: LineData) => {
 const {
   isDragging,
   isSuppressingClick,
+  draggingSlotKey,
   dragMoveMode,
-  pendingCopyDrop,
-  resolveCopyDropAsCopy,
-  resolveCopyDropAsMove,
-  cancelCopyDrop,
+  dragOverSlotKey,
+  dropZone,
   ghostChordName,
   setGhostEl,
   handlePointerDown,
 } = useLyricsDragDrop(scoreZoneRef);
 
-/** 复制拖拽：复用同一套拖拽流程，落点后弹窗询问「复制 / 移位」 */
+/** 「移动」按钮拖拽入口：源槽虚化（swap 样式）；落地动作由落点分区决定，与按钮模式无关 */
 const handleCopyPointerDown = (e: PointerEvent, slotKey: string, chord: Chord) => {
-  handlePointerDown(e, slotKey, chord, 'copy');
+  handlePointerDown(e, slotKey, chord);
 };
 
-/** 待决落点弹窗显隐：关闭即取消（ESC / 点击遮罩） */
-const copyDropVisible = computed({
-  get: () => pendingCopyDrop.value !== null,
-  set: (visible: boolean) => {
-    if (!visible) cancelCopyDrop();
-  },
+/** 本槽位的落点分区；非当前落点、或该槽位是拖拽源自身时返回 null（源不可作为落点） */
+const dropZoneFor = (slotKey: string) =>
+  isDragging.value && dragOverSlotKey.value === slotKey && draggingSlotKey.value !== slotKey ? dropZone.value : null;
+
+/** 落点按行归约：slotKey 前缀 line_${lineId}_ 判定本行是否含当前落点（供 v-memo 按行粒度失效） */
+const lineDropTargetKey = (lineId: string): string | null =>
+  isDragging.value && dragOverSlotKey.value?.startsWith(`line_${lineId}_`) ? dragOverSlotKey.value : null;
+/** 本行落点分区值：仅落点行携带，其余行恒为 null 以保持 v-memo 命中 */
+const lineDropZone = (lineId: string): DropZone | null =>
+  isDragging.value && dragOverSlotKey.value?.startsWith(`line_${lineId}_`) ? dropZone.value : null;
+
+// 拖拽中的分区规则提示：loading toast 不会自动消失，拖拽结束手动移除
+let dragHintToastId: number | null = null;
+watch(isDragging, dragging => {
+  if (dragging) {
+    dragHintToastId = uiStore.toast.loading('拖到上半：交换 / 复制 · 下半：替换 / 移动', {
+      closable: false,
+      customClass: 'drag-hint-toast',
+    });
+  } else if (dragHintToastId !== null) {
+    uiStore.removeToast(dragHintToastId);
+    dragHintToastId = null;
+  }
+});
+onBeforeUnmount(() => {
+  if (dragHintToastId !== null) {
+    uiStore.removeToast(dragHintToastId);
+    dragHintToastId = null;
+  }
 });
 
 const handleOpenPicker = (slotKey: SlotKey) => {

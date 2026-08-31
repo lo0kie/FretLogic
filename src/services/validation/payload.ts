@@ -90,6 +90,8 @@ export interface ValidationResult {
   isValid: boolean;
   payload?: ImportExportPayload;
   issues: string[];
+  /** 非阻断的自动清理提示（去重 / 剪枝失效引用）；调用方应向用户展示 */
+  warnings?: string[];
 }
 const sanitizeGroups = (groups: unknown, issues: string[]): GroupDraft[] => {
   if (!Array.isArray(groups)) {
@@ -265,13 +267,26 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
   dupes.forEach(c => console.warn(`[validatePayload] 丢弃同组重复指纹: ${getChordName(c)} (${c.id})`));
 
   const validChordIds = new Set(dedupedChords.map(c => c.id));
+  let prunedRefCount = 0;
   const cleanedSongs = songs.map(song => {
     const { map, changed } = pruneOrphanChordRefs(song.chordMap, validChordIds);
-    return changed ? { ...song, chordMap: map } : song;
+    if (!changed) return song;
+    prunedRefCount += song.chordMap.size - map.size;
+    return { ...song, chordMap: map };
   });
+
+  // 自动清理（去重 / 剪枝失效引用）不阻断导入，但必须可见，避免用户以为数据完好
+  const warnings: string[] = [];
+  if (dupes.length > 0) {
+    warnings.push(`导入时丢弃了 ${dupes.length} 个同组重复指纹的和弦`);
+  }
+  if (prunedRefCount > 0) {
+    warnings.push(`导入时清除了 ${prunedRefCount} 个指向不存在和弦的引用`);
+  }
 
   return {
     isValid: true,
+    ...(warnings.length > 0 ? { warnings } : {}),
     payload: {
       version: CURRENT_PAYLOAD_VERSION,
       groups,

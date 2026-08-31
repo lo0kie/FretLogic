@@ -295,6 +295,8 @@ export const STORAGE_KEYS = {
   SONG_ENTRY: 'CHORD_LAB_SONG_ENTRY_V1',
   /** 当前活动歌曲 id */
   ACTIVE_SONG_ID: 'CHORD_LAB_ACTIVE_SONG_ID_V1',
+  /** 乐谱排序方式：manual / title / createdAt */
+  SONGS_SORT_METHOD: 'CHORD_LAB_SONGS_SORT_METHOD_V1',
 
   // ---- 谱面视图偏好 ----
   /** 导出质量（0~1 的小数，滑块以百分比展示） */
@@ -315,7 +317,7 @@ export const TOAST_DEFAULT_DURATION_MS = 3000;
 /** 聚焦默认延迟（ms，v-focus 未指定 delay 时使用） */
 export const FOCUS_DEFAULT_DELAY_MS = 60;
 /** 悬浮提示隐藏后清理 DOM 的延迟（ms，配合淡出过渡，v-tooltip 使用） */
-export const TOOLTIP_HIDE_CLEANUP_DELAY_MS = 80;
+export const TOOLTIP_HIDE_CLEANUP_DELAY_MS = 180;
 
 /** 滚动位置恢复动画：最长恢复时长（ms，v-scroll-cache 使用） */
 export const SCROLL_RESTORE_MAX_DURATION_MS = 1200;

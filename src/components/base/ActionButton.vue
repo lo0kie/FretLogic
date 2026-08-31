@@ -8,7 +8,7 @@
     :aria-busy="loading || undefined"
     :aria-label
     :style="normalizedStyle"
-    class="inline-flex items-center justify-center font-semibold border border-solid select-none box-border cursor-pointer shrink-0 outline-none transition-all duration-fast disabled:opacity-35 disabled:cursor-not-allowed disabled:shadow-none disabled:pointer-events-auto active:not-disabled:brightness-95 focus-visible:ring-2 focus-visible:ring-primary/70"
+    class="action-button inline-flex items-center justify-center font-semibold border border-solid select-none box-border cursor-pointer shrink-0 outline-none disabled:opacity-35 disabled:cursor-not-allowed disabled:shadow-none disabled:pointer-events-auto active:not-disabled:brightness-95 focus-visible:ring-2 focus-visible:ring-primary/70"
     :class="[sizeClasses, themeVariantClasses, roundedClasses, { 'w-full': block }]"
     data-focusable-inline
     @click="handleInternalClick"
@@ -143,10 +143,14 @@ const TEXT_THEME_MAP: Record<ThemeType, string> = {
 };
 
 const GHOST_THEME_MAP: Record<ThemeType, string> = {
-  primary: 'text-primary hover:enabled:bg-bg-panel-hover',
-  danger: 'text-danger hover:enabled:bg-bg-panel-hover',
-  warning: 'text-warning hover:enabled:bg-bg-panel-hover',
-  success: 'text-success hover:enabled:bg-bg-panel-hover',
+  primary:
+    'text-primary hover:enabled:text-[color:color-mix(in_srgb,var(--color-primary)_88%,black)] hover:enabled:bg-bg-panel-hover',
+  danger:
+    'text-danger hover:enabled:text-[color:color-mix(in_srgb,var(--color-danger)_88%,black)] hover:enabled:bg-bg-panel-hover',
+  warning:
+    'text-warning hover:enabled:text-[color:color-mix(in_srgb,var(--color-warning)_88%,black)] hover:enabled:bg-bg-panel-hover',
+  success:
+    'text-success hover:enabled:text-[color:color-mix(in_srgb,var(--color-success)_88%,black)] hover:enabled:bg-bg-panel-hover',
   default: 'text-text-disabled hover:enabled:text-text-body hover:enabled:bg-bg-panel-hover',
 };
 
@@ -206,3 +210,21 @@ const normalizedStyle = computed(() => {
   return style;
 });
 </script>
+
+<!--
+  统一过渡：颜色 / 背景 / 边框 / 阴影 / 滤镜 / 不透明度 / 位移 一次声明，
+  避免多个 Tailwind transition-* 工具类各自重写 transition-property 互相覆盖。
+  用长写属性（不写 transition-delay），以免覆盖调用方加在按钮上的
+  [transition-delay:40ms] / [transition-delay:80ms] 错峰延迟。
+  时长锁定设计令牌 $duration-fast，缓动用 $bezier-standard。
+-->
+<style scoped lang="scss">
+@use '@/assets/tokens' as *;
+
+.action-button {
+  transition-property:
+    color, background-color, border-color, box-shadow, filter, opacity, transform, translate, scale, rotate;
+  transition-duration: $duration-fast;
+  transition-timing-function: $bezier-standard;
+}
+</style>

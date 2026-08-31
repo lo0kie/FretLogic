@@ -57,8 +57,11 @@ export function useImportExportService() {
       const resultStr = (await file.text()).trim();
       if (!resultStr) throw new Error('文件内容为空');
       const imported = JSON.parse(resultStr);
-      const { isValid, payload } = validateImportExportPayload(imported);
+      const { isValid, payload, warnings } = validateImportExportPayload(imported);
       if (!isValid || !payload) throw new Error('Import verification failed');
+      if (warnings && warnings.length > 0) {
+        uiStore.toast.warning(`导入时已自动清理部分数据：${warnings.join('；')}`);
+      }
       return payload;
     } catch (err) {
       console.error('备份解析拦截:', err);
