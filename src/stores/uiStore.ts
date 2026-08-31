@@ -1,7 +1,7 @@
 /**
  * UI store：全局 Toast 队列（含定时销毁）、侧栏开合状态与复制中标记等界面瞬时状态。
  */
-import { STORAGE_KEYS } from '@/utils/core/constants';
+import { STORAGE_KEYS, TOAST_DEFAULT_DURATION_MS } from '@/utils/core/constants';
 import type { Toast, ToastOptions } from '@/types';
 import { ToastType } from '@/types';
 import { useStorage } from '@vueuse/core';
@@ -42,7 +42,7 @@ export const useUiStore = defineStore('ui', () => {
     timersMap.forEach((timer, id) => {
       clearTimeout(timer);
       const startedAt = startedAtMap.get(id) ?? Date.now();
-      const total = remainingMap.get(id) ?? 3000;
+      const total = remainingMap.get(id) ?? TOAST_DEFAULT_DURATION_MS;
       const elapsed = Date.now() - startedAt;
       remainingMap.set(id, Math.max(0, total - elapsed));
     });
@@ -52,7 +52,7 @@ export const useUiStore = defineStore('ui', () => {
   const resumeAllTimers = () => {
     toasts.value.forEach(toast => {
       if (toast.type !== ToastType.LOADING) {
-        scheduleToastRemoval(toast.id, remainingMap.get(toast.id) ?? toast.duration ?? 3000);
+        scheduleToastRemoval(toast.id, remainingMap.get(toast.id) ?? toast.duration ?? TOAST_DEFAULT_DURATION_MS);
       }
     });
   };
@@ -61,7 +61,7 @@ export const useUiStore = defineStore('ui', () => {
 
   const createToast = (msg: string, type: ToastType = ToastType.INFO, options: ToastOptions = {}) => {
     const id = ++toastIdCounter;
-    const duration = options.duration ?? 3000;
+    const duration = options.duration ?? TOAST_DEFAULT_DURATION_MS;
 
     if (options.onAction) clearActionToasts();
 

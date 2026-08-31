@@ -1,5 +1,5 @@
 <template>
-  <BaseFloatingBar :visible="visible" bottom="1.8rem" #="{ divider }">
+  <BaseFloatingBar :visible bottom="1.8rem" #="{ divider }">
     <div class="bar-info-zone flex items-center gap-sm text-xs font-semibold text-text-title min-w-0">
       <BaseBadge
         :variant="selectedCount > 0 ? 'primary' : 'neutral'"
@@ -47,7 +47,7 @@
       </ActionButton>
 
       <ActionButton
-        v-tooltip="includeMetaBar ? '导出图片将包含歌名/调/Capo 信息' : '导出图片不包含歌曲信息'"
+        v-tooltip="includeMetaTooltip"
         icon-only
         size="sm"
         :variant="includeMetaBar ? 'subtle' : 'ghost'"
@@ -73,6 +73,7 @@ import ActionButton from '@/components/base/ActionButton.vue';
 import BaseBadge from '@/components/base/BaseBadge.vue';
 import BaseFloatingBar from '@/components/base/BaseFloatingBar.vue';
 import { Copy, FileText } from '@lucide/vue';
+import { computed } from 'vue';
 
 const {
   visible = true,
@@ -93,4 +94,8 @@ const emit = defineEmits<{
 }>();
 
 const includeMetaBar = defineModel<boolean>('includeMetaBar', { default: true });
+/** 图片是否包含歌名/调/Capo 信息的提示 */
+const includeMetaTooltip = computed(() =>
+  includeMetaBar.value ? '导出图片将包含歌名/调/Capo 信息' : '导出图片不包含歌曲信息'
+);
 </script>

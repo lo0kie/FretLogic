@@ -1,17 +1,15 @@
 /**
- * 数据层引导（渐进接线，零破坏）
+ * 数据层引导（IndexedDB 纯备份，localStorage 为唯一实时权威）
  *
  * 数据流设计（当前阶段）：
- *   UI ──读──> localStorage（现有 store 同步 API 不变）
- *   UI ──写──> localStorage（现有防抖刷写不变）
- *   IDB ──> 启动时回填 localStorage（迁移的数据真正被 UI 使用）
- *   localStorage ──> 后台切换/关闭前同步到 IDB（IDB 成为权威备份）
+ *   UI ──读写──> localStorage（现有 store 同步 API 不变）
+ *   localStorage ──> 后台切换/关闭前同步到 IDB（IndexedDB 仅作纯备份，不自动恢复）
  *
- * 这样：迁移导入的数据被 UI 采用；IDB 始终持有完整副本，
- * 为将来 store 切换到 v2 契约（Phase 3 逐 feature 迁移）备好数据源。
+ * 说明：启动时不再把 IDB 回填回 localStorage。这样用户清空 localStorage 后，
+ * 数据不会因 IDB 备份而"复活"，真正的清空能立即生效。
+ * IDB 副本仍完整保留，供将来 store 切换到 v2 契约（Phase 3 逐 feature 迁移）备好数据源。
  */
 import type { Chord, Group, Song } from '@/types';
-import { serializeForStorage } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { logger } from '@/utils/core/logger';
 import { migrateLegacyData } from './migrateLegacy';
@@ -28,40 +26,11 @@ function readJson<T>(key: string, storage: Storage): T[] {
   }
 }
 
-/** 启动引导：迁移旧数据并回填（幂等、失败不阻塞） */
+/** 启动引导：仅做一次性旧数据备份迁移（幂等、失败不阻塞）；不回填恢复，避免清空后被备份"复活" */
 export async function bootstrapDataLayer(storage: Storage = window.localStorage): Promise<void> {
   try {
-    // 1. 旧 localStorage → IDB（一次性迁移）
+    // 旧 localStorage → IDB（一次性迁移，写入备份；IDB 纯备份，不反向回填恢复）
     await migrateLegacyData(storage);
-
-    // 2. IDB → localStorage 回填：仅当 localStorage 为空时回填（localStorage 是 UI 实时权威源，
-    //    IDB 只是备份；若 localStorage 已有数据则保留，避免用过期 IDB 备份覆盖用户刚保存的数据）
-    const [groups, chords, songs] = await Promise.all([
-      chordRepository.loadGroups(),
-      chordRepository.loadChords(),
-      songRepository.loadSongs(),
-    ]);
-    // 判断 localStorage 里是否已有键：仅当完全缺失时才回填，避免用过期 IDB 备份覆盖实时数据
-    const hasLocalGroups = storage.getItem(STORAGE_KEYS.GROUPS) !== null;
-    const hasLocalChords = storage.getItem(STORAGE_KEYS.CHORD_LIST) !== null;
-    if (groups.length > 0 && !hasLocalGroups) storage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(groups));
-    if (chords.length > 0 && !hasLocalChords) storage.setItem(STORAGE_KEYS.CHORD_LIST, JSON.stringify(chords));
-    // 歌曲同样仅在 localStorage 缺失索引时才回填；IDB 为空时不得删除 localStorage 的歌曲
-    // （syncLocalStorageToIdb 是异步写 IDB，刷新/退出时可能未完成，IDB 为空只是"尚未同步"，不代表应清空）
-    const hasLocalSongsIndex = storage.getItem(STORAGE_KEYS.SONGS_INDEX) !== null;
-    if (songs.length > 0 && !hasLocalSongsIndex) {
-      storage.setItem(STORAGE_KEYS.SONGS_INDEX, JSON.stringify(songs.map(s => s.id)));
-      for (const song of songs) {
-        storage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:${song.id}`, serializeForStorage(song));
-      }
-    }
-    if (groups.length + chords.length + songs.length > 0) {
-      logger.info('bootstrap', '已从 IndexedDB 回填数据到 localStorage', {
-        groups: groups.length,
-        chords: chords.length,
-        songs: songs.length,
-      });
-    }
   } catch (error) {
     logger.error('bootstrap', '数据层引导失败（不影响应用运行）', error);
   }

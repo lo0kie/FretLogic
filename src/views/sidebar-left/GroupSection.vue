@@ -27,7 +27,7 @@
             data-focusable-inline
             role="button"
             :aria-expanded="isGroupContentOpen(group)"
-            :aria-label="`${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${chordStore.isGroupCollapsed(group.id) ? '已折叠' : '已展开'}`"
+            :aria-label="groupTitleAriaLabel(group)"
             class="group-title-row group/row h-[2.4rem] px-3 flex items-center justify-between cursor-pointer rounded-md select-none box-border outline-none border border-transparent transition-all duration-fast hover:bg-bg-panel-hover hover:border-border-base"
             :class="{
               '!bg-tint-panelhover-50': isGroupContentOpen(group),
@@ -67,7 +67,7 @@
                   :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
                   :appearance="hasMatchedChords(group.id) ? 'subtle' : 'filled'"
                   size="xs"
-                  :aria-label="`匹配 ${getMatchCount(group.id)} 个，共 ${getGroupChordsCount(group.id)} 个和弦`"
+                  :aria-label="matchCountAriaLabel(group)"
                   width="2.5rem"
                 >
                   <span
@@ -86,7 +86,7 @@
                   size="xs"
                   width="1.5rem"
                   class="font-mono"
-                  :aria-label="`共 ${getGroupChordsCount(group.id)} 个和弦`"
+                  :aria-label="chordCountAriaLabel(group)"
                 >
                   {{ getGroupChordsCount(group.id) }}
                 </BaseBadge>
@@ -196,6 +196,15 @@ const getSortLabel = (group: Group): string => sortLabelStrategies[group.sortRul
 const getGroupChordsCount = (groupId: string) => {
   return chordStore.groupChordMap.get(groupId)?.length ?? 0;
 };
+
+/** 分组行无障碍描述：名称、和弦数与展开/折叠状态 */
+const groupTitleAriaLabel = (group: Group): string =>
+  `${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${chordStore.isGroupCollapsed(group.id) ? '已折叠' : '已展开'}`;
+/** 匹配计数无障碍描述：本次匹配数与组内总数 */
+const matchCountAriaLabel = (group: Group): string =>
+  `匹配 ${getMatchCount(group.id)} 个，共 ${getGroupChordsCount(group.id)} 个和弦`;
+/** 组内和弦计数无障碍描述：仅显示总数 */
+const chordCountAriaLabel = (group: Group): string => `共 ${getGroupChordsCount(group.id)} 个和弦`;
 
 const handleLocalDeleteChord = (chord: Chord) => {
   const isEditingCurrent = editorStore.draftChord.id === chord.id;

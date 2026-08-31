@@ -49,8 +49,8 @@ describe('bootstrap 数据层引导', () => {
     await idb.put('syncMeta', { name: 'legacy-migration-done', done: true });
   });
 
-  it('IDB 有数据时回填到 localStorage（UI 数据源）', async () => {
-    // 预置 IDB 数据（模拟已迁移）
+  it('IndexedDB 仅作备份，启动时不再回填 localStorage（清空后数据不会"复活"）', async () => {
+    // 预置 IDB 数据（模拟已有备份）
     await chordRepository.saveGroups([{ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' }]);
     await chordRepository.saveChords([
       {
@@ -75,10 +75,11 @@ describe('bootstrap 数据层引导', () => {
 
     await bootstrapDataLayer(storage);
 
-    expect(storage.getItem('CHORD_LAB_GROUPS')).toBeTruthy();
-    expect(storage.getItem('CHORD_LAB_LIST_V4')).toBeTruthy();
-    expect(storage.getItem('CHORD_LAB_SONGS_INDEX_V1')).toContain('s1');
-    expect(storage.getItem('CHORD_LAB_SONG_ENTRY_V1:s1')).toBeTruthy();
+    // IDB 纯备份不回填：localStorage 保持为空，清空后数据不会"复活"
+    expect(storage.getItem('CHORD_LAB_GROUPS')).toBeNull();
+    expect(storage.getItem('CHORD_LAB_LIST_V4')).toBeNull();
+    expect(storage.getItem('CHORD_LAB_SONGS_INDEX_V1')).toBeNull();
+    expect(storage.getItem('CHORD_LAB_SONG_ENTRY_V1:s1')).toBeNull();
   });
 
   it('localStorage 有数据时同步到 IDB（权威备份）', async () => {

@@ -27,75 +27,53 @@
 
 <script setup lang="ts">
 import Fretboard from '@/components/fretboard/Fretboard.vue';
+import { useActiveExportTarget } from '@/composables/app/useActiveExportTarget';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
-import { useUiStore } from '@/stores/uiStore';
 import type { ChordNameSegments, GuitarStringsModel, StringIndex } from '@/types';
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/utils/core/constants';
 import { toCapo, toStringIndex } from '@/utils/music/chord-fretboard';
 import { nameToSegments } from '@/utils/music/musicTheory';
-import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, useTemplateRef, watch } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 
 const editorStore = useChordEditorStore();
-const uiStore = useUiStore();
 const cardRef = useTemplateRef<HTMLElement>('cardRef');
 
-watch(
-  cardRef,
-  el => {
-    if (el) uiStore.activeExportTarget = el;
-  },
-  { immediate: true }
-);
+useActiveExportTarget(cardRef);
 
-onMounted(() => {
-  if (cardRef.value) {
-    uiStore.activeExportTarget = cardRef.value;
-  }
-});
-
-onActivated(() => {
-  if (cardRef.value) {
-    uiStore.activeExportTarget = cardRef.value;
-  }
-});
-
-onDeactivated(() => {
-  if (uiStore.activeExportTarget === cardRef.value) uiStore.activeExportTarget = null;
-});
-
-onBeforeUnmount(() => {
-  if (uiStore.activeExportTarget === cardRef.value) uiStore.activeExportTarget = null;
-});
+/** 任一编辑操作都会把草稿标记为「创建中」，仅当非编辑态时生效 */
+const markCreating = () => {
+  if (!editorStore.isEditing) editorStore.isCreating = true;
+};
 
 const handleCapoUpdate = (capo: number) => {
   editorStore.draftChord.capo = toCapo(capo);
-  if (!editorStore.isEditing) editorStore.isCreating = true;
+  markCreating();
 };
 
 const handleStringsChange = (strings: GuitarStringsModel) => {
   strings.forEach((str, i) => {
     editorStore.draftChord.strings[i] = [str[0], str[1]];
   });
-  if (!editorStore.isEditing) editorStore.isCreating = true;
+  markCreating();
 };
 
 const handleRootStringChange = (index: number | null) => {
   const validIndex: StringIndex | null =
     index !== null && (editorStore.draftChord.strings[index]?.[0] ?? -1) >= 0 ? toStringIndex(index) : null;
   editorStore.draftChord.rootStringIndex = validIndex;
-  if (!editorStore.isEditing) editorStore.isCreating = true;
+  markCreating();
 };
 
 const handleChordNameChange = (name: string) => {
   const segs = name ? nameToSegments(name) : null;
   editorStore.draftChord.nameSegments = segs;
-  if (!editorStore.isEditing) editorStore.isCreating = true;
+  markCreating();
 };
 
 const handleNameSegmentsChange = (segments: ChordNameSegments | null) => {
   editorStore.draftChord.nameSegments = segments;
-  if (!editorStore.isEditing) editorStore.isCreating = true;
+  markCreating();
 };
 
 const dynamicHeight = computed(() => {

@@ -7,7 +7,7 @@
     role="radiogroup"
     aria-orientation="horizontal"
     :aria-disabled="disabled || undefined"
-    :aria-label="ariaLabel"
+    :aria-label
     @keydown="handleKeydown"
   >
     <span

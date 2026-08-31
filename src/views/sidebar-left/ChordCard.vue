@@ -13,7 +13,7 @@
           role="button"
           tabindex="0"
           :aria-pressed="isActive"
-          :aria-label="ariaLabel"
+          :aria-label
           data-focusable-inline
           @click="handleCardClick"
           @wheel="handleWheelScroll"

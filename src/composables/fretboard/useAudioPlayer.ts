@@ -120,7 +120,7 @@ export function useAudioPlayer() {
         const frequency = getFrequencyFromMidi(currentMidiNote, ToneModule);
 
         const triggerTime = now + strumDelay;
-        const humanizeVelocity = 0.78 + Math.random() * 0.22;
+        const humanizeVelocity = AUDIO_CONFIG.STRUM_VELOCITY_MIN + Math.random() * AUDIO_CONFIG.STRUM_VELOCITY_RANGE;
 
         guitarSynth.triggerAttackRelease(frequency, AUDIO_CONFIG.ENV_RELEASE, triggerTime, humanizeVelocity);
 

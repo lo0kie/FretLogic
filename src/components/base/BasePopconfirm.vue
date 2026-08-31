@@ -1,16 +1,16 @@
 <template>
   <BasePopover
     v-model="visible"
-    :trigger="trigger"
-    :placement="placement"
-    :disabled="disabled"
-    :hover-open-delay="hoverOpenDelay"
-    :hover-close-delay="hoverCloseDelay"
+    :trigger
+    :placement
+    :disabled
+    :hover-open-delay
+    :hover-close-delay
     :show-arrow="true"
     :auto-focus="trigger === 'click' && !disabled"
     :offset-distance="10"
-    :teleport-to="teleportTo"
-    :disabled-teleport="disabledTeleport"
+    :teleport-to
+    :disabled-teleport
     :aria-label="title"
     :panel-class="'popconfirm-panel'"
     :panel-style="{ width: resolvedWidth }"

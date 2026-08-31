@@ -1,8 +1,8 @@
-import type { Chord, Group, LineId, SlotKey, ChordId, Song, StringIndex } from '@/types';
+import type { Chord, ChordId, Group, LineId, SlotKey, Song, StringIndex } from '@/types';
 import { GroupSortRule } from '@/types';
+import { FRET_COUNTS } from '@/utils/core/constants';
 import { isCapoValue, normalizeChord, pruneOrphanChordRefs } from '@/utils/music/chord-fretboard';
 import { buildGroupVariant, toSongId } from '@/utils/music/entityFactories';
-import { FRET_COUNTS } from '@/utils/core/constants';
 import { computeChordFingerprint, Tuning } from '@/utils/music/musicTheory';
 
 type RawRecord = Record<string, unknown>;
@@ -148,25 +148,37 @@ const sanitizeGroups = (groups: unknown): GroupDraft[] => {
   return groups.map(sanitizeGroupEntity).filter((group): group is GroupDraft => group !== null);
 };
 
+/**
+ * 同组 + 同指纹去重（稳定保序），返回保留项与重复项。
+ * persistedData（静默丢弃）与 payload（整包拒绝 + warn）共用同一套去重语义，避免双轨漂移。
+ */
+export const dedupeChordsByFingerprint = (chords: Chord[]): { kept: Chord[]; dupes: Chord[] } => {
+  const seen = new Set<string>();
+  const kept: Chord[] = [];
+  const dupes: Chord[] = [];
+
+  for (const chord of chords) {
+    const fingerprint = `${chord.groupId}::${computeChordFingerprint(chord)}`;
+    if (seen.has(fingerprint)) {
+      dupes.push(chord);
+      continue;
+    }
+    seen.add(fingerprint);
+    kept.push(chord);
+  }
+
+  return { kept, dupes };
+};
+
 const sanitizeChords = (chords: unknown, validGroupIds: Set<string>): Chord[] => {
   if (!Array.isArray(chords)) return [];
 
-  const sanitizedChords: Chord[] = [];
-  const seenFingerprints = new Set<string>();
+  // 先清洗并按组归属过滤，再交共享去重逻辑（顺序与原内联实现一致）
+  const byGroup = chords
+    .map(raw => sanitizeChordEntity(raw))
+    .filter((chord): chord is Chord => chord !== null && validGroupIds.has(chord.groupId));
 
-  for (const rawChord of chords) {
-    const chord = sanitizeChordEntity(rawChord);
-    if (!chord) continue;
-    if (!validGroupIds.has(chord.groupId)) continue;
-
-    const fingerprint = `${chord.groupId}::${computeChordFingerprint(chord)}`;
-    if (seenFingerprints.has(fingerprint)) continue;
-
-    seenFingerprints.add(fingerprint);
-    sanitizedChords.push(chord);
-  }
-
-  return sanitizedChords;
+  return dedupeChordsByFingerprint(byGroup).kept;
 };
 
 const sanitizeSongs = (songs: unknown): SongDraft[] => {

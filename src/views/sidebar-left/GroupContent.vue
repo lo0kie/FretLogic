@@ -25,7 +25,7 @@
             cardData.mainChord.id === activeMainId,
             settingsStore.workbenchChordShorthand,
           ]"
-          :card-data="cardData"
+          :card-data
           :is-active="cardData.mainChord.id === activeMainId"
           @delete-variants="data => emit('open-delete-variants', data)"
           @delete="chord => emit('delete-chord', chord)"

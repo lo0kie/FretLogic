@@ -24,9 +24,9 @@
           ]"
           :role="item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'"
         >
-          <slot name="card" :item="item">
+          <slot name="card" :item>
             <div class="shrink-0 flex items-center justify-center pt-0.5" :class="{ '!pt-3xs': item.description }">
-              <slot name="icon" :item="item">
+              <slot name="icon" :item>
                 <Loader2 v-if="item.type === 'loading'" :size="16" class="opacity-80 animate-spin" aria-hidden="true" />
                 <CheckCircle2 v-else-if="item.type === 'success'" :size="16" class="opacity-90" aria-hidden="true" />
                 <AlertCircle v-else-if="item.type === 'error'" :size="16" class="opacity-90" aria-hidden="true" />
@@ -39,7 +39,7 @@
               class="flex flex-col shrink-0"
               :class="item.description ? '!shrink !flex-1 min-w-0 max-w-sm' : 'whitespace-nowrap'"
             >
-              <slot name="content" :item="item">
+              <slot name="content" :item>
                 <span class="text-xs font-semibold leading-normal whitespace-nowrap">
                   {{ item.msg }}
                 </span>
@@ -52,7 +52,7 @@
               </slot>
             </div>
 
-            <slot name="action" :item="item">
+            <slot name="action" :item>
               <button
                 v-if="item.onAction"
                 v-wave

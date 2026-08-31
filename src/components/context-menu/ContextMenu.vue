@@ -5,16 +5,16 @@
     :class="{ 'cursor-default': disabled }"
     @contextmenu="handleContextMenu"
   >
-    <slot :is-open="isOpen" />
+    <slot :is-open />
   </div>
 
   <BasePopover
     ref="popoverRef"
     v-model="isOpen"
-    :virtual-ref="virtualRef"
+    :virtual-ref
     placement="bottom-start"
     :offset-distance="6"
-    :disabled="disabled"
+    :disabled
     aria-label="右键上下文菜单"
     panel-class="context-menu-box"
     @close="handlePopoverClose"
@@ -27,7 +27,7 @@
       :class="`context-menu-size-${size}`"
       @keydown="handleMenuKeydown"
     >
-      <ContextMenuItems ref="itemsRef" :items="items" :title="title" :size="size" @select="handleItemSelect" />
+      <ContextMenuItems ref="itemsRef" :items :title :size @select="handleItemSelect" />
     </div>
   </BasePopover>
 </template>

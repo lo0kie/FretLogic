@@ -23,7 +23,7 @@
 
   <BaseModal
     v-model:visible="groupModals.modals.delete"
-    :title="`删除分组 ${groupModals.modalData.activeGroup?.name}`"
+    :title="deleteGroupTitle"
     confirm-type="danger"
     @confirm="groupModals.handleDeleteGroup"
   >
@@ -65,8 +65,10 @@ import BaseSegmentedControl from '@/components/base/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/base/BaseSelector.vue';
 import type { useChordGroupModals } from '@/composables/app/useChordGroupModals';
 import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/utils/music/musicTheory';
-import { inject } from 'vue';
+import { computed, inject } from 'vue';
 
 type GroupModals = ReturnType<typeof useChordGroupModals>;
 const groupModals = inject<GroupModals>('groupModals')!;
+/** 删除分组弹窗标题：拼接被删分组名 */
+const deleteGroupTitle = computed(() => `删除分组 ${groupModals.modalData.activeGroup?.name}`);
 </script>

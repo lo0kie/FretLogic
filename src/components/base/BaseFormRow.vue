@@ -36,7 +36,7 @@
         ]"
         :style="controlStyle"
       >
-        <slot :id="effectiveForId" :disabled="disabled" :required="required" />
+        <slot :id="effectiveForId" :disabled :required />
       </div>
     </div>
 

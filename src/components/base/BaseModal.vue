@@ -30,14 +30,14 @@
           @keydown="handleKeydownTrap"
         >
           <div v-if="hasHeader" class="modal-header-zone pt-xl px-xl shrink-0 flex items-center justify-between gap-lg">
-            <slot name="header" :title-id="titleId">
+            <slot name="header" :title-id>
               <div class="modal-header-left flex items-center min-w-0 flex-1">
-                <slot name="title" :title-id="titleId">
+                <slot name="title" :title-id>
                   <h3
                     v-if="title"
                     :id="titleId"
                     class="modal-title text-sm font-bold tracking-tight text-text-title m-0 whitespace-nowrap overflow-hidden text-ellipsis"
-                    :title="title"
+                    :title
                   >
                     {{ title }}
                   </h3>
@@ -52,7 +52,7 @@
                   icon-only
                   aria-label="关闭"
                   class="!p-1.5"
-                  @click="close"
+                  @click="close('close')"
                 >
                   <X :size="20" :stroke-width="3" />
                 </ActionButton>
@@ -62,7 +62,7 @@
 
           <div
             class="modal-body-scrollable px-xl py-lg flex-1 min-h-0 overflow-y-auto box-border no-scrollbar flex flex-col"
-            :class="{ 'has-header': hasHeader, 'has-footer': showFooter }"
+            :class="{ 'has-header': hasHeader, 'has-footer': showFooter, 'py-sm': !$slots['default'] }"
           >
             <slot />
           </div>
@@ -77,7 +77,7 @@
                   variant="default"
                   size="md"
                   :disabled="cancelButtonDisabled || confirmLoading"
-                  @click="close"
+                  @click="close('cancel')"
                 >
                   {{ cancelText }}
                 </ActionButton>
@@ -107,6 +107,9 @@
 // 否则每个实例各自持有独立 Set，多层弹窗的 inert 协调与 Esc 栈顶判断都会失效
 const activeModalOverlays = new Set<HTMLElement>();
 const isClient = typeof document !== 'undefined';
+
+/** 关闭来源：cancel=底部取消按钮 / close=右上角X / mask=点击蒙层 / esc=键盘ESC */
+export type ModalCloseReason = 'cancel' | 'close' | 'mask' | 'esc';
 
 const updateGlobalInertState = () => {
   if (!isClient) return;
@@ -192,7 +195,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'confirm'): void;
-  (e: 'cancel'): void;
+  /** 关闭时携带来源（取消按钮/X/蒙层/ESC），程序化置 visible=false 不触发 */
+  (e: 'cancel', reason: ModalCloseReason): void;
   (e: 'open'): void;
   (e: 'opened'): void;
   (e: 'close'): void;
@@ -298,7 +302,7 @@ const isTopOverlay = () => {
 const handleEscape = (e: KeyboardEvent) => {
   if (e.key !== 'Escape') return;
   if (!props.keyboard || !isTopOverlay()) return;
-  close();
+  close('esc');
 };
 
 watch(
@@ -357,14 +361,14 @@ onBeforeUnmount(() => {
   isBodyLocked.value = activeModalOverlays.size > 0;
 });
 
-// 统一关闭入口：加载中禁止关闭，并支持 beforeClose 拦截
-const close = async () => {
+// 统一关闭入口：加载中禁止关闭，并支持 beforeClose 拦截；reason 标识关闭来源
+const close = async (reason: ModalCloseReason = 'cancel') => {
   if (props.confirmLoading) return;
   if (props.beforeClose) {
     const ok = await props.beforeClose();
     if (ok === false) return;
   }
-  emit('cancel');
+  emit('cancel', reason);
   visible.value = false;
 };
 
@@ -379,7 +383,7 @@ const handleMaskMousedown = (e: MouseEvent) => {
 };
 const handleMaskClick = (e: MouseEvent) => {
   if (props.closeOnMask && e.target === e.currentTarget && mousedownTarget === e.currentTarget) {
-    close();
+    close('mask');
   }
   mousedownTarget = null;
 };

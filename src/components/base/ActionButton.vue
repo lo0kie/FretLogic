@@ -1,12 +1,12 @@
 <template>
   <button
     v-wave="{ disabled: disabled || loading }"
-    :type="type"
-    :tabindex="tabindex"
+    :type
+    :tabindex
     :disabled="disabled || loading"
     :aria-disabled="disabled || loading || undefined"
     :aria-busy="loading || undefined"
-    :aria-label="ariaLabel"
+    :aria-label
     :style="normalizedStyle"
     class="inline-flex items-center justify-center font-semibold border border-solid select-none box-border cursor-pointer shrink-0 outline-none transition-all duration-fast disabled:opacity-35 disabled:cursor-not-allowed disabled:shadow-none disabled:pointer-events-auto active:not-disabled:brightness-95 focus-visible:ring-2 focus-visible:ring-primary/70"
     :class="[sizeClasses, themeVariantClasses, roundedClasses, { 'w-full': block }]"
@@ -14,16 +14,16 @@
     @click="handleInternalClick"
   >
     <Loader2 v-if="loading" :class="['loading-icon shrink-0 opacity-80 animate-spin', loaderSizeClass]" />
-    <slot v-else name="prefix" :disabled="disabled" :loading="loading" :size="size" />
+    <slot v-else name="prefix" :disabled :loading :size />
 
     <span
       v-if="$slots['default'] && (!loading || !iconOnly)"
       class="button-content flex items-center justify-center whitespace-nowrap"
     >
-      <slot :disabled="disabled" :loading="loading" :size="size" />
+      <slot :disabled :loading :size />
     </span>
 
-    <slot v-if="!loading || !iconOnly" name="suffix" :disabled="disabled" :loading="loading" :size="size" />
+    <slot v-if="!loading || !iconOnly" name="suffix" :disabled :loading :size />
   </button>
 </template>
 

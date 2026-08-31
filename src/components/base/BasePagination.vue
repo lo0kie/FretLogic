@@ -8,7 +8,7 @@
       v-if="showFirstLast && !simple"
       variant="ghost"
       icon-only
-      :size="size"
+      :size
       :disabled="disabled || atFirst"
       aria-label="第一页"
       title="第一页"
@@ -20,7 +20,7 @@
     <ActionButton
       variant="ghost"
       icon-only
-      :size="size"
+      :size
       :disabled="disabled || atFirst"
       aria-label="上一页"
       title="上一页"
@@ -51,7 +51,7 @@
     <ActionButton
       variant="ghost"
       icon-only
-      :size="size"
+      :size
       :disabled="disabled || atLast"
       aria-label="下一页"
       title="下一页"
@@ -64,7 +64,7 @@
       v-if="showFirstLast && !simple"
       variant="ghost"
       icon-only
-      :size="size"
+      :size
       :disabled="disabled || atLast"
       aria-label="最后一页"
       title="最后一页"
@@ -77,7 +77,7 @@
       v-if="pageSizes && pageSizes.length > 0 && !simple"
       class="pagination-page-size text-xs h-7 px-1.5 rounded border border-border-light bg-bg-body text-text-title font-medium outline-none cursor-pointer focus:border-primary focus:ring-1 focus:ring-primary/50"
       :value="pageSizeModel"
-      :disabled="disabled"
+      :disabled
       aria-label="每页条数"
       @change="handlePageSizeChange"
     >

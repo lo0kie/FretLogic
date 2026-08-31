@@ -39,7 +39,7 @@
       v-model="tempValue"
       type="text"
       inputmode="numeric"
-      :placeholder="placeholder"
+      :placeholder
       class="font-bold text-primary text-center bg-transparent border-none outline-none p-0 m-0 font-[inherit] box-border [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none flex-1 w-0"
       :class="currentConfig.textClass"
       @blur="commitInput"

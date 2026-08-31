@@ -20,7 +20,7 @@
       style="overflow: visible"
       class="w-full pointer-events-none box-border block"
       role="img"
-      :aria-label="`吉他指板图，共 ${fretCount} 品${capo > 0 ? `，变调夹 Capo ${capo} 品` : ''}`"
+      :aria-label="boardAriaLabel"
     >
       <g>
         <line
@@ -153,15 +153,15 @@
           :x="stringXPositions[sIdx] ?? 0"
           :y="(str[0] - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
           :is-root="isRoot(sIdx)"
-          :is-dark-mode="isDarkMode"
-          :interactive="interactive"
+          :is-dark-mode
+          :interactive
           :is-hovered="isNoteHovered(sIdx, str[0])"
           :is-focused="isNoteFocused(sIdx, str[0])"
-          :show-pitch-names="showPitchNames"
+          :show-pitch-names
           :label="showPitchNames ? noteInfo(sIdx, str).label : ''"
           :is-accidental="showPitchNames && noteInfo(sIdx, str).isAccidental"
           :prefer-flat="str[1]"
-          :aria-label="`第 ${6 - sIdx} 弦第 ${str[0]} 品，音名 ${formatStringLabel(sIdx, str[0], str[1], capo, activeBaseStrings)}`"
+          :aria-label="stringNoteAriaLabel(sIdx, str)"
           @toggle-pitch="emit('toggle-pitch', sIdx)"
         />
       </template>
@@ -242,6 +242,12 @@ const {
 }>();
 
 const isWideNut = computed(() => Boolean(wideNut));
+
+/** 指板图的整体无障碍描述：品数与变调夹信息 */
+const boardAriaLabel = computed(() => `吉他指板图，共 ${fretCount} 品${capo > 0 ? `，变调夹 Capo ${capo} 品` : ''}`);
+/** 单根弦指位描述：弦序、品格与音名（v-for 内调用） */
+const stringNoteAriaLabel = (sIdx: number, str: GuitarStringEntity) =>
+  `第 ${6 - sIdx} 弦第 ${str[0]} 品，音名 ${formatStringLabel(sIdx, str[0], str[1], capo, activeBaseStrings)}`;
 
 const emit = defineEmits<{
   (e: 'toggle-pitch', stringIndex: number): void;

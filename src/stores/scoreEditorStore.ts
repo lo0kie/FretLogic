@@ -159,21 +159,28 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
-  const updateLyrics = (lyrics: string) => {
-    if (!activeSong.value) return;
+  /**
+   * 更新歌词。songId 缺省时为当前激活歌曲。
+   * 提供 songId 参数是为了让防抖/异步提交在"调度时"锁定目标歌曲（见 ScoreLyricsEditor 的 commitLyrics），
+   * 避免切换歌曲后旧的挂起回调把上一首的歌词错误写入当前歌曲（会连带清空其和弦，即跨歌联动根因）。
+   */
+  const updateLyrics = (lyrics: string, songId?: string) => {
+    const target = songId ? (songStore.songs.find(s => s.id === songId) ?? null) : activeSong.value;
+    if (!target) return;
     const sanitizedLyrics = sanitizeLyricsText(lyrics);
-    if (sanitizedLyrics === activeSong.value.lyrics) return;
-    recordHistory();
-    const oldLines = activeSong.value.lyrics.split('\n');
+    if (sanitizedLyrics === target.lyrics) return;
+    // 仅在编辑的正是当前激活歌曲时才记录撤销历史，避免历史栈混入非激活歌曲的变更
+    if (activeSong.value?.id === target.id) recordHistory();
+    const oldLines = target.lyrics.split('\n');
     const newLines = sanitizedLyrics.split('\n');
-    const newIds = matchLineIds(oldLines, newLines, activeSong.value.lineIds ?? []);
-    const { map: updatedChordMap, changed } = garbageCollectChordMap(activeSong.value.chordMap, newIds);
-    songStore.updateSongMeta(activeSong.value.id, {
+    const newIds = matchLineIds(oldLines, newLines, target.lineIds ?? []);
+    const { map: updatedChordMap, changed } = garbageCollectChordMap(target.chordMap, newIds);
+    songStore.updateSongMeta(target.id, {
       lyrics: sanitizedLyrics,
       lineIds: newIds,
-      chordMap: changed ? updatedChordMap : activeSong.value.chordMap,
+      chordMap: changed ? updatedChordMap : target.chordMap,
     });
-    if (!sanitizedLyrics.trim()) {
+    if (activeSong.value?.id === target.id && !sanitizedLyrics.trim()) {
       activeTabRef.value = 'edit';
     }
   };
@@ -216,6 +223,27 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     songStore.swapSongSlotChords(activeSong.value.id, sourceKey, targetKey);
   };
 
+  /** 复制并移动：把源槽位的和弦拷贝到目标槽位，源槽位保留（用于复制拖拽） */
+  const copySlotChord = (sourceKey: string, targetKey: string) => {
+    if (!activeSong.value || sourceKey === targetKey) return;
+    if (!isSlotKey(sourceKey) || !isSlotKey(targetKey)) return;
+    const sourceChordId = activeSong.value.chordMap.get(sourceKey);
+    if (!sourceChordId) return;
+    recordHistory();
+    songStore.setCharChord(activeSong.value.id, targetKey, sourceChordId);
+  };
+
+  /** 移位：源槽位和弦移动到目标槽位（目标被覆盖，源槽位清空），单条撤销记录 */
+  const moveSlotChord = (sourceKey: string, targetKey: string) => {
+    if (!activeSong.value || sourceKey === targetKey) return;
+    if (!isSlotKey(sourceKey) || !isSlotKey(targetKey)) return;
+    const sourceChordId = activeSong.value.chordMap.get(sourceKey);
+    if (!sourceChordId) return;
+    recordHistory();
+    songStore.setCharChord(activeSong.value.id, targetKey, sourceChordId);
+    songStore.removeCharChord(activeSong.value.id, sourceKey);
+  };
+
   return {
     activeSongId,
     activeTab,
@@ -231,6 +259,8 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     removeSlotChord,
     clearLineChords,
     swapSlotChords,
+    copySlotChord,
+    moveSlotChord,
     fontScale,
     fretboardScale,
     exportScaleMultiplier,
