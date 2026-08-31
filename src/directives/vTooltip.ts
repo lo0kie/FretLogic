@@ -121,8 +121,10 @@ const getOrCreateGlobalBox = (): HTMLDivElement | null => {
   if (!isClient) return null;
   if (!globalBox) {
     globalBox = document.createElement('div');
+    globalBox.className = 'v-tooltip-root';
+    // 初始隐藏态：opacity 0 + 缩小到 scale(.95)（与 v-transition-scale 入场一致）
     globalBox.style.cssText =
-      'position:fixed;top:0;left:0;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .08s ease;';
+      'position:fixed;top:0;left:0;pointer-events:none;opacity:0;visibility:hidden;transform:scale(0.95);';
     document.body.appendChild(globalBox);
 
     globalContent = document.createElement('div');
@@ -256,7 +258,11 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
 
   if (currentTargetEl === el) {
     box.style.visibility = 'visible';
+    // 先以缩小态呈现，强制回流让浏览器记录起始状态，再放大淡入（避免首帧跳变）
+    box.classList.remove('v-tooltip-instant');
+    void box.offsetWidth;
     box.style.opacity = '1';
+    box.style.transform = 'scale(1)';
 
     cleanupAutoUpdate?.();
     cleanupAutoUpdate = autoUpdate(el, box, () => updatePosition(el, opts));
@@ -291,7 +297,9 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
   if (delayMs > 0) {
     hideTimer = setTimeout(() => {
       if (currentTargetEl === el && globalBox) {
+        // 离场：淡出并缩回 scale(.95)（即时路径才关过渡，见下）
         globalBox.style.opacity = '0';
+        globalBox.style.transform = 'scale(0.95)';
         releaseBoxZ();
         cleanupAutoUpdate?.();
         cleanupAutoUpdate = null;
@@ -307,8 +315,11 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
     }, delayMs);
   } else {
     if (globalBox) {
+      // 滚动 / 失焦 / 卸载：关过渡，立即隐藏，避免跟随锚点漂移时仍淡出
+      globalBox.classList.add('v-tooltip-instant');
       globalBox.style.opacity = '0';
       globalBox.style.visibility = 'hidden';
+      globalBox.style.transform = 'scale(0.95)';
     }
     releaseBoxZ();
     cleanupAutoUpdate?.();

@@ -142,6 +142,29 @@ describe('payload validation migration matrix', () => {
     expect(result.payload?.songs[0].chordMap).toEqual(new Map());
   });
 
+  it('清除失效引用时记录 warnings，避免静默丢数据', () => {
+    const result = validateImportExportPayload({
+      version: 6,
+      groups: [group],
+      chords: [{ id: 'c1', chordName: 'C', strings, fretCount: 3, capo: 0, groupId: 'g1', tuning: 'STANDARD' }],
+      songs: [
+        {
+          id: 's1',
+          title: 'S',
+          lyrics: '',
+          lineIds: [],
+          playKey: 'C',
+          capo: 0,
+          chordMap: { slot: 'missing', slot2: 'c1' },
+        },
+      ],
+    });
+
+    expect(result.isValid).toBe(true);
+    expect(result.payload?.songs[0].chordMap.size).toBe(1);
+    expect(result.warnings?.some(w => w.includes('引用'))).toBe(true);
+  });
+
   it('keeps valid preferences and drops corrupt ones without rejecting the payload (v6)', () => {
     const base = {
       groups: [group],

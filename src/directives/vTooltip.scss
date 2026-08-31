@@ -21,6 +21,19 @@
   border: 1px solid var(--glass-border);
 }
 
+// 浮层根容器：负责显隐过渡（位置由 floating-ui 用 left/top 控制，与 transform 解耦，避免重排抖动）
+.v-tooltip-root {
+  transition:
+    opacity $duration-fast $bezier-standard,
+    transform $duration-fast $bezier-bounce;
+  will-change: opacity, transform;
+}
+
+// 即时隐藏路径（滚动 / 失焦 / 卸载）关闭过渡，避免跟随锚点漂移时还淡出
+.v-tooltip-root.v-tooltip-instant {
+  transition: none !important;
+}
+
 .v-tooltip-arrow {
   box-sizing: border-box;
 }

@@ -105,9 +105,11 @@
   --ease-standard: var(--bezier-standard);
   --ease-sidebar: var(--bezier-sidebar);
 
-  --duration-fast: var(--duration-fast);
-  --duration-base: var(--duration-base);
-  --duration-slow: var(--duration-slow);
+  /* v4 的 duration 工具类主题命名空间是 --transition-duration-*，
+     值引用 tokens.scss 的 --duration-* 变量，保持单一令牌来源 */
+  --transition-duration-fast: var(--duration-fast);
+  --transition-duration-base: var(--duration-base);
+  --transition-duration-slow: var(--duration-slow);
 
   --z-index-base: var(--z-base);
   --z-index-inner: var(--z-inner);

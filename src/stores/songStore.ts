@@ -6,14 +6,18 @@ import { createSongRepository } from '@/services/repositories';
 import { sanitizePersistedData } from '@/services/validation/persistedData';
 import type { ChordId, SlotKey, Song } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
+import { compareByPinyin, pinyinReady, preloadPinyin } from '@/utils/core/pinyin';
 import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/music/chord-fretboard';
 import { createSong as createSongEntity } from '@/utils/music/entityFactories';
 import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const FLUSH_DELAY = 400;
 const FLUSH_MAX_WAIT = 1500;
+
+/** 乐谱排序方式：manual 手动（拖拽顺序）/ title 按标题 / createdAt 按创建时间 */
+export type SongSortMethod = 'manual' | 'title' | 'createdAt';
 
 const lineIdsEqual = (a: string[], b: string[]) => {
   if (a === b) return true;
@@ -27,6 +31,15 @@ const readJsonSongIds = (raw: string): string[] | null => {
     return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : null;
   } catch {
     return null;
+  }
+};
+
+const readSongSortMethod = (): SongSortMethod => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SONGS_SORT_METHOD);
+    return raw === 'title' || raw === 'createdAt' ? raw : 'manual';
+  } catch {
+    return 'manual';
   }
 };
 
@@ -117,6 +130,39 @@ export const useSongStore = defineStore('song', () => {
   };
 
   songs.value = loadInitialSongs();
+
+  // ---- 乐谱排序方式（持久化；manual 为拖拽顺序，其余为展示排序，非 manual 时禁用拖拽重排） ----
+  const songSortMethod = ref<SongSortMethod>(readSongSortMethod());
+  const setSongSortMethod = (method: SongSortMethod) => {
+    songSortMethod.value = method;
+    try {
+      localStorage.setItem(STORAGE_KEYS.SONGS_SORT_METHOD, method);
+    } catch {
+      /* 存储不可用时仅保持内存态 */
+    }
+  };
+  const sortedSongs = computed<Song[]>(() => {
+    if (songSortMethod.value === 'title') {
+      // 拼音分组：pinyin-pro 动态导入未就绪时先用浏览器拼音排序（zh-Hans-CN）兜底；
+      // 就绪后 pinyinReady 翻转触发本 computed 重算为精确拼音排序（与分组标题键一致）
+      if (!pinyinReady.value) {
+        return [...songs.value].sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
+      }
+      return [...songs.value].sort((a, b) => compareByPinyin(a.title, b.title));
+    }
+    if (songSortMethod.value === 'createdAt') {
+      return [...songs.value].sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+    }
+    return songs.value;
+  });
+  // 首次进入拼音分组时动态加载 pinyin-pro（独立 chunk，按需请求）；已处于该模式则立即预加载
+  watch(
+    () => songSortMethod.value === 'title',
+    active => {
+      if (active) void preloadPinyin();
+    },
+    { immediate: true }
+  );
 
   // 与 chordStore 的 useStorage 行为对齐：监听外部对 localStorage 的变更（DevTools 清空 / 其他标签页写入）。
   // 本页自身写 localStorage 不会触发 storage 事件（规范），因此不会自我循环；
@@ -269,16 +315,6 @@ export const useSongStore = defineStore('song', () => {
       target.updatedAt = Date.now();
       markSongDirty(id);
     }
-    // [PROBE] 临时写入探针：记录每次更新目标与歌词字段，用于定位跨歌串写
-    if (typeof window !== 'undefined') {
-      ((window as unknown as { __w?: unknown[] }).__w ??= []).push({
-        t: Date.now(),
-        id,
-        isLyricsEdit: payload.lyrics !== undefined,
-        lyrics: payload.lyrics ?? target.lyrics,
-        lineIds: payload.lineIds ?? target.lineIds,
-      });
-    }
   };
 
   const setCharChord = (songId: string, slotKey: SlotKey, chordId: ChordId) => {
@@ -331,6 +367,29 @@ export const useSongStore = defineStore('song', () => {
     flushSongsNow();
   };
 
+  /**
+   * 仅调整顺序（拖拽排序专用）：不会删除任何歌曲或存储键。
+   * 守卫：新顺序与现有集合不一致（缺项/多项/含未知 id）时直接拒绝，避免误删。
+   */
+  const reorderSongs = (orderedSongs: Song[]) => {
+    const currentIds = new Set<string>(songs.value.map(s => s.id));
+    const seen = new Set<string>();
+    const next: Song[] = [];
+
+    for (const song of orderedSongs) {
+      if (!currentIds.has(song.id) || seen.has(song.id)) continue;
+      seen.add(song.id);
+      next.push(song);
+    }
+
+    if (next.length !== songs.value.length) return;
+
+    songs.value = next;
+    next.forEach(s => markSongDirty(s.id));
+    markIndexDirty();
+    flushSongsNow();
+  };
+
   interface RemovedChordBinding {
     songId: string;
     slotKey: SlotKey;
@@ -379,6 +438,9 @@ export const useSongStore = defineStore('song', () => {
 
   return {
     songs,
+    songSortMethod,
+    sortedSongs,
+    setSongSortMethod,
     chordReferencesIndex,
     getChordReferences,
     createSong,
@@ -389,6 +451,7 @@ export const useSongStore = defineStore('song', () => {
     removeCharChord,
     swapSongSlotChords,
     overwriteSongs,
+    reorderSongs,
     unbindChordIds,
     restoreChordBindings,
     flushSongsNow,

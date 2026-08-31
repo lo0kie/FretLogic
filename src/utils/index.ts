@@ -16,4 +16,5 @@ export * from './core/common';
 export * from './core/constants';
 export * from './core/logger';
 export * from './core/lruCache';
+export * from './core/pinyin';
 export * from './core/validateSettings';

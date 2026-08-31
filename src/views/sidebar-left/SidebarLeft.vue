@@ -49,15 +49,38 @@
           </BaseBadge>
         </div>
 
-        <ActionButton
-          v-tooltip="'新建乐谱'"
-          variant="ghost"
-          icon-only
-          aria-label="新建乐谱"
-          @click="songModals.openCreateSongModal"
-        >
-          <Plus :size="16" :stroke-width="2.5" />
-        </ActionButton>
+        <div class="header-actions flex items-center gap-xs shrink-0">
+          <BasePopover trigger="hover" placement="bottom-end">
+            <template #trigger="{ isOpen, pinToggle }">
+              <ActionButton
+                v-tooltip="songSortTooltip"
+                icon-only
+                :variant="isOpen ? 'subtle' : 'ghost'"
+                :color="isOpen ? 'primary' : 'default'"
+                aria-label="切换乐谱排序方式"
+                aria-haspopup="menu"
+                :aria-expanded="isOpen"
+                @click="pinToggle()"
+              >
+                <component :is="currentSortIcon" :size="16" :stroke-width="2.5" />
+              </ActionButton>
+            </template>
+
+            <template #default="{ close }">
+              <ContextMenuItems :items="songSortMenuItems" @select="item => (item.action?.(), close())" />
+            </template>
+          </BasePopover>
+
+          <ActionButton
+            v-tooltip="'新建乐谱'"
+            variant="ghost"
+            icon-only
+            aria-label="新建乐谱"
+            @click="songModals.openCreateSongModal"
+          >
+            <Plus :size="16" :stroke-width="2.5" />
+          </ActionButton>
+        </div>
       </template>
     </div>
 
@@ -118,6 +141,8 @@
 import ActionButton from '@/components/base/ActionButton.vue';
 import BaseBadge from '@/components/base/BaseBadge.vue';
 import BaseInput from '@/components/base/BaseInput.vue';
+import BasePopover from '@/components/base/BasePopover.vue';
+import ContextMenuItems, { type ContextMenuItem } from '@/components/context-menu/ContextMenuItems.vue';
 import { useBackupModals } from '@/composables/app/useBackupModals';
 import { useChordGroupModals } from '@/composables/app/useChordGroupModals';
 import { useSongModals } from '@/composables/app/useSongModals';
@@ -125,8 +150,8 @@ import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/core/constants';
-import { Download, Plus, Search, Upload } from '@lucide/vue';
-import { provide, ref, useTemplateRef } from 'vue';
+import { Clock, Download, List, Plus, Search, Type, Upload } from '@lucide/vue';
+import { computed, provide, ref, useTemplateRef } from 'vue';
 import { useRoute } from 'vue-router';
 import BackupModalsContainer from './BackupModalsContainer.vue';
 import ChordModalsContainer from './ChordModalsContainer.vue';
@@ -154,6 +179,53 @@ provide('songModals', songModals);
 provide('backupModals', backupModals);
 
 const handleImportTrigger = () => fileInputRef.value?.click();
+
+/** 乐谱排序菜单（交互参考主题切换：Popover + 菜单项，选中项带勾选标记） */
+const songSortMenuItems = computed<ContextMenuItem[]>(() => [
+  {
+    label: '手动排序',
+    icon: List,
+    color: 'var(--text-title)',
+    checked: songStore.songSortMethod === 'manual',
+    action: () => songStore.setSongSortMethod('manual'),
+  },
+  {
+    label: '拼音分组',
+    icon: Type,
+    color: 'var(--color-primary)',
+    checked: songStore.songSortMethod === 'title',
+    action: () => songStore.setSongSortMethod('title'),
+  },
+  {
+    label: '创建时间',
+    icon: Clock,
+    color: 'var(--color-success)',
+    checked: songStore.songSortMethod === 'createdAt',
+    action: () => songStore.setSongSortMethod('createdAt'),
+  },
+]);
+const songSortLabel = computed(() => {
+  switch (songStore.songSortMethod) {
+    case 'title':
+      return '拼音分组';
+    case 'createdAt':
+      return '创建时间';
+    default:
+      return '手动排序';
+  }
+});
+const songSortTooltip = computed(() => `排序方式：${songSortLabel.value}`);
+/** 排序按钮图标随当前排序方式切换（与菜单项图标一致），颜色保持默认不换 */
+const currentSortIcon = computed(() => {
+  switch (songStore.songSortMethod) {
+    case 'title':
+      return Type;
+    case 'createdAt':
+      return Clock;
+    default:
+      return List;
+  }
+});
 
 const handleFileChange = async (e: Event) => {
   const target = e.target as HTMLInputElement;
