@@ -62,7 +62,7 @@
           class="flex items-center justify-center w-full max-w-full h-full min-h-0 leading-normal font-bold text-text-title box-border outline-none cursor-inherit whitespace-nowrap overflow-hidden text-ellipsis px-0.5 font-[Helvetica_Neue,Arial,sans-serif]"
           :style="chordNameFontSizeStyle"
         >
-          <ChordNameDisplay v-if="displayChordName" :chord :shorthand="isUseShorthand" size="inherit" />
+          <span v-if="displayChordName" v-chord-name="{ chord, shorthand: isUseShorthand }" />
           <span v-else class="text-text-disabled opacity-35 font-bold">CHORD</span>
         </div>
       </div>
@@ -128,9 +128,8 @@
 </template>
 
 <script setup lang="ts">
-import ChordNameDisplay from '@/components/fretboard/ChordNameDisplay.vue';
 import FretboardSvg from '@/components/fretboard/FretboardSvg.vue';
-import { useFretboardInteraction } from '@/composables/fretboard/useFretboardInteraction';
+import { useFretboardInteraction } from '@/shared/composables/useFretboardInteraction';
 import { vTooltip } from '@/directives/vTooltip.ts';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -271,10 +270,12 @@ watch(
 
 const MAX_CHORD_NAME_LENGTH = 16;
 
+/** 和弦名输入聚焦：标记编辑态，暂停外部数据对输入内容的同步覆盖 */
 const handleFocus = () => {
   isInputFocused.value = true;
 };
 
+/** 和弦名输入：截断超长文本并把光标维持到末尾，同步到内部状态 */
 const handleInput = (e: Event) => {
   const el = e.target as HTMLElement;
   let text = el?.textContent ?? '';
@@ -360,6 +361,7 @@ const commitOrRevert = () => {
   }
 };
 
+/** Esc 取消编辑：恢复修改前的有效名称并失焦（不触发校验） */
 const handleEscape = () => {
   const rawText = chordNameInputRef.value?.textContent ?? inputChordName.value;
   const isChanged = rawText.trim() !== displayChordName.value.trim();
@@ -418,6 +420,7 @@ const {
   index => emit('update:root-string-index', index)
 );
 
+/** 空弦悬停提示：仅可交互且未被按品时展示操作说明 */
 const getOpenStringTooltip = (sIdx: number) => {
   const str = props.chord.strings[sIdx];
   if (!str || !props.interactive || str[0] > 0) return undefined;

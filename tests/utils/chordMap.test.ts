@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  garbageCollectChordMap,
-  getEdgeChords,
-  parseSlotKey,
-  pruneOrphanChordRefs,
-  removeChordFromSlot,
-  setEdgeChords,
-  swapOrMoveSlotChords,
-} from '@/utils/music/chord-fretboard';
+import { garbageCollectChordMap, getEdgeChords, parseSlotKey, pruneOrphanChordRefs, removeChordFromSlot, setEdgeChords, swapOrMoveSlotChords } from '@/utils/score/chordSlots';
 
 const buildMap = (entries: Record<string, string>): Map<string, string> => new Map(Object.entries(entries));
 

@@ -15,10 +15,12 @@ export const useUiStore = defineStore('ui', () => {
   const timersMap = new Map<number, ReturnType<typeof setTimeout>>();
   const activeExportTarget = shallowRef<HTMLElement | null>(null);
 
+  /** 清除所有带操作按钮（onAction）的 Toast，避免旧的行动入口叠加显示。 */
   const clearActionToasts = () => {
     toasts.value = toasts.value.filter(t => !t.onAction);
   };
 
+  /** 按 id 移除指定 Toast，并清理其对应的自动销毁定时器。 */
   const removeToast = (id: number) => {
     toasts.value = toasts.value.filter(t => t.id !== id);
     if (timersMap.has(id)) {
@@ -30,6 +32,7 @@ export const useUiStore = defineStore('ui', () => {
   const remainingMap = new Map<number, number>();
   const startedAtMap = new Map<number, number>();
 
+  /** 为 Toast 安排延时销毁定时器，并记录起始时间与剩余时长以支持暂停/恢复。 */
   const scheduleToastRemoval = (id: number, delay: number) => {
     if (timersMap.has(id)) clearTimeout(timersMap.get(id));
     startedAtMap.set(id, Date.now());
@@ -38,6 +41,7 @@ export const useUiStore = defineStore('ui', () => {
     timersMap.set(id, timer);
   };
 
+  /** 暂停所有 Toast 的销毁倒计时（如弹窗打开时），按已流逝时间折算剩余时长。 */
   const pauseAllTimers = () => {
     timersMap.forEach((timer, id) => {
       clearTimeout(timer);
@@ -49,6 +53,7 @@ export const useUiStore = defineStore('ui', () => {
     timersMap.clear();
   };
 
+  /** 恢复所有 Toast 的销毁倒计时（LOADING 型常驻 Toast 除外）。 */
   const resumeAllTimers = () => {
     toasts.value.forEach(toast => {
       if (toast.type !== ToastType.LOADING) {
@@ -59,6 +64,7 @@ export const useUiStore = defineStore('ui', () => {
 
   let toastIdCounter = 0;
 
+  /** 创建 Toast 入队：LOADING 型常驻，其余按时长自动销毁；带操作按钮的会先清掉同类。 */
   const createToast = (msg: string, type: ToastType = ToastType.INFO, options: ToastOptions = {}) => {
     const id = ++toastIdCounter;
     const duration = options.duration ?? TOAST_DEFAULT_DURATION_MS;

@@ -61,9 +61,12 @@ if (!('IntersectionObserver' in globalThis)) {
   });
 }
 
+import { vChordName } from '@/directives/vChordName';
 import { config } from '@vue/test-utils';
 config.global.directives = {
   ...config.global.directives,
   wave: () => {},
   tooltip: () => {},
+  'chord-name': vChordName,
+  chordName: vChordName,
 };

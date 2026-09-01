@@ -45,6 +45,7 @@ export const clearScrollCache = (key?: string) => {
   }
 };
 
+/** 归一化指令配置：缓存 key 取值顺序为绑定值 > DOM 稳定特征（id/name/data-key）> 路径+标签特征；轴方向修饰符优先。 */
 const resolveOptions = (
   el: HTMLElement,
   binding: DirectiveBinding<ScrollCacheBinding>
@@ -81,6 +82,7 @@ const resolveOptions = (
   return { key, axis, onRestored };
 };
 
+/** 取消元素上尚在进行中的滚动还原（清理观察器/定时器/动画帧）。 */
 const cancelActiveRestore = (el: HTMLElement) => {
   const active = activeRestoreMap.get(el);
   if (active) {
@@ -91,6 +93,7 @@ const cancelActiveRestore = (el: HTMLElement) => {
   }
 };
 
+/** 按轴记录元素当前滚动位置到缓存（rAF 节流调用）。 */
 const save = (el: HTMLElement, axis: 'x' | 'y' | 'both' = 'both') => {
   const key = elKeys.get(el);
   if (!key) return;
@@ -103,6 +106,7 @@ const save = (el: HTMLElement, axis: 'x' | 'y' | 'both' = 'both') => {
   scrollPositions.set(key, newPos);
 };
 
+/** 执行滚动还原：内容异步加载导致高度变化时由 ResizeObserver 持续校正，超时或到位后结束并派发事件。 */
 const restoreScroll = (
   el: HTMLElement,
   savedPos: ScrollPosition,
@@ -184,6 +188,7 @@ const restoreScroll = (
   }
 };
 
+/** 缓存命中时调度一次滚动还原（下一帧执行）。 */
 const restore = (el: HTMLElement, binding: DirectiveBinding<ScrollCacheBinding>) => {
   const { key, axis, onRestored } = resolveOptions(el, binding);
   elKeys.set(el, key);

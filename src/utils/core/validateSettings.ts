@@ -29,6 +29,7 @@ export interface ValidationResult<T> {
 
 export type SettingsValidationResult = ValidationResult<GithubSettingsPayload>;
 
+/** 校验 GitHub 同步配置：Token 格式（可留空）、账户/仓库/路径非空；返回清洗后的载荷与错误列表。 */
 export const validateGithubSettings = (data: GithubSettingsPayload): SettingsValidationResult => {
   const errors: string[] = [];
   const token = data.githubToken.trim();
@@ -59,6 +60,7 @@ export const validateGithubSettings = (data: GithubSettingsPayload): SettingsVal
   };
 };
 
+/** 校验 WebDAV 同步配置：服务器地址与可选代理地址均须为 http(s) URL。 */
 export const validateWebdavSettings = (data: WebdavSettingsPayload): ValidationResult<WebdavSettingsPayload> => {
   const errors: string[] = [];
   const serverUrl = data.webdavServerUrl.trim();
@@ -86,6 +88,7 @@ export const validateWebdavSettings = (data: WebdavSettingsPayload): ValidationR
   };
 };
 
+/** 校验自建服务器同步配置：接口地址须为 http(s) URL，Token 可选。 */
 export const validateServerSettings = (data: ServerSettingsPayload): ValidationResult<ServerSettingsPayload> => {
   const errors: string[] = [];
   const serverUrl = data.serverUrl.trim();

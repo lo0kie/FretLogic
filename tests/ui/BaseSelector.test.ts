@@ -1,4 +1,4 @@
-import BaseSelector from '@/components/base/BaseSelector.vue';
+import BaseSelector from '@/components/ui/BaseSelector.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { markRaw } from 'vue';

@@ -4,6 +4,7 @@ import { createSyncProviderBase } from './syncBase';
 
 const TIMEOUT_MS = 15000;
 
+/** 创建 GitHub Contents API 同步 provider：远端为单个 base64 信封文件，按分支读写。 */
 export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranchesProvider {
   const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
   const baseHeaders: Record<string, string> = {

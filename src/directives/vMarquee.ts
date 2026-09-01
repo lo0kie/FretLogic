@@ -80,6 +80,7 @@ interface MarqueeState {
 
 const STATES = new WeakMap<HTMLElement, MarqueeState>();
 
+/** 合并绑定值与修饰符得到完整配置：修饰符（hover/always/left/fade 等）优先级高于绑定值。 */
 function resolveOptions(binding: MarqueeBinding, modifiers?: Record<string, boolean>): typeof DEFAULTS {
   const base: MarqueeOptions = binding && typeof binding === 'object' ? { ...binding } : {};
 
@@ -98,17 +99,20 @@ function resolveOptions(binding: MarqueeBinding, modifiers?: Record<string, bool
   return { ...DEFAULTS, ...base };
 }
 
+/** 在宿主元素上派发不冒泡的 CustomEvent，并同步调用绑定值里的回调。 */
 function emit<T = unknown>(el: HTMLElement, name: string, detail?: T, cb?: (value: T) => void): void {
   el.dispatchEvent(new CustomEvent(name, { detail, bubbles: false }));
   cb?.(detail as T);
 }
 
+/** 判定当前是否应处于滚动状态：always 常滚，hover 模式需悬停或聚焦，none 永不滚动。 */
 function shouldAnimate(state: MarqueeState): boolean {
   if (state.options.mode === 'none') return false;
   if (state.options.mode === 'always') return true;
   return state.hovered || state.focused;
 }
 
+/** 按配置在两端应用羽化渐变遮罩；未开启或未溢出时清除遮罩。 */
 function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
   if (!state.options.fade || !state.overflowing) {
     el.style.maskImage = '';
@@ -121,6 +125,7 @@ function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
   el.style.webkitMaskImage = mask;
 }
 
+/** 测量内容是否溢出（宽度差 > 1px），溢出状态变化时派发事件，并联动遮罩与动画刷新。 */
 function measure(el: HTMLElement): void {
   const state = STATES.get(el);
   if (!state) return;
@@ -138,6 +143,7 @@ function measure(el: HTMLElement): void {
   update(el);
 }
 
+/** 核心：根据溢出/激活状态启停 Web Animations；continuous 与 pingpong 各自构造关键帧，签名未变时复用动画。 */
 function update(el: HTMLElement): void {
   const state = STATES.get(el);
   if (!state) return;

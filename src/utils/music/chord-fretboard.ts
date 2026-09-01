@@ -3,15 +3,12 @@ import type {
   BarreFret,
   Capo,
   Chord,
-  ChordId,
   GuitarStringEntity,
   GuitarStringsModel,
-  SlotKey,
   StringIndex,
 } from '@/types';
 import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_SCALE_MAP } from '@/utils/core/constants';
 import { Tuning, isMuted, isOpen, nameToSegments } from '@/utils/music/musicTheory';
-import { charKey, chordSlotKey, collectEdgeChordIds, edgeSlotPrefix } from '@/utils/score/scoreModel';
 import { createLruCache } from '../core/lruCache';
 
 const barreCandidatesCache = createLruCache<BarreEntity[]>(64);
@@ -145,217 +142,12 @@ const normalizeBarres = (barres: unknown): BarreEntity[] | undefined => {
   return out.length > 0 ? out : undefined;
 };
 
-// ===== chordMap: 和弦槽位映射与和弦数据归一化 =====
-
-export interface ParsedSlotKey {
-  lineId: string;
-  type: 'char' | 'start' | 'end';
-  index: number;
-}
-export function parseSlotKey(slotKey: string): ParsedSlotKey | null {
-  const str = String(slotKey);
-  const match = str.match(/^line_(.+?)_(char|start|end)_(\d+)$/);
-  if (!match) return null;
-  return {
-    lineId: match[1] ?? '',
-    type: (match[2] ?? 'char') as 'char' | 'start' | 'end',
-    index: parseInt(match[3] ?? '0', 10),
-  };
-}
-export function getEdgeChords(
-  chordMap: ReadonlyMap<SlotKey, ChordId>,
-  lineId: string,
-  type: 'start' | 'end'
-): ChordId[] {
-  // key/value 在 Song.chordMap 中已品牌化，此处仅按前缀过滤排序
-  return collectEdgeChordIds(chordMap, lineId, type) as ChordId[];
-}
-export function setEdgeChords(
-  chordMap: Map<SlotKey, ChordId>,
-  lineId: string,
-  type: 'start' | 'end',
-  chordIds: ChordId[]
-): void {
-  const prefix = edgeSlotPrefix(lineId, type);
-  for (const key of [...chordMap.keys()]) {
-    if (key.startsWith(prefix)) {
-      chordMap.delete(key);
-    }
-  }
-  chordIds.forEach((chordId, idx) => {
-    chordMap.set(chordSlotKey(lineId, type, idx), chordId);
-  });
-}
-export function removeChordFromSlot(chordMap: Map<SlotKey, ChordId>, slotKey: SlotKey): ChordId | null {
-  const parsed = parseSlotKey(slotKey);
-  if (!parsed) {
-    const removed = chordMap.get(slotKey) ?? null;
-    chordMap.delete(slotKey);
-    return removed;
-  }
-  const { lineId, type, index } = parsed;
-  if (type === 'char') {
-    const removed = chordMap.get(slotKey) ?? null;
-    chordMap.delete(slotKey);
-    return removed;
-  } else {
-    const list = getEdgeChords(chordMap, lineId, type);
-    if (index < 0 || index >= list.length) return null;
-    const [removed] = list.splice(index, 1);
-    setEdgeChords(chordMap, lineId, type, list);
-    return removed ?? null;
-  }
-}
-export function bindNewChordToSlot(chordMap: Map<SlotKey, ChordId>, slotKey: SlotKey, chordId: ChordId): void {
-  const parsed = parseSlotKey(slotKey);
-  if (!parsed || parsed.type === 'char') {
-    chordMap.set(slotKey, chordId);
-    return;
-  }
-  const { lineId, type, index } = parsed;
-  const list = getEdgeChords(chordMap, lineId, type);
-  if (index >= list.length) {
-    if (type === 'start') list.unshift(chordId);
-    else list.push(chordId);
-  } else list[index] = chordId;
-  setEdgeChords(chordMap, lineId, type, list);
-}
-export function swapOrMoveSlotChords(chordMap: Map<SlotKey, ChordId>, sourceKey: SlotKey, targetKey: SlotKey): void {
-  if (sourceKey === targetKey) return;
-  const sourceParsed = parseSlotKey(sourceKey);
-  const targetParsed = parseSlotKey(targetKey);
-  if (!sourceParsed || !targetParsed) {
-    return;
-  }
-  if (
-    sourceParsed.lineId === targetParsed.lineId &&
-    sourceParsed.type === targetParsed.type &&
-    sourceParsed.type !== 'char'
-  ) {
-    const list = getEdgeChords(chordMap, sourceParsed.lineId, sourceParsed.type);
-    const srcIdx = sourceParsed.index;
-    const tgtIdx = targetParsed.index;
-    if (srcIdx >= 0 && srcIdx < list.length) {
-      const originalLength = list.length;
-      const isTargetAddButton = tgtIdx >= originalLength;
-      const [movedChordId] = list.splice(srcIdx, 1);
-      if (movedChordId === undefined) return;
-      let insertIdx: number;
-      if (isTargetAddButton) {
-        // 当拖拽到行首的“添加”按钮（最左侧占位符）时插入到最左侧（0），行尾插入到末尾
-        insertIdx = sourceParsed.type === 'start' ? 0 : list.length;
-      } else {
-        insertIdx = Math.min(Math.max(0, tgtIdx), list.length);
-      }
-      list.splice(insertIdx, 0, movedChordId);
-      setEdgeChords(chordMap, sourceParsed.lineId, sourceParsed.type, list);
-    }
-    return;
-  }
-  const peekChordId = (parsed: ParsedSlotKey): ChordId | null => {
-    if (parsed.type === 'char') return chordMap.get(charKey(parsed.lineId, parsed.index)) ?? null;
-    const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
-    return list[parsed.index] || null;
-  };
-  const sourceChordId = peekChordId(sourceParsed);
-  if (!sourceChordId) return;
-  const targetChordId = peekChordId(targetParsed);
-
-  // 2. 两处都有和弦：纯 SWAP（原地互换位置内容，绝不缩减或打乱边和弦列表顺序）
-  if (targetChordId) {
-    const setSlotChordDirect = (parsed: ParsedSlotKey, chordId: ChordId) => {
-      if (parsed.type === 'char') {
-        chordMap.set(charKey(parsed.lineId, parsed.index), chordId);
-      } else {
-        const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
-        if (parsed.index < list.length) {
-          list[parsed.index] = chordId;
-        } else {
-          list.push(chordId);
-        }
-        setEdgeChords(chordMap, parsed.lineId, parsed.type, list);
-      }
-    };
-
-    setSlotChordDirect(sourceParsed, targetChordId);
-    setSlotChordDirect(targetParsed, sourceChordId);
-    return;
-  }
-
-  // 3. 目标槽位为空：MOVE（从源槽位移出，并插入到目标槽位）
-  removeChordFromSlot(chordMap, sourceKey);
-  insertChordAtParsedLocation(chordMap, targetParsed, sourceChordId);
-}
-function insertChordAtParsedLocation(chordMap: Map<SlotKey, ChordId>, parsed: ParsedSlotKey, chordId: ChordId): void {
-  if (parsed.type === 'char') {
-    chordMap.set(charKey(parsed.lineId, parsed.index), chordId);
-  } else {
-    const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
-    let insertIdx: number;
-    if (parsed.index >= list.length) {
-      // 当目标是行首“添加”按钮（最左侧占位符）时插入到最左侧（0），行尾插入到末尾
-      insertIdx = parsed.type === 'start' ? 0 : list.length;
-    } else {
-      insertIdx = Math.min(Math.max(0, parsed.index), list.length);
-    }
-    list.splice(insertIdx, 0, chordId);
-    setEdgeChords(chordMap, parsed.lineId, parsed.type, list);
-  }
-}
-export const garbageCollectChordMap = (
-  chordMap: Map<SlotKey, ChordId>,
-  finalLineIds: string[]
-): { map: Map<SlotKey, ChordId>; changed: boolean } => {
-  const finalIdsSet = new Set(finalLineIds);
-  const updatedMap = new Map(chordMap);
-  let changed = false;
-  for (const key of updatedMap.keys()) {
-    const parsed = parseSlotKey(key);
-    if (parsed && !finalIdsSet.has(parsed.lineId)) {
-      updatedMap.delete(key);
-      changed = true;
-    }
-  }
-  return { map: updatedMap, changed };
-};
-
-/** 清理 chordMap 中指向不存在和弦 id 的孤儿引用（导入校验 / 删除和弦后使用） */
-export const pruneOrphanChordRefs = (
-  chordMap: Map<SlotKey, ChordId>,
-  validChordIds: Set<string>,
-  options?: { preserveUnknown?: boolean }
-): { map: Map<SlotKey, ChordId>; changed: boolean } => {
-  const updatedMap = new Map(chordMap);
-  let changed = false;
-  for (const [key, id] of updatedMap) {
-    if (id !== undefined && !validChordIds.has(id) && !(options?.preserveUnknown && validChordIds.size === 0)) {
-      updatedMap.delete(key);
-      changed = true;
-    }
-  }
-  return { map: updatedMap, changed };
-};
-
-// ===== 序列化边界：内存统一用 Map，JSON/持久化用普通对象 =====
-
-/** Map -> 普通对象（localStorage / 备份 / 同步序列化用） */
-export const chordMapToPlain = (chordMap: ReadonlyMap<SlotKey, ChordId>): Record<string, string> =>
-  Object.fromEntries(chordMap);
-
-/** 普通对象 -> Map（读取 localStorage / 导入备份 / 同步拉取用），容忍非法条目；
- *  key/value 已通过 string 类型过滤，品牌收窄信任该过滤 */
-export const plainToChordMap = (raw: unknown): Map<SlotKey, ChordId> => {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return new Map();
-  return new Map(
-    Object.entries(raw as Record<string, unknown>)
-      .filter(
-        (entry): entry is [string, string] =>
-          typeof entry[0] === 'string' && entry[0].length > 0 && typeof entry[1] === 'string' && entry[1].length > 0
-      )
-      .map(([k, v]) => [k as SlotKey, v as ChordId])
-  );
-};
-
+/**
+ * 和弦实体归一化：迁移旧数据结构并修复非法字段。
+ * 覆盖：strings 对象数组 → 二维数组、弦级 isRoot → 单点 rootStringIndex（含有效性校验）、
+ * 旧字段（isInverted/fingerprint/chordName）清理、横按合法性过滤、chordName → nameSegments 迁移。
+ * @returns 规范化实体与是否发生变更（未变更时原样返回引用，避免无谓的深拷贝/写盘）
+ */
 export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean } => {
   const capo = chord.capo ?? 0;
   const tuning = chord.tuning || Tuning.STANDARD;
@@ -445,12 +237,14 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
 
 // ===== fretboardVisuals: 指板视觉样式 =====
 
+/** 返回空弦/静音弦的状态样式类（根音优先级最高）；普通按音弦返回空串。 */
 export const getOpenStringStatusClass = (str: GuitarStringEntity, isRoot: boolean): string => {
   if (isMuted(str)) return 'is-muted-status';
   if (isOpen(str) && !isRoot) return 'is-open-status';
   return '';
 };
 
+/** 返回根音空弦的强调样式（背景/边框/文字/发光）；非根音空弦返回空样式对象。 */
 export const getOpenStringStyle = (str: GuitarStringEntity, isRoot: boolean, isDarkMode: boolean) => {
   if (isOpen(str) && isRoot) {
     const bg = isDarkMode ? FRETBOARD_COLORS.openRootBgDark : FRETBOARD_COLORS.openRootBgLight;
@@ -464,17 +258,20 @@ export const getOpenStringStyle = (str: GuitarStringEntity, isRoot: boolean, isD
   return {};
 };
 
+/** 指板圆点填充色：根音用强调色，其余用普通色，按明暗主题区分。 */
 export const getFingerColor = (isRoot: boolean, isDarkMode: boolean): string => {
   if (isRoot) return isDarkMode ? FRETBOARD_COLORS.rootDark : FRETBOARD_COLORS.rootLight;
   return isDarkMode ? FRETBOARD_COLORS.normalDark : FRETBOARD_COLORS.normalLight;
 };
 
+/** 指板圆点文字颜色（仅暗色主题下的根音需要高亮文字）。 */
 export const getFingerTextColor = (isRoot: boolean, isDarkMode: boolean): string => {
   return isRoot && isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
 };
 
 const placeholderSizeCache = createLruCache<{ width: string; height: string }>(32);
 
+/** 计算指板占位尺寸（px 字符串），随品位数/缩放/展示区开关变化；结果按参数组合 LRU 缓存。 */
 export const getPlaceholderSize = (
   fretCount: number,
   customScale = 1.0,

@@ -1,4 +1,4 @@
-import BaseSlider from '@/components/base/BaseSlider.vue';
+import BaseSlider from '@/components/ui/BaseSlider.vue';
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

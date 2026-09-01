@@ -14,6 +14,7 @@ import type { Chord, Group, Song } from '@/types';
 
 const MIGRATION_FLAG_KEY = 'legacy-migration-done';
 
+/** 从旧 localStorage 读取任意 JSON；键不存在或解析失败时返回 undefined。 */
 function readJson(storage: Storage, key: string): unknown {
   try {
     const raw = storage.getItem(key);
@@ -25,6 +26,7 @@ function readJson(storage: Storage, key: string): unknown {
 
 const SONG_ENTRY_PREFIX = `${STORAGE_KEYS.SONG_ENTRY}:`;
 
+/** 收集旧版歌曲数据：单曲独立键（SONG_ENTRY 前缀扫描）与旧整表（SONGS）合并返回。 */
 function readLegacySongs(storage: Storage): Song[] {
   // 单曲独立键
   const songs: Song[] = [];

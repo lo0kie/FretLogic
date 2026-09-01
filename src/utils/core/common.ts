@@ -3,6 +3,7 @@ import { isProxy, isRef, toRaw, unref } from 'vue';
 
 // ===== id: 唯一 id 生成 =====
 
+/** 生成带可选前缀的短随机 id：优先 crypto.randomUUID，不支持时回退随机串 + 时间戳。 */
 export const generateUUID = (prefix: string = '', length = 8): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return (prefix ? `${prefix}_` : '') + crypto.randomUUID().slice(0, length);
@@ -57,6 +58,7 @@ export function cloneDeep<T>(value: T): T {
 export const serializeForStorage = (value: unknown): string =>
   JSON.stringify(value, (_key, val) => (val instanceof Map ? Object.fromEntries(val) : val));
 
+/** 克隆六弦模型：剥响应式代理后逐弦复制 [品位, 升降偏好] 元组，得到纯净的可写副本。 */
 export function cloneGuitarStrings(strings: GuitarStringsModel): GuitarStringsModel {
   const raw = toRaw(strings);
   return [
@@ -71,6 +73,7 @@ export function cloneGuitarStrings(strings: GuitarStringsModel): GuitarStringsMo
 
 // ===== stringDistance: 编辑距离 =====
 
+/** 计算 Levenshtein 编辑距离；用滚动单行数组实现，空间 O(短串长度)。 */
 export const getEditDistance = (a: string, b: string): number => {
   if (a.length === 0) return b.length;
   if (b.length === 0) return a.length;
@@ -107,8 +110,10 @@ export const getEditDistance = (a: string, b: string): number => {
 const SIMILARITY_THRESHOLD = 0.45;
 // 未匹配行数超过该值时（整段替换/大粘贴），逐对编辑距离的成本失控，直接分配新 id
 const MAX_SIMILAR_MATCH_LINES = 60;
+/** 创建歌词行 id（l_ + 短 uuid），matchLineIds 的 id 生成底层。 */
 const createLineId = (): string => 'l_' + generateUUID('', 8);
 
+/** 第一轮匹配：内容完全相同的行按出现顺序逐一配对复用旧 id。 */
 const matchExactLines = (
   oldLines: string[],
   newLines: string[],
@@ -149,6 +154,7 @@ const matchExactLines = (
   return { newIds, usedOldIndices };
 };
 
+/** 第二轮匹配：对未配对行用编辑距离找最相似的旧行（长度差异过大直接剪枝），复用其 id。 */
 const matchSimilarLines = (
   oldLines: string[],
   newLines: string[],
@@ -196,6 +202,7 @@ const matchSimilarLines = (
   }
 };
 
+/** 仍未配对的行分配全新 id。 */
 const assignNewIds = (newIds: (string | null)[]): string[] => {
   return newIds.map(id => id || createLineId());
 };
@@ -212,6 +219,7 @@ export const matchLineIds = (oldLines: string[], newLines: string[], oldLineIds:
 
 // ===== sanitizeLyricsText: 歌词文本清洗 =====
 
+/** 歌词文本清洗：去制表符/回车、全角空格转半角、行首尾去空白（按行处理）。 */
 export const sanitizeLyricsText = (lyrics: string): string => {
   return lyrics
     .split('\n')
@@ -236,6 +244,7 @@ type VisibilityCallback = (visible: boolean) => void;
 const observersByRoot = new Map<Element | null, IntersectionObserver>();
 const elementCallbacks = new WeakMap<Element, VisibilityCallback>();
 
+/** 取（或创建）绑定到指定 root 的共享 IntersectionObserver 实例。 */
 const getObserverForRoot = (root: Element | null): IntersectionObserver => {
   let observer = observersByRoot.get(root);
   if (!observer) {

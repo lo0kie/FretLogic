@@ -11,6 +11,7 @@ const PREFIX = '[fret-logic]';
 /** 是否生产环境（构建时静态替换） */
 const IS_PROD = import.meta.env.PROD;
 
+/** 统一输出日志：带模块前缀标签，extra 存在时一并输出。 */
 function emit(level: LogLevel, scope: string, message: string, extra?: unknown) {
   const tag = `${PREFIX}:${scope}`;
   if (extra !== undefined) {

@@ -1,4 +1,4 @@
-﻿import BaseSwitch from '@/components/base/BaseSwitch.vue';
+﻿import BaseSwitch from '@/components/ui/BaseSwitch.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 

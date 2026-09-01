@@ -1,4 +1,4 @@
-import ContextMenuItems, { type ContextMenuItem } from '@/components/context-menu/ContextMenuItems.vue';
+import ContextMenuItems, { type ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 

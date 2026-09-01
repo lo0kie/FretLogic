@@ -9,6 +9,7 @@ export interface LruCache<K, V> {
   readonly size: number;
 }
 
+/** 创建字符串键的 LRU 缓存实例：get/set 均刷新位置，超限淘汰最旧条目。 */
 export function createLruCache<V>(limit: number): LruCache<string, V> {
   const map = new Map<string, V>();
   return {

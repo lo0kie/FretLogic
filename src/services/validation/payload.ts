@@ -17,7 +17,7 @@ import type {
   SyncSettingsBackup,
 } from '@/types';
 import { cloneDeep } from '@/utils/core/common';
-import { pruneOrphanChordRefs } from '@/utils/music/chord-fretboard';
+import { pruneOrphanChordRefs } from '@/utils/score/chordSlots';
 import { getChordName, nameToSegments } from '@/utils/music/musicTheory';
 
 /** 旧/未知结构的数据（含历史遗留字段），用于防御性清洗 */
@@ -93,6 +93,7 @@ export interface ValidationResult {
   /** 非阻断的自动清理提示（去重 / 剪枝失效引用）；调用方应向用户展示 */
   warnings?: string[];
 }
+/** 清洗备份包中的分组列表：结构非法的条目记入 issues 并丢弃，其余交由实体内核。 */
 const sanitizeGroups = (groups: unknown, issues: string[]): GroupDraft[] => {
   if (!Array.isArray(groups)) {
     issues.push('groups 字段必须为数组');
@@ -112,6 +113,7 @@ const sanitizeGroups = (groups: unknown, issues: string[]): GroupDraft[] => {
     });
 };
 
+/** 清洗备份包中的和弦列表：逐项校验结构（含 6 弦二维数组），旧数据仅有 chordName 时兜底解析分片。 */
 const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
   if (!Array.isArray(chords)) {
     issues.push('chords 字段必须为数组');
@@ -160,6 +162,7 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
   );
 };
 
+/** 清洗备份包中的歌曲列表：结构非法的条目记入 issues 并丢弃，其余交由实体内核。 */
 const sanitizeSongs = (songs: unknown, issues: string[]): SongDraft[] => {
   if (songs === undefined) return [];
   if (!Array.isArray(songs)) {
@@ -201,6 +204,7 @@ const SYNC_STRING_FIELDS = [
   'serverToken',
 ] as const;
 
+/** 清洗备份包中的同步配置（仅保留已知字段，兼容旧字段名 webdavUseProxy）；无有效字段返回 undefined。 */
 const sanitizeSyncSettings = (raw: unknown): SyncSettingsBackup | undefined => {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
   const source = raw as RawRecord;
@@ -248,6 +252,12 @@ const sanitizePreferences = (raw: unknown): AppPreferencesBackup | undefined => 
   return Object.keys(result).length > 0 ? result : undefined;
 };
 
+/**
+ * 校验并清洗导入/导出/云同步的数据包：
+ * 1) 版本逐级迁移到当前格式；2) 分组/和弦/歌曲/配置逐项清洗；
+ * 3) 剔除悬空分组下的和弦、同组重复指纹、歌曲内失效引用。
+ * 自动清理以 warnings 返回而非拒绝导入；结构损坏以 issues 返回并整体拒绝。
+ */
 export const validateImportExportPayload = (data: unknown): ValidationResult => {
   if (!data || typeof data !== 'object') {
     return { isValid: false, issues: ['检测到数据资产并非有效对象'] };

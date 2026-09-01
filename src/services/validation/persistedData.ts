@@ -1,23 +1,28 @@
 import type { Chord, ChordId, Group, LineId, SlotKey, Song, StringIndex } from '@/types';
 import { GroupSortRule } from '@/types';
 import { FRET_COUNTS } from '@/utils/core/constants';
-import { isCapoValue, normalizeChord, pruneOrphanChordRefs } from '@/utils/music/chord-fretboard';
+import { pruneOrphanChordRefs } from '@/utils/score/chordSlots';
+import { isCapoValue, normalizeChord } from '@/utils/music/chord-fretboard';
 import { buildGroupVariant, toSongId } from '@/utils/music/entityFactories';
 import { computeChordFingerprint, Tuning } from '@/utils/music/musicTheory';
 
 type RawRecord = Record<string, unknown>;
 
+/** 判断值是否为普通对象（非 null、非数组）。 */
 const isRecord = (value: unknown): value is RawRecord => !!value && typeof value === 'object' && !Array.isArray(value);
 
+/** 判断值是否为去空格后非空的字符串。 */
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
 
 /** 合法毫秒时间戳：有限数字且为正 */
 const isValidTimestamp = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0;
 
+/** 判断值是否为落在 [min, max] 区间内的有限数字。 */
 const isBoundedNumber = (value: unknown, min: number, max: number): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 
+/** 判断弦实体是否为合法的 [品位, 升降偏好] 元组（品位为 >= -1 的有限数字）。 */
 const isValidStringEntity = (value: unknown): value is [number, boolean] => {
   return (
     Array.isArray(value) &&
@@ -51,6 +56,7 @@ export const sanitizeGroupEntity = (raw: unknown): GroupDraft | null => {
   return draft;
 };
 
+/** 解析根音标记弦索引：仅在索引合法（0~5）且指向已按音的弦时保留，否则置 null。 */
 const resolveRootStringIndex = (chord: RawRecord): StringIndex | null => {
   const index = chord['rootStringIndex'];
   if (!isBoundedNumber(index, 0, 5) || !Array.isArray(chord['strings'])) return null;
@@ -100,6 +106,7 @@ export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 
   return chord;
 };
 
+/** 清洗和弦槽位映射：接受 Map 或普通对象，仅保留非空字符串键值对，其余条目丢弃。 */
 const sanitizeChordMap = (chordMap: unknown): Map<SlotKey, ChordId> => {
   const collect = (entries: Iterable<[unknown, unknown]>): Map<SlotKey, ChordId> => {
     const out = new Map<SlotKey, ChordId>();
@@ -143,6 +150,7 @@ export const sanitizeSongEntity = (raw: unknown): SongDraft | null => {
 
 // ===== 数组级清洗（localStorage 链路：静默丢弃非法条目） =====
 
+/** 数组级分组清洗：逐项走实体内核，非法条目静默丢弃（localStorage 链路语义）。 */
 const sanitizeGroups = (groups: unknown): GroupDraft[] => {
   if (!Array.isArray(groups)) return [];
   return groups.map(sanitizeGroupEntity).filter((group): group is GroupDraft => group !== null);
@@ -170,6 +178,7 @@ export const dedupeChordsByFingerprint = (chords: Chord[]): { kept: Chord[]; dup
   return { kept, dupes };
 };
 
+/** 数组级和弦清洗：逐项清洗、过滤悬空分组引用，再做同组指纹去重（strict 模式）。 */
 const sanitizeChords = (chords: unknown, validGroupIds: Set<string>): Chord[] => {
   if (!Array.isArray(chords)) return [];
 
@@ -181,6 +190,7 @@ const sanitizeChords = (chords: unknown, validGroupIds: Set<string>): Chord[] =>
   return dedupeChordsByFingerprint(byGroup).kept;
 };
 
+/** 数组级歌曲清洗：逐项走实体内核并按 id 去重，非法/重复条目静默丢弃。 */
 const sanitizeSongs = (songs: unknown): SongDraft[] => {
   if (!Array.isArray(songs)) return [];
 
@@ -221,6 +231,11 @@ export const fillMissingTimestamps = <T extends Timestamped>(
   });
 };
 
+/**
+ * 清洗 localStorage 持久化数据（应用启动入口）：
+ * 分组/和弦/歌曲逐层清洗补齐时间戳；和弦指向不存在分组时剔除；
+ * 歌曲内指向不存在和弦的引用剪除（未知和弦 id 因快照可能缺失而保留）。
+ */
 export const sanitizePersistedData = (data: { groups?: unknown; chords?: unknown | null; songs?: unknown }) => {
   const now = Date.now();
   // Group 为判别联合，交叉类型无法被 TS 自动收敛，时间戳补齐后信任收窄（校验边界）

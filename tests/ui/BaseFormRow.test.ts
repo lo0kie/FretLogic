@@ -1,4 +1,4 @@
-﻿import BaseFormRow from '@/components/base/BaseFormRow.vue';
+﻿import BaseFormRow from '@/components/ui/BaseFormRow.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 

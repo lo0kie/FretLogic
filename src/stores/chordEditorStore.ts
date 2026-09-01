@@ -10,6 +10,7 @@ import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { computed, toRaw, watch } from 'vue';
 
+/** 构造空白和弦草稿（六弦全部静音、标准调弦、3 品窗口），作为编辑器初始态。 */
 const createDefaultChord = (): Chord => ({
   id: toChordId(''),
   nameSegments: null,
@@ -154,6 +155,7 @@ export const useChordEditorStore = defineStore('editor', () => {
     return index >= 0 ? index : 0;
   });
 
+  /** 切换到指定索引的多指法变体：将其实体克隆进草稿并切换为编辑态。 */
   const setMultiFingeringIndex = (index: number) => {
     const chord = currentMultiFingeringChords.value[index];
     if (!chord) return;
@@ -162,6 +164,7 @@ export const useChordEditorStore = defineStore('editor', () => {
     isEditing.value = true;
   };
 
+  /** 设置指板可视品位数；缩小时静音越界音符，并联动清理失效的根音标记与横按。 */
   const setFretCount = (newVal: Chord['fretCount']) => {
     const oldVal = draftChord.value.fretCount;
     draftChord.value.fretCount = newVal;
@@ -257,6 +260,7 @@ export const useChordEditorStore = defineStore('editor', () => {
     { flush: 'sync' }
   );
 
+  /** 加载已有和弦进编辑器（克隆为草稿，切换为编辑态）；程序性替换不触发横按重算。 */
   const setEditor = (chord: Chord) => {
     isProgrammaticStringsChange = true;
     isCreating.value = false;
@@ -265,6 +269,7 @@ export const useChordEditorStore = defineStore('editor', () => {
     isProgrammaticStringsChange = false;
   };
 
+  /** 从和弦库重新加载当前草稿对应的原始数据（草稿丢失/脏污时的恢复入口）。 */
   const initEditor = () => {
     if (!draftChord.value.id) return;
     const original = chordStore.savedChordsList.find(c => c.id === draftChord.value.id);
@@ -272,6 +277,7 @@ export const useChordEditorStore = defineStore('editor', () => {
     else resetEditor();
   };
 
+  /** 重置编辑器为空白草稿，退出编辑/新建状态。 */
   const resetEditor = () => {
     isProgrammaticStringsChange = true;
     draftChord.value = createDefaultChord();
@@ -280,6 +286,7 @@ export const useChordEditorStore = defineStore('editor', () => {
     isEditing.value = false;
   };
 
+  /** 以当前草稿为模板另存为新和弦：清空 id 并切换为新建态。 */
   const saveAsNewChord = () => {
     draftChord.value = { ...draftChord.value, id: toChordId('') };
     isEditing.value = false;

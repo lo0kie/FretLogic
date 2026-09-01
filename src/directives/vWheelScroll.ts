@@ -28,6 +28,7 @@ export interface WheelScrollOptions {
 
 export type WheelScrollBinding = number | boolean | WheelScrollOptions | undefined;
 
+/** 归一化指令配置：绑定值支持速度倍率/开关/选项对象，修饰符叠加并补齐默认值。 */
 const normalize = (value: WheelScrollBinding, modifiers?: Record<string, boolean>): WheelScrollOptions => {
   let opts: WheelScrollOptions = {};
   if (typeof value === 'number') {
@@ -66,6 +67,7 @@ interface SmoothScrollState {
 const handlerMap = new WeakMap<HTMLElement, WheelScrollHandler>();
 const smoothStateMap = new WeakMap<HTMLElement, SmoothScrollState>();
 
+/** 取消元素上未完成的平滑滚动动画帧。 */
 const cancelSmoothScroll = (el: HTMLElement) => {
   const state = smoothStateMap.get(el);
   if (state?.rafId !== null && state?.rafId !== undefined) {
@@ -91,6 +93,7 @@ const performSmoothScroll = (el: HTMLElement, scrollAmount: number, maxScrollLef
 
   if (state.rafId !== null) return;
 
+  /** 单帧缓动循环：向目标位置 lerp 逼近，差值小于 0.5px 时收尾停止。 */
   const animate = () => {
     if (!state) return;
     const current = el.scrollLeft;

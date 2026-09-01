@@ -1,4 +1,4 @@
-import BaseBadge from '@/components/base/BaseBadge.vue';
+import BaseBadge from '@/components/ui/BaseBadge.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 

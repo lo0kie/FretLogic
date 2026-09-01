@@ -20,6 +20,7 @@ export interface SyncBaseDeps {
   timeoutMs?: number;
 }
 
+/** 创建共享基类实例：返回统一的请求函数与响应体解码校验函数，差异点由 deps 注入。 */
 export function createSyncProviderBase(deps: SyncBaseDeps) {
   const TIMEOUT_MS = deps.timeoutMs ?? 15000;
   const buildUrl = deps.buildUrl ?? ((url: string) => url);
@@ -27,6 +28,7 @@ export function createSyncProviderBase(deps: SyncBaseDeps) {
     deps.classifyNetworkError ??
     ((err: unknown) => new SyncError('NETWORK', err instanceof Error ? err.message : '网络请求失败'));
 
+  /** 发起请求：默认 GET 地址可延迟求值；超时中断映射为 TIMEOUT，网络错误按 deps 细分类别。 */
   const request = async (init: RequestInit, url?: string): Promise<Response> => {
     const target = url ?? (typeof deps.defaultUrl === 'function' ? deps.defaultUrl() : deps.defaultUrl);
     const controller = new AbortController();
@@ -47,6 +49,7 @@ export function createSyncProviderBase(deps: SyncBaseDeps) {
     }
   };
 
+  /** 读取响应原文并解析为 JSON，再经导入校验；JSON 或校验失败均抛 INVALID_CLOUD_DATA。 */
   const decodePayload = async (response: Response): Promise<ImportExportPayload> => {
     const raw = await deps.readRaw(response);
     let parsed: unknown;
