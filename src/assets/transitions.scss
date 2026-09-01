@@ -39,6 +39,14 @@
 // =============================================================================
 // 3. 对话框弹窗动画 (Modal) - 遮罩层渐隐 + 居中卡片微缩放平移
 // =============================================================================
+.modal-card {
+  transition:
+    transform $duration-base $bezier-standard,
+    opacity $duration-base $bezier-standard,
+    width $duration-base $bezier-standard,
+    height $duration-base $bezier-standard;
+}
+
 .v-transition-modal-enter-active,
 .v-transition-modal-leave-active {
   transition: opacity $duration-base $bezier-standard;
@@ -46,7 +54,9 @@
   .modal-card {
     transition:
       transform $duration-base $bezier-standard,
-      opacity $duration-base $bezier-standard;
+      opacity $duration-base $bezier-standard,
+      width $duration-base $bezier-standard,
+      height $duration-base $bezier-standard;
   }
 }
 

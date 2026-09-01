@@ -2,7 +2,7 @@
  * 云同步服务：基于 Provider（GitHub / WebDAV）的推拉同步、连接测试与分支列表获取。
  * 推送使用不含凭据的 selection（见 buildBackupPayload），拉取结果走统一清洗层后应用。
  */
-import { SyncError, type SyncBranchesProvider, type SyncProvider } from '@/services/sync/provider';
+import { SyncError, type SyncBranchesProvider, type SyncProvider, type SyncProviderKind } from '@/services/sync/provider';
 import { syncProviderRegistry } from '@/services/sync/registry';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
@@ -26,8 +26,8 @@ export function useSyncService() {
   const songStore = useSongStore();
   const editorStore = useChordEditorStore();
 
-  const resolveProvider = (errorPrefix: string): SyncProvider | null => {
-    const factory = syncProviderRegistry[settingsStore.syncTarget];
+  const resolveProvider = (errorPrefix: string, target: SyncProviderKind = settingsStore.syncTarget): SyncProvider | null => {
+    const factory = syncProviderRegistry[target];
     const resolved = factory.resolveConfig(settingsStore);
     if (resolved.error || !resolved.config) {
       uiStore.toast.error(`${errorPrefix}：${resolved.error ?? '配置无效'}`);
@@ -55,9 +55,9 @@ export function useSyncService() {
     }
   };
 
-  const syncToRemote = async (): Promise<boolean> => {
+  const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> => {
     if (isSyncing.value) return false;
-    const provider = resolveProvider('同步失败');
+    const provider = resolveProvider('同步失败', target);
     if (!provider) return false;
     // 云端推送不携带同步配置（含 Token/密码等凭据），仅手动备份导出才包含
     const payload = buildBackupPayload({ selection: { ...FULL_BACKUP_SELECTION, syncSettings: false } });
@@ -82,10 +82,10 @@ export function useSyncService() {
     }
   };
 
-  const pullFromRemote = async (): Promise<boolean> => {
-    if (isPulling.value) return false;
-    const provider = resolveProvider('拉取失败');
-    if (!provider) return false;
+  const pullFromRemote = async (target?: SyncProviderKind): Promise<ImportExportPayload | null> => {
+    if (isPulling.value) return null;
+    const provider = resolveProvider('拉取失败', target);
+    if (!provider) return null;
 
     isPulling.value = true;
     let loadingToastId: number | null = null;
@@ -93,12 +93,11 @@ export function useSyncService() {
       loadingToastId = uiStore.toast.loading('正在从云端获取数据...', { closable: false });
       const payload = await provider.pull();
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
-      applyOverwriteWithCloud(payload);
-      return true;
+      return payload;
     } catch (err: unknown) {
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
       showSyncError('拉取失败', err);
-      return false;
+      return null;
     } finally {
       isPulling.value = false;
     }
@@ -120,10 +119,10 @@ export function useSyncService() {
     editorStore.resetEditor();
   };
 
-  const fetchGithubBranches = async (): Promise<boolean> => {
-    const factory = syncProviderRegistry[settingsStore.syncTarget];
+  const fetchGithubBranches = async (target: SyncProviderKind = settingsStore.syncTarget): Promise<boolean> => {
+    const factory = syncProviderRegistry[target];
     if (!factory.supportsBranches || isFetchingBranches.value) return false; // 仅 GitHub 支持分支列表
-    const provider = resolveProvider('获取分支失败');
+    const provider = resolveProvider('获取分支失败', target);
     if (!provider) return false;
     const branchesProvider = provider as SyncBranchesProvider;
 
@@ -150,12 +149,12 @@ export function useSyncService() {
     }
   };
 
-  const triggerGlobalSync = () => syncToRemote();
+  const triggerGlobalSync = (target?: SyncProviderKind) => syncToRemote(target);
 
-  /** 测试当前同步后端的连通性（探测请求，不读写业务数据） */
-  const testConnection = async (): Promise<boolean> => {
+  /** 测试同步后端的连通性（探测请求，不读写业务数据） */
+  const testConnection = async (target: SyncProviderKind = settingsStore.syncTarget): Promise<boolean> => {
     if (isTestingConnection.value) return false;
-    const factory = syncProviderRegistry[settingsStore.syncTarget];
+    const factory = syncProviderRegistry[target];
     const resolved = factory.resolveTestConfig(settingsStore);
     if (resolved.error || !resolved.config) {
       uiStore.toast.error(`测试连接失败：${resolved.error ?? '配置无效'}`);

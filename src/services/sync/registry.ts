@@ -1,5 +1,7 @@
 import type { useSettingsStore } from '@/stores/settingsStore';
-import { validateGithubSettings, validateServerSettings, validateWebdavSettings } from '@/utils/core/validateSettings';
+import { CLOUD_SYNC_CONFIG, GITHUB_SYNC_CONFIG, WEBDAV_SYNC_CONFIG } from '@/utils/core/constants';
+import { validateGithubSettings, validateWebdavSettings } from '@/utils/core/validateSettings';
+import { createGithubSyncProvider } from './githubSyncProvider';
 import type {
   GithubSyncConfig,
   ServerSyncConfig,
@@ -8,7 +10,6 @@ import type {
   SyncProviderKind,
   WebdavSyncConfig,
 } from './provider';
-import { createGithubSyncProvider } from './githubSyncProvider';
 import { createServerSyncProvider } from './serverSyncProvider';
 import { createWebdavSyncProvider } from './webdavSyncProvider';
 
@@ -36,12 +37,16 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
   github: {
     supportsBranches: true,
     resolveConfig: s => {
+      const owner = s.githubOwner.trim() || GITHUB_SYNC_CONFIG.DEFAULT_OWNER;
+      const repo = s.githubRepo.trim() || GITHUB_SYNC_CONFIG.DEFAULT_REPO;
+      const branch = s.githubBranch.trim() || GITHUB_SYNC_CONFIG.DEFAULT_BRANCH;
+      const path = s.githubPath.trim() || GITHUB_SYNC_CONFIG.DEFAULT_PATH;
       const r = validateGithubSettings({
         githubToken: s.githubToken,
-        githubOwner: s.githubOwner,
-        githubRepo: s.githubRepo,
-        githubBranch: s.githubBranch,
-        githubPath: s.githubPath,
+        githubOwner: owner,
+        githubRepo: repo,
+        githubBranch: branch,
+        githubPath: path,
       });
       if (!r.isValid) return { error: r.errors[0] ?? 'GitHub 配置无效' };
       const d = r.data;
@@ -59,8 +64,10 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
     create: config => createGithubSyncProvider(config as GithubSyncConfig),
     // 测试连接只需 owner/repo（Token 与公开性在探测时自动区分），branch/path 不参与
     resolveTestConfig: s => {
-      const owner = s.githubOwner.trim();
-      const repo = s.githubRepo.trim();
+      const owner = s.githubOwner.trim() || GITHUB_SYNC_CONFIG.DEFAULT_OWNER;
+      const repo = s.githubRepo.trim() || GITHUB_SYNC_CONFIG.DEFAULT_REPO;
+      const branch = s.githubBranch.trim() || GITHUB_SYNC_CONFIG.DEFAULT_BRANCH;
+      const path = s.githubPath.trim() || GITHUB_SYNC_CONFIG.DEFAULT_PATH;
       if (!owner || !repo) return { error: '请先填写用户名与仓库名' };
       return {
         config: {
@@ -68,19 +75,22 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
           token: s.githubToken.trim() || undefined,
           owner,
           repo,
-          branch: s.githubBranch.trim() || 'master',
-          path: s.githubPath.trim() || 'backup/chords.json',
+          branch,
+          path,
         },
       };
     },
   },
   webdav: {
     resolveConfig: s => {
+      const proxyUrl = s.webdavUseDefaultProxy
+        ? WEBDAV_SYNC_CONFIG.DEFAULT_PROXY_URL
+        : s.webdavProxyUrl.trim() || undefined;
       const r = validateWebdavSettings({
         webdavServerUrl: s.webdavServerUrl,
         webdavUsername: s.webdavUsername,
         webdavPassword: s.webdavPassword,
-        webdavProxyUrl: s.webdavProxyUrl,
+        webdavProxyUrl: proxyUrl,
       });
       if (!r.isValid) return { error: r.errors[0] ?? 'WebDAV 配置无效' };
       const d = r.data;
@@ -100,7 +110,9 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
       const serverUrl = s.webdavServerUrl.trim();
       if (!serverUrl) return { error: '请先填写 WebDAV 服务器地址' };
       if (!/^https?:\/\/.+/.test(serverUrl)) return { error: 'WebDAV 服务器地址需以 http(s):// 开头' };
-      const proxyUrl = s.webdavProxyUrl.trim();
+      const proxyUrl = s.webdavUseDefaultProxy
+        ? WEBDAV_SYNC_CONFIG.DEFAULT_PROXY_URL
+        : s.webdavProxyUrl.trim() || undefined;
       return {
         config: {
           kind: 'webdav',
@@ -113,33 +125,18 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
     },
   },
   server: {
-    resolveConfig: s => {
-      const r = validateServerSettings({
-        serverUrl: s.serverUrl,
-        serverToken: s.serverToken,
-      });
-      if (!r.isValid) return { error: r.errors[0] ?? '服务器配置无效' };
-      const d = r.data;
-      return {
-        config: {
-          kind: 'server',
-          serverUrl: d.serverUrl,
-          token: d.serverToken,
-        },
-      };
-    },
+    resolveConfig: () => ({
+      config: {
+        kind: 'server',
+        serverUrl: CLOUD_SYNC_CONFIG.SERVER_URL,
+      },
+    }),
     create: config => createServerSyncProvider(config as ServerSyncConfig),
-    resolveTestConfig: s => {
-      const serverUrl = s.serverUrl.trim();
-      if (!serverUrl) return { error: '请先填写服务器接口地址' };
-      if (!/^https?:\/\/.+/.test(serverUrl)) return { error: '服务器接口地址需以 http(s):// 开头' };
-      return {
-        config: {
-          kind: 'server',
-          serverUrl,
-          token: s.serverToken.trim() || undefined,
-        },
-      };
-    },
+    resolveTestConfig: () => ({
+      config: {
+        kind: 'server',
+        serverUrl: CLOUD_SYNC_CONFIG.SERVER_URL,
+      },
+    }),
   },
 };

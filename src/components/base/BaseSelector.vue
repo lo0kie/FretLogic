@@ -40,6 +40,14 @@
           ]"
         >
           <slot name="prefix" />
+          <component
+            :is="currentTriggerIcon"
+            v-if="currentTriggerIcon"
+            :size="13"
+            :stroke-width="2.5"
+            class="shrink-0 opacity-80"
+            aria-hidden="true"
+          />
           <span class="overflow-hidden text-ellipsis whitespace-nowrap w-full flex items-center gap-1">
             <template v-if="isMultiple && selectedValues.length">
               <span
@@ -178,10 +186,20 @@
               @keydown.enter.prevent.stop="handleSelect(option, close)"
               @keydown.space.prevent.stop="handleSelect(option, close)"
             >
-              <span class="truncate flex-1 min-w-0 max-w-full">
-                <slot name="option" :option :index>
-                  {{ formattedOption(option) }}
-                </slot>
+              <span class="truncate flex-1 min-w-0 max-w-full flex items-center gap-2">
+                <component
+                  :is="getOptionIcon(option)"
+                  v-if="getOptionIcon(option)"
+                  :size="13"
+                  :stroke-width="2.5"
+                  class="shrink-0 opacity-80"
+                  aria-hidden="true"
+                />
+                <span class="truncate">
+                  <slot name="option" :option :index>
+                    {{ formattedOption(option) }}
+                  </slot>
+                </span>
               </span>
               <Check
                 v-if="isSelected(getOptionValue(option))"
@@ -210,6 +228,25 @@
   </BasePopover>
 </template>
 
+<script lang="ts">
+import type { Component } from 'vue';
+
+export interface SelectorFieldNames {
+  label?: string;
+  value?: string;
+  disabled?: string;
+  icon?: string;
+}
+
+export interface BaseSelectorOption<V = unknown> {
+  label: string;
+  value: V;
+  disabled?: boolean;
+  icon?: Component;
+  [key: string]: unknown;
+}
+</script>
+
 <script setup lang="ts" generic="T">
 import BasePopover from '@/components/base/BasePopover.vue';
 import EmptyState from '@/components/base/EmptyState.vue';
@@ -219,12 +256,6 @@ import { computed, nextTick, onBeforeUpdate, ref, useTemplateRef, watch } from '
 
 type AnyOption = Record<string, unknown> | string | number;
 
-interface SelectorFieldNames {
-  label?: string;
-  value?: string;
-  disabled?: string;
-}
-
 defineOptions({ inheritAttrs: false });
 
 const {
@@ -232,6 +263,7 @@ const {
   size = 'md',
   width = 'full',
   placeholder = '请选择...',
+  icon = undefined,
   clearable = false,
   disabled = false,
   displayItems = 6,
@@ -251,6 +283,8 @@ const {
   size?: 'sm' | 'md' | 'lg';
   width?: FormComponentWidth;
   placeholder?: string;
+  /** 触发器前缀图标（不传则自动取当前选中项的 icon） */
+  icon?: Component;
   clearable?: boolean;
   disabled?: boolean;
   displayItems?: number;
@@ -282,6 +316,27 @@ const emit = defineEmits<{
 const labelKey = computed(() => fieldNames?.label ?? 'label');
 const valueKey = computed(() => fieldNames?.value ?? 'value');
 const disabledKey = computed(() => fieldNames?.disabled ?? 'disabled');
+const iconKey = computed(() => fieldNames?.icon ?? 'icon');
+
+const getOptionIcon = (option: AnyOption): Component | undefined => {
+  if (option !== null && typeof option === 'object' && iconKey.value in option) {
+    return (option as Record<string, unknown>)[iconKey.value] as Component | undefined;
+  }
+  return undefined;
+};
+
+const selectedOption = computed(() => {
+  if (isMultiple.value) return undefined;
+  return options.find(opt => equalsValue(getOptionValue(opt), modelValue.value));
+});
+
+const currentTriggerIcon = computed(() => {
+  if (icon) return icon;
+  if (!isMultiple.value && selectedOption.value) {
+    return getOptionIcon(selectedOption.value);
+  }
+  return undefined;
+});
 
 const isOpen = ref(false);
 const dropdownRef = useTemplateRef<HTMLElement>('dropdownRef');

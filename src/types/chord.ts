@@ -225,6 +225,7 @@ export interface SyncSettingsBackup {
   webdavServerUrl?: string;
   webdavUsername?: string;
   webdavPassword?: string;
+  webdavUseDefaultProxy?: boolean;
   webdavProxyUrl?: string;
   serverUrl?: string;
   serverToken?: string;

@@ -11,25 +11,30 @@ import { computed, reactive } from 'vue';
  * - 导出：勾选要写进备份包的数据类别（和弦/乐谱/同步配置/偏好设置）
  * - 导入：文件解析成功后展示包内实际包含的数据类别，勾选要应用的部分
  */
+const modals = reactive({
+  export: false,
+  import: false,
+});
+
+const modalData = reactive({
+  exportSelection: { ...FULL_BACKUP_SELECTION } as BackupSelection,
+  importSelection: { ...FULL_BACKUP_SELECTION } as BackupSelection,
+  /** 解析成功的备份包（导入确认时应用） */
+  parsedPayload: null as ImportExportPayload | null,
+  fileName: '',
+  isParsing: false,
+});
+
+/**
+ * 备份导入/导出弹窗状态：
+ * - 导出：勾选要写进备份包的数据类别（和弦/乐谱/同步配置/偏好设置）
+ * - 导入：文件解析成功后展示包内实际包含的数据类别，勾选要应用的部分
+ */
 export function useBackupModals() {
   const ioService = useImportExportService();
   const uiStore = useUiStore();
   const chordStore = useChordStore();
   const songStore = useSongStore();
-
-  const modals = reactive({
-    export: false,
-    import: false,
-  });
-
-  const modalData = reactive({
-    exportSelection: { ...FULL_BACKUP_SELECTION } as BackupSelection,
-    importSelection: { ...FULL_BACKUP_SELECTION } as BackupSelection,
-    /** 解析成功的备份包（导入确认时应用） */
-    parsedPayload: null as ImportExportPayload | null,
-    fileName: '',
-    isParsing: false,
-  });
 
   /** 当前本地数据规模（导出面板展示） */
   const exportStats = computed(() => ({
@@ -66,7 +71,12 @@ export function useBackupModals() {
       groupCount: p.groups?.length ?? 0,
       chordCount: p.chords?.length ?? 0,
       songCount: p.songs?.length ?? 0,
-      syncTargetLabel: p.syncSettings?.syncTarget === 'webdav' ? 'WebDAV' : 'GitHub',
+      syncTargetLabel:
+        p.syncSettings?.syncTarget === 'server'
+          ? '线上服务器'
+          : p.syncSettings?.syncTarget === 'webdav'
+            ? 'WebDAV'
+            : 'GitHub',
     };
   });
 
@@ -107,20 +117,26 @@ export function useBackupModals() {
     modalData.importSelection = toggleSelection(modalData.importSelection, importAvailability.value);
   };
 
+  /** 直接以载荷打开导入勾选面板（用于云端拉取、扫描等非文件流入口） */
+  const openImportWithPayload = (payload: ImportExportPayload, fileName = '云端同步数据') => {
+    modalData.parsedPayload = payload;
+    modalData.fileName = fileName;
+    const availability = importAvailability.value;
+    modalData.importSelection = {
+      chords: availability.chords,
+      songs: availability.songs,
+      syncSettings: availability.syncSettings,
+      preferences: availability.preferences,
+    };
+    modals.import = true;
+  };
+
   /** 文件选择入口：解析成功后打开导入勾选面板（失败已 toast，静默返回） */
   const handleFileChange = async (file: File, resetInput: () => void) => {
     modalData.isParsing = true;
     try {
-      modalData.parsedPayload = await ioService.parseBackupFile(file);
-      modalData.fileName = file.name;
-      const availability = importAvailability.value;
-      modalData.importSelection = {
-        chords: availability.chords,
-        songs: availability.songs,
-        syncSettings: availability.syncSettings,
-        preferences: availability.preferences,
-      };
-      modals.import = true;
+      const payload = await ioService.parseBackupFile(file);
+      openImportWithPayload(payload, file.name);
     } catch {
       // 解析失败：parseBackupFile 内已 toast，无需额外处理
     } finally {
@@ -159,6 +175,7 @@ export function useBackupModals() {
     isExportAll,
     isImportAll,
     openExport,
+    openImportWithPayload,
     handleExportSelectAll,
     handleImportSelectAll,
     handleFileChange,

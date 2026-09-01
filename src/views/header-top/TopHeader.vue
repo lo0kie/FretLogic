@@ -101,21 +101,6 @@
         <component :is="isAutoScrolling ? Pause : Play" :size="15" :stroke-width="2.5" />
       </ActionButton>
 
-      <ActionButton
-        v-tooltip="'全局编辑'"
-        icon-only
-        variant="ghost"
-        :aria-label="isGlobalEditable ? '退出全局编辑' : '开启全局编辑'"
-        @click="toggleEditable"
-      >
-        <component
-          :is="isGlobalEditable ? Pencil : PencilOff"
-          :size="17"
-          :stroke-width="2.2"
-          :class="isGlobalEditable ? 'text-color-primary' : 'text-text-disabled'"
-        />
-      </ActionButton>
-
       <BasePopover trigger="hover" placement="bottom-end">
         <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
@@ -136,16 +121,34 @@
         <HeaderConfigPopover />
       </BasePopover>
 
-      <ActionButton
-        v-tooltip="'云端备份与拉取'"
-        icon-only
-        variant="ghost"
-        aria-label="云端同步"
-        :size="uiSize"
-        @click="isSyncModalOpen = true"
-      >
-        <Cloud :size="18" :stroke-width="2.2" />
-      </ActionButton>
+      <BasePopover trigger="hover" placement="bottom-end">
+        <template #trigger="{ isOpen, pinToggle }">
+          <ActionButton
+            icon-only
+            :variant="isOpen ? 'subtle' : 'ghost'"
+            :color="isOpen ? 'primary' : 'default'"
+            aria-label="云端同步"
+            aria-haspopup="menu"
+            :aria-expanded="isOpen"
+            :size="uiSize"
+            @click="pinToggle()"
+          >
+            <Cloud :size="18" :stroke-width="2.2" />
+          </ActionButton>
+        </template>
+
+        <template #default="{ close }">
+          <ContextMenuItems
+            :items="syncMenuItems"
+            @select="
+              item => {
+                item.action?.();
+                if (!item.keepOpen) close();
+              }
+            "
+          />
+        </template>
+      </BasePopover>
 
       <BasePopover trigger="hover" placement="bottom-end">
         <template #trigger="{ isOpen, pinToggle }">
@@ -162,7 +165,7 @@
             <component
               :is="globalDarkMode ? Moon : Sun"
               :size="18"
-              ::stroke-width="2.2"
+              :stroke-width="2.2"
               :class="globalDarkMode ? 'text-color-primary' : 'text-color-warning'"
             />
           </ActionButton>
@@ -185,38 +188,92 @@
     </div>
   </header>
 
+  <BaseModal
+    v-model:visible="isSyncConfirmOpen"
+    title="确认同步到云端"
+    confirm-text="确认同步"
+    cancel-text="取消"
+    width="w-80"
+    :confirm-loading="isSyncing"
+    :close-on-mask="!isSyncing"
+    :show-close="!isSyncing"
+    :keyboard="!isSyncing"
+    :cancel-button-disabled="isSyncing"
+    :before-close="() => !isSyncing"
+    @confirm="handleConfirmSync"
+  >
+    <div class="py-xs">
+      <p class="text-xs text-text-body leading-relaxed m-0">
+        确定要将本地数据（和弦库、乐谱库与设置）同步上传至
+        <strong class="text-text-title">{{ currentSchemeName }}</strong> 吗？
+      </p>
+    </div>
+  </BaseModal>
+
+  <BaseModal
+    v-model:visible="isPullConfirmOpen"
+    title="确认从云端拉取"
+    confirm-text="确认拉取"
+    cancel-text="取消"
+    width="w-80"
+    :confirm-loading="isPulling"
+    :close-on-mask="!isPulling"
+    :show-close="!isPulling"
+    :keyboard="!isPulling"
+    :cancel-button-disabled="isPulling"
+    :before-close="() => !isPulling"
+    @confirm="handleConfirmPull"
+  >
+    <div class="py-xs">
+      <p class="text-xs text-text-body leading-relaxed m-0">
+        确定要从
+        <strong class="text-text-title">{{ currentSchemeName }}</strong>
+        拉取云端备份数据吗？拉取完成后将进入导入面板供您勾选应用。
+      </p>
+    </div>
+  </BaseModal>
+
   <SyncModalContainer v-model:is-sync-modal-open="isSyncModalOpen" />
 </template>
 
 <script setup lang="ts">
 import ActionButton from '@/components/base/ActionButton.vue';
+import BaseModal from '@/components/base/BaseModal.vue';
 import BasePopover from '@/components/base/BasePopover.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/base/BaseSegmentedControl.vue';
 import ContextMenuItems, { type ContextMenuItem } from '@/components/context-menu/ContextMenuItems.vue';
+import { useBackupModals } from '@/composables/app/useBackupModals';
+import { useSyncService } from '@/composables/app/useSyncService';
 import { useAudioPlayer } from '@/composables/fretboard/useAudioPlayer';
 import { useAutoScroll } from '@/composables/score/useAutoScroll';
+import type { SyncProviderKind } from '@/services/sync/provider';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
-import { globalDarkMode, isGlobalEditable, setThemeMode, themePreference, toggleEditable } from '@/stores/globalState';
+import { globalDarkMode, setThemeMode, themePreference } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { renderElementToBlob, writeBlobToClipboard } from '@/utils/score/score-export';
 import {
   Cloud,
+  CloudDownload,
+  CloudUpload,
   Copy,
+  FolderSync,
+  GitBranch,
   Image,
   Info,
   Laptop,
   Moon,
   PanelLeft,
   Pause,
-  Pencil,
-  PencilOff,
   Play,
+  Server,
+  Settings,
   SlidersHorizontal,
   Square,
   Sun,
 } from '@lucide/vue';
-import { computed, defineAsyncComponent, ref, unref } from 'vue';
+import { computed, defineAsyncComponent, ref, unref, type Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 
@@ -275,8 +332,104 @@ const themeMenuItems = computed<ContextMenuItem[]>(() => [
   },
 ]);
 
+const { triggerGlobalSync, pullFromRemote, isSyncing, isPulling } = useSyncService();
+const backupModals = useBackupModals();
+const settingsStore = useSettingsStore();
+
+const isSyncConfirmOpen = ref(false);
+const isPullConfirmOpen = ref(false);
+
+const SYNC_TARGET_LABELS: Record<SyncProviderKind, string> = {
+  server: '线上服务器',
+  github: 'GitHub',
+  webdav: 'WebDAV',
+};
+
+const SYNC_TARGET_ICONS: Record<SyncProviderKind, Component> = {
+  server: Server,
+  github: GitBranch,
+  webdav: FolderSync,
+};
+
+const currentSchemeName = computed(() => SYNC_TARGET_LABELS[settingsStore.syncTarget] || '线上服务器');
+
+const handleConfirmSync = async () => {
+  const ok = await triggerGlobalSync();
+  if (ok) {
+    isSyncConfirmOpen.value = false;
+  }
+};
+
+const handleConfirmPull = async () => {
+  const payload = await pullFromRemote();
+  isPullConfirmOpen.value = false;
+  if (payload) {
+    backupModals.openImportWithPayload(payload, '云端同步数据');
+  }
+};
+
+const syncMenuItems = computed<ContextMenuItem[]>(() => [
+  {
+    label: isSyncing.value ? '同步中...' : '同步',
+    icon: CloudUpload,
+    disabled: isSyncing.value || isPulling.value,
+    action: () => {
+      isSyncConfirmOpen.value = true;
+    },
+  },
+  {
+    label: isPulling.value ? '拉取中...' : '拉取',
+    icon: CloudDownload,
+    disabled: isSyncing.value || isPulling.value,
+    action: () => {
+      isPullConfirmOpen.value = true;
+    },
+  },
+  {
+    label: '配置',
+    icon: SYNC_TARGET_ICONS[settingsStore.syncTarget] || Server,
+    children: [
+      {
+        label: '线上服务器',
+        icon: Server,
+        checked: settingsStore.syncTarget === 'server',
+        keepOpen: true,
+        action: () => {
+          settingsStore.syncTarget = 'server';
+        },
+      },
+      {
+        label: 'GitHub',
+        icon: GitBranch,
+        checked: settingsStore.syncTarget === 'github',
+        keepOpen: true,
+        action: () => {
+          settingsStore.syncTarget = 'github';
+        },
+      },
+      {
+        label: 'WebDAV',
+        icon: FolderSync,
+        checked: settingsStore.syncTarget === 'webdav',
+        keepOpen: true,
+        action: () => {
+          settingsStore.syncTarget = 'webdav';
+        },
+      },
+      {
+        label: '同步设置...',
+        icon: Settings,
+        divided: true,
+        action: () => {
+          isSyncModalOpen.value = true;
+        },
+      },
+    ],
+  },
+]);
+
 const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive'>[]>(() => [
-  { label: '编辑歌词', value: 'edit', disabled: !isGlobalEditable.value },
+  { label: '编辑歌词', value: 'edit' },
   {
     label: '排列和弦',
     value: 'interactive',

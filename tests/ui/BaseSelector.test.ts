@@ -1,6 +1,7 @@
 import BaseSelector from '@/components/base/BaseSelector.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+import { markRaw } from 'vue';
 
 describe('BaseSelector 键盘可达性', () => {
   it('清空按钮可聚焦且回车触发 clear', async () => {
@@ -30,5 +31,23 @@ describe('BaseSelector 键盘可达性', () => {
     const tags = wrapper.emitted('removeTag');
     expect(tags).toBeTruthy();
     expect(tags![0]).toEqual(['a', 'a']);
+  });
+
+  it('支持传入并渲染选项 icon', async () => {
+    const DummyIcon = markRaw({
+      template: '<svg data-test="dummy-icon"></svg>',
+    });
+    const wrapper = mount(BaseSelector, {
+      props: {
+        options: [
+          { label: 'Opt 1', value: '1', icon: DummyIcon },
+          { label: 'Opt 2', value: '2' },
+        ],
+        modelValue: '1',
+      },
+    });
+
+    const triggerIcon = wrapper.find('[data-test="dummy-icon"]');
+    expect(triggerIcon.exists()).toBe(true);
   });
 });

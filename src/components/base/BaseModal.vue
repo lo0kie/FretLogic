@@ -36,7 +36,7 @@
           >
             <div
               v-if="hasHeader"
-              class="modal-header-zone pt-xl px-xl shrink-0 flex items-center justify-between gap-lg"
+              class="modal-header-zone pt-xl px-xl shrink-0 flex items-center justify-between gap-lg min-h-[3.1rem]"
             >
               <slot name="header" :title-id>
                 <div class="modal-header-left flex items-center min-w-0 flex-1">
@@ -44,14 +44,14 @@
                     <h3
                       v-if="title"
                       :id="titleId"
-                      class="modal-title text-sm font-bold tracking-tight text-text-title m-0 whitespace-nowrap overflow-hidden text-ellipsis"
+                      class="modal-title text-sm font-bold tracking-tight text-text-title m-0 whitespace-nowrap overflow-hidden text-ellipsis leading-tight"
                       :title
                     >
                       {{ title }}
                     </h3>
                   </slot>
                 </div>
-                <div class="modal-header-right flex items-center gap-sm shrink-0">
+                <div class="modal-header-right flex items-center gap-sm shrink-0 min-h-[1.6rem]">
                   <slot name="header-extra" />
                   <ActionButton
                     v-if="showClose"
@@ -60,6 +60,7 @@
                     icon-only
                     aria-label="关闭"
                     class="!p-1.5"
+                    :disabled="confirmLoading"
                     @click="close('close')"
                   >
                     <X :size="20" :stroke-width="3" />

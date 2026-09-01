@@ -1,18 +1,20 @@
 import { serializeForStorage } from '@/utils/core/common';
+import { CLOUD_SYNC_CONFIG } from '@/utils/core/constants';
 import { SyncError, type ServerSyncConfig, type SyncProvider } from './provider';
 import { createSyncProviderBase } from './syncBase';
 
 const TIMEOUT_MS = 15000;
 
 /**
- * 线上服务器（Custom Server / REST API）同步 provider。
+ * 线上服务器（Custom Server / Cloudflare Worker D1）同步 provider。
  *
- * 适用于自建 Node.js / Go / Python / Java 后端，或 Cloudflare Worker + D1/KV 等无服务器接口。
+ * 由 Vite 构建环境注入服务地址与环境标识，无需用户在界面配置 Token 或接口地址。
+ * 根据构建环境自动分发至对应的开发 / 生产数据库。
  *
  * 协议约定：
- *  - pull(): GET ${serverUrl}，携带 Authorization: Bearer <token>（若配置了 token），返回 ImportExportPayload JSON。
+ *  - pull(): GET ${serverUrl}，返回 ImportExportPayload JSON。
  *  - push(): POST ${serverUrl}，携带 Content-Type: application/json 与 JSON 字符串体。
- *  - testConnection(): GET ${serverUrl} 探测连通性与认证凭据。
+ *  - testConnection(): GET ${serverUrl} 探测连通性。
  */
 async function extractErrorMessage(response: Response): Promise<string> {
   try {
@@ -25,12 +27,12 @@ async function extractErrorMessage(response: Response): Promise<string> {
   return '';
 }
 
-export function createServerSyncProvider(config: ServerSyncConfig): SyncProvider {
-  const serverUrl = config.serverUrl.trim();
+export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): SyncProvider {
+  const serverUrl = (config?.serverUrl?.trim() || CLOUD_SYNC_CONFIG.SERVER_URL).trim();
 
-  const baseHeaders: Record<string, string> = config.token?.trim()
-    ? { Authorization: `Bearer ${config.token.trim()}` }
-    : {};
+  const baseHeaders: Record<string, string> = {
+    'X-Environment': CLOUD_SYNC_CONFIG.MODE,
+  };
 
   const { request, decodePayload } = createSyncProviderBase({
     baseHeaders,
@@ -81,14 +83,12 @@ export function createServerSyncProvider(config: ServerSyncConfig): SyncProvider
     },
     async testConnection(): Promise<string> {
       const response = await request({ method: 'GET' });
+      const envLabel = CLOUD_SYNC_CONFIG.IS_DEV ? '开发环境' : '生产环境';
       if (response.ok) {
-        return config.token ? '服务器连接成功，凭据验证通过' : '服务器连接成功（未配置 Token）';
+        return `服务器连接成功，已连通线上数据库 (${envLabel})`;
       }
       if (response.status === 404) {
-        return '服务器连接成功（服务端暂无数据存档）';
-      }
-      if (response.status === 401 || response.status === 403) {
-        throw new SyncError('REQUEST_FAILED', '认证失败：请检查 Token / API Key');
+        return `服务器连接成功（服务端暂无数据存档，${envLabel}）`;
       }
       const serverError = await extractErrorMessage(response);
       throw new SyncError('REQUEST_FAILED', `服务器返回错误状态码 ${response.status}${serverError}`);

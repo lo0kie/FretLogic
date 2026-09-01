@@ -251,8 +251,9 @@ export const STORAGE_KEYS = {
   WEBDAV_USERNAME: 'CHORD_LAB_WEBDAV_USERNAME',
   /** WebDAV 密码 */
   WEBDAV_PASSWORD: 'CHORD_LAB_WEBDAV_PASSWORD',
-  /** WebDAV 远程文件路径 */
-  /** WebDAV CORS 代理地址（可选，用于绕开跨域限制） */
+  /** WebDAV 是否使用预设 CORS 代理（开关打开用预设，关闭可自定义或留空直连） */
+  WEBDAV_USE_DEFAULT_PROXY: 'CHORD_LAB_WEBDAV_USE_DEFAULT_PROXY_V1',
+  /** WebDAV 自定义 CORS 代理地址（可选） */
   WEBDAV_PROXY_URL: 'CHORD_LAB_WEBDAV_PROXY_URL',
 
   // ---- 线上服务器（Custom Server）同步配置 ----
@@ -278,12 +279,14 @@ export const STORAGE_KEYS = {
   MULTI_FINGERING_CHORDS: 'CHORD_LAB_MULTI_FINGERING_CHORDS',
 
   // ---- 应用级偏好 ----
-  /** 全局是否可编辑（false = 仅预览） */
-  IS_GLOBAL_EDITABLE: 'CHORD_LAB_IS_GLOBAL_EDITABLE',
   /** 工作台：是否启用和弦名简写（如 maj7->M7, dim->° 等） */
   WORKBENCH_CHORD_SHORTHAND: 'CHORD_LAB_WORKBENCH_CHORD_SHORTHAND_V1',
   /** 工作台：是否在指板音符圆点上显示音名（如 C, D, E 等） */
   WORKBENCH_SHOW_PITCH_NAMES: 'CHORD_LAB_WORKBENCH_SHOW_PITCH_NAMES_V1',
+  /** 工作台：和弦分析面板是否收起折叠（持久化） */
+  WORKBENCH_CHORD_ANALYSIS_COLLAPSED: 'CHORD_LAB_WORKBENCH_CHORD_ANALYSIS_COLLAPSED_V1',
+  /** 工作台：横按标记面板是否收起折叠（持久化） */
+  WORKBENCH_BARRE_COLLAPSED: 'CHORD_LAB_WORKBENCH_BARRE_COLLAPSED_V1',
   /** 乐谱：是否启用和弦名简写（如 maj7->M7, dim->° 等） */
   SCORE_CHORD_SHORTHAND: 'CHORD_LAB_SCORE_CHORD_SHORTHAND_V1',
   /** 乐谱：是否在指板音符圆点上显示音名（如 C, D, E 等） */
@@ -313,6 +316,18 @@ export const STORAGE_KEYS = {
   SCORE_FRETBOARD_SCALE: 'CHORD_LAB_SCORE_FRETBOARD_SCALE_V1',
   /** 谱面滚动速度 */
   SCORE_SCROLL_SPEED: 'CHORD_LAB_SCORE_SCROLL_SPEED_V1',
+  /** 谱面字号缩放 */
+  SCORE_SCALE: 'CHORD_LAB_SCORE_SCALE_V1',
+  /** 谱面行高缩放 */
+  SCORE_LINE_HEIGHT_SCALE: 'CHORD_LAB_SCORE_LINE_HEIGHT_SCALE_V1',
+  /** 谱面网格对齐（和弦自动吸附到字符正上方） */
+  SCORE_SNAP_TO_GRID: 'CHORD_LAB_SCORE_SNAP_TO_GRID_V1',
+  /** 谱面行间距基准（rem） */
+  SCORE_LINE_GAP: 'CHORD_LAB_SCORE_LINE_GAP_V1',
+  /** 谱面段落间距基准（rem） */
+  SCORE_SECTION_GAP: 'CHORD_LAB_SCORE_SECTION_GAP_V1',
+  /** 谱面左右边距基准（rem） */
+  SCORE_PAGE_PADDING: 'CHORD_LAB_SCORE_PAGE_PADDING_V1',
   /** 左侧栏开合状态 */
   UI_LEFT_OPEN: 'CHORD_LAB_UI_LEFT_OPEN',
 } as const;
@@ -381,4 +396,32 @@ export const FRETBOARD_COLORS = {
   focusLight: '#92400e',
   /** 聚焦高亮色（深色主题） */
   focusDark: '#fcd34d',
+} as const;
+
+// ===================== 线上云端同步配置 =====================
+/** 线上云端同步服务配置（由 Vite 构建环境注入） */
+export const CLOUD_SYNC_CONFIG = {
+  /** 服务端接口地址（优先读取环境变量 VITE_SYNC_SERVER_URL，默认为线上 Cloudflare Worker 接口） */
+  SERVER_URL:
+    (import.meta.env['VITE_SYNC_SERVER_URL'] as string | undefined) || 'https://fret-logic.server-lookie.workers.dev/',
+  /** 当前构建模式（如 'development' | 'production'） */
+  MODE: import.meta.env.MODE,
+  /** 是否为开发环境构建 */
+  IS_DEV: import.meta.env.DEV,
+} as const;
+
+// ===================== GitHub 同步预设 =====================
+/** GitHub 同步预设配置（根据构建模式分流目标分支） */
+export const GITHUB_SYNC_CONFIG = {
+  DEFAULT_OWNER: 'lo0kie',
+  DEFAULT_REPO: 'FretLogic',
+  DEFAULT_BRANCH: import.meta.env.DEV ? 'dev-data-sync' : 'data-sync',
+  DEFAULT_PATH: 'backup/chords.json',
+} as const;
+
+// ===================== WebDAV 同步预设 =====================
+/** WebDAV 同步预设配置 */
+export const WEBDAV_SYNC_CONFIG = {
+  /** 默认预设 CORS 代理地址 */
+  DEFAULT_PROXY_URL: 'https://proxy.server-lookie.workers.dev/',
 } as const;

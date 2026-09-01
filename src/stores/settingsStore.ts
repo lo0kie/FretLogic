@@ -4,26 +4,27 @@
  */
 import type { SyncProviderKind } from '@/services/sync/provider';
 import type { AppPreferencesBackup, SyncSettingsBackup } from '@/types';
-import { STORAGE_KEYS } from '@/utils/core/constants';
+import { GITHUB_SYNC_CONFIG, STORAGE_KEYS } from '@/utils/core/constants';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
 export const useSettingsStore = defineStore('settings', () => {
-  const syncTarget = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_TARGET, 'github');
+  const syncTarget = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_TARGET, 'server');
 
-  // GitHub 同步配置
+  // GitHub 同步配置（默认由 GITHUB_SYNC_CONFIG 提供仓库与环境分支）
   const githubToken = ref('');
-  const githubOwner = useStorage(STORAGE_KEYS.GH_OWNER, '');
-  const githubRepo = useStorage(STORAGE_KEYS.GH_REPO, '');
-  const githubBranch = useStorage(STORAGE_KEYS.GH_BRANCH, '');
-  const githubPath = useStorage(STORAGE_KEYS.GH_PATH, 'backup/chords.json');
+  const githubOwner = useStorage(STORAGE_KEYS.GH_OWNER, GITHUB_SYNC_CONFIG.DEFAULT_OWNER);
+  const githubRepo = useStorage(STORAGE_KEYS.GH_REPO, GITHUB_SYNC_CONFIG.DEFAULT_REPO);
+  const githubBranch = useStorage(STORAGE_KEYS.GH_BRANCH, GITHUB_SYNC_CONFIG.DEFAULT_BRANCH);
+  const githubPath = useStorage(STORAGE_KEYS.GH_PATH, GITHUB_SYNC_CONFIG.DEFAULT_PATH);
   const githubBranches = useStorage(STORAGE_KEYS.GH_BRANCHES, <Array<string>>[]);
 
-  // WebDAV 同步配置
+  // WebDAV 同步配置（支持选择使用预设代理或自定义代理）
   const webdavServerUrl = useStorage(STORAGE_KEYS.WEBDAV_SERVER_URL, '');
   const webdavUsername = useStorage(STORAGE_KEYS.WEBDAV_USERNAME, '');
   const webdavPassword = useStorage(STORAGE_KEYS.WEBDAV_PASSWORD, '');
+  const webdavUseDefaultProxy = useStorage(STORAGE_KEYS.WEBDAV_USE_DEFAULT_PROXY, true);
   const webdavProxyUrl = useStorage(STORAGE_KEYS.WEBDAV_PROXY_URL, '');
 
   // 线上服务器同步配置
@@ -52,6 +53,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (typeof sync.webdavServerUrl === 'string') webdavServerUrl.value = sync.webdavServerUrl;
     if (typeof sync.webdavUsername === 'string') webdavUsername.value = sync.webdavUsername;
     if (typeof sync.webdavPassword === 'string') webdavPassword.value = sync.webdavPassword;
+    if (typeof sync.webdavUseDefaultProxy === 'boolean') webdavUseDefaultProxy.value = sync.webdavUseDefaultProxy;
     if (typeof sync.webdavProxyUrl === 'string') webdavProxyUrl.value = sync.webdavProxyUrl;
     if (typeof sync.serverUrl === 'string') serverUrl.value = sync.serverUrl;
     if (typeof sync.serverToken === 'string') serverToken.value = sync.serverToken;
@@ -80,6 +82,7 @@ export const useSettingsStore = defineStore('settings', () => {
     webdavServerUrl,
     webdavUsername,
     webdavPassword,
+    webdavUseDefaultProxy,
     webdavProxyUrl,
     serverUrl,
     serverToken,

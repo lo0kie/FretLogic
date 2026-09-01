@@ -1,4 +1,3 @@
-import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord, SlotKey } from '@/types';
 import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from 'vue';
@@ -277,7 +276,6 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   };
 
   const handlePointerDown = (e: PointerEvent, slotKey: string, chord: Chord, mode: 'swap' | 'copy' = 'swap') => {
-    if (!isGlobalEditable.value) return;
     if (activeSourceKey !== null) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const target = e.target as HTMLElement;

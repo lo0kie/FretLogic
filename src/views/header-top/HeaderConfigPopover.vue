@@ -5,7 +5,6 @@
         <BaseSegmentedControl
           :model-value="editorStore.draftChord.fretCount"
           :options="FRET_OPTIONS"
-          :disabled="!isGlobalEditable"
           @update:model-value="editorStore.setFretCount"
         />
       </BaseFormRow>
@@ -17,7 +16,6 @@
           :max="INTERACTION_CONFIG.MAX_CAPO_LIMIT"
           :formatter="val => (val === 0 ? 'CAPO 0' : `CAPO ${val}`)"
           :editable="false"
-          :disabled="!isGlobalEditable"
         />
       </BaseFormRow>
 
@@ -30,7 +28,6 @@
             (val: string | number) =>
               (typeof val === 'string' ? TUNING_PRESETS[val as Tuning]?.name : undefined) || Tuning.STANDARD
           "
-          :disabled="!isGlobalEditable"
           clearable
         />
       </BaseFormRow>
@@ -44,13 +41,7 @@
       </BaseFormRow>
 
       <div class="action-full-row w-full">
-        <ActionButton
-          variant="subtle"
-          color="primary"
-          width="100%"
-          :disabled="!isGlobalEditable"
-          @click="handleRepairData"
-        >
+        <ActionButton variant="subtle" color="primary" width="100%" @click="handleRepairData">
           <template #prefix>
             <Wrench :size="13" :stroke-width="2.5" />
           </template>
@@ -119,7 +110,6 @@ import BaseSlider from '@/components/base/BaseSlider.vue';
 import BaseSwitch from '@/components/base/BaseSwitch.vue';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
-import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';

@@ -208,6 +208,12 @@ const sanitizeSyncSettings = (raw: unknown): SyncSettingsBackup | undefined => {
   if (source['syncTarget'] === 'github' || source['syncTarget'] === 'webdav' || source['syncTarget'] === 'server') {
     result.syncTarget = source['syncTarget'];
   }
+  if (typeof source['webdavUseDefaultProxy'] === 'boolean') {
+    result.webdavUseDefaultProxy = source['webdavUseDefaultProxy'];
+  } else if (typeof source['webdavUseProxy'] === 'boolean') {
+    // 兼容旧字段名
+    result.webdavUseDefaultProxy = source['webdavUseProxy'];
+  }
   for (const field of SYNC_STRING_FIELDS) {
     const value = source[field];
     if (typeof value === 'string') {

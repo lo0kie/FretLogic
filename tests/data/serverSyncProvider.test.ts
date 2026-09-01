@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const config: ServerSyncConfig = {
   kind: 'server',
   serverUrl: 'https://api.example.com/sync',
-  token: 'my-token',
 };
 
 const payload = {
@@ -23,7 +22,7 @@ afterEach(() => {
 });
 
 describe('server sync provider', () => {
-  it('pushes snapshot with POST and Authorization header', async () => {
+  it('pushes snapshot with POST and Environment header', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 200, headers: { etag: 'etag-123' } }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -36,7 +35,7 @@ describe('server sync provider', () => {
     expect(call[0]).toBe('https://api.example.com/sync');
     const init = call[1] as RequestInit;
     expect(init.method).toBe('POST');
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer my-token');
+    expect((init.headers as Record<string, string>)['X-Environment']).toBeDefined();
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
   });
 
