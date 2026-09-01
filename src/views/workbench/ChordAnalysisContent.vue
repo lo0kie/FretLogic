@@ -9,10 +9,10 @@
           <BaseBadge
             v-for="candidate in candidates"
             :key="candidate.chordName"
-            v-wave="{ disabled: !isGlobalEditable }"
+            v-wave
             :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
             :appearance="isCandidateActive(candidate) ? 'filled' : 'subtle'"
-            :interactive="isGlobalEditable"
+            interactive
             size="md"
             @click="emit('select-candidate', candidate)"
           >
@@ -92,7 +92,6 @@
 import BaseBadge from '@/components/base/BaseBadge.vue';
 import EmptyState from '@/components/base/EmptyState.vue';
 import ChordNameDisplay from '@/components/fretboard/ChordNameDisplay.vue';
-import { isGlobalEditable } from '@/stores/globalState';
 import type { CandidateResult, NoteInput } from '@/types';
 import { formatAccidental, parseNoteLabel, segmentsToString } from '@/utils/music/musicTheory';
 

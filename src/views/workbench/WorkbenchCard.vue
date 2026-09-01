@@ -8,7 +8,7 @@
         :chord="editorStore.draftChord"
         :is-dark-mode="globalDarkMode"
         :scale="1.0"
-        :interactive="isGlobalEditable"
+        :interactive="true"
         chord-name-editable
         chord-name-font-size="lg"
         @update:capo="handleCapoUpdate"
@@ -25,7 +25,7 @@
 import Fretboard from '@/components/fretboard/Fretboard.vue';
 import { useActiveExportTarget } from '@/composables/app/useActiveExportTarget';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
-import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
+import { globalDarkMode } from '@/stores/globalState';
 import type { ChordNameSegments, GuitarStringsModel, StringIndex } from '@/types';
 import { toCapo, toStringIndex } from '@/utils/music/chord-fretboard';
 import { nameToSegments } from '@/utils/music/musicTheory';

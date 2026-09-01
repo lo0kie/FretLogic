@@ -116,29 +116,19 @@ describe('webdav testConnection', () => {
 });
 
 describe('server testConnection', () => {
-  it('returns success message on 200 with token', async () => {
+  it('returns success message with environment indicator on 200', async () => {
     const fetchMock = vi.fn().mockResolvedValue(response(200));
     vi.stubGlobal('fetch', fetchMock);
     const detail = await createServerSyncProvider({
       kind: 'server',
       serverUrl: 'https://api.example.com/sync',
-      token: 'secret-token',
     }).testConnection();
-    expect(detail).toContain('凭据验证通过');
+    expect(detail).toContain('已连通线上数据库');
     const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
-    expect(headers?.Authorization).toBe('Bearer secret-token');
+    expect(headers?.['X-Environment']).toBeDefined();
   });
 
-  it('notes missing token on 200 without token', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(200)));
-    const detail = await createServerSyncProvider({
-      kind: 'server',
-      serverUrl: 'https://api.example.com/sync',
-    }).testConnection();
-    expect(detail).toContain('未配置 Token');
-  });
-
-  it('returns 404 friendly message', async () => {
+  it('returns 404 friendly message with environment indicator', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(404)));
     const detail = await createServerSyncProvider({
       kind: 'server',
@@ -147,17 +137,16 @@ describe('server testConnection', () => {
     expect(detail).toContain('暂无数据存档');
   });
 
-  it('rejects with auth message on 401/403', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(401)));
+  it('rejects with server error message on failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(500)));
     await expect(
       createServerSyncProvider({
         kind: 'server',
         serverUrl: 'https://api.example.com/sync',
-        token: 'bad-token',
       }).testConnection()
     ).rejects.toMatchObject({
       code: 'REQUEST_FAILED',
-      message: expect.stringContaining('认证失败'),
+      message: expect.stringContaining('500'),
     });
   });
 });

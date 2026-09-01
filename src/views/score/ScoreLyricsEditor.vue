@@ -2,8 +2,7 @@
   <div class="flex-1 p-xl px-2xl box-border relative">
     <textarea
       v-model="localLyrics"
-      :readonly="!isGlobalEditable"
-      class="no-scrollbar w-full h-full bg-bg-panel border border-glass-border rounded-lg p-xl text-base leading-relaxed text-text-title outline-none resize-none box-border font-inherit transition-all duration-base focus:not-read-only:border-primary focus:not-read-only:ring-2 focus:not-read-only:ring-primary/70 read-only:cursor-default read-only:select-none read-only:bg-bg-main"
+      class="no-scrollbar w-full h-full bg-bg-panel border border-glass-border rounded-lg p-xl text-base leading-relaxed text-text-title outline-none resize-none box-border font-inherit transition-all duration-base focus:border-primary focus:ring-2 focus:ring-primary/70"
       placeholder="在此处输入或粘贴歌词文本..."
     />
     <div
@@ -15,7 +14,6 @@
 </template>
 
 <script setup lang="ts">
-import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import { useDebounceFn } from '@vueuse/core';

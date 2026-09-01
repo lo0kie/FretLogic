@@ -60,7 +60,6 @@
             isExporting ? isLineVisibleInExport(lineData.lineIdx) : selectedLineSet.has(lineData.lineIdx),
             hoveredLineKey === lineData.lineId,
             isExporting,
-            isGlobalEditable,
             isDragging,
             // 拖拽分区落点：按行归约后再进依赖，缺了分区层会被 v-memo 冻住；
             // 若直接放全局 dragOverSlotKey/dropZone，则任意落点变化会使所有行失效全量重渲染
@@ -176,7 +175,7 @@
             </div>
 
             <ActionButton
-              v-if="isGlobalEditable && !isExporting"
+              v-if="!isExporting"
               icon-only
               size="lg"
               variant="subtle"
@@ -228,7 +227,6 @@ import { useAutoScroll } from '@/composables/score/useAutoScroll';
 import { useLyricsDragDrop } from '@/composables/score/useLyricsDragDrop';
 import type { DropZone } from '@/composables/score/lyrics-drag/dropZone';
 import { useScoreLinesData } from '@/composables/score/useScoreLinesData';
-import { isGlobalEditable } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, LineId, SlotKey } from '@/types';
@@ -312,7 +310,7 @@ const handleLineClick = (ev: MouseEvent, lineIdx: number) => {
   // 若不拦截会误触发行选中切换（isSuppressingClick 在松手后短暂保持，恰好覆盖该 click）
   if (isDragging.value || isSuppressingClick.value) return;
   const target = ev.target as HTMLElement;
-  if (isGlobalEditable.value && target.closest('[data-slot-key], .char-box')) {
+  if (target.closest('[data-slot-key], .char-box')) {
     return;
   }
   emit('line-click', lineIdx);

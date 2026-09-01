@@ -26,8 +26,7 @@ export interface WebdavSyncConfig extends BaseSyncConfig {
 
 export interface ServerSyncConfig extends BaseSyncConfig {
   kind: 'server';
-  serverUrl: string;
-  token?: string;
+  serverUrl?: string;
 }
 
 export type SyncConfig = GithubSyncConfig | WebdavSyncConfig | ServerSyncConfig;

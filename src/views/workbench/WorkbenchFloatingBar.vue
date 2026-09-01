@@ -4,24 +4,22 @@
       {{ editorStore.isEditing ? '放弃修改' : '重置指板' }}
     </ActionButton>
 
-    <template v-if="isGlobalEditable">
-      <template v-if="editorStore.isEditing">
-        <component :is="divider" />
-        <ActionButton size="md" variant="ghost" @click="chordActions.saveAsNewChord"> 作为新和弦保存 </ActionButton>
-      </template>
-
+    <template v-if="editorStore.isEditing">
       <component :is="divider" />
-
-      <ActionButton
-        size="md"
-        variant="subtle"
-        color="primary"
-        :disabled="isSaveDisabled"
-        @click="chordActions.persistCurrentChord"
-      >
-        {{ editorStore.isEditing ? '更新保存' : '确认保存' }}
-      </ActionButton>
+      <ActionButton size="md" variant="ghost" @click="chordActions.saveAsNewChord"> 作为新和弦保存 </ActionButton>
     </template>
+
+    <component :is="divider" />
+
+    <ActionButton
+      size="md"
+      variant="subtle"
+      color="primary"
+      :disabled="isSaveDisabled"
+      @click="chordActions.persistCurrentChord"
+    >
+      {{ editorStore.isEditing ? '更新保存' : '确认保存' }}
+    </ActionButton>
   </BaseFloatingBar>
 </template>
 
@@ -30,7 +28,6 @@ import ActionButton from '@/components/base/ActionButton.vue';
 import BaseFloatingBar from '@/components/base/BaseFloatingBar.vue';
 import { useChordActions } from '@/composables/fretboard/useChordActions';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
-import { isGlobalEditable } from '@/stores/globalState';
 import { getChordName } from '@/utils/music/musicTheory';
 import { computed } from 'vue';
 

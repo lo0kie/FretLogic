@@ -20,7 +20,7 @@
         :disabled="item.disabled"
         panel-class="context-menu-box"
       >
-        <template #trigger="{ isOpen: isSubOpen }">
+        <template #trigger="{ isOpen: isSubOpen, pinToggle }">
           <button
             :ref="el => setItemEl(el, index)"
             type="button"
@@ -31,7 +31,7 @@
             :tabindex="item.disabled ? -1 : 0"
             :aria-disabled="item.disabled"
             data-focusable-inline
-            class="group flex items-center rounded-md border-none bg-transparent w-full text-left box-border relative select-none cursor-pointer transition-colors duration-fast outline-none disabled:opacity-35 disabled:cursor-not-allowed enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover))"
+            class="group flex items-center rounded-md border-none bg-transparent w-full text-left box-border relative select-none cursor-pointer transition-colors duration-fast outline-none disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover))"
             :class="[
               currentSizeClass,
               isSubOpen ? 'bg-bg-panel-hover' : '',
@@ -40,24 +40,23 @@
             :style="getItemStyle(item)"
             :title="item.title"
             @mousedown="item.disabled && $event.preventDefault()"
+            @click.stop="!item.disabled && pinToggle()"
           >
             <component
               :is="item.icon"
               v-if="item.icon"
               :size="13"
               :stroke-width="2.5"
-              class="shrink-0 opacity-85 group-hover:opacity-100 transition-opacity duration-fast"
+              class="shrink-0 opacity-85 group-enabled:group-hover:opacity-100 transition-opacity duration-fast"
               aria-hidden="true"
             />
             <span class="flex-1 min-w-0 whitespace-nowrap"> {{ item.label }} </span>
-            <ChevronRight :size="12" class="opacity-50 shrink-0 ml-2" aria-hidden="true" />
+            <ChevronRight :size="12" class="opacity-50 shrink-0 -mr-0.5" aria-hidden="true" />
           </button>
         </template>
 
         <template #default>
-          <div class="context-menu-inner flex flex-col gap-xs outline-none" :class="`context-menu-size-${size}`">
-            <ContextMenuItems :items="item.children" :size @select="emit('select', $event)" />
-          </div>
+          <ContextMenuItems :items="item.children" :size @select="emit('select', $event)" />
         </template>
       </BasePopover>
 
@@ -72,13 +71,13 @@
         :aria-disabled="item.disabled"
         :aria-checked="item.checked"
         data-focusable-inline
-        class="group flex items-center rounded-md border-none bg-transparent w-full text-left box-border relative select-none cursor-pointer transition-colors duration-fast outline-none disabled:opacity-35 disabled:cursor-not-allowed enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover))"
+        class="group flex items-center rounded-md border-none bg-transparent w-full text-left box-border relative select-none cursor-pointer transition-colors duration-fast outline-none disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover))"
         :class="[
           currentSizeClass,
           item.danger
             ? item.checked
               ? '!bg-tint-danger-88 !text-danger font-semibold'
-              : 'text-danger hover:!bg-tint-danger-88 focus-visible:!bg-tint-danger-88'
+              : 'text-danger enabled:hover:!bg-tint-danger-88 enabled:focus-visible:!bg-tint-danger-88'
             : item.color
               ? item.checked
                 ? 'font-semibold'
@@ -98,7 +97,7 @@
           v-if="item.checked"
           :size="13"
           :stroke-width="2.5"
-          class="shrink-0 opacity-85 group-hover:opacity-100 transition-opacity duration-fast"
+          class="shrink-0 opacity-85 group-enabled:group-hover:opacity-100 transition-opacity duration-fast"
           aria-hidden="true"
         />
         <component
@@ -106,7 +105,7 @@
           v-else-if="item.icon"
           :size="13"
           :stroke-width="2.5"
-          class="shrink-0 opacity-85 group-hover:opacity-100 transition-opacity duration-fast"
+          class="shrink-0 opacity-85 group-enabled:group-hover:opacity-100 transition-opacity duration-fast"
           aria-hidden="true"
         />
 
@@ -134,6 +133,8 @@ export interface ContextMenuItem {
   danger?: boolean;
   disabled?: boolean;
   title?: string;
+  /** 点击后是否保持菜单打开状态（不自动关闭浮层） */
+  keepOpen?: boolean;
   /** 快捷键提示文本，如 Ctrl+C */
   shortcut?: string;
   /** 是否在此项前插入分割线 */

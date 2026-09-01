@@ -62,6 +62,7 @@ import { useAutoHeight } from '@/composables/ui/useAutoHeight';
 import { analyzeChordGraph } from '@/services/music/chordEngine';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import type { CandidateResult } from '@/types/engine.ts';
+import { STORAGE_KEYS } from '@/utils/core/constants';
 import { toStringIndex } from '@/utils/music/chord-fretboard';
 import {
   calcPitchIndex,
@@ -72,7 +73,8 @@ import {
   segmentsToString,
 } from '@/utils/music/musicTheory';
 import { Maximize2, Minimize2, Sparkles } from '@lucide/vue';
-import { computed, ref, useTemplateRef } from 'vue';
+import { useStorage } from '@vueuse/core';
+import { computed, useTemplateRef } from 'vue';
 import ChordAnalysisContent, { type RenderNoteItem } from './ChordAnalysisContent.vue';
 
 const editorStore = useChordEditorStore();
@@ -148,10 +150,10 @@ const analysis = computed(() => {
 
 /** 有按音时面板有内容；但无论有无内容，用户都可手动收起/展开
  * （即使无音符也允许展开，空白态给出占位提示）。
- * 初始默认：有内容展开、无内容收起为 14rem 小面板 */
+ * 持久化记录用户折叠收起偏好（默认 false 即展开） */
 const isExpanded = computed(() => analysis.value.notes.length > 0);
 
-const collapsed = ref(!isExpanded.value);
+const collapsed = useStorage(STORAGE_KEYS.WORKBENCH_CHORD_ANALYSIS_COLLAPSED, false);
 const effectiveExpanded = computed(() => !collapsed.value);
 const toggleCollapse = () => {
   collapsed.value = !collapsed.value;
