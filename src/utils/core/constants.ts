@@ -255,6 +255,12 @@ export const STORAGE_KEYS = {
   /** WebDAV CORS 代理地址（可选，用于绕开跨域限制） */
   WEBDAV_PROXY_URL: 'CHORD_LAB_WEBDAV_PROXY_URL',
 
+  // ---- 线上服务器（Custom Server）同步配置 ----
+  /** 线上服务器 API 地址 */
+  SERVER_URL: 'CHORD_LAB_SERVER_URL',
+  /** 线上服务器 Token / API Key */
+  SERVER_TOKEN: 'CHORD_LAB_SERVER_TOKEN',
+
   // ---- 编辑器草稿状态 ----
   /** 是否处于编辑模式 */
   IS_EDITING: 'CHORD_LAB_IS_EDITING',
@@ -318,6 +324,12 @@ export const TOAST_DEFAULT_DURATION_MS = 3000;
 export const FOCUS_DEFAULT_DELAY_MS = 60;
 /** 悬浮提示隐藏后清理 DOM 的延迟（ms，配合淡出过渡，v-tooltip 使用） */
 export const TOOLTIP_HIDE_CLEANUP_DELAY_MS = 180;
+/**
+ * 交互式 tooltip 的隐藏最小延迟（ms，v-tooltip 使用）。
+ * 交互式浮层需允许鼠标从触发元素「跨过间隙」移入浮层本身，
+ * 因此离开触发元素时不能瞬时收起，必须留出一个时间窗；缺省 hideDelay 时取此值。
+ */
+export const TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS = 200;
 
 /** 滚动位置恢复动画：最长恢复时长（ms，v-scroll-cache 使用） */
 export const SCROLL_RESTORE_MAX_DURATION_MS = 1200;

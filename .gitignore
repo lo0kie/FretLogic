@@ -35,3 +35,4 @@ blob-report/
 # Generated planning and audit documents
 docs/
 coverage/
+.workbuddy/

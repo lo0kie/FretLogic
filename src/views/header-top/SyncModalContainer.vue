@@ -1,14 +1,19 @@
 <template>
   <BaseModal
     v-model:visible="isSyncModalOpen"
-    title="云端同步设置"
+    title="同步设置"
     width="w-80"
     :close-on-mask="modalCloseable"
     :show-close="modalCloseable"
     :keyboard="modalCloseable"
   >
     <template #header-extra>
-      <BaseSegmentedControl v-model="settingsStore.syncTarget" :disabled="!modalCloseable" :options="providerOptions" />
+      <BaseSegmentedControl
+        v-model="settingsStore.syncTarget"
+        :disabled="!modalCloseable"
+        :options="providerOptions"
+        compacted
+      />
     </template>
 
     <template #default>
@@ -22,10 +27,10 @@
         <template v-if="settingsStore.syncTarget === 'github'">
           <BaseInput
             v-model="settingsStore.githubToken"
-            v-focus
             placeholder="GitHub Token (ghp_...)"
             is-password
             clearable
+            :disabled="isBusy"
             :maxlength="100"
             show-count
           />
@@ -35,6 +40,7 @@
               v-model="settingsStore.githubOwner"
               placeholder="Username"
               clearable
+              :disabled="isBusy"
               :maxlength="39"
               show-count
             />
@@ -43,6 +49,7 @@
               v-model="settingsStore.githubRepo"
               placeholder="Repository"
               clearable
+              :disabled="isBusy"
               :maxlength="100"
               show-count
             />
@@ -55,6 +62,7 @@
               placeholder="请选择分支"
               :options="settingsStore.githubBranches"
               default-value=""
+              :disabled="isBusy"
             />
 
             <ActionButton
@@ -67,22 +75,30 @@
           </div>
         </template>
 
-        <template v-else>
+        <template v-else-if="settingsStore.syncTarget === 'webdav'">
           <BaseInput
             v-model="settingsStore.webdavServerUrl"
             placeholder="WebDAV 地址"
             clearable
+            :disabled="isBusy"
             :maxlength="200"
             show-count
           />
 
-          <BaseInput v-model="settingsStore.webdavUsername" placeholder="用户名" clearable :maxlength="100" />
+          <BaseInput
+            v-model="settingsStore.webdavUsername"
+            placeholder="用户名"
+            clearable
+            :disabled="isBusy"
+            :maxlength="100"
+          />
 
           <BaseInput
             v-model="settingsStore.webdavPassword"
             placeholder="密码"
             is-password
             clearable
+            :disabled="isBusy"
             :maxlength="100"
             show-count
           />
@@ -91,6 +107,7 @@
             v-model="settingsStore.webdavProxyUrl"
             placeholder="CORS 非必填"
             clearable
+            :disabled="isBusy"
             :maxlength="200"
             show-count
           />
@@ -99,13 +116,38 @@
             提示：浏览器直连 WebDAV 常被跨域(CORS)拦截。可在服务器开启 CORS，或填写上方「CORS 代理」经代理转发请求。
           </p>
         </template>
+
+        <template v-else-if="settingsStore.syncTarget === 'server'">
+          <BaseInput
+            v-model="settingsStore.serverUrl"
+            placeholder="接口地址 (https://...)"
+            clearable
+            :disabled="isBusy"
+            :maxlength="200"
+            show-count
+          />
+
+          <BaseInput
+            v-model="settingsStore.serverToken"
+            placeholder="Token / API Key (可选)"
+            is-password
+            clearable
+            :disabled="isBusy"
+            :maxlength="200"
+            show-count
+          />
+
+          <p class="form-hint">
+            提示：支持自建 REST 接口（Node / Go / Python / Cloudflare Worker 等）。GET 请求拉取数据，POST 请求同步覆盖。
+          </p>
+        </template>
       </div>
     </template>
 
     <template #footer>
       <ActionButton
         v-tooltip="testConnectionTooltip"
-        :disabled="isTestDisabled || isSyncing || isPulling"
+        :disabled="isTestDisabled || isBusy"
         :loading="isTestingConnection"
         @click="handleTestConnectionClick"
       >
@@ -117,7 +159,7 @@
 
       <ActionButton
         v-tooltip="pullTooltip"
-        :disabled="isPullConfigComplete || isSyncing"
+        :disabled="isPullConfigComplete || isBusy"
         :loading="isPulling"
         @click="handlePullClick"
       >
@@ -129,7 +171,7 @@
 
       <ActionButton
         v-tooltip="syncTooltip"
-        :disabled="isPushConfigComplete || isSyncing"
+        :disabled="isPushConfigComplete || isBusy"
         :loading="isSyncing"
         @click="handleSyncClick"
       >
@@ -180,19 +222,24 @@ const handlePullClick = async () => {
 const providerOptions: { label: string; value: SyncProviderKind }[] = [
   { label: 'GitHub', value: 'github' },
   { label: 'WebDAV', value: 'webdav' },
+  { label: '服务器', value: 'server' },
 ];
 
-const modalCloseable = computed(
-  () => !isSyncing.value && !isPulling.value && !isFetchingBranches.value && !isTestingConnection.value
+/** 任一同异步操作进行中时，锁定全部操作按钮并禁止关闭弹窗 */
+const isBusy = computed(
+  () => isSyncing.value || isPulling.value || isTestingConnection.value || isFetchingBranches.value
 );
+
+const modalCloseable = computed(() => !isBusy.value);
 
 // 控制获取分支按钮的禁用状态（只要填了账号和仓库名即可获取，不需要 Token）
 const isFetchBranchesDisabled = computed(
-  () => !settingsStore.githubOwner.trim() || !settingsStore.githubRepo.trim() || isFetchingBranches.value
+  () => !settingsStore.githubOwner.trim() || !settingsStore.githubRepo.trim() || isBusy.value
 );
 
 // 拉取只需要账号、仓库、分支和文件路径（公开仓库无需 Token）
 const isPullConfigComplete = computed(() => {
+  if (settingsStore.syncTarget === 'server') return !settingsStore.serverUrl.trim();
   if (settingsStore.syncTarget === 'webdav') return !settingsStore.webdavServerUrl.trim();
 
   return (
@@ -205,7 +252,9 @@ const isPullConfigComplete = computed(() => {
 
 // 同步（推送）写回仓库，因此必须校验 Token 是否填写
 const isPushConfigComplete = computed(() => {
-  if (settingsStore.syncTarget === 'webdav') return isPullConfigComplete.value;
+  if (settingsStore.syncTarget === 'server' || settingsStore.syncTarget === 'webdav') {
+    return isPullConfigComplete.value;
+  }
 
   return isPullConfigComplete.value || !settingsStore.githubToken.trim();
 });
@@ -214,8 +263,9 @@ const handleTestConnectionClick = async () => {
   await testConnection();
 };
 
-// 测试连接的最小配置要求：GitHub 只需账号与仓库，WebDAV 只需服务器地址
+// 测试连接的最小配置要求：GitHub 只需账号与仓库，WebDAV 与自建服务只需服务器地址
 const isTestDisabled = computed(() => {
+  if (settingsStore.syncTarget === 'server') return !settingsStore.serverUrl.trim();
   if (settingsStore.syncTarget === 'webdav') return !settingsStore.webdavServerUrl.trim();
 
   return !settingsStore.githubOwner.trim() || !settingsStore.githubRepo.trim();
@@ -223,14 +273,32 @@ const isTestDisabled = computed(() => {
 
 /** 测试连接按钮提示：按测试中状态与配置完整性给说明 */
 const testConnectionTooltip = computed(() =>
-  isTestingConnection.value ? '测试中' : isTestDisabled.value ? '请先填写必要配置' : '验证云端地址与凭据（不读写数据）'
+  isTestingConnection.value
+    ? '测试中'
+    : isBusy.value
+      ? '其他操作进行中'
+      : isTestDisabled.value
+        ? '请先填写必要配置'
+        : '验证云端地址与凭据（不读写数据）'
 );
 /** 拉取按钮提示：按拉取状态与配置完整性给说明 */
 const pullTooltip = computed(() =>
-  isPulling.value ? '同步中' : isPullConfigComplete.value ? '请先填写配置' : '从云端下载并覆盖本地数据'
+  isPulling.value
+    ? '同步中'
+    : isBusy.value
+      ? '其他操作进行中'
+      : isPullConfigComplete.value
+        ? '请先填写配置'
+        : '从云端下载并覆盖本地数据'
 );
 /** 同步按钮提示：按同步状态与配置完整性给说明 */
 const syncTooltip = computed(() =>
-  isSyncing.value ? '同步中' : isPushConfigComplete.value ? '请先填写配置' : '将本地数据推送到云端'
+  isSyncing.value
+    ? '同步中'
+    : isBusy.value
+      ? '其他操作进行中'
+      : isPushConfigComplete.value
+        ? '请先填写配置'
+        : '将本地数据推送到云端'
 );
 </script>

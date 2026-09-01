@@ -26,6 +26,10 @@ export const useSettingsStore = defineStore('settings', () => {
   const webdavPassword = useStorage(STORAGE_KEYS.WEBDAV_PASSWORD, '');
   const webdavProxyUrl = useStorage(STORAGE_KEYS.WEBDAV_PROXY_URL, '');
 
+  // 线上服务器同步配置
+  const serverUrl = useStorage(STORAGE_KEYS.SERVER_URL, '');
+  const serverToken = ref('');
+
   // 工作台乐理显示偏好
   const workbenchChordShorthand = useStorage<boolean>(STORAGE_KEYS.WORKBENCH_CHORD_SHORTHAND, false);
   const workbenchShowPitchNames = useStorage<boolean>(STORAGE_KEYS.WORKBENCH_SHOW_PITCH_NAMES, true);
@@ -37,7 +41,9 @@ export const useSettingsStore = defineStore('settings', () => {
   /** 从备份包恢复同步配置（导入备份/云端拉取时调用）。分支缓存随旧配置失效。 */
   const applySyncBackup = (sync?: SyncSettingsBackup) => {
     if (!sync) return;
-    if (sync.syncTarget === 'github' || sync.syncTarget === 'webdav') syncTarget.value = sync.syncTarget;
+    if (sync.syncTarget === 'github' || sync.syncTarget === 'webdav' || sync.syncTarget === 'server') {
+      syncTarget.value = sync.syncTarget;
+    }
     if (typeof sync.githubToken === 'string') githubToken.value = sync.githubToken;
     if (typeof sync.githubOwner === 'string') githubOwner.value = sync.githubOwner;
     if (typeof sync.githubRepo === 'string') githubRepo.value = sync.githubRepo;
@@ -47,6 +53,8 @@ export const useSettingsStore = defineStore('settings', () => {
     if (typeof sync.webdavUsername === 'string') webdavUsername.value = sync.webdavUsername;
     if (typeof sync.webdavPassword === 'string') webdavPassword.value = sync.webdavPassword;
     if (typeof sync.webdavProxyUrl === 'string') webdavProxyUrl.value = sync.webdavProxyUrl;
+    if (typeof sync.serverUrl === 'string') serverUrl.value = sync.serverUrl;
+    if (typeof sync.serverToken === 'string') serverToken.value = sync.serverToken;
     githubBranches.value = [];
   };
 
@@ -73,6 +81,8 @@ export const useSettingsStore = defineStore('settings', () => {
     webdavUsername,
     webdavPassword,
     webdavProxyUrl,
+    serverUrl,
+    serverToken,
     workbenchChordShorthand,
     workbenchShowPitchNames,
     scoreChordShorthand,

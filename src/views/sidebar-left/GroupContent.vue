@@ -35,7 +35,9 @@
         />
       </TransitionGroup>
       <EmptyState v-else-if="chordsCount === 0" size="sm" description="暂无和弦" />
-      <EmptyState v-else-if="searchQuery" size="sm" description="无匹配" />
+      <Transition name="v-transition-fade">
+        <EmptyState v-if="chordsCount > 0 && searchQuery" size="sm" description="无匹配" />
+      </Transition>
     </div>
   </div>
 </template>

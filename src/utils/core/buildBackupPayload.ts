@@ -39,6 +39,8 @@ export function buildBackupPayload(options?: { selection?: BackupSelection }): I
         webdavUsername: settingsStore.webdavUsername,
         webdavPassword: settingsStore.webdavPassword,
         webdavProxyUrl: settingsStore.webdavProxyUrl,
+        serverUrl: settingsStore.serverUrl,
+        serverToken: settingsStore.serverToken,
       }
     : undefined;
 

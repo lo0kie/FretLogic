@@ -1,10 +1,12 @@
 <template>
   <aside
-    class="panel-left absolute top-0 bottom-0 left-0 z-sidebar bg-bg-panel/90 backdrop-blur-xl border-r border-glass-border h-full box-border overflow-hidden flex flex-col transition-[width,opacity] duration-slow ease-sidebar"
+    class="panel-left absolute top-0 bottom-0 left-0 z-sidebar bg-bg-panel/90 backdrop-blur-xl border-r border-glass-border h-full box-border overflow-hidden flex flex-col will-change-transform transition-[transform,opacity] duration-slow ease-sidebar"
     :aria-label="route.path === '/score' ? '乐谱库' : '指法库'"
     :style="{
-      width: uiStore.isLeftOpen ? LEFT_SIDEBAR_WIDTH_PIXEL : '0px',
+      width: LEFT_SIDEBAR_WIDTH_PIXEL,
+      transform: uiStore.isLeftOpen ? 'translateX(0)' : 'translateX(-100%)',
       opacity: uiStore.isLeftOpen ? 1 : 0,
+      pointerEvents: uiStore.isLeftOpen ? 'auto' : 'none',
       boxShadow: uiStore.isLeftOpen ? 'var(--shadow-panel)' : 'none',
     }"
     v-bind="$attrs"
@@ -50,14 +52,14 @@
         </div>
 
         <div class="header-actions flex items-center gap-xs shrink-0">
-          <BasePopover trigger="hover" placement="bottom-end">
+          <BasePopover trigger="hover" placement="bottom">
             <template #trigger="{ isOpen, pinToggle }">
               <ActionButton
-                v-tooltip="songSortTooltip"
                 icon-only
                 :variant="isOpen ? 'subtle' : 'ghost'"
                 :color="isOpen ? 'primary' : 'default'"
                 aria-label="切换乐谱排序方式"
+                title="切换乐谱排序方式"
                 aria-haspopup="menu"
                 :aria-expanded="isOpen"
                 @click="pinToggle()"
@@ -150,6 +152,7 @@ import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/core/constants';
+import type { LucideIcon } from '@lucide/vue';
 import { Clock, Download, List, Plus, Search, Type, Upload } from '@lucide/vue';
 import { computed, provide, ref, useTemplateRef } from 'vue';
 import { useRoute } from 'vue-router';
@@ -204,28 +207,14 @@ const songSortMenuItems = computed<ContextMenuItem[]>(() => [
     action: () => songStore.setSongSortMethod('createdAt'),
   },
 ]);
-const songSortLabel = computed(() => {
-  switch (songStore.songSortMethod) {
-    case 'title':
-      return '拼音分组';
-    case 'createdAt':
-      return '创建时间';
-    default:
-      return '手动排序';
-  }
-});
-const songSortTooltip = computed(() => `排序方式：${songSortLabel.value}`);
+
+const SORT_ICON_MAP: Record<string, LucideIcon> = {
+  title: Type,
+  createdAt: Clock,
+};
+
 /** 排序按钮图标随当前排序方式切换（与菜单项图标一致），颜色保持默认不换 */
-const currentSortIcon = computed(() => {
-  switch (songStore.songSortMethod) {
-    case 'title':
-      return Type;
-    case 'createdAt':
-      return Clock;
-    default:
-      return List;
-  }
-});
+const currentSortIcon = computed(() => SORT_ICON_MAP[songStore.songSortMethod] ?? List);
 
 const handleFileChange = async (e: Event) => {
   const target = e.target as HTMLInputElement;

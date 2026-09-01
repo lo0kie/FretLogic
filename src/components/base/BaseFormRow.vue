@@ -16,7 +16,7 @@
     >
       <label
         v-if="label || $slots['label']"
-        class="form-row-label text-xs font-semibold text-text-muted whitespace-nowrap shrink-0 select-none overflow-hidden text-ellipsis"
+        class="form-row-label text-xs font-semibold text-text-body whitespace-nowrap shrink-0 select-none overflow-hidden text-ellipsis"
         :class="[
           layout === 'horizontal' && align === 'top' ? 'pt-[calc(0.5rem+1px)]' : '',
           required ? 'flex items-center gap-1' : '',
@@ -43,7 +43,7 @@
     <div
       v-if="resolvedHelp || resolvedError || $slots['help'] || $slots['error']"
       class="form-row-feedback w-full mt-1 text-2xs leading-relaxed"
-      :class="[resolvedError ? 'text-danger' : 'text-text-disabled']"
+      :class="[resolvedError ? 'text-danger' : 'text-text-muted']"
       :style="feedbackStyle"
       :role="resolvedError ? 'alert' : undefined"
       aria-live="polite"

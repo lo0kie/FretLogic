@@ -134,4 +134,13 @@ describe('reconcileBarres', () => {
     const result = reconcileBarres([2, 4, 4, 2, 2, 3], [2, 4, 4, 2, 2, 2], [{ fret: 2, fromString: 0, toString: 5 }]);
     expect(result).toEqual([{ fret: 2, fromString: 0, toString: 4 }]);
   });
+
+  it('支持同品位非重叠的多条横按同时并存与校验', () => {
+    const barres: BarreEntity[] = [
+      { fret: 2, fromString: 0, toString: 1 },
+      { fret: 2, fromString: 3, toString: 5 },
+    ];
+    const result = reconcileBarres([2, 2, -1, 2, 2, 2], [2, 2, -1, 2, 2, 2], barres);
+    expect(result).toBe(barres);
+  });
 });

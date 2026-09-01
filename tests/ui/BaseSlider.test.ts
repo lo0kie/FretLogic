@@ -32,9 +32,9 @@ describe('BaseSlider component', () => {
     expect(wrapper.find('input[aria-label="输入精确数值"]').exists()).toBe(true);
   });
 
-  it('editable=false 时 readout 不可聚焦', () => {
+  it('editable=false 且 restoreOnValueClick=false 时 readout 不可聚焦', () => {
     const wrapper = mount(BaseSlider, {
-      props: { modelValue: 50, min: 0, max: 100, showReadout: true, editable: false },
+      props: { modelValue: 50, min: 0, max: 100, showReadout: true, editable: false, restoreOnValueClick: false },
     });
     const readout = wrapper.find('span.tabular-nums.min-w-8');
     expect(readout.exists()).toBe(true);

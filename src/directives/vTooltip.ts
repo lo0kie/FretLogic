@@ -1,4 +1,4 @@
-import { TOOLTIP_HIDE_CLEANUP_DELAY_MS } from '@/utils/core/constants';
+import { TOOLTIP_HIDE_CLEANUP_DELAY_MS, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS } from '@/utils/core/constants';
 import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
 import { acquireFloatingZ, releaseFloatingZ } from '@/utils/ui/floatingZ';
 import {
@@ -20,14 +20,38 @@ export interface TooltipOptions {
   delay?: number | [number, number];
   showDelay?: number;
   hideDelay?: number;
-  /** 是否禁用提示 */
+  /** 是否禁用提示（亦可用 `.disabled` 修饰符关闭） */
   disabled?: boolean;
   /** 自定义样式类名 */
   customClass?: string;
   /** 是否显示指示箭头，默认 true */
   showArrow?: boolean;
+  /**
+   * 交互式：鼠标移入浮层本身时不收起，移出才收起（默认 false）。
+   * 开启后浮层会接收鼠标事件（pointer-events:auto），并自动套用最小隐藏延迟，
+   * 留出「从触发元素跨过间隙移入浮层」的时间窗，使浮层内的内容可被交互/选中。
+   */
+  interactive?: boolean;
+  /**
+   * 内容是否按 HTML 渲染（默认 false，使用 textContent 防 XSS）。
+   * 亦可用 `.html` 修饰符开启。
+   * 仅当内容为可信的静态字符串时使用；切勿传入用户输入，否则有注入风险。
+   * 配合 interactive 可承载可点击的链接 / 按钮等真实交互内容。
+   */
+  html?: boolean;
 }
 
+/**
+ * v-tooltip 支持的修饰符（以 `.foo` 形式书写，如 `v-tooltip.interactive`）：
+ * - 方位：`top` `top-start` `top-end` `bottom` `bottom-start` `bottom-end`
+ *   `left` `left-start` `left-end` `right` `right-start` `right-end`，可拆分写为 `v-tooltip.bottom.start`
+ * - `no-arrow`：隐藏箭头（等价于 `showArrow:false`）
+ * - `interactive`：开启交互式（等价于 `interactive:true`）
+ * - `html`：内容按 HTML 渲染（等价于 `html:true`）
+ * - `disabled`：禁用提示（等价于 `disabled:true`）
+ *
+ * 修饰符与对象选项等效，对象显式赋值优先级更高。
+ */
 export type TooltipModifiers =
   | 'top'
   | 'top-start'
@@ -44,6 +68,9 @@ export type TooltipModifiers =
   | 'start'
   | 'end'
   | 'no-arrow'
+  | 'interactive'
+  | 'html'
+  | 'disabled'
   | (string & Record<never, never>);
 
 export type TooltipBinding = string | TooltipOptions | undefined;
@@ -68,25 +95,34 @@ const getPlacementFromModifiers = (modifiers?: Record<string, boolean>): Placeme
   const keys = Object.keys(modifiers);
   if (keys.length === 0) return undefined;
 
+  // 拆分修饰符优先：基础方位 + 对齐（如 v-tooltip.right.end → right-end）。
+  // 必须在此先组合，否则裸方位（right）会被当作完整 placement 提前返回，丢掉对齐。
+  const baseSide = ['top', 'bottom', 'left', 'right'].find(side => modifiers[side]);
+  if (baseSide) {
+    const alignment = ['start', 'end'].find(align => modifiers[align]);
+    const combined = (alignment ? `${baseSide}-${alignment}` : baseSide) as Placement;
+    if (VALID_PLACEMENTS.includes(combined)) {
+      return combined;
+    }
+  }
+
+  // 兜底：直接命中完整方位修饰符（如 v-tooltip.bottom-start 作为单键）
   for (const key of keys) {
     if (VALID_PLACEMENTS.includes(key as Placement)) {
       return key as Placement;
     }
   }
 
-  const baseSide = ['top', 'bottom', 'left', 'right'].find(side => modifiers[side]);
-  if (baseSide) {
-    const alignment = ['start', 'end'].find(align => modifiers[align]);
-    if (alignment) {
-      return `${baseSide}-${alignment}` as Placement;
-    }
-    return baseSide as Placement;
-  }
-
   return undefined;
 };
 
-const normalize = (value: TooltipBinding, modifiers?: Record<string, boolean>): TooltipOptions => {
+/**
+ * 将指令的绑定值（字符串 / 选项对象）与修饰符归一化为统一的 TooltipOptions。
+ *
+ * 修饰符（如 `v-tooltip.interactive`、`v-tooltip.html`）与对象选项等效，
+ * 优先级规则：对象显式赋值 > 修饰符 > 默认值。
+ */
+export const normalize = (value: TooltipBinding, modifiers?: Record<string, boolean>): TooltipOptions => {
   const base = typeof value === 'string' ? { content: value } : { ...value };
   if (!base.placement) {
     const modifierPlacement = getPlacementFromModifiers(modifiers);
@@ -97,6 +133,18 @@ const normalize = (value: TooltipBinding, modifiers?: Record<string, boolean>): 
   // 箭头默认显示；显式传了 showArrow 以对象为准，否则用 .no-arrow 修饰符关闭
   if (base.showArrow === undefined) {
     base.showArrow = !modifiers?.['no-arrow'];
+  }
+  // 交互式默认 false；显式传了 interactive 以对象为准，否则用 .interactive 修饰符开启
+  if (base.interactive === undefined) {
+    base.interactive = !!modifiers?.['interactive'];
+  }
+  // 内容 HTML 渲染默认 false；显式传了 html 以对象为准，否则用 .html 修饰符开启
+  if (base.html === undefined) {
+    base.html = !!modifiers?.['html'];
+  }
+  // 禁用默认 false；显式传了 disabled 以对象为准，否则用 .disabled 修饰符关闭
+  if (base.disabled === undefined) {
+    base.disabled = !!modifiers?.['disabled'];
   }
   return base;
 };
@@ -146,6 +194,20 @@ const getOrCreateGlobalBox = (): HTMLDivElement | null => {
       },
       true
     );
+
+    // 交互式 tooltip：鼠标移入浮层本身时不收起，移出才收起
+    globalBox.addEventListener('mouseenter', () => {
+      const el = currentTargetEl;
+      if (!el) return;
+      const h = handlerMap.get(el);
+      if (h?.opts.interactive) clearTimers();
+    });
+    globalBox.addEventListener('mouseleave', () => {
+      const el = currentTargetEl;
+      if (!el) return;
+      const h = handlerMap.get(el);
+      if (h?.opts.interactive) hideTooltip(el, false);
+    });
   }
   return globalBox;
 };
@@ -212,6 +274,15 @@ const clearTimers = () => {
   }
 };
 
+/** 写入浮层内容：html=true 时按 HTML 渲染（仅限可信静态内容），否则用 textContent 防注入 */
+const setTooltipContent = (el: HTMLElement, opts: TooltipOptions): void => {
+  if (opts.html && opts.content != null) {
+    el.innerHTML = opts.content;
+  } else {
+    el.textContent = opts.content ?? '';
+  }
+};
+
 const resolveDelay = (opts: TooltipOptions): { show: number; hide: number } => {
   let show = 0;
   let hide = 0;
@@ -241,6 +312,9 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
   boxZOwned = true;
   box.style.zIndex = String(z);
 
+  // 交互式 tooltip 需要接收鼠标事件，才能感知「移入浮层」；否则保持穿透不挡点击
+  box.style.pointerEvents = opts.interactive ? 'auto' : 'none';
+
   // 处理自定义类名（挂在 content 上，因为它才是承载视觉样式的元素）
   if (appliedCustomClass) {
     globalContent.classList.remove(...appliedCustomClass.split(' ').filter(Boolean));
@@ -251,7 +325,7 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
     globalContent.classList.add(...appliedCustomClass.split(' ').filter(Boolean));
   }
 
-  globalContent.textContent = opts.content;
+  setTooltipContent(globalContent, opts);
 
   // 关键：先计算准确坐标，完成后再显隐，杜绝 (0, 0) 闪烁 (FOUC)
   await updatePosition(el, opts);
@@ -292,7 +366,11 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
 
   const handler = handlerMap.get(el);
   const { hide } = resolveDelay(handler?.opts ?? {});
-  const delayMs = immediate ? 0 : hide;
+  // 交互式浮层需留出「跨过间隙移入浮层」的时间窗：未显式设置 hideDelay 时套用最小延迟，
+  // 否则鼠标一离开触发元素浮层就瞬间消失，interactive 形同虚设
+  const effectiveHide =
+    !immediate && handler?.opts.interactive && hide === 0 ? TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS : hide;
+  const delayMs = immediate ? 0 : effectiveHide;
 
   if (delayMs > 0) {
     hideTimer = setTimeout(() => {
@@ -382,7 +460,7 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
       if (handler.opts.disabled || !handler.opts.content) {
         hideTooltip(el, true);
       } else if (globalContent) {
-        globalContent.textContent = handler.opts.content;
+        setTooltipContent(globalContent, handler.opts);
         updatePosition(el, handler.opts);
       }
     }

@@ -1,6 +1,6 @@
 import type { ImportExportPayload } from '@/types';
 
-export type SyncProviderKind = 'github' | 'webdav';
+export type SyncProviderKind = 'github' | 'webdav' | 'server';
 
 export interface BaseSyncConfig {
   kind: SyncProviderKind;
@@ -24,7 +24,13 @@ export interface WebdavSyncConfig extends BaseSyncConfig {
   proxyUrl?: string;
 }
 
-export type SyncConfig = GithubSyncConfig | WebdavSyncConfig;
+export interface ServerSyncConfig extends BaseSyncConfig {
+  kind: 'server';
+  serverUrl: string;
+  token?: string;
+}
+
+export type SyncConfig = GithubSyncConfig | WebdavSyncConfig | ServerSyncConfig;
 
 export interface SyncProvider {
   pull(): Promise<ImportExportPayload>;

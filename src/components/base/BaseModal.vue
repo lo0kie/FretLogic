@@ -24,77 +24,89 @@
           :aria-labelledby="title || $slots['title'] ? titleId : undefined"
           :aria-label="title || $slots['title'] ? undefined : '对话框'"
           tabindex="-1"
-          class="modal-card relative z-panel flex flex-col box-border bg-bg-panel border border-glass-border rounded-lg shadow-floating outline-none transition-[width,height] duration-base"
+          class="modal-card relative z-panel flex flex-col box-border bg-bg-panel border border-glass-border rounded-lg shadow-floating outline-none transition-[width,height] duration-base overflow-hidden"
           :style="[sizeStyle, topStyle]"
           @click.stop
           @keydown="handleKeydownTrap"
         >
-          <div v-if="hasHeader" class="modal-header-zone pt-xl px-xl shrink-0 flex items-center justify-between gap-lg">
-            <slot name="header" :title-id>
-              <div class="modal-header-left flex items-center min-w-0 flex-1">
-                <slot name="title" :title-id>
-                  <h3
-                    v-if="title"
-                    :id="titleId"
-                    class="modal-title text-sm font-bold tracking-tight text-text-title m-0 whitespace-nowrap overflow-hidden text-ellipsis"
-                    :title
+          <div
+            ref="modalContentRef"
+            class="w-full flex flex-col"
+            :class="isAutoHeight ? 'h-auto shrink-0' : 'flex-1 min-h-0'"
+          >
+            <div
+              v-if="hasHeader"
+              class="modal-header-zone pt-xl px-xl shrink-0 flex items-center justify-between gap-lg"
+            >
+              <slot name="header" :title-id>
+                <div class="modal-header-left flex items-center min-w-0 flex-1">
+                  <slot name="title" :title-id>
+                    <h3
+                      v-if="title"
+                      :id="titleId"
+                      class="modal-title text-sm font-bold tracking-tight text-text-title m-0 whitespace-nowrap overflow-hidden text-ellipsis"
+                      :title
+                    >
+                      {{ title }}
+                    </h3>
+                  </slot>
+                </div>
+                <div class="modal-header-right flex items-center gap-sm shrink-0">
+                  <slot name="header-extra" />
+                  <ActionButton
+                    v-if="showClose"
+                    variant="ghost"
+                    size="sm"
+                    icon-only
+                    aria-label="关闭"
+                    class="!p-1.5"
+                    @click="close('close')"
                   >
-                    {{ title }}
-                  </h3>
+                    <X :size="20" :stroke-width="3" />
+                  </ActionButton>
+                </div>
+              </slot>
+            </div>
+
+            <div
+              class="modal-body-scrollable px-xl py-lg overflow-y-auto box-border no-scrollbar flex flex-col"
+              :class="[
+                { 'has-header': hasHeader, 'has-footer': showFooter, 'py-sm': !$slots['default'] },
+                isAutoHeight ? 'h-auto max-h-[calc(85vh-8rem)]' : 'flex-1 min-h-0',
+              ]"
+            >
+              <slot />
+            </div>
+
+            <div
+              v-if="showFooter"
+              class="modal-footer-zone pb-xl px-xl pt-0 shrink-0 flex items-center justify-end gap-sm w-full box-border"
+            >
+              <slot name="footer">
+                <slot name="cancel-btn">
+                  <ActionButton
+                    variant="default"
+                    size="md"
+                    :disabled="cancelButtonDisabled || confirmLoading"
+                    @click="close('cancel')"
+                  >
+                    {{ cancelText }}
+                  </ActionButton>
                 </slot>
-              </div>
-              <div class="modal-header-right flex items-center gap-sm shrink-0">
-                <slot name="header-extra" />
-                <ActionButton
-                  v-if="showClose"
-                  variant="ghost"
-                  size="sm"
-                  icon-only
-                  aria-label="关闭"
-                  class="!p-1.5"
-                  @click="close('close')"
-                >
-                  <X :size="20" :stroke-width="3" />
-                </ActionButton>
-              </div>
-            </slot>
-          </div>
-
-          <div
-            class="modal-body-scrollable px-xl py-lg flex-1 min-h-0 overflow-y-auto box-border no-scrollbar flex flex-col"
-            :class="{ 'has-header': hasHeader, 'has-footer': showFooter, 'py-sm': !$slots['default'] }"
-          >
-            <slot />
-          </div>
-
-          <div
-            v-if="showFooter"
-            class="modal-footer-zone pb-xl px-xl pt-0 shrink-0 flex items-center justify-end gap-sm w-full box-border"
-          >
-            <slot name="footer">
-              <slot name="cancel-btn">
-                <ActionButton
-                  variant="default"
-                  size="md"
-                  :disabled="cancelButtonDisabled || confirmLoading"
-                  @click="close('cancel')"
-                >
-                  {{ cancelText }}
-                </ActionButton>
+                <slot name="confirm-btn">
+                  <ActionButton
+                    variant="subtle"
+                    :color="confirmType"
+                    size="md"
+                    :loading="confirmLoading"
+                    :disabled="confirmButtonDisabled || confirmLoading"
+                    @click="handleConfirm"
+                  >
+                    {{ confirmText }}
+                  </ActionButton>
+                </slot>
               </slot>
-              <slot name="confirm-btn">
-                <ActionButton
-                  variant="subtle"
-                  :color="confirmType"
-                  size="md"
-                  :loading="confirmLoading"
-                  :disabled="confirmButtonDisabled || confirmLoading"
-                  @click="handleConfirm"
-                >
-                  {{ confirmText }}
-                </ActionButton>
-              </slot>
-            </slot>
+            </div>
           </div>
         </div>
       </div>
@@ -130,6 +142,7 @@ const updateGlobalInertState = () => {
 </script>
 
 <script setup lang="ts">
+import { useAutoHeight } from '@/composables/ui/useAutoHeight';
 import { X } from '@lucide/vue';
 import { useEventListener, useScrollLock } from '@vueuse/core';
 import { computed, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
@@ -207,7 +220,17 @@ const slots = useSlots();
 const visible = defineModel<boolean>('visible', { required: true });
 const overlayRef = useTemplateRef<HTMLDivElement>('overlayRef');
 const modalCardRef = useTemplateRef<HTMLDivElement>('modalCardRef');
+const modalContentRef = useTemplateRef<HTMLDivElement>('modalContentRef');
 const titleId = `base-modal-title-${useId()}`;
+
+// 自适应高度与过渡：未指定固定高度时实时同步内部内容尺寸并平滑过渡
+const isAutoHeight = computed(() => {
+  const h = props.height;
+  if (!h || h === 'h-auto') return true;
+  if (typeof h === 'string' && HEIGHT_MAP[h]?.startsWith('auto')) return true;
+  return false;
+});
+const { height: autoMeasuredHeight } = useAutoHeight(modalContentRef, visible);
 
 // SSR 安全：服务端无 document，降级为普通 ref，避免运行时崩溃
 const isBodyLocked = isClient ? useScrollLock(document.body) : ref(false);
@@ -271,7 +294,15 @@ const sizeStyle = computed<Record<string, string>>(() => {
     style['maxHeight'] = '90vh';
   } else if (h && HEIGHT_MAP[h]) {
     const parts = HEIGHT_MAP[h].split('|');
-    if (parts[0]) style['height'] = parts[0];
+    if (parts[0] === 'auto') {
+      if (autoMeasuredHeight.value && autoMeasuredHeight.value !== '0px') {
+        style['height'] = autoMeasuredHeight.value;
+      } else {
+        style['height'] = 'auto';
+      }
+    } else if (parts[0]) {
+      style['height'] = parts[0];
+    }
     if (parts[1]) style['maxHeight'] = parts[1];
   } else if (typeof h === 'string' && h) {
     style['height'] = h;

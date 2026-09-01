@@ -2,7 +2,7 @@
   <BaseModal
     v-model:visible="visibleModel"
     title="选择要绑定的和弦"
-    :show-footer="chordSections.length > 0"
+    :show-footer="true"
     class="chord-picker-modal"
     width="w-wide"
     height="h-full"
@@ -80,9 +80,11 @@
         v-grid-nav="{ cols: 5, selector: '.picker-chord-card' }"
         class="picker-scroll-content no-scrollbar flex-1 min-h-0 overflow-y-auto p-xs"
       >
-        <EmptyState v-if="filteredChords.length === 0" description="当前搜索或分组下暂无匹配和弦。" size="lg" />
+        <Transition name="v-transition-fade">
+          <EmptyState v-if="filteredChords.length === 0" description="当前搜索或分组下暂无匹配和弦。" size="lg" />
+        </Transition>
         <TransitionGroup
-          v-else
+          v-if="filteredChords.length > 0"
           name="v-transition-list"
           tag="div"
           class="picker-sections-list flex flex-col gap-xl w-full relative"
@@ -116,11 +118,7 @@
                 :aria-pressed="isCurrentBound(chord)"
                 :aria-disabled="isCurrentBound(chord)"
                 :aria-label="`和弦 ${chordMeta.get(chord.id)?.name ?? ''}${isCurrentBound(chord) ? '（当前已绑定）' : ''}`"
-                class="picker-chord-card group flex flex-col items-center justify-center self-start w-full box-border relative z-card p-md bg-bg-body border border-border-light rounded-md cursor-pointer outline-none transition-all duration-fast hover:border-primary hover:shadow-md active:scale-[0.97] [&:has(.picker-edit-btn:active)]:scale-100"
-                :class="{
-                  '!bg-tint-primary-88 !border-primary cursor-default !pointer-events-none ring-2 ring-primary/70 !shadow-none !active:scale-100':
-                    isCurrentBound(chord),
-                }"
+                :class="[CHORD_CARD_BASE_CLASS, { [CHORD_CARD_ACTIVE_CLASS]: isCurrentBound(chord) }]"
                 :data-chord-id="chord.id"
                 data-focusable-inline
                 @click="!isCurrentBound(chord) && handleSelectChord(chord)"
@@ -175,24 +173,38 @@
         role="navigation"
         aria-label="和弦分区快速跳转"
       >
-        <ActionButton
-          v-for="section in chordSections"
-          :key="section.id"
-          :variant="activeSectionId === section.id ? 'subtle' : 'ghost'"
-          :color="activeSectionId === section.id ? 'primary' : 'default'"
-          size="sm"
-          class="section-nav-chip shrink-0"
-          :aria-label="`跳转到 ${section.title} 区`"
-          :aria-current="activeSectionId === section.id ? 'true' : undefined"
-          @click="scrollToSection(section.id)"
-        >
-          <span class="group-label text-xs font-semibold"> {{ section.title }} </span>
-          <span
-            class="group-count pl-2 text-2xs font-semibold"
-            :class="{ 'is-selected font-extrabold': activeSectionId === section.id }"
+        <!-- 有分区时渲染真实跳转 chip；空状态用一个不可见占位 chip 撑出相同行高，
+             使 footer 区域高度恒定、modal 主体高度不随空/非空切换变化，避免空状态垂直跳动 -->
+        <template v-if="chordSections.length > 0">
+          <ActionButton
+            v-for="section in chordSections"
+            :key="section.id"
+            :variant="activeSectionId === section.id ? 'subtle' : 'ghost'"
+            :color="activeSectionId === section.id ? 'primary' : 'default'"
+            size="sm"
+            class="section-nav-chip shrink-0"
+            :aria-label="`跳转到 ${section.title} 区`"
+            :aria-current="activeSectionId === section.id ? 'true' : undefined"
+            @click="scrollToSection(section.id)"
           >
-            {{ section.chords.length }}
-          </span>
+            <span class="group-label text-xs font-semibold"> {{ section.title }} </span>
+            <span
+              class="group-count pl-2 text-2xs font-semibold"
+              :class="{ 'is-selected font-extrabold': activeSectionId === section.id }"
+            >
+              {{ section.chords.length }}
+            </span>
+          </ActionButton>
+        </template>
+        <ActionButton
+          v-else
+          variant="ghost"
+          size="sm"
+          disabled
+          class="invisible pointer-events-none"
+          aria-hidden="true"
+        >
+          占位
         </ActionButton>
       </div>
     </template>
@@ -244,6 +256,12 @@ import {
 import { useRouter } from 'vue-router';
 
 const pickerScale = 0.32;
+/** 和弦选择卡片基础与激活态类名 */
+const CHORD_CARD_BASE_CLASS =
+  'picker-chord-card group flex flex-col items-center justify-center self-start w-full box-border relative z-card p-md bg-bg-body border border-border-light rounded-md cursor-pointer outline-none transition-all duration-fast hover:border-primary hover:shadow-md active:scale-[0.97] [&:has(.picker-edit-btn:active)]:scale-100';
+const CHORD_CARD_ACTIVE_CLASS =
+  '!bg-tint-primary-88 !border-primary cursor-default !pointer-events-none ring-2 ring-primary/70 !shadow-none !active:scale-100';
+
 const props = defineProps<{
   visible: boolean;
 }>();

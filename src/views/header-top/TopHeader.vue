@@ -2,9 +2,7 @@
   <header
     class="relative z-header flex min-h-10 w-full shrink-0 select-none items-center justify-between border-b border-glass-border bg-bg-panel/90 backdrop-blur-lg px-4 box-border @media(display-mode:window-controls-overlay):[-webkit-app-region:drag] @media(display-mode:window-controls-overlay):[app-region:drag] @media(display-mode:window-controls-overlay):min-h-[max(2.5rem,env(titlebar-area-height,2.5rem))] @media(display-mode:window-controls-overlay):pl-[max(env(titlebar-area-inset-left,0px),1rem)] @media(display-mode:window-controls-overlay):pr-[max(env(titlebar-area-inset-right,0px),1rem)]"
   >
-    <div
-      class="flex flex-1 min-w-0 items-center justify-start gap-sm @media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag]"
-    >
+    <div class="flex flex-1 min-w-0 items-center justify-start gap-sm" :class="NO_DRAG_REGION_CLASS">
       <ActionButton
         v-tooltip="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'"
         aria-label="切换侧边栏"
@@ -35,7 +33,8 @@
     </div>
 
     <div
-      class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-inner pointer-events-auto flex items-center @media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag] @media(display-mode:window-controls-overlay):-translate-x-[calc(50%-(env(titlebar-area-inset-left,0px)-env(titlebar-area-inset-right,0px))/2)]"
+      class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-inner pointer-events-auto flex items-center @media(display-mode:window-controls-overlay):-translate-x-[calc(50%-(env(titlebar-area-inset-left,0px)-env(titlebar-area-inset-right,0px))/2)]"
+      :class="NO_DRAG_REGION_CLASS"
     >
       <div v-if="route.path === '/workbench'" class="flex items-center gap-xs p-xs">
         <ActionButton
@@ -88,9 +87,7 @@
       />
     </div>
 
-    <div
-      class="flex flex-1 min-w-0 items-center justify-end gap-xs @media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag]"
-    >
+    <div class="flex flex-1 min-w-0 items-center justify-end gap-xs" :class="NO_DRAG_REGION_CLASS">
       <ActionButton
         v-if="scoreEditor.activeTab === 'interactive' && route.path === '/score'"
         v-tooltip="isAutoScrolling ? '暂停滚动' : '开始滚动'"
@@ -105,6 +102,7 @@
       </ActionButton>
 
       <ActionButton
+        v-tooltip="'全局编辑'"
         icon-only
         variant="ghost"
         :aria-label="isGlobalEditable ? '退出全局编辑' : '开启全局编辑'"
@@ -175,7 +173,13 @@
         </template>
       </BasePopover>
 
-      <ActionButton v-tooltip="buildInfoTooltip" icon-only variant="ghost" aria-label="构建信息" :size="uiSize">
+      <ActionButton
+        v-tooltip.interactive="buildInfoTooltip"
+        icon-only
+        variant="ghost"
+        aria-label="构建信息"
+        :size="uiSize"
+      >
         <Info :size="17" :stroke-width="2.2" />
       </ActionButton>
     </div>
@@ -311,6 +315,9 @@ const handleExport = async (isTransparent: boolean) => {
 
 const isSyncModalOpen = ref(false);
 const uiSize = 'md';
+/** PWA 窗口控制拖拽拦截类名 */
+const NO_DRAG_REGION_CLASS =
+  '@media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag]';
 const SyncModalContainer = defineAsyncComponent(() => import('./SyncModalContainer.vue'));
 const buildInfoTooltip = computed(() => {
   const builtAt = new Date(__BUILD_INFO__.time).toLocaleString('zh-CN', { hour12: false });
