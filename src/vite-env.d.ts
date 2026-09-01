@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 
+import type { ChordNameBinding } from './directives/vChordName';
 import type { FocusBinding, FocusModifiers } from './directives/vFocus';
 import type { GridNavBinding, GridNavModifiers } from './directives/vGridNav';
 import type { MarqueeBinding, MarqueeModifiers } from './directives/vMarquee';
@@ -93,6 +94,7 @@ declare module '@vue/runtime-core' {
     vScrollCache: TypedDirective<HTMLElement, ScrollCacheBinding, string>;
     vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
+    vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
     vWave: TypedDirective<HTMLElement, unknown, string>;
   }
 
@@ -111,6 +113,8 @@ declare module '@vue/runtime-core' {
     'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     'vMarquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
     'v-marquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
+    'vChordName': TypedDirective<HTMLElement, ChordNameBinding, string>;
+    'v-chord-name': TypedDirective<HTMLElement, ChordNameBinding, string>;
   }
 }
 
@@ -122,6 +126,7 @@ declare module 'vue' {
     vScrollCache: TypedDirective<HTMLElement, ScrollCacheBinding, string>;
     vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
+    vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
     vWave: TypedDirective<HTMLElement, unknown, string>;
   }
 
@@ -140,5 +145,7 @@ declare module 'vue' {
     'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     'vMarquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
     'v-marquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
+    'vChordName': TypedDirective<HTMLElement, ChordNameBinding, string>;
+    'v-chord-name': TypedDirective<HTMLElement, ChordNameBinding, string>;
   }
 }

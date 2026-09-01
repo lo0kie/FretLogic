@@ -23,3 +23,6 @@ export interface Toast {
 
 /** 创建 toast 的入参：id / msg / type 由 store 生成，duration 可缺省 */
 export type ToastOptions = Omit<Toast, 'id' | 'msg' | 'type' | 'duration'> & { duration?: number };
+
+/** 主题语义色：ActionButton / BaseModal 等基础组件共用的 color 联合（新增语义色只改这里） */
+export type ThemeColor = 'default' | 'primary' | 'danger' | 'warning' | 'success';

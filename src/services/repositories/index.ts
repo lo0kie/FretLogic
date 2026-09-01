@@ -24,6 +24,7 @@ export interface SongRepository {
 
 const SONG_ENTRY_PREFIX = `${STORAGE_KEYS.SONG_ENTRY}:`;
 
+/** 从指定存储读取并解析 JSON；键不存在或解析失败时返回 undefined。 */
 const readJson = (storage: Storage, key: string): unknown => {
   try {
     const raw = storage.getItem(key);
@@ -33,6 +34,7 @@ const readJson = (storage: Storage, key: string): unknown => {
   }
 };
 
+/** 序列化并写入指定存储；超出配额时抛出带 cause 的 PERSISTENCE_QUOTA_EXCEEDED 错误。 */
 const writeJson = (storage: Storage, key: string, value: unknown): void => {
   try {
     storage.setItem(key, serializeForStorage(value));
@@ -46,6 +48,7 @@ const writeJson = (storage: Storage, key: string, value: unknown): void => {
   }
 };
 
+/** 创建和弦库仓储：整库快照（分组 + 和弦）存取，读取时经 sanitizePersistedData 清洗。 */
 export function createChordRepository(storage: Storage): ChordRepository {
   return {
     load() {
@@ -62,14 +65,18 @@ export function createChordRepository(storage: Storage): ChordRepository {
   };
 }
 
+/** 创建歌曲仓储：每首歌单独一个存储键（SONG_ENTRY 前缀 + id），索引键集中维护 id 列表。 */
 export function createSongRepository(storage: Storage): SongRepository {
+  /** 拼出某首歌的存储键。 */
   const songKey = (id: string) => `${SONG_ENTRY_PREFIX}${id}`;
 
+  /** 读取索引中登记的歌曲 id 列表；索引缺失或损坏时返回空数组。 */
   const loadIds = (): string[] => {
     const ids = readJson(storage, STORAGE_KEYS.SONGS_INDEX);
     return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
   };
 
+  /** 扫描存储中实际存在的歌曲键，返回不含前缀的歌曲 id 列表（索引损坏时的真相源）。 */
   const listStoredSongIds = (): string[] => {
     const storedIds: string[] = [];
     for (let index = 0; index < storage.length; index += 1) {

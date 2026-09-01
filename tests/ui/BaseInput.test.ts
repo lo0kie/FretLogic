@@ -1,4 +1,4 @@
-import BaseInput from '@/components/base/BaseInput.vue';
+import BaseInput from '@/components/ui/BaseInput.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 

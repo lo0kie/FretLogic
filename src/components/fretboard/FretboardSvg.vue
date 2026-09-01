@@ -186,6 +186,7 @@ const activeBarreHit = ref<string | null>(null);
 /** 当前键盘聚焦的候选梁标识，聚焦强调走外扩虚线框而非浏览器默认描边 */
 const focusedBarreHit = ref<string | null>(null);
 
+/** 候选梁唯一标识（品位-起弦-止弦），用于 hover / 聚焦态比对 */
 const barreKey = (b: BarreEntity) => `${b.fret}-${b.fromString}-${b.toString}`;
 /** 候选梁是否处于 hover 或键盘聚焦的强调态 */
 const isBarreHighlighted = (b: BarreEntity) => {
@@ -254,6 +255,7 @@ const emit = defineEmits<{
   (e: 'barre-click', barre: BarreEntity): void;
 }>();
 
+/** 品号定位：置于指板左侧、按品高垂直排列 */
 const getFretNumberStyle = (fretIndex: number) => {
   const yPixel = fretIndex * CANVAS_CONFIG.FRET_HEIGHT;
   const xPixel = (stringXPositions[0] ?? 0) - 22;
@@ -263,6 +265,7 @@ const getFretNumberStyle = (fretIndex: number) => {
   };
 };
 
+/** 该弦是否为根音弦 */
 const isRoot = (sIdx: number) => rootStringIndex === sIdx;
 const hoverFillColor = computed(() => 'var(--fb-hover)');
 const emptyRingRadius = computed(() => (showPitchNames ? NOTE_DISPLAY.FINGER_OUTLINE_RADIUS : 28));
@@ -281,6 +284,7 @@ const barreGeometry = (barre: BarreEntity) => {
 
 /** 候选横按梁的外扩虚线轮廓（四向外扩 DASH_PAD，虚线框比主体大一圈） */
 const BARRE_DASH_PAD = 10;
+/** 候选横按梁的外扩虚线轮廓几何：四周向外扩 DASH_PAD，虚线框比主体大一圈 */
 const barreDashGeometry = (barre: BarreEntity) => {
   const base = barreGeometry(barre);
   const h = barreThickness + BARRE_DASH_PAD * 2;
@@ -317,12 +321,15 @@ const barreHitGeometry = (barre: BarreEntity) => {
 /** 候选梁 hover 提示：显示品位与弦范围 */
 const barreCandidateTitle = (b: BarreEntity) => `标记 ${b.fret} 品 ${6 - b.fromString}弦 ~ ${6 - b.toString}弦 横按`;
 
+/** 按弦点位音名信息（v-for 内调用） */
 const noteInfo = (sIdx: number, str: GuitarStringEntity) =>
   computeStringLabelAccidental(sIdx, str[0], capo, str[1], activeBaseStrings);
 
+/** 该按弦点是否处于 hover 位 */
 const isNoteHovered = (sIdx: number, fret: number) =>
   hoverPoint?.stringIndex === sIdx && hoverPoint?.fretIndex === fret;
 
+/** 该按弦点是否处于键盘焦点位 */
 const isNoteFocused = (sIdx: number, fret: number) =>
   focusPoint?.stringIndex === sIdx && focusPoint?.fretIndex === fret;
 

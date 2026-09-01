@@ -1,4 +1,4 @@
-import type { SegmentOption } from '@/components/base/BaseSegmentedControl.vue';
+import type { SegmentOption } from '@/components/ui/BaseSegmentedControl.vue';
 import type {
   AccidentalType,
   Chord,
@@ -85,9 +85,12 @@ export const TUNING_PRESETS: Record<
 };
 
 const ACCIDENTAL_PITCH = Object.freeze([false, true, false, true, false, false, true, false, true, false, true, false]);
+/** 判断相对根音的音程是否属于和弦特征音（根音/小三/大三/纯五度）。 */
 const isChordToneRelative = (rel: number) => rel === 0 || rel === 3 || rel === 4 || rel === 7;
 
+/** 判断弦是否为静音态（品位 -1）。 */
 export const isMuted = (s: GuitarStringEntity) => s[0] === -1;
+/** 判断弦是否为空弦态（品位 0）。 */
 export const isOpen = (s: GuitarStringEntity) => s[0] === 0;
 /** 创建默认琴弦元组：[-1（静音）, false（升号偏好）] */
 export const createString = (): GuitarStringEntity => [-1, false];
@@ -128,6 +131,7 @@ export const formatStringLabel = (
 export const composeNoteLabel = (label: string, isAccidental: boolean, preferFlat: boolean): string =>
   isAccidental ? label + (preferFlat ? 'b' : '#') : label;
 
+/** 计算某弦某品的 MIDI 音高（空弦基准音 + 品位 + 变调夹有效偏移）。 */
 export const calcNoteMidi = (
   sIdx: number,
   fretVal: number,
@@ -139,6 +143,7 @@ export const calcNoteMidi = (
   return base + fretVal + actualOffset;
 };
 
+/** 由 MIDI 音高取模得到 0~11 的音级索引（八度无关）。 */
 export const calcPitchIndex = (
   sIdx: number,
   fretVal: number,
@@ -148,9 +153,11 @@ export const calcPitchIndex = (
   return calcNoteMidi(sIdx, fretVal, capoVal, baseStrings) % 12;
 };
 
+/** 判断音级是否为变化音（黑键，存在升降号拼写）。 */
 export const isAccidentalNote = (pitchIndex: number): boolean =>
   ACCIDENTAL_PITCH[((pitchIndex % 12) + 12) % 12] ?? false;
 
+/** 判断某弦某品是否可切换升降号拼写（仅变化音级可切换，静音弦除外）。 */
 export const canTogglePitchAccidental = (
   sIdx: number,
   fretVal: number,
@@ -162,6 +169,7 @@ export const canTogglePitchAccidental = (
   return isAccidentalNote(pitchIndex);
 };
 
+/** 计算某弦某品的音名标签（按 preferFlat 选择升号/降号记法），静音弦返回 ✕。 */
 export const calcNoteLabel = (
   sIdx: number,
   fretVal: number,
@@ -520,6 +528,10 @@ export const matchChordSearch = (
  */
 const parsedChordNameCache = createLruCache<ParsedChordName>(512);
 
+/**
+ * 解析和弦名为结构化元数据（根音/低音音高、后缀），解析失败时返回空结果（pitch=99）。
+ * @returns rootPitch 为 99 表示根音无法解析
+ */
 export const parseChordName = (chordName: string): ParsedChordName => {
   const empty: ParsedChordName = {
     rootLabel: '',
@@ -650,6 +662,7 @@ export const resolveChordRootPitch = (
   return 99;
 };
 
+/** 判断指法是否为转位：物理最低音不等于（已解析的）根音即为转位；无法解析时视为非转位。 */
 export const computeIsInverted = (
   strings: GuitarStringEntity[],
   capoVal: number,
@@ -692,6 +705,7 @@ export const validateBassConsistency = (
   return null;
 };
 
+/** 统计指法中相对根音的"和弦外音"（非特征音）数量，并用 12 位位掩码记录出现的音级。 */
 const getColorNoteCountAndPitches = (chord: Chord, rootPitch: number) => {
   if (rootPitch === 99) return { colorNoteCount: 0, pitchMask: 0 };
   const baseStrings = TUNING_PRESETS[chord.tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
@@ -750,6 +764,7 @@ interface SortMeta {
   qualityRank: number; // 同根音下性质聚类：小调类 0 / 其他 1，使 Em 与扩展 Em7 相邻
 }
 
+/** 预计算单个和弦的排序元数据（根音/转位/复杂度/性质聚类等），供排序比较器复用。 */
 const buildSortMeta = (chord: Chord): SortMeta => {
   const name = getChordName(chord);
   const parsed = parseChordName(name);
@@ -775,6 +790,12 @@ export const SORT_RULE_CONFIG = <SegmentOption<GroupSortRule>[]>[
   { label: 'A-Z', value: GroupSortRule.NAME_ASC },
 ];
 
+/**
+ * 按分组排序规则排列和弦：
+ * NAME_ASC 按名称字典序；ROOT_PITCH 按根音 C-B 依次比较转位/复杂度/性质；
+ * KEY_DEGREE 优先级内调内音级靠前，同度数按五度圈顺序（降 7 级在 6 级之前）。
+ * 无法识别的规则返回原序副本。
+ */
 export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey = 'C'): Chord[] => {
   if (chords.length <= 1) return chords.slice();
   const effectiveRule: GroupSortRule = rule ?? GroupSortRule.ROOT_PITCH;
@@ -828,6 +849,7 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
   return out;
 };
 
+/** 将和弦名整体移调：根音与斜杠低音按半音数移位，后缀保持不变；无法解析时原样返回。 */
 export const transposeChordName = (chordName: string, semitones: number): string => {
   const parsed = parseChordName(chordName);
   if (parsed.rootPitch === 99) return chordName;
@@ -839,6 +861,7 @@ export const transposeChordName = (chordName: string, semitones: number): string
   return `${shiftedRoot}${parsed.suffix}`;
 };
 
+/** 计算两个调名之间的半音差，结果收敛到 [-5, 6] 区间（取最短移调路径）；无法解析时返回 0。 */
 export const getKeySemitones = (key1: string, key2: string): number => {
   const p1 = getChordRootPitch(key1);
   const p2 = getChordRootPitch(key2);
@@ -851,6 +874,10 @@ export const getKeySemitones = (key1: string, key2: string): number => {
 
 const chordFingerprintCache = new WeakMap<object, string>();
 
+/**
+ * 计算和弦指纹（名称:变调夹:品位数:调弦:是否转位:根音标记:逐弦品位+升降偏好），
+ * 用于重复和弦判定；结果按对象引用 WeakMap 缓存。
+ */
 export const computeChordFingerprint = (chord: {
   chordName?: string;
   nameSegments?: ChordNameSegments | null;
@@ -874,6 +901,7 @@ export const computeChordFingerprint = (chord: {
   return fp;
 };
 
+/** 取指定调弦预设的空弦基准音高数组；未知调弦回退标准调弦。 */
 export const getActiveBaseStrings = (tuning: Tuning) => {
   return TUNING_PRESETS[tuning]?.mapping || DEFAULT_TUNING_MAPPING;
 };

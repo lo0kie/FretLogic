@@ -31,6 +31,7 @@ export const preloadPinyin = (): Promise<PinyinModule> => {
   return pinyinPromise;
 };
 
+/** 计算单个汉字的分组字母（pinyin-pro 首选拼音首字母），未就绪时归 '#'。 */
 const cjkGroupKey = (ch: string): string => {
   if (pinyinModule) {
     const py = pinyinModule.pinyin(ch, { toneType: 'none', type: 'array' })[0] ?? '';

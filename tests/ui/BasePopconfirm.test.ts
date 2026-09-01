@@ -1,4 +1,4 @@
-import BasePopconfirm from '@/components/base/BasePopconfirm.vue';
+import BasePopconfirm from '@/components/ui/BasePopconfirm.vue';
 import type { VueWrapper } from '@vue/test-utils';
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';

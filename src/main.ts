@@ -1,6 +1,6 @@
-import App from '@/App.vue';
-import { useTheme } from '@/composables/app/useTheme';
-import { router } from '@/router';
+import App from '@/app/App.vue';
+import { useTheme } from '@/shared/composables/useTheme';
+import { router } from '@/app/router';
 import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { logger } from '@/utils/core/logger';
@@ -10,6 +10,7 @@ import { createApp } from 'vue';
 
 import '@/assets/tailwind.css';
 import '@/assets/main.scss';
+import { vChordName } from './directives/vChordName';
 import { vFocus } from './directives/vFocus';
 import { vGridNav } from './directives/vGridNav';
 import { vMarquee } from './directives/vMarquee';
@@ -31,7 +32,9 @@ app.directive('focus', vFocus);
 app.directive('scroll-cache', vScrollCache);
 app.directive('grid-nav', vGridNav);
 app.directive('marquee', vMarquee);
+app.directive('chord-name', vChordName);
 
+/** 恢复上次编辑中的和弦草稿（含异常兜底日志），避免应用启动后编辑态丢失。 */
 const initializeEditor = () => {
   try {
     useChordEditorStore(pinia).initEditor();
@@ -40,6 +43,7 @@ const initializeEditor = () => {
   }
 };
 
+/** 应用启动：先完成数据层引导（旧数据迁移），无论成败都挂载应用并初始化编辑器。 */
 const initApp = async () => {
   try {
     await bootstrapDataLayer(window.localStorage);
@@ -53,6 +57,7 @@ const initApp = async () => {
 
 void initApp();
 
+/** 退出/切后台前把 localStorage 数据同步到 IndexedDB 备份（异常静默，不中断生命周期）。 */
 const syncOnExit = async () => {
   try {
     await syncLocalStorageToIdb(window.localStorage);

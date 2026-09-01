@@ -75,6 +75,7 @@ export const buildScoreTree = (
       char,
       key: charKey(lineId, idx),
     }));
+    /** 构建某行某侧的和弦槽位节点序列（id 列表 → 节点）。 */
     const buildEdge = (type: EdgeSlotType): ScoreNode[] =>
       collectEdgeChordIds(chordMap, lineId, type).map((chordId, idx) => ({
         kind: 'chord',

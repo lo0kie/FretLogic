@@ -4,7 +4,8 @@
  */
 import { useSongStore } from '@/stores/songStore';
 import type { Chord, ChordId, LineId, SlotKey, Song } from '@/types';
-import { garbageCollectChordMap, toCapo } from '@/utils/music/chord-fretboard';
+import { garbageCollectChordMap } from '@/utils/score/chordSlots';
+import { toCapo } from '@/utils/music/chord-fretboard';
 import { cloneDeep, matchLineIds, sanitizeLyricsText } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { computeSongKey, getKeySemitones, transposeChordName } from '@/utils/music/musicTheory';
@@ -63,6 +64,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     },
   });
 
+  /** 将当前歌曲的歌词/行序/和弦映射快照压入撤销栈（容量 20，撤销-重做期间不记录）。 */
   const recordHistory = (song?: Song) => {
     const target = song || activeSong.value;
     if (!target || isUndoRedoAction.value) return;
@@ -80,6 +82,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     historyIndex = historyStack.length - 1;
   };
 
+  /** 撤销：回退到上一快照并写回歌曲数据；标记撤销期以避免恢复过程被再次记录。 */
   const undo = async () => {
     if (historyIndex > 0 && activeSong.value) {
       isUndoRedoAction.value = true;
@@ -93,6 +96,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
+  /** 重做：前进到下一快照并写回歌曲数据；标记撤销期以避免恢复过程被再次记录。 */
   const redo = async () => {
     if (historyIndex < historyStack.length - 1 && activeSong.value) {
       isUndoRedoAction.value = true;
@@ -124,10 +128,12 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     { immediate: true }
   );
 
+  /** 设置当前编辑的歌曲 id（持久化，刷新后恢复上次编辑的歌曲）。 */
   const setActiveSong = (id: string | null) => {
     activeSongId.value = id;
   };
 
+  /** 变换歌曲调性：按当前实际调（含变调夹换算）到目标调的半音差转调 playKey。 */
   const updateKey = (key: string) => {
     if (!activeSong.value) return;
     const currentKey = computeSongKey(activeSong.value.playKey, activeSong.value.capo);
@@ -141,6 +147,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
+  /** 更新歌曲演奏调（playKey）；值未变化时跳过。 */
   const updatePlayKey = (playKey: string) => {
     if (activeSong.value && activeSong.value.playKey !== playKey) {
       recordHistory();
@@ -150,6 +157,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
+  /** 更新歌曲变调夹品位（经 toCapo 收敛到合法范围）；值未变化时跳过。 */
   const updateCapo = (capo: number) => {
     if (activeSong.value && activeSong.value.capo !== capo) {
       recordHistory();
@@ -185,18 +193,21 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
+  /** 为当前歌曲的歌词字符槽位设置和弦，并记录撤销历史。 */
   const setSlotChord = (slotKey: SlotKey, chord: Chord) => {
     if (!activeSong.value) return;
     recordHistory();
     songStore.setCharChord(activeSong.value.id, slotKey, chord.id);
   };
 
+  /** 移除当前歌曲指定槽位上的和弦，并记录撤销历史。 */
   const removeSlotChord = (slotKey: SlotKey) => {
     if (!activeSong.value) return;
     recordHistory();
     songStore.removeCharChord(activeSong.value.id, slotKey);
   };
 
+  /** 清空指定歌词行内全部槽位的和弦绑定（按槽位键前缀匹配）。 */
   const clearLineChords = (lineId: string) => {
     if (!activeSong.value || !activeSong.value.chordMap) return;
     recordHistory();
@@ -216,6 +227,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
 
   /** 拖拽来源是 DOM data-slot-key（不可信边界）：校验前缀后再信任收窄 */
   const isSlotKey = (value: string): value is SlotKey => value.startsWith('line_');
+  /** 交换两个槽位的和弦绑定（拖拽互换），并记录撤销历史。 */
   const swapSlotChords = (sourceKey: string, targetKey: string) => {
     if (!activeSong.value || sourceKey === targetKey) return;
     if (!isSlotKey(sourceKey) || !isSlotKey(targetKey)) return;

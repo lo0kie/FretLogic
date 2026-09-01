@@ -90,6 +90,7 @@ const VALID_PLACEMENTS: Placement[] = [
   'right-end',
 ];
 
+/** 从修饰符解析方位：先组合"基础方位 + 对齐"，再兜底匹配完整方位键；无匹配返回 undefined。 */
 const getPlacementFromModifiers = (modifiers?: Record<string, boolean>): Placement | undefined => {
   if (!modifiers) return undefined;
   const keys = Object.keys(modifiers);
@@ -165,6 +166,7 @@ let boxZOwned = false;
 
 const isClient = typeof document !== 'undefined';
 
+/** 惰性创建全局单例 tooltip DOM（box > content + arrow），并注册全局滚动隐藏与交互式悬停监听。 */
 const getOrCreateGlobalBox = (): HTMLDivElement | null => {
   if (!isClient) return null;
   if (!globalBox) {
@@ -219,6 +221,7 @@ const releaseBoxZ = () => {
   boxZOwned = false;
 };
 
+/** 用 floating-ui 计算并写入定位与箭头样式；锚点已切换时丢弃本次结果。 */
 const updatePosition = async (el: HTMLElement, opts: TooltipOptions): Promise<void> => {
   if (!globalBox || !isClient) return;
 
@@ -263,6 +266,7 @@ const updatePosition = async (el: HTMLElement, opts: TooltipOptions): Promise<vo
   }
 };
 
+/** 清空显示/隐藏的延时定时器。 */
 const clearTimers = () => {
   if (showTimer) {
     clearTimeout(showTimer);
@@ -283,6 +287,7 @@ const setTooltipContent = (el: HTMLElement, opts: TooltipOptions): void => {
   }
 };
 
+/** 解析最终生效的显示/隐藏延迟：delay 数组/单值与 showDelay/hideDelay，后者优先。 */
 const resolveDelay = (opts: TooltipOptions): { show: number; hide: number } => {
   let show = 0;
   let hide = 0;
@@ -298,6 +303,7 @@ const resolveDelay = (opts: TooltipOptions): { show: number; hide: number } => {
   return { show, hide };
 };
 
+/** 实际显示 tooltip：分配层级、写内容与自定义类，先定位后显隐以避免 (0,0) 闪烁，并启动 autoUpdate 跟随。 */
 const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
   if (!isClient || opts.disabled || !opts.content) return;
 
@@ -343,6 +349,7 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
   }
 };
 
+/** 显示入口：按配置延迟触发 executeShow（immediate 时零延迟）。 */
 const showTooltip = (el: HTMLElement, opts: TooltipOptions, immediate = false) => {
   if (!isClient || opts.disabled || !opts.content) return;
   clearTimers();
@@ -360,6 +367,7 @@ const showTooltip = (el: HTMLElement, opts: TooltipOptions, immediate = false) =
   }
 };
 
+/** 隐藏入口：区分立即隐藏（滚动/失焦/卸载）与延迟淡出（鼠标移出）；交互式浮层套用最小隐藏延迟。 */
 const hideTooltip = (el: HTMLElement, immediate = false) => {
   if (!isClient || currentTargetEl !== el) return;
   clearTimers();

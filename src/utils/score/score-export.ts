@@ -1,7 +1,7 @@
 import { globalDarkMode } from '@/stores/globalState';
 import type { Chord, SlotKey } from '@/types';
 import { computeChordFingerprint } from '@/utils/music/musicTheory';
-import { plainToChordMap } from '@/utils/music/chord-fretboard';
+import { plainToChordMap } from '@/utils/score/chordSlots';
 import { charKey, chordSlotKey, collectEdgeChordIds } from '@/utils/score/scoreModel';
 import type { Options } from 'html-to-image/lib/types';
 
@@ -30,6 +30,7 @@ export interface LineData {
 const prevCharsByLineId = new Map<string, { text: string; chars: CharItem[] }>();
 const prevEdgeChordsCache = new Map<string, { sig: string; chords: EdgeChordItem[] }>();
 
+/** 读取某行某侧的边和弦（含缓存）：签名含和弦内容，和弦编辑后能正确失效缓存；同时给出下一个可用槽位键。 */
 function getEdgeChordsWithNextKey(
   chordMap: Map<string, string>,
   lineId: string,
@@ -62,6 +63,7 @@ function getEdgeChordsWithNextKey(
   return { chords, nextKey: chordSlotKey(lineId, type, ids.length) };
 }
 
+/** 构建一行歌词的字符槽位序列，行文本未变化时复用缓存。 */
 function buildChars(lineId: string, lineText: string): CharItem[] {
   const cached = prevCharsByLineId.get(lineId);
   if (cached && cached.text === lineText) {
@@ -75,6 +77,7 @@ function buildChars(lineId: string, lineText: string): CharItem[] {
   return chars;
 }
 
+/** 构建乐谱行数据（歌词字符 + 行首/行尾和弦），并清理已消失行的缓存条目。 */
 export function buildLyricsLinesWithEdges(
   lyrics: string,
   chordMap: Map<string, string>,
@@ -121,6 +124,7 @@ export function buildLyricsLinesWithEdges(
   return result;
 }
 
+/** 清空歌词行字符与边和弦的全部缓存（和弦库整体替换等场景调用）。 */
 export function clearLyricsLineCharsCache() {
   prevCharsByLineId.clear();
   prevEdgeChordsCache.clear();
@@ -179,6 +183,7 @@ export interface ExportOptions {
   pixelRatio?: number;
 }
 
+/** 按导出元素面积选择画布像素比：超大面积降为 1.5，其余 2.5，避免超尺寸画布。 */
 const getCanvasPixelRatio = (el: HTMLElement): number => {
   const area = el.scrollWidth * el.scrollHeight;
   if (area > 8_000_000) return 1.5;
@@ -186,16 +191,19 @@ const getCanvasPixelRatio = (el: HTMLElement): number => {
   return 2.5;
 };
 
+/** 返回导出图的默认背景色（跟随当前明暗主题）。 */
 const getDOMBgColor = (): string => {
   const isDark = globalDarkMode.value;
   return isDark ? '#18181a' : '#f2f2f7';
 };
 
+/** 等待字体加载完成再渲染；超过 1.5s 超时放行，避免导出卡死。 */
 const waitForFontsReady = async (): Promise<void> => {
   if (!document.fonts) return;
   await Promise.race([document.fonts.ready, new Promise<void>(resolve => setTimeout(resolve, 1500))]);
 };
 
+/** 组装 html-to-image 的渲染参数：处理透明背景、尺寸、像素比，并剥离阴影/边框等导出干扰样式。 */
 const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions): Options => {
   let defaultBgColor: string | undefined = getDOMBgColor();
   let defaultStyle: Record<string, string> = {};
@@ -231,6 +239,7 @@ const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions):
   };
 };
 
+/** 将 DOM 元素渲染为图片 Blob（html-to-image 按需动态加载，导出前等待字体就绪）。 */
 export const renderElementToBlob = async (el: HTMLElement, exportOptions: ExportOptions = {}): Promise<Blob> => {
   const htmlToImage = await import('html-to-image');
   const finalOptions = buildHtmlToImageOptions(el, exportOptions);
@@ -242,6 +251,7 @@ export const renderElementToBlob = async (el: HTMLElement, exportOptions: Export
   return blob;
 };
 
+/** 将 DOM 元素渲染为 Canvas（pdf 导出等需要位图后处理的场景）。 */
 export const renderElementToCanvas = async (
   el: HTMLElement,
   exportOptions: ExportOptions = {}
@@ -252,11 +262,13 @@ export const renderElementToCanvas = async (
   return htmlToImage.toCanvas(el, finalOptions);
 };
 
+/** Canvas 转 Blob 的 Promise 封装。 */
 export const canvasToBlob = (canvas: HTMLCanvasElement, type = 'image/png', quality = 0.95): Promise<Blob> =>
   new Promise((resolve, reject) => {
     canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Canvas 转 Blob 失败'))), type, quality);
   });
 
+/** 复制图片 Blob 到剪贴板；环境不支持或页面失焦时抛错，写入时按 MIME 兼容性多级降级重试。 */
 export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
   if (!navigator.clipboard || typeof navigator.clipboard.write !== 'function' || typeof ClipboardItem === 'undefined') {
     throw new Error('当前浏览器环境不支持复制图片到剪贴板');
@@ -276,4 +288,5 @@ export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
   }
 };
 
+/** 延时工具（默认 0ms），用于导出前等待一帧渲染。 */
 export const wait = (ms = 0) => new Promise<void>(resolve => setTimeout(resolve, ms));

@@ -1,4 +1,4 @@
-import BaseModal from '@/components/base/BaseModal.vue';
+import BaseModal from '@/components/ui/BaseModal.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 

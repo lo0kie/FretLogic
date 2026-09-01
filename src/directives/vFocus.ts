@@ -23,6 +23,7 @@ const timerMap = new WeakMap<HTMLElement, number>();
 const FOCUSABLE_SELECTOR =
   'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
 
+/** 定位实际聚焦目标：宿主自身可聚焦则直接用，否则在其内部按选择器查找第一个可聚焦元素。 */
 const findFocusTarget = (el: HTMLElement): HTMLElement | null => {
   if (
     el instanceof HTMLInputElement ||
@@ -40,6 +41,7 @@ const findFocusTarget = (el: HTMLElement): HTMLElement | null => {
   return el.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
 };
 
+/** 执行聚焦并按修饰符/选项设置光标位置（start/end/all），支持输入框与 contenteditable。 */
 const executeFocus = (el: HTMLElement, modifiers?: Record<string, boolean>, options?: FocusOptions) => {
   const target = findFocusTarget(el);
   if (!target) return;
@@ -88,6 +90,7 @@ const executeFocus = (el: HTMLElement, modifiers?: Record<string, boolean>, opti
   }
 };
 
+/** 触发聚焦的时机控制：带 delay 时用定时器延迟执行，否则等 nextTick；重复触发前先清理旧定时器。 */
 const triggerFocusWithTiming = (el: HTMLElement, modifiers?: Record<string, boolean>, options?: FocusOptions) => {
   // 清理既有定时器
   const oldTimer = timerMap.get(el);
@@ -110,8 +113,10 @@ const triggerFocusWithTiming = (el: HTMLElement, modifiers?: Record<string, bool
   }
 };
 
+/** 判断绑定值是否为配置对象（区别于布尔开关）。 */
 const isConfigObject = (val: unknown): val is FocusOptions => typeof val === 'object' && val !== null;
 
+/** 解析指令当前是否处于激活态：undefined 视为默认激活，对象取 disabled 取反。 */
 const resolveIsActive = (val: FocusBinding): boolean => {
   if (val === undefined) return true; // v-focus 默认激活
   if (val === false) return false;

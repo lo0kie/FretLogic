@@ -27,6 +27,7 @@ async function extractErrorMessage(response: Response): Promise<string> {
   return '';
 }
 
+/** 创建线上服务器同步 provider：pull 走 GET、push 走 POST，环境标识随请求头分发。 */
 export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): SyncProvider {
   const serverUrl = (config?.serverUrl?.trim() || CLOUD_SYNC_CONFIG.SERVER_URL).trim();
 

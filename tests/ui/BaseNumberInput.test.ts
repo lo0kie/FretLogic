@@ -1,4 +1,4 @@
-import BaseNumberInput from '@/components/base/BaseNumberInput.vue';
+import BaseNumberInput from '@/components/ui/BaseNumberInput.vue';
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

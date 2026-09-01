@@ -15,6 +15,7 @@ import { logger } from '@/utils/core/logger';
 import { migrateLegacyData } from './migrateLegacy';
 import { chordRepository, songRepository } from './repositories';
 
+/** 从指定存储读取 JSON 数组；键不存在、解析失败或非数组时返回空数组。 */
 function readJson<T>(key: string, storage: Storage): T[] {
   try {
     const raw = storage.getItem(key);

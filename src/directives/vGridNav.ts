@@ -37,6 +37,7 @@ const DEFAULT_SELECTOR =
 
 const isTestEnv = typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test';
 
+/** 判断元素是否视觉可见：优先 offsetParent，fixed/sticky 节点回退计算样式判定；测试环境恒可见。 */
 const isVisible = (el: HTMLElement): boolean => {
   if (isTestEnv) return true;
   if (el.offsetParent !== null) return true;
@@ -49,6 +50,7 @@ const isVisible = (el: HTMLElement): boolean => {
   }
 };
 
+/** 判断元素是否可参与导航：无 disabled、非 tabindex=-1、无 aria-disabled、可见且不在 inert 子树中。 */
 const isEligible = (el: HTMLElement): boolean => {
   if (el.hasAttribute('disabled') || (el as HTMLButtonElement).disabled) return false;
   if (el.getAttribute('tabindex') === '-1') return false;
@@ -58,6 +60,7 @@ const isEligible = (el: HTMLElement): boolean => {
   return true;
 };
 
+/** 归一化指令配置：绑定值支持列数/选项对象/布尔禁用，修饰符叠加；缺省补齐选择器与默认方向。 */
 const resolveOptions = (binding: DirectiveBinding<GridNavBinding>): GridNavOptions => {
   const val = binding.value;
   const mods = binding.modifiers;
@@ -125,6 +128,7 @@ interface NavContext {
   loop?: boolean;
 }
 
+/** 从 from-1 向前找第一个可导航元素；loop 开启时绕到末尾继续找，找不到返回 -1。 */
 const findEligibleBackward = (entries: Entry[], from: number, loop?: boolean): number => {
   for (let idx = from - 1; idx >= 0; idx--) {
     if (entries[idx]?.eligible) return idx;
@@ -137,6 +141,7 @@ const findEligibleBackward = (entries: Entry[], from: number, loop?: boolean): n
   return -1;
 };
 
+/** 从 from+1 向后找第一个可导航元素；loop 开启时绕回头部继续找，找不到返回 -1。 */
 const findEligibleForward = (entries: Entry[], from: number, total: number, loop?: boolean): number => {
   for (let idx = from + 1; idx < total; idx++) {
     if (entries[idx]?.eligible) return idx;
@@ -226,6 +231,7 @@ interface ElementGridNavState {
 
 const stateMap = new WeakMap<HTMLElement, ElementGridNavState>();
 
+/** 创建容器 keydown 监听：按方向/几何策略定位目标元素并转移焦点，忽略输入类控件内的按键。 */
 const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) => {
   const state = stateMap.get(containerEl);
   if (!state || state.options.disabled) return;

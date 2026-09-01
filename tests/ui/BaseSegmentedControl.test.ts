@@ -1,4 +1,4 @@
-import BaseSegmentedControl from '@/components/base/BaseSegmentedControl.vue';
+import BaseSegmentedControl from '@/components/ui/BaseSegmentedControl.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 

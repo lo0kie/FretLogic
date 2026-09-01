@@ -7,7 +7,7 @@ import { sanitizePersistedData } from '@/services/validation/persistedData';
 import type { ChordId, SlotKey, Song } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { compareByPinyin, pinyinReady, preloadPinyin } from '@/utils/core/pinyin';
-import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/music/chord-fretboard';
+import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/score/chordSlots';
 import { createSong as createSongEntity } from '@/utils/music/entityFactories';
 import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -19,12 +19,14 @@ const FLUSH_MAX_WAIT = 1500;
 /** 乐谱排序方式：manual 手动（拖拽顺序）/ title 按标题 / createdAt 按创建时间 */
 export type SongSortMethod = 'manual' | 'title' | 'createdAt';
 
+/** 比较两组行 id 序列是否逐项相同，避免引用相等时的无谓更新。 */
 const lineIdsEqual = (a: string[], b: string[]) => {
   if (a === b) return true;
   if (a.length !== b.length) return false;
   return a.every((v, i) => v === b[i]);
 };
 
+/** 从 JSON 文本解析歌曲 id 索引数组；解析失败或结构非法时返回 null。 */
 const readJsonSongIds = (raw: string): string[] | null => {
   try {
     const ids = JSON.parse(raw);
@@ -34,6 +36,7 @@ const readJsonSongIds = (raw: string): string[] | null => {
   }
 };
 
+/** 读取持久化的乐谱排序方式；存储不可用或值非法时回退为手动排序。 */
 const readSongSortMethod = (): SongSortMethod => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.SONGS_SORT_METHOD);
@@ -99,6 +102,10 @@ export const useSongStore = defineStore('song', () => {
 
   let migratedFromLegacy = false;
 
+  /**
+   * 初始化加载歌曲列表：优先按索引键分片读取（并清除旧版单键数据），
+   * 索引缺失/损坏时回退读取旧版 SONGS 单键并走清洗层迁移。
+   */
   const loadInitialSongs = (): Song[] => {
     try {
       const indexRaw = localStorage.getItem(STORAGE_KEYS.SONGS_INDEX);
@@ -133,6 +140,7 @@ export const useSongStore = defineStore('song', () => {
 
   // ---- 乐谱排序方式（持久化；manual 为拖拽顺序，其余为展示排序，非 manual 时禁用拖拽重排） ----
   const songSortMethod = ref<SongSortMethod>(readSongSortMethod());
+  /** 设置乐谱排序方式并持久化到 localStorage；存储不可用时仅保持内存态。 */
   const setSongSortMethod = (method: SongSortMethod) => {
     songSortMethod.value = method;
     try {
@@ -183,6 +191,7 @@ export const useSongStore = defineStore('song', () => {
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /** 立即刷写持久化：处理删除、脏歌曲、索引更新与旧数据清理，失败时记录日志。 */
   const flushSongsNow = () => {
     if (flushTimer) {
       clearTimeout(flushTimer);
@@ -218,6 +227,7 @@ export const useSongStore = defineStore('song', () => {
     }
   };
 
+  /** 安排一次防抖刷写（400ms，最长等待 1500ms 强制落盘），合并短时间内的多次变更。 */
   const scheduleFlush = () => {
     if (!maxWaitTimer) {
       maxWaitTimer = setTimeout(() => {
@@ -232,16 +242,19 @@ export const useSongStore = defineStore('song', () => {
     }, FLUSH_DELAY);
   };
 
+  /** 标记歌曲为脏，纳入下次防抖刷写。 */
   const markSongDirty = (id: string) => {
     dirtySongIds.add(id);
     scheduleFlush();
   };
 
+  /** 标记歌曲索引为脏，下次刷写时重建 id 索引。 */
   const markIndexDirty = () => {
     indexDirty = true;
     scheduleFlush();
   };
 
+  /** 新建歌曲并加入列表尾部，返回创建的实体；标记脏并调度持久化。 */
   const createSong = (title: string): Song => {
     const newSong = createSongEntity(title);
     songs.value.push(newSong);
@@ -250,6 +263,7 @@ export const useSongStore = defineStore('song', () => {
     return newSong;
   };
 
+  /** 删除歌曲：先记录原位置与内容以支持撤销，再移除并标记存储删除。 */
   const deleteSong = (id: string) => {
     const index = songs.value.findIndex(s => s.id === id);
     if (index === -1) return;
@@ -263,6 +277,7 @@ export const useSongStore = defineStore('song', () => {
     markIndexDirty();
   };
 
+  /** 撤销最近一次删除：将歌曲恢复到原位置（或尾部），撤销后清空恢复信息。 */
   const undoDeleteSong = () => {
     if (!lastDeletedSongInfo.value) return;
     const { song, index } = lastDeletedSongInfo.value;
@@ -277,6 +292,10 @@ export const useSongStore = defineStore('song', () => {
     lastDeletedSongInfo.value = null;
   };
 
+  /**
+   * 批量更新歌曲元信息（标题/调式/变调夹/歌词/行序/和弦映射）。
+   * 仅写入有实际变化的字段，变更后递增 version、刷新 updatedAt 并调度持久化。
+   */
   const updateSongMeta = (
     id: string,
     payload: Partial<Pick<Song, 'title' | 'playKey' | 'capo' | 'lyrics' | 'lineIds' | 'chordMap'>>
@@ -317,6 +336,7 @@ export const useSongStore = defineStore('song', () => {
     }
   };
 
+  /** 为歌词字符槽位绑定和弦；值未变化时跳过，绑定后刷新版本与更新时间。 */
   const setCharChord = (songId: string, slotKey: SlotKey, chordId: ChordId) => {
     const target = songMap.value.get(songId);
     if (!target) return;
@@ -328,6 +348,7 @@ export const useSongStore = defineStore('song', () => {
     markSongDirty(songId);
   };
 
+  /** 移除歌词字符槽位上的和弦绑定；槽位本为空时跳过。 */
   const removeCharChord = (songId: string, slotKey: SlotKey) => {
     const target = songMap.value.get(songId);
     if (!target) return;
@@ -339,6 +360,7 @@ export const useSongStore = defineStore('song', () => {
     markSongDirty(songId);
   };
 
+  /** 交换或移动两个歌词槽位的和弦绑定（拖拽重排槽位用）。 */
   const swapSongSlotChords = (songId: string, sourceKey: SlotKey, targetKey: SlotKey) => {
     const target = songMap.value.get(songId);
     if (!target) return;
@@ -349,6 +371,7 @@ export const useSongStore = defineStore('song', () => {
     markSongDirty(songId);
   };
 
+  /** 用新列表全量覆盖歌曲集合：清理孤立存储键、标记全部为脏并立即落盘。 */
   const overwriteSongs = (newSongs: Song[]) => {
     const newIds = new Set<string>(newSongs.map(s => s.id));
 
@@ -396,6 +419,10 @@ export const useSongStore = defineStore('song', () => {
     chordId: ChordId;
   }
 
+  /**
+   * 从全部歌曲中解除对指定和弦 id 集合的槽位绑定（供删除和弦后联动调用）。
+   * @returns 被解除的绑定列表，可传给 restoreChordBindings 做撤销恢复。
+   */
   const unbindChordIds = (targetIds: Set<string>): RemovedChordBinding[] => {
     const removedBindings: RemovedChordBinding[] = [];
     songs.value.forEach(song => {

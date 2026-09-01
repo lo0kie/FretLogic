@@ -40,11 +40,13 @@ type ChordValidationResult =
       cleanName?: string;
     };
 
+/** 计算和弦的归一化名称键（去空格、转小写），用于同名变体的分组匹配。 */
 function nameKeyOf(chordOrName: string | ChordOrName): string {
   if (typeof chordOrName === 'string') return chordOrName.trim().toLowerCase();
   return getChordName(chordOrName).trim().toLowerCase();
 }
 
+/** 对同一和弦名的多个指法变体排序：转位在后，其余按变调夹品位升序。 */
 function sortVariants(variants: Chord[]): Chord[] {
   return [...variants].sort((a, b) => {
     const aInv = computeIsInverted(a.strings, a.capo, a.tuning, a, a.rootStringIndex);
@@ -54,6 +56,7 @@ function sortVariants(variants: Chord[]): Chord[] {
   });
 }
 
+/** 将一组同名和弦变体包装成卡片视图模型，取排序后的首个作为主指法。 */
 function toGroupedCard(variants: Chord[]): GroupedChordCard {
   const sorted = variants.length > 1 ? sortVariants(variants) : variants;
   return {
@@ -73,6 +76,7 @@ export const useChordStore = defineStore('chord', () => {
   const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
   // 只允许同时展开一个分组：单一展开状态持久化，刷新后恢复
   const expandedGroupId = useStorage<string | null>(STORAGE_KEYS.EXPANDED_GROUP_ID, null);
+  /** 判断分组是否处于折叠态（与持久化的展开分组 id 比对）。 */
   const isGroupCollapsed = (groupId: string): boolean => expandedGroupId.value !== groupId;
   const isAnyGroupExpanded = computed(() => expandedGroupId.value !== null);
 
@@ -129,6 +133,7 @@ export const useChordStore = defineStore('chord', () => {
     return result;
   });
 
+  /** 查询指定分组下某和弦名的多指法卡片；不存在或仅单指法时返回 null。 */
   const getMultiFingering = (groupId: string, chordName: string): GroupedChordCard | null => {
     if (!groupId || !chordName) return null;
     return multiFingeringData.value.get(groupId)?.get(nameKeyOf(chordName)) ?? null;
@@ -160,6 +165,7 @@ export const useChordStore = defineStore('chord', () => {
     return result;
   });
 
+  /** 获取分组内按规则排序后的和弦卡片列表；传入搜索词时仅保留匹配项。 */
   const getGroupedCards = (groupId: string, searchQuery = ''): GroupedChordCard[] => {
     const cards = groupedChordMap.value.get(groupId) ?? [];
     const q = searchQuery.trim();
@@ -167,6 +173,10 @@ export const useChordStore = defineStore('chord', () => {
     return cards.filter(card => matchChordSearch(card.mainChord, q));
   };
 
+  /**
+   * 获取和弦列表，支持按分组或全部分组（groupId 传 'ALL'）查询。
+   * 可选覆盖搜索词与排序规则；未显式指定时沿用分组自身配置。
+   */
   const getFilteredChords = (
     groupId: string,
     options: {
@@ -196,22 +206,27 @@ export const useChordStore = defineStore('chord', () => {
     return sortChordsByRule(list, effectiveRule, effectiveKey);
   };
 
+  /** 用新列表整体覆盖和弦列表（写入 localStorage，同时进入撤销历史）。 */
   const overwriteChords = (newChords: Chord[]) => {
     savedChordsList.value = [...newChords];
   };
 
+  /** 用新列表整体覆盖分组列表（写入 localStorage）。 */
   const overwriteGroups = (newGroups: Group[]) => {
     groups.value = [...newGroups];
   };
 
+  /** 设置当前选中分组 id；传 null 表示取消选中（写入 localStorage）。 */
   const setSelectedGroupId = (id: string | null) => {
     selectedGroupId.value = id;
   };
 
+  /** 折叠全部分组（清空持久化的展开分组 id）。 */
   const collapseAllGroups = () => {
     expandedGroupId.value = null;
   };
 
+  /** 选中并展开指定分组；传 null 时取消选中并折叠全部分组。 */
   const selectAndExpandGroup = (id: string | null) => {
     if (!id) {
       collapseAllGroups();
@@ -222,6 +237,7 @@ export const useChordStore = defineStore('chord', () => {
     selectedGroupId.value = id;
   };
 
+  /** 切换分组折叠/展开态；单展开模式下展开其一即折叠其余，折叠会联动清除选中。 */
   const toggleGroupCollapsed = (groupId: string) => {
     const g = groups.value.find(x => x.id === groupId);
     if (!g) return;
@@ -236,6 +252,7 @@ export const useChordStore = defineStore('chord', () => {
     }
   };
 
+  /** 新建分组并选中展开；返回创建的分组对象。 */
   const addGroup = (name: string, sortRule: GroupSortRule = DEFAULT_SORT_RULE): Group => {
     const group = createGroup(name, sortRule);
     expandedGroupId.value = group.id;
@@ -244,6 +261,7 @@ export const useChordStore = defineStore('chord', () => {
     return group;
   };
 
+  /** 重命名分组；名称去空格后为空或未变化时忽略，并刷新 updatedAt。 */
   const renameGroup = (groupId: string, name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -254,6 +272,7 @@ export const useChordStore = defineStore('chord', () => {
     );
   };
 
+  /** 更新分组排序规则；按调内度数排序时可附带调式主音（sortKey），无变化时跳过。 */
   const updateGroupSort = (groupId: string, sortRule: GroupSortRule, sortKey?: string) => {
     const g = groups.value.find(x => x.id === groupId);
     if (!g) return;
@@ -282,6 +301,7 @@ export const useChordStore = defineStore('chord', () => {
     }
   };
 
+  /** 删除分组及其名下全部和弦，并联动清除展开/选中状态（两者均写入 localStorage）。 */
   const deleteGroup = (groupId: string) => {
     savedChordsList.value = savedChordsList.value.filter(c => c.groupId !== groupId);
     groups.value = groups.value.filter(g => g.id !== groupId);
@@ -291,6 +311,10 @@ export const useChordStore = defineStore('chord', () => {
     }
   };
 
+  /**
+   * 用导入的数据整体替换分组与和弦列表（常用于导入/恢复）。
+   * 默认折叠全部分组并清空选中；可通过 options 调整。
+   */
   const replaceAllData = (
     data: { groups: Group[]; chords: Chord[] },
     options: { collapseAll?: boolean; clearSelection?: boolean } = {}
@@ -302,10 +326,12 @@ export const useChordStore = defineStore('chord', () => {
     if (clearSelection) selectedGroupId.value = null;
   };
 
+  /** 将和弦插入列表头部（新和弦优先展示）。 */
   const addChord = (chord: Chord) => {
     savedChordsList.value = [chord, ...savedChordsList.value];
   };
 
+  /** 按 id 替换更新指定和弦；id 不存在时静默忽略。 */
   const updateChord = (chord: Chord) => {
     const idx = savedChordsList.value.findIndex(c => c.id === chord.id);
     if (idx < 0) return;
@@ -326,12 +352,14 @@ export const useChordStore = defineStore('chord', () => {
     }
   };
 
+  /** 按 id 集合批量删除和弦；空集合时直接返回。 */
   const removeChordsByIds = (ids: string[]) => {
     if (ids.length === 0) return;
     const set = new Set(ids);
     savedChordsList.value = savedChordsList.value.filter(c => !set.has(c.id));
   };
 
+  /** 将一批和弦移动到目标分组；目标分组不存在时忽略，被移动项刷新 updatedAt。 */
   const moveChordsToGroup = (chordIds: string[], targetGroupId: string) => {
     if (!groups.value.some(g => g.id === targetGroupId)) return;
     const set = new Set(chordIds);
@@ -341,6 +369,7 @@ export const useChordStore = defineStore('chord', () => {
     );
   };
 
+  /** 将源分组内某和弦名（含全部指法变体）整体移动到目标分组。 */
   const moveVariantsByName = (sourceGroupId: string, chordName: string, targetGroupId: string) => {
     if (!groups.value.some(g => g.id === targetGroupId)) return;
     const targetName = nameKeyOf(chordName);
@@ -353,16 +382,10 @@ export const useChordStore = defineStore('chord', () => {
     });
   };
 
-  const reorderGroupChords = (groupId: string, oldIndex: number, newIndex: number) => {
-    const groupChords = savedChordsList.value.filter(c => c.groupId === groupId);
-    if (oldIndex < 0 || oldIndex >= groupChords.length || newIndex < 0 || newIndex >= groupChords.length) return;
-    const [moved] = groupChords.splice(oldIndex, 1);
-    if (moved === undefined) return;
-    groupChords.splice(newIndex, 0, moved);
-    const otherGroupsChords = savedChordsList.value.filter(c => c.groupId !== groupId);
-    savedChordsList.value = [...otherGroupsChords, ...groupChords];
-  };
-
+  /**
+   * 执行撤销并做孤儿数据修复：撤销后若存在指向已删分组的和弦，
+   * 自动创建（或复用）"已恢复的和弦"分组将其收容，避免数据丢失。
+   */
   const executeUndoRestore = () => {
     rawUndo();
     const validGroupIds = new Set(groups.value.map(g => g.id));
@@ -388,6 +411,7 @@ export const useChordStore = defineStore('chord', () => {
     });
   };
 
+  /** 对全量和弦执行规范化修复（如脏数据纠正），返回修复的条数。 */
   const repairData = (): number => {
     let repairedCount = 0;
     const repairedList = savedChordsList.value.map(c => {
@@ -417,6 +441,7 @@ export const useChordStore = defineStore('chord', () => {
     return targetIds;
   };
 
+  /** 删除指定分组内某和弦名下的全部指法变体，返回被删除的 id 列表。 */
   const removeVariantsByName = (groupId: string, chordName: string): string[] => {
     const targetName = nameKeyOf(chordName);
     const matchedIds = savedChordsList.value
@@ -428,6 +453,11 @@ export const useChordStore = defineStore('chord', () => {
     return matchedIds;
   };
 
+  /**
+   * 将编辑草稿校验并构建为可保存的和弦实体。
+   * 依次校验名称非空、语法合法、分组存在且已选中；编辑模式下识别无修改并保留 createdAt。
+   * 同分组内指纹重复视为重复和弦；返回值带低音弦一致性警告（warn）。
+   */
   const buildChordForSave = (draft: Chord, isEditing: boolean): ChordValidationResult => {
     const nameSegments = draft.nameSegments;
     const cleanName = nameSegments ? segmentsToString(nameSegments) : '';
@@ -528,7 +558,6 @@ export const useChordStore = defineStore('chord', () => {
     moveVariantsByName,
     executeUndoRestore,
     repairData,
-    reorderGroupChords,
     removeChords,
     removeVariantsByName,
     buildChordForSave,

@@ -12,6 +12,7 @@ export const FLOATING_Z_BASE = 9999; // 对应 tokens.scss 的 --z-menu
 export const FLOATING_Z_CEILING = 11000;
 const activeFloatingZ = new Set<number>();
 
+/** 分配一个新的浮层层号（当前最高占用 + 1，可传 ceiling 限制上限），并登记为占用中。 */
 export function acquireFloatingZ(ceiling?: number): number {
   // 取「当前最高占用 + 1」而不是最小空闲层：保证后打开的浮层必定压住所有已打开的，
   // 否则先开的浮层占着高位时，后开的会分配到低位的空闲层而被压住。
@@ -26,6 +27,7 @@ export function acquireFloatingZ(ceiling?: number): number {
   return next;
 }
 
+/** 释放浮层层号，供后续浮层复用。 */
 export function releaseFloatingZ(z: number): void {
   activeFloatingZ.delete(z);
 }
