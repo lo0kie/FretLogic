@@ -11,7 +11,6 @@
   word-break: break-word;
   width: max-content;
   max-width: min(320px, calc(100vw - 24px));
-  box-sizing: border-box;
   border-radius: $radius-md;
   box-shadow: $shadow-lg;
   backdrop-filter: var(--blur-xl);
@@ -35,5 +34,5 @@
 }
 
 .v-tooltip-arrow {
-  box-sizing: border-box;
+  //
 }

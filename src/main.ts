@@ -8,8 +8,8 @@ import { createPinia } from 'pinia';
 import VWave from 'v-wave';
 import { createApp } from 'vue';
 
-import '@/assets/main.scss';
 import '@/assets/tailwind.css';
+import '@/assets/main.scss';
 import { vFocus } from './directives/vFocus';
 import { vGridNav } from './directives/vGridNav';
 import { vMarquee } from './directives/vMarquee';

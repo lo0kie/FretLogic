@@ -16,6 +16,11 @@ export interface WebdavSettingsPayload {
   webdavProxyUrl?: string;
 }
 
+export interface ServerSettingsPayload {
+  serverUrl: string;
+  serverToken?: string;
+}
+
 export interface ValidationResult<T> {
   isValid: boolean;
   data: T;
@@ -76,6 +81,26 @@ export const validateWebdavSettings = (data: WebdavSettingsPayload): ValidationR
       webdavUsername: data.webdavUsername.trim(),
       webdavPassword: data.webdavPassword,
       webdavProxyUrl: proxyUrl,
+    },
+    errors,
+  };
+};
+
+export const validateServerSettings = (data: ServerSettingsPayload): ValidationResult<ServerSettingsPayload> => {
+  const errors: string[] = [];
+  const serverUrl = data.serverUrl.trim();
+  const urlRegex = /^https?:\/\/.+/;
+  if (!serverUrl) {
+    errors.push('服务器接口地址不能为空');
+  } else if (!urlRegex.test(serverUrl)) {
+    errors.push('服务器接口地址需以 http(s):// 开头');
+  }
+
+  return {
+    isValid: errors.length === 0,
+    data: {
+      serverUrl,
+      serverToken: data.serverToken?.trim() || undefined,
     },
     errors,
   };

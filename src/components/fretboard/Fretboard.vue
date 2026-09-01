@@ -76,7 +76,7 @@
           :width="CANVAS_CONFIG.BOARD_WIDTH"
           :height="activeTopOffset"
           :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${activeTopOffset}`"
-          style="overflow: visible; width: 100%; height: 100%; display: block"
+          style="overflow: visible; width: 100%; height: 100%"
         >
           <FretboardNote
             v-for="(str, sIdx) in chord.strings"

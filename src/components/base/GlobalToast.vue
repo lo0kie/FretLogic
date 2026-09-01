@@ -126,23 +126,16 @@ const TOAST_THEME_MAP: Record<ToastType, string> = {
   info: 'bg-bg-panel text-text-title',
 };
 
-const positionClass = computed(() => {
-  switch (props.position) {
-    case 'top-right':
-      return 'right-lg items-end';
-    case 'top-left':
-      return 'left-lg items-start';
-    case 'bottom-center':
-      return 'left-1/2 -translate-x-1/2 items-center';
-    case 'bottom-right':
-      return 'right-lg items-end';
-    case 'bottom-left':
-      return 'left-lg items-start';
-    case 'top-center':
-    default:
-      return 'left-1/2 -translate-x-1/2 items-center';
-  }
-});
+const POSITION_CLASS_MAP: Record<string, string> = {
+  'top-right': 'right-lg items-end',
+  'top-left': 'left-lg items-start',
+  'bottom-center': 'left-1/2 -translate-x-1/2 items-center',
+  'bottom-right': 'right-lg items-end',
+  'bottom-left': 'left-lg items-start',
+  'top-center': 'left-1/2 -translate-x-1/2 items-center',
+};
+
+const positionClass = computed(() => POSITION_CLASS_MAP[props.position] ?? POSITION_CLASS_MAP['top-center']);
 
 // 叠加安全区边距（Safe Area Insets）
 const positionStyle = computed(() => {

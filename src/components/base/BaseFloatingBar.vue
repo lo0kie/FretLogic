@@ -83,17 +83,15 @@ onDeactivated(() => {
 
 const isBarVisible = computed(() => Boolean(props.visible && isViewActive.value));
 
-const alignClass = computed(() => {
-  switch (props.align) {
-    case 'start':
-      return 'left-4 right-auto';
-    case 'end':
-      return 'right-4 left-auto';
-    case 'center':
-    default:
-      return 'left-0 right-0 mx-auto';
-  }
-});
+const ALIGN_CLASS_MAP: Record<'start' | 'end' | 'center', string> = {
+  start: 'left-4 right-auto',
+  end: 'right-4 left-auto',
+  center: 'left-0 right-0 mx-auto',
+};
+
+const alignClass = computed(() =>
+  props.align ? (ALIGN_CLASS_MAP[props.align] ?? ALIGN_CLASS_MAP.center) : ALIGN_CLASS_MAP.center
+);
 
 const zIndexClass = computed(() => (typeof props.zIndex === 'string' ? props.zIndex : ''));
 

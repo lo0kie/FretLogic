@@ -2,7 +2,7 @@
   <div
     ref="charBoxRef"
     v-wave="{ disabled: !isGlobalEditable }"
-    class="char-box group flex flex-col items-center justify-start p-0.5 self-stretch rounded-sm box-border relative cursor-pointer outline-none transition-all duration-fast [touch-action:pan-x_pan-y] [&.is-drop-target]:!bg-tint-primary-85 [&.is-dragging-source]:!opacity-35 [&.is-dragging-source]:!shadow-[0_0_0_2px_var(--bg-panel),0_0_0_4px_var(--color-primary)] [&.is-dragging-copy-source]:!shadow-[0_0_0_2px_var(--bg-panel),0_0_0_4px_var(--color-primary)]"
+    class="char-box group flex flex-col items-center justify-start p-0.5 self-stretch rounded-sm box-border relative cursor-pointer outline-none transition-all duration-fast [touch-action:pan-x_pan-y] [&.is-drop-target]:!bg-tint-primary-85 [&.is-dragging-source]:!opacity-35"
     :data-slot-key="slotKey"
     :class="[
       isGlobalEditable
@@ -19,7 +19,7 @@
         // 若跟随 dropZone 逐槽增缩会推动整行来回顶、产生抽动
         'is-drop-widened': !chord && isDragActive,
         // 聚焦时和弦自身保持外边框（焦点会落到组内按钮，故用 isFocused 状态而非 :focus）
-        '!shadow-[0_0_0_2px_var(--bg-panel),0_0_0_4px_var(--color-primary)]': isFocused,
+        [FOCUS_RING_SHADOW_CLASS]: isFocused,
       },
     ]"
     :role="isGlobalEditable ? 'button' : undefined"
@@ -57,22 +57,13 @@
         >
           <!-- 有和弦的落点：整槽压暗提示将被影响（位于分区之下） -->
           <div v-if="chord" class="absolute inset-0 -z-[1] rounded-[6px] bg-black/30 pointer-events-none" />
-          <div class="flex items-center justify-center transition-all duration-[160ms]" :class="zoneShellClass('top')">
-            <span
-              class="font-bold leading-none transition-all duration-[160ms] break-keep"
-              :class="zoneLabelClass('top')"
-            >
+          <div class="flex items-center justify-center" :class="[FAST_TRANSITION_CLASS, zoneShellClass('top')]">
+            <span class="font-bold leading-none break-keep" :class="[FAST_TRANSITION_CLASS, zoneLabelClass('top')]">
               {{ zoneLabel('top') }}
             </span>
           </div>
-          <div
-            class="flex items-center justify-center transition-all duration-[160ms]"
-            :class="zoneShellClass('bottom')"
-          >
-            <span
-              class="font-bold leading-none transition-all duration-[160ms] break-keep"
-              :class="zoneLabelClass('bottom')"
-            >
+          <div class="flex items-center justify-center" :class="[FAST_TRANSITION_CLASS, zoneShellClass('bottom')]">
+            <span class="font-bold leading-none break-keep" :class="[FAST_TRANSITION_CLASS, zoneLabelClass('bottom')]">
               {{ zoneLabel('bottom') }}
             </span>
           </div>
@@ -84,14 +75,17 @@
       >
         <div
           v-if="isVisible && isGlobalEditable && !isExporting"
-          class="absolute inset-0 rounded-sm bg-black/30 pointer-events-none transition-all duration-[160ms] z-[2]"
-          :class="isActive ? 'opacity-100' : 'opacity-0'"
+          class="absolute inset-0 rounded-sm bg-black/30 pointer-events-none z-[2]"
+          :class="[FAST_TRANSITION_CLASS, isActive ? 'opacity-100' : 'opacity-0']"
         >
           <div
             v-if="isVisible && !isExporting && isGlobalEditable"
             ref="actionGroupEl"
-            class="absolute inset-0 z-card transition-all duration-[160ms] flex flex-col items-stretch justify-center gap-1.5 p-2"
-            :class="isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'"
+            class="absolute inset-0 z-card flex flex-col items-stretch justify-center gap-1.5 p-2"
+            :class="[
+              FAST_TRANSITION_CLASS,
+              isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
+            ]"
             @keydown="handleActionKeydown"
           >
             <ActionButton
@@ -254,6 +248,10 @@ const activeActionIndex = ref(0);
 // 覆盖层（操作按钮/遮罩/添加槽提示）在 hover 或聚焦时显示；拖拽进行中一律抑制，
 // 防止指针划过的和弦弹出压暗遮罩与按钮、盖住落点高亮
 const isActive = computed(() => (isHovered.value || isFocused.value) && !props.isDragActive);
+
+// 拖拽/焦点高亮与过渡常量
+const FOCUS_RING_SHADOW_CLASS = '!shadow-[0_0_0_2px_var(--bg-panel),0_0_0_4px_var(--color-primary)]';
+const FAST_TRANSITION_CLASS = 'transition-all duration-[160ms]';
 
 // 三个操作按钮的级联过渡类（完整类名需静态写出供 Tailwind 扫描）：
 // 显示时按 修改 → 移动 → 删除 依次延迟淡入并上移归位，隐藏时统一无延迟淡出。
@@ -497,5 +495,13 @@ unwatchExport = watch(
 .char-box.is-press-arming {
   box-shadow: 0 0 0 2px var(--color-primary);
   transform: scale(1.04);
+}
+
+/* 拖拽源槽位高亮外边框 */
+.char-box.is-dragging-source,
+.char-box.is-dragging-copy-source {
+  box-shadow:
+    0 0 0 2px var(--bg-panel),
+    0 0 0 4px var(--color-primary) !important;
 }
 </style>

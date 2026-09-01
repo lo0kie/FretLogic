@@ -132,45 +132,48 @@ const resolvedDescription = computed(() => {
 
 const hasText = computed(() => Boolean(props.title || resolvedDescription.value));
 
-const sizeClass = computed(() => {
-  switch (props.size) {
-    case 'sm':
-      return 'empty-size-sm py-md px-0';
-    case 'lg':
-      return 'empty-size-lg py-3xl px-xl';
-    default:
-      return 'empty-size-md py-3xl px-lg';
+const SIZE_CONFIG_MAP: Record<
+  'sm' | 'md' | 'lg',
+  {
+    sizeClass: string;
+    gapClass: string;
+    iconSize: number;
+    actionBtnSize: 'sm' | 'md';
+    titleClass: string;
+    descriptionClass: string;
   }
-});
-
-const gapClass = computed(() => {
-  switch (props.size) {
-    case 'sm':
-      return 'gap-1.5';
-    case 'lg':
-      return 'gap-4';
-    default:
-      return 'gap-2.5';
-  }
-});
-
-const SIZE_TO_ICON: Record<'sm' | 'md' | 'lg', number> = {
-  sm: 18,
-  md: 26,
-  lg: 38,
+> = {
+  sm: {
+    sizeClass: 'empty-size-sm py-md px-0',
+    gapClass: 'gap-1.5',
+    iconSize: 18,
+    actionBtnSize: 'sm',
+    titleClass: 'text-2xs font-semibold',
+    descriptionClass: 'text-2xs',
+  },
+  md: {
+    sizeClass: 'empty-size-md py-3xl px-lg',
+    gapClass: 'gap-2.5',
+    iconSize: 26,
+    actionBtnSize: 'sm',
+    titleClass: 'text-xs font-semibold',
+    descriptionClass: 'text-2xs',
+  },
+  lg: {
+    sizeClass: 'empty-size-lg py-3xl px-xl',
+    gapClass: 'gap-4',
+    iconSize: 38,
+    actionBtnSize: 'md',
+    titleClass: 'text-base font-bold',
+    descriptionClass: 'text-xs',
+  },
 };
-const iconSize = computed(() => SIZE_TO_ICON[props.size] ?? 26);
 
-const actionBtnSize = computed(() => {
-  switch (props.size) {
-    case 'sm':
-      return 'sm';
-    case 'lg':
-      return 'md';
-    default:
-      return 'sm';
-  }
-});
+const sizeConfig = computed(() => SIZE_CONFIG_MAP[props.size] ?? SIZE_CONFIG_MAP.md);
+const sizeClass = computed(() => sizeConfig.value.sizeClass);
+const gapClass = computed(() => sizeConfig.value.gapClass);
+const iconSize = computed(() => sizeConfig.value.iconSize);
+const actionBtnSize = computed(() => sizeConfig.value.actionBtnSize);
 
 const zoneClass = computed(() => {
   if (props.image && !isImageError.value) {
@@ -182,23 +185,6 @@ const zoneClass = computed(() => {
   return 'flex items-center justify-center';
 });
 
-const titleClass = computed(() => {
-  switch (props.size) {
-    case 'sm':
-      return 'text-2xs font-semibold';
-    case 'lg':
-      return 'text-base font-bold';
-    default:
-      return 'text-xs font-semibold';
-  }
-});
-
-const descriptionClass = computed(() => {
-  switch (props.size) {
-    case 'lg':
-      return 'text-xs';
-    default:
-      return 'text-2xs';
-  }
-});
+const titleClass = computed(() => sizeConfig.value.titleClass);
+const descriptionClass = computed(() => sizeConfig.value.descriptionClass);
 </script>

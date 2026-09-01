@@ -192,94 +192,92 @@ export function useFretboardInteraction(
       fretIndex: showOpenStrings.value ? 0 : 1,
     };
 
-    switch (e.key) {
-      case 'ArrowUp':
-        e.preventDefault();
+    const handleEnterOrSpace = () => {
+      const pt = focusPoint.value;
+      if (!pt) return;
+      if (pt.fretIndex === 0) {
+        handleLocalToggleOpenString(pt.stringIndex);
+      } else {
+        emitStringsUpdate(cloned => {
+          const str = cloned[pt.stringIndex];
+          if (!str) return;
+          if (str[0] === pt.fretIndex) {
+            setStringFret(str, -1);
+          } else {
+            setStringFret(str, pt.fretIndex);
+          }
+        });
+      }
+    };
+
+    const handleDeleteOrBackspace = () => {
+      const pt = focusPoint.value;
+      if (!pt) return;
+      emitStringsUpdate(cloned => {
+        const str = cloned[pt.stringIndex];
+        if (str) setStringFret(str, -1);
+      });
+    };
+
+    const keyActions: Record<string, () => void> = {
+      'ArrowUp': () => {
         focusPoint.value = {
           stringIndex: current.stringIndex,
           fretIndex: Math.max(minFret, current.fretIndex - 1),
         };
-        break;
-      case 'ArrowDown':
-        e.preventDefault();
+      },
+      'ArrowDown': () => {
         focusPoint.value = {
           stringIndex: current.stringIndex,
           fretIndex: Math.min(maxFret, current.fretIndex + 1),
         };
-        break;
-      case 'ArrowLeft':
-        e.preventDefault();
+      },
+      'ArrowLeft': () => {
         focusPoint.value = {
           stringIndex: Math.max(0, current.stringIndex - 1),
           fretIndex: current.fretIndex,
         };
-        break;
-      case 'ArrowRight':
-        e.preventDefault();
+      },
+      'ArrowRight': () => {
         focusPoint.value = {
           stringIndex: Math.min(5, current.stringIndex + 1),
           fretIndex: current.fretIndex,
         };
-        break;
-      case 'Home':
-        e.preventDefault();
+      },
+      'Home': () => {
         focusPoint.value = {
           stringIndex: 0,
           fretIndex: current.fretIndex,
         };
-        break;
-      case 'End':
-        e.preventDefault();
+      },
+      'End': () => {
         focusPoint.value = {
           stringIndex: 5,
           fretIndex: current.fretIndex,
         };
-        break;
-      case 'PageUp':
-        e.preventDefault();
+      },
+      'PageUp': () => {
         focusPoint.value = {
           stringIndex: current.stringIndex,
           fretIndex: minFret,
         };
-        break;
-      case 'PageDown':
-        e.preventDefault();
+      },
+      'PageDown': () => {
         focusPoint.value = {
           stringIndex: current.stringIndex,
           fretIndex: maxFret,
         };
-        break;
-      case 'Enter':
-      case ' ': {
-        e.preventDefault();
-        const pt = focusPoint.value;
-        if (!pt) break;
-        if (pt.fretIndex === 0) {
-          handleLocalToggleOpenString(pt.stringIndex);
-        } else {
-          emitStringsUpdate(cloned => {
-            const str = cloned[pt.stringIndex];
-            if (!str) return;
-            if (str[0] === pt.fretIndex) {
-              setStringFret(str, -1);
-            } else {
-              setStringFret(str, pt.fretIndex);
-            }
-          });
-        }
-        break;
-      }
-      case 'Delete':
-      case 'Backspace': {
-        e.preventDefault();
-        const pt = focusPoint.value;
-        if (!pt) break;
-        emitStringsUpdate(cloned => {
-          const str = cloned[pt.stringIndex];
-          if (str) setStringFret(str, -1);
-        });
-        break;
-      }
+      },
+      'Enter': handleEnterOrSpace,
+      ' ': handleEnterOrSpace,
+      'Delete': handleDeleteOrBackspace,
+      'Backspace': handleDeleteOrBackspace,
+    };
+
+    const action = keyActions[e.key];
+    if (action) {
+      e.preventDefault();
+      action();
     }
   };
 

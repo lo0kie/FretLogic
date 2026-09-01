@@ -37,14 +37,22 @@
     <span
       v-else-if="showReadout && !isRange && readoutPosition === 'left'"
       class="text-2xs font-bold text-text-title text-center font-mono rounded-sm tabular-nums inline-block min-w-8"
-      :class="editable && !disabled ? 'cursor-text hover:text-primary' : ''"
-      :role="editable && !disabled ? 'button' : undefined"
-      :tabindex="editable && !disabled ? 0 : -1"
-      :aria-label="editable && !disabled ? '输入精确数值' : undefined"
-      :title="editable && !disabled ? '点击输入精确数值' : ''"
-      @click="startEdit"
-      @keydown.enter.prevent="startEdit"
-      @keydown.space.prevent="startEdit"
+      :class="
+        valueTextClickable
+          ? props.editable
+            ? 'cursor-text hover:text-primary'
+            : 'cursor-pointer hover:text-primary'
+          : ''
+      "
+      :role="valueTextClickable ? 'button' : undefined"
+      :tabindex="valueTextClickable ? 0 : -1"
+      :aria-label="
+        valueTextClickable ? (props.editable ? '输入精确数值' : `恢复默认值 ${defaultDisplayText}`) : undefined
+      "
+      :title="valueTextClickable ? (props.editable ? '点击输入精确数值' : '点击恢复默认值') : ''"
+      @click="handleReadoutClick"
+      @keydown.enter.prevent="handleReadoutClick"
+      @keydown.space.prevent="handleReadoutClick"
     >
       {{ singleDisplayText }}
     </span>
@@ -96,7 +104,7 @@
         class="absolute w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none hover:scale-125 group-hover:scale-125 active:scale-135"
         :class="[
           vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-          isDragging === 0 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-transform duration-75',
+          isDragging === 0 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-all duration-75',
         ]"
         :style="singleThumbStyle"
         tabindex="0"
@@ -127,7 +135,7 @@
           class="absolute w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none hover:scale-125 group-hover:scale-125 active:scale-135"
           :class="[
             vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-            isDragging === 0 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-transform duration-75',
+            isDragging === 0 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-all duration-75',
           ]"
           :style="rangeThumb0Style"
           tabindex="0"
@@ -158,7 +166,7 @@
           class="absolute w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none hover:scale-125 group-hover:scale-125 active:scale-135"
           :class="[
             vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-            isDragging === 1 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-transform duration-75',
+            isDragging === 1 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-all duration-75',
           ]"
           :style="rangeThumb1Style"
           tabindex="0"
@@ -238,14 +246,22 @@
     <span
       v-else-if="showReadout && !isRange && readoutPosition === 'right'"
       class="text-2xs font-bold text-text-title text-center font-mono rounded-sm tabular-nums inline-block min-w-8"
-      :class="editable && !disabled ? 'cursor-text hover:text-primary' : ''"
-      :role="editable && !disabled ? 'button' : undefined"
-      :tabindex="editable && !disabled ? 0 : -1"
-      :aria-label="editable && !disabled ? '输入精确数值' : undefined"
-      :title="editable && !disabled ? '点击输入精确数值' : ''"
-      @click="startEdit"
-      @keydown.enter.prevent="startEdit"
-      @keydown.space.prevent="startEdit"
+      :class="
+        valueTextClickable
+          ? props.editable
+            ? 'cursor-text hover:text-primary'
+            : 'cursor-pointer hover:text-primary'
+          : ''
+      "
+      :role="valueTextClickable ? 'button' : undefined"
+      :tabindex="valueTextClickable ? 0 : -1"
+      :aria-label="
+        valueTextClickable ? (props.editable ? '输入精确数值' : `恢复默认值 ${defaultDisplayText}`) : undefined
+      "
+      :title="valueTextClickable ? (props.editable ? '点击输入精确数值' : '点击恢复默认值') : ''"
+      @click="handleReadoutClick"
+      @keydown.enter.prevent="handleReadoutClick"
+      @keydown.space.prevent="handleReadoutClick"
     >
       {{ singleDisplayText }}
     </span>
@@ -288,6 +304,8 @@ const props = withDefaults(
     formatter?: (val: number) => string;
     marks?: Record<number, string>;
     showTicks?: boolean;
+    /** 点击数值文字是否恢复为默认值，默认 true */
+    restoreOnValueClick?: boolean;
   }>(),
   {
     min: 0,
@@ -311,10 +329,35 @@ const props = withDefaults(
     formatter: undefined,
     marks: undefined,
     showTicks: false,
+    restoreOnValueClick: true,
   }
 );
 
 const modelValue = defineModel<T>({ required: true });
+
+// 点击数值文字恢复默认值：默认开启；禁用或区间滑块不可点击
+const valueTextClickable = computed(
+  () => !isRange.value && !props.disabled && (props.editable || props.restoreOnValueClick)
+);
+
+const defaultDisplayText = computed(() => {
+  if (Array.isArray(props.defaultValue)) return props.defaultValue.map(formatVal).join(' - ');
+  return formatVal(props.defaultValue);
+});
+
+const restoreDefault = () => {
+  if (props.disabled) return;
+  updateValue(props.defaultValue, { commit: true });
+};
+
+// 数值文字点击：可编辑时进入编辑，否则（默认）恢复默认值
+const handleReadoutClick = () => {
+  if (props.editable && !props.disabled) {
+    startEdit();
+  } else if (props.restoreOnValueClick && !props.disabled) {
+    restoreDefault();
+  }
+};
 
 const emit = defineEmits<{
   (e: 'change', value: T): void;

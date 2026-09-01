@@ -216,7 +216,7 @@ export type Group =
 
 /** 备份包内嵌的云端同步配置（v5 起随备份导出/导入，恢复后端凭据用） */
 export interface SyncSettingsBackup {
-  syncTarget?: 'github' | 'webdav';
+  syncTarget?: 'github' | 'webdav' | 'server';
   githubToken?: string;
   githubOwner?: string;
   githubRepo?: string;
@@ -226,6 +226,8 @@ export interface SyncSettingsBackup {
   webdavUsername?: string;
   webdavPassword?: string;
   webdavProxyUrl?: string;
+  serverUrl?: string;
+  serverToken?: string;
 }
 
 /** 备份包内嵌的偏好设置（v6 起随备份导出/导入；不含凭据，云端同步也安全携带） */

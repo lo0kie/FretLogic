@@ -18,7 +18,7 @@
     <div class="flex flex-col gap-md py-xs">
       <BaseFormRow
         label="和弦库"
-        label-width="4.5rem"
+        :label-width="FORM_LABEL_WIDTH"
         :help="`全部分组与和弦（当前 ${exportStats.groupCount} 组 / ${exportStats.chordCount} 个）`"
         :disabled="!exportAvailability.chords"
       >
@@ -31,7 +31,7 @@
 
       <BaseFormRow
         label="乐谱库"
-        label-width="4.5rem"
+        :label-width="FORM_LABEL_WIDTH"
         :help="`全部乐谱（当前 ${exportStats.songCount} 份）`"
         :disabled="!exportAvailability.songs"
       >
@@ -42,11 +42,11 @@
         />
       </BaseFormRow>
 
-      <BaseFormRow label="同步配置" label-width="4.5rem" help="云端同步的后端与账号信息">
+      <BaseFormRow label="同步配置" :label-width="FORM_LABEL_WIDTH" help="云端同步的后端与账号信息">
         <BaseSwitch v-model="backupModals.modalData.exportSelection.syncSettings" aria-label="导出同步配置" />
       </BaseFormRow>
 
-      <BaseFormRow label="偏好设置" label-width="4.5rem" help="工作台与乐谱的乐理显示偏好">
+      <BaseFormRow label="偏好设置" :label-width="FORM_LABEL_WIDTH" help="工作台与乐谱的乐理显示偏好">
         <BaseSwitch v-model="backupModals.modalData.exportSelection.preferences" aria-label="导出偏好设置" />
       </BaseFormRow>
     </div>
@@ -72,7 +72,7 @@
     <div class="flex flex-col gap-md py-xs">
       <BaseFormRow
         label="和弦库"
-        label-width="4.5rem"
+        :label-width="FORM_LABEL_WIDTH"
         :help="`备份包含 ${importStats?.groupCount ?? 0} 组 / ${importStats?.chordCount ?? 0} 个和弦`"
         :disabled="!importAvailability.chords"
       >
@@ -85,7 +85,7 @@
 
       <BaseFormRow
         label="乐谱库"
-        label-width="4.5rem"
+        :label-width="FORM_LABEL_WIDTH"
         :help="`备份包含 ${importStats?.songCount ?? 0} 份乐谱`"
         :disabled="!importAvailability.songs"
       >
@@ -98,7 +98,7 @@
 
       <BaseFormRow
         label="同步配置"
-        label-width="4.5rem"
+        :label-width="FORM_LABEL_WIDTH"
         :help="`云端后端：${importStats?.syncTargetLabel ?? '-'}（含凭据）`"
         :disabled="!importAvailability.syncSettings"
       >
@@ -111,7 +111,7 @@
 
       <BaseFormRow
         label="偏好设置"
-        label-width="4.5rem"
+        :label-width="FORM_LABEL_WIDTH"
         help="工作台与乐谱的乐理显示偏好"
         :disabled="!importAvailability.preferences"
       >
@@ -135,6 +135,9 @@ import { inject } from 'vue';
 
 type BackupModals = ReturnType<typeof useBackupModals>;
 const backupModals = inject<BackupModals>('backupModals')!;
+
+/** 表单行统一 Label 宽度 */
+const FORM_LABEL_WIDTH = '4.5rem';
 
 // computed 解构到顶层，模板中才会自动解包
 const exportStats = backupModals.exportStats;

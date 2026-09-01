@@ -23,7 +23,7 @@
         :ref="el => setItemRef(el, i)"
         v-wave="{ disabled: disabled || opt.disabled }"
         type="button"
-        class="segmented-item relative z-20 font-bold text-text-muted rounded-full border-none bg-transparent shadow-none whitespace-nowrap inline-flex items-center justify-center self-stretch h-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/70 leading-none enabled:cursor-pointer enabled:hover:text-text-title disabled:cursor-not-allowed disabled:opacity-40"
+        class="segmented-item relative z-20 font-bold text-text-muted rounded-full border-none bg-transparent shadow-none whitespace-nowrap inline-flex items-center justify-center self-stretch h-full transition-all duration-200 ease-out outline-none focus-visible:ring-2 focus-visible:ring-primary/70 leading-none enabled:cursor-pointer enabled:hover:text-text-title disabled:cursor-not-allowed disabled:opacity-40"
         :class="itemClasses(opt)"
         role="radio"
         :aria-checked="isSelected(opt.value)"
@@ -61,6 +61,8 @@ const props = withDefaults(
     block?: boolean;
     width?: FormComponentWidth;
     ariaLabel?: string;
+    /** 紧凑模式：缩小按钮左右内边距，默认 true */
+    compacted?: boolean;
   }>(),
   {
     size: 'md',
@@ -69,6 +71,7 @@ const props = withDefaults(
     closeable: false,
     block: false,
     width: 'auto',
+    compacted: false,
   }
 );
 
@@ -106,6 +109,15 @@ const SIZE_MAP: Record<'sm' | 'md' | 'lg', { wrapper: string; item: string; text
   lg: { wrapper: 'h-[2.3rem]', item: 'text-xs px-3', textItem: 'px-3 py-1.5 text-sm' },
 };
 
+/** 紧凑模式尺寸：进一步缩小按钮左右内边距（超紧凑） */
+const COMPACTED_SIZE_MAP: Record<'sm' | 'md' | 'lg', { wrapper: string; item: string; textItem: string }> = {
+  sm: { wrapper: 'h-[1.6rem]', item: 'text-2xs px-1', textItem: 'px-1 py-1 text-2xs' },
+  md: { wrapper: 'h-[1.9rem]', item: 'text-2xs px-1.5', textItem: 'px-1.5 py-1 text-xs' },
+  lg: { wrapper: 'h-[2.3rem]', item: 'text-xs px-1.5', textItem: 'px-1.5 py-1.5 text-sm' },
+};
+
+const sizeConfig = computed(() => (props.compacted ? COMPACTED_SIZE_MAP[props.size] : SIZE_MAP[props.size]));
+
 const normalizedOptions = computed<SegmentOption<T>[]>(() =>
   props.options.map(o => {
     if (o !== null && typeof o === 'object' && 'value' in (o as object)) {
@@ -136,7 +148,7 @@ const indicatorStyle = computed(() => ({
 }));
 
 const controlClasses = computed(() => [
-  SIZE_MAP[props.size].wrapper,
+  sizeConfig.value.wrapper,
   props.variant === 'pill'
     ? 'bg-bg-body border border-border-light rounded-full p-1 gap-1 transition-opacity'
     : 'bg-transparent gap-xs',
@@ -149,11 +161,11 @@ const itemClasses = (opt: SegmentOption<T>): (string | Record<string, boolean>)[
   const isExpand = isFullWidth.value;
 
   if (props.variant === 'pill') {
-    return [SIZE_MAP[props.size].item, active ? '!text-primary font-extrabold' : '', { 'flex-1': isExpand }];
+    return [sizeConfig.value.item, active ? '!text-primary font-extrabold' : '', { 'flex-1': isExpand }];
   }
   // text variant
   return [
-    SIZE_MAP[props.size].textItem,
+    sizeConfig.value.textItem,
     'rounded-lg font-medium',
     active
       ? 'text-primary font-semibold bg-primary/10'

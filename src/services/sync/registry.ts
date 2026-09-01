@@ -1,7 +1,15 @@
 import type { useSettingsStore } from '@/stores/settingsStore';
-import { validateGithubSettings, validateWebdavSettings } from '@/utils/core/validateSettings';
-import type { GithubSyncConfig, SyncConfig, SyncProvider, SyncProviderKind, WebdavSyncConfig } from './provider';
+import { validateGithubSettings, validateServerSettings, validateWebdavSettings } from '@/utils/core/validateSettings';
+import type {
+  GithubSyncConfig,
+  ServerSyncConfig,
+  SyncConfig,
+  SyncProvider,
+  SyncProviderKind,
+  WebdavSyncConfig,
+} from './provider';
 import { createGithubSyncProvider } from './githubSyncProvider';
+import { createServerSyncProvider } from './serverSyncProvider';
 import { createWebdavSyncProvider } from './webdavSyncProvider';
 
 type SettingsStore = ReturnType<typeof useSettingsStore>;
@@ -19,7 +27,7 @@ export interface ProviderFactory {
   create: (config: SyncConfig) => SyncProvider;
   /**
    * 「测试连接」专用宽松解析：只要求发起探测请求的最小字段
-   *（GitHub 仅 owner/repo，WebDAV 仅 serverUrl），分支/路径等完整配置不强制。
+   *（GitHub 仅 owner/repo，WebDAV 仅 serverUrl，Server 仅 serverUrl），分支/路径等完整配置不强制。
    */
   resolveTestConfig: (settings: SettingsStore) => { config?: SyncConfig; error?: string };
 }
@@ -60,8 +68,8 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
           token: s.githubToken.trim() || undefined,
           owner,
           repo,
-          branch: 'main',
-          path: '',
+          branch: s.githubBranch.trim() || 'master',
+          path: s.githubPath.trim() || 'backup/chords.json',
         },
       };
     },
@@ -100,6 +108,36 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
           username: s.webdavUsername.trim() || undefined,
           password: s.webdavPassword || undefined,
           ...(proxyUrl ? { proxyUrl } : {}),
+        },
+      };
+    },
+  },
+  server: {
+    resolveConfig: s => {
+      const r = validateServerSettings({
+        serverUrl: s.serverUrl,
+        serverToken: s.serverToken,
+      });
+      if (!r.isValid) return { error: r.errors[0] ?? '服务器配置无效' };
+      const d = r.data;
+      return {
+        config: {
+          kind: 'server',
+          serverUrl: d.serverUrl,
+          token: d.serverToken,
+        },
+      };
+    },
+    create: config => createServerSyncProvider(config as ServerSyncConfig),
+    resolveTestConfig: s => {
+      const serverUrl = s.serverUrl.trim();
+      if (!serverUrl) return { error: '请先填写服务器接口地址' };
+      if (!/^https?:\/\/.+/.test(serverUrl)) return { error: '服务器接口地址需以 http(s):// 开头' };
+      return {
+        config: {
+          kind: 'server',
+          serverUrl,
+          token: s.serverToken.trim() || undefined,
         },
       };
     },

@@ -1,6 +1,5 @@
 @use '@/assets/tokens' as *;
 @use './transitions.scss';
-@import 'normalize.css';
 @import 'nprogress/nprogress.css';
 
 #nprogress {
@@ -24,7 +23,6 @@ body {
   width: 100vw;
   min-width: $app-min-width;
   height: 100vh;
-  margin: 0;
   overflow-x: auto;
   overflow-y: hidden;
   user-select: none;
@@ -82,7 +80,6 @@ body {
 
 .form-hint,
 .modal-hint {
-  margin: 0;
   font-size: $fs-2xs;
   line-height: 1.5;
   color: var(--text-muted);

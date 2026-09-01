@@ -103,20 +103,14 @@ const effectiveShorthand = computed(() => {
   return isScoreMode.value ? settingsStore.scoreChordShorthand : settingsStore.workbenchChordShorthand;
 });
 
-const sizeClass = computed(() => {
-  switch (props.size) {
-    case 'xs':
-      return 'text-[11px]';
-    case 'sm':
-      return 'text-[13px]';
-    case 'md':
-      return 'text-[15px]';
-    case 'lg':
-      return 'text-[18px]';
-    default:
-      return '';
-  }
-});
+const SIZE_CLASS_MAP: Record<string, string> = {
+  xs: 'text-[11px]',
+  sm: 'text-[13px]',
+  md: 'text-[15px]',
+  lg: 'text-[18px]',
+};
+
+const sizeClass = computed(() => (props.size ? (SIZE_CLASS_MAP[props.size] ?? '') : ''));
 
 const resolvedSegments = computed<ChordNameSegments | null>(() => {
   if (props.segments) return props.segments;

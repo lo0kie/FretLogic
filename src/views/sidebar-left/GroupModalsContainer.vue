@@ -5,7 +5,7 @@
       v-focus
       placeholder="请输入分组名称..."
       clearable
-      :maxlength="15"
+      :maxlength="MAX_GROUP_NAME_LENGTH"
       @enter="groupModals.handleCreateGroup"
     />
   </BaseModal>
@@ -16,7 +16,7 @@
       v-focus.select
       placeholder="请输入新名称..."
       clearable
-      :maxlength="15"
+      :maxlength="MAX_GROUP_NAME_LENGTH"
       @enter="groupModals.handleRenameGroup"
     />
   </BaseModal>
@@ -39,11 +39,11 @@
     @confirm="groupModals.handleSaveSort"
   >
     <div class="sort-modal-body flex flex-col gap-lg py-xs">
-      <BaseFormRow label="排序规则" label-width="4.2rem">
+      <BaseFormRow label="排序规则" :label-width="FORM_LABEL_WIDTH">
         <BaseSegmentedControl v-model="groupModals.modalData.sortRule" :options="SORT_RULE_CONFIG" />
       </BaseFormRow>
 
-      <BaseFormRow label="调式设定" label-width="4.2rem">
+      <BaseFormRow label="调式设定" :label-width="FORM_LABEL_WIDTH">
         <BaseSelector
           v-model="groupModals.modalData.sortKey"
           :options="KEY_OPTIONS"
@@ -69,6 +69,12 @@ import { computed, inject } from 'vue';
 
 type GroupModals = ReturnType<typeof useChordGroupModals>;
 const groupModals = inject<GroupModals>('groupModals')!;
+
+/** 表单行统一 Label 宽度 */
+const FORM_LABEL_WIDTH = '4.2rem';
+/** 分组名称最大长度 */
+const MAX_GROUP_NAME_LENGTH = 15;
+
 /** 删除分组弹窗标题：拼接被删分组名 */
 const deleteGroupTitle = computed(() => `删除分组 ${groupModals.modalData.activeGroup?.name}`);
 </script>

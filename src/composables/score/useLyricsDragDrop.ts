@@ -217,20 +217,15 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
         scoreEditor.activeSong
       ) {
         const targetKey = dragOverSlotKey.value;
-        const occupied = !!scoreEditor.activeSong.chordMap.get(targetKey as SlotKey);
-        // sourceKey 源自 data-slot-key，store 动作内会再做 isSlotKey 前缀校验
-        switch (resolveDropAction(dropZone.value, occupied)) {
-          case 'swap':
-            scoreEditor.swapSlotChords(draggingSlotKey.value, targetKey);
-            break;
-          case 'copy':
-            scoreEditor.copySlotChord(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
-            break;
-          case 'replace':
-          case 'move':
-            scoreEditor.moveSlotChord(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
-            break;
-        }
+        const occupied = Boolean(scoreEditor.activeSong.chordMap.get(targetKey as SlotKey));
+        const action = resolveDropAction(dropZone.value, occupied);
+        const dropActionHandlers: Record<'swap' | 'copy' | 'replace' | 'move', (src: string, tgt: string) => void> = {
+          swap: (src, tgt) => scoreEditor.swapSlotChords(src, tgt),
+          copy: (src, tgt) => scoreEditor.copySlotChord(src as SlotKey, tgt as SlotKey),
+          replace: (src, tgt) => scoreEditor.moveSlotChord(src as SlotKey, tgt as SlotKey),
+          move: (src, tgt) => scoreEditor.moveSlotChord(src as SlotKey, tgt as SlotKey),
+        };
+        dropActionHandlers[action]?.(draggingSlotKey.value, targetKey);
       }
     } catch {
       /* 落地失败则忽略（可手动撤销兜底） */

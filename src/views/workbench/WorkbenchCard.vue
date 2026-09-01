@@ -1,11 +1,7 @@
 <template>
   <div
     ref="cardRef"
-    class="flex flex-col items-center justify-evenly pointer-events-auto bg-bg-panel/90 backdrop-blur-lg border border-glass-border rounded-md shadow-panel relative px-sm shrink-0 transition-all duration-slow ease-sidebar hover:border-border-base hover:shadow-lg"
-    :style="{
-      height: dynamicHeight,
-      width: `${CANVAS_CONFIG.BOARD_WIDTH + 64}px`,
-    }"
+    class="flex flex-col items-center justify-evenly pointer-events-auto bg-bg-panel/90 backdrop-blur-lg border border-glass-border rounded-md shadow-panel relative py-xl px-2xl shrink-0 transition-all duration-slow ease-sidebar hover:border-border-base hover:shadow-lg"
   >
     <div class="flex justify-center relative w-full z-base shrink-0">
       <Fretboard
@@ -31,10 +27,9 @@ import { useActiveExportTarget } from '@/composables/app/useActiveExportTarget';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { globalDarkMode, isGlobalEditable } from '@/stores/globalState';
 import type { ChordNameSegments, GuitarStringsModel, StringIndex } from '@/types';
-import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, WORKBENCH_LAYOUT } from '@/utils/core/constants';
 import { toCapo, toStringIndex } from '@/utils/music/chord-fretboard';
 import { nameToSegments } from '@/utils/music/musicTheory';
-import { computed, useTemplateRef } from 'vue';
+import { useTemplateRef } from 'vue';
 
 const editorStore = useChordEditorStore();
 const cardRef = useTemplateRef<HTMLElement>('cardRef');
@@ -75,15 +70,4 @@ const handleNameSegmentsChange = (segments: ChordNameSegments | null) => {
   editorStore.draftChord.nameSegments = segments;
   markCreating();
 };
-
-const dynamicHeight = computed(() => {
-  const baseVerticalSpace = WORKBENCH_LAYOUT.BASE_VERTICAL_PADDING;
-  const rawCanvasHeight =
-    CANVAS_CONFIG.OFFSET_Y_TOP +
-    editorStore.draftChord.fretCount * CANVAS_CONFIG.FRET_HEIGHT +
-    CANVAS_CONFIG.OFFSET_Y_BOTTOM;
-  const currentScale = FRETBOARD_SCALE_MAP[editorStore.draftChord.fretCount] || 1.0;
-  const realBoardHeight = rawCanvasHeight * currentScale;
-  return `${baseVerticalSpace + realBoardHeight}px`;
-});
 </script>
