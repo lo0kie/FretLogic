@@ -2,7 +2,7 @@
   <div class="p-xs gap-xs box-border flex flex-col">
     <template v-if="title">
       <div
-        class="py-xs px-md text-2xs text-text-disabled overflow-hidden font-semibold text-ellipsis whitespace-nowrap select-none"
+        class="px-md text-2xs text-text-disabled overflow-hidden py-[0.15rem] leading-none font-semibold text-ellipsis whitespace-nowrap select-none"
       >
         {{ title }}
       </div>

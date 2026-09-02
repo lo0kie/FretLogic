@@ -1,5 +1,5 @@
 /**
- * 同步设置载荷类型与校验结果结构：GitHub / WebDAV 连接配置的表单校验契约。
+ * 同步设置载荷类型与校验结果结构：GitHub / Gitee / WebDAV 连接配置的表单校验契约。
  */
 export interface GithubSettingsPayload {
   githubToken: string;
@@ -7,6 +7,14 @@ export interface GithubSettingsPayload {
   githubRepo: string;
   githubBranch: string;
   githubPath: string;
+}
+
+export interface GiteeSettingsPayload {
+  giteeToken: string;
+  giteeOwner: string;
+  giteeRepo: string;
+  giteeBranch: string;
+  giteePath: string;
 }
 
 export interface WebdavSettingsPayload {
@@ -55,6 +63,39 @@ export const validateGithubSettings = (data: GithubSettingsPayload): SettingsVal
       githubRepo: data.githubRepo.trim(),
       githubBranch: data.githubBranch.trim() || 'master',
       githubPath: data.githubPath.trim(),
+    },
+    errors,
+  };
+};
+
+/**
+ * 校验 Gitee 同步配置：Token 可选（公开仓库拉取无需 Token），填写时才做格式粗检
+ * （Gitee 私人令牌无固定前缀）；owner/仓库/路径非空。
+ */
+export const validateGiteeSettings = (data: GiteeSettingsPayload): ValidationResult<GiteeSettingsPayload> => {
+  const errors: string[] = [];
+  const token = data.giteeToken.trim();
+  if (token && (token.length < 10 || /\s/.test(token))) {
+    errors.push('Gitee Token 格式不合法');
+  }
+  if (!data.giteeOwner.trim()) {
+    errors.push('账户名称不能为空');
+  }
+  if (!data.giteeRepo.trim()) {
+    errors.push('仓库名称不能为空');
+  }
+  if (!data.giteePath.trim()) {
+    errors.push('备份路径不能为空');
+  }
+
+  return {
+    isValid: errors.length === 0,
+    data: {
+      giteeToken: token,
+      giteeOwner: data.giteeOwner.trim(),
+      giteeRepo: data.giteeRepo.trim(),
+      giteeBranch: data.giteeBranch.trim() || 'master',
+      giteePath: data.giteePath.trim(),
     },
     errors,
   };

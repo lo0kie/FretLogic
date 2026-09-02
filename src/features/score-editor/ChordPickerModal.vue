@@ -17,7 +17,7 @@
     </template>
 
     <div class="chord-picker-wrapper box-border flex h-full flex-col overflow-hidden">
-      <div class="picker-fixed-header gap-md border-border-light mb-2.5 flex shrink-0 flex-col border-b pb-2.5">
+      <div class="picker-fixed-header gap-md flex shrink-0 flex-col">
         <div class="picker-controls-row gap-lg flex items-center justify-between p-1">
           <div class="search-input-wrapper max-w-64 min-w-0 flex-1">
             <BaseInput
@@ -69,23 +69,19 @@
         </div>
         <div
           v-wheel-scroll.smooth
-          class="picker-group-pills-bar no-scrollbar gap-sm py-xs pl-xs flex items-center overflow-x-auto scroll-smooth"
+          class="picker-group-pills-bar no-scrollbar py-xs flex items-center overflow-x-auto scroll-smooth"
         >
-          <ActionButton
-            v-for="group in groupTabOptions"
-            :color="selectedGroupId === group.value ? 'primary' : 'default'"
-            :key="String(group.value)"
-            :variant="selectedGroupId === group.value ? 'subtle' : 'ghost'"
-            @click="handleGroupTabChange(String(group.value))"
+          <BaseSegmentedControl
+            v-model="selectedGroupId"
+            :options="groupTabOptions"
+            @change="handleGroupTabChange"
+            size="lg"
+            tabbed
           >
-            <span class="group-label text-xs font-semibold"> {{ group.label }} </span>
-            <span
-              :class="{ 'is-selected font-extrabold': selectedGroupId === group.value }"
-              class="group-count text-2xs pl-2 font-semibold"
-            >
-              {{ group.count }}
-            </span>
-          </ActionButton>
+            <template #item-suffix="{ option }">
+              <span class="group-count text-2xs pl-1.5 font-semibold">{{ option.count }}</span>
+            </template>
+          </BaseSegmentedControl>
         </div>
       </div>
       <div

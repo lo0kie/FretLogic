@@ -1,6 +1,6 @@
 import type { ImportExportPayload } from '@/types';
 
-export type SyncProviderKind = 'github' | 'webdav' | 'server';
+export type SyncProviderKind = 'github' | 'gitee' | 'webdav' | 'server';
 
 export interface BaseSyncConfig {
   kind: SyncProviderKind;
@@ -8,6 +8,16 @@ export interface BaseSyncConfig {
 
 export interface GithubSyncConfig extends BaseSyncConfig {
   kind: 'github';
+  token?: string;
+  owner: string;
+  repo: string;
+  branch: string;
+  path: string;
+}
+
+/** Gitee 与 GitHub 的仓库文件同步结构一致：单 base64 信封文件，按分支读写。 */
+export interface GiteeSyncConfig extends BaseSyncConfig {
+  kind: 'gitee';
   token?: string;
   owner: string;
   repo: string;
@@ -29,7 +39,7 @@ export interface ServerSyncConfig extends BaseSyncConfig {
   serverUrl?: string;
 }
 
-export type SyncConfig = GithubSyncConfig | WebdavSyncConfig | ServerSyncConfig;
+export type SyncConfig = GithubSyncConfig | GiteeSyncConfig | WebdavSyncConfig | ServerSyncConfig;
 
 export interface SyncProvider {
   pull(): Promise<ImportExportPayload>;
@@ -43,7 +53,7 @@ export interface SyncProvider {
 }
 
 /**
- * 可选能力：仅 GitHub provider 具备（拉取远程分支列表）。
+ * 可选能力：仅仓库型 provider（GitHub / Gitee）具备（拉取远程分支列表）。
  * 调用方用 `'listBranches' in provider` 守卫，不要求所有 provider 实现。
  */
 export interface SyncBranchesProvider extends SyncProvider {

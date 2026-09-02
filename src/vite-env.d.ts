@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 import type { ComponentPublicInstance, VNode } from 'vue';
 
+import type { IVWaveDirectiveOptions } from 'v-wave';
+
 import type { AutoHeightBinding } from './directives/vAutoHeight';
 import type { AutoWidthBinding, AutoWidthModifiers } from './directives/vAutoWidth';
 import type { ChordNameBinding } from './directives/vChordName';
@@ -20,6 +22,9 @@ declare global {
     commit: string;
   };
 }
+
+/** v-wave 指令（material ripple）的绑定值：涟漪选项，可按需覆盖任意字段，空对象 / 裸指令均合法 */
+export type WaveDirectiveValue = Partial<IVWaveDirectiveOptions>;
 
 export type TypedDirective<Host = HTMLElement, Value = unknown, Modifiers extends string = string> =
   | {
@@ -98,7 +103,7 @@ declare module '@vue/runtime-core' {
     vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
     vAutoWidth: TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
     vAutoHeight: TypedDirective<HTMLElement, AutoHeightBinding, string>;
-    vWave: TypedDirective<HTMLElement, unknown, string>;
+    vWave: TypedDirective<HTMLElement, WaveDirectiveValue, string>;
   }
 
   export interface ComponentCustomDirectives {
@@ -108,8 +113,8 @@ declare module '@vue/runtime-core' {
     'v-wheel-scroll': TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
     'vFocus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
     'v-focus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
-    'vWave': TypedDirective<HTMLElement, unknown, string>;
-    'v-wave': TypedDirective<HTMLElement, unknown, string>;
+    'vWave': TypedDirective<HTMLElement, WaveDirectiveValue, string>;
+    'v-wave': TypedDirective<HTMLElement, WaveDirectiveValue, string>;
     'vScrollCache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
     'v-scroll-cache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
     'vGridNav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
@@ -136,7 +141,7 @@ declare module 'vue' {
     vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
     vAutoWidth: TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
     vAutoHeight: TypedDirective<HTMLElement, AutoHeightBinding, string>;
-    vWave: TypedDirective<HTMLElement, unknown, string>;
+    vWave: TypedDirective<HTMLElement, WaveDirectiveValue, string>;
   }
 
   export interface ComponentCustomDirectives {
@@ -146,8 +151,8 @@ declare module 'vue' {
     'v-wheel-scroll': TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
     'vFocus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
     'v-focus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
-    'vWave': TypedDirective<HTMLElement, unknown, string>;
-    'v-wave': TypedDirective<HTMLElement, unknown, string>;
+    'vWave': TypedDirective<HTMLElement, WaveDirectiveValue, string>;
+    'v-wave': TypedDirective<HTMLElement, WaveDirectiveValue, string>;
     'vScrollCache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
     'v-scroll-cache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
     'vGridNav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;

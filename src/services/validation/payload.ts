@@ -196,6 +196,11 @@ const SYNC_STRING_FIELDS = [
   'githubRepo',
   'githubBranch',
   'githubPath',
+  'giteeToken',
+  'giteeOwner',
+  'giteeRepo',
+  'giteeBranch',
+  'giteePath',
   'webdavServerUrl',
   'webdavUsername',
   'webdavPassword',
@@ -209,7 +214,12 @@ const sanitizeSyncSettings = (raw: unknown): SyncSettingsBackup | undefined => {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
   const source = raw as RawRecord;
   const result: SyncSettingsBackup = {};
-  if (source['syncTarget'] === 'github' || source['syncTarget'] === 'webdav' || source['syncTarget'] === 'server') {
+  if (
+    source['syncTarget'] === 'github' ||
+    source['syncTarget'] === 'gitee' ||
+    source['syncTarget'] === 'webdav' ||
+    source['syncTarget'] === 'server'
+  ) {
     result.syncTarget = source['syncTarget'];
   }
   if (typeof source['webdavUseDefaultProxy'] === 'boolean') {

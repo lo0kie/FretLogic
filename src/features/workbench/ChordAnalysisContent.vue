@@ -14,7 +14,6 @@
             :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
             @click="emit('select-candidate', candidate)"
             interactive
-            size="md"
           >
             <span v-chord-name="{ segments: candidate.segments, name: candidate.chordName }" />
           </BaseBadge>

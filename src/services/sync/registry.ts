@@ -1,9 +1,11 @@
 import type { useSettingsStore } from '@/stores/settingsStore';
-import { CLOUD_SYNC_CONFIG, GITHUB_SYNC_CONFIG, WEBDAV_SYNC_CONFIG } from '@/utils/core/constants';
-import { validateGithubSettings, validateWebdavSettings } from '@/utils/core/validateSettings';
+import { CLOUD_SYNC_CONFIG, GITEE_SYNC_CONFIG, GITHUB_SYNC_CONFIG, WEBDAV_SYNC_CONFIG } from '@/utils/core/constants';
+import { validateGiteeSettings, validateGithubSettings, validateWebdavSettings } from '@/utils/core/validateSettings';
 
+import { createGiteeSyncProvider } from './giteeSyncProvider';
 import { createGithubSyncProvider } from './githubSyncProvider';
 import type {
+  GiteeSyncConfig,
   GithubSyncConfig,
   ServerSyncConfig,
   SyncConfig,
@@ -74,6 +76,53 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
         config: {
           kind: 'github',
           token: s.githubToken.trim() || undefined,
+          owner,
+          repo,
+          branch,
+          path,
+        },
+      };
+    },
+  },
+  gitee: {
+    supportsBranches: true,
+    resolveConfig: s => {
+      const owner = s.giteeOwner.trim() || GITEE_SYNC_CONFIG.DEFAULT_OWNER;
+      const repo = s.giteeRepo.trim() || GITEE_SYNC_CONFIG.DEFAULT_REPO;
+      const branch = s.giteeBranch.trim() || GITEE_SYNC_CONFIG.DEFAULT_BRANCH;
+      const path = s.giteePath.trim() || GITEE_SYNC_CONFIG.DEFAULT_PATH;
+      const r = validateGiteeSettings({
+        giteeToken: s.giteeToken,
+        giteeOwner: owner,
+        giteeRepo: repo,
+        giteeBranch: branch,
+        giteePath: path,
+      });
+      if (!r.isValid) return { error: r.errors[0] ?? 'Gitee 配置无效' };
+      const d = r.data;
+      return {
+        config: {
+          kind: 'gitee',
+          token: d.giteeToken,
+          owner: d.giteeOwner,
+          repo: d.giteeRepo,
+          branch: d.giteeBranch,
+          path: d.giteePath,
+        },
+      };
+    },
+    create: config => createGiteeSyncProvider(config as GiteeSyncConfig),
+    // 测试连接同样只需 owner/repo；Gitee 写操作强制要求 Token，连接测试宽松处理
+    resolveTestConfig: s => {
+      const owner = s.giteeOwner.trim() || GITEE_SYNC_CONFIG.DEFAULT_OWNER;
+      const repo = s.giteeRepo.trim() || GITEE_SYNC_CONFIG.DEFAULT_REPO;
+      const branch = s.giteeBranch.trim() || GITEE_SYNC_CONFIG.DEFAULT_BRANCH;
+      const path = s.giteePath.trim() || GITEE_SYNC_CONFIG.DEFAULT_PATH;
+      if (!owner || !repo) return { error: '请先填写用户名与仓库名' };
+      return {
+        config: {
+          kind: 'gitee',
+          token: s.giteeToken.trim() || undefined,
           owner,
           repo,
           branch,

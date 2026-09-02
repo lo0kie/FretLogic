@@ -2,7 +2,7 @@
   <div
     v-scroll-cache="'score-interactive-scroll'"
     :style="{ '--score-font-scale': scoreEditor.effectiveFontScale }"
-    class="no-scrollbar interactive-score-zone pt-xl pl-2xl max-md:pl-sm max-md:pt-sm relative box-border min-w-0 flex-1 overflow-x-auto overflow-y-auto pr-0 pb-[8rem] max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]"
+    class="no-scrollbar interactive-score-zone pt-xl pb-xl pl-xl max-md:pl-sm max-md:pt-sm relative box-border min-w-0 flex-1 overflow-x-auto overflow-y-auto pr-0 max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]"
     ref="scoreZoneRef"
   >
     <div class="contents">
@@ -24,7 +24,6 @@
             // 行内槽位和弦在子树中经 getCharChord 实时读取，必须依赖 chordMap 引用（每次变更为新 Map），
             // 否则删除/更换行中段和弦时 chars 等依赖不变，memo 命中导致旧和弦残留显示
             scoreEditor.activeSong?.chordMap,
-            selectedLineSet.has(lineData.lineIdx),
             hoveredLineKey === lineData.lineId,
             isDragging,
             // 拖拽分区落点：按行归约后再进依赖，缺了分区层会被 v-memo 冻住；
@@ -36,21 +35,13 @@
           class="line-row flex w-max min-w-full items-stretch"
         >
           <div
-            v-wave
-            :class="{
-              'is-line-selected': selectedLineSet.has(lineData.lineIdx),
-              'bg-tint-primary-92! border-tint-primary-60! hover:bg-tint-primary-80! hover:border-primary!':
-                selectedLineSet.has(lineData.lineIdx),
-            }"
             :data-line-idx="lineData.lineId"
-            @click="e => handleLineClick(e, lineData.lineIdx)"
             @mouseenter="hoveredLineKey = lineData.lineId"
             @mouseleave="hoveredLineKey = null"
-            class="lyrics-line py-xs px-sm duration-base hover:bg-bg-panel-hover hover:border-border-base focus-within:bg-bg-panel-hover focus-within:border-border-base relative box-border flex w-max min-w-0 flex-[1_1_auto] cursor-pointer flex-nowrap items-stretch gap-0 rounded-md border border-transparent transition-all select-none"
+            class="lyrics-line py-xs px-sm duration-base hover:bg-bg-panel-hover hover:border-border-base focus-within:bg-bg-panel-hover focus-within:border-border-base relative box-border flex w-max min-w-0 flex-[1_1_auto] flex-nowrap items-stretch gap-0 rounded-md border border-transparent transition-all select-none"
           >
             <div class="mr-2 flex shrink-0 items-end pb-0.5 select-none">
               <span
-                :class="{ 'text-text-on-accent! bg-primary!': selectedLineSet.has(lineData.lineIdx) }"
                 class="text-2xs text-text-disabled py-2xs px-xs duration-fast rounded-lg font-mono font-bold transition-colors"
               >
                 {{ formatLineIndex(lineData.lineIdx) }}
@@ -151,7 +142,7 @@
             </ActionButton>
           </div>
 
-          <div aria-hidden="true" class="line-row-gutter w-8 shrink-0 max-md:w-2" />
+          <div aria-hidden="true" class="line-row-gutter w-6 shrink-0 max-md:w-2" />
         </div>
       </div>
     </div>
@@ -185,7 +176,6 @@ import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseIcon from '@/components/ui/BaseIcon.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import type { DropZone } from '@/features/score-editor/composables/lyrics-drag/dropZone';
-import { useAutoScroll } from '@/features/score-editor/composables/useAutoScroll';
 import { useLyricsDragDrop } from '@/features/score-editor/composables/useLyricsDragDrop';
 import { useScoreLinesData } from '@/features/score-editor/composables/useScoreLinesData';
 import { useActiveExportTarget } from '@/shared/composables/useActiveExportTarget';
@@ -198,13 +188,8 @@ import ChordSlotCell from './ChordSlotCell.vue';
 
 defineOptions({ name: 'ScoreInteractiveArea' });
 
-const props = defineProps<{
-  selectedLineSet: Set<number>;
-}>();
-
 const emit = defineEmits<{
   (e: 'open-picker', slotKey: SlotKey): void;
-  (e: 'line-click', lineIdx: number): void;
 }>();
 
 const scoreEditor = useScoreEditorStore();
@@ -255,18 +240,6 @@ const isEndEdgeGap = (lineData: LineData, index: number): boolean => {
     return Boolean(lastChar && getCharChord(lastChar.slotKey));
   }
   return Boolean(lineData.endChords[index - 1]?.chord);
-};
-
-/** 用户点击歌词行：拖拽中/点击抑制期/命中槽位时忽略，否则交给父组件切换行选中 */
-const handleLineClick = (ev: MouseEvent, lineIdx: number) => {
-  // 拖拽落点在起始行内时，浏览器会以行容器为公共祖先合成一次 click，
-  // 若不拦截会误触发行选中切换（isSuppressingClick 在松手后短暂保持，恰好覆盖该 click）
-  if (isDragging.value || isSuppressingClick.value) return;
-  const target = ev.target as HTMLElement;
-  if (target.closest('[data-slot-key], .char-box')) {
-    return;
-  }
-  emit('line-click', lineIdx);
 };
 
 /** 删除歌词行：按 lineId 实时反查索引，避免 v-memo 缓存 vnode 中陈旧 lineIdx 闭包删错行 */
@@ -342,18 +315,7 @@ const handleOpenPicker = (slotKey: SlotKey) => {
   emit('open-picker', slotKey);
 };
 
-const { stopAutoScroll } = useAutoScroll(scoreZoneRef);
-
 useActiveExportTarget(lyricsRef);
-
-watch(
-  () => props.selectedLineSet.size,
-  selectedCount => {
-    if (selectedCount > 0) {
-      stopAutoScroll();
-    }
-  }
-);
 
 defineExpose({ scoreZoneRef });
 </script>

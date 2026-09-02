@@ -1,6 +1,6 @@
 <template>
   <div
-    v-wave
+    v-wave="{}"
     :aria-label="ariaLabelText"
     :class="[
       {

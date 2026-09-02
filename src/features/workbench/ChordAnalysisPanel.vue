@@ -10,42 +10,21 @@
         :class="effectiveExpanded ? 'border-border-light pb-1.5' : 'border-transparent pb-0'"
         class="duration-slow ease-sidebar flex shrink-0 items-center justify-between gap-2 border-b transition-[border-color,padding-bottom]"
       >
-        <div
-          :aria-expanded="effectiveExpanded"
-          :aria-label="effectiveExpanded ? '收起和弦分析面板' : '展开和弦分析面板'"
-          :tabindex="0"
-          @click="toggleCollapse"
-          @keydown.enter.prevent="toggleCollapse"
-          @keydown.space.prevent="toggleCollapse"
-          class="group hover:bg-bg-panel-hover/50 -ml-1 flex cursor-pointer items-center gap-1.5 rounded-md py-0.5 pr-1.5 pl-1 transition-colors"
-          role="button"
-        >
-          <div
-            class="bg-tint-primary-88 text-primary relative flex h-5 w-5 items-center justify-center overflow-hidden rounded-md"
-          >
-            <BaseIcon
-              :size="13"
-              :stroke-width="2.5"
-              class="duration-fast pointer-events-none absolute transition-all group-hover:scale-50 group-hover:opacity-0"
-              name="sparkles"
-            />
-            <BaseIcon
-              v-if="effectiveExpanded"
-              :size="13"
-              :stroke-width="2.5"
-              class="duration-fast pointer-events-none absolute scale-50 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100"
-              name="minimize-2"
-            />
-            <BaseIcon
-              v-else
-              :size="13"
-              :stroke-width="2.5"
-              class="duration-fast pointer-events-none absolute scale-50 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100"
-              name="maximize-2"
-            />
+        <div class="-ml-1 flex items-center gap-1.5 py-0.5 pr-1.5 pl-1">
+          <div class="bg-tint-primary-88 text-primary flex h-5 w-5 shrink-0 items-center justify-center rounded-md">
+            <BaseIcon :size="13" :stroke-width="2.5" name="sparkles" />
           </div>
-          <span class="text-text-title text-xs font-extrabold tracking-tight">和弦分析</span>
+          <span class="text-text-title text-xs font-extrabold tracking-tight break-keep">和弦分析</span>
         </div>
+
+        <!-- 面板行为：三态单选（跟随音符 / 始终展开 / 始终收起），位于 header 右侧，始终可见 -->
+        <BaseSegmentedControl
+          v-model="mode"
+          :options="PANEL_MODE_LABEL"
+          aria-label="和弦分析面板行为"
+          compacted
+          size="sm"
+        />
       </div>
 
       <!-- 内容区高度动画：测量内容真实高度写入 height 并过渡。
@@ -58,7 +37,7 @@
              靠外层 overflow-hidden 裁切。横按面板则额外用 flex justify-center 让指板居中、不漂移 -->
         <div class="w-[calc(19rem-1.5rem)]">
           <Transition mode="out-in">
-            <div v-if="isExpanded" class="pt-2" key="content">
+            <div v-if="hasNotes" class="pt-2" key="content">
               <ChordAnalysisContent
                 :active-chord-name="getChordName(editorStore.draftChord)"
                 :candidates="analysis.candidates"
@@ -79,9 +58,8 @@
 <script lang="ts" setup>
 import { computed } from 'vue';
 
-import { useStorage } from '@vueuse/core';
-
 import BaseIcon from '@/components/ui/BaseIcon.vue';
+import BaseSegmentedControl from '@/components/ui/BaseSegmentedControl.vue';
 import { analyzeChordGraph } from '@/services/music/chordEngine';
 import {
   calcPitchIndex,
@@ -97,6 +75,7 @@ import { STORAGE_KEYS } from '@/utils/core/constants';
 import { toStringIndex } from '@/utils/music/chord-fretboard';
 
 import ChordAnalysisContent, { type RenderNoteItem } from './ChordAnalysisContent.vue';
+import { PANEL_MODE_LABEL, usePanelMode } from './composables/usePanelMode';
 
 const editorStore = useChordEditorStore();
 
@@ -169,17 +148,10 @@ const analysis = computed(() => {
   return { notes, candidates };
 });
 
-/** 有按音时面板有内容；但无论有无内容，用户都可手动收起/展开
- * （即使无音符也允许展开，空白态给出占位提示）。
- * 持久化记录用户折叠收起偏好（默认 false 即展开） */
-const isExpanded = computed(() => analysis.value.notes.length > 0);
+/** 有按音（auto 模式的展开依据）：分析图存在即代表至少一个按音 */
+const hasNotes = computed(() => analysis.value.notes.length > 0);
 
-const collapsed = useStorage(STORAGE_KEYS.WORKBENCH_CHORD_ANALYSIS_COLLAPSED, false);
-const effectiveExpanded = computed(() => !collapsed.value);
-/** 用户点击标题栏切换面板展开/收起（偏好持久化） */
-const toggleCollapse = () => {
-  collapsed.value = !collapsed.value;
-};
+const { mode, effectiveExpanded } = usePanelMode(STORAGE_KEYS.WORKBENCH_CHORD_ANALYSIS_COLLAPSED, () => hasNotes.value);
 
 /** 候选和弦是否已被选中（与当前草稿名一致，含音名段序列等价） */
 const isCandidateSelected = (candidate: CandidateResult): boolean => {

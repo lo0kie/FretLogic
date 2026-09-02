@@ -60,6 +60,10 @@ const {
   size?: 'sm' | 'md' | 'lg';
 }>();
 
+const emit = defineEmits<{
+  (e: 'close'): void;
+}>();
+
 const isOpen = ref(false);
 const x = ref(0);
 const y = ref(0);
@@ -83,11 +87,12 @@ const virtualRef = computed<VirtualElement>(() => ({
   },
 }));
 
-/** 菜单关闭回调：若全局互斥记录仍指向自己则清除 */
+/** 菜单关闭回调：若全局互斥记录仍指向自己则清除，并向父级转发关闭事件 */
 const handlePopoverClose = () => {
   if (globalActiveMenuCloseFn.value === closeMenu) {
     globalActiveMenuCloseFn.value = null;
   }
+  emit('close');
 };
 
 /** 关闭本菜单并清理全局互斥记录 */

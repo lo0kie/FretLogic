@@ -34,7 +34,6 @@ export const prepareWorkerExportPayload = (
   selectedIndices: number[],
   chordsLookupMap: Map<string, Chord>,
   mode: 'normal' | 'a4',
-  quality = 0.95,
   shorthand = false,
   includeMetaBar = true
 ): WorkerExportPayload => {
@@ -97,7 +96,6 @@ export const prepareWorkerExportPayload = (
     lines,
     mode,
     darkMode: globalDarkMode.value,
-    quality,
     includeMetaBar,
   };
 };

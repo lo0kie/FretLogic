@@ -40,6 +40,10 @@
         <BaseSwitch v-model="settingsStore.workbenchShowPitchNames" aria-label="工作台显示音名" />
       </BaseFormRow>
 
+      <BaseFormRow help="指板有可横按弦组时自动标记" label="自动横按">
+        <BaseSwitch v-model="editorStore.autoBarre" aria-label="自动标记横按" />
+      </BaseFormRow>
+
       <div class="action-full-row w-full">
         <ActionButton @click="handleRepairData" color="primary" variant="subtle" width="100%">
           <template #prefix>
@@ -51,18 +55,6 @@
     </template>
 
     <template v-else-if="currentMode === 'score'">
-      <BaseFormRow label="滚动速度">
-        <BaseSlider
-          v-model="scoreEditor.scrollSpeed"
-          :default-value="60"
-          :max="120"
-          :min="40"
-          :show-buttons="false"
-          :step="5"
-          readout-position="left"
-        />
-      </BaseFormRow>
-
       <BaseFormRow label="字号缩放">
         <BaseSlider
           v-model="scoreEditor.fontScale"

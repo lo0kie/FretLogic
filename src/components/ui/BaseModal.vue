@@ -85,7 +85,6 @@
                   <ActionButton
                     :disabled="cancelButtonDisabled || confirmLoading"
                     @click="close('cancel')"
-                    size="md"
                     variant="default"
                   >
                     {{ cancelText }}
@@ -97,7 +96,6 @@
                     :disabled="confirmButtonDisabled || confirmLoading"
                     :loading="confirmLoading"
                     @click="handleConfirm"
-                    size="md"
                     variant="subtle"
                   >
                     {{ confirmText }}
