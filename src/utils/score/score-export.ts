@@ -227,7 +227,28 @@ export const canvasToBlob = (canvas: HTMLCanvasElement, type = 'image/png', qual
     canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Canvas 转 Blob 失败'))), type, quality);
   });
 
-/** 复制图片 Blob 到剪贴板；环境不支持或页面失焦时抛错，写入时按 MIME 兼容性多级降级重试。 */
+/** 将任意图片 Blob 解码后重编码为 PNG Blob（JPEG→PNG 剪贴板降级用），失败保留原始异常。 */
+const reencodeAsPng = async (blob: Blob): Promise<Blob> => {
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('无法初始化画布上下文');
+    ctx.drawImage(bitmap, 0, 0);
+    return await canvasToBlob(canvas, 'image/png');
+  } finally {
+    bitmap.close();
+  }
+};
+
+/**
+ * 复制图片 Blob 到剪贴板；环境不支持或页面失焦时抛错。
+ * 注意：ClipboardItem 的键必须与 blob.type 完全一致，浏览器会校验类型匹配，
+ * 伪造 MIME 键只会得到 NotAllowedError（类型不匹配）。因此当首选 MIME 写入失败时，
+ * 唯一可靠的降级是把图片真正转码为 PNG（剪贴板事实标准）再重试，而非改声明。
+ */
 export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
   if (!navigator.clipboard || typeof navigator.clipboard.write !== 'function' || typeof ClipboardItem === 'undefined') {
     throw new Error('当前浏览器环境不支持复制图片到剪贴板');
@@ -235,17 +256,47 @@ export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
   if (!document.hasFocus()) {
     throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
   }
+
+  const writeItem = (item: Blob, mime: string) => navigator.clipboard.write([new ClipboardItem({ [mime]: item })]);
+
   const mimeType = blob.type || 'image/png';
   try {
-    await navigator.clipboard.write([new ClipboardItem({ [mimeType]: blob })]);
-  } catch {
+    await writeItem(blob, mimeType);
+    return;
+  } catch (originalErr) {
+    // 已是最兼容的 PNG 且写入仍失败（权限/焦点等），无可降级空间，直接抛出
+    if (mimeType === 'image/png') {
+      throw originalErr;
+    }
+    // 非 PNG（如 Worker 导出的 image/jpeg）且首选写入被拒：转码为 PNG 后重试一次
     try {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      const pngBlob = await reencodeAsPng(blob);
+      await writeItem(pngBlob, 'image/png');
     } catch {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': Promise.resolve(blob) })]);
+      throw originalErr;
     }
   }
 };
 
 /** 延时工具（默认 0ms），用于导出前等待一帧渲染。 */
 export const wait = (ms = 0) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+/** 标题转安全文件名：剔除路径非法字符与多余空白，供下载命名使用。 */
+export const buildExportFileName = (title: string): string => {
+  const cleaned = title
+    .replace(/[\\/:*?"<>|\s]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60);
+  return cleaned || 'score';
+};
+
+/** 触发单个 Blob 的浏览器下载，稍后释放对象 URL。 */
+export const triggerBlobDownload = (blob: Blob, filename: string): void => {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+};

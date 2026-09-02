@@ -261,29 +261,53 @@ export const SCORE_EXPORT_CONFIG = {
   /** 行与行之间的独立垂直行间距（px，拉开乐谱各行） */
   LINE_ROW_GAP: 36,
 
-  // ---- 主题配色方案 ----
+  // ---- 主题配色方案（乐谱导出渲染用）----
+  // 字段说明：FB_ 前缀 = 指板图（Fretboard）内元素；无前缀 = 页面/文字元素。
+  // DARK / LIGHT 仅色值不同，字段语义一致，逐字段解释见各字段行注释。
   THEME: {
     DARK: {
+      /** 画布底色（整页铺底 fillRect 背景，普通长图导出也读它做底） */
       BG: '#18181a',
+      /** 主文字：标题、和弦名、歌词正文 */
       TEXT: '#f5f5f7',
+      /** 次级文字：表头元信息（调号/变调夹）、指板图品号 */
       SUB_TEXT: '#a1a1aa',
+      /** 分隔线（预留字段，当前导出渲染未消费） */
       DIVIDER: '#27272a',
+      /** 指板图：琴弦与品丝网格线 */
       FB_LINE: '#52525b',
+      /** 指板图：弦枕（0 品时的加粗枕条） */
       FB_NUT: '#e4e4e7',
+      /** 指板图：按品音符实心圆点填充色 */
       FB_NOTE: '#f4f4f5',
+      /** 指板图：空弦 ○ 标记描边色（独立于音符色，可单独调整） */
+      FB_OPEN: '#f4f4f5',
+      /** 指板图：大横按梁填充色 */
       FB_BARRE: '#f4f4f5',
-      FB_MUTE: '#71717a',
+      /** 指板图：静音 ✕ 叉号描边色 */
+      FB_MUTE: '#f4f4f5',
     },
     LIGHT: {
+      /** 画布底色（整页铺底 fillRect 背景，普通长图导出也读它做底） */
       BG: '#f2f2f7',
+      /** 主文字：标题、和弦名、歌词正文 */
       TEXT: '#1c1c1e',
+      /** 次级文字：表头元信息（调号/变调夹）、指板图品号 */
       SUB_TEXT: '#71717a',
+      /** 分隔线（预留字段，当前导出渲染未消费） */
       DIVIDER: '#e4e4e7',
+      /** 指板图：琴弦与品丝网格线 */
       FB_LINE: '#a1a1aa',
+      /** 指板图：弦枕（0 品时的加粗枕条） */
       FB_NUT: '#27272a',
+      /** 指板图：按品音符实心圆点填充色 */
       FB_NOTE: '#18181b',
+      /** 指板图：空弦 ○ 标记描边色（独立于音符色，可单独调整） */
+      FB_OPEN: '#18181b',
+      /** 指板图：大横按梁填充色 */
       FB_BARRE: '#18181b',
-      FB_MUTE: '#a1a1aa',
+      /** 指板图：静音 ✕ 叉号描边色 */
+      FB_MUTE: '#18181b',
     },
   },
 } as const;
@@ -304,7 +328,7 @@ export const STORAGE_KEYS = {
   EXPANDED_GROUP_ID: 'CHORD_LAB_EXPANDED_GROUP_ID_V1',
 
   // ---- 同步配置（后端选择） ----
-  /** 当前同步后端：github | webdav */
+  /** 当前同步后端：github | gitee | webdav | server */
   SYNC_TARGET: 'CHORD_LAB_SYNC_TARGET',
 
   // ---- GitHub 同步配置 ----
@@ -317,6 +341,17 @@ export const STORAGE_KEYS = {
   /** GitHub 存储路径 */
   GH_PATH: 'CHORD_LAB_GH_PATH',
   GH_BRANCHES: 'CHORD_LAB_GH_BRANCHES',
+
+  // ---- Gitee 同步配置 ----
+  /** Gitee 仓库 owner */
+  GE_OWNER: 'CHORD_LAB_GE_OWNER',
+  /** Gitee 仓库名 */
+  GE_REPO: 'CHORD_LAB_GE_REPO',
+  /** Gitee 分支 */
+  GE_BRANCH: 'CHORD_LAB_GE_BRANCH',
+  /** Gitee 存储路径 */
+  GE_PATH: 'CHORD_LAB_GE_PATH',
+  GE_BRANCHES: 'CHORD_LAB_GE_BRANCHES',
 
   // ---- WebDAV 同步配置 ----
   /** WebDAV 服务器地址 */
@@ -365,6 +400,8 @@ export const STORAGE_KEYS = {
   SCORE_CHORD_SHORTHAND: 'CHORD_LAB_SCORE_CHORD_SHORTHAND_V1',
   /** 乐谱：是否在指板音符圆点上显示音名（如 C, D, E 等） */
   SCORE_SHOW_PITCH_NAMES: 'CHORD_LAB_SCORE_SHOW_PITCH_NAMES_V1',
+  /** 乐谱：当前所在标签页（edit / interactive / preview），刷新后恢复上次所在页 */
+  SCORE_ACTIVE_TAB: 'CHORD_LAB_SCORE_ACTIVE_TAB_V1',
   /** [兼容历史键] */
   USE_CHORD_SHORTHAND: 'CHORD_LAB_USE_CHORD_SHORTHAND_V1',
   SHOW_PITCH_NAMES: 'CHORD_LAB_SHOW_PITCH_NAMES_V1',
@@ -382,14 +419,10 @@ export const STORAGE_KEYS = {
   SONGS_SORT_METHOD: 'CHORD_LAB_SONGS_SORT_METHOD_V1',
 
   // ---- 谱面视图偏好 ----
-  /** 导出质量（0~1 的小数，滑块以百分比展示） */
-  EXPORT_QUALITY: 'CHORD_LAB_EXPORT_QUALITY_V1',
   /** 谱面字号缩放 */
   SCORE_FONT_SCALE: 'CHORD_LAB_SCORE_FONT_SCALE_V1',
   /** 谱面内嵌指板缩放 */
   SCORE_FRETBOARD_SCALE: 'CHORD_LAB_SCORE_FRETBOARD_SCALE_V1',
-  /** 谱面滚动速度 */
-  SCORE_SCROLL_SPEED: 'CHORD_LAB_SCORE_SCROLL_SPEED_V1',
   /** 谱面字号缩放 */
   SCORE_SCALE: 'CHORD_LAB_SCORE_SCALE_V1',
   /** 谱面行高缩放 */
@@ -490,6 +523,15 @@ export const GITHUB_SYNC_CONFIG = {
   DEFAULT_OWNER: 'lo0kie',
   DEFAULT_REPO: 'FretLogic',
   DEFAULT_BRANCH: import.meta.env.DEV ? 'dev-data-sync' : 'data-sync',
+  DEFAULT_PATH: 'backup/chords.json',
+} as const;
+
+// ===================== Gitee 同步预设 =====================
+/** Gitee 同步预设配置（Gitee 默认分支为 master；文件路径沿用同一备份文件） */
+export const GITEE_SYNC_CONFIG = {
+  DEFAULT_OWNER: 'look1e',
+  DEFAULT_REPO: 'fret-logic',
+  DEFAULT_BRANCH: 'master',
   DEFAULT_PATH: 'backup/chords.json',
 } as const;
 

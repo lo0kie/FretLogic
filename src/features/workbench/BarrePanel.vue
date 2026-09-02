@@ -5,58 +5,17 @@
   >
     <div
       :class="effectiveExpanded ? 'border-border-light pb-1.5' : 'border-transparent pb-0'"
-      class="duration-slow ease-sidebar flex h-7 shrink-0 items-center justify-between gap-2 border-b transition-[border-color,padding-bottom]"
+      class="duration-slow ease-sidebar flex shrink-0 items-center justify-between gap-2 border-b transition-[border-color,padding-bottom]"
     >
-      <div
-        :aria-expanded="effectiveExpanded"
-        :aria-label="effectiveExpanded ? '收起横按标记面板' : '展开横按标记面板'"
-        :tabindex="0"
-        @click="toggleCollapse"
-        @keydown.enter.prevent="toggleCollapse"
-        @keydown.space.prevent="toggleCollapse"
-        class="group hover:bg-bg-panel-hover/50 -ml-1 flex cursor-pointer items-center gap-1.5 rounded-md py-0.5 pr-1.5 pl-1 transition-colors"
-        role="button"
-      >
-        <div
-          class="bg-tint-primary-88 text-primary relative flex h-5 w-5 items-center justify-center overflow-hidden rounded-md"
-        >
-          <BaseIcon
-            :size="13"
-            :stroke-width="2.5"
-            class="duration-fast pointer-events-none absolute transition-all group-hover:scale-50 group-hover:opacity-0"
-            name="move-horizontal"
-          />
-          <BaseIcon
-            v-if="effectiveExpanded"
-            :size="13"
-            :stroke-width="2.5"
-            class="duration-fast pointer-events-none absolute scale-50 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100"
-            name="minimize-2"
-          />
-          <BaseIcon
-            v-else
-            :size="13"
-            :stroke-width="2.5"
-            class="duration-fast pointer-events-none absolute scale-50 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100"
-            name="maximize-2"
-          />
+      <div class="-ml-1 flex items-center gap-1.5 py-0.5 pr-1.5 pl-1">
+        <div class="bg-tint-primary-88 text-primary flex h-5 w-5 shrink-0 items-center justify-center rounded-md">
+          <BaseIcon :size="13" :stroke-width="2.5" name="move-horizontal" />
         </div>
         <span class="text-text-title text-xs font-extrabold tracking-tight break-keep">横按标记</span>
       </div>
 
-      <div class="flex shrink-0 items-center gap-2">
-        <ActionButton
-          v-tooltip="'自动标记横按'"
-          :color="editorStore.autoBarre ? 'primary' : 'default'"
-          @click="toggleAutoBarre"
-          compacted
-          size="sm"
-          title="自动标记横按"
-          variant="ghost"
-        >
-          自动
-        </ActionButton>
-      </div>
+      <!-- 面板行为：三态单选（跟随音符 / 始终展开 / 始终收起），位于 header 右侧，始终可见 -->
+      <BaseSegmentedControl v-model="mode" :options="PANEL_MODE_LABEL" aria-label="横按面板行为" compacted size="sm" />
     </div>
 
     <!-- 内容区高度动画：测量内容真实高度写入 height 并过渡，覆盖展开/收起与内容尺寸变化 -->
@@ -68,7 +27,7 @@
            宽度动画期间不再随面板伸缩而重排，高度保持稳定、不抖动 -->
       <div class="w-[calc(19rem-1.5rem)]">
         <Transition mode="out-in">
-          <div v-if="isExpanded" class="flex flex-col gap-1 pt-2" key="content">
+          <div v-if="hasNotes" class="flex flex-col gap-1 pt-2" key="content">
             <div class="box-border flex justify-center py-1">
               <Fretboard
                 :barre-candidates="candidates"
@@ -102,31 +61,24 @@
 <script lang="ts" setup>
 import { computed } from 'vue';
 
-import { useStorage } from '@vueuse/core';
-
 import Fretboard from '@/components/fretboard/Fretboard.vue';
-import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseIcon from '@/components/ui/BaseIcon.vue';
+import BaseSegmentedControl from '@/components/ui/BaseSegmentedControl.vue';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { BarreEntity } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { computeBarreCandidates } from '@/utils/music/chord-fretboard';
 
+import { PANEL_MODE_LABEL, usePanelMode } from './composables/usePanelMode';
+
 const editorStore = useChordEditorStore();
 const settingsStore = useSettingsStore();
 
-/** 指板有按音时面板有内容；但无论有无内容，用户都可手动收起/展开
- * （即使无音符也允许展开，空白态给出占位提示）。
- * 持久化记录用户折叠收起偏好（默认 false 即展开） */
-const isExpanded = computed(() => !editorStore.isFretBoardEmpty);
+/** 指板是否有按音（auto 模式的展开依据） */
+const hasNotes = computed(() => !editorStore.isFretBoardEmpty);
 
-const collapsed = useStorage(STORAGE_KEYS.WORKBENCH_BARRE_COLLAPSED, false);
-const effectiveExpanded = computed(() => !collapsed.value);
-/** 用户点击标题栏切换面板展开/收起（偏好持久化） */
-const toggleCollapse = () => {
-  collapsed.value = !collapsed.value;
-};
+const { mode, effectiveExpanded } = usePanelMode(STORAGE_KEYS.WORKBENCH_BARRE_COLLAPSED, () => hasNotes.value);
 
 /** 工作台「显示音名」是否开启：开启时主指板不渲染横按条，需要文字提示 */
 const showPitchNamesOn = computed(() => settingsStore.workbenchShowPitchNames);
@@ -157,10 +109,5 @@ const handleBarreClick = (barre: BarreEntity) => {
   } else {
     editorStore.setBarres([...current.filter(x => !isOverlapping(x, barre)), barre]);
   }
-};
-
-/** 切换横按自动标记开关（持久化，由 chordEditorStore 的 autoBarre 负责写入 localStorage） */
-const toggleAutoBarre = () => {
-  editorStore.autoBarre = !editorStore.autoBarre;
 };
 </script>

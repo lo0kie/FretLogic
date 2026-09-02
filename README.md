@@ -16,7 +16,7 @@
 - **智能和弦引擎**：从音符集合识别三和弦 / 七和弦 / 挂留 / 强力和弦，支持转位与低音弦
 - **歌词和弦谱编辑器**：逐字对齐的歌词行 + 和弦槽位，支持拖拽、撤销重做、自动滚动
 - **音频试听**：基于 WebAudio 的和弦弹奏预览
-- **导出**：PDF / PNG（html-to-image + jsPDF）
+- **导出预览**：整曲 Web Worker 离屏渲染为 PNG 长图，可拆分上下两半并排查看
 - **云同步**：把和弦库与曲库备份到 GitHub 仓库或 WebDAV 服务器（支持 CORS 代理）
 - **多主题**：浅色 / 深色 / 高对比，可跟随系统
 
@@ -46,17 +46,17 @@ pnpm dev
 
 ## 🛠️ 技术栈
 
-| 层       | 技术                                     |
-| -------- | ---------------------------------------- |
-| 框架     | Vue 3.5（组合式 API）+ TypeScript 5.4    |
-| 构建     | Vite 5                                   |
-| 状态     | Pinia                                    |
-| 样式     | LESS + CSS 设计令牌（三主题）            |
-| 存储     | IndexedDB（v2 契约）+ 旧数据迁移         |
-| 音频     | WebAudio（tone.js）                      |
-| 导出     | html-to-image + jsPDF                    |
-| 测试     | Vitest（单元）+ Playwright（E2E）        |
-| 代码质量 | ESLint（含架构约束）+ Prettier + vue-tsc |
+| 层       | 技术                                         |
+| -------- | -------------------------------------------- |
+| 框架     | Vue 3.5（组合式 API）+ TypeScript 5.4        |
+| 构建     | Vite 5                                       |
+| 状态     | Pinia                                        |
+| 样式     | LESS + CSS 设计令牌（三主题）                |
+| 存储     | IndexedDB（v2 契约）+ 旧数据迁移             |
+| 音频     | WebAudio（tone.js）                          |
+| 导出     | Web Worker 离屏渲染（OffscreenCanvas → PNG） |
+| 测试     | Vitest（单元）+ Playwright（E2E）            |
+| 代码质量 | ESLint（含架构约束）+ Prettier + vue-tsc     |
 
 ## 📂 项目结构
 

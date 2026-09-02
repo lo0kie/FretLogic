@@ -12,10 +12,10 @@
   >
     <span
       v-if="showSlider"
-      :class="{ 'transition-all duration-200 ease-out': isInitialized }"
+      :class="[...sliderClasses, { 'transition-all duration-200 ease-out': isInitialized }]"
       :style="indicatorStyle"
       aria-hidden="true"
-      class="segmented-slider bg-tint-primary-88 border-tint-primary-60 pointer-events-none absolute top-0 left-0 z-0 box-border rounded-full border shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)] will-change-transform"
+      class="segmented-slider"
     />
 
     <template v-for="(opt, i) in normalizedOptions" :key="String(opt.value)">
@@ -26,8 +26,9 @@
         :disabled="disabled || opt.disabled"
         :ref="el => setItemRef(el, i)"
         :tabindex="getTabindex(opt, i)"
+        :title="opt.label"
         @click="select(opt, i)"
-        class="segmented-item text-text-muted focus-visible:ring-primary/70 enabled:hover:text-text-title relative z-20 inline-flex h-full items-center justify-center self-stretch rounded-full border-none bg-transparent leading-none font-bold whitespace-nowrap shadow-none transition-all duration-200 ease-out outline-none focus-visible:ring-2 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+        class="segmented-item text-text-muted focus-visible:ring-primary/70 enabled:hover:text-text-title relative z-20 inline-flex h-full items-center justify-center self-stretch border-none bg-transparent leading-none font-bold whitespace-nowrap shadow-none transition-all duration-200 ease-out outline-none focus-visible:ring-2 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
         role="radio"
         type="button"
       >
@@ -49,6 +50,8 @@ export interface SegmentOption<T> {
   label: string;
   value: T;
   disabled?: boolean;
+  /** 选项附带数量角标（如分组条目数），组件不消费，仅透传给 item-suffix 插槽供调用方渲染 */
+  count?: number;
 }
 
 type OptionInput<T> = T | SegmentOption<T>;
@@ -58,6 +61,9 @@ const props = withDefaults(
     options: OptionInput<T>[];
     size?: 'sm' | 'md' | 'lg';
     variant?: 'pill' | 'text';
+    /** 下划线 Tab 形态：等价于 variant 的第三种视觉——无外框，选中项底部一条滑动主色下划线（浏览器标签风格）。
+     *  与 variant 互斥优先级：tabbed=true 时覆盖 variant */
+    tabbed?: boolean;
     disabled?: boolean;
     /** 可取消选中：开启后点击已选项会把 v-model 置为 undefined */
     closeable?: C;
@@ -66,14 +72,19 @@ const props = withDefaults(
     ariaLabel?: string;
     /** 紧凑模式：缩小按钮左右内边距，默认 true */
     compacted?: boolean;
+    /** 通高拉伸：根容器高度用 h-full 取代尺寸档固定高度（需父容器有确定高度），
+     *  配合 tabbed 可做整条撑满父容器的 Tab 栏，指示器/文字自动随高度适配 */
+    fullHeight?: boolean;
   }>(),
   {
     size: 'md',
     variant: 'pill',
+    tabbed: false,
     disabled: false,
     block: false,
     width: 'auto',
     compacted: false,
+    fullHeight: false,
   }
 );
 
@@ -141,7 +152,10 @@ const normalizedOptions = computed<SegmentOption<T>[]>(() =>
 );
 
 const activeIndex = computed(() => normalizedOptions.value.findIndex(o => isSelected(o.value)));
-const showSlider = computed(() => props.variant === 'pill' && activeIndex.value >= 0);
+/** 生效视觉形态：tabbed 属性优先于 variant（tabbed 即第三种「下划线」形态） */
+const visualVariant = computed<'pill' | 'text' | 'tabbed'>(() => (props.tabbed ? 'tabbed' : props.variant));
+/** 需要滑动指示器：pill 与 tabbed 两种形态携带指示器 */
+const showSlider = computed(() => visualVariant.value !== 'text' && activeIndex.value >= 0);
 
 const firstFocusableIndex = computed(() => normalizedOptions.value.findIndex(o => !o.disabled && !props.disabled));
 
@@ -162,20 +176,40 @@ const indicatorStyle = computed(() => ({
 }));
 
 const controlClasses = computed(() => [
-  sizeConfig.value.wrapper,
-  props.variant === 'pill'
+  props.fullHeight ? 'h-full' : sizeConfig.value.wrapper,
+  visualVariant.value === 'pill'
     ? 'bg-bg-body border border-border-light rounded-full p-1 gap-1 transition-opacity'
     : 'bg-transparent gap-xs',
   props.disabled ? 'opacity-50 cursor-not-allowed' : '',
   isFullWidth.value ? 'w-full' : '',
 ]);
 
-/** 选项类名：按 variant（pill / text）与选中态拼装 */
+/** 滑块外观：pill 为覆盖整段的圆角胶囊（浅主色底 + 描边），tabbed 为贴底主色下划线 */
+const sliderClasses = computed(() => [
+  'segmented-slider pointer-events-none absolute top-0 left-0 z-0 box-border will-change-transform',
+  visualVariant.value === 'tabbed'
+    ? 'bg-primary'
+    : 'bg-tint-primary-88 border-tint-primary-60 rounded-full border shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)]',
+]);
+
+/** 下划线高度（px）：tabbed 形态贴段底部的主色细线 */
+const TAB_LINE_HEIGHT = 2;
+
+/** 选项类名：按生效形态（pill / text / tabbed）与选中态拼装 */
 const itemClasses = (opt: SegmentOption<T>): (string | Record<string, boolean>)[] => {
   const active = isSelected(opt.value);
   const isExpand = isFullWidth.value;
 
-  if (props.variant === 'pill') {
+  if (visualVariant.value === 'pill') {
+    return [
+      sizeConfig.value.item,
+      'rounded-full',
+      active ? 'text-primary! font-extrabold' : '',
+      { 'flex-1': isExpand },
+    ];
+  }
+  if (visualVariant.value === 'tabbed') {
+    // 下划线 Tab：无填充底，仅选中项加主色文字强调，选中线由滑块负责
     return [sizeConfig.value.item, active ? 'text-primary! font-extrabold' : '', { 'flex-1': isExpand }];
   }
   // text variant
@@ -203,7 +237,7 @@ const toEl = (raw: unknown): HTMLElement | null => {
 
 /** 测量选中项位置并更新滑块指示器；无选中时隐藏 */
 const updateIndicatorPosition = async () => {
-  if (props.variant !== 'pill') return;
+  if (visualVariant.value === 'text') return;
   await nextTick();
 
   if (activeIndex.value < 0) {
@@ -221,13 +255,24 @@ const updateIndicatorPosition = async () => {
     return;
   }
 
-  indicatorPosition.value = {
-    width: offsetWidth,
-    height: offsetHeight,
-    x: offsetLeft,
-    y: offsetTop,
-    opacity: 1,
-  };
+  if (visualVariant.value === 'tabbed') {
+    // 下划线形态：滑块是一条贴段底部的主色细线，宽度随选中段
+    indicatorPosition.value = {
+      width: offsetWidth,
+      height: TAB_LINE_HEIGHT,
+      x: offsetLeft,
+      y: offsetTop + offsetHeight - TAB_LINE_HEIGHT,
+      opacity: 1,
+    };
+  } else {
+    indicatorPosition.value = {
+      width: offsetWidth,
+      height: offsetHeight,
+      x: offsetLeft,
+      y: offsetTop,
+      opacity: 1,
+    };
+  }
 
   if (!isInitialized.value) {
     requestAnimationFrame(() => {

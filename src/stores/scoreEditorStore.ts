@@ -15,7 +15,7 @@ import { STORAGE_KEYS } from '@/utils/core/constants';
 import { toCapo } from '@/utils/music/chord-fretboard';
 import { garbageCollectChordMap } from '@/utils/score/chordSlots';
 
-type ScoreActiveTab = 'edit' | 'interactive';
+type ScoreActiveTab = 'edit' | 'interactive' | 'preview';
 
 interface HistoryState {
   lyrics: string;
@@ -26,7 +26,8 @@ interface HistoryState {
 export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const songStore = useSongStore();
   const activeSongId = useStorage<string | null>(STORAGE_KEYS.ACTIVE_SONG_ID, null);
-  const activeTabRef = ref<ScoreActiveTab>('edit');
+  // 当前标签页持久化：刷新/重启后恢复上次所在的乐谱视图（edit / interactive / preview）
+  const activeTabRef = useStorage<ScoreActiveTab>(STORAGE_KEYS.SCORE_ACTIVE_TAB, 'edit');
   const selectedSlotKey = ref<SlotKey | null>(null);
   const fontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 1.0, localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
@@ -34,16 +35,12 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const fretboardScale = useStorage(STORAGE_KEYS.SCORE_FRETBOARD_SCALE, 1.0, localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
   });
-  // A4 导出适配用的非持久化倍率：不写 localStorage，导出结束后归位
-  const exportScaleMultiplier = ref(1);
-  const effectiveFontScale = computed(() => fontScale.value * exportScaleMultiplier.value);
-  const effectiveFretboardScale = computed(() => fretboardScale.value * exportScaleMultiplier.value);
+  const effectiveFontScale = computed(() => fontScale.value);
+  const effectiveFretboardScale = computed(() => fretboardScale.value);
   const historyStack: HistoryState[] = [];
   let historyIndex = -1;
   const isUndoRedoAction = ref(false);
   const HISTORY_CAPACITY = 20;
-  const scrollSpeed = useStorage(STORAGE_KEYS.SCORE_SCROLL_SPEED, 60);
-  const exportQuality = useStorage(STORAGE_KEYS.EXPORT_QUALITY, 0.85);
 
   const activeSong = computed<Song | null>(() => {
     if (!activeSongId.value) return null;
@@ -54,11 +51,14 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
 
   const activeTab = computed({
     get: () => {
+      // 防御 storage 中遗留未知值：仅接受三个合法标签
+      const current = activeTabRef.value;
+      if (current !== 'edit' && current !== 'interactive' && current !== 'preview') return 'edit';
       if (!hasLyrics.value) return 'edit';
-      return activeTabRef.value;
+      return current;
     },
     set: (val: ScoreActiveTab) => {
-      if (val === 'interactive' && !hasLyrics.value) {
+      if (val !== 'edit' && !hasLyrics.value) {
         activeTabRef.value = 'edit';
         return;
       }
@@ -118,14 +118,21 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       historyStack.length = 0;
       historyIndex = -1;
       if (!newSong) {
-        activeTabRef.value = 'edit';
+        // 启动早期歌曲数据尚未从存储载入时也会触发一次 null：此时若已恢复出 activeSongId
+        //（数据加载中）不得重置 tab，避免覆盖持久化的上次视图；真正无选中歌曲时才回编辑
+        if (!activeSongId.value) {
+          activeTabRef.value = 'edit';
+        }
         return;
       }
       if (!isUndoRedoAction.value) {
         recordHistory(newSong);
       }
-      const validLyrics = Boolean(newSong.lyrics && newSong.lyrics.trim().length > 0);
-      activeTabRef.value = validLyrics ? 'interactive' : 'edit';
+      // 切歌不强制切回「排列和弦」：保留当前所在标签（如预览/编辑歌词）；
+      // 仅当新歌无歌词且当前标签依赖歌词时回退到编辑
+      if (activeTabRef.value !== 'edit' && !(newSong.lyrics && newSong.lyrics.trim().length > 0)) {
+        activeTabRef.value = 'edit';
+      }
     },
     { immediate: true }
   );
@@ -277,12 +284,9 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     moveSlotChord,
     fontScale,
     fretboardScale,
-    exportScaleMultiplier,
     effectiveFontScale,
     effectiveFretboardScale,
     undo,
     redo,
-    scrollSpeed,
-    exportQuality,
   };
 });

@@ -73,7 +73,9 @@ export function useBackupModals() {
           ? '线上服务器'
           : p.syncSettings?.syncTarget === 'webdav'
             ? 'WebDAV'
-            : 'GitHub',
+            : p.syncSettings?.syncTarget === 'gitee'
+              ? 'Gitee'
+              : 'GitHub',
     };
   });
 

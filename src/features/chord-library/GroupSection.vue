@@ -1,8 +1,8 @@
 <template>
-  <EmptyState v-if="chordStore.groups.length === 0" description="还没有添加分组" icon="folder-open" size="md" />
+  <EmptyState v-if="chordStore.groups.length === 0" description="还没有添加分组" icon="folder-open" />
   <template v-else>
     <Transition name="v-transition-fade">
-      <EmptyState v-if="searchQuery && totalMatchCount === 0" description="未找到匹配的和弦" icon="search" size="md" />
+      <EmptyState v-if="searchQuery && totalMatchCount === 0" description="未找到匹配的和弦" icon="search" />
     </Transition>
     <div v-grid-nav.stop="{ cols: 1, selector: '.group-title-row' }" v-if="!searchQuery || totalMatchCount > 0">
       <VueDraggable

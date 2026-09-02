@@ -801,7 +801,12 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
   if (chords.length <= 1) return chords.slice();
   const effectiveRule: GroupSortRule = rule ?? GroupSortRule.ROOT_PITCH;
   if (effectiveRule === GroupSortRule.NAME_ASC) {
-    return chords.slice().sort((a, b) => getChordName(a).localeCompare(getChordName(b)));
+    // 预映射 [chord, name] 后再排序：避免比较器内 O(n log n) 次重复 getChordName 拼名，
+    // 与下方 ROOT_PITCH/KEY_DEGREE 分支先 buildSortMeta 再比较的预构建模式保持一致
+    return chords
+      .map((chord): [Chord, string] => [chord, getChordName(chord)])
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(pair => pair[0]);
   }
   const n = chords.length;
   const mappedList: SortMeta[] = new Array(n);

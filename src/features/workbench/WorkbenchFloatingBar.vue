@@ -1,23 +1,17 @@
 <template>
   <BaseFloatingBar #="{ divider }" :bottom="barBottomPosition" :visible="!isPristine">
-    <ActionButton :disabled="isPristine" @click="editorStore.resetEditor" size="md" variant="ghost">
+    <ActionButton :disabled="isPristine" @click="editorStore.resetEditor" variant="ghost">
       {{ editorStore.isEditing ? '放弃修改' : '重置指板' }}
     </ActionButton>
 
     <template v-if="editorStore.isEditing">
       <component :is="divider" />
-      <ActionButton @click="chordActions.saveAsNewChord" size="md" variant="ghost"> 作为新和弦保存 </ActionButton>
+      <ActionButton @click="chordActions.saveAsNewChord" variant="ghost"> 作为新和弦保存 </ActionButton>
     </template>
 
     <component :is="divider" />
 
-    <ActionButton
-      :disabled="isSaveDisabled"
-      @click="chordActions.persistCurrentChord"
-      color="primary"
-      size="md"
-      variant="subtle"
-    >
+    <ActionButton :disabled="isSaveDisabled" @click="chordActions.persistCurrentChord" color="primary" variant="subtle">
       {{ editorStore.isEditing ? '更新保存' : '确认保存' }}
     </ActionButton>
   </BaseFloatingBar>

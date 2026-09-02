@@ -217,12 +217,17 @@ export type Group =
 
 /** 备份包内嵌的云端同步配置（v5 起随备份导出/导入，恢复后端凭据用） */
 export interface SyncSettingsBackup {
-  syncTarget?: 'github' | 'webdav' | 'server';
+  syncTarget?: 'github' | 'gitee' | 'webdav' | 'server';
   githubToken?: string;
   githubOwner?: string;
   githubRepo?: string;
   githubBranch?: string;
   githubPath?: string;
+  giteeToken?: string;
+  giteeOwner?: string;
+  giteeRepo?: string;
+  giteeBranch?: string;
+  giteePath?: string;
   webdavServerUrl?: string;
   webdavUsername?: string;
   webdavPassword?: string;

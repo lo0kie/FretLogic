@@ -134,24 +134,34 @@ export function useSyncService() {
     editorStore.resetEditor();
   };
 
-  /** 拉取 GitHub 远程分支列表写入 settingsStore（仅支持分支能力的 Provider） */
+  /** 拉取远程分支列表写入 settingsStore（仅支持分支能力的 Provider：GitHub / Gitee） */
   const fetchGithubBranches = async (target: SyncProviderKind = settingsStore.syncTarget): Promise<boolean> => {
     const factory = syncProviderRegistry[target];
-    if (!factory.supportsBranches || isFetchingBranches.value) return false; // 仅 GitHub 支持分支列表
+    if (!factory.supportsBranches || isFetchingBranches.value) return false;
     const provider = resolveProvider('获取分支失败', target);
     if (!provider) return false;
     const branchesProvider = provider as SyncBranchesProvider;
 
-    // 重新获取前重置已有分支选择，避免下拉框残留失效选项
-    settingsStore.githubBranches = [];
-    settingsStore.githubBranch = '';
+    // 重新获取前重置当前后端的既有分支选择，避免下拉框残留失效选项
+    const isGitee = target === 'gitee';
+    if (isGitee) {
+      settingsStore.giteeBranches = [];
+      settingsStore.giteeBranch = '';
+    } else {
+      settingsStore.githubBranches = [];
+      settingsStore.githubBranch = '';
+    }
 
     isFetchingBranches.value = true;
     let loadingToastId: number | null = null;
     try {
       loadingToastId = uiStore.toast.loading('正在获取远程分支列表...', { closable: false });
       const branches = await branchesProvider.listBranches();
-      settingsStore.githubBranches = branches;
+      if (isGitee) {
+        settingsStore.giteeBranches = branches;
+      } else {
+        settingsStore.githubBranches = branches;
+      }
 
       if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
       uiStore.toast.success(`成功获取 ${branches.length} 个分支`);

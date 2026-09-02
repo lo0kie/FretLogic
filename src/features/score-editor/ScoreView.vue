@@ -19,106 +19,40 @@
         />
 
         <ScoreInteractiveArea
-          v-else
+          v-else-if="scoreEditor.activeTab === 'interactive'"
           :key="`interactive-area-${scoreEditor.activeSong.id}`"
-          :selected-line-set
-          @line-click="handleLineClick"
           @open-picker="openChordPicker"
           ref="interactiveAreaRef"
+        />
+
+        <ScorePreviewPane
+          v-else-if="scoreEditor.activeTab === 'preview'"
+          :key="`score-preview-${scoreEditor.activeSong.id}`"
         />
       </Transition>
     </div>
 
-    <ScoreExportFloatingBar
-      v-model:include-meta-bar="includeMetaBar"
-      :is-all-selected
-      :is-indeterminate
-      :selected-count="selectedLineSet.size"
-      :visible="Boolean(scoreEditor.activeSong && scoreEditor.activeTab === 'interactive')"
-      @open-export="previewVisible = true"
-      @toggle-select-all="handleToggleSelectAll"
-    />
-
     <ChordPickerModal v-model:visible="isPickerOpen" />
-
-    <ScoreExportPreviewModal
-      v-model:current-page-index="currentPageIndex"
-      v-model:mode="exportMode"
-      v-model:quality="scoreEditor.exportQuality"
-      v-model:visible="previewVisible"
-      :current-page
-      :is-generating
-      :pages
-      :progress
-      @commit-quality="applyQuality"
-      @copy-current-page="copyCurrentPage"
-      @download-current-page="downloadCurrentPage"
-      @download-pdf="downloadPdf"
-    />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
+import { onActivated, onBeforeUnmount, onDeactivated, ref, useTemplateRef } from 'vue';
 
 import { useEventListener } from '@vueuse/core';
 
 import EmptyState from '@/components/ui/EmptyState.vue';
-import { useLineSelection } from '@/features/score-editor/composables/useLineSelection';
-import { useScoreExportPreview } from '@/features/score-editor/composables/useScoreExportPreview';
-import { useScoreLinesData } from '@/features/score-editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { SlotKey } from '@/types';
 
 import ChordPickerModal from './ChordPickerModal.vue';
-import ScoreExportFloatingBar from './ScoreExportFloatingBar.vue';
-import ScoreExportPreviewModal from './ScoreExportPreviewModal.vue';
 import ScoreInteractiveArea from './ScoreInteractiveArea.vue';
 import ScoreLyricsEditor from './ScoreLyricsEditor.vue';
+import ScorePreviewPane from './ScorePreviewPane.vue';
 
 const scoreEditor = useScoreEditorStore();
 const isPickerOpen = ref(false);
-const previewVisible = ref(false);
 const interactiveAreaRef = useTemplateRef<InstanceType<typeof ScoreInteractiveArea>>('interactiveAreaRef');
-
-const { lyricsLinesWithEdges } = useScoreLinesData();
-const totalLines = computed(() => lyricsLinesWithEdges.value.length);
-
-const {
-  selectedLineSet,
-  isAllSelected,
-  isIndeterminate,
-  sortedSelectedIndices,
-  handleToggleSelectAll,
-  handleLineClick,
-} = useLineSelection(
-  totalLines,
-  computed(() => scoreEditor.activeSong)
-);
-
-const {
-  mode: exportMode,
-  pages,
-  currentPage,
-  currentPageIndex,
-  isGenerating,
-  includeMetaBar,
-  progress,
-  generatePreview,
-  copyCurrentPage,
-  downloadPdf,
-  clearPreview,
-  downloadCurrentPage,
-  applyQuality,
-} = useScoreExportPreview(sortedSelectedIndices);
-
-watch(previewVisible, open => {
-  if (open) generatePreview();
-  else clearPreview();
-});
-watch([exportMode, includeMetaBar], () => {
-  if (previewVisible.value) generatePreview();
-});
 
 /** 用户点击歌词槽位：记录选中槽位并打开和弦选择弹窗 */
 const openChordPicker = (slotKey: SlotKey) => {

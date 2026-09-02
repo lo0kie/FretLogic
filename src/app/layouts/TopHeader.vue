@@ -3,17 +3,14 @@
     class="z-header border-glass-border bg-bg-panel/90 @media(display-mode:window-controls-overlay):[-webkit-app-region:drag] @media(display-mode:window-controls-overlay):[app-region:drag] @media(display-mode:window-controls-overlay):min-h-[max(2.5rem,env(titlebar-area-height,2.5rem))] @media(display-mode:window-controls-overlay):pl-[max(env(titlebar-area-inset-left,0px),1rem)] @media(display-mode:window-controls-overlay):pr-[max(env(titlebar-area-inset-right,0px),1rem)] relative box-border flex min-h-10 w-full shrink-0 items-center justify-between border-b px-4 backdrop-blur-lg select-none"
   >
     <div :class="NO_DRAG_REGION_CLASS" class="gap-sm flex min-w-0 flex-1 items-center justify-start">
-      <ActionButton
+      <BaseCheckbox
+        v-model="uiStore.isLeftOpen"
         v-tooltip="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'"
-        :color="uiStore.isLeftOpen ? 'primary' : 'default'"
-        :size="uiSize"
-        :variant="uiStore.isLeftOpen ? 'subtle' : 'ghost'"
-        @click="uiStore.isLeftOpen = !uiStore.isLeftOpen"
-        aria-label="切换侧边栏"
+        :aria-label="'切换侧边栏'"
+        buttonized
+        icon="panel-left"
         icon-only
-      >
-        <BaseIcon :size="18" :stroke-width="2.2" name="panel-left" />
-      </ActionButton>
+      />
 
       <div class="bg-glass-border mx-[0.1rem] h-[0.7rem] w-px" />
 
@@ -21,18 +18,16 @@
         <span class="text-text-title font-features-['ss01'_1] text-xs font-extrabold tracking-tight whitespace-nowrap">
           Fret Logic
         </span>
-        <BaseSegmentedControl
-          :model-value="activeNavPath"
-          :options="NAV_OPTIONS"
-          :size="uiSize"
-          @change="path => router.push(path)"
-        />
+        <BaseSegmentedControl :model-value="activeNavPath" :options="NAV_OPTIONS" @change="path => router.push(path)" />
       </div>
     </div>
 
     <div
-      :class="NO_DRAG_REGION_CLASS"
-      class="z-inner @media(display-mode:window-controls-overlay):-translate-x-[calc(50%-(env(titlebar-area-inset-left,0px)-env(titlebar-area-inset-right,0px))/2)] pointer-events-auto absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center"
+      :class="[
+        NO_DRAG_REGION_CLASS,
+        route.path === '/score' ? 'inset-y-0 items-stretch' : 'top-1/2 -translate-y-1/2 items-center',
+      ]"
+      class="z-inner @media(display-mode:window-controls-overlay):-translate-x-[calc(50%-(env(titlebar-area-inset-left,0px)-env(titlebar-area-inset-right,0px))/2)] pointer-events-auto absolute left-1/2 flex -translate-x-1/2"
     >
       <div v-if="route.path === '/workbench'" class="gap-xs p-xs flex items-center">
         <ActionButton
@@ -81,30 +76,52 @@
         :disabled="!scoreEditor.activeSong"
         :options="scoreModeOptions"
         @change="handleScoreTabChange"
-        size="md"
+        full-height
+        tabbed
       />
     </div>
 
     <div :class="NO_DRAG_REGION_CLASS" class="gap-xs flex min-w-0 flex-1 items-center justify-end">
-      <ActionButton
-        v-if="scoreEditor.activeTab === 'interactive' && route.path === '/score'"
-        v-tooltip="isAutoScrolling ? '暂停滚动' : '开始滚动'"
-        :aria-label="isAutoScrolling ? '暂停滚动' : '开始滚动'"
-        :title="isAutoScrolling ? '暂停滚动' : '开始滚动'"
-        @click="toggleAutoScroll"
-        icon-only
-        size="sm"
-        variant="ghost"
+      <!-- 乐谱预览 tab：复制 / 下载当前乐谱的整曲长图 -->
+      <BasePopover
+        v-if="route.path === '/score' && scoreEditor.activeTab === 'preview'"
+        :disabled="!scoreEditor.hasLyrics"
+        placement="bottom-end"
+        trigger="hover"
       >
-        <BaseIcon :name="isAutoScrolling ? 'pause' : 'play'" :size="15" />
-      </ActionButton>
-
-      <BasePopover placement="bottom-end" trigger="hover">
         <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
             :aria-expanded="isOpen"
             :color="isOpen ? 'primary' : 'default'"
-            :size="uiSize"
+            :disabled="!scoreEditor.hasLyrics"
+            :variant="isOpen ? 'subtle' : 'ghost'"
+            @click="pinToggle()"
+            aria-haspopup="menu"
+            aria-label="导出乐谱图片"
+            icon-only
+          >
+            <BaseIcon :size="18" :stroke-width="2.2" name="download" />
+          </ActionButton>
+        </template>
+
+        <template #default="{ close }">
+          <ContextMenuItems
+            :items="scoreExportMenuItems"
+            @select="
+              item => {
+                item.action?.();
+                if (!item.keepOpen) close();
+              }
+            "
+          />
+        </template>
+      </BasePopover>
+
+      <BasePopover v-if="showHeaderSettings" placement="bottom-end" trigger="hover">
+        <template #trigger="{ isOpen, pinToggle }">
+          <ActionButton
+            :aria-expanded="isOpen"
+            :color="isOpen ? 'primary' : 'default'"
             :variant="isOpen ? 'subtle' : 'ghost'"
             @click="pinToggle()"
             aria-haspopup="true"
@@ -124,7 +141,6 @@
           <ActionButton
             :aria-expanded="isOpen"
             :color="isOpen ? 'primary' : 'default'"
-            :size="uiSize"
             :variant="isOpen ? 'subtle' : 'ghost'"
             @click="pinToggle()"
             aria-haspopup="menu"
@@ -153,7 +169,6 @@
           <ActionButton
             :aria-expanded="isOpen"
             :color="isOpen ? 'primary' : 'default'"
-            :size="uiSize"
             :variant="isOpen ? 'subtle' : 'ghost'"
             @click="pinToggle()"
             aria-haspopup="menu"
@@ -173,13 +188,7 @@
         </template>
       </BasePopover>
 
-      <ActionButton
-        v-tooltip.interactive="buildInfoTooltip"
-        :size="uiSize"
-        aria-label="构建信息"
-        icon-only
-        variant="ghost"
-      >
+      <ActionButton v-tooltip.interactive="buildInfoTooltip" aria-label="构建信息" icon-only variant="ghost">
         <BaseIcon :size="17" :stroke-width="2.2" name="info" />
       </ActionButton>
     </div>
@@ -238,13 +247,15 @@ import { computed, defineAsyncComponent, ref, unref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import ActionButton from '@/components/ui/ActionButton.vue';
+import BaseCheckbox from '@/components/ui/BaseCheckbox.vue';
 import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BasePopover from '@/components/ui/BasePopover.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/ui/BaseSegmentedControl.vue';
 import ContextMenuItems, { type ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
 import type { IconName } from '@/components/ui/icons.registry';
-import { useAutoScroll } from '@/features/score-editor/composables/useAutoScroll';
+import { useScoreLinesData } from '@/features/score-editor/composables/useScoreLinesData';
+import { prepareWorkerExportPayload, runWorkerExport } from '@/services/export/workerExportService';
 import type { SyncProviderKind } from '@/services/sync/provider';
 import { useAudioPlayer } from '@/shared/composables/useAudioPlayer';
 import { useBackupModals } from '@/shared/composables/useBackupModals';
@@ -254,7 +265,12 @@ import { globalDarkMode, setThemeMode, themePreference } from '@/stores/globalSt
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
-import { renderElementToBlob, writeBlobToClipboard } from '@/utils/score/score-export';
+import {
+  buildExportFileName,
+  renderElementToBlob,
+  triggerBlobDownload,
+  writeBlobToClipboard,
+} from '@/utils/score/score-export';
 
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 
@@ -268,7 +284,7 @@ const editorStore = useChordEditorStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 const { isPlaying, playCurrentChord } = useAudioPlayer();
-const { isAutoScrolling, toggleAutoScroll } = useAutoScroll();
+const { chordsLookupMap } = useScoreLinesData();
 
 const activeNavPath = computed(() => {
   const matched = NAV_OPTIONS.find(opt => opt.value === route.path);
@@ -323,12 +339,14 @@ const isPullConfirmOpen = ref(false);
 const SYNC_TARGET_LABELS: Record<SyncProviderKind, string> = {
   server: '线上服务器',
   github: 'GitHub',
+  gitee: 'Gitee',
   webdav: 'WebDAV',
 };
 
 const SYNC_TARGET_ICONS: Record<SyncProviderKind, IconName> = {
   server: 'server',
   github: 'github',
+  gitee: 'git-branch',
   webdav: 'folder-sync',
 };
 
@@ -391,6 +409,15 @@ const syncMenuItems = computed<ContextMenuItem[]>(() => [
         },
       },
       {
+        label: 'Gitee',
+        icon: 'git-branch',
+        checked: settingsStore.syncTarget === 'gitee',
+        keepOpen: true,
+        action: () => {
+          settingsStore.syncTarget = 'gitee';
+        },
+      },
+      {
         label: 'WebDAV',
         icon: 'folder-sync',
         checked: settingsStore.syncTarget === 'webdav',
@@ -411,18 +438,26 @@ const syncMenuItems = computed<ContextMenuItem[]>(() => [
   },
 ]);
 
-const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive'>[]>(() => [
+/** 右侧「设置面板」按钮显示范围：工作台始终显示；乐谱模式仅「排列和弦」显示（编辑歌词/预览无相关设置项） */
+const showHeaderSettings = computed(() => route.path !== '/score' || scoreEditor.activeTab === 'interactive');
+
+const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive' | 'preview'>[]>(() => [
   { label: '编辑歌词', value: 'edit' },
   {
     label: '排列和弦',
     value: 'interactive',
     disabled: !scoreEditor.hasLyrics,
   },
+  {
+    label: '预览',
+    value: 'preview',
+    disabled: !scoreEditor.hasLyrics,
+  },
 ]);
 
-/** 乐谱模式切换回调：无歌词时切到"排列和弦"给出提示（选项本身已被禁用，双保险） */
-const handleScoreTabChange = (val: 'edit' | 'interactive') => {
-  if (val === 'interactive' && !scoreEditor.hasLyrics) {
+/** 乐谱模式切换回调：无歌词时切到需要歌词的 tab 给出提示（选项本身已被禁用，双保险） */
+const handleScoreTabChange = (val: 'edit' | 'interactive' | 'preview') => {
+  if (val !== 'edit' && !scoreEditor.hasLyrics) {
     uiStore.toast.warning('请先在“编辑歌词”模式下输入歌词内容');
   }
 };
@@ -454,8 +489,76 @@ const handleExport = async (isTransparent: boolean) => {
   }
 };
 
+/** 整曲全部歌词行索引（预览/导出始终覆盖全曲） */
+const allLyricsLineIndices = (): number[] => {
+  const lyrics = scoreEditor.activeSong?.lyrics;
+  if (!lyrics) return [];
+  return Array.from({ length: lyrics.split('\n').length }, (_, i) => i);
+};
+
+/**
+ * 预览 tab 的导出：整曲经 Worker 离屏渲染为一张长图（normal 模式），
+ * 再按操作写入剪贴板或触发浏览器下载。
+ */
+const handleScoreExport = async (op: 'copy' | 'download') => {
+  if (uiStore.isCopying) return;
+  const song = scoreEditor.activeSong;
+  const lineIndices = allLyricsLineIndices();
+  if (!song || lineIndices.length === 0) return;
+
+  uiStore.isCopying = true;
+  uiStore.toast.info('正在渲染整曲长图...');
+  try {
+    const payload = prepareWorkerExportPayload(
+      song,
+      lineIndices,
+      chordsLookupMap.value,
+      'normal',
+      settingsStore.scoreChordShorthand,
+      true
+    );
+    const blobs = await runWorkerExport(payload);
+    if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
+
+    if (op === 'copy') {
+      await writeBlobToClipboard(blobs[0]!);
+      uiStore.toast.success('成功复制至系统剪贴板');
+    } else {
+      triggerBlobDownload(blobs[0]!, `${buildExportFileName(song.title || '')}.jpg`);
+      uiStore.toast.success('已开始下载');
+    }
+  } catch (err) {
+    console.error('Score export error:', err);
+    uiStore.toast.error(err instanceof Error ? err.message : '导出失败');
+  } finally {
+    uiStore.isCopying = false;
+  }
+};
+
+/** 预览 tab 的导出菜单：复制 / 下载 整曲长图（平级两项，无子菜单） */
+const scoreExportMenuItems = computed<ContextMenuItem[]>(() => {
+  const hasLyrics = scoreEditor.hasLyrics;
+  return [
+    {
+      label: '复制',
+      icon: 'copy',
+      disabled: !hasLyrics,
+      action: () => {
+        void handleScoreExport('copy');
+      },
+    },
+    {
+      label: '下载',
+      icon: 'download',
+      disabled: !hasLyrics,
+      action: () => {
+        void handleScoreExport('download');
+      },
+    },
+  ];
+});
+
 const isSyncModalOpen = ref(false);
-const uiSize = 'md';
 /** PWA 窗口控制拖拽拦截类名 */
 const NO_DRAG_REGION_CLASS =
   '@media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag]';

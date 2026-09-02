@@ -1,5 +1,5 @@
 <template>
-  <EmptyState v-if="songStore.songs.length === 0" description="暂无乐谱，点击右上角新建" icon="music" size="md" />
+  <EmptyState v-if="songStore.songs.length === 0" description="暂无乐谱，点击右上角新建" icon="music" />
 
   <!-- 统一容器：手动排序时经 useDraggable 支持拖拽，非手动时仅展示；
        排序方法切换（含手动↔拼音分组等）都在同一 TransitionGroup 内重排，FLIP 动画全程生效；
@@ -226,16 +226,15 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => {
   return items;
 };
 
-/** 用户点击乐谱卡：再次点击取消选中；选中新乐谱时按有无歌词切到对应标签页 */
+/** 用户点击乐谱卡：再次点击取消选中；选中新乐谱时保持当前标签页，仅目标无歌词时回退编辑 */
 const handleSelectSong = (songId: string) => {
   if (scoreEditor.activeSongId === songId) {
     scoreEditor.setActiveSong(null);
   } else {
     scoreEditor.setActiveSong(songId);
 
-    if (scoreEditor.hasLyrics) {
-      scoreEditor.activeTab = 'interactive';
-    } else {
+    // 不强制跳到「排列和弦」：保留用户当前所在标签；无歌词时该歌只能编辑
+    if (!scoreEditor.hasLyrics) {
       scoreEditor.activeTab = 'edit';
     }
   }

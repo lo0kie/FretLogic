@@ -1,5 +1,5 @@
 /**
- * 同步与偏好设置 store：同步目标（GitHub / WebDAV）凭据与路径、应用偏好项。
+ * 同步与偏好设置 store：同步目标（GitHub / Gitee / WebDAV / Server）凭据与路径、应用偏好项。
  * 敏感字段（token/密码）仅驻留内存，不参与云同步推送。
  */
 import { ref } from 'vue';
@@ -9,7 +9,7 @@ import { defineStore } from 'pinia';
 
 import type { SyncProviderKind } from '@/services/sync/provider';
 import type { AppPreferencesBackup, SyncSettingsBackup } from '@/types';
-import { GITHUB_SYNC_CONFIG, STORAGE_KEYS } from '@/utils/core/constants';
+import { GITEE_SYNC_CONFIG, GITHUB_SYNC_CONFIG, STORAGE_KEYS } from '@/utils/core/constants';
 
 export const useSettingsStore = defineStore('settings', () => {
   const syncTarget = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_TARGET, 'server');
@@ -21,6 +21,14 @@ export const useSettingsStore = defineStore('settings', () => {
   const githubBranch = useStorage(STORAGE_KEYS.GH_BRANCH, GITHUB_SYNC_CONFIG.DEFAULT_BRANCH);
   const githubPath = useStorage(STORAGE_KEYS.GH_PATH, GITHUB_SYNC_CONFIG.DEFAULT_PATH);
   const githubBranches = useStorage(STORAGE_KEYS.GH_BRANCHES, <Array<string>>[]);
+
+  // Gitee 同步配置（默认由 GITEE_SYNC_CONFIG 提供仓库与分支）
+  const giteeToken = ref('');
+  const giteeOwner = useStorage(STORAGE_KEYS.GE_OWNER, GITEE_SYNC_CONFIG.DEFAULT_OWNER);
+  const giteeRepo = useStorage(STORAGE_KEYS.GE_REPO, GITEE_SYNC_CONFIG.DEFAULT_REPO);
+  const giteeBranch = useStorage(STORAGE_KEYS.GE_BRANCH, GITEE_SYNC_CONFIG.DEFAULT_BRANCH);
+  const giteePath = useStorage(STORAGE_KEYS.GE_PATH, GITEE_SYNC_CONFIG.DEFAULT_PATH);
+  const giteeBranches = useStorage(STORAGE_KEYS.GE_BRANCHES, <Array<string>>[]);
 
   // WebDAV 同步配置（支持选择使用预设代理或自定义代理）
   const webdavServerUrl = useStorage(STORAGE_KEYS.WEBDAV_SERVER_URL, '');
@@ -44,7 +52,12 @@ export const useSettingsStore = defineStore('settings', () => {
   /** 从备份包恢复同步配置（导入备份/云端拉取时调用）。分支缓存随旧配置失效。 */
   const applySyncBackup = (sync?: SyncSettingsBackup) => {
     if (!sync) return;
-    if (sync.syncTarget === 'github' || sync.syncTarget === 'webdav' || sync.syncTarget === 'server') {
+    if (
+      sync.syncTarget === 'github' ||
+      sync.syncTarget === 'gitee' ||
+      sync.syncTarget === 'webdav' ||
+      sync.syncTarget === 'server'
+    ) {
       syncTarget.value = sync.syncTarget;
     }
     if (typeof sync.githubToken === 'string') githubToken.value = sync.githubToken;
@@ -52,6 +65,11 @@ export const useSettingsStore = defineStore('settings', () => {
     if (typeof sync.githubRepo === 'string') githubRepo.value = sync.githubRepo;
     if (typeof sync.githubBranch === 'string') githubBranch.value = sync.githubBranch;
     if (typeof sync.githubPath === 'string') githubPath.value = sync.githubPath;
+    if (typeof sync.giteeToken === 'string') giteeToken.value = sync.giteeToken;
+    if (typeof sync.giteeOwner === 'string') giteeOwner.value = sync.giteeOwner;
+    if (typeof sync.giteeRepo === 'string') giteeRepo.value = sync.giteeRepo;
+    if (typeof sync.giteeBranch === 'string') giteeBranch.value = sync.giteeBranch;
+    if (typeof sync.giteePath === 'string') giteePath.value = sync.giteePath;
     if (typeof sync.webdavServerUrl === 'string') webdavServerUrl.value = sync.webdavServerUrl;
     if (typeof sync.webdavUsername === 'string') webdavUsername.value = sync.webdavUsername;
     if (typeof sync.webdavPassword === 'string') webdavPassword.value = sync.webdavPassword;
@@ -60,6 +78,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (typeof sync.serverUrl === 'string') serverUrl.value = sync.serverUrl;
     if (typeof sync.serverToken === 'string') serverToken.value = sync.serverToken;
     githubBranches.value = [];
+    giteeBranches.value = [];
   };
 
   /** 从备份包恢复偏好设置（导入备份/云端拉取时调用）。仅覆盖包中携带的字段。 */
@@ -81,6 +100,12 @@ export const useSettingsStore = defineStore('settings', () => {
     githubBranch,
     githubPath,
     githubBranches,
+    giteeToken,
+    giteeOwner,
+    giteeRepo,
+    giteeBranch,
+    giteePath,
+    giteeBranches,
     webdavServerUrl,
     webdavUsername,
     webdavPassword,

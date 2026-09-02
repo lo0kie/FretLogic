@@ -92,10 +92,10 @@ describe('workerExportService', () => {
       updatedAt: Date.now(),
     };
 
-    const fullPayload = prepareWorkerExportPayload(song, [0], chordsLookupMap, 'a4', 0.95, false);
+    const fullPayload = prepareWorkerExportPayload(song, [0], chordsLookupMap, 'a4', false);
     expect(fullPayload.lines[0]?.chars[0]?.chord?.chordName).toBe('Cmaj7');
 
-    const shortPayload = prepareWorkerExportPayload(song, [0], chordsLookupMap, 'a4', 0.95, true);
+    const shortPayload = prepareWorkerExportPayload(song, [0], chordsLookupMap, 'a4', true);
     expect(shortPayload.lines[0]?.chars[0]?.chord?.chordName).toBe('CM7');
   });
 });

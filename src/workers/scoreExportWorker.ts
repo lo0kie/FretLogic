@@ -33,12 +33,14 @@ export interface WorkerExportPayload {
   lines: ExportLineItem[];
   mode: 'normal' | 'a4';
   darkMode: boolean;
-  quality: number;
   includeMetaBar?: boolean;
 }
 
 export type WorkerExportMessage =
   { type: 'progress'; percent: number } | { type: 'complete'; blobs: Blob[] } | { type: 'error'; message: string };
+
+/** 输出图固定编码质量（导出质量设置已移除，预览与后续入口统一使用） */
+const EXPORT_JPEG_QUALITY = 0.95;
 
 type ThemeColors = (typeof SCORE_EXPORT_CONFIG.THEME)['DARK'] | (typeof SCORE_EXPORT_CONFIG.THEME)['LIGHT'];
 
@@ -315,8 +317,8 @@ function drawFretboard(
       ctx.lineTo(sx - SCORE_EXPORT_CONFIG.MUTE_CROSS_RADIUS, markerY + SCORE_EXPORT_CONFIG.MUTE_CROSS_RADIUS);
       ctx.stroke();
     } else if (fret === 0) {
-      // ○ 空弦标记
-      ctx.strokeStyle = colors.FB_NOTE;
+      // ○ 空弦标记（独立于按品音符颜色的 FB_OPEN，可单独配置）
+      ctx.strokeStyle = colors.FB_OPEN;
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.arc(sx, markerY, SCORE_EXPORT_CONFIG.OPEN_CIRCLE_RADIUS, 0, Math.PI * 2);
@@ -547,7 +549,7 @@ function renderHeader(
 
 self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
   try {
-    const { title, keyText, capoText, lines, mode, darkMode, quality = 0.95, includeMetaBar = true } = e.data;
+    const { title, keyText, capoText, lines, mode, darkMode, includeMetaBar = true } = e.data;
 
     const colors = darkMode ? SCORE_EXPORT_CONFIG.THEME.DARK : SCORE_EXPORT_CONFIG.THEME.LIGHT;
     const blobs: Blob[] = [];
@@ -641,7 +643,7 @@ self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
           curY = res.nextY;
         }
 
-        const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+        const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: EXPORT_JPEG_QUALITY });
         blobs.push(blob);
 
         self.postMessage({
@@ -704,7 +706,7 @@ self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
         curY = res.nextY;
       }
 
-      const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+      const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: EXPORT_JPEG_QUALITY });
       blobs.push(blob);
 
       self.postMessage({ type: 'progress', percent: 100 } as WorkerExportMessage);

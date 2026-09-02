@@ -50,6 +50,25 @@
             </div>
           </template>
 
+          <template v-else-if="selectedProvider === 'gitee'">
+            <div class="gap-sm py-xs box-border flex flex-col">
+              <BaseInput
+                v-model="settingsStore.giteeToken"
+                :disabled="isBusy"
+                :maxlength="100"
+                clearable
+                is-password
+                placeholder="Gitee 私人令牌 (Token)"
+                show-count
+              />
+
+              <p class="form-hint m-0">
+                提示：数据同步至 Gitee 仓库 look1e/fret-logic 的 backup/chords.json。需先在 Gitee 「私人令牌」页创建
+                Token；私有仓库拉取同样需要 Token。
+              </p>
+            </div>
+          </template>
+
           <template v-else-if="selectedProvider === 'webdav'">
             <div class="gap-sm py-xs box-border flex flex-col">
               <BaseInput
@@ -196,6 +215,7 @@ const handlePullClick = async () => {
 const providerOptions: BaseSelectorOption<SyncProviderKind>[] = [
   { label: '线上服务器', value: 'server', icon: 'server' },
   { label: 'GitHub', value: 'github', icon: 'github' },
+  { label: 'Gitee', value: 'gitee', icon: 'git-branch' },
   { label: 'WebDAV', value: 'webdav', icon: 'folder-sync' },
 ];
 
@@ -210,9 +230,10 @@ const isPullDisabled = computed(() => {
   return false;
 });
 
-// 同步（推送）配置禁用判断：GitHub 需填 Token，WebDAV 需填服务器地址，服务器免密
+// 同步（推送）配置禁用判断：GitHub/Gitee 需填 Token，WebDAV 需填服务器地址，服务器免密
 const isSyncDisabled = computed(() => {
   if (selectedProvider.value === 'github') return !settingsStore.githubToken.trim();
+  if (selectedProvider.value === 'gitee') return !settingsStore.giteeToken.trim();
   if (selectedProvider.value === 'webdav') return !settingsStore.webdavServerUrl.trim();
   return false;
 });
@@ -250,6 +271,7 @@ const syncTooltip = computed(() => {
   if (isBusy.value) return '其他操作进行中';
   if (isSyncDisabled.value) {
     if (selectedProvider.value === 'github') return '推送写回分支需先填写 GitHub Token';
+    if (selectedProvider.value === 'gitee') return '推送写回仓库需先填写 Gitee Token';
     return '请先填写 WebDAV 服务器地址';
   }
   return '将本地数据推送到云端';
