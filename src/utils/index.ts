@@ -4,7 +4,6 @@
 // Music Theory & Chords
 export * from './music/chord-fretboard';
 export * from './music/entityFactories';
-export * from './music/musicTheory';
 
 // Score
 export * from './score/score-export';

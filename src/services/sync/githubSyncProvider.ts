@@ -1,4 +1,5 @@
 import { base64DecodeUtf8, base64EncodeUtf8, serializeForStorage } from '@/utils/core/common';
+
 import { SyncError, type GithubSyncConfig, type SyncBranchesProvider } from './provider';
 import { createSyncProviderBase } from './syncBase';
 

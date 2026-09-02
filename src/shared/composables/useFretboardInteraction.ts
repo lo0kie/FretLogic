@@ -1,11 +1,15 @@
+import { computed, ref, useTemplateRef, watchEffect } from 'vue';
+
+import { useEventListener } from '@vueuse/core';
+
 import type { FretboardProps } from '@/components/fretboard/Fretboard.vue';
+import { canTogglePitchAccidental, getActiveBaseStrings, isOpen } from '@/services/music/theory';
+import { useFretboardKeyboard } from '@/shared/composables/useFretboardKeyboard';
 import { useFretboardLayout } from '@/shared/composables/useFretboardLayout';
+import { useRafThrottle } from '@/shared/composables/useRafThrottle';
 import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
 import { cloneGuitarStrings } from '@/utils/core/common';
 import { CANVAS_CONFIG, INTERACTION_CONFIG } from '@/utils/core/constants';
-import { canTogglePitchAccidental, getActiveBaseStrings, isOpen } from '@/utils/music/musicTheory';
-import { useEventListener } from '@vueuse/core';
-import { computed, onBeforeUnmount, ref, useTemplateRef, watchEffect } from 'vue';
 
 /** 指板交互核心：坐标换算、点按/右键/滚轮/键盘编辑音符与变调夹，以及 hover/focus 高亮管理 */
 export function useFretboardInteraction(
@@ -153,6 +157,27 @@ export function useFretboardInteraction(
     });
   };
 
+  /** 切换某弦某品位的音符：该品位已有音符则清除为静音，否则按下到该品位（指针点击与键盘 Enter 共用） */
+  const toggleNoteAt = (sIdx: number, fret: number) => {
+    emitStringsUpdate(cloned => {
+      const str = cloned[sIdx];
+      if (!str) return;
+      if (str[0] === fret) {
+        setStringFret(str, -1);
+      } else {
+        setStringFret(str, fret);
+      }
+    });
+  };
+
+  /** 清除某弦音符（置为静音），键盘 Delete/Backspace 使用 */
+  const muteString = (sIdx: number) => {
+    emitStringsUpdate(cloned => {
+      const str = cloned[sIdx];
+      if (str) setStringFret(str, -1);
+    });
+  };
+
   /** 切换某弦的升降号偏好（如 C#/Db），仅在该位置允许变体时生效 */
   const handleTogglePitchName = (sIdx: number) => {
     if (interactive.value) {
@@ -171,124 +196,16 @@ export function useFretboardInteraction(
     });
   };
 
-  /** 键盘可达性：方向键/Home/End/PageUp/PageDown 移动焦点，Enter/Space 切换音符，Delete/Backspace 清除 */
-  const handleKeydown = (e: KeyboardEvent) => {
-    if (!interactive.value) return;
-
-    const target = e.target as HTMLElement | null;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-      return;
-    }
-
-    const minFret = showOpenStrings.value ? 0 : 1;
-    const maxFret = fretCount.value;
-
-    if (!focusPoint.value) {
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
-        e.preventDefault();
-        focusPoint.value = {
-          stringIndex: 0,
-          fretIndex: showOpenStrings.value ? 0 : 1,
-        };
-        return;
-      }
-    }
-
-    const current = focusPoint.value || {
-      stringIndex: 0,
-      fretIndex: showOpenStrings.value ? 0 : 1,
-    };
-
-    /** Enter/Space：在焦点品位放置/清除音符，焦点在空弦区时切换空弦态 */
-    const handleEnterOrSpace = () => {
-      const pt = focusPoint.value;
-      if (!pt) return;
-      if (pt.fretIndex === 0) {
-        handleLocalToggleOpenString(pt.stringIndex);
-      } else {
-        emitStringsUpdate(cloned => {
-          const str = cloned[pt.stringIndex];
-          if (!str) return;
-          if (str[0] === pt.fretIndex) {
-            setStringFret(str, -1);
-          } else {
-            setStringFret(str, pt.fretIndex);
-          }
-        });
-      }
-    };
-
-    /** Delete/Backspace：清除焦点弦上的音符（置为静音） */
-    const handleDeleteOrBackspace = () => {
-      const pt = focusPoint.value;
-      if (!pt) return;
-      emitStringsUpdate(cloned => {
-        const str = cloned[pt.stringIndex];
-        if (str) setStringFret(str, -1);
-      });
-    };
-
-    const keyActions: Record<string, () => void> = {
-      'ArrowUp': () => {
-        focusPoint.value = {
-          stringIndex: current.stringIndex,
-          fretIndex: Math.max(minFret, current.fretIndex - 1),
-        };
-      },
-      'ArrowDown': () => {
-        focusPoint.value = {
-          stringIndex: current.stringIndex,
-          fretIndex: Math.min(maxFret, current.fretIndex + 1),
-        };
-      },
-      'ArrowLeft': () => {
-        focusPoint.value = {
-          stringIndex: Math.max(0, current.stringIndex - 1),
-          fretIndex: current.fretIndex,
-        };
-      },
-      'ArrowRight': () => {
-        focusPoint.value = {
-          stringIndex: Math.min(5, current.stringIndex + 1),
-          fretIndex: current.fretIndex,
-        };
-      },
-      'Home': () => {
-        focusPoint.value = {
-          stringIndex: 0,
-          fretIndex: current.fretIndex,
-        };
-      },
-      'End': () => {
-        focusPoint.value = {
-          stringIndex: 5,
-          fretIndex: current.fretIndex,
-        };
-      },
-      'PageUp': () => {
-        focusPoint.value = {
-          stringIndex: current.stringIndex,
-          fretIndex: minFret,
-        };
-      },
-      'PageDown': () => {
-        focusPoint.value = {
-          stringIndex: current.stringIndex,
-          fretIndex: maxFret,
-        };
-      },
-      'Enter': handleEnterOrSpace,
-      ' ': handleEnterOrSpace,
-      'Delete': handleDeleteOrBackspace,
-      'Backspace': handleDeleteOrBackspace,
-    };
-
-    const action = keyActions[e.key];
-    if (action) {
-      e.preventDefault();
-      action();
-    }
-  };
+  // 键盘可达性：方向键移动焦点、Enter/Space 切换音符、Delete/Backspace 静音，细节见 useFretboardKeyboard
+  const { handleKeydown } = useFretboardKeyboard({
+    interactive,
+    focusPoint,
+    showOpenStrings,
+    fretCount,
+    onToggleOpenString: handleLocalToggleOpenString,
+    onToggleNote: toggleNoteAt,
+    onMuteString: muteString,
+  });
 
   /** 按事件坐标刷新 hover 高亮点，位置未变化时不触发响应式更新 */
   const updateHoverFromEvent = (clientX: number, clientY: number) => {
@@ -298,29 +215,15 @@ export function useFretboardInteraction(
     if (changed) hoverPoint.value = pt;
   };
 
-  let hoverRafId = 0;
-  let pendingEvent: { clientX: number; clientY: number } | null = null;
+  // hover 更新按帧合帧：只保留最后一次指针位置，避免高频 pointermove 重复做坐标换算
+  const { schedule: scheduleHoverFrame, cancel: cancelHoverUpdate } = useRafThrottle<{
+    clientX: number;
+    clientY: number;
+  }>(pos => updateHoverFromEvent(pos.clientX, pos.clientY));
 
-  /** hover 更新按帧合帧：只保留最后一次指针位置，避免高频 pointermove 重复做坐标换算 */
-  const scheduleHoverUpdate = (clientX: number, clientY: number) => {
-    pendingEvent = { clientX, clientY };
-    if (hoverRafId) return;
-    hoverRafId = requestAnimationFrame(() => {
-      if (pendingEvent) {
-        updateHoverFromEvent(pendingEvent.clientX, pendingEvent.clientY);
-        pendingEvent = null;
-      }
-      hoverRafId = 0;
-    });
-  };
-
-  /** 指针离开：取消待处理的 hover 帧并清空高亮 */
+  /** 指针离开：丢弃待处理的 hover 帧并清空高亮 */
   const handlePointerLeave = () => {
-    pendingEvent = null;
-    if (hoverRafId) {
-      cancelAnimationFrame(hoverRafId);
-      hoverRafId = 0;
-    }
+    cancelHoverUpdate();
     hoverPoint.value = null;
   };
 
@@ -340,16 +243,8 @@ export function useFretboardInteraction(
 
     if (pt.fretIndex < 1 || pt.fretIndex > fretCount.value) return;
 
-    // 单击品位：切换音符（已有则清除 -1，无则设置为该品位）
-    emitStringsUpdate(cloned => {
-      const str = cloned[pt.stringIndex];
-      if (!str) return;
-      if (str[0] === pt.fretIndex) {
-        setStringFret(str, -1);
-      } else {
-        setStringFret(str, pt.fretIndex);
-      }
-    });
+    // 单击品位：切换音符（已有则清除，无则按下到该品位）
+    toggleNoteAt(pt.stringIndex, pt.fretIndex);
   };
 
   /** 获得键盘焦点：显示焦点框，首次聚焦时给一个默认焦点位置 */
@@ -370,20 +265,13 @@ export function useFretboardInteraction(
     focusPoint.value = null;
   };
 
-  // wheel 按帧合帧
-  let wheelRafId = 0;
-  let pendingWheel: {
+  // wheel 按帧合帧：只保留最后一次滚轮增量
+  const { schedule: scheduleWheelFrame } = useRafThrottle<{
     clientX: number;
     clientY: number;
     deltaY: number;
-  } | null = null;
-
-  /** 处理积压的滚轮事件：悬停在音符上时切升降号，否则按累计增量调整变调夹品位 */
-  const processWheel = () => {
-    wheelRafId = 0;
-    const pending = pendingWheel;
-    pendingWheel = null;
-    if (!pending || !interactive.value) return;
+  }>(pending => {
+    if (!interactive.value) return;
 
     const point = getCanvasPoint(pending.clientX, pending.clientY);
     if (point) {
@@ -410,20 +298,18 @@ export function useFretboardInteraction(
       onCapoChange(Math.max(INTERACTION_CONFIG.MIN_CAPO_LIMIT, capo.value - 1));
     }
     wheelAccumulator = 0;
-  };
+  });
 
-  /** wheel 入口：只记录事件并按帧合帧交给 processWheel，忽略 Ctrl/Cmd 缩放手势 */
+  /** wheel 入口：只记录事件并按帧合帧处理，忽略 Ctrl/Cmd 缩放手势 */
   const handleWheel = (e: WheelEvent) => {
     if (!interactive.value || e.ctrlKey || e.metaKey) return;
     e.preventDefault();
-    pendingWheel = { clientX: e.clientX, clientY: e.clientY, deltaY: e.deltaY };
-    if (wheelRafId) return;
-    wheelRafId = requestAnimationFrame(processWheel);
+    scheduleWheelFrame({ clientX: e.clientX, clientY: e.clientY, deltaY: e.deltaY });
   };
 
   useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
   useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {
-    if (interactive.value) scheduleHoverUpdate(e.clientX, e.clientY);
+    if (interactive.value) scheduleHoverFrame({ clientX: e.clientX, clientY: e.clientY });
   });
 
   // 非编辑态：禁用一切 hover 高亮（如缩略图 / 谱面 / 选择器中不应有悬停反馈）
@@ -436,11 +322,6 @@ export function useFretboardInteraction(
   useEventListener(fretBoardRef, 'keydown', handleKeydown);
   useEventListener(fretBoardRef, 'focus', handleFocus);
   useEventListener(fretBoardRef, 'blur', handleBlur);
-
-  onBeforeUnmount(() => {
-    if (hoverRafId) cancelAnimationFrame(hoverRafId);
-    if (wheelRafId) cancelAnimationFrame(wheelRafId);
-  });
 
   return {
     fretBoardRef,

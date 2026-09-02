@@ -3,8 +3,9 @@
  * 自动在元素就绪或 KeepAlive 重新激活时注册；组件停用或卸载时若仍指向该元素则清除，
  * 收敛各视图中重复的 watch + 生命周期注册逻辑。
  */
-import { useUiStore } from '@/stores/uiStore';
 import { onActivated, onBeforeUnmount, onDeactivated, watch, type Ref } from 'vue';
+
+import { useUiStore } from '@/stores/uiStore';
 
 /** 将容器元素注册为全局导出目标，并随挂载 / KeepAlive 激活、停用与卸载自动维护注册状态 */
 export const useActiveExportTarget = (el: Ref<HTMLElement | null>) => {

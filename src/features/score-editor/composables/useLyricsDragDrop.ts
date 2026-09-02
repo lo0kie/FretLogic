@@ -1,10 +1,13 @@
+import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from 'vue';
+
+import { useRafThrottle } from '@/shared/composables/useRafThrottle';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord, SlotKey } from '@/types';
-import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from 'vue';
+
+import { resolveDropAction } from './lyrics-drag/dropZone';
 import { useDragAutoScroll } from './lyrics-drag/useDragAutoScroll';
 import { useDragGhost } from './lyrics-drag/useDragGhost';
 import { useDragHighlight } from './lyrics-drag/useDragHighlight';
-import { resolveDropAction } from './lyrics-drag/dropZone';
 
 /** 歌词行和弦槽位拖拽核心：鼠标阈值起拖 + 触摸长按起拖，ghost/落点更新按帧合帧，松手按分区落地 */
 export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) {
@@ -28,36 +31,15 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   const { dragOverSlotKey, dropZone, markDragSource, clearDragClasses, updateDropTarget } = useDragHighlight();
 
   // 落点命中节流：与 ghost 位置一样合并进 rAF，避免每帧同步执行 elementFromPoint 命中测试
-  let pendingDropPos: { x: number; y: number } | null = null;
-  let dropUpdateRafId = 0;
+  const {
+    schedule: scheduleDropFrame,
+    flush: flushDropTargetUpdate,
+    cancel: cancelDropTargetUpdate,
+  } = useRafThrottle<{ x: number; y: number }>(pos => updateDropTarget(pos.x, pos.y));
+
   /** 落点命中检测按帧合帧，避免 pointermove 高频执行 elementFromPoint */
   const scheduleDropTargetUpdate = (x: number, y: number) => {
-    pendingDropPos = { x, y };
-    if (dropUpdateRafId) return;
-    dropUpdateRafId = requestAnimationFrame(() => {
-      dropUpdateRafId = 0;
-      const pos = pendingDropPos;
-      pendingDropPos = null;
-      if (pos) updateDropTarget(pos.x, pos.y);
-    });
-  };
-  /** 立即处理待执行的落点更新（松手落地前必须保证落点状态最新） */
-  const flushDropTargetUpdate = () => {
-    if (dropUpdateRafId) {
-      cancelAnimationFrame(dropUpdateRafId);
-      dropUpdateRafId = 0;
-    }
-    const pos = pendingDropPos;
-    pendingDropPos = null;
-    if (pos) updateDropTarget(pos.x, pos.y);
-  };
-  /** 丢弃待处理的落点更新 */
-  const cancelDropTargetUpdate = () => {
-    if (dropUpdateRafId) {
-      cancelAnimationFrame(dropUpdateRafId);
-      dropUpdateRafId = 0;
-    }
-    pendingDropPos = null;
+    scheduleDropFrame({ x, y });
   };
 
   const { checkAutoScroll, stopAutoScroll, isScrolling } = useDragAutoScroll();
@@ -119,6 +101,63 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     window.removeEventListener('contextmenu', preventContextMenu, true);
   };
 
+  /** 清除长按计时器（触摸端起拖前的取消/重置多处复用） */
+  const clearLongPressTimer = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  };
+
+  /** 判定事件是否属于当前拖拽会话的活动指针（多指/鼠标混用时忽略非活动指针） */
+  const isEventForActivePointer = (e: PointerEvent): boolean => {
+    if (activeSourceKey === null && !isDragging.value) return false;
+    if (
+      startPointer.pointerId !== -1 &&
+      startPointer.pointerId !== e.pointerId &&
+      e.pointerType !== 'mouse' &&
+      !isDragging.value
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  /** 按当前落点分区执行落地动作（交换/替换/复制/移位），无有效目标返回 false */
+  const resolveLandingAction = (): boolean => {
+    if (
+      !isDragging.value ||
+      !draggingSlotKey.value ||
+      !dragOverSlotKey.value ||
+      !dropZone.value ||
+      draggingSlotKey.value === dragOverSlotKey.value ||
+      !scoreEditor.activeSong
+    ) {
+      return false;
+    }
+    const targetKey = dragOverSlotKey.value;
+    const occupied = Boolean(scoreEditor.activeSong.chordMap.get(targetKey as SlotKey));
+    const action = resolveDropAction(dropZone.value, occupied);
+    const dropActionHandlers: Record<'swap' | 'copy' | 'replace' | 'move', (src: string, tgt: string) => void> = {
+      swap: (src, tgt) => scoreEditor.swapSlotChords(src, tgt),
+      copy: (src, tgt) => scoreEditor.copySlotChord(src as SlotKey, tgt as SlotKey),
+      replace: (src, tgt) => scoreEditor.moveSlotChord(src as SlotKey, tgt as SlotKey),
+      move: (src, tgt) => scoreEditor.moveSlotChord(src as SlotKey, tgt as SlotKey),
+    };
+    dropActionHandlers[action]?.(draggingSlotKey.value, targetKey);
+    return true;
+  };
+
+  /** 触摸端：进入长按等待，给出按压反馈，超时未移动则起拖 */
+  const armLongPressStart = (clientX: number, clientY: number) => {
+    setPressArming(true);
+    longPressTimer = setTimeout(() => {
+      setPressArming(false);
+      startDrag(clientX, clientY);
+      longPressTimer = null;
+    }, LONG_PRESS_DELAY);
+  };
+
   /** 真正进入拖拽：标记源槽位样式、设置 ghost 内容、全局拖拽态与触觉反馈 */
   const startDrag = (clientX: number, clientY: number) => {
     if (!activeSourceKey || !activeChord) return;
@@ -150,15 +189,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
   /** 全局指针移动：未拖拽时按阈值/长按规则判定起拖；拖拽中更新 ghost 与落点并处理边缘自动滚动 */
   const handleGlobalPointerMove = (e: PointerEvent) => {
-    if (activeSourceKey === null && !isDragging.value) return;
-    if (
-      startPointer.pointerId !== -1 &&
-      startPointer.pointerId !== e.pointerId &&
-      e.pointerType !== 'mouse' &&
-      !isDragging.value
-    ) {
-      return;
-    }
+    if (!isEventForActivePointer(e)) return;
 
     currentPointerPos = { x: e.clientX, y: e.clientY };
 
@@ -194,20 +225,9 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
   /** 全局抬起：按当前落点分区执行落地动作（交换/替换/复制/移位），随后统一收尾 */
   const handleGlobalPointerUp = (e: PointerEvent) => {
-    if (activeSourceKey === null && !isDragging.value) return;
-    if (
-      startPointer.pointerId !== -1 &&
-      startPointer.pointerId !== e.pointerId &&
-      e.pointerType !== 'mouse' &&
-      !isDragging.value
-    ) {
-      return;
-    }
+    if (!isEventForActivePointer(e)) return;
 
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
+    clearLongPressTimer();
 
     const hadDrag = isDragging.value || wasDraggingInSession;
 
@@ -217,25 +237,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       flushDropTargetUpdate();
 
       // 分区落地：松手所在分区直接决定动作（交换/替换/复制/移位），无有效目标则取消
-      if (
-        isDragging.value &&
-        draggingSlotKey.value &&
-        dragOverSlotKey.value &&
-        dropZone.value &&
-        draggingSlotKey.value !== dragOverSlotKey.value &&
-        scoreEditor.activeSong
-      ) {
-        const targetKey = dragOverSlotKey.value;
-        const occupied = Boolean(scoreEditor.activeSong.chordMap.get(targetKey as SlotKey));
-        const action = resolveDropAction(dropZone.value, occupied);
-        const dropActionHandlers: Record<'swap' | 'copy' | 'replace' | 'move', (src: string, tgt: string) => void> = {
-          swap: (src, tgt) => scoreEditor.swapSlotChords(src, tgt),
-          copy: (src, tgt) => scoreEditor.copySlotChord(src as SlotKey, tgt as SlotKey),
-          replace: (src, tgt) => scoreEditor.moveSlotChord(src as SlotKey, tgt as SlotKey),
-          move: (src, tgt) => scoreEditor.moveSlotChord(src as SlotKey, tgt as SlotKey),
-        };
-        dropActionHandlers[action]?.(draggingSlotKey.value, targetKey);
-      }
+      resolveLandingAction();
     } catch {
       /* 落地失败则忽略（可手动撤销兜底） */
     } finally {
@@ -249,20 +251,9 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
   /** 全局取消（pointercancel / 右键）：中止拖拽并恢复状态 */
   const handleGlobalPointerCancel = (e: PointerEvent) => {
-    if (activeSourceKey === null && !isDragging.value) return;
-    if (
-      startPointer.pointerId !== -1 &&
-      startPointer.pointerId !== e.pointerId &&
-      e.pointerType !== 'mouse' &&
-      !isDragging.value
-    ) {
-      return;
-    }
+    if (!isEventForActivePointer(e)) return;
 
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
+    clearLongPressTimer();
 
     const hadDrag = isDragging.value || wasDraggingInSession;
 
@@ -294,10 +285,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     const target = e.target as HTMLElement;
     if (target.closest('.remove-chord-btn')) return;
 
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
+    clearLongPressTimer();
 
     wasDraggingInSession = false;
     dragMoveMode.value = mode;
@@ -316,12 +304,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
     if (e.pointerType === 'touch') {
       // 长按等待期给出按压反馈（is-press-arming），提示即将进入拖拽
-      setPressArming(true);
-      longPressTimer = setTimeout(() => {
-        setPressArming(false);
-        startDrag(currentPointerPos.x, currentPointerPos.y);
-        longPressTimer = null;
-      }, LONG_PRESS_DELAY);
+      armLongPressStart(currentPointerPos.x, currentPointerPos.y);
     }
   };
 

@@ -1,65 +1,65 @@
 <template>
-  <EmptyState v-if="songStore.songs.length === 0" :icon="Music" description="暂无乐谱，点击右上角新建" size="md" />
+  <EmptyState v-if="songStore.songs.length === 0" description="暂无乐谱，点击右上角新建" icon="music" size="md" />
 
   <!-- 统一容器：手动排序时经 useDraggable 支持拖拽，非手动时仅展示；
        排序方法切换（含手动↔拼音分组等）都在同一 TransitionGroup 内重排，FLIP 动画全程生效；
        拼音分组模式在列表中插入分组小标题行，分组显隐同样走 enter/leave 过渡 -->
   <div v-else v-grid-nav.stop="{ cols: 1, selector: '.song-card-item' }">
     <TransitionGroup
-      ref="songListRef"
+      class="draggable-list gap-sm relative box-border flex flex-col"
       name="song-sort"
+      ref="songListRef"
       tag="div"
-      class="draggable-list relative flex flex-col gap-sm box-border"
     >
-      <div v-for="row in songRows" :key="row.key" class="flex flex-col w-full box-border">
-        <div v-if="row.type === 'group'" class="song-group-header px-sm pb-2xs" :aria-hidden="true">
-          <span class="text-xs font-bold text-text-disabled tracking-widest leading-none">{{ row.label }}</span>
+      <div v-for="row in songRows" :key="row.key" class="box-border flex w-full flex-col">
+        <div v-if="row.type === 'group'" :aria-hidden="true" class="song-group-header px-sm pb-2xs">
+          <span class="text-text-disabled text-xs leading-none font-bold tracking-widest">{{ row.label }}</span>
         </div>
         <template v-else>
           <ContextMenu :items="getSongMenuItems(row.song!)" #="{ isOpen }">
             <div
               v-wave
-              class="song-card-item w-full p-sm px-md rounded-md bg-bg-body border border-border-light cursor-pointer box-border outline-none transition-all duration-fast hover:bg-bg-panel-hover hover:border-border-base"
+              :aria-label="songCardAriaLabel(row.song!)"
+              :aria-pressed="isSongActive(row.song!.id)"
               :class="{
-                '!bg-tint-primary-92 !border-tint-primary-60 hover:!bg-tint-primary-82 hover:!border-primary hover:shadow-[0_0_0_1px_var(--color-primary)]':
+                'bg-tint-primary-92! border-tint-primary-60! hover:bg-tint-primary-82! hover:border-primary! hover:shadow-[0_0_0_1px_var(--color-primary)]':
                   isSongActive(row.song!.id),
                 'bg-bg-panel-hover border-border-base': isOpen,
               }"
-              role="button"
-              tabindex="0"
-              data-focusable-inline
-              :aria-pressed="isSongActive(row.song!.id)"
-              :aria-label="songCardAriaLabel(row.song!)"
               @click="handleSelectSong(row.song!.id)"
               @keydown.enter.prevent.stop="handleSelectSong(row.song!.id)"
               @keydown.space.prevent.stop="handleSelectSong(row.song!.id)"
+              class="song-card-item p-sm px-md bg-bg-body border-border-light duration-fast hover:bg-bg-panel-hover hover:border-border-base box-border w-full cursor-pointer rounded-md border transition-all outline-none"
+              data-focusable-inline
+              role="button"
+              tabindex="0"
             >
-              <div class="flex items-center justify-between gap-sm w-full">
-                <div v-marquee class="flex-1 min-w-0">
+              <div class="gap-sm flex w-full items-center justify-between">
+                <div v-marquee class="min-w-0 flex-1">
                   <span
+                    :class="isSongActive(row.song!.id) ? 'text-primary! font-bold' : 'text-text-title'"
                     class="text-xs font-semibold"
-                    :class="isSongActive(row.song!.id) ? '!text-primary font-bold' : 'text-text-title'"
                   >
                     {{ row.song!.title }}
                   </span>
                 </div>
 
-                <div class="flex gap-xs shrink-0">
+                <div class="gap-xs flex shrink-0">
                   <BaseBadge
-                    variant="neutral"
                     :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
-                    size="xs"
                     :aria-label="songKeyAriaLabel(row.song!)"
+                    size="xs"
+                    variant="neutral"
                     width="2rem"
                   >
                     <span v-chord-name="{ name: `${computeSongKey(row.song!.playKey, row.song!.capo)}调` }" />
                   </BaseBadge>
 
                   <BaseBadge
-                    variant="neutral"
                     :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
-                    size="xs"
                     :aria-label="`变调夹 capo ${row.song!.capo} 品`"
+                    size="xs"
+                    variant="neutral"
                     width="2.8rem"
                   >
                     Capo {{ row.song!.capo }}
@@ -74,20 +74,20 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, nextTick, useTemplateRef, watch } from 'vue';
+import { useDraggable, type DraggableEvent } from 'vue-draggable-plus';
+
 import BaseBadge from '@/components/ui/BaseBadge.vue';
-import EmptyState from '@/components/ui/EmptyState.vue';
 import ContextMenu from '@/components/ui/context-menu/ContextMenu.vue';
 import type { ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
+import EmptyState from '@/components/ui/EmptyState.vue';
+import { computeSongKey } from '@/services/music/theory';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
 import { pinyinGroupKey } from '@/utils/core/pinyin';
-import { computeSongKey } from '@/utils/music/musicTheory';
-import { Eraser, Music, SlidersHorizontal, Trash2 } from '@lucide/vue';
-import { computed, nextTick, useTemplateRef, watch } from 'vue';
-import { useDraggable, type DraggableEvent } from 'vue-draggable-plus';
 
 const emit = defineEmits<{
   (e: 'open-config', song: Song): void;
@@ -190,7 +190,7 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => {
   const items: ContextMenuItem[] = [
     {
       label: '修改属性',
-      icon: SlidersHorizontal,
+      icon: 'sliders-horizontal',
       action: () => {
         const s = resolveSong(song.id);
         if (s) emit('open-config', s);
@@ -198,7 +198,7 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => {
     },
     {
       label: '清空和弦',
-      icon: Eraser,
+      icon: 'eraser',
       disabled: song.chordMap.size === 0 || song.id !== scoreEditor.activeSongId,
       action: () => {
         const s = resolveSong(song.id);
@@ -207,7 +207,7 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => {
     },
     {
       label: '删除乐谱',
-      icon: Trash2,
+      icon: 'trash-2',
       danger: true,
       action: () => {
         const s = resolveSong(song.id);

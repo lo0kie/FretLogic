@@ -1,47 +1,49 @@
 <template>
   <div
-    ref="containerRef"
-    class="segmented-control relative inline-flex items-center box-border select-none"
-    :class="controlClasses"
-    :style="resolvedWidth ? { width: resolvedWidth } : undefined"
-    role="radiogroup"
-    aria-orientation="horizontal"
     :aria-disabled="disabled || undefined"
     :aria-label
+    :class="controlClasses"
+    :style="resolvedWidth ? { width: resolvedWidth } : undefined"
     @keydown="handleKeydown"
+    aria-orientation="horizontal"
+    class="segmented-control relative box-border inline-flex items-center select-none"
+    ref="containerRef"
+    role="radiogroup"
   >
     <span
       v-if="showSlider"
-      class="segmented-slider absolute left-0 top-0 rounded-full bg-tint-primary-88 border border-tint-primary-60 shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)] pointer-events-none z-0 box-border will-change-transform"
       :class="{ 'transition-all duration-200 ease-out': isInitialized }"
       :style="indicatorStyle"
       aria-hidden="true"
+      class="segmented-slider bg-tint-primary-88 border-tint-primary-60 pointer-events-none absolute top-0 left-0 z-0 box-border rounded-full border shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)] will-change-transform"
     />
 
     <template v-for="(opt, i) in normalizedOptions" :key="String(opt.value)">
       <button
-        :ref="el => setItemRef(el, i)"
         v-wave="{ disabled: disabled || opt.disabled }"
-        type="button"
-        class="segmented-item relative z-20 font-bold text-text-muted rounded-full border-none bg-transparent shadow-none whitespace-nowrap inline-flex items-center justify-center self-stretch h-full transition-all duration-200 ease-out outline-none focus-visible:ring-2 focus-visible:ring-primary/70 leading-none enabled:cursor-pointer enabled:hover:text-text-title disabled:cursor-not-allowed disabled:opacity-40"
-        :class="itemClasses(opt)"
-        role="radio"
         :aria-checked="isSelected(opt.value)"
+        :class="itemClasses(opt)"
         :disabled="disabled || opt.disabled"
+        :ref="el => setItemRef(el, i)"
         :tabindex="getTabindex(opt, i)"
         @click="select(opt, i)"
+        class="segmented-item text-text-muted focus-visible:ring-primary/70 enabled:hover:text-text-title relative z-20 inline-flex h-full items-center justify-center self-stretch rounded-full border-none bg-transparent leading-none font-bold whitespace-nowrap shadow-none transition-all duration-200 ease-out outline-none focus-visible:ring-2 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+        role="radio"
+        type="button"
       >
-        <slot name="item-icon" :option="opt" :index="i" />
+        <slot :index="i" :option="opt" name="item-icon" />
         <span class="segmented-item-label inline-flex items-center justify-center leading-none">{{ opt.label }}</span>
-        <slot name="item-suffix" :option="opt" :index="i" />
+        <slot :index="i" :option="opt" name="item-suffix" />
       </button>
     </template>
   </div>
 </template>
 
-<script setup lang="ts" generic="T extends string | number | boolean, C extends boolean = false">
-import { type FormComponentWidth, resolveComponentWidth } from '@/utils/core/constants';
+<script generic="T extends string | number | boolean, C extends boolean = false" lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onBeforeUpdate, onMounted, ref, useTemplateRef, watch } from 'vue';
+
+import { useRafThrottle } from '@/shared/composables/useRafThrottle';
+import { resolveComponentWidth, type FormComponentWidth } from '@/utils/core/constants';
 
 export interface SegmentOption<T> {
   label: string;
@@ -174,7 +176,7 @@ const itemClasses = (opt: SegmentOption<T>): (string | Record<string, boolean>)[
   const isExpand = isFullWidth.value;
 
   if (props.variant === 'pill') {
-    return [sizeConfig.value.item, active ? '!text-primary font-extrabold' : '', { 'flex-1': isExpand }];
+    return [sizeConfig.value.item, active ? 'text-primary! font-extrabold' : '', { 'flex-1': isExpand }];
   }
   // text variant
   return [
@@ -283,17 +285,10 @@ watch(
 );
 
 // 同时观察容器与每个子项，使用 requestAnimationFrame 进行防抖合并
-let resizeRafId: number | null = null;
 let ro: ResizeObserver | null = null;
 
 /** 用 rAF 合并同一帧内的多次尺寸变化，避免重复测量 */
-const debouncedUpdate = () => {
-  if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
-  resizeRafId = requestAnimationFrame(() => {
-    updateIndicatorPosition();
-    resizeRafId = null;
-  });
-};
+const { schedule: debouncedUpdate, cancel: cancelPendingUpdate } = useRafThrottle(() => updateIndicatorPosition());
 
 /** （重）建 ResizeObserver：观察容器与全部选项，尺寸变化时更新指示器 */
 const observeItems = () => {
@@ -325,7 +320,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
+  cancelPendingUpdate();
   ro?.disconnect();
 });
 </script>

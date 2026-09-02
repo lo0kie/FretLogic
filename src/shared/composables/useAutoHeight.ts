@@ -8,7 +8,7 @@
  *
  * 初始值为 'auto'：首帧不做动画（auto→px 不可插值），避免页面加载时面板自己展开一次。
  */
-import { nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
+import { getCurrentInstance, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
 
 export interface AutoHeightOptions {
   /** 是否在展开时初始值为 auto 避免首帧跳变，默认 true */
@@ -25,7 +25,7 @@ export const useAutoHeight = (
   let lastMeasuredPx = 0;
 
   /** 实测内容高度写入 height（px）；变化小于 2px 时忽略以避免抖动 */
-  const sync = () => {
+  const sync = (force = false) => {
     const el = contentRef.value;
     if (!el || !expanded.value) {
       height.value = expanded.value ? 'auto' : '0px';
@@ -33,7 +33,10 @@ export const useAutoHeight = (
       return;
     }
     const measured = Math.ceil(Math.max(el.offsetHeight, el.scrollHeight));
-    if (measured > 0 && Math.abs(measured - lastMeasuredPx) >= 2) {
+    if (
+      measured > 0 &&
+      (force || height.value === 'auto' || height.value === '0px' || Math.abs(measured - lastMeasuredPx) >= 2)
+    ) {
       lastMeasuredPx = measured;
       height.value = `${measured}px`;
     }
@@ -45,18 +48,22 @@ export const useAutoHeight = (
     if (!el || typeof ResizeObserver === 'undefined') return;
     observer = new ResizeObserver(() => sync());
     observer.observe(el);
-    sync();
+    sync(true);
   };
 
-  onMounted(() => {
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      observe(contentRef.value);
+    });
+    onBeforeUnmount(() => observer?.disconnect());
+  } else {
     observe(contentRef.value);
-  });
+  }
 
   // 监听 contentRef 变化（支持 v-if 动态挂载/卸载）
   watch(
     contentRef,
-    async newEl => {
-      await nextTick();
+    newEl => {
       observe(newEl);
     },
     { flush: 'post' }
@@ -65,18 +72,16 @@ export const useAutoHeight = (
   // 折叠/展开切换
   watch(
     expanded,
-    async isExp => {
+    isExp => {
       if (!isExp) {
         height.value = '0px';
+        lastMeasuredPx = 0;
       } else {
-        await nextTick();
-        sync();
+        sync(true);
       }
     },
     { flush: 'post' }
   );
-
-  onBeforeUnmount(() => observer?.disconnect());
 
   return { height, sync };
 };

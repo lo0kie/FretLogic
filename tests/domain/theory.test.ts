@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { calcPitchIndex, formatStringLabel, isAccidentalNote } from '@/services/music/theory';
 
 describe('theory: 音高计算', () => {

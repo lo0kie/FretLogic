@@ -41,14 +41,14 @@
 
 .v-transition-scale-enter-from,
 .v-transition-scale-leave-to {
-  opacity: 0;
   transform: scale(0.95);
+  opacity: 0;
 }
 
 .v-transition-scale-enter-to,
 .v-transition-scale-leave-from {
-  opacity: 1;
   transform: scale(1);
+  opacity: 1;
 }
 
 // =============================================================================
@@ -79,8 +79,8 @@
   opacity: 0;
 
   .modal-card {
-    opacity: 0;
     transform: scale(0.92) translateY(12px);
+    opacity: 0;
   }
 }
 
@@ -88,8 +88,8 @@
   opacity: 1;
 
   .modal-card {
-    opacity: 1;
     transform: scale(1) translateY(0);
+    opacity: 1;
   }
 }
 
@@ -97,8 +97,8 @@
   opacity: 0;
 
   .modal-card {
-    opacity: 0;
     transform: scale(0.95) translateY(8px);
+    opacity: 0;
   }
 }
 
@@ -115,14 +115,14 @@
 
 .v-transition-floating-bar-enter-from,
 .v-transition-floating-bar-leave-to {
-  opacity: 0;
   transform: translate(-50%, 20px) scale(0.95);
+  opacity: 0;
 }
 
 .v-transition-floating-bar-enter-to,
 .v-transition-floating-bar-leave-from {
-  opacity: 1;
   transform: translate(-50%, 0) scale(1);
+  opacity: 1;
 }
 
 // =============================================================================
@@ -142,14 +142,14 @@
 
 .v-transition-slide-up-enter-from,
 .v-transition-slide-up-leave-to {
-  opacity: 0;
   transform: translateY(16px);
+  opacity: 0;
 }
 
 .v-transition-slide-up-enter-to,
 .v-transition-slide-up-leave-from {
-  opacity: 1;
   transform: translateY(0);
+  opacity: 1;
 }
 
 .v-transition-slide-up-move {
@@ -173,19 +173,19 @@
 }
 
 .v-transition-slide-down-enter-from {
-  opacity: 0;
   transform: translateY(-16px) scale(0.92);
+  opacity: 0;
 }
 
 .v-transition-slide-down-leave-to {
-  opacity: 0;
   transform: translateY(-8px) scale(0.96);
+  opacity: 0;
 }
 
 .v-transition-slide-down-enter-to,
 .v-transition-slide-down-leave-from {
-  opacity: 1;
   transform: translateY(0) scale(1);
+  opacity: 1;
 }
 
 .v-transition-slide-down-move {
@@ -221,14 +221,14 @@
 
 .v-transition-list-enter-from,
 .v-transition-list-leave-to {
-  opacity: 0;
   transform: scale(0.92);
+  opacity: 0;
 }
 
 .v-transition-list-enter-to,
 .v-transition-list-leave-from {
-  opacity: 1;
   transform: scale(1);
+  opacity: 1;
 }
 
 .v-transition-list-move {
@@ -250,24 +250,24 @@
 
 .v-transition-slide-left-enter-from,
 .v-transition-slide-left-leave-to {
-  opacity: 0;
   transform: translateX(-16px);
+  opacity: 0;
 }
 
 .v-transition-slide-left-enter-to,
 .v-transition-slide-left-leave-from {
-  opacity: 1;
   transform: translateX(0);
+  opacity: 1;
 }
 
 .v-transition-slide-right-enter-from,
 .v-transition-slide-right-leave-to {
-  opacity: 0;
   transform: translateX(16px);
+  opacity: 0;
 }
 
 .v-transition-slide-right-enter-to,
 .v-transition-slide-right-leave-from {
-  opacity: 1;
   transform: translateX(0);
+  opacity: 1;
 }

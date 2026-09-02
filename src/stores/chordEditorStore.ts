@@ -1,14 +1,16 @@
 // src/stores/chordEditorStore.ts
+import { computed, toRaw, watch } from 'vue';
+
+import { useStorage } from '@vueuse/core';
+import { defineStore } from 'pinia';
+
+import { createString, DEFAULT_TUNING_MAPPING, getChordName, Tuning, TUNING_PRESETS } from '@/services/music/theory';
 import { useChordStore } from '@/stores/chordStore';
 import type { BarreEntity, Chord, GuitarStringsModel } from '@/types';
 import { cloneDeep } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { computeBarreCandidates, isBarreStillValid, normalizeChord } from '@/utils/music/chord-fretboard';
-import { toChordId, toGuitarStringsModel, toGroupId } from '@/utils/music/entityFactories';
-import { createString, DEFAULT_TUNING_MAPPING, getChordName, Tuning, TUNING_PRESETS } from '@/utils/music/musicTheory';
-import { useStorage } from '@vueuse/core';
-import { defineStore } from 'pinia';
-import { computed, toRaw, watch } from 'vue';
+import { toChordId, toGroupId, toGuitarStringsModel } from '@/utils/music/entityFactories';
 
 /** 构造空白和弦草稿（六弦全部静音、标准调弦、3 品窗口），作为编辑器初始态。 */
 const createDefaultChord = (): Chord => ({

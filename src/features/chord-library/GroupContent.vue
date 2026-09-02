@@ -1,24 +1,23 @@
 <template>
   <div
-    class="grid transition-[grid-template-rows] duration-base ease-standard"
-    :class="isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr] pointer-events-none'"
     :aria-hidden="!isOpen"
+    :class="isOpen ? 'grid-rows-[1fr]' : 'pointer-events-none grid-rows-[0fr]'"
     :inert="!isOpen ? true : undefined"
+    class="duration-base ease-standard grid transition-[grid-template-rows]"
   >
     <div
-      class="overflow-hidden min-h-0 pt-0 box-border transition-[padding-top] duration-base ease-standard"
       @contextmenu.stop
+      class="duration-base ease-standard box-border min-h-0 overflow-hidden pt-0 transition-[padding-top]"
     >
       <TransitionGroup
-        v-if="groupedCards.length > 0"
         v-grid-nav.stop="{ cols: gridCols, selector: '.chord-thumb-card' }"
+        v-if="groupedCards.length > 0"
+        class="gap-sm pt-md px-sm pb-xs z-panel relative box-border grid min-h-[2.2rem] grid-cols-3 items-center"
         name="v-transition-list"
         tag="div"
-        class="grid grid-cols-3 gap-sm pt-md px-sm pb-xs items-center relative z-panel min-h-[2.2rem] box-border"
       >
         <LeftChordCard
           v-for="cardData in groupedCards"
-          :key="cardData.mainChord.id"
           v-memo="[
             cardData.mainChord,
             cardData.variantCount,
@@ -27,30 +26,32 @@
           ]"
           :card-data
           :is-active="cardData.mainChord.id === activeMainId"
-          @delete-variants="data => emit('open-delete-variants', data)"
+          :key="cardData.mainChord.id"
           @delete="chord => emit('delete-chord', chord)"
+          @delete-variants="data => emit('open-delete-variants', data)"
           @move="chord => emit('open-move', chord)"
-          @select="chord => emit('select-chord', chord)"
           @open-references="cardData => emit('open-references', cardData)"
+          @select="chord => emit('select-chord', chord)"
         />
       </TransitionGroup>
-      <EmptyState v-else-if="chordsCount === 0" size="sm" description="暂无和弦" />
+      <EmptyState v-else-if="chordsCount === 0" description="暂无和弦" size="sm" />
       <Transition name="v-transition-fade">
-        <EmptyState v-if="chordsCount > 0 && searchQuery" size="sm" description="无匹配" />
+        <EmptyState v-if="chordsCount > 0 && searchQuery" description="无匹配" size="sm" />
       </Transition>
     </div>
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed } from 'vue';
+
 import EmptyState from '@/components/ui/EmptyState.vue';
+import LeftChordCard from '@/features/chord-library/ChordCard.vue';
+import { getChordName } from '@/services/music/theory';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
-import { getChordName } from '@/utils/music/musicTheory';
-import { computed } from 'vue';
-import LeftChordCard from '@/features/chord-library/ChordCard.vue';
 
 const gridCols = 3;
 

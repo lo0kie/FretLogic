@@ -12,6 +12,7 @@ import type {
 } from '@/types';
 import { CHORD_QUALITIES, GroupSortRule } from '@/types';
 import { createLruCache } from '@/utils/core/lruCache';
+
 import { analyzeChordGraph } from './chordEngine';
 
 /** 接受"和弦实体或名称字符串"的通用入参形态，统一多处多态签名 */

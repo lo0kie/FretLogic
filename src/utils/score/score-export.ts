@@ -1,9 +1,10 @@
+import type { Options } from 'html-to-image/lib/types';
+
+import { computeChordFingerprint } from '@/services/music/theory';
 import { globalDarkMode } from '@/stores/globalState';
 import type { Chord, SlotKey } from '@/types';
-import { computeChordFingerprint } from '@/utils/music/musicTheory';
 import { plainToChordMap } from '@/utils/score/chordSlots';
 import { charKey, chordSlotKey, collectEdgeChordIds } from '@/utils/score/scoreModel';
-import type { Options } from 'html-to-image/lib/types';
 
 // ===== scoreLines: 谱面行数据与缓存 =====
 

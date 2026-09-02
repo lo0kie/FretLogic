@@ -1,8 +1,10 @@
 /* eslint-disable vue/one-component-per-file */
-import { normalize, vTooltip } from '@/directives/vTooltip';
+import { defineComponent } from 'vue';
+
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import { defineComponent } from 'vue';
+
+import { normalize, vTooltip } from '@/directives/vTooltip';
 
 describe('vTooltip directive modifiers', () => {
   it('supports default placement top when no modifiers provided', () => {

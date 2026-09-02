@@ -1,94 +1,96 @@
 <template>
   <nav
     v-if="pageCount > 0 && !(hideOnSinglePage && isSinglePage)"
-    class="inline-flex items-center justify-center gap-sm box-border select-none"
     aria-label="分页导航"
+    class="gap-sm box-border inline-flex items-center justify-center select-none"
   >
     <ActionButton
       v-if="showFirstLast && !simple"
-      variant="ghost"
-      icon-only
-      :size
       :disabled="disabled || atFirst"
-      aria-label="第一页"
-      title="第一页"
+      :size
       @click="handleFirst"
+      aria-label="第一页"
+      icon-only
+      title="第一页"
+      variant="ghost"
     >
-      <ChevronsLeft :size="iconSize" />
+      <BaseIcon :size="iconSize" name="chevrons-left" />
     </ActionButton>
 
     <ActionButton
-      variant="ghost"
-      icon-only
-      :size
       :disabled="disabled || atFirst"
-      aria-label="上一页"
-      title="上一页"
+      :size
       @click="handlePrev"
+      aria-label="上一页"
+      icon-only
+      title="上一页"
+      variant="ghost"
     >
-      <ChevronLeft :size="iconSize" />
+      <BaseIcon :size="iconSize" name="chevron-left" />
     </ActionButton>
 
-    <span class="pagination-label text-xs text-text-secondary whitespace-nowrap select-none font-medium">
+    <span class="pagination-label text-text-secondary text-xs font-medium whitespace-nowrap select-none">
       {{ displayText }}
     </span>
 
     <input
       v-if="showJumper && !simple"
-      ref="jumperRef"
       v-model="jumperValue"
-      type="number"
-      inputmode="numeric"
-      class="pagination-jumper w-16 h-7 px-1 text-center text-xs rounded border border-border-light bg-bg-body outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none font-semibold text-text-title"
-      :placeholder="String(humanCurrentPage)"
-      :min="1"
       :max="pageCount"
-      aria-label="跳转到页码"
-      @keydown.enter="commitJumper"
+      :min="1"
+      :placeholder="String(humanCurrentPage)"
       @blur="commitJumper"
+      @keydown.enter="commitJumper"
+      aria-label="跳转到页码"
+      class="pagination-jumper border-border-light bg-bg-body focus:border-primary focus:ring-primary/50 text-text-title h-7 w-16 [appearance:textfield] rounded border px-1 text-center text-xs font-semibold outline-none focus:ring-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      inputmode="numeric"
+      ref="jumperRef"
+      type="number"
     />
 
     <ActionButton
-      variant="ghost"
-      icon-only
-      :size
       :disabled="disabled || atLast"
-      aria-label="下一页"
-      title="下一页"
+      :size
       @click="handleNext"
+      aria-label="下一页"
+      icon-only
+      title="下一页"
+      variant="ghost"
     >
-      <ChevronRight :size="iconSize" />
+      <BaseIcon :size="iconSize" name="chevron-right" />
     </ActionButton>
 
     <ActionButton
       v-if="showFirstLast && !simple"
-      variant="ghost"
-      icon-only
-      :size
       :disabled="disabled || atLast"
-      aria-label="最后一页"
-      title="最后一页"
+      :size
       @click="handleLast"
+      aria-label="最后一页"
+      icon-only
+      title="最后一页"
+      variant="ghost"
     >
-      <ChevronsRight :size="iconSize" />
+      <BaseIcon :size="iconSize" name="chevrons-right" />
     </ActionButton>
 
     <select
       v-if="pageSizes && pageSizes.length > 0 && !simple"
-      class="pagination-page-size text-xs h-7 px-1.5 rounded border border-border-light bg-bg-body text-text-title font-medium outline-none cursor-pointer focus:border-primary focus:ring-1 focus:ring-primary/50"
-      :value="pageSizeModel"
       :disabled
-      aria-label="每页条数"
+      :value="pageSizeModel"
       @change="handlePageSizeChange"
+      aria-label="每页条数"
+      class="pagination-page-size border-border-light bg-bg-body text-text-title focus:border-primary focus:ring-primary/50 h-7 cursor-pointer rounded border px-1.5 text-xs font-medium outline-none focus:ring-1"
     >
       <option v-for="s in pageSizes" :key="s" :value="s">{{ s }} 条/页</option>
     </select>
   </nav>
 </template>
 
-<script setup lang="ts">
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from '@lucide/vue';
+<script lang="ts" setup>
 import { computed, ref, useTemplateRef } from 'vue';
+
+import BaseIcon from '@/components/ui/BaseIcon.vue';
+
 import ActionButton from './ActionButton.vue';
 
 const props = withDefaults(

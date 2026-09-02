@@ -1,8 +1,10 @@
+import { ref } from 'vue';
+
+import type * as Tone from 'tone';
+
+import { calcNoteMidi } from '@/services/music/theory';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { AUDIO_CONFIG } from '@/utils/core/constants';
-import { calcNoteMidi } from '@/utils/music/musicTheory';
-import type * as Tone from 'tone';
-import { ref } from 'vue';
 
 const isPlaying = ref(false);
 let isEngineInitialized = false;

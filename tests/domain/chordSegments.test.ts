@@ -1,7 +1,8 @@
+import { describe, expect, it } from 'vitest';
+
 import { analyzeChordGraph } from '@/services/music/chordEngine';
 import { nameToSegments, parsePitchSegment, pitchSegmentToString, segmentsToString } from '@/services/music/theory';
 import type { GuitarStringsModel, Tuning } from '@/types';
-import { describe, expect, it } from 'vitest';
 
 describe('Chord Name Segmentation (AST/Tokenization)', () => {
   describe('parsePitchSegment', () => {

@@ -1,5 +1,6 @@
 import { serializeForStorage } from '@/utils/core/common';
 import { CLOUD_SYNC_CONFIG } from '@/utils/core/constants';
+
 import { SyncError, type ServerSyncConfig, type SyncProvider } from './provider';
 import { createSyncProviderBase } from './syncBase';
 

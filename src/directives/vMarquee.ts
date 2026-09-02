@@ -1,4 +1,5 @@
 import type { Directive } from 'vue';
+
 import {
   MARQUEE_DEFAULT_FADE_WIDTH,
   MARQUEE_MIN_DURATION_CONTINUOUS_MS,

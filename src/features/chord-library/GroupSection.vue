@@ -1,71 +1,72 @@
 <template>
-  <EmptyState v-if="chordStore.groups.length === 0" :icon="FolderOpen" description="还没有添加分组" size="md" />
+  <EmptyState v-if="chordStore.groups.length === 0" description="还没有添加分组" icon="folder-open" size="md" />
   <template v-else>
     <Transition name="v-transition-fade">
-      <EmptyState v-if="searchQuery && totalMatchCount === 0" :icon="Search" description="未找到匹配的和弦" size="md" />
+      <EmptyState v-if="searchQuery && totalMatchCount === 0" description="未找到匹配的和弦" icon="search" size="md" />
     </Transition>
-    <div v-if="!searchQuery || totalMatchCount > 0" v-grid-nav.stop="{ cols: 1, selector: '.group-title-row' }">
+    <div v-grid-nav.stop="{ cols: 1, selector: '.group-title-row' }" v-if="!searchQuery || totalMatchCount > 0">
       <VueDraggable
-        :model-value="chordStore.groups"
         :animation="200"
-        handle=".group-title-row"
         :disabled="!isAllCollapsed || Boolean(searchQuery)"
-        class="draggable-list flex flex-col gap-sm box-border"
-        ghost-class="drag-ghost-style"
-        chosen-class="drag-chosen-style"
-        drag-class="drag-active-style"
+        :model-value="chordStore.groups"
         :swap-threshold="0.5"
         @update:model-value="(val: Group[]) => chordStore.overwriteGroups(val)"
+        chosen-class="drag-chosen-style"
+        class="draggable-list gap-sm box-border flex flex-col"
+        drag-class="drag-active-style"
+        ghost-class="drag-ghost-style"
+        handle=".group-title-row"
       >
         <div v-for="(group, index) in chordStore.groups" :key="group.id" class="box-border">
           <ContextMenu :items="getGroupMenuItems(group)" #="{ isOpen }">
             <div
               v-wave
-              tabindex="0"
-              data-focusable-inline
-              role="button"
               :aria-expanded="isGroupContentOpen(group)"
               :aria-label="groupTitleAriaLabel(group)"
-              class="group-title-row group/row h-[2.4rem] px-3 flex items-center justify-between cursor-pointer rounded-md select-none box-border outline-none border border-transparent transition-all duration-fast hover:bg-bg-panel-hover hover:border-border-base"
               :class="{
-                '!bg-tint-panelhover-50': isGroupContentOpen(group),
-                '!bg-tint-panelhover-30': isOpen,
+                'bg-tint-panelhover-50!': isGroupContentOpen(group),
+                'bg-tint-panelhover-30!': isOpen,
               }"
               @click="chordActions.executeGroupToggle(group)"
               @keydown.enter.prevent="chordActions.executeGroupToggle(group)"
               @keydown.space.prevent="chordActions.executeGroupToggle(group)"
+              class="group-title-row group/row duration-fast hover:bg-bg-panel-hover hover:border-border-base box-border flex h-[2.4rem] cursor-pointer items-center justify-between rounded-md border border-transparent px-3 transition-all outline-none select-none"
+              data-focusable-inline
+              role="button"
+              tabindex="0"
             >
-              <div class="flex items-center gap-sm min-w-0 flex-1" title="点击折叠/展开分组">
-                <ChevronDown
+              <div class="gap-sm flex min-w-0 flex-1 items-center" title="点击折叠/展开分组">
+                <BaseIcon
+                  :class="{ '-rotate-90': !isGroupContentOpen(group) }"
                   :size="14"
                   :stroke-width="2.5"
-                  class="text-text-disabled shrink-0 transition-transform duration-fast group-hover/row:text-text-title"
-                  :class="{ '-rotate-90': !isGroupContentOpen(group) }"
                   aria-hidden="true"
+                  class="text-text-disabled duration-fast group-hover/row:text-text-title shrink-0 transition-transform"
+                  name="chevron-down"
                 />
                 <div v-marquee>
-                  <span class="text-xs font-bold text-text-title whitespace-nowrap">
+                  <span class="text-text-title text-xs font-bold whitespace-nowrap">
                     {{ group.name }}
                   </span>
                 </div>
-                <div class="flex items-center gap-sm ml-auto shrink-0">
+                <div class="gap-sm ml-auto flex shrink-0 items-center">
                   <BaseBadge
-                    variant="neutral"
-                    appearance="outline"
-                    size="xs"
-                    class="opacity-80"
-                    title="排序方法"
                     :aria-label="`按${getSortLabel(group)}自动排序`"
+                    appearance="outline"
+                    class="opacity-80"
+                    size="xs"
+                    title="排序方法"
+                    variant="neutral"
                     width="2rem"
                   >
                     <span v-chord-name="{ name: getSortLabel(group) }" />
                   </BaseBadge>
                   <BaseBadge
                     v-if="searchQuery"
-                    :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
                     :appearance="hasMatchedChords(group.id) ? 'subtle' : 'filled'"
-                    size="xs"
                     :aria-label="matchCountAriaLabel(group)"
+                    :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
+                    size="xs"
                     width="2.5rem"
                   >
                     <span :class="{ 'font-extrabold': hasMatchedChords(group.id) }">
@@ -75,12 +76,12 @@
                   </BaseBadge>
                   <BaseBadge
                     v-else
-                    variant="neutral"
                     :appearance="isGroupContentOpen(group) ? 'subtle' : 'filled'"
-                    size="xs"
-                    width="1.5rem"
-                    class="font-mono"
                     :aria-label="chordCountAriaLabel(group)"
+                    class="font-mono"
+                    size="xs"
+                    variant="neutral"
+                    width="1.5rem"
                   >
                     {{ getGroupChordsCount(group.id) }}
                   </BaseBadge>
@@ -88,14 +89,14 @@
               </div>
             </div>
             <LeftChordGroupContent
-              :ref="el => setContentOuterRef(el, index)"
               :group
-              :search-query
               :is-open="isGroupContentOpen(group)"
-              @open-move="chord => emit('open-move', chord)"
-              @open-delete-variants="cardData => emit('open-delete-variants', cardData)"
-              @open-references="cardData => emit('open-references', cardData)"
+              :ref="el => setContentOuterRef(el, index)"
+              :search-query
               @delete-chord="handleLocalDeleteChord"
+              @open-delete-variants="cardData => emit('open-delete-variants', cardData)"
+              @open-move="chord => emit('open-move', chord)"
+              @open-references="cardData => emit('open-references', cardData)"
               @select-chord="handleSelectChord"
             />
           </ContextMenu>
@@ -105,20 +106,21 @@
   </template>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, watch, type ComponentPublicInstance } from 'vue';
+import { VueDraggable } from 'vue-draggable-plus';
+
 import BaseBadge from '@/components/ui/BaseBadge.vue';
-import EmptyState from '@/components/ui/EmptyState.vue';
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 import ContextMenu from '@/components/ui/context-menu/ContextMenu.vue';
 import type { ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
+import EmptyState from '@/components/ui/EmptyState.vue';
+import LeftChordGroupContent from '@/features/chord-library/GroupContent.vue';
 import { useChordActions } from '@/shared/composables/useChordActions';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import type { Chord, Group, GroupedChordCard } from '@/types';
 import { getGroupSortKey } from '@/utils/music/entityFactories';
-import { ArrowUpDown, ChevronDown, FolderOpen, Search, SquarePen, Trash2 } from '@lucide/vue';
-import { computed, watch, type ComponentPublicInstance } from 'vue';
-import { VueDraggable } from 'vue-draggable-plus';
-import LeftChordGroupContent from '@/features/chord-library/GroupContent.vue';
 
 const props = defineProps<{
   searchQuery: string;
@@ -232,7 +234,7 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
   const items: ContextMenuItem[] = [
     {
       label: '修改名称',
-      icon: SquarePen,
+      icon: 'square-pen',
       action: () => {
         const g = resolveGroup(group.id);
         if (g) emit('open-rename', g);
@@ -240,7 +242,7 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
     },
     {
       label: '和弦排序',
-      icon: ArrowUpDown,
+      icon: 'arrow-up-down',
       disabled: getGroupChordsCount(group.id) === 0,
       action: () => {
         const g = resolveGroup(group.id);
@@ -249,7 +251,7 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
     },
     {
       label: '删除分组',
-      icon: Trash2,
+      icon: 'trash-2',
       danger: true,
       action: () => {
         const g = resolveGroup(group.id);

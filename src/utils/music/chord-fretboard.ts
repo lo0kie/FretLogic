@@ -1,14 +1,7 @@
-import type {
-  BarreEntity,
-  BarreFret,
-  Capo,
-  Chord,
-  GuitarStringEntity,
-  GuitarStringsModel,
-  StringIndex,
-} from '@/types';
+import { isMuted, isOpen, nameToSegments, Tuning } from '@/services/music/theory';
+import type { BarreEntity, BarreFret, Capo, Chord, GuitarStringEntity, GuitarStringsModel, StringIndex } from '@/types';
 import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_SCALE_MAP } from '@/utils/core/constants';
-import { Tuning, isMuted, isOpen, nameToSegments } from '@/utils/music/musicTheory';
+
 import { createLruCache } from '../core/lruCache';
 
 const barreCandidatesCache = createLruCache<BarreEntity[]>(64);

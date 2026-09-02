@@ -1,6 +1,8 @@
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useEventListener } from '@vueuse/core';
 import { onBeforeUnmount, onDeactivated, ref, shallowRef, watch, type Ref } from 'vue';
+
+import { useEventListener } from '@vueuse/core';
+
+import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 
 const isAutoScrolling = ref(false);
 const globalScrollContainer = shallowRef<HTMLElement | null>(null);

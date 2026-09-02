@@ -1,8 +1,9 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { createGithubSyncProvider } from '@/services/sync/githubSyncProvider';
 import type { GithubSyncConfig, WebdavSyncConfig } from '@/services/sync/provider';
 import { createServerSyncProvider } from '@/services/sync/serverSyncProvider';
 import { createWebdavSyncProvider } from '@/services/sync/webdavSyncProvider';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const response = (status: number, body: unknown = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });

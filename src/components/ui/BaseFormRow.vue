@@ -1,66 +1,67 @@
 <template>
   <div
-    class="base-form-row flex flex-col w-full box-border"
     :class="[
       { 'is-disabled opacity-60': disabled, 'is-compacted': compacted },
       align === 'top' ? 'align-top' : 'align-center',
     ]"
+    class="base-form-row box-border flex w-full flex-col"
   >
     <div
-      class="form-row-main flex w-full box-border"
       :class="[
         layout === 'vertical'
           ? 'flex-col items-start gap-1.5'
           : [align === 'top' ? 'items-start' : 'items-center', compacted ? 'is-compacted gap-sm' : 'gap-md'],
       ]"
+      class="form-row-main box-border flex w-full"
     >
       <label
         v-if="label || $slots['label']"
-        class="form-row-label text-xs font-semibold text-text-body whitespace-nowrap shrink-0 select-none overflow-hidden text-ellipsis"
         :class="[
           layout === 'horizontal' && align === 'top' ? 'pt-[calc(0.5rem+1px)]' : '',
           required ? 'flex items-center gap-1' : '',
         ]"
-        :style="layout === 'horizontal' ? labelStyle : undefined"
         :for="effectiveForId"
+        :style="layout === 'horizontal' ? labelStyle : undefined"
+        class="form-row-label text-text-body shrink-0 overflow-hidden text-xs font-semibold text-ellipsis whitespace-nowrap select-none"
       >
         <slot name="label"> {{ label }} </slot>
-        <span v-if="required" class="text-danger leading-none" aria-hidden="true">*</span>
+        <span v-if="required" aria-hidden="true" class="text-danger leading-none">*</span>
       </label>
 
       <div
-        class="form-row-control flex items-center min-w-0"
         :class="[
           layout === 'vertical' ? 'w-full' : 'flex-1',
           controlAlign === 'start' ? 'justify-start' : controlAlign === 'center' ? 'justify-center' : 'justify-end',
         ]"
         :style="controlStyle"
+        class="form-row-control flex min-w-0 items-center"
       >
-        <slot :id="effectiveForId" :disabled :required />
+        <slot :disabled :id="effectiveForId" :required />
       </div>
     </div>
 
     <div
       v-if="resolvedHelp || resolvedError || $slots['help'] || $slots['error']"
-      class="form-row-feedback w-full mt-1 text-2xs leading-relaxed"
       :class="[resolvedError ? 'text-danger' : 'text-text-muted']"
-      :style="feedbackStyle"
       :role="resolvedError ? 'alert' : undefined"
+      :style="feedbackStyle"
       aria-live="polite"
+      class="form-row-feedback text-2xs mt-1 w-full leading-relaxed"
     >
-      <slot name="error" :message="resolvedError">
+      <slot :message="resolvedError" name="error">
         <span v-if="resolvedError">{{ resolvedError }}</span>
       </slot>
-      <slot v-if="!resolvedError" name="help" :message="resolvedHelp">
+      <slot v-if="!resolvedError" :message="resolvedHelp" name="help">
         <span v-if="resolvedHelp">{{ resolvedHelp }}</span>
       </slot>
     </div>
   </div>
 </template>
 
-<script setup lang="ts">
-import { type FormComponentWidth, resolveComponentWidth } from '@/utils/core/constants';
+<script lang="ts" setup>
 import { computed, useId } from 'vue';
+
+import { resolveComponentWidth, type FormComponentWidth } from '@/utils/core/constants';
 
 const {
   label = '',

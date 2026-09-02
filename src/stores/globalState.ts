@@ -1,8 +1,9 @@
 /**
  * 全局状态：主题模式与外观偏好。
  */
-import { useTheme } from '@/shared/composables/useTheme';
 import { computed } from 'vue';
+
+import { useTheme } from '@/shared/composables/useTheme';
 
 const theme = useTheme();
 

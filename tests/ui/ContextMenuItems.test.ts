@@ -1,6 +1,7 @@
-import ContextMenuItems, { type ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+
+import ContextMenuItems, { type ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
 
 const buildItems = (): ContextMenuItem[] => [
   { label: '可用项', action: () => {} },

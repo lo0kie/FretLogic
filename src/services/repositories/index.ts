@@ -1,5 +1,5 @@
-import type { Chord, Group, Song } from '@/types';
 import { sanitizePersistedData } from '@/services/validation/persistedData';
+import type { Chord, Group, Song } from '@/types';
 import { serializeForStorage } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 

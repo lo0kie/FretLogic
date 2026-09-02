@@ -1,53 +1,52 @@
 <template>
   <div
-    ref="scoreZoneRef"
     v-scroll-cache="'score-interactive-scroll'"
-    class="no-scrollbar interactive-score-zone flex-1 relative box-border overflow-x-auto overflow-y-auto min-w-0 pt-xl pb-[8rem] pl-2xl pr-0 max-md:pl-sm max-md:pt-sm max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]"
     :style="{ '--score-font-scale': scoreEditor.effectiveFontScale }"
+    class="no-scrollbar interactive-score-zone pt-xl pl-2xl max-md:pl-sm max-md:pt-sm relative box-border min-w-0 flex-1 overflow-x-auto overflow-y-auto pr-0 pb-[8rem] max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]"
+    ref="scoreZoneRef"
   >
     <div
+      class="contents [&.is-a4-capture-mode]:box-border [&.is-a4-capture-mode]:flex [&.is-a4-capture-mode]:flex-col [&.is-a4-capture-mode]:items-center [&.is-a4-capture-mode]:overflow-hidden"
       ref="a4CaptureWrapperRef"
-      class="contents [&.is-a4-capture-mode]:flex [&.is-a4-capture-mode]:flex-col [&.is-a4-capture-mode]:items-center [&.is-a4-capture-mode]:box-border [&.is-a4-capture-mode]:overflow-hidden"
     >
       <EmptyState
         v-if="!scoreEditor.activeSong?.lyrics.trim()"
-        :icon="FileText"
         description="请先在“编辑歌词”模式下输入文本内容"
+        icon="file-text"
         size="lg"
       />
       <div
         v-else
-        ref="lyricsRef"
-        class="flex flex-col gap-xs max-w-[900px] mx-auto w-max min-w-full"
         :class="{
-          '!min-w-0 !w-max !gap-0 [&_.line-row]:[content-visibility:visible] [&_.line-row-gutter]:!hidden [&_.line-row:has(.lyrics-line:not(.is-line-selected))]:!hidden [&_.lyrics-line]:!transition-none [&_.lyrics-line]:!p-0 [&_.lyrics-line_.index-text-tag]:!transition-none [&_.lyrics-line:not(.is-line-selected)]:!hidden [&_.lyrics-line.is-line-selected]:!min-w-0 [&_.lyrics-line.is-line-selected]:!w-max [&_.lyrics-line.is-line-selected]:!bg-transparent [&_.lyrics-line.is-line-selected]:!border-transparent':
+          'w-max! min-w-0! gap-0! [&_.line-row]:[content-visibility:visible] [&_.line-row-gutter]:hidden! [&_.line-row:has(.lyrics-line:not(.is-line-selected))]:hidden! [&_.lyrics-line]:p-0! [&_.lyrics-line]:transition-none! [&_.lyrics-line_.index-text-tag]:transition-none! [&_.lyrics-line.is-line-selected]:w-max! [&_.lyrics-line.is-line-selected]:min-w-0! [&_.lyrics-line.is-line-selected]:border-transparent! [&_.lyrics-line.is-line-selected]:bg-transparent! [&_.lyrics-line:not(.is-line-selected)]:hidden!':
             isExporting,
         }"
+        class="gap-xs mx-auto flex w-max max-w-[900px] min-w-full flex-col"
+        ref="lyricsRef"
       >
         <div
           v-show="isExporting && includeMetaBar"
+          class="gap-sm flex w-full flex-col items-center justify-center pb-5"
           ref="exportHeaderMetaRef"
-          class="flex flex-col items-center justify-center gap-sm pb-5 w-full"
         >
           <h1
-            class="text-[calc(1.5rem*var(--score-font-scale,1))] text-text-title tracking-tight m-0 mb-2 font-extrabold"
+            class="text-text-title m-0 mb-2 text-[calc(1.5rem*var(--score-font-scale,1))] font-extrabold tracking-tight"
           >
             {{ scoreEditor.activeSong?.title }}
           </h1>
           <div
-            class="text-[calc(0.75rem*var(--score-font-scale,1))] flex items-center justify-center w-full font-semibold text-text-body"
+            class="text-text-body flex w-full items-center justify-center text-[calc(0.75rem*var(--score-font-scale,1))] font-semibold"
           >
-            <span class="flex-1 min-w-0 text-right">
+            <span class="min-w-0 flex-1 text-right">
               {{ computeSongKey(scoreEditor.activeSong.playKey, scoreEditor.activeSong.capo) }} 调
             </span>
-            <span class="text-text-disabled opacity-50 px-md shrink-0">|</span>
-            <span class="flex-1 min-w-0 text-left"> Capo: {{ scoreEditor.activeSong.capo }} </span>
+            <span class="text-text-disabled px-md shrink-0 opacity-50">|</span>
+            <span class="min-w-0 flex-1 text-left"> Capo: {{ scoreEditor.activeSong.capo }} </span>
           </div>
         </div>
 
         <div
           v-for="lineData in lyricsLinesWithEdges"
-          :key="lineData.lineId"
           v-memo="[
             lineData.lineId,
             lineData.lineIdx,
@@ -66,133 +65,134 @@
             isDragging ? lineDropTargetKey(lineData.lineId) : null,
             isDragging ? lineDropZone(lineData.lineId) : null,
           ]"
-          class="line-row flex items-stretch w-max min-w-full"
+          :key="lineData.lineId"
+          class="line-row flex w-max min-w-full items-stretch"
         >
           <div
             v-wave
-            :data-line-idx="lineData.lineId"
-            class="lyrics-line relative flex flex-nowrap gap-0 items-stretch w-max min-w-0 flex-[1_1_auto] py-xs px-sm rounded-md box-border cursor-pointer select-none border border-transparent transition-all duration-base hover:bg-bg-panel-hover hover:border-border-base focus-within:bg-bg-panel-hover focus-within:border-border-base"
             :class="{
               'is-line-selected': isExporting
                 ? isLineVisibleInExport(lineData.lineIdx)
                 : selectedLineSet.has(lineData.lineIdx),
-              '!bg-tint-primary-92 !border-tint-primary-60 hover:!bg-tint-primary-80 hover:!border-primary':
+              'bg-tint-primary-92! border-tint-primary-60! hover:bg-tint-primary-80! hover:border-primary!':
                 !isExporting && selectedLineSet.has(lineData.lineIdx),
             }"
+            :data-line-idx="lineData.lineId"
             @click="e => handleLineClick(e, lineData.lineIdx)"
             @mouseenter="hoveredLineKey = lineData.lineId"
             @mouseleave="hoveredLineKey = null"
+            class="lyrics-line py-xs px-sm duration-base hover:bg-bg-panel-hover hover:border-border-base focus-within:bg-bg-panel-hover focus-within:border-border-base relative box-border flex w-max min-w-0 flex-[1_1_auto] cursor-pointer flex-nowrap items-stretch gap-0 rounded-md border border-transparent transition-all select-none"
           >
-            <div v-show="!isExporting" class="flex items-end pb-0.5 mr-2 select-none shrink-0">
+            <div v-show="!isExporting" class="mr-2 flex shrink-0 items-end pb-0.5 select-none">
               <span
-                class="text-2xs font-bold font-mono text-text-disabled py-2xs px-xs rounded-lg transition-colors duration-fast"
-                :class="{ '!text-text-on-accent !bg-primary': !isExporting && selectedLineSet.has(lineData.lineIdx) }"
+                :class="{ 'text-text-on-accent! bg-primary!': !isExporting && selectedLineSet.has(lineData.lineIdx) }"
+                class="text-2xs text-text-disabled py-2xs px-xs duration-fast rounded-lg font-mono font-bold transition-colors"
               >
                 {{ formatLineIndex(lineData.lineIdx) }}
               </span>
             </div>
-            <div class="flex items-stretch gap-0 shrink-0">
+            <div class="flex shrink-0 items-stretch gap-0">
               <ChordSlotCell
-                :is-exporting
+                :drop-zone="dropZoneFor(lineData.nextStartKey)"
                 :is-drag-active="isDragging"
+                :is-exporting
                 :line-hovered="hoveredLineKey === lineData.lineId"
                 :scroll-root="scoreZoneRef"
-                variant="add"
                 :slot-key="lineData.nextStartKey"
-                :drop-zone="dropZoneFor(lineData.nextStartKey)"
-                add-placeholder-title="点击添加行首和弦"
                 @click="handleOpenPicker(lineData.nextStartKey)"
                 @pointerdown="handlePointerDown"
                 @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
+                add-placeholder-title="点击添加行首和弦"
+                variant="add"
               />
               <ChordSlotCell
                 v-for="item in lineData.startChords"
-                :key="item.slotKey"
-                :is-exporting
-                :is-drag-active="isDragging"
-                :line-hovered="hoveredLineKey === lineData.lineId"
-                :scroll-root="scoreZoneRef"
-                variant="edge"
-                :slot-key="item.slotKey"
                 :chord="item.chord"
                 :drop-zone="dropZoneFor(item.slotKey)"
+                :is-drag-active="isDragging"
+                :is-exporting
+                :key="item.slotKey"
+                :line-hovered="hoveredLineKey === lineData.lineId"
+                :scroll-root="scoreZoneRef"
+                :slot-key="item.slotKey"
                 @click="handleOpenPicker(item.slotKey)"
-                @pointerdown="handlePointerDown"
                 @copy-pointerdown="handleCopyPointerDown"
+                @pointerdown="handlePointerDown"
                 @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
+                variant="edge"
               />
             </div>
 
             <ChordSlotCell
               v-for="(item, index) in lineData.chars"
-              :key="item.slotKey"
-              :is-exporting
-              :is-drag-active="isDragging"
-              :line-hovered="hoveredLineKey === lineData.lineId"
-              :scroll-root="scoreZoneRef"
-              variant="char"
-              :slot-key="item.slotKey"
               :char="item.char"
               :chord="getCharChord(item.slotKey) ?? undefined"
               :drop-zone="dropZoneFor(item.slotKey)"
+              :is-drag-active="isDragging"
+              :is-exporting
+              :key="item.slotKey"
               :left-chord-gap="isLeftAdjacentChord(lineData, index)"
+              :line-hovered="hoveredLineKey === lineData.lineId"
+              :scroll-root="scoreZoneRef"
+              :slot-key="item.slotKey"
               @click="handleOpenPicker(item.slotKey)"
-              @pointerdown="handlePointerDown"
               @copy-pointerdown="handleCopyPointerDown"
+              @pointerdown="handlePointerDown"
               @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
+              variant="char"
             />
-            <div class="flex items-stretch gap-0 shrink-0">
+            <div class="flex shrink-0 items-stretch gap-0">
               <ChordSlotCell
                 v-for="(item, index) in lineData.endChords"
-                :key="item.slotKey"
-                :is-exporting
+                :chord="item.chord"
+                :drop-zone="dropZoneFor(item.slotKey)"
                 :is-drag-active="isDragging"
+                :is-exporting
+                :key="item.slotKey"
+                :left-chord-gap="isEndEdgeGap(lineData, index)"
                 :line-hovered="hoveredLineKey === lineData.lineId"
                 :scroll-root="scoreZoneRef"
-                variant="edge"
                 :slot-key="item.slotKey"
-                :chord="item.chord"
-                :left-chord-gap="isEndEdgeGap(lineData, index)"
-                :drop-zone="dropZoneFor(item.slotKey)"
                 @click="handleOpenPicker(item.slotKey)"
-                @pointerdown="handlePointerDown"
                 @copy-pointerdown="handleCopyPointerDown"
+                @pointerdown="handlePointerDown"
                 @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
+                variant="edge"
               />
               <ChordSlotCell
-                :is-exporting
+                :drop-zone="dropZoneFor(lineData.nextEndKey)"
                 :is-drag-active="isDragging"
+                :is-exporting
                 :line-hovered="hoveredLineKey === lineData.lineId"
                 :scroll-root="scoreZoneRef"
-                variant="add"
                 :slot-key="lineData.nextEndKey"
-                :drop-zone="dropZoneFor(lineData.nextEndKey)"
-                add-placeholder-title="点击添加行尾和弦"
                 @click="handleOpenPicker(lineData.nextEndKey)"
                 @pointerdown="handlePointerDown"
                 @remove="slotKey => scoreEditor.removeSlotChord(slotKey)"
+                add-placeholder-title="点击添加行尾和弦"
+                variant="add"
               />
             </div>
 
             <ActionButton
               v-if="!isExporting"
-              icon-only
-              size="lg"
-              variant="subtle"
-              class="self-center ml-auto pl-sm shrink-0 text-danger transition-opacity duration-fast"
+              :aria-hidden="hoveredLineKey !== lineData.lineId"
+              :aria-label="deleteLineButtonTitle"
               :class="hoveredLineKey === lineData.lineId ? 'opacity-100' : 'opacity-0'"
               :tabindex="hoveredLineKey === lineData.lineId ? 0 : -1"
               :title="deleteLineButtonTitle"
-              :aria-label="deleteLineButtonTitle"
-              :aria-hidden="hoveredLineKey !== lineData.lineId"
-              @pointerdown.stop
               @click.stop="deleteLine(lineData)"
+              @pointerdown.stop
+              class="pl-sm text-danger duration-fast ml-auto shrink-0 self-center transition-opacity"
+              icon-only
+              size="lg"
+              variant="subtle"
             >
-              <Trash2 :size="18" :stroke-width="2.2" />
+              <BaseIcon :size="18" :stroke-width="2.2" name="trash-2" />
             </ActionButton>
           </div>
 
-          <div class="line-row-gutter shrink-0 w-8 max-md:w-2" aria-hidden="true" />
+          <div aria-hidden="true" class="line-row-gutter w-8 shrink-0 max-md:w-2" />
         </div>
       </div>
     </div>
@@ -201,15 +201,15 @@
       <div
         v-if="isDragging"
         :ref="setGhostEl"
-        class="fixed top-0 left-0 z-top pointer-events-none will-change-transform"
+        class="z-top pointer-events-none fixed top-0 left-0 will-change-transform"
       >
         <div
-          class="-translate-x-1/2 -translate-y-1/2 scale-105 py-sm px-md bg-bg-panel/95 border-[1.5px] border-primary rounded-md shadow-floating backdrop-blur-md flex items-center justify-center"
           :class="dragMoveMode === 'copy' ? 'border-success' : ''"
+          class="py-sm px-md bg-bg-panel/95 border-primary shadow-floating flex -translate-x-1/2 -translate-y-1/2 scale-105 items-center justify-center rounded-md border-[1.5px] backdrop-blur-md"
         >
           <span
-            class="text-sm font-extrabold leading-none"
             :class="dragMoveMode === 'copy' ? 'text-success' : 'text-primary'"
+            class="text-sm leading-none font-extrabold"
           >
             {{ ghostChordName }}
           </span>
@@ -219,21 +219,23 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+
 import ActionButton from '@/components/ui/ActionButton.vue';
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
-import { useActiveExportTarget } from '@/shared/composables/useActiveExportTarget';
+import type { DropZone } from '@/features/score-editor/composables/lyrics-drag/dropZone';
 import { useAutoScroll } from '@/features/score-editor/composables/useAutoScroll';
 import { useLyricsDragDrop } from '@/features/score-editor/composables/useLyricsDragDrop';
-import type { DropZone } from '@/features/score-editor/composables/lyrics-drag/dropZone';
 import { useScoreLinesData } from '@/features/score-editor/composables/useScoreLinesData';
+import { computeSongKey } from '@/services/music/theory';
+import { useActiveExportTarget } from '@/shared/composables/useActiveExportTarget';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, LineId, SlotKey } from '@/types';
-import { computeSongKey } from '@/utils/music/musicTheory';
 import type { LineData } from '@/utils/score/score-export';
-import { FileText, Trash2 } from '@lucide/vue';
-import { onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+
 import ChordSlotCell from './ChordSlotCell.vue';
 
 defineOptions({ name: 'ScoreInteractiveArea' });

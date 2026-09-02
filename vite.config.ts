@@ -1,10 +1,14 @@
-import tailwindcss from '@tailwindcss/vite';
-import vue from '@vitejs/plugin-vue';
 import { execSync } from 'node:child_process';
 import { resolve } from 'path';
+
+import tailwindcss from '@tailwindcss/vite';
+import vue from '@vitejs/plugin-vue';
 import { visualizer } from 'rollup-plugin-visualizer';
+import Icons from 'unplugin-icons/vite';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+import { injectScssTokens } from './scripts/scss-inject';
 
 // 读取当前 git 提交短 SHA，作为随代码自动变化、真实有意义的构建标识。
 // 非 git 环境（或取不到时）回退为 unknown。
@@ -32,6 +36,10 @@ export default defineConfig(({ mode }) => ({
           ],
         },
       },
+    }),
+    Icons({
+      compiler: 'vue3',
+      autoInstall: false,
     }),
     // 产物体积分析按需生成：仅 `pnpm build:analyze`（--mode analyze）时注册插件，
     // 日常构建跳过 gzip/brotli 统计与 stats.html 写盘（产物变了分析必须重算，无缓存可言）
@@ -90,13 +98,8 @@ export default defineConfig(({ mode }) => ({
     preprocessorOptions: {
       scss: {
         api: 'modern-compiler',
-        // 全局注入设计令牌，使任意 .vue <style lang="scss"> 与 .scss 文件都能直接使用 $space-* / $radius-* / $fs-* 等变量与 mixin，
-        // 无需每个文件手动 @use。
-        additionalData: (source: string, filePath: string) => {
-          if (filePath.includes('tokens.scss')) return source;
-          if (source.includes('assets/tokens')) return source;
-          return `@use "@/assets/tokens" as *;\n${source.replace(/^\uFEFF/, '')}`;
-        },
+        // 全局注入设计令牌，使任意 .vue <style lang="scss"> 与 .scss 文件都能直接使用 $space-* / $radius-* / $fs-* 等变量与 mixin
+        additionalData: injectScssTokens,
       },
     },
   },

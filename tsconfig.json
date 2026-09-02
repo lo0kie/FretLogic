@@ -21,6 +21,8 @@
     "noPropertyAccessFromIndexSignature": true,
     "noImplicitOverride": true,
     "forceConsistentCasingInFileNames": true,
+    "types": ["unplugin-icons/types/vue"],
+    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }

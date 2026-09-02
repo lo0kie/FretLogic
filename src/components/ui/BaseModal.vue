@@ -1,107 +1,107 @@
 <template>
-  <Teleport :to="teleportTo" :disabled="disabledTeleport">
+  <Teleport :disabled="disabledTeleport" :to="teleportTo">
     <Transition
-      name="v-transition-modal"
-      @before-enter="emit('open')"
       @after-enter="emit('opened')"
-      @before-leave="emit('close')"
       @after-leave="emit('closed')"
+      @before-enter="emit('open')"
+      @before-leave="emit('close')"
+      name="v-transition-modal"
     >
       <div
+        v-bind="$attrs"
         v-if="destroyOnClose ? visible : true"
         v-show="visible"
-        v-bind="$attrs"
-        ref="overlayRef"
-        class="modal-overlay-container fixed inset-0 z-overlay flex p-md box-border bg-black/50 overflow-y-auto"
         :class="overlayAlignClass"
-        @mousedown="handleMaskMousedown"
         @click.self="handleMaskClick"
+        @mousedown="handleMaskMousedown"
+        class="modal-overlay-container z-overlay p-md fixed inset-0 box-border flex overflow-y-auto bg-black/50"
+        ref="overlayRef"
       >
         <div
-          ref="modalCardRef"
-          role="dialog"
-          aria-modal="true"
-          :aria-labelledby="title || $slots['title'] ? titleId : undefined"
           :aria-label="title || $slots['title'] ? undefined : '对话框'"
-          tabindex="-1"
-          class="modal-card relative z-panel flex flex-col box-border bg-bg-panel border border-glass-border rounded-lg shadow-floating outline-none transition-[width,height] duration-base overflow-hidden"
+          :aria-labelledby="title || $slots['title'] ? titleId : undefined"
           :style="[sizeStyle, topStyle]"
           @click.stop
           @keydown="handleKeydownTrap"
+          aria-modal="true"
+          class="modal-card z-panel bg-bg-panel border-glass-border shadow-floating duration-base ease-standard relative box-border flex flex-col overflow-hidden rounded-lg border transition-[width,height] outline-none"
+          ref="modalCardRef"
+          role="dialog"
+          tabindex="-1"
         >
           <div
+            :class="isAutoHeight ? 'h-auto shrink-0' : 'min-h-0 flex-1'"
+            class="flex w-full flex-col"
             ref="modalContentRef"
-            class="w-full flex flex-col"
-            :class="isAutoHeight ? 'h-auto shrink-0' : 'flex-1 min-h-0'"
           >
             <div
               v-if="hasHeader"
-              class="modal-header-zone pt-xl px-xl shrink-0 flex items-center justify-between gap-lg min-h-[3.1rem]"
+              class="modal-header-zone pt-xl px-xl gap-lg flex min-h-[3.1rem] shrink-0 items-center justify-between"
             >
-              <slot name="header" :title-id>
-                <div class="modal-header-left flex items-center min-w-0 flex-1">
-                  <slot name="title" :title-id>
+              <slot :title-id name="header">
+                <div class="modal-header-left flex min-w-0 flex-1 items-center">
+                  <slot :title-id name="title">
                     <h3
                       v-if="title"
                       :id="titleId"
-                      class="modal-title text-sm font-bold tracking-tight text-text-title m-0 whitespace-nowrap overflow-hidden text-ellipsis leading-tight"
                       :title
+                      class="modal-title text-text-title m-0 overflow-hidden text-sm leading-tight font-bold tracking-tight text-ellipsis whitespace-nowrap"
                     >
                       {{ title }}
                     </h3>
                   </slot>
                 </div>
-                <div class="modal-header-right flex items-center gap-sm shrink-0 min-h-[1.6rem]">
+                <div class="modal-header-right gap-sm flex min-h-[1.6rem] shrink-0 items-center">
                   <slot name="header-extra" />
                   <ActionButton
                     v-if="showClose"
-                    variant="ghost"
-                    size="sm"
-                    icon-only
-                    aria-label="关闭"
-                    class="!p-1.5"
                     :disabled="confirmLoading"
                     @click="close('close')"
+                    aria-label="关闭"
+                    class="p-1.5!"
+                    icon-only
+                    size="sm"
+                    variant="ghost"
                   >
-                    <X :size="20" :stroke-width="3" />
+                    <BaseIcon :size="20" :stroke-width="3" name="x" />
                   </ActionButton>
                 </div>
               </slot>
             </div>
 
             <div
-              class="modal-body-scrollable px-xl py-lg overflow-y-auto box-border no-scrollbar flex flex-col"
               :class="[
                 { 'has-header': hasHeader, 'has-footer': showFooter, 'py-sm': !$slots['default'] },
-                isAutoHeight ? 'h-auto max-h-[calc(85vh-8rem)]' : 'flex-1 min-h-0',
+                isAutoHeight ? 'h-auto max-h-[calc(85vh-8rem)]' : 'min-h-0 flex-1',
               ]"
+              class="modal-body-scrollable px-xl py-lg no-scrollbar box-border flex flex-col overflow-y-auto"
             >
               <slot />
             </div>
 
             <div
               v-if="showFooter"
-              class="modal-footer-zone pb-xl px-xl pt-0 shrink-0 flex items-center justify-end gap-sm w-full box-border"
+              class="modal-footer-zone pb-xl px-xl gap-sm box-border flex w-full shrink-0 items-center justify-end pt-0"
             >
               <slot name="footer">
                 <slot name="cancel-btn">
                   <ActionButton
-                    variant="default"
-                    size="md"
                     :disabled="cancelButtonDisabled || confirmLoading"
                     @click="close('cancel')"
+                    size="md"
+                    variant="default"
                   >
                     {{ cancelText }}
                   </ActionButton>
                 </slot>
                 <slot name="confirm-btn">
                   <ActionButton
-                    variant="subtle"
                     :color="confirmType"
-                    size="md"
-                    :loading="confirmLoading"
                     :disabled="confirmButtonDisabled || confirmLoading"
+                    :loading="confirmLoading"
                     @click="handleConfirm"
+                    size="md"
+                    variant="subtle"
                   >
                     {{ confirmText }}
                   </ActionButton>
@@ -116,6 +116,8 @@
 </template>
 
 <script lang="ts">
+import BaseIcon from '@/components/ui/BaseIcon.vue';
+
 // 全局弹窗层级栈：必须放在模块作用域（<script setup> 体每次实例化都会重新执行），
 // 否则每个实例各自持有独立 Set，多层弹窗的 inert 协调与 Esc 栈顶判断都会失效
 const activeModalOverlays = new Set<HTMLElement>();
@@ -143,12 +145,14 @@ const updateGlobalInertState = () => {
 };
 </script>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
+
+import { useEventListener, useScrollLock } from '@vueuse/core';
+
 import { useAutoHeight } from '@/shared/composables/useAutoHeight';
 import type { ThemeColor } from '@/types';
-import { X } from '@lucide/vue';
-import { useEventListener, useScrollLock } from '@vueuse/core';
-import { computed, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
+
 import ActionButton from './ActionButton.vue';
 
 defineOptions({ inheritAttrs: false });

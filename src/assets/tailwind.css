@@ -129,19 +129,19 @@
 }
 
 .marquee-viewport {
+  display: flex;
+  position: relative;
+  align-items: center;
   overflow: hidden;
   white-space: nowrap;
-  display: flex;
-  align-items: center;
-  position: relative;
 }
 
 .marquee-inner {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  white-space: nowrap;
+  will-change: transform;
   width: max-content;
   max-width: none;
-  flex: none;
-  will-change: transform;
+  white-space: nowrap;
 }

@@ -1,67 +1,67 @@
 <template>
-  <div class="flex flex-row items-stretch gap-2 overflow-hidden box-border w-full min-h-0">
-    <div class="flex flex-col gap-1 min-w-0 flex-[0_0_55%]">
-      <div class="text-2xs font-bold text-text-disabled tracking-wider select-none px-0.5 whitespace-nowrap">
+  <div class="box-border flex min-h-0 w-full flex-row items-stretch gap-2 overflow-hidden">
+    <div class="flex min-w-0 flex-[0_0_55%] flex-col gap-1">
+      <div class="text-2xs text-text-disabled px-0.5 font-bold tracking-wider whitespace-nowrap select-none">
         推荐候选
       </div>
-      <div v-wheel-scroll.smooth v-grid-nav class="no-scrollbar flex flex-wrap gap-1 p-1 min-h-0 overflow-y-auto">
+      <div v-grid-nav v-wheel-scroll.smooth class="no-scrollbar flex min-h-0 flex-wrap gap-1 overflow-y-auto p-1">
         <template v-if="candidates.length > 0">
           <BaseBadge
             v-for="candidate in candidates"
-            :key="candidate.chordName"
             v-wave
-            :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
             :appearance="isCandidateActive(candidate) ? 'filled' : 'subtle'"
+            :key="candidate.chordName"
+            :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
+            @click="emit('select-candidate', candidate)"
             interactive
             size="md"
-            @click="emit('select-candidate', candidate)"
           >
             <span v-chord-name="{ segments: candidate.segments, name: candidate.chordName }" />
           </BaseBadge>
         </template>
-        <EmptyState v-else description="暂无匹配和弦" size="sm" bordered />
+        <EmptyState v-else bordered description="暂无匹配和弦" size="sm" />
       </div>
     </div>
 
-    <div class="shrink-0 bg-border-light w-px h-auto self-stretch my-0" />
+    <div class="bg-border-light my-0 h-auto w-px shrink-0 self-stretch" />
 
-    <div class="flex flex-col gap-1 min-w-0 flex-1">
-      <div class="text-2xs font-bold text-text-disabled tracking-wider select-none px-0.5 whitespace-nowrap">
+    <div class="flex min-w-0 flex-1 flex-col gap-1">
+      <div class="text-2xs text-text-disabled px-0.5 font-bold tracking-wider whitespace-nowrap select-none">
         构成音
       </div>
-      <div v-wheel-scroll.smooth class="no-scrollbar flex flex-col gap-1 p-0.5 min-h-0 overflow-y-auto">
+      <div v-wheel-scroll.smooth class="no-scrollbar flex min-h-0 flex-col gap-1 overflow-y-auto p-0.5">
         <div
           v-for="note in notes"
-          :key="note.stringIndex"
           v-wave
-          class="flex items-center justify-between gap-1.5 py-1 px-2 rounded-md border box-border shrink-0 select-none min-w-0 transition-colors"
           :class="[
             note.isRoot
               ? 'bg-tint-warning-90 border-tint-warning-65 hover:bg-tint-warning-88 hover:border-tint-warning-78'
               : 'bg-bg-body border-border-light hover:border-border-base hover:bg-bg-panel-hover',
           ]"
+          :key="note.stringIndex"
+          class="box-border flex min-w-0 shrink-0 items-center justify-between gap-1.5 rounded-md border px-2 py-1 transition-colors select-none"
         >
-          <div class="flex items-center gap-1.5 shrink-0 min-w-0">
+          <div class="flex min-w-0 shrink-0 items-center gap-1.5">
             <span
-              class="text-2xs font-semibold shrink-0 whitespace-nowrap"
               :class="note.isRoot ? 'text-warning font-bold' : 'text-text-disabled'"
+              class="text-2xs shrink-0 font-semibold whitespace-nowrap"
             >
               {{ 6 - note.stringIndex }}弦
             </span>
             <span
-              class="text-xs shrink-0 whitespace-nowrap"
               :class="note.isRoot ? 'text-warning font-extrabold' : 'text-text-title font-bold'"
+              class="shrink-0 text-xs whitespace-nowrap"
             >
               <span v-chord-name="{ name: note.label }" />
             </span>
           </div>
           <span
-            class="inline-flex items-center justify-center min-w-[1.35rem] h-5 px-1.5 rounded-full border text-2xs font-bold font-mono whitespace-nowrap shrink-0 select-none leading-none tabular-nums"
             :class="[
               note.isRoot
                 ? 'bg-warning text-text-on-accent border-transparent shadow-[0_1px_4px_rgba(255,149,0,0.5)]'
                 : 'bg-bg-panel border-border-light text-text-body',
             ]"
+            class="text-2xs inline-flex h-5 min-w-[1.35rem] shrink-0 items-center justify-center rounded-full border px-1.5 font-mono leading-none font-bold whitespace-nowrap tabular-nums select-none"
           >
             <span v-chord-name="{ degrees: noteDegrees(note) }" />
           </span>
@@ -71,11 +71,11 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
 import BaseBadge from '@/components/ui/BaseBadge.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
+import { segmentsToString } from '@/services/music/theory';
 import type { CandidateResult, ExtensionSegment, NoteInput } from '@/types';
-import { segmentsToString } from '@/utils/music/musicTheory';
 
 export interface RenderNoteItem extends NoteInput {
   isRoot: boolean;

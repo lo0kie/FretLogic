@@ -1,7 +1,8 @@
 ﻿import { describe, expect, it } from 'vitest';
-import type { Chord, Group, Song } from '@/types';
-import { Tuning } from '@/utils/music/musicTheory';
+
 import { ChordRecord, GroupRecord, SongRecord } from '@/services/music/models';
+import { Tuning } from '@/services/music/theory';
+import type { Chord, Group, Song } from '@/types';
 
 const chord: Chord = {
   id: 'chord-1',

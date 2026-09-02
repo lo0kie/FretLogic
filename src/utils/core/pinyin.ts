@@ -4,8 +4,9 @@
  * 加载完成前退化为兜底逻辑（浏览器 zh-Hans-CN 排序 / 非字母归 '#'），
  * 就绪后 pinyinReady 翻转，依赖它的 computed（sortedSongs、songRows 等）自动重算。
  */
-import type * as PinyinNs from 'pinyin-pro';
 import { ref } from 'vue';
+
+import type * as PinyinNs from 'pinyin-pro';
 
 const ASCII_LETTER_RE = /^[a-zA-Z]/;
 const CJK_RE = /^[\u4e00-\u9fff]/;

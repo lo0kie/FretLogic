@@ -2,12 +2,14 @@
  * 同步与偏好设置 store：同步目标（GitHub / WebDAV）凭据与路径、应用偏好项。
  * 敏感字段（token/密码）仅驻留内存，不参与云同步推送。
  */
+import { ref } from 'vue';
+
+import { useStorage } from '@vueuse/core';
+import { defineStore } from 'pinia';
+
 import type { SyncProviderKind } from '@/services/sync/provider';
 import type { AppPreferencesBackup, SyncSettingsBackup } from '@/types';
 import { GITHUB_SYNC_CONFIG, STORAGE_KEYS } from '@/utils/core/constants';
-import { useStorage } from '@vueuse/core';
-import { defineStore } from 'pinia';
-import { ref } from 'vue';
 
 export const useSettingsStore = defineStore('settings', () => {
   const syncTarget = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_TARGET, 'server');

@@ -1,6 +1,6 @@
-import { gzipSync } from 'node:zlib';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 
 const distDir = 'dist/assets';
 const INITIAL_BUDGET_KB = 220;

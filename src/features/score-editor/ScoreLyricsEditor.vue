@@ -1,23 +1,25 @@
 <template>
-  <div class="flex-1 p-xl px-2xl box-border relative">
+  <div class="p-xl px-2xl relative box-border flex-1">
     <textarea
       v-model="localLyrics"
-      class="no-scrollbar w-full h-full bg-bg-panel border border-glass-border rounded-lg p-xl text-base leading-relaxed text-text-title outline-none resize-none box-border font-inherit transition-all duration-base focus:border-primary focus:ring-2 focus:ring-primary/70"
+      class="no-scrollbar bg-bg-panel border-glass-border p-xl text-text-title font-inherit duration-base focus:border-primary focus:ring-primary/70 box-border h-full w-full resize-none rounded-lg border text-base leading-relaxed transition-all outline-none focus:ring-2"
       placeholder="在此处输入或粘贴歌词文本..."
     />
     <div
-      class="absolute right-9 bottom-9 text-sm text-text-muted py-0.5 px-2 rounded-sm pointer-events-none opacity-80"
+      class="text-text-muted pointer-events-none absolute right-9 bottom-9 rounded-sm px-2 py-0.5 text-sm opacity-80"
     >
       {{ localLyrics.length }} 字
     </div>
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
+
+import { useDebounceFn } from '@vueuse/core';
+
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
-import { useDebounceFn } from '@vueuse/core';
-import { onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
 
 defineOptions({ name: 'ScoreLyricsEditor' });
 

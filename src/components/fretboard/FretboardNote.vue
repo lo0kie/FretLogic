@@ -1,63 +1,63 @@
 <template>
   <g
-    role="img"
+    :aria-label
     :class="[
       interactive
-        ? 'cursor-pointer pointer-events-auto outline-none [&:hover_.note-outline-ring]:opacity-100'
-        : 'cursor-default pointer-events-none outline-none',
+        ? 'pointer-events-auto cursor-pointer outline-none [&:hover_.note-outline-ring]:opacity-100'
+        : 'pointer-events-none cursor-default outline-none',
       {
-        '[&_.note-circle]:hidden [&_.note-svg-label]:hidden [&_.note-mute-x]:hidden': isPressed,
+        '[&_.note-circle]:hidden [&_.note-mute-x]:hidden [&_.note-svg-label]:hidden': isPressed,
       },
     ]"
-    tabindex="-1"
-    :aria-label
     @click.stop="interactive && $emit('click', $event)"
     @dblclick.prevent.stop="interactive && $emit('toggle-pitch')"
+    role="img"
+    tabindex="-1"
   >
     <circle
       v-if="isHovered || isFocused"
       :cx="x"
       :cy="y"
-      :r="outlineRadius"
       :fill="hoverFillColor"
-      :style="{ stroke: noteRingColor }"
+      :r="outlineRadius"
       :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
-      class="note-outline-ring transition-[fill,stroke] duration-fast"
+      :style="{ stroke: noteRingColor }"
+      class="note-outline-ring duration-fast transition-[fill,stroke]"
     />
 
     <circle
       v-if="!isPressed && (showPitchNames || !isMuted)"
+      :class="{ 'filter-(--root-glow)': showRootStyle && !interactive }"
       :cx="x"
       :cy="y"
-      :r="dotRadius"
       :fill="noteBgColor"
-      :style="{ stroke: noteStrokeColor }"
+      :r="dotRadius"
       :stroke-width="noteStrokeWidth"
-      class="note-circle transition-[fill,stroke] duration-fast [filter:var(--finger-shadow)]"
-      :class="{ '[filter:var(--root-glow)]': showRootStyle && !interactive }"
+      :style="{ stroke: noteStrokeColor }"
+      class="note-circle duration-fast filter-(--finger-shadow) transition-[fill,stroke]"
     />
 
     <g
       v-if="!isPressed && isMuted"
-      class="note-mute-x pointer-events-none"
       :stroke="muteStrokeColor"
       :stroke-width="muteStrokeWidth"
+      class="note-mute-x pointer-events-none"
       stroke-linecap="round"
     >
-      <line :x1="x - muteXHalf" :y1="y - muteXHalf" :x2="x + muteXHalf" :y2="y + muteXHalf" />
-      <line :x1="x + muteXHalf" :y1="y - muteXHalf" :x2="x - muteXHalf" :y2="y + muteXHalf" />
+      <line :x1="x - muteXHalf" :x2="x + muteXHalf" :y1="y - muteXHalf" :y2="y + muteXHalf" />
+      <line :x1="x + muteXHalf" :x2="x - muteXHalf" :y1="y - muteXHalf" :y2="y + muteXHalf" />
     </g>
 
     <text
       v-else-if="!isPressed && label"
-      :x
-      :y
-      text-anchor="middle"
       :dy="labelVerticalOffset"
       :fill="noteTextColor"
       :font-size="svgFontSize"
+      :x
+      :y
+      class="note-svg-label pointer-events-none font-[Helvetica_Neue,Arial,sans-serif] select-none"
       font-weight="700"
-      class="note-svg-label font-[Helvetica_Neue,Arial,sans-serif] select-none pointer-events-none"
+      text-anchor="middle"
     >
       <tspan> {{ label }} </tspan>
       <tspan
@@ -72,20 +72,21 @@
     </text>
 
     <circle
-      class="transition-[pointer-events]"
       :class="interactive ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'"
       :cx="x"
       :cy="y"
       :r="NOTE_DISPLAY.FINGER_DOT_RADIUS"
+      class="transition-[pointer-events]"
       fill="transparent"
     />
   </g>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed } from 'vue';
+
 import { FRETBOARD_COLORS, NOTE_DISPLAY } from '@/utils/core/constants';
 import { getFingerColor, getFingerTextColor } from '@/utils/music/chord-fretboard';
-import { computed } from 'vue';
 
 const {
   x,

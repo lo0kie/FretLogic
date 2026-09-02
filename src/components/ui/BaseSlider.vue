@@ -1,129 +1,129 @@
 <template>
   <div
-    ref="wrapperRef"
-    class="base-slider inline-flex items-center justify-center bg-bg-body border border-border-light rounded-full box-border select-none gap-sm transition-all duration-fast hover:border-border-base has-[:focus-visible]:border-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/70"
     :class="[
       currentConfig.wrapperClass,
-      vertical ? 'flex-col !rounded-2xl py-sm h-auto' : '',
-      tickValues.length && !vertical ? '!h-auto !rounded-2xl pb-5 pt-1' : '',
-      { 'opacity-45 cursor-not-allowed': disabled, 'w-full': resolvedWidth === '100%' },
+      vertical ? 'py-sm h-auto flex-col rounded-2xl!' : '',
+      tickValues.length && !vertical ? 'h-auto! rounded-2xl! pt-1 pb-5' : '',
+      { 'cursor-not-allowed opacity-45': disabled, 'w-full': resolvedWidth === '100%' },
     ]"
     :style="wrapperStyle"
     @wheel="handleWheel"
+    class="base-slider bg-bg-body border-border-light gap-sm duration-fast hover:border-border-base has-focus-visible:border-primary has-focus-visible:ring-primary/70 box-border inline-flex items-center justify-center rounded-full border transition-all select-none has-focus-visible:ring-2"
+    ref="wrapperRef"
   >
     <span
       v-if="label && (labelPosition === 'left' || (vertical && labelPosition !== 'right'))"
-      class="text-2xs font-semibold text-text-disabled whitespace-nowrap px-xs"
       :class="disabled ? 'cursor-not-allowed' : ''"
+      class="text-2xs text-text-disabled px-xs font-semibold whitespace-nowrap"
     >
       {{ label }}
     </span>
 
     <input
       v-if="showReadout && !isRange && readoutPosition === 'left' && isEditing"
-      ref="readoutInputRef"
       v-model="editValue"
-      type="number"
-      :min
       :max
+      :min
       :step
-      class="text-2xs font-bold text-primary text-center font-mono outline-none rounded-sm tabular-nums w-16 h-5 bg-bg-body border border-border-light focus:border-primary focus:ring-1 focus:ring-primary/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-      aria-label="输入精确数值"
       @blur="commitEdit"
       @keydown.enter="commitEdit"
       @keydown.esc="cancelEdit"
       @pointerdown.stop
+      aria-label="输入精确数值"
+      class="text-2xs text-primary bg-bg-body border-border-light focus:border-primary focus:ring-primary/50 h-5 w-16 [appearance:textfield] rounded-sm border text-center font-mono font-bold tabular-nums outline-none focus:ring-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      ref="readoutInputRef"
+      type="number"
     />
     <span
       v-else-if="showReadout && !isRange && readoutPosition === 'left'"
-      class="text-2xs font-bold text-text-title text-center font-mono rounded-sm tabular-nums inline-block min-w-8"
+      :aria-label="
+        valueTextClickable ? (props.editable ? '输入精确数值' : `恢复默认值 ${defaultDisplayText}`) : undefined
+      "
       :class="
         valueTextClickable
           ? props.editable
-            ? 'cursor-text hover:text-primary'
-            : 'cursor-pointer hover:text-primary'
+            ? 'hover:text-primary cursor-text'
+            : 'hover:text-primary cursor-pointer'
           : ''
       "
       :role="valueTextClickable ? 'button' : undefined"
       :tabindex="valueTextClickable ? 0 : -1"
-      :aria-label="
-        valueTextClickable ? (props.editable ? '输入精确数值' : `恢复默认值 ${defaultDisplayText}`) : undefined
-      "
       :title="valueTextClickable ? (props.editable ? '点击输入精确数值' : '点击恢复默认值') : ''"
       @click="handleReadoutClick"
       @keydown.enter.prevent="handleReadoutClick"
       @keydown.space.prevent="handleReadoutClick"
+      class="text-2xs text-text-title inline-block min-w-8 rounded-sm text-center font-mono font-bold tabular-nums"
     >
       {{ singleDisplayText }}
     </span>
 
     <button
       v-if="showButtons && !isRange && !vertical"
-      type="button"
-      class="border-none bg-transparent p-0 flex items-center justify-center text-text-disabled cursor-pointer outline-none rounded-full hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed"
       :disabled="disabled || singleValue <= min"
-      title="减少"
-      aria-label="减少"
-      data-focusable-inline
       @click="stepBy(-1, $event)"
+      aria-label="减少"
+      class="text-text-disabled hover:text-primary flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 outline-none disabled:cursor-not-allowed disabled:opacity-30"
+      data-focusable-inline
+      title="减少"
+      type="button"
     >
-      <Minus :size="14" :stroke-width="2.2" aria-hidden="true" />
+      <BaseIcon :size="14" :stroke-width="2.2" aria-hidden="true" name="minus" />
     </button>
 
     <div
-      ref="trackRef"
-      class="relative flex items-center justify-center group touch-none before:absolute before:content-[''] before:z-0"
       :class="[
         vertical
-          ? 'w-5 flex-1 min-h-24 h-full my-1 before:-inset-x-4 before:inset-y-0'
+          ? 'my-1 h-full min-h-24 w-5 flex-1 before:-inset-x-4 before:inset-y-0'
           : isCustomWidth
-            ? 'flex-1 min-w-16 w-full before:-inset-y-4 before:inset-x-0'
-            : 'w-24 before:-inset-y-4 before:inset-x-0',
+            ? 'w-full min-w-16 flex-1 before:inset-x-0 before:-inset-y-4'
+            : 'w-24 before:inset-x-0 before:-inset-y-4',
         disabled ? '' : 'cursor-pointer',
       ]"
-      @pointerdown="handleTrackPointerDown"
       @mouseenter="isTrackHovered = true"
       @mouseleave="isTrackHovered = false"
+      @pointerdown="handleTrackPointerDown"
+      class="group relative flex touch-none items-center justify-center before:absolute before:z-0 before:content-['']"
+      ref="trackRef"
     >
       <div
-        class="absolute rounded-full bg-border-base transition-colors"
-        :class="vertical ? 'w-1 inset-y-0 left-1/2 -translate-x-1/2' : 'h-1 inset-x-0 top-1/2 -translate-y-1/2'"
+        :class="vertical ? 'inset-y-0 left-1/2 w-1 -translate-x-1/2' : 'inset-x-0 top-1/2 h-1 -translate-y-1/2'"
+        class="bg-border-base absolute rounded-full transition-colors"
       />
 
       <div
-        class="absolute rounded-full bg-primary pointer-events-none"
         :class="[
-          vertical ? 'w-1 left-1/2 -translate-x-1/2' : 'h-1 top-1/2 -translate-y-1/2',
+          vertical ? 'left-1/2 w-1 -translate-x-1/2' : 'top-1/2 h-1 -translate-y-1/2',
           isDragging === null ? 'transition-all duration-75' : '',
         ]"
         :style="activeBarStyle"
+        class="bg-primary pointer-events-none absolute rounded-full"
       />
 
       <div
         v-if="!isRange"
-        class="absolute w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none hover:scale-125 group-hover:scale-125 active:scale-135"
-        :class="[
-          vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-          isDragging === 0 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-all duration-75',
-        ]"
-        :style="singleThumbStyle"
-        tabindex="0"
-        role="slider"
-        :aria-valuemin="min"
+        :aria-disabled="disabled || undefined"
         :aria-valuemax="max"
+        :aria-valuemin="min"
         :aria-valuenow="singleValue"
         :aria-valuetext="singleDisplayText"
-        :aria-disabled="disabled || undefined"
+        :class="[
+          vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
+          isDragging === 0 ? 'ring-primary/70 z-20 scale-125 ring-2' : 'z-10 transition-all duration-75',
+        ]"
+        :style="singleThumbStyle"
         @keydown="handleRangeKeydown"
         @mouseenter="isHovered = true"
         @mouseleave="isHovered = false"
         @pointerdown.stop="startDrag(0)"
+        class="bg-primary border-bg-body absolute h-3.5 w-3.5 cursor-pointer rounded-full border-2 shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
+        role="slider"
+        tabindex="0"
       >
         <Transition name="v-transition-fade">
           <div
             v-if="shouldShowTooltip(0)"
-            class="absolute pointer-events-none px-1.5 py-0.5 rounded bg-bg-elevated border border-glass-border text-text-title shadow-md text-2xs font-bold font-mono whitespace-nowrap z-20"
-            :class="vertical ? 'left-full ml-2 top-1/2 -translate-y-1/2' : 'bottom-full mb-2 left-1/2 -translate-x-1/2'"
+            :class="vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'"
+            class="bg-bg-elevated border-glass-border text-text-title text-2xs pointer-events-none absolute z-20 rounded border px-1.5 py-0.5 font-mono font-bold whitespace-nowrap shadow-md"
           >
             {{ singleDisplayText }}
           </div>
@@ -132,30 +132,30 @@
 
       <template v-else>
         <div
-          class="absolute w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none hover:scale-125 group-hover:scale-125 active:scale-135"
-          :class="[
-            vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-            isDragging === 0 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-all duration-75',
-          ]"
-          :style="rangeThumb0Style"
-          tabindex="0"
-          role="slider"
-          :aria-valuemin="min"
           :aria-valuemax="rangeValues[1]"
+          :aria-valuemin="min"
           :aria-valuenow="rangeValues[0]"
           :aria-valuetext="formatVal(rangeValues[0])"
+          :class="[
+            vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
+            isDragging === 0 ? 'ring-primary/70 z-20 scale-125 ring-2' : 'z-10 transition-all duration-75',
+          ]"
+          :style="rangeThumb0Style"
           @keydown="e => handleRangeKeydown(e, 0)"
           @mouseenter="isHoveredThumb0 = true"
           @mouseleave="isHoveredThumb0 = false"
           @pointerdown.stop="startDrag(0)"
+          class="bg-primary border-bg-body absolute h-3.5 w-3.5 cursor-pointer rounded-full border-2 shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
+          role="slider"
+          tabindex="0"
         >
           <Transition name="v-transition-fade">
             <div
               v-if="shouldShowRangeTooltip(0)"
-              class="absolute pointer-events-none px-1.5 py-0.5 rounded bg-bg-elevated border border-glass-border text-text-title shadow-md text-2xs font-bold font-mono whitespace-nowrap z-20"
               :class="
-                vertical ? 'left-full ml-2 top-1/2 -translate-y-1/2' : 'bottom-full mb-2 left-1/2 -translate-x-1/2'
+                vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'
               "
+              class="bg-bg-elevated border-glass-border text-text-title text-2xs pointer-events-none absolute z-20 rounded border px-1.5 py-0.5 font-mono font-bold whitespace-nowrap shadow-md"
             >
               {{ formatVal(rangeValues[0]) }}
             </div>
@@ -163,30 +163,30 @@
         </div>
 
         <div
-          class="absolute w-3.5 h-3.5 rounded-full bg-primary border-2 border-bg-body shadow-sm cursor-pointer outline-none hover:scale-125 group-hover:scale-125 active:scale-135"
-          :class="[
-            vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-            isDragging === 1 ? 'z-20 ring-2 ring-primary/70 scale-125' : 'z-10 transition-all duration-75',
-          ]"
-          :style="rangeThumb1Style"
-          tabindex="0"
-          role="slider"
-          :aria-valuemin="rangeValues[0]"
           :aria-valuemax="max"
+          :aria-valuemin="rangeValues[0]"
           :aria-valuenow="rangeValues[1]"
           :aria-valuetext="formatVal(rangeValues[1])"
+          :class="[
+            vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
+            isDragging === 1 ? 'ring-primary/70 z-20 scale-125 ring-2' : 'z-10 transition-all duration-75',
+          ]"
+          :style="rangeThumb1Style"
           @keydown="e => handleRangeKeydown(e, 1)"
           @mouseenter="isHoveredThumb1 = true"
           @mouseleave="isHoveredThumb1 = false"
           @pointerdown.stop="startDrag(1)"
+          class="bg-primary border-bg-body absolute h-3.5 w-3.5 cursor-pointer rounded-full border-2 shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
+          role="slider"
+          tabindex="0"
         >
           <Transition name="v-transition-fade">
             <div
               v-if="shouldShowRangeTooltip(1)"
-              class="absolute pointer-events-none px-1.5 py-0.5 rounded bg-bg-elevated border border-glass-border text-text-title shadow-md text-2xs font-bold font-mono whitespace-nowrap z-20"
               :class="
-                vertical ? 'left-full ml-2 top-1/2 -translate-y-1/2' : 'bottom-full mb-2 left-1/2 -translate-x-1/2'
+                vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'
               "
+              class="bg-bg-elevated border-glass-border text-text-title text-2xs pointer-events-none absolute z-20 rounded border px-1.5 py-0.5 font-mono font-bold whitespace-nowrap shadow-md"
             >
               {{ formatVal(rangeValues[1]) }}
             </div>
@@ -196,19 +196,19 @@
 
       <div
         v-if="tickValues.length"
-        class="absolute pointer-events-none"
-        :class="vertical ? 'inset-y-0 right-full mr-2' : 'left-0 right-0 top-full mt-1'"
+        :class="vertical ? 'inset-y-0 right-full mr-2' : 'top-full right-0 left-0 mt-1'"
         aria-hidden="true"
+        class="pointer-events-none absolute"
       >
         <div
           v-for="v in tickValues"
-          :key="v"
-          class="absolute flex items-center"
           :class="vertical ? 'flex-row justify-end' : 'flex-col'"
+          :key="v"
           :style="getTickPositionStyle(v)"
+          class="absolute flex items-center"
         >
-          <div :class="vertical ? 'w-1.5 h-px bg-border-base' : 'w-px h-1.5 bg-border-base'" />
-          <span class="text-2xs text-text-disabled whitespace-nowrap font-mono" :class="vertical ? 'mr-1' : 'mt-0.5'">
+          <div :class="vertical ? 'bg-border-base h-px w-1.5' : 'bg-border-base h-1.5 w-px'" />
+          <span :class="vertical ? 'mr-1' : 'mt-0.5'" class="text-2xs text-text-disabled font-mono whitespace-nowrap">
             {{ markLabel(v) }}
           </span>
         </div>
@@ -217,69 +217,70 @@
 
     <button
       v-if="showButtons && !isRange && !vertical"
-      type="button"
-      class="border-none bg-transparent p-0 flex items-center justify-center text-text-disabled cursor-pointer outline-none rounded-full hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed"
       :disabled="disabled || singleValue >= max"
-      title="增加"
-      aria-label="增加"
-      data-focusable-inline
       @click="stepBy(1, $event)"
+      aria-label="增加"
+      class="text-text-disabled hover:text-primary flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 outline-none disabled:cursor-not-allowed disabled:opacity-30"
+      data-focusable-inline
+      title="增加"
+      type="button"
     >
-      <Plus :size="14" :stroke-width="2.2" aria-hidden="true" />
+      <BaseIcon :size="14" :stroke-width="2.2" aria-hidden="true" name="plus" />
     </button>
 
     <input
       v-if="showReadout && !isRange && readoutPosition === 'right' && isEditing"
-      ref="readoutInputRef"
       v-model="editValue"
-      type="number"
-      :min="min"
       :max="max"
+      :min="min"
       :step="step"
-      class="text-2xs font-bold text-primary text-center font-mono outline-none rounded-sm tabular-nums w-16 h-5 bg-bg-body border border-border-light focus:border-primary focus:ring-1 focus:ring-primary/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-      aria-label="输入精确数值"
       @blur="commitEdit"
       @keydown.enter="commitEdit"
       @keydown.esc="cancelEdit"
       @pointerdown.stop
+      aria-label="输入精确数值"
+      class="text-2xs text-primary bg-bg-body border-border-light focus:border-primary focus:ring-primary/50 h-5 w-16 [appearance:textfield] rounded-sm border text-center font-mono font-bold tabular-nums outline-none focus:ring-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      ref="readoutInputRef"
+      type="number"
     />
     <span
       v-else-if="showReadout && !isRange && readoutPosition === 'right'"
-      class="text-2xs font-bold text-text-title text-center font-mono rounded-sm tabular-nums inline-block min-w-8"
+      :aria-label="
+        valueTextClickable ? (props.editable ? '输入精确数值' : `恢复默认值 ${defaultDisplayText}`) : undefined
+      "
       :class="
         valueTextClickable
           ? props.editable
-            ? 'cursor-text hover:text-primary'
-            : 'cursor-pointer hover:text-primary'
+            ? 'hover:text-primary cursor-text'
+            : 'hover:text-primary cursor-pointer'
           : ''
       "
       :role="valueTextClickable ? 'button' : undefined"
       :tabindex="valueTextClickable ? 0 : -1"
-      :aria-label="
-        valueTextClickable ? (props.editable ? '输入精确数值' : `恢复默认值 ${defaultDisplayText}`) : undefined
-      "
       :title="valueTextClickable ? (props.editable ? '点击输入精确数值' : '点击恢复默认值') : ''"
       @click="handleReadoutClick"
       @keydown.enter.prevent="handleReadoutClick"
       @keydown.space.prevent="handleReadoutClick"
+      class="text-2xs text-text-title inline-block min-w-8 rounded-sm text-center font-mono font-bold tabular-nums"
     >
       {{ singleDisplayText }}
     </span>
 
     <span
       v-if="label && labelPosition === 'right' && !vertical"
-      class="text-2xs font-semibold text-text-disabled whitespace-nowrap px-xs"
       :class="disabled ? 'cursor-not-allowed' : ''"
+      class="text-2xs text-text-disabled px-xs font-semibold whitespace-nowrap"
     >
       {{ label }}
     </span>
   </div>
 </template>
 
-<script setup lang="ts" generic="R extends boolean = false">
-import { type FormComponentWidth, resolveComponentWidth } from '@/utils/core/constants';
-import { Minus, Plus } from '@lucide/vue';
+<script generic="R extends boolean = false" lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+
+import BaseIcon from '@/components/ui/BaseIcon.vue';
+import { resolveComponentWidth, type FormComponentWidth } from '@/utils/core/constants';
 
 /** 滑块值的内部统一视图：R 未解析时条件类型无法直接收窄，读写在别名处集中断言 */
 type SliderValue = number | [number, number];

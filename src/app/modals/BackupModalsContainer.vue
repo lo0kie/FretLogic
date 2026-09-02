@@ -1,52 +1,52 @@
 <template>
   <BaseModal
     v-model:visible="backupModals.modals.export"
-    title="导出备份"
     :confirm-button-disabled="!hasExportSelection"
     @confirm="backupModals.handleExportConfirm"
+    title="导出备份"
   >
     <template #header-extra>
       <ActionButton
-        size="sm"
-        :variant="isExportAll ? 'subtle' : 'ghost'"
         :color="isExportAll ? 'primary' : 'default'"
+        :variant="isExportAll ? 'subtle' : 'ghost'"
         @click="backupModals.handleExportSelectAll"
+        size="sm"
       >
         全选
       </ActionButton>
     </template>
-    <div class="flex flex-col gap-md py-xs">
+    <div class="gap-md py-xs flex flex-col">
       <BaseFormRow
-        label="和弦库"
-        :label-width="FORM_LABEL_WIDTH"
-        :help="`全部分组与和弦（当前 ${exportStats.groupCount} 组 / ${exportStats.chordCount} 个）`"
         :disabled="!exportAvailability.chords"
+        :help="`全部分组与和弦（当前 ${exportStats.groupCount} 组 / ${exportStats.chordCount} 个）`"
+        :label-width="FORM_LABEL_WIDTH"
+        label="和弦库"
       >
         <BaseSwitch
           v-model="backupModals.modalData.exportSelection.chords"
-          aria-label="导出和弦库"
           :disabled="!exportAvailability.chords"
+          aria-label="导出和弦库"
         />
       </BaseFormRow>
 
       <BaseFormRow
-        label="乐谱库"
-        :label-width="FORM_LABEL_WIDTH"
-        :help="`全部乐谱（当前 ${exportStats.songCount} 份）`"
         :disabled="!exportAvailability.songs"
+        :help="`全部乐谱（当前 ${exportStats.songCount} 份）`"
+        :label-width="FORM_LABEL_WIDTH"
+        label="乐谱库"
       >
         <BaseSwitch
           v-model="backupModals.modalData.exportSelection.songs"
-          aria-label="导出乐谱库"
           :disabled="!exportAvailability.songs"
+          aria-label="导出乐谱库"
         />
       </BaseFormRow>
 
-      <BaseFormRow label="同步配置" :label-width="FORM_LABEL_WIDTH" help="云端同步的后端与账号信息">
+      <BaseFormRow :label-width="FORM_LABEL_WIDTH" help="云端同步的后端与账号信息" label="同步配置">
         <BaseSwitch v-model="backupModals.modalData.exportSelection.syncSettings" aria-label="导出同步配置" />
       </BaseFormRow>
 
-      <BaseFormRow label="偏好设置" :label-width="FORM_LABEL_WIDTH" help="工作台与乐谱的乐理显示偏好">
+      <BaseFormRow :label-width="FORM_LABEL_WIDTH" help="工作台与乐谱的乐理显示偏好" label="偏好设置">
         <BaseSwitch v-model="backupModals.modalData.exportSelection.preferences" aria-label="导出偏好设置" />
       </BaseFormRow>
     </div>
@@ -54,84 +54,85 @@
 
   <BaseModal
     v-model:visible="backupModals.modals.import"
-    title="导入备份"
-    confirm-type="danger"
     :confirm-button-disabled="!hasImportSelection"
     @confirm="backupModals.handleImportConfirm"
+    confirm-type="danger"
+    title="导入备份"
   >
     <template #header-extra>
       <ActionButton
-        size="sm"
-        :variant="isImportAll ? 'subtle' : 'ghost'"
         :color="isImportAll ? 'primary' : 'default'"
+        :variant="isImportAll ? 'subtle' : 'ghost'"
         @click="backupModals.handleImportSelectAll"
+        size="sm"
       >
         全选
       </ActionButton>
     </template>
-    <div class="flex flex-col gap-md py-xs">
+    <div class="gap-md py-xs flex flex-col">
       <BaseFormRow
-        label="和弦库"
-        :label-width="FORM_LABEL_WIDTH"
-        :help="`备份包含 ${importStats?.groupCount ?? 0} 组 / ${importStats?.chordCount ?? 0} 个和弦`"
         :disabled="!importAvailability.chords"
+        :help="`备份包含 ${importStats?.groupCount ?? 0} 组 / ${importStats?.chordCount ?? 0} 个和弦`"
+        :label-width="FORM_LABEL_WIDTH"
+        label="和弦库"
       >
         <BaseSwitch
           v-model="backupModals.modalData.importSelection.chords"
-          aria-label="导入和弦库"
           :disabled="!importAvailability.chords"
+          aria-label="导入和弦库"
         />
       </BaseFormRow>
 
       <BaseFormRow
-        label="乐谱库"
-        :label-width="FORM_LABEL_WIDTH"
-        :help="`备份包含 ${importStats?.songCount ?? 0} 份乐谱`"
         :disabled="!importAvailability.songs"
+        :help="`备份包含 ${importStats?.songCount ?? 0} 份乐谱`"
+        :label-width="FORM_LABEL_WIDTH"
+        label="乐谱库"
       >
         <BaseSwitch
           v-model="backupModals.modalData.importSelection.songs"
-          aria-label="导入乐谱库"
           :disabled="!importAvailability.songs"
+          aria-label="导入乐谱库"
         />
       </BaseFormRow>
 
       <BaseFormRow
-        label="同步配置"
-        :label-width="FORM_LABEL_WIDTH"
-        :help="`云端后端：${importStats?.syncTargetLabel ?? '-'}（含凭据）`"
         :disabled="!importAvailability.syncSettings"
+        :help="`云端后端：${importStats?.syncTargetLabel ?? '-'}（含凭据）`"
+        :label-width="FORM_LABEL_WIDTH"
+        label="同步配置"
       >
         <BaseSwitch
           v-model="backupModals.modalData.importSelection.syncSettings"
-          aria-label="导入同步配置"
           :disabled="!importAvailability.syncSettings"
+          aria-label="导入同步配置"
         />
       </BaseFormRow>
 
       <BaseFormRow
-        label="偏好设置"
+        :disabled="!importAvailability.preferences"
         :label-width="FORM_LABEL_WIDTH"
         help="工作台与乐谱的乐理显示偏好"
-        :disabled="!importAvailability.preferences"
+        label="偏好设置"
       >
         <BaseSwitch
           v-model="backupModals.modalData.importSelection.preferences"
-          aria-label="导入偏好设置"
           :disabled="!importAvailability.preferences"
+          aria-label="导入偏好设置"
         />
       </BaseFormRow>
     </div>
   </BaseModal>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { inject } from 'vue';
+
 import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseFormRow from '@/components/ui/BaseFormRow.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BaseSwitch from '@/components/ui/BaseSwitch.vue';
 import type { useBackupModals } from '@/shared/composables/useBackupModals';
-import { inject } from 'vue';
 
 type BackupModals = ReturnType<typeof useBackupModals>;
 const backupModals = inject<BackupModals>('backupModals')!;

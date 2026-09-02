@@ -1,6 +1,7 @@
-﻿import BaseFormRow from '@/components/ui/BaseFormRow.vue';
-import { mount } from '@vue/test-utils';
+﻿import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+
+import BaseFormRow from '@/components/ui/BaseFormRow.vue';
 
 describe('BaseFormRow component', () => {
   it('renders label and control correctly', () => {

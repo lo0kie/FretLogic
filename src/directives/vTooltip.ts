@@ -1,6 +1,5 @@
-import { TOOLTIP_HIDE_CLEANUP_DELAY_MS, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS } from '@/utils/core/constants';
-import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
-import { acquireFloatingZ, releaseFloatingZ } from '@/utils/ui/floatingZ';
+import type { Directive } from 'vue';
+
 import {
   autoUpdate,
   computePosition,
@@ -10,7 +9,11 @@ import {
   shift,
   type Placement,
 } from '@floating-ui/dom';
-import type { Directive } from 'vue';
+
+import { TOOLTIP_HIDE_CLEANUP_DELAY_MS, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS } from '@/utils/core/constants';
+import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
+import { acquireFloatingZ, releaseFloatingZ } from '@/utils/ui/floatingZ';
+
 import './vTooltip.scss';
 
 export interface TooltipOptions {

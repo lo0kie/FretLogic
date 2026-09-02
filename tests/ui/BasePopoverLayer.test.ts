@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
 import { defineComponent, nextTick, ref, type Ref } from 'vue';
+
 import { mount } from '@vue/test-utils';
+import { describe, expect, it, vi } from 'vitest';
+
 import BasePopover from '@/components/ui/BasePopover.vue';
 
 /**

@@ -1,22 +1,22 @@
 <template>
-  <Teleport :to="teleportTo" :disabled="disabledTeleport">
+  <Teleport :disabled="disabledTeleport" :to="teleportTo">
     <Transition
       :name="transitionName"
-      appear
-      @before-enter="el => emit('before-enter', el)"
-      @enter="el => emit('enter', el)"
       @after-enter="el => emit('after-enter', el)"
-      @before-leave="el => emit('before-leave', el)"
-      @leave="el => emit('leave', el)"
       @after-leave="el => emit('after-leave', el)"
+      @before-enter="el => emit('before-enter', el)"
+      @before-leave="el => emit('before-leave', el)"
+      @enter="el => emit('enter', el)"
+      @leave="el => emit('leave', el)"
+      appear
     >
       <div
         v-if="isBarVisible"
-        class="fixed flex items-center pointer-events-auto gap-sm py-sm px-md bg-bg-panel/95 backdrop-blur-xl border border-glass-border rounded-full shadow-floating box-border w-max max-w-[calc(100vw-2rem)] transition-[background-color,border-color,box-shadow,bottom] duration-slow ease-sidebar hover:ring-2 hover:ring-primary/70"
+        :aria-label="ariaLabel ?? '浮动操作栏'"
         :class="[alignClass, zIndexClass]"
         :style="outerStyle"
+        class="gap-sm py-sm px-md bg-bg-panel/95 border-glass-border shadow-floating duration-slow ease-sidebar hover:ring-primary/70 pointer-events-auto fixed box-border flex w-max max-w-[calc(100vw-2rem)] items-center rounded-full border backdrop-blur-xl transition-[background-color,border-color,box-shadow,bottom] hover:ring-2"
         role="toolbar"
-        :aria-label="ariaLabel ?? '浮动操作栏'"
         tabindex="-1"
       >
         <slot :divider="FloatingBarDivider" />
@@ -25,7 +25,7 @@
   </Teleport>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
 import { computed, defineComponent, h, onActivated, onDeactivated, ref } from 'vue';
 
 const props = withDefaults(

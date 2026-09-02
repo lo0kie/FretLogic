@@ -1,8 +1,10 @@
 /* eslint-disable vue/one-component-per-file */
-import { vWheelScroll } from '@/directives/vWheelScroll';
+import { defineComponent } from 'vue';
+
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
+
+import { vWheelScroll } from '@/directives/vWheelScroll';
 
 describe('vWheelScroll directive', () => {
   it('converts vertical wheel event to horizontal scroll on scrollable container', async () => {

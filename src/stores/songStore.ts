@@ -2,16 +2,18 @@
  * 歌曲 store：歌曲列表的加载、增删改与分片持久化（localStorage 按歌曲单键存储）。
  * 提供和弦引用反查倒排索引；旧版单键（SONGS）数据在首次加载时自动迁移后清除。
  */
+import { computed, ref, watch } from 'vue';
+
+import { useEventListener } from '@vueuse/core';
+import { defineStore } from 'pinia';
+
 import { createSongRepository } from '@/services/repositories';
 import { sanitizePersistedData } from '@/services/validation/persistedData';
 import type { ChordId, SlotKey, Song } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { compareByPinyin, pinyinReady, preloadPinyin } from '@/utils/core/pinyin';
-import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/score/chordSlots';
 import { createSong as createSongEntity } from '@/utils/music/entityFactories';
-import { useEventListener } from '@vueuse/core';
-import { defineStore } from 'pinia';
-import { computed, ref, watch } from 'vue';
+import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/score/chordSlots';
 
 const FLUSH_DELAY = 400;
 const FLUSH_MAX_WAIT = 1500;

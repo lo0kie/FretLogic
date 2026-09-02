@@ -1,53 +1,72 @@
 <template>
   <div
-    class="transition-[width,min-width] duration-slow ease-sidebar"
     :class="effectiveExpanded ? 'w-[19rem] min-w-[19rem]' : 'w-[14rem] min-w-[14rem]'"
+    class="duration-slow ease-sidebar transition-[width,min-width]"
   >
     <div
-      class="@container relative w-full h-auto p-3 bg-bg-panel border border-glass-border rounded-lg flex flex-col z-panel pointer-events-auto box-border overflow-hidden [container-type:inline-size]"
+      class="bg-bg-panel border-glass-border z-panel @container pointer-events-auto relative box-border flex h-auto w-full flex-col overflow-hidden rounded-lg border p-3"
     >
       <div
-        class="flex items-center justify-between gap-2 shrink-0 border-b transition-[border-color,padding-bottom] duration-slow ease-sidebar"
-        :class="effectiveExpanded ? 'pb-1.5 border-border-light' : 'pb-0 border-transparent'"
+        :class="effectiveExpanded ? 'border-border-light pb-1.5' : 'border-transparent pb-0'"
+        class="duration-slow ease-sidebar flex shrink-0 items-center justify-between gap-2 border-b transition-[border-color,padding-bottom]"
       >
         <div
-          class="group flex items-center gap-1.5 -ml-1 pl-1 pr-1.5 py-0.5 rounded-md cursor-pointer hover:bg-bg-panel-hover/50 transition-colors"
-          role="button"
-          :tabindex="0"
           :aria-expanded="effectiveExpanded"
           :aria-label="effectiveExpanded ? '收起和弦分析面板' : '展开和弦分析面板'"
+          :tabindex="0"
           @click="toggleCollapse"
           @keydown.enter.prevent="toggleCollapse"
           @keydown.space.prevent="toggleCollapse"
+          class="group hover:bg-bg-panel-hover/50 -ml-1 flex cursor-pointer items-center gap-1.5 rounded-md py-0.5 pr-1.5 pl-1 transition-colors"
+          role="button"
         >
-          <div class="flex items-center justify-center w-5 h-5 rounded-md bg-tint-primary-88 text-primary">
-            <Sparkles class="group-hover:hidden" :size="13" :stroke-width="2.5" />
-            <Minimize2 v-if="effectiveExpanded" class="hidden group-hover:block" :size="13" :stroke-width="2.5" />
-            <Maximize2 v-else class="hidden group-hover:block" :size="13" :stroke-width="2.5" />
+          <div
+            class="bg-tint-primary-88 text-primary relative flex h-5 w-5 items-center justify-center overflow-hidden rounded-md"
+          >
+            <BaseIcon
+              :size="13"
+              :stroke-width="2.5"
+              class="duration-fast pointer-events-none absolute transition-all group-hover:scale-50 group-hover:opacity-0"
+              name="sparkles"
+            />
+            <BaseIcon
+              v-if="effectiveExpanded"
+              :size="13"
+              :stroke-width="2.5"
+              class="duration-fast pointer-events-none absolute scale-50 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100"
+              name="minimize-2"
+            />
+            <BaseIcon
+              v-else
+              :size="13"
+              :stroke-width="2.5"
+              class="duration-fast pointer-events-none absolute scale-50 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100"
+              name="maximize-2"
+            />
           </div>
-          <span class="text-xs font-extrabold text-text-title tracking-tight">和弦分析</span>
+          <span class="text-text-title text-xs font-extrabold tracking-tight">和弦分析</span>
         </div>
       </div>
 
       <!-- 内容区高度动画：测量内容真实高度写入 height 并过渡。
            覆盖展开/收起以及内容自身尺寸变化（音符增减、候选徽标换行等）——
            grid-template-rows 0fr↔1fr 只能处理显示/隐藏，内容尺寸变化时行高恒为 1fr 不会触发过渡 -->
-      <div class="overflow-hidden transition-[height] duration-base ease-sidebar" :style="{ height: bodyHeight }">
+      <div :style="{ height: bodyHeight }" class="duration-base ease-sidebar overflow-hidden transition-[height]">
         <!-- 被测量内容宽度始终锁定为展开态内容区宽度（19rem - 卡片左右内边距 p-3 共 1.5rem），
              宽度动画期间不随面板伸缩而重排/压窄 → useAutoHeight 测得高度稳定、不抖动；
              分析面板内容为流体布局，若按收起态 12.5rem 渲染会被挤压变形，故始终按展开宽度渲染、
              靠外层 overflow-hidden 裁切。横按面板则额外用 flex justify-center 让指板居中、不漂移 -->
-        <div ref="bodyContentRef" class="w-[calc(19rem-1.5rem)]">
+        <div class="w-[calc(19rem-1.5rem)]" ref="bodyContentRef">
           <Transition mode="out-in">
-            <div v-if="isExpanded" key="content" class="pt-2">
+            <div v-if="isExpanded" class="pt-2" key="content">
               <ChordAnalysisContent
-                :candidates="analysis.candidates"
                 :active-chord-name="getChordName(editorStore.draftChord)"
+                :candidates="analysis.candidates"
                 :notes="analysis.notes"
                 @select-candidate="handleSelectCandidate"
               />
             </div>
-            <p v-else-if="effectiveExpanded" key="empty" class="form-hint pt-2">
+            <p v-else-if="effectiveExpanded" class="form-hint pt-2" key="empty">
               在指板上按出音符后，这里会显示和弦名称与候选分析。
             </p>
           </Transition>
@@ -57,13 +76,13 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { useAutoHeight } from '@/shared/composables/useAutoHeight';
+<script lang="ts" setup>
+import { computed, useTemplateRef } from 'vue';
+
+import { useStorage } from '@vueuse/core';
+
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 import { analyzeChordGraph } from '@/services/music/chordEngine';
-import { useChordEditorStore } from '@/stores/chordEditorStore';
-import type { CandidateResult } from '@/types/engine.ts';
-import { STORAGE_KEYS } from '@/utils/core/constants';
-import { toStringIndex } from '@/utils/music/chord-fretboard';
 import {
   calcPitchIndex,
   canTogglePitchAccidental,
@@ -71,10 +90,13 @@ import {
   getChordName,
   nameToSegments,
   segmentsToString,
-} from '@/utils/music/musicTheory';
-import { Maximize2, Minimize2, Sparkles } from '@lucide/vue';
-import { useStorage } from '@vueuse/core';
-import { computed, useTemplateRef } from 'vue';
+} from '@/services/music/theory';
+import { useAutoHeight } from '@/shared/composables/useAutoHeight';
+import { useChordEditorStore } from '@/stores/chordEditorStore';
+import type { CandidateResult } from '@/types/engine.ts';
+import { STORAGE_KEYS } from '@/utils/core/constants';
+import { toStringIndex } from '@/utils/music/chord-fretboard';
+
 import ChordAnalysisContent, { type RenderNoteItem } from './ChordAnalysisContent.vue';
 
 const editorStore = useChordEditorStore();

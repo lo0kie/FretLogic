@@ -1,43 +1,43 @@
 <template>
-  <div class="w-full box-border">
+  <div class="box-border w-full">
     <ContextMenu :items="menuItems" #="{ isOpen }">
-      <div class="w-full" :title="getChordName(activeChord, { shorthand: settingsStore.workbenchChordShorthand })">
+      <div :title="getChordName(activeChord, { shorthand: settingsStore.workbenchChordShorthand })" class="w-full">
         <div
           v-wave
-          class="w-full h-[2.2rem] px-2 flex items-center justify-between relative box-border cursor-pointer rounded-md outline-none transition-all duration-fast bg-bg-body border border-border-light hover:bg-bg-panel-hover hover:border-border-base active:bg-bg-panel-hover active:border-border-base"
+          :aria-label
+          :aria-pressed="isActive"
           :class="{
-            '!bg-tint-primary-92 !border-tint-primary-45 shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.25)] hover:!bg-tint-primary-80 hover:!border-primary hover:shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.4)]':
+            'bg-tint-primary-92! border-tint-primary-45! hover:bg-tint-primary-80! hover:border-primary! shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.25)] hover:shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.4)]':
               isActive,
             'bg-bg-panel-hover border-border-base': isOpen,
           }"
-          role="button"
-          tabindex="0"
-          :aria-pressed="isActive"
-          :aria-label
-          data-focusable-inline
           @click="handleCardClick"
-          @wheel="handleWheelScroll"
           @keydown.enter.prevent.stop="handleCardClick"
           @keydown.space.prevent.stop="handleCardClick"
+          @wheel="handleWheelScroll"
+          class="duration-fast bg-bg-body border-border-light hover:bg-bg-panel-hover hover:border-border-base active:bg-bg-panel-hover active:border-border-base relative box-border flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border px-2 transition-all outline-none"
+          data-focusable-inline
+          role="button"
+          tabindex="0"
         >
           <BaseBadge
             v-if="cardData.hasVariants"
-            :variant="isActive ? 'primary' : 'neutral'"
-            appearance="filled"
-            size="xs"
-            class="absolute -top-1.5 -right-1.5 z-card border border-bg-body shadow-sm cursor-pointer transition-all duration-fast ease-bounce"
             :title="isActive ? '滚轮切换指法' : undefined"
+            :variant="isActive ? 'primary' : 'neutral'"
             @click.stop="toggleVariantsDropdown"
+            appearance="filled"
+            class="z-card border-bg-body duration-fast ease-bounce absolute -top-1.5 -right-1.5 cursor-pointer border shadow-sm transition-all"
+            size="xs"
           >
             <span v-if="isActive"> {{ activeVariantIndex + 1 }}/{{ cardData.variantCount }} </span>
             <span v-else> {{ cardData.variantCount }} </span>
           </BaseBadge>
 
-          <div v-marquee class="flex-1 min-w-0">
+          <div v-marquee class="min-w-0 flex-1">
             <span
               v-chord-name="{ chord: activeChord, shorthand: settingsStore.workbenchChordShorthand }"
-              class="text-xs font-bold tracking-tight pointer-events-none"
               :class="isActive ? 'text-primary' : 'text-text-body'"
+              class="pointer-events-none text-xs font-bold tracking-tight"
             />
           </div>
         </div>
@@ -46,17 +46,17 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, ref } from 'vue';
+
 import BaseBadge from '@/components/ui/BaseBadge.vue';
 import ContextMenu from '@/components/ui/context-menu/ContextMenu.vue';
 import type { ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
+import { getChordName } from '@/services/music/theory';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSongStore } from '@/stores/songStore';
 import type { Chord, GroupedChordCard } from '@/types';
-import { getChordName } from '@/utils/music/musicTheory';
-import { Link2, Move, Trash2 } from '@lucide/vue';
-import { computed, ref } from 'vue';
 
 const props = defineProps<{
   cardData: GroupedChordCard;
@@ -142,18 +142,18 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   return [
     {
       label: '移动分组',
-      icon: Move,
+      icon: 'move',
       action: () => emit('move', activeChord.value),
     },
     {
       label: '引用反查',
-      icon: Link2,
+      icon: 'link-2',
       disabled: !hasReferences,
       action: () => emit('open-references', props.cardData),
     },
     {
       label: '删除和弦',
-      icon: Trash2,
+      icon: 'trash-2',
       danger: true,
       action: () => {
         if (props.cardData.hasVariants) {

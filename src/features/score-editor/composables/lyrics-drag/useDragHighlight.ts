@@ -3,6 +3,7 @@
  * 以及落点分区（上下两块，对应不同落地动作）判定。
  */
 import { ref } from 'vue';
+
 import { resolveDropZone, type DropZone } from './dropZone';
 
 /** 拖拽高亮管理：源槽位与落点槽位的 DOM class 标记及落点分区判定 */

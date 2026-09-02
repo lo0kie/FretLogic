@@ -1,66 +1,66 @@
 <template>
-  <BaseFloatingBar :visible bottom="1.8rem" #="{ divider }">
-    <div class="bar-info-zone flex items-center gap-sm text-xs font-semibold text-text-title min-w-0">
+  <BaseFloatingBar :visible #="{ divider }" bottom="1.8rem">
+    <div class="bar-info-zone gap-sm text-text-title flex min-w-0 items-center text-xs font-semibold">
       <BaseBadge
-        :variant="selectedCount > 0 ? 'primary' : 'neutral'"
         :appearance="selectedCount > 0 ? 'filled' : 'subtle'"
+        :variant="selectedCount > 0 ? 'primary' : 'neutral'"
         size="xs"
         width="1.5rem"
       >
         {{ selectedCount }}
       </BaseBadge>
 
-      <span class="selected-text-tip text-text-title whitespace-nowrap shrink-0">
+      <span class="selected-text-tip text-text-title shrink-0 whitespace-nowrap">
         {{ selectedCount > 0 ? '已选择歌词' : '请选择歌词' }}
       </span>
 
       <div
         v-wheel-scroll.smooth
-        class="clickable-indices-list no-scrollbar flex items-center gap-xs w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] min-h-[1.75rem] box-border overflow-x-auto overflow-y-hidden whitespace-nowrap shrink-0 py-1 px-1.5"
+        class="clickable-indices-list no-scrollbar gap-xs box-border flex min-h-[1.75rem] w-[7.5rem] max-w-[7.5rem] min-w-[7.5rem] shrink-0 items-center overflow-x-auto overflow-y-hidden px-1.5 py-1 whitespace-nowrap"
       >
         <BaseBadge
           v-for="lineIdx in sortedIndices"
-          :key="lineIdx"
           :content="lineIdx + 1"
-          variant="primary"
-          appearance="subtle"
-          size="xs"
-          width="1.5rem"
-          hover-close
-          title="点击取消选择该行"
+          :key="lineIdx"
           @click="emit('remove-index', lineIdx)"
+          appearance="subtle"
+          hover-close
+          size="xs"
+          title="点击取消选择该行"
+          variant="primary"
+          width="1.5rem"
         />
       </div>
     </div>
 
     <component :is="divider" />
 
-    <div class="bar-actions-zone flex items-center gap-sm shrink-0">
+    <div class="bar-actions-zone gap-sm flex shrink-0 items-center">
       <ActionButton
         v-tooltip="'选中所有歌词'"
-        size="sm"
-        :variant="isAllSelected ? 'subtle' : 'ghost'"
         :color="isAllSelected ? 'primary' : 'default'"
+        :variant="isAllSelected ? 'subtle' : 'ghost'"
         @click="emit('toggle-select-all')"
+        size="sm"
       >
         全选
       </ActionButton>
 
       <ActionButton
         v-tooltip="includeMetaTooltip"
+        :aria-label="includeMetaBar ? '关闭歌曲信息栏' : '开启歌曲信息栏'"
+        :color="includeMetaBar ? 'primary' : 'default'"
+        :variant="includeMetaBar ? 'subtle' : 'ghost'"
+        @click="includeMetaBar = !includeMetaBar"
         icon-only
         size="sm"
-        :variant="includeMetaBar ? 'subtle' : 'ghost'"
-        :color="includeMetaBar ? 'primary' : 'default'"
-        :aria-label="includeMetaBar ? '关闭歌曲信息栏' : '开启歌曲信息栏'"
-        @click="includeMetaBar = !includeMetaBar"
       >
-        <FileText :size="14" :stroke-width="2.5" />
+        <BaseIcon :size="14" :stroke-width="2.5" name="file-text" />
       </ActionButton>
 
-      <ActionButton size="sm" variant="subtle" :disabled="selectedCount === 0" @click="emit('open-export')">
+      <ActionButton :disabled="selectedCount === 0" @click="emit('open-export')" size="sm" variant="subtle">
         <template #prefix>
-          <Copy :size="14" :stroke-width="2.5" aria-hidden="true" />
+          <BaseIcon :size="14" :stroke-width="2.5" aria-hidden="true" name="copy" />
         </template>
         导出图片
       </ActionButton>
@@ -68,12 +68,13 @@
   </BaseFloatingBar>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed } from 'vue';
+
 import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseBadge from '@/components/ui/BaseBadge.vue';
 import BaseFloatingBar from '@/components/ui/BaseFloatingBar.vue';
-import { Copy, FileText } from '@lucide/vue';
-import { computed } from 'vue';
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 
 const {
   visible = true,

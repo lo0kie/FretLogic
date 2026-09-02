@@ -1,5 +1,6 @@
-import NProgress from 'nprogress';
 import { createRouter, createWebHashHistory } from 'vue-router';
+
+import NProgress from 'nprogress';
 
 NProgress.configure({ showSpinner: false });
 

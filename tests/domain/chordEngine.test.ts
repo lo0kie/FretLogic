@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { analyzeChordGraph } from '@/services/music/chordEngine';
 import type { NoteInput } from '@/types';
 

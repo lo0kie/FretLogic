@@ -1,66 +1,90 @@
 <template>
-  <Teleport to="body" :disabled="!teleport">
+  <Teleport :disabled="!teleport" to="body">
     <div
-      class="fixed z-toast flex flex-col pointer-events-none box-border gap-sm select-none"
       :class="positionClass"
       :style="positionStyle"
-      role="region"
+      @mouseenter="uiStore.pauseAllTimers"
+      @mouseleave="uiStore.resumeAllTimers"
       aria-label="系统通知"
       aria-live="polite"
       aria-relevant="additions text"
-      @mouseenter="uiStore.pauseAllTimers"
-      @mouseleave="uiStore.resumeAllTimers"
+      class="z-toast gap-sm pointer-events-none fixed box-border flex flex-col select-none"
+      role="region"
     >
       <TransitionGroup :name="transitionName">
         <div
           v-for="(item, index) in displayedToasts"
-          :key="item.id"
-          class="relative flex items-center gap-sm px-lg py-sm rounded-pill text-xs font-semibold shadow-md pointer-events-auto border border-glass-border box-border shrink-0 outline-none transition-all duration-base w-max max-w-[90vw]"
           :class="[
             TOAST_THEME_MAP[item.type] || TOAST_THEME_MAP.info,
-            item.description ? '!rounded-xl !items-start !py-md !w-auto' : 'whitespace-nowrap',
+            item.description ? 'py-md! w-auto! items-start! rounded-xl!' : 'whitespace-nowrap',
             stack && index < displayedToasts.length - 1 ? 'scale-[0.98] opacity-90' : '',
             item.customClass,
           ]"
+          :key="item.id"
           :role="item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'"
+          class="gap-sm px-lg py-sm rounded-pill border-glass-border duration-base pointer-events-auto relative box-border flex w-max max-w-[90vw] shrink-0 items-center border text-xs font-semibold shadow-md transition-all outline-none"
         >
-          <slot name="card" :item>
-            <div class="shrink-0 flex items-center justify-center pt-0.5" :class="{ '!pt-3xs': item.description }">
-              <slot name="icon" :item>
-                <Loader2 v-if="item.type === 'loading'" :size="16" class="opacity-80 animate-spin" aria-hidden="true" />
-                <CheckCircle2 v-else-if="item.type === 'success'" :size="16" class="opacity-90" aria-hidden="true" />
-                <AlertCircle v-else-if="item.type === 'error'" :size="16" class="opacity-90" aria-hidden="true" />
-                <AlertTriangle v-else-if="item.type === 'warning'" :size="16" class="opacity-90" aria-hidden="true" />
-                <Info v-else :size="16" class="opacity-80" aria-hidden="true" />
+          <slot :item name="card">
+            <div :class="{ 'pt-3xs!': item.description }" class="flex shrink-0 items-center justify-center pt-0.5">
+              <slot :item name="icon">
+                <BaseIcon
+                  v-if="item.type === 'loading'"
+                  :size="16"
+                  aria-hidden="true"
+                  class="animate-spin opacity-80"
+                  name="loader-2"
+                />
+                <BaseIcon
+                  v-else-if="item.type === 'success'"
+                  :size="16"
+                  aria-hidden="true"
+                  class="opacity-90"
+                  name="check-circle-2"
+                />
+                <BaseIcon
+                  v-else-if="item.type === 'error'"
+                  :size="16"
+                  aria-hidden="true"
+                  class="opacity-90"
+                  name="alert-circle"
+                />
+                <BaseIcon
+                  v-else-if="item.type === 'warning'"
+                  :size="16"
+                  aria-hidden="true"
+                  class="opacity-90"
+                  name="alert-triangle"
+                />
+                <BaseIcon v-else :size="16" aria-hidden="true" class="opacity-80" name="info" />
               </slot>
             </div>
 
             <div
-              class="flex flex-col shrink-0"
-              :class="item.description ? '!shrink !flex-1 min-w-0 max-w-sm' : 'whitespace-nowrap'"
+              :class="item.description ? 'max-w-sm min-w-0 flex-1! shrink!' : 'whitespace-nowrap'"
+              class="flex shrink-0 flex-col"
             >
-              <slot name="content" :item>
-                <span class="text-xs font-semibold leading-normal whitespace-nowrap">
+              <slot :item name="content">
+                <span class="text-xs leading-normal font-semibold whitespace-nowrap">
                   {{ item.msg }}
                 </span>
                 <span
                   v-if="item.description"
-                  class="text-2xs font-normal opacity-85 leading-relaxed mt-2xs whitespace-normal break-words"
+                  class="text-2xs mt-2xs leading-relaxed font-normal wrap-break-word whitespace-normal opacity-85"
                 >
                   {{ item.description }}
                 </span>
               </slot>
             </div>
 
-            <slot name="action" :item>
+            <slot :item name="action">
               <button
                 v-if="item.onAction"
                 v-wave
-                type="button"
-                class="font-bold underline text-xs ml-sm opacity-90 bg-transparent border-none p-0 text-inherit cursor-pointer outline-none rounded-sm hover:opacity-100 shrink-0 self-center whitespace-nowrap"
                 :aria-label="`${item.actionText ?? '确定'}操作`"
-                data-focusable-inline
                 @click="handleExecuteAction(item)"
+                class="ml-sm shrink-0 cursor-pointer self-center rounded-sm border-none bg-transparent p-0 text-xs font-bold whitespace-nowrap text-inherit underline opacity-90 outline-none hover:opacity-100"
+                data-focusable-inline
+                type="button"
               >
                 {{ item.actionText }}
               </button>
@@ -69,15 +93,15 @@
             <button
               v-if="item.closable"
               v-wave
-              type="button"
-              class="shrink-0 ml-xs flex items-center justify-center bg-transparent border-none rounded-full text-current opacity-50 cursor-pointer p-2xs outline-none hover:opacity-100 transition-opacity self-center"
-              :class="{ '!self-start !pt-3xs': item.description }"
-              title="关闭"
-              aria-label="关闭通知"
-              data-focusable-inline
+              :class="{ 'pt-3xs! self-start!': item.description }"
               @click="uiStore.removeToast(item.id)"
+              aria-label="关闭通知"
+              class="ml-xs p-2xs flex shrink-0 cursor-pointer items-center justify-center self-center rounded-full border-none bg-transparent text-current opacity-50 transition-opacity outline-none hover:opacity-100"
+              data-focusable-inline
+              title="关闭"
+              type="button"
             >
-              <X :size="14" :stroke-width="2.5" aria-hidden="true" />
+              <BaseIcon :size="14" :stroke-width="2.5" aria-hidden="true" name="x" />
             </button>
           </slot>
         </div>
@@ -86,11 +110,12 @@
   </Teleport>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed } from 'vue';
+
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 import { useUiStore } from '@/stores/uiStore';
 import type { Toast, ToastType } from '@/types';
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, Loader2, X } from '@lucide/vue';
-import { computed } from 'vue';
 
 type ToastPosition = 'top-center' | 'top-right' | 'top-left' | 'bottom-center' | 'bottom-right' | 'bottom-left';
 

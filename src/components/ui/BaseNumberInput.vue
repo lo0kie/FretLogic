@@ -1,32 +1,32 @@
 <template>
   <div
-    ref="wrapperRef"
-    class="group inline-flex items-center justify-between bg-bg-body border border-border-light rounded-full box-border select-none transition-all duration-fast hover:border-border-base focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/70"
+    :aria-disabled="disabled || undefined"
+    :aria-valuemax="max"
+    :aria-valuemin="min"
+    :aria-valuenow="modelValue"
+    :aria-valuetext="displayText"
     :class="[currentConfig.wrapperClass, { 'w-full': resolvedWidth === '100%' }]"
     :style="resolvedWidth ? { width: resolvedWidth } : undefined"
-    role="spinbutton"
-    :aria-valuenow="modelValue"
-    :aria-valuemin="min"
-    :aria-valuemax="max"
-    :aria-valuetext="displayText"
-    :aria-disabled="disabled || undefined"
     :tabindex="disabled ? -1 : 0"
-    @wheel="handleWheel"
     @keydown="handleWrapperKeydown"
+    @wheel="handleWheel"
+    class="group bg-bg-body border-border-light duration-fast hover:border-border-base focus-within:border-primary focus-within:ring-primary/70 box-border inline-flex items-center justify-between rounded-full border transition-all select-none focus-within:ring-2"
+    ref="wrapperRef"
+    role="spinbutton"
   >
     <button
       v-wave="{ disabled }"
-      type="button"
-      tabindex="-1"
-      aria-label="减少数值"
-      class="border-none bg-transparent font-extrabold text-text-muted group-hover:enabled:text-text-title cursor-pointer rounded-full flex items-center justify-center p-0 outline-none transition-all duration-fast active:enabled:scale-90 hover:enabled:bg-bg-panel-hover disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
       :class="currentConfig.btnClass"
       :disabled="disabled || (modelValue <= min && !loopable)"
-      @pointerdown="startContinuousStep(-1, $event)"
-      @pointerup="stopContinuousStep"
-      @pointerleave="stopContinuousStep"
-      @pointercancel="stopContinuousStep"
       @click.prevent
+      @pointercancel="stopContinuousStep"
+      @pointerdown="startContinuousStep(-1, $event)"
+      @pointerleave="stopContinuousStep"
+      @pointerup="stopContinuousStep"
+      aria-label="减少数值"
+      class="text-text-muted group-hover:enabled:text-text-title duration-fast hover:enabled:bg-bg-panel-hover flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold transition-all outline-none active:enabled:scale-90 disabled:cursor-not-allowed disabled:opacity-30"
+      tabindex="-1"
+      type="button"
     >
       <slot name="minus">
         {{ minusText }}
@@ -35,55 +35,56 @@
 
     <input
       v-if="editable && isEditing"
-      ref="inputRef"
       v-model="tempValue"
-      type="text"
-      inputmode="numeric"
-      :placeholder
-      class="font-bold text-primary text-center bg-transparent border-none outline-none p-0 m-0 font-[inherit] box-border [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none flex-1 w-0"
       :class="currentConfig.textClass"
+      :placeholder
       @blur="commitInput"
       @keydown.enter="commitInput"
       @keydown.esc="cancelInput"
+      class="text-primary m-0 box-border w-0 flex-1 [appearance:textfield] border-none bg-transparent p-0 text-center font-[inherit] font-bold outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      inputmode="numeric"
+      ref="inputRef"
+      type="text"
     />
     <span
       v-else
-      class="font-bold text-center whitespace-nowrap outline-none flex-1 w-0"
       :class="[
         currentConfig.textClass,
         disabled
           ? 'text-text-disabled cursor-not-allowed'
           : editable
-            ? 'text-text-title cursor-pointer hover:text-primary'
+            ? 'text-text-title hover:text-primary cursor-pointer'
             : 'text-text-title',
       ]"
       @click="startEditing"
+      class="w-0 flex-1 text-center font-bold whitespace-nowrap outline-none"
     >
       {{ displayText }}
     </span>
 
     <button
       v-wave="{ disabled }"
-      type="button"
-      tabindex="-1"
-      aria-label="增加数值"
-      class="border-none bg-transparent font-extrabold text-text-muted group-hover:enabled:text-text-title cursor-pointer rounded-full flex items-center justify-center p-0 outline-none transition-all duration-fast active:enabled:scale-90 hover:enabled:bg-bg-panel-hover disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
       :class="currentConfig.btnClass"
       :disabled="disabled || (modelValue >= max && !loopable)"
-      @pointerdown="startContinuousStep(1, $event)"
-      @pointerup="stopContinuousStep"
-      @pointerleave="stopContinuousStep"
-      @pointercancel="stopContinuousStep"
       @click.prevent
+      @pointercancel="stopContinuousStep"
+      @pointerdown="startContinuousStep(1, $event)"
+      @pointerleave="stopContinuousStep"
+      @pointerup="stopContinuousStep"
+      aria-label="增加数值"
+      class="text-text-muted group-hover:enabled:text-text-title duration-fast hover:enabled:bg-bg-panel-hover flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold transition-all outline-none active:enabled:scale-90 disabled:cursor-not-allowed disabled:opacity-30"
+      tabindex="-1"
+      type="button"
     >
       <slot name="plus"> {{ plusText }} </slot>
     </button>
   </div>
 </template>
 
-<script setup lang="ts">
-import { type FormComponentWidth, resolveComponentWidth } from '@/utils/core/constants';
+<script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+
+import { resolveComponentWidth, type FormComponentWidth } from '@/utils/core/constants';
 
 const props = withDefaults(
   defineProps<{

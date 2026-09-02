@@ -1,41 +1,47 @@
 <template>
   <div
-    role="status"
-    aria-live="polite"
-    class="empty-state-wrapper flex flex-col items-center justify-center w-full h-full box-border select-none text-center"
     :class="[
       sizeClass,
       gapClass,
-      { 'is-bordered border border-dashed border-border-light rounded-md bg-bg-body': bordered },
+      { 'is-bordered border-border-light bg-bg-body rounded-md border border-dashed': bordered },
     ]"
+    aria-live="polite"
+    class="empty-state-wrapper box-border flex h-full w-full flex-col items-center justify-center text-center select-none"
+    role="status"
   >
-    <div class="icon-zone text-text-disabled opacity-80 shrink-0" :class="zoneClass">
-      <slot name="icon" :size="iconSize">
+    <div :class="zoneClass" class="icon-zone text-text-disabled shrink-0 opacity-80">
+      <slot :size="iconSize" name="icon">
         <img
           v-if="image && !isImageError"
           :src="image"
-          class="max-w-[8rem] max-h-28 object-contain"
+          @error="isImageError = true"
           alt=""
           aria-hidden="true"
-          @error="isImageError = true"
+          class="max-h-28 max-w-[8rem] object-contain"
         />
-        <component :is="resolvedIcon" v-else :size="iconSize" :stroke-width="1.8" class="empty-icon" />
+        <BaseIcon
+          v-else-if="typeof resolvedIcon === 'string'"
+          :name="resolvedIcon"
+          :size="iconSize"
+          class="empty-icon"
+        />
+        <component v-else :is="resolvedIcon" :size="iconSize" class="empty-icon" />
       </slot>
     </div>
 
     <div v-if="hasText" class="text-zone flex flex-col items-center gap-1">
       <div
         v-if="title || $slots['title']"
-        class="title-text text-text-title leading-tight max-w-[18rem] break-words"
         :class="titleClass"
+        class="title-text text-text-title max-w-[18rem] leading-tight wrap-break-word"
       >
         <slot name="title"> {{ title }} </slot>
       </div>
 
       <div
         v-if="resolvedDescription || $slots['default']"
-        class="description-text text-text-disabled font-medium leading-relaxed max-w-[22rem] break-words"
         :class="descriptionClass"
+        class="description-text text-text-disabled max-w-[22rem] leading-relaxed font-medium wrap-break-word"
       >
         <slot> {{ resolvedDescription }} </slot>
       </div>
@@ -45,11 +51,11 @@
       <slot name="action">
         <ActionButton
           v-if="actionText"
-          :variant="actionVariant"
           :color="actionColor"
-          :size="actionBtnSize"
-          :loading="actionLoading"
           :disabled="actionLoading"
+          :loading="actionLoading"
+          :size="actionBtnSize"
+          :variant="actionVariant"
           @click="emit('action')"
         >
           {{ actionText }}
@@ -59,9 +65,12 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { FileQuestion, Inbox, SearchX, WifiOff } from '@lucide/vue';
+<script lang="ts" setup>
 import { computed, ref, watch, type Component } from 'vue';
+
+import BaseIcon from '@/components/ui/BaseIcon.vue';
+import type { IconName } from '@/components/ui/icons.registry';
+
 import ActionButton from './ActionButton.vue';
 
 type EmptyType = 'empty' | '404' | 'network' | 'search';
@@ -70,8 +79,8 @@ const props = withDefaults(
   defineProps<{
     /** 预设状态场景类型：empty 缺省 | 404 未找到 | network 网络错误 | search 搜索无结果 */
     type?: EmptyType;
-    /** 支持传入 Lucide 图标组件；未传时根据 type 自动匹配 */
-    icon?: Component;
+    /** 支持传入图标名称或组件；未传时根据 type 自动匹配 */
+    icon?: IconName | Component;
     /** 自定义插画 URL，加载失败时自动回退至图标 */
     image?: string;
     /** 主标题 */
@@ -113,16 +122,16 @@ watch(
   }
 );
 
-const TYPE_CONFIG_MAP: Record<EmptyType, { icon: Component; description: string }> = {
-  empty: { icon: Inbox, description: '暂无数据' },
-  404: { icon: FileQuestion, description: '未找到相关资源' },
-  network: { icon: WifiOff, description: '网络连接异常，请重试' },
-  search: { icon: SearchX, description: '未找到匹配结果' },
+const TYPE_CONFIG_MAP: Record<EmptyType, { icon: IconName; description: string }> = {
+  empty: { icon: 'inbox', description: '暂无数据' },
+  404: { icon: 'file-question', description: '未找到相关资源' },
+  network: { icon: 'wifi-off', description: '网络连接异常，请重试' },
+  search: { icon: 'search-x', description: '未找到匹配结果' },
 };
 
-const resolvedIcon = computed<Component>(() => {
+const resolvedIcon = computed<IconName | Component>(() => {
   if (props.icon) return props.icon;
-  return TYPE_CONFIG_MAP[props.type]?.icon ?? Inbox;
+  return TYPE_CONFIG_MAP[props.type]?.icon ?? 'inbox';
 });
 
 const resolvedDescription = computed(() => {

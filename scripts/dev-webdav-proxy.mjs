@@ -21,11 +21,11 @@
  *   - CORS 仅对 localhost 来源回显（PROXY_ALLOWED_ORIGINS 可加白名单）
  *   - PROXY_ALLOWED_HOSTS 可进一步把目标限制到指定主机
  */
+import { lookup } from 'node:dns/promises';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
 import { URL } from 'node:url';
-import { lookup } from 'node:dns/promises';
 
 const PORT = Number(process.env.PROXY_PORT ?? 9003);
 // 默认双栈监听（'::' 同时接受 IPv6 与 IPv4-mapped 连接）：

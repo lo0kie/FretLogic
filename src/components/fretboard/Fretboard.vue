@@ -1,19 +1,14 @@
 <template>
   <div
-    class="relative box-border pointer-events-auto transition-[width,height] duration-slow ease-sidebar"
-    :class="{ 'border border-border-light rounded-md': bordered }"
+    :class="{ 'border-border-light rounded-md border': bordered }"
     :style="{ width: `${realScaledWidth}px`, height: `${realScaledHeight}px` }"
+    class="duration-slow ease-sidebar pointer-events-auto relative box-border transition-[width,height]"
   >
     <div
-      ref="fretBoardRef"
-      class="relative flex flex-col items-center select-none box-border outline-none transition-[transform,background-color,border-color] duration-slow ease-sidebar"
       :class="[
-        interactive || barrePickMode
-          ? '[touch-action:none] cursor-default'
-          : 'pointer-events-none cursor-default outline-none',
-        { 'border border-border-light rounded-md': bordered },
+        interactive || barrePickMode ? 'cursor-default touch-none' : 'pointer-events-none cursor-default outline-none',
+        { 'border-border-light rounded-md border': bordered },
       ]"
-      :tabindex="interactive ? 0 : undefined"
       :data-focusable-outline="interactive || undefined"
       :inert="!(interactive || barrePickMode) || undefined"
       :style="{
@@ -23,123 +18,119 @@
         transformOrigin: 'top left',
         backgroundColor: bgColor,
       }"
+      :tabindex="interactive ? 0 : undefined"
       @contextmenu="handleRightClickRoot"
+      class="duration-slow ease-sidebar relative box-border flex flex-col items-center transition-[transform,background-color,border-color] outline-none select-none"
+      ref="fretBoardRef"
     >
       <div
         v-if="showChordName"
-        class="w-full max-w-full flex items-center justify-center shrink-0 box-border select-none overflow-hidden whitespace-nowrap px-sm cursor-default font-[Helvetica_Neue,Arial,sans-serif]"
         :class="[canEditChordName ? 'cursor-text' : '']"
         :style="{ height: `${CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT}px`, paddingTop: isShowPitchNames ? '0px' : '16px' }"
-        @pointerdown.stop
         @contextmenu.stop
+        @pointerdown.stop
+        class="px-sm box-border flex w-full max-w-full shrink-0 cursor-default items-center justify-center overflow-hidden font-[Helvetica_Neue,Arial,sans-serif] whitespace-nowrap select-none"
       >
         <div
           v-if="canEditChordName"
-          ref="chordNameInputRef"
-          contenteditable="plaintext-only"
-          spellcheck="false"
-          role="textbox"
-          aria-label="和弦名称"
-          :data-placeholder="'CHORD'"
-          class="w-full max-w-full h-full min-h-0 flex items-center justify-center text-center font-bold leading-normal bg-transparent border-none outline-none text-text-title box-border whitespace-nowrap overflow-hidden px-0.5 cursor-text select-text caret-primary font-[Helvetica_Neue,Arial,sans-serif] empty:before:content-[attr(data-placeholder)] empty:before:text-text-disabled empty:before:opacity-35 empty:before:font-bold empty:before:pointer-events-none"
           :class="{
-            'before:content-[attr(data-placeholder)] before:text-text-disabled before:opacity-35 before:font-bold before:pointer-events-none':
+            'before:text-text-disabled before:pointer-events-none before:font-bold before:opacity-35 before:content-[attr(data-placeholder)]':
               !inputChordName.trim(),
           }"
+          :data-placeholder="'CHORD'"
           :style="chordNameFontSizeStyle"
-          @focus="handleFocus"
           @blur="commitOrRevert"
+          @focus="handleFocus"
           @input="handleInput"
           @keydown.enter.prevent="chordNameInputRef?.blur()"
           @keydown.esc.prevent="handleEscape"
           @keydown.stop
           @pointerdown.stop
+          aria-label="和弦名称"
+          class="text-text-title caret-primary empty:before:text-text-disabled box-border flex h-full min-h-0 w-full max-w-full cursor-text items-center justify-center overflow-hidden border-none bg-transparent px-0.5 text-center font-[Helvetica_Neue,Arial,sans-serif] leading-normal font-bold whitespace-nowrap outline-none select-text empty:before:pointer-events-none empty:before:font-bold empty:before:opacity-35 empty:before:content-[attr(data-placeholder)]"
+          contenteditable="plaintext-only"
+          ref="chordNameInputRef"
+          role="textbox"
+          spellcheck="false"
         >
           {{ displayChordName }}
         </div>
         <div
           v-else
-          class="flex items-center justify-center w-full max-w-full h-full min-h-0 leading-normal font-bold text-text-title box-border outline-none cursor-inherit whitespace-nowrap overflow-hidden text-ellipsis px-0.5 font-[Helvetica_Neue,Arial,sans-serif]"
           :style="chordNameFontSizeStyle"
+          class="text-text-title cursor-inherit box-border flex h-full min-h-0 w-full max-w-full items-center justify-center overflow-hidden px-0.5 font-[Helvetica_Neue,Arial,sans-serif] leading-normal font-bold text-ellipsis whitespace-nowrap outline-none"
         >
-          <span v-if="displayChordName" v-chord-name="{ chord, shorthand: isUseShorthand }" />
-          <span v-else class="text-text-disabled opacity-35 font-bold">CHORD</span>
+          <span v-chord-name="{ chord, shorthand: isUseShorthand }" v-if="displayChordName" />
+          <span v-else class="text-text-disabled font-bold opacity-35">CHORD</span>
         </div>
       </div>
       <div
-        class="w-full relative pointer-events-auto box-border"
         :class="{ 'pointer-events-none': !interactive }"
         :style="{ height: `${activeTopOffset}px` }"
+        class="pointer-events-auto relative box-border w-full"
       >
         <svg
           v-if="showOpenStrings"
-          :width="CANVAS_CONFIG.BOARD_WIDTH"
           :height="activeTopOffset"
           :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${activeTopOffset}`"
+          :width="CANVAS_CONFIG.BOARD_WIDTH"
           style="overflow: visible; width: 100%; height: 100%"
         >
           <FretboardNote
             v-for="(str, sIdx) in chord.strings"
-            :key="'os-' + sIdx"
             v-tooltip="getOpenStringTooltip(sIdx)"
+            :aria-label="openStringAriaLabels[sIdx]"
+            :interactive
+            :is-accidental="isShowPitchNames && openNoteInfo(sIdx).isAccidental"
+            :is-dark-mode
+            :is-focused="isFocused && focusPoint?.fretIndex === 0 && focusPoint?.stringIndex === sIdx"
+            :is-hovered="hoverPoint?.fretIndex === 0 && hoverPoint?.stringIndex === sIdx"
+            :is-muted="isMuted(str)"
+            :is-pressed="str[0] > 0"
+            :is-root="isRoot(sIdx)"
+            :key="'os-' + sIdx"
+            :label="isShowPitchNames ? openNoteInfo(sIdx).label : ''"
+            :prefer-flat="str[1]"
+            :show-pitch-names="isShowPitchNames"
             :x="stringXPositions[sIdx] || 30 + sIdx * 64"
             :y="openStringMarkerY"
-            is-open-string
-            :is-root="isRoot(sIdx)"
-            :is-dark-mode
-            :interactive
-            :is-pressed="str[0] > 0"
-            :is-muted="isMuted(str)"
-            :is-hovered="hoverPoint?.fretIndex === 0 && hoverPoint?.stringIndex === sIdx"
-            :is-focused="isFocused && focusPoint?.fretIndex === 0 && focusPoint?.stringIndex === sIdx"
-            :show-pitch-names="isShowPitchNames"
-            :label="isShowPitchNames ? openNoteInfo(sIdx).label : ''"
-            :is-accidental="isShowPitchNames && openNoteInfo(sIdx).isAccidental"
-            :prefer-flat="str[1]"
-            :aria-label="openStringAriaLabels[sIdx]"
             @toggle-pitch="handleTogglePitchName(sIdx)"
+            is-open-string
           />
         </svg>
       </div>
 
       <FretboardSvg
-        :is-dark-mode
-        :interactive
-        :string-x-positions
-        :hover-point
-        :focus-point="isFocused ? focusPoint : null"
-        :fret-number-size
-        :show-fret-numbers
-        :show-pitch-names="isShowPitchNames"
-        :strings="chord.strings"
-        :fret-count="chord.fretCount"
-        :capo="chord.capo"
-        :root-string-index="chord.rootStringIndex"
         :active-base-strings="getActiveBaseStrings(chord.tuning)"
-        :barres="effectiveBarres"
         :barre-candidates
         :barre-pick-mode
+        :barres="effectiveBarres"
+        :capo="chord.capo"
+        :focus-point="isFocused ? focusPoint : null"
+        :fret-count="chord.fretCount"
+        :fret-number-size
+        :hover-point
+        :interactive
+        :is-dark-mode
+        :root-string-index="chord.rootStringIndex"
+        :show-fret-numbers
+        :show-pitch-names="isShowPitchNames"
+        :string-x-positions
+        :strings="chord.strings"
         :wide-nut="isWideNut"
-        @toggle-pitch="handleTogglePitchName"
         @barre-click="emit('barre-click', $event)"
+        @toggle-pitch="handleTogglePitchName"
       />
     </div>
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, getCurrentInstance, nextTick, ref, useTemplateRef, watch, type CSSProperties } from 'vue';
+import { useRoute } from 'vue-router';
+
 import FretboardSvg from '@/components/fretboard/FretboardSvg.vue';
-import { useFretboardInteraction } from '@/shared/composables/useFretboardInteraction';
 import { vTooltip } from '@/directives/vTooltip.ts';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { useUiStore } from '@/stores/uiStore';
-import type { BarreEntity, Chord, ChordNameSegments, GuitarStringsModel } from '@/types';
-import {
-  CANVAS_CONFIG,
-  CHORD_NAME_FONT_SIZE_MAP,
-  OPEN_STRING_MARKER_Y,
-  type ChordNameFontSize,
-} from '@/utils/core/constants';
 import {
   calcNoteLabel,
   computeStringLabelAccidental,
@@ -149,9 +140,18 @@ import {
   isValidChordName,
   nameToSegments,
   segmentsToString,
-} from '@/utils/music/musicTheory';
-import { computed, getCurrentInstance, nextTick, ref, useTemplateRef, watch, type CSSProperties } from 'vue';
-import { useRoute } from 'vue-router';
+} from '@/services/music/theory';
+import { useFretboardInteraction } from '@/shared/composables/useFretboardInteraction';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { useUiStore } from '@/stores/uiStore';
+import type { BarreEntity, Chord, ChordNameSegments, GuitarStringsModel } from '@/types';
+import {
+  CANVAS_CONFIG,
+  CHORD_NAME_FONT_SIZE_MAP,
+  OPEN_STRING_MARKER_Y,
+  type ChordNameFontSize,
+} from '@/utils/core/constants';
+
 import FretboardNote from './FretboardNote.vue';
 
 export interface FretboardProps {
