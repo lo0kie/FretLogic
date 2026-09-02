@@ -8,14 +8,15 @@
  */
 import { type Directive } from 'vue';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
-import type { AccidentalType, Chord, ChordNameSegments, ExtensionSegment } from '@/types';
-import { useSettingsStore } from '@/stores/settingsStore';
+
 import {
   formatAccidental as formatAccidentalTheory,
   formatChordQuality,
   getChordName,
   nameToSegments,
-} from '@/utils/music/musicTheory';
+} from '@/services/music/theory';
+import { useSettingsStore } from '@/stores/settingsStore';
+import type { AccidentalType, Chord, ChordNameSegments, ExtensionSegment } from '@/types';
 
 export interface ChordNameValue {
   chord?: Chord | null;

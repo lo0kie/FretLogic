@@ -1,3 +1,4 @@
+import { getChordName, nameToSegments } from '@/services/music/theory';
 import {
   dedupeChordsByFingerprint,
   fillMissingTimestamps,
@@ -18,7 +19,6 @@ import type {
 } from '@/types';
 import { cloneDeep } from '@/utils/core/common';
 import { pruneOrphanChordRefs } from '@/utils/score/chordSlots';
-import { getChordName, nameToSegments } from '@/utils/music/musicTheory';
 
 /** 旧/未知结构的数据（含历史遗留字段），用于防御性清洗 */
 type RawRecord = Record<string, unknown>;

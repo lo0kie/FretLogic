@@ -1,7 +1,8 @@
-import BasePopconfirm from '@/components/ui/BasePopconfirm.vue';
 import type { VueWrapper } from '@vue/test-utils';
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import BasePopconfirm from '@/components/ui/BasePopconfirm.vue';
 
 /** 挂载辅助：默认 click 触发 + 关闭 Teleport（面板留在 wrapper 内便于断言） */
 const mountPopconfirm = (props: Record<string, unknown> = {}) =>

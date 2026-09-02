@@ -1,9 +1,10 @@
+import { computed, watch } from 'vue';
+
+import { computeChordFingerprint } from '@/services/music/theory';
 import { useChordStore } from '@/stores/chordStore';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord } from '@/types';
-import { computeChordFingerprint } from '@/utils/music/musicTheory';
 import { buildLyricsLinesWithEdges, clearLyricsLineCharsCache, type LineData } from '@/utils/score/score-export';
-import { computed, watch } from 'vue';
 
 // 模块级单例：ScoreView 与 ScoreInteractiveArea 共享同一套 computed，
 // 避免 chordsLookupMap / lyricsLinesWithEdges 各自重复构建与双份依赖追踪

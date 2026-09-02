@@ -1,6 +1,6 @@
 <template>
   <aside
-    class="panel-left absolute top-0 bottom-0 left-0 z-sidebar bg-bg-panel/90 backdrop-blur-xl border-r border-glass-border h-full box-border overflow-hidden flex flex-col will-change-transform transition-[transform,opacity] duration-slow ease-sidebar"
+    v-bind="$attrs"
     :aria-label="route.path === '/score' ? '乐谱库' : '指法库'"
     :style="{
       width: LEFT_SIDEBAR_WIDTH_PIXEL,
@@ -9,70 +9,70 @@
       pointerEvents: uiStore.isLeftOpen ? 'auto' : 'none',
       boxShadow: uiStore.isLeftOpen ? 'var(--shadow-panel)' : 'none',
     }"
-    v-bind="$attrs"
+    class="panel-left z-sidebar bg-bg-panel/90 border-glass-border duration-slow ease-sidebar absolute top-0 bottom-0 left-0 box-border flex h-full flex-col overflow-hidden border-r backdrop-blur-xl transition-[transform,opacity] will-change-transform"
   >
     <div
-      class="panel-header px-lg h-10 border-b border-glass-border flex items-center justify-between gap-sm box-border shrink-0"
+      class="panel-header px-lg border-glass-border gap-sm box-border flex h-10 shrink-0 items-center justify-between border-b"
     >
       <div
         v-if="route.path === '/workbench'"
+        class="v-fade-in-quick gap-sm flex w-full min-w-0 items-center justify-between"
         key="workbench"
-        class="v-fade-in-quick w-full min-w-0 flex items-center justify-between gap-sm"
       >
         <BaseInput
           v-model="searchQuery"
           :disabled="chordStore.savedChordsList.length === 0"
-          placeholder="搜索和弦..."
+          :maxlength="15"
+          class="header-search-input min-w-0 flex-1"
           clearable
           font-size="xs"
-          class="header-search-input flex-1 min-w-0"
-          :maxlength="15"
+          placeholder="搜索和弦..."
           show-count
         >
           <template #prefix>
-            <Search class="search-icon text-text-disabled" :size="14" :stroke-width="2.5" />
+            <BaseIcon :size="14" :stroke-width="2.5" class="search-icon text-text-disabled" name="search" />
           </template>
         </BaseInput>
 
-        <div class="header-actions flex items-center gap-xs shrink-0">
+        <div class="header-actions gap-xs flex shrink-0 items-center">
           <ActionButton
             v-tooltip="'新建分组'"
-            variant="ghost"
-            icon-only
-            aria-label="新建分组"
             @click="groupModals.openCreate"
+            aria-label="新建分组"
+            icon-only
+            variant="ghost"
           >
-            <Plus :size="16" :stroke-width="2.5" />
+            <BaseIcon :size="16" :stroke-width="2.5" name="plus" />
           </ActionButton>
         </div>
       </div>
 
       <div
         v-else-if="route.path === '/score'"
+        class="v-fade-in-quick gap-sm flex w-full min-w-0 items-center justify-between"
         key="score"
-        class="v-fade-in-quick w-full min-w-0 flex items-center justify-between gap-sm"
       >
-        <div class="header-title-zone flex items-center gap-sm min-w-0">
-          <span class="sidebar-title text-xs font-bold text-text-title tracking-tight whitespace-nowrap">乐谱列表</span>
-          <BaseBadge variant="neutral" appearance="filled" size="xs">
+        <div class="header-title-zone gap-sm flex min-w-0 items-center">
+          <span class="sidebar-title text-text-title text-xs font-bold tracking-tight whitespace-nowrap">乐谱列表</span>
+          <BaseBadge appearance="filled" size="xs" variant="neutral">
             {{ songStore.songs.length }}
           </BaseBadge>
         </div>
 
-        <div class="header-actions flex items-center gap-xs shrink-0">
-          <BasePopover trigger="hover" placement="bottom">
+        <div class="header-actions gap-xs flex shrink-0 items-center">
+          <BasePopover placement="bottom" trigger="hover">
             <template #trigger="{ isOpen, pinToggle }">
               <ActionButton
-                icon-only
-                :variant="isOpen ? 'subtle' : 'ghost'"
-                :color="isOpen ? 'primary' : 'default'"
-                aria-label="切换乐谱排序方式"
-                title="切换乐谱排序方式"
-                aria-haspopup="menu"
                 :aria-expanded="isOpen"
+                :color="isOpen ? 'primary' : 'default'"
+                :variant="isOpen ? 'subtle' : 'ghost'"
                 @click="pinToggle()"
+                aria-haspopup="menu"
+                aria-label="切换乐谱排序方式"
+                icon-only
+                title="切换乐谱排序方式"
               >
-                <component :is="currentSortIcon" :size="16" :stroke-width="2.5" />
+                <BaseIcon :name="currentSortIcon" :size="16" />
               </ActionButton>
             </template>
 
@@ -83,56 +83,56 @@
 
           <ActionButton
             v-tooltip="'新建乐谱'"
-            variant="ghost"
-            icon-only
-            aria-label="新建乐谱"
             @click="songModals.openCreateSongModal"
+            aria-label="新建乐谱"
+            icon-only
+            variant="ghost"
           >
-            <Plus :size="16" :stroke-width="2.5" />
+            <BaseIcon :size="16" :stroke-width="2.5" name="plus" />
           </ActionButton>
         </div>
       </div>
     </div>
 
     <div
-      class="left-group-list-container left-group-list flex flex-col flex-1 min-h-0 overflow-hidden box-border w-full"
+      class="left-group-list-container left-group-list box-border flex min-h-0 w-full flex-1 flex-col overflow-hidden"
     >
       <div
         v-scroll-cache="`sidebar-scroll:${route.path}`"
-        class="scroll-body no-scrollbar flex-1 overflow-y-auto p-md box-border"
+        class="scroll-body no-scrollbar p-md box-border flex-1 overflow-y-auto"
       >
-        <div v-if="route.path === '/workbench'" key="workbench" class="v-fade-in-quick min-w-0">
+        <div v-if="route.path === '/workbench'" class="v-fade-in-quick min-w-0" key="workbench">
           <LeftChordGroupSection
             :search-query="searchQuery"
-            @open-rename="groupModals.openRename"
             @open-delete="groupModals.openDelete"
-            @open-move="groupModals.openMove"
-            @open-sort="groupModals.openSort"
             @open-delete-variants="groupModals.openChordVariantsDelete"
+            @open-move="groupModals.openMove"
             @open-references="groupModals.openChordReferences"
+            @open-rename="groupModals.openRename"
+            @open-sort="groupModals.openSort"
           />
         </div>
 
-        <div v-else-if="route.path === '/score'" key="score" class="v-fade-in-quick min-w-0">
-          <LeftSongListSection @open-config="songModals.openConfig" @open-clear="songModals.openClear" />
+        <div v-else-if="route.path === '/score'" class="v-fade-in-quick min-w-0" key="score">
+          <LeftSongListSection @open-clear="songModals.openClear" @open-config="songModals.openConfig" />
         </div>
       </div>
     </div>
 
-    <div class="left-panel-footer p-md px-lg border-t border-glass-border box-border shrink-0 w-full">
-      <input ref="fileInputRef" type="file" accept=".json" class="hidden-input hidden" @change="handleFileChange" />
+    <div class="left-panel-footer p-md px-lg border-glass-border box-border w-full shrink-0 border-t">
+      <input @change="handleFileChange" accept=".json" class="hidden-input hidden" ref="fileInputRef" type="file" />
 
-      <div class="footer-actions-row grid grid-cols-2 gap-sm items-stretch box-border">
-        <ActionButton width="100%" @click="handleImportTrigger">
+      <div class="footer-actions-row gap-sm box-border grid grid-cols-2 items-stretch">
+        <ActionButton @click="handleImportTrigger" width="100%">
           <template #prefix>
-            <Download :size="13" :stroke-width="2" />
+            <BaseIcon :size="13" :stroke-width="2" name="download" />
           </template>
           导入备份
         </ActionButton>
 
-        <ActionButton width="100%" @click="backupModals.openExport">
+        <ActionButton @click="backupModals.openExport" width="100%">
           <template #prefix>
-            <Upload :size="13" :stroke-width="2" />
+            <BaseIcon :size="13" :stroke-width="2" name="upload" />
           </template>
           导出备份
         </ActionButton>
@@ -146,29 +146,30 @@
   <BackupModalsContainer />
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, provide, ref, useTemplateRef } from 'vue';
+import { useRoute } from 'vue-router';
+
+import BackupModalsContainer from '@/app/modals/BackupModalsContainer.vue';
 import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseBadge from '@/components/ui/BaseBadge.vue';
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BasePopover from '@/components/ui/BasePopover.vue';
 import ContextMenuItems, { type ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
-import { useBackupModals } from '@/shared/composables/useBackupModals';
+import type { IconName } from '@/components/ui/icons.registry';
+import ChordModalsContainer from '@/features/chord-library/ChordModalsContainer.vue';
 import { useChordGroupModals } from '@/features/chord-library/composables/useChordGroupModals';
+import GroupModalsContainer from '@/features/chord-library/GroupModalsContainer.vue';
+import LeftChordGroupSection from '@/features/chord-library/GroupSection.vue';
 import { useSongModals } from '@/features/song-library/composables/useSongModals';
+import SongModalsContainer from '@/features/song-library/SongModalsContainer.vue';
+import LeftSongListSection from '@/features/song-library/SongSection.vue';
+import { useBackupModals } from '@/shared/composables/useBackupModals';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/core/constants';
-import type { LucideIcon } from '@lucide/vue';
-import { Clock, Download, List, Plus, Search, Type, Upload } from '@lucide/vue';
-import { computed, provide, ref, useTemplateRef } from 'vue';
-import { useRoute } from 'vue-router';
-import BackupModalsContainer from '@/app/modals/BackupModalsContainer.vue';
-import ChordModalsContainer from '@/features/chord-library/ChordModalsContainer.vue';
-import GroupModalsContainer from '@/features/chord-library/GroupModalsContainer.vue';
-import LeftChordGroupSection from '@/features/chord-library/GroupSection.vue';
-import SongModalsContainer from '@/features/song-library/SongModalsContainer.vue';
-import LeftSongListSection from '@/features/song-library/SongSection.vue';
 
 defineOptions({ inheritAttrs: false });
 
@@ -195,34 +196,34 @@ const handleImportTrigger = () => fileInputRef.value?.click();
 const songSortMenuItems = computed<ContextMenuItem[]>(() => [
   {
     label: '手动排序',
-    icon: List,
+    icon: 'list',
     color: 'var(--text-title)',
     checked: songStore.songSortMethod === 'manual',
     action: () => songStore.setSongSortMethod('manual'),
   },
   {
     label: '拼音分组',
-    icon: Type,
+    icon: 'type',
     color: 'var(--color-primary)',
     checked: songStore.songSortMethod === 'title',
     action: () => songStore.setSongSortMethod('title'),
   },
   {
     label: '创建时间',
-    icon: Clock,
+    icon: 'clock',
     color: 'var(--color-success)',
     checked: songStore.songSortMethod === 'createdAt',
     action: () => songStore.setSongSortMethod('createdAt'),
   },
 ]);
 
-const SORT_ICON_MAP: Record<string, LucideIcon> = {
-  title: Type,
-  createdAt: Clock,
+const SORT_ICON_MAP: Record<string, IconName> = {
+  title: 'type',
+  createdAt: 'clock',
 };
 
 /** 排序按钮图标随当前排序方式切换（与菜单项图标一致），颜色保持默认不换 */
-const currentSortIcon = computed(() => SORT_ICON_MAP[songStore.songSortMethod] ?? List);
+const currentSortIcon = computed<IconName>(() => SORT_ICON_MAP[songStore.songSortMethod] ?? 'list');
 
 /** 用户选定备份文件后交给备份弹窗流程处理；完成后清空 input 以便重复导入同一文件 */
 const handleFileChange = async (e: Event) => {

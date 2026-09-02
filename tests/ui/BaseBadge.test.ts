@@ -1,6 +1,7 @@
-import BaseBadge from '@/components/ui/BaseBadge.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+
+import BaseBadge from '@/components/ui/BaseBadge.vue';
 
 describe('BaseBadge component', () => {
   it('renders content correctly', () => {

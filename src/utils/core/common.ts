@@ -1,5 +1,6 @@
-import type { GuitarStringsModel, LineId } from '@/types';
 import { isProxy, isRef, toRaw, unref } from 'vue';
+
+import type { GuitarStringsModel, LineId } from '@/types';
 
 // ===== id: 唯一 id 生成 =====
 

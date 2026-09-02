@@ -1,10 +1,11 @@
+import { computed, reactive } from 'vue';
+
+import { getKeySemitones, transposeChordName } from '@/services/music/theory';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Song } from '@/types';
 import { toCapo } from '@/utils/music/chord-fretboard';
-import { getKeySemitones, transposeChordName } from '@/utils/music/musicTheory';
-import { computed, reactive } from 'vue';
 
 /** 乐谱相关弹窗的状态与动作：新建 / 配置（标题、调性、变调夹）/ 清空和弦 */
 export function useSongModals() {

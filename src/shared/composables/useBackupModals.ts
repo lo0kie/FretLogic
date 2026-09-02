@@ -1,16 +1,13 @@
+import { computed, reactive } from 'vue';
+
 import type { BackupSelection } from '@/shared/composables/useImportExportService';
 import { FULL_BACKUP_SELECTION, useImportExportService } from '@/shared/composables/useImportExportService';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
-import { computed, reactive } from 'vue';
 
-/**
- * 备份导入/导出弹窗状态：
- * - 导出：勾选要写进备份包的数据类别（和弦/乐谱/同步配置/偏好设置）
- * - 导入：文件解析成功后展示包内实际包含的数据类别，勾选要应用的部分
- */
+/** 备份导入/导出弹窗的模块级共享状态：保证任意组件取用的都是同一份开关与导入数据 */
 const modals = reactive({
   export: false,
   import: false,

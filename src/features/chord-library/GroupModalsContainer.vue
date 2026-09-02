@@ -1,54 +1,54 @@
 <template>
-  <BaseModal v-model:visible="groupModals.modals.create" title="新建分组" @confirm="groupModals.handleCreateGroup">
+  <BaseModal v-model:visible="groupModals.modals.create" @confirm="groupModals.handleCreateGroup" title="新建分组">
     <BaseInput
-      v-model="groupModals.modalData.inputValue"
       v-focus
-      placeholder="请输入分组名称..."
-      clearable
+      v-model="groupModals.modalData.inputValue"
       :maxlength="MAX_GROUP_NAME_LENGTH"
       @enter="groupModals.handleCreateGroup"
+      clearable
+      placeholder="请输入分组名称..."
     />
   </BaseModal>
 
-  <BaseModal v-model:visible="groupModals.modals.rename" title="修改组名" @confirm="groupModals.handleRenameGroup">
+  <BaseModal v-model:visible="groupModals.modals.rename" @confirm="groupModals.handleRenameGroup" title="修改组名">
     <BaseInput
-      v-model="groupModals.modalData.inputValue"
       v-focus.select
-      placeholder="请输入新名称..."
-      clearable
+      v-model="groupModals.modalData.inputValue"
       :maxlength="MAX_GROUP_NAME_LENGTH"
       @enter="groupModals.handleRenameGroup"
+      clearable
+      placeholder="请输入新名称..."
     />
   </BaseModal>
 
   <BaseModal
     v-model:visible="groupModals.modals.delete"
     :title="deleteGroupTitle"
-    confirm-type="danger"
     @confirm="groupModals.handleDeleteGroup"
+    confirm-type="danger"
   >
-    <p class="modal-description-text text-xs font-medium leading-relaxed text-text-body m-0">
+    <p class="modal-description-text text-text-body m-0 text-xs leading-relaxed font-medium">
       确定要执行此删除操作吗？删除后组内的所有和弦都将清空。
     </p>
   </BaseModal>
 
   <BaseModal
     v-model:visible="groupModals.modals.sort"
+    @confirm="groupModals.handleSaveSort"
     title="分组和弦排序配置"
     width="w-md"
-    @confirm="groupModals.handleSaveSort"
   >
-    <div class="sort-modal-body flex flex-col gap-lg py-xs">
-      <BaseFormRow label="排序规则" :label-width="FORM_LABEL_WIDTH">
+    <div class="sort-modal-body gap-lg py-xs flex flex-col">
+      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="排序规则">
         <BaseSegmentedControl v-model="groupModals.modalData.sortRule" :options="SORT_RULE_CONFIG" />
       </BaseFormRow>
 
-      <BaseFormRow label="调式设定" :label-width="FORM_LABEL_WIDTH">
+      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="调式设定">
         <BaseSelector
           v-model="groupModals.modalData.sortKey"
+          :disabled="groupModals.modalData.sortRule !== 'KEY_DEGREE'"
           :options="KEY_OPTIONS"
           default-value="C"
-          :disabled="groupModals.modalData.sortRule !== 'KEY_DEGREE'"
           width="md"
         >
           <template #label="{ selected }">
@@ -64,15 +64,16 @@
   </BaseModal>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, inject } from 'vue';
+
 import BaseFormRow from '@/components/ui/BaseFormRow.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BaseSegmentedControl from '@/components/ui/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/ui/BaseSelector.vue';
 import type { useChordGroupModals } from '@/features/chord-library/composables/useChordGroupModals';
-import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/utils/music/musicTheory';
-import { computed, inject } from 'vue';
+import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/services/music/theory';
 
 type GroupModals = ReturnType<typeof useChordGroupModals>;
 const groupModals = inject<GroupModals>('groupModals')!;

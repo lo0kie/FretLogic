@@ -1,6 +1,7 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { createGithubSyncProvider } from '@/services/sync/githubSyncProvider';
 import type { GithubSyncConfig } from '@/services/sync/provider';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const config: GithubSyncConfig = {
   kind: 'github',

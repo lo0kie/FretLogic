@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { idb } from '@/services/storage';
-import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
+
 import { chordRepository, songRepository } from '@/services/data';
+import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
+import { idb } from '@/services/storage';
 import type { Song } from '@/types';
 
 class MemoryStorage implements Storage {

@@ -1,108 +1,108 @@
 <template>
   <BaseModal
     v-model:visible="visibleModel"
-    :show-footer="false"
-    width="w-lg"
     :close-on-mask="!isGenerating"
+    :show-footer="false"
+    @cancel="modeModel = ExportMode.NORMAL"
     height="h-full"
     title="导出歌词数据"
-    @cancel="modeModel = ExportMode.NORMAL"
+    width="w-lg"
   >
     <template #header-extra>
-      <BaseSegmentedControl v-model="modeModel" size="sm" :options="modeOptions" />
+      <BaseSegmentedControl v-model="modeModel" :options="modeOptions" size="sm" />
     </template>
 
-    <div class="flex flex-col gap-md flex-1 h-full min-h-0">
+    <div class="gap-md flex h-full min-h-0 flex-1 flex-col">
       <div
-        class="relative flex flex-col items-center w-full flex-1 h-0 min-h-0 p-md overflow-auto box-border border border-border-light rounded-lg bg-bg-body isolate no-scrollbar [background-image:linear-gradient(45deg,var(--tint-borderbase-85)_25%,transparent_25%),linear-gradient(-45deg,var(--tint-borderbase-85)_25%,transparent_25%),linear-gradient(45deg,transparent_75%,var(--tint-borderbase-85)_75%),linear-gradient(-45deg,transparent_75%,var(--tint-borderbase-85)_75%)] [background-size:16px_16px] [background-position:0_0,0_8px,8px_-8px,-8px_0px]"
+        class="p-md border-border-light bg-bg-body no-scrollbar relative isolate box-border flex h-0 min-h-0 w-full flex-1 flex-col items-center overflow-auto rounded-lg border bg-[linear-gradient(45deg,var(--tint-borderbase-85)_25%,transparent_25%),linear-gradient(-45deg,var(--tint-borderbase-85)_25%,transparent_25%),linear-gradient(45deg,transparent_75%,var(--tint-borderbase-85)_75%),linear-gradient(-45deg,transparent_75%,var(--tint-borderbase-85)_75%)] bg-size-[16px_16px] bg-position-[0_0,0_8px,8px_-8px,-8px_0px]"
       >
         <div
           v-if="isGenerating"
-          class="flex items-center justify-center w-full min-h-[260px] text-text-disabled text-sm leading-normal gap-2 m-auto"
+          class="text-text-disabled m-auto flex min-h-[260px] w-full items-center justify-center gap-2 text-sm leading-normal"
         >
-          <Loader2 class="w-4 h-4 text-primary animate-spin" />
+          <BaseIcon class="text-primary h-4 w-4 animate-spin" name="loader-2" />
           <span>正在生成预览{{ (progress ?? 0) > 0 ? ` (${progress}%)` : '' }}...</span>
         </div>
-        <EmptyState v-else-if="pages.length === 0" description="暂无预览内容" size="md" class="m-auto" />
+        <EmptyState v-else-if="pages.length === 0" class="m-auto" description="暂无预览内容" size="md" />
         <img
           v-else
+          :class="mode === ExportMode.A4 ? 'h-full max-h-full w-auto max-w-full' : 'h-auto w-auto max-w-full'"
           :src="currentPage?.objectUrl"
-          class="block shrink-0 rounded-sm shadow-md bg-bg-main object-contain transition-all duration-fast"
-          :class="mode === ExportMode.A4 ? 'w-auto h-full max-w-full max-h-full' : 'w-auto max-w-full h-auto'"
           alt="导出预览"
+          class="bg-bg-main duration-fast block shrink-0 rounded-sm object-contain shadow-md transition-all"
         />
       </div>
 
-      <div class="flex flex-col gap-sm shrink-0">
+      <div class="gap-sm flex shrink-0 flex-col">
         <BasePagination
           v-if="modeModel === ExportMode.A4"
           v-model="currentPageIndexModel"
-          :total="pages.length"
           :disabled="isGenerating"
-          size="md"
           :formatter="(current, total) => `第 ${current} / ${total} 张`"
+          :total="pages.length"
+          size="md"
         />
 
         <BaseSlider
           v-model="qualityDisplayPercent"
-          label="导出质量"
-          :min="5"
-          :max="100"
-          :step="5"
-          size="md"
           :default-value="85"
-          :formatter="val => `${val}%`"
           :disabled="isGenerating"
+          :formatter="val => `${val}%`"
+          :max="100"
+          :min="5"
+          :step="5"
           @change="handleQualityCommit"
+          label="导出质量"
+          size="md"
         />
 
-        <div class="flex items-center justify-center gap-sm">
+        <div class="gap-sm flex items-center justify-center">
           <ActionButton
-            variant="subtle"
             :disabled="isActionDisabled"
             :size="buttonSize"
             @click="emit('download-current-page')"
+            variant="subtle"
           >
             <template #prefix>
-              <Download :size="14" :stroke-width="2.5" />
+              <BaseIcon :size="14" :stroke-width="2.5" name="download" />
             </template>
             下载
           </ActionButton>
 
           <ActionButton
-            variant="subtle"
             :disabled="isActionDisabled"
             :size="buttonSize"
             @click="emit('copy-current-page')"
+            variant="subtle"
           >
             <template #prefix>
-              <Copy :size="14" :stroke-width="2.5" />
+              <BaseIcon :size="14" :stroke-width="2.5" name="copy" />
             </template>
             复制图片
           </ActionButton>
 
           <ActionButton
             v-if="mode === ExportMode.A4"
-            variant="subtle"
             :disabled="isActionDisabled"
             :size="buttonSize"
             @click="emit('download-all-zip')"
+            variant="subtle"
           >
             <template #prefix>
-              <Archive :size="14" :stroke-width="2.5" />
+              <BaseIcon :size="14" :stroke-width="2.5" name="archive" />
             </template>
             下载全部 (ZIP)
           </ActionButton>
 
           <ActionButton
             v-if="mode === ExportMode.A4"
-            variant="subtle"
             :disabled="isActionDisabled"
             :size="buttonSize"
             @click="emit('download-pdf')"
+            variant="subtle"
           >
             <template #prefix>
-              <FileDown :size="14" :stroke-width="2.5" />
+              <BaseIcon :size="14" :stroke-width="2.5" name="file-down" />
             </template>
             下载 PDF
           </ActionButton>
@@ -112,16 +112,17 @@
   </BaseModal>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, ref, watch } from 'vue';
+
 import ActionButton from '@/components/ui/ActionButton.vue';
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BasePagination from '@/components/ui/BasePagination.vue';
 import BaseSegmentedControl from '@/components/ui/BaseSegmentedControl.vue';
 import BaseSlider from '@/components/ui/BaseSlider.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import { ExportMode, type PreviewPage } from '@/features/score-editor/composables/useScoreExportPreview';
-import { Archive, Copy, Download, FileDown, Loader2 } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
 
 const props = defineProps<{
   visible: boolean;

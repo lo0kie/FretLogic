@@ -1,6 +1,7 @@
+import { describe, expect, it } from 'vitest';
+
 import { matchChordSearch, nameToSegments } from '@/services/music/theory';
 import type { Chord } from '@/types';
-import { describe, expect, it } from 'vitest';
 
 const createMockChord = (chordName: string): Chord => ({
   id: `chord-${chordName}`,

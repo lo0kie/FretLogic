@@ -1,6 +1,10 @@
-import vue from '@vitejs/plugin-vue';
 import { fileURLToPath } from 'node:url';
+
+import vue from '@vitejs/plugin-vue';
+import Icons from 'unplugin-icons/vite';
 import { configDefaults, defineConfig } from 'vitest/config';
+
+import { injectScssTokens } from './scripts/scss-inject';
 
 // Vitest 测试配置（projects 双项目拆分）：
 // - logic 项目（environment: node）：领域/服务/工具等纯逻辑测试。
@@ -11,7 +15,13 @@ import { configDefaults, defineConfig } from 'vitest/config';
 // - isolate 默认 true：每个测试文件独立模块注册表，模块级缓存不跨文件泄漏。
 // - pool 默认 'forks'：Windows 下进程模型最稳，避免 worker 挂起。
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    Icons({
+      compiler: 'vue3',
+      autoInstall: false,
+    }),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -21,11 +31,7 @@ export default defineConfig({
     preprocessorOptions: {
       scss: {
         api: 'modern-compiler',
-        additionalData: (source: string, filePath: string) => {
-          if (filePath.includes('tokens.scss')) return source;
-          if (source.includes('assets/tokens')) return source;
-          return `@use "@/assets/tokens" as *;\n${source.replace(/^\uFEFF/, '')}`;
-        },
+        additionalData: injectScssTokens,
       },
     },
   },

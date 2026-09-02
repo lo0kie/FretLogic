@@ -1,15 +1,13 @@
 <template>
   <div
-    ref="charBoxRef"
     v-wave
-    class="char-box group flex flex-col items-center justify-start p-0.5 self-stretch rounded-sm box-border relative cursor-pointer outline-none transition-all duration-fast hover:bg-tint-primary-88 [touch-action:pan-x_pan-y] [&.is-drop-target]:!bg-tint-primary-85 [&.is-dragging-source]:!opacity-35"
-    :data-slot-key="slotKey"
+    :aria-label="ariaLabelText"
     :class="[
       {
         'opacity-85': variant !== 'char' && !(variant === 'edge' && chord) && variant !== 'add',
-        'opacity-100 justify-start after:content-[\'\'] after:block after:w-full after:h-[1.15rem] after:shrink-0':
+        'justify-start opacity-100 after:block after:h-[1.15rem] after:w-full after:shrink-0 after:content-[\'\']':
           variant === 'edge' && Boolean(chord),
-        'opacity-100 px-[0.4rem] justify-center hover:!bg-transparent': variant === 'add',
+        'justify-center px-[0.4rem] opacity-100 hover:bg-transparent!': variant === 'add',
         'ml-[0.42rem]': leftChordGap,
         // 拖拽期间整行空字符槽统一撑开（isDragActive 全程恒定）：
         // 若跟随 dropZone 逐槽增缩会推动整行来回顶、产生抽动
@@ -18,24 +16,26 @@
         [FOCUS_RING_SHADOW_CLASS]: isFocused,
       },
     ]"
-    role="button"
-    :tabindex="0"
-    :aria-label="ariaLabelText"
-    :title="slotTitle"
     :data-focusable-inline="true"
+    :data-slot-key="slotKey"
+    :tabindex="0"
+    :title="slotTitle"
     @click="handleClick"
-    @keydown.enter="handleKeydown"
-    @keydown.space="handleKeydown"
-    @keydown.delete="handleDelete"
-    @keydown.backspace="handleDelete"
-    @mouseenter="isHovered = true"
-    @mouseleave="isHovered = false"
     @focusin="handleFocusIn"
     @focusout="handleFocusOut"
+    @keydown.backspace="handleDelete"
+    @keydown.delete="handleDelete"
+    @keydown.enter="handleKeydown"
+    @keydown.space="handleKeydown"
+    @mouseenter="isHovered = true"
+    @mouseleave="isHovered = false"
+    class="char-box group duration-fast hover:bg-tint-primary-88 [&.is-drop-target]:bg-tint-primary-85! relative box-border flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 transition-all outline-none [&.is-dragging-source]:!opacity-35"
+    ref="charBoxRef"
+    role="button"
   >
     <div
-      class="chord-display-slot flex-1 flex justify-center w-full"
       :class="variant === 'edge' && chord ? 'items-start' : variant === 'add' ? 'items-center' : 'items-start'"
+      class="chord-display-slot flex w-full flex-1 justify-center"
     >
       <!-- 拖拽分区落点：本槽位为当前落点时，上下两块分区即松手后将执行的动作（光标所在分区放大）。
            层级说明：z-[3] 低于操作按钮层 z-card(5)，因拖拽中操作层被 isDragActive 抑制为
@@ -49,17 +49,17 @@
       >
         <div
           v-if="dropZone"
-          class="absolute inset-0 z-[3] flex flex-col gap-[4px] p-[2px] overflow-hidden rounded-[6px] pointer-events-none"
+          class="pointer-events-none absolute inset-0 z-3 flex flex-col gap-[4px] overflow-hidden rounded-[6px] p-[2px]"
         >
           <!-- 有和弦的落点：整槽压暗提示将被影响（位于分区之下） -->
-          <div v-if="chord" class="absolute inset-0 -z-[1] rounded-[6px] bg-black/30 pointer-events-none" />
-          <div class="flex items-center justify-center" :class="[FAST_TRANSITION_CLASS, zoneShellClass('top')]">
-            <span class="font-bold leading-none break-keep" :class="[FAST_TRANSITION_CLASS, zoneLabelClass('top')]">
+          <div v-if="chord" class="pointer-events-none absolute inset-0 z-[-1] rounded-[6px] bg-black/30" />
+          <div :class="[FAST_TRANSITION_CLASS, zoneShellClass('top')]" class="flex items-center justify-center">
+            <span :class="[FAST_TRANSITION_CLASS, zoneLabelClass('top')]" class="leading-none font-bold break-keep">
               {{ zoneLabel('top') }}
             </span>
           </div>
-          <div class="flex items-center justify-center" :class="[FAST_TRANSITION_CLASS, zoneShellClass('bottom')]">
-            <span class="font-bold leading-none break-keep" :class="[FAST_TRANSITION_CLASS, zoneLabelClass('bottom')]">
+          <div :class="[FAST_TRANSITION_CLASS, zoneShellClass('bottom')]" class="flex items-center justify-center">
+            <span :class="[FAST_TRANSITION_CLASS, zoneLabelClass('bottom')]" class="leading-none font-bold break-keep">
               {{ zoneLabel('bottom') }}
             </span>
           </div>
@@ -67,89 +67,89 @@
       </Transition>
       <div
         v-if="chord"
-        class="inline-fretboard-card flex flex-col items-center p-xs rounded-sm bg-transparent relative select-none transition-all duration-fast"
+        class="inline-fretboard-card p-xs duration-fast relative flex flex-col items-center rounded-sm bg-transparent transition-all select-none"
       >
         <div
           v-if="isVisible && !isExporting"
-          class="absolute inset-0 rounded-sm bg-black/30 pointer-events-none z-[2]"
           :class="[FAST_TRANSITION_CLASS, isActive ? 'opacity-100' : 'opacity-0']"
+          class="pointer-events-none absolute inset-0 z-2 rounded-sm bg-black/30"
         >
           <div
             v-if="isVisible && !isExporting"
-            ref="actionGroupEl"
-            class="absolute inset-0 z-card flex flex-col items-stretch justify-center gap-1.5 p-2"
             :class="[
               FAST_TRANSITION_CLASS,
               isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
             ]"
             @keydown="handleActionKeydown"
+            class="z-card absolute inset-0 flex flex-col items-stretch justify-center gap-1.5 p-2"
+            ref="actionGroupEl"
           >
             <ActionButton
-              ref="editButtonEl"
               v-wave
-              color="primary"
-              variant="subtle"
-              size="sm"
-              block
-              :tabindex="-1"
               :aria-label="editButtonTitle"
-              :title="editButtonTitle"
-              class="!pointer-events-auto"
               :class="actionButtonTransition(0)"
-              @pointerdown.stop
+              :tabindex="-1"
+              :title="editButtonTitle"
               @click.stop.prevent="emit('click')"
+              @pointerdown.stop
+              block
+              class="pointer-events-auto!"
+              color="primary"
+              ref="editButtonEl"
+              size="sm"
+              variant="subtle"
             >
-              <Pencil :size="16" :stroke-width="2.5" class="shrink-0" />
+              <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="pencil" />
               <span class="font-bold">{{ editButtonLabel }}</span>
             </ActionButton>
             <ActionButton
-              ref="copyButtonEl"
               v-wave
-              color="success"
-              variant="subtle"
-              size="sm"
-              block
-              :tabindex="-1"
               :aria-label="moveButtonTitle"
-              :title="moveButtonTitle"
-              class="!pointer-events-auto cursor-grab active:cursor-grabbing"
               :class="actionButtonTransition(1)"
-              @pointerdown.stop.prevent="emit('copyPointerdown', $event, slotKey, chord)"
-              @mouseup.stop.prevent
+              :tabindex="-1"
+              :title="moveButtonTitle"
               @click.stop.prevent
+              @mouseup.stop.prevent
+              @pointerdown.stop.prevent="emit('copyPointerdown', $event, slotKey, chord)"
+              block
+              class="pointer-events-auto! cursor-grab active:cursor-grabbing"
+              color="success"
+              ref="copyButtonEl"
+              size="sm"
+              variant="subtle"
             >
-              <GripVertical :size="16" :stroke-width="2.5" class="shrink-0" />
+              <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="grip-vertical" />
               <span class="font-bold">{{ moveButtonLabel }}</span>
             </ActionButton>
             <ActionButton
-              ref="removeButtonEl"
               v-wave
-              color="danger"
-              variant="subtle"
-              size="sm"
-              block
-              :tabindex="-1"
               :aria-label="removeButtonTitle"
-              :title="removeButtonTitle"
-              class="!pointer-events-auto"
               :class="actionButtonTransition(2)"
-              @pointerdown.stop
+              :tabindex="-1"
+              :title="removeButtonTitle"
               @click.stop.prevent="emit('remove', slotKey)"
+              @pointerdown.stop
+              block
+              class="pointer-events-auto!"
+              color="danger"
+              ref="removeButtonEl"
+              size="sm"
+              variant="subtle"
             >
-              <X :size="16" :stroke-width="2.5" class="shrink-0" />
+              <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="x" />
               <span class="font-bold">{{ removeButtonLabel }}</span>
             </ActionButton>
           </div>
         </div>
         <Fretboard
           v-if="isVisible"
-          :ref="setFretboardMeasureRef"
-          :chord-name-editable="false"
           :chord
+          :chord-name-editable="false"
           :interactive="false"
-          :is-score-mode="true"
-          :scale="0.25 * scoreEditor.effectiveFretboardScale"
           :is-dark-mode="globalDarkMode"
+          :is-score-mode="true"
+          :ref="setFretboardMeasureRef"
+          :scale="0.25 * scoreEditor.effectiveFretboardScale"
           fret-number-size="lg"
         />
         <div v-else :style="chord ? getCalculatedOrCachedSize(chord.fretCount) : undefined" />
@@ -157,29 +157,29 @@
 
       <ActionButton
         v-else-if="variant === 'add'"
-        ref="addButtonEl"
-        icon-only
-        variant="subtle"
-        :tabindex="-1"
         :aria-label="addPlaceholderTitle"
+        :class="isActive || lineHovered ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'"
+        :tabindex="-1"
         :title="addPlaceholderTitle"
-        :class="isActive || lineHovered ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'"
+        icon-only
+        ref="addButtonEl"
+        variant="subtle"
       >
-        <Plus :size="18" :stroke-width="3" class="text-primary" />
+        <BaseIcon :size="18" :stroke-width="3" class="text-primary" name="plus" />
       </ActionButton>
     </div>
     <template v-if="variant === 'char'">
       <span
-        class="char-text inline-flex items-center justify-center font-semibold text-text-title px-0.5 box-border mt-auto transition-all duration-fast text-[calc(0.875rem*var(--score-font-scale,1))] leading-[1.15rem] min-h-[calc(1.15rem*var(--score-font-scale,1))] whitespace-pre"
         :class="[
           // 拖拽中字符 hover 不染主题色（避免与分区高亮抢注意力），正常 hover 仍保留
           { 'group-hover:text-primary': !isDragActive },
           char === ' '
             ? ''
             : chord
-              ? 'underline decoration-dashed decoration-text-disabled/80 underline-offset-[8px]'
+              ? 'decoration-text-disabled/80 underline decoration-dashed underline-offset-[8px]'
               : '',
         ]"
+        class="char-text text-text-title duration-fast mt-auto box-border inline-flex min-h-[calc(1.15rem*var(--score-font-scale,1))] items-center justify-center px-0.5 text-[calc(0.875rem*var(--score-font-scale,1))] leading-[1.15rem] font-semibold whitespace-pre transition-all"
       >
         {{ char === ' ' ? '\u00A0' : char }}
       </span>
@@ -189,21 +189,28 @@
 
 <script lang="ts">
 import { reactive } from 'vue';
+
+import BaseIcon from '@/components/ui/BaseIcon.vue';
+
 const fretboardSizeCache = reactive(new Map<string, { width: string; height: string }>());
 </script>
 
-<script setup lang="ts">
-import ActionButton from '@/components/ui/ActionButton.vue';
+<script lang="ts" setup>
+import { computed, nextTick, ref, useTemplateRef, watch, watchEffect, type ComponentPublicInstance } from 'vue';
+
 import Fretboard from '@/components/fretboard/Fretboard.vue';
-import { resolveDropAction, type DropAction, type DropZone } from '@/features/score-editor/composables/lyrics-drag/dropZone';
+import ActionButton from '@/components/ui/ActionButton.vue';
+import {
+  resolveDropAction,
+  type DropAction,
+  type DropZone,
+} from '@/features/score-editor/composables/lyrics-drag/dropZone';
+import { getChordName } from '@/services/music/theory';
 import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { Chord, SlotKey } from '@/types';
 import { observeVisibility } from '@/utils/core/common';
 import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
-import { getChordName } from '@/utils/music/musicTheory';
-import { GripVertical, Pencil, Plus, X } from '@lucide/vue';
-import { computed, nextTick, ref, useTemplateRef, watch, watchEffect, type ComponentPublicInstance } from 'vue';
 
 const props = defineProps<{
   slotKey: SlotKey;
@@ -482,7 +489,7 @@ unwatchExport = watch(
 );
 </script>
 
-<style scoped lang="scss">
+<style lang="scss" scoped>
 /* 拖拽经过的空槽位撑开：直接加宽字符槽 + X 轴外边距推开相邻字符，
    min-width 只作下限、不缩窄；宽度/外边距变化带过渡 */
 .is-drop-widened {

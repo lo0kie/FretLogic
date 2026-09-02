@@ -2,15 +2,12 @@
  * 和弦 store：和弦与分组数据的加载、增删改、排序及持久化。
  * 维护分组-和弦卡片视图模型（GroupedChordCard）与和弦指法历史（撤销-重做）。
  */
-import { createChordRepository } from '@/services/repositories';
-import type { Chord, Group, GroupedChordCard } from '@/types';
-import { GroupSortRule } from '@/types';
-import { cloneDeep, cloneGuitarStrings, generateUUID } from '@/utils/core/common';
-import { STORAGE_KEYS } from '@/utils/core/constants';
-import { normalizeChord } from '@/utils/music/chord-fretboard';
-import { buildGroupVariant, createChord, createGroup, getGroupSortKey, toGroupId } from '@/utils/music/entityFactories';
+import { computed, toRaw } from 'vue';
+
+import { useRefHistory, useStorage } from '@vueuse/core';
+import { defineStore } from 'pinia';
+
 import {
-  type ChordOrName,
   computeChordFingerprint,
   computeIsInverted,
   getChordName,
@@ -19,10 +16,15 @@ import {
   segmentsToString,
   sortChordsByRule,
   validateBassConsistency,
-} from '@/utils/music/musicTheory';
-import { useRefHistory, useStorage } from '@vueuse/core';
-import { defineStore } from 'pinia';
-import { computed, toRaw } from 'vue';
+  type ChordOrName,
+} from '@/services/music/theory';
+import { createChordRepository } from '@/services/repositories';
+import type { Chord, Group, GroupedChordCard } from '@/types';
+import { GroupSortRule } from '@/types';
+import { cloneDeep, cloneGuitarStrings, generateUUID } from '@/utils/core/common';
+import { STORAGE_KEYS } from '@/utils/core/constants';
+import { normalizeChord } from '@/utils/music/chord-fretboard';
+import { buildGroupVariant, createChord, createGroup, getGroupSortKey, toGroupId } from '@/utils/music/entityFactories';
 
 const DEFAULT_SORT_RULE: GroupSortRule = GroupSortRule.ROOT_PITCH;
 

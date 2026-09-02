@@ -1,7 +1,8 @@
-import FretboardSvg from '@/components/fretboard/FretboardSvg.vue';
-import type { BarreEntity } from '@/types';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+
+import FretboardSvg from '@/components/fretboard/FretboardSvg.vue';
+import type { BarreEntity } from '@/types';
 
 const candidate: BarreEntity = { fret: 1, fromString: 0, toString: 5, finger: 1 };
 

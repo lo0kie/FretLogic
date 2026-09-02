@@ -2,6 +2,8 @@
  * 云同步服务：基于 Provider（GitHub / WebDAV）的推拉同步、连接测试与分支列表获取。
  * 推送使用不含凭据的 selection（见 buildBackupPayload），拉取结果走统一清洗层后应用。
  */
+import { ref } from 'vue';
+
 import {
   SyncError,
   type SyncBranchesProvider,
@@ -9,6 +11,7 @@ import {
   type SyncProviderKind,
 } from '@/services/sync/provider';
 import { syncProviderRegistry } from '@/services/sync/registry';
+import { FULL_BACKUP_SELECTION } from '@/shared/composables/useImportExportService';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -16,8 +19,6 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { buildBackupPayload } from '@/utils/core/buildBackupPayload';
-import { FULL_BACKUP_SELECTION } from '@/shared/composables/useImportExportService';
-import { ref } from 'vue';
 
 const isSyncing = ref(false);
 const isPulling = ref(false);

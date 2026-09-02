@@ -2,16 +2,18 @@
  * 乐谱编辑器 store：当前编辑歌曲的歌词 / 和弦槽位 / 谱面状态管理，
  * 含撤销-重做历史栈、调性变换（transpose/capo）与编辑态持久化。
  */
-import { useSongStore } from '@/stores/songStore';
-import type { Chord, ChordId, LineId, SlotKey, Song } from '@/types';
-import { garbageCollectChordMap } from '@/utils/score/chordSlots';
-import { toCapo } from '@/utils/music/chord-fretboard';
-import { cloneDeep, matchLineIds, sanitizeLyricsText } from '@/utils/core/common';
-import { STORAGE_KEYS } from '@/utils/core/constants';
-import { computeSongKey, getKeySemitones, transposeChordName } from '@/utils/music/musicTheory';
+import { computed, nextTick, ref, watch } from 'vue';
+
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { computed, nextTick, ref, watch } from 'vue';
+
+import { computeSongKey, getKeySemitones, transposeChordName } from '@/services/music/theory';
+import { useSongStore } from '@/stores/songStore';
+import type { Chord, ChordId, LineId, SlotKey, Song } from '@/types';
+import { cloneDeep, matchLineIds, sanitizeLyricsText } from '@/utils/core/common';
+import { STORAGE_KEYS } from '@/utils/core/constants';
+import { toCapo } from '@/utils/music/chord-fretboard';
+import { garbageCollectChordMap } from '@/utils/score/chordSlots';
 
 type ScoreActiveTab = 'edit' | 'interactive';
 

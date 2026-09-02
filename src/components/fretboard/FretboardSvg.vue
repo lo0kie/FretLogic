@@ -1,60 +1,60 @@
 <template>
-  <div class="relative w-full inline-block">
-    <div v-if="showFretNumbers" class="absolute inset-0 pointer-events-none z-inner" aria-hidden="true">
+  <div class="relative inline-block w-full">
+    <div v-if="showFretNumbers" aria-hidden="true" class="z-inner pointer-events-none absolute inset-0">
       <span
         v-for="i in fretCount"
         v-show="i < fretCount"
-        :key="'fret-num-' + i"
-        class="absolute -translate-x-full -translate-y-1/2 font-extrabold leading-none select-none text-[var(--fb-label)] font-[Helvetica_Neue,Arial,sans-serif]"
         :class="FRET_SIZE_MAP[fretNumberSize] || FRET_SIZE_MAP['md']"
+        :key="'fret-num-' + i"
         :style="getFretNumberStyle(i)"
+        class="absolute -translate-x-full -translate-y-1/2 font-[Helvetica_Neue,Arial,sans-serif] leading-none font-extrabold text-(--fb-label) select-none"
       >
         {{ capo > 0 ? capo + i : i }}
       </span>
     </div>
 
     <svg
-      :width="CANVAS_CONFIG.BOARD_WIDTH"
+      :aria-label="boardAriaLabel"
       :height="fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
       :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
-      style="overflow: visible"
-      class="w-full pointer-events-none box-border block"
+      :width="CANVAS_CONFIG.BOARD_WIDTH"
+      class="pointer-events-none box-border block w-full"
       role="img"
-      :aria-label="boardAriaLabel"
+      style="overflow: visible"
     >
       <g>
         <line
           v-for="s in 6"
           :key="'string-' + s"
-          :x1="stringXPositions[s - 1] ?? 0"
-          :y1="0"
-          :x2="stringXPositions[s - 1] ?? 0"
-          :y2="fretCount * CANVAS_CONFIG.FRET_HEIGHT"
-          stroke="var(--fb-line)"
           :stroke-width="FRETBOARD_LINE_WIDTH"
-          stroke-linecap="butt"
+          :x1="stringXPositions[s - 1] ?? 0"
+          :x2="stringXPositions[s - 1] ?? 0"
+          :y1="0"
+          :y2="fretCount * CANVAS_CONFIG.FRET_HEIGHT"
           shape-rendering="crispEdges"
+          stroke="var(--fb-line)"
+          stroke-linecap="butt"
         />
 
         <line
           v-for="f in fretCount + 1"
           :key="'fret-line-' + (f - 1)"
-          :x1="stringXPositions[0] ?? 0"
-          :y1="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
-          :x2="stringXPositions[5] ?? 0"
-          :y2="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
-          stroke="var(--fb-line)"
           :stroke-width="FRETBOARD_LINE_WIDTH"
-          stroke-linecap="square"
+          :x1="stringXPositions[0] ?? 0"
+          :x2="stringXPositions[5] ?? 0"
+          :y1="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
+          :y2="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
           shape-rendering="crispEdges"
+          stroke="var(--fb-line)"
+          stroke-linecap="square"
         />
 
         <rect
           v-if="capo === 0 && isWideNut"
+          :height="12"
+          :width="(stringXPositions[5] ?? 0) - (stringXPositions[0] ?? 0) + FRETBOARD_LINE_WIDTH"
           :x="(stringXPositions[0] ?? 0) - FRETBOARD_LINE_WIDTH / 2"
           :y="-12"
-          :width="(stringXPositions[5] ?? 0) - (stringXPositions[0] ?? 0) + FRETBOARD_LINE_WIDTH"
-          :height="12"
           fill="var(--fb-note)"
           rx="1"
         />
@@ -63,65 +63,65 @@
       <g v-if="!showPitchNames && barrePickMode && renderBarreCandidates.length">
         <rect
           v-for="c in renderBarreCandidates"
-          :key="`barre-cand-dash-${c.fret}-${c.fromString}-${c.toString}`"
-          :x="barreDashGeometry(c).x"
-          :y="barreDashGeometry(c).y"
-          :width="barreDashGeometry(c).width"
           :height="barreDashGeometry(c).height"
+          :key="`barre-cand-dash-${c.fret}-${c.fromString}-${c.toString}`"
           :rx="barreDashGeometry(c).rx"
-          fill="none"
           :stroke="barreCandidateFill"
-          :stroke-width="isBarreHighlighted(c) ? 6 : 4"
           :stroke-dasharray="'8 6'"
           :stroke-opacity="isBarreHighlighted(c) ? 1 : 0.6"
-          class="transition-[stroke-opacity] duration-fast"
+          :stroke-width="isBarreHighlighted(c) ? 6 : 4"
+          :width="barreDashGeometry(c).width"
+          :x="barreDashGeometry(c).x"
+          :y="barreDashGeometry(c).y"
+          class="duration-fast transition-[stroke-opacity]"
+          fill="none"
         />
         <rect
           v-for="c in renderBarreCandidates"
-          :key="`barre-cand-${c.fret}-${c.fromString}-${c.toString}`"
-          :x="barreGeometry(c).x"
-          :y="barreGeometry(c).y"
-          :width="barreGeometry(c).width"
-          :height="barreThickness"
-          :rx="barreThickness / 2"
           :fill="barreCandidateFill"
           :fill-opacity="isBarreHighlighted(c) ? 0.5 : 0.2"
+          :height="barreThickness"
+          :key="`barre-cand-${c.fret}-${c.fromString}-${c.toString}`"
+          :rx="barreThickness / 2"
           :title="barreCandidateTitle(c)"
-          class="pointer-events-none cursor-pointer transition-[fill-opacity] duration-fast"
+          :width="barreGeometry(c).width"
+          :x="barreGeometry(c).x"
+          :y="barreGeometry(c).y"
+          class="duration-fast pointer-events-none cursor-pointer transition-[fill-opacity]"
         />
         <rect
           v-for="c in renderBarreCandidates"
+          :aria-label="barreCandidateTitle(c)"
+          :height="barreHitThickness"
           :key="`barre-cand-hit-${c.fret}-${c.fromString}-${c.toString}`"
+          :width="barreGeometry(c).width"
           :x="barreGeometry(c).x"
           :y="barreHitGeometry(c).y"
-          :width="barreGeometry(c).width"
-          :height="barreHitThickness"
+          @blur="focusedBarreHit = null"
+          @click.stop="emit('barre-click', c)"
+          @focus="focusedBarreHit = barreKey(c)"
+          @keydown.enter.prevent="emit('barre-click', c)"
+          @keydown.space.prevent="emit('barre-click', c)"
+          @mouseenter="activeBarreHit = barreKey(c)"
+          @mouseleave="activeBarreHit = null"
+          class="pointer-events-auto cursor-pointer outline-none"
           fill="transparent"
           role="button"
           tabindex="0"
-          :aria-label="barreCandidateTitle(c)"
-          class="pointer-events-auto cursor-pointer outline-none"
-          @click.stop="emit('barre-click', c)"
-          @keydown.enter.prevent="emit('barre-click', c)"
-          @keydown.space.prevent="emit('barre-click', c)"
-          @focus="focusedBarreHit = barreKey(c)"
-          @blur="focusedBarreHit = null"
-          @mouseenter="activeBarreHit = barreKey(c)"
-          @mouseleave="activeBarreHit = null"
         />
       </g>
 
       <g v-if="!showPitchNames && renderBarres.length" aria-hidden="true">
         <rect
           v-for="barre in renderBarres"
+          :fill="barreActiveFill"
+          :height="barreThickness"
           :key="`barre-${barre.fret}-${barre.fromString}-${barre.toString}`"
+          :rx="barreThickness / 2"
+          :width="barreGeometry(barre).width"
           :x="barreGeometry(barre).x"
           :y="barreGeometry(barre).y"
-          :width="barreGeometry(barre).width"
-          :height="barreThickness"
-          :rx="barreThickness / 2"
-          :fill="barreActiveFill"
-          class="transition-[fill] duration-fast"
+          class="duration-fast transition-[fill]"
         />
       </g>
 
@@ -129,39 +129,39 @@
         v-if="showEmptyHoverRing"
         :cx="stringXPositions[hoverPoint!.stringIndex]"
         :cy="(hoverPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-        :r="emptyRingRadius"
         :fill="hoverFillColor"
-        stroke="var(--color-primary)"
+        :r="emptyRingRadius"
         :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
         class="pointer-events-auto cursor-pointer"
+        stroke="var(--color-primary)"
       />
 
       <circle
         v-if="showEmptyFocusRing"
         :cx="stringXPositions[focusPoint!.stringIndex]"
         :cy="(focusPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-        :r="emptyRingRadius"
         :fill="hoverFillColor"
-        stroke="var(--color-primary)"
+        :r="emptyRingRadius"
         :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
         class="pointer-events-auto cursor-pointer"
+        stroke="var(--color-primary)"
       />
 
       <template v-for="(str, sIdx) in strings" :key="'finger-' + sIdx">
         <FretboardNote
           v-if="str[0] > 0 && str[0] <= fretCount"
+          :aria-label="stringNoteAriaLabel(sIdx, str)"
+          :interactive
+          :is-accidental="showPitchNames && noteInfo(sIdx, str).isAccidental"
+          :is-dark-mode
+          :is-focused="isNoteFocused(sIdx, str[0])"
+          :is-hovered="isNoteHovered(sIdx, str[0])"
+          :is-root="isRoot(sIdx)"
+          :label="showPitchNames ? noteInfo(sIdx, str).label : ''"
+          :prefer-flat="str[1]"
+          :show-pitch-names
           :x="stringXPositions[sIdx] ?? 0"
           :y="(str[0] - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-          :is-root="isRoot(sIdx)"
-          :is-dark-mode
-          :interactive
-          :is-hovered="isNoteHovered(sIdx, str[0])"
-          :is-focused="isNoteFocused(sIdx, str[0])"
-          :show-pitch-names
-          :label="showPitchNames ? noteInfo(sIdx, str).label : ''"
-          :is-accidental="showPitchNames && noteInfo(sIdx, str).isAccidental"
-          :prefer-flat="str[1]"
-          :aria-label="stringNoteAriaLabel(sIdx, str)"
           @toggle-pitch="emit('toggle-pitch', sIdx)"
         />
       </template>
@@ -169,11 +169,13 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, ref } from 'vue';
+
+import { computeStringLabelAccidental, formatStringLabel } from '@/services/music/theory';
 import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/types';
 import { CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '@/utils/core/constants';
-import { computeStringLabelAccidental, formatStringLabel } from '@/utils/music/musicTheory';
-import { computed, ref } from 'vue';
+
 import FretboardNote from './FretboardNote.vue';
 
 /** 横按梁厚度与极简模式按品圆点同直径（仅不显示音名时渲染，固定 48px） */

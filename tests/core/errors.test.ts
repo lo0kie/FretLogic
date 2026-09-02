@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { AppError, ErrorCode, errors, toAppError } from '@/services/errors';
 
 describe('AppError / toAppError', () => {

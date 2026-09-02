@@ -4,8 +4,9 @@
  * 实现方式：在 `<html>` 上设置 `data-theme` 属性；dark 同时挂载 `.dark` class
  * （tokens.scss 的暗色选择器与组件中 `:is-dark-mode` 布尔判断均依赖）。
  */
-import { useMediaQuery } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
+
+import { useMediaQuery } from '@vueuse/core';
 
 export type ThemeMode = 'light' | 'dark' | 'high-contrast';
 export type ThemePreference = ThemeMode | 'auto';

@@ -1,9 +1,11 @@
+import { nextTick } from 'vue';
+
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { nextTick } from 'vue';
-import SongSection from '@/features/song-library/SongSection.vue';
+
 import type { ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
+import SongSection from '@/features/song-library/SongSection.vue';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import type { Song } from '@/types';

@@ -1,47 +1,49 @@
 <template>
   <div
-    ref="triggerWrapperRef"
-    class="context-menu-trigger-wrapper contents"
     :class="{ 'cursor-default': disabled }"
     @contextmenu="handleContextMenu"
+    class="context-menu-trigger-wrapper contents"
+    ref="triggerWrapperRef"
   >
     <slot :is-open />
   </div>
 
   <BasePopover
-    ref="popoverRef"
     v-model="isOpen"
-    :virtual-ref
-    placement="bottom-start"
-    :offset-distance="6"
     :disabled
+    :offset-distance="6"
+    :virtual-ref
+    @close="handlePopoverClose"
     aria-label="右键上下文菜单"
     panel-class="context-menu-box"
-    @close="handlePopoverClose"
+    placement="bottom-start"
+    ref="popoverRef"
   >
     <div
+      :class="`context-menu-size-${size}`"
+      @keydown="handleMenuKeydown"
+      class="context-menu-inner gap-xs flex flex-col outline-none"
       ref="menuBoxRef"
       role="menu"
       tabindex="-1"
-      class="context-menu-inner flex flex-col gap-xs outline-none"
-      :class="`context-menu-size-${size}`"
-      @keydown="handleMenuKeydown"
     >
-      <ContextMenuItems ref="itemsRef" :items :title :size @select="handleItemSelect" />
+      <ContextMenuItems :items :size :title @select="handleItemSelect" ref="itemsRef" />
     </div>
   </BasePopover>
 </template>
 
 <script lang="ts">
-import BasePopover from '@/components/ui/BasePopover.vue';
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+
+import BasePopover from '@/components/ui/BasePopover.vue';
 
 // 记录全局当前打开的菜单，用于互斥关闭
 const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
 </script>
 
-<script setup lang="ts">
+<script lang="ts" setup>
 import type { VirtualElement } from '@floating-ui/vue';
+
 import ContextMenuItems, { type ContextMenuItem } from './ContextMenuItems.vue';
 
 defineOptions({ name: 'ContextMenu', inheritAttrs: false });

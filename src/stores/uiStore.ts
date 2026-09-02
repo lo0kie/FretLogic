@@ -1,12 +1,14 @@
 /**
  * UI store：全局 Toast 队列（含定时销毁）、侧栏开合状态与复制中标记等界面瞬时状态。
  */
-import { STORAGE_KEYS, TOAST_DEFAULT_DURATION_MS } from '@/utils/core/constants';
-import type { Toast, ToastOptions } from '@/types';
-import { ToastType } from '@/types';
+import { ref, shallowRef } from 'vue';
+
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { ref, shallowRef } from 'vue';
+
+import type { Toast, ToastOptions } from '@/types';
+import { ToastType } from '@/types';
+import { STORAGE_KEYS, TOAST_DEFAULT_DURATION_MS } from '@/utils/core/constants';
 
 export const useUiStore = defineStore('ui', () => {
   const toasts = ref<Toast[]>([]);

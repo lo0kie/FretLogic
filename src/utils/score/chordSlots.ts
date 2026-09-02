@@ -3,6 +3,7 @@
  * 由 utils/music/chord-fretboard.ts 拆分迁入——槽位域属乐谱（score），与 scoreModel 同居一处。
  */
 import type { ChordId, SlotKey } from '@/types';
+
 import { charKey, chordSlotKey, collectEdgeChordIds, edgeSlotPrefix } from './scoreModel';
 
 // ===== chordMap: 和弦槽位映射与和弦数据归一化 =====
@@ -225,4 +226,3 @@ export const plainToChordMap = (raw: unknown): Map<SlotKey, ChordId> => {
       .map(([k, v]) => [k as SlotKey, v as ChordId])
   );
 };
-

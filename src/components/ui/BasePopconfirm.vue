@@ -1,60 +1,60 @@
 <template>
   <BasePopover
     v-model="visible"
-    :trigger
-    :placement
-    :disabled
-    :hover-open-delay
-    :hover-close-delay
-    :show-arrow="true"
-    :auto-focus="trigger === 'click' && !disabled"
-    :offset-distance="10"
-    :teleport-to
-    :disabled-teleport
     :aria-label="title"
+    :auto-focus="trigger === 'click' && !disabled"
+    :disabled
+    :disabled-teleport
+    :hover-close-delay
+    :hover-open-delay
+    :offset-distance="10"
     :panel-class="'popconfirm-panel'"
     :panel-style="{ width: resolvedWidth }"
-    @open="emit('open')"
+    :placement
+    :show-arrow="true"
+    :teleport-to
+    :trigger
     @close="emit('close')"
+    @open="emit('open')"
   >
     <template #trigger="slotProps">
-      <slot name="trigger" v-bind="slotProps" />
+      <slot v-bind="slotProps" name="trigger" />
     </template>
 
     <slot :close="closePopover" :confirm="handleConfirm">
-      <div class="popconfirm-body flex items-start gap-sm px-md py-md box-border">
-        <component
-          :is="resolvedIcon"
-          v-if="resolvedIcon"
-          class="popconfirm-icon shrink-0 mt-2px"
+      <div class="popconfirm-body gap-sm px-md py-md box-border flex items-start">
+        <BaseIcon
+          v-if="typeof resolvedIcon === 'string'"
+          :name="resolvedIcon"
           :size="15"
-          :stroke-width="2"
+          class="popconfirm-icon mt-2px shrink-0"
         />
+        <component v-else-if="resolvedIcon" :is="resolvedIcon" :size="15" class="popconfirm-icon mt-2px shrink-0" />
 
-        <div class="popconfirm-text flex-1 min-w-0">
-          <p class="popconfirm-title text-xs font-semibold text-text-title leading-relaxed m-0">{{ title }}</p>
-          <p v-if="description" class="popconfirm-description text-2xs text-text-muted leading-relaxed mt-1 mb-0">
+        <div class="popconfirm-text min-w-0 flex-1">
+          <p class="popconfirm-title text-text-title m-0 text-xs leading-relaxed font-semibold">{{ title }}</p>
+          <p v-if="description" class="popconfirm-description text-text-description m-0 mt-1 text-xs leading-relaxed">
             {{ description }}
           </p>
 
-          <div class="popconfirm-actions flex items-center justify-end gap-sm mt-sm" :class="{ 'mt-2': !description }">
-            <slot name="actions" :confirm="handleConfirm" :close="closePopover">
+          <div :class="{ 'mt-2': !description }" class="popconfirm-actions gap-sm mt-sm flex items-center justify-end">
+            <slot :close="closePopover" :confirm="handleConfirm" name="actions">
               <ActionButton
                 v-if="showCancel"
-                variant="ghost"
-                size="sm"
                 :disabled="confirmLoading"
                 @click="handleCancel"
+                size="sm"
+                variant="ghost"
               >
                 {{ cancelText }}
               </ActionButton>
               <ActionButton
-                variant="subtle"
-                size="sm"
                 :color="confirmColor"
-                :loading="confirmLoading"
                 :disabled="confirmDisabled || confirmLoading"
+                :loading="confirmLoading"
                 @click="handleConfirm"
+                size="sm"
+                variant="subtle"
               >
                 {{ confirmText }}
               </ActionButton>
@@ -66,12 +66,15 @@
   </BasePopover>
 </template>
 
-<script setup lang="ts">
-import ActionButton from '@/components/ui/ActionButton.vue';
-import BasePopover from '@/components/ui/BasePopover.vue';
-import type { Placement } from '@floating-ui/vue';
-import { AlertTriangle, Info } from '@lucide/vue';
+<script lang="ts" setup>
 import { computed, type Component } from 'vue';
+
+import type { Placement } from '@floating-ui/vue';
+
+import ActionButton from '@/components/ui/ActionButton.vue';
+import BaseIcon from '@/components/ui/BaseIcon.vue';
+import BasePopover from '@/components/ui/BasePopover.vue';
+import type { IconName } from '@/components/ui/icons.registry';
 
 /**
  * BasePopconfirm 气泡提示/确认卡：
@@ -119,7 +122,7 @@ const {
   /** 是否显示语义图标（default 色调无图标） */
   showIcon?: boolean;
   /** 自定义图标组件（覆盖 tone 默认图标） */
-  icon?: Component | null;
+  icon?: IconName | Component | null;
   confirmText?: string;
   cancelText?: string;
   /** 是否显示取消按钮（纯提示卡可关掉，仅留确认/知道了） */
@@ -153,14 +156,16 @@ const emit = defineEmits<{
 const visible = defineModel<boolean>('visible', { default: false });
 
 /** tone → 图标映射（GlobalToast 同套图标语言） */
-const TONE_ICONS: Record<string, Component | null> = {
+const TONE_ICONS: Record<string, IconName | null> = {
   default: null,
-  info: Info,
-  warning: AlertTriangle,
-  danger: AlertTriangle,
+  info: 'info',
+  warning: 'alert-triangle',
+  danger: 'alert-triangle',
 };
 
-const resolvedIcon = computed(() => (showIcon ? (icon ?? TONE_ICONS[tone] ?? null) : null));
+const resolvedIcon = computed<IconName | Component | null>(() =>
+  showIcon ? (icon ?? TONE_ICONS[tone] ?? null) : null
+);
 
 const confirmColor = computed(() => (tone === 'danger' ? 'danger' : tone === 'warning' ? 'warning' : 'primary'));
 

@@ -1,35 +1,36 @@
 <template>
   <div
+    class="bg-bg-panel/90 border-glass-border shadow-panel py-xl px-2xl duration-slow ease-sidebar hover:border-border-base pointer-events-auto relative flex shrink-0 flex-col items-center justify-evenly rounded-md border backdrop-blur-lg transition-all hover:shadow-lg"
     ref="cardRef"
-    class="flex flex-col items-center justify-evenly pointer-events-auto bg-bg-panel/90 backdrop-blur-lg border border-glass-border rounded-md shadow-panel relative py-xl px-2xl shrink-0 transition-all duration-slow ease-sidebar hover:border-border-base hover:shadow-lg"
   >
-    <div class="flex justify-center relative w-full z-base shrink-0">
+    <div class="z-base relative flex w-full shrink-0 justify-center">
       <Fretboard
         :chord="editorStore.draftChord"
+        :interactive="true"
         :is-dark-mode="globalDarkMode"
         :scale="1.0"
-        :interactive="true"
-        chord-name-editable
-        chord-name-font-size="lg"
         @update:capo="handleCapoUpdate"
-        @update:strings="handleStringsChange"
-        @update:root-string-index="handleRootStringChange"
         @update:chord-name="handleChordNameChange"
         @update:name-segments="handleNameSegmentsChange"
+        @update:root-string-index="handleRootStringChange"
+        @update:strings="handleStringsChange"
+        chord-name-editable
+        chord-name-font-size="lg"
       />
     </div>
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { useTemplateRef } from 'vue';
+
 import Fretboard from '@/components/fretboard/Fretboard.vue';
+import { nameToSegments } from '@/services/music/theory';
 import { useActiveExportTarget } from '@/shared/composables/useActiveExportTarget';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { globalDarkMode } from '@/stores/globalState';
 import type { ChordNameSegments, GuitarStringsModel, StringIndex } from '@/types';
 import { toCapo, toStringIndex } from '@/utils/music/chord-fretboard';
-import { nameToSegments } from '@/utils/music/musicTheory';
-import { useTemplateRef } from 'vue';
 
 const editorStore = useChordEditorStore();
 const cardRef = useTemplateRef<HTMLElement>('cardRef');

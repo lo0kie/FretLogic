@@ -2,6 +2,7 @@
 // 扁平目录结构下的架构约定见 CONTRIBUTING.md：跨层依赖方向为单向
 // views/components → composables → stores/services → utils。
 import eslint from '@eslint/js';
+import prettier from 'eslint-config-prettier/flat';
 import importPlugin from 'eslint-plugin-import-x';
 import vue from 'eslint-plugin-vue';
 import globals from 'globals';
@@ -24,7 +25,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   ...vue.configs['flat/recommended'],
   {
-    // 浏览器端源码（src）
+    // 浏览器端源码（src）——轻量语法级 AST 解析与分层架构约束（全量类型检查由 vue-tsc 负责）。
     files: ['src/**/*.{ts,vue}'],
     languageOptions: {
       globals: { ...globals.browser, __BUILD_INFO__: 'readonly' },
@@ -41,9 +42,38 @@ export default tseslint.config(
       },
     },
     rules: {
-      // ---- 架构约束：扁平分层 ----
-      // 历史上用 import/no-restricted-paths 强制 feature 隔离；改为扁平结构后，
-      // 跨层方向（views/components → composables → stores/services → utils）由约定与代码评审保障。
+      // ---- 架构约束：跨层依赖方向（单向）----
+      // 依赖方向：components/features/app → shared/composables → stores/services → utils/directives/assets；
+      // types/ 为中性叶子层，任何层均可导入，且自身不可向上依赖。
+      // 因此「下层」禁止导入「上层」：utils 不可导入 stores/services/shared/components/features/app；
+      // stores/services 不可导入 shared/components/features/app；shared 不可导入 components/features/app。
+      'import/no-restricted-paths': [
+        'error',
+        {
+          basePath: '.',
+          zones: [
+            {
+              target: ['./src/utils', './src/directives', './src/assets'],
+              from: [
+                './src/app/**',
+                './src/features/**',
+                './src/components/**',
+                './src/shared/**',
+                './src/stores/**',
+                './src/services/**',
+              ],
+            },
+            {
+              target: ['./src/stores', './src/services'],
+              from: ['./src/app/**', './src/features/**', './src/components/**', './src/shared/**'],
+            },
+            {
+              target: ['./src/shared'],
+              from: ['./src/app/**', './src/features/**', './src/components/**'],
+            },
+          ],
+        },
+      ],
       // ---- 代码质量 ----
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
@@ -61,6 +91,8 @@ export default tseslint.config(
       'vue/max-attributes-per-line': 'off',
       'vue/singleline-html-element-content-newline': 'off',
       'vue/multiline-html-element-content-newline': 'off',
+      // 属性顺序交由 prettier-plugin-organize-attributes 统一处理，避免与 ESLint 互改。
+      'vue/attributes-order': 'off',
       'vue/html-self-closing': [
         'error',
         {
@@ -72,14 +104,39 @@ export default tseslint.config(
     },
   },
   {
-    // Node 侧脚本与配置文件
-    files: ['**/*.{cjs,mjs,js,ts}', 'scripts/**', '*.config.{ts,js,mjs}', 'vitest.config.ts', 'playwright.config.ts'],
+    // Node 侧脚本与配置文件——files 已收窄，不再匹配 src/**/*.ts，
+    // 故不会用 Node globals（process/require/__dirname）污染浏览器代码作用域，
+    // 也不会用 no-console:'off' 覆盖浏览器块对 console 的告警。
+    // 与上方 src 块互斥：src/**/*.ts 只命中浏览器块。
+    files: ['**/*.{cjs,mjs,js}', 'scripts/**/*.ts', '*.config.{ts,js,mjs}', 'vitest.config.ts', 'playwright.config.ts'],
     languageOptions: {
       globals: { ...globals.node },
+    },
+    plugins: {
+      import: importPlugin,
+    },
+    settings: {
+      'import/resolver': {
+        typescript: true,
+      },
     },
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
       'no-console': 'off',
+      'import/no-duplicates': 'error',
     },
-  }
+  },
+  {
+    // 统一日志设施是唯一被允许直接使用 console 的地方（生产构建剥离 debug/info）。
+    // 其通过 console[level] 动态索引输出，无法被 no-console 静态放行，故整文件豁免。
+    files: ['src/utils/core/logger.ts'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  // 必须最后：关闭所有与 Prettier 排版冲突的 ESLint 规则（html-indent / html-self-closing 等），
+  // 让 Prettier 独占格式化主导权，消除 eslint --fix 与 prettier --write 的反复互改。
+  // 注：vue/attributes-order 需另行显式关闭（见上方 src 规则块），因属性顺序现由
+  // prettier-plugin-organize-attributes 统一处理，而本配置默认不覆盖该规则。
+  prettier
 );

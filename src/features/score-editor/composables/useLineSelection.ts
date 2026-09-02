@@ -1,5 +1,6 @@
-import type { Song } from '@/types';
 import { computed, shallowRef, watch, type Ref } from 'vue';
+
+import type { Song } from '@/types';
 
 /** 歌词行多选状态（供行级导出等场景使用）：切歌自动清空，总行数变化时裁剪越界的选中项 */
 export function useLineSelection(totalLines: Ref<number>, activeSong: Ref<Song | null>) {

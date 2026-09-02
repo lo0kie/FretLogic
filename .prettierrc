@@ -9,5 +9,15 @@
   "arrowParens": "avoid",
   "trailingComma": "es5",
   "proseWrap": "always",
-  "quoteProps": "consistent"
+  "quoteProps": "consistent",
+  "plugins": [
+    "@ianvs/prettier-plugin-sort-imports",
+    "prettier-plugin-tailwindcss",
+    "prettier-plugin-organize-attributes",
+    "prettier-plugin-css-order",
+    "prettier-plugin-merge"
+  ],
+  "importOrder": ["^vue", "", "<BUILTIN_MODULES>", "", "<THIRD_PARTY_MODULES>", "", "^@/(.*)$", "", "^[./]"],
+  "attributeGroups": ["^v-", "^:", "^@", "$DEFAULT"],
+  "attributeSort": "ASC"
 }

@@ -3,20 +3,20 @@
     <slot name="target" />
     <span
       v-if="!isHidden"
-      ref="targetBadgeEl"
-      class="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 z-10 inline-flex items-center justify-center rounded-full font-semibold leading-none box-border whitespace-nowrap select-none border border-transparent shadow-xs transition-all duration-base"
+      :aria-disabled="disabled || undefined"
+      :aria-label="ariaLabelText"
       :class="[
         sizeClasses,
         variantAppearanceClasses,
         {
-          '!p-0 !w-2 !h-2 !min-w-0 !border-none': isDotOnly,
-          'opacity-40 cursor-not-allowed': disabled,
+          'h-2! w-2! min-w-0! border-none! p-0!': isDotOnly,
+          'cursor-not-allowed opacity-40': disabled,
         },
       ]"
       :style="[normalizedStyle, offsetStyle]"
+      class="duration-base absolute top-0 right-0 z-10 box-border inline-flex translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-transparent leading-none font-semibold whitespace-nowrap shadow-xs transition-all select-none"
+      ref="targetBadgeEl"
       role="status"
-      :aria-label="ariaLabelText"
-      :aria-disabled="disabled || undefined"
     >
       <span v-if="!isDotOnly">
         <slot> {{ formattedContent }} </slot>
@@ -25,73 +25,75 @@
   </span>
 
   <component
-    :is="isInteractive ? 'button' : 'span'"
     v-else-if="!isHidden"
-    ref="standaloneEl"
-    :type="isInteractive ? 'button' : undefined"
-    class="inline-flex items-center justify-center shrink-0 rounded-full font-semibold leading-none tracking-tight box-border whitespace-nowrap select-none border border-transparent outline-none transition-all duration-fast"
+    :aria-disabled="disabled || undefined"
+    :aria-label="ariaLabelText"
     :class="[
       sizeClasses,
       variantAppearanceClasses,
       {
-        'cursor-pointer hover:opacity-85 hover:-translate-y-px active:translate-y-0 active:scale-95':
+        'cursor-pointer hover:-translate-y-px hover:opacity-85 active:translate-y-0 active:scale-95':
           isInteractive && !disabled,
-        'opacity-40 cursor-not-allowed': disabled,
-        '!p-0 !w-2 !h-2 !min-w-0 !border-none': isDotOnly,
-        '!px-0': Boolean(width),
-        'group hover:!bg-tint-danger-88 hover:!text-danger hover:!border-tint-danger-75 focus-visible:!bg-tint-danger-88 focus-visible:!text-danger focus-visible:!border-tint-danger-75':
+        'cursor-not-allowed opacity-40': disabled,
+        'h-2! w-2! min-w-0! border-none! p-0!': isDotOnly,
+        'px-0!': Boolean(width),
+        'group hover:bg-tint-danger-88! hover:text-danger! hover:border-tint-danger-75! focus-visible:bg-tint-danger-88! focus-visible:text-danger! focus-visible:border-tint-danger-75!':
           hoverClose && !disabled,
       },
     ]"
-    :style="normalizedStyle"
-    :role="isInteractive ? undefined : 'status'"
     :disabled="isInteractive ? disabled : undefined"
-    :aria-disabled="disabled || undefined"
-    :aria-label="ariaLabelText"
-    data-focusable-inline
+    :is="isInteractive ? 'button' : 'span'"
+    :role="isInteractive ? undefined : 'status'"
+    :style="normalizedStyle"
+    :type="isInteractive ? 'button' : undefined"
     @click="handleClick"
+    class="duration-fast box-border inline-flex shrink-0 items-center justify-center rounded-full border border-transparent leading-none font-semibold tracking-tight whitespace-nowrap transition-all outline-none select-none"
+    data-focusable-inline
+    ref="standaloneEl"
   >
-    <span v-if="hasDot" class="w-1.5 h-1.5 rounded-full bg-current shrink-0" aria-hidden="true" />
+    <span v-if="hasDot" aria-hidden="true" class="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
 
     <slot name="prefix" />
 
     <span
       v-if="!isDotOnly && ($slots['default'] || content !== undefined)"
-      class="inline-flex items-center justify-center overflow-hidden text-ellipsis h-full leading-none"
-      :class="{ 'relative w-full h-full': hoverClose }"
+      :class="{ 'relative h-full w-full': hoverClose }"
+      class="inline-flex h-full items-center justify-center overflow-hidden leading-none text-ellipsis"
     >
       <span
-        class="inline-flex items-center justify-center h-full leading-none transition-opacity duration-fast"
         :class="{ 'group-hover:opacity-0': hoverClose && !disabled }"
+        class="duration-fast inline-flex h-full items-center justify-center leading-none transition-opacity"
       >
         <slot> {{ formattedContent }} </slot>
       </span>
-      <X
+      <BaseIcon
         v-if="hoverClose"
         :size="closeIconSize"
         :stroke-width="3"
-        class="absolute inset-0 m-auto flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-fast group-hover:opacity-100"
         aria-hidden="true"
+        class="duration-fast pointer-events-none absolute inset-0 m-auto flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"
+        name="x"
       />
     </span>
 
     <button
       v-if="closable && !hoverClose"
-      type="button"
       :disabled
-      title="关闭"
-      aria-label="关闭"
-      class="p-0 ml-0.5 border-none bg-transparent text-current opacity-65 flex items-center justify-center cursor-pointer outline-none rounded-full transition-all duration-fast hover:opacity-100 hover:bg-tint-current-82 disabled:cursor-not-allowed disabled:opacity-40"
       @click.stop="handleClose"
+      aria-label="关闭"
+      class="duration-fast hover:bg-tint-current-82 ml-0.5 flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current opacity-65 transition-all outline-none hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+      title="关闭"
+      type="button"
     >
-      <X :size="closeIconSize" stroke-width="3" aria-hidden="true" />
+      <BaseIcon :size="closeIconSize" aria-hidden="true" name="x" stroke-width="3" />
     </button>
   </component>
 </template>
 
-<script setup lang="ts">
-import { X } from '@lucide/vue';
+<script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, useAttrs, useTemplateRef, watch } from 'vue';
+
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 
 type BadgeVariant = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
 type BadgeSize = 'xs' | 'sm' | 'md' | 'lg';

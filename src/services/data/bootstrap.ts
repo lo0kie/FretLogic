@@ -12,6 +12,7 @@
 import type { Chord, Group, Song } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { logger } from '@/utils/core/logger';
+
 import { migrateLegacyData } from './migrateLegacy';
 import { chordRepository, songRepository } from './repositories';
 

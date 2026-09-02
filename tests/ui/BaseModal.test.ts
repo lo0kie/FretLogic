@@ -1,6 +1,7 @@
-import BaseModal from '@/components/ui/BaseModal.vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+
+import BaseModal from '@/components/ui/BaseModal.vue';
 
 const flushStack = () => new Promise(resolve => setTimeout(resolve, 0));
 

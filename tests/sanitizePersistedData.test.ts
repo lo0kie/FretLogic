@@ -1,11 +1,12 @@
-﻿import { describe, expect, it } from 'vitest';
-import { createPinia, setActivePinia } from 'pinia';
+﻿import { createPinia, setActivePinia } from 'pinia';
+import { describe, expect, it } from 'vitest';
+
+import { Tuning } from '@/services/music/theory';
+import { sanitizePersistedData } from '@/services/validation/persistedData';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
-import { Tuning } from '@/utils/music/musicTheory';
-import { sanitizePersistedData } from '@/services/validation/persistedData';
-import { serializeForStorage } from '@/utils/core/common';
 import type { Chord, Group, Song } from '@/types';
+import { serializeForStorage } from '@/utils/core/common';
 
 const group: Group = { id: 'group-1', name: 'C', sortRule: 'ROOT_PITCH' };
 const validChord: Chord = {

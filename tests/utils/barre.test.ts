@@ -1,5 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { reconcileBarres, useChordEditorStore } from '@/stores/chordEditorStore';
 import type { BarreEntity, GuitarStringsModel } from '@/types';
 import { computeBarreCandidates, isBarreStillValid } from '@/utils/music/chord-fretboard';

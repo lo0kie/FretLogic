@@ -1,16 +1,16 @@
 <template>
-  <div class="score-view-wrapper relative flex w-full h-full box-border overflow-hidden">
+  <div class="score-view-wrapper relative box-border flex h-full w-full overflow-hidden">
     <div
-      class="score-main-content flex-1 h-full flex flex-col min-w-0 min-h-0 bg-bg-main box-border overflow-y-auto relative"
+      class="score-main-content bg-bg-main relative box-border flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
     >
-      <Transition name="v-transition-fade" mode="out-in">
+      <Transition mode="out-in" name="v-transition-fade">
         <EmptyState
           v-if="!scoreEditor.activeSong"
-          key="empty"
-          :icon="Music"
-          title="未选择乐谱"
           description="请在左侧侧边栏选择或新建一份乐谱"
+          icon="music"
+          key="empty"
           size="lg"
+          title="未选择乐谱"
         />
 
         <ScoreLyricsEditor
@@ -20,58 +20,60 @@
 
         <ScoreInteractiveArea
           v-else
-          :key="`interactive-area-${scoreEditor.activeSong.id}`"
-          ref="interactiveAreaRef"
-          :selected-line-set
           :export-page-line-set
           :include-meta-bar
           :is-exporting="isGenerating"
-          @open-picker="openChordPicker"
+          :key="`interactive-area-${scoreEditor.activeSong.id}`"
+          :selected-line-set
           @line-click="handleLineClick"
+          @open-picker="openChordPicker"
+          ref="interactiveAreaRef"
         />
       </Transition>
     </div>
 
     <ScoreExportFloatingBar
       v-model:include-meta-bar="includeMetaBar"
-      :visible="Boolean(scoreEditor.activeSong && scoreEditor.activeTab === 'interactive')"
       :is-all-selected
       :selected-count="selectedLineSet.size"
       :sorted-indices="sortedSelectedIndices"
+      :visible="Boolean(scoreEditor.activeSong && scoreEditor.activeTab === 'interactive')"
+      @open-export="previewVisible = true"
       @remove-index="handleRemoveLineIndex"
       @toggle-select-all="handleToggleSelectAll"
-      @open-export="previewVisible = true"
     />
 
     <ChordPickerModal v-model:visible="isPickerOpen" />
 
     <ScoreExportPreviewModal
-      v-model:visible="previewVisible"
-      v-model:mode="exportMode"
       v-model:current-page-index="currentPageIndex"
+      v-model:mode="exportMode"
       v-model:quality="scoreEditor.exportQuality"
-      :pages
-      :progress
+      v-model:visible="previewVisible"
       :current-page
       :is-generating
-      @copy-current-page="copyCurrentPage"
-      @download-pdf="downloadPdf"
-      @download-current-page="downloadCurrentPage"
+      :pages
+      :progress
       @commit-quality="applyQuality"
+      @copy-current-page="copyCurrentPage"
+      @download-current-page="downloadCurrentPage"
+      @download-pdf="downloadPdf"
     />
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
+
+import { useEventListener } from '@vueuse/core';
+
 import EmptyState from '@/components/ui/EmptyState.vue';
 import { useLineSelection } from '@/features/score-editor/composables/useLineSelection';
 import { useScoreExportPreview } from '@/features/score-editor/composables/useScoreExportPreview';
 import { useScoreLinesData } from '@/features/score-editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import type { SlotKey } from '@/types';
-import { Music } from '@lucide/vue';
-import { useEventListener } from '@vueuse/core';
-import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
+
 import ChordPickerModal from './ChordPickerModal.vue';
 import ScoreExportFloatingBar from './ScoreExportFloatingBar.vue';
 import ScoreExportPreviewModal from './ScoreExportPreviewModal.vue';

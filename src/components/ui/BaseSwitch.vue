@@ -1,84 +1,84 @@
 <template>
   <button
-    :id="resolvedId"
-    ref="switchBtnRef"
-    type="button"
-    role="switch"
-    :name
+    :aria-busy="isCurrentLoading || undefined"
     :aria-checked="isChecked"
     :aria-disabled="disabled || isCurrentLoading"
     :aria-label="ariaLabel || label"
-    :aria-busy="isCurrentLoading || undefined"
-    :disabled="disabled || isCurrentLoading"
-    class="group inline-flex items-center gap-sm bg-transparent border-none rounded-full p-0 m-0 cursor-pointer select-none touch-none outline-none box-border align-middle disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none"
     :class="{ 'cursor-grabbing': isDragging }"
-    @pointerdown="handlePointerDown"
-    @pointermove="handlePointerMove"
-    @pointerup="handlePointerUp"
-    @pointercancel="handlePointerCancel"
+    :disabled="disabled || isCurrentLoading"
+    :id="resolvedId"
+    :name
     @click="handleClick"
     @keydown.enter.prevent="toggle"
     @keydown.space.prevent="toggle"
+    @pointercancel="handlePointerCancel"
+    @pointerdown="handlePointerDown"
+    @pointermove="handlePointerMove"
+    @pointerup="handlePointerUp"
+    class="group gap-sm m-0 box-border inline-flex cursor-pointer touch-none items-center rounded-full border-none bg-transparent p-0 align-middle outline-none select-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+    ref="switchBtnRef"
+    role="switch"
+    type="button"
   >
     <span
-      ref="trackRef"
       v-wave="{ disabled: disabled || isCurrentLoading }"
-      class="switch-track relative inline-flex items-center rounded-full box-border shrink-0 transition-all duration-base group-focus-visible:ring-2 group-focus-visible:ring-primary/70 overflow-hidden"
       :class="[currentConfig.trackClass, trackColorClass]"
+      class="switch-track duration-base group-focus-visible:ring-primary/70 relative box-border inline-flex shrink-0 items-center overflow-hidden rounded-full transition-all group-focus-visible:ring-2"
+      ref="trackRef"
     >
       <span
         v-if="$slots['checked-text'] || $slots['unchecked-text']"
-        class="absolute inset-0 flex items-center pointer-events-none text-2xs font-bold leading-none text-white select-none overflow-hidden px-1.5"
         :class="isChecked ? 'justify-start' : 'justify-end'"
+        class="text-2xs pointer-events-none absolute inset-0 flex items-center overflow-hidden px-1.5 leading-none font-bold text-white select-none"
       >
-        <span class="truncate max-w-[calc(100%-1.1rem)] inline-block">
+        <span class="inline-block max-w-[calc(100%-1.1rem)] truncate">
           <slot v-if="isChecked" name="checked-text" />
           <slot v-else name="unchecked-text" />
         </span>
       </span>
 
       <span
-        ref="thumbRef"
-        class="switch-thumb rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] box-border transition-transform duration-base ease-spring inline-flex items-center justify-center pointer-events-none"
         :class="[
           currentConfig.thumbClass,
           !isDragging && (isChecked ? currentConfig.checkedClass : 'translate-x-0'),
           isPressed && !isDragging && !hasMovedSignificantly && 'scale-y-[0.82]',
         ]"
         :style="dragThumbStyle"
+        class="switch-thumb duration-base ease-spring pointer-events-none box-border inline-flex items-center justify-center rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] transition-transform"
+        ref="thumbRef"
       >
         <slot v-if="isChecked" name="checked-icon" />
         <slot v-else name="unchecked-icon" />
 
         <svg
           v-if="isCurrentLoading"
-          class="animate-spin text-primary"
-          :width="currentConfig.spinnerSize"
           :height="currentConfig.spinnerSize"
-          viewBox="0 0 24 24"
-          fill="none"
+          :width="currentConfig.spinnerSize"
           aria-hidden="true"
+          class="text-primary animate-spin"
+          fill="none"
+          viewBox="0 0 24 24"
         >
           <circle
+            :stroke-width="3"
             cx="12"
             cy="12"
             r="10"
             stroke="currentColor"
-            :stroke-width="3"
-            stroke-linecap="round"
             stroke-dasharray="47 17"
+            stroke-linecap="round"
           />
         </svg>
       </span>
     </span>
 
-    <span v-if="label || $slots['default']" class="switch-label text-xs font-medium text-text-body leading-none">
+    <span v-if="label || $slots['default']" class="switch-label text-text-body text-xs leading-none font-medium">
       <slot> {{ label }} </slot>
     </span>
   </button>
 </template>
 
-<script setup lang="ts" generic="T extends string | number | boolean = boolean">
+<script generic="T extends string | number | boolean = boolean" lang="ts" setup>
 import { computed, ref, useId, useTemplateRef } from 'vue';
 
 const COLOR_CLASS: Record<string, { on: string; off: string }> = {

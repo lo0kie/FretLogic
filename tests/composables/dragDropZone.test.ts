@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { resolveDropAction, resolveDropZone, type DropZone } from '@/features/score-editor/composables/lyrics-drag/dropZone';
+
+import {
+  resolveDropAction,
+  resolveDropZone,
+  type DropZone,
+} from '@/features/score-editor/composables/lyrics-drag/dropZone';
 
 const rect = (top: number, height: number) => ({ top, height });
 

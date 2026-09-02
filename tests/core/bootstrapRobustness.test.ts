@@ -1,10 +1,11 @@
 ﻿import { describe, expect, it, vi } from 'vitest';
-import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
+
 import { songRepository } from '@/services/data';
-import { logger } from '@/utils/core/logger';
-import { STORAGE_KEYS } from '@/utils/core/constants';
+import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
 import { idb } from '@/services/storage';
 import type { Group, Song } from '@/types';
+import { STORAGE_KEYS } from '@/utils/core/constants';
+import { logger } from '@/utils/core/logger';
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();

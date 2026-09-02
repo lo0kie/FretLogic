@@ -1,5 +1,6 @@
 import type { ChordNameSegments, NoteInput } from '@/types';
 import { createLruCache } from '@/utils/core/lruCache';
+
 import { GRAMMAR_TEMPLATES } from './grammar';
 import { nameToSegments } from './theory';
 
@@ -183,61 +184,54 @@ function fastSoftScore(
   return Math.round(total * 1000) / 10;
 }
 
+/**
+ * 构造一个角色归属：把根音与音程换算为实际音高，并取该音高上记录的首个音名。
+ * 必选音、可选音、转位低音、外音四处共用同一套构造规则。
+ */
+function createRole(
+  rootPitch: number,
+  interval: number,
+  role: ChordSlot,
+  confidence: RoleConfidence,
+  labelByPitch: (string | undefined)[]
+): RoleAssignment {
+  const pitchIndex = (rootPitch + interval) % 12;
+  return {
+    noteLabel: labelByPitch[pitchIndex] || '',
+    pitchIndex,
+    interval,
+    role,
+    confidence,
+  };
+}
+
 function populateRoles(hit: RawHitCandidate, labelByPitch: (string | undefined)[]): ChordCandidate {
   const { rootPitch, rootLabel, intervalMask, lowestInterval, isSlash, slashBassLabel, template } = hit;
   const roles: RoleAssignment[] = [];
   const usedIntervals = new Set<number>();
 
   for (const req of template.required) {
-    const p = (rootPitch + req.interval) % 12;
-    roles.push({
-      noteLabel: labelByPitch[p] || '',
-      pitchIndex: p,
-      interval: req.interval,
-      role: req.role,
-      confidence: req.confidence,
-    });
+    roles.push(createRole(rootPitch, req.interval, req.role, req.confidence, labelByPitch));
     usedIntervals.add(req.interval);
   }
 
   if (template.optional) {
     for (const opt of template.optional) {
       if (intervalMask & (1 << opt.interval) && !usedIntervals.has(opt.interval)) {
-        const p = (rootPitch + opt.interval) % 12;
-        roles.push({
-          noteLabel: labelByPitch[p] || '',
-          pitchIndex: p,
-          interval: opt.interval,
-          role: opt.role,
-          confidence: opt.confidence,
-        });
+        roles.push(createRole(rootPitch, opt.interval, opt.role, opt.confidence, labelByPitch));
         usedIntervals.add(opt.interval);
       }
     }
   }
 
   if (isSlash && !usedIntervals.has(lowestInterval)) {
-    const p = (rootPitch + lowestInterval) % 12;
-    roles.push({
-      noteLabel: labelByPitch[p] || '',
-      pitchIndex: p,
-      interval: lowestInterval,
-      role: 'slash_bass',
-      confidence: 'optional',
-    });
+    roles.push(createRole(rootPitch, lowestInterval, 'slash_bass', 'optional', labelByPitch));
     usedIntervals.add(lowestInterval);
   }
 
   for (let i = 0; i < 12; i++) {
     if (intervalMask & (1 << i) && !usedIntervals.has(i)) {
-      const p = (rootPitch + i) % 12;
-      roles.push({
-        noteLabel: labelByPitch[p] || '',
-        pitchIndex: p,
-        interval: i,
-        role: 'extra',
-        confidence: 'extra',
-      });
+      roles.push(createRole(rootPitch, i, 'extra', 'extra', labelByPitch));
     }
   }
 
@@ -272,20 +266,22 @@ function assignTiers(candidates: ChordCandidate[]): void {
 
 const cache = createLruCache<AnalyzeResult>(80);
 
-function rawAnalyze(notes: NoteInput[], explicitRootPitch: number | null): AnalyzeResult {
-  if (notes.length === 0) {
-    return {
-      candidates: [],
-      bestRootPitch: 0,
-      best: undefined,
-      alternatives: [],
-      theoretical: [],
-    };
-  }
+/** 构造一次空分析结果：每次返回新对象，避免缓存与调用方共享同一引用后被意外改写 */
+function createEmptyResult(): AnalyzeResult {
+  return {
+    candidates: [],
+    bestRootPitch: 0,
+    best: undefined,
+    alternatives: [],
+    theoretical: [],
+  };
+}
 
+/** 收集输入音符的音高掩码、最低音（按弦序）与各音高对应的音名（同一音高只保留首个音名） */
+function collectNoteContext(notes: NoteInput[]) {
   let pitchMask = 0;
-  const lowestNote = notes.reduce((min, n) => (n.stringIndex < min.stringIndex ? n : min), notes[0]!);
   const labelByPitch: (string | undefined)[] = new Array(12);
+  const lowestNote = notes.reduce((min, n) => (n.stringIndex < min.stringIndex ? n : min), notes[0]!);
 
   for (const n of notes) {
     const p = normalizePitch(n.pitchIndex);
@@ -293,17 +289,68 @@ function rawAnalyze(notes: NoteInput[], explicitRootPitch: number | null): Analy
     if (labelByPitch[p] === undefined) labelByPitch[p] = n.label;
   }
 
-  const totalInputNotes = bitCount(pitchMask);
+  return { pitchMask, labelByPitch, lowestNote };
+}
+
+/** 枚举候选根音：显式指定时只用该音，否则取输入中出現的全部音高 */
+function resolveRootPitches(pitchMask: number, explicitRootPitch: number | null): number[] {
+  if (explicitRootPitch !== null) return [normalizePitch(explicitRootPitch)];
+
   const rootPitches: number[] = [];
-
-  if (explicitRootPitch !== null) {
-    rootPitches.push(normalizePitch(explicitRootPitch));
-  } else {
-    for (let p = 0; p < 12; p++) {
-      if (pitchMask & (1 << p)) rootPitches.push(p);
-    }
+  for (let p = 0; p < 12; p++) {
+    if (pitchMask & (1 << p)) rootPitches.push(p);
   }
+  return rootPitches;
+}
 
+/** 用单个模板匹配当前音集：不冲突且必选音齐全时给出纯度与分数，否则判定为不匹配 */
+function evaluateTemplate(
+  comp: CompiledTemplate,
+  rootPitch: number,
+  rootLabel: string,
+  intervalMask: number,
+  lowestInterval: number,
+  isSlash: boolean,
+  slashBassLabel: string,
+  totalInputNotes: number,
+  explicitRoot: boolean
+): RawHitCandidate | null {
+  if ((intervalMask & comp.conflictMask) !== 0) return null;
+  if ((intervalMask & comp.reqMask) !== comp.reqMask) return null;
+
+  let explainedMask = intervalMask & (comp.reqMask | comp.optMask);
+  if (isSlash) explainedMask |= intervalMask & (1 << lowestInterval);
+
+  const explainedCount = bitCount(explainedMask);
+  const purity = totalInputNotes === 0 ? 0 : explainedCount / totalInputNotes;
+  if (purity < MIN_PURITY) return null;
+
+  const extraCount = totalInputNotes - explainedCount;
+  const score = fastSoftScore(purity, extraCount, isSlash, lowestInterval, explicitRoot, comp.template);
+
+  return {
+    template: comp.template,
+    rootPitch,
+    rootLabel,
+    intervalMask,
+    lowestInterval,
+    isSlash,
+    slashBassLabel,
+    purity,
+    extraCount,
+    score,
+  };
+}
+
+/** 遍历「根音 × 模板」的全部组合，收集通过纯度门槛的候选命中 */
+function collectRawHits(
+  rootPitches: number[],
+  pitchMask: number,
+  labelByPitch: (string | undefined)[],
+  lowestNote: NoteInput,
+  explicitRoot: boolean
+): RawHitCandidate[] {
+  const totalInputNotes = bitCount(pitchMask);
   const rawHits: RawHitCandidate[] = [];
 
   for (const rootPitch of rootPitches) {
@@ -314,85 +361,67 @@ function rawAnalyze(notes: NoteInput[], explicitRootPitch: number | null): Analy
     const slashBassLabel = isSlash ? `/${lowestNote.label}` : '';
 
     for (const comp of COMPILED_TEMPLATES) {
-      if ((intervalMask & comp.conflictMask) !== 0) continue;
-      if ((intervalMask & comp.reqMask) !== comp.reqMask) continue;
-
-      let explainedMask = intervalMask & (comp.reqMask | comp.optMask);
-      if (isSlash) explainedMask |= intervalMask & (1 << lowestInterval);
-
-      const explainedCount = bitCount(explainedMask);
-      const purity = totalInputNotes === 0 ? 0 : explainedCount / totalInputNotes;
-
-      if (purity < MIN_PURITY) continue;
-
-      const extraCount = totalInputNotes - explainedCount;
-      const score = fastSoftScore(
-        purity,
-        extraCount,
-        isSlash,
-        lowestInterval,
-        explicitRootPitch !== null,
-        comp.template
-      );
-
-      rawHits.push({
-        template: comp.template,
+      const hit = evaluateTemplate(
+        comp,
         rootPitch,
         rootLabel,
         intervalMask,
         lowestInterval,
         isSlash,
         slashBassLabel,
-        purity,
-        extraCount,
-        score,
-      });
+        totalInputNotes,
+        explicitRoot
+      );
+      if (hit) rawHits.push(hit);
     }
   }
 
+  return rawHits;
+}
+
+/** 按分数降序去重（同一和弦名只保留最高分者），取前 TOP_EVALUATE_LIMIT 个命中 */
+function dedupeTopHits(rawHits: RawHitCandidate[]): RawHitCandidate[] {
   rawHits.sort((a, b) => b.score - a.score);
 
   const seen = new Set<string>();
   const topHits: RawHitCandidate[] = [];
   for (const h of rawHits) {
     const name = `${h.rootLabel}${h.template.suffix}${h.slashBassLabel}`;
-    if (!seen.has(name)) {
-      seen.add(name);
-      topHits.push(h);
-      if (topHits.length >= TOP_EVALUATE_LIMIT) break;
-    }
+    if (seen.has(name)) continue;
+    seen.add(name);
+    topHits.push(h);
+    if (topHits.length >= TOP_EVALUATE_LIMIT) break;
   }
+  return topHits;
+}
 
-  const uniqueCandidates: ChordCandidate[] = topHits.map(h => populateRoles(h, labelByPitch));
-
-  assignTiers(uniqueCandidates);
-
-  const bestRootPitch =
-    uniqueCandidates.length > 0 ? uniqueCandidates[0]!.rootPitch : normalizePitch(lowestNote.pitchIndex);
-
-  const best = uniqueCandidates.find(c => c.tier === 'best');
-  const alternatives = uniqueCandidates.filter(c => c.tier === 'alternative');
-  const theoretical = uniqueCandidates.filter(c => c.tier === 'theoretical');
+/** 完成分层并把候选拆成 best / alternatives / theoretical，同时给出最佳根音 */
+function groupCandidates(candidates: ChordCandidate[], lowestNote: NoteInput): AnalyzeResult {
+  assignTiers(candidates);
 
   return {
-    candidates: uniqueCandidates,
-    bestRootPitch,
-    best,
-    alternatives,
-    theoretical,
+    candidates,
+    bestRootPitch: candidates.length > 0 ? candidates[0]!.rootPitch : normalizePitch(lowestNote.pitchIndex),
+    best: candidates.find(c => c.tier === 'best'),
+    alternatives: candidates.filter(c => c.tier === 'alternative'),
+    theoretical: candidates.filter(c => c.tier === 'theoretical'),
   };
 }
 
+/** 和弦识别主流程：收集音集 → 枚举根音 → 模板打分 → 去重取优 → 角色填充 → 分层 */
+function rawAnalyze(notes: NoteInput[], explicitRootPitch: number | null): AnalyzeResult {
+  if (notes.length === 0) return createEmptyResult();
+
+  const { pitchMask, labelByPitch, lowestNote } = collectNoteContext(notes);
+  const rootPitches = resolveRootPitches(pitchMask, explicitRootPitch);
+  const rawHits = collectRawHits(rootPitches, pitchMask, labelByPitch, lowestNote, explicitRootPitch !== null);
+  const uniqueCandidates = dedupeTopHits(rawHits).map(h => populateRoles(h, labelByPitch));
+
+  return groupCandidates(uniqueCandidates, lowestNote);
+}
+
 export function analyzeChordGraph(notes: NoteInput[], explicitRootPitch: number | null = null): AnalyzeResult {
-  if (notes.length === 0) {
-    return {
-      candidates: [],
-      bestRootPitch: 0,
-      best: undefined,
-      alternatives: [],
-      theoretical: [],
-    };
-  }
+  if (notes.length === 0) return createEmptyResult();
 
   let key = `${explicitRootPitch ?? 'auto'}:`;
   for (const n of notes) {

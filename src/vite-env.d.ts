@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import type { ComponentPublicInstance, VNode } from 'vue';
 
 import type { ChordNameBinding } from './directives/vChordName';
 import type { FocusBinding, FocusModifiers } from './directives/vFocus';
@@ -17,8 +18,6 @@ declare global {
     commit: string;
   };
 }
-
-import type { ComponentPublicInstance, VNode } from 'vue';
 
 export type TypedDirective<Host = HTMLElement, Value = unknown, Modifiers extends string = string> =
   | {

@@ -1,10 +1,10 @@
+import { computeChordFingerprint, Tuning } from '@/services/music/theory';
 import type { Chord, ChordId, Group, LineId, SlotKey, Song, StringIndex } from '@/types';
 import { GroupSortRule } from '@/types';
 import { FRET_COUNTS } from '@/utils/core/constants';
-import { pruneOrphanChordRefs } from '@/utils/score/chordSlots';
 import { isCapoValue, normalizeChord } from '@/utils/music/chord-fretboard';
 import { buildGroupVariant, toSongId } from '@/utils/music/entityFactories';
-import { computeChordFingerprint, Tuning } from '@/utils/music/musicTheory';
+import { pruneOrphanChordRefs } from '@/utils/score/chordSlots';
 
 type RawRecord = Record<string, unknown>;
 

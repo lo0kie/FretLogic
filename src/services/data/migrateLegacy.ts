@@ -6,11 +6,12 @@
  * - 迁移成功后在 IDB 写入标记，避免重复导入；
  * - 迁移为「只读读取旧数据 + 清洗 + 写入 IDB」，不删除旧 localStorage（保留回退能力）。
  */
-import { STORAGE_KEYS } from '@/utils/core/constants';
-import { validateImportExportPayload } from '@/services/validation/payload';
 import { idb } from '@/services/storage';
-import { chordRepository, songRepository } from './repositories';
+import { validateImportExportPayload } from '@/services/validation/payload';
 import type { Chord, Group, Song } from '@/types';
+import { STORAGE_KEYS } from '@/utils/core/constants';
+
+import { chordRepository, songRepository } from './repositories';
 
 const MIGRATION_FLAG_KEY = 'legacy-migration-done';
 

@@ -1,3 +1,7 @@
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue';
+
+import { useDebounceFn } from '@vueuse/core';
+
 import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -8,8 +12,6 @@ import {
   renderElementToCanvas,
   writeBlobToClipboard,
 } from '@/utils/score/score-export';
-import { useDebounceFn } from '@vueuse/core';
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue';
 
 export enum ExportMode {
   NORMAL = 'normal',

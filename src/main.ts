@@ -1,15 +1,18 @@
-import App from '@/app/App.vue';
-import { useTheme } from '@/shared/composables/useTheme';
-import { router } from '@/app/router';
-import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
-import { useChordEditorStore } from '@/stores/chordEditorStore';
-import { logger } from '@/utils/core/logger';
-import { createPinia } from 'pinia';
-import VWave from 'v-wave';
 import { createApp } from 'vue';
 
-import '@/assets/tailwind.css';
+import { createPinia } from 'pinia';
+import VWave from 'v-wave';
+
+import App from '@/app/App.vue';
+import { router } from '@/app/router';
+import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
+import { useTheme } from '@/shared/composables/useTheme';
+import { useChordEditorStore } from '@/stores/chordEditorStore';
+import { logger } from '@/utils/core/logger';
+
 import '@/assets/main.scss';
+import '@/assets/tailwind.css';
+
 import { vChordName } from './directives/vChordName';
 import { vFocus } from './directives/vFocus';
 import { vGridNav } from './directives/vGridNav';

@@ -1,8 +1,10 @@
 /* eslint-disable vue/one-component-per-file */
-import { vGridNav } from '@/directives/vGridNav';
+import { defineComponent } from 'vue';
+
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
+
+import { vGridNav } from '@/directives/vGridNav';
 
 describe('vGridNav directive', () => {
   it('navigates with ArrowRight and ArrowLeft', async () => {

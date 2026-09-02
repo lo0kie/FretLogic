@@ -1,5 +1,8 @@
 /** 测试全局 setup：注入 fake IndexedDB 与浏览器 API polyfill（jsdom 不内置） */
-import { indexedDB, IDBKeyRange } from 'fake-indexeddb';
+import { config } from '@vue/test-utils';
+import { IDBKeyRange, indexedDB } from 'fake-indexeddb';
+
+import { vChordName } from '@/directives/vChordName';
 
 Object.defineProperty(globalThis, 'indexedDB', {
   value: indexedDB,
@@ -61,12 +64,10 @@ if (!('IntersectionObserver' in globalThis)) {
   });
 }
 
-import { vChordName } from '@/directives/vChordName';
-import { config } from '@vue/test-utils';
 config.global.directives = {
   ...config.global.directives,
-  wave: () => {},
-  tooltip: () => {},
+  'wave': () => {},
+  'tooltip': () => {},
   'chord-name': vChordName,
-  chordName: vChordName,
+  'chordName': vChordName,
 };

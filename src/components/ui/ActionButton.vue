@@ -1,20 +1,24 @@
 <template>
   <button
     v-wave="{ disabled: disabled || loading }"
-    :type
-    :tabindex
-    :disabled="disabled || loading"
-    :aria-disabled="disabled || loading || undefined"
     :aria-busy="loading || undefined"
+    :aria-disabled="disabled || loading || undefined"
     :aria-label
-    :style="normalizedStyle"
-    class="action-button inline-flex items-center justify-center font-semibold border border-solid select-none box-border cursor-pointer shrink-0 outline-none disabled:opacity-35 disabled:cursor-not-allowed disabled:shadow-none disabled:pointer-events-auto active:not-disabled:brightness-95 focus-visible:ring-2 focus-visible:ring-primary/70"
     :class="[sizeClasses, themeVariantClasses, roundedClasses, { 'w-full': block }]"
-    data-focusable-inline
+    :disabled="disabled || loading"
+    :style="normalizedStyle"
+    :tabindex
+    :type
     @click="handleInternalClick"
+    class="action-button focus-visible:ring-primary/70 box-border inline-flex shrink-0 cursor-pointer items-center justify-center border border-solid font-semibold outline-none select-none focus-visible:ring-2 active:not-disabled:brightness-95 disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
+    data-focusable-inline
   >
-    <Loader2 v-if="loading" :class="['loading-icon shrink-0 opacity-80 animate-spin', loaderSizeClass]" />
-    <slot v-else name="prefix" :disabled :loading :size />
+    <BaseIcon
+      v-if="loading"
+      :class="['loading-icon shrink-0 animate-spin opacity-80', loaderSizeClass]"
+      name="loader-2"
+    />
+    <slot v-else :disabled :loading :size name="prefix" />
 
     <span
       v-if="$slots['default'] && (!loading || !iconOnly)"
@@ -23,14 +27,15 @@
       <slot :disabled :loading :size />
     </span>
 
-    <slot v-if="!loading || !iconOnly" name="suffix" :disabled :loading :size />
+    <slot v-if="!loading || !iconOnly" :disabled :loading :size name="suffix" />
   </button>
 </template>
 
-<script setup lang="ts">
-import { type ThemeColor } from '@/types';
-import { Loader2 } from '@lucide/vue';
+<script lang="ts" setup>
 import { computed, watch } from 'vue';
+
+import BaseIcon from '@/components/ui/BaseIcon.vue';
+import { type ThemeColor } from '@/types';
 
 const {
   type = 'button',
@@ -117,9 +122,9 @@ const COMPACTED_SIZE_MAP: Record<string, string> = {
 };
 
 const ICON_ONLY_SIZE_MAP: Record<string, string> = {
-  sm: '!p-0 w-[1.6rem] h-[1.6rem] aspect-square',
-  md: '!p-0 w-[1.9rem] h-[1.9rem] aspect-square',
-  lg: '!p-0 w-[2.3rem] h-[2.3rem] aspect-square',
+  sm: 'p-0! w-[1.6rem] h-[1.6rem] aspect-square',
+  md: 'p-0! w-[1.9rem] h-[1.9rem] aspect-square',
+  lg: 'p-0! w-[2.3rem] h-[2.3rem] aspect-square',
 };
 
 const LOADER_SIZE_MAP: Record<string, string> = {
@@ -177,7 +182,7 @@ const DEFAULT_THEME_MAP: Record<ThemeType, string> = {
 
 const sizeClasses = computed(() => {
   if (iconOnly) {
-    // iconOnly 已通过 !p-0 强制方形无内边距，compacted 不再叠加
+    // iconOnly 已通过 p-0! 强制方形无内边距，compacted 不再叠加
     return ICON_ONLY_SIZE_MAP[size] ?? ICON_ONLY_SIZE_MAP['md'];
   }
   const map = compacted ? COMPACTED_SIZE_MAP : SIZE_MAP;
@@ -196,7 +201,7 @@ const themeVariantClasses = computed(() => {
   }
   if (variant === 'text') {
     // 紧凑模式下进一步收紧文字按钮的左右内边距
-    return `px-[${compacted ? '0.15rem' : '0.3rem'}] !bg-transparent border-transparent focus:border-primary active:enabled:border-primary focus-visible:border-primary focus-visible:ring-2 ${TEXT_THEME_MAP[resolvedColor.value]}`;
+    return `px-[${compacted ? '0.15rem' : '0.3rem'}] bg-transparent! border-transparent focus:border-primary active:enabled:border-primary focus-visible:border-primary focus-visible:ring-2 ${TEXT_THEME_MAP[resolvedColor.value]}`;
   }
   return DEFAULT_THEME_MAP[resolvedColor.value];
 });
@@ -220,7 +225,7 @@ const normalizedStyle = computed(() => {
   [transition-delay:40ms] / [transition-delay:80ms] 错峰延迟。
   时长锁定设计令牌 $duration-fast，缓动用 $bezier-standard。
 -->
-<style scoped lang="scss">
+<style lang="scss" scoped>
 @use '@/assets/tokens' as *;
 
 .action-button {

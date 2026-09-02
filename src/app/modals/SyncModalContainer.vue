@@ -1,11 +1,11 @@
 <template>
   <BaseModal
     v-model:visible="isSyncModalOpen"
+    :close-on-mask="modalCloseable"
+    :keyboard="modalCloseable"
+    :show-close="modalCloseable"
     title="同步设置"
     width="w-80"
-    :close-on-mask="modalCloseable"
-    :show-close="modalCloseable"
-    :keyboard="modalCloseable"
   >
     <template #header-extra>
       <BaseSelector
@@ -18,16 +18,16 @@
     </template>
 
     <template #default>
-      <div class="flex flex-col gap-md">
+      <div class="gap-md flex flex-col">
         <div
-          class="sync-panel-card w-full flex flex-col gap-md bg-bg-panel p-md rounded-lg border border-glass-border box-border"
+          class="sync-panel-card gap-md bg-bg-panel p-md border-glass-border box-border flex w-full flex-col rounded-lg border"
         >
-          <div class="panel-header flex items-center justify-between box-border">
-            <h3 class="panel-title text-xs font-semibold text-text-disabled m-0">云端同步</h3>
+          <div class="panel-header box-border flex items-center justify-between">
+            <h3 class="panel-title text-text-disabled m-0 text-xs font-semibold">云端同步</h3>
           </div>
 
           <template v-if="selectedProvider === 'server'">
-            <div class="flex flex-col gap-sm py-xs box-border">
+            <div class="gap-sm py-xs box-border flex flex-col">
               <p class="form-hint m-0">
                 免配置开箱即用，由系统自动连接云端数据库。直接点击下方按钮进行测试、拉取或同步。
               </p>
@@ -35,14 +35,14 @@
           </template>
 
           <template v-else-if="selectedProvider === 'github'">
-            <div class="flex flex-col gap-sm py-xs box-border">
+            <div class="gap-sm py-xs box-border flex flex-col">
               <BaseInput
                 v-model="settingsStore.githubToken"
-                placeholder="GitHub Token (ghp_...)"
-                is-password
-                clearable
                 :disabled="isBusy"
                 :maxlength="100"
+                clearable
+                is-password
+                placeholder="GitHub Token (ghp_...)"
                 show-count
               />
 
@@ -51,50 +51,50 @@
           </template>
 
           <template v-else-if="selectedProvider === 'webdav'">
-            <div class="flex flex-col gap-sm py-xs box-border">
+            <div class="gap-sm py-xs box-border flex flex-col">
               <BaseInput
                 v-model="settingsStore.webdavServerUrl"
-                placeholder="WebDAV 地址 (https://...)"
-                clearable
                 :disabled="isBusy"
                 :maxlength="200"
+                clearable
+                placeholder="WebDAV 地址 (https://...)"
                 show-count
               />
 
               <BaseInput
                 v-model="settingsStore.webdavUsername"
-                placeholder="用户名"
-                clearable
                 :disabled="isBusy"
                 :maxlength="100"
+                clearable
+                placeholder="用户名"
               />
 
               <BaseInput
                 v-model="settingsStore.webdavPassword"
-                placeholder="密码"
-                is-password
-                clearable
                 :disabled="isBusy"
                 :maxlength="100"
+                clearable
+                is-password
+                placeholder="密码"
                 show-count
               />
             </div>
           </template>
         </div>
 
-        <div v-if="selectedProvider === 'webdav'" class="flex flex-col gap-xs px-xs box-border">
+        <div v-if="selectedProvider === 'webdav'" class="gap-xs px-xs box-border flex flex-col">
           <div class="flex items-center justify-between py-0.5">
-            <span class="text-xs font-medium text-text-secondary">使用预设代理</span>
+            <span class="text-text-secondary text-xs font-medium">使用预设代理</span>
             <BaseSwitch v-model="settingsStore.webdavUseDefaultProxy" :disabled="isBusy" aria-label="使用预设代理" />
           </div>
 
           <BaseInput
             v-if="!settingsStore.webdavUseDefaultProxy"
             v-model="settingsStore.webdavProxyUrl"
-            placeholder="自定义代理地址 (留空则直连)"
-            clearable
             :disabled="isBusy"
             :maxlength="200"
+            clearable
+            placeholder="自定义代理地址 (留空则直连)"
             show-count
           />
 
@@ -117,7 +117,7 @@
         @click="handleTestConnectionClick"
       >
         <template #prefix>
-          <PlugZap :size="13" :stroke-width="2.5" />
+          <BaseIcon :size="13" :stroke-width="2.5" name="plug-zap" />
         </template>
         测试连接
       </ActionButton>
@@ -129,7 +129,7 @@
         @click="handlePullClick"
       >
         <template #prefix>
-          <CloudDownload :size="13" :stroke-width="2.5" />
+          <BaseIcon :size="13" :stroke-width="2.5" name="cloud-download" />
         </template>
         拉取
       </ActionButton>
@@ -141,7 +141,7 @@
         @click="handleSyncClick"
       >
         <template #prefix>
-          <CloudUpload :size="13" :stroke-width="2.5" />
+          <BaseIcon :size="13" :stroke-width="2.5" name="cloud-upload" />
         </template>
         同步
       </ActionButton>
@@ -149,18 +149,19 @@
   </BaseModal>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, ref, watch } from 'vue';
+
 import ActionButton from '@/components/ui/ActionButton.vue';
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BaseSelector, { type BaseSelectorOption } from '@/components/ui/BaseSelector.vue';
 import BaseSwitch from '@/components/ui/BaseSwitch.vue';
+import type { SyncProviderKind } from '@/services/sync/provider';
 import { useBackupModals } from '@/shared/composables/useBackupModals';
 import { useSyncService } from '@/shared/composables/useSyncService';
-import type { SyncProviderKind } from '@/services/sync/provider';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { CloudDownload, CloudUpload, FolderSync, GitBranch, PlugZap, Server } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
 
 const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true });
 const { triggerGlobalSync, pullFromRemote, testConnection, isSyncing, isPulling, isTestingConnection } =
@@ -193,9 +194,9 @@ const handlePullClick = async () => {
 };
 
 const providerOptions: BaseSelectorOption<SyncProviderKind>[] = [
-  { label: '线上服务器', value: 'server', icon: Server },
-  { label: 'GitHub', value: 'github', icon: GitBranch },
-  { label: 'WebDAV', value: 'webdav', icon: FolderSync },
+  { label: '线上服务器', value: 'server', icon: 'server' },
+  { label: 'GitHub', value: 'github', icon: 'github' },
+  { label: 'WebDAV', value: 'webdav', icon: 'folder-sync' },
 ];
 
 /** 任一同异步操作进行中时，锁定全部操作按钮并禁止关闭弹窗 */

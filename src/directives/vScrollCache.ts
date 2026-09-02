@@ -1,4 +1,5 @@
 import type { DirectiveBinding, DirectiveHook, ObjectDirective } from 'vue';
+
 import { SCROLL_RESTORE_BUFFER_MS, SCROLL_RESTORE_MAX_DURATION_MS } from '@/utils/core/constants';
 
 export interface ScrollPosition {

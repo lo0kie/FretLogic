@@ -3,6 +3,7 @@
  * 支持光标定位（start/end/all）、延时触发与 preventScroll 等选项。
  */
 import { nextTick, type Directive } from 'vue';
+
 import { FOCUS_DEFAULT_DELAY_MS } from '@/utils/core/constants';
 
 export type FocusModifiers =

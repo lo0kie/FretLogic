@@ -1,36 +1,35 @@
 <template>
   <BasePopover
     v-model="isOpen"
-    placement="bottom-start"
-    :offset-distance="6"
-    :disabled
-    match-trigger-width
     :block="width === 'full'"
-    panel-class="p-0 overflow-hidden"
+    :disabled
+    :offset-distance="6"
     @open="scrollToSelected"
+    match-trigger-width
+    panel-class="p-0 overflow-hidden"
+    placement="bottom-start"
   >
     <template #trigger="{ isOpen: _isOpen }">
       <div
-        ref="referenceRef"
+        v-bind="$attrs"
         v-wave="{ disabled }"
-        :tabindex="disabled ? -1 : 0"
         :aria-disabled="disabled || undefined"
-        role="combobox"
         :aria-expanded="_isOpen"
-        aria-haspopup="listbox"
-        :style="{ width: presetWidth }"
-        class="group relative flex items-center justify-between select-none rounded-full bg-bg-body border border-border-light text-text-title box-border transition-all duration-150 outline-none hover:border-border-base focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/70"
         :class="[
           currentConfig.triggerClass,
-          _isOpen ? 'border-primary ring-1 ring-primary' : '',
-          disabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer',
+          _isOpen ? 'border-primary ring-primary ring-1' : '',
+          disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer',
         ]"
         :data-focusable-inline="!disabled || undefined"
-        v-bind="$attrs"
+        :style="{ width: presetWidth }"
+        :tabindex="disabled ? -1 : 0"
         @keydown="handleTriggerKeydown($event)"
+        aria-haspopup="listbox"
+        class="group bg-bg-body border-border-light text-text-title hover:border-border-base focus-visible:border-primary focus-visible:ring-primary/70 relative box-border flex items-center justify-between rounded-full border transition-all duration-150 outline-none select-none focus-visible:ring-2"
+        ref="referenceRef"
+        role="combobox"
       >
         <span
-          class="font-semibold flex items-center gap-sm flex-1 min-w-0 overflow-hidden"
           :class="[
             isEmpty && placeholder
               ? 'text-text-disabled font-normal'
@@ -38,96 +37,108 @@
                 ? 'text-primary'
                 : 'text-text-title',
           ]"
+          class="gap-sm flex min-w-0 flex-1 items-center overflow-hidden font-semibold"
         >
           <slot name="prefix" />
+          <BaseIcon
+            v-if="typeof currentTriggerIcon === 'string'"
+            :name="currentTriggerIcon as IconName"
+            :size="13"
+            aria-hidden="true"
+            class="shrink-0 opacity-80"
+          />
           <component
+            v-else-if="currentTriggerIcon"
             :is="currentTriggerIcon"
-            v-if="currentTriggerIcon"
             :size="13"
             :stroke-width="2.5"
-            class="shrink-0 opacity-80"
             aria-hidden="true"
+            class="shrink-0 opacity-80"
           />
-          <span class="overflow-hidden text-ellipsis whitespace-nowrap w-full flex items-center gap-1">
+          <span class="flex w-full items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap">
             <template v-if="isMultiple && selectedValues.length">
               <span
                 v-for="opt in displayedTags"
                 :key="String(getOptionValue(opt))"
-                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-tint-primary-90 text-primary text-2xs font-bold shrink-0 max-w-[8rem]"
+                class="bg-tint-primary-90 text-primary text-2xs inline-flex max-w-[8rem] shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-bold"
               >
                 <span class="truncate">{{ formattedOption(opt) }}</span>
-                <X
+                <BaseIcon
                   :size="10"
                   :stroke-width="3"
-                  class="cursor-pointer opacity-60 hover:opacity-100 hover:text-danger shrink-0"
-                  title="移除"
-                  aria-label="移除选项"
-                  role="button"
-                  tabindex="0"
-                  @pointerdown.stop.prevent
-                  @mousedown.stop.prevent
+                  @click.stop.prevent="handleRemoveTag(opt)"
                   @keydown.enter.prevent.stop="handleRemoveTag(opt)"
                   @keydown.space.prevent.stop="handleRemoveTag(opt)"
-                  @click.stop.prevent="handleRemoveTag(opt)"
+                  @mousedown.stop.prevent
+                  @pointerdown.stop.prevent
+                  aria-label="移除选项"
+                  class="hover:text-danger shrink-0 cursor-pointer opacity-60 hover:opacity-100"
+                  name="x"
+                  role="button"
+                  tabindex="0"
+                  title="移除"
                 />
               </span>
               <span
                 v-if="collapsedCount > 0"
-                class="inline-flex items-center px-1.5 py-0.5 rounded bg-bg-panel-hover text-text-muted text-2xs font-bold shrink-0"
+                class="bg-bg-panel-hover text-text-muted text-2xs inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-bold"
               >
                 +{{ collapsedCount }}
               </span>
             </template>
-            <slot v-else name="label" :selected="modelValue"> {{ displayText }} </slot>
+            <slot v-else :selected="modelValue" name="label"> {{ displayText }} </slot>
           </span>
           <slot name="suffix" />
         </span>
 
         <template v-if="clearable && canClear && !disabled">
-          <X
+          <BaseIcon
             :size="14"
             :stroke-width="2.5"
-            class="hidden group-hover:block group-focus-within:block cursor-pointer text-text-disabled hover:text-danger transition-colors shrink-0 bg-bg-body"
-            title="清空"
-            aria-label="清空选择"
-            role="button"
-            tabindex="0"
-            @pointerdown.stop.prevent
-            @mousedown.stop.prevent
+            @click.stop.prevent="handleClear"
             @keydown.enter.prevent.stop="handleClear"
             @keydown.space.prevent.stop="handleClear"
-            @click.stop.prevent="handleClear"
+            @mousedown.stop.prevent
+            @pointerdown.stop.prevent
+            aria-label="清空选择"
+            class="text-text-disabled hover:text-danger bg-bg-body hidden shrink-0 cursor-pointer transition-colors group-focus-within:block group-hover:block"
+            name="x"
+            role="button"
+            tabindex="0"
+            title="清空"
           />
-          <ChevronDown
+          <BaseIcon
+            :class="{ 'rotate-180': _isOpen }"
             :size="14"
             :stroke-width="2.5"
-            class="block group-hover:hidden group-focus-within:hidden text-text-disabled transition-transform duration-200 shrink-0"
-            :class="{ 'rotate-180': _isOpen }"
+            class="text-text-disabled block shrink-0 transition-transform duration-200 group-focus-within:hidden group-hover:hidden"
+            name="chevron-down"
           />
         </template>
-        <ChevronDown
+        <BaseIcon
           v-else
+          :class="{ 'rotate-180': _isOpen }"
           :size="14"
           :stroke-width="2.5"
-          class="block text-text-disabled transition-transform duration-200 shrink-0"
-          :class="{ 'rotate-180': _isOpen }"
+          class="text-text-disabled block shrink-0 transition-transform duration-200"
+          name="chevron-down"
         />
       </div>
     </template>
 
     <template #default="{ close }">
-      <div class="dropdown-inner-container relative w-full flex flex-col">
-        <div v-if="$slots['header'] || filterable" class="shrink-0 border-b border-glass-border">
+      <div class="dropdown-inner-container relative flex w-full flex-col">
+        <div v-if="$slots['header'] || filterable" class="border-glass-border shrink-0 border-b">
           <div v-if="filterable" class="px-2 py-1.5">
             <input
-              ref="filterInputRef"
               v-model="searchQuery"
-              type="text"
               :placeholder="filterPlaceholder"
-              class="w-full h-7 px-2 text-xs rounded border border-border-light bg-bg-body outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
               @keydown.down.prevent="handleFilterKeydownDown"
               @keydown.enter.prevent="handleFilterKeydownEnter(close)"
               @pointerdown.stop
+              class="border-border-light bg-bg-body focus:border-primary focus:ring-primary/50 h-7 w-full rounded border px-2 text-xs outline-none focus:ring-1"
+              ref="filterInputRef"
+              type="text"
             />
           </div>
           <slot name="header" />
@@ -136,77 +147,85 @@
         <Transition name="v-transition-fade">
           <div
             v-if="canScrollUp"
-            class="absolute left-1 right-1 top-1 h-2 flex items-center justify-center z-panel text-text-disabled pointer-events-none transition-colors"
             aria-hidden="true"
+            class="z-panel text-text-disabled pointer-events-none absolute top-1 right-1 left-1 flex h-2 items-center justify-center transition-colors"
           >
-            <ChevronUp :size="9" :stroke-width="3" />
+            <BaseIcon :size="9" :stroke-width="3" name="chevron-up" />
           </div>
         </Transition>
 
         <div
-          ref="dropdownRef"
-          role="listbox"
-          tabindex="-1"
           :aria-multiselectable="isMultiple || undefined"
-          class="no-scrollbar w-full overflow-y-auto flex flex-col box-border p-xs gap-0.5 outline-none"
           :style="{
             maxHeight: dropdownMaxHeight,
             // 空选项时禁止滚动（空占位可能略高于容器，避免出现可滚动的空面板）
             ...(filteredOptions.length === 0 ? { overflow: 'hidden' } : {}),
           }"
-          @scroll.passive="checkScroll"
           @keydown="handleDropdownKeydown($event, close)"
+          @scroll.passive="checkScroll"
+          class="no-scrollbar p-xs box-border flex w-full flex-col gap-0.5 overflow-y-auto outline-none"
+          ref="dropdownRef"
+          role="listbox"
+          tabindex="-1"
         >
           <div
             v-if="filteredOptions.length === 0"
-            class="flex flex-col items-center justify-center py-6 w-full min-h-[5.5rem] box-border m-auto"
+            class="m-auto box-border flex min-h-[5.5rem] w-full flex-col items-center justify-center py-6"
           >
-            <EmptyState size="sm" :description="filterable ? '无匹配结果' : '暂无选项'" />
+            <EmptyState :description="filterable ? '无匹配结果' : '暂无选项'" size="sm" />
           </div>
           <template v-else>
             <div
               v-for="(option, index) in filteredOptions"
-              :key="index"
-              :ref="el => setOptionEl(el, index)"
               v-wave="{ disabled: isOptionDisabled(option) }"
-              role="option"
-              :tabindex="isOptionDisabled(option) ? -1 : 0"
               :aria-selected="isSelected(getOptionValue(option))"
-              class="px-2.5 flex items-center justify-between text-xs text-text-body bg-transparent rounded-lg box-border cursor-pointer transition-colors shrink-0 outline-none hover:bg-bg-panel-hover hover:text-text-title gap-2 min-w-0"
               :class="[
                 currentConfig.itemClass,
                 isSelected(getOptionValue(option))
-                  ? '!bg-tint-primary-88 !text-primary font-bold'
+                  ? 'bg-tint-primary-88! text-primary! font-bold'
                   : fontBlackItems
                     ? 'font-black'
                     : 'font-bold',
-                { 'opacity-40 cursor-not-allowed pointer-events-none': isOptionDisabled(option) },
+                { 'pointer-events-none cursor-not-allowed opacity-40': isOptionDisabled(option) },
               ]"
+              :key="index"
+              :ref="el => setOptionEl(el, index)"
+              :tabindex="isOptionDisabled(option) ? -1 : 0"
               @click="handleSelect(option, close)"
               @keydown.enter.prevent.stop="handleSelect(option, close)"
               @keydown.space.prevent.stop="handleSelect(option, close)"
+              class="text-text-body hover:bg-bg-panel-hover hover:text-text-title box-border flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-lg bg-transparent px-2.5 text-xs transition-colors outline-none"
+              role="option"
             >
-              <span class="truncate flex-1 min-w-0 max-w-full flex items-center gap-2">
+              <span class="flex max-w-full min-w-0 flex-1 items-center gap-2 truncate">
+                <BaseIcon
+                  v-if="typeof getOptionIcon(option) === 'string'"
+                  :name="getOptionIcon(option) as IconName"
+                  :size="13"
+                  aria-hidden="true"
+                  class="shrink-0 opacity-80"
+                />
                 <component
+                  v-else-if="getOptionIcon(option)"
                   :is="getOptionIcon(option)"
-                  v-if="getOptionIcon(option)"
                   :size="13"
                   :stroke-width="2.5"
-                  class="shrink-0 opacity-80"
                   aria-hidden="true"
+                  class="shrink-0 opacity-80"
                 />
                 <span class="truncate">
-                  <slot name="option" :option :index>
+                  <slot :index :option name="option">
                     {{ formattedOption(option) }}
                   </slot>
                 </span>
               </span>
-              <Check
+              <BaseIcon
                 v-if="isSelected(getOptionValue(option))"
                 :size="13"
                 :stroke-width="2.5"
-                class="shrink-0 text-primary"
                 aria-hidden="true"
+                class="text-primary shrink-0"
+                name="check"
               />
             </div>
           </template>
@@ -215,10 +234,10 @@
         <Transition name="v-transition-fade">
           <div
             v-if="canScrollDown"
-            class="absolute left-1 right-1 bottom-1 h-2 flex items-center justify-center z-panel text-text-disabled pointer-events-none transition-colors"
             aria-hidden="true"
+            class="z-panel text-text-disabled pointer-events-none absolute right-1 bottom-1 left-1 flex h-2 items-center justify-center transition-colors"
           >
-            <ChevronDown :size="9" :stroke-width="3" />
+            <BaseIcon :size="9" :stroke-width="3" name="chevron-down" />
           </div>
         </Transition>
 
@@ -231,6 +250,9 @@
 <script lang="ts">
 import type { Component } from 'vue';
 
+import BaseIcon from '@/components/ui/BaseIcon.vue';
+import type { IconName } from '@/components/ui/icons.registry';
+
 export interface SelectorFieldNames {
   label?: string;
   value?: string;
@@ -242,7 +264,7 @@ export interface BaseSelectorOption<V = unknown> {
   label: string;
   value: V;
   disabled?: boolean;
-  icon?: Component;
+  icon?: IconName | Component;
   [key: string]: unknown;
 }
 
@@ -251,15 +273,15 @@ export type OptionValue<Opt> = Opt extends { value: infer V } ? V : Opt;
 </script>
 
 <script
-  setup
-  lang="ts"
   generic="O extends Record<string, unknown> | string | number, M extends boolean = false, V = OptionValue<O>"
+  lang="ts"
+  setup
 >
+import { computed, nextTick, onBeforeUpdate, ref, useTemplateRef, watch } from 'vue';
+
 import BasePopover from '@/components/ui/BasePopover.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import { resolveComponentWidth, type FormComponentWidth } from '@/utils/core/constants';
-import { Check, ChevronDown, ChevronUp, X } from '@lucide/vue';
-import { computed, nextTick, onBeforeUpdate, ref, useTemplateRef, watch } from 'vue';
 
 type AnyOption = O;
 
@@ -291,14 +313,14 @@ const {
   width?: FormComponentWidth;
   placeholder?: string;
   /** 触发器前缀图标（不传则自动取当前选中项的 icon） */
-  icon?: Component;
+  icon?: IconName | Component;
   clearable?: boolean;
   disabled?: boolean;
   displayItems?: number;
   defaultValue?: M extends true ? V[] : V;
   fontBlackItems?: boolean;
   /** 自定义选项展示文本（仅原始值选项；对象选项走 fieldNames.label） */
-  formatOption?: (opt: string | number) => string;
+  formatOption?: (option: AnyOption) => string;
   multiple?: M;
   /** 多选模式下最多展示的 Tag 数量 */
   maxTagCount?: number;
@@ -326,9 +348,9 @@ const disabledKey = computed(() => fieldNames?.disabled ?? 'disabled');
 const iconKey = computed(() => fieldNames?.icon ?? 'icon');
 
 /** 读取选项图标：仅对象选项且对应字段存在时返回 */
-const getOptionIcon = (option: AnyOption): Component | undefined => {
+const getOptionIcon = (option: AnyOption): IconName | Component | undefined => {
   if (option !== null && typeof option === 'object' && iconKey.value in option) {
-    return (option as Record<string, unknown>)[iconKey.value] as Component | undefined;
+    return (option as Record<string, unknown>)[iconKey.value] as IconName | Component | undefined;
   }
   return undefined;
 };
@@ -338,7 +360,7 @@ const selectedOption = computed(() => {
   return options.find(opt => equalsValue(getOptionValue(opt), modelValue.value as V));
 });
 
-const currentTriggerIcon = computed(() => {
+const currentTriggerIcon = computed<IconName | Component | undefined>(() => {
   if (icon) return icon;
   if (!isMultiple.value && selectedOption.value) {
     return getOptionIcon(selectedOption.value);

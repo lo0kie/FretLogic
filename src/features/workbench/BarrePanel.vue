@@ -1,39 +1,58 @@
 <template>
   <div
-    class="transition-[width,min-width] duration-slow ease-sidebar h-auto p-3 bg-bg-panel border border-glass-border rounded-lg flex flex-col box-border overflow-hidden"
     :class="effectiveExpanded ? 'w-[19rem] min-w-[19rem]' : 'w-[14rem] min-w-[14rem]'"
+    class="duration-slow ease-sidebar bg-bg-panel border-glass-border box-border flex h-auto flex-col overflow-hidden rounded-lg border p-3 transition-[width,min-width]"
   >
     <div
-      class="flex items-center justify-between gap-2 shrink-0 h-7 border-b transition-[border-color,padding-bottom] duration-slow ease-sidebar"
-      :class="effectiveExpanded ? 'pb-1.5 border-border-light' : 'pb-0 border-transparent'"
+      :class="effectiveExpanded ? 'border-border-light pb-1.5' : 'border-transparent pb-0'"
+      class="duration-slow ease-sidebar flex h-7 shrink-0 items-center justify-between gap-2 border-b transition-[border-color,padding-bottom]"
     >
       <div
-        class="group flex items-center gap-1.5 -ml-1 pl-1 pr-1.5 py-0.5 rounded-md cursor-pointer hover:bg-bg-panel-hover/50 transition-colors"
-        role="button"
-        :tabindex="0"
         :aria-expanded="effectiveExpanded"
         :aria-label="effectiveExpanded ? '收起横按标记面板' : '展开横按标记面板'"
+        :tabindex="0"
         @click="toggleCollapse"
         @keydown.enter.prevent="toggleCollapse"
         @keydown.space.prevent="toggleCollapse"
+        class="group hover:bg-bg-panel-hover/50 -ml-1 flex cursor-pointer items-center gap-1.5 rounded-md py-0.5 pr-1.5 pl-1 transition-colors"
+        role="button"
       >
-        <div class="flex items-center justify-center w-5 h-5 rounded-md bg-tint-primary-88 text-primary">
-          <MoveHorizontal class="group-hover:hidden" :size="13" :stroke-width="2.5" />
-          <Minimize2 v-if="effectiveExpanded" class="hidden group-hover:block" :size="13" :stroke-width="2.5" />
-          <Maximize2 v-else class="hidden group-hover:block" :size="13" :stroke-width="2.5" />
+        <div
+          class="bg-tint-primary-88 text-primary relative flex h-5 w-5 items-center justify-center overflow-hidden rounded-md"
+        >
+          <BaseIcon
+            :size="13"
+            :stroke-width="2.5"
+            class="duration-fast pointer-events-none absolute transition-all group-hover:scale-50 group-hover:opacity-0"
+            name="move-horizontal"
+          />
+          <BaseIcon
+            v-if="effectiveExpanded"
+            :size="13"
+            :stroke-width="2.5"
+            class="duration-fast pointer-events-none absolute scale-50 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100"
+            name="minimize-2"
+          />
+          <BaseIcon
+            v-else
+            :size="13"
+            :stroke-width="2.5"
+            class="duration-fast pointer-events-none absolute scale-50 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100"
+            name="maximize-2"
+          />
         </div>
-        <span class="text-xs font-extrabold text-text-title tracking-tight break-keep">横按标记</span>
+        <span class="text-text-title text-xs font-extrabold tracking-tight break-keep">横按标记</span>
       </div>
 
-      <div class="flex items-center gap-2 shrink-0">
+      <div class="flex shrink-0 items-center gap-2">
         <ActionButton
           v-tooltip="'自动标记横按'"
-          compacted
-          variant="ghost"
-          size="sm"
           :color="editorStore.autoBarre ? 'primary' : 'default'"
-          title="自动标记横按"
           @click="toggleAutoBarre"
+          compacted
+          size="sm"
+          title="自动标记横按"
+          variant="ghost"
         >
           自动
         </ActionButton>
@@ -42,26 +61,26 @@
 
     <!-- 内容区高度动画：测量内容真实高度写入 height 并过渡，覆盖展开/收起与内容尺寸变化 -->
     <div
-      class="overflow-hidden transition-[height] duration-base ease-sidebar flex justify-center items-start"
       :style="{ height: bodyHeight }"
+      class="duration-base ease-sidebar flex items-start justify-center overflow-hidden transition-[height]"
     >
       <!-- 被测量内容宽度瞬时锁定到目标内容区宽度（面板宽 - 卡片左右内边距 p-3 共 1.5rem），
            宽度动画期间不再随面板伸缩而重排，useAutoHeight 测得的高度保持稳定、不抖动 -->
-      <div ref="bodyContentRef" class="w-[calc(19rem-1.5rem)]">
+      <div class="w-[calc(19rem-1.5rem)]" ref="bodyContentRef">
         <Transition mode="out-in">
-          <div v-if="isExpanded" key="content" class="flex flex-col gap-1 pt-2">
-            <div class="flex justify-center py-1 box-border">
+          <div v-if="isExpanded" class="flex flex-col gap-1 pt-2" key="content">
+            <div class="box-border flex justify-center py-1">
               <Fretboard
-                :wide-nut="false"
+                :barre-candidates="candidates"
+                :barre-pick-mode="true"
                 :chord="editorStore.draftChord"
                 :interactive="false"
-                :show-pitch-names="false"
-                :show-chord-name="false"
                 :scale="0.6"
-                :barre-pick-mode="true"
+                :show-chord-name="false"
                 :show-fret-numbers="false"
                 :show-open-strings="false"
-                :barre-candidates="candidates"
+                :show-pitch-names="false"
+                :wide-nut="false"
                 @barre-click="handleBarreClick"
               />
             </div>
@@ -71,7 +90,7 @@
             <p v-else-if="showPitchNamesOn" class="form-hint">显示音名模式下主指板不渲染横按条，关闭后可查看。</p>
             <p v-else class="form-hint">点击指板上的半透明横按条即可标记，再次点击已标记的横按可清除。</p>
           </div>
-          <p v-else-if="effectiveExpanded" key="empty" class="form-hint pt-2">
+          <p v-else-if="effectiveExpanded" class="form-hint pt-2" key="empty">
             在指板上按出至少两根弦，即可在此标记横按。
           </p>
         </Transition>
@@ -80,18 +99,20 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import ActionButton from '@/components/ui/ActionButton.vue';
+<script lang="ts" setup>
+import { computed, useTemplateRef } from 'vue';
+
+import { useStorage } from '@vueuse/core';
+
 import Fretboard from '@/components/fretboard/Fretboard.vue';
+import ActionButton from '@/components/ui/ActionButton.vue';
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 import { useAutoHeight } from '@/shared/composables/useAutoHeight';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { BarreEntity } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { computeBarreCandidates } from '@/utils/music/chord-fretboard';
-import { Maximize2, Minimize2, MoveHorizontal } from '@lucide/vue';
-import { useStorage } from '@vueuse/core';
-import { computed, useTemplateRef } from 'vue';
 
 const editorStore = useChordEditorStore();
 const settingsStore = useSettingsStore();

@@ -1,5 +1,5 @@
+import { isMuted } from '@/services/music/theory';
 import type { Chord, Group, Song } from '@/types';
-import { isMuted } from '@/utils/music/musicTheory';
 
 export const ChordRecord = {
   id: (chord: Chord): string => chord.id,

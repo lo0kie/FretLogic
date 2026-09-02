@@ -1,22 +1,22 @@
 <template>
   <GlobalToast />
 
-  <div class="w-screen h-screen min-w-[320px] flex flex-col overflow-hidden box-border">
+  <div class="box-border flex h-screen w-screen min-w-[320px] flex-col overflow-hidden">
     <div class="shrink-0">
       <TopHeader />
     </div>
 
-    <div class="flex-1 min-h-0 flex relative overflow-hidden">
+    <div class="relative flex min-h-0 flex-1 overflow-hidden">
       <SidebarLeft />
 
-      <main class="flex-1 min-w-0 min-h-0 relative overflow-hidden">
+      <main class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <div
-          class="absolute inset-0 box-border transition-[padding-left] duration-slow ease-sidebar"
           :style="{ paddingLeft: mainPaddingLeft }"
+          class="duration-slow ease-sidebar absolute inset-0 box-border transition-[padding-left]"
         >
           <RouterView #="{ Component, route }">
             <KeepAlive>
-              <Transition name="v-transition-fade" mode="out-in">
+              <Transition mode="out-in" name="v-transition-fade">
                 <component :is="Component" :key="route.name || route.path" />
               </Transition>
             </KeepAlive>
@@ -27,12 +27,13 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed, defineAsyncComponent } from 'vue';
+
+import TopHeader from '@/app/layouts/TopHeader.vue';
 import GlobalToast from '@/components/ui/GlobalToast.vue';
 import { useUiStore } from '@/stores/uiStore';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/core/constants';
-import TopHeader from '@/app/layouts/TopHeader.vue';
-import { computed, defineAsyncComponent } from 'vue';
 
 const uiStore = useUiStore();
 const SidebarLeft = defineAsyncComponent(() => import('@/app/layouts/SidebarLeft.vue'));

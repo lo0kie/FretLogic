@@ -1,5 +1,6 @@
-import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP } from '@/utils/core/constants';
 import { computed, type Ref } from 'vue';
+
+import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP } from '@/utils/core/constants';
 
 const STRING_X_POSITIONS = Array.from(
   { length: 6 },

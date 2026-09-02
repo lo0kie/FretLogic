@@ -1,45 +1,45 @@
 <template>
-  <div v-if="$slots['trigger']" class="popover-wrapper relative inline-flex" :class="{ 'flex w-full': block }">
+  <div v-if="$slots['trigger']" :class="{ 'flex w-full': block }" class="popover-wrapper relative inline-flex">
     <div
-      ref="referenceRef"
-      class="popover-trigger inline-flex"
-      :class="{ 'flex flex-1 w-full': block }"
-      @mouseenter="handleTriggerMouseEnter"
-      @mouseleave="handleTriggerMouseLeave"
-      @focusin="handleTriggerFocusIn"
-      @focusout="handleTriggerFocusOut"
+      :class="{ 'flex w-full flex-1': block }"
       @click="handleTriggerClick"
       @contextmenu="handleTriggerContextMenu"
+      @focusin="handleTriggerFocusIn"
+      @focusout="handleTriggerFocusOut"
+      @mouseenter="handleTriggerMouseEnter"
+      @mouseleave="handleTriggerMouseLeave"
+      class="popover-trigger inline-flex"
+      ref="referenceRef"
     >
-      <slot name="trigger" :is-open="model" :toggle :open :close :pin-toggle />
+      <slot :close :is-open="model" :open :pin-toggle :toggle name="trigger" />
     </div>
   </div>
 
-  <Teleport :to="teleportTo ?? 'body'" :disabled="disabledTeleport">
+  <Teleport :disabled="disabledTeleport" :to="teleportTo ?? 'body'">
     <div
       v-if="isMounted"
-      ref="floatingRef"
-      data-floating-layer
-      class="popover-floating-host pointer-events-auto"
       :style="[floatingStyles, { zIndex: floatingZIndex }]"
+      class="popover-floating-host pointer-events-auto"
+      data-floating-layer
+      ref="floatingRef"
     >
-      <Transition appear :name="transitionName" @after-leave="handleAfterLeave">
+      <Transition :name="transitionName" @after-leave="handleAfterLeave" appear>
         <div
           v-if="isShown"
-          ref="panelRef"
-          role="dialog"
-          :aria-modal="false"
           :aria-label
-          class="popover-panel relative z-10 box-border outline-none bg-bg-elevated border border-glass-border rounded-md shadow-floating backdrop-blur-xl origin-top"
+          :aria-modal="false"
           :class="panelClass"
           :style="panelStyle"
-          tabindex="-1"
-          @mouseenter="handlePanelMouseEnter"
-          @mouseleave="handlePanelMouseLeave"
           @focusout="handleFocusOut"
           @keydown="handlePanelKeydown"
+          @mouseenter="handlePanelMouseEnter"
+          @mouseleave="handlePanelMouseLeave"
+          class="popover-panel bg-bg-elevated border-glass-border shadow-floating relative z-10 box-border origin-top rounded-md border backdrop-blur-xl outline-none"
+          ref="panelRef"
+          role="dialog"
+          tabindex="-1"
         >
-          <div v-if="showArrow" ref="arrowRef" class="popover-arrow pointer-events-none" :style="arrowStyle" />
+          <div v-if="showArrow" :style="arrowStyle" class="popover-arrow pointer-events-none" ref="arrowRef" />
           <slot :close />
         </div>
       </Transition>
@@ -59,9 +59,19 @@ interface PopoverLayerEntry {
 const openedPopovers = new Set<PopoverLayerEntry>();
 </script>
 
-<script setup lang="ts">
-import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
-import { acquireFloatingZ, FLOATING_Z_BASE, releaseFloatingZ } from '@/utils/ui/floatingZ';
+<script lang="ts" setup>
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  ref,
+  unref,
+  useTemplateRef,
+  watch,
+  type CSSProperties,
+  type MaybeRef,
+} from 'vue';
+
 import {
   autoUpdate,
   flip,
@@ -76,17 +86,9 @@ import {
   type VirtualElement,
 } from '@floating-ui/vue';
 import { useEventListener } from '@vueuse/core';
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  ref,
-  unref,
-  useTemplateRef,
-  watch,
-  type CSSProperties,
-  type MaybeRef,
-} from 'vue';
+
+import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
+import { acquireFloatingZ, FLOATING_Z_BASE, releaseFloatingZ } from '@/utils/ui/floatingZ';
 
 const {
   trigger = 'click',

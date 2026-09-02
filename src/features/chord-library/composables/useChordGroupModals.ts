@@ -1,3 +1,6 @@
+import { reactive } from 'vue';
+
+import { computeChordFingerprint, getChordName } from '@/services/music/theory';
 import { useChordActions } from '@/shared/composables/useChordActions';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
@@ -5,8 +8,6 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/types';
 import { getGroupSortKey } from '@/utils/music/entityFactories';
-import { computeChordFingerprint, getChordName } from '@/utils/music/musicTheory';
-import { reactive } from 'vue';
 
 const DEFAULT_GROUP_SORT_RULE = 'ROOT_PITCH' as const;
 const DEFAULT_SORT_KEY = 'C';

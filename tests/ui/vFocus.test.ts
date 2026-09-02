@@ -1,8 +1,10 @@
 /* eslint-disable vue/one-component-per-file */
-import { vFocus } from '@/directives/vFocus';
+import { defineComponent, ref } from 'vue';
+
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref } from 'vue';
+
+import { vFocus } from '@/directives/vFocus';
 
 describe('vFocus directive', () => {
   it('automatically focuses input on mount', async () => {

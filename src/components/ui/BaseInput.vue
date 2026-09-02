@@ -1,70 +1,70 @@
 <template>
   <div
-    class="group relative flex items-center box-border rounded-full"
     :class="{ 'cursor-not-allowed select-none': disabled }"
     :style="{ width: resolvedWidth }"
-    @mouseenter="isHovered = true"
-    @mouseleave="isHovered = false"
     @focusin="isFocused = true"
     @focusout="isFocused = false"
+    @mouseenter="isHovered = true"
+    @mouseleave="isHovered = false"
+    class="group relative box-border flex items-center rounded-full"
   >
     <div
       v-if="$slots['prefix']"
-      class="absolute inset-y-0 flex items-center justify-center text-text-disabled pointer-events-none"
       :class="currentConfig.prefixClass"
+      class="text-text-disabled pointer-events-none absolute inset-y-0 flex items-center justify-center"
     >
       <slot name="prefix" />
     </div>
 
     <input
-      :id
-      ref="inputRef"
-      :type="resolvedType"
-      :disabled
-      :readonly
-      :name
-      :minlength
-      :maxlength
-      :pattern
-      :inputmode
-      :required
-      :autocomplete
-      :placeholder
-      :value="modelValue"
       :aria-invalid="invalid || undefined"
-      class="w-full font-medium font-[inherit] box-border bg-bg-body border border-solid rounded-full text-text-title caret-primary outline-none cursor-text min-w-0 overflow-hidden text-ellipsis transition-all duration-fast placeholder:text-text-disabled placeholder:font-normal placeholder:truncate focus:enabled:bg-bg-body focus-visible:ring-2 disabled:opacity-45 disabled:cursor-not-allowed disabled:pointer-events-none disabled:select-none"
+      :autocomplete
       :class="[
         currentConfig.inputClass,
         fontClass,
         stateBorderClasses,
         $slots['prefix'] ? currentConfig.prefixPadding : currentConfig.basePaddingLeft,
       ]"
+      :disabled
+      :id
+      :inputmode
+      :maxlength
+      :minlength
+      :name
+      :pattern
+      :placeholder
+      :readonly
+      :required
       :style="{ paddingRight: computedPaddingRight }"
-      data-bwignore="true"
-      data-1p-ignore="true"
-      data-lpignore="true"
-      data-protonpass-ignore="true"
-      data-form-type="other"
-      data-focusable-inline
-      @input="handleInput"
-      @compositionstart="handleCompositionStart"
-      @compositionend="handleCompositionEnd"
-      @keyup.enter="$emit('enter')"
-      @focus="(e: FocusEvent) => $emit('focus', e)"
+      :type="resolvedType"
+      :value="modelValue"
       @blur="handleBlur"
       @change="(e: Event) => $emit('change', e)"
+      @compositionend="handleCompositionEnd"
+      @compositionstart="handleCompositionStart"
+      @focus="(e: FocusEvent) => $emit('focus', e)"
+      @input="handleInput"
+      @keyup.enter="$emit('enter')"
+      class="bg-bg-body text-text-title caret-primary duration-fast placeholder:text-text-disabled focus:enabled:bg-bg-body box-border w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid font-[inherit] font-medium text-ellipsis transition-all outline-none placeholder:truncate placeholder:font-normal focus-visible:ring-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45 disabled:select-none"
+      data-1p-ignore="true"
+      data-bwignore="true"
+      data-focusable-inline
+      data-form-type="other"
+      data-lpignore="true"
+      data-protonpass-ignore="true"
+      ref="inputRef"
     />
 
     <div
       v-if="hasCount || hasSuffix || isClearAvailable"
+      class="pointer-events-none absolute inset-y-0 right-2 flex items-center gap-1.5"
       ref="rightSlotRef"
-      class="absolute inset-y-0 right-2 flex items-center gap-1.5 pointer-events-none"
     >
       <span
         v-if="showCount && maxlength !== undefined"
-        class="text-2xs font-medium text-text-disabled whitespace-nowrap transition-all duration-fast"
-        :class="{ '!text-danger font-bold': isAtLimit }"
+        :class="{ 'text-danger! font-bold': isAtLimit }"
         aria-live="polite"
+        class="text-2xs text-text-disabled duration-fast font-medium whitespace-nowrap transition-all"
       >
         {{ modelValue?.length ?? 0 }}/{{ maxlength }}
       </span>
@@ -72,44 +72,44 @@
       <button
         v-if="isClearAvailable"
         v-wave
-        type="button"
-        class="flex items-center justify-center text-text-disabled bg-bg-panel-hover rounded-full border-none p-0 cursor-pointer overflow-hidden transition-all duration-200 hover:bg-danger hover:text-text-on-accent active:scale-90 outline-none"
         :class="
           clearVisible
-            ? 'w-4 h-4 opacity-100 scale-100 pointer-events-auto'
-            : 'w-0 h-4 opacity-0 scale-0 pointer-events-none -mr-1.5'
+            ? 'pointer-events-auto h-4 w-4 scale-100 opacity-100'
+            : 'pointer-events-none -mr-1.5 h-4 w-0 scale-0 opacity-0'
         "
-        title="清空内容"
+        @click.stop="handleClear"
+        @mousedown.stop
+        @pointerdown.stop
+        class="text-text-disabled bg-bg-panel-hover hover:bg-danger hover:text-text-on-accent flex cursor-pointer items-center justify-center overflow-hidden rounded-full border-none p-0 transition-all duration-200 outline-none active:scale-90"
         data-focusable-inline
         tabindex="0"
-        @click.stop="handleClear"
-        @pointerdown.stop
-        @mousedown.stop
+        title="清空内容"
+        type="button"
       >
-        <X :size="14" stroke-width="3" />
+        <BaseIcon :size="14" name="x" stroke-width="3" />
       </button>
 
-      <div v-if="isPasswordMode || $slots['suffix']" class="flex items-center justify-center pointer-events-none">
+      <div v-if="isPasswordMode || $slots['suffix']" class="pointer-events-none flex items-center justify-center">
         <slot name="suffix">
           <button
             v-if="isPasswordMode"
             v-wave="{ disabled }"
-            data-focusable-inline
-            type="button"
-            :disabled="disabled"
-            class="flex items-center justify-center w-4 h-4 rounded-full text-text-disabled transition-all duration-fast bg-transparent border-none p-0 outline-none"
+            :aria-label="showPassword ? '隐藏密码' : '显示密码'"
             :class="
               disabled
                 ? 'pointer-events-none opacity-40'
-                : 'pointer-events-auto cursor-pointer hover:text-text-title hover:bg-bg-panel-hover active:scale-90'
+                : 'hover:text-text-title hover:bg-bg-panel-hover pointer-events-auto cursor-pointer active:scale-90'
             "
+            :disabled="disabled"
             :title="showPassword ? '隐藏密码' : '显示密码'"
-            :aria-label="showPassword ? '隐藏密码' : '显示密码'"
             @click.stop="!disabled && (showPassword = !showPassword)"
-            @pointerdown.stop
             @mousedown.stop
+            @pointerdown.stop
+            class="text-text-disabled duration-fast flex h-4 w-4 items-center justify-center rounded-full border-none bg-transparent p-0 transition-all outline-none"
+            data-focusable-inline
+            type="button"
           >
-            <component :is="showPassword ? Eye : EyeOff" :size="11" stroke-width="2.5" />
+            <BaseIcon :name="showPassword ? 'eye' : 'eye-off'" :size="11" />
           </button>
         </slot>
       </div>
@@ -117,11 +117,13 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { type FormComponentWidth, resolveComponentWidth } from '@/utils/core/constants';
-import { Eye, EyeOff, X } from '@lucide/vue';
-import { useEventListener } from '@vueuse/core';
+<script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
+
+import { useEventListener } from '@vueuse/core';
+
+import BaseIcon from '@/components/ui/BaseIcon.vue';
+import { resolveComponentWidth, type FormComponentWidth } from '@/utils/core/constants';
 
 const id = useId();
 const slots = useSlots();

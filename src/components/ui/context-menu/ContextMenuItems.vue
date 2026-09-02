@@ -1,57 +1,64 @@
 <template>
-  <div class="p-xs flex flex-col gap-xs box-border">
+  <div class="p-xs gap-xs box-border flex flex-col">
     <template v-if="title">
       <div
-        class="py-xs px-md text-2xs font-semibold text-text-disabled whitespace-nowrap overflow-hidden text-ellipsis select-none"
+        class="py-xs px-md text-2xs text-text-disabled overflow-hidden font-semibold text-ellipsis whitespace-nowrap select-none"
       >
         {{ title }}
       </div>
-      <div class="h-px bg-border-light my-0.5 mx-1" role="separator" />
+      <div class="bg-border-light mx-1 my-0.5 h-px" role="separator" />
     </template>
 
     <template v-for="(item, index) in items" :key="item.label + index">
-      <div v-if="item.divided" class="h-px bg-border-light my-0.5 mx-1" role="separator" />
+      <div v-if="item.divided" class="bg-border-light mx-1 my-0.5 h-px" role="separator" />
 
       <BasePopover
         v-if="item.children && item.children.length"
-        trigger="hover"
-        placement="right-start"
-        :offset-distance="4"
         :disabled="item.disabled"
+        :offset-distance="4"
         panel-class="context-menu-box"
+        placement="right-start"
+        trigger="hover"
       >
         <template #trigger="{ isOpen: isSubOpen, pinToggle }">
           <button
-            :ref="el => setItemEl(el, index)"
-            type="button"
-            role="menuitem"
-            :aria-haspopup="true"
-            :aria-expanded="isSubOpen"
-            :disabled="item.disabled"
-            :tabindex="item.disabled ? -1 : 0"
             :aria-disabled="item.disabled"
-            data-focusable-inline
-            class="group flex items-center rounded-md border-none bg-transparent w-full text-left box-border relative select-none cursor-pointer transition-colors duration-fast outline-none disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover))"
+            :aria-expanded="isSubOpen"
+            :aria-haspopup="true"
             :class="[
               currentSizeClass,
               isSubOpen ? 'bg-bg-panel-hover' : '',
               item.danger ? 'text-danger' : 'text-text-title',
             ]"
+            :disabled="item.disabled"
+            :ref="el => setItemEl(el, index)"
             :style="getItemStyle(item)"
+            :tabindex="item.disabled ? -1 : 0"
             :title="item.title"
-            @mousedown="item.disabled && $event.preventDefault()"
             @click.stop="!item.disabled && pinToggle()"
+            @mousedown="item.disabled && $event.preventDefault()"
+            class="group duration-fast relative box-border flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left transition-colors outline-none select-none enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover)) disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
+            data-focusable-inline
+            role="menuitem"
+            type="button"
           >
+            <BaseIcon
+              v-if="typeof item.icon === 'string'"
+              :name="item.icon"
+              :size="13"
+              aria-hidden="true"
+              class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+            />
             <component
+              v-else-if="item.icon"
               :is="item.icon"
-              v-if="item.icon"
               :size="13"
               :stroke-width="2.5"
-              class="shrink-0 opacity-85 group-enabled:group-hover:opacity-100 transition-opacity duration-fast"
               aria-hidden="true"
+              class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
             />
-            <span class="flex-1 min-w-0 whitespace-nowrap"> {{ item.label }} </span>
-            <ChevronRight :size="12" class="opacity-50 shrink-0 -mr-0.5" aria-hidden="true" />
+            <span class="min-w-0 flex-1 whitespace-nowrap"> {{ item.label }} </span>
+            <BaseIcon :size="12" aria-hidden="true" class="-mr-0.5 shrink-0 opacity-50" name="chevron-right" />
           </button>
         </template>
 
@@ -62,56 +69,63 @@
 
       <button
         v-else
-        :ref="el => setItemEl(el, index)"
         v-wave="{ disabled: item.disabled }"
-        type="button"
-        :role="item.checked !== undefined ? 'menuitemradio' : 'menuitem'"
-        :disabled="item.disabled"
-        :tabindex="item.disabled ? -1 : 0"
-        :aria-disabled="item.disabled"
         :aria-checked="item.checked"
-        data-focusable-inline
-        class="group flex items-center rounded-md border-none bg-transparent w-full text-left box-border relative select-none cursor-pointer transition-colors duration-fast outline-none disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover))"
+        :aria-disabled="item.disabled"
         :class="[
           currentSizeClass,
           item.danger
             ? item.checked
-              ? '!bg-tint-danger-88 !text-danger font-semibold'
-              : 'text-danger enabled:hover:!bg-tint-danger-88 enabled:focus-visible:!bg-tint-danger-88'
+              ? 'bg-tint-danger-88! text-danger! font-semibold'
+              : 'text-danger enabled:hover:bg-tint-danger-88! enabled:focus-visible:bg-tint-danger-88!'
             : item.color
               ? item.checked
                 ? 'font-semibold'
                 : ''
               : item.checked
-                ? '!bg-tint-primary-88 !text-primary font-semibold'
+                ? 'bg-tint-primary-88! text-primary! font-semibold'
                 : 'text-text-title',
         ]"
+        :disabled="item.disabled"
+        :ref="el => setItemEl(el, index)"
+        :role="item.checked !== undefined ? 'menuitemradio' : 'menuitem'"
         :style="getItemStyle(item)"
+        :tabindex="item.disabled ? -1 : 0"
         :title="item.title"
-        @mousedown="item.disabled && $event.preventDefault()"
         @click.stop="handleItemClick(item)"
         @keydown.enter.prevent.stop="handleItemClick(item)"
         @keydown.space.prevent.stop="handleItemClick(item)"
+        @mousedown="item.disabled && $event.preventDefault()"
+        class="group duration-fast relative box-border flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left transition-colors outline-none select-none enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover)) disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
+        data-focusable-inline
+        type="button"
       >
-        <Check
+        <BaseIcon
           v-if="item.checked"
           :size="13"
-          :stroke-width="2.5"
-          class="shrink-0 opacity-85 group-enabled:group-hover:opacity-100 transition-opacity duration-fast"
           aria-hidden="true"
+          class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+          name="check"
+        />
+        <BaseIcon
+          v-else-if="typeof item.icon === 'string'"
+          :name="item.icon"
+          :size="13"
+          aria-hidden="true"
+          class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
         />
         <component
-          :is="item.icon"
           v-else-if="item.icon"
+          :is="item.icon"
           :size="13"
           :stroke-width="2.5"
-          class="shrink-0 opacity-85 group-enabled:group-hover:opacity-100 transition-opacity duration-fast"
           aria-hidden="true"
+          class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
         />
 
-        <span class="flex-1 min-w-0 whitespace-nowrap"> {{ item.label }} </span>
+        <span class="min-w-0 flex-1 whitespace-nowrap"> {{ item.label }} </span>
 
-        <span v-if="item.shortcut" class="text-2xs opacity-45 font-mono tracking-tight ml-3 shrink-0 select-none">
+        <span v-if="item.shortcut" class="text-2xs ml-3 shrink-0 font-mono tracking-tight opacity-45 select-none">
           {{ item.shortcut }}
         </span>
       </button>
@@ -119,14 +133,16 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import BasePopover from '@/components/ui/BasePopover.vue';
-import { Check, ChevronRight } from '@lucide/vue';
+<script lang="ts" setup>
 import { computed, onBeforeUpdate, ref, type Component, type CSSProperties } from 'vue';
+
+import BaseIcon from '@/components/ui/BaseIcon.vue';
+import BasePopover from '@/components/ui/BasePopover.vue';
+import type { IconName } from '@/components/ui/icons.registry';
 
 export interface ContextMenuItem {
   label: string;
-  icon?: Component;
+  icon?: IconName | Component;
   action?: () => void;
   checked?: boolean;
   color?: string;
