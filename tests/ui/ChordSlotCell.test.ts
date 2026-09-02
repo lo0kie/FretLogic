@@ -39,7 +39,7 @@ describe('ChordSlotCell 谱面槽位', () => {
 
   it('char 槽位渲染字符', () => {
     const wrapper = mount(ChordSlotCell, {
-      props: { slotKey: 'line_l1_char_0', variant: 'char', char: 'C', isExporting: false },
+      props: { slotKey: 'line_l1_char_0', variant: 'char', char: 'C' },
       global: globalStubs,
     });
     expect(wrapper.attributes('data-slot-key')).toBe('line_l1_char_0');
@@ -48,7 +48,7 @@ describe('ChordSlotCell 谱面槽位', () => {
 
   it('点击触发 click 事件', async () => {
     const wrapper = mount(ChordSlotCell, {
-      props: { slotKey: 'line_l1_char_0', variant: 'char', isExporting: false },
+      props: { slotKey: 'line_l1_char_0', variant: 'char' },
       global: globalStubs,
     });
     await wrapper.trigger('click');
@@ -57,7 +57,7 @@ describe('ChordSlotCell 谱面槽位', () => {
 
   it('edge 槽位带和弦时渲染 chord-display-slot', () => {
     const wrapper = mount(ChordSlotCell, {
-      props: { slotKey: 'line_l1_start_0', variant: 'edge', chord, isExporting: false },
+      props: { slotKey: 'line_l1_start_0', variant: 'edge', chord },
       global: globalStubs,
     });
     // 重构后改用 Tailwind 工具类，不再有 edge-slot/has-edge-chord 这类语义 class；
@@ -71,7 +71,6 @@ describe('ChordSlotCell 谱面槽位', () => {
       props: {
         slotKey: 'line_l1_start_0',
         variant: 'add',
-        isExporting: false,
         addPlaceholderTitle: '点击添加行首和弦',
       },
       global: globalStubs,

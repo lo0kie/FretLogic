@@ -2,6 +2,8 @@
 import { config } from '@vue/test-utils';
 import { IDBKeyRange, indexedDB } from 'fake-indexeddb';
 
+import { vAutoHeight } from '@/directives/vAutoHeight';
+import { vAutoWidth } from '@/directives/vAutoWidth';
 import { vChordName } from '@/directives/vChordName';
 
 Object.defineProperty(globalThis, 'indexedDB', {
@@ -70,4 +72,8 @@ config.global.directives = {
   'tooltip': () => {},
   'chord-name': vChordName,
   'chordName': vChordName,
+  'auto-width': vAutoWidth,
+  'autoWidth': vAutoWidth,
+  'auto-height': vAutoHeight,
+  'autoHeight': vAutoHeight,
 };

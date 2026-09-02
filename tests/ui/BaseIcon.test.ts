@@ -1,4 +1,4 @@
-﻿import { mount } from '@vue/test-utils';
+import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import BaseIcon from '@/components/ui/BaseIcon.vue';
@@ -64,5 +64,17 @@ describe('BaseIcon.vue', () => {
     const svg = wrapper.find('svg');
     expect(svg.attributes('style')).toContain('transform: rotate(180deg)');
     expect(svg.attributes('style')).toContain('color: red');
+  });
+
+  it('supports strokeWidth prop for outline icons', () => {
+    const wrapper = mount(BaseIcon, {
+      props: {
+        name: 'plus',
+        strokeWidth: 2.5,
+      },
+    });
+
+    const svg = wrapper.find('svg');
+    expect(svg.attributes('style')).toContain('stroke-width: 2.5px');
   });
 });

@@ -1,6 +1,6 @@
 <template>
   <div class="box-border w-full">
-    <ContextMenu :items="menuItems" #="{ isOpen }">
+    <ContextMenu #="{ isOpen }" :items="menuItems">
       <div :title="getChordName(activeChord, { shorthand: settingsStore.workbenchChordShorthand })" class="w-full">
         <div
           v-wave

@@ -20,9 +20,6 @@
 
         <ScoreInteractiveArea
           v-else
-          :export-page-line-set
-          :include-meta-bar
-          :is-exporting="isGenerating"
           :key="`interactive-area-${scoreEditor.activeSong.id}`"
           :selected-line-set
           @line-click="handleLineClick"
@@ -35,11 +32,10 @@
     <ScoreExportFloatingBar
       v-model:include-meta-bar="includeMetaBar"
       :is-all-selected
+      :is-indeterminate
       :selected-count="selectedLineSet.size"
-      :sorted-indices="sortedSelectedIndices"
       :visible="Boolean(scoreEditor.activeSong && scoreEditor.activeTab === 'interactive')"
       @open-export="previewVisible = true"
-      @remove-index="handleRemoveLineIndex"
       @toggle-select-all="handleToggleSelectAll"
     />
 
@@ -80,13 +76,10 @@ import ScoreExportPreviewModal from './ScoreExportPreviewModal.vue';
 import ScoreInteractiveArea from './ScoreInteractiveArea.vue';
 import ScoreLyricsEditor from './ScoreLyricsEditor.vue';
 
-const exportPageLineSet = ref<Set<number>>(new Set());
 const scoreEditor = useScoreEditorStore();
 const isPickerOpen = ref(false);
 const previewVisible = ref(false);
 const interactiveAreaRef = useTemplateRef<InstanceType<typeof ScoreInteractiveArea>>('interactiveAreaRef');
-const exportHeaderMetaRef = computed(() => interactiveAreaRef.value?.exportHeaderMetaRef ?? null);
-const a4CaptureWrapperRef = computed(() => interactiveAreaRef.value?.a4CaptureWrapperRef ?? null);
 
 const { lyricsLinesWithEdges } = useScoreLinesData();
 const totalLines = computed(() => lyricsLinesWithEdges.value.length);
@@ -94,8 +87,8 @@ const totalLines = computed(() => lyricsLinesWithEdges.value.length);
 const {
   selectedLineSet,
   isAllSelected,
+  isIndeterminate,
   sortedSelectedIndices,
-  handleRemoveLineIndex,
   handleToggleSelectAll,
   handleLineClick,
 } = useLineSelection(
@@ -117,7 +110,7 @@ const {
   clearPreview,
   downloadCurrentPage,
   applyQuality,
-} = useScoreExportPreview(sortedSelectedIndices, exportHeaderMetaRef, exportPageLineSet, a4CaptureWrapperRef);
+} = useScoreExportPreview(sortedSelectedIndices);
 
 watch(previewVisible, open => {
   if (open) generatePreview();

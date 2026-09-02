@@ -36,10 +36,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior: none;
 }
-.panel-divider {
-  opacity: 1;
-  background-color: var(--separator);
-}
 [v-cloak] {
   display: none !important;
 }
@@ -78,8 +74,7 @@ body {
   opacity: 0;
 }
 
-.form-hint,
-.modal-hint {
+.form-hint {
   color: var(--text-muted);
   font-size: $fs-2xs;
   line-height: 1.5;
@@ -106,9 +101,6 @@ body.is-global-dragging {
 
   .interactive-score-zone {
     .char-text,
-    .inline-chord-name,
-    .fretboard-layout-scaler,
-    .line-index-badge,
     svg {
       pointer-events: none;
     }

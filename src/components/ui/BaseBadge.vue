@@ -2,6 +2,7 @@
   <span v-if="$slots['target']" class="relative inline-flex shrink-0">
     <slot name="target" />
     <span
+      v-auto-width="width === undefined"
       v-if="!isHidden"
       :aria-disabled="disabled || undefined"
       :aria-label="ariaLabelText"
@@ -15,7 +16,6 @@
       ]"
       :style="[normalizedStyle, offsetStyle]"
       class="duration-base absolute top-0 right-0 z-10 box-border inline-flex translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-transparent leading-none font-semibold whitespace-nowrap shadow-xs transition-all select-none"
-      ref="targetBadgeEl"
       role="status"
     >
       <span v-if="!isDotOnly">
@@ -25,6 +25,7 @@
   </span>
 
   <component
+    v-auto-width="width === undefined"
     v-else-if="!isHidden"
     :aria-disabled="disabled || undefined"
     :aria-label="ariaLabelText"
@@ -49,7 +50,6 @@
     @click="handleClick"
     class="duration-fast box-border inline-flex shrink-0 items-center justify-center rounded-full border border-transparent leading-none font-semibold tracking-tight whitespace-nowrap transition-all outline-none select-none"
     data-focusable-inline
-    ref="standaloneEl"
   >
     <span v-if="hasDot" aria-hidden="true" class="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
 
@@ -91,7 +91,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, useAttrs, useTemplateRef, watch } from 'vue';
+import { computed, useAttrs } from 'vue';
 
 import BaseIcon from '@/components/ui/BaseIcon.vue';
 
@@ -144,82 +144,6 @@ const emit = defineEmits<{
 }>();
 
 const attrs = useAttrs();
-
-// ===== 内容驱动的宽度补间 =====
-// CSS transition 依赖 specified value 变化：width 为 auto 时纯内容变化不会触发过渡。
-// 未指定显式 width 时，用 ResizeObserver 捕获宽度跳变，WAAPI 从旧宽补间到新宽（FLIP）。
-// 注意：width 动画本身会逐帧改变布局宽度并再次触发 RO，动画期间必须忽略中间量，
-// 否则 cancel/重启形成反馈循环导致闪烁。
-const targetBadgeEl = useTemplateRef<HTMLElement>('targetBadgeEl');
-const standaloneEl = useTemplateRef<HTMLElement>('standaloneEl');
-const lastWidthMap = new WeakMap<HTMLElement, number>();
-const runningAnimMap = new WeakMap<HTMLElement, Animation>();
-const pendingWidthMap = new WeakMap<HTMLElement, number>();
-let widthRo: ResizeObserver | null = null;
-
-/** 旧宽到新宽的 WAAPI 补间；动画期间内容再变则在结束后接力到最新目标 */
-const startWidthAnim = (el: HTMLElement, from: number, to: number) => {
-  const anim = el.animate([{ width: `${from}px` }, { width: `${to}px` }], {
-    duration: 160,
-    easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
-  });
-  runningAnimMap.set(el, anim);
-  anim.onfinish = () => {
-    if (runningAnimMap.get(el) !== anim) return;
-    runningAnimMap.delete(el);
-    lastWidthMap.set(el, to);
-    // 动画期间内容又变了：从当前值接力到最新目标
-    const pending = pendingWidthMap.get(el);
-    pendingWidthMap.delete(el);
-    if (pending !== undefined && Math.abs(pending - to) >= 0.5) startWidthAnim(el, to, pending);
-  };
-};
-
-/** 宽度变化回调：动画进行中仅记录待结算宽度，空闲时直接补间 */
-const handleAutoWidthResize = (entries: ResizeObserverEntry[]) => {
-  for (const entry of entries) {
-    const el = entry.target as HTMLElement;
-    const newWidth = entry.borderBoxSize?.[0]?.inlineSize ?? el.offsetWidth;
-    // 动画进行中：此刻的布局宽度由动画驱动，仅记录最新目标，结算留给 onfinish
-    if (runningAnimMap.get(el)) {
-      pendingWidthMap.set(el, newWidth);
-      continue;
-    }
-    const last = lastWidthMap.get(el);
-    lastWidthMap.set(el, newWidth);
-    if (last === undefined || Math.abs(newWidth - last) < 0.5) continue;
-    startWidthAnim(el, last, newWidth);
-  }
-};
-
-/** 开始观察宽度（未指定显式 width 时），并记录首次基准宽避免首帧动画 */
-const observeAutoWidth = () => {
-  if (props.width !== undefined || typeof ResizeObserver === 'undefined') return;
-  widthRo ??= new ResizeObserver(handleAutoWidthResize);
-  for (const el of [targetBadgeEl.value, standaloneEl.value]) {
-    if (el) {
-      lastWidthMap.set(el, el.offsetWidth); // 首次挂载不动画，仅记录基准
-      widthRo.observe(el);
-    }
-  }
-};
-
-/** 停止宽度观察（改用显式 width 后不再需要补间） */
-const unobserveAutoWidth = () => {
-  for (const el of [targetBadgeEl.value, standaloneEl.value]) {
-    if (el) widthRo?.unobserve(el);
-  }
-};
-
-onMounted(observeAutoWidth);
-watch(
-  () => props.width,
-  val => (val === undefined ? observeAutoWidth() : unobserveAutoWidth())
-);
-onBeforeUnmount(() => {
-  widthRo?.disconnect();
-  widthRo = null;
-});
 
 // 交互态：仅当显式声明 interactive 或 hoverClose，且非独立 closable 时渲染为 button，
 // 避免依据 attrs.onClick 推断造成的 SSR 水合不一致及标签意外切换。

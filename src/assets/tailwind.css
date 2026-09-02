@@ -62,6 +62,9 @@
   --color-tint-current-85: var(--tint-current-85);
   --color-tint-borderbase-85: var(--tint-borderbase-85);
 
+  --color-tint-panelhover-30: var(--tint-panelhover-30);
+  --color-tint-panelhover-50: var(--tint-panelhover-50);
+
   --color-fb-line: var(--fb-line);
   --color-fb-line-dim: var(--fb-line-dim);
   --color-fb-note: var(--fb-note);

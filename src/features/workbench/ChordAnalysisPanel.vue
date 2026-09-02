@@ -51,12 +51,12 @@
       <!-- 内容区高度动画：测量内容真实高度写入 height 并过渡。
            覆盖展开/收起以及内容自身尺寸变化（音符增减、候选徽标换行等）——
            grid-template-rows 0fr↔1fr 只能处理显示/隐藏，内容尺寸变化时行高恒为 1fr 不会触发过渡 -->
-      <div :style="{ height: bodyHeight }" class="duration-base ease-sidebar overflow-hidden transition-[height]">
+      <div v-auto-height="effectiveExpanded" class="duration-base ease-sidebar overflow-hidden transition-[height]">
         <!-- 被测量内容宽度始终锁定为展开态内容区宽度（19rem - 卡片左右内边距 p-3 共 1.5rem），
-             宽度动画期间不随面板伸缩而重排/压窄 → useAutoHeight 测得高度稳定、不抖动；
+             宽度动画期间不随面板伸缩而重排/压窄 → 高度稳定、不抖动；
              分析面板内容为流体布局，若按收起态 12.5rem 渲染会被挤压变形，故始终按展开宽度渲染、
              靠外层 overflow-hidden 裁切。横按面板则额外用 flex justify-center 让指板居中、不漂移 -->
-        <div class="w-[calc(19rem-1.5rem)]" ref="bodyContentRef">
+        <div class="w-[calc(19rem-1.5rem)]">
           <Transition mode="out-in">
             <div v-if="isExpanded" class="pt-2" key="content">
               <ChordAnalysisContent
@@ -77,7 +77,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, useTemplateRef } from 'vue';
+import { computed } from 'vue';
 
 import { useStorage } from '@vueuse/core';
 
@@ -91,7 +91,6 @@ import {
   nameToSegments,
   segmentsToString,
 } from '@/services/music/theory';
-import { useAutoHeight } from '@/shared/composables/useAutoHeight';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import type { CandidateResult } from '@/types/engine.ts';
 import { STORAGE_KEYS } from '@/utils/core/constants';
@@ -181,9 +180,6 @@ const effectiveExpanded = computed(() => !collapsed.value);
 const toggleCollapse = () => {
   collapsed.value = !collapsed.value;
 };
-
-const bodyContentRef = useTemplateRef<HTMLElement>('bodyContentRef');
-const { height: bodyHeight } = useAutoHeight(bodyContentRef, effectiveExpanded);
 
 /** 候选和弦是否已被选中（与当前草稿名一致，含音名段序列等价） */
 const isCandidateSelected = (candidate: CandidateResult): boolean => {

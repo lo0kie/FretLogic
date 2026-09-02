@@ -65,14 +65,6 @@
 .v-transition-modal-enter-active,
 .v-transition-modal-leave-active {
   transition: opacity $duration-base $bezier-standard;
-
-  .modal-card {
-    transition:
-      transform $duration-base $bezier-standard,
-      opacity $duration-base $bezier-standard,
-      width $duration-base $bezier-standard,
-      height $duration-base $bezier-standard;
-  }
 }
 
 .v-transition-modal-enter-from {
@@ -103,30 +95,7 @@
 }
 
 // =============================================================================
-// 4. 底部居中悬浮条动画 (Floating Bar) - 严格保持 X 轴 -50% 居中，Y 轴平移渐现
-// =============================================================================
-.v-transition-floating-bar-enter-active,
-.v-transition-floating-bar-leave-active {
-  transition:
-    opacity $duration-fast $bezier-standard,
-    transform $duration-fast $bezier-standard;
-  will-change: opacity, transform;
-}
-
-.v-transition-floating-bar-enter-from,
-.v-transition-floating-bar-leave-to {
-  transform: translate(-50%, 20px) scale(0.95);
-  opacity: 0;
-}
-
-.v-transition-floating-bar-enter-to,
-.v-transition-floating-bar-leave-from {
-  transform: translate(-50%, 0) scale(1);
-  opacity: 1;
-}
-
-// =============================================================================
-// 5. 向上滑动淡入淡出 (Slide Up) - 全局轻提示 Toast / 底部抽屉
+// 4. 向上滑动淡入淡出 (Slide Up) - 全局轻提示 Toast / 底部抽屉
 // =============================================================================
 .v-transition-slide-up-enter-active,
 .v-transition-slide-up-leave-active {
@@ -157,7 +126,7 @@
 }
 
 // =============================================================================
-// 6. 向下滑动淡入淡出 (Slide Down) - 顶部通知 Toast / 顶部下拉横幅
+// 5. 向下滑动淡入淡出 (Slide Down) - 顶部通知 Toast / 顶部下拉横幅
 // =============================================================================
 .v-transition-slide-down-enter-active,
 .v-transition-slide-down-leave-active {
@@ -193,20 +162,7 @@
 }
 
 // =============================================================================
-// 7. 侧边栏抽屉滑动 (Drawer Left) - 移动端侧边抽屉展开/收起
-// =============================================================================
-.v-transition-drawer-left-enter-active,
-.v-transition-drawer-left-leave-active {
-  transition: transform $duration-slow $bezier-sidebar;
-}
-
-.v-transition-drawer-left-enter-from,
-.v-transition-drawer-left-leave-to {
-  transform: translateX(-100%);
-}
-
-// =============================================================================
-// 8. 列表 FLIP 排版平移动画 (List Move) - 用于 TransitionGroup 列表增删/重排
+// 6. 列表 FLIP 排版平移动画 (List Move) - 用于 TransitionGroup 列表增删/重排
 // =============================================================================
 .v-transition-list-enter-active,
 .v-transition-list-leave-active {
@@ -233,41 +189,4 @@
 
 .v-transition-list-move {
   transition: transform $duration-base $bezier-sidebar;
-}
-
-// =============================================================================
-// 9. 水平横向滑动淡入淡出 (Slide Left / Slide Right)
-// =============================================================================
-.v-transition-slide-left-enter-active,
-.v-transition-slide-left-leave-active,
-.v-transition-slide-right-enter-active,
-.v-transition-slide-right-leave-active {
-  transition:
-    opacity $duration-fast $bezier-standard,
-    transform $duration-fast $bezier-standard;
-  will-change: opacity, transform;
-}
-
-.v-transition-slide-left-enter-from,
-.v-transition-slide-left-leave-to {
-  transform: translateX(-16px);
-  opacity: 0;
-}
-
-.v-transition-slide-left-enter-to,
-.v-transition-slide-left-leave-from {
-  transform: translateX(0);
-  opacity: 1;
-}
-
-.v-transition-slide-right-enter-from,
-.v-transition-slide-right-leave-to {
-  transform: translateX(16px);
-  opacity: 0;
-}
-
-.v-transition-slide-right-enter-to,
-.v-transition-slide-right-leave-from {
-  transform: translateX(0);
-  opacity: 1;
 }

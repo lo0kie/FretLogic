@@ -23,6 +23,12 @@ export interface BaseIconProps {
    * - 字符串（如 '14px', '1.2rem', '1em'）：直接生效
    */
   size?: number | string;
+  /**
+   * 图标描边粗细（针对 Lucide 等描边类图标）：
+   * - 数字（如 2, 2.5, 3）：自动转换为 px 或数值生效
+   * - 字符串（如 '2.5px'）：直接生效
+   */
+  strokeWidth?: number | string;
   /** 图标颜色，默认 currentColor */
   color?: string;
   /** 旋转角度（如 90, 180） */
@@ -31,7 +37,14 @@ export interface BaseIconProps {
   spin?: boolean;
 }
 
-const { name, size = '1em', color = undefined, rotate = undefined, spin = false } = defineProps<BaseIconProps>();
+const {
+  name,
+  size = '1em',
+  strokeWidth = undefined,
+  color = undefined,
+  rotate = undefined,
+  spin = false,
+} = defineProps<BaseIconProps>();
 
 const resolvedComponent = computed(() => ICON_REGISTRY[name] || null);
 
@@ -43,6 +56,10 @@ const customStyle = computed<CSSProperties>(() => {
     style.width = formattedSize;
     style.height = formattedSize;
     style.fontSize = formattedSize;
+  }
+
+  if (strokeWidth !== undefined) {
+    style.strokeWidth = typeof strokeWidth === 'number' ? `${strokeWidth}px` : strokeWidth;
   }
 
   if (color) {

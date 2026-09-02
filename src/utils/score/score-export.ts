@@ -3,6 +3,7 @@ import type { Options } from 'html-to-image/lib/types';
 import { computeChordFingerprint } from '@/services/music/theory';
 import { globalDarkMode } from '@/stores/globalState';
 import type { Chord, SlotKey } from '@/types';
+import { SCORE_EXPORT_CONFIG } from '@/utils/core/constants';
 import { plainToChordMap } from '@/utils/score/chordSlots';
 import { charKey, chordSlotKey, collectEdgeChordIds } from '@/utils/score/scoreModel';
 
@@ -131,47 +132,6 @@ export function clearLyricsLineCharsCache() {
   prevEdgeChordsCache.clear();
 }
 
-// ===== paginateLines: A4 分页 =====
-
-export interface PageChunk {
-  lineIndices: number[];
-  isFirstPage: boolean;
-}
-
-/**
- * 按每行的（缩放后）高度，贪心地把选中的行分配到若干个 A4 页面里。
- * capacityPx：每页内容区可用高度（已扣掉首页的歌名信息栏高度）
- */
-export function paginateLinesByHeight(
-  sortedIndices: number[],
-  lineHeights: Map<number, number>,
-  firstPageCapacityPx: number,
-  restPageCapacityPx: number
-): PageChunk[] {
-  const pages: PageChunk[] = [];
-  let current: number[] = [];
-  let currentHeight = 0;
-  let isFirst = true;
-
-  for (const idx of sortedIndices) {
-    const h = lineHeights.get(idx) ?? 0;
-    const capacity = isFirst ? firstPageCapacityPx : restPageCapacityPx;
-    // 单行就超页高的极端情况：单独成页，避免死循环
-    if (currentHeight > 0 && currentHeight + h > capacity) {
-      pages.push({ lineIndices: current, isFirstPage: isFirst });
-      current = [];
-      currentHeight = 0;
-      isFirst = false;
-    }
-    current.push(idx);
-    currentHeight += h;
-  }
-  if (current.length > 0) {
-    pages.push({ lineIndices: current, isFirstPage: isFirst });
-  }
-  return pages;
-}
-
 // ===== domExporter: DOM → 图片导出 =====
 
 export interface ExportOptions {
@@ -195,14 +155,23 @@ const getCanvasPixelRatio = (el: HTMLElement): number => {
 /** 返回导出图的默认背景色（跟随当前明暗主题）。 */
 const getDOMBgColor = (): string => {
   const isDark = globalDarkMode.value;
-  return isDark ? '#18181a' : '#f2f2f7';
+  return isDark ? SCORE_EXPORT_CONFIG.THEME.DARK.BG : SCORE_EXPORT_CONFIG.THEME.LIGHT.BG;
 };
 
-/** 等待字体加载完成再渲染；超过 1.5s 超时放行，避免导出卡死。 */
-const waitForFontsReady = async (): Promise<void> => {
-  if (!document.fonts) return;
-  await Promise.race([document.fonts.ready, new Promise<void>(resolve => setTimeout(resolve, 1500))]);
+let fontsReadyPromise: Promise<void> | null = null;
+
+/** 等待字体加载完成再渲染；首次超过 1.5s 超时放行，单例缓存结果避免多页重复等待。 */
+export const waitForFontsReady = async (): Promise<void> => {
+  if (typeof document === 'undefined' || !document.fonts) return;
+  fontsReadyPromise ??= Promise.race([
+    document.fonts.ready.then(() => {}),
+    new Promise<void>(resolve => setTimeout(resolve, 1500)),
+  ]);
+  await fontsReadyPromise;
 };
+
+/** 让出主线程微片（宏任务调度），确保事件循环有机会处理 UI 交互、重绘与进度条动画 */
+export const yieldMainThread = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
 
 /** 组装 html-to-image 的渲染参数：处理透明背景、尺寸、像素比，并剥离阴影/边框等导出干扰样式。 */
 const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions): Options => {
@@ -250,17 +219,6 @@ export const renderElementToBlob = async (el: HTMLElement, exportOptions: Export
     throw new Error('Blob 图片数据生成失败');
   }
   return blob;
-};
-
-/** 将 DOM 元素渲染为 Canvas（pdf 导出等需要位图后处理的场景）。 */
-export const renderElementToCanvas = async (
-  el: HTMLElement,
-  exportOptions: ExportOptions = {}
-): Promise<HTMLCanvasElement> => {
-  const htmlToImage = await import('html-to-image');
-  const finalOptions = buildHtmlToImageOptions(el, exportOptions);
-  await waitForFontsReady();
-  return htmlToImage.toCanvas(el, finalOptions);
 };
 
 /** Canvas 转 Blob 的 Promise 封装。 */

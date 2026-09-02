@@ -61,12 +61,12 @@
 
     <!-- 内容区高度动画：测量内容真实高度写入 height 并过渡，覆盖展开/收起与内容尺寸变化 -->
     <div
-      :style="{ height: bodyHeight }"
+      v-auto-height="effectiveExpanded"
       class="duration-base ease-sidebar flex items-start justify-center overflow-hidden transition-[height]"
     >
       <!-- 被测量内容宽度瞬时锁定到目标内容区宽度（面板宽 - 卡片左右内边距 p-3 共 1.5rem），
-           宽度动画期间不再随面板伸缩而重排，useAutoHeight 测得的高度保持稳定、不抖动 -->
-      <div class="w-[calc(19rem-1.5rem)]" ref="bodyContentRef">
+           宽度动画期间不再随面板伸缩而重排，高度保持稳定、不抖动 -->
+      <div class="w-[calc(19rem-1.5rem)]">
         <Transition mode="out-in">
           <div v-if="isExpanded" class="flex flex-col gap-1 pt-2" key="content">
             <div class="box-border flex justify-center py-1">
@@ -100,14 +100,13 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, useTemplateRef } from 'vue';
+import { computed } from 'vue';
 
 import { useStorage } from '@vueuse/core';
 
 import Fretboard from '@/components/fretboard/Fretboard.vue';
 import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseIcon from '@/components/ui/BaseIcon.vue';
-import { useAutoHeight } from '@/shared/composables/useAutoHeight';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { BarreEntity } from '@/types';
@@ -128,9 +127,6 @@ const effectiveExpanded = computed(() => !collapsed.value);
 const toggleCollapse = () => {
   collapsed.value = !collapsed.value;
 };
-
-const bodyContentRef = useTemplateRef<HTMLElement>('bodyContentRef');
-const { height: bodyHeight } = useAutoHeight(bodyContentRef, effectiveExpanded);
 
 /** 工作台「显示音名」是否开启：开启时主指板不渲染横按条，需要文字提示 */
 const showPitchNamesOn = computed(() => settingsStore.workbenchShowPitchNames);

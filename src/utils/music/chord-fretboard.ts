@@ -1,4 +1,4 @@
-import { isMuted, isOpen, nameToSegments, Tuning } from '@/services/music/theory';
+import { nameToSegments, Tuning } from '@/services/music/theory';
 import type { BarreEntity, BarreFret, Capo, Chord, GuitarStringEntity, GuitarStringsModel, StringIndex } from '@/types';
 import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_SCALE_MAP } from '@/utils/core/constants';
 
@@ -229,27 +229,6 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
 };
 
 // ===== fretboardVisuals: 指板视觉样式 =====
-
-/** 返回空弦/静音弦的状态样式类（根音优先级最高）；普通按音弦返回空串。 */
-export const getOpenStringStatusClass = (str: GuitarStringEntity, isRoot: boolean): string => {
-  if (isMuted(str)) return 'is-muted-status';
-  if (isOpen(str) && !isRoot) return 'is-open-status';
-  return '';
-};
-
-/** 返回根音空弦的强调样式（背景/边框/文字/发光）；非根音空弦返回空样式对象。 */
-export const getOpenStringStyle = (str: GuitarStringEntity, isRoot: boolean, isDarkMode: boolean) => {
-  if (isOpen(str) && isRoot) {
-    const bg = isDarkMode ? FRETBOARD_COLORS.openRootBgDark : FRETBOARD_COLORS.openRootBgLight;
-    return {
-      backgroundColor: bg,
-      borderColor: bg,
-      color: isDarkMode ? FRETBOARD_COLORS.openRootTextDark : FRETBOARD_COLORS.openRootTextLight,
-      boxShadow: 'var(--root-glow)',
-    };
-  }
-  return {};
-};
 
 /** 指板圆点填充色：根音用强调色，其余用普通色，按明暗主题区分。 */
 export const getFingerColor = (isRoot: boolean, isDarkMode: boolean): string => {

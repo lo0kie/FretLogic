@@ -38,12 +38,12 @@ export function useImportExportService() {
   const applyImportSelection = (data: ImportExportPayload, selection: BackupSelection) => {
     if (selection.chords) {
       chordStore.replaceAllData({
-        groups: data.groups ?? [],
-        chords: data.chords ?? [],
+        groups: data.groups,
+        chords: data.chords,
       });
       chordStore.selectedGroupId = null;
     }
-    if (selection.songs) songStore.overwriteSongs(data.songs ?? []);
+    if (selection.songs) songStore.overwriteSongs(data.songs);
     if (selection.syncSettings) settingsStore.applySyncBackup(data.syncSettings);
     if (selection.preferences) settingsStore.applyPreferencesBackup(data.preferences);
     // 覆盖实体数据后清空指板编辑草稿（全部静音），避免残留旧指法
@@ -82,8 +82,8 @@ export function useImportExportService() {
     }
     // 没有任何实质内容时不执行导出：无实体数据 且 未勾选同步配置/偏好设置
     const hasEntities =
-      (selection.chords && ((payload.groups?.length ?? 0) > 0 || (payload.chords?.length ?? 0) > 0)) ||
-      (selection.songs && (payload.songs?.length ?? 0) > 0);
+      (selection.chords && (payload.groups.length > 0 || payload.chords.length > 0)) ||
+      (selection.songs && payload.songs.length > 0);
     const hasNonEntity = selection.syncSettings || selection.preferences;
     if (!hasEntities && !hasNonEntity) {
       uiStore.toast.warning('没有可导出的数据，请先创建分组、和弦或乐谱');

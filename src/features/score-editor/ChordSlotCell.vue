@@ -70,12 +70,12 @@
         class="inline-fretboard-card p-xs duration-fast relative flex flex-col items-center rounded-sm bg-transparent transition-all select-none"
       >
         <div
-          v-if="isVisible && !isExporting"
+          v-if="isVisible"
           :class="[FAST_TRANSITION_CLASS, isActive ? 'opacity-100' : 'opacity-0']"
           class="pointer-events-none absolute inset-0 z-2 rounded-sm bg-black/30"
         >
           <div
-            v-if="isVisible && !isExporting"
+            v-if="isVisible"
             :class="[
               FAST_TRANSITION_CLASS,
               isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
@@ -196,7 +196,7 @@ const fretboardSizeCache = reactive(new Map<string, { width: string; height: str
 </script>
 
 <script lang="ts" setup>
-import { computed, nextTick, ref, useTemplateRef, watch, watchEffect, type ComponentPublicInstance } from 'vue';
+import { computed, nextTick, ref, useTemplateRef, watchEffect, type ComponentPublicInstance } from 'vue';
 
 import Fretboard from '@/components/fretboard/Fretboard.vue';
 import ActionButton from '@/components/ui/ActionButton.vue';
@@ -218,9 +218,6 @@ const props = defineProps<{
   char?: string;
   variant: 'char' | 'edge' | 'add';
   addPlaceholderTitle?: string;
-  isDropTarget?: boolean;
-  isDraggingSource?: boolean;
-  isExporting: boolean;
   scrollRoot?: HTMLElement | null;
   leftChordGap?: boolean;
   lineHovered?: boolean;
@@ -475,18 +472,6 @@ const ariaLabelText = computed(() => {
   }
   return `字符 ${charDisplay}，未分配和弦，按 Enter 添加`;
 });
-
-let unwatchExport: (() => void) | null = null;
-unwatchExport = watch(
-  () => props.isExporting,
-  exporting => {
-    if (exporting) {
-      isVisible.value = true;
-      unwatchExport?.();
-    }
-  },
-  { immediate: true }
-);
 </script>
 
 <style lang="scss" scoped>

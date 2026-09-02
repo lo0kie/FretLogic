@@ -5,46 +5,14 @@
     class="no-scrollbar interactive-score-zone pt-xl pl-2xl max-md:pl-sm max-md:pt-sm relative box-border min-w-0 flex-1 overflow-x-auto overflow-y-auto pr-0 pb-[8rem] max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]"
     ref="scoreZoneRef"
   >
-    <div
-      class="contents [&.is-a4-capture-mode]:box-border [&.is-a4-capture-mode]:flex [&.is-a4-capture-mode]:flex-col [&.is-a4-capture-mode]:items-center [&.is-a4-capture-mode]:overflow-hidden"
-      ref="a4CaptureWrapperRef"
-    >
+    <div class="contents">
       <EmptyState
         v-if="!scoreEditor.activeSong?.lyrics.trim()"
         description="请先在“编辑歌词”模式下输入文本内容"
         icon="file-text"
         size="lg"
       />
-      <div
-        v-else
-        :class="{
-          'w-max! min-w-0! gap-0! [&_.line-row]:[content-visibility:visible] [&_.line-row-gutter]:hidden! [&_.line-row:has(.lyrics-line:not(.is-line-selected))]:hidden! [&_.lyrics-line]:p-0! [&_.lyrics-line]:transition-none! [&_.lyrics-line_.index-text-tag]:transition-none! [&_.lyrics-line.is-line-selected]:w-max! [&_.lyrics-line.is-line-selected]:min-w-0! [&_.lyrics-line.is-line-selected]:border-transparent! [&_.lyrics-line.is-line-selected]:bg-transparent! [&_.lyrics-line:not(.is-line-selected)]:hidden!':
-            isExporting,
-        }"
-        class="gap-xs mx-auto flex w-max max-w-[900px] min-w-full flex-col"
-        ref="lyricsRef"
-      >
-        <div
-          v-show="isExporting && includeMetaBar"
-          class="gap-sm flex w-full flex-col items-center justify-center pb-5"
-          ref="exportHeaderMetaRef"
-        >
-          <h1
-            class="text-text-title m-0 mb-2 text-[calc(1.5rem*var(--score-font-scale,1))] font-extrabold tracking-tight"
-          >
-            {{ scoreEditor.activeSong?.title }}
-          </h1>
-          <div
-            class="text-text-body flex w-full items-center justify-center text-[calc(0.75rem*var(--score-font-scale,1))] font-semibold"
-          >
-            <span class="min-w-0 flex-1 text-right">
-              {{ computeSongKey(scoreEditor.activeSong.playKey, scoreEditor.activeSong.capo) }} 调
-            </span>
-            <span class="text-text-disabled px-md shrink-0 opacity-50">|</span>
-            <span class="min-w-0 flex-1 text-left"> Capo: {{ scoreEditor.activeSong.capo }} </span>
-          </div>
-        </div>
-
+      <div v-else class="gap-xs mx-auto flex w-max max-w-[900px] min-w-full flex-col" ref="lyricsRef">
         <div
           v-for="lineData in lyricsLinesWithEdges"
           v-memo="[
@@ -56,9 +24,8 @@
             // 行内槽位和弦在子树中经 getCharChord 实时读取，必须依赖 chordMap 引用（每次变更为新 Map），
             // 否则删除/更换行中段和弦时 chars 等依赖不变，memo 命中导致旧和弦残留显示
             scoreEditor.activeSong?.chordMap,
-            isExporting ? isLineVisibleInExport(lineData.lineIdx) : selectedLineSet.has(lineData.lineIdx),
+            selectedLineSet.has(lineData.lineIdx),
             hoveredLineKey === lineData.lineId,
-            isExporting,
             isDragging,
             // 拖拽分区落点：按行归约后再进依赖，缺了分区层会被 v-memo 冻住；
             // 若直接放全局 dragOverSlotKey/dropZone，则任意落点变化会使所有行失效全量重渲染
@@ -71,11 +38,9 @@
           <div
             v-wave
             :class="{
-              'is-line-selected': isExporting
-                ? isLineVisibleInExport(lineData.lineIdx)
-                : selectedLineSet.has(lineData.lineIdx),
+              'is-line-selected': selectedLineSet.has(lineData.lineIdx),
               'bg-tint-primary-92! border-tint-primary-60! hover:bg-tint-primary-80! hover:border-primary!':
-                !isExporting && selectedLineSet.has(lineData.lineIdx),
+                selectedLineSet.has(lineData.lineIdx),
             }"
             :data-line-idx="lineData.lineId"
             @click="e => handleLineClick(e, lineData.lineIdx)"
@@ -83,9 +48,9 @@
             @mouseleave="hoveredLineKey = null"
             class="lyrics-line py-xs px-sm duration-base hover:bg-bg-panel-hover hover:border-border-base focus-within:bg-bg-panel-hover focus-within:border-border-base relative box-border flex w-max min-w-0 flex-[1_1_auto] cursor-pointer flex-nowrap items-stretch gap-0 rounded-md border border-transparent transition-all select-none"
           >
-            <div v-show="!isExporting" class="mr-2 flex shrink-0 items-end pb-0.5 select-none">
+            <div class="mr-2 flex shrink-0 items-end pb-0.5 select-none">
               <span
-                :class="{ 'text-text-on-accent! bg-primary!': !isExporting && selectedLineSet.has(lineData.lineIdx) }"
+                :class="{ 'text-text-on-accent! bg-primary!': selectedLineSet.has(lineData.lineIdx) }"
                 class="text-2xs text-text-disabled py-2xs px-xs duration-fast rounded-lg font-mono font-bold transition-colors"
               >
                 {{ formatLineIndex(lineData.lineIdx) }}
@@ -95,7 +60,6 @@
               <ChordSlotCell
                 :drop-zone="dropZoneFor(lineData.nextStartKey)"
                 :is-drag-active="isDragging"
-                :is-exporting
                 :line-hovered="hoveredLineKey === lineData.lineId"
                 :scroll-root="scoreZoneRef"
                 :slot-key="lineData.nextStartKey"
@@ -110,7 +74,6 @@
                 :chord="item.chord"
                 :drop-zone="dropZoneFor(item.slotKey)"
                 :is-drag-active="isDragging"
-                :is-exporting
                 :key="item.slotKey"
                 :line-hovered="hoveredLineKey === lineData.lineId"
                 :scroll-root="scoreZoneRef"
@@ -129,7 +92,6 @@
               :chord="getCharChord(item.slotKey) ?? undefined"
               :drop-zone="dropZoneFor(item.slotKey)"
               :is-drag-active="isDragging"
-              :is-exporting
               :key="item.slotKey"
               :left-chord-gap="isLeftAdjacentChord(lineData, index)"
               :line-hovered="hoveredLineKey === lineData.lineId"
@@ -147,7 +109,6 @@
                 :chord="item.chord"
                 :drop-zone="dropZoneFor(item.slotKey)"
                 :is-drag-active="isDragging"
-                :is-exporting
                 :key="item.slotKey"
                 :left-chord-gap="isEndEdgeGap(lineData, index)"
                 :line-hovered="hoveredLineKey === lineData.lineId"
@@ -162,7 +123,6 @@
               <ChordSlotCell
                 :drop-zone="dropZoneFor(lineData.nextEndKey)"
                 :is-drag-active="isDragging"
-                :is-exporting
                 :line-hovered="hoveredLineKey === lineData.lineId"
                 :scroll-root="scoreZoneRef"
                 :slot-key="lineData.nextEndKey"
@@ -175,7 +135,6 @@
             </div>
 
             <ActionButton
-              v-if="!isExporting"
               :aria-hidden="hoveredLineKey !== lineData.lineId"
               :aria-label="deleteLineButtonTitle"
               :class="hoveredLineKey === lineData.lineId ? 'opacity-100' : 'opacity-0'"
@@ -229,7 +188,6 @@ import type { DropZone } from '@/features/score-editor/composables/lyrics-drag/d
 import { useAutoScroll } from '@/features/score-editor/composables/useAutoScroll';
 import { useLyricsDragDrop } from '@/features/score-editor/composables/useLyricsDragDrop';
 import { useScoreLinesData } from '@/features/score-editor/composables/useScoreLinesData';
-import { computeSongKey } from '@/services/music/theory';
 import { useActiveExportTarget } from '@/shared/composables/useActiveExportTarget';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -242,9 +200,6 @@ defineOptions({ name: 'ScoreInteractiveArea' });
 
 const props = defineProps<{
   selectedLineSet: Set<number>;
-  exportPageLineSet?: Set<number>;
-  isExporting: boolean;
-  includeMetaBar: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -257,8 +212,6 @@ const uiStore = useUiStore();
 
 const scoreZoneRef = useTemplateRef<HTMLElement>('scoreZoneRef');
 const lyricsRef = useTemplateRef<HTMLElement>('lyricsRef');
-const a4CaptureWrapperRef = useTemplateRef<HTMLElement>('a4CaptureWrapperRef');
-const exportHeaderMetaRef = useTemplateRef<HTMLElement>('exportHeaderMetaRef');
 
 const hoveredLineKey = ref<string | null>(null);
 /** 删除行按钮的无障碍文本与悬停提示 */
@@ -304,16 +257,8 @@ const isEndEdgeGap = (lineData: LineData, index: number): boolean => {
   return Boolean(lineData.endChords[index - 1]?.chord);
 };
 
-/** 导出时该行是否出现在当前分页（未指定分页集合时全部可见） */
-const isLineVisibleInExport = (lineIdx: number): boolean => {
-  if (!props.isExporting) return false;
-  if (!props.exportPageLineSet) return true;
-  return props.exportPageLineSet.has(lineIdx);
-};
-
-/** 用户点击歌词行：导出中/拖拽中/点击抑制期/命中槽位时忽略，否则交给父组件切换行选中 */
+/** 用户点击歌词行：拖拽中/点击抑制期/命中槽位时忽略，否则交给父组件切换行选中 */
 const handleLineClick = (ev: MouseEvent, lineIdx: number) => {
-  if (props.isExporting) return;
   // 拖拽落点在起始行内时，浏览器会以行容器为公共祖先合成一次 click，
   // 若不拦截会误触发行选中切换（isSuppressingClick 在松手后短暂保持，恰好覆盖该 click）
   if (isDragging.value || isSuppressingClick.value) return;
@@ -401,11 +346,14 @@ const { stopAutoScroll } = useAutoScroll(scoreZoneRef);
 
 useActiveExportTarget(lyricsRef);
 
-watch([() => props.isExporting, () => props.selectedLineSet.size], ([exporting, selectedCount]) => {
-  if (exporting || selectedCount > 0) {
-    stopAutoScroll();
+watch(
+  () => props.selectedLineSet.size,
+  selectedCount => {
+    if (selectedCount > 0) {
+      stopAutoScroll();
+    }
   }
-});
+);
 
-defineExpose({ scoreZoneRef, exportHeaderMetaRef, a4CaptureWrapperRef });
+defineExpose({ scoreZoneRef });
 </script>

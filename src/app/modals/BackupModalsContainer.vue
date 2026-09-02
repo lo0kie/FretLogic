@@ -6,14 +6,13 @@
     title="导出备份"
   >
     <template #header-extra>
-      <ActionButton
-        :color="isExportAll ? 'primary' : 'default'"
-        :variant="isExportAll ? 'subtle' : 'ghost'"
-        @click="backupModals.handleExportSelectAll"
+      <BaseCheckbox
+        :indeterminate="isExportIndeterminate"
+        :model-value="isExportAll"
+        @update:model-value="backupModals.handleExportSelectAll"
+        label="全选"
         size="sm"
-      >
-        全选
-      </ActionButton>
+      />
     </template>
     <div class="gap-md py-xs flex flex-col">
       <BaseFormRow
@@ -60,14 +59,13 @@
     title="导入备份"
   >
     <template #header-extra>
-      <ActionButton
-        :color="isImportAll ? 'primary' : 'default'"
-        :variant="isImportAll ? 'subtle' : 'ghost'"
-        @click="backupModals.handleImportSelectAll"
+      <BaseCheckbox
+        :indeterminate="isImportIndeterminate"
+        :model-value="isImportAll"
+        @update:model-value="backupModals.handleImportSelectAll"
+        label="全选"
         size="sm"
-      >
-        全选
-      </ActionButton>
+      />
     </template>
     <div class="gap-md py-xs flex flex-col">
       <BaseFormRow
@@ -128,7 +126,7 @@
 <script lang="ts" setup>
 import { inject } from 'vue';
 
-import ActionButton from '@/components/ui/ActionButton.vue';
+import BaseCheckbox from '@/components/ui/BaseCheckbox.vue';
 import BaseFormRow from '@/components/ui/BaseFormRow.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BaseSwitch from '@/components/ui/BaseSwitch.vue';
@@ -149,4 +147,6 @@ const hasExportSelection = backupModals.hasExportSelection;
 const hasImportSelection = backupModals.hasImportSelection;
 const isExportAll = backupModals.isExportAll;
 const isImportAll = backupModals.isImportAll;
+const isExportIndeterminate = backupModals.isExportIndeterminate;
+const isImportIndeterminate = backupModals.isImportIndeterminate;
 </script>

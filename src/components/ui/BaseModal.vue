@@ -18,6 +18,7 @@
         ref="overlayRef"
       >
         <div
+          v-auto-height="{ expanded: visible, disabled: !isAutoHeight }"
           :aria-label="title || $slots['title'] ? undefined : '对话框'"
           :aria-labelledby="title || $slots['title'] ? titleId : undefined"
           :style="[sizeStyle, topStyle]"
@@ -29,11 +30,7 @@
           role="dialog"
           tabindex="-1"
         >
-          <div
-            :class="isAutoHeight ? 'h-auto shrink-0' : 'min-h-0 flex-1'"
-            class="flex w-full flex-col"
-            ref="modalContentRef"
-          >
+          <div :class="isAutoHeight ? 'h-auto shrink-0' : 'min-h-0 flex-1'" class="flex w-full flex-col">
             <div
               v-if="hasHeader"
               class="modal-header-zone pt-xl px-xl gap-lg flex min-h-[3.1rem] shrink-0 items-center justify-between"
@@ -150,7 +147,6 @@ import { computed, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch 
 
 import { useEventListener, useScrollLock } from '@vueuse/core';
 
-import { useAutoHeight } from '@/shared/composables/useAutoHeight';
 import type { ThemeColor } from '@/types';
 
 import ActionButton from './ActionButton.vue';
@@ -227,7 +223,6 @@ const slots = useSlots();
 const visible = defineModel<boolean>('visible', { required: true });
 const overlayRef = useTemplateRef<HTMLDivElement>('overlayRef');
 const modalCardRef = useTemplateRef<HTMLDivElement>('modalCardRef');
-const modalContentRef = useTemplateRef<HTMLDivElement>('modalContentRef');
 const titleId = `base-modal-title-${useId()}`;
 
 // 自适应高度与过渡：未指定固定高度时实时同步内部内容尺寸并平滑过渡
@@ -237,7 +232,6 @@ const isAutoHeight = computed(() => {
   if (typeof h === 'string' && HEIGHT_MAP[h]?.startsWith('auto')) return true;
   return false;
 });
-const { height: autoMeasuredHeight } = useAutoHeight(modalContentRef, visible);
 
 // SSR 安全：服务端无 document，降级为普通 ref，避免运行时崩溃
 const isBodyLocked = isClient ? useScrollLock(document.body) : ref(false);
@@ -302,11 +296,7 @@ const sizeStyle = computed<Record<string, string>>(() => {
   } else if (h && HEIGHT_MAP[h]) {
     const parts = HEIGHT_MAP[h].split('|');
     if (parts[0] === 'auto') {
-      if (autoMeasuredHeight.value && autoMeasuredHeight.value !== '0px') {
-        style['height'] = autoMeasuredHeight.value;
-      } else {
-        style['height'] = 'auto';
-      }
+      // 自适应高度由 v-auto-height 动态测量与过渡
     } else if (parts[0]) {
       style['height'] = parts[0];
     }

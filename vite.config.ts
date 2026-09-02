@@ -114,7 +114,7 @@ export default defineConfig(({ mode }) => ({
         // 拆出稳定的 vendor 分组：业务代码迭代不再导致框架层缓存全量失效
         manualChunks: {
           vue: ['vue', 'vue-router', 'pinia'],
-          vueuse: ['@vueuse/core', '@vueuse/components'],
+          vueuse: ['@vueuse/core'],
         },
       },
     },

@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 import type { ComponentPublicInstance, VNode } from 'vue';
 
+import type { AutoHeightBinding } from './directives/vAutoHeight';
+import type { AutoWidthBinding, AutoWidthModifiers } from './directives/vAutoWidth';
 import type { ChordNameBinding } from './directives/vChordName';
 import type { FocusBinding, FocusModifiers } from './directives/vFocus';
 import type { GridNavBinding, GridNavModifiers } from './directives/vGridNav';
@@ -94,6 +96,8 @@ declare module '@vue/runtime-core' {
     vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
     vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
+    vAutoWidth: TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
+    vAutoHeight: TypedDirective<HTMLElement, AutoHeightBinding, string>;
     vWave: TypedDirective<HTMLElement, unknown, string>;
   }
 
@@ -114,6 +118,10 @@ declare module '@vue/runtime-core' {
     'v-marquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
     'vChordName': TypedDirective<HTMLElement, ChordNameBinding, string>;
     'v-chord-name': TypedDirective<HTMLElement, ChordNameBinding, string>;
+    'vAutoWidth': TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
+    'v-auto-width': TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
+    'vAutoHeight': TypedDirective<HTMLElement, AutoHeightBinding, string>;
+    'v-auto-height': TypedDirective<HTMLElement, AutoHeightBinding, string>;
   }
 }
 
@@ -126,6 +134,8 @@ declare module 'vue' {
     vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
     vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
+    vAutoWidth: TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
+    vAutoHeight: TypedDirective<HTMLElement, AutoHeightBinding, string>;
     vWave: TypedDirective<HTMLElement, unknown, string>;
   }
 
@@ -146,5 +156,9 @@ declare module 'vue' {
     'v-marquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
     'vChordName': TypedDirective<HTMLElement, ChordNameBinding, string>;
     'v-chord-name': TypedDirective<HTMLElement, ChordNameBinding, string>;
+    'vAutoWidth': TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
+    'v-auto-width': TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
+    'vAutoHeight': TypedDirective<HTMLElement, AutoHeightBinding, string>;
+    'v-auto-height': TypedDirective<HTMLElement, AutoHeightBinding, string>;
   }
 }

@@ -18,7 +18,7 @@ function buildSingleton() {
   const chordsLookupMap = computed(() => {
     const map = new Map<string, Chord>();
     chordStore.savedChordsList.forEach(c => {
-      if (c.id) map.set(c.id, c);
+      map.set(c.id, c);
       map.set(computeChordFingerprint(c), c);
     });
     return map;

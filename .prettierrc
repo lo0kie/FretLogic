@@ -18,6 +18,6 @@
     "prettier-plugin-merge"
   ],
   "importOrder": ["^vue", "", "<BUILTIN_MODULES>", "", "<THIRD_PARTY_MODULES>", "", "^@/(.*)$", "", "^[./]"],
-  "attributeGroups": ["^v-", "^:", "^@", "$DEFAULT"],
+  "attributeGroups": ["^v-", "^#", "^:", "^@", "$DEFAULT"],
   "attributeSort": "ASC"
 }

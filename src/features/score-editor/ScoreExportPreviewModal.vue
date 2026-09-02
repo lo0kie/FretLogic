@@ -2,6 +2,8 @@
   <BaseModal
     v-model:visible="visibleModel"
     :close-on-mask="!isGenerating"
+    :keyboard="!isGenerating"
+    :show-close="!isGenerating"
     :show-footer="false"
     @cancel="modeModel = ExportMode.NORMAL"
     height="h-full"
@@ -9,7 +11,7 @@
     width="w-lg"
   >
     <template #header-extra>
-      <BaseSegmentedControl v-model="modeModel" :options="modeOptions" size="sm" />
+      <BaseSegmentedControl v-model="modeModel" :disabled="isGenerating" :options="modeOptions" />
     </template>
 
     <div class="gap-md flex h-full min-h-0 flex-1 flex-col">
@@ -85,19 +87,6 @@
             v-if="mode === ExportMode.A4"
             :disabled="isActionDisabled"
             :size="buttonSize"
-            @click="emit('download-all-zip')"
-            variant="subtle"
-          >
-            <template #prefix>
-              <BaseIcon :size="14" :stroke-width="2.5" name="archive" />
-            </template>
-            下载全部 (ZIP)
-          </ActionButton>
-
-          <ActionButton
-            v-if="mode === ExportMode.A4"
-            :disabled="isActionDisabled"
-            :size="buttonSize"
             @click="emit('download-pdf')"
             variant="subtle"
           >
@@ -143,7 +132,6 @@ const emit = defineEmits<{
   (e: 'commit-quality', value: number): void;
   (e: 'download-current-page'): void;
   (e: 'copy-current-page'): void;
-  (e: 'download-all-zip'): void;
   (e: 'download-pdf'): void;
 }>();
 

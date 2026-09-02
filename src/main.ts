@@ -13,6 +13,8 @@ import { logger } from '@/utils/core/logger';
 import '@/assets/main.scss';
 import '@/assets/tailwind.css';
 
+import { vAutoHeight } from './directives/vAutoHeight';
+import { vAutoWidth } from './directives/vAutoWidth';
 import { vChordName } from './directives/vChordName';
 import { vFocus } from './directives/vFocus';
 import { vGridNav } from './directives/vGridNav';
@@ -36,6 +38,8 @@ app.directive('scroll-cache', vScrollCache);
 app.directive('grid-nav', vGridNav);
 app.directive('marquee', vMarquee);
 app.directive('chord-name', vChordName);
+app.directive('auto-width', vAutoWidth);
+app.directive('auto-height', vAutoHeight);
 
 /** 恢复上次编辑中的和弦草稿（含异常兜底日志），避免应用启动后编辑态丢失。 */
 const initializeEditor = () => {
