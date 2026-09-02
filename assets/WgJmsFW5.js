@@ -1,0 +1,1 @@
+import{ai as r}from"./BHIbROH9.js";import{af as i,H as c,L as s,I as n}from"./BXUza1UO.js";const f=t=>{const a=r();i(t,o=>{o&&(a.activeExportTarget=o)},{immediate:!0}),c(()=>{t.value&&(a.activeExportTarget=t.value)});const e=()=>{a.activeExportTarget===t.value&&(a.activeExportTarget=null)};s(e),n(e)};export{f as u};
