@@ -2,6 +2,7 @@
   <label
     :class="[
       sizeConfig.containerClass,
+      hasDescription ? 'items-start' : 'items-center',
       {
         'cursor-not-allowed opacity-50': disabled,
         'cursor-pointer': !disabled && !readonly,
@@ -10,7 +11,7 @@
       },
     ]"
     :for="resolvedId"
-    class="base-checkbox group duration-fast relative inline-flex items-start transition-colors select-none"
+    class="base-checkbox group duration-fast relative inline-flex transition-colors select-none"
   >
     <input
       :aria-checked="ariaCheckedState"
@@ -35,6 +36,7 @@
       v-wave="{ disabled: disabled || readonly }"
       :class="[
         sizeConfig.boxClass,
+        hasDescription ? 'mt-0.5' : '',
         isChecked || indeterminate ? colorConfig.checkedClass : colorConfig.uncheckedClass,
         {
           'peer-focus-visible:ring-primary/60 peer-focus-visible:ring-2 peer-focus-visible:ring-offset-1': !disabled,
@@ -67,8 +69,12 @@
     >
       <span
         v-if="label || $slots['default']"
-        :class="[sizeConfig.labelClass, isChecked ? 'text-text-title font-medium' : 'text-text-body']"
-        class="checkbox-label duration-fast leading-tight transition-colors"
+        :class="[
+          sizeConfig.labelClass,
+          isChecked ? 'text-text-title font-medium' : 'text-text-body',
+          hasDescription ? 'leading-tight' : 'leading-none',
+        ]"
+        class="checkbox-label duration-fast transition-colors"
       >
         <slot>{{ label }}</slot>
       </span>
@@ -85,7 +91,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, useId, useTemplateRef } from 'vue';
+import { computed, ref, useId, useSlots, useTemplateRef } from 'vue';
 
 import BaseIcon from '@/components/ui/BaseIcon.vue';
 
@@ -140,6 +146,9 @@ const {
   ariaDescribedby = undefined,
 } = defineProps<BaseCheckboxProps>();
 
+const slots = useSlots();
+const hasDescription = computed(() => Boolean(description || slots['description']));
+
 const modelValue = defineModel<unknown>({ default: undefined });
 const indeterminate = defineModel<boolean>('indeterminate', { default: false });
 
@@ -162,24 +171,24 @@ const innerChecked = ref(false);
 const SIZE_CONFIGS = {
   sm: {
     containerClass: 'gap-1.5',
-    boxClass: 'w-3.5 h-3.5 mt-0.5 rounded-[3px]',
-    iconSize: 10,
+    boxClass: 'w-3.5 h-3.5 rounded-[3px]',
+    iconSize: 16,
     labelWrapperClass: 'ml-0.5',
     labelClass: 'text-xs',
     descriptionClass: 'text-2xs',
   },
   md: {
     containerClass: 'gap-2',
-    boxClass: 'w-4 h-4 mt-0.5 rounded',
-    iconSize: 12,
+    boxClass: 'w-4 h-4 rounded',
+    iconSize: 18,
     labelWrapperClass: 'ml-0.5',
     labelClass: 'text-sm',
     descriptionClass: 'text-xs',
   },
   lg: {
     containerClass: 'gap-2.5',
-    boxClass: 'w-5 h-5 mt-0.5 rounded-md',
-    iconSize: 14,
+    boxClass: 'w-5 h-5 rounded-md',
+    iconSize: 20,
     labelWrapperClass: 'ml-1',
     labelClass: 'text-base',
     descriptionClass: 'text-sm',

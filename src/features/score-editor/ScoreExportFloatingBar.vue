@@ -1,50 +1,14 @@
 <template>
-  <BaseFloatingBar :visible #="{ divider }" bottom="1.8rem">
-    <div class="bar-info-zone gap-sm text-text-title flex min-w-0 items-center text-xs font-semibold">
-      <BaseBadge
-        :appearance="selectedCount > 0 ? 'filled' : 'subtle'"
-        :variant="selectedCount > 0 ? 'primary' : 'neutral'"
-        size="xs"
-        width="1.5rem"
-      >
-        {{ selectedCount }}
-      </BaseBadge>
-
-      <span class="selected-text-tip text-text-title shrink-0 whitespace-nowrap">
-        {{ selectedCount > 0 ? '已选择歌词' : '请选择歌词' }}
-      </span>
-
-      <div
-        v-wheel-scroll.smooth
-        class="clickable-indices-list no-scrollbar gap-xs box-border flex min-h-[1.75rem] w-[7.5rem] max-w-[7.5rem] min-w-[7.5rem] shrink-0 items-center overflow-x-auto overflow-y-hidden px-1.5 py-1 whitespace-nowrap"
-      >
-        <BaseBadge
-          v-for="lineIdx in sortedIndices"
-          :content="lineIdx + 1"
-          :key="lineIdx"
-          @click="emit('remove-index', lineIdx)"
-          appearance="subtle"
-          hover-close
-          size="xs"
-          title="点击取消选择该行"
-          variant="primary"
-          width="1.5rem"
-        />
-      </div>
-    </div>
-
-    <component :is="divider" />
-
+  <BaseFloatingBar :visible bottom="1.8rem">
     <div class="bar-actions-zone gap-sm flex shrink-0 items-center">
-      <ActionButton
+      <BaseCheckbox
         v-tooltip="'选中所有歌词'"
-        :color="isAllSelected ? 'primary' : 'default'"
-        :variant="isAllSelected ? 'subtle' : 'ghost'"
-        @click="emit('toggle-select-all')"
+        :indeterminate="isIndeterminate"
+        :model-value="isAllSelected"
+        @update:model-value="emit('toggle-select-all')"
+        label="全选"
         size="sm"
-      >
-        全选
-      </ActionButton>
+      />
 
       <ActionButton
         v-tooltip="includeMetaTooltip"
@@ -72,24 +36,23 @@
 import { computed } from 'vue';
 
 import ActionButton from '@/components/ui/ActionButton.vue';
-import BaseBadge from '@/components/ui/BaseBadge.vue';
+import BaseCheckbox from '@/components/ui/BaseCheckbox.vue';
 import BaseFloatingBar from '@/components/ui/BaseFloatingBar.vue';
 import BaseIcon from '@/components/ui/BaseIcon.vue';
 
 const {
   visible = true,
   selectedCount,
-  sortedIndices,
   isAllSelected,
+  isIndeterminate = false,
 } = defineProps<{
   visible?: boolean;
   selectedCount: number;
-  sortedIndices: number[];
   isAllSelected: boolean;
+  isIndeterminate?: boolean;
 }>();
 
 const emit = defineEmits<{
-  (e: 'remove-index', lineIdx: number): void;
   (e: 'toggle-select-all'): void;
   (e: 'open-export'): void;
 }>();

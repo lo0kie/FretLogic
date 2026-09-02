@@ -152,26 +152,6 @@ export const LEFT_SIDEBAR_WIDTH = ref(344);
 /** 左侧栏宽度（px 字符串形式，供 CSS 绑定） */
 export const LEFT_SIDEBAR_WIDTH_PIXEL = computed(() => `${LEFT_SIDEBAR_WIDTH.value}px`);
 
-/** 工作台布局配置 */
-export const WORKBENCH_LAYOUT = {
-  /** 指板画布之外的固定垂直内边距（px，为和弦名区/操作区预留空间） */
-  BASE_VERTICAL_PADDING: 135,
-} as const;
-
-/** 表单组件三档高度映射（rem，sm/md/lg） */
-export const FORM_COMPONENT_HEIGHT_MAP = {
-  sm: '1.5rem', // 小档高度
-  md: '1.75rem', // 中档/默认高度
-  lg: '2.2rem', // 大档高度
-} as const;
-
-/** 小档高度（= FORM_COMPONENT_HEIGHT_MAP.sm） */
-export const HEIGHT_SM = FORM_COMPONENT_HEIGHT_MAP.sm;
-/** 中档高度（= FORM_COMPONENT_HEIGHT_MAP.md） */
-export const HEIGHT_MD = FORM_COMPONENT_HEIGHT_MAP.md;
-/** 大档高度（= FORM_COMPONENT_HEIGHT_MAP.lg） */
-export const HEIGHT_LG = FORM_COMPONENT_HEIGHT_MAP.lg;
-
 /** 表单组件预设宽度映射（rem / %） */
 export const FORM_COMPONENT_WIDTH_MAP = {
   auto: 'auto',
@@ -194,25 +174,119 @@ export const resolveComponentWidth = (width?: FormComponentWidth): string | unde
   return width;
 };
 
-/** 间距 token（rem，与 tokens.module.less 的 @space-* 保持一致，供脚本侧计算使用） */
-export const SPACE_REM = {
-  /** @space-2xs */
-  XS_2: 0.125,
-  /** @space-xs */
-  XS: 0.25,
-} as const;
+// ===================== 乐谱离屏导出配置 =====================
+/** 无标题乐谱导出/保存时使用的默认标题文案 */
+export const DEFAULT_SCORE_TITLE = '歌词谱';
+/** 乐谱离屏导出引擎（Worker / OffscreenCanvas）UI 尺寸、排版与主题配色常量 */
+export const SCORE_EXPORT_CONFIG = {
+  // ---- 画布与页面尺寸 ----
+  /** A4 标准宽度（px @96dpi，210mm） */
+  A4_WIDTH: 794,
+  /** A4 标准高度（px @96dpi，297mm） */
+  A4_HEIGHT: 1123,
+  /** 导出页面安全边距（px，统一为 A4 标准 15mm 边距 56px） */
+  PAGE_MARGIN: 56,
+  /** 离屏绘制像素比（超采样抗锯齿） */
+  PIXEL_RATIO: 2.0,
+  /** 普通长图模式最小画布宽度（px，保证标题与表头排版舒展） */
+  NORMAL_CANVAS_MIN_WIDTH: 520,
+  /** 普通长图模式单行最大正文宽度（px，超出自动软折行） */
+  NORMAL_CONTENT_MAX_WIDTH: 880,
+  /** 表头元信息与首行歌词之间的间距（px） */
+  HEADER_BOTTOM_GAP: 42,
+  /** 标题与元信息行之间的垂直间距（px） */
+  TITLE_TO_META_GAP: 14,
 
-// ===================== 打印（A4）=====================
-/** A4 纸张宽度（px @96dpi，210mm） */
-export const A4_WIDTH_PX = 794; // 210mm @96dpi
-/** A4 纸张高度（px @96dpi，297mm） */
-export const A4_HEIGHT_PX = 1123; // 297mm @96dpi
-/** A4 页边距（px，≈15mm） */
-export const A4_MARGIN_PX = 56; // ≈15mm 页边距
-/** A4 内容区宽度（= 纸宽 - 左右页边距） */
-export const A4_CONTENT_WIDTH = A4_WIDTH_PX - A4_MARGIN_PX * 2;
-/** A4 内容区高度（= 纸高 - 上下页边距） */
-export const A4_CONTENT_HEIGHT = A4_HEIGHT_PX - A4_MARGIN_PX * 2;
+  // ---- 吉他指板图尺寸（整体放大并增强横按视觉饱满度） ----
+  /** 指板图容器标准宽度（px） */
+  FRETBOARD_WIDTH: 78,
+  /** 琴弦间距（px） */
+  STRING_SPACING: 9.8,
+  /** 品格高度（px） */
+  FRET_HEIGHT: 13.5,
+  /** 指板左侧留白（px，容纳品号文字） */
+  FRETBOARD_LEFT_PAD: 14,
+  /** 指板网格顶部起始 Y 偏移（px） */
+  FRETBOARD_GRID_TOP: 30,
+  /** 按弦圆点半径（px） */
+  DOT_RADIUS: 3.8,
+  /** 大横按梁厚度（px，适度加粗补偿，两端饱满圆角） */
+  BARRE_THICKNESS: 8.4,
+  /** 弦枕枕条高度（px） */
+  NUT_HEIGHT: 3.6,
+  /** 空弦与静音标记中心 Y 偏移（px） */
+  MARKER_CENTER_Y: 22,
+  /** 静音叉号半径（px） */
+  MUTE_CROSS_RADIUS: 2.6,
+  /** 空弦圆圈半径（px） */
+  OPEN_CIRCLE_RADIUS: 2.6,
+
+  // ---- 排版与文字布局（和弦贴近歌词，行与行之间拉开大间距） ----
+  /** 歌词文字字号（px） */
+  LYRICS_FONT_SIZE: 23,
+  /** 和弦名称字号（px） */
+  CHORD_NAME_FONT_SIZE: 16,
+  /** 和弦名称升降号上标字号（px） */
+  ACCIDENTAL_FONT_SIZE: 11,
+  /** 和弦名称升降号上标垂直偏移量（px，负值向上浮动） */
+  ACCIDENTAL_SUPERSCRIPT_OFFSET: -5,
+  /** 品号标记字号（px） */
+  CAPO_TEXT_FONT_SIZE: 10,
+  /** 品号文字距首弦的水平向左偏移量（px） */
+  FRET_NUMBER_X_OFFSET: 3.8,
+  /** 标题字号（px） */
+  TITLE_FONT_SIZE: 32,
+  /** 元信息（调号/变调夹）字号（px，加大） */
+  META_FONT_SIZE: 18,
+  /** 元信息调号升降号上标字号（px） */
+  META_ACCIDENTAL_FONT_SIZE: 12,
+  /** 元信息升降号上标垂直偏移量（px，负值向上浮动） */
+  META_ACCIDENTAL_SUPERSCRIPT_OFFSET: -5,
+  /** 普通空格宽度（px） */
+  SPACE_CHAR_WIDTH: 18,
+  /** 普通汉字/单字基准列宽（px） */
+  REGULAR_CHAR_WIDTH: 30,
+  /** 指板槽位额外列宽补偿（px） */
+  CHORD_COLUMN_EXTRA_PAD: 8,
+  /** 行内连续和弦间距（px） */
+  INLINE_CHORD_GAP: 10,
+  /** 边和弦与歌词正文间距（px） */
+  EDGE_CHORD_SECTION_GAP: 6,
+  /** 指板图底部与歌词字符之间的垂直间距（px，保持紧贴连贯） */
+  CHORD_TO_LYRICS_GAP: 6,
+  /** 歌词超长自动折行续行缩进量（px，首行顶格，续行悬挂缩进） */
+  WRAPPED_LINE_INDENT: 32,
+  /** 自动折行子行间的紧凑垂直行距（px，约为标准行距的一半） */
+  WRAPPED_LINE_ROW_GAP: 18,
+  /** 行与行之间的独立垂直行间距（px，拉开乐谱各行） */
+  LINE_ROW_GAP: 36,
+
+  // ---- 主题配色方案 ----
+  THEME: {
+    DARK: {
+      BG: '#18181a',
+      TEXT: '#f5f5f7',
+      SUB_TEXT: '#a1a1aa',
+      DIVIDER: '#27272a',
+      FB_LINE: '#52525b',
+      FB_NUT: '#e4e4e7',
+      FB_NOTE: '#f4f4f5',
+      FB_BARRE: '#f4f4f5',
+      FB_MUTE: '#71717a',
+    },
+    LIGHT: {
+      BG: '#f2f2f7',
+      TEXT: '#1c1c1e',
+      SUB_TEXT: '#71717a',
+      DIVIDER: '#e4e4e7',
+      FB_LINE: '#a1a1aa',
+      FB_NUT: '#27272a',
+      FB_NOTE: '#18181b',
+      FB_BARRE: '#18181b',
+      FB_MUTE: '#a1a1aa',
+    },
+  },
+} as const;
 
 // ===================== 存储键 =====================
 /** localStorage 存储键统一管理（避免魔法字符串散落） */

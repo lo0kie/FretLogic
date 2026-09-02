@@ -1,5 +1,5 @@
 <template>
-  <BaseFloatingBar :bottom="barBottomPosition" :visible="!isPristine" #="{ divider }">
+  <BaseFloatingBar #="{ divider }" :bottom="barBottomPosition" :visible="!isPristine">
     <ActionButton :disabled="isPristine" @click="editorStore.resetEditor" size="md" variant="ghost">
       {{ editorStore.isEditing ? '放弃修改' : '重置指板' }}
     </ActionButton>

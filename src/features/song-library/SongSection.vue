@@ -16,7 +16,7 @@
           <span class="text-text-disabled text-xs leading-none font-bold tracking-widest">{{ row.label }}</span>
         </div>
         <template v-else>
-          <ContextMenu :items="getSongMenuItems(row.song!)" #="{ isOpen }">
+          <ContextMenu #="{ isOpen }" :items="getSongMenuItems(row.song!)">
             <div
               v-wave
               :aria-label="songCardAriaLabel(row.song!)"

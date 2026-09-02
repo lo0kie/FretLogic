@@ -90,6 +90,8 @@ export function useBackupModals() {
     (sel.preferences || !availability.preferences);
   const isExportAll = computed(() => isAllSelected(modalData.exportSelection, exportAvailability.value));
   const isImportAll = computed(() => isAllSelected(modalData.importSelection, importAvailability.value));
+  const isExportIndeterminate = computed(() => hasExportSelection.value && !isExportAll.value);
+  const isImportIndeterminate = computed(() => hasImportSelection.value && !isImportAll.value);
 
   /** 全选按钮 toggle：全选状态下点击切换为全不选，否则勾选全部可用类别 */
   const toggleSelection = (selection: BackupSelection, availability: BackupSelection): BackupSelection => {
@@ -175,6 +177,8 @@ export function useBackupModals() {
     hasImportSelection,
     isExportAll,
     isImportAll,
+    isExportIndeterminate,
+    isImportIndeterminate,
     openExport,
     openImportWithPayload,
     handleExportSelectAll,

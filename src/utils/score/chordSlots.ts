@@ -24,7 +24,7 @@ export function parseSlotKey(slotKey: string): ParsedSlotKey | null {
     index: parseInt(match[3] ?? '0', 10),
   };
 }
-/** 读取某行行首/行尾的和弦 id 列表。 */
+
 export function getEdgeChords(
   chordMap: ReadonlyMap<SlotKey, ChordId>,
   lineId: string,
@@ -208,10 +208,6 @@ export const pruneOrphanChordRefs = (
 };
 
 // ===== 序列化边界：内存统一用 Map，JSON/持久化用普通对象 =====
-
-/** Map -> 普通对象（localStorage / 备份 / 同步序列化用） */
-export const chordMapToPlain = (chordMap: ReadonlyMap<SlotKey, ChordId>): Record<string, string> =>
-  Object.fromEntries(chordMap);
 
 /** 普通对象 -> Map（读取 localStorage / 导入备份 / 同步拉取用），容忍非法条目；
  *  key/value 已通过 string 类型过滤，品牌收窄信任该过滤 */

@@ -32,9 +32,13 @@
     width="w-large"
   >
     <template #header-extra>
-      <ActionButton :color="isAllVariantsSelected ? 'primary' : 'default'" @click="handleToggleSelectAllVariants">
-        {{ isAllVariantsSelected ? '取消全选' : '全选' }}
-      </ActionButton>
+      <BaseCheckbox
+        :indeterminate="isVariantsIndeterminate"
+        :model-value="isAllVariantsSelected"
+        @update:model-value="handleToggleSelectAllVariants"
+        label="全选"
+        size="sm"
+      />
     </template>
 
     <div class="gap-md flex flex-col">
@@ -140,6 +144,7 @@ import { useRouter } from 'vue-router';
 import Fretboard from '@/components/fretboard/Fretboard.vue';
 import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseBadge from '@/components/ui/BaseBadge.vue';
+import BaseCheckbox from '@/components/ui/BaseCheckbox.vue';
 import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -163,6 +168,12 @@ const isAllVariantsSelected = computed(() => {
   const variants = groupModals.modalData.activeGroupCard?.variants ?? [];
   if (variants.length === 0) return false;
   return variants.every(v => groupModals.modalData.selectedVariantIds.has(v.id));
+});
+
+const isVariantsIndeterminate = computed(() => {
+  const variants = groupModals.modalData.activeGroupCard?.variants ?? [];
+  const selectedCount = variants.filter(v => groupModals.modalData.selectedVariantIds.has(v.id)).length;
+  return selectedCount > 0 && selectedCount < variants.length;
 });
 
 /** 删除指法弹窗标题：拼接主和弦名 */

@@ -7,6 +7,9 @@ export function useLineSelection(totalLines: Ref<number>, activeSong: Ref<Song |
   const selectedLineSet = shallowRef<Set<number>>(new Set());
 
   const isAllSelected = computed(() => totalLines.value > 0 && selectedLineSet.value.size === totalLines.value);
+  const isIndeterminate = computed(
+    () => selectedLineSet.value.size > 0 && selectedLineSet.value.size < totalLines.value
+  );
   const sortedSelectedIndices = computed(() => Array.from(selectedLineSet.value).sort((a, b) => a - b));
 
   /** 从选中集合中移除一行（行被删除时同步选中态） */
@@ -63,6 +66,7 @@ export function useLineSelection(totalLines: Ref<number>, activeSong: Ref<Song |
   return {
     selectedLineSet,
     isAllSelected,
+    isIndeterminate,
     sortedSelectedIndices,
     handleRemoveLineIndex,
     handleLineClick,

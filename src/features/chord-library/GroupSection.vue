@@ -18,7 +18,7 @@
         handle=".group-title-row"
       >
         <div v-for="(group, index) in chordStore.groups" :key="group.id" class="box-border">
-          <ContextMenu :items="getGroupMenuItems(group)" #="{ isOpen }">
+          <ContextMenu #="{ isOpen }" :items="getGroupMenuItems(group)">
             <div
               v-wave
               :aria-expanded="isGroupContentOpen(group)"
