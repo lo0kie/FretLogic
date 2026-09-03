@@ -54,9 +54,7 @@ export function buildBackupPayload(options?: { selection?: BackupSelection }): I
   const preferences = selection.preferences
     ? {
         workbenchChordShorthand: settingsStore.workbenchChordShorthand,
-        workbenchShowPitchNames: settingsStore.workbenchShowPitchNames,
         scoreChordShorthand: settingsStore.scoreChordShorthand,
-        scoreShowPitchNames: settingsStore.scoreShowPitchNames,
       }
     : undefined;
 

@@ -91,15 +91,13 @@ const OFFSET_Y_TOP = 80;
 export const OPEN_STRING_MARKER_Y = 34;
 /** 底部留白（px） */
 const OFFSET_Y_BOTTOM = 20;
-/** 指板自带和弦名区域高度（px） */
-const CHORD_NAME_ZONE_HEIGHT = 80;
-/** 指板自带和弦名预设字号（px），与项目 'sm' | 'md' | 'lg' 尺寸约定一致 */
-export const CHORD_NAME_FONT_SIZE_MAP = {
-  sm: 32,
-  md: 40,
-  lg: 56,
-} as const;
-export type ChordNameFontSize = keyof typeof CHORD_NAME_FONT_SIZE_MAP;
+/** 指板自带和弦名区域高度（px）；需比 CHORD_NAME_FONT_SIZE × 行高 略大，给 j / g 等下伸部留余量，避免被裁脚 */
+const CHORD_NAME_ZONE_HEIGHT = 100;
+/**
+ * 指板自带和弦名字号（px）：全局唯一值，不再按 sm/md/lg 分档（原档位表只有一个消费方且从不传值）。
+ * 与行高配合：字号 80 × 行高 1.15 ≈ 92px 的 line-box，落在 100px 的区域内，j / g 下伸部完整可见
+ */
+export const CHORD_NAME_FONT_SIZE = 80;
 
 /** 指板画布整体配置（由上方基础常量派生，供各处统一引用） */
 export const CANVAS_CONFIG = {
@@ -198,8 +196,8 @@ export const SCORE_EXPORT_CONFIG = {
   TITLE_TO_META_GAP: 14,
 
   // ---- 吉他指板图尺寸（整体放大并增强横按视觉饱满度） ----
-  /** 指板图容器标准宽度（px） */
-  FRETBOARD_WIDTH: 78,
+  /** 指板图容器标准宽度（px）＝ 左右对称留白 14 × 2 ＋ 5 根弦间距，与 FRETBOARD_LEFT_PAD 联动保持左右边距一致 */
+  FRETBOARD_WIDTH: 77,
   /** 琴弦间距（px） */
   STRING_SPACING: 9.8,
   /** 品格高度（px） */
@@ -214,6 +212,8 @@ export const SCORE_EXPORT_CONFIG = {
   BARRE_THICKNESS: 8.4,
   /** 弦枕枕条高度（px） */
   NUT_HEIGHT: 3.6,
+  /** 和弦名文字基线的 y 坐标：需保证大写字母顶部与画布上缘留白充足，且降部不与 22px 处的空弦标记圆相碰 */
+  CHORD_NAME_BASELINE_Y: 16,
   /** 空弦与静音标记中心 Y 偏移（px） */
   MARKER_CENTER_Y: 22,
   /** 静音叉号半径（px） */
@@ -330,6 +330,8 @@ export const STORAGE_KEYS = {
   // ---- 同步配置（后端选择） ----
   /** 当前同步后端：github | gitee | webdav | server */
   SYNC_TARGET: 'CHORD_LAB_SYNC_TARGET',
+  /** 同步设置弹窗内临时查看/操作的方案（与全局 syncTarget 相互独立，仅弹窗内持久化） */
+  SYNC_MODAL_PROVIDER: 'CHORD_LAB_SYNC_MODAL_PROVIDER',
 
   // ---- GitHub 同步配置 ----
   /** GitHub 仓库 owner */
@@ -390,21 +392,18 @@ export const STORAGE_KEYS = {
   // ---- 应用级偏好 ----
   /** 工作台：是否启用和弦名简写（如 maj7->M7, dim->° 等） */
   WORKBENCH_CHORD_SHORTHAND: 'CHORD_LAB_WORKBENCH_CHORD_SHORTHAND_V1',
-  /** 工作台：是否在指板音符圆点上显示音名（如 C, D, E 等） */
-  WORKBENCH_SHOW_PITCH_NAMES: 'CHORD_LAB_WORKBENCH_SHOW_PITCH_NAMES_V1',
   /** 工作台：和弦分析面板是否收起折叠（持久化） */
   WORKBENCH_CHORD_ANALYSIS_COLLAPSED: 'CHORD_LAB_WORKBENCH_CHORD_ANALYSIS_COLLAPSED_V1',
-  /** 工作台：横按标记面板是否收起折叠（持久化） */
-  WORKBENCH_BARRE_COLLAPSED: 'CHORD_LAB_WORKBENCH_BARRE_COLLAPSED_V1',
+  /** 工作台：设置面板是否收起折叠（持久化） */
+  WORKBENCH_SETTINGS_COLLAPSED: 'CHORD_LAB_WORKBENCH_SETTINGS_COLLAPSED_V1',
+  /** 工作台：导出面板是否收起折叠（持久化） */
+  WORKBENCH_EXPORT_COLLAPSED: 'CHORD_LAB_WORKBENCH_EXPORT_COLLAPSED_V1',
+  /** 工作台：导出面板背景模式（transparent / white / dark） */
+  WORKBENCH_EXPORT_BG: 'CHORD_LAB_WORKBENCH_EXPORT_BG_V1',
   /** 乐谱：是否启用和弦名简写（如 maj7->M7, dim->° 等） */
   SCORE_CHORD_SHORTHAND: 'CHORD_LAB_SCORE_CHORD_SHORTHAND_V1',
-  /** 乐谱：是否在指板音符圆点上显示音名（如 C, D, E 等） */
-  SCORE_SHOW_PITCH_NAMES: 'CHORD_LAB_SCORE_SHOW_PITCH_NAMES_V1',
   /** 乐谱：当前所在标签页（edit / interactive / preview），刷新后恢复上次所在页 */
   SCORE_ACTIVE_TAB: 'CHORD_LAB_SCORE_ACTIVE_TAB_V1',
-  /** [兼容历史键] */
-  USE_CHORD_SHORTHAND: 'CHORD_LAB_USE_CHORD_SHORTHAND_V1',
-  SHOW_PITCH_NAMES: 'CHORD_LAB_SHOW_PITCH_NAMES_V1',
 
   // ---- 歌曲数据（按歌曲拆键持久化） ----
   /** [已废弃 / 历史迁移源] 旧版歌曲单键整表数据（仅用于从早期版本向分片结构迁移，运行时不再读写） */
@@ -464,6 +463,15 @@ export const MARQUEE_MIN_DURATION_CONTINUOUS_MS = 800;
 export const MARQUEE_MIN_DURATION_PINGPONG_MS = 500;
 /** 跑马灯 fade 模式：默认羽化宽度（px） */
 export const MARQUEE_DEFAULT_FADE_WIDTH = 16;
+/** 跑马灯停用后平滑复位到起始位的动画时长（ms） */
+export const MARQUEE_RESET_DURATION_MS = 240;
+/** 跑马灯平滑复位缓动（ease-out-cubic，起步快收尾缓） */
+export const MARQUEE_RESET_EASING = 'cubic-bezier(0.33, 1, 0.68, 1)';
+
+/** 右键菜单已打开时换位动画时长（ms，WAAPI 实现） */
+export const CONTEXT_MENU_REPOSITION_DURATION_MS = 80;
+/** 右键菜单换位动画缓动（与 tokens.scss 的 $bezier-standard 一致） */
+export const CONTEXT_MENU_REPOSITION_EASING = 'cubic-bezier(0.25, 0.1, 0.25, 1)';
 
 // ===================== 主题配色 =====================
 /** 指板配色（明暗双主题） */
@@ -527,11 +535,11 @@ export const GITHUB_SYNC_CONFIG = {
 } as const;
 
 // ===================== Gitee 同步预设 =====================
-/** Gitee 同步预设配置（Gitee 默认分支为 master；文件路径沿用同一备份文件） */
+/** Gitee 同步预设配置（开发/生产分别走专用数据分支，避免备份提交污染主分支） */
 export const GITEE_SYNC_CONFIG = {
   DEFAULT_OWNER: 'look1e',
   DEFAULT_REPO: 'fret-logic',
-  DEFAULT_BRANCH: 'master',
+  DEFAULT_BRANCH: import.meta.env.DEV ? 'dev-data-sync' : 'data-sync',
   DEFAULT_PATH: 'backup/chords.json',
 } as const;
 

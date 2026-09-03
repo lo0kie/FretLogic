@@ -17,8 +17,9 @@
         class="modal-overlay-container z-overlay p-md fixed inset-0 box-border flex overflow-y-auto bg-black/50"
         ref="overlayRef"
       >
+        <!-- 关闭（leave）期间禁用高度接管：expanded 联动 visible，避免退场动画进行中卡片被高度压 0 裁没 -->
         <div
-          v-auto-height="{ expanded: visible, disabled: !isAutoHeight }"
+          v-auto-height="{ expanded: visible, disabled: !isAutoHeight || !visible }"
           :aria-label="title || $slots['title'] ? undefined : '对话框'"
           :aria-labelledby="title || $slots['title'] ? titleId : undefined"
           :style="[sizeStyle, topStyle]"

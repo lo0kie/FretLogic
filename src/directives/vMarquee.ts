@@ -4,6 +4,8 @@ import {
   MARQUEE_DEFAULT_FADE_WIDTH,
   MARQUEE_MIN_DURATION_CONTINUOUS_MS,
   MARQUEE_MIN_DURATION_PINGPONG_MS,
+  MARQUEE_RESET_DURATION_MS,
+  MARQUEE_RESET_EASING,
 } from '@/utils/core/constants';
 
 export interface MarqueeOptions {
@@ -74,6 +76,8 @@ interface MarqueeState {
   wasActive: boolean;
   sig: string | null;
   animation: Animation | null;
+  /** 停用后的平滑复位动画（进行中时阻止重复触发与循环重启） */
+  resetAnim: Animation | null;
   observer: ResizeObserver;
   mql: MediaQueryList;
   cleanups: Array<() => void>;
@@ -153,17 +157,53 @@ function update(el: HTMLElement): void {
   const active = overflowing && !state.reducedMotion && shouldAnimate(state);
 
   if (!active) {
+    state.sig = null;
     if (state.animation) {
+      // 先取样当前滚动位置，cancel 后元素会瞬间回落到 inline 静止位
+      const current = getComputedStyle(inner).transform;
       state.animation.cancel();
       state.animation = null;
+      if (!state.reducedMotion && current !== 'none') {
+        // 从当前位置平滑滚回起始位，避免移出瞬间的硬切
+        const restTransform =
+          options.direction === 'right'
+            ? `translateX(-${Math.max(0, inner.scrollWidth - el.clientWidth)}px)`
+            : 'translateX(0px)';
+        const reset = inner.animate([{ transform: current }, { transform: restTransform }], {
+          duration: MARQUEE_RESET_DURATION_MS,
+          easing: MARQUEE_RESET_EASING,
+        });
+        reset.onfinish = () => {
+          // 期间可能已被再次激活并取消，仅当仍是本次复位动画时才落定静止位
+          if (state.resetAnim === reset) {
+            state.resetAnim = null;
+            inner.style.transform = restTransform;
+          }
+        };
+        state.resetAnim = reset;
+        inner.style.animation = '';
+        // 提前return前补发 end 事件，保持生命周期回调语义与直落路径一致
+        if (state.wasActive) emit(el, 'marquee-end', undefined, options.onEnd);
+        state.wasActive = false;
+        return;
+      }
     }
-    state.sig = null;
+    if (state.resetAnim) return; // 复位动画进行中，让其自然结束
     inner.style.animation = '';
     inner.style.transform =
       options.direction === 'right'
         ? `translateX(-${Math.max(0, inner.scrollWidth - el.clientWidth)}px)`
         : 'translateX(0px)';
   } else {
+    // 重新激活：立即结束尚未完成的复位动画并落定到静止位，循环从头开始
+    if (state.resetAnim) {
+      state.resetAnim.cancel();
+      state.resetAnim = null;
+      inner.style.transform =
+        options.direction === 'right'
+          ? `translateX(-${Math.max(0, inner.scrollWidth - el.clientWidth)}px)`
+          : 'translateX(0px)';
+    }
     const dist = inner.scrollWidth - el.clientWidth;
     const isContinuous = options.loopMode === 'continuous';
 
@@ -264,6 +304,7 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       wasActive: false,
       sig: null,
       animation: null,
+      resetAnim: null,
       observer: undefined as unknown as ResizeObserver,
       mql: undefined as unknown as MediaQueryList,
       cleanups: [],
@@ -314,6 +355,7 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       mql.removeEventListener('change', onMql);
       observer.disconnect();
       state.animation?.cancel();
+      state.resetAnim?.cancel();
     });
 
     measure(el);

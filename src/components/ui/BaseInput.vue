@@ -120,8 +120,6 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
 
-import { useEventListener } from '@vueuse/core';
-
 import BaseIcon from '@/components/ui/BaseIcon.vue';
 import { resolveComponentWidth, type FormComponentWidth } from '@/utils/core/constants';
 
@@ -147,7 +145,6 @@ const {
   required = false,
   autocomplete = 'off',
   showCount = false,
-  horizontalWheel = true,
   trim = false,
   formatter = undefined,
   invalid = false,
@@ -171,7 +168,6 @@ const {
   required?: boolean;
   autocomplete?: string;
   showCount?: boolean;
-  horizontalWheel?: boolean;
   /** 失焦或提交时是否自动去除前后空格 */
   trim?: boolean;
   /** 自定义格式化处理函数 */
@@ -365,22 +361,6 @@ const handleClear = () => {
     inputRef.value.focus();
   }
 };
-
-// 响应式管理横向滚轮事件绑定，自动处理响应式切换与组件销毁解绑
-useEventListener(
-  inputRef,
-  'wheel',
-  (e: WheelEvent) => {
-    if (!horizontalWheel || disabled || !inputRef.value) return;
-    e.preventDefault();
-    const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
-    inputRef.value.scrollBy({
-      left: delta,
-      behavior: 'smooth',
-    });
-  },
-  { passive: false }
-);
 
 // 持续追踪右侧叠加容器真实宽度的观察器（覆盖字体异步加载变宽、字数增减、isAtLimit 加粗、清空显隐等场景）
 let rightSlotObserver: ResizeObserver | undefined;

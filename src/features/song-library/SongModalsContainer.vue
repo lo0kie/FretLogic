@@ -24,7 +24,7 @@
       </BaseFormRow>
 
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="指法调 (Play)">
-        <BaseSelector v-model="songModals.modalData.playKey" :options="KEY_OPTIONS" default-value="C">
+        <BaseSelector v-model="songModals.modalData.playKey" :options="KEY_OPTIONS" default-value="C" width="md">
           <template #label="{ selected }">
             <span v-chord-name="{ name: `${selected}调` }" />
           </template>
@@ -36,7 +36,7 @@
       </BaseFormRow>
 
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="演唱调 (Key)">
-        <BaseSelector v-model="songModals.key.value" :options="KEY_OPTIONS" default-value="C">
+        <BaseSelector v-model="songModals.key.value" :options="KEY_OPTIONS" default-value="C" width="md">
           <template #label="{ selected }">
             <span v-chord-name="{ name: `${selected}调` }" />
           </template>

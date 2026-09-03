@@ -8,13 +8,7 @@
     width="w-80"
   >
     <template #header-extra>
-      <BaseSelector
-        v-model="selectedProvider"
-        :disabled="!modalCloseable"
-        :options="providerOptions"
-        class="w-36"
-        width="md"
-      />
+      <BaseSelector v-model="selectedProvider" :disabled="!modalCloseable" :options="providerOptions" width="auto" />
     </template>
 
     <template #default>
@@ -23,7 +17,7 @@
           class="sync-panel-card gap-md bg-bg-panel p-md border-glass-border box-border flex w-full flex-col rounded-lg border"
         >
           <div class="panel-header box-border flex items-center justify-between">
-            <h3 class="panel-title text-text-disabled m-0 text-xs font-semibold">云端同步</h3>
+            <h3 class="panel-title text-text-body m-0 text-xs font-semibold">云端同步</h3>
           </div>
 
           <template v-if="selectedProvider === 'server'">
@@ -169,7 +163,9 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue';
+import { computed } from 'vue';
+
+import { useStorage } from '@vueuse/core';
 
 import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseIcon from '@/components/ui/BaseIcon.vue';
@@ -181,6 +177,7 @@ import type { SyncProviderKind } from '@/services/sync/provider';
 import { useBackupModals } from '@/shared/composables/useBackupModals';
 import { useSyncService } from '@/shared/composables/useSyncService';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { STORAGE_KEYS } from '@/utils/core/constants';
 
 const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true });
 const { triggerGlobalSync, pullFromRemote, testConnection, isSyncing, isPulling, isTestingConnection } =
@@ -188,22 +185,16 @@ const { triggerGlobalSync, pullFromRemote, testConnection, isSyncing, isPulling,
 const settingsStore = useSettingsStore();
 const backupModals = useBackupModals();
 
-// 弹窗内的方案选择器仅用于切换当前查看与配置的表单，不直接修改全局激活的方案
-const selectedProvider = ref<SyncProviderKind>(settingsStore.syncTarget);
+// 弹窗内方案选择器：独立持久化（不联动全局 syncTarget，仅记录弹窗当前查看/操作的方案）
+const selectedProvider = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_MODAL_PROVIDER, 'server');
 
-watch(isSyncModalOpen, isOpen => {
-  if (isOpen) {
-    selectedProvider.value = settingsStore.syncTarget;
-  }
-});
-
-/** 用户点击"同步"：按弹窗内选中的方案推送本地数据，成功后关闭弹窗 */
+/** 用户点击"同步"：按当前选中的方案推送本地数据，成功后关闭弹窗 */
 const handleSyncClick = async () => {
   const ok = await triggerGlobalSync(selectedProvider.value);
   if (ok) isSyncModalOpen.value = false;
 };
 
-/** 用户点击"拉取"：按弹窗内选中的方案拉取云端数据，成功后关闭弹窗并进入导入面板 */
+/** 用户点击"拉取"：按当前选中的方案拉取云端数据，成功后关闭弹窗并进入导入面板 */
 const handlePullClick = async () => {
   const payload = await pullFromRemote(selectedProvider.value);
   if (payload) {

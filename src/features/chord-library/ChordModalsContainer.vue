@@ -74,16 +74,7 @@
           tabindex="0"
         >
           <div class="p-xs pointer-events-none box-border flex w-full items-center justify-center">
-            <Fretboard
-              :bordered="false"
-              :chord="variant"
-              :interactive="false"
-              :is-dark-mode="globalDarkMode"
-              :scale="0.32"
-              :show-chord-name="false"
-              bg-color="transparent"
-              fret-number-size="lg"
-            />
+            <FretboardCanvas :chord="variant" :chord-name-scale="0.7" :is-dark-mode="globalDarkMode" :scale="1.8" />
           </div>
         </div>
       </div>
@@ -141,7 +132,7 @@
 import { computed, inject } from 'vue';
 import { useRouter } from 'vue-router';
 
-import Fretboard from '@/components/fretboard/Fretboard.vue';
+import FretboardCanvas from '@/components/fretboard/FretboardCanvas.vue';
 import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseBadge from '@/components/ui/BaseBadge.vue';
 import BaseCheckbox from '@/components/ui/BaseCheckbox.vue';

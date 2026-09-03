@@ -21,11 +21,11 @@
           disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer',
         ]"
         :data-focusable-inline="!disabled || undefined"
-        :style="{ width: presetWidth }"
+        :style="{ width: triggerWidthStyle }"
         :tabindex="disabled ? -1 : 0"
         @keydown="handleTriggerKeydown($event)"
         aria-haspopup="listbox"
-        class="group bg-bg-body border-border-light text-text-title hover:border-border-base focus-visible:border-primary focus-visible:ring-primary/70 relative box-border flex items-center justify-between rounded-full border transition-all duration-150 outline-none select-none focus-visible:ring-2"
+        class="group bg-bg-body border-border-light text-text-title hover:border-border-base focus-visible:border-primary focus-visible:ring-primary/70 relative box-border flex items-center justify-between gap-2 rounded-full border transition-all duration-150 outline-none select-none focus-visible:ring-2"
         ref="referenceRef"
         role="combobox"
       >
@@ -55,7 +55,7 @@
             aria-hidden="true"
             class="shrink-0 opacity-80"
           />
-          <span class="flex w-full items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap">
+          <span class="flex w-full items-center gap-1 overflow-hidden">
             <template v-if="isMultiple && selectedValues.length">
               <span
                 v-for="opt in displayedTags"
@@ -86,7 +86,9 @@
                 +{{ collapsedCount }}
               </span>
             </template>
-            <slot v-else :selected="modelValue" name="label"> {{ displayText }} </slot>
+            <span v-else class="truncate">
+              <slot :selected="modelValue" name="label">{{ displayText }}</slot>
+            </span>
           </span>
           <slot name="suffix" />
         </span>
@@ -370,6 +372,7 @@ const currentTriggerIcon = computed<IconName | Component | undefined>(() => {
 
 const isOpen = ref(false);
 const dropdownRef = useTemplateRef<HTMLElement>('dropdownRef');
+const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const optionEls = ref<Array<HTMLElement | null>>([]);
 const filterInputRef = useTemplateRef<HTMLInputElement>('filterInputRef');
 const searchQuery = ref('');
@@ -506,6 +509,13 @@ const canClear = computed(() => {
 
 const presetWidth = computed(() => resolveComponentWidth(width) ?? '100%');
 
+/**
+ * 触发器宽度样式。auto 宽度模式下由动画逻辑临时接管为具体像素值，
+ * 动画结束后回归 undefined（交还给 presetWidth 的 auto），从而实现宽度自动过渡。
+ */
+const animatingWidth = ref<string | undefined>(undefined);
+const triggerWidthStyle = computed(() => animatingWidth.value ?? presetWidth.value);
+
 const displayText = computed(() => {
   if (isMultiple.value) {
     if (!selectedValues.value.length) return placeholder;
@@ -525,6 +535,56 @@ const dropdownMaxHeight = computed(() => {
   const visibleCount = Math.min(Math.max(1, displayItems), list.length);
   const total = visibleCount * ITEM_HEIGHT[size] + (visibleCount - 1) * GAP_REM + PADDING_REM;
   return `${total}rem`;
+});
+
+/** auto 宽度模式下，选项文案变化（标签宽度随之变化）时平滑过渡触发器宽度 */
+let widthAnim: Animation | undefined;
+
+const animateTriggerWidth = () => {
+  const el = referenceRef.value;
+  if (!el || width !== 'auto') return;
+  if (widthAnim) widthAnim.cancel();
+  // 1) 捕获变更前宽度并锁定，使新文案渲染后宽度不跳变
+  const fromWidth = el.getBoundingClientRect().width;
+  animatingWidth.value = `${fromWidth}px`;
+  nextTick(() => {
+    // 2) 新文案已渲染且宽度仍锁定为 fromWidth，临时释放测量目标自然宽度
+    const prevTransition = el.style.transition;
+    el.style.transition = 'none';
+    const savedWidth = el.style.width;
+    el.style.width = 'auto';
+    const toWidth = el.getBoundingClientRect().width;
+    el.style.width = savedWidth;
+    el.style.transition = prevTransition;
+    if (Math.abs(toWidth - fromWidth) < 0.5) {
+      // 宽度无变化，无需动画，直接回到自适应
+      animatingWidth.value = undefined;
+      return;
+    }
+    // 3) 用 WAAPI 显式播放宽度过渡：不依赖 CSS 过渡的起点提交时机，
+    //    规避增长方向（如切到最宽的「线上服务器」）transition 不触发导致宽度直跳的问题
+    widthAnim = el.animate([{ width: `${fromWidth}px` }, { width: `${toWidth}px` }], {
+      duration: 150,
+      easing: 'ease',
+      fill: 'forwards',
+    });
+    // 4) 动画结束后交还 auto（toWidth 即 auto 宽度，无回弹）；
+    //    期间关闭 CSS 过渡，避免 revert 触发二次宽度过渡或回弹闪烁
+    widthAnim.onfinish = () => {
+      el.style.transition = 'none';
+      el.style.width = 'auto';
+      animatingWidth.value = undefined;
+      widthAnim?.cancel();
+      requestAnimationFrame(() => {
+        el.style.transition = '';
+      });
+    };
+  });
+};
+
+watch(displayText, () => {
+  if (width !== 'auto') return;
+  animateTriggerWidth();
 });
 
 /** 选择选项：多选切换勾选，单选写值后关闭面板 */

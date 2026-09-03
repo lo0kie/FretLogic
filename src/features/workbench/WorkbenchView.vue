@@ -7,11 +7,34 @@
         <WorkbenchCard />
       </div>
 
-      <div
-        class="no-scrollbar z-panel gap-lg pointer-events-auto absolute top-8 right-8 bottom-8 flex flex-col items-end overflow-y-auto *:shrink-0"
-      >
-        <ChordAnalysisPanel />
-        <BarrePanel />
+      <!-- 右侧卡片列：外层定位且不滚动，内层承载滚动。
+           顶部/底部渐隐层常驻在边缘，但用滚动状态控制显隐：
+           · 未滚动（scrollTop===0）时顶部 fade 隐藏 → 首卡完整可见、与指板顶对齐
+           · 上滚后顶部 fade 显示，柔化滚出内容的切口
+           · 底部 fade 仅未滚到底时显示，滚到底自动隐藏 → 末卡不被遮挡
+           列顶 top-8（32px）与指板同高，滚动时卡片最多上移到 32px，不会比指板更高 -->
+      <div class="z-panel pointer-events-auto absolute top-8 right-8 bottom-8">
+        <div
+          @scroll="onScroll"
+          class="no-scrollbar gap-lg flex h-full w-full flex-col items-end overflow-y-auto *:shrink-0"
+          ref="scrollRef"
+        >
+          <ChordAnalysisPanel />
+          <WorkbenchExportPanel />
+          <WorkbenchSettingsPanel />
+        </div>
+        <!-- 顶部滚动渐隐：仅可上滚时显示，避免未滚动时遮挡首卡 -->
+        <div
+          v-show="!atTop"
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-x-0 top-0 z-10 h-[20px] [background:linear-gradient(to_bottom,var(--bg-main),transparent)]"
+        />
+        <!-- 底部滚动渐隐：仅未滚到底时显示，滚到底时隐藏避免遮挡末卡 -->
+        <div
+          v-show="!atBottom"
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[20px] [background:linear-gradient(to_top,var(--bg-main),transparent)]"
+        />
       </div>
     </div>
 
@@ -20,8 +43,24 @@
 </template>
 
 <script lang="ts" setup>
-import BarrePanel from './BarrePanel.vue';
+import { onMounted, ref } from 'vue';
+
 import ChordAnalysisPanel from './ChordAnalysisPanel.vue';
 import WorkbenchCard from './WorkbenchCard.vue';
+import WorkbenchExportPanel from './WorkbenchExportPanel.vue';
 import WorkbenchFloatingBar from './WorkbenchFloatingBar.vue';
+import WorkbenchSettingsPanel from './WorkbenchSettingsPanel.vue';
+
+// 滚动边缘渐隐：未滚动时顶部 fade 隐藏（首卡完整可见），上滚后显示柔化切口；
+// 底部 fade 仅未滚到底时显示，滚到底隐藏（末卡不被遮挡）
+const scrollRef = ref<HTMLElement | null>(null);
+const atTop = ref(true);
+const atBottom = ref(false);
+const onScroll = () => {
+  const el = scrollRef.value;
+  if (!el) return;
+  atTop.value = el.scrollTop <= 1;
+  atBottom.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+};
+onMounted(onScroll);
 </script>

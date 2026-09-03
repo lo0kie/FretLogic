@@ -12,7 +12,7 @@
         icon="file-text"
         size="lg"
       />
-      <div v-else class="gap-xs mx-auto flex w-max max-w-[900px] min-w-full flex-col" ref="lyricsRef">
+      <div v-else class="gap-xs mx-auto flex w-max max-w-[900px] min-w-full flex-col">
         <div
           v-for="lineData in lyricsLinesWithEdges"
           v-memo="[
@@ -178,7 +178,6 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import type { DropZone } from '@/features/score-editor/composables/lyrics-drag/dropZone';
 import { useLyricsDragDrop } from '@/features/score-editor/composables/useLyricsDragDrop';
 import { useScoreLinesData } from '@/features/score-editor/composables/useScoreLinesData';
-import { useActiveExportTarget } from '@/shared/composables/useActiveExportTarget';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Chord, LineId, SlotKey } from '@/types';
@@ -196,7 +195,6 @@ const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 
 const scoreZoneRef = useTemplateRef<HTMLElement>('scoreZoneRef');
-const lyricsRef = useTemplateRef<HTMLElement>('lyricsRef');
 
 const hoveredLineKey = ref<string | null>(null);
 /** 删除行按钮的无障碍文本与悬停提示 */
@@ -314,8 +312,6 @@ const handleOpenPicker = (slotKey: SlotKey) => {
   if (isDragging.value || isSuppressingClick.value) return;
   emit('open-picker', slotKey);
 };
-
-useActiveExportTarget(lyricsRef);
 
 defineExpose({ scoreZoneRef });
 </script>

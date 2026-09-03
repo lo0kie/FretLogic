@@ -60,26 +60,16 @@
         </div>
 
         <div class="header-actions gap-xs flex shrink-0 items-center">
-          <BasePopover placement="bottom" trigger="hover">
-            <template #trigger="{ isOpen, pinToggle }">
-              <ActionButton
-                :aria-expanded="isOpen"
-                :color="isOpen ? 'primary' : 'default'"
-                :variant="isOpen ? 'subtle' : 'ghost'"
-                @click="pinToggle()"
-                aria-haspopup="menu"
-                aria-label="切换乐谱排序方式"
-                icon-only
-                title="切换乐谱排序方式"
-              >
-                <BaseIcon :name="currentSortIcon" :size="16" />
-              </ActionButton>
+          <PopoverMenu
+            :items="songSortMenuItems"
+            aria-label="切换乐谱排序方式"
+            placement="bottom"
+            title="切换乐谱排序方式"
+          >
+            <template #icon>
+              <BaseIcon :name="currentSortIcon" :size="16" />
             </template>
-
-            <template #default="{ close }">
-              <ContextMenuItems :items="songSortMenuItems" @select="item => (item.action?.(), close())" />
-            </template>
-          </BasePopover>
+          </PopoverMenu>
 
           <ActionButton
             v-tooltip="'新建乐谱'"
@@ -155,9 +145,9 @@ import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseBadge from '@/components/ui/BaseBadge.vue';
 import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
-import BasePopover from '@/components/ui/BasePopover.vue';
-import ContextMenuItems, { type ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
+import { type ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
 import type { IconName } from '@/components/ui/icons.registry';
+import PopoverMenu from '@/components/ui/PopoverMenu.vue';
 import ChordModalsContainer from '@/features/chord-library/ChordModalsContainer.vue';
 import { useChordGroupModals } from '@/features/chord-library/composables/useChordGroupModals';
 import GroupModalsContainer from '@/features/chord-library/GroupModalsContainer.vue';

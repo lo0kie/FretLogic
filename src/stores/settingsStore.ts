@@ -30,6 +30,12 @@ export const useSettingsStore = defineStore('settings', () => {
   const giteePath = useStorage(STORAGE_KEYS.GE_PATH, GITEE_SYNC_CONFIG.DEFAULT_PATH);
   const giteeBranches = useStorage(STORAGE_KEYS.GE_BRANCHES, <Array<string>>[]);
 
+  // 迁移一次性兼容：早期 Gitee 预设曾沿用 GitHub 值（lo0kie/FretLogic）且分支固定 master，
+  // useStorage 的持久化值优先于新默认，故在此把历史遗留值纠正到新预设（分支按 dev/prod 分流）
+  if (giteeOwner.value === 'lo0kie') giteeOwner.value = GITEE_SYNC_CONFIG.DEFAULT_OWNER;
+  if (giteeRepo.value === 'FretLogic') giteeRepo.value = GITEE_SYNC_CONFIG.DEFAULT_REPO;
+  if (giteeBranch.value === 'master') giteeBranch.value = GITEE_SYNC_CONFIG.DEFAULT_BRANCH;
+
   // WebDAV 同步配置（支持选择使用预设代理或自定义代理）
   const webdavServerUrl = useStorage(STORAGE_KEYS.WEBDAV_SERVER_URL, '');
   const webdavUsername = useStorage(STORAGE_KEYS.WEBDAV_USERNAME, '');
@@ -43,11 +49,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 工作台乐理显示偏好
   const workbenchChordShorthand = useStorage<boolean>(STORAGE_KEYS.WORKBENCH_CHORD_SHORTHAND, false);
-  const workbenchShowPitchNames = useStorage<boolean>(STORAGE_KEYS.WORKBENCH_SHOW_PITCH_NAMES, true);
 
   // 乐谱乐理显示偏好
   const scoreChordShorthand = useStorage<boolean>(STORAGE_KEYS.SCORE_CHORD_SHORTHAND, false);
-  const scoreShowPitchNames = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_PITCH_NAMES, true);
 
   /** 从备份包恢复同步配置（导入备份/云端拉取时调用）。分支缓存随旧配置失效。 */
   const applySyncBackup = (sync?: SyncSettingsBackup) => {
@@ -86,10 +90,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (!prefs) return;
     if (typeof prefs.workbenchChordShorthand === 'boolean')
       workbenchChordShorthand.value = prefs.workbenchChordShorthand;
-    if (typeof prefs.workbenchShowPitchNames === 'boolean')
-      workbenchShowPitchNames.value = prefs.workbenchShowPitchNames;
     if (typeof prefs.scoreChordShorthand === 'boolean') scoreChordShorthand.value = prefs.scoreChordShorthand;
-    if (typeof prefs.scoreShowPitchNames === 'boolean') scoreShowPitchNames.value = prefs.scoreShowPitchNames;
   };
 
   return {
@@ -114,9 +115,7 @@ export const useSettingsStore = defineStore('settings', () => {
     serverUrl,
     serverToken,
     workbenchChordShorthand,
-    workbenchShowPitchNames,
     scoreChordShorthand,
-    scoreShowPitchNames,
     applySyncBackup,
     applyPreferencesBackup,
   };

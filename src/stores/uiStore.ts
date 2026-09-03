@@ -1,7 +1,7 @@
 /**
  * UI store：全局 Toast 队列（含定时销毁）、侧栏开合状态与复制中标记等界面瞬时状态。
  */
-import { ref, shallowRef } from 'vue';
+import { ref } from 'vue';
 
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -15,7 +15,6 @@ export const useUiStore = defineStore('ui', () => {
   const isCopying = ref(false);
   const isLeftOpen = useStorage(STORAGE_KEYS.UI_LEFT_OPEN, true);
   const timersMap = new Map<number, ReturnType<typeof setTimeout>>();
-  const activeExportTarget = shallowRef<HTMLElement | null>(null);
 
   /** 清除所有带操作按钮（onAction）的 Toast，避免旧的行动入口叠加显示。 */
   const clearActionToasts = () => {
@@ -135,6 +134,5 @@ export const useUiStore = defineStore('ui', () => {
     removeToast,
     pauseAllTimers,
     resumeAllTimers,
-    activeExportTarget,
   };
 });

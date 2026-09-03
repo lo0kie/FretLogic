@@ -10,7 +10,7 @@ import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { buildBackupPayload } from '@/utils/core/buildBackupPayload';
 import { serializeForStorage } from '@/utils/core/common';
-import { wait } from '@/utils/score/score-export';
+import { triggerBlobDownload, wait } from '@/utils/score/score-export';
 
 /** 备份内容勾选项：和弦（含分组）/ 乐谱 / 同步配置 / 偏好设置 */
 export interface BackupSelection {
@@ -93,15 +93,11 @@ export function useImportExportService() {
     const tzOffset = now.getTimezoneOffset() * 60000;
     const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, -1);
     const dateStr = localISOTime.replace(/T/, '_').replace(/:/g, '-').split('.')[0];
-    const link = document.createElement('a');
+    // 下载逻辑与导出图一致：统一走 triggerBlobDownload（创建 URL → a.click → 延时 revoke）
     const blob = new Blob([serializeForStorage(payload)], {
       type: 'application/json',
     });
-    const objectUrl = URL.createObjectURL(blob);
-    link.href = objectUrl;
-    link.download = `FretLogic备份_${dateStr}.json`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    triggerBlobDownload(blob, `FretLogic备份_${dateStr}.json`);
     uiStore.toast.success('备份已下载');
     return true;
   };

@@ -296,8 +296,14 @@ function drawFretboard(
   const gridBottom = gridTop + fretCount * SCORE_EXPORT_CONFIG.FRET_HEIGHT;
   const gridRight = startStrX + 5 * SCORE_EXPORT_CONFIG.STRING_SPACING;
 
-  // 1. 和弦名称（顶部加粗居中，升降号采用上标形式）
-  drawFormattedChordName(ctx, x + SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH / 2, y + 13, chord.chordName, colors.TEXT);
+  // 1. 和弦名称（顶部加粗居中，升降号采用上标形式；基线与独立指板图渲染器保持一致）
+  drawFormattedChordName(
+    ctx,
+    x + SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH / 2,
+    y + SCORE_EXPORT_CONFIG.CHORD_NAME_BASELINE_Y,
+    chord.chordName,
+    colors.TEXT
+  );
 
   // 2. 空弦 / 静音标记（中性色，不使用红色）
   const markerY = y + SCORE_EXPORT_CONFIG.MARKER_CENTER_Y;

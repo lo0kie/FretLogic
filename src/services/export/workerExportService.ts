@@ -14,8 +14,8 @@ import type {
   WorkerExportPayload,
 } from '@/workers/scoreExportWorker';
 
-/** 将 Chord 模型转为 Worker 绘图所需的轻量指板实体 */
-export const extractExportChordData = (chord: Chord, shorthand = false): ExportChordData => ({
+/** 将 Chord 模型转为 Worker 绘图所需的轻量指板实体（仅本文件内部使用） */
+const extractExportChordData = (chord: Chord, shorthand = false): ExportChordData => ({
   chordName: getChordName(chord, { shorthand, useUnicode: true }),
   strings: chord.strings.map(s => [s[0], s[1]]),
   fretCount: chord.fretCount,

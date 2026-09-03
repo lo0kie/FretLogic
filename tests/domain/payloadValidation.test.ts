@@ -177,26 +177,22 @@ describe('payload validation migration matrix', () => {
       ...base,
       preferences: {
         workbenchChordShorthand: true,
-        workbenchShowPitchNames: false,
         scoreChordShorthand: false,
-        scoreShowPitchNames: true,
       },
     });
     expect(valid.isValid).toBe(true);
     expect(valid.payload?.preferences).toEqual({
       workbenchChordShorthand: true,
-      workbenchShowPitchNames: false,
       scoreChordShorthand: false,
-      scoreShowPitchNames: true,
     });
 
     // 非法值逐字段剔除，未提及字段不出现
     const partial = validateImportExportPayload({
       ...base,
-      preferences: { workbenchChordShorthand: 'yes', scoreShowPitchNames: false } as Record<string, unknown>,
+      preferences: { workbenchChordShorthand: 'yes', scoreChordShorthand: false } as Record<string, unknown>,
     });
     expect(partial.isValid).toBe(true);
-    expect(partial.payload?.preferences).toEqual({ scoreShowPitchNames: false });
+    expect(partial.payload?.preferences).toEqual({ scoreChordShorthand: false });
 
     // 整个 preferences 损坏（数组/标量）→ 丢弃字段，不影响整包
     const corrupt = validateImportExportPayload({ ...base, preferences: ['broken'] });

@@ -8,7 +8,9 @@
         'justify-start opacity-100 after:block after:h-[1.15rem] after:w-full after:shrink-0 after:content-[\'\']':
           variant === 'edge' && Boolean(chord),
         'justify-center px-[0.4rem] opacity-100 hover:bg-transparent!': variant === 'add',
-        'ml-[0.42rem]': leftChordGap,
+        'ml-[0.15rem]': leftChordGap,
+        'px-0': Boolean(chord),
+        'px-0.5': !chord,
         // 拖拽期间整行空字符槽统一撑开（isDragActive 全程恒定）：
         // 若跟随 dropZone 逐槽增缩会推动整行来回顶、产生抽动
         'is-drop-widened': !chord && isDragActive,
@@ -33,6 +35,76 @@
     ref="charBoxRef"
     role="button"
   >
+    <!-- 覆盖整个字符槽的操作层（修改 / 移动 / 删除），纵向扩展至全槽完整高度（指板 + 字符） -->
+    <div
+      v-if="chord"
+      :class="[FAST_TRANSITION_CLASS, isActive ? 'opacity-100' : 'opacity-0']"
+      class="pointer-events-none absolute inset-0 z-2 rounded-sm bg-black/35"
+    >
+      <div
+        :class="[FAST_TRANSITION_CLASS, isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0']"
+        @keydown="handleActionKeydown"
+        class="z-card absolute inset-0 flex flex-col items-stretch justify-center gap-1.5 p-2"
+        ref="actionGroupEl"
+      >
+        <ActionButton
+          v-wave
+          :aria-label="editButtonTitle"
+          :class="actionButtonTransition(0)"
+          :tabindex="-1"
+          :title="editButtonTitle"
+          @click.stop.prevent="emit('click')"
+          @pointerdown.stop
+          block
+          class="pointer-events-auto!"
+          color="primary"
+          ref="editButtonEl"
+          size="sm"
+          variant="subtle"
+        >
+          <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="pencil" />
+          <span class="font-bold">{{ editButtonLabel }}</span>
+        </ActionButton>
+        <ActionButton
+          v-wave
+          :aria-label="moveButtonTitle"
+          :class="actionButtonTransition(1)"
+          :tabindex="-1"
+          :title="moveButtonTitle"
+          @click.stop.prevent
+          @mouseup.stop.prevent
+          @pointerdown.stop.prevent="emit('copyPointerdown', $event, slotKey, chord)"
+          block
+          class="pointer-events-auto! cursor-grab active:cursor-grabbing"
+          color="success"
+          ref="copyButtonEl"
+          size="sm"
+          variant="subtle"
+        >
+          <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="grip-vertical" />
+          <span class="font-bold">{{ moveButtonLabel }}</span>
+        </ActionButton>
+        <ActionButton
+          v-wave
+          :aria-label="removeButtonTitle"
+          :class="actionButtonTransition(2)"
+          :tabindex="-1"
+          :title="removeButtonTitle"
+          @click.stop.prevent="emit('remove', slotKey)"
+          @pointerdown.stop
+          block
+          class="pointer-events-auto!"
+          color="danger"
+          ref="removeButtonEl"
+          size="sm"
+          variant="subtle"
+        >
+          <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="x" />
+          <span class="font-bold">{{ removeButtonLabel }}</span>
+        </ActionButton>
+      </div>
+    </div>
+
     <div
       :class="variant === 'edge' && chord ? 'items-start' : variant === 'add' ? 'items-center' : 'items-start'"
       class="chord-display-slot flex w-full flex-1 justify-center"
@@ -67,92 +139,14 @@
       </Transition>
       <div
         v-if="chord"
-        class="inline-fretboard-card p-xs duration-fast relative flex flex-col items-center rounded-sm bg-transparent transition-all select-none"
+        class="inline-fretboard-card py-xs duration-fast relative flex flex-col items-center rounded-sm bg-transparent px-0 transition-all select-none"
       >
-        <div
-          v-if="isVisible"
-          :class="[FAST_TRANSITION_CLASS, isActive ? 'opacity-100' : 'opacity-0']"
-          class="pointer-events-none absolute inset-0 z-2 rounded-sm bg-black/30"
-        >
-          <div
-            v-if="isVisible"
-            :class="[
-              FAST_TRANSITION_CLASS,
-              isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
-            ]"
-            @keydown="handleActionKeydown"
-            class="z-card absolute inset-0 flex flex-col items-stretch justify-center gap-1.5 p-2"
-            ref="actionGroupEl"
-          >
-            <ActionButton
-              v-wave
-              :aria-label="editButtonTitle"
-              :class="actionButtonTransition(0)"
-              :tabindex="-1"
-              :title="editButtonTitle"
-              @click.stop.prevent="emit('click')"
-              @pointerdown.stop
-              block
-              class="pointer-events-auto!"
-              color="primary"
-              ref="editButtonEl"
-              size="sm"
-              variant="subtle"
-            >
-              <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="pencil" />
-              <span class="font-bold">{{ editButtonLabel }}</span>
-            </ActionButton>
-            <ActionButton
-              v-wave
-              :aria-label="moveButtonTitle"
-              :class="actionButtonTransition(1)"
-              :tabindex="-1"
-              :title="moveButtonTitle"
-              @click.stop.prevent
-              @mouseup.stop.prevent
-              @pointerdown.stop.prevent="emit('copyPointerdown', $event, slotKey, chord)"
-              block
-              class="pointer-events-auto! cursor-grab active:cursor-grabbing"
-              color="success"
-              ref="copyButtonEl"
-              size="sm"
-              variant="subtle"
-            >
-              <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="grip-vertical" />
-              <span class="font-bold">{{ moveButtonLabel }}</span>
-            </ActionButton>
-            <ActionButton
-              v-wave
-              :aria-label="removeButtonTitle"
-              :class="actionButtonTransition(2)"
-              :tabindex="-1"
-              :title="removeButtonTitle"
-              @click.stop.prevent="emit('remove', slotKey)"
-              @pointerdown.stop
-              block
-              class="pointer-events-auto!"
-              color="danger"
-              ref="removeButtonEl"
-              size="sm"
-              variant="subtle"
-            >
-              <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="x" />
-              <span class="font-bold">{{ removeButtonLabel }}</span>
-            </ActionButton>
-          </div>
-        </div>
-        <Fretboard
-          v-if="isVisible"
+        <FretboardCanvas
           :chord
-          :chord-name-editable="false"
-          :interactive="false"
           :is-dark-mode="globalDarkMode"
-          :is-score-mode="true"
-          :ref="setFretboardMeasureRef"
-          :scale="0.25 * scoreEditor.effectiveFretboardScale"
-          fret-number-size="lg"
+          :scale="1.2 * scoreEditor.effectiveFretboardScale"
+          :shorthand="settingsStore.scoreChordShorthand"
         />
-        <div v-else :style="chord ? getCalculatedOrCachedSize(chord.fretCount) : undefined" />
       </div>
 
       <ActionButton
@@ -188,17 +182,13 @@
 </template>
 
 <script lang="ts">
-import { reactive } from 'vue';
-
 import BaseIcon from '@/components/ui/BaseIcon.vue';
-
-const fretboardSizeCache = reactive(new Map<string, { width: string; height: string }>());
 </script>
 
 <script lang="ts" setup>
-import { computed, nextTick, ref, useTemplateRef, watchEffect, type ComponentPublicInstance } from 'vue';
+import { computed, nextTick, ref, useTemplateRef } from 'vue';
 
-import Fretboard from '@/components/fretboard/Fretboard.vue';
+import FretboardCanvas from '@/components/fretboard/FretboardCanvas.vue';
 import ActionButton from '@/components/ui/ActionButton.vue';
 import {
   resolveDropAction,
@@ -208,9 +198,8 @@ import {
 import { getChordName } from '@/services/music/theory';
 import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import type { Chord, SlotKey } from '@/types';
-import { observeVisibility } from '@/utils/core/common';
-import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
 
 const props = defineProps<{
   slotKey: SlotKey;
@@ -234,7 +223,6 @@ const emit = defineEmits<{
   (e: 'copyPointerdown', event: PointerEvent, slotKey: SlotKey, chord: Chord): void;
 }>();
 
-const isVisible = ref(false);
 const isHovered = ref(false);
 const isFocused = ref(false);
 // 操作按钮组引用：作为单一可聚焦节点，方向键在其内部按钮间切换
@@ -250,7 +238,9 @@ const activeActionIndex = ref(0);
 const isActive = computed(() => (isHovered.value || isFocused.value) && !props.isDragActive);
 
 // 拖拽/焦点高亮与过渡常量
-const FOCUS_RING_SHADOW_CLASS = '!shadow-[0_0_0_2px_var(--bg-panel),0_0_0_4px_var(--color-primary)]';
+// 聚焦环与拖拽源高亮描边取值一致：值只定义在 .char-box 的 --slot-ring-shadow（见 <style>），
+// 这里与 SCSS 规则同引用该变量，避免样式表与 Tailwind 常量各存一份同值字符串
+const FOCUS_RING_SHADOW_CLASS = '!shadow-[var(--slot-ring-shadow)]';
 const FAST_TRANSITION_CLASS = 'transition-all duration-[160ms]';
 
 // 三个操作按钮的级联过渡类（完整类名需静态写出供 Tailwind 扫描）：
@@ -346,50 +336,8 @@ const moveButtonTitle = '按住拖拽：落到和弦上可交换或替换，落�
 const removeButtonLabel = '删除';
 const removeButtonTitle = '清除当前和弦';
 const scoreEditor = useScoreEditorStore();
+const settingsStore = useSettingsStore();
 const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
-
-// 所有字符槽共享同一个 IntersectionObserver（按 scrollRoot 复用），命中即停
-watchEffect(onCleanup => {
-  const el = charBoxRef.value;
-  if (!el || isVisible.value) return;
-  const stop = observeVisibility(
-    el,
-    visible => {
-      if (visible) isVisible.value = true;
-    },
-    props.scrollRoot ?? null
-  );
-  onCleanup(stop);
-});
-
-/** 当前实际渲染缩放（基础 0.25 × 全局和弦缩放） */
-const getEffectiveScale = () => 0.25 * scoreEditor.effectiveFretboardScale;
-/** 占位尺寸缓存键：品数 + 缩放保留两位小数 */
-const getCacheKey = (fretCount: number) => `${fretCount}_${getEffectiveScale().toFixed(2)}`;
-
-/** 首次渲染的指板测量真实尺寸并按品数缓存，供后续占位元素复用 */
-const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null) => {
-  if (!el || !props.chord) return;
-  const cacheKey = getCacheKey(props.chord.fretCount);
-  if (fretboardSizeCache.has(cacheKey)) return;
-  const domEl = (el as ComponentPublicInstance)?.$el ?? el;
-  if (!(domEl instanceof HTMLElement)) return;
-  const rect = domEl.getBoundingClientRect();
-  if (rect.width > 0 && rect.height > 0) {
-    fretboardSizeCache.set(cacheKey, {
-      width: `${rect.width}px`,
-      height: `${rect.height}px`,
-    });
-  }
-};
-
-/** 取缓存的指板占位尺寸；无缓存时按当前缩放计算，保证懒挂载前后布局一致 */
-const getCalculatedOrCachedSize = (fretCount: number) => {
-  const cacheKey = getCacheKey(fretCount);
-  const cached = fretboardSizeCache.get(cacheKey);
-  if (cached) return cached;
-  else return getPlaceholderSize(fretCount, getEffectiveScale(), true, true);
-};
 
 /** 槽位点击：空槽/添加槽打开 picker；有和弦的交互收敛到 hover 浮出的操作按钮 */
 const handleClick = (e: MouseEvent) => {
@@ -487,17 +435,21 @@ const ariaLabelText = computed(() => {
     margin 0.18s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
+/* 聚焦环与拖拽源高亮描边的唯一定义处：Tailwind 常量 FOCUS_RING_SHADOW_CLASS 与下方
+   .is-dragging-* 规则均引用此变量，改描边只需改这一行 */
+.char-box {
+  --slot-ring-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--color-primary);
+}
+
 /* 触摸长按等待期的按压反馈：源槽位渐显主色描边并轻微放大，提示即将进入拖拽 */
 .char-box.is-press-arming {
   box-shadow: 0 0 0 2px var(--color-primary);
   transform: scale(1.04);
 }
 
-/* 拖拽源槽位高亮外边框 */
+/* 拖拽源槽位高亮外边框（与聚焦环同描边） */
 .char-box.is-dragging-source,
 .char-box.is-dragging-copy-source {
-  box-shadow:
-    0 0 0 2px var(--bg-panel),
-    0 0 0 4px var(--color-primary) !important;
+  box-shadow: var(--slot-ring-shadow) !important;
 }
 </style>

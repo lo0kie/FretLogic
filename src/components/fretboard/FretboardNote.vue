@@ -1,16 +1,12 @@
 <template>
   <g
     :aria-label
-    :class="[
-      interactive
-        ? 'pointer-events-auto cursor-pointer outline-none [&:hover_.note-outline-ring]:opacity-100'
-        : 'pointer-events-none cursor-default outline-none',
-      {
-        '[&_.note-circle]:hidden [&_.note-mute-x]:hidden [&_.note-svg-label]:hidden': isPressed,
-      },
-    ]"
-    @click.stop="interactive && $emit('click', $event)"
-    @dblclick.prevent.stop="interactive && $emit('toggle-pitch')"
+    :class="{
+      '[&_.note-circle]:hidden [&_.note-mute-x]:hidden [&_.note-svg-label]:hidden': isPressed,
+    }"
+    @click.stop="$emit('click', $event)"
+    @dblclick.prevent.stop="$emit('toggle-pitch')"
+    class="pointer-events-auto cursor-pointer outline-none [&:hover_.note-outline-ring]:opacity-100"
     role="img"
     tabindex="-1"
   >
@@ -26,8 +22,7 @@
     />
 
     <circle
-      v-if="!isPressed && (showPitchNames || !isMuted)"
-      :class="{ 'filter-(--root-glow)': showRootStyle && !interactive }"
+      v-if="!isPressed"
       :cx="x"
       :cy="y"
       :fill="noteBgColor"
@@ -72,11 +67,10 @@
     </text>
 
     <circle
-      :class="interactive ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'"
       :cx="x"
       :cy="y"
       :r="NOTE_DISPLAY.FINGER_DOT_RADIUS"
-      class="transition-[pointer-events]"
+      class="pointer-events-auto cursor-pointer"
       fill="transparent"
     />
   </g>
@@ -99,10 +93,8 @@ const {
   isMuted = false,
   isPressed = false,
   isDarkMode = false,
-  interactive = true,
   isHovered = false,
   isFocused = false,
-  showPitchNames = true,
   ariaLabel = '',
 } = defineProps<{
   x: number;
@@ -115,10 +107,8 @@ const {
   isMuted?: boolean;
   isPressed?: boolean;
   isDarkMode?: boolean;
-  interactive?: boolean;
   isHovered?: boolean;
   isFocused?: boolean;
-  showPitchNames?: boolean;
   ariaLabel?: string;
 }>();
 
@@ -127,33 +117,15 @@ defineEmits<{
   (e: 'toggle-pitch'): void;
 }>();
 
-/** 主音强调仅在显示音名时生效；不显示音名状态下主音不强调 */
-const showRootStyle = computed(() => showPitchNames && isRoot);
+/** 主音强调 */
+const showRootStyle = computed(() => isRoot);
 
-/** 圆点半径：不显示音名时指板按品圆点为 20，空弦圈为 16；显示音名时统一为 28 */
-const dotRadius = computed(() => {
-  if (!showPitchNames) {
-    return isOpenString ? 16 : 24;
-  }
-  return NOTE_DISPLAY.FINGER_DOT_RADIUS;
-});
-
-const outlineRadius = computed(() => {
-  if (!showPitchNames) {
-    return isOpenString ? 20 : 28;
-  }
-  return NOTE_DISPLAY.FINGER_OUTLINE_RADIUS;
-});
-
-const muteXHalf = computed(() => {
-  if (isOpenString && !showPitchNames) return 12;
-  return NOTE_DISPLAY.FINGER_FONT_SIZE * 0.28;
-});
-
-const muteStrokeWidth = computed(() => {
-  if (isOpenString && !showPitchNames) return 3.5;
-  return 3;
-});
+/** 圆点半径：带描边的标记（空弦圈/静音圈）描边以路径为中心向两侧各扩 stroke/2，
+ *  需向内收缩相同量，使视觉外缘与无描边的按弦点（r=28）对齐，保证相邻标记间隙一致 */
+const dotRadius = computed(() => NOTE_DISPLAY.FINGER_DOT_RADIUS - noteStrokeWidth.value / 2);
+const outlineRadius = computed(() => NOTE_DISPLAY.FINGER_OUTLINE_RADIUS);
+const muteXHalf = computed(() => NOTE_DISPLAY.FINGER_FONT_SIZE * 0.28);
+const muteStrokeWidth = computed(() => 3);
 
 const SVG_FONT_SIZE_RATIO = 0.9;
 const svgFontSize = computed(() => NOTE_DISPLAY.FINGER_FONT_SIZE * SVG_FONT_SIZE_RATIO);
@@ -166,15 +138,12 @@ const hoverFillColor = computed(() => 'var(--fb-hover)');
 const noteBgColor = computed(() => {
   if (isOpenString) {
     if (isMuted) {
-      return !showPitchNames ? 'transparent' : isDarkMode ? '#351f20' : '#ffefee';
+      return isDarkMode ? '#351f20' : '#ffefee';
     }
     if (showRootStyle.value) {
       return isDarkMode ? FRETBOARD_COLORS.openRootBgDark : FRETBOARD_COLORS.openRootBgLight;
     }
-    return !showPitchNames ? 'transparent' : isDarkMode ? '#182737' : '#ebf4ff';
-  }
-  if (!showPitchNames) {
-    return 'var(--fb-line)';
+    return isDarkMode ? '#182737' : '#ebf4ff';
   }
   return getFingerColor(showRootStyle.value, isDarkMode);
 });
@@ -182,33 +151,23 @@ const noteBgColor = computed(() => {
 const noteStrokeColor = computed(() => {
   if (isOpenString) {
     if (isMuted) {
-      return !showPitchNames ? 'transparent' : isDarkMode ? '#762b28' : '#ffc4c1';
+      return isDarkMode ? '#762b28' : '#ffc4c1';
     }
     if (showRootStyle.value) {
       return isDarkMode ? FRETBOARD_COLORS.openRootBorderDark : FRETBOARD_COLORS.openRootBorderLight;
     }
-    return !showPitchNames ? 'var(--fb-line)' : isDarkMode ? '#144477' : '#b3d7ff';
+    return isDarkMode ? '#144477' : '#b3d7ff';
   }
   return 'transparent';
 });
 
-const noteStrokeWidth = computed(() => {
-  if (isOpenString) {
-    if (!showPitchNames && isMuted) return 0;
-    return 2;
-  }
-  return 0;
-});
-
-const muteStrokeColor = computed(() => {
-  if (!showPitchNames) return 'var(--fb-line)';
-  return 'var(--color-danger)';
-});
+const noteStrokeWidth = computed(() => (isOpenString ? 2 : 0));
+const muteStrokeColor = computed(() => 'var(--color-danger)');
 
 const noteRingColor = computed(() => {
   if (showRootStyle.value) return 'var(--color-warning)';
   if (isOpenString && isMuted) {
-    return !showPitchNames ? 'var(--fb-line)' : 'var(--color-danger)';
+    return 'var(--color-danger)';
   }
   return 'var(--color-primary)';
 });

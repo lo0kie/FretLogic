@@ -1,20 +1,18 @@
 <template>
   <div
     class="bg-bg-panel/90 border-glass-border shadow-panel py-xl px-2xl duration-slow ease-sidebar hover:border-border-base pointer-events-auto relative flex shrink-0 flex-col items-center justify-evenly rounded-md border backdrop-blur-lg transition-all hover:shadow-lg"
-    ref="cardRef"
   >
     <div class="z-base relative flex w-full shrink-0 justify-center">
       <Fretboard
         :chord="editorStore.draftChord"
-        :interactive="true"
         :is-dark-mode="globalDarkMode"
         :scale="1.0"
+        @update:barres="handleBarresChange"
         @update:capo="handleCapoUpdate"
         @update:chord-name="handleChordNameChange"
         @update:name-segments="handleNameSegmentsChange"
         @update:root-string-index="handleRootStringChange"
         @update:strings="handleStringsChange"
-        chord-name-editable
         chord-name-font-size="lg"
       />
     </div>
@@ -22,20 +20,14 @@
 </template>
 
 <script lang="ts" setup>
-import { useTemplateRef } from 'vue';
-
 import Fretboard from '@/components/fretboard/Fretboard.vue';
 import { nameToSegments } from '@/services/music/theory';
-import { useActiveExportTarget } from '@/shared/composables/useActiveExportTarget';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { globalDarkMode } from '@/stores/globalState';
-import type { ChordNameSegments, GuitarStringsModel, StringIndex } from '@/types';
+import type { BarreEntity, ChordNameSegments, GuitarStringsModel, StringIndex } from '@/types';
 import { toCapo, toStringIndex } from '@/utils/music/chord-fretboard';
 
 const editorStore = useChordEditorStore();
-const cardRef = useTemplateRef<HTMLElement>('cardRef');
-
-useActiveExportTarget(cardRef);
 
 /** 任一编辑操作都会把草稿标记为「创建中」，仅当非编辑态时生效 */
 const markCreating = () => {
@@ -74,6 +66,12 @@ const handleChordNameChange = (name: string) => {
 /** 用户编辑音名段后写入草稿 */
 const handleNameSegmentsChange = (segments: ChordNameSegments | null) => {
   editorStore.draftChord.nameSegments = segments;
+  markCreating();
+};
+
+/** 用户在指板上点击横按切换标记后同步到草稿 */
+const handleBarresChange = (barres: BarreEntity[] | undefined) => {
+  editorStore.setBarres(barres);
   markCreating();
 };
 </script>

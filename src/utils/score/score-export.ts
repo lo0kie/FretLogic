@@ -1,9 +1,5 @@
-import type { Options } from 'html-to-image/lib/types';
-
 import { computeChordFingerprint } from '@/services/music/theory';
-import { globalDarkMode } from '@/stores/globalState';
 import type { Chord, SlotKey } from '@/types';
-import { SCORE_EXPORT_CONFIG } from '@/utils/core/constants';
 import { plainToChordMap } from '@/utils/score/chordSlots';
 import { charKey, chordSlotKey, collectEdgeChordIds } from '@/utils/score/scoreModel';
 
@@ -131,95 +127,6 @@ export function clearLyricsLineCharsCache() {
   prevCharsByLineId.clear();
   prevEdgeChordsCache.clear();
 }
-
-// ===== domExporter: DOM → 图片导出 =====
-
-export interface ExportOptions {
-  width?: number;
-  height?: number;
-  backgroundColor?: string;
-  isTransparent?: boolean;
-  style?: Record<string, string>;
-  filter?: (node: Node) => boolean;
-  pixelRatio?: number;
-}
-
-/** 按导出元素面积选择画布像素比：超大面积降为 1.5，其余 2.5，避免超尺寸画布。 */
-const getCanvasPixelRatio = (el: HTMLElement): number => {
-  const area = el.scrollWidth * el.scrollHeight;
-  if (area > 8_000_000) return 1.5;
-
-  return 2.5;
-};
-
-/** 返回导出图的默认背景色（跟随当前明暗主题）。 */
-const getDOMBgColor = (): string => {
-  const isDark = globalDarkMode.value;
-  return isDark ? SCORE_EXPORT_CONFIG.THEME.DARK.BG : SCORE_EXPORT_CONFIG.THEME.LIGHT.BG;
-};
-
-let fontsReadyPromise: Promise<void> | null = null;
-
-/** 等待字体加载完成再渲染；首次超过 1.5s 超时放行，单例缓存结果避免多页重复等待。 */
-export const waitForFontsReady = async (): Promise<void> => {
-  if (typeof document === 'undefined' || !document.fonts) return;
-  fontsReadyPromise ??= Promise.race([
-    document.fonts.ready.then(() => {}),
-    new Promise<void>(resolve => setTimeout(resolve, 1500)),
-  ]);
-  await fontsReadyPromise;
-};
-
-/** 让出主线程微片（宏任务调度），确保事件循环有机会处理 UI 交互、重绘与进度条动画 */
-export const yieldMainThread = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
-
-/** 组装 html-to-image 的渲染参数：处理透明背景、尺寸、像素比，并剥离阴影/边框等导出干扰样式。 */
-const buildHtmlToImageOptions = (el: HTMLElement, exportOptions: ExportOptions): Options => {
-  let defaultBgColor: string | undefined = getDOMBgColor();
-  let defaultStyle: Record<string, string> = {};
-  if (exportOptions.isTransparent) {
-    defaultBgColor = undefined;
-    defaultStyle = {
-      backgroundColor: 'transparent',
-      backgroundImage: 'none',
-    };
-  }
-  const width = exportOptions.width;
-  const height = exportOptions.height;
-  const backgroundColor = exportOptions.backgroundColor ?? defaultBgColor;
-  const filter = exportOptions.filter;
-  return {
-    quality: 0.95,
-    pixelRatio: exportOptions.pixelRatio ?? getCanvasPixelRatio(el),
-    cacheBust: false,
-    ...(width !== undefined ? { width } : {}),
-    ...(height !== undefined ? { height } : {}),
-    ...(backgroundColor !== undefined ? { backgroundColor } : {}),
-    style: {
-      ...defaultStyle,
-      ...exportOptions.style,
-      transform: exportOptions.style?.['transform'] ?? 'none',
-      borderRadius: '0',
-      borderColor: 'transparent',
-      borderWidth: '0',
-      boxShadow: 'none',
-      border: 'none',
-    },
-    ...(filter !== undefined ? { filter } : {}),
-  };
-};
-
-/** 将 DOM 元素渲染为图片 Blob（html-to-image 按需动态加载，导出前等待字体就绪）。 */
-export const renderElementToBlob = async (el: HTMLElement, exportOptions: ExportOptions = {}): Promise<Blob> => {
-  const htmlToImage = await import('html-to-image');
-  const finalOptions = buildHtmlToImageOptions(el, exportOptions);
-  await waitForFontsReady();
-  const blob = await htmlToImage.toBlob(el, finalOptions);
-  if (!blob) {
-    throw new Error('Blob 图片数据生成失败');
-  }
-  return blob;
-};
 
 /** Canvas 转 Blob 的 Promise 封装。 */
 export const canvasToBlob = (canvas: HTMLCanvasElement, type = 'image/png', quality = 0.95): Promise<Blob> =>

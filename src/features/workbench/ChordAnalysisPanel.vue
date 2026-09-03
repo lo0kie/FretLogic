@@ -1,65 +1,32 @@
 <template>
-  <div
-    :class="effectiveExpanded ? 'w-[19rem] min-w-[19rem]' : 'w-[14rem] min-w-[14rem]'"
-    class="duration-slow ease-sidebar transition-[width,min-width]"
+  <WorkbenchPanel
+    :has-content="hasContent"
+    :storage-key="STORAGE_KEYS.WORKBENCH_CHORD_ANALYSIS_COLLAPSED"
+    icon="sparkles"
+    mode-aria-label="和弦分析面板行为"
+    title="和弦分析"
   >
-    <div
-      class="bg-bg-panel border-glass-border z-panel @container pointer-events-auto relative box-border flex h-auto w-full flex-col overflow-hidden rounded-lg border p-3"
-    >
-      <div
-        :class="effectiveExpanded ? 'border-border-light pb-1.5' : 'border-transparent pb-0'"
-        class="duration-slow ease-sidebar flex shrink-0 items-center justify-between gap-2 border-b transition-[border-color,padding-bottom]"
-      >
-        <div class="-ml-1 flex items-center gap-1.5 py-0.5 pr-1.5 pl-1">
-          <div class="bg-tint-primary-88 text-primary flex h-5 w-5 shrink-0 items-center justify-center rounded-md">
-            <BaseIcon :size="13" :stroke-width="2.5" name="sparkles" />
-          </div>
-          <span class="text-text-title text-xs font-extrabold tracking-tight break-keep">和弦分析</span>
+    <template #default="{ effectiveExpanded }">
+      <Transition mode="out-in">
+        <div v-if="hasNotes" class="pt-2" key="content">
+          <ChordAnalysisContent
+            :active-chord-name="getChordName(editorStore.draftChord)"
+            :candidates="analysis.candidates"
+            :notes="analysis.notes"
+            @select-candidate="handleSelectCandidate"
+          />
         </div>
-
-        <!-- 面板行为：三态单选（跟随音符 / 始终展开 / 始终收起），位于 header 右侧，始终可见 -->
-        <BaseSegmentedControl
-          v-model="mode"
-          :options="PANEL_MODE_LABEL"
-          aria-label="和弦分析面板行为"
-          compacted
-          size="sm"
-        />
-      </div>
-
-      <!-- 内容区高度动画：测量内容真实高度写入 height 并过渡。
-           覆盖展开/收起以及内容自身尺寸变化（音符增减、候选徽标换行等）——
-           grid-template-rows 0fr↔1fr 只能处理显示/隐藏，内容尺寸变化时行高恒为 1fr 不会触发过渡 -->
-      <div v-auto-height="effectiveExpanded" class="duration-base ease-sidebar overflow-hidden transition-[height]">
-        <!-- 被测量内容宽度始终锁定为展开态内容区宽度（19rem - 卡片左右内边距 p-3 共 1.5rem），
-             宽度动画期间不随面板伸缩而重排/压窄 → 高度稳定、不抖动；
-             分析面板内容为流体布局，若按收起态 12.5rem 渲染会被挤压变形，故始终按展开宽度渲染、
-             靠外层 overflow-hidden 裁切。横按面板则额外用 flex justify-center 让指板居中、不漂移 -->
-        <div class="w-[calc(19rem-1.5rem)]">
-          <Transition mode="out-in">
-            <div v-if="hasNotes" class="pt-2" key="content">
-              <ChordAnalysisContent
-                :active-chord-name="getChordName(editorStore.draftChord)"
-                :candidates="analysis.candidates"
-                :notes="analysis.notes"
-                @select-candidate="handleSelectCandidate"
-              />
-            </div>
-            <p v-else-if="effectiveExpanded" class="form-hint pt-2" key="empty">
-              在指板上按出音符后，这里会显示和弦名称与候选分析。
-            </p>
-          </Transition>
-        </div>
-      </div>
-    </div>
-  </div>
+        <p v-else-if="effectiveExpanded" class="form-hint pt-2" key="empty">
+          在指板上按出音符后，这里会显示和弦名称与候选分析。
+        </p>
+      </Transition>
+    </template>
+  </WorkbenchPanel>
 </template>
 
 <script lang="ts" setup>
 import { computed } from 'vue';
 
-import BaseIcon from '@/components/ui/BaseIcon.vue';
-import BaseSegmentedControl from '@/components/ui/BaseSegmentedControl.vue';
 import { analyzeChordGraph } from '@/services/music/chordEngine';
 import {
   calcPitchIndex,
@@ -75,7 +42,7 @@ import { STORAGE_KEYS } from '@/utils/core/constants';
 import { toStringIndex } from '@/utils/music/chord-fretboard';
 
 import ChordAnalysisContent, { type RenderNoteItem } from './ChordAnalysisContent.vue';
-import { PANEL_MODE_LABEL, usePanelMode } from './composables/usePanelMode';
+import WorkbenchPanel from './WorkbenchPanel.vue';
 
 const editorStore = useChordEditorStore();
 
@@ -151,7 +118,8 @@ const analysis = computed(() => {
 /** 有按音（auto 模式的展开依据）：分析图存在即代表至少一个按音 */
 const hasNotes = computed(() => analysis.value.notes.length > 0);
 
-const { mode, effectiveExpanded } = usePanelMode(STORAGE_KEYS.WORKBENCH_CHORD_ANALYSIS_COLLAPSED, () => hasNotes.value);
+/** auto 模式的展开依据：有按音（分析图存在即代表至少一个按音） */
+const hasContent = () => hasNotes.value;
 
 /** 候选和弦是否已被选中（与当前草稿名一致，含音名段序列等价） */
 const isCandidateSelected = (candidate: CandidateResult): boolean => {

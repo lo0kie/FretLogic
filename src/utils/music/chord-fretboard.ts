@@ -1,6 +1,6 @@
 import { nameToSegments, Tuning } from '@/services/music/theory';
 import type { BarreEntity, BarreFret, Capo, Chord, GuitarStringEntity, GuitarStringsModel, StringIndex } from '@/types';
-import { CANVAS_CONFIG, FRETBOARD_COLORS, FRETBOARD_SCALE_MAP } from '@/utils/core/constants';
+import { FRETBOARD_COLORS } from '@/utils/core/constants';
 
 import { createLruCache } from '../core/lruCache';
 
@@ -136,6 +136,64 @@ const normalizeBarres = (barres: unknown): BarreEntity[] | undefined => {
 };
 
 /**
+ * 规范化并合并同一个和弦内的横按列表：
+ * 1. 过滤物理无效横按（isBarreStillValid 校验）
+ * 2. 吸收包含关系：同一个品位上，若大横按完全覆盖了小横按，小横按被合并吸收
+ * 3. 连通合并：同一个品位上，若两个横按重叠或首尾相接且中间连通，合并为一个大横按
+ */
+export const normalizeAndMergeBarres = (
+  barres: BarreEntity[] | undefined,
+  strings: GuitarStringsModel
+): BarreEntity[] | undefined => {
+  if (!barres || barres.length === 0) return undefined;
+
+  // 1. 基础有效性过滤
+  const valid = barres.filter(b => isBarreStillValid(strings, b));
+  if (valid.length === 0) return undefined;
+
+  // 2. 按品位分组
+  const byFret = new Map<number, BarreEntity[]>();
+  for (const b of valid) {
+    const list = byFret.get(b.fret) ?? [];
+    list.push({ ...b });
+    byFret.set(b.fret, list);
+  }
+
+  const result: BarreEntity[] = [];
+
+  for (const [fret, list] of byFret.entries()) {
+    // 起始弦升序，终止弦降序（跨度大的优先合并）
+    list.sort((a, b) => a.fromString - b.fromString || b.toString - a.toString);
+
+    const mergedForFret: BarreEntity[] = [];
+    for (const item of list) {
+      if (mergedForFret.length === 0) {
+        mergedForFret.push(item);
+        continue;
+      }
+
+      const prev = mergedForFret[mergedForFret.length - 1]!;
+
+      // 若 prev 已完全覆盖 item（例如 prev 是 0..5，item 是 0..2 或 4..5）
+      if (prev.fromString <= item.fromString && prev.toString >= item.toString) {
+        continue;
+      }
+
+      // 若 item 与 prev 重叠或首尾相接，且两段之间可连通覆盖
+      if (item.fromString <= prev.toString + 1 && canBarreCover(strings, prev.fromString, item.toString, fret)) {
+        prev.toString = Math.max(prev.toString, item.toString) as StringIndex;
+      } else {
+        mergedForFret.push(item);
+      }
+    }
+
+    result.push(...mergedForFret);
+  }
+
+  return result.length > 0 ? result : undefined;
+};
+
+/**
  * 和弦实体归一化：迁移旧数据结构并修复非法字段。
  * 覆盖：strings 对象数组 → 二维数组、弦级 isRoot → 单点 rootStringIndex（含有效性校验）、
  * 旧字段（isInverted/fingerprint/chordName）清理、横按合法性过滤、chordName → nameSegments 迁移。
@@ -187,10 +245,9 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
     delete legacyChord.fingerprint;
   }
 
-  // 横按规范化：过滤非法条目与物理非法项；未变化时不触发迁移
+  // 横按规范化：过滤非法条目与物理非法项，合并重叠与包含关系
   const rawBarres = normalizeBarres(chord.barres);
-  const validBarres = rawBarres?.filter(b => isBarreStillValid(strings, b));
-  const finalBarres = validBarres && validBarres.length > 0 ? validBarres : undefined;
+  const finalBarres = normalizeAndMergeBarres(rawBarres, strings);
 
   const barresChanged = JSON.stringify(chord.barres ?? undefined) !== JSON.stringify(finalBarres);
 
@@ -239,33 +296,4 @@ export const getFingerColor = (isRoot: boolean, isDarkMode: boolean): string => 
 /** 指板圆点文字颜色（仅暗色主题下的根音需要高亮文字）。 */
 export const getFingerTextColor = (isRoot: boolean, isDarkMode: boolean): string => {
   return isRoot && isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
-};
-
-const placeholderSizeCache = createLruCache<{ width: string; height: string }>(32);
-
-/** 计算指板占位尺寸（px 字符串），随品位数/缩放/展示区开关变化；结果按参数组合 LRU 缓存。 */
-export const getPlaceholderSize = (
-  fretCount: number,
-  customScale = 1.0,
-  showChordName = true,
-  showOpenStrings = true
-) => {
-  const scaleKey = Math.round(customScale * 1000);
-  const cacheKey = `${fretCount}_${scaleKey}_${showChordName ? 1 : 0}_${showOpenStrings ? 1 : 0}`;
-
-  const cached = placeholderSizeCache.get(cacheKey);
-  if (cached) return cached;
-
-  const topOffset =
-    (showChordName ? CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT : 0) + (showOpenStrings ? CANVAS_CONFIG.OFFSET_Y_TOP : 16);
-  const rawHeight = topOffset + fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM;
-  const fretboardScale = (FRETBOARD_SCALE_MAP[fretCount] ?? 1.0) * customScale;
-
-  const size = {
-    width: `${CANVAS_CONFIG.BOARD_WIDTH * fretboardScale}px`,
-    height: `${rawHeight * fretboardScale}px`,
-  };
-
-  placeholderSizeCache.set(cacheKey, size);
-  return size;
 };
