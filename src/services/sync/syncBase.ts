@@ -1,5 +1,6 @@
-import { validateImportExportPayload } from '@/services/validation/payload';
+import { parseAndValidatePayload } from '@/services/validation/payload';
 import type { ImportExportPayload } from '@/types';
+import { base64DecodeUtf8 } from '@/utils/core/common';
 
 import { SyncError } from './provider';
 
@@ -16,18 +17,51 @@ export interface SyncBaseDeps {
   buildUrl?: (url: string) => string;
   /** 网络/CORS 模糊错误的细分类别（默认全部归为 NETWORK） */
   classifyNetworkError?: (err: unknown) => SyncError;
-  /** 从响应体读取原始字符串：GitHub 走 base64 解码，WebDAV 走纯文本 */
-  readRaw: (response: Response) => Promise<string>;
-  timeoutMs?: number;
+  /** 从响应体读取原始字符串：GitHub/Gitee 走 base64 信封解码，其余默认纯文本 */
+  readRaw?: (response: Response) => Promise<string>;
 }
+
+/** 同步请求统一超时（毫秒）：各 provider 不再各自声明，直接使用该默认值。 */
+export const SYNC_TIMEOUT_MS = 15000;
+
+/** 同步提交信息模板（GitHub / Gitee 共用，带本地时间戳便于区分提交） */
+export const buildSyncCommitMessage = (): string => `Auto sync fret-logic data: ${new Date().toLocaleString()}`;
+
+/**
+ * GitHub / Gitee 共用的 base64 信封解码：解析 {content} → 去换行 → base64 解码。
+ * 内容缺失时抛 INVALID_CLOUD_DATA，避免各自 readRaw 各写一份逐字相同的实现。
+ */
+export const decodeBase64Envelope = async (response: Response): Promise<string> => {
+  const body = await response.json();
+  if (!body.content) throw new SyncError('INVALID_CLOUD_DATA', '云端文件内容为空');
+  return base64DecodeUtf8(String(body.content).replace(/\n/g, ''));
+};
+
+/**
+ * 提取错误响应中的说明文字（{"message": ...} 或 {"error": ...}，message 优先），
+ * 用于区分 401 是令牌无效还是权限不足等。返回纯文本（不带标点前缀），
+ * 由各调用方按自己的文案格式拼接（Gitee 用「：」、自建服务器用「 (…)」）；截断至 120 字符。
+ */
+export const extractApiErrorDetail = async (response: Response): Promise<string> => {
+  try {
+    const body = (await response.json()) as { message?: unknown; error?: unknown };
+    const detail = body.message ?? body.error;
+    if (typeof detail === 'string' && detail) return detail.slice(0, 120);
+    return '';
+  } catch {
+    return '';
+  }
+};
 
 /** 创建共享基类实例：返回统一的请求函数与响应体解码校验函数，差异点由 deps 注入。 */
 export function createSyncProviderBase(deps: SyncBaseDeps) {
-  const TIMEOUT_MS = deps.timeoutMs ?? 15000;
+  const TIMEOUT_MS = SYNC_TIMEOUT_MS;
   const buildUrl = deps.buildUrl ?? ((url: string) => url);
   const classifyNetworkError =
     deps.classifyNetworkError ??
     ((err: unknown) => new SyncError('NETWORK', err instanceof Error ? err.message : '网络请求失败'));
+  /** 默认按纯文本读取响应体（server / WebDAV 无需注入） */
+  const readRaw = deps.readRaw ?? (async (response: Response) => response.text());
 
   /** 发起请求：默认 GET 地址可延迟求值；超时中断映射为 TIMEOUT，网络错误按 deps 细分类别。 */
   const request = async (init: RequestInit, url?: string): Promise<Response> => {
@@ -50,17 +84,16 @@ export function createSyncProviderBase(deps: SyncBaseDeps) {
     }
   };
 
-  /** 读取响应原文并解析为 JSON，再经导入校验；JSON 或校验失败均抛 INVALID_CLOUD_DATA。 */
+  /** 读取响应原文并解析为 JSON，再经导入校验；解析或校验失败均抛 INVALID_CLOUD_DATA。 */
   const decodePayload = async (response: Response): Promise<ImportExportPayload> => {
-    const raw = await deps.readRaw(response);
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
+    const result = parseAndValidatePayload(await readRaw(response));
+    if (result.error === 'EMPTY') {
+      throw new SyncError('INVALID_CLOUD_DATA', '云端数据为空');
+    }
+    if (result.error === 'INVALID_JSON') {
       throw new SyncError('INVALID_CLOUD_DATA', '云端数据不是合法的 JSON');
     }
-    const result = validateImportExportPayload(parsed);
-    if (!result.isValid || !result.payload) {
+    if (result.error === 'INVALID_SCHEMA' || !result.payload) {
       throw new SyncError('INVALID_CLOUD_DATA', '云端数据格式校验失败');
     }
     return result.payload;

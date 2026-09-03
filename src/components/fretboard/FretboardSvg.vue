@@ -39,8 +39,8 @@
           @pointermove.stop
           class="group duration-fast pointer-events-auto relative flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap transition-[background-color,border-color,box-shadow]"
         >
-          <BaseIcon v-if="displayBubbleBarre.isMarked" :size="12" :stroke-width="2.5" name="check" />
-          <BaseIcon v-else :size="12" :stroke-width="2.5" name="plus" />
+          <BaseIcon v-if="displayBubbleBarre.isMarked" :stroke-width="2.5" name="check" size="xs" />
+          <BaseIcon v-else :stroke-width="2.5" name="plus" size="xs" />
           <span>{{ displayBubbleBarre.isMarked ? '取消标记' : '标记为横按' }}</span>
 
           <!-- 直接复用项目统一的 buildFloatingArrowStyle 箭头组件与样式 -->
@@ -177,7 +177,7 @@ import { computed, onBeforeUnmount, ref, watch, type CSSProperties } from 'vue';
 import BaseIcon from '@/components/ui/BaseIcon.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/services/music/theory';
 import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/types';
-import { CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '@/utils/core/constants';
+import { BARRE_ARROW_TRANSITION_MS, CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '@/utils/core/constants';
 import { computeBarreCandidates, isBarreStillValid } from '@/utils/music/chord-fretboard';
 import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
 
@@ -470,7 +470,7 @@ const barreArrowStyle = computed<CSSProperties>(() => {
   return {
     ...base,
     left: `calc(50% - ${size / 2}px)`,
-    transition: 'background-color 150ms ease, border-color 150ms ease',
+    transition: `background-color ${BARRE_ARROW_TRANSITION_MS}ms ease, border-color ${BARRE_ARROW_TRANSITION_MS}ms ease`,
   };
 });
 
@@ -539,12 +539,14 @@ const showEmptyFocusRing = computed(() => {
 });
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
+@use '@/assets/tokens' as *;
+
 .barre-bubble-transition-enter-active,
 .barre-bubble-transition-leave-active {
   transition:
-    opacity 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
-    transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1);
+    opacity $duration-base $bezier-standard,
+    transform $duration-base $bezier-standard;
   will-change: opacity, transform;
 }
 

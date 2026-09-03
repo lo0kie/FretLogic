@@ -38,11 +38,11 @@
               <div class="gap-sm flex min-w-0 flex-1 items-center" title="点击折叠/展开分组">
                 <BaseIcon
                   :class="{ '-rotate-90': !isGroupContentOpen(group) }"
-                  :size="14"
                   :stroke-width="2.5"
                   aria-hidden="true"
                   class="text-text-disabled duration-fast group-hover/row:text-text-title shrink-0 transition-transform"
                   name="chevron-down"
+                  size="sm"
                 />
                 <div v-marquee>
                   <span class="text-text-title text-xs font-bold whitespace-nowrap">
@@ -107,7 +107,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, type ComponentPublicInstance } from 'vue';
+import { computed, type ComponentPublicInstance } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 
 import BaseBadge from '@/components/ui/BaseBadge.vue';
@@ -217,27 +217,14 @@ const handleLocalDeleteChord = (chord: Chord) => {
   if (isEditingCurrent) editorStore.resetEditor();
 };
 
-const groupMenuItemsMap = new Map<string, ContextMenuItem[]>();
-// 签名需包含组内和弦数，否则增删和弦后禁用态不会刷新
-const groupIdsSignature = computed(() =>
-  chordStore.groups.map(g => `${g.id}:${chordStore.groupChordMap.get(g.id)?.length ?? 0}`).join('\u0000')
-);
-watch(groupIdsSignature, () => groupMenuItemsMap.clear());
-
-/** 按 id 实时查找分组（菜单项被缓存后仍能取到最新对象，避免闭包陈旧引用） */
-const resolveGroup = (groupId: string): Group | null => chordStore.groups.find(g => g.id === groupId) ?? null;
-
-/** 生成分组右键菜单项（重命名/排序/删除），按分组 id 缓存避免重复创建 */
+// 分组右键菜单项：每次直接构建（仅 3-4 项），不缓存
 const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
-  const cached = groupMenuItemsMap.get(group.id);
-  if (cached) return cached;
   const items: ContextMenuItem[] = [
     {
       label: '修改名称',
       icon: 'square-pen',
       action: () => {
-        const g = resolveGroup(group.id);
-        if (g) emit('open-rename', g);
+        emit('open-rename', group);
       },
     },
     {
@@ -245,8 +232,7 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
       icon: 'arrow-up-down',
       disabled: getGroupChordsCount(group.id) === 0,
       action: () => {
-        const g = resolveGroup(group.id);
-        if (g) emit('open-sort', g);
+        emit('open-sort', group);
       },
     },
     {
@@ -254,12 +240,10 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
       icon: 'trash-2',
       danger: true,
       action: () => {
-        const g = resolveGroup(group.id);
-        if (g) emit('open-delete', g);
+        emit('open-delete', group);
       },
     },
   ];
-  groupMenuItemsMap.set(group.id, items);
   return items;
 };
 </script>

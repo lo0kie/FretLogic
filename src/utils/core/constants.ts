@@ -473,6 +473,20 @@ export const CONTEXT_MENU_REPOSITION_DURATION_MS = 80;
 /** 右键菜单换位动画缓动（与 tokens.scss 的 $bezier-standard 一致） */
 export const CONTEXT_MENU_REPOSITION_EASING = 'cubic-bezier(0.25, 0.1, 0.25, 1)';
 
+// ===================== 导出 / 预览微调 =====================
+/** 触发 Blob 下载后延迟释放对象 URL 的时间（ms，score-export 使用） */
+export const URL_REVOKE_DELAY_MS = 1000;
+/** 乐谱预览 A4 分页重新生成的防抖间隔（ms） */
+export const SCORE_PREVIEW_DEBOUNCE_MS = 150;
+
+// ===================== 浮层默认延时 =====================
+/** Popover 悬停关闭默认延迟（ms） */
+export const POPOVER_HOVER_CLOSE_DELAY_MS = 150;
+
+// ===================== 和弦槽位 / 横按交互 =====================
+/** 横按提示箭头颜色过渡时长（ms，FretboardSvg 计算样式） */
+export const BARRE_ARROW_TRANSITION_MS = 150;
+
 // ===================== 主题配色 =====================
 /** 指板配色（明暗双主题） */
 export const FRETBOARD_COLORS = {

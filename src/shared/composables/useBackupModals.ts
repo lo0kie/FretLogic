@@ -1,26 +1,25 @@
-import { computed, reactive } from 'vue';
+import { computed } from 'vue';
 
 import type { BackupSelection } from '@/shared/composables/useImportExportService';
 import { FULL_BACKUP_SELECTION, useImportExportService } from '@/shared/composables/useImportExportService';
+import { useModalController } from '@/shared/composables/useModalController';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 
 /** 备份导入/导出弹窗的模块级共享状态：保证任意组件取用的都是同一份开关与导入数据 */
-const modals = reactive({
-  export: false,
-  import: false,
-});
-
-const modalData = reactive({
-  exportSelection: { ...FULL_BACKUP_SELECTION } as BackupSelection,
-  importSelection: { ...FULL_BACKUP_SELECTION } as BackupSelection,
-  /** 解析成功的备份包（导入确认时应用） */
-  parsedPayload: null as ImportExportPayload | null,
-  fileName: '',
-  isParsing: false,
-});
+const { modals, modalData, open, close } = useModalController(
+  { export: false, import: false },
+  {
+    exportSelection: { ...FULL_BACKUP_SELECTION } as BackupSelection,
+    importSelection: { ...FULL_BACKUP_SELECTION } as BackupSelection,
+    /** 解析成功的备份包（导入确认时应用） */
+    parsedPayload: null as ImportExportPayload | null,
+    fileName: '',
+    isParsing: false,
+  }
+);
 
 /**
  * 备份导入/导出弹窗状态：
@@ -106,8 +105,7 @@ export function useBackupModals() {
   /** 打开导出弹窗，默认勾选全部本地可用类别 */
   const openExport = () => {
     // 默认勾选全部本地可用的类别（无数据的类别不勾选且禁用）
-    modalData.exportSelection = { ...exportAvailability.value };
-    modals.export = true;
+    open('export', { exportSelection: { ...exportAvailability.value } });
   };
 
   /** header-extra 全选：导出面板在全部可用类别间切换 */
@@ -122,16 +120,17 @@ export function useBackupModals() {
 
   /** 直接以载荷打开导入勾选面板（用于云端拉取、扫描等非文件流入口） */
   const openImportWithPayload = (payload: ImportExportPayload, fileName = '云端同步数据') => {
-    modalData.parsedPayload = payload;
-    modalData.fileName = fileName;
     const availability = importAvailability.value;
-    modalData.importSelection = {
-      chords: availability.chords,
-      songs: availability.songs,
-      syncSettings: availability.syncSettings,
-      preferences: availability.preferences,
-    };
-    modals.import = true;
+    open('import', {
+      parsedPayload: payload,
+      fileName,
+      importSelection: {
+        chords: availability.chords,
+        songs: availability.songs,
+        syncSettings: availability.syncSettings,
+        preferences: availability.preferences,
+      },
+    });
   };
 
   /** 文件选择入口：解析成功后打开导入勾选面板（失败已 toast，静默返回） */
@@ -152,7 +151,7 @@ export function useBackupModals() {
   const handleExportConfirm = () => {
     // 导出失败（数据损坏/无可导出内容）时保持弹窗打开，让用户调整勾选
     if (!ioService.triggerFullExport(modalData.exportSelection)) return;
-    modals.export = false;
+    close('export');
   };
 
   /** 确认导入：按勾选把备份包覆盖写入本地 */
@@ -160,11 +159,11 @@ export function useBackupModals() {
     const payload = modalData.parsedPayload;
     if (!payload) {
       uiStore.toast.error('备份包未就绪，请重新选择文件');
-      modals.import = false;
+      close('import');
       return;
     }
     ioService.applyImportSelection(payload, modalData.importSelection);
-    modals.import = false;
+    close('import');
     uiStore.toast.success('已导入所选数据并覆盖本地');
   };
 

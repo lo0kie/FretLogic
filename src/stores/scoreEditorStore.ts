@@ -7,7 +7,6 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
-import { computeSongKey, getKeySemitones, transposeChordName } from '@/services/music/theory';
 import { useSongStore } from '@/stores/songStore';
 import type { Chord, ChordId, LineId, SlotKey, Song } from '@/types';
 import { cloneDeep, matchLineIds, sanitizeLyricsText } from '@/utils/core/common';
@@ -142,20 +141,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     activeSongId.value = id;
   };
 
-  /** 变换歌曲调性：按当前实际调（含变调夹换算）到目标调的半音差转调 playKey。 */
-  const updateKey = (key: string) => {
-    if (!activeSong.value) return;
-    const currentKey = computeSongKey(activeSong.value.playKey, activeSong.value.capo);
-    if (currentKey !== key) {
-      recordHistory();
-      const delta = getKeySemitones(currentKey, key);
-      const newPlayKey = transposeChordName(activeSong.value.playKey || 'C', delta);
-      songStore.updateSongMeta(activeSong.value.id, {
-        playKey: newPlayKey,
-      });
-    }
-  };
-
   /** 更新歌曲演奏调（playKey）；值未变化时跳过。 */
   const updatePlayKey = (playKey: string) => {
     if (activeSong.value && activeSong.value.playKey !== playKey) {
@@ -272,7 +257,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     activeSong,
     hasLyrics,
     setActiveSong,
-    updateKey,
     updatePlayKey,
     updateCapo,
     updateLyrics,

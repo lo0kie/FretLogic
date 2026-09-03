@@ -18,7 +18,9 @@
       :class="['loading-icon shrink-0 animate-spin opacity-80', loaderSizeClass]"
       name="loader-2"
     />
-    <slot v-else :disabled :loading :size name="prefix" />
+    <slot v-else :disabled :loading :size name="prefix">
+      <BaseIcon v-if="prefixIcon" :name="prefixIcon" aria-hidden="true" class="shrink-0" />
+    </slot>
 
     <span
       v-if="$slots['default'] && (!loading || !iconOnly)"
@@ -27,7 +29,9 @@
       <slot :disabled :loading :size />
     </span>
 
-    <slot v-if="!loading || !iconOnly" :disabled :loading :size name="suffix" />
+    <slot v-if="!loading || !iconOnly" :disabled :loading :size name="suffix">
+      <BaseIcon v-if="suffixIcon" :name="suffixIcon" aria-hidden="true" class="shrink-0" />
+    </slot>
   </button>
 </template>
 
@@ -46,6 +50,7 @@ import {
   BUTTON_SUBTLE_THEME_MAP,
   BUTTON_TEXT_THEME_MAP,
 } from '@/components/ui/buttonThemes';
+import type { IconName } from '@/components/ui/icons.registry';
 import { type ThemeColor } from '@/types';
 
 const {
@@ -84,6 +89,10 @@ const {
   compacted?: boolean;
   /** 原生 button 的 tabindex（不传则保持按钮默认可聚焦） */
   tabindex?: number;
+  /** 前缀图标名（注册表枚举）：直接以 props 渲染，无需包 #prefix slot；传了 #prefix slot 时 slot 优先 */
+  prefixIcon?: IconName;
+  /** 后缀图标名（注册表枚举）：直接以 props 渲染，无需包 #suffix slot；传了 #suffix slot 时 slot 优先 */
+  suffixIcon?: IconName;
 }>();
 
 const emit = defineEmits<{

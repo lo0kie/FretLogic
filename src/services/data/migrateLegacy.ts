@@ -10,20 +10,11 @@ import { idb } from '@/services/storage';
 import { validateImportExportPayload } from '@/services/validation/payload';
 import type { Chord, Group, Song } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
+import { readJson } from '@/utils/core/storage';
 
 import { chordRepository, songRepository } from './repositories';
 
 const MIGRATION_FLAG_KEY = 'legacy-migration-done';
-
-/** 从旧 localStorage 读取任意 JSON；键不存在或解析失败时返回 undefined。 */
-function readJson(storage: Storage, key: string): unknown {
-  try {
-    const raw = storage.getItem(key);
-    return raw ? JSON.parse(raw) : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 const SONG_ENTRY_PREFIX = `${STORAGE_KEYS.SONG_ENTRY}:`;
 

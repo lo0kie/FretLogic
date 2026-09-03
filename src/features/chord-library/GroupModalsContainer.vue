@@ -1,25 +1,22 @@
 <template>
-  <BaseModal v-model:visible="groupModals.modals.create" @confirm="groupModals.handleCreateGroup" title="新建分组">
-    <BaseInput
-      v-focus
-      v-model="groupModals.modalData.inputValue"
-      :maxlength="MAX_GROUP_NAME_LENGTH"
-      @enter="groupModals.handleCreateGroup"
-      clearable
-      placeholder="请输入分组名称..."
-    />
-  </BaseModal>
+  <PromptInputModal
+    v-model="groupModals.modalData.inputValue"
+    v-model:visible="groupModals.modals.create"
+    :maxlength="MAX_GROUP_NAME_LENGTH"
+    @confirm="groupModals.handleCreateGroup"
+    placeholder="请输入分组名称..."
+    title="新建分组"
+  />
 
-  <BaseModal v-model:visible="groupModals.modals.rename" @confirm="groupModals.handleRenameGroup" title="修改组名">
-    <BaseInput
-      v-focus.select
-      v-model="groupModals.modalData.inputValue"
-      :maxlength="MAX_GROUP_NAME_LENGTH"
-      @enter="groupModals.handleRenameGroup"
-      clearable
-      placeholder="请输入新名称..."
-    />
-  </BaseModal>
+  <PromptInputModal
+    v-model="groupModals.modalData.inputValue"
+    v-model:visible="groupModals.modals.rename"
+    :maxlength="MAX_GROUP_NAME_LENGTH"
+    @confirm="groupModals.handleRenameGroup"
+    placeholder="请输入新名称..."
+    select-on-focus
+    title="修改组名"
+  />
 
   <BaseModal
     v-model:visible="groupModals.modals.delete"
@@ -44,39 +41,29 @@
       </BaseFormRow>
 
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="调式设定">
-        <BaseSelector
+        <KeySelector
           v-model="groupModals.modalData.sortKey"
           :disabled="groupModals.modalData.sortRule !== 'KEY_DEGREE'"
-          :options="KEY_OPTIONS"
-          default-value="C"
           width="md"
-        >
-          <template #label="{ selected }">
-            <span v-chord-name="{ name: `${selected}调` }" />
-          </template>
-
-          <template #option="{ option }">
-            <span v-chord-name="{ name: `${option}调` }" />
-          </template>
-        </BaseSelector>
+        />
       </BaseFormRow>
     </div>
   </BaseModal>
 </template>
 
 <script lang="ts" setup>
-import { computed, inject } from 'vue';
+import { computed } from 'vue';
 
 import BaseFormRow from '@/components/ui/BaseFormRow.vue';
-import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BaseSegmentedControl from '@/components/ui/BaseSegmentedControl.vue';
-import BaseSelector from '@/components/ui/BaseSelector.vue';
+import KeySelector from '@/components/ui/KeySelector.vue';
+import PromptInputModal from '@/components/ui/PromptInputModal.vue';
 import type { useChordGroupModals } from '@/features/chord-library/composables/useChordGroupModals';
-import { KEY_OPTIONS, SORT_RULE_CONFIG } from '@/services/music/theory';
+import { SORT_RULE_CONFIG } from '@/services/music/theory';
+import { injectModalController } from '@/shared/composables/useModalController';
 
-type GroupModals = ReturnType<typeof useChordGroupModals>;
-const groupModals = inject<GroupModals>('groupModals')!;
+const groupModals = injectModalController<ReturnType<typeof useChordGroupModals>>('groupModals');
 
 /** 表单行统一 Label 宽度 */
 const FORM_LABEL_WIDTH = '4.2rem';

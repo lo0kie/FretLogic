@@ -35,18 +35,15 @@
       </BaseFormRow>
 
       <!-- 操作按钮 -->
-      <div class="flex gap-2">
+      <div class="flex gap-4">
         <ActionButton
           :disabled="isActing"
           @click="handleCopy"
           class="flex-1"
           color="default"
-          size="sm"
+          prefix-icon="copy"
           variant="subtle"
         >
-          <template #prefix>
-            <BaseIcon :size="13" :stroke-width="2.5" name="copy" />
-          </template>
           复制
         </ActionButton>
         <ActionButton
@@ -54,12 +51,9 @@
           @click="handleDownload"
           class="flex-1"
           color="primary"
-          size="sm"
+          prefix-icon="download"
           variant="subtle"
         >
-          <template #prefix>
-            <BaseIcon :size="13" :stroke-width="2.5" name="download" />
-          </template>
           下载
         </ActionButton>
       </div>
@@ -74,7 +68,6 @@ import { useStorage } from '@vueuse/core';
 
 import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseFormRow from '@/components/ui/BaseFormRow.vue';
-import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/ui/BaseSegmentedControl.vue';
 import { getChordName } from '@/services/music/theory';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
@@ -82,6 +75,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { renderFretboardToCanvas } from '@/utils/music/fretboard-canvas-renderer';
+import { canvasToBlob, triggerBlobDownload, writeBlobToClipboard } from '@/utils/score/score-export';
 
 import FretboardCanvas from '../../components/fretboard/FretboardCanvas.vue';
 import WorkbenchPanel from './WorkbenchPanel.vue';
@@ -121,23 +115,13 @@ function buildFilename(): string {
   return `${name}.png`;
 }
 
-/** 复制为 PNG 到剪贴板 */
+/** 复制为 PNG 到剪贴板（复用 score-export 的降级与环境检测能力） */
 async function handleCopy() {
   if (isActing.value) return;
   isActing.value = true;
   try {
-    const canvas = buildCanvas();
-    await new Promise<void>((resolve, reject) => {
-      canvas.toBlob(async blob => {
-        if (!blob) return reject(new Error('toBlob failed'));
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-          resolve();
-        } catch (e) {
-          reject(e);
-        }
-      }, 'image/png');
-    });
+    const blob = await canvasToBlob(buildCanvas());
+    await writeBlobToClipboard(blob);
     uiStore.toast.success('图片已复制到剪贴板');
   } catch {
     uiStore.toast.error('复制失败，请尝试下载');
@@ -151,12 +135,8 @@ async function handleDownload() {
   if (isActing.value) return;
   isActing.value = true;
   try {
-    const canvas = buildCanvas();
-    const url = canvas.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = buildFilename();
-    a.click();
+    const blob = await canvasToBlob(buildCanvas());
+    triggerBlobDownload(blob, buildFilename());
     uiStore.toast.success(`已下载 ${buildFilename()}`);
   } catch {
     uiStore.toast.error('下载失败');

@@ -27,12 +27,9 @@
           clearable
           font-size="xs"
           placeholder="搜索和弦..."
+          prefix-icon="search"
           show-count
-        >
-          <template #prefix>
-            <BaseIcon :size="14" :stroke-width="2.5" class="search-icon text-text-disabled" name="search" />
-          </template>
-        </BaseInput>
+        />
 
         <div class="header-actions gap-xs flex shrink-0 items-center">
           <ActionButton
@@ -42,7 +39,7 @@
             icon-only
             variant="ghost"
           >
-            <BaseIcon :size="16" :stroke-width="2.5" name="plus" />
+            <BaseIcon :stroke-width="2.5" name="plus" size="xl" />
           </ActionButton>
         </div>
       </div>
@@ -67,7 +64,7 @@
             title="切换乐谱排序方式"
           >
             <template #icon>
-              <BaseIcon :name="currentSortIcon" :size="16" />
+              <BaseIcon :name="currentSortIcon" :stroke-width="2.5" size="xl" />
             </template>
           </PopoverMenu>
 
@@ -78,7 +75,7 @@
             icon-only
             variant="ghost"
           >
-            <BaseIcon :size="16" :stroke-width="2.5" name="plus" />
+            <BaseIcon :stroke-width="2.5" name="plus" size="xl" />
           </ActionButton>
         </div>
       </div>
@@ -113,19 +110,9 @@
       <input @change="handleFileChange" accept=".json" class="hidden-input hidden" ref="fileInputRef" type="file" />
 
       <div class="footer-actions-row gap-sm box-border grid grid-cols-2 items-stretch">
-        <ActionButton @click="handleImportTrigger" width="100%">
-          <template #prefix>
-            <BaseIcon :size="13" :stroke-width="2" name="download" />
-          </template>
-          导入备份
-        </ActionButton>
+        <ActionButton @click="handleImportTrigger" prefix-icon="download" width="100%"> 导入备份 </ActionButton>
 
-        <ActionButton @click="backupModals.openExport" width="100%">
-          <template #prefix>
-            <BaseIcon :size="13" :stroke-width="2" name="upload" />
-          </template>
-          导出备份
-        </ActionButton>
+        <ActionButton @click="backupModals.openExport" prefix-icon="upload" width="100%"> 导出备份 </ActionButton>
       </div>
     </div>
   </aside>

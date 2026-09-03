@@ -29,12 +29,12 @@
           :aria-label
           :aria-modal="false"
           :class="panelClass"
-          :style="panelStyle"
+          :style="mergedPanelStyle"
           @focusout="handleFocusOut"
           @keydown="handlePanelKeydown"
           @mouseenter="handlePanelMouseEnter"
           @mouseleave="handlePanelMouseLeave"
-          class="popover-panel bg-bg-elevated border-glass-border shadow-floating relative z-10 box-border origin-top rounded-md border backdrop-blur-xl outline-none"
+          class="popover-panel bg-bg-elevated border-glass-border shadow-floating z-panel relative box-border rounded-md border backdrop-blur-xl outline-none"
           ref="panelRef"
           role="dialog"
           tabindex="-1"
@@ -72,28 +72,18 @@ import {
   type MaybeRef,
 } from 'vue';
 
-import {
-  autoUpdate,
-  flip,
-  arrow as floatingArrow,
-  size as floatingSize,
-  limitShift,
-  offset,
-  shift,
-  useFloating,
-  type Middleware,
-  type Placement,
-  type VirtualElement,
-} from '@floating-ui/vue';
+import { autoUpdate, useFloating, type Placement, type VirtualElement } from '@floating-ui/vue';
 import { useEventListener } from '@vueuse/core';
 
+import { POPOVER_HOVER_CLOSE_DELAY_MS } from '@/utils/core/constants';
 import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
+import { buildFloatingMiddlewares, createVirtualElementRect, resolveArrowAwareOffset } from '@/utils/ui/floatingCore';
 import { acquireFloatingZ, FLOATING_Z_BASE, releaseFloatingZ } from '@/utils/ui/floatingZ';
 
 const {
   trigger = 'click',
   hoverOpenDelay = 50,
-  hoverCloseDelay = 150,
+  hoverCloseDelay = POPOVER_HOVER_CLOSE_DELAY_MS,
   placement = 'bottom',
   disabled = false,
   offsetDistance = 8,
@@ -158,39 +148,16 @@ const ownLayerEntry: PopoverLayerEntry = { el: null, z: FLOATING_Z_BASE };
 
 const activeReference = computed(() => unref(virtualRef) || contextMenuVirtualRef.value || referenceRef.value);
 
-const middlewareList = computed(() => {
-  // showArrow 时箭头外露 ≈ size·√2/2 - 1（size=14 → ≈9px），浮层间距需大于外露量，否则箭头会戳到触发元素
-  const effectiveOffset = showArrow ? Math.max(offsetDistance, 12) : offsetDistance;
-  const m: Middleware[] = [
-    offset(effectiveOffset),
-    flip({
-      fallbackPlacements: ['top', 'bottom-end', 'bottom-start', 'top-end', 'top-start', 'left', 'right'],
-      padding: 8,
-    }),
-    shift({ padding: 12, limiter: limitShift() }),
-  ];
-  if (matchTriggerWidth) {
-    m.push(
-      floatingSize({
-        apply({ rects, elements }) {
-          if (matchTriggerWidthStrategy === 'minWidth') {
-            Object.assign(elements.floating.style, {
-              minWidth: `${rects.reference.width}px`,
-            });
-          } else {
-            Object.assign(elements.floating.style, {
-              width: `${rects.reference.width}px`,
-            });
-          }
-        },
-      })
-    );
-  }
-  if (showArrow) {
-    m.push(floatingArrow({ element: () => arrowRef.value, padding: 6 }));
-  }
-  return m;
-});
+const middlewareList = computed(() =>
+  buildFloatingMiddlewares({
+    // showArrow 时箭头外露 ≈ size·√2/2 - 1（size=14 → ≈9px），浮层间距需大于外露量，否则箭头会戳到触发元素
+    offsetDistance: resolveArrowAwareOffset(offsetDistance, showArrow),
+    showArrow,
+    getArrowEl: () => arrowRef.value,
+    matchTriggerWidth,
+    matchTriggerWidthStrategy,
+  })
+);
 
 const {
   floatingStyles: computedFloatingStyles,
@@ -206,6 +173,42 @@ const {
 
 const floatingStyles = computed<CSSProperties>(() => ({
   ...computedFloatingStyles.value,
+}));
+
+/**
+ * 浮层入场缩放的原点：跟随实际(flip 后)placement，让面板从「贴着触发点的那一侧」长出，
+ * 而不是固定 top 中心（视觉像从中心弹开）。
+ *
+ * floating-ui 的 placement 描述「浮层相对锚点的方位」：
+ *  - main 轴为 bottom/top/left/right → 贴锚点的边是该方位的反边（bottom → 从面板 top 生长）；
+ *  - cross 轴为 start/end → 另一个维度也贴近锚点（bottom-start → top-left 角贴触发点）。
+ * 无 cross 时该维度居中，水平主轴与垂直主轴分别拼装 transform-origin。
+ */
+const panelTransformOrigin = computed<string>(() => {
+  const p = currentPlacement.value || placement;
+  const [main = '', cross] = p.split('-');
+  const mainNear: Record<string, string> = { bottom: 'top', top: 'bottom', right: 'left', left: 'right' };
+  const mainIsVertical = main === 'bottom' || main === 'top';
+
+  // 主轴贴边（必含）；交叉轴仅在有 start/end 时贴近，否则居中
+  const mainPart = mainNear[main] ?? 'center';
+  const crossPart =
+    cross === 'start'
+      ? mainIsVertical
+        ? 'left'
+        : 'top'
+      : cross === 'end'
+        ? mainIsVertical
+          ? 'right'
+          : 'bottom'
+        : 'center';
+
+  return mainIsVertical ? `${mainPart} ${crossPart}` : `${crossPart} ${mainPart}`;
+});
+
+const mergedPanelStyle = computed<CSSProperties>(() => ({
+  transformOrigin: panelTransformOrigin.value,
+  ...(typeof panelStyle === 'object' && !Array.isArray(panelStyle) ? panelStyle : {}),
 }));
 
 const arrowStyle = computed<CSSProperties>(() => {
@@ -369,20 +372,7 @@ const handleTriggerClick = () => {
 const handleTriggerContextMenu = (e: MouseEvent) => {
   if (trigger !== 'contextmenu' || disabled) return;
   e.preventDefault();
-  contextMenuVirtualRef.value = {
-    getBoundingClientRect() {
-      return {
-        x: e.clientX,
-        y: e.clientY,
-        top: e.clientY,
-        bottom: e.clientY,
-        left: e.clientX,
-        right: e.clientX,
-        width: 0,
-        height: 0,
-      };
-    },
-  };
+  contextMenuVirtualRef.value = createVirtualElementRect(e.clientX, e.clientY);
   open();
 };
 

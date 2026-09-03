@@ -1,17 +1,10 @@
 import type { Directive } from 'vue';
 
-import {
-  autoUpdate,
-  computePosition,
-  flip,
-  arrow as floatingArrow,
-  offset,
-  shift,
-  type Placement,
-} from '@floating-ui/dom';
+import { autoUpdate, computePosition, type Placement } from '@floating-ui/dom';
 
 import { TOOLTIP_HIDE_CLEANUP_DELAY_MS, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS } from '@/utils/core/constants';
 import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
+import { buildFloatingMiddlewares } from '@/utils/ui/floatingCore';
 import { acquireFloatingZ, releaseFloatingZ } from '@/utils/ui/floatingZ';
 
 import './vTooltip.scss';
@@ -228,10 +221,11 @@ const releaseBoxZ = () => {
 const updatePosition = async (el: HTMLElement, opts: TooltipOptions): Promise<void> => {
   if (!globalBox || !isClient) return;
 
-  const middleware = [offset(8), flip({ fallbackAxisSideDirection: 'start' }), shift({ padding: 12 })];
-  if (opts.showArrow && globalArrow) {
-    middleware.push(floatingArrow({ element: globalArrow, padding: 6 }));
-  }
+  const middleware = buildFloatingMiddlewares({
+    offsetDistance: 8,
+    showArrow: opts.showArrow,
+    getArrowEl: () => globalArrow,
+  });
 
   const { x, y, placement, middlewareData } = await computePosition(el, globalBox, {
     placement: opts.placement ?? 'top',
@@ -340,10 +334,17 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
   await updatePosition(el, opts);
 
   if (currentTargetEl === el) {
+    // 每次显示都从「入场前态」开始：连续滑过多个 trigger 时，上一次 hide 定时器会被
+    // 下一 trigger 的 showTooltip 取消，box 仍停留在可见态（opacity 已为 1）——
+    // 此时直接写回 opacity=1 无状态差，CSS 过渡不会触发，表现为「快速连续滑过无动画」。
+    // 统一先以缩小+透明提交一帧作为过渡起点，保证每个 trigger 都重放淡入放大动画。
+    box.classList.add('v-tooltip-instant'); // 归位阶段关过渡，避免残留态被补间
     box.style.visibility = 'visible';
-    // 先以缩小态呈现，强制回流让浏览器记录起始状态，再放大淡入（避免首帧跳变）
-    box.classList.remove('v-tooltip-instant');
-    void box.offsetWidth;
+    box.style.opacity = '0';
+    box.style.transform = 'scale(0.95)';
+    void box.offsetWidth; // 强制回流：把入场前态作为过渡起始帧提交
+    box.classList.remove('v-tooltip-instant'); // 恢复过渡
+    void box.offsetWidth; // 再回流一次，让浏览器以带过渡的起始帧记录起点
     box.style.opacity = '1';
     box.style.transform = 'scale(1)';
 

@@ -26,7 +26,7 @@
           @click.stop
           @keydown="handleKeydownTrap"
           aria-modal="true"
-          class="modal-card z-panel bg-bg-panel border-glass-border shadow-floating duration-base ease-standard relative box-border flex flex-col overflow-hidden rounded-lg border transition-[width,height] outline-none"
+          class="modal-card z-panel bg-bg-panel border-glass-border shadow-floating relative box-border flex flex-col overflow-hidden rounded-lg border outline-none"
           ref="modalCardRef"
           role="dialog"
           tabindex="-1"
@@ -61,7 +61,7 @@
                     size="sm"
                     variant="ghost"
                   >
-                    <BaseIcon :size="20" :stroke-width="3" name="x" />
+                    <BaseIcon :stroke-width="3" name="x" size="xl" />
                   </ActionButton>
                 </div>
               </slot>

@@ -15,7 +15,7 @@
         },
       ]"
       :style="[normalizedStyle, offsetStyle]"
-      class="duration-base absolute top-0 right-0 z-10 box-border inline-flex translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-transparent leading-none font-semibold whitespace-nowrap shadow-xs transition-all select-none"
+      class="duration-base z-panel absolute top-0 right-0 box-border inline-flex translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-transparent leading-none font-semibold whitespace-nowrap shadow-xs transition-all select-none"
       role="status"
     >
       <span v-if="!isDotOnly">

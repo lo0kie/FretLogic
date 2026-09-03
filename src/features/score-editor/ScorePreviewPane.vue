@@ -51,7 +51,7 @@
       <!-- 后台重新渲染指示：已有页时右上角轻提示，不打断阅读 -->
       <div
         v-if="isRendering && pages.length > 0"
-        class="text-text-muted absolute top-4 right-4 z-20 flex items-center gap-1.5 rounded-full px-2 py-1 text-xs backdrop-blur-md"
+        class="text-text-muted z-float absolute top-4 right-4 flex items-center gap-1.5 rounded-full px-2 py-1 text-xs backdrop-blur-md"
       >
         <BaseIcon class="h-3 w-3 animate-spin" name="loader-2" />
         更新中
@@ -79,6 +79,7 @@ import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
+import { SCORE_PREVIEW_DEBOUNCE_MS } from '@/utils/core/constants';
 import { buildExportFileName, triggerBlobDownload, writeBlobToClipboard } from '@/utils/score/score-export';
 
 // ===== 会话级 A4 分页预览缓存（模块作用域，组件卸载/切换标签后仍保留）：内容键 → 各页图 URL =====
@@ -166,8 +167,7 @@ const generate = async (force = false) => {
       allLineIndices.value,
       chordsLookupMap.value,
       'a4', // 自动分页模式
-      settingsStore.scoreChordShorthand,
-      true
+      settingsStore.scoreChordShorthand
     );
     const pageBlobs = await runWorkerExport(payload);
     if (token !== runToken) return;
@@ -187,7 +187,7 @@ const generate = async (force = false) => {
   }
 };
 
-const debouncedGenerate = useDebounceFn(() => generate(), 150);
+const debouncedGenerate = useDebounceFn(() => generate(), SCORE_PREVIEW_DEBOUNCE_MS);
 
 // ===== 单页右键菜单：复制 / 下载当前页图 =====
 const previewMenuRef = ref<InstanceType<typeof ContextMenu> | null>(null);

@@ -67,7 +67,7 @@
       title="减少"
       type="button"
     >
-      <BaseIcon :size="14" :stroke-width="2.2" aria-hidden="true" name="minus" />
+      <BaseIcon :stroke-width="2.2" aria-hidden="true" name="minus" size="sm" />
     </button>
 
     <div
@@ -108,7 +108,7 @@
         :aria-valuetext="singleDisplayText"
         :class="[
           vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-          isDragging === 0 ? 'ring-primary/70 z-20 scale-125 ring-2' : 'z-10 transition-all duration-75',
+          isDragging === 0 ? 'ring-primary/70 z-float scale-125 ring-2' : 'z-panel transition-all duration-75',
         ]"
         :style="singleThumbStyle"
         @keydown="handleRangeKeydown"
@@ -123,7 +123,7 @@
           <div
             v-if="shouldShowTooltip(0)"
             :class="vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'"
-            class="bg-bg-elevated border-glass-border text-text-title text-2xs pointer-events-none absolute z-20 rounded border px-1.5 py-0.5 font-mono font-bold whitespace-nowrap shadow-md"
+            class="bg-bg-elevated border-glass-border text-text-title text-2xs z-float pointer-events-none absolute rounded border px-1.5 py-0.5 font-mono font-bold whitespace-nowrap shadow-md"
           >
             {{ singleDisplayText }}
           </div>
@@ -138,7 +138,7 @@
           :aria-valuetext="formatVal(rangeValues[0])"
           :class="[
             vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-            isDragging === 0 ? 'ring-primary/70 z-20 scale-125 ring-2' : 'z-10 transition-all duration-75',
+            isDragging === 0 ? 'ring-primary/70 z-float scale-125 ring-2' : 'z-panel transition-all duration-75',
           ]"
           :style="rangeThumb0Style"
           @keydown="e => handleRangeKeydown(e, 0)"
@@ -155,7 +155,7 @@
               :class="
                 vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'
               "
-              class="bg-bg-elevated border-glass-border text-text-title text-2xs pointer-events-none absolute z-20 rounded border px-1.5 py-0.5 font-mono font-bold whitespace-nowrap shadow-md"
+              class="bg-bg-elevated border-glass-border text-text-title text-2xs z-float pointer-events-none absolute rounded border px-1.5 py-0.5 font-mono font-bold whitespace-nowrap shadow-md"
             >
               {{ formatVal(rangeValues[0]) }}
             </div>
@@ -169,7 +169,7 @@
           :aria-valuetext="formatVal(rangeValues[1])"
           :class="[
             vertical ? 'left-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-1/2 -translate-x-1/2 -translate-y-1/2',
-            isDragging === 1 ? 'ring-primary/70 z-20 scale-125 ring-2' : 'z-10 transition-all duration-75',
+            isDragging === 1 ? 'ring-primary/70 z-float scale-125 ring-2' : 'z-panel transition-all duration-75',
           ]"
           :style="rangeThumb1Style"
           @keydown="e => handleRangeKeydown(e, 1)"
@@ -186,7 +186,7 @@
               :class="
                 vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'
               "
-              class="bg-bg-elevated border-glass-border text-text-title text-2xs pointer-events-none absolute z-20 rounded border px-1.5 py-0.5 font-mono font-bold whitespace-nowrap shadow-md"
+              class="bg-bg-elevated border-glass-border text-text-title text-2xs z-float pointer-events-none absolute rounded border px-1.5 py-0.5 font-mono font-bold whitespace-nowrap shadow-md"
             >
               {{ formatVal(rangeValues[1]) }}
             </div>
@@ -225,7 +225,7 @@
       title="增加"
       type="button"
     >
-      <BaseIcon :size="14" :stroke-width="2.2" aria-hidden="true" name="plus" />
+      <BaseIcon :stroke-width="2.2" aria-hidden="true" name="plus" size="sm" />
     </button>
 
     <input

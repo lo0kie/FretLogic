@@ -5,6 +5,7 @@
 import { getChordName } from '@/services/music/theory';
 import type { Chord } from '@/types';
 import { SCORE_EXPORT_CONFIG } from '@/utils/core/constants';
+import { parseChordNameTokens } from '@/utils/score/chordNameTokens';
 
 export type FretboardThemeColors = (typeof SCORE_EXPORT_CONFIG.THEME)['LIGHT' | 'DARK'];
 
@@ -19,24 +20,6 @@ export interface RenderFretboardOptions {
 }
 
 // ---- 内部辅助 ----
-
-interface ChordNameToken {
-  text: string;
-  isAccidental: boolean;
-}
-
-function parseChordNameTokens(chordName: string): ChordNameToken[] {
-  if (!chordName) return [];
-  const tokens: ChordNameToken[] = [];
-  const parts = chordName.split(/([#b♯♭])/g);
-  for (const part of parts) {
-    if (!part) continue;
-    if (part === '#' || part === '♯') tokens.push({ text: '♯', isAccidental: true });
-    else if (part === 'b' || part === '♭') tokens.push({ text: '♭', isAccidental: true });
-    else tokens.push({ text: part, isAccidental: false });
-  }
-  return tokens;
-}
 
 /** 逐 token 度量和弦名宽度：主名与升降号上标使用不同字号，需分别测量后累加 */
 function measureChordNameLayout(ctx: CanvasRenderingContext2D, chordName: string, fontScale = 1.0) {

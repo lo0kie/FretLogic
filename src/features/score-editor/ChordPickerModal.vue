@@ -8,10 +8,7 @@
     width="w-wide"
   >
     <template #header-extra>
-      <ActionButton @click="goToWorkbenchToCreate" color="primary" variant="subtle">
-        <template #prefix>
-          <BaseIcon :size="14" :stroke-width="2.5" aria-hidden="true" name="plus" />
-        </template>
+      <ActionButton @click="goToWorkbenchToCreate" color="primary" prefix-icon="plus" variant="subtle">
         新建和弦
       </ActionButton>
     </template>
@@ -28,18 +25,9 @@
               clearable
               font-size="xs"
               placeholder="搜索和弦名称..."
+              prefix-icon="search"
               show-count
-            >
-              <template #prefix>
-                <BaseIcon
-                  :size="14"
-                  :stroke-width="2.5"
-                  aria-hidden="true"
-                  class="search-icon text-text-disabled"
-                  name="search"
-                />
-              </template>
-            </BaseInput>
+            />
           </div>
           <div class="sort-action-group gap-sm flex shrink-0 items-center">
             <span class="sort-label text-text-disabled text-xs font-semibold whitespace-nowrap">排序</span>
@@ -48,23 +36,13 @@
               :options="SORT_RULE_CONFIG"
               @update:model-value="handleSortRuleChange"
             />
-            <BaseSelector
+            <KeySelector
               v-model="tempSortKey"
               :disabled="sortOverride !== GroupSortRule.KEY_DEGREE"
-              :options="KEY_OPTIONS"
               @update:model-value="handleSortKeyChange"
               class="picker-key-selector w-20"
-              default-value="C"
               width="md"
-            >
-              <template #label="{ selected }">
-                <span v-chord-name="{ name: `${selected}调` }" />
-              </template>
-
-              <template #option="{ option }">
-                <span v-chord-name="{ name: `${option}调` }" />
-              </template>
-            </BaseSelector>
+            />
           </div>
         </div>
         <div
@@ -144,19 +122,19 @@
                   @mousedown.stop
                   @pointerdown.stop
                   aria-label="去修改该和弦"
-                  class="picker-edit-btn duration-fast pointer-events-auto absolute top-1 right-1 z-20 p-1.5! opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                  class="picker-edit-btn duration-fast z-float pointer-events-auto absolute top-1 right-1 p-1.5! opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                   color="primary"
                   icon-only
                   size="sm"
                   title="去修改该和弦"
                   variant="ghost"
                 >
-                  <BaseIcon :size="13" :stroke-width="2.2" name="pencil" />
+                  <BaseIcon :stroke-width="2.2" name="pencil" size="sm" />
                 </ActionButton>
                 <span
                   v-if="selectedGroupId === 'ALL' && getSourceGroupName(chord)"
                   :title="getSourceGroupName(chord)"
-                  class="picker-source-group bg-bg-panel/90 border-border-light text-2xs text-text-muted pointer-events-none absolute top-1 left-1 z-10 max-w-[60%] truncate rounded-sm border px-1 py-0.5 leading-none font-semibold select-none"
+                  class="picker-source-group bg-bg-panel/90 border-border-light text-2xs text-text-muted z-panel pointer-events-none absolute top-1 left-1 max-w-[60%] truncate rounded-sm border px-1 py-0.5 leading-none font-semibold select-none"
                 >
                   {{ getSourceGroupName(chord) }}
                 </span>
@@ -248,13 +226,12 @@ import BaseBadge from '@/components/ui/BaseBadge.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BaseSegmentedControl from '@/components/ui/BaseSegmentedControl.vue';
-import BaseSelector from '@/components/ui/BaseSelector.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
+import KeySelector from '@/components/ui/KeySelector.vue';
 import { useScoreLinesData } from '@/features/score-editor/composables/useScoreLinesData';
 import {
   computeChordFingerprint,
   getChordName,
-  KEY_OPTIONS,
   parseChordName,
   resolveChordRootPitch,
   SORT_RULE_CONFIG,

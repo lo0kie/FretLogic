@@ -18,6 +18,7 @@
   --color-bg-panel: var(--bg-panel);
   --color-bg-panel-hover: var(--bg-panel-hover);
   --color-bg-elevated: var(--bg-elevated);
+  --color-bg-surface: var(--bg-surface);
 
   --color-glass-border: var(--glass-border);
   --color-border-light: var(--border-light);
@@ -31,7 +32,6 @@
   --color-text-disabled: var(--text-disabled);
   --color-text-on-accent: var(--text-on-accent);
 
-  --color-tint-primary-20: var(--tint-primary-20);
   --color-tint-primary-45: var(--tint-primary-45);
   --color-tint-primary-60: var(--tint-primary-60);
   --color-tint-primary-80: var(--tint-primary-80);
@@ -120,6 +120,7 @@
   --z-index-content: var(--z-content);
   --z-index-card: var(--z-card);
   --z-index-panel: var(--z-panel);
+  --z-index-float: var(--z-float);
   --z-index-fab: var(--z-fab);
   --z-index-sidebar: var(--z-sidebar);
   --z-index-scrim: var(--z-scrim);

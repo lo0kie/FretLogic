@@ -321,3 +321,30 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
     issues: [],
   };
 };
+
+export interface ParsePayloadResult {
+  payload?: ImportExportPayload;
+  /** 解析失败类型：EMPTY=空串 / INVALID_JSON=非合法 JSON / INVALID_SCHEMA=结构校验失败 */
+  error?: 'EMPTY' | 'INVALID_JSON' | 'INVALID_SCHEMA';
+  /** 非阻断的自动清理提示（去重 / 剪枝失效引用），调用方应向用户展示 */
+  warnings?: string[];
+}
+
+/**
+ * 解析原始字符串为经校验清洗的备份包。
+ * 统一「空串 / 非法 JSON / 结构校验失败」的错误分类，供文件导入与云同步两条入口共用；
+ * 各入口自行把 error 类型映射为 toast 或 SyncError。
+ */
+export const parseAndValidatePayload = (raw: string): ParsePayloadResult => {
+  const trimmed = raw.trim();
+  if (!trimmed) return { error: 'EMPTY' };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return { error: 'INVALID_JSON' };
+  }
+  const { isValid, payload, warnings } = validateImportExportPayload(parsed);
+  if (!isValid || !payload) return { error: 'INVALID_SCHEMA' };
+  return { payload, ...(warnings && warnings.length > 0 ? { warnings } : {}) };
+};

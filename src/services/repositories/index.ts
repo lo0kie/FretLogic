@@ -2,6 +2,7 @@ import { sanitizePersistedData } from '@/services/validation/persistedData';
 import type { Chord, Group, Song } from '@/types';
 import { serializeForStorage } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
+import { readJson } from '@/utils/core/storage';
 
 export interface ChordLibrarySnapshot {
   groups: Group[];
@@ -23,16 +24,6 @@ export interface SongRepository {
 }
 
 const SONG_ENTRY_PREFIX = `${STORAGE_KEYS.SONG_ENTRY}:`;
-
-/** 从指定存储读取并解析 JSON；键不存在或解析失败时返回 undefined。 */
-const readJson = (storage: Storage, key: string): unknown => {
-  try {
-    const raw = storage.getItem(key);
-    return raw ? JSON.parse(raw) : undefined;
-  } catch {
-    return undefined;
-  }
-};
 
 /** 序列化并写入指定存储；超出配额时抛出带 cause 的 PERSISTENCE_QUOTA_EXCEEDED 错误。 */
 const writeJson = (storage: Storage, key: string, value: unknown): void => {

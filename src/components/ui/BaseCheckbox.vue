@@ -9,7 +9,7 @@
             {
               'cursor-not-allowed opacity-50': disabled,
               'cursor-pointer': !disabled && !readonly,
-              'border-border-base dark:border-border-dark hover:bg-bg-panel-hover rounded-lg border p-2.5': bordered,
+              'border-border-base hover:bg-bg-panel-hover rounded-lg border p-2.5': bordered,
               'bg-bg-panel-hover/50': bordered && isChecked,
             },
           ],
@@ -236,23 +236,19 @@ const SIZE_CONFIGS = {
 const COLOR_CONFIGS = {
   primary: {
     checkedClass: 'bg-primary border-primary text-white group-hover:brightness-105',
-    uncheckedClass:
-      'bg-bg-body dark:bg-bg-surface border border-border-base dark:border-border-dark group-hover:border-primary/80',
+    uncheckedClass: 'bg-bg-body dark:bg-bg-surface border border-border-base group-hover:border-primary/80',
   },
   success: {
     checkedClass: 'bg-success border-success text-white group-hover:brightness-105',
-    uncheckedClass:
-      'bg-bg-body dark:bg-bg-surface border border-border-base dark:border-border-dark group-hover:border-success/80',
+    uncheckedClass: 'bg-bg-body dark:bg-bg-surface border border-border-base group-hover:border-success/80',
   },
   warning: {
     checkedClass: 'bg-warning border-warning text-white group-hover:brightness-105',
-    uncheckedClass:
-      'bg-bg-body dark:bg-bg-surface border border-border-base dark:border-border-dark group-hover:border-warning/80',
+    uncheckedClass: 'bg-bg-body dark:bg-bg-surface border border-border-base group-hover:border-warning/80',
   },
   danger: {
     checkedClass: 'bg-danger border-danger text-white group-hover:brightness-105',
-    uncheckedClass:
-      'bg-bg-body dark:bg-bg-surface border border-border-base dark:border-border-dark group-hover:border-danger/80',
+    uncheckedClass: 'bg-bg-body dark:bg-bg-surface border border-border-base group-hover:border-danger/80',
   },
 } as const;
 

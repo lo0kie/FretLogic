@@ -3,7 +3,6 @@ import { base64EncodeUtf8, serializeForStorage } from '@/utils/core/common';
 import { SyncError, type SyncProvider, type WebdavSyncConfig } from './provider';
 import { createSyncProviderBase } from './syncBase';
 
-const TIMEOUT_MS = 15000;
 const WEBDAV_REMOTE_FILE_PATH = 'FretLogic/chords.json'; // 内部写死
 
 /**
@@ -44,8 +43,6 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
       }
       return new SyncError('CORS', 'WebDAV 请求被浏览器拦截（通常为跨域 CORS 限制）');
     },
-    readRaw: async response => response.text(),
-    timeoutMs: TIMEOUT_MS,
   });
 
   // PUT 前确保父集合存在：自顶向下对每个祖先目录发 MKCOL。

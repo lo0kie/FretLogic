@@ -1,6 +1,12 @@
 <template>
   <div
-    :class="effectiveExpanded ? 'w-[19rem] min-w-[19rem]' : isCompact ? 'w-[calc(2.85rem_+_2px)] min-w-[calc(2.85rem_+_2px)]' : 'w-[14rem] min-w-[14rem]'"
+    :class="
+      effectiveExpanded
+        ? 'w-[19rem] min-w-[19rem]'
+        : isCompact
+          ? 'w-[calc(2.85rem_+_2px)] min-w-[calc(2.85rem_+_2px)]'
+          : 'w-[14rem] min-w-[14rem]'
+    "
     @focusin="isFocusWithin = true"
     @focusout="isFocusWithin = false"
     @mouseenter="isPointerOver = true"
@@ -12,7 +18,13 @@
          鼠标移入移出只变宽度、高度恒定 → 无高度跳变、也不需要高度过渡。圆角取直径一半；
          不用 rounded-full（9999px 与 rounded-lg 插值时生硬）。 -->
     <div
-      :class="effectiveExpanded ? 'rounded-lg p-3' : isCompact ? 'justify-center rounded-[calc(1.425rem_+_1px)] p-2.5' : 'rounded-lg p-2.5'"
+      :class="
+        effectiveExpanded
+          ? 'rounded-lg p-3'
+          : isCompact
+            ? 'justify-center rounded-[calc(1.425rem_+_1px)] p-2.5'
+            : 'rounded-lg p-2.5'
+      "
       class="bg-bg-panel border-glass-border z-panel duration-slow ease-sidebar @container pointer-events-auto relative box-border flex w-full flex-col overflow-hidden border transition-[border-radius,padding]"
     >
       <!-- 收起态标题栏锁最小高 1.6rem（= 分段控件高度 COMPACTED_SIZE_MAP.sm.wrapper 与圆球高度公式的
@@ -30,7 +42,7 @@
           class="duration-slow ease-sidebar flex items-center transition-[padding,margin]"
         >
           <div class="bg-tint-primary-88 text-primary flex h-5 w-5 shrink-0 items-center justify-center rounded-md">
-            <BaseIcon :name="icon" :size="13" :stroke-width="2.5" />
+            <BaseIcon :name="icon" :stroke-width="2.5" size="sm" />
           </div>
           <span v-show="!isCompact" class="text-text-title text-xs font-extrabold tracking-tight break-keep">
             {{ title }}

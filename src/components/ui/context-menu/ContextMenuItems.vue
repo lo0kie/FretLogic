@@ -34,7 +34,7 @@
             :ref="el => setItemEl(el, index)"
             :style="getItemStyle(item)"
             :tabindex="item.disabled ? -1 : 0"
-            :title="item.title"
+            :title="item.title ?? item.label"
             @click.stop="!item.disabled && pinToggle()"
             @mousedown="item.disabled && $event.preventDefault()"
             class="group duration-fast relative box-border flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left transition-colors outline-none select-none enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover)) disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
@@ -45,20 +45,27 @@
             <BaseIcon
               v-if="typeof item.icon === 'string'"
               :name="item.icon"
-              :size="13"
+              :stroke-width="3"
               aria-hidden="true"
               class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+              size="md"
             />
             <component
               v-else-if="item.icon"
               :is="item.icon"
-              :size="13"
-              :stroke-width="2.5"
+              :stroke-width="3"
               aria-hidden="true"
               class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+              size="md"
             />
             <span class="min-w-0 flex-1 whitespace-nowrap"> {{ item.label }} </span>
-            <BaseIcon :size="12" aria-hidden="true" class="-mr-0.5 shrink-0 opacity-50" name="chevron-right" />
+            <BaseIcon
+              :stroke-width="3"
+              aria-hidden="true"
+              class="-mr-0.5 shrink-0 opacity-50"
+              name="chevron-right"
+              size="md"
+            />
           </button>
         </template>
 
@@ -91,7 +98,7 @@
         :role="item.checked !== undefined ? 'menuitemradio' : 'menuitem'"
         :style="getItemStyle(item)"
         :tabindex="item.disabled ? -1 : 0"
-        :title="item.title"
+        :title="item.title ?? item.label"
         @click.stop="handleItemClick(item)"
         @keydown.enter.prevent.stop="handleItemClick(item)"
         @keydown.space.prevent.stop="handleItemClick(item)"
@@ -102,25 +109,27 @@
       >
         <BaseIcon
           v-if="item.checked"
-          :size="13"
+          :stroke-width="3"
           aria-hidden="true"
           class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
           name="check"
+          size="md"
         />
         <BaseIcon
           v-else-if="typeof item.icon === 'string'"
           :name="item.icon"
-          :size="13"
+          :stroke-width="3"
           aria-hidden="true"
           class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+          size="md"
         />
         <component
           v-else-if="item.icon"
           :is="item.icon"
-          :size="13"
-          :stroke-width="2.5"
+          :stroke-width="3"
           aria-hidden="true"
           class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+          size="md"
         />
 
         <span class="min-w-0 flex-1 whitespace-nowrap"> {{ item.label }} </span>

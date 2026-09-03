@@ -9,11 +9,20 @@
     class="group relative box-border flex items-center rounded-full"
   >
     <div
-      v-if="$slots['prefix']"
+      v-if="hasPrefix"
       :class="currentConfig.prefixClass"
       class="text-text-disabled pointer-events-none absolute inset-y-0 flex items-center justify-center"
     >
-      <slot name="prefix" />
+      <slot name="prefix">
+        <BaseIcon
+          v-if="prefixIcon"
+          :name="prefixIcon"
+          :stroke-width="2.5"
+          aria-hidden="true"
+          class="shrink-0"
+          size="sm"
+        />
+      </slot>
     </div>
 
     <input
@@ -23,7 +32,7 @@
         currentConfig.inputClass,
         fontClass,
         stateBorderClasses,
-        $slots['prefix'] ? currentConfig.prefixPadding : currentConfig.basePaddingLeft,
+        hasPrefix ? currentConfig.prefixPadding : currentConfig.basePaddingLeft,
       ]"
       :disabled
       :id
@@ -86,7 +95,7 @@
         title="清空内容"
         type="button"
       >
-        <BaseIcon :size="14" name="x" stroke-width="3" />
+        <BaseIcon name="x" size="sm" stroke-width="3" />
       </button>
 
       <div v-if="isPasswordMode || $slots['suffix']" class="pointer-events-none flex items-center justify-center">
@@ -109,7 +118,7 @@
             data-focusable-inline
             type="button"
           >
-            <BaseIcon :name="showPassword ? 'eye' : 'eye-off'" :size="11" />
+            <BaseIcon :name="showPassword ? 'eye' : 'eye-off'" size="xs" />
           </button>
         </slot>
       </div>
@@ -121,6 +130,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
 
 import BaseIcon from '@/components/ui/BaseIcon.vue';
+import type { IconName } from '@/components/ui/icons.registry';
 import { resolveComponentWidth, type FormComponentWidth } from '@/utils/core/constants';
 
 const id = useId();
@@ -132,6 +142,7 @@ const {
   readonly = false,
   clearable = false,
   isPassword = false,
+  prefixIcon = undefined,
   size = 'md',
   width = 'full',
   fontSize = 'md',
@@ -154,6 +165,8 @@ const {
   readonly?: boolean;
   clearable?: boolean;
   isPassword?: boolean;
+  /** 前缀图标名（注册表枚举）：无需包 #prefix slot 即可在输入框左侧渲染图标；传了 #prefix slot 时 slot 优先 */
+  prefixIcon?: IconName;
   size?: 'sm' | 'md' | 'lg';
   width?: FormComponentWidth;
   fontSize?: 'xs' | 'md' | 'lg';
@@ -288,6 +301,8 @@ const INPUT_CONFIG: Record<
 };
 
 const currentConfig = computed(() => INPUT_CONFIG[size] ?? INPUT_CONFIG.md);
+/** 是否存在前缀区（#prefix slot 优先，其次 prefix-icon prop）：决定容器显隐与输入框左内边距 */
+const hasPrefix = computed(() => Boolean(slots['prefix']) || Boolean(prefixIcon));
 const resolvedWidth = computed(() => resolveComponentWidth(width) ?? '100%');
 
 const FONT_SIZE_CLASS: Record<string, string> = {

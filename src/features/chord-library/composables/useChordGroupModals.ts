@@ -1,7 +1,6 @@
-import { reactive } from 'vue';
-
 import { computeChordFingerprint, getChordName } from '@/services/music/theory';
 import { useChordActions } from '@/shared/composables/useChordActions';
+import { useModalController } from '@/shared/composables/useModalController';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
@@ -23,34 +22,34 @@ export function useChordGroupModals() {
   const chordActions = useChordActions();
   const songStore = useSongStore();
 
-  const modals = reactive({
-    create: false,
-    rename: false,
-    delete: false,
-    move: false,
-    sort: false,
-    chordVariantsDelete: false,
-    chordReferences: false,
-  });
-
-  const modalData = reactive({
-    inputValue: '',
-    activeGroup: null as Group | null,
-    activeChord: null as Chord | null,
-    activeGroupCard: null as GroupedChordCard | null,
-    selectedVariantIds: new Set<string>(),
-    moveTargetId: '',
-    sortRule: DEFAULT_GROUP_SORT_RULE as GroupSortRule,
-    sortKey: DEFAULT_SORT_KEY,
-    // 和弦引用反查弹窗数据
-    referenceChordName: '',
-    referenceChordIds: [] as string[],
-  });
+  const { modals, modalData, open, close } = useModalController(
+    {
+      create: false,
+      rename: false,
+      delete: false,
+      move: false,
+      sort: false,
+      chordVariantsDelete: false,
+      chordReferences: false,
+    },
+    {
+      inputValue: '',
+      activeGroup: null as Group | null,
+      activeChord: null as Chord | null,
+      activeGroupCard: null as GroupedChordCard | null,
+      selectedVariantIds: new Set<string>(),
+      moveTargetId: '',
+      sortRule: DEFAULT_GROUP_SORT_RULE as GroupSortRule,
+      sortKey: DEFAULT_SORT_KEY,
+      // 和弦引用反查弹窗数据
+      referenceChordName: '',
+      referenceChordIds: [] as string[],
+    }
+  );
 
   /** 打开新建分组弹窗，清空上次输入 */
   const openCreate = () => {
-    modalData.inputValue = '';
-    modals.create = true;
+    open('create', { inputValue: '' });
   };
 
   /** 确认创建分组：校验非空与重名后写入 chordStore */
@@ -65,15 +64,13 @@ export function useChordGroupModals() {
       return;
     }
     chordStore.addGroup(val);
-    modals.create = false;
+    close('create');
     uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
   };
 
   /** 打开重命名弹窗并预填当前分组名 */
   const openRename = (group: Group) => {
-    modalData.activeGroup = group;
-    modalData.inputValue = group.name;
-    modals.rename = true;
+    open('rename', { activeGroup: group, inputValue: group.name });
   };
 
   /** 确认重命名分组 */
@@ -86,14 +83,13 @@ export function useChordGroupModals() {
     if (modalData.activeGroup) {
       chordStore.renameGroup(modalData.activeGroup.id, val);
     }
-    modals.rename = false;
+    close('rename');
     uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
   };
 
   /** 打开删除分组确认弹窗 */
   const openDelete = (group: Group) => {
-    modalData.activeGroup = group;
-    modals.delete = true;
+    open('delete', { activeGroup: group });
   };
 
   /** 确认删除分组：联动编辑器复位与歌曲解绑，toast 提供 4 秒撤销（分组快照 + 和弦撤销 + 绑定恢复） */
@@ -116,7 +112,7 @@ export function useChordGroupModals() {
     chordStore.deleteGroup(targetGid);
     const removedBindings = songStore.unbindChordIds(targetChordIds);
 
-    modals.delete = false;
+    close('delete');
     uiStore.toast.info(`已删除分组 "${groupName}"`, {
       actionText: '撤销',
       duration: 4000,
@@ -132,9 +128,7 @@ export function useChordGroupModals() {
 
   /** 打开移动和弦弹窗，重置目标分组选择 */
   const openMove = (chord: Chord) => {
-    modalData.activeChord = chord;
-    modalData.moveTargetId = '';
-    modals.move = true;
+    open('move', { activeChord: chord, moveTargetId: '' });
   };
 
   /** 确认移动：按和弦名把该分组下所有变体指法移到目标分组 */
@@ -152,7 +146,7 @@ export function useChordGroupModals() {
     );
 
     uiStore.clearActionToasts();
-    modals.move = false;
+    close('move');
     uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
   };
 
@@ -165,10 +159,11 @@ export function useChordGroupModals() {
 
   /** 打开排序配置弹窗，回填分组当前的排序规则 */
   const openSort = (group: Group) => {
-    modalData.activeGroup = group;
-    modalData.sortRule = group.sortRule || DEFAULT_GROUP_SORT_RULE;
-    modalData.sortKey = getGroupSortKey(group) || DEFAULT_SORT_KEY;
-    modals.sort = true;
+    open('sort', {
+      activeGroup: group,
+      sortRule: group.sortRule || DEFAULT_GROUP_SORT_RULE,
+      sortKey: getGroupSortKey(group) || DEFAULT_SORT_KEY,
+    });
   };
 
   /** 确认保存排序配置 */
@@ -176,15 +171,13 @@ export function useChordGroupModals() {
     if (modalData.activeGroup) {
       chordStore.updateGroupSort(modalData.activeGroup.id, modalData.sortRule, modalData.sortKey);
     }
-    modals.sort = false;
+    close('sort');
     uiStore.toast.success('排序配置已更新');
   };
 
   /** 打开批量删除指法弹窗，清空上次的勾选 */
   const openChordVariantsDelete = (cardData: GroupedChordCard) => {
-    modalData.activeGroupCard = cardData;
-    modalData.selectedVariantIds.clear();
-    modals.chordVariantsDelete = true;
+    open('chordVariantsDelete', { activeGroupCard: cardData, selectedVariantIds: new Set<string>() });
   };
 
   /** 勾选/取消勾选一个待删除的变体指法 */
@@ -205,22 +198,20 @@ export function useChordGroupModals() {
     }
     const chordsToDelete = modalData.activeGroupCard.variants.filter(v => modalData.selectedVariantIds.has(v.id));
     chordActions.triggerDeleteChords(chordsToDelete);
-    modals.chordVariantsDelete = false;
+    close('chordVariantsDelete');
   };
 
   /** 确认删除该分组卡片的全部指法 */
   const handleDeleteAllVariants = () => {
     if (!modalData.activeGroupCard) return;
     chordActions.triggerDeleteChords(modalData.activeGroupCard.variants);
-    modals.chordVariantsDelete = false;
+    close('chordVariantsDelete');
   };
 
   /** 打开和弦引用反查弹窗：准备和弦名与全部变体 id，供展示被哪些歌曲槽位引用 */
   const openChordReferences = (cardData: GroupedChordCard) => {
     const ids = Array.from(new Set(cardData.variants.map(v => v.id)));
-    modalData.referenceChordIds = ids;
-    modalData.referenceChordName = getChordName(cardData.mainChord);
-    modals.chordReferences = true;
+    open('chordReferences', { referenceChordIds: ids, referenceChordName: getChordName(cardData.mainChord) });
   };
 
   return {

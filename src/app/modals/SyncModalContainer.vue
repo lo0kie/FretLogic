@@ -124,39 +124,15 @@
 
     <template #footer>
       <ActionButton
-        v-tooltip="testConnectionTooltip"
-        :disabled="isTestDisabled || isBusy"
-        :loading="isTestingConnection"
-        @click="handleTestConnectionClick"
+        v-for="action in syncActionButtons"
+        v-tooltip="action.tooltip"
+        :disabled="action.disabled"
+        :key="action.key"
+        :loading="action.loading"
+        :prefix-icon="action.icon"
+        @click="action.onClick"
       >
-        <template #prefix>
-          <BaseIcon :size="13" :stroke-width="2.5" name="plug-zap" />
-        </template>
-        测试连接
-      </ActionButton>
-
-      <ActionButton
-        v-tooltip="pullTooltip"
-        :disabled="isPullDisabled || isBusy"
-        :loading="isPulling"
-        @click="handlePullClick"
-      >
-        <template #prefix>
-          <BaseIcon :size="13" :stroke-width="2.5" name="cloud-download" />
-        </template>
-        拉取
-      </ActionButton>
-
-      <ActionButton
-        v-tooltip="syncTooltip"
-        :disabled="isSyncDisabled || isBusy"
-        :loading="isSyncing"
-        @click="handleSyncClick"
-      >
-        <template #prefix>
-          <BaseIcon :size="13" :stroke-width="2.5" name="cloud-upload" />
-        </template>
-        同步
+        {{ action.label }}
       </ActionButton>
     </template>
   </BaseModal>
@@ -168,11 +144,11 @@ import { computed } from 'vue';
 import { useStorage } from '@vueuse/core';
 
 import ActionButton from '@/components/ui/ActionButton.vue';
-import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BaseSelector, { type BaseSelectorOption } from '@/components/ui/BaseSelector.vue';
 import BaseSwitch from '@/components/ui/BaseSwitch.vue';
+import type { IconName } from '@/components/ui/icons.registry';
 import type { SyncProviderKind } from '@/services/sync/provider';
 import { useBackupModals } from '@/shared/composables/useBackupModals';
 import { useSyncService } from '@/shared/composables/useSyncService';
@@ -186,7 +162,7 @@ const settingsStore = useSettingsStore();
 const backupModals = useBackupModals();
 
 // 弹窗内方案选择器：独立持久化（不联动全局 syncTarget，仅记录弹窗当前查看/操作的方案）
-const selectedProvider = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_MODAL_PROVIDER, 'server');
+const selectedProvider = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_MODAL_PROVIDER, 'gitee');
 
 /** 用户点击"同步"：按当前选中的方案推送本地数据，成功后关闭弹窗 */
 const handleSyncClick = async () => {
@@ -267,4 +243,46 @@ const syncTooltip = computed(() => {
   }
   return '将本地数据推送到云端';
 });
+
+/** 底部操作按钮组：测试连接 / 拉取 / 同步 —— 结构一致（图标+文案+tooltip+禁用+加载+点击），
+ *  差异字段化后由模板 v-for 渲染。经 computed 求值并展开为纯值，模板无需解包 ref */
+type SyncActionButton = {
+  key: 'test-connection' | 'pull' | 'sync';
+  icon: IconName;
+  label: string;
+  tooltip: string | undefined;
+  disabled: boolean;
+  loading: boolean;
+  onClick: () => void | Promise<void>;
+};
+
+const syncActionButtons = computed<SyncActionButton[]>(() => [
+  {
+    key: 'test-connection',
+    icon: 'plug-zap',
+    label: '测试连接',
+    tooltip: testConnectionTooltip.value,
+    disabled: isTestDisabled.value || isBusy.value,
+    loading: isTestingConnection.value,
+    onClick: handleTestConnectionClick,
+  },
+  {
+    key: 'pull',
+    icon: 'cloud-download',
+    label: '拉取',
+    tooltip: pullTooltip.value,
+    disabled: isPullDisabled.value || isBusy.value,
+    loading: isPulling.value,
+    onClick: handlePullClick,
+  },
+  {
+    key: 'sync',
+    icon: 'cloud-upload',
+    label: '同步',
+    tooltip: syncTooltip.value,
+    disabled: isSyncDisabled.value || isBusy.value,
+    loading: isSyncing.value,
+    onClick: handleSyncClick,
+  },
+]);
 </script>

@@ -13,7 +13,6 @@
         @update:name-segments="handleNameSegmentsChange"
         @update:root-string-index="handleRootStringChange"
         @update:strings="handleStringsChange"
-        chord-name-font-size="lg"
       />
     </div>
   </div>
