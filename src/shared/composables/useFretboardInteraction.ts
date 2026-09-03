@@ -1,4 +1,4 @@
-import { computed, ref, useTemplateRef, watchEffect } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 
 import { useEventListener } from '@vueuse/core';
 
@@ -23,18 +23,14 @@ export function useFretboardInteraction(
   const focusPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
   const isFocused = ref(false);
 
-  const interactive = computed(() => props.interactive ?? true);
   const scale = computed(() => props.scale ?? 1.0);
-  const showOpenStrings = computed(() => props.showOpenStrings ?? true);
   const strings = computed(() => props.chord.strings);
   const fretCount = computed(() => props.chord.fretCount);
   const capo = computed(() => props.chord.capo);
   const tuning = computed(() => props.chord.tuning);
   const rootStringIndex = computed(() => props.chord.rootStringIndex);
-  // 和弦名区始终显示，高度恒计入布局
-  const showChordName = computed(() => props.showChordName ?? true);
-  const chordNameZoneHeight = computed(() => (showChordName.value ? CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT : 0));
-  const layout = useFretboardLayout(fretCount, scale, showOpenStrings, chordNameZoneHeight);
+  const chordNameZoneHeight = computed(() => CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT);
+  const layout = useFretboardLayout(fretCount, scale, chordNameZoneHeight);
 
   let wheelAccumulator = 0;
 
@@ -63,7 +59,6 @@ export function useFretboardInteraction(
     mutator: (cloned: GuitarStringsModel) => void,
     resolveRoot?: (currentRoot: number | null, cloned: GuitarStringsModel) => number | null
   ) => {
-    if (!interactive.value) return;
     const cloned = cloneGuitarStrings(strings.value);
     mutator(cloned);
     onStringsChange(cloned);
@@ -75,7 +70,7 @@ export function useFretboardInteraction(
 
   /** 切换某弦是否为根音（单点标记：只保留该弦，或清空为 null） */
   const emitToggleRootString = (sIdx: number) => {
-    if (!interactive.value || !onRootStringChange) return;
+    if (!onRootStringChange) return;
     const next = rootStringIndex.value === sIdx ? null : sIdx;
     if (next !== rootStringIndex.value) onRootStringChange(next);
   };
@@ -89,7 +84,6 @@ export function useFretboardInteraction(
 
   /** 右击空白处/禁用空弦：直接设为可用(对应品位或空弦)并设为主音 */
   const setAvailableAndRoot = (sIdx: number, fret: number) => {
-    if (!interactive.value) return;
     emitStringsUpdate(
       cloned => {
         const str = cloned[sIdx];
@@ -101,7 +95,6 @@ export function useFretboardInteraction(
 
   /** 右键：命中已有音符则切换主音，空品位/空弦则设为可用音符并标记为主音 */
   const handleRightClickRoot = (e: MouseEvent) => {
-    if (!interactive.value) return;
     // 交互态下统一抑制浏览器原生右键菜单（覆盖未命中区域，原由独立的 contextmenu 监听负责）
     e.preventDefault();
     const point = getCanvasPoint(e.clientX, e.clientY);
@@ -138,12 +131,10 @@ export function useFretboardInteraction(
     }
   };
 
-  /** 循环切换某弦状态：按品位 → 空弦 → 静音；交互态下同时让该弦获得焦点 */
+  /** 循环切换某弦状态：按品位 → 空弦 → 静音；同时让该弦获得焦点 */
   const handleLocalToggleOpenString = (sIdx: number) => {
-    if (interactive.value) {
-      fretBoardRef.value?.focus();
-      focusPoint.value = { stringIndex: sIdx, fretIndex: 0 };
-    }
+    fretBoardRef.value?.focus();
+    focusPoint.value = { stringIndex: sIdx, fretIndex: 0 };
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
       if (!str) return;
@@ -180,14 +171,12 @@ export function useFretboardInteraction(
 
   /** 切换某弦的升降号偏好（如 C#/Db），仅在该位置允许变体时生效 */
   const handleTogglePitchName = (sIdx: number) => {
-    if (interactive.value) {
-      fretBoardRef.value?.focus();
-      const currentFret = strings.value[sIdx]?.[0];
-      focusPoint.value = {
-        stringIndex: sIdx,
-        fretIndex: currentFret !== undefined && currentFret > 0 ? currentFret : 0,
-      };
-    }
+    fretBoardRef.value?.focus();
+    const currentFret = strings.value[sIdx]?.[0];
+    focusPoint.value = {
+      stringIndex: sIdx,
+      fretIndex: currentFret !== undefined && currentFret > 0 ? currentFret : 0,
+    };
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
       if (str && canTogglePitchAccidental(sIdx, str[0], capo.value, getActiveBaseStrings(tuning.value))) {
@@ -198,9 +187,7 @@ export function useFretboardInteraction(
 
   // 键盘可达性：方向键移动焦点、Enter/Space 切换音符、Delete/Backspace 静音，细节见 useFretboardKeyboard
   const { handleKeydown } = useFretboardKeyboard({
-    interactive,
     focusPoint,
-    showOpenStrings,
     fretCount,
     onToggleOpenString: handleLocalToggleOpenString,
     onToggleNote: toggleNoteAt,
@@ -229,7 +216,7 @@ export function useFretboardInteraction(
 
   /** 左键按下：焦点定位到命中点；空弦区切换空弦态，品位区切换音符（已有则清除） */
   const handlePointerDown = (e: PointerEvent) => {
-    if (!interactive.value || e.button !== 0) return;
+    if (e.button !== 0) return;
     fretBoardRef.value?.focus();
     const pt = getCanvasPoint(e.clientX, e.clientY);
     if (!pt) return;
@@ -249,12 +236,11 @@ export function useFretboardInteraction(
 
   /** 获得键盘焦点：显示焦点框，首次聚焦时给一个默认焦点位置 */
   const handleFocus = () => {
-    if (!interactive.value) return;
     isFocused.value = true;
     if (!focusPoint.value) {
       focusPoint.value = {
         stringIndex: 0,
-        fretIndex: showOpenStrings.value ? 0 : 1,
+        fretIndex: 0,
       };
     }
   };
@@ -271,8 +257,6 @@ export function useFretboardInteraction(
     clientY: number;
     deltaY: number;
   }>(pending => {
-    if (!interactive.value) return;
-
     const point = getCanvasPoint(pending.clientX, pending.clientY);
     if (point) {
       const { stringIndex: sIdx, fretIndex: fIdx } = point;
@@ -302,19 +286,16 @@ export function useFretboardInteraction(
 
   /** wheel 入口：只记录事件并按帧合帧处理，忽略 Ctrl/Cmd 缩放手势 */
   const handleWheel = (e: WheelEvent) => {
-    if (!interactive.value || e.ctrlKey || e.metaKey) return;
+    if (e.ctrlKey || e.metaKey) return;
+    // 仅命中指板有效区域（品位格/空弦行）时才接管滚轮；和弦名区与容器其余部分放行默认滚动，不触发 capo
+    if (!getCanvasPoint(e.clientX, e.clientY)) return;
     e.preventDefault();
     scheduleWheelFrame({ clientX: e.clientX, clientY: e.clientY, deltaY: e.deltaY });
   };
 
   useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
   useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {
-    if (interactive.value) scheduleHoverFrame({ clientX: e.clientX, clientY: e.clientY });
-  });
-
-  // 非编辑态：禁用一切 hover 高亮（如缩略图 / 谱面 / 选择器中不应有悬停反馈）
-  watchEffect(() => {
-    if (!interactive.value) hoverPoint.value = null;
+    scheduleHoverFrame({ clientX: e.clientX, clientY: e.clientY });
   });
 
   useEventListener(fretBoardRef, 'pointerleave', handlePointerLeave);
@@ -335,7 +316,6 @@ export function useFretboardInteraction(
     realScaledHeight: layout.realScaledHeight,
     activeTopOffset: layout.activeTopOffset,
     handleRightClickRoot,
-    handleLocalToggleOpenString,
     handleTogglePitchName,
   };
 }

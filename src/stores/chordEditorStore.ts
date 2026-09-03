@@ -6,10 +6,15 @@ import { defineStore } from 'pinia';
 
 import { createString, DEFAULT_TUNING_MAPPING, getChordName, Tuning, TUNING_PRESETS } from '@/services/music/theory';
 import { useChordStore } from '@/stores/chordStore';
-import type { BarreEntity, Chord, GuitarStringsModel } from '@/types';
+import type { BarreEntity, Chord, GuitarStringsModel, StringIndex } from '@/types';
 import { cloneDeep } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
-import { computeBarreCandidates, isBarreStillValid, normalizeChord } from '@/utils/music/chord-fretboard';
+import {
+  computeBarreCandidates,
+  isBarreStillValid,
+  normalizeAndMergeBarres,
+  normalizeChord,
+} from '@/utils/music/chord-fretboard';
 import { toChordId, toGroupId, toGuitarStringsModel } from '@/utils/music/entityFactories';
 
 /** 构造空白和弦草稿（六弦全部静音、标准调弦、3 品窗口），作为编辑器初始态。 */
@@ -74,8 +79,8 @@ export const reconcileBarres = (
 
     const reconciled: BarreEntity = {
       fret: oldBarre.fret,
-      fromString: newFrom,
-      toString: newTo,
+      fromString: newFrom as StringIndex,
+      toString: newTo as StringIndex,
       finger: oldBarre.finger,
     };
     if (isBarreStillValid(newStrings, reconciled)) {
@@ -83,15 +88,18 @@ export const reconcileBarres = (
     }
   });
 
+  const merged = normalizeAndMergeBarres(newBarres, newStrings);
+
   const isSame =
-    newBarres.length === oldBarres.length &&
-    newBarres.every((nb, i) => {
+    merged &&
+    merged.length === oldBarres.length &&
+    merged.every((nb, i) => {
       const ob = oldBarres[i];
       return ob && nb.fret === ob.fret && nb.fromString === ob.fromString && nb.toString === ob.toString;
     });
 
   if (isSame) return oldBarres;
-  return newBarres.length > 0 ? newBarres : undefined;
+  return merged;
 };
 
 /** 规范化草稿：复用统一的 normalizeChord 并在空白草稿时清理残留 C 分片 */ const normalizeDraftChord = (
@@ -204,6 +212,27 @@ export const useChordEditorStore = defineStore('editor', () => {
   // 程序性整体替换（加载/重置和弦）时跳过横按清除，避免误清已保存的横按
   let isProgrammaticStringsChange = false;
 
+  /**
+   * 自动横按合并：保留仍有效的现有横按（含手动标记，如 x13331 的 2 锚点横按），
+   * 再叠加「横按品位上真实音符 ≥ 3」的自动候选，按品位+弦范围去重。
+   * - ≥3 门槛只约束「自动新增」，不会清掉已有标记；
+   * - 已有横按是否保留以 isBarreStillValid 判定（两端锚点 + 无更低品位阻断），
+   *   音符被移走导致失效时自然清除，与手动模式 reconcile 语义一致。
+   */
+  const mergeAutoBarres = (): BarreEntity[] | undefined => {
+    const strings = draftChord.value.strings;
+    const existing = (draftChord.value.barres ?? []).filter(b => isBarreStillValid(strings, b));
+    const candidates = computeBarreCandidates(strings, draftChord.value.fretCount).filter(c => {
+      let noteCount = 0;
+      for (let s = c.fromString; s <= c.toString; s++) {
+        if (strings[s]?.[0] === c.fret) noteCount++;
+      }
+      return noteCount >= 3;
+    });
+
+    return normalizeAndMergeBarres([...existing, ...candidates], strings);
+  };
+
   // 指板音符变化时，精准保留未受影响的横按
   watch(
     () => draftChord.value.strings.map(s => s[0]),
@@ -213,18 +242,8 @@ export const useChordEditorStore = defineStore('editor', () => {
       }
 
       if (autoBarre.value) {
-        const candidates = computeBarreCandidates(draftChord.value.strings, draftChord.value.fretCount);
-        // 过滤：仅当该横按范围内，真正在该品位上的音符数量 >= 3 时，才自动标记
-        const validCandidates = candidates.filter(c => {
-          let noteCount = 0;
-          for (let s = c.fromString; s <= c.toString; s++) {
-            if (newFrets[s] === c.fret) noteCount++;
-          }
-          const passed = noteCount >= 3;
-          return passed;
-        });
-
-        draftChord.value.barres = validCandidates.length > 0 ? validCandidates : undefined;
+        // 自动横按：保留仍有效的现有横按 + 叠加 ≥3 音符的自动候选（见 mergeAutoBarres）
+        draftChord.value.barres = mergeAutoBarres();
         return;
       }
 
@@ -247,16 +266,8 @@ export const useChordEditorStore = defineStore('editor', () => {
     autoBarre,
     isAuto => {
       if (isAuto && !isFretBoardEmpty.value) {
-        const candidates = computeBarreCandidates(draftChord.value.strings, draftChord.value.fretCount);
-        const validCandidates = candidates.filter(c => {
-          let noteCount = 0;
-          for (let s = c.fromString; s <= c.toString; s++) {
-            if (draftChord.value.strings[s]?.[0] === c.fret) noteCount++;
-          }
-          return noteCount >= 3;
-        });
-
-        draftChord.value.barres = validCandidates.length > 0 ? validCandidates : undefined;
+        // 切换到自动横按：不清掉已有标记，只叠加满足 ≥3 音符门槛的自动候选
+        draftChord.value.barres = mergeAutoBarres();
       }
     },
     { flush: 'sync' }

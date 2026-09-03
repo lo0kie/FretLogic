@@ -36,10 +36,6 @@
         <BaseSwitch v-model="settingsStore.workbenchChordShorthand" aria-label="工作台符号简写" />
       </BaseFormRow>
 
-      <BaseFormRow help="仅工作台生效" label="显示音名">
-        <BaseSwitch v-model="settingsStore.workbenchShowPitchNames" aria-label="工作台显示音名" />
-      </BaseFormRow>
-
       <BaseFormRow help="指板有可横按弦组时自动标记" label="自动横按">
         <BaseSwitch v-model="editorStore.autoBarre" aria-label="自动标记横按" />
       </BaseFormRow>
@@ -83,10 +79,6 @@
 
       <BaseFormRow help="仅乐谱生效" label="符号简写 (M/°/+)">
         <BaseSwitch v-model="settingsStore.scoreChordShorthand" aria-label="乐谱符号简写" />
-      </BaseFormRow>
-
-      <BaseFormRow help="仅乐谱生效" label="显示音名">
-        <BaseSwitch v-model="settingsStore.scoreShowPitchNames" aria-label="乐谱显示音名" />
       </BaseFormRow>
     </template>
   </div>

@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 import FretboardSvg from '@/components/fretboard/FretboardSvg.vue';
 import type { BarreEntity } from '@/types';
 
-const candidate: BarreEntity = { fret: 1, fromString: 0, toString: 5, finger: 1 };
+const barre: BarreEntity = { fret: 1, fromString: 0, toString: 5, finger: 1 };
 
-const mountSvg = (barreCandidates: BarreEntity[]) =>
+const mountSvg = (barres: BarreEntity[] = []) =>
   mount(FretboardSvg, {
     props: {
       strings: [
@@ -21,50 +21,58 @@ const mountSvg = (barreCandidates: BarreEntity[]) =>
       capo: 0,
       activeBaseStrings: [40, 45, 50, 55, 59, 64],
       isDarkMode: false,
-      interactive: false,
       stringXPositions: [40, 70, 100, 130, 160, 190],
-      showPitchNames: false,
-      barrePickMode: true,
-      barreCandidates,
+      barres,
     },
   });
 
-describe('FretboardSvg 横按候选拾取', () => {
-  it('候选命中区可聚焦且具备按钮语义与可读标签', () => {
-    const wrapper = mountSvg([candidate]);
-    const hit = wrapper.find('rect[role="button"]');
-    expect(hit.exists()).toBe(true);
-    expect(hit.attributes('tabindex')).toBe('0');
-    expect(hit.attributes('aria-label')).toContain('横按');
+describe('FretboardSvg 指板渲染', () => {
+  it('正确渲染琴弦与按品音名圆点', () => {
+    const wrapper = mountSvg();
+    const notes = wrapper.findAllComponents({ name: 'FretboardNote' });
+    expect(notes.length).toBe(6);
   });
 
-  it('Enter / Space / 点击 均派发 barre-click', async () => {
-    const wrapper = mountSvg([candidate]);
-    const hit = wrapper.find('rect[role="button"]');
-
-    await hit.trigger('keydown', { key: 'Enter' });
-    await hit.trigger('keydown', { key: ' ' });
-    await hit.trigger('click');
-
-    const clicks = wrapper.emitted('barre-click');
-    expect(clicks).toHaveLength(3);
-    expect(clicks![0]).toEqual([candidate]);
+  it('当传入已标记横按时渲染淡蓝色横按梁', () => {
+    const wrapper = mountSvg([barre]);
+    const barreGroup = wrapper.find('.fretboard-barre-group');
+    expect(barreGroup.exists()).toBe(true);
+    const rect = barreGroup.find('.fretboard-barre-beam');
+    expect(rect.exists()).toBe(true);
+    // 已标记横按为淡蓝色背景
+    expect(rect.attributes('fill')).toContain('rgba(');
   });
 
-  it('键盘聚焦时外扩虚线框强调显示，失焦后恢复', async () => {
-    const wrapper = mountSvg([candidate]);
-    const hit = wrapper.find('rect[role="button"]');
-    const dash = wrapper.find('rect[stroke-dasharray]');
-
-    expect(dash.attributes('stroke-opacity')).toBe('0.6');
-    await hit.trigger('focus');
-    expect(dash.attributes('stroke-opacity')).toBe('1');
-    await hit.trigger('blur');
-    expect(dash.attributes('stroke-opacity')).toBe('0.6');
-  });
-
-  it('无候选时不渲染可聚焦命中区', () => {
+  it('未传入已标记横按但指法满足条件时渲染推导横按（更淡蓝色）', () => {
     const wrapper = mountSvg([]);
-    expect(wrapper.find('rect[role="button"]').exists()).toBe(false);
+    const barreGroup = wrapper.find('.fretboard-barre-group');
+    expect(barreGroup.exists()).toBe(true);
+    const rect = barreGroup.find('.fretboard-barre-beam');
+    expect(rect.exists()).toBe(true);
+    // 未标记横按为虚线描边
+    expect(rect.attributes('stroke-dasharray')).toBe('6 4');
+  });
+
+  it('无横按指法且无标记时，不渲染横按分组', () => {
+    const wrapper = mount(FretboardSvg, {
+      props: {
+        strings: [
+          [-1, false],
+          [3, false],
+          [2, false],
+          [0, false],
+          [1, false],
+          [0, false],
+        ] as never,
+        fretCount: 5,
+        capo: 0,
+        activeBaseStrings: [40, 45, 50, 55, 59, 64],
+        isDarkMode: false,
+        stringXPositions: [40, 70, 100, 130, 160, 190],
+        barres: [],
+      },
+    });
+    const barreGroup = wrapper.find('.fretboard-barre-group');
+    expect(barreGroup.exists()).toBe(false);
   });
 });

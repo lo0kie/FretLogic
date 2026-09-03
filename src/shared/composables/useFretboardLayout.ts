@@ -8,14 +8,9 @@ const STRING_X_POSITIONS = Array.from(
 );
 
 /** 指板几何布局：根据品位数/缩放/顶部附加高度推导各尺寸 computed，供 SVG 渲染与坐标换算共用 */
-export function useFretboardLayout(
-  fretCount: Ref<number>,
-  scale: Ref<number>,
-  showOpenStrings?: Ref<boolean | undefined>,
-  extraTopHeight?: Ref<number>
-) {
+export function useFretboardLayout(fretCount: Ref<number>, scale: Ref<number>, extraTopHeight?: Ref<number>) {
   const stringXPositions = computed(() => STRING_X_POSITIONS);
-  const activeTopOffset = computed(() => (showOpenStrings?.value !== false ? CANVAS_CONFIG.OFFSET_Y_TOP : 16));
+  const activeTopOffset = computed(() => CANVAS_CONFIG.OFFSET_Y_TOP);
   /** 指板 SVG 实际起始位置：和弦名区 + 空弦区 */
   const contentTopOffset = computed(() => (extraTopHeight?.value ?? 0) + activeTopOffset.value);
 

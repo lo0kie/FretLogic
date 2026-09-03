@@ -69,7 +69,7 @@
         </div>
         <div
           v-wheel-scroll.smooth
-          class="picker-group-pills-bar no-scrollbar py-xs flex items-center overflow-x-auto scroll-smooth"
+          class="picker-group-pills-bar no-scrollbar pt-xs flex items-center overflow-x-auto scroll-smooth"
         >
           <BaseSegmentedControl
             v-model="selectedGroupId"
@@ -90,7 +90,9 @@
         ref="scrollWrapperRef"
       >
         <Transition name="v-transition-fade">
-          <EmptyState v-if="filteredChords.length === 0" description="当前搜索或分组下暂无匹配和弦。" size="lg" />
+          <div v-if="filteredChords.length === 0" class="flex h-full w-full items-center justify-center">
+            <EmptyState description="当前搜索或分组下暂无匹配和弦。" size="lg" />
+          </div>
         </Transition>
         <TransitionGroup
           v-if="filteredChords.length > 0"
@@ -143,6 +145,7 @@
                   @pointerdown.stop
                   aria-label="去修改该和弦"
                   class="picker-edit-btn duration-fast pointer-events-auto absolute top-1 right-1 z-20 p-1.5! opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                  color="primary"
                   icon-only
                   size="sm"
                   title="去修改该和弦"
@@ -157,15 +160,14 @@
                 >
                   {{ getSourceGroupName(chord) }}
                 </span>
-                <Fretboard
+                <FretboardCanvas
                   v-if="visibleMap.get(chord.id)"
                   :chord
-                  :interactive="false"
+                  :chord-name-scale="0.7"
                   :is-dark-mode="globalDarkMode"
-                  :is-score-mode="true"
                   :ref="el => setFretboardMeasureRef(el, chord.fretCount)"
                   :scale="pickerScale"
-                  fret-number-size="lg"
+                  :shorthand="settingsStore.scoreChordShorthand"
                 />
                 <div v-else :style="getCalculatedOrCachedSize(chord.fretCount)" />
               </div>
@@ -240,7 +242,7 @@ import {
 } from 'vue';
 import { useRouter } from 'vue-router';
 
-import Fretboard from '@/components/fretboard/Fretboard.vue';
+import FretboardCanvas from '@/components/fretboard/FretboardCanvas.vue';
 import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseBadge from '@/components/ui/BaseBadge.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
@@ -262,18 +264,21 @@ import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import type { Chord } from '@/types';
 import { GroupSortRule } from '@/types';
 import { observeVisibility } from '@/utils/core/common';
-import { getPlaceholderSize } from '@/utils/music/chord-fretboard';
+import { SCORE_EXPORT_CONFIG } from '@/utils/core/constants';
 import { getGroupSortKey, toGroupId } from '@/utils/music/entityFactories';
 
-const pickerScale = 0.32;
-/** 和弦选择卡片基础与激活态类名 */
+const pickerScale = 2;
+/** 和弦选择卡片基础与激活态类名（设定充足 min-h 与顶部呼吸空间，避免顶栏操作压住和弦名） */
 const CHORD_CARD_BASE_CLASS =
-  'picker-chord-card group flex flex-col items-center justify-center self-start w-full box-border relative z-card p-md bg-bg-body border border-border-light rounded-md cursor-pointer outline-none transition-all duration-fast hover:border-primary hover:shadow-md active:scale-[0.97] [&:has(.picker-edit-btn:active)]:scale-100';
+  'picker-chord-card group flex flex-col items-center justify-center self-start w-full min-h-[196px] box-border relative z-card pt-4 pb-2 px-2 bg-bg-body border border-border-light rounded-md cursor-pointer outline-none transition-all duration-fast hover:border-primary hover:shadow-md active:scale-[0.97] [&:has(.picker-edit-btn:active)]:scale-100';
 const CHORD_CARD_ACTIVE_CLASS =
-  'bg-tint-primary-88! border-primary! cursor-default pointer-events-none! ring-2 ring-primary/70 shadow-none! !active:scale-100';
+  // 不加 pointer-events-none：active 卡需整卡可 hover 才能显示「去编辑」按钮，
+  // 选中防护由 click 守卫 + cursor-default + important 覆盖 hover 变体兜底
+  'bg-tint-primary-88! border-primary! cursor-default ring-2 ring-primary/70 shadow-none! !active:scale-100';
 
 const props = defineProps<{
   visible: boolean;
@@ -291,6 +296,7 @@ const router = useRouter();
 const editorStore = useChordEditorStore();
 const chordStore = useChordStore();
 const scoreEditor = useScoreEditorStore();
+const settingsStore = useSettingsStore();
 const { chordsLookupMap } = useScoreLinesData();
 
 const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
@@ -308,6 +314,18 @@ const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordI
   const domEl = (el as ComponentPublicInstance)?.$el ?? el;
   if (!(domEl instanceof HTMLElement)) return;
   if (visibleMap.get(chordId) || cardObserverStops.has(chordId)) return;
+
+  const scrollRoot = scrollWrapperRef.value;
+  // 若滚动容器尚未挂载，等待 nextTick 容器就绪后再行建立观察，避免以 window 为 root 误判
+  if (!scrollRoot) {
+    nextTick(() => {
+      if (scrollWrapperRef.value && !visibleMap.get(chordId) && !cardObserverStops.has(chordId)) {
+        setCardObserverRef(el, chordId);
+      }
+    });
+    return;
+  }
+
   const stop = observeVisibility(
     domEl,
     visible => {
@@ -317,28 +335,35 @@ const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordI
         cardObserverStops.delete(chordId);
       }
     },
-    scrollWrapperRef.value
+    scrollRoot
   );
   cardObserverStops.set(chordId, stop);
 };
 
-/** 停止并清空所有卡片的可见性观察器（组件失活时调用，防止泄漏） */
+/** 停止并清空所有卡片的可见性观察器 */
 const clearAllCardObservers = () => {
   cardObserverStops.forEach(stop => stop());
   cardObserverStops.clear();
 };
 
+// 弹窗关闭时重置可见性映射与观察器，确保下次打开依然享有虚拟占位与按需渲染的高性能
+watch(visibleModel, isOpen => {
+  if (!isOpen) {
+    clearAllCardObservers();
+    visibleMap.clear();
+  }
+});
+
 /** 首次渲染的指板测量真实尺寸并按品数缓存，供后续占位元素复用 */
 const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fretCount: number) => {
   const cacheKey = getCacheKey(fretCount);
-  if (!el || fretboardSizeCache.has(cacheKey)) return;
   const domEl = (el as ComponentPublicInstance)?.$el ?? el;
   if (!(domEl instanceof HTMLElement)) return;
   const rect = domEl.getBoundingClientRect();
   if (rect.width > 0 && rect.height > 0) {
     fretboardSizeCache.set(cacheKey, {
-      width: `${rect.width}px`,
-      height: `${rect.height}px`,
+      width: `${Math.round(rect.width)}px`,
+      height: `${Math.round(rect.height)}px`,
     });
   }
 };
@@ -348,7 +373,11 @@ const getCalculatedOrCachedSize = (fretCount: number) => {
   const cacheKey = getCacheKey(fretCount);
   const cached = fretboardSizeCache.get(cacheKey);
   if (cached) return cached;
-  const coreSize = getPlaceholderSize(fretCount, pickerScale, true, true);
+  const w = Math.round(SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH * pickerScale);
+  const h = Math.round(
+    (SCORE_EXPORT_CONFIG.FRETBOARD_GRID_TOP + fretCount * SCORE_EXPORT_CONFIG.FRET_HEIGHT + 6) * pickerScale
+  );
+  const coreSize = { width: `${w}px`, height: `${h}px` };
   fretboardSizeCache.set(cacheKey, coreSize);
   return coreSize;
 };

@@ -39,11 +39,11 @@
         <img
           v-for="(url, index) in pages"
           :alt="`乐谱预览第 ${index + 1} 页`"
-          :class="menuTargetIndex === index ? 'outline-primary outline-2 -outline-offset-2' : ''"
+          :class="menuTargetIndex === index ? 'outline-primary' : 'outline-transparent'"
           :key="url"
           :src="url"
           @contextmenu.prevent="handlePageContextMenu($event, index)"
-          class="shadow-panel block h-full w-auto cursor-context-menu rounded-sm"
+          class="shadow-panel block h-full w-auto cursor-context-menu rounded-sm outline-2 -outline-offset-2 transition-[outline]"
           draggable="false"
         />
       </div>

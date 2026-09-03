@@ -238,12 +238,7 @@ const sanitizeSyncSettings = (raw: unknown): SyncSettingsBackup | undefined => {
 };
 
 /** 偏好设置字段（全部 boolean） */
-const PREFERENCE_BOOLEAN_FIELDS = [
-  'workbenchChordShorthand',
-  'workbenchShowPitchNames',
-  'scoreChordShorthand',
-  'scoreShowPitchNames',
-] as const;
+const PREFERENCE_BOOLEAN_FIELDS = ['workbenchChordShorthand', 'scoreChordShorthand'] as const;
 
 /**
  * 防御性清洗 preferences：偏好属辅助数据，字段损坏只丢弃该字段，

@@ -29,7 +29,6 @@
     "@floating-ui/dom": "^1.8.0",
     "@floating-ui/vue": "^2.0.1",
     "@vueuse/core": "^14.4.0",
-    "html-to-image": "^1.11.13",
     "nprogress": "^0.2.0",
     "pinia": "^2.1.7",
     "pinyin-pro": "^3.29.3",

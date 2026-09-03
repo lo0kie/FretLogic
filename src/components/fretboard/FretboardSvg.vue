@@ -1,16 +1,52 @@
 <template>
   <div class="relative inline-block w-full">
-    <div v-if="showFretNumbers" aria-hidden="true" class="z-inner pointer-events-none absolute inset-0">
+    <div aria-hidden="true" class="z-inner pointer-events-none absolute inset-0">
       <span
         v-for="i in fretCount"
         v-show="i < fretCount"
-        :class="FRET_SIZE_MAP[fretNumberSize] || FRET_SIZE_MAP['md']"
         :key="'fret-num-' + i"
         :style="getFretNumberStyle(i)"
-        class="absolute -translate-x-full -translate-y-1/2 font-[Helvetica_Neue,Arial,sans-serif] leading-none font-extrabold text-(--fb-label) select-none"
+        class="absolute -translate-x-full -translate-y-1/2 font-[Helvetica_Neue,Arial,sans-serif] text-xl leading-none font-extrabold text-(--fb-label) select-none"
       >
         {{ capo > 0 ? capo + i : i }}
       </span>
+    </div>
+
+    <!-- 悬浮横按操作气泡：外层 Wrapper 专注坐标定位与平移过渡，内层 Panel 专注入场出场动效与点击交互 -->
+    <div
+      v-if="isBubbleMounted && displayBubbleGeometry"
+      :style="{
+        left: `${(displayBubbleGeometry.centerX / CANVAS_CONFIG.BOARD_WIDTH) * 100}%`,
+        top: `${displayBubbleGeometry.topY}px`,
+      }"
+      class="z-card pointer-events-none absolute -translate-x-1/2 -translate-y-full transition-[left,top] duration-200 ease-out select-none"
+    >
+      <Transition @after-leave="handleBubbleAfterLeave" appear name="barre-bubble-transition">
+        <div
+          v-auto-width
+          v-if="activeHoveredBarre && displayBubbleBarre"
+          v-wave
+          :class="[
+            displayBubbleBarre.isMarked
+              ? 'bg-primary border-primary text-white shadow-[0_6px_20px_rgba(59,130,246,0.45)] dark:shadow-[0_8px_26px_rgba(96,165,250,0.55)]'
+              : 'bg-bg-panel text-primary border-primary/40 hover:bg-tint-primary-88 shadow-[0_6px_20px_rgba(0,0,0,0.22)] dark:shadow-[0_8px_26px_rgba(0,0,0,0.65)]',
+          ]"
+          @click.stop="handleBarreBubbleClick"
+          @mousedown.prevent.stop
+          @pointerdown.prevent.stop
+          @pointerenter.stop="handleBubblePointerEnter"
+          @pointerleave="handleBubblePointerLeave"
+          @pointermove.stop
+          class="group duration-fast pointer-events-auto relative flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap transition-[background-color,border-color,box-shadow]"
+        >
+          <BaseIcon v-if="displayBubbleBarre.isMarked" :size="12" :stroke-width="2.5" name="check" />
+          <BaseIcon v-else :size="12" :stroke-width="2.5" name="plus" />
+          <span>{{ displayBubbleBarre.isMarked ? '取消标记' : '标记为横按' }}</span>
+
+          <!-- 直接复用项目统一的 buildFloatingArrowStyle 箭头组件与样式 -->
+          <div :style="barreArrowStyle" class="popover-arrow pointer-events-none" />
+        </div>
+      </Transition>
     </div>
 
     <svg
@@ -60,69 +96,37 @@
         />
       </g>
 
-      <g v-if="!showPitchNames && barrePickMode && renderBarreCandidates.length">
-        <rect
-          v-for="c in renderBarreCandidates"
-          :height="barreDashGeometry(c).height"
-          :key="`barre-cand-dash-${c.fret}-${c.fromString}-${c.toString}`"
-          :rx="barreDashGeometry(c).rx"
-          :stroke="barreCandidateFill"
-          :stroke-dasharray="'8 6'"
-          :stroke-opacity="isBarreHighlighted(c) ? 1 : 0.6"
-          :stroke-width="isBarreHighlighted(c) ? 6 : 4"
-          :width="barreDashGeometry(c).width"
-          :x="barreDashGeometry(c).x"
-          :y="barreDashGeometry(c).y"
-          class="duration-fast transition-[stroke-opacity]"
-          fill="none"
-        />
-        <rect
-          v-for="c in renderBarreCandidates"
-          :fill="barreCandidateFill"
-          :fill-opacity="isBarreHighlighted(c) ? 0.5 : 0.2"
-          :height="barreThickness"
-          :key="`barre-cand-${c.fret}-${c.fromString}-${c.toString}`"
-          :rx="barreThickness / 2"
-          :title="barreCandidateTitle(c)"
-          :width="barreGeometry(c).width"
-          :x="barreGeometry(c).x"
-          :y="barreGeometry(c).y"
-          class="duration-fast pointer-events-none cursor-pointer transition-[fill-opacity]"
-        />
-        <rect
-          v-for="c in renderBarreCandidates"
-          :aria-label="barreCandidateTitle(c)"
-          :height="barreHitThickness"
-          :key="`barre-cand-hit-${c.fret}-${c.fromString}-${c.toString}`"
-          :width="barreGeometry(c).width"
-          :x="barreGeometry(c).x"
-          :y="barreHitGeometry(c).y"
-          @blur="focusedBarreHit = null"
-          @click.stop="emit('barre-click', c)"
-          @focus="focusedBarreHit = barreKey(c)"
-          @keydown.enter.prevent="emit('barre-click', c)"
-          @keydown.space.prevent="emit('barre-click', c)"
-          @mouseenter="activeBarreHit = barreKey(c)"
-          @mouseleave="activeBarreHit = null"
-          class="pointer-events-auto cursor-pointer outline-none"
-          fill="transparent"
-          role="button"
-          tabindex="0"
-        />
-      </g>
-
-      <g v-if="!showPitchNames && renderBarres.length" aria-hidden="true">
-        <rect
-          v-for="barre in renderBarres"
-          :fill="barreActiveFill"
-          :height="barreThickness"
-          :key="`barre-${barre.fret}-${barre.fromString}-${barre.toString}`"
-          :rx="barreThickness / 2"
-          :width="barreGeometry(barre).width"
-          :x="barreGeometry(barre).x"
-          :y="barreGeometry(barre).y"
-          class="duration-fast transition-[fill]"
-        />
+      <!-- 横按梁（推导横按与已标记横按）：绘制在音符下方作为底衬，淡蓝色表示已标记，更淡的蓝色表示推导未标记 -->
+      <g v-if="displayBarres.length" class="fretboard-barre-group">
+        <g
+          v-for="barre in displayBarres"
+          :key="barre.key"
+          @mouseenter="handleBarreMouseEnter(barre)"
+          @mouseleave="handleBarreMouseLeave"
+          class="duration-fast pointer-events-auto transition-all"
+        >
+          <!-- 整品高度感应热区：鼠标悬停在横按区域内任何位置（两弦之间、品格空白处）均即刻浮现气泡 -->
+          <rect
+            :height="CANVAS_CONFIG.FRET_HEIGHT"
+            :width="barreGeometry(barre).width"
+            :x="barreGeometry(barre).x"
+            :y="(barre.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT"
+            fill="transparent"
+          />
+          <!-- 视觉横按梁底衬 -->
+          <rect
+            :fill="getBarreFill(barre.isMarked)"
+            :height="barreThickness"
+            :rx="barreThickness / 2"
+            :stroke="getBarreStroke(barre.isMarked)"
+            :stroke-dasharray="barre.isMarked ? undefined : '6 4'"
+            :width="barreGeometry(barre).width"
+            :x="barreGeometry(barre).x"
+            :y="barreGeometry(barre).y"
+            class="fretboard-barre-beam duration-fast transition-all hover:brightness-110"
+            stroke-width="1.5"
+          />
+        </g>
       </g>
 
       <circle
@@ -151,15 +155,13 @@
         <FretboardNote
           v-if="str[0] > 0 && str[0] <= fretCount"
           :aria-label="stringNoteAriaLabel(sIdx, str)"
-          :interactive
-          :is-accidental="showPitchNames && noteInfo(sIdx, str).isAccidental"
+          :is-accidental="noteInfo(sIdx, str).isAccidental"
           :is-dark-mode
           :is-focused="isNoteFocused(sIdx, str[0])"
           :is-hovered="isNoteHovered(sIdx, str[0])"
           :is-root="isRoot(sIdx)"
-          :label="showPitchNames ? noteInfo(sIdx, str).label : ''"
+          :label="noteInfo(sIdx, str).label"
           :prefer-flat="str[1]"
-          :show-pitch-names
           :x="stringXPositions[sIdx] ?? 0"
           :y="(str[0] - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
           @toggle-pitch="emit('toggle-pitch', sIdx)"
@@ -170,42 +172,21 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch, type CSSProperties } from 'vue';
 
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/services/music/theory';
 import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/types';
 import { CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '@/utils/core/constants';
+import { computeBarreCandidates, isBarreStillValid } from '@/utils/music/chord-fretboard';
+import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
 
 import FretboardNote from './FretboardNote.vue';
 
-/** 横按梁厚度与极简模式按品圆点同直径（仅不显示音名时渲染，固定 48px） */
-const barreThickness = 24 * 2;
-/** 横按候选命中区厚度：略大于圆点，扩大可点击/悬停热区 */
-const barreHitThickness = 24 * 2 + 8;
-
-/** 当前 hover 的候选梁标识（`fret-from-to`），用于可见梁提亮提示 */
-const activeBarreHit = ref<string | null>(null);
-/** 当前键盘聚焦的候选梁标识，聚焦强调走外扩虚线框而非浏览器默认描边 */
-const focusedBarreHit = ref<string | null>(null);
-
-/** 候选梁唯一标识（品位-起弦-止弦），用于 hover / 聚焦态比对 */
-const barreKey = (b: BarreEntity) => `${b.fret}-${b.fromString}-${b.toString}`;
-/** 候选梁是否处于 hover 或键盘聚焦的强调态 */
-const isBarreHighlighted = (b: BarreEntity) => {
-  const key = barreKey(b);
-  return activeBarreHit.value === key || focusedBarreHit.value === key;
-};
-
-const FRET_SIZE_MAP: Record<string, string> = {
-  sm: 'text-lg',
-  md: 'text-xl',
-  lg: 'text-2xl',
-};
+/** 横按实心梁厚度：贴合按弦圆点直径 */
+const barreThickness = NOTE_DISPLAY.FINGER_DOT_RADIUS * 2;
 
 const {
-  fretNumberSize = 'md',
-  showFretNumbers = true,
-  showPitchNames = true,
   hoverPoint = null,
   focusPoint = null,
   rootStringIndex = null,
@@ -213,13 +194,10 @@ const {
   activeBaseStrings,
   fretCount,
   strings,
-  interactive,
   capo,
   isDarkMode,
   wideNut = false,
   barres = [],
-  barreCandidates = [],
-  barrePickMode = false,
 } = defineProps<{
   strings: GuitarStringsModel;
   fretCount: number;
@@ -227,21 +205,13 @@ const {
   activeBaseStrings: readonly number[];
   rootStringIndex?: number | null;
   isDarkMode: boolean;
-  interactive: boolean;
   stringXPositions: number[];
   hoverPoint?: { stringIndex: number; fretIndex: number } | null;
   focusPoint?: { stringIndex: number; fretIndex: number } | null;
-  fretNumberSize?: 'sm' | 'md' | 'lg';
-  showFretNumbers?: boolean;
-  showPitchNames?: boolean;
   /** 零品品丝是否加宽（粗琴枕效果），默认 false */
   wideNut?: boolean;
   /** 横按列表（显式配置或自动推导），绘制在音符下方 */
   barres?: BarreEntity[];
-  /** 可点击的候选横按列表（横按拾取模式展示） */
-  barreCandidates?: BarreEntity[];
-  /** 横按拾取模式：候选梁可点击派发 barre-click（音符保持不可交互） */
-  barrePickMode?: boolean;
 }>();
 
 const isWideNut = computed(() => Boolean(wideNut));
@@ -254,7 +224,7 @@ const stringNoteAriaLabel = (sIdx: number, str: GuitarStringEntity) =>
 
 const emit = defineEmits<{
   (e: 'toggle-pitch', stringIndex: number): void;
-  (e: 'barre-click', barre: BarreEntity): void;
+  (e: 'toggle-barre', barre: BarreEntity): void;
 }>();
 
 /** 品号定位：置于指板左侧、按品高垂直排列 */
@@ -270,7 +240,7 @@ const getFretNumberStyle = (fretIndex: number) => {
 /** 该弦是否为根音弦 */
 const isRoot = (sIdx: number) => rootStringIndex === sIdx;
 const hoverFillColor = computed(() => 'var(--fb-hover)');
-const emptyRingRadius = computed(() => (showPitchNames ? NOTE_DISPLAY.FINGER_OUTLINE_RADIUS : 28));
+const emptyRingRadius = computed(() => NOTE_DISPLAY.FINGER_OUTLINE_RADIUS);
 
 /** 横按梁几何：圆角圆心对齐最外侧音符中心（pad = 厚度一半），y 对齐所在品中心 */
 const barreGeometry = (barre: BarreEntity) => {
@@ -284,44 +254,260 @@ const barreGeometry = (barre: BarreEntity) => {
   };
 };
 
-/** 候选横按梁的外扩虚线轮廓（四向外扩 DASH_PAD，虚线框比主体大一圈） */
-const BARRE_DASH_PAD = 10;
-/** 候选横按梁的外扩虚线轮廓几何：四周向外扩 DASH_PAD，虚线框比主体大一圈 */
-const barreDashGeometry = (barre: BarreEntity) => {
-  const base = barreGeometry(barre);
-  const h = barreThickness + BARRE_DASH_PAD * 2;
-  return {
-    x: base.x - BARRE_DASH_PAD,
-    y: base.y - BARRE_DASH_PAD,
-    width: base.width + BARRE_DASH_PAD * 2,
-    height: h,
-    rx: h / 2,
-  };
+/**
+ * 汇总当前指板上需要展示的所有横按（推导出的候选 + 已标记横按）：
+ * - 已标记横按（用户显式设置）：isMarked = true
+ * - 推导出的未标记横按：isMarked = false
+ */
+interface DisplayBarre extends BarreEntity {
+  isMarked: boolean;
+  key: string;
+}
+
+const displayBarres = computed<DisplayBarre[]>(() => {
+  const validMarked = barres.filter(b => isBarreStillValid(strings, b) && b.fret >= 1 && b.fret <= fretCount);
+  const candidates = computeBarreCandidates(strings, fretCount).filter(c => c.fret >= 1 && c.fret <= fretCount);
+
+  const map = new Map<string, { barre: BarreEntity; isMarked: boolean }>();
+
+  // 1. 注入推导出的候选横按（初始为未标记）
+  for (const c of candidates) {
+    const key = `${c.fret}_${c.fromString}_${c.toString}`;
+    map.set(key, { barre: c, isMarked: false });
+  }
+
+  // 2. 将已有标记的横按设为已标记（覆盖已有候选或补充特例）
+  for (const m of validMarked) {
+    const key = `${m.fret}_${m.fromString}_${m.toString}`;
+    map.set(key, { barre: m, isMarked: true });
+  }
+
+  return Array.from(map.values()).map(({ barre, isMarked }) => ({
+    ...barre,
+    isMarked,
+    key: `barre-${barre.fret}-${barre.fromString}-${barre.toString}`,
+  }));
+});
+
+/** 横按梁填充色：已标记加深蓝色，推导未标记为更淡的蓝色 */
+const getBarreFill = (isMarked: boolean) => {
+  if (isMarked) {
+    return isDarkMode ? 'rgba(96, 165, 250, 0.62)' : 'rgba(59, 130, 246, 0.58)';
+  }
+  return isDarkMode ? 'rgba(96, 165, 250, 0.16)' : 'rgba(59, 130, 246, 0.14)';
 };
 
-/** 候选横按梁填充：极简模式线色（以淡色 + 虚线表现"未选中可点"） */
-const barreCandidateFill = 'var(--fb-line)';
-/** 已标记横按梁填充：实心线色，保持黑白线稿风格，与候选淡虚线明显区分 */
-const barreActiveFill = 'var(--fb-line)';
-
-/** 仅渲染落在指板范围内的横按（品格越界时跳过，避免画出 SVG 外） */
-const renderBarres = computed(() => barres.filter(b => b.fret >= 1 && b.fret <= fretCount));
-const renderBarreCandidates = computed(() => barreCandidates.filter(b => b.fret >= 1 && b.fret <= fretCount));
-
-/** 候选横按梁的可点击命中区几何（垂直方向按品中心扩展） */
-const barreHitGeometry = (barre: BarreEntity) => {
-  const half = barreHitThickness / 2;
-  const x = barreGeometry(barre).x - 4;
-  const width = barreGeometry(barre).width + 8;
-  return {
-    x,
-    width,
-    y: (barre.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2 - half,
-  };
+/** 横按梁边框色：已标记为深色清晰描边，未标记为虚线更淡描边 */
+const getBarreStroke = (isMarked: boolean) => {
+  if (isMarked) {
+    return isDarkMode ? 'rgba(96, 165, 250, 0.90)' : 'rgba(59, 130, 246, 0.85)';
+  }
+  return isDarkMode ? 'rgba(96, 165, 250, 0.38)' : 'rgba(59, 130, 246, 0.35)';
 };
 
-/** 候选梁 hover 提示：显示品位与弦范围 */
-const barreCandidateTitle = (b: BarreEntity) => `标记 ${b.fret} 品 ${6 - b.fromString}弦 ~ ${6 - b.toString}弦 横按`;
+// ==================== 浮动横按操作气泡交互 ====================
+const activeHoveredBarreKey = ref<string | null>(null);
+const isBubbleMounted = ref(false);
+let barreHideTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 当前被 hover 激活的横按对象（响应式随 displayBarres 变化同步更新，并在横按延伸时平滑延续避免 DOM 销毁重建） */
+const activeHoveredBarre = computed<DisplayBarre | null>(() => {
+  if (activeHoveredBarreKey.value) {
+    const direct = displayBarres.value.find(b => b.key === activeHoveredBarreKey.value);
+    if (direct) return direct;
+
+    // 关键优化：音符连续点按时横按弦跨度扩展（例如从 0..1 延伸到 0..2），新旧 key 不一致但属于同一品位横按的连续生长
+    // 此时平滑延续当前品位的最新横按，绝不返回 null 触发 DOM 节点销毁重建，确保 CSS 移位平滑过渡！
+    const oldFret = Number(activeHoveredBarreKey.value.split('-')[1]);
+    const continued = displayBarres.value.find(
+      b => b.fret === oldFret && ((hoverPoint && isPointInBarre(hoverPoint, b)) || true)
+    );
+    if (continued) {
+      return continued;
+    }
+  }
+
+  // 若光标当前落在任一横按上，自动匹配激活
+  if (hoverPoint) {
+    const matched = displayBarres.value.find(b => isPointInBarre(hoverPoint, b));
+    if (matched) {
+      return matched;
+    }
+  }
+
+  return null;
+});
+
+// 在合法的 watcher 生命周期内同步最新 key 与挂载生命周期，杜绝 computed 内产生 side-effect
+watch(
+  activeHoveredBarre,
+  b => {
+    if (b) {
+      isBubbleMounted.value = true;
+      activeHoveredBarreKey.value = b.key;
+    }
+  },
+  { immediate: true }
+);
+
+/** 内层离开动画完全播放完毕后，才安全卸载外层定位容器，绝不提前卸载打断动画 */
+const handleBubbleAfterLeave = () => {
+  // 核心防御：若离开动画播放期间用户重新移入了横按，绝不可把挂载状态置为 false！
+  if (activeHoveredBarre.value) return;
+  isBubbleMounted.value = false;
+};
+
+const isBubbleHovered = ref(false);
+
+const isBubbleElementHovered = ref(false);
+
+const handleBubblePointerEnter = () => {
+  isBubbleHovered.value = true;
+  isBubbleElementHovered.value = true;
+  if (barreHideTimer) {
+    clearTimeout(barreHideTimer);
+    barreHideTimer = null;
+  }
+};
+
+const handleBubblePointerLeave = () => {
+  isBubbleHovered.value = false;
+  isBubbleElementHovered.value = false;
+  handleBarreMouseLeave();
+};
+
+const handleBarreMouseEnter = (barre: DisplayBarre) => {
+  if (barreHideTimer) {
+    clearTimeout(barreHideTimer);
+    barreHideTimer = null;
+  }
+  isBubbleMounted.value = true;
+  activeHoveredBarreKey.value = barre.key;
+};
+
+/** 离开横按区域：只有在鼠标确实不在该横按区域内、且不在气泡本体上时，才延迟隐藏 */
+const handleBarreMouseLeave = () => {
+  // 如果鼠标依然悬停在气泡上，或仍处于该横按琴弦跨度内，绝不关闭
+  if (isBubbleHovered.value) return;
+  if (activeHoveredBarre.value && isPointInBarre(hoverPoint, activeHoveredBarre.value)) return;
+
+  if (barreHideTimer) clearTimeout(barreHideTimer);
+  barreHideTimer = setTimeout(() => {
+    if (isBubbleHovered.value) return;
+    if (activeHoveredBarre.value && isPointInBarre(hoverPoint, activeHoveredBarre.value)) return;
+    activeHoveredBarreKey.value = null;
+    barreHideTimer = null;
+  }, 200);
+};
+
+/** 点击浮动气泡：派发切换事件，由于响应式计算，气泡内容将实时切换已标记/未标记 */
+const handleBarreBubbleClick = () => {
+  if (activeHoveredBarre.value) {
+    emit('toggle-barre', activeHoveredBarre.value);
+  }
+};
+
+/** 悬浮气泡几何定位：处于该横按所在两弦中心水平位置，垂直上移至品丝线上方，远离音符并由箭头指向下方 */
+const hoveredBarreGeometry = computed(() => {
+  const b = activeHoveredBarre.value;
+  if (!b) return null;
+  const xLeft = stringXPositions[b.fromString] ?? 0;
+  const xRight = stringXPositions[b.toString] ?? 0;
+  const centerX = (xLeft + xRight) / 2;
+  // 气泡上移：原 +14px 调整为 +4px，整体上移 10px，远离音符并由底边箭头指向下方
+  const topY = (b.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + 4;
+  return {
+    centerX,
+    topY,
+    label: `${6 - b.fromString}～${6 - b.toString}弦`,
+  };
+});
+
+// 缓存最后一次有效的横按数据与坐标，确保在 Transition 离开动画播放期间，DOM 节点的 left/top 不被清空导致闪现到左上角 (0, 0)
+const cachedBarre = ref<DisplayBarre | null>(null);
+const cachedGeometry = ref<{ centerX: number; topY: number; label: string } | null>(null);
+
+watch(
+  [activeHoveredBarre, hoveredBarreGeometry] as const,
+  ([b, geo]) => {
+    if (b) cachedBarre.value = b;
+    if (geo) cachedGeometry.value = geo;
+  },
+  { immediate: true }
+);
+
+/** 用于渲染展示的气泡数据（即使在离开动画期间也稳定持有最后一刻的状态，绝不闪现脱位） */
+const displayBubbleBarre = computed(() => activeHoveredBarre.value ?? cachedBarre.value);
+const displayBubbleGeometry = computed(() => hoveredBarreGeometry.value ?? cachedGeometry.value);
+
+/** 复用项目统一的 buildFloatingArrowStyle 箭头算法：朝下加大为 12px 且带边框，与面板同源 0 色差 */
+const barreArrowStyle = computed<CSSProperties>(() => {
+  const b = displayBubbleBarre.value;
+  if (!b) return {};
+  const isMarked = b.isMarked;
+  const isHovered = isBubbleElementHovered.value;
+  const size = 12;
+
+  const background = isMarked ? 'var(--color-primary)' : isHovered ? 'var(--tint-primary-88)' : 'var(--bg-panel)';
+
+  const borderColor = isMarked
+    ? 'var(--color-primary)'
+    : isDarkMode
+      ? 'rgba(96, 165, 250, 0.4)'
+      : 'rgba(59, 130, 246, 0.4)';
+
+  const base = buildFloatingArrowStyle({
+    arrowX: null,
+    arrowY: null,
+    placement: 'top',
+    background,
+    borderColor,
+    size,
+    borderWidth: 1,
+    zIndex: 1,
+  });
+
+  return {
+    ...base,
+    left: `calc(50% - ${size / 2}px)`,
+    transition: 'background-color 150ms ease, border-color 150ms ease',
+  };
+});
+
+onBeforeUnmount(() => {
+  if (barreHideTimer) clearTimeout(barreHideTimer);
+});
+
+/** 判定当前 hoverPoint 逻辑点是否落在某个横按的品位与琴弦跨度范围内 */
+const isPointInBarre = (pt: { stringIndex: number; fretIndex: number } | null, b: BarreEntity) => {
+  if (!pt) return false;
+  if (pt.fretIndex !== b.fret) return false;
+  const minS = Math.min(b.fromString, b.toString);
+  const maxS = Math.max(b.fromString, b.toString);
+  return pt.stringIndex >= minS && pt.stringIndex <= maxS;
+};
+
+/** 根据当前的 hoverPoint 实时评估是否命中任一横按 */
+const syncBarreHover = () => {
+  if (isBubbleHovered.value) return;
+  const pt = hoverPoint;
+  if (!pt) {
+    handleBarreMouseLeave();
+    return;
+  }
+  const matched = displayBarres.value.find(b => isPointInBarre(pt, b));
+  if (matched) {
+    handleBarreMouseEnter(matched);
+  } else {
+    handleBarreMouseLeave();
+  }
+};
+
+// 1. 鼠标在指板上移动时检测横按气泡
+watch(() => hoverPoint, syncBarreHover, { deep: true });
+
+// 2. 当点按音符产生新横按时（如按下第 2 颗音符），即使鼠标不移动也立即检测并瞬间浮现气泡！
+watch(displayBarres, syncBarreHover, { flush: 'post' });
 
 /** 按弦点位音名信息（v-for 内调用） */
 const noteInfo = (sIdx: number, str: GuitarStringEntity) =>
@@ -336,17 +522,41 @@ const isNoteFocused = (sIdx: number, fret: number) =>
   focusPoint?.stringIndex === sIdx && focusPoint?.fretIndex === fret;
 
 const showEmptyHoverRing = computed(() => {
+  // 鼠标悬浮在横按气泡上时，坚决不显示上一品的空品预览环
+  if (isBubbleHovered.value) return false;
   const hp = hoverPoint;
-  if (!interactive || !hp || hp.fretIndex <= 0 || hp.fretIndex > fretCount) return false;
+  if (!hp || hp.fretIndex <= 0 || hp.fretIndex > fretCount) return false;
   return strings[hp.stringIndex]?.[0] !== hp.fretIndex;
 });
 
 const showEmptyFocusRing = computed(() => {
   const fp = focusPoint;
-  if (!interactive || !fp || fp.fretIndex <= 0 || fp.fretIndex > fretCount) return false;
+  if (!fp || fp.fretIndex <= 0 || fp.fretIndex > fretCount) return false;
   if (hoverPoint && hoverPoint.stringIndex === fp.stringIndex && hoverPoint.fretIndex === fp.fretIndex) {
     return false;
   }
   return strings[fp.stringIndex]?.[0] !== fp.fretIndex;
 });
 </script>
+
+<style scoped>
+.barre-bubble-transition-enter-active,
+.barre-bubble-transition-leave-active {
+  transition:
+    opacity 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
+    transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  will-change: opacity, transform;
+}
+
+.barre-bubble-transition-enter-from,
+.barre-bubble-transition-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.barre-bubble-transition-enter-to,
+.barre-bubble-transition-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+</style>

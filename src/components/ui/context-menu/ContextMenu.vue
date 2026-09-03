@@ -27,7 +27,7 @@
       role="menu"
       tabindex="-1"
     >
-      <ContextMenuItems :items :size :title @select="handleItemSelect" ref="itemsRef" />
+      <ContextMenuItems :items :size @select="handleItemSelect" ref="itemsRef" />
     </div>
   </BasePopover>
 </template>
@@ -44,18 +44,18 @@ const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
 <script lang="ts" setup>
 import type { VirtualElement } from '@floating-ui/vue';
 
+import { CONTEXT_MENU_REPOSITION_DURATION_MS, CONTEXT_MENU_REPOSITION_EASING } from '@/utils/core/constants';
+
 import ContextMenuItems, { type ContextMenuItem } from './ContextMenuItems.vue';
 
 defineOptions({ name: 'ContextMenu', inheritAttrs: false });
 
 const {
   items,
-  title = '',
   disabled = false,
   size = 'md',
 } = defineProps<{
   items: ContextMenuItem[];
-  title?: string;
   disabled?: boolean;
   size?: 'sm' | 'md' | 'lg';
 }>();
@@ -111,14 +111,42 @@ const openMenuAt = async (clientX: number, clientY: number, _sourceEl?: HTMLElem
   }
   globalActiveMenuCloseFn.value = closeMenu;
 
+  const wasOpen = isOpen.value;
+  const prevX = x.value;
+  const prevY = y.value;
+
   x.value = clientX;
   y.value = clientY;
   isOpen.value = true;
+
+  // 已打开时切换锚点：定位更新后用 WAAPI 从旧坐标平滑滑到新坐标（首次打开走 Transition 入场）
+  if (wasOpen) {
+    await nextTick();
+    popoverRef.value?.update();
+    animateReposition(prevX, prevY);
+    return;
+  }
 
   await nextTick();
   popoverRef.value?.update();
   // 自动聚焦首个有效菜单项
   itemsRef.value?.focusFirstItem();
+};
+
+/** 换位动画：对浮层宿主做 FLIP 位移（从旧坐标偏移归零），尊重系统减弱动态效果偏好 */
+const animateReposition = (prevX: number, prevY: number) => {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const rootEl = itemsRef.value?.$el as HTMLElement | undefined;
+  const host = rootEl?.closest<HTMLElement>('[data-floating-layer]');
+  if (!host) return;
+  host.animate(
+    [{ transform: `translate(${prevX - x.value}px, ${prevY - y.value}px)` }, { transform: 'translate(0, 0)' }],
+    {
+      composite: 'add', // floating-ui 用 transform 定位宿主，动画必须叠加而非替换，否则会瞬移到原点
+      duration: CONTEXT_MENU_REPOSITION_DURATION_MS,
+      easing: CONTEXT_MENU_REPOSITION_EASING,
+    }
+  );
 };
 
 /** 右键事件入口：阻断默认菜单并在鼠标位置打开 */

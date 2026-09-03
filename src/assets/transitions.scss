@@ -94,6 +94,15 @@
   }
 }
 
+/* 模态卡片自身的过渡通道：enter/leave 的缩放淡入淡出与 auto-height 的宽高变化都依赖它 */
+.modal-card {
+  transition:
+    transform $duration-base $bezier-standard,
+    opacity $duration-base $bezier-standard,
+    width $duration-base $bezier-standard,
+    height $duration-base $bezier-standard;
+}
+
 // =============================================================================
 // 4. 向上滑动淡入淡出 (Slide Up) - 全局轻提示 Toast / 底部抽屉
 // =============================================================================

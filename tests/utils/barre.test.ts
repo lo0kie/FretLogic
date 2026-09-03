@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { reconcileBarres, useChordEditorStore } from '@/stores/chordEditorStore';
 import type { BarreEntity, GuitarStringsModel } from '@/types';
-import { computeBarreCandidates, isBarreStillValid } from '@/utils/music/chord-fretboard';
+import { computeBarreCandidates, isBarreStillValid, normalizeAndMergeBarres } from '@/utils/music/chord-fretboard';
 
 /** 按弦序构造六弦模型（全部不偏好降号） */
 const strings = (...frets: number[]): GuitarStringsModel => frets.map(f => [f, false]) as unknown as GuitarStringsModel;
@@ -143,5 +143,43 @@ describe('reconcileBarres', () => {
     ];
     const result = reconcileBarres([2, 2, -1, 2, 2, 2], [2, 2, -1, 2, 2, 2], barres);
     expect(result).toBe(barres);
+  });
+});
+
+describe('横按包含吸收与打断拆分（用户 222x22 场景）', () => {
+  it('大横按应完全吸收被其覆盖的较小子横按', () => {
+    const s = strings(2, 2, 2, 2, 2, 2);
+    const existing: BarreEntity[] = [
+      { fret: 2, fromString: 0, toString: 2 },
+      { fret: 2, fromString: 4, toString: 5 },
+      { fret: 2, fromString: 0, toString: 5 },
+    ];
+    const merged = normalizeAndMergeBarres(existing, s);
+    expect(merged).toEqual([{ fret: 2, fromString: 0, toString: 5 }]);
+  });
+
+  it('222x22 标记左右横按后补齐全横按再删除中间音符，仅保留左侧三个音符的横按', () => {
+    setActivePinia(createPinia());
+    const store = useChordEditorStore();
+    store.autoBarre = true;
+
+    // 1. 设置 2 2 2 x 2 2
+    store.draftChord.strings = strings(2, 2, 2, -1, 2, 2);
+    // 2. 手动给左右两侧都标记为横按
+    store.setBarres([
+      { fret: 2, fromString: 0, toString: 2 },
+      { fret: 2, fromString: 4, toString: 5 },
+    ]);
+    expect(store.draftChord.barres).toHaveLength(2);
+
+    // 3. 把 x 也改成 2（变成 2 2 2 2 2 2）
+    store.draftChord.strings[3]![0] = 2;
+    // 此时全横按形成，应吸收原本的两个碎横按
+    expect(store.draftChord.barres).toMatchObject([{ fret: 2, fromString: 0, toString: 5 }]);
+
+    // 4. 再把该音符删除（变回 2 2 2 x 2 2）
+    store.draftChord.strings[3]![0] = -1;
+    // 预期应仅保留左侧三个音符的横按，右侧两个音符不足 3 颗音符不作为横按保留！
+    expect(store.draftChord.barres).toMatchObject([{ fret: 2, fromString: 0, toString: 2 }]);
   });
 });

@@ -6,7 +6,7 @@
  * 绑定值为普通对象；宿主组件重渲染时经 updated 钩子自动重绘，
  * 输入快照未变化时跳过 DOM 写入。
  */
-import { type Directive } from 'vue';
+import { watch, type Directive } from 'vue';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 
 import {
@@ -61,6 +61,8 @@ interface ResolvedInput {
 const stateMap = new WeakMap<HTMLElement, string>();
 /** 上次由本指令添加的 class，更新时只增删自己的 class，不覆盖消费方的 class */
 const appliedClassMap = new WeakMap<HTMLElement, string>();
+/** 简写设置监听的停止句柄，随元素卸载清理，避免内存泄漏 */
+const stopMap = new WeakMap<HTMLElement, () => void>();
 
 /** 同步"本指令拥有"的 class：更新时只增删自己上次写入的 class，不覆盖宿主其他 class。 */
 const syncOwnClasses = (el: HTMLElement, target: string): void => {
@@ -186,6 +188,21 @@ const renderChordName = (
 };
 
 export const vChordName: Directive<HTMLElement, ChordNameValue | null | undefined> = {
-  mounted: renderChordName,
+  mounted(el, binding) {
+    renderChordName(el, binding);
+    // 简写开关取自设置 store，而指令仅在宿主组件重渲染时重绘；
+    // 切简写开关不会触发宿主重渲染，故在此监听设置变化、主动重绘，
+    // 否则会出现“切了简写需再点一下/改动和弦才生效”的延迟
+    const settingsStore = useSettingsStore();
+    const stop = watch(
+      () => [settingsStore.workbenchChordShorthand, settingsStore.scoreChordShorthand],
+      () => renderChordName(el, binding)
+    );
+    stopMap.set(el, stop);
+  },
   updated: renderChordName,
+  unmounted(el) {
+    stopMap.get(el)?.();
+    stopMap.delete(el);
+  },
 };

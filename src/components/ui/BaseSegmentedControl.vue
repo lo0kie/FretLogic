@@ -28,7 +28,7 @@
         :tabindex="getTabindex(opt, i)"
         :title="opt.label"
         @click="select(opt, i)"
-        class="segmented-item text-text-muted focus-visible:ring-primary/70 enabled:hover:text-text-title relative z-20 inline-flex h-full items-center justify-center self-stretch border-none bg-transparent leading-none font-bold whitespace-nowrap shadow-none transition-all duration-200 ease-out outline-none focus-visible:ring-2 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+        class="segmented-item text-text-muted focus-visible:ring-primary/70 enabled:hover:text-text-title relative z-20 inline-flex h-full items-center justify-center self-stretch bg-transparent leading-none font-bold whitespace-nowrap shadow-none transition-all duration-200 ease-out outline-none focus-visible:ring-2 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
         role="radio"
         type="button"
       >
@@ -75,6 +75,10 @@ const props = withDefaults(
     /** 通高拉伸：根容器高度用 h-full 取代尺寸档固定高度（需父容器有确定高度），
      *  配合 tabbed 可做整条撑满父容器的 Tab 栏，指示器/文字自动随高度适配 */
     fullHeight?: boolean;
+    /** 在 tabbed 形态下，始终为每个未激活 tab 显示底部边框（浅色分隔线）；
+     *  激活项以透明占位保留 2px 高度、露出主色下划线。默认 false（仅激活项有下划线）。
+     *  与 pill/text 形态无关，非 tabbed 下忽略 */
+    showInactiveBorder?: boolean;
   }>(),
   {
     size: 'md',
@@ -85,6 +89,7 @@ const props = withDefaults(
     width: 'auto',
     compacted: false,
     fullHeight: false,
+    showInactiveBorder: false,
   }
 );
 
@@ -179,7 +184,9 @@ const controlClasses = computed(() => [
   props.fullHeight ? 'h-full' : sizeConfig.value.wrapper,
   visualVariant.value === 'pill'
     ? 'bg-bg-body border border-border-light rounded-full p-1 gap-1 transition-opacity'
-    : 'bg-transparent gap-xs',
+    : visualVariant.value === 'tabbed' && props.showInactiveBorder
+      ? 'bg-transparent gap-xs border-b-2 border-border-light' // 容器级贯穿底线：保留 tab 间距，激活主色线叠加其上
+      : 'bg-transparent gap-xs',
   props.disabled ? 'opacity-50 cursor-not-allowed' : '',
   isFullWidth.value ? 'w-full' : '',
 ]);
@@ -209,7 +216,9 @@ const itemClasses = (opt: SegmentOption<T>): (string | Record<string, boolean>)[
     ];
   }
   if (visualVariant.value === 'tabbed') {
-    // 下划线 Tab：无填充底，仅选中项加主色文字强调，选中线由滑块负责
+    // 下划线 Tab：无填充底，仅选中项加主色文字强调
+    // 底边框贯穿线由容器 border-b 提供（showInactiveBorder 时），激活主色线由滑块叠加其上，
+    // 故此处 tab 自身不再单独加边框（否则会与容器线重叠成双线）
     return [sizeConfig.value.item, active ? 'text-primary! font-extrabold' : '', { 'flex-1': isExpand }];
   }
   // text variant
@@ -257,11 +266,14 @@ const updateIndicatorPosition = async () => {
 
   if (visualVariant.value === 'tabbed') {
     // 下划线形态：滑块是一条贴段底部的主色细线，宽度随选中段
+    // 开启 showInactiveBorder 时，容器底部有 border-b 贯穿线（位于内容区下方 2px），
+    // 滑块需下移到该 border 区与之重合，才能盖住浅色线、形成连续同厚的激活段
+    const lineShift = props.showInactiveBorder ? TAB_LINE_HEIGHT : 0;
     indicatorPosition.value = {
       width: offsetWidth,
       height: TAB_LINE_HEIGHT,
       x: offsetLeft,
-      y: offsetTop + offsetHeight - TAB_LINE_HEIGHT,
+      y: offsetTop + offsetHeight - TAB_LINE_HEIGHT + lineShift,
       opacity: 1,
     };
   } else {

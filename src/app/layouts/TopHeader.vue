@@ -29,49 +29,8 @@
       ]"
       class="z-inner @media(display-mode:window-controls-overlay):-translate-x-[calc(50%-(env(titlebar-area-inset-left,0px)-env(titlebar-area-inset-right,0px))/2)] pointer-events-auto absolute left-1/2 flex -translate-x-1/2"
     >
-      <div v-if="route.path === '/workbench'" class="gap-xs p-xs flex items-center">
-        <ActionButton
-          v-tooltip="'播放/试听当前和弦'"
-          :disabled="editorStore.isFretBoardEmpty || isPlaying"
-          @click="playCurrentChord"
-          aria-label="播放/试听当前和弦"
-          color="primary"
-          icon-only
-          size="sm"
-          variant="subtle"
-        >
-          <BaseIcon :name="isPlaying ? 'square' : 'play'" :size="15" />
-        </ActionButton>
-
-        <div class="bg-border-base mx-[0.1rem] h-[0.8rem] w-px opacity-50" />
-
-        <ActionButton
-          v-tooltip="'导出透明背景图片'"
-          :disabled="uiStore.isCopying"
-          @click="handleExport(true)"
-          aria-label="导出透明背景图片"
-          icon-only
-          size="sm"
-          variant="ghost"
-        >
-          <BaseIcon :size="15" name="image" />
-        </ActionButton>
-
-        <ActionButton
-          v-tooltip="'导出带背景卡片切图'"
-          :disabled="uiStore.isCopying"
-          @click="handleExport(false)"
-          aria-label="导出带背景卡片切图"
-          icon-only
-          size="sm"
-          variant="ghost"
-        >
-          <BaseIcon :size="15" name="copy" />
-        </ActionButton>
-      </div>
-
       <BaseSegmentedControl
-        v-else-if="route.path === '/score'"
+        v-if="route.path === '/score'"
         v-model="scoreEditor.activeTab"
         :disabled="!scoreEditor.activeSong"
         :options="scoreModeOptions"
@@ -82,40 +41,28 @@
     </div>
 
     <div :class="NO_DRAG_REGION_CLASS" class="gap-xs flex min-w-0 flex-1 items-center justify-end">
+      <!-- 工作台：试听当前和弦（置于右侧操作区最左侧） -->
+      <ActionButton
+        v-if="route.path === '/workbench'"
+        v-tooltip="'播放/试听当前和弦'"
+        :disabled="editorStore.isFretBoardEmpty || isPlaying"
+        @click="playCurrentChord"
+        aria-label="播放/试听当前和弦"
+        color="primary"
+        icon-only
+        variant="subtle"
+      >
+        <BaseIcon :name="isPlaying ? 'square' : 'play'" :size="18" :stroke-width="2.2" />
+      </ActionButton>
+
       <!-- 乐谱预览 tab：复制 / 下载当前乐谱的整曲长图 -->
-      <BasePopover
+      <PopoverMenu
         v-if="route.path === '/score' && scoreEditor.activeTab === 'preview'"
         :disabled="!scoreEditor.hasLyrics"
-        placement="bottom-end"
-        trigger="hover"
-      >
-        <template #trigger="{ isOpen, pinToggle }">
-          <ActionButton
-            :aria-expanded="isOpen"
-            :color="isOpen ? 'primary' : 'default'"
-            :disabled="!scoreEditor.hasLyrics"
-            :variant="isOpen ? 'subtle' : 'ghost'"
-            @click="pinToggle()"
-            aria-haspopup="menu"
-            aria-label="导出乐谱图片"
-            icon-only
-          >
-            <BaseIcon :size="18" :stroke-width="2.2" name="download" />
-          </ActionButton>
-        </template>
-
-        <template #default="{ close }">
-          <ContextMenuItems
-            :items="scoreExportMenuItems"
-            @select="
-              item => {
-                item.action?.();
-                if (!item.keepOpen) close();
-              }
-            "
-          />
-        </template>
-      </BasePopover>
+        :items="scoreExportMenuItems"
+        aria-label="导出乐谱图片"
+        icon="download"
+      />
 
       <BasePopover v-if="showHeaderSettings" placement="bottom-end" trigger="hover">
         <template #trigger="{ isOpen, pinToggle }">
@@ -136,57 +83,14 @@
         <HeaderConfigPopover />
       </BasePopover>
 
-      <BasePopover placement="bottom-end" trigger="hover">
-        <template #trigger="{ isOpen, pinToggle }">
-          <ActionButton
-            :aria-expanded="isOpen"
-            :color="isOpen ? 'primary' : 'default'"
-            :variant="isOpen ? 'subtle' : 'ghost'"
-            @click="pinToggle()"
-            aria-haspopup="menu"
-            aria-label="云端同步"
-            icon-only
-          >
-            <BaseIcon :size="18" :stroke-width="2.2" name="cloud" />
-          </ActionButton>
-        </template>
+      <PopoverMenu :items="syncMenuItems" aria-label="云端同步" icon="cloud" />
 
-        <template #default="{ close }">
-          <ContextMenuItems
-            :items="syncMenuItems"
-            @select="
-              item => {
-                item.action?.();
-                if (!item.keepOpen) close();
-              }
-            "
-          />
-        </template>
-      </BasePopover>
-
-      <BasePopover placement="bottom-end" trigger="hover">
-        <template #trigger="{ isOpen, pinToggle }">
-          <ActionButton
-            :aria-expanded="isOpen"
-            :color="isOpen ? 'primary' : 'default'"
-            :variant="isOpen ? 'subtle' : 'ghost'"
-            @click="pinToggle()"
-            aria-haspopup="menu"
-            aria-label="外观设置"
-            icon-only
-          >
-            <BaseIcon
-              :class="globalDarkMode ? 'text-color-primary' : 'text-color-warning'"
-              :name="globalDarkMode ? 'moon' : 'sun'"
-              :size="18"
-            />
-          </ActionButton>
-        </template>
-
-        <template #default="{ close }">
-          <ContextMenuItems :items="themeMenuItems" @select="item => (item.action?.(), close())" />
-        </template>
-      </BasePopover>
+      <PopoverMenu
+        :icon="themeTriggerIcon"
+        :icon-class="themeTriggerIconClass"
+        :items="themeMenuItems"
+        aria-label="外观设置"
+      />
 
       <ActionButton v-tooltip.interactive="buildInfoTooltip" aria-label="构建信息" icon-only variant="ghost">
         <BaseIcon :size="17" :stroke-width="2.2" name="info" />
@@ -243,7 +147,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, ref, unref } from 'vue';
+import { computed, defineAsyncComponent, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import ActionButton from '@/components/ui/ActionButton.vue';
@@ -252,8 +156,9 @@ import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BasePopover from '@/components/ui/BasePopover.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/ui/BaseSegmentedControl.vue';
-import ContextMenuItems, { type ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
+import type { ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
 import type { IconName } from '@/components/ui/icons.registry';
+import PopoverMenu from '@/components/ui/PopoverMenu.vue';
 import { useScoreLinesData } from '@/features/score-editor/composables/useScoreLinesData';
 import { prepareWorkerExportPayload, runWorkerExport } from '@/services/export/workerExportService';
 import type { SyncProviderKind } from '@/services/sync/provider';
@@ -265,12 +170,7 @@ import { globalDarkMode, setThemeMode, themePreference } from '@/stores/globalSt
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUiStore } from '@/stores/uiStore';
-import {
-  buildExportFileName,
-  renderElementToBlob,
-  triggerBlobDownload,
-  writeBlobToClipboard,
-} from '@/utils/score/score-export';
+import { buildExportFileName, triggerBlobDownload, writeBlobToClipboard } from '@/utils/score/score-export';
 
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 
@@ -295,6 +195,10 @@ const NAV_OPTIONS: SegmentOption<string>[] = [
   { label: '和弦', value: '/workbench' },
   { label: '乐谱', value: '/score' },
 ];
+
+/** 主题按钮触发图标：暗色显示月亮（primary），亮色显示太阳（warning） */
+const themeTriggerIcon = computed(() => (globalDarkMode.value ? 'moon' : 'sun'));
+const themeTriggerIconClass = computed(() => (globalDarkMode.value ? 'text-color-primary' : 'text-color-warning'));
 
 const themeMenuItems = computed<ContextMenuItem[]>(() => [
   {
@@ -438,8 +342,8 @@ const syncMenuItems = computed<ContextMenuItem[]>(() => [
   },
 ]);
 
-/** 右侧「设置面板」按钮显示范围：工作台始终显示；乐谱模式仅「排列和弦」显示（编辑歌词/预览无相关设置项） */
-const showHeaderSettings = computed(() => route.path !== '/score' || scoreEditor.activeTab === 'interactive');
+/** 右侧「设置面板」按钮显示范围：工作台已直接放置右侧常驻设置面板；顶部设置按钮仅在乐谱模式「排列和弦」下显示 */
+const showHeaderSettings = computed(() => route.path === '/score' && scoreEditor.activeTab === 'interactive');
 
 const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive' | 'preview'>[]>(() => [
   { label: '编辑歌词', value: 'edit' },
@@ -459,33 +363,6 @@ const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive' | 'previe
 const handleScoreTabChange = (val: 'edit' | 'interactive' | 'preview') => {
   if (val !== 'edit' && !scoreEditor.hasLyrics) {
     uiStore.toast.warning('请先在“编辑歌词”模式下输入歌词内容');
-  }
-};
-
-/**
- * 用户点击导出：把当前激活区域渲染为图片并写入系统剪贴板
- * @param isTransparent true 导出透明背景图，false 导出带卡片背景的切图
- */
-const handleExport = async (isTransparent: boolean) => {
-  if (uiStore.isCopying) return;
-  const el =
-    unref(uiStore.activeExportTarget) ||
-    document.querySelector<HTMLElement>('.workbench-card, .score-lyrics-interactive');
-  if (!el) {
-    uiStore.toast.error('导出失败：目标 DOM 节点尚未渲染完成');
-    return;
-  }
-  uiStore.isCopying = true;
-  uiStore.toast.info(isTransparent ? '正在导出透明底色快照...' : '正在导出带卡片背景快照...');
-  try {
-    const blob = await renderElementToBlob(el, { isTransparent });
-    await writeBlobToClipboard(blob);
-    uiStore.toast.success('成功复制至系统剪贴板');
-  } catch (err) {
-    console.error('Fretboard Exporter Error:', err);
-    uiStore.toast.error(err instanceof Error ? err.message : '导出失败');
-  } finally {
-    uiStore.isCopying = false;
   }
 };
 
