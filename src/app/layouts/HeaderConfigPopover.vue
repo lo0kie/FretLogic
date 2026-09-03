@@ -41,10 +41,7 @@
       </BaseFormRow>
 
       <div class="action-full-row w-full">
-        <ActionButton @click="handleRepairData" color="primary" variant="subtle" width="100%">
-          <template #prefix>
-            <BaseIcon :size="13" :stroke-width="2.5" name="wrench" />
-          </template>
+        <ActionButton @click="handleRepairData" color="primary" prefix-icon="wrench" variant="subtle" width="100%">
           修复与对齐数据
         </ActionButton>
       </div>
@@ -90,7 +87,6 @@ import { useRoute } from 'vue-router';
 
 import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseFormRow from '@/components/ui/BaseFormRow.vue';
-import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseNumberInput from '@/components/ui/BaseNumberInput.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/ui/BaseSegmentedControl.vue';
 import BaseSelector from '@/components/ui/BaseSelector.vue';

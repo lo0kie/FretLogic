@@ -1,5 +1,6 @@
 import { computeChordFingerprint } from '@/services/music/theory';
 import type { Chord, SlotKey } from '@/types';
+import { URL_REVOKE_DELAY_MS } from '@/utils/core/constants';
 import { plainToChordMap } from '@/utils/score/chordSlots';
 import { charKey, chordSlotKey, collectEdgeChordIds } from '@/utils/score/scoreModel';
 
@@ -205,5 +206,5 @@ export const triggerBlobDownload = (blob: Blob, filename: string): void => {
   link.href = objectUrl;
   link.download = filename;
   link.click();
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), URL_REVOKE_DELAY_MS);
 };

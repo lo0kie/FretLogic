@@ -2,9 +2,7 @@ import { serializeForStorage } from '@/utils/core/common';
 import { CLOUD_SYNC_CONFIG } from '@/utils/core/constants';
 
 import { SyncError, type ServerSyncConfig, type SyncProvider } from './provider';
-import { createSyncProviderBase } from './syncBase';
-
-const TIMEOUT_MS = 15000;
+import { createSyncProviderBase, extractApiErrorDetail } from './syncBase';
 
 /**
  * 线上服务器（Custom Server / Cloudflare Worker D1）同步 provider。
@@ -17,16 +15,6 @@ const TIMEOUT_MS = 15000;
  *  - push(): POST ${serverUrl}，携带 Content-Type: application/json 与 JSON 字符串体。
  *  - testConnection(): GET ${serverUrl} 探测连通性。
  */
-async function extractErrorMessage(response: Response): Promise<string> {
-  try {
-    const json = await response.clone().json();
-    if (json?.error) return ` (${json.error})`;
-    if (json?.message) return ` (${json.message})`;
-  } catch {
-    // 非 JSON 响应保持原状
-  }
-  return '';
-}
 
 /** 创建线上服务器同步 provider：pull 走 GET、push 走 POST，环境标识随请求头分发。 */
 export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): SyncProvider {
@@ -43,8 +31,6 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
       const detail = err instanceof Error ? err.message : String(err);
       return new SyncError('NETWORK', `请求服务器失败：请检查网络或地址有效性。底层错误：${detail}`);
     },
-    readRaw: async response => response.text(),
-    timeoutMs: TIMEOUT_MS,
   });
 
   return {
@@ -52,8 +38,11 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
       const response = await request({ method: 'GET' });
       if (response.status === 404) throw new SyncError('FILE_NOT_FOUND', '服务端暂无已保存的数据');
       if (!response.ok) {
-        const errorDetail = await extractErrorMessage(response);
-        throw new SyncError('REQUEST_FAILED', `服务器返回错误状态码 ${response.status}${errorDetail}`);
+        const errorDetail = await extractApiErrorDetail(response);
+        throw new SyncError(
+          'REQUEST_FAILED',
+          `服务器返回错误状态码 ${response.status}${errorDetail ? ` (${errorDetail})` : ''}`
+        );
       }
       return decodePayload(response);
     },
@@ -67,8 +56,11 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
         if (getRes.status === 404) return false;
         return getRes.ok;
       }
-      const errorDetail = await extractErrorMessage(head);
-      throw new SyncError('REQUEST_FAILED', `服务器返回错误状态码 ${head.status}${errorDetail}`);
+      const errorDetail = await extractApiErrorDetail(head);
+      throw new SyncError(
+        'REQUEST_FAILED',
+        `服务器返回错误状态码 ${head.status}${errorDetail ? ` (${errorDetail})` : ''}`
+      );
     },
     async push(payload) {
       const response = await request({
@@ -77,8 +69,11 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
         body: serializeForStorage(payload),
       });
       if (!response.ok) {
-        const errorDetail = await extractErrorMessage(response);
-        throw new SyncError('REQUEST_FAILED', `服务器返回错误状态码 ${response.status}${errorDetail}`);
+        const errorDetail = await extractApiErrorDetail(response);
+        throw new SyncError(
+          'REQUEST_FAILED',
+          `服务器返回错误状态码 ${response.status}${errorDetail ? ` (${errorDetail})` : ''}`
+        );
       }
       const etag = response.headers.get('ETag') ?? Date.now().toString();
       return { sha: etag };
@@ -92,8 +87,11 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
       if (response.status === 404) {
         return `服务器连接成功（服务端暂无数据存档，${envLabel}）`;
       }
-      const serverError = await extractErrorMessage(response);
-      throw new SyncError('REQUEST_FAILED', `服务器返回错误状态码 ${response.status}${serverError}`);
+      const serverError = await extractApiErrorDetail(response);
+      throw new SyncError(
+        'REQUEST_FAILED',
+        `服务器返回错误状态码 ${response.status}${serverError ? ` (${serverError})` : ''}`
+      );
     },
   };
 }

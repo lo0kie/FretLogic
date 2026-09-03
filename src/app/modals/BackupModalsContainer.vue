@@ -124,16 +124,14 @@
 </template>
 
 <script lang="ts" setup>
-import { inject } from 'vue';
-
 import BaseCheckbox from '@/components/ui/BaseCheckbox.vue';
 import BaseFormRow from '@/components/ui/BaseFormRow.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BaseSwitch from '@/components/ui/BaseSwitch.vue';
 import type { useBackupModals } from '@/shared/composables/useBackupModals';
+import { injectModalController } from '@/shared/composables/useModalController';
 
-type BackupModals = ReturnType<typeof useBackupModals>;
-const backupModals = inject<BackupModals>('backupModals')!;
+const backupModals = injectModalController<ReturnType<typeof useBackupModals>>('backupModals');
 
 /** 表单行统一 Label 宽度 */
 const FORM_LABEL_WIDTH = '4.5rem';

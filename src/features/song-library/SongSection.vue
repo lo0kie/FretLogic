@@ -173,27 +173,14 @@ const songCardAriaLabel = (song: Song): string =>
 /** 调性徽标无障碍描述：最终计算调 */
 const songKeyAriaLabel = (song: Song): string => `调性 ${computeSongKey(song.playKey, song.capo)} 调`;
 
-const songMenuItemsMap = new Map<string, ContextMenuItem[]>();
-// 签名需包含和弦数与当前乐谱 id，否则清空/添加和弦、切换当前乐谱后禁用态不会刷新
-const songIdsSignature = computed(() =>
-  [scoreEditor.activeSongId ?? '', ...songStore.songs.map(s => `${s.id}:${s.chordMap.size}`)].join('\u0000')
-);
-watch(songIdsSignature, () => songMenuItemsMap.clear());
-
-/** 按 id 实时查找乐谱（菜单项被缓存后仍能取到最新对象，避免闭包陈旧引用） */
-const resolveSong = (songId: string): Song | null => songStore.songs.find(s => s.id === songId) ?? null;
-
-/** 生成乐谱右键菜单项（改属性/清空和弦/删除），按乐谱 id 缓存避免重复创建 */
+// 乐谱右键菜单项：每次直接构建（仅 3 项），不缓存
 const getSongMenuItems = (song: Song): ContextMenuItem[] => {
-  const cached = songMenuItemsMap.get(song.id);
-  if (cached) return cached;
   const items: ContextMenuItem[] = [
     {
       label: '修改属性',
       icon: 'sliders-horizontal',
       action: () => {
-        const s = resolveSong(song.id);
-        if (s) emit('open-config', s);
+        emit('open-config', song);
       },
     },
     {
@@ -201,8 +188,7 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => {
       icon: 'eraser',
       disabled: song.chordMap.size === 0 || song.id !== scoreEditor.activeSongId,
       action: () => {
-        const s = resolveSong(song.id);
-        if (s) emit('open-clear', s);
+        emit('open-clear', song);
       },
     },
     {
@@ -210,19 +196,15 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => {
       icon: 'trash-2',
       danger: true,
       action: () => {
-        const s = resolveSong(song.id);
-        if (s) {
-          const isCurrentActive = scoreEditor.activeSongId === s.id;
-          songStore.deleteSong(s.id);
-          if (isCurrentActive) {
-            scoreEditor.setActiveSong(null);
-          }
-          uiStore.toast.success(`已删除乐谱 "${s.title}"`);
+        const isCurrentActive = scoreEditor.activeSongId === song.id;
+        songStore.deleteSong(song.id);
+        if (isCurrentActive) {
+          scoreEditor.setActiveSong(null);
         }
+        uiStore.toast.success(`已删除乐谱 "${song.title}"`);
       },
     },
   ];
-  songMenuItemsMap.set(song.id, items);
   return items;
 };
 

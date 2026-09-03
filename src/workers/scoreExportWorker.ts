@@ -4,6 +4,7 @@
  * 支持绘制完整的吉他指板图、升降号上标和弦名、等粗横按、品丝对齐品号、紧随歌词排版及 A4 满页 Space-Between 垂直均分对齐。
  */
 import { SCORE_EXPORT_CONFIG } from '@/utils/core/constants';
+import { parseChordNameTokens as parseChordNameTokensCore, type ChordNameToken } from '@/utils/score/chordNameTokens';
 
 export interface ExportChordData {
   chordName: string;
@@ -33,7 +34,6 @@ export interface WorkerExportPayload {
   lines: ExportLineItem[];
   mode: 'normal' | 'a4';
   darkMode: boolean;
-  includeMetaBar?: boolean;
 }
 
 export type WorkerExportMessage =
@@ -44,31 +44,14 @@ const EXPORT_JPEG_QUALITY = 0.95;
 
 type ThemeColors = (typeof SCORE_EXPORT_CONFIG.THEME)['DARK'] | (typeof SCORE_EXPORT_CONFIG.THEME)['LIGHT'];
 
-interface ChordNameToken {
-  text: string;
-  isAccidental: boolean;
-}
-
 /** 模块级 Token 解析缓存，避免同曲目内重复出现的和弦名反复正则分割 */
 const tokenCache = new Map<string, ChordNameToken[]>();
 
-/** 将和弦名称解析为带有升降号标记的 Token 序列，统一将 # / b 规整为标准 ♯ / ♭ 符号并上标 */
+/** 带缓存的和弦名分片解析（核心实现见 utils/score/chordNameTokens） */
 function parseChordNameTokens(chordName: string): ChordNameToken[] {
   const cached = tokenCache.get(chordName);
   if (cached) return cached;
-  if (!chordName) return [];
-  const tokens: ChordNameToken[] = [];
-  const parts = chordName.split(/([#b♯♭])/g);
-  for (const part of parts) {
-    if (!part) continue;
-    if (part === '#' || part === '♯') {
-      tokens.push({ text: '♯', isAccidental: true });
-    } else if (part === 'b' || part === '♭') {
-      tokens.push({ text: '♭', isAccidental: true });
-    } else {
-      tokens.push({ text: part, isAccidental: false });
-    }
-  }
+  const tokens = parseChordNameTokensCore(chordName);
   tokenCache.set(chordName, tokens);
   return tokens;
 }
@@ -555,7 +538,7 @@ function renderHeader(
 
 self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
   try {
-    const { title, keyText, capoText, lines, mode, darkMode, includeMetaBar = true } = e.data;
+    const { title, keyText, capoText, lines, mode, darkMode } = e.data;
 
     const colors = darkMode ? SCORE_EXPORT_CONFIG.THEME.DARK : SCORE_EXPORT_CONFIG.THEME.LIGHT;
     const blobs: Blob[] = [];
@@ -563,7 +546,7 @@ self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
     if (mode === 'a4') {
       // ===== A4 分页模式 =====
       const contentHeight = SCORE_EXPORT_CONFIG.A4_HEIGHT - SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2;
-      const headerH = includeMetaBar ? HEADER_HEIGHT : 0;
+      const headerH = HEADER_HEIGHT;
       const availWidth = SCORE_EXPORT_CONFIG.A4_WIDTH - SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2;
 
       // 1. 超长行软折行
@@ -611,7 +594,7 @@ self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
         ctx.fillRect(0, 0, SCORE_EXPORT_CONFIG.A4_WIDTH, SCORE_EXPORT_CONFIG.A4_HEIGHT);
 
         let curY: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN;
-        if (pIdx === 0 && includeMetaBar) {
+        if (pIdx === 0) {
           curY = renderHeader(ctx, title, keyText, capoText, SCORE_EXPORT_CONFIG.A4_WIDTH, curY, colors);
         }
 
@@ -676,7 +659,7 @@ self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
         }
       }
 
-      const headerH = includeMetaBar ? HEADER_HEIGHT : 0;
+      const headerH = HEADER_HEIGHT;
       const canvasW = Math.max(
         SCORE_EXPORT_CONFIG.NORMAL_CANVAS_MIN_WIDTH,
         Math.round(maxSegmentW + SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2)
@@ -695,9 +678,7 @@ self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
       ctx.fillRect(0, 0, canvasW, canvasH);
 
       let curY: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN;
-      if (includeMetaBar) {
-        curY = renderHeader(ctx, title, keyText, capoText, canvasW, curY, colors);
-      }
+      curY = renderHeader(ctx, title, keyText, capoText, canvasW, curY, colors);
 
       for (let i = 0; i < allSegments.length; i++) {
         const seg = allSegments[i]!;

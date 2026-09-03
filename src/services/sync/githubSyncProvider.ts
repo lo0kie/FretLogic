@@ -1,9 +1,7 @@
-import { base64DecodeUtf8, base64EncodeUtf8, serializeForStorage } from '@/utils/core/common';
+import { base64EncodeUtf8, serializeForStorage } from '@/utils/core/common';
 
 import { SyncError, type GithubSyncConfig, type SyncBranchesProvider } from './provider';
-import { createSyncProviderBase } from './syncBase';
-
-const TIMEOUT_MS = 15000;
+import { buildSyncCommitMessage, createSyncProviderBase, decodeBase64Envelope } from './syncBase';
 
 /** 创建 GitHub Contents API 同步 provider：远端为单个 base64 信封文件，按分支读写。 */
 export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranchesProvider {
@@ -16,12 +14,7 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranches
   const { request, decodePayload } = createSyncProviderBase({
     baseHeaders,
     defaultUrl: `${apiUrl}?ref=${config.branch}`,
-    readRaw: async response => {
-      const body = await response.json();
-      if (!body.content) throw new SyncError('INVALID_CLOUD_DATA', '云端文件内容为空');
-      return base64DecodeUtf8(String(body.content).replace(/\n/g, ''));
-    },
-    timeoutMs: TIMEOUT_MS,
+    readRaw: decodeBase64Envelope,
   });
 
   return {
@@ -51,7 +44,7 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranches
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            message: `Auto sync fret-logic data: ${new Date().toLocaleString()}`,
+            message: buildSyncCommitMessage(),
             content: base64EncodeUtf8(serializeForStorage(payload)),
             branch: config.branch,
             ...(sha ? { sha } : {}),

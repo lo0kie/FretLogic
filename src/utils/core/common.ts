@@ -299,3 +299,19 @@ export const base64DecodeUtf8 = (b64: string): string => {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new TextDecoder().decode(bytes);
 };
+
+// ===== clamp / 时间戳 =====
+
+/** 数值夹取：把 value 限制在 [min, max] 区间内 */
+export const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+/**
+ * 本地时间戳 → 文件名安全串（如 2026-09-03_10-05-33）。
+ * 用 getTimezoneOffset 换算为本地时间再格式化，避免 toISOString 的 UTC 偏差；
+ * 并剔除冒号等文件名非法字符，供备份等导出文件命名使用。
+ */
+export const formatLocalTimestampForFile = (date: Date = new Date()): string => {
+  const tzOffset = date.getTimezoneOffset() * 60000;
+  const localISOTime = new Date(date.getTime() - tzOffset).toISOString().slice(0, -1);
+  return localISOTime.replace(/T/, '_').replace(/:/g, '-').split('.')[0] ?? '';
+};

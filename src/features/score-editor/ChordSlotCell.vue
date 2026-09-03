@@ -39,7 +39,7 @@
     <div
       v-if="chord"
       :class="[FAST_TRANSITION_CLASS, isActive ? 'opacity-100' : 'opacity-0']"
-      class="pointer-events-none absolute inset-0 z-2 rounded-sm bg-black/35"
+      class="z-inner pointer-events-none absolute inset-0 rounded-sm bg-black/35"
     >
       <div
         :class="[FAST_TRANSITION_CLASS, isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0']"
@@ -48,59 +48,23 @@
         ref="actionGroupEl"
       >
         <ActionButton
+          v-for="(action, index) in ACTION_ITEMS"
+          v-on="action.handlers"
           v-wave
-          :aria-label="editButtonTitle"
-          :class="actionButtonTransition(0)"
+          :aria-label="action.title"
+          :class="[actionButtonTransition(index), action.extraClass]"
+          :color="action.color"
+          :key="action.key"
+          :ref="el => setActionButtonEl(el, index)"
           :tabindex="-1"
-          :title="editButtonTitle"
-          @click.stop.prevent="emit('click')"
-          @pointerdown.stop
+          :title="action.title"
           block
           class="pointer-events-auto!"
-          color="primary"
-          ref="editButtonEl"
           size="sm"
           variant="subtle"
         >
-          <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="pencil" />
-          <span class="font-bold">{{ editButtonLabel }}</span>
-        </ActionButton>
-        <ActionButton
-          v-wave
-          :aria-label="moveButtonTitle"
-          :class="actionButtonTransition(1)"
-          :tabindex="-1"
-          :title="moveButtonTitle"
-          @click.stop.prevent
-          @mouseup.stop.prevent
-          @pointerdown.stop.prevent="emit('copyPointerdown', $event, slotKey, chord)"
-          block
-          class="pointer-events-auto! cursor-grab active:cursor-grabbing"
-          color="success"
-          ref="copyButtonEl"
-          size="sm"
-          variant="subtle"
-        >
-          <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="grip-vertical" />
-          <span class="font-bold">{{ moveButtonLabel }}</span>
-        </ActionButton>
-        <ActionButton
-          v-wave
-          :aria-label="removeButtonTitle"
-          :class="actionButtonTransition(2)"
-          :tabindex="-1"
-          :title="removeButtonTitle"
-          @click.stop.prevent="emit('remove', slotKey)"
-          @pointerdown.stop
-          block
-          class="pointer-events-auto!"
-          color="danger"
-          ref="removeButtonEl"
-          size="sm"
-          variant="subtle"
-        >
-          <BaseIcon :size="16" :stroke-width="2.5" class="shrink-0" name="x" />
-          <span class="font-bold">{{ removeButtonLabel }}</span>
+          <BaseIcon :name="action.icon" :stroke-width="2.5" class="shrink-0" size="md" />
+          <span class="font-bold">{{ action.label }}</span>
         </ActionButton>
       </div>
     </div>
@@ -114,14 +78,14 @@
            opacity-0 + pointer-events-none，且分区层自身 pointer-events-none，二者无交互冲突。
            外层 Transition 负责分区整体出现/消失的透明度过渡 -->
       <Transition
-        enter-active-class="transition-[opacity,scale] duration-[160ms]"
+        enter-active-class="transition-[opacity,scale] duration-fast"
         enter-from-class="opacity-0 scale-100"
-        leave-active-class="transition-[opacity,scale] duration-[160ms]"
+        leave-active-class="transition-[opacity,scale] duration-fast"
         leave-to-class="opacity-0 scale-100"
       >
         <div
           v-if="dropZone"
-          class="pointer-events-none absolute inset-0 z-3 flex flex-col gap-[4px] overflow-hidden rounded-[6px] p-[2px]"
+          class="pointer-events-none absolute inset-0 z-[3] flex flex-col gap-[4px] overflow-hidden rounded-[6px] p-[2px]"
         >
           <!-- 有和弦的落点：整槽压暗提示将被影响（位于分区之下） -->
           <div v-if="chord" class="pointer-events-none absolute inset-0 z-[-1] rounded-[6px] bg-black/30" />
@@ -159,7 +123,7 @@
         ref="addButtonEl"
         variant="subtle"
       >
-        <BaseIcon :size="18" :stroke-width="3" class="text-primary" name="plus" />
+        <BaseIcon :stroke-width="3" class="text-primary" name="plus" size="lg" />
       </ActionButton>
     </div>
     <template v-if="variant === 'char'">
@@ -190,6 +154,7 @@ import { computed, nextTick, ref, useTemplateRef } from 'vue';
 
 import FretboardCanvas from '@/components/fretboard/FretboardCanvas.vue';
 import ActionButton from '@/components/ui/ActionButton.vue';
+import type { IconName } from '@/components/ui/icons.registry';
 import {
   resolveDropAction,
   type DropAction,
@@ -227,9 +192,13 @@ const isHovered = ref(false);
 const isFocused = ref(false);
 // 操作按钮组引用：作为单一可聚焦节点，方向键在其内部按钮间切换
 const actionGroupEl = useTemplateRef<HTMLElement>('actionGroupEl');
-const editButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('editButtonEl');
-const copyButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('copyButtonEl');
-const removeButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('removeButtonEl');
+// 操作按钮 DOM 按 ACTION_ITEMS 顺序收集（0 修改 / 1 移动 / 2 删除），键盘导航按下标取用
+type ActionButtonInstance = { $el: HTMLButtonElement };
+const actionButtonEls = ref<Array<ActionButtonInstance | null>>([]);
+const setActionButtonEl = (el: unknown, index: number) => {
+  if (el) actionButtonEls.value[index] = el as ActionButtonInstance;
+  else actionButtonEls.value[index] = null;
+};
 const addButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('addButtonEl');
 // 当前激活的操作按钮下标（0 修改 / 1 复制 / 2 删除），支持上下方向键切换
 const activeActionIndex = ref(0);
@@ -238,12 +207,12 @@ const activeActionIndex = ref(0);
 const isActive = computed(() => (isHovered.value || isFocused.value) && !props.isDragActive);
 
 // 拖拽/焦点高亮与过渡常量
-// 聚焦环与拖拽源高亮描边取值一致：值只定义在 .char-box 的 --slot-ring-shadow（见 <style>），
-// 这里与 SCSS 规则同引用该变量，避免样式表与 Tailwind 常量各存一份同值字符串
-const FOCUS_RING_SHADOW_CLASS = '!shadow-[var(--slot-ring-shadow)]';
-const FAST_TRANSITION_CLASS = 'transition-all duration-[160ms]';
+// 聚焦环与拖拽源高亮描边统一引用 tokens 的 --focus-ring 令牌，不再本地各存一份同值字符串
+const FOCUS_RING_SHADOW_CLASS = '!shadow-[var(--focus-ring)]';
+// 分区淡入淡出/落点提示统一使用 duration-fast 令牌（双源统一后 fast=100ms）
+const FAST_TRANSITION_CLASS = 'transition-all duration-fast';
 
-// 三个操作按钮的级联过渡类（完整类名需静态写出供 Tailwind 扫描）：
+// 三个操作按钮的级联过渡类（完整类名需静态写出供 Tailwind 扫描，不能模板拼接）：
 // 显示时按 修改 → 移动 → 删除 依次延迟淡入并上移归位，隐藏时统一无延迟淡出。
 // 注意覆盖层随 isVisible 懒挂载后不再重挂，出场动画只能靠 isActive 驱动的过渡实现
 const ACTION_BUTTON_SHOW_CLASSES = [
@@ -328,13 +297,72 @@ const handleFocusOut = (e: FocusEvent) => {
 const slotTitle = computed(() =>
   props.variant === 'char' ? (props.chord ? '点击更换或清除和弦' : '点击添加和弦') : undefined
 );
-/** 修改/复制/删除大按钮的标签与提示文案 */
-const editButtonLabel = '修改';
-const editButtonTitle = '打开和弦编辑器';
-const moveButtonLabel = '移动';
-const moveButtonTitle = '按住拖拽：落到和弦上可交换或替换，落到空位可复制或移位';
-const removeButtonLabel = '删除';
-const removeButtonTitle = '清除当前和弦';
+/** 操作按钮统一配置：修改 / 移动 / 删除 —— 模板用 v-for 渲染，差异（图标/颜色/文案/样式/事件）全部字段化。
+ *  顺序即按钮顺序（0 修改 / 1 移动 / 2 删除），与 activeActionIndex / actionButtonEls 下标一一对应 */
+interface ActionItem {
+  key: 'edit' | 'move' | 'remove';
+  icon: IconName;
+  color: 'primary' | 'success' | 'danger';
+  label: string;
+  title: string;
+  /** 按钮专属样式类（如拖拽光标）；公共类在模板统一书写 */
+  extraClass?: string;
+  /** 按钮事件集：v-on 对象绑定。stop/prevent 修饰符在 handler 内手动调用，保证与模板写法等价 */
+  handlers: Record<string, (event: Event) => void>;
+}
+
+const stopEvent = (e: Event): void => {
+  e.stopPropagation();
+  e.preventDefault();
+};
+
+const ACTION_ITEMS: ActionItem[] = [
+  {
+    key: 'edit',
+    icon: 'pencil',
+    color: 'primary',
+    label: '修改',
+    title: '打开和弦编辑器',
+    handlers: {
+      click: e => {
+        stopEvent(e);
+        emit('click');
+      },
+      pointerdown: e => e.stopPropagation(),
+    },
+  },
+  {
+    key: 'move',
+    icon: 'grip-vertical',
+    color: 'success',
+    label: '移动',
+    title: '按住拖拽：落到和弦上可交换或替换，落到空位可复制或移位',
+    extraClass: 'cursor-grab active:cursor-grabbing',
+    handlers: {
+      // 落地动作由落点分区决定，与按钮模式无关；此处仅拦截冒泡（点击/松开）供拖拽接管
+      click: stopEvent,
+      mouseup: stopEvent,
+      pointerdown: e => {
+        stopEvent(e);
+        if (props.chord) emit('copyPointerdown', e as PointerEvent, props.slotKey, props.chord);
+      },
+    },
+  },
+  {
+    key: 'remove',
+    icon: 'trash-2',
+    color: 'danger',
+    label: '删除',
+    title: '清除当前和弦',
+    handlers: {
+      click: e => {
+        stopEvent(e);
+        emit('remove', props.slotKey);
+      },
+      pointerdown: e => e.stopPropagation(),
+    },
+  },
+];
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
@@ -372,11 +400,9 @@ const handleKeydown = (e: KeyboardEvent) => {
   nextTick(() => focusButton(activeActionIndex.value));
 };
 
-// 三个操作按钮的 DOM 引用，按下标取用
-const actionButtons = () =>
-  [editButtonEl.value, copyButtonEl.value, removeButtonEl.value].filter(Boolean) as Array<{
-    $el: HTMLButtonElement;
-  }>;
+// 操作按钮 DOM 按下标取用（与 ACTION_ITEMS 顺序一致）
+const actionButtons = (): ActionButtonInstance[] =>
+  actionButtonEls.value.filter((el): el is ActionButtonInstance => el !== null);
 /** 聚焦指定下标的操作按钮 */
 const focusButton = (index: number) => {
   const btn = actionButtons()[index];
@@ -389,7 +415,7 @@ const handleActionKeydown = (e: KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const delta = e.key === 'ArrowDown' ? 1 : -1;
-    const len = 3;
+    const len = ACTION_ITEMS.length;
     activeActionIndex.value = (activeActionIndex.value + delta + len) % len;
     focusButton(activeActionIndex.value);
     return;
@@ -435,11 +461,7 @@ const ariaLabelText = computed(() => {
     margin 0.18s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-/* 聚焦环与拖拽源高亮描边的唯一定义处：Tailwind 常量 FOCUS_RING_SHADOW_CLASS 与下方
-   .is-dragging-* 规则均引用此变量，改描边只需改这一行 */
-.char-box {
-  --slot-ring-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--color-primary);
-}
+/* 聚焦环与拖拽源高亮描边统一引用 tokens 的 --focus-ring 令牌（见 FOCUS_RING_SHADOW_CLASS） */
 
 /* 触摸长按等待期的按压反馈：源槽位渐显主色描边并轻微放大，提示即将进入拖拽 */
 .char-box.is-press-arming {
@@ -448,8 +470,7 @@ const ariaLabelText = computed(() => {
 }
 
 /* 拖拽源槽位高亮外边框（与聚焦环同描边） */
-.char-box.is-dragging-source,
-.char-box.is-dragging-copy-source {
-  box-shadow: var(--slot-ring-shadow) !important;
+.char-box.is-dragging-source {
+  box-shadow: var(--focus-ring) !important;
 }
 </style>

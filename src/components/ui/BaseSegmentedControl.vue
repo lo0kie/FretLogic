@@ -28,7 +28,7 @@
         :tabindex="getTabindex(opt, i)"
         :title="opt.label"
         @click="select(opt, i)"
-        class="segmented-item text-text-muted focus-visible:ring-primary/70 enabled:hover:text-text-title relative z-20 inline-flex h-full items-center justify-center self-stretch bg-transparent leading-none font-bold whitespace-nowrap shadow-none transition-all duration-200 ease-out outline-none focus-visible:ring-2 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+        class="segmented-item text-text-muted focus-visible:ring-primary/70 enabled:hover:text-text-title z-float relative inline-flex h-full items-center justify-center self-stretch bg-transparent leading-none font-bold whitespace-nowrap shadow-none transition-all duration-200 ease-out outline-none focus-visible:ring-2 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
         role="radio"
         type="button"
       >

@@ -29,33 +29,33 @@
               <slot :item name="icon">
                 <BaseIcon
                   v-if="item.type === 'loading'"
-                  :size="16"
                   aria-hidden="true"
                   class="animate-spin opacity-80"
                   name="loader-2"
+                  size="md"
                 />
                 <BaseIcon
                   v-else-if="item.type === 'success'"
-                  :size="16"
                   aria-hidden="true"
                   class="opacity-90"
                   name="check-circle-2"
+                  size="md"
                 />
                 <BaseIcon
                   v-else-if="item.type === 'error'"
-                  :size="16"
                   aria-hidden="true"
                   class="opacity-90"
                   name="alert-circle"
+                  size="md"
                 />
                 <BaseIcon
                   v-else-if="item.type === 'warning'"
-                  :size="16"
                   aria-hidden="true"
                   class="opacity-90"
                   name="alert-triangle"
+                  size="md"
                 />
-                <BaseIcon v-else :size="16" aria-hidden="true" class="opacity-80" name="info" />
+                <BaseIcon v-else aria-hidden="true" class="opacity-80" name="info" size="md" />
               </slot>
             </div>
 
@@ -101,7 +101,7 @@
               title="关闭"
               type="button"
             >
-              <BaseIcon :size="14" :stroke-width="2.5" aria-hidden="true" name="x" />
+              <BaseIcon :stroke-width="2.5" aria-hidden="true" name="x" size="sm" />
             </button>
           </slot>
         </div>

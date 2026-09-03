@@ -23,6 +23,7 @@
         :data-focusable-inline="!disabled || undefined"
         :style="{ width: triggerWidthStyle }"
         :tabindex="disabled ? -1 : 0"
+        :title="triggerTitle"
         @keydown="handleTriggerKeydown($event)"
         aria-haspopup="listbox"
         class="group bg-bg-body border-border-light text-text-title hover:border-border-base focus-visible:border-primary focus-visible:ring-primary/70 relative box-border flex items-center justify-between gap-2 rounded-full border transition-all duration-150 outline-none select-none focus-visible:ring-2"
@@ -43,17 +44,18 @@
           <BaseIcon
             v-if="typeof currentTriggerIcon === 'string'"
             :name="currentTriggerIcon as IconName"
-            :size="13"
+            :stroke-width="3"
             aria-hidden="true"
             class="shrink-0 opacity-80"
+            size="md"
           />
           <component
             v-else-if="currentTriggerIcon"
             :is="currentTriggerIcon"
-            :size="13"
-            :stroke-width="2.5"
+            :stroke-width="3"
             aria-hidden="true"
             class="shrink-0 opacity-80"
+            size="md"
           />
           <span class="flex w-full items-center gap-1 overflow-hidden">
             <template v-if="isMultiple && selectedValues.length">
@@ -64,7 +66,6 @@
               >
                 <span class="truncate">{{ formattedOption(opt) }}</span>
                 <BaseIcon
-                  :size="10"
                   :stroke-width="3"
                   @click.stop.prevent="handleRemoveTag(opt)"
                   @keydown.enter.prevent.stop="handleRemoveTag(opt)"
@@ -75,6 +76,7 @@
                   class="hover:text-danger shrink-0 cursor-pointer opacity-60 hover:opacity-100"
                   name="x"
                   role="button"
+                  size="xs"
                   tabindex="0"
                   title="移除"
                 />
@@ -95,8 +97,7 @@
 
         <template v-if="clearable && canClear && !disabled">
           <BaseIcon
-            :size="14"
-            :stroke-width="2.5"
+            :stroke-width="3"
             @click.stop.prevent="handleClear"
             @keydown.enter.prevent.stop="handleClear"
             @keydown.space.prevent.stop="handleClear"
@@ -106,24 +107,25 @@
             class="text-text-disabled hover:text-danger bg-bg-body hidden shrink-0 cursor-pointer transition-colors group-focus-within:block group-hover:block"
             name="x"
             role="button"
+            size="md"
             tabindex="0"
             title="清空"
           />
           <BaseIcon
             :class="{ 'rotate-180': _isOpen }"
-            :size="14"
-            :stroke-width="2.5"
+            :stroke-width="3"
             class="text-text-disabled block shrink-0 transition-transform duration-200 group-focus-within:hidden group-hover:hidden"
             name="chevron-down"
+            size="md"
           />
         </template>
         <BaseIcon
           v-else
           :class="{ 'rotate-180': _isOpen }"
-          :size="14"
-          :stroke-width="2.5"
+          :stroke-width="3"
           class="text-text-disabled block shrink-0 transition-transform duration-200"
           name="chevron-down"
+          size="md"
         />
       </div>
     </template>
@@ -152,7 +154,7 @@
             aria-hidden="true"
             class="z-panel text-text-disabled pointer-events-none absolute top-1 right-1 left-1 flex h-2 items-center justify-center transition-colors"
           >
-            <BaseIcon :size="9" :stroke-width="3" name="chevron-up" />
+            <BaseIcon :stroke-width="3" name="chevron-up" size="xs" />
           </div>
         </Transition>
 
@@ -193,6 +195,7 @@
               :key="index"
               :ref="el => setOptionEl(el, index)"
               :tabindex="isOptionDisabled(option) ? -1 : 0"
+              :title="getOptionTitle(option)"
               @click="handleSelect(option, close)"
               @keydown.enter.prevent.stop="handleSelect(option, close)"
               @keydown.space.prevent.stop="handleSelect(option, close)"
@@ -203,17 +206,18 @@
                 <BaseIcon
                   v-if="typeof getOptionIcon(option) === 'string'"
                   :name="getOptionIcon(option) as IconName"
-                  :size="13"
+                  :stroke-width="3"
                   aria-hidden="true"
                   class="shrink-0 opacity-80"
+                  size="md"
                 />
                 <component
                   v-else-if="getOptionIcon(option)"
                   :is="getOptionIcon(option)"
-                  :size="13"
-                  :stroke-width="2.5"
+                  :stroke-width="3"
                   aria-hidden="true"
                   class="shrink-0 opacity-80"
+                  size="md"
                 />
                 <span class="truncate">
                   <slot :index :option name="option">
@@ -223,11 +227,11 @@
               </span>
               <BaseIcon
                 v-if="isSelected(getOptionValue(option))"
-                :size="13"
-                :stroke-width="2.5"
+                :stroke-width="3"
                 aria-hidden="true"
                 class="text-primary shrink-0"
                 name="check"
+                size="md"
               />
             </div>
           </template>
@@ -239,7 +243,7 @@
             aria-hidden="true"
             class="z-panel text-text-disabled pointer-events-none absolute right-1 bottom-1 left-1 flex h-2 items-center justify-center transition-colors"
           >
-            <BaseIcon :size="9" :stroke-width="3" name="chevron-down" />
+            <BaseIcon :stroke-width="3" name="chevron-down" size="xs" />
           </div>
         </Transition>
 
@@ -279,7 +283,7 @@ export type OptionValue<Opt> = Opt extends { value: infer V } ? V : Opt;
   lang="ts"
   setup
 >
-import { computed, nextTick, onBeforeUpdate, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUpdate, ref, useAttrs, useTemplateRef, watch } from 'vue';
 
 import BasePopover from '@/components/ui/BasePopover.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -338,6 +342,7 @@ const {
 
 const modelValue = defineModel<M extends true ? V[] : V>({ required: true });
 
+const attrs = useAttrs();
 const emit = defineEmits<{
   (e: 'change', value: M extends true ? V[] : V): void;
   (e: 'clear'): void;
@@ -456,6 +461,15 @@ const formattedOption = (option: AnyOption): string => {
   return getOptionLabel(option);
 };
 
+/** 选项行 tooltip：显式 title 字段优先，未指定时用展示文本（与行内一致，含 formatter） */
+const getOptionTitle = (option: AnyOption): string | undefined => {
+  if (option !== null && typeof option === 'object' && 'title' in option) {
+    const t = (option as Record<string, unknown>)['title'];
+    if (typeof t === 'string' && t) return t;
+  }
+  return formattedOption(option) || undefined;
+};
+
 const selectedValues = computed<V[]>(() =>
   isMultiple.value
     ? Array.isArray(modelValue.value)
@@ -515,6 +529,11 @@ const presetWidth = computed(() => resolveComponentWidth(width) ?? '100%');
  */
 const animatingWidth = ref<string | undefined>(undefined);
 const triggerWidthStyle = computed(() => animatingWidth.value ?? presetWidth.value);
+
+const triggerTitle = computed(() => {
+  const explicit = attrs['title'];
+  return typeof explicit === 'string' && explicit ? explicit : displayText.value || undefined;
+});
 
 const displayText = computed(() => {
   if (isMultiple.value) {

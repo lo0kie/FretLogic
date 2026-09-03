@@ -1,7 +1,7 @@
 /**
  * 导入/导出服务：备份包的文件下载、文件解析（含老版本迁移与清洗）、导入应用。
  */
-import { validateImportExportPayload } from '@/services/validation/payload';
+import { parseAndValidatePayload } from '@/services/validation/payload';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useChordStore } from '@/stores/chordStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -9,7 +9,7 @@ import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { ImportExportPayload } from '@/types';
 import { buildBackupPayload } from '@/utils/core/buildBackupPayload';
-import { serializeForStorage } from '@/utils/core/common';
+import { formatLocalTimestampForFile, serializeForStorage } from '@/utils/core/common';
 import { triggerBlobDownload, wait } from '@/utils/score/score-export';
 
 /** 备份内容勾选项：和弦（含分组）/ 乐谱 / 同步配置 / 偏好设置 */
@@ -55,15 +55,12 @@ export function useImportExportService() {
     const loadingId = uiStore.toast.loading('正在解析并恢复数据...');
     await wait(30);
     try {
-      const resultStr = (await file.text()).trim();
-      if (!resultStr) throw new Error('文件内容为空');
-      const imported = JSON.parse(resultStr);
-      const { isValid, payload, warnings } = validateImportExportPayload(imported);
-      if (!isValid || !payload) throw new Error('Import verification failed');
-      if (warnings && warnings.length > 0) {
-        uiStore.toast.warning(`导入时已自动清理部分数据：${warnings.join('；')}`);
+      const result = parseAndValidatePayload(await file.text());
+      if (result.error || !result.payload) throw new Error(`备份解析失败：${result.error}`);
+      if (result.warnings && result.warnings.length > 0) {
+        uiStore.toast.warning(`导入时已自动清理部分数据：${result.warnings.join('；')}`);
       }
-      return payload;
+      return result.payload;
     } catch (err) {
       console.error('备份解析拦截:', err);
       uiStore.toast.error('文件非标准备份或核心数据已损坏');
@@ -89,15 +86,11 @@ export function useImportExportService() {
       uiStore.toast.warning('没有可导出的数据，请先创建分组、和弦或乐谱');
       return false;
     }
-    const now = new Date();
-    const tzOffset = now.getTimezoneOffset() * 60000;
-    const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, -1);
-    const dateStr = localISOTime.replace(/T/, '_').replace(/:/g, '-').split('.')[0];
     // 下载逻辑与导出图一致：统一走 triggerBlobDownload（创建 URL → a.click → 延时 revoke）
     const blob = new Blob([serializeForStorage(payload)], {
       type: 'application/json',
     });
-    triggerBlobDownload(blob, `FretLogic备份_${dateStr}.json`);
+    triggerBlobDownload(blob, `FretLogic备份_${formatLocalTimestampForFile()}.json`);
     uiStore.toast.success('备份已下载');
     return true;
   };

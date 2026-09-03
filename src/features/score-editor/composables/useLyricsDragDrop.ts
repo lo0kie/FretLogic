@@ -16,9 +16,6 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   const isDragging = ref(false);
   const isSuppressingClick = ref(false);
   const draggingSlotKey = ref<string | null>(null);
-  /** 当前拖拽的操作模式：swap 为换位，copy 为复制拖拽（仅决定拖拽源的视觉样式，落地动作由分区决定） */
-  const dragMoveMode = ref<'swap' | 'copy'>('swap');
-
   const {
     ghostChordName,
     setGhostEl: setGhostElInternal,
@@ -165,13 +162,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     isDragging.value = true;
     wasDraggingInSession = true;
     draggingSlotKey.value = activeSourceKey;
-    // 换位模式：源和弦虚化提示将被移走；复制模式：源和弦保留原位，仅以聚焦描边标记拖拽起点。
-    // 两种模式的拖拽源在拖动过程中都保持聚焦描边样式
-    if (dragMoveMode.value === 'swap') {
-      markDragSource(activeSourceKey, 'is-dragging-source');
-    } else {
-      markDragSource(activeSourceKey, 'is-dragging-copy-source');
-    }
+    markDragSource(activeSourceKey, 'is-dragging-source');
     setGhostChord(activeChord);
     document.body.classList.add('is-global-dragging');
 
@@ -279,7 +270,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   };
 
   /** 槽位按下入口：记录起点与拖拽模式；触摸端启动长按计时，鼠标端等待移动超过阈值 */
-  const handlePointerDown = (e: PointerEvent, slotKey: string, chord: Chord, mode: 'swap' | 'copy' = 'swap') => {
+  const handlePointerDown = (e: PointerEvent, slotKey: string, chord: Chord) => {
     if (activeSourceKey !== null) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const target = e.target as HTMLElement;
@@ -288,7 +279,6 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     clearLongPressTimer();
 
     wasDraggingInSession = false;
-    dragMoveMode.value = mode;
     startPointer = {
       x: e.clientX,
       y: e.clientY,
@@ -336,7 +326,6 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     draggingSlotKey,
     dragOverSlotKey,
     dropZone,
-    dragMoveMode,
     ghostChordName,
     setGhostEl,
     handlePointerDown,

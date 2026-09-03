@@ -1,5 +1,6 @@
 import { nameToSegments, Tuning } from '@/services/music/theory';
 import type { BarreEntity, BarreFret, Capo, Chord, GuitarStringEntity, GuitarStringsModel, StringIndex } from '@/types';
+import { clamp } from '@/utils/core/common';
 import { FRETBOARD_COLORS } from '@/utils/core/constants';
 
 import { createLruCache } from '../core/lruCache';
@@ -53,10 +54,10 @@ export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: n
 };
 
 /** 数值收窄：变调夹品位（0~12，截断取整） */
-export const toCapo = (value: number): Capo => Math.min(12, Math.max(0, Math.trunc(value))) as Capo;
+export const toCapo = (value: number): Capo => clamp(Math.trunc(value), 0, 12) as Capo;
 
 /** 数值收窄：琴弦索引（0~5，截断取整） */
-export const toStringIndex = (value: number): StringIndex => Math.min(5, Math.max(0, Math.trunc(value))) as StringIndex;
+export const toStringIndex = (value: number): StringIndex => clamp(Math.trunc(value), 0, 5) as StringIndex;
 
 /** 值域校验：变调夹品位（清洗层用，用于区分"非法值"与"合法 0 品"） */
 export const isCapoValue = (value: unknown): value is Capo =>

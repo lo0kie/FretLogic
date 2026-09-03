@@ -52,7 +52,7 @@
         icon-only
         variant="subtle"
       >
-        <BaseIcon :name="isPlaying ? 'square' : 'play'" :size="18" :stroke-width="2.2" />
+        <BaseIcon :name="isPlaying ? 'square' : 'play'" size="xl" />
       </ActionButton>
 
       <!-- 乐谱预览 tab：复制 / 下载当前乐谱的整曲长图 -->
@@ -76,7 +76,7 @@
             icon-only
             ref="triggerBtnRef"
           >
-            <BaseIcon :size="18" :stroke-width="2.2" aria-hidden="true" name="sliders-horizontal" />
+            <BaseIcon :stroke-width="2.5" aria-hidden="true" name="sliders-horizontal" size="xl" />
           </ActionButton>
         </template>
 
@@ -93,7 +93,7 @@
       />
 
       <ActionButton v-tooltip.interactive="buildInfoTooltip" aria-label="构建信息" icon-only variant="ghost">
-        <BaseIcon :size="17" :stroke-width="2.2" name="info" />
+        <BaseIcon :stroke-width="2.5" name="info" size="xl" />
       </ActionButton>
     </div>
   </header>
@@ -391,8 +391,7 @@ const handleScoreExport = async (op: 'copy' | 'download') => {
       lineIndices,
       chordsLookupMap.value,
       'normal',
-      settingsStore.scoreChordShorthand,
-      true
+      settingsStore.scoreChordShorthand
     );
     const blobs = await runWorkerExport(payload);
     if (blobs.length === 0) throw new Error('未能生成有效的导出图片');

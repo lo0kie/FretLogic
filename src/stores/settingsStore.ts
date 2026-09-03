@@ -12,7 +12,7 @@ import type { AppPreferencesBackup, SyncSettingsBackup } from '@/types';
 import { GITEE_SYNC_CONFIG, GITHUB_SYNC_CONFIG, STORAGE_KEYS } from '@/utils/core/constants';
 
 export const useSettingsStore = defineStore('settings', () => {
-  const syncTarget = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_TARGET, 'server');
+  const syncTarget = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_TARGET, 'gitee');
 
   // GitHub 同步配置（默认由 GITHUB_SYNC_CONFIG 提供仓库与环境分支）
   const githubToken = ref('');

@@ -23,8 +23,8 @@
 // 浮层根容器：负责显隐过渡（位置由 floating-ui 用 left/top 控制，与 transform 解耦，避免重排抖动）
 .v-tooltip-root {
   transition:
-    opacity $duration-fast $bezier-standard,
-    transform $duration-fast $bezier-bounce;
+    opacity $duration-base $bezier-standard,
+    transform $duration-base $bezier-bounce;
   will-change: opacity, transform;
 }
 

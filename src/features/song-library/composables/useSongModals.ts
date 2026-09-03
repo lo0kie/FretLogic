@@ -1,6 +1,7 @@
-import { computed, reactive } from 'vue';
+import { computed } from 'vue';
 
 import { getKeySemitones, transposeChordName } from '@/services/music/theory';
+import { useModalController } from '@/shared/composables/useModalController';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -13,19 +14,20 @@ export function useSongModals() {
   const scoreEditor = useScoreEditorStore();
   const uiStore = useUiStore();
 
-  const modals = reactive({
-    create: false,
-    config: false,
-    clear: false,
-  });
-
-  const modalData = reactive({
-    activeSong: null as Song | null,
-    inputValue: '',
-    title: '',
-    playKey: 'C',
-    capo: 0,
-  });
+  const { modals, modalData, open, close } = useModalController(
+    {
+      create: false,
+      config: false,
+      clear: false,
+    },
+    {
+      activeSong: null as Song | null,
+      inputValue: '',
+      title: '',
+      playKey: 'C',
+      capo: 0,
+    }
+  );
 
   const key = computed({
     get: () => {
@@ -52,7 +54,7 @@ export function useSongModals() {
   /** 打开新建乐谱弹窗 */
   const openCreateSongModal = () => {
     resetModalData();
-    modals.create = true;
+    open('create');
   };
 
   /** 确认创建乐谱：建谱后立即切换为活动乐谱并进入编辑页 */
@@ -67,20 +69,20 @@ export function useSongModals() {
     scoreEditor.setActiveSong(newSong.id);
     scoreEditor.activeTab = 'edit';
 
-    modals.create = false;
+    close('create');
     resetModalData();
     uiStore.toast.success('新建乐谱成功');
   };
 
   /** 打开乐谱配置弹窗，回填当前标题/调性/变调夹 */
   const openConfig = (song: Song) => {
-    modalData.activeSong = song;
-    modalData.title = song.title;
-    modalData.playKey = song.playKey || 'C';
-    modalData.capo = song.capo || 0;
-
     // key 由 playKey + capo 实时派生，无需单独读取持久化字段
-    modals.config = true;
+    open('config', {
+      activeSong: song,
+      title: song.title,
+      playKey: song.playKey || 'C',
+      capo: song.capo || 0,
+    });
   };
 
   /** 确认保存乐谱配置 */
@@ -94,14 +96,13 @@ export function useSongModals() {
       });
       uiStore.toast.success('乐谱配置已更新');
     }
-    modals.config = false;
+    close('config');
     resetModalData();
   };
 
   /** 打开清空和弦确认弹窗 */
   const openClear = (song: Song) => {
-    modalData.activeSong = song;
-    modals.clear = true;
+    open('clear', { activeSong: song });
   };
 
   /** 确认清空该乐谱的全部和弦槽位 */
@@ -110,7 +111,7 @@ export function useSongModals() {
       songStore.updateSongMeta(modalData.activeSong.id, { chordMap: new Map() });
       uiStore.toast.success('已清除该乐谱的所有和弦');
     }
-    modals.clear = false;
+    close('clear');
     resetModalData();
   };
 

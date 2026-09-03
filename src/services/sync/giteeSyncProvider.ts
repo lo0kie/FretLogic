@@ -1,9 +1,13 @@
-import { base64DecodeUtf8, base64EncodeUtf8, serializeForStorage } from '@/utils/core/common';
+import { base64EncodeUtf8, serializeForStorage } from '@/utils/core/common';
 
 import { SyncError, type GiteeSyncConfig, type SyncBranchesProvider } from './provider';
-import { createSyncProviderBase } from './syncBase';
+import {
+  buildSyncCommitMessage,
+  createSyncProviderBase,
+  decodeBase64Envelope,
+  extractApiErrorDetail,
+} from './syncBase';
 
-const TIMEOUT_MS = 15000;
 const GITEE_API_BASE = 'https://gitee.com/api/v5';
 
 /**
@@ -31,28 +35,17 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
 
   const branchesUrl = () => withToken(`${GITEE_API_BASE}/repos/${config.owner}/${config.repo}/branches?per_page=100`);
 
-  /** 提取 Gitee 错误响应中的说明文字（{"message": ...} 或 {"error": ...}），便于区分 401 是令牌无效还是权限不足 */
+  /** Gitee 文案格式：错误详情前置「：」（提取逻辑见 syncBase.extractApiErrorDetail） */
   const describeError = async (response: Response): Promise<string> => {
-    try {
-      const body = (await response.json()) as { message?: unknown; error?: unknown };
-      const detail = body.message ?? body.error;
-      if (typeof detail === 'string' && detail) return `：${detail.slice(0, 120)}`;
-      return '';
-    } catch {
-      return '';
-    }
+    const detail = await extractApiErrorDetail(response);
+    return detail ? `：${detail}` : '';
   };
 
   const { request, decodePayload } = createSyncProviderBase({
     // 双通道认证：query access_token（文件/分支/仓库 URL 均已携带）+ Authorization 头，任一被 Gitee 接受即可
     baseHeaders: config.token ? { Authorization: `token ${config.token}` } : undefined,
     defaultUrl: () => fileUrl(config.branch),
-    readRaw: async response => {
-      const body = await response.json();
-      if (!body.content) throw new SyncError('INVALID_CLOUD_DATA', '云端文件内容为空');
-      return base64DecodeUtf8(String(body.content).replace(/\n/g, ''));
-    },
-    timeoutMs: TIMEOUT_MS,
+    readRaw: decodeBase64Envelope,
   });
 
   return {
@@ -94,7 +87,7 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
           body: JSON.stringify({
             access_token: config.token ?? '',
             content: base64EncodeUtf8(serializeForStorage(payload)),
-            message: `Auto sync fret-logic data: ${new Date().toLocaleString()}`,
+            message: buildSyncCommitMessage(),
             branch: config.branch,
             ...(sha ? { sha } : {}),
           }),

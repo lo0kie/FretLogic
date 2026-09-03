@@ -3,16 +3,12 @@
 // Lucide Icons
 import AlertCircle from '~icons/lucide/alert-circle';
 import AlertTriangle from '~icons/lucide/alert-triangle';
-import Archive from '~icons/lucide/archive';
 import ArrowUpDown from '~icons/lucide/arrow-up-down';
 import Check from '~icons/lucide/check';
 import CheckCircle2 from '~icons/lucide/check-circle-2';
 import ChevronDown from '~icons/lucide/chevron-down';
-import ChevronLeft from '~icons/lucide/chevron-left';
 import ChevronRight from '~icons/lucide/chevron-right';
 import ChevronUp from '~icons/lucide/chevron-up';
-import ChevronsLeft from '~icons/lucide/chevrons-left';
-import ChevronsRight from '~icons/lucide/chevrons-right';
 import Clock from '~icons/lucide/clock';
 import Cloud from '~icons/lucide/cloud';
 import CloudDownload from '~icons/lucide/cloud-download';
@@ -22,7 +18,6 @@ import Download from '~icons/lucide/download';
 import Eraser from '~icons/lucide/eraser';
 import Eye from '~icons/lucide/eye';
 import EyeOff from '~icons/lucide/eye-off';
-import FileDown from '~icons/lucide/file-down';
 import FileQuestion from '~icons/lucide/file-question';
 import FileText from '~icons/lucide/file-text';
 import FolderOpen from '~icons/lucide/folder-open';
@@ -36,15 +31,11 @@ import Laptop from '~icons/lucide/laptop';
 import Link2 from '~icons/lucide/link-2';
 import List from '~icons/lucide/list';
 import Loader2 from '~icons/lucide/loader-2';
-import Maximize2 from '~icons/lucide/maximize-2';
-import Minimize2 from '~icons/lucide/minimize-2';
 import Minus from '~icons/lucide/minus';
 import Moon from '~icons/lucide/moon';
 import Move from '~icons/lucide/move';
-import MoveHorizontal from '~icons/lucide/move-horizontal';
 import Music from '~icons/lucide/music';
 import PanelLeft from '~icons/lucide/panel-left';
-import Pause from '~icons/lucide/pause';
 import Pencil from '~icons/lucide/pencil';
 import Play from '~icons/lucide/play';
 import PlugZap from '~icons/lucide/plug-zap';
@@ -70,15 +61,11 @@ import SimpleIconsGithub from '~icons/simple-icons/github';
 export const ICON_REGISTRY = {
   'alert-circle': AlertCircle,
   'alert-triangle': AlertTriangle,
-  'archive': Archive,
   'arrow-up-down': ArrowUpDown,
   'check': Check,
   'check-circle-2': CheckCircle2,
   'chevron-down': ChevronDown,
-  'chevron-left': ChevronLeft,
   'chevron-right': ChevronRight,
-  'chevrons-left': ChevronsLeft,
-  'chevrons-right': ChevronsRight,
   'chevron-up': ChevronUp,
   'clock': Clock,
   'cloud': Cloud,
@@ -89,7 +76,6 @@ export const ICON_REGISTRY = {
   'eraser': Eraser,
   'eye': Eye,
   'eye-off': EyeOff,
-  'file-down': FileDown,
   'file-question': FileQuestion,
   'file-text': FileText,
   'folder-open': FolderOpen,
@@ -103,15 +89,11 @@ export const ICON_REGISTRY = {
   'link-2': Link2,
   'list': List,
   'loader-2': Loader2,
-  'maximize-2': Maximize2,
-  'minimize-2': Minimize2,
   'minus': Minus,
   'moon': Moon,
   'move': Move,
-  'move-horizontal': MoveHorizontal,
   'music': Music,
   'panel-left': PanelLeft,
-  'pause': Pause,
   'pencil': Pencil,
   'play': Play,
   'plug-zap': PlugZap,

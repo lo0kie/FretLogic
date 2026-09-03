@@ -138,7 +138,7 @@
               size="lg"
               variant="subtle"
             >
-              <BaseIcon :size="18" :stroke-width="2.2" name="trash-2" />
+              <BaseIcon :stroke-width="2.2" name="trash-2" size="lg" />
             </ActionButton>
           </div>
 
@@ -154,13 +154,9 @@
         class="z-top pointer-events-none fixed top-0 left-0 will-change-transform"
       >
         <div
-          :class="dragMoveMode === 'copy' ? 'border-success' : ''"
           class="py-sm px-md bg-bg-panel/95 border-primary shadow-floating flex -translate-x-1/2 -translate-y-1/2 scale-105 items-center justify-center rounded-md border-[1.5px] backdrop-blur-md"
         >
-          <span
-            :class="dragMoveMode === 'copy' ? 'text-success' : 'text-primary'"
-            class="text-sm leading-none font-extrabold"
-          >
+          <span class="text-primary text-sm leading-none font-extrabold">
             {{ ghostChordName }}
           </span>
         </div>
@@ -263,7 +259,6 @@ const {
   isDragging,
   isSuppressingClick,
   draggingSlotKey,
-  dragMoveMode,
   dragOverSlotKey,
   dropZone,
   ghostChordName,

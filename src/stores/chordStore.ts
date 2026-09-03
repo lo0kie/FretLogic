@@ -317,15 +317,11 @@ export const useChordStore = defineStore('chord', () => {
    * 用导入的数据整体替换分组与和弦列表（常用于导入/恢复）。
    * 默认折叠全部分组并清空选中；可通过 options 调整。
    */
-  const replaceAllData = (
-    data: { groups: Group[]; chords: Chord[] },
-    options: { collapseAll?: boolean; clearSelection?: boolean } = {}
-  ) => {
-    const { collapseAll = true, clearSelection = true } = options;
+  const replaceAllData = (data: { groups: Group[]; chords: Chord[] }): void => {
     groups.value = [...data.groups];
-    expandedGroupId.value = collapseAll ? null : (data.groups[0]?.id ?? null);
+    expandedGroupId.value = null;
     savedChordsList.value = [...data.chords];
-    if (clearSelection) selectedGroupId.value = null;
+    selectedGroupId.value = null;
   };
 
   /** 将和弦插入列表头部（新和弦优先展示）。 */
@@ -352,23 +348,6 @@ export const useChordStore = defineStore('chord', () => {
     } catch {
       // 存储失败静默忽略（与 useStorage 行为一致）
     }
-  };
-
-  /** 按 id 集合批量删除和弦；空集合时直接返回。 */
-  const removeChordsByIds = (ids: string[]) => {
-    if (ids.length === 0) return;
-    const set = new Set(ids);
-    savedChordsList.value = savedChordsList.value.filter(c => !set.has(c.id));
-  };
-
-  /** 将一批和弦移动到目标分组；目标分组不存在时忽略，被移动项刷新 updatedAt。 */
-  const moveChordsToGroup = (chordIds: string[], targetGroupId: string) => {
-    if (!groups.value.some(g => g.id === targetGroupId)) return;
-    const set = new Set(chordIds);
-    const now = Date.now();
-    savedChordsList.value = savedChordsList.value.map(c =>
-      set.has(c.id) ? { ...c, groupId: toGroupId(targetGroupId), updatedAt: now } : c
-    );
   };
 
   /** 将源分组内某和弦名（含全部指法变体）整体移动到目标分组。 */
@@ -441,18 +420,6 @@ export const useChordStore = defineStore('chord', () => {
     if (targetIds.size === 0) return targetIds;
     savedChordsList.value = savedChordsList.value.filter(c => !targetIds.has(c.id));
     return targetIds;
-  };
-
-  /** 删除指定分组内某和弦名下的全部指法变体，返回被删除的 id 列表。 */
-  const removeVariantsByName = (groupId: string, chordName: string): string[] => {
-    const targetName = nameKeyOf(chordName);
-    const matchedIds = savedChordsList.value
-      .filter(c => c.groupId === groupId && nameKeyOf(c) === targetName)
-      .map(c => c.id);
-    if (matchedIds.length === 0) return matchedIds;
-    const idSet = new Set(matchedIds);
-    savedChordsList.value = savedChordsList.value.filter(c => !idSet.has(c.id));
-    return matchedIds;
   };
 
   /**
@@ -555,13 +522,10 @@ export const useChordStore = defineStore('chord', () => {
     addChord,
     updateChord,
     flushChordsToStorage,
-    removeChordsByIds,
-    moveChordsToGroup,
     moveVariantsByName,
     executeUndoRestore,
     repairData,
     removeChords,
-    removeVariantsByName,
     buildChordForSave,
     replaceAllData,
   };

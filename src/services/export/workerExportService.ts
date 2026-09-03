@@ -34,8 +34,7 @@ export const prepareWorkerExportPayload = (
   selectedIndices: number[],
   chordsLookupMap: Map<string, Chord>,
   mode: 'normal' | 'a4',
-  shorthand = false,
-  includeMetaBar = true
+  shorthand = false
 ): WorkerExportPayload => {
   const lyricsLines = song.lyrics.split('\n');
   const chordMap = song.chordMap;
@@ -96,7 +95,6 @@ export const prepareWorkerExportPayload = (
     lines,
     mode,
     darkMode: globalDarkMode.value,
-    includeMetaBar,
   };
 };
 

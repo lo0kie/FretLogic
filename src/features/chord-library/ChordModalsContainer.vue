@@ -115,7 +115,7 @@
             data-focusable-inline
             type="button"
           >
-            <BaseIcon :size="16" class="text-primary shrink-0" name="music" />
+            <BaseIcon class="text-primary shrink-0" name="music" size="md" />
             <span class="text-text-title min-w-0 flex-1 truncate text-xs font-semibold">
               {{ item.song.title }}
             </span>
@@ -129,7 +129,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, inject } from 'vue';
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 import FretboardCanvas from '@/components/fretboard/FretboardCanvas.vue';
@@ -141,14 +141,14 @@ import BaseModal from '@/components/ui/BaseModal.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import type { useChordGroupModals } from '@/features/chord-library/composables/useChordGroupModals';
 import { getChordName } from '@/services/music/theory';
+import { injectModalController } from '@/shared/composables/useModalController';
 import { useChordStore } from '@/stores/chordStore';
 import { globalDarkMode } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import type { Song } from '@/types';
 
-type GroupModals = ReturnType<typeof useChordGroupModals>;
-const groupModals = inject<GroupModals>('groupModals')!;
+const groupModals = injectModalController<ReturnType<typeof useChordGroupModals>>('groupModals');
 
 const router = useRouter();
 const chordStore = useChordStore();

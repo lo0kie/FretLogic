@@ -42,9 +42,8 @@ const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
 </script>
 
 <script lang="ts" setup>
-import type { VirtualElement } from '@floating-ui/vue';
-
 import { CONTEXT_MENU_REPOSITION_DURATION_MS, CONTEXT_MENU_REPOSITION_EASING } from '@/utils/core/constants';
+import { createVirtualElementRect } from '@/utils/ui/floatingCore';
 
 import ContextMenuItems, { type ContextMenuItem } from './ContextMenuItems.vue';
 
@@ -72,20 +71,7 @@ const popoverRef = useTemplateRef<InstanceType<typeof BasePopover>>('popoverRef'
 const itemsRef = useTemplateRef<InstanceType<typeof ContextMenuItems>>('itemsRef');
 const triggerWrapperRef = useTemplateRef<HTMLElement>('triggerWrapperRef');
 
-const virtualRef = computed<VirtualElement>(() => ({
-  getBoundingClientRect() {
-    return {
-      x: x.value,
-      y: y.value,
-      top: y.value,
-      left: x.value,
-      bottom: y.value,
-      right: x.value,
-      width: 0,
-      height: 0,
-    };
-  },
-}));
+const virtualRef = computed(() => createVirtualElementRect(x.value, y.value));
 
 /** 菜单关闭回调：若全局互斥记录仍指向自己则清除，并向父级转发关闭事件 */
 const handlePopoverClose = () => {

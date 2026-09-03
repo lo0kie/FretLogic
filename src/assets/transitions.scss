@@ -34,8 +34,8 @@
 .v-transition-scale-enter-active,
 .v-transition-scale-leave-active {
   transition:
-    opacity $duration-fast $bezier-standard,
-    transform $duration-fast $bezier-bounce;
+    opacity $duration-base $bezier-standard,
+    transform $duration-base $bezier-bounce;
   will-change: opacity, transform;
 }
 
@@ -56,15 +56,15 @@
 // =============================================================================
 .modal-card {
   transition:
-    transform $duration-base $bezier-standard,
-    opacity $duration-base $bezier-standard,
+    transform $duration-slow $bezier-standard,
+    opacity $duration-slow $bezier-standard,
     width $duration-base $bezier-standard,
     height $duration-base $bezier-standard;
 }
 
 .v-transition-modal-enter-active,
 .v-transition-modal-leave-active {
-  transition: opacity $duration-base $bezier-standard;
+  transition: opacity $duration-slow $bezier-standard;
 }
 
 .v-transition-modal-enter-from {
@@ -89,18 +89,9 @@
   opacity: 0;
 
   .modal-card {
-    transform: scale(0.95) translateY(8px);
+    transform: scale(0.92) translateY(12px);
     opacity: 0;
   }
-}
-
-/* 模态卡片自身的过渡通道：enter/leave 的缩放淡入淡出与 auto-height 的宽高变化都依赖它 */
-.modal-card {
-  transition:
-    transform $duration-base $bezier-standard,
-    opacity $duration-base $bezier-standard,
-    width $duration-base $bezier-standard,
-    height $duration-base $bezier-standard;
 }
 
 // =============================================================================

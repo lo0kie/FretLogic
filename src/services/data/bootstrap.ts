@@ -12,21 +12,10 @@
 import type { Chord, Group, Song } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { logger } from '@/utils/core/logger';
+import { readJsonArray } from '@/utils/core/storage';
 
 import { migrateLegacyData } from './migrateLegacy';
 import { chordRepository, songRepository } from './repositories';
-
-/** 从指定存储读取 JSON 数组；键不存在、解析失败或非数组时返回空数组。 */
-function readJson<T>(key: string, storage: Storage): T[] {
-  try {
-    const raw = storage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as T[]) : [];
-  } catch {
-    return [];
-  }
-}
 
 /** 启动引导：仅做一次性旧数据备份迁移（幂等、失败不阻塞）；不回填恢复，避免清空后被备份"复活" */
 export async function bootstrapDataLayer(storage: Storage = window.localStorage): Promise<void> {
@@ -41,8 +30,8 @@ export async function bootstrapDataLayer(storage: Storage = window.localStorage)
 /** 把 localStorage 当前数据同步到 IDB（后台切换/关闭前调用） */
 export async function syncLocalStorageToIdb(storage: Storage = window.localStorage): Promise<void> {
   try {
-    const groups = readJson<Group>(STORAGE_KEYS.GROUPS, storage);
-    const chords = readJson<Chord>(STORAGE_KEYS.CHORD_LIST, storage);
+    const groups = readJsonArray<Group>(storage, STORAGE_KEYS.GROUPS);
+    const chords = readJsonArray<Chord>(storage, STORAGE_KEYS.CHORD_LIST);
     const songs: Song[] = [];
 
     // 歌曲按分片存储（SONGS_INDEX + SONG_ENTRY:{id}）

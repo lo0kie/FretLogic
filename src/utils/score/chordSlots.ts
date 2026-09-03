@@ -3,6 +3,7 @@
  * 由 utils/music/chord-fretboard.ts 拆分迁入——槽位域属乐谱（score），与 scoreModel 同居一处。
  */
 import type { ChordId, SlotKey } from '@/types';
+import { clamp } from '@/utils/core/common';
 
 import { charKey, chordSlotKey, collectEdgeChordIds, edgeSlotPrefix } from './scoreModel';
 
@@ -112,7 +113,7 @@ export function swapOrMoveSlotChords(chordMap: Map<SlotKey, ChordId>, sourceKey:
         // 当拖拽到行首的“添加”按钮（最左侧占位符）时插入到最左侧（0），行尾插入到末尾
         insertIdx = sourceParsed.type === 'start' ? 0 : list.length;
       } else {
-        insertIdx = Math.min(Math.max(0, tgtIdx), list.length);
+        insertIdx = clamp(tgtIdx, 0, list.length);
       }
       list.splice(insertIdx, 0, movedChordId);
       setEdgeChords(chordMap, sourceParsed.lineId, sourceParsed.type, list);
@@ -166,7 +167,7 @@ function insertChordAtParsedLocation(chordMap: Map<SlotKey, ChordId>, parsed: Pa
       // 当目标是行首“添加”按钮（最左侧占位符）时插入到最左侧（0），行尾插入到末尾
       insertIdx = parsed.type === 'start' ? 0 : list.length;
     } else {
-      insertIdx = Math.min(Math.max(0, parsed.index), list.length);
+      insertIdx = clamp(parsed.index, 0, list.length);
     }
     list.splice(insertIdx, 0, chordId);
     setEdgeChords(chordMap, parsed.lineId, parsed.type, list);

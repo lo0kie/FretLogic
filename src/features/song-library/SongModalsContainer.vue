@@ -1,14 +1,12 @@
 <template>
-  <BaseModal v-model:visible="songModals.modals.create" @confirm="songModals.handleCreateSong" title="新建乐谱">
-    <BaseInput
-      v-focus
-      v-model="songModals.modalData.inputValue"
-      :maxlength="MAX_SONG_NAME_LENGTH"
-      @enter="songModals.handleCreateSong"
-      clearable
-      placeholder="请输入乐谱名称..."
-    />
-  </BaseModal>
+  <PromptInputModal
+    v-model="songModals.modalData.inputValue"
+    v-model:visible="songModals.modals.create"
+    :maxlength="MAX_SONG_NAME_LENGTH"
+    @confirm="songModals.handleCreateSong"
+    placeholder="请输入乐谱名称..."
+    title="新建乐谱"
+  />
 
   <BaseModal v-model:visible="songModals.modals.config" @confirm="songModals.handleConfigSong" title="乐谱配置">
     <div class="config-modal-body gap-lg py-xs flex flex-col">
@@ -24,27 +22,11 @@
       </BaseFormRow>
 
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="指法调 (Play)">
-        <BaseSelector v-model="songModals.modalData.playKey" :options="KEY_OPTIONS" default-value="C" width="md">
-          <template #label="{ selected }">
-            <span v-chord-name="{ name: `${selected}调` }" />
-          </template>
-
-          <template #option="{ option }">
-            <span v-chord-name="{ name: `${option}调` }" />
-          </template>
-        </BaseSelector>
+        <KeySelector v-model="songModals.modalData.playKey" width="md" />
       </BaseFormRow>
 
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="演唱调 (Key)">
-        <BaseSelector v-model="songModals.key.value" :options="KEY_OPTIONS" default-value="C" width="md">
-          <template #label="{ selected }">
-            <span v-chord-name="{ name: `${selected}调` }" />
-          </template>
-
-          <template #option="{ option }">
-            <span v-chord-name="{ name: `${option}调` }" />
-          </template>
-        </BaseSelector>
+        <KeySelector v-model="songModals.key.value" width="md" />
       </BaseFormRow>
 
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="变调夹 (Capo)">
@@ -69,18 +51,16 @@
 </template>
 
 <script lang="ts" setup>
-import { inject } from 'vue';
-
 import BaseFormRow from '@/components/ui/BaseFormRow.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BaseNumberInput from '@/components/ui/BaseNumberInput.vue';
-import BaseSelector from '@/components/ui/BaseSelector.vue';
+import KeySelector from '@/components/ui/KeySelector.vue';
+import PromptInputModal from '@/components/ui/PromptInputModal.vue';
 import type { useSongModals } from '@/features/song-library/composables/useSongModals';
-import { KEY_OPTIONS } from '@/services/music/theory';
+import { injectModalController } from '@/shared/composables/useModalController';
 
-type SongModals = ReturnType<typeof useSongModals>;
-const songModals = inject<SongModals>('songModals')!;
+const songModals = injectModalController<ReturnType<typeof useSongModals>>('songModals');
 
 /** 表单行统一 Label 宽度 */
 const FORM_LABEL_WIDTH = '5rem';
