@@ -1,5 +1,5 @@
 <template>
-  <div class="box-border w-full">
+  <div :data-chord-id="cardData.mainChord.id" class="box-border w-full">
     <ContextMenu #="{ isOpen }" :items="menuItems">
       <div :title="getChordName(activeChord, { shorthand: settingsStore.workbenchChordShorthand })" class="w-full">
         <div
@@ -53,6 +53,7 @@ import BaseBadge from '@/components/ui/BaseBadge.vue';
 import ContextMenu from '@/components/ui/context-menu/ContextMenu.vue';
 import type { ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
 import { getChordName } from '@/services/music/theory';
+import { useTextTransfer } from '@/shared/composables/useTextTransfer';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSongStore } from '@/stores/songStore';
@@ -74,6 +75,7 @@ const emit = defineEmits<{
 const editorStore = useChordEditorStore();
 const settingsStore = useSettingsStore();
 const songStore = useSongStore();
+const { copyChordCardText } = useTextTransfer();
 
 const WHEEL_SWITCH_THRESHOLD = 60;
 
@@ -139,7 +141,20 @@ const handleWheelScroll = (e: WheelEvent) => {
 const menuItems = computed<ContextMenuItem[]>(() => {
   const variantIds = props.cardData.variants.map(v => v.id);
   const hasReferences = songStore.getChordReferences(variantIds).length > 0;
+  // 复制：多指法时展开为级联子菜单逐指法复制，单指法不展开直接复制当前展示的指法
+
   return [
+    {
+      label: '复制',
+      icon: 'copy',
+      expandChildren: props.cardData.hasVariants,
+      action: () => void copyChordCardText(activeChord.value),
+      children: props.cardData.variants.map((variant, index) => ({
+        label: `指法 ${index + 1}`,
+        icon: 'copy',
+        action: () => void copyChordCardText(variant),
+      })),
+    },
     {
       label: '移动分组',
       icon: 'move',

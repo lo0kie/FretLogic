@@ -32,7 +32,7 @@
           class="flex min-w-[320px] flex-col items-center gap-2 text-sm"
         >
           <span class="text-danger">{{ errorMessage }}</span>
-          <ActionButton @click="generate(true)" size="sm" variant="subtle"> 重试 </ActionButton>
+          <ActionButton @click="generate(true)" label="重试" size="sm" variant="subtle" />
         </div>
 
         <!-- 分页页流：每页满高、A4 等比宽，横向排列；右键单页可复制/下载该页图 -->

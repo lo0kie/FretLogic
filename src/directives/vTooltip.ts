@@ -228,7 +228,7 @@ const updatePosition = async (el: HTMLElement, opts: TooltipOptions): Promise<vo
   });
 
   const { x, y, placement, middlewareData } = await computePosition(el, globalBox, {
-    placement: opts.placement ?? 'top',
+    placement: opts.placement ?? 'bottom',
     middleware,
   });
 

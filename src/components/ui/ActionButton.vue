@@ -19,26 +19,52 @@
       name="loader-2"
     />
     <slot v-else :disabled :loading :size name="prefix">
-      <BaseIcon v-if="prefixIcon" :name="prefixIcon" aria-hidden="true" class="shrink-0" />
+      <BaseIcon
+        v-if="resolvedIcon && hasText"
+        :color="iconColor"
+        :name="resolvedIcon"
+        :size="iconSize"
+        :stroke-width="iconStrokeWidth"
+        aria-hidden="true"
+        class="shrink-0"
+      />
     </slot>
 
     <span
-      v-if="$slots['default'] && (!loading || !iconOnly)"
+      v-if="(hasText || resolvedIcon) && (!loading || !isIconOnly)"
       class="button-content flex items-center justify-center whitespace-nowrap"
     >
-      <slot :disabled :loading :size />
+      <slot v-if="hasDefaultSlot" :disabled :loading :size />
+      <span v-else-if="label" class="whitespace-nowrap">{{ label }}</span>
+      <BaseIcon
+        v-else-if="resolvedIcon"
+        :color="iconColor"
+        :name="resolvedIcon"
+        :size="iconSize ?? size"
+        :stroke-width="iconStrokeWidth"
+        aria-hidden="true"
+        class="shrink-0"
+      />
     </span>
 
-    <slot v-if="!loading || !iconOnly" :disabled :loading :size name="suffix">
-      <BaseIcon v-if="suffixIcon" :name="suffixIcon" aria-hidden="true" class="shrink-0" />
+    <slot v-if="!loading || !isIconOnly" :disabled :loading :size name="suffix">
+      <BaseIcon
+        v-if="suffixIcon"
+        :color="iconColor"
+        :name="suffixIcon"
+        :size="iconSize"
+        :stroke-width="iconStrokeWidth"
+        aria-hidden="true"
+        class="shrink-0"
+      />
     </slot>
   </button>
 </template>
 
 <script lang="ts" setup>
-import { computed, watch } from 'vue';
+import { computed, useSlots, watch } from 'vue';
 
-import BaseIcon from '@/components/ui/BaseIcon.vue';
+import BaseIcon, { type BaseIconProps } from '@/components/ui/BaseIcon.vue';
 import {
   BUTTON_COMPACTED_SIZE_MAP,
   BUTTON_DEFAULT_THEME_MAP,
@@ -59,6 +85,11 @@ const {
   disabled = false,
   loading = false,
   iconOnly = false,
+  icon = undefined,
+  iconSize = undefined,
+  iconStrokeWidth = undefined,
+  iconColor = undefined,
+  label = undefined,
   variant = 'default',
   ariaLabel,
   size = 'md',
@@ -68,6 +99,8 @@ const {
   height = undefined,
   /** 紧凑模式：左右内边距减半 */
   compacted = false,
+  prefixIcon = undefined,
+  suffixIcon = undefined,
 } = defineProps<{
   /** 原生 button 的 type，默认 'button' 避免在表单内意外触发表单提交 */
   type?: 'button' | 'submit' | 'reset';
@@ -76,6 +109,19 @@ const {
   disabled?: boolean;
   loading?: boolean;
   iconOnly?: boolean;
+  /**
+   * 图标名（注册表枚举）：无默认插槽时作为按钮主体（等同 iconOnly 方形图标钮），
+   * 有默认插槽时作为前缀图标；#prefix 插槽优先于本属性。
+   */
+  icon?: IconName;
+  /** 透传给内部 BaseIcon 的尺寸；不传时 icon 主体跟随按钮 size，prefix/suffix 用 1em */
+  iconSize?: BaseIconProps['size'];
+  /** 透传给内部 BaseIcon 的描边粗细 */
+  iconStrokeWidth?: BaseIconProps['strokeWidth'];
+  /** 透传给内部 BaseIcon 的颜色（默认 currentColor） */
+  iconColor?: BaseIconProps['color'];
+  /** 按钮文案：行为等同默认插槽，传了默认插槽时以插槽为准（label 忽略） */
+  label?: string;
   variant?: 'default' | 'subtle' | 'ghost' | 'text';
   /** iconOnly 场景下必须提供，保证无障碍可访问性 */
   ariaLabel?: string;
@@ -113,12 +159,22 @@ const handleInternalClick = (e: MouseEvent) => {
 
 type ThemeType = ThemeColor;
 
+const slots = useSlots();
 const resolvedColor = computed<ThemeType>(() => color ?? 'default');
+
+/** 是否传入了默认插槽内容 */
+const hasDefaultSlot = computed(() => Boolean(slots['default']));
+/** 统一解析主图标（兼容 prefixIcon 历史别名） */
+const resolvedIcon = computed<IconName | undefined>(() => icon ?? prefixIcon);
+/** 是否有文案内容（默认插槽或 label），决定 icon 属性是作前缀还是主体 */
+const hasText = computed(() => hasDefaultSlot.value || Boolean(label));
+/** 图标主体态：显式 iconOnly，或主图标且无文案（图标即整个按钮主体） */
+const isIconOnly = computed(() => iconOnly || (Boolean(resolvedIcon.value) && !hasText.value));
 
 // 仅在开发环境中注册 a11y 警告监听，生产环境构建时被完全 Tree-shaking
 if (import.meta.env.DEV) {
   watch(
-    () => [iconOnly, ariaLabel] as const,
+    () => [isIconOnly.value, ariaLabel] as const,
     ([io, label]) => {
       if (io && !label) {
         console.warn('[ActionButton] iconOnly 为 true 时应传入 ariaLabel，否则屏幕阅读器无法识别该按钮。');
@@ -129,7 +185,7 @@ if (import.meta.env.DEV) {
 }
 
 const sizeClasses = computed(() => {
-  if (iconOnly) {
+  if (isIconOnly.value) {
     // iconOnly 已通过 p-0! 强制方形无内边距，compacted 不再叠加
     return BUTTON_ICON_ONLY_SIZE_MAP[size] ?? BUTTON_ICON_ONLY_SIZE_MAP['md'];
   }

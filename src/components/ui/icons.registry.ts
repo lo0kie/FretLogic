@@ -1,4 +1,4 @@
-﻿import type { Component } from 'vue';
+import type { Component } from 'vue';
 
 // Lucide Icons
 import AlertCircle from '~icons/lucide/alert-circle';
@@ -9,6 +9,7 @@ import CheckCircle2 from '~icons/lucide/check-circle-2';
 import ChevronDown from '~icons/lucide/chevron-down';
 import ChevronRight from '~icons/lucide/chevron-right';
 import ChevronUp from '~icons/lucide/chevron-up';
+import ClipboardPaste from '~icons/lucide/clipboard-paste';
 import Clock from '~icons/lucide/clock';
 import Cloud from '~icons/lucide/cloud';
 import CloudDownload from '~icons/lucide/cloud-download';
@@ -67,6 +68,7 @@ export const ICON_REGISTRY = {
   'chevron-down': ChevronDown,
   'chevron-right': ChevronRight,
   'chevron-up': ChevronUp,
+  'clipboard-paste': ClipboardPaste,
   'clock': Clock,
   'cloud': Cloud,
   'cloud-download': CloudDownload,

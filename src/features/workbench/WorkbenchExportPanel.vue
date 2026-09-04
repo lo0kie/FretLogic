@@ -41,21 +41,19 @@
           @click="handleCopy"
           class="flex-1"
           color="default"
-          prefix-icon="copy"
+          icon="copy"
+          label="复制"
           variant="subtle"
-        >
-          复制
-        </ActionButton>
+        />
         <ActionButton
           :disabled="isActing"
           @click="handleDownload"
           class="flex-1"
           color="primary"
-          prefix-icon="download"
+          icon="download"
+          label="下载"
           variant="subtle"
-        >
-          下载
-        </ActionButton>
+        />
       </div>
     </div>
   </WorkbenchPanel>

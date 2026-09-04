@@ -8,9 +8,7 @@
     width="w-wide"
   >
     <template #header-extra>
-      <ActionButton @click="goToWorkbenchToCreate" color="primary" prefix-icon="plus" variant="subtle">
-        新建和弦
-      </ActionButton>
+      <ActionButton @click="goToWorkbenchToCreate" color="primary" icon="plus" label="新建和弦" variant="subtle" />
     </template>
 
     <div class="chord-picker-wrapper box-border flex h-full flex-col overflow-hidden">
@@ -116,6 +114,7 @@
                 role="button"
               >
                 <ActionButton
+                  :icon-stroke-width="2.2"
                   :tabindex="editHoverMap.get(chord.id) ? 0 : -1"
                   @click.stop="goToWorkbenchToEdit(chord)"
                   @mousedown.stop
@@ -123,13 +122,13 @@
                   aria-label="去修改该和弦"
                   class="picker-edit-btn duration-fast z-float pointer-events-auto absolute top-1 right-1 p-1.5! opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                   color="primary"
+                  icon="pencil"
                   icon-only
+                  icon-size="sm"
                   size="sm"
                   title="去修改该和弦"
                   variant="ghost"
-                >
-                  <BaseIcon :stroke-width="2.2" name="pencil" size="sm" />
-                </ActionButton>
+                />
                 <span
                   v-if="selectedGroupId === 'ALL' && getSourceGroupName(chord)"
                   :title="getSourceGroupName(chord)"
@@ -183,24 +182,20 @@
             </span>
           </ActionButton>
         </template>
+
         <ActionButton
           v-else
           aria-hidden="true"
           class="pointer-events-none invisible"
           disabled
+          label="占位"
           size="sm"
           variant="ghost"
-        >
-          占位
-        </ActionButton>
+        />
       </div>
     </template>
   </BaseModal>
 </template>
-
-<script lang="ts">
-import BaseIcon from '@/components/ui/BaseIcon.vue';
-</script>
 
 <script lang="ts" setup>
 import { computed, nextTick, onDeactivated, reactive, ref, useTemplateRef, watch } from 'vue';

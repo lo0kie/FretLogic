@@ -13,7 +13,7 @@
       <div v-if="item.divided" class="bg-border-light mx-1 my-0.5 h-px" role="separator" />
 
       <BasePopover
-        v-if="item.children && item.children.length"
+        v-if="item.expandChildren ?? Boolean(item.children?.length)"
         :disabled="item.disabled"
         :offset-distance="4"
         panel-class="context-menu-box"
@@ -164,6 +164,13 @@ export interface ContextMenuItem {
   shortcut?: string;
   /** 是否在此项前插入分割线 */
   divided?: boolean;
+  /**
+   * 是否展开 children 为级联子菜单；不传时以「是否带 children」决定，
+   * 显式传入 true/false 则强制采用该布尔值。
+   * 置为 false 时即使带 children 也按普通项渲染，使用 action 作为点击行为，
+   * 便于「单子项时不弹出子菜单」等场景，免去调用方在两种形态间切换对象。
+   */
+  expandChildren?: boolean;
   /** 级联子菜单列表 */
   children?: ContextMenuItem[];
 }

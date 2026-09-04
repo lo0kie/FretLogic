@@ -495,6 +495,17 @@ export const POPOVER_HOVER_CLOSE_DELAY_MS = 150;
 /** 横按提示箭头颜色过渡时长（ms，FretboardSvg 计算样式） */
 export const BARRE_ARROW_TRANSITION_MS = 150;
 
+// ===================== 文字传递格式 =====================
+/** 跨实例文字传递格式：魔数与版本，供 textCodec 识别/校验 */
+export const TEXT_FORMAT = {
+  /** 和弦文本魔数 */
+  CHORD: 'FLCHORD',
+  /** 乐谱文本魔数 */
+  SONG: 'FLSONG',
+  /** 当前格式版本 */
+  VERSION: 1,
+} as const;
+
 // ===================== 主题配色 =====================
 /** 指板配色（明暗双主题） */
 export const FRETBOARD_COLORS = {

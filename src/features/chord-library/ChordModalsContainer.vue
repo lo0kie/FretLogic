@@ -79,18 +79,22 @@
         </div>
       </div>
       <div class="gap-md pt-md pb-xs border-border-light mt-[0.15rem] flex items-center justify-between border-t">
-        <ActionButton @click="groupModals.modals.chordVariantsDelete = false" variant="ghost"> 取消 </ActionButton>
+        <ActionButton @click="groupModals.modals.chordVariantsDelete = false" label="取消" variant="ghost" />
+
         <div class="gap-sm flex items-center">
-          <ActionButton @click="groupModals.handleDeleteAllVariants()" color="danger" variant="subtle">
-            全部删除
-          </ActionButton>
+          <ActionButton
+            @click="groupModals.handleDeleteAllVariants()"
+            color="danger"
+            label="全部删除"
+            variant="ghost"
+          />
+
           <ActionButton
             :disabled="groupModals.modalData.selectedVariantIds.size === 0"
             @click="groupModals.handleDeleteSelectedVariants()"
             color="danger"
-          >
-            确认删除所选 ({{ groupModals.modalData.selectedVariantIds.size }})
-          </ActionButton>
+            label="删除选中"
+          />
         </div>
       </div>
     </div>

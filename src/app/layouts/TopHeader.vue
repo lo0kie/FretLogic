@@ -46,14 +46,27 @@
         v-if="route.path === '/workbench'"
         v-tooltip="'播放/试听当前和弦'"
         :disabled="editorStore.isFretBoardEmpty || isPlaying"
+        :icon="isPlaying ? 'square' : 'play'"
         @click="playCurrentChord"
         aria-label="播放/试听当前和弦"
         color="primary"
         icon-only
+        icon-size="xl"
         variant="subtle"
-      >
-        <BaseIcon :name="isPlaying ? 'square' : 'play'" size="xl" />
-      </ActionButton>
+      />
+      <!-- 复制/粘贴：和弦页与乐谱页共用，按当前路由分派动作与文案 -->
+      <ActionButton
+        v-for="btn in transferButtons"
+        v-tooltip="btn.tooltip"
+        :aria-label="btn.tooltip"
+        :disabled="btn.disabled"
+        :icon="btn.icon"
+        :key="btn.key"
+        @click="btn.onClick"
+        icon-only
+        icon-size="xl"
+        variant="ghost"
+      />
 
       <!-- 乐谱预览 tab：复制 / 下载当前乐谱的整曲长图 -->
       <PopoverMenu
@@ -69,15 +82,16 @@
           <ActionButton
             :aria-expanded="isOpen"
             :color="isOpen ? 'primary' : 'default'"
+            :icon-stroke-width="2.5"
             :variant="isOpen ? 'subtle' : 'ghost'"
             @click="pinToggle()"
             aria-haspopup="true"
             aria-label="设置面板"
+            icon="sliders-horizontal"
             icon-only
+            icon-size="xl"
             ref="triggerBtnRef"
-          >
-            <BaseIcon :stroke-width="2.5" aria-hidden="true" name="sliders-horizontal" size="xl" />
-          </ActionButton>
+          />
         </template>
 
         <HeaderConfigPopover />
@@ -92,9 +106,15 @@
         aria-label="外观设置"
       />
 
-      <ActionButton v-tooltip.interactive="buildInfoTooltip" aria-label="构建信息" icon-only variant="ghost">
-        <BaseIcon :stroke-width="2.5" name="info" size="xl" />
-      </ActionButton>
+      <ActionButton
+        v-tooltip.interactive="buildInfoTooltip"
+        :icon-stroke-width="2.5"
+        aria-label="构建信息"
+        icon="info"
+        icon-only
+        icon-size="xl"
+        variant="ghost"
+      />
     </div>
   </header>
 
@@ -152,7 +172,6 @@ import { useRoute, useRouter } from 'vue-router';
 
 import ActionButton from '@/components/ui/ActionButton.vue';
 import BaseCheckbox from '@/components/ui/BaseCheckbox.vue';
-import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BasePopover from '@/components/ui/BasePopover.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/ui/BaseSegmentedControl.vue';
@@ -161,10 +180,12 @@ import type { IconName } from '@/components/ui/icons.registry';
 import PopoverMenu from '@/components/ui/PopoverMenu.vue';
 import { useScoreLinesData } from '@/features/score-editor/composables/useScoreLinesData';
 import { prepareWorkerExportPayload, runWorkerExport } from '@/services/export/workerExportService';
+import { getChordName } from '@/services/music/theory';
 import type { SyncProviderKind } from '@/services/sync/provider';
 import { useAudioPlayer } from '@/shared/composables/useAudioPlayer';
 import { useBackupModals } from '@/shared/composables/useBackupModals';
 import { useSyncService } from '@/shared/composables/useSyncService';
+import { useTextTransfer } from '@/shared/composables/useTextTransfer';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { globalDarkMode, setThemeMode, themePreference } from '@/stores/globalState';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
@@ -185,6 +206,61 @@ const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 const { isPlaying, playCurrentChord } = useAudioPlayer();
 const { chordsLookupMap } = useScoreLinesData();
+const { copyChordText, pasteChordFromClipboard, copySongText, pasteSongFromClipboard } = useTextTransfer();
+
+/** 复制/粘贴按钮配置项：由 transferButtons 统一描述，供模板 v-for 渲染 */
+interface TransferButton {
+  key: string;
+  icon: IconName;
+  tooltip: string;
+  disabled: boolean;
+  onClick: () => void;
+}
+
+/** 复制/粘贴防重入锁：包装异步动作，执行期间禁用按钮 */
+const withTransferLock = (fn: () => Promise<void>): void => {
+  if (uiStore.isCopying) return;
+  uiStore.isCopying = true;
+  void fn().finally(() => {
+    uiStore.isCopying = false;
+  });
+};
+
+/** 工作台可复制条件：指板非空且已解析出和弦名 */
+const canCopyChord = computed(() => !editorStore.isFretBoardEmpty && Boolean(getChordName(editorStore.draftChord)));
+
+/** 工作台：复制当前编辑的和弦文字到剪贴板 */
+const handleCopyChord = () => withTransferLock(() => copyChordText(editorStore.draftChord));
+
+/** 工作台：从剪贴板文字载入编辑器草稿（切「新建」态） */
+const handlePasteChord = () => withTransferLock(pasteChordFromClipboard);
+
+/** 乐谱：复制当前乐谱文字到剪贴板 */
+const handleCopySong = () => withTransferLock(() => copySongText(scoreEditor.activeSong));
+
+/** 乐谱：从剪贴板文字导入（始终新建一首乐谱） */
+const handlePasteSong = () => withTransferLock(pasteSongFromClipboard);
+
+/** 复制/粘贴按钮配置：和弦页与乐谱页共用，按当前路由分派动作、文案与禁用态 */
+const transferButtons = computed<TransferButton[]>(() => {
+  const isScore = route.path === '/score';
+  return [
+    {
+      key: 'copy',
+      icon: 'copy',
+      tooltip: isScore ? '复制当前乐谱' : '复制当前和弦',
+      disabled: uiStore.isCopying || (isScore ? !scoreEditor.activeSong : !canCopyChord.value),
+      onClick: isScore ? handleCopySong : handleCopyChord,
+    },
+    {
+      key: 'paste',
+      icon: 'clipboard-paste',
+      tooltip: isScore ? '粘贴乐谱文字（将新建乐谱）' : '粘贴和弦文字',
+      disabled: uiStore.isCopying,
+      onClick: isScore ? handlePasteSong : handlePasteChord,
+    },
+  ];
+});
 
 const activeNavPath = computed(() => {
   const matched = NAV_OPTIONS.find(opt => opt.value === route.path);

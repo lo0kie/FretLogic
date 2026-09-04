@@ -54,18 +54,19 @@
           :aria-label="action.title"
           :class="[actionButtonTransition(index), action.extraClass]"
           :color="action.color"
+          :icon="action.icon"
+          :icon-stroke-width="2.5"
           :key="action.key"
+          :label="action.label"
           :ref="el => setActionButtonEl(el, index)"
           :tabindex="-1"
           :title="action.title"
           block
           class="pointer-events-auto!"
+          compacted
           size="sm"
           variant="subtle"
-        >
-          <BaseIcon :name="action.icon" :stroke-width="2.5" class="shrink-0" size="md" />
-          <span class="font-bold">{{ action.label }}</span>
-        </ActionButton>
+        />
       </div>
     </div>
 
@@ -117,14 +118,16 @@
         v-else-if="variant === 'add'"
         :aria-label="addPlaceholderTitle"
         :class="isActive || lineHovered ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'"
+        :icon-color="'var(--color-primary)'"
+        :icon-stroke-width="3"
         :tabindex="-1"
         :title="addPlaceholderTitle"
+        icon="plus"
         icon-only
+        icon-size="lg"
         ref="addButtonEl"
         variant="subtle"
-      >
-        <BaseIcon :stroke-width="3" class="text-primary" name="plus" size="lg" />
-      </ActionButton>
+      />
     </div>
     <template v-if="variant === 'char'">
       <span
@@ -144,10 +147,6 @@
     </template>
   </div>
 </template>
-
-<script lang="ts">
-import BaseIcon from '@/components/ui/BaseIcon.vue';
-</script>
 
 <script lang="ts" setup>
 import { computed, nextTick, ref, useTemplateRef } from 'vue';
