@@ -21,7 +21,6 @@ pnpm dev          # 本地开发（http://localhost:5173）
 | `pnpm typecheck` | 类型检查（vue-tsc）       |
 | `pnpm lint`      | ESLint 检查（含架构约束） |
 | `pnpm test`      | 单元测试（Vitest）        |
-| `pnpm test:e2e`  | E2E 测试（Playwright）    |
 | `pnpm coverage`  | 测试覆盖率                |
 | `pnpm format`    | Prettier 格式化           |
 

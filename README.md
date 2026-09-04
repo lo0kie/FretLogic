@@ -118,12 +118,11 @@ src/
 | `pnpm typecheck` | 类型检查                                     |
 | `pnpm lint`      | ESLint                                       |
 | `pnpm test`      | 单元测试                                     |
-| `pnpm test:e2e`  | E2E 测试                                     |
 | `pnpm coverage`  | 覆盖率                                       |
 
 ## 🤝 贡献
 
-欢迎提交 Issue 与 Pull Request。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+欢迎提交 Issue 与 Pull Request。详见 [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md)。
 
 ## 📄 许可
 

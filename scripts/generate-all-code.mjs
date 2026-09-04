@@ -7,8 +7,6 @@ const SOURCE_DIRS = ['src'];
 const CONFIG_FILES = [
   'package.json',
   'vite.config.ts',
-  'vitest.config.ts',
-  'playwright.config.ts',
   'tsconfig.json',
   'tsconfig.node.json',
   'eslint.config.mjs',
