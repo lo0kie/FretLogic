@@ -19,7 +19,7 @@ const extractExportChordData = (chord: Chord, shorthand = false): ExportChordDat
   chordName: getChordName(chord, { shorthand, useUnicode: true }),
   strings: chord.strings.map(s => [s[0], s[1]]),
   fretCount: chord.fretCount,
-  capo: chord.capo,
+  fretOffset: chord.fretOffset,
   rootStringIndex: chord.rootStringIndex ?? null,
   barres: chord.barres?.map(b => ({
     fret: b.fret,

@@ -14,11 +14,10 @@
         />
       </BaseFormRow>
 
-      <BaseFormRow label="变调夹 (Capo)">
+      <BaseFormRow label="品位偏移 (Offset)">
         <BaseNumberInput
-          v-model="editorStore.draftChord.capo"
+          v-model="editorStore.draftChord.fretOffset"
           :editable="false"
-          :formatter="val => (val === 0 ? 'CAPO 0' : `CAPO ${val}`)"
           :max="INTERACTION_CONFIG.MAX_CAPO_LIMIT"
           :min="0"
           wheelable
@@ -51,6 +50,8 @@
 </template>
 
 <script lang="ts" setup>
+import { computed } from 'vue';
+
 import BaseFormRow from '@/components/ui/BaseFormRow.vue';
 import BaseNumberInput from '@/components/ui/BaseNumberInput.vue';
 import BaseSegmentedControl, { type SegmentOption } from '@/components/ui/BaseSegmentedControl.vue';
@@ -69,7 +70,9 @@ const settingsStore = useSettingsStore();
 /** auto 模式的展开依据：与导出面板一致——草稿存在至少一根按音弦（指板有内容才需要设置） */
 const hasFrettedNotes = () => editorStore.draftChord.strings.some(str => str && str[0] > 0);
 
-const tuningOptions = Object.values(Tuning);
+const tuningOptions = computed(() =>
+  (Object.keys(TUNING_PRESETS) as Tuning[]).filter(t => TUNING_PRESETS[t]?.stringCount === editorStore.stringCount)
+);
 const FRET_OPTIONS: SegmentOption<3 | 4>[] = FRET_COUNTS.map(f => ({
   label: `${f}品`,
   value: f,

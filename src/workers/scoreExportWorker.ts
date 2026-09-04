@@ -10,7 +10,10 @@ export interface ExportChordData {
   chordName: string;
   strings: [number, boolean][];
   fretCount: number;
-  capo: number;
+  /** 品位/把位偏移量；`capo` 为历史备份兼容名（旧版本导出数据可能仍是 capo） */
+  fretOffset?: number;
+  /** @deprecated 旧版字段，仅兼容历史备份；新数据请用 fretOffset */
+  capo?: number;
   rootStringIndex: number | null;
   barres?: { fret: number; fromString: number; toString: number }[];
 }
@@ -122,10 +125,50 @@ export interface RenderSegment {
   contentHeight: number; // 预计算内容高度，避免渲染与装箱时重复遍历和弦列表
 }
 
-/** 计算单个字符槽位所占用的总宽度（含指板图补偿） */
+/** 中文排版避头尾：禁止出现在行首的标点符号集合 */
+const NO_LINE_START_CHARS = new Set([
+  '，',
+  '。',
+  '！',
+  '？',
+  '、',
+  '；',
+  '：',
+  '）',
+  '》',
+  '」',
+  '』',
+  '”',
+  '’',
+  '…',
+  '—',
+  ',',
+  '.',
+  '!',
+  '?',
+  ';',
+  ':',
+  ')',
+  ']',
+  '}',
+  '>',
+]);
+
+/** 计算单个字符槽位所占用的总宽度（含半角/全角字符区分与指板图补偿） */
 function getCharColumnWidth(item: ExportCharItem): number {
-  const isSpace = item.char === ' ' || item.char === '　';
-  const charW = isSpace ? SCORE_EXPORT_CONFIG.SPACE_CHAR_WIDTH : SCORE_EXPORT_CONFIG.REGULAR_CHAR_WIDTH;
+  if (item.char === ' ' || item.char === '　') {
+    const spaceW = SCORE_EXPORT_CONFIG.SPACE_CHAR_WIDTH;
+    return item.chord
+      ? Math.max(SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH + SCORE_EXPORT_CONFIG.CHORD_COLUMN_EXTRA_PAD, spaceW)
+      : spaceW;
+  }
+  const code = item.char.charCodeAt(0);
+  // 半角 ASCII 字符（英文字母、数字、半角标点）：宽度约为全角汉字的 58%，排版更紧凑自然
+  const isHalfWidth = code <= 127;
+  const charW = isHalfWidth
+    ? Math.round(SCORE_EXPORT_CONFIG.REGULAR_CHAR_WIDTH * 0.58)
+    : SCORE_EXPORT_CONFIG.REGULAR_CHAR_WIDTH;
+
   return item.chord
     ? Math.max(SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH + SCORE_EXPORT_CONFIG.CHORD_COLUMN_EXTRA_PAD, charW)
     : charW;
@@ -166,7 +209,7 @@ function computeLineContentHeight(
   return fbHeight + SCORE_EXPORT_CONFIG.CHORD_TO_LYRICS_GAP + SCORE_EXPORT_CONFIG.LYRICS_FONT_SIZE;
 }
 
-/** 将原始歌词行根据最大可用宽度自动切分为软折行段落（首行顶格，续行缩进，子行行距减半） */
+/** 将原始歌词行根据最大可用宽度自动切分为软折行段落（含避头尾禁则与孤字控制） */
 function wrapScoreLines(lines: ExportLineItem[], maxAvailableWidth: number): RenderSegment[] {
   const allSegments: RenderSegment[] = [];
 
@@ -202,7 +245,19 @@ function wrapScoreLines(lines: ExportLineItem[], maxAvailableWidth: number): Ren
       const endChordsW = isLastChar ? getChordsGroupWidth(line.endChords) : 0;
 
       if (curChars.length > 0 && curW + charColW + endChordsW > maxW) {
-        // 超出可用宽度，将当前累积的字符切为一段
+        // 避头尾规则：如果即将排在新行首位的字符是禁止行首标点，且前一段末尾字符无和弦，则向前回借一字
+        let nextInitialChars = [charItem];
+        let nextInitialW = charColW;
+
+        if (NO_LINE_START_CHARS.has(charItem.char) && curChars.length > 1) {
+          const lastPrev = curChars[curChars.length - 1];
+          if (lastPrev && !lastPrev.chord) {
+            curChars.pop();
+            nextInitialChars = [lastPrev, charItem];
+            nextInitialW = getCharColumnWidth(lastPrev) + charColW;
+          }
+        }
+
         const segStartChords = isFirstSubLine ? line.startChords : undefined;
         lineSegments.push({
           lineIdx: line.lineIdx,
@@ -212,12 +267,25 @@ function wrapScoreLines(lines: ExportLineItem[], maxAvailableWidth: number): Ren
           isLastSubLine: false,
           contentHeight: computeLineContentHeight(curChars, segStartChords, undefined),
         });
-        curChars = [charItem];
-        curW = charColW;
+        curChars = nextInitialChars;
+        curW = nextInitialW;
         isFirstSubLine = false;
       } else {
         curChars.push(charItem);
         curW += charColW;
+      }
+    }
+
+    // 孤字控制：若最后一行仅剩 1 个字符且不是唯的一行，尝试从上一段末尾借一个无和弦字符
+    if (curChars.length === 1 && lineSegments.length > 0) {
+      const prevSeg = lineSegments[lineSegments.length - 1]!;
+      if (prevSeg.chars.length > 2) {
+        const lastPrev = prevSeg.chars[prevSeg.chars.length - 1];
+        if (lastPrev && !lastPrev.chord) {
+          prevSeg.chars.pop();
+          curChars.unshift(lastPrev);
+          prevSeg.contentHeight = computeLineContentHeight(prevSeg.chars, prevSeg.startChords, undefined);
+        }
       }
     }
 
@@ -236,7 +304,6 @@ function wrapScoreLines(lines: ExportLineItem[], maxAvailableWidth: number): Ren
       const lastSeg = lineSegments[lineSegments.length - 1]!;
       lastSeg.endChords = line.endChords;
       lastSeg.isLastSubLine = true;
-      // 行尾和弦可能影响高度，重新计算
       lastSeg.contentHeight = computeLineContentHeight(lastSeg.chars, lastSeg.startChords, line.endChords);
     }
 
@@ -274,15 +341,17 @@ function drawFretboard(
   colors: ThemeColors
 ) {
   const fretCount = Math.max(3, chord.fretCount || 4);
+  const stringCount = chord.strings?.length || 6;
+  const fbWidth = SCORE_EXPORT_CONFIG.getExportFretboardWidth(stringCount);
   const startStrX = x + SCORE_EXPORT_CONFIG.FRETBOARD_LEFT_PAD;
   const gridTop = y + SCORE_EXPORT_CONFIG.FRETBOARD_GRID_TOP;
   const gridBottom = gridTop + fretCount * SCORE_EXPORT_CONFIG.FRET_HEIGHT;
-  const gridRight = startStrX + 5 * SCORE_EXPORT_CONFIG.STRING_SPACING;
+  const gridRight = startStrX + (stringCount - 1) * SCORE_EXPORT_CONFIG.STRING_SPACING;
 
   // 1. 和弦名称（顶部加粗居中，升降号采用上标形式；基线与独立指板图渲染器保持一致）
   drawFormattedChordName(
     ctx,
-    x + SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH / 2,
+    x + fbWidth / 2,
     y + SCORE_EXPORT_CONFIG.CHORD_NAME_BASELINE_Y,
     chord.chordName,
     colors.TEXT
@@ -290,7 +359,7 @@ function drawFretboard(
 
   // 2. 空弦 / 静音标记（中性色，不使用红色）
   const markerY = y + SCORE_EXPORT_CONFIG.MARKER_CENTER_Y;
-  for (let s = 0; s < 6; s++) {
+  for (let s = 0; s < stringCount; s++) {
     const sx = startStrX + s * SCORE_EXPORT_CONFIG.STRING_SPACING;
     const strData = chord.strings[s];
     const fret = strData ? strData[0] : 0;
@@ -315,12 +384,12 @@ function drawFretboard(
     }
   }
 
-  // 3. 指板网格线（6 根琴弦 + (fretCount + 1) 根品丝）
+  // 3. 指板网格线（琴弦竖线 + (fretCount + 1) 根品丝）
   ctx.strokeStyle = colors.FB_LINE;
   ctx.lineWidth = 1;
 
   // 竖线（琴弦）
-  for (let s = 0; s < 6; s++) {
+  for (let s = 0; s < stringCount; s++) {
     const sx = startStrX + s * SCORE_EXPORT_CONFIG.STRING_SPACING;
     ctx.beginPath();
     ctx.moveTo(sx, gridTop);
@@ -337,14 +406,15 @@ function drawFretboard(
     ctx.stroke();
   }
 
-  // 4. 弦枕（0品时绘制）与品号（除首末所有品，对齐品丝）
-  if (chord.capo === 0) {
-    // 0 品弦枕（加粗枕条）
+  // 4. 弦枕（offset 为 0 时绘制）与品号（除首末所有品，对齐品丝）
+  const offset = chord.fretOffset ?? chord.capo ?? 0;
+  if (offset === 0) {
+    // 0 品位偏移即从 1 品起步，绘制加粗枕条
     ctx.fillStyle = colors.FB_NUT;
     ctx.fillRect(
       startStrX - 0.5,
       gridTop - SCORE_EXPORT_CONFIG.NUT_HEIGHT,
-      5 * SCORE_EXPORT_CONFIG.STRING_SPACING + 1,
+      (stringCount - 1) * SCORE_EXPORT_CONFIG.STRING_SPACING + 1,
       SCORE_EXPORT_CONFIG.NUT_HEIGHT
     );
   }
@@ -358,7 +428,7 @@ function drawFretboard(
   ctx.textBaseline = 'middle';
   for (let f = 1; f < fretCount; f++) {
     const fy = gridTop + f * SCORE_EXPORT_CONFIG.FRET_HEIGHT;
-    const fretNumber = chord.capo > 0 ? chord.capo + f : f;
+    const fretNumber = offset > 0 ? offset + f : f;
     ctx.fillText(String(fretNumber), startStrX - SCORE_EXPORT_CONFIG.FRET_NUMBER_X_OFFSET, fy);
   }
   ctx.textBaseline = 'alphabetic';
@@ -381,7 +451,7 @@ function drawFretboard(
   }
 
   // 6. 按弦圆点（Finger Dots）——统一音符色彩，不额外强调主音
-  for (let s = 0; s < 6; s++) {
+  for (let s = 0; s < stringCount; s++) {
     const strData = chord.strings[s];
     const fret = strData ? strData[0] : 0;
     if (fret > 0) {
@@ -447,10 +517,7 @@ function renderScoreLine(
 
   for (const item of line.chars) {
     const isSpace = item.char === ' ' || item.char === '　';
-    const charW = isSpace ? SCORE_EXPORT_CONFIG.SPACE_CHAR_WIDTH : SCORE_EXPORT_CONFIG.REGULAR_CHAR_WIDTH;
-    const colW = item.chord
-      ? Math.max(SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH + SCORE_EXPORT_CONFIG.CHORD_COLUMN_EXTRA_PAD, charW)
-      : charW;
+    const colW = getCharColumnWidth(item);
 
     // 上方指板图（底部对齐）
     if (item.chord) {
@@ -536,96 +603,198 @@ function renderHeader(
   return y;
 }
 
-self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
-  try {
-    const { title, keyText, capoText, lines, mode, darkMode } = e.data;
+if (typeof self !== 'undefined') {
+  self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
+    try {
+      const { title, keyText, capoText, lines, mode, darkMode } = e.data;
 
-    const colors = darkMode ? SCORE_EXPORT_CONFIG.THEME.DARK : SCORE_EXPORT_CONFIG.THEME.LIGHT;
-    const blobs: Blob[] = [];
+      const colors = darkMode ? SCORE_EXPORT_CONFIG.THEME.DARK : SCORE_EXPORT_CONFIG.THEME.LIGHT;
+      const blobs: Blob[] = [];
 
-    if (mode === 'a4') {
-      // ===== A4 分页模式 =====
-      const contentHeight = SCORE_EXPORT_CONFIG.A4_HEIGHT - SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2;
-      const headerH = HEADER_HEIGHT;
-      const availWidth = SCORE_EXPORT_CONFIG.A4_WIDTH - SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2;
+      if (mode === 'a4') {
+        // ===== A4 分页模式 =====
+        const contentHeight = SCORE_EXPORT_CONFIG.A4_HEIGHT - SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2;
+        const headerH = HEADER_HEIGHT;
+        const availWidth = SCORE_EXPORT_CONFIG.A4_WIDTH - SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2;
 
-      // 1. 超长行软折行
-      const allSegments = wrapScoreLines(lines, availWidth);
+        // 1. 超长行软折行
+        const allSegments = wrapScoreLines(lines, availWidth);
 
-      // 2. 动态装箱分页：合并 neededGap/actualGap 为单变量，溢出时置零
-      const pages: RenderSegment[][] = [];
-      let curPageSegments: RenderSegment[] = [];
-      let curPageUsedH: number = headerH;
+        // 2. 动态装箱分页：合并 neededGap/actualGap 为单变量，溢出时置零
+        // 2. 动态装箱分页：整句歌词跨页断裂保护 + 页首空行优化
+        const pages: RenderSegment[][] = [];
+        let curPageSegments: RenderSegment[] = [];
+        let curPageUsedH: number = headerH;
 
-      for (let i = 0; i < allSegments.length; i++) {
-        const seg = allSegments[i]!;
-        const segContentH = seg.contentHeight;
-        const lastSeg = curPageSegments[curPageSegments.length - 1];
-        const gap = lastSeg
-          ? lastSeg.isLastSubLine
-            ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP
-            : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP
-          : 0;
+        for (let i = 0; i < allSegments.length; i++) {
+          const seg = allSegments[i]!;
 
-        const willOverflow = curPageUsedH + gap + segContentH > contentHeight && curPageSegments.length > 0;
-        if (willOverflow) {
+          // 页首空行优化：如果新页尚未放入任何歌词，遇到纯空行直接跳过，避免页首留白
+          if (
+            curPageSegments.length === 0 &&
+            seg.chars.length === 0 &&
+            !seg.startChords?.length &&
+            !seg.endChords?.length
+          ) {
+            continue;
+          }
+
+          const segContentH = seg.contentHeight;
+          const lastSeg = curPageSegments[curPageSegments.length - 1];
+          const gap = lastSeg
+            ? lastSeg.isLastSubLine
+              ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP
+              : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP
+            : 0;
+
+          let willOverflow = false;
+
+          // 整句歌词跨页保护：当这是一个原始歌词行的首个分段时，前瞻该原始行所有分段的总高度
+          if (!seg.isContinuation && curPageSegments.length > 0) {
+            let entireLineH = gap + segContentH;
+            for (let j = i + 1; j < allSegments.length; j++) {
+              const nextSeg = allSegments[j]!;
+              if (nextSeg.lineIdx !== seg.lineIdx) break;
+              entireLineH += SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP + nextSeg.contentHeight;
+            }
+            // 当前页放不下整句，但全新一页放得下 → 提前开新页，保证整句歌词完整留在同一页
+            if (curPageUsedH + entireLineH > contentHeight && entireLineH <= contentHeight) {
+              willOverflow = true;
+            }
+          }
+
+          // 常规溢出判定（单段放不下）
+          if (!willOverflow && curPageUsedH + gap + segContentH > contentHeight && curPageSegments.length > 0) {
+            willOverflow = true;
+          }
+
+          if (willOverflow) {
+            pages.push(curPageSegments);
+            curPageSegments = [];
+            curPageUsedH = 0;
+
+            // 新页若遇到纯空行则跳过
+            if (seg.chars.length === 0 && !seg.startChords?.length && !seg.endChords?.length) {
+              continue;
+            }
+          }
+
+          const effectiveGap = willOverflow || curPageSegments.length === 0 ? 0 : gap;
+          curPageSegments.push(seg);
+          curPageUsedH += effectiveGap + segContentH;
+        }
+        if (curPageSegments.length > 0 || pages.length === 0) {
           pages.push(curPageSegments);
-          curPageSegments = [];
-          curPageUsedH = 0;
         }
 
-        curPageSegments.push(seg);
-        curPageUsedH += (willOverflow ? 0 : gap) + segContentH;
-      }
-      if (curPageSegments.length > 0 || pages.length === 0) {
-        pages.push(curPageSegments);
-      }
+        for (let pIdx = 0; pIdx < pages.length; pIdx++) {
+          const pageSegments = pages[pIdx]!;
+          const canvas = new OffscreenCanvas(
+            SCORE_EXPORT_CONFIG.A4_WIDTH * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
+            SCORE_EXPORT_CONFIG.A4_HEIGHT * SCORE_EXPORT_CONFIG.PIXEL_RATIO
+          );
+          const ctx = canvas.getContext('2d')!;
+          ctx.scale(SCORE_EXPORT_CONFIG.PIXEL_RATIO, SCORE_EXPORT_CONFIG.PIXEL_RATIO);
 
-      for (let pIdx = 0; pIdx < pages.length; pIdx++) {
-        const pageSegments = pages[pIdx]!;
+          ctx.fillStyle = colors.BG;
+          ctx.fillRect(0, 0, SCORE_EXPORT_CONFIG.A4_WIDTH, SCORE_EXPORT_CONFIG.A4_HEIGHT);
+
+          let curY: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN;
+          if (pIdx === 0) {
+            curY = renderHeader(ctx, title, keyText, capoText, SCORE_EXPORT_CONFIG.A4_WIDTH, curY, colors);
+          }
+
+          // 合并为单次循环：计算 space-between 参数 + 逐段绘制
+          const pageAvailH = SCORE_EXPORT_CONFIG.A4_HEIGHT - SCORE_EXPORT_CONFIG.PAGE_MARGIN - curY;
+          const isFullPage = pIdx < pages.length - 1;
+
+          let totalContentH = 0;
+          let totalWrappedGapsH = 0;
+          let majorGapCount = 0;
+          for (let i = 0; i < pageSegments.length - 1; i++) {
+            const s = pageSegments[i]!;
+            totalContentH += s.contentHeight;
+            if (s.isLastSubLine) majorGapCount++;
+            else totalWrappedGapsH += SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
+          }
+          if (pageSegments.length > 0) totalContentH += pageSegments[pageSegments.length - 1]!.contentHeight;
+
+          let dynamicRowGap: number = SCORE_EXPORT_CONFIG.LINE_ROW_GAP;
+          if (isFullPage && majorGapCount > 0) {
+            const rawGap = (pageAvailH - totalContentH - totalWrappedGapsH) / majorGapCount;
+            // 限制最大膨胀上限为默认行距的 1.35 倍，避免因整句跨页保护导致少行时行距被暴力拉伸至夸张间距
+            const maxAllowedGap = SCORE_EXPORT_CONFIG.LINE_ROW_GAP * 1.35;
+            dynamicRowGap = Math.min(maxAllowedGap, Math.max(SCORE_EXPORT_CONFIG.LINE_ROW_GAP, rawGap));
+          }
+
+          for (let i = 0; i < pageSegments.length; i++) {
+            const seg = pageSegments[i]!;
+            const isLastInPage = i === pageSegments.length - 1;
+            const defaultGap = seg.isLastSubLine ? dynamicRowGap : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
+            const rowGap = isLastInPage ? 0 : defaultGap;
+            const startX =
+              SCORE_EXPORT_CONFIG.PAGE_MARGIN + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
+            const res = renderScoreLine(ctx, seg, startX, curY, colors, rowGap);
+            curY = res.nextY;
+          }
+
+          const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: EXPORT_JPEG_QUALITY });
+          blobs.push(blob);
+
+          self.postMessage({
+            type: 'progress',
+            percent: Math.round(((pIdx + 1) / pages.length) * 100),
+          } as WorkerExportMessage);
+        }
+      } else {
+        // ===== 普通长图模式（画布宽度自适应实际最宽行，左右对称 56px 页边距，彻底消除右侧空白） =====
+        const availWidth = SCORE_EXPORT_CONFIG.NORMAL_CONTENT_MAX_WIDTH;
+        const allSegments = wrapScoreLines(lines, availWidth);
+
+        // 单次遍历同时计算：最宽段宽度、内容总高、行间距总高
+        let maxSegmentW = 0;
+        let totalContentH = 0;
+        let totalGapsH = 0;
+        for (let i = 0; i < allSegments.length; i++) {
+          const seg = allSegments[i]!;
+          const segW = getSegmentWidth(seg);
+          if (segW > maxSegmentW) maxSegmentW = segW;
+          totalContentH += seg.contentHeight;
+          if (i < allSegments.length - 1) {
+            totalGapsH += seg.isLastSubLine
+              ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP
+              : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
+          }
+        }
+
+        const headerH = HEADER_HEIGHT;
+        const canvasW = Math.max(
+          SCORE_EXPORT_CONFIG.NORMAL_CANVAS_MIN_WIDTH,
+          Math.round(maxSegmentW + SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2)
+        );
+        const canvasH =
+          SCORE_EXPORT_CONFIG.PAGE_MARGIN + headerH + totalContentH + totalGapsH + SCORE_EXPORT_CONFIG.PAGE_MARGIN;
+
         const canvas = new OffscreenCanvas(
-          SCORE_EXPORT_CONFIG.A4_WIDTH * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
-          SCORE_EXPORT_CONFIG.A4_HEIGHT * SCORE_EXPORT_CONFIG.PIXEL_RATIO
+          canvasW * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
+          canvasH * SCORE_EXPORT_CONFIG.PIXEL_RATIO
         );
         const ctx = canvas.getContext('2d')!;
         ctx.scale(SCORE_EXPORT_CONFIG.PIXEL_RATIO, SCORE_EXPORT_CONFIG.PIXEL_RATIO);
 
         ctx.fillStyle = colors.BG;
-        ctx.fillRect(0, 0, SCORE_EXPORT_CONFIG.A4_WIDTH, SCORE_EXPORT_CONFIG.A4_HEIGHT);
+        ctx.fillRect(0, 0, canvasW, canvasH);
 
         let curY: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN;
-        if (pIdx === 0) {
-          curY = renderHeader(ctx, title, keyText, capoText, SCORE_EXPORT_CONFIG.A4_WIDTH, curY, colors);
-        }
+        curY = renderHeader(ctx, title, keyText, capoText, canvasW, curY, colors);
 
-        // 合并为单次循环：计算 space-between 参数 + 逐段绘制
-        const pageAvailH = SCORE_EXPORT_CONFIG.A4_HEIGHT - SCORE_EXPORT_CONFIG.PAGE_MARGIN - curY;
-        const isFullPage = pIdx < pages.length - 1;
-
-        let totalContentH = 0;
-        let totalWrappedGapsH = 0;
-        let majorGapCount = 0;
-        for (let i = 0; i < pageSegments.length - 1; i++) {
-          const s = pageSegments[i]!;
-          totalContentH += s.contentHeight;
-          if (s.isLastSubLine) majorGapCount++;
-          else totalWrappedGapsH += SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
-        }
-        if (pageSegments.length > 0) totalContentH += pageSegments[pageSegments.length - 1]!.contentHeight;
-
-        let dynamicRowGap: number = SCORE_EXPORT_CONFIG.LINE_ROW_GAP;
-        if (isFullPage && majorGapCount > 0) {
-          dynamicRowGap = Math.max(
-            SCORE_EXPORT_CONFIG.LINE_ROW_GAP,
-            (pageAvailH - totalContentH - totalWrappedGapsH) / majorGapCount
-          );
-        }
-
-        for (let i = 0; i < pageSegments.length; i++) {
-          const seg = pageSegments[i]!;
-          const isLastInPage = i === pageSegments.length - 1;
-          const defaultGap = seg.isLastSubLine ? dynamicRowGap : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
-          const rowGap = isLastInPage ? 0 : defaultGap;
+        for (let i = 0; i < allSegments.length; i++) {
+          const seg = allSegments[i]!;
+          const isLast = i === allSegments.length - 1;
+          const defaultGap = seg.isLastSubLine
+            ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP
+            : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
+          const rowGap = isLast ? 0 : defaultGap;
           const startX =
             SCORE_EXPORT_CONFIG.PAGE_MARGIN + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
           const res = renderScoreLine(ctx, seg, startX, curY, colors, rowGap);
@@ -635,75 +804,17 @@ self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
         const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: EXPORT_JPEG_QUALITY });
         blobs.push(blob);
 
-        self.postMessage({
-          type: 'progress',
-          percent: Math.round(((pIdx + 1) / pages.length) * 100),
-        } as WorkerExportMessage);
-      }
-    } else {
-      // ===== 普通长图模式（画布宽度自适应实际最宽行，左右对称 56px 页边距，彻底消除右侧空白） =====
-      const availWidth = SCORE_EXPORT_CONFIG.NORMAL_CONTENT_MAX_WIDTH;
-      const allSegments = wrapScoreLines(lines, availWidth);
-
-      // 单次遍历同时计算：最宽段宽度、内容总高、行间距总高
-      let maxSegmentW = 0;
-      let totalContentH = 0;
-      let totalGapsH = 0;
-      for (let i = 0; i < allSegments.length; i++) {
-        const seg = allSegments[i]!;
-        const segW = getSegmentWidth(seg);
-        if (segW > maxSegmentW) maxSegmentW = segW;
-        totalContentH += seg.contentHeight;
-        if (i < allSegments.length - 1) {
-          totalGapsH += seg.isLastSubLine ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
-        }
+        self.postMessage({ type: 'progress', percent: 100 } as WorkerExportMessage);
       }
 
-      const headerH = HEADER_HEIGHT;
-      const canvasW = Math.max(
-        SCORE_EXPORT_CONFIG.NORMAL_CANVAS_MIN_WIDTH,
-        Math.round(maxSegmentW + SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2)
-      );
-      const canvasH =
-        SCORE_EXPORT_CONFIG.PAGE_MARGIN + headerH + totalContentH + totalGapsH + SCORE_EXPORT_CONFIG.PAGE_MARGIN;
-
-      const canvas = new OffscreenCanvas(
-        canvasW * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
-        canvasH * SCORE_EXPORT_CONFIG.PIXEL_RATIO
-      );
-      const ctx = canvas.getContext('2d')!;
-      ctx.scale(SCORE_EXPORT_CONFIG.PIXEL_RATIO, SCORE_EXPORT_CONFIG.PIXEL_RATIO);
-
-      ctx.fillStyle = colors.BG;
-      ctx.fillRect(0, 0, canvasW, canvasH);
-
-      let curY: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN;
-      curY = renderHeader(ctx, title, keyText, capoText, canvasW, curY, colors);
-
-      for (let i = 0; i < allSegments.length; i++) {
-        const seg = allSegments[i]!;
-        const isLast = i === allSegments.length - 1;
-        const defaultGap = seg.isLastSubLine
-          ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP
-          : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
-        const rowGap = isLast ? 0 : defaultGap;
-        const startX =
-          SCORE_EXPORT_CONFIG.PAGE_MARGIN + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
-        const res = renderScoreLine(ctx, seg, startX, curY, colors, rowGap);
-        curY = res.nextY;
-      }
-
-      const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: EXPORT_JPEG_QUALITY });
-      blobs.push(blob);
-
-      self.postMessage({ type: 'progress', percent: 100 } as WorkerExportMessage);
+      self.postMessage({ type: 'complete', blobs } as WorkerExportMessage);
+    } catch (err) {
+      self.postMessage({
+        type: 'error',
+        message: err instanceof Error ? err.message : String(err),
+      } as WorkerExportMessage);
     }
+  };
+}
 
-    self.postMessage({ type: 'complete', blobs } as WorkerExportMessage);
-  } catch (err) {
-    self.postMessage({
-      type: 'error',
-      message: err instanceof Error ? err.message : String(err),
-    } as WorkerExportMessage);
-  }
-};
+export { getCharColumnWidth, wrapScoreLines };

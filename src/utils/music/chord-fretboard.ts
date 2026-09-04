@@ -1,5 +1,14 @@
 import { nameToSegments, Tuning } from '@/services/music/theory';
-import type { BarreEntity, BarreFret, Capo, Chord, GuitarStringEntity, GuitarStringsModel, StringIndex } from '@/types';
+import type {
+  BarreEntity,
+  BarreFret,
+  Capo,
+  Chord,
+  FretOffset,
+  GuitarStringEntity,
+  GuitarStringsModel,
+  StringIndex,
+} from '@/types';
 import { clamp } from '@/utils/core/common';
 import { FRETBOARD_COLORS } from '@/utils/core/constants';
 
@@ -22,7 +31,7 @@ export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: n
   const out: BarreEntity[] = [];
   for (let fret = 1; fret <= fretCount; fret++) {
     const atFret: number[] = [];
-    for (let s = 0; s < 6; s++) {
+    for (let s = 0; s < strings.length; s++) {
       if (strings[s]![0] === fret) atFret.push(s);
     }
     if (atFret.length < 2) continue;
@@ -36,7 +45,6 @@ export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: n
         const from = atFret[segmentStart]!;
         const to = atFret[i]!;
         if (to > from) {
-          // from/to 来自弦索引循环（0~5），值域由构造保证；fret 来自 1..fretCount 循环，恒 >= 1
           out.push({
             fret: fret as BarreFret,
             fromString: from as StringIndex,
@@ -56,11 +64,19 @@ export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: n
 /** 数值收窄：变调夹品位（0~12，截断取整） */
 export const toCapo = (value: number): Capo => clamp(Math.trunc(value), 0, 12) as Capo;
 
-/** 数值收窄：琴弦索引（0~5，截断取整） */
-export const toStringIndex = (value: number): StringIndex => clamp(Math.trunc(value), 0, 5) as StringIndex;
+/** 数值收窄：品位/把位偏移量（0~12，截断取整） */
+export const toFretOffset = (value: number): FretOffset => clamp(Math.trunc(value), 0, 12) as FretOffset;
+
+/** 数值收窄：琴弦索引（截断取整，非负） */
+export const toStringIndex = (value: number, maxIndex: number = 9): StringIndex =>
+  clamp(Math.trunc(value), 0, maxIndex) as StringIndex;
 
 /** 值域校验：变调夹品位（清洗层用，用于区分"非法值"与"合法 0 品"） */
 export const isCapoValue = (value: unknown): value is Capo =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 12;
+
+/** 值域校验：品位/把位偏移量（清洗层用，用于区分"非法值"与"合法 0 品"） */
+export const isFretOffsetValue = (value: unknown): value is FretOffset =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 12;
 
 /** 判断两根同品弦之间的所有弦是否都能被横按食指覆盖（品位 >= fret 即可，更高品视为垫底，空弦/静音弦会切断） */
@@ -113,9 +129,10 @@ export const isBarreStillValid = (strings: GuitarStringsModel, barre: BarreEntit
 };
 
 /** 规范化显式横按列表：过滤非法条目（品格/弦序越界、from > to），返回 undefined 表示无有效横按 */
-const normalizeBarres = (barres: unknown): BarreEntity[] | undefined => {
+const normalizeBarres = (barres: unknown, maxStrings: number = 10): BarreEntity[] | undefined => {
   if (!Array.isArray(barres)) return undefined;
   const out: BarreEntity[] = [];
+  const maxIndex = Math.max(0, maxStrings - 1);
   for (const raw of barres) {
     if (!raw || typeof raw !== 'object') continue;
     const b = raw as Partial<BarreEntity>;
@@ -123,8 +140,8 @@ const normalizeBarres = (barres: unknown): BarreEntity[] | undefined => {
     const fromString =
       typeof b.fromString === 'number' && Number.isFinite(b.fromString) ? Math.floor(b.fromString) : NaN;
     const toString = typeof b.toString === 'number' && Number.isFinite(b.toString) ? Math.floor(b.toString) : NaN;
-    if (fret < 1 || fromString < 0 || toString > 5 || fromString > toString) continue;
-    // 上一行已完成 0~5 值域校验，此处收窄为 StringIndex；fret 已通过 >= 1 校验收窄为 BarreFret
+    if (fret < 1 || fromString < 0 || toString > maxIndex || fromString > toString) continue;
+    // 上一行已完成 0~maxIndex 值域校验，此处收窄为 StringIndex；fret 已通过 >= 1 校验收窄为 BarreFret
     const item: BarreEntity = {
       fret: fret as BarreFret,
       fromString: fromString as StringIndex,
@@ -194,6 +211,27 @@ export const normalizeAndMergeBarres = (
   return result.length > 0 ? result : undefined;
 };
 
+/** 计算横按配置的轻量确定性签名（用于快速比对与缓存键生成，避免 JSON.stringify 性能开销） */
+export const computeBarresSignature = (barres?: readonly BarreEntity[] | null): string => {
+  if (!barres || barres.length === 0) return '';
+  return barres
+    .map(b => `${b.fret}:${b.fromString}-${b.toString}`)
+    .sort()
+    .join(';');
+};
+
+/** 比较两组横按配置是否语义相等（轻量指纹对比，避免全量 JSON.stringify） */
+export const areBarresEqual = (
+  a: readonly BarreEntity[] | null | undefined,
+  b: readonly BarreEntity[] | null | undefined
+): boolean => {
+  const lenA = a?.length ?? 0;
+  const lenB = b?.length ?? 0;
+  if (lenA !== lenB) return false;
+  if (lenA === 0) return true;
+  return computeBarresSignature(a) === computeBarresSignature(b);
+};
+
 /**
  * 和弦实体归一化：迁移旧数据结构并修复非法字段。
  * 覆盖：strings 对象数组 → 二维数组、弦级 isRoot → 单点 rootStringIndex（含有效性校验）、
@@ -201,7 +239,12 @@ export const normalizeAndMergeBarres = (
  * @returns 规范化实体与是否发生变更（未变更时原样返回引用，避免无谓的深拷贝/写盘）
  */
 export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean } => {
-  const capo = chord.capo ?? 0;
+  const rawChord = chord as unknown as Record<string, unknown>;
+  const fretOffset = isFretOffsetValue(rawChord['fretOffset'])
+    ? (rawChord['fretOffset'] as FretOffset)
+    : isCapoValue(rawChord['capo'])
+      ? toFretOffset(rawChord['capo'] as number)
+      : 0;
   const tuning = chord.tuning || Tuning.STANDARD;
   const fretCount = chord.fretCount ?? 3;
 
@@ -237,17 +280,28 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
     rootStringIndex = null;
   }
 
-  // 清理旧字段：和弦级 isInverted / fingerprint / chordName（现已由 nameSegments 替代）
-  const legacyChord = chord as unknown as { isInverted?: boolean; fingerprint?: string; chordName?: string };
+  // 清理旧字段：和弦级 isInverted / fingerprint / chordName（现已由 nameSegments 替代）及旧的 capo
+  const legacyChord = chord as unknown as {
+    isInverted?: boolean;
+    fingerprint?: string;
+    chordName?: string;
+    capo?: unknown;
+  };
   let fieldsCleaned = false;
-  if ('isInverted' in legacyChord || 'fingerprint' in legacyChord || 'chordName' in legacyChord) {
+  if (
+    'isInverted' in legacyChord ||
+    'fingerprint' in legacyChord ||
+    'chordName' in legacyChord ||
+    'capo' in legacyChord
+  ) {
     fieldsCleaned = true;
     delete legacyChord.isInverted;
     delete legacyChord.fingerprint;
+    delete legacyChord.capo;
   }
 
   // 横按规范化：过滤非法条目与物理非法项，合并重叠与包含关系
-  const rawBarres = normalizeBarres(chord.barres);
+  const rawBarres = normalizeBarres(chord.barres, strings.length);
   const finalBarres = normalizeAndMergeBarres(rawBarres, strings);
 
   const barresChanged = JSON.stringify(chord.barres ?? undefined) !== JSON.stringify(finalBarres);
@@ -264,7 +318,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   const changed =
     stringsMigrated ||
     nameMigrated ||
-    chord.capo !== capo ||
+    chord.fretOffset !== fretOffset ||
     chord.tuning !== tuning ||
     chord.fretCount !== fretCount ||
     chord.rootStringIndex !== rootStringIndex ||
@@ -275,7 +329,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
     chord: {
       ...chord,
       nameSegments,
-      capo,
+      fretOffset,
       tuning,
       fretCount,
       rootStringIndex,

@@ -39,7 +39,7 @@ const chord: Chord = {
     [0, false],
   ],
   fretCount: 3,
-  capo: 0,
+  fretOffset: 0,
   groupId: 'g1',
   tuning: 'STANDARD',
   rootStringIndex: null,
@@ -71,7 +71,7 @@ describe('data repositories', () => {
 
     expect(result.groups).toHaveLength(1);
     expect(result.groups[0]).toMatchObject(group);
-    expect(result.chords[0].capo).toBe(0);
+    expect(result.chords[0].fretOffset).toBe(0);
     expect(result.chords).toHaveLength(1);
   });
 

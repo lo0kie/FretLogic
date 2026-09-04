@@ -43,7 +43,9 @@
 </template>
 
 <script lang="ts" setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { ref } from 'vue';
+
+import { useScrollEdgeFades } from '@/shared/composables/useScrollEdgeFades';
 
 import ChordAnalysisPanel from './ChordAnalysisPanel.vue';
 import WorkbenchCard from './WorkbenchCard.vue';
@@ -54,34 +56,5 @@ import WorkbenchSettingsPanel from './WorkbenchSettingsPanel.vue';
 // 滚动边缘渐隐：未滚动时顶部 fade 隐藏（首卡完整可见），上滚后显示柔化切口；
 // 底部 fade 仅未滚到底时显示，滚到底隐藏（末卡不被遮挡）
 const scrollRef = ref<HTMLElement | null>(null);
-const atTop = ref(true);
-const atBottom = ref(false);
-
-/** 依据当前滚动位置与内容尺寸刷新两端的渐隐状态 */
-const syncEdgeFades = () => {
-  const el = scrollRef.value;
-  if (!el) return;
-  atTop.value = el.scrollTop <= 1;
-  atBottom.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
-};
-
-/** 监听各面板尺寸变化：auto 面板随音符展开/收起时内容高度在过渡中增长，
- *  但 scrollTop 不变、浏览器不触发 scroll 事件，若只在滚动/挂载时刷新，
- *  会出现「面板撑高后底部渐隐未出现、滚一下才出现」的滞后。
- *  尺寸一变即重算边缘态（顺带覆盖窗口/容器缩放场景） */
-let sizeObserver: ResizeObserver | null = null;
-
-onMounted(() => {
-  syncEdgeFades();
-  const el = scrollRef.value;
-  if (el && typeof ResizeObserver !== 'undefined') {
-    sizeObserver = new ResizeObserver(syncEdgeFades);
-    for (const child of Array.from(el.children)) sizeObserver.observe(child);
-  }
-});
-
-onBeforeUnmount(() => {
-  sizeObserver?.disconnect();
-  sizeObserver = null;
-});
+const { atTop, atBottom, syncEdgeFades } = useScrollEdgeFades(scrollRef);
 </script>

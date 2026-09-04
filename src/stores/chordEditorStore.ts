@@ -4,9 +4,15 @@ import { computed, toRaw, watch } from 'vue';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
-import { createString, DEFAULT_TUNING_MAPPING, getChordName, Tuning, TUNING_PRESETS } from '@/services/music/theory';
+import {
+  createString,
+  DEFAULT_TUNING_MAPPING,
+  getChordName,
+  getDefaultTuningForStringCount,
+  TUNING_PRESETS,
+} from '@/services/music/theory';
 import { useChordStore } from '@/stores/chordStore';
-import type { BarreEntity, Chord, GuitarStringsModel, StringIndex } from '@/types';
+import type { BarreEntity, Chord, GuitarStringEntity, StringIndex } from '@/types';
 import { cloneDeep } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import {
@@ -17,23 +23,16 @@ import {
 } from '@/utils/music/chord-fretboard';
 import { toChordId, toGroupId, toGuitarStringsModel } from '@/utils/music/entityFactories';
 
-/** 构造空白和弦草稿（六弦全部静音、标准调弦、3 品窗口），作为编辑器初始态。 */
-const createDefaultChord = (): Chord => ({
+/** 构造空白和弦草稿（指定弦数全部静音、匹配默认调弦、3 品窗口），作为编辑器初始态。 */
+const createDefaultChord = (stringCount: number = 6): Chord => ({
   id: toChordId(''),
   nameSegments: null,
   createdAt: Date.now(),
   updatedAt: Date.now(),
-  strings: [
-    createString(),
-    createString(),
-    createString(),
-    createString(),
-    createString(),
-    createString(),
-  ] as GuitarStringsModel,
+  strings: Array.from({ length: stringCount }, () => createString()),
   fretCount: 3,
-  capo: 0,
-  tuning: Tuning.STANDARD,
+  fretOffset: 0,
+  tuning: getDefaultTuningForStringCount(stringCount),
   groupId: toGroupId(''),
   rootStringIndex: null,
 });
@@ -201,6 +200,41 @@ export const useChordEditorStore = defineStore('editor', () => {
     }
   };
 
+  const stringCount = computed(() => draftChord.value.strings.length);
+
+  /** 设置琴弦数量（3~10 弦，典型覆盖 4 弦尤克里里/贝斯、6 弦吉他、7/8 弦重金属） */
+  const setStringCount = (targetCount: number) => {
+    const count = Math.min(10, Math.max(3, Math.round(targetCount)));
+    const current = draftChord.value.strings;
+    if (current.length === count) return;
+
+    let nextStrings: GuitarStringEntity[];
+    if (count > current.length) {
+      const added: GuitarStringEntity[] = Array.from({ length: count - current.length }, () => createString());
+      nextStrings = [...current, ...added];
+    } else {
+      nextStrings = current.slice(0, count);
+    }
+    draftChord.value.strings = nextStrings;
+
+    // 调弦方案自动联动：若当前调弦方案与新弦数不匹配，自动选用该弦数对应的默认调弦方案
+    const currPreset = TUNING_PRESETS[draftChord.value.tuning];
+    if (!currPreset || currPreset.stringCount !== count) {
+      draftChord.value.tuning = getDefaultTuningForStringCount(count);
+    }
+
+    // 清理越界的根音标记
+    if (draftChord.value.rootStringIndex !== null && draftChord.value.rootStringIndex >= count) {
+      draftChord.value.rootStringIndex = null;
+    }
+
+    // 清理越界的横按配置
+    if (draftChord.value.barres) {
+      const kept = draftChord.value.barres.filter(b => b.fromString < count && b.toString < count);
+      draftChord.value.barres = kept.length > 0 ? kept : undefined;
+    }
+  };
+
   /** 设置显式横按列表（undefined / 空数组表示清除横按标记）；不改变自动横按开关状态 */
   const setBarres = (barres: BarreEntity[] | undefined) => {
     if (!barres || barres.length === 0) {
@@ -316,6 +350,8 @@ export const useChordEditorStore = defineStore('editor', () => {
     isMultiFingering,
     currentMultiFingeringChords,
     currentMultiFingeringIndex,
+    stringCount,
+    setStringCount,
     setFretCount,
     setBarres,
     setEditor,

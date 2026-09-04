@@ -2,7 +2,7 @@
  * 和弦槽位映射（chordMap）：谱面槽位键的解析、读写、垃圾回收与序列化边界。
  * 由 utils/music/chord-fretboard.ts 拆分迁入——槽位域属乐谱（score），与 scoreModel 同居一处。
  */
-import type { ChordId, SlotKey } from '@/types';
+import type { Chord, ChordId, SlotKey, Song } from '@/types';
 import { clamp } from '@/utils/core/common';
 
 import { charKey, chordSlotKey, collectEdgeChordIds, edgeSlotPrefix } from './scoreModel';
@@ -87,6 +87,17 @@ export function bindNewChordToSlot(chordMap: Map<SlotKey, ChordId>, slotKey: Slo
   } else list[index] = chordId;
   setEdgeChords(chordMap, lineId, type, list);
 }
+
+/**
+ * 将边和弦目标索引解析为实际插入位置：
+ * - 索引有效（< 当前列表长度）→ clamp 后直接使用
+ * - 索引越界（占位符/添加按钮）→ 行首（start）插在第 0 位，行尾（end）追加到末位
+ */
+function resolveEdgeInsertIndex(index: number, listLength: number, type: 'start' | 'end'): number {
+  if (index >= listLength) return type === 'start' ? 0 : listLength;
+  return clamp(index, 0, listLength);
+}
+
 /** 交换或移动两个槽位的和弦：同行同类边槽位内做插入式重排；跨槽位时两处有值则互换，目标为空则移动。 */
 export function swapOrMoveSlotChords(chordMap: Map<SlotKey, ChordId>, sourceKey: SlotKey, targetKey: SlotKey): void {
   if (sourceKey === targetKey) return;
@@ -104,17 +115,10 @@ export function swapOrMoveSlotChords(chordMap: Map<SlotKey, ChordId>, sourceKey:
     const srcIdx = sourceParsed.index;
     const tgtIdx = targetParsed.index;
     if (srcIdx >= 0 && srcIdx < list.length) {
-      const originalLength = list.length;
-      const isTargetAddButton = tgtIdx >= originalLength;
       const [movedChordId] = list.splice(srcIdx, 1);
       if (movedChordId === undefined) return;
-      let insertIdx: number;
-      if (isTargetAddButton) {
-        // 当拖拽到行首的“添加”按钮（最左侧占位符）时插入到最左侧（0），行尾插入到末尾
-        insertIdx = sourceParsed.type === 'start' ? 0 : list.length;
-      } else {
-        insertIdx = clamp(tgtIdx, 0, list.length);
-      }
+      // 拖到"添加"占位符（tgtIdx >= originalLength）或正常位置均走统一解析
+      const insertIdx = resolveEdgeInsertIndex(tgtIdx, list.length, sourceParsed.type);
       list.splice(insertIdx, 0, movedChordId);
       setEdgeChords(chordMap, sourceParsed.lineId, sourceParsed.type, list);
     }
@@ -162,13 +166,7 @@ function insertChordAtParsedLocation(chordMap: Map<SlotKey, ChordId>, parsed: Pa
     chordMap.set(charKey(parsed.lineId, parsed.index), chordId);
   } else {
     const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
-    let insertIdx: number;
-    if (parsed.index >= list.length) {
-      // 当目标是行首“添加”按钮（最左侧占位符）时插入到最左侧（0），行尾插入到末尾
-      insertIdx = parsed.type === 'start' ? 0 : list.length;
-    } else {
-      insertIdx = clamp(parsed.index, 0, list.length);
-    }
+    const insertIdx = resolveEdgeInsertIndex(parsed.index, list.length, parsed.type);
     list.splice(insertIdx, 0, chordId);
     setEdgeChords(chordMap, parsed.lineId, parsed.type, list);
   }
@@ -222,4 +220,67 @@ export const plainToChordMap = (raw: unknown): Map<SlotKey, ChordId> => {
       )
       .map(([k, v]) => [k as SlotKey, v as ChordId])
   );
+};
+
+export interface ScoreChordStep {
+  slotKey: SlotKey;
+  chordId: ChordId;
+  chord: Chord;
+  lineId: string;
+  type: 'start' | 'char' | 'end';
+  index: number;
+}
+
+/**
+ * 提取乐谱内按自然乐理阅读次序（行序 -> 行首和弦 -> 字符槽位和弦 -> 行尾和弦）排列的和弦时间序列
+ */
+export const extractSongChordSequence = (
+  song: Song,
+  chordResolver: (id: ChordId) => Chord | undefined
+): ScoreChordStep[] => {
+  if (!song || !song.chordMap || song.chordMap.size === 0) return [];
+
+  const lineIndexMap = new Map<string, number>();
+  (song.lineIds ?? []).forEach((id, idx) => lineIndexMap.set(id, idx));
+
+  const typePriority: Record<'start' | 'char' | 'end', number> = {
+    start: 0,
+    char: 1,
+    end: 2,
+  };
+
+  const steps: ScoreChordStep[] = [];
+
+  for (const [slotKey, chordId] of song.chordMap) {
+    if (!chordId) continue;
+    const parsed = parseSlotKey(slotKey);
+    if (!parsed) continue;
+
+    const chord = chordResolver(chordId);
+    if (!chord) continue;
+
+    steps.push({
+      slotKey,
+      chordId,
+      chord,
+      lineId: parsed.lineId,
+      type: parsed.type,
+      index: parsed.index,
+    });
+  }
+
+  // 按阅读时间排序
+  steps.sort((a, b) => {
+    const lineA = lineIndexMap.get(a.lineId) ?? 9999;
+    const lineB = lineIndexMap.get(b.lineId) ?? 9999;
+    if (lineA !== lineB) return lineA - lineB;
+
+    const typeA = typePriority[a.type] ?? 1;
+    const typeB = typePriority[b.type] ?? 1;
+    if (typeA !== typeB) return typeA - typeB;
+
+    return a.index - b.index;
+  });
+
+  return steps;
 };

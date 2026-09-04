@@ -23,7 +23,7 @@ import type { Chord, Group, GroupedChordCard } from '@/types';
 import { GroupSortRule } from '@/types';
 import { cloneDeep, cloneGuitarStrings, generateUUID } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
-import { normalizeChord } from '@/utils/music/chord-fretboard';
+import { areBarresEqual } from '@/utils/music/chord-fretboard';
 import { buildGroupVariant, createChord, createGroup, getGroupSortKey, toGroupId } from '@/utils/music/entityFactories';
 
 const DEFAULT_SORT_RULE: GroupSortRule = GroupSortRule.ROOT_PITCH;
@@ -48,13 +48,13 @@ function nameKeyOf(chordOrName: string | ChordOrName): string {
   return getChordName(chordOrName).trim().toLowerCase();
 }
 
-/** 对同一和弦名的多个指法变体排序：转位在后，其余按变调夹品位升序。 */
+/** 对同一和弦名的多个指法变体排序：转位在后，其余按品位偏移升序。 */
 function sortVariants(variants: Chord[]): Chord[] {
   return [...variants].sort((a, b) => {
-    const aInv = computeIsInverted(a.strings, a.capo, a.tuning, a, a.rootStringIndex);
-    const bInv = computeIsInverted(b.strings, b.capo, b.tuning, b, b.rootStringIndex);
+    const aInv = computeIsInverted(a.strings, a.fretOffset, a.tuning, a, a.rootStringIndex);
+    const bInv = computeIsInverted(b.strings, b.fretOffset, b.tuning, b, b.rootStringIndex);
     if (aInv !== bInv) return aInv ? 1 : -1;
-    return (a.capo ?? 0) - (b.capo ?? 0);
+    return (a.fretOffset ?? 0) - (b.fretOffset ?? 0);
   });
 }
 
@@ -80,15 +80,14 @@ export const useChordStore = defineStore('chord', () => {
   const expandedGroupId = useStorage<string | null>(STORAGE_KEYS.EXPANDED_GROUP_ID, null);
   /** 判断分组是否处于折叠态（与持久化的展开分组 id 比对）。 */
   const isGroupCollapsed = (groupId: string): boolean => expandedGroupId.value !== groupId;
-  const isAnyGroupExpanded = computed(() => expandedGroupId.value !== null);
 
-  // 数据通过 useStorage 自动持久化，无需手动 flush（原空实现移除）
+  // 持久化分层：常规变更由 useStorage 响应式自动同步；保存等关键入口提供 flushChordsToStorage 作为同步刷盘保障
 
+  // 启动时以 chordRepository 清洗与迁移后的数据为准，避免全量 JSON.stringify 比对
   {
     const sanitized = chordRepository.load();
-    if (JSON.stringify(sanitized.groups) !== JSON.stringify(groups.value)) groups.value = sanitized.groups;
-    if (JSON.stringify(sanitized.chords) !== JSON.stringify(savedChordsList.value))
-      savedChordsList.value = sanitized.chords;
+    groups.value = sanitized.groups;
+    savedChordsList.value = sanitized.chords;
   }
 
   // 每次提交都会克隆整个和弦列表，容量控制在 8 份以限制内存驻留
@@ -206,11 +205,6 @@ export const useChordStore = defineStore('chord', () => {
     const effectiveRule = sortRule ?? DEFAULT_SORT_RULE;
     const effectiveKey = sortKey ?? 'C';
     return sortChordsByRule(list, effectiveRule, effectiveKey);
-  };
-
-  /** 用新列表整体覆盖和弦列表（写入 localStorage，同时进入撤销历史）。 */
-  const overwriteChords = (newChords: Chord[]) => {
-    savedChordsList.value = [...newChords];
   };
 
   /** 用新列表整体覆盖分组列表（写入 localStorage）。 */
@@ -339,8 +333,8 @@ export const useChordStore = defineStore('chord', () => {
   };
 
   /**
-   * 立即将和弦列表写入 localStorage（绕过 useStorage 的 400ms 防抖）。
-   * 供保存动作成功后调用，避免用户保存后立刻刷新时横按等数据尚未落盘而丢失。
+   * 同步紧急落盘：立即将和弦列表同步写入 localStorage。
+   * 供保存/更新等关键动作成功后调用，消除 Vue 响应式 watch 微任务延迟，避免用户操作后光速刷新导致数据未落盘。
    */
   const flushChordsToStorage = () => {
     try {
@@ -392,22 +386,9 @@ export const useChordStore = defineStore('chord', () => {
     });
   };
 
-  /** 对全量和弦执行规范化修复（如脏数据纠正），返回修复的条数。 */
-  const repairData = (): number => {
-    let repairedCount = 0;
-    const repairedList = savedChordsList.value.map(c => {
-      const { chord, changed } = normalizeChord(c);
-      if (changed) repairedCount++;
-      return chord;
-    });
-    if (repairedCount > 0) overwriteChords(repairedList);
-    return repairedCount;
-  };
-
   /**
    * 按 id 精确删除指定和弦列表。
    *
-   * 注意：此函数被 triggerDeleteChords（UI 删除选中项）调用，
    * 必须严格按 id 匹配，不使用指纹兜底——避免两个指法相同但 id 不同的和弦
    * 在用户只删其一时被连带误删。
    * 返回被删除的 id 集合，供调用方同步解绑歌曲中的引用。
@@ -465,7 +446,7 @@ export const useChordStore = defineStore('chord', () => {
       nameSegments,
       strings: currentStrings,
       fretCount: draft.fretCount,
-      capo: draft.capo,
+      fretOffset: draft.fretOffset,
       groupId: targetGroupId,
       tuning: draft.tuning,
       rootStringIndex,
@@ -476,7 +457,7 @@ export const useChordStore = defineStore('chord', () => {
     if (isEditing) {
       const original = savedChordsList.value.find(c => c.id === id);
       // 指纹不含 barres，因此"仅修改横按"时指纹不变；需同时比较 barres 才能识别真正的无修改
-      const sameBarres = JSON.stringify(original?.barres ?? undefined) === JSON.stringify(payload.barres ?? undefined);
+      const sameBarres = areBarresEqual(original?.barres, payload.barres);
       if (original && computeChordFingerprint(original) === fingerprint && sameBarres) {
         return { ok: false, reason: 'UNCHANGED' };
       }
@@ -493,7 +474,7 @@ export const useChordStore = defineStore('chord', () => {
       return { ok: false, reason: 'DUPLICATE_FINGERPRINT', cleanName };
     }
 
-    const bassWarn = validateBassConsistency(payload.strings, payload.capo, payload.tuning, payload);
+    const bassWarn = validateBassConsistency(payload.strings, payload.fretOffset, payload.tuning, payload);
     return { ok: true, payload, cleanName, warn: bassWarn };
   };
 
@@ -502,15 +483,12 @@ export const useChordStore = defineStore('chord', () => {
     groups,
     selectedGroupId,
     groupChordMap,
-    multiFingeringData,
     groupedChordMap,
     getMultiFingering,
     getGroupedCards,
     getFilteredChords,
-    overwriteChords,
     overwriteGroups,
     isGroupCollapsed,
-    isAnyGroupExpanded,
     setSelectedGroupId,
     selectAndExpandGroup,
     toggleGroupCollapsed,
@@ -524,7 +502,6 @@ export const useChordStore = defineStore('chord', () => {
     flushChordsToStorage,
     moveVariantsByName,
     executeUndoRestore,
-    repairData,
     removeChords,
     buildChordForSave,
     replaceAllData,

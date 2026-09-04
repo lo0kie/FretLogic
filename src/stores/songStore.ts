@@ -7,11 +7,13 @@ import { computed, ref, watch } from 'vue';
 import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
+import { getChordName, transposeChordName } from '@/services/music/theory';
 import { createSongRepository } from '@/services/repositories';
 import { sanitizePersistedData } from '@/services/validation/persistedData';
-import type { ChordId, SlotKey, Song } from '@/types';
+import type { Chord, ChordId, SlotKey, Song } from '@/types';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { compareByPinyin, pinyinReady, preloadPinyin } from '@/utils/core/pinyin';
+import { toCapo } from '@/utils/music/chord-fretboard';
 import { createSong as createSongEntity } from '@/utils/music/entityFactories';
 import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/utils/score/chordSlots';
 
@@ -279,21 +281,6 @@ export const useSongStore = defineStore('song', () => {
     markIndexDirty();
   };
 
-  /** 撤销最近一次删除：将歌曲恢复到原位置（或尾部），撤销后清空恢复信息。 */
-  const undoDeleteSong = () => {
-    if (!lastDeletedSongInfo.value) return;
-    const { song, index } = lastDeletedSongInfo.value;
-    if (index >= 0 && index <= songs.value.length) {
-      songs.value.splice(index, 0, song);
-    } else {
-      songs.value.push(song);
-    }
-    removedSongIds.delete(song.id);
-    markSongDirty(song.id);
-    markIndexDirty();
-    lastDeletedSongInfo.value = null;
-  };
-
   /**
    * 批量更新歌曲元信息（标题/调式/变调夹/歌词/行序/和弦映射）。
    * 仅写入有实际变化的字段，变更后递增 version、刷新 updatedAt 并调度持久化。
@@ -368,6 +355,90 @@ export const useSongStore = defineStore('song', () => {
     if (!target) return;
     swapOrMoveSlotChords(target.chordMap, sourceKey, targetKey);
     target.chordMap = new Map(target.chordMap);
+    target.version = (target.version ?? 1) + 1;
+    target.updatedAt = Date.now();
+    markSongDirty(songId);
+  };
+
+  /**
+   * 全曲移调：
+   * 1. 移调演奏调（playKey）
+   * 2. 若提供和弦解析与创建器，则对全曲 chordMap 进行换算映射（优先复用和弦库既有指法，无匹配时自动生成新和弦）
+   */
+  const transposeSong = (
+    songId: string,
+    semitones: number,
+    options?: {
+      chordResolver: (id: ChordId) => Chord | undefined;
+      chordFinder?: (name: string, originalChord: Chord) => Chord | undefined;
+      chordCreator?: (originalChord: Chord, targetName: string) => Chord;
+    }
+  ) => {
+    if (semitones === 0) return;
+    const target = songMap.value.get(songId);
+    if (!target) return;
+
+    const newPlayKey = transposeChordName(target.playKey || 'C', semitones);
+    target.playKey = newPlayKey;
+
+    if (options && target.chordMap.size > 0) {
+      const newChordMap = new Map<SlotKey, ChordId>();
+      const chordIdCache = new Map<string, ChordId>();
+
+      for (const [slotKey, chordId] of target.chordMap) {
+        if (!chordId) continue;
+        if (chordIdCache.has(chordId)) {
+          newChordMap.set(slotKey, chordIdCache.get(chordId)!);
+          continue;
+        }
+
+        const originalChord = options.chordResolver(chordId);
+        if (!originalChord) {
+          newChordMap.set(slotKey, chordId);
+          continue;
+        }
+
+        const currentName = getChordName(originalChord);
+        const targetName = transposeChordName(currentName, semitones);
+
+        // 1. 优先从库中查找同名且弦数/调弦相同的和弦
+        const existing = options.chordFinder?.(targetName, originalChord);
+        if (existing) {
+          chordIdCache.set(chordId, existing.id);
+          newChordMap.set(slotKey, existing.id);
+          continue;
+        }
+
+        // 2. 库中无对应和弦时，调用创建器生成新和弦并登记
+        if (options.chordCreator) {
+          const created = options.chordCreator(originalChord, targetName);
+          chordIdCache.set(chordId, created.id);
+          newChordMap.set(slotKey, created.id);
+        } else {
+          newChordMap.set(slotKey, chordId);
+        }
+      }
+
+      target.chordMap = newChordMap;
+    }
+
+    target.version = (target.version ?? 1) + 1;
+    target.updatedAt = Date.now();
+    markSongDirty(songId);
+  };
+
+  /**
+   * 全曲变调夹品位调整（Capo 增减，自动收敛至 [0, 12]）
+   */
+  const transposeSongCapo = (songId: string, deltaCapo: number) => {
+    if (deltaCapo === 0) return;
+    const target = songMap.value.get(songId);
+    if (!target) return;
+
+    const newCapo = toCapo(target.capo + deltaCapo);
+    if (newCapo === target.capo) return;
+
+    target.capo = newCapo;
     target.version = (target.version ?? 1) + 1;
     target.updatedAt = Date.now();
     markSongDirty(songId);
@@ -474,7 +545,6 @@ export const useSongStore = defineStore('song', () => {
     getChordReferences,
     createSong,
     deleteSong,
-    undoDeleteSong,
     updateSongMeta,
     setCharChord,
     removeCharChord,
@@ -483,6 +553,8 @@ export const useSongStore = defineStore('song', () => {
     reorderSongs,
     unbindChordIds,
     restoreChordBindings,
+    transposeSong,
+    transposeSongCapo,
     flushSongsNow,
   };
 });

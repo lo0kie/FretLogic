@@ -73,16 +73,18 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
   const { chord, colors, chordNameScale = 1.0, shorthand = false } = opts;
   const fc = Math.max(3, chord.fretCount || 4);
   const chordName = getChordName(chord, { shorthand });
+  const stringCount = chord.strings?.length || 6;
+  const fretboardWidth = SCORE_EXPORT_CONFIG.getExportFretboardWidth(stringCount);
 
   const startStrX = SCORE_EXPORT_CONFIG.FRETBOARD_LEFT_PAD;
   const gridTop = SCORE_EXPORT_CONFIG.FRETBOARD_GRID_TOP;
   const gridBottom = gridTop + fc * SCORE_EXPORT_CONFIG.FRET_HEIGHT;
-  const gridRight = startStrX + 5 * SCORE_EXPORT_CONFIG.STRING_SPACING;
+  const gridRight = startStrX + (stringCount - 1) * SCORE_EXPORT_CONFIG.STRING_SPACING;
 
   // 1. 和弦名称（基线取自配置，保证图内顶部留白）
   drawFormattedChordName(
     ctx,
-    SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH / 2,
+    fretboardWidth / 2,
     SCORE_EXPORT_CONFIG.CHORD_NAME_BASELINE_Y,
     chordName,
     colors.TEXT,
@@ -91,7 +93,7 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
 
   // 2. 空弦 / 静音标记
   const markerY = SCORE_EXPORT_CONFIG.MARKER_CENTER_Y;
-  for (let s = 0; s < 6; s++) {
+  for (let s = 0; s < stringCount; s++) {
     const sx = startStrX + s * SCORE_EXPORT_CONFIG.STRING_SPACING;
     const strData = chord.strings[s];
     const fret = strData ? strData[0] : 0;
@@ -117,7 +119,7 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
   // 3. 网格线（琴弦竖线 + 品丝横线）
   ctx.strokeStyle = colors.FB_LINE;
   ctx.lineWidth = 1;
-  for (let s = 0; s < 6; s++) {
+  for (let s = 0; s < stringCount; s++) {
     const sx = startStrX + s * SCORE_EXPORT_CONFIG.STRING_SPACING;
     ctx.beginPath();
     ctx.moveTo(sx, gridTop);
@@ -133,12 +135,13 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
   }
 
   // 4. 弦枕
-  if (chord.capo === 0) {
+  const offset = chord.fretOffset ?? 0;
+  if (offset === 0) {
     ctx.fillStyle = colors.FB_NUT;
     ctx.fillRect(
       startStrX - 0.5,
       gridTop - SCORE_EXPORT_CONFIG.NUT_HEIGHT,
-      5 * SCORE_EXPORT_CONFIG.STRING_SPACING + 1,
+      (stringCount - 1) * SCORE_EXPORT_CONFIG.STRING_SPACING + 1,
       SCORE_EXPORT_CONFIG.NUT_HEIGHT
     );
   }
@@ -150,7 +153,7 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
   ctx.textBaseline = 'middle';
   for (let f = 1; f < fc; f++) {
     const fy = gridTop + f * SCORE_EXPORT_CONFIG.FRET_HEIGHT;
-    const fretNumber = chord.capo > 0 ? chord.capo + f : f;
+    const fretNumber = offset > 0 ? offset + f : f;
     ctx.fillText(String(fretNumber), startStrX - SCORE_EXPORT_CONFIG.FRET_NUMBER_X_OFFSET, fy);
   }
   ctx.textBaseline = 'alphabetic';
@@ -172,7 +175,7 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
   }
 
   // 7. 按弦圆点
-  for (let s = 0; s < 6; s++) {
+  for (let s = 0; s < stringCount; s++) {
     const strData = chord.strings[s];
     const fret = strData ? strData[0] : 0;
     if (fret > 0) {
@@ -203,10 +206,12 @@ export function renderFretboardToCanvas(
   const { scale = 3, isDarkMode = false, shorthand = false, chordNameScale = 1.0, bgColor } = opts;
 
   const fc = Math.max(3, chord.fretCount || 4);
+  /** 顶部留白（px，逻辑坐标）：让导出图上方有充足呼吸感 */
+  const TOP_PAD = 2;
   const BOTTOM_PAD = 6;
   /** 和弦名两侧最小留白（px）：名称测宽后按此值扩宽画布，避免长名（如 C♯maj7♯11）被左右裁切 */
   const CHORD_NAME_EDGE_PAD = 4;
-  const baseWidth: number = SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH;
+  const baseWidth: number = SCORE_EXPORT_CONFIG.getExportFretboardWidth(chord.strings?.length || 6);
   const baseHeight = SCORE_EXPORT_CONFIG.FRETBOARD_GRID_TOP + fc * SCORE_EXPORT_CONFIG.FRET_HEIGHT + BOTTOM_PAD;
 
   // 名称宽度测量：按同一字体与缩放测量实际渲染宽度，超出标准容器宽时对称扩宽画布
@@ -219,7 +224,8 @@ export function renderFretboardToCanvas(
   }
 
   const physW = Math.round(canvasWidth * scale);
-  const physH = Math.round(baseHeight * scale);
+  // 高度加上顶部留白
+  const physH = Math.round((baseHeight + TOP_PAD) * scale);
 
   const canvas = document.createElement('canvas');
   canvas.width = physW;
@@ -237,8 +243,8 @@ export function renderFretboardToCanvas(
   const colors = isDarkMode ? SCORE_EXPORT_CONFIG.THEME.DARK : SCORE_EXPORT_CONFIG.THEME.LIGHT;
   ctx.save();
   ctx.scale(scale, scale);
-  // 画布被名称撑宽时，将标准布局整体平移居中，扩宽量均分到左右两侧
-  ctx.translate((canvasWidth - baseWidth) / 2, 0);
+  // 整体下移 TOP_PAD，同时处理水平居中偏移（名称撑宽时）
+  ctx.translate((canvasWidth - baseWidth) / 2, TOP_PAD);
   renderFretboard(ctx, { chord, colors, chordNameScale, shorthand });
   ctx.restore();
 

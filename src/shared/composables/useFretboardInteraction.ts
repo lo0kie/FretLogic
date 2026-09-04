@@ -5,16 +5,16 @@ import { useEventListener } from '@vueuse/core';
 import type { FretboardProps } from '@/components/fretboard/Fretboard.vue';
 import { canTogglePitchAccidental, getActiveBaseStrings, isOpen } from '@/services/music/theory';
 import { useFretboardKeyboard } from '@/shared/composables/useFretboardKeyboard';
-import { useFretboardLayout } from '@/shared/composables/useFretboardLayout';
+import { calculateFretboardPoint, useFretboardLayout } from '@/shared/composables/useFretboardLayout';
 import { useRafThrottle } from '@/shared/composables/useRafThrottle';
 import type { GuitarStringEntity, GuitarStringsModel } from '@/types';
 import { cloneGuitarStrings } from '@/utils/core/common';
 import { CANVAS_CONFIG, INTERACTION_CONFIG } from '@/utils/core/constants';
 
-/** 指板交互核心：坐标换算、点按/右键/滚轮/键盘编辑音符与变调夹，以及 hover/focus 高亮管理 */
+/** 指板交互核心：坐标换算、点按/右键/滚轮/键盘编辑音符与品位偏移，以及 hover/focus 高亮管理 */
 export function useFretboardInteraction(
   props: FretboardProps,
-  onCapoChange: (capo: number) => void,
+  onFretOffsetChange: (fretOffset: number) => void,
   onStringsChange: (strings: GuitarStringsModel) => void,
   onRootStringChange?: (index: number | null) => void
 ) {
@@ -26,32 +26,29 @@ export function useFretboardInteraction(
   const scale = computed(() => props.scale ?? 1.0);
   const strings = computed(() => props.chord.strings);
   const fretCount = computed(() => props.chord.fretCount);
-  const capo = computed(() => props.chord.capo);
+  const fretOffset = computed(() => props.chord.fretOffset);
   const tuning = computed(() => props.chord.tuning);
   const rootStringIndex = computed(() => props.chord.rootStringIndex);
   const chordNameZoneHeight = computed(() => CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT);
-  const layout = useFretboardLayout(fretCount, scale, chordNameZoneHeight);
+  const stringCount = computed(() => props.chord.strings.length);
+  const layout = useFretboardLayout(fretCount, scale, chordNameZoneHeight, stringCount);
 
   let wheelAccumulator = 0;
 
   /** 把指针事件坐标换算为指板逻辑坐标（弦序号/品位），未命中有效区域时返回 null */
   const getCanvasPoint = (clientX: number, clientY: number) => {
     const board = fretBoardRef.value?.getBoundingClientRect();
-    if (!board || board.width === 0 || board.height === 0) return null;
-    const scaleX = board.width / CANVAS_CONFIG.BOARD_WIDTH;
-    const scaleY = board.height / layout.rawHeight.value;
-    const x = (clientX - board.left) / scaleX;
-    const y = (clientY - board.top) / scaleY;
-    const rawStringFloat = (x - CANVAS_CONFIG.OFFSET_X_LEFT) / CANVAS_CONFIG.STRING_SPACING;
-    const stringIndex = Math.round(rawStringFloat);
-    if (stringIndex < 0 || stringIndex > 5) return null;
-    // 处于和弦名区域时不触发音符/空弦悬停
-    if (y < chordNameZoneHeight.value) return null;
-    // SVG 实际从 和弦名区高度 + 空弦区高度 之后才开始，坐标换算需计入额外顶部高度
-    const fretAreaY = y - layout.contentTopOffset.value;
-    const fretIndex = fretAreaY > 0 ? Math.floor(fretAreaY / CANVAS_CONFIG.FRET_HEIGHT) + 1 : 0;
-    if (fretIndex > fretCount.value) return null;
-    return { stringIndex, fretIndex, rawStringFloat };
+    if (!board) return null;
+    return calculateFretboardPoint({
+      clientX,
+      clientY,
+      boardRect: board,
+      rawHeight: layout.rawHeight.value,
+      contentTopOffset: layout.contentTopOffset.value,
+      chordNameZoneHeight: chordNameZoneHeight.value,
+      fretCount: fretCount.value,
+      stringCount: stringCount.value,
+    });
   };
 
   /** 统一的弦数据更新出口：克隆当前模型交给 mutator 修改后上报，并可选地由 resolveRoot 重算根音弦 */
@@ -179,7 +176,7 @@ export function useFretboardInteraction(
     };
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
-      if (str && canTogglePitchAccidental(sIdx, str[0], capo.value, getActiveBaseStrings(tuning.value))) {
+      if (str && canTogglePitchAccidental(sIdx, str[0], fretOffset.value, getActiveBaseStrings(tuning.value))) {
         str[1] = !str[1];
       }
     });
@@ -261,12 +258,12 @@ export function useFretboardInteraction(
     if (point) {
       const { stringIndex: sIdx, fretIndex: fIdx } = point;
       const currentStr = strings.value[sIdx];
-      // 悬停在已按音符上（含空弦 open 音符）：切换升降号，不触发 capo
+      // 悬停在已按音符上（含空弦 open 音符）：切换升降号，不触发品位偏移
       const isHoveringActiveNote =
         (fIdx > 0 && fIdx <= fretCount.value && currentStr?.[0] === fIdx) ||
         (fIdx === 0 && currentStr !== undefined && isOpen(currentStr));
       if (isHoveringActiveNote && currentStr !== undefined) {
-        if (canTogglePitchAccidental(sIdx, currentStr[0], capo.value, getActiveBaseStrings(tuning.value))) {
+        if (canTogglePitchAccidental(sIdx, currentStr[0], fretOffset.value, getActiveBaseStrings(tuning.value))) {
           handleTogglePitchName(sIdx);
         }
         return;
@@ -277,9 +274,9 @@ export function useFretboardInteraction(
     wheelAccumulator += pending.deltaY;
     if (Math.abs(wheelAccumulator) < INTERACTION_CONFIG.WHEEL_THRESHOLD) return;
     if (wheelAccumulator > 0) {
-      onCapoChange(Math.min(INTERACTION_CONFIG.MAX_CAPO_LIMIT, capo.value + 1));
+      onFretOffsetChange(Math.min(INTERACTION_CONFIG.MAX_CAPO_LIMIT, fretOffset.value + 1));
     } else {
-      onCapoChange(Math.max(INTERACTION_CONFIG.MIN_CAPO_LIMIT, capo.value - 1));
+      onFretOffsetChange(Math.max(INTERACTION_CONFIG.MIN_CAPO_LIMIT, fretOffset.value - 1));
     }
     wheelAccumulator = 0;
   });
@@ -287,7 +284,7 @@ export function useFretboardInteraction(
   /** wheel 入口：只记录事件并按帧合帧处理，忽略 Ctrl/Cmd 缩放手势 */
   const handleWheel = (e: WheelEvent) => {
     if (e.ctrlKey || e.metaKey) return;
-    // 仅命中指板有效区域（品位格/空弦行）时才接管滚轮；和弦名区与容器其余部分放行默认滚动，不触发 capo
+    // 仅命中指板有效区域（品位格/空弦行）时才接管滚轮；和弦名区与容器其余部分放行默认滚动，不触发品位偏移
     if (!getCanvasPoint(e.clientX, e.clientY)) return;
     e.preventDefault();
     scheduleWheelFrame({ clientX: e.clientX, clientY: e.clientY, deltaY: e.deltaY });
@@ -309,6 +306,7 @@ export function useFretboardInteraction(
     hoverPoint,
     focusPoint,
     isFocused,
+    boardWidth: layout.boardWidth,
     stringXPositions: layout.stringXPositions,
     rawHeight: layout.rawHeight,
     fretboardScale: layout.fretboardScale,

@@ -18,7 +18,7 @@ const legacyPayload = {
         { fret: 0, preferFlat: false },
       ],
       fretCount: 3,
-      capo: 0,
+      fretOffset: 0,
       groupId: 'g1',
       tuning: 'STANDARD',
     },

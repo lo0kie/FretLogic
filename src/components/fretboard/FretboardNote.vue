@@ -4,9 +4,8 @@
     :class="{
       '[&_.note-circle]:hidden [&_.note-mute-x]:hidden [&_.note-svg-label]:hidden': isPressed,
     }"
-    @click.stop="$emit('click', $event)"
     @dblclick.prevent.stop="$emit('toggle-pitch')"
-    class="pointer-events-auto cursor-pointer outline-none [&:hover_.note-outline-ring]:opacity-100"
+    class="outline-none"
     role="img"
     tabindex="-1"
   >
@@ -113,7 +112,6 @@ const {
 }>();
 
 defineEmits<{
-  (e: 'click', event: MouseEvent): void;
   (e: 'toggle-pitch'): void;
 }>();
 

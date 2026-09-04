@@ -82,11 +82,12 @@
     </div>
 
     <div
-      class="left-group-list-container left-group-list box-border flex min-h-0 w-full flex-1 flex-col overflow-hidden"
+      class="left-group-list-container left-group-list relative box-border flex min-h-0 w-full flex-1 flex-col overflow-hidden"
     >
       <div
         v-scroll-cache="`sidebar-scroll:${route.path}`"
         class="scroll-body no-scrollbar p-md box-border flex-1 overflow-y-auto"
+        ref="scrollRef"
       >
         <div v-if="route.path === '/workbench'" class="v-fade-in-quick min-w-0" key="workbench">
           <LeftChordGroupSection
@@ -104,6 +105,19 @@
           <LeftSongListSection @open-clear="songModals.openClear" @open-config="songModals.openConfig" />
         </div>
       </div>
+
+      <!-- 顶部滚动渐隐：仅可上滚时显示，避免未滚动时遮挡首项 -->
+      <div
+        v-show="!atTop"
+        aria-hidden="true"
+        class="z-panel pointer-events-none absolute inset-x-0 top-0 h-[20px] [background:linear-gradient(to_bottom,var(--bg-panel),transparent)]"
+      />
+      <!-- 底部滚动渐隐：仅未滚到底时显示，滚到底时隐藏避免遮挡末项 -->
+      <div
+        v-show="!atBottom"
+        aria-hidden="true"
+        class="z-panel pointer-events-none absolute inset-x-0 bottom-0 h-[20px] [background:linear-gradient(to_top,var(--bg-panel),transparent)]"
+      />
     </div>
 
     <div class="left-panel-footer p-md px-lg border-glass-border box-border w-full shrink-0 border-t">
@@ -124,7 +138,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, provide, ref, useTemplateRef } from 'vue';
+import { computed, nextTick, provide, ref, useTemplateRef, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import BackupModalsContainer from '@/app/modals/BackupModalsContainer.vue';
@@ -143,6 +157,7 @@ import { useSongModals } from '@/features/song-library/composables/useSongModals
 import SongModalsContainer from '@/features/song-library/SongModalsContainer.vue';
 import LeftSongListSection from '@/features/song-library/SongSection.vue';
 import { useBackupModals } from '@/shared/composables/useBackupModals';
+import { useScrollEdgeFades } from '@/shared/composables/useScrollEdgeFades';
 import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -152,11 +167,30 @@ defineOptions({ inheritAttrs: false });
 
 const searchQuery = ref('');
 const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef');
+const scrollRef = useTemplateRef<HTMLElement>('scrollRef');
 
 const route = useRoute();
 const uiStore = useUiStore();
 const chordStore = useChordStore();
 const songStore = useSongStore();
+
+const { atTop, atBottom, syncEdgeFades } = useScrollEdgeFades(scrollRef);
+
+watch(
+  () => route.path,
+  () => {
+    nextTick(syncEdgeFades);
+  }
+);
+
+watch(
+  () => uiStore.isLeftOpen,
+  isOpen => {
+    if (isOpen) {
+      nextTick(syncEdgeFades);
+    }
+  }
+);
 
 const groupModals = useChordGroupModals();
 const songModals = useSongModals();

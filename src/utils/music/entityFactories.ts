@@ -1,4 +1,15 @@
-import type { Capo, Chord, ChordId, Group, GroupId, GuitarStringsModel, Song, SongId, StringIndex } from '@/types';
+import type {
+  Capo,
+  Chord,
+  ChordId,
+  FretOffset,
+  Group,
+  GroupId,
+  GuitarStringsModel,
+  Song,
+  SongId,
+  StringIndex,
+} from '@/types';
 import { GroupSortRule } from '@/types';
 import { generateUUID } from '@/utils/core/common';
 
@@ -50,17 +61,9 @@ export const createSong = (title: string): Song => ({
   updatedAt: Date.now(),
 });
 
-/** 由 6 根弦的 [品位, 降号偏好] 数组构造强类型弦模型（固定长度，逐项兜底 -1/false） */
+/** 由 [品位, 降号偏好] 数组构造强类型弦模型（逐项兜底 -1/false） */
 export const toGuitarStringsModel = (strings: Array<[number, boolean]>): GuitarStringsModel => {
-  const out: GuitarStringsModel = [
-    [strings[0]?.[0] ?? -1, Boolean(strings[0]?.[1])],
-    [strings[1]?.[0] ?? -1, Boolean(strings[1]?.[1])],
-    [strings[2]?.[0] ?? -1, Boolean(strings[2]?.[1])],
-    [strings[3]?.[0] ?? -1, Boolean(strings[3]?.[1])],
-    [strings[4]?.[0] ?? -1, Boolean(strings[4]?.[1])],
-    [strings[5]?.[0] ?? -1, Boolean(strings[5]?.[1])],
-  ];
-  return out;
+  return strings.map(s => [s?.[0] ?? -1, Boolean(s?.[1])]);
 };
 
 /** 新建和弦：统一 id 前缀（'c_'）与必填字段装配 */
@@ -68,7 +71,8 @@ export const createChord = (input: {
   nameSegments: Chord['nameSegments'];
   strings: Chord['strings'];
   fretCount: Chord['fretCount'];
-  capo: Capo;
+  fretOffset?: FretOffset;
+  capo?: Capo;
   groupId: string;
   tuning: Chord['tuning'];
   rootStringIndex: StringIndex | null;
@@ -81,7 +85,7 @@ export const createChord = (input: {
   nameSegments: input.nameSegments,
   strings: input.strings,
   fretCount: input.fretCount,
-  capo: input.capo,
+  fretOffset: (input.fretOffset ?? input.capo ?? 0) as FretOffset,
   groupId: toGroupId(input.groupId),
   tuning: input.tuning,
   rootStringIndex: input.rootStringIndex,

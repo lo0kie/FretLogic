@@ -52,4 +52,16 @@ describe('BaseSelector 键盘可达性', () => {
     const triggerIcon = wrapper.find('[data-test="dummy-icon"]');
     expect(triggerIcon.exists()).toBe(true);
   });
+
+  it('已移除旧箭头图标，采用滚动渐隐遮罩', async () => {
+    const wrapper = mount(BaseSelector, {
+      props: {
+        options: ['1', '2', '3', '4', '5'],
+        modelValue: '1',
+      },
+    });
+    // 旧的滚动提示箭头已被移除
+    expect(wrapper.find('.z-panel [name="chevron-up"]').exists()).toBe(false);
+    expect(wrapper.find('.z-panel [name="chevron-down"]').exists()).toBe(false);
+  });
 });

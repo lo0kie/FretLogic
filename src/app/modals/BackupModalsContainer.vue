@@ -41,7 +41,19 @@
         />
       </BaseFormRow>
 
-      <BaseFormRow :label-width="FORM_LABEL_WIDTH" help="云端同步的后端与账号信息" label="同步配置">
+      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="同步配置">
+        <template #help>
+          <div class="text-2xs flex h-[18px] items-center leading-none">
+            <span
+              v-if="backupModals.modalData.exportSelection.syncSettings && hasCredentials"
+              class="text-warning flex items-center gap-1 font-medium"
+            >
+              <BaseIcon :size="11" class="shrink-0" name="alert-triangle" />
+              <span>包含 Token / 密码明文，请妥善保管勿公开分享</span>
+            </span>
+            <span v-else>云端同步的后端与账号信息</span>
+          </div>
+        </template>
         <BaseSwitch v-model="backupModals.modalData.exportSelection.syncSettings" aria-label="导出同步配置" />
       </BaseFormRow>
 
@@ -124,14 +136,19 @@
 </template>
 
 <script lang="ts" setup>
+import { computed } from 'vue';
+
 import BaseCheckbox from '@/components/ui/BaseCheckbox.vue';
 import BaseFormRow from '@/components/ui/BaseFormRow.vue';
+import BaseIcon from '@/components/ui/BaseIcon.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BaseSwitch from '@/components/ui/BaseSwitch.vue';
 import type { useBackupModals } from '@/shared/composables/useBackupModals';
 import { injectModalController } from '@/shared/composables/useModalController';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 const backupModals = injectModalController<ReturnType<typeof useBackupModals>>('backupModals');
+const settingsStore = useSettingsStore();
 
 /** 表单行统一 Label 宽度 */
 const FORM_LABEL_WIDTH = '4.5rem';
@@ -147,4 +164,11 @@ const isExportAll = backupModals.isExportAll;
 const isImportAll = backupModals.isImportAll;
 const isExportIndeterminate = backupModals.isExportIndeterminate;
 const isImportIndeterminate = backupModals.isImportIndeterminate;
+
+/** 当前是否存在非空凭证（Token / 密码），用于决定是否展示安全警告 */
+const hasCredentials = computed(() =>
+  [settingsStore.githubToken, settingsStore.giteeToken, settingsStore.webdavPassword, settingsStore.serverToken].some(
+    v => typeof v === 'string' && v.trim().length > 0
+  )
+);
 </script>

@@ -1,6 +1,7 @@
 import { computeChordFingerprint } from '@/services/music/theory';
 import type { Chord, SlotKey } from '@/types';
 import { URL_REVOKE_DELAY_MS } from '@/utils/core/constants';
+import { computeBarresSignature } from '@/utils/music/chord-fretboard';
 import { plainToChordMap } from '@/utils/score/chordSlots';
 import { charKey, chordSlotKey, collectEdgeChordIds } from '@/utils/score/scoreModel';
 
@@ -41,7 +42,7 @@ function getEdgeChordsWithNextKey(
   const sig = ids
     .map((id, idx) => {
       const chord = chordsLookupMap.get(id);
-      const contentSig = chord ? `${computeChordFingerprint(chord)}:${JSON.stringify(chord.barres ?? null)}` : '-';
+      const contentSig = chord ? `${computeChordFingerprint(chord)}:${computeBarresSignature(chord.barres)}` : '-';
       return `${idx}:${id}:${contentSig}|`;
     })
     .join('');

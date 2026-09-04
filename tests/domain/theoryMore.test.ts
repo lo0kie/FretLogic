@@ -32,7 +32,7 @@ describe('theory: 和弦指纹', () => {
   it('相同和弦属性生成相同指纹', () => {
     const chord = {
       chordName: 'C',
-      capo: 0,
+      fretOffset: 0,
       fretCount: 3,
       tuning: 'STANDARD' as const,
       strings: [
@@ -51,7 +51,7 @@ describe('theory: 和弦指纹', () => {
   it('不同 capo 产生不同指纹', () => {
     const base = {
       chordName: 'C',
-      capo: 0,
+      fretOffset: 0,
       fretCount: 3,
       tuning: 'STANDARD' as const,
       strings: [
@@ -64,7 +64,7 @@ describe('theory: 和弦指纹', () => {
       ],
       rootStringIndex: 2,
     };
-    const withCapo = { ...base, capo: 2 };
+    const withCapo = { ...base, fretOffset: 2 };
     expect(computeChordFingerprint(base)).not.toBe(computeChordFingerprint(withCapo));
   });
 });
