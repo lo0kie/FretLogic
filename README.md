@@ -109,19 +109,17 @@ src/
 
 ## 📦 脚本
 
-| 命令                | 说明                                              |
-| ------------------- | ------------------------------------------------- |
-| `pnpm dev`          | 开发服务器                                        |
-| `pnpm dev:proxy`    | WebDAV CORS 转发代理                              |
-| `pnpm build`        | 生产构建（GitHub Pages 路径：`/FretLogic/`）      |
-| `pnpm build:gitee`  | 生产构建（Gitee Pages 路径：`/fret-logic/`）      |
-| `pnpm deploy:gitee` | 一键构建并推送到 Gitee Pages 分支 (`gitee-pages`) |
-| `pnpm verify`       | 全量质检（Lint + Typecheck + Test + Build）       |
-| `pnpm typecheck`    | 类型检查                                          |
-| `pnpm lint`         | ESLint                                            |
-| `pnpm test`         | 单元测试                                          |
-| `pnpm test:e2e`     | E2E 测试                                          |
-| `pnpm coverage`     | 覆盖率                                            |
+| 命令             | 说明                                         |
+| ---------------- | -------------------------------------------- |
+| `pnpm dev`       | 开发服务器                                   |
+| `pnpm dev:proxy` | WebDAV CORS 转发代理                         |
+| `pnpm build`     | 生产构建（GitHub Pages 路径：`/FretLogic/`） |
+| `pnpm verify`    | 全量质检（Lint + Typecheck + Test + Build）  |
+| `pnpm typecheck` | 类型检查                                     |
+| `pnpm lint`      | ESLint                                       |
+| `pnpm test`      | 单元测试                                     |
+| `pnpm test:e2e`  | E2E 测试                                     |
+| `pnpm coverage`  | 覆盖率                                       |
 
 ## 🤝 贡献
 

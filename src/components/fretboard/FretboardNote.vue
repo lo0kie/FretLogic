@@ -1,69 +1,60 @@
 <template>
-  <g
-    :aria-label
-    :class="{
-      '[&_.note-circle]:hidden [&_.note-mute-x]:hidden [&_.note-svg-label]:hidden': isPressed,
-    }"
-    @dblclick.prevent.stop="$emit('toggle-pitch')"
-    class="outline-none"
-    role="img"
-    tabindex="-1"
-  >
-    <circle
-      v-if="isHovered || isFocused"
-      :cx="x"
-      :cy="y"
-      :fill="hoverFillColor"
-      :r="outlineRadius"
-      :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
-      :style="{ stroke: noteRingColor }"
-      class="note-outline-ring duration-fast transition-[fill,stroke]"
-    />
+  <g :aria-label @dblclick.prevent.stop="$emit('toggle-pitch')" class="outline-none" role="img" tabindex="-1">
+    <g class="duration-base transition-opacity">
+      <circle
+        v-if="isHovered || isFocused"
+        :cx="x"
+        :cy="y"
+        :r="outlineRadius"
+        :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
+        :style="{ fill: hoverFillColor, stroke: noteRingColor }"
+        class="note-outline-ring"
+      />
 
-    <circle
-      v-if="!isPressed"
-      :cx="x"
-      :cy="y"
-      :fill="noteBgColor"
-      :r="dotRadius"
-      :stroke-width="noteStrokeWidth"
-      :style="{ stroke: noteStrokeColor }"
-      class="note-circle duration-fast filter-(--finger-shadow) transition-[fill,stroke]"
-    />
+      <circle
+        :cx="x"
+        :cy="y"
+        :r="dotRadius"
+        :stroke-width="noteStrokeWidth"
+        :style="{ fill: noteBgColor, stroke: noteStrokeColor }"
+        class="note-circle filter-(--finger-shadow)"
+      />
 
-    <g
-      v-if="!isPressed && isMuted"
-      :stroke="muteStrokeColor"
-      :stroke-width="muteStrokeWidth"
-      class="note-mute-x pointer-events-none"
-      stroke-linecap="round"
-    >
-      <line :x1="x - muteXHalf" :x2="x + muteXHalf" :y1="y - muteXHalf" :y2="y + muteXHalf" />
-      <line :x1="x + muteXHalf" :x2="x - muteXHalf" :y1="y - muteXHalf" :y2="y + muteXHalf" />
-    </g>
-
-    <text
-      v-else-if="!isPressed && label"
-      :dy="labelVerticalOffset"
-      :fill="noteTextColor"
-      :font-size="svgFontSize"
-      :x
-      :y
-      class="note-svg-label pointer-events-none font-[Helvetica_Neue,Arial,sans-serif] select-none"
-      font-weight="700"
-      text-anchor="middle"
-    >
-      <tspan> {{ label }} </tspan>
-      <tspan
-        v-if="isAccidental"
-        :dx="accidentalDx"
-        :dy="accidentalDy"
-        :font-size="svgAccidentalFontSize"
-        font-weight="700"
+      <g
+        :class="isMuted ? 'opacity-100' : 'opacity-0'"
+        :stroke-width="muteStrokeWidth"
+        :style="{ stroke: muteStrokeColor }"
+        class="note-mute-x pointer-events-none"
+        stroke-linecap="round"
       >
-        {{ preferFlat ? '♭' : '♯' }}
-      </tspan>
-    </text>
+        <line :x1="x - muteXHalf" :x2="x + muteXHalf" :y1="y - muteXHalf" :y2="y + muteXHalf" />
+        <line :x1="x + muteXHalf" :x2="x - muteXHalf" :y1="y - muteXHalf" :y2="y + muteXHalf" />
+      </g>
+
+      <text
+        v-if="label"
+        :class="isMuted || hideLabel ? 'opacity-0' : 'opacity-100'"
+        :dy="labelVerticalOffset"
+        :font-size="svgFontSize"
+        :style="{ fill: noteTextColor }"
+        :x
+        :y
+        class="note-svg-label pointer-events-none font-[Helvetica_Neue,Arial,sans-serif] select-none"
+        font-weight="700"
+        text-anchor="middle"
+      >
+        <tspan> {{ label }} </tspan>
+        <tspan
+          v-if="isAccidental"
+          :dx="accidentalDx"
+          :dy="accidentalDy"
+          :font-size="svgAccidentalFontSize"
+          font-weight="700"
+        >
+          {{ preferFlat ? '♭' : '♯' }}
+        </tspan>
+      </text>
+    </g>
 
     <circle
       :cx="x"
@@ -90,11 +81,11 @@ const {
   isRoot = false,
   isOpenString = false,
   isMuted = false,
-  isPressed = false,
   isDarkMode = false,
   isHovered = false,
   isFocused = false,
   ariaLabel = '',
+  hideLabel = false,
 } = defineProps<{
   x: number;
   y: number;
@@ -104,11 +95,11 @@ const {
   isRoot?: boolean;
   isOpenString?: boolean;
   isMuted?: boolean;
-  isPressed?: boolean;
   isDarkMode?: boolean;
   isHovered?: boolean;
   isFocused?: boolean;
   ariaLabel?: string;
+  hideLabel?: boolean;
 }>();
 
 defineEmits<{
@@ -118,8 +109,8 @@ defineEmits<{
 /** 主音强调 */
 const showRootStyle = computed(() => isRoot);
 
-/** 圆点半径：带描边的标记（空弦圈/静音圈）描边以路径为中心向两侧各扩 stroke/2，
- *  需向内收缩相同量，使视觉外缘与无描边的按弦点（r=28）对齐，保证相邻标记间隙一致 */
+/** 描边宽度恒定 2px，按品时描边颜色与背景色相同，确保外缘总半径恒为 28px 且颜色平滑插值无跳变 */
+const noteStrokeWidth = computed(() => 2);
 const dotRadius = computed(() => NOTE_DISPLAY.FINGER_DOT_RADIUS - noteStrokeWidth.value / 2);
 const outlineRadius = computed(() => NOTE_DISPLAY.FINGER_OUTLINE_RADIUS);
 const muteXHalf = computed(() => NOTE_DISPLAY.FINGER_FONT_SIZE * 0.28);
@@ -156,10 +147,9 @@ const noteStrokeColor = computed(() => {
     }
     return isDarkMode ? '#144477' : '#b3d7ff';
   }
-  return 'transparent';
+  return noteBgColor.value;
 });
 
-const noteStrokeWidth = computed(() => (isOpenString ? 2 : 0));
 const muteStrokeColor = computed(() => 'var(--color-danger)');
 
 const noteRingColor = computed(() => {
@@ -181,3 +171,42 @@ const noteTextColor = computed(() => {
   return getFingerTextColor(showRootStyle.value, isDarkMode);
 });
 </script>
+
+<style lang="scss" scoped>
+.note-circle {
+  transition:
+    fill $duration-base $bezier-standard,
+    stroke $duration-base $bezier-standard;
+  will-change: fill, stroke;
+}
+
+.note-svg-label {
+  transition:
+    fill $duration-base $bezier-standard,
+    opacity $duration-base $bezier-standard;
+  will-change: fill, opacity;
+}
+
+.note-mute-x {
+  transition:
+    opacity $duration-base $bezier-standard,
+    stroke $duration-base $bezier-standard;
+  will-change: opacity, stroke;
+}
+
+.note-outline-ring {
+  transition:
+    fill $duration-base $bezier-standard,
+    stroke $duration-base $bezier-standard;
+  will-change: fill, stroke;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-circle,
+  .note-svg-label,
+  .note-mute-x,
+  .note-outline-ring {
+    transition: none;
+  }
+}
+</style>

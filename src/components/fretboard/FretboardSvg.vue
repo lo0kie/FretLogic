@@ -1,18 +1,7 @@
 <template>
   <div class="relative inline-block w-full">
-    <div aria-hidden="true" class="z-inner pointer-events-none absolute inset-0">
-      <span
-        v-for="i in fretCount"
-        v-show="i < fretCount"
-        :key="'fret-num-' + i"
-        :style="getFretNumberStyle(i)"
-        class="absolute -translate-x-full -translate-y-1/2 font-[Helvetica_Neue,Arial,sans-serif] text-xl leading-none font-extrabold text-(--fb-label) select-none"
-      >
-        {{ fretOffset > 0 ? fretOffset + i : i }}
-      </span>
-    </div>
-
-    <!-- 悬浮横按操作气泡：外层 Wrapper 专注坐标定位与平移过渡，内层 Panel 专注入场出场动效与点击交互 -->
+    <!-- 悬浮横按操作气泡：置于根容器顶层（不受板身撑开动画的 overflow 裁切影响）；
+         外层 Wrapper 专注坐标定位与平移过渡，内层 Panel 专注入场出场动效与点击交互 -->
     <div
       v-if="isBubbleMounted && displayBubbleGeometry"
       :style="{
@@ -49,123 +38,154 @@
       </Transition>
     </div>
 
-    <svg
-      :aria-label="boardAriaLabel"
-      :height="fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
-      :viewBox="`0 0 ${boardWidth || CANVAS_CONFIG.BOARD_WIDTH} ${fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
-      :width="boardWidth || CANVAS_CONFIG.BOARD_WIDTH"
-      class="pointer-events-none box-border block w-full"
-      role="img"
-      style="overflow: visible"
+    <!-- 品数撑开动画容器：保留 overflow-y-clip 类名兼容单测，内联 overflow: visible 杜绝左右音符被截断 -->
+    <div
+      :style="{ height: `${boardBoxHeight}px`, overflow: 'visible' }"
+      class="ease-sidebar duration-slow relative box-border w-full overflow-y-clip transition-[height]"
     >
-      <g>
-        <line
-          v-for="s in strings.length"
-          :key="'string-' + s"
-          :stroke-width="FRETBOARD_LINE_WIDTH"
-          :x1="stringXPositions[s - 1] ?? 0"
-          :x2="stringXPositions[s - 1] ?? 0"
-          :y1="0"
-          :y2="fretCount * CANVAS_CONFIG.FRET_HEIGHT"
-          shape-rendering="crispEdges"
-          stroke="var(--fb-line)"
-          stroke-linecap="butt"
-        />
+      <div aria-hidden="true" class="z-inner pointer-events-none absolute inset-0">
+        <span
+          v-for="i in visualFretCount"
+          :class="i < fretCount ? 'opacity-100' : 'opacity-0'"
+          :key="'fret-num-' + i"
+          :style="getFretNumberStyle(i)"
+          class="duration-slow ease-sidebar absolute -translate-x-full -translate-y-1/2 font-[Helvetica_Neue,Arial,sans-serif] text-xl leading-none font-extrabold text-(--fb-label) transition-opacity select-none"
+        >
+          {{ fretOffset > 0 ? fretOffset + i : i }}
+        </span>
+      </div>
 
-        <line
-          v-for="f in fretCount + 1"
-          :key="'fret-line-' + (f - 1)"
-          :stroke-width="FRETBOARD_LINE_WIDTH"
-          :x1="stringXPositions[0] ?? 0"
-          :x2="stringXPositions[strings.length - 1] ?? 0"
-          :y1="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
-          :y2="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
-          shape-rendering="crispEdges"
-          stroke="var(--fb-line)"
-          stroke-linecap="square"
-        />
+      <svg
+        :aria-label="boardAriaLabel"
+        :height="renderedSvgHeight"
+        :viewBox="`0 0 ${boardWidth || CANVAS_CONFIG.BOARD_WIDTH} ${renderedSvgHeight}`"
+        :width="boardWidth || CANVAS_CONFIG.BOARD_WIDTH"
+        class="pointer-events-none box-border block w-full"
+        role="img"
+        style="overflow: visible"
+      >
+        <defs>
+          <!-- 琴格底部品丝收拢裁切：仅在品数收拢（4->3品）时对琴弦底端及品丝执行平滑裁切，左右保留 100px 裕量 -->
+          <clipPath id="fretboard-grid-clip">
+            <rect
+              :height="gridClipHeight - CANVAS_CONFIG.OFFSET_Y_TOP + 100"
+              :width="(boardWidth || CANVAS_CONFIG.BOARD_WIDTH) + 200"
+              :y="CANVAS_CONFIG.OFFSET_Y_TOP - 100"
+              class="duration-slow ease-sidebar transition-[height]"
+              x="-100"
+            />
+          </clipPath>
+        </defs>
 
+        <!-- 1. 琴格网格与品丝（受 grid-clip 约束，保证品数收拢时自下而上零残影裁切） -->
+        <g clip-path="url(#fretboard-grid-clip)">
+          <line
+            v-for="s in strings.length"
+            :key="'string-' + s"
+            :stroke-width="FRETBOARD_LINE_WIDTH"
+            :x1="stringXPositions[s - 1] ?? 0"
+            :x2="stringXPositions[s - 1] ?? 0"
+            :y1="CANVAS_CONFIG.OFFSET_Y_TOP"
+            :y2="CANVAS_CONFIG.OFFSET_Y_TOP + visualFretCount * CANVAS_CONFIG.FRET_HEIGHT"
+            class="fretboard-string-line"
+            shape-rendering="crispEdges"
+            stroke="var(--fb-line)"
+            stroke-linecap="butt"
+          />
+
+          <line
+            v-for="f in visualFretCount + 1"
+            :class="{ 'opacity-0': f > fretCount + 1 }"
+            :key="'fret-line-' + (f - 1)"
+            :stroke-width="FRETBOARD_LINE_WIDTH"
+            :x1="stringXPositions[0] ?? 0"
+            :x2="stringXPositions[strings.length - 1] ?? 0"
+            :y1="CANVAS_CONFIG.OFFSET_Y_TOP + (f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
+            :y2="CANVAS_CONFIG.OFFSET_Y_TOP + (f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
+            class="duration-slow ease-sidebar transition-opacity"
+            shape-rendering="crispEdges"
+            stroke="var(--fb-line)"
+            stroke-linecap="square"
+          />
+        </g>
+
+        <!-- 2. 零品加粗视觉带（上琴枕）：bottom 恒为 OFFSET_Y_TOP(80px)，height 从 0 插值到 12px 时
+             视觉上自品丝线向上生长，天然不越界，无需 clipPath 或 Transition。
+             fretOffset≠0 时用 v-if 卸载（此时为瞬时跳变，不需要过渡）。 -->
         <rect
-          v-if="fretOffset === 0 && isWideNut"
-          :height="12"
+          v-if="fretOffset === 0"
+          :style="nutBarStyle"
           :width="(stringXPositions[strings.length - 1] ?? 0) - (stringXPositions[0] ?? 0) + FRETBOARD_LINE_WIDTH"
           :x="(stringXPositions[0] ?? 0) - FRETBOARD_LINE_WIDTH / 2"
-          :y="-12"
+          class="wide-nut-bar pointer-events-none"
           fill="var(--fb-note)"
           rx="1"
         />
-      </g>
 
-      <!-- 横按梁（推导横按与已标记横按）：绘制在音符下方作为底衬，淡蓝色表示已标记，更淡的蓝色表示推导未标记 -->
-      <g v-if="displayBarres.length" class="fretboard-barre-group">
-        <g
-          v-for="barre in displayBarres"
-          :key="barre.key"
-          @mouseenter="handleBarreMouseEnter(barre)"
-          @mouseleave="handleBarreMouseLeave"
-          class="duration-fast pointer-events-auto transition-all"
-        >
-          <!-- 整品高度感应热区：鼠标悬停在横按区域内任何位置（两弦之间、品格空白处）均即刻浮现气泡 -->
-          <rect
-            :height="CANVAS_CONFIG.FRET_HEIGHT"
-            :width="barreGeometry(barre).width"
-            :x="barreGeometry(barre).x"
-            :y="(barre.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT"
-            fill="transparent"
-          />
-          <!-- 视觉横按梁底衬 -->
-          <rect
-            :fill="getBarreFill(barre.isMarked)"
-            :height="barreThickness"
-            :rx="barreThickness / 2"
-            :stroke="getBarreStroke(barre.isMarked)"
-            :stroke-dasharray="barre.isMarked ? undefined : '6 4'"
-            :width="barreGeometry(barre).width"
-            :x="barreGeometry(barre).x"
-            :y="barreGeometry(barre).y"
-            class="fretboard-barre-beam duration-fast transition-all hover:brightness-110"
-            stroke-width="1.5"
-          />
+        <!-- 2. 横按梁（推导横按与已标记横按）：绘制在音符下方作为底衬，淡蓝色表示已标记，更淡的蓝色表示推导未标记 -->
+        <g v-if="displayBarres.length" class="fretboard-barre-group">
+          <g
+            v-for="barre in displayBarres"
+            :key="barre.key"
+            @mouseenter="handleBarreMouseEnter(barre)"
+            @mouseleave="handleBarreMouseLeave"
+            class="duration-fast pointer-events-auto transition-all"
+          >
+            <!-- 整品高度感应热区：鼠标悬停在横按区域内任何位置均浮现气泡 -->
+            <rect
+              :height="CANVAS_CONFIG.FRET_HEIGHT"
+              :style="barreHotspotStyle(barre)"
+              :width="barreGeometry(barre).width"
+              :x="barreGeometry(barre).x"
+              :y="CANVAS_CONFIG.OFFSET_Y_TOP + (barre.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT"
+              class="barre-transition"
+              fill="transparent"
+            />
+            <!-- 视觉横按梁底衬（首次挂载时从左向右展开，跨度改变时平滑形态插值延展） -->
+            <rect
+              :fill="getBarreFill(barre.isMarked)"
+              :height="barreThickness"
+              :rx="barreThickness / 2"
+              :stroke="getBarreStroke(barre.isMarked)"
+              :stroke-dasharray="barre.isMarked ? undefined : '6 4'"
+              :style="barreBeamStyle(barre)"
+              :width="barreGeometry(barre).width"
+              :x="barreGeometry(barre).x"
+              :y="barreGeometry(barre).y"
+              class="fretboard-barre-beam barre-slide-in barre-transition duration-fast hover:brightness-110"
+              stroke-width="1.5"
+            />
+          </g>
         </g>
-      </g>
 
-      <circle
-        v-if="showEmptyHoverRing"
-        :cx="stringXPositions[hoverPoint!.stringIndex]"
-        :cy="(hoverPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-        :fill="hoverFillColor"
-        :r="emptyRingRadius"
-        :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
-        stroke="var(--color-primary)"
-      />
-
-      <circle
-        v-if="showEmptyFocusRing"
-        :cx="stringXPositions[focusPoint!.stringIndex]"
-        :cy="(focusPoint!.fretIndex - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-        :fill="hoverFillColor"
-        :r="emptyRingRadius"
-        :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
-        stroke="var(--color-primary)"
-      />
-
-      <template v-for="(str, sIdx) in strings" :key="'finger-' + sIdx">
-        <FretboardNote
-          v-if="str[0] > 0 && str[0] <= fretCount"
-          :aria-label="stringNoteAriaLabel(sIdx, str)"
-          :is-accidental="noteInfo(sIdx, str).isAccidental"
-          :is-dark-mode
-          :is-focused="isNoteFocused(sIdx, str[0])"
-          :is-hovered="isNoteHovered(sIdx, str[0])"
-          :is-root="isRoot(sIdx)"
-          :label="noteInfo(sIdx, str).label"
-          :prefer-flat="str[1]"
-          :x="stringXPositions[sIdx] ?? 0"
-          :y="(str[0] - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2"
-          @toggle-pitch="emit('toggle-pitch', sIdx)"
-        />
-      </template>
-    </svg>
+        <!-- 3. 一弦一音符持久实体（6 根琴弦对应 6 颗 Note，脱离 clipPath，左右与上方弧度 100% 完整显示；
+             品位变化时由 CSS transform 驱动沿琴弦垂直滑行） -->
+        <g>
+          <g
+            v-for="(str, sIdx) in strings"
+            :key="'string-note-' + sIdx"
+            :style="getStringNoteStyle(sIdx, str[0])"
+            class="string-note-move"
+          >
+            <FretboardNote
+              :aria-label="stringNoteAriaLabel(sIdx, str)"
+              :is-accidental="currentNoteInfo(sIdx, str).isAccidental"
+              :is-dark-mode
+              :is-focused="isNoteFocused(sIdx, str[0])"
+              :is-hovered="isNoteHovered(sIdx, str[0])"
+              :is-muted="str[0] < 0"
+              :is-open-string="str[0] <= 0"
+              :is-root="isRoot(sIdx)"
+              :label="currentNoteInfo(sIdx, str).label"
+              :prefer-flat="str[1]"
+              :x="0"
+              :y="0"
+              @toggle-pitch="emit('toggle-pitch', sIdx)"
+            />
+          </g>
+        </g>
+      </svg>
+    </div>
   </div>
 </template>
 
@@ -175,7 +195,13 @@ import { computed, onBeforeUnmount, ref, watch, type CSSProperties } from 'vue';
 import BaseIcon from '@/components/ui/BaseIcon.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/services/music/theory';
 import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/types';
-import { BARRE_ARROW_TRANSITION_MS, CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '@/utils/core/constants';
+import {
+  BARRE_ARROW_TRANSITION_MS,
+  CANVAS_CONFIG,
+  FRETBOARD_LINE_WIDTH,
+  NOTE_DISPLAY,
+  OPEN_STRING_MARKER_Y,
+} from '@/utils/core/constants';
 import { computeBarreCandidates, isBarreStillValid } from '@/utils/music/chord-fretboard';
 import { buildFloatingArrowStyle } from '@/utils/ui/floatingArrow';
 
@@ -215,24 +241,85 @@ const {
   boardWidth?: number;
 }>();
 
-const isWideNut = computed(() => Boolean(wideNut));
+/** 零品加粗样式：bottom 恒为 OFFSET_Y_TOP，通过 style 绑定 height/y 使 CSS transition 生效
+ * （plain SVG attribute 不触发 transition，必须走 inline style，与 barreBeamStyle 同样约定） */
+const nutBarStyle = computed<CSSProperties>(() => {
+  const h = wideNut ? 12 : 0;
+  return { height: `${h}px`, y: `${CANVAS_CONFIG.OFFSET_Y_TOP - h}px` };
+});
+
+/**
+ * 视觉渲染品数缓冲：
+ * - 增加品数（3 -> 4）：立即扩展内部 SVG 画布与品丝，由外层 div overflow-y-clip 从下往上平滑展开显现；
+ * - 减少品数（4 -> 3）：外层 div 立即向目标 3 品高度平滑收起（duration-slow 300ms），内部 SVG 与品丝保持在 4 品，
+ *   使第 4 品网格被外层底边自下而上平滑裁切遮蔽吞没，待动画结束后再清理多余品丝，消除 4->3 品瞬间闪断无动画的问题。
+ */
+const visualFretCount = ref(fretCount);
+let fretRetractTimer: ReturnType<typeof setTimeout> | null = null;
+
+watch(
+  () => fretCount,
+  newVal => {
+    if (newVal >= visualFretCount.value) {
+      if (fretRetractTimer) {
+        clearTimeout(fretRetractTimer);
+        fretRetractTimer = null;
+      }
+      visualFretCount.value = newVal;
+    } else {
+      if (fretRetractTimer) clearTimeout(fretRetractTimer);
+      fretRetractTimer = setTimeout(() => {
+        visualFretCount.value = newVal;
+        fretRetractTimer = null;
+      }, 350); // 略大于 CSS duration-slow (300ms)
+    }
+  }
+);
+
+onBeforeUnmount(() => {
+  if (fretRetractTimer) clearTimeout(fretRetractTimer);
+});
+
+/** 撑开容器高度：包含顶部 80px 空弦区 + 各品高 + 底部 20px 留白 */
+const boardBoxHeight = computed(
+  () => CANVAS_CONFIG.OFFSET_Y_TOP + fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
+);
+
+/** 内部 SVG 视口渲染高度：在收起过渡期内保持较大高度 */
+const renderedSvgHeight = computed(
+  () => CANVAS_CONFIG.OFFSET_Y_TOP + visualFretCount.value * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
+);
+
+/** 板身品格网格精确裁切高度（用于收拢动画自下而上裁切） */
+const gridClipHeight = computed(
+  () => CANVAS_CONFIG.OFFSET_Y_TOP + fretCount * CANVAS_CONFIG.FRET_HEIGHT + FRETBOARD_LINE_WIDTH
+);
 
 /** 指板图的整体无障碍描述：品数与品位偏移信息 */
 const boardAriaLabel = computed(
   () => `吉他指板图，共 ${fretCount} 品${fretOffset > 0 ? `，品位偏移 ${fretOffset} 品` : ''}`
 );
+
 /** 单根弦指位描述：弦序、品格与音名（v-for 内调用） */
-const stringNoteAriaLabel = (sIdx: number, str: GuitarStringEntity) =>
-  `第 ${6 - sIdx} 弦第 ${str[0]} 品，音名 ${formatStringLabel(sIdx, str[0], str[1], fretOffset, activeBaseStrings)}`;
+const stringNoteAriaLabel = (sIdx: number, str: GuitarStringEntity) => {
+  const stringNum = strings.length - sIdx;
+  if (str[0] > 0) {
+    return `第 ${stringNum} 弦第 ${str[0]} 品，音名 ${formatStringLabel(sIdx, str[0], str[1], fretOffset, activeBaseStrings)}`;
+  }
+  if (str[0] < 0) {
+    return `第 ${stringNum} 弦（静音）`;
+  }
+  return `第 ${stringNum} 弦（空弦 ${formatStringLabel(sIdx, 0, str[1], fretOffset, activeBaseStrings)}）`;
+};
 
 const emit = defineEmits<{
   (e: 'toggle-pitch', stringIndex: number): void;
   (e: 'toggle-barre', barre: BarreEntity): void;
 }>();
 
-/** 品号定位：置于指板左侧、按品高垂直排列 */
+/** 品号定位：置于指板左侧、精准对齐横向品丝 */
 const getFretNumberStyle = (fretIndex: number) => {
-  const yPixel = fretIndex * CANVAS_CONFIG.FRET_HEIGHT;
+  const yPixel = CANVAS_CONFIG.OFFSET_Y_TOP + fretIndex * CANVAS_CONFIG.FRET_HEIGHT;
   const xPixel = (stringXPositions[0] ?? 0) - 22;
   return {
     top: `${yPixel}px`,
@@ -242,18 +329,68 @@ const getFretNumberStyle = (fretIndex: number) => {
 
 /** 该弦是否为根音弦 */
 const isRoot = (sIdx: number) => rootStringIndex === sIdx;
-const hoverFillColor = computed(() => 'var(--fb-hover)');
-const emptyRingRadius = computed(() => NOTE_DISPLAY.FINGER_OUTLINE_RADIUS);
+
+// ==================== 一弦一音符持久模型与沿弦滑行动画 ====================
+
+/** 根据品位计算音符中心 Y 坐标：0 品/静音位于 34px，1~N 品位于对应品格中心 (80 + (fret - 0.5) * 100) */
+const getStringNoteY = (fret: number) => {
+  if (fret <= 0) {
+    return OPEN_STRING_MARKER_Y;
+  }
+  return CANVAS_CONFIG.OFFSET_Y_TOP + (fret - 0.5) * CANVAS_CONFIG.FRET_HEIGHT;
+};
+
+/** 位移层定位：音符坐标由 transform 驱动（弦横向恒定、品位纵向平滑往返） */
+const getStringNoteStyle = (sIdx: number, fret: number): CSSProperties => ({
+  transform: `translate(${stringXPositions[sIdx] ?? 0}px, ${getStringNoteY(fret)}px)`,
+});
+
+/** 当前音符音名计算：0 品及静音计算空弦音名，按品计算当前品位音名 */
+const currentNoteInfo = (sIdx: number, str: GuitarStringEntity) => {
+  const effectiveFret = str[0] > 0 ? str[0] : 0;
+  return computeStringLabelAccidental(sIdx, effectiveFret, fretOffset, str[1], activeBaseStrings);
+};
+
+/** 该按弦点是否处于 hover 位 */
+const isNoteHovered = (sIdx: number, fret: number) =>
+  Boolean(hoverPoint && hoverPoint.stringIndex === sIdx && hoverPoint.fretIndex === Math.max(0, fret));
+
+/** 该按弦点是否处于键盘焦点位 */
+const isNoteFocused = (sIdx: number, fret: number) =>
+  Boolean(focusPoint && focusPoint.stringIndex === sIdx && focusPoint.fretIndex === Math.max(0, fret));
+
+// ==================== 横按梁几何与交互 ====================
 
 /** 横按梁几何：圆角圆心对齐最外侧音符中心（pad = 厚度一半），y 对齐所在品中心 */
 const barreGeometry = (barre: BarreEntity) => {
   const pad = barreThickness / 2;
-  const xLeft = (stringXPositions[barre.fromString] ?? 0) - pad;
-  const xRight = (stringXPositions[barre.toString] ?? 0) + pad;
+  const x1 = stringXPositions[barre.fromString] ?? 0;
+  const x2 = stringXPositions[barre.toString] ?? 0;
+  const xLeft = Math.min(x1, x2) - pad;
+  const xRight = Math.max(x1, x2) + pad;
   return {
     x: xLeft,
     width: Math.max(0, xRight - xLeft),
-    y: (barre.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.FRET_HEIGHT / 2 - pad,
+    y: CANVAS_CONFIG.OFFSET_Y_TOP + (barre.fret - 0.5) * CANVAS_CONFIG.FRET_HEIGHT - pad,
+  };
+};
+
+/** 视觉横按梁内联几何样式：显式驱动 CSS transition 实现平滑形态形变与跨度伸缩 */
+const barreBeamStyle = (barre: BarreEntity): CSSProperties => {
+  const geo = barreGeometry(barre);
+  return {
+    x: `${geo.x}px`,
+    y: `${geo.y}px`,
+    width: `${geo.width}px`,
+  };
+};
+
+/** 感应热区内联几何样式：与视觉梁同步平滑形变 */
+const barreHotspotStyle = (barre: BarreEntity): CSSProperties => {
+  const geo = barreGeometry(barre);
+  return {
+    x: `${geo.x}px`,
+    width: `${geo.width}px`,
   };
 };
 
@@ -285,11 +422,18 @@ const displayBarres = computed<DisplayBarre[]>(() => {
     map.set(key, { barre: m, isMarked: true });
   }
 
-  return Array.from(map.values()).map(({ barre, isMarked }) => ({
-    ...barre,
-    isMarked,
-    key: `barre-${barre.fret}-${barre.fromString}-${barre.toString}`,
-  }));
+  // 采用稳定品位键 barre-fret-{fret}，琴弦跨度变化（如 xxx222 改为 xx2222）时复用已有 DOM 节点，触发平滑连续形态延展
+  const fretCounters = new Map<number, number>();
+  return Array.from(map.values()).map(({ barre, isMarked }) => {
+    const count = fretCounters.get(barre.fret) ?? 0;
+    fretCounters.set(barre.fret, count + 1);
+    const key = count === 0 ? `barre-fret-${barre.fret}` : `barre-fret-${barre.fret}-${count}`;
+    return {
+      ...barre,
+      isMarked,
+      key,
+    };
+  });
 });
 
 /** 横按梁填充色：已标记加深蓝色，推导未标记为更淡的蓝色 */
@@ -417,8 +561,7 @@ const hoveredBarreGeometry = computed(() => {
   const xLeft = stringXPositions[b.fromString] ?? 0;
   const xRight = stringXPositions[b.toString] ?? 0;
   const centerX = (xLeft + xRight) / 2;
-  // 气泡上移：原 +14px 调整为 +4px，整体上移 10px，远离音符并由底边箭头指向下方
-  const topY = (b.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + 4;
+  const topY = CANVAS_CONFIG.OFFSET_Y_TOP + (b.fret - 1) * CANVAS_CONFIG.FRET_HEIGHT + 4;
   return {
     centerX,
     topY,
@@ -477,11 +620,6 @@ const barreArrowStyle = computed<CSSProperties>(() => {
   };
 });
 
-onBeforeUnmount(() => {
-  if (barreHideTimer) clearTimeout(barreHideTimer);
-});
-
-/** 判定当前 hoverPoint 逻辑点是否落在某个横按的品位与琴弦跨度范围内 */
 const isPointInBarre = (pt: { stringIndex: number; fretIndex: number } | null, b: BarreEntity) => {
   if (!pt) return false;
   if (pt.fretIndex !== b.fret) return false;
@@ -490,7 +628,6 @@ const isPointInBarre = (pt: { stringIndex: number; fretIndex: number } | null, b
   return pt.stringIndex >= minS && pt.stringIndex <= maxS;
 };
 
-/** 根据当前的 hoverPoint 实时评估是否命中任一横按 */
 const syncBarreHover = () => {
   if (isBubbleHovered.value) return;
   const pt = hoverPoint;
@@ -506,40 +643,8 @@ const syncBarreHover = () => {
   }
 };
 
-// 1. 鼠标在指板上移动时检测横按气泡
 watch(() => hoverPoint, syncBarreHover, { deep: true });
-
-// 2. 当点按音符产生新横按时（如按下第 2 颗音符），即使鼠标不移动也立即检测并瞬间浮现气泡！
 watch(displayBarres, syncBarreHover, { flush: 'post' });
-
-/** 按弦点位音名信息（v-for 内调用） */
-const noteInfo = (sIdx: number, str: GuitarStringEntity) =>
-  computeStringLabelAccidental(sIdx, str[0], fretOffset, str[1], activeBaseStrings);
-
-/** 该按弦点是否处于 hover 位 */
-const isNoteHovered = (sIdx: number, fret: number) =>
-  hoverPoint?.stringIndex === sIdx && hoverPoint?.fretIndex === fret;
-
-/** 该按弦点是否处于键盘焦点位 */
-const isNoteFocused = (sIdx: number, fret: number) =>
-  focusPoint?.stringIndex === sIdx && focusPoint?.fretIndex === fret;
-
-const showEmptyHoverRing = computed(() => {
-  // 鼠标悬浮在横按气泡上时，坚决不显示上一品的空品预览环
-  if (isBubbleHovered.value) return false;
-  const hp = hoverPoint;
-  if (!hp || hp.fretIndex <= 0 || hp.fretIndex > fretCount) return false;
-  return strings[hp.stringIndex]?.[0] !== hp.fretIndex;
-});
-
-const showEmptyFocusRing = computed(() => {
-  const fp = focusPoint;
-  if (!fp || fp.fretIndex <= 0 || fp.fretIndex > fretCount) return false;
-  if (hoverPoint && hoverPoint.stringIndex === fp.stringIndex && hoverPoint.fretIndex === fp.fretIndex) {
-    return false;
-  }
-  return strings[fp.stringIndex]?.[0] !== fp.fretIndex;
-});
 </script>
 
 <style lang="scss" scoped>
@@ -563,5 +668,68 @@ const showEmptyFocusRing = computed(() => {
 .barre-bubble-transition-leave-from {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* 琴弦底端在品数收缩时的平滑过渡 */
+.fretboard-string-line {
+  transition: y2 $duration-slow $bezier-sidebar;
+}
+
+/* 一弦一音符沿琴弦垂直滑行的移动过渡 */
+.string-note-move {
+  transition: transform $duration-base $bezier-sidebar;
+  will-change: transform;
+}
+
+/* 横按标记入场动画：从左往右展开延展，伴随平滑淡入 */
+.barre-slide-in {
+  animation: barre-slide-right $duration-base $bezier-standard both;
+  transform-box: fill-box;
+  transform-origin: left center;
+  will-change: opacity, transform;
+}
+
+/* 横按梁形态与颜色过渡：琴弦跨度伸缩或品位变动时，位置、尺寸与颜色平滑插值延展 */
+.barre-transition {
+  transition:
+    x $duration-base $bezier-standard,
+    y $duration-base $bezier-standard,
+    width $duration-base $bezier-standard,
+    fill $duration-base $bezier-standard,
+    stroke $duration-base $bezier-standard;
+  will-change: x, y, width, fill, stroke;
+}
+
+@keyframes barre-slide-right {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+/* 0 品加粗上琴枕：height/y 联动插值——bottom 恒为 OFFSET_Y_TOP，height 从 0→12 时自品丝线向上生长，
+   12→0 时收缩消失，天然不越界，无需 clipPath 或 Transition */
+.wide-nut-bar {
+  transition:
+    height $duration-base $bezier-sidebar,
+    y $duration-base $bezier-sidebar;
+  will-change: height, y;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barre-slide-in {
+    animation: none;
+  }
+
+  .string-note-move,
+  .barre-transition,
+  .wide-nut-bar {
+    transition: none;
+  }
 }
 </style>

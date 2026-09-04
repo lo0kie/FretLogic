@@ -73,7 +73,7 @@
 <script lang="ts" setup>
 import BaseBadge from '@/components/ui/BaseBadge.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
-import { segmentsToString } from '@/services/music/theory';
+import { areChordsEnharmonicallyEquivalent } from '@/services/music/theory';
 import type { CandidateResult, ExtensionSegment, NoteInput } from '@/types';
 
 export interface RenderNoteItem extends NoteInput {
@@ -93,13 +93,11 @@ const emit = defineEmits<{
   (e: 'select-candidate', candidate: CandidateResult): void;
 }>();
 
-/** 候选和弦是否为当前激活项（与草稿名相同，或音名段序列一致均视为匹配） */
+/** 候选和弦是否为当前激活项（与草稿名相同，或音名段序列/等音异名一致均视为匹配） */
 const isCandidateActive = (candidate: CandidateResult): boolean => {
   const active = props.activeChordName?.trim();
   if (!active) return false;
-  if (active === candidate.chordName?.trim()) return true;
-  if (candidate.segments && segmentsToString(candidate.segments).trim() === active) return true;
-  return false;
+  return areChordsEnharmonicallyEquivalent(active, candidate.segments ?? candidate.chordName);
 };
 
 /** 把 "2·9" 这类度数串拆分为度数列表 */

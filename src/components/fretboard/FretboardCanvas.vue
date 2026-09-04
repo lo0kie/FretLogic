@@ -9,10 +9,11 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, watch, type CSSProperties } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue';
 
 import { getChordName } from '@/services/music/theory';
 import type { Chord } from '@/types';
+import { observeVisibility } from '@/utils/core/common';
 import { SCORE_EXPORT_CONFIG } from '@/utils/core/constants';
 import { createLruCache } from '@/utils/core/lruCache';
 import { renderFretboard } from '@/utils/music/fretboard-canvas-renderer';
@@ -23,6 +24,9 @@ interface Props {
   isDarkMode?: boolean;
   shorthand?: boolean;
   chordNameScale?: number;
+  /** 懒绘制：挂载后不立即绘制，等元素滚入视口才首绘一次；后续参数变化正常重绘。
+   *  DOM 尺寸始终由本组件按 scale/fretCount 计算确定，无需外部占位与测量 */
+  lazy?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -30,6 +34,7 @@ const props = withDefaults(defineProps<Props>(), {
   isDarkMode: false,
   shorthand: false,
   chordNameScale: 1.0,
+  lazy: false,
 });
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
@@ -127,13 +132,41 @@ function draw() {
   }
 }
 
+// 懒绘制状态：lazy 模式下首绘前为 false，期间参数变化不触发绘制（画了也看不见）
+const hasDrawn = ref(!props.lazy);
+let stopLazyObserver: (() => void) | null = null;
+
 onMounted(() => {
-  draw();
+  if (!props.lazy) {
+    draw();
+    return;
+  }
+  // 滚入视口才首绘；IntersectionObserver 会考虑祖先滚动容器的裁剪，
+  // 故无需向调用方索要滚动根。首绘后停止观察，后续重绘走 watch 与 LRU 缓存
+  const el = canvasRef.value;
+  if (!el) {
+    hasDrawn.value = true;
+    draw();
+    return;
+  }
+  stopLazyObserver = observeVisibility(el, visible => {
+    if (!visible) return;
+    stopLazyObserver?.();
+    stopLazyObserver = null;
+    hasDrawn.value = true;
+    draw();
+  });
+});
+
+onBeforeUnmount(() => {
+  stopLazyObserver?.();
+  stopLazyObserver = null;
 });
 
 watch(
   [() => props.chord, () => props.scale, () => props.isDarkMode, () => props.shorthand, () => props.chordNameScale],
   () => {
+    if (!hasDrawn.value) return;
     draw();
   },
   { deep: true }

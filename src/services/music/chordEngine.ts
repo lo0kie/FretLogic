@@ -323,14 +323,14 @@ function getPreferredRootLabel(
       if (isMinor) return 'C#';
       return existingLabel || 'Db';
     case 3: // D# / Eb
-      return 'Eb';
+      return existingLabel || 'Eb';
     case 6: // F# / Gb
       return existingLabel || 'F#';
     case 8: // G# / Ab
       if (isMinor) return 'G#';
       return existingLabel === 'G#' ? 'G#' : 'Ab';
     case 10: // A# / Bb
-      return 'Bb';
+      return existingLabel || 'Bb';
     default:
       return existingLabel || STANDARD_ROOT_NAMES[normRoot] || 'C';
   }

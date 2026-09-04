@@ -190,6 +190,26 @@ export const createString = (): GuitarStringEntity => [-1, false];
 const NATURAL_LETTER_SHARP = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
 const NATURAL_LETTER_FLAT = ['C', 'D', 'D', 'E', 'E', 'F', 'G', 'G', 'A', 'A', 'B', 'B'];
 
+/** 标准调性乐理与五度圈中各半音音级的默认降号偏好（3: Eb, 10: Bb 默认降号；1: C#, 6: F#, 8: G# 默认升号） */
+export const DEFAULT_PITCH_PREFER_FLAT = Object.freeze([
+  false, // 0: C
+  false, // 1: C#
+  false, // 2: D
+  true, // 3: Eb
+  false, // 4: E
+  false, // 5: F
+  false, // 6: F#
+  false, // 7: G
+  false, // 8: G#
+  false, // 9: A
+  true, // 10: Bb
+  false, // 11: B
+] as const);
+
+/** 根据音级索引（0~11）获取默认升降号偏好（true 为降号，false 为升号） */
+export const getDefaultPreferFlatForPitch = (pitchIndex: number): boolean =>
+  DEFAULT_PITCH_PREFER_FLAT[((pitchIndex % 12) + 12) % 12] ?? false;
+
 /** 计算某弦的音名（自然字母，不含升降号）与是否为变化音级（黑键）。由 pitch + preferFlat 派生。 */
 export const computeStringLabelAccidental = (
   sIdx: number,
@@ -274,7 +294,7 @@ export const calcNoteLabel = (
 };
 
 // 补齐等音异名（E#/Fb/B#/Cb），让根音解析对少见但合法的记谱更健壮
-const ROOT_PITCH_MAP: Record<string, number> = {
+export const ROOT_PITCH_MAP: Record<string, number> = {
   'C': 0,
   'C#': 1,
   'Db': 1,
@@ -1238,4 +1258,74 @@ export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 
     degree: def.degree,
     isDiatonic: def.isDiatonic,
   };
+};
+
+/**
+ * 判定两个和弦名称或分片在乐理上是否等价（支持等音异名根音/低音兼容，如 Bbadd9/F# ≡ A#add9/F#，C#m7 ≡ Dbm7）
+ */
+export const areChordsEnharmonicallyEquivalent = (
+  chordA: string | ChordNameSegments | null | undefined,
+  chordB: string | ChordNameSegments | null | undefined
+): boolean => {
+  if (!chordA || !chordB) return false;
+
+  // 1. 快速文本全等命中（纯文本比对）
+  if (typeof chordA === 'string' && typeof chordB === 'string') {
+    if (chordA.trim() === chordB.trim()) return true;
+  }
+
+  // 2. 解析两者的结构化分片
+  const segsA = typeof chordA === 'string' ? nameToSegments(chordA) : chordA;
+  const segsB = typeof chordB === 'string' ? nameToSegments(chordB) : chordB;
+
+  if (!segsA || !segsB) {
+    // 若有非结构化字符串，退化为 trim 后比对
+    const strA = typeof chordA === 'string' ? chordA.trim() : segmentsToString(chordA).trim();
+    const strB = typeof chordB === 'string' ? chordB.trim() : segmentsToString(chordB).trim();
+    return strA === strB;
+  }
+
+  // 3. 比较根音音高（Pitch mod 12）
+  const letterPitchA = ROOT_PITCH_MAP[segsA.root[0]] ?? 0;
+  const pitchA = (letterPitchA + segsA.root[1] + 12) % 12;
+
+  const letterPitchB = ROOT_PITCH_MAP[segsB.root[0]] ?? 0;
+  const pitchB = (letterPitchB + segsB.root[1] + 12) % 12;
+
+  if (pitchA !== pitchB) return false;
+
+  // 4. 比较和弦性质（quality 与 unknownQuality 统合）
+  const qualityA = (segsA.quality ?? segsA.unknownQuality ?? '').trim().toLowerCase();
+  const qualityB = (segsB.quality ?? segsB.unknownQuality ?? '').trim().toLowerCase();
+  if (qualityA !== qualityB) return false;
+
+  // 5. 比较斜杠低音（若存在，比较音高 mod 12）
+  const hasBassA = Boolean(segsA.bass);
+  const hasBassB = Boolean(segsB.bass);
+  if (hasBassA !== hasBassB) return false;
+
+  if (segsA.bass && segsB.bass) {
+    const bassLetterA = ROOT_PITCH_MAP[segsA.bass[0]] ?? 0;
+    const bassPitchA = (bassLetterA + segsA.bass[1] + 12) % 12;
+
+    const bassLetterB = ROOT_PITCH_MAP[segsB.bass[0]] ?? 0;
+    const bassPitchB = (bassLetterB + segsB.bass[1] + 12) % 12;
+
+    if (bassPitchA !== bassPitchB) return false;
+  }
+
+  // 6. 比较扩展音（extensions）
+  const extA = segsA.extensions ?? [];
+  const extB = segsB.extensions ?? [];
+  if (extA.length !== extB.length) return false;
+
+  const extSigA = extA
+    .map(([d, a]) => `${d}:${a}`)
+    .sort()
+    .join(',');
+  const extSigB = extB
+    .map(([d, a]) => `${d}:${a}`)
+    .sort()
+    .join(',');
+  return extSigA === extSigB;
 };

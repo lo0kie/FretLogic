@@ -406,6 +406,8 @@ export const STORAGE_KEYS = {
   WORKBENCH_EXPORT_COLLAPSED: 'CHORD_LAB_WORKBENCH_EXPORT_COLLAPSED_V1',
   /** 工作台：导出面板背景模式（transparent / white / dark） */
   WORKBENCH_EXPORT_BG: 'CHORD_LAB_WORKBENCH_EXPORT_BG_V1',
+  /** 工作台：右侧卡片列面板排序顺序（持久化） */
+  WORKBENCH_PANEL_ORDER: 'CHORD_LAB_WORKBENCH_PANEL_ORDER_V1',
   /** 乐谱：是否启用和弦名简写（如 maj7->M7, dim->° 等） */
   SCORE_CHORD_SHORTHAND: 'CHORD_LAB_SCORE_CHORD_SHORTHAND_V1',
   /** 乐谱：当前所在标签页（edit / interactive / preview），刷新后恢复上次所在页 */

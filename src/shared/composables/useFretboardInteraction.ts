@@ -3,7 +3,13 @@ import { computed, ref, useTemplateRef } from 'vue';
 import { useEventListener } from '@vueuse/core';
 
 import type { FretboardProps } from '@/components/fretboard/Fretboard.vue';
-import { canTogglePitchAccidental, getActiveBaseStrings, isOpen } from '@/services/music/theory';
+import {
+  calcPitchIndex,
+  canTogglePitchAccidental,
+  getActiveBaseStrings,
+  getDefaultPreferFlatForPitch,
+  isOpen,
+} from '@/services/music/theory';
 import { useFretboardKeyboard } from '@/shared/composables/useFretboardKeyboard';
 import { calculateFretboardPoint, useFretboardLayout } from '@/shared/composables/useFretboardLayout';
 import { useRafThrottle } from '@/shared/composables/useRafThrottle';
@@ -72,11 +78,16 @@ export function useFretboardInteraction(
     if (next !== rootStringIndex.value) onRootStringChange(next);
   };
 
-  /** 设置某弦品位，并清除该弦的附加状态（如 preferFlat）。
-   *  升降号偏好只针对具体某个音，清除/移动音符时应一并复位。 */
-  const setStringFret = (str: GuitarStringEntity, fret: number) => {
+  /** 设置某弦品位，并按乐理默认赋予初始升降号状态（如 10 为 Bb, 3 为 Eb）。
+   *  清除/移动音符时一并复位为新品位的乐理默认。 */
+  const setStringFret = (str: GuitarStringEntity, fret: number, sIdx: number) => {
     str[0] = fret;
-    str[1] = false;
+    if (fret >= 0) {
+      const pitch = calcPitchIndex(sIdx, fret, fretOffset.value, getActiveBaseStrings(tuning.value));
+      str[1] = getDefaultPreferFlatForPitch(pitch);
+    } else {
+      str[1] = false;
+    }
   };
 
   /** 右击空白处/禁用空弦：直接设为可用(对应品位或空弦)并设为主音 */
@@ -84,7 +95,7 @@ export function useFretboardInteraction(
     emitStringsUpdate(
       cloned => {
         const str = cloned[sIdx];
-        if (str) setStringFret(str, fret);
+        if (str) setStringFret(str, fret, sIdx);
       },
       () => sIdx
     );
@@ -136,11 +147,11 @@ export function useFretboardInteraction(
       const str = cloned[sIdx];
       if (!str) return;
       if (str[0] > 0) {
-        setStringFret(str, 0);
+        setStringFret(str, 0, sIdx);
       } else if (isOpen(str)) {
-        setStringFret(str, -1);
+        setStringFret(str, -1, sIdx);
       } else {
-        setStringFret(str, 0);
+        setStringFret(str, 0, sIdx);
       }
     });
   };
@@ -151,9 +162,9 @@ export function useFretboardInteraction(
       const str = cloned[sIdx];
       if (!str) return;
       if (str[0] === fret) {
-        setStringFret(str, -1);
+        setStringFret(str, -1, sIdx);
       } else {
-        setStringFret(str, fret);
+        setStringFret(str, fret, sIdx);
       }
     });
   };
@@ -162,7 +173,7 @@ export function useFretboardInteraction(
   const muteString = (sIdx: number) => {
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
-      if (str) setStringFret(str, -1);
+      if (str) setStringFret(str, -1, sIdx);
     });
   };
 

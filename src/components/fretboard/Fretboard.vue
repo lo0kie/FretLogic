@@ -12,7 +12,7 @@
         backgroundColor: 'transparent',
       }"
       @contextmenu="handleRightClickRoot"
-      class="duration-slow ease-sidebar relative box-border flex cursor-default touch-none flex-col items-center transition-[transform,background-color,border-color] outline-none select-none"
+      class="duration-slow ease-sidebar relative box-border flex cursor-default touch-none flex-col items-center transition-[transform,height,background-color,border-color] outline-none select-none"
       data-focusable-outline
       ref="fretBoardRef"
       tabindex="0"
@@ -50,35 +50,6 @@
         </div>
       </div>
 
-      <div :style="{ height: `${activeTopOffset}px` }" class="pointer-events-auto relative box-border w-full">
-        <svg
-          :height="activeTopOffset"
-          :viewBox="`0 0 ${boardWidth} ${activeTopOffset}`"
-          :width="boardWidth"
-          style="overflow: visible; width: 100%; height: 100%"
-        >
-          <FretboardNote
-            v-for="(str, sIdx) in chord.strings"
-            v-tooltip="getOpenStringTooltip(sIdx)"
-            :aria-label="openStringAriaLabels[sIdx]"
-            :is-accidental="openNoteInfo(sIdx).isAccidental"
-            :is-dark-mode
-            :is-focused="isFocused && focusPoint?.fretIndex === 0 && focusPoint?.stringIndex === sIdx"
-            :is-hovered="hoverPoint?.fretIndex === 0 && hoverPoint?.stringIndex === sIdx"
-            :is-muted="isMuted(str)"
-            :is-pressed="str[0] > 0"
-            :is-root="isRoot(sIdx)"
-            :key="'os-' + sIdx"
-            :label="openNoteInfo(sIdx).label"
-            :prefer-flat="str[1]"
-            :x="stringXPositions[sIdx] || 30 + sIdx * 64"
-            :y="openStringMarkerY"
-            @toggle-pitch="handleTogglePitchName(sIdx)"
-            is-open-string
-          />
-        </svg>
-      </div>
-
       <FretboardSvg
         :active-base-strings="getActiveBaseStrings(chord.tuning)"
         :barres="effectiveBarres"
@@ -103,13 +74,9 @@
 import { computed, nextTick, ref, useTemplateRef, watch, type CSSProperties } from 'vue';
 
 import FretboardSvg from '@/components/fretboard/FretboardSvg.vue';
-import { vTooltip } from '@/directives/vTooltip.ts';
 import {
-  calcNoteLabel,
-  computeStringLabelAccidental,
   getActiveBaseStrings,
   getChordName,
-  isMuted,
   isValidChordName,
   nameToSegments,
   segmentsToString,
@@ -117,9 +84,7 @@ import {
 import { useFretboardInteraction } from '@/shared/composables/useFretboardInteraction';
 import { useUiStore } from '@/stores/uiStore';
 import type { BarreEntity, Chord, ChordNameSegments, GuitarStringsModel } from '@/types';
-import { CANVAS_CONFIG, CHORD_NAME_FONT_SIZE, OPEN_STRING_MARKER_Y } from '@/utils/core/constants';
-
-import FretboardNote from './FretboardNote.vue';
+import { CANVAS_CONFIG, CHORD_NAME_FONT_SIZE } from '@/utils/core/constants';
 
 export interface FretboardProps {
   chord: Chord;
@@ -171,8 +136,6 @@ const handleToggleBarre = (barre: BarreEntity) => {
   emit('toggle-barre', barre);
   emit('update:chord', { ...props.chord, barres: next });
 };
-
-const openStringMarkerY = OPEN_STRING_MARKER_Y;
 
 const chordNameInputRef = useTemplateRef<HTMLDivElement>('chordNameInputRef');
 const isInputFocused = ref(false);
@@ -338,7 +301,6 @@ const {
   fretboardScale,
   realScaledWidth,
   realScaledHeight,
-  activeTopOffset,
   handleRightClickRoot,
   handleTogglePitchName,
 } = useFretboardInteraction(
@@ -349,48 +311,4 @@ const {
   strings => emit('update:strings', strings),
   index => emit('update:root-string-index', index)
 );
-
-/** 空弦悬停提示：未被按品时展示操作说明 */
-const getOpenStringTooltip = (sIdx: number) => {
-  const str = props.chord.strings[sIdx];
-  if (!str || str[0] > 0) return undefined;
-  return {
-    content: '左键：切换空弦 \n 右键：设为根音 \n 滚轮：切换升降号',
-    placement: 'top' as const,
-  };
-};
-
-/** 单点根音标记：某弦是否为主音（根音位置可能是按弦品位，也可能是空弦 0 品）。
- *  空弦圈只代表“空弦本身”：仅当该弦确为根音弦且按在空弦（0 品）时，空弦才算主音（黄环）；
- *  若根音弦被按到其他品位，主音落在指板按弦点，空弦走自己的状态（静音红/普通蓝），不随弦上的主音变化。
- *  数据层已保证 rootStringIndex 永不指向静音弦。 */
-const isRoot = (sIdx: number) => props.chord.rootStringIndex === sIdx && (props.chord.strings[sIdx]?.[0] ?? -1) === 0;
-
-const openStringAriaLabels = computed(() => {
-  return props.chord.strings.map((str, sIdx) => {
-    const stringNum = 6 - sIdx;
-    if (str[0] > 0) {
-      return `第 ${stringNum} 弦（已按第 ${str[0]} 品，点击清除按音）`;
-    }
-    if (isMuted(str)) {
-      return `第 ${stringNum} 弦（静音，点击切换为空弦）`;
-    }
-    const noteName = calcNoteLabel(sIdx, 0, props.chord.fretOffset, str[1], getActiveBaseStrings(props.chord.tuning));
-    return `第 ${stringNum} 弦（空弦 ${noteName}，点击切换为静音）`;
-  });
-});
-
-/** 空弦音名拆分：自然字母 + 是否为变化音级（供模板拆出独立小号升降号） */
-const openNoteInfo = (sIdx: number): { label: string; isAccidental: boolean; preferFlat: boolean } => {
-  const str = props.chord.strings[sIdx];
-  if (!str) return { label: '', isAccidental: false, preferFlat: false };
-  const { label, isAccidental } = computeStringLabelAccidental(
-    sIdx,
-    0,
-    props.chord.fretOffset,
-    str[1],
-    getActiveBaseStrings(props.chord.tuning)
-  );
-  return { label, isAccidental, preferFlat: str[1] };
-};
 </script>

@@ -3,6 +3,20 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SOURCE_DIRS = ['src'];
+// 项目根配置文件清单：与 src 一起打进 all_code.txt，便于把构建/类型/Lint/部署等配置一并带入上下文
+const CONFIG_FILES = [
+  'package.json',
+  'vite.config.ts',
+  'vitest.config.ts',
+  'playwright.config.ts',
+  'tsconfig.json',
+  'tsconfig.node.json',
+  'eslint.config.mjs',
+  '.prettierrc',
+  '.prettierignore',
+  'pnpm-workspace.yaml',
+  'index.html',
+];
 const OUTPUT_FILE = 'all_code.txt';
 const EXCLUDED_DIRS = ['node_modules'];
 const EXCLUDED_FILES = ['all_code.txt'];
@@ -122,6 +136,16 @@ function main() {
     console.log(`扫描 ${srcPath} ...`);
     const files = collectFiles(srcPath);
     allFiles.push(...files);
+  }
+
+  // 追加项目根配置文件（不存在则跳过，避免因缺失导致整个输出中断）
+  for (const rel of CONFIG_FILES) {
+    const cfgPath = path.resolve(process.cwd(), rel);
+    if (!fs.existsSync(cfgPath)) {
+      console.warn(`配置不存在，已跳过: ${rel}`);
+      continue;
+    }
+    if (!allFiles.includes(cfgPath)) allFiles.push(cfgPath);
   }
 
   const files = Array.from(new Set(allFiles));

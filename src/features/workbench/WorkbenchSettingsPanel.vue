@@ -21,6 +21,7 @@
           :max="INTERACTION_CONFIG.MAX_CAPO_LIMIT"
           :min="0"
           wheelable
+          width="auto"
         />
       </BaseFormRow>
 

@@ -50,18 +50,34 @@ describe('chord engine boundary', () => {
     }
   });
 
-  it('favors standard enharmonic root spellings (Bb over A#, Eb over D#)', () => {
-    // Bb major: Bb(10), D(2), F(5)
-    const bbMajorNotes = [note(1, 10, 'A#'), note(2, 2, 'D'), note(3, 5, 'F')];
+  it('favors standard enharmonic root spellings (Bb, Eb) and respects explicit accidental switches', () => {
+    // 默认标准音名记谱 (Bb, Eb)
+    const bbMajorNotes = [note(1, 10, 'Bb'), note(2, 2, 'D'), note(3, 5, 'F')];
     const bbResult = analyzeChordGraph(bbMajorNotes, null);
     expect(bbResult.best?.chordName).toBe('Bb');
     expect(bbResult.best?.rootLabel).toBe('Bb');
 
     // Eb major: Eb(3), G(7), Bb(10)
-    const ebMajorNotes = [note(1, 3, 'D#'), note(2, 7, 'G'), note(3, 10, 'A#')];
+    const ebMajorNotes = [note(1, 3, 'Eb'), note(2, 7, 'G'), note(3, 10, 'Bb')];
     const ebResult = analyzeChordGraph(ebMajorNotes, null);
     expect(ebResult.best?.chordName).toBe('Eb');
     expect(ebResult.best?.rootLabel).toBe('Eb');
+
+    // 未指定音名标签时兜底使用标准音名 (Bb)
+    const unlabelledBb = [note(1, 10, ''), note(2, 2, 'D'), note(3, 5, 'F')];
+    const unlabelledResult = analyzeChordGraph(unlabelledBb, null);
+    expect(unlabelledResult.best?.chordName).toBe('Bb');
+
+    // 当用户主动在琴弦上切换变音记号（切成 A# 或 D#）时，候选列表联动更新
+    const aSharpNotes = [note(1, 10, 'A#'), note(2, 2, 'D'), note(3, 5, 'F')];
+    const aSharpResult = analyzeChordGraph(aSharpNotes, null);
+    expect(aSharpResult.best?.chordName).toBe('A#');
+    expect(aSharpResult.best?.rootLabel).toBe('A#');
+
+    const dSharpNotes = [note(1, 3, 'D#'), note(2, 7, 'G'), note(3, 10, 'Bb')];
+    const dSharpResult = analyzeChordGraph(dSharpNotes, null);
+    expect(dSharpResult.best?.chordName).toBe('D#');
+    expect(dSharpResult.best?.rootLabel).toBe('D#');
   });
 
   it('honors explicit root note label when explicitly specified', () => {
@@ -105,5 +121,42 @@ describe('chord engine boundary', () => {
     expect(resolvedSegs).toBeDefined();
     expect(resolvedSegs?.root).toEqual(['C', 0]);
     expect(resolvedSegs?.unknownQuality).toBe('(custom)');
+  });
+
+  it('233332 指法下能够正确推导出 Bbadd9/F#', () => {
+    // 6弦(2品 F# 42), 5弦(3品 C 48), 4弦(3品 F 53), 3弦(3品 Bb 58), 2弦(3品 D 62), 1弦(2品 F# 66)
+    const notes = [
+      note(0, 42, 'F#'),
+      note(1, 48, 'C'),
+      note(2, 53, 'F'),
+      note(3, 58, 'Bb'),
+      note(4, 62, 'D'),
+      note(5, 66, 'F#'),
+    ];
+    const result = analyzeChordGraph(notes, null);
+    expect(result.candidates.length).toBeGreaterThan(0);
+    const bbCandidate = result.candidates.find(c => c.chordName.startsWith('Bbadd9'));
+    expect(bbCandidate).toBeDefined();
+    expect(bbCandidate?.chordName).toBe('Bbadd9/F#');
+
+    // 当指定显式根音为 58 (Bb) 时，仍应稳定推导为 Bbadd9/F#
+    const resultWithExplicit = analyzeChordGraph(notes, 58);
+    const explicitCandidate = resultWithExplicit.candidates.find(c => c.chordName.startsWith('Bbadd9'));
+    expect(explicitCandidate).toBeDefined();
+    expect(explicitCandidate?.chordName).toBe('Bbadd9/F#');
+
+    // 当用户切音名将 3 弦切为 A# 时，候选列表联动推导出 A#add9/F#
+    const notesWithASharp = [
+      note(0, 42, 'F#'),
+      note(1, 48, 'C'),
+      note(2, 53, 'F'),
+      note(3, 58, 'A#'),
+      note(4, 62, 'D'),
+      note(5, 66, 'F#'),
+    ];
+    const aSharpResult = analyzeChordGraph(notesWithASharp, null);
+    const aSharpCandidate = aSharpResult.candidates.find(c => c.chordName.startsWith('A#add9'));
+    expect(aSharpCandidate).toBeDefined();
+    expect(aSharpCandidate?.chordName).toBe('A#add9/F#');
   });
 });
