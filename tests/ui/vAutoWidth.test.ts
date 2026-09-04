@@ -4,7 +4,7 @@ import { defineComponent, ref } from 'vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
-import { vAutoWidth } from '@/directives/vAutoWidth';
+import { vAutoWidth } from '@/platform/directives/vAutoWidth';
 
 describe('vAutoWidth directive', () => {
   it('initializes and records baseline on mount without animating', async () => {

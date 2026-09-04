@@ -1,8 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useSongStore } from '@/stores/songStore';
+import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { useSongStore } from '@/domains/score/library/store/songStore';
 
 /**
  * 复现用户上报的跨乐谱联动 bug：

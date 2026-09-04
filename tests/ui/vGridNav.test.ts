@@ -4,7 +4,7 @@ import { defineComponent } from 'vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
-import { vGridNav } from '@/directives/vGridNav';
+import { vGridNav } from '@/platform/directives/vGridNav';
 
 describe('vGridNav directive', () => {
   it('navigates with ArrowRight and ArrowLeft', async () => {

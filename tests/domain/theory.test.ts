@@ -6,7 +6,7 @@ import {
   formatStringLabel,
   getDefaultPreferFlatForPitch,
   isAccidentalNote,
-} from '@/services/music/theory';
+} from '@/domains/chord/theory/theory';
 
 describe('theory: 音高计算', () => {
   it('标准调弦下 6 弦空弦为 E (pitch 4)', () => {

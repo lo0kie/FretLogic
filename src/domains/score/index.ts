@@ -1,0 +1,28 @@
+// 乐谱与排版领域公共门面
+export { default as SongSection } from './library/components/SongSection.vue';
+export { default as SongModalsContainer } from './library/components/SongModalsContainer.vue';
+export * from './library/composables/useSongModals';
+export * from './library/store/songStore';
+export { default as ScoreView } from './editor/components/ScoreView.vue';
+export { default as ScoreInteractiveArea } from './editor/components/ScoreInteractiveArea.vue';
+export { default as ChordSlotCell } from './editor/components/ChordSlotCell.vue';
+export { default as ChordPickerModal } from './editor/components/ChordPickerModal.vue';
+export { default as ScoreLyricsEditor } from './editor/components/ScoreLyricsEditor.vue';
+export * from './editor/composables/useLyricsDragDrop';
+export * from './editor/composables/useScoreLinesData';
+export * from './editor/composables/lyrics-drag/dropZone';
+export * from './editor/composables/lyrics-drag/useDragAutoScroll';
+export * from './editor/composables/lyrics-drag/useDragGhost';
+export * from './editor/composables/lyrics-drag/useDragHighlight';
+export * from './editor/store/scoreEditorStore';
+export { default as ScorePreviewPane } from './preview/components/ScorePreviewPane.vue';
+export * from './preview/services/workerExportService';
+export * from './preview/services/scoreExportCanvas';
+export * from './transfer/textCodec';
+export * from './transfer/useTextTransfer';
+export * from './model/scoreModel';
+export * from './model/chordSlots';
+export * from './model/chordNameTokens';
+export * from './model/songRepository';
+export * from './constants';
+export * from './types';

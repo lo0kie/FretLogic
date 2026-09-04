@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
-import { GRAMMAR_TEMPLATES } from '@/services/music/grammar';
-import { isValidChordName, nameToSegments } from '@/services/music/theory';
-import { validateImportExportPayload } from '@/services/validation/payload';
+import { validateImportExportPayload } from '@/app/services/validation/payload';
+import { GRAMMAR_TEMPLATES } from '@/domains/chord/theory/grammar';
+import { isValidChordName, nameToSegments } from '@/domains/chord/theory/theory';
 
 describe('和弦识别引擎与解析器语法一致性保证', () => {
   it('GRAMMAR_TEMPLATES 识别引擎能输出的所有和弦后缀均能被 isValidChordName 成功通过', () => {

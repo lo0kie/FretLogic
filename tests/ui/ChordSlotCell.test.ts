@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import ChordSlotCell from '@/features/score-editor/ChordSlotCell.vue';
+import ChordSlotCell from '@/domains/score/editor/components/ChordSlotCell.vue';
 
 // stub 全局指令与重型依赖
 const globalStubs = {

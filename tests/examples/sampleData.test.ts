@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs';
+﻿import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { validateImportExportPayload } from '@/services/validation/payload';
+import { validateImportExportPayload } from '@/app/services/validation/payload';
 
 describe('示例备份数据', () => {
   it('通过结构校验，可被导入', () => {

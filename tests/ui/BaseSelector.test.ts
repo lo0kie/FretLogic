@@ -3,7 +3,7 @@ import { markRaw } from 'vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import BaseSelector from '@/components/ui/BaseSelector.vue';
+import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
 
 describe('BaseSelector 键盘可达性', () => {
   it('清空按钮可聚焦且回车触发 clear', async () => {

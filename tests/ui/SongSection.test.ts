@@ -4,11 +4,11 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
-import SongSection from '@/features/song-library/SongSection.vue';
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useSongStore } from '@/stores/songStore';
-import type { Song } from '@/types';
+import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import SongSection from '@/domains/score/library/components/SongSection.vue';
+import { useSongStore } from '@/domains/score/library/store/songStore';
+import type { Song } from '@/domains/score/types';
+import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
 
 const buildSong = (id: string): Song => ({
   id,

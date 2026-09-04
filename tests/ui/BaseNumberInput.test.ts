@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import BaseNumberInput from '@/components/ui/BaseNumberInput.vue';
+import BaseNumberInput from '@/platform/ui/input/BaseNumberInput.vue';
 
 describe('BaseNumberInput component', () => {
   afterEach(() => {

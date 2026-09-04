@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { prepareWorkerExportPayload } from '@/services/export/workerExportService';
-import type { Chord, LineId, Song, SongId } from '@/types';
-import { charKey } from '@/utils/score/scoreModel';
+import type { Chord } from '@/domains/chord/types';
+import { charKey } from '@/domains/score/model/scoreModel';
+import { prepareWorkerExportPayload } from '@/domains/score/preview/services/workerExportService';
+import type { LineId, Song, SongId } from '@/domains/score/types';
 
 describe('workerExportService', () => {
   it('正确将 Song 数据转换为 Worker 渲染所需的轻量 Payload（含指板图数据）', () => {

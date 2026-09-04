@@ -5,23 +5,23 @@ import VWave from 'v-wave';
 
 import App from '@/app/App.vue';
 import { router } from '@/app/router';
-import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
-import { useTheme } from '@/shared/composables/useTheme';
-import { useChordEditorStore } from '@/stores/chordEditorStore';
-import { logger } from '@/utils/core/logger';
+import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/app/services/data/bootstrap';
+import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
+import { useTheme } from '@/platform/composables/useTheme';
+import { logger } from '@/platform/utils/logger';
 
 import '@/assets/main.scss';
 import '@/assets/tailwind.css';
 
-import { vAutoHeight } from './directives/vAutoHeight';
-import { vAutoWidth } from './directives/vAutoWidth';
-import { vChordName } from './directives/vChordName';
-import { vFocus } from './directives/vFocus';
-import { vGridNav } from './directives/vGridNav';
-import { vMarquee } from './directives/vMarquee';
-import { vScrollCache } from './directives/vScrollCache';
-import { vTooltip } from './directives/vTooltip';
-import { vWheelScroll } from './directives/vWheelScroll';
+import { vChordName } from './domains/chord/directives/vChordName.ts';
+import { vAutoHeight } from './platform/directives/vAutoHeight.ts';
+import { vAutoWidth } from './platform/directives/vAutoWidth.ts';
+import { vFocus } from './platform/directives/vFocus.ts';
+import { vGridNav } from './platform/directives/vGridNav.ts';
+import { vMarquee } from './platform/directives/vMarquee.ts';
+import { vScrollCache } from './platform/directives/vScrollCache.ts';
+import { vTooltip } from './platform/directives/vTooltip.ts';
+import { vWheelScroll } from './platform/directives/vWheelScroll.ts';
 
 const app = createApp(App);
 const pinia = createPinia();

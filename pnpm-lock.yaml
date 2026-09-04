@@ -9,6 +9,9 @@ overrides:
   nanoid: ^3.3.18
   postcss: ^8.5.23
 
+patchedDependencies:
+  prettier-plugin-organize-attributes: 7a14a1243e072d5f4b8c9ac452929f7f7e80ff5391b3dc26c6ac5bc077a3923f
+
 importers:
 
   .:
@@ -121,10 +124,10 @@ importers:
         version: 0.10.1(prettier@3.9.6)
       prettier-plugin-organize-attributes:
         specifier: ^1.0.0
-        version: 1.0.0(prettier@3.9.6)
+        version: 1.0.0(patch_hash=7a14a1243e072d5f4b8c9ac452929f7f7e80ff5391b3dc26c6ac5bc077a3923f)(prettier@3.9.6)
       prettier-plugin-tailwindcss:
         specifier: ^0.8.1
-        version: 0.8.1(@ianvs/prettier-plugin-sort-imports@4.7.1(@prettier/plugin-oxc@0.2.2)(@vue/compiler-sfc@3.5.11)(content-tag@4.2.0)(prettier-plugin-ember-template-tag@2.1.8(prettier@3.9.6)(supports-color@8.1.1))(prettier@3.9.6)(supports-color@8.1.1))(@prettier/plugin-oxc@0.2.2)(prettier-plugin-css-order@2.2.0(postcss@8.5.26)(prettier@3.9.6))(prettier-plugin-organize-attributes@1.0.0(prettier@3.9.6))(prettier@3.9.6)
+        version: 0.8.1(@ianvs/prettier-plugin-sort-imports@4.7.1(@prettier/plugin-oxc@0.2.2)(@vue/compiler-sfc@3.5.11)(content-tag@4.2.0)(prettier-plugin-ember-template-tag@2.1.8(prettier@3.9.6)(supports-color@8.1.1))(prettier@3.9.6)(supports-color@8.1.1))(@prettier/plugin-oxc@0.2.2)(prettier-plugin-css-order@2.2.0(postcss@8.5.26)(prettier@3.9.6))(prettier-plugin-organize-attributes@1.0.0(patch_hash=7a14a1243e072d5f4b8c9ac452929f7f7e80ff5391b3dc26c6ac5bc077a3923f)(prettier@3.9.6))(prettier@3.9.6)
       rollup-plugin-visualizer:
         specifier: ^7.0.1
         version: 7.0.1(rolldown@1.2.5)(rollup@4.60.4)
@@ -8378,18 +8381,18 @@ snapshots:
       diff: 5.2.2
       prettier: 3.9.6
 
-  prettier-plugin-organize-attributes@1.0.0(prettier@3.9.6):
+  prettier-plugin-organize-attributes@1.0.0(patch_hash=7a14a1243e072d5f4b8c9ac452929f7f7e80ff5391b3dc26c6ac5bc077a3923f)(prettier@3.9.6):
     dependencies:
       prettier: 3.9.6
 
-  prettier-plugin-tailwindcss@0.8.1(@ianvs/prettier-plugin-sort-imports@4.7.1(@prettier/plugin-oxc@0.2.2)(@vue/compiler-sfc@3.5.11)(content-tag@4.2.0)(prettier-plugin-ember-template-tag@2.1.8(prettier@3.9.6)(supports-color@8.1.1))(prettier@3.9.6)(supports-color@8.1.1))(@prettier/plugin-oxc@0.2.2)(prettier-plugin-css-order@2.2.0(postcss@8.5.26)(prettier@3.9.6))(prettier-plugin-organize-attributes@1.0.0(prettier@3.9.6))(prettier@3.9.6):
+  prettier-plugin-tailwindcss@0.8.1(@ianvs/prettier-plugin-sort-imports@4.7.1(@prettier/plugin-oxc@0.2.2)(@vue/compiler-sfc@3.5.11)(content-tag@4.2.0)(prettier-plugin-ember-template-tag@2.1.8(prettier@3.9.6)(supports-color@8.1.1))(prettier@3.9.6)(supports-color@8.1.1))(@prettier/plugin-oxc@0.2.2)(prettier-plugin-css-order@2.2.0(postcss@8.5.26)(prettier@3.9.6))(prettier-plugin-organize-attributes@1.0.0(patch_hash=7a14a1243e072d5f4b8c9ac452929f7f7e80ff5391b3dc26c6ac5bc077a3923f)(prettier@3.9.6))(prettier@3.9.6):
     dependencies:
       prettier: 3.9.6
     optionalDependencies:
       '@ianvs/prettier-plugin-sort-imports': 4.7.1(@prettier/plugin-oxc@0.2.2)(@vue/compiler-sfc@3.5.11)(content-tag@4.2.0)(prettier-plugin-ember-template-tag@2.1.8(prettier@3.9.6)(supports-color@8.1.1))(prettier@3.9.6)(supports-color@8.1.1)
       '@prettier/plugin-oxc': 0.2.2
       prettier-plugin-css-order: 2.2.0(postcss@8.5.26)(prettier@3.9.6)
-      prettier-plugin-organize-attributes: 1.0.0(prettier@3.9.6)
+      prettier-plugin-organize-attributes: 1.0.0(patch_hash=7a14a1243e072d5f4b8c9ac452929f7f7e80ff5391b3dc26c6ac5bc077a3923f)(prettier@3.9.6)
 
   prettier@3.9.6: {}
 

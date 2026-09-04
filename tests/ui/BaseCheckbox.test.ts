@@ -1,7 +1,7 @@
 ﻿import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import BaseCheckbox from '@/components/ui/BaseCheckbox.vue';
+import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 
 describe('BaseCheckbox.vue', () => {
   it('renders correctly with default props', () => {

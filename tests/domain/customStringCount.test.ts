@@ -2,12 +2,12 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getTuningsByStringCount, Tuning, TUNING_PRESETS } from '@/services/music/theory';
-import { sanitizeChordEntity } from '@/services/validation/persistedData';
-import { useChordEditorStore } from '@/stores/chordEditorStore';
-import type { BarreFret, GuitarStringEntity } from '@/types';
-import { cloneGuitarStrings } from '@/utils/core/common';
-import { SCORE_EXPORT_CONFIG } from '@/utils/core/constants';
+import { sanitizeChordEntity } from '@/app/services/validation/persistedData';
+import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
+import { getTuningsByStringCount, Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
+import type { BarreFret, GuitarStringEntity } from '@/domains/fretboard/types';
+import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
+import { cloneGuitarStrings } from '@/platform/utils/common';
 
 describe('自定义弦数架构 (Custom String Count Architecture)', () => {
   beforeEach(() => {
@@ -168,7 +168,7 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
 
   describe('导入/导出 Payload 与横按支持非 6 弦', () => {
     it('validateImportExportPayload 允许 4 弦与 7 弦和弦，不再硬编码 6 弦报错', async () => {
-      const { validateImportExportPayload } = await import('@/services/validation/payload');
+      const { validateImportExportPayload } = await import('@/app/services/validation/payload');
       const payload = {
         version: 6,
         groups: [{ id: 'g1', name: '常用' }],
@@ -217,7 +217,7 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
     });
 
     it('7 弦和弦横按跨至第 7 根弦（toString: 6）不应被丢弃', async () => {
-      const { normalizeChord } = await import('@/utils/music/chord-fretboard');
+      const { normalizeChord } = await import('@/domains/chord/theory/normalizeChord');
       const chord7 = {
         id: 'c7_barre',
         groupId: 'g1',
@@ -244,9 +244,9 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
     });
 
     it('settingsStore 中 webdavPassword 不再持久化到 localStorage', async () => {
-      const { STORAGE_KEYS } = await import('@/utils/core/constants');
+      const { STORAGE_KEYS } = await import('@/platform/utils/constants');
       localStorage.setItem(STORAGE_KEYS.WEBDAV_PASSWORD, 'old_plaintext_password');
-      const { useSettingsStore } = await import('@/stores/settingsStore');
+      const { useSettingsStore } = await import('@/platform/store/settingsStore');
       const store = useSettingsStore();
 
       // 初始化时清除历史遗留的 localStorage 密码

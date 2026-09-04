@@ -4,7 +4,7 @@ import { defineComponent, ref } from 'vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
-import { vFocus } from '@/directives/vFocus';
+import { vFocus } from '@/platform/directives/vFocus';
 
 describe('vFocus directive', () => {
   it('automatically focuses input on mount', async () => {

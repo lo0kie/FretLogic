@@ -3,15 +3,15 @@ import type { ComponentPublicInstance, VNode } from 'vue';
 
 import type { IVWaveDirectiveOptions } from 'v-wave';
 
-import type { AutoHeightBinding } from './directives/vAutoHeight';
-import type { AutoWidthBinding, AutoWidthModifiers } from './directives/vAutoWidth';
-import type { ChordNameBinding } from './directives/vChordName';
-import type { FocusBinding, FocusModifiers } from './directives/vFocus';
-import type { GridNavBinding, GridNavModifiers } from './directives/vGridNav';
-import type { MarqueeBinding, MarqueeModifiers } from './directives/vMarquee';
-import type { ScrollCacheBinding } from './directives/vScrollCache';
-import type { TooltipBinding, TooltipModifiers } from './directives/vTooltip';
-import type { WheelScrollBinding, WheelScrollModifiers } from './directives/vWheelScroll';
+import type { ChordNameBinding } from './domains/chord/directives/vChordName.ts';
+import type { AutoHeightBinding } from './platform/directives/vAutoHeight.ts';
+import type { AutoWidthBinding, AutoWidthModifiers } from './platform/directives/vAutoWidth.ts';
+import type { FocusBinding, FocusModifiers } from './platform/directives/vFocus.ts';
+import type { GridNavBinding, GridNavModifiers } from './platform/directives/vGridNav.ts';
+import type { MarqueeBinding, MarqueeModifiers } from './platform/directives/vMarquee.ts';
+import type { ScrollCacheBinding } from './platform/directives/vScrollCache.ts';
+import type { TooltipBinding, TooltipModifiers } from './platform/directives/vTooltip.ts';
+import type { WheelScrollBinding, WheelScrollModifiers } from './platform/directives/vWheelScroll.ts';
 
 // 由 vite.config.ts 的 define 注入的构建信息（打包时生成）
 declare global {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import {
   getChordName,
   nameToSegments,
@@ -9,9 +10,8 @@ import {
   transposePitch,
   transposeRootSegment,
   Tuning,
-} from '@/services/music/theory';
-import type { Chord, RootSegment } from '@/types';
-import { toChordId, toGroupId } from '@/utils/music/entityFactories';
+} from '@/domains/chord/theory/theory';
+import type { Chord, RootSegment } from '@/domains/chord/types';
 
 describe('乐理移调核心算法', () => {
   it('transposePitch: 半音位移模 12 循环', () => {

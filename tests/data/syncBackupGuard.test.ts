@@ -1,9 +1,9 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { syncLocalStorageToIdb } from '@/services/data/bootstrap';
-import { chordRepository, songRepository } from '@/services/data/repositories';
-import type { Song } from '@/types';
+import { syncLocalStorageToIdb } from '@/app/services/data/bootstrap';
+import { chordRepository, songRepository } from '@/app/services/data/repositories';
+import type { Song } from '@/domains/score/types';
 
 const song: Song = {
   id: 's1',

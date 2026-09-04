@@ -2,10 +2,10 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Tuning } from '@/services/music/theory';
-import { useAudioPlayer } from '@/shared/composables/useAudioPlayer';
-import type { Chord } from '@/types';
-import { toChordId, toGroupId } from '@/utils/music/entityFactories';
+import { useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
+import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
+import { Tuning } from '@/domains/chord/theory/theory';
+import type { Chord } from '@/domains/chord/types';
 
 vi.mock('tone', () => ({
   start: vi.fn().mockResolvedValue(undefined),

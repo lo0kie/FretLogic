@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createLruCache } from '@/utils/core/lruCache';
+import { createLruCache } from '@/platform/utils/lruCache';
 
 describe('createLruCache', () => {
   it('应当支持基础的读写、存在性与大小查询', () => {

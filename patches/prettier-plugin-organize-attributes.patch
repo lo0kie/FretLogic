@@ -1,0 +1,24 @@
+diff --git a/lib/organize.js b/lib/organize.js
+index 8f750395c6bf88ba123e000640007106fea354f7..b8ed88d052ef55e8caff816f2de07a41e201392e 100644
+--- a/lib/organize.js
++++ b/lib/organize.js
+@@ -51,11 +51,15 @@ function miniorganize(values, options) {
+         defaultGroup.values.push(value);
+     });
+     if (options.sort) {
++        const dir = options.sort === "DESC" ? -1 : 1;
++        const isValueless = (v) => v != null && typeof v === "object" && v.value == null;
+         groups.forEach((group) => {
+-            group.values.sort((a, b) => getString(a).localeCompare(getString(b)));
+-            if (options.sort === "DESC") {
+-                group.values.reverse();
+-            }
++            group.values.sort((a, b) => {
++                const aEmpty = isValueless(a);
++                const bEmpty = isValueless(b);
++                if (aEmpty !== bEmpty) return aEmpty ? -1 : 1;
++                return getString(a).localeCompare(getString(b)) * dir;
++            });
+         });
+     }
+     return {

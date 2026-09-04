@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { Tuning } from '@/services/music/theory';
-import type { Chord, ChordId, LineId, SlotKey, Song } from '@/types';
-import { toChordId, toGroupId, toSongId } from '@/utils/music/entityFactories';
-import { extractSongChordSequence } from '@/utils/score/chordSlots';
+import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
+import { Tuning } from '@/domains/chord/theory/theory';
+import type { Chord, ChordId } from '@/domains/chord/types';
+import { extractSongChordSequence } from '@/domains/score/model/chordSlots';
+import { toSongId } from '@/domains/score/model/scoreModel';
+import type { LineId, SlotKey, Song } from '@/domains/score/types';
 
 describe('乐谱时间序列和弦提取 (extractSongChordSequence)', () => {
   const mockChordC: Chord = {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createGithubSyncProvider } from '@/services/sync/githubSyncProvider';
-import type { GithubSyncConfig } from '@/services/sync/provider';
+import { createGithubSyncProvider } from '@/app/services/sync/githubSyncProvider';
+import type { GithubSyncConfig } from '@/app/services/sync/provider';
 
 const config: GithubSyncConfig = {
   kind: 'github',
@@ -68,5 +68,19 @@ describe('github sync provider', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ content: btoa(JSON.stringify({ version: 4 })) })));
     const provider = createGithubSyncProvider(config);
     await expect(provider.pull()).rejects.toMatchObject({ code: 'INVALID_CLOUD_DATA' });
+  });
+
+  it('throws CONFLICT on 409 when pushing', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ sha: 'old-sha' }))
+      .mockResolvedValueOnce(jsonResponse({ message: 'Conflict' }, 409));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = createGithubSyncProvider(config);
+    await expect(provider.push(payload)).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: expect.stringContaining('版本冲突'),
+    });
   });
 });

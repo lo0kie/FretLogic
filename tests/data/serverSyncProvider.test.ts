@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+﻿import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ServerSyncConfig } from '@/services/sync/provider';
-import { createServerSyncProvider } from '@/services/sync/serverSyncProvider';
+import type { ServerSyncConfig } from '@/app/services/sync/provider';
+import { createServerSyncProvider } from '@/app/services/sync/serverSyncProvider';
 
 const config: ServerSyncConfig = {
   kind: 'server',

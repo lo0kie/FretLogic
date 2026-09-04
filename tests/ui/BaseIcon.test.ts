@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import BaseIcon from '@/components/ui/BaseIcon.vue';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 
 describe('BaseIcon.vue', () => {
   it('renders correctly with icon name', () => {

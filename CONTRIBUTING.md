@@ -37,21 +37,25 @@ CI（GitHub Actions）也会执行同样的检查，失败将阻止合并。
 
 ## 架构约定
 
-### 目录结构
+### 目录结构（垂直领域）
 
 ```
 src/
-  app/          # 壳层：App.vue / router / 布局骨架 / 全局模态框
+  app/          # 应用装配外壳：App.vue / router / 顶层布局 / 全局模态 / backup、sync、data、audio 编排服务
   assets/       # 样式与设计令牌（tokens.scss / transitions.scss）
-  components/   # 通用 UI 组件（ui/）与指板组件族（fretboard/）
-  features/     # 按业务域纵切（chord-library / song-library / score-editor / workbench）
-  services/     # 领域服务层：sync providers、repositories、领域算法、数据清洗
-  stores/       # Pinia stores
-  directives/   # 全局指令（vTooltip、vChordName 等）
-  types/        # 全局类型定义
-  utils/        # 通用工具、常量（constants.ts）、乐理/乐谱纯函数
-  shared/       # 跨业务域共享组合式函数（shared/composables）
+  domains/      # 纵向业务领域（公共 API 由各自领域根 index.ts 显式导出）
+    fretboard/  # 指板引擎：model（纯几何物理模型）/ components（乐器呈现）/ composables
+    chord/      # 和弦乐理与和弦库：theory（乐理内核）/ store / library / workbench / transfer
+    score/      # 乐谱排版：editor / library / preview / model / transfer
+  platform/     # 平台底座：ui 原语 / store 基座 / directives / utils / services（clipboard、storage、errors）
 ```
+
+### 依赖方向（单向）
+
+`app → domains → platform`。领域间的细粒度约束（fretboard/model 零业务依赖、chord 不得依赖 score、fretboard 不得依赖 score 等）与平台单向保护由
+`eslint.config.mjs` 的
+`import/no-restricted-paths`（六条严格 zone，target 覆盖全部子目录）强制。跨领域副作用通过**领域事件 + 应用层桥接**（`app/services/chordScoreBridge`）或
+**provide/inject 能力注入**实现，领域之间不直接反向导入。详见 `ARCHITECTURE.md`。
 
 ### 代码风格与模板规范
 

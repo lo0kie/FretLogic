@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import BaseSlider from '@/components/ui/BaseSlider.vue';
+import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 
 describe('BaseSlider component', () => {
   afterEach(() => {

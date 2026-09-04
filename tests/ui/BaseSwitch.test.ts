@@ -1,7 +1,7 @@
 ﻿import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import BaseSwitch from '@/components/ui/BaseSwitch.vue';
+import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 
 describe('BaseSwitch.vue', () => {
   it('renders correctly with default props', () => {

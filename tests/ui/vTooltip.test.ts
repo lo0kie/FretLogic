@@ -4,7 +4,7 @@ import { defineComponent } from 'vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import { normalize, vTooltip } from '@/directives/vTooltip';
+import { normalize, vTooltip } from '@/platform/directives/vTooltip';
 
 describe('vTooltip directive modifiers', () => {
   it('supports default placement top when no modifiers provided', () => {

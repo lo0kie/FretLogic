@@ -2,9 +2,9 @@
 import { config } from '@vue/test-utils';
 import { IDBKeyRange, indexedDB } from 'fake-indexeddb';
 
-import { vAutoHeight } from '@/directives/vAutoHeight';
-import { vAutoWidth } from '@/directives/vAutoWidth';
-import { vChordName } from '@/directives/vChordName';
+import { vChordName } from '@/domains/chord/directives/vChordName';
+import { vAutoHeight } from '@/platform/directives/vAutoHeight';
+import { vAutoWidth } from '@/platform/directives/vAutoWidth';
 
 Object.defineProperty(globalThis, 'indexedDB', {
   value: indexedDB,

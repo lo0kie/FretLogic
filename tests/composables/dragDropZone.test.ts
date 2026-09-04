@@ -4,7 +4,7 @@ import {
   resolveDropAction,
   resolveDropZone,
   type DropZone,
-} from '@/features/score-editor/composables/lyrics-drag/dropZone';
+} from '@/domains/score/editor/composables/lyrics-drag/dropZone';
 
 const rect = (top: number, height: number) => ({ top, height });
 

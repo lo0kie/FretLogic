@@ -4,7 +4,7 @@ import { defineComponent, ref } from 'vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import { vAutoHeight } from '@/directives/vAutoHeight';
+import { vAutoHeight } from '@/platform/directives/vAutoHeight';
 
 describe('vAutoHeight directive', () => {
   it('正确根据子元素高度写入容器 style.height', async () => {

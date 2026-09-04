@@ -2,10 +2,11 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { nameToSegments, Tuning } from '@/services/music/theory';
-import { useSongStore } from '@/stores/songStore';
-import type { Chord, ChordId, LineId, SlotKey } from '@/types';
-import { toChordId, toGroupId } from '@/utils/music/entityFactories';
+import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
+import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
+import type { Chord, ChordId } from '@/domains/chord/types';
+import { useSongStore } from '@/domains/score/library/store/songStore';
+import type { LineId, SlotKey } from '@/domains/score/types';
 
 describe('歌曲移调动作 (songStore.transposeSong & transposeSongCapo)', () => {
   beforeEach(() => {

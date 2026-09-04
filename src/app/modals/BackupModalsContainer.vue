@@ -135,17 +135,17 @@
   </BaseModal>
 </template>
 
-<script lang="ts" setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 
-import BaseCheckbox from '@/components/ui/BaseCheckbox.vue';
-import BaseFormRow from '@/components/ui/BaseFormRow.vue';
-import BaseIcon from '@/components/ui/BaseIcon.vue';
-import BaseModal from '@/components/ui/BaseModal.vue';
-import BaseSwitch from '@/components/ui/BaseSwitch.vue';
-import type { useBackupModals } from '@/shared/composables/useBackupModals';
-import { injectModalController } from '@/shared/composables/useModalController';
-import { useSettingsStore } from '@/stores/settingsStore';
+import type { useBackupModals } from '@/app/modals/useBackupModals';
+import { useSettingsStore } from '@/platform/store/settingsStore';
+import { injectModalController } from '@/platform/store/useModalController';
+import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
+import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import BaseModal from '@/platform/ui/modal/BaseModal.vue';
+import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 
 const backupModals = injectModalController<ReturnType<typeof useBackupModals>>('backupModals');
 const settingsStore = useSettingsStore();

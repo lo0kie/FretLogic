@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateImportExportPayload } from '@/services/validation/payload';
-import { sanitizePersistedData } from '@/services/validation/persistedData';
+import { validateImportExportPayload } from '@/app/services/validation/payload';
+import { sanitizePersistedData } from '@/app/services/validation/persistedData';
 
 const group = { id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' };
 const strings = [
@@ -198,5 +198,84 @@ describe('payload validation migration matrix', () => {
     const corrupt = validateImportExportPayload({ ...base, preferences: ['broken'] });
     expect(corrupt.isValid).toBe(true);
     expect(corrupt.payload?.preferences).toBeUndefined();
+  });
+
+  it('lenient 模式下丢弃单条损坏和弦并记录 warning，不阻断整包（避免一条脏数据拖垮全部）', () => {
+    const validChord = {
+      id: 'c1',
+      chordName: 'C',
+      strings,
+      fretCount: 3,
+      fretOffset: 0,
+      groupId: 'g1',
+      tuning: 'STANDARD',
+      rootStringIndex: null,
+    };
+    const brokenChord = {
+      id: 'bad_c',
+      chordName: 'Dm',
+      strings: 'broken-strings-not-array',
+      fretCount: 3,
+      fretOffset: 0,
+      groupId: 'g1',
+      tuning: 'STANDARD',
+    };
+
+    // strict 模式（默认）：单条损坏和弦阻断整体
+    const strictResult = validateImportExportPayload({
+      groups: [group],
+      chords: [validChord, brokenChord],
+      songs: [],
+    });
+    expect(strictResult.isValid).toBe(false);
+    expect(strictResult.issues.length).toBeGreaterThan(0);
+
+    // lenient 模式：跳过损坏和弦，保留有效和弦，不阻断整包
+    const lenientResult = validateImportExportPayload(
+      {
+        groups: [group],
+        chords: [validChord, brokenChord],
+        songs: [],
+      },
+      { mode: 'lenient' }
+    );
+    expect(lenientResult.isValid).toBe(true);
+    expect(lenientResult.payload?.chords).toHaveLength(1);
+    expect(lenientResult.payload?.chords[0]?.id).toBe('c1');
+    expect(lenientResult.warnings?.some(w => w.includes('损坏') && w.includes('已跳过'))).toBe(true);
+  });
+
+  it('孤儿和弦（groupId 不存在）被清理并生成 warning，保持警告可见性', () => {
+    const validChord = {
+      id: 'c1',
+      chordName: 'C',
+      strings,
+      fretCount: 3,
+      fretOffset: 0,
+      groupId: 'g1',
+      tuning: 'STANDARD',
+      rootStringIndex: null,
+    };
+    const orphanChord = {
+      id: 'orphan_c',
+      chordName: 'G',
+      strings,
+      fretCount: 3,
+      fretOffset: 0,
+      groupId: 'non_existent_group',
+      tuning: 'STANDARD',
+      rootStringIndex: null,
+    };
+
+    const result = validateImportExportPayload({
+      groups: [group],
+      chords: [validChord, orphanChord],
+      songs: [],
+    });
+
+    expect(result.isValid).toBe(true);
+    expect(result.payload?.chords).toHaveLength(1);
+    expect(result.payload?.chords[0]?.id).toBe('c1');
+    expect(result.warnings?.some(w => w.includes('孤儿和弦'))).toBe(true);
   });
 });

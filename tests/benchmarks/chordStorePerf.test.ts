@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeChordFingerprint } from '@/services/music/theory';
-import type { BarreEntity, Chord, GuitarStringsModel, StringIndex } from '@/types';
-import { areBarresEqual, computeBarresSignature, normalizeChord } from '@/utils/music/chord-fretboard';
-import { createChord, toGroupId } from '@/utils/music/entityFactories';
+import { createChord, toGroupId } from '@/domains/chord/theory/entityFactories';
+import { normalizeChord } from '@/domains/chord/theory/normalizeChord';
+import { computeChordFingerprint } from '@/domains/chord/theory/theory';
+import type { Chord } from '@/domains/chord/types';
+import { areBarresEqual, computeBarresSignature } from '@/domains/fretboard/model/coordinates';
+import type { BarreEntity, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
 
 /** 生成指定数量的测试和弦实体 */
 function generateTestChords(count: number): Chord[] {
