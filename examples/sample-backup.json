@@ -1,0 +1,282 @@
+{
+  "version": 6,
+  "groups": [
+    {
+      "id": "g-major",
+      "name": "大和弦",
+      "createdAt": 1788559162905,
+      "updatedAt": 1788559162905,
+      "sortRule": "ROOT_PITCH"
+    },
+    {
+      "id": "g-minor",
+      "name": "小和弦",
+      "createdAt": 1788559162906,
+      "updatedAt": 1788559162906,
+      "sortRule": "ROOT_PITCH"
+    },
+    {
+      "id": "g-seven",
+      "name": "七和弦",
+      "createdAt": 1788559162907,
+      "updatedAt": 1788559162907,
+      "sortRule": "ROOT_PITCH"
+    }
+  ],
+  "chords": [
+    {
+      "id": "c-c",
+      "strings": [
+        [-1, false],
+        [3, false],
+        [2, false],
+        [0, false],
+        [1, false],
+        [0, false]
+      ],
+      "fretCount": 3,
+      "groupId": "g-major",
+      "tuning": "STANDARD",
+      "rootStringIndex": 2,
+      "nameSegments": {
+        "root": ["C", 0]
+      },
+      "fretOffset": 0,
+      "createdAt": 1788559162905,
+      "updatedAt": 1788559162905
+    },
+    {
+      "id": "c-g",
+      "strings": [
+        [3, false],
+        [2, false],
+        [0, false],
+        [0, false],
+        [0, false],
+        [3, false]
+      ],
+      "fretCount": 3,
+      "groupId": "g-major",
+      "tuning": "STANDARD",
+      "rootStringIndex": 5,
+      "nameSegments": {
+        "root": ["G", 0]
+      },
+      "fretOffset": 0,
+      "createdAt": 1788559162906,
+      "updatedAt": 1788559162906
+    },
+    {
+      "id": "c-d",
+      "strings": [
+        [-1, false],
+        [-1, false],
+        [0, false],
+        [2, false],
+        [3, false],
+        [2, false]
+      ],
+      "fretCount": 3,
+      "groupId": "g-major",
+      "tuning": "STANDARD",
+      "rootStringIndex": 3,
+      "nameSegments": {
+        "root": ["D", 0]
+      },
+      "fretOffset": 0,
+      "createdAt": 1788559162907,
+      "updatedAt": 1788559162907
+    },
+    {
+      "id": "c-f",
+      "strings": [
+        [1, false],
+        [3, false],
+        [3, false],
+        [2, false],
+        [1, false],
+        [1, false]
+      ],
+      "fretCount": 3,
+      "groupId": "g-major",
+      "tuning": "STANDARD",
+      "rootStringIndex": 3,
+      "barres": [
+        {
+          "fret": 1,
+          "fromString": 0,
+          "toString": 5,
+          "finger": 1
+        }
+      ],
+      "nameSegments": {
+        "root": ["F", 0]
+      },
+      "fretOffset": 0,
+      "createdAt": 1788559162908,
+      "updatedAt": 1788559162908
+    },
+    {
+      "id": "c-am",
+      "strings": [
+        [-1, false],
+        [0, false],
+        [2, false],
+        [2, false],
+        [1, false],
+        [0, false]
+      ],
+      "fretCount": 3,
+      "groupId": "g-minor",
+      "tuning": "STANDARD",
+      "rootStringIndex": 2,
+      "nameSegments": {
+        "root": ["A", 0],
+        "quality": "m"
+      },
+      "fretOffset": 0,
+      "createdAt": 1788559162909,
+      "updatedAt": 1788559162909
+    },
+    {
+      "id": "c-em",
+      "strings": [
+        [0, false],
+        [0, false],
+        [0, false],
+        [2, false],
+        [2, false],
+        [0, false]
+      ],
+      "fretCount": 3,
+      "groupId": "g-minor",
+      "tuning": "STANDARD",
+      "rootStringIndex": 3,
+      "nameSegments": {
+        "root": ["E", 0],
+        "quality": "m"
+      },
+      "fretOffset": 0,
+      "createdAt": 1788559162910,
+      "updatedAt": 1788559162910
+    },
+    {
+      "id": "c-dm",
+      "strings": [
+        [-1, false],
+        [-1, false],
+        [0, false],
+        [2, false],
+        [3, false],
+        [1, false]
+      ],
+      "fretCount": 3,
+      "groupId": "g-minor",
+      "tuning": "STANDARD",
+      "rootStringIndex": 3,
+      "nameSegments": {
+        "root": ["D", 0],
+        "quality": "m"
+      },
+      "fretOffset": 0,
+      "createdAt": 1788559162911,
+      "updatedAt": 1788559162911
+    },
+    {
+      "id": "c-g7",
+      "strings": [
+        [3, false],
+        [2, false],
+        [0, false],
+        [0, false],
+        [0, false],
+        [1, false]
+      ],
+      "fretCount": 3,
+      "groupId": "g-seven",
+      "tuning": "STANDARD",
+      "rootStringIndex": 5,
+      "nameSegments": {
+        "root": ["G", 0],
+        "quality": "7"
+      },
+      "fretOffset": 0,
+      "createdAt": 1788559162912,
+      "updatedAt": 1788559162912
+    },
+    {
+      "id": "c-a7",
+      "strings": [
+        [-1, false],
+        [0, false],
+        [2, false],
+        [0, false],
+        [2, false],
+        [0, false]
+      ],
+      "fretCount": 3,
+      "groupId": "g-seven",
+      "tuning": "STANDARD",
+      "rootStringIndex": 2,
+      "nameSegments": {
+        "root": ["A", 0],
+        "quality": "7"
+      },
+      "fretOffset": 0,
+      "createdAt": 1788559162913,
+      "updatedAt": 1788559162913
+    },
+    {
+      "id": "c-e7",
+      "strings": [
+        [0, false],
+        [2, false],
+        [0, false],
+        [1, false],
+        [0, false],
+        [0, false]
+      ],
+      "fretCount": 3,
+      "groupId": "g-seven",
+      "tuning": "STANDARD",
+      "rootStringIndex": 0,
+      "nameSegments": {
+        "root": ["E", 0],
+        "quality": "7"
+      },
+      "fretOffset": 0,
+      "createdAt": 1788559162914,
+      "updatedAt": 1788559162914
+    }
+  ],
+  "songs": [
+    {
+      "id": "s-demo",
+      "title": "示例：经典进行 (C - G - Am - F)",
+      "lyrics": "C   G   Am  F\n午后的阳光 洒在窗台\nC   G   F\n想起你弹的 那首老歌\nC   G   Am  F\n和弦轻轻伴 着晚风唱",
+      "lineIds": ["l1", "l2", "l3", "l4", "l5", "l6"],
+      "playKey": "C",
+      "capo": 0,
+      "chordMap": {
+        "line_l1_start_0": "c-c",
+        "line_l1_start_1": "c-g",
+        "line_l1_start_2": "c-am",
+        "line_l1_start_3": "c-f",
+        "line_l2_char_4": "c-g",
+        "line_l2_char_5": "c-am",
+        "line_l3_start_0": "c-c",
+        "line_l3_start_1": "c-g",
+        "line_l3_start_2": "c-f",
+        "line_l4_char_4": "c-g",
+        "line_l4_char_5": "c-am",
+        "line_l5_start_0": "c-c",
+        "line_l5_start_1": "c-g",
+        "line_l5_start_2": "c-am",
+        "line_l5_start_3": "c-f"
+      },
+      "version": 1,
+      "createdAt": 1788559162905,
+      "updatedAt": 1788559162905
+    }
+  ]
+}

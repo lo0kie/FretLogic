@@ -1,5 +1,5 @@
 // Fret-Logic ESLint 扁平配置（ESLint 10）
-// 扁平目录结构下的架构约定见 CONTRIBUTING.md：跨层依赖方向为单向
+// 扁平目录结构下的架构约定见 .github/CONTRIBUTING.md：跨层依赖方向为单向
 // views/components → composables → stores/services → utils。
 import eslint from '@eslint/js';
 import prettier from 'eslint-config-prettier/flat';
@@ -124,7 +124,7 @@ export default tseslint.config(
     // 故不会用 Node globals（process/require/__dirname）污染浏览器代码作用域，
     // 也不会用 no-console:'off' 覆盖浏览器块对 console 的告警。
     // 与上方 src 块互斥：src/**/*.ts 只命中浏览器块。
-    files: ['**/*.{cjs,mjs,js}', 'scripts/**/*.ts', '*.config.{ts,js,mjs}', 'vitest.config.ts', 'playwright.config.ts'],
+    files: ['**/*.{cjs,mjs,js}', 'scripts/**/*.ts', '*.config.{ts,js,mjs}'],
     languageOptions: {
       globals: { ...globals.node },
     },
