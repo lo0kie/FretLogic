@@ -36,7 +36,7 @@ const isPristine = computed(() => {
     !editorStore.isEditing &&
     cleanName === '' &&
     editorStore.isFretBoardEmpty &&
-    editorStore.draftChord.capo === 0 &&
+    editorStore.draftChord.fretOffset === 0 &&
     editorStore.draftChord.fretCount === 3 &&
     editorStore.draftChord.tuning === 'STANDARD'
   );

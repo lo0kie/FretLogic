@@ -18,7 +18,13 @@ const GITEE_API_BASE = 'https://gitee.com/api/v5';
  *    单 PUT 自动创建在这里不适用，故 push 先探测已存在与否再选择方法。
  */
 export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesProvider {
-  /** 追加 access_token 查询参数（有 token 时） */
+  /**
+   * 追加 access_token 查询参数（有 token 时）。
+   * 安全说明：Gitee API v5 不接受 Authorization Bearer 头作为唯一认证方式，
+   * 官方推荐将 access_token 放入 URL 查询参数。这意味着 token 会出现在
+   * 浏览器历史记录及代理服务器访问日志中；如使用公共或共享代理，
+   * 请注意 token 泄露风险并定期轮换 token。
+   */
   const withToken = (base: string): string => {
     if (!config.token) return base;
     const separator = base.includes('?') ? '&' : '?';

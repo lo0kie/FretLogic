@@ -6,15 +6,8 @@ import type { Song } from './song';
 /** 单根琴弦：[0] 品位（-1 静音 / 0 空弦 / >=1 按品），[1] 是否偏好降号 */
 export type GuitarStringEntity = [fret: number, preferFlat: boolean];
 
-/** 六根弦的二维数组（固定长度 6） */
-export type GuitarStringsModel = [
-  GuitarStringEntity,
-  GuitarStringEntity,
-  GuitarStringEntity,
-  GuitarStringEntity,
-  GuitarStringEntity,
-  GuitarStringEntity,
-];
+/** 琴弦模型：动态长度的琴弦数组（支持 3~10 弦，常用 4/6/7/8 弦） */
+export type GuitarStringsModel = GuitarStringEntity[];
 
 /** 分组排序规则 */
 export enum GroupSortRule {
@@ -65,7 +58,16 @@ export const CHORD_QUALITIES = [
   'sus2',
   '7sus4',
   '7sus2',
+  '7sus',
   '9sus4',
+  '9sus2',
+  '9sus',
+  '11sus4',
+  '11sus2',
+  '11sus',
+  '13sus4',
+  '13sus2',
+  '13sus',
   '5',
   '6',
   'm6',
@@ -80,8 +82,10 @@ export const CHORD_QUALITIES = [
   'add2',
   'add4',
   'add11',
+  'add13',
   'madd9',
   'madd11',
+  'madd13',
   'madd4',
   'madd2',
   '9',
@@ -118,6 +122,24 @@ export const CHORD_QUALITIES = [
   'mΔ7',
   '-M7',
   '-Δ7',
+  'mMaj9',
+  'mmaj9',
+  'mM9',
+  'mΔ9',
+  '-M9',
+  '-Δ9',
+  'mMaj11',
+  'mmaj11',
+  'mM11',
+  'mΔ11',
+  '-M11',
+  '-Δ11',
+  'mMaj13',
+  'mmaj13',
+  'mM13',
+  'mΔ13',
+  '-M13',
+  '-Δ13',
   'dimMaj7',
   'dimmaj7',
   '°M7',
@@ -148,8 +170,8 @@ export interface ChordNameSegments {
   bass?: RootSegment;
 }
 
-/** 琴弦索引：0 代表 6 弦（低 E），5 代表 1 弦（高 E） */
-export type StringIndex = 0 | 1 | 2 | 3 | 4 | 5;
+/** 琴弦索引：从 0 开始的非负整数（0 代表最低音粗弦，如 6 弦吉他的低 E） */
+export type StringIndex = number;
 
 /** 品牌字符串基础：运行时就是 string，编译期防止不同 id 混用 */
 export type Brand<T extends string, B extends string> = T & { readonly __brand: B };
@@ -163,8 +185,11 @@ export type GroupId = Brand<string, 'GroupId'>;
 /** 谱面槽位 key（如 line_x_start_0），由 scoreModel 的构建函数产生 */
 export type SlotKey = Brand<string, 'SlotKey'>;
 
-/** 变调夹品位：0 表示不使用；上限 12 与清洗层校验一致 */
+/** 变调夹品位（乐谱整曲使用）：0 表示不使用；上限 12 与清洗层校验一致 */
 export type Capo = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+
+/** 和弦指板品位/把位偏移量（0 表示指板视窗从 1 品起步，上限 12） */
+export type FretOffset = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
 
 /** 品牌数值：横按所在品位（正整数 >= 1；0 品为变调夹/空弦不属于横按），运行时仍是 number */
 export type BarreFret = number & { readonly __brand: 'BarreFret' };
@@ -187,7 +212,8 @@ export interface Chord {
   nameSegments: ChordNameSegments | null;
   strings: GuitarStringsModel;
   fretCount: (typeof FRET_COUNTS)[number];
-  capo: Capo;
+  /** 品位/把位偏移量（0~12，0 代表从第 1 品起步） */
+  fretOffset: FretOffset;
   groupId: GroupId;
   tuning: Tuning;
   /** 根音所在弦的索引（单点标记，替代原来每根弦各自维护的 isRoot）；null 表示未指定根音 */

@@ -34,6 +34,7 @@ import {
   collectChordNotes,
   getChordName,
   nameToSegments,
+  parsePitchSegment,
   segmentsToString,
 } from '@/services/music/theory';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
@@ -63,10 +64,10 @@ const INTERVAL_MAP: Record<number, { degree: string; acc: '' | 'b' | '#' }> = {
 
 const graphAnalysis = computed(() => {
   const strings = editorStore.draftChord.strings;
-  const capo = editorStore.draftChord.capo;
+  const fretOffset = editorStore.draftChord.fretOffset;
   const baseStrings = editorStore.activeBaseStrings;
 
-  const { notes: rawNotes } = collectChordNotes(strings, capo, baseStrings);
+  const { notes: rawNotes } = collectChordNotes(strings, fretOffset, baseStrings);
   if (rawNotes.length === 0) {
     return null;
   }
@@ -74,11 +75,11 @@ const graphAnalysis = computed(() => {
   let explicitRootPitch: number | null = null;
   const rootIdx = editorStore.draftChord.rootStringIndex;
   if (rootIdx !== null && strings[rootIdx]?.[0] !== undefined && strings[rootIdx]![0] >= 0) {
-    explicitRootPitch = calcPitchIndex(rootIdx, strings[rootIdx]![0], capo, baseStrings);
+    explicitRootPitch = calcPitchIndex(rootIdx, strings[rootIdx]![0], fretOffset, baseStrings);
   }
 
   const { candidates, bestRootPitch } = analyzeChordGraph(rawNotes, explicitRootPitch);
-  return { strings, capo, baseStrings, rawNotes, candidates, bestRootPitch };
+  return { strings, fretOffset, baseStrings, rawNotes, candidates, bestRootPitch };
 });
 
 const analysis = computed(() => {
@@ -89,7 +90,7 @@ const analysis = computed(() => {
       candidates: [] as CandidateResult[],
     };
 
-  const { strings, capo, baseStrings, rawNotes, candidates, bestRootPitch } = graph;
+  const { strings, fretOffset, baseStrings, rawNotes, candidates, bestRootPitch } = graph;
   const currentDraftName = getChordName(editorStore.draftChord);
   const selectedCandidate = candidates.find(c => c.chordName === currentDraftName);
   const activeRootPitch = selectedCandidate ? selectedCandidate.rootPitch : bestRootPitch;
@@ -99,7 +100,7 @@ const analysis = computed(() => {
       const semitones = (n.pitchIndex - activeRootPitch + 12) % 12;
       const stringObj = strings[n.stringIndex];
       const canToggle =
-        stringObj !== undefined && canTogglePitchAccidental(n.stringIndex, stringObj[0], capo, baseStrings);
+        stringObj !== undefined && canTogglePitchAccidental(n.stringIndex, stringObj[0], fretOffset, baseStrings);
       const interval = INTERVAL_MAP[semitones] || { degree: `${semitones}半音`, acc: '' };
 
       return {
@@ -139,15 +140,23 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
     editorStore.draftChord.rootStringIndex = null;
   } else {
     let rootAssigned = false;
-    if (candidate.segments) {
-      editorStore.draftChord.nameSegments = candidate.segments;
+    const parsedSegs = candidate.segments ?? nameToSegments(candidate.chordName);
+    if (parsedSegs) {
+      editorStore.draftChord.nameSegments = parsedSegs;
     } else {
-      const segs = nameToSegments(candidate.chordName);
-      editorStore.draftChord.nameSegments = segs;
+      const parsedRoot = parsePitchSegment(candidate.rootLabel);
+      if (parsedRoot) {
+        const rawSuffix = candidate.chordName.slice(candidate.rootLabel.length);
+        const cleanSuffix = rawSuffix.startsWith('/') ? rawSuffix.slice(1) : rawSuffix;
+        editorStore.draftChord.nameSegments = {
+          root: parsedRoot,
+          unknownQuality: cleanSuffix || undefined,
+        };
+      }
     }
     editorStore.draftChord.strings.forEach((str, sIdx) => {
       if (str[0] >= 0 && !rootAssigned) {
-        const pitch = calcPitchIndex(sIdx, str[0], editorStore.draftChord.capo, editorStore.activeBaseStrings);
+        const pitch = calcPitchIndex(sIdx, str[0], editorStore.draftChord.fretOffset, editorStore.activeBaseStrings);
         if (pitch === candidate.rootPitch) {
           editorStore.draftChord.rootStringIndex = toStringIndex(sIdx);
           rootAssigned = true;

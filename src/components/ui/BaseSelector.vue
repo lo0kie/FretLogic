@@ -148,104 +148,99 @@
           <slot name="header" />
         </div>
 
-        <Transition name="v-transition-fade">
+        <div class="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           <div
-            v-if="canScrollUp"
-            aria-hidden="true"
-            class="z-panel text-text-disabled pointer-events-none absolute top-1 right-1 left-1 flex h-2 items-center justify-center transition-colors"
+            :aria-multiselectable="isMultiple || undefined"
+            :style="{
+              maxHeight: dropdownMaxHeight,
+              // 空选项时禁止滚动（空占位可能略高于容器，避免出现可滚动的空面板）
+              ...(filteredOptions.length === 0 ? { overflow: 'hidden' } : {}),
+            }"
+            @keydown="handleDropdownKeydown($event, close)"
+            @scroll.passive="syncEdgeFades"
+            class="no-scrollbar p-xs box-border flex w-full flex-col gap-0.5 overflow-y-auto outline-none"
+            ref="dropdownRef"
+            role="listbox"
+            tabindex="-1"
           >
-            <BaseIcon :stroke-width="3" name="chevron-up" size="xs" />
-          </div>
-        </Transition>
-
-        <div
-          :aria-multiselectable="isMultiple || undefined"
-          :style="{
-            maxHeight: dropdownMaxHeight,
-            // 空选项时禁止滚动（空占位可能略高于容器，避免出现可滚动的空面板）
-            ...(filteredOptions.length === 0 ? { overflow: 'hidden' } : {}),
-          }"
-          @keydown="handleDropdownKeydown($event, close)"
-          @scroll.passive="checkScroll"
-          class="no-scrollbar p-xs box-border flex w-full flex-col gap-0.5 overflow-y-auto outline-none"
-          ref="dropdownRef"
-          role="listbox"
-          tabindex="-1"
-        >
-          <div
-            v-if="filteredOptions.length === 0"
-            class="m-auto box-border flex min-h-[5.5rem] w-full flex-col items-center justify-center py-6"
-          >
-            <EmptyState :description="filterable ? '无匹配结果' : '暂无选项'" size="sm" />
-          </div>
-          <template v-else>
             <div
-              v-for="(option, index) in filteredOptions"
-              v-wave="{ disabled: isOptionDisabled(option) }"
-              :aria-selected="isSelected(getOptionValue(option))"
-              :class="[
-                currentConfig.itemClass,
-                isSelected(getOptionValue(option))
-                  ? 'bg-tint-primary-88! text-primary! font-bold'
-                  : fontBlackItems
-                    ? 'font-black'
-                    : 'font-bold',
-                { 'pointer-events-none cursor-not-allowed opacity-40': isOptionDisabled(option) },
-              ]"
-              :key="index"
-              :ref="el => setOptionEl(el, index)"
-              :tabindex="isOptionDisabled(option) ? -1 : 0"
-              :title="getOptionTitle(option)"
-              @click="handleSelect(option, close)"
-              @keydown.enter.prevent.stop="handleSelect(option, close)"
-              @keydown.space.prevent.stop="handleSelect(option, close)"
-              class="text-text-body hover:bg-bg-panel-hover hover:text-text-title box-border flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-lg bg-transparent px-2.5 text-xs transition-colors outline-none"
-              role="option"
+              v-if="filteredOptions.length === 0"
+              class="m-auto box-border flex min-h-[5.5rem] w-full flex-col items-center justify-center py-6"
             >
-              <span class="flex max-w-full min-w-0 flex-1 items-center gap-2 truncate">
-                <BaseIcon
-                  v-if="typeof getOptionIcon(option) === 'string'"
-                  :name="getOptionIcon(option) as IconName"
-                  :stroke-width="3"
-                  aria-hidden="true"
-                  class="shrink-0 opacity-80"
-                  size="md"
-                />
-                <component
-                  v-else-if="getOptionIcon(option)"
-                  :is="getOptionIcon(option)"
-                  :stroke-width="3"
-                  aria-hidden="true"
-                  class="shrink-0 opacity-80"
-                  size="md"
-                />
-                <span class="truncate">
-                  <slot :index :option name="option">
-                    {{ formattedOption(option) }}
-                  </slot>
-                </span>
-              </span>
-              <BaseIcon
-                v-if="isSelected(getOptionValue(option))"
-                :stroke-width="3"
-                aria-hidden="true"
-                class="text-primary shrink-0"
-                name="check"
-                size="md"
-              />
+              <EmptyState :description="filterable ? '无匹配结果' : '暂无选项'" size="sm" />
             </div>
-          </template>
-        </div>
-
-        <Transition name="v-transition-fade">
-          <div
-            v-if="canScrollDown"
-            aria-hidden="true"
-            class="z-panel text-text-disabled pointer-events-none absolute right-1 bottom-1 left-1 flex h-2 items-center justify-center transition-colors"
-          >
-            <BaseIcon :stroke-width="3" name="chevron-down" size="xs" />
+            <template v-else>
+              <div
+                v-for="(option, index) in filteredOptions"
+                v-wave="{ disabled: isOptionDisabled(option) }"
+                :aria-selected="isSelected(getOptionValue(option))"
+                :class="[
+                  currentConfig.itemClass,
+                  isSelected(getOptionValue(option))
+                    ? 'bg-tint-primary-88! text-primary! font-bold'
+                    : fontBlackItems
+                      ? 'font-black'
+                      : 'font-bold',
+                  { 'pointer-events-none cursor-not-allowed opacity-40': isOptionDisabled(option) },
+                ]"
+                :key="index"
+                :ref="el => setOptionEl(el, index)"
+                :tabindex="isOptionDisabled(option) ? -1 : 0"
+                :title="getOptionTitle(option)"
+                @click="handleSelect(option, close)"
+                @keydown.enter.prevent.stop="handleSelect(option, close)"
+                @keydown.space.prevent.stop="handleSelect(option, close)"
+                class="text-text-body hover:bg-bg-panel-hover hover:text-text-title box-border flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-lg bg-transparent px-2.5 text-xs transition-colors outline-none"
+                role="option"
+              >
+                <span class="flex max-w-full min-w-0 flex-1 items-center gap-2 truncate">
+                  <BaseIcon
+                    v-if="typeof getOptionIcon(option) === 'string'"
+                    :name="getOptionIcon(option) as IconName"
+                    :stroke-width="3"
+                    aria-hidden="true"
+                    class="shrink-0 opacity-80"
+                    size="md"
+                  />
+                  <component
+                    v-else-if="getOptionIcon(option)"
+                    :is="getOptionIcon(option)"
+                    :stroke-width="3"
+                    aria-hidden="true"
+                    class="shrink-0 opacity-80"
+                    size="md"
+                  />
+                  <span class="truncate">
+                    <slot :index :option name="option">
+                      {{ formattedOption(option) }}
+                    </slot>
+                  </span>
+                </span>
+                <BaseIcon
+                  v-if="isSelected(getOptionValue(option))"
+                  :stroke-width="3"
+                  aria-hidden="true"
+                  class="text-primary shrink-0"
+                  name="check"
+                  size="md"
+                />
+              </div>
+            </template>
           </div>
-        </Transition>
+
+          <!-- 顶部滚动渐隐：仅可上滚时显示 -->
+          <div
+            v-show="!atTop"
+            aria-hidden="true"
+            class="z-panel pointer-events-none absolute inset-x-0 top-0 h-[16px] [background:linear-gradient(to_bottom,var(--bg-elevated),transparent)]"
+          />
+          <!-- 底部滚动渐隐：仅未滚到底时显示 -->
+          <div
+            v-show="!atBottom"
+            aria-hidden="true"
+            class="z-panel pointer-events-none absolute inset-x-0 bottom-0 h-[16px] [background:linear-gradient(to_top,var(--bg-elevated),transparent)]"
+          />
+        </div>
 
         <slot v-if="$slots['footer']" name="footer" />
       </div>
@@ -287,6 +282,7 @@ import { computed, nextTick, onBeforeUpdate, ref, useAttrs, useTemplateRef, watc
 
 import BasePopover from '@/components/ui/BasePopover.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
+import { useScrollEdgeFades } from '@/shared/composables/useScrollEdgeFades';
 import { resolveComponentWidth, type FormComponentWidth } from '@/utils/core/constants';
 
 type AnyOption = O;
@@ -393,8 +389,7 @@ onBeforeUpdate(() => {
   optionEls.value = [];
 });
 
-const canScrollUp = ref(false);
-const canScrollDown = ref(false);
+const { atTop, atBottom, syncEdgeFades } = useScrollEdgeFades(dropdownRef, { threshold: 2 });
 
 const isMultiple = computed(() => multiple);
 
@@ -729,30 +724,10 @@ watch(
   () => options,
   () => {
     if (isOpen.value) {
-      nextTick(checkScroll);
+      nextTick(syncEdgeFades);
     }
   }
 );
-
-/** 根据滚动位置更新上下渐隐箭头的显隐 */
-const checkScroll = () => {
-  const el = dropdownRef.value;
-  // 空选项时不显示滚动提示箭头（空占位可能略高于容器，但面板禁止滚动）
-  if (!el || filteredOptions.value.length === 0) {
-    canScrollUp.value = false;
-    canScrollDown.value = false;
-    return;
-  }
-  const threshold = 2;
-  const isScrollable = el.scrollHeight > el.clientHeight + threshold;
-  if (!isScrollable) {
-    canScrollUp.value = false;
-    canScrollDown.value = false;
-    return;
-  }
-  canScrollUp.value = el.scrollTop > threshold;
-  canScrollDown.value = el.scrollTop + el.clientHeight < el.scrollHeight - threshold;
-};
 
 // 打开后：将焦点移入列表（或搜索框），确保键盘方向键从当前/首个有效项开始定位
 const scrollToSelected = async () => {
@@ -781,7 +756,7 @@ const scrollToSelected = async () => {
       }
     }
 
-    checkScroll();
+    syncEdgeFades();
   });
 };
 </script>

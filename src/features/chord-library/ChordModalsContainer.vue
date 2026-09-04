@@ -58,7 +58,7 @@
           v-for="variant in groupModals.modalData.activeGroupCard?.variants"
           v-wave
           :aria-checked="groupModals.modalData.selectedVariantIds.has(variant.id)"
-          :aria-label="`指法 Capo ${variant.capo}`"
+          :aria-label="`指法 偏移 ${variant.fretOffset}`"
           :class="{
             'border-danger! bg-tint-danger-90! ring-danger/50 ring-1': groupModals.modalData.selectedVariantIds.has(
               variant.id

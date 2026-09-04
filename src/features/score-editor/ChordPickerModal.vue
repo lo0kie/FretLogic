@@ -574,7 +574,13 @@ const getChordRootCategory = (chord: Chord): { key: string; label: string } => {
         const accUnicode = accAscii === '#' ? '♯' : accAscii === 'b' ? '♭' : '';
         result = { key: `${natural}${accAscii}`, label: `${natural}${accUnicode}` };
       } else {
-        const rootPitch = resolveChordRootPitch(chord.strings, chord.capo, chord.tuning, chord, chord.rootStringIndex);
+        const rootPitch = resolveChordRootPitch(
+          chord.strings,
+          chord.fretOffset,
+          chord.tuning,
+          chord,
+          chord.rootStringIndex
+        );
         if (rootPitch >= 0 && rootPitch < 12) {
           const SHARP_KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
           const SHARP_LABELS = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
@@ -584,7 +590,13 @@ const getChordRootCategory = (chord: Chord): { key: string; label: string } => {
         }
       }
     } else {
-      const rootPitch = resolveChordRootPitch(chord.strings, chord.capo, chord.tuning, chord, chord.rootStringIndex);
+      const rootPitch = resolveChordRootPitch(
+        chord.strings,
+        chord.fretOffset,
+        chord.tuning,
+        chord,
+        chord.rootStringIndex
+      );
       if (rootPitch >= 0 && rootPitch < 12) {
         const SHARP_KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
         const SHARP_LABELS = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];

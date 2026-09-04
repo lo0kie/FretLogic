@@ -1,9 +1,12 @@
 import type { SegmentOption } from '@/components/ui/BaseSegmentedControl.vue';
 import type {
   AccidentalType,
+  BarreEntity,
   Chord,
+  ChordId,
   ChordNameSegments,
   ExtensionSegment,
+  GroupId,
   GuitarStringEntity,
   GuitarStringsModel,
   NaturalPitchLetter,
@@ -23,20 +26,35 @@ const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 
 /** 调性键名选项（升号调/降号调按常见记谱习惯混合） */
 export const KEY_OPTIONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
+// 4 弦预设：尤克里里 (G4 C4 E4 A4)、电贝斯 (E1 A1 D2 G2)、贝斯 Drop D (D1 A1 D2 G2)
+const TUNING_MAPPING_UKULELE = Object.freeze([67, 60, 64, 69] as const);
+const TUNING_MAPPING_BASS_STANDARD = Object.freeze([28, 33, 38, 43] as const);
+const TUNING_MAPPING_BASS_DROP_D = Object.freeze([26, 33, 38, 43] as const);
+
+// 6 弦常规吉他预设
 const TUNING_MAPPING_STANDARD = Object.freeze([40, 45, 50, 55, 59, 64] as const);
 const TUNING_MAPPING_DROP_D = Object.freeze([38, 45, 50, 55, 59, 64] as const);
 const TUNING_MAPPING_DADGAD = Object.freeze([38, 45, 50, 55, 57, 62] as const);
 const TUNING_MAPPING_OPEN_G = Object.freeze([38, 43, 50, 55, 59, 62] as const);
 const TUNING_MAPPING_HALF_STEP = Object.freeze([39, 44, 49, 54, 58, 63] as const);
-// 新增：Open D (D A D F# A D)
 const TUNING_MAPPING_OPEN_D = Object.freeze([38, 45, 50, 54, 57, 62] as const);
-// 新增：Open C (C G C G C E)
 const TUNING_MAPPING_OPEN_C = Object.freeze([36, 43, 48, 55, 60, 64] as const);
-// 新增：Drop C (C G C F A D) — 即 Drop D 整体降全音
 const TUNING_MAPPING_DROP_C = Object.freeze([36, 43, 48, 53, 57, 62] as const);
+
+// 7 弦与 8 弦重型/扩展音域预设
+const TUNING_MAPPING_SEVEN_STANDARD = Object.freeze([35, 40, 45, 50, 55, 59, 64] as const);
+const TUNING_MAPPING_SEVEN_DROP_A = Object.freeze([33, 40, 45, 50, 55, 59, 64] as const);
+const TUNING_MAPPING_EIGHT_STANDARD = Object.freeze([30, 35, 40, 45, 50, 55, 59, 64] as const);
+const TUNING_MAPPING_EIGHT_DROP_E = Object.freeze([28, 35, 40, 45, 50, 55, 59, 64] as const);
+
 export const DEFAULT_TUNING_MAPPING = TUNING_MAPPING_STANDARD;
 
 export enum Tuning {
+  // 4 弦
+  UKULELE_STANDARD = 'UKULELE_STANDARD',
+  BASS_STANDARD = 'BASS_STANDARD',
+  BASS_DROP_D = 'BASS_DROP_D',
+  // 6 弦
   STANDARD = 'STANDARD',
   DROP_D = 'DROP_D',
   DADGAD = 'DADGAD',
@@ -45,45 +63,117 @@ export enum Tuning {
   OPEN_D = 'OPEN_D',
   OPEN_C = 'OPEN_C',
   DROP_C = 'DROP_C',
+  // 7 弦
+  SEVEN_STANDARD = 'SEVEN_STANDARD',
+  SEVEN_DROP_A = 'SEVEN_DROP_A',
+  // 8 弦
+  EIGHT_STANDARD = 'EIGHT_STANDARD',
+  EIGHT_DROP_E = 'EIGHT_DROP_E',
 }
 
-export const TUNING_PRESETS: Record<
-  Tuning,
-  {
-    name: string;
-    mapping: readonly [number, number, number, number, number, number];
-  }
-> = {
+export interface TuningPreset {
+  name: string;
+  stringCount: number;
+  mapping: readonly number[];
+}
+
+export const TUNING_PRESETS: Record<Tuning, TuningPreset> = {
+  // 4 弦
+  [Tuning.UKULELE_STANDARD]: {
+    name: 'Ukulele Standard (GCEA)',
+    stringCount: 4,
+    mapping: TUNING_MAPPING_UKULELE,
+  },
+  [Tuning.BASS_STANDARD]: {
+    name: 'Bass Standard (EADG)',
+    stringCount: 4,
+    mapping: TUNING_MAPPING_BASS_STANDARD,
+  },
+  [Tuning.BASS_DROP_D]: {
+    name: 'Bass Drop D (DADG)',
+    stringCount: 4,
+    mapping: TUNING_MAPPING_BASS_DROP_D,
+  },
+  // 6 弦
   [Tuning.STANDARD]: {
     name: 'Standard (EADGBE)',
+    stringCount: 6,
     mapping: TUNING_MAPPING_STANDARD,
   },
   [Tuning.DROP_D]: {
     name: 'Drop D (DADGBE)',
+    stringCount: 6,
     mapping: TUNING_MAPPING_DROP_D,
   },
-  [Tuning.DADGAD]: { name: 'DADGAD', mapping: TUNING_MAPPING_DADGAD },
+  [Tuning.DADGAD]: {
+    name: 'DADGAD',
+    stringCount: 6,
+    mapping: TUNING_MAPPING_DADGAD,
+  },
   [Tuning.OPEN_G]: {
     name: 'Open G (DGDGBD)',
+    stringCount: 6,
     mapping: TUNING_MAPPING_OPEN_G,
   },
   [Tuning.HALF_STEP]: {
     name: 'Half Step Down',
+    stringCount: 6,
     mapping: TUNING_MAPPING_HALF_STEP,
   },
   [Tuning.OPEN_D]: {
     name: 'Open D (DADF#AD)',
+    stringCount: 6,
     mapping: TUNING_MAPPING_OPEN_D,
   },
   [Tuning.OPEN_C]: {
     name: 'Open C (CGCGCE)',
+    stringCount: 6,
     mapping: TUNING_MAPPING_OPEN_C,
   },
   [Tuning.DROP_C]: {
     name: 'Drop C (CGCFAD)',
+    stringCount: 6,
     mapping: TUNING_MAPPING_DROP_C,
   },
+  // 7 弦
+  [Tuning.SEVEN_STANDARD]: {
+    name: '7-String Standard (BEADGBE)',
+    stringCount: 7,
+    mapping: TUNING_MAPPING_SEVEN_STANDARD,
+  },
+  [Tuning.SEVEN_DROP_A]: {
+    name: '7-String Drop A (AEADGBE)',
+    stringCount: 7,
+    mapping: TUNING_MAPPING_SEVEN_DROP_A,
+  },
+  // 8 弦
+  [Tuning.EIGHT_STANDARD]: {
+    name: '8-String Standard (F#BEADGBE)',
+    stringCount: 8,
+    mapping: TUNING_MAPPING_EIGHT_STANDARD,
+  },
+  [Tuning.EIGHT_DROP_E]: {
+    name: '8-String Drop E (EBEADGBE)',
+    stringCount: 8,
+    mapping: TUNING_MAPPING_EIGHT_DROP_E,
+  },
 };
+
+/** 各弦数对应的默认标准调弦方案 */
+export const DEFAULT_TUNING_BY_STRING_COUNT: Record<number, Tuning> = {
+  4: Tuning.UKULELE_STANDARD,
+  6: Tuning.STANDARD,
+  7: Tuning.SEVEN_STANDARD,
+  8: Tuning.EIGHT_STANDARD,
+};
+
+/** 根据弦数获取对应的默认调弦方案（超出特定预设时兜底为 6 弦标准） */
+export const getDefaultTuningForStringCount = (stringCount: number): Tuning =>
+  DEFAULT_TUNING_BY_STRING_COUNT[stringCount] ?? Tuning.STANDARD;
+
+/** 根据弦数筛选匹配的调弦枚举列表 */
+export const getTuningsByStringCount = (stringCount: number): Tuning[] =>
+  (Object.keys(TUNING_PRESETS) as Tuning[]).filter(t => TUNING_PRESETS[t]?.stringCount === stringCount);
 
 const ACCIDENTAL_PITCH = Object.freeze([false, true, false, true, false, false, true, false, true, false, true, false]);
 /** 判断相对根音的音程是否属于和弦特征音（根音/小三/大三/纯五度）。 */
@@ -104,12 +194,12 @@ const NATURAL_LETTER_FLAT = ['C', 'D', 'D', 'E', 'E', 'F', 'G', 'G', 'A', 'A', '
 export const computeStringLabelAccidental = (
   sIdx: number,
   fretVal: number,
-  capoVal: number,
-  preferFlat: boolean,
+  fretOffset: number = 0,
+  preferFlat: boolean = false,
   baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
 ): { label: string; isAccidental: boolean } => {
   if (fretVal < 0) return { label: '', isAccidental: false };
-  const pitchIndex = calcPitchIndex(sIdx, fretVal, capoVal, baseStrings);
+  const pitchIndex = calcPitchIndex(sIdx, fretVal, fretOffset, baseStrings);
   const isAccidental = isAccidentalNote(pitchIndex);
   const label = (preferFlat ? NATURAL_LETTER_FLAT : NATURAL_LETTER_SHARP)[pitchIndex] ?? '';
   return { label, isAccidental };
@@ -119,12 +209,12 @@ export const computeStringLabelAccidental = (
 export const formatStringLabel = (
   sIdx: number,
   fretVal: number,
-  preferFlat: boolean,
-  capoVal: number,
+  preferFlat: boolean = false,
+  fretOffset: number = 0,
   baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
 ): string => {
   if (fretVal < 0) return '✕';
-  const { label, isAccidental } = computeStringLabelAccidental(sIdx, fretVal, capoVal, preferFlat, baseStrings);
+  const { label, isAccidental } = computeStringLabelAccidental(sIdx, fretVal, fretOffset, preferFlat, baseStrings);
   return composeNoteLabel(label, isAccidental, preferFlat);
 };
 
@@ -132,15 +222,15 @@ export const formatStringLabel = (
 export const composeNoteLabel = (label: string, isAccidental: boolean, preferFlat: boolean): string =>
   isAccidental ? label + (preferFlat ? 'b' : '#') : label;
 
-/** 计算某弦某品的 MIDI 音高（空弦基准音 + 品位 + 变调夹有效偏移）。 */
+/** 计算某弦某品的 MIDI 音高（空弦基准音 + 品位 + 把位偏移）。 */
 export const calcNoteMidi = (
   sIdx: number,
   fretVal: number,
-  capoVal: number,
+  fretOffset: number = 0,
   baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
 ): number => {
   const base = baseStrings[sIdx] ?? 0;
-  const actualOffset = fretVal > 0 && capoVal > 0 ? capoVal : 0;
+  const actualOffset = fretVal > 0 && fretOffset > 0 ? fretOffset : 0;
   return base + fretVal + actualOffset;
 };
 
@@ -148,10 +238,10 @@ export const calcNoteMidi = (
 export const calcPitchIndex = (
   sIdx: number,
   fretVal: number,
-  capoVal: number,
+  fretOffset: number = 0,
   baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
 ): number => {
-  return calcNoteMidi(sIdx, fretVal, capoVal, baseStrings) % 12;
+  return calcNoteMidi(sIdx, fretVal, fretOffset, baseStrings) % 12;
 };
 
 /** 判断音级是否为变化音（黑键，存在升降号拼写）。 */
@@ -162,11 +252,11 @@ export const isAccidentalNote = (pitchIndex: number): boolean =>
 export const canTogglePitchAccidental = (
   sIdx: number,
   fretVal: number,
-  capoVal: number,
+  fretOffset: number = 0,
   baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
 ): boolean => {
   if (fretVal < 0) return false;
-  const pitchIndex = calcPitchIndex(sIdx, fretVal, capoVal, baseStrings);
+  const pitchIndex = calcPitchIndex(sIdx, fretVal, fretOffset, baseStrings);
   return isAccidentalNote(pitchIndex);
 };
 
@@ -174,12 +264,12 @@ export const canTogglePitchAccidental = (
 export const calcNoteLabel = (
   sIdx: number,
   fretVal: number,
-  capoVal: number,
+  fretOffset: number = 0,
   preferFlat: boolean = false,
   baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
 ): string => {
   if (fretVal === -1) return '✕';
-  const noteIndex = calcPitchIndex(sIdx, fretVal, capoVal, baseStrings);
+  const noteIndex = calcPitchIndex(sIdx, fretVal, fretOffset, baseStrings);
   return preferFlat ? (NOTES_FLAT[noteIndex] ?? '') : (NOTES_SHARP[noteIndex] ?? '');
 };
 
@@ -265,24 +355,23 @@ const nameSegmentsCache = createLruCache<ChordNameSegments | null>(512);
 export const nameToSegments = (chordName: string): ChordNameSegments | null => {
   if (!chordName || typeof chordName !== 'string') return null;
   const trimmed = chordName.trim();
-  if (!trimmed) return null;
-
-  const cached = nameSegmentsCache.get(trimmed);
+  const normalized = trimmed.replace(/（/g, '(').replace(/）/g, ')');
+  const cached = nameSegmentsCache.get(normalized);
   if (cached !== undefined) return cached;
 
   // 1. 根音：从开头提取 [A-G][#b♯♭]?
-  const rootMatch = trimmed.match(/^([A-G][#b♯♭]?)/i);
+  const rootMatch = normalized.match(/^([A-G][#b♯♭]?)/i);
   if (!rootMatch) {
-    nameSegmentsCache.set(trimmed, null);
+    nameSegmentsCache.set(normalized, null);
     return null;
   }
   const root = parsePitchSegment(rootMatch[1]!);
   if (!root) {
-    nameSegmentsCache.set(trimmed, null);
+    nameSegmentsCache.set(normalized, null);
     return null;
   }
 
-  let remaining = trimmed.slice(rootMatch[0].length);
+  let remaining = normalized.slice(rootMatch[0].length);
 
   // 2. 斜杠低音：从末尾提取 /[A-G][#b♯♭]?（注意避免将 6/9 中的 /9 误判为斜杠低音）
   let bass: RootSegment | undefined = undefined;
@@ -331,7 +420,7 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
     extensions: extensions.length > 0 ? extensions : undefined,
     bass: bass ?? undefined,
   };
-  nameSegmentsCache.set(trimmed, result);
+  nameSegmentsCache.set(normalized, result);
   return result;
 };
 
@@ -386,6 +475,14 @@ export const SHORTHAND_QUALITY_MAP: Record<string, string> = {
   'mmaj7': 'mM7',
   'm(maj7)': 'mM7',
   'm(M7)': 'mM7',
+  'mMaj9': 'mM9',
+  'mmaj9': 'mM9',
+  'm(maj9)': 'mM9',
+  'm(M9)': 'mM9',
+  'mMaj11': 'mM11',
+  'mmaj11': 'mM11',
+  'mMaj13': 'mM13',
+  'mmaj13': 'mM13',
   'augMaj7': '+M7',
   'augmaj7': '+M7',
   'aug(maj7)': '+M7',
@@ -396,6 +493,8 @@ export const SHORTHAND_QUALITY_MAP: Record<string, string> = {
   'sus4': 'sus',
   '7sus4': '7sus',
   '9sus4': '9sus',
+  '11sus4': '11sus',
+  '13sus4': '13sus',
 };
 
 /** 格式化和弦性质（根据是否开启简写） */
@@ -603,7 +702,7 @@ export const getChordRootPitch = (chordName: string): number => {
  */
 export const collectChordNotes = (
   strings: GuitarStringEntity[],
-  capoVal: number,
+  fretOffset: number = 0,
   baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
 ): { notes: NoteInput[]; bassPitch: number } => {
   const notes: NoteInput[] = [];
@@ -611,11 +710,11 @@ export const collectChordNotes = (
   for (let sIdx = 0; sIdx < strings.length; sIdx++) {
     const str = strings[sIdx];
     if (!str || str[0] < 0) continue;
-    const pitch = calcPitchIndex(sIdx, str[0], capoVal, baseStrings);
+    const pitch = calcPitchIndex(sIdx, str[0], fretOffset, baseStrings);
     const { label: naturalLabel, isAccidental } = computeStringLabelAccidental(
       sIdx,
       str[0],
-      capoVal,
+      fretOffset,
       str[1],
       baseStrings
     );
@@ -636,9 +735,9 @@ const collectNotes = collectChordNotes;
  */
 export const resolveChordRootPitch = (
   strings: GuitarStringEntity[],
-  capoVal: number,
-  tuning: Tuning | string,
-  chordOrName: string | ChordOrName,
+  fretOffset: number = 0,
+  tuning: Tuning | string = Tuning.STANDARD,
+  chordOrName?: string | ChordOrName,
   rootStringIndex: number | null = null
 ): number => {
   const baseStrings = TUNING_PRESETS[tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
@@ -646,15 +745,17 @@ export const resolveChordRootPitch = (
   if (rootStringIndex !== null && rootStringIndex >= 0 && rootStringIndex < strings.length) {
     const markedStr = strings[rootStringIndex];
     if (markedStr && markedStr[0] >= 0) {
-      return calcPitchIndex(rootStringIndex, markedStr[0], capoVal, baseStrings);
+      return calcPitchIndex(rootStringIndex, markedStr[0], fretOffset, baseStrings);
     }
   }
   // 2. 名字/分片解析
-  const chordName = typeof chordOrName === 'string' ? chordOrName : getChordName(chordOrName);
-  const namePitch = getChordRootPitch(chordName);
-  if (namePitch !== 99) return namePitch;
+  if (chordOrName) {
+    const chordName = typeof chordOrName === 'string' ? chordOrName : getChordName(chordOrName);
+    const namePitch = getChordRootPitch(chordName);
+    if (namePitch !== 99) return namePitch;
+  }
   // 3. 自动推导（基于指板音集）
-  const { notes } = collectNotes(strings, capoVal, baseStrings);
+  const { notes } = collectNotes(strings, fretOffset, baseStrings);
   if (notes.length === 0) return 99;
   const analysis = analyzeChordGraph(notes, null);
   if (analysis && analysis.bestRootPitch !== undefined && analysis.bestRootPitch !== -1) {
@@ -666,14 +767,14 @@ export const resolveChordRootPitch = (
 /** 判断指法是否为转位：物理最低音不等于（已解析的）根音即为转位；无法解析时视为非转位。 */
 export const computeIsInverted = (
   strings: GuitarStringEntity[],
-  capoVal: number,
-  tuning: string,
-  chordOrName: string | ChordOrName,
+  fretOffset: number = 0,
+  tuning: string = Tuning.STANDARD,
+  chordOrName?: string | ChordOrName,
   rootStringIndex: number | null = null
 ): boolean => {
   const baseStrings = TUNING_PRESETS[tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
-  const { bassPitch } = collectNotes(strings, capoVal, baseStrings);
-  const rootPitch = resolveChordRootPitch(strings, capoVal, tuning, chordOrName, rootStringIndex);
+  const { bassPitch } = collectNotes(strings, fretOffset, baseStrings);
+  const rootPitch = resolveChordRootPitch(strings, fretOffset, tuning, chordOrName, rootStringIndex);
   return bassPitch !== -1 && rootPitch !== 99 && bassPitch !== rootPitch;
 };
 
@@ -689,15 +790,16 @@ export const computeSongKey = (playKey: string, capo: number): string => transpo
  */
 export const validateBassConsistency = (
   strings: GuitarStringEntity[],
-  capoVal: number,
-  tuning: Tuning | string,
-  chordOrName: string | { nameSegments?: ChordNameSegments | null; chordName?: string }
+  fretOffset: number = 0,
+  tuning: Tuning | string = Tuning.STANDARD,
+  chordOrName?: string | { nameSegments?: ChordNameSegments | null; chordName?: string }
 ): string | null => {
+  if (!chordOrName) return null;
   const chordName = typeof chordOrName === 'string' ? chordOrName : getChordName(chordOrName);
   const parsed = parseChordName(chordName);
   if (!parsed.hasBass || parsed.bassPitch === 99) return null;
   const baseStrings = TUNING_PRESETS[tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
-  const { bassPitch } = collectNotes(strings, capoVal, baseStrings);
+  const { bassPitch } = collectNotes(strings, fretOffset, baseStrings);
   if (bassPitch === -1) return null;
   // 音高模 12 比较（忽略八度）
   if (bassPitch % 12 !== parsed.bassPitch) {
@@ -715,7 +817,7 @@ const getColorNoteCountAndPitches = (chord: Chord, rootPitch: number) => {
   for (let sIdx = 0; sIdx < strings.length; sIdx++) {
     const str = strings[sIdx];
     if (str && str[0] >= 0) {
-      const p = calcPitchIndex(sIdx, str[0], chord.capo, baseStrings);
+      const p = calcPitchIndex(sIdx, str[0], chord.fretOffset, baseStrings);
       pitchMask |= 1 << p;
     }
   }
@@ -772,12 +874,12 @@ const buildSortMeta = (chord: Chord): SortMeta => {
   const rootPitch =
     parsed.rootPitch !== 99
       ? parsed.rootPitch
-      : resolveChordRootPitch(chord.strings, chord.capo, chord.tuning, chord, chord.rootStringIndex);
+      : resolveChordRootPitch(chord.strings, chord.fretOffset, chord.tuning, chord, chord.rootStringIndex);
   const { colorNoteCount } = getColorNoteCountAndPitches(chord, rootPitch);
   return {
     chord,
     rootPitch,
-    isInverted: computeIsInverted(chord.strings, chord.capo, chord.tuning, chord, chord.rootStringIndex),
+    isInverted: computeIsInverted(chord.strings, chord.fretOffset, chord.tuning, chord, chord.rootStringIndex),
     colorNoteCount,
     complexityRank: getComplexityRank(parsed.suffix),
     qualityRank: isMinorFlavored(parsed.suffix) ? 0 : 1,
@@ -881,13 +983,14 @@ export const getKeySemitones = (key1: string, key2: string): number => {
 const chordFingerprintCache = new WeakMap<object, string>();
 
 /**
- * 计算和弦指纹（名称:变调夹:品位数:调弦:是否转位:根音标记:逐弦品位+升降偏好），
+ * 计算和弦指纹（名称:品位偏移:品位数:调弦:是否转位:根音标记:逐弦品位+升降偏好），
  * 用于重复和弦判定；结果按对象引用 WeakMap 缓存。
  */
 export const computeChordFingerprint = (chord: {
   chordName?: string;
   nameSegments?: ChordNameSegments | null;
-  capo: number;
+  fretOffset?: number;
+  capo?: number;
   fretCount: number;
   tuning: Tuning | string;
   strings: GuitarStringsModel;
@@ -897,10 +1000,11 @@ export const computeChordFingerprint = (chord: {
     const cached = chordFingerprintCache.get(chord);
     if (cached !== undefined) return cached;
   }
+  const offset = chord.fretOffset ?? chord.capo ?? 0;
   const name = getChordName(chord);
-  const isInverted = computeIsInverted(chord.strings, chord.capo, chord.tuning, chord, chord.rootStringIndex);
+  const isInverted = computeIsInverted(chord.strings, offset, chord.tuning, chord, chord.rootStringIndex);
   const strSig = chord.strings.map(s => `${s[0]}_${s[1] ? 1 : 0}`).join('|');
-  const fp = `${name.trim()}:${chord.capo}:${chord.fretCount}:${chord.tuning}:${isInverted ? 1 : 0}:${String(chord.rootStringIndex)}:${strSig}`;
+  const fp = `${name.trim()}:${offset}:${chord.fretCount}:${chord.tuning}:${isInverted ? 1 : 0}:${String(chord.rootStringIndex)}:${strSig}`;
   if (chord && typeof chord === 'object') {
     chordFingerprintCache.set(chord, fp);
   }
@@ -910,4 +1014,228 @@ export const computeChordFingerprint = (chord: {
 /** 取指定调弦预设的空弦基准音高数组；未知调弦回退标准调弦。 */
 export const getActiveBaseStrings = (tuning: Tuning) => {
   return TUNING_PRESETS[tuning]?.mapping || DEFAULT_TUNING_MAPPING;
+};
+
+/** 音高半音移调运算：保证结果收敛在 [0, 11] */
+export const transposePitch = (pitch: number, semitones: number): number => {
+  return (((pitch + semitones) % 12) + 12) % 12;
+};
+
+/**
+ * 结构化根音分片（[NaturalPitchLetter, AccidentalType]）按半音数移调
+ * @param root 原始根音分片
+ * @param semitones 移调半音数（正数为升，负数为降）
+ * @param preferFlat 是否偏好降号（缺省时根据原始变音记号与目标音名智能判定）
+ */
+export const transposeRootSegment = (root: RootSegment, semitones: number, preferFlat?: boolean): RootSegment => {
+  const [letter, acc] = root;
+  const basePitch = ROOT_PITCH_MAP[letter] ?? 0;
+  const currentPitch = (basePitch + acc + 12) % 12;
+  const newPitch = transposePitch(currentPitch, semitones);
+
+  const useFlat = preferFlat ?? (acc < 0 || (acc === 0 && (newPitch === 10 || newPitch === 3 || newPitch === 8)));
+  const noteName = useFlat ? NOTES_FLAT[newPitch] : NOTES_SHARP[newPitch];
+  const parsed = parsePitchSegment(noteName ?? 'C');
+  return parsed ?? ['C', 0];
+};
+
+/**
+ * 将和弦名分片结构整体移调（根音与斜杠低音同步移位，其余性质/扩展分片深度复制保留）
+ */
+export const transposeChordSegments = (
+  segments: ChordNameSegments,
+  semitones: number,
+  preferFlat?: boolean
+): ChordNameSegments => {
+  const newRoot = transposeRootSegment(segments.root, semitones, preferFlat);
+  const newBass = segments.bass ? transposeRootSegment(segments.bass, semitones, preferFlat) : undefined;
+  return {
+    root: newRoot,
+    ...(segments.quality ? { quality: segments.quality } : {}),
+    ...(segments.unknownQuality ? { unknownQuality: segments.unknownQuality } : {}),
+    ...(segments.extensions ? { extensions: segments.extensions.map(e => ({ ...e })) } : {}),
+    ...(newBass ? { bass: newBass } : {}),
+  };
+};
+
+/**
+ * 和弦实体移调
+ * 模式 'update_name'（默认）：指法品位不变，更新和弦名与根音音高（适合吉他夹变调夹或保持把位分析）
+ * 模式 'shift_frets'：非空弦品位整体平移 N 品（横按同步平移），适合封闭和弦把位推移
+ */
+export const transposeChordEntity = (
+  chord: Chord,
+  semitones: number,
+  options?: {
+    mode?: 'shift_frets' | 'update_name';
+    preferFlat?: boolean;
+    newId?: ChordId;
+    newGroupId?: GroupId;
+  }
+): Chord => {
+  const mode = options?.mode ?? 'update_name';
+  const newSegments = chord.nameSegments
+    ? transposeChordSegments(chord.nameSegments, semitones, options?.preferFlat)
+    : null;
+
+  let newStrings = chord.strings.map(s => [...s] as GuitarStringEntity);
+  let newBarres = chord.barres ? chord.barres.map(b => ({ ...b })) : undefined;
+
+  if (mode === 'shift_frets' && semitones !== 0) {
+    newStrings = newStrings.map(([fret, flat]) => {
+      if (fret <= 0) return [fret, flat];
+      const shifted = fret + semitones;
+      return [shifted > 0 ? shifted : -1, flat];
+    });
+    if (newBarres) {
+      newBarres = newBarres
+        .map(b => ({ ...b, fret: (b.fret + semitones) as BarreEntity['fret'] }))
+        .filter(b => b.fret > 0);
+    }
+  }
+
+  const now = Date.now();
+  return {
+    ...chord,
+    id: options?.newId ?? chord.id,
+    groupId: options?.newGroupId ?? chord.groupId,
+    nameSegments: newSegments,
+    strings: newStrings,
+    barres: newBarres,
+    createdAt: now,
+    updatedAt: now,
+  };
+};
+
+export interface ChordDegreeResult {
+  /** 罗马数字级数标注，如 'I', 'ii', 'V7', 'bVII', 'viiø7', 'I/3' */
+  roman: string;
+  /** 音阶音级编号 1~7，离调/无法识别为 0 */
+  degree: number;
+  /** 是否为调内自然和弦 */
+  isDiatonic: boolean;
+}
+
+/**
+ * 计算和弦在指定调性（大调或小调）下的罗马数字级数
+ * @param chordOrName 和弦实体或和弦名字符串
+ * @param key 调式基准名（如 'C', 'G', 'F', 'Am', 'Em', 'Bb'）
+ */
+export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 'C'): ChordDegreeResult => {
+  const empty: ChordDegreeResult = { roman: '', degree: 0, isDiatonic: false };
+  if (!chordOrName || !key) return empty;
+
+  const rawChordName = typeof chordOrName === 'string' ? chordOrName : getChordName(chordOrName);
+  if (!rawChordName) return empty;
+
+  const parsed = parseChordName(rawChordName);
+  if (parsed.rootPitch === 99) return empty;
+
+  const trimmedKey = key.trim();
+  const isMinorKey = /m(in)?$/i.test(trimmedKey);
+  const keyRootLabel = trimmedKey.replace(/m(in)?$/i, '');
+  const keyRootPitch = ROOT_PITCH_MAP[keyRootLabel] ?? 0;
+
+  // 相对调根音的半音差 [0, 11]
+  const interval = (parsed.rootPitch - keyRootPitch + 12) % 12;
+
+  interface DegreeDef {
+    degree: number;
+    base: string;
+    isDiatonic: boolean;
+  }
+
+  // 大调音级：0: I, 2: II (ii), 4: III (iii), 5: IV, 7: V, 9: VI (vi), 11: VII (vii°)
+  const MAJOR_INTERVAL_MAP: Record<number, DegreeDef> = {
+    0: { degree: 1, base: 'I', isDiatonic: true },
+    1: { degree: 2, base: 'bII', isDiatonic: false },
+    2: { degree: 2, base: 'II', isDiatonic: true },
+    3: { degree: 3, base: 'bIII', isDiatonic: false },
+    4: { degree: 3, base: 'III', isDiatonic: true },
+    5: { degree: 4, base: 'IV', isDiatonic: true },
+    6: { degree: 5, base: 'bV', isDiatonic: false },
+    7: { degree: 5, base: 'V', isDiatonic: true },
+    8: { degree: 6, base: 'bVI', isDiatonic: false },
+    9: { degree: 6, base: 'VI', isDiatonic: true },
+    10: { degree: 7, base: 'bVII', isDiatonic: false },
+    11: { degree: 7, base: 'VII', isDiatonic: true },
+  };
+
+  // 小调音级：0: I (i), 2: II (ii°), 3: III, 5: IV (iv), 7: V (v/V), 8: VI, 10: VII
+  const MINOR_INTERVAL_MAP: Record<number, DegreeDef> = {
+    0: { degree: 1, base: 'I', isDiatonic: true },
+    1: { degree: 2, base: 'bII', isDiatonic: false },
+    2: { degree: 2, base: 'II', isDiatonic: true },
+    3: { degree: 3, base: 'III', isDiatonic: true },
+    4: { degree: 3, base: '#III', isDiatonic: false },
+    5: { degree: 4, base: 'IV', isDiatonic: true },
+    6: { degree: 5, base: 'bV', isDiatonic: false },
+    7: { degree: 5, base: 'V', isDiatonic: true },
+    8: { degree: 6, base: 'VI', isDiatonic: true },
+    9: { degree: 6, base: '#VI', isDiatonic: false },
+    10: { degree: 7, base: 'VII', isDiatonic: true },
+    11: { degree: 7, base: 'VII', isDiatonic: true },
+  };
+
+  const def = (isMinorKey ? MINOR_INTERVAL_MAP[interval] : MAJOR_INTERVAL_MAP[interval]) ?? {
+    degree: 1,
+    base: 'I',
+    isDiatonic: false,
+  };
+
+  const suffix = parsed.suffix || '';
+  const isMinorChord = isMinorFlavored(suffix);
+  const isHalfDim = /^(ø|m7b5)/.test(suffix);
+  const isDim = /^(dim|°)/.test(suffix) || isHalfDim;
+  const isAug = /^(aug|\+)/.test(suffix);
+
+  const prefixMatch = def.base.match(/^([b#])?(.*)$/);
+  const prefix = prefixMatch?.[1] ?? '';
+  let romanBody = prefixMatch?.[2] ?? def.base;
+
+  // 小调与减和弦用小写罗马数字
+  if (isMinorChord || isDim) {
+    romanBody = romanBody.toLowerCase();
+  }
+
+  let romanSuffix = '';
+  if (isHalfDim) {
+    romanSuffix = 'ø7';
+  } else if (isDim) {
+    romanSuffix = '°';
+    if (/7/.test(suffix)) romanSuffix += '7';
+  } else if (isAug) {
+    romanSuffix = '+';
+  } else if (/^(maj7|Maj7|M7|Δ7)\b/.test(suffix)) {
+    romanSuffix = 'maj7';
+  } else if (/^(m7|min7|-7)\b/i.test(suffix)) {
+    romanSuffix = '7';
+  } else if (/^7sus4\b/i.test(suffix)) {
+    romanSuffix = '7sus4';
+  } else if (/^sus4\b/i.test(suffix)) {
+    romanSuffix = 'sus4';
+  } else if (/^sus2\b/i.test(suffix)) {
+    romanSuffix = 'sus2';
+  } else if (/^7\b/.test(suffix)) {
+    romanSuffix = '7';
+  } else if (/^9\b/.test(suffix)) {
+    romanSuffix = '9';
+  } else if (/^add9\b/i.test(suffix)) {
+    romanSuffix = 'add9';
+  }
+
+  let finalRoman = `${prefix}${romanBody}${romanSuffix}`;
+
+  // 斜杠转位低音：若存在，计算低音相对调根音的音级，格式化为 /3, /5, /7 等
+  if (parsed.hasBass && parsed.bassPitch !== 99) {
+    const bassInterval = (parsed.bassPitch - keyRootPitch + 12) % 12;
+    const bassDegree = DIATONIC_DEGREE_MAP[bassInterval] ?? 1;
+    finalRoman = `${finalRoman}/${bassDegree}`;
+  }
+
+  return {
+    roman: finalRoman,
+    degree: def.degree,
+    isDiatonic: def.isDiatonic,
+  };
 };

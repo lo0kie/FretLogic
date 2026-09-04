@@ -2,27 +2,53 @@
  * 有上限的 LRU 缓存：超出容量时按插入顺序淘汰最旧条目。
  * 用于替换各处手写的 "size >= N 时删最旧 key" 样板。
  */
+export interface LruCacheOptions<K, V> {
+  /** 条目被淘汰、覆盖或清空时的销毁回调（用于释放 ImageBitmap 等底层原生资源） */
+  onEvict?: (key: K, value: V) => void;
+}
+
 export interface LruCache<K, V> {
   get(key: K): V | undefined;
   set(key: K, value: V): void;
   has(key: K): boolean;
+  clear(): void;
   readonly size: number;
 }
 
-/** 创建字符串键的 LRU 缓存实例：get/set 均刷新位置，超限淘汰最旧条目。 */
-export function createLruCache<V>(limit: number): LruCache<string, V> {
+/** 创建字符串键的 LRU 缓存实例：get/set 均刷新位置，超限淘汰最旧条目，支持生命周期释放回调。 */
+export function createLruCache<V>(limit: number, options?: LruCacheOptions<string, V>): LruCache<string, V> {
   const map = new Map<string, V>();
   return {
     get: key => map.get(key),
     has: key => map.has(key),
     set: (key, value) => {
       // 已存在则先删除再插入，刷新到最新位置（访问序 LRU 语义）
-      if (map.has(key)) map.delete(key);
+      if (map.has(key)) {
+        const oldVal = map.get(key);
+        map.delete(key);
+        if (oldVal !== undefined && oldVal !== value) {
+          options?.onEvict?.(key, oldVal);
+        }
+      }
       map.set(key, value);
       if (map.size > limit) {
-        const oldest = map.keys().next().value;
-        if (oldest !== undefined) map.delete(oldest);
+        const oldestKey = map.keys().next().value;
+        if (oldestKey !== undefined) {
+          const oldestVal = map.get(oldestKey);
+          map.delete(oldestKey);
+          if (oldestVal !== undefined) {
+            options?.onEvict?.(oldestKey, oldestVal);
+          }
+        }
       }
+    },
+    clear: () => {
+      if (options?.onEvict) {
+        for (const [k, v] of map.entries()) {
+          options.onEvict(k, v);
+        }
+      }
+      map.clear();
     },
     get size() {
       return map.size;

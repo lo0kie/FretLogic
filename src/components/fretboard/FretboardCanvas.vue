@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <canvas
     :aria-label="ariaLabel"
     :style="canvasStyle"
@@ -37,12 +37,12 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const fretCount = computed(() => Math.max(3, props.chord.fretCount || 4));
 
 const BOTTOM_PAD = 6;
-const baseWidth = SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH;
+const baseWidth = computed(() => SCORE_EXPORT_CONFIG.getExportFretboardWidth(props.chord.strings?.length || 6));
 const baseHeight = computed(
   () => SCORE_EXPORT_CONFIG.FRETBOARD_GRID_TOP + fretCount.value * SCORE_EXPORT_CONFIG.FRET_HEIGHT + BOTTOM_PAD
 );
 
-const cssWidth = computed(() => Math.round(baseWidth * props.scale));
+const cssWidth = computed(() => Math.round(baseWidth.value * props.scale));
 const cssHeight = computed(() => Math.round(baseHeight.value * props.scale));
 
 const canvasStyle = computed<CSSProperties>(() => ({
@@ -62,13 +62,19 @@ const getDpr = () => {
   return Math.max(userDpr, 2.5);
 };
 
-const bitmapCache = createLruCache<ImageBitmap | HTMLCanvasElement>(64);
+const bitmapCache = createLruCache<ImageBitmap | HTMLCanvasElement>(64, {
+  onEvict: (_key, item) => {
+    if ('close' in item && typeof item.close === 'function') {
+      item.close();
+    }
+  },
+});
 
 function getCacheKey(): string {
   const c = props.chord;
   const strSig = c.strings.map(s => s[0]).join(',');
   const barreSig = (c.barres ?? []).map(b => `${b.fret}:${b.fromString}-${b.toString}`).join('|');
-  return `${displayChordName.value}_${c.capo}_${fretCount.value}_${strSig}_${barreSig}_${props.isDarkMode ? 1 : 0}_${props.chordNameScale}_${cssWidth.value}x${cssHeight.value}`;
+  return `${displayChordName.value}_${c.fretOffset}_${fretCount.value}_${strSig}_${barreSig}_${props.isDarkMode ? 1 : 0}_${props.chordNameScale}_${cssWidth.value}x${cssHeight.value}`;
 }
 
 function draw() {

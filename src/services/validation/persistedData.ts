@@ -2,7 +2,7 @@ import { computeChordFingerprint, Tuning } from '@/services/music/theory';
 import type { Chord, ChordId, Group, LineId, SlotKey, Song, StringIndex } from '@/types';
 import { GroupSortRule } from '@/types';
 import { FRET_COUNTS } from '@/utils/core/constants';
-import { isCapoValue, normalizeChord } from '@/utils/music/chord-fretboard';
+import { isCapoValue, isFretOffsetValue, normalizeChord, toFretOffset } from '@/utils/music/chord-fretboard';
 import { buildGroupVariant, toSongId } from '@/utils/music/entityFactories';
 import { pruneOrphanChordRefs } from '@/utils/score/chordSlots';
 
@@ -56,13 +56,12 @@ export const sanitizeGroupEntity = (raw: unknown): GroupDraft | null => {
   return draft;
 };
 
-/** 解析根音标记弦索引：仅在索引合法（0~5）且指向已按音的弦时保留，否则置 null。 */
+/** 解析根音标记弦索引：仅在索引合法（>=0 且在实际弦数内）且指向已按音的弦时保留，否则置 null。 */
 const resolveRootStringIndex = (chord: RawRecord): StringIndex | null => {
   const index = chord['rootStringIndex'];
-  if (!isBoundedNumber(index, 0, 5) || !Array.isArray(chord['strings'])) return null;
+  if (!Array.isArray(chord['strings']) || !isBoundedNumber(index, 0, chord['strings'].length - 1)) return null;
 
   const stringEntity = chord['strings'][index];
-  // isBoundedNumber 已保证 0~5 整数，此处收窄为 StringIndex
   return Array.isArray(stringEntity) && typeof stringEntity[0] === 'number' && stringEntity[0] >= 0
     ? (index as StringIndex)
     : null;
@@ -80,7 +79,7 @@ export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 
   if (typeof raw['id'] !== 'string' || !raw['id']) return null;
   if (typeof raw['groupId'] !== 'string' || !raw['groupId']) return null;
   if (!raw['chordName'] && !raw['nameSegments']) return null;
-  if (!Array.isArray(raw['strings']) || raw['strings'].length !== 6) return null;
+  if (!Array.isArray(raw['strings']) || raw['strings'].length < 3 || raw['strings'].length > 10) return null;
 
   if (mode === 'strict') {
     if (!raw['strings'].every(isValidStringEntity)) return null;
@@ -92,13 +91,17 @@ export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 
     if (!isStringsValid) return null;
   }
 
+  const rawOffset = raw['fretOffset'];
+  const rawCapo = raw['capo'];
+  const fretOffset = isFretOffsetValue(rawOffset) ? rawOffset : isCapoValue(rawCapo) ? toFretOffset(rawCapo) : 0;
+
   const draft: Chord = {
     ...(raw as unknown as Chord),
     nameSegments: (raw['nameSegments'] as Chord['nameSegments']) ?? null,
     fretCount: FRET_COUNTS.includes(raw['fretCount'] as Chord['fretCount'])
       ? (raw['fretCount'] as Chord['fretCount'])
       : 3,
-    capo: isCapoValue(raw['capo']) ? raw['capo'] : 0,
+    fretOffset,
     tuning: Object.values(Tuning).includes(raw['tuning'] as Tuning) ? (raw['tuning'] as Tuning) : Tuning.STANDARD,
     rootStringIndex: resolveRootStringIndex(raw),
   };

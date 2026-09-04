@@ -1,4 +1,4 @@
-﻿import { createPinia, setActivePinia } from 'pinia';
+import { createPinia, setActivePinia } from 'pinia';
 import { describe, expect, it } from 'vitest';
 
 import { Tuning } from '@/services/music/theory';
@@ -21,7 +21,7 @@ const validChord: Chord = {
     [0, false],
   ],
   fretCount: 3,
-  capo: 0,
+  fretOffset: 0,
   groupId: 'group-1',
   tuning: Tuning.STANDARD,
   rootStringIndex: 4,
@@ -179,6 +179,31 @@ describe('sanitizePersistedData', () => {
     const result = sanitizePersistedData({ songs: [stored] });
     expect(result.songs[0].chordMap).toBeInstanceOf(Map);
     expect(result.songs[0].chordMap.get('line_line-1_char_0')).toBe('chord-1');
+  });
+
+  it('迁移旧版和弦顶层 capo -> fretOffset：合法旧值 2 保留为 fretOffset 2 且不再含 capo 字段', () => {
+    const legacyChord = {
+      id: 'chord-legacy',
+      chordName: 'C',
+      strings: [
+        [-1, false],
+        [3, false],
+        [2, false],
+        [0, false],
+        [1, false],
+        [0, false],
+      ],
+      fretCount: 3,
+      capo: 2,
+      groupId: 'group-1',
+      tuning: Tuning.STANDARD,
+      rootStringIndex: 4,
+    };
+
+    const result = sanitizePersistedData({ groups: [group], chords: [legacyChord], songs: [] });
+
+    expect(result.chords[0].fretOffset).toBe(2);
+    expect(result.chords[0]).not.toHaveProperty('capo');
   });
 });
 

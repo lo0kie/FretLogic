@@ -8,7 +8,7 @@
         :style="getFretNumberStyle(i)"
         class="absolute -translate-x-full -translate-y-1/2 font-[Helvetica_Neue,Arial,sans-serif] text-xl leading-none font-extrabold text-(--fb-label) select-none"
       >
-        {{ capo > 0 ? capo + i : i }}
+        {{ fretOffset > 0 ? fretOffset + i : i }}
       </span>
     </div>
 
@@ -16,7 +16,7 @@
     <div
       v-if="isBubbleMounted && displayBubbleGeometry"
       :style="{
-        left: `${(displayBubbleGeometry.centerX / CANVAS_CONFIG.BOARD_WIDTH) * 100}%`,
+        left: `${(displayBubbleGeometry.centerX / (boardWidth || CANVAS_CONFIG.BOARD_WIDTH)) * 100}%`,
         top: `${displayBubbleGeometry.topY}px`,
       }"
       class="z-card pointer-events-none absolute -translate-x-1/2 -translate-y-full transition-[left,top] duration-200 ease-out select-none"
@@ -52,15 +52,15 @@
     <svg
       :aria-label="boardAriaLabel"
       :height="fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM"
-      :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
-      :width="CANVAS_CONFIG.BOARD_WIDTH"
+      :viewBox="`0 0 ${boardWidth || CANVAS_CONFIG.BOARD_WIDTH} ${fretCount * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM}`"
+      :width="boardWidth || CANVAS_CONFIG.BOARD_WIDTH"
       class="pointer-events-none box-border block w-full"
       role="img"
       style="overflow: visible"
     >
       <g>
         <line
-          v-for="s in 6"
+          v-for="s in strings.length"
           :key="'string-' + s"
           :stroke-width="FRETBOARD_LINE_WIDTH"
           :x1="stringXPositions[s - 1] ?? 0"
@@ -77,7 +77,7 @@
           :key="'fret-line-' + (f - 1)"
           :stroke-width="FRETBOARD_LINE_WIDTH"
           :x1="stringXPositions[0] ?? 0"
-          :x2="stringXPositions[5] ?? 0"
+          :x2="stringXPositions[strings.length - 1] ?? 0"
           :y1="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
           :y2="(f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
           shape-rendering="crispEdges"
@@ -86,9 +86,9 @@
         />
 
         <rect
-          v-if="capo === 0 && isWideNut"
+          v-if="fretOffset === 0 && isWideNut"
           :height="12"
-          :width="(stringXPositions[5] ?? 0) - (stringXPositions[0] ?? 0) + FRETBOARD_LINE_WIDTH"
+          :width="(stringXPositions[strings.length - 1] ?? 0) - (stringXPositions[0] ?? 0) + FRETBOARD_LINE_WIDTH"
           :x="(stringXPositions[0] ?? 0) - FRETBOARD_LINE_WIDTH / 2"
           :y="-12"
           fill="var(--fb-note)"
@@ -136,7 +136,6 @@
         :fill="hoverFillColor"
         :r="emptyRingRadius"
         :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
-        class="pointer-events-auto cursor-pointer"
         stroke="var(--color-primary)"
       />
 
@@ -147,7 +146,6 @@
         :fill="hoverFillColor"
         :r="emptyRingRadius"
         :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
-        class="pointer-events-auto cursor-pointer"
         stroke="var(--color-primary)"
       />
 
@@ -194,14 +192,15 @@ const {
   activeBaseStrings,
   fretCount,
   strings,
-  capo,
+  fretOffset = 0,
   isDarkMode,
   wideNut = false,
   barres = [],
+  boardWidth,
 } = defineProps<{
   strings: GuitarStringsModel;
   fretCount: number;
-  capo: number;
+  fretOffset?: number;
   activeBaseStrings: readonly number[];
   rootStringIndex?: number | null;
   isDarkMode: boolean;
@@ -212,15 +211,19 @@ const {
   wideNut?: boolean;
   /** 横按列表（显式配置或自动推导），绘制在音符下方 */
   barres?: BarreEntity[];
+  /** 指板画布基准宽度（根据弦数动态推导） */
+  boardWidth?: number;
 }>();
 
 const isWideNut = computed(() => Boolean(wideNut));
 
-/** 指板图的整体无障碍描述：品数与变调夹信息 */
-const boardAriaLabel = computed(() => `吉他指板图，共 ${fretCount} 品${capo > 0 ? `，变调夹 Capo ${capo} 品` : ''}`);
+/** 指板图的整体无障碍描述：品数与品位偏移信息 */
+const boardAriaLabel = computed(
+  () => `吉他指板图，共 ${fretCount} 品${fretOffset > 0 ? `，品位偏移 ${fretOffset} 品` : ''}`
+);
 /** 单根弦指位描述：弦序、品格与音名（v-for 内调用） */
 const stringNoteAriaLabel = (sIdx: number, str: GuitarStringEntity) =>
-  `第 ${6 - sIdx} 弦第 ${str[0]} 品，音名 ${formatStringLabel(sIdx, str[0], str[1], capo, activeBaseStrings)}`;
+  `第 ${6 - sIdx} 弦第 ${str[0]} 品，音名 ${formatStringLabel(sIdx, str[0], str[1], fretOffset, activeBaseStrings)}`;
 
 const emit = defineEmits<{
   (e: 'toggle-pitch', stringIndex: number): void;
@@ -511,7 +514,7 @@ watch(displayBarres, syncBarreHover, { flush: 'post' });
 
 /** 按弦点位音名信息（v-for 内调用） */
 const noteInfo = (sIdx: number, str: GuitarStringEntity) =>
-  computeStringLabelAccidental(sIdx, str[0], capo, str[1], activeBaseStrings);
+  computeStringLabelAccidental(sIdx, str[0], fretOffset, str[1], activeBaseStrings);
 
 /** 该按弦点是否处于 hover 位 */
 const isNoteHovered = (sIdx: number, fret: number) =>

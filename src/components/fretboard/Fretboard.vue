@@ -5,7 +5,7 @@
   >
     <div
       :style="{
-        width: `${CANVAS_CONFIG.BOARD_WIDTH}px`,
+        width: `${boardWidth}px`,
         height: `${rawHeight}px`,
         transform: `scale(${fretboardScale})`,
         transformOrigin: 'top left',
@@ -53,8 +53,8 @@
       <div :style="{ height: `${activeTopOffset}px` }" class="pointer-events-auto relative box-border w-full">
         <svg
           :height="activeTopOffset"
-          :viewBox="`0 0 ${CANVAS_CONFIG.BOARD_WIDTH} ${activeTopOffset}`"
-          :width="CANVAS_CONFIG.BOARD_WIDTH"
+          :viewBox="`0 0 ${boardWidth} ${activeTopOffset}`"
+          :width="boardWidth"
           style="overflow: visible; width: 100%; height: 100%"
         >
           <FretboardNote
@@ -82,9 +82,10 @@
       <FretboardSvg
         :active-base-strings="getActiveBaseStrings(chord.tuning)"
         :barres="effectiveBarres"
-        :capo="chord.capo"
+        :board-width="boardWidth"
         :focus-point="isFocused ? focusPoint : null"
         :fret-count="chord.fretCount"
+        :fret-offset="chord.fretOffset"
         :hover-point
         :is-dark-mode
         :root-string-index="chord.rootStringIndex"
@@ -137,6 +138,7 @@ const props = withDefaults(defineProps<FretboardProps>(), {
 const emit = defineEmits<{
   (e: 'update:chord', value: Chord): void;
   (e: 'update:strings', strings: GuitarStringsModel): void;
+  (e: 'update:fret-offset', fretOffset: number): void;
   (e: 'update:capo', capo: number): void;
   (e: 'update:root-string-index', index: number | null): void;
   (e: 'update:chord-name', name: string): void;
@@ -330,6 +332,7 @@ const {
   hoverPoint,
   focusPoint,
   isFocused,
+  boardWidth,
   stringXPositions,
   rawHeight,
   fretboardScale,
@@ -340,7 +343,9 @@ const {
   handleTogglePitchName,
 } = useFretboardInteraction(
   props,
-  capo => emit('update:capo', capo),
+  fretOffset => {
+    emit('update:fret-offset', fretOffset);
+  },
   strings => emit('update:strings', strings),
   index => emit('update:root-string-index', index)
 );
@@ -370,7 +375,7 @@ const openStringAriaLabels = computed(() => {
     if (isMuted(str)) {
       return `第 ${stringNum} 弦（静音，点击切换为空弦）`;
     }
-    const noteName = calcNoteLabel(sIdx, 0, props.chord.capo, str[1], getActiveBaseStrings(props.chord.tuning));
+    const noteName = calcNoteLabel(sIdx, 0, props.chord.fretOffset, str[1], getActiveBaseStrings(props.chord.tuning));
     return `第 ${stringNum} 弦（空弦 ${noteName}，点击切换为静音）`;
   });
 });
@@ -382,7 +387,7 @@ const openNoteInfo = (sIdx: number): { label: string; isAccidental: boolean; pre
   const { label, isAccidental } = computeStringLabelAccidental(
     sIdx,
     0,
-    props.chord.capo,
+    props.chord.fretOffset,
     str[1],
     getActiveBaseStrings(props.chord.tuning)
   );

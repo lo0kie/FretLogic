@@ -59,17 +59,10 @@ export function cloneDeep<T>(value: T): T {
 export const serializeForStorage = (value: unknown): string =>
   JSON.stringify(value, (_key, val) => (val instanceof Map ? Object.fromEntries(val) : val));
 
-/** 克隆六弦模型：剥响应式代理后逐弦复制 [品位, 升降偏好] 元组，得到纯净的可写副本。 */
+/** 克隆琴弦模型：剥响应式代理后逐弦复制 [品位, 升降偏好] 元组，得到纯净的可写副本。 */
 export function cloneGuitarStrings(strings: GuitarStringsModel): GuitarStringsModel {
   const raw = toRaw(strings);
-  return [
-    [raw[0][0], raw[0][1]],
-    [raw[1][0], raw[1][1]],
-    [raw[2][0], raw[2][1]],
-    [raw[3][0], raw[3][1]],
-    [raw[4][0], raw[4][1]],
-    [raw[5][0], raw[5][1]],
-  ];
+  return raw.map(s => [s[0], s[1]]);
 }
 
 // ===== stringDistance: 编辑距离 =====

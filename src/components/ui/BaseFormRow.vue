@@ -36,7 +36,7 @@
         :style="controlStyle"
         class="form-row-control flex min-w-0 items-center"
       >
-        <slot :disabled :id="effectiveForId" :required />
+        <slot :disabled :id="slotControlId" :required />
       </div>
     </div>
 
@@ -104,7 +104,12 @@ const {
 
 // 使用 Vue 3.5 useId 保证 SSR 与客户端水合一致
 const autoId = useId();
-const effectiveForId = computed(() => forProp || inputId || `form-row-control-${autoId}`);
+/** 供默认插槽接收的控件 id（自动生成一个稳定 id，便于需要自接 id 的控件使用） */
+const slotControlId = computed(() => forProp || inputId || `form-row-control-${autoId}`);
+// label 的 for 仅在调用方显式给出 for/inputId 时才输出：多数控件（BaseInput/BaseSwitch）用各自的
+// useId() 自管原生 id，并不会接收此自动生成的 id，悬空关联会触发浏览器告警
+// （Incorrect use of <label for="...">）
+const effectiveForId = computed(() => forProp || inputId || undefined);
 
 const normalizedLabelWidth = computed(() => {
   if (labelWidth === undefined) return undefined;

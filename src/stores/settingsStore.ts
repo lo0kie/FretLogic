@@ -39,7 +39,11 @@ export const useSettingsStore = defineStore('settings', () => {
   // WebDAV 同步配置（支持选择使用预设代理或自定义代理）
   const webdavServerUrl = useStorage(STORAGE_KEYS.WEBDAV_SERVER_URL, '');
   const webdavUsername = useStorage(STORAGE_KEYS.WEBDAV_USERNAME, '');
-  const webdavPassword = useStorage(STORAGE_KEYS.WEBDAV_PASSWORD, '');
+  // WebDAV 密码统一为纯内存态（与 githubToken/giteeToken/serverToken 一致，不落盘 localStorage）
+  const webdavPassword = ref('');
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(STORAGE_KEYS.WEBDAV_PASSWORD);
+  }
   const webdavUseDefaultProxy = useStorage(STORAGE_KEYS.WEBDAV_USE_DEFAULT_PROXY, true);
   const webdavProxyUrl = useStorage(STORAGE_KEYS.WEBDAV_PROXY_URL, '');
 

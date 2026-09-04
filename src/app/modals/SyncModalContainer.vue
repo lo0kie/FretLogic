@@ -60,6 +60,9 @@
                 提示：数据同步至 Gitee 仓库 look1e/fret-logic 的 backup/chords.json。需先在 Gitee 「私人令牌」页创建
                 Token；私有仓库拉取同样需要 Token。
               </p>
+              <p class="form-hint text-warning m-0">
+                安全说明：受限于 Gitee API v5 鉴权机制，Token 经请求参数传输，请勿在不受信任的公共网络环境中使用。
+              </p>
             </div>
           </template>
 
@@ -114,8 +117,8 @@
           <p class="form-hint m-0">
             {{
               settingsStore.webdavUseDefaultProxy
-                ? '已启用预设代理，自动转发跨域请求。'
-                : '关闭预设代理后可填写自定义代理，留空则浏览器直接连接。'
+                ? '已启用预设代理（由作者维护的 Cloudflare Worker 转发，以绕开浏览器跨域限制；凭据经 HTTPS 传输）。如介意可关闭并填入自建代理或直连。'
+                : '关闭预设代理后可填写自定义代理，留空则由浏览器直接连接（若 WebDAV 服务未配置 CORS 头，直连可能失败）。'
             }}
           </p>
         </div>

@@ -99,6 +99,10 @@ const CHORD_NAME_ZONE_HEIGHT = 100;
  */
 export const CHORD_NAME_FONT_SIZE = 80;
 
+/** 动态计算任意弦数对应的大指板画布总宽（左留白 + (N-1) 段弦距 + 右留白） */
+export const getBoardWidth = (stringCount: number): number =>
+  OFFSET_X_LEFT + Math.max(1, stringCount - 1) * STRING_SPACING + OFFSET_X_RIGHT;
+
 /** 指板画布整体配置（由上方基础常量派生，供各处统一引用） */
 export const CANVAS_CONFIG = {
   STRING_SPACING,
@@ -107,7 +111,7 @@ export const CANVAS_CONFIG = {
   OFFSET_Y_TOP,
   OFFSET_Y_BOTTOM,
   CHORD_NAME_ZONE_HEIGHT,
-  /** 画布总宽 = 左留白 + 5 段弦间距 + 右留白 */
+  /** 画布总宽（默认 6 弦基准） */
   BOARD_WIDTH: OFFSET_X_LEFT + 5 * STRING_SPACING + OFFSET_X_RIGHT,
 } as const;
 
@@ -196,6 +200,8 @@ export const SCORE_EXPORT_CONFIG = {
   TITLE_TO_META_GAP: 14,
 
   // ---- 吉他指板图尺寸（整体放大并增强横按视觉饱满度） ----
+  /** 动态计算乐谱/导出指板图的宽度：左侧留白 × 2 + (N-1) 根弦间距 */
+  getExportFretboardWidth: (stringCount: number): number => 14 * 2 + Math.max(1, stringCount - 1) * 9.8,
   /** 指板图容器标准宽度（px）＝ 左右对称留白 14 × 2 ＋ 5 根弦间距，与 FRETBOARD_LEFT_PAD 联动保持左右边距一致 */
   FRETBOARD_WIDTH: 77,
   /** 琴弦间距（px） */

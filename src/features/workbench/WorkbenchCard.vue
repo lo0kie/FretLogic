@@ -8,8 +8,8 @@
         :is-dark-mode="globalDarkMode"
         :scale="1.0"
         @update:barres="handleBarresChange"
-        @update:capo="handleCapoUpdate"
         @update:chord-name="handleChordNameChange"
+        @update:fret-offset="handleFretOffsetUpdate"
         @update:name-segments="handleNameSegmentsChange"
         @update:root-string-index="handleRootStringChange"
         @update:strings="handleStringsChange"
@@ -24,7 +24,7 @@ import { nameToSegments } from '@/services/music/theory';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
 import { globalDarkMode } from '@/stores/globalState';
 import type { BarreEntity, ChordNameSegments, GuitarStringsModel, StringIndex } from '@/types';
-import { toCapo, toStringIndex } from '@/utils/music/chord-fretboard';
+import { toFretOffset, toStringIndex } from '@/utils/music/chord-fretboard';
 
 const editorStore = useChordEditorStore();
 
@@ -33,9 +33,9 @@ const markCreating = () => {
   if (!editorStore.isEditing) editorStore.isCreating = true;
 };
 
-/** 用户在指板上调整 Capo 后写入草稿 */
-const handleCapoUpdate = (capo: number) => {
-  editorStore.draftChord.capo = toCapo(capo);
+/** 用户在指板上调整品位偏移后写入草稿 */
+const handleFretOffsetUpdate = (offset: number) => {
+  editorStore.draftChord.fretOffset = toFretOffset(offset);
   markCreating();
 };
 

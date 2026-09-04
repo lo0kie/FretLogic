@@ -2,7 +2,7 @@ import type { ChordNameSegments, NoteInput } from '@/types';
 import { createLruCache } from '@/utils/core/lruCache';
 
 import { GRAMMAR_TEMPLATES } from './grammar';
-import { nameToSegments } from './theory';
+import { nameToSegments, parsePitchSegment } from './theory';
 
 export type ChordSlot =
   | 'root'
@@ -47,7 +47,7 @@ export interface ChordCandidate {
   purity: number;
   extraCount: number;
   score: number;
-  tier: 'best' | 'alternative' | 'theoretical';
+  tier: 'best' | 'alternative' | 'theoretical' | 'low_confidence';
   segments?: ChordNameSegments;
 }
 
@@ -57,6 +57,7 @@ export interface AnalyzeResult {
   best: ChordCandidate | undefined;
   alternatives: ChordCandidate[];
   theoretical: ChordCandidate[];
+  lowConfidence: ChordCandidate[];
 }
 
 interface SlotDef {
@@ -100,9 +101,12 @@ const WEIGHTS = {
   EXTRA_PENALTY: 0.25,
 };
 
-const MIN_PURITY = 0.62;
+const MIN_PURITY = 0.6;
+const LOW_PURITY_THRESHOLD = 0.45;
 const BEST_GAP = 6;
 const TOP_EVALUATE_LIMIT = 10;
+
+const STANDARD_ROOT_NAMES: readonly string[] = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
 const normalizePitch = (p: number) => ((p % 12) + 12) % 12;
 
@@ -236,6 +240,19 @@ function populateRoles(hit: RawHitCandidate, labelByPitch: (string | undefined)[
   }
 
   const chordName = `${rootLabel}${template.suffix}${slashBassLabel}`;
+  let segments = nameToSegments(chordName) ?? undefined;
+  if (!segments) {
+    const parsedRoot = parsePitchSegment(rootLabel);
+    if (parsedRoot) {
+      const cleanBassLabel = slashBassLabel.startsWith('/') ? slashBassLabel.slice(1) : slashBassLabel;
+      const parsedBass = isSlash ? (parsePitchSegment(cleanBassLabel) ?? undefined) : undefined;
+      segments = {
+        root: parsedRoot,
+        unknownQuality: template.suffix || undefined,
+        bass: parsedBass,
+      };
+    }
+  }
 
   return {
     chordName,
@@ -248,19 +265,24 @@ function populateRoles(hit: RawHitCandidate, labelByPitch: (string | undefined)[
     extraCount: hit.extraCount,
     score: hit.score,
     tier: 'theoretical',
-    segments: nameToSegments(chordName) ?? undefined,
+    segments,
   };
 }
 
 function assignTiers(candidates: ChordCandidate[]): void {
   if (candidates.length === 0) return;
-  const bestScore = candidates[0]!.score;
+  const highQualityCandidates = candidates.filter(c => c.purity >= MIN_PURITY);
+  const bestScore = highQualityCandidates.length > 0 ? highQualityCandidates[0]!.score : candidates[0]!.score;
 
   for (const c of candidates) {
-    const gap = bestScore - c.score;
-    if (gap <= 0.5) c.tier = 'best';
-    else if (gap <= BEST_GAP) c.tier = 'alternative';
-    else c.tier = 'theoretical';
+    if (c.purity < MIN_PURITY) {
+      c.tier = 'low_confidence';
+    } else {
+      const gap = bestScore - c.score;
+      if (gap <= 0.5) c.tier = 'best';
+      else if (gap <= BEST_GAP) c.tier = 'alternative';
+      else c.tier = 'theoretical';
+    }
   }
 }
 
@@ -274,19 +296,69 @@ function createEmptyResult(): AnalyzeResult {
     best: undefined,
     alternatives: [],
     theoretical: [],
+    lowConfidence: [],
   };
 }
 
-/** 收集输入音符的音高掩码、最低音（按弦序）与各音高对应的音名（同一音高只保留首个音名） */
-function collectNoteContext(notes: NoteInput[]) {
+/**
+ * 结合五度圈习惯、显式根音标记与性质后缀决定根音音名拼写（如小调倾向 C#m/Ebm/G#m/Bbm，非显式时不出现冷门音名）
+ */
+function getPreferredRootLabel(
+  rootPitch: number,
+  labelByPitch: (string | undefined)[],
+  suffix: string,
+  explicitRootPitch: number | null
+): string {
+  const normRoot = normalizePitch(rootPitch);
+  if (explicitRootPitch !== null && normalizePitch(explicitRootPitch) === normRoot) {
+    const explicitLabel = labelByPitch[normRoot];
+    if (explicitLabel) return explicitLabel;
+  }
+
+  const isMinor = suffix.startsWith('m') && !suffix.startsWith('maj') && !suffix.startsWith('Maj');
+  const existingLabel = labelByPitch[normRoot];
+
+  switch (normRoot) {
+    case 1: // C# / Db
+      if (isMinor) return 'C#';
+      return existingLabel || 'Db';
+    case 3: // D# / Eb
+      return 'Eb';
+    case 6: // F# / Gb
+      return existingLabel || 'F#';
+    case 8: // G# / Ab
+      if (isMinor) return 'G#';
+      return existingLabel === 'G#' ? 'G#' : 'Ab';
+    case 10: // A# / Bb
+      return 'Bb';
+    default:
+      return existingLabel || STANDARD_ROOT_NAMES[normRoot] || 'C';
+  }
+}
+
+/** 收集输入音符的音高掩码、最低音（按弦序）与各音高对应的音名（显式根音音高优先保留其音名，空缺由标准音名兜底） */
+function collectNoteContext(notes: NoteInput[], explicitRootPitch: number | null) {
   let pitchMask = 0;
   const labelByPitch: (string | undefined)[] = new Array(12);
   const lowestNote = notes.reduce((min, n) => (n.stringIndex < min.stringIndex ? n : min), notes[0]!);
 
+  const normExplicit = explicitRootPitch !== null ? normalizePitch(explicitRootPitch) : null;
+
+  if (normExplicit !== null) {
+    const explicitNote = notes.find(n => normalizePitch(n.pitchIndex) === normExplicit);
+    if (explicitNote && explicitNote.label) {
+      labelByPitch[normExplicit] = explicitNote.label;
+    }
+  }
+
   for (const n of notes) {
     const p = normalizePitch(n.pitchIndex);
     pitchMask |= 1 << p;
-    if (labelByPitch[p] === undefined) labelByPitch[p] = n.label;
+    if (labelByPitch[p] === undefined && n.label) labelByPitch[p] = n.label;
+  }
+
+  for (let p = 0; p < 12; p++) {
+    if (!labelByPitch[p]) labelByPitch[p] = STANDARD_ROOT_NAMES[p];
   }
 
   return { pitchMask, labelByPitch, lowestNote };
@@ -323,7 +395,7 @@ function evaluateTemplate(
 
   const explainedCount = bitCount(explainedMask);
   const purity = totalInputNotes === 0 ? 0 : explainedCount / totalInputNotes;
-  if (purity < MIN_PURITY) return null;
+  if (purity < LOW_PURITY_THRESHOLD) return null;
 
   const extraCount = totalInputNotes - explainedCount;
   const score = fastSoftScore(purity, extraCount, isSlash, lowestInterval, explicitRoot, comp.template);
@@ -354,13 +426,18 @@ function collectRawHits(
   const rawHits: RawHitCandidate[] = [];
 
   for (const rootPitch of rootPitches) {
-    const rootLabel = labelByPitch[rootPitch] || '';
     const intervalMask = toIntervalMask(pitchMask, rootPitch);
     const lowestInterval = normalizePitch(lowestNote.pitchIndex - rootPitch);
     const isSlash = normalizePitch(lowestNote.pitchIndex) !== rootPitch;
     const slashBassLabel = isSlash ? `/${lowestNote.label}` : '';
 
     for (const comp of COMPILED_TEMPLATES) {
+      const rootLabel = getPreferredRootLabel(
+        rootPitch,
+        labelByPitch,
+        comp.template.suffix,
+        explicitRoot ? rootPitch : null
+      );
       const hit = evaluateTemplate(
         comp,
         rootPitch,
@@ -405,6 +482,7 @@ function groupCandidates(candidates: ChordCandidate[], lowestNote: NoteInput): A
     best: candidates.find(c => c.tier === 'best'),
     alternatives: candidates.filter(c => c.tier === 'alternative'),
     theoretical: candidates.filter(c => c.tier === 'theoretical'),
+    lowConfidence: candidates.filter(c => c.tier === 'low_confidence'),
   };
 }
 
@@ -412,7 +490,7 @@ function groupCandidates(candidates: ChordCandidate[], lowestNote: NoteInput): A
 function rawAnalyze(notes: NoteInput[], explicitRootPitch: number | null): AnalyzeResult {
   if (notes.length === 0) return createEmptyResult();
 
-  const { pitchMask, labelByPitch, lowestNote } = collectNoteContext(notes);
+  const { pitchMask, labelByPitch, lowestNote } = collectNoteContext(notes, explicitRootPitch);
   const rootPitches = resolveRootPitches(pitchMask, explicitRootPitch);
   const rawHits = collectRawHits(rootPitches, pitchMask, labelByPitch, lowestNote, explicitRootPitch !== null);
   const uniqueCandidates = dedupeTopHits(rawHits).map(h => populateRoles(h, labelByPitch));

@@ -23,7 +23,7 @@ describe('payload validation migration matrix', () => {
           chordName: 'C',
           strings,
           fretCount: 3,
-          capo: 0,
+          fretOffset: 0,
           groupId: 'g1',
           tuning: 'STANDARD',
           isInverted: false,
@@ -50,7 +50,7 @@ describe('payload validation migration matrix', () => {
           chordName: 'C',
           strings: strings.map(([fret, preferFlat]) => ({ fret, preferFlat })),
           fretCount: 3,
-          capo: 0,
+          fretOffset: 0,
           groupId: 'g1',
           tuning: 'STANDARD',
         },
@@ -85,7 +85,7 @@ describe('payload validation migration matrix', () => {
           chordName: 'C',
           strings: 'broken',
           fretCount: 3,
-          capo: 99,
+          fretOffset: 99,
           groupId: 'g1',
           tuning: 'STANDARD',
         },
@@ -102,7 +102,7 @@ describe('payload validation migration matrix', () => {
           chordName: 'C',
           strings,
           fretCount: 3,
-          capo: 99,
+          fretOffset: 99,
           groupId: 'g1',
           tuning: 'STANDARD',
           rootStringIndex: null,
@@ -111,7 +111,7 @@ describe('payload validation migration matrix', () => {
       songs: [{ id: 's1', title: 'S', lyrics: '', lineIds: [], playKey: 'C', capo: 99, chordMap: {} }],
     });
 
-    expect(sanitized.chords[0].capo).toBe(0);
+    expect(sanitized.chords[0].fretOffset).toBe(0);
     expect(sanitized.songs[0].capo).toBe(0);
   });
 
@@ -121,7 +121,7 @@ describe('payload validation migration matrix', () => {
       chordName: 'C',
       strings,
       fretCount: 3,
-      capo: 0,
+      fretOffset: 0,
       groupId: 'g1',
       tuning: 'STANDARD',
       rootStringIndex: null,
@@ -147,7 +147,7 @@ describe('payload validation migration matrix', () => {
     const result = validateImportExportPayload({
       version: 6,
       groups: [group],
-      chords: [{ id: 'c1', chordName: 'C', strings, fretCount: 3, capo: 0, groupId: 'g1', tuning: 'STANDARD' }],
+      chords: [{ id: 'c1', chordName: 'C', strings, fretCount: 3, fretOffset: 0, groupId: 'g1', tuning: 'STANDARD' }],
       songs: [
         {
           id: 's1',

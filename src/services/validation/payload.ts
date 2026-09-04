@@ -47,7 +47,12 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: ImportExportPayload) => void>
       if (typeof legacyChord.id === 'number') {
         legacyChord.id = String(legacyChord.id);
       }
-      if (Array.isArray(chord.strings) && chord.strings.length === 6 && chord.strings.some(s => !Array.isArray(s))) {
+      if (
+        Array.isArray(chord.strings) &&
+        chord.strings.length >= 3 &&
+        chord.strings.length <= 10 &&
+        chord.strings.some(s => !Array.isArray(s))
+      ) {
         chord.strings = chord.strings.map(s => {
           const legacy = s as unknown as { fret?: unknown; preferFlat?: unknown };
           return [typeof legacy.fret === 'number' ? legacy.fret : -1, !!legacy.preferFlat];
@@ -114,7 +119,7 @@ const sanitizeGroups = (groups: unknown, issues: string[]): GroupDraft[] => {
 };
 
 /** 清洗备份包中的和弦列表：逐项校验结构（含 6 弦二维数组），旧数据仅有 chordName 时兜底解析分片。 */
-const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
+const sanitizeChords = (chords: unknown, issues: string[], warnings: string[]): Chord[] => {
   if (!Array.isArray(chords)) {
     issues.push('chords 字段必须为数组');
     return [];
@@ -132,8 +137,8 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
             issues.push(`chords[${index}] (${c.id || index}) 缺失基础识别属性`);
             return false;
           }
-          if (!Array.isArray(c.strings) || c.strings.length !== 6) {
-            issues.push(`chords[${index}] (${c.id}) 琴弦数组损坏 (必须为 6 弦)`);
+          if (!Array.isArray(c.strings) || c.strings.length < 3 || c.strings.length > 10) {
+            issues.push(`chords[${index}] (${c.id}) 琴弦数组损坏 (琴弦数量须在 3-10 之间)`);
             return false;
           }
           // 二维数组校验：每项必须是 [fret, preferFlat] 元组
@@ -149,10 +154,20 @@ const sanitizeChords = (chords: unknown, issues: string[]): Chord[] => {
         }
       )
       .map(c => {
-        // 兼容边界：旧数据可能仅有 chordName，先兜底出 nameSegments 再进清洗内核
+        // 兼容边界：旧数据可能仅有 chordName，先解析出 nameSegments 再进清洗内核
         const rawName = typeof c['chordName'] === 'string' ? c['chordName'].trim() : '';
-        const nameSegments: ChordNameSegments = c.nameSegments ??
-          (rawName ? (nameToSegments(rawName) ?? null) : null) ?? { root: ['C', 0] };
+        let nameSegments: ChordNameSegments | null = c.nameSegments ?? null;
+
+        if (!nameSegments && rawName) {
+          nameSegments = nameToSegments(rawName);
+          if (!nameSegments) {
+            warnings.push(`和弦「${rawName}」(ID: ${c.id}) 名称解析失败，已记录并重置为默认根音 C`);
+            nameSegments = { root: ['C', 0] };
+          }
+        } else if (!nameSegments) {
+          warnings.push(`和弦 (ID: ${c.id}) 缺失名称信息，已重置为默认根音 C`);
+          nameSegments = { root: ['C', 0] };
+        }
 
         // 字段收口与旧字段清理统一交由共享实体内核（repair 模式）
         return sanitizeChordEntity({ ...c, nameSegments }, { mode: 'repair' });
@@ -268,13 +283,14 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
     return { isValid: false, issues: ['检测到数据资产并非有效对象'] };
   }
   const issues: string[] = [];
+  const warnings: string[] = [];
   const raw = cloneDeep(data as RawRecord);
   // 先迁移旧版本到当前格式，再做结构校验（校验只认当前格式）
   const migrated = migratePayloadVersion(raw as unknown as ImportExportPayload);
   const now = Date.now();
   // Group 为判别联合，交叉类型无法被 TS 自动收敛，时间戳补齐后信任收窄（校验边界）
   const groups = fillMissingTimestamps(sanitizeGroups(migrated.groups, issues), now) as Group[];
-  const chords = fillMissingTimestamps(sanitizeChords(migrated.chords, issues), now);
+  const chords = fillMissingTimestamps(sanitizeChords(migrated.chords, issues, warnings), now);
   const songs = migrated.songs !== undefined ? fillMissingTimestamps(sanitizeSongs(migrated.songs, issues), now) : [];
   const syncSettings = sanitizeSyncSettings(migrated.syncSettings);
   const preferences = sanitizePreferences(migrated.preferences);
@@ -298,8 +314,7 @@ export const validateImportExportPayload = (data: unknown): ValidationResult => 
     return { ...song, chordMap: map };
   });
 
-  // 自动清理（去重 / 剪枝失效引用）不阻断导入，但必须可见，避免用户以为数据完好
-  const warnings: string[] = [];
+  // 自动清理（去重 / 剪枝失效引用 / 和弦名重置）不阻断导入，但必须可见，避免用户以为数据完好
   if (dupes.length > 0) {
     warnings.push(`导入时丢弃了 ${dupes.length} 个同组重复指纹的和弦`);
   }

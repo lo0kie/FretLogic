@@ -7,11 +7,13 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
+import { getChordName, transposeChordEntity } from '@/services/music/theory';
+import { useChordStore } from '@/stores/chordStore';
 import { useSongStore } from '@/stores/songStore';
-import type { Chord, ChordId, LineId, SlotKey, Song } from '@/types';
-import { cloneDeep, matchLineIds, sanitizeLyricsText } from '@/utils/core/common';
+import type { Capo, Chord, ChordId, LineId, SlotKey, Song } from '@/types';
+import { generateUUID, matchLineIds, sanitizeLyricsText } from '@/utils/core/common';
 import { STORAGE_KEYS } from '@/utils/core/constants';
-import { toCapo } from '@/utils/music/chord-fretboard';
+import { toChordId } from '@/utils/music/entityFactories';
 import { garbageCollectChordMap } from '@/utils/score/chordSlots';
 
 type ScoreActiveTab = 'edit' | 'interactive' | 'preview';
@@ -20,10 +22,13 @@ interface HistoryState {
   lyrics: string;
   lineIds: LineId[];
   chordMap: Map<SlotKey, ChordId>;
+  playKey?: string;
+  capo?: Capo;
 }
 
 export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const songStore = useSongStore();
+  const chordStore = useChordStore();
   const activeSongId = useStorage<string | null>(STORAGE_KEYS.ACTIVE_SONG_ID, null);
   // 当前标签页持久化：刷新/重启后恢复上次所在的乐谱视图（edit / interactive / preview）
   const activeTabRef = useStorage<ScoreActiveTab>(STORAGE_KEYS.SCORE_ACTIVE_TAB, 'edit');
@@ -65,18 +70,53 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     },
   });
 
+  const cloneHistoryState = (state: HistoryState): HistoryState => ({
+    lyrics: state.lyrics,
+    lineIds: [...state.lineIds],
+    chordMap: new Map(state.chordMap),
+    playKey: state.playKey,
+    capo: state.capo,
+  });
+
+  const chordMapsEqual = (a: Map<SlotKey, ChordId>, b: Map<SlotKey, ChordId>): boolean => {
+    if (a === b) return true;
+    if (a.size !== b.size) return false;
+    for (const [k, v] of a) {
+      if (b.get(k) !== v) return false;
+    }
+    return true;
+  };
+
+  const lineIdsEqual = (a: LineId[], b: LineId[]): boolean => {
+    if (a === b) return true;
+    if (a.length !== b.length) return false;
+    return a.every((id, i) => id === b[i]);
+  };
+
   /** 将当前歌曲的歌词/行序/和弦映射快照压入撤销栈（容量 20，撤销-重做期间不记录）。 */
   const recordHistory = (song?: Song) => {
     const target = song || activeSong.value;
     if (!target || isUndoRedoAction.value) return;
+    const nextState = cloneHistoryState({
+      lyrics: target.lyrics,
+      lineIds: target.lineIds,
+      chordMap: target.chordMap,
+      playKey: target.playKey,
+      capo: target.capo,
+    });
+    const currentTop = historyStack[historyIndex];
+    if (
+      currentTop &&
+      currentTop.lyrics === nextState.lyrics &&
+      currentTop.playKey === nextState.playKey &&
+      currentTop.capo === nextState.capo &&
+      lineIdsEqual(currentTop.lineIds, nextState.lineIds) &&
+      chordMapsEqual(currentTop.chordMap, nextState.chordMap)
+    ) {
+      return;
+    }
     historyStack.splice(historyIndex + 1);
-    historyStack.push(
-      cloneDeep({
-        lyrics: target.lyrics,
-        lineIds: target.lineIds,
-        chordMap: target.chordMap,
-      })
-    );
+    historyStack.push(nextState);
     if (historyStack.length > HISTORY_CAPACITY) {
       historyStack.shift();
     }
@@ -89,7 +129,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       isUndoRedoAction.value = true;
       historyIndex--;
       // 快照可能被 songStore 以引用方式接管（chordMap 会被原地修改），恢复时必须克隆
-      const state = cloneDeep(historyStack[historyIndex]!);
+      const state = cloneHistoryState(historyStack[historyIndex]!);
       songStore.updateSongMeta(activeSong.value.id, state);
       await nextTick();
       await nextTick();
@@ -102,7 +142,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     if (historyIndex < historyStack.length - 1 && activeSong.value) {
       isUndoRedoAction.value = true;
       historyIndex++;
-      const state = cloneDeep(historyStack[historyIndex]!);
+      const state = cloneHistoryState(historyStack[historyIndex]!);
       songStore.updateSongMeta(activeSong.value.id, state);
       await nextTick();
       await nextTick();
@@ -139,26 +179,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   /** 设置当前编辑的歌曲 id（持久化，刷新后恢复上次编辑的歌曲）。 */
   const setActiveSong = (id: string | null) => {
     activeSongId.value = id;
-  };
-
-  /** 更新歌曲演奏调（playKey）；值未变化时跳过。 */
-  const updatePlayKey = (playKey: string) => {
-    if (activeSong.value && activeSong.value.playKey !== playKey) {
-      recordHistory();
-      songStore.updateSongMeta(activeSong.value.id, {
-        playKey,
-      });
-    }
-  };
-
-  /** 更新歌曲变调夹品位（经 toCapo 收敛到合法范围）；值未变化时跳过。 */
-  const updateCapo = (capo: number) => {
-    if (activeSong.value && activeSong.value.capo !== capo) {
-      recordHistory();
-      songStore.updateSongMeta(activeSong.value.id, {
-        capo: toCapo(capo),
-      });
-    }
   };
 
   /**
@@ -201,24 +221,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     songStore.removeCharChord(activeSong.value.id, slotKey);
   };
 
-  /** 清空指定歌词行内全部槽位的和弦绑定（按槽位键前缀匹配）。 */
-  const clearLineChords = (lineId: string) => {
-    if (!activeSong.value || !activeSong.value.chordMap) return;
-    recordHistory();
-    const linePrefix = `line_${lineId}_`;
-    const updatedMap = new Map(activeSong.value.chordMap);
-    let changed = false;
-    for (const key of updatedMap.keys()) {
-      if (key.startsWith(linePrefix)) {
-        updatedMap.delete(key);
-        changed = true;
-      }
-    }
-    if (changed) {
-      songStore.updateSongMeta(activeSong.value.id, { chordMap: updatedMap });
-    }
-  };
-
   /** 拖拽来源是 DOM data-slot-key（不可信边界）：校验前缀后再信任收窄 */
   const isSlotKey = (value: string): value is SlotKey => value.startsWith('line_');
   /** 交换两个槽位的和弦绑定（拖拽互换），并记录撤销历史。 */
@@ -250,6 +252,38 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     songStore.removeCharChord(activeSong.value.id, sourceKey);
   };
 
+  /** 对当前编辑歌曲进行移调（包含撤销栈记录与和弦库复用/自动补充） */
+  const transposeActiveSong = (semitones: number) => {
+    if (!activeSong.value || semitones === 0) return;
+    recordHistory();
+    songStore.transposeSong(activeSong.value.id, semitones, {
+      chordResolver: id => chordStore.savedChordsList.find(c => c.id === id),
+      chordFinder: (targetName, originalChord) => {
+        return chordStore.savedChordsList.find(c => {
+          if (c.tuning !== originalChord.tuning || c.strings.length !== originalChord.strings.length) return false;
+          return getChordName(c) === targetName;
+        });
+      },
+      chordCreator: originalChord => {
+        const created = transposeChordEntity(originalChord, semitones, {
+          mode: 'update_name',
+          newId: toChordId('c_' + generateUUID().slice(0, 10)),
+        });
+        chordStore.addChord(created);
+        return created;
+      },
+    });
+    recordHistory();
+  };
+
+  /** 增减当前歌曲的变调夹品位（包含撤销栈保护） */
+  const transposeActiveCapo = (deltaCapo: number) => {
+    if (!activeSong.value || deltaCapo === 0) return;
+    recordHistory();
+    songStore.transposeSongCapo(activeSong.value.id, deltaCapo);
+    recordHistory();
+  };
+
   return {
     activeSongId,
     activeTab,
@@ -257,15 +291,14 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     activeSong,
     hasLyrics,
     setActiveSong,
-    updatePlayKey,
-    updateCapo,
     updateLyrics,
     setSlotChord,
     removeSlotChord,
-    clearLineChords,
     swapSlotChords,
     copySlotChord,
     moveSlotChord,
+    transposeActiveSong,
+    transposeActiveCapo,
     fontScale,
     fretboardScale,
     effectiveFontScale,

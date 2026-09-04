@@ -12,7 +12,8 @@ import type { ImportExportPayload } from '@/types';
 const { modals, modalData, open, close } = useModalController(
   { export: false, import: false },
   {
-    exportSelection: { ...FULL_BACKUP_SELECTION } as BackupSelection,
+    // 出于凭据安全考量，导出默认不勾选同步配置，需用户知情后主动勾选
+    exportSelection: { ...FULL_BACKUP_SELECTION, syncSettings: false } as BackupSelection,
     importSelection: { ...FULL_BACKUP_SELECTION } as BackupSelection,
     /** 解析成功的备份包（导入确认时应用） */
     parsedPayload: null as ImportExportPayload | null,
@@ -102,10 +103,15 @@ export function useBackupModals() {
     return { ...availability };
   };
 
-  /** 打开导出弹窗，默认勾选全部本地可用类别 */
+  /** 打开导出弹窗，默认勾选本地可用类别（敏感凭据 syncSettings 默认不勾选） */
   const openExport = () => {
-    // 默认勾选全部本地可用的类别（无数据的类别不勾选且禁用）
-    open('export', { exportSelection: { ...exportAvailability.value } });
+    // 默认勾选全部本地可用的业务类别；出于安全考量，含凭据的同步配置默认不勾选，需用户显式选择
+    open('export', {
+      exportSelection: {
+        ...exportAvailability.value,
+        syncSettings: false,
+      },
+    });
   };
 
   /** header-extra 全选：导出面板在全部可用类别间切换 */
