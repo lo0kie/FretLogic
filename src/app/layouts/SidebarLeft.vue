@@ -34,13 +34,14 @@
         <div class="header-actions gap-xs flex shrink-0 items-center">
           <ActionButton
             v-tooltip="'新建分组'"
+            :icon-stroke-width="2.5"
             @click="groupModals.openCreate"
             aria-label="新建分组"
+            icon="plus"
             icon-only
+            icon-size="xl"
             variant="ghost"
-          >
-            <BaseIcon :stroke-width="2.5" name="plus" size="xl" />
-          </ActionButton>
+          />
         </div>
       </div>
 
@@ -70,13 +71,14 @@
 
           <ActionButton
             v-tooltip="'新建乐谱'"
+            :icon-stroke-width="2.5"
             @click="songModals.openCreateSongModal"
             aria-label="新建乐谱"
+            icon="plus"
             icon-only
+            icon-size="xl"
             variant="ghost"
-          >
-            <BaseIcon :stroke-width="2.5" name="plus" size="xl" />
-          </ActionButton>
+          />
         </div>
       </div>
     </div>
@@ -124,9 +126,8 @@
       <input @change="handleFileChange" accept=".json" class="hidden-input hidden" ref="fileInputRef" type="file" />
 
       <div class="footer-actions-row gap-sm box-border grid grid-cols-2 items-stretch">
-        <ActionButton @click="handleImportTrigger" prefix-icon="download" width="100%"> 导入备份 </ActionButton>
-
-        <ActionButton @click="backupModals.openExport" prefix-icon="upload" width="100%"> 导出备份 </ActionButton>
+        <ActionButton @click="handleImportTrigger" icon="download" label="导入备份" width="100%" />
+        <ActionButton @click="backupModals.openExport" icon="upload" label="导出备份" width="100%" />
       </div>
     </div>
   </aside>

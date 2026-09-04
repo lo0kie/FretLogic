@@ -58,11 +58,10 @@
         :fret-count="chord.fretCount"
         :fret-offset="chord.fretOffset"
         :hover-point
-        :is-dark-mode
+        :is-dark-mode="globalDarkMode"
         :root-string-index="chord.rootStringIndex"
         :string-x-positions
         :strings="chord.strings"
-        :wide-nut="isWideNut"
         @toggle-barre="handleToggleBarre"
         @toggle-pitch="handleTogglePitchName"
       />
@@ -82,39 +81,27 @@ import {
   segmentsToString,
 } from '@/services/music/theory';
 import { useFretboardInteraction } from '@/shared/composables/useFretboardInteraction';
+import { globalDarkMode } from '@/stores/globalState';
 import { useUiStore } from '@/stores/uiStore';
 import type { BarreEntity, Chord, ChordNameSegments, GuitarStringsModel } from '@/types';
 import { CANVAS_CONFIG, CHORD_NAME_FONT_SIZE } from '@/utils/core/constants';
 
 export interface FretboardProps {
   chord: Chord;
-  isDarkMode?: boolean;
-  scale?: number;
-  /** 零品品丝是否加宽（粗琴枕效果），默认 true */
-  wideNut?: boolean;
 }
 
-const props = withDefaults(defineProps<FretboardProps>(), {
-  isDarkMode: false,
-  scale: 1.0,
-  wideNut: true,
-});
+const props = defineProps<FretboardProps>();
 
 const emit = defineEmits<{
-  (e: 'update:chord', value: Chord): void;
   (e: 'update:strings', strings: GuitarStringsModel): void;
   (e: 'update:fret-offset', fretOffset: number): void;
-  (e: 'update:capo', capo: number): void;
   (e: 'update:root-string-index', index: number | null): void;
   (e: 'update:chord-name', name: string): void;
   (e: 'update:name-segments', segments: ChordNameSegments | null): void;
   (e: 'update:barres', barres: BarreEntity[] | undefined): void;
-  (e: 'toggle-barre', barre: BarreEntity): void;
 }>();
 
 const uiStore = useUiStore();
-
-const isWideNut = computed(() => Boolean(props.wideNut));
 
 /** 生效横按：仅采用显式手动标记（不做自动推导） */
 const effectiveBarres = computed<BarreEntity[]>(() => props.chord.barres ?? []);
@@ -133,8 +120,6 @@ const handleToggleBarre = (barre: BarreEntity) => {
     next = [...current, { fret: barre.fret, fromString: barre.fromString, toString: barre.toString }];
   }
   emit('update:barres', next);
-  emit('toggle-barre', barre);
-  emit('update:chord', { ...props.chord, barres: next });
 };
 
 const chordNameInputRef = useTemplateRef<HTMLDivElement>('chordNameInputRef');

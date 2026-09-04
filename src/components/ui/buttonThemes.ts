@@ -21,11 +21,11 @@ export const BUTTON_SIZE_MAP: Record<string, string> = {
   lg: 'h-[2.3rem] px-xl text-sm gap-sm',
 };
 
-/** 紧凑模式尺寸：仅左右内边距减半，高度/字号/间距保持与原尺寸一致 */
+/** 紧凑模式尺寸：左右内边距减半，同时缩小与首尾图标的 gap；高度/字号保持与原尺寸一致 */
 export const BUTTON_COMPACTED_SIZE_MAP: Record<string, string> = {
-  sm: 'h-[1.6rem] px-[0.4rem] text-xs gap-xs',
-  md: 'h-[1.9rem] px-[0.6rem] text-xs gap-sm',
-  lg: 'h-[2.3rem] px-[0.8rem] text-sm gap-sm',
+  sm: 'h-[1.6rem] px-[0.4rem] text-xs gap-2xs',
+  md: 'h-[1.9rem] px-[0.6rem] text-xs gap-xs',
+  lg: 'h-[2.3rem] px-[0.8rem] text-sm gap-xs',
 };
 
 /** icon-only 方形尺寸 */

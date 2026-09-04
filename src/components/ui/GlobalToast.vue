@@ -28,34 +28,11 @@
             <div :class="{ 'pt-3xs!': item.description }" class="flex shrink-0 items-center justify-center pt-0.5">
               <slot :item name="icon">
                 <BaseIcon
-                  v-if="item.type === 'loading'"
+                  :class="TOAST_ICON_MAP[item.type]?.iconClass"
+                  :name="TOAST_ICON_MAP[item.type]?.name ?? 'info'"
                   aria-hidden="true"
-                  class="animate-spin opacity-80"
-                  name="loader-2"
-                  size="md"
+                  size="xl"
                 />
-                <BaseIcon
-                  v-else-if="item.type === 'success'"
-                  aria-hidden="true"
-                  class="opacity-90"
-                  name="check-circle-2"
-                  size="md"
-                />
-                <BaseIcon
-                  v-else-if="item.type === 'error'"
-                  aria-hidden="true"
-                  class="opacity-90"
-                  name="alert-circle"
-                  size="md"
-                />
-                <BaseIcon
-                  v-else-if="item.type === 'warning'"
-                  aria-hidden="true"
-                  class="opacity-90"
-                  name="alert-triangle"
-                  size="md"
-                />
-                <BaseIcon v-else aria-hidden="true" class="opacity-80" name="info" size="md" />
               </slot>
             </div>
 
@@ -101,7 +78,7 @@
               title="关闭"
               type="button"
             >
-              <BaseIcon :stroke-width="2.5" aria-hidden="true" name="x" size="sm" />
+              <BaseIcon :stroke-width="3" aria-hidden="true" name="x" size="md" />
             </button>
           </slot>
         </div>
@@ -114,6 +91,7 @@
 import { computed } from 'vue';
 
 import BaseIcon from '@/components/ui/BaseIcon.vue';
+import type { IconName } from '@/components/ui/icons.registry';
 import { useUiStore } from '@/stores/uiStore';
 import type { Toast, ToastType } from '@/types';
 
@@ -149,6 +127,15 @@ const TOAST_THEME_MAP: Record<ToastType, string> = {
   warning: 'bg-tint-warning-82 text-warning',
   loading: 'bg-tint-primary-82 text-primary',
   info: 'bg-bg-panel text-text-title',
+};
+
+/** 各类型提示的图标与附加类（loading 需旋转、其余按类型定透明度） */
+const TOAST_ICON_MAP: Record<ToastType, { name: IconName; iconClass: string }> = {
+  loading: { name: 'loader-2', iconClass: 'animate-spin opacity-80' },
+  success: { name: 'check-circle-2', iconClass: 'opacity-90' },
+  error: { name: 'alert-circle', iconClass: 'opacity-90' },
+  warning: { name: 'alert-triangle', iconClass: 'opacity-90' },
+  info: { name: 'info', iconClass: 'opacity-80' },
 };
 
 const POSITION_CLASS_MAP: Record<string, string> = {

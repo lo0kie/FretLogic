@@ -216,11 +216,10 @@ const {
   rootStringIndex = null,
   stringXPositions,
   activeBaseStrings,
-  fretCount,
   strings,
+  fretCount,
   fretOffset = 0,
   isDarkMode,
-  wideNut = false,
   barres = [],
   boardWidth,
 } = defineProps<{
@@ -233,8 +232,6 @@ const {
   stringXPositions: number[];
   hoverPoint?: { stringIndex: number; fretIndex: number } | null;
   focusPoint?: { stringIndex: number; fretIndex: number } | null;
-  /** 零品品丝是否加宽（粗琴枕效果），默认 false */
-  wideNut?: boolean;
   /** 横按列表（显式配置或自动推导），绘制在音符下方 */
   barres?: BarreEntity[];
   /** 指板画布基准宽度（根据弦数动态推导） */
@@ -242,9 +239,10 @@ const {
 }>();
 
 /** 零品加粗样式：bottom 恒为 OFFSET_Y_TOP，通过 style 绑定 height/y 使 CSS transition 生效
- * （plain SVG attribute 不触发 transition，必须走 inline style，与 barreBeamStyle 同样约定） */
+ * （plain SVG attribute 不触发 transition，必须走 inline style，与 barreBeamStyle 同样约定）；
+ * 高度固定 12px 加宽，显隐由模板 v-if="fretOffset === 0" 控制（非零品不显示粗轴承） */
 const nutBarStyle = computed<CSSProperties>(() => {
-  const h = wideNut ? 12 : 0;
+  const h = 12;
   return { height: `${h}px`, y: `${CANVAS_CONFIG.OFFSET_Y_TOP - h}px` };
 });
 

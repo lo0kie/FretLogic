@@ -129,17 +129,18 @@
               :aria-hidden="hoveredLineKey !== lineData.lineId"
               :aria-label="deleteLineButtonTitle"
               :class="hoveredLineKey === lineData.lineId ? 'opacity-100' : 'opacity-0'"
+              :icon-stroke-width="2.2"
               :tabindex="hoveredLineKey === lineData.lineId ? 0 : -1"
               :title="deleteLineButtonTitle"
               @click.stop="deleteLine(lineData)"
               @pointerdown.stop
               class="pl-sm text-danger duration-fast ml-auto shrink-0 self-center transition-opacity"
+              icon="trash-2"
               icon-only
+              icon-size="lg"
               size="lg"
               variant="subtle"
-            >
-              <BaseIcon :stroke-width="2.2" name="trash-2" size="lg" />
-            </ActionButton>
+            />
           </div>
 
           <div aria-hidden="true" class="line-row-gutter w-6 shrink-0 max-md:w-2" />
@@ -169,7 +170,6 @@
 import { onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 import ActionButton from '@/components/ui/ActionButton.vue';
-import BaseIcon from '@/components/ui/BaseIcon.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import type { DropZone } from '@/features/score-editor/composables/lyrics-drag/dropZone';
 import { useLyricsDragDrop } from '@/features/score-editor/composables/useLyricsDragDrop';

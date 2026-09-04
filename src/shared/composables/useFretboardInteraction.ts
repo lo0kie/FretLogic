@@ -29,7 +29,8 @@ export function useFretboardInteraction(
   const focusPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
   const isFocused = ref(false);
 
-  const scale = computed(() => props.scale ?? 1.0);
+  // 交互指板固定以原生尺寸渲染（Fretboard 已是纯交互组件且仅一处使用，不再暴露 scale 参数）
+  const scale = ref(1);
   const strings = computed(() => props.chord.strings);
   const fretCount = computed(() => props.chord.fretCount);
   const fretOffset = computed(() => props.chord.fretOffset);

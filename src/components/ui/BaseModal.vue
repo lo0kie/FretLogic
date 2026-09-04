@@ -54,15 +54,16 @@
                   <ActionButton
                     v-if="showClose"
                     :disabled="confirmLoading"
+                    :icon-stroke-width="3"
                     @click="close('close')"
                     aria-label="关闭"
                     class="p-1.5!"
+                    icon="x"
                     icon-only
+                    icon-size="xl"
                     size="sm"
                     variant="ghost"
-                  >
-                    <BaseIcon :stroke-width="3" name="x" size="xl" />
-                  </ActionButton>
+                  />
                 </div>
               </slot>
             </div>
@@ -85,22 +86,21 @@
                 <slot name="cancel-btn">
                   <ActionButton
                     :disabled="cancelButtonDisabled || confirmLoading"
+                    :label="cancelText"
                     @click="close('cancel')"
                     variant="default"
-                  >
-                    {{ cancelText }}
-                  </ActionButton>
+                  />
                 </slot>
+
                 <slot name="confirm-btn">
                   <ActionButton
                     :color="confirmType"
                     :disabled="confirmButtonDisabled || confirmLoading"
+                    :label="confirmText"
                     :loading="confirmLoading"
                     @click="handleConfirm"
                     variant="subtle"
-                  >
-                    {{ confirmText }}
-                  </ActionButton>
+                  />
                 </slot>
               </slot>
             </div>
@@ -112,8 +112,6 @@
 </template>
 
 <script lang="ts">
-import BaseIcon from '@/components/ui/BaseIcon.vue';
-
 // 全局弹窗层级栈：必须放在模块作用域（<script setup> 体每次实例化都会重新执行），
 // 否则每个实例各自持有独立 Set，多层弹窗的 inert 协调与 Esc 栈顶判断都会失效
 const activeModalOverlays = new Set<HTMLElement>();

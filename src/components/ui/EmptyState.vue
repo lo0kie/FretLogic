@@ -53,13 +53,12 @@
           v-if="actionText"
           :color="actionColor"
           :disabled="actionLoading"
+          :label="actionText"
           :loading="actionLoading"
           :size="actionBtnSize"
           :variant="actionVariant"
           @click="emit('action')"
-        >
-          {{ actionText }}
-        </ActionButton>
+        />
       </slot>
     </div>
   </div>

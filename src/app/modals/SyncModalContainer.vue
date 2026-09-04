@@ -130,13 +130,12 @@
         v-for="action in syncActionButtons"
         v-tooltip="action.tooltip"
         :disabled="action.disabled"
+        :icon="action.icon"
         :key="action.key"
+        :label="action.label"
         :loading="action.loading"
-        :prefix-icon="action.icon"
         @click="action.onClick"
-      >
-        {{ action.label }}
-      </ActionButton>
+      />
     </template>
   </BaseModal>
 </template>

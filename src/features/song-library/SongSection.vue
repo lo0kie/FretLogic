@@ -26,6 +26,7 @@
                   isSongActive(row.song!.id),
                 'bg-bg-panel-hover border-border-base': isOpen,
               }"
+              :data-song-id="row.song!.id"
               @click="handleSelectSong(row.song!.id)"
               @keydown.enter.prevent.stop="handleSelectSong(row.song!.id)"
               @keydown.space.prevent.stop="handleSelectSong(row.song!.id)"
@@ -75,7 +76,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue';
 import { useDraggable, type DraggableEvent } from 'vue-draggable-plus';
 
 import BaseBadge from '@/components/ui/BaseBadge.vue';
@@ -83,6 +84,7 @@ import ContextMenu from '@/components/ui/context-menu/ContextMenu.vue';
 import type { ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import { computeSongKey } from '@/services/music/theory';
+import { useTextTransfer } from '@/shared/composables/useTextTransfer';
 import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSongStore } from '@/stores/songStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -97,8 +99,22 @@ const emit = defineEmits<{
 const songStore = useSongStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
+const { copySongText } = useTextTransfer();
 
 const songListRef = useTemplateRef<HTMLElement>('songListRef');
+
+/** 滚动定位到活动乐谱卡片；block:'nearest' 使已在视窗内的项不产生滚动 */
+const scrollActiveSongIntoView = () => {
+  const id = scoreEditor.activeSongId;
+  if (!id) return;
+  const doScroll = () => {
+    const el = document.querySelector<HTMLElement>(`[data-song-id="${id}"]`);
+    el?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
+  nextTick(() => {
+    requestAnimationFrame(doScroll);
+  });
+};
 
 // 手动排序时启用拖拽（Sortable 直接操作 DOM，拖拽结束按索引重排后经 reorderSongs 持久化）；
 // 非手动排序时禁用，排序方法切换由 TransitionGroup 的 FLIP 动画呈现。
@@ -177,6 +193,13 @@ const songKeyAriaLabel = (song: Song): string => `调性 ${computeSongKey(song.p
 const getSongMenuItems = (song: Song): ContextMenuItem[] => {
   const items: ContextMenuItem[] = [
     {
+      label: '复制',
+      icon: 'copy',
+      action: () => {
+        void copySongText(song);
+      },
+    },
+    {
       label: '修改属性',
       icon: 'sliders-horizontal',
       action: () => {
@@ -221,6 +244,21 @@ const handleSelectSong = (songId: string) => {
     }
   }
 };
+
+onMounted(() => {
+  // 首次挂载（含刷新恢复）时定位，并设置轻微延时重试以兜底首屏渲染与滚动恢复
+  scrollActiveSongIntoView();
+  setTimeout(scrollActiveSongIntoView, 120);
+});
+
+// 活动乐谱切换（非 null）时自动滚动定位到该项
+watch(
+  () => scoreEditor.activeSongId,
+  id => {
+    if (!id) return;
+    scrollActiveSongIntoView();
+  }
+);
 </script>
 
 <style lang="scss">
