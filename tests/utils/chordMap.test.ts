@@ -8,7 +8,7 @@ import {
   removeChordFromSlot,
   setEdgeChords,
   swapOrMoveSlotChords,
-} from '@/utils/score/chordSlots';
+} from '@/domains/score/model/chordSlots';
 
 const buildMap = (entries: Record<string, string>): Map<string, string> => new Map(Object.entries(entries));
 

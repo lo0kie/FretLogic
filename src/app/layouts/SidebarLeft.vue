@@ -23,12 +23,12 @@
           v-model="searchQuery"
           :disabled="chordStore.savedChordsList.length === 0"
           :maxlength="15"
-          class="header-search-input min-w-0 flex-1"
           clearable
+          show-count
+          class="header-search-input min-w-0 flex-1"
           font-size="xs"
           placeholder="搜索和弦..."
           prefix-icon="search"
-          show-count
         />
 
         <div class="header-actions gap-xs flex shrink-0 items-center">
@@ -36,9 +36,9 @@
             v-tooltip="'新建分组'"
             :icon-stroke-width="2.5"
             @click="groupModals.openCreate"
+            icon-only
             aria-label="新建分组"
             icon="plus"
-            icon-only
             icon-size="xl"
             variant="ghost"
           />
@@ -73,9 +73,9 @@
             v-tooltip="'新建乐谱'"
             :icon-stroke-width="2.5"
             @click="songModals.openCreateSongModal"
+            icon-only
             aria-label="新建乐谱"
             icon="plus"
-            icon-only
             icon-size="xl"
             variant="ghost"
           />
@@ -93,7 +93,7 @@
       >
         <div v-if="route.path === '/workbench'" class="v-fade-in-quick min-w-0" key="workbench">
           <LeftChordGroupSection
-            :search-query="searchQuery"
+            :search-query
             @open-delete="groupModals.openDelete"
             @open-delete-variants="groupModals.openChordVariantsDelete"
             @open-move="groupModals.openMove"
@@ -134,35 +134,38 @@
 
   <GroupModalsContainer />
   <ChordModalsContainer />
+  <ChordReferencesModal />
   <SongModalsContainer />
   <BackupModalsContainer />
 </template>
 
-<script lang="ts" setup>
+<script setup lang="ts">
 import { computed, nextTick, provide, ref, useTemplateRef, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import BackupModalsContainer from '@/app/modals/BackupModalsContainer.vue';
-import ActionButton from '@/components/ui/ActionButton.vue';
-import BaseBadge from '@/components/ui/BaseBadge.vue';
-import BaseIcon from '@/components/ui/BaseIcon.vue';
-import BaseInput from '@/components/ui/BaseInput.vue';
-import { type ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
-import type { IconName } from '@/components/ui/icons.registry';
-import PopoverMenu from '@/components/ui/PopoverMenu.vue';
-import ChordModalsContainer from '@/features/chord-library/ChordModalsContainer.vue';
-import { useChordGroupModals } from '@/features/chord-library/composables/useChordGroupModals';
-import GroupModalsContainer from '@/features/chord-library/GroupModalsContainer.vue';
-import LeftChordGroupSection from '@/features/chord-library/GroupSection.vue';
-import { useSongModals } from '@/features/song-library/composables/useSongModals';
-import SongModalsContainer from '@/features/song-library/SongModalsContainer.vue';
-import LeftSongListSection from '@/features/song-library/SongSection.vue';
-import { useBackupModals } from '@/shared/composables/useBackupModals';
-import { useScrollEdgeFades } from '@/shared/composables/useScrollEdgeFades';
-import { useChordStore } from '@/stores/chordStore';
-import { useSongStore } from '@/stores/songStore';
-import { useUiStore } from '@/stores/uiStore';
-import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/core/constants';
+import ChordReferencesModal from '@/app/modals/ChordReferencesModal.vue';
+import { useBackupModals } from '@/app/modals/useBackupModals';
+import ChordModalsContainer from '@/domains/chord/library/components/ChordModalsContainer.vue';
+import GroupModalsContainer from '@/domains/chord/library/components/GroupModalsContainer.vue';
+import LeftChordGroupSection from '@/domains/chord/library/components/GroupSection.vue';
+import { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
+import { CHORD_REFERENCE_LOOKUP } from '@/domains/chord/library/injectionKeys';
+import { useChordStore } from '@/domains/chord/store/chordStore';
+import SongModalsContainer from '@/domains/score/library/components/SongModalsContainer.vue';
+import LeftSongListSection from '@/domains/score/library/components/SongSection.vue';
+import { useSongModals } from '@/domains/score/library/composables/useSongModals';
+import { useSongStore } from '@/domains/score/library/store/songStore';
+import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
+import { useUiStore } from '@/platform/store/uiStore';
+import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import { type ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import type { IconName } from '@/platform/ui/icons/icons.registry';
+import BaseInput from '@/platform/ui/input/BaseInput.vue';
+import PopoverMenu from '@/platform/ui/popover/PopoverMenu.vue';
+import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/platform/utils/constants';
 
 defineOptions({ inheritAttrs: false });
 
@@ -198,6 +201,8 @@ const songModals = useSongModals();
 const backupModals = useBackupModals();
 
 provide('groupModals', groupModals);
+// 跨领域桥接：和弦卡「引用反查」的能力实现由应用层注入（内部走乐谱域 songStore）
+provide(CHORD_REFERENCE_LOOKUP, (chordIds: string[]) => songStore.getChordReferences(chordIds).length);
 provide('songModals', songModals);
 provide('backupModals', backupModals);
 

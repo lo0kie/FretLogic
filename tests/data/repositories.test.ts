@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+﻿import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createChordRepository, createSongRepository } from '@/services/repositories';
-import type { Chord, Group, Song } from '@/types';
+import { createChordRepository, createSongRepository } from '@/app/services/repositories';
+import type { Chord, Group } from '@/domains/chord/types';
+import type { Song } from '@/domains/score/types';
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();

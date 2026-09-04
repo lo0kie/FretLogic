@@ -13,6 +13,9 @@ overrides:
   nanoid: ^3.3.18
   postcss: ^8.5.23
 
+patchedDependencies:
+  prettier-plugin-organize-attributes: patches/prettier-plugin-organize-attributes.patch
+
 peerDependencyRules:
   allowedVersions:
     eslint: '10'

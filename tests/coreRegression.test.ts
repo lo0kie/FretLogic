@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
-import { analyzeChordGraph } from '@/services/music/chordEngine';
-import { computeSongKey } from '@/services/music/theory';
-import { validateImportExportPayload } from '@/services/validation/payload';
+import { validateImportExportPayload } from '@/app/services/validation/payload';
+import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';
+import { computeSongKey } from '@/domains/chord/theory/theory';
 
 const legacyPayload = {
   chords: [

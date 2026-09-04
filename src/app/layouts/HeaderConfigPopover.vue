@@ -32,12 +32,12 @@
   </div>
 </template>
 
-<script lang="ts" setup>
-import BaseFormRow from '@/components/ui/BaseFormRow.vue';
-import BaseSlider from '@/components/ui/BaseSlider.vue';
-import BaseSwitch from '@/components/ui/BaseSwitch.vue';
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+<script setup lang="ts">
+import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { useSettingsStore } from '@/platform/store/settingsStore';
+import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
+import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
+import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();

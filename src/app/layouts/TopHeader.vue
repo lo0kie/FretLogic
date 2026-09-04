@@ -8,8 +8,8 @@
         v-tooltip="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'"
         :aria-label="'切换侧边栏'"
         buttonized
-        icon="panel-left"
         icon-only
+        icon="panel-left"
       />
 
       <div class="bg-glass-border mx-[0.1rem] h-[0.7rem] w-px" />
@@ -48,9 +48,9 @@
         :disabled="editorStore.isFretBoardEmpty || isPlaying"
         :icon="isPlaying ? 'square' : 'play'"
         @click="playCurrentChord"
+        icon-only
         aria-label="播放/试听当前和弦"
         color="primary"
-        icon-only
         icon-size="xl"
         variant="subtle"
       />
@@ -85,10 +85,10 @@
             :icon-stroke-width="2.5"
             :variant="isOpen ? 'subtle' : 'ghost'"
             @click="pinToggle()"
+            icon-only
             aria-haspopup="true"
             aria-label="设置面板"
             icon="sliders-horizontal"
-            icon-only
             icon-size="xl"
             ref="triggerBtnRef"
           />
@@ -109,9 +109,9 @@
       <ActionButton
         v-tooltip.interactive="buildInfoTooltip"
         :icon-stroke-width="2.5"
+        icon-only
         aria-label="构建信息"
         icon="info"
-        icon-only
         icon-size="xl"
         variant="ghost"
       />
@@ -166,32 +166,33 @@
   <SyncModalContainer v-model:is-sync-modal-open="isSyncModalOpen" />
 </template>
 
-<script lang="ts" setup>
+<script setup lang="ts">
 import { computed, defineAsyncComponent, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import ActionButton from '@/components/ui/ActionButton.vue';
-import BaseCheckbox from '@/components/ui/BaseCheckbox.vue';
-import BaseModal from '@/components/ui/BaseModal.vue';
-import BasePopover from '@/components/ui/BasePopover.vue';
-import BaseSegmentedControl, { type SegmentOption } from '@/components/ui/BaseSegmentedControl.vue';
-import type { ContextMenuItem } from '@/components/ui/context-menu/ContextMenuItems.vue';
-import type { IconName } from '@/components/ui/icons.registry';
-import PopoverMenu from '@/components/ui/PopoverMenu.vue';
-import { useScoreLinesData } from '@/features/score-editor/composables/useScoreLinesData';
-import { prepareWorkerExportPayload, runWorkerExport } from '@/services/export/workerExportService';
-import { getChordName } from '@/services/music/theory';
-import type { SyncProviderKind } from '@/services/sync/provider';
-import { useAudioPlayer } from '@/shared/composables/useAudioPlayer';
-import { useBackupModals } from '@/shared/composables/useBackupModals';
-import { useSyncService } from '@/shared/composables/useSyncService';
-import { useTextTransfer } from '@/shared/composables/useTextTransfer';
-import { useChordEditorStore } from '@/stores/chordEditorStore';
-import { globalDarkMode, setThemeMode, themePreference } from '@/stores/globalState';
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { useUiStore } from '@/stores/uiStore';
-import { buildExportFileName, triggerBlobDownload, writeBlobToClipboard } from '@/utils/score/score-export';
+import { useBackupModals } from '@/app/modals/useBackupModals';
+import { useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
+import { useSyncService } from '@/app/services/sync/useSyncService';
+import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
+import { getChordName } from '@/domains/chord/theory/theory';
+import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
+import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { prepareWorkerExportPayload, runWorkerExport } from '@/domains/score/preview/services/workerExportService';
+import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
+import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
+import { globalDarkMode, setThemeMode, themePreference } from '@/platform/store/globalState';
+import { useSettingsStore } from '@/platform/store/settingsStore';
+import { useUiStore } from '@/platform/store/uiStore';
+import type { SyncProviderKind } from '@/platform/types';
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
+import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import type { IconName } from '@/platform/ui/icons/icons.registry';
+import BaseModal from '@/platform/ui/modal/BaseModal.vue';
+import BasePopover from '@/platform/ui/popover/BasePopover.vue';
+import PopoverMenu from '@/platform/ui/popover/PopoverMenu.vue';
+import BaseSegmentedControl, { type SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
+import { buildExportFileName, triggerBlobDownload } from '@/platform/utils/canvas';
 
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 

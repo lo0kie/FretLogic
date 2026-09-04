@@ -36,8 +36,8 @@
                 :maxlength="100"
                 clearable
                 is-password
-                placeholder="GitHub Token (ghp_...)"
                 show-count
+                placeholder="GitHub Token (ghp_...)"
               />
 
               <p class="form-hint m-0">提示：推送写回分支需配置 Token；拉取公开分支无需 Token。</p>
@@ -52,16 +52,16 @@
                 :maxlength="100"
                 clearable
                 is-password
-                placeholder="Gitee 私人令牌 (Token)"
                 show-count
+                placeholder="Gitee 私人令牌 (Token)"
               />
 
               <p class="form-hint m-0">
                 提示：数据同步至 Gitee 仓库 look1e/fret-logic 的 backup/chords.json。需先在 Gitee 「私人令牌」页创建
                 Token；私有仓库拉取同样需要 Token。
               </p>
-              <p class="form-hint text-warning m-0">
-                安全说明：受限于 Gitee API v5 鉴权机制，Token 经请求参数传输，请勿在不受信任的公共网络环境中使用。
+              <p class="form-hint m-0">
+                安全说明：Token 仅在浏览器本地存储，通过 Authorization 请求头经 HTTPS 加密传输，不经由 URL 参数暴露。
               </p>
             </div>
           </template>
@@ -73,8 +73,8 @@
                 :disabled="isBusy"
                 :maxlength="200"
                 clearable
-                placeholder="WebDAV 地址 (https://...)"
                 show-count
+                placeholder="WebDAV 服务器根地址 (例如 https://dav.example.com)"
               />
 
               <BaseInput
@@ -82,7 +82,8 @@
                 :disabled="isBusy"
                 :maxlength="100"
                 clearable
-                placeholder="用户名"
+                show-count
+                placeholder="用户名 (可选)"
               />
 
               <BaseInput
@@ -91,8 +92,8 @@
                 :maxlength="100"
                 clearable
                 is-password
-                placeholder="密码"
                 show-count
+                placeholder="密码"
               />
             </div>
           </template>
@@ -110,16 +111,23 @@
             :disabled="isBusy"
             :maxlength="200"
             clearable
-            placeholder="自定义代理地址 (留空则直连)"
             show-count
+            placeholder="自定义代理地址 (留空则直连)"
           />
 
           <p class="form-hint m-0">
             {{
               settingsStore.webdavUseDefaultProxy
-                ? '已启用预设代理（由作者维护的 Cloudflare Worker 转发，以绕开浏览器跨域限制；凭据经 HTTPS 传输）。如介意可关闭并填入自建代理或直连。'
+                ? '已启用预设代理（由作者维护的 Cloudflare Worker 转发，以绕开浏览器跨域限制）。如介意可关闭并填入自建代理或直连。'
                 : '关闭预设代理后可填写自定义代理，留空则由浏览器直接连接（若 WebDAV 服务未配置 CORS 头，直连可能失败）。'
             }}
+          </p>
+          <p
+            v-if="settingsStore.webdavUseDefaultProxy || Boolean(settingsStore.webdavProxyUrl)"
+            class="form-hint text-warning m-0"
+          >
+            安全提示：启用代理时，WebDAV 账号与密码（Basic 认证凭据）将经由代理中转。若包含敏感数据，建议在 WebDAV
+            服务器直接配置 CORS 支持直连，或部署自建代理。
           </p>
         </div>
       </div>
@@ -140,22 +148,22 @@
   </BaseModal>
 </template>
 
-<script lang="ts" setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 
 import { useStorage } from '@vueuse/core';
 
-import ActionButton from '@/components/ui/ActionButton.vue';
-import BaseInput from '@/components/ui/BaseInput.vue';
-import BaseModal from '@/components/ui/BaseModal.vue';
-import BaseSelector, { type BaseSelectorOption } from '@/components/ui/BaseSelector.vue';
-import BaseSwitch from '@/components/ui/BaseSwitch.vue';
-import type { IconName } from '@/components/ui/icons.registry';
-import type { SyncProviderKind } from '@/services/sync/provider';
-import { useBackupModals } from '@/shared/composables/useBackupModals';
-import { useSyncService } from '@/shared/composables/useSyncService';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { STORAGE_KEYS } from '@/utils/core/constants';
+import { useBackupModals } from '@/app/modals/useBackupModals';
+import { useSyncService } from '@/app/services/sync/useSyncService';
+import { useSettingsStore } from '@/platform/store/settingsStore';
+import type { SyncProviderKind } from '@/platform/types';
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import type { IconName } from '@/platform/ui/icons/icons.registry';
+import BaseInput from '@/platform/ui/input/BaseInput.vue';
+import BaseModal from '@/platform/ui/modal/BaseModal.vue';
+import BaseSelector, { type BaseSelectorOption } from '@/platform/ui/selector/BaseSelector.vue';
+import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
+import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true });
 const { triggerGlobalSync, pullFromRemote, testConnection, isSyncing, isPulling, isTestingConnection } =

@@ -4,7 +4,7 @@ import {
   DEFAULT_WORKBENCH_PANEL_ORDER,
   sanitizePanelOrder,
   useWorkbenchPanelsOrder,
-} from '@/features/workbench/composables/useWorkbenchPanelsOrder';
+} from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder';
 
 describe('useWorkbenchPanelsOrder: sanitizePanelOrder', () => {
   it('非法或空入参时兜底返回默认面板顺序', () => {

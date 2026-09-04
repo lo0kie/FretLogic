@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import BaseInput from '@/components/ui/BaseInput.vue';
+import BaseInput from '@/platform/ui/input/BaseInput.vue';
 
 describe('BaseInput component', () => {
   it('invalid=true 时渲染错误边框并保留 aria-invalid', () => {

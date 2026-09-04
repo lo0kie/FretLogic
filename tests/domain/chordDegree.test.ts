@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getChordDegree } from '@/services/music/theory';
+import { getChordDegree } from '@/domains/chord/theory/theory';
 
 describe('调式和弦级数推导 (Roman Numerals)', () => {
   describe('C 大调自然级数 (Diatonic Major)', () => {

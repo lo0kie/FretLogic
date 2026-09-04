@@ -1,10 +1,10 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createSongRepository } from '@/services/repositories';
-import { useSongStore } from '@/stores/songStore';
-import type { Song } from '@/types';
+import { createSongRepository } from '@/app/services/repositories';
+import { useSongStore } from '@/domains/score/library/store/songStore';
+import type { Song } from '@/domains/score/types';
 
 const SONG_ENTRY_PREFIX = 'CHORD_LAB_SONG_ENTRY_V1:';
 

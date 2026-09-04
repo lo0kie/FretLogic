@@ -37,39 +37,55 @@ export default tseslint.config(
       import: importPlugin,
     },
     settings: {
+      'import-x/resolver': {
+        typescript: true,
+      },
       'import/resolver': {
         typescript: true,
       },
     },
     rules: {
-      // ---- 架构约束：跨层依赖方向（单向）----
-      // 依赖方向：components/features/app → shared/composables → stores/services → utils/directives/assets；
-      // types/ 为中性叶子层，任何层均可导入，且自身不可向上依赖。
-      // 因此「下层」禁止导入「上层」：utils 不可导入 stores/services/shared/components/features/app；
-      // stores/services 不可导入 shared/components/features/app；shared 不可导入 components/features/app。
+      // ---- 架构约束：纵向领域与平台分层依赖方向（单向；target 带 ** 覆盖全部子目录）----
+      // 1. platform：底座，严禁反向导入任何领域或应用代码（含 type-only 导入）；
+      // 2. domains：禁止向上依赖应用外壳层；
+      // 3. fretboard/model：纯几何物理模型，严禁依赖和弦/乐谱业务；
+      // 4. fretboard：禁止依赖乐谱领域（呈现层允许依赖 chord 领域）；
+      // 5. chord：通用乐理层，禁止依赖乐谱领域；
+      // 6. platform/utils：纯工具，禁止依赖 platform 内的 UI、Store 或服务。
       'import/no-restricted-paths': [
         'error',
         {
           basePath: '.',
           zones: [
             {
-              target: ['./src/utils', './src/directives', './src/assets'],
-              from: [
-                './src/app/**',
-                './src/features/**',
-                './src/components/**',
-                './src/shared/**',
-                './src/stores/**',
-                './src/services/**',
-              ],
+              target: ['./src/platform/**'],
+              from: ['./src/domains/**', './src/app/**'],
+              message: '平台基础设施层 (src/platform) 属于底层基座，严禁反向导入领域层或应用层代码。',
             },
             {
-              target: ['./src/stores', './src/services'],
-              from: ['./src/app/**', './src/features/**', './src/components/**', './src/shared/**'],
+              target: ['./src/domains/**'],
+              from: ['./src/app/**'],
+              message: '业务领域层 (src/domains) 禁止向上依赖应用外壳层。',
             },
             {
-              target: ['./src/shared'],
-              from: ['./src/app/**', './src/features/**', './src/components/**'],
+              target: ['./src/domains/fretboard/model/**'],
+              from: ['./src/domains/chord/**', './src/domains/score/**'],
+              message: '指板物理模型 (fretboard/model) 是纯几何底座，严禁依赖和弦/乐谱业务。',
+            },
+            {
+              target: ['./src/domains/fretboard/**'],
+              from: ['./src/domains/score/**'],
+              message: '指板引擎领域 (fretboard) 禁止依赖乐谱领域（呈现层允许依赖 chord 领域）。',
+            },
+            {
+              target: ['./src/domains/chord/**'],
+              from: ['./src/domains/score/**'],
+              message: '和弦与乐理领域 (chord) 属于通用乐理层，禁止依赖乐谱排版领域。',
+            },
+            {
+              target: ['./src/platform/utils/**'],
+              from: ['./src/platform/ui/**', './src/platform/store/**', './src/platform/services/**'],
+              message: '底层工具 (platform/utils) 严禁依赖上层 UI、Store 或服务。',
             },
           ],
         },
@@ -129,7 +145,7 @@ export default tseslint.config(
   {
     // 统一日志设施是唯一被允许直接使用 console 的地方（生产构建剥离 debug/info）。
     // 其通过 console[level] 动态索引输出，无法被 no-console 静态放行，故整文件豁免。
-    files: ['src/utils/core/logger.ts'],
+    files: ['src/platform/utils/logger.ts'],
     rules: {
       'no-console': 'off',
     },

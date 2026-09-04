@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { nameToSegments, Tuning } from '@/services/music/theory';
-import type { BarreEntity, Chord, ChordId, SlotKey, Song } from '@/types';
-import { createChord } from '@/utils/music/entityFactories';
-import { charKey, chordSlotKey } from '@/utils/score/scoreModel';
+import { createChord } from '@/domains/chord/theory/entityFactories';
+import { GRAMMAR_TEMPLATES } from '@/domains/chord/theory/grammar';
+import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
+import type { Chord, ChordId } from '@/domains/chord/types';
+import type { BarreEntity } from '@/domains/fretboard/types';
+import { charKey, chordSlotKey } from '@/domains/score/model/scoreModel';
 import {
   parseChordFromText,
   parseSongFromText,
   serializeChordToText,
   serializeSongToText,
-} from '@/utils/score/textCodec';
+} from '@/domains/score/transfer/textCodec';
+import type { SlotKey, Song } from '@/domains/score/types';
 
 /** 构造测试和弦：默认标准调弦 6 弦、3 品、根音 5 弦 */
 const makeChord = (name: string, strings: Array<[number, boolean]>, barres?: BarreEntity[]): Chord =>
@@ -276,5 +279,42 @@ describe('textCodec 乐谱往返', () => {
     if (!result.ok) return;
     expect(result.data.lyrics).toBe(plainLyrics);
     expect(result.data.slots).toHaveLength(0);
+  });
+
+  it('智能宽容导入：支持大小写混写和弦标记（如 [CMaj7]、[Cadd9]、[Csus4]、[G/B]）', () => {
+    const textWithMixedCaseChords = '[CMaj7]海风吹过[Cadd9]海浪[Csus4]涌起[G/B]';
+    const result = parseSongFromText(textWithMixedCaseChords);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.lyrics).toBe('海风吹过海浪涌起');
+    expect(result.data.slots).toHaveLength(4);
+    expect(result.data.slots[0]?.chord.name).toBe('CMaj7');
+    expect(result.data.slots[1]?.chord.name).toBe('Cadd9');
+    expect(result.data.slots[2]?.chord.name).toBe('Csus4');
+    expect(result.data.slots[3]?.chord.name).toBe('G/B');
+  });
+
+  it('智能宽容导入：GRAMMAR_TEMPLATES 中全部理论和弦类型均能通过方括号标记正确抓取并生成槽位', () => {
+    for (const t of GRAMMAR_TEMPLATES) {
+      const chordName = `C${t.suffix}`;
+      const line = `歌词[${chordName}]片段`;
+      const result = parseSongFromText(`{title: 测试}\n${line}`);
+      expect(result.ok).toBe(true);
+      if (!result.ok) continue;
+      expect(result.data.lyrics).toBe('歌词片段');
+      expect(result.data.slots).toHaveLength(1);
+      expect(result.data.slots[0]?.chord.name).toBe(chordName);
+    }
+  });
+
+  it('智能宽容导入：保留非和弦方括号标记（如 [Chorus]、[Verse]），不误识别为和弦', () => {
+    const text = '[Chorus]\n[C]此时此刻[G]阳光明媚';
+    const result = parseSongFromText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.lyrics).toBe('[Chorus]\n此时此刻阳光明媚');
+    expect(result.data.slots).toHaveLength(2);
+    expect(result.data.slots[0]?.chord.name).toBe('C');
+    expect(result.data.slots[1]?.chord.name).toBe('G');
   });
 });

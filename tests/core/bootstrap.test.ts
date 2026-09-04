@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+﻿import { beforeEach, describe, expect, it } from 'vitest';
 
-import { chordRepository, songRepository } from '@/services/data';
-import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/services/data/bootstrap';
-import { idb } from '@/services/storage';
-import type { Song } from '@/types';
+import { chordRepository, songRepository } from '@/app/services/data';
+import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/app/services/data/bootstrap';
+import type { Song } from '@/domains/score/types';
+import { idb } from '@/platform/services/storage';
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();

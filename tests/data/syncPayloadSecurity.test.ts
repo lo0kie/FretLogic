@@ -2,9 +2,9 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { FULL_BACKUP_SELECTION } from '@/shared/composables/useImportExportService';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { buildBackupPayload } from '@/utils/core/buildBackupPayload';
+import { buildBackupPayload } from '@/app/services/backup/buildBackupPayload';
+import { FULL_BACKUP_SELECTION } from '@/app/services/backup/useImportExportService';
+import { useSettingsStore } from '@/platform/store/settingsStore';
 
 describe('云同步 Payload 凭据隔离与安全断言', () => {
   beforeEach(() => {
@@ -47,5 +47,52 @@ describe('云同步 Payload 凭据隔离与安全断言', () => {
 
     // 3. 确保普通偏好设置（如和弦简写）不受影响且正常保留
     expect(syncPayload?.preferences).toBeDefined();
+  });
+
+  it('存在单条脏和弦数据时不拖垮整体备份与同步（宽容式清洗）', async () => {
+    const { useChordStore } = await import('@/domains/chord/store/chordStore');
+    const { buildBackupPayloadResult } = await import('@/app/services/backup/buildBackupPayload');
+    const { GroupSortRule } = await import('@/domains/chord/types');
+    const { Tuning } = await import('@/domains/chord/theory/theory');
+    type ChordItem = import('@/domains/chord/types').Chord;
+    const chordStore = useChordStore();
+
+    chordStore.groups = [{ id: 'g1', name: 'C', sortRule: GroupSortRule.ROOT_PITCH }];
+    // 一条正常和弦，一条琴弦数据损坏的和弦
+    chordStore.savedChordsList = [
+      {
+        id: 'valid_c',
+        chordName: 'C',
+        strings: [
+          [-1, false],
+          [3, false],
+          [2, false],
+          [0, false],
+          [1, false],
+          [0, false],
+        ],
+        fretCount: 3,
+        fretOffset: 0,
+        groupId: 'g1',
+        tuning: Tuning.STANDARD,
+        rootStringIndex: null,
+      },
+      {
+        id: 'corrupt_c',
+        chordName: 'Dm',
+        strings: 'corrupted-not-array',
+        fretCount: 3,
+        fretOffset: 0,
+        groupId: 'g1',
+        tuning: Tuning.STANDARD,
+      } as unknown as ChordItem,
+    ];
+
+    const result = buildBackupPayloadResult();
+    expect(result.payload).not.toBeNull();
+    expect(result.payload?.chords).toHaveLength(1);
+    expect(result.payload?.chords[0]?.id).toBe('valid_c');
+    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.issues).toHaveLength(0);
   });
 });

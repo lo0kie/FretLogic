@@ -27,15 +27,18 @@
   </div>
 </template>
 
-<script lang="ts" setup>
+<script setup lang="ts">
 import { computed, defineAsyncComponent } from 'vue';
 
 import TopHeader from '@/app/layouts/TopHeader.vue';
-import GlobalToast from '@/components/ui/GlobalToast.vue';
-import { useUiStore } from '@/stores/uiStore';
-import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/utils/core/constants';
+import { setupChordScoreBridge } from '@/app/services/chordScoreBridge';
+import { useUiStore } from '@/platform/store/uiStore';
+import GlobalToast from '@/platform/ui/feedback/GlobalToast.vue';
+import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/platform/utils/constants';
 
 const uiStore = useUiStore();
+// 跨领域装配：和弦删除/撤销与乐谱槽位解绑的事件桥接（chord 域因此无需依赖 score 域）
+setupChordScoreBridge();
 const SidebarLeft = defineAsyncComponent(() => import('@/app/layouts/SidebarLeft.vue'));
 const mainPaddingLeft = computed(() => (uiStore.isLeftOpen ? LEFT_SIDEBAR_WIDTH_PIXEL.value : '0px'));
 </script>

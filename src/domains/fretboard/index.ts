@@ -1,0 +1,11 @@
+export { default as Fretboard } from './components/Fretboard.vue';
+export { default as FretboardSvg } from './components/FretboardSvg.vue';
+export { default as FretboardCanvas } from './components/FretboardCanvas.vue';
+export { default as FretboardNote } from './components/FretboardNote.vue';
+export * from './composables/useFretboardInteraction';
+export * from './composables/useFretboardKeyboard';
+export * from './composables/useFretboardLayout';
+export * from './model/coordinates';
+export * from './components/renderFretboardCanvas';
+export * from './constants';
+export * from './types';

@@ -1,9 +1,13 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { reconcileBarres, useChordEditorStore } from '@/stores/chordEditorStore';
-import type { BarreEntity, GuitarStringsModel } from '@/types';
-import { computeBarreCandidates, isBarreStillValid, normalizeAndMergeBarres } from '@/utils/music/chord-fretboard';
+import { reconcileBarres, useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
+import {
+  computeBarreCandidates,
+  isBarreStillValid,
+  normalizeAndMergeBarres,
+} from '@/domains/fretboard/model/coordinates';
+import type { BarreEntity, GuitarStringsModel } from '@/domains/fretboard/types';
 
 /** 按弦序构造六弦模型（全部不偏好降号） */
 const strings = (...frets: number[]): GuitarStringsModel => frets.map(f => [f, false]) as unknown as GuitarStringsModel;

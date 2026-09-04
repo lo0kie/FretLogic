@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import BaseSegmentedControl from '@/components/ui/BaseSegmentedControl.vue';
+import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 
 describe('BaseSegmentedControl component', () => {
   it('默认 compacted=false 应用常规宽松 padding 类名', () => {

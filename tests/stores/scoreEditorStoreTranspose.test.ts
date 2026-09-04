@@ -4,12 +4,13 @@ import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { nameToSegments, Tuning } from '@/services/music/theory';
-import { useChordStore } from '@/stores/chordStore';
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useSongStore } from '@/stores/songStore';
-import type { Chord, LineId, SlotKey } from '@/types';
-import { toChordId, toGroupId } from '@/utils/music/entityFactories';
+import { useChordStore } from '@/domains/chord/store/chordStore';
+import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
+import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
+import type { Chord } from '@/domains/chord/types';
+import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { useSongStore } from '@/domains/score/library/store/songStore';
+import type { LineId, SlotKey } from '@/domains/score/types';
 
 describe('乐谱编辑器移调与撤销栈 (scoreEditorStore Transpose & Undo)', () => {
   beforeEach(() => {

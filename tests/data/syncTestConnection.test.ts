@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createGithubSyncProvider } from '@/services/sync/githubSyncProvider';
-import type { GithubSyncConfig, WebdavSyncConfig } from '@/services/sync/provider';
-import { createServerSyncProvider } from '@/services/sync/serverSyncProvider';
-import { createWebdavSyncProvider } from '@/services/sync/webdavSyncProvider';
+import { createGithubSyncProvider } from '@/app/services/sync/githubSyncProvider';
+import type { GithubSyncConfig, WebdavSyncConfig } from '@/app/services/sync/provider';
+import { createServerSyncProvider } from '@/app/services/sync/serverSyncProvider';
+import { createWebdavSyncProvider } from '@/app/services/sync/webdavSyncProvider';
 
 const response = (status: number, body: unknown = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -112,6 +112,28 @@ describe('webdav testConnection', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(500)));
     await expect(createWebdavSyncProvider(webdavConfig).testConnection()).rejects.toMatchObject({
       code: 'REQUEST_FAILED',
+    });
+  });
+
+  it('throws CONFLICT on 409 during push', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(response(201)).mockResolvedValueOnce(response(409));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = createWebdavSyncProvider(webdavConfig);
+    await expect(provider.push({ version: 4, groups: [], chords: [], songs: [] })).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: expect.stringContaining('版本冲突'),
+    });
+  });
+
+  it('throws CONFLICT on 412 during push', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(response(201)).mockResolvedValueOnce(response(412));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = createWebdavSyncProvider(webdavConfig);
+    await expect(provider.push({ version: 4, groups: [], chords: [], songs: [] })).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: expect.stringContaining('版本冲突'),
     });
   });
 });

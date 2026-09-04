@@ -2,9 +2,9 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import ScoreLyricsEditor from '@/features/score-editor/ScoreLyricsEditor.vue';
-import { useScoreEditorStore } from '@/stores/scoreEditorStore';
-import { useSongStore } from '@/stores/songStore';
+import ScoreLyricsEditor from '@/domains/score/editor/components/ScoreLyricsEditor.vue';
+import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { useSongStore } from '@/domains/score/library/store/songStore';
 
 // 用 fake timers 控制防抖提交，避免真实 300ms 等待
 vi.useFakeTimers();

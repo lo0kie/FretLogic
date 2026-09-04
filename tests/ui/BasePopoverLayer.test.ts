@@ -4,7 +4,7 @@ import { defineComponent, nextTick, ref, type Ref } from 'vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
-import BasePopover from '@/components/ui/BasePopover.vue';
+import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 
 /**
  * 嵌套浮层层级规则：

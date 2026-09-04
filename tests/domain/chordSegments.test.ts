@@ -1,8 +1,14 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
-import { analyzeChordGraph } from '@/services/music/chordEngine';
-import { nameToSegments, parsePitchSegment, pitchSegmentToString, segmentsToString } from '@/services/music/theory';
-import type { GuitarStringsModel, Tuning } from '@/types';
+import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';
+import {
+  nameToSegments,
+  parsePitchSegment,
+  pitchSegmentToString,
+  segmentsToString,
+} from '@/domains/chord/theory/theory';
+import type { Tuning } from '@/domains/chord/theory/theory';
+import type { GuitarStringsModel } from '@/domains/fretboard/types';
 
 describe('Chord Name Segmentation (AST/Tokenization)', () => {
   describe('parsePitchSegment', () => {
@@ -217,7 +223,7 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
 
   describe('Export payload nameSegments preservation & migration', () => {
     it('should populate nameSegments in exported payload chords if missing', async () => {
-      const { validateImportExportPayload } = await import('@/services/validation/payload');
+      const { validateImportExportPayload } = await import('@/app/services/validation/payload');
       const rawPayload = {
         version: 4,
         groups: [{ id: 'g1', name: '常用', sortRule: 'ROOT_PITCH' }],
@@ -255,7 +261,7 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
 
   describe('Chord quality shorthand formatting', () => {
     it('should format chord qualities into shorthand symbols when requested', async () => {
-      const { formatChordQuality, segmentsToString, nameToSegments } = await import('@/services/music/theory');
+      const { formatChordQuality, segmentsToString, nameToSegments } = await import('@/domains/chord/theory/theory');
 
       expect(formatChordQuality('maj7', true)).toBe('M7');
       expect(formatChordQuality('Maj7', true)).toBe('M7');
@@ -300,7 +306,7 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
     });
 
     it('should accurately distinguish valid chord names from invalid ones', async () => {
-      const { isValidChordName } = await import('@/services/music/theory');
+      const { isValidChordName } = await import('@/domains/chord/theory/theory');
 
       // Valid chords
       expect(isValidChordName('C')).toBe(true);
@@ -327,7 +333,7 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
     });
 
     it('should derive chord name dynamically via getChordName SSOT without chordName string', async () => {
-      const { getChordName } = await import('@/services/music/theory');
+      const { getChordName } = await import('@/domains/chord/theory/theory');
 
       const chordWithoutName = {
         id: 'test-1',
@@ -361,7 +367,7 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
     });
 
     it('should derive chord name and shorthand for string-only chord objects', async () => {
-      const { getChordName } = await import('@/services/music/theory');
+      const { getChordName } = await import('@/domains/chord/theory/theory');
 
       const chordWithNameOnly = {
         name: 'Cmaj7',

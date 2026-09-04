@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { calculateFretboardPoint, type FretboardPointCalculationParams } from '@/shared/composables/useFretboardLayout';
-import { CANVAS_CONFIG } from '@/utils/core/constants';
+import {
+  calculateFretboardPoint,
+  type FretboardPointCalculationParams,
+} from '@/domains/fretboard/composables/useFretboardLayout';
+import { CANVAS_CONFIG } from '@/domains/fretboard/constants';
 
 describe('calculateFretboardPoint', () => {
   const defaultBoardRect = {

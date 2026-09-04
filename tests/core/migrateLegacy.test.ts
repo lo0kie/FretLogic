@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { chordRepository, songRepository } from '@/services/data';
-import { isLegacyMigrationDone, migrateLegacyData } from '@/services/data/migrateLegacy';
-import { idb } from '@/services/storage';
-import type { Song } from '@/types';
+import { chordRepository, songRepository } from '@/app/services/data';
+import { isLegacyMigrationDone, migrateLegacyData } from '@/app/services/data/migrateLegacy';
+import type { Song } from '@/domains/score/types';
+import { idb } from '@/platform/services/storage';
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();
@@ -97,5 +97,13 @@ describe('legacy localStorage migration', () => {
     const second = await migrateLegacyData(storage);
     expect(second).toEqual({ groups: 0, chords: 0, songs: 0 });
     expect(await chordRepository.loadGroups()).toHaveLength(1);
+  });
+
+  it('旧数据校验失败时不标记完成，允许后续排查或重试', async () => {
+    // 写入损坏的 groups（非数组或非法结构导致校验失败）
+    storage.setItem('CHORD_LAB_GROUPS', JSON.stringify('corrupt-not-array'));
+    const result = await migrateLegacyData(storage);
+    expect(result).toEqual({ groups: 0, chords: 0, songs: 0 });
+    expect(await isLegacyMigrationDone()).toBe(false);
   });
 });

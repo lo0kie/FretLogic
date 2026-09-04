@@ -3,7 +3,7 @@ import { defineComponent, h, nextTick, ref } from 'vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import { useScrollEdgeFades } from '@/shared/composables/useScrollEdgeFades';
+import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
 
 describe('useScrollEdgeFades', () => {
   const createMockScrollElement = (
