@@ -19,10 +19,9 @@
           class="no-scrollbar gap-lg flex h-full w-full flex-col items-end overflow-y-auto *:shrink-0"
           ref="scrollRef"
         >
-          <ChordAnalysisPanel />
-          <WorkbenchExportPanel />
-          <WorkbenchSettingsPanel />
+          <component v-for="panelId in panels" :is="PANEL_COMPONENT_MAP[panelId]" :key="panelId" />
         </div>
+
         <!-- 顶部滚动渐隐：仅可上滚时显示，避免未滚动时遮挡首卡 -->
         <div
           v-show="!atTop"
@@ -43,11 +42,12 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { ref, type Component } from 'vue';
 
 import { useScrollEdgeFades } from '@/shared/composables/useScrollEdgeFades';
 
 import ChordAnalysisPanel from './ChordAnalysisPanel.vue';
+import { useWorkbenchPanelsOrder, type WorkbenchPanelId } from './composables/useWorkbenchPanelsOrder';
 import WorkbenchCard from './WorkbenchCard.vue';
 import WorkbenchExportPanel from './WorkbenchExportPanel.vue';
 import WorkbenchFloatingBar from './WorkbenchFloatingBar.vue';
@@ -57,4 +57,12 @@ import WorkbenchSettingsPanel from './WorkbenchSettingsPanel.vue';
 // 底部 fade 仅未滚到底时显示，滚到底隐藏（末卡不被遮挡）
 const scrollRef = ref<HTMLElement | null>(null);
 const { atTop, atBottom, syncEdgeFades } = useScrollEdgeFades(scrollRef);
+
+const PANEL_COMPONENT_MAP: Record<WorkbenchPanelId, Component> = {
+  analysis: ChordAnalysisPanel,
+  export: WorkbenchExportPanel,
+  settings: WorkbenchSettingsPanel,
+};
+
+const { panels } = useWorkbenchPanelsOrder();
 </script>

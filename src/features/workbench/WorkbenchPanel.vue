@@ -35,7 +35,7 @@
           effectiveExpanded ? 'border-border-light pb-1.5' : 'border-b-0 pb-0',
           isCompact ? 'justify-center' : 'justify-between',
         ]"
-        class="duration-slow ease-sidebar flex min-h-[1.6rem] shrink-0 items-center gap-2 border-b transition-[border-color,padding-bottom]"
+        class="workbench-panel-header duration-slow ease-sidebar flex min-h-[1.6rem] shrink-0 items-center gap-2 border-b transition-[border-color,padding-bottom]"
       >
         <div
           :class="isCompact ? '' : '-ml-1 gap-1.5 py-0.5 pr-1.5 pl-1'"

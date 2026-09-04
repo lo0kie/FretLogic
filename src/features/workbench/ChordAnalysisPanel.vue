@@ -29,15 +29,18 @@ import { computed } from 'vue';
 
 import { analyzeChordGraph } from '@/services/music/chordEngine';
 import {
+  areChordsEnharmonicallyEquivalent,
   calcPitchIndex,
   canTogglePitchAccidental,
   collectChordNotes,
+  computeStringLabelAccidental,
   getChordName,
   nameToSegments,
   parsePitchSegment,
-  segmentsToString,
+  ROOT_PITCH_MAP,
 } from '@/services/music/theory';
 import { useChordEditorStore } from '@/stores/chordEditorStore';
+import type { AccidentalType, NaturalPitchLetter } from '@/types';
 import type { CandidateResult } from '@/types/engine.ts';
 import { STORAGE_KEYS } from '@/utils/core/constants';
 import { toStringIndex } from '@/utils/music/chord-fretboard';
@@ -92,7 +95,9 @@ const analysis = computed(() => {
 
   const { strings, fretOffset, baseStrings, rawNotes, candidates, bestRootPitch } = graph;
   const currentDraftName = getChordName(editorStore.draftChord);
-  const selectedCandidate = candidates.find(c => c.chordName === currentDraftName);
+  const selectedCandidate = candidates.find(c =>
+    areChordsEnharmonicallyEquivalent(currentDraftName, c.segments ?? c.chordName)
+  );
   const activeRootPitch = selectedCandidate ? selectedCandidate.rootPitch : bestRootPitch;
 
   const notes: RenderNoteItem[] = rawNotes
@@ -122,13 +127,11 @@ const hasNotes = computed(() => analysis.value.notes.length > 0);
 /** auto 模式的展开依据：有按音（分析图存在即代表至少一个按音） */
 const hasContent = () => hasNotes.value;
 
-/** 候选和弦是否已被选中（与当前草稿名一致，含音名段序列等价） */
+/** 候选和弦是否已被选中（与当前草稿名一致，支持乐理等音异名等价判定） */
 const isCandidateSelected = (candidate: CandidateResult): boolean => {
   const currentDraftName = getChordName(editorStore.draftChord).trim();
   if (!currentDraftName) return false;
-  if (currentDraftName === candidate.chordName.trim()) return true;
-  const candidateFormatted = candidate.segments ? segmentsToString(candidate.segments).trim() : '';
-  return candidateFormatted === currentDraftName;
+  return areChordsEnharmonicallyEquivalent(currentDraftName, candidate.segments ?? candidate.chordName);
 };
 
 /** 用户点击候选：已选中则清除和弦名与根音标记，否则应用候选名并把根音指到对应琴弦 */
@@ -140,30 +143,73 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
     editorStore.draftChord.rootStringIndex = null;
   } else {
     let rootAssigned = false;
-    const parsedSegs = candidate.segments ?? nameToSegments(candidate.chordName);
-    if (parsedSegs) {
-      editorStore.draftChord.nameSegments = parsedSegs;
-    } else {
+    let parsedSegs = candidate.segments ?? nameToSegments(candidate.chordName);
+    if (!parsedSegs) {
       const parsedRoot = parsePitchSegment(candidate.rootLabel);
       if (parsedRoot) {
         const rawSuffix = candidate.chordName.slice(candidate.rootLabel.length);
         const cleanSuffix = rawSuffix.startsWith('/') ? rawSuffix.slice(1) : rawSuffix;
-        editorStore.draftChord.nameSegments = {
+        parsedSegs = {
           root: parsedRoot,
           unknownQuality: cleanSuffix || undefined,
         };
       }
     }
+
+    // 提取候选和弦根音与斜杠低音的升降号偏好（-1 为降号）
+    let assignedRootStringIdx: number | null = null;
     editorStore.draftChord.strings.forEach((str, sIdx) => {
       if (str[0] >= 0 && !rootAssigned) {
         const pitch = calcPitchIndex(sIdx, str[0], editorStore.draftChord.fretOffset, editorStore.activeBaseStrings);
         if (pitch === candidate.rootPitch) {
           editorStore.draftChord.rootStringIndex = toStringIndex(sIdx);
+          assignedRootStringIdx = sIdx;
           rootAssigned = true;
         }
       }
     });
     if (!rootAssigned) editorStore.draftChord.rootStringIndex = null;
+
+    // 核心尊重用户：若根音琴弦当前已被用户明确指定变音记号（如手动切成了 A#），和弦名自动与琴弦保持一致，绝不强行将用户的 A# 改回降 B
+    if (parsedSegs && assignedRootStringIdx !== null) {
+      const rootStr = editorStore.draftChord.strings[assignedRootStringIdx];
+      if (rootStr) {
+        const { label: curNatural, isAccidental } = computeStringLabelAccidental(
+          assignedRootStringIdx,
+          rootStr[0],
+          editorStore.draftChord.fretOffset,
+          rootStr[1],
+          editorStore.activeBaseStrings
+        );
+        if (isAccidental) {
+          const curAcc: AccidentalType = rootStr[1] ? -1 : 1;
+          parsedSegs = {
+            ...parsedSegs,
+            root: [curNatural as NaturalPitchLetter, curAcc],
+          };
+        }
+      }
+    }
+
+    editorStore.draftChord.nameSegments = parsedSegs;
+
+    // 若为斜杠和弦且指定了低音（bass），同步物理最低音弦的升降号偏好
+    if (parsedSegs?.bass) {
+      const bassIsFlat = parsedSegs.bass[1] === -1;
+      const bassNatural = parsedSegs.bass[0];
+      const bassAcc = parsedSegs.bass[1];
+      const bassPitch = ((ROOT_PITCH_MAP[bassNatural] ?? 0) + bassAcc + 12) % 12;
+      for (let s = 0; s < editorStore.draftChord.strings.length; s++) {
+        const str = editorStore.draftChord.strings[s];
+        if (str && str[0] >= 0) {
+          const p = calcPitchIndex(s, str[0], editorStore.draftChord.fretOffset, editorStore.activeBaseStrings);
+          if (p % 12 === bassPitch) {
+            str[1] = bassIsFlat;
+          }
+          break;
+        }
+      }
+    }
   }
 };
 </script>

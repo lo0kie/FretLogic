@@ -20,7 +20,8 @@ try {
 }
 
 export default defineConfig(({ mode }) => {
-  const base = process.env.VITE_BASE || (process.env.BUILD_TARGET === 'gitee' ? '/fret-logic/' : '/FretLogic/');
+  // 单一部署目标：GitHub Pages 子路径 /FretLogic/
+  const base = '/FretLogic/';
 
   return {
     plugins: [

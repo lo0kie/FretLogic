@@ -106,7 +106,6 @@
                 :class="[CHORD_CARD_BASE_CLASS, { [CHORD_CARD_ACTIVE_CLASS]: isCurrentBound(chord) }]"
                 :data-chord-id="chord.id"
                 :key="chord.id"
-                :ref="el => setCardObserverRef(el, chord.id)"
                 :tabindex="isCurrentBound(chord) ? -1 : 0"
                 @click="!isCurrentBound(chord) && handleSelectChord(chord)"
                 @keydown.enter.prevent="!isCurrentBound(chord) && handleSelectChord(chord)"
@@ -139,15 +138,13 @@
                   {{ getSourceGroupName(chord) }}
                 </span>
                 <FretboardCanvas
-                  v-if="visibleMap.get(chord.id)"
                   :chord
                   :chord-name-scale="0.7"
                   :is-dark-mode="globalDarkMode"
-                  :ref="el => setFretboardMeasureRef(el, chord.fretCount)"
                   :scale="pickerScale"
                   :shorthand="settingsStore.scoreChordShorthand"
+                  lazy
                 />
-                <div v-else :style="getCalculatedOrCachedSize(chord.fretCount)" />
               </div>
             </TransitionGroup>
           </div>
@@ -203,21 +200,10 @@
 
 <script lang="ts">
 import BaseIcon from '@/components/ui/BaseIcon.vue';
-
-const fretboardSizeCache = reactive(new Map<string, { width: string; height: string }>());
 </script>
 
 <script lang="ts" setup>
-import {
-  computed,
-  nextTick,
-  onDeactivated,
-  reactive,
-  ref,
-  useTemplateRef,
-  watch,
-  type ComponentPublicInstance,
-} from 'vue';
+import { computed, nextTick, onDeactivated, reactive, ref, useTemplateRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import FretboardCanvas from '@/components/fretboard/FretboardCanvas.vue';
@@ -244,8 +230,6 @@ import { useScoreEditorStore } from '@/stores/scoreEditorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { Chord } from '@/types';
 import { GroupSortRule } from '@/types';
-import { observeVisibility } from '@/utils/core/common';
-import { SCORE_EXPORT_CONFIG } from '@/utils/core/constants';
 import { getGroupSortKey, toGroupId } from '@/utils/music/entityFactories';
 
 const pickerScale = 2;
@@ -260,8 +244,6 @@ const CHORD_CARD_ACTIVE_CLASS =
 const props = defineProps<{
   visible: boolean;
 }>();
-/** 和弦指板占位尺寸缓存的键：品数 + 选择器固定缩放 */
-const getCacheKey = (fretCount: number) => `${fretCount}_${pickerScale}`;
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void;
 }>();
@@ -277,87 +259,7 @@ const settingsStore = useSettingsStore();
 const { chordsLookupMap } = useScoreLinesData();
 
 const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
-const visibleMap = reactive(new Map<string, boolean>());
 const editHoverMap = reactive(new Map<string, boolean>());
-const cardObserverStops = new Map<string, () => void>();
-
-/** 卡片滚入可视区域时标记为可见并停止观察（首见即懒挂载指板）；ref 卸载时清理对应观察器 */
-const setCardObserverRef = (el: Element | ComponentPublicInstance | null, chordId: string) => {
-  if (!el) {
-    cardObserverStops.get(chordId)?.();
-    cardObserverStops.delete(chordId);
-    return;
-  }
-  const domEl = (el as ComponentPublicInstance)?.$el ?? el;
-  if (!(domEl instanceof HTMLElement)) return;
-  if (visibleMap.get(chordId) || cardObserverStops.has(chordId)) return;
-
-  const scrollRoot = scrollWrapperRef.value;
-  // 若滚动容器尚未挂载，等待 nextTick 容器就绪后再行建立观察，避免以 window 为 root 误判
-  if (!scrollRoot) {
-    nextTick(() => {
-      if (scrollWrapperRef.value && !visibleMap.get(chordId) && !cardObserverStops.has(chordId)) {
-        setCardObserverRef(el, chordId);
-      }
-    });
-    return;
-  }
-
-  const stop = observeVisibility(
-    domEl,
-    visible => {
-      if (visible) {
-        visibleMap.set(chordId, true);
-        stop();
-        cardObserverStops.delete(chordId);
-      }
-    },
-    scrollRoot
-  );
-  cardObserverStops.set(chordId, stop);
-};
-
-/** 停止并清空所有卡片的可见性观察器 */
-const clearAllCardObservers = () => {
-  cardObserverStops.forEach(stop => stop());
-  cardObserverStops.clear();
-};
-
-// 弹窗关闭时重置可见性映射与观察器，确保下次打开依然享有虚拟占位与按需渲染的高性能
-watch(visibleModel, isOpen => {
-  if (!isOpen) {
-    clearAllCardObservers();
-    visibleMap.clear();
-  }
-});
-
-/** 首次渲染的指板测量真实尺寸并按品数缓存，供后续占位元素复用 */
-const setFretboardMeasureRef = (el: Element | ComponentPublicInstance | null, fretCount: number) => {
-  const cacheKey = getCacheKey(fretCount);
-  const domEl = (el as ComponentPublicInstance)?.$el ?? el;
-  if (!(domEl instanceof HTMLElement)) return;
-  const rect = domEl.getBoundingClientRect();
-  if (rect.width > 0 && rect.height > 0) {
-    fretboardSizeCache.set(cacheKey, {
-      width: `${Math.round(rect.width)}px`,
-      height: `${Math.round(rect.height)}px`,
-    });
-  }
-};
-
-/** 取缓存的指板占位尺寸；无缓存时计算并写入，保证懒挂载前后布局一致、不跳动 */
-const getCalculatedOrCachedSize = (fretCount: number) => {
-  const cacheKey = getCacheKey(fretCount);
-  const cached = fretboardSizeCache.get(cacheKey);
-  if (cached) return cached;
-  const w = Math.round(SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH * pickerScale);
-  const h = Math.round(
-    (SCORE_EXPORT_CONFIG.FRETBOARD_GRID_TOP + fretCount * SCORE_EXPORT_CONFIG.FRET_HEIGHT + 6) * pickerScale
-  );
-  const coreSize = { width: `${w}px`, height: `${h}px` };
-  fretboardSizeCache.set(cacheKey, coreSize);
-  return coreSize;
-};
 
 const selectedGroupId = ref<string>('ALL');
 const pickerSearchQuery = ref<string>('');
@@ -617,16 +519,6 @@ interface ChordPickerSection {
   chords: Chord[];
 }
 
-/** 根音 key（如 "C" / "C#" / "Eb"）→ 音高类序号（C=0 … B=11）；无法识别的 key 返回 12 排在最后 */
-const pitchClassIndex = (key: string): number => {
-  const NOTE_BASE: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-  const base = key ? NOTE_BASE[key[0]!] : undefined;
-  if (base === undefined) return 12;
-  const acc = key.slice(1);
-  const offset = acc === '#' || acc === '♯' ? 1 : acc === 'b' || acc === '♭' ? -1 : 0;
-  return base + offset;
-};
-
 const chordSections = computed<ChordPickerSection[]>(() => {
   const chords = filteredChords.value;
   if (chords.length === 0) return [];
@@ -649,8 +541,9 @@ const chordSections = computed<ChordPickerSection[]>(() => {
     sec.chords.push(chord);
   }
 
-  // 分区按根音音高排序（C → C# → D …）：Array#sort 稳定，等音异名与未知 key 保持原有相对顺序
-  return orderedKeys.map(k => sectionMap.get(k)!).sort((a, b) => pitchClassIndex(a.id) - pitchClassIndex(b.id));
+  // 分区顺序跟随当前排序规则（filteredChords 已按右上角 selector 的规则排好）中首个音符出现的次序，
+  // 使「按主音分组 + 跟随分组排序」同时成立；C-B 规则下自然呈现 C→C♯→D…，此时为稳定排序保持原序
+  return orderedKeys.map(k => sectionMap.get(k)!);
 });
 
 /** 用户点击候选和弦：绑定到当前选中的槽位并关闭弹窗 */
@@ -763,7 +656,6 @@ watch(
 );
 
 onDeactivated(() => {
-  clearAllCardObservers();
   cancelActiveSectionUpdate();
   scrollWrapperRef.value?.removeEventListener('scroll', handleScroll);
 });

@@ -164,17 +164,17 @@ const NUMBER_INPUT_CONFIG: Record<'sm' | 'md' | 'lg', { wrapperClass: string; bt
   sm: {
     wrapperClass: 'h-[1.6rem] px-xs gap-xs',
     btnClass: 'w-[1.1rem] h-[1.1rem] text-xs',
-    textClass: 'text-2xs min-w-[3rem]',
+    textClass: 'text-2xs min-w-[1.5rem]',
   },
   md: {
     wrapperClass: 'h-[1.9rem] px-xs gap-xs',
     btnClass: 'w-[1.3rem] h-[1.3rem] text-xs',
-    textClass: 'text-xs min-w-[3.5rem]',
+    textClass: 'text-xs min-w-[1.75rem]',
   },
   lg: {
     wrapperClass: 'h-[2.3rem] px-xs gap-xs',
     btnClass: 'w-[1.3rem] h-[1.3rem] text-xs',
-    textClass: 'text-xs min-w-[4rem]',
+    textClass: 'text-xs min-w-[2.25rem]',
   },
 };
 

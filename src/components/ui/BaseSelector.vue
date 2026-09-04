@@ -309,6 +309,7 @@ const {
   filterPlaceholder = '搜索...',
   filterMethod = undefined,
   valueComparator = undefined,
+  highlightNonDefault = false,
 } = defineProps<{
   options: O[];
   size?: 'sm' | 'md' | 'lg';
@@ -334,6 +335,9 @@ const {
   filterMethod?: (query: string, option: AnyOption) => boolean;
   /** 自定义值相等比较器 */
   valueComparator?: (a: V, b: V) => boolean;
+  /** 是否启用"非默认值高亮"：true（默认）保持原行为 —— 传了 defaultValue 且当前值偏离时标签高亮；
+   *  false 则关闭该高亮，标签恒用默认文字色。仅控制高亮，不影响清空按钮的判定 */
+  highlightNonDefault?: boolean;
 }>();
 
 const modelValue = defineModel<M extends true ? V[] : V>({ required: true });
@@ -502,16 +506,20 @@ const isEmpty = computed(() =>
     : modelValue.value === undefined || modelValue.value === null || modelValue.value === ''
 );
 
-const isNonDefault = computed(() => {
+/** 当前值是否已偏离 defaultValue：仅描述值状态，与是否高亮无关（共清空按钮判定使用） */
+const isNonDefaultValue = computed(() => {
   if (defaultValue === undefined) return false;
-  // isNonDefault 仅在非空单选路径参与 canClear；多选时 defaultValue 形态为 V[]，故此处断言为 V
+  // 多选时 defaultValue 形态为 V[]，故此处断言为 V（该分支仅单选路径生效）
   return !equalsValue(modelValue.value as V, defaultValue as V);
 });
+
+/** 标签是否高亮：由 highlightNonDefault 开关控制，开启时仅在值偏离 defaultValue 时高亮 */
+const isNonDefault = computed(() => highlightNonDefault && isNonDefaultValue.value);
 
 const canClear = computed(() => {
   if (isEmpty.value) return false;
   if (defaultValue !== undefined) {
-    return isNonDefault.value;
+    return isNonDefaultValue.value;
   }
   return true;
 });

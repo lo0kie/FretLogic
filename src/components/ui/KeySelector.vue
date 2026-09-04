@@ -1,5 +1,12 @@
 <template>
-  <BaseSelector v-model="modelValue" :disabled="disabled" :options="KEY_OPTIONS" :width="width" default-value="C">
+  <BaseSelector
+    v-model="modelValue"
+    :disabled="disabled"
+    :highlight-non-default="false"
+    :options="KEY_OPTIONS"
+    :width="width"
+    default-value="C"
+  >
     <template #label="{ selected }">
       <span v-chord-name="{ name: `${selected}调` }" />
     </template>
