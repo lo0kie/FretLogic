@@ -34,6 +34,9 @@
           class="line-row flex w-max min-w-full items-stretch"
         >
           <div
+            :class="{
+              'min-h-[116px]': isDragging && lineData.chars.length === 0,
+            }"
             :data-line-idx="lineData.lineId"
             @mouseenter="hoveredLineKey = lineData.lineId"
             @mouseleave="hoveredLineKey = null"
@@ -128,7 +131,6 @@
               :aria-hidden="hoveredLineKey !== lineData.lineId"
               :aria-label="deleteLineButtonTitle"
               :class="hoveredLineKey === lineData.lineId ? 'opacity-100' : 'opacity-0'"
-              :icon-stroke-width="2.2"
               :tabindex="hoveredLineKey === lineData.lineId ? 0 : -1"
               :title="deleteLineButtonTitle"
               @pointerdown.stop
@@ -137,6 +139,7 @@
               class="pl-sm text-danger duration-fast ml-auto shrink-0 self-center transition-opacity"
               icon="trash-2"
               icon-size="lg"
+              icon-stroke="thin"
               size="lg"
               variant="subtle"
             />
@@ -162,11 +165,32 @@
         </div>
       </div>
     </Teleport>
+
+    <BaseFab
+      :visible="scrollTopVisible"
+      @click="scrollToTop"
+      align="end"
+      aria-label="滚动到顶部"
+      bottom="7rem"
+      icon="chevron-up"
+      right="2rem"
+      tooltip="滚动到顶部"
+    />
+    <BaseFab
+      :visible="scrollBottomVisible"
+      @click="scrollToBottom"
+      align="end"
+      aria-label="滚动到底部"
+      bottom="4rem"
+      icon="chevron-down"
+      right="2rem"
+      tooltip="滚动到底部"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
 
 import type { Chord } from '@/domains/chord/types';
 import type { DropZone } from '@/domains/score/editor/composables/lyrics-drag/dropZone';
@@ -175,9 +199,11 @@ import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLi
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import type { LineData } from '@/domains/score/preview/services/scoreExportCanvas';
 import type { LineId, SlotKey } from '@/domains/score/types';
+import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
 import { useUiStore } from '@/platform/store/uiStore';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import BaseFab from '@/platform/ui/floating-bar/BaseFab.vue';
 
 import ChordSlotCell from './ChordSlotCell.vue';
 
@@ -191,6 +217,17 @@ const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 
 const scoreZoneRef = useTemplateRef<HTMLElement>('scoreZoneRef');
+
+/** 边缘滚动入口：顶部/底部浮动按钮。内容可滚且未贴该边时可见，点击平滑滚至对应边 */
+const {
+  visible: edgeVisible,
+  scrollToTop,
+  scrollToBottom,
+} = useEdgeScroll(scoreZoneRef, {
+  edges: ['top', 'bottom'],
+});
+const scrollTopVisible = computed(() => edgeVisible.top);
+const scrollBottomVisible = computed(() => edgeVisible.bottom);
 
 const hoveredLineKey = ref<string | null>(null);
 /** 删除行按钮的无障碍文本与悬停提示 */
@@ -305,6 +342,26 @@ const clearDragHintToast = () => {
 
 onDeactivated(clearDragHintToast);
 onBeforeUnmount(clearDragHintToast);
+
+// —— 排列区滚动位置保持 ——
+// 打点实证：KeepAlive 缓存本已命中（切回仅触发 onActivated、不重建），但浏览器会在元素 detach 后再
+// attach 时把其 scrollTop/scrollLeft 清零。故在 deactivate 时保存偏移，activate 时显式恢复；
+// 滚动保存为组件实例变量，切歌会新建实例（key 含 song.id）天然归零，无需额外清理。此补偿属于浏览器
+// 行为的必要修复，非绕过缓存。
+const savedScroll = { top: 0, left: 0 };
+onDeactivated(() => {
+  const el = scoreZoneRef.value;
+  if (el) {
+    savedScroll.top = el.scrollTop;
+    savedScroll.left = el.scrollLeft;
+  }
+});
+onActivated(async () => {
+  const el = scoreZoneRef.value;
+  if (!el || (savedScroll.top === 0 && savedScroll.left === 0)) return;
+  await nextTick();
+  el.scrollTo({ top: savedScroll.top, left: savedScroll.left, behavior: 'auto' });
+});
 
 /** 用户点击槽位打开 picker：拖拽中或点击抑制期忽略，避免拖拽松手误触发 */
 const handleOpenPicker = (slotKey: SlotKey) => {

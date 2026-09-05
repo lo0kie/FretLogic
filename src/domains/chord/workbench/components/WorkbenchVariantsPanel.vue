@@ -33,7 +33,7 @@
               <div class="flex w-full shrink-0 items-start justify-center overflow-hidden pt-0.5">
                 <FretboardCanvas
                   :chord="variant"
-                  :is-dark-mode="globalDarkMode"
+                  :is-dark-mode="isDark"
                   :scale="1.8"
                   :show-chord-name="false"
                   show-bold-nut
@@ -45,18 +45,9 @@
             </div>
           </div>
 
-          <!-- 左侧滚动渐隐：仅未滚到最左侧时显示，柔化左侧卡片滚出边缘 -->
-          <div
-            v-show="!atLeft"
-            aria-hidden="true"
-            class="z-panel pointer-events-none absolute inset-y-0 left-0 w-6 [background:linear-gradient(to_right,var(--bg-panel),transparent)]"
-          />
-          <!-- 右侧滚动渐隐：仅未滚到最右侧时显示，提示右侧还有更多变体卡片 -->
-          <div
-            v-show="!atRight"
-            aria-hidden="true"
-            class="z-panel pointer-events-none absolute inset-y-0 right-0 w-6 [background:linear-gradient(to_left,var(--bg-panel),transparent)]"
-          />
+          <!-- 左侧/右侧滚动渐隐 -->
+          <component :is="leftFade" />
+          <component :is="rightFade" />
         </div>
       </div>
       <p v-else-if="effectiveExpanded" class="form-hint pt-2">
@@ -75,7 +66,7 @@ import { computeChordFingerprint, getChordName } from '@/domains/chord/theory/th
 import type { Chord } from '@/domains/chord/types';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
 import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
-import { globalDarkMode } from '@/platform/store/globalState.ts';
+import { isDark } from '@/platform/composables/useTheme';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import WorkbenchPanel from './WorkbenchPanel.vue';
@@ -86,9 +77,10 @@ const chordStore = useChordStore();
 const isChordOpened = computed(() => Boolean(editorStore.draftChord.id));
 
 const scrollRef = ref<HTMLElement | null>(null);
-const { atLeft, atRight, syncEdgeFades } = useScrollEdgeFades(scrollRef, {
+const { leftFade, rightFade, syncEdgeFades } = useScrollEdgeFades(scrollRef, {
   direction: 'horizontal',
   threshold: 4,
+  fadeSize: 24,
 });
 
 const chordName = computed(() => getChordName(editorStore.draftChord).trim());

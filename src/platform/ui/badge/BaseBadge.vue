@@ -68,10 +68,10 @@
       </span>
       <BaseIcon
         v-if="hoverClose"
-        :size="closeIconSize"
-        :stroke-width="3"
+        :icon-size="closeIconSize"
         aria-hidden="true"
         class="duration-fast pointer-events-none absolute inset-0 m-auto flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"
+        icon-stroke="bold"
         name="x"
       />
     </span>
@@ -85,7 +85,7 @@
       title="关闭"
       type="button"
     >
-      <BaseIcon :size="closeIconSize" aria-hidden="true" name="x" stroke-width="3" />
+      <BaseIcon :icon-size="closeIconSize" aria-hidden="true" icon-stroke="bold" name="x" />
     </button>
   </component>
 </template>
@@ -94,6 +94,7 @@
 import { computed, useAttrs } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import type { IconSizePreset, IconSizeValue } from '@/platform/ui/icons/iconSizes';
 
 type BadgeVariant = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
 type BadgeSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -235,13 +236,14 @@ const variantAppearanceClasses = computed(
   () => VARIANT_APPEARANCE_MAP[props.variant]?.[props.appearance] ?? VARIANT_APPEARANCE_MAP.neutral.filled
 );
 
-const SIZE_TO_CLOSE_ICON: Record<string, number> = {
-  xs: 10,
-  sm: 12,
-  md: 14,
-  lg: 16,
+/** 徽标尺寸 → 关闭图标档位映射：xs/sm/md/lg → 12/14/16/18（统一取图标档位表，取消私有数字） */
+const CLOSE_ICON_SIZE_BY_BADGE_SIZE: Record<BadgeSize, IconSizePreset> = {
+  xs: 'xs',
+  sm: 'sm',
+  md: 'md',
+  lg: 'lg',
 };
-const closeIconSize = computed(() => SIZE_TO_CLOSE_ICON[props.size] ?? 14);
+const closeIconSize = computed<IconSizeValue>(() => CLOSE_ICON_SIZE_BY_BADGE_SIZE[props.size] ?? 'md');
 
 /** 关闭按钮：禁用态屏蔽，派发 close */
 const handleClose = (e: MouseEvent | KeyboardEvent) => {

@@ -26,3 +26,13 @@ export type ToastOptions = Omit<Toast, 'id' | 'msg' | 'type' | 'duration'> & { d
 
 /** 主题语义色：ActionButton / BaseModal 等基础组件共用的 color 联合（新增语义色只改这里） */
 export type ThemeColor = 'default' | 'primary' | 'danger' | 'warning' | 'success';
+
+/**
+ * 基础组件尺寸档位：UI 原语统一语义（sm / md / lg）。
+ *
+ * ⚠️ 与图标尺寸档位 `IconSizePreset` 是**两套不同语义**，严禁混用：
+ * - `ComponentSize` 描述控件本体大小（高度/内边距/字号）；
+ * - `IconSizePreset` 描述图标边长（px）。
+ * 组件内部需把 `ComponentSize` 显式映射为 `IconSizePreset`，不得直接透传。
+ */
+export type ComponentSize = 'sm' | 'md' | 'lg';

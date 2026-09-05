@@ -287,7 +287,7 @@ const syncActionButtons = computed<SyncActionButton[]>(() => [
   },
   {
     key: 'sync',
-    icon: 'cloud-upload',
+    icon: 'refresh-cw',
     label: '同步',
     tooltip: syncTooltip.value,
     disabled: isSyncDisabled.value || isBusy.value,

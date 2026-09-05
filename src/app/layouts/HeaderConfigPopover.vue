@@ -26,6 +26,17 @@
       />
     </BaseFormRow>
 
+    <BaseFormRow help="导出与预览对齐排版" label="乐谱对齐">
+      <BaseSegmentedControl
+        v-model="settingsStore.scoreLayoutAlign"
+        :options="[
+          { value: 'start', label: '起始位置' },
+          { value: 'center', label: '居中对齐' },
+        ]"
+        size="sm"
+      />
+    </BaseFormRow>
+
     <BaseFormRow help="仅乐谱生效" label="符号简写 (M/°/+)">
       <BaseSwitch v-model="settingsStore.scoreChordShorthand" aria-label="乐谱符号简写" />
     </BaseFormRow>
@@ -36,6 +47,7 @@
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
+import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 

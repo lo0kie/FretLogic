@@ -78,7 +78,7 @@
               title="关闭"
               type="button"
             >
-              <BaseIcon :stroke-width="3" aria-hidden="true" name="x" size="md" />
+              <BaseIcon aria-hidden="true" icon-size="md" icon-stroke="bold" name="x" />
             </button>
           </slot>
         </div>

@@ -45,7 +45,7 @@
           { 'peer-focus-visible:ring-primary/70 peer-focus-visible:ring-2': !disabled && !readonly },
         ]"
       >
-        <BaseIcon v-if="icon" :name="icon" :size="iconSize" :stroke-width="2.5" class="shrink-0" />
+        <BaseIcon v-if="icon" :icon-size :icon-stroke="'regular'" :name="icon" class="shrink-0" />
         <span v-if="label || $slots['default']" class="truncate whitespace-nowrap">
           <slot>{{ label }}</slot>
         </span>
@@ -68,7 +68,7 @@
       >
         <slot v-if="indeterminate" name="indeterminate-icon">
           <BaseIcon
-            :size="sizeConfig.iconSize"
+            :icon-size="sizeConfig.iconSize"
             class="duration-fast scale-100 text-white transition-transform"
             name="minus"
           />
@@ -76,7 +76,7 @@
 
         <slot v-else-if="isChecked" name="icon">
           <BaseIcon
-            :size="sizeConfig.iconSize"
+            :icon-size="sizeConfig.iconSize"
             class="duration-fast scale-100 text-white transition-transform"
             name="check"
           />
@@ -115,6 +115,7 @@
 <script setup lang="ts">
 import { computed, ref, useId, useSlots, useTemplateRef } from 'vue';
 
+import type { ComponentSize } from '@/platform/types';
 import {
   BUTTON_GHOST_THEME_MAP,
   BUTTON_ICON_ONLY_SIZE_MAP,
@@ -123,6 +124,7 @@ import {
 } from '@/platform/ui/button/buttonThemes';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { type IconName } from '@/platform/ui/icons/icons.registry';
+import { ICON_SIZE_PRESETS } from '@/platform/ui/icons/iconSizes';
 
 export interface BaseCheckboxProps {
   /** 当绑定为数组/集合时的选项自身值，或表单 value */
@@ -146,7 +148,7 @@ export interface BaseCheckboxProps {
   /** 标题下方的辅助说明文案 */
   description?: string;
   /** 尺寸大小 */
-  size?: 'sm' | 'md' | 'lg';
+  size?: ComponentSize;
   /** 主题色风格 */
   color?: 'primary' | 'success' | 'warning' | 'danger';
   /** 是否以带边框卡片形式展示 */
@@ -210,7 +212,7 @@ const SIZE_CONFIGS = {
   sm: {
     containerClass: 'gap-1.5',
     boxClass: 'w-3.5 h-3.5 rounded-[3px]',
-    iconSize: 16,
+    iconSize: ICON_SIZE_PRESETS.md,
     labelWrapperClass: 'ml-0.5',
     labelClass: 'text-xs',
     descriptionClass: 'text-2xs',
@@ -218,7 +220,7 @@ const SIZE_CONFIGS = {
   md: {
     containerClass: 'gap-2',
     boxClass: 'w-4 h-4 rounded',
-    iconSize: 18,
+    iconSize: ICON_SIZE_PRESETS.lg,
     labelWrapperClass: 'ml-0.5',
     labelClass: 'text-sm',
     descriptionClass: 'text-xs',
@@ -226,7 +228,7 @@ const SIZE_CONFIGS = {
   lg: {
     containerClass: 'gap-2.5',
     boxClass: 'w-5 h-5 rounded-md',
-    iconSize: 20,
+    iconSize: ICON_SIZE_PRESETS.xl,
     labelWrapperClass: 'ml-1',
     labelClass: 'text-base',
     descriptionClass: 'text-sm',

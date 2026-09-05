@@ -81,6 +81,8 @@
 <script setup generic="T extends string | number | boolean = boolean" lang="ts">
 import { computed, ref, useId, useTemplateRef } from 'vue';
 
+import type { ComponentSize } from '@/platform/types';
+
 const COLOR_CLASS: Record<string, { on: string; off: string }> = {
   primary: {
     on: 'bg-primary group-hover:brightness-105 group-disabled:brightness-100',
@@ -135,7 +137,7 @@ const SWITCH_CONFIG: Record<
 
 const props = withDefaults(
   defineProps<{
-    size?: 'sm' | 'md' | 'lg';
+    size?: ComponentSize;
     color?: 'primary' | 'success' | 'danger' | 'warning' | (string & {});
     disabled?: boolean;
     loading?: boolean;

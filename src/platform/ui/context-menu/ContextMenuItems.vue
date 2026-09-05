@@ -45,24 +45,24 @@
             <BaseIcon
               v-if="typeof item.icon === 'string'"
               :name="item.icon"
-              :stroke-width="3"
               aria-hidden="true"
               class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+              icon-stroke="bold"
               size="md"
             />
             <component
               v-else-if="item.icon"
               :is="item.icon"
-              :stroke-width="3"
               aria-hidden="true"
               class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+              icon-stroke="bold"
               size="md"
             />
             <span class="min-w-0 flex-1 whitespace-nowrap"> {{ item.label }} </span>
             <BaseIcon
-              :stroke-width="3"
               aria-hidden="true"
               class="-mr-0.5 shrink-0 opacity-50"
+              icon-stroke="bold"
               name="chevron-right"
               size="md"
             />
@@ -109,26 +109,26 @@
       >
         <BaseIcon
           v-if="item.checked"
-          :stroke-width="3"
           aria-hidden="true"
           class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+          icon-stroke="bold"
           name="check"
           size="md"
         />
         <BaseIcon
           v-else-if="typeof item.icon === 'string'"
           :name="item.icon"
-          :stroke-width="3"
           aria-hidden="true"
           class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+          icon-stroke="bold"
           size="md"
         />
         <component
           v-else-if="item.icon"
           :is="item.icon"
-          :stroke-width="3"
           aria-hidden="true"
           class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+          icon-stroke="bold"
           size="md"
         />
 
@@ -145,6 +145,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUpdate, ref, type Component, type CSSProperties } from 'vue';
 
+import type { ComponentSize } from '@/platform/types';
+import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
@@ -184,7 +186,7 @@ const {
 } = defineProps<{
   items?: ContextMenuItem[];
   title?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: ComponentSize;
 }>();
 
 const emit = defineEmits<{
@@ -205,9 +207,9 @@ onBeforeUpdate(() => {
 });
 
 const SIZE_MAP: Record<'sm' | 'md' | 'lg', string> = {
-  sm: 'h-[1.6rem] px-sm text-2xs gap-sm',
-  md: 'h-[1.9rem] px-md text-xs gap-sm',
-  lg: 'h-[2.3rem] px-md text-xs gap-sm',
+  sm: `${CONTROL_HEIGHT_CLASSES.sm} px-sm text-2xs gap-sm`,
+  md: `${CONTROL_HEIGHT_CLASSES.md} px-md text-xs gap-sm`,
+  lg: `${CONTROL_HEIGHT_CLASSES.lg} px-md text-xs gap-sm`,
 };
 
 const currentSizeClass = computed(() => SIZE_MAP[size] ?? SIZE_MAP.md);

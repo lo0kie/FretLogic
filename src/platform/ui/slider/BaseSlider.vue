@@ -67,7 +67,7 @@
       title="减少"
       type="button"
     >
-      <BaseIcon :stroke-width="2.2" aria-hidden="true" name="minus" size="sm" />
+      <BaseIcon aria-hidden="true" icon-size="sm" icon-stroke="thin" name="minus" />
     </button>
 
     <div
@@ -225,7 +225,7 @@
       title="增加"
       type="button"
     >
-      <BaseIcon :stroke-width="2.2" aria-hidden="true" name="plus" size="sm" />
+      <BaseIcon aria-hidden="true" icon-size="sm" icon-stroke="thin" name="plus" />
     </button>
 
     <input
@@ -279,6 +279,8 @@
 <script setup generic="R extends boolean = false" lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
+import type { ComponentSize } from '@/platform/types';
+import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { resolveComponentWidth, type FormComponentWidth } from '@/platform/utils/constants';
 
@@ -290,7 +292,7 @@ const props = withDefaults(
     min?: number;
     max?: number;
     step?: number;
-    size?: 'sm' | 'md' | 'lg';
+    size?: ComponentSize;
     width?: FormComponentWidth;
     height?: string | number;
     label?: string;
@@ -434,9 +436,9 @@ const wrapperStyle = computed(() => {
 });
 
 const SLIDER_CONFIG: Record<'sm' | 'md' | 'lg', { wrapperClass: string }> = {
-  sm: { wrapperClass: 'h-[1.6rem] px-xs' },
-  md: { wrapperClass: 'h-[1.9rem] px-sm' },
-  lg: { wrapperClass: 'h-[2.3rem] px-sm' },
+  sm: { wrapperClass: `${CONTROL_HEIGHT_CLASSES.sm} px-xs` },
+  md: { wrapperClass: `${CONTROL_HEIGHT_CLASSES.md} px-sm` },
+  lg: { wrapperClass: `${CONTROL_HEIGHT_CLASSES.lg} px-sm` },
 };
 
 const currentConfig = computed(() => SLIDER_CONFIG[props.size] ?? SLIDER_CONFIG.md);

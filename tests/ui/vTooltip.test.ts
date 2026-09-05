@@ -89,6 +89,11 @@ describe('vTooltip normalize modifiers', () => {
     expect(normalize('提示', { right: true, end: true }).placement).toBe('right-end');
     expect(normalize('提示', { top: true, start: true }).placement).toBe('top-start');
   });
+
+  it('supports string[] in normalize', () => {
+    const opts = normalize(['第一行', '第二行']);
+    expect(opts.content).toEqual(['第一行', '第二行']);
+  });
 });
 
 describe('vTooltip lifecycle & scroll listener', () => {
@@ -149,6 +154,28 @@ describe('vTooltip lifecycle & scroll listener', () => {
 
     addEventListenerSpy.mockRestore();
     removeEventListenerSpy.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('支持传入字符串数组，为每一项渲染独立的 .v-tooltip-line 行', async () => {
+    const TestComponent = defineComponent({
+      directives: { tooltip: vTooltip },
+      template: `<button id="btn-lines" v-tooltip="{ content: ['第一行', '第二行'], showDelay: 0, hideDelay: 0 }">按钮</button>`,
+    });
+
+    const wrapper = mount(TestComponent, { attachTo: document.body });
+    const btn = wrapper.find('#btn-lines');
+
+    await btn.trigger('mouseenter');
+    await wrapper.vm.$nextTick();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const lineEls = document.querySelectorAll('.v-tooltip-box .v-tooltip-line');
+    expect(lineEls).toHaveLength(2);
+    expect(lineEls[0]?.textContent).toBe('第一行');
+    expect(lineEls[1]?.textContent).toBe('第二行');
+
+    await btn.trigger('mouseleave');
     wrapper.unmount();
   });
 });

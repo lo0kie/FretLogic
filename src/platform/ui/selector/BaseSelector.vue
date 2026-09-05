@@ -44,17 +44,17 @@
           <BaseIcon
             v-if="typeof currentTriggerIcon === 'string'"
             :name="currentTriggerIcon as IconName"
-            :stroke-width="3"
             aria-hidden="true"
             class="shrink-0 opacity-80"
+            icon-stroke="bold"
             size="md"
           />
           <component
             v-else-if="currentTriggerIcon"
             :is="currentTriggerIcon"
-            :stroke-width="3"
             aria-hidden="true"
             class="shrink-0 opacity-80"
+            icon-stroke="bold"
             size="md"
           />
           <span class="flex w-full items-center gap-1 overflow-hidden">
@@ -66,7 +66,6 @@
               >
                 <span class="truncate">{{ formattedOption(opt) }}</span>
                 <BaseIcon
-                  :stroke-width="3"
                   @mousedown.stop.prevent
                   @pointerdown.stop.prevent
                   @click.stop.prevent="handleRemoveTag(opt)"
@@ -74,6 +73,7 @@
                   @keydown.space.prevent.stop="handleRemoveTag(opt)"
                   aria-label="移除选项"
                   class="hover:text-danger shrink-0 cursor-pointer opacity-60 hover:opacity-100"
+                  icon-stroke="bold"
                   name="x"
                   role="button"
                   size="xs"
@@ -97,7 +97,6 @@
 
         <template v-if="clearable && canClear && !disabled">
           <BaseIcon
-            :stroke-width="3"
             @mousedown.stop.prevent
             @pointerdown.stop.prevent
             @click.stop.prevent="handleClear"
@@ -105,6 +104,7 @@
             @keydown.space.prevent.stop="handleClear"
             aria-label="清空选择"
             class="text-text-disabled hover:text-danger bg-bg-body hidden shrink-0 cursor-pointer transition-colors group-focus-within:block group-hover:block"
+            icon-stroke="bold"
             name="x"
             role="button"
             size="md"
@@ -113,8 +113,8 @@
           />
           <BaseIcon
             :class="{ 'rotate-180': _isOpen }"
-            :stroke-width="3"
             class="text-text-disabled block shrink-0 transition-transform duration-200 group-focus-within:hidden group-hover:hidden"
+            icon-stroke="bold"
             name="chevron-down"
             size="md"
           />
@@ -122,8 +122,8 @@
         <BaseIcon
           v-else
           :class="{ 'rotate-180': _isOpen }"
-          :stroke-width="3"
           class="text-text-disabled block shrink-0 transition-transform duration-200"
+          icon-stroke="bold"
           name="chevron-down"
           size="md"
         />
@@ -197,17 +197,17 @@
                   <BaseIcon
                     v-if="typeof getOptionIcon(option) === 'string'"
                     :name="getOptionIcon(option) as IconName"
-                    :stroke-width="3"
                     aria-hidden="true"
                     class="shrink-0 opacity-80"
+                    icon-stroke="bold"
                     size="md"
                   />
                   <component
                     v-else-if="getOptionIcon(option)"
                     :is="getOptionIcon(option)"
-                    :stroke-width="3"
                     aria-hidden="true"
                     class="shrink-0 opacity-80"
+                    icon-stroke="bold"
                     size="md"
                   />
                   <span class="truncate">
@@ -218,9 +218,9 @@
                 </span>
                 <BaseIcon
                   v-if="isSelected(getOptionValue(option))"
-                  :stroke-width="3"
                   aria-hidden="true"
                   class="text-primary shrink-0"
+                  icon-stroke="bold"
                   name="check"
                   size="md"
                 />
@@ -228,18 +228,9 @@
             </template>
           </div>
 
-          <!-- 顶部滚动渐隐：仅可上滚时显示 -->
-          <div
-            v-show="!atTop"
-            aria-hidden="true"
-            class="z-panel pointer-events-none absolute inset-x-0 top-0 h-[16px] [background:linear-gradient(to_bottom,var(--bg-elevated),transparent)]"
-          />
-          <!-- 底部滚动渐隐：仅未滚到底时显示 -->
-          <div
-            v-show="!atBottom"
-            aria-hidden="true"
-            class="z-panel pointer-events-none absolute inset-x-0 bottom-0 h-[16px] [background:linear-gradient(to_top,var(--bg-elevated),transparent)]"
-          />
+          <!-- 顶部/底部滚动渐隐 -->
+          <component :is="topFade" />
+          <component :is="bottomFade" />
         </div>
 
         <slot v-if="$slots['footer']" name="footer" />
@@ -251,6 +242,7 @@
 <script lang="ts">
 import type { Component } from 'vue';
 
+import type { ComponentSize } from '@/platform/types';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 
@@ -281,6 +273,7 @@ export type OptionValue<Opt> = Opt extends { value: infer V } ? V : Opt;
 import { computed, nextTick, onBeforeUpdate, ref, useAttrs, useTemplateRef, watch } from 'vue';
 
 import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
+import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import { resolveComponentWidth, type FormComponentWidth } from '@/platform/utils/constants';
@@ -312,7 +305,7 @@ const {
   highlightNonDefault = false,
 } = defineProps<{
   options: O[];
-  size?: 'sm' | 'md' | 'lg';
+  size?: ComponentSize;
   width?: FormComponentWidth;
   placeholder?: string;
   /** 触发器前缀图标（不传则自动取当前选中项的 icon） */
@@ -393,14 +386,18 @@ onBeforeUpdate(() => {
   optionEls.value = [];
 });
 
-const { atTop, atBottom, syncEdgeFades } = useScrollEdgeFades(dropdownRef, { threshold: 2 });
+const { topFade, bottomFade, syncEdgeFades } = useScrollEdgeFades(dropdownRef, {
+  threshold: 2,
+  fadeSize: 16,
+  color: 'var(--bg-elevated)',
+});
 
 const isMultiple = computed(() => multiple);
 
 const SELECTOR_CONFIG: Record<'sm' | 'md' | 'lg', { triggerClass: string; itemClass: string }> = {
-  sm: { triggerClass: 'h-[1.6rem] px-2 text-2xs', itemClass: 'h-[1.6rem]' },
-  md: { triggerClass: 'h-[1.9rem] px-2.5 text-xs', itemClass: 'h-[1.9rem]' },
-  lg: { triggerClass: 'h-[2.3rem] px-3.5 text-xs', itemClass: 'h-[2.3rem]' },
+  sm: { triggerClass: `${CONTROL_HEIGHT_CLASSES.sm} px-2 text-2xs`, itemClass: `${CONTROL_HEIGHT_CLASSES.sm}` },
+  md: { triggerClass: `${CONTROL_HEIGHT_CLASSES.md} px-2.5 text-xs`, itemClass: `${CONTROL_HEIGHT_CLASSES.md}` },
+  lg: { triggerClass: `${CONTROL_HEIGHT_CLASSES.lg} px-3.5 text-xs`, itemClass: `${CONTROL_HEIGHT_CLASSES.lg}` },
 };
 
 const currentConfig = computed(() => SELECTOR_CONFIG[size] ?? SELECTOR_CONFIG.md);

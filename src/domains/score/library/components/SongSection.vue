@@ -181,7 +181,7 @@ const songKeyAriaLabel = (song: Song): string => `调性 ${computeSongKey(song.p
 const getSongMenuItems = (song: Song): ContextMenuItem[] => {
   const items: ContextMenuItem[] = [
     {
-      label: '复制',
+      label: '复制文本',
       icon: 'copy',
       action: () => {
         void copySongText(song);
@@ -208,28 +208,35 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => {
       danger: true,
       action: () => {
         const isCurrentActive = scoreEditor.activeSongId === song.id;
+        const deletedSong = { ...song, chordMap: new Map(song.chordMap) };
+        const originalIndex = songStore.songs.findIndex(s => s.id === song.id);
         songStore.deleteSong(song.id);
         if (isCurrentActive) {
           scoreEditor.setActiveSong(null);
         }
-        uiStore.toast.success(`已删除乐谱 "${song.title}"`);
+        uiStore.toast.info(`已删除乐谱 "${song.title}"`, {
+          actionText: '撤销',
+          duration: 4000,
+          onAction: () => {
+            songStore.restoreSong(deletedSong, originalIndex >= 0 ? originalIndex : undefined);
+            if (isCurrentActive) {
+              scoreEditor.setActiveSong(deletedSong.id);
+            }
+            uiStore.toast.success(`已恢复乐谱 "${deletedSong.title}"`);
+          },
+        });
       },
     },
   ];
   return items;
 };
 
-/** 用户点击乐谱卡：再次点击取消选中；选中新乐谱时保持当前标签页，仅目标无歌词时回退编辑 */
+/** 用户点击乐谱卡：再次点击取消选中；选中新乐谱时保留并恢复用户此前的标签页 */
 const handleSelectSong = (songId: string) => {
   if (scoreEditor.activeSongId === songId) {
     scoreEditor.setActiveSong(null);
   } else {
     scoreEditor.setActiveSong(songId);
-
-    // 不强制跳到「排列和弦」：保留用户当前所在标签；无歌词时该歌只能编辑
-    if (!scoreEditor.hasLyrics) {
-      scoreEditor.activeTab = 'edit';
-    }
   }
 };
 </script>

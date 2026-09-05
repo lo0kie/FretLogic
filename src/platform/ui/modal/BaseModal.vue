@@ -54,13 +54,13 @@
                   <ActionButton
                     v-if="showClose"
                     :disabled="confirmLoading"
-                    :icon-stroke-width="3"
                     @click="close('close')"
                     icon-only
                     aria-label="关闭"
                     class="p-1.5!"
                     icon="x"
                     icon-size="xl"
+                    icon-stroke="bold"
                     size="sm"
                     variant="ghost"
                   />

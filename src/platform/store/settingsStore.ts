@@ -56,6 +56,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // 乐谱乐理显示偏好
   const scoreChordShorthand = useStorage<boolean>(STORAGE_KEYS.SCORE_CHORD_SHORTHAND, false);
 
+  // 乐谱排版对齐偏好（start 起始位置 / center 居中对齐）
+  const scoreLayoutAlign = useStorage<'start' | 'center'>(STORAGE_KEYS.SCORE_LAYOUT_ALIGN, 'start');
+
   /** 从备份包恢复同步配置（导入备份/云端拉取时调用）。分支缓存随旧配置失效。 */
   const applySyncBackup = (sync?: SyncSettingsBackup) => {
     if (!sync) return;
@@ -94,6 +97,8 @@ export const useSettingsStore = defineStore('settings', () => {
     if (typeof prefs.workbenchChordShorthand === 'boolean')
       workbenchChordShorthand.value = prefs.workbenchChordShorthand;
     if (typeof prefs.scoreChordShorthand === 'boolean') scoreChordShorthand.value = prefs.scoreChordShorthand;
+    if (prefs.scoreLayoutAlign === 'start' || prefs.scoreLayoutAlign === 'center')
+      scoreLayoutAlign.value = prefs.scoreLayoutAlign;
   };
 
   return {
@@ -119,6 +124,7 @@ export const useSettingsStore = defineStore('settings', () => {
     serverToken,
     workbenchChordShorthand,
     scoreChordShorthand,
+    scoreLayoutAlign,
     applySyncBackup,
     applyPreferencesBackup,
   };

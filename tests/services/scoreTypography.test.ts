@@ -12,14 +12,19 @@ describe('乐谱排版与折行引擎算法测试', () => {
     const hanziWidth = getCharColumnWidth({ char: '我' });
     const englishWidth = getCharColumnWidth({ char: 'a' });
     const numberWidth = getCharColumnWidth({ char: '1' });
+    const barWidth = getCharColumnWidth({ char: '|' });
+    const fullBarWidth = getCharColumnWidth({ char: '｜' });
     const spaceWidth = getCharColumnWidth({ char: ' ' });
 
     expect(hanziWidth).toBe(SCORE_EXPORT_CONFIG.REGULAR_CHAR_WIDTH);
+    expect(fullBarWidth).toBe(SCORE_EXPORT_CONFIG.REGULAR_CHAR_WIDTH);
     expect(spaceWidth).toBe(SCORE_EXPORT_CONFIG.SPACE_CHAR_WIDTH);
-    // 半角英文和数字宽度严格小于全角汉字宽度
+    // 半角英文、数字与小节竖线宽度严格小于全角汉字宽度
     expect(englishWidth).toBeLessThan(hanziWidth);
     expect(numberWidth).toBeLessThan(hanziWidth);
+    expect(barWidth).toBeLessThan(hanziWidth);
     expect(englishWidth).toBe(Math.round(SCORE_EXPORT_CONFIG.REGULAR_CHAR_WIDTH * 0.58));
+    expect(barWidth).toBe(Math.round(SCORE_EXPORT_CONFIG.REGULAR_CHAR_WIDTH * 0.58));
   });
 
   it('中文避头尾规则生效：标点符号不得单独出现在新行开头', () => {

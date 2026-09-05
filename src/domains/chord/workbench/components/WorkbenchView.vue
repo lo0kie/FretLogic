@@ -35,18 +35,9 @@
           <component v-for="panelId in panels" :is="PANEL_COMPONENT_MAP[panelId]" :key="panelId" />
         </div>
 
-        <!-- 顶部滚动渐隐：仅可上滚时显示，避免未滚动时遮挡首卡 -->
-        <div
-          v-show="!atTop"
-          aria-hidden="true"
-          class="z-panel pointer-events-none absolute inset-x-0 top-0 h-[20px] [background:linear-gradient(to_bottom,var(--bg-main),transparent)]"
-        />
-        <!-- 底部滚动渐隐：仅未滚到底时显示，滚到底时隐藏避免遮挡末卡 -->
-        <div
-          v-show="!atBottom"
-          aria-hidden="true"
-          class="z-panel pointer-events-none absolute inset-x-0 bottom-0 h-[20px] [background:linear-gradient(to_top,var(--bg-main),transparent)]"
-        />
+        <!-- 顶部/底部滚动渐隐 -->
+        <component :is="topFade" />
+        <component :is="bottomFade" />
       </div>
     </div>
 
@@ -75,7 +66,9 @@ import WorkbenchVariantsPanel from './WorkbenchVariantsPanel.vue';
 // 滚动边缘渐隐：未滚动时顶部 fade 隐藏（首卡完整可见），上滚后显示柔化切口；
 // 底部 fade 仅未滚到底时显示，滚到底隐藏（末卡不被遮挡）
 const scrollRef = ref<HTMLElement | null>(null);
-const { atTop, atBottom, syncEdgeFades } = useScrollEdgeFades(scrollRef);
+const { topFade, bottomFade, syncEdgeFades } = useScrollEdgeFades(scrollRef, {
+  color: 'var(--bg-main)',
+});
 
 const PANEL_COMPONENT_MAP: Record<WorkbenchPanelId, Component> = {
   analysis: ChordAnalysisPanel,

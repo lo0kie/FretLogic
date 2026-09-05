@@ -79,4 +79,22 @@ describe('SongSection 乐谱菜单', () => {
 
     expect(items.find(item => item.label === '清空和弦')?.disabled).toBe(true);
   });
+
+  it('关闭乐谱再打开时，恢复关闭前的标签页', async () => {
+    const songStore = useSongStore();
+    const scoreEditor = useScoreEditorStore();
+    songStore.overwriteSongs([buildSong('s1')]);
+
+    scoreEditor.setActiveSong('s1');
+    scoreEditor.activeTab = 'preview';
+    expect(scoreEditor.activeTab).toBe('preview');
+
+    // 关闭乐谱（置空）
+    scoreEditor.setActiveSong(null);
+    expect(scoreEditor.activeSong).toBeNull();
+
+    // 重新打开乐谱
+    scoreEditor.setActiveSong('s1');
+    expect(scoreEditor.activeTab).toBe('preview');
+  });
 });

@@ -7,8 +7,16 @@
  * - buildFloatingMiddlewares：中间件列表（两消费方通用，dom/vue 的中间件同源于 core）
  * - createVirtualElementRect：以鼠标坐标 / 任意点构造零尺寸虚拟锚点
  */
-import { flip, arrow as floatingArrow, limitShift, offset, shift, size } from '@floating-ui/dom';
-import type { Middleware } from '@floating-ui/dom';
+import {
+  flip,
+  arrow as floatingArrow,
+  limitShift,
+  offset,
+  shift,
+  size,
+  type Middleware,
+  type Placement,
+} from '@floating-ui/dom';
 
 /** 显示箭头时浮层与锚点的最小间距（px）：箭头外露量约 size·√2/2 - 1（size=14 → ≈9px），
  *  间距须大于外露量，否则箭头会戳进触发元素。BasePopover 箭头 size=14 即用此下限 */
@@ -25,6 +33,14 @@ export interface FloatingMiddlewareOptions {
   matchTriggerWidth?: boolean;
   /** matchTriggerWidth 的生效策略：width 强制等宽 / minWidth 仅不小于锚点 */
   matchTriggerWidthStrategy?: 'width' | 'minWidth';
+  /**
+   * 交叉轴溢出检查（默认 false）：
+   * 设为 false 时 flip 仅在主轴（如上下）空间不足时翻转；交叉轴（左右）轻微溢出交由后面的 shift 限位，
+   * 避免靠屏幕右/左边缘的元素因水平微小溢出而被强制上下翻转。
+   */
+  crossAxis?: boolean;
+  /** 自定义备选翻转方位；未传时 floating-ui 默认翻转至对侧 */
+  fallbackPlacements?: Placement[];
 }
 
 /**
@@ -36,7 +52,8 @@ export const buildFloatingMiddlewares = (opts: FloatingMiddlewareOptions = {}): 
   const m: Middleware[] = [
     offset(opts.offsetDistance ?? 8),
     flip({
-      fallbackPlacements: ['top', 'bottom-end', 'bottom-start', 'top-end', 'top-start', 'left', 'right'],
+      crossAxis: opts.crossAxis ?? false,
+      fallbackPlacements: opts.fallbackPlacements,
       padding: 8,
     }),
     shift({ padding: 12, limiter: limitShift() }),

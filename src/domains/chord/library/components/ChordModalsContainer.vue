@@ -77,7 +77,7 @@
             <FretboardCanvas
               :chord="variant"
               :chord-name-scale="0.8"
-              :is-dark-mode="globalDarkMode"
+              :is-dark-mode="isDark"
               :scale="1.8"
               :show-chord-name="false"
             />
@@ -114,7 +114,7 @@ import type { useChordGroupModals } from '@/domains/chord/library/composables/us
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
-import { globalDarkMode } from '@/platform/store/globalState';
+import { isDark } from '@/platform/composables/useTheme';
 import { injectModalController } from '@/platform/store/useModalController';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';

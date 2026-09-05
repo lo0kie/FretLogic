@@ -5,6 +5,81 @@
 
 ## [Unreleased]
 
+### 修复与增强（2026-09-06 · 顶部回滚按钮与滚动边沿通用化）
+
+- 和弦选择器弹窗与乐谱排列区新增「滚动到顶部」悬浮按钮：对称于既有「滚到底部」入口，长列表置顶内容一键可达；按钮仅在容器可滚动且未贴顶边时显示；
+- 滚动边沿侦测通用化：原 `useNearBottomScroll` 重构为 `useEdgeScroll`，`edges` 选项支持
+  `'top' | 'bottom' | 'left' | 'right'` 任意方向组合，统一暴露各边可见态与 `scrollToX`
+  平滑滚动，供任意方向上的浮动按钮/自动加载复用；
+- `BaseFab` 补齐 `top` 与 `left` / `right` 定位参数（默认靠右、距边与既有 `align="end"`
+  一致），支撑任意方向贴边的悬浮按钮布局；
+- 近义 API 收敛（P1）：`platform/utils/validateSettings.ts` 四个 `validateXxxSettings` 收拢为
+  `validateByRules(payload, rules)` 通用核心 + 四张声明式规则表，对外签名与返回类型 `ValidationResult<T>`
+  保持不变；`app/services/validation/payload.ts` 的载荷校验结果类型由 `ValidationResult` 重命名为
+  `PayloadValidationResult` 以消除与前者同名异形的歧义；`BackupSelection` 去重为 `app/types/payload.ts`
+  单一声明源、`useImportExportService` 仅作 re-export。
+
+### 修复与增强（2026-09-05 · 边缘渐变导出、预览调式响应与乐谱删除撤回）
+
+- 修复乐谱预览 Tab 下切换乐谱闪现上一张旧谱的渲染竞态与闪烁缺陷：重构 `ScoreView` 与 `ScorePreviewPane`
+  的渲染生命周期与响应式时序：
+  1. 将 `ScorePreviewPane` 在 `ScoreView` 中的缓存键由动态乐谱 ID 规范为固定组件键（`key="score-preview"`），消除了 Vue
+     3 在 `<Transition mode="out-in">` 嵌套 `<KeepAlive>`
+     场景下因同一组件分支动态换 key 导致的组件出入场竞态与 DOM 残留异常；
+  2. 重构 `ScorePreviewPane` 内部响应式切歌时序，将离散切歌行为（`activeSong.id`
+     变化）与普通内容微调防抖彻底解耦：切歌时若命中会话级 LRU 缓存（`previewCache`）则 0ms 瞬间同步完成切图，未命中缓存时首帧立即清空旧乐谱并展示生成中占位，同时自动作废上一首歌曲未完成的导出任务，彻底消除了“过渡完成后屏幕上仍显示上一张乐谱、随后突变闪烁”的深层根因；
+  3. 增强 `onActivated`
+     唤醒状态守卫，比对内容哈希（`contentKey`）确保在其他 Tab 切歌后再进预览时旧乐谱绝不残留，切歌后横向翻页滚动位置自动归零；
+- 乐谱表头元信息竖线居中对齐与淡色弱化：修复乐谱离屏导出引擎（Worker）中表头元信息（调号与 Capo）整行合并度量导致中央分隔竖线
+  `'|'`
+  偏心、无法与上方乐谱标题水平中轴对齐的问题，重构为以画布中心为基准轴严格居中绘制竖线分隔符，调号与 Capo 分别对称向两侧排布，并将竖线切换为弱化淡色（`colors.FB_LINE`）；
+- 乐谱排版对齐方式可配置化（起始位置 / 居中对齐）：在顶栏配置卡片（`HeaderConfigPopover`）新增「乐谱对齐」分段控制项（`scoreLayoutAlign`），支持在经典的「起始位置」（默认贴齐页面左安全边距）与「居中对齐」（单行根据实际内容宽度在页面内严格水平居中）之间自由切换，设置项持久化落盘并同步至备份清洗链路与 A4 预览响应；小节竖线同步支持弱化淡色渲染与编辑器槽位置灰；
+
+- `v-tooltip` 取消自动感知折行并支持字符串数组换行：移除容器 `white-space: pre-line` 自动断行行为，改为
+  `white-space: nowrap` 不再自动换行；需要多行换行时支持传入字符串数组（`string[]`，如
+  `v-tooltip="['第一行', '第二行']"` 或 `content: string[]`），为每项渲染独立的 `.v-tooltip-line`
+  块级行，换行排版精确可控；`TopHeader` 构建信息提示已全面接入该模式；
+- `useScrollEdgeFades` 升级为直接导出虚拟组件节点：新增导出 `topFade` / `bottomFade`（及 `leftFade` / `rightFade` /
+  `startFade` / `endFade`），调用方在模板中只需 `<component :is="topFade" />`
+  即可直接渲染，自带定位、层级、可访问性与渐变样式，消除一切模板样本代码；`SidebarLeft`、`BaseSelector`、`WorkbenchVariantsPanel`、`WorkbenchView`
+  已全面切换为 `<component :is="..." />` 渲染；
+- 修复乐谱关闭后再打开标签页被重置为编辑歌词的问题：移除取消选中乐谱（`activeSongId = null`）时重置 `activeTabRef`
+  的冗余逻辑，`SongSection` 点选乐谱不再暴力覆盖
+  `activeTab`，重新打开乐谱时平滑恢复用户关闭前所在的功能标签页（排列和弦 / 乐谱预览 / 编辑歌词）；
+- API 契约与冗余入口收敛（P0 与 P1）：彻底删除冗余中转文件
+  `src/platform/store/globalState.ts`，全局 8 处调用点统一收拢至 `@/platform/composables/useTheme`（直接导出
+  `isDark`、`preference`、`setTheme` 等），确立单一导入入口；废弃 `src/platform/utils/validateSettings.ts` 中单独保留的
+  `SettingsValidationResult` 别名，所有同步校验器统一返回规范类型 `ValidationResult<T>`；
+- 分段控制组件整体禁用时抑制激活样式：`BaseSegmentedControl` 在 `disabled: true`
+  时自动隐藏滑块/下划线指示器，各选项取消主色加粗高亮与选中背景色，避免禁用时依然残留突兀的激活视觉；
+- 分段控制组件补齐开箱即用的图标与纯图标能力：`BaseSegmentedControl` 的 `SegmentOption` 新增 `icon?: IconName` 与
+  `iconOnly?: boolean` 字段，支持组件级 `iconOnly` 与 `iconSize` 配置；配置图标时自动渲染 `BaseIcon`
+  并与文字保持自适应间距；纯图标模式下自动隐藏文字并赋予 `aria-label` 与 `title`，兼顾无障碍与视觉纯净度；
+- 修复复合 Lucide 图标 stroke-width 粗细控制失效的深层缺陷：修复 `BaseIcon` 中带 `<g stroke-width="2">`
+  分组容器的图标（如 `layout-grid`、`music` 等）因 CSS 选择器遗漏 `g`
+  标签导致继承链被截断、粗细始终锁死在 2px 的问题；`BaseSegmentedControl` 同步支持 `iconStrokeWidth`
+  配置（默认 2.5 粗细，与全局其他图标对齐）；
+- 顶栏左侧视觉与交互体验升级：Logo 区域升级为带有 `guitar`
+  品牌微标的可交互主页入口（Hover 微动效 + 点击回工作台）；侧边栏微型分割线规范为
+  `h-3.5`（14px）中心对齐，消除悬空毛刺感；`NAV_OPTIONS` 全面接入图标能力，为「和弦」与「乐谱」赋予 `layout-grid` 与
+  `music` 语义图标，辨识度显著提升；
+- 修复乐谱切换调式/标题/变调夹未触发预览更新：在 `ScorePreviewPane` 的 `buildContentKey` 内容哈希及 `watch`
+  监听队列中补齐 `song.title`、`song.playKey`、`song.capo` 与
+  `song.version`，彻底杜绝切换调式时因命中旧内容哈希导致预览画面不刷新的问题；
+- 删除乐谱操作支持撤销：`songStore` 实装并导出 `restoreSong` 与 `undoDeleteSong`，`SongSection`
+  右键删除乐谱由普通成功提示升级为带「撤销」操作的 Toast（4 秒停留），撤回后自动还原原列表位置并保持当前激活选中状态；
+
+### 修复与增强（2026-09-05 · 预览零遮挡与组件解耦）
+
+- 预览界面导出收敛与零遮挡体验：彻底移除覆盖在乐谱预览图表面的底部浮动条与点选操作，使 A4 乐谱横向翻页浏览 100% 零遮挡；导出功能清晰收敛为「顶栏导出整曲长图（复制/下载）+ 右键单页导出本页（复制/下载）」，职责明确且互不干扰；
+- 浮动组件语义拆分（`BaseFab` 与 `BaseFloatingBar`）：解耦单按钮与多操作工具栏，抽取专职圆形悬浮按钮
+  `BaseFab`（内建黄金比例图标与原生按钮语义），乐谱排列区与和弦选择器弹窗的「滚到底部」入口切换至 `BaseFab`；
+- 修复与优化 Tooltip 悬浮定位：修复边缘元素 `v-tooltip.top`
+  触发 crossAxis 翻转导致出现在底部的问题，加大默认与触发元素间距（12px）；
+- 乐谱排列区拖拽槽位与无歌词行高度优化：修复拖拽和弦时无歌词行（前奏/尾奏/空白行）因无和弦撑开导致高度坍缩的问题；`.is-drop-widened`
+  新增 `min-height: 108px` 协同过渡，无歌词行拖拽时保底 `min-h-[116px]`，上下两块动作落点分区保底 `min-h-[38px]` /
+  `min-h-[26px]`，彻底解决落点过扁、动作分区被挤压重叠的问题。
+
 ### 修复与增强（2026-09-05 · 粘贴确认兜底与体验打磨）
 
 - 修复多指法面板 KeepAlive 定位失效：`v-scroll-into-view` 的 `updated` 钩子不再使用挂载时闭包的旧

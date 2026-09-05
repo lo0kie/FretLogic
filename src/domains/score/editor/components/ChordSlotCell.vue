@@ -8,6 +8,7 @@
         'justify-start opacity-100 after:block after:h-[1.15rem] after:w-full after:shrink-0 after:content-[\'\']':
           variant === 'edge' && Boolean(chord),
         'justify-center px-[0.4rem] opacity-100 hover:bg-transparent!': variant === 'add',
+        'border-border-base/70 rounded-md border border-dashed': variant === 'add' && isDragActive,
         'ml-[0.15rem]': leftChordGap,
         'px-0': Boolean(chord),
         'px-0.5': !chord,
@@ -55,7 +56,6 @@
           :class="[actionButtonTransition(index), action.extraClass]"
           :color="action.color"
           :icon="action.icon"
-          :icon-stroke-width="2.5"
           :key="action.key"
           :label="action.label"
           :ref="el => setActionButtonEl(el, index)"
@@ -64,6 +64,7 @@
           block
           compacted
           class="pointer-events-auto!"
+          icon-stroke="regular"
           size="sm"
           variant="subtle"
         />
@@ -108,8 +109,9 @@
       >
         <FretboardCanvas
           :chord
-          :is-dark-mode="globalDarkMode"
-          :scale="1.2 * scoreEditor.effectiveFretboardScale"
+          :chord-name-scale="0.8"
+          :is-dark-mode="isDark"
+          :scale="1.4 * scoreEditor.effectiveFretboardScale"
           :shorthand="settingsStore.scoreChordShorthand"
         />
       </div>
@@ -117,14 +119,16 @@
       <ActionButton
         v-else-if="variant === 'add'"
         :aria-label="addPlaceholderTitle"
-        :class="isActive || lineHovered ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'"
+        :class="
+          isActive || lineHovered || isDragActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+        "
         :icon-color="'var(--color-primary)'"
-        :icon-stroke-width="3"
         :tabindex="-1"
         :title="addPlaceholderTitle"
         icon-only
         icon="plus"
         icon-size="lg"
+        icon-stroke="bold"
         ref="addButtonEl"
         variant="subtle"
       />
@@ -134,13 +138,14 @@
         :class="[
           // 拖拽中字符 hover 不染主题色（避免与分区高亮抢注意力），正常 hover 仍保留
           { 'group-hover:text-primary': !isDragActive },
+          char === '|' || char === '｜' ? 'text-text-muted font-normal' : 'text-text-title font-semibold',
           char === ' '
             ? ''
             : chord
               ? 'decoration-text-disabled/80 underline decoration-dashed underline-offset-[8px]'
               : '',
         ]"
-        class="char-text text-text-title duration-fast mt-auto box-border inline-flex min-h-[calc(1.15rem*var(--score-font-scale,1))] items-center justify-center px-0.5 text-[calc(0.875rem*var(--score-font-scale,1))] leading-[1.15rem] font-semibold whitespace-pre transition-all"
+        class="char-text duration-fast mt-auto box-border inline-flex min-h-[calc(1.15rem*var(--score-font-scale,1))] items-center justify-center px-0.5 text-[calc(0.875rem*var(--score-font-scale,1))] leading-[1.15rem] whitespace-pre transition-all"
       >
         {{ char === ' ' ? '\u00A0' : char }}
       </span>
@@ -161,7 +166,7 @@ import {
 } from '@/domains/score/editor/composables/lyrics-drag/dropZone';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import type { SlotKey } from '@/domains/score/types';
-import { globalDarkMode } from '@/platform/store/globalState';
+import { isDark } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
@@ -239,16 +244,16 @@ const ACTION_LABELS: Record<DropAction, string> = {
 // 活动/非活动均用 border 描边（仅宽度/透明度差异），避免 box-shadow ring ↔ border
 // 切换时过渡出现白闪
 const ZONE_ACTIVE_CLASSES: Record<DropAction, string> = {
-  swap: 'flex-[1.86] bg-tint-primary-88 border-2 border-primary rounded-[5px]',
-  replace: 'flex-[1.86] bg-tint-success-88 border-2 border-success rounded-[5px]',
-  copy: 'flex-[1.86] bg-tint-primary-88 border-2 border-primary rounded-[5px]',
-  move: 'flex-[1.86] bg-tint-success-88 border-2 border-success rounded-[5px]',
+  swap: 'flex-[1.86] min-h-[38px] bg-tint-primary-88 border-2 border-primary rounded-[5px]',
+  replace: 'flex-[1.86] min-h-[38px] bg-tint-success-88 border-2 border-success rounded-[5px]',
+  copy: 'flex-[1.86] min-h-[38px] bg-tint-primary-88 border-2 border-primary rounded-[5px]',
+  move: 'flex-[1.86] min-h-[38px] bg-tint-success-88 border-2 border-success rounded-[5px]',
 };
 const ZONE_INACTIVE_CLASSES: Record<DropAction, string> = {
-  swap: 'flex-1 bg-tint-primary-88 rounded-[5px] border border-primary/40',
-  replace: 'flex-1 bg-tint-success-88 rounded-[5px] border border-success/40',
-  copy: 'flex-1 bg-tint-primary-88 rounded-[5px] border border-primary/40',
-  move: 'flex-1 bg-tint-success-88 rounded-[5px] border border-success/40',
+  swap: 'flex-1 min-h-[26px] bg-tint-primary-88 rounded-[5px] border border-primary/40',
+  replace: 'flex-1 min-h-[26px] bg-tint-success-88 rounded-[5px] border border-success/40',
+  copy: 'flex-1 min-h-[26px] bg-tint-primary-88 rounded-[5px] border border-primary/40',
+  move: 'flex-1 min-h-[26px] bg-tint-success-88 rounded-[5px] border border-success/40',
 };
 const ZONE_LABEL_CLASSES: Record<DropAction, { active: string; inactive: string }> = {
   swap: { active: 'text-xs text-primary', inactive: 'text-2xs text-primary' },
@@ -449,15 +454,18 @@ const ariaLabelText = computed(() => {
 </script>
 
 <style scoped lang="scss">
-/* 拖拽经过的空槽位撑开：直接加宽字符槽 + X 轴外边距推开相邻字符，
-   min-width 只作下限、不缩窄；宽度/外边距变化带过渡 */
+/* 拖拽期间整行空字符槽/添加槽统一撑开（isDragActive 全程恒定）：
+   min-width/min-height 只作下限、不缩窄；尺寸与外边距变化带平滑过渡，
+   保证拖拽到空行或未排和弦的行时落点与两块分区有充足高度 */
 .is-drop-widened {
   box-sizing: content-box;
   min-width: 58px;
+  min-height: 108px;
   margin-left: 6px;
   margin-right: 6px;
   transition:
     min-width 0.18s cubic-bezier(0.25, 0.1, 0.25, 1),
+    min-height 0.18s cubic-bezier(0.25, 0.1, 0.25, 1),
     margin 0.18s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 

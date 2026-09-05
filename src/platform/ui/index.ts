@@ -14,10 +14,12 @@ export { default as ContextMenuItems } from './context-menu/ContextMenuItems.vue
 export { default as BaseIcon } from './icons/BaseIcon.vue';
 export * from './icons/icons.registry';
 export * from './icons/iconSizes';
+export * from './controlSizes';
 export { default as BaseBadge } from './badge/BaseBadge.vue';
 export { default as BaseCheckbox } from './checkbox/BaseCheckbox.vue';
 export { default as BaseFormRow } from './form/BaseFormRow.vue';
 export { default as BaseFloatingBar } from './floating-bar/BaseFloatingBar.vue';
+export { default as BaseFab } from './floating-bar/BaseFab.vue';
 export { default as BaseSegmentedControl } from './segmented/BaseSegmentedControl.vue';
 export { default as BaseSlider } from './slider/BaseSlider.vue';
 export { default as BaseSwitch } from './switch/BaseSwitch.vue';

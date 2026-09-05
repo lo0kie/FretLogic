@@ -11,28 +11,29 @@
  *   - label（BaseCheckbox）：把 `hover:enabled:` 替换为 `hover:`；禁用态单独移除 hover 段
  */
 import type { ThemeColor } from '@/platform/types';
+import { CONTROL_HEIGHT_CLASSES, CONTROL_SQUARE_CLASSES } from '@/platform/ui/controlSizes';
 
 export type ButtonThemeType = ThemeColor;
 
 /** 普通（default）变体：尺寸高度/内边距/字号 */
 export const BUTTON_SIZE_MAP: Record<string, string> = {
-  sm: 'h-[1.6rem] px-md text-xs gap-xs',
-  md: 'h-[1.9rem] px-lg text-xs gap-sm',
-  lg: 'h-[2.3rem] px-xl text-sm gap-sm',
+  sm: `${CONTROL_HEIGHT_CLASSES.sm} px-md text-xs gap-xs`,
+  md: `${CONTROL_HEIGHT_CLASSES.md} px-lg text-xs gap-sm`,
+  lg: `${CONTROL_HEIGHT_CLASSES.lg} px-xl text-sm gap-sm`,
 };
 
 /** 紧凑模式尺寸：左右内边距减半，同时缩小与首尾图标的 gap；高度/字号保持与原尺寸一致 */
 export const BUTTON_COMPACTED_SIZE_MAP: Record<string, string> = {
-  sm: 'h-[1.6rem] px-[0.4rem] text-xs gap-2xs',
-  md: 'h-[1.9rem] px-[0.6rem] text-xs gap-xs',
-  lg: 'h-[2.3rem] px-[0.8rem] text-sm gap-xs',
+  sm: `${CONTROL_HEIGHT_CLASSES.sm} px-[0.4rem] text-xs gap-2xs`,
+  md: `${CONTROL_HEIGHT_CLASSES.md} px-[0.6rem] text-xs gap-xs`,
+  lg: `${CONTROL_HEIGHT_CLASSES.lg} px-[0.8rem] text-sm gap-xs`,
 };
 
 /** icon-only 方形尺寸 */
 export const BUTTON_ICON_ONLY_SIZE_MAP: Record<string, string> = {
-  sm: 'p-0! w-[1.6rem] h-[1.6rem] aspect-square',
-  md: 'p-0! w-[1.9rem] h-[1.9rem] aspect-square',
-  lg: 'p-0! w-[2.3rem] h-[2.3rem] aspect-square',
+  sm: `p-0! ${CONTROL_SQUARE_CLASSES.sm} aspect-square`,
+  md: `p-0! ${CONTROL_SQUARE_CLASSES.md} aspect-square`,
+  lg: `p-0! ${CONTROL_SQUARE_CLASSES.lg} aspect-square`,
 };
 
 export const BUTTON_LOADER_SIZE_MAP: Record<string, string> = {

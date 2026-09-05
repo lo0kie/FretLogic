@@ -34,15 +34,16 @@
         :class="[
           effectiveExpanded ? 'border-border-light pb-1.5' : 'border-b-0 pb-0',
           isCompact ? 'justify-center' : 'justify-between',
+          'workbench-panel-header duration-slow ease-sidebar flex shrink-0 items-center gap-2 border-b transition-[border-color,padding-bottom]',
+          CONTROL_MIN_HEIGHT_CLASSES.sm,
         ]"
-        class="workbench-panel-header duration-slow ease-sidebar flex min-h-[1.6rem] shrink-0 items-center gap-2 border-b transition-[border-color,padding-bottom]"
       >
         <div
           :class="isCompact ? '' : '-ml-1 gap-1.5 py-0.5 pr-1.5 pl-1'"
           class="duration-slow ease-sidebar flex items-center transition-[padding,margin]"
         >
           <div class="bg-tint-primary-88 text-primary flex h-5 w-5 shrink-0 items-center justify-center rounded-md">
-            <BaseIcon :name="icon" :stroke-width="2.5" size="sm" />
+            <BaseIcon :name="icon" icon-size="sm" icon-stroke="regular" />
           </div>
           <span v-show="!isCompact" class="text-text-title text-xs font-extrabold tracking-tight break-keep">
             {{ title }}
@@ -75,6 +76,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 
+import { CONTROL_MIN_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';

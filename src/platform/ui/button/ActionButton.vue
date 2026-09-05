@@ -21,10 +21,10 @@
     <slot v-else :disabled :loading :size name="prefix">
       <BaseIcon
         v-if="resolvedIcon && hasText"
+        :icon-size
+        :icon-stroke
         :color="iconColor"
         :name="resolvedIcon"
-        :size="iconSize"
-        :stroke-width="iconStrokeWidth"
         aria-hidden="true"
         class="shrink-0"
       />
@@ -38,10 +38,10 @@
       <span v-else-if="label" class="whitespace-nowrap">{{ label }}</span>
       <BaseIcon
         v-else-if="resolvedIcon"
+        :icon-stroke
         :color="iconColor"
+        :icon-size="resolvedIconSize"
         :name="resolvedIcon"
-        :size="iconSize ?? size"
-        :stroke-width="iconStrokeWidth"
         aria-hidden="true"
         class="shrink-0"
       />
@@ -50,10 +50,10 @@
     <slot v-if="!loading || !isIconOnly" :disabled :loading :size name="suffix">
       <BaseIcon
         v-if="suffixIcon"
+        :icon-size
+        :icon-stroke
         :color="iconColor"
         :name="suffixIcon"
-        :size="iconSize"
-        :stroke-width="iconStrokeWidth"
         aria-hidden="true"
         class="shrink-0"
       />
@@ -64,7 +64,7 @@
 <script setup lang="ts">
 import { computed, useSlots, watch } from 'vue';
 
-import type { ThemeColor } from '@/platform/types';
+import type { ComponentSize, ThemeColor } from '@/platform/types';
 import {
   BUTTON_COMPACTED_SIZE_MAP,
   BUTTON_DEFAULT_THEME_MAP,
@@ -78,6 +78,7 @@ import {
 } from '@/platform/ui/button/buttonThemes';
 import BaseIcon, { type BaseIconProps } from '@/platform/ui/icons/BaseIcon.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
+import type { IconSizePreset, IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
 
 const {
   type = 'button',
@@ -87,7 +88,7 @@ const {
   iconOnly = false,
   icon = undefined,
   iconSize = undefined,
-  iconStrokeWidth = undefined,
+  iconStroke = 'regular',
   iconColor = undefined,
   label = undefined,
   variant = 'default',
@@ -114,10 +115,10 @@ const {
    * 有默认插槽时作为前缀图标；#prefix 插槽优先于本属性。
    */
   icon?: IconName;
-  /** 透传给内部 BaseIcon 的尺寸；不传时 icon 主体跟随按钮 size，prefix/suffix 用 1em */
-  iconSize?: BaseIconProps['size'];
-  /** 透传给内部 BaseIcon 的描边粗细 */
-  iconStrokeWidth?: BaseIconProps['strokeWidth'];
+  /** 透传给内部 BaseIcon 的尺寸；不传时 icon 主体按按钮 size 映射到图标档位，prefix/suffix 用 1em */
+  iconSize?: IconSizeValue;
+  /** 透传给内部 BaseIcon 的描边粗细（档位名或数值） */
+  iconStroke?: IconStrokeValue;
   /** 透传给内部 BaseIcon 的颜色（默认 currentColor） */
   iconColor?: BaseIconProps['color'];
   /** 按钮文案：行为等同默认插槽，传了默认插槽时以插槽为准（label 忽略） */
@@ -125,7 +126,7 @@ const {
   variant?: 'default' | 'subtle' | 'ghost' | 'text';
   /** iconOnly 场景下必须提供，保证无障碍可访问性 */
   ariaLabel?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: ComponentSize;
   rounded?: 'none' | 'sm' | 'md' | 'lg' | 'full';
   /** 是否占满父容器宽度 (w-full) */
   block?: boolean;
@@ -170,6 +171,14 @@ const resolvedIcon = computed<IconName | undefined>(() => icon ?? prefixIcon);
 const hasText = computed(() => hasDefaultSlot.value || Boolean(label));
 /** 图标主体态：显式 iconOnly，或主图标且无文案（图标即整个按钮主体） */
 const isIconOnly = computed(() => iconOnly || (Boolean(resolvedIcon.value) && !hasText.value));
+
+/**
+ * 按钮尺寸 → 图标尺寸档位的**显式映射**。
+ * 严禁再写 `iconSize ?? size`：组件尺寸（ComponentSize）与图标尺寸（IconSizePreset）是两套语义，
+ * 二者档位名重合只是巧合，直接透传会在尺寸档位变动时静默降级为无效 CSS。
+ */
+const ICON_SIZE_BY_BUTTON_SIZE: Record<ComponentSize, IconSizePreset> = { sm: 'sm', md: 'md', lg: 'xl' };
+const resolvedIconSize = computed<IconSizeValue>(() => iconSize ?? ICON_SIZE_BY_BUTTON_SIZE[size]);
 
 // 仅在开发环境中注册 a11y 警告监听，生产环境构建时被完全 Tree-shaking
 if (import.meta.env.DEV) {

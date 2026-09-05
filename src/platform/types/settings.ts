@@ -1,4 +1,4 @@
-﻿export type SyncProviderKind = 'github' | 'gitee' | 'webdav' | 'server';
+export type SyncProviderKind = 'github' | 'gitee' | 'webdav' | 'server';
 
 export interface SyncSettingsBackup {
   syncTarget?: SyncProviderKind;
@@ -24,4 +24,5 @@ export interface SyncSettingsBackup {
 export interface AppPreferencesBackup {
   workbenchChordShorthand?: boolean;
   scoreChordShorthand?: boolean;
+  scoreLayoutAlign?: 'start' | 'center';
 }

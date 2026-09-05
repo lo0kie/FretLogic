@@ -1,6 +1,7 @@
 <template>
   <BaseModal
     v-model:visible="visibleModel"
+    :destroy-on-close="false"
     show-footer
     class="chord-picker-modal"
     height="h-full"
@@ -11,7 +12,7 @@
       <ActionButton @click="goToWorkbenchToCreate" color="primary" icon="plus" label="新建和弦" variant="subtle" />
     </template>
 
-    <div class="chord-picker-wrapper box-border flex h-full flex-col overflow-hidden">
+    <div class="chord-picker-wrapper relative box-border flex h-full flex-col overflow-hidden">
       <div class="picker-fixed-header gap-md flex shrink-0 flex-col">
         <div class="picker-controls-row gap-lg flex items-center justify-between p-1">
           <div class="search-input-wrapper max-w-64 min-w-0 flex-1">
@@ -114,7 +115,6 @@
                 role="button"
               >
                 <ActionButton
-                  :icon-stroke-width="2.2"
                   :tabindex="editHoverMap.get(chord.id) ? 0 : -1"
                   @mousedown.stop
                   @pointerdown.stop
@@ -125,6 +125,7 @@
                   color="primary"
                   icon="pencil"
                   icon-size="sm"
+                  icon-stroke="thin"
                   size="sm"
                   title="去修改该和弦"
                   variant="ghost"
@@ -139,7 +140,7 @@
                 <FretboardCanvas
                   :chord
                   :chord-name-scale="0.7"
-                  :is-dark-mode="globalDarkMode"
+                  :is-dark-mode="isDark"
                   :scale="pickerScale"
                   :shorthand="settingsStore.scoreChordShorthand"
                   lazy
@@ -149,6 +150,29 @@
           </div>
         </TransitionGroup>
       </div>
+
+      <BaseFab
+        :disabled-teleport="true"
+        :visible="scrollTopVisible"
+        @click="scrollToTop"
+        align="end"
+        aria-label="滚动到顶部"
+        bottom="4rem"
+        icon="chevron-up"
+        position="absolute"
+        tooltip="滚动到顶部"
+      />
+      <BaseFab
+        :disabled-teleport="true"
+        :visible="scrollBottomVisible"
+        @click="scrollToBottom"
+        align="end"
+        aria-label="滚动到底部查看全部和弦"
+        bottom="1rem"
+        icon="chevron-down"
+        position="absolute"
+        tooltip="滚动到底部查看全部和弦"
+      />
     </div>
 
     <template #footer>
@@ -217,11 +241,13 @@ import { GroupSortRule } from '@/domains/chord/types';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import { globalDarkMode } from '@/platform/store/globalState';
+import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
+import { isDark } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import BaseFab from '@/platform/ui/floating-bar/BaseFab.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
@@ -254,6 +280,18 @@ const settingsStore = useSettingsStore();
 const { chordsLookupMap } = useScoreLinesData();
 
 const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
+
+/** 边缘滚动入口：顶部/底部浮动按钮。列表可滚且未贴该边时显示，点击平滑滚至对应边 */
+const {
+  visible: edgeVisible,
+  scrollToTop,
+  scrollToBottom,
+} = useEdgeScroll(scrollWrapperRef, {
+  edges: ['top', 'bottom'],
+});
+const scrollTopVisible = computed(() => edgeVisible.top);
+const scrollBottomVisible = computed(() => edgeVisible.bottom);
+
 const editHoverMap = reactive(new Map<string, boolean>());
 
 const selectedGroupId = ref<string>('ALL');

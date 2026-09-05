@@ -13,7 +13,7 @@ import type {
   WorkerExportPayload,
 } from '@/domains/score/preview/workers/scoreExportWorker';
 import type { Song } from '@/domains/score/types';
-import { globalDarkMode } from '@/platform/store/globalState';
+import { isDark } from '@/platform/composables/useTheme';
 
 /** 将 Chord 模型转为 Worker 绘图所需的轻量指板实体（仅本文件内部使用） */
 const extractExportChordData = (chord: Chord, shorthand = false): ExportChordData => ({
@@ -35,7 +35,8 @@ export const prepareWorkerExportPayload = (
   selectedIndices: number[],
   chordsLookupMap: Map<string, Chord>,
   mode: 'normal' | 'a4',
-  shorthand = false
+  shorthand = false,
+  layoutAlign: 'start' | 'center' = 'start'
 ): WorkerExportPayload => {
   const lyricsLines = song.lyrics.split('\n');
   const chordMap = song.chordMap;
@@ -95,7 +96,8 @@ export const prepareWorkerExportPayload = (
     capoText,
     lines,
     mode,
-    darkMode: globalDarkMode.value,
+    darkMode: isDark.value,
+    layoutAlign,
   };
 };
 

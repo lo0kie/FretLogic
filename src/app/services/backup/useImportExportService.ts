@@ -3,6 +3,7 @@
  */
 import { parseAndValidatePayload } from '@/app/services/validation/payload';
 import type { ImportExportPayload } from '@/app/types';
+import type { BackupSelection } from '@/app/types/payload';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
@@ -13,13 +14,7 @@ import { formatLocalTimestampForFile, serializeForStorage } from '@/platform/uti
 
 import { buildBackupPayloadResult } from './buildBackupPayload';
 
-/** 备份内容勾选项：和弦（含分组）/ 乐谱 / 同步配置 / 偏好设置 */
-export interface BackupSelection {
-  chords: boolean;
-  songs: boolean;
-  syncSettings: boolean;
-  preferences: boolean;
-}
+export type { BackupSelection };
 
 export const FULL_BACKUP_SELECTION: BackupSelection = {
   chords: true,

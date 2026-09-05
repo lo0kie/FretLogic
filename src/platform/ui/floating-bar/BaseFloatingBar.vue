@@ -11,11 +11,12 @@
       appear
     >
       <div
+        v-bind="$attrs"
         v-if="isBarVisible"
         :aria-label="ariaLabel ?? '浮动操作栏'"
-        :class="[alignClass, zIndexClass]"
+        :class="[positionClass, alignClass, zIndexClass]"
         :style="outerStyle"
-        class="gap-sm py-sm px-md bg-bg-panel/95 border-glass-border shadow-floating duration-slow ease-sidebar hover:ring-primary/70 pointer-events-auto fixed box-border flex w-max max-w-[calc(100vw-2rem)] items-center rounded-full border backdrop-blur-xl transition-[background-color,border-color,box-shadow,bottom] hover:ring-2"
+        class="base-floating-bar gap-sm py-sm px-md bg-bg-panel/95 border-glass-border shadow-floating hover:ring-primary/70 pointer-events-auto box-border flex w-max max-w-[calc(100vw-2rem)] items-center rounded-full border backdrop-blur-xl hover:ring-2"
         role="toolbar"
         tabindex="-1"
       >
@@ -28,6 +29,11 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, onActivated, onDeactivated, ref } from 'vue';
 
+defineOptions({
+  name: 'BaseFloatingBar',
+  inheritAttrs: false,
+});
+
 const props = withDefaults(
   defineProps<{
     visible?: boolean;
@@ -35,6 +41,8 @@ const props = withDefaults(
     bottom?: string | number;
     /** 水平对齐方式：'center' (居中) | 'start' (靠左) | 'end' (靠右) */
     align?: 'center' | 'start' | 'end';
+    /** 定位方式：'fixed' (相对于视口) | 'absolute' (相对于父级定位上下文) */
+    position?: 'fixed' | 'absolute';
     /** 自定义 z-index，支持数字或 Tailwind 类名，默认 'z-fab' */
     zIndex?: number | string;
     /** 过渡动画名称 */
@@ -52,6 +60,7 @@ const props = withDefaults(
     visible: true,
     bottom: '2rem',
     align: 'center',
+    position: 'fixed',
     zIndex: 'z-fab',
     transitionName: 'v-floating-bar-slide',
     safeAreaInset: true,
@@ -83,6 +92,8 @@ onDeactivated(() => {
 
 const isBarVisible = computed(() => Boolean(props.visible && isViewActive.value));
 
+const positionClass = computed(() => (props.position === 'absolute' ? 'absolute' : 'fixed'));
+
 const ALIGN_CLASS_MAP: Record<'start' | 'end' | 'center', string> = {
   start: 'left-4 right-auto',
   end: 'right-4 left-auto',
@@ -95,7 +106,7 @@ const alignClass = computed(() =>
 
 const zIndexClass = computed(() => (typeof props.zIndex === 'string' ? props.zIndex : ''));
 
-// 安全区与底部定位：将 bottom 直接作用于 fixed 容器
+// 安全区与底部定位：将 bottom 直接作用于定位容器
 const outerStyle = computed(() => {
   const b = typeof props.bottom === 'number' ? `${props.bottom}px` : props.bottom;
   const style: Record<string, string | number> = {
@@ -121,11 +132,21 @@ const FloatingBarDivider = defineComponent({
 </script>
 
 <style scoped>
+/* 常态 hover 过渡：只影响底色/边框/阴影，不与进出场动画抢 transition-property */
+.base-floating-bar {
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* 进出场动画：!important 确保在 enter/leave 阶段强制覆盖 transition-property，
+   否则容器任意 transition-* 工具类都会把 opacity/transform 排除导致动画瞬时完成 */
 :global(.v-floating-bar-slide-enter-active),
 :global(.v-floating-bar-slide-leave-active) {
   transition:
-    opacity 0.2s cubic-bezier(0, 0, 0.2, 1),
-    transform 0.2s cubic-bezier(0, 0, 0.2, 1);
+    opacity 0.25s cubic-bezier(0, 0, 0.2, 1),
+    transform 0.25s cubic-bezier(0, 0, 0.2, 1) !important;
 }
 
 :global(.v-floating-bar-slide-enter-from),

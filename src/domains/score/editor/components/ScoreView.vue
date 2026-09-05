@@ -26,10 +26,7 @@
             ref="interactiveAreaRef"
           />
 
-          <ScorePreviewPane
-            v-else-if="scoreEditor.activeTab === 'preview'"
-            :key="`score-preview-${scoreEditor.activeSong.id}`"
-          />
+          <ScorePreviewPane v-else-if="scoreEditor.activeTab === 'preview'" key="score-preview" />
         </KeepAlive>
       </Transition>
     </div>

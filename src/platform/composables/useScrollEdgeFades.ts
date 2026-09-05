@@ -1,4 +1,4 @@
-import { ref, watchEffect, type Ref } from 'vue';
+import { computed, defineComponent, h, ref, watchEffect, type CSSProperties, type Ref } from 'vue';
 
 import { useRafThrottle } from '../utils/useRafThrottle.ts';
 
@@ -7,6 +7,10 @@ export interface UseScrollEdgeFadesOptions {
   threshold?: number;
   /** 滚动方向：'vertical'（默认，检测上下边缘）| 'horizontal'（检测左右边缘） */
   direction?: 'vertical' | 'horizontal';
+  /** 渐隐遮罩尺寸（像素数值或 CSS 长度字符串，默认 20） */
+  fadeSize?: number | string;
+  /** 渐变基色（供 overlay 样式使用，如 'var(--bg-panel)' 或 'var(--bg-elevated)'，默认 'var(--bg-panel)'） */
+  color?: string;
 }
 
 /**
@@ -24,12 +28,117 @@ export interface UseScrollEdgeFadesOptions {
  * 4. rAF 节流防抖与卸载自动清理，无内存泄漏
  */
 export function useScrollEdgeFades(scrollRef: Ref<HTMLElement | null>, options: UseScrollEdgeFadesOptions = {}) {
-  const { threshold = 3, direction = 'vertical' } = options;
+  const { threshold = 3, direction = 'vertical', fadeSize = 20, color = 'var(--bg-panel)' } = options;
 
   const atTop = ref(true);
   const atBottom = ref(true);
   const atLeft = ref(true);
   const atRight = ref(true);
+
+  const sizeStr = typeof fadeSize === 'number' ? `${fadeSize}px` : fadeSize;
+
+  const maskStyle = computed<CSSProperties>(() => {
+    if (direction === 'horizontal') {
+      if (atLeft.value && atRight.value) {
+        return { maskImage: 'none', WebkitMaskImage: 'none' };
+      }
+      let gradient: string;
+      if (!atLeft.value && !atRight.value) {
+        gradient = `linear-gradient(to right, transparent, black ${sizeStr}, black calc(100% - ${sizeStr}), transparent 100%)`;
+      } else if (!atLeft.value && atRight.value) {
+        gradient = `linear-gradient(to right, transparent, black ${sizeStr}, black 100%)`;
+      } else {
+        gradient = `linear-gradient(to right, black 0%, black calc(100% - ${sizeStr}), transparent 100%)`;
+      }
+      return { maskImage: gradient, WebkitMaskImage: gradient };
+    } else {
+      if (atTop.value && atBottom.value) {
+        return { maskImage: 'none', WebkitMaskImage: 'none' };
+      }
+      let gradient: string;
+      if (!atTop.value && !atBottom.value) {
+        gradient = `linear-gradient(to bottom, transparent, black ${sizeStr}, black calc(100% - ${sizeStr}), transparent 100%)`;
+      } else if (!atTop.value && atBottom.value) {
+        gradient = `linear-gradient(to bottom, transparent, black ${sizeStr}, black 100%)`;
+      } else {
+        gradient = `linear-gradient(to bottom, black 0%, black calc(100% - ${sizeStr}), transparent 100%)`;
+      }
+      return { maskImage: gradient, WebkitMaskImage: gradient };
+    }
+  });
+
+  const topStyle = computed<CSSProperties>(() => ({
+    background: `linear-gradient(to bottom, ${color}, transparent)`,
+    height: sizeStr,
+    opacity: atTop.value ? 0 : 1,
+    pointerEvents: 'none',
+    transition: 'opacity 0.2s ease',
+  }));
+
+  const bottomStyle = computed<CSSProperties>(() => ({
+    background: `linear-gradient(to top, ${color}, transparent)`,
+    height: sizeStr,
+    opacity: atBottom.value ? 0 : 1,
+    pointerEvents: 'none',
+    transition: 'opacity 0.2s ease',
+  }));
+
+  const leftStyle = computed<CSSProperties>(() => ({
+    background: `linear-gradient(to right, ${color}, transparent)`,
+    width: sizeStr,
+    opacity: atLeft.value ? 0 : 1,
+    pointerEvents: 'none',
+    transition: 'opacity 0.2s ease',
+  }));
+
+  const rightStyle = computed<CSSProperties>(() => ({
+    background: `linear-gradient(to left, ${color}, transparent)`,
+    width: sizeStr,
+    opacity: atRight.value ? 0 : 1,
+    pointerEvents: 'none',
+    transition: 'opacity 0.2s ease',
+  }));
+
+  const startStyle = computed<CSSProperties>(() => (direction === 'horizontal' ? leftStyle.value : topStyle.value));
+  const endStyle = computed<CSSProperties>(() => (direction === 'horizontal' ? rightStyle.value : bottomStyle.value));
+
+  const createFadeComponent = (defaultClass: string, styleRef: typeof topStyle, name: string) =>
+    defineComponent({
+      name,
+      inheritAttrs: false,
+      setup(_, { attrs }) {
+        return () =>
+          h('div', {
+            'aria-hidden': 'true',
+            ...attrs,
+            'class': [defaultClass, attrs['class']],
+            'style': [styleRef.value, attrs['style'] as CSSProperties],
+          });
+      },
+    });
+
+  const topFade = createFadeComponent(
+    'z-panel pointer-events-none absolute inset-x-0 top-0',
+    topStyle,
+    'ScrollTopFade'
+  );
+  const bottomFade = createFadeComponent(
+    'z-panel pointer-events-none absolute inset-x-0 bottom-0',
+    bottomStyle,
+    'ScrollBottomFade'
+  );
+  const leftFade = createFadeComponent(
+    'z-panel pointer-events-none absolute inset-y-0 left-0',
+    leftStyle,
+    'ScrollLeftFade'
+  );
+  const rightFade = createFadeComponent(
+    'z-panel pointer-events-none absolute inset-y-0 right-0',
+    rightStyle,
+    'ScrollRightFade'
+  );
+  const startFade = direction === 'horizontal' ? leftFade : topFade;
+  const endFade = direction === 'horizontal' ? rightFade : bottomFade;
 
   const syncEdgeFades = () => {
     const el = scrollRef.value;
@@ -148,6 +257,25 @@ export function useScrollEdgeFades(scrollRef: Ref<HTMLElement | null>, options: 
     atRight,
     atStart: direction === 'horizontal' ? atLeft : atTop,
     atEnd: direction === 'horizontal' ? atRight : atBottom,
+    maskStyle,
+    topStyle,
+    bottomStyle,
+    leftStyle,
+    rightStyle,
+    startStyle,
+    endStyle,
+    topFade,
+    bottomFade,
+    leftFade,
+    rightFade,
+    startFade,
+    endFade,
+    TopFade: topFade,
+    BottomFade: bottomFade,
+    LeftFade: leftFade,
+    RightFade: rightFade,
+    StartFade: startFade,
+    EndFade: endFade,
     syncEdgeFades,
   };
 }

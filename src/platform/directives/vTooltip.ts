@@ -10,8 +10,10 @@ import { TOOLTIP_HIDE_CLEANUP_DELAY_MS, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS } 
 import './vTooltip.scss';
 
 export interface TooltipOptions {
-  content?: string;
+  content?: string | string[];
   placement?: Placement;
+  /** 浮层与锚点的间距（px），默认 12 */
+  offset?: number;
   /** 延迟显示/隐藏时长（毫秒），支持 [showDelay, hideDelay] */
   delay?: number | [number, number];
   showDelay?: number;
@@ -69,7 +71,7 @@ export type TooltipModifiers =
   | 'disabled'
   | (string & Record<never, never>);
 
-export type TooltipBinding = string | TooltipOptions | undefined;
+export type TooltipBinding = string | string[] | TooltipOptions | undefined;
 
 const VALID_PLACEMENTS: Placement[] = [
   'top',
@@ -120,7 +122,7 @@ const getPlacementFromModifiers = (modifiers?: Record<string, boolean>): Placeme
  * 优先级规则：对象显式赋值 > 修饰符 > 默认值。
  */
 export const normalize = (value: TooltipBinding, modifiers?: Record<string, boolean>): TooltipOptions => {
-  const base = typeof value === 'string' ? { content: value } : { ...value };
+  const base: TooltipOptions = typeof value === 'string' || Array.isArray(value) ? { content: value } : { ...value };
   if (!base.placement) {
     const modifierPlacement = getPlacementFromModifiers(modifiers);
     if (modifierPlacement) {
@@ -249,13 +251,14 @@ const updatePosition = async (el: HTMLElement, opts: TooltipOptions): Promise<vo
   if (!globalBox || !isClient) return;
 
   const middleware = buildFloatingMiddlewares({
-    offsetDistance: 8,
+    offsetDistance: opts.offset ?? 12,
     showArrow: opts.showArrow,
     getArrowEl: () => globalArrow,
   });
 
   const { x, y, placement, middlewareData } = await computePosition(el, globalBox, {
     placement: opts.placement ?? 'bottom',
+    strategy: 'fixed',
     middleware,
   });
 
@@ -302,12 +305,30 @@ const clearTimers = () => {
   }
 };
 
-/** 写入浮层内容：html=true 时按 HTML 渲染（仅限可信静态内容），否则用 textContent 防注入 */
+/** 写入浮层内容：支持单字符串与字符串数组（数组各项独立成行，不再自动换行）；html=true 时按 HTML 渲染，否则用 textContent 防注入 */
 const setTooltipContent = (el: HTMLElement, opts: TooltipOptions): void => {
-  if (opts.html && opts.content != null) {
-    el.innerHTML = opts.content;
+  const { content, html } = opts;
+  if (!content) {
+    el.textContent = '';
+    return;
+  }
+
+  if (Array.isArray(content)) {
+    el.innerHTML = '';
+    for (const line of content) {
+      const lineEl = document.createElement('div');
+      lineEl.className = 'v-tooltip-line';
+      if (html) {
+        lineEl.innerHTML = line;
+      } else {
+        lineEl.textContent = line;
+      }
+      el.appendChild(lineEl);
+    }
+  } else if (html) {
+    el.innerHTML = content;
   } else {
-    el.textContent = opts.content ?? '';
+    el.textContent = content;
   }
 };
 
@@ -329,7 +350,8 @@ const resolveDelay = (opts: TooltipOptions): { show: number; hide: number } => {
 
 /** 实际显示 tooltip：分配层级、写内容与自定义类，先定位后显隐以避免 (0,0) 闪烁，并启动 autoUpdate 跟随。 */
 const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
-  if (!isClient || opts.disabled || !opts.content) return;
+  const hasContent = Array.isArray(opts.content) ? opts.content.length > 0 : Boolean(opts.content);
+  if (!isClient || opts.disabled || !hasContent) return;
 
   const box = getOrCreateGlobalBox();
   if (!box || !globalContent) return;

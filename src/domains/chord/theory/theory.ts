@@ -883,6 +883,7 @@ interface SortMeta {
   colorNoteCount: number;
   complexityRank: number; // 和弦复杂度：三和弦 0 / 七和弦 1 / 九和弦+ 2
   qualityRank: number; // 同根音下性质聚类：小调类 0 / 其他 1，使 Em 与扩展 Em7 相邻
+  qualityKind: 'maj' | 'min' | 'dim'; // 三和弦性质（大/小/减），用于「调内级数」校验性质是否匹配调的该级
 }
 
 /** 预计算单个和弦的排序元数据（根音/转位/复杂度/性质聚类等），供排序比较器复用。 */
@@ -894,6 +895,7 @@ const buildSortMeta = (chord: Chord): SortMeta => {
       ? parsed.rootPitch
       : resolveChordRootPitch(chord.strings, chord.fretOffset, chord.tuning, chord, chord.rootStringIndex);
   const { colorNoteCount } = getColorNoteCountAndPitches(chord, rootPitch);
+  const suffix = parsed.suffix || '';
   return {
     chord,
     rootPitch,
@@ -901,6 +903,7 @@ const buildSortMeta = (chord: Chord): SortMeta => {
     colorNoteCount,
     complexityRank: getComplexityRank(parsed.suffix),
     qualityRank: isMinorFlavored(parsed.suffix) ? 0 : 1,
+    qualityKind: /^(dim|°|ø|m7b5)/i.test(suffix) ? 'dim' : isMinorFlavored(suffix) ? 'min' : 'maj',
   };
 };
 
@@ -943,7 +946,14 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
       return getChordName(a.chord).localeCompare(getChordName(b.chord));
     });
   } else if (effectiveRule === GroupSortRule.KEY_DEGREE) {
-    const keyPitch = ROOT_PITCH_MAP[sortKey] ?? 0;
+    // 支持大小调调名（'A' 或 'Am'）；关键音高取根音字母，小调用自然小调的三音程性质表
+    const isMinorKey = /m(in)?$/i.test(sortKey.trim());
+    const keyLetter = sortKey.trim().replace(/m(in)?$/i, '');
+    const keyPitch = ROOT_PITCH_MAP[keyLetter] ?? 0;
+    // 各级三和弦期望性质（index = degree 1~7）：大调 I/ii/iii/IV/V/vi/vii°；自然小调 i/ii°/III/iv/v/VI/VII
+    const DEGREE_QUALITY = isMinorKey
+      ? ['', 'min', 'dim', 'maj', 'min', 'min', 'maj', 'maj']
+      : ['', 'maj', 'min', 'min', 'maj', 'maj', 'min', 'dim'];
     mappedList.sort((a, b) => {
       let aDiatonic = false;
       let bDiatonic = false;
@@ -952,12 +962,15 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
       if (a.rootPitch !== 99) {
         const ia = (a.rootPitch - keyPitch + 12) % 12;
         aDegree = DIATONIC_DEGREE_MAP[ia] ?? 99;
-        aDiatonic = (DIATONIC_INTERVALS_MASK & (1 << ia)) !== 0;
+        // 真正的调内和弦需「根音在调内」且「三和弦性质匹配该级」：D 是大调 IV（调内），Dm 是借用 iv，不得与 D 同级
+        const rootInScale = (DIATONIC_INTERVALS_MASK & (1 << ia)) !== 0;
+        aDiatonic = rootInScale && a.qualityKind === DEGREE_QUALITY[aDegree];
       }
       if (b.rootPitch !== 99) {
         const ib = (b.rootPitch - keyPitch + 12) % 12;
         bDegree = DIATONIC_DEGREE_MAP[ib] ?? 99;
-        bDiatonic = (DIATONIC_INTERVALS_MASK & (1 << ib)) !== 0;
+        const rootInScale = (DIATONIC_INTERVALS_MASK & (1 << ib)) !== 0;
+        bDiatonic = rootInScale && b.qualityKind === DEGREE_QUALITY[bDegree];
       }
       if (aDiatonic !== bDiatonic) return aDiatonic ? -1 : 1;
       if (aDegree !== bDegree) return aDegree - bDegree;

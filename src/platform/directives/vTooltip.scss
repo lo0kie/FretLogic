@@ -10,14 +10,22 @@
   background-color: var(--bg-panel);
   padding: $space-sm $space-md;
   width: max-content;
-  max-width: min(320px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
   color: var(--text-title);
   font-weight: 500;
   font-size: $fs-xs;
   line-height: 1.45;
   text-align: center;
-  white-space: pre-line;
-  word-break: break-word;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.v-tooltip-line {
+  white-space: nowrap;
+
+  & + .v-tooltip-line {
+    margin-top: 2px;
+  }
 }
 
 // 浮层根容器：负责显隐过渡（位置由 floating-ui 用 left/top 控制，与 transform 解耦，避免重排抖动）

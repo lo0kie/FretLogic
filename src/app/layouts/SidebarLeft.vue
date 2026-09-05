@@ -34,12 +34,12 @@
         <div class="header-actions gap-xs flex shrink-0 items-center">
           <ActionButton
             v-tooltip="'新建分组'"
-            :icon-stroke-width="2.5"
             @click="groupModals.openCreate"
             icon-only
             aria-label="新建分组"
             icon="plus"
             icon-size="xl"
+            icon-stroke="regular"
             variant="ghost"
           />
         </div>
@@ -65,18 +65,18 @@
             title="切换乐谱排序方式"
           >
             <template #icon>
-              <BaseIcon :name="currentSortIcon" :stroke-width="2.5" size="xl" />
+              <BaseIcon :name="currentSortIcon" icon-size="xl" icon-stroke="regular" />
             </template>
           </PopoverMenu>
 
           <ActionButton
             v-tooltip="'新建乐谱'"
-            :icon-stroke-width="2.5"
             @click="songModals.openCreateSongModal"
             icon-only
             aria-label="新建乐谱"
             icon="plus"
             icon-size="xl"
+            icon-stroke="regular"
             variant="ghost"
           />
         </div>
@@ -109,18 +109,9 @@
         </KeepAlive>
       </div>
 
-      <!-- 顶部滚动渐隐：仅可上滚时显示，避免未滚动时遮挡首项 -->
-      <div
-        v-show="!atTop"
-        aria-hidden="true"
-        class="z-panel pointer-events-none absolute inset-x-0 top-0 h-[20px] [background:linear-gradient(to_bottom,var(--bg-panel),transparent)]"
-      />
-      <!-- 底部滚动渐隐：仅未滚到底时显示，滚到底时隐藏避免遮挡末项 -->
-      <div
-        v-show="!atBottom"
-        aria-hidden="true"
-        class="z-panel pointer-events-none absolute inset-x-0 bottom-0 h-[20px] [background:linear-gradient(to_top,var(--bg-panel),transparent)]"
-      />
+      <!-- 顶部/底部滚动渐隐 -->
+      <component :is="topFade" />
+      <component :is="bottomFade" />
     </div>
 
     <div class="left-panel-footer p-md px-lg border-glass-border box-border w-full shrink-0 border-t">
@@ -179,7 +170,7 @@ const uiStore = useUiStore();
 const chordStore = useChordStore();
 const songStore = useSongStore();
 
-const { atTop, atBottom, syncEdgeFades } = useScrollEdgeFades(scrollRef);
+const { topFade, bottomFade, syncEdgeFades } = useScrollEdgeFades(scrollRef);
 
 // 两个 section（KeepAlive）共用同一个滚动容器，滚动位置无法随组件 DOM 天然保持：
 // 按路由 key 手动缓存 scrollTop，切走时保存、切回时在内容重挂载后恢复

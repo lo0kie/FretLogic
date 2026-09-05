@@ -38,11 +38,11 @@
               <div class="gap-sm flex min-w-0 flex-1 items-center" title="点击折叠/展开分组">
                 <BaseIcon
                   :class="{ '-rotate-90': !isGroupContentOpen(group) }"
-                  :stroke-width="2.5"
                   aria-hidden="true"
                   class="text-text-disabled duration-fast group-hover/row:text-text-title shrink-0 transition-transform"
+                  icon-size="sm"
+                  icon-stroke="regular"
                   name="chevron-down"
-                  size="sm"
                 />
                 <div v-marquee>
                   <span class="text-text-title text-xs font-bold whitespace-nowrap">

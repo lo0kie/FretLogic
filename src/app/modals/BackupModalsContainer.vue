@@ -48,7 +48,7 @@
               v-if="backupModals.modalData.exportSelection.syncSettings && hasCredentials"
               class="text-warning flex items-center gap-1 font-medium"
             >
-              <BaseIcon :size="11" class="shrink-0" name="alert-triangle" />
+              <BaseIcon :icon-size="'xs'" class="shrink-0" name="alert-triangle" />
               <span>包含 Token / 密码明文，请妥善保管勿公开分享</span>
             </span>
             <span v-else>云端同步的后端与账号信息</span>

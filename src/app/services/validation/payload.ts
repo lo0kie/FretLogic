@@ -86,13 +86,16 @@ const migratePayloadVersion = (payload: ImportExportPayload): ImportExportPayloa
   return { ...payload, version: CURRENT_PAYLOAD_VERSION };
 };
 
-export interface ValidationResult {
+export interface PayloadValidationResult {
   isValid: boolean;
   payload?: ImportExportPayload;
   issues: string[];
   /** 非阻断的自动清理提示（去重 / 剪枝失效引用）；调用方应向用户展示 */
   warnings?: string[];
 }
+
+/** @deprecated 请改用 {@link PayloadValidationResult}。保留别名以便存量导入平滑迁移。 */
+export type { PayloadValidationResult as ValidationResult };
 /** 清洗备份包中的分组列表：结构非法的条目在 strict 模式记入 issues，在 lenient 模式记入 warnings 并丢弃。 */
 const sanitizeGroups = (
   groups: unknown,
@@ -326,6 +329,9 @@ const sanitizePreferences = (raw: unknown): AppPreferencesBackup | undefined => 
       result[field] = value;
     }
   }
+  if (source['scoreLayoutAlign'] === 'start' || source['scoreLayoutAlign'] === 'center') {
+    result.scoreLayoutAlign = source['scoreLayoutAlign'];
+  }
   return Object.keys(result).length > 0 ? result : undefined;
 };
 
@@ -344,7 +350,10 @@ export interface ValidatePayloadOptions {
  * 3) 剔除悬空分组下的孤儿和弦、同组重复指纹、歌曲内失效引用。
  * 自动清理以 warnings 返回；仅根结构损坏或 strict 模式下的单条损坏以 issues 返回。
  */
-export const validateImportExportPayload = (data: unknown, options?: ValidatePayloadOptions): ValidationResult => {
+export const validateImportExportPayload = (
+  data: unknown,
+  options?: ValidatePayloadOptions
+): PayloadValidationResult => {
   if (!data || typeof data !== 'object') {
     return { isValid: false, issues: ['检测到数据资产并非有效对象'] };
   }

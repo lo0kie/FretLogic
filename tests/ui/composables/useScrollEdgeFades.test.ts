@@ -1,3 +1,4 @@
+/* eslint-disable vue/one-component-per-file */
 import { defineComponent, h, nextTick, ref } from 'vue';
 
 import { mount } from '@vue/test-utils';
@@ -250,6 +251,82 @@ describe('useScrollEdgeFades', () => {
 
       expect(atLeft.value).toBe(false);
       expect(atRight.value).toBe(true);
+    });
+  });
+
+  describe('导出样式（maskStyle 与 overlay 边缘样式）', () => {
+    it('两端均无需渐隐时，maskStyle 为 none，overlay opacity 均为 0', () => {
+      const el = createMockScrollElement({ clientHeight: 500, scrollHeight: 400, scrollTop: 0 });
+      const scrollRef = ref<HTMLElement | null>(el);
+      const { maskStyle, topStyle, bottomStyle, startStyle, endStyle } = useScrollEdgeFades(scrollRef);
+
+      expect(maskStyle.value).toEqual({ maskImage: 'none', WebkitMaskImage: 'none' });
+      expect(topStyle.value.opacity).toBe(0);
+      expect(bottomStyle.value.opacity).toBe(0);
+      expect(startStyle.value.opacity).toBe(0);
+      expect(endStyle.value.opacity).toBe(0);
+    });
+
+    it('停留在顶部时，maskStyle 与 bottomStyle 表现出渐隐，且支持自定义 fadeSize 与 color', () => {
+      const el = createMockScrollElement({ clientHeight: 300, scrollHeight: 1000, scrollTop: 0 });
+      const scrollRef = ref<HTMLElement | null>(el);
+      const { maskStyle, topStyle, bottomStyle } = useScrollEdgeFades(scrollRef, {
+        fadeSize: 24,
+        color: 'rgb(255, 0, 0)',
+      });
+
+      expect(maskStyle.value.maskImage).toContain('24px');
+      expect(topStyle.value.opacity).toBe(0);
+      expect(bottomStyle.value.opacity).toBe(1);
+      expect(bottomStyle.value.height).toBe('24px');
+      expect(bottomStyle.value.background).toContain('rgb(255, 0, 0)');
+    });
+
+    it('横向滚动时正确导出 startStyle/endStyle 与 maskStyle', () => {
+      const el = createMockScrollElement({ clientWidth: 300, scrollWidth: 1000, scrollLeft: 200 });
+      const scrollRef = ref<HTMLElement | null>(el);
+      const { maskStyle, startStyle, endStyle, leftStyle, rightStyle } = useScrollEdgeFades(scrollRef, {
+        direction: 'horizontal',
+        fadeSize: '16px',
+      });
+
+      expect(maskStyle.value.maskImage).toContain('to right');
+      expect(maskStyle.value.maskImage).toContain('16px');
+      expect(startStyle.value.opacity).toBe(1);
+      expect(endStyle.value.opacity).toBe(1);
+      expect(leftStyle.value.width).toBe('16px');
+      expect(rightStyle.value.width).toBe('16px');
+    });
+
+    it('导出的 topFade / bottomFade 可直接作为组件在模板渲染', async () => {
+      const el = createMockScrollElement({ clientHeight: 300, scrollHeight: 1000, scrollTop: 0 });
+      const scrollRef = ref<HTMLElement | null>(el);
+
+      const TestHost = defineComponent({
+        setup() {
+          const { topFade, bottomFade } = useScrollEdgeFades(scrollRef, {
+            fadeSize: 20,
+            color: 'var(--bg-panel)',
+          });
+          return { topFade, bottomFade };
+        },
+        template: `
+          <div class="host">
+            <component :is="topFade" />
+            <component :is="bottomFade" class="custom-bottom" />
+          </div>
+        `,
+      });
+
+      const wrapper = mount(TestHost);
+      await nextTick();
+
+      const divs = wrapper.findAll('.z-panel');
+      expect(divs).toHaveLength(2);
+      expect(divs[0]!.classes()).toContain('top-0');
+      expect(divs[1]!.classes()).toContain('bottom-0');
+      expect(divs[1]!.classes()).toContain('custom-bottom');
+      expect(divs[0]!.attributes('aria-hidden')).toBe('true');
     });
   });
 });

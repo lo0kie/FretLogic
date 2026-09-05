@@ -159,20 +159,10 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       historyStack.length = 0;
       historyIndex = -1;
       if (!newSong) {
-        // 启动早期歌曲数据尚未从存储载入时也会触发一次 null：此时若已恢复出 activeSongId
-        //（数据加载中）不得重置 tab，避免覆盖持久化的上次视图；真正无选中歌曲时才回编辑
-        if (!activeSongId.value) {
-          activeTabRef.value = 'edit';
-        }
         return;
       }
       if (!isUndoRedoAction.value) {
         recordHistory(newSong);
-      }
-      // 切歌不强制切回「排列和弦」：保留当前所在标签（如预览/编辑歌词）；
-      // 仅当新歌无歌词且当前标签依赖歌词时回退到编辑
-      if (activeTabRef.value !== 'edit' && !(newSong.lyrics && newSong.lyrics.trim().length > 0)) {
-        activeTabRef.value = 'edit';
       }
     },
     { immediate: true }

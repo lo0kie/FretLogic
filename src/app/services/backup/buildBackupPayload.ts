@@ -69,6 +69,7 @@ export function buildBackupPayloadResult(options?: BuildBackupOptions): BuildBac
     ? {
         workbenchChordShorthand: settingsStore.workbenchChordShorthand,
         scoreChordShorthand: settingsStore.scoreChordShorthand,
+        scoreLayoutAlign: settingsStore.scoreLayoutAlign,
       }
     : undefined;
 

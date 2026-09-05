@@ -28,8 +28,8 @@
           @pointerleave="handleBubblePointerLeave"
           class="group duration-fast pointer-events-auto relative flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap transition-[background-color,border-color,box-shadow]"
         >
-          <BaseIcon v-if="displayBubbleBarre.isMarked" :stroke-width="3" name="check" size="md" />
-          <BaseIcon v-else :stroke-width="3" name="plus" size="md" />
+          <BaseIcon v-if="displayBubbleBarre.isMarked" icon-size="md" icon-stroke="bold" name="check" />
+          <BaseIcon v-else icon-size="md" icon-stroke="bold" name="plus" />
           <span>{{ displayBubbleBarre.isMarked ? '取消标记' : '标记为横按' }}</span>
 
           <!-- 直接复用项目统一的 buildFloatingArrowStyle 箭头组件与样式 -->

@@ -35,6 +35,7 @@
 <script lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
+import type { ComponentSize } from '@/platform/types';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 
 // 记录全局当前打开的菜单，用于互斥关闭
@@ -56,7 +57,7 @@ const {
 } = defineProps<{
   items: ContextMenuItem[];
   disabled?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: ComponentSize;
 }>();
 
 const emit = defineEmits<{

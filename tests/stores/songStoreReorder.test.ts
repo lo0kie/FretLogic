@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -55,5 +55,30 @@ describe('songStore.reorderSongs 排序不应删除数据', () => {
     expect(songStore.songs.map(s => s.id)).toEqual(seedIds);
     expect(songStore.songs).toHaveLength(3);
     expect(songRepository.listSongIds().sort()).toEqual(seedIds);
+  });
+
+  it('删除乐谱后支持 undoDeleteSong 恢复到原位置', () => {
+    const songStore = useSongStore();
+    const [a, b, c] = [...songStore.songs];
+
+    // 删除第 2 首 (b)
+    songStore.deleteSong(b!.id);
+    expect(songStore.songs.map(s => s.id)).toEqual([a!.id, c!.id]);
+
+    // 撤销删除
+    const restored = songStore.undoDeleteSong();
+    expect(restored?.id).toBe(b!.id);
+    expect(songStore.songs.map(s => s.id)).toEqual([a!.id, b!.id, c!.id]);
+  });
+
+  it('restoreSong 能准确将歌曲恢复至指定索引', () => {
+    const songStore = useSongStore();
+    const [a, b, c] = [...songStore.songs];
+
+    songStore.deleteSong(a!.id);
+    expect(songStore.songs.map(s => s.id)).toEqual([b!.id, c!.id]);
+
+    songStore.restoreSong(a!, 0);
+    expect(songStore.songs.map(s => s.id)).toEqual([a!.id, b!.id, c!.id]);
   });
 });

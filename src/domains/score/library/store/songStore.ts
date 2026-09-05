@@ -272,13 +272,43 @@ export const useSongStore = defineStore('song', () => {
     const index = songs.value.findIndex(s => s.id === id);
     if (index === -1) return;
     lastDeletedSongInfo.value = {
-      song: { ...songs.value[index]! },
+      song: { ...songs.value[index]!, chordMap: new Map(songs.value[index]!.chordMap) },
       index,
     };
     songs.value = songs.value.filter(s => s.id !== id);
     dirtySongIds.delete(id);
     removedSongIds.add(id);
     markIndexDirty();
+  };
+
+  /**
+   * 恢复指定歌曲到列表指定位置（或末尾）并重标记脏落盘。
+   */
+  const restoreSong = (song: Song, index?: number) => {
+    if (songs.value.some(s => s.id === song.id)) return;
+    const targetIndex = index !== undefined ? Math.min(Math.max(0, index), songs.value.length) : songs.value.length;
+    songs.value.splice(targetIndex, 0, song);
+    removedSongIds.delete(song.id);
+    markSongDirty(song.id);
+    markIndexDirty();
+    if (lastDeletedSongInfo.value?.song.id === song.id) {
+      lastDeletedSongInfo.value = null;
+    }
+  };
+
+  /**
+   * 撤销最近一次删除歌曲，恢复到原位置（或末尾）并重标记脏落盘。
+   * @returns 恢复成功的歌曲对象，无历史记录时返回 null。
+   */
+  const undoDeleteSong = (): Song | null => {
+    if (!lastDeletedSongInfo.value) return null;
+    const { song, index } = lastDeletedSongInfo.value;
+    lastDeletedSongInfo.value = null;
+
+    if (songs.value.some(s => s.id === song.id)) return null;
+
+    restoreSong(song, index);
+    return song;
   };
 
   /**
@@ -573,6 +603,8 @@ export const useSongStore = defineStore('song', () => {
     getChordReferences,
     createSong,
     deleteSong,
+    restoreSong,
+    undoDeleteSong,
     updateSongMeta,
     setCharChord,
     removeCharChord,

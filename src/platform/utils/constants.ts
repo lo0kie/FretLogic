@@ -127,6 +127,8 @@ export const STORAGE_KEYS = {
   WORKBENCH_PANEL_ORDER: 'CHORD_LAB_WORKBENCH_PANEL_ORDER_V1',
   /** 乐谱：是否启用和弦名简写（如 maj7->M7, dim->° 等） */
   SCORE_CHORD_SHORTHAND: 'CHORD_LAB_SCORE_CHORD_SHORTHAND_V1',
+  /** 乐谱：排版对齐方式（start 起始位置 / center 居中对齐） */
+  SCORE_LAYOUT_ALIGN: 'CHORD_LAB_SCORE_LAYOUT_ALIGN_V1',
   /** 乐谱：当前所在标签页（edit / interactive / preview），刷新后恢复上次所在页 */
   SCORE_ACTIVE_TAB: 'CHORD_LAB_SCORE_ACTIVE_TAB_V1',
 

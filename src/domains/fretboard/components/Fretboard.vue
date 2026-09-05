@@ -59,7 +59,7 @@
         :focus-point="isFocused ? focusPoint : null"
         :fret-count="chord.fretCount"
         :fret-offset="chord.fretOffset"
-        :is-dark-mode="globalDarkMode"
+        :is-dark-mode="isDark"
         :root-string-index="chord.rootStringIndex"
         :strings="chord.strings"
         @toggle-barre="handleToggleBarre"
@@ -83,7 +83,7 @@ import type { Chord, ChordNameSegments } from '@/domains/chord/types';
 import FretboardSvg from '@/domains/fretboard/components/FretboardSvg.vue';
 import { useFretboardInteraction } from '@/domains/fretboard/composables/useFretboardInteraction';
 import type { BarreEntity, GuitarStringsModel } from '@/domains/fretboard/types';
-import { globalDarkMode } from '@/platform/store/globalState';
+import { isDark } from '@/platform/composables/useTheme';
 import { useUiStore } from '@/platform/store/uiStore';
 
 import { CANVAS_CONFIG, CHORD_NAME_FONT_SIZE } from '../constants';

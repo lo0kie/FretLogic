@@ -19,13 +19,8 @@
           aria-hidden="true"
           class="max-h-28 max-w-[8rem] object-contain"
         />
-        <BaseIcon
-          v-else-if="typeof resolvedIcon === 'string'"
-          :name="resolvedIcon"
-          :size="iconSize"
-          class="empty-icon"
-        />
-        <component v-else :is="resolvedIcon" :size="iconSize" class="empty-icon" />
+        <BaseIcon v-else-if="typeof resolvedIcon === 'string'" :icon-size :name="resolvedIcon" class="empty-icon" />
+        <component v-else :is="resolvedIcon" :size="resolveIconSize(iconSize)" class="empty-icon" />
       </slot>
     </div>
 
@@ -67,8 +62,10 @@
 <script setup lang="ts">
 import { computed, ref, watch, type Component } from 'vue';
 
+import type { ComponentSize } from '@/platform/types';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
+import { resolveIconSize, type IconSizeValue } from '@/platform/ui/icons/iconSizes';
 
 import ActionButton from '../button/ActionButton.vue';
 
@@ -87,7 +84,7 @@ const props = withDefaults(
     /** 描述/副文本 */
     description?: string;
     /** 尺寸档位：sm (小卡片内) | md (侧边栏/列表) | lg (主视图大区) */
-    size?: 'sm' | 'md' | 'lg';
+    size?: ComponentSize;
     /** 是否带有虚线边框外框 */
     bordered?: boolean;
     /** 便捷操作按钮文字；传入后自动渲染 ActionButton 并触发 'action' 事件 */
@@ -145,7 +142,7 @@ const SIZE_CONFIG_MAP: Record<
   {
     sizeClass: string;
     gapClass: string;
-    iconSize: number;
+    iconSize: IconSizeValue;
     actionBtnSize: 'sm' | 'md';
     titleClass: string;
     descriptionClass: string;
@@ -154,7 +151,7 @@ const SIZE_CONFIG_MAP: Record<
   sm: {
     sizeClass: 'empty-size-sm py-md px-0',
     gapClass: 'gap-1.5',
-    iconSize: 18,
+    iconSize: 'lg',
     actionBtnSize: 'sm',
     titleClass: 'text-2xs font-semibold',
     descriptionClass: 'text-2xs',
@@ -162,7 +159,7 @@ const SIZE_CONFIG_MAP: Record<
   md: {
     sizeClass: 'empty-size-md py-3xl px-lg',
     gapClass: 'gap-2.5',
-    iconSize: 26,
+    iconSize: '2xl',
     actionBtnSize: 'sm',
     titleClass: 'text-xs font-semibold',
     descriptionClass: 'text-2xs',
@@ -170,7 +167,7 @@ const SIZE_CONFIG_MAP: Record<
   lg: {
     sizeClass: 'empty-size-lg py-3xl px-xl',
     gapClass: 'gap-4',
-    iconSize: 38,
+    iconSize: '3xl',
     actionBtnSize: 'md',
     titleClass: 'text-base font-bold',
     descriptionClass: 'text-xs',

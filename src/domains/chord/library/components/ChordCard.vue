@@ -118,7 +118,7 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 
   return [
     {
-      label: '复制',
+      label: '复制文本',
       icon: 'copy',
       expandChildren: props.cardData.hasVariants,
       action: () => void copyChordCardText(activeChord.value),

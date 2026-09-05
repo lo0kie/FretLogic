@@ -17,10 +17,10 @@
         <BaseIcon
           v-if="prefixIcon"
           :name="prefixIcon"
-          :stroke-width="2.5"
           aria-hidden="true"
           class="shrink-0"
-          size="sm"
+          icon-size="sm"
+          icon-stroke="regular"
         />
       </slot>
     </div>
@@ -95,7 +95,7 @@
         title="清空内容"
         type="button"
       >
-        <BaseIcon name="x" size="sm" stroke-width="3" />
+        <BaseIcon icon-size="sm" icon-stroke="bold" name="x" />
       </button>
 
       <div v-if="isPasswordMode || $slots['suffix']" class="pointer-events-none flex items-center justify-center">
@@ -118,7 +118,7 @@
             class="text-text-disabled duration-fast flex h-4 w-4 items-center justify-center rounded-full border-none bg-transparent p-0 transition-all outline-none"
             type="button"
           >
-            <BaseIcon :name="showPassword ? 'eye' : 'eye-off'" size="xs" />
+            <BaseIcon :icon-size="'xs'" :name="showPassword ? 'eye' : 'eye-off'" />
           </button>
         </slot>
       </div>
@@ -129,6 +129,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
 
+import type { ComponentSize } from '@/platform/types';
+import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import { resolveComponentWidth, type FormComponentWidth } from '@/platform/utils/constants';
@@ -167,7 +169,7 @@ const {
   isPassword?: boolean;
   /** 前缀图标名（注册表枚举）：无需包 #prefix slot 即可在输入框左侧渲染图标；传了 #prefix slot 时 slot 优先 */
   prefixIcon?: IconName;
-  size?: 'sm' | 'md' | 'lg';
+  size?: ComponentSize;
   width?: FormComponentWidth;
   fontSize?: 'xs' | 'md' | 'lg';
   autofocus?: boolean;
@@ -281,19 +283,19 @@ const INPUT_CONFIG: Record<
   }
 > = {
   sm: {
-    inputClass: 'h-[1.6rem]',
+    inputClass: `${CONTROL_HEIGHT_CLASSES.sm}`,
     basePaddingLeft: 'pl-2',
     prefixClass: 'left-2',
     prefixPadding: 'pl-6',
   },
   md: {
-    inputClass: 'h-[1.9rem]',
+    inputClass: `${CONTROL_HEIGHT_CLASSES.md}`,
     basePaddingLeft: 'pl-2.5',
     prefixClass: 'left-2.5',
     prefixPadding: 'pl-7',
   },
   lg: {
-    inputClass: 'h-[2.3rem]',
+    inputClass: `${CONTROL_HEIGHT_CLASSES.lg}`,
     basePaddingLeft: 'pl-3',
     prefixClass: 'left-3',
     prefixPadding: 'pl-8',

@@ -18,7 +18,7 @@
             class="gap-sm bg-bg-body border-border-light duration-fast hover:bg-bg-panel-hover hover:border-border-base box-border flex w-full cursor-pointer items-center rounded-md border px-3 py-2 text-left transition-all outline-none"
             type="button"
           >
-            <BaseIcon class="text-primary shrink-0" name="music" size="md" />
+            <BaseIcon class="text-primary shrink-0" icon-size="md" name="music" />
             <span class="text-text-title min-w-0 flex-1 truncate text-xs font-semibold">
               {{ item.song.title }}
             </span>

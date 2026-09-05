@@ -73,7 +73,7 @@ const handleSelect = (item: ContextMenuItem) => {
         icon-only
       >
         <slot :is-open name="icon">
-          <BaseIcon v-if="icon" :class="iconClass" :name="icon" size="xl" />
+          <BaseIcon v-if="icon" :class="iconClass" :name="icon" icon-size="xl" icon-stroke="regular" />
         </slot>
       </ActionButton>
     </template>

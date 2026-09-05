@@ -12,12 +12,22 @@
         icon="panel-left"
       />
 
-      <div class="bg-glass-border mx-[0.1rem] h-[0.7rem] w-px" />
+      <div class="bg-glass-border mx-0.5 h-3.5 w-px shrink-0 opacity-80" />
 
       <div class="gap-md flex items-center">
-        <span class="text-text-title font-features-['ss01'_1] text-xs font-extrabold tracking-tight whitespace-nowrap">
-          Fret Logic
-        </span>
+        <button
+          v-tooltip="'回到工作台'"
+          @click="router.push('/workbench')"
+          aria-label="Fret Logic 首页"
+          class="group focus-visible:ring-primary/70 flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors outline-none select-none focus-visible:ring-2"
+          type="button"
+        >
+          <span
+            class="text-text-title group-hover:text-primary font-features-['ss01'_1] text-xs font-extrabold tracking-tight whitespace-nowrap transition-colors"
+          >
+            Fret Logic
+          </span>
+        </button>
         <BaseSegmentedControl :model-value="activeNavPath" :options="NAV_OPTIONS" @change="path => router.push(path)" />
       </div>
     </div>
@@ -37,6 +47,7 @@
         @change="handleScoreTabChange"
         full-height
         tabbed
+        size="lg"
       />
     </div>
 
@@ -52,7 +63,7 @@
         aria-label="播放/试听当前和弦"
         color="primary"
         icon-size="xl"
-        variant="subtle"
+        variant="ghost"
       />
       <!-- 复制/粘贴：和弦页与乐谱页共用，按当前路由分派动作与文案 -->
       <ActionButton
@@ -73,8 +84,9 @@
         v-if="route.path === '/score' && scoreEditor.activeTab === 'preview'"
         :disabled="!scoreEditor.hasLyrics"
         :items="scoreExportMenuItems"
-        aria-label="导出乐谱图片"
+        aria-label="导出整曲长图"
         icon="download"
+        title="导出整曲长图"
       />
 
       <BasePopover v-if="showHeaderSettings" placement="bottom-end" trigger="hover">
@@ -82,7 +94,6 @@
           <ActionButton
             :aria-expanded="isOpen"
             :color="isOpen ? 'primary' : 'default'"
-            :icon-stroke-width="2.5"
             :variant="isOpen ? 'subtle' : 'ghost'"
             @click="pinToggle()"
             icon-only
@@ -90,6 +101,7 @@
             aria-label="设置面板"
             icon="sliders-horizontal"
             icon-size="xl"
+            icon-stroke="regular"
             ref="triggerBtnRef"
           />
         </template>
@@ -196,8 +208,8 @@ import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorSto
 import { prepareWorkerExportPayload, runWorkerExport } from '@/domains/score/preview/services/workerExportService';
 import type { PortableSong } from '@/domains/score/transfer/textCodec';
 import { useTextTransfer, type PasteSongOutcome } from '@/domains/score/transfer/useTextTransfer';
+import { useTheme } from '@/platform/composables/useTheme';
 import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
-import { globalDarkMode, setThemeMode, themePreference } from '@/platform/store/globalState';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import type { SyncProviderKind } from '@/platform/types';
@@ -297,7 +309,7 @@ const transferButtons = computed<TransferButton[]>(() => {
     {
       key: 'paste',
       icon: 'clipboard-paste',
-      tooltip: isScore ? '粘贴乐谱文字（将新建乐谱）' : '粘贴和弦文字',
+      tooltip: isScore ? '从剪切板粘贴' : '从剪切板粘贴',
       disabled: uiStore.isCopying,
       onClick: isScore ? handlePasteSong : handlePasteChord,
     },
@@ -310,13 +322,15 @@ const activeNavPath = computed(() => {
 });
 
 const NAV_OPTIONS: SegmentOption<string>[] = [
-  { label: '和弦', value: '/workbench' },
-  { label: '乐谱', value: '/score' },
+  { label: '和弦', value: '/workbench', icon: 'layout-grid' },
+  { label: '乐谱', value: '/score', icon: 'music' },
 ];
 
+const { isDark, setTheme, preference: themePreference } = useTheme();
+
 /** 主题按钮触发图标：暗色显示月亮（primary），亮色显示太阳（warning） */
-const themeTriggerIcon = computed(() => (globalDarkMode.value ? 'moon' : 'sun'));
-const themeTriggerIconClass = computed(() => (globalDarkMode.value ? 'text-color-primary' : 'text-color-warning'));
+const themeTriggerIcon = computed(() => (isDark.value ? 'moon' : 'sun'));
+const themeTriggerIconClass = computed(() => (isDark.value ? 'text-color-primary' : 'text-color-warning'));
 
 const themeMenuItems = computed<ContextMenuItem[]>(() => [
   {
@@ -325,7 +339,7 @@ const themeMenuItems = computed<ContextMenuItem[]>(() => [
     color: 'var(--color-warning)',
     checked: themePreference.value === 'light',
     action: () => {
-      setThemeMode('light');
+      setTheme('light');
       emit('toggle-theme', 'light');
     },
   },
@@ -335,7 +349,7 @@ const themeMenuItems = computed<ContextMenuItem[]>(() => [
     color: 'var(--color-primary)',
     checked: themePreference.value === 'dark',
     action: () => {
-      setThemeMode('dark');
+      setTheme('dark');
       emit('toggle-theme', 'dark');
     },
   },
@@ -345,7 +359,7 @@ const themeMenuItems = computed<ContextMenuItem[]>(() => [
     color: 'var(--text-title)',
     checked: themePreference.value === 'auto',
     action: () => {
-      setThemeMode('auto');
+      setTheme('auto');
       emit('toggle-theme', 'auto');
     },
   },
@@ -394,7 +408,7 @@ const handleConfirmPull = async () => {
 const syncMenuItems = computed<ContextMenuItem[]>(() => [
   {
     label: isSyncing.value ? '同步中...' : '同步',
-    icon: 'cloud-upload',
+    icon: 'refresh-cw',
     disabled: isSyncing.value || isPulling.value,
     action: () => {
       isSyncConfirmOpen.value = true;
@@ -509,7 +523,8 @@ const handleScoreExport = async (op: 'copy' | 'download') => {
       lineIndices,
       chordsLookupMap.value,
       'normal',
-      settingsStore.scoreChordShorthand
+      settingsStore.scoreChordShorthand,
+      settingsStore.scoreLayoutAlign
     );
     const { blobs } = await runWorkerExport(payload);
     if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
@@ -534,7 +549,7 @@ const scoreExportMenuItems = computed<ContextMenuItem[]>(() => {
   const hasLyrics = scoreEditor.hasLyrics;
   return [
     {
-      label: '复制',
+      label: '复制整曲长图',
       icon: 'copy',
       disabled: !hasLyrics,
       action: () => {
@@ -542,7 +557,7 @@ const scoreExportMenuItems = computed<ContextMenuItem[]>(() => {
       },
     },
     {
-      label: '下载',
+      label: '下载整曲长图',
       icon: 'download',
       disabled: !hasLyrics,
       action: () => {
@@ -557,9 +572,9 @@ const isSyncModalOpen = ref(false);
 const NO_DRAG_REGION_CLASS =
   '@media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag]';
 const SyncModalContainer = defineAsyncComponent(() => import('@/app/modals/SyncModalContainer.vue'));
-/** GitHub 按钮 tooltip：构建信息 + 点击跳转仓库提示（交互式，可承载多行文本） */
+/** GitHub 按钮 tooltip：构建信息 + 点击跳转仓库提示（交互式，字符串数组多行换行） */
 const buildRepoTooltip = computed(() => {
   const builtAt = new Date(__BUILD_INFO__.time).toLocaleString('zh-CN', { hour12: false });
-  return `Fret Logic\n版本：${__BUILD_INFO__.commit}\n构建时间：${builtAt}\n点击在 GitHub 查看项目源码`;
+  return ['Fret Logic', `版本：${__BUILD_INFO__.commit}`, `构建时间：${builtAt}`, '点击图标打开 GitHub 查看项目源码'];
 });
 </script>

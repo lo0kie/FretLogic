@@ -40,6 +40,7 @@ export interface WorkerExportPayload {
   lines: ExportLineItem[];
   mode: 'normal' | 'a4';
   darkMode: boolean;
+  layoutAlign?: 'start' | 'center';
 }
 
 export type WorkerExportMessage =
@@ -510,9 +511,13 @@ function renderScoreLine(
 
   // 1. 绘制行首边和弦指板图
   if (line.startChords && line.startChords.length > 0) {
-    for (const chord of line.startChords) {
+    for (let i = 0; i < line.startChords.length; i++) {
+      const chord = line.startChords[i]!;
       drawFretboard(ctx, currentX, getChordY(chord), chord, colors);
-      currentX += SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH + SCORE_EXPORT_CONFIG.INLINE_CHORD_GAP;
+      currentX += SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH;
+      if (i < line.startChords.length - 1) {
+        currentX += SCORE_EXPORT_CONFIG.INLINE_CHORD_GAP;
+      }
     }
     currentX += SCORE_EXPORT_CONFIG.EDGE_CHORD_SECTION_GAP;
   }
@@ -538,9 +543,14 @@ function renderScoreLine(
       ctx.textAlign = 'center';
     }
 
-    // 下方歌词文字（紧随指板图下方）
+    // 下方歌词文字（紧随指板图下方，竖线小节线以弱化次级色 SUB_TEXT 渲染）
     if (!isSpace) {
+      const isBarLine = item.char === '|' || item.char === '｜';
+      ctx.fillStyle = isBarLine ? colors.SUB_TEXT : colors.TEXT;
       ctx.fillText(item.char, currentX + colW / 2, textBaselineY);
+      if (isBarLine) {
+        ctx.fillStyle = colors.TEXT;
+      }
     }
 
     currentX += colW;
@@ -549,33 +559,17 @@ function renderScoreLine(
   // 3. 绘制行尾边和弦指板图
   if (line.endChords && line.endChords.length > 0) {
     currentX += SCORE_EXPORT_CONFIG.EDGE_CHORD_SECTION_GAP;
-    for (const chord of line.endChords) {
+    for (let i = 0; i < line.endChords.length; i++) {
+      const chord = line.endChords[i]!;
       drawFretboard(ctx, currentX, getChordY(chord), chord, colors);
-      currentX += SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH + SCORE_EXPORT_CONFIG.INLINE_CHORD_GAP;
+      currentX += SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH;
+      if (i < line.endChords.length - 1) {
+        currentX += SCORE_EXPORT_CONFIG.INLINE_CHORD_GAP;
+      }
     }
   }
 
   return { nextY: y + contentH + rowGap, width: currentX - startX };
-}
-
-/** 绘制带上标升降号的元信息文本（调号与 Capo，水平居中） */
-function drawFormattedMeta(
-  ctx: OffscreenCanvasRenderingContext2D,
-  centerX: number,
-  baselineY: number,
-  metaText: string,
-  color: string
-) {
-  drawTokenizedText(
-    ctx,
-    centerX,
-    baselineY,
-    metaText,
-    color,
-    `500 ${SCORE_EXPORT_CONFIG.META_FONT_SIZE}px system-ui, -apple-system, sans-serif`,
-    `bold ${SCORE_EXPORT_CONFIG.META_ACCIDENTAL_FONT_SIZE}px system-ui, -apple-system, sans-serif`,
-    SCORE_EXPORT_CONFIG.META_ACCIDENTAL_SUPERSCRIPT_OFFSET
-  );
 }
 
 /** 表头总高度（模块级预计算常量，onmessage 中直接引用，无需每次调用函数） */
@@ -585,7 +579,7 @@ const HEADER_HEIGHT =
   SCORE_EXPORT_CONFIG.META_FONT_SIZE +
   SCORE_EXPORT_CONFIG.HEADER_BOTTOM_GAP;
 
-/** 绘制乐谱表头（标题、调号与变调夹，无下划分割线） */
+/** 绘制乐谱表头（标题、调号与变调夹，竖线分隔符严格与标题中心对齐，竖线采用弱化淡色） */
 function renderHeader(
   ctx: OffscreenCanvasRenderingContext2D,
   title: string,
@@ -596,17 +590,53 @@ function renderHeader(
   colors: ThemeColors
 ): number {
   let y = startY;
+  const centerX = width / 2;
 
-  // 标题
+  // 1. 标题（严格以 centerX 为轴水平居中）
   ctx.font = `bold ${SCORE_EXPORT_CONFIG.TITLE_FONT_SIZE}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
   ctx.fillStyle = colors.TEXT;
   ctx.textAlign = 'center';
-  ctx.fillText(title, width / 2, y + SCORE_EXPORT_CONFIG.TITLE_FONT_SIZE);
+  ctx.fillText(title, centerX, y + SCORE_EXPORT_CONFIG.TITLE_FONT_SIZE);
   y += SCORE_EXPORT_CONFIG.TITLE_FONT_SIZE + SCORE_EXPORT_CONFIG.TITLE_TO_META_GAP;
 
-  // 调号 / Capo（加粗带上标升降号）
-  const meta = `${keyText}  |  Capo: ${capoText}`;
-  drawFormattedMeta(ctx, width / 2, y + SCORE_EXPORT_CONFIG.META_FONT_SIZE, meta, colors.SUB_TEXT);
+  // 2. 元信息行（竖线分隔符居中对齐 centerX，调号向左排布，变调夹向右排布）
+  const baselineY = y + SCORE_EXPORT_CONFIG.META_FONT_SIZE;
+  const metaBaseFont = `500 ${SCORE_EXPORT_CONFIG.META_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
+  const metaAccFont = `bold ${SCORE_EXPORT_CONFIG.META_ACCIDENTAL_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
+  const META_GAP = 14;
+
+  // 中央竖线分隔符：严格居中于 centerX，使用淡色（colors.FB_LINE），使视觉与标题中心严密垂直对齐
+  ctx.font = metaBaseFont;
+  ctx.fillStyle = colors.FB_LINE;
+  ctx.textAlign = 'center';
+  ctx.fillText('|', centerX, baselineY);
+
+  // 左侧调号：右端对齐至 (centerX - META_GAP)，支持升降号上标
+  const keyTokens = parseChordNameTokens(keyText);
+  let keyWidth = 0;
+  const measuredKeyTokens = keyTokens.map(token => {
+    ctx.font = token.isAccidental ? metaAccFont : metaBaseFont;
+    const w = ctx.measureText(token.text).width;
+    keyWidth += w;
+    return { ...token, width: w };
+  });
+
+  let curKeyX = centerX - META_GAP - keyWidth;
+  ctx.fillStyle = colors.SUB_TEXT;
+  ctx.textAlign = 'left';
+  for (const item of measuredKeyTokens) {
+    ctx.font = item.isAccidental ? metaAccFont : metaBaseFont;
+    const itemY = item.isAccidental ? baselineY + SCORE_EXPORT_CONFIG.META_ACCIDENTAL_SUPERSCRIPT_OFFSET : baselineY;
+    ctx.fillText(item.text, curKeyX, itemY);
+    curKeyX += item.width;
+  }
+
+  // 右侧变调夹：左端对齐至 (centerX + META_GAP)
+  ctx.font = metaBaseFont;
+  ctx.fillStyle = colors.SUB_TEXT;
+  ctx.textAlign = 'left';
+  ctx.fillText(`Capo: ${capoText}`, centerX + META_GAP, baselineY);
+
   y += SCORE_EXPORT_CONFIG.META_FONT_SIZE + SCORE_EXPORT_CONFIG.HEADER_BOTTOM_GAP;
 
   return y;
@@ -615,7 +645,7 @@ function renderHeader(
 if (typeof self !== 'undefined') {
   self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
     try {
-      const { title, keyText, capoText, lines, mode, darkMode } = e.data;
+      const { title, keyText, capoText, lines, mode, darkMode, layoutAlign } = e.data;
 
       const colors = darkMode ? SCORE_EXPORT_CONFIG.THEME.DARK : SCORE_EXPORT_CONFIG.THEME.LIGHT;
       const blobs: Blob[] = [];
@@ -707,23 +737,25 @@ if (typeof self !== 'undefined') {
 
         for (let pIdx = 0; pIdx < pages.length; pIdx++) {
           const pageSegments = pages[pIdx]!;
+          const canvasW = SCORE_EXPORT_CONFIG.A4_WIDTH;
+          const canvasH = SCORE_EXPORT_CONFIG.A4_HEIGHT;
           const canvas = new OffscreenCanvas(
-            SCORE_EXPORT_CONFIG.A4_WIDTH * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
-            SCORE_EXPORT_CONFIG.A4_HEIGHT * SCORE_EXPORT_CONFIG.PIXEL_RATIO
+            canvasW * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
+            canvasH * SCORE_EXPORT_CONFIG.PIXEL_RATIO
           );
           const ctx = canvas.getContext('2d')!;
           ctx.scale(SCORE_EXPORT_CONFIG.PIXEL_RATIO, SCORE_EXPORT_CONFIG.PIXEL_RATIO);
 
           ctx.fillStyle = colors.BG;
-          ctx.fillRect(0, 0, SCORE_EXPORT_CONFIG.A4_WIDTH, SCORE_EXPORT_CONFIG.A4_HEIGHT);
+          ctx.fillRect(0, 0, canvasW, canvasH);
 
           let curY: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN;
           if (pIdx === 0) {
-            curY = renderHeader(ctx, title, keyText, capoText, SCORE_EXPORT_CONFIG.A4_WIDTH, curY, colors);
+            curY = renderHeader(ctx, title, keyText, capoText, canvasW, curY, colors);
           }
 
           // 合并为单次循环：计算 space-between 参数 + 逐段绘制
-          const pageAvailH = SCORE_EXPORT_CONFIG.A4_HEIGHT - SCORE_EXPORT_CONFIG.PAGE_MARGIN - curY;
+          const pageAvailH = canvasH - SCORE_EXPORT_CONFIG.PAGE_MARGIN - curY;
           const isFullPage = pIdx < pages.length - 1;
 
           let totalContentH = 0;
@@ -750,8 +782,12 @@ if (typeof self !== 'undefined') {
             const isLastInPage = i === pageSegments.length - 1;
             const defaultGap = seg.isLastSubLine ? dynamicRowGap : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
             const rowGap = isLastInPage ? 0 : defaultGap;
-            const startX =
-              SCORE_EXPORT_CONFIG.PAGE_MARGIN + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
+            const segW = getSegmentWidth(seg);
+            const isCenter = layoutAlign === 'center';
+            const startX = isCenter
+              ? Math.max(SCORE_EXPORT_CONFIG.PAGE_MARGIN, Math.round((canvasW - segW) / 2)) +
+                (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0)
+              : SCORE_EXPORT_CONFIG.PAGE_MARGIN + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
             const res = renderScoreLine(ctx, seg, startX, curY, colors, rowGap);
             curY = res.nextY;
           }
@@ -813,8 +849,12 @@ if (typeof self !== 'undefined') {
             ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP
             : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
           const rowGap = isLast ? 0 : defaultGap;
-          const startX =
-            SCORE_EXPORT_CONFIG.PAGE_MARGIN + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
+          const segW = getSegmentWidth(seg);
+          const isCenter = layoutAlign === 'center';
+          const startX = isCenter
+            ? Math.max(SCORE_EXPORT_CONFIG.PAGE_MARGIN, Math.round((canvasW - segW) / 2)) +
+              (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0)
+            : SCORE_EXPORT_CONFIG.PAGE_MARGIN + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
           const res = renderScoreLine(ctx, seg, startX, curY, colors, rowGap);
           curY = res.nextY;
         }

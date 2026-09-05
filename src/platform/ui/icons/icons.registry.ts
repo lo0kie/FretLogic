@@ -25,10 +25,12 @@ import FolderOpen from '~icons/lucide/folder-open';
 import FolderSync from '~icons/lucide/folder-sync';
 import GitBranch from '~icons/lucide/git-branch';
 import GripVertical from '~icons/lucide/grip-vertical';
+import Guitar from '~icons/lucide/guitar';
 import Image from '~icons/lucide/image';
 import Inbox from '~icons/lucide/inbox';
 import Info from '~icons/lucide/info';
 import Laptop from '~icons/lucide/laptop';
+import LayoutGrid from '~icons/lucide/layout-grid';
 import Link2 from '~icons/lucide/link-2';
 import List from '~icons/lucide/list';
 import Loader2 from '~icons/lucide/loader-2';
@@ -41,6 +43,7 @@ import Pencil from '~icons/lucide/pencil';
 import Play from '~icons/lucide/play';
 import PlugZap from '~icons/lucide/plug-zap';
 import Plus from '~icons/lucide/plus';
+import RefreshCw from '~icons/lucide/refresh-cw';
 import Search from '~icons/lucide/search';
 import SearchX from '~icons/lucide/search-x';
 import Server from '~icons/lucide/server';
@@ -84,10 +87,12 @@ export const ICON_REGISTRY = {
   'folder-sync': FolderSync,
   'git-branch': GitBranch,
   'grip-vertical': GripVertical,
+  'guitar': Guitar,
   'image': Image,
   'inbox': Inbox,
   'info': Info,
   'laptop': Laptop,
+  'layout-grid': LayoutGrid,
   'link-2': Link2,
   'list': List,
   'loader-2': Loader2,
@@ -100,6 +105,7 @@ export const ICON_REGISTRY = {
   'play': Play,
   'plug-zap': PlugZap,
   'plus': Plus,
+  'refresh-cw': RefreshCw,
   'search': Search,
   'search-x': SearchX,
   'server': Server,

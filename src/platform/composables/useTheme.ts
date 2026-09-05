@@ -96,3 +96,5 @@ export const useTheme = () => ({
   /** 明暗切换（在 light/dark 间） */
   toggleDark,
 });
+
+export { activeTheme, initTheme, isDark, preference, setTheme, toggleDark };

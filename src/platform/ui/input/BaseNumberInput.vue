@@ -84,6 +84,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
+import type { ComponentSize } from '@/platform/types';
+import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { resolveComponentWidth, type FormComponentWidth } from '@/platform/utils/constants';
 
 const props = withDefaults(
@@ -91,7 +93,7 @@ const props = withDefaults(
     min?: number;
     max?: number;
     step?: number;
-    size?: 'sm' | 'md' | 'lg';
+    size?: ComponentSize;
     width?: FormComponentWidth;
     disabled?: boolean;
     wheelable?: boolean;
@@ -162,17 +164,17 @@ const resolvedWidth = computed(() => resolveComponentWidth(props.width));
 
 const NUMBER_INPUT_CONFIG: Record<'sm' | 'md' | 'lg', { wrapperClass: string; btnClass: string; textClass: string }> = {
   sm: {
-    wrapperClass: 'h-[1.6rem] px-xs gap-xs',
+    wrapperClass: `${CONTROL_HEIGHT_CLASSES.sm} px-xs gap-xs`,
     btnClass: 'w-[1.1rem] h-[1.1rem] text-xs',
     textClass: 'text-2xs min-w-[1.5rem]',
   },
   md: {
-    wrapperClass: 'h-[1.9rem] px-xs gap-xs',
+    wrapperClass: `${CONTROL_HEIGHT_CLASSES.md} px-xs gap-xs`,
     btnClass: 'w-[1.3rem] h-[1.3rem] text-xs',
     textClass: 'text-xs min-w-[1.75rem]',
   },
   lg: {
-    wrapperClass: 'h-[2.3rem] px-xs gap-xs',
+    wrapperClass: `${CONTROL_HEIGHT_CLASSES.lg} px-xs gap-xs`,
     btnClass: 'w-[1.3rem] h-[1.3rem] text-xs',
     textClass: 'text-xs min-w-[2.25rem]',
   },
