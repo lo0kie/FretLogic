@@ -23,7 +23,7 @@ const buildSong = (id: string): Song => ({
 
 // 隔离重型依赖：拖拽库与浮层菜单不需要参与本用例
 const globalStubs = {
-  directives: { 'marquee': {}, 'grid-nav': {} },
+  directives: { 'marquee': {}, 'grid-nav': {}, 'scroll-into-view': {} },
   components: {
     VueDraggable: { template: '<div><slot /></div>' },
     ContextMenu: { template: '<div><slot :is-open="false" /></div>' },

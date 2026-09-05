@@ -107,4 +107,75 @@ describe('chordScoreBridge：和弦删除/撤销与乐谱槽位解绑的跨域�
     const afterDelete = songStore.songs.find(s => s.id === song.id)!;
     expect(afterDelete.chordMap.has(slotKey)).toBe(false);
   });
+
+  it('移动和弦到目标分组遇到完全相同指法时自动合并，槽位引用重定向到保留项', () => {
+    const chordStore = useChordStore();
+    const songStore = useSongStore();
+
+    const sourceGroup = chordStore.addGroup('源分组');
+    const targetGroup = chordStore.addGroup('目标分组');
+
+    // 两个同指纹同横按的完全相同和弦，分别位于源/目标分组（id 不同）
+    const moved = makeChord('C');
+    moved.groupId = sourceGroup.id;
+    chordStore.addChord(moved);
+    const kept = makeChord('C');
+    kept.groupId = targetGroup.id;
+    chordStore.addChord(kept);
+
+    // 乐谱绑定的是"将被合并丢弃"的移入项，合并后应重定向到保留项
+    const song = songStore.createSong('合并歌');
+    const slotKey = charKey('l1', 0);
+    songStore.updateSongMeta(song.id, {
+      lyrics: 'ab',
+      lineIds: ['l1'],
+      playKey: 'C',
+      capo: 0,
+      chordMap: new Map([[slotKey, moved.id]]),
+    });
+
+    chordStore.moveVariantsByName(sourceGroup.id, 'C', targetGroup.id);
+
+    // 移入的重复项被丢弃，仅剩目标分组原有的完全相同和弦
+    const remaining = chordStore.savedChordsList.filter(c => c.groupId === targetGroup.id);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.id).toBe(kept.id);
+
+    // 槽位引用被重定向到保留项，而不是变成死引用
+    const target = songStore.songs.find(s => s.id === song.id)!;
+    expect(target.chordMap.get(slotKey)).toBe(kept.id);
+  });
+
+  it('移动和弦到目标分组时，指法不同（横按不同）的同名和弦不会误合并', () => {
+    const chordStore = useChordStore();
+    const songStore = useSongStore();
+
+    const sourceGroup = chordStore.addGroup('源分组2');
+    const targetGroup = chordStore.addGroup('目标分组2');
+
+    const moved = makeChord('C');
+    moved.groupId = sourceGroup.id;
+    moved.barres = [{ fret: 1, fromString: 0, toString: 5 }];
+    chordStore.addChord(moved);
+    const kept = makeChord('C');
+    kept.groupId = targetGroup.id;
+    chordStore.addChord(kept);
+
+    const song = songStore.createSong('横按歌');
+    const slotKey = charKey('l1', 0);
+    songStore.updateSongMeta(song.id, {
+      lyrics: 'ab',
+      lineIds: ['l1'],
+      playKey: 'C',
+      capo: 0,
+      chordMap: new Map([[slotKey, moved.id]]),
+    });
+
+    chordStore.moveVariantsByName(sourceGroup.id, 'C', targetGroup.id);
+
+    // 横按不同不属于"完全相同"，两个和弦都保留，引用不动
+    expect(chordStore.savedChordsList.filter(c => c.groupId === targetGroup.id)).toHaveLength(2);
+    const target = songStore.songs.find(s => s.id === song.id)!;
+    expect(target.chordMap.get(slotKey)).toBe(moved.id);
+  });
 });

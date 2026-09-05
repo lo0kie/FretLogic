@@ -1,5 +1,5 @@
 <template>
-  <div :data-chord-id="cardData.mainChord.id" class="box-border w-full">
+  <div class="box-border w-full">
     <ContextMenu #="{ isOpen }" :items="menuItems">
       <div :title="getChordName(activeChord, { shorthand: settingsStore.workbenchChordShorthand })" class="w-full">
         <div
@@ -14,7 +14,6 @@
           @click="handleCardClick"
           @keydown.enter.prevent.stop="handleCardClick"
           @keydown.space.prevent.stop="handleCardClick"
-          @wheel="handleWheelScroll"
           data-focusable-inline
           class="duration-fast bg-bg-body border-border-light hover:bg-bg-panel-hover hover:border-border-base active:bg-bg-panel-hover active:border-border-base relative box-border flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border px-2 transition-all outline-none"
           role="button"
@@ -22,7 +21,6 @@
         >
           <BaseBadge
             v-if="cardData.hasVariants"
-            :title="isActive ? '滚轮切换指法' : undefined"
             :variant="isActive ? 'primary' : 'neutral'"
             @click.stop="toggleVariantsDropdown"
             appearance="filled"
@@ -78,8 +76,6 @@ const { copyChordCardText } = useChordTransfer();
 // 引用反查能力由应用层注入（桥接乐谱域）；未注入时按无引用处理
 const lookupChordReferences = inject(CHORD_REFERENCE_LOOKUP, () => 0);
 
-const WHEEL_SWITCH_THRESHOLD = 60;
-
 const localVariantIndex = ref(0);
 
 const activeVariantIndex = computed(() => {
@@ -112,30 +108,6 @@ const switchVariant = (newIndex: number) => {
 /** 用户点击计数徽标：循环切换到下一个指法 */
 const toggleVariantsDropdown = () => {
   const nextIdx = (activeVariantIndex.value + 1) % props.cardData.variants.length;
-  switchVariant(nextIdx);
-};
-
-let accumulatedDelta = 0;
-let lastWheelTime = 0;
-
-/** 滚轮在卡片上累积 deltaY，超过阈值按方向切换上一个/下一个指法（300ms 无滚动则重新累积） */
-const handleWheelScroll = (e: WheelEvent) => {
-  if (!props.cardData.hasVariants) return;
-  e.preventDefault();
-  e.stopPropagation();
-
-  const now = Date.now();
-  if (now - lastWheelTime > 300) accumulatedDelta = 0;
-  lastWheelTime = now;
-
-  accumulatedDelta += e.deltaY;
-  if (Math.abs(accumulatedDelta) < WHEEL_SWITCH_THRESHOLD) return;
-
-  const step = accumulatedDelta > 0 ? 1 : -1;
-  accumulatedDelta = 0;
-
-  const count = props.cardData.variants.length;
-  const nextIdx = (activeVariantIndex.value + step + count) % count;
   switchVariant(nextIdx);
 };
 
@@ -185,8 +157,6 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 const ariaLabel = computed(() => {
   const name = getChordName(activeChord.value);
   if (!props.cardData.hasVariants) return `和弦 ${name}`;
-  const parts = [`和弦 ${name}`, `共 ${props.cardData.variantCount} 种指法`];
-  if (props.isActive) parts.push('已激活，滚轮可切换');
-  return parts.join('，');
+  return `和弦 ${name}，共 ${props.cardData.variantCount} 种指法`;
 });
 </script>

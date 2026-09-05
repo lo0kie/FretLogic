@@ -2,9 +2,9 @@
 import { defineComponent } from 'vue';
 
 import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { normalize, vTooltip } from '@/platform/directives/vTooltip';
+import { destroyGlobalTooltip, normalize, vTooltip } from '@/platform/directives/vTooltip';
 
 describe('vTooltip directive modifiers', () => {
   it('supports default placement top when no modifiers provided', () => {
@@ -88,5 +88,67 @@ describe('vTooltip normalize modifiers', () => {
     expect(normalize('提示', { bottom: true }).placement).toBe('bottom');
     expect(normalize('提示', { right: true, end: true }).placement).toBe('right-end');
     expect(normalize('提示', { top: true, start: true }).placement).toBe('top-start');
+  });
+});
+
+describe('vTooltip lifecycle & scroll listener', () => {
+  afterEach(() => {
+    destroyGlobalTooltip();
+  });
+
+  it('destroyGlobalTooltip 能够完全移除 DOM 节点并释放资源', async () => {
+    const TestComponent = defineComponent({
+      directives: { tooltip: vTooltip },
+      template: `<button id="btn" v-tooltip="'测试内容'">按钮</button>`,
+    });
+
+    const wrapper = mount(TestComponent, { attachTo: document.body });
+    const btn = wrapper.find('#btn');
+    await btn.trigger('mouseenter');
+    await wrapper.vm.$nextTick();
+
+    // 应该已创建 globalBox
+    expect(document.querySelector('.v-tooltip-root')).not.toBeNull();
+
+    // 销毁
+    destroyGlobalTooltip();
+    expect(document.querySelector('.v-tooltip-root')).toBeNull();
+
+    wrapper.unmount();
+  });
+
+  it('滚动监听器在无 tooltip 显示时按需挂载/卸载，不留全局常驻监听', async () => {
+    const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
+    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+
+    const TestComponent = defineComponent({
+      directives: { tooltip: vTooltip },
+      template: `<button id="btn" v-tooltip="{ content: '测试', showDelay: 0, hideDelay: 0 }">按钮</button>`,
+    });
+
+    const wrapper = mount(TestComponent, { attachTo: document.body });
+    const btn = wrapper.find('#btn');
+
+    // 移入触发显示
+    await btn.trigger('mouseenter');
+    await wrapper.vm.$nextTick();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // 应当已动态添加 scroll capture 监听
+    const hasScrollAdded = addEventListenerSpy.mock.calls.some(call => call[0] === 'scroll' && call[2] === true);
+    expect(hasScrollAdded).toBe(true);
+
+    // 移出触发隐藏
+    await btn.trigger('mouseleave');
+    await wrapper.vm.$nextTick();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // 应当已移除 scroll capture 监听
+    const hasScrollRemoved = removeEventListenerSpy.mock.calls.some(call => call[0] === 'scroll' && call[2] === true);
+    expect(hasScrollRemoved).toBe(true);
+
+    addEventListenerSpy.mockRestore();
+    removeEventListenerSpy.mockRestore();
+    wrapper.unmount();
   });
 });

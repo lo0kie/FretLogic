@@ -109,6 +109,8 @@ export default tseslint.config(
       'vue/multiline-html-element-content-newline': 'off',
       // 属性顺序交由 prettier-plugin-organize-attributes 统一处理，避免与 ESLint 互改。
       'vue/attributes-order': 'off',
+      // 强制 v-bind 简写且开启 Vue 3.4+ 同名属性简写（:foo="foo" 必须写为 :foo，:attr-name="attrName" 必须写为 :attr-name）
+      'vue/v-bind-style': ['error', 'shorthand', { sameNameShorthand: 'always' }],
       'vue/html-self-closing': [
         'error',
         {

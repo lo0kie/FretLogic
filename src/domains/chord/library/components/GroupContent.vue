@@ -23,8 +23,10 @@
             cardData.mainChord,
             cardData.variantCount,
             cardData.mainChord.id === activeMainId,
+            cardData.mainChord.id === activeMainId ? editorStore.draftChord.id : '',
             settingsStore.workbenchChordShorthand,
           ]"
+          v-scroll-into-view.y.once="cardData.mainChord.id === activeMainId"
           :card-data
           :is-active="cardData.mainChord.id === activeMainId"
           :key="cardData.mainChord.id"
@@ -44,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 
 import LeftChordCard from '@/domains/chord/library/components/ChordCard.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
@@ -86,6 +88,7 @@ const activeMainId = computed(() => {
       if (card.variants.some(v => v.id === draft.id)) return card.mainChord.id;
     }
   }
+
   if (editorStore.isEditing) {
     const draftName = getChordName(draft).trim().toLowerCase();
     if (draftName) {
@@ -100,42 +103,5 @@ const activeMainId = computed(() => {
     }
   }
   return null;
-});
-
-// 活动和弦定位：活动卡变化（含刷新恢复）时，分组收起则先展开，再滚动到该卡片；
-// block:'nearest' 使已在视窗内的卡片不产生滚动
-const scrollToActiveCard = (mainId: string) => {
-  const scroll = () => {
-    const el = document.querySelector<HTMLElement>(`[data-chord-id="${mainId}"]`);
-    el?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  };
-  if (chordStore.isGroupCollapsed(props.group.id)) {
-    // 仅展开本组（不动其他分组），等展开过渡结束后再滚动
-    chordStore.toggleGroupCollapsed(props.group.id);
-    window.setTimeout(scroll, 280);
-  } else {
-    nextTick(() => {
-      requestAnimationFrame(scroll);
-    });
-  }
-};
-
-onMounted(() => {
-  if (activeMainId.value) {
-    scrollToActiveCard(activeMainId.value);
-    setTimeout(() => {
-      if (activeMainId.value) {
-        document.querySelector<HTMLElement>(`[data-chord-id="${activeMainId.value}"]`)?.scrollIntoView({
-          block: 'nearest',
-          inline: 'nearest',
-        });
-      }
-    }, 120);
-  }
-});
-
-watch(activeMainId, mainId => {
-  if (!mainId) return;
-  scrollToActiveCard(mainId);
 });
 </script>

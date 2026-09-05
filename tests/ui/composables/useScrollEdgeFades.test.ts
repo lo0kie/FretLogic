@@ -11,12 +11,18 @@ describe('useScrollEdgeFades', () => {
       scrollTop?: number;
       clientHeight?: number;
       scrollHeight?: number;
+      scrollLeft?: number;
+      clientWidth?: number;
+      scrollWidth?: number;
     } = {}
   ) => {
     const el = document.createElement('div');
     let scrollTop = overrides.scrollTop ?? 0;
     let clientHeight = overrides.clientHeight ?? 300;
     let scrollHeight = overrides.scrollHeight ?? 1000;
+    let scrollLeft = overrides.scrollLeft ?? 0;
+    let clientWidth = overrides.clientWidth ?? 300;
+    let scrollWidth = overrides.scrollWidth ?? 1000;
 
     Object.defineProperty(el, 'scrollTop', {
       get: () => scrollTop,
@@ -36,6 +42,27 @@ describe('useScrollEdgeFades', () => {
       get: () => scrollHeight,
       set: (v: number) => {
         scrollHeight = v;
+      },
+      configurable: true,
+    });
+    Object.defineProperty(el, 'scrollLeft', {
+      get: () => scrollLeft,
+      set: (v: number) => {
+        scrollLeft = v;
+      },
+      configurable: true,
+    });
+    Object.defineProperty(el, 'clientWidth', {
+      get: () => clientWidth,
+      set: (v: number) => {
+        clientWidth = v;
+      },
+      configurable: true,
+    });
+    Object.defineProperty(el, 'scrollWidth', {
+      get: () => scrollWidth,
+      set: (v: number) => {
+        scrollWidth = v;
       },
       configurable: true,
     });
@@ -155,5 +182,74 @@ describe('useScrollEdgeFades', () => {
       // 验证未抛出错误且可正常卸载
       wrapper.unmount();
     }
+  });
+
+  describe('横向滚动模式 (direction: "horizontal")', () => {
+    it('当横向内容不可滚动时，两端均隐藏（atLeft=true, atRight=true）', () => {
+      const el = createMockScrollElement({ clientWidth: 500, scrollWidth: 400, scrollLeft: 0 });
+      const scrollRef = ref<HTMLElement | null>(el);
+      const { atLeft, atRight, atStart, atEnd } = useScrollEdgeFades(scrollRef, {
+        direction: 'horizontal',
+      });
+
+      expect(atLeft.value).toBe(true);
+      expect(atRight.value).toBe(true);
+      expect(atStart.value).toBe(true);
+      expect(atEnd.value).toBe(true);
+    });
+
+    it('当横向可滚动且在最左端时：左侧隐藏（atLeft=true），右侧显示（atRight=false）', () => {
+      const el = createMockScrollElement({ clientWidth: 300, scrollWidth: 1000, scrollLeft: 0 });
+      const scrollRef = ref<HTMLElement | null>(el);
+      const { atLeft, atRight } = useScrollEdgeFades(scrollRef, { direction: 'horizontal' });
+
+      expect(atLeft.value).toBe(true);
+      expect(atRight.value).toBe(false);
+    });
+
+    it('当横向滚动到中间时：两端均显示（atLeft=false, atRight=false）', () => {
+      const el = createMockScrollElement({ clientWidth: 300, scrollWidth: 1000, scrollLeft: 0 });
+      const scrollRef = ref<HTMLElement | null>(el);
+      const { atLeft, atRight, syncEdgeFades } = useScrollEdgeFades(scrollRef, {
+        direction: 'horizontal',
+      });
+
+      el.scrollLeft = 200;
+      syncEdgeFades();
+
+      expect(atLeft.value).toBe(false);
+      expect(atRight.value).toBe(false);
+    });
+
+    it('当横向滚动到最右端时：左侧显示（atLeft=false），右侧隐藏（atRight=true）', () => {
+      const el = createMockScrollElement({ clientWidth: 300, scrollWidth: 1000, scrollLeft: 0 });
+      const scrollRef = ref<HTMLElement | null>(el);
+      const { atLeft, atRight, syncEdgeFades } = useScrollEdgeFades(scrollRef, {
+        direction: 'horizontal',
+      });
+
+      el.scrollLeft = 700; // scrollLeft + clientWidth = 1000 >= scrollWidth - threshold
+      syncEdgeFades();
+
+      expect(atLeft.value).toBe(false);
+      expect(atRight.value).toBe(true);
+    });
+
+    it('在存在亚像素浮点数与微小截断误差时，仍能正确判定到达最右端（atRight=true）', () => {
+      // 模拟高分屏缩放下的浮点值与滚轮截断（如还差 1.8px）
+      const el = createMockScrollElement({ clientWidth: 389, scrollWidth: 500, scrollLeft: 0 });
+      const scrollRef = ref<HTMLElement | null>(el);
+      const { atLeft, atRight, syncEdgeFades } = useScrollEdgeFades(scrollRef, {
+        direction: 'horizontal',
+        threshold: 3,
+      });
+
+      // 理论 maxScrollLeft = 111，实际因 subpixel 停在 109.2（差 1.8px）
+      el.scrollLeft = 109.2;
+      syncEdgeFades();
+
+      expect(atLeft.value).toBe(false);
+      expect(atRight.value).toBe(true);
+    });
   });
 });

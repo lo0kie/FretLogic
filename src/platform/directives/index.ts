@@ -5,5 +5,5 @@ export * from './vAutoWidth';
 export * from './vFocus';
 export * from './vGridNav';
 export * from './vMarquee';
-export * from './vScrollCache';
+export * from './vScrollIntoView';
 export * from './vWheelScroll';

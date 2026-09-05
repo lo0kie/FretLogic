@@ -99,11 +99,17 @@ export const prepareWorkerExportPayload = (
   };
 };
 
+/** Worker 导出结果：各页 Blob + a4 模式下每页覆盖的原始歌词行序号（供按页重组内容） */
+export interface WorkerExportResult {
+  blobs: Blob[];
+  pageLineRanges: number[][];
+}
+
 /** 执行 Worker 离屏导出，主线程完全无阻塞 */
 export const runWorkerExport = (
   payload: WorkerExportPayload,
   onProgress?: (percent: number) => void
-): Promise<Blob[]> => {
+): Promise<WorkerExportResult> => {
   return new Promise((resolve, reject) => {
     // 检查浏览器是否支持 OffscreenCanvas
     if (typeof OffscreenCanvas === 'undefined') {
@@ -121,7 +127,7 @@ export const runWorkerExport = (
         onProgress?.(msg.percent);
       } else if (msg.type === 'complete') {
         worker.terminate();
-        resolve(msg.blobs);
+        resolve({ blobs: msg.blobs, pageLineRanges: msg.pageLineRanges ?? [] });
       } else if (msg.type === 'error') {
         worker.terminate();
         reject(new Error(msg.message));

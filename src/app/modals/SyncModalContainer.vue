@@ -8,7 +8,7 @@
     width="w-80"
   >
     <template #header-extra>
-      <BaseSelector v-model="selectedProvider" :disabled="!modalCloseable" :options="providerOptions" width="auto" />
+      <BaseSelector v-model="selectedProvider" :disabled="!modalCloseable" :options="providerOptions" width="md" />
     </template>
 
     <template #default>

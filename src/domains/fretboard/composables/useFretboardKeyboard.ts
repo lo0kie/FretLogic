@@ -1,13 +1,13 @@
-import type { ComputedRef, Ref } from 'vue';
+import { toValue, type MaybeRefOrGetter, type Ref } from 'vue';
 
 /** 指板键盘可达性所需的外部依赖：焦点位置、音域边界与三个编辑动作 */
 export interface FretboardKeyboardDeps {
   /** 当前键盘焦点所在的弦与品位，键盘导航直接改写它 */
   focusPoint: Ref<{ stringIndex: number; fretIndex: number } | null>;
   /** 指板总品位数：品位移动的上界 */
-  fretCount: Ref<number> | ComputedRef<number>;
+  fretCount: MaybeRefOrGetter<number>;
   /** 指板总弦数：弦移动的上界（默认 6） */
-  stringCount?: Ref<number> | ComputedRef<number>;
+  stringCount?: MaybeRefOrGetter<number>;
   /** 切换某弦的空弦态（按品位 → 空弦 → 静音 的循环） */
   onToggleOpenString: (stringIndex: number) => void;
   /** 切换某弦某品位的音符：已有则清除，无则按下 */
@@ -54,8 +54,8 @@ export function useFretboardKeyboard(deps: FretboardKeyboardDeps) {
     }
 
     const minFret = 0;
-    const maxFret = fretCount.value;
-    const maxString = Math.max(0, (stringCount?.value ?? 6) - 1);
+    const maxFret = toValue(fretCount);
+    const maxString = Math.max(0, (toValue(stringCount) ?? 6) - 1);
 
     // 尚无焦点时，导航键先把焦点落到默认位置
     if (!focusPoint.value && NAV_KEYS.includes(e.key)) {

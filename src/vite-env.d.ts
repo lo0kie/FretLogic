@@ -9,7 +9,7 @@ import type { AutoWidthBinding, AutoWidthModifiers } from './platform/directives
 import type { FocusBinding, FocusModifiers } from './platform/directives/vFocus.ts';
 import type { GridNavBinding, GridNavModifiers } from './platform/directives/vGridNav.ts';
 import type { MarqueeBinding, MarqueeModifiers } from './platform/directives/vMarquee.ts';
-import type { ScrollCacheBinding } from './platform/directives/vScrollCache.ts';
+import type { ScrollIntoViewBinding, ScrollIntoViewModifiers } from './platform/directives/vScrollIntoView.ts';
 import type { TooltipBinding, TooltipModifiers } from './platform/directives/vTooltip.ts';
 import type { WheelScrollBinding, WheelScrollModifiers } from './platform/directives/vWheelScroll.ts';
 
@@ -97,7 +97,7 @@ declare module '@vue/runtime-core' {
     vTooltip: TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
     vWheelScroll: TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
     vFocus: TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
-    vScrollCache: TypedDirective<HTMLElement, ScrollCacheBinding, string>;
+    vScrollIntoView: TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
     vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
     vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
@@ -115,8 +115,8 @@ declare module '@vue/runtime-core' {
     'v-focus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
     'vWave': TypedDirective<HTMLElement, WaveDirectiveValue, string>;
     'v-wave': TypedDirective<HTMLElement, WaveDirectiveValue, string>;
-    'vScrollCache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
-    'v-scroll-cache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
+    'vScrollIntoView': TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
+    'v-scroll-into-view': TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
     'vGridNav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     'vMarquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
@@ -135,7 +135,7 @@ declare module 'vue' {
     vTooltip: TypedDirective<HTMLElement, TooltipBinding, TooltipModifiers>;
     vWheelScroll: TypedDirective<HTMLElement, WheelScrollBinding, WheelScrollModifiers>;
     vFocus: TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
-    vScrollCache: TypedDirective<HTMLElement, ScrollCacheBinding, string>;
+    vScrollIntoView: TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
     vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
     vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
@@ -153,8 +153,8 @@ declare module 'vue' {
     'v-focus': TypedDirective<HTMLElement, FocusBinding, FocusModifiers>;
     'vWave': TypedDirective<HTMLElement, WaveDirectiveValue, string>;
     'v-wave': TypedDirective<HTMLElement, WaveDirectiveValue, string>;
-    'vScrollCache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
-    'v-scroll-cache': TypedDirective<HTMLElement, ScrollCacheBinding, string>;
+    'vScrollIntoView': TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
+    'v-scroll-into-view': TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
     'vGridNav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     'vMarquee': TypedDirective<HTMLElement, MarqueeBinding, string>;

@@ -4,9 +4,14 @@ import { useStorage } from '@vueuse/core';
 
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
-export type WorkbenchPanelId = 'analysis' | 'export' | 'settings';
+export type WorkbenchPanelId = 'analysis' | 'variants' | 'export' | 'settings';
 
-export const DEFAULT_WORKBENCH_PANEL_ORDER: readonly WorkbenchPanelId[] = ['analysis', 'export', 'settings'] as const;
+export const DEFAULT_WORKBENCH_PANEL_ORDER: readonly WorkbenchPanelId[] = [
+  'variants',
+  'analysis',
+  'export',
+  'settings',
+] as const;
 
 /**
  * 校验并清洗工作台面板顺序：保证所有默认面板存在、无未知项且不重复

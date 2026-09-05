@@ -536,6 +536,34 @@ export const useSongStore = defineStore('song', () => {
     });
   };
 
+  /**
+   * 和弦合并重定向：把全部歌曲中绑定在「被丢弃重复项」上的槽位改绑到「保留项」。
+   * 与 unbindChordIds（删除后解绑）不同，合并不丢失引用，仅做 id 重映射。
+   * @returns 发生重定向的槽位数量（用于提示）。
+   */
+  const remapChordBindings = (mapping: Map<string, string>): number => {
+    if (mapping.size === 0) return 0;
+    let remappedCount = 0;
+    songs.value.forEach(song => {
+      let hasChanged = false;
+      for (const [key, boundChordId] of song.chordMap) {
+        const newChordId = mapping.get(boundChordId) as ChordId | undefined;
+        if (newChordId !== undefined && newChordId !== boundChordId) {
+          song.chordMap.set(key, newChordId);
+          hasChanged = true;
+          remappedCount++;
+        }
+      }
+      if (hasChanged) {
+        song.chordMap = new Map(song.chordMap);
+        song.version = (song.version ?? 1) + 1;
+        song.updatedAt = Date.now();
+        markSongDirty(song.id);
+      }
+    });
+    return remappedCount;
+  };
+
   return {
     songs,
     songSortMethod,
@@ -553,6 +581,7 @@ export const useSongStore = defineStore('song', () => {
     reorderSongs,
     unbindChordIds,
     restoreChordBindings,
+    remapChordBindings,
     transposeSong,
     transposeSongCapo,
     flushSongsNow,

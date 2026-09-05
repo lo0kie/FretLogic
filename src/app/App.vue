@@ -15,11 +15,11 @@
           class="duration-slow ease-sidebar absolute inset-0 box-border transition-[padding-left]"
         >
           <RouterView #="{ Component, route }">
-            <KeepAlive>
-              <Transition mode="out-in" name="v-transition-fade">
+            <Transition mode="out-in" name="v-transition-fade">
+              <KeepAlive :max="12">
                 <component :is="Component" :key="route.name || route.path" />
-              </Transition>
-            </KeepAlive>
+              </KeepAlive>
+            </Transition>
           </RouterView>
         </div>
       </main>

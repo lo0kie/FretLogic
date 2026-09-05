@@ -107,11 +107,11 @@
       />
 
       <ActionButton
-        v-tooltip.interactive="buildInfoTooltip"
-        :icon-stroke-width="2.5"
+        v-tooltip.interactive="buildRepoTooltip"
+        @click="openSourceRepository"
         icon-only
-        aria-label="构建信息"
-        icon="info"
+        aria-label="GitHub 仓库与构建信息"
+        icon="github"
         icon-size="xl"
         variant="ghost"
       />
@@ -163,6 +163,22 @@
     </div>
   </BaseModal>
 
+  <BaseModal
+    v-model:visible="isLyricsImportConfirmOpen"
+    @confirm="handleConfirmLyricsImport"
+    cancel-text="取消"
+    confirm-text="仍要导入"
+    title="导入确认"
+    width="w-80"
+  >
+    <div class="py-xs">
+      <p class="text-text-body m-0 text-xs leading-relaxed">
+        这段文字未包含可识别的和弦或标题结构，确定仍按
+        <strong class="text-text-title">纯歌词</strong>新建乐谱吗？
+      </p>
+    </div>
+  </BaseModal>
+
   <SyncModalContainer v-model:is-sync-modal-open="isSyncModalOpen" />
 </template>
 
@@ -178,7 +194,8 @@ import { getChordName } from '@/domains/chord/theory/theory';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { prepareWorkerExportPayload, runWorkerExport } from '@/domains/score/preview/services/workerExportService';
-import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
+import type { PortableSong } from '@/domains/score/transfer/textCodec';
+import { useTextTransfer, type PasteSongOutcome } from '@/domains/score/transfer/useTextTransfer';
 import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { globalDarkMode, setThemeMode, themePreference } from '@/platform/store/globalState';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -207,7 +224,12 @@ const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 const { isPlaying, playCurrentChord } = useAudioPlayer();
 const { chordsLookupMap } = useScoreLinesData();
-const { copyChordText, pasteChordFromClipboard, copySongText, pasteSongFromClipboard } = useTextTransfer();
+const { copyChordText, pasteChordFromClipboard, copySongText, pasteSongFromClipboard, importPortableSong } =
+  useTextTransfer();
+
+/** 无结构纯歌词「确认兜底」：待确认的载荷 + 确认弹窗开关 */
+const pendingLyricsImport = ref<PortableSong | null>(null);
+const isLyricsImportConfirmOpen = ref(false);
 
 /** 复制/粘贴按钮配置项：由 transferButtons 统一描述，供模板 v-for 渲染 */
 interface TransferButton {
@@ -239,8 +261,27 @@ const handlePasteChord = () => withTransferLock(pasteChordFromClipboard);
 /** 乐谱：复制当前乐谱文字到剪贴板 */
 const handleCopySong = () => withTransferLock(() => copySongText(scoreEditor.activeSong));
 
-/** 乐谱：从剪贴板文字导入（始终新建一首乐谱） */
-const handlePasteSong = () => withTransferLock(pasteSongFromClipboard);
+/** 乐谱：从剪贴板文字导入（始终新建一首乐谱）；无结构纯歌词先弹「确认兜底」交给用户决定 */
+const handlePasteSong = () =>
+  withTransferLock(async () => {
+    const outcome: PasteSongOutcome = await pasteSongFromClipboard();
+    if (outcome.status !== 'needsConfirm') return;
+    pendingLyricsImport.value = outcome.portable;
+    isLyricsImportConfirmOpen.value = true;
+  });
+
+/** 用户确认「仍按纯歌词导入」后落地建谱 */
+const handleConfirmLyricsImport = () => {
+  const portable = pendingLyricsImport.value;
+  if (portable) importPortableSong(portable);
+  isLyricsImportConfirmOpen.value = false;
+  pendingLyricsImport.value = null;
+};
+
+/** 打开开源仓库主页（GitHub），使用 noopener 安全新标签页 */
+const openSourceRepository = () => {
+  window.open('https://github.com/lo0kie/FretLogic', '_blank', 'noopener,noreferrer');
+};
 
 /** 复制/粘贴按钮配置：和弦页与乐谱页共用，按当前路由分派动作、文案与禁用态 */
 const transferButtons = computed<TransferButton[]>(() => {
@@ -470,7 +511,7 @@ const handleScoreExport = async (op: 'copy' | 'download') => {
       'normal',
       settingsStore.scoreChordShorthand
     );
-    const blobs = await runWorkerExport(payload);
+    const { blobs } = await runWorkerExport(payload);
     if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
 
     if (op === 'copy') {
@@ -516,8 +557,9 @@ const isSyncModalOpen = ref(false);
 const NO_DRAG_REGION_CLASS =
   '@media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag]';
 const SyncModalContainer = defineAsyncComponent(() => import('@/app/modals/SyncModalContainer.vue'));
-const buildInfoTooltip = computed(() => {
+/** GitHub 按钮 tooltip：构建信息 + 点击跳转仓库提示（交互式，可承载多行文本） */
+const buildRepoTooltip = computed(() => {
   const builtAt = new Date(__BUILD_INFO__.time).toLocaleString('zh-CN', { hour12: false });
-  return `Fret Logic\n版本：${__BUILD_INFO__.commit}\n构建时间：${builtAt}`;
+  return `Fret Logic\n版本：${__BUILD_INFO__.commit}\n构建时间：${builtAt}\n点击在 GitHub 查看项目源码`;
 });
 </script>

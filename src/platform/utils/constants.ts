@@ -119,6 +119,8 @@ export const STORAGE_KEYS = {
   WORKBENCH_SETTINGS_COLLAPSED: 'CHORD_LAB_WORKBENCH_SETTINGS_COLLAPSED_V1',
   /** 工作台：导出面板是否收起折叠（持久化） */
   WORKBENCH_EXPORT_COLLAPSED: 'CHORD_LAB_WORKBENCH_EXPORT_COLLAPSED_V1',
+  /** 工作台：多指法变体面板是否收起折叠（持久化） */
+  WORKBENCH_VARIANTS_COLLAPSED: 'CHORD_LAB_WORKBENCH_VARIANTS_COLLAPSED_V1',
   /** 工作台：导出面板背景模式（transparent / white / dark） */
   WORKBENCH_EXPORT_BG: 'CHORD_LAB_WORKBENCH_EXPORT_BG_V1',
   /** 工作台：右侧卡片列面板排序顺序（持久化） */
@@ -174,11 +176,6 @@ export const TOOLTIP_HIDE_CLEANUP_DELAY_MS = 180;
  * 因此离开触发元素时不能瞬时收起，必须留出一个时间窗；缺省 hideDelay 时取此值。
  */
 export const TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS = 200;
-
-/** 滚动位置恢复动画：最长恢复时长（ms，v-scroll-cache 使用） */
-export const SCROLL_RESTORE_MAX_DURATION_MS = 1200;
-/** 滚动位置恢复动画：额外缓冲（ms，防止 resize 观察器回调在超时前未触发） */
-export const SCROLL_RESTORE_BUFFER_MS = 200;
 
 /** 跑马灯 continuous 模式：最小单程时长（ms） */
 export const MARQUEE_MIN_DURATION_CONTINUOUS_MS = 800;

@@ -179,14 +179,17 @@ const trackRef = useTemplateRef<HTMLElement>('trackRef');
 const thumbRef = useTemplateRef<HTMLElement>('thumbRef');
 
 const isDragging = ref(false);
-const dragStartX = ref(0);
-const dragCurrentX = ref(0);
-const startValue = ref(false);
-const maxTravelDistance = ref(16);
-const hasMovedSignificantly = ref(false);
-const isPending = ref(false);
 const isPressed = ref(false);
-const pressBasePos = ref(0);
+const isPending = ref(false);
+const dragOffset = ref(0);
+
+// 手势生命周期中间变量：仅在 pointerdown -> pointerup 期间通过局部状态追踪，无需全局响应式追踪
+let dragStartX = 0;
+let startValue = false;
+let maxTravelDistance = 16;
+let pressBasePos = 0;
+let hasMovedSignificantly = false;
+
 const isCurrentLoading = computed(() => props.loading || loadingModel.value || isPending.value);
 
 const isChecked = computed(() => Object.is(modelValue.value, resolvedActiveValue.value));
@@ -195,10 +198,9 @@ const currentConfig = computed(() => SWITCH_CONFIG[props.size] ?? SWITCH_CONFIG.
 
 const isDragPastHalf = computed(() => {
   if (!isDragging.value) return null;
-  const deltaX = dragCurrentX.value - dragStartX.value;
-  const initialPos = startValue.value ? maxTravelDistance.value : 0;
-  const clampedX = Math.min(Math.max(0, initialPos + deltaX), maxTravelDistance.value);
-  return clampedX >= maxTravelDistance.value * 0.5;
+  const initialPos = startValue ? maxTravelDistance : 0;
+  const clampedX = Math.min(Math.max(0, initialPos + dragOffset.value), maxTravelDistance);
+  return clampedX >= maxTravelDistance * 0.5;
 });
 
 const trackColorClass = computed(() => {
@@ -233,8 +235,8 @@ const toggle = async () => {
 
 /** 点击切换：刚拖拽过则吞掉本次 click（拖拽结果已在 pointerup 按落点结算） */
 const handleClick = () => {
-  if (hasMovedSignificantly.value) {
-    hasMovedSignificantly.value = false;
+  if (hasMovedSignificantly) {
+    hasMovedSignificantly = false;
     return;
   }
   toggle();
@@ -249,17 +251,16 @@ const handlePointerDown = (e: PointerEvent) => {
     const padLeft = parseFloat(style.paddingLeft) || 0;
     const padRight = parseFloat(style.paddingRight) || 0;
     const calculatedTravel = trackRef.value.clientWidth - thumbRef.value.offsetWidth - (padLeft + padRight);
-    maxTravelDistance.value = Math.max(0, calculatedTravel);
+    maxTravelDistance = Math.max(0, calculatedTravel);
   } else {
-    maxTravelDistance.value = currentConfig.value.travelPx;
+    maxTravelDistance = currentConfig.value.travelPx;
   }
 
-  pressBasePos.value = isChecked.value ? maxTravelDistance.value : 0;
-
-  dragStartX.value = e.clientX;
-  dragCurrentX.value = e.clientX;
-  startValue.value = isChecked.value;
-  hasMovedSignificantly.value = false;
+  pressBasePos = isChecked.value ? maxTravelDistance : 0;
+  dragStartX = e.clientX;
+  dragOffset.value = 0;
+  startValue = isChecked.value;
+  hasMovedSignificantly = false;
   isPressed.value = true;
   (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
 };
@@ -267,21 +268,27 @@ const handlePointerDown = (e: PointerEvent) => {
 /** 拖拽中：跟踪横向位移，超过阈值进入拖拽态 */
 const handlePointerMove = (e: PointerEvent) => {
   if (e.buttons === 0) {
-    if (isDragging.value) isDragging.value = false;
+    if (isDragging.value) {
+      isDragging.value = false;
+      dragOffset.value = 0;
+    }
     return;
   }
-  dragCurrentX.value = e.clientX;
-  if (!isDragging.value && Math.abs(dragCurrentX.value - dragStartX.value) > 4) {
+  const deltaX = e.clientX - dragStartX;
+  dragOffset.value = deltaX;
+  if (!isDragging.value && Math.abs(deltaX) > 4) {
     isDragging.value = true;
-    hasMovedSignificantly.value = true;
+    hasMovedSignificantly = true;
   }
 };
 
 /** 松开：按落点是否过半结算开关值（同样走 beforeChange 拦截） */
 const handlePointerUp = async (e: PointerEvent) => {
   const wasDragging = isDragging.value;
+  const deltaX = dragOffset.value;
   isDragging.value = false;
   isPressed.value = false;
+  dragOffset.value = 0;
 
   try {
     (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);
@@ -289,12 +296,10 @@ const handlePointerUp = async (e: PointerEvent) => {
     // ignore
   }
 
-  const deltaX = dragCurrentX.value - dragStartX.value;
-
-  if (wasDragging && hasMovedSignificantly.value) {
-    const initialPos = startValue.value ? maxTravelDistance.value : 0;
-    const targetPos = Math.min(Math.max(0, initialPos + deltaX), maxTravelDistance.value);
-    const finalChecked = targetPos >= maxTravelDistance.value * 0.5;
+  if (wasDragging && hasMovedSignificantly) {
+    const initialPos = startValue ? maxTravelDistance : 0;
+    const targetPos = Math.min(Math.max(0, initialPos + deltaX), maxTravelDistance);
+    const finalChecked = targetPos >= maxTravelDistance * 0.5;
 
     if (finalChecked !== isChecked.value) {
       const nextVal = finalChecked ? resolvedActiveValue.value : resolvedInactiveValue.value;
@@ -321,6 +326,7 @@ const handlePointerUp = async (e: PointerEvent) => {
 const handlePointerCancel = (e: PointerEvent) => {
   isDragging.value = false;
   isPressed.value = false;
+  dragOffset.value = 0;
   try {
     (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);
   } catch {
@@ -331,19 +337,19 @@ const handlePointerCancel = (e: PointerEvent) => {
 const THUMB_PX: Record<'sm' | 'md' | 'lg', number> = { sm: 12, md: 16, lg: 20 };
 
 const dragThumbStyle = computed(() => {
-  if (isDragging.value && hasMovedSignificantly.value) {
-    const deltaX = dragCurrentX.value - dragStartX.value;
-    const initialPos = pressBasePos.value;
-    const clampedX = Math.min(Math.max(0, initialPos + deltaX), maxTravelDistance.value);
+  if (isDragging.value) {
+    const deltaX = dragOffset.value;
+    const initialPos = pressBasePos;
+    const clampedX = Math.min(Math.max(0, initialPos + deltaX), maxTravelDistance);
 
     const dir = deltaX >= 0 ? 1 : -1;
-    const travelRatio = maxTravelDistance.value > 0 ? Math.min(Math.abs(deltaX) / maxTravelDistance.value, 1) : 0;
+    const travelRatio = maxTravelDistance > 0 ? Math.min(Math.abs(deltaX) / maxTravelDistance, 1) : 0;
 
     const thumbSize = THUMB_PX[props.size] ?? 16;
     const desiredStretch = 1 + travelRatio * 0.18;
     const desiredSqueeze = 1 - travelRatio * 0.08;
 
-    const remainingSpace = dir > 0 ? maxTravelDistance.value - clampedX : clampedX;
+    const remainingSpace = dir > 0 ? maxTravelDistance - clampedX : clampedX;
     const maxAllowedStretch = thumbSize > 0 ? 1 + Math.max(0, remainingSpace) / thumbSize : desiredStretch;
 
     const stretch = Math.min(desiredStretch, maxAllowedStretch);

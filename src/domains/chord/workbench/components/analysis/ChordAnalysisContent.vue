@@ -1,9 +1,6 @@
 <template>
   <div class="box-border flex min-h-0 w-full flex-row items-stretch gap-2 overflow-hidden">
-    <div class="flex min-w-0 flex-[0_0_55%] flex-col gap-1">
-      <div class="text-2xs text-text-disabled px-0.5 font-bold tracking-wider whitespace-nowrap select-none">
-        推荐候选
-      </div>
+    <div class="flex min-w-0 flex-[0_0_58%] flex-col gap-1">
       <div v-grid-nav v-wheel-scroll.smooth class="no-scrollbar flex min-h-0 flex-wrap gap-1 overflow-y-auto p-1">
         <template v-if="candidates.length > 0">
           <BaseBadge
@@ -25,9 +22,6 @@
     <div class="bg-border-light my-0 h-auto w-px shrink-0 self-stretch" />
 
     <div class="flex min-w-0 flex-1 flex-col gap-1">
-      <div class="text-2xs text-text-disabled px-0.5 font-bold tracking-wider whitespace-nowrap select-none">
-        构成音
-      </div>
       <div v-wheel-scroll.smooth class="no-scrollbar flex min-h-0 flex-col gap-1 overflow-y-auto p-0.5">
         <div
           v-wave

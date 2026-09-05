@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     v-model:visible="visibleModel"
-    :show-footer="true"
+    show-footer
     class="chord-picker-modal"
     height="h-full"
     title="选择要绑定的和弦"

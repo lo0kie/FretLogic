@@ -162,7 +162,43 @@ let boxZOwned = false;
 
 const isClient = typeof document !== 'undefined';
 
-/** 惰性创建全局单例 tooltip DOM（box > content + arrow），并注册全局滚动隐藏与交互式悬停监听。 */
+let isScrollListening = false;
+const onScrollCapture = () => {
+  if (currentTargetEl) hideTooltip(currentTargetEl, true);
+};
+
+const startScrollListening = () => {
+  if (!isScrollListening && isClient) {
+    window.addEventListener('scroll', onScrollCapture, true);
+    isScrollListening = true;
+  }
+};
+
+const stopScrollListening = () => {
+  if (isScrollListening && isClient) {
+    window.removeEventListener('scroll', onScrollCapture, true);
+    isScrollListening = false;
+  }
+};
+
+/** 销毁全局单例 tooltip DOM 与关联监听器（用于应用卸载、微前端或测试环境清理）。 */
+export const destroyGlobalTooltip = () => {
+  clearTimers();
+  stopScrollListening();
+  cleanupAutoUpdate?.();
+  cleanupAutoUpdate = null;
+  releaseBoxZ();
+  if (globalBox && globalBox.parentElement) {
+    globalBox.parentElement.removeChild(globalBox);
+  }
+  globalBox = null;
+  globalContent = null;
+  globalArrow = null;
+  currentTargetEl = null;
+  appliedCustomClass = '';
+};
+
+/** 惰性创建全局单例 tooltip DOM（box > content + arrow），并注册交互式悬停监听。 */
 const getOrCreateGlobalBox = (): HTMLDivElement | null => {
   if (!isClient) return null;
   if (!globalBox) {
@@ -183,15 +219,6 @@ const getOrCreateGlobalBox = (): HTMLDivElement | null => {
     globalArrow.className = 'v-tooltip-arrow';
     globalArrow.style.cssText = 'position:absolute;z-index:2;width:8px;height:8px;pointer-events:none;display:none;';
     globalBox.appendChild(globalArrow);
-
-    // 任何容器滚动时立即隐藏：tooltip 是 fixed 定位，滚动会让它飘离锚点
-    window.addEventListener(
-      'scroll',
-      () => {
-        if (currentTargetEl) hideTooltip(currentTargetEl, true);
-      },
-      true
-    );
 
     // 交互式 tooltip：鼠标移入浮层本身时不收起，移出才收起
     globalBox.addEventListener('mouseenter', () => {
@@ -350,6 +377,7 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
 
     cleanupAutoUpdate?.();
     cleanupAutoUpdate = autoUpdate(el, box, () => updatePosition(el, opts));
+    startScrollListening();
   }
 };
 
@@ -397,7 +425,10 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
         setTimeout(() => {
           if (globalBox && globalBox.style.opacity === '0') {
             globalBox.style.visibility = 'hidden';
-            currentTargetEl = null;
+            if (currentTargetEl === el) {
+              currentTargetEl = null;
+              stopScrollListening();
+            }
           }
         }, TOOLTIP_HIDE_CLEANUP_DELAY_MS);
       }
@@ -415,6 +446,7 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
     cleanupAutoUpdate?.();
     cleanupAutoUpdate = null;
     currentTargetEl = null;
+    stopScrollListening();
   }
 };
 

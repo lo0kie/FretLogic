@@ -42,6 +42,11 @@ export interface PortableSong {
   slots: PortableSongSlot[];
 }
 
+/** 智能宽容导入结果：needsConfirm 标记「无结构信号纯歌词」，需用户确认后才建谱 */
+export interface SmartSongImport extends PortableSong {
+  needsConfirm: boolean;
+}
+
 const HEADER_CHORD = `${TEXT_FORMAT.CHORD} ${TEXT_FORMAT.VERSION}`;
 const HEADER_SONG = `${TEXT_FORMAT.SONG} ${TEXT_FORMAT.VERSION}`;
 
@@ -60,6 +65,39 @@ const classifyHeader = (header: string): 'UNKNOWN_FORMAT' | 'INVALID_HEADER' => 
  */
 const BRACKET_CHORD_REGEX = /\[([A-Ga-g][#b]?(?:[a-zA-Z0-9#b/()（）+ø°△\-^]){0,15})\]/gi;
 const DIRECTIVE_REGEX = /^\{([a-zA-Z]+)\s*:\s*(.*?)\}$/;
+
+/**
+ * 是否含可确证的乐谱结构信号：内嵌 [和弦] 标签（合法和弦名）、ChordPro 指令 {title}/{key}/{capo}、
+ * 或首行标题 歌名：xxx。仅凭语法结构判别，不依赖语义词表，避免「乱匹配」UI 装饰文本。
+ * 无此信号的纯散文文本只能走「确认兜底」路径。
+ */
+const hasScoreStructuralMarker = (text: string): boolean => {
+  let match: RegExpExecArray | null;
+  BRACKET_CHORD_REGEX.lastIndex = 0;
+  while ((match = BRACKET_CHORD_REGEX.exec(text)) !== null) {
+    if (isValidChordName(match[1]?.trim() ?? '')) return true;
+  }
+  const firstLine = text.trimStart().split('\n')[0]?.trim() ?? '';
+  if (DIRECTIVE_REGEX.test(firstLine)) return true;
+  return /^(?:歌名|曲名|Title)\s*[:：]/.test(firstLine);
+};
+
+/**
+ * 纯歌词兜底解析：文本无任何结构信号、但作为歌词内容足够，仅填充歌词（无和弦槽位）。
+ * 该载荷需用户在 UI 确认后才落地建谱，防止任意框选文本被静默吞入歌词。
+ */
+const parsePlainLyricsFromText = (text: string): PortableSong | null => {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const meaningfulLines = lines.filter(l => l.trim());
+  if (meaningfulLines.length < 2 || text.trim().length < 6) return null;
+  return {
+    title: '',
+    playKey: 'C',
+    capo: 0,
+    lyrics: lines.join('\n'),
+    slots: [],
+  };
+};
 
 const createFallbackPortableChord = (name: string): PortableChord => {
   const tuning = getDefaultTuningForStringCount(6);
@@ -213,16 +251,21 @@ export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord
 const SLOT_RE = /^(\d+):(char|start|end):(\d+):(.*)$/;
 
 /** 解析乐谱文字；返回 PortableSong 或错误分类（槽位越界/字段非法只跳过单条） */
-export const parseSongFromText = (text: string): TextParseResult<PortableSong> => {
+export const parseSongFromText = (text: string): TextParseResult<SmartSongImport> => {
   // 归一化 CRLF/CR 换行：Windows 剪贴板可能带 \r，导致段标记匹配失败
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
   const header = lines[0]?.trim() ?? '';
   if (header === HEADER_CHORD) return { ok: false, reason: 'WRONG_TYPE' };
 
   if (header !== HEADER_SONG) {
-    // 智能宽容解析：尝试从非 FLSONG 的普通歌词或带 [Chord] 文本导入
-    const smart = parseSmartSongFromText(text);
-    if (smart) return { ok: true, data: smart };
+    // 按结构信号分流：含内嵌和弦/指令/标题的可确证结构直接识别；纯散文走「确认兜底」
+    if (hasScoreStructuralMarker(text)) {
+      const structured = parseSmartSongFromText(text);
+      if (structured) return { ok: true, data: { ...structured, needsConfirm: false } };
+    } else {
+      const plain = parsePlainLyricsFromText(text);
+      if (plain) return { ok: true, data: { ...plain, needsConfirm: true } };
+    }
     return { ok: false, reason: classifyHeader(header) };
   }
 
@@ -312,6 +355,7 @@ export const parseSongFromText = (text: string): TextParseResult<PortableSong> =
       capo: clamp(Number.isFinite(capoNum) ? capoNum : 0, 0, 12) as Capo,
       lyrics,
       slots,
+      needsConfirm: false,
     },
   };
 };

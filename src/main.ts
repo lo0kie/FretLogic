@@ -19,7 +19,7 @@ import { vAutoWidth } from './platform/directives/vAutoWidth.ts';
 import { vFocus } from './platform/directives/vFocus.ts';
 import { vGridNav } from './platform/directives/vGridNav.ts';
 import { vMarquee } from './platform/directives/vMarquee.ts';
-import { vScrollCache } from './platform/directives/vScrollCache.ts';
+import { vScrollIntoView } from './platform/directives/vScrollIntoView.ts';
 import { vTooltip } from './platform/directives/vTooltip.ts';
 import { vWheelScroll } from './platform/directives/vWheelScroll.ts';
 
@@ -34,7 +34,7 @@ app.use(router);
 app.directive('tooltip', vTooltip);
 app.directive('wheel-scroll', vWheelScroll);
 app.directive('focus', vFocus);
-app.directive('scroll-cache', vScrollCache);
+app.directive('scroll-into-view', vScrollIntoView);
 app.directive('grid-nav', vGridNav);
 app.directive('marquee', vMarquee);
 app.directive('chord-name', vChordName);

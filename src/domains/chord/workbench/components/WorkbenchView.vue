@@ -70,6 +70,7 @@ import ChordAnalysisPanel from './analysis/ChordAnalysisPanel.vue';
 import WorkbenchExportPanel from './WorkbenchExportPanel.vue';
 import WorkbenchFloatingBar from './WorkbenchFloatingBar.vue';
 import WorkbenchSettingsPanel from './WorkbenchSettingsPanel.vue';
+import WorkbenchVariantsPanel from './WorkbenchVariantsPanel.vue';
 
 // 滚动边缘渐隐：未滚动时顶部 fade 隐藏（首卡完整可见），上滚后显示柔化切口；
 // 底部 fade 仅未滚到底时显示，滚到底隐藏（末卡不被遮挡）
@@ -78,6 +79,7 @@ const { atTop, atBottom, syncEdgeFades } = useScrollEdgeFades(scrollRef);
 
 const PANEL_COMPONENT_MAP: Record<WorkbenchPanelId, Component> = {
   analysis: ChordAnalysisPanel,
+  variants: WorkbenchVariantsPanel,
   export: WorkbenchExportPanel,
   settings: WorkbenchSettingsPanel,
 };

@@ -170,8 +170,8 @@ export const FRETBOARD_CANVAS_CONFIG = {
   CHORD_NAME_FONT_SIZE: 16,
   /** 升降号上标字号（px） */
   ACCIDENTAL_FONT_SIZE: 12,
-  /** 升降号上标垂直上移（px） */
-  ACCIDENTAL_SUPERSCRIPT_OFFSET: 5,
+  /** 升降号上标垂直上移（px，Canvas 坐标系向下为正，上标需为负数向上偏移） */
+  ACCIDENTAL_SUPERSCRIPT_OFFSET: -5,
   /** 变调夹品号字号（px） */
   CAPO_TEXT_FONT_SIZE: 8,
   /** 品号文字在指板左侧的 X 轴偏移（px） */
@@ -184,7 +184,7 @@ export const FRETBOARD_CANVAS_CONFIG = {
       SUB_TEXT: '#a1a1aa',
       DIVIDER: '#27272a',
       FB_LINE: '#52525b',
-      FB_NUT: '#e4e4e7',
+      FB_NUT: '#f4f4f5',
       FB_NOTE: '#f4f4f5',
       FB_OPEN: '#f4f4f5',
       FB_BARRE: '#f4f4f5',
@@ -196,7 +196,7 @@ export const FRETBOARD_CANVAS_CONFIG = {
       SUB_TEXT: '#71717a',
       DIVIDER: '#e4e4e7',
       FB_LINE: '#a1a1aa',
-      FB_NUT: '#27272a',
+      FB_NUT: '#18181b',
       FB_NOTE: '#18181b',
       FB_OPEN: '#18181b',
       FB_BARRE: '#18181b',

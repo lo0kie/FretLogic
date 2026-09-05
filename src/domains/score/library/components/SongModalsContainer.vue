@@ -18,6 +18,7 @@
           @enter="songModals.handleConfigSong"
           clearable
           placeholder="请输入名称"
+          width="lg"
         />
       </BaseFormRow>
 

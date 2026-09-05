@@ -4,7 +4,7 @@
  * 实现方式：在 `<html>` 上设置 `data-theme` 属性；dark 同时挂载 `.dark` class
  * （tokens.scss 的暗色选择器与组件中 `:is-dark-mode` 布尔判断均依赖）。
  */
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watchEffect } from 'vue';
 
 import { useMediaQuery } from '@vueuse/core';
 
@@ -37,56 +37,42 @@ function resolve(pref: ThemePreference): ThemeMode {
 
 /** 把主题应用到 <html>（data-theme + dark class）并记录生效主题 */
 function apply(mode: ThemeMode) {
+  activeTheme.value = mode;
+  if (typeof document === 'undefined') return;
   const root = document.documentElement;
   root.setAttribute('data-theme', mode);
   // tokens.scss 中暗色主题选择器为 `.dark`，与 data-theme="dark" 同步挂载
   root.classList.toggle('dark', mode === 'dark');
-  activeTheme.value = mode;
 }
 
 const preference = ref<ThemePreference>(readPreference());
 
-/** 按当前偏好重新应用主题 */
-function refresh() {
-  apply(resolve(preference.value));
-}
-
-watch(
-  () => preference.value,
-  () => {
-    refresh();
-    try {
-      localStorage.setItem(PREFERENCE_KEY, preference.value);
-    } catch {
-      /* 忽略写入失败 */
-    }
-  }
-);
-
-// 跟随系统自动切换（仅 auto 模式生效）
-watch(
-  () => prefersDark.value,
-  () => {
-    if (preference.value === 'auto') refresh();
-  }
-);
-
-/** 立即初始化（应用入口调用） */
-function initTheme() {
-  refresh();
-}
-
-const isDark = computed(() => activeTheme.value !== 'light');
-
-/** 设置偏好并立即生效，同时持久化到 localStorage */
-function setTheme(pref: ThemePreference) {
-  preference.value = pref;
+/**
+ * 统一响应偏好与系统明暗变化：
+ * - pref 为 auto 时，Vue 动态追踪 prefersDark 并自适应更新；
+ * - pref 为具体主题时短路求值，自动解除对 prefersDark 的依赖；
+ * - immediate 执行，初始化自动应用并完成 localStorage 同步。
+ */
+watchEffect(() => {
+  const pref = preference.value;
   apply(resolve(pref));
   try {
     localStorage.setItem(PREFERENCE_KEY, pref);
   } catch {
-    /* 忽略 */
+    /* 忽略写入失败 */
   }
+});
+
+/** 立即初始化（兼容保留供应用入口调用） */
+function initTheme() {
+  apply(resolve(preference.value));
+}
+
+const isDark = computed(() => activeTheme.value !== 'light');
+
+/** 设置偏好并立即生效（由 watchEffect 自动响应与持久化） */
+function setTheme(pref: ThemePreference) {
+  preference.value = pref;
 }
 
 /** 在 light/dark 间明暗切换（high-contrast 视为非 dark，切到 dark） */
