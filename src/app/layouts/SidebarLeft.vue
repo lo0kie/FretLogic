@@ -86,13 +86,10 @@
     <div
       class="left-group-list-container left-group-list relative box-border flex min-h-0 w-full flex-1 flex-col overflow-hidden"
     >
-      <div
-        v-scroll-cache="`sidebar-scroll:${route.path}`"
-        class="scroll-body no-scrollbar p-md box-border flex-1 overflow-y-auto"
-        ref="scrollRef"
-      >
-        <div v-if="route.path === '/workbench'" class="v-fade-in-quick min-w-0" key="workbench">
-          <LeftChordGroupSection
+      <div class="scroll-body no-scrollbar p-md box-border flex-1 overflow-y-auto" ref="scrollRef">
+        <KeepAlive :max="12">
+          <GroupSection
+            v-if="route.path === '/workbench'"
             :search-query
             @open-delete="groupModals.openDelete"
             @open-delete-variants="groupModals.openChordVariantsDelete"
@@ -100,12 +97,16 @@
             @open-references="groupModals.openChordReferences"
             @open-rename="groupModals.openRename"
             @open-sort="groupModals.openSort"
+            key="workbench"
           />
-        </div>
 
-        <div v-else-if="route.path === '/score'" class="v-fade-in-quick min-w-0" key="score">
-          <LeftSongListSection @open-clear="songModals.openClear" @open-config="songModals.openConfig" />
-        </div>
+          <SongSection
+            v-else-if="route.path === '/score'"
+            @open-clear="songModals.openClear"
+            @open-config="songModals.openConfig"
+            key="score"
+          />
+        </KeepAlive>
       </div>
 
       <!-- 顶部滚动渐隐：仅可上滚时显示，避免未滚动时遮挡首项 -->
@@ -125,7 +126,7 @@
     <div class="left-panel-footer p-md px-lg border-glass-border box-border w-full shrink-0 border-t">
       <input @change="handleFileChange" accept=".json" class="hidden-input hidden" ref="fileInputRef" type="file" />
 
-      <div class="footer-actions-row gap-sm box-border grid grid-cols-2 items-stretch">
+      <div class="footer-actions-row gap-md box-border grid grid-cols-2 items-stretch">
         <ActionButton @click="handleImportTrigger" icon="download" label="导入备份" width="100%" />
         <ActionButton @click="backupModals.openExport" icon="upload" label="导出备份" width="100%" />
       </div>
@@ -148,12 +149,12 @@ import ChordReferencesModal from '@/app/modals/ChordReferencesModal.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import ChordModalsContainer from '@/domains/chord/library/components/ChordModalsContainer.vue';
 import GroupModalsContainer from '@/domains/chord/library/components/GroupModalsContainer.vue';
-import LeftChordGroupSection from '@/domains/chord/library/components/GroupSection.vue';
+import GroupSection from '@/domains/chord/library/components/GroupSection.vue';
 import { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
 import { CHORD_REFERENCE_LOOKUP } from '@/domains/chord/library/injectionKeys';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import SongModalsContainer from '@/domains/score/library/components/SongModalsContainer.vue';
-import LeftSongListSection from '@/domains/score/library/components/SongSection.vue';
+import SongSection from '@/domains/score/library/components/SongSection.vue';
 import { useSongModals } from '@/domains/score/library/composables/useSongModals';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
@@ -180,10 +181,20 @@ const songStore = useSongStore();
 
 const { atTop, atBottom, syncEdgeFades } = useScrollEdgeFades(scrollRef);
 
+// 两个 section（KeepAlive）共用同一个滚动容器，滚动位置无法随组件 DOM 天然保持：
+// 按路由 key 手动缓存 scrollTop，切走时保存、切回时在内容重挂载后恢复
+const SCROLL_CACHE = new Map<string, number>();
+
 watch(
   () => route.path,
-  () => {
-    nextTick(syncEdgeFades);
+  (next, prev) => {
+    if (prev) SCROLL_CACHE.set(prev, scrollRef.value?.scrollTop ?? 0);
+    nextTick(() => {
+      const el = scrollRef.value;
+      if (!el) return;
+      el.scrollTop = SCROLL_CACHE.get(next) ?? 0;
+      syncEdgeFades();
+    });
   }
 );
 

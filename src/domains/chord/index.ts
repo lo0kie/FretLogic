@@ -9,6 +9,7 @@ export { default as WorkbenchView } from './workbench/components/WorkbenchView.v
 export { default as WorkbenchFloatingBar } from './workbench/components/WorkbenchFloatingBar.vue';
 export { default as WorkbenchExportPanel } from './workbench/components/WorkbenchExportPanel.vue';
 export { default as WorkbenchSettingsPanel } from './workbench/components/WorkbenchSettingsPanel.vue';
+export { default as WorkbenchVariantsPanel } from './workbench/components/WorkbenchVariantsPanel.vue';
 export { default as WorkbenchPanel } from './workbench/components/WorkbenchPanel.vue';
 export { default as ChordAnalysisPanel } from './workbench/components/analysis/ChordAnalysisPanel.vue';
 export { default as ChordAnalysisContent } from './workbench/components/analysis/ChordAnalysisContent.vue';

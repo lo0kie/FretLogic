@@ -305,8 +305,11 @@ export const useChordStore = defineStore('chord', () => {
 
   // ---- 跨领域副作用事件：和弦被删除 / 撤销恢复时向外广播（由应用层桥接乐谱槽位解绑，避免 chord→score 反向依赖） ----
   type ChordIdsListener = (chordIds: string[]) => void;
+  /** 和弦合并事件参数：key 为被丢弃的重复和弦 id，value 为合并后保留的和弦 id */
+  type ChordsMergedListener = (mapping: Map<string, string>) => void;
   const chordsRemovedListeners: ChordIdsListener[] = [];
   const chordsRestoredListeners: ChordIdsListener[] = [];
+  const chordsMergedListeners: ChordsMergedListener[] = [];
 
   /** 订阅「和弦被删除」事件；返回取消订阅函数 */
   const onChordsRemoved = (cb: ChordIdsListener): (() => void) => {
@@ -334,6 +337,20 @@ export const useChordStore = defineStore('chord', () => {
   const emitChordsRestored = (chordIds: string[]) => {
     if (chordIds.length === 0) return;
     chordsRestoredListeners.forEach(cb => cb(chordIds));
+  };
+
+  /** 订阅「和弦被合并（重复项丢弃）」事件；返回取消订阅函数 */
+  const onChordsMerged = (cb: ChordsMergedListener): (() => void) => {
+    chordsMergedListeners.push(cb);
+    return () => {
+      const idx = chordsMergedListeners.indexOf(cb);
+      if (idx >= 0) chordsMergedListeners.splice(idx, 1);
+    };
+  };
+
+  const emitChordsMerged = (mapping: Map<string, string>) => {
+    if (mapping.size === 0) return;
+    chordsMergedListeners.forEach(cb => cb(mapping));
   };
 
   /** 删除分组及其名下全部和弦，并联动清除展开/选中状态（两者均写入 localStorage）。 */
@@ -385,17 +402,52 @@ export const useChordStore = defineStore('chord', () => {
     }
   };
 
-  /** 将源分组内某和弦名（含全部指法变体）整体移动到目标分组。 */
+  /**
+   * 将源分组内某和弦名（含全部指法变体）整体移动到目标分组。
+   * 移入后若目标分组已存在完全相同的和弦（指纹一致且横按一致），自动合并：
+   * 丢弃移入的重复项并广播合并映射，供乐谱侧把槽位引用重定向到保留项，避免产生死引用。
+   */
   const moveVariantsByName = (sourceGroupId: string, chordName: string, targetGroupId: string) => {
     if (!groups.value.some(g => g.id === targetGroupId)) return;
     const targetName = nameKeyOf(chordName);
     const now = Date.now();
+    const resolvedTargetGroupId = toGroupId(targetGroupId);
+    const movedIds = new Set(
+      savedChordsList.value.filter(c => c.groupId === sourceGroupId && nameKeyOf(c) === targetName).map(c => c.id)
+    );
+    if (movedIds.size === 0) return;
+
     savedChordsList.value = savedChordsList.value.map(c => {
-      if (c.groupId === sourceGroupId && nameKeyOf(c) === targetName) {
-        return { ...c, groupId: toGroupId(targetGroupId), updatedAt: now };
+      if (movedIds.has(c.id)) {
+        return { ...c, groupId: resolvedTargetGroupId, updatedAt: now };
       }
       return c;
     });
+
+    // 同名变体内两两比对：指纹一致且横按一致才视为"完全相同"（指纹不含 barres，需补充比对）
+    const sameNameVariants = savedChordsList.value.filter(
+      c => c.groupId === resolvedTargetGroupId && nameKeyOf(c) === targetName
+    );
+    const droppedIds = new Set<string>();
+    const mergeMapping = new Map<string, string>();
+    for (let i = 0; i < sameNameVariants.length; i++) {
+      const a = sameNameVariants[i]!;
+      if (droppedIds.has(a.id)) continue;
+      for (let j = i + 1; j < sameNameVariants.length; j++) {
+        const b = sameNameVariants[j]!;
+        if (droppedIds.has(b.id)) continue;
+        if (computeChordFingerprint(a) !== computeChordFingerprint(b)) continue;
+        if (!areBarresEqual(a.barres, b.barres)) continue;
+        // 优先保留目标分组原有项；两者同为移入项（源分组历史重复数据）时保留靠前者
+        const [drop, keep] = movedIds.has(a.id) && !movedIds.has(b.id) ? [a, b] : [b, a];
+        droppedIds.add(drop.id);
+        mergeMapping.set(drop.id, keep.id);
+      }
+    }
+    if (droppedIds.size === 0) return;
+
+    savedChordsList.value = savedChordsList.value.filter(c => !droppedIds.has(c.id));
+    emitChordsMerged(mergeMapping);
   };
 
   /**
@@ -551,6 +603,7 @@ export const useChordStore = defineStore('chord', () => {
     removeChords,
     onChordsRemoved,
     onChordsRestored,
+    onChordsMerged,
     buildChordForSave,
     replaceAllData,
   };

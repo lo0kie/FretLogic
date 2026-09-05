@@ -1,6 +1,5 @@
 <template>
   <div
-    v-scroll-cache="'score-interactive-scroll'"
     :style="{ '--score-font-scale': scoreEditor.effectiveFontScale }"
     class="no-scrollbar interactive-score-zone pt-xl pb-xl pl-xl max-md:pl-sm max-md:pt-sm relative box-border min-w-0 flex-1 overflow-x-auto overflow-y-auto pr-0 max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]"
     ref="scoreZoneRef"
@@ -167,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+import { onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
 
 import type { Chord } from '@/domains/chord/types';
 import type { DropZone } from '@/domains/score/editor/composables/lyrics-drag/dropZone';
@@ -296,12 +295,16 @@ watch(isDragging, dragging => {
     dragHintToastId = null;
   }
 });
-onBeforeUnmount(() => {
+
+const clearDragHintToast = () => {
   if (dragHintToastId !== null) {
     uiStore.removeToast(dragHintToastId);
     dragHintToastId = null;
   }
-});
+};
+
+onDeactivated(clearDragHintToast);
+onBeforeUnmount(clearDragHintToast);
 
 /** 用户点击槽位打开 picker：拖拽中或点击抑制期忽略，避免拖拽松手误触发 */
 const handleOpenPicker = (slotKey: SlotKey) => {

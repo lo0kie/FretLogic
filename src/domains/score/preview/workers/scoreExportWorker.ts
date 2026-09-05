@@ -43,7 +43,13 @@ export interface WorkerExportPayload {
 }
 
 export type WorkerExportMessage =
-  { type: 'progress'; percent: number } | { type: 'complete'; blobs: Blob[] } | { type: 'error'; message: string };
+  | { type: 'progress'; percent: number }
+  | {
+      type: 'complete';
+      blobs: Blob[];
+      /** a4 模式下每页覆盖的原始歌词行序号（升序去重），供外部按页重组内容；normal 模式为 undefined */ pageLineRanges?: number[][];
+    }
+  | { type: 'error'; message: string };
 
 /** 输出图固定编码质量（导出质量设置已移除，预览与后续入口统一使用） */
 const EXPORT_JPEG_QUALITY = 0.95;
@@ -613,6 +619,8 @@ if (typeof self !== 'undefined') {
 
       const colors = darkMode ? SCORE_EXPORT_CONFIG.THEME.DARK : SCORE_EXPORT_CONFIG.THEME.LIGHT;
       const blobs: Blob[] = [];
+      // a4 模式下每页覆盖的原始歌词行序号；normal 模式不产出
+      let pageLineRanges: number[][] | undefined;
 
       if (mode === 'a4') {
         // ===== A4 分页模式 =====
@@ -689,6 +697,13 @@ if (typeof self !== 'undefined') {
         if (curPageSegments.length > 0 || pages.length === 0) {
           pages.push(curPageSegments);
         }
+
+        // 每页覆盖的原始歌词行序号（升序去重）：装箱后按段的 lineIdx 归集，供外部按页重组内容
+        pageLineRanges = pages.map(pageSegments => {
+          const seen = new Set<number>();
+          for (const seg of pageSegments) seen.add(seg.lineIdx);
+          return [...seen].sort((a, b) => a - b);
+        });
 
         for (let pIdx = 0; pIdx < pages.length; pIdx++) {
           const pageSegments = pages[pIdx]!;
@@ -810,7 +825,7 @@ if (typeof self !== 'undefined') {
         self.postMessage({ type: 'progress', percent: 100 } as WorkerExportMessage);
       }
 
-      self.postMessage({ type: 'complete', blobs } as WorkerExportMessage);
+      self.postMessage({ type: 'complete', blobs, pageLineRanges } as WorkerExportMessage);
     } catch (err) {
       self.postMessage({
         type: 'error',

@@ -1,26 +1,48 @@
-import { computed, ref, type Ref } from 'vue';
+import { computed, toValue, type MaybeRefOrGetter } from 'vue';
 
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, getBoardWidth } from '../constants';
 
+export interface UseFretboardLayoutOptions {
+  scale?: MaybeRefOrGetter<number>;
+  extraTopHeight?: MaybeRefOrGetter<number>;
+  stringCount?: MaybeRefOrGetter<number>;
+}
+
 /** 指板几何布局：根据品位数/缩放/顶部附加高度/琴弦数量推导各尺寸 computed，供 SVG 渲染与坐标换算共用 */
 export function useFretboardLayout(
-  fretCount: Ref<number>,
-  scale: Ref<number>,
-  extraTopHeight?: Ref<number>,
-  stringCount: Ref<number> = ref(6)
+  fretCount: MaybeRefOrGetter<number>,
+  optionsOrScale?: MaybeRefOrGetter<number> | UseFretboardLayoutOptions,
+  extraTopHeightArg?: MaybeRefOrGetter<number>,
+  stringCountArg: MaybeRefOrGetter<number> = 6
 ) {
-  const boardWidth = computed(() => getBoardWidth(stringCount.value));
+  let scale: MaybeRefOrGetter<number> = 1;
+  let extraTopHeight: MaybeRefOrGetter<number> = 0;
+  let stringCount: MaybeRefOrGetter<number> = stringCountArg;
+
+  if (optionsOrScale != null && typeof optionsOrScale === 'object' && !('value' in optionsOrScale)) {
+    if (optionsOrScale.scale !== undefined) scale = optionsOrScale.scale;
+    if (optionsOrScale.extraTopHeight !== undefined) extraTopHeight = optionsOrScale.extraTopHeight;
+    if (optionsOrScale.stringCount !== undefined) stringCount = optionsOrScale.stringCount;
+  } else if (optionsOrScale !== undefined) {
+    scale = optionsOrScale as MaybeRefOrGetter<number>;
+    if (extraTopHeightArg !== undefined) extraTopHeight = extraTopHeightArg;
+  }
+
+  const boardWidth = computed(() => getBoardWidth(toValue(stringCount)));
   const stringXPositions = computed(() =>
-    Array.from({ length: stringCount.value }, (_, i) => CANVAS_CONFIG.OFFSET_X_LEFT + i * CANVAS_CONFIG.STRING_SPACING)
+    Array.from(
+      { length: toValue(stringCount) },
+      (_, i) => CANVAS_CONFIG.OFFSET_X_LEFT + i * CANVAS_CONFIG.STRING_SPACING
+    )
   );
   const activeTopOffset = computed(() => CANVAS_CONFIG.OFFSET_Y_TOP);
   /** 指板 SVG 实际起始位置：和弦名区 + 空弦区 */
-  const contentTopOffset = computed(() => (extraTopHeight?.value ?? 0) + activeTopOffset.value);
+  const contentTopOffset = computed(() => toValue(extraTopHeight) + activeTopOffset.value);
 
   const rawHeight = computed(
-    () => contentTopOffset.value + fretCount.value * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
+    () => contentTopOffset.value + toValue(fretCount) * CANVAS_CONFIG.FRET_HEIGHT + CANVAS_CONFIG.OFFSET_Y_BOTTOM
   );
-  const fretboardScale = computed(() => (FRETBOARD_SCALE_MAP[fretCount.value] ?? 1.0) * scale.value);
+  const fretboardScale = computed(() => (FRETBOARD_SCALE_MAP[toValue(fretCount)] ?? 1.0) * toValue(scale));
   const realScaledWidth = computed(() => boardWidth.value * fretboardScale.value);
   const realScaledHeight = computed(() => rawHeight.value * fretboardScale.value);
 

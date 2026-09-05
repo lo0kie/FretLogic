@@ -22,4 +22,9 @@ export function setupChordScoreBridge(): void {
     songStore.restoreChordBindings(lastUnboundBindings);
     lastUnboundBindings = [];
   });
+
+  /** 和弦合并（移动时去重）：被丢弃的重复项引用重定向到保留项，避免槽位死引用 */
+  chordStore.onChordsMerged(mapping => {
+    songStore.remapChordBindings(mapping);
+  });
 }

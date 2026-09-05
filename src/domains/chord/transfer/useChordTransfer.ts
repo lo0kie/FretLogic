@@ -33,11 +33,11 @@ export const buildDraftChordFromPortable = (p: PortableChord): Chord =>
 export const pasteErrorToast = (reason: TextParseReason, target: '和弦' | '乐谱') => {
   const uiStore = useUiStore();
   if (reason === 'UNKNOWN_FORMAT') {
-    uiStore.toast.warning('剪贴板内容不是 Fret Logic 可识别的格式');
+    uiStore.toast.warning('无法识别的格式');
   } else if (reason === 'WRONG_TYPE') {
-    uiStore.toast.warning(target === '和弦' ? '这是乐谱文本，请到乐谱页粘贴' : '这是和弦文本，请到和弦页粘贴');
+    uiStore.toast.warning(target === '和弦' ? '请到乐谱页粘贴' : '请到和弦页粘贴');
   } else if (reason === 'INVALID_HEADER') {
-    uiStore.toast.warning('文字格式版本不匹配，请用相同版本的应用生成');
+    uiStore.toast.warning('文字格式版本不匹配');
   } else if (reason === 'INVALID_NAME') {
     uiStore.toast.warning('文字中包含无法解析的和弦名');
   } else {

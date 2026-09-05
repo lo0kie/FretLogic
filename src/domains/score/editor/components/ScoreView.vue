@@ -4,31 +4,33 @@
       class="score-main-content bg-bg-main relative box-border flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
     >
       <Transition mode="out-in" name="v-transition-fade">
-        <EmptyState
-          v-if="!scoreEditor.activeSong"
-          description="请在左侧侧边栏选择或新建一份乐谱"
-          icon="music"
-          key="empty"
-          size="lg"
-          title="未选择乐谱"
-        />
+        <KeepAlive :max="12">
+          <EmptyState
+            v-if="!scoreEditor.activeSong"
+            description="请在左侧侧边栏选择或新建一份乐谱"
+            icon="music"
+            key="empty"
+            size="lg"
+            title="未选择乐谱"
+          />
 
-        <ScoreLyricsEditor
-          v-else-if="scoreEditor.activeTab === 'edit'"
-          :key="`lyrics-editor-${scoreEditor.activeSong.id}`"
-        />
+          <ScoreLyricsEditor
+            v-else-if="scoreEditor.activeTab === 'edit'"
+            :key="`lyrics-editor-${scoreEditor.activeSong.id}`"
+          />
 
-        <ScoreInteractiveArea
-          v-else-if="scoreEditor.activeTab === 'interactive'"
-          :key="`interactive-area-${scoreEditor.activeSong.id}`"
-          @open-picker="openChordPicker"
-          ref="interactiveAreaRef"
-        />
+          <ScoreInteractiveArea
+            v-else-if="scoreEditor.activeTab === 'interactive'"
+            :key="`interactive-area-${scoreEditor.activeSong.id}`"
+            @open-picker="openChordPicker"
+            ref="interactiveAreaRef"
+          />
 
-        <ScorePreviewPane
-          v-else-if="scoreEditor.activeTab === 'preview'"
-          :key="`score-preview-${scoreEditor.activeSong.id}`"
-        />
+          <ScorePreviewPane
+            v-else-if="scoreEditor.activeTab === 'preview'"
+            :key="`score-preview-${scoreEditor.activeSong.id}`"
+          />
+        </KeepAlive>
       </Transition>
     </div>
 

@@ -74,7 +74,13 @@
           tabindex="0"
         >
           <div class="p-xs pointer-events-none box-border flex w-full items-center justify-center">
-            <FretboardCanvas :chord="variant" :chord-name-scale="0.7" :is-dark-mode="globalDarkMode" :scale="1.8" />
+            <FretboardCanvas
+              :chord="variant"
+              :chord-name-scale="0.8"
+              :is-dark-mode="globalDarkMode"
+              :scale="1.8"
+              :show-chord-name="false"
+            />
           </div>
         </div>
       </div>

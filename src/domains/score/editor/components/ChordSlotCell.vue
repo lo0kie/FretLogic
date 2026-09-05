@@ -18,7 +18,6 @@
         [FOCUS_RING_SHADOW_CLASS]: isFocused,
       },
     ]"
-    :data-focusable-inline="true"
     :data-slot-key="slotKey"
     :tabindex="0"
     :title="slotTitle"
@@ -31,6 +30,7 @@
     @keydown.space="handleKeydown"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
+    data-focusable-inline
     class="char-box group duration-fast hover:bg-tint-primary-88 [&.is-drop-target]:bg-tint-primary-85! relative box-border flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 transition-all outline-none [&.is-dragging-source]:!opacity-35"
     ref="charBoxRef"
     role="button"

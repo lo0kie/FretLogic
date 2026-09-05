@@ -1,6 +1,6 @@
 /**
  * 乐谱域文字传递服务：把乐谱复制为文字到剪贴板，或从剪贴板文字导入（始终新建一首乐谱）。
- * 文字中未入库的和弦自动生成并归入「{乐谱名}{时间戳}」分组。
+ * 文字中未入库的和弦自动生成并归入「{乐谱名}」分组。
  * 单和弦的复制/粘贴能力委托和弦域 useChordTransfer（编解码、剪贴板与 toast 收敛在 chord/transfer）。
  */
 import { useChordStore } from '@/domains/chord/store/chordStore';
@@ -26,7 +26,10 @@ import {
 import type { SlotKey, Song } from '@/domains/score/types';
 import { readTextFromClipboard, writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useUiStore } from '@/platform/store/uiStore';
-import { formatLocalTimestampForFile } from '@/platform/utils/common';
+
+/** 乐谱粘贴结果：imported 已建谱 | needsConfirm 无结构纯歌词需用户确认 | none 无操作（读取失败/无法识别） */
+export type PasteSongOutcome =
+  { status: 'imported' } | { status: 'needsConfirm'; portable: PortableSong } | { status: 'none' };
 
 export function useTextTransfer() {
   const chordStore = useChordStore();
@@ -89,7 +92,7 @@ export function useTextTransfer() {
     const newSong = songStore.createSong(title);
     const lines = lyrics.split('\n');
     const lineIds = matchLineIds([], lines, []);
-    const importGroupName = `${title}${formatLocalTimestampForFile()}`;
+    const importGroupName = title;
 
     const chordMap = new Map<SlotKey, ChordId>();
     let createdCount = 0;
@@ -111,25 +114,31 @@ export function useTextTransfer() {
 
     if (!lyrics) uiStore.toast.warning('导入的乐谱没有歌词内容');
     let msg = `已导入乐谱`;
-    if (createdCount > 0) msg += `，已自动生成 ${createdCount} 个新和弦，归入分组「${importGroupName}」`;
+    if (createdCount > 0) msg += `并创建 ${createdCount} 个和弦`;
     uiStore.toast.success(msg);
   };
 
-  /** 乐谱粘贴：解析文字并始终新建一首乐谱 */
-  const pasteSongFromClipboard = async (): Promise<void> => {
+  /**
+   * 乐谱粘贴：读取剪贴板并解析。含结构信号（内嵌和弦/指令/标题）直接建谱返回 imported；
+   * 无结构的纯歌词返回 needsConfirm，由调用方弹出确认后回调 importPortableSong 落地。
+   */
+  const pasteSongFromClipboard = async (): Promise<PasteSongOutcome> => {
     let text: string;
     try {
       text = await readTextFromClipboard();
     } catch (err) {
       uiStore.toast.error(err instanceof Error ? err.message : '读取剪贴板失败');
-      return;
+      return { status: 'none' };
     }
     const result = parseSongFromText(text);
     if (!result.ok) {
       pasteErrorToast(result.reason, '乐谱');
-      return;
+      return { status: 'none' };
     }
-    importPortableSong(result.data);
+    const { needsConfirm, ...portable } = result.data;
+    if (needsConfirm) return { status: 'needsConfirm', portable };
+    importPortableSong(portable);
+    return { status: 'imported' };
   };
 
   return {
@@ -138,5 +147,6 @@ export function useTextTransfer() {
     pasteChordFromClipboard,
     copySongText,
     pasteSongFromClipboard,
+    importPortableSong,
   };
 }

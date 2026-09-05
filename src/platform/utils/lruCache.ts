@@ -11,6 +11,7 @@ export interface LruCache<K, V> {
   get(key: K): V | undefined;
   set(key: K, value: V): void;
   has(key: K): boolean;
+  delete(key: K): boolean;
   clear(): void;
   readonly size: number;
 }
@@ -19,8 +20,23 @@ export interface LruCache<K, V> {
 export function createLruCache<V>(limit: number, options?: LruCacheOptions<string, V>): LruCache<string, V> {
   const map = new Map<string, V>();
   return {
-    get: key => map.get(key),
+    get: key => {
+      if (!map.has(key)) return undefined;
+      const val = map.get(key)!;
+      map.delete(key);
+      map.set(key, val);
+      return val;
+    },
     has: key => map.has(key),
+    delete: key => {
+      if (!map.has(key)) return false;
+      const val = map.get(key);
+      map.delete(key);
+      if (val !== undefined) {
+        options?.onEvict?.(key, val);
+      }
+      return true;
+    },
     set: (key, value) => {
       // 已存在则先删除再插入，刷新到最新位置（访问序 LRU 语义）
       if (map.has(key)) {

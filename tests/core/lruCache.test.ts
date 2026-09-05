@@ -91,4 +91,35 @@ describe('createLruCache', () => {
     cache.clear();
     expect(cache.size).toBe(0);
   });
+
+  it('调用 get 时应当刷新访问顺序（LRU 读语义）', () => {
+    const cache = createLruCache<string>(3);
+    cache.set('a', 'apple');
+    cache.set('b', 'banana');
+    cache.set('c', 'cherry');
+
+    // 读访问 a，使 a 成为最近使用，顺序变为 b, c, a
+    expect(cache.get('a')).toBe('apple');
+
+    // 写入 d，应当淘汰 b 而不是 a
+    cache.set('d', 'date');
+    expect(cache.has('b')).toBe(false);
+    expect(cache.has('a')).toBe(true);
+    expect(cache.has('c')).toBe(true);
+    expect(cache.has('d')).toBe(true);
+  });
+
+  it('调用 delete 时应当正常删除并触发 onEvict 回调', () => {
+    const onEvict = vi.fn();
+    const cache = createLruCache<number>(3, { onEvict });
+
+    cache.set('k1', 100);
+    expect(cache.delete('non_existent')).toBe(false);
+    expect(onEvict).not.toHaveBeenCalled();
+
+    expect(cache.delete('k1')).toBe(true);
+    expect(cache.has('k1')).toBe(false);
+    expect(cache.size).toBe(0);
+    expect(onEvict).toHaveBeenCalledWith('k1', 100);
+  });
 });

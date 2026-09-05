@@ -57,6 +57,7 @@ const normalize = (value: WheelScrollBinding, modifiers?: Record<string, boolean
 interface WheelScrollHandler {
   opts: WheelScrollOptions;
   onWheel: (e: WheelEvent) => void;
+  onPointerDown: () => void;
 }
 
 interface SmoothScrollState {
@@ -86,6 +87,9 @@ const performSmoothScroll = (el: HTMLElement, scrollAmount: number, maxScrollLef
   if (!state) {
     state = { target: el.scrollLeft, rafId: null };
     smoothStateMap.set(el, state);
+  } else if (state.rafId === null) {
+    // 若上一轮缓动已彻底停止，scrollLeft 可能已被外部点击或拖动改变，需以当前 DOM 实际位置重置基准
+    state.target = el.scrollLeft;
   }
 
   // 累加位移并限制在合法滚动区间
@@ -93,21 +97,32 @@ const performSmoothScroll = (el: HTMLElement, scrollAmount: number, maxScrollLef
 
   if (state.rafId !== null) return;
 
-  /** 单帧缓动循环：向目标位置 lerp 逼近，差值小于 0.5px 时收尾停止。 */
+  /** 单帧缓动循环：向目标位置 lerp 逼近，差值 ≤1px 或位移停滞时立即收尾停止。 */
   const animate = () => {
     if (!state) return;
     const current = el.scrollLeft;
     const diff = state.target - current;
 
-    if (Math.abs(diff) < 0.5) {
+    // 当差值小于等于 1px 时直接就位并结束 rAF，防止 DOM 整数像素截断导致差值停在 2~4px 陷入无限死循环
+    if (Math.abs(diff) <= 1) {
       el.scrollLeft = state.target;
       state.rafId = null;
       onProgress?.();
       return;
     }
 
-    // 0.2 缓动系数，带来轻快丝滑的惯性减速感
-    el.scrollLeft = current + diff * 0.2;
+    // 保证单帧步长在整数像素级别至少有 1px 变化，避免子像素被浏览器截断舍弃
+    const rawStep = diff * 0.2;
+    const step = Math.abs(rawStep) < 1 ? Math.sign(rawStep) : rawStep;
+    el.scrollLeft = current + step;
+
+    // 若受边界约束未能产生任何位移，立即停止防止死循环
+    if (el.scrollLeft === current) {
+      state.rafId = null;
+      onProgress?.();
+      return;
+    }
+
     onProgress?.();
     state.rafId = requestAnimationFrame(animate);
   };
@@ -121,6 +136,7 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
 
     const handler: WheelScrollHandler = {
       opts,
+      onPointerDown: () => cancelSmoothScroll(el),
       onWheel: (e: WheelEvent) => {
         if (handler.opts.disabled) return;
 
@@ -181,6 +197,7 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
 
     handlerMap.set(el, handler);
     el.addEventListener('wheel', handler.onWheel, { passive: false });
+    el.addEventListener('pointerdown', handler.onPointerDown, { passive: true });
   },
   updated(el, binding) {
     const handler = handlerMap.get(el);
@@ -193,6 +210,7 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
     const handler = handlerMap.get(el);
     if (handler) {
       el.removeEventListener('wheel', handler.onWheel);
+      el.removeEventListener('pointerdown', handler.onPointerDown);
       handlerMap.delete(el);
     }
   },

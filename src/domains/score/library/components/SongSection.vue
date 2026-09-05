@@ -12,13 +12,14 @@
       tag="div"
     >
       <div v-for="row in songRows" :key="row.key" class="box-border flex w-full flex-col">
-        <div v-if="row.type === 'group'" :aria-hidden="true" class="song-group-header px-sm pb-2xs">
+        <div v-if="row.type === 'group'" aria-hidden="true" class="song-group-header px-sm pb-2xs">
           <span class="text-text-disabled text-xs leading-none font-bold tracking-widest">{{ row.label }}</span>
         </div>
         <template v-else>
           <ContextMenu #="{ isOpen }" :items="getSongMenuItems(row.song!)">
             <div
               v-wave
+              v-scroll-into-view.y.once="isSongActive(row.song!.id)"
               :aria-label="songCardAriaLabel(row.song!)"
               :aria-pressed="isSongActive(row.song!.id)"
               :class="{
@@ -76,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import { useDraggable, type DraggableEvent } from 'vue-draggable-plus';
 
 import { computeSongKey } from '@/domains/chord/theory/theory';
@@ -102,19 +103,6 @@ const uiStore = useUiStore();
 const { copySongText } = useTextTransfer();
 
 const songListRef = useTemplateRef<HTMLElement>('songListRef');
-
-/** 滚动定位到活动乐谱卡片；block:'nearest' 使已在视窗内的项不产生滚动 */
-const scrollActiveSongIntoView = () => {
-  const id = scoreEditor.activeSongId;
-  if (!id) return;
-  const doScroll = () => {
-    const el = document.querySelector<HTMLElement>(`[data-song-id="${id}"]`);
-    el?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  };
-  nextTick(() => {
-    requestAnimationFrame(doScroll);
-  });
-};
 
 // 手动排序时启用拖拽（Sortable 直接操作 DOM，拖拽结束按索引重排后经 reorderSongs 持久化）；
 // 非手动排序时禁用，排序方法切换由 TransitionGroup 的 FLIP 动画呈现。
@@ -244,21 +232,6 @@ const handleSelectSong = (songId: string) => {
     }
   }
 };
-
-onMounted(() => {
-  // 首次挂载（含刷新恢复）时定位，并设置轻微延时重试以兜底首屏渲染与滚动恢复
-  scrollActiveSongIntoView();
-  setTimeout(scrollActiveSongIntoView, 120);
-});
-
-// 活动乐谱切换（非 null）时自动滚动定位到该项
-watch(
-  () => scoreEditor.activeSongId,
-  id => {
-    if (!id) return;
-    scrollActiveSongIntoView();
-  }
-);
 </script>
 
 <style lang="scss">

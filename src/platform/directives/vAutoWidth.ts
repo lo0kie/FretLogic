@@ -89,6 +89,16 @@ const handleResize: ResizeObserverCallback = entries => {
 
     const newWidth = entry.borderBoxSize?.[0]?.inlineSize ?? el.offsetWidth;
 
+    // 元素脱离文档（KeepAlive 摘除）或被隐藏时宽度上报为 0：
+    // 这不是内容宽度变化，清除基准与动画状态，避免恢复可见时回放「0 → 真实宽度」的生长动画
+    if (!el.isConnected || newWidth === 0) {
+      state.runningAnim?.cancel();
+      state.runningAnim = undefined;
+      state.pendingWidth = undefined;
+      state.lastWidth = undefined;
+      continue;
+    }
+
     // 动画进行中：此刻的布局宽度由动画驱动，仅记录最新目标，结算留给 onfinish
     if (state.runningAnim) {
       state.pendingWidth = newWidth;

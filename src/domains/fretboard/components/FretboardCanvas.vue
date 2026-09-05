@@ -13,7 +13,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } 
 
 import { getChordName } from '@/domains/chord/theory/theory';
 import type { Chord } from '@/domains/chord/types';
-import { renderFretboard } from '@/domains/fretboard/components/renderFretboardCanvas';
+import { computeFretboardLayout, renderFretboard } from '@/domains/fretboard/components/renderFretboardCanvas';
 import { FRETBOARD_CANVAS_CONFIG } from '@/domains/fretboard/constants';
 import { observeVisibility } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
@@ -24,6 +24,14 @@ interface Props {
   isDarkMode?: boolean;
   shorthand?: boolean;
   chordNameScale?: number;
+  /** 是否显示和弦名（默认 true） */
+  showChordName?: boolean;
+  /** 是否显示空弦○与静音×标记（默认 true） */
+  showOpenStringNotes?: boolean;
+  /** 是否显示左侧品号数字（默认 true） */
+  showFretNumbers?: boolean;
+  /** 是否显示加粗弦枕（默认 true；false 时为普通品丝线条粗细） */
+  showBoldNut?: boolean;
   /** 懒绘制：挂载后不立即绘制，等元素滚入视口才首绘一次；后续参数变化正常重绘。
    *  DOM 尺寸始终由本组件按 scale/fretCount 计算确定，无需外部占位与测量 */
   lazy?: boolean;
@@ -34,6 +42,10 @@ const props = withDefaults(defineProps<Props>(), {
   isDarkMode: false,
   shorthand: false,
   chordNameScale: 1.0,
+  showChordName: true,
+  showOpenStringNotes: true,
+  showFretNumbers: true,
+  showBoldNut: true,
   lazy: false,
 });
 
@@ -41,11 +53,19 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 
 const fretCount = computed(() => Math.max(3, props.chord.fretCount || 4));
 
-const BOTTOM_PAD = 6;
-const baseWidth = computed(() => FRETBOARD_CANVAS_CONFIG.getExportFretboardWidth(props.chord.strings?.length || 6));
-const baseHeight = computed(
-  () => FRETBOARD_CANVAS_CONFIG.FRETBOARD_GRID_TOP + fretCount.value * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT + BOTTOM_PAD
+const layout = computed(() =>
+  computeFretboardLayout({
+    stringCount: props.chord.strings?.length || 6,
+    fretCount: fretCount.value,
+    fretOffset: props.chord.fretOffset ?? 0,
+    showChordName: props.showChordName,
+    showOpenStringNotes: props.showOpenStringNotes,
+    showFretNumbers: props.showFretNumbers,
+    showBoldNut: props.showBoldNut,
+  })
 );
+const baseWidth = computed(() => layout.value.width);
+const baseHeight = computed(() => layout.value.height);
 
 const cssWidth = computed(() => Math.round(baseWidth.value * props.scale));
 const cssHeight = computed(() => Math.round(baseHeight.value * props.scale));
@@ -79,7 +99,7 @@ function getCacheKey(): string {
   const c = props.chord;
   const strSig = c.strings.map(s => s[0]).join(',');
   const barreSig = (c.barres ?? []).map(b => `${b.fret}:${b.fromString}-${b.toString}`).join('|');
-  return `${displayChordName.value}_${c.fretOffset}_${fretCount.value}_${strSig}_${barreSig}_${props.isDarkMode ? 1 : 0}_${props.chordNameScale}_${cssWidth.value}x${cssHeight.value}`;
+  return `${displayChordName.value}_${c.fretOffset}_${fretCount.value}_${strSig}_${barreSig}_${props.isDarkMode ? 1 : 0}_${props.chordNameScale}_${props.showChordName ? 1 : 0}_${props.showOpenStringNotes ? 1 : 0}_${props.showFretNumbers ? 1 : 0}_${props.showBoldNut ? 1 : 0}_${cssWidth.value}x${cssHeight.value}`;
 }
 
 function draw() {
@@ -118,6 +138,10 @@ function draw() {
     colors: themeColors.value,
     chordNameScale: props.chordNameScale,
     shorthand: props.shorthand,
+    showChordName: props.showChordName,
+    showOpenStringNotes: props.showOpenStringNotes,
+    showFretNumbers: props.showFretNumbers,
+    showBoldNut: props.showBoldNut,
   });
   ctx.restore();
 
@@ -164,7 +188,17 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  [() => props.chord, () => props.scale, () => props.isDarkMode, () => props.shorthand, () => props.chordNameScale],
+  [
+    () => props.chord,
+    () => props.scale,
+    () => props.isDarkMode,
+    () => props.shorthand,
+    () => props.chordNameScale,
+    () => props.showChordName,
+    () => props.showOpenStringNotes,
+    () => props.showFretNumbers,
+    () => props.showBoldNut,
+  ],
   () => {
     if (!hasDrawn.value) return;
     draw();

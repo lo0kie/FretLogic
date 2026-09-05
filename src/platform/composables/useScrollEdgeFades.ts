@@ -1,10 +1,12 @@
-import { getCurrentInstance, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
+import { ref, watchEffect, type Ref } from 'vue';
 
 import { useRafThrottle } from '../utils/useRafThrottle.ts';
 
 export interface UseScrollEdgeFadesOptions {
-  /** 判定处于边缘的容差阈值（像素），默认 1 */
+  /** 判定处于边缘的容差阈值（像素），默认 3，避免高分屏缩放与子像素舍入导致边缘判定失效 */
   threshold?: number;
+  /** 滚动方向：'vertical'（默认，检测上下边缘）| 'horizontal'（检测左右边缘） */
+  direction?: 'vertical' | 'horizontal';
 }
 
 /**
@@ -22,24 +24,46 @@ export interface UseScrollEdgeFadesOptions {
  * 4. rAF 节流防抖与卸载自动清理，无内存泄漏
  */
 export function useScrollEdgeFades(scrollRef: Ref<HTMLElement | null>, options: UseScrollEdgeFadesOptions = {}) {
-  const { threshold = 1 } = options;
+  const { threshold = 3, direction = 'vertical' } = options;
 
   const atTop = ref(true);
   const atBottom = ref(true);
+  const atLeft = ref(true);
+  const atRight = ref(true);
 
   const syncEdgeFades = () => {
     const el = scrollRef.value;
     if (!el) return;
 
-    const isScrollable = el.scrollHeight > el.clientHeight + threshold;
-    if (!isScrollable) {
-      atTop.value = true;
-      atBottom.value = true;
-      return;
-    }
+    if (direction === 'horizontal') {
+      const isScrollable = el.scrollWidth > el.clientWidth + threshold;
+      if (!isScrollable) {
+        atLeft.value = true;
+        atRight.value = true;
+        atTop.value = true;
+        atBottom.value = true;
+        return;
+      }
 
-    atTop.value = el.scrollTop <= threshold;
-    atBottom.value = el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
+      atLeft.value = el.scrollLeft <= threshold;
+      atRight.value = Math.ceil(el.scrollLeft + el.clientWidth) >= Math.floor(el.scrollWidth) - threshold;
+      atTop.value = atLeft.value;
+      atBottom.value = atRight.value;
+    } else {
+      const isScrollable = el.scrollHeight > el.clientHeight + threshold;
+      if (!isScrollable) {
+        atTop.value = true;
+        atBottom.value = true;
+        atLeft.value = true;
+        atRight.value = true;
+        return;
+      }
+
+      atTop.value = el.scrollTop <= threshold;
+      atBottom.value = Math.ceil(el.scrollTop + el.clientHeight) >= Math.floor(el.scrollHeight) - threshold;
+      atLeft.value = atTop.value;
+      atRight.value = atBottom.value;
+    }
   };
 
   const { schedule: scheduleSync, cancel: cancelSync } = useRafThrottle(syncEdgeFades);
@@ -85,10 +109,15 @@ export function useScrollEdgeFades(scrollRef: Ref<HTMLElement | null>, options: 
     mutationObserver = null;
   };
 
-  const attach = (el: HTMLElement | null) => {
+  const detach = (el: HTMLElement | null) => {
+    if (el) {
+      el.removeEventListener('scroll', syncEdgeFades);
+    }
     cleanup();
-    if (!el) return;
+  };
 
+  const attach = (el: HTMLElement) => {
+    cleanup();
     el.addEventListener('scroll', syncEdgeFades, { passive: true });
 
     syncEdgeFades();
@@ -105,35 +134,20 @@ export function useScrollEdgeFades(scrollRef: Ref<HTMLElement | null>, options: 
     }
   };
 
-  if (scrollRef.value) {
-    attach(scrollRef.value);
-  }
-
-  if (getCurrentInstance()) {
-    onMounted(() => {
-      if (scrollRef.value) {
-        attach(scrollRef.value);
-      }
-    });
-
-    watch(scrollRef, (newEl, oldEl) => {
-      if (oldEl) {
-        oldEl.removeEventListener('scroll', syncEdgeFades);
-      }
-      attach(newEl);
-    });
-
-    onBeforeUnmount(() => {
-      if (scrollRef.value) {
-        scrollRef.value.removeEventListener('scroll', syncEdgeFades);
-      }
-      cleanup();
-    });
-  }
+  watchEffect(onCleanup => {
+    const el = scrollRef.value;
+    if (!el) return;
+    attach(el);
+    onCleanup(() => detach(el));
+  });
 
   return {
     atTop,
     atBottom,
+    atLeft,
+    atRight,
+    atStart: direction === 'horizontal' ? atLeft : atTop,
+    atEnd: direction === 'horizontal' ? atRight : atBottom,
     syncEdgeFades,
   };
 }

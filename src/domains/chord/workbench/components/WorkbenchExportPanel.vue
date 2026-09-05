@@ -20,6 +20,7 @@
           class="inline-block overflow-hidden rounded-md p-2 shadow-inner"
         >
           <FretboardCanvas
+            v-bind="fretBoardConfig"
             :chord="editorStore.draftChord"
             :chord-name-scale="0.7"
             :is-dark-mode="previewBg === 'dark'"
@@ -83,6 +84,8 @@ const editorStore = useChordEditorStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 
+const fretBoardConfig = { showChordName: true, showOpenStringNotes: true, showFretNumbers: true, showBoldNut: true };
+
 // ---- 面板行为：三态（自动跟随音符 / 始终展开 / 始终收起），由 WorkbenchPanel 外壳统一承载 ----
 // auto 的展开依据：草稿和弦存在至少一根按音弦（有内容才值得导出）
 const hasFrettedNotes = () => editorStore.draftChord.strings.some(str => str && str[0] > 0);
@@ -106,6 +109,7 @@ function buildCanvas(): HTMLCanvasElement {
     isDarkMode: previewBg.value === 'dark',
     shorthand: settingsStore.workbenchChordShorthand,
     bgColor,
+    ...fretBoardConfig,
   });
 }
 
