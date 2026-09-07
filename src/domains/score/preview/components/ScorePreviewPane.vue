@@ -94,7 +94,6 @@
               :step="2"
               bordered
               wheel-on-hover
-              label-position="right"
               readout-position="left"
               size="sm"
               width="md"
@@ -144,12 +143,12 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import {
+  getScorePageSize,
   PREVIEW_DEFAULT_ZOOM_PERCENT,
   PREVIEW_FIT_PADDING_PX,
   PREVIEW_MAX_ZOOM_PERCENT,
   PREVIEW_MIN_ZOOM_PERCENT,
   PREVIEW_WHEEL_ZOOM_SENSITIVITY,
-  SCORE_EXPORT_CONFIG,
   SCORE_PREVIEW_DEBOUNCE_MS,
 } from '@/domains/score/constants';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
@@ -254,8 +253,11 @@ const buildContentKey = () => {
   }
   refSignatures.sort();
 
-  return `${song.id}_${song.title}_${song.playKey}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_fz${scoreEditor.fontScale}_fb${scoreEditor.fretboardScale}_ref${refSignatures.length}_${refSignatures.join('|')}`;
+  return `${song.id}_${song.title}_${song.playKey}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_q${settingsStore.scoreExportQuality}_pm${settingsStore.scorePageMargin}_ps${settingsStore.scorePageSize}_fz${scoreEditor.fontScale}_fb${scoreEditor.fretboardScale}_ref${refSignatures.length}_${refSignatures.join('|')}`;
 };
+
+/** 响应式内容键：内容/排版任一依赖变化即重算，作为「重渲染触发」的单一 watch 源 */
+const reactiveContentKey = computed(() => buildContentKey());
 
 /** 整曲 A4 自动分页渲染：Worker 内部按可用高度装箱分页并逐页绘制表头，返回各页图 */
 const generate = async (force = false) => {
@@ -295,7 +297,10 @@ const generate = async (force = false) => {
       scoreEditor.fontScale,
       scoreEditor.fretboardScale,
       settingsStore.scoreShowBarre,
-      settingsStore.scoreLyricsFontWeight
+      settingsStore.scoreLyricsFontWeight,
+      settingsStore.scoreExportQuality,
+      settingsStore.scorePageMargin,
+      settingsStore.scorePageSize
     );
     const { blobs: pageBlobs } = await runWorkerExport(payload);
     if (token !== runToken) return;
@@ -353,12 +358,15 @@ watch(measuredContainerHeight, h => {
 /** 滚动容器可视高度（px）：自适应百分比与超高判定的基准（重挂载首帧用记忆值兜底） */
 const containerHeight = computed(() => measuredContainerHeight.value || rememberedContainerHeight);
 
-/** 自适应模式下的等比百分比：容器可用高度换算为 A4 高度的百分比 */
+/** 当前选中的单页尺寸（按 settingsStore.scorePageSize 档位解析，未命中回退 A4）；预览页高/超高判定以此为基准 */
+const previewPageSize = computed(() => getScorePageSize(settingsStore.scorePageSize));
+
+/** 自适应模式下的等比百分比：容器可用高度换算为当前单页高度的百分比 */
 const fitPercent = computed(() => {
   if (containerHeight.value <= 0) return 100;
   return Math.max(
     PREVIEW_MIN_ZOOM_PERCENT,
-    Math.round(((containerHeight.value - PREVIEW_FIT_PADDING_PX) / SCORE_EXPORT_CONFIG.A4_HEIGHT) * 100)
+    Math.round(((containerHeight.value - PREVIEW_FIT_PADDING_PX) / previewPageSize.value.height) * 100)
   );
 });
 
@@ -377,7 +385,7 @@ const activePercent = computed<number>({
 /** 页面渲染高度：始终用 px 绝对值（适应态 = fitPercent 换算高，自定义态 = 自定义百分比换算高）。
  * 不在适应态用 '100%'——% 与 px 混合插值不可靠会导致切换时高度闪跳；同为 px 后过渡平滑且两态数值同源 */
 const renderedPageHeight = computed(
-  () => `${Math.round((SCORE_EXPORT_CONFIG.A4_HEIGHT * activePercent.value) / 100)}px`
+  () => `${Math.round((previewPageSize.value.height * activePercent.value) / 100)}px`
 );
 
 /** 页面是否超出视口可用高度：决定顶部对齐、纵向滚动浏览与禁用横向翻页滚轮。
@@ -388,7 +396,7 @@ const renderedPageHeight = computed(
  *  也不留正向容差：真实溢出哪怕 1px 也须切顶部对齐（items-center 会在负方向裁掉页面顶部）；
  *  fitPercent 取整误差最多 ±6px，距边界尚有整个 FIT_PADDING（48px）余量，边界不会抖动 */
 const isTallerThanViewport = computed(() => {
-  const pageHeight = Math.round((SCORE_EXPORT_CONFIG.A4_HEIGHT * activePercent.value) / 100);
+  const pageHeight = Math.round((previewPageSize.value.height * activePercent.value) / 100);
   return pageHeight > containerHeight.value;
 });
 
@@ -511,22 +519,7 @@ watch(
  * 走 150ms 防抖重渲染，避免用户编辑歌词/切换开关时高频触发导出
  */
 watch(
-  [
-    isDark,
-    () => scoreEditor.activeSong?.title,
-    () => scoreEditor.activeSong?.playKey,
-    () => scoreEditor.activeSong?.capo,
-    () => scoreEditor.activeSong?.version,
-    () => scoreEditor.activeSong?.lyrics,
-    () => scoreEditor.activeSong?.chordMap,
-    () => allLineIndices.value.length,
-    () => settingsStore.scoreChordShorthand,
-    () => settingsStore.scoreLayoutAlign,
-    () => scoreEditor.fontScale,
-    () => scoreEditor.fretboardScale,
-    () => settingsStore.scoreShowBarre,
-    () => settingsStore.scoreLyricsFontWeight,
-  ],
+  reactiveContentKey,
   () => {
     if (!isPaneActive) return;
     debouncedGenerate();

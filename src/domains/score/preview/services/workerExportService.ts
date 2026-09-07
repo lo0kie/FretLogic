@@ -4,7 +4,7 @@
  */
 import { computeSongKey, getChordName } from '@/domains/chord/theory/theory';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
-import { DEFAULT_SCORE_TITLE } from '@/domains/score/constants';
+import { DEFAULT_SCORE_TITLE, SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { charKey, collectEdgeChordIds } from '@/domains/score/model/scoreModel';
 
 import type { Chord } from '@/domains/chord/types';
@@ -42,7 +42,10 @@ export const prepareWorkerExportPayload = (
   fontScale = 100,
   fretboardScale = 100,
   showBarre = true,
-  lyricsFontWeight: ScoreLyricsFontWeight = 'regular'
+  lyricsFontWeight: ScoreLyricsFontWeight = 'regular',
+  exportQualityPct = 95,
+  pageMarginPx: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
+  pageSize = 'a4'
 ): WorkerExportPayload => {
   const lyricsLines = song.lyrics.split('\n');
   const chordMap = song.chordMap;
@@ -109,6 +112,12 @@ export const prepareWorkerExportPayload = (
     fretboardScale,
     showBarre,
     lyricsFontWeight,
+    // 导出质量：百分制（30~100）转为 0.3~1 的比例值，由 Worker 侧 clamp 兜底
+    exportQuality: Math.min(1, Math.max(0.3, exportQualityPct / 100)),
+    // 导出页面边距（标准档位 窄/标准/宽，px）
+    pageMargin: pageMarginPx,
+    // 导出单页尺寸档位（a4 / a5 / letter）
+    pageSize,
   };
 };
 

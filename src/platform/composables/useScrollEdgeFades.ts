@@ -1,5 +1,7 @@
 import { computed, defineComponent, h, ref, watchEffect } from 'vue';
 
+import { useEventListener } from '@vueuse/core';
+
 import { buildEdgeFadeMask, ensureFadeProperties, fadeTransition } from '@/platform/utils/fadeMask.ts';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle.ts';
 
@@ -214,16 +216,13 @@ export function useScrollEdgeFades(scrollRef: Ref<HTMLElement | null>, options: 
     mutationObserver = null;
   };
 
-  const detach = (el: HTMLElement | null) => {
-    if (el) {
-      el.removeEventListener('scroll', syncEdgeFades);
-    }
+  const detach = () => {
+    // scroll 监听由 useEventListener 随 scrollRef 变化自动清理，这里只负责观察器回收
     cleanup();
   };
 
   const attach = (el: HTMLElement) => {
     cleanup();
-    el.addEventListener('scroll', syncEdgeFades, { passive: true });
 
     syncEdgeFades();
     updateObservedElements(el);
@@ -239,11 +238,14 @@ export function useScrollEdgeFades(scrollRef: Ref<HTMLElement | null>, options: 
     }
   };
 
+  // scroll 监听交给 VueUse：scrollRef 换绑/卸载时自动解绑，passive 不阻塞滚动合成
+  useEventListener(scrollRef, 'scroll', syncEdgeFades, { passive: true });
+
   watchEffect(onCleanup => {
     const el = scrollRef.value;
     if (!el) return;
     attach(el);
-    onCleanup(() => detach(el));
+    onCleanup(() => detach());
   });
 
   return {

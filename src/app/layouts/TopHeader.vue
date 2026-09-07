@@ -579,7 +579,10 @@ const handleScoreExport = async (op: 'copy' | 'download') => {
       scoreEditor.fontScale,
       scoreEditor.fretboardScale,
       settingsStore.scoreShowBarre,
-      settingsStore.scoreLyricsFontWeight
+      settingsStore.scoreLyricsFontWeight,
+      settingsStore.scoreExportQuality,
+      settingsStore.scorePageMargin,
+      settingsStore.scorePageSize
     );
     const { blobs } = await runWorkerExport(payload);
     if (blobs.length === 0) throw new Error('未能生成有效的导出图片');

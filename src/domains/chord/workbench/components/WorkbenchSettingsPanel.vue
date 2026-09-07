@@ -36,6 +36,7 @@
           "
           :options="tuningOptions"
           clearable
+          keep-open-on-select
           width="lg"
         />
       </BaseFormRow>

@@ -157,6 +157,12 @@ export const STORAGE_KEYS = {
   SCORE_SHOW_BARRE: 'CHORD_LAB_SCORE_SHOW_BARRE_V1',
   /** 预览/导出：歌词字重（light 细 / regular 常规 / bold 粗） */
   SCORE_LYRICS_FONT_WEIGHT: 'CHORD_LAB_SCORE_LYRICS_FONT_WEIGHT_V1',
+  /** 预览/导出：JPEG 压缩质量百分比（30~100，默认 95） */
+  SCORE_EXPORT_QUALITY: 'CHORD_LAB_SCORE_EXPORT_QUALITY_V1',
+  /** 预览/导出：页边距（px，按标准档位 窄/标准/宽 选择，默认 56px 标准） */
+  SCORE_PAGE_MARGIN: 'CHORD_LAB_SCORE_PAGE_MARGIN_V1',
+  /** 预览/导出：标准单页尺寸档位（a4 / a5 / letter，默认 a4） */
+  SCORE_PAGE_SIZE: 'CHORD_LAB_SCORE_PAGE_SIZE_V1',
   /** 谱面字号缩放 */
   SCORE_SCALE: 'CHORD_LAB_SCORE_SCALE_V1',
   /** 谱面行高缩放 */

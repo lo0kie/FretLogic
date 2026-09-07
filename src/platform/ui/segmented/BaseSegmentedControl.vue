@@ -330,8 +330,10 @@ const updateIndicatorPosition = async (animate = true) => {
   }
 
   // 双路测量：祖先存在 scale 动画时（BaseModal / BasePopover 进场），rect 含祖先缩放而失真，
-  // 回退到 transform 免疫的 offset 布局坐标；缩放比≈1 的正常态用 rect 分数级测量，
-  // 消除页面缩放下 offset 整数舍入导致的滑块边缘错位闪烁
+  // 回退为「rect 差值 ÷ 缩放比」还原布局坐标——滑块与按钮同源布局坐标，缩放全程自洽，
+  // 动画结束（scale→1）无需重测也不会偏移；缩放比≈1 的正常态直接用 rect 分数级测量，
+  // 消除页面缩放下 offset 整数舍入导致的滑块边缘错位闪烁。两式在 scale=1 时严格等价，
+  // 缩放判定偶有误差也不会引入可见错位
   const scaleX = containerRect.width / container.offsetWidth;
   const scaleY = containerRect.height / container.offsetHeight;
   const ancestorScaled = Math.abs(scaleX - 1) > 0.005 || Math.abs(scaleY - 1) > 0.005;
@@ -342,8 +344,12 @@ const updateIndicatorPosition = async (animate = true) => {
   const borderWidthX = parseFloat(containerStyle.borderLeftWidth) || 0;
   const borderWidthY = parseFloat(containerStyle.borderTopWidth) || 0;
 
-  const x = buttonRect.left - containerRect.left - borderWidthX;
-  const y = buttonRect.top - containerRect.top - borderWidthY;
+  const x = ancestorScaled
+    ? (buttonRect.left - containerRect.left) / scaleX - borderWidthX
+    : buttonRect.left - containerRect.left - borderWidthX;
+  const y = ancestorScaled
+    ? (buttonRect.top - containerRect.top) / scaleY - borderWidthY
+    : buttonRect.top - containerRect.top - borderWidthY;
   const width = ancestorScaled ? activeButton.offsetWidth : buttonRect.width;
   const height = ancestorScaled ? activeButton.offsetHeight : buttonRect.height;
   if (width === 0 && height === 0) {

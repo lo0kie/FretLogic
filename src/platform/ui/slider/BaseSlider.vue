@@ -10,7 +10,7 @@
       { 'cursor-not-allowed opacity-45': disabled, 'w-full': resolvedWidth === '100%' },
     ]"
     :style="wrapperStyle"
-    class="base-slider box-border inline-flex items-center justify-center gap-sm rounded-full border bg-surface-body transition-all duration-fast select-none has-focus-visible:ring-2 has-focus-visible:ring-primary/70"
+    class="base-slider box-border inline-flex items-center justify-center gap-1 rounded-full border bg-surface-body transition-all duration-fast select-none has-focus-visible:ring-2 has-focus-visible:ring-primary/70"
     ref="wrapperRef"
   >
     <span
@@ -90,69 +90,41 @@
       class="group relative flex touch-none items-center justify-center before:absolute before:z-0 before:content-['']"
       ref="trackRef"
     >
+      <!-- 内缩定位层：相对轨道各缩进约一个拇指半径（含 hover/拖拽放大裕量），填充条/基线/拇指共用同一坐标空间，保证极值时拇指整体落在胶囊边框内而不是顶框 -->
       <div
-        :class="vertical ? 'inset-y-0 left-1/2 w-1 -translate-x-1/2' : 'inset-x-0 top-1/2 h-1 -translate-y-1/2'"
-        class="absolute rounded-full bg-border-base transition-colors"
-      />
-
-      <div
-        :class="[
-          vertical ? 'left-1/2 w-1 -translate-x-1/2' : 'top-1/2 h-1 -translate-y-1/2',
-          isDragging === null ? 'transition-all duration-75' : '',
-        ]"
-        :style="activeBarStyle"
-        class="pointer-events-none absolute rounded-full bg-primary"
-      />
-
-      <div
-        v-if="!isRange"
-        :aria-disabled="disabled || undefined"
-        :aria-valuemax="max"
-        :aria-valuemin="min"
-        :aria-valuenow="singleValue"
-        :aria-valuetext="singleDisplayText"
-        :class="[
-          vertical ? 'left-1/2 -translate-1/2' : 'top-1/2 -translate-1/2',
-          isDragging === 0
-            ? 'z-float scale-125 ring-2 ring-primary/70'
-            : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
-        ]"
-        :style="singleThumbStyle"
-        @keydown="handleRangeKeydown($event)"
-        @mouseenter="isHovered = true"
-        @mouseleave="isHovered = false"
-        @pointerdown.stop="startDrag(0)"
-        class="absolute size-3.5 cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
-        role="slider"
-        tabindex="0"
+        :class="vertical ? 'absolute inset-x-0 top-[4px] bottom-[4px]' : 'absolute inset-y-0 right-[4px] left-[4px]'"
       >
-        <Transition name="v-transition-fade">
-          <div
-            v-if="shouldShowTooltip(0)"
-            :class="vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'"
-            class="pointer-events-none absolute z-float rounded-sm border border-glass-border bg-surface-elevated px-1.5 py-0.5 font-mono text-2xs font-bold whitespace-nowrap text-fg-title shadow-md"
-          >
-            {{ singleDisplayText }}
-          </div>
-        </Transition>
-      </div>
-
-      <template v-else>
         <div
-          :aria-valuemax="rangeValues[1]"
+          :class="vertical ? 'left-1/2 w-1 -translate-x-1/2' : 'inset-x-0 top-1/2 h-1 -translate-y-1/2'"
+          class="absolute rounded-full bg-border-base transition-colors"
+        />
+
+        <div
+          :class="[
+            vertical ? 'left-1/2 w-1 -translate-x-1/2' : 'top-1/2 h-1 -translate-y-1/2',
+            isDragging === null ? 'transition-all duration-75' : '',
+          ]"
+          :style="activeBarStyle"
+          class="pointer-events-none absolute rounded-full bg-primary"
+        />
+
+        <div
+          v-if="!isRange"
+          :aria-disabled="disabled || undefined"
+          :aria-valuemax="max"
           :aria-valuemin="min"
-          :aria-valuenow="rangeValues[0]"
-          :aria-valuetext="formatVal(rangeValues[0])"
+          :aria-valuenow="singleValue"
+          :aria-valuetext="singleDisplayText"
           :class="[
             vertical ? 'left-1/2 -translate-1/2' : 'top-1/2 -translate-1/2',
             isDragging === 0
               ? 'z-float scale-125 ring-2 ring-primary/70'
               : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
           ]"
-          :style="rangeThumb0Style"
-          @keydown="handleRangeKeydown($event, 0)"
-          @mouseenter="isHoveredThumb0 = true"
-          @mouseleave="isHoveredThumb0 = false"
+          :style="singleThumbStyle"
+          @keydown="handleRangeKeydown($event)"
+          @mouseenter="isHovered = true"
+          @mouseleave="isHovered = false"
           @pointerdown.stop="startDrag(0)"
           class="absolute size-3.5 cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
           role="slider"
@@ -160,50 +132,85 @@
         >
           <Transition name="v-transition-fade">
             <div
-              v-if="shouldShowRangeTooltip(0)"
+              v-if="shouldShowTooltip(0)"
               :class="
                 vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'
               "
               class="pointer-events-none absolute z-float rounded-sm border border-glass-border bg-surface-elevated px-1.5 py-0.5 font-mono text-2xs font-bold whitespace-nowrap text-fg-title shadow-md"
             >
-              {{ formatVal(rangeValues[0]) }}
+              {{ singleDisplayText }}
             </div>
           </Transition>
         </div>
 
-        <div
-          :aria-valuemax="max"
-          :aria-valuemin="rangeValues[0]"
-          :aria-valuenow="rangeValues[1]"
-          :aria-valuetext="formatVal(rangeValues[1])"
-          :class="[
-            vertical ? 'left-1/2 -translate-1/2' : 'top-1/2 -translate-1/2',
-            isDragging === 1
-              ? 'z-float scale-125 ring-2 ring-primary/70'
-              : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
-          ]"
-          :style="rangeThumb1Style"
-          @keydown="handleRangeKeydown($event, 1)"
-          @mouseenter="isHoveredThumb1 = true"
-          @mouseleave="isHoveredThumb1 = false"
-          @pointerdown.stop="startDrag(1)"
-          class="absolute size-3.5 cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
-          role="slider"
-          tabindex="0"
-        >
-          <Transition name="v-transition-fade">
-            <div
-              v-if="shouldShowRangeTooltip(1)"
-              :class="
-                vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'
-              "
-              class="pointer-events-none absolute z-float rounded-sm border border-glass-border bg-surface-elevated px-1.5 py-0.5 font-mono text-2xs font-bold whitespace-nowrap text-fg-title shadow-md"
-            >
-              {{ formatVal(rangeValues[1]) }}
-            </div>
-          </Transition>
-        </div>
-      </template>
+        <template v-else>
+          <div
+            :aria-valuemax="rangeValues[1]"
+            :aria-valuemin="min"
+            :aria-valuenow="rangeValues[0]"
+            :aria-valuetext="formatVal(rangeValues[0])"
+            :class="[
+              vertical ? 'left-1/2 -translate-1/2' : 'top-1/2 -translate-1/2',
+              isDragging === 0
+                ? 'z-float scale-125 ring-2 ring-primary/70'
+                : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
+            ]"
+            :style="rangeThumb0Style"
+            @keydown="handleRangeKeydown($event, 0)"
+            @mouseenter="isHoveredThumb0 = true"
+            @mouseleave="isHoveredThumb0 = false"
+            @pointerdown.stop="startDrag(0)"
+            class="absolute size-3.5 cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
+            role="slider"
+            tabindex="0"
+          >
+            <Transition name="v-transition-fade">
+              <div
+                v-if="shouldShowRangeTooltip(0)"
+                :class="
+                  vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'
+                "
+                class="pointer-events-none absolute z-float rounded-sm border border-glass-border bg-surface-elevated px-1.5 py-0.5 font-mono text-2xs font-bold whitespace-nowrap text-fg-title shadow-md"
+              >
+                {{ formatVal(rangeValues[0]) }}
+              </div>
+            </Transition>
+          </div>
+
+          <div
+            :aria-valuemax="max"
+            :aria-valuemin="rangeValues[0]"
+            :aria-valuenow="rangeValues[1]"
+            :aria-valuetext="formatVal(rangeValues[1])"
+            :class="[
+              vertical ? 'left-1/2 -translate-1/2' : 'top-1/2 -translate-1/2',
+              isDragging === 1
+                ? 'z-float scale-125 ring-2 ring-primary/70'
+                : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
+            ]"
+            :style="rangeThumb1Style"
+            @keydown="handleRangeKeydown($event, 1)"
+            @mouseenter="isHoveredThumb1 = true"
+            @mouseleave="isHoveredThumb1 = false"
+            @pointerdown.stop="startDrag(1)"
+            class="absolute size-3.5 cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
+            role="slider"
+            tabindex="0"
+          >
+            <Transition name="v-transition-fade">
+              <div
+                v-if="shouldShowRangeTooltip(1)"
+                :class="
+                  vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'
+                "
+                class="pointer-events-none absolute z-float rounded-sm border border-glass-border bg-surface-elevated px-1.5 py-0.5 font-mono text-2xs font-bold whitespace-nowrap text-fg-title shadow-md"
+              >
+                {{ formatVal(rangeValues[1]) }}
+              </div>
+            </Transition>
+          </div>
+        </template>
+      </div>
 
       <div
         v-if="tickValues.length"
@@ -334,6 +341,8 @@ const props = withDefaults(
     wheelable?: boolean;
     /** 悬停在轨道/拇指上即允许滚轮步进，无需聚焦（与 wheelable 独立；两者同时开启时本项优先，是否聚焦均可） */
     wheelOnHover?: boolean;
+    /** 反向滚轮方向：true 时上滚减值、下滚增值（默认滚动方向与之相反） */
+    reverseWheel?: boolean;
     /** 是否显示数值编辑输入框（点击读数进入编辑） */
     editable?: boolean;
     /** 区间模式：开启后 v-model 必须为 [number, number] 元组 */
@@ -370,6 +379,7 @@ const props = withDefaults(
     disabled: false,
     wheelable: false,
     wheelOnHover: false,
+    reverseWheel: false,
     editable: false,
     vertical: false,
     showTooltip: 'drag',
@@ -797,10 +807,11 @@ const handleTrackPointerDown = (e: PointerEvent) => {
   }
 };
 
-/** 滚轮 deltaY → 步进方向：上滚加值、下滚减值（修饰键倍率见 resolveMultiplier） */
+/** 滚轮 deltaY → 步进方向：上滚加值、下滚减值（修饰键倍率见 resolveMultiplier）；reverseWheel 时方向取反 */
 const applyWheelStep = (e: WheelEvent) => {
-  if (e.deltaY > 0) stepBy(-1, e);
-  else if (e.deltaY < 0) stepBy(1, e);
+  if (e.deltaY === 0) return;
+  const direction = e.deltaY > 0 ? -1 : 1;
+  stepBy(props.reverseWheel ? -direction : direction, e);
 };
 
 /**

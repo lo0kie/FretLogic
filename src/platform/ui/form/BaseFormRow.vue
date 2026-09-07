@@ -18,12 +18,14 @@
       <label
         v-if="label || $slots['label']"
         :class="[
+          'form-row-label shrink-0 truncate font-semibold select-none',
+          resolvedLabelSize === '2xs' ? 'text-2xs' : 'text-xs',
           layout === 'horizontal' && align === 'top' ? labelTopPaddingClass : '',
           required ? 'flex items-center gap-1' : '',
+          resolvedLabelTone === 'muted' ? 'text-fg-muted' : 'text-fg-body',
         ]"
         :for="effectiveForId"
         :style="layout === 'horizontal' ? labelStyle : undefined"
-        class="form-row-label shrink-0 truncate text-xs font-semibold text-fg-body select-none"
       >
         <slot name="label"> {{ label }} </slot>
         <span v-if="required" aria-hidden="true" class="leading-none text-danger">*</span>
@@ -60,12 +62,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useId } from 'vue';
+import { computed, inject, useId } from 'vue';
 
 // 行高引用控件高度标尺契约（md 档），与全工程控件单一真理源保持一致
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { FORM_ROW_DENSITY_KEY } from '@/platform/ui/form/formRowContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
+import type { FormRowDensityContext } from '@/platform/ui/form/formRowContext';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 
 const {
@@ -80,6 +84,8 @@ const {
   disabled = false,
   error,
   help,
+  labelTone,
+  labelSize,
   for: forProp,
   inputId,
 } = defineProps<{
@@ -105,6 +111,10 @@ const {
   error?: string;
   /** 说明文案 */
   help?: string;
+  /** 标签亮度：'body' 常规（默认）| 'muted' 次级（弱化标签，用于让分组标题更突出） */
+  labelTone?: 'body' | 'muted';
+  /** 标签字号：'xs' 常规（默认）| '2xs' 缩小（用于弱化层级让分组标题更突出） */
+  labelSize?: 'xs' | '2xs';
   /** 语义关联：显式指定关联控件 id */
   for?: string;
   /** 自动关联控件 id；与 for 二选一 */
@@ -113,6 +123,11 @@ const {
 
 // 使用 Vue 3.5 useId 保证 SSR 与客户端水合一致
 const autoId = useId();
+
+// 密度上下文：BaseCollapse 等容器注入默认值，行内显式 props 优先
+const densityContext = inject<FormRowDensityContext | null>(FORM_ROW_DENSITY_KEY, null);
+const resolvedLabelTone = computed(() => labelTone ?? densityContext?.labelTone ?? 'body');
+const resolvedLabelSize = computed(() => labelSize ?? densityContext?.labelSize ?? 'xs');
 /** 供默认插槽接收的控件 id（自动生成一个稳定 id，便于需要自接 id 的控件使用） */
 const slotControlId = computed(() => forProp || inputId || `form-row-control-${autoId}`);
 // label 的 for 仅在调用方显式给出 for/inputId 时才输出：多数控件（BaseInput/BaseSwitch）用各自的

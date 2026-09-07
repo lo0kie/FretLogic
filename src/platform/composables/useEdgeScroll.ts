@@ -1,4 +1,6 @@
-import { onBeforeUnmount, reactive, toValue, watch } from 'vue';
+import { reactive, toValue, watch } from 'vue';
+
+import { useEventListener, useResizeObserver } from '@vueuse/core';
 
 import type { MaybeRef } from 'vue';
 
@@ -29,9 +31,6 @@ export const useEdgeScroll = (target: MaybeRef<HTMLElement | null>, options: Use
     right: false,
   });
 
-  let current: HTMLElement | null = null;
-  let resizeObserver: ResizeObserver | null = null;
-
   const refresh = () => {
     const el = toValue(target);
     if (!el) {
@@ -54,29 +53,17 @@ export const useEdgeScroll = (target: MaybeRef<HTMLElement | null>, options: Use
 
   const handleScroll = () => refresh();
 
+  // 滚动与尺寸监听交给 VueUse：target 换绑/卸载时自动清理，无需手工 removeEventListener / disconnect
+  useEventListener(target, 'scroll', handleScroll, { passive: true });
+  // 内容高度变化（增删行/搜索过滤）也会改变“能否滚动/是否贴边”，需跟踪尺寸
+  useResizeObserver(target, refresh);
+
+  // target 换绑（切歌/切容器）后立即刷新一次贴边状态
   watch(
     () => toValue(target),
-    next => {
-      current?.removeEventListener('scroll', handleScroll);
-      resizeObserver?.disconnect();
-      current = next ?? null;
-      if (current) {
-        current.addEventListener('scroll', handleScroll, { passive: true });
-        // 内容高度变化（增删行/搜索过滤）也会改变“能否滚动/是否贴边”，需跟踪尺寸
-        if (typeof ResizeObserver !== 'undefined') {
-          resizeObserver = new ResizeObserver(refresh);
-          resizeObserver.observe(current);
-        }
-      }
-      refresh();
-    },
+    () => refresh(),
     { immediate: true }
   );
-
-  onBeforeUnmount(() => {
-    current?.removeEventListener('scroll', handleScroll);
-    resizeObserver?.disconnect();
-  });
 
   /** 规范化滚动行为：仅接受 'auto' | 'instant'，传入 Event 或未知值时一律安全回退到 'smooth' */
   const resolveBehavior = (val?: unknown): ScrollBehavior => (val === 'auto' || val === 'instant' ? val : 'smooth');

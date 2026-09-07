@@ -18,6 +18,7 @@ export * from './controlSizes';
 export { default as BaseBadge } from './badge/BaseBadge.vue';
 export { default as BaseCheckbox } from './checkbox/BaseCheckbox.vue';
 export { default as BaseFormRow } from './form/BaseFormRow.vue';
+export { default as BaseCollapse } from './collapse/BaseCollapse.vue';
 export { default as BaseFloatingBar } from './floating-bar/BaseFloatingBar.vue';
 export { default as BaseFab } from './floating-bar/BaseFab.vue';
 export { default as BaseSegmentedControl } from './segmented/BaseSegmentedControl.vue';

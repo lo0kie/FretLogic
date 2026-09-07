@@ -96,3 +96,24 @@ export const PREVIEW_DEFAULT_ZOOM_PERCENT = 70;
 export const PREVIEW_FIT_PADDING_PX = 48;
 /** 乐谱预览缩放：Ctrl+滚轮/捏合的灵敏度（每像素 deltaY 对应的百分比变化） */
 export const PREVIEW_WHEEL_ZOOM_SENSITIVITY = 0.15;
+
+/** 预览/导出页边距标准档位（px @96dpi，对应 A4 标准 10/15/20mm 边距；默认取「标准」56px） */
+export const SCORE_PAGE_MARGIN_PRESETS = [
+  { label: '窄', value: 38 },
+  { label: '标准', value: 56 },
+  { label: '宽', value: 76 },
+] as const;
+
+/** 预览/导出标准单页尺寸档位（px @96dpi；默认取 A4） */
+export const SCORE_PAGE_SIZE_PRESETS = [
+  { id: 'a4', label: 'A4', width: 794, height: 1123 },
+  { id: 'a5', label: 'A5', width: 559, height: 794 },
+  { id: 'letter', label: 'Letter', width: 816, height: 1056 },
+] as const;
+
+/** 按档位 id 解析页面宽高（A4 794×1123 / A5 559×794 / Letter 816×1056 px @96dpi）；未知 id 回退 A4 */
+export const getScorePageSize = (id: string): { width: number; height: number } =>
+  SCORE_PAGE_SIZE_PRESETS.find(p => p.id === id) ?? {
+    width: SCORE_EXPORT_CONFIG.A4_WIDTH,
+    height: SCORE_EXPORT_CONFIG.A4_HEIGHT,
+  };

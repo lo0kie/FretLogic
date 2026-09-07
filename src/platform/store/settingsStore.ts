@@ -91,6 +91,15 @@ export const useSettingsStore = defineStore('settings', () => {
   // 预览/导出：歌词字重（light 细 / regular 常规 / bold 粗）
   const scoreLyricsFontWeight = useStorage<ScoreLyricsFontWeight>(STORAGE_KEYS.SCORE_LYRICS_FONT_WEIGHT, 'regular');
 
+  // 预览/导出：JPEG 压缩质量百分比（30~100，默认 95；设备级，不随偏好备份同步）
+  const scoreExportQuality = useStorage<number>(STORAGE_KEYS.SCORE_EXPORT_QUALITY, 95);
+
+  // 预览/导出：页边距（px，标准档位 窄/标准/宽，默认 56px 标准 15mm；设备级，不随偏好备份同步）
+  const scorePageMargin = useStorage<number>(STORAGE_KEYS.SCORE_PAGE_MARGIN, 56);
+
+  // 预览/导出：标准单页尺寸档位（a4 / a5 / letter，默认 a4；设备级，不随偏好备份同步）
+  const scorePageSize = useStorage<string>(STORAGE_KEYS.SCORE_PAGE_SIZE, 'a4');
+
   // 预览显示偏好（设备级，不随偏好备份同步）：自适应满高 / 自定义缩放百分比
   const previewFitMode = useStorage<boolean>(STORAGE_KEYS.SCORE_PREVIEW_FIT_MODE, true);
   const previewZoomPercent = useStorage<number>(STORAGE_KEYS.SCORE_PREVIEW_ZOOM_PERCENT, 100);
@@ -190,6 +199,9 @@ export const useSettingsStore = defineStore('settings', () => {
     scoreLayoutAlign,
     scoreShowBarre,
     scoreLyricsFontWeight,
+    scoreExportQuality,
+    scorePageMargin,
+    scorePageSize,
     previewFitMode,
     previewZoomPercent,
     workbenchExportBg,

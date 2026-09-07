@@ -29,8 +29,6 @@
     @keydown.delete="handleDelete($event)"
     @keydown.enter="handleKeydown($event)"
     @keydown.space="handleKeydown($event)"
-    @mouseenter="isHovered = true"
-    @mouseleave="isHovered = false"
     data-focusable-inline
     class="char-box group relative box-border flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 transition-all duration-fast outline-none hover:bg-tint-primary-88 [&.is-dragging-source]:opacity-35! [&.is-drop-target]:bg-tint-primary-85!"
     ref="charBoxRef"
@@ -153,6 +151,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef } from 'vue';
 
+import { useElementHover } from '@vueuse/core';
+
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import { getChordName } from '@/domains/chord/theory/theory';
@@ -188,7 +188,9 @@ const emit = defineEmits<{
   (e: 'copyPointerdown', payload: { event: PointerEvent; slotKey: SlotKey; chord: Chord }): void;
 }>();
 
-const isHovered = ref(false);
+// 根槽元素：hover 态经 useElementHover 跟踪（免去模板 mouseenter/mouseleave 双绑定），焦点态仍走 focusin/focusout
+const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
+const isHovered = useElementHover(charBoxRef);
 const isFocused = ref(false);
 // 操作按钮组引用：作为单一可聚焦节点，方向键在其内部按钮间切换
 const actionGroupEl = useTemplateRef<HTMLElement>('actionGroupEl');
@@ -366,7 +368,6 @@ const ACTION_ITEMS: ActionItem[] = [
 ];
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
-const charBoxRef = useTemplateRef<HTMLElement>('charBoxRef');
 
 /** 槽位点击：空槽/添加槽打开 picker；有和弦的交互收敛到 hover 浮出的操作按钮 */
 const handleClick = (e: MouseEvent) => {

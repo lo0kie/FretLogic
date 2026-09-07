@@ -526,7 +526,15 @@ useEventListener(
     // contextTriggerEl 内的左键是否关闭由消费方声明：ContextMenu 触发区要点关（toggle），
     // 而 BaseInput 的 input 本身位于 contextTriggerEl 内且点击会立即重开面板，关闭再重开只会闪烁
     if (!closeOnContextTriggerClick && contextTriggerEl?.contains(e.target as Node)) return;
-    if (isEventInside(e.target)) return;
+    if (isEventInside(e.target)) {
+      // hover 模式：在「面板内容」上按下一次即视为「钉住」，此后悬停离开不再关闭。
+      // 仅限面板本身，排除触发按钮——按钮自带 pinToggle 逻辑，若在此一并置位会被它的再次切换关掉自己
+      if (trigger === 'hover' && !pinned.value && panelRef.value?.contains(e.target as Node)) {
+        pinned.value = true;
+      }
+      clearHoverTimer();
+      return;
+    }
 
     close();
   },

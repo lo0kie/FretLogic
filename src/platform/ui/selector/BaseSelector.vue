@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <BasePopover
     v-model="isOpen"
     :disabled
@@ -147,6 +147,7 @@
 
         <div class="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           <div
+            v-scrollbar="{ endInset: 8 }"
             :aria-multiselectable="isMultiple || undefined"
             :style="{
               maxHeight: dropdownMaxHeight,
@@ -155,7 +156,7 @@
             }"
             @keydown="handleDropdownKeydown($event, close)"
             @scroll.passive="syncEdgeFades()"
-            class="no-scrollbar box-border flex w-full flex-col gap-0.5 overflow-y-auto p-xs outline-none"
+            class="box-border flex w-full flex-col gap-0.5 overflow-y-auto p-xs outline-none"
             ref="dropdownRef"
             role="listbox"
             tabindex="-1"
@@ -187,7 +188,7 @@
                 @click="handleSelect(entry.option, close)"
                 @keydown.enter.prevent.stop="handleSelect(entry.option, close)"
                 @keydown.space.prevent.stop="handleSelect(entry.option, close)"
-                class="box-border flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-lg bg-transparent px-2.5 text-xs text-fg-body transition-colors outline-none hover:bg-surface-panel-hover hover:text-fg-title"
+                class="box-border flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-md bg-transparent px-2.5 text-xs text-fg-body transition-colors outline-none hover:bg-surface-panel-hover hover:text-fg-title"
                 role="option"
               >
                 <span class="flex max-w-full min-w-0 flex-1 items-center gap-2">
@@ -207,7 +208,7 @@
                     icon-stroke="bold"
                     size="md"
                   />
-                  <div v-marquee.fade class="min-w-0 flex-1">
+                  <div v-marquee.fade class="min-w-0">
                     <span class="block whitespace-nowrap">
                       <slot :index :option="entry.option" name="option">
                         {{ formattedOption(entry.option) }}
@@ -307,6 +308,7 @@ const {
   filterMethod = undefined,
   valueComparator = undefined,
   highlightNonDefault = false,
+  keepOpenOnSelect = false,
 } = defineProps<{
   /** 选项列表：对象数组（label/value 等字段）或原始值数组 */
   options: O[];
@@ -349,6 +351,8 @@ const {
   /** 是否启用"非默认值高亮"：true（默认）保持原行为 —— 传了 defaultValue 且当前值偏离时标签高亮；
    *  false 则关闭该高亮，标签恒用默认文字色。仅控制高亮，不影响清空按钮的判定 */
   highlightNonDefault?: boolean;
+  /** 单选选中后是否保持面板打开（默认 false 选中即关；用于快捷切换场景，Esc/点外部仍可关闭） */
+  keepOpenOnSelect?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -645,7 +649,7 @@ watch(displayText, () => {
   animateTriggerWidth();
 });
 
-/** 选择选项：多选切换勾选，单选写值后关闭面板 */
+/** 选择选项：多选切换勾选，单选写值后关闭面板（keepOpenOnSelect 时保持面板打开便于连续切换） */
 const handleSelect = (option: AnyOption, close: () => void) => {
   if (isOptionDisabled(option)) return;
   const val = getOptionValue(option);
@@ -659,7 +663,7 @@ const handleSelect = (option: AnyOption, close: () => void) => {
   } else {
     modelValue.value = val as unknown as M extends true ? V[] : V;
     emit('change', val as unknown as M extends true ? V[] : V);
-    close();
+    if (!keepOpenOnSelect) close();
   }
 };
 

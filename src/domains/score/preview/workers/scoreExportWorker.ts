@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Web Worker: 纯数据驱动的 OffscreenCanvas 离屏乐谱渲染引擎。
  * 100% 运行在后台 Worker 线程，主线程 0ms 阻塞。
  * 支持绘制完整的吉他指板图、升降号上标和弦名、等粗横按、品丝对齐品号、紧随歌词排版及 A4 满页 Space-Between 垂直均分对齐。
  */
-import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
+import { getScorePageSize, SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { parseChordNameTokens as parseChordNameTokensCore } from '@/domains/score/model/chordNameTokens';
 
 import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
@@ -51,6 +51,12 @@ export interface WorkerExportPayload {
   showBarre?: boolean;
   /** 歌词字重（缺省 regular 常规） */
   lyricsFontWeight?: ScoreLyricsFontWeight;
+  /** 导出 JPEG 压缩质量（0.3~1，缺省 0.95） */
+  exportQuality?: number;
+  /** 导出页面边距（px，标准档位 窄/标准/宽，缺省跟随 pageMargin） */
+  pageMargin?: number;
+  /** 导出单页尺寸档位（a4 / a5 / letter，缺省 a4），仅 A4 分页模式生效 */
+  pageSize?: string;
 }
 
 export type WorkerExportMessage =
@@ -738,10 +744,19 @@ if (typeof self !== 'undefined') {
         fretboardScale = 100,
         showBarre = true,
         lyricsFontWeight: lyricsFontWeightMode = 'regular',
+        exportQuality = EXPORT_JPEG_QUALITY,
+        pageMargin = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
+        pageSize = 'a4',
       } = e.data;
+
+      // 导出单页尺寸：按档位解析宽高（A4 / A5 / Letter），仅 A4 分页模式使用
+      const { width: pageW, height: pageH } = getScorePageSize(pageSize);
 
       // 歌词字重映射为 canvas 数值字重（light 300 / regular 400 / bold 700）
       const lyricsFontWeight = lyricsFontWeightMode === 'light' ? 300 : lyricsFontWeightMode === 'bold' ? 700 : 400;
+
+      // 导出 JPEG 压缩质量：限制在 [0.3, 1] 区间（对应「导出质量」设置 30~100）
+      const jpegQuality = Math.min(1, Math.max(0.3, exportQuality));
 
       // 排列和弦配置的缩放参数先于任何布局计算生效
       applyLayoutScales(fontScale, fretboardScale);
@@ -751,10 +766,10 @@ if (typeof self !== 'undefined') {
       let pageLineRanges: number[][] | undefined;
 
       if (mode === 'a4') {
-        // ===== A4 分页模式 =====
-        const contentHeight = SCORE_EXPORT_CONFIG.A4_HEIGHT - SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2;
+        // ===== 单页分页模式（尺寸按档位 A4 / A5 / Letter） =====
+        const contentHeight = pageH - pageMargin * 2;
         const headerH = HEADER_HEIGHT;
-        const availWidth = SCORE_EXPORT_CONFIG.A4_WIDTH - SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2;
+        const availWidth = pageW - pageMargin * 2;
 
         // 1. 超长行软折行
         const allSegments = wrapScoreLines(lines, availWidth);
@@ -835,8 +850,8 @@ if (typeof self !== 'undefined') {
 
         for (let pIdx = 0; pIdx < pages.length; pIdx++) {
           const pageSegments = pages[pIdx]!;
-          const canvasW = SCORE_EXPORT_CONFIG.A4_WIDTH;
-          const canvasH = SCORE_EXPORT_CONFIG.A4_HEIGHT;
+          const canvasW = pageW;
+          const canvasH = pageH;
           const canvas = new OffscreenCanvas(
             canvasW * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
             canvasH * SCORE_EXPORT_CONFIG.PIXEL_RATIO
@@ -847,13 +862,13 @@ if (typeof self !== 'undefined') {
           ctx.fillStyle = colors.BG;
           ctx.fillRect(0, 0, canvasW, canvasH);
 
-          let curY: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN;
+          let curY: number = pageMargin;
           if (pIdx === 0) {
             curY = renderHeader(ctx, title, keyText, capoText, canvasW, curY, colors);
           }
 
           // 合并为单次循环：计算 space-between 参数 + 逐段绘制
-          const pageAvailH = canvasH - SCORE_EXPORT_CONFIG.PAGE_MARGIN - curY;
+          const pageAvailH = canvasH - pageMargin - curY;
           const isFullPage = pIdx < pages.length - 1;
 
           let totalContentH = 0;
@@ -883,14 +898,14 @@ if (typeof self !== 'undefined') {
             const segW = getSegmentWidth(seg);
             const isCenter = layoutAlign === 'center';
             const startX = isCenter
-              ? Math.max(SCORE_EXPORT_CONFIG.PAGE_MARGIN, Math.round((canvasW - segW) / 2)) +
+              ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) +
                 (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0)
-              : SCORE_EXPORT_CONFIG.PAGE_MARGIN + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
+              : pageMargin + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
             const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
             curY = res.nextY;
           }
 
-          const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: EXPORT_JPEG_QUALITY });
+          const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: jpegQuality });
           blobs.push(blob);
 
           self.postMessage({
@@ -899,7 +914,7 @@ if (typeof self !== 'undefined') {
           } as WorkerExportMessage);
         }
       } else {
-        // ===== 普通长图模式（画布宽度自适应实际最宽行，左右对称 56px 页边距，彻底消除右侧空白） =====
+        // ===== 普通长图模式（画布宽度自适应实际最宽行，左右对称 pageMargin 页边距，彻底消除右侧空白） =====
         const availWidth = SCORE_EXPORT_CONFIG.NORMAL_CONTENT_MAX_WIDTH;
         const allSegments = wrapScoreLines(lines, availWidth);
 
@@ -920,12 +935,8 @@ if (typeof self !== 'undefined') {
         }
 
         const headerH = HEADER_HEIGHT;
-        const canvasW = Math.max(
-          SCORE_EXPORT_CONFIG.NORMAL_CANVAS_MIN_WIDTH,
-          Math.round(maxSegmentW + SCORE_EXPORT_CONFIG.PAGE_MARGIN * 2)
-        );
-        const canvasH =
-          SCORE_EXPORT_CONFIG.PAGE_MARGIN + headerH + totalContentH + totalGapsH + SCORE_EXPORT_CONFIG.PAGE_MARGIN;
+        const canvasW = Math.max(SCORE_EXPORT_CONFIG.NORMAL_CANVAS_MIN_WIDTH, Math.round(maxSegmentW + pageMargin * 2));
+        const canvasH = pageMargin + headerH + totalContentH + totalGapsH + pageMargin;
 
         const canvas = new OffscreenCanvas(
           canvasW * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
@@ -937,7 +948,7 @@ if (typeof self !== 'undefined') {
         ctx.fillStyle = colors.BG;
         ctx.fillRect(0, 0, canvasW, canvasH);
 
-        let curY: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN;
+        let curY: number = pageMargin;
         curY = renderHeader(ctx, title, keyText, capoText, canvasW, curY, colors);
 
         for (let i = 0; i < allSegments.length; i++) {
@@ -950,14 +961,14 @@ if (typeof self !== 'undefined') {
           const segW = getSegmentWidth(seg);
           const isCenter = layoutAlign === 'center';
           const startX = isCenter
-            ? Math.max(SCORE_EXPORT_CONFIG.PAGE_MARGIN, Math.round((canvasW - segW) / 2)) +
+            ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) +
               (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0)
-            : SCORE_EXPORT_CONFIG.PAGE_MARGIN + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
+            : pageMargin + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
           const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
           curY = res.nextY;
         }
 
-        const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: EXPORT_JPEG_QUALITY });
+        const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: jpegQuality });
         blobs.push(blob);
 
         self.postMessage({ type: 'progress', percent: 100 } as WorkerExportMessage);
