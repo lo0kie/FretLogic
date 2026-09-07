@@ -40,10 +40,6 @@
         />
       </BaseFormRow>
 
-      <BaseFormRow help="仅工作台生效" label="符号简写 (M/°/+)">
-        <BaseSwitch v-model="settingsStore.workbenchChordShorthand" aria-label="工作台符号简写" />
-      </BaseFormRow>
-
       <BaseFormRow help="指板有可横按弦组时自动标记" label="自动横按">
         <BaseSwitch v-model="editorStore.autoBarre" aria-label="自动标记横按" />
       </BaseFormRow>
@@ -62,7 +58,6 @@ import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
 import { FRET_COUNTS, INTERACTION_CONFIG } from '@/domains/fretboard/constants';
-import { useSettingsStore } from '@/platform/store/settingsStore';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import WorkbenchPanel from './WorkbenchPanel.vue';
@@ -71,7 +66,6 @@ import type { Chord } from '@/domains/chord/types';
 import type { SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 
 const editorStore = useChordEditorStore();
-const settingsStore = useSettingsStore();
 
 /** auto 模式的展开依据：与导出面板一致——草稿存在至少一根按音弦（指板有内容才需要设置） */
 const hasFrettedNotes = () => editorStore.draftChord.strings.some(str => str && str[0] > 0);

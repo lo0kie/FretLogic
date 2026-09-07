@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <aside
     v-bind="$attrs"
     :aria-label="route.path === ROUTE_PATHS.SCORE ? '乐谱库' : '指法库'"
@@ -158,11 +158,7 @@
     <div
       class="left-group-list-container left-group-list relative box-border flex min-h-0 w-full flex-1 flex-col overflow-hidden"
     >
-      <div
-        v-scrollbar="{ onScroll: closeAllPopovers }"
-        class="scroll-body no-scrollbar box-border flex-1 overflow-y-auto p-md"
-        ref="scrollRef"
-      >
+      <div v-scrollbar="{ onScroll: closeAllPopovers }" class="scroll-body box-border flex-1 p-md" ref="scrollRef">
         <KeepAlive :max="12">
           <GroupSection
             v-if="route.path === ROUTE_PATHS.WORKBENCH"

@@ -60,7 +60,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, useSlots, watch } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
@@ -77,7 +77,8 @@ const props = withDefaults(
   defineProps<{
     /** 预设状态场景类型：empty 缺省 | 404 未找到 | network 网络错误 | search 搜索无结果 */
     type?: EmptyType;
-    /** 支持传入图标名称或组件；未传时根据 type 自动匹配 */
+    /** 支持传入图标名称或组件；未传时根据 type 自动匹配。
+     *  传组件时该组件须接受 `size: number` prop（像素值），否则尺寸档位静默不生效 */
     icon?: IconName | Component;
     /** 自定义插画 URL，加载失败时自动回退至图标 */
     image?: string;
@@ -112,6 +113,8 @@ const emit = defineEmits<{
   (e: 'action'): void;
 }>();
 
+const slots = useSlots();
+
 const isImageError = ref(false);
 watch(
   () => props.image,
@@ -127,6 +130,19 @@ const TYPE_CONFIG_MAP: Record<EmptyType, { icon: IconName; description: string }
   search: { icon: 'search-x', description: '未找到匹配结果' },
 };
 
+// 开发期提示：type 新增枚举但漏加 TYPE_CONFIG_MAP 时给出警告，避免静默降级为默认图标/文案
+if (import.meta.env.DEV) {
+  watch(
+    () => props.type,
+    t => {
+      if (t && !(t in TYPE_CONFIG_MAP)) {
+        console.warn(`[EmptyState] type "${t}" 未在 TYPE_CONFIG_MAP 中配置，已回退为默认图标/文案。`);
+      }
+    },
+    { immediate: true }
+  );
+}
+
 const resolvedIcon = computed<IconName | Component>(() => {
   if (props.icon) return props.icon;
   return TYPE_CONFIG_MAP[props.type]?.icon ?? 'inbox';
@@ -137,7 +153,9 @@ const resolvedDescription = computed(() => {
   return TYPE_CONFIG_MAP[props.type]?.description;
 });
 
-const hasText = computed(() => Boolean(props.title || resolvedDescription.value));
+// text-zone 是外层容器：必须把插槽一并纳入，否则 description 显式传空串时
+// hasText 为 false，会连内层本该显示的 #title / #default 插槽一起挡掉
+const hasText = computed(() => Boolean(props.title || slots['title'] || resolvedDescription.value || slots['default']));
 
 const SIZE_CONFIG_MAP: Record<
   'sm' | 'md' | 'lg',
@@ -184,7 +202,11 @@ const actionBtnSize = computed(() => sizeConfig.value.actionBtnSize);
 
 const zoneClass = computed(() => {
   if (props.image && !isImageError.value) {
-    return 'flex items-center justify-center';
+    // lg 下图标容器是 64px 圆形区；图片分支预留同尺寸，加载失败回退时不再有明显布局跳变
+    //（sm/md 两分支本就同为 flex 居中，无需预留）
+    return props.size === 'lg'
+      ? 'flex min-h-16 min-w-16 items-center justify-center'
+      : 'flex items-center justify-center';
   }
   if (props.size === 'lg') {
     return 'w-16 h-16 rounded-full bg-surface-panel-hover flex items-center justify-center';

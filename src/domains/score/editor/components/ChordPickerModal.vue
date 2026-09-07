@@ -64,7 +64,7 @@
       <div
         v-scrollbar
         v-grid-nav="{ cols: gridCols, selector: '.picker-chord-card' }"
-        class="picker-scroll-content no-scrollbar min-h-0 flex-1 overflow-y-auto p-xs"
+        class="picker-scroll-content min-h-0 flex-1 p-xs"
         ref="scrollWrapperRef"
       >
         <Transition name="v-transition-fade">
@@ -256,6 +256,7 @@ import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
 import { useResponsive } from '@/platform/composables/useResponsive';
 import { isDark } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { useUiStore } from '@/platform/store/uiStore';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
 import type { Chord } from '@/domains/chord/types';
@@ -295,6 +296,7 @@ const router = useRouter();
 const editorStore = useChordEditorStore();
 const chordStore = useChordStore();
 const scoreEditor = useScoreEditorStore();
+const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
 const { chordsLookupMap } = useScoreLinesData();
 
@@ -612,6 +614,8 @@ const handleSelectChord = (chord: Chord) => {
  */
 const goToWorkbenchToCreate = () => {
   visibleModel.value = false;
+  // 工作台的和弦编辑依赖左侧栏（分组树/草稿上下文），跳转前确保侧栏展开
+  uiStore.isLeftOpen = true;
   editorStore.resetEditor();
   if (selectedGroupId.value && selectedGroupId.value !== 'ALL') {
     chordStore.selectAndExpandGroup(selectedGroupId.value);
@@ -626,6 +630,8 @@ const goToWorkbenchToCreate = () => {
 /** 用户点击卡片上的编辑按钮：关闭弹窗并加载该和弦到工作台编辑 */
 const goToWorkbenchToEdit = (chord: Chord) => {
   visibleModel.value = false;
+  // 工作台的和弦编辑依赖左侧栏（分组树/草稿上下文），跳转前确保侧栏展开
+  uiStore.isLeftOpen = true;
   editorStore.setEditor(chord);
   chordStore.selectAndExpandGroup(chord.groupId);
   router.push('/');

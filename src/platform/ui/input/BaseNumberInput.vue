@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div
     :aria-disabled="disabled || undefined"
     :aria-valuemax="max"
@@ -303,6 +303,10 @@ const commitInput = () => {
   isEditing.value = false;
   const nextVal = clampValue(parsed);
   if (nextVal !== modelValue.value) {
+    // dev 提示：越界输入会被夹紧后写回，主动提示避免使用者误以为原值生效（与 BaseSlider 保持一致）
+    if (import.meta.env.DEV && (parsed < props.min || parsed > props.max)) {
+      console.warn(`[BaseNumberInput] 输入值 ${parsed} 超出范围 [${props.min}, ${props.max}]，已自动吸附到范围内。`);
+    }
     modelValue.value = nextVal;
     emit('change', nextVal);
   }
@@ -365,6 +369,11 @@ const startContinuousStep = (sign: number, e: PointerEvent) => {
 
   stepTimer = setTimeout(() => {
     stepInterval = setInterval(() => {
+      // disabled 中途变 true 时主动停止连发，避免 interval 空转及「解禁后复活续步」的副作用
+      if (props.disabled) {
+        stopContinuousStep();
+        return;
+      }
       handleStep(sign, e);
     }, 80);
   }, 350);

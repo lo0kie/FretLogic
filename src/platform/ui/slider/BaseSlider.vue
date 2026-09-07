@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div
     :class="[
       currentConfig.wrapperClass,
@@ -10,7 +10,6 @@
       { 'cursor-not-allowed opacity-45': disabled, 'w-full': resolvedWidth === '100%' },
     ]"
     :style="wrapperStyle"
-    @wheel="handleWheel($event)"
     class="base-slider box-border inline-flex items-center justify-center gap-sm rounded-full border bg-surface-body transition-all duration-fast select-none has-focus-visible:ring-2 has-focus-visible:ring-primary/70"
     ref="wrapperRef"
   >
@@ -73,18 +72,21 @@
       <BaseIcon aria-hidden="true" icon-size="sm" icon-stroke="thin" name="minus" />
     </button>
 
+    <!-- 轨道 mx-1.5 专为 ± 步进按钮留白；showButtons=false 时归零，
+         读数/容器与轨道间距只吃 wrapper gap-sm，formatter 不再离轨道过远 -->
     <div
       :class="[
         vertical
           ? 'my-1 h-full min-h-24 w-5 flex-1 before:-inset-x-4 before:inset-y-0'
           : isCustomWidth
-            ? 'mx-1.5 w-full min-w-16 flex-1 before:inset-x-0 before:-inset-y-4'
-            : 'mx-1.5 w-24 before:inset-x-0 before:-inset-y-4',
+            ? `${showButtons ? 'mx-1.5' : 'mx-0'} w-full min-w-16 flex-1 before:inset-x-0 before:-inset-y-4`
+            : `${showButtons ? 'mx-1.5' : 'mx-0'} w-24 before:inset-x-0 before:-inset-y-4`,
         disabled ? '' : 'cursor-pointer',
       ]"
       @mouseenter="isTrackHovered = true"
       @mouseleave="isTrackHovered = false"
       @pointerdown="handleTrackPointerDown($event)"
+      @wheel="handleWheel($event)"
       class="group relative flex touch-none items-center justify-center before:absolute before:z-0 before:content-['']"
       ref="trackRef"
     >
@@ -328,8 +330,10 @@ const props = withDefaults(
     defaultValue?: R extends true ? [number, number] : number;
     /** 禁用交互并置灰 */
     disabled?: boolean;
-    /** 聚焦时允许滚轮步进 */
+    /** 聚焦时允许滚轮步进（需先聚焦到滑块拇指才会生效；且滚轮必须发生在轨道/拇指上，在标签、按钮、读数等区域滚动不触发） */
     wheelable?: boolean;
+    /** 悬停在轨道/拇指上即允许滚轮步进，无需聚焦（与 wheelable 独立；两者同时开启时本项优先，是否聚焦均可） */
+    wheelOnHover?: boolean;
     /** 是否显示数值编辑输入框（点击读数进入编辑） */
     editable?: boolean;
     /** 区间模式：开启后 v-model 必须为 [number, number] 元组 */
@@ -365,6 +369,7 @@ const props = withDefaults(
     readoutPosition: 'right',
     disabled: false,
     wheelable: false,
+    wheelOnHover: false,
     editable: false,
     vertical: false,
     showTooltip: 'drag',
@@ -630,8 +635,9 @@ const updateValue = (rawNextVal: number | [number, number], options?: { commit?:
   if (isRange.value) {
     const raw0 = (Array.isArray(rawNextVal) ? rawNextVal[0] : rawNextVal) ?? props.min;
     const raw1 = (Array.isArray(rawNextVal) ? rawNextVal[1] : rawNextVal) ?? props.max;
-    const c0 = snapToStep(Math.min(props.max, Math.max(props.min, raw0)));
-    const c1 = snapToStep(Math.min(props.max, Math.max(props.min, raw1)));
+    // 用另一拇指当前值做夹紧边界，防止两拇指交叉互换身份（对齐 aria-valuemin/max 的约束语义）
+    const c0 = snapToStep(Math.min(rangeValues.value[1], Math.max(props.min, raw0)));
+    const c1 = snapToStep(Math.max(rangeValues.value[0], Math.min(props.max, raw1)));
     const nextArr: [number, number] = [Math.min(c0, c1), Math.max(c0, c1)];
     modelValue.value = nextArr;
     if (options?.commit) {
@@ -662,7 +668,9 @@ const resolveMultiplier = (e?: { shiftKey?: boolean; altKey?: boolean }) => {
 
 /** 按符号步进（区间模式作用于指定拇指），支持修饰键倍率 */
 const stepBy = (sign: number, e?: { shiftKey?: boolean; altKey?: boolean }, thumbIdx = 0) => {
-  const delta = props.step * sign * resolveMultiplier(e);
+  // 与 snapToStep 保持一致的步长兜底：非正数 step 一律按 1 走，避免按钮/键盘静默失效
+  const step = props.step > 0 ? props.step : 1;
+  const delta = step * sign * resolveMultiplier(e);
   if (isRange.value) {
     const [v0, v1] = rangeValues.value;
     if (thumbIdx === 0) updateValue([v0 + delta, v1], { commit: true });
@@ -763,7 +771,13 @@ const startDrag = (thumbIndex: number) => {
   window.addEventListener('pointerup', onPointerUp);
 };
 
-/** 点击轨道：就近选中拇指并直接跳到点击位置 */
+/** 聚焦指定拇指（单值只有第 0 个；聚焦后滚轮步进立即生效，无需二次点击） */
+const focusThumb = (index: number) => {
+  const thumbs = wrapperRef.value?.querySelectorAll<HTMLElement>('[role="slider"]') ?? [];
+  thumbs[index]?.focus();
+};
+
+/** 点击轨道：就近选中拇指、聚焦并直接跳到点击位置 */
 const handleTrackPointerDown = (e: PointerEvent) => {
   if (props.disabled) return;
   const clickedVal = calculateValueFromPointer(e);
@@ -773,21 +787,36 @@ const handleTrackPointerDown = (e: PointerEvent) => {
     const d1 = Math.abs(clickedVal - v1);
     const targetThumb = d0 <= d1 ? 0 : 1;
     startDrag(targetThumb);
+    focusThumb(targetThumb);
     if (targetThumb === 0) updateValue([clickedVal, v1], { commit: false });
     else updateValue([v0, clickedVal], { commit: false });
   } else {
     startDrag(0);
+    focusThumb(0);
     updateValue(clickedVal, { commit: false });
   }
 };
 
-/** 滚轮步进：仅在 wheelable 且组件持有焦点时生效 */
-const handleWheel = (e: WheelEvent) => {
-  if (props.disabled || !props.wheelable || isEditing.value) return;
-  if (!wrapperRef.value?.contains(document.activeElement)) return;
-  e.preventDefault();
+/** 滚轮 deltaY → 步进方向：上滚加值、下滚减值（修饰键倍率见 resolveMultiplier） */
+const applyWheelStep = (e: WheelEvent) => {
   if (e.deltaY > 0) stepBy(-1, e);
   else if (e.deltaY < 0) stepBy(1, e);
+};
+
+/**
+ * 滚轮步进：事件绑定在轨道上，标签/按钮/读数区域滚动不会误触。
+ * 两种开启方式（互不影响）：wheelable 需组件持有焦点；wheelOnHover 悬停即生效、无需聚焦。
+ */
+const handleWheel = (e: WheelEvent) => {
+  if (props.disabled || isEditing.value) return;
+  if (props.wheelOnHover) {
+    e.preventDefault();
+    applyWheelStep(e);
+    return;
+  }
+  if (!props.wheelable || !wrapperRef.value?.contains(document.activeElement)) return;
+  e.preventDefault();
+  applyWheelStep(e);
 };
 
 /** 进入精确数值编辑：预填当前值并聚焦全选输入框 */
@@ -807,6 +836,10 @@ const commitEdit = () => {
   isEditing.value = false;
   const parsed = parseFloat(editValue.value);
   if (isNaN(parsed)) return;
+  // dev 提示：越界输入会被 updateValue 静默夹紧，主动提示避免使用者误以为原值生效
+  if (import.meta.env.DEV && (parsed < props.min || parsed > props.max)) {
+    console.warn(`[BaseSlider] 输入值 ${parsed} 超出范围 [${props.min}, ${props.max}]，将自动吸附到范围内。`);
+  }
   updateValue(parsed, { commit: true });
 };
 

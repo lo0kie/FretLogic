@@ -4,8 +4,11 @@
  */
 import type { Directive } from 'vue';
 
-export type WheelScrollModifiers =
-  'smooth' | 'reverse' | 'prevent' | 'stop' | 'contain' | 'auto' | (string & Record<never, never>);
+/**
+ * 指令修饰符集合。smooth/reverse/prevent/stop/contain/auto 仅为文档约定名，
+ * Vue 传入的 modifiers 是任意字符串键，故类型上直接放宽为 string。
+ */
+export type WheelScrollModifiers = string;
 
 export interface WheelScrollOptions {
   /** 滚动灵敏度/倍率，默认 1 */
@@ -22,7 +25,11 @@ export interface WheelScrollOptions {
   stop?: boolean;
   /** 到达边界时的穿透策略：'contain' 始终拦截 | 'auto' 边界放行纵向滚动 */
   overscroll?: 'contain' | 'auto';
-  /** 滚动回调（滚动量 + 双轴进度 0~1） */
+  /**
+   * 滚动回调：progress 为当前横向滚动进度 0~1。
+   * 注意：smooth 模式下缓动动画的每一帧都会触发本回调，其 e 始终是触发本轮滚动的那个原始 WheelEvent
+   *（非逐帧事件），如果有逐帧计算需求请只依赖 progress，勿用 e.deltaX 等推断当前帧。
+   */
   onScroll?: (e: WheelEvent, progress: number) => void;
   /** 贴边回调：内容横向滚到最左/最右时触发（与 wheel-scroll-edge 事件同源） */
   onEdge?: (edge: 'left' | 'right') => void;

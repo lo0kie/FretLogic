@@ -255,19 +255,20 @@ describe('useScrollEdgeFades', () => {
   });
 
   describe('导出样式（maskStyle 与 overlay 边缘样式）', () => {
-    it('两端均无需渐隐时，maskStyle 为 none，overlay opacity 均为 0', () => {
+    it('两端均贴边时端点羽化量为 0（遮罩整体不透明等价于无遮罩），overlay opacity 均为 0', () => {
       const el = createMockScrollElement({ clientHeight: 500, scrollHeight: 400, scrollTop: 0 });
       const scrollRef = ref<HTMLElement | null>(el);
       const { maskStyle, topStyle, bottomStyle, startStyle, endStyle } = useScrollEdgeFades(scrollRef);
 
-      expect(maskStyle.value).toEqual({ maskImage: 'none', WebkitMaskImage: 'none' });
+      expect(maskStyle.value['--fade-start']).toBe('0');
+      expect(maskStyle.value['--fade-end']).toBe('0');
       expect(topStyle.value.opacity).toBe(0);
       expect(bottomStyle.value.opacity).toBe(0);
       expect(startStyle.value.opacity).toBe(0);
       expect(endStyle.value.opacity).toBe(0);
     });
 
-    it('停留在顶部时，maskStyle 与 bottomStyle 表现出渐隐，且支持自定义 fadeSize 与 color', () => {
+    it('停留在顶部时，maskStyle 端点表现出渐隐，且支持自定义 fadeSize 与 color', () => {
       const el = createMockScrollElement({ clientHeight: 300, scrollHeight: 1000, scrollTop: 0 });
       const scrollRef = ref<HTMLElement | null>(el);
       const { maskStyle, topStyle, bottomStyle } = useScrollEdgeFades(scrollRef, {
@@ -276,6 +277,8 @@ describe('useScrollEdgeFades', () => {
       });
 
       expect(maskStyle.value.maskImage).toContain('24px');
+      expect(maskStyle.value['--fade-start']).toBe('0');
+      expect(maskStyle.value['--fade-end']).toBe('1');
       expect(topStyle.value.opacity).toBe(0);
       expect(bottomStyle.value.opacity).toBe(1);
       expect(bottomStyle.value.height).toBe('24px');

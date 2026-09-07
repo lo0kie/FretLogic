@@ -18,7 +18,7 @@
       <label
         v-if="label || $slots['label']"
         :class="[
-          layout === 'horizontal' && align === 'top' ? 'pt-[calc(0.5rem+1px)]' : '',
+          layout === 'horizontal' && align === 'top' ? labelTopPaddingClass : '',
           required ? 'flex items-center gap-1' : '',
         ]"
         :for="effectiveForId"
@@ -99,7 +99,7 @@ const {
   compacted?: boolean;
   /** 必填标记：显示 *，并通过默认插槽 props 透传 required（控件侧据此输出 aria-required / 原生 required） */
   required?: boolean;
-  /** 禁用态：label 置灰且透传 disabled 状态 */
+  /** 禁用态：仅置灰 label 并通过默认插槽 props 透传 disabled——控件侧必须自接该 prop 才真正禁用 */
   disabled?: boolean;
   /** 错误信息文案（优先级高于 help），输出 role="alert" */
   error?: string;
@@ -139,11 +139,19 @@ const feedbackStyle = computed(() => {
   if (layout !== 'horizontal' || normalizedLabelWidth.value === undefined || controlAlign === 'end') {
     return {};
   }
+  // 补偿值必须与 form-row-main 的 gap-sm / gap-md 同源：直接引用 Tailwind @theme 注入的
+  // --spacing-* 变量，间距 token 调整时此处的对齐缩进自动跟随，无需手工同步
   return {
-    paddingLeft: `calc(${normalizedLabelWidth.value} + ${compacted ? '0.5rem' : '0.75rem'})`,
+    paddingLeft: `calc(${normalizedLabelWidth.value} + var(--spacing-${compacted ? 'sm' : 'md'}))`,
   };
 });
 
 const resolvedError = computed(() => error || undefined);
-const resolvedHelp = computed(() => (error ? undefined : help || undefined));
+const resolvedHelp = computed(() => (resolvedError.value ? undefined : help || undefined));
+
+/**
+ * align="top" 时 label 的顶部内边距：间距档 sm 对齐控件内边距，+1px 补偿控件的 1px 边框宽度，
+ * 使 label 首行文字与输入框内文字基线对齐（控件边框宽度变更时需同步调整此补偿值）
+ */
+const labelTopPaddingClass = 'pt-[calc(var(--spacing-sm)+1px)]';
 </script>

@@ -1,9 +1,10 @@
 <template>
   <div
     v-scrollbar="{ onScroll: closeAllPopovers }"
-    :style="{ '--score-font-scale': scoreEditor.effectiveFontScale }"
+    :style="{ '--score-font-scale': scoreEditor.effectiveFontScale / 100, ...maskStyle }"
+    @scroll="syncEdgeFades()"
     @scroll.passive="handleScroll()"
-    class="no-scrollbar interactive-score-zone relative box-border min-w-0 flex-1 overflow-auto py-6 pr-0 pl-xl max-md:pt-sm max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] max-md:pl-sm"
+    class="no-scrollbar interactive-score-zone relative box-border min-w-0 flex-1 py-6 pr-0 pl-xl max-md:pt-sm max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] max-md:pl-sm"
     ref="scoreZoneRef"
   >
     <div class="contents">
@@ -297,6 +298,7 @@ import { useLyricsDragDrop } from '@/domains/score/editor/composables/useLyricsD
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
+import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades.ts';
 import { useUiStore } from '@/platform/store/uiStore';
 import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry.ts';
 import { TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
@@ -318,6 +320,7 @@ const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 
 const scoreZoneRef = useTemplateRef<HTMLElement>('scoreZoneRef');
+const { syncEdgeFades, maskStyle } = useScrollEdgeFades(scoreZoneRef);
 
 /** 边缘滚动入口：顶部/底部浮动按钮。内容可滚且未贴该边时可见，点击平滑滚至对应边 */
 const {

@@ -1,8 +1,12 @@
 import { computed, defineComponent, h, ref, watchEffect } from 'vue';
 
+import { buildEdgeFadeMask, ensureFadeProperties, fadeTransition } from '@/platform/utils/fadeMask.ts';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle.ts';
 
 import type { CSSProperties, Ref } from 'vue';
+
+/** mask 端点透明度翻转的过渡时长（与原 overlay opacity 0.2s 一致） */
+const FADE_TRANSITION_MS = 200;
 
 export interface UseScrollEdgeFadesOptions {
   /** 判定处于边缘的容差阈值（像素），默认 3，避免高分屏缩放与子像素舍入导致边缘判定失效 */
@@ -39,34 +43,24 @@ export function useScrollEdgeFades(scrollRef: Ref<HTMLElement | null>, options: 
 
   const sizeStr = typeof fadeSize === 'number' ? `${fadeSize}px` : fadeSize;
 
+  /**
+   * mask 方案样式：双端羽化遮罩（端点透明度由注册属性 --fade-start/--fade-end 驱动，
+   * 参与过渡 → 边缘状态翻转时羽化平滑过渡而非硬切）。两端均贴边时端点为 0，
+   * 渐变整体不透明等价于无遮罩，无需单独的 none 分支。
+   */
   const maskStyle = computed<CSSProperties>(() => {
-    if (direction === 'horizontal') {
-      if (atLeft.value && atRight.value) {
-        return { maskImage: 'none', WebkitMaskImage: 'none' };
-      }
-      let gradient: string;
-      if (!atLeft.value && !atRight.value) {
-        gradient = `linear-gradient(to right, transparent, black ${sizeStr}, black calc(100% - ${sizeStr}), transparent 100%)`;
-      } else if (!atLeft.value && atRight.value) {
-        gradient = `linear-gradient(to right, transparent, black ${sizeStr}, black 100%)`;
-      } else {
-        gradient = `linear-gradient(to right, black 0%, black calc(100% - ${sizeStr}), transparent 100%)`;
-      }
-      return { maskImage: gradient, WebkitMaskImage: gradient };
-    } else {
-      if (atTop.value && atBottom.value) {
-        return { maskImage: 'none', WebkitMaskImage: 'none' };
-      }
-      let gradient: string;
-      if (!atTop.value && !atBottom.value) {
-        gradient = `linear-gradient(to bottom, transparent, black ${sizeStr}, black calc(100% - ${sizeStr}), transparent 100%)`;
-      } else if (!atTop.value && atBottom.value) {
-        gradient = `linear-gradient(to bottom, transparent, black ${sizeStr}, black 100%)`;
-      } else {
-        gradient = `linear-gradient(to bottom, black 0%, black calc(100% - ${sizeStr}), transparent 100%)`;
-      }
-      return { maskImage: gradient, WebkitMaskImage: gradient };
-    }
+    ensureFadeProperties();
+    const horizontal = direction === 'horizontal';
+    const flushStart = horizontal ? atLeft.value : atTop.value;
+    const flushEnd = horizontal ? atRight.value : atBottom.value;
+    const mask = buildEdgeFadeMask(horizontal ? 'x' : 'y', sizeStr);
+    return {
+      'maskImage': mask,
+      'WebkitMaskImage': mask,
+      'transition': fadeTransition(FADE_TRANSITION_MS),
+      '--fade-start': flushStart ? '0' : '1',
+      '--fade-end': flushEnd ? '0' : '1',
+    } as CSSProperties;
   });
 
   const topStyle = computed<CSSProperties>(() => ({

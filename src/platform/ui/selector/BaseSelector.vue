@@ -4,7 +4,6 @@
     :disabled
     :block="width === 'full'"
     :offset-distance="6"
-    @open="scrollToSelected()"
     match-trigger-width
     panel-class="p-0 overflow-hidden"
     placement="bottom-start"
@@ -169,40 +168,40 @@
             </div>
             <template v-else>
               <div
-                v-for="(option, index) in filteredOptions"
-                v-wave="{ disabled: isOptionDisabled(option) }"
-                :aria-selected="isSelected(getOptionValue(option))"
+                v-for="(entry, index) in filteredEntries"
+                v-wave="{ disabled: isOptionDisabled(entry.option) }"
+                :aria-selected="isSelected(getOptionValue(entry.option))"
                 :class="[
                   currentConfig.itemClass,
-                  isSelected(getOptionValue(option))
+                  isSelected(getOptionValue(entry.option))
                     ? 'bg-tint-primary-88! font-bold text-primary!'
                     : fontBlackItems
                       ? 'font-black'
                       : 'font-bold',
-                  { 'pointer-events-none cursor-not-allowed opacity-40': isOptionDisabled(option) },
+                  { 'pointer-events-none cursor-not-allowed opacity-40': isOptionDisabled(entry.option) },
                 ]"
-                :key="index"
+                :key="entry.key"
                 :ref="el => setOptionEl(el, index)"
-                :tabindex="isOptionDisabled(option) ? -1 : 0"
-                :title="getOptionTitle(option)"
-                @click="handleSelect(option, close)"
-                @keydown.enter.prevent.stop="handleSelect(option, close)"
-                @keydown.space.prevent.stop="handleSelect(option, close)"
+                :tabindex="isOptionDisabled(entry.option) ? -1 : 0"
+                :title="getOptionTitle(entry.option)"
+                @click="handleSelect(entry.option, close)"
+                @keydown.enter.prevent.stop="handleSelect(entry.option, close)"
+                @keydown.space.prevent.stop="handleSelect(entry.option, close)"
                 class="box-border flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-lg bg-transparent px-2.5 text-xs text-fg-body transition-colors outline-none hover:bg-surface-panel-hover hover:text-fg-title"
                 role="option"
               >
                 <span class="flex max-w-full min-w-0 flex-1 items-center gap-2">
                   <BaseIcon
-                    v-if="typeof getOptionIcon(option) === 'string'"
-                    :name="getOptionIcon(option) as IconName"
+                    v-if="typeof getOptionIcon(entry.option) === 'string'"
+                    :name="getOptionIcon(entry.option) as IconName"
                     aria-hidden="true"
                     class="shrink-0 opacity-80"
                     icon-stroke="bold"
                     size="md"
                   />
                   <component
-                    v-else-if="getOptionIcon(option)"
-                    :is="getOptionIcon(option)"
+                    v-else-if="getOptionIcon(entry.option)"
+                    :is="getOptionIcon(entry.option)"
                     aria-hidden="true"
                     class="shrink-0 opacity-80"
                     icon-stroke="bold"
@@ -210,14 +209,14 @@
                   />
                   <div v-marquee.fade class="min-w-0 flex-1">
                     <span class="block whitespace-nowrap">
-                      <slot :index :option name="option">
-                        {{ formattedOption(option) }}
+                      <slot :index :option="entry.option" name="option">
+                        {{ formattedOption(entry.option) }}
                       </slot>
                     </span>
                   </div>
                 </span>
                 <BaseIcon
-                  v-if="isSelected(getOptionValue(option))"
+                  v-if="isSelected(getOptionValue(entry.option))"
                   aria-hidden="true"
                   class="shrink-0 text-primary"
                   icon-stroke="bold"
@@ -502,6 +501,22 @@ const filteredOptions = computed(() => {
   });
 });
 
+/**
+ * 过滤结果行：附带完整 options 中的原始下标作为稳定 key。
+ * filterable 时行序随关键字变动，若用「过滤后的行内下标」作 key，Vue 会按位复用错位 DOM，
+ * 焦点所在的旧行节点会被填进另一个选项的内容（键盘导航定位与实际可见项脱节）。
+ * 原始下标不随过滤变化，能保证行与选项一一对应。
+ */
+const filteredEntries = computed(() => {
+  const list = filteredOptions.value;
+  if (list === options) {
+    // 未过滤 / 非 filterable：行序即原始序，下标即稳定 key
+    return list.map((option, index) => ({ option, key: index }));
+  }
+  // 已过滤：按引用回查原始下标（选项列表通常为常驻数组且规模小，indexOf 成本可忽略）
+  return list.map(option => ({ option, key: options.indexOf(option) }));
+});
+
 const selectedOptions = computed(() => options.filter(opt => isSelected(getOptionValue(opt))));
 
 const maxTags = computed(() => {
@@ -522,7 +537,15 @@ const isEmpty = computed(() =>
 /** 当前值是否已偏离 defaultValue：仅描述值状态，与是否高亮无关（共清空按钮判定使用） */
 const isNonDefaultValue = computed(() => {
   if (defaultValue === undefined) return false;
-  // 多选时 defaultValue 形态为 V[]，故此处断言为 V（该分支仅单选路径生效）
+  if (isMultiple.value) {
+    // 多选按集合语义比较（忽略勾选顺序）：长度不等即偏离；否则双向逐项 equalsValue。
+    // equalsValue 对数组会落到 JSON.stringify 的字符串比较，顺序敏感——['a','b'] 与 ['b','a']
+    // 在多选下语义等价，若按字符串比较会把清空按钮/高亮状态误判为"已偏离默认值"。
+    const current = selectedValues.value;
+    const fallback = Array.isArray(defaultValue) ? (defaultValue as unknown as V[]) : [];
+    if (current.length !== fallback.length) return true;
+    return !fallback.every(dv => current.some(v => equalsValue(v, dv)));
+  }
   return !equalsValue(modelValue.value as V, defaultValue as V);
 });
 
@@ -723,7 +746,12 @@ const handleDropdownKeydown = (e: KeyboardEvent, close: () => void) => {
     e.preventDefault();
     close();
   } else if (e.key === 'Tab') {
+    // 显式拦截原生 Tab：面板经 Teleport 挂在 body 下，若放任浏览器默认焦点移动，
+    // 焦点可能落在「即将随面板卸载的列表节点」上，导致焦点意外掉回 document.body。
+    // 改由手动把焦点交还触发器，面板关闭后的下一次 Tab 自然前进到下一个控件。
+    e.preventDefault();
     close();
+    referenceRef.value?.focus();
   }
 };
 

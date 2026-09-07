@@ -138,6 +138,40 @@ export function useTextTransfer() {
     return { status: 'imported' };
   };
 
+  /** 复制当前乐谱的纯歌词文本到剪贴板（不含和弦标记，与「复制乐谱」的带谱文本区分） */
+  const copyLyricsText = async (song: Song | null): Promise<void> => {
+    if (!song) return;
+    try {
+      await writeTextToClipboard(song.lyrics ?? '');
+      uiStore.toast.success('已复制歌词到剪贴板');
+    } catch (err) {
+      uiStore.toast.error(err instanceof Error ? err.message : '复制失败');
+    }
+  };
+
+  /**
+   * 纯文本粘贴进歌词编辑器：读剪贴板原文并覆盖当前乐谱歌词。
+   * 与 pasteSongFromClipboard 的区别：不解析和弦、不新建乐谱、不动和弦库，只把原文填进编辑器。
+   * 超长行无需在此处理——歌词编辑器的 localLyrics watch 会逐行截断后回写。
+   */
+  const pasteLyricsToEditor = async (): Promise<void> => {
+    const songId = scoreEditor.activeSongId;
+    if (!songId) return;
+    let text: string;
+    try {
+      text = await readTextFromClipboard();
+    } catch (err) {
+      uiStore.toast.error(err instanceof Error ? err.message : '读取剪贴板失败');
+      return;
+    }
+    if (!text.trim()) {
+      uiStore.toast.warning('剪贴板没有文本内容');
+      return;
+    }
+    scoreEditor.updateLyrics(text, songId);
+    uiStore.toast.success('已粘贴到歌词编辑器');
+  };
+
   return {
     copyChordText,
     copyChordCardText,
@@ -145,5 +179,7 @@ export function useTextTransfer() {
     copySongText,
     pasteSongFromClipboard,
     importPortableSong,
+    copyLyricsText,
+    pasteLyricsToEditor,
   };
 }

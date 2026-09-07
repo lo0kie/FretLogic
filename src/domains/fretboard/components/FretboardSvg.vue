@@ -110,16 +110,17 @@
           />
         </g>
 
-        <!-- 2. 零品加粗视觉带（上琴枕）：bottom 恒为 OFFSET_Y_TOP(80px)，height 从 0 插值到 12px 时
-             视觉上自品丝线向上生长，天然不越界，无需 clipPath 或 Transition。
-             fretOffset≠0 时用 v-if 卸载（此时为瞬时跳变，不需要过渡）。 -->
+        <!-- 2. 零品加粗视觉带（上琴枕）：零品线本身恒以普通品丝粗细渲染（见上方网格循环），
+             此带仅在琴枕态出现，且完整覆盖零品线（底缘压到线宽下沿）——琴枕态只见深色粗带、
+             偏移态只见灰色细线，任一时刻单一颜色无拼缝；
+             height 从 0 插值生长，天然不越界。fretOffset≠0 时用 v-if 卸载（瞬时跳变，不需要过渡）。 -->
         <rect
           v-if="fretOffset === 0"
           :style="nutBarStyle"
           :width="(stringXPositions[strings.length - 1] ?? 0) - (stringXPositions[0] ?? 0) + FRETBOARD_LINE_WIDTH"
           :x="(stringXPositions[0] ?? 0) - FRETBOARD_LINE_WIDTH / 2"
           class="wide-nut-bar pointer-events-none"
-          fill="var(--fb-note)"
+          fill="var(--fb-nut)"
           rx="1"
         />
 
@@ -246,12 +247,16 @@ const emit = defineEmits<{
 /** 横按实心梁厚度：贴合按弦圆点直径 */
 const barreThickness = NOTE_DISPLAY.FINGER_DOT_RADIUS * 2;
 
-/** 零品加粗样式：bottom 恒为 OFFSET_Y_TOP，通过 style 绑定 height/y 使 CSS transition 生效
- * （plain SVG attribute 不触发 transition，必须走 inline style，与 barreBeamStyle 同样约定）；
- * 高度固定 12px 加宽，显隐由模板 v-if="fretOffset === 0" 控制（非零品不显示粗轴承） */
+/** 零品加粗样式：加粗带完整覆盖零品线（底缘压到线宽下沿），使琴枕态画面中只存在深色粗带一种颜色，
+ *  偏移态卸载后只存在灰色细线一种颜色——任一状态都不会出现双色拼缝；
+ *  通过 style 绑定 height/y 使 CSS transition 生效（plain SVG attribute 不触发 transition，
+ *  与 barreBeamStyle 同样约定）；显隐由模板 v-if="fretOffset === 0" 控制 */
+const NUT_BAR_HEIGHT = 14;
 const nutBarStyle = computed<CSSProperties>(() => {
-  const h = 12;
-  return { height: `${h}px`, y: `${CANVAS_CONFIG.OFFSET_Y_TOP - h}px` };
+  return {
+    height: `${NUT_BAR_HEIGHT}px`,
+    y: `${CANVAS_CONFIG.OFFSET_Y_TOP - NUT_BAR_HEIGHT + FRETBOARD_LINE_WIDTH / 2}px`,
+  };
 });
 
 /**

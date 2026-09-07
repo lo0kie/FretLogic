@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <WorkbenchPanel
     :has-content
     :storage-key="STORAGE_KEYS.WORKBENCH_VARIANTS_COLLAPSED"
@@ -13,7 +13,7 @@
           v-wheel-scroll.auto.smooth
           v-scrollbar.x="{ onScroll: closeAllPopovers }"
           @scroll.passive="syncEdgeFades()"
-          class="no-scrollbar flex w-full items-stretch gap-4 overflow-x-auto p-1 select-none"
+          class="flex w-full items-stretch gap-4 p-1 select-none"
           ref="scrollRef"
         >
           <div

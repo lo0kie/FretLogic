@@ -69,7 +69,8 @@
         icon-size="xl"
         variant="ghost"
       />
-      <!-- 复制/粘贴：和弦页与乐谱页共用，按当前路由分派动作与文案 -->
+      <!-- 复制/粘贴：和弦页与乐谱页共用，按当前路由分派动作与文案；
+           乐谱「预览」tab 无文字编辑语义，改派为整曲长图的复制 / 下载 -->
       <ActionButton
         v-for="btn in transferButtons"
         v-tooltip="btn.tooltip"
@@ -81,16 +82,6 @@
         icon-only
         icon-size="xl"
         variant="ghost"
-      />
-
-      <!-- 乐谱预览 tab：复制 / 下载当前乐谱的整曲长图 -->
-      <PopoverMenu
-        v-if="route.path === ROUTE_PATHS.SCORE && scoreEditor.activeTab === 'preview'"
-        :disabled="!scoreEditor.hasLyrics"
-        :items="scoreExportMenuItems"
-        aria-label="导出整曲长图"
-        icon="download"
-        title="导出整曲长图"
       />
 
       <BasePopover v-if="showHeaderSettings" placement="bottom-end" trigger="hover">
@@ -244,8 +235,15 @@ const uiStore = useUiStore();
 const { isPlaying, isSustaining, playCurrentChord, startChordSustain, stopChordSustain } = useAudioPlayer();
 
 const { chordsLookupMap } = useScoreLinesData();
-const { copyChordText, pasteChordFromClipboard, copySongText, pasteSongFromClipboard, importPortableSong } =
-  useTextTransfer();
+const {
+  copyChordText,
+  pasteChordFromClipboard,
+  copySongText,
+  pasteSongFromClipboard,
+  importPortableSong,
+  copyLyricsText,
+  pasteLyricsToEditor,
+} = useTextTransfer();
 const scoreRouteSync = useScoreRouteSync();
 
 /** 无结构纯歌词「确认兜底」：待确认的载荷 + 确认弹窗开关 */
@@ -291,6 +289,12 @@ const handlePasteSong = () =>
     isLyricsImportConfirmOpen.value = true;
   });
 
+/** 乐谱-编辑歌词 tab：复制当前纯歌词文本（不带和弦标记） */
+const handleCopyLyrics = () => withTransferLock(() => copyLyricsText(scoreEditor.activeSong));
+
+/** 乐谱-编辑歌词 tab：把剪贴板纯文本粘进当前歌词编辑器（不解析和弦、不新建乐谱） */
+const handlePasteLyricsToEditor = () => withTransferLock(pasteLyricsToEditor);
+
 /** 用户确认「仍按纯歌词导入」后落地建谱 */
 const handleConfirmLyricsImport = () => {
   const portable = pendingLyricsImport.value;
@@ -307,6 +311,46 @@ const openSourceRepository = () => {
 /** 复制/粘贴按钮配置：和弦页与乐谱页共用，按当前路由分派动作、文案与禁用态 */
 const transferButtons = computed<TransferButton[]>(() => {
   const isScore = route.path === ROUTE_PATHS.SCORE;
+  // 乐谱「预览」tab：此处无文字编辑语义，复制/粘贴乐谱文本不成立，
+  // 改派为整曲长图的复制与下载（复用预览导出链路 handleScoreExport）
+  if (isScore && scoreEditor.activeTab === 'preview') {
+    const longImageDisabled = uiStore.isCopying || !scoreEditor.hasLyrics;
+    return [
+      {
+        key: 'copy-long-image',
+        icon: 'copy',
+        tooltip: '复制整曲长图',
+        disabled: longImageDisabled,
+        onClick: () => void handleScoreExport('copy'),
+      },
+      {
+        key: 'download-long-image',
+        icon: 'download',
+        tooltip: '下载整曲长图',
+        disabled: longImageDisabled,
+        onClick: () => void handleScoreExport('download'),
+      },
+    ];
+  }
+  // 乐谱「编辑歌词」tab：此处编辑的是纯歌词文本，两个按钮改为歌词纯文本的复制 / 粘贴进编辑器
+  if (isScore && scoreEditor.activeTab === 'edit') {
+    return [
+      {
+        key: 'copy-lyrics',
+        icon: 'copy',
+        tooltip: '复制歌词',
+        disabled: uiStore.isCopying || !scoreEditor.hasLyrics,
+        onClick: handleCopyLyrics,
+      },
+      {
+        key: 'paste-to-editor',
+        icon: 'clipboard-paste',
+        tooltip: '粘贴到editor',
+        disabled: uiStore.isCopying || !scoreEditor.activeSong,
+        onClick: handlePasteLyricsToEditor,
+      },
+    ];
+  }
   return [
     {
       key: 'copy',
@@ -533,7 +577,9 @@ const handleScoreExport = async (op: 'copy' | 'download') => {
       settingsStore.scoreChordShorthand,
       settingsStore.scoreLayoutAlign,
       scoreEditor.fontScale,
-      scoreEditor.fretboardScale
+      scoreEditor.fretboardScale,
+      settingsStore.scoreShowBarre,
+      settingsStore.scoreLyricsFontWeight
     );
     const { blobs } = await runWorkerExport(payload);
     if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
@@ -553,29 +599,6 @@ const handleScoreExport = async (op: 'copy' | 'download') => {
     uiStore.isCopying = false;
   }
 };
-
-/** 预览 tab 的导出菜单：复制 / 下载 整曲长图（平级两项，无子菜单） */
-const scoreExportMenuItems = computed<ContextMenuItem[]>(() => {
-  const hasLyrics = scoreEditor.hasLyrics;
-  return [
-    {
-      label: '复制整曲长图',
-      icon: 'copy',
-      disabled: !hasLyrics,
-      action: () => {
-        void handleScoreExport('copy');
-      },
-    },
-    {
-      label: '下载整曲长图',
-      icon: 'download',
-      disabled: !hasLyrics,
-      action: () => {
-        void handleScoreExport('download');
-      },
-    },
-  ];
-});
 
 const isSyncModalOpen = ref(false);
 /** PWA 窗口控制拖拽拦截类名 */

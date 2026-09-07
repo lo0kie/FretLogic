@@ -26,6 +26,7 @@
             :is-dark-mode="previewBg === 'dark'"
             :scale="1.8"
             :shorthand="settingsStore.workbenchChordShorthand"
+            :theme="previewBg === 'dark' ? 'dark' : 'light'"
           />
         </div>
       </div>
@@ -61,9 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-
-import { useStorage } from '@vueuse/core';
+import { ref, toRef } from 'vue';
 
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
@@ -81,6 +80,7 @@ import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import WorkbenchPanel from './WorkbenchPanel.vue';
 
+import type { ExportBgMode } from '@/platform/types';
 import type { SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 
 const editorStore = useChordEditorStore();
@@ -93,14 +93,13 @@ const fretBoardConfig = { showChordName: true, showOpenStringNotes: true, showFr
 // auto 的展开依据：草稿和弦存在至少一根按音弦（有内容才值得导出）
 const hasFrettedNotes = () => editorStore.draftChord.strings.some(str => str && str[0] > 0);
 
-// ---- 背景选项 ----
-type BgMode = 'transparent' | 'white' | 'dark';
-const BG_OPTIONS: SegmentOption<BgMode>[] = [
+// ---- 背景选项（偏好持久化于 settingsStore，设备级不随偏好备份同步） ----
+const BG_OPTIONS: SegmentOption<ExportBgMode>[] = [
   { label: '透明', value: 'transparent' },
   { label: '白底', value: 'white' },
   { label: '暗底', value: 'dark' },
 ];
-const previewBg = useStorage<BgMode>(STORAGE_KEYS.WORKBENCH_EXPORT_BG, 'transparent');
+const previewBg = toRef(settingsStore, 'workbenchExportBg');
 
 // ---- 导出辅助 ----
 const isActing = ref(false);

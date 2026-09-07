@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <BaseModal
     v-model:visible="isSyncModalOpen"
     :close-on-mask="modalCloseable"
@@ -149,9 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-
-import { useStorage } from '@vueuse/core';
+import { computed, toRef } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
@@ -161,7 +159,7 @@ import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { useSyncService } from '@/app/services/sync/useSyncService';
 import { useSettingsStore } from '@/platform/store/settingsStore';
-import { STORAGE_KEYS } from '@/platform/utils/constants';
+import { useUiStore } from '@/platform/store/uiStore';
 
 import type { SyncProviderKind } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
@@ -171,10 +169,11 @@ const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true
 const { triggerGlobalSync, pullFromRemote, testConnection, isSyncing, isPulling, isTestingConnection } =
   useSyncService();
 const settingsStore = useSettingsStore();
+const uiStore = useUiStore();
 const backupModals = useBackupModals();
 
 // 弹窗内方案选择器：独立持久化（不联动全局 syncTarget，仅记录弹窗当前查看/操作的方案）
-const selectedProvider = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_MODAL_PROVIDER, 'gitee');
+const selectedProvider = toRef(uiStore, 'syncModalProvider');
 
 /** 用户点击"同步"：按当前选中的方案推送本地数据，成功后关闭弹窗 */
 const handleSyncClick = async () => {

@@ -1,15 +1,21 @@
 <template>
-  <div class="config-popover-card box-border flex w-[360px] flex-col gap-lg p-lg outline-none">
+  <div
+    v-scrollbar="{ endInset: 8 }"
+    :style="maskStyle"
+    @scroll="syncEdgeFades()"
+    class="config-popover-card box-border flex max-h-80 w-[360px] flex-col gap-lg p-lg outline-none"
+    ref="scrollRef"
+  >
     <template v-if="isScoreRoute">
       <BaseFormRow label="字号缩放">
         <BaseSlider
           v-model.lazy="scoreEditor.fontScale"
-          :default-value="1.0"
-          :formatter="val => `${Math.round(val * 100)}%`"
-          :max="1.5"
-          :min="0.6"
+          :default-value="100"
+          :formatter="val => `${Math.round(val)}%`"
+          :max="150"
+          :min="60"
           :show-buttons="false"
-          :step="0.05"
+          :step="5"
           bordered
           readout-position="left"
         />
@@ -18,12 +24,12 @@
       <BaseFormRow label="和弦缩放">
         <BaseSlider
           v-model.lazy="scoreEditor.fretboardScale"
-          :default-value="1.0"
-          :formatter="val => `${Math.round(val * 100)}%`"
-          :max="1.5"
-          :min="0.6"
+          :default-value="100"
+          :formatter="val => `${Math.round(val)}%`"
+          :max="150"
+          :min="60"
           :show-buttons="false"
-          :step="0.1"
+          :step="5"
           bordered
           readout-position="left"
         />
@@ -40,8 +46,24 @@
         />
       </BaseFormRow>
 
+      <BaseFormRow v-if="isPreviewTab" help="仅影响预览与导出图片的歌词文字" label="歌词字重">
+        <BaseSegmentedControl
+          v-model="settingsStore.scoreLyricsFontWeight"
+          :options="[
+            { value: 'light', label: '细' },
+            { value: 'regular', label: '常规' },
+            { value: 'bold', label: '粗' },
+          ]"
+          size="sm"
+        />
+      </BaseFormRow>
+
       <BaseFormRow help="仅乐谱生效" label="符号简写 (M/°/+)">
         <BaseSwitch v-model="settingsStore.scoreChordShorthand" aria-label="乐谱符号简写" />
+      </BaseFormRow>
+
+      <BaseFormRow help="关闭后指板图仅保留按弦圆点" label="显示横按">
+        <BaseSwitch v-model="settingsStore.scoreShowBarre" aria-label="是否显示大横按" />
       </BaseFormRow>
     </template>
 
@@ -106,12 +128,12 @@
       <BaseFormRow help="混响尾音占比" label="混响">
         <BaseSlider
           v-model="settingsStore.audioPlayback.reverbWet"
-          :default-value="0.2"
-          :formatter="val => `${Math.round(val * 100)}%`"
-          :max="1"
+          :default-value="20"
+          :formatter="val => `${Math.round(val)}%`"
+          :max="100"
           :min="0"
           :show-buttons="false"
-          :step="0.05"
+          :step="5"
           bordered
           readout-position="left"
         />
@@ -120,12 +142,16 @@
       <BaseFormRow help="为试听音色添加合唱摆动效果" label="合唱">
         <BaseSwitch v-model="settingsStore.audioPlayback.chorusEnabled" aria-label="合唱效果" />
       </BaseFormRow>
+
+      <BaseFormRow help="仅工作台生效" label="符号简写 (M/°/+)">
+        <BaseSwitch v-model="settingsStore.workbenchChordShorthand" aria-label="工作台符号简写" />
+      </BaseFormRow>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 
 import { useRoute } from 'vue-router';
 
@@ -134,9 +160,12 @@ import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.v
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
 
+const scrollRef = useTemplateRef('scrollRef');
+const { syncEdgeFades, maskStyle } = useScrollEdgeFades(scrollRef);
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 const route = useRoute();

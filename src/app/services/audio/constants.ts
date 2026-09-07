@@ -13,8 +13,8 @@ export const AUDIO_CONFIG = {
   MAIN_VOLUME_DB: AUDIO_SETTINGS_DEFAULTS.volumeDb,
   /** 混响时长（s） */
   REVERB_DURATION: 1.2,
-  /** 混响干湿比：默认值真源在 platform/utils 的 AUDIO_SETTINGS_DEFAULTS */
-  REVERB_WET_GAIN: AUDIO_SETTINGS_DEFAULTS.reverbWet,
+  /** 混响干湿比（0~1）：默认值真源在 platform/utils 的 AUDIO_SETTINGS_DEFAULTS（存百分制，此处换算为干湿比） */
+  REVERB_WET_GAIN: AUDIO_SETTINGS_DEFAULTS.reverbWet / 100,
 
   /** 压缩器阈值（dB） */
   COMPRESSOR_THRESHOLD: -14,

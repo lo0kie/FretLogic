@@ -3,11 +3,11 @@
     <div
       :class="positionClass"
       :style="positionStyle"
+      @focusin="uiStore.pauseAllTimers"
+      @focusout="handleFocusOut($event)"
       @mouseenter="uiStore.pauseAllTimers"
       @mouseleave="uiStore.resumeAllTimers"
       aria-label="系统通知"
-      aria-live="polite"
-      aria-relevant="additions text"
       class="pointer-events-none fixed z-toast box-border flex flex-col gap-sm select-none"
       role="region"
     >
@@ -53,9 +53,10 @@
                 v-wave
                 v-if="item.onAction"
                 :aria-label="`${item.actionText ?? '确定'}操作`"
+                :disabled="isActionPending(item.id)"
                 @click="handleExecuteAction(item)"
                 data-focusable-inline
-                class="ml-sm shrink-0 cursor-pointer self-center rounded-sm border-none bg-transparent p-0 text-xs font-bold whitespace-nowrap text-inherit underline opacity-90 outline-none hover:opacity-100"
+                class="ml-sm shrink-0 cursor-pointer self-center rounded-sm border-none bg-transparent p-0 text-xs font-bold whitespace-nowrap text-inherit underline opacity-90 transition-opacity outline-none hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
                 type="button"
               >
                 {{ item.actionText }}
@@ -83,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { useUiStore } from '@/platform/store/uiStore';
@@ -177,16 +178,35 @@ const transitionName = computed(() =>
   props.position.startsWith('bottom') ? 'v-transition-slide-up' : 'v-transition-slide-down'
 );
 
-/** 执行通知动作：无论成败都会移除该通知 */
+/** 正在执行 action 的 toast id 集合，用于 pending 期间禁用按钮，防止并发重复点击（#4） */
+const pendingActionIds = ref<Set<number>>(new Set());
+const isActionPending = (id: number) => pendingActionIds.value.has(id);
+
+/** 焦点移出容器（而非在内部子元素间移动）时恢复自动销毁计时，满足 WCAG 2.2.1 可暂停要求（#6） */
+const handleFocusOut = (e: FocusEvent) => {
+  const container = e.currentTarget as HTMLElement | null;
+  if (container && !container.contains(e.relatedTarget as Node | null)) {
+    uiStore.resumeAllTimers();
+  }
+};
+
+/**
+ * 执行通知动作：
+ * - 成功：移除该通知；
+ * - 失败：保留原通知（便于重试）并额外弹出错误提示，避免用户误以为操作成功（#3）。
+ * pending 期间通过 pendingActionIds 禁用按钮，防止并发重复点击（#4）。
+ */
 const handleExecuteAction = async (item: Toast) => {
-  if (item.onAction) {
-    try {
-      await item.onAction();
-    } catch (err) {
-      console.error('[Toast] Action execution failed:', err);
-    } finally {
-      uiStore.removeToast(item.id);
-    }
+  if (!item.onAction || isActionPending(item.id)) return;
+  pendingActionIds.value.add(item.id);
+  try {
+    await item.onAction();
+    uiStore.removeToast(item.id);
+  } catch (err) {
+    console.error('[Toast] Action execution failed:', err);
+    uiStore.toast.error('操作失败，请重试');
+  } finally {
+    pendingActionIds.value.delete(item.id);
   }
 };
 </script>

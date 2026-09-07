@@ -39,8 +39,9 @@
   --text-on-accent: #ffffff;
 
   /* 指板画布调色板：跟随主题切换的绘制色 */
-  --fb-line: #0f172a; /* 主网格 / 品丝 */
-  --fb-line-dim: #334155; /* 次要网格 */
+  --fb-line: #a1a1aa; /* 主网格 / 品丝（对齐 canvas 导出配色的柔和灰） */
+  --fb-line-dim: #d4d4d8; /* 次要网格 */
+  --fb-nut: #18181b; /* 上琴枕加粗带（比品丝更深，对齐 canvas 琴枕色） */
   --fb-note: #0f172a; /* 音符填充 */
   --fb-hover: #ffffff; /* hover 高亮填充（浅色底） */
   --fb-label: #475569; /* 品位数字（浅色态） */
@@ -174,8 +175,9 @@
   --color-danger: #ff453a;
 
   --text-on-accent: #ffffff;
-  --fb-line: #ffffff;
-  --fb-line-dim: #cbd5e1;
+  --fb-line: #52525b;
+  --fb-line-dim: #3f3f46;
+  --fb-nut: #f4f4f5;
   --fb-note: #ffffff;
   --fb-hover: #28282a;
   --fb-label: #e2e8f0;

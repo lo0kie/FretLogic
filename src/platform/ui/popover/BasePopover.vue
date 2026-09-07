@@ -75,6 +75,8 @@ const globalFloatingReferenceMap = new WeakMap<HTMLElement, HTMLElement>();
 interface PopoverLayerEntry {
   el: HTMLElement | null;
   z: number;
+  /** 是否处于打开态：关场动画期间 model 已为 false 但宿主尚未卸载，需与「真正打开」区分以判定最上层 */
+  open: boolean;
 }
 
 /** 打开中的浮层实例登记（供 bring-to-front 时计算后代层级预算，保证父面板不反超打开中的子浮层） */
@@ -174,7 +176,7 @@ const contextMenuVirtualRef = ref<VirtualElement | null>(null);
 const isPointerDown = ref(false);
 
 // 本实例在打开中浮层登记表（模块级 openedPopovers）里的条目（el 由 floatingRef watch 填充）
-const ownLayerEntry: PopoverLayerEntry = { el: null, z: FLOATING_Z_BASE };
+const ownLayerEntry: PopoverLayerEntry = { el: null, z: FLOATING_Z_BASE, open: false };
 
 const activeReference = computed(() => unref(virtualRef) || contextMenuVirtualRef.value || referenceRef.value);
 
@@ -290,6 +292,7 @@ watch(model, async val => {
     if (!zOwned) {
       acquireOwnedZ();
       openedPopovers.add(ownLayerEntry);
+      ownLayerEntry.open = true;
     }
     isMounted.value = true;
     await nextTick();
@@ -318,6 +321,7 @@ const open = async () => {
   releaseOwnedZ();
   acquireOwnedZ();
   openedPopovers.add(ownLayerEntry);
+  ownLayerEntry.open = true;
   isMounted.value = true;
   model.value = true;
   emit('open');
@@ -326,6 +330,7 @@ const open = async () => {
 /** 关闭浮层：复位钉住与右键虚拟锚点，并派发 close */
 const close = () => {
   if (!model.value && !isShown.value) return;
+  ownLayerEntry.open = false;
   isShown.value = false;
   model.value = false;
   pinned.value = false;
@@ -515,10 +520,9 @@ useEventListener(
   window,
   'pointerdown',
   (e: PointerEvent) => {
-    isPointerDown.value = true;
-
     if (!closeOnClickOutside || !model.value || !isShown.value) return;
-    if (e.button === 2) return; // 右键留给 ContextMenu
+    if (e.button === 2) return; // 右键留给 ContextMenu（不置 isPointerDown，避免污染拖拽守卫）
+    isPointerDown.value = true;
     // contextTriggerEl 内的左键是否关闭由消费方声明：ContextMenu 触发区要点关（toggle），
     // 而 BaseInput 的 input 本身位于 contextTriggerEl 内且点击会立即重开面板，关闭再重开只会闪烁
     if (!closeOnContextTriggerClick && contextTriggerEl?.contains(e.target as Node)) return;
@@ -562,12 +566,23 @@ useEventListener(
   true
 );
 
+/** 判断本浮层是否为当前所有打开中浮层里 z 最高的（即最上层），用于 Escape 仅关闭最上层而非全部 */
+const isTopmostOpenPopover = (): boolean => {
+  let topZ = -Infinity;
+  for (const entry of openedPopovers) {
+    if (entry.open) topZ = Math.max(topZ, entry.z);
+  }
+  return floatingZIndex.value >= topZ;
+};
+
 useEventListener(
   window,
   'keydown',
   (e: KeyboardEvent) => {
     if (!model.value || !closeOnEsc) return;
     if (e.key !== 'Escape') return;
+    // 嵌套浮层下，仅最上层（z 最大）的实例响应 Escape，避免一次按键把所有浮层一次性全部关闭
+    if (!isTopmostOpenPopover()) return;
     e.stopPropagation();
     close();
   },
@@ -581,8 +596,9 @@ const handleFocusOut = (e: FocusEvent) => {
   if (isPointerDown.value) return;
 
   const nextFocused = e.relatedTarget as HTMLElement | null;
-  if (nextFocused) {
-    if (isEventInside(nextFocused)) return;
+  // relatedTarget 为 null（焦点移出到浏览器地址栏 / iframe / 开发者工具等）时视为离开合法区域，
+  // 保守关闭；拖拽过程中已由上方 isPointerDown 守卫拦截
+  if (!nextFocused || !isEventInside(nextFocused)) {
     close();
   }
 };

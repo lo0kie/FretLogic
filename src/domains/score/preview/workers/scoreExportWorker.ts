@@ -8,6 +8,7 @@ import { parseChordNameTokens as parseChordNameTokensCore } from '@/domains/scor
 
 import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import type { ChordNameToken } from '@/domains/score/model/chordNameTokens';
+import type { ScoreLyricsFontWeight } from '@/platform/types';
 
 export interface ExportChordData {
   chordName: string;
@@ -46,6 +47,10 @@ export interface WorkerExportPayload {
   fontScale?: number;
   /** 指板图缩放（来自排列和弦配置「和弦缩放」，缺省 1 不缩放） */
   fretboardScale?: number;
+  /** 是否绘制大横按（缺省 true；false 时隐藏横按梁，仅保留按弦圆点） */
+  showBarre?: boolean;
+  /** 歌词字重（缺省 regular 常规） */
+  lyricsFontWeight?: ScoreLyricsFontWeight;
 }
 
 export type WorkerExportMessage =
@@ -113,16 +118,19 @@ const mutableLayoutConfig = SCORE_EXPORT_CONFIG as unknown as Record<string, num
   getExportFretboardWidth: (stringCount: number) => number;
 };
 
-/** 按缩放系数重算布局常量（Worker 每收到渲染消息先调用；表头标题/元信息体系保持不缩放） */
+/** 按缩放系数重算布局常量（Worker 每收到渲染消息先调用；表头标题/元信息体系保持不缩放）。
+ *  fontScale/fretboardScale 以百分制传入（100 = 100%），此处换算为倍率后乘基准布局值 */
 const applyLayoutScales = (fontScale: number, fretboardScale: number): void => {
+  const fontFactor = fontScale / 100;
+  const fretboardFactor = fretboardScale / 100;
   for (const key of FRETBOARD_SCALED_KEYS) {
-    mutableLayoutConfig[key] = BASE_LAYOUT_VALUES[key]! * fretboardScale;
+    mutableLayoutConfig[key] = BASE_LAYOUT_VALUES[key]! * fretboardFactor;
   }
   for (const key of FONT_SCALED_KEYS) {
-    mutableLayoutConfig[key] = BASE_LAYOUT_VALUES[key]! * fontScale;
+    mutableLayoutConfig[key] = BASE_LAYOUT_VALUES[key]! * fontFactor;
   }
   mutableLayoutConfig.getExportFretboardWidth = (stringCount: number) =>
-    BASE_GET_EXPORT_FRETBOARD_WIDTH(stringCount) * fretboardScale;
+    BASE_GET_EXPORT_FRETBOARD_WIDTH(stringCount) * fretboardFactor;
 };
 
 /** 模块级 Token 解析缓存，避免同曲目内重复出现的和弦名反复正则分割 */
@@ -418,7 +426,8 @@ function drawFretboard(
   x: number,
   y: number,
   chord: ExportChordData,
-  colors: ThemeColors
+  colors: ThemeColors,
+  showBarre: boolean
 ) {
   const fretCount = Math.max(3, chord.fretCount || 4);
   const stringCount = chord.strings?.length || 6;
@@ -513,8 +522,8 @@ function drawFretboard(
   }
   ctx.textBaseline = 'alphabetic';
 
-  // 5. 大横按（Barres）——两端带饱满圆角，完全覆盖音符点
-  if (chord.barres && chord.barres.length > 0) {
+  // 5. 大横按（Barres）——两端带饱满圆角，完全覆盖音符点；showBarre=false 时隐藏横按梁
+  if (showBarre && chord.barres && chord.barres.length > 0) {
     const barreHalfH = SCORE_EXPORT_CONFIG.BARRE_THICKNESS / 2;
     for (const b of chord.barres) {
       const bx1 = startStrX + b.fromString * SCORE_EXPORT_CONFIG.STRING_SPACING;
@@ -553,6 +562,8 @@ function renderScoreLine(
   startX: number,
   y: number,
   colors: ThemeColors,
+  showBarre: boolean,
+  lyricsFontWeight: number,
   customRowGap?: number
 ): { nextY: number; width: number } {
   // contentHeight 从预计算字段读取（RenderSegment），ExportLineItem 则回退到 computeLineContentHeight
@@ -583,7 +594,7 @@ function renderScoreLine(
   if (line.startChords && line.startChords.length > 0) {
     for (let i = 0; i < line.startChords.length; i++) {
       const chord = line.startChords[i]!;
-      drawFretboard(ctx, currentX, getChordY(chord), chord, colors);
+      drawFretboard(ctx, currentX, getChordY(chord), chord, colors, showBarre);
       currentX += SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH;
       if (i < line.startChords.length - 1) {
         currentX += SCORE_EXPORT_CONFIG.INLINE_CHORD_GAP;
@@ -594,7 +605,7 @@ function renderScoreLine(
 
   // 2. 绘制每个字符与其上方的和弦指板图
   // 歌词字体、颜色、对齐方式在循环外设置一次，避免每字重复赋值
-  const lyricsFont = `${SCORE_EXPORT_CONFIG.LYRICS_FONT_SIZE}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+  const lyricsFont = `${lyricsFontWeight} ${SCORE_EXPORT_CONFIG.LYRICS_FONT_SIZE}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
   ctx.font = lyricsFont;
   ctx.fillStyle = colors.TEXT;
   ctx.textAlign = 'center';
@@ -606,7 +617,7 @@ function renderScoreLine(
     // 上方指板图（底部对齐）
     if (item.chord) {
       const fbX = currentX + (colW - SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH) / 2;
-      drawFretboard(ctx, fbX, getChordY(item.chord), item.chord, colors);
+      drawFretboard(ctx, fbX, getChordY(item.chord), item.chord, colors, showBarre);
       // drawFretboard 可能修改 ctx 状态，恢复歌词绘制所需属性
       ctx.font = lyricsFont;
       ctx.fillStyle = colors.TEXT;
@@ -631,7 +642,7 @@ function renderScoreLine(
     currentX += SCORE_EXPORT_CONFIG.EDGE_CHORD_SECTION_GAP;
     for (let i = 0; i < line.endChords.length; i++) {
       const chord = line.endChords[i]!;
-      drawFretboard(ctx, currentX, getChordY(chord), chord, colors);
+      drawFretboard(ctx, currentX, getChordY(chord), chord, colors, showBarre);
       currentX += SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH;
       if (i < line.endChords.length - 1) {
         currentX += SCORE_EXPORT_CONFIG.INLINE_CHORD_GAP;
@@ -715,7 +726,22 @@ function renderHeader(
 if (typeof self !== 'undefined') {
   self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
     try {
-      const { title, keyText, capoText, lines, mode, colors, layoutAlign, fontScale = 1, fretboardScale = 1 } = e.data;
+      const {
+        title,
+        keyText,
+        capoText,
+        lines,
+        mode,
+        colors,
+        layoutAlign,
+        fontScale = 100,
+        fretboardScale = 100,
+        showBarre = true,
+        lyricsFontWeight: lyricsFontWeightMode = 'regular',
+      } = e.data;
+
+      // 歌词字重映射为 canvas 数值字重（light 300 / regular 400 / bold 700）
+      const lyricsFontWeight = lyricsFontWeightMode === 'light' ? 300 : lyricsFontWeightMode === 'bold' ? 700 : 400;
 
       // 排列和弦配置的缩放参数先于任何布局计算生效
       applyLayoutScales(fontScale, fretboardScale);
@@ -860,7 +886,7 @@ if (typeof self !== 'undefined') {
               ? Math.max(SCORE_EXPORT_CONFIG.PAGE_MARGIN, Math.round((canvasW - segW) / 2)) +
                 (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0)
               : SCORE_EXPORT_CONFIG.PAGE_MARGIN + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
-            const res = renderScoreLine(ctx, seg, startX, curY, colors, rowGap);
+            const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
             curY = res.nextY;
           }
 
@@ -927,7 +953,7 @@ if (typeof self !== 'undefined') {
             ? Math.max(SCORE_EXPORT_CONFIG.PAGE_MARGIN, Math.round((canvasW - segW) / 2)) +
               (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0)
             : SCORE_EXPORT_CONFIG.PAGE_MARGIN + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
-          const res = renderScoreLine(ctx, seg, startX, curY, colors, rowGap);
+          const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
           curY = res.nextY;
         }
 

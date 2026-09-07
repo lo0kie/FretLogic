@@ -7,6 +7,7 @@ import {
   MARQUEE_RESET_DURATION_MS,
   MARQUEE_RESET_EASING,
 } from '@/platform/utils/constants';
+import { buildEdgeFadeMask, ensureFadeProperties, fadeTransition } from '@/platform/utils/fadeMask';
 
 import type { Directive } from 'vue';
 
@@ -133,8 +134,9 @@ function shouldAnimate(state: MarqueeState): boolean {
  * - 静止复位态：direction 'left' 停在起点（左缘贴内容）→ 仅右端渐隐；
  *   direction 'right' 停在终点（右缘贴内容）→ 仅左端渐隐。
  *
- * 渐隐量由两个注册自定义属性（@property <number>）驱动渐变端点透明度，
- * 注册属性可参与 CSS transition——贴边/离开贴边时羽化以 MARQUEE_FADE_TRANSITION_MS 平滑过渡，
+ * 渐隐量由两个注册自定义属性（@property <number>，--fade-start/--fade-end，注册规则见
+ * platform/utils/fadeMask.ts）驱动渐变端点透明度，注册属性可参与 CSS transition——
+ * 贴边/离开贴边时羽化以 MARQUEE_FADE_TRANSITION_MS 平滑过渡，
  * 而非整段 mask-image 字符串瞬变（渐变图片本身不可插值）。
  */
 function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
@@ -145,20 +147,20 @@ function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
       state.lastFade = null;
       el.style.maskImage = '';
       el.style.webkitMaskImage = '';
-      el.style.removeProperty('--marquee-fade-start');
-      el.style.removeProperty('--marquee-fade-end');
+      el.style.removeProperty('--fade-start');
+      el.style.removeProperty('--fade-end');
       el.style.transition = '';
     }
     return;
   }
-  ensureFadeTransitionStyle();
+  ensureFadeProperties();
   if (state.lastFade === null) {
     // 首次启用：铺常驻遮罩模板（端点透明度由自定义属性控制，全程黑 = 无羽化效果）
     const fadeWidth = typeof fade === 'number' ? fade : MARQUEE_DEFAULT_FADE_WIDTH;
-    const mask = FADE_MASK_TEMPLATE(fadeWidth);
+    const mask = buildEdgeFadeMask('x', fadeWidth);
     el.style.maskImage = mask;
     el.style.webkitMaskImage = mask;
-    el.style.transition = `--marquee-fade-start ${MARQUEE_FADE_TRANSITION_MS}ms ease, --marquee-fade-end ${MARQUEE_FADE_TRANSITION_MS}ms ease`;
+    el.style.transition = fadeTransition(MARQUEE_FADE_TRANSITION_MS);
   }
   const active = state.overflowing && !state.reducedMotion && shouldAnimate(state);
   let start: number;
@@ -175,28 +177,13 @@ function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
   setFade(state, start, end);
 }
 
-/** 遮罩模板：两端点透明度分别由 --marquee-fade-start/end（0=不渐隐，1=全羽化）驱动 */
-const FADE_MASK_TEMPLATE = (w: number) =>
-  `linear-gradient(to right, rgb(0 0 0 / calc(1 - var(--marquee-fade-start))), rgb(0 0 0) ${w}px, rgb(0 0 0) calc(100% - ${w}px), rgb(0 0 0 / calc(1 - var(--marquee-fade-end))))`;
-
-/** 写入两端羽化量（0~1），与上次相同则跳过重复写入 */
+/** 写入两端羽化量（0~1）到共享注册属性，与上次相同则跳过重复写入 */
 function setFade(state: MarqueeState, start: number, end: number): void {
   const sig = `${start}|${end}`;
   if (state.lastFade === sig) return;
   state.lastFade = sig;
-  state.el.style.setProperty('--marquee-fade-start', String(start));
-  state.el.style.setProperty('--marquee-fade-end', String(end));
-}
-
-/** 一次性注入 @property 注册规则（注册后的自定义属性才能参与 transition） */
-function ensureFadeTransitionStyle(): void {
-  if (typeof document === 'undefined' || document.getElementById('v-marquee-fade-props')) return;
-  const style = document.createElement('style');
-  style.id = 'v-marquee-fade-props';
-  style.textContent =
-    `@property --marquee-fade-start{syntax:'<number>';inherits:false;initial-value:0;}` +
-    `@property --marquee-fade-end{syntax:'<number>';inherits:false;initial-value:0;}`;
-  document.head.appendChild(style);
+  state.el.style.setProperty('--fade-start', String(start));
+  state.el.style.setProperty('--fade-end', String(end));
 }
 
 /** 贴边判定容差（px）：内容与边缘间距小于该值视为贴边，不渐隐 */

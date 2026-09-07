@@ -1,11 +1,9 @@
 <template>
   <div class="pointer-events-auto absolute inset-0 z-content box-border overflow-hidden">
-    <div
-      class="no-scrollbar relative box-border flex size-full items-start justify-center overflow-y-auto px-2xl pt-2xl pb-3xl"
-    >
+    <div class="relative box-border flex size-full items-start overflow-auto px-2xl pt-2xl pb-3xl">
       <!-- 交互指板卡片：点击/编辑即写和弦草稿，含横按标记与和弦名直改 -->
       <div
-        class="pointer-events-auto relative flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel/90 px-2xl py-xl shadow-panel backdrop-blur-lg transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg"
+        class="pointer-events-auto relative mx-auto flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel/90 px-2xl py-xl shadow-panel backdrop-blur-lg transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg"
       >
         <div class="relative z-base flex w-full shrink-0 justify-center">
           <Fretboard
@@ -21,24 +19,21 @@
       </div>
 
       <!-- 右侧卡片列：外层定位且不滚动，内层承载滚动。
-           顶部/底部渐隐层常驻在边缘，但用滚动状态控制显隐：
-           · 未滚动（scrollTop===0）时顶部 fade 隐藏 → 首卡完整可见、与指板顶对齐
-           · 上滚后顶部 fade 显示，柔化滚出内容的切口
-           · 底部 fade 仅未滚到底时显示，滚到底自动隐藏 → 末卡不被遮挡
+           内容边缘用 mask-image 透明渐变柔化（不依赖背景色的 overlay 渐隐，任何背景/玻璃态下无色带）：
+           · 未滚动（scrollTop===0）时顶部不遮罩 → 首卡完整可见、与指板顶对齐
+           · 上滚后顶部渐隐显示，柔化滚出内容的切口
+           · 底部仅未滚到底时渐隐，滚到底自动取消 → 末卡不被遮挡
            列顶 top-8（32px）与指板同高，滚动时卡片最多上移到 32px，不会比指板更高 -->
       <div class="pointer-events-auto absolute inset-y-2xl right-8 z-panel">
         <div
-          v-scrollbar="{ onScroll: closeAllPopovers }"
+          v-scrollbar="{ onScroll: closeAllPopovers, endInset: 12 }"
+          :style="maskStyle"
           @scroll="syncEdgeFades()"
-          class="no-scrollbar flex size-full flex-col items-end gap-lg overflow-y-auto *:shrink-0"
+          class="flex size-full flex-col items-end gap-lg *:shrink-0"
           ref="scrollRef"
         >
           <component v-for="panelId in panels" :is="PANEL_COMPONENT_MAP[panelId]" :key="panelId" />
         </div>
-
-        <!-- 顶部/底部滚动渐隐 -->
-        <component :is="topFade" />
-        <component :is="bottomFade" />
       </div>
     </div>
 
@@ -69,12 +64,10 @@ import type { WorkbenchPanelId } from '@/domains/chord/workbench/composables/use
 import type { BarreEntity, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
 import type { Component } from 'vue';
 
-// 滚动边缘渐隐：未滚动时顶部 fade 隐藏（首卡完整可见），上滚后显示柔化切口；
-// 底部 fade 仅未滚到底时显示，滚到底隐藏（末卡不被遮挡）
+// 滚动边缘渐隐（mask 方案）：未滚动时顶部不遮罩（首卡完整可见），上滚后顶部渐隐柔化切口；
+// 底部仅未滚到底时渐隐，滚到底隐藏（末卡不被遮挡）。渐变直接作用于内容透明度，不依赖背景色
 const scrollRef = ref<HTMLElement | null>(null);
-const { topFade, bottomFade, syncEdgeFades } = useScrollEdgeFades(scrollRef, {
-  color: 'var(--bg-main)',
-});
+const { maskStyle, syncEdgeFades } = useScrollEdgeFades(scrollRef);
 
 const PANEL_COMPONENT_MAP: Record<WorkbenchPanelId, Component> = {
   analysis: ChordAnalysisPanel,

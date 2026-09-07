@@ -33,6 +33,9 @@
 import { computed, onActivated, onDeactivated, ref } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { logger } from '@/platform/utils/logger';
+
+import { ALIGN_CLASS_MAP, toPositionLength } from './floatingPositions';
 
 import type { TooltipOptions } from '@/platform/directives/vTooltip';
 import type { ComponentSize } from '@/platform/types';
@@ -114,6 +117,17 @@ const emit = defineEmits<{
   (e: 'after-leave', el: Element): void;
 }>();
 
+// left/right 与 top/bottom 的互斥规则分别落在 alignClass 与 outerStyle 两处、纯靠 !== undefined 约定。
+// 同时传入时高优先级一方胜出、另一方被静默忽略（无类型层约束）——开发期显式提示，避免调用方踩空。
+if (import.meta.env.DEV) {
+  if (props.left !== undefined && props.right !== undefined) {
+    logger.warn('BaseFab', 'left 与 right 同时传入：left 优先，right 被忽略');
+  }
+  if (props.top !== undefined && props.bottom !== undefined) {
+    logger.warn('BaseFab', 'top 与 bottom 同时传入：top 优先，bottom 被忽略');
+  }
+}
+
 // 初始为 true：保证首次挂载（含 KeepAlive 初始激活）即可见；
 // 切走时 onDeactivated 置 false 隐藏，切回时 onActivated 置 true 恢复。
 const isViewActive = ref(true);
@@ -129,12 +143,6 @@ onDeactivated(() => {
 const isButtonVisible = computed(() => Boolean(props.visible && isViewActive.value));
 
 const positionClass = computed(() => (props.position === 'absolute' ? 'absolute' : 'fixed'));
-
-const ALIGN_CLASS_MAP: Record<'start' | 'end' | 'center', string> = {
-  start: 'right-auto left-4',
-  end: 'right-4 left-auto',
-  center: 'right-0 left-0 mx-auto',
-};
 
 const alignClass = computed(() => {
   // 显式指定 left/right 时，仅用其对侧 auto 收边，距边距离交给 inline style 处理
@@ -158,7 +166,11 @@ const fabSizeClass = computed(() => FAB_SIZE_MAP[props.size] ?? FAB_SIZE_MAP.md)
 
 /** FAB 尺寸 → 图标档位映射：sm→lg(18) / md→xl(20) / lg→2xl(26) */
 const ICON_SIZE_BY_FAB_SIZE: Record<ComponentSize, IconSizePreset> = { sm: 'lg', md: 'xl', lg: '2xl' };
-const computedIconSize = computed<IconSizeValue>(() => props.iconSize ?? ICON_SIZE_BY_FAB_SIZE[props.size] ?? 'xl');
+// 映射表为必填全量 Record，正常入参不可能取到 undefined；?? 兜底仅防御运行时非法 size（
+// 与 FAB_SIZE_MAP 的 ?? md 同一策略：非法时统一回落 md/xl，而非落到图标默认 1em 造成尺寸失配）
+const computedIconSize = computed<IconSizeValue>(
+  () => props.iconSize ?? ICON_SIZE_BY_FAB_SIZE[props.size] ?? ICON_SIZE_BY_FAB_SIZE.md
+);
 
 const computedAriaLabel = computed(() => props.ariaLabel ?? props.tooltip ?? '浮动操作按钮');
 
@@ -170,22 +182,20 @@ const computedTooltip = computed<TooltipOptions | undefined>(() => {
   };
 });
 
-// 安全区与边定位：垂直优先 top，否则 bottom（叠加底部安全区）；水平优先 left/right，否则由 alignClass 决定（默认靠右 1rem）
+// 安全区与边定位：垂直优先 top，否则 bottom（叠加底部安全区）；水平优先 left/right，否则由 alignClass 决定（默认靠右 1rem）。
+// 各定位值经 toPositionLength 统一转 px/校验（非法字符串开发期告警）
 const outerStyle = computed(() => {
   const style: Record<string, string | number> = {};
   if (props.top !== undefined) {
-    const t = typeof props.top === 'number' ? `${props.top}px` : props.top;
-    style['top'] = t;
+    style['top'] = toPositionLength(props.top, 'BaseFab');
   } else {
-    const b = typeof props.bottom === 'number' ? `${props.bottom}px` : props.bottom;
+    const b = toPositionLength(props.bottom, 'BaseFab');
     style['bottom'] = props.safeAreaInset ? `calc(${b} + env(safe-area-inset-bottom, 0px))` : b;
   }
   if (props.left !== undefined) {
-    const l = typeof props.left === 'number' ? `${props.left}px` : props.left;
-    style['left'] = l;
+    style['left'] = toPositionLength(props.left, 'BaseFab');
   } else if (props.right !== undefined) {
-    const r = typeof props.right === 'number' ? `${props.right}px` : props.right;
-    style['right'] = r;
+    style['right'] = toPositionLength(props.right, 'BaseFab');
   }
   if (typeof props.zIndex === 'number') {
     style['zIndex'] = props.zIndex;

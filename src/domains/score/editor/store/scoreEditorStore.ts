@@ -19,6 +19,16 @@ import { STORAGE_KEYS } from '@/platform/utils/constants';
 import type { Chord, ChordId } from '@/domains/chord/types';
 import type { Capo, LineId, SlotKey, Song } from '@/domains/score/types';
 
+/** 百分制缩放值序列化器：读取时迁移旧版倍率（0.6~1.5）为百分制（60~150），写回按百分制原样存储 */
+const percentScaleSerializer = {
+  read: (raw: string): number => {
+    const v = Number(raw);
+    // 旧版倍率上限 1.5，新版百分制下限 60，值 < 2 必为旧版倍率
+    return v < 2 ? v * 100 : v;
+  },
+  write: (v: number): string => String(v),
+};
+
 /** 乐谱页主 Tab：编辑歌词 / 排列和弦 / 预览（URL tab 参数的合法值域） */
 export type ScoreActiveTab = 'edit' | 'interactive' | 'preview';
 
@@ -39,11 +49,14 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   // 当前标签页仅内存态：URL `?tab=` 全权接管（刷新由 URL 恢复，裸访问回落到 edit 默认）
   const activeTabRef = ref<ScoreActiveTab>('edit');
   const selectedSlotKey = ref<SlotKey | null>(null);
-  const fontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 1.0, localStorage, {
+  // 缩放以百分制存储（100 = 100%），序列化处迁移旧版倍率（0.6~1.5）为百分制
+  const fontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 100, localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
+    serializer: percentScaleSerializer,
   });
-  const fretboardScale = useStorage(STORAGE_KEYS.SCORE_FRETBOARD_SCALE, 1.0, localStorage, {
+  const fretboardScale = useStorage(STORAGE_KEYS.SCORE_FRETBOARD_SCALE, 100, localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
+    serializer: percentScaleSerializer,
   });
   const effectiveFontScale = computed(() => fontScale.value);
   const effectiveFretboardScale = computed(() => fretboardScale.value);

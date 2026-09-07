@@ -192,11 +192,39 @@ const handlePointerDown = (event: PointerEvent) => {
   activePointerId = event.pointerId;
   holdTimer = setTimeout(() => {
     holdTimer = null;
+    // 计时期间可能被外部禁用（如按下触发异步任务后置 disabled）：
+    // 禁用态不得进入持续态，静默放弃本次长按
+    if (disabled || loading) {
+      activePointerId = null;
+      return;
+    }
     isHolding = true;
     suppressClick = true; // 持续发声结束后吞掉本次 click，避免再触发短按动作
     emit('hold-start', event);
   }, holdDelay);
 };
+
+/** 中止长按：清计时器，若已进入持续态则补发 hold-end（禁用变更与卸载共用） */
+const abortHold = () => {
+  if (holdTimer !== null) {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+  }
+  if (isHolding) {
+    isHolding = false;
+    suppressClick = true;
+    emit('hold-end');
+  }
+  activePointerId = null;
+};
+
+// 长按中途被外部禁用/进入加载态时主动中止持续态，避免业务侧（如持续发声）卡到下一次指针事件
+watch(
+  () => [disabled, loading] as const,
+  ([d, l]) => {
+    if (d || l) abortHold();
+  }
+);
 
 /** 结束一次指针序列：未达阈值仅清计时（交由短按 click）；已持续则派发 hold-end 并抑制 click */
 const endHoldPress = (cancelled: boolean, event?: PointerEvent) => {
@@ -275,7 +303,7 @@ const isIconOnly = computed(() => iconOnly || (Boolean(resolvedIcon.value) && !h
  * 二者档位名重合只是巧合，直接透传会在尺寸档位变动时静默降级为无效 CSS。
  */
 const ICON_SIZE_BY_BUTTON_SIZE: Record<ComponentSize, IconSizePreset> = { sm: 'sm', md: 'md', lg: 'xl' };
-const resolvedIconSize = computed<IconSizeValue>(() => iconSize ?? ICON_SIZE_BY_BUTTON_SIZE[size]);
+const resolvedIconSize = computed<IconSizeValue>(() => iconSize ?? ICON_SIZE_BY_BUTTON_SIZE[size] ?? 'md');
 
 // 仅在开发环境中注册 a11y 警告监听，生产环境构建时被完全 Tree-shaking
 if (import.meta.env.DEV) {
@@ -310,8 +338,8 @@ const themeVariantClasses = computed(() => {
     return BUTTON_SUBTLE_THEME_MAP[resolvedColor.value];
   }
   if (variant === 'text') {
-    // 紧凑模式下进一步收紧文字按钮的左右内边距
-    return `px-[${compacted ? '0.15rem' : '0.3rem'}] bg-transparent! border-transparent focus:border-primary active:enabled:border-primary focus-visible:border-primary focus-visible:ring-2 ${BUTTON_TEXT_THEME_MAP[resolvedColor.value]}`;
+    // 紧凑模式下进一步收紧文字按钮的左右内边距（类名必须以完整字面量出现，供 Tailwind 静态扫描）
+    return `${compacted ? 'px-[0.15rem]' : 'px-[0.3rem]'} bg-transparent! border-transparent focus:border-primary active:enabled:border-primary focus-visible:border-primary focus-visible:ring-2 ${BUTTON_TEXT_THEME_MAP[resolvedColor.value]}`;
   }
   return BUTTON_DEFAULT_THEME_MAP[resolvedColor.value];
 });

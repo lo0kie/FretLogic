@@ -1,7 +1,7 @@
 /**
  * v-scrollbar 指令：把宿主滚动容器的原生滚动条替换为自绘覆盖式滚动条。
  *
- * 用法：<div v-scrollbar class="overflow-auto">…</div>
+ * 用法：<div v-scrollbar>…</div>（指令自行注入 overflow 并隐藏原生滚动条，无需手写 overflow-* 类）
  * 不带修饰符/方向选项时默认同时渲染横、纵双轴滚动条，各轴仅在确有内容溢出时显示（对齐原生限制）。
  * 带选项/单向限制：<div v-scrollbar="{ direction: 'x', autoHide: 1200 }"> 或 v-scrollbar.vertical
  *
@@ -31,9 +31,9 @@ export interface ScrollbarOptions {
   trackClick?: 'page' | 'jump' | 'none';
   /** 是否渲染轨道（拇指仍保留）；亦可直接用 `.no-track` 修饰符开启拇指-only 模式。默认 true */
   showTrack?: boolean;
-  /** 轨道与拇指行程的首尾留白（px），默认 2；遇到大圆角容器时可适当增大（如 8）避免拇指端部被 overflow:hidden 裁切 */
+  /** 轨道与拇指行程的首尾留白（px），默认 4；遇到大圆角容器时可适当增大（如 8）避免拇指端部被 overflow:hidden 裁切 */
   endInset?: number;
-  /** 轨道与拇指距容器边缘的视觉间距（px），默认 3 */
+  /** 轨道与拇指距容器边缘的视觉间距（px），默认 4 */
   edgeOffset?: number;
   /** 每次滚动回调：携带位置与双轴进度（与派发的 scrollbar-scroll 事件同源，脚本消费更易获得类型提示） */
   onScroll?: (detail: ScrollbarScrollDetail) => void;
@@ -642,6 +642,12 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
   // 内联属性不受 patch 影响；::-webkit-scrollbar 仍靠宿主类兜底（伪元素无法内联设置）
   host.style.scrollbarWidth = 'none';
   host.style.setProperty('-ms-overflow-style', 'none');
+  // 注入滚动所必需的 overflow：指令托管哪个轴，就把哪个轴设为 auto，调用方无需再手写 overflow-* 工具类。
+  // 同为内联设置（理由同上：className 会被 Vue patch 重写，内联不受影响）。
+  // 注：CSS 规范下 overflow 一轴非 visible 时，另一轴的 visible 会计算为 auto——
+  // 故对现有「只声明了单轴 overflow-*」的宿主，注入后计算值不变，无回归。
+  if (state.axes.includes('y')) host.style.overflowY = 'auto';
+  if (state.axes.includes('x')) host.style.overflowX = 'auto';
 
   const makeEl = (cls: string) => {
     const el = document.createElement('div');
@@ -682,6 +688,8 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
       // wheel 不会冒泡到宿主（兄弟节点）：同参重派发到宿主元素，宿主上的滚动监听/指令
       // （如 v-wheel-scroll）按自身策略消费，以 defaultPrevented 判定消费与否；
       // 无人消费才走自身兜底转发。ctrl/meta/alt 交还浏览器默认（缩放等组合键）
+      // 合成事件刻意 bubbles:false：只投递给宿主自身消费，不向上冒泡，
+      // 避免宿主祖先上依赖 wheel 冒泡的委托（若存在）被这份转发事件二次处理。
       // 注意：真实事件不能在探测前无条件 preventDefault——若宿主策略选择放行
       // （如 v-wheel-scroll 的 overscroll:'auto' 在边界处），需要让真实事件保留默认行为，
       // 浏览器才能对非受信合成事件无法执行的「原生滚动链」进行兜底（穿透到祖先滚动容器）。
@@ -772,8 +780,16 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
     for (const child of host.children) state.resizeObserver.observe(child);
   }
   if (typeof MutationObserver !== 'undefined') {
-    state.mutationObserver = new MutationObserver(() => {
+    state.mutationObserver = new MutationObserver(mutations => {
       if (state.resizeObserver) {
+        // 被移除的子元素不再观察：ResizeObserver 不会因元素脱离 DOM 自动停止，
+        // 高频增删列表若不显式 unobserve，会持续持有已移除节点的引用形成泄漏
+        for (const mutation of mutations) {
+          for (const node of mutation.removedNodes) {
+            if (node instanceof Element) state.resizeObserver.unobserve(node);
+          }
+        }
+        // 新增的子元素补进观察集
         for (const child of host.children) state.resizeObserver.observe(child);
       }
       refreshAll(state);
@@ -823,6 +839,8 @@ const unmountScrollbar = (host: HTMLElement): void => {
   host.classList.remove(HOST_CLASS);
   host.style.removeProperty('scrollbar-width');
   host.style.removeProperty('-ms-overflow-style');
+  host.style.removeProperty('overflow-x');
+  host.style.removeProperty('overflow-y');
   states.delete(host);
 };
 
@@ -842,13 +860,19 @@ export const vScrollbar: Directive<HTMLElement, ScrollbarBinding> = {
     if (prev && next && prev.options.onScroll !== next.options.onScroll) {
       prev.options.onScroll = next.options.onScroll;
     }
+    // 早退守卫须覆盖全部运行态选项：minThumbSize/autoHide/trackClick 任一变化若不重建，
+    // 绑定新值会被静默冻结在挂载初值（此前的比较漏了这三项）。
+    // direction 不在此比较——其唯一运行态影响已通过 resolveAxes 收敛进下方 axes 的 JSON 比较。
     if (
       prev &&
       next &&
       JSON.stringify(prev.axes) === JSON.stringify(next.axes) &&
       prev.options.showTrack === next.options.showTrack &&
       prev.options.endInset === next.options.endInset &&
-      prev.options.edgeOffset === next.options.edgeOffset
+      prev.options.edgeOffset === next.options.edgeOffset &&
+      prev.options.minThumbSize === next.options.minThumbSize &&
+      prev.options.autoHide === next.options.autoHide &&
+      prev.options.trackClick === next.options.trackClick
     ) {
       return;
     }

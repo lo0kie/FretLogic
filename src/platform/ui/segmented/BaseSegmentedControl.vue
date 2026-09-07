@@ -12,7 +12,7 @@
   >
     <span
       v-if="showSlider"
-      :class="[...sliderClasses, { 'transition-all duration-200 ease-out': isInitialized }]"
+      :class="[...sliderClasses, { 'transition-all duration-200 ease-out': isInitialized && transitionEnabled }]"
       :style="indicatorStyle"
       aria-hidden="true"
       class="segmented-slider"
@@ -166,6 +166,11 @@ onBeforeUpdate(() => {
 
 // 首次渲染无动画，后续移动带平滑缓动
 const isInitialized = ref(false);
+/**
+ * 指示器过渡开关：缩放/布局连续变化期间暂停（每帧重测量若仍带 200ms 缓动，
+ * 滑块会持续追赶新位置 → 视觉抖动），静止后恢复，选中切换的平滑动画不受影响
+ */
+const transitionEnabled = ref(false);
 const indicatorPosition = ref({ width: 0, height: 0, x: 0, y: 0, opacity: 0 });
 
 const resolvedWidth = computed(() => (props.block ? '100%' : resolveComponentWidth(props.width)));
@@ -225,10 +230,14 @@ const getTabindex = (opt: SegmentOption<T>, i: number): number => {
   return i === firstFocusableIndex.value ? 0 : -1;
 };
 
+/** 滑块定位：用 left/top（布局属性）而非 transform——transform 合成层在分数 DPR
+ * （如 Windows 150% 缩放）下会对齐整数设备像素，与流内渲染的按钮/聚焦圈错位约半像素；
+ * left/top 与按钮走同一渲染路径，任意缩放比下严格重合（元素极小，过渡时的重排开销可忽略） */
 const indicatorStyle = computed(() => ({
   width: `${indicatorPosition.value.width}px`,
   height: `${indicatorPosition.value.height}px`,
-  transform: `translate(${indicatorPosition.value.x}px, ${indicatorPosition.value.y}px)`,
+  left: `${indicatorPosition.value.x}px`,
+  top: `${indicatorPosition.value.y}px`,
   opacity: indicatorPosition.value.opacity,
 }));
 
@@ -245,7 +254,7 @@ const controlClasses = computed(() => [
 
 /** 滑块外观：pill 为覆盖整段的圆角胶囊（浅主色底 + 描边），tabbed 为贴底主色下划线 */
 const sliderClasses = computed(() => [
-  'segmented-slider pointer-events-none absolute top-0 left-0 z-0 box-border will-change-transform',
+  'segmented-slider pointer-events-none absolute top-0 left-0 z-0 box-border',
   visualVariant.value === 'tabbed'
     ? 'bg-primary'
     : 'bg-tint-primary-88 border-tint-primary-60 rounded-full border shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)]',
@@ -296,8 +305,10 @@ const toEl = (raw: unknown): HTMLElement | null => {
   return null;
 };
 
-/** 测量选中项位置并更新滑块指示器；无选中时隐藏 */
-const updateIndicatorPosition = async () => {
+/** 测量选中项位置并更新滑块指示器；无选中时隐藏。
+ *  animate=false（ResizeObserver 路径）时暂停过渡直接贴合，避免连续布局变化下的缓动追赶抖动 */
+const updateIndicatorPosition = async (animate = true) => {
+  transitionEnabled.value = animate;
   if (visualVariant.value === 'text') return;
   await nextTick();
 
@@ -311,8 +322,31 @@ const updateIndicatorPosition = async () => {
     return;
   }
 
-  const { offsetLeft, offsetWidth, offsetTop, offsetHeight } = activeButton;
-  if (offsetWidth === 0 && offsetHeight === 0) {
+  const container = containerRef.value;
+  const containerRect = container.getBoundingClientRect();
+  const buttonRect = activeButton.getBoundingClientRect();
+  if (containerRect.width === 0 && containerRect.height === 0 && buttonRect.width === 0 && buttonRect.height === 0) {
+    return;
+  }
+
+  // 双路测量：祖先存在 scale 动画时（BaseModal / BasePopover 进场），rect 含祖先缩放而失真，
+  // 回退到 transform 免疫的 offset 布局坐标；缩放比≈1 的正常态用 rect 分数级测量，
+  // 消除页面缩放下 offset 整数舍入导致的滑块边缘错位闪烁
+  const scaleX = containerRect.width / container.offsetWidth;
+  const scaleY = containerRect.height / container.offsetHeight;
+  const ancestorScaled = Math.abs(scaleX - 1) > 0.005 || Math.abs(scaleY - 1) > 0.005;
+
+  // 边框补偿必须用 computed 的分数级边框宽度：clientTop/clientLeft 返回四舍五入整数，
+  // 分数 DPR（如 150% 缩放下 1px 边框实为 0.667 CSS px）时会引入 ~0.3px 的定位误差
+  const containerStyle = getComputedStyle(container);
+  const borderWidthX = parseFloat(containerStyle.borderLeftWidth) || 0;
+  const borderWidthY = parseFloat(containerStyle.borderTopWidth) || 0;
+
+  const x = buttonRect.left - containerRect.left - borderWidthX;
+  const y = buttonRect.top - containerRect.top - borderWidthY;
+  const width = ancestorScaled ? activeButton.offsetWidth : buttonRect.width;
+  const height = ancestorScaled ? activeButton.offsetHeight : buttonRect.height;
+  if (width === 0 && height === 0) {
     return;
   }
 
@@ -322,18 +356,18 @@ const updateIndicatorPosition = async () => {
     // 滑块需下移到该 border 区与之重合，才能盖住浅色线、形成连续同厚的激活段
     const lineShift = props.showInactiveBorder ? TAB_LINE_HEIGHT : 0;
     indicatorPosition.value = {
-      width: offsetWidth,
+      width,
       height: TAB_LINE_HEIGHT,
-      x: offsetLeft,
-      y: offsetTop + offsetHeight - TAB_LINE_HEIGHT + lineShift,
+      x,
+      y: y + height - TAB_LINE_HEIGHT + lineShift,
       opacity: 1,
     };
   } else {
     indicatorPosition.value = {
-      width: offsetWidth,
-      height: offsetHeight,
-      x: offsetLeft,
-      y: offsetTop,
+      width,
+      height,
+      x,
+      y,
       opacity: 1,
     };
   }
@@ -396,14 +430,28 @@ watch(
 // 同时观察容器与每个子项，使用 requestAnimationFrame 进行防抖合并
 let ro: ResizeObserver | null = null;
 
-/** 用 rAF 合并同一帧内的多次尺寸变化，避免重复测量 */
-const { schedule: debouncedUpdate, cancel: cancelPendingUpdate } = useRafThrottle(() => updateIndicatorPosition());
+/** 用 rAF 合并同一帧内的多次尺寸变化，避免重复测量（ResizeObserver 路径不带动画） */
+const { schedule: debouncedUpdate, cancel: cancelPendingUpdate } = useRafThrottle(() => updateIndicatorPosition(false));
+
+/** 布局静止多少毫秒后恢复指示器过渡 */
+const RESUME_TRANSITION_DELAY_MS = 200;
+let resumeTransitionTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** （重）建 ResizeObserver：观察容器与全部选项，尺寸变化时更新指示器 */
 const observeItems = () => {
   if (typeof ResizeObserver === 'undefined') return;
   ro?.disconnect();
-  ro = new ResizeObserver(() => debouncedUpdate());
+  ro = new ResizeObserver(() => {
+    // 连续缩放/布局变化期间暂停过渡；最后一次变化静止后延迟恢复，
+    // 恢复时位置与当前渲染一致，不会产生多余动画
+    transitionEnabled.value = false;
+    if (resumeTransitionTimer) clearTimeout(resumeTransitionTimer);
+    resumeTransitionTimer = setTimeout(() => {
+      resumeTransitionTimer = null;
+      transitionEnabled.value = true;
+    }, RESUME_TRANSITION_DELAY_MS);
+    debouncedUpdate();
+  });
   if (containerRef.value) ro.observe(containerRef.value);
   items.value.forEach(dom => {
     if (dom) ro!.observe(dom);
@@ -430,6 +478,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   cancelPendingUpdate();
+  if (resumeTransitionTimer) clearTimeout(resumeTransitionTimer);
   ro?.disconnect();
 });
 </script>

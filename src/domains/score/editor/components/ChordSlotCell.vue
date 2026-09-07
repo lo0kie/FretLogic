@@ -111,8 +111,9 @@
           :chord
           :chord-name-scale="0.8"
           :is-dark-mode="isDark"
-          :scale="1.4 * scoreEditor.effectiveFretboardScale"
+          :scale="(1.4 * scoreEditor.effectiveFretboardScale) / 100"
           :shorthand="settingsStore.scoreChordShorthand"
+          :show-barre="settingsStore.scoreShowBarre"
         />
       </div>
 

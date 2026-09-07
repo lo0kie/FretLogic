@@ -99,6 +99,15 @@ watch(modelValue, value => {
   if (!isEditing.value) setText(value);
 });
 
+/** 编辑中被外部禁用：立即结束编辑态。blur 走 handleBlur 统一路径（提交/取消/IME 守卫齐全），
+ *  避免焦点残留在一个刚变成 contenteditable="false" 的元素上（各浏览器对禁用切换的焦点处理不一） */
+watch(
+  () => props.disabled,
+  isDisabled => {
+    if (isDisabled && isEditing.value) editorRef.value?.blur();
+  }
+);
+
 // 关键：immediate watch 在 setup 阶段执行时 editorRef 尚未挂载（为 null），setText 是空操作；
 // 若 modelValue 此后不再变化，DOM 不会被回填（典型：刷新后草稿名已就绪，input 却空白）。
 // 因此元素真正挂载后再按 modelValue 回填一次，保证初始即显示正确文本。
@@ -133,9 +142,15 @@ const handleInput = () => {
   if (!el) return;
   let text = el.textContent ?? '';
   if (props.maxlength !== undefined && text.length > props.maxlength) {
-    text = text.slice(0, props.maxlength);
-    setText(text);
-    moveCaretToEnd();
+    // 按 code point 截断，勿用 slice（UTF-16 code unit）：slice 可能恰好切断代理对（emoji）
+    // 产生孤立代理项、渲染成乱码；Array.from 按完整 code point 拆分，保证不劈开字符。
+    // 内层 truncated !== text 兜底 emoji 占位偏移（code unit 超长但 code point 数未超）时无需改写
+    const truncated = Array.from(text).slice(0, props.maxlength).join('');
+    if (truncated !== text) {
+      text = truncated;
+      setText(text);
+      moveCaretToEnd();
+    }
   }
   if (!text.trim() && el.innerHTML !== '') el.innerHTML = '';
   modelValue.value = text;

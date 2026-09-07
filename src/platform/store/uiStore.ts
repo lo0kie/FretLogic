@@ -9,12 +9,14 @@ import { defineStore } from 'pinia';
 import { ToastType } from '@/platform/types';
 import { STORAGE_KEYS, TOAST_DEFAULT_DURATION_MS } from '@/platform/utils/constants';
 
-import type { Toast, ToastOptions } from '@/platform/types';
+import type { SyncProviderKind, Toast, ToastOptions } from '@/platform/types';
 
 export const useUiStore = defineStore('ui', () => {
   const toasts = ref<Toast[]>([]);
   const isCopying = ref(false);
   const isLeftOpen = useStorage(STORAGE_KEYS.UI_LEFT_OPEN, true);
+  /** 同步弹窗上次选中的提供商（UI 瞬时偏好，跨会话保留） */
+  const syncModalProvider = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_MODAL_PROVIDER, 'gitee');
   const timersMap = new Map<number, ReturnType<typeof setTimeout>>();
 
   /** 清除所有带操作按钮（onAction）的 Toast，避免旧的行动入口叠加显示。 */
@@ -137,6 +139,7 @@ export const useUiStore = defineStore('ui', () => {
   return {
     clearActionToasts,
     isLeftOpen,
+    syncModalProvider,
     isCopying,
     toasts,
     toast,

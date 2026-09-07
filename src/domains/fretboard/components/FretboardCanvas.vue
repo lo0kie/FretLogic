@@ -25,6 +25,8 @@ interface Props {
   chord: Chord;
   scale?: number;
   isDarkMode?: boolean;
+  /** 显式指板配色主题（缺省读取当前应用主题；导出面板传此值以固定匹配其背景，独立于应用明暗） */
+  theme?: 'light' | 'dark' | 'high-contrast';
   shorthand?: boolean;
   chordNameScale?: number;
   /** 是否显示和弦名（默认 true） */
@@ -35,6 +37,8 @@ interface Props {
   showFretNumbers?: boolean;
   /** 是否显示加粗弦枕（默认 true；false 时为普通品丝线条粗细） */
   showBoldNut?: boolean;
+  /** 是否绘制大横按（默认 true；false 时隐藏横按梁，仅保留按弦圆点） */
+  showBarre?: boolean;
   /** 懒绘制：挂载后不立即绘制，等元素滚入视口才首绘一次；后续参数变化正常重绘。
    *  DOM 尺寸始终由本组件按 scale/fretCount 计算确定，无需外部占位与测量 */
   lazy?: boolean;
@@ -49,6 +53,7 @@ const props = withDefaults(defineProps<Props>(), {
   showOpenStringNotes: true,
   showFretNumbers: true,
   showBoldNut: true,
+  showBarre: true,
   lazy: false,
 });
 
@@ -82,8 +87,10 @@ const displayChordName = computed(() => getChordName(props.chord, { shorthand: p
 const ariaLabel = computed(() => `吉他和弦 ${displayChordName.value}`);
 
 // 画布配色：从 tokens.scss 的 --fbc-* 变量运行时解析（canvas 2D 无法直接消费 var()）；
-// 主题切换时由下方 watcher 重新解析（isDarkMode 翻转时主题类名已同步更新）
-const themeColors = ref(resolveFretboardCanvasPalette());
+// 传了显式 theme 则按其解析（导出面板固定背景配色），否则读取当前应用主题（含 high-contrast）
+const resolveThemeColors = () =>
+  props.theme ? resolveFretboardCanvasPalette(props.theme) : resolveFretboardCanvasPalette();
+const themeColors = ref(resolveThemeColors());
 
 const getDpr = () => {
   const userDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
@@ -102,7 +109,7 @@ function getCacheKey(): string {
   const c = props.chord;
   const strSig = c.strings.map(s => s[0]).join(',');
   const barreSig = (c.barres ?? []).map(b => `${b.fret}:${b.fromString}-${b.toString}`).join('|');
-  return `${displayChordName.value}_${c.fretOffset}_${fretCount.value}_${strSig}_${barreSig}_${props.isDarkMode ? 1 : 0}_${props.chordNameScale}_${props.showChordName ? 1 : 0}_${props.showOpenStringNotes ? 1 : 0}_${props.showFretNumbers ? 1 : 0}_${props.showBoldNut ? 1 : 0}_${cssWidth.value}x${cssHeight.value}`;
+  return `${displayChordName.value}_${c.fretOffset}_${fretCount.value}_${strSig}_${barreSig}_${props.isDarkMode ? 1 : 0}_th${props.theme ?? ''}_${props.chordNameScale}_${props.showChordName ? 1 : 0}_${props.showOpenStringNotes ? 1 : 0}_${props.showFretNumbers ? 1 : 0}_${props.showBoldNut ? 1 : 0}_${props.showBarre ? 1 : 0}_${cssWidth.value}x${cssHeight.value}`;
 }
 
 function draw() {
@@ -145,6 +152,7 @@ function draw() {
     showOpenStringNotes: props.showOpenStringNotes,
     showFretNumbers: props.showFretNumbers,
     showBoldNut: props.showBoldNut,
+    showBarre: props.showBarre,
   });
   ctx.restore();
 
@@ -190,14 +198,11 @@ onBeforeUnmount(() => {
   stopLazyObserver = null;
 });
 
-// 主题切换时重新解析配色再重绘（isDarkMode 翻转时 tokens 主题类名已更新）
-watch(
-  () => props.isDarkMode,
-  () => {
-    themeColors.value = resolveFretboardCanvasPalette();
-    if (hasDrawn.value) draw();
-  }
-);
+// 主题切换时重新解析配色再重绘（应用主题变化经 isDarkMode 联动；显式 theme 由导出面板传入）
+watch([() => props.isDarkMode, () => props.theme], () => {
+  themeColors.value = resolveThemeColors();
+  if (hasDrawn.value) draw();
+});
 
 watch(
   [
@@ -209,6 +214,7 @@ watch(
     () => props.showOpenStringNotes,
     () => props.showFretNumbers,
     () => props.showBoldNut,
+    () => props.showBarre,
   ],
   () => {
     if (!hasDrawn.value) return;

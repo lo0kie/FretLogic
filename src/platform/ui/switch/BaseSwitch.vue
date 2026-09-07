@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <button
     :name
     :aria-busy="isCurrentLoading || undefined"
@@ -9,8 +9,6 @@
     :disabled="disabled || isCurrentLoading"
     :id="resolvedId"
     @click="handleClick()"
-    @keydown.enter.prevent="toggle()"
-    @keydown.space.prevent="toggle()"
     @pointercancel="handlePointerCancel($event)"
     @pointerdown="handlePointerDown($event)"
     @pointermove="handlePointerMove($event)"
@@ -221,28 +219,38 @@ const trackColorClass = computed(() => {
   return on ? palette.on : palette.off;
 });
 
-/** 切换开关：支持 beforeChange 异步拦截，拦截期间进入 loading 并禁止重复触发 */
-const toggle = async () => {
-  if (props.disabled || isCurrentLoading.value) return;
-  const nextChecked = !isChecked.value;
-  const nextVal = nextChecked ? resolvedActiveValue.value : resolvedInactiveValue.value;
-
+/**
+ * 结算一次切换（点击 / 拖拽共用单一真源）：统一走 beforeChange 拦截；返回 false 或抛错则阻止变更并返回 false，
+ * 通过后写回 model 并派发 change、返回 true。避免两路各自维护一份导致行为分歧。
+ */
+const settleChange = async (nextVal: T): Promise<boolean> => {
   if (props.beforeChange) {
     isPending.value = true;
     loadingModel.value = true;
     try {
       const allowed = await props.beforeChange(nextVal);
-      if (!allowed) return;
-    } catch {
-      return;
+      if (!allowed) return false;
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error('[BaseSwitch] beforeChange 抛错，已阻止本次切换。', err);
+      }
+      return false;
     } finally {
       isPending.value = false;
       loadingModel.value = false;
     }
   }
-
   modelValue.value = nextVal;
   emit('change', nextVal);
+  return true;
+};
+
+/** 切换开关（键盘/点击统一由 handleClick 收敛，源于原生 button 的 Enter/Space click） */
+const toggle = async () => {
+  if (props.disabled || isCurrentLoading.value) return;
+  const nextChecked = !isChecked.value;
+  const nextVal = nextChecked ? resolvedActiveValue.value : resolvedInactiveValue.value;
+  await settleChange(nextVal);
 };
 
 /** 点击切换：刚拖拽过则吞掉本次 click（拖拽结果已在 pointerup 按落点结算） */
@@ -303,6 +311,8 @@ const handlePointerMove = (e: PointerEvent) => {
 const handlePointerUp = async (e: PointerEvent) => {
   const wasDragging = isDragging.value;
   const deltaX = dragOffset.value;
+  // 提前复位拖拽/按压态是刻意的时序：若 beforeChange 拒绝或抛错，
+  // 滑块依赖 isDragging=false + isChecked 未变 的过渡类自动弹回原位，而非停留在拖拽中间态
   isDragging.value = false;
   isPressed.value = false;
   dragOffset.value = 0;
@@ -323,21 +333,7 @@ const handlePointerUp = async (e: PointerEvent) => {
 
     if (finalChecked !== isChecked.value) {
       const nextVal = finalChecked ? resolvedActiveValue.value : resolvedInactiveValue.value;
-      if (props.beforeChange) {
-        isPending.value = true;
-        loadingModel.value = true;
-        try {
-          const allowed = await props.beforeChange(nextVal);
-          if (!allowed) return;
-        } catch {
-          return;
-        } finally {
-          isPending.value = false;
-          loadingModel.value = false;
-        }
-      }
-      modelValue.value = nextVal;
-      emit('change', nextVal);
+      await settleChange(nextVal);
     }
   }
 };
@@ -354,8 +350,6 @@ const handlePointerCancel = (e: PointerEvent) => {
   }
 };
 
-const THUMB_PX: Record<'sm' | 'md' | 'lg', number> = { sm: 12, md: 16, lg: 20 };
-
 const dragThumbStyle = computed(() => {
   if (isDragging.value) {
     const deltaX = dragOffset.value;
@@ -365,7 +359,9 @@ const dragThumbStyle = computed(() => {
     const dir = deltaX >= 0 ? 1 : -1;
     const travelRatio = maxTravelDistance > 0 ? Math.min(Math.abs(deltaX) / maxTravelDistance, 1) : 0;
 
-    const thumbSize = THUMB_PX[props.size] ?? 16;
+    // 拇指直径复用 travelPx 单一真源：SWITCH_CONFIG 构造上 travelPx === 拇指尺寸
+    // （track 宽 - 拇指 - 两侧 p-0.5），无需再维护一份 THUMB_PX 硬编码
+    const thumbSize = currentConfig.value.travelPx;
     const desiredStretch = 1 + travelRatio * 0.18;
     const desiredSqueeze = 1 - travelRatio * 0.08;
 

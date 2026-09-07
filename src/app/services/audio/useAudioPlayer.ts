@@ -59,7 +59,7 @@ export function useAudioPlayer() {
   const syncEngineToneSettings = () => {
     applyTimbre(settingsStore.audioPlayback.timbre);
     setSynthVolume(settingsStore.audioPlayback.volumeDb);
-    setReverbWet(settingsStore.audioPlayback.reverbWet);
+    setReverbWet(settingsStore.audioPlayback.reverbWet / 100);
     applyChorusEnabled(settingsStore.audioPlayback.chorusEnabled);
   };
 

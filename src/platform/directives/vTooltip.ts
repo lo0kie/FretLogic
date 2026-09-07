@@ -4,6 +4,7 @@ import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
 import { buildFloatingMiddlewares } from '@/platform/ui/popover/floatingCore';
 import { acquireFloatingZ, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
 import { TOOLTIP_HIDE_CLEANUP_DELAY_MS, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS } from '@/platform/utils/constants';
+import { logger } from '@/platform/utils/logger';
 
 import type { Placement } from '@floating-ui/dom';
 import type { Directive } from 'vue';
@@ -159,6 +160,8 @@ let currentTargetEl: HTMLElement | null = null;
 let cleanupAutoUpdate: (() => void) | null = null;
 let showTimer: ReturnType<typeof setTimeout> | null = null;
 let hideTimer: ReturnType<typeof setTimeout> | null = null;
+// 淡出结束后的「补设 visibility:hidden」清理定时器：独立于 hideTimer 之外、同样纳入统一清理
+let hideCleanupTimer: ReturnType<typeof setTimeout> | null = null;
 let appliedCustomClass = '';
 // tooltip 当前在浮层层级池中持有的层号（单例，同一时刻最多持有一个）
 let boxZOwned = false;
@@ -257,11 +260,20 @@ const updatePosition = async (el: HTMLElement, opts: TooltipOptions): Promise<vo
     getArrowEl: () => globalArrow,
   });
 
-  const { x, y, placement, middlewareData } = await computePosition(el, globalBox, {
-    placement: opts.placement ?? 'bottom',
-    strategy: 'fixed',
-    middleware,
-  });
+  // try/catch 兜底：computePosition 是异步计算，若锚点/参考 DOM 在计算期间被移除等极端场景会 reject。
+  // 这里吞掉而非上抛——否则 executeShow / autoUpdate 回调 / updated 钩子里的 fire-and-forget 调用
+  // 都会留下未处理的 rejected Promise。
+  let result: Awaited<ReturnType<typeof computePosition>>;
+  try {
+    result = await computePosition(el, globalBox, {
+      placement: opts.placement ?? 'bottom',
+      strategy: 'fixed',
+      middleware,
+    });
+  } catch {
+    return;
+  }
+  const { x, y, placement, middlewareData } = result;
 
   if (!globalBox || currentTargetEl !== el) return;
   globalBox.style.left = `${x}px`;
@@ -294,7 +306,7 @@ const updatePosition = async (el: HTMLElement, opts: TooltipOptions): Promise<vo
   }
 };
 
-/** 清空显示/隐藏的延时定时器。 */
+/** 清空显示/隐藏的延时定时器（含淡出后的清理定时器）。 */
 const clearTimers = () => {
   if (showTimer) {
     clearTimeout(showTimer);
@@ -304,6 +316,31 @@ const clearTimers = () => {
     clearTimeout(hideTimer);
     hideTimer = null;
   }
+  if (hideCleanupTimer) {
+    clearTimeout(hideCleanupTimer);
+    hideCleanupTimer = null;
+  }
+};
+
+/** 内容判空统一口径：数组按长度、字符串按 truthy。
+ *  showTooltip 入口与 executeShow 内部曾各写一套（入口用 `!opts.content`，空数组 [] 为 truthy 会穿透），
+ *  导致空数组白白走完延迟调度才在 executeShow 里被拦下——统一后入口即拦截。 */
+const hasTooltipContent = (opts: TooltipOptions): boolean =>
+  Array.isArray(opts.content) ? opts.content.length > 0 : Boolean(opts.content);
+
+/** html:true 时对内容做基础危险模式检测（仅开发期、按内容去重告警）。
+ *  不替代 sanitize——只是把「误把用户输入塞进 html 模式」这一全局单例 XSS 隐患尽早暴露，
+ *  纯静态可信字符串不受影响。 */
+const DANGEROUS_HTML_PATTERN = /<\s*(script|iframe|object|embed)\b|on[a-z]+\s*=|javascript\s*:/i;
+const warnedHtmlSnippets = new Set<string>();
+const warnIfDangerousHtml = (content: string) => {
+  if (!import.meta.env.DEV || !DANGEROUS_HTML_PATTERN.test(content)) return;
+  if (warnedHtmlSnippets.has(content)) return;
+  warnedHtmlSnippets.add(content);
+  logger.warn(
+    'vTooltip',
+    'html:true 的内容含危险模式（<script>/<iframe>/on* 事件/javascript:）。若内容来自用户输入请改用纯文本模式，否则存在 XSS 风险'
+  );
 };
 
 /** 写入浮层内容：支持单字符串与字符串数组（数组各项独立成行，不再自动换行）；html=true 时按 HTML 渲染，否则用 textContent 防注入 */
@@ -320,6 +357,7 @@ const setTooltipContent = (el: HTMLElement, opts: TooltipOptions): void => {
       const lineEl = document.createElement('div');
       lineEl.className = 'v-tooltip-line';
       if (html) {
+        warnIfDangerousHtml(line);
         lineEl.innerHTML = line;
       } else {
         lineEl.textContent = line;
@@ -327,6 +365,7 @@ const setTooltipContent = (el: HTMLElement, opts: TooltipOptions): void => {
       el.appendChild(lineEl);
     }
   } else if (html) {
+    warnIfDangerousHtml(content);
     el.innerHTML = content;
   } else {
     el.textContent = content;
@@ -351,8 +390,7 @@ const resolveDelay = (opts: TooltipOptions): { show: number; hide: number } => {
 
 /** 实际显示 tooltip：分配层级、写内容与自定义类，先定位后显隐以避免 (0,0) 闪烁，并启动 autoUpdate 跟随。 */
 const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
-  const hasContent = Array.isArray(opts.content) ? opts.content.length > 0 : Boolean(opts.content);
-  if (!isClient || opts.disabled || !hasContent) return;
+  if (!isClient || opts.disabled || !hasTooltipContent(opts)) return;
 
   const box = getOrCreateGlobalBox();
   if (!box || !globalContent) return;
@@ -406,7 +444,8 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
 
 /** 显示入口：按配置延迟触发 executeShow（immediate 时零延迟）。 */
 const showTooltip = (el: HTMLElement, opts: TooltipOptions, immediate = false) => {
-  if (!isClient || opts.disabled || !opts.content) return;
+  // 统一走 hasTooltipContent：空数组 [] 为 truthy，原 `!opts.content` 拦不住，会让其白走一遍延迟调度
+  if (!isClient || opts.disabled || !hasTooltipContent(opts)) return;
   clearTimers();
 
   const { show } = resolveDelay(opts);
@@ -445,7 +484,10 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
         cleanupAutoUpdate?.();
         cleanupAutoUpdate = null;
 
-        setTimeout(() => {
+        // 淡出动画结束后的补设 visibility:hidden：存引用并纳入 clearTimers/destroy 统一清理，
+        // 避免窗口期（动画播放中）触发元素被卸载后仍留下游离定时器访问模块单例
+        hideCleanupTimer = setTimeout(() => {
+          hideCleanupTimer = null;
           if (globalBox && globalBox.style.opacity === '0') {
             globalBox.style.visibility = 'hidden';
             if (currentTargetEl === el) {
@@ -524,7 +566,7 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     handler.opts = normalize(binding.value, binding.modifiers);
 
     if (currentTargetEl === el) {
-      if (handler.opts.disabled || !handler.opts.content) {
+      if (handler.opts.disabled || !hasTooltipContent(handler.opts)) {
         hideTooltip(el, true);
       } else if (globalContent) {
         setTooltipContent(globalContent, handler.opts);

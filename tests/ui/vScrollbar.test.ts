@@ -1,5 +1,5 @@
 /* eslint-disable vue/one-component-per-file -- 指令测试需为每个用例声明独立的宿主组件 */
-import { defineComponent } from 'vue';
+import { defineComponent, nextTick } from 'vue';
 
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
@@ -203,5 +203,71 @@ describe('vScrollbar 指令', () => {
     expect(document.querySelectorAll('#v-scrollbar-style')).toHaveLength(1);
     w1.unmount();
     w2.unmount();
+  });
+
+  it('动态更新 autoHide 选项：updated 守卫重建生效，新值不被冻结在挂载初值', async () => {
+    const DynamicHost = defineComponent({
+      directives: { scrollbar: vScrollbar },
+      props: { opts: { type: Object, required: true } },
+      template: `
+        <div style="height:100px;overflow-y:auto;position:relative;" v-scrollbar="opts">
+          <div style="height:1000px;">content</div>
+        </div>
+      `,
+    });
+    const w = mount(DynamicHost, {
+      attachTo: document.body,
+      props: { opts: { direction: 'y', autoHide: false } },
+    });
+    const thumb = (): HTMLElement => document.querySelector('.v-scrollbar-thumb--y') as HTMLElement;
+    // autoHide:false → 挂载即常显
+    expect(thumb().classList.contains('v-scrollbar-thumb--visible')).toBe(true);
+    // 绑定改为自动隐藏(autoHide 数值):若 updated 早退守卫漏比该字段,状态会冻结在"常显"
+    await w.setProps({ opts: { direction: 'y', autoHide: 50 } });
+    await nextTick();
+    expect(thumb().classList.contains('v-scrollbar-thumb--visible')).toBe(false);
+    w.unmount();
+  });
+
+  it('子元素从宿主移除时显式 ResizeObserver.unobserve（避免观察器持有已移除节点）', async () => {
+    const unobserveCalls: Element[] = [];
+    class TrackingResizeObserver {
+      observed = new Set<Element>();
+      observe(el: Element): void {
+        this.observed.add(el);
+      }
+      unobserve(el: Element): void {
+        unobserveCalls.push(el);
+        this.observed.delete(el);
+      }
+      disconnect(): void {
+        this.observed.clear();
+      }
+    }
+    vi.stubGlobal('ResizeObserver', TrackingResizeObserver);
+    try {
+      const w = mount(
+        defineComponent({
+          directives: { scrollbar: vScrollbar },
+          template: `
+            <div style="height:100px;overflow-y:auto;position:relative;" v-scrollbar="{ direction: 'y' }">
+              <div class="child-a" style="height:300px;">a</div>
+              <div class="child-b" style="height:300px;">b</div>
+            </div>
+          `,
+        }),
+        { attachTo: document.body }
+      );
+      // 直接以组件根元素定位宿主，避免前面用例失败残留的宿主干扰 document 级查询
+      const host = w.element as HTMLElement;
+      const childB = host.querySelector('.child-b') as HTMLElement;
+      childB.remove();
+      // MutationObserver 以微任务派发记录；越过一个宏任务后必然已执行
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(unobserveCalls).toContain(childB);
+      w.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

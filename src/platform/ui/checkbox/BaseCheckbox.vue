@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <label
     :class="[
       buttonized
@@ -29,7 +29,7 @@
       :disabled="disabled || readonly"
       :id="resolvedId"
       @blur="emit('blur', $event)"
-      @change="handleChange()"
+      @change="toggle()"
       @focus="emit('focus', $event)"
       class="peer sr-only"
       ref="inputRef"
@@ -113,7 +113,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId, useSlots, useTemplateRef } from 'vue';
+import { computed, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import {
@@ -209,6 +209,12 @@ const resolvedFalseValue = computed(() => (falseValue !== undefined ? falseValue
 /** 内部非受控备用状态（当未传 v-model 时保证组件自身可独立交互） */
 const innerChecked = ref(false);
 
+/**
+ * 受控 / 非受控契约：`modelValue === undefined` 视为「未绑定 v-model」→ 组件自管内部态。
+ * 注意：因此绑定值**不可有意用 undefined 承接**（例如 `v-model="obj.maybeUndefinedField"` 且字段恰为
+ * undefined 时会静默切到内部态，与外部脱节）；需占位请用 null 或具体空值。此语义为固有设计权衡。
+ */
+
 const SIZE_CONFIGS = {
   sm: {
     containerClass: 'gap-1.5',
@@ -271,6 +277,21 @@ const hasButtonizedText = computed(() => Boolean(label || slots['default']));
 /** 是否为方形图标按钮：显式 iconOnly，或仅有图标且无文本 */
 const isIconOnlySquare = computed(() => iconOnly || (Boolean(icon) && !hasButtonizedText.value));
 
+// 仅在开发环境中注册 a11y 警告，生产环境构建时被完全 Tree-shaking（对齐 ActionButton 的同类校验）
+if (import.meta.env.DEV) {
+  watch(
+    () => [isIconOnlySquare.value, ariaLabel, label] as const,
+    ([square, aria, text]) => {
+      if (square && !aria && !text) {
+        console.warn(
+          '[BaseCheckbox] buttonized 的 iconOnly 为 true 时应传入 ariaLabel（或 label），否则屏幕阅读器无法识别该复选框。'
+        );
+      }
+    },
+    { immediate: true }
+  );
+}
+
 /**
  * buttonized 内容外观：勾选=ActionButton subtle（浅主色高亮），未勾选=ActionButton ghost。
  * 宿主是 label（非 button），主题串的 hover:enabled: 前缀对 label 不生效，统一替换为 hover:；
@@ -279,6 +300,8 @@ const isIconOnlySquare = computed(() => iconOnly || (Boolean(icon) && !hasButton
 const rootButtonizedClass = computed(() => {
   const sized = isIconOnlySquare.value ? buttonizedConfig.value.square : buttonizedConfig.value.text;
   const theme =
+    // 未选中态刻意统一用 ghost 中性色，不随 color 变化（未选中无需强调色）；
+    // 仅选中态才按 color 取对应 subtle 色板
     isChecked.value && !indeterminate.value
       ? (BUTTON_SUBTLE_THEME_MAP[color] ?? BUTTON_SUBTLE_THEME_MAP['primary'])
       : BUTTON_GHOST_THEME_MAP['default'];
@@ -359,10 +382,6 @@ const toggle = () => {
 
   modelValue.value = nextModelValue;
   emit('change', nextChecked, nextModelValue);
-};
-
-const handleChange = () => {
-  toggle();
 };
 
 defineExpose({

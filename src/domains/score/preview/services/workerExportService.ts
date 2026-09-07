@@ -15,6 +15,7 @@ import type {
   WorkerExportPayload,
 } from '@/domains/score/preview/workers/scoreExportWorker';
 import type { Song } from '@/domains/score/types';
+import type { ScoreLyricsFontWeight } from '@/platform/types';
 
 /** 将 Chord 模型转为 Worker 绘图所需的轻量指板实体（仅本文件内部使用） */
 const extractExportChordData = (chord: Chord, shorthand = false): ExportChordData => ({
@@ -38,8 +39,10 @@ export const prepareWorkerExportPayload = (
   mode: 'normal' | 'a4',
   shorthand = false,
   layoutAlign: 'start' | 'center' = 'start',
-  fontScale = 1,
-  fretboardScale = 1
+  fontScale = 100,
+  fretboardScale = 100,
+  showBarre = true,
+  lyricsFontWeight: ScoreLyricsFontWeight = 'regular'
 ): WorkerExportPayload => {
   const lyricsLines = song.lyrics.split('\n');
   const chordMap = song.chordMap;
@@ -104,6 +107,8 @@ export const prepareWorkerExportPayload = (
     layoutAlign,
     fontScale,
     fretboardScale,
+    showBarre,
+    lyricsFontWeight,
   };
 };
 

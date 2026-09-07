@@ -148,7 +148,7 @@
         :class="searchMaxHeightClass"
         @mousedown.stop
         @mouseleave="setSearchActiveIndex(-1)"
-        class="overflow-x-hidden overflow-y-auto transition-[height] duration-base ease-sidebar"
+        class="overflow-x-hidden transition-[height] duration-base ease-sidebar"
         ref="searchScrollRef"
       >
         <div class="box-border p-1">

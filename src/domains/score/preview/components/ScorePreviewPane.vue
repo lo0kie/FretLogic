@@ -16,7 +16,7 @@
       <div
         v-scrollbar="{ onScroll: closeAllPopovers }"
         v-wheel-scroll="{ disabled: isTallerThanViewport, smooth: true }"
-        class="no-scrollbar relative box-border min-h-0 flex-1 overflow-auto p-6"
+        class="relative box-border min-h-0 flex-1 p-6 py-4"
         ref="previewScrollRef"
       >
         <!-- 内容行：够宽时自动水平居中（mx-auto），超宽时 margin 归 0 自然从左侧滚动；
@@ -84,16 +84,20 @@
           <!-- 适应开关：按钮化 checkbox（选中=主色高亮，撑满语义图标），控制自适应满高模式 -->
 
           <template v-if="!isFitMode">
-            <BaseNumberInput
-              v-model="customZoomPercent"
-              :label-suffix="'%'"
+            <BaseSlider
+              v-model.lazy="customZoomPercent"
+              :default-value="PREVIEW_DEFAULT_ZOOM_PERCENT"
+              :formatter="val => `${Math.round(val)}%`"
               :max="PREVIEW_MAX_ZOOM_PERCENT"
               :min="PREVIEW_MIN_ZOOM_PERCENT"
-              :step="10"
-              use-icons
-              aria-label="预览缩放百分比"
+              :show-buttons="false"
+              :step="2"
+              bordered
+              wheel-on-hover
+              label-position="right"
+              readout-position="left"
               size="sm"
-              variant="glass"
+              width="md"
             />
 
             <component :is="divider" />
@@ -127,7 +131,7 @@
 </script>
 
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, ref, toRef, watch } from 'vue';
 
 import { useDebounceFn, useElementSize, useEventListener } from '@vueuse/core';
 
@@ -137,13 +141,13 @@ import ContextMenu from '@/platform/ui/context-menu/ContextMenu.vue';
 import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
 import BaseFloatingBar from '@/platform/ui/floating-bar/BaseFloatingBar.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
-import BaseNumberInput from '@/platform/ui/input/BaseNumberInput.vue';
+import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import {
+  PREVIEW_DEFAULT_ZOOM_PERCENT,
   PREVIEW_FIT_PADDING_PX,
   PREVIEW_MAX_ZOOM_PERCENT,
   PREVIEW_MIN_ZOOM_PERCENT,
-  PREVIEW_TALL_MODE_TOLERANCE_PX,
   PREVIEW_WHEEL_ZOOM_SENSITIVITY,
   SCORE_EXPORT_CONFIG,
   SCORE_PREVIEW_DEBOUNCE_MS,
@@ -250,7 +254,7 @@ const buildContentKey = () => {
   }
   refSignatures.sort();
 
-  return `${song.id}_${song.title}_${song.playKey}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_al${settingsStore.scoreLayoutAlign}_fz${scoreEditor.fontScale}_fb${scoreEditor.fretboardScale}_ref${refSignatures.length}_${refSignatures.join('|')}`;
+  return `${song.id}_${song.title}_${song.playKey}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_fz${scoreEditor.fontScale}_fb${scoreEditor.fretboardScale}_ref${refSignatures.length}_${refSignatures.join('|')}`;
 };
 
 /** 整曲 A4 自动分页渲染：Worker 内部按可用高度装箱分页并逐页绘制表头，返回各页图 */
@@ -289,7 +293,9 @@ const generate = async (force = false) => {
       settingsStore.scoreChordShorthand,
       settingsStore.scoreLayoutAlign,
       scoreEditor.fontScale,
-      scoreEditor.fretboardScale
+      scoreEditor.fretboardScale,
+      settingsStore.scoreShowBarre,
+      settingsStore.scoreLyricsFontWeight
     );
     const { blobs: pageBlobs } = await runWorkerExport(payload);
     if (token !== runToken) return;
@@ -333,10 +339,10 @@ const previewScrollRef = ref<HTMLElement | null>(null);
 let savedScroll = { top: 0, left: 0 };
 
 // ===== 缩放控制：自适应满高 + 自定义百分比（Ctrl+滚轮/捏合/步进器三通道） =====
-/** 是否为自适应模式：页面满高贴合滚动容器，随窗口缩放 */
-const isFitMode = ref(true);
-/** 自定义缩放百分比（离开自适应模式后生效，保留上次用户偏好） */
-const customZoomPercent = ref(100);
+/** 是否为自适应模式：页面满高贴合滚动容器，随窗口缩放（持久化于 settingsStore，切歌保留） */
+const isFitMode = toRef(settingsStore, 'previewFitMode');
+/** 自定义缩放百分比（离开自适应模式后生效，持久化于 settingsStore 保留用户偏好） */
+const customZoomPercent = toRef(settingsStore, 'previewZoomPercent');
 
 /** 滚动容器可视高度（px）：自适应百分比与超高判定的基准 */
 const { height: measuredContainerHeight } = useElementSize(previewScrollRef);
@@ -375,12 +381,15 @@ const renderedPageHeight = computed(
 );
 
 /** 页面是否超出视口可用高度：决定顶部对齐、纵向滚动浏览与禁用横向翻页滚轮。
- *  以「页面渲染高度 > 可视内容高 + 容差」判定，容差覆盖 fitPercent 整数化回放带来的 ~6px 取整溢出，
- *  避免轻微取整就误切换（该态会禁用横滚滚轮） */
+ *  判定必须与真实纵向溢出严格一致（页高 > 滚动容器内容区高）：useElementSize 量到的
+ *  containerHeight 已是 content-box（排除 p-6 内边距），不得再减 PREVIEW_FIT_PADDING_PX——
+ *  旧写法重复扣一次内边距，把「页面尚能放下、无纵向溢出」的一段放大倍率误判为超高：
+ *  该区间 v-wheel-scroll 被禁用而原生又无纵向可滚距离，滚轮完全无响应（横向翻页失灵）。
+ *  也不留正向容差：真实溢出哪怕 1px 也须切顶部对齐（items-center 会在负方向裁掉页面顶部）；
+ *  fitPercent 取整误差最多 ±6px，距边界尚有整个 FIT_PADDING（48px）余量，边界不会抖动 */
 const isTallerThanViewport = computed(() => {
   const pageHeight = Math.round((SCORE_EXPORT_CONFIG.A4_HEIGHT * activePercent.value) / 100);
-  const available = containerHeight.value - PREVIEW_FIT_PADDING_PX;
-  return pageHeight > available + PREVIEW_TALL_MODE_TOLERANCE_PX;
+  return pageHeight > containerHeight.value;
 });
 
 /** Ctrl+滚轮 / 触控板捏合：拦截浏览器页面缩放，按 deltaY 平滑换算预览百分比 */
@@ -463,8 +472,6 @@ watch(
     if (newId === oldId) return;
     cancelPendingExport();
     savedScroll = { top: 0, left: 0 };
-    // 缩放回归自适应：新歌页数/内容高度未知，保留旧的自定义缩放易产生违和的初始视野
-    isFitMode.value = true;
     if (previewScrollRef.value) {
       previewScrollRef.value.scrollTop = 0;
       previewScrollRef.value.scrollLeft = 0;
@@ -505,6 +512,7 @@ watch(
  */
 watch(
   [
+    isDark,
     () => scoreEditor.activeSong?.title,
     () => scoreEditor.activeSong?.playKey,
     () => scoreEditor.activeSong?.capo,
@@ -512,11 +520,12 @@ watch(
     () => scoreEditor.activeSong?.lyrics,
     () => scoreEditor.activeSong?.chordMap,
     () => allLineIndices.value.length,
-    isDark,
     () => settingsStore.scoreChordShorthand,
     () => settingsStore.scoreLayoutAlign,
     () => scoreEditor.fontScale,
     () => scoreEditor.fretboardScale,
+    () => settingsStore.scoreShowBarre,
+    () => settingsStore.scoreLyricsFontWeight,
   ],
   () => {
     if (!isPaneActive) return;

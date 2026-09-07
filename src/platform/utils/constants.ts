@@ -149,6 +149,14 @@ export const STORAGE_KEYS = {
   SCORE_FONT_SCALE: 'CHORD_LAB_SCORE_FONT_SCALE_V1',
   /** 谱面内嵌指板缩放 */
   SCORE_FRETBOARD_SCALE: 'CHORD_LAB_SCORE_FRETBOARD_SCALE_V1',
+  /** 预览：是否自适应满高 */
+  SCORE_PREVIEW_FIT_MODE: 'CHORD_LAB_SCORE_PREVIEW_FIT_MODE_V1',
+  /** 预览：自定义缩放百分比 */
+  SCORE_PREVIEW_ZOOM_PERCENT: 'CHORD_LAB_SCORE_PREVIEW_ZOOM_PERCENT_V1',
+  /** 乐谱：是否绘制大横按 */
+  SCORE_SHOW_BARRE: 'CHORD_LAB_SCORE_SHOW_BARRE_V1',
+  /** 预览/导出：歌词字重（light 细 / regular 常规 / bold 粗） */
+  SCORE_LYRICS_FONT_WEIGHT: 'CHORD_LAB_SCORE_LYRICS_FONT_WEIGHT_V1',
   /** 谱面字号缩放 */
   SCORE_SCALE: 'CHORD_LAB_SCORE_SCALE_V1',
   /** 谱面行高缩放 */
@@ -266,8 +274,8 @@ export const AUDIO_SETTINGS_DEFAULTS = {
   strumDelayMs: 60,
   /** 主音量（dB） */
   volumeDb: -8,
-  /** 混响干湿比（0~1） */
-  reverbWet: 0.2,
+  /** 混响干湿比（0~100 百分制） */
+  reverbWet: 20,
 } as const;
 
 // ===================== 路由路径 =====================

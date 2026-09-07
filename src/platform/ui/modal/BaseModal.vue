@@ -114,7 +114,7 @@
 <script lang="ts">
 // 双 script 块的 SFC 视为同一模块：import 必须整体置于第一个块顶部（import/first），
 // 下方 <script setup> 直接复用这些绑定
-import { computed, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
 
 import { useEventListener, useScrollLock } from '@vueuse/core';
 
@@ -326,7 +326,7 @@ const clearListeners = () => {
 // 仅当自身位于弹窗栈顶时才响应 Esc，避免一次按键同时关闭所有层叠弹窗
 const isTopOverlay = () => {
   if (!overlayRef.value) return false;
-  // 刚打开还未入栈（setTimeout 入队间隙）时视为栈顶
+  // 刚打开还未完成 nextTick 入栈（DOM 已挂载但尚未登记）时视为栈顶
   if (!activeModalOverlays.has(overlayRef.value)) return true;
   return Array.from(activeModalOverlays).pop() === overlayRef.value;
 };
@@ -351,13 +351,15 @@ watch(
     } else {
       isBodyLocked.value = true;
       stopKeydownListener = useEventListener(window, 'keydown', handleEscape);
-      // 待 DOM 挂载后加入激活栈
-      setTimeout(() => {
+      // 待 DOM 挂载后加入激活栈。用 nextTick（渲染冲刷后的微任务）而非裸 setTimeout(0)（下一个宏任务）：
+      // 语义更贴合「DOM 已更新」，且多个弹窗几乎同时打开时，入栈顺序与各 watch 的触发顺序严格一致，
+      // 不会因宏任务排队时机与其它异步逻辑交织而错序。
+      void nextTick(() => {
         if (overlayRef.value) {
           activeModalOverlays.add(overlayRef.value);
           updateGlobalInertState();
         }
-      }, 0);
+      });
     }
   },
   { immediate: true }
@@ -396,11 +398,20 @@ onBeforeUnmount(() => {
 });
 
 // 统一关闭入口：加载中禁止关闭，并支持 beforeClose 拦截；reason 标识关闭来源
+let closePending = false;
 const close = async (reason: ModalCloseReason = 'cancel') => {
-  if (props.confirmLoading) return;
+  // beforeClose 执行期间防重入：遮罩 / X / Esc 并发触发（或二次确认期间再次点击）时，
+  // 只让一次请求进入拦截，避免异步 beforeClose（二次确认 / 远端校验）被重复拉起。
+  // 拦截成功放行后可见性同步置 false，组件随即卸载/隐藏，不再有新的点击窗口。
+  if (closePending || props.confirmLoading) return;
   if (props.beforeClose) {
-    const ok = await props.beforeClose();
-    if (ok === false) return;
+    closePending = true;
+    try {
+      const ok = await props.beforeClose();
+      if (ok === false) return; // 拦截：放弃本次关闭，closePending 由 finally 复位，允许下次重试
+    } finally {
+      closePending = false;
+    }
   }
   emit('cancel', reason);
   visible.value = false;

@@ -25,11 +25,13 @@
     "noPropertyAccessFromIndexSignature": true,
     "noImplicitOverride": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["unplugin-icons/types/vue"],
+    "types": ["unplugin-icons/types/vue", "node"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"]
+  // 检查范围：src + 构建与脚本 TS 文件（vite.config / scripts/*.ts，需 node types）。
+  // tests 不纳入严格类型检查（vitest 走 esbuild 转译运行，类型由 IDE 宽松提示兜底）
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue", "vite.config.ts", "scripts/**/*.ts"]
 }

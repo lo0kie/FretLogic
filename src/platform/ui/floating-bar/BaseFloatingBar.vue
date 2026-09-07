@@ -30,6 +30,8 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, onActivated, onDeactivated, ref } from 'vue';
 
+import { ALIGN_CLASS_MAP, toPositionLength } from './floatingPositions';
+
 defineOptions({
   name: 'BaseFloatingBar',
   inheritAttrs: false,
@@ -99,12 +101,6 @@ const isBarVisible = computed(() => Boolean(props.visible && isViewActive.value)
 
 const positionClass = computed(() => (props.position === 'absolute' ? 'absolute' : 'fixed'));
 
-const ALIGN_CLASS_MAP: Record<'start' | 'end' | 'center', string> = {
-  start: 'right-auto left-4',
-  end: 'right-4 left-auto',
-  center: 'right-0 left-0 mx-auto',
-};
-
 const alignClass = computed(() =>
   props.align ? (ALIGN_CLASS_MAP[props.align] ?? ALIGN_CLASS_MAP.center) : ALIGN_CLASS_MAP.center
 );
@@ -119,9 +115,9 @@ const sizeClass = computed(() => SIZE_CLASS_MAP[props.size] ?? SIZE_CLASS_MAP.md
 
 const zIndexClass = computed(() => (typeof props.zIndex === 'string' ? props.zIndex : ''));
 
-// 安全区与底部定位：将 bottom 直接作用于定位容器
+// 安全区与底部定位：将 bottom 直接作用于定位容器（toPositionLength 内含非法值 dev 校验）
 const outerStyle = computed(() => {
-  const b = typeof props.bottom === 'number' ? `${props.bottom}px` : props.bottom;
+  const b = toPositionLength(props.bottom, 'BaseFloatingBar');
   const style: Record<string, string | number> = {
     bottom: props.safeAreaInset ? `calc(${b} + env(safe-area-inset-bottom, 0px))` : b,
   };

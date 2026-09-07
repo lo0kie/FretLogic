@@ -127,8 +127,9 @@ const attrs = useAttrs();
 const { class: attrClass, style: attrStyle, ...restAttrs } = attrs;
 /** 根容器类：合并调用方 fallthrough 的 class（如 h-full w-full） */
 const rootClass = computed(() => attrClass);
-/** 根容器内联样式：规范化 useAttrs 的 unknown 值为 Vue CSSProperties 可接受类型 */
-const rootStyle = computed<CSSProperties | string | undefined>(() => attrStyle as CSSProperties | undefined);
+/** 根容器内联样式：useAttrs 的 style 既可能是字符串（原生 style="..." 透传）也可能是对象，
+ *  断言需覆盖两态，与声明类型 CSSProperties | string | undefined 保持一致 */
+const rootStyle = computed<CSSProperties | string | undefined>(() => attrStyle as CSSProperties | string | undefined);
 
 const variantClasses = computed(() =>
   props.variant === 'glass'

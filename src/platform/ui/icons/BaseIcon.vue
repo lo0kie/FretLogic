@@ -11,7 +11,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, watchEffect } from 'vue';
+
+import { logger } from '@/platform/utils/logger';
 
 import { ICON_REGISTRY } from './icons.registry.ts';
 import { resolveIconSize, resolveIconStroke } from './iconSizes.ts';
@@ -58,15 +60,25 @@ const {
 
 const resolvedComponent = computed(() => ICON_REGISTRY[name] || null);
 
+// 未注册的图标名（拼写错误 / 后端动态返回的图标名强转为 IconName）会静默渲染成空白，
+// 既看不出"没传"也看不出"传错"，排查成本极高——开发期显式告警。
+// 用 watchEffect 而非 setup 内一次性判断：图标名可能随数据动态变化。
+if (import.meta.env.DEV) {
+  watchEffect(() => {
+    if (name && !resolvedComponent.value) {
+      logger.warn('BaseIcon', `图标名 "${name}" 未在 ICON_REGISTRY 中注册，图标不会渲染`);
+    }
+  });
+}
+
 const customStyle = computed<CSSProperties>(() => {
   const style: CSSProperties = {};
 
-  if (iconSize !== undefined) {
-    const formattedSize = resolveIconSize(iconSize);
-    style.width = formattedSize;
-    style.height = formattedSize;
-    style.fontSize = formattedSize;
-  }
+  // iconSize 默认 '1em'，恒有值——原 `!== undefined` 判断恒真且易误导为"存在不设尺寸的路径"，故直接解析
+  const formattedSize = resolveIconSize(iconSize);
+  style.width = formattedSize;
+  style.height = formattedSize;
+  style.fontSize = formattedSize;
 
   if (iconStroke !== undefined) {
     style.strokeWidth = resolveIconStroke(iconStroke);
@@ -84,6 +96,11 @@ const customStyle = computed<CSSProperties>(() => {
 });
 </script>
 
+<!-- 注意：本块**不可加 scoped**。
+     规则要作用于图标子组件渲染的 SVG 内部元素（g/path/line…），而 scoped 会把作用域属性
+     追加到末位选择器上，那些内部节点并不携带 BaseIcon 的 scope id —— 加了即整条规则失效、
+     描边粗细覆盖全部失灵。故保持全局；碰撞风险由 `.base-icon[data-icon-stroke]` 双条件
+     限定（需同时命中 class 与本组件独有的 data 标记），实际上足够特异。 -->
 <style>
 /* Lucide 等描边图标把 stroke-width 写死在内部 path/g 的 SVG presentation attribute 上，
    根元素上的 CSS stroke-width 因优先级低于该 attribute 而传不下去——导致 BaseIcon 的

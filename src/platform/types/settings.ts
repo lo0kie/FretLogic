@@ -25,7 +25,15 @@ export interface AppPreferencesBackup {
   workbenchChordShorthand?: boolean;
   scoreChordShorthand?: boolean;
   scoreLayoutAlign?: 'start' | 'center';
+  scoreShowBarre?: boolean;
+  scoreLyricsFontWeight?: ScoreLyricsFontWeight;
 }
+
+/** 预览/导出歌词字重（细/常规/粗） */
+export type ScoreLyricsFontWeight = 'light' | 'regular' | 'bold';
+
+/** 导出预览背景模式（工作台导出面板与 settingsStore 共用） */
+export type ExportBgMode = 'transparent' | 'white' | 'dark';
 
 /** 音频试听音色预设 id（预设参数表定义于 app/services/audio/constants.ts） */
 export type AudioTimbreId = 'standard' | 'soft' | 'bright' | 'pluck';
@@ -46,7 +54,7 @@ export interface AudioPlaybackSettings {
   volumeDb: number;
   /** 力度随机拟真（关闭后每弦固定力度，时序抖动同步关闭） */
   humanize: boolean;
-  /** 混响干湿比（0~1，默认与引擎常量 REVERB_WET_GAIN 一致） */
+  /** 混响干湿比（0~100 百分制，默认与 AUDIO_SETTINGS_DEFAULTS.reverbWet 一致） */
   reverbWet: number;
   /** 合唱效果开关（常驻链路，开/关切换 wet） */
   chorusEnabled: boolean;

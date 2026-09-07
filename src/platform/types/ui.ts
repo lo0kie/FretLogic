@@ -20,6 +20,7 @@ export interface Toast {
   actionText?: string;
   duration: number;
   closable?: boolean;
+  /** 自定义扩展类；注意：description 型基础样式用 `!important` 锁定了 w-auto/items-start/rounded-xl/py-md，customClass 无法覆盖这些属性 */
   customClass?: string;
   /** LOADING 型是否显示转圈图标；false 时退化为中性静态图标（用于非后台异步的常驻提示） */
   spinner?: boolean;

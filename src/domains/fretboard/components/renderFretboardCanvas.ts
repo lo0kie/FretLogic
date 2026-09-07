@@ -27,6 +27,8 @@ export interface RenderFretboardOptions {
   showFretNumbers?: boolean;
   /** 是否显示加粗弦枕（默认 true；false 时零品仅留普通品丝线条） */
   showBoldNut?: boolean;
+  /** 是否绘制大横按（默认 true；false 时隐藏横按梁，仅保留按弦圆点） */
+  showBarre?: boolean;
 }
 
 // ---- 内部辅助 ----
@@ -172,6 +174,7 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
     showOpenStringNotes = true,
     showFretNumbers = true,
     showBoldNut = true,
+    showBarre = true,
   } = opts;
   const fc = Math.max(MIN_FRET_COUNT, chord.fretCount || DEFAULT_FRET_COUNT);
   const chordName = getChordName(chord, { shorthand });
@@ -267,8 +270,8 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
     ctx.textBaseline = 'alphabetic';
   }
 
-  // 6. 大横按
-  if (chord.barres && chord.barres.length > 0) {
+  // 6. 大横按（showBarre=false 时隐藏横按梁）
+  if (showBarre && chord.barres && chord.barres.length > 0) {
     const barreHalfH = FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS / 2;
     for (const b of chord.barres) {
       const bx1 = startStrX + b.fromString * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
@@ -322,6 +325,7 @@ export function renderFretboardToCanvas(chord: Chord, opts: RenderFretboardToCan
     showOpenStringNotes = true,
     showFretNumbers = true,
     showBoldNut = true,
+    showBarre = true,
   } = opts;
 
   const fc = Math.max(MIN_FRET_COUNT, chord.fretCount || DEFAULT_FRET_COUNT);
@@ -380,6 +384,7 @@ export function renderFretboardToCanvas(chord: Chord, opts: RenderFretboardToCan
     showOpenStringNotes,
     showFretNumbers,
     showBoldNut,
+    showBarre,
   });
   ctx.restore();
 
