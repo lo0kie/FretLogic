@@ -1,11 +1,12 @@
-import type { Directive } from 'vue';
-
-import { autoUpdate, computePosition, type Placement } from '@floating-ui/dom';
+﻿import { autoUpdate, computePosition } from '@floating-ui/dom';
 
 import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
 import { buildFloatingMiddlewares } from '@/platform/ui/popover/floatingCore';
 import { acquireFloatingZ, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
 import { TOOLTIP_HIDE_CLEANUP_DELAY_MS, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS } from '@/platform/utils/constants';
+
+import type { Placement } from '@floating-ui/dom';
+import type { Directive } from 'vue';
 
 import './vTooltip.scss';
 

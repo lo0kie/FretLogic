@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import FretboardSvg from '@/domains/fretboard/components/FretboardSvg.vue';
+
 import type { BarreEntity } from '@/domains/fretboard/types';
 
 const barre: BarreEntity = { fret: 1, fromString: 0, toString: 5, finger: 1 };
@@ -248,10 +249,12 @@ describe('FretboardSvg 指板渲染', () => {
       ] as never,
     });
 
-    // 音符实体未销毁，位置平滑滑回 34px 空弦基准点
+    // 音符实体未销毁，位置平滑滑回 34px 空弦基准点，且变动的第 3 弦激活 is-moving 过渡类，未变动弦保持静态
     expect(wrapper.findAllComponents({ name: 'FretboardNote' }).length).toBe(6);
     const noteNodesAfter = wrapper.findAll('.string-note-move');
     expect(noteNodesAfter[3].attributes('style')).toContain('translate(130px, 34px)');
+    expect(noteNodesAfter[3].classes()).toContain('is-moving');
+    expect(noteNodesAfter[1].classes()).not.toContain('is-moving');
     expect(wrapper.findAllComponents({ name: 'FretboardNote' })[3].props('isOpenString')).toBe(true);
   });
 });

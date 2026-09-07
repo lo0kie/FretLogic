@@ -1,25 +1,25 @@
-<template>
+﻿<template>
   <BaseModal v-model:visible="groupModals.modals.move" @confirm="groupModals.handleMoveChord" title="移动至新分组">
-    <div v-grid-nav="3" class="gap-md no-scrollbar grid max-h-[50vh] grid-cols-3">
+    <div v-grid-nav="3" class="no-scrollbar grid max-h-[50vh] grid-cols-3 gap-md">
       <button
         v-wave
         v-for="group in chordStore.groups"
         v-tooltip="group.id === groupModals.modalData.activeChord?.groupId ? '和弦当前已在此分组中' : ''"
         :class="[
           groupModals.modalData.moveTargetId === group.id
-            ? 'bg-primary text-text-on-accent border-primary scale-[1.02]'
-            : 'bg-bg-body text-text-body hover:border-primary hover:bg-bg-panel-hover active:scale-95',
+            ? 'scale-[1.02] border-primary bg-primary text-fg-on-accent'
+            : 'bg-surface-body text-fg-body hover:border-primary hover:bg-surface-panel-hover active:scale-95',
         ]"
         :disabled="group.id === groupModals.modalData.activeChord?.groupId"
         :key="group.id"
         :title="group.name"
         @click="groupModals.modalData.moveTargetId = group.id"
         data-focusable-inline
-        class="p-md border-border-base duration-fast disabled:bg-bg-main disabled:border-border-light disabled:text-text-disabled box-border flex w-full min-w-0 cursor-pointer items-center rounded-md border text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50"
+        class="box-border flex w-full min-w-0 cursor-pointer items-center rounded-md border border-border-base p-md text-xs font-bold transition-all duration-fast disabled:cursor-not-allowed disabled:border-border-light disabled:bg-surface-main disabled:text-fg-disabled disabled:opacity-50"
       >
-        <div v-marquee>
+        <div v-marquee.fade>
           <span> {{ group.name }} </span>
-          <span class="text-text-disabled pl-1">({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})</span>
+          <span class="pl-1 text-fg-disabled">({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})</span>
         </div>
       </button>
     </div>
@@ -35,24 +35,24 @@
       <BaseCheckbox
         :indeterminate="isVariantsIndeterminate"
         :model-value="isAllVariantsSelected"
-        @update:model-value="handleToggleSelectAllVariants"
+        @update:model-value="handleToggleSelectAllVariants()"
         label="全选"
         size="sm"
       />
     </template>
 
-    <div class="gap-md flex flex-col">
-      <div class="gap-lg flex items-center justify-between">
-        <p class="text-text-body m-0 text-xs leading-relaxed font-medium">
+    <div class="flex flex-col gap-md">
+      <div class="flex items-center justify-between gap-lg">
+        <p class="m-0 text-xs/relaxed font-medium text-fg-body">
           请点击选择要删除的指法，共
-          <strong class="text-danger font-bold">
+          <strong class="font-bold text-danger">
             {{ groupModals.modalData.activeGroupCard?.variants.length || 0 }}
           </strong>
           个
         </p>
       </div>
       <div
-        class="no-scrollbar gap-lg p-xs box-border grid max-h-[52vh] grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] overflow-y-auto"
+        class="no-scrollbar box-border grid max-h-[52vh] grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-lg overflow-y-auto p-xs"
       >
         <div
           v-wave
@@ -60,7 +60,7 @@
           :aria-checked="groupModals.modalData.selectedVariantIds.has(variant.id)"
           :aria-label="`指法 偏移 ${variant.fretOffset}`"
           :class="{
-            'border-danger! bg-tint-danger-90! ring-danger/50 ring-1': groupModals.modalData.selectedVariantIds.has(
+            'border-danger! bg-tint-danger-90! ring-1 ring-danger/50': groupModals.modalData.selectedVariantIds.has(
               variant.id
             ),
           }"
@@ -69,11 +69,11 @@
           @keydown.enter.prevent="groupModals.toggleVariantSelection(variant.id)"
           @keydown.space.prevent="groupModals.toggleVariantSelection(variant.id)"
           data-focusable-inline
-          class="pt-md px-sm pb-sm bg-bg-body border-border-light duration-fast hover:border-border-base hover:bg-bg-panel-hover relative box-border flex min-w-0 cursor-pointer flex-col items-center rounded-md border-[1.5px] transition-all outline-none select-none hover:-translate-y-px active:scale-[0.98]"
+          class="relative box-border flex min-w-0 cursor-pointer flex-col items-center rounded-md border-[1.5px] border-border-light bg-surface-body px-sm pt-md pb-sm transition-all duration-fast outline-none select-none hover:-translate-y-px hover:border-border-base hover:bg-surface-panel-hover active:scale-[0.98]"
           role="checkbox"
           tabindex="0"
         >
-          <div class="p-xs pointer-events-none box-border flex w-full items-center justify-center">
+          <div class="pointer-events-none box-border flex w-full items-center justify-center p-xs">
             <FretboardCanvas
               :chord="variant"
               :chord-name-scale="0.8"
@@ -84,10 +84,10 @@
           </div>
         </div>
       </div>
-      <div class="gap-md pt-md pb-xs border-border-light mt-[0.15rem] flex items-center justify-between border-t">
+      <div class="mt-[0.15rem] flex items-center justify-between gap-md border-t border-border-light pt-md pb-xs">
         <ActionButton @click="groupModals.modals.chordVariantsDelete = false" label="取消" variant="ghost" />
 
-        <div class="gap-sm flex items-center">
+        <div class="flex items-center gap-sm">
           <ActionButton
             @click="groupModals.handleDeleteAllVariants()"
             color="danger"
@@ -110,15 +110,16 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import type { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
-import { useChordStore } from '@/domains/chord/store/chordStore';
-import { getChordName } from '@/domains/chord/theory/theory';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
-import { isDark } from '@/platform/composables/useTheme';
-import { injectModalController } from '@/platform/store/useModalController';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
+import { useChordStore } from '@/domains/chord/store/chordStore';
+import { getChordName } from '@/domains/chord/theory/theory';
+import { isDark } from '@/platform/composables/useTheme';
+import { injectModalController } from '@/platform/store/useModalController';
+
+import type { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
 
 const groupModals = injectModalController<ReturnType<typeof useChordGroupModals>>('groupModals');
 

@@ -13,7 +13,7 @@
             :active-chord-name="getChordName(editorStore.draftChord)"
             :candidates="analysis.candidates"
             :notes="analysis.notes"
-            @select-candidate="handleSelectCandidate"
+            @select-candidate="handleSelectCandidate($event)"
           />
         </div>
         <p v-else-if="effectiveExpanded" class="form-hint pt-2" key="empty">
@@ -27,6 +27,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import WorkbenchPanel from '@/domains/chord/workbench/components/WorkbenchPanel.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';
 import {
@@ -40,12 +41,13 @@ import {
   parsePitchSegment,
   ROOT_PITCH_MAP,
 } from '@/domains/chord/theory/theory';
-import type { AccidentalType, CandidateResult, NaturalPitchLetter } from '@/domains/chord/types';
 import { toStringIndex } from '@/domains/fretboard/model/coordinates';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
-import WorkbenchPanel from '../WorkbenchPanel.vue';
-import ChordAnalysisContent, { type RenderNoteItem } from './ChordAnalysisContent.vue';
+import ChordAnalysisContent from './ChordAnalysisContent.vue';
+
+import type { RenderNoteItem } from './ChordAnalysisContent.vue';
+import type { AccidentalType, CandidateResult, NaturalPitchLetter } from '@/domains/chord/types';
 
 const editorStore = useChordEditorStore();
 

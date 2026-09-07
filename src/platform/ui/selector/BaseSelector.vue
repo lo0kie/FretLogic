@@ -1,10 +1,10 @@
-<template>
+﻿<template>
   <BasePopover
     v-model="isOpen"
     :disabled
     :block="width === 'full'"
     :offset-distance="6"
-    @open="scrollToSelected"
+    @open="scrollToSelected()"
     match-trigger-width
     panel-class="p-0 overflow-hidden"
     placement="bottom-start"
@@ -17,7 +17,7 @@
         :aria-expanded="_isOpen"
         :class="[
           currentConfig.triggerClass,
-          _isOpen ? 'border-primary ring-primary ring-1' : '',
+          _isOpen ? 'border-primary ring-1 ring-primary' : '',
           disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer',
         ]"
         :data-focusable-inline="!disabled || undefined"
@@ -26,19 +26,15 @@
         :title="triggerTitle"
         @keydown="handleTriggerKeydown($event)"
         aria-haspopup="listbox"
-        class="group bg-bg-body border-border-light text-text-title hover:border-border-base focus-visible:border-primary focus-visible:ring-primary/70 relative box-border flex items-center justify-between gap-2 rounded-full border transition-all duration-150 outline-none select-none focus-visible:ring-2"
+        class="group relative box-border flex items-center justify-between gap-2 rounded-full border border-border-light bg-surface-body text-fg-title transition-all duration-150 outline-none select-none hover:border-border-base focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/70"
         ref="referenceRef"
         role="combobox"
       >
         <span
           :class="[
-            isEmpty && placeholder
-              ? 'text-text-disabled font-normal'
-              : isNonDefault
-                ? 'text-primary'
-                : 'text-text-title',
+            isEmpty && placeholder ? 'font-normal text-fg-disabled' : isNonDefault ? 'text-primary' : 'text-fg-title',
           ]"
-          class="gap-sm flex min-w-0 flex-1 items-center overflow-hidden font-semibold"
+          class="flex min-w-0 flex-1 items-center gap-sm overflow-hidden font-semibold"
         >
           <slot name="prefix" />
           <BaseIcon
@@ -62,7 +58,7 @@
               <span
                 v-for="opt in displayedTags"
                 :key="String(getOptionValue(opt))"
-                class="bg-tint-primary-90 text-primary text-2xs inline-flex max-w-[8rem] shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-bold"
+                class="inline-flex max-w-32 shrink-0 items-center gap-1 rounded-sm bg-tint-primary-90 px-1.5 py-0.5 text-2xs font-bold text-primary"
               >
                 <span class="truncate">{{ formattedOption(opt) }}</span>
                 <BaseIcon
@@ -72,7 +68,7 @@
                   @keydown.enter.prevent.stop="handleRemoveTag(opt)"
                   @keydown.space.prevent.stop="handleRemoveTag(opt)"
                   aria-label="移除选项"
-                  class="hover:text-danger shrink-0 cursor-pointer opacity-60 hover:opacity-100"
+                  class="shrink-0 cursor-pointer opacity-60 hover:text-danger hover:opacity-100"
                   icon-stroke="bold"
                   name="x"
                   role="button"
@@ -83,14 +79,16 @@
               </span>
               <span
                 v-if="collapsedCount > 0"
-                class="bg-bg-panel-hover text-text-muted text-2xs inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-bold"
+                class="inline-flex shrink-0 items-center rounded-sm bg-surface-panel-hover px-1.5 py-0.5 text-2xs font-bold text-fg-muted"
               >
                 +{{ collapsedCount }}
               </span>
             </template>
-            <span v-else class="truncate">
-              <slot :selected="modelValue" name="label">{{ displayText }}</slot>
-            </span>
+            <div v-else v-marquee.fade class="min-w-0 flex-1">
+              <span class="block whitespace-nowrap">
+                <slot :selected="modelValue" name="label">{{ displayText }}</slot>
+              </span>
+            </div>
           </span>
           <slot name="suffix" />
         </span>
@@ -99,11 +97,11 @@
           <BaseIcon
             @mousedown.stop.prevent
             @pointerdown.stop.prevent
-            @click.stop.prevent="handleClear"
-            @keydown.enter.prevent.stop="handleClear"
-            @keydown.space.prevent.stop="handleClear"
+            @click.stop.prevent="handleClear()"
+            @keydown.enter.prevent.stop="handleClear()"
+            @keydown.space.prevent.stop="handleClear()"
             aria-label="清空选择"
-            class="text-text-disabled hover:text-danger bg-bg-body hidden shrink-0 cursor-pointer transition-colors group-focus-within:block group-hover:block"
+            class="hidden shrink-0 cursor-pointer bg-surface-body text-fg-disabled transition-colors group-focus-within:block group-hover:block hover:text-danger"
             icon-stroke="bold"
             name="x"
             role="button"
@@ -113,7 +111,7 @@
           />
           <BaseIcon
             :class="{ 'rotate-180': _isOpen }"
-            class="text-text-disabled block shrink-0 transition-transform duration-200 group-focus-within:hidden group-hover:hidden"
+            class="block shrink-0 text-fg-disabled transition-transform duration-200 group-focus-within:hidden group-hover:hidden"
             icon-stroke="bold"
             name="chevron-down"
             size="md"
@@ -122,7 +120,7 @@
         <BaseIcon
           v-else
           :class="{ 'rotate-180': _isOpen }"
-          class="text-text-disabled block shrink-0 transition-transform duration-200"
+          class="block shrink-0 text-fg-disabled transition-transform duration-200"
           icon-stroke="bold"
           name="chevron-down"
           size="md"
@@ -132,15 +130,15 @@
 
     <template #default="{ close }">
       <div class="dropdown-inner-container relative flex w-full flex-col">
-        <div v-if="$slots['header'] || filterable" class="border-glass-border shrink-0 border-b">
+        <div v-if="$slots['header'] || filterable" class="shrink-0 border-b border-glass-border">
           <div v-if="filterable" class="px-2 py-1.5">
             <input
               v-model="searchQuery"
               :placeholder="filterPlaceholder"
               @pointerdown.stop
-              @keydown.down.prevent="handleFilterKeydownDown"
+              @keydown.down.prevent="handleFilterKeydownDown()"
               @keydown.enter.prevent="handleFilterKeydownEnter(close)"
-              class="border-border-light bg-bg-body focus:border-primary focus:ring-primary/50 h-7 w-full rounded border px-2 text-xs outline-none focus:ring-1"
+              class="h-7 w-full rounded-sm border border-border-light bg-surface-body px-2 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
               ref="filterInputRef"
               type="text"
             />
@@ -157,15 +155,15 @@
               ...(filteredOptions.length === 0 ? { overflow: 'hidden' } : {}),
             }"
             @keydown="handleDropdownKeydown($event, close)"
-            @scroll.passive="syncEdgeFades"
-            class="no-scrollbar p-xs box-border flex w-full flex-col gap-0.5 overflow-y-auto outline-none"
+            @scroll.passive="syncEdgeFades()"
+            class="no-scrollbar box-border flex w-full flex-col gap-0.5 overflow-y-auto p-xs outline-none"
             ref="dropdownRef"
             role="listbox"
             tabindex="-1"
           >
             <div
               v-if="filteredOptions.length === 0"
-              class="m-auto box-border flex min-h-[5.5rem] w-full flex-col items-center justify-center py-6"
+              class="m-auto box-border flex min-h-22 w-full flex-col items-center justify-center py-6"
             >
               <EmptyState :description="filterable ? '无匹配结果' : '暂无选项'" size="sm" />
             </div>
@@ -177,7 +175,7 @@
                 :class="[
                   currentConfig.itemClass,
                   isSelected(getOptionValue(option))
-                    ? 'bg-tint-primary-88! text-primary! font-bold'
+                    ? 'bg-tint-primary-88! font-bold text-primary!'
                     : fontBlackItems
                       ? 'font-black'
                       : 'font-bold',
@@ -190,10 +188,10 @@
                 @click="handleSelect(option, close)"
                 @keydown.enter.prevent.stop="handleSelect(option, close)"
                 @keydown.space.prevent.stop="handleSelect(option, close)"
-                class="text-text-body hover:bg-bg-panel-hover hover:text-text-title box-border flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-lg bg-transparent px-2.5 text-xs transition-colors outline-none"
+                class="box-border flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-lg bg-transparent px-2.5 text-xs text-fg-body transition-colors outline-none hover:bg-surface-panel-hover hover:text-fg-title"
                 role="option"
               >
-                <span class="flex max-w-full min-w-0 flex-1 items-center gap-2 truncate">
+                <span class="flex max-w-full min-w-0 flex-1 items-center gap-2">
                   <BaseIcon
                     v-if="typeof getOptionIcon(option) === 'string'"
                     :name="getOptionIcon(option) as IconName"
@@ -210,16 +208,18 @@
                     icon-stroke="bold"
                     size="md"
                   />
-                  <span class="truncate">
-                    <slot :index :option name="option">
-                      {{ formattedOption(option) }}
-                    </slot>
-                  </span>
+                  <div v-marquee.fade class="min-w-0 flex-1">
+                    <span class="block whitespace-nowrap">
+                      <slot :index :option name="option">
+                        {{ formattedOption(option) }}
+                      </slot>
+                    </span>
+                  </div>
                 </span>
                 <BaseIcon
                   v-if="isSelected(getOptionValue(option))"
                   aria-hidden="true"
-                  class="text-primary shrink-0"
+                  class="shrink-0 text-primary"
                   icon-stroke="bold"
                   name="check"
                   size="md"
@@ -240,11 +240,22 @@
 </template>
 
 <script lang="ts">
-import type { Component } from 'vue';
+// 双 script 块的 SFC 视为同一模块：import 必须整体置于第一个块顶部（import/first），
+// 下方 <script setup> 直接复用这些绑定；<script setup> 内禁止 export，
+// 对外的类型导出也只能放在本块
+import { computed, nextTick, onBeforeUpdate, ref, useAttrs, useTemplateRef, watch } from 'vue';
+
+import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import BasePopover from '@/platform/ui/popover/BasePopover.vue';
+import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
+import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { ComponentSize } from '@/platform/types';
-import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
+import type { FormComponentWidth } from '@/platform/utils/constants';
+import type { Component } from 'vue';
 
 export interface SelectorFieldNames {
   label?: string;
@@ -270,17 +281,11 @@ export type OptionValue<Opt> = Opt extends { value: infer V } ? V : Opt;
   generic="O extends Record<string, unknown> | string | number, M extends boolean = false, V = OptionValue<O>"
   lang="ts"
 >
-import { computed, nextTick, onBeforeUpdate, ref, useAttrs, useTemplateRef, watch } from 'vue';
-
-import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
-import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
-import BasePopover from '@/platform/ui/popover/BasePopover.vue';
-import { resolveComponentWidth, type FormComponentWidth } from '@/platform/utils/constants';
-
 type AnyOption = O;
 
 defineOptions({ inheritAttrs: false });
+
+const modelValue = defineModel<M extends true ? V[] : V>({ required: true });
 
 const {
   options,
@@ -304,27 +309,41 @@ const {
   valueComparator = undefined,
   highlightNonDefault = false,
 } = defineProps<{
+  /** 选项列表：对象数组（label/value 等字段）或原始值数组 */
   options: O[];
+  /** 尺寸档位：sm/md/lg */
   size?: ComponentSize;
+  /** 触发器宽度：full / auto 或具体 CSS 宽度值 */
   width?: FormComponentWidth;
+  /** 未选中时的占位提示文本 */
   placeholder?: string;
   /** 触发器前缀图标（不传则自动取当前选中项的 icon） */
   icon?: IconName | Component;
+  /** 是否显示清空按钮 */
   clearable?: boolean;
+  /** 禁用整个选择器 */
   disabled?: boolean;
+  /** 下拉面板不滚动时直接可见的选项数量（决定面板最大高度） */
   displayItems?: number;
+  /** 默认值：清空时回退到该值，多选形态为数组 */
   defaultValue?: M extends true ? V[] : V;
+  /** 选项文字是否统一加重（未选中项以 font-black 呈现） */
   fontBlackItems?: boolean;
   /** 自定义选项展示文本（仅原始值选项；对象选项走 fieldNames.label） */
   formatOption?: (option: AnyOption) => string;
+  /** 多选模式：绑定值为数组，选中项以 Tag 形式展示 */
   multiple?: M;
   /** 多选模式下最多展示的 Tag 数量 */
   maxTagCount?: number;
   /** 多选模式下是否折叠超出的 Tag 为 +N */
   collapseTags?: boolean;
+  /** 对象选项的字段名映射（label/value/disabled/icon） */
   fieldNames?: SelectorFieldNames;
+  /** 是否在面板顶部显示搜索过滤输入框 */
   filterable?: boolean;
+  /** 搜索过滤输入框的占位提示文本 */
   filterPlaceholder?: string;
+  /** 自定义过滤函数（默认按展示文本包含关键字过滤） */
   filterMethod?: (query: string, option: AnyOption) => boolean;
   /** 自定义值相等比较器 */
   valueComparator?: (a: V, b: V) => boolean;
@@ -333,15 +352,12 @@ const {
   highlightNonDefault?: boolean;
 }>();
 
-const modelValue = defineModel<M extends true ? V[] : V>({ required: true });
-
-const attrs = useAttrs();
 const emit = defineEmits<{
   (e: 'change', value: M extends true ? V[] : V): void;
   (e: 'clear'): void;
   (e: 'removeTag', option: AnyOption, value: V): void;
 }>();
-
+const attrs = useAttrs();
 const labelKey = computed(() => fieldNames?.label ?? 'label');
 const valueKey = computed(() => fieldNames?.value ?? 'value');
 const disabledKey = computed(() => fieldNames?.disabled ?? 'disabled');
@@ -371,7 +387,7 @@ const currentTriggerIcon = computed<IconName | Component | undefined>(() => {
 const isOpen = ref(false);
 const dropdownRef = useTemplateRef<HTMLElement>('dropdownRef');
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
-const optionEls = ref<Array<HTMLElement | null>>([]);
+const optionEls = ref<(HTMLElement | null)[]>([]);
 const filterInputRef = useTemplateRef<HTMLInputElement>('filterInputRef');
 const searchQuery = ref('');
 

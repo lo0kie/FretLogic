@@ -3,13 +3,13 @@
     :class="[
       sizeClass,
       gapClass,
-      { 'is-bordered border-border-light bg-bg-body rounded-md border border-dashed': bordered },
+      { 'is-bordered rounded-md border border-dashed border-border-light bg-surface-body': bordered },
     ]"
     aria-live="polite"
-    class="empty-state-wrapper box-border flex h-full w-full flex-col items-center justify-center text-center select-none"
+    class="empty-state-wrapper box-border flex size-full flex-col items-center justify-center text-center select-none"
     role="status"
   >
-    <div :class="zoneClass" class="icon-zone text-text-disabled shrink-0 opacity-80">
+    <div :class="zoneClass" class="icon-zone shrink-0 text-fg-disabled opacity-80">
       <slot :size="iconSize" name="icon">
         <img
           v-if="image && !isImageError"
@@ -17,7 +17,7 @@
           @error="isImageError = true"
           alt=""
           aria-hidden="true"
-          class="max-h-28 max-w-[8rem] object-contain"
+          class="max-h-28 max-w-32 object-contain"
         />
         <BaseIcon v-else-if="typeof resolvedIcon === 'string'" :icon-size :name="resolvedIcon" class="empty-icon" />
         <component v-else :is="resolvedIcon" :size="resolveIconSize(iconSize)" class="empty-icon" />
@@ -28,7 +28,7 @@
       <div
         v-if="title || $slots['title']"
         :class="titleClass"
-        class="title-text text-text-title max-w-[18rem] leading-tight wrap-break-word"
+        class="title-text max-w-72 leading-tight wrap-break-word text-fg-title"
       >
         <slot name="title"> {{ title }} </slot>
       </div>
@@ -36,7 +36,7 @@
       <div
         v-if="resolvedDescription || $slots['default']"
         :class="descriptionClass"
-        class="description-text text-text-disabled max-w-[22rem] leading-relaxed font-medium wrap-break-word"
+        class="description-text max-w-88 leading-relaxed font-medium wrap-break-word text-fg-disabled"
       >
         <slot> {{ resolvedDescription }} </slot>
       </div>
@@ -60,14 +60,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, type Component } from 'vue';
+import { computed, ref, watch } from 'vue';
+
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { resolveIconSize } from '@/platform/ui/icons/iconSizes';
 
 import type { ComponentSize } from '@/platform/types';
-import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
-import { resolveIconSize, type IconSizeValue } from '@/platform/ui/icons/iconSizes';
-
-import ActionButton from '../button/ActionButton.vue';
+import type { IconSizeValue } from '@/platform/ui/icons/iconSizes';
+import type { Component } from 'vue';
 
 type EmptyType = 'empty' | '404' | 'network' | 'search';
 
@@ -149,7 +151,7 @@ const SIZE_CONFIG_MAP: Record<
   }
 > = {
   sm: {
-    sizeClass: 'empty-size-sm py-md px-0',
+    sizeClass: 'empty-size-sm px-0 py-md',
     gapClass: 'gap-1.5',
     iconSize: 'lg',
     actionBtnSize: 'sm',
@@ -157,7 +159,7 @@ const SIZE_CONFIG_MAP: Record<
     descriptionClass: 'text-2xs',
   },
   md: {
-    sizeClass: 'empty-size-md py-3xl px-lg',
+    sizeClass: 'empty-size-md px-lg py-3xl',
     gapClass: 'gap-2.5',
     iconSize: '2xl',
     actionBtnSize: 'sm',
@@ -165,7 +167,7 @@ const SIZE_CONFIG_MAP: Record<
     descriptionClass: 'text-2xs',
   },
   lg: {
-    sizeClass: 'empty-size-lg py-3xl px-xl',
+    sizeClass: 'empty-size-lg px-xl py-3xl',
     gapClass: 'gap-4',
     iconSize: '3xl',
     actionBtnSize: 'md',
@@ -185,7 +187,7 @@ const zoneClass = computed(() => {
     return 'flex items-center justify-center';
   }
   if (props.size === 'lg') {
-    return 'w-16 h-16 rounded-full bg-bg-panel-hover flex items-center justify-center';
+    return 'w-16 h-16 rounded-full bg-surface-panel-hover flex items-center justify-center';
   }
   return 'flex items-center justify-center';
 });

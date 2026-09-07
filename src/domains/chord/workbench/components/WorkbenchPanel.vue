@@ -2,16 +2,16 @@
   <div
     :class="
       effectiveExpanded
-        ? 'w-[19rem] min-w-[19rem]'
+        ? 'w-76 min-w-76'
         : isCompact
-          ? 'w-[calc(2.85rem_+_2px)] min-w-[calc(2.85rem_+_2px)]'
-          : 'w-[14rem] min-w-[14rem]'
+          ? 'w-[calc(2.85rem+2px)] min-w-[calc(2.85rem+2px)]'
+          : 'w-56 min-w-56'
     "
     @focusin="isFocusWithin = true"
     @focusout="isFocusWithin = false"
     @mouseenter="isPointerOver = true"
     @mouseleave="isPointerOver = false"
-    class="duration-slow ease-sidebar transition-[width,min-width]"
+    class="transition-[width,min-width] duration-slow ease-sidebar"
   >
     <!-- 收起系（圆球 + hover 摊开卡）两态同高：标题栏 min-h 1.6rem + 内边距 1.25rem + 边框 2px
          = 2.85rem + 2px ≈ 65.4px（根字号 22.25px）。圆球宽高即此值 → 正圆；hover 高度与之相等，
@@ -22,10 +22,10 @@
         effectiveExpanded
           ? 'rounded-lg p-3'
           : isCompact
-            ? 'justify-center rounded-[calc(1.425rem_+_1px)] p-2.5'
+            ? 'justify-center rounded-[calc(1.425rem+1px)] p-2.5'
             : 'rounded-lg p-2.5'
       "
-      class="bg-bg-panel border-glass-border z-panel duration-slow ease-sidebar @container pointer-events-auto relative box-border flex w-full flex-col overflow-hidden border transition-[border-radius,padding]"
+      class="@container pointer-events-auto relative z-panel box-border flex w-full flex-col overflow-hidden border border-glass-border bg-surface-panel transition-[border-radius,padding] duration-slow ease-sidebar"
     >
       <!-- 收起态标题栏锁最小高 1.6rem（= 分段控件高度 COMPACTED_SIZE_MAP.sm.wrapper 与圆球高度公式的
            1.6rem 项一致）：分段控件/标题文字用 v-show 显隐（display 不可过渡），锁高后其显隐不再影响高度，
@@ -34,18 +34,18 @@
         :class="[
           effectiveExpanded ? 'border-border-light pb-1.5' : 'border-b-0 pb-0',
           isCompact ? 'justify-center' : 'justify-between',
-          'workbench-panel-header duration-slow ease-sidebar flex shrink-0 items-center gap-2 border-b transition-[border-color,padding-bottom]',
+          'workbench-panel-header flex shrink-0 items-center gap-2 border-b transition-[border-color,padding-bottom] duration-slow ease-sidebar',
           CONTROL_MIN_HEIGHT_CLASSES.sm,
         ]"
       >
         <div
           :class="isCompact ? '' : '-ml-1 gap-1.5 py-0.5 pr-1.5 pl-1'"
-          class="duration-slow ease-sidebar flex items-center transition-[padding,margin]"
+          class="flex items-center transition-[padding,margin] duration-slow ease-sidebar"
         >
-          <div class="bg-tint-primary-88 text-primary flex h-5 w-5 shrink-0 items-center justify-center rounded-md">
+          <div class="flex size-5 shrink-0 items-center justify-center rounded-md bg-tint-primary-88 text-primary">
             <BaseIcon :name="icon" icon-size="sm" icon-stroke="regular" />
           </div>
-          <span v-show="!isCompact" class="text-text-title text-xs font-extrabold tracking-tight break-keep">
+          <span v-show="!isCompact" class="text-xs font-extrabold tracking-tight break-keep text-fg-title">
             {{ title }}
           </span>
         </div>
@@ -64,8 +64,8 @@
       <!-- 内容区高度动画：测量内容真实高度写入 height 并过渡，覆盖展开/收起与内容自身尺寸变化。
            内层宽度锁定为展开态内容宽度（19rem - 卡片左右内边距共 1.5rem），
            宽度动画期间内容不随面板伸缩重排/压窄 → 高度稳定不抖动 -->
-      <div v-auto-height="effectiveExpanded" class="duration-base ease-sidebar overflow-hidden transition-[height]">
-        <div class="w-[calc(19rem-1.5rem)]">
+      <div v-auto-height="effectiveExpanded" class="overflow-hidden transition-[height] duration-base ease-sidebar">
+        <div class="w-70">
           <slot :effective-expanded />
         </div>
       </div>
@@ -76,12 +76,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 
-import { CONTROL_MIN_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
-import type { IconName } from '@/platform/ui/icons/icons.registry';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
+import { PANEL_MODE_LABEL, usePanelMode } from '@/domains/chord/workbench/composables/usePanelMode.ts';
+import { CONTROL_MIN_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 
-import { PANEL_MODE_LABEL, usePanelMode } from '../composables/usePanelMode.ts';
+import type { IconName } from '@/platform/ui/icons/icons.registry';
 
 defineOptions({ name: 'WorkbenchPanel' });
 

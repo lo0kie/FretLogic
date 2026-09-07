@@ -1,7 +1,7 @@
-<template>
-  <div class="score-view-wrapper relative box-border flex h-full w-full overflow-hidden">
+﻿<template>
+  <div class="score-view-wrapper relative box-border flex size-full overflow-hidden">
     <div
-      class="score-main-content bg-bg-main relative box-border flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
+      class="score-main-content relative box-border flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-main"
     >
       <Transition mode="out-in" name="v-transition-fade">
         <KeepAlive :max="12">
@@ -21,8 +21,8 @@
 
           <ScoreInteractiveArea
             v-else-if="scoreEditor.activeTab === 'interactive'"
-            :key="`interactive-area-${scoreEditor.activeSong.id}`"
-            @open-picker="openChordPicker"
+            @open-picker="openChordPicker($event)"
+            key="interactive-area"
             ref="interactiveAreaRef"
           />
 
@@ -36,20 +36,23 @@
 </template>
 
 <script setup lang="ts">
-import { onActivated, onBeforeUnmount, onDeactivated, ref, useTemplateRef } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 
-import { useEventListener } from '@vueuse/core';
-
-import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import type { SlotKey } from '@/domains/score/types';
+import ScorePreviewPane from '@/domains/score/preview/components/ScorePreviewPane.vue';
 import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import { useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
+import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { useKeybinding } from '@/platform/composables/useKeybinding';
 
-import ScorePreviewPane from '../../preview/components/ScorePreviewPane.vue';
 import ChordPickerModal from './ChordPickerModal.vue';
 import ScoreInteractiveArea from './ScoreInteractiveArea.vue';
 import ScoreLyricsEditor from './ScoreLyricsEditor.vue';
 
+import type { SlotKey } from '@/domains/score/types';
+
 const scoreEditor = useScoreEditorStore();
+// URL ↔ Store 状态同构（#/score?id=xxx&tab=xxx）：本组件注册路由 watcher 与 KeepAlive 重激活回放
+useScoreRouteSync();
 const isPickerOpen = ref(false);
 const interactiveAreaRef = useTemplateRef<InstanceType<typeof ScoreInteractiveArea>>('interactiveAreaRef');
 
@@ -59,35 +62,8 @@ const openChordPicker = (slotKey: SlotKey) => {
   isPickerOpen.value = true;
 };
 
-// KeepAlive 缓存页面：仅在本页激活时拦截 Ctrl+Z / Ctrl+Y，切走后移除监听
-let stopUndoKeydown: (() => void) | null = null;
-/** 拦截 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y 触发乐谱撤销重做（焦点在输入类元素内时不拦截） */
-const handleUndoKeydown = (e: KeyboardEvent) => {
-  if (!scoreEditor.activeSong) return;
-  const target = e.target as HTMLElement | null;
-  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-    return;
-  }
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-    e.preventDefault();
-    if (e.shiftKey) scoreEditor.redo();
-    else scoreEditor.undo();
-  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
-    e.preventDefault();
-    scoreEditor.redo();
-  }
-};
-onActivated(() => {
-  if (!stopUndoKeydown) {
-    stopUndoKeydown = useEventListener(window, 'keydown', handleUndoKeydown);
-  }
-});
-onDeactivated(() => {
-  stopUndoKeydown?.();
-  stopUndoKeydown = null;
-});
-onBeforeUnmount(() => {
-  stopUndoKeydown?.();
-  stopUndoKeydown = null;
-});
+// 乐谱撤销/重做全局快捷键：仅在本页（KeepAlive 缓存）激活且有 activeSong 时拦截。
+// 焦点在输入类元素内放行原生输入由 useKeybinding 默认的 ignoreEditable 承担，业务无需手动判焦点。
+useKeybinding('Mod+z', () => scoreEditor.undo(), { enabled: () => !!scoreEditor.activeSong });
+useKeybinding(['Mod+Shift+z', 'Mod+y'], () => scoreEditor.redo(), { enabled: () => !!scoreEditor.activeSong });
 </script>

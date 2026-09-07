@@ -1,10 +1,13 @@
-// @vitest-environment jsdom
-import { defineComponent, nextTick, ref, type Ref } from 'vue';
+import { defineComponent, nextTick, ref } from 'vue';
 
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
+
+import type { Ref } from 'vue';
+
+// @vitest-environment jsdom
 
 /**
  * 嵌套浮层层级规则：

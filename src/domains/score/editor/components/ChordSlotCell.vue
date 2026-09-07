@@ -8,12 +8,12 @@
         'justify-start opacity-100 after:block after:h-[1.15rem] after:w-full after:shrink-0 after:content-[\'\']':
           variant === 'edge' && Boolean(chord),
         'justify-center px-[0.4rem] opacity-100 hover:bg-transparent!': variant === 'add',
-        'border-border-base/70 rounded-md border border-dashed': variant === 'add' && isDragActive,
+        'rounded-md border border-dashed border-border-base/70': variant === 'add' && isDragActive,
         'ml-[0.15rem]': leftChordGap,
         'px-0': Boolean(chord),
         'px-0.5': !chord,
-        // 拖拽期间整行空字符槽统一撑开（isDragActive 全程恒定）：
-        // 若跟随 dropZone 逐槽增缩会推动整行来回顶、产生抽动
+        // 拖拽落点行内整行空字符槽统一撑开（仅活动落点行触发）：
+        // 尺寸与外边距平滑过渡，保证两块落点分区有充裕高度且行内相对位置不抽动
         'is-drop-widened': !chord && isDragActive,
         // 聚焦时和弦自身保持外边框（焦点会落到组内按钮，故用 isFocused 状态而非 :focus）
         [FOCUS_RING_SHADOW_CLASS]: isFocused,
@@ -22,17 +22,17 @@
     :data-slot-key="slotKey"
     :tabindex="0"
     :title="slotTitle"
-    @click="handleClick"
-    @focusin="handleFocusIn"
-    @focusout="handleFocusOut"
-    @keydown.backspace="handleDelete"
-    @keydown.delete="handleDelete"
-    @keydown.enter="handleKeydown"
-    @keydown.space="handleKeydown"
+    @click="handleClick($event)"
+    @focusin="handleFocusIn($event)"
+    @focusout="handleFocusOut($event)"
+    @keydown.backspace="handleDelete($event)"
+    @keydown.delete="handleDelete($event)"
+    @keydown.enter="handleKeydown($event)"
+    @keydown.space="handleKeydown($event)"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
     data-focusable-inline
-    class="char-box group duration-fast hover:bg-tint-primary-88 [&.is-drop-target]:bg-tint-primary-85! relative box-border flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 transition-all outline-none [&.is-dragging-source]:!opacity-35"
+    class="char-box group relative box-border flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 transition-all duration-fast outline-none hover:bg-tint-primary-88 [&.is-dragging-source]:opacity-35! [&.is-drop-target]:bg-tint-primary-85!"
     ref="charBoxRef"
     role="button"
   >
@@ -40,12 +40,12 @@
     <div
       v-if="chord"
       :class="[FAST_TRANSITION_CLASS, isActive ? 'opacity-100' : 'opacity-0']"
-      class="z-inner pointer-events-none absolute inset-0 rounded-sm bg-black/35"
+      class="pointer-events-none absolute inset-0 z-inner rounded-sm bg-black/35"
     >
       <div
         :class="[FAST_TRANSITION_CLASS, isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0']"
-        @keydown="handleActionKeydown"
-        class="z-card absolute inset-0 flex flex-col items-stretch justify-center gap-1.5 p-2"
+        @keydown="handleActionKeydown($event)"
+        class="absolute inset-0 z-card flex flex-col items-stretch justify-center gap-1.5 p-2"
         ref="actionGroupEl"
       >
         <ActionButton
@@ -87,7 +87,7 @@
       >
         <div
           v-if="dropZone"
-          class="pointer-events-none absolute inset-0 z-[3] flex flex-col gap-[4px] overflow-hidden rounded-[6px] p-[2px]"
+          class="pointer-events-none absolute inset-0 z-3 flex flex-col gap-[4px] overflow-hidden rounded-[6px] p-[2px]"
         >
           <!-- 有和弦的落点：整槽压暗提示将被影响（位于分区之下） -->
           <div v-if="chord" class="pointer-events-none absolute inset-0 z-[-1] rounded-[6px] bg-black/30" />
@@ -105,7 +105,7 @@
       </Transition>
       <div
         v-if="chord"
-        class="inline-fretboard-card py-xs duration-fast relative flex flex-col items-center rounded-sm bg-transparent px-0 transition-all select-none"
+        class="inline-fretboard-card relative flex flex-col items-center rounded-sm bg-transparent px-0 py-xs transition-all duration-fast select-none"
       >
         <FretboardCanvas
           :chord
@@ -138,14 +138,10 @@
         :class="[
           // 拖拽中字符 hover 不染主题色（避免与分区高亮抢注意力），正常 hover 仍保留
           { 'group-hover:text-primary': !isDragActive },
-          char === '|' || char === '｜' ? 'text-text-muted font-normal' : 'text-text-title font-semibold',
-          char === ' '
-            ? ''
-            : chord
-              ? 'decoration-text-disabled/80 underline decoration-dashed underline-offset-[8px]'
-              : '',
+          char === '|' || char === '｜' ? 'font-normal text-fg-muted' : 'font-semibold text-fg-title',
+          char === ' ' ? '' : chord ? 'underline decoration-fg-disabled/80 decoration-dashed underline-offset-8' : '',
         ]"
-        class="char-text duration-fast mt-auto box-border inline-flex min-h-[calc(1.15rem*var(--score-font-scale,1))] items-center justify-center px-0.5 text-[calc(0.875rem*var(--score-font-scale,1))] leading-[1.15rem] whitespace-pre transition-all"
+        class="char-text mt-auto box-border inline-flex min-h-[calc(1.15rem*var(--score-font-scale,1))] items-center justify-center px-0.5 text-[calc(var(--score-font-scale,1)*0.875rem)]/[1.15rem] whitespace-pre transition-all duration-fast"
       >
         {{ char === ' ' ? '\u00A0' : char }}
       </span>
@@ -156,19 +152,17 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef } from 'vue';
 
-import { getChordName } from '@/domains/chord/theory/theory';
-import type { Chord } from '@/domains/chord/types';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
-import {
-  resolveDropAction,
-  type DropAction,
-  type DropZone,
-} from '@/domains/score/editor/composables/lyrics-drag/dropZone';
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import { getChordName } from '@/domains/chord/theory/theory';
+import { resolveDropAction } from '@/domains/score/editor/composables/lyrics-drag/dropZone';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import type { SlotKey } from '@/domains/score/types';
 import { isDark } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
-import ActionButton from '@/platform/ui/button/ActionButton.vue';
+
+import type { Chord } from '@/domains/chord/types';
+import type { DropAction, DropZone } from '@/domains/score/editor/composables/lyrics-drag/dropZone';
+import type { SlotKey } from '@/domains/score/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 
 const props = defineProps<{
@@ -189,8 +183,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'click'): void;
   (e: 'remove', slotKey: SlotKey): void;
-  (e: 'pointerdown', event: PointerEvent, slotKey: SlotKey, chord: Chord): void;
-  (e: 'copyPointerdown', event: PointerEvent, slotKey: SlotKey, chord: Chord): void;
+  (e: 'pointerdown', payload: { event: PointerEvent; slotKey: SlotKey; chord: Chord }): void;
+  (e: 'copyPointerdown', payload: { event: PointerEvent; slotKey: SlotKey; chord: Chord }): void;
 }>();
 
 const isHovered = ref(false);
@@ -199,7 +193,7 @@ const isFocused = ref(false);
 const actionGroupEl = useTemplateRef<HTMLElement>('actionGroupEl');
 // 操作按钮 DOM 按 ACTION_ITEMS 顺序收集（0 修改 / 1 移动 / 2 删除），键盘导航按下标取用
 type ActionButtonInstance = { $el: HTMLButtonElement };
-const actionButtonEls = ref<Array<ActionButtonInstance | null>>([]);
+const actionButtonEls = ref<(ActionButtonInstance | null)[]>([]);
 const setActionButtonEl = (el: unknown, index: number) => {
   if (el) actionButtonEls.value[index] = el as ActionButtonInstance;
   else actionButtonEls.value[index] = null;
@@ -213,7 +207,7 @@ const isActive = computed(() => (isHovered.value || isFocused.value) && !props.i
 
 // 拖拽/焦点高亮与过渡常量
 // 聚焦环与拖拽源高亮描边统一引用 tokens 的 --focus-ring 令牌，不再本地各存一份同值字符串
-const FOCUS_RING_SHADOW_CLASS = '!shadow-[var(--focus-ring)]';
+const FOCUS_RING_SHADOW_CLASS = 'shadow-(--focus-ring)!';
 // 分区淡入淡出/落点提示统一使用 duration-fast 令牌（双源统一后 fast=100ms）
 const FAST_TRANSITION_CLASS = 'transition-all duration-fast';
 
@@ -221,9 +215,9 @@ const FAST_TRANSITION_CLASS = 'transition-all duration-fast';
 // 显示时按 修改 → 移动 → 删除 依次延迟淡入并上移归位，隐藏时统一无延迟淡出。
 // 注意覆盖层随 isVisible 懒挂载后不再重挂，出场动画只能靠 isActive 驱动的过渡实现
 const ACTION_BUTTON_SHOW_CLASSES = [
-  'opacity-100 translate-y-0 scale-100',
-  'opacity-100 translate-y-0 scale-100 [transition-delay:50ms]',
-  'opacity-100 translate-y-0 scale-100 [transition-delay:100ms]',
+  'translate-y-0 scale-100 opacity-100',
+  'translate-y-0 scale-100 opacity-100 delay-50',
+  'translate-y-0 scale-100 opacity-100 delay-100',
 ] as const;
 const actionButtonTransition = (index: number): string =>
   isActive.value ? (ACTION_BUTTON_SHOW_CLASSES[index] ?? '') : 'opacity-0 translate-y-2 scale-95';
@@ -244,16 +238,16 @@ const ACTION_LABELS: Record<DropAction, string> = {
 // 活动/非活动均用 border 描边（仅宽度/透明度差异），避免 box-shadow ring ↔ border
 // 切换时过渡出现白闪
 const ZONE_ACTIVE_CLASSES: Record<DropAction, string> = {
-  swap: 'flex-[1.86] min-h-[38px] bg-tint-primary-88 border-2 border-primary rounded-[5px]',
-  replace: 'flex-[1.86] min-h-[38px] bg-tint-success-88 border-2 border-success rounded-[5px]',
-  copy: 'flex-[1.86] min-h-[38px] bg-tint-primary-88 border-2 border-primary rounded-[5px]',
-  move: 'flex-[1.86] min-h-[38px] bg-tint-success-88 border-2 border-success rounded-[5px]',
+  swap: 'min-h-[38px] flex-[1.86] rounded-[5px] border-2 border-primary bg-tint-primary-88',
+  replace: 'min-h-[38px] flex-[1.86] rounded-[5px] border-2 border-success bg-tint-success-88',
+  copy: 'min-h-[38px] flex-[1.86] rounded-[5px] border-2 border-primary bg-tint-primary-88',
+  move: 'min-h-[38px] flex-[1.86] rounded-[5px] border-2 border-success bg-tint-success-88',
 };
 const ZONE_INACTIVE_CLASSES: Record<DropAction, string> = {
-  swap: 'flex-1 min-h-[26px] bg-tint-primary-88 rounded-[5px] border border-primary/40',
-  replace: 'flex-1 min-h-[26px] bg-tint-success-88 rounded-[5px] border border-success/40',
-  copy: 'flex-1 min-h-[26px] bg-tint-primary-88 rounded-[5px] border border-primary/40',
-  move: 'flex-1 min-h-[26px] bg-tint-success-88 rounded-[5px] border border-success/40',
+  swap: 'min-h-[26px] flex-1 rounded-[5px] border border-primary/40 bg-tint-primary-88',
+  replace: 'min-h-[26px] flex-1 rounded-[5px] border border-success/40 bg-tint-success-88',
+  copy: 'min-h-[26px] flex-1 rounded-[5px] border border-primary/40 bg-tint-primary-88',
+  move: 'min-h-[26px] flex-1 rounded-[5px] border border-success/40 bg-tint-success-88',
 };
 const ZONE_LABEL_CLASSES: Record<DropAction, { active: string; inactive: string }> = {
   swap: { active: 'text-xs text-primary', inactive: 'text-2xs text-primary' },
@@ -349,7 +343,8 @@ const ACTION_ITEMS: ActionItem[] = [
       mouseup: stopEvent,
       pointerdown: e => {
         stopEvent(e);
-        if (props.chord) emit('copyPointerdown', e as PointerEvent, props.slotKey, props.chord);
+        if (props.chord)
+          emit('copyPointerdown', { event: e as PointerEvent, slotKey: props.slotKey, chord: props.chord });
       },
     },
   },
@@ -454,19 +449,16 @@ const ariaLabelText = computed(() => {
 </script>
 
 <style scoped lang="scss">
-/* 拖拽期间整行空字符槽/添加槽统一撑开（isDragActive 全程恒定）：
-   min-width/min-height 只作下限、不缩窄；尺寸与外边距变化带平滑过渡，
-   保证拖拽到空行或未排和弦的行时落点与两块分区有充足高度 */
+/* 拖拽期间仅当前活动落点行空字符槽/添加槽统一撑开：
+   min-width/min-height 只作下限、不缩窄；平滑过渡尺寸，
+   保证拖拽到空行或未排和弦的行时落点与两块分区有充足高度，且绝无外边距抖动闪烁 */
 .is-drop-widened {
   box-sizing: content-box;
   min-width: 58px;
   min-height: 108px;
-  margin-left: 6px;
-  margin-right: 6px;
   transition:
-    min-width 0.18s cubic-bezier(0.25, 0.1, 0.25, 1),
-    min-height 0.18s cubic-bezier(0.25, 0.1, 0.25, 1),
-    margin 0.18s cubic-bezier(0.25, 0.1, 0.25, 1);
+    min-width 0.12s cubic-bezier(0.25, 0.1, 0.25, 1),
+    min-height 0.12s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 /* 聚焦环与拖拽源高亮描边统一引用 tokens 的 --focus-ring 令牌（见 FOCUS_RING_SHADOW_CLASS） */

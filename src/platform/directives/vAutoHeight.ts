@@ -33,20 +33,24 @@ interface AutoHeightState {
 const stateMap = new WeakMap<HTMLElement, AutoHeightState>();
 
 /** 归一化指令配置 */
-const normalizeOptions = (value: AutoHeightBinding): AutoHeightOptions => {
+const normalizeOptions = (value: AutoHeightBinding, modifiers?: Record<string, boolean>): AutoHeightOptions => {
+  let opts: AutoHeightOptions;
   if (typeof value === 'boolean') {
-    return { expanded: value, initialAuto: true, threshold: 2, disabled: false };
-  }
-  if (value && typeof value === 'object') {
-    return {
+    opts = { expanded: value, initialAuto: true, threshold: 2, disabled: false };
+  } else if (value && typeof value === 'object') {
+    opts = {
       expanded: value.expanded !== false,
       initialAuto: value.initialAuto !== false,
       target: value.target,
       threshold: value.threshold ?? 2,
       disabled: Boolean(value.disabled),
     };
+  } else {
+    opts = { expanded: true, initialAuto: true, threshold: 2, disabled: false };
   }
-  return { expanded: true, initialAuto: true, threshold: 2, disabled: false };
+  // 静态修饰符 .disabled（编译期固定，动态禁用请用绑定值 { disabled }）
+  if (modifiers?.['disabled']) opts.disabled = true;
+  return opts;
 };
 
 /** 解析测量目标元素 */
@@ -97,7 +101,7 @@ const observeTarget = (container: HTMLElement, state: AutoHeightState) => {
 
 export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
   mounted(el: HTMLElement, binding: DirectiveBinding<AutoHeightBinding>) {
-    const opts = normalizeOptions(binding.value);
+    const opts = normalizeOptions(binding.value, binding.modifiers);
     const state: AutoHeightState = {
       opts,
       lastMeasuredPx: 0,
@@ -121,7 +125,7 @@ export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
 
     const prevDisabled = state.opts.disabled;
     const prevExpanded = state.opts.expanded !== false;
-    state.opts = normalizeOptions(binding.value);
+    state.opts = normalizeOptions(binding.value, binding.modifiers);
     const currentDisabled = state.opts.disabled;
     const currentExpanded = state.opts.expanded !== false;
 

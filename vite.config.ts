@@ -3,12 +3,14 @@ import { resolve } from 'path';
 
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
-import { visualizer } from 'rollup-plugin-visualizer';
 import Icons from 'unplugin-icons/vite';
+import { visualizer } from 'rollup-plugin-visualizer';
 import { VitePWA } from 'vite-plugin-pwa';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 import { injectScssTokens } from './scripts/scss-inject';
+
+import type { ViteUserConfig } from 'vitest/config';
 
 // 读取当前 git 提交短 SHA，作为随代码自动变化、真实有意义的构建标识。
 // 非 git 环境（或取不到时）回退为 unknown。
@@ -27,7 +29,7 @@ try {
 // - 共享 setup：注入 fake-indexeddb 与 IntersectionObserver polyfill（node 环境下同样无害）。
 // - isolate 默认 true：每个测试文件独立模块注册表，模块级缓存不跨文件泄漏。
 // - pool 默认 'forks'：Windows 下进程模型最稳，避免 worker 挂起。
-const testConfig = {
+const testConfig: ViteUserConfig = {
   test: {
     // 性能/产物类检查不在单测链路中（bundle 体积走 build:budget）
     exclude: [...configDefaults.exclude, '**/performance.test.ts'],
@@ -114,6 +116,9 @@ export default defineConfig(({ mode }) => {
   const base = '/FretLogic/';
 
   return {
+    // 统一缓存收纳：Vite 依赖预构建/构建缓存与 Vitest 测试结果缓存都落在 node_modules/.cache/vite，
+    // 与 eslint（node_modules/.cache/eslint）等工具缓存目录约定对齐
+    cacheDir: 'node_modules/.cache/vite',
     // 单测配置（仅 Vitest 消费，Vite 构建忽略该字段）
     ...testConfig,
     plugins: [
@@ -209,8 +214,7 @@ export default defineConfig(({ mode }) => {
           assetFileNames: 'assets/[hash][extname]',
           // 拆出稳定的 vendor 分组：业务代码迭代不再导致框架层缓存全量失效
           manualChunks: {
-            vue: ['vue', 'vue-router', 'pinia'],
-            vueuse: ['@vueuse/core'],
+            vendor: ['vue', 'vue-router', 'pinia', '@vueuse/core'],
           },
         },
       },

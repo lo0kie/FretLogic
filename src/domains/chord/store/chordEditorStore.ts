@@ -14,7 +14,7 @@ import {
   getDefaultTuningForStringCount,
   TUNING_PRESETS,
 } from '@/domains/chord/theory/theory';
-import type { BarreEntity, Chord, GuitarStringEntity, StringIndex } from '@/domains/chord/types';
+import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
 import {
   computeBarreCandidates,
   isBarreStillValid,
@@ -23,6 +23,8 @@ import {
 import { cloneDeep } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
+import type { BarreEntity, Chord, GuitarStringEntity, StringIndex } from '@/domains/chord/types';
+
 /** 构造空白和弦草稿（指定弦数全部静音、匹配默认调弦、3 品窗口），作为编辑器初始态。 */
 const createDefaultChord = (stringCount: number = 6): Chord => ({
   id: toChordId(''),
@@ -30,7 +32,7 @@ const createDefaultChord = (stringCount: number = 6): Chord => ({
   createdAt: Date.now(),
   updatedAt: Date.now(),
   strings: Array.from({ length: stringCount }, () => createString()),
-  fretCount: 3,
+  fretCount: DEFAULT_FRET_COUNT,
   fretOffset: 0,
   tuning: getDefaultTuningForStringCount(stringCount),
   groupId: toGroupId(''),

@@ -1,8 +1,10 @@
 import { serializeForStorage } from '@/platform/utils/common';
 import { CLOUD_SYNC_CONFIG } from '@/platform/utils/constants';
 
-import { SyncError, type ServerSyncConfig, type SyncProvider } from './provider.ts';
+import { SyncError } from './provider.ts';
 import { createSyncProviderBase, extractApiErrorDetail } from './syncBase.ts';
+
+import type { ServerSyncConfig, SyncProvider } from './provider.ts';
 
 /**
  * 线上服务器（Custom Server / Cloudflare Worker D1）同步 provider。

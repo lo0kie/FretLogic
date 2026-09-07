@@ -1,7 +1,7 @@
 <template>
   <div
     :class="{ 'cursor-default': disabled }"
-    @contextmenu="handleContextMenu"
+    @contextmenu="handleContextMenu($event)"
     class="context-menu-trigger-wrapper contents"
     ref="triggerWrapperRef"
   >
@@ -12,41 +12,43 @@
     v-model="isOpen"
     :disabled
     :virtual-ref
+    :context-trigger-el="triggerWrapperRef"
     :offset-distance="6"
-    @close="handlePopoverClose"
+    @close="handlePopoverClose()"
     aria-label="右键上下文菜单"
     panel-class="context-menu-box"
     placement="bottom-start"
     ref="popoverRef"
   >
     <div
-      :class="`context-menu-size-${size}`"
-      @keydown="handleMenuKeydown"
-      class="context-menu-inner gap-xs flex flex-col outline-none"
+      :class="MENU_SIZE_CLASS[size]"
+      @keydown="handleMenuKeydown($event)"
+      class="context-menu-inner flex flex-col gap-xs outline-none"
       ref="menuBoxRef"
       role="menu"
       tabindex="-1"
     >
-      <ContextMenuItems :items :size @select="handleItemSelect" ref="itemsRef" />
+      <ContextMenuItems :items :size @select="handleItemSelect($event)" ref="itemsRef" />
     </div>
   </BasePopover>
 </template>
 
 <script lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
-
-import type { ComponentSize } from '@/platform/types';
-import BasePopover from '@/platform/ui/popover/BasePopover.vue';
-
-// 记录全局当前打开的菜单，用于互斥关闭
-const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
+// 记录全局当前打开的菜单，用于多实例互斥关闭（打开新菜单时只关其他菜单，非关闭所有浮层）
+// 注意：ref 由下方 <script setup> 的 import 提升 提供，此处不可重复导入
 </script>
 
 <script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+
+import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import { createVirtualElementRect } from '@/platform/ui/popover/floatingCore';
 import { CONTEXT_MENU_REPOSITION_DURATION_MS, CONTEXT_MENU_REPOSITION_EASING } from '@/platform/utils/constants';
 
-import ContextMenuItems, { type ContextMenuItem } from './ContextMenuItems.vue';
+import ContextMenuItems from './ContextMenuItems.vue';
+
+import type { ContextMenuItem } from './ContextMenuItems.vue';
+import type { ComponentSize } from '@/platform/types';
 
 defineOptions({ name: 'ContextMenu', inheritAttrs: false });
 
@@ -55,14 +57,26 @@ const {
   disabled = false,
   size = 'md',
 } = defineProps<{
+  /** 菜单项数据列表 */
   items: ContextMenuItem[];
+  /** 是否禁用菜单：禁用时右键不弹出 */
   disabled?: boolean;
+  /** 菜单尺寸档位 */
   size?: ComponentSize;
 }>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
 }>();
+
+const globalActiveMenuCloseFn = ref<(() => void) | null>(null);
+
+// 尺寸 → 类名静态映射：避免模板字符串拼接（Tailwind/扫描器无法识别动态拼接的类）
+const MENU_SIZE_CLASS: Record<ComponentSize, string> = {
+  sm: 'context-menu-size-sm',
+  md: 'context-menu-size-md',
+  lg: 'context-menu-size-lg',
+};
 
 const isOpen = ref(false);
 const x = ref(0);
@@ -74,7 +88,7 @@ const triggerWrapperRef = useTemplateRef<HTMLElement>('triggerWrapperRef');
 
 const virtualRef = computed(() => createVirtualElementRect(x.value, y.value));
 
-/** 菜单关闭回调：若全局互斥记录仍指向自己则清除，并向父级转发关闭事件 */
+/** 菜单关闭回调：清除全局互斥记录（若仍指向自己），并向父级转发关闭事件 */
 const handlePopoverClose = () => {
   if (globalActiveMenuCloseFn.value === closeMenu) {
     globalActiveMenuCloseFn.value = null;
@@ -89,10 +103,10 @@ const closeMenu = () => {
 };
 
 /** 在指定坐标打开菜单：先互斥关闭其他菜单，再定位、打开并聚焦首个可用项 */
-const openMenuAt = async (clientX: number, clientY: number, _sourceEl?: HTMLElement | null) => {
+const openMenuAt = async (clientX: number, clientY: number) => {
   if (disabled || !items?.length) return;
 
-  // 如果有其他菜单打开，关掉它
+  // 如果有其他菜单打开，关掉它，再登记自己为当前全局活动菜单
   if (globalActiveMenuCloseFn.value && globalActiveMenuCloseFn.value !== closeMenu) {
     globalActiveMenuCloseFn.value();
   }
@@ -141,7 +155,7 @@ const handleContextMenu = (e: MouseEvent) => {
   if (disabled) return;
   e.preventDefault();
   e.stopPropagation();
-  openMenuAt(e.clientX, e.clientY, triggerWrapperRef.value);
+  openMenuAt(e.clientX, e.clientY);
 };
 
 /** 菜单项选中：执行动作并关闭菜单 */

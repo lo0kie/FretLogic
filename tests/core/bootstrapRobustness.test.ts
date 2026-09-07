@@ -2,11 +2,12 @@
 
 import { songRepository } from '@/app/services/data';
 import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/app/services/data/bootstrap';
-import type { Group } from '@/domains/chord/types';
-import type { Song } from '@/domains/score/types';
 import { idb } from '@/platform/services/storage';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
+
+import type { Group } from '@/domains/chord/types';
+import type { Song } from '@/domains/score/types';
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();

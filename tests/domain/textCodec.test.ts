@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { createChord } from '@/domains/chord/theory/entityFactories';
 import { GRAMMAR_TEMPLATES } from '@/domains/chord/theory/grammar';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
-import type { Chord, ChordId } from '@/domains/chord/types';
-import type { BarreEntity } from '@/domains/fretboard/types';
 import { charKey, chordSlotKey } from '@/domains/score/model/scoreModel';
 import {
   parseChordFromText,
@@ -12,6 +10,9 @@ import {
   serializeChordToText,
   serializeSongToText,
 } from '@/domains/score/transfer/textCodec';
+
+import type { Chord, ChordId } from '@/domains/chord/types';
+import type { BarreEntity } from '@/domains/fretboard/types';
 import type { SlotKey, Song } from '@/domains/score/types';
 
 /** 构造测试和弦：默认标准调弦 6 弦、3 品、根音 5 弦 */

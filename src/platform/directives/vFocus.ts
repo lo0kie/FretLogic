@@ -1,13 +1,24 @@
+import { nextTick } from 'vue';
+
+import { FOCUS_DEFAULT_DELAY_MS } from '@/platform/utils/constants';
+
+import type { Directive } from 'vue';
+
 /**
  * v-focus 指令：元素挂载或绑定值激活时自动聚焦。
  * 支持光标定位（start/end/all）、延时触发与 preventScroll 等选项。
  */
-import { nextTick, type Directive } from 'vue';
-
-import { FOCUS_DEFAULT_DELAY_MS } from '@/platform/utils/constants';
 
 export type FocusModifiers =
-  'select' | 'delay' | 'start' | 'end' | 'all' | 'preventScroll' | 'prevent_scroll' | (string & Record<never, never>);
+  | 'select'
+  | 'delay'
+  | 'start'
+  | 'end'
+  | 'all'
+  | 'disabled'
+  | 'preventScroll'
+  | 'prevent_scroll'
+  | (string & Record<never, never>);
 
 export interface FocusOptions {
   select?: boolean;
@@ -117,8 +128,9 @@ const triggerFocusWithTiming = (el: HTMLElement, modifiers?: Record<string, bool
 /** 判断绑定值是否为配置对象（区别于布尔开关）。 */
 const isConfigObject = (val: unknown): val is FocusOptions => typeof val === 'object' && val !== null;
 
-/** 解析指令当前是否处于激活态：undefined 视为默认激活，对象取 disabled 取反。 */
-const resolveIsActive = (val: FocusBinding): boolean => {
+/** 解析指令当前是否处于激活态：undefined 视为默认激活，对象取 disabled 取反，.disabled 修饰符恒禁用。 */
+const resolveIsActive = (val: FocusBinding, modifiers?: Record<string, boolean>): boolean => {
+  if (modifiers?.['disabled']) return false;
   if (val === undefined) return true; // v-focus 默认激活
   if (val === false) return false;
   if (val === true) return true;
@@ -128,12 +140,12 @@ const resolveIsActive = (val: FocusBinding): boolean => {
 
 export const vFocus: Directive<HTMLElement, FocusBinding, FocusModifiers> = {
   mounted(el, binding) {
-    if (!resolveIsActive(binding.value)) return;
+    if (!resolveIsActive(binding.value, binding.modifiers)) return;
     const opts = isConfigObject(binding.value) ? binding.value : undefined;
     triggerFocusWithTiming(el, binding.modifiers, opts);
   },
   updated(el, binding) {
-    const isNowActive = resolveIsActive(binding.value);
+    const isNowActive = resolveIsActive(binding.value, binding.modifiers);
     const wasActive = resolveIsActive(binding.oldValue);
 
     // 仅在值从 falsy 转为 truthy 时再次触发聚焦

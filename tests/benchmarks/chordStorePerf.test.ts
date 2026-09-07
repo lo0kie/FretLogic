@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { createChord, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { normalizeChord } from '@/domains/chord/theory/normalizeChord';
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
-import type { Chord } from '@/domains/chord/types';
 import { areBarresEqual, computeBarresSignature } from '@/domains/fretboard/model/coordinates';
+
+import type { Chord } from '@/domains/chord/types';
 import type { BarreEntity, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
 
 /** 生成指定数量的测试和弦实体 */

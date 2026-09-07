@@ -4,10 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { sanitizePersistedData } from '@/app/services/validation/persistedData';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { Tuning } from '@/domains/chord/theory/theory';
-import type { Chord, Group } from '@/domains/chord/types';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import type { Song } from '@/domains/score/types';
 import { serializeForStorage } from '@/platform/utils/common';
+
+import type { Chord, Group } from '@/domains/chord/types';
+import type { Song } from '@/domains/score/types';
 
 const group: Group = { id: 'group-1', name: 'C', sortRule: 'ROOT_PITCH' };
 const validChord: Chord = {

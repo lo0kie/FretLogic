@@ -7,11 +7,12 @@
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
     class="group relative box-border flex items-center rounded-full"
+    ref="rootRef"
   >
     <div
       v-if="hasPrefix"
       :class="currentConfig.prefixClass"
-      class="text-text-disabled pointer-events-none absolute inset-y-0 flex items-center justify-center"
+      class="pointer-events-none absolute inset-y-0 flex items-center justify-center text-fg-disabled"
     >
       <slot name="prefix">
         <BaseIcon
@@ -46,16 +47,18 @@
       ]"
       :style="{ paddingRight: computedPaddingRight }"
       :type="resolvedType"
-      :value="modelValue"
-      @blur="handleBlur"
-      @change="(e: Event) => $emit('change', e)"
-      @compositionend="handleCompositionEnd"
-      @compositionstart="handleCompositionStart"
-      @focus="(e: FocusEvent) => $emit('focus', e)"
-      @input="handleInput"
+      :value="localValue"
+      @blur="handleBlur($event)"
+      @change="handleChange($event)"
+      @click="handleInputClick($event)"
+      @compositionend="handleCompositionEnd($event)"
+      @compositionstart="handleCompositionStart()"
+      @focus="handleFocus($event)"
+      @input="handleInput($event)"
+      @keydown="handleKeydown($event)"
       @keyup.enter="$emit('enter')"
       data-focusable-inline
-      class="bg-bg-body text-text-title caret-primary duration-fast placeholder:text-text-disabled focus:enabled:bg-bg-body box-border w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid font-[inherit] font-medium text-ellipsis transition-all outline-none placeholder:truncate placeholder:font-normal focus-visible:ring-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45 disabled:select-none"
+      class="box-border w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid bg-surface-body font-[inherit] font-medium text-ellipsis text-fg-title caret-primary transition-all duration-fast outline-none placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus-visible:ring-2 focus:enabled:bg-surface-body disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45 disabled:select-none"
       data-1p-ignore="true"
       data-bwignore="true"
       data-form-type="other"
@@ -71,11 +74,11 @@
     >
       <span
         v-if="showCount && maxlength !== undefined"
-        :class="{ 'text-danger! font-bold': isAtLimit }"
+        :class="{ 'font-bold text-danger!': isAtLimit }"
         aria-live="polite"
-        class="text-2xs text-text-disabled duration-fast font-medium whitespace-nowrap transition-all"
+        class="text-2xs font-medium whitespace-nowrap text-fg-disabled transition-all duration-fast"
       >
-        {{ modelValue?.length ?? 0 }}/{{ maxlength }}
+        {{ localValue?.length ?? 0 }}/{{ maxlength }}
       </span>
 
       <button
@@ -83,14 +86,14 @@
         v-if="isClearAvailable"
         :class="
           clearVisible
-            ? 'pointer-events-auto h-4 w-4 scale-100 opacity-100'
+            ? 'pointer-events-auto size-4 scale-100 opacity-100'
             : 'pointer-events-none -mr-1.5 h-4 w-0 scale-0 opacity-0'
         "
         @mousedown.stop
         @pointerdown.stop
-        @click.stop="handleClear"
+        @click.stop="handleClear()"
         data-focusable-inline
-        class="text-text-disabled bg-bg-panel-hover hover:bg-danger hover:text-text-on-accent flex cursor-pointer items-center justify-center overflow-hidden rounded-full border-none p-0 transition-all duration-200 outline-none active:scale-90"
+        class="flex cursor-pointer items-center justify-center overflow-hidden rounded-full border-none bg-surface-panel-hover p-0 text-fg-disabled transition-all duration-200 outline-none hover:bg-danger hover:text-fg-on-accent active:scale-90"
         tabindex="0"
         title="清空内容"
         type="button"
@@ -108,14 +111,14 @@
             :class="
               disabled
                 ? 'pointer-events-none opacity-40'
-                : 'hover:text-text-title hover:bg-bg-panel-hover pointer-events-auto cursor-pointer active:scale-90'
+                : 'pointer-events-auto cursor-pointer hover:bg-surface-panel-hover hover:text-fg-title active:scale-90'
             "
             :title="showPassword ? '隐藏密码' : '显示密码'"
             @mousedown.stop
             @pointerdown.stop
             @click.stop="!disabled && (showPassword = !showPassword)"
             data-focusable-inline
-            class="text-text-disabled duration-fast flex h-4 w-4 items-center justify-center rounded-full border-none bg-transparent p-0 transition-all outline-none"
+            class="flex size-4 items-center justify-center rounded-full border-none bg-transparent p-0 text-fg-disabled transition-all duration-fast outline-none"
             type="button"
           >
             <BaseIcon :icon-size="'xs'" :name="showPassword ? 'eye' : 'eye-off'" />
@@ -123,26 +126,69 @@
         </slot>
       </div>
     </div>
+
+    <!-- searchable 下拉结果面板：以输入框根元素为虚拟锚点，宽度对齐输入框，内置自适应高度与滚动条外壳，内容由 #search-results 插槽决定 -->
+    <BasePopover
+      v-if="searchable"
+      v-model="resultsOpen"
+      :close-on-context-trigger-click="false"
+      :context-trigger-el="rootRef"
+      :offset-distance="6"
+      :panel-style="{ transformOrigin: 'top center' }"
+      :virtual-ref="searchVirtualRef"
+      match-trigger-width
+      aria-label="搜索结果"
+      panel-class="base-input-search-panel rounded-xl! p-0! overflow-hidden shadow-floating"
+      placement="bottom-start"
+      ref="searchPopoverRef"
+    >
+      <div
+        v-auto-height
+        v-scrollbar="{ direction: 'y', showTrack: false, endInset: 8 }"
+        :class="searchMaxHeightClass"
+        @mousedown.stop
+        @mouseleave="setSearchActiveIndex(-1)"
+        class="overflow-x-hidden overflow-y-auto transition-[height] duration-base ease-sidebar"
+        ref="searchScrollRef"
+      >
+        <div class="box-border p-1">
+          <slot
+            :active-index="searchActiveIndex"
+            :close="closeResults"
+            :query="localValue"
+            :set-active-index="setSearchActiveIndex"
+            name="search-results"
+          />
+        </div>
+      </div>
+    </BasePopover>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
 
-import type { ComponentSize } from '@/platform/types';
-import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import BasePopover from '@/platform/ui/popover/BasePopover.vue';
+import { vAutoHeight } from '@/platform/directives/vAutoHeight';
+import { vScrollbar } from '@/platform/directives/vScrollbar';
+import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { resolveComponentWidth } from '@/platform/utils/constants';
+
+import type { ComponentSize } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
-import { resolveComponentWidth, type FormComponentWidth } from '@/platform/utils/constants';
+import type { FormComponentWidth } from '@/platform/utils/constants';
+import type { VirtualElement } from '@floating-ui/vue';
 
-const id = useId();
-const slots = useSlots();
-
+const modelValue = defineModel<string>({ required: true });
 const {
   placeholder = '',
   disabled = false,
   readonly = false,
   clearable = false,
+  searchable = false,
+  searchItemCount = undefined,
+  searchMaxHeightClass = 'max-h-64',
   isPassword = false,
   prefixIcon = undefined,
   size = 'md',
@@ -161,27 +207,51 @@ const {
   trim = false,
   formatter = undefined,
   invalid = false,
+  modelModifiers = undefined,
 } = defineProps<{
+  /** 空内容时显示的占位提示文本 */
   placeholder?: string;
+  /** 是否禁用输入框 */
   disabled?: boolean;
+  /** 是否只读（可聚焦选中但不可编辑） */
   readonly?: boolean;
+  /** 是否显示一键清空按钮（悬停/聚焦且有内容时浮现） */
   clearable?: boolean;
+  /** 搜索模式下拉：聚焦/输入时弹出 #search-results 结果面板（浮层由内部 BasePopover 承载，内容完全由插槽决定） */
+  searchable?: boolean;
+  /** 搜索候选项总数（用于组件内置的键盘上下键循环导航与回车选中） */
+  searchItemCount?: number;
+  /** 搜索结果面板最大高度类，默认 'max-h-64' */
+  searchMaxHeightClass?: string;
+  /** 密码模式：显示明文/密文切换按钮（type 需为 password） */
   isPassword?: boolean;
   /** 前缀图标名（注册表枚举）：无需包 #prefix slot 即可在输入框左侧渲染图标；传了 #prefix slot 时 slot 优先 */
   prefixIcon?: IconName;
+  /** 尺寸档位（影响高度与字号） */
   size?: ComponentSize;
+  /** 宽度：预设档位名或自定义值（数字按 px） */
   width?: FormComponentWidth;
+  /** 文字字号覆写（默认随 size 档位） */
   fontSize?: 'xs' | 'md' | 'lg';
+  /** 挂载后自动聚焦 */
   autofocus?: boolean;
   /** 原生 input 类型；password 走 isPasswordMode 的明文/密文切换逻辑 */
   type?: 'text' | 'password' | 'email' | 'search' | 'url' | 'tel' | (string & {});
+  /** 最大输入长度；配合 showCount 显示字数统计 */
   maxlength?: number;
+  /** 最小输入长度（原生校验） */
   minlength?: number;
+  /** 原生正则校验模式 */
   pattern?: string;
+  /** 虚拟键盘类型提示（移动端） */
   inputmode?: 'none' | 'text' | 'numeric' | 'decimal' | 'tel' | 'email' | 'url' | 'search';
+  /** 原生表单字段名 */
   name?: string;
+  /** 原生必填校验标记 */
   required?: boolean;
+  /** 原生自动填充行为，默认 'off' */
   autocomplete?: string;
+  /** 是否显示字数统计（需同时设置 maxlength） */
   showCount?: boolean;
   /** 失焦或提交时是否自动去除前后空格 */
   trim?: boolean;
@@ -189,20 +259,116 @@ const {
   formatter?: (val: string) => string;
   /** 校验非法状态（映射到 aria-invalid="true"） */
   invalid?: boolean;
+  /** v-model 修饰符载体：vue-tsc 对 defineModel 修饰符未生成 prop 类型，此处显式声明 */
+  modelModifiers?: { lazy?: boolean; trim?: boolean };
 }>();
-
-const modelValue = defineModel<string>({ required: true });
-
 const emit = defineEmits<{
   (e: 'enter'): void;
   (e: 'clear'): void;
   (e: 'focus', event: FocusEvent): void;
   (e: 'blur', event: FocusEvent): void;
   (e: 'change', event: Event): void;
+  (e: 'click', event: MouseEvent): void;
+  /** 搜索模式：通过键盘回车选中某个下标项时派发 */
+  (e: 'select-search-index', index: number): void;
 }>();
+const id = useId();
+const slots = useSlots();
+
+/** lazy 修饰符：打字期间只更新本地显示值，change/blur 等提交点才写回 model */
+const isLazy = computed(() => !!modelModifiers?.lazy);
+/** .trim 修饰符与 trim prop 同义：提交时去首尾空格 */
+const isTrimEnabled = computed(() => trim || !!modelModifiers?.trim);
+/** 本地即时值：lazy 模式下打字中间态先落在这里，避免逐键写回 model（初值为一次性快照，后续由 watch 同步；AST 规则误报豁免） */
+// eslint-disable-next-line vue/no-ref-object-reactivity-loss
+const localValue = ref<string>(modelValue.value);
+// 外部 model 变化时同步本地显示值（lazy 期间不写 model，无回环风险）
+watch(modelValue, v => {
+  localValue.value = v;
+});
+/** 统一写入入口：总是更新本地显示值；非 lazy 时同步写回 model */
+const commitLocal = (val: string) => {
+  localValue.value = val;
+  if (!isLazy.value) modelValue.value = val;
+};
 
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
+const rootRef = useTemplateRef<HTMLDivElement>('rootRef');
+const searchPopoverRef = useTemplateRef<InstanceType<typeof BasePopover>>('searchPopoverRef');
 const showPassword = ref(false);
+
+// ─── searchable 下拉：以输入框根元素为虚拟锚点的 BasePopover ───
+const resultsOpen = ref(false);
+/** 锚点虚拟元素：每次定位实时读取根元素矩形，随输入框尺寸/位置自动跟随 */
+const searchVirtualRef = computed<VirtualElement | null>(() => {
+  if (!searchable) return null;
+  return { getBoundingClientRect: () => rootRef.value?.getBoundingClientRect() ?? new DOMRect() };
+});
+const closeResults = () => {
+  resultsOpen.value = false;
+  searchActiveIndex.value = -1;
+};
+/** 聚焦或输入时展开结果面板；禁用/只读不弹 */
+const openResults = () => {
+  if (!searchable || disabled || readonly) return;
+  resultsOpen.value = true;
+};
+const handleInputClick = (e: MouseEvent) => {
+  openResults();
+  emit('click', e);
+};
+
+// ─── searchable 键盘导航与活跃项状态 ───
+const searchActiveIndex = ref(-1);
+const searchScrollRef = useTemplateRef<HTMLDivElement>('searchScrollRef');
+
+const setSearchActiveIndex = (index: number) => {
+  searchActiveIndex.value = index;
+};
+
+watch(localValue, () => {
+  searchActiveIndex.value = -1;
+});
+
+const scrollActiveItemIntoView = () => {
+  nextTick(() => {
+    if (!searchScrollRef.value || searchActiveIndex.value < 0) return;
+    const items = searchScrollRef.value.querySelectorAll<HTMLElement>('button, [role="button"], [data-search-item]');
+    const activeEl = items[searchActiveIndex.value];
+    activeEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+};
+
+const handleKeydown = (e: KeyboardEvent) => {
+  if (searchable && resultsOpen.value) {
+    const count = searchItemCount ?? 0;
+    if (count > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        searchActiveIndex.value = (searchActiveIndex.value + 1) % count;
+        scrollActiveItemIntoView();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        searchActiveIndex.value = (searchActiveIndex.value - 1 + count) % count;
+        scrollActiveItemIntoView();
+        return;
+      }
+      if (e.key === 'Enter' && searchActiveIndex.value >= 0) {
+        e.preventDefault();
+        emit('select-search-index', searchActiveIndex.value);
+        closeResults();
+        return;
+      }
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeResults();
+      return;
+    }
+  }
+};
 
 const isPasswordMode = computed(() => isPassword || type === 'password');
 
@@ -214,7 +380,7 @@ const resolvedType = computed(() => {
   return type;
 });
 
-const isAtLimit = computed(() => Boolean(maxlength) && (modelValue.value?.length ?? 0) >= (maxlength as number));
+const isAtLimit = computed(() => Boolean(maxlength) && (localValue.value?.length ?? 0) >= (maxlength as number));
 
 // 边框/焦点环配色按校验状态二选一，避免两组同权重 Tailwind 类共存时由 CSS 顺序决定胜者
 const stateBorderClasses = computed(() =>
@@ -232,7 +398,7 @@ const hasSuffix = computed(() => Boolean(slots['suffix']) || isPasswordMode.valu
 const isHovered = ref(false);
 const isFocused = ref(false);
 const clearVisible = computed(
-  () => isClearAvailable.value && Boolean(modelValue.value) && (isHovered.value || isFocused.value)
+  () => isClearAvailable.value && Boolean(localValue.value) && (isHovered.value || isFocused.value)
 );
 
 // 右内边距预留：输入框右侧叠加了字数统计 / 清空按钮 / 密码眼睛等绝对定位元素，
@@ -263,7 +429,7 @@ const measureRightSlot = () => {
 
 // 字数 / maxlength / 清空显隐 / 后缀变化都可能改变右侧叠加宽度，重测（无 RO 环境兜底）
 watch(
-  () => [modelValue.value?.length ?? 0, maxlength, clearVisible.value, hasSuffix.value, hasCount.value] as const,
+  () => [localValue.value?.length ?? 0, maxlength, clearVisible.value, hasSuffix.value, hasCount.value] as const,
   () => nextTick(measureRightSlot)
 );
 
@@ -319,13 +485,13 @@ const isComposing = ref(false);
 /** 应用 trim 与 formatter 后写回模型，并同步 DOM 值 */
 const formatAndCommit = (raw: string) => {
   let val = raw;
-  if (trim) {
+  if (isTrimEnabled.value) {
     val = val.trim();
   }
   if (formatter) {
     val = formatter(val);
   }
-  modelValue.value = val;
+  commitLocal(val);
   if (inputRef.value && inputRef.value.value !== val) {
     inputRef.value.value = val;
   }
@@ -334,12 +500,19 @@ const formatAndCommit = (raw: string) => {
 /** 输入同步：输入法合成期间跳过（由 compositionend 统一提交） */
 const handleInput = (e: Event) => {
   if (isComposing.value) return;
+  openResults();
   const targetVal = (e.target as HTMLInputElement).value;
   if (formatter) {
     formatAndCommit(targetVal);
   } else {
-    modelValue.value = targetVal;
+    commitLocal(targetVal);
   }
+};
+
+/** change（失焦/回车）：lazy 模式下的提交点，把最终输入写回 model */
+const handleChange = (e: Event) => {
+  if (isLazy.value) formatAndCommit((e.target as HTMLInputElement).value);
+  emit('change', e);
 };
 
 /** 进入输入法合成态：暂停输入同步 */
@@ -350,8 +523,15 @@ const handleCompositionStart = () => {
 /** 合成结束：提交最终文本（走 trim / formatter） */
 const handleCompositionEnd = (e: Event) => {
   isComposing.value = false;
+  openResults();
   const targetVal = (e.target as HTMLInputElement).value;
   formatAndCommit(targetVal);
+};
+
+/** 聚焦：searchable 模式展开结果面板并透传 focus 事件 */
+const handleFocus = (e: FocusEvent) => {
+  openResults();
+  emit('focus', e);
 };
 
 /** 失焦：补提交合成中 / 未 trim 的内容，并派发 blur */
@@ -361,14 +541,15 @@ const handleBlur = (e: FocusEvent) => {
     isComposing.value = false;
     const targetVal = (e.target as HTMLInputElement).value;
     formatAndCommit(targetVal);
-  } else if (trim) {
+  } else if (isTrimEnabled.value) {
     formatAndCommit((e.target as HTMLInputElement).value);
   }
   emit('blur', e);
 };
 
-/** 清空内容：重置模型与 DOM 值，补发 input / change 事件并保持聚焦 */
+/** 清空内容：重置模型与 DOM 值，补发 input / change 事件并保持聚焦（清空为显式操作，lazy 下也立即提交） */
 const handleClear = () => {
+  localValue.value = '';
   modelValue.value = '';
   emit('clear');
   if (inputRef.value) {
@@ -381,6 +562,9 @@ const handleClear = () => {
 
 // 持续追踪右侧叠加容器真实宽度的观察器（覆盖字体异步加载变宽、字数增减、isAtLimit 加粗、清空显隐等场景）
 let rightSlotObserver: ResizeObserver | undefined;
+// searchable 模式：锚点是虚拟元素（实时读根元素矩形），floating-ui 不会自动观察它，
+// 根元素尺寸变化时需手动触发浮层重定位
+let rootSizeObserver: ResizeObserver | undefined;
 
 onMounted(() => {
   // 挂载后测量右侧叠加容器真实宽度，纠正首帧估算值，避免长 maxlength 下重叠
@@ -398,10 +582,15 @@ onMounted(() => {
   if (autofocus) {
     nextTick(() => inputRef.value?.focus());
   }
+  if (searchable && rootRef.value && typeof ResizeObserver !== 'undefined') {
+    rootSizeObserver = new ResizeObserver(() => searchPopoverRef.value?.update());
+    rootSizeObserver.observe(rootRef.value);
+  }
 });
 
 onBeforeUnmount(() => {
   rightSlotObserver?.disconnect();
+  rootSizeObserver?.disconnect();
 });
 
 // 暴露实例方法供父组件直接调用
@@ -410,5 +599,10 @@ defineExpose({
   blur: () => inputRef.value?.blur(),
   select: () => inputRef.value?.select(),
   inputRef,
+  /** searchable 模式：手动开合结果面板 */
+  openSearch: openResults,
+  closeSearch: closeResults,
+  searchActiveIndex,
+  setSearchActiveIndex,
 });
 </script>

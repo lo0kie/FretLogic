@@ -1,14 +1,17 @@
-import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 
-import type { Chord } from '@/domains/chord/types';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import type { SlotKey } from '@/domains/score/types';
+import { logger } from '@/platform/utils/logger';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
 import { resolveDropAction } from './lyrics-drag/dropZone.ts';
 import { useDragAutoScroll } from './lyrics-drag/useDragAutoScroll.ts';
 import { useDragGhost } from './lyrics-drag/useDragGhost.ts';
 import { useDragHighlight } from './lyrics-drag/useDragHighlight.ts';
+
+import type { Chord } from '@/domains/chord/types';
+import type { SlotKey } from '@/domains/score/types';
+import type { ComponentPublicInstance, Ref } from 'vue';
 
 /** 歌词行和弦槽位拖拽核心：鼠标阈值起拖 + 触摸长按起拖，ghost/落点更新按帧合帧，松手按分区落地 */
 export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) {
@@ -26,7 +29,8 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     setGhostChord,
   } = useDragGhost();
 
-  const { dragOverSlotKey, dropZone, markDragSource, clearDragClasses, updateDropTarget } = useDragHighlight();
+  const { dragOverSlotKey, activeDropLineId, dropZone, markDragSource, clearDragClasses, updateDropTarget } =
+    useDragHighlight();
 
   // 落点命中节流：与 ghost 位置一样合并进 rAF，避免每帧同步执行 elementFromPoint 命中测试
   const {
@@ -230,8 +234,8 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
       // 分区落地：松手所在分区直接决定动作（交换/替换/复制/移位），无有效目标则取消
       resolveLandingAction();
-    } catch {
-      /* 落地失败则忽略（可手动撤销兜底） */
+    } catch (e) {
+      logger.warn('lyrics-drag', '拖拽落地失败，已保留原状态（可手动撤销兜底）', e);
     } finally {
       if (hadDrag) {
         triggerClickSuppression();
@@ -253,8 +257,8 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       stopAutoScroll();
       cancelGhostPos();
       cancelDropTargetUpdate();
-    } catch {
-      /* 取消失败则忽略 */
+    } catch (e) {
+      logger.warn('lyrics-drag', '拖拽清理阶段异常（自动滚动/幽灵层/高亮未完全复位）', e);
     } finally {
       if (hadDrag) {
         triggerClickSuppression();
@@ -271,7 +275,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   };
 
   /** 槽位按下入口：记录起点与拖拽模式；触摸端启动长按计时，鼠标端等待移动超过阈值 */
-  const handlePointerDown = (e: PointerEvent, slotKey: string, chord: Chord) => {
+  const handlePointerDown = ({ event: e, slotKey, chord }: { event: PointerEvent; slotKey: string; chord: Chord }) => {
     if (activeSourceKey !== null) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const target = e.target as HTMLElement;
@@ -326,6 +330,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     isSuppressingClick,
     draggingSlotKey,
     dragOverSlotKey,
+    activeDropLineId,
     dropZone,
     ghostChordName,
     setGhostEl,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';
 import { nameToSegments, parsePitchSegment } from '@/domains/chord/theory/theory';
+
 import type { NoteInput } from '@/domains/chord/types';
 
 const note = (stringIndex: number, pitchIndex: number, label: string): NoteInput => ({

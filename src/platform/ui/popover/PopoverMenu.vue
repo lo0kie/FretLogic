@@ -1,13 +1,41 @@
+<template>
+  <BasePopover :disabled :placement :trigger ref="popoverRef">
+    <template #trigger="{ isOpen, pinToggle }">
+      <ActionButton
+        :aria-label
+        :disabled
+        :title
+        :aria-expanded="isOpen"
+        :aria-haspopup="items.length > 0 ? 'menu' : undefined"
+        :color="isOpen ? 'primary' : 'default'"
+        :variant="isOpen ? 'subtle' : 'ghost'"
+        @click="pinToggle()"
+        icon-only
+      >
+        <slot :is-open name="icon">
+          <BaseIcon v-if="icon" :class="iconClass" :name="icon" icon-size="xl" icon-stroke="regular" />
+        </slot>
+      </ActionButton>
+    </template>
+
+    <template #default>
+      <ContextMenuItems :items @select="handleSelect($event)" />
+    </template>
+  </BasePopover>
+</template>
+
 <script setup lang="ts">
 import { useTemplateRef } from 'vue';
 
-import type { Placement } from '@floating-ui/vue';
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import ContextMenuItems from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 
-import ActionButton from '../button/ActionButton.vue';
-import ContextMenuItems, { type ContextMenuItem } from '../context-menu/ContextMenuItems.vue';
-import BaseIcon from '../icons/BaseIcon.vue';
-import type { IconName } from '../icons/icons.registry.ts';
 import BasePopover from './BasePopover.vue';
+
+import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import type { IconName } from '@/platform/ui/icons/icons.registry.ts';
+import type { Placement } from '@floating-ui/vue';
 
 defineOptions({ name: 'PopoverMenu' });
 
@@ -57,29 +85,3 @@ const handleSelect = (item: ContextMenuItem) => {
   if (!item.keepOpen) popoverRef.value?.close();
 };
 </script>
-
-<template>
-  <BasePopover :disabled :placement :trigger ref="popoverRef">
-    <template #trigger="{ isOpen, pinToggle }">
-      <ActionButton
-        :aria-label
-        :disabled
-        :title
-        :aria-expanded="isOpen"
-        :aria-haspopup="items.length > 0 ? 'menu' : undefined"
-        :color="isOpen ? 'primary' : 'default'"
-        :variant="isOpen ? 'subtle' : 'ghost'"
-        @click="pinToggle()"
-        icon-only
-      >
-        <slot :is-open name="icon">
-          <BaseIcon v-if="icon" :class="iconClass" :name="icon" icon-size="xl" icon-stroke="regular" />
-        </slot>
-      </ActionButton>
-    </template>
-
-    <template #default>
-      <ContextMenuItems :items @select="handleSelect" />
-    </template>
-  </BasePopover>
-</template>

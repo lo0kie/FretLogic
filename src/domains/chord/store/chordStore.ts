@@ -2,7 +2,7 @@
  * 和弦 store：和弦与分组数据的加载、增删改、排序及持久化。
  * 维护分组-和弦卡片视图模型（GroupedChordCard）与和弦指法历史（撤销-重做）。
  */
-import { computed, toRaw } from 'vue';
+import { computed, ref, toRaw, watch } from 'vue';
 
 import { useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -24,13 +24,14 @@ import {
   segmentsToString,
   sortChordsByRule,
   validateBassConsistency,
-  type ChordOrName,
 } from '@/domains/chord/theory/theory';
-import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
 import { GroupSortRule } from '@/domains/chord/types';
 import { areBarresEqual } from '@/domains/fretboard/model/coordinates';
 import { cloneDeep, cloneGuitarStrings, generateUUID } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
+
+import type { ChordOrName } from '@/domains/chord/theory/theory';
+import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
 
 const DEFAULT_SORT_RULE: GroupSortRule = GroupSortRule.ROOT_PITCH;
 
@@ -81,11 +82,21 @@ export const useChordStore = defineStore('chord', () => {
   // 避免刷新时落入防抖窗口导致数据回退
   const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
   const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
-  const selectedGroupId = useStorage<string | null>(STORAGE_KEYS.CURR_GROUP_ID, null);
-  // 只允许同时展开一个分组：单一展开状态持久化，刷新后恢复
-  const expandedGroupId = useStorage<string | null>(STORAGE_KEYS.EXPANDED_GROUP_ID, null);
-  /** 判断分组是否处于折叠态（与持久化的展开分组 id 比对）。 */
+  // 选中/展开分组仅内存态：URL `?group=` 是唯一数据源，localStorage 只维护一个「最近编辑分组」指针
+  // 供裸访问入口冷启动回灌；不再双写完整选中态。
+  const selectedGroupId = ref<string | null>(null);
+  // 单一展开状态同属内存态（与 selectedGroupId 联动，URL group 回灌时经 selectAndExpandGroup 一并恢复）
+  const expandedGroupId = ref<string | null>(null);
+  /** 判断分组是否处于折叠态（与当前展开分组 id 比对）。 */
   const isGroupCollapsed = (groupId: string): boolean => expandedGroupId.value !== groupId;
+
+  // 「最近编辑分组」冷启动指针：选中非空时写入；取消选中时清除，
+  // 避免「关闭分组后刷新」被冷启动回灌重新打开（URL 方已移除 group 参数，指针须同步失效）
+  watch(selectedGroupId, id => {
+    if (typeof localStorage === 'undefined') return;
+    if (id) localStorage.setItem(STORAGE_KEYS.LAST_GROUP_ID, id);
+    else localStorage.removeItem(STORAGE_KEYS.LAST_GROUP_ID);
+  });
 
   // 持久化分层：常规变更由 useStorage 响应式自动同步；保存等关键入口提供 flushChordsToStorage 作为同步刷盘保障
 
@@ -218,12 +229,12 @@ export const useChordStore = defineStore('chord', () => {
     groups.value = [...newGroups];
   };
 
-  /** 设置当前选中分组 id；传 null 表示取消选中（写入 localStorage）。 */
+  /** 设置当前选中分组 id；传 null 表示取消选中（仅内存，URL `?group=` 承担寻址）。 */
   const setSelectedGroupId = (id: string | null) => {
     selectedGroupId.value = id;
   };
 
-  /** 折叠全部分组（清空持久化的展开分组 id）。 */
+  /** 折叠全部分组（选中/展开态都置空）。 */
   const collapseAllGroups = () => {
     expandedGroupId.value = null;
   };
@@ -580,6 +591,7 @@ export const useChordStore = defineStore('chord', () => {
     savedChordsList,
     groups,
     selectedGroupId,
+    expandedGroupId,
     groupChordMap,
     groupedChordMap,
     getMultiFingering,

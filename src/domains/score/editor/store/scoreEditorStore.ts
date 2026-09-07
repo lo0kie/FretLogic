@@ -10,15 +10,17 @@ import { defineStore } from 'pinia';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { toChordId } from '@/domains/chord/theory/entityFactories';
 import { getChordName, transposeChordEntity } from '@/domains/chord/theory/theory';
-import type { Chord, ChordId } from '@/domains/chord/types';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { garbageCollectChordMap } from '@/domains/score/model/chordSlots';
 import { matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
-import type { Capo, LineId, SlotKey, Song } from '@/domains/score/types';
 import { generateUUID } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
-type ScoreActiveTab = 'edit' | 'interactive' | 'preview';
+import type { Chord, ChordId } from '@/domains/chord/types';
+import type { Capo, LineId, SlotKey, Song } from '@/domains/score/types';
+
+/** 乐谱页主 Tab：编辑歌词 / 排列和弦 / 预览（URL tab 参数的合法值域） */
+export type ScoreActiveTab = 'edit' | 'interactive' | 'preview';
 
 interface HistoryState {
   lyrics: string;
@@ -31,9 +33,11 @@ interface HistoryState {
 export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const songStore = useSongStore();
   const chordStore = useChordStore();
-  const activeSongId = useStorage<string | null>(STORAGE_KEYS.ACTIVE_SONG_ID, null);
-  // 当前标签页持久化：刷新/重启后恢复上次所在的乐谱视图（edit / interactive / preview）
-  const activeTabRef = useStorage<ScoreActiveTab>(STORAGE_KEYS.SCORE_ACTIVE_TAB, 'edit');
+  // 选中乐谱仅内存态：URL `?id=` 是唯一数据源（可分享 / 可后退），localStorage 只维护一个
+  // 「最近编辑乐谱」指针供裸访问入口冷启动回灌，不再双写完整选中态。
+  const activeSongId = ref<string | null>(null);
+  // 当前标签页仅内存态：URL `?tab=` 全权接管（刷新由 URL 恢复，裸访问回落到 edit 默认）
+  const activeTabRef = ref<ScoreActiveTab>('edit');
   const selectedSlotKey = ref<SlotKey | null>(null);
   const fontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 1.0, localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
@@ -152,9 +156,14 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     }
   };
 
+  let currentActiveSongId: string | null = null;
   watch(
     activeSong,
     newSong => {
+      if (newSong && newSong.id === currentActiveSongId && historyStack.length > 0) {
+        return;
+      }
+      currentActiveSongId = newSong?.id ?? null;
       selectedSlotKey.value = null;
       historyStack.length = 0;
       historyIndex = -1;
@@ -168,10 +177,25 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     { immediate: true }
   );
 
-  /** 设置当前编辑的歌曲 id（持久化，刷新后恢复上次编辑的歌曲）。 */
+  /** 设置当前编辑的歌曲 id（仅内存）；URL `?id=` 负责刷新/深链恢复。 */
   const setActiveSong = (id: string | null) => {
     activeSongId.value = id;
   };
+
+  // 「最近编辑乐谱」冷启动指针：URL 无选歌参数（裸访问）时作为回灌种子；取消选中不主动清除，
+  // 保证「上次编辑过哪首」在选中态清空后仍可被回退恢复。
+  watch(activeSongId, id => {
+    if (id && typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEYS.LAST_SONG_ID, id);
+  });
+
+  // 记录「最近的乐谱主 Tab」冷启动指针：仅当存在激活歌曲且当前为主 Tab（非 edit）时写入，
+  // 供裸入口刷新后随 LAST_SONG 一并回灌（URL 仍是唯一数据源）；取消选中或回退到 edit 时清理，
+  // 避免刷新后误恢复一个当前不再有效的 Tab。
+  watch([activeSongId, () => activeTab.value], ([songId, tab]) => {
+    if (typeof localStorage === 'undefined') return;
+    if (songId && tab && tab !== 'edit') localStorage.setItem(STORAGE_KEYS.LAST_ACTIVE_TAB, tab);
+    else localStorage.removeItem(STORAGE_KEYS.LAST_ACTIVE_TAB);
+  });
 
   /**
    * 更新歌词。songId 缺省时为当前激活歌曲。
@@ -194,6 +218,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       lineIds: newIds,
       chordMap: changed ? updatedChordMap : target.chordMap,
     });
+    if (activeSong.value?.id === target.id) recordHistory();
     if (activeSong.value?.id === target.id && !sanitizedLyrics.trim()) {
       activeTabRef.value = 'edit';
     }
@@ -204,6 +229,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     if (!activeSong.value) return;
     recordHistory();
     songStore.setCharChord(activeSong.value.id, slotKey, chord.id);
+    recordHistory();
   };
 
   /** 移除当前歌曲指定槽位上的和弦，并记录撤销历史。 */
@@ -211,6 +237,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     if (!activeSong.value) return;
     recordHistory();
     songStore.removeCharChord(activeSong.value.id, slotKey);
+    recordHistory();
   };
 
   /** 拖拽来源是 DOM data-slot-key（不可信边界）：校验前缀后再信任收窄 */
@@ -221,6 +248,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     if (!isSlotKey(sourceKey) || !isSlotKey(targetKey)) return;
     recordHistory();
     songStore.swapSongSlotChords(activeSong.value.id, sourceKey, targetKey);
+    recordHistory();
   };
 
   /** 复制并移动：把源槽位的和弦拷贝到目标槽位，源槽位保留（用于复制拖拽） */
@@ -231,6 +259,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     if (!sourceChordId) return;
     recordHistory();
     songStore.setCharChord(activeSong.value.id, targetKey, sourceChordId);
+    recordHistory();
   };
 
   /** 移位：源槽位和弦移动到目标槽位（目标被覆盖，源槽位清空），单条撤销记录 */
@@ -242,6 +271,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     recordHistory();
     songStore.setCharChord(activeSong.value.id, targetKey, sourceChordId);
     songStore.removeCharChord(activeSong.value.id, sourceKey);
+    recordHistory();
   };
 
   /** 对当前编辑歌曲进行移调（包含撤销栈记录与和弦库复用/自动补充） */

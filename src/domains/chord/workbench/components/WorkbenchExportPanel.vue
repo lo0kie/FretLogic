@@ -6,13 +6,13 @@
     mode-aria-label="导出面板行为"
     title="导出图片"
   >
-    <div class="gap-md flex flex-col p-1 pt-3">
+    <div class="flex flex-col gap-md p-1 pt-3">
       <!-- 预览区 -->
       <div class="flex justify-center">
         <div
           :class="[
             previewBg === 'transparent'
-              ? 'bg-[repeating-conic-gradient(#ccc_0%_25%,#fff_0%_50%)] bg-[length:12px_12px]'
+              ? 'bg-[repeating-conic-gradient(#ccc_0%_25%,#fff_0%_50%)] bg-size-[12px_12px]'
               : previewBg === 'white'
                 ? 'bg-white'
                 : 'bg-[#18181a]',
@@ -39,7 +39,7 @@
       <div class="flex gap-4">
         <ActionButton
           :disabled="isActing"
-          @click="handleCopy"
+          @click="handleCopy()"
           class="flex-1"
           color="default"
           icon="copy"
@@ -48,7 +48,7 @@
         />
         <ActionButton
           :disabled="isActing"
-          @click="handleDownload"
+          @click="handleDownload()"
           class="flex-1"
           color="primary"
           icon="download"
@@ -65,20 +65,23 @@ import { ref } from 'vue';
 
 import { useStorage } from '@vueuse/core';
 
+import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
+import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { renderFretboardToCanvas } from '@/domains/fretboard/components/renderFretboardCanvas';
+import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import ActionButton from '@/platform/ui/button/ActionButton.vue';
-import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
-import BaseSegmentedControl, { type SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import { canvasToBlob, triggerBlobDownload } from '@/platform/utils/canvas';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
-import FretboardCanvas from '../../../fretboard/components/FretboardCanvas.vue';
 import WorkbenchPanel from './WorkbenchPanel.vue';
+
+import type { SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 
 const editorStore = useChordEditorStore();
 const settingsStore = useSettingsStore();
@@ -103,10 +106,13 @@ const previewBg = useStorage<BgMode>(STORAGE_KEYS.WORKBENCH_EXPORT_BG, 'transpar
 const isActing = ref(false);
 
 function buildCanvas(): HTMLCanvasElement {
-  const bgColor = previewBg.value === 'white' ? '#ffffff' : previewBg.value === 'dark' ? '#18181a' : undefined;
+  // 导出配色与背景联动：透明/白底固定亮色，暗底固定暗色（与导出图用途匹配，独立于应用主题）
+  const theme = previewBg.value === 'dark' ? 'dark' : 'light';
+  const palette = resolveFretboardCanvasPalette(theme);
+  const bgColor = previewBg.value === 'white' ? '#ffffff' : previewBg.value === 'dark' ? palette.BG : undefined;
   return renderFretboardToCanvas(editorStore.draftChord, {
     scale: 4,
-    isDarkMode: previewBg.value === 'dark',
+    colors: palette,
     shorthand: settingsStore.workbenchChordShorthand,
     bgColor,
     ...fretBoardConfig,

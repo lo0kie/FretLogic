@@ -9,7 +9,11 @@
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    // 编译器级强制类型擦除：类型导入必须显式标记 type，杜绝值导入被静默剥离的不确定性
+    "verbatimModuleSyntax": true,
     "noEmit": true,
+    // 增量检查缓存统一收纳到 node_modules/.cache（与 vite/eslint 缓存目录约定对齐）
+    "tsBuildInfoFile": "node_modules/.cache/vue-tsc/tsconfig.tsbuildinfo",
     "jsx": "preserve",
     "allowSyntheticDefaultImports": true,
     "strict": true,

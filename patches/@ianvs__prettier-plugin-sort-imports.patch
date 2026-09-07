@@ -1,0 +1,64 @@
+diff --git a/lib/src/utils/explode-type-and-value-specifiers.js b/lib/src/utils/explode-type-and-value-specifiers.js
+index 07f78ddc51eed264f7fcbb9c7fdd8c1adb20bf54..38f27445d7a8e8f37c27faae21ce0e8a333b8da4 100644
+--- a/lib/src/utils/explode-type-and-value-specifiers.js
++++ b/lib/src/utils/explode-type-and-value-specifiers.js
+@@ -21,16 +21,21 @@ const explodeTypeAndValueSpecifiers = (nodes) => {
+             explodedNodes.push(node);
+             continue;
+         }
+-        // Nothing to do if there's only one specifier
+-        if (node.specifiers.length <= 1) {
+-            explodedNodes.push(node);
+-            continue;
+-        }
+         // @ts-expect-error TS is not refining correctly, but we're checking the type
+         const typeImports = node.specifiers.filter((i) => i.type === 'ImportSpecifier' && i.importKind === 'type');
++        const valueImports = node.specifiers.filter((i) => !(i.type === 'ImportSpecifier' && i.importKind === 'type'));
++        // FretLogic 扩展：全部为内联 type（import { type A } / import { type A, type B }）时，
++        // 原逻辑因 specifiers.length <= 1 或「非混合」而跳过，这里统一转为独立的 type-only import
++        //（import type { … }），以满足「type 必须单独导入」的契约。
++        if (typeImports.length > 0 && valueImports.length === 0) {
++            typeImports.forEach((specifier) => (specifier.importKind = 'value'));
++            const newTypeNode = (0, types_1.importDeclaration)(typeImports, node.source);
++            newTypeNode.importKind = 'type';
++            explodedNodes.push(newTypeNode);
++            continue;
++        }
+         // If we have a mix of type and value imports, we need to 'splode them into two import declarations
+         if (typeImports.length && typeImports.length < node.specifiers.length) {
+-            const valueImports = node.specifiers.filter((i) => !(i.type === 'ImportSpecifier' && i.importKind === 'type'));
+             const newValueNode = (0, types_1.importDeclaration)(valueImports, node.source);
+             explodedNodes.push(newValueNode);
+             // Change the importKind of the specifiers, to avoid `import type {type Foo} from 'foo'`
+diff --git a/lib/src/utils/get-sorted-nodes-group.js b/lib/src/utils/get-sorted-nodes-group.js
+index 455ac0c07a330ddf8a613a169dc58500d8ec5024..b831c4efe5c156c62e26115bb79aee0a1b266282 100644
+--- a/lib/src/utils/get-sorted-nodes-group.js
++++ b/lib/src/utils/get-sorted-nodes-group.js
+@@ -7,6 +7,26 @@ const getSortedNodesGroup = (imports, options) => {
+     const sortFn = importOrderCaseSensitive
+         ? natural_sort_1.naturalSortCaseSensitive
+         : natural_sort_1.naturalSort;
+-    return imports.sort((a, b) => sortFn(a.source.value, b.source.value));
++    // FretLogic 自定义排序优先级：默认导入居首 → 命名/命名空间居中 → type-only 沉底。
++    // 优先级相同的 import 仍按模块路径自然排序（沿用原生 comparator）。
++    const getPriority = (node) => {
++        const specs = node.specifiers || [];
++        // 含默认导入（import Foo from … / import Foo, { … } from …）置于组首
++        const hasDefault = specs.some((s) => s && s.type === 'ImportDefaultSpecifier');
++        if (hasDefault)
++            return 0;
++        // type-only 导入（import type { … } from …）沉至组末
++        if (node.importKind === 'type')
++            return 2;
++        // 命名 / 命名空间导入居中
++        return 1;
++    };
++    return imports.sort((a, b) => {
++        const pa = getPriority(a);
++        const pb = getPriority(b);
++        if (pa !== pb)
++            return pa - pb;
++        return sortFn(a.source.value, b.source.value);
++    });
+ };
+ exports.getSortedNodesGroup = getSortedNodesGroup;

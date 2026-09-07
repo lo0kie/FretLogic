@@ -7,6 +7,7 @@ import {
   isBarreStillValid,
   normalizeAndMergeBarres,
 } from '@/domains/fretboard/model/coordinates';
+
 import type { BarreEntity, GuitarStringsModel } from '@/domains/fretboard/types';
 
 /** 按弦序构造六弦模型（全部不偏好降号） */

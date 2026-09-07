@@ -1,10 +1,13 @@
+import { computed } from 'vue';
+
+import { useStorage } from '@vueuse/core';
+
+import type { ComputedRef } from 'vue';
+
 /**
  * 工作台面板三态行为：auto（有音符时展开否则收起）/ expanded（始终展开）/ collapsed（始终收起）。
  * 模式持久化到 localStorage（沿用原 *_COLLAPSED 键，旧布尔值首次访问时归一化为三态）。
  */
-import { computed, type ComputedRef } from 'vue';
-
-import { useStorage } from '@vueuse/core';
 
 export type PanelMode = 'auto' | 'expanded' | 'collapsed';
 

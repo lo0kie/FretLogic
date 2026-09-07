@@ -2,13 +2,14 @@
  * 备份包构造器：把当前 store 快照组装为可导出 / 可推送的 ImportExportPayload。
  */
 import { validateImportExportPayload } from '@/app/services/validation/payload';
-import type { ImportExportPayload, SyncSettingsBackup } from '@/app/types';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 
-import type { BackupSelection } from './useImportExportService';
 import { FULL_BACKUP_SELECTION } from './useImportExportService';
+
+import type { BackupSelection } from './useImportExportService';
+import type { ImportExportPayload, SyncSettingsBackup } from '@/app/types';
 
 /**
  * 从当前 store 快照生成经 validate 清洗后的备份包（v5 起可包含同步配置，v6 起携带偏好设置）。

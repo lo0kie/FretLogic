@@ -1,12 +1,14 @@
 import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
-import { SyncError, type GiteeSyncConfig, type SyncBranchesProvider } from './provider.ts';
+import { SyncError } from './provider.ts';
 import {
   buildSyncCommitMessage,
   createSyncProviderBase,
   decodeBase64Envelope,
   extractApiErrorDetail,
 } from './syncBase.ts';
+
+import type { GiteeSyncConfig, SyncBranchesProvider } from './provider.ts';
 
 const GITEE_API_BASE = 'https://gitee.com/api/v5';
 
@@ -116,7 +118,7 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
           `获取分支失败，状态码：${response.status}${await describeError(response)}`
         );
       }
-      const branches: Array<{ name: string }> = await response.json();
+      const branches: { name: string }[] = await response.json();
       return branches.map(b => b.name).filter(name => !name.startsWith('dependabot/'));
     },
     async testConnection(): Promise<string> {

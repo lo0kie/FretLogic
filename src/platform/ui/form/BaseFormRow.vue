@@ -11,6 +11,7 @@
         layout === 'vertical'
           ? 'flex-col items-start gap-1.5'
           : [align === 'top' ? 'items-start' : 'items-center', compacted ? 'is-compacted gap-sm' : 'gap-md'],
+        layout === 'horizontal' && align === 'center' ? CONTROL_HEIGHT_CLASSES.md : '',
       ]"
       class="form-row-main box-border flex w-full"
     >
@@ -22,10 +23,10 @@
         ]"
         :for="effectiveForId"
         :style="layout === 'horizontal' ? labelStyle : undefined"
-        class="form-row-label text-text-body shrink-0 overflow-hidden text-xs font-semibold text-ellipsis whitespace-nowrap select-none"
+        class="form-row-label shrink-0 truncate text-xs font-semibold text-fg-body select-none"
       >
         <slot name="label"> {{ label }} </slot>
-        <span v-if="required" aria-hidden="true" class="text-danger leading-none">*</span>
+        <span v-if="required" aria-hidden="true" class="leading-none text-danger">*</span>
       </label>
 
       <div
@@ -34,7 +35,7 @@
           controlAlign === 'start' ? 'justify-start' : controlAlign === 'center' ? 'justify-center' : 'justify-end',
         ]"
         :style="controlStyle"
-        class="form-row-control flex min-w-0 items-center"
+        class="form-row-control flex min-w-0 items-center *:max-h-full"
       >
         <slot :disabled :required :id="slotControlId" />
       </div>
@@ -42,11 +43,11 @@
 
     <div
       v-if="resolvedHelp || resolvedError || $slots['help'] || $slots['error']"
-      :class="[resolvedError ? 'text-danger' : 'text-text-muted']"
+      :class="[resolvedError ? 'text-danger' : 'text-fg-muted']"
       :role="resolvedError ? 'alert' : undefined"
       :style="feedbackStyle"
       aria-live="polite"
-      class="form-row-feedback text-2xs mt-1 w-full leading-relaxed"
+      class="form-row-feedback mt-1 w-full text-2xs/relaxed"
     >
       <slot :message="resolvedError" name="error">
         <span v-if="resolvedError">{{ resolvedError }}</span>
@@ -61,7 +62,11 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue';
 
-import { resolveComponentWidth, type FormComponentWidth } from '@/platform/utils/constants';
+// 行高引用控件高度标尺契约（md 档），与全工程控件单一真理源保持一致
+import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { resolveComponentWidth } from '@/platform/utils/constants';
+
+import type { FormComponentWidth } from '@/platform/utils/constants';
 
 const {
   label = '',
@@ -78,6 +83,7 @@ const {
   for: forProp,
   inputId,
 } = defineProps<{
+  /** 行标签文本（无 label 时不渲染标签列） */
   label?: string;
   /** 布局方向：'horizontal' 水平并排（默认） | 'vertical' 上下堆叠 */
   layout?: 'horizontal' | 'vertical';
@@ -85,8 +91,11 @@ const {
   align?: 'center' | 'top';
   /** 标签宽度；数值自动补齐 px */
   labelWidth?: string | number;
+  /** 控件区宽度档位或具体值；未传时自适应拉伸占满 */
   controlWidth?: FormComponentWidth;
+  /** 控件区水平对齐：'start' 靠左 | 'center' 居中 | 'end' 靠右（默认） */
   controlAlign?: 'start' | 'center' | 'end';
+  /** 紧凑模式：缩小标签与控件区的间距 */
   compacted?: boolean;
   /** 必填标记：显示 *，并通过默认插槽 props 透传 required（控件侧据此输出 aria-required / 原生 required） */
   required?: boolean;

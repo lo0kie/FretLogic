@@ -4,7 +4,7 @@
     :aria-disabled="disabled || undefined"
     :class="controlClasses"
     :style="resolvedWidth ? { width: resolvedWidth } : undefined"
-    @keydown="handleKeydown"
+    @keydown="handleKeydown($event)"
     aria-orientation="horizontal"
     class="segmented-control relative box-border inline-flex items-center select-none"
     ref="containerRef"
@@ -29,7 +29,7 @@
         :tabindex="getTabindex(opt, i)"
         :title="opt.label"
         @click="select(opt, i)"
-        class="segmented-item text-text-muted focus-visible:ring-primary/70 enabled:hover:text-text-title z-float relative inline-flex h-full items-center justify-center self-stretch bg-transparent leading-none font-bold whitespace-nowrap shadow-none transition-all duration-200 ease-out outline-none focus-visible:ring-2 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+        class="segmented-item relative z-float inline-flex h-full items-center justify-center self-stretch bg-transparent leading-none font-bold whitespace-nowrap text-fg-muted shadow-none transition-all duration-200 ease-out outline-none focus-visible:ring-2 focus-visible:ring-primary/70 enabled:cursor-pointer enabled:hover:text-fg-title disabled:cursor-not-allowed disabled:opacity-40"
         role="radio"
         type="button"
       >
@@ -57,13 +57,15 @@
 <script setup generic="T extends string | number | boolean, C extends boolean = false" lang="ts">
 import { computed, nextTick, onBeforeUnmount, onBeforeUpdate, onMounted, ref, useTemplateRef, watch } from 'vue';
 
-import type { ComponentSize } from '@/platform/types';
-import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { resolveComponentWidth } from '@/platform/utils/constants';
+import { useRafThrottle } from '@/platform/utils/useRafThrottle';
+
+import type { ComponentSize } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { IconSizePreset, IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
-import { resolveComponentWidth, type FormComponentWidth } from '@/platform/utils/constants';
-import { useRafThrottle } from '@/platform/utils/useRafThrottle';
+import type { FormComponentWidth } from '@/platform/utils/constants';
 
 export interface SegmentOption<T> {
   label: string;
@@ -81,14 +83,20 @@ export interface SegmentOption<T> {
 
 type OptionInput<T> = T | SegmentOption<T>;
 
+const model = defineModel<C extends true ? T | undefined : T>({ required: true });
+
 const props = withDefaults(
   defineProps<{
+    /** 选项数组：支持原始值（字符串/数字等）或 SegmentOption 对象 */
     options: OptionInput<T>[];
+    /** 尺寸档位：sm/md/lg */
     size?: ComponentSize;
+    /** 视觉形态：pill 胶囊底板 / text 纯文字 */
     variant?: 'pill' | 'text';
     /** 下划线 Tab 形态：等价于 variant 的第三种视觉——无外框，选中项底部一条滑动主色下划线（浏览器标签风格）。
      *  与 variant 互斥优先级：tabbed=true 时覆盖 variant */
     tabbed?: boolean;
+    /** 禁用交互并置灰（整组不可点击） */
     disabled?: boolean;
     /** 全局仅显示图标模式：若为 true 且选项配置了 icon，则隐藏 label 文本（保留 title / aria-label） */
     iconOnly?: boolean;
@@ -98,8 +106,11 @@ const props = withDefaults(
     iconStroke?: IconStrokeValue;
     /** 可取消选中：开启后点击已选项会把 v-model 置为 undefined */
     closeable?: C;
+    /** 是否撑满父容器宽度 */
     block?: boolean;
+    /** 宽度：auto / full 或具体 CSS 宽度值 */
     width?: FormComponentWidth;
+    /** 根容器 radiogroup 的无障碍标签 */
     ariaLabel?: string;
     /** 紧凑模式：缩小按钮左右内边距，默认 true */
     compacted?: boolean;
@@ -126,7 +137,9 @@ const props = withDefaults(
   }
 );
 
-const model = defineModel<C extends true ? T | undefined : T>({ required: true });
+const emit = defineEmits<{
+  (e: 'change', value: C extends true ? T | undefined : T): void;
+}>();
 /** 内部读写别名：closeable 时模型允许 undefined，仅在别名处集中断言 */
 const modelValue = computed({
   get: () => model.value as T | undefined,
@@ -137,12 +150,8 @@ const modelValue = computed({
 /** 对外派发值类型收窄：把统一视图断言回对外泛型形态 */
 const emitValue = (v: T | undefined): C extends true ? T | undefined : T => v as C extends true ? T | undefined : T;
 
-const emit = defineEmits<{
-  (e: 'change', value: C extends true ? T | undefined : T): void;
-}>();
-
 const containerRef = useTemplateRef<HTMLElement>('containerRef');
-const items = ref<Array<HTMLElement | null>>([]);
+const items = ref<(HTMLElement | null)[]>([]);
 
 /** 收集选项 DOM（函数式 ref），供选中后聚焦与指示器测量使用 */
 const setItemRef = (el: unknown, index: number) => {
@@ -166,16 +175,16 @@ const isFullWidth = computed(() => props.block || resolvedWidth.value === '100%'
 const isSelected = (val: unknown) => Object.is(modelValue.value, val);
 
 const SIZE_MAP: Record<'sm' | 'md' | 'lg', { wrapper: string; item: string; textItem: string }> = {
-  sm: { wrapper: `${CONTROL_HEIGHT_CLASSES.sm}`, item: 'text-2xs px-2', textItem: 'px-2 py-1 text-2xs' },
-  md: { wrapper: `${CONTROL_HEIGHT_CLASSES.md}`, item: 'text-2xs px-3', textItem: 'px-2.5 py-1 text-xs' },
-  lg: { wrapper: `${CONTROL_HEIGHT_CLASSES.lg}`, item: 'text-xs px-3', textItem: 'px-3 py-1.5 text-sm' },
+  sm: { wrapper: `${CONTROL_HEIGHT_CLASSES.sm}`, item: 'px-2 text-2xs', textItem: 'px-2 py-1 text-2xs' },
+  md: { wrapper: `${CONTROL_HEIGHT_CLASSES.md}`, item: 'px-3 text-2xs', textItem: 'px-2.5 py-1 text-xs' },
+  lg: { wrapper: `${CONTROL_HEIGHT_CLASSES.lg}`, item: 'px-3 text-xs', textItem: 'px-3 py-1.5 text-sm' },
 };
 
 /** 紧凑模式尺寸：进一步缩小按钮左右内边距（超紧凑） */
 const COMPACTED_SIZE_MAP: Record<'sm' | 'md' | 'lg', { wrapper: string; item: string; textItem: string }> = {
-  sm: { wrapper: `${CONTROL_HEIGHT_CLASSES.sm}`, item: 'text-2xs px-1', textItem: 'px-1 py-1 text-2xs' },
-  md: { wrapper: `${CONTROL_HEIGHT_CLASSES.md}`, item: 'text-2xs px-1.5', textItem: 'px-1.5 py-1 text-xs' },
-  lg: { wrapper: `${CONTROL_HEIGHT_CLASSES.lg}`, item: 'text-xs px-1.5', textItem: 'px-1.5 py-1.5 text-sm' },
+  sm: { wrapper: `${CONTROL_HEIGHT_CLASSES.sm}`, item: 'px-1 text-2xs', textItem: 'px-1 py-1 text-2xs' },
+  md: { wrapper: `${CONTROL_HEIGHT_CLASSES.md}`, item: 'px-1.5 text-2xs', textItem: 'px-1.5 py-1 text-xs' },
+  lg: { wrapper: `${CONTROL_HEIGHT_CLASSES.lg}`, item: 'px-1.5 text-xs', textItem: 'px-1.5 py-1.5 text-sm' },
 };
 
 const sizeConfig = computed(() => (props.compacted ? COMPACTED_SIZE_MAP[props.size] : SIZE_MAP[props.size]));
@@ -226,7 +235,7 @@ const indicatorStyle = computed(() => ({
 const controlClasses = computed(() => [
   props.fullHeight ? 'h-full' : sizeConfig.value.wrapper,
   visualVariant.value === 'pill'
-    ? 'bg-bg-body border border-border-light rounded-full p-1 gap-1 transition-opacity'
+    ? 'bg-surface-body border border-border-light rounded-full p-1 gap-1 transition-opacity'
     : visualVariant.value === 'tabbed' && props.showInactiveBorder
       ? 'bg-transparent gap-xs border-b-2 border-border-light' // 容器级贯穿底线：保留 tab 间距，激活主色线叠加其上
       : 'bg-transparent gap-xs',
@@ -270,7 +279,7 @@ const itemClasses = (opt: SegmentOption<T>): (string | Record<string, boolean>)[
     'rounded-lg font-medium',
     active
       ? 'text-primary font-semibold bg-primary/10'
-      : 'text-text-muted enabled:hover:text-text-title enabled:hover:bg-bg-panel-hover/50',
+      : 'text-fg-muted enabled:hover:text-fg-title enabled:hover:bg-surface-panel-hover/50',
     { 'flex-1': isExpand },
   ];
 };

@@ -2,9 +2,9 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import ScorePreviewPane from '@/domains/score/preview/components/ScorePreviewPane.vue';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import ScorePreviewPane from '@/domains/score/preview/components/ScorePreviewPane.vue';
 import * as workerExportService from '@/domains/score/preview/services/workerExportService';
 
 describe('ScorePreviewPane 切换乐谱防闪烁与旧谱残留守卫', () => {

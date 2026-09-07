@@ -11,21 +11,18 @@ import {
   pasteErrorToast,
   useChordTransfer,
 } from '@/domains/chord/transfer/useChordTransfer';
-import type { ChordId } from '@/domains/chord/types';
 import { toCapo } from '@/domains/fretboard/model/coordinates';
 import { DEFAULT_SCORE_TITLE } from '@/domains/score/constants';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { charKey, chordSlotKey, matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
-import {
-  parseSongFromText,
-  serializeSongToText,
-  type PortableChord,
-  type PortableSong,
-} from '@/domains/score/transfer/textCodec';
-import type { SlotKey, Song } from '@/domains/score/types';
+import { parseSongFromText, serializeSongToText } from '@/domains/score/transfer/textCodec';
 import { readTextFromClipboard, writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useUiStore } from '@/platform/store/uiStore';
+
+import type { ChordId } from '@/domains/chord/types';
+import type { PortableChord, PortableSong } from '@/domains/score/transfer/textCodec';
+import type { SlotKey, Song } from '@/domains/score/types';
 
 /** 乐谱粘贴结果：imported 已建谱 | needsConfirm 无结构纯歌词需用户确认 | none 无操作（读取失败/无法识别） */
 export type PasteSongOutcome =

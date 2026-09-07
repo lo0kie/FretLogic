@@ -1,15 +1,12 @@
 <template>
-  <div class="p-xl px-2xl relative box-border flex-1">
-    <textarea
+  <div class="relative box-border flex-1 p-xl px-2xl">
+    <BaseTextarea
       v-model="localLyrics"
-      class="no-scrollbar bg-bg-panel border-glass-border p-xl text-text-title font-inherit duration-base focus:border-primary focus:ring-primary/70 box-border h-full w-full resize-none rounded-lg border text-base leading-relaxed transition-all outline-none focus:ring-2"
+      show-count
+      class="size-full"
       placeholder="在此处输入或粘贴歌词文本..."
+      variant="glass"
     />
-    <div
-      class="text-text-muted pointer-events-none absolute right-9 bottom-9 rounded-sm px-2 py-0.5 text-sm opacity-80"
-    >
-      {{ localLyrics.length }} 字
-    </div>
   </div>
 </template>
 
@@ -18,6 +15,7 @@ import { onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
 
 import { useDebounceFn } from '@vueuse/core';
 
+import BaseTextarea from '@/platform/ui/input/BaseTextarea.vue';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 
@@ -36,6 +34,8 @@ const localLyrics = ref(scoreEditor.activeSong?.lyrics ?? '');
 const boundSongId = scoreEditor.activeSong?.id ?? null;
 // 与存储的"同步基线"：最近一次从 store 读取到的歌词。任何提交仅允许在 store 仍等于该基线时落地，
 // 避免用陈旧的本地文本覆盖中途被「导入 / 下拉同步」更新过的最新歌词（"打开着导入不生效"的根因）。
+// 有意取一次初始快照作为同步基线，后续提交以该基线守卫；对 AST 规则的误报行内豁免
+// eslint-disable-next-line vue/no-ref-object-reactivity-loss
 const baseline = ref(localLyrics.value);
 // 本地是否有未提交的用户编辑：为 true 时卸载/失活才允许定向提交；外部改动会被基线守卫拦截。
 const dirty = ref(false);

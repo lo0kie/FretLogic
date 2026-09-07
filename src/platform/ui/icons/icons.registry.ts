@@ -1,5 +1,3 @@
-import type { Component } from 'vue';
-
 // Lucide Icons
 import AlertCircle from '~icons/lucide/alert-circle';
 import AlertTriangle from '~icons/lucide/alert-triangle';
@@ -34,6 +32,7 @@ import LayoutGrid from '~icons/lucide/layout-grid';
 import Link2 from '~icons/lucide/link-2';
 import List from '~icons/lucide/list';
 import Loader2 from '~icons/lucide/loader-2';
+import Maximize2 from '~icons/lucide/maximize-2';
 import Minus from '~icons/lucide/minus';
 import Moon from '~icons/lucide/moon';
 import Move from '~icons/lucide/move';
@@ -44,6 +43,7 @@ import Play from '~icons/lucide/play';
 import PlugZap from '~icons/lucide/plug-zap';
 import Plus from '~icons/lucide/plus';
 import RefreshCw from '~icons/lucide/refresh-cw';
+import Scan from '~icons/lucide/scan';
 import Search from '~icons/lucide/search';
 import SearchX from '~icons/lucide/search-x';
 import Server from '~icons/lucide/server';
@@ -61,6 +61,8 @@ import Wrench from '~icons/lucide/wrench';
 import X from '~icons/lucide/x';
 // Simple Icons
 import SimpleIconsGithub from '~icons/simple-icons/github';
+
+import type { Component } from 'vue';
 
 export const ICON_REGISTRY = {
   'alert-circle': AlertCircle,
@@ -96,6 +98,7 @@ export const ICON_REGISTRY = {
   'link-2': Link2,
   'list': List,
   'loader-2': Loader2,
+  'maximize-2': Maximize2,
   'minus': Minus,
   'moon': Moon,
   'move': Move,
@@ -106,6 +109,7 @@ export const ICON_REGISTRY = {
   'plug-zap': PlugZap,
   'plus': Plus,
   'refresh-cw': RefreshCw,
+  'scan': Scan,
   'search': Search,
   'search-x': SearchX,
   'server': Server,

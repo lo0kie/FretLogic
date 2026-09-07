@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="box-border flex min-h-0 w-full flex-row items-stretch gap-2 overflow-hidden">
     <div class="flex min-w-0 flex-[0_0_58%] flex-col gap-1">
       <div v-grid-nav v-wheel-scroll.smooth class="no-scrollbar flex min-h-0 flex-wrap gap-1 overflow-y-auto p-1">
@@ -19,7 +19,7 @@
       </div>
     </div>
 
-    <div class="bg-border-light my-0 h-auto w-px shrink-0 self-stretch" />
+    <div class="my-0 h-auto w-px shrink-0 self-stretch bg-border-light" />
 
     <div class="flex min-w-0 flex-1 flex-col gap-1">
       <div v-wheel-scroll.smooth class="no-scrollbar flex min-h-0 flex-col gap-1 overflow-y-auto p-0.5">
@@ -28,33 +28,33 @@
           v-for="note in notes"
           :class="[
             note.isRoot
-              ? 'bg-tint-warning-90 border-tint-warning-65 hover:bg-tint-warning-88 hover:border-tint-warning-78'
-              : 'bg-bg-body border-border-light hover:border-border-base hover:bg-bg-panel-hover',
+              ? 'border-tint-warning-65 bg-tint-warning-90 hover:border-tint-warning-78 hover:bg-tint-warning-88'
+              : 'border-border-light bg-surface-body hover:border-border-base hover:bg-surface-panel-hover',
           ]"
           :key="note.stringIndex"
           class="box-border flex min-w-0 shrink-0 items-center justify-between gap-1.5 rounded-md border px-2 py-1 transition-colors select-none"
         >
           <div class="flex min-w-0 shrink-0 items-center gap-1.5">
             <span
-              :class="note.isRoot ? 'text-warning font-bold' : 'text-text-disabled'"
-              class="text-2xs shrink-0 font-semibold whitespace-nowrap"
+              :class="note.isRoot ? 'font-bold text-warning' : 'text-fg-disabled'"
+              class="shrink-0 text-2xs font-semibold whitespace-nowrap"
             >
               {{ 6 - note.stringIndex }}弦
             </span>
             <span
-              :class="note.isRoot ? 'text-warning font-extrabold' : 'text-text-title font-bold'"
+              :class="note.isRoot ? 'font-extrabold text-warning' : 'font-bold text-fg-title'"
               class="shrink-0 text-xs whitespace-nowrap"
             >
-              <span v-chord-name="{ name: note.label }" />
+              <span v-chord-name="note.label" />
             </span>
           </div>
           <span
             :class="[
               note.isRoot
-                ? 'bg-warning text-text-on-accent border-transparent shadow-[0_1px_4px_rgba(255,149,0,0.5)]'
-                : 'bg-bg-panel border-border-light text-text-body',
+                ? 'border-transparent bg-warning text-fg-on-accent shadow-[0_1px_4px_rgba(255,149,0,0.5)]'
+                : 'border-border-light bg-surface-panel text-fg-body',
             ]"
-            class="text-2xs inline-flex h-5 min-w-[1.35rem] shrink-0 items-center justify-center rounded-full border px-1.5 font-mono leading-none font-bold whitespace-nowrap tabular-nums select-none"
+            class="inline-flex h-5 min-w-[1.35rem] shrink-0 items-center justify-center rounded-full border px-1.5 font-mono text-2xs leading-none font-bold whitespace-nowrap tabular-nums select-none"
           >
             <span v-chord-name="{ degrees: noteDegrees(note) }" />
           </span>
@@ -65,10 +65,11 @@
 </template>
 
 <script setup lang="ts">
-import { areChordsEnharmonicallyEquivalent } from '@/domains/chord/theory/theory';
-import type { CandidateResult, ExtensionSegment, NoteInput } from '@/domains/chord/types';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import { areChordsEnharmonicallyEquivalent } from '@/domains/chord/theory/theory';
+
+import type { CandidateResult, ExtensionSegment, NoteInput } from '@/domains/chord/types';
 
 export interface RenderNoteItem extends NoteInput {
   isRoot: boolean;

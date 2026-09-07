@@ -1,12 +1,13 @@
 import { computed } from 'vue';
 
-import type { BackupSelection } from '@/app/services/backup/useImportExportService';
 import { FULL_BACKUP_SELECTION, useImportExportService } from '@/app/services/backup/useImportExportService';
-import type { ImportExportPayload } from '@/app/types';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useModalController } from '@/platform/store/useModalController';
+
+import type { BackupSelection } from '@/app/services/backup/useImportExportService';
+import type { ImportExportPayload } from '@/app/types';
 
 /** 备份导入/导出弹窗的模块级共享状态：保证任意组件取用的都是同一份开关与导入数据 */
 const { modals, modalData, open, close } = useModalController(

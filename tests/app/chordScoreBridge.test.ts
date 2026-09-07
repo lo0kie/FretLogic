@@ -8,9 +8,10 @@ import { setupChordScoreBridge } from '@/app/services/chordScoreBridge';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { createChord } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
-import type { Chord } from '@/domains/chord/types';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { charKey } from '@/domains/score/model/scoreModel';
+
+import type { Chord } from '@/domains/chord/types';
 
 const makeChord = (name: string): Chord =>
   createChord({

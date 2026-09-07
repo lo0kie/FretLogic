@@ -1,4 +1,4 @@
-import { ref, useTemplateRef } from 'vue';
+﻿import { ref, useTemplateRef } from 'vue';
 
 import { useEventListener } from '@vueuse/core';
 
@@ -9,14 +9,15 @@ import {
   getDefaultPreferFlatForPitch,
   isOpen,
 } from '@/domains/chord/theory/theory';
-import type { FretboardProps } from '@/domains/fretboard/components/Fretboard.vue';
 import { useFretboardKeyboard } from '@/domains/fretboard/composables/useFretboardKeyboard';
 import { calculateFretboardPoint, useFretboardLayout } from '@/domains/fretboard/composables/useFretboardLayout';
-import type { GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
 import { cloneGuitarStrings } from '@/platform/utils/common';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
 import { CANVAS_CONFIG, INTERACTION_CONFIG } from '../constants';
+
+import type { FretboardProps } from '@/domains/fretboard/components/Fretboard.vue';
+import type { GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
 
 /** 指板交互核心：坐标换算、点按/右键/滚轮/键盘编辑音符与品位偏移，以及 hover/focus 高亮管理 */
 export function useFretboardInteraction(

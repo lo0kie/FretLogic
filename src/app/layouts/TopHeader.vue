@@ -1,8 +1,8 @@
 <template>
   <header
-    class="z-header border-glass-border bg-bg-panel/90 @media(display-mode:window-controls-overlay):[-webkit-app-region:drag] @media(display-mode:window-controls-overlay):[app-region:drag] @media(display-mode:window-controls-overlay):min-h-[max(2.5rem,env(titlebar-area-height,2.5rem))] @media(display-mode:window-controls-overlay):pl-[max(env(titlebar-area-inset-left,0px),1rem)] @media(display-mode:window-controls-overlay):pr-[max(env(titlebar-area-inset-right,0px),1rem)] relative box-border flex min-h-10 w-full shrink-0 items-center justify-between border-b px-4 backdrop-blur-lg select-none"
+    class="@media(display-mode:window-controls-overlay):[-webkit-app-region:drag] @media(display-mode:window-controls-overlay):[app-region:drag] @media(display-mode:window-controls-overlay):min-h-[max(2.5rem,env(titlebar-area-height,2.5rem))] @media(display-mode:window-controls-overlay):pl-[max(env(titlebar-area-inset-left,0px),1rem)] @media(display-mode:window-controls-overlay):pr-[max(env(titlebar-area-inset-right,0px),1rem)] relative z-header box-border flex min-h-10 w-full shrink-0 items-center justify-between border-b border-glass-border bg-surface-panel/90 px-4 backdrop-blur-lg select-none"
   >
-    <div :class="NO_DRAG_REGION_CLASS" class="gap-sm flex min-w-0 flex-1 items-center justify-start">
+    <div :class="NO_DRAG_REGION_CLASS" class="flex min-w-0 flex-1 items-center justify-start gap-sm">
       <BaseCheckbox
         v-model="uiStore.isLeftOpen"
         v-tooltip="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'"
@@ -12,55 +12,59 @@
         icon="panel-left"
       />
 
-      <div class="bg-glass-border mx-0.5 h-3.5 w-px shrink-0 opacity-80" />
+      <div class="mx-0.5 h-3.5 w-px shrink-0 bg-glass-border opacity-80" />
 
-      <div class="gap-md flex items-center">
+      <div class="flex items-center gap-md">
         <button
           v-tooltip="'回到工作台'"
-          @click="router.push('/workbench')"
+          @click="router.push(ROUTE_PATHS.WORKBENCH)"
           aria-label="Fret Logic 首页"
-          class="group focus-visible:ring-primary/70 flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors outline-none select-none focus-visible:ring-2"
+          class="group flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors outline-none select-none focus-visible:ring-2 focus-visible:ring-primary/70"
           type="button"
         >
           <span
-            class="text-text-title group-hover:text-primary font-features-['ss01'_1] text-xs font-extrabold tracking-tight whitespace-nowrap transition-colors"
+            class="font-features-['ss01'_1] text-xs font-extrabold tracking-tight whitespace-nowrap text-fg-title transition-colors group-hover:text-primary"
           >
             Fret Logic
           </span>
         </button>
-        <BaseSegmentedControl :model-value="activeNavPath" :options="NAV_OPTIONS" @change="path => router.push(path)" />
+        <BaseSegmentedControl :model-value="activeNavPath" :options="NAV_OPTIONS" @change="router.push($event)" />
       </div>
     </div>
 
     <div
       :class="[
         NO_DRAG_REGION_CLASS,
-        route.path === '/score' ? 'inset-y-0 items-stretch' : 'top-1/2 -translate-y-1/2 items-center',
+        route.path === ROUTE_PATHS.SCORE ? 'inset-y-0 items-stretch' : 'top-1/2 -translate-y-1/2 items-center',
       ]"
-      class="z-inner @media(display-mode:window-controls-overlay):-translate-x-[calc(50%-(env(titlebar-area-inset-left,0px)-env(titlebar-area-inset-right,0px))/2)] pointer-events-auto absolute left-1/2 flex -translate-x-1/2"
+      class="@media(display-mode:window-controls-overlay):-translate-x-[calc(50%-(env(titlebar-area-inset-left,0px)-env(titlebar-area-inset-right,0px))/2)] pointer-events-auto absolute left-1/2 z-inner flex -translate-x-1/2"
     >
       <BaseSegmentedControl
-        v-if="route.path === '/score'"
-        v-model="scoreEditor.activeTab"
+        v-if="route.path === ROUTE_PATHS.SCORE"
         :disabled="!scoreEditor.activeSong"
+        :model-value="scoreEditor.activeTab"
         :options="scoreModeOptions"
-        @change="handleScoreTabChange"
+        @change="handleScoreTabChange($event)"
         full-height
         tabbed
         size="lg"
       />
     </div>
 
-    <div :class="NO_DRAG_REGION_CLASS" class="gap-xs flex min-w-0 flex-1 items-center justify-end">
+    <div :class="NO_DRAG_REGION_CLASS" class="flex min-w-0 flex-1 items-center justify-end gap-xs">
       <!-- 工作台：试听当前和弦（置于右侧操作区最左侧） -->
       <ActionButton
-        v-if="route.path === '/workbench'"
-        v-tooltip="'播放/试听当前和弦'"
+        v-if="route.path === ROUTE_PATHS.WORKBENCH"
+        v-tooltip="'播放/试听当前和弦（长按持续发声）'"
         :disabled="editorStore.isFretBoardEmpty || isPlaying"
-        :icon="isPlaying ? 'square' : 'play'"
-        @click="playCurrentChord"
+        :hold-delay="300"
+        :icon="isPlaying || isSustaining ? 'square' : 'play'"
+        @click="playCurrentChord()"
+        @hold-end="stopChordSustain()"
+        @hold-start="void startChordSustain(editorStore.draftChord)"
+        holdable
         icon-only
-        aria-label="播放/试听当前和弦"
+        aria-label="播放/试听当前和弦（长按持续发声）"
         color="primary"
         icon-size="xl"
         variant="ghost"
@@ -81,7 +85,7 @@
 
       <!-- 乐谱预览 tab：复制 / 下载当前乐谱的整曲长图 -->
       <PopoverMenu
-        v-if="route.path === '/score' && scoreEditor.activeTab === 'preview'"
+        v-if="route.path === ROUTE_PATHS.SCORE && scoreEditor.activeTab === 'preview'"
         :disabled="!scoreEditor.hasLyrics"
         :items="scoreExportMenuItems"
         aria-label="导出整曲长图"
@@ -98,8 +102,8 @@
             @click="pinToggle()"
             icon-only
             aria-haspopup="true"
-            aria-label="设置面板"
-            icon="sliders-horizontal"
+            aria-label="偏好设置"
+            icon="settings"
             icon-size="xl"
             icon-stroke="regular"
             ref="triggerBtnRef"
@@ -120,7 +124,7 @@
 
       <ActionButton
         v-tooltip.interactive="buildRepoTooltip"
-        @click="openSourceRepository"
+        @click="openSourceRepository()"
         icon-only
         aria-label="GitHub 仓库与构建信息"
         icon="github"
@@ -138,16 +142,16 @@
     :confirm-loading="isSyncing"
     :keyboard="!isSyncing"
     :show-close="!isSyncing"
-    @confirm="handleConfirmSync"
+    @confirm="handleConfirmSync()"
     cancel-text="取消"
     confirm-text="确认同步"
     title="确认同步到云端"
     width="w-80"
   >
     <div class="py-xs">
-      <p class="text-text-body m-0 text-xs leading-relaxed">
+      <p class="m-0 text-xs/relaxed text-fg-body">
         确定要将本地数据（和弦库、乐谱库与设置）同步上传至
-        <strong class="text-text-title">{{ currentSchemeName }}</strong> 吗？
+        <strong class="text-fg-title">{{ currentSchemeName }}</strong> 吗？
       </p>
     </div>
   </BaseModal>
@@ -160,16 +164,16 @@
     :confirm-loading="isPulling"
     :keyboard="!isPulling"
     :show-close="!isPulling"
-    @confirm="handleConfirmPull"
+    @confirm="handleConfirmPull()"
     cancel-text="取消"
     confirm-text="确认拉取"
     title="确认从云端拉取"
     width="w-80"
   >
     <div class="py-xs">
-      <p class="text-text-body m-0 text-xs leading-relaxed">
+      <p class="m-0 text-xs/relaxed text-fg-body">
         确定要从
-        <strong class="text-text-title">{{ currentSchemeName }}</strong>
+        <strong class="text-fg-title">{{ currentSchemeName }}</strong>
         拉取云端备份数据吗？拉取完成后将进入导入面板供您勾选应用。
       </p>
     </div>
@@ -177,16 +181,16 @@
 
   <BaseModal
     v-model:visible="isLyricsImportConfirmOpen"
-    @confirm="handleConfirmLyricsImport"
+    @confirm="handleConfirmLyricsImport()"
     cancel-text="取消"
     confirm-text="仍要导入"
     title="导入确认"
     width="w-80"
   >
     <div class="py-xs">
-      <p class="text-text-body m-0 text-xs leading-relaxed">
+      <p class="m-0 text-xs/relaxed text-fg-body">
         这段文字未包含可识别的和弦或标题结构，确定仍按
-        <strong class="text-text-title">纯歌词</strong>新建乐谱吗？
+        <strong class="text-fg-title">纯歌词</strong>新建乐谱吗？
       </p>
     </div>
   </BaseModal>
@@ -196,48 +200,53 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref } from 'vue';
+
 import { useRoute, useRouter } from 'vue-router';
 
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
+import BaseModal from '@/platform/ui/modal/BaseModal.vue';
+import BasePopover from '@/platform/ui/popover/BasePopover.vue';
+import PopoverMenu from '@/platform/ui/popover/PopoverMenu.vue';
+import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
 import { useSyncService } from '@/app/services/sync/useSyncService';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
+import { useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { prepareWorkerExportPayload, runWorkerExport } from '@/domains/score/preview/services/workerExportService';
-import type { PortableSong } from '@/domains/score/transfer/textCodec';
-import { useTextTransfer, type PasteSongOutcome } from '@/domains/score/transfer/useTextTransfer';
+import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
 import { useTheme } from '@/platform/composables/useTheme';
 import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import type { SyncProviderKind } from '@/platform/types';
-import ActionButton from '@/platform/ui/button/ActionButton.vue';
-import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
-import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
-import type { IconName } from '@/platform/ui/icons/icons.registry';
-import BaseModal from '@/platform/ui/modal/BaseModal.vue';
-import BasePopover from '@/platform/ui/popover/BasePopover.vue';
-import PopoverMenu from '@/platform/ui/popover/PopoverMenu.vue';
-import BaseSegmentedControl, { type SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import { buildExportFileName, triggerBlobDownload } from '@/platform/utils/canvas';
+import { ROUTE_PATHS } from '@/platform/utils/constants';
 
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 
-const emit = defineEmits<{
-  (e: 'toggle-theme', mode?: 'light' | 'dark' | 'auto'): void;
-}>();
+import type { ScoreActiveTab } from '@/domains/score/editor/store/scoreEditorStore';
+import type { PortableSong } from '@/domains/score/transfer/textCodec';
+import type { PasteSongOutcome } from '@/domains/score/transfer/useTextTransfer';
+import type { SyncProviderKind } from '@/platform/types';
+import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import type { IconName } from '@/platform/ui/icons/icons.registry';
+import type { SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 
 const route = useRoute();
 const router = useRouter();
 const editorStore = useChordEditorStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
-const { isPlaying, playCurrentChord } = useAudioPlayer();
+const { isPlaying, isSustaining, playCurrentChord, startChordSustain, stopChordSustain } = useAudioPlayer();
+
 const { chordsLookupMap } = useScoreLinesData();
 const { copyChordText, pasteChordFromClipboard, copySongText, pasteSongFromClipboard, importPortableSong } =
   useTextTransfer();
+const scoreRouteSync = useScoreRouteSync();
 
 /** 无结构纯歌词「确认兜底」：待确认的载荷 + 确认弹窗开关 */
 const pendingLyricsImport = ref<PortableSong | null>(null);
@@ -297,7 +306,7 @@ const openSourceRepository = () => {
 
 /** 复制/粘贴按钮配置：和弦页与乐谱页共用，按当前路由分派动作、文案与禁用态 */
 const transferButtons = computed<TransferButton[]>(() => {
-  const isScore = route.path === '/score';
+  const isScore = route.path === ROUTE_PATHS.SCORE;
   return [
     {
       key: 'copy',
@@ -322,8 +331,8 @@ const activeNavPath = computed(() => {
 });
 
 const NAV_OPTIONS: SegmentOption<string>[] = [
-  { label: '和弦', value: '/workbench', icon: 'layout-grid' },
-  { label: '乐谱', value: '/score', icon: 'music' },
+  { label: '和弦', value: ROUTE_PATHS.WORKBENCH, icon: 'layout-grid' },
+  { label: '乐谱', value: ROUTE_PATHS.SCORE, icon: 'music' },
 ];
 
 const { isDark, setTheme, preference: themePreference } = useTheme();
@@ -340,7 +349,6 @@ const themeMenuItems = computed<ContextMenuItem[]>(() => [
     checked: themePreference.value === 'light',
     action: () => {
       setTheme('light');
-      emit('toggle-theme', 'light');
     },
   },
   {
@@ -350,7 +358,6 @@ const themeMenuItems = computed<ContextMenuItem[]>(() => [
     checked: themePreference.value === 'dark',
     action: () => {
       setTheme('dark');
-      emit('toggle-theme', 'dark');
     },
   },
   {
@@ -360,7 +367,6 @@ const themeMenuItems = computed<ContextMenuItem[]>(() => [
     checked: themePreference.value === 'auto',
     action: () => {
       setTheme('auto');
-      emit('toggle-theme', 'auto');
     },
   },
 ]);
@@ -475,9 +481,10 @@ const syncMenuItems = computed<ContextMenuItem[]>(() => [
 ]);
 
 /** 右侧「设置面板」按钮显示范围：工作台已直接放置右侧常驻设置面板；顶部设置按钮仅在乐谱模式「排列和弦」下显示 */
-const showHeaderSettings = computed(() => route.path === '/score' && scoreEditor.activeTab === 'interactive');
+/** 设置弹窗可见范围：乐谱页（任意 tab，含预览——缩放/对齐/简写同步作用于预览与导出）+ 工作台（音频试听设置） */
+const showHeaderSettings = computed(() => route.path === ROUTE_PATHS.WORKBENCH || route.path === ROUTE_PATHS.SCORE);
 
-const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive' | 'preview'>[]>(() => [
+const scoreModeOptions = computed<SegmentOption<ScoreActiveTab>[]>(() => [
   { label: '编辑歌词', value: 'edit' },
   {
     label: '排列和弦',
@@ -491,11 +498,9 @@ const scoreModeOptions = computed<SegmentOption<'edit' | 'interactive' | 'previe
   },
 ]);
 
-/** 乐谱模式切换回调：无歌词时切到需要歌词的 tab 给出提示（选项本身已被禁用，双保险） */
-const handleScoreTabChange = (val: 'edit' | 'interactive' | 'preview') => {
-  if (val !== 'edit' && !scoreEditor.hasLyrics) {
-    uiStore.toast.warning('请先在“编辑歌词”模式下输入歌词内容');
-  }
+/** 乐谱页切 Tab：委托 useScoreRouteSync 统一写 Store 并镜像 URL（push 产生历史，可后退回放） */
+const handleScoreTabChange = (val: ScoreActiveTab) => {
+  void scoreRouteSync.switchTab(val);
 };
 
 /** 整曲全部歌词行索引（预览/导出始终覆盖全曲） */
@@ -516,7 +521,9 @@ const handleScoreExport = async (op: 'copy' | 'download') => {
   if (!song || lineIndices.length === 0) return;
 
   uiStore.isCopying = true;
-  uiStore.toast.info('正在渲染整曲长图...');
+  // 后台异步渲染使用常驻 LOADING Toast，避免 info 自动销毁导致超时渲染失去「进行中」反馈；
+  // 渲染完成后移除该常驻提示，再由下方 success/error 给出结论
+  const exportLoadingToastId = uiStore.toast.loading('正在渲染整曲长图...');
   try {
     const payload = prepareWorkerExportPayload(
       song,
@@ -524,7 +531,9 @@ const handleScoreExport = async (op: 'copy' | 'download') => {
       chordsLookupMap.value,
       'normal',
       settingsStore.scoreChordShorthand,
-      settingsStore.scoreLayoutAlign
+      settingsStore.scoreLayoutAlign,
+      scoreEditor.fontScale,
+      scoreEditor.fretboardScale
     );
     const { blobs } = await runWorkerExport(payload);
     if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
@@ -540,6 +549,7 @@ const handleScoreExport = async (op: 'copy' | 'download') => {
     console.error('Score export error:', err);
     uiStore.toast.error(err instanceof Error ? err.message : '导出失败');
   } finally {
+    uiStore.removeToast(exportLoadingToastId);
     uiStore.isCopying = false;
   }
 };

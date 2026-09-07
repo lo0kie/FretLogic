@@ -2,8 +2,6 @@
  * 导入/导出服务：备份包的文件下载、文件解析（含老版本迁移与清洗）、导入应用。
  */
 import { parseAndValidatePayload } from '@/app/services/validation/payload';
-import type { ImportExportPayload } from '@/app/types';
-import type { BackupSelection } from '@/app/types/payload';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
@@ -13,6 +11,9 @@ import { triggerBlobDownload, wait } from '@/platform/utils/canvas';
 import { formatLocalTimestampForFile, serializeForStorage } from '@/platform/utils/common';
 
 import { buildBackupPayloadResult } from './buildBackupPayload';
+
+import type { ImportExportPayload } from '@/app/types';
+import type { BackupSelection } from '@/app/types/payload';
 
 export type { BackupSelection };
 

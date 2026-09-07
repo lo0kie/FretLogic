@@ -1,7 +1,9 @@
 import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
-import { SyncError, type GithubSyncConfig, type SyncBranchesProvider } from './provider.ts';
+import { SyncError } from './provider.ts';
 import { buildSyncCommitMessage, createSyncProviderBase, decodeBase64Envelope } from './syncBase.ts';
+
+import type { GithubSyncConfig, SyncBranchesProvider } from './provider.ts';
 
 /** 创建 GitHub Contents API 同步 provider：远端为单个 base64 信封文件，按分支读写。 */
 export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranchesProvider {
@@ -67,7 +69,7 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranches
       if (!response.ok) {
         throw new SyncError('REQUEST_FAILED', `获取分支失败，状态码：${response.status}`);
       }
-      const branches: Array<{ name: string }> = await response.json();
+      const branches: { name: string }[] = await response.json();
       return branches.map(b => b.name).filter(name => !name.startsWith('dependabot/'));
     },
     async testConnection(): Promise<string> {

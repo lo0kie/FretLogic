@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <PromptInputModal
     v-model="songModals.modalData.inputValue"
     v-model:visible="songModals.modals.create"
@@ -9,7 +9,7 @@
   />
 
   <BaseModal v-model:visible="songModals.modals.config" @confirm="songModals.handleConfigSong" title="乐谱配置">
-    <div class="config-modal-body gap-lg py-xs flex flex-col">
+    <div class="config-modal-body flex flex-col gap-lg py-xs">
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="乐谱名称">
         <BaseInput
           v-focus.select
@@ -33,7 +33,7 @@
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="变调夹 (Capo)">
         <BaseNumberInput v-model="songModals.modalData.capo" :max="11" :min="0" />
       </BaseFormRow>
-      <p class="form-hint text-2xs text-text-disabled mt-xs leading-relaxed">
+      <p class="form-hint mt-xs text-2xs/relaxed text-fg-disabled">
         提示：在此处修改调式不会触发已排布和弦的自动移调。如需整体移调请使用顶部工具栏。
       </p>
     </div>
@@ -45,7 +45,7 @@
     confirm-type="danger"
     title="清除所有和弦"
   >
-    <p class="modal-description-text text-text-body m-0 text-xs leading-relaxed font-medium">
+    <p class="modal-description-text m-0 text-xs/relaxed font-medium text-fg-body">
       确定要清除该乐谱中的所有已绑定和弦吗？此操作将立即生效。
     </p>
   </BaseModal>
@@ -53,13 +53,14 @@
 
 <script setup lang="ts">
 import KeySelector from '@/domains/chord/components/KeySelector.vue';
-import type { useSongModals } from '@/domains/score/library/composables/useSongModals';
-import { injectModalController } from '@/platform/store/useModalController';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseNumberInput from '@/platform/ui/input/BaseNumberInput.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import PromptInputModal from '@/platform/ui/prompt/PromptInputModal.vue';
+import { injectModalController } from '@/platform/store/useModalController';
+
+import type { useSongModals } from '@/domains/score/library/composables/useSongModals';
 
 const songModals = injectModalController<ReturnType<typeof useSongModals>>('songModals');
 

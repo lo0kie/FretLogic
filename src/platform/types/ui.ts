@@ -5,6 +5,8 @@ export enum ToastType {
   ERROR = 'error',
   LOADING = 'loading',
   WARNING = 'warning',
+  /** 常驻中性提示：与 LOADING 一样不自动销毁，但无转圈（用于交互引导等「过程进行中但非后台任务」的提示） */
+  NEUTRAL = 'neutral',
 }
 
 export interface Toast {
@@ -19,6 +21,8 @@ export interface Toast {
   duration: number;
   closable?: boolean;
   customClass?: string;
+  /** LOADING 型是否显示转圈图标；false 时退化为中性静态图标（用于非后台异步的常驻提示） */
+  spinner?: boolean;
 }
 
 /** 创建 toast 的入参：id / msg / type 由 store 生成，duration 可缺省 */

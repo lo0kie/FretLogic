@@ -1,16 +1,14 @@
 <template>
-  <div class="p-xs gap-xs box-border flex flex-col">
+  <div class="box-border flex flex-col gap-xs p-xs">
     <template v-if="title">
-      <div
-        class="px-md text-2xs text-text-disabled overflow-hidden py-[0.15rem] leading-none font-semibold text-ellipsis whitespace-nowrap select-none"
-      >
+      <div class="truncate px-md py-[0.15rem] text-2xs leading-none font-semibold text-fg-disabled select-none">
         {{ title }}
       </div>
-      <div class="bg-border-light mx-1 my-0.5 h-px" role="separator" />
+      <div class="mx-1 my-0.5 h-px bg-border-light" role="separator" />
     </template>
 
     <template v-for="(item, index) in items" :key="item.label + index">
-      <div v-if="item.divided" class="bg-border-light mx-1 my-0.5 h-px" role="separator" />
+      <div v-if="item.divided" class="mx-1 my-0.5 h-px bg-border-light" role="separator" />
 
       <BasePopover
         v-if="item.expandChildren ?? Boolean(item.children?.length)"
@@ -27,8 +25,8 @@
             :aria-haspopup="true"
             :class="[
               currentSizeClass,
-              isSubOpen ? 'bg-bg-panel-hover' : '',
-              item.danger ? 'text-danger' : 'text-text-title',
+              isSubOpen ? 'bg-surface-panel-hover' : '',
+              item.danger ? 'text-danger' : 'text-fg-title',
             ]"
             :disabled="item.disabled"
             :ref="el => setItemEl(el, index)"
@@ -38,7 +36,7 @@
             @click.stop="!item.disabled && pinToggle()"
             @mousedown="item.disabled && $event.preventDefault()"
             data-focusable-inline
-            class="group duration-fast relative box-border flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left transition-colors outline-none select-none enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover)) disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
+            class="group relative box-border flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left transition-colors duration-fast outline-none select-none enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover)) disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
             role="menuitem"
             type="button"
           >
@@ -46,7 +44,7 @@
               v-if="typeof item.icon === 'string'"
               :name="item.icon"
               aria-hidden="true"
-              class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+              class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
               icon-stroke="bold"
               size="md"
             />
@@ -54,7 +52,7 @@
               v-else-if="item.icon"
               :is="item.icon"
               aria-hidden="true"
-              class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+              class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
               icon-stroke="bold"
               size="md"
             />
@@ -83,15 +81,15 @@
           currentSizeClass,
           item.danger
             ? item.checked
-              ? 'bg-tint-danger-88! text-danger! font-semibold'
+              ? 'bg-tint-danger-88! font-semibold text-danger!'
               : 'text-danger enabled:hover:bg-tint-danger-88! enabled:focus-visible:bg-tint-danger-88!'
             : item.color
               ? item.checked
                 ? 'font-semibold'
                 : ''
               : item.checked
-                ? 'bg-tint-primary-88! text-primary! font-semibold'
-                : 'text-text-title',
+                ? 'bg-tint-primary-88! font-semibold text-primary!'
+                : 'text-fg-title',
         ]"
         :disabled="item.disabled"
         :ref="el => setItemEl(el, index)"
@@ -104,13 +102,13 @@
         @keydown.space.prevent.stop="handleItemClick(item)"
         @mousedown="item.disabled && $event.preventDefault()"
         data-focusable-inline
-        class="group duration-fast relative box-border flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left transition-colors outline-none select-none enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover)) disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
+        class="group relative box-border flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left transition-colors duration-fast outline-none select-none enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover)) disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
         type="button"
       >
         <BaseIcon
           v-if="item.checked"
           aria-hidden="true"
-          class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+          class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
           icon-stroke="bold"
           name="check"
           size="md"
@@ -119,7 +117,7 @@
           v-else-if="typeof item.icon === 'string'"
           :name="item.icon"
           aria-hidden="true"
-          class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+          class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
           icon-stroke="bold"
           size="md"
         />
@@ -127,14 +125,14 @@
           v-else-if="item.icon"
           :is="item.icon"
           aria-hidden="true"
-          class="duration-fast shrink-0 opacity-85 transition-opacity group-enabled:group-hover:opacity-100"
+          class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
           icon-stroke="bold"
           size="md"
         />
 
         <span class="min-w-0 flex-1 whitespace-nowrap"> {{ item.label }} </span>
 
-        <span v-if="item.shortcut" class="text-2xs ml-3 shrink-0 font-mono tracking-tight opacity-45 select-none">
+        <span v-if="item.shortcut" class="ml-3 shrink-0 font-mono text-2xs tracking-tight opacity-45 select-none">
           {{ item.shortcut }}
         </span>
       </button>
@@ -143,13 +141,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUpdate, ref, type Component, type CSSProperties } from 'vue';
+import { computed, onBeforeUpdate, ref } from 'vue';
+
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import BasePopover from '@/platform/ui/popover/BasePopover.vue';
+import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 
 import type { ComponentSize } from '@/platform/types';
-import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
-import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
-import BasePopover from '@/platform/ui/popover/BasePopover.vue';
+import type { Component, CSSProperties } from 'vue';
 
 export interface ContextMenuItem {
   label: string;
@@ -184,8 +184,11 @@ const {
   title = '',
   size = 'md',
 } = defineProps<{
+  /** 菜单项数据列表（支持 children 嵌套为级联子菜单） */
   items?: ContextMenuItem[];
+  /** 顶部分组标题；为空时不渲染标题行与分割线 */
   title?: string;
+  /** 菜单尺寸档位 */
   size?: ComponentSize;
 }>();
 
@@ -193,7 +196,7 @@ const emit = defineEmits<{
   (e: 'select', item: ContextMenuItem): void;
 }>();
 
-const itemEls = ref<Array<HTMLButtonElement | null>>([]);
+const itemEls = ref<(HTMLButtonElement | null)[]>([]);
 
 /** 收集菜单项 DOM（函数式 ref），供键盘导航聚焦 */
 const setItemEl = (el: unknown, index: number) => {
@@ -207,9 +210,9 @@ onBeforeUpdate(() => {
 });
 
 const SIZE_MAP: Record<'sm' | 'md' | 'lg', string> = {
-  sm: `${CONTROL_HEIGHT_CLASSES.sm} px-sm text-2xs gap-sm`,
-  md: `${CONTROL_HEIGHT_CLASSES.md} px-md text-xs gap-sm`,
-  lg: `${CONTROL_HEIGHT_CLASSES.lg} px-md text-xs gap-sm`,
+  sm: `${CONTROL_HEIGHT_CLASSES.sm} gap-sm px-sm text-2xs`,
+  md: `${CONTROL_HEIGHT_CLASSES.md} gap-sm px-md text-xs`,
+  lg: `${CONTROL_HEIGHT_CLASSES.lg} gap-sm px-md text-xs`,
 };
 
 const currentSizeClass = computed(() => SIZE_MAP[size] ?? SIZE_MAP.md);

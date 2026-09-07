@@ -7,9 +7,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
-import type { Chord } from '@/domains/chord/types';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+
+import type { Chord } from '@/domains/chord/types';
 import type { LineId, SlotKey } from '@/domains/score/types';
 
 describe('乐谱编辑器移调与撤销栈 (scoreEditorStore Transpose & Undo)', () => {

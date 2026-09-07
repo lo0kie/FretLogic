@@ -7,6 +7,7 @@ import {
   pitchSegmentToString,
   segmentsToString,
 } from '@/domains/chord/theory/theory';
+
 import type { Tuning } from '@/domains/chord/theory/theory';
 import type { GuitarStringsModel } from '@/domains/fretboard/types';
 

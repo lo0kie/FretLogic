@@ -1,8 +1,9 @@
 import { parseAndValidatePayload } from '@/app/services/validation/payload';
-import type { ImportExportPayload } from '@/app/types';
 import { base64DecodeUtf8 } from '@/platform/utils/common';
 
 import { SyncError } from './provider.ts';
+
+import type { ImportExportPayload } from '@/app/types';
 
 /**
  * 同步 provider 共享基类（模板方法）：抽走两个 provider 完全对称的

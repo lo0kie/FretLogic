@@ -1,3 +1,8 @@
+import { CHORD_QUALITIES, GroupSortRule } from '@/domains/chord/types';
+import { createLruCache } from '@/platform/utils/lruCache';
+
+import { analyzeChordGraph } from './chordEngine.ts';
+
 import type {
   AccidentalType,
   Chord,
@@ -9,12 +14,8 @@ import type {
   NoteInput,
   RootSegment,
 } from '@/domains/chord/types';
-import { CHORD_QUALITIES, GroupSortRule } from '@/domains/chord/types';
 import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
 import type { SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
-import { createLruCache } from '@/platform/utils/lruCache';
-
-import { analyzeChordGraph } from './chordEngine.ts';
 
 /** 接受"和弦实体或名称字符串"的通用入参形态，统一多处多态签名 */
 export type ChordOrName = { nameSegments?: ChordNameSegments | null; chordName?: string };

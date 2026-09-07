@@ -13,12 +13,13 @@
   --color-color-warning: var(--color-warning);
   --color-color-danger: var(--color-danger);
 
-  --color-bg-main: var(--bg-main);
-  --color-bg-body: var(--bg-body);
-  --color-bg-panel: var(--bg-panel);
-  --color-bg-panel-hover: var(--bg-panel-hover);
-  --color-bg-elevated: var(--bg-elevated);
-  --color-bg-surface: var(--bg-surface);
+  /* 页面层级背景色：颜色名不带属性角色词，避免 bg-bg-* 叠加 */
+  --color-surface-main: var(--bg-main);
+  --color-surface-body: var(--bg-body);
+  --color-surface-panel: var(--bg-panel);
+  --color-surface-panel-hover: var(--bg-panel-hover);
+  --color-surface-elevated: var(--bg-elevated);
+  --color-surface-surface: var(--bg-surface);
 
   --color-glass-border: var(--glass-border);
   --color-border-light: var(--border-light);
@@ -26,11 +27,12 @@
   --color-control-border: var(--control-border);
   --color-separator: var(--separator);
 
-  --color-text-title: var(--text-title);
-  --color-text-body: var(--text-body);
-  --color-text-muted: var(--text-muted);
-  --color-text-disabled: var(--text-disabled);
-  --color-text-on-accent: var(--text-on-accent);
+  /* 文字层级颜色：颜色名不带属性角色词，避免 text-text-* 叠加 */
+  --color-fg-title: var(--text-title);
+  --color-fg-body: var(--text-body);
+  --color-fg-muted: var(--text-muted);
+  --color-fg-disabled: var(--text-disabled);
+  --color-fg-on-accent: var(--text-on-accent);
 
   --color-tint-primary-45: var(--tint-primary-45);
   --color-tint-primary-60: var(--tint-primary-60);

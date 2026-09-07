@@ -6,9 +6,10 @@ import { ref } from 'vue';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
-import type { Toast, ToastOptions } from '@/platform/types';
 import { ToastType } from '@/platform/types';
 import { STORAGE_KEYS, TOAST_DEFAULT_DURATION_MS } from '@/platform/utils/constants';
+
+import type { Toast, ToastOptions } from '@/platform/types';
 
 export const useUiStore = defineStore('ui', () => {
   const toasts = ref<Toast[]>([]);
@@ -54,10 +55,14 @@ export const useUiStore = defineStore('ui', () => {
     timersMap.clear();
   };
 
-  /** 恢复所有 Toast 的销毁倒计时（LOADING 型常驻 Toast 除外）。 */
+  /** 是否常驻型 Toast（不自动销毁）：LOADING（转圈加载）与 NEUTRAL（中性引导），
+   *  二者都需在 create 时不排定自动销毁、resume 时不重新调度 */
+  const isPersistentToast = (type: ToastType): boolean => type === ToastType.LOADING || type === ToastType.NEUTRAL;
+
+  /** 恢复所有 Toast 的销毁倒计时（常驻型 Toast 除外）。 */
   const resumeAllTimers = () => {
     toasts.value.forEach(toast => {
-      if (toast.type !== ToastType.LOADING) {
+      if (!isPersistentToast(toast.type)) {
         scheduleToastRemoval(toast.id, remainingMap.get(toast.id) ?? toast.duration ?? TOAST_DEFAULT_DURATION_MS);
       }
     });
@@ -65,7 +70,7 @@ export const useUiStore = defineStore('ui', () => {
 
   let toastIdCounter = 0;
 
-  /** 创建 Toast 入队：LOADING 型常驻，其余按时长自动销毁；带操作按钮的会先清掉同类。 */
+  /** 创建 Toast 入队：常驻型（LOADING/NEUTRAL）不自动销毁，其余按时长自动销毁；带操作按钮的会先清掉同类。 */
   const createToast = (msg: string, type: ToastType = ToastType.INFO, options: ToastOptions = {}) => {
     const id = ++toastIdCounter;
     const duration = options.duration ?? TOAST_DEFAULT_DURATION_MS;
@@ -82,9 +87,11 @@ export const useUiStore = defineStore('ui', () => {
       duration,
       closable: options.closable ?? true,
       customClass: options.customClass,
+      // LOADING 型默认转圈，spinner:false 时退化为中性静态图标；NEUTRAL 型恒无转圈
+      spinner: options.spinner ?? type === ToastType.LOADING,
     });
 
-    if (type !== ToastType.LOADING) {
+    if (!isPersistentToast(type)) {
       scheduleToastRemoval(id, duration);
     }
     return id;
@@ -96,6 +103,8 @@ export const useUiStore = defineStore('ui', () => {
     error: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.ERROR, options),
     warning: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.WARNING, options),
     loading: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.LOADING, options),
+    /** 常驻中性提示：不自动销毁、无转圈（交互引导等「过程进行中但非后台任务」的场景） */
+    neutral: (msg: string, options?: ToastOptions) => createToast(msg, ToastType.NEUTRAL, options),
     clear: () => {
       toasts.value.forEach(t => removeToast(t.id));
       toasts.value = [];

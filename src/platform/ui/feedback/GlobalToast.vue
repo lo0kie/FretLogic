@@ -8,7 +8,7 @@
       aria-label="系统通知"
       aria-live="polite"
       aria-relevant="additions text"
-      class="z-toast gap-sm pointer-events-none fixed box-border flex flex-col select-none"
+      class="pointer-events-none fixed z-toast box-border flex flex-col gap-sm select-none"
       role="region"
     >
       <TransitionGroup :name="transitionName">
@@ -16,23 +16,18 @@
           v-for="(item, index) in displayedToasts"
           :class="[
             TOAST_THEME_MAP[item.type] || TOAST_THEME_MAP.info,
-            item.description ? 'py-md! w-auto! items-start! rounded-xl!' : 'whitespace-nowrap',
+            item.description ? 'w-auto! items-start! rounded-xl! py-md!' : 'whitespace-nowrap',
             stack && index < displayedToasts.length - 1 ? 'scale-[0.98] opacity-90' : '',
             item.customClass,
           ]"
           :key="item.id"
           :role="item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'"
-          class="gap-sm px-lg py-sm rounded-pill border-glass-border duration-base pointer-events-auto relative box-border flex w-max max-w-[90vw] shrink-0 items-center border text-xs font-semibold shadow-md transition-all outline-none"
+          class="pointer-events-auto relative box-border flex w-max max-w-[90vw] shrink-0 items-center gap-sm rounded-pill border border-glass-border px-lg py-sm text-xs font-semibold shadow-md transition-all duration-base outline-none"
         >
           <slot :item name="card">
             <div :class="{ 'pt-3xs!': item.description }" class="flex shrink-0 items-center justify-center pt-0.5">
               <slot :item name="icon">
-                <BaseIcon
-                  :class="TOAST_ICON_MAP[item.type]?.iconClass"
-                  :name="TOAST_ICON_MAP[item.type]?.name ?? 'info'"
-                  aria-hidden="true"
-                  size="xl"
-                />
+                <BaseIcon :class="toastIconClass(item)" :name="toastIconName(item)" aria-hidden="true" icon-size="xl" />
               </slot>
             </div>
 
@@ -41,12 +36,12 @@
               class="flex shrink-0 flex-col"
             >
               <slot :item name="content">
-                <span class="text-xs leading-normal font-semibold whitespace-nowrap">
+                <span class="text-xs/normal font-semibold whitespace-nowrap">
                   {{ item.msg }}
                 </span>
                 <span
                   v-if="item.description"
-                  class="text-2xs mt-2xs leading-relaxed font-normal wrap-break-word whitespace-normal opacity-85"
+                  class="mt-2xs text-2xs/relaxed font-normal wrap-break-word whitespace-normal opacity-85"
                 >
                   {{ item.description }}
                 </span>
@@ -70,11 +65,11 @@
             <button
               v-wave
               v-if="item.closable"
-              :class="{ 'pt-3xs! self-start!': item.description }"
+              :class="{ 'self-start! pt-3xs!': item.description }"
               @click="uiStore.removeToast(item.id)"
               data-focusable-inline
               aria-label="关闭通知"
-              class="ml-xs p-2xs flex shrink-0 cursor-pointer items-center justify-center self-center rounded-full border-none bg-transparent text-current opacity-50 transition-opacity outline-none hover:opacity-100"
+              class="ml-xs flex shrink-0 cursor-pointer items-center justify-center self-center rounded-full border-none bg-transparent p-2xs text-current opacity-50 transition-opacity outline-none hover:opacity-100"
               title="关闭"
               type="button"
             >
@@ -90,16 +85,20 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import { useUiStore } from '@/platform/store/uiStore';
-import type { Toast, ToastType } from '@/platform/types';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { useUiStore } from '@/platform/store/uiStore';
+import { ToastType } from '@/platform/types';
+
+import type { Toast } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 
 type ToastPosition = 'top-center' | 'top-right' | 'top-left' | 'bottom-center' | 'bottom-right' | 'bottom-left';
 
 const props = withDefaults(
   defineProps<{
+    /** 通知容器的屏幕方位：top/bottom × left/center/right 六档 */
     position?: ToastPosition;
+    /** 是否 Teleport 到 body；设为 false 时在原地渲染 */
     teleport?: boolean;
     /** 最大显示数量，超出时只渲染最新的 N 条 */
     maxCount?: number;
@@ -126,16 +125,29 @@ const TOAST_THEME_MAP: Record<ToastType, string> = {
   error: 'bg-tint-danger-82 text-danger',
   warning: 'bg-tint-warning-82 text-warning',
   loading: 'bg-tint-primary-82 text-primary',
-  info: 'bg-bg-panel text-text-title',
+  info: 'bg-surface-panel text-fg-title',
+  neutral: 'bg-surface-panel text-fg-title',
 };
 
-/** 各类型提示的图标与附加类（loading 需旋转、其余按类型定透明度） */
+/** 各类型提示的图标与附加类（loading 需旋转、其余按类型定透明度；neutral 恒静止中性） */
 const TOAST_ICON_MAP: Record<ToastType, { name: IconName; iconClass: string }> = {
   loading: { name: 'loader-2', iconClass: 'animate-spin opacity-80' },
   success: { name: 'check-circle-2', iconClass: 'opacity-90' },
   error: { name: 'alert-circle', iconClass: 'opacity-90' },
   warning: { name: 'alert-triangle', iconClass: 'opacity-90' },
   info: { name: 'info', iconClass: 'opacity-80' },
+  neutral: { name: 'info', iconClass: 'opacity-80' },
+};
+
+/** 取图标名：LOADING 型关闭转圈（spinner:false）时退化为中性静态图标 */
+const toastIconName = (item: Toast): IconName => {
+  if (item.type === ToastType.LOADING && item.spinner === false) return 'info';
+  return TOAST_ICON_MAP[item.type]?.name ?? 'info';
+};
+/** 取图标类：LOADING 型关闭转圈时去掉 animate-spin */
+const toastIconClass = (item: Toast): string => {
+  if (item.type === ToastType.LOADING && item.spinner === false) return 'opacity-80';
+  return TOAST_ICON_MAP[item.type]?.iconClass ?? '';
 };
 
 const POSITION_CLASS_MAP: Record<string, string> = {

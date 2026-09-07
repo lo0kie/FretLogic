@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <PromptInputModal
     v-model="groupModals.modalData.inputValue"
     v-model:visible="groupModals.modals.create"
@@ -24,7 +24,7 @@
     @confirm="groupModals.handleDeleteGroup"
     confirm-type="danger"
   >
-    <p class="modal-description-text text-text-body m-0 text-xs leading-relaxed font-medium">
+    <p class="modal-description-text m-0 text-xs/relaxed font-medium text-fg-body">
       确定要执行此删除操作吗？删除后组内的所有和弦都将清空。
     </p>
   </BaseModal>
@@ -35,7 +35,7 @@
     title="分组和弦排序配置"
     width="w-md"
   >
-    <div class="sort-modal-body gap-lg py-xs flex flex-col">
+    <div class="sort-modal-body flex flex-col gap-lg py-xs">
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="排序规则">
         <BaseSegmentedControl v-model="groupModals.modalData.sortRule" :options="SORT_RULE_CONFIG" />
       </BaseFormRow>
@@ -55,13 +55,14 @@
 import { computed } from 'vue';
 
 import KeySelector from '@/domains/chord/components/KeySelector.vue';
-import type { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
-import { SORT_RULE_CONFIG } from '@/domains/chord/theory/theory';
-import { injectModalController } from '@/platform/store/useModalController';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import PromptInputModal from '@/platform/ui/prompt/PromptInputModal.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
+import { SORT_RULE_CONFIG } from '@/domains/chord/theory/theory';
+import { injectModalController } from '@/platform/store/useModalController';
+
+import type { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
 
 const groupModals = injectModalController<ReturnType<typeof useChordGroupModals>>('groupModals');
 

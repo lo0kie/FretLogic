@@ -1,7 +1,9 @@
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
-import type { Chord, Group } from '@/domains/chord/types';
 import { useUiStore } from '@/platform/store/uiStore';
+import { TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
+
+import type { Chord, Group } from '@/domains/chord/types';
 
 const warningMessages: Record<string, string> = {
   DUPLICATE_FINGERPRINT: '保存失败：该分组下已存在一模一样的和弦',
@@ -22,10 +24,15 @@ export function useChordActions() {
     editorStore.setEditor(chord);
   };
 
-  /** 切换分组折叠；非新建态下顺带复位编辑器，避免草稿停留在已折叠不可见的分组上下文里 */
+  /**
+   * 切换分组折叠/展开：仅在编辑现有和弦、且操作后草稿所属分组不再是当前展开的分组时复位编辑器
+   * （折叠本组 / 切到其他组都满足；重新展开本组继续编辑则不受影响）。自由草稿与新建态一律不处理。
+   */
   const executeGroupToggle = (group: Group) => {
     chordStore.toggleGroupCollapsed(group.id);
-    if (!editorStore.isCreating) editorStore.resetEditor();
+    const draftLeftVisibleGroup =
+      editorStore.isEditing && editorStore.draftChord.groupId !== chordStore.expandedGroupId;
+    if (draftLeftVisibleGroup) editorStore.resetEditor();
   };
 
   /** 批量删除指法：乐谱槽位解绑由 chordStore 删除事件经应用层桥接完成，toast 提供 4 秒撤销 */
@@ -40,7 +47,7 @@ export function useChordActions() {
 
     uiStore.toast.info(`已删除 ${chords.length} 个指法`, {
       actionText: '撤销',
-      duration: 4000,
+      duration: TOAST_WARNING_DURATION_MS,
       onAction: () => {
         // 撤销恢复和弦后，乐谱槽位回填由 chordStore 恢复事件经应用层桥接完成
         chordStore.executeUndoRestore();

@@ -4,10 +4,12 @@
  */
 import { parseChordNameTokens } from '@/domains/chord/theory/chordNameTokens';
 import { getChordName } from '@/domains/chord/theory/theory';
-import type { Chord } from '@/domains/chord/types';
-import { FRETBOARD_CANVAS_CONFIG } from '@/domains/fretboard/constants';
+import { DEFAULT_FRET_COUNT, FRETBOARD_CANVAS_CONFIG, MIN_FRET_COUNT } from '@/domains/fretboard/constants';
 
-export type FretboardThemeColors = (typeof FRETBOARD_CANVAS_CONFIG.THEME)['LIGHT' | 'DARK'];
+import type { Chord } from '@/domains/chord/types';
+import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
+
+export type FretboardThemeColors = FretboardCanvasPalette;
 
 export interface RenderFretboardOptions {
   chord: Chord;
@@ -171,7 +173,7 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
     showFretNumbers = true,
     showBoldNut = true,
   } = opts;
-  const fc = Math.max(3, chord.fretCount || 4);
+  const fc = Math.max(MIN_FRET_COUNT, chord.fretCount || DEFAULT_FRET_COUNT);
   const chordName = getChordName(chord, { shorthand });
   const stringCount = chord.strings?.length || 6;
 
@@ -300,8 +302,8 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
 export type RenderFretboardToCanvasOptions = Omit<RenderFretboardOptions, 'chord' | 'colors'> & {
   /** 导出缩放倍数（默认 3） */
   scale?: number;
-  /** 是否按深色主题取色（默认 false） */
-  isDarkMode?: boolean;
+  /** 画布配色（tokens.scss 的 --fbc-* 变量运行时解析结果，见 resolveFretboardCanvasPalette） */
+  colors: FretboardCanvasPalette;
   /** 背景色（undefined = 透明） */
   bgColor?: string;
 };
@@ -309,10 +311,10 @@ export type RenderFretboardToCanvasOptions = Omit<RenderFretboardOptions, 'chord
 /**
  * 导出用：将指板图渲染到一个新的离屏 HTMLCanvasElement 并返回。
  */
-export function renderFretboardToCanvas(chord: Chord, opts: RenderFretboardToCanvasOptions = {}): HTMLCanvasElement {
+export function renderFretboardToCanvas(chord: Chord, opts: RenderFretboardToCanvasOptions): HTMLCanvasElement {
   const {
     scale = 3,
-    isDarkMode = false,
+    colors,
     shorthand = false,
     chordNameScale = 1.0,
     bgColor,
@@ -322,7 +324,7 @@ export function renderFretboardToCanvas(chord: Chord, opts: RenderFretboardToCan
     showBoldNut = true,
   } = opts;
 
-  const fc = Math.max(3, chord.fretCount || 4);
+  const fc = Math.max(MIN_FRET_COUNT, chord.fretCount || DEFAULT_FRET_COUNT);
   /** 顶部留白（px，逻辑坐标）：让导出图上方有充足呼吸感 */
   const TOP_PAD = 2;
   /** 和弦名两侧最小留白（px）：名称测宽后按此值扩宽画布，避免长名（如 C♯maj7♯11）被左右裁切 */
@@ -365,7 +367,6 @@ export function renderFretboardToCanvas(chord: Chord, opts: RenderFretboardToCan
     ctx.fillRect(0, 0, physW, physH);
   }
 
-  const colors = isDarkMode ? FRETBOARD_CANVAS_CONFIG.THEME.DARK : FRETBOARD_CANVAS_CONFIG.THEME.LIGHT;
   ctx.save();
   ctx.scale(scale, scale);
   // 整体下移 TOP_PAD，同时处理水平居中偏移（名称撑宽时）

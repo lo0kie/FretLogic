@@ -14,7 +14,7 @@
         size="sm"
       />
     </template>
-    <div class="gap-md py-xs flex flex-col">
+    <div class="flex flex-col gap-md py-xs">
       <BaseFormRow
         :disabled="!exportAvailability.chords"
         :help="`全部分组与和弦（当前 ${exportStats.groupCount} 组 / ${exportStats.chordCount} 个）`"
@@ -43,12 +43,12 @@
 
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="同步配置">
         <template #help>
-          <div class="text-2xs flex h-[18px] items-center leading-none">
+          <div class="flex h-[18px] items-center text-2xs leading-none">
             <span
               v-if="backupModals.modalData.exportSelection.syncSettings && hasCredentials"
-              class="text-warning flex items-center gap-1 font-medium"
+              class="flex items-center gap-1 font-medium text-warning"
             >
-              <BaseIcon :icon-size="'xs'" class="shrink-0" name="alert-triangle" />
+              <BaseIcon :icon-size="11" class="shrink-0" name="alert-triangle" />
               <span>包含 Token / 密码明文，请妥善保管勿公开分享</span>
             </span>
             <span v-else>云端同步的后端与账号信息</span>
@@ -79,7 +79,7 @@
         size="sm"
       />
     </template>
-    <div class="gap-md py-xs flex flex-col">
+    <div class="flex flex-col gap-md py-xs">
       <BaseFormRow
         :disabled="!importAvailability.chords"
         :help="`备份包含 ${importStats?.groupCount ?? 0} 组 / ${importStats?.chordCount ?? 0} 个和弦`"
@@ -138,14 +138,15 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import type { useBackupModals } from '@/app/modals/useBackupModals';
-import { useSettingsStore } from '@/platform/store/settingsStore';
-import { injectModalController } from '@/platform/store/useModalController';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
+import { useSettingsStore } from '@/platform/store/settingsStore';
+import { injectModalController } from '@/platform/store/useModalController';
+
+import type { useBackupModals } from '@/app/modals/useBackupModals';
 
 const backupModals = injectModalController<ReturnType<typeof useBackupModals>>('backupModals');
 const settingsStore = useSettingsStore();

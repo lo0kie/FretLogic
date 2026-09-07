@@ -3,6 +3,7 @@
 // views/components → composables → stores/services → utils。
 import eslint from '@eslint/js';
 import prettier from 'eslint-config-prettier/flat';
+import betterTailwind from 'eslint-plugin-better-tailwindcss';
 import importPlugin from 'eslint-plugin-import-x';
 import vue from 'eslint-plugin-vue';
 import globals from 'globals';
@@ -37,9 +38,6 @@ export default tseslint.config(
       import: importPlugin,
     },
     settings: {
-      'import-x/resolver': {
-        typescript: true,
-      },
       'import/resolver': {
         typescript: true,
       },
@@ -93,6 +91,8 @@ export default tseslint.config(
       // ---- 代码质量 ----
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+      // 统一数组类型写法为 T[]（Array<T> 由 --fix 机械转换）
+      '@typescript-eslint/array-type': ['error', { default: 'array' }],
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-debugger': 'error',
       'vue/multi-word-component-names': 'off',
@@ -104,19 +104,82 @@ export default tseslint.config(
       // 该规则无法识别解构里的默认值，会对所有可选 prop 误报；而 TS 类型已表达可选性，故关闭。
       'vue/require-default-prop': 'off',
       'import/no-duplicates': 'error',
-      'vue/max-attributes-per-line': 'off',
-      'vue/singleline-html-element-content-newline': 'off',
-      'vue/multiline-html-element-content-newline': 'off',
+      // import 必须置于文件顶部，且其后空行与执行代码分隔
+      'import/first': 'error',
+      'import/newline-after-import': 'error',
+      // 防御性规则：禁止模块自引用
+      'import/no-self-import': 'error',
+      // 禁止跨目录上溯的相对导入（../），统一指向 src 根别名 @/；同目录 ./ 保留。
+      // 与 importOrder 的 @/platform|domains|app 分层分组配合，保持依赖流向清晰。
+      'import/no-relative-parent-imports': 'error',
       // 属性顺序交由 prettier-plugin-organize-attributes 统一处理，避免与 ESLint 互改。
       'vue/attributes-order': 'off',
       // 强制 v-bind 简写且开启 Vue 3.4+ 同名属性简写（:foo="foo" 必须写为 :foo，:attr-name="attrName" 必须写为 :attr-name）
       'vue/v-bind-style': ['error', 'shorthand', { sameNameShorthand: 'always' }],
-      'vue/html-self-closing': [
+      // 强制布尔型 prop 使用无值简写：禁止写 :prop="true"，必须简写为 prop
+      'vue/prefer-true-attribute-shorthand': ['error', 'always'],
+      // 强制事件处理器使用 inline 风格（函数调用必须显式带括号，且禁止内联箭头函数）
+      'vue/v-on-handler-style': ['error', 'inline'],
+      // defineEmits 必须用类型字面量声明（与项目类型优先风格一致）
+      'vue/define-emits-declaration': ['error', 'type-based'],
+      // defineProps 同样必须用类型字面量声明
+      'vue/define-props-declaration': ['error', 'type-based'],
+      // 注：vue/prefer-define-model 在 eslint-plugin-vue v10 已移除，无法作为规则启用；
+      // 存量已全部迁移至 defineModel，新代码靠 review 约定。
+      // 禁止空的 template/script/style 块
+      'vue/no-empty-component-block': 'error',
+      // 响应性丢失检测（AST 级，对 ref 工厂解构/vueuse 有误报可能，先以 warn 试跑）
+      'vue/no-ref-object-reactivity-loss': 'warn',
+      // 编译宏按 defineOptions → defineModel → defineProps → defineEmits → defineSlots 顺序排列
+      'vue/define-macros-order': [
+        'error',
+        { order: ['defineOptions', 'defineModel', 'defineProps', 'defineEmits', 'defineSlots'] },
+      ],
+      // 模板组件标签必须 PascalCase
+      'vue/component-name-in-template-casing': ['error', 'PascalCase'],
+      // SFC 块顺序：template → script → style
+      'vue/block-order': ['error', { order: ['template', 'script', 'style'] }],
+    },
+  },
+  {
+    // Tailwind 过时语法检测（v4）：仅保留废弃类名检测（如 rounded → rounded-sm）。
+    // 类名排序由 prettier-plugin-tailwindcss 独占；未知类检测暂不启用
+    //（SCSS @layer components 里定义的项目自定义类无法被插件解析，会大面积误报）。
+    files: ['src/**/*.{ts,vue}'],
+    plugins: {
+      'better-tailwindcss': betterTailwind,
+    },
+    settings: {
+      'better-tailwindcss': {
+        entryPoint: './src/assets/tailwind.css',
+        // 全量检查 JS/TS 变量（含对象值）中的类名（SIZE_MAP、CONTROL_HEIGHT_CLASSES 等）。
+        // 注意：不开 callees（函数实参）——emit()/addEventListener() 的非类名字符串会被
+        // 废弃类修复器误改（曾把 emit('blur') 改成 emit('blur-sm') 破坏事件名）
+        variables: [['.*', [{ match: 'strings' }, { match: 'objectValues' }]]],
+      },
+    },
+    rules: {
+      // 废弃类检测仅看模板属性：变量里的 'blur'、'change' 等事件名字符串会被误报/误修
+      'better-tailwindcss/no-deprecated-classes': ['error', { variables: [], callees: [] }],
+      'better-tailwindcss/no-duplicate-classes': 'error',
+      'better-tailwindcss/no-conflicting-classes': 'error',
+      // 拼接检测只看模板属性：全局变量全开后，日志前缀/路径拼接等非类名字符串会产生海量误报
+      'better-tailwindcss/no-concatenated-classes': ['error', { variables: [], callees: [] }],
+      // 类名（token 列表）排序交由 prettier-plugin-tailwindcss 独占；
+      // 而 important 修饰符位置、变体堆叠顺序、var() 语法属 within-token 规范化，
+      // prettier-plugin-tailwindcss 不处理，故保留于此（与 prettier 各管一维，互不冲突）
+      'better-tailwindcss/enforce-consistent-class-order': 'error',
+      'better-tailwindcss/enforce-consistent-important-position': 'error',
+      'better-tailwindcss/enforce-consistent-variant-order': 'error',
+      'better-tailwindcss/enforce-consistent-variable-syntax': 'error',
+      // 关闭多类合并（h-full w-full → size-full、px-3 py-3 → p-3 等），
+      // 并忽略 width/height 系列的任意值→刻度值转换（w-[14rem] → w-56、min-w-[19rem] → min-w-76 等），
+      // 保留其余规范写法检查（z-[3] → z-3、var() 语法等；仅类名 token 列表排序已移交 prettier-plugin-tailwindcss）
+      'better-tailwindcss/enforce-canonical-classes': [
         'error',
         {
-          html: { void: 'always', normal: 'always', component: 'always' },
-          svg: 'always',
-          math: 'always',
+          collapse: false,
+          ignore: ['^w-', '^min-w-', '^max-w-', '^h-', '^min-h-', '^max-h-'],
         },
       ],
     },

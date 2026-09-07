@@ -1,24 +1,25 @@
+import NProgress from 'nprogress';
 import { createRouter, createWebHashHistory } from 'vue-router';
 
-import NProgress from 'nprogress';
+import { ROUTE_PATHS } from '@/platform/utils/constants';
 
 NProgress.configure({ showSpinner: false });
 
 export const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/', redirect: '/workbench' },
+    { path: '/', redirect: ROUTE_PATHS.WORKBENCH },
     {
-      path: '/workbench',
+      path: ROUTE_PATHS.WORKBENCH,
       name: 'FretboardWorkbench',
       component: () => import('@/domains/chord/workbench/components/WorkbenchView.vue'),
     },
     {
-      path: '/score',
+      path: ROUTE_PATHS.SCORE,
       name: 'InteractiveScore',
       component: () => import('@/domains/score/editor/components/ScoreView.vue'),
     },
-    { path: '/:pathMatch(.*)*', redirect: '/workbench' },
+    { path: '/:pathMatch(.*)*', redirect: ROUTE_PATHS.WORKBENCH },
   ],
 });
 

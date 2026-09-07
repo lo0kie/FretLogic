@@ -2,12 +2,12 @@
   <Teleport :disabled="disabledTeleport" :to="teleportTo">
     <Transition
       :name="transitionName"
-      @after-enter="el => emit('after-enter', el)"
-      @after-leave="el => emit('after-leave', el)"
-      @before-enter="el => emit('before-enter', el)"
-      @before-leave="el => emit('before-leave', el)"
-      @enter="el => emit('enter', el)"
-      @leave="el => emit('leave', el)"
+      @after-enter="emit('after-enter', $event)"
+      @after-leave="emit('after-leave', $event)"
+      @before-enter="emit('before-enter', $event)"
+      @before-leave="emit('before-leave', $event)"
+      @enter="emit('enter', $event)"
+      @leave="emit('leave', $event)"
       appear
     >
       <button
@@ -18,7 +18,7 @@
         :aria-label="computedAriaLabel"
         :class="[positionClass, alignClass, zIndexClass, fabSizeClass]"
         :style="outerStyle"
-        class="base-fab bg-bg-panel/95 border-glass-border shadow-floating hover:ring-primary/70 pointer-events-auto box-border flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full border backdrop-blur-xl select-none hover:ring-2 active:scale-95"
+        class="base-fab pointer-events-auto box-border flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full border border-glass-border bg-surface-panel/95 shadow-floating backdrop-blur-xl select-none hover:ring-2 hover:ring-primary/70 active:scale-95"
         type="button"
       >
         <slot>
@@ -32,9 +32,10 @@
 <script setup lang="ts">
 import { computed, onActivated, onDeactivated, ref } from 'vue';
 
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+
 import type { TooltipOptions } from '@/platform/directives/vTooltip';
 import type { ComponentSize } from '@/platform/types';
-import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { IconSizePreset, IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
 
@@ -130,9 +131,9 @@ const isButtonVisible = computed(() => Boolean(props.visible && isViewActive.val
 const positionClass = computed(() => (props.position === 'absolute' ? 'absolute' : 'fixed'));
 
 const ALIGN_CLASS_MAP: Record<'start' | 'end' | 'center', string> = {
-  start: 'left-4 right-auto',
+  start: 'right-auto left-4',
   end: 'right-4 left-auto',
-  center: 'left-0 right-0 mx-auto',
+  center: 'right-0 left-0 mx-auto',
 };
 
 const alignClass = computed(() => {

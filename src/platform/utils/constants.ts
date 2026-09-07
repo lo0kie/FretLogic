@@ -43,10 +43,12 @@ export const STORAGE_KEYS = {
   GROUPS: 'CHORD_LAB_GROUPS',
   /** 正在编辑的和弦 id */
   EDITING_ID: 'CHORD_LAB_EDITING_ID',
-  /** 当前选中的分组 id */
-  CURR_GROUP_ID: 'CHORD_LAB_CURR_GROUP_ID_V1',
-  /** 当前展开的分组 id（单一展开，持久化） */
-  EXPANDED_GROUP_ID: 'CHORD_LAB_EXPANDED_GROUP_ID_V1',
+  /** 最近编辑乐谱 id（冷启动回灌种子，非选中态本身） */
+  LAST_SONG_ID: 'CHORD_LAB_LAST_SONG',
+  /** 最近编辑分组 id（冷启动回灌种子，非选中态本身） */
+  LAST_GROUP_ID: 'CHORD_LAB_LAST_GROUP',
+  /** 最近乐谱页主 Tab（冷启动回灌种子，仅配合 LAST_SONG 恢复入口生效，非选中态本身） */
+  LAST_ACTIVE_TAB: 'CHORD_LAB_LAST_SCORE_TAB',
 
   // ---- 同步配置（后端选择） ----
   /** 当前同步后端：github | gitee | webdav | server */
@@ -129,8 +131,8 @@ export const STORAGE_KEYS = {
   SCORE_CHORD_SHORTHAND: 'CHORD_LAB_SCORE_CHORD_SHORTHAND_V1',
   /** 乐谱：排版对齐方式（start 起始位置 / center 居中对齐） */
   SCORE_LAYOUT_ALIGN: 'CHORD_LAB_SCORE_LAYOUT_ALIGN_V1',
-  /** 乐谱：当前所在标签页（edit / interactive / preview），刷新后恢复上次所在页 */
-  SCORE_ACTIVE_TAB: 'CHORD_LAB_SCORE_ACTIVE_TAB_V1',
+  /** 音频试听可调参数（音色 / 弦间间隔 / 扫弦方向 / 音量 / 力度随机） */
+  AUDIO_PLAYBACK: 'CHORD_LAB_AUDIO_PLAYBACK_V1',
 
   // ---- 歌曲数据（按歌曲拆键持久化） ----
   /** [已废弃 / 历史迁移源] 旧版歌曲单键整表数据（仅用于从早期版本向分片结构迁移，运行时不再读写） */
@@ -139,8 +141,6 @@ export const STORAGE_KEYS = {
   SONGS_INDEX: 'CHORD_LAB_SONGS_INDEX_V1',
   /** 单曲独立键前缀（前缀:歌曲id 格式，按歌分片存储） */
   SONG_ENTRY: 'CHORD_LAB_SONG_ENTRY_V1',
-  /** 当前活动歌曲 id */
-  ACTIVE_SONG_ID: 'CHORD_LAB_ACTIVE_SONG_ID_V1',
   /** 乐谱排序方式：manual / title / createdAt */
   SONGS_SORT_METHOD: 'CHORD_LAB_SONGS_SORT_METHOD_V1',
 
@@ -168,6 +168,8 @@ export const STORAGE_KEYS = {
 // ===================== 界面提示 / 交互延时 =====================
 /** Toast 默认展示时长（ms） */
 export const TOAST_DEFAULT_DURATION_MS = 3000;
+/** 警告类 Toast 展示时长（ms）：内容较多需要更长阅读时间 */
+export const TOAST_WARNING_DURATION_MS = 4000;
 /** 聚焦默认延迟（ms，v-focus 未指定 delay 时使用） */
 export const FOCUS_DEFAULT_DELAY_MS = 60;
 /** 悬浮提示隐藏后清理 DOM 的延迟（ms，配合淡出过渡，v-tooltip 使用） */
@@ -185,10 +187,18 @@ export const MARQUEE_MIN_DURATION_CONTINUOUS_MS = 800;
 export const MARQUEE_MIN_DURATION_PINGPONG_MS = 500;
 /** 跑马灯 fade 模式：默认羽化宽度（px） */
 export const MARQUEE_DEFAULT_FADE_WIDTH = 16;
+/** 跑马灯 fast 修饰符：相对默认速度的倍率 */
+export const MARQUEE_FAST_SPEED_MULTIPLIER = 2;
 /** 跑马灯停用后平滑复位到起始位的动画时长（ms） */
 export const MARQUEE_RESET_DURATION_MS = 240;
 /** 跑马灯平滑复位缓动（ease-out-cubic，起步快收尾缓） */
 export const MARQUEE_RESET_EASING = 'cubic-bezier(0.33, 1, 0.68, 1)';
+/** 跑马灯两端羽化的过渡时长（ms）：贴边/离开贴边时渐隐以该时长平滑淡入淡出 */
+export const MARQUEE_FADE_TRANSITION_MS = 200;
+
+/** v-scrollbar 判定「scroll 事件是否由用户交互发起」的时间窗口（ms）：窗口内算用户滚动，
+ *  否则视为浏览器布局钳位 / 程序化设位，消费端可据此过滤非用户触发的滚动信号 */
+export const SCROLL_INTERACTIVE_WINDOW_MS = 120;
 
 /** 右键菜单已打开时换位动画时长（ms，WAAPI 实现） */
 export const CONTEXT_MENU_REPOSITION_DURATION_MS = 80;
@@ -206,6 +216,8 @@ export const TEXT_FORMAT = {
   CHORD: 'FLCHORD',
   /** 乐谱文本魔数 */
   SONG: 'FLSONG',
+  /** 分组文本魔数（分组名 + 排序规则 + 组内和弦行） */
+  GROUP: 'FLGROUP',
   /** 当前格式版本 */
   VERSION: 1,
 } as const;
@@ -245,4 +257,22 @@ export const GITEE_SYNC_CONFIG = {
 export const WEBDAV_SYNC_CONFIG = {
   /** 默认预设 CORS 代理地址 */
   DEFAULT_PROXY_URL: 'https://proxy.server-lookie.workers.dev/',
+} as const;
+
+// ===================== 音频试听默认参数 =====================
+/** 音频试听设置的唯一默认值真源：settingsStore 初始值与 app 层音频引擎兜底值均从此引用（platform↛app，故下沉于此） */
+export const AUDIO_SETTINGS_DEFAULTS = {
+  /** 扫弦时相邻弦触发间隔（ms） */
+  strumDelayMs: 60,
+  /** 主音量（dB） */
+  volumeDb: -8,
+  /** 混响干湿比（0~1） */
+  reverbWet: 0.2,
+} as const;
+
+// ===================== 路由路径 =====================
+/** 应用路由路径唯一真源（router 定义与各层判断/跳转均从此引用，改路径只动这里） */
+export const ROUTE_PATHS = {
+  WORKBENCH: '/workbench',
+  SCORE: '/score',
 } as const;

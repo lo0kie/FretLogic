@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <label
     :class="[
       buttonized
@@ -9,13 +9,13 @@
             {
               'cursor-not-allowed opacity-50': disabled,
               'cursor-pointer': !disabled && !readonly,
-              'border-border-base hover:bg-bg-panel-hover rounded-lg border p-2.5': bordered,
-              'bg-bg-panel-hover/50': bordered && isChecked,
+              'rounded-lg border border-border-base p-2.5 hover:bg-surface-panel-hover': bordered,
+              'bg-surface-panel-hover/50': bordered && isChecked,
             },
           ],
     ]"
     :for="resolvedId"
-    class="base-checkbox group duration-fast relative inline-flex transition-colors select-none"
+    class="base-checkbox group relative inline-flex transition-colors duration-fast select-none"
   >
     <input
       :aria-describedby
@@ -29,7 +29,7 @@
       :disabled="disabled || readonly"
       :id="resolvedId"
       @blur="emit('blur', $event)"
-      @change="handleChange"
+      @change="handleChange()"
       @focus="emit('focus', $event)"
       class="peer sr-only"
       ref="inputRef"
@@ -42,7 +42,7 @@
         v-wave="{ disabled: disabled || readonly }"
         :class="[
           rootButtonizedClass,
-          { 'peer-focus-visible:ring-primary/70 peer-focus-visible:ring-2': !disabled && !readonly },
+          { 'peer-focus-visible:ring-2 peer-focus-visible:ring-primary/70': !disabled && !readonly },
         ]"
       >
         <BaseIcon v-if="icon" :icon-size :icon-stroke="'regular'" :name="icon" class="shrink-0" />
@@ -60,16 +60,16 @@
           hasDescription ? 'mt-0.5' : '',
           isChecked || indeterminate ? colorConfig.checkedClass : colorConfig.uncheckedClass,
           {
-            'peer-focus-visible:ring-primary/60 peer-focus-visible:ring-2 peer-focus-visible:ring-offset-1': !disabled,
+            'peer-focus-visible:ring-2 peer-focus-visible:ring-primary/60 peer-focus-visible:ring-offset-1': !disabled,
           },
         ]"
         aria-hidden="true"
-        class="checkbox-box duration-fast relative box-border inline-flex shrink-0 items-center justify-center transition-all"
+        class="checkbox-box relative box-border inline-flex shrink-0 items-center justify-center transition-all duration-fast"
       >
         <slot v-if="indeterminate" name="indeterminate-icon">
           <BaseIcon
             :icon-size="sizeConfig.iconSize"
-            class="duration-fast scale-100 text-white transition-transform"
+            class="scale-100 text-white transition-transform duration-fast"
             name="minus"
           />
         </slot>
@@ -77,7 +77,7 @@
         <slot v-else-if="isChecked" name="icon">
           <BaseIcon
             :icon-size="sizeConfig.iconSize"
-            class="duration-fast scale-100 text-white transition-transform"
+            class="scale-100 text-white transition-transform duration-fast"
             name="check"
           />
         </slot>
@@ -92,10 +92,10 @@
           v-if="label || $slots['default']"
           :class="[
             sizeConfig.labelClass,
-            isChecked ? 'text-text-title font-medium' : 'text-text-body',
+            isChecked ? 'font-medium text-fg-title' : 'text-fg-body',
             hasDescription ? 'leading-tight' : 'leading-none',
           ]"
-          class="checkbox-label duration-fast transition-colors"
+          class="checkbox-label transition-colors duration-fast"
         >
           <slot>{{ label }}</slot>
         </span>
@@ -103,7 +103,7 @@
         <span
           v-if="description || $slots['description']"
           :class="sizeConfig.descriptionClass"
-          class="checkbox-description text-text-description mt-0.5 leading-normal"
+          class="checkbox-description text-fg-description mt-0.5 leading-normal"
         >
           <slot name="description">{{ description }}</slot>
         </span>
@@ -115,16 +115,17 @@
 <script setup lang="ts">
 import { computed, ref, useId, useSlots, useTemplateRef } from 'vue';
 
-import type { ComponentSize } from '@/platform/types';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import {
   BUTTON_GHOST_THEME_MAP,
   BUTTON_ICON_ONLY_SIZE_MAP,
   BUTTON_SIZE_MAP,
   BUTTON_SUBTLE_THEME_MAP,
 } from '@/platform/ui/button/buttonThemes';
-import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
-import { type IconName } from '@/platform/ui/icons/icons.registry';
 import { ICON_SIZE_PRESETS } from '@/platform/ui/icons/iconSizes';
+
+import type { ComponentSize } from '@/platform/types';
+import type { IconName } from '@/platform/ui/icons/icons.registry';
 
 export interface BaseCheckboxProps {
   /** 当绑定为数组/集合时的选项自身值，或表单 value */
@@ -165,6 +166,10 @@ export interface BaseCheckboxProps {
   ariaDescribedby?: string;
 }
 
+const modelValue = defineModel<unknown>({ default: undefined });
+
+const indeterminate = defineModel<boolean>('indeterminate', { default: false });
+
 const {
   value = undefined,
   trueValue = undefined,
@@ -186,17 +191,13 @@ const {
   ariaDescribedby = undefined,
 } = defineProps<BaseCheckboxProps>();
 
-const slots = useSlots();
-const hasDescription = computed(() => Boolean(description || slots['description']));
-
-const modelValue = defineModel<unknown>({ default: undefined });
-const indeterminate = defineModel<boolean>('indeterminate', { default: false });
-
 const emit = defineEmits<{
   (e: 'change', checked: boolean, value: unknown): void;
   (e: 'focus', event: FocusEvent): void;
   (e: 'blur', event: FocusEvent): void;
 }>();
+const slots = useSlots();
+const hasDescription = computed(() => Boolean(description || slots['description']));
 
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
 const generatedId = useId();
@@ -211,7 +212,7 @@ const innerChecked = ref(false);
 const SIZE_CONFIGS = {
   sm: {
     containerClass: 'gap-1.5',
-    boxClass: 'w-3.5 h-3.5 rounded-[3px]',
+    boxClass: 'h-3.5 w-3.5 rounded-[3px]',
     iconSize: ICON_SIZE_PRESETS.md,
     labelWrapperClass: 'ml-0.5',
     labelClass: 'text-xs',
@@ -219,7 +220,7 @@ const SIZE_CONFIGS = {
   },
   md: {
     containerClass: 'gap-2',
-    boxClass: 'w-4 h-4 rounded',
+    boxClass: 'h-4 w-4 rounded-sm',
     iconSize: ICON_SIZE_PRESETS.lg,
     labelWrapperClass: 'ml-0.5',
     labelClass: 'text-sm',
@@ -227,7 +228,7 @@ const SIZE_CONFIGS = {
   },
   lg: {
     containerClass: 'gap-2.5',
-    boxClass: 'w-5 h-5 rounded-md',
+    boxClass: 'h-5 w-5 rounded-md',
     iconSize: ICON_SIZE_PRESETS.xl,
     labelWrapperClass: 'ml-1',
     labelClass: 'text-base',
@@ -237,20 +238,20 @@ const SIZE_CONFIGS = {
 
 const COLOR_CONFIGS = {
   primary: {
-    checkedClass: 'bg-primary border-primary text-white group-hover:brightness-105',
-    uncheckedClass: 'bg-bg-body dark:bg-bg-surface border border-border-base group-hover:border-primary/80',
+    checkedClass: 'border-primary bg-primary text-white group-hover:brightness-105',
+    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-primary/80 dark:bg-surface-surface',
   },
   success: {
-    checkedClass: 'bg-success border-success text-white group-hover:brightness-105',
-    uncheckedClass: 'bg-bg-body dark:bg-bg-surface border border-border-base group-hover:border-success/80',
+    checkedClass: 'border-success bg-success text-white group-hover:brightness-105',
+    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-success/80 dark:bg-surface-surface',
   },
   warning: {
-    checkedClass: 'bg-warning border-warning text-white group-hover:brightness-105',
-    uncheckedClass: 'bg-bg-body dark:bg-bg-surface border border-border-base group-hover:border-warning/80',
+    checkedClass: 'border-warning bg-warning text-white group-hover:brightness-105',
+    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-warning/80 dark:bg-surface-surface',
   },
   danger: {
-    checkedClass: 'bg-danger border-danger text-white group-hover:brightness-105',
-    uncheckedClass: 'bg-bg-body dark:bg-bg-surface border border-border-base group-hover:border-danger/80',
+    checkedClass: 'border-danger bg-danger text-white group-hover:brightness-105',
+    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-danger/80 dark:bg-surface-surface',
   },
 } as const;
 

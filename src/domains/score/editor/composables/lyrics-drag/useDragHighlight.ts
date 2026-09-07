@@ -4,11 +4,15 @@
  */
 import { ref } from 'vue';
 
-import { resolveDropZone, type DropZone } from './dropZone.ts';
+import { resolveDropZone } from './dropZone.ts';
+
+import type { DropZone } from './dropZone.ts';
 
 /** 拖拽高亮管理：源槽位与落点槽位的 DOM class 标记及落点分区判定 */
 export function useDragHighlight() {
   const dragOverSlotKey = ref<string | null>(null);
+  /** 当前悬停的歌词行 ID（只要指针在行内，跨越字符间隙时保持恒定，避免行状态高频抖动闪烁） */
+  const activeDropLineId = ref<string | null>(null);
   /** 当前落点分区（仅当悬停在有效目标槽位上时有值） */
   const dropZone = ref<DropZone | null>(null);
   let currentDropKey: string | null = null;
@@ -46,6 +50,7 @@ export function useDragHighlight() {
       sourceClass = null;
     }
     dragOverSlotKey.value = null;
+    activeDropLineId.value = null;
     dropZone.value = null;
   };
 
@@ -54,10 +59,14 @@ export function useDragHighlight() {
     const el = document.elementFromPoint(clientX, clientY);
     if (!el) {
       dragOverSlotKey.value = null;
+      activeDropLineId.value = null;
       dropZone.value = null;
       applyDropHighlight(null);
       return null;
     }
+
+    const lineEl = el.closest<HTMLElement>('[data-line-idx]');
+    activeDropLineId.value = lineEl?.dataset['lineIdx'] ?? null;
 
     const slotEl = el.closest('[data-slot-key]');
     if (slotEl instanceof HTMLElement) {
@@ -81,6 +90,7 @@ export function useDragHighlight() {
 
   return {
     dragOverSlotKey,
+    activeDropLineId,
     dropZone,
     markDragSource,
     clearDragClasses,

@@ -8,25 +8,25 @@
         left: `${(displayBubbleGeometry.centerX / (boardWidth || CANVAS_CONFIG.BOARD_WIDTH)) * 100}%`,
         top: `${displayBubbleGeometry.topY}px`,
       }"
-      class="z-card pointer-events-none absolute -translate-x-1/2 -translate-y-full transition-[left,top] duration-200 ease-out select-none"
+      class="pointer-events-none absolute z-card -translate-x-1/2 -translate-y-full transition-[left,top] duration-200 ease-out select-none"
     >
-      <Transition @after-leave="handleBubbleAfterLeave" appear name="barre-bubble-transition">
+      <Transition @after-leave="handleBubbleAfterLeave()" appear name="barre-bubble-transition">
         <div
           v-auto-width
           v-wave
           v-if="activeHoveredBarre && displayBubbleBarre"
           :class="[
             displayBubbleBarre.isMarked
-              ? 'bg-primary border-primary text-white shadow-[0_6px_20px_rgba(59,130,246,0.45)] dark:shadow-[0_8px_26px_rgba(96,165,250,0.55)]'
-              : 'bg-bg-panel text-primary border-primary/40 hover:bg-tint-primary-88 shadow-[0_6px_20px_rgba(0,0,0,0.22)] dark:shadow-[0_8px_26px_rgba(0,0,0,0.65)]',
+              ? 'border-primary bg-primary text-white shadow-[0_6px_20px_rgba(59,130,246,0.45)] dark:shadow-[0_8px_26px_rgba(96,165,250,0.55)]'
+              : 'border-primary/40 bg-surface-panel text-primary shadow-[0_6px_20px_rgba(0,0,0,0.22)] hover:bg-tint-primary-88 dark:shadow-[0_8px_26px_rgba(0,0,0,0.65)]',
           ]"
           @mousedown.prevent.stop
           @pointerdown.prevent.stop
           @pointermove.stop
-          @click.stop="handleBarreBubbleClick"
-          @pointerenter.stop="handleBubblePointerEnter"
-          @pointerleave="handleBubblePointerLeave"
-          class="group duration-fast pointer-events-auto relative flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap transition-[background-color,border-color,box-shadow]"
+          @click.stop="handleBarreBubbleClick()"
+          @pointerenter.stop="handleBubblePointerEnter()"
+          @pointerleave="handleBubblePointerLeave()"
+          class="group pointer-events-auto relative flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap transition-[background-color,border-color,box-shadow] duration-fast"
         >
           <BaseIcon v-if="displayBubbleBarre.isMarked" icon-size="md" icon-stroke="bold" name="check" />
           <BaseIcon v-else icon-size="md" icon-stroke="bold" name="plus" />
@@ -41,15 +41,15 @@
     <!-- 品数撑开动画容器：保留 overflow-y-clip 类名兼容单测，内联 overflow: visible 杜绝左右音符被截断 -->
     <div
       :style="{ height: `${boardBoxHeight}px`, overflow: 'visible' }"
-      class="ease-sidebar duration-slow relative box-border w-full overflow-y-clip transition-[height]"
+      class="relative box-border w-full overflow-y-clip transition-[height] duration-slow ease-sidebar"
     >
-      <div aria-hidden="true" class="z-inner pointer-events-none absolute inset-0">
+      <div aria-hidden="true" class="pointer-events-none absolute inset-0 z-inner">
         <span
           v-for="i in visualFretCount"
           :class="i < fretCount ? 'opacity-100' : 'opacity-0'"
           :key="'fret-num-' + i"
           :style="getFretNumberStyle(i)"
-          class="duration-slow ease-sidebar absolute -translate-x-full -translate-y-1/2 font-[Helvetica_Neue,Arial,sans-serif] text-xl leading-none font-extrabold text-(--fb-label) transition-opacity select-none"
+          class="absolute -translate-x-full -translate-y-1/2 font-[Helvetica_Neue,Arial,sans-serif] text-xl leading-none font-extrabold text-(--fb-label) transition-opacity duration-slow ease-sidebar select-none"
         >
           {{ fretOffset > 0 ? fretOffset + i : i }}
         </span>
@@ -58,11 +58,12 @@
       <svg
         :aria-label="boardAriaLabel"
         :height="renderedSvgHeight"
+        :style="{ overflow: 'visible', maxWidth: `${boardWidth || CANVAS_CONFIG.BOARD_WIDTH}px` }"
         :viewBox="`0 0 ${boardWidth || CANVAS_CONFIG.BOARD_WIDTH} ${renderedSvgHeight}`"
         :width="boardWidth || CANVAS_CONFIG.BOARD_WIDTH"
-        class="pointer-events-none box-border block w-full"
+        class="pointer-events-none mx-auto box-border block w-full"
+        preserveAspectRatio="xMidYMin meet"
         role="img"
-        style="overflow: visible"
       >
         <defs>
           <!-- 琴格底部品丝收拢裁切：仅在品数收拢（4->3品）时对琴弦底端及品丝执行平滑裁切，左右保留 100px 裕量 -->
@@ -71,7 +72,7 @@
               :height="gridClipHeight - CANVAS_CONFIG.OFFSET_Y_TOP + 100"
               :width="(boardWidth || CANVAS_CONFIG.BOARD_WIDTH) + 200"
               :y="CANVAS_CONFIG.OFFSET_Y_TOP - 100"
-              class="duration-slow ease-sidebar transition-[height]"
+              class="transition-[height] duration-slow ease-sidebar"
               x="-100"
             />
           </clipPath>
@@ -102,7 +103,7 @@
             :x2="stringXPositions[strings.length - 1] ?? 0"
             :y1="CANVAS_CONFIG.OFFSET_Y_TOP + (f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
             :y2="CANVAS_CONFIG.OFFSET_Y_TOP + (f - 1) * CANVAS_CONFIG.FRET_HEIGHT"
-            class="duration-slow ease-sidebar transition-opacity"
+            class="transition-opacity duration-slow ease-sidebar"
             shape-rendering="crispEdges"
             stroke="var(--fb-line)"
             stroke-linecap="square"
@@ -128,8 +129,8 @@
             v-for="barre in displayBarres"
             :key="barre.key"
             @mouseenter="handleBarreMouseEnter(barre)"
-            @mouseleave="handleBarreMouseLeave"
-            class="duration-fast pointer-events-auto transition-all"
+            @mouseleave="handleBarreMouseLeave()"
+            class="pointer-events-auto transition-all duration-fast"
           >
             <!-- 整品高度感应热区：鼠标悬停在横按区域内任何位置均浮现气泡 -->
             <rect
@@ -163,12 +164,12 @@
         <g>
           <g
             v-for="(str, sIdx) in strings"
+            :class="{ 'is-moving': movingStringIndices.has(sIdx) }"
             :key="'string-note-' + sIdx"
             :style="getStringNoteStyle(sIdx, str[0])"
             class="string-note-move"
           >
             <FretboardNote
-              :is-dark-mode
               :aria-label="stringNoteAriaLabel(sIdx, str)"
               :is-accidental="currentNoteInfo(sIdx, str).isAccidental"
               :is-focused="isNoteFocused(sIdx, str[0])"
@@ -190,14 +191,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch, type CSSProperties } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/domains/chord/theory/theory';
 import { computeBarreCandidates, isBarreStillValid } from '@/domains/fretboard/model/coordinates';
-import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
-import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
 
+import FretboardNote from './FretboardNote.vue';
 import {
   BARRE_ARROW_TRANSITION_MS,
   CANVAS_CONFIG,
@@ -205,10 +206,9 @@ import {
   NOTE_DISPLAY,
   OPEN_STRING_MARKER_Y,
 } from '../constants';
-import FretboardNote from './FretboardNote.vue';
 
-/** 横按实心梁厚度：贴合按弦圆点直径 */
-const barreThickness = NOTE_DISPLAY.FINGER_DOT_RADIUS * 2;
+import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
+import type { CSSProperties } from 'vue';
 
 const {
   hoverPoint = null,
@@ -237,6 +237,14 @@ const {
   /** 指板画布基准宽度（根据弦数动态推导） */
   boardWidth?: number;
 }>();
+
+const emit = defineEmits<{
+  (e: 'toggle-pitch', stringIndex: number): void;
+  (e: 'toggle-barre', barre: BarreEntity): void;
+}>();
+
+/** 横按实心梁厚度：贴合按弦圆点直径 */
+const barreThickness = NOTE_DISPLAY.FINGER_DOT_RADIUS * 2;
 
 /** 零品加粗样式：bottom 恒为 OFFSET_Y_TOP，通过 style 绑定 height/y 使 CSS transition 生效
  * （plain SVG attribute 不触发 transition，必须走 inline style，与 barreBeamStyle 同样约定）；
@@ -310,11 +318,6 @@ const stringNoteAriaLabel = (sIdx: number, str: GuitarStringEntity) => {
   return `第 ${stringNum} 弦（空弦 ${formatStringLabel(sIdx, 0, str[1], fretOffset, activeBaseStrings)}）`;
 };
 
-const emit = defineEmits<{
-  (e: 'toggle-pitch', stringIndex: number): void;
-  (e: 'toggle-barre', barre: BarreEntity): void;
-}>();
-
 /** 品号定位：置于指板左侧、精准对齐横向品丝 */
 const getFretNumberStyle = (fretIndex: number) => {
   const yPixel = CANVAS_CONFIG.OFFSET_Y_TOP + fretIndex * CANVAS_CONFIG.FRET_HEIGHT;
@@ -337,6 +340,39 @@ const getStringNoteY = (fret: number) => {
   }
   return CANVAS_CONFIG.OFFSET_Y_TOP + (fret - 0.5) * CANVAS_CONFIG.FRET_HEIGHT;
 };
+
+/** 正在沿弦滑动的琴弦索引集合：仅在品位变更时激活 transition，避免浏览器缩放/resize 时因矩阵微调误触发过渡抽动 */
+const movingStringIndices = ref<Set<number>>(new Set());
+let movingTimer: ReturnType<typeof setTimeout> | null = null;
+
+watch(
+  () => strings.map(s => s[0]),
+  (newFrets, oldFrets) => {
+    // 初始挂载时不触发过渡动画，保持瞬间就位
+    if (!oldFrets) return;
+
+    const changedIndices: number[] = [];
+    newFrets.forEach((fret, idx) => {
+      if (fret !== oldFrets[idx]) {
+        changedIndices.push(idx);
+      }
+    });
+
+    if (changedIndices.length === 0) return;
+
+    movingStringIndices.value = new Set(changedIndices);
+
+    if (movingTimer) clearTimeout(movingTimer);
+    movingTimer = setTimeout(() => {
+      movingStringIndices.value = new Set();
+      movingTimer = null;
+    }, 250); // 略大于 $duration-base (200ms)
+  }
+);
+
+onBeforeUnmount(() => {
+  if (movingTimer) clearTimeout(movingTimer);
+});
 
 /** 位移层定位：音符坐标由 transform 驱动（弦横向恒定、品位纵向平滑往返） */
 const getStringNoteStyle = (sIdx: number, fret: number): CSSProperties => ({
@@ -673,10 +709,18 @@ watch(displayBarres, syncBarreHover, { flush: 'post' });
   transition: y2 $duration-slow $bezier-sidebar;
 }
 
-/* 一弦一音符沿琴弦垂直滑行的移动过渡 */
+/* 一弦一音符沿琴弦垂直滑行的移动过渡：
+   平时处于静态锁定状态（transition: none），仅在品位变动激活 .is-moving 时驱动 transform 平滑沿弦滑行；
+   显式锁定变换参考系为 view-box 且原点为 (0, 0)；
+   彻底根治浏览器缩放（Ctrl +/-）或容器 resize 时变换矩阵亚像素重算误触发 CSS transition 导致的音符偏离琴弦抽动现象 */
 .string-note-move {
-  transition: transform $duration-base $bezier-sidebar;
-  will-change: transform;
+  transform-box: view-box;
+  transform-origin: 0 0;
+  transition: none;
+
+  &.is-moving {
+    transition: transform $duration-base $bezier-sidebar;
+  }
 }
 
 /* 横按标记入场动画：从左往右展开延展，伴随平滑淡入 */

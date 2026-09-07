@@ -1,7 +1,7 @@
 <template>
   <div
     :style="{ width: `${realScaledWidth}px`, height: `${realScaledHeight}px` }"
-    class="duration-slow ease-sidebar pointer-events-auto relative box-border transition-[width,height]"
+    class="pointer-events-auto relative box-border transition-[width,height] duration-slow ease-sidebar"
   >
     <div
       :style="{
@@ -11,9 +11,9 @@
         transformOrigin: 'top left',
         backgroundColor: 'transparent',
       }"
-      @contextmenu="handleRightClickRoot"
+      @contextmenu="handleRightClickRoot($event)"
       data-focusable-outline
-      class="duration-slow ease-sidebar relative box-border flex cursor-default touch-none flex-col items-center transition-[transform,height,background-color,border-color] outline-none select-none"
+      class="relative box-border flex cursor-default touch-none flex-col items-center transition-[transform,height,background-color,border-color] duration-slow ease-sidebar outline-none select-none"
       ref="fretBoardRef"
       tabindex="0"
     >
@@ -21,33 +21,20 @@
         :style="{ height: `${CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT}px`, paddingTop: '0px' }"
         @contextmenu.stop
         @pointerdown.stop
-        class="px-sm box-border flex w-full max-w-full shrink-0 cursor-text items-center justify-center overflow-hidden font-[Helvetica_Neue,Arial,sans-serif] whitespace-nowrap select-none"
+        class="box-border flex w-full max-w-full shrink-0 cursor-text items-center justify-center overflow-hidden px-sm font-[Helvetica_Neue,Arial,sans-serif] whitespace-nowrap select-none"
       >
-        <!-- v-wheel-scroll：和弦名超长被截断时可用滚轮横向平移查看全文；未溢出时指令自动放行 -->
-        <div
-          v-wheel-scroll.smooth
-          :class="{
-            'before:text-text-disabled before:pointer-events-none before:font-bold before:opacity-35 before:content-[attr(data-placeholder)]':
-              !inputChordName.trim(),
-          }"
-          :data-placeholder="'CHORD'"
+        <!-- 和弦名行内编辑：底层 DOM/选区/占位符协议均由 BaseEditableText 承接 -->
+        <BaseEditableText
+          v-model="inputChordName"
+          v-model:editing="isInputFocused"
+          :maxlength="MAX_CHORD_NAME_LENGTH"
           :style="chordNameFontSizeStyle"
-          @keydown.stop
-          @pointerdown.stop
-          @blur="commitOrRevert"
-          @focus="handleFocus"
-          @input="handleInput"
-          @keydown.enter.prevent="chordNameInputRef?.blur()"
-          @keydown.esc.prevent="handleEscape"
+          @cancel="handleEscape()"
+          @commit="commitOrRevert($event)"
           aria-label="和弦名称"
-          class="text-text-title caret-primary empty:before:text-text-disabled no-scrollbar box-border flex h-full min-h-0 w-full max-w-full cursor-text items-center justify-center-safe overflow-x-auto overflow-y-hidden border-none bg-transparent px-0.5 text-center font-[Helvetica_Neue,Arial,sans-serif] leading-[1.15] font-bold whitespace-nowrap outline-none select-text empty:before:pointer-events-none empty:before:font-bold empty:before:opacity-35 empty:before:content-[attr(data-placeholder)]"
-          contenteditable="plaintext-only"
-          ref="chordNameInputRef"
-          role="textbox"
-          spellcheck="false"
-        >
-          {{ displayChordName }}
-        </div>
+          class="no-scrollbar box-border flex size-full min-h-0 max-w-full cursor-text items-center justify-center-safe overflow-x-auto overflow-y-hidden px-0.5 text-center font-[Helvetica_Neue,Arial,sans-serif] leading-[1.15] font-bold whitespace-nowrap text-fg-title"
+          placeholder="CHORD"
+        />
       </div>
 
       <FretboardSvg
@@ -62,16 +49,18 @@
         :is-dark-mode="isDark"
         :root-string-index="chord.rootStringIndex"
         :strings="chord.strings"
-        @toggle-barre="handleToggleBarre"
-        @toggle-pitch="handleTogglePitchName"
+        @toggle-barre="handleToggleBarre($event)"
+        @toggle-pitch="handleTogglePitchName($event)"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef, watch, type CSSProperties } from 'vue';
+import { computed, ref, watch } from 'vue';
 
+import FretboardSvg from '@/domains/fretboard/components/FretboardSvg.vue';
+import BaseEditableText from '@/platform/ui/input/BaseEditableText.vue';
 import {
   getActiveBaseStrings,
   getChordName,
@@ -79,14 +68,15 @@ import {
   nameToSegments,
   segmentsToString,
 } from '@/domains/chord/theory/theory';
-import type { Chord, ChordNameSegments } from '@/domains/chord/types';
-import FretboardSvg from '@/domains/fretboard/components/FretboardSvg.vue';
 import { useFretboardInteraction } from '@/domains/fretboard/composables/useFretboardInteraction';
-import type { BarreEntity, GuitarStringsModel } from '@/domains/fretboard/types';
 import { isDark } from '@/platform/composables/useTheme';
 import { useUiStore } from '@/platform/store/uiStore';
 
 import { CANVAS_CONFIG, CHORD_NAME_FONT_SIZE } from '../constants';
+
+import type { Chord, ChordNameSegments } from '@/domains/chord/types';
+import type { BarreEntity, GuitarStringsModel } from '@/domains/fretboard/types';
+import type { CSSProperties } from 'vue';
 
 export interface FretboardProps {
   chord: Chord;
@@ -124,26 +114,21 @@ const handleToggleBarre = (barre: BarreEntity) => {
   emit('update:barres', next);
 };
 
-const chordNameInputRef = useTemplateRef<HTMLDivElement>('chordNameInputRef');
 const isInputFocused = ref(false);
 
 // 交互指板的和弦名始终显示全称，不跟随全局简写设置（编辑时以全称为基准提交）
 const displayChordName = computed(() => getChordName(props.chord, { shorthand: false }));
+// 有意取一次初始快照作为输入框初值，后续同步走下方 watch；对 AST 规则的误报行内豁免
+// eslint-disable-next-line vue/no-ref-object-reactivity-loss
 const inputChordName = ref(displayChordName.value);
 
-// 当非聚焦状态下外部和弦数据变更（如选中和弦卡片/重置指板/撤销重做），自动同步 input 内容
+// 当非聚焦状态下外部和弦数据变更（如选中和弦卡片/重置指板/撤销重做），自动同步 input 内容；
+// DOM 回填由 BaseEditableText 依据 modelValue 在非编辑态自动完成
 watch(
   displayChordName,
   newName => {
     if (!isInputFocused.value) {
       inputChordName.value = newName;
-      if (chordNameInputRef.value) {
-        if (!newName) {
-          chordNameInputRef.value.innerHTML = '';
-        } else if (chordNameInputRef.value.textContent !== newName) {
-          chordNameInputRef.value.textContent = newName;
-        }
-      }
     }
   },
   { immediate: true }
@@ -151,69 +136,20 @@ watch(
 
 const MAX_CHORD_NAME_LENGTH = 16;
 
-/** 和弦名输入聚焦：标记编辑态，暂停外部数据对输入内容的同步覆盖 */
-const handleFocus = () => {
-  isInputFocused.value = true;
-};
-
-/** 和弦名输入：截断超长文本并把光标维持到末尾，同步到内部状态 */
-const handleInput = (e: Event) => {
-  const el = e.target as HTMLElement;
-  let text = el?.textContent ?? '';
-  if (text.length > MAX_CHORD_NAME_LENGTH) {
-    text = text.slice(0, MAX_CHORD_NAME_LENGTH);
-    if (el) el.textContent = text;
-    const selection = window.getSelection();
-    if (selection && el) {
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-  }
-  inputChordName.value = text;
-  if (!text.trim() && el && el.innerHTML !== '') {
-    el.innerHTML = '';
-  }
-};
-
-let isCancellingWithEsc = false;
-
 /**
- * 失焦或提交时执行校验：
- * 1. 删空 -> 清空和弦名
- * 2. 合法名称 -> 派发生效
- * 3. 非法名称 -> Toast 警告并恢复修改前的有效名称
+ * 提交（BaseEditableText 失焦/Enter 触发，入参为最终文本）时执行校验：
+ * 1. 无修改 -> 保持原名称
+ * 2. 删空 -> 清空和弦名
+ * 3. 合法名称 -> 派发生效
+ * 4. 非法名称 -> Toast 警告并恢复修改前的有效名称
  */
-const commitOrRevert = () => {
-  // 失焦时收起输入框内的文字选区：contenteditable 嵌套在可聚焦父容器 fretBoardRef 内，
-  // 点击指板其它位置时焦点转移到父级 div，浏览器不会自动收起子级选区，导致选中高亮残留
-  const selection = window.getSelection();
-  if (
-    selection &&
-    chordNameInputRef.value &&
-    selection.anchorNode &&
-    chordNameInputRef.value.contains(selection.anchorNode)
-  ) {
-    selection.removeAllRanges();
-  }
-  if (isCancellingWithEsc) return;
-  isInputFocused.value = false;
-  const rawText = chordNameInputRef.value?.textContent ?? inputChordName.value;
+const commitOrRevert = (rawText: string) => {
   const trimmed = rawText.trim();
   const currentName = displayChordName.value.trim();
 
   // 1. 无修改
   if (trimmed === currentName) {
     inputChordName.value = currentName;
-    if (chordNameInputRef.value) {
-      if (!currentName) {
-        chordNameInputRef.value.innerHTML = '';
-      } else if (chordNameInputRef.value.textContent !== currentName) {
-        chordNameInputRef.value.textContent = currentName;
-      }
-    }
     return;
   }
 
@@ -222,7 +158,6 @@ const commitOrRevert = () => {
     emit('update:chord-name', '');
     emit('update:name-segments', null);
     inputChordName.value = '';
-    if (chordNameInputRef.value) chordNameInputRef.value.innerHTML = '';
     return;
   }
 
@@ -234,40 +169,22 @@ const commitOrRevert = () => {
       emit('update:chord-name', trimmed);
       emit('update:name-segments', segs);
       inputChordName.value = formattedName;
-      if (chordNameInputRef.value && chordNameInputRef.value.textContent !== formattedName) {
-        chordNameInputRef.value.textContent = formattedName;
-      }
       return;
     }
   }
 
-  // 4. 非法名称：警告并回退
+  // 4. 非法名称：警告并回退（Esc 恢复由 BaseEditableText 在 cancel 时同步回 modelValue）
   uiStore.toast.warning('和弦名称不合法');
   inputChordName.value = currentName;
-  if (chordNameInputRef.value) {
-    if (!currentName) {
-      chordNameInputRef.value.innerHTML = '';
-    } else {
-      chordNameInputRef.value.textContent = currentName;
-    }
-  }
 };
 
-/** Esc 取消编辑：恢复修改前的有效名称并失焦（不触发校验） */
+/** Esc 取消编辑：恢复修改前的有效名称（组件负责回填 DOM 并抑制随后的 commit） */
 const handleEscape = () => {
-  const rawText = chordNameInputRef.value?.textContent ?? inputChordName.value;
-  const isChanged = rawText.trim() !== displayChordName.value.trim();
-  isCancellingWithEsc = true;
+  const isChanged = inputChordName.value.trim() !== displayChordName.value.trim();
   inputChordName.value = displayChordName.value;
-  if (chordNameInputRef.value) chordNameInputRef.value.textContent = displayChordName.value;
-  isInputFocused.value = false;
-  chordNameInputRef.value?.blur();
   if (isChanged) {
     uiStore.toast.info('已取消编辑');
   }
-  nextTick(() => {
-    isCancellingWithEsc = false;
-  });
 };
 
 /**

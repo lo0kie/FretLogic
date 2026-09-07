@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
-import type { Chord, ChordId } from '@/domains/chord/types';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+
+import type { Chord, ChordId } from '@/domains/chord/types';
 import type { LineId, SlotKey } from '@/domains/score/types';
 
 describe('歌曲移调动作 (songStore.transposeSong & transposeSongCapo)', () => {

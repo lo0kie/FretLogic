@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <BaseModal
     v-model:visible="isSyncModalOpen"
     :close-on-mask="modalCloseable"
@@ -12,16 +12,16 @@
     </template>
 
     <template #default>
-      <div class="gap-md flex flex-col">
+      <div class="flex flex-col gap-md">
         <div
-          class="sync-panel-card gap-md bg-bg-panel p-md border-glass-border box-border flex w-full flex-col rounded-lg border"
+          class="sync-panel-card box-border flex w-full flex-col gap-md rounded-lg border border-glass-border bg-surface-panel p-md"
         >
           <div class="panel-header box-border flex items-center justify-between">
-            <h3 class="panel-title text-text-body m-0 text-xs font-semibold">云端同步</h3>
+            <h3 class="panel-title m-0 text-xs font-semibold text-fg-body">云端同步</h3>
           </div>
 
           <template v-if="selectedProvider === 'server'">
-            <div class="gap-sm py-xs box-border flex flex-col">
+            <div class="box-border flex flex-col gap-sm py-xs">
               <p class="form-hint m-0">
                 免配置开箱即用，由系统自动连接云端数据库。直接点击下方按钮进行测试、拉取或同步。
               </p>
@@ -29,7 +29,7 @@
           </template>
 
           <template v-else-if="selectedProvider === 'github'">
-            <div class="gap-sm py-xs box-border flex flex-col">
+            <div class="box-border flex flex-col gap-sm py-xs">
               <BaseInput
                 v-model="settingsStore.githubToken"
                 :disabled="isBusy"
@@ -45,7 +45,7 @@
           </template>
 
           <template v-else-if="selectedProvider === 'gitee'">
-            <div class="gap-sm py-xs box-border flex flex-col">
+            <div class="box-border flex flex-col gap-sm py-xs">
               <BaseInput
                 v-model="settingsStore.giteeToken"
                 :disabled="isBusy"
@@ -67,7 +67,7 @@
           </template>
 
           <template v-else-if="selectedProvider === 'webdav'">
-            <div class="gap-sm py-xs box-border flex flex-col">
+            <div class="box-border flex flex-col gap-sm py-xs">
               <BaseInput
                 v-model="settingsStore.webdavServerUrl"
                 :disabled="isBusy"
@@ -99,9 +99,9 @@
           </template>
         </div>
 
-        <div v-if="selectedProvider === 'webdav'" class="gap-xs px-xs box-border flex flex-col">
+        <div v-if="selectedProvider === 'webdav'" class="box-border flex flex-col gap-xs px-xs">
           <div class="flex items-center justify-between py-0.5">
-            <span class="text-text-secondary text-xs font-medium">使用预设代理</span>
+            <span class="text-fg-secondary text-xs font-medium">使用预设代理</span>
             <BaseSwitch v-model="settingsStore.webdavUseDefaultProxy" :disabled="isBusy" aria-label="使用预设代理" />
           </div>
 
@@ -124,7 +124,7 @@
           </p>
           <p
             v-if="settingsStore.webdavUseDefaultProxy || Boolean(settingsStore.webdavProxyUrl)"
-            class="form-hint text-warning m-0"
+            class="form-hint m-0 text-warning"
           >
             安全提示：启用代理时，WebDAV 账号与密码（Basic 认证凭据）将经由代理中转。若包含敏感数据，建议在 WebDAV
             服务器直接配置 CORS 支持直连，或部署自建代理。
@@ -153,17 +153,19 @@ import { computed } from 'vue';
 
 import { useStorage } from '@vueuse/core';
 
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import BaseInput from '@/platform/ui/input/BaseInput.vue';
+import BaseModal from '@/platform/ui/modal/BaseModal.vue';
+import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
+import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { useSyncService } from '@/app/services/sync/useSyncService';
 import { useSettingsStore } from '@/platform/store/settingsStore';
-import type { SyncProviderKind } from '@/platform/types';
-import ActionButton from '@/platform/ui/button/ActionButton.vue';
-import type { IconName } from '@/platform/ui/icons/icons.registry';
-import BaseInput from '@/platform/ui/input/BaseInput.vue';
-import BaseModal from '@/platform/ui/modal/BaseModal.vue';
-import BaseSelector, { type BaseSelectorOption } from '@/platform/ui/selector/BaseSelector.vue';
-import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
+
+import type { SyncProviderKind } from '@/platform/types';
+import type { IconName } from '@/platform/ui/icons/icons.registry';
+import type { BaseSelectorOption } from '@/platform/ui/selector/BaseSelector.vue';
 
 const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true });
 const { triggerGlobalSync, pullFromRemote, testConnection, isSyncing, isPulling, isTestingConnection } =

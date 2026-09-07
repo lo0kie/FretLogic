@@ -1,6 +1,8 @@
-import { computed, defineComponent, h, ref, watchEffect, type CSSProperties, type Ref } from 'vue';
+import { computed, defineComponent, h, ref, watchEffect } from 'vue';
 
-import { useRafThrottle } from '../utils/useRafThrottle.ts';
+import { useRafThrottle } from '@/platform/utils/useRafThrottle.ts';
+
+import type { CSSProperties, Ref } from 'vue';
 
 export interface UseScrollEdgeFadesOptions {
   /** 判定处于边缘的容差阈值（像素），默认 3，避免高分屏缩放与子像素舍入导致边缘判定失效 */

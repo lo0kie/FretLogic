@@ -11,8 +11,9 @@
 import { execSync } from 'node:child_process';
 
 const SCRIPT = `
-import { analyzeChordGraph } from '@/services/music/chordEngine';
-import { getActiveBaseStrings } from '@/services/music/theory';
+// 相对导入：vite-node 场景下绕开 tsconfig paths 别名解析限制
+import { analyzeChordGraph } from '../src/domains/chord/theory/chordEngine';
+import { getActiveBaseStrings } from '../src/domains/chord/theory/theory';
 
 function bench(name, fn, iterations = 2000) {
   // 预热

@@ -1,8 +1,10 @@
-import { ref, type ComponentPublicInstance } from 'vue';
+import { ref } from 'vue';
 
 import { getChordName } from '@/domains/chord/theory/theory';
-import type { Chord } from '@/domains/chord/types';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle';
+
+import type { Chord } from '@/domains/chord/types';
+import type { ComponentPublicInstance } from 'vue';
 
 /** 拖拽 ghost（跟随指针的和弦名浮层）管理：位置更新按帧合帧，避免高频写 transform */
 export function useDragGhost() {

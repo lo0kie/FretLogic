@@ -2,8 +2,9 @@
 
 import { chordRepository, songRepository } from '@/app/services/data';
 import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/app/services/data/bootstrap';
-import type { Song } from '@/domains/score/types';
 import { idb } from '@/platform/services/storage';
+
+import type { Song } from '@/domains/score/types';
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();

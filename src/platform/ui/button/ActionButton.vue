@@ -9,9 +9,13 @@
     :class="[sizeClasses, themeVariantClasses, roundedClasses, { 'w-full': block }]"
     :disabled="disabled || loading"
     :style="normalizedStyle"
-    @click="handleInternalClick"
+    @click="handleInternalClick($event)"
+    @pointercancel="handlePointerCancel($event)"
+    @pointerdown="handlePointerDown($event)"
+    @pointerleave="handlePointerLeave($event)"
+    @pointerup="handlePointerUp($event)"
     data-focusable-inline
-    class="action-button focus-visible:ring-primary/70 box-border inline-flex shrink-0 cursor-pointer items-center justify-center border border-solid font-semibold outline-none select-none focus-visible:ring-2 active:not-disabled:brightness-95 disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
+    class="action-button box-border inline-flex shrink-0 cursor-pointer items-center justify-center border border-solid font-semibold outline-none select-none focus-visible:ring-2 focus-visible:ring-primary/70 active:not-disabled:brightness-95 disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
   >
     <BaseIcon
       v-if="loading"
@@ -62,9 +66,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useSlots, watch } from 'vue';
+import { computed, onBeforeUnmount, useSlots, watch } from 'vue';
 
-import type { ComponentSize, ThemeColor } from '@/platform/types';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import {
   BUTTON_COMPACTED_SIZE_MAP,
   BUTTON_DEFAULT_THEME_MAP,
@@ -76,7 +80,9 @@ import {
   BUTTON_SUBTLE_THEME_MAP,
   BUTTON_TEXT_THEME_MAP,
 } from '@/platform/ui/button/buttonThemes';
-import BaseIcon, { type BaseIconProps } from '@/platform/ui/icons/BaseIcon.vue';
+
+import type { ComponentSize, ThemeColor } from '@/platform/types';
+import type { BaseIconProps } from '@/platform/ui/icons/BaseIcon.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { IconSizePreset, IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
 
@@ -102,13 +108,18 @@ const {
   compacted = false,
   prefixIcon = undefined,
   suffixIcon = undefined,
+  holdable = false,
+  holdDelay = 300,
 } = defineProps<{
   /** 原生 button 的 type，默认 'button' 避免在表单内意外触发表单提交 */
   type?: 'button' | 'submit' | 'reset';
   /** 统一主题色 */
   color?: 'default' | 'primary' | 'danger' | 'warning' | 'success';
+  /** 禁用交互并置灰（原生 disabled） */
   disabled?: boolean;
+  /** 加载态：显示 spinner 并阻止点击 */
   loading?: boolean;
+  /** 图标按钮模式：渲染为方形图标钮（label 不显示） */
   iconOnly?: boolean;
   /**
    * 图标名（注册表枚举）：无默认插槽时作为按钮主体（等同 iconOnly 方形图标钮），
@@ -123,30 +134,108 @@ const {
   iconColor?: BaseIconProps['color'];
   /** 按钮文案：行为等同默认插槽，传了默认插槽时以插槽为准（label 忽略） */
   label?: string;
+  /** 视觉变体：default 实底 / subtle 浅底 / ghost 透明 / text 纯文字 */
   variant?: 'default' | 'subtle' | 'ghost' | 'text';
   /** iconOnly 场景下必须提供，保证无障碍可访问性 */
   ariaLabel?: string;
+  /** 尺寸档位（影响高度、内边距与字号） */
   size?: ComponentSize;
+  /** 圆角档位：none 直角 ~ full 全圆 */
   rounded?: 'none' | 'sm' | 'md' | 'lg' | 'full';
   /** 是否占满父容器宽度 (w-full) */
   block?: boolean;
+  /** 自定义宽度（数字按 px 处理） */
   width?: string | number;
+  /** 自定义高度（数字按 px 处理） */
   height?: string | number;
   /** 紧凑模式：左右内边距减半（不影响高度、圆角、iconOnly、显式 width/height） */
   compacted?: boolean;
   /** 原生 button 的 tabindex（不传则保持按钮默认可聚焦） */
   tabindex?: number;
-  /** 前缀图标名（注册表枚举）：直接以 props 渲染，无需包 #prefix slot；传了 #prefix slot 时 slot 优先 */
+  /** 前缀图标名（注册表枚举）：以 props 渲染，无需包 #prefix slot；传了 slot 时 slot 优先 */
   prefixIcon?: IconName;
-  /** 后缀图标名（注册表枚举）：直接以 props 渲染，无需包 #suffix slot；传了 #suffix slot 时 slot 优先 */
+  /** 后缀图标名（注册表枚举）：以 props 渲染，无需包 #suffix slot；传了 slot 时 slot 优先 */
   suffixIcon?: IconName;
+  /**
+   * 长按能力：按下超过 holdDelay 触发 hold-start（进入持续态），松开/离开/取消触发 hold-end，
+   * 并自动吞没长按松手后派发的次生 click，业务层无需手写抑制标志位。
+   */
+  holdable?: boolean;
+  /** holdable 时判定“长按”的阈值(ms)，默认 300 */
+  holdDelay?: number;
 }>();
 
 const emit = defineEmits<{
   (e: 'click', event: MouseEvent): void;
+  /** 已按住 holdDelay 时长、进入持续态（配合 holdable） */
+  (e: 'hold-start', event: PointerEvent): void;
+  /** 松开/离开/取消指针，结束持续态（配合 holdable） */
+  (e: 'hold-end'): void;
 }>();
 
-/** 统一点击入口：禁用 / 加载中彻底拦截，其余透传 click */
+// —— 长按（holdable）状态机：内部闭环 holdTimer 与次生 click 吞没协议 ——
+// 长按达到阈值后松手，浏览器会在 pointerup 之后派发原生 click，这里用 suppressClick
+// 拦截该次 click，避免“已持续发声再触发一次短按扫弦”。新一次 pointerdown 会清除残留标志。
+let holdTimer: ReturnType<typeof setTimeout> | null = null;
+let isHolding = false;
+let suppressClick = false;
+/** 发起本次长按的指针 id：多指触摸下用于过滤其它手指的 up/leave/cancel 事件 */
+let activePointerId: number | null = null;
+
+/** 按下：holdable 时启动长按计时，达到阈值进入持续态并派发 hold-start */
+const handlePointerDown = (event: PointerEvent) => {
+  // 仅响应主指针左键：右键/副指针长按不应触发持续态
+  if (event.button !== 0 || !event.isPrimary) return;
+  // 新按压开始即清除上一次遗留的抑制标志（长按后指针滑出按钮、浏览器不派发 click 时，标志会滞留）
+  suppressClick = false;
+  if (!holdable || disabled || loading) return;
+  activePointerId = event.pointerId;
+  holdTimer = setTimeout(() => {
+    holdTimer = null;
+    isHolding = true;
+    suppressClick = true; // 持续发声结束后吞掉本次 click，避免再触发短按动作
+    emit('hold-start', event);
+  }, holdDelay);
+};
+
+/** 结束一次指针序列：未达阈值仅清计时（交由短按 click）；已持续则派发 hold-end 并抑制 click */
+const endHoldPress = (cancelled: boolean, event?: PointerEvent) => {
+  if (!holdable) return;
+  // 多指触摸下第二指的 up/leave/cancel 也会派发回本按钮（触摸隐式捕获）：
+  // 仅允许发起长按的那个指针结束本次序列，避免提前打断第一指的长按/持续态
+  if (event && activePointerId !== null && event.pointerId !== activePointerId) return;
+  if (holdTimer !== null) {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+  }
+  activePointerId = null;
+  if (isHolding) {
+    isHolding = false;
+    suppressClick = true;
+    emit('hold-end');
+  } else if (cancelled) {
+    suppressClick = true;
+  }
+};
+
+const handlePointerUp = (event: PointerEvent) => endHoldPress(false, event);
+const handlePointerLeave = (event: PointerEvent) => endHoldPress(true, event);
+const handlePointerCancel = (event: PointerEvent) => endHoldPress(true, event);
+
+// 卸载时清理长按状态：定时器已派发 hold-start 的话必须补发 hold-end，
+// 否则业务侧持续态（如持续发声）会永久卡住且再无指针事件可结束它
+onBeforeUnmount(() => {
+  if (holdTimer !== null) {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+  }
+  if (isHolding) {
+    isHolding = false;
+    emit('hold-end');
+  }
+});
+
+/** 统一点击入口：禁用 / 加载中彻底拦截；holdable 时吞没长按后的次生 click，其余透传 click */
 const handleInternalClick = (e: MouseEvent) => {
   // 禁用或加载中时彻底拦截点击，阻断事件冒泡与后续监听器执行
   if (disabled || loading) {
@@ -154,6 +243,14 @@ const handleInternalClick = (e: MouseEvent) => {
     e.stopPropagation();
     e.stopImmediatePropagation();
     return;
+  }
+  if (holdable) {
+    if (suppressClick) {
+      suppressClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
   }
   emit('click', e);
 };

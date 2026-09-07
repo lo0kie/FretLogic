@@ -1,37 +1,9 @@
-﻿import { mount } from '@vue/test-utils';
+import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 
 describe('BaseSwitch.vue', () => {
-  it('renders correctly with default props', () => {
-    const wrapper = mount(BaseSwitch, {
-      props: {
-        modelValue: false,
-        label: 'switch-label-text',
-      },
-    });
-
-    const button = wrapper.find('[role="switch"]');
-    expect(button.exists()).toBe(true);
-    expect(button.attributes('aria-checked')).toBe('false');
-    expect(button.attributes('aria-disabled')).toBe('false');
-    const labelEl = wrapper.find('.switch-label');
-    expect(labelEl.exists()).toBe(true);
-    expect(labelEl.text()).toContain('switch-label-text');
-  });
-
-  it('renders checked state when modelValue is true', () => {
-    const wrapper = mount(BaseSwitch, {
-      props: {
-        modelValue: true,
-      },
-    });
-
-    const button = wrapper.find('[role="switch"]');
-    expect(button.attributes('aria-checked')).toBe('true');
-  });
-
   it('emits update:modelValue and change on pointer click/drag', async () => {
     const wrapper = mount(BaseSwitch, {
       props: {

@@ -1,7 +1,8 @@
-import type { Chord, ChordId, Group, GroupId } from '@/domains/chord/types';
 import { GroupSortRule } from '@/domains/chord/types';
-import type { Capo, FretOffset, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
 import { generateUUID } from '@/platform/utils/common';
+
+import type { Chord, ChordId, Group, GroupId } from '@/domains/chord/types';
+import type { Capo, FretOffset, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
 
 /** 按排序规则构造合法 Group 变体：非 KEY_DEGREE 一律不携带 sortKey。
  * 时间戳可缺省（补齐前为 0，由 fillMissingTimestamps 识别并补全合法值）。 */
@@ -37,7 +38,7 @@ export const createGroup = (name: string, sortRule: GroupSortRule = GroupSortRul
 };
 
 /** 由 [品位, 降号偏好] 数组构造强类型弦模型（逐项兜底 -1/false） */
-export const toGuitarStringsModel = (strings: Array<[number, boolean]>): GuitarStringsModel => {
+export const toGuitarStringsModel = (strings: [number, boolean][]): GuitarStringsModel => {
   return strings.map(s => [s?.[0] ?? -1, Boolean(s?.[1])]);
 };
 

@@ -1,7 +1,6 @@
 import { clamp } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
 
-import { FRETBOARD_COLORS } from '../constants';
 import type { BarreEntity, BarreFret, Capo, FretOffset, GuitarStringsModel, StringIndex } from '../types';
 
 const barreCandidatesCache = createLruCache<BarreEntity[]>(64);
@@ -223,14 +222,5 @@ export const areBarresEqual = (
 };
 
 // ===== fretboardVisuals: 指板视觉样式 =====
-
-/** 指板圆点填充色：根音用强调色，其余用普通色，按明暗主题区分。 */
-export const getFingerColor = (isRoot: boolean, isDarkMode: boolean): string => {
-  if (isRoot) return isDarkMode ? FRETBOARD_COLORS.rootDark : FRETBOARD_COLORS.rootLight;
-  return isDarkMode ? FRETBOARD_COLORS.normalDark : FRETBOARD_COLORS.normalLight;
-};
-
-/** 指板圆点文字颜色（仅暗色主题下的根音需要高亮文字）。 */
-export const getFingerTextColor = (isRoot: boolean, isDarkMode: boolean): string => {
-  return isRoot && isDarkMode ? FRETBOARD_COLORS.textRootDark : FRETBOARD_COLORS.textRootLight;
-};
+// 圆点/空弦配色已迁移至 tokens.scss 的 --fb-* CSS 变量（FretboardNote 直接消费 var()），
+// 本模型不再持有颜色字面量，保持纯几何职责。

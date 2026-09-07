@@ -1,8 +1,9 @@
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
-import type { Chord } from '@/domains/chord/types';
 import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
 import { plainToChordMap } from '@/domains/score/model/chordSlots';
 import { charKey, chordSlotKey, collectEdgeChordIds } from '@/domains/score/model/scoreModel';
+
+import type { Chord } from '@/domains/chord/types';
 import type { SlotKey } from '@/domains/score/types';
 
 // ===== scoreLines: 谱面行数据与缓存 =====

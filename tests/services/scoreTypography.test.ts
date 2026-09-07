@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
-import {
-  getCharColumnWidth,
-  wrapScoreLines,
-  type ExportLineItem,
-} from '@/domains/score/preview/workers/scoreExportWorker';
+import { getCharColumnWidth, wrapScoreLines } from '@/domains/score/preview/workers/scoreExportWorker';
+
+import type { ExportLineItem } from '@/domains/score/preview/workers/scoreExportWorker';
 
 describe('乐谱排版与折行引擎算法测试', () => {
   it('半角字符与全角汉字列宽区分准确', () => {

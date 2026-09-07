@@ -1,4 +1,5 @@
 import { isMuted } from '@/domains/chord/theory/theory';
+
 import type { Chord, Group } from '@/domains/chord/types';
 
 export const ChordRecord = {

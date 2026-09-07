@@ -3,9 +3,11 @@ import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
 import { getChordName } from '@/domains/chord/theory/theory';
-import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/domains/chord/types';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useModalController } from '@/platform/store/useModalController';
+import { TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
+
+import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/domains/chord/types';
 
 const DEFAULT_GROUP_SORT_RULE = 'ROOT_PITCH' as const;
 const DEFAULT_SORT_KEY = 'C';
@@ -13,37 +15,39 @@ const MESSAGES = {
   SUCCESS_OPERATION: '操作成功完成',
 } as const;
 
+/** 和弦分组弹窗的模块级共享状态：保证任意组件取用的都是同一份开关与弹窗数据（与 useBackupModals 一致）。
+ * 若放在函数体内，每次调用都会生成脱节副本——非容器组件调用 open 时弹窗容器收不到信号。 */
+const { modals, modalData, open, close } = useModalController(
+  {
+    create: false,
+    rename: false,
+    delete: false,
+    move: false,
+    sort: false,
+    chordVariantsDelete: false,
+    chordReferences: false,
+  },
+  {
+    inputValue: '',
+    activeGroup: null as Group | null,
+    activeChord: null as Chord | null,
+    activeGroupCard: null as GroupedChordCard | null,
+    selectedVariantIds: new Set<string>(),
+    moveTargetId: '',
+    sortRule: DEFAULT_GROUP_SORT_RULE as GroupSortRule,
+    sortKey: DEFAULT_SORT_KEY,
+    // 和弦引用反查弹窗数据
+    referenceChordName: '',
+    referenceChordIds: [] as string[],
+  }
+);
+
 /** 和弦分组相关弹窗的状态与动作集合：创建/重命名/删除/移动/排序/批量删指法/引用反查 */
 export function useChordGroupModals() {
   const chordStore = useChordStore();
   const editorStore = useChordEditorStore();
   const uiStore = useUiStore();
   const chordActions = useChordActions();
-
-  const { modals, modalData, open, close } = useModalController(
-    {
-      create: false,
-      rename: false,
-      delete: false,
-      move: false,
-      sort: false,
-      chordVariantsDelete: false,
-      chordReferences: false,
-    },
-    {
-      inputValue: '',
-      activeGroup: null as Group | null,
-      activeChord: null as Chord | null,
-      activeGroupCard: null as GroupedChordCard | null,
-      selectedVariantIds: new Set<string>(),
-      moveTargetId: '',
-      sortRule: DEFAULT_GROUP_SORT_RULE as GroupSortRule,
-      sortKey: DEFAULT_SORT_KEY,
-      // 和弦引用反查弹窗数据
-      referenceChordName: '',
-      referenceChordIds: [] as string[],
-    }
-  );
 
   /** 打开新建分组弹窗，清空上次输入 */
   const openCreate = () => {
@@ -108,7 +112,7 @@ export function useChordGroupModals() {
     close('delete');
     uiStore.toast.info(`已删除分组 "${groupName}"`, {
       actionText: '撤销',
-      duration: 4000,
+      duration: TOAST_WARNING_DURATION_MS,
       onAction: () => {
         chordStore.overwriteGroups(groupsSnapshot);
         chordStore.executeUndoRestore();

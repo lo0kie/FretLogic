@@ -7,3 +7,5 @@ export * from './vGridNav';
 export * from './vMarquee';
 export * from './vScrollIntoView';
 export * from './vWheelScroll';
+export * from './vScrollbar';
+export * from './vActionCard';

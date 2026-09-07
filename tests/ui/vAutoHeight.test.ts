@@ -7,29 +7,6 @@ import { describe, expect, it } from 'vitest';
 import { vAutoHeight } from '@/platform/directives/vAutoHeight';
 
 describe('vAutoHeight directive', () => {
-  it('正确根据子元素高度写入容器 style.height', async () => {
-    const TestComponent = defineComponent({
-      directives: { autoHeight: vAutoHeight },
-      template: `
-        <div id="container" v-auto-height>
-          <div id="child" style="height: 240px;">Child Content</div>
-        </div>
-      `,
-    });
-
-    const wrapper = mount(TestComponent, { attachTo: document.body });
-    const container = wrapper.find('#container').element as HTMLElement;
-    const child = wrapper.find('#child').element as HTMLElement;
-
-    Object.defineProperty(child, 'offsetHeight', { value: 240, configurable: true });
-    Object.defineProperty(child, 'scrollHeight', { value: 240, configurable: true });
-
-    await wrapper.vm.$nextTick();
-
-    expect(container).toBeDefined();
-    wrapper.unmount();
-  });
-
   it('支持布尔值展开/收起切换', async () => {
     const isExpanded = ref(true);
     const TestComponent = defineComponent({

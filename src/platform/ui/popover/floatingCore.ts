@@ -1,3 +1,7 @@
+import { flip, arrow as floatingArrow, limitShift, offset, shift, size } from '@floating-ui/dom';
+
+import type { Middleware, Placement } from '@floating-ui/dom';
+
 /**
  * floating-ui 定位编排的唯一实现处。
  *
@@ -7,16 +11,6 @@
  * - buildFloatingMiddlewares：中间件列表（两消费方通用，dom/vue 的中间件同源于 core）
  * - createVirtualElementRect：以鼠标坐标 / 任意点构造零尺寸虚拟锚点
  */
-import {
-  flip,
-  arrow as floatingArrow,
-  limitShift,
-  offset,
-  shift,
-  size,
-  type Middleware,
-  type Placement,
-} from '@floating-ui/dom';
 
 /** 显示箭头时浮层与锚点的最小间距（px）：箭头外露量约 size·√2/2 - 1（size=14 → ≈9px），
  *  间距须大于外露量，否则箭头会戳进触发元素。BasePopover 箭头 size=14 即用此下限 */

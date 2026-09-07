@@ -1,7 +1,9 @@
 import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
-import { SyncError, type SyncProvider, type WebdavSyncConfig } from './provider.ts';
+import { SyncError } from './provider.ts';
 import { createSyncProviderBase } from './syncBase.ts';
+
+import type { SyncProvider, WebdavSyncConfig } from './provider.ts';
 
 const WEBDAV_REMOTE_FILE_PATH = 'FretLogic/chords.json'; // 内部写死
 

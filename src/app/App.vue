@@ -1,7 +1,7 @@
 <template>
   <GlobalToast />
 
-  <div class="box-border flex h-screen w-screen min-w-[320px] flex-col overflow-hidden">
+  <div class="box-border flex h-screen w-full min-w-[320px] flex-col overflow-hidden">
     <div class="shrink-0">
       <TopHeader />
     </div>
@@ -12,7 +12,7 @@
       <main class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <div
           :style="{ paddingLeft: mainPaddingLeft }"
-          class="duration-slow ease-sidebar absolute inset-0 box-border transition-[padding-left]"
+          class="absolute inset-0 box-border transition-[padding-left] duration-slow ease-sidebar"
         >
           <RouterView #="{ Component, route }">
             <Transition mode="out-in" name="v-transition-fade">
@@ -31,9 +31,9 @@
 import { computed, defineAsyncComponent } from 'vue';
 
 import TopHeader from '@/app/layouts/TopHeader.vue';
+import GlobalToast from '@/platform/ui/feedback/GlobalToast.vue';
 import { setupChordScoreBridge } from '@/app/services/chordScoreBridge';
 import { useUiStore } from '@/platform/store/uiStore';
-import GlobalToast from '@/platform/ui/feedback/GlobalToast.vue';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/platform/utils/constants';
 
 const uiStore = useUiStore();

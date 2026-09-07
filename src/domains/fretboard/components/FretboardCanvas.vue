@@ -9,14 +9,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import { getChordName } from '@/domains/chord/theory/theory';
-import type { Chord } from '@/domains/chord/types';
 import { computeFretboardLayout, renderFretboard } from '@/domains/fretboard/components/renderFretboardCanvas';
-import { FRETBOARD_CANVAS_CONFIG } from '@/domains/fretboard/constants';
+import { DEFAULT_FRET_COUNT, MIN_FRET_COUNT } from '@/domains/fretboard/constants';
+import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { observeVisibility } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
+
+import type { Chord } from '@/domains/chord/types';
+import type { CSSProperties } from 'vue';
 
 interface Props {
   chord: Chord;
@@ -51,7 +54,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 
-const fretCount = computed(() => Math.max(3, props.chord.fretCount || 4));
+const fretCount = computed(() => Math.max(MIN_FRET_COUNT, props.chord.fretCount || DEFAULT_FRET_COUNT));
 
 const layout = computed(() =>
   computeFretboardLayout({
@@ -78,9 +81,9 @@ const canvasStyle = computed<CSSProperties>(() => ({
 const displayChordName = computed(() => getChordName(props.chord, { shorthand: props.shorthand }));
 const ariaLabel = computed(() => `吉他和弦 ${displayChordName.value}`);
 
-const themeColors = computed(() =>
-  props.isDarkMode ? FRETBOARD_CANVAS_CONFIG.THEME.DARK : FRETBOARD_CANVAS_CONFIG.THEME.LIGHT
-);
+// 画布配色：从 tokens.scss 的 --fbc-* 变量运行时解析（canvas 2D 无法直接消费 var()）；
+// 主题切换时由下方 watcher 重新解析（isDarkMode 翻转时主题类名已同步更新）
+const themeColors = ref(resolveFretboardCanvasPalette());
 
 const getDpr = () => {
   const userDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
@@ -187,11 +190,19 @@ onBeforeUnmount(() => {
   stopLazyObserver = null;
 });
 
+// 主题切换时重新解析配色再重绘（isDarkMode 翻转时 tokens 主题类名已更新）
+watch(
+  () => props.isDarkMode,
+  () => {
+    themeColors.value = resolveFretboardCanvasPalette();
+    if (hasDrawn.value) draw();
+  }
+);
+
 watch(
   [
     () => props.chord,
     () => props.scale,
-    () => props.isDarkMode,
     () => props.shorthand,
     () => props.chordNameScale,
     () => props.showChordName,

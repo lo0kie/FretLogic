@@ -19,7 +19,7 @@ export interface AutoWidthOptions {
   disabled?: boolean;
 }
 
-export type AutoWidthModifiers = 'fast' | 'slow' | (string & Record<never, never>);
+export type AutoWidthModifiers = 'fast' | 'slow' | 'disabled' | (string & Record<never, never>);
 export type AutoWidthBinding = boolean | number | AutoWidthOptions | undefined;
 
 interface AutoWidthState {
@@ -51,6 +51,8 @@ const normalizeOptions = (value: AutoWidthBinding, modifiers?: Record<string, bo
   if (modifiers) {
     if (modifiers['fast']) opts.duration = 100;
     if (modifiers['slow']) opts.duration = 260;
+    // 静态修饰符 .disabled（编译期固定，动态禁用请用绑定值 { disabled }）
+    if (modifiers['disabled']) opts.disabled = true;
   }
 
   return opts;

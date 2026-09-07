@@ -4,9 +4,10 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import SongSection from '@/domains/score/library/components/SongSection.vue';
+import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+
 import type { Song } from '@/domains/score/types';
 import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
 

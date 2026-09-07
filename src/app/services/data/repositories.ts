@@ -4,9 +4,10 @@
  * 职责：提供对 IDB 对象库的类型化读写，封装存储细节。
  * 与 UI 解耦；store 层负责把仓库数据映射为响应式状态。
  */
+import { idb } from '@/platform/services/storage';
+
 import type { Chord, Group } from '@/domains/chord/types';
 import type { Song } from '@/domains/score/types';
-import { idb } from '@/platform/services/storage';
 
 export interface ChordRepository {
   loadGroups(): Promise<Group[]>;

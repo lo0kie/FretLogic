@@ -9,14 +9,15 @@
  * 数据不会因 IDB 备份而"复活"，真正的清空能立即生效。
  * IDB 副本仍完整保留，供将来 store 切换到 v2 契约（Phase 3 逐 feature 迁移）备好数据源。
  */
-import type { Chord, Group } from '@/domains/chord/types';
-import type { Song } from '@/domains/score/types';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 import { readJsonArray } from '@/platform/utils/storage';
 
 import { migrateLegacyData } from './migrateLegacy.ts';
 import { chordRepository, songRepository } from './repositories.ts';
+
+import type { Chord, Group } from '@/domains/chord/types';
+import type { Song } from '@/domains/score/types';
 
 /** 启动引导：仅做一次性旧数据备份迁移（幂等、失败不阻塞）；不回填恢复，避免清空后被备份"复活" */
 export async function bootstrapDataLayer(storage: Storage = window.localStorage): Promise<void> {

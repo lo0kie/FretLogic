@@ -81,10 +81,19 @@ export const SCORE_EXPORT_CONFIG = {
   WRAPPED_LINE_ROW_GAP: 18,
   /** 行与行之间的独立垂直行间距（px，拉开乐谱各行） */
   LINE_ROW_GAP: 36,
-
-  // ---- 主题配色方案（与指板渲染共享单一来源，明/暗色值一致） ----
-  THEME: FRETBOARD_CANVAS_CONFIG.THEME,
 } as const;
 
 /** 乐谱预览 A4 分页重新生成的防抖间隔（ms） */
 export const SCORE_PREVIEW_DEBOUNCE_MS = 150;
+
+/** 乐谱预览缩放：自定义缩放百分比下限（%） */
+export const PREVIEW_MIN_ZOOM_PERCENT = 30;
+/** 乐谱预览缩放：自定义缩放百分比上限（%） */
+export const PREVIEW_MAX_ZOOM_PERCENT = 300;
+/** 乐谱预览缩放：自适应模式下预留给上下呼吸的视口内边距（px，上下合计） */
+export const PREVIEW_FIT_PADDING_PX = 48;
+/** 乐谱预览超高判定容差（px）：页面渲染高度仅略超可视内容高时仍按横向翻页处理，
+ *  覆盖 fitPercent 整数化后回放高度带来的 ~6px 取整溢出，避免轻微取整就误切纵向浏览（该态禁用横滚滚轮） */
+export const PREVIEW_TALL_MODE_TOLERANCE_PX = 8;
+/** 乐谱预览缩放：Ctrl+滚轮/捏合的灵敏度（每像素 deltaY 对应的百分比变化） */
+export const PREVIEW_WHEEL_ZOOM_SENSITIVITY = 0.15;

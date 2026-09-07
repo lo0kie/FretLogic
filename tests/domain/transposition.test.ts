@@ -11,6 +11,7 @@ import {
   transposeRootSegment,
   Tuning,
 } from '@/domains/chord/theory/theory';
+
 import type { Chord, RootSegment } from '@/domains/chord/types';
 
 describe('乐理移调核心算法', () => {

@@ -10,12 +10,12 @@
         sizeClasses,
         variantAppearanceClasses,
         {
-          'h-2! w-2! min-w-0! border-none! p-0!': isDotOnly,
+          'size-2! min-w-0! border-none! p-0!': isDotOnly,
           'cursor-not-allowed opacity-40': disabled,
         },
       ]"
       :style="[normalizedStyle, offsetStyle]"
-      class="duration-base z-panel absolute top-0 right-0 box-border inline-flex translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-transparent leading-none font-semibold whitespace-nowrap shadow-xs transition-all select-none"
+      class="absolute top-0 right-0 z-panel box-border inline-flex translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-transparent leading-none font-semibold whitespace-nowrap shadow-xs transition-all duration-base select-none"
       role="status"
     >
       <span v-if="!isDotOnly">
@@ -36,9 +36,9 @@
         'cursor-pointer hover:-translate-y-px hover:opacity-85 active:translate-y-0 active:scale-95':
           isInteractive && !disabled,
         'cursor-not-allowed opacity-40': disabled,
-        'h-2! w-2! min-w-0! border-none! p-0!': isDotOnly,
+        'size-2! min-w-0! border-none! p-0!': isDotOnly,
         'px-0!': Boolean(width),
-        'group hover:bg-tint-danger-88! hover:text-danger! hover:border-tint-danger-75! focus-visible:bg-tint-danger-88! focus-visible:text-danger! focus-visible:border-tint-danger-75!':
+        'group hover:border-tint-danger-75! hover:bg-tint-danger-88! hover:text-danger! focus-visible:border-tint-danger-75! focus-visible:bg-tint-danger-88! focus-visible:text-danger!':
           hoverClose && !disabled,
       },
     ]"
@@ -47,22 +47,22 @@
     :role="isInteractive ? undefined : 'status'"
     :style="normalizedStyle"
     :type="isInteractive ? 'button' : undefined"
-    @click="handleClick"
+    @click="handleClick($event)"
     data-focusable-inline
-    class="duration-fast box-border inline-flex shrink-0 items-center justify-center rounded-full border border-transparent leading-none font-semibold tracking-tight whitespace-nowrap transition-all outline-none select-none"
+    class="box-border inline-flex shrink-0 items-center justify-center rounded-full border border-transparent leading-none font-semibold tracking-tight whitespace-nowrap transition-all duration-fast outline-none select-none"
   >
-    <span v-if="hasDot" aria-hidden="true" class="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+    <span v-if="hasDot" aria-hidden="true" class="size-1.5 shrink-0 rounded-full bg-current" />
 
     <slot name="prefix" />
 
     <span
       v-if="!isDotOnly && ($slots['default'] || content !== undefined)"
-      :class="{ 'relative h-full w-full': hoverClose }"
+      :class="{ 'relative size-full': hoverClose }"
       class="inline-flex h-full items-center justify-center overflow-hidden leading-none text-ellipsis"
     >
       <span
         :class="{ 'group-hover:opacity-0': hoverClose && !disabled }"
-        class="duration-fast inline-flex h-full items-center justify-center leading-none transition-opacity"
+        class="inline-flex h-full items-center justify-center leading-none transition-opacity duration-fast"
       >
         <slot> {{ formattedContent }} </slot>
       </span>
@@ -70,7 +70,7 @@
         v-if="hoverClose"
         :icon-size="closeIconSize"
         aria-hidden="true"
-        class="duration-fast pointer-events-none absolute inset-0 m-auto flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"
+        class="pointer-events-none absolute inset-0 m-auto flex items-center justify-center opacity-0 transition-opacity duration-fast group-hover:opacity-100"
         icon-stroke="bold"
         name="x"
       />
@@ -79,9 +79,9 @@
     <button
       v-if="closable && !hoverClose"
       :disabled
-      @click.stop="handleClose"
+      @click.stop="handleClose($event)"
       aria-label="关闭"
-      class="duration-fast hover:bg-tint-current-82 ml-0.5 flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current opacity-65 transition-all outline-none hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+      class="ml-0.5 flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current opacity-65 transition-all duration-fast outline-none hover:bg-tint-current-82 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
       title="关闭"
       type="button"
     >
@@ -94,18 +94,24 @@
 import { computed, useAttrs } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+
 import type { IconSizePreset, IconSizeValue } from '@/platform/ui/icons/iconSizes';
 
 type BadgeVariant = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
-type BadgeSize = 'xs' | 'sm' | 'md' | 'lg';
+type BadgeSize = '2xs' | 'xs' | 'sm' | 'md' | 'lg';
 type BadgeAppearance = 'filled' | 'subtle' | 'outline';
 
 const props = withDefaults(
   defineProps<{
+    /** 徽标语义色：neutral/primary/success/warning/danger */
     variant?: BadgeVariant;
+    /** 尺寸档位：2xs（微型角标）~lg */
     size?: BadgeSize;
+    /** 视觉形态：filled 实底 / subtle 浅底 / outline 描边 */
     appearance?: BadgeAppearance;
+    /** 徽标文本内容（数字超长时按 max 截断为 N+） */
     content?: string | number;
+    /** 数字内容的上限，超出显示 N+（默认 99） */
     max?: number;
     /** 是否在数值为 0 时展示，默认为 true；设为 false 时 content===0 将隐藏 */
     showZero?: boolean;
@@ -113,6 +119,7 @@ const props = withDefaults(
     dot?: boolean;
     /** 在文字前显示状态指示灯（前缀圆点） */
     statusDot?: boolean;
+    /** 显示独立关闭小按钮，点击派发 close 事件 */
     closable?: boolean;
     /** 悬停显示关闭图标，整体作为关闭按钮（点击派发 close 事件而非 click） */
     hoverClose?: boolean;
@@ -120,6 +127,7 @@ const props = withDefaults(
     interactive?: boolean;
     /** 禁用状态，屏蔽点击与关闭事件并置灰 */
     disabled?: boolean;
+    /** 显式固定宽度，数值按 px、字符串原样使用 */
     width?: string | number;
     /** 角标偏移量 [x, y]，支持数值（px）或带单位字符串 */
     offset?: [number | string, number | string];
@@ -197,37 +205,39 @@ const ariaLabelText = computed(() => {
 });
 
 const SIZE_MAP: Record<BadgeSize, string> = {
-  xs: 'text-2xs h-[1.15rem] px-[0.35rem] gap-2xs',
-  sm: 'text-2xs h-[1.35rem] px-sm gap-xs',
-  md: 'text-xs h-[1.55rem] px-[0.6rem] gap-xs',
-  lg: 'text-xs h-[1.8rem] px-md gap-sm',
+  // 2xs：更紧凑的微型徽标（角标/密集列表行内），文字沿用最小档 text-2xs
+  '2xs': 'h-[0.95rem] gap-2xs px-[0.3rem] text-2xs',
+  'xs': 'h-[1.15rem] gap-2xs px-[0.35rem] text-2xs',
+  'sm': 'h-[1.35rem] gap-xs px-sm text-2xs',
+  'md': 'h-[1.55rem] gap-xs px-[0.6rem] text-xs',
+  'lg': 'h-[1.8rem] gap-sm px-md text-xs',
 };
 
 const VARIANT_APPEARANCE_MAP: Record<BadgeVariant, Record<BadgeAppearance, string>> = {
   neutral: {
-    filled: 'bg-bg-body text-text-disabled border-border-light',
-    subtle: 'bg-bg-panel-hover text-text-body border-transparent',
-    outline: 'bg-transparent border-border-base text-text-body',
+    filled: 'border-border-light bg-surface-body text-fg-disabled',
+    subtle: 'border-transparent bg-surface-panel-hover text-fg-body',
+    outline: 'border-border-base bg-transparent text-fg-body',
   },
   primary: {
-    filled: 'bg-primary text-text-on-accent border-transparent',
-    subtle: 'bg-tint-primary-88 text-primary border-transparent',
-    outline: 'bg-transparent border-primary text-primary',
+    filled: 'border-transparent bg-primary text-fg-on-accent',
+    subtle: 'border-transparent bg-tint-primary-88 text-primary',
+    outline: 'border-primary bg-transparent text-primary',
   },
   success: {
-    filled: 'bg-success text-text-on-accent border-transparent',
-    subtle: 'bg-tint-success-88 text-success border-transparent',
-    outline: 'bg-transparent border-success text-success',
+    filled: 'border-transparent bg-success text-fg-on-accent',
+    subtle: 'border-transparent bg-tint-success-88 text-success',
+    outline: 'border-success bg-transparent text-success',
   },
   warning: {
-    filled: 'bg-warning text-text-on-accent border-transparent',
-    subtle: 'bg-tint-warning-88 text-warning border-transparent',
-    outline: 'bg-transparent border-warning text-warning',
+    filled: 'border-transparent bg-warning text-fg-on-accent',
+    subtle: 'border-transparent bg-tint-warning-88 text-warning',
+    outline: 'border-warning bg-transparent text-warning',
   },
   danger: {
-    filled: 'bg-danger text-text-on-accent border-transparent',
-    subtle: 'bg-tint-danger-88 text-danger border-transparent',
-    outline: 'bg-transparent border-danger text-danger',
+    filled: 'border-transparent bg-danger text-fg-on-accent',
+    subtle: 'border-transparent bg-tint-danger-88 text-danger',
+    outline: 'border-danger bg-transparent text-danger',
   },
 };
 
@@ -236,12 +246,13 @@ const variantAppearanceClasses = computed(
   () => VARIANT_APPEARANCE_MAP[props.variant]?.[props.appearance] ?? VARIANT_APPEARANCE_MAP.neutral.filled
 );
 
-/** 徽标尺寸 → 关闭图标档位映射：xs/sm/md/lg → 12/14/16/18（统一取图标档位表，取消私有数字） */
+/** 徽标尺寸 → 关闭图标档位映射：2xs/xs/sm/md/lg 统一取图标档位表，取消私有数字 */
 const CLOSE_ICON_SIZE_BY_BADGE_SIZE: Record<BadgeSize, IconSizePreset> = {
-  xs: 'xs',
-  sm: 'sm',
-  md: 'md',
-  lg: 'lg',
+  '2xs': 'xs',
+  'xs': 'xs',
+  'sm': 'sm',
+  'md': 'md',
+  'lg': 'lg',
 };
 const closeIconSize = computed<IconSizeValue>(() => CLOSE_ICON_SIZE_BY_BADGE_SIZE[props.size] ?? 'md');
 

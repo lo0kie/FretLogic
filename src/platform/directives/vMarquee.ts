@@ -1,12 +1,14 @@
-import type { Directive } from 'vue';
-
 import {
   MARQUEE_DEFAULT_FADE_WIDTH,
+  MARQUEE_FADE_TRANSITION_MS,
+  MARQUEE_FAST_SPEED_MULTIPLIER,
   MARQUEE_MIN_DURATION_CONTINUOUS_MS,
   MARQUEE_MIN_DURATION_PINGPONG_MS,
   MARQUEE_RESET_DURATION_MS,
   MARQUEE_RESET_EASING,
 } from '@/platform/utils/constants';
+
+import type { Directive } from 'vue';
 
 export interface MarqueeOptions {
   /** 触发模式：hover 悬停/聚焦时滚动，always 常驻轮播，none 永不滚动 */
@@ -44,6 +46,7 @@ export type MarqueeModifiers =
   | 'left'
   | 'right'
   | 'no-pause'
+  | 'fast'
   | 'continuous'
   | 'pingpong'
   | 'fade'
@@ -67,6 +70,7 @@ const DEFAULTS: Required<Omit<MarqueeOptions, 'onStart' | 'onEnd' | 'onOverflowC
 };
 
 interface MarqueeState {
+  el: HTMLElement;
   inner: HTMLSpanElement;
   options: typeof DEFAULTS;
   overflowing: boolean;
@@ -78,9 +82,13 @@ interface MarqueeState {
   animation: Animation | null;
   /** 停用后的平滑复位动画（进行中时阻止重复触发与循环重启） */
   resetAnim: Animation | null;
+  /** 动画激活期间的逐帧遮罩同步循环（rAF id，0 表示未运行） */
+  maskRaf: number;
+  /** 遮罩状态签名（羽化量 "start|end" 或 null=未启用）：相同则跳过重复样式写入 */
+  lastFade: string | null;
   observer: ResizeObserver;
   mql: MediaQueryList;
-  cleanups: Array<() => void>;
+  cleanups: (() => void)[];
 }
 
 const STATES = new WeakMap<HTMLElement, MarqueeState>();
@@ -96,6 +104,7 @@ function resolveOptions(binding: MarqueeBinding, modifiers?: Record<string, bool
     if (modifiers['left']) base.direction = 'left';
     if (modifiers['right']) base.direction = 'right';
     if (modifiers['no-pause']) base.pauseOnEdges = false;
+    if (modifiers['fast']) base.speed = DEFAULTS.speed * MARQUEE_FAST_SPEED_MULTIPLIER;
     if (modifiers['continuous']) base.loopMode = 'continuous';
     if (modifiers['pingpong']) base.loopMode = 'pingpong';
     if (modifiers['fade']) base.fade = true;
@@ -117,17 +126,146 @@ function shouldAnimate(state: MarqueeState): boolean {
   return state.hovered || state.focused;
 }
 
-/** 按配置在两端应用羽化渐变遮罩；未开启或未溢出时清除遮罩。 */
+/**
+ * 按配置在两端应用羽化渐变遮罩；未开启或未溢出时清除遮罩。
+ * 遮罩方向跟随滚动位置，语义与 useScrollEdgeFades 一致——边缘贴住内容时不加渐隐：
+ * - 动画进行中：由 maskLoop 按动画相位逐帧计算（起点/终点贴边侧不渐隐）；
+ * - 静止复位态：direction 'left' 停在起点（左缘贴内容）→ 仅右端渐隐；
+ *   direction 'right' 停在终点（右缘贴内容）→ 仅左端渐隐。
+ *
+ * 渐隐量由两个注册自定义属性（@property <number>）驱动渐变端点透明度，
+ * 注册属性可参与 CSS transition——贴边/离开贴边时羽化以 MARQUEE_FADE_TRANSITION_MS 平滑过渡，
+ * 而非整段 mask-image 字符串瞬变（渐变图片本身不可插值）。
+ */
 function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
-  if (!state.options.fade || !state.overflowing) {
-    el.style.maskImage = '';
-    el.style.webkitMaskImage = '';
+  const { fade, direction } = state.options;
+  if (!fade || !state.overflowing) {
+    // 未启用羽化或内容未溢出：彻底清除遮罩与羽化量（溢出消失时同步回收）
+    if (state.lastFade !== null) {
+      state.lastFade = null;
+      el.style.maskImage = '';
+      el.style.webkitMaskImage = '';
+      el.style.removeProperty('--marquee-fade-start');
+      el.style.removeProperty('--marquee-fade-end');
+      el.style.transition = '';
+    }
     return;
   }
-  const fadeWidth = typeof state.options.fade === 'number' ? state.options.fade : MARQUEE_DEFAULT_FADE_WIDTH;
-  const mask = `linear-gradient(to right, transparent 0px, black ${fadeWidth}px, black calc(100% - ${fadeWidth}px), transparent 100%)`;
-  el.style.maskImage = mask;
-  el.style.webkitMaskImage = mask;
+  ensureFadeTransitionStyle();
+  if (state.lastFade === null) {
+    // 首次启用：铺常驻遮罩模板（端点透明度由自定义属性控制，全程黑 = 无羽化效果）
+    const fadeWidth = typeof fade === 'number' ? fade : MARQUEE_DEFAULT_FADE_WIDTH;
+    const mask = FADE_MASK_TEMPLATE(fadeWidth);
+    el.style.maskImage = mask;
+    el.style.webkitMaskImage = mask;
+    el.style.transition = `--marquee-fade-start ${MARQUEE_FADE_TRANSITION_MS}ms ease, --marquee-fade-end ${MARQUEE_FADE_TRANSITION_MS}ms ease`;
+  }
+  const active = state.overflowing && !state.reducedMotion && shouldAnimate(state);
+  let start: number;
+  let end: number;
+  if (!active) {
+    // 静止复位态：贴内容一侧不渐隐
+    start = direction === 'left' ? 0 : 1;
+    end = direction === 'left' ? 1 : 0;
+  } else {
+    // 动画中：双端渐隐兜底，逐帧循环会按相位精确覆盖
+    start = 1;
+    end = 1;
+  }
+  setFade(state, start, end);
+}
+
+/** 遮罩模板：两端点透明度分别由 --marquee-fade-start/end（0=不渐隐，1=全羽化）驱动 */
+const FADE_MASK_TEMPLATE = (w: number) =>
+  `linear-gradient(to right, rgb(0 0 0 / calc(1 - var(--marquee-fade-start))), rgb(0 0 0) ${w}px, rgb(0 0 0) calc(100% - ${w}px), rgb(0 0 0 / calc(1 - var(--marquee-fade-end))))`;
+
+/** 写入两端羽化量（0~1），与上次相同则跳过重复写入 */
+function setFade(state: MarqueeState, start: number, end: number): void {
+  const sig = `${start}|${end}`;
+  if (state.lastFade === sig) return;
+  state.lastFade = sig;
+  state.el.style.setProperty('--marquee-fade-start', String(start));
+  state.el.style.setProperty('--marquee-fade-end', String(end));
+}
+
+/** 一次性注入 @property 注册规则（注册后的自定义属性才能参与 transition） */
+function ensureFadeTransitionStyle(): void {
+  if (typeof document === 'undefined' || document.getElementById('v-marquee-fade-props')) return;
+  const style = document.createElement('style');
+  style.id = 'v-marquee-fade-props';
+  style.textContent =
+    `@property --marquee-fade-start{syntax:'<number>';inherits:false;initial-value:0;}` +
+    `@property --marquee-fade-end{syntax:'<number>';inherits:false;initial-value:0;}`;
+  document.head.appendChild(style);
+}
+
+/** 贴边判定容差（px）：内容与边缘间距小于该值视为贴边，不渐隐 */
+const FLUSH_EPS_PX = 1;
+
+/**
+ * 由动画当前时间计算内容位移偏移（0 = 起点贴边，dist = 终点贴边）。
+ * pingpong：第一段由静止位滚向远端 → 远端停顿 → 返回 → 静止位停顿；
+ * continuous：单向循环，offset 在 [0, travelDist) 内循环。
+ */
+function sampleOffset(state: MarqueeState, dist: number): number {
+  const anim = state.animation;
+  if (!anim) return state.options.direction === 'left' ? 0 : dist;
+  const { direction, gap } = state.options;
+  const t = Number(anim.currentTime ?? 0);
+  if (state.options.loopMode === 'continuous') {
+    const travel = inner_scrollWidth(state) + gap;
+    const moveMs = anim.effect?.getTiming().duration;
+    const dur = typeof moveMs === 'number' ? moveMs : 0;
+    if (dur <= 0) return 0;
+    const frac = (t % dur) / dur;
+    return direction === 'left' ? travel * frac : travel * (1 - frac);
+  }
+  // pingpong：与 update() 的时间轴分段一致
+  const speed = state.options.speed;
+  const duration = state.options.duration;
+  const moveMs = duration != null ? duration : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / speed) * 1000);
+  const pauseMs = state.options.pauseOnEdges ? Math.max(0, state.options.pauseDuration) : 0;
+  const total = 2 * moveMs + 2 * pauseMs;
+  const phase = total > 0 ? t % total : 0;
+  let fracToFar: number;
+  if (phase < moveMs) fracToFar = phase / moveMs;
+  else if (phase < moveMs + pauseMs) fracToFar = 1;
+  else if (phase < 2 * moveMs + pauseMs) fracToFar = 1 - (phase - moveMs - pauseMs) / moveMs;
+  else fracToFar = 0;
+  // 'left'：静止位 offset=0 → 远端 dist；'right'：静止位 offset=dist → 远端 0
+  return direction === 'left' ? dist * fracToFar : dist * (1 - fracToFar);
+}
+
+/** 读取 inner 内容宽度（隔离采样函数内的 DOM 访问） */
+function inner_scrollWidth(state: MarqueeState): number {
+  return state.inner.scrollWidth;
+}
+
+/** 动画激活期间逐帧同步遮罩：起点贴边 → 仅右端羽化；终点贴边 → 仅左端羽化；区间内 → 双端 */
+function startMaskLoop(state: MarqueeState, dist: number): void {
+  if (state.maskRaf !== 0) return;
+  const step = (): void => {
+    state.maskRaf = 0;
+    if (!state.animation) return;
+    const offset = sampleOffset(state, dist);
+    if (offset <= FLUSH_EPS_PX) {
+      setFade(state, 0, 1); // 起点贴边：左缘不渐隐
+    } else if (offset >= dist - FLUSH_EPS_PX) {
+      setFade(state, 1, 0); // 终点贴边：右缘不渐隐
+    } else {
+      setFade(state, 1, 1);
+    }
+    state.maskRaf = requestAnimationFrame(step);
+  };
+  state.maskRaf = requestAnimationFrame(step);
+}
+
+/** 停止逐帧遮罩循环 */
+function stopMaskLoop(state: MarqueeState): void {
+  if (state.maskRaf !== 0) {
+    cancelAnimationFrame(state.maskRaf);
+    state.maskRaf = 0;
+  }
 }
 
 /** 测量内容是否溢出（宽度差 > 1px），溢出状态变化时派发事件，并联动遮罩与动画刷新。 */
@@ -156,7 +294,11 @@ function update(el: HTMLElement): void {
 
   const active = overflowing && !state.reducedMotion && shouldAnimate(state);
 
+  // 激活/静止切换时同步遮罩方向（激活=双端，静止=贴内容侧不渐隐）
+  applyFadeMask(el, state);
+
   if (!active) {
+    stopMaskLoop(state);
     state.sig = null;
     if (state.animation) {
       // 先取样当前滚动位置，cancel 后元素会瞬间回落到 inline 静止位
@@ -206,9 +348,12 @@ function update(el: HTMLElement): void {
     }
     const dist = inner.scrollWidth - el.clientWidth;
     const isContinuous = options.loopMode === 'continuous';
+    // 逐帧遮罩同步所需的全程位移：continuous 为内容宽+gap，pingpong 为溢出距离
+    let maskDist = dist;
 
     if (isContinuous) {
       const travelDist = inner.scrollWidth + options.gap;
+      maskDist = travelDist;
       const moveMs =
         options.duration != null
           ? options.duration
@@ -275,6 +420,9 @@ function update(el: HTMLElement): void {
         state.sig = sig;
       }
     }
+
+    // 动画激活期间逐帧同步遮罩：起点/终点贴边的一侧不渐隐
+    startMaskLoop(state, maskDist);
   }
 
   if (active && !state.wasActive) emit(el, 'marquee-start', undefined, options.onStart);
@@ -295,6 +443,7 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     el.appendChild(inner);
 
     const state: MarqueeState = {
+      el,
       inner,
       options,
       overflowing: false,
@@ -305,6 +454,8 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       sig: null,
       animation: null,
       resetAnim: null,
+      maskRaf: 0,
+      lastFade: null,
       observer: undefined as unknown as ResizeObserver,
       mql: undefined as unknown as MediaQueryList,
       cleanups: [],
@@ -354,6 +505,7 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       el.removeEventListener('focusout', onFocusOut);
       mql.removeEventListener('change', onMql);
       observer.disconnect();
+      stopMaskLoop(state);
       state.animation?.cancel();
       state.resetAnim?.cancel();
     });

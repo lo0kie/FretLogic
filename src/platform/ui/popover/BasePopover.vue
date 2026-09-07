@@ -2,12 +2,12 @@
   <div v-if="$slots['trigger']" :class="{ 'flex w-full': block }" class="popover-wrapper relative inline-flex">
     <div
       :class="{ 'flex w-full flex-1': block }"
-      @click="handleTriggerClick"
-      @contextmenu="handleTriggerContextMenu"
-      @focusin="handleTriggerFocusIn"
-      @focusout="handleTriggerFocusOut"
-      @mouseenter="handleTriggerMouseEnter"
-      @mouseleave="handleTriggerMouseLeave"
+      @click="handleTriggerClick()"
+      @contextmenu="handleTriggerContextMenu($event)"
+      @focusin="handleTriggerFocusIn()"
+      @focusout="handleTriggerFocusOut($event)"
+      @mouseenter="handleTriggerMouseEnter()"
+      @mouseleave="handleTriggerMouseLeave()"
       class="popover-trigger inline-flex"
       ref="referenceRef"
     >
@@ -23,18 +23,18 @@
       class="popover-floating-host pointer-events-auto"
       ref="floatingRef"
     >
-      <Transition :name="transitionName" @after-leave="handleAfterLeave" appear>
+      <Transition :name="transitionName" @after-leave="handleAfterLeave()" appear>
         <div
           v-if="isShown"
           :aria-label
           :aria-modal="false"
           :class="panelClass"
           :style="mergedPanelStyle"
-          @focusout="handleFocusOut"
-          @keydown="handlePanelKeydown"
-          @mouseenter="handlePanelMouseEnter"
-          @mouseleave="handlePanelMouseLeave"
-          class="popover-panel bg-bg-elevated border-glass-border shadow-floating z-panel relative box-border rounded-md border backdrop-blur-xl outline-none"
+          @focusout="handleFocusOut($event)"
+          @keydown="handlePanelKeydown($event)"
+          @mouseenter="handlePanelMouseEnter()"
+          @mouseleave="handlePanelMouseLeave()"
+          class="popover-panel relative z-panel box-border rounded-md border border-glass-border bg-surface-elevated shadow-floating backdrop-blur-xl outline-none"
           ref="panelRef"
           role="dialog"
           tabindex="-1"
@@ -48,6 +48,28 @@
 </template>
 
 <script lang="ts">
+// 双 script 块的 SFC 视为同一模块：import 必须整体置于第一个块顶部（import/first），
+// 下方 <script setup> 直接复用这些绑定
+import { computed, nextTick, onBeforeUnmount, ref, unref, useTemplateRef, watch } from 'vue';
+
+import { autoUpdate, useFloating } from '@floating-ui/vue';
+import { useEventListener } from '@vueuse/core';
+
+import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
+import {
+  buildFloatingMiddlewares,
+  createVirtualElementRect,
+  resolveArrowAwareOffset,
+} from '@/platform/ui/popover/floatingCore';
+import { acquireFloatingZ, FLOATING_Z_BASE, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
+import { registerOpenPopover, unregisterOpenPopover } from '@/platform/ui/popover/popoverRegistry';
+import { POPOVER_HOVER_CLOSE_DELAY_MS } from '@/platform/utils/constants';
+
+import type { Placement, VirtualElement } from '@floating-ui/vue';
+import type { CSSProperties, MaybeRef } from 'vue';
+
+// 浮层全局状态：必须放在模块作用域（<script setup> 体每次实例化都会重新执行），
+// 否则每个实例各自持有独立登记表，跨实例的引用映射与层级预算（父面板不反超子浮层）都会失效
 const globalFloatingReferenceMap = new WeakMap<HTMLElement, HTMLElement>();
 
 interface PopoverLayerEntry {
@@ -60,29 +82,7 @@ const openedPopovers = new Set<PopoverLayerEntry>();
 </script>
 
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  ref,
-  unref,
-  useTemplateRef,
-  watch,
-  type CSSProperties,
-  type MaybeRef,
-} from 'vue';
-
-import { autoUpdate, useFloating, type Placement, type VirtualElement } from '@floating-ui/vue';
-import { useEventListener } from '@vueuse/core';
-
-import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
-import {
-  buildFloatingMiddlewares,
-  createVirtualElementRect,
-  resolveArrowAwareOffset,
-} from '@/platform/ui/popover/floatingCore';
-import { acquireFloatingZ, FLOATING_Z_BASE, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
-import { POPOVER_HOVER_CLOSE_DELAY_MS } from '@/platform/utils/constants';
+const model = defineModel<boolean>({ default: false });
 
 const {
   trigger = 'click',
@@ -105,28 +105,55 @@ const {
   panelStyle = {},
   transitionName = 'v-transition-scale',
   virtualRef = null,
+  contextTriggerEl = null,
+  closeOnContextTriggerClick = true,
   autoFocus = false,
 } = defineProps<{
+  /** 触发方式：click / hover / focus / contextmenu */
   trigger?: 'click' | 'hover' | 'focus' | 'contextmenu';
+  /** hover 触发时移入后延时打开的毫秒数 */
   hoverOpenDelay?: number;
+  /** hover 触发时移出后延时关闭的毫秒数 */
   hoverCloseDelay?: number;
+  /** 浮层相对锚点的定位方位（floating-ui Placement） */
   placement?: Placement;
+  /** 禁用一切触发与开关交互 */
   disabled?: boolean;
+  /** 浮层与锚点之间的间距（px） */
   offsetDistance?: number;
+  /** 按下浮层与触发器外部区域时是否关闭 */
   closeOnClickOutside?: boolean;
+  /** 按 Esc 键是否关闭浮层 */
   closeOnEsc?: boolean;
+  /** 焦点移出浮层合法区域时是否关闭 */
   closeOnFocusOut?: boolean;
+  /** 浮层宽度是否对齐触发元素 */
   matchTriggerWidth?: boolean;
+  /** 宽度对齐策略：width 固定等宽 / minWidth 仅不小于触发器 */
   matchTriggerWidthStrategy?: 'width' | 'minWidth';
+  /** 是否显示指向锚点的小箭头 */
   showArrow?: boolean;
+  /** 触发器包裹层是否撑满整行宽度 */
   block?: boolean;
+  /** 浮层 Teleport 的挂载目标（选择器或元素，默认 body） */
   teleportTo?: string | HTMLElement;
+  /** 是否禁用 Teleport（浮层就近渲染在组件原位） */
   disabledTeleport?: boolean;
+  /** 浮层面板的无障碍标签 */
   ariaLabel?: string;
+  /** 附加到浮层面板上的类名 */
   panelClass?: string | string[] | Record<string, boolean>;
+  /** 附加到浮层面板上的内联样式 */
   panelStyle?: CSSProperties;
+  /** 浮层进出场过渡动画名 */
   transitionName?: string;
+  /** 虚拟锚点引用（如鼠标坐标构造的定位点），设置后浮层锚定它而非触发元素 */
   virtualRef?: MaybeRef<VirtualElement | null>;
+  /** 虚拟锚点模式下真实承载右键事件的触发元素（如 ContextMenu 的包裹层），纳入合法区域判定 */
+  contextTriggerEl?: HTMLElement | null;
+  /** 左键点击 contextTriggerEl 内部时是否关闭浮层；触发元素本身就是持续编辑面（如搜索输入框）时应关掉 */
+  closeOnContextTriggerClick?: boolean;
+  /** 打开后是否自动聚焦面板内首个可聚焦元素 */
   autoFocus?: boolean;
 }>();
 
@@ -135,7 +162,6 @@ const emit = defineEmits<{
   (e: 'close'): void;
 }>();
 
-const model = defineModel<boolean>({ default: false });
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const panelRef = useTemplateRef<HTMLDivElement>('panelRef');
@@ -223,7 +249,7 @@ const arrowStyle = computed<CSSProperties>(() => {
     arrowX: x,
     arrowY: y,
     placement: currentPlacement.value || placement,
-    background: 'var(--color-bg-elevated)',
+    background: 'var(--color-surface-elevated)',
     borderColor: 'var(--color-glass-border)',
     backdropFilter: 'var(--blur-xl)',
     borderWidth: 1, // 直接告诉构建函数：父容器有 1px 边框，帮我修掉偏差
@@ -247,6 +273,12 @@ watch(
   },
   { immediate: true }
 );
+
+// 全局注册：打开中的浮层登记关闭函数，供容器滚动等场景联动关闭（close 幂等，嵌套重复关闭安全）
+watch(model, val => {
+  if (val) registerOpenPopover(close);
+  else unregisterOpenPopover(close);
+});
 
 watch(model, async val => {
   if (!val) {
@@ -487,8 +519,26 @@ useEventListener(
 
     if (!closeOnClickOutside || !model.value || !isShown.value) return;
     if (e.button === 2) return; // 右键留给 ContextMenu
+    // contextTriggerEl 内的左键是否关闭由消费方声明：ContextMenu 触发区要点关（toggle），
+    // 而 BaseInput 的 input 本身位于 contextTriggerEl 内且点击会立即重开面板，关闭再重开只会闪烁
+    if (!closeOnContextTriggerClick && contextTriggerEl?.contains(e.target as Node)) return;
     if (isEventInside(e.target)) return;
 
+    close();
+  },
+  true
+);
+
+// 右键不参与 pointerdown 外点关闭（避免与触发新菜单的 contextmenu 事件竞争），
+// 改由全局 contextmenu 捕获阶段负责：右键落在合法区域外时关闭本浮层。
+// contextTriggerEl（虚拟锚点模式下承载右键的真实触发元素）仅对右键视为「内部」——
+// 右键它应走复用换位重开而非关闭；左键它则仍由 pointerdown 路径正常关闭
+useEventListener(
+  window,
+  'contextmenu',
+  (e: MouseEvent) => {
+    if (!closeOnClickOutside || !model.value || !isShown.value) return;
+    if (isEventInside(e.target) || contextTriggerEl?.contains(e.target as Node)) return;
     close();
   },
   true
@@ -559,6 +609,7 @@ const handlePanelKeydown = (e: KeyboardEvent) => {
 
 onBeforeUnmount(() => {
   clearHoverTimer();
+  unregisterOpenPopover(close);
   openedPopovers.delete(ownLayerEntry);
   releaseOwnedZ();
 });

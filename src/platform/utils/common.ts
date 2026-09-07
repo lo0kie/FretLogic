@@ -58,7 +58,7 @@ export const serializeForStorage = (value: unknown): string =>
   JSON.stringify(value, (_key, val) => (val instanceof Map ? Object.fromEntries(val) : val));
 
 /** 克隆琴弦模型：剥响应式代理后逐弦复制 [品位, 升降偏好] 元组，得到纯净的可写副本。 */
-export function cloneGuitarStrings<T extends Array<[number, boolean]>>(strings: T): T {
+export function cloneGuitarStrings<T extends [number, boolean][]>(strings: T): T {
   const raw = toRaw(strings);
   return raw.map(s => [s[0], s[1]]) as unknown as T;
 }

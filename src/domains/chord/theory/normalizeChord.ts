@@ -1,5 +1,4 @@
-﻿import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
-import type { Chord } from '@/domains/chord/types';
+import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 import {
   isCapoValue,
   isFretOffsetValue,
@@ -7,6 +6,8 @@ import {
   normalizeBarres,
   toFretOffset,
 } from '@/domains/fretboard/model/coordinates';
+
+import type { Chord } from '@/domains/chord/types';
 import type { FretOffset, GuitarStringEntity, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
 
 /**
@@ -27,14 +28,24 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
 
   // 迁移：strings 由旧对象数组 [{fret, preferFlat}] 升级为二维数组 [[fret, preferFlat]]
   // 注意：fret 合法值是 -1/0/正整数，不能用 `|| -1` 兜底（0 是空弦，会被误判为 -1 静音）
+  // 品位清洗：fret 为可视窗口内的相对值，合法值域 -1/0/1..fretCount，越界一律置 -1 静音
   let stringsMigrated = false;
+  let stringsBounded = false;
+  const boundFret = (v: number): number => {
+    if (Number.isFinite(v) && v >= -1 && v <= fretCount) return v;
+    stringsBounded = true;
+    return -1;
+  };
   const strings = (chord.strings as unknown[]).map(s => {
     if (Array.isArray(s)) {
-      return [typeof s[0] === 'number' && Number.isFinite(s[0]) ? s[0] : -1, Boolean(s[1])] as GuitarStringEntity;
+      return [
+        typeof s[0] === 'number' && Number.isFinite(s[0]) ? boundFret(s[0]) : -1,
+        Boolean(s[1]),
+      ] as GuitarStringEntity;
     }
     stringsMigrated = true;
     const legacy = s as { fret?: number; preferFlat?: boolean; isRoot?: boolean };
-    return [typeof legacy?.fret === 'number' ? legacy.fret : -1, !!legacy?.preferFlat] as GuitarStringEntity;
+    return [typeof legacy?.fret === 'number' ? boundFret(legacy.fret) : -1, !!legacy?.preferFlat] as GuitarStringEntity;
   }) as GuitarStringsModel;
 
   // 迁移：旧数据每根弦各自维护 isRoot，统一为单点 rootStringIndex
@@ -94,6 +105,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
 
   const changed =
     stringsMigrated ||
+    stringsBounded ||
     nameMigrated ||
     chord.fretOffset !== fretOffset ||
     chord.tuning !== tuning ||

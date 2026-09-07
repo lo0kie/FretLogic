@@ -12,12 +12,25 @@
   "quoteProps": "consistent",
   "plugins": [
     "@ianvs/prettier-plugin-sort-imports",
-    "prettier-plugin-tailwindcss",
     "prettier-plugin-organize-attributes",
     "prettier-plugin-css-order",
+    "prettier-plugin-tailwindcss",
     "prettier-plugin-merge"
   ],
-  "importOrder": ["^vue", "", "<BUILTIN_MODULES>", "", "<THIRD_PARTY_MODULES>", "", "^@/(.*)$", "", "^[./]"],
+  "importOrder": [
+    "^vue$",
+    "",
+    "<BUILTIN_MODULES>",
+    "",
+    "<THIRD_PARTY_MODULES>",
+    "",
+    "^@/(.*)$",
+    "",
+    "^[./]",
+    "",
+    "<TYPES>"
+  ],
   "attributeGroups": ["^v-", "^#", "^:", "^@", "$DEFAULT"],
-  "attributeSort": "ASC"
+  "attributeSort": "ASC",
+  "tailwindStylesheet": "./src/assets/tailwind.css"
 }

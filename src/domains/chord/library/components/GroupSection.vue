@@ -1,130 +1,113 @@
-<template>
+﻿<template>
   <EmptyState v-if="chordStore.groups.length === 0" description="还没有添加分组" icon="folder-open" />
-  <template v-else>
-    <Transition name="v-transition-fade">
-      <EmptyState v-if="searchQuery && totalMatchCount === 0" description="未找到匹配的和弦" icon="search" />
-    </Transition>
-    <div v-grid-nav.stop="{ cols: 1, selector: '.group-title-row' }" v-if="!searchQuery || totalMatchCount > 0">
-      <VueDraggable
-        :animation="200"
-        :disabled="!isAllCollapsed || Boolean(searchQuery)"
-        :model-value="chordStore.groups"
-        :swap-threshold="0.5"
-        @update:model-value="(val: Group[]) => chordStore.overwriteGroups(val)"
-        chosen-class="drag-chosen-style"
-        class="draggable-list gap-sm box-border flex flex-col"
-        drag-class="drag-active-style"
-        ghost-class="drag-ghost-style"
-        handle=".group-title-row"
-      >
-        <div v-for="(group, index) in chordStore.groups" :key="group.id" class="box-border">
-          <ContextMenu #="{ isOpen }" :items="getGroupMenuItems(group)">
-            <div
-              v-wave
-              :aria-expanded="isGroupContentOpen(group)"
-              :aria-label="groupTitleAriaLabel(group)"
-              :class="{
-                'bg-tint-panelhover-50!': isGroupContentOpen(group),
-                'bg-tint-panelhover-30!': isOpen,
-              }"
-              @click="chordActions.executeGroupToggle(group)"
-              @keydown.enter.prevent="chordActions.executeGroupToggle(group)"
-              @keydown.space.prevent="chordActions.executeGroupToggle(group)"
-              data-focusable-inline
-              class="group-title-row group/row duration-fast hover:bg-bg-panel-hover hover:border-border-base box-border flex h-[2.4rem] cursor-pointer items-center justify-between rounded-md border border-transparent px-3 transition-all outline-none select-none"
-              role="button"
-              tabindex="0"
-            >
-              <div class="gap-sm flex min-w-0 flex-1 items-center" title="点击折叠/展开分组">
-                <BaseIcon
-                  :class="{ '-rotate-90': !isGroupContentOpen(group) }"
-                  aria-hidden="true"
-                  class="text-text-disabled duration-fast group-hover/row:text-text-title shrink-0 transition-transform"
-                  icon-size="sm"
-                  icon-stroke="regular"
-                  name="chevron-down"
-                />
-                <div v-marquee>
-                  <span class="text-text-title text-xs font-bold whitespace-nowrap">
-                    {{ group.name }}
-                  </span>
-                </div>
-                <div class="gap-sm ml-auto flex shrink-0 items-center">
-                  <BaseBadge
-                    :aria-label="`按${getSortLabel(group)}自动排序`"
-                    appearance="outline"
-                    class="opacity-80"
-                    size="xs"
-                    title="排序方法"
-                    variant="neutral"
-                    width="2rem"
-                  >
-                    <span v-chord-name="{ name: getSortLabel(group) }" />
-                  </BaseBadge>
-                  <BaseBadge
-                    v-if="searchQuery"
-                    :appearance="hasMatchedChords(group.id) ? 'subtle' : 'filled'"
-                    :aria-label="matchCountAriaLabel(group)"
-                    :variant="hasMatchedChords(group.id) ? 'primary' : 'neutral'"
-                    size="xs"
-                    width="2.5rem"
-                  >
-                    <span :class="{ 'font-extrabold': hasMatchedChords(group.id) }">
-                      {{ getMatchCount(group.id) }}
-                    </span>
-                    <span aria-hidden="true">&nbsp;/&nbsp;{{ getGroupChordsCount(group.id) }} </span>
-                  </BaseBadge>
-                  <BaseBadge
-                    v-else
-                    :appearance="isGroupContentOpen(group) ? 'subtle' : 'filled'"
-                    :aria-label="chordCountAriaLabel(group)"
-                    class="font-mono"
-                    size="xs"
-                    variant="neutral"
-                    width="1.5rem"
-                  >
-                    {{ getGroupChordsCount(group.id) }}
-                  </BaseBadge>
-                </div>
+  <div v-else v-grid-nav.stop="{ cols: 1, selector: '.group-title-row' }">
+    <VueDraggable
+      :animation="200"
+      :disabled="!isAllCollapsed"
+      :model-value="chordStore.groups"
+      :swap-threshold="0.5"
+      @update:model-value="chordStore.overwriteGroups($event)"
+      chosen-class="drag-chosen-style"
+      class="draggable-list box-border flex flex-col gap-sm"
+      drag-class="drag-active-style"
+      ghost-class="drag-ghost-style"
+      handle=".group-title-row"
+    >
+      <div v-for="(group, index) in chordStore.groups" :key="group.id" class="box-border">
+        <ContextMenu #="{ isOpen }" :items="getGroupMenuItems(group)">
+          <div
+            v-wave
+            v-scroll-into-view.y="group.id === chordStore.selectedGroupId"
+            :aria-expanded="isGroupContentOpen(group)"
+            :aria-label="groupTitleAriaLabel(group)"
+            :class="{
+              'bg-tint-panelhover-50!': isGroupContentOpen(group),
+              'bg-tint-panelhover-30!': isOpen,
+            }"
+            :data-group-id="group.id"
+            @click="chordActions.executeGroupToggle(group)"
+            @keydown.enter.prevent="chordActions.executeGroupToggle(group)"
+            @keydown.space.prevent="chordActions.executeGroupToggle(group)"
+            data-focusable-inline
+            class="group-title-row group/row box-border flex h-[2.4rem] cursor-pointer items-center justify-between rounded-md border border-transparent px-3 transition-all duration-fast outline-none select-none hover:border-border-base hover:bg-surface-panel-hover"
+            role="button"
+            tabindex="0"
+          >
+            <div class="flex min-w-0 flex-1 items-center gap-sm" title="点击折叠/展开分组">
+              <BaseIcon
+                :class="{ '-rotate-90': !isGroupContentOpen(group) }"
+                aria-hidden="true"
+                class="shrink-0 text-fg-disabled transition-transform duration-fast group-hover/row:text-fg-title"
+                icon-size="sm"
+                icon-stroke="regular"
+                name="chevron-down"
+              />
+              <div v-marquee.fade>
+                <span class="text-xs font-bold whitespace-nowrap text-fg-title">
+                  {{ group.name }}
+                </span>
+              </div>
+              <div class="ml-auto flex shrink-0 items-center gap-sm">
+                <BaseBadge
+                  :aria-label="`按${getSortLabel(group)}自动排序`"
+                  appearance="outline"
+                  class="opacity-80"
+                  size="xs"
+                  title="排序方法"
+                  variant="neutral"
+                  width="2rem"
+                >
+                  <span v-chord-name="getSortLabel(group)" />
+                </BaseBadge>
+                <BaseBadge
+                  :appearance="isGroupContentOpen(group) ? 'subtle' : 'filled'"
+                  :aria-label="chordCountAriaLabel(group)"
+                  class="font-mono"
+                  size="xs"
+                  variant="neutral"
+                  width="1.5rem"
+                >
+                  {{ getGroupChordsCount(group.id) }}
+                </BaseBadge>
               </div>
             </div>
-            <LeftChordGroupContent
-              :group
-              :search-query
-              :is-open="isGroupContentOpen(group)"
-              :ref="el => setContentOuterRef(el, index)"
-              @delete-chord="handleLocalDeleteChord"
-              @open-delete-variants="cardData => emit('open-delete-variants', cardData)"
-              @open-move="chord => emit('open-move', chord)"
-              @open-references="cardData => emit('open-references', cardData)"
-              @select-chord="handleSelectChord"
-            />
-          </ContextMenu>
-        </div>
-      </VueDraggable>
-    </div>
-  </template>
+          </div>
+          <LeftChordGroupContent
+            :group
+            :is-open="isGroupContentOpen(group)"
+            :ref="el => setContentOuterRef(el, index)"
+            @delete-chord="handleLocalDeleteChord($event)"
+            @open-delete-variants="emit('open-delete-variants', $event)"
+            @open-move="emit('open-move', $event)"
+            @open-references="emit('open-references', $event)"
+            @select-chord="handleSelectChord($event)"
+          />
+        </ContextMenu>
+      </div>
+    </VueDraggable>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, type ComponentPublicInstance } from 'vue';
+import { computed } from 'vue';
+
 import { VueDraggable } from 'vue-draggable-plus';
 
 import LeftChordGroupContent from '@/domains/chord/library/components/GroupContent.vue';
+import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
+import ContextMenu from '@/platform/ui/context-menu/ContextMenu.vue';
+import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
-import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
-import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
-import ContextMenu from '@/platform/ui/context-menu/ContextMenu.vue';
-import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
-import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { useChordTransfer } from '@/domains/chord/transfer/useChordTransfer';
 
-const props = defineProps<{
-  searchQuery: string;
-}>();
+import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
+import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import type { ComponentPublicInstance } from 'vue';
+
 const emit = defineEmits<{
   (e: 'open-rename', group: Group): void;
   (e: 'open-delete', group: Group): void;
@@ -137,6 +120,7 @@ const emit = defineEmits<{
 const chordStore = useChordStore();
 const editorStore = useChordEditorStore();
 const chordActions = useChordActions();
+const { copyGroupText } = useChordTransfer();
 
 const contentOuterComponentEls = new Map<number, ComponentPublicInstance | Element | null>();
 
@@ -159,34 +143,6 @@ const handleSelectChord = (chord: Chord) => {
   }
 };
 
-const groupMatchCountsMap = computed(() => {
-  const map = new Map<string, number>();
-  const q = props.searchQuery.trim();
-
-  if (!q) {
-    chordStore.groups.forEach(g => {
-      map.set(g.id, chordStore.groupedChordMap.get(g.id)?.length ?? 0);
-    });
-    return map;
-  }
-
-  chordStore.groups.forEach(g => {
-    map.set(g.id, chordStore.getGroupedCards(g.id, q).length);
-  });
-
-  return map;
-});
-
-const totalMatchCount = computed(() => {
-  if (!props.searchQuery.trim()) return chordStore.savedChordsList.length;
-  return Array.from(groupMatchCountsMap.value.values()).reduce((sum, c) => sum + c, 0);
-});
-
-/** 搜索模式下该组匹配的和弦数（无搜索时等于组内总数） */
-const getMatchCount = (groupId: string): number => groupMatchCountsMap.value.get(groupId) ?? 0;
-/** 该组在当前搜索下是否有匹配和弦 */
-const hasMatchedChords = (groupId: string): boolean => getMatchCount(groupId) > 0;
-
 const sortLabelStrategies: Record<Group['sortRule'], (group: Group) => string> = {
   ROOT_PITCH: () => 'C-B',
   KEY_DEGREE: group => `${getGroupSortKey(group) ?? 'C'}调`,
@@ -204,9 +160,6 @@ const getGroupChordsCount = (groupId: string) => {
 /** 分组行无障碍描述：名称、和弦数与展开/折叠状态 */
 const groupTitleAriaLabel = (group: Group): string =>
   `${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${chordStore.isGroupCollapsed(group.id) ? '已折叠' : '已展开'}`;
-/** 匹配计数无障碍描述：本次匹配数与组内总数 */
-const matchCountAriaLabel = (group: Group): string =>
-  `匹配 ${getMatchCount(group.id)} 个，共 ${getGroupChordsCount(group.id)} 个和弦`;
 /** 组内和弦计数无障碍描述：仅显示总数 */
 const chordCountAriaLabel = (group: Group): string => `共 ${getGroupChordsCount(group.id)} 个和弦`;
 
@@ -225,6 +178,13 @@ const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
       icon: 'square-pen',
       action: () => {
         emit('open-rename', group);
+      },
+    },
+    {
+      label: '复制分组',
+      icon: 'copy',
+      action: () => {
+        void copyGroupText(group);
       },
     },
     {

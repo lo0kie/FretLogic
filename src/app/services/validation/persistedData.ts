@@ -5,12 +5,13 @@ import {
   sanitizeChords,
   sanitizeGroupEntity,
   sanitizeGroups,
-  type GroupDraft,
-  type Timestamped,
 } from '@/domains/chord';
-import type { Group } from '@/domains/chord/types';
 import { pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
-import { sanitizeSongEntity, sanitizeSongs, type SongDraft } from '@/domains/score/model/songRepository';
+import { sanitizeSongEntity, sanitizeSongs } from '@/domains/score/model/songRepository';
+
+import type { GroupDraft, Timestamped } from '@/domains/chord';
+import type { Group } from '@/domains/chord/types';
+import type { SongDraft } from '@/domains/score/model/songRepository';
 
 export {
   dedupeChordsByFingerprint,

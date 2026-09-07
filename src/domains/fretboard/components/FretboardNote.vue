@@ -1,6 +1,6 @@
 <template>
   <g :aria-label @dblclick.prevent.stop="$emit('toggle-pitch')" class="outline-none" role="img" tabindex="-1">
-    <g class="duration-base transition-opacity">
+    <g class="transition-opacity duration-base">
       <circle
         v-if="isHovered || isFocused"
         :cx="x"
@@ -17,7 +17,7 @@
         :r="dotRadius"
         :stroke-width="noteStrokeWidth"
         :style="{ fill: noteBgColor, stroke: noteStrokeColor }"
-        class="note-circle filter-(--finger-shadow)"
+        class="note-circle"
       />
 
       <g
@@ -69,9 +69,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import { getFingerColor, getFingerTextColor } from '@/domains/fretboard/model/coordinates';
-
-import { FRETBOARD_COLORS, NOTE_DISPLAY } from '../constants';
+import { NOTE_DISPLAY } from '../constants';
 
 const {
   x,
@@ -82,7 +80,6 @@ const {
   isRoot = false,
   isOpenString = false,
   isMuted = false,
-  isDarkMode = false,
   isHovered = false,
   isFocused = false,
   ariaLabel = '',
@@ -96,7 +93,6 @@ const {
   isRoot?: boolean;
   isOpenString?: boolean;
   isMuted?: boolean;
-  isDarkMode?: boolean;
   isHovered?: boolean;
   isFocused?: boolean;
   ariaLabel?: string;
@@ -127,26 +123,19 @@ const hoverFillColor = computed(() => 'var(--fb-hover)');
 
 const noteBgColor = computed(() => {
   if (isOpenString) {
-    if (isMuted) {
-      return isDarkMode ? '#351f20' : '#ffefee';
-    }
-    if (showRootStyle.value) {
-      return isDarkMode ? FRETBOARD_COLORS.openRootBgDark : FRETBOARD_COLORS.openRootBgLight;
-    }
-    return isDarkMode ? '#182737' : '#ebf4ff';
+    if (isMuted) return 'var(--fb-open-muted-bg)';
+    if (showRootStyle.value) return 'var(--fb-open-root-bg)';
+    return 'var(--fb-open-bg)';
   }
-  return getFingerColor(showRootStyle.value, isDarkMode);
+  // 根音用强调色，其余用普通色；明暗主题由 CSS 变量在 tokens.scss 中切换
+  return showRootStyle.value ? 'var(--fb-root)' : 'var(--fb-dot)';
 });
 
 const noteStrokeColor = computed(() => {
   if (isOpenString) {
-    if (isMuted) {
-      return isDarkMode ? '#762b28' : '#ffc4c1';
-    }
-    if (showRootStyle.value) {
-      return isDarkMode ? FRETBOARD_COLORS.openRootBorderDark : FRETBOARD_COLORS.openRootBorderLight;
-    }
-    return isDarkMode ? '#144477' : '#b3d7ff';
+    if (isMuted) return 'var(--fb-open-muted-border)';
+    if (showRootStyle.value) return 'var(--fb-open-root-border)';
+    return 'var(--fb-open-border)';
   }
   return noteBgColor.value;
 });
@@ -164,12 +153,11 @@ const noteRingColor = computed(() => {
 const noteTextColor = computed(() => {
   if (isOpenString) {
     if (isMuted) return 'var(--color-danger)';
-    if (showRootStyle.value) {
-      return isDarkMode ? FRETBOARD_COLORS.openRootTextDark : FRETBOARD_COLORS.openRootTextLight;
-    }
+    if (showRootStyle.value) return 'var(--color-warning)';
     return 'var(--color-primary)';
   }
-  return getFingerTextColor(showRootStyle.value, isDarkMode);
+  // 普通音符文字用「强调色上的文字」token（蓝点上白字/高对比黑字）；暗色根音高亮值在 tokens.scss 的 .dark 块中定义
+  return showRootStyle.value ? 'var(--fb-root-text)' : 'var(--text-on-accent)';
 });
 </script>
 

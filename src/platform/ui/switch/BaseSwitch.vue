@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <button
     :name
     :aria-busy="isCurrentLoading || undefined"
@@ -8,14 +8,14 @@
     :class="{ 'cursor-grabbing': isDragging }"
     :disabled="disabled || isCurrentLoading"
     :id="resolvedId"
-    @click="handleClick"
-    @keydown.enter.prevent="toggle"
-    @keydown.space.prevent="toggle"
-    @pointercancel="handlePointerCancel"
-    @pointerdown="handlePointerDown"
-    @pointermove="handlePointerMove"
-    @pointerup="handlePointerUp"
-    class="group gap-sm m-0 box-border inline-flex cursor-pointer touch-none items-center rounded-full border-none bg-transparent p-0 align-middle outline-none select-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+    @click="handleClick()"
+    @keydown.enter.prevent="toggle()"
+    @keydown.space.prevent="toggle()"
+    @pointercancel="handlePointerCancel($event)"
+    @pointerdown="handlePointerDown($event)"
+    @pointermove="handlePointerMove($event)"
+    @pointerup="handlePointerUp($event)"
+    class="group m-0 box-border inline-flex cursor-pointer touch-none items-center gap-sm rounded-full border-none bg-transparent p-0 align-middle outline-none select-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
     ref="switchBtnRef"
     role="switch"
     type="button"
@@ -23,13 +23,13 @@
     <span
       v-wave="{ disabled: disabled || isCurrentLoading }"
       :class="[currentConfig.trackClass, trackColorClass]"
-      class="switch-track duration-base group-focus-visible:ring-primary/70 relative box-border inline-flex shrink-0 items-center overflow-hidden rounded-full transition-all group-focus-visible:ring-2"
+      class="switch-track relative box-border inline-flex shrink-0 items-center overflow-hidden rounded-full transition-all duration-base group-focus-visible:ring-2 group-focus-visible:ring-primary/70"
       ref="trackRef"
     >
       <span
         v-if="$slots['checked-text'] || $slots['unchecked-text']"
         :class="isChecked ? 'justify-start' : 'justify-end'"
-        class="text-2xs pointer-events-none absolute inset-0 flex items-center overflow-hidden px-1.5 leading-none font-bold text-white select-none"
+        class="pointer-events-none absolute inset-0 flex items-center overflow-hidden px-1.5 text-2xs leading-none font-bold text-white select-none"
       >
         <span class="inline-block max-w-[calc(100%-1.1rem)] truncate">
           <slot v-if="isChecked" name="checked-text" />
@@ -44,7 +44,7 @@
           isPressed && !isDragging && !hasMovedSignificantly && 'scale-y-[0.82]',
         ]"
         :style="dragThumbStyle"
-        class="switch-thumb duration-base ease-spring pointer-events-none box-border inline-flex items-center justify-center rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] transition-transform"
+        class="switch-thumb pointer-events-none box-border inline-flex items-center justify-center rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] transition-transform duration-base ease-spring"
         ref="thumbRef"
       >
         <slot v-if="isChecked" name="checked-icon" />
@@ -55,7 +55,7 @@
           :height="currentConfig.spinnerSize"
           :width="currentConfig.spinnerSize"
           aria-hidden="true"
-          class="text-primary animate-spin"
+          class="animate-spin text-primary"
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -72,7 +72,7 @@
       </span>
     </span>
 
-    <span v-if="label || $slots['default']" class="switch-label text-text-body text-xs leading-none font-medium">
+    <span v-if="label || $slots['default']" class="switch-label text-xs leading-none font-medium text-fg-body">
       <slot> {{ label }} </slot>
     </span>
   </button>
@@ -82,6 +82,47 @@
 import { computed, ref, useId, useTemplateRef } from 'vue';
 
 import type { ComponentSize } from '@/platform/types';
+
+const modelValue = defineModel<T>({ required: true });
+
+const loadingModel = defineModel<boolean>('loading', { default: false });
+
+const props = withDefaults(
+  defineProps<{
+    /** 尺寸档位：sm/md/lg */
+    size?: ComponentSize;
+    /** 激活态轨道配色主题（primary/success/danger/warning） */
+    color?: 'primary' | 'success' | 'danger' | 'warning' | (string & {});
+    /** 禁用开关，不可点击与拖拽 */
+    disabled?: boolean;
+    /** 加载中：拇指显示旋转 spinner 并禁止切换 */
+    loading?: boolean;
+    /** 原生表单 name 属性 */
+    name?: string;
+    /** 开关右侧的文字标签 */
+    label?: string;
+    /** 原生 id，不传时自动生成 */
+    id?: string;
+    /** 无障碍标签（缺省回退到 label） */
+    ariaLabel?: string;
+    /** 激活时的值，默认 true */
+    activeValue?: T;
+    /** 关闭时的值，默认 false */
+    inactiveValue?: T;
+    /** 切换前拦截钩子：返回 false（或抛错）阻止本次变更，等待期间显示 loading */
+    beforeChange?: (val: T) => boolean | Promise<boolean>;
+  }>(),
+  {
+    size: 'md',
+    color: 'primary',
+    disabled: false,
+    loading: false,
+  }
+);
+
+const emit = defineEmits<{
+  (e: 'change', value: T): void;
+}>();
 
 const COLOR_CLASS: Record<string, { on: string; off: string }> = {
   primary: {
@@ -113,58 +154,27 @@ const SWITCH_CONFIG: Record<
   }
 > = {
   sm: {
-    trackClass: 'w-7 h-4 p-0.5',
-    thumbClass: 'w-3 h-3',
+    trackClass: 'h-4 w-7 p-0.5',
+    thumbClass: 'h-3 w-3',
     checkedClass: 'translate-x-3',
     travelPx: 12,
     spinnerSize: 9,
   },
   md: {
-    trackClass: 'w-9 h-5 p-0.5',
-    thumbClass: 'w-4 h-4',
+    trackClass: 'h-5 w-9 p-0.5',
+    thumbClass: 'h-4 w-4',
     checkedClass: 'translate-x-4',
     travelPx: 16,
     spinnerSize: 11,
   },
   lg: {
-    trackClass: 'w-11 h-6 p-0.5',
-    thumbClass: 'w-5 h-5',
+    trackClass: 'h-6 w-11 p-0.5',
+    thumbClass: 'h-5 w-5',
     checkedClass: 'translate-x-5',
     travelPx: 20,
     spinnerSize: 13,
   },
 };
-
-const props = withDefaults(
-  defineProps<{
-    size?: ComponentSize;
-    color?: 'primary' | 'success' | 'danger' | 'warning' | (string & {});
-    disabled?: boolean;
-    loading?: boolean;
-    name?: string;
-    label?: string;
-    id?: string;
-    ariaLabel?: string;
-    /** 激活时的值，默认 true */
-    activeValue?: T;
-    /** 关闭时的值，默认 false */
-    inactiveValue?: T;
-    beforeChange?: (val: T) => boolean | Promise<boolean>;
-  }>(),
-  {
-    size: 'md',
-    color: 'primary',
-    disabled: false,
-    loading: false,
-  }
-);
-
-const modelValue = defineModel<T>({ required: true });
-const loadingModel = defineModel<boolean>('loading', { default: false });
-
-const emit = defineEmits<{
-  (e: 'change', value: T): void;
-}>();
 
 const resolvedActiveValue = computed<T>(() =>
   props.activeValue !== undefined ? props.activeValue : (true as unknown as T)
@@ -269,6 +279,9 @@ const handlePointerDown = (e: PointerEvent) => {
 
 /** 拖拽中：跟踪横向位移，超过阈值进入拖拽态 */
 const handlePointerMove = (e: PointerEvent) => {
+  // 禁用/加载中不参与拖拽：pointer 事件在 disabled 按钮上仍会派发（与 mouse 事件不同），
+  // 且此场景下 dragStartX 未被 pointerdown 初始化（保持 0），不拦截会把巨大位移误判为拖拽
+  if (props.disabled || isCurrentLoading.value) return;
   if (e.buttons === 0) {
     if (isDragging.value) {
       isDragging.value = false;
@@ -276,6 +289,8 @@ const handlePointerMove = (e: PointerEvent) => {
     }
     return;
   }
+  // 未经过本组件 pointerdown 的按压（如在别处按下拖入）：无有效起点，忽略
+  if (!isPressed.value) return;
   const deltaX = e.clientX - dragStartX;
   dragOffset.value = deltaX;
   if (!isDragging.value && Math.abs(deltaX) > 4) {
@@ -297,6 +312,9 @@ const handlePointerUp = async (e: PointerEvent) => {
   } catch {
     // ignore
   }
+
+  // 禁用/加载中禁止结算：拖拽态可能由指针拖入产生，不得改值
+  if (props.disabled || isCurrentLoading.value) return;
 
   if (wasDragging && hasMovedSignificantly) {
     const initialPos = startValue ? maxTravelDistance : 0;

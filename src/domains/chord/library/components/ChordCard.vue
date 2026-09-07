@@ -3,38 +3,35 @@
     <ContextMenu #="{ isOpen }" :items="menuItems">
       <div :title="getChordName(activeChord, { shorthand: settingsStore.workbenchChordShorthand })" class="w-full">
         <div
+          v-action-card
           v-wave
           :aria-label
           :aria-pressed="isActive"
           :class="{
-            'bg-tint-primary-92! border-tint-primary-45! hover:bg-tint-primary-80! hover:border-primary! shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.25)] hover:shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.4)]':
+            'border-tint-primary-45! bg-tint-primary-92! shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.25)] hover:border-primary! hover:bg-tint-primary-80! hover:shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.4)]':
               isActive,
-            'bg-bg-panel-hover border-border-base': isOpen,
+            'border-border-base bg-surface-panel-hover': isOpen,
           }"
-          @click="handleCardClick"
-          @keydown.enter.prevent.stop="handleCardClick"
-          @keydown.space.prevent.stop="handleCardClick"
+          @click="handleCardClick()"
           data-focusable-inline
-          class="duration-fast bg-bg-body border-border-light hover:bg-bg-panel-hover hover:border-border-base active:bg-bg-panel-hover active:border-border-base relative box-border flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border px-2 transition-all outline-none"
-          role="button"
-          tabindex="0"
+          class="relative box-border flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border border-border-light bg-surface-body px-2 transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover active:border-border-base active:bg-surface-panel-hover"
         >
           <BaseBadge
             v-if="cardData.hasVariants"
             :variant="isActive ? 'primary' : 'neutral'"
-            @click.stop="toggleVariantsDropdown"
+            @click.stop="toggleVariantsDropdown()"
             appearance="filled"
-            class="z-card border-bg-body duration-fast ease-bounce absolute -top-1.5 -right-1.5 cursor-pointer border shadow-sm transition-all"
+            class="absolute -top-1.5 -right-1.5 z-card cursor-pointer border border-surface-body shadow-sm transition-all duration-fast ease-bounce"
             size="xs"
           >
             <span v-if="isActive"> {{ activeVariantIndex + 1 }}/{{ cardData.variantCount }} </span>
             <span v-else> {{ cardData.variantCount }} </span>
           </BaseBadge>
 
-          <div v-marquee class="min-w-0 flex-1">
+          <div v-marquee.fade class="min-w-0 flex-1">
             <span
               v-chord-name="{ chord: activeChord, shorthand: settingsStore.workbenchChordShorthand }"
-              :class="isActive ? 'text-primary' : 'text-text-body'"
+              :class="isActive ? 'text-primary' : 'text-fg-body'"
               class="pointer-events-none text-xs font-bold tracking-tight"
             />
           </div>
@@ -47,14 +44,15 @@
 <script setup lang="ts">
 import { computed, inject, ref } from 'vue';
 
+import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
+import ContextMenu from '@/platform/ui/context-menu/ContextMenu.vue';
 import { CHORD_REFERENCE_LOOKUP } from '@/domains/chord/library/injectionKeys';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { useChordTransfer } from '@/domains/chord/transfer/useChordTransfer';
-import type { Chord, GroupedChordCard } from '@/domains/chord/types';
 import { useSettingsStore } from '@/platform/store/settingsStore';
-import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
-import ContextMenu from '@/platform/ui/context-menu/ContextMenu.vue';
+
+import type { Chord, GroupedChordCard } from '@/domains/chord/types';
 import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
 
 const props = defineProps<{
@@ -118,7 +116,7 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 
   return [
     {
-      label: '复制文本',
+      label: '复制和弦',
       icon: 'copy',
       expandChildren: props.cardData.hasVariants,
       action: () => void copyChordCardText(activeChord.value),

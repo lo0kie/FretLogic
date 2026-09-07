@@ -7,8 +7,19 @@ import { ref } from 'vue';
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
-import type { AppPreferencesBackup, SyncProviderKind, SyncSettingsBackup } from '@/platform/types';
-import { GITEE_SYNC_CONFIG, GITHUB_SYNC_CONFIG, STORAGE_KEYS } from '@/platform/utils/constants';
+import {
+  AUDIO_SETTINGS_DEFAULTS,
+  GITEE_SYNC_CONFIG,
+  GITHUB_SYNC_CONFIG,
+  STORAGE_KEYS,
+} from '@/platform/utils/constants';
+
+import type {
+  AppPreferencesBackup,
+  AudioPlaybackSettings,
+  SyncProviderKind,
+  SyncSettingsBackup,
+} from '@/platform/types';
 
 export const useSettingsStore = defineStore('settings', () => {
   const syncTarget = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_TARGET, 'gitee');
@@ -19,7 +30,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const githubRepo = useStorage(STORAGE_KEYS.GH_REPO, GITHUB_SYNC_CONFIG.DEFAULT_REPO);
   const githubBranch = useStorage(STORAGE_KEYS.GH_BRANCH, GITHUB_SYNC_CONFIG.DEFAULT_BRANCH);
   const githubPath = useStorage(STORAGE_KEYS.GH_PATH, GITHUB_SYNC_CONFIG.DEFAULT_PATH);
-  const githubBranches = useStorage(STORAGE_KEYS.GH_BRANCHES, <Array<string>>[]);
+  const githubBranches = useStorage(STORAGE_KEYS.GH_BRANCHES, <string[]>[]);
 
   // Gitee 同步配置（默认由 GITEE_SYNC_CONFIG 提供仓库与分支）
   const giteeToken = ref('');
@@ -27,7 +38,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const giteeRepo = useStorage(STORAGE_KEYS.GE_REPO, GITEE_SYNC_CONFIG.DEFAULT_REPO);
   const giteeBranch = useStorage(STORAGE_KEYS.GE_BRANCH, GITEE_SYNC_CONFIG.DEFAULT_BRANCH);
   const giteePath = useStorage(STORAGE_KEYS.GE_PATH, GITEE_SYNC_CONFIG.DEFAULT_PATH);
-  const giteeBranches = useStorage(STORAGE_KEYS.GE_BRANCHES, <Array<string>>[]);
+  const giteeBranches = useStorage(STORAGE_KEYS.GE_BRANCHES, <string[]>[]);
 
   // 迁移一次性兼容：早期 Gitee 预设曾沿用 GitHub 值（lo0kie/FretLogic）且分支固定 master，
   // useStorage 的持久化值优先于新默认，故在此把历史遗留值纠正到新预设（分支按 dev/prod 分流）
@@ -58,6 +69,23 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 乐谱排版对齐偏好（start 起始位置 / center 居中对齐）
   const scoreLayoutAlign = useStorage<'start' | 'center'>(STORAGE_KEYS.SCORE_LAYOUT_ALIGN, 'start');
+
+  // 音频试听可调参数（音色 / 弦间间隔 / 扫弦方向 / 音量 / 力度随机；默认值即初始出厂值）
+  // mergeDefaults: 旧版本持久化对象缺新增字段（如 reverbWet/chorusEnabled）时与默认值合并，避免 undefined 流入音频引擎
+  const audioPlayback = useStorage<AudioPlaybackSettings>(
+    STORAGE_KEYS.AUDIO_PLAYBACK,
+    {
+      timbre: 'standard',
+      strumDelayMs: AUDIO_SETTINGS_DEFAULTS.strumDelayMs,
+      strumDirection: 'low',
+      volumeDb: AUDIO_SETTINGS_DEFAULTS.volumeDb,
+      humanize: true,
+      reverbWet: AUDIO_SETTINGS_DEFAULTS.reverbWet,
+      chorusEnabled: false,
+    },
+    undefined,
+    { mergeDefaults: true }
+  );
 
   /** 从备份包恢复同步配置（导入备份/云端拉取时调用）。分支缓存随旧配置失效。 */
   const applySyncBackup = (sync?: SyncSettingsBackup) => {
@@ -125,6 +153,7 @@ export const useSettingsStore = defineStore('settings', () => {
     workbenchChordShorthand,
     scoreChordShorthand,
     scoreLayoutAlign,
+    audioPlayback,
     applySyncBackup,
     applyPreferencesBackup,
   };

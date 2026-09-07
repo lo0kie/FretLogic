@@ -1,22 +1,23 @@
-<template>
+﻿<template>
   <Teleport :disabled="disabledTeleport" :to="teleportTo">
     <Transition
       :name="transitionName"
-      @after-enter="el => emit('after-enter', el)"
-      @after-leave="el => emit('after-leave', el)"
-      @before-enter="el => emit('before-enter', el)"
-      @before-leave="el => emit('before-leave', el)"
-      @enter="el => emit('enter', el)"
-      @leave="el => emit('leave', el)"
+      @after-enter="emit('after-enter', $event)"
+      @after-leave="emit('after-leave', $event)"
+      @before-enter="emit('before-enter', $event)"
+      @before-leave="emit('before-leave', $event)"
+      @enter="emit('enter', $event)"
+      @leave="emit('leave', $event)"
       appear
     >
       <div
+        v-auto-width
         v-bind="$attrs"
         v-if="isBarVisible"
         :aria-label="ariaLabel ?? '浮动操作栏'"
-        :class="[positionClass, alignClass, zIndexClass]"
+        :class="[positionClass, alignClass, zIndexClass, sizeClass]"
         :style="outerStyle"
-        class="base-floating-bar gap-sm py-sm px-md bg-bg-panel/95 border-glass-border shadow-floating hover:ring-primary/70 pointer-events-auto box-border flex w-max max-w-[calc(100vw-2rem)] items-center rounded-full border backdrop-blur-xl hover:ring-2"
+        class="base-floating-bar pointer-events-auto box-border flex w-max max-w-[calc(100vw-2rem)] items-center rounded-full border border-glass-border bg-surface-panel/95 shadow-floating backdrop-blur-xl hover:ring-2 hover:ring-primary/70"
         role="toolbar"
         tabindex="-1"
       >
@@ -36,6 +37,7 @@ defineOptions({
 
 const props = withDefaults(
   defineProps<{
+    /** 是否显示浮动栏（还需组件未被 KeepAlive 停用） */
     visible?: boolean;
     /** 距底部距离；数值自动补齐 px */
     bottom?: string | number;
@@ -51,6 +53,8 @@ const props = withDefaults(
     ariaLabel?: string;
     /** 是否叠加底部安全区（env(safe-area-inset-bottom)），适配移动端/可折叠设备 */
     safeAreaInset?: boolean;
+    /** 尺寸形态：'md' 常规操作栏（默认）| 'sm' 紧凑胶囊（内嵌小控件场景，如缩放控制器） */
+    size?: 'sm' | 'md';
     /** Teleport 目标，默认 'body'；微前端/多窗口/Shadow DOM 等场景可指定挂载节点 */
     teleportTo?: string | HTMLElement;
     /** 禁用 Teleport，直接在本地渲染 */
@@ -64,6 +68,7 @@ const props = withDefaults(
     zIndex: 'z-fab',
     transitionName: 'v-floating-bar-slide',
     safeAreaInset: true,
+    size: 'md',
     teleportTo: 'body',
     disabledTeleport: false,
   }
@@ -95,14 +100,22 @@ const isBarVisible = computed(() => Boolean(props.visible && isViewActive.value)
 const positionClass = computed(() => (props.position === 'absolute' ? 'absolute' : 'fixed'));
 
 const ALIGN_CLASS_MAP: Record<'start' | 'end' | 'center', string> = {
-  start: 'left-4 right-auto',
+  start: 'right-auto left-4',
   end: 'right-4 left-auto',
-  center: 'left-0 right-0 mx-auto',
+  center: 'right-0 left-0 mx-auto',
 };
 
 const alignClass = computed(() =>
   props.align ? (ALIGN_CLASS_MAP[props.align] ?? ALIGN_CLASS_MAP.center) : ALIGN_CLASS_MAP.center
 );
+
+/** 尺寸形态映射：md 常规操作栏 / sm 紧凑胶囊。sm 的水平内边距与垂直对称（px-1.5），
+ * 保证内容为单个方形控件（如图标开关）时整体呈正圆形，而非左右拉长的胶囊 */
+const SIZE_CLASS_MAP: Record<'sm' | 'md', string> = {
+  sm: 'gap-xs px-1.5 py-1.5',
+  md: 'gap-sm px-md py-sm',
+};
+const sizeClass = computed(() => SIZE_CLASS_MAP[props.size] ?? SIZE_CLASS_MAP.md);
 
 const zIndexClass = computed(() => (typeof props.zIndex === 'string' ? props.zIndex : ''));
 

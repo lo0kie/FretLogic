@@ -3,9 +3,11 @@
  * 将乐谱数据封装后发送至 Worker 独立线程，OffscreenCanvas 离屏绘制，主线程 0ms 阻塞。
  */
 import { computeSongKey, getChordName } from '@/domains/chord/theory/theory';
-import type { Chord } from '@/domains/chord/types';
+import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { DEFAULT_SCORE_TITLE } from '@/domains/score/constants';
 import { charKey, collectEdgeChordIds } from '@/domains/score/model/scoreModel';
+
+import type { Chord } from '@/domains/chord/types';
 import type {
   ExportChordData,
   ExportLineItem,
@@ -13,7 +15,6 @@ import type {
   WorkerExportPayload,
 } from '@/domains/score/preview/workers/scoreExportWorker';
 import type { Song } from '@/domains/score/types';
-import { isDark } from '@/platform/composables/useTheme';
 
 /** 将 Chord 模型转为 Worker 绘图所需的轻量指板实体（仅本文件内部使用） */
 const extractExportChordData = (chord: Chord, shorthand = false): ExportChordData => ({
@@ -36,7 +37,9 @@ export const prepareWorkerExportPayload = (
   chordsLookupMap: Map<string, Chord>,
   mode: 'normal' | 'a4',
   shorthand = false,
-  layoutAlign: 'start' | 'center' = 'start'
+  layoutAlign: 'start' | 'center' = 'start',
+  fontScale = 1,
+  fretboardScale = 1
 ): WorkerExportPayload => {
   const lyricsLines = song.lyrics.split('\n');
   const chordMap = song.chordMap;
@@ -96,8 +99,11 @@ export const prepareWorkerExportPayload = (
     capoText,
     lines,
     mode,
-    darkMode: isDark.value,
+    // 画布配色单一来源是 tokens.scss 的 --fbc-* 变量，主线程解析后传给 Worker（Worker 无 DOM）
+    colors: resolveFretboardCanvasPalette(),
     layoutAlign,
+    fontScale,
+    fretboardScale,
   };
 };
 

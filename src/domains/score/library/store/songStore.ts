@@ -8,14 +8,15 @@ import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
 import { getChordName, transposeChordName } from '@/domains/chord/theory/theory';
-import type { Chord, ChordId } from '@/domains/chord/types';
 import { toCapo } from '@/domains/fretboard/model/coordinates';
 import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/domains/score/model/chordSlots';
 import { createSong as createSongEntity } from '@/domains/score/model/scoreModel';
 import { createSongRepository, sanitizeSongList } from '@/domains/score/model/songRepository';
-import type { SlotKey, Song } from '@/domains/score/types';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { compareByPinyin, pinyinReady, preloadPinyin } from '@/platform/utils/pinyin';
+
+import type { Chord, ChordId } from '@/domains/chord/types';
+import type { SlotKey, Song } from '@/domains/score/types';
 
 const FLUSH_DELAY = 400;
 const FLUSH_MAX_WAIT = 1500;
@@ -272,7 +273,7 @@ export const useSongStore = defineStore('song', () => {
     const index = songs.value.findIndex(s => s.id === id);
     if (index === -1) return;
     lastDeletedSongInfo.value = {
-      song: { ...songs.value[index]!, chordMap: new Map(songs.value[index]!.chordMap) },
+      song: { ...songs.value[index]! },
       index,
     };
     songs.value = songs.value.filter(s => s.id !== id);

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { syncLocalStorageToIdb } from '@/app/services/data/bootstrap';
 import { chordRepository, songRepository } from '@/app/services/data/repositories';
+
 import type { Song } from '@/domains/score/types';
 
 const song: Song = {

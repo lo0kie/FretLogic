@@ -1,12 +1,13 @@
 import { fillMissingTimestamps } from '@/domains/chord/model/chordRepository';
-import type { ChordId } from '@/domains/chord/types';
 import { isCapoValue } from '@/domains/fretboard/model/coordinates';
 import { pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
 import { toSongId } from '@/domains/score/model/scoreModel';
-import type { LineId, SlotKey, Song } from '@/domains/score/types';
 import { serializeForStorage } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { readJson } from '@/platform/utils/storage';
+
+import type { ChordId } from '@/domains/chord/types';
+import type { LineId, SlotKey, Song } from '@/domains/score/types';
 
 type RawRecord = Record<string, unknown>;
 

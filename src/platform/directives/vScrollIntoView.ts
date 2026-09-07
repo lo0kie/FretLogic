@@ -1,10 +1,13 @@
+import { nextTick } from 'vue';
+
+import type { Directive, DirectiveBinding } from 'vue';
+
 /**
  * v-scroll-into-view 指令：元素激活或挂载时自动平滑/即时滚入视口。
  * 支持布尔值、配置对象（{ active, direction, block, inline, behavior, delay, once }）
  * 与修饰符（.x/.horizontal, .y/.vertical, .center, .nearest, .smooth, .immediate, .once/.mountOnly）。
  * 适用于多指法卡片、乐谱卡片、和弦分组卡片等列表项激活时的自动居中/视口定位。
  */
-import { nextTick, type Directive, type DirectiveBinding } from 'vue';
 
 export type ScrollIntoViewModifiers =
   | 'x'

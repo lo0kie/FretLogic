@@ -5,12 +5,13 @@
     icon="sliders-horizontal"
     title="指板设置"
   >
-    <div class="gap-md flex flex-col px-1 pt-2">
+    <div class="flex flex-col gap-md px-1 pt-2">
       <BaseFormRow label="显示品数">
         <BaseSegmentedControl
           :model-value="editorStore.draftChord.fretCount"
           :options="FRET_OPTIONS"
-          @update:model-value="val => editorStore.setFretCount(val as 3 | 4)"
+          @update:model-value="editorStore.setFretCount($event)"
+          compacted
         />
       </BaseFormRow>
 
@@ -35,7 +36,7 @@
           "
           :options="tuningOptions"
           clearable
-          width="auto"
+          width="lg"
         />
       </BaseFormRow>
 
@@ -53,18 +54,21 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
+import BaseNumberInput from '@/platform/ui/input/BaseNumberInput.vue';
+import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
+import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
+import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
 import { FRET_COUNTS, INTERACTION_CONFIG } from '@/domains/fretboard/constants';
 import { useSettingsStore } from '@/platform/store/settingsStore';
-import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
-import BaseNumberInput from '@/platform/ui/input/BaseNumberInput.vue';
-import BaseSegmentedControl, { type SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
-import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
-import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import WorkbenchPanel from './WorkbenchPanel.vue';
+
+import type { Chord } from '@/domains/chord/types';
+import type { SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 
 const editorStore = useChordEditorStore();
 const settingsStore = useSettingsStore();
@@ -75,7 +79,7 @@ const hasFrettedNotes = () => editorStore.draftChord.strings.some(str => str && 
 const tuningOptions = computed(() =>
   (Object.keys(TUNING_PRESETS) as Tuning[]).filter(t => TUNING_PRESETS[t]?.stringCount === editorStore.stringCount)
 );
-const FRET_OPTIONS: SegmentOption<3 | 4>[] = FRET_COUNTS.map(f => ({
+const FRET_OPTIONS: SegmentOption<Chord['fretCount']>[] = FRET_COUNTS.map(f => ({
   label: `${f}品`,
   value: f,
 }));

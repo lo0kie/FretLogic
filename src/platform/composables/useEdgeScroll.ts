@@ -1,4 +1,6 @@
-import { onBeforeUnmount, reactive, toValue, watch, type MaybeRef } from 'vue';
+import { onBeforeUnmount, reactive, toValue, watch } from 'vue';
+
+import type { MaybeRef } from 'vue';
 
 /** 可跟踪的容器边：任意子集组合，决定暴露哪些“滚到该边”入口 */
 export type ScrollEdge = 'top' | 'bottom' | 'left' | 'right';
@@ -76,32 +78,55 @@ export const useEdgeScroll = (target: MaybeRef<HTMLElement | null>, options: Use
     resizeObserver?.disconnect();
   });
 
+  /** 规范化滚动行为：仅接受 'auto' | 'instant'，传入 Event 或未知值时一律安全回退到 'smooth' */
+  const resolveBehavior = (val?: unknown): ScrollBehavior => (val === 'auto' || val === 'instant' ? val : 'smooth');
+
   /** 平滑滚动至指定边（如容器已卸载则静默返回） */
-  const scrollToEdge = (edge: ScrollEdge, behavior: ScrollBehavior = 'smooth') => {
+  const scrollToEdge = (edge: ScrollEdge, behavior?: ScrollBehavior | unknown) => {
     const el = toValue(target);
     if (!el) return;
-    switch (edge) {
-      case 'bottom':
-        el.scrollTo({ top: el.scrollHeight, behavior });
-        break;
-      case 'top':
-        el.scrollTo({ top: 0, behavior });
-        break;
-      case 'right':
-        el.scrollTo({ left: el.scrollWidth, behavior });
-        break;
-      case 'left':
-        el.scrollTo({ left: 0, behavior });
-        break;
+    const scrollBehavior = resolveBehavior(behavior);
+    if (typeof el.scrollTo === 'function') {
+      switch (edge) {
+        case 'bottom':
+          el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior });
+          break;
+        case 'top':
+          el.scrollTo({ top: 0, behavior: scrollBehavior });
+          break;
+        case 'right':
+          el.scrollTo({ left: el.scrollWidth, behavior: scrollBehavior });
+          break;
+        case 'left':
+          el.scrollTo({ left: 0, behavior: scrollBehavior });
+          break;
+      }
+    } else {
+      switch (edge) {
+        case 'bottom':
+          el.scrollTop = el.scrollHeight;
+          break;
+        case 'top':
+          el.scrollTop = 0;
+          break;
+        case 'right':
+          el.scrollLeft = el.scrollWidth;
+          break;
+        case 'left':
+          el.scrollLeft = 0;
+          break;
+      }
     }
   };
 
   return {
     visible,
-    scrollToTop: () => scrollToEdge('top'),
-    scrollToBottom: () => scrollToEdge('bottom'),
-    scrollToLeft: () => scrollToEdge('left'),
-    scrollToRight: () => scrollToEdge('right'),
+    /** 由调用方在“仅内容高度变化、无滚动事件”后主动刷新各边状态（如切歌后 DOM 落定） */
+    refresh,
+    scrollToTop: (behavior?: ScrollBehavior | unknown) => scrollToEdge('top', behavior),
+    scrollToBottom: (behavior?: ScrollBehavior | unknown) => scrollToEdge('bottom', behavior),
+    scrollToLeft: (behavior?: ScrollBehavior | unknown) => scrollToEdge('left', behavior),
+    scrollToRight: (behavior?: ScrollBehavior | unknown) => scrollToEdge('right', behavior),
     scrollToEdge,
   };
 };

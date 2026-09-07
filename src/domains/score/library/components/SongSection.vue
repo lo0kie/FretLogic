@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <EmptyState v-if="songStore.songs.length === 0" description="暂无乐谱，点击右上角新建" icon="music" />
 
   <!-- 统一容器：手动排序时经 useDraggable 支持拖拽，非手动时仅展示；
@@ -6,47 +6,45 @@
        拼音分组模式在列表中插入分组小标题行，分组显隐同样走 enter/leave 过渡 -->
   <div v-else v-grid-nav.stop="{ cols: 1, selector: '.song-card-item' }">
     <TransitionGroup
-      class="draggable-list gap-sm relative box-border flex flex-col"
+      @leave="onSongLeave($event)"
+      class="draggable-list relative box-border flex flex-col gap-sm"
       name="song-sort"
       ref="songListRef"
       tag="div"
     >
       <div v-for="row in songRows" :key="row.key" class="box-border flex w-full flex-col">
         <div v-if="row.type === 'group'" aria-hidden="true" class="song-group-header px-sm pb-2xs">
-          <span class="text-text-disabled text-xs leading-none font-bold tracking-widest">{{ row.label }}</span>
+          <span class="text-xs leading-none font-bold tracking-widest text-fg-disabled">{{ row.label }}</span>
         </div>
         <template v-else>
           <ContextMenu #="{ isOpen }" :items="getSongMenuItems(row.song!)">
             <div
+              v-action-card
               v-wave
-              v-scroll-into-view.y.once="isSongActive(row.song!.id)"
+              v-scroll-into-view.y="isSongActive(row.song!.id)"
               :aria-label="songCardAriaLabel(row.song!)"
               :aria-pressed="isSongActive(row.song!.id)"
               :class="{
-                'bg-tint-primary-92! border-tint-primary-60! hover:bg-tint-primary-82! hover:border-primary! hover:shadow-[0_0_0_1px_var(--color-primary)]':
+                'border-tint-primary-60! bg-tint-primary-92! hover:border-primary! hover:bg-tint-primary-82! hover:shadow-[0_0_0_1px_var(--color-primary)]':
                   isSongActive(row.song!.id),
-                'bg-bg-panel-hover border-border-base': isOpen,
+                'border-border-base bg-surface-panel-hover': isOpen,
               }"
               :data-song-id="row.song!.id"
               @click="handleSelectSong(row.song!.id)"
-              @keydown.enter.prevent.stop="handleSelectSong(row.song!.id)"
-              @keydown.space.prevent.stop="handleSelectSong(row.song!.id)"
               data-focusable-inline
-              class="song-card-item p-sm px-md bg-bg-body border-border-light duration-fast hover:bg-bg-panel-hover hover:border-border-base box-border w-full cursor-pointer rounded-md border transition-all outline-none"
-              role="button"
-              tabindex="0"
+              class="song-card-item box-border w-full cursor-pointer rounded-md border border-border-light bg-surface-body p-sm px-md transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover"
             >
-              <div class="gap-sm flex w-full items-center justify-between">
-                <div v-marquee class="min-w-0 flex-1">
+              <div class="flex w-full items-center justify-between gap-sm">
+                <div v-marquee.fade class="min-w-0 flex-1">
                   <span
-                    :class="isSongActive(row.song!.id) ? 'text-primary! font-bold' : 'text-text-title'"
+                    :class="isSongActive(row.song!.id) ? 'font-bold text-primary!' : 'text-fg-title'"
                     class="text-xs font-semibold"
                   >
                     {{ row.song!.title }}
                   </span>
                 </div>
 
-                <div class="gap-xs flex shrink-0">
+                <div class="flex shrink-0 gap-xs">
                   <BaseBadge
                     :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
                     :aria-label="songKeyAriaLabel(row.song!)"
@@ -54,7 +52,7 @@
                     variant="neutral"
                     width="2rem"
                   >
-                    <span v-chord-name="{ name: `${computeSongKey(row.song!.playKey, row.song!.capo)}调` }" />
+                    <span v-chord-name="`${computeSongKey(row.song!.playKey, row.song!.capo)}调`" />
                   </BaseBadge>
 
                   <BaseBadge
@@ -78,19 +76,24 @@
 
 <script setup lang="ts">
 import { computed, nextTick, useTemplateRef, watch } from 'vue';
-import { useDraggable, type DraggableEvent } from 'vue-draggable-plus';
 
+import { useDraggable } from 'vue-draggable-plus';
+
+import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
+import ContextMenu from '@/platform/ui/context-menu/ContextMenu.vue';
+import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
 import { computeSongKey } from '@/domains/chord/theory/theory';
+import { useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
-import type { Song } from '@/domains/score/types';
 import { useUiStore } from '@/platform/store/uiStore';
-import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
-import ContextMenu from '@/platform/ui/context-menu/ContextMenu.vue';
-import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import { TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
 import { pinyinGroupKey } from '@/platform/utils/pinyin';
+
+import type { Song } from '@/domains/score/types';
+import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import type { DraggableEvent } from 'vue-draggable-plus';
 
 const emit = defineEmits<{
   (e: 'open-config', song: Song): void;
@@ -100,6 +103,7 @@ const emit = defineEmits<{
 const songStore = useSongStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
+const { selectSong } = useScoreRouteSync();
 const { copySongText } = useTextTransfer();
 
 const songListRef = useTemplateRef<HTMLElement>('songListRef');
@@ -181,7 +185,7 @@ const songKeyAriaLabel = (song: Song): string => `调性 ${computeSongKey(song.p
 const getSongMenuItems = (song: Song): ContextMenuItem[] => {
   const items: ContextMenuItem[] = [
     {
-      label: '复制文本',
+      label: '复制乐谱',
       icon: 'copy',
       action: () => {
         void copySongText(song);
@@ -216,7 +220,7 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => {
         }
         uiStore.toast.info(`已删除乐谱 "${song.title}"`, {
           actionText: '撤销',
-          duration: 4000,
+          duration: TOAST_WARNING_DURATION_MS,
           onAction: () => {
             songStore.restoreSong(deletedSong, originalIndex >= 0 ? originalIndex : undefined);
             if (isCurrentActive) {
@@ -231,13 +235,26 @@ const getSongMenuItems = (song: Song): ContextMenuItem[] => {
   return items;
 };
 
-/** 用户点击乐谱卡：再次点击取消选中；选中新乐谱时保留并恢复用户此前的标签页 */
+/** 用户点击乐谱卡：再次点击取消选中；URL 以 replace 镜像（选歌不产生历史），滚动对焦由卡片上的 v-scroll-into-view 声明式完成 */
 const handleSelectSong = (songId: string) => {
-  if (scoreEditor.activeSongId === songId) {
-    scoreEditor.setActiveSong(null);
-  } else {
-    scoreEditor.setActiveSong(songId);
-  }
+  selectSong(scoreEditor.activeSongId === songId ? null : songId);
+};
+
+/**
+ * 删除/移除乐谱时的 leave 钩子：锁死当前纵向偏移，避免 position:absolute 后
+ * top 在 flex 容器里被解析为容器顶端，导致卡片“飞”到列表顶部（飞得太远）。
+ * 单参数 → Vue 仍走 CSS transitionend 判定，无需手动 done()。
+ */
+const onSongLeave = (el: Element): void => {
+  const node = el as HTMLElement;
+  const parent = node.parentElement;
+  if (!parent) return;
+  const elRect = node.getBoundingClientRect();
+  const parentRect = parent.getBoundingClientRect();
+  // 收窄过渡：离场元素自带 transition-all，若补间 top 会二次滑动；改为仅淡出 + 轻微位移
+  node.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+  node.style.top = `${elRect.top - parentRect.top + parent.scrollTop}px`;
+  node.style.bottom = 'auto';
 };
 </script>
 

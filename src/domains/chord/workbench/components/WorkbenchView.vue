@@ -1,21 +1,21 @@
 <template>
-  <div class="z-content pointer-events-auto absolute inset-0 box-border overflow-hidden">
+  <div class="pointer-events-auto absolute inset-0 z-content box-border overflow-hidden">
     <div
-      class="no-scrollbar pt-2xl pb-3xl px-2xl relative box-border flex h-full w-full items-start justify-center overflow-y-auto"
+      class="no-scrollbar relative box-border flex size-full items-start justify-center overflow-y-auto px-2xl pt-2xl pb-3xl"
     >
       <!-- 交互指板卡片：点击/编辑即写和弦草稿，含横按标记与和弦名直改 -->
       <div
-        class="bg-bg-panel/90 border-glass-border shadow-panel py-xl px-2xl duration-slow ease-sidebar hover:border-border-base pointer-events-auto relative flex shrink-0 flex-col items-center justify-evenly rounded-md border backdrop-blur-lg transition-all hover:shadow-lg"
+        class="pointer-events-auto relative flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel/90 px-2xl py-xl shadow-panel backdrop-blur-lg transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg"
       >
-        <div class="z-base relative flex w-full shrink-0 justify-center">
+        <div class="relative z-base flex w-full shrink-0 justify-center">
           <Fretboard
             :chord="editorStore.draftChord"
-            @update:barres="handleBarresChange"
-            @update:chord-name="handleChordNameChange"
-            @update:fret-offset="handleFretOffsetUpdate"
-            @update:name-segments="handleNameSegmentsChange"
-            @update:root-string-index="handleRootStringChange"
-            @update:strings="handleStringsChange"
+            @update:barres="handleBarresChange($event)"
+            @update:chord-name="handleChordNameChange($event)"
+            @update:fret-offset="handleFretOffsetUpdate($event)"
+            @update:name-segments="handleNameSegmentsChange($event)"
+            @update:root-string-index="handleRootStringChange($event)"
+            @update:strings="handleStringsChange($event)"
           />
         </div>
       </div>
@@ -26,10 +26,11 @@
            · 上滚后顶部 fade 显示，柔化滚出内容的切口
            · 底部 fade 仅未滚到底时显示，滚到底自动隐藏 → 末卡不被遮挡
            列顶 top-8（32px）与指板同高，滚动时卡片最多上移到 32px，不会比指板更高 -->
-      <div class="z-panel pointer-events-auto absolute top-8 right-8 bottom-8">
+      <div class="pointer-events-auto absolute inset-y-2xl right-8 z-panel">
         <div
-          @scroll="syncEdgeFades"
-          class="no-scrollbar gap-lg flex h-full w-full flex-col items-end overflow-y-auto *:shrink-0"
+          v-scrollbar="{ onScroll: closeAllPopovers }"
+          @scroll="syncEdgeFades()"
+          class="no-scrollbar flex size-full flex-col items-end gap-lg overflow-y-auto *:shrink-0"
           ref="scrollRef"
         >
           <component v-for="panelId in panels" :is="PANEL_COMPONENT_MAP[panelId]" :key="panelId" />
@@ -46,22 +47,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, type Component } from 'vue';
+import { ref } from 'vue';
 
+import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { nameToSegments } from '@/domains/chord/theory/theory';
-import type { ChordNameSegments } from '@/domains/chord/types';
-import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
+import { useWorkbenchPanelsOrder } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder.ts';
 import { toFretOffset, toStringIndex } from '@/domains/fretboard/model/coordinates';
-import type { BarreEntity, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
 import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
+import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry.ts';
 
-import { useWorkbenchPanelsOrder, type WorkbenchPanelId } from '../composables/useWorkbenchPanelsOrder.ts';
 import ChordAnalysisPanel from './analysis/ChordAnalysisPanel.vue';
 import WorkbenchExportPanel from './WorkbenchExportPanel.vue';
 import WorkbenchFloatingBar from './WorkbenchFloatingBar.vue';
 import WorkbenchSettingsPanel from './WorkbenchSettingsPanel.vue';
 import WorkbenchVariantsPanel from './WorkbenchVariantsPanel.vue';
+import { useWorkbenchRouteSync } from '../composables/useWorkbenchRouteSync';
+
+import type { ChordNameSegments } from '@/domains/chord/types';
+import type { WorkbenchPanelId } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder.ts';
+import type { BarreEntity, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
+import type { Component } from 'vue';
 
 // 滚动边缘渐隐：未滚动时顶部 fade 隐藏（首卡完整可见），上滚后显示柔化切口；
 // 底部 fade 仅未滚到底时显示，滚到底隐藏（末卡不被遮挡）
@@ -83,6 +89,9 @@ const { panels } = useWorkbenchPanelsOrder();
 
 /** 和弦草稿编辑：Fretboard 读写 draftChord，任一编辑操作把草稿标记为「创建中」 */
 const editorStore = useChordEditorStore();
+
+// URL ↔ Store 状态同构（#/workbench?group=&chord=&v=）：本组件注册双向 watcher 与 KeepAlive 重激活回放
+useWorkbenchRouteSync();
 
 const markCreating = () => {
   if (!editorStore.isEditing) editorStore.isCreating = true;

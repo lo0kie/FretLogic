@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { chordRepository, songRepository } from '@/app/services/data';
 import { isLegacyMigrationDone, migrateLegacyData } from '@/app/services/data/migrateLegacy';
-import type { Song } from '@/domains/score/types';
 import { idb } from '@/platform/services/storage';
+
+import type { Song } from '@/domains/score/types';
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();

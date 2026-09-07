@@ -1,7 +1,7 @@
 import { createApp } from 'vue';
 
-import { createPinia } from 'pinia';
 import VWave from 'v-wave';
+import { createPinia } from 'pinia';
 
 import App from '@/app/App.vue';
 import { router } from '@/app/router';
@@ -14,11 +14,13 @@ import '@/assets/main.scss';
 import '@/assets/tailwind.css';
 
 import { vChordName } from './domains/chord/directives/vChordName.ts';
+import { vActionCard } from './platform/directives/vActionCard.ts';
 import { vAutoHeight } from './platform/directives/vAutoHeight.ts';
 import { vAutoWidth } from './platform/directives/vAutoWidth.ts';
 import { vFocus } from './platform/directives/vFocus.ts';
 import { vGridNav } from './platform/directives/vGridNav.ts';
 import { vMarquee } from './platform/directives/vMarquee.ts';
+import { vScrollbar } from './platform/directives/vScrollbar.ts';
 import { vScrollIntoView } from './platform/directives/vScrollIntoView.ts';
 import { vTooltip } from './platform/directives/vTooltip.ts';
 import { vWheelScroll } from './platform/directives/vWheelScroll.ts';
@@ -32,9 +34,11 @@ app.use(pinia);
 app.use(VWave, { easing: 'ease-out' });
 app.use(router);
 app.directive('tooltip', vTooltip);
+app.directive('action-card', vActionCard);
 app.directive('wheel-scroll', vWheelScroll);
 app.directive('focus', vFocus);
 app.directive('scroll-into-view', vScrollIntoView);
+app.directive('scrollbar', vScrollbar);
 app.directive('grid-nav', vGridNav);
 app.directive('marquee', vMarquee);
 app.directive('chord-name', vChordName);

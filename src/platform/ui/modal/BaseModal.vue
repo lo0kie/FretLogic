@@ -12,9 +12,9 @@
         v-if="destroyOnClose ? visible : true"
         v-show="visible"
         :class="overlayAlignClass"
-        @click.self="handleMaskClick"
-        @mousedown="handleMaskMousedown"
-        class="modal-overlay-container z-overlay p-md fixed inset-0 box-border flex overflow-y-auto bg-black/50"
+        @click.self="handleMaskClick($event)"
+        @mousedown="handleMaskMousedown($event)"
+        class="modal-overlay-container fixed inset-0 z-overlay box-border flex overflow-y-auto bg-black/50 p-md"
         ref="overlayRef"
       >
         <!-- 关闭（leave）期间禁用高度接管：expanded 联动 visible，避免退场动画进行中卡片被高度压 0 裁没 -->
@@ -24,9 +24,9 @@
           :aria-labelledby="title || $slots['title'] ? titleId : undefined"
           :style="[sizeStyle, topStyle]"
           @click.stop
-          @keydown="handleKeydownTrap"
+          @keydown="handleKeydownTrap($event)"
           aria-modal="true"
-          class="modal-card z-panel bg-bg-panel border-glass-border shadow-floating relative box-border flex flex-col overflow-hidden rounded-lg border outline-none"
+          class="modal-card relative z-panel box-border flex flex-col overflow-hidden rounded-lg border border-glass-border bg-surface-panel shadow-floating outline-none"
           ref="modalCardRef"
           role="dialog"
           tabindex="-1"
@@ -34,7 +34,7 @@
           <div :class="isAutoHeight ? 'h-auto shrink-0' : 'min-h-0 flex-1'" class="flex w-full flex-col">
             <div
               v-if="hasHeader"
-              class="modal-header-zone pt-xl px-xl gap-lg flex min-h-[3.1rem] shrink-0 items-center justify-between"
+              class="modal-header-zone flex min-h-[3.1rem] shrink-0 items-center justify-between gap-lg px-xl pt-xl"
             >
               <slot :title-id name="header">
                 <div class="modal-header-left flex min-w-0 flex-1 items-center">
@@ -43,13 +43,13 @@
                       v-if="title"
                       :title
                       :id="titleId"
-                      class="modal-title text-text-title m-0 overflow-hidden text-sm leading-tight font-bold tracking-tight text-ellipsis whitespace-nowrap"
+                      class="modal-title m-0 truncate text-sm/tight font-bold tracking-tight text-fg-title"
                     >
                       {{ title }}
                     </h3>
                   </slot>
                 </div>
-                <div class="modal-header-right gap-sm flex min-h-[1.6rem] shrink-0 items-center">
+                <div class="modal-header-right flex min-h-[1.6rem] shrink-0 items-center gap-sm">
                   <slot name="header-extra" />
                   <ActionButton
                     v-if="showClose"
@@ -73,14 +73,14 @@
                 { 'has-header': hasHeader, 'has-footer': showFooter, 'py-sm': !$slots['default'] },
                 isAutoHeight ? 'h-auto max-h-[calc(85vh-8rem)]' : 'min-h-0 flex-1',
               ]"
-              class="modal-body-scrollable px-xl py-lg no-scrollbar box-border flex flex-col overflow-y-auto"
+              class="modal-body-scrollable no-scrollbar box-border flex flex-col overflow-y-auto px-xl py-lg"
             >
               <slot />
             </div>
 
             <div
               v-if="showFooter"
-              class="modal-footer-zone pb-xl px-xl gap-sm box-border flex w-full shrink-0 items-center justify-end pt-0"
+              class="modal-footer-zone box-border flex w-full shrink-0 items-center justify-end gap-sm px-xl pt-0 pb-xl"
             >
               <slot name="footer">
                 <slot name="cancel-btn">
@@ -98,7 +98,7 @@
                     :disabled="confirmButtonDisabled || confirmLoading"
                     :label="confirmText"
                     :loading="confirmLoading"
-                    @click="handleConfirm"
+                    @click="handleConfirm()"
                     variant="subtle"
                   />
                 </slot>
@@ -112,13 +112,21 @@
 </template>
 
 <script lang="ts">
+// 双 script 块的 SFC 视为同一模块：import 必须整体置于第一个块顶部（import/first），
+// 下方 <script setup> 直接复用这些绑定
+import { computed, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
+
+import { useEventListener, useScrollLock } from '@vueuse/core';
+
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
+
+import type { ModalCloseReason } from './modalCloseReason';
+import type { ThemeColor } from '@/platform/types';
+
 // 全局弹窗层级栈：必须放在模块作用域（<script setup> 体每次实例化都会重新执行），
 // 否则每个实例各自持有独立 Set，多层弹窗的 inert 协调与 Esc 栈顶判断都会失效
 const activeModalOverlays = new Set<HTMLElement>();
 const isClient = typeof document !== 'undefined';
-
-/** 关闭来源：cancel=底部取消按钮 / close=右上角X / mask=点击蒙层 / esc=键盘ESC */
-export type ModalCloseReason = 'cancel' | 'close' | 'mask' | 'esc';
 
 /** 依据弹窗栈顶同步 body 直接子元素的 inert 属性：仅栈顶弹窗可交互 */
 const updateGlobalInertState = () => {
@@ -137,31 +145,31 @@ const updateGlobalInertState = () => {
     }
   });
 };
+// （ModalCloseReason 类型在 ./modalCloseReason.ts，<script setup> 内不允许 export）
 </script>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
-
-import { useEventListener, useScrollLock } from '@vueuse/core';
-
-import type { ThemeColor } from '@/platform/types';
-
-import ActionButton from '../button/ActionButton.vue';
-
 defineOptions({ inheritAttrs: false });
-
+const visible = defineModel<boolean>('visible', { required: true });
 const props = withDefaults(
   defineProps<{
+    /** 弹窗标题（配合默认 footer 或独立使用） */
     title?: string;
     /** 预设别名或任意自定义值：number 视为 px，字符串如 "520px" 直接生效 */
     width?: 'w-sm' | 'w-md' | 'w-80' | 'w-lg' | 'w-large' | 'w-xl' | 'w-wide' | 'w-full' | (string & {}) | number;
+    /** 高度预设别名或自定义值：number 视为 px，字符串原样生效 */
     height?: 'h-auto' | 'h-sm' | 'h-md' | 'h-lg' | 'h-xl' | 'h-full' | (string & {}) | number;
+    /** 是否渲染底部按钮区（取消/确认），默认 true */
     showFooter?: boolean;
     /** 是否显示右上角关闭（X）按钮，默认 true */
     showClose?: boolean;
+    /** 取消按钮文案 */
     cancelText?: string;
+    /** 确认按钮文案 */
     confirmText?: string;
+    /** 确认按钮主题色（如 primary / danger） */
     confirmType?: ThemeColor;
+    /** 点击蒙层是否关闭弹窗，默认 true */
     closeOnMask?: boolean;
     /** 是否允许 Esc 键关闭，默认 true；关闭后仅能通过遮罩/按钮关闭 */
     keyboard?: boolean;
@@ -205,7 +213,6 @@ const props = withDefaults(
     destroyOnClose: true,
   }
 );
-
 const emit = defineEmits<{
   (e: 'confirm'): void;
   /** 关闭时携带来源（取消按钮/X/蒙层/ESC），程序化置 visible=false 不触发 */
@@ -217,7 +224,6 @@ const emit = defineEmits<{
 }>();
 
 const slots = useSlots();
-const visible = defineModel<boolean>('visible', { required: true });
 const overlayRef = useTemplateRef<HTMLDivElement>('overlayRef');
 const modalCardRef = useTemplateRef<HTMLDivElement>('modalCardRef');
 const titleId = `base-modal-title-${useId()}`;

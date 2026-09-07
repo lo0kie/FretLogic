@@ -44,12 +44,32 @@
   --fb-note: #0f172a; /* 音符填充 */
   --fb-hover: #ffffff; /* hover 高亮填充（浅色底） */
   --fb-label: #475569; /* 品位数字（浅色态） */
+  --fb-root: var(--color-warning); /* 根音圆点（跟随主题强调色） */
+  --fb-dot: #2563eb; /* 普通音符圆点 */
+  --fb-root-text: #fff7ed; /* 根音圆点文字 */
+  --fb-open-bg: #ebf4ff; /* 空弦普通音符底 */
+  --fb-open-border: #b3d7ff; /* 空弦普通音符描边 */
+  --fb-open-root-bg: #fff7ed; /* 空弦根音底 */
+  --fb-open-root-border: #fed7aa; /* 空弦根音描边 */
+  --fb-open-muted-bg: #ffefee; /* 空弦静音底 */
+  --fb-open-muted-border: #ffc4c1; /* 空弦静音描边 */
+
+  /* 离屏指板画布/导出图配色（canvas 2D 无法消费 var()，由 resolveFretboardCanvasPalette 运行时解析） */
+  --fbc-bg: #fbfbfd; /* 画布背景 */
+  --fbc-text: var(--text-title); /* 和弦名主文字 */
+  --fbc-sub-text: #71717a; /* 品号等次级文字 */
+  --fbc-divider: #e4e4e7; /* 分隔线 */
+  --fbc-line: #a1a1aa; /* 指板网格线 */
+  --fbc-nut: #18181b; /* 琴枕 */
+  --fbc-note: #18181b; /* 音符标记 */
+  --fbc-open: #18181b; /* 空弦圆圈 */
+  --fbc-barre: #18181b; /* 横按梁 */
+  --fbc-mute: #18181b; /* 静音叉 */
 
   /* ===== 其他 ===== */
   --theme-btn-color: #ff9500;
   --theme-btn-bg: #ebebef;
   --root-glow: 0 0 20px rgba(255, 209, 153, 0.6);
-  --finger-shadow: 0 4px 12px rgba(191, 220, 255, 0.5);
 
   /* 阴影更轻、更清晰 */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
@@ -123,6 +143,7 @@
   --tint-warning-82: #f4e1cb;
   --tint-warning-88: #f4e7d9;
   --tint-warning-90: #f3e9de;
+
   /* === SOLID TINTS LIGHT END === */
 }
 
@@ -158,11 +179,30 @@
   --fb-note: #ffffff;
   --fb-hover: #28282a;
   --fb-label: #e2e8f0;
+  --fb-root: var(--color-warning);
+  --fb-dot: #3b82f6;
+  --fb-root-text: #29323d;
+  --fb-open-bg: #182737;
+  --fb-open-border: #144477;
+  --fb-open-root-bg: #2d2012;
+  --fb-open-root-border: #6b4712;
+  --fb-open-muted-bg: #351f20;
+  --fb-open-muted-border: #762b28;
+
+  --fbc-bg: #18181a;
+  --fbc-text: var(--text-title);
+  --fbc-sub-text: #a1a1aa;
+  --fbc-divider: #27272a;
+  --fbc-line: #52525b;
+  --fbc-nut: #f4f4f5;
+  --fbc-note: #f4f4f5;
+  --fbc-open: #f4f4f5;
+  --fbc-barre: #f4f4f5;
+  --fbc-mute: #f4f4f5;
 
   --theme-btn-color: #64d2ff;
   --theme-btn-bg: #2c2c2e;
   --root-glow: 0 0 24px rgba(128, 107, 5, 0.5);
-  --finger-shadow: 0 6px 18px rgba(3, 46, 82, 0.5);
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);

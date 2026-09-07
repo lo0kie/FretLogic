@@ -7,13 +7,14 @@
  * - 迁移为「只读读取旧数据 + 清洗 + 写入 IDB」，不删除旧 localStorage（保留回退能力）。
  */
 import { validateImportExportPayload } from '@/app/services/validation/payload';
-import type { Chord, Group } from '@/domains/chord/types';
-import type { Song } from '@/domains/score/types';
 import { idb } from '@/platform/services/storage';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { readJson } from '@/platform/utils/storage';
 
 import { chordRepository, songRepository } from './repositories.ts';
+
+import type { Chord, Group } from '@/domains/chord/types';
+import type { Song } from '@/domains/score/types';
 
 const MIGRATION_FLAG_KEY = 'legacy-migration-done';
 

@@ -22,8 +22,10 @@ export interface WheelScrollOptions {
   stop?: boolean;
   /** 到达边界时的穿透策略：'contain' 始终拦截 | 'auto' 边界放行纵向滚动 */
   overscroll?: 'contain' | 'auto';
-  /** 滚动回调 */
+  /** 滚动回调（滚动量 + 双轴进度 0~1） */
   onScroll?: (e: WheelEvent, progress: number) => void;
+  /** 贴边回调：内容横向滚到最左/最右时触发（与 wheel-scroll-edge 事件同源） */
+  onEdge?: (edge: 'left' | 'right') => void;
 }
 
 export type WheelScrollBinding = number | boolean | WheelScrollOptions | undefined;
@@ -46,6 +48,8 @@ const normalize = (value: WheelScrollBinding, modifiers?: Record<string, boolean
     if (modifiers['stop'] !== undefined) opts.stop = Boolean(modifiers['stop']);
     if (modifiers['contain']) opts.overscroll = 'contain';
     if (modifiers['auto']) opts.overscroll = 'auto';
+    // 静态修饰符 .disabled（编译期固定，动态禁用请用绑定值 { disabled }）
+    if (modifiers['disabled']) opts.disabled = true;
   }
 
   opts.speed = opts.speed ?? 1;
@@ -67,6 +71,10 @@ interface SmoothScrollState {
 
 const handlerMap = new WeakMap<HTMLElement, WheelScrollHandler>();
 const smoothStateMap = new WeakMap<HTMLElement, SmoothScrollState>();
+
+/** 单次滚轮事件的最大位移占可视宽度比例：仅拦下触控板惯性的超大 delta，
+ *  防止短列表一两个 tick 就从一端瞬移到另一端；普通滚轮 delta 远小于该上限不受影响 */
+const MAX_STEP_RATIO = 0.6;
 
 /** 取消元素上未完成的平滑滚动动画帧。 */
 const cancelSmoothScroll = (el: HTMLElement) => {
@@ -139,6 +147,8 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
       onPointerDown: () => cancelSmoothScroll(el),
       onWheel: (e: WheelEvent) => {
         if (handler.opts.disabled) return;
+        // 组合键放行：ctrl/meta/alt + 滚轮是浏览器缩放等原生手势，交还默认行为，不劫持、不 preventDefault
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
 
         const maxScrollLeft = el.scrollWidth - el.clientWidth;
         if (maxScrollLeft <= 1) return;
@@ -149,10 +159,20 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
         if (rawDelta === 0) return;
 
         const multiplier = (handler.opts.reverse ? -1 : 1) * (handler.opts.speed ?? 1);
-        const scrollAmount = rawDelta * multiplier;
+        let scrollAmount = rawDelta * multiplier;
+
+        // 单 tick 位移钳制：可视宽度为 0（不可见）时跳过，退回原始位移
+        const maxStep = el.clientWidth * MAX_STEP_RATIO;
+        if (maxStep > 0 && Math.abs(scrollAmount) > maxStep) {
+          scrollAmount = Math.sign(scrollAmount) * maxStep;
+        }
 
         const canScrollMore =
           (scrollAmount > 0 && el.scrollLeft < maxScrollLeft - 1) || (scrollAmount < 0 && el.scrollLeft > 1);
+
+        // 边界穿透策略 'auto'：已抵达横向边界时彻底让位——既不拦截也不再横向滚动，
+        // 交由页面纵向滚动处理。否则会出现「横向到底 + 纵向同时滚动」的拉扯感（尤其触控板惯性滑动期间）
+        if (handler.opts.overscroll === 'auto' && !canScrollMore) return;
 
         const shouldPrevent = handler.opts.prevent && (handler.opts.overscroll === 'contain' || canScrollMore);
 
@@ -180,8 +200,10 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
 
           if (el.scrollLeft <= 0) {
             el.dispatchEvent(new CustomEvent('wheel-scroll-edge', { detail: { edge: 'left' }, bubbles: false }));
+            handler.opts.onEdge?.('left');
           } else if (el.scrollLeft >= maxScrollLeft - 1) {
             el.dispatchEvent(new CustomEvent('wheel-scroll-edge', { detail: { edge: 'right' }, bubbles: false }));
+            handler.opts.onEdge?.('right');
           }
         };
 
@@ -202,7 +224,10 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
   updated(el, binding) {
     const handler = handlerMap.get(el);
     if (!handler) return;
-    handler.opts = normalize(binding.value, binding.modifiers);
+    const next = normalize(binding.value, binding.modifiers);
+    // 中途被禁用或退出平滑模式时掐断未完成的缓动，避免动画继续跑完产生幽灵滚动
+    if (next.disabled || !next.smooth) cancelSmoothScroll(el);
+    handler.opts = next;
   },
   unmounted(el) {
     cancelSmoothScroll(el);

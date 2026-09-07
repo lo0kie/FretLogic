@@ -1,7 +1,8 @@
 // ===== 槽位 key 编码：单一真相源，替换散落的 `line_${...}` / `char_${...}` 模板 =====
 
-import type { LineId, SlotKey, Song, SongId } from '@/domains/score/types';
 import { generateUUID, getEditDistance } from '@/platform/utils/common';
+
+import type { LineId, SlotKey, Song, SongId } from '@/domains/score/types';
 
 export type EdgeSlotType = 'start' | 'end';
 
@@ -47,7 +48,7 @@ const matchExactLines = (
   newLines: string[],
   oldIds: string[]
 ): { newIds: (string | null)[]; usedOldIndices: Set<number> } => {
-  const newIds: Array<string | null> = new Array(newLines.length).fill(null);
+  const newIds: (string | null)[] = new Array(newLines.length).fill(null);
   const usedOldIndices = new Set<number>();
 
   const contentToIndices = new Map<string, number[]>();

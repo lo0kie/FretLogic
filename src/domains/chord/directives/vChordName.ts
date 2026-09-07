@@ -1,13 +1,4 @@
-/**
- * v-chord-name 指令：将和弦名结构化分片渲染为带样式的行内标记。
- * 由原 ChordNameDisplay 组件迁移而来（纯展示、无交互状态，指令化省去组件实例开销）。
- *
- * 用法：<span v-chord-name="{ chord, shorthand: true }" />
- * 绑定值为普通对象；宿主组件重渲染时经 updated 钩子自动重绘，
- * 输入快照未变化时跳过 DOM 写入。
- */
-import { watch, type Directive } from 'vue';
-import type { RouteLocationNormalizedLoaded } from 'vue-router';
+import { watch } from 'vue';
 
 import {
   formatAccidental as formatAccidentalTheory,
@@ -15,8 +6,21 @@ import {
   getChordName,
   nameToSegments,
 } from '@/domains/chord/theory/theory';
-import type { AccidentalType, Chord, ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { ROUTE_PATHS } from '@/platform/utils/constants';
+
+import type { AccidentalType, Chord, ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
+import type { Directive } from 'vue';
+import type { RouteLocationNormalizedLoaded } from 'vue-router';
+
+/**
+ * v-chord-name 指令：将和弦名结构化分片渲染为带样式的行内标记。
+ * 由原 ChordNameDisplay 组件迁移而来（纯展示、无交互状态，指令化省去组件实例开销）。
+ *
+ * 用法：<span v-chord-name="{ chord, shorthand: true }" /> 或 <span v-chord-name="'Cm7'" />（字符串等价于 { name }）
+ * 绑定值为普通对象；宿主组件重渲染时经 updated 钩子自动重绘，
+ * 输入快照未变化时跳过 DOM 写入。
+ */
 
 export interface ChordNameValue {
   chord?: Chord | null;
@@ -30,14 +34,14 @@ export interface ChordNameValue {
   shorthand?: boolean;
 }
 
-/** 指令绑定值（与其他指令的 XxxBinding 命名对齐，供 vite-env.d.ts 类型声明使用） */
-export type ChordNameBinding = ChordNameValue | null | undefined;
+/** 指令绑定值：对象形式见 ChordNameValue；字符串形式等价于 { name: value }，走完整解析链 */
+export type ChordNameBinding = ChordNameValue | string | null | undefined;
 
 const DISPLAY_CLASS =
-  'chord-name-display inline-flex items-baseline align-middle leading-none max-w-full overflow-hidden text-ellipsis select-none whitespace-nowrap tabular-nums';
+  'chord-name-display inline-flex max-w-full items-baseline align-middle leading-normal whitespace-nowrap tabular-nums select-none';
 const FALLBACK_CLASS = 'chord-name-display-fallback inline leading-[inherit]';
 const ACCIDENTAL_CLASS =
-  'chord-accidental inline-block text-[0.72em] font-bold leading-none relative -top-[0.32em] align-baseline ml-[0.06em] mr-[0.04em] font-[inherit]';
+  'chord-accidental relative top-[-0.32em] mr-[0.04em] ml-[0.06em] inline-block align-baseline font-[inherit] text-[0.72em] leading-none font-bold';
 
 const SIZE_CLASS_MAP: Record<NonNullable<ChordNameValue['size']>, string> = {
   xs: 'text-[11px]',
@@ -102,7 +106,7 @@ const buildNameHtml = (segments: ChordNameSegments, shorthand: boolean, useUnico
   const extensions = segments.extensions ?? [];
   const accidental = (acc: AccidentalType | undefined) => formatAccidentalSpan(acc, useUnicode);
 
-  let html = `<span class="chord-root-group inline align-baseline whitespace-nowrap"><span class="chord-root-letter">${escapeHtml(segments.root[0])}</span>${accidental(segments.root[1])}</span>`;
+  let html = `<span class="chord-root-group whitespace-nowrap"><span inline align-baseline class="chord-root-letter">${escapeHtml(segments.root[0])}</span>${accidental(segments.root[1])}</span>`;
 
   const qualityText = resolveQualityText(segments, extensions, shorthand);
   if (qualityText) html += `<span class="chord-quality font-[inherit]">${escapeHtml(qualityText)}</span>`;
@@ -143,8 +147,10 @@ const resolveRoute = (instance: unknown): RouteLocationNormalizedLoaded | null =
 };
 
 /** 归一化渲染输入：解析分片/兜底文本，简写开关按显式值 > 路由场景（乐谱/工作台）设置推断。 */
-const resolveInput = (instance: unknown, value: ChordNameValue | null | undefined): ResolvedInput => {
-  const isScoreMode = resolveRoute(instance)?.path === '/score';
+const resolveInput = (instance: unknown, value: ChordNameBinding): ResolvedInput => {
+  // 字符串绑定：等价于传入 { name: value }，走完整解析链（分片 → 简写联动 → 兜底）
+  if (typeof value === 'string') return resolveInput(instance, { name: value });
+  const isScoreMode = resolveRoute(instance)?.path === ROUTE_PATHS.SCORE;
   const settingsStore = useSettingsStore();
   const shorthand =
     value?.shorthand !== undefined
@@ -162,14 +168,18 @@ const resolveInput = (instance: unknown, value: ChordNameValue | null | undefine
     (value?.chord ? nameToSegments(getChordName(value.chord)) : null);
   const fallback = value?.name || (value?.chord ? getChordName(value.chord, { shorthand }) : '');
 
-  return { segments, degrees: value?.degrees ?? null, fallback, shorthand, useUnicode, sizeClass };
+  return {
+    segments,
+    degrees: value?.degrees ?? null,
+    fallback,
+    shorthand,
+    useUnicode,
+    sizeClass,
+  };
 };
 
 /** 渲染入口（mounted/updated 共用）：输入快照未变化时跳过；按分片/度数/兜底文本三档写入 DOM。 */
-const renderChordName = (
-  el: HTMLElement,
-  binding: { value: ChordNameValue | null | undefined; instance: unknown }
-): void => {
+const renderChordName = (el: HTMLElement, binding: { value: ChordNameBinding; instance: unknown }): void => {
   const input = resolveInput(binding.instance, binding.value);
   const snapshotKey = JSON.stringify(input);
   if (stateMap.get(el) === snapshotKey) return;
@@ -187,7 +197,7 @@ const renderChordName = (
   }
 };
 
-export const vChordName: Directive<HTMLElement, ChordNameValue | null | undefined> = {
+export const vChordName: Directive<HTMLElement, ChordNameBinding> = {
   mounted(el, binding) {
     renderChordName(el, binding);
     // 简写开关取自设置 store，而指令仅在宿主组件重渲染时重绘；

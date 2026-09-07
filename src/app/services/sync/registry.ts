@@ -1,4 +1,3 @@
-import type { useSettingsStore } from '@/platform/store/settingsStore';
 import {
   CLOUD_SYNC_CONFIG,
   GITEE_SYNC_CONFIG,
@@ -13,6 +12,9 @@ import {
 
 import { createGiteeSyncProvider } from './giteeSyncProvider.ts';
 import { createGithubSyncProvider } from './githubSyncProvider.ts';
+import { createServerSyncProvider } from './serverSyncProvider.ts';
+import { createWebdavSyncProvider } from './webdavSyncProvider.ts';
+
 import type {
   GiteeSyncConfig,
   GithubSyncConfig,
@@ -22,8 +24,7 @@ import type {
   SyncProviderKind,
   WebdavSyncConfig,
 } from './provider.ts';
-import { createServerSyncProvider } from './serverSyncProvider.ts';
-import { createWebdavSyncProvider } from './webdavSyncProvider.ts';
+import type { useSettingsStore } from '@/platform/store/settingsStore';
 
 type SettingsStore = ReturnType<typeof useSettingsStore>;
 

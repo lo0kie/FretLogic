@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Chord } from '@/domains/chord/types';
 import { charKey } from '@/domains/score/model/scoreModel';
 import { prepareWorkerExportPayload } from '@/domains/score/preview/services/workerExportService';
+
+import type { Chord } from '@/domains/chord/types';
 import type { LineId, Song, SongId } from '@/domains/score/types';
 
 describe('workerExportService', () => {

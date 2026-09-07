@@ -2,10 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import { createChord } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
-import { parseChordFromText, serializeChordToText } from '@/domains/chord/transfer/chordTextCodec';
+import {
+  parseChordFromText,
+  parseGroupFromText,
+  serializeChordToText,
+  serializeGroupToText,
+} from '@/domains/chord/transfer/chordTextCodec';
+import { GroupSortRule } from '@/domains/chord/types';
+import { TEXT_FORMAT } from '@/platform/utils/constants';
+
 import type { Chord } from '@/domains/chord/types';
 import type { BarreEntity } from '@/domains/fretboard/types';
-import { TEXT_FORMAT } from '@/platform/utils/constants';
 
 /** 构造测试和弦：默认标准调弦 6 弦、3 品、根音 5 弦 */
 const makeChord = (name: string, strings: Array<[number, boolean]>, barres?: BarreEntity[]): Chord =>
@@ -61,5 +68,49 @@ describe('chordTextCodec 和弦文字编解码（chord 域单一来源）', () =
     expect(parseChordFromText('随便什么歌词文本')).toEqual({ ok: false, reason: 'UNKNOWN_FORMAT' });
     const headerOnly = `${TEXT_FORMAT.CHORD} ${TEXT_FORMAT.VERSION}`;
     expect(parseChordFromText(headerOnly)).toEqual({ ok: false, reason: 'INVALID_NAME' });
+  });
+});
+
+describe('chordTextCodec 分组文字编解码', () => {
+  it('分组序列化 → 解析往返保真（名称/排序规则/组内和弦保序）', () => {
+    const chords = [
+      makeChord('Am7', [
+        [-1, false],
+        [0, false],
+        [0, false],
+        [0, false],
+        [0, false],
+        [0, false],
+      ]),
+      makeChord('C', [
+        [-1, false],
+        [3, false],
+        [2, false],
+        [0, false],
+        [1, false],
+        [0, false],
+      ]),
+    ];
+    const text = serializeGroupToText({ name: '测试分组', sortRule: GroupSortRule.KEY_DEGREE, sortKey: 'G' }, chords);
+    const result = parseGroupFromText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.name).toBe('测试分组');
+    expect(result.data.sortRule).toBe(GroupSortRule.KEY_DEGREE);
+    expect(result.data.sortKey).toBe('G');
+    expect(result.data.chords.map(c => c.name)).toEqual(['Am7', 'C']);
+  });
+
+  it('和弦文本误贴到分组解析时返回 WRONG_TYPE；非本应用格式返回 UNKNOWN_FORMAT', () => {
+    const chordText = `${TEXT_FORMAT.CHORD} ${TEXT_FORMAT.VERSION}\nNAME:C\n`;
+    expect(parseGroupFromText(chordText)).toEqual({ ok: false, reason: 'WRONG_TYPE' });
+    expect(parseGroupFromText('随便什么歌词文本')).toEqual({ ok: false, reason: 'UNKNOWN_FORMAT' });
+  });
+
+  it('KEY_DEGREE 缺 sortKey 或缺 CHORDS 段返回 INVALID_FIELD', () => {
+    const noKey = `${TEXT_FORMAT.GROUP} ${TEXT_FORMAT.VERSION}\nNAME:组\nSORT:KEY_DEGREE\nCHORDS:\n`;
+    expect(parseGroupFromText(noKey)).toEqual({ ok: false, reason: 'INVALID_FIELD' });
+    const noChords = `${TEXT_FORMAT.GROUP} ${TEXT_FORMAT.VERSION}\nNAME:组\nSORT:NAME_ASC\n`;
+    expect(parseGroupFromText(noChords)).toEqual({ ok: false, reason: 'INVALID_FIELD' });
   });
 });

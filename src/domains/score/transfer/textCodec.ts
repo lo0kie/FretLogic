@@ -4,17 +4,15 @@
  * 并转发和弦 API 以兼容既有导入路径。格式魔数见 TEXT_FORMAT（platform/utils/constants）。
  */
 import { getChordName, getDefaultTuningForStringCount, isValidChordName } from '@/domains/chord/theory/theory';
-import {
-  parseChordFields,
-  serializeChordFields,
-  type PortableChord,
-  type TextParseResult,
-} from '@/domains/chord/transfer/chordTextCodec';
-import type { Chord, ChordId } from '@/domains/chord/types';
+import { parseChordFields, serializeChordFields } from '@/domains/chord/transfer/chordTextCodec';
+import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
 import { extractSongChordSequence } from '@/domains/score/model/chordSlots';
-import type { Capo, LineId, Song } from '@/domains/score/types';
 import { clamp } from '@/platform/utils/common';
 import { TEXT_FORMAT } from '@/platform/utils/constants';
+
+import type { PortableChord, TextParseResult } from '@/domains/chord/transfer/chordTextCodec';
+import type { Chord, ChordId } from '@/domains/chord/types';
+import type { Capo, LineId, Song } from '@/domains/score/types';
 
 // 和弦编解码 API 转发（兼容既有导入路径，如 tests/domain/textCodec.test.ts）
 export {
@@ -104,7 +102,7 @@ const createFallbackPortableChord = (name: string): PortableChord => {
   return {
     name,
     tuning,
-    fretCount: 3,
+    fretCount: DEFAULT_FRET_COUNT,
     fretOffset: 0,
     rootStringIndex: null,
     strings: [

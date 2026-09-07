@@ -1,8 +1,10 @@
-import { ref, watch, type Ref } from 'vue';
+import { ref, watch } from 'vue';
 
 import { useStorage } from '@vueuse/core';
 
 import { STORAGE_KEYS } from '@/platform/utils/constants';
+
+import type { Ref } from 'vue';
 
 export type WorkbenchPanelId = 'analysis' | 'variants' | 'export' | 'settings';
 

@@ -14,6 +14,7 @@ overrides:
   postcss: ^8.5.23
 
 patchedDependencies:
+  '@ianvs/prettier-plugin-sort-imports': patches/@ianvs__prettier-plugin-sort-imports.patch
   prettier-plugin-organize-attributes: patches/prettier-plugin-organize-attributes.patch
 
 peerDependencyRules:

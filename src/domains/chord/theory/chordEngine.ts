@@ -1,8 +1,9 @@
-import type { ChordNameSegments, NoteInput } from '@/domains/chord/types';
 import { createLruCache } from '@/platform/utils/lruCache';
 
 import { GRAMMAR_TEMPLATES } from './grammar.ts';
 import { nameToSegments, parsePitchSegment } from './theory.ts';
+
+import type { ChordNameSegments, NoteInput } from '@/domains/chord/types';
 
 export type ChordSlot =
   | 'root'

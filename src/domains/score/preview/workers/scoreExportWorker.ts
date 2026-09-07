@@ -4,10 +4,10 @@
  * 支持绘制完整的吉他指板图、升降号上标和弦名、等粗横按、品丝对齐品号、紧随歌词排版及 A4 满页 Space-Between 垂直均分对齐。
  */
 import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
-import {
-  parseChordNameTokens as parseChordNameTokensCore,
-  type ChordNameToken,
-} from '@/domains/score/model/chordNameTokens';
+import { parseChordNameTokens as parseChordNameTokensCore } from '@/domains/score/model/chordNameTokens';
+
+import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
+import type { ChordNameToken } from '@/domains/score/model/chordNameTokens';
 
 export interface ExportChordData {
   chordName: string;
@@ -39,8 +39,13 @@ export interface WorkerExportPayload {
   capoText: string;
   lines: ExportLineItem[];
   mode: 'normal' | 'a4';
-  darkMode: boolean;
+  /** 画布配色（单一来源 tokens.scss 的 --fbc-* 变量，由主线程 resolveFretboardCanvasPalette 解析后传入；Worker 无 DOM 不能自取） */
+  colors: FretboardCanvasPalette;
   layoutAlign?: 'start' | 'center';
+  /** 歌词字号缩放（来自排列和弦配置「字号缩放」，缺省 1 不缩放） */
+  fontScale?: number;
+  /** 指板图缩放（来自排列和弦配置「和弦缩放」，缺省 1 不缩放） */
+  fretboardScale?: number;
 }
 
 export type WorkerExportMessage =
@@ -55,7 +60,70 @@ export type WorkerExportMessage =
 /** 输出图固定编码质量（导出质量设置已移除，预览与后续入口统一使用） */
 const EXPORT_JPEG_QUALITY = 0.95;
 
-type ThemeColors = (typeof SCORE_EXPORT_CONFIG.THEME)['DARK'] | (typeof SCORE_EXPORT_CONFIG.THEME)['LIGHT'];
+type ThemeColors = FretboardCanvasPalette;
+
+// ---- 布局缩放（来自排列和弦配置：字号缩放 / 和弦缩放，作用于预览与导出图片生成） ----
+/** 随「和弦缩放」联动的布局键：指板几何 / 和弦名体系 / 和弦列间距 */
+const FRETBOARD_SCALED_KEYS = [
+  'FRETBOARD_WIDTH',
+  'STRING_SPACING',
+  'FRET_HEIGHT',
+  'FRETBOARD_GRID_TOP',
+  'FRETBOARD_LEFT_PAD',
+  'DOT_RADIUS',
+  'BARRE_THICKNESS',
+  'NUT_HEIGHT',
+  'CHORD_NAME_BASELINE_Y',
+  'MARKER_CENTER_Y',
+  'MUTE_CROSS_RADIUS',
+  'OPEN_CIRCLE_RADIUS',
+  'FRET_NUMBER_X_OFFSET',
+  'CHORD_NAME_FONT_SIZE',
+  'ACCIDENTAL_FONT_SIZE',
+  'ACCIDENTAL_SUPERSCRIPT_OFFSET',
+  'CAPO_TEXT_FONT_SIZE',
+  'INLINE_CHORD_GAP',
+  'CHORD_COLUMN_EXTRA_PAD',
+  'EDGE_CHORD_SECTION_GAP',
+  'CHORD_TO_LYRICS_GAP',
+] as const;
+/** 随「字号缩放」联动的布局键：歌词字号 / 字宽估算 / 行距 / 续行缩进 */
+const FONT_SCALED_KEYS = [
+  'LYRICS_FONT_SIZE',
+  'SPACE_CHAR_WIDTH',
+  'REGULAR_CHAR_WIDTH',
+  'WRAPPED_LINE_INDENT',
+  'WRAPPED_LINE_ROW_GAP',
+  'LINE_ROW_GAP',
+] as const;
+
+/** 出厂基准值快照（模块加载时采集，每次渲染先重置基准再乘缩放，避免累积漂移） */
+const BASE_LAYOUT_VALUES: Record<string, number> = (() => {
+  const snapshot: Record<string, number> = {};
+  for (const key of [...FRETBOARD_SCALED_KEYS, ...FONT_SCALED_KEYS]) {
+    snapshot[key] = SCORE_EXPORT_CONFIG[key];
+  }
+  return snapshot;
+})();
+/** getExportFretboardWidth 的出厂实现（闭包字面量，不读可变常量，需单独包装缩放） */
+const BASE_GET_EXPORT_FRETBOARD_WIDTH = SCORE_EXPORT_CONFIG.getExportFretboardWidth;
+
+/** 可变视图：SCORE_EXPORT_CONFIG 类型层 readonly（as const），运行时在每次渲染前重算布局键 */
+const mutableLayoutConfig = SCORE_EXPORT_CONFIG as unknown as Record<string, number> & {
+  getExportFretboardWidth: (stringCount: number) => number;
+};
+
+/** 按缩放系数重算布局常量（Worker 每收到渲染消息先调用；表头标题/元信息体系保持不缩放） */
+const applyLayoutScales = (fontScale: number, fretboardScale: number): void => {
+  for (const key of FRETBOARD_SCALED_KEYS) {
+    mutableLayoutConfig[key] = BASE_LAYOUT_VALUES[key]! * fretboardScale;
+  }
+  for (const key of FONT_SCALED_KEYS) {
+    mutableLayoutConfig[key] = BASE_LAYOUT_VALUES[key]! * fontScale;
+  }
+  mutableLayoutConfig.getExportFretboardWidth = (stringCount: number) =>
+    BASE_GET_EXPORT_FRETBOARD_WIDTH(stringCount) * fretboardScale;
+};
 
 /** 模块级 Token 解析缓存，避免同曲目内重复出现的和弦名反复正则分割 */
 const tokenCache = new Map<string, ChordNameToken[]>();
@@ -154,6 +222,8 @@ const NO_LINE_START_CHARS = new Set([
   '—',
   ',',
   '.',
+  // 下一行是排版标点常量而非 Tailwind 类名，important 位置检查在此为误报
+  // eslint-disable-next-line better-tailwindcss/enforce-consistent-important-position
   '!',
   '?',
   ';',
@@ -645,9 +715,11 @@ function renderHeader(
 if (typeof self !== 'undefined') {
   self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
     try {
-      const { title, keyText, capoText, lines, mode, darkMode, layoutAlign } = e.data;
+      const { title, keyText, capoText, lines, mode, colors, layoutAlign, fontScale = 1, fretboardScale = 1 } = e.data;
 
-      const colors = darkMode ? SCORE_EXPORT_CONFIG.THEME.DARK : SCORE_EXPORT_CONFIG.THEME.LIGHT;
+      // 排列和弦配置的缩放参数先于任何布局计算生效
+      applyLayoutScales(fontScale, fretboardScale);
+
       const blobs: Blob[] = [];
       // a4 模式下每页覆盖的原始歌词行序号；normal 模式不产出
       let pageLineRanges: number[][] | undefined;

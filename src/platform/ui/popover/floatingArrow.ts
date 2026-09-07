@@ -28,10 +28,10 @@ const OPPOSITE_SIDE: Record<StaticSide, StaticSide> = {
  * 否则插入侧的边框会透过面板隐约可见。
  */
 const ARROW_CLIP: Record<StaticSide, string> = {
-  top: 'polygon(0 0, 100% 0, 0 100%)', // 左上三角（尖朝上，保留 top+left 边）
+  top: 'polygon(0 0, 100%  0 100%)', // 左上三角（尖朝上，保留 top+left 边）
   bottom: 'polygon(100% 0, 100% 100%, 0 100%)', // 右下三角（尖朝下，保留 bottom+right 边）
   left: 'polygon(0 0, 0 100%, 100% 100%)', // 左下三角（尖朝左，保留 bottom+left 边）
-  right: 'polygon(0 0, 100% 0, 100% 100%)', // 右上三角（尖朝右，保留 top+right 边）
+  right: 'polygon(0 0, 100%   100%)', // 右上三角（尖朝右，保留 top+right 边）
 };
 
 export interface FloatingArrowStyleInput {

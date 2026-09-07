@@ -6,15 +6,17 @@ import { ref } from 'vue';
 
 import { buildBackupPayloadResult } from '@/app/services/backup/buildBackupPayload';
 import { FULL_BACKUP_SELECTION } from '@/app/services/backup/useImportExportService';
-import type { ImportExportPayload } from '@/app/types';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 
-import { SyncError, type SyncBranchesProvider, type SyncProvider, type SyncProviderKind } from './provider';
+import { SyncError } from './provider';
 import { syncProviderRegistry } from './registry';
+
+import type { SyncBranchesProvider, SyncProvider, SyncProviderKind } from './provider';
+import type { ImportExportPayload } from '@/app/types';
 
 const isSyncing = ref(false);
 const isPulling = ref(false);

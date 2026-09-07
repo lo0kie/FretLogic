@@ -5,9 +5,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { sanitizeChordEntity } from '@/app/services/validation/persistedData';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getTuningsByStringCount, Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
-import type { BarreFret, GuitarStringEntity } from '@/domains/fretboard/types';
 import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { cloneGuitarStrings } from '@/platform/utils/common';
+
+import type { BarreFret, GuitarStringEntity } from '@/domains/fretboard/types';
 
 describe('自定义弦数架构 (Custom String Count Architecture)', () => {
   beforeEach(() => {

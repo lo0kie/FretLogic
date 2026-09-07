@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
 import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { Tuning } from '@/domains/chord/theory/theory';
+
 import type { Chord } from '@/domains/chord/types';
 
 vi.mock('tone', () => ({
@@ -20,7 +21,23 @@ vi.mock('tone', () => ({
   Compressor: class {
     dispose = vi.fn();
   },
-  FMSynth: class {},
+  Chorus: class {
+    wet = { value: 0 };
+    start = vi.fn();
+    dispose = vi.fn();
+  },
+  Panner: class {
+    pan = { value: 0 };
+    dispose = vi.fn();
+  },
+  FMSynth: class {
+    volume = { value: 0 };
+    chain = vi.fn();
+    triggerRelease = vi.fn();
+    triggerAttack = vi.fn();
+    triggerAttackRelease = vi.fn();
+    dispose = vi.fn();
+  },
   PolySynth: class {
     volume = { value: 0 };
     chain = vi.fn();

@@ -118,7 +118,10 @@
      `'foo'`（这是 Vue 框架的功能，不是业务逻辑）；
    - **严禁测试纯访问器与空包装**：例如单独为 `x => x.id` 这类没有任何分支的 getter 写单测；
    - **严禁测试原子 UI 的 CSS 类名与内联样式**：严禁断言 `expect(el.classes()).toContain('border-danger')` 或
-     `toContain('px-3')`——这类断言一旦样式微调或换 Tailwind 类就会产生纯噪音假报错。
+     `toContain('px-3')`——这类断言一旦样式微调或换 Tailwind 类就会产生纯噪音假报错；
+   - **严禁无有效断言的空跑用例**：每个 `it` 必须包含对被测行为的实质验证，以下形态一律视为垃圾用例——仅
+     `expect(el).toBeDefined()` 式存在性断言、`setProps`/toggle 触发后不验证任何结果、mock（如
+     `el.animate`）注入后不做任何断言就结束用例。挂载/执行本身不是测试目的，验证行为才是。
 2. **绝对禁写“写死字面量”的脆弱测试（No Hardcoded-Literal Tests）**：
    - **严禁把可变配置常量写死在断言中**：例如严禁在单测中把 `DEFAULT_WORKBENCH_PANEL_ORDER` 默认顺序数组在断言里写死成
      `['analysis', 'variants', ...]`，或断言静态 demo 示例数据里正好有几条记录；

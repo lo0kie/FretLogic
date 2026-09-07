@@ -2,11 +2,12 @@
  * 和弦槽位映射（chordMap）：谱面槽位键的解析、读写、垃圾回收与序列化边界。
  * 由 utils/music/chord-fretboard.ts 拆分迁入——槽位域属乐谱（score），与 scoreModel 同居一处。
  */
-import type { Chord, ChordId } from '@/domains/chord/types';
-import type { SlotKey, Song } from '@/domains/score/types';
 import { clamp } from '@/platform/utils/common';
 
 import { charKey, chordSlotKey, collectEdgeChordIds, edgeSlotPrefix } from './scoreModel.ts';
+
+import type { Chord, ChordId } from '@/domains/chord/types';
+import type { SlotKey, Song } from '@/domains/score/types';
 
 // ===== chordMap: 和弦槽位映射与和弦数据归一化 =====
 

@@ -9,13 +9,13 @@
     width="w-wide"
   >
     <template #header-extra>
-      <ActionButton @click="goToWorkbenchToCreate" color="primary" icon="plus" label="新建和弦" variant="subtle" />
+      <ActionButton @click="goToWorkbenchToCreate()" color="primary" icon="plus" label="新建和弦" variant="subtle" />
     </template>
 
     <div class="chord-picker-wrapper relative box-border flex h-full flex-col overflow-hidden">
-      <div class="picker-fixed-header gap-md flex shrink-0 flex-col">
-        <div class="picker-controls-row gap-lg flex items-center justify-between p-1">
-          <div class="search-input-wrapper max-w-64 min-w-0 flex-1">
+      <div class="picker-fixed-header flex shrink-0 flex-col gap-md">
+        <div class="picker-controls-row flex flex-wrap items-center justify-between gap-sm p-1 sm:gap-lg">
+          <div class="search-input-wrapper min-w-[200px] flex-1 sm:max-w-64">
             <BaseInput
               v-focus
               v-model="pickerSearchQuery"
@@ -28,17 +28,17 @@
               prefix-icon="search"
             />
           </div>
-          <div class="sort-action-group gap-sm flex shrink-0 items-center">
-            <span class="sort-label text-text-disabled text-xs font-semibold whitespace-nowrap">排序</span>
+          <div class="sort-action-group flex shrink-0 items-center gap-sm">
+            <span class="sort-label text-xs font-semibold whitespace-nowrap text-fg-disabled">排序</span>
             <BaseSegmentedControl
               v-model="sortOverride"
               :options="SORT_RULE_CONFIG"
-              @update:model-value="handleSortRuleChange"
+              @update:model-value="handleSortRuleChange($event)"
             />
             <KeySelector
               v-model="tempSortKey"
               :disabled="sortOverride !== GroupSortRule.KEY_DEGREE"
-              @update:model-value="handleSortKeyChange"
+              @update:model-value="handleSortKeyChange($event)"
               class="picker-key-selector w-20"
               width="md"
             />
@@ -46,34 +46,35 @@
         </div>
         <div
           v-wheel-scroll.smooth
-          class="picker-group-pills-bar no-scrollbar pt-xs flex items-center overflow-x-auto scroll-smooth"
+          class="picker-group-pills-bar no-scrollbar flex items-center overflow-x-auto scroll-smooth pt-xs"
         >
           <BaseSegmentedControl
             v-model="selectedGroupId"
             :options="groupTabOptions"
-            @change="handleGroupTabChange"
+            @change="handleGroupTabChange($event)"
             tabbed
             size="lg"
           >
             <template #item-suffix="{ option }">
-              <span class="group-count text-2xs pl-1.5 font-semibold">{{ option.count }}</span>
+              <span class="group-count pl-1.5 text-2xs font-semibold">{{ option.count }}</span>
             </template>
           </BaseSegmentedControl>
         </div>
       </div>
       <div
-        v-grid-nav="{ cols: 5, selector: '.picker-chord-card' }"
-        class="picker-scroll-content no-scrollbar p-xs min-h-0 flex-1 overflow-y-auto"
+        v-scrollbar
+        v-grid-nav="{ cols: gridCols, selector: '.picker-chord-card' }"
+        class="picker-scroll-content no-scrollbar min-h-0 flex-1 overflow-y-auto p-xs"
         ref="scrollWrapperRef"
       >
         <Transition name="v-transition-fade">
-          <div v-if="filteredChords.length === 0" class="flex h-full w-full items-center justify-center">
+          <div v-if="filteredChords.length === 0" class="flex size-full items-center justify-center">
             <EmptyState description="当前搜索或分组下暂无匹配和弦。" size="lg" />
           </div>
         </Transition>
         <TransitionGroup
           v-if="filteredChords.length > 0"
-          class="picker-sections-list gap-xl relative flex w-full flex-col"
+          class="picker-sections-list relative flex w-full flex-col gap-xl"
           name="v-transition-list"
           tag="div"
         >
@@ -81,17 +82,20 @@
             v-for="section in chordSections"
             :data-section-id="section.id"
             :key="section.id"
-            class="picker-section-block gap-sm flex flex-col"
+            class="picker-section-block flex flex-col gap-sm"
           >
-            <div class="picker-section-header gap-md py-md flex items-center select-none">
-              <span class="picker-section-title text-text-title text-sm font-extrabold tracking-tight">
+            <div class="picker-section-header flex items-center gap-md py-md select-none">
+              <span
+                v-chord-name="section.title"
+                class="picker-section-title text-sm font-extrabold tracking-tight text-fg-title"
+              >
                 {{ section.title }}
               </span>
-              <BaseBadge appearance="outline"> {{ section.chords.length }} </BaseBadge>
+              <BaseBadge> {{ section.chords.length }} </BaseBadge>
             </div>
             <TransitionGroup
               :aria-label="`${section.title} 和弦组`"
-              class="picker-cards-grid-cols gap-lg relative grid grid-cols-5 items-start"
+              class="picker-cards-grid-cols relative grid grid-cols-2 items-start gap-sm sm:grid-cols-3 sm:gap-md md:grid-cols-4 lg:grid-cols-5 lg:gap-lg"
               name="v-transition-list"
               role="group"
               tag="div"
@@ -121,7 +125,7 @@
                   @click.stop="goToWorkbenchToEdit(chord)"
                   icon-only
                   aria-label="去修改该和弦"
-                  class="picker-edit-btn duration-fast z-float pointer-events-auto absolute top-1 right-1 p-1.5! opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                  class="picker-edit-btn pointer-events-auto absolute top-1 right-1 z-float p-1.5! opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100"
                   color="primary"
                   icon="pencil"
                   icon-size="sm"
@@ -133,7 +137,7 @@
                 <span
                   v-if="selectedGroupId === 'ALL' && getSourceGroupName(chord)"
                   :title="getSourceGroupName(chord)"
-                  class="picker-source-group bg-bg-panel/90 border-border-light text-2xs text-text-muted z-panel pointer-events-none absolute top-1 left-1 max-w-[60%] truncate rounded-sm border px-1 py-0.5 leading-none font-semibold select-none"
+                  class="picker-source-group pointer-events-none absolute top-1 left-1 z-panel max-w-[60%] truncate rounded-sm border border-border-light bg-surface-panel/90 px-1 py-0.5 text-2xs leading-none font-semibold text-fg-muted select-none"
                 >
                   {{ getSourceGroupName(chord) }}
                 </span>
@@ -152,9 +156,9 @@
       </div>
 
       <BaseFab
-        :disabled-teleport="true"
         :visible="scrollTopVisible"
-        @click="scrollToTop"
+        @click="scrollToTop()"
+        disabled-teleport
         align="end"
         aria-label="滚动到顶部"
         bottom="4rem"
@@ -163,9 +167,9 @@
         tooltip="滚动到顶部"
       />
       <BaseFab
-        :disabled-teleport="true"
         :visible="scrollBottomVisible"
-        @click="scrollToBottom"
+        @click="scrollToBottom()"
+        disabled-teleport
         align="end"
         aria-label="滚动到底部查看全部和弦"
         bottom="1rem"
@@ -179,7 +183,7 @@
       <div
         v-wheel-scroll.smooth
         aria-label="和弦分区快速跳转"
-        class="picker-section-nav no-scrollbar gap-sm py-xs flex w-full items-center justify-center overflow-x-auto scroll-smooth"
+        class="picker-section-nav no-scrollbar flex w-full items-center justify-center gap-sm overflow-x-auto scroll-smooth py-xs"
         role="navigation"
       >
         <!-- 有分区时渲染真实跳转 chip；空状态用一个不可见占位 chip 撑出相同行高，
@@ -196,11 +200,11 @@
             class="section-nav-chip shrink-0"
             size="sm"
           >
-            <span v-chord-name="{ name: section.title }" class="group-label text-xs font-semibold" />
+            <span v-chord-name="section.title" class="group-label text-xs font-semibold" />
 
             <span
               :class="{ 'is-selected font-extrabold': activeSectionId === section.id }"
-              class="group-count text-2xs pl-2 font-semibold"
+              class="group-count pl-2 text-2xs font-semibold"
             >
               {{ section.chords.length }}
             </span>
@@ -223,9 +227,18 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onDeactivated, reactive, ref, useTemplateRef, watch } from 'vue';
+
 import { useRouter } from 'vue-router';
 
 import KeySelector from '@/domains/chord/components/KeySelector.vue';
+import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
+import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import BaseFab from '@/platform/ui/floating-bar/BaseFab.vue';
+import BaseInput from '@/platform/ui/input/BaseInput.vue';
+import BaseModal from '@/platform/ui/modal/BaseModal.vue';
+import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getGroupSortKey, toGroupId } from '@/domains/chord/theory/entityFactories';
@@ -236,38 +249,44 @@ import {
   resolveChordRootPitch,
   SORT_RULE_CONFIG,
 } from '@/domains/chord/theory/theory';
-import type { Chord } from '@/domains/chord/types';
 import { GroupSortRule } from '@/domains/chord/types';
-import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
+import { useResponsive } from '@/platform/composables/useResponsive';
 import { isDark } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
-import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
-import ActionButton from '@/platform/ui/button/ActionButton.vue';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
-import BaseFab from '@/platform/ui/floating-bar/BaseFab.vue';
-import BaseInput from '@/platform/ui/input/BaseInput.vue';
-import BaseModal from '@/platform/ui/modal/BaseModal.vue';
-import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
-const pickerScale = 2;
-/** 和弦选择卡片基础与激活态类名（设定充足 min-h 与顶部呼吸空间，避免顶栏操作压住和弦名） */
-const CHORD_CARD_BASE_CLASS =
-  'picker-chord-card group flex flex-col items-center justify-center self-start w-full min-h-[196px] box-border relative z-card pt-4 pb-2 px-2 bg-bg-body border border-border-light rounded-md cursor-pointer outline-none transition-all duration-fast hover:border-primary hover:shadow-md active:scale-[0.97] [&:has(.picker-edit-btn:active)]:scale-100';
-const CHORD_CARD_ACTIVE_CLASS =
-  // 不加 pointer-events-none：active 卡需整卡可 hover 才能显示「去编辑」按钮，
-  // 选中防护由 click 守卫 + cursor-default + important 覆盖 hover 变体兜底
-  'bg-tint-primary-88! border-primary! cursor-default ring-2 ring-primary/70 shadow-none! !active:scale-100';
+import type { Chord } from '@/domains/chord/types';
 
 const props = defineProps<{
   visible: boolean;
 }>();
+
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void;
 }>();
+
+const { isMobile, isTablet, isDesktop } = useResponsive();
+
+/** 响应式网格列数：与 CSS grid-cols 阶梯精准同步，确保键盘上下导航正确换行 */
+const gridCols = computed(() => {
+  if (isMobile.value) return 2;
+  if (isTablet.value) return 3;
+  if (!isDesktop.value) return 4;
+  return 5;
+});
+
+const pickerScale = 2;
+/** 和弦选择卡片基础与激活态类名（设定充足 min-h 与顶部呼吸空间，避免顶栏操作压住和弦名） */
+const CHORD_CARD_BASE_CLASS =
+  'picker-chord-card group relative z-card box-border flex min-h-[196px] w-full cursor-pointer flex-col items-center justify-center self-start rounded-md border border-border-light bg-surface-body px-2 pt-4 pb-2 transition-all duration-fast outline-none hover:border-primary hover:shadow-md active:scale-[0.97] [&:has(.picker-edit-btn:active)]:scale-100';
+const CHORD_CARD_ACTIVE_CLASS =
+  // 不加 pointer-events-none：active 卡需整卡可 hover 才能显示「去编辑」按钮，
+  // 选中防护由 click 守卫 + cursor-default + important 覆盖 hover 变体兜底
+  'cursor-default border-primary! bg-tint-primary-88! shadow-none! ring-2 ring-primary/70 active:scale-100!';
+
 const visibleModel = computed({
   get: () => props.visible,
   set: val => emit('update:visible', val),
@@ -306,7 +325,7 @@ const savedUserPickerState = ref<{
 
 const groupTabOptions = computed(() => {
   const totalCount = chordStore.savedChordsList.length;
-  const options: Array<{ label: string; value: string; count: number }> = [
+  const options: { label: string; value: string; count: number }[] = [
     { label: '全部和弦', value: 'ALL', count: totalCount },
   ];
   chordStore.groups.forEach(g => {

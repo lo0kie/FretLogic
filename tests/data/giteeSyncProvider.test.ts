@@ -1,6 +1,7 @@
 ﻿import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createGiteeSyncProvider } from '@/app/services/sync/giteeSyncProvider';
+
 import type { GiteeSyncConfig } from '@/app/services/sync/provider';
 
 const config: GiteeSyncConfig = {

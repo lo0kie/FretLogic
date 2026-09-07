@@ -1,8 +1,5 @@
-import type { AppPreferencesBackup, ImportExportPayload, SyncSettingsBackup } from '@/app/types';
 import { getChordName, nameToSegments } from '@/domains/chord/theory/theory';
-import type { Chord, ChordNameSegments, Group } from '@/domains/chord/types';
 import { pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
-import type { Song } from '@/domains/score/types';
 import { cloneDeep } from '@/platform/utils/common';
 
 import {
@@ -11,9 +8,12 @@ import {
   sanitizeChordEntity,
   sanitizeGroupEntity,
   sanitizeSongEntity,
-  type GroupDraft,
-  type SongDraft,
 } from './persistedData';
+
+import type { GroupDraft, SongDraft } from './persistedData';
+import type { AppPreferencesBackup, ImportExportPayload, SyncSettingsBackup } from '@/app/types';
+import type { Chord, ChordNameSegments, Group } from '@/domains/chord/types';
+import type { Song } from '@/domains/score/types';
 
 /** 旧/未知结构的数据（含历史遗留字段），用于防御性清洗 */
 type RawRecord = Record<string, unknown>;

@@ -1,6 +1,8 @@
-import { computed, toValue, type MaybeRefOrGetter } from 'vue';
+import { computed, toValue } from 'vue';
 
 import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, getBoardWidth } from '../constants';
+
+import type { MaybeRefOrGetter } from 'vue';
 
 export interface UseFretboardLayoutOptions {
   scale?: MaybeRefOrGetter<number>;

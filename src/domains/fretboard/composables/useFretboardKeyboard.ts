@@ -1,4 +1,6 @@
-import { toValue, type MaybeRefOrGetter, type Ref } from 'vue';
+import { toValue } from 'vue';
+
+import type { MaybeRefOrGetter, Ref } from 'vue';
 
 /** 指板键盘可达性所需的外部依赖：焦点位置、音域边界与三个编辑动作 */
 export interface FretboardKeyboardDeps {

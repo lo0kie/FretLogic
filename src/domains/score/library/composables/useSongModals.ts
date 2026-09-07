@@ -4,30 +4,33 @@ import { getKeySemitones, transposeChordName } from '@/domains/chord/theory/theo
 import { toCapo } from '@/domains/fretboard/model/coordinates';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import type { Song } from '@/domains/score/types';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useModalController } from '@/platform/store/useModalController';
+
+import type { Song } from '@/domains/score/types';
+
+/** 乐谱弹窗的模块级共享状态：保证任意组件取用的都是同一份开关与弹窗数据（与 useBackupModals 一致）。
+ * 若放在函数体内，每次调用都会生成脱节的副本——非容器组件调用 open 时，弹窗容器收不到信号。 */
+const { modals, modalData, open, close } = useModalController(
+  {
+    create: false,
+    config: false,
+    clear: false,
+  },
+  {
+    activeSong: null as Song | null,
+    inputValue: '',
+    title: '',
+    playKey: 'C',
+    capo: 0,
+  }
+);
 
 /** 乐谱相关弹窗的状态与动作：新建 / 配置（标题、调性、变调夹）/ 清空和弦 */
 export function useSongModals() {
   const songStore = useSongStore();
   const scoreEditor = useScoreEditorStore();
   const uiStore = useUiStore();
-
-  const { modals, modalData, open, close } = useModalController(
-    {
-      create: false,
-      config: false,
-      clear: false,
-    },
-    {
-      activeSong: null as Song | null,
-      inputValue: '',
-      title: '',
-      playKey: 'C',
-      capo: 0,
-    }
-  );
 
   const key = computed({
     get: () => {

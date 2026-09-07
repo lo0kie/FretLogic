@@ -1,16 +1,23 @@
-<template>
+﻿<template>
   <div
     :aria-disabled="disabled || undefined"
     :aria-valuemax="max"
     :aria-valuemin="min"
     :aria-valuenow="modelValue"
     :aria-valuetext="displayText"
-    :class="[currentConfig.wrapperClass, { 'w-full': resolvedWidth === '100%' }]"
+    :class="[
+      currentConfig.wrapperClass,
+      variant === 'glass'
+        ? // 毛玻璃形态：常用于悬浮容器（如缩放胶囊）内部，自身不投影，阴影由外层容器统一提供
+          'border-glass-border bg-surface-panel/95 backdrop-blur-xl'
+        : 'border-border-light bg-surface-body hover:border-border-base',
+      { 'w-full': resolvedWidth === '100%' },
+    ]"
     :style="resolvedWidth ? { width: resolvedWidth } : undefined"
     :tabindex="disabled ? -1 : 0"
-    @keydown="handleWrapperKeydown"
-    @wheel="handleWheel"
-    class="group bg-bg-body border-border-light duration-fast hover:border-border-base focus-within:border-primary focus-within:ring-primary/70 box-border inline-flex items-center justify-between rounded-full border transition-all select-none focus-within:ring-2"
+    @keydown="handleWrapperKeydown($event)"
+    @wheel="handleWheel($event)"
+    class="group box-border inline-flex items-center justify-between rounded-full border transition-all duration-fast select-none focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/70"
     ref="wrapperRef"
     role="spinbutton"
   >
@@ -19,17 +26,18 @@
       :class="currentConfig.btnClass"
       :disabled="disabled || (modelValue <= min && !loopable)"
       @click.prevent
-      @pointercancel="stopContinuousStep"
+      @pointercancel="stopContinuousStep()"
       @pointerdown="startContinuousStep(-1, $event)"
-      @pointerleave="stopContinuousStep"
-      @pointerup="stopContinuousStep"
+      @pointerleave="stopContinuousStep()"
+      @pointerup="stopContinuousStep()"
       aria-label="减少数值"
-      class="text-text-muted group-hover:enabled:text-text-title duration-fast hover:enabled:bg-bg-panel-hover flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold transition-all outline-none active:enabled:scale-90 disabled:cursor-not-allowed disabled:opacity-30"
+      class="flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold text-fg-muted transition-all duration-fast outline-none group-hover:enabled:text-fg-title hover:enabled:bg-surface-panel-hover active:enabled:scale-90 disabled:cursor-not-allowed disabled:opacity-30"
       tabindex="-1"
       type="button"
     >
       <slot name="minus">
-        {{ minusText }}
+        <BaseIcon v-if="useIcons" class="size-3" name="minus" />
+        <template v-else>{{ minusText }}</template>
       </slot>
     </button>
 
@@ -38,10 +46,10 @@
       v-model="tempValue"
       :placeholder
       :class="currentConfig.textClass"
-      @blur="commitInput"
-      @keydown.enter="commitInput"
-      @keydown.esc="cancelInput"
-      class="text-primary m-0 box-border w-0 flex-1 [appearance:textfield] border-none bg-transparent p-0 text-center font-[inherit] font-bold outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      @blur="commitInput()"
+      @keydown.enter="commitInput()"
+      @keydown.esc="cancelInput()"
+      class="m-0 box-border w-0 flex-1 [appearance:textfield] border-none bg-transparent p-0 text-center font-[inherit] font-bold text-primary outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       inputmode="numeric"
       ref="inputRef"
       type="text"
@@ -51,12 +59,12 @@
       :class="[
         currentConfig.textClass,
         disabled
-          ? 'text-text-disabled cursor-not-allowed'
+          ? 'cursor-not-allowed text-fg-disabled'
           : editable
-            ? 'text-text-title hover:text-primary cursor-pointer'
-            : 'text-text-title',
+            ? 'cursor-pointer text-fg-title hover:text-primary'
+            : 'text-fg-title',
       ]"
-      @click="startEditing"
+      @click="startEditing()"
       class="w-0 flex-1 text-center font-bold whitespace-nowrap outline-none"
     >
       {{ displayText }}
@@ -67,16 +75,19 @@
       :class="currentConfig.btnClass"
       :disabled="disabled || (modelValue >= max && !loopable)"
       @click.prevent
-      @pointercancel="stopContinuousStep"
+      @pointercancel="stopContinuousStep()"
       @pointerdown="startContinuousStep(1, $event)"
-      @pointerleave="stopContinuousStep"
-      @pointerup="stopContinuousStep"
+      @pointerleave="stopContinuousStep()"
+      @pointerup="stopContinuousStep()"
       aria-label="增加数值"
-      class="text-text-muted group-hover:enabled:text-text-title duration-fast hover:enabled:bg-bg-panel-hover flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold transition-all outline-none active:enabled:scale-90 disabled:cursor-not-allowed disabled:opacity-30"
+      class="flex shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 font-extrabold text-fg-muted transition-all duration-fast outline-none group-hover:enabled:text-fg-title hover:enabled:bg-surface-panel-hover active:enabled:scale-90 disabled:cursor-not-allowed disabled:opacity-30"
       tabindex="-1"
       type="button"
     >
-      <slot name="plus"> {{ plusText }} </slot>
+      <slot name="plus">
+        <BaseIcon v-if="useIcons" class="size-3" name="plus" />
+        <template v-else>{{ plusText }}</template>
+      </slot>
     </button>
   </div>
 </template>
@@ -84,32 +95,58 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
-import type { ComponentSize } from '@/platform/types';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
-import { resolveComponentWidth, type FormComponentWidth } from '@/platform/utils/constants';
+import { resolveComponentWidth } from '@/platform/utils/constants';
+
+import type { ComponentSize } from '@/platform/types';
+import type { FormComponentWidth } from '@/platform/utils/constants';
+
+const modelValue = defineModel<number>({ required: true });
 
 const props = withDefaults(
   defineProps<{
+    /** 允许的最小值 */
     min?: number;
+    /** 允许的最大值 */
     max?: number;
+    /** 步进增量（按钮点击/滚轮/方向键的步长） */
     step?: number;
+    /** 尺寸档位（影响高度与字号） */
     size?: ComponentSize;
+    /** 宽度：预设档位名或自定义值（数字按 px） */
     width?: FormComponentWidth;
+    /** 视觉变体：default 实底 / glass 玻璃拟态 */
+    variant?: 'default' | 'glass';
+    /** 是否渲染加减按钮图标（false 时按钮无图标） */
+    useIcons?: boolean;
+    /** 禁用交互并置灰 */
     disabled?: boolean;
+    /** 聚焦时允许滚轮步进 */
     wheelable?: boolean;
+    /** 越界时循环到另一端（min/max 首尾相接） */
     loopable?: boolean;
+    /** 是否允许手动键入编辑（false 时仅能通过按钮/滚轮/方向键步进） */
     editable?: boolean;
     /** 是否开启严格步长对齐：强制限制数值必须落在 min + k * step 上 */
     stepStrictly?: boolean;
     /** 是否开启长按持续自增/自减，默认 true */
     autoIncrement?: boolean;
+    /** 编辑态占位文本 */
     placeholder?: string;
+    /** 加号按钮自定义文本（useIcons=false 时生效） */
     plusText?: string;
+    /** 减号按钮自定义文本（useIcons=false 时生效） */
     minusText?: string;
+    /** 展示值的前缀文案 */
     labelPrefix?: string;
+    /** 展示值的后缀文案 */
     labelSuffix?: string;
+    /** 自定义展示格式化函数 */
     formatter?: (val: number) => string;
+    /** 自定义输入解析函数；返回 null 视为非法并回退原值 */
     parser?: (raw: string) => number | null;
+    /** 固定小数位数；未传时按 step 的小数位数取整 */
     precision?: number;
   }>(),
   {
@@ -118,6 +155,8 @@ const props = withDefaults(
     step: 1,
     size: 'md',
     width: 'auto',
+    variant: 'default',
+    useIcons: false,
     disabled: false,
     wheelable: false,
     loopable: false,
@@ -134,8 +173,6 @@ const props = withDefaults(
     precision: undefined,
   }
 );
-
-const modelValue = defineModel<number>({ required: true });
 
 const emit = defineEmits<{
   (e: 'change', value: number): void;
@@ -164,19 +201,19 @@ const resolvedWidth = computed(() => resolveComponentWidth(props.width));
 
 const NUMBER_INPUT_CONFIG: Record<'sm' | 'md' | 'lg', { wrapperClass: string; btnClass: string; textClass: string }> = {
   sm: {
-    wrapperClass: `${CONTROL_HEIGHT_CLASSES.sm} px-xs gap-xs`,
-    btnClass: 'w-[1.1rem] h-[1.1rem] text-xs',
-    textClass: 'text-2xs min-w-[1.5rem]',
+    wrapperClass: `${CONTROL_HEIGHT_CLASSES.sm} gap-xs px-xs`,
+    btnClass: 'h-[1.1rem] w-[1.1rem] text-xs',
+    textClass: 'min-w-[1.5rem] text-2xs',
   },
   md: {
-    wrapperClass: `${CONTROL_HEIGHT_CLASSES.md} px-xs gap-xs`,
-    btnClass: 'w-[1.3rem] h-[1.3rem] text-xs',
-    textClass: 'text-xs min-w-[1.75rem]',
+    wrapperClass: `${CONTROL_HEIGHT_CLASSES.md} gap-xs px-xs`,
+    btnClass: 'h-[1.3rem] w-[1.3rem] text-xs',
+    textClass: 'min-w-[1.75rem] text-xs',
   },
   lg: {
-    wrapperClass: `${CONTROL_HEIGHT_CLASSES.lg} px-xs gap-xs`,
-    btnClass: 'w-[1.3rem] h-[1.3rem] text-xs',
-    textClass: 'text-xs min-w-[2.25rem]',
+    wrapperClass: `${CONTROL_HEIGHT_CLASSES.lg} gap-xs px-xs`,
+    btnClass: 'h-[1.3rem] w-[1.3rem] text-xs',
+    textClass: 'min-w-[2.25rem] text-xs',
   },
 };
 

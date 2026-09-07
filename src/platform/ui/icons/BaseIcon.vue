@@ -11,10 +11,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, type CSSProperties } from 'vue';
+import { computed } from 'vue';
 
-import { ICON_REGISTRY, type IconName } from './icons.registry.ts';
-import { resolveIconSize, resolveIconStroke, type IconSizeValue, type IconStrokeValue } from './iconSizes.ts';
+import { ICON_REGISTRY } from './icons.registry.ts';
+import { resolveIconSize, resolveIconStroke } from './iconSizes.ts';
+
+import type { IconName } from './icons.registry.ts';
+import type { IconSizeValue, IconStrokeValue } from './iconSizes.ts';
+import type { CSSProperties } from 'vue';
 
 export interface BaseIconProps {
   /** 图标名称（具备完整的 TypeScript 自动补全提示） */

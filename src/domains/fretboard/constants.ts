@@ -63,8 +63,26 @@ export const CANVAS_CONFIG = {
   BOARD_WIDTH: OFFSET_X_LEFT + 5 * STRING_SPACING + OFFSET_X_RIGHT,
 } as const;
 
-/** 可选品数（指板支持 3 或 4 品） */
-export const FRET_COUNTS = [3, 4] as const;
+/** 可选品数（指板支持的品位窗口档位；扩展品数只需改这里与各 *MAP 映射表） */
+export const FRET_COUNTS = [3, 4, 5] as const;
+/** 默认品数：清洗兜底、解码兜底、初始草稿共用此值 */
+export const DEFAULT_FRET_COUNT = 3;
+/** 品数下限：渲染层对异常数据的兜底钳制下界 */
+export const MIN_FRET_COUNT: number = Math.min(...FRET_COUNTS);
+
+/** 各品数下浮动操作栏的 bottom 定位（画布随品数增高，栏位随之贴近底部） */
+export const FRET_COUNT_BAR_BOTTOM_MAP: Record<number, string> = {
+  3: '5rem',
+  4: '3.5rem',
+  5: '2.5rem',
+};
+/** 取品数对应的浮动栏 bottom；未登记的品数回退到最高档（画布最高，栏位最贴底） */
+export const getFloatingBarBottom = (fretCount: number): string => {
+  const exact = FRET_COUNT_BAR_BOTTOM_MAP[fretCount];
+  if (exact) return exact;
+  const tallest = Math.max(...FRET_COUNTS);
+  return FRET_COUNT_BAR_BOTTOM_MAP[tallest] ?? '3.5rem';
+};
 
 const FINGER_DOT_RADIUS = 28;
 const OPEN_DOT_SIZE_PX = FINGER_DOT_RADIUS * 2;
@@ -96,44 +114,7 @@ export const NOTE_DISPLAY = {
   ACCIDENTAL_RAISE_RATIO: 0.28,
 } as const;
 
-/** 指板配色（明暗双主题） */
-export const FRETBOARD_COLORS = {
-  /** 根音圆点（浅色主题） */
-  rootLight: '#ff9500',
-  /** 根音圆点（深色主题） */
-  rootDark: '#ffd60a',
-
-  /** 普通音符圆点（浅色主题） */
-  normalLight: '#2563eb',
-  /** 普通音符圆点（深色主题） */
-  normalDark: '#3b82f6',
-
-  /** 根音音符文字（浅色主题） */
-  textRootLight: '#fff7ed',
-  /** 根音音符文字（深色主题） */
-  textRootDark: '#29323d',
-
-  /** 空弦根音按钮背景（浅色主题） */
-  openRootBgLight: '#fff7ed',
-  /** 空弦根音按钮背景（深色主题） */
-  openRootBgDark: '#2d2012',
-
-  /** 空弦根音边框（浅色主题） */
-  openRootBorderLight: '#fed7aa',
-  /** 空弦根音边框（深色主题） */
-  openRootBorderDark: '#6b4712',
-
-  /** 空弦根音按钮文字（浅色主题） */
-  openRootTextLight: '#ff9500',
-  /** 空弦根音按钮文字（深色主题） */
-  openRootTextDark: '#ffd60a',
-
-  // 专门用于 focus/currentColor
-  /** 聚焦高亮色（浅色主题） */
-  focusLight: '#92400e',
-  /** 聚焦高亮色（深色主题） */
-  focusDark: '#fcd34d',
-} as const;
+/** 指板圆点/空弦配色已迁移至 tokens.scss 的 --fb-* CSS 变量（FretboardNote 消费 var()，明暗主题随 tokens 切换） */
 
 /** 横按提示箭头颜色过渡时长（ms，FretboardSvg 计算样式） */
 export const BARRE_ARROW_TRANSITION_MS = 150;
@@ -176,31 +157,10 @@ export const FRETBOARD_CANVAS_CONFIG = {
   CAPO_TEXT_FONT_SIZE: 8,
   /** 品号文字在指板左侧的 X 轴偏移（px） */
   FRET_NUMBER_X_OFFSET: 4,
-  /** 主题配色方案（明/暗） */
-  THEME: {
-    DARK: {
-      BG: '#18181a',
-      TEXT: '#f5f5f7',
-      SUB_TEXT: '#a1a1aa',
-      DIVIDER: '#27272a',
-      FB_LINE: '#52525b',
-      FB_NUT: '#f4f4f5',
-      FB_NOTE: '#f4f4f5',
-      FB_OPEN: '#f4f4f5',
-      FB_BARRE: '#f4f4f5',
-      FB_MUTE: '#f4f4f5',
-    },
-    LIGHT: {
-      BG: '#f2f2f7',
-      TEXT: '#1c1c1e',
-      SUB_TEXT: '#71717a',
-      DIVIDER: '#e4e4e7',
-      FB_LINE: '#a1a1aa',
-      FB_NUT: '#18181b',
-      FB_NOTE: '#18181b',
-      FB_OPEN: '#18181b',
-      FB_BARRE: '#18181b',
-      FB_MUTE: '#18181b',
-    },
-  },
+  /**
+   * 主题配色已迁移至 tokens.scss 的 --fbc-* CSS 变量，
+   * 由 fretboardCanvasPalette.ts 的 resolveFretboardCanvasPalette 运行时解析：
+   * - FretboardCanvas.vue 主题切换时解析重绘
+   * - scoreExportWorker 由主线程解析后随导出消息传入
+   */
 } as const;
