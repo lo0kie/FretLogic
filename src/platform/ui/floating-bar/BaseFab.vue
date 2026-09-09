@@ -18,7 +18,7 @@
         :aria-label="computedAriaLabel"
         :class="[positionClass, alignClass, zIndexClass, fabSizeClass]"
         :style="outerStyle"
-        class="base-fab pointer-events-auto box-border flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full border border-glass-border bg-surface-panel/95 shadow-floating backdrop-blur-xl select-none hover:ring-2 hover:ring-primary/70 active:scale-95"
+        class="base-fab pointer-events-auto flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full border border-glass-border bg-surface-panel/95 shadow-floating backdrop-blur-xl select-none hover:ring-2 hover:ring-primary/70 active:scale-95"
         type="button"
       >
         <slot>
@@ -162,15 +162,12 @@ const FAB_SIZE_MAP: Record<'sm' | 'md' | 'lg', string> = {
   lg: 'h-[2.6rem] w-[2.6rem]',
 };
 
-const fabSizeClass = computed(() => FAB_SIZE_MAP[props.size] ?? FAB_SIZE_MAP.md);
+const fabSizeClass = computed(() => FAB_SIZE_MAP[props.size]);
 
 /** FAB 尺寸 → 图标档位映射：sm→lg(18) / md→xl(20) / lg→2xl(26) */
 const ICON_SIZE_BY_FAB_SIZE: Record<ComponentSize, IconSizePreset> = { sm: 'lg', md: 'xl', lg: '2xl' };
-// 映射表为必填全量 Record，正常入参不可能取到 undefined；?? 兜底仅防御运行时非法 size（
-// 与 FAB_SIZE_MAP 的 ?? md 同一策略：非法时统一回落 md/xl，而非落到图标默认 1em 造成尺寸失配）
-const computedIconSize = computed<IconSizeValue>(
-  () => props.iconSize ?? ICON_SIZE_BY_FAB_SIZE[props.size] ?? ICON_SIZE_BY_FAB_SIZE.md
-);
+// 映射表为必填全量 Record（ComponentSize 为 'sm'|'md'|'lg' 有限联合），索引结果非空，无需 ?? 兜底
+const computedIconSize = computed<IconSizeValue>(() => props.iconSize ?? ICON_SIZE_BY_FAB_SIZE[props.size]);
 
 const computedAriaLabel = computed(() => props.ariaLabel ?? props.tooltip ?? '浮动操作按钮');
 
@@ -204,7 +201,7 @@ const outerStyle = computed(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 /* 常态 hover 过渡：只影响底色/边框/阴影，不与进出场动画抢 transition-property */
 .base-fab {
   transition:
@@ -223,13 +220,13 @@ const outerStyle = computed(() => {
 
 :global(.v-floating-bar-slide-enter-from),
 :global(.v-floating-bar-slide-leave-to) {
-  opacity: 0;
   transform: translateY(16px) scale(0.96);
+  opacity: 0;
 }
 
 :global(.v-floating-bar-slide-enter-to),
 :global(.v-floating-bar-slide-leave-from) {
-  opacity: 1;
   transform: translateY(0) scale(1);
+  opacity: 1;
 }
 </style>

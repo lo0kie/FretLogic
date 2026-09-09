@@ -48,7 +48,7 @@
     @click="handleClick($event)"
     @keydown="handleKeydown($event)"
     data-focusable-inline
-    class="box-border inline-flex shrink-0 items-center justify-center rounded-full border border-transparent leading-none font-semibold tracking-tight whitespace-nowrap transition-all duration-fast outline-none select-none"
+    class="inline-flex shrink-0 items-center justify-center rounded-full border border-transparent leading-none font-semibold tracking-tight whitespace-nowrap transition-all duration-fast outline-none select-none"
   >
     <span v-if="hasDot" aria-hidden="true" class="size-1.5 shrink-0 rounded-full bg-current" />
 

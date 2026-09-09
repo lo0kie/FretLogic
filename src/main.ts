@@ -10,9 +10,6 @@ import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useTheme } from '@/platform/composables/useTheme';
 import { logger } from '@/platform/utils/logger';
 
-import '@/assets/main.scss';
-import '@/assets/tailwind.css';
-
 import { vChordName } from './domains/chord/directives/vChordName.ts';
 import { vActionCard } from './platform/directives/vActionCard.ts';
 import { vAutoHeight } from './platform/directives/vAutoHeight.ts';
@@ -24,6 +21,9 @@ import { vScrollbar } from './platform/directives/vScrollbar.ts';
 import { vScrollIntoView } from './platform/directives/vScrollIntoView.ts';
 import { vTooltip } from './platform/directives/vTooltip.ts';
 import { vWheelScroll } from './platform/directives/vWheelScroll.ts';
+
+import '@/assets/tailwind.css';
+import '@/assets/main.scss';
 
 const app = createApp(App);
 const pinia = createPinia();

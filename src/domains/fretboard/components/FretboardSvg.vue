@@ -41,7 +41,7 @@
     <!-- 品数撑开动画容器：保留 overflow-y-clip 类名兼容单测，内联 overflow: visible 杜绝左右音符被截断 -->
     <div
       :style="{ height: `${boardBoxHeight}px`, overflow: 'visible' }"
-      class="relative box-border w-full overflow-y-clip transition-[height] duration-slow ease-sidebar"
+      class="relative w-full overflow-y-clip transition-[height] duration-slow ease-sidebar"
     >
       <div aria-hidden="true" class="pointer-events-none absolute inset-0 z-inner">
         <span
@@ -61,7 +61,7 @@
         :style="{ overflow: 'visible', maxWidth: `${boardWidth || CANVAS_CONFIG.BOARD_WIDTH}px` }"
         :viewBox="`0 0 ${boardWidth || CANVAS_CONFIG.BOARD_WIDTH} ${renderedSvgHeight}`"
         :width="boardWidth || CANVAS_CONFIG.BOARD_WIDTH"
-        class="pointer-events-none mx-auto box-border block w-full"
+        class="pointer-events-none mx-auto block w-full"
         preserveAspectRatio="xMidYMin meet"
         role="img"
       >
@@ -686,7 +686,7 @@ watch(() => hoverPoint, syncBarreHover, { deep: true });
 watch(displayBarres, syncBarreHover, { flush: 'post' });
 </script>
 
-<style scoped lang="scss">
+<style lang="scss">
 @use '@/assets/tokens' as *;
 
 .barre-bubble-transition-enter-active,
@@ -699,14 +699,14 @@ watch(displayBarres, syncBarreHover, { flush: 'post' });
 
 .barre-bubble-transition-enter-from,
 .barre-bubble-transition-leave-to {
-  opacity: 0;
   transform: translateY(6px);
+  opacity: 0;
 }
 
 .barre-bubble-transition-enter-to,
 .barre-bubble-transition-leave-from {
-  opacity: 1;
   transform: translateY(0);
+  opacity: 1;
 }
 
 /* 琴弦底端在品数收缩时的平滑过渡 */
@@ -730,9 +730,9 @@ watch(displayBarres, syncBarreHover, { flush: 'post' });
 
 /* 横按标记入场动画：从左往右展开延展，伴随平滑淡入 */
 .barre-slide-in {
-  animation: barre-slide-right $duration-base $bezier-standard both;
   transform-box: fill-box;
   transform-origin: left center;
+  animation: barre-slide-right $duration-base $bezier-standard both;
   will-change: opacity, transform;
 }
 
@@ -749,13 +749,13 @@ watch(displayBarres, syncBarreHover, { flush: 'post' });
 
 @keyframes barre-slide-right {
   from {
-    opacity: 0;
     transform: scaleX(0);
+    opacity: 0;
   }
 
   to {
-    opacity: 1;
     transform: scaleX(1);
+    opacity: 1;
   }
 }
 

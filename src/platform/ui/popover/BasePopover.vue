@@ -31,10 +31,9 @@
           :class="panelClass"
           :style="mergedPanelStyle"
           @focusout="handleFocusOut($event)"
-          @keydown="handlePanelKeydown($event)"
           @mouseenter="handlePanelMouseEnter()"
           @mouseleave="handlePanelMouseLeave()"
-          class="popover-panel relative z-panel box-border rounded-md border border-glass-border bg-surface-elevated shadow-floating backdrop-blur-xl outline-none"
+          class="popover-panel relative z-panel rounded-md border border-glass-border bg-surface-elevated shadow-floating backdrop-blur-xl outline-none"
           ref="panelRef"
           role="dialog"
           tabindex="-1"
@@ -620,15 +619,6 @@ const handleTriggerFocusOut = (e: FocusEvent) => {
   const nextFocused = e.relatedTarget as HTMLElement | null;
   if (nextFocused && isEventInside(nextFocused)) return;
   close();
-};
-
-/** 面板内 Esc 关闭（兜底路径，正常由全局捕获监听先行处理） */
-const handlePanelKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && closeOnEsc) {
-    e.preventDefault();
-    e.stopPropagation();
-    close();
-  }
 };
 
 onBeforeUnmount(() => {

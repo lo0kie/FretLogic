@@ -1,5 +1,5 @@
 <template>
-  <div class="relative box-border flex-1 p-xl px-2xl">
+  <div class="relative flex-1 p-xl px-2xl">
     <BaseTextarea
       v-model="localLyrics"
       show-count

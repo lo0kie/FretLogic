@@ -9,7 +9,7 @@ import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorSto
 import { useSongStore } from '@/domains/score/library/store/songStore';
 
 import type { Song } from '@/domains/score/types';
-import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import type { MenuItem } from '@/platform/ui/menu/types';
 
 const buildSong = (id: string): Song => ({
   id,
@@ -26,8 +26,8 @@ const buildSong = (id: string): Song => ({
 const globalStubs = {
   directives: { 'marquee': {}, 'grid-nav': {}, 'scroll-into-view': {} },
   components: {
+    BaseMenu: { template: '<div><slot :is-open="false" /></div>' },
     VueDraggable: { template: '<div><slot /></div>' },
-    ContextMenu: { template: '<div><slot :is-open="false" /></div>' },
   },
 };
 
@@ -45,7 +45,7 @@ describe('SongSection 乐谱菜单', () => {
     await nextTick();
 
     const wrapper = mount(SongSection, { global: globalStubs });
-    const vm = wrapper.vm as unknown as { getSongMenuItems: (song: Song) => ContextMenuItem[] };
+    const vm = wrapper.vm as unknown as { getSongMenuItems: (song: Song) => MenuItem[] };
 
     const clearItemDisabled = (song: Song) =>
       vm.getSongMenuItems(song).find(item => item.label === '清空和弦')?.disabled;
@@ -74,7 +74,7 @@ describe('SongSection 乐谱菜单', () => {
     await nextTick();
 
     const wrapper = mount(SongSection, { global: globalStubs });
-    const vm = wrapper.vm as unknown as { getSongMenuItems: (song: Song) => ContextMenuItem[] };
+    const vm = wrapper.vm as unknown as { getSongMenuItems: (song: Song) => MenuItem[] };
 
     const items = vm.getSongMenuItems(songStore.songs[0]!);
 

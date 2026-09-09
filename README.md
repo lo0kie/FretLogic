@@ -86,7 +86,7 @@ pnpm dev
 | 状态     | Pinia                                        |
 | 样式     | Tailwind CSS v4 + SCSS 设计令牌（三主题）    |
 | 存储     | IndexedDB（v2 契约）+ 旧数据迁移             |
-| 音频     | WebAudio（tone.js）                          |
+| 音频     | 原生 Web Audio（无第三方音频库）             |
 | 导出     | Web Worker 离屏渲染（OffscreenCanvas → PNG） |
 | 测试     | Vitest（单元）+ Playwright（E2E）            |
 | 代码质量 | ESLint（含架构约束）+ Prettier + vue-tsc     |

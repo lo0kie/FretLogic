@@ -839,8 +839,10 @@ const unmountScrollbar = (host: HTMLElement): void => {
   host.classList.remove(HOST_CLASS);
   host.style.removeProperty('scrollbar-width');
   host.style.removeProperty('-ms-overflow-style');
-  host.style.removeProperty('overflow-x');
-  host.style.removeProperty('overflow-y');
+  // 刻意不摘 overflow-x / overflow-y：一旦把 overflow 还原为 visible，浏览器会立即销毁该元素的
+  // scrolling box 并丢弃 scrollTop。而卸载发生时元素往往仍在 DOM 中、且正在播放离场动画
+  // （如浮层关闭的 scale 淡出），内容会瞬间跳回顶部，肉眼可见。
+  // 元素即将被移除，这些内联样式本就随节点一起消失，保留它们没有副作用。
   states.delete(host);
 };
 

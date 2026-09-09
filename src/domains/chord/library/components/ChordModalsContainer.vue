@@ -15,7 +15,7 @@
         :title="group.name"
         @click="groupModals.modalData.moveTargetId = group.id"
         data-focusable-inline
-        class="box-border flex w-full min-w-0 cursor-pointer items-center rounded-md border border-border-base p-md text-xs font-bold transition-all duration-fast disabled:cursor-not-allowed disabled:border-border-light disabled:bg-surface-main disabled:text-fg-disabled disabled:opacity-50"
+        class="flex w-full min-w-0 cursor-pointer items-center rounded-md border border-border-base p-md text-xs font-bold transition-all duration-fast disabled:cursor-not-allowed disabled:border-border-light disabled:bg-surface-main disabled:text-fg-disabled disabled:opacity-50"
       >
         <div v-marquee.fade>
           <span> {{ group.name }} </span>
@@ -52,7 +52,7 @@
         </p>
       </div>
       <div
-        class="no-scrollbar box-border grid max-h-[52vh] grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-lg overflow-y-auto p-xs"
+        class="no-scrollbar grid max-h-[52vh] grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-lg overflow-y-auto p-xs"
       >
         <div
           v-wave
@@ -69,11 +69,11 @@
           @keydown.enter.prevent="groupModals.toggleVariantSelection(variant.id)"
           @keydown.space.prevent="groupModals.toggleVariantSelection(variant.id)"
           data-focusable-inline
-          class="relative box-border flex min-w-0 cursor-pointer flex-col items-center rounded-md border-[1.5px] border-border-light bg-surface-body px-sm pt-md pb-sm transition-all duration-fast outline-none select-none hover:-translate-y-px hover:border-border-base hover:bg-surface-panel-hover active:scale-[0.98]"
+          class="relative flex min-w-0 cursor-pointer flex-col items-center rounded-md border-[1.5px] border-border-light bg-surface-body px-sm pt-md pb-sm transition-all duration-fast outline-none select-none hover:-translate-y-px hover:border-border-base hover:bg-surface-panel-hover active:scale-[0.98]"
           role="checkbox"
           tabindex="0"
         >
-          <div class="pointer-events-none box-border flex w-full items-center justify-center p-xs">
+          <div class="pointer-events-none flex w-full items-center justify-center p-xs">
             <FretboardCanvas
               :chord="variant"
               :chord-name-scale="0.8"

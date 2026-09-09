@@ -8,7 +8,7 @@ import {
   applyChorusEnabled,
   applyTimbre,
   disposeSynthEngine,
-  ensureToneReady,
+  ensureAudioReady,
   releaseSynthNotes,
   setReverbWet,
   setSynthVolume,
@@ -68,8 +68,8 @@ export function useAudioPlayer() {
     if (isPlaying.value) return;
     isPlaying.value = true;
     try {
-      const tone = await ensureToneReady();
-      if (!tone) {
+      const ready = await ensureAudioReady();
+      if (!ready) {
         isPlaying.value = false;
         return;
       }
@@ -100,8 +100,8 @@ export function useAudioPlayer() {
     isPlaying.value = true;
 
     try {
-      const tone = await ensureToneReady();
-      if (!tone) {
+      const ready = await ensureAudioReady();
+      if (!ready) {
         isPlaying.value = false;
         return;
       }
@@ -136,10 +136,10 @@ export function useAudioPlayer() {
     isSustaining.value = true;
     const ticket = ++sustainTicket;
     try {
-      const tone = await ensureToneReady();
+      const ready = await ensureAudioReady();
       // await 窗口内的状态复检：松手（stopChordSustain 复位）、再次按住（ticket 已被新会话接管）
       // 或切换为播放时，本会话不得再起音——否则会出现「停止后才发声且无人释放」的失控延音/双扫弦
-      if (!tone || sustainTicket !== ticket || !isSustaining.value || isPlaying.value) {
+      if (!ready || sustainTicket !== ticket || !isSustaining.value || isPlaying.value) {
         // 仅当仍是本会话时才复位状态，避免误清新会话
         if (sustainTicket === ticket) isSustaining.value = false;
         return;
@@ -198,8 +198,8 @@ export function useAudioPlayer() {
     }
   ) => {
     if (!sequence || sequence.length === 0) return;
-    const tone = await ensureToneReady();
-    if (!tone) return;
+    const ready = await ensureAudioReady();
+    if (!ready) return;
 
     activeSequence = sequence;
     activeStepIndex = options?.startIndex ?? 0;

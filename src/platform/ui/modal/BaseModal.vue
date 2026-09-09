@@ -14,7 +14,7 @@
         :class="overlayAlignClass"
         @click.self="handleMaskClick($event)"
         @mousedown="handleMaskMousedown($event)"
-        class="modal-overlay-container fixed inset-0 z-overlay box-border flex overflow-y-auto bg-black/50 p-md"
+        class="modal-overlay-container fixed inset-0 z-overlay flex overflow-y-auto bg-black/50 p-md"
         ref="overlayRef"
       >
         <!-- 关闭（leave）期间禁用高度接管：expanded 联动 visible，避免退场动画进行中卡片被高度压 0 裁没 -->
@@ -26,7 +26,7 @@
           @click.stop
           @keydown="handleKeydownTrap($event)"
           aria-modal="true"
-          class="modal-card relative z-panel box-border flex flex-col overflow-hidden rounded-lg border border-glass-border bg-surface-panel shadow-floating outline-none"
+          class="modal-card relative z-panel flex flex-col overflow-hidden rounded-lg border border-glass-border bg-surface-panel shadow-floating outline-none"
           ref="modalCardRef"
           role="dialog"
           tabindex="-1"
@@ -73,14 +73,14 @@
                 { 'has-header': hasHeader, 'has-footer': showFooter, 'py-sm': !$slots['default'] },
                 isAutoHeight ? 'h-auto max-h-[calc(85vh-8rem)]' : 'min-h-0 flex-1',
               ]"
-              class="modal-body-scrollable no-scrollbar box-border flex flex-col overflow-y-auto px-xl py-lg"
+              class="modal-body-scrollable no-scrollbar flex flex-col overflow-y-auto px-xl py-lg"
             >
               <slot />
             </div>
 
             <div
               v-if="showFooter"
-              class="modal-footer-zone box-border flex w-full shrink-0 items-center justify-end gap-sm px-xl pt-0 pb-xl"
+              class="modal-footer-zone flex w-full shrink-0 items-center justify-end gap-sm px-xl pt-0 pb-xl"
             >
               <slot name="footer">
                 <slot name="cancel-btn">

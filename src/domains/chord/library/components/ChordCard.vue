@@ -1,6 +1,6 @@
 <template>
-  <div class="box-border w-full">
-    <ContextMenu #="{ isOpen }" :items="menuItems">
+  <div class="w-full">
+    <BaseMenu #="{ isOpen }" :items="menuItems" trigger="contextmenu">
       <div :title="getChordName(activeChord, { shorthand: settingsStore.workbenchChordShorthand })" class="w-full">
         <div
           v-action-card
@@ -14,7 +14,7 @@
           }"
           @click="handleCardClick()"
           data-focusable-inline
-          class="relative box-border flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border border-border-light bg-surface-body px-2 transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover active:border-border-base active:bg-surface-panel-hover"
+          class="relative flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border border-border-light bg-surface-body px-2 transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover active:border-border-base active:bg-surface-panel-hover"
         >
           <BaseBadge
             v-if="cardData.hasVariants"
@@ -37,7 +37,7 @@
           </div>
         </div>
       </div>
-    </ContextMenu>
+    </BaseMenu>
   </div>
 </template>
 
@@ -45,7 +45,7 @@
 import { computed, inject, ref } from 'vue';
 
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
-import ContextMenu from '@/platform/ui/context-menu/ContextMenu.vue';
+import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import { CHORD_REFERENCE_LOOKUP } from '@/domains/chord/library/injectionKeys';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
@@ -53,7 +53,7 @@ import { useChordTransfer } from '@/domains/chord/transfer/useChordTransfer';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 
 import type { Chord, GroupedChordCard } from '@/domains/chord/types';
-import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import type { MenuItem } from '@/platform/ui/menu/types';
 
 const props = defineProps<{
   cardData: GroupedChordCard;
@@ -109,7 +109,7 @@ const toggleVariantsDropdown = () => {
   switchVariant(nextIdx);
 };
 
-const menuItems = computed<ContextMenuItem[]>(() => {
+const menuItems = computed<MenuItem[]>(() => {
   const variantIds = props.cardData.variants.map(v => v.id);
   const hasReferences = lookupChordReferences(variantIds) > 0;
   // 复制：多指法时展开为级联子菜单逐指法复制，单指法不展开直接复制当前展示的指法

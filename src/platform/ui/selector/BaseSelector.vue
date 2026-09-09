@@ -25,7 +25,7 @@
         :title="triggerTitle"
         @keydown="handleTriggerKeydown($event)"
         aria-haspopup="listbox"
-        class="group relative box-border flex items-center justify-between gap-2 rounded-full border border-border-light bg-surface-body text-fg-title transition-all duration-150 outline-none select-none hover:border-border-base focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/70"
+        class="group relative flex items-center justify-between gap-2 rounded-full border border-border-light bg-surface-body text-fg-title transition-all duration-150 outline-none select-none hover:border-border-base focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/70"
         ref="referenceRef"
         role="combobox"
       >
@@ -41,16 +41,16 @@
             :name="currentTriggerIcon as IconName"
             aria-hidden="true"
             class="shrink-0 opacity-80"
+            icon-size="md"
             icon-stroke="bold"
-            size="md"
           />
           <component
             v-else-if="currentTriggerIcon"
             :is="currentTriggerIcon"
             aria-hidden="true"
             class="shrink-0 opacity-80"
+            icon-size="md"
             icon-stroke="bold"
-            size="md"
           />
           <span class="flex w-full items-center gap-1 overflow-hidden">
             <template v-if="isMultiple && selectedValues.length">
@@ -68,10 +68,10 @@
                   @keydown.space.prevent.stop="handleRemoveTag(opt)"
                   aria-label="移除选项"
                   class="shrink-0 cursor-pointer opacity-60 hover:text-danger hover:opacity-100"
+                  icon-size="xs"
                   icon-stroke="bold"
                   name="x"
                   role="button"
-                  size="xs"
                   tabindex="0"
                   title="移除"
                 />
@@ -101,28 +101,28 @@
             @keydown.space.prevent.stop="handleClear()"
             aria-label="清空选择"
             class="hidden shrink-0 cursor-pointer bg-surface-body text-fg-disabled transition-colors group-focus-within:block group-hover:block hover:text-danger"
+            icon-size="md"
             icon-stroke="bold"
             name="x"
             role="button"
-            size="md"
             tabindex="0"
             title="清空"
           />
           <BaseIcon
             :class="{ 'rotate-180': _isOpen }"
             class="block shrink-0 text-fg-disabled transition-transform duration-200 group-focus-within:hidden group-hover:hidden"
+            icon-size="md"
             icon-stroke="bold"
             name="chevron-down"
-            size="md"
           />
         </template>
         <BaseIcon
           v-else
           :class="{ 'rotate-180': _isOpen }"
           class="block shrink-0 text-fg-disabled transition-transform duration-200"
+          icon-size="md"
           icon-stroke="bold"
           name="chevron-down"
-          size="md"
         />
       </div>
     </template>
@@ -156,16 +156,16 @@
             }"
             @keydown="handleDropdownKeydown($event, close)"
             @scroll.passive="syncEdgeFades()"
-            class="box-border flex w-full flex-col gap-0.5 overflow-y-auto p-xs outline-none"
+            class="flex w-full flex-col gap-0.5 overflow-y-auto p-xs outline-none"
             ref="dropdownRef"
             role="listbox"
             tabindex="-1"
           >
             <div
               v-if="filteredOptions.length === 0"
-              class="m-auto box-border flex min-h-22 w-full flex-col items-center justify-center py-6"
+              class="m-auto flex min-h-22 w-full flex-col items-center justify-center py-6"
             >
-              <EmptyState :description="filterable ? '无匹配结果' : '暂无选项'" size="sm" />
+              <Feedback :description="filterable ? '无匹配结果' : '暂无选项'" size="sm" />
             </div>
             <template v-else>
               <div
@@ -188,7 +188,7 @@
                 @click="handleSelect(entry.option, close)"
                 @keydown.enter.prevent.stop="handleSelect(entry.option, close)"
                 @keydown.space.prevent.stop="handleSelect(entry.option, close)"
-                class="box-border flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-md bg-transparent px-2.5 text-xs text-fg-body transition-colors outline-none hover:bg-surface-panel-hover hover:text-fg-title"
+                class="flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-md bg-transparent px-2.5 text-xs text-fg-body transition-colors outline-none hover:bg-surface-panel-hover hover:text-fg-title"
                 role="option"
               >
                 <span class="flex max-w-full min-w-0 flex-1 items-center gap-2">
@@ -197,16 +197,16 @@
                     :name="getOptionIcon(entry.option) as IconName"
                     aria-hidden="true"
                     class="shrink-0 opacity-80"
+                    icon-size="md"
                     icon-stroke="bold"
-                    size="md"
                   />
                   <component
                     v-else-if="getOptionIcon(entry.option)"
                     :is="getOptionIcon(entry.option)"
                     aria-hidden="true"
                     class="shrink-0 opacity-80"
+                    icon-size="md"
                     icon-stroke="bold"
-                    size="md"
                   />
                   <div v-marquee.fade class="min-w-0">
                     <span class="block whitespace-nowrap">
@@ -220,9 +220,9 @@
                   v-if="isSelected(getOptionValue(entry.option))"
                   aria-hidden="true"
                   class="shrink-0 text-primary"
+                  icon-size="md"
                   icon-stroke="bold"
                   name="check"
-                  size="md"
                 />
               </div>
             </template>
@@ -243,16 +243,18 @@
 // 双 script 块的 SFC 视为同一模块：import 必须整体置于第一个块顶部（import/first），
 // 下方 <script setup> 直接复用这些绑定；<script setup> 内禁止 export，
 // 对外的类型导出也只能放在本块
-import { computed, nextTick, onBeforeUpdate, ref, useAttrs, useTemplateRef, watch } from 'vue';
+import { computed, inject, nextTick, onBeforeUpdate, ref, useAttrs, useTemplateRef, watch } from 'vue';
 
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { ComponentSize } from '@/platform/types';
+import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 import type { Component } from 'vue';
@@ -289,7 +291,7 @@ const modelValue = defineModel<M extends true ? V[] : V>({ required: true });
 
 const {
   options,
-  size = 'md',
+  size = undefined,
   width = 'full',
   placeholder = '请选择...',
   icon = undefined,
@@ -361,6 +363,9 @@ const emit = defineEmits<{
   (e: 'removeTag', option: AnyOption, value: V): void;
 }>();
 const attrs = useAttrs();
+/** 尺寸解析优先级：行内 size props > BaseForm 下发的 FormControlContext > 默认 md */
+const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
+const resolvedSize = computed<ComponentSize>(() => size ?? controlContext?.size ?? 'md');
 const labelKey = computed(() => fieldNames?.label ?? 'label');
 const valueKey = computed(() => fieldNames?.value ?? 'value');
 const disabledKey = computed(() => fieldNames?.disabled ?? 'disabled');
@@ -419,7 +424,7 @@ const SELECTOR_CONFIG: Record<'sm' | 'md' | 'lg', { triggerClass: string; itemCl
   lg: { triggerClass: `${CONTROL_HEIGHT_CLASSES.lg} px-3.5 text-xs`, itemClass: `${CONTROL_HEIGHT_CLASSES.lg}` },
 };
 
-const currentConfig = computed(() => SELECTOR_CONFIG[size] ?? SELECTOR_CONFIG.md);
+const currentConfig = computed(() => SELECTOR_CONFIG[resolvedSize.value] ?? SELECTOR_CONFIG.md);
 
 const ITEM_HEIGHT: Record<'sm' | 'md' | 'lg', number> = { sm: 1.6, md: 1.9, lg: 2.3 };
 const GAP_REM = 0.125;
@@ -595,7 +600,7 @@ const dropdownMaxHeight = computed(() => {
   const list = filteredOptions.value;
   if (list.length === 0) return '6rem';
   const visibleCount = Math.min(Math.max(1, displayItems), list.length);
-  const total = visibleCount * ITEM_HEIGHT[size] + (visibleCount - 1) * GAP_REM + PADDING_REM;
+  const total = visibleCount * ITEM_HEIGHT[resolvedSize.value] + (visibleCount - 1) * GAP_REM + PADDING_REM;
   return `${total}rem`;
 });
 

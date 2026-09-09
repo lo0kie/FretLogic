@@ -64,7 +64,7 @@
           },
         ]"
         aria-hidden="true"
-        class="checkbox-box relative box-border inline-flex shrink-0 items-center justify-center transition-all duration-fast"
+        class="checkbox-box relative inline-flex shrink-0 items-center justify-center transition-all duration-fast"
       >
         <slot v-if="indeterminate" name="indeterminate-icon">
           <BaseIcon

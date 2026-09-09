@@ -13,7 +13,7 @@
     @pointerdown="handlePointerDown($event)"
     @pointermove="handlePointerMove($event)"
     @pointerup="handlePointerUp($event)"
-    class="group m-0 box-border inline-flex cursor-pointer touch-none items-center gap-sm rounded-full border-none bg-transparent p-0 align-middle outline-none select-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+    class="group m-0 inline-flex cursor-pointer touch-none items-center gap-sm rounded-full border-none bg-transparent p-0 align-middle outline-none select-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
     ref="switchBtnRef"
     role="switch"
     type="button"
@@ -21,7 +21,7 @@
     <span
       v-wave="{ disabled: disabled || isCurrentLoading }"
       :class="[currentConfig.trackClass, trackColorClass]"
-      class="switch-track relative box-border inline-flex shrink-0 items-center overflow-hidden rounded-full transition-all duration-base group-focus-visible:ring-2 group-focus-visible:ring-primary/70"
+      class="switch-track relative inline-flex shrink-0 items-center overflow-hidden rounded-full transition-all duration-base group-focus-visible:ring-2 group-focus-visible:ring-primary/70"
       ref="trackRef"
     >
       <span
@@ -42,7 +42,7 @@
           isPressed && !isDragging && !hasMovedSignificantly && 'scale-y-[0.82]',
         ]"
         :style="dragThumbStyle"
-        class="switch-thumb pointer-events-none box-border inline-flex items-center justify-center rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] transition-transform duration-base ease-spring"
+        class="switch-thumb pointer-events-none inline-flex items-center justify-center rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] transition-transform duration-base ease-spring"
         ref="thumbRef"
       >
         <slot v-if="isChecked" name="checked-icon" />
@@ -77,9 +77,12 @@
 </template>
 
 <script setup generic="T extends string | number | boolean = boolean" lang="ts">
-import { computed, ref, useId, useTemplateRef } from 'vue';
+import { computed, inject, ref, useId, useTemplateRef } from 'vue';
+
+import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 
 import type { ComponentSize } from '@/platform/types';
+import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 
 const modelValue = defineModel<T>({ required: true });
 
@@ -111,7 +114,7 @@ const props = withDefaults(
     beforeChange?: (val: T) => boolean | Promise<boolean>;
   }>(),
   {
-    size: 'md',
+    size: undefined,
     color: 'primary',
     disabled: false,
     loading: false,
@@ -204,7 +207,11 @@ const isCurrentLoading = computed(() => props.loading || loadingModel.value || i
 
 const isChecked = computed(() => Object.is(modelValue.value, resolvedActiveValue.value));
 
-const currentConfig = computed(() => SWITCH_CONFIG[props.size] ?? SWITCH_CONFIG.md);
+// 尺寸解析：行内 props > BaseForm 注入上下文 > 默认 md
+const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
+const resolvedSize = computed<ComponentSize>(() => props.size ?? controlContext?.size ?? 'md');
+
+const currentConfig = computed(() => SWITCH_CONFIG[resolvedSize.value] ?? SWITCH_CONFIG.md);
 
 const isDragPastHalf = computed(() => {
   if (!isDragging.value) return null;

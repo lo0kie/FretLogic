@@ -9,11 +9,9 @@
       pointerEvents: uiStore.isLeftOpen ? 'auto' : 'none',
       boxShadow: uiStore.isLeftOpen ? 'var(--shadow-panel)' : 'none',
     }"
-    class="panel-left absolute inset-y-0 left-0 z-sidebar box-border flex h-full flex-col overflow-hidden border-r border-glass-border bg-surface-panel/90 backdrop-blur-xl transition-[transform,opacity] duration-slow ease-sidebar will-change-transform"
+    class="panel-left absolute inset-y-0 left-0 z-sidebar flex h-full flex-col overflow-hidden border-r border-glass-border bg-surface-panel/90 backdrop-blur-xl transition-[transform,opacity] duration-slow ease-sidebar will-change-transform"
   >
-    <div
-      class="panel-header box-border flex h-10 shrink-0 items-center justify-between gap-sm border-b border-glass-border px-lg"
-    >
+    <div class="panel-header flex h-10 shrink-0 items-center justify-between gap-sm border-b border-glass-border px-lg">
       <div
         v-if="route.path === ROUTE_PATHS.WORKBENCH"
         class="v-fade-in-quick flex w-full min-w-0 items-center justify-between gap-sm"
@@ -95,11 +93,11 @@
               </div>
 
               <!-- 搜索无结果：复用通用空状态（search 预设） -->
-              <EmptyState v-else :description="noResultText" size="sm" type="search" />
+              <Feedback v-else :description="noResultText" size="sm" type="search" />
             </template>
 
             <!-- 未输入时的引导提示：复用通用空状态 -->
-            <EmptyState v-else description="输入和弦名称搜索..." icon="search" size="sm" />
+            <Feedback v-else description="输入和弦名称搜索..." icon="search" size="sm" />
           </template>
         </BaseInput>
 
@@ -130,16 +128,24 @@
         </div>
 
         <div class="header-actions flex shrink-0 items-center gap-xs">
-          <PopoverMenu
-            :items="songSortMenuItems"
-            aria-label="切换乐谱排序方式"
-            placement="bottom"
-            title="切换乐谱排序方式"
-          >
-            <template #icon>
-              <BaseIcon :name="currentSortIcon" icon-size="xl" icon-stroke="regular" />
+          <BaseMenu :items="songSortMenuItems" placement="bottom">
+            <template #trigger="{ isOpen, pinToggle }">
+              <ActionButton
+                :aria-expanded="isOpen"
+                :color="isOpen ? 'primary' : 'default'"
+                :title="'切换乐谱排序方式'"
+                :variant="isOpen ? 'subtle' : 'ghost'"
+                @click="pinToggle()"
+                icon-only
+                aria-haspopup="menu"
+                aria-label="切换乐谱排序方式"
+                icon-size="xl"
+                icon-stroke="regular"
+              >
+                <BaseIcon :name="currentSortIcon" icon-size="xl" icon-stroke="regular" />
+              </ActionButton>
             </template>
-          </PopoverMenu>
+          </BaseMenu>
 
           <ActionButton
             v-tooltip="'新建乐谱'"
@@ -155,10 +161,8 @@
       </div>
     </div>
 
-    <div
-      class="left-group-list-container left-group-list relative box-border flex min-h-0 w-full flex-1 flex-col overflow-hidden"
-    >
-      <div v-scrollbar="{ onScroll: closeAllPopovers }" class="scroll-body box-border flex-1 p-md" ref="scrollRef">
+    <div class="left-group-list-container left-group-list relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+      <div v-scrollbar="{ onScroll: closeAllPopovers }" class="scroll-body flex-1 p-md" ref="scrollRef">
         <KeepAlive :max="12">
           <GroupSection
             v-if="route.path === ROUTE_PATHS.WORKBENCH"
@@ -185,8 +189,8 @@
       <component :is="bottomFade" />
     </div>
 
-    <div class="left-panel-footer box-border w-full shrink-0 border-t border-glass-border p-md px-lg">
-      <div class="footer-actions-row box-border grid grid-cols-2 items-stretch gap-md">
+    <div class="left-panel-footer w-full shrink-0 border-t border-glass-border p-md px-lg">
+      <div class="footer-actions-row grid grid-cols-2 items-stretch gap-md">
         <ActionButton @click="handleImportTrigger()" icon="download" label="导入备份" width="100%" />
         <ActionButton @click="backupModals.openExport" icon="upload" label="导出备份" width="100%" />
       </div>
@@ -214,10 +218,10 @@ import SongModalsContainer from '@/domains/score/library/components/SongModalsCo
 import SongSection from '@/domains/score/library/components/SongSection.vue';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
-import PopoverMenu from '@/platform/ui/popover/PopoverMenu.vue';
+import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
 import { CHORD_REFERENCE_LOOKUP } from '@/domains/chord/library/injectionKeys';
@@ -234,8 +238,8 @@ import { LEFT_SIDEBAR_WIDTH_PIXEL, ROUTE_PATHS } from '@/platform/utils/constant
 import { pickFile } from '@/platform/utils/filePicker';
 
 import type { GroupedChordCard } from '@/domains/chord/types';
-import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
+import type { MenuItem } from '@/platform/ui/menu/types';
 
 defineOptions({ inheritAttrs: false });
 
@@ -348,25 +352,22 @@ const handleImportTrigger = async () => {
 };
 
 /** 乐谱排序菜单（交互参考主题切换：Popover + 菜单项，选中项带勾选标记） */
-const songSortMenuItems = computed<ContextMenuItem[]>(() => [
+const songSortMenuItems = computed<MenuItem[]>(() => [
   {
     label: '手动排序',
     icon: 'list',
-    color: 'var(--text-title)',
     checked: songStore.songSortMethod === 'manual',
     action: () => songStore.setSongSortMethod('manual'),
   },
   {
     label: '拼音分组',
     icon: 'type',
-    color: 'var(--color-primary)',
     checked: songStore.songSortMethod === 'title',
     action: () => songStore.setSongSortMethod('title'),
   },
   {
     label: '创建时间',
     icon: 'clock',
-    color: 'var(--color-success)',
     checked: songStore.songSortMethod === 'createdAt',
     action: () => songStore.setSongSortMethod('createdAt'),
   },

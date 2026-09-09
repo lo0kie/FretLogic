@@ -1,33 +1,31 @@
-﻿<template>
+<template>
   <BaseModal
     v-model:visible="groupModals.modals.chordReferences"
     :show-footer="false"
     :title="`和弦引用 · ${groupModals.modalData.referenceChordName}`"
     width="w-md"
   >
-    <div>
-      <ul
-        v-if="references.length > 0"
-        class="no-scrollbar m-0 flex max-h-[50vh] list-none flex-col gap-md overflow-y-auto p-1"
-      >
-        <li v-for="item in references" :key="item.song.id">
-          <button
-            v-wave
-            @click="handleOpenSong(item.song.id)"
-            data-focusable-inline
-            class="box-border flex w-full cursor-pointer items-center gap-sm rounded-md border border-border-light bg-surface-body px-3 py-2 text-left transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover"
-            type="button"
-          >
-            <BaseIcon class="shrink-0 text-primary" icon-size="md" name="music" />
-            <span class="min-w-0 flex-1 truncate text-xs font-semibold text-fg-title">
-              {{ item.song.title }}
-            </span>
-            <BaseBadge appearance="subtle" size="xs" variant="primary"> {{ item.count }} 处 </BaseBadge>
-          </button>
-        </li>
-      </ul>
-      <EmptyState v-else description="暂无歌词乐谱引用此和弦" size="sm" />
-    </div>
+    <ul
+      v-if="references.length > 0"
+      class="no-scrollbar m-0 flex max-h-[50vh] list-none flex-col gap-md overflow-y-auto p-1"
+    >
+      <li v-for="item in references" :key="item.song.id">
+        <button
+          v-wave
+          @click="handleOpenSong(item.song.id)"
+          data-focusable-inline
+          class="flex w-full cursor-pointer items-center gap-sm rounded-md border border-border-light bg-surface-body px-3 py-2 text-left transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover"
+          type="button"
+        >
+          <BaseIcon class="shrink-0 text-primary" icon-size="md" name="music" />
+          <span class="min-w-0 flex-1 truncate text-xs font-semibold text-fg-title">
+            {{ item.song.title }}
+          </span>
+          <BaseBadge appearance="subtle" size="xs" variant="primary"> {{ item.count }} 处 </BaseBadge>
+        </button>
+      </li>
+    </ul>
+    <Feedback v-else description="暂无歌词乐谱引用此和弦" size="sm" />
   </BaseModal>
 </template>
 
@@ -37,7 +35,7 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';

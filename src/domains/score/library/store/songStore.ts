@@ -2,7 +2,7 @@
  * 歌曲 store：歌曲列表的加载、增删改与分片持久化（localStorage 按歌曲单键存储）。
  * 提供和弦引用反查倒排索引；旧版单键（SONGS）数据在首次加载时自动迁移后清除。
  */
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -13,7 +13,7 @@ import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@
 import { createSong as createSongEntity } from '@/domains/score/model/scoreModel';
 import { createSongRepository, sanitizeSongList } from '@/domains/score/model/songRepository';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
-import { compareByPinyin, pinyinReady, preloadPinyin } from '@/platform/utils/pinyin';
+import { compareByPinyin } from '@/platform/utils/pinyin';
 
 import type { Chord, ChordId } from '@/domains/chord/types';
 import type { SlotKey, Song } from '@/domains/score/types';
@@ -156,11 +156,7 @@ export const useSongStore = defineStore('song', () => {
   };
   const sortedSongs = computed<Song[]>(() => {
     if (songSortMethod.value === 'title') {
-      // 拼音分组：pinyin-pro 动态导入未就绪时先用浏览器拼音排序（zh-Hans-CN）兜底；
-      // 就绪后 pinyinReady 翻转触发本 computed 重算为精确拼音排序（与分组标题键一致）
-      if (!pinyinReady.value) {
-        return [...songs.value].sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
-      }
+      // 拼音分组：由内置 Intl.Collator 统一驱动排序与分组键，二者天然一致，无需异步加载
       return [...songs.value].sort((a, b) => compareByPinyin(a.title, b.title));
     }
     if (songSortMethod.value === 'createdAt') {
@@ -168,14 +164,6 @@ export const useSongStore = defineStore('song', () => {
     }
     return songs.value;
   });
-  // 首次进入拼音分组时动态加载 pinyin-pro（独立 chunk，按需请求）；已处于该模式则立即预加载
-  watch(
-    () => songSortMethod.value === 'title',
-    active => {
-      if (active) void preloadPinyin();
-    },
-    { immediate: true }
-  );
 
   // 与 chordStore 的 useStorage 行为对齐：监听外部对 localStorage 的变更（DevTools 清空 / 其他标签页写入）。
   // 本页自身写 localStorage 不会触发 storage 事件（规范），因此不会自我循环；

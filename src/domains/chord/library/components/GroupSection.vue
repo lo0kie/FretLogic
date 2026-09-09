@@ -1,5 +1,5 @@
-﻿<template>
-  <EmptyState v-if="chordStore.groups.length === 0" description="还没有添加分组" icon="folder-open" />
+<template>
+  <Feedback v-if="chordStore.groups.length === 0" description="还没有添加分组" icon="folder-open" />
   <div v-else v-grid-nav.stop="{ cols: 1, selector: '.group-title-row' }">
     <VueDraggable
       :animation="200"
@@ -8,46 +8,41 @@
       :swap-threshold="0.5"
       @update:model-value="chordStore.overwriteGroups($event)"
       chosen-class="drag-chosen-style"
-      class="draggable-list box-border flex flex-col gap-sm"
+      class="draggable-list flex flex-col gap-sm"
       drag-class="drag-active-style"
       ghost-class="drag-ghost-style"
       handle=".group-title-row"
     >
-      <div v-for="(group, index) in chordStore.groups" :key="group.id" class="box-border">
-        <ContextMenu #="{ isOpen }" :items="getGroupMenuItems(group)">
-          <div
-            v-wave
+      <div v-for="(group, index) in chordStore.groups" :key="group.id">
+        <BaseMenu #="{ isOpen }" :items="getGroupMenuItems(group)" trigger="contextmenu">
+          <!-- 头部复用 BaseCollapse：点击/键盘切换、aria-expanded、chevron 旋转全部内聚在组件内；
+               class/data-*/aria-* 经 $attrs 落到头部按钮本体（拖拽把手、键盘导航标记、状态 tint）。
+               px-3 覆盖内置 px-2：Tailwind 同工具类按数值升序产出，px-3 必然在样式表中靠后 -->
+          <BaseCollapse
             v-scroll-into-view.y="group.id === chordStore.selectedGroupId"
-            :aria-expanded="isGroupContentOpen(group)"
             :aria-label="groupTitleAriaLabel(group)"
-            :class="{
-              'bg-tint-panelhover-50!': isGroupContentOpen(group),
-              'bg-tint-panelhover-30!': isOpen,
-            }"
+            :class="[
+              'group-title-row h-[2.4rem] border border-transparent px-3 transition-all duration-fast hover:border-border-base',
+              isGroupContentOpen(group) ? 'bg-tint-panelhover-50!' : '',
+              isOpen ? 'bg-tint-panelhover-30!' : '',
+            ]"
             :data-group-id="group.id"
-            @click="chordActions.executeGroupToggle(group)"
-            @keydown.enter.prevent="chordActions.executeGroupToggle(group)"
-            @keydown.space.prevent="chordActions.executeGroupToggle(group)"
+            :expanded="isGroupContentOpen(group)"
+            @update:expanded="chordActions.executeGroupToggle(group)"
             data-focusable-inline
-            class="group-title-row group/row box-border flex h-[2.4rem] cursor-pointer items-center justify-between rounded-md border border-transparent px-3 transition-all duration-fast outline-none select-none hover:border-border-base hover:bg-surface-panel-hover"
-            role="button"
-            tabindex="0"
+            unpadded
+            chevron-side="start"
           >
-            <div class="flex min-w-0 flex-1 items-center gap-sm" title="点击折叠/展开分组">
-              <BaseIcon
-                :class="{ '-rotate-90': !isGroupContentOpen(group) }"
-                aria-hidden="true"
-                class="shrink-0 text-fg-disabled transition-transform duration-fast group-hover/row:text-fg-title"
-                icon-size="sm"
-                icon-stroke="regular"
-                name="chevron-down"
-              />
-              <div v-marquee.fade>
+            <template #title>
+              <div v-marquee.fade title="点击折叠/展开分组">
                 <span class="text-xs font-bold whitespace-nowrap text-fg-title">
                   {{ group.name }}
                 </span>
               </div>
-              <div class="ml-auto flex shrink-0 items-center gap-sm">
+            </template>
+
+            <template #trailing>
+              <div class="flex shrink-0 items-center gap-sm">
                 <BaseBadge
                   :aria-label="`按${getSortLabel(group)}自动排序`"
                   appearance="outline"
@@ -59,6 +54,7 @@
                 >
                   <span v-chord-name="getSortLabel(group)" />
                 </BaseBadge>
+
                 <BaseBadge
                   :appearance="isGroupContentOpen(group) ? 'subtle' : 'filled'"
                   :aria-label="chordCountAriaLabel(group)"
@@ -70,19 +66,19 @@
                   {{ getGroupChordsCount(group.id) }}
                 </BaseBadge>
               </div>
-            </div>
-          </div>
-          <LeftChordGroupContent
-            :group
-            :is-open="isGroupContentOpen(group)"
-            :ref="el => setContentOuterRef(el, index)"
-            @delete-chord="handleLocalDeleteChord($event)"
-            @open-delete-variants="emit('open-delete-variants', $event)"
-            @open-move="emit('open-move', $event)"
-            @open-references="emit('open-references', $event)"
-            @select-chord="handleSelectChord($event)"
-          />
-        </ContextMenu>
+            </template>
+
+            <LeftChordGroupContent
+              :group
+              :ref="el => setContentOuterRef(el, index)"
+              @delete-chord="handleLocalDeleteChord($event)"
+              @open-delete-variants="emit('open-delete-variants', $event)"
+              @open-move="emit('open-move', $event)"
+              @open-references="emit('open-references', $event)"
+              @select-chord="handleSelectChord($event)"
+            />
+          </BaseCollapse>
+        </BaseMenu>
       </div>
     </VueDraggable>
   </div>
@@ -95,9 +91,9 @@ import { VueDraggable } from 'vue-draggable-plus';
 
 import LeftChordGroupContent from '@/domains/chord/library/components/GroupContent.vue';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
-import ContextMenu from '@/platform/ui/context-menu/ContextMenu.vue';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
-import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
+import Feedback from '@/platform/ui/feedback/Feedback.vue';
+import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
@@ -105,7 +101,7 @@ import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
 import { useChordTransfer } from '@/domains/chord/transfer/useChordTransfer';
 
 import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
-import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import type { MenuItem } from '@/platform/ui/menu/types';
 import type { ComponentPublicInstance } from 'vue';
 
 const emit = defineEmits<{
@@ -171,8 +167,8 @@ const handleLocalDeleteChord = (chord: Chord) => {
 };
 
 // 分组右键菜单项：每次直接构建（仅 3-4 项），不缓存
-const getGroupMenuItems = (group: Group): ContextMenuItem[] => {
-  const items: ContextMenuItem[] = [
+const getGroupMenuItems = (group: Group): MenuItem[] => {
+  const items: MenuItem[] = [
     {
       label: '修改名称',
       icon: 'square-pen',

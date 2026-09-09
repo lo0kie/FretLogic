@@ -10,7 +10,7 @@
       { 'cursor-not-allowed opacity-45': disabled, 'w-full': resolvedWidth === '100%' },
     ]"
     :style="wrapperStyle"
-    class="base-slider box-border inline-flex items-center justify-center gap-1 rounded-full border bg-surface-body transition-all duration-fast select-none has-focus-visible:ring-2 has-focus-visible:ring-primary/70"
+    class="base-slider inline-flex items-center justify-center gap-1 rounded-full border bg-surface-body transition-all duration-fast select-none has-focus-visible:ring-2 has-focus-visible:ring-primary/70"
     ref="wrapperRef"
   >
     <span
@@ -27,12 +27,13 @@
       :max
       :min
       :step
+      :class="readoutInputClass"
       @pointerdown.stop
       @blur="commitEdit()"
       @keydown.enter="commitEdit()"
       @keydown.esc="cancelEdit()"
       aria-label="输入精确数值"
-      class="h-5 w-16 [appearance:textfield] rounded-sm border border-border-light bg-surface-body text-center font-mono text-2xs font-bold text-primary tabular-nums outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      class="h-5 [appearance:textfield] rounded-sm border border-border-light bg-surface-body text-center font-mono text-2xs font-bold text-primary tabular-nums outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       ref="readoutInputRef"
       type="number"
     />
@@ -41,20 +42,21 @@
       :aria-label="
         valueTextClickable ? (props.editable ? '输入精确数值' : `恢复默认值 ${defaultDisplayText}`) : undefined
       "
-      :class="
+      :class="[
         valueTextClickable
           ? props.editable
             ? 'cursor-text hover:text-primary'
             : 'cursor-pointer hover:text-primary'
-          : ''
-      "
+          : '',
+        readoutSpanClass,
+      ]"
       :role="valueTextClickable ? 'button' : undefined"
       :tabindex="valueTextClickable ? 0 : -1"
       :title="valueTextClickable ? (props.editable ? '点击输入精确数值' : '点击恢复默认值') : ''"
       @click="handleReadoutClick()"
       @keydown.enter.prevent="handleReadoutClick()"
       @keydown.space.prevent="handleReadoutClick()"
-      class="inline-block min-w-8 rounded-sm text-center font-mono text-2xs font-bold text-fg-title tabular-nums"
+      class="inline-block rounded-sm text-center font-mono text-2xs font-bold text-fg-title tabular-nums"
     >
       {{ singleDisplayText }}
     </span>
@@ -73,14 +75,16 @@
     </button>
 
     <!-- 轨道 mx-1.5 专为 ± 步进按钮留白；showButtons=false 时归零，
-         读数/容器与轨道间距只吃 wrapper gap-sm，formatter 不再离轨道过远 -->
+         读数/容器与轨道间距只吃 wrapper gap-sm，formatter 不再离轨道过远。
+         自定义宽度下轨道必须可收缩（min-w-0）：否则当宽度档位（如 sm=5.5rem）小于
+         各配件最小宽度之和时内容会溢出 wrapper，并被 justify-center 均分到左右两侧 -->
     <div
       :class="[
         vertical
           ? 'my-1 h-full min-h-24 w-5 flex-1 before:-inset-x-4 before:inset-y-0'
           : isCustomWidth
-            ? `${showButtons ? 'mx-1.5' : 'mx-0'} w-full min-w-16 flex-1 before:inset-x-0 before:-inset-y-4`
-            : `${showButtons ? 'mx-1.5' : 'mx-0'} w-24 before:inset-x-0 before:-inset-y-4`,
+            ? `${showButtons ? 'mx-1.5' : 'mx-0'} w-full min-w-0 flex-1 before:inset-x-0 ${currentConfig.hitClass}`
+            : `${showButtons ? 'mx-1.5' : 'mx-0'} ${currentConfig.autoWidth} before:inset-x-0 ${currentConfig.hitClass}`,
         disabled ? '' : 'cursor-pointer',
       ]"
       @mouseenter="isTrackHovered = true"
@@ -92,16 +96,26 @@
     >
       <!-- 内缩定位层：相对轨道各缩进约一个拇指半径（含 hover/拖拽放大裕量），填充条/基线/拇指共用同一坐标空间，保证极值时拇指整体落在胶囊边框内而不是顶框 -->
       <div
-        :class="vertical ? 'absolute inset-x-0 top-[4px] bottom-[4px]' : 'absolute inset-y-0 right-[4px] left-[4px]'"
+        :class="
+          vertical
+            ? `absolute inset-x-0 ${currentConfig.insetClassV}`
+            : `absolute inset-y-0 ${currentConfig.insetClass}`
+        "
       >
         <div
-          :class="vertical ? 'left-1/2 w-1 -translate-x-1/2' : 'inset-x-0 top-1/2 h-1 -translate-y-1/2'"
+          :class="
+            vertical
+              ? `left-1/2 ${currentConfig.barClassV} -translate-x-1/2`
+              : `inset-x-0 top-1/2 ${currentConfig.barClass} -translate-y-1/2`
+          "
           class="absolute rounded-full bg-border-base transition-colors"
         />
 
         <div
           :class="[
-            vertical ? 'left-1/2 w-1 -translate-x-1/2' : 'top-1/2 h-1 -translate-y-1/2',
+            vertical
+              ? `left-1/2 ${currentConfig.barClassV} -translate-x-1/2`
+              : `top-1/2 ${currentConfig.barClass} -translate-y-1/2`,
             isDragging === null ? 'transition-all duration-75' : '',
           ]"
           :style="activeBarStyle"
@@ -120,13 +134,14 @@
             isDragging === 0
               ? 'z-float scale-125 ring-2 ring-primary/70'
               : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
+            currentConfig.thumbClass,
           ]"
           :style="singleThumbStyle"
           @keydown="handleRangeKeydown($event)"
           @mouseenter="isHovered = true"
           @mouseleave="isHovered = false"
           @pointerdown.stop="startDrag(0)"
-          class="absolute size-3.5 cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
+          class="absolute cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
           role="slider"
           tabindex="0"
         >
@@ -154,13 +169,14 @@
               isDragging === 0
                 ? 'z-float scale-125 ring-2 ring-primary/70'
                 : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
+              currentConfig.thumbClass,
             ]"
             :style="rangeThumb0Style"
             @keydown="handleRangeKeydown($event, 0)"
             @mouseenter="isHoveredThumb0 = true"
             @mouseleave="isHoveredThumb0 = false"
             @pointerdown.stop="startDrag(0)"
-            class="absolute size-3.5 cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
+            class="absolute cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
             role="slider"
             tabindex="0"
           >
@@ -187,13 +203,14 @@
               isDragging === 1
                 ? 'z-float scale-125 ring-2 ring-primary/70'
                 : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
+              currentConfig.thumbClass,
             ]"
             :style="rangeThumb1Style"
             @keydown="handleRangeKeydown($event, 1)"
             @mouseenter="isHoveredThumb1 = true"
             @mouseleave="isHoveredThumb1 = false"
             @pointerdown.stop="startDrag(1)"
-            class="absolute size-3.5 cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
+            class="absolute cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
             role="slider"
             tabindex="0"
           >
@@ -252,12 +269,13 @@
       :max
       :min
       :step
+      :class="readoutInputClass"
       @pointerdown.stop
       @blur="commitEdit()"
       @keydown.enter="commitEdit()"
       @keydown.esc="cancelEdit()"
       aria-label="输入精确数值"
-      class="h-5 w-16 [appearance:textfield] rounded-sm border border-border-light bg-surface-body text-center font-mono text-2xs font-bold text-primary tabular-nums outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      class="h-5 [appearance:textfield] rounded-sm border border-border-light bg-surface-body text-center font-mono text-2xs font-bold text-primary tabular-nums outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       ref="readoutInputRef"
       type="number"
     />
@@ -266,20 +284,21 @@
       :aria-label="
         valueTextClickable ? (props.editable ? '输入精确数值' : `恢复默认值 ${defaultDisplayText}`) : undefined
       "
-      :class="
+      :class="[
         valueTextClickable
           ? props.editable
             ? 'cursor-text hover:text-primary'
             : 'cursor-pointer hover:text-primary'
-          : ''
-      "
+          : '',
+        readoutSpanClass,
+      ]"
       :role="valueTextClickable ? 'button' : undefined"
       :tabindex="valueTextClickable ? 0 : -1"
       :title="valueTextClickable ? (props.editable ? '点击输入精确数值' : '点击恢复默认值') : ''"
       @click="handleReadoutClick()"
       @keydown.enter.prevent="handleReadoutClick()"
       @keydown.space.prevent="handleReadoutClick()"
-      class="inline-block min-w-8 rounded-sm text-center font-mono text-2xs font-bold text-fg-title tabular-nums"
+      class="inline-block rounded-sm text-center font-mono text-2xs font-bold text-fg-title tabular-nums"
     >
       {{ singleDisplayText }}
     </span>
@@ -295,13 +314,15 @@
 </template>
 
 <script setup generic="R extends boolean = false" lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+import { computed, inject, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { ComponentSize } from '@/platform/types';
+import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 
 /** 滑块值的内部统一视图：R 未解析时条件类型无法直接收窄，读写在别名处集中断言 */
@@ -368,7 +389,7 @@ const props = withDefaults(
     min: 0,
     max: 100,
     step: 1,
-    size: 'md',
+    size: undefined,
     width: 'auto',
     height: '10rem',
     label: '',
@@ -398,6 +419,9 @@ const emit = defineEmits<{
 }>();
 /** lazy 修饰符：拖拽过程中只更新本地显示值，松手（drag-end）或按钮/编辑提交时才写回 model */
 const isLazy = computed(() => !!props.modelModifiers?.lazy);
+/** 尺寸解析：行内 props > BaseForm 注入上下文 > 默认 md */
+const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
+const resolvedSize = computed<ComponentSize>(() => props.size ?? controlContext?.size ?? 'md');
 /** 内部即时值：lazy 模式下拖拽中间态先落在这里，避免逐帧写回 model（初值为一次性快照，后续由 watch 同步；AST 规则误报豁免） */
 // eslint-disable-next-line vue/no-ref-object-reactivity-loss
 const localValue = ref<SliderValue>(model.value as SliderValue);
@@ -496,13 +520,75 @@ const wrapperStyle = computed(() => {
   return resolvedWidth.value ? { width: resolvedWidth.value } : {};
 });
 
-const SLIDER_CONFIG: Record<'sm' | 'md' | 'lg', { wrapperClass: string }> = {
-  sm: { wrapperClass: `${CONTROL_HEIGHT_CLASSES.sm} px-xs` },
-  md: { wrapperClass: `${CONTROL_HEIGHT_CLASSES.md} px-sm` },
-  lg: { wrapperClass: `${CONTROL_HEIGHT_CLASSES.lg} px-sm` },
+/**
+ * 尺寸档位样式表：除高度/内边距外，轨道厚度、拇指直径、极值内缩与命中区扩展一并按档位缩放，
+ * 使 size 真正作用于「轨道高度与圆点大小」（与 props.size 文档一致）。
+ * md 为设计基线，取值与既有视觉完全一致，保证存量 UI 零回归。
+ */
+interface SliderSizeConfig {
+  /** wrapper 高度与横向内边距 */
+  wrapperClass: string;
+  /** 横向基线 / 填充条厚度 */
+  barClass: string;
+  /** 纵向基线 / 填充条厚度 */
+  barClassV: string;
+  /** 拇指直径 */
+  thumbClass: string;
+  /** 极值内缩：取「拇指半径 - 3px」，使各档拇指溢出胶囊边框的幅度保持一致 */
+  insetClass: string;
+  insetClassV: string;
+  /** 轨道纵向扩展命中区（矮档位收窄，避免与相邻控件重叠） */
+  hitClass: string;
+  /** width="auto" 时的固定轨道宽度 */
+  autoWidth: string;
+}
+
+const SLIDER_CONFIG: Record<'sm' | 'md' | 'lg', SliderSizeConfig> = {
+  sm: {
+    wrapperClass: `${CONTROL_HEIGHT_CLASSES.sm} px-xs`,
+    barClass: 'h-0.5',
+    barClassV: 'w-0.5',
+    thumbClass: 'size-3',
+    insetClass: 'right-[3px] left-[3px]',
+    insetClassV: 'top-[3px] bottom-[3px]',
+    hitClass: 'before:-inset-y-2',
+    autoWidth: 'w-16',
+  },
+  md: {
+    wrapperClass: `${CONTROL_HEIGHT_CLASSES.md} px-sm`,
+    barClass: 'h-1',
+    barClassV: 'w-1',
+    thumbClass: 'size-3.5',
+    insetClass: 'right-[4px] left-[4px]',
+    insetClassV: 'top-[4px] bottom-[4px]',
+    hitClass: 'before:-inset-y-4',
+    autoWidth: 'w-24',
+  },
+  lg: {
+    wrapperClass: `${CONTROL_HEIGHT_CLASSES.lg} px-sm`,
+    barClass: 'h-1.5',
+    barClassV: 'w-1.5',
+    thumbClass: 'size-4',
+    insetClass: 'right-[5px] left-[5px]',
+    insetClassV: 'top-[5px] bottom-[5px]',
+    hitClass: 'before:-inset-y-4',
+    autoWidth: 'w-32',
+  },
 };
 
-const currentConfig = computed(() => SLIDER_CONFIG[props.size] ?? SLIDER_CONFIG.md);
+const currentConfig = computed(() => SLIDER_CONFIG[resolvedSize.value] ?? SLIDER_CONFIG.md);
+
+/**
+ * 窄档位（生效尺寸为 sm 或 width=sm）下收紧读数占位：
+ * min-w-8（32px）在 88px 的盒子里占了近一半，会把轨道挤到几乎不可用，故降到 min-w-6（24px）。
+ * 24px 仍可稳定容纳 3~4 个字符的读数（font-mono + tabular-nums 约 6px/字符），
+ * 更长的读数会自然撑开——min-width 只是防抖下限，不裁剪内容。
+ * 非窄档位取值完全不变，存量 UI 零回归。
+ */
+const isCompactReadout = computed(() => resolvedSize.value === 'sm' || props.width === 'sm');
+const readoutSpanClass = computed(() => (isCompactReadout.value ? 'min-w-6' : 'min-w-8'));
+/** 编辑态输入框同理：w-16（64px）在窄档位下会直接撑破盒子 */
+const readoutInputClass = computed(() => (isCompactReadout.value ? 'w-10' : 'w-16'));
 
 /** 计算数值的小数位数（兼容科学计数法表示） */
 const countDecimals = (n: number): number => {

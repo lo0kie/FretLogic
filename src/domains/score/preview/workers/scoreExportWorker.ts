@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Web Worker: 纯数据驱动的 OffscreenCanvas 离屏乐谱渲染引擎。
  * 100% 运行在后台 Worker 线程，主线程 0ms 阻塞。
  * 支持绘制完整的吉他指板图、升降号上标和弦名、等粗横按、品丝对齐品号、紧随歌词排版及 A4 满页 Space-Between 垂直均分对齐。
@@ -49,6 +49,8 @@ export interface WorkerExportPayload {
   fretboardScale?: number;
   /** 是否绘制大横按（缺省 true；false 时隐藏横按梁，仅保留按弦圆点） */
   showBarre?: boolean;
+  /** 是否显示页脚页码（缺省 true；仅 A4 分页模式生效） */
+  showFooter?: boolean;
   /** 歌词字重（缺省 regular 常规） */
   lyricsFontWeight?: ScoreLyricsFontWeight;
   /** 导出 JPEG 压缩质量（0.3~1，缺省 0.95） */
@@ -729,6 +731,21 @@ function renderHeader(
   return y;
 }
 
+/** 绘制页脚页码：在底部页边距内水平居中显示「第 X 页」，使用弱化文字色 */
+function renderFooter(
+  ctx: OffscreenCanvasRenderingContext2D,
+  pageIndex: number,
+  width: number,
+  height: number,
+  pageMargin: number,
+  colors: ThemeColors
+): void {
+  ctx.font = `500 ${SCORE_EXPORT_CONFIG.FOOTER_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
+  ctx.fillStyle = colors.SUB_TEXT;
+  ctx.textAlign = 'center';
+  ctx.fillText(`第 ${pageIndex + 1} 页`, width / 2, height - pageMargin / 2);
+}
+
 if (typeof self !== 'undefined') {
   self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
     try {
@@ -743,6 +760,7 @@ if (typeof self !== 'undefined') {
         fontScale = 100,
         fretboardScale = 100,
         showBarre = true,
+        showFooter = true,
         lyricsFontWeight: lyricsFontWeightMode = 'regular',
         exportQuality = EXPORT_JPEG_QUALITY,
         pageMargin = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
@@ -903,6 +921,11 @@ if (typeof self !== 'undefined') {
               : pageMargin + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
             const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
             curY = res.nextY;
+          }
+
+          // 页脚页码：在底部页边距内居中显示「第 X 页」，开关关闭时跳过
+          if (showFooter) {
+            renderFooter(ctx, pIdx, canvasW, canvasH, pageMargin, colors);
           }
 
           const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: jpegQuality });

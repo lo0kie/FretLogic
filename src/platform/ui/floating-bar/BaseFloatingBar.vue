@@ -1,4 +1,4 @@
-﻿<template>
+﻿﻿<template>
   <Teleport :disabled="disabledTeleport" :to="teleportTo">
     <Transition
       :name="transitionName"
@@ -17,7 +17,7 @@
         :aria-label="ariaLabel ?? '浮动操作栏'"
         :class="[positionClass, alignClass, zIndexClass, sizeClass]"
         :style="outerStyle"
-        class="base-floating-bar pointer-events-auto box-border flex w-max max-w-[calc(100vw-2rem)] items-center rounded-full border border-glass-border bg-surface-panel/95 shadow-floating backdrop-blur-xl hover:ring-2 hover:ring-primary/70"
+        class="base-floating-bar pointer-events-auto flex w-max max-w-[calc(100vw-2rem)] items-center rounded-full border border-glass-border bg-surface-panel/95 shadow-floating backdrop-blur-xl hover:ring-2 hover:ring-primary/70"
         role="toolbar"
         tabindex="-1"
       >
@@ -140,7 +140,7 @@ const FloatingBarDivider = defineComponent({
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 /* 常态 hover 过渡：只影响底色/边框/阴影，不与进出场动画抢 transition-property */
 .base-floating-bar {
   transition:
@@ -160,13 +160,13 @@ const FloatingBarDivider = defineComponent({
 
 :global(.v-floating-bar-slide-enter-from),
 :global(.v-floating-bar-slide-leave-to) {
-  opacity: 0;
   transform: translateY(16px) scale(0.96);
+  opacity: 0;
 }
 
 :global(.v-floating-bar-slide-enter-to),
 :global(.v-floating-bar-slide-leave-from) {
-  opacity: 1;
   transform: translateY(0) scale(1);
+  opacity: 1;
 }
 </style>

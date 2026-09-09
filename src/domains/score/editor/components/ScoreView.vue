@@ -1,11 +1,11 @@
 ﻿<template>
-  <div class="score-view-wrapper relative box-border flex size-full overflow-hidden">
+  <div class="score-view-wrapper relative flex size-full overflow-hidden">
     <div
-      class="score-main-content relative box-border flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-main"
+      class="score-main-content relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-main"
     >
       <Transition mode="out-in" name="v-transition-fade">
         <KeepAlive :max="12">
-          <EmptyState
+          <Feedback
             v-if="!scoreEditor.activeSong"
             description="请在左侧侧边栏选择或新建一份乐谱"
             icon="music"
@@ -39,7 +39,7 @@
 import { ref, useTemplateRef } from 'vue';
 
 import ScorePreviewPane from '@/domains/score/preview/components/ScorePreviewPane.vue';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import { useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useKeybinding } from '@/platform/composables/useKeybinding';

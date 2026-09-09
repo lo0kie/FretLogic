@@ -1,5 +1,5 @@
-﻿<template>
-  <EmptyState v-if="songStore.songs.length === 0" description="暂无乐谱，点击右上角新建" icon="music" />
+<template>
+  <Feedback v-if="songStore.songs.length === 0" description="暂无乐谱，点击右上角新建" icon="music" />
 
   <!-- 统一容器：手动排序时经 useDraggable 支持拖拽，非手动时仅展示；
        排序方法切换（含手动↔拼音分组等）都在同一 TransitionGroup 内重排，FLIP 动画全程生效；
@@ -7,17 +7,17 @@
   <div v-else v-grid-nav.stop="{ cols: 1, selector: '.song-card-item' }">
     <TransitionGroup
       @leave="onSongLeave($event)"
-      class="draggable-list relative box-border flex flex-col gap-sm"
+      class="draggable-list relative flex flex-col gap-sm"
       name="song-sort"
       ref="songListRef"
       tag="div"
     >
-      <div v-for="row in songRows" :key="row.key" class="box-border flex w-full flex-col">
+      <div v-for="row in songRows" :key="row.key" class="flex w-full flex-col">
         <div v-if="row.type === 'group'" aria-hidden="true" class="song-group-header px-sm pb-2xs">
           <span class="text-xs leading-none font-bold tracking-widest text-fg-disabled">{{ row.label }}</span>
         </div>
         <template v-else>
-          <ContextMenu #="{ isOpen }" :items="getSongMenuItems(row.song!)">
+          <BaseMenu #="{ isOpen }" :items="getSongMenuItems(row.song!)" trigger="contextmenu">
             <div
               v-action-card
               v-wave
@@ -32,7 +32,7 @@
               :data-song-id="row.song!.id"
               @click="handleSelectSong(row.song!.id)"
               data-focusable-inline
-              class="song-card-item box-border w-full cursor-pointer rounded-md border border-border-light bg-surface-body p-sm px-md transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover"
+              class="song-card-item w-full cursor-pointer rounded-md border border-border-light bg-surface-body p-sm px-md transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover"
             >
               <div class="flex w-full items-center justify-between gap-sm">
                 <div v-marquee.fade class="min-w-0 flex-1">
@@ -67,7 +67,7 @@
                 </div>
               </div>
             </div>
-          </ContextMenu>
+          </BaseMenu>
         </template>
       </div>
     </TransitionGroup>
@@ -80,8 +80,8 @@ import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import { useDraggable } from 'vue-draggable-plus';
 
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
-import ContextMenu from '@/platform/ui/context-menu/ContextMenu.vue';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import Feedback from '@/platform/ui/feedback/Feedback.vue';
+import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import { computeSongKey } from '@/domains/chord/theory/theory';
 import { useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
@@ -92,7 +92,7 @@ import { TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
 import { pinyinGroupKey } from '@/platform/utils/pinyin';
 
 import type { Song } from '@/domains/score/types';
-import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import type { MenuItem } from '@/platform/ui/menu/types';
 import type { DraggableEvent } from 'vue-draggable-plus';
 
 const emit = defineEmits<{
@@ -110,7 +110,7 @@ const songListRef = useTemplateRef<HTMLElement>('songListRef');
 
 // 手动排序时启用拖拽（Sortable 直接操作 DOM，拖拽结束按索引重排后经 reorderSongs 持久化）；
 // 非手动排序时禁用，排序方法切换由 TransitionGroup 的 FLIP 动画呈现。
-// immediate:false —— 库默认在 mounted 时初始化；空乐谱列表走 EmptyState 分支，容器不存在，
+// immediate:false —— 库默认在 mounted 时初始化；空乐谱列表走 Feedback 分支，容器不存在，
 // 直接初始化会抛 "Root element not found / Sortable: el must be an HTMLElement"。
 // 改为等列表真正渲染出来（有乐谱且 ref 就绪）再手动 start()，清空/重建时也能重新初始化。
 const draggableList = useDraggable(songListRef, {
@@ -136,7 +136,7 @@ watch(
   () => songStore.songSortMethod !== 'manual',
   sorted => draggableList.option('disabled', sorted)
 );
-// 空列表（EmptyState）时容器不存在，此时不初始化；列表渲染/重建后再 start
+// 空列表（Feedback）时容器不存在，此时不初始化；列表渲染/重建后再 start
 watch(
   () => songStore.songs.length > 0 && songListRef.value,
   () => {
@@ -182,8 +182,8 @@ const songCardAriaLabel = (song: Song): string =>
 const songKeyAriaLabel = (song: Song): string => `调性 ${computeSongKey(song.playKey, song.capo)} 调`;
 
 // 乐谱右键菜单项：每次直接构建（仅 3 项），不缓存
-const getSongMenuItems = (song: Song): ContextMenuItem[] => {
-  const items: ContextMenuItem[] = [
+const getSongMenuItems = (song: Song): MenuItem[] => {
+  const items: MenuItem[] = [
     {
       label: '复制乐谱',
       icon: 'copy',
@@ -258,7 +258,7 @@ const onSongLeave = (el: Element): void => {
 };
 </script>
 
-<style lang="scss">
+<style scoped lang="scss">
 /* 切换排序方法时的重排动画：TransitionGroup 的 FLIP move 过渡。
    类加在列表项根元素上，scoped 选择器匹配不到，故用非 scoped 规则。
    enter/leave 用于分组小标题的显隐（切换进/出拼音分组模式、歌曲增删时同样生效）：
@@ -272,16 +272,16 @@ const onSongLeave = (el: Element): void => {
     transform 0.25s ease;
 }
 .song-sort-leave-active {
+  position: absolute;
+  right: 0;
+  left: 0;
   transition:
     opacity 0.2s ease,
     transform 0.2s ease;
-  position: absolute;
-  left: 0;
-  right: 0;
 }
 .song-sort-enter-from,
 .song-sort-leave-to {
-  opacity: 0;
   transform: translateY(-6px);
+  opacity: 0;
 }
 </style>
