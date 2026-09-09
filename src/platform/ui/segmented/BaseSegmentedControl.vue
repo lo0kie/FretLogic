@@ -6,7 +6,7 @@
     :style="resolvedWidth ? { width: resolvedWidth } : undefined"
     @keydown="handleKeydown($event)"
     aria-orientation="horizontal"
-    class="segmented-control relative box-border inline-flex items-center select-none"
+    class="segmented-control relative inline-flex items-center select-none"
     ref="containerRef"
     role="radiogroup"
   >
@@ -55,14 +55,26 @@
 </template>
 
 <script setup generic="T extends string | number | boolean, C extends boolean = false" lang="ts">
-import { computed, nextTick, onBeforeUnmount, onBeforeUpdate, onMounted, ref, useTemplateRef, watch } from 'vue';
+import {
+  computed,
+  inject,
+  nextTick,
+  onBeforeUnmount,
+  onBeforeUpdate,
+  onMounted,
+  ref,
+  useTemplateRef,
+  watch,
+} from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
 import type { ComponentSize } from '@/platform/types';
+import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { IconSizePreset, IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
 import type { FormComponentWidth } from '@/platform/utils/constants';
@@ -123,7 +135,7 @@ const props = withDefaults(
     showInactiveBorder?: boolean;
   }>(),
   {
-    size: 'md',
+    size: undefined,
     variant: 'pill',
     tabbed: false,
     disabled: false,
@@ -192,7 +204,13 @@ const COMPACTED_SIZE_MAP: Record<'sm' | 'md' | 'lg', { wrapper: string; item: st
   lg: { wrapper: `${CONTROL_HEIGHT_CLASSES.lg}`, item: 'px-1.5 text-xs', textItem: 'px-1.5 py-1.5 text-sm' },
 };
 
-const sizeConfig = computed(() => (props.compacted ? COMPACTED_SIZE_MAP[props.size] : SIZE_MAP[props.size]));
+// 尺寸解析：行内 props > BaseForm 注入上下文 > 默认 md
+const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
+const resolvedSize = computed<ComponentSize>(() => props.size ?? controlContext?.size ?? 'md');
+
+const sizeConfig = computed(() =>
+  props.compacted ? COMPACTED_SIZE_MAP[resolvedSize.value] : SIZE_MAP[resolvedSize.value]
+);
 
 const DEFAULT_ICON_SIZES: Record<'sm' | 'md' | 'lg', IconSizePreset> = {
   sm: 'sm',
@@ -200,7 +218,7 @@ const DEFAULT_ICON_SIZES: Record<'sm' | 'md' | 'lg', IconSizePreset> = {
   lg: 'xl',
 };
 
-const resolvedIconSize = computed(() => props.iconSize ?? DEFAULT_ICON_SIZES[props.size]);
+const resolvedIconSize = computed(() => props.iconSize ?? DEFAULT_ICON_SIZES[resolvedSize.value]);
 
 const isOptionIconOnly = (opt: SegmentOption<T>): boolean => Boolean(opt.icon && (opt.iconOnly ?? props.iconOnly));
 
@@ -254,7 +272,7 @@ const controlClasses = computed(() => [
 
 /** 滑块外观：pill 为覆盖整段的圆角胶囊（浅主色底 + 描边），tabbed 为贴底主色下划线 */
 const sliderClasses = computed(() => [
-  'segmented-slider pointer-events-none absolute top-0 left-0 z-0 box-border',
+  'segmented-slider pointer-events-none absolute top-0 left-0 z-0',
   visualVariant.value === 'tabbed'
     ? 'bg-primary'
     : 'bg-tint-primary-88 border-tint-primary-60 rounded-full border shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)]',

@@ -45,7 +45,8 @@ export const prepareWorkerExportPayload = (
   lyricsFontWeight: ScoreLyricsFontWeight = 'regular',
   exportQualityPct = 95,
   pageMarginPx: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
-  pageSize = 'a4'
+  pageSize = 'a4',
+  showFooter = true
 ): WorkerExportPayload => {
   const lyricsLines = song.lyrics.split('\n');
   const chordMap = song.chordMap;
@@ -111,6 +112,8 @@ export const prepareWorkerExportPayload = (
     fontScale,
     fretboardScale,
     showBarre,
+    // 是否显示页脚页码（仅 A4 分页预览生效）
+    showFooter,
     lyricsFontWeight,
     // 导出质量：百分制（30~100）转为 0.3~1 的比例值，由 Worker 侧 clamp 兜底
     exportQuality: Math.min(1, Math.max(0.3, exportQualityPct / 100)),

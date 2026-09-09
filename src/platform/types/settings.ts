@@ -27,6 +27,8 @@ export interface AppPreferencesBackup {
   scoreLayoutAlign?: 'start' | 'center';
   scoreShowBarre?: boolean;
   scoreLyricsFontWeight?: ScoreLyricsFontWeight;
+  /** 预览/导出：是否显示页脚页码 */
+  scoreShowFooter?: boolean;
 }
 
 /** 预览/导出歌词字重（细/常规/粗） */

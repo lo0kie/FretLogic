@@ -10,6 +10,9 @@ const child = spawn(
   process.execPath,
   [
     'node_modules/prettier/bin/prettier.cjs',
+    // prettier 3.9 默认 CLI 不再调用 parser 的 preprocess 钩子，会导致
+    // import 排序插件（依赖 preprocess）完全失效，必须显式启用实验性 CLI。
+    '--experimental-cli',
     '--write',
     '--cache',
     '--cache-location',

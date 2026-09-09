@@ -1,11 +1,5 @@
 <template>
-  <canvas
-    :aria-label
-    :style="canvasStyle"
-    class="pointer-events-none box-border block select-none"
-    ref="canvasRef"
-    role="img"
-  />
+  <canvas :aria-label :style="canvasStyle" class="pointer-events-none block select-none" ref="canvasRef" role="img" />
 </template>
 
 <script setup lang="ts">

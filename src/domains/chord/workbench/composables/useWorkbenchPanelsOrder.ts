@@ -6,14 +6,9 @@ import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import type { Ref } from 'vue';
 
-export type WorkbenchPanelId = 'analysis' | 'variants' | 'export' | 'settings';
+export type WorkbenchPanelId = 'analysis' | 'variants' | 'export';
 
-export const DEFAULT_WORKBENCH_PANEL_ORDER: readonly WorkbenchPanelId[] = [
-  'variants',
-  'analysis',
-  'export',
-  'settings',
-] as const;
+export const DEFAULT_WORKBENCH_PANEL_ORDER: readonly WorkbenchPanelId[] = ['variants', 'analysis', 'export'] as const;
 
 /**
  * 校验并清洗工作台面板顺序：保证所有默认面板存在、无未知项且不重复

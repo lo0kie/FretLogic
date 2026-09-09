@@ -1,4 +1,4 @@
-﻿<template>
+﻿﻿<template>
   <div
     v-wheel-scroll.smooth
     v-bind="forwardAttrs"

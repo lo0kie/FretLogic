@@ -8,7 +8,7 @@
       @mouseenter="uiStore.pauseAllTimers"
       @mouseleave="uiStore.resumeAllTimers"
       aria-label="系统通知"
-      class="pointer-events-none fixed z-toast box-border flex flex-col gap-sm select-none"
+      class="pointer-events-none fixed z-toast flex flex-col gap-sm select-none"
       role="region"
     >
       <TransitionGroup :name="transitionName">
@@ -22,7 +22,7 @@
           ]"
           :key="item.id"
           :role="item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'"
-          class="pointer-events-auto relative box-border flex w-max max-w-[90vw] shrink-0 items-center gap-sm rounded-pill border border-glass-border px-lg py-sm text-xs font-semibold shadow-md transition-all duration-base outline-none"
+          class="pointer-events-auto relative flex w-max max-w-[90vw] shrink-0 items-center gap-sm rounded-pill border border-glass-border px-lg py-sm text-xs font-semibold shadow-md transition-all duration-base outline-none"
         >
           <slot :item name="card">
             <div :class="{ 'pt-3xs!': item.description }" class="flex shrink-0 items-center justify-center pt-0.5">

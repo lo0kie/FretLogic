@@ -63,6 +63,8 @@ export const SCORE_EXPORT_CONFIG = {
   META_ACCIDENTAL_FONT_SIZE: 12,
   /** 元信息升降号上标垂直偏移量（px，负值向上浮动） */
   META_ACCIDENTAL_SUPERSCRIPT_OFFSET: -5,
+  /** 页脚页码字号（px，A4 分页预览/导出底部居中） */
+  FOOTER_FONT_SIZE: 12,
   /** 普通空格宽度（px） */
   SPACE_CHAR_WIDTH: 18,
   /** 普通汉字/单字基准列宽（px） */

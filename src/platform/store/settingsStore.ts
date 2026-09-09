@@ -88,6 +88,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // 乐谱乐理显示偏好：是否绘制大横按（排列和弦/预览共用）
   const scoreShowBarre = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_BARRE, true);
 
+  // 预览/导出：是否显示页脚页码（仅 A4 分页预览生效）
+  const scoreShowFooter = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_FOOTER, true);
+
   // 预览/导出：歌词字重（light 细 / regular 常规 / bold 粗）
   const scoreLyricsFontWeight = useStorage<ScoreLyricsFontWeight>(STORAGE_KEYS.SCORE_LYRICS_FONT_WEIGHT, 'regular');
 
@@ -165,6 +168,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (prefs.scoreLayoutAlign === 'start' || prefs.scoreLayoutAlign === 'center')
       scoreLayoutAlign.value = prefs.scoreLayoutAlign;
     if (typeof prefs.scoreShowBarre === 'boolean') scoreShowBarre.value = prefs.scoreShowBarre;
+    if (typeof prefs.scoreShowFooter === 'boolean') scoreShowFooter.value = prefs.scoreShowFooter;
     if (
       prefs.scoreLyricsFontWeight === 'light' ||
       prefs.scoreLyricsFontWeight === 'regular' ||
@@ -198,6 +202,7 @@ export const useSettingsStore = defineStore('settings', () => {
     scoreChordShorthand,
     scoreLayoutAlign,
     scoreShowBarre,
+    scoreShowFooter,
     scoreLyricsFontWeight,
     scoreExportQuality,
     scorePageMargin,

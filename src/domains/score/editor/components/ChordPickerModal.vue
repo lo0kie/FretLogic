@@ -12,7 +12,7 @@
       <ActionButton @click="goToWorkbenchToCreate()" color="primary" icon="plus" label="新建和弦" variant="subtle" />
     </template>
 
-    <div class="chord-picker-wrapper relative box-border flex h-full flex-col overflow-hidden">
+    <div class="chord-picker-wrapper relative flex h-full flex-col overflow-hidden">
       <div class="picker-fixed-header flex shrink-0 flex-col gap-md">
         <div class="picker-controls-row flex flex-wrap items-center justify-between gap-sm p-1 sm:gap-lg">
           <div class="search-input-wrapper min-w-[200px] flex-1 sm:max-w-64">
@@ -69,7 +69,7 @@
       >
         <Transition name="v-transition-fade">
           <div v-if="filteredChords.length === 0" class="flex size-full items-center justify-center">
-            <EmptyState description="当前搜索或分组下暂无匹配和弦。" size="lg" />
+            <Feedback description="当前搜索或分组下暂无匹配和弦。" size="lg" />
           </div>
         </Transition>
         <TransitionGroup
@@ -234,7 +234,7 @@ import KeySelector from '@/domains/chord/components/KeySelector.vue';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseFab from '@/platform/ui/floating-bar/BaseFab.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
@@ -282,7 +282,7 @@ const gridCols = computed(() => {
 const pickerScale = 2;
 /** 和弦选择卡片基础与激活态类名（设定充足 min-h 与顶部呼吸空间，避免顶栏操作压住和弦名） */
 const CHORD_CARD_BASE_CLASS =
-  'picker-chord-card group relative z-card box-border flex min-h-[196px] w-full cursor-pointer flex-col items-center justify-center self-start rounded-md border border-border-light bg-surface-body px-2 pt-4 pb-2 transition-all duration-fast outline-none hover:border-primary hover:shadow-md active:scale-[0.97] [&:has(.picker-edit-btn:active)]:scale-100';
+  'picker-chord-card group relative z-card flex min-h-[196px] w-full cursor-pointer flex-col items-center justify-center self-start rounded-md border border-border-light bg-surface-body px-2 pt-4 pb-2 transition-all duration-fast outline-none hover:border-primary hover:shadow-md active:scale-[0.97] [&:has(.picker-edit-btn:active)]:scale-100';
 const CHORD_CARD_ACTIVE_CLASS =
   // 不加 pointer-events-none：active 卡需整卡可 hover 才能显示「去编辑」按钮，
   // 选中防护由 click 守卫 + cursor-default + important 覆盖 hover 变体兜底

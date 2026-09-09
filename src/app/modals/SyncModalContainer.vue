@@ -14,14 +14,14 @@
     <template #default>
       <div class="flex flex-col gap-md">
         <div
-          class="sync-panel-card box-border flex w-full flex-col gap-md rounded-lg border border-glass-border bg-surface-panel p-md"
+          class="sync-panel-card flex w-full flex-col gap-md rounded-lg border border-glass-border bg-surface-panel p-md"
         >
-          <div class="panel-header box-border flex items-center justify-between">
+          <div class="panel-header flex items-center justify-between">
             <h3 class="panel-title m-0 text-xs font-semibold text-fg-body">云端同步</h3>
           </div>
 
           <template v-if="selectedProvider === 'server'">
-            <div class="box-border flex flex-col gap-sm py-xs">
+            <div class="flex flex-col gap-sm py-xs">
               <p class="form-hint m-0">
                 免配置开箱即用，由系统自动连接云端数据库。直接点击下方按钮进行测试、拉取或同步。
               </p>
@@ -29,7 +29,7 @@
           </template>
 
           <template v-else-if="selectedProvider === 'github'">
-            <div class="box-border flex flex-col gap-sm py-xs">
+            <div class="flex flex-col gap-sm py-xs">
               <BaseInput
                 v-model="settingsStore.githubToken"
                 :disabled="isBusy"
@@ -45,7 +45,7 @@
           </template>
 
           <template v-else-if="selectedProvider === 'gitee'">
-            <div class="box-border flex flex-col gap-sm py-xs">
+            <div class="flex flex-col gap-sm py-xs">
               <BaseInput
                 v-model="settingsStore.giteeToken"
                 :disabled="isBusy"
@@ -67,7 +67,7 @@
           </template>
 
           <template v-else-if="selectedProvider === 'webdav'">
-            <div class="box-border flex flex-col gap-sm py-xs">
+            <div class="flex flex-col gap-sm py-xs">
               <BaseInput
                 v-model="settingsStore.webdavServerUrl"
                 :disabled="isBusy"
@@ -99,7 +99,7 @@
           </template>
         </div>
 
-        <div v-if="selectedProvider === 'webdav'" class="box-border flex flex-col gap-xs px-xs">
+        <div v-if="selectedProvider === 'webdav'" class="flex flex-col gap-xs px-xs">
           <div class="flex items-center justify-between py-0.5">
             <span class="text-fg-secondary text-xs font-medium">使用预设代理</span>
             <BaseSwitch v-model="settingsStore.webdavUseDefaultProxy" :disabled="isBusy" aria-label="使用预设代理" />

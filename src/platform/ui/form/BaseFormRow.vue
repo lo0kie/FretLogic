@@ -4,7 +4,7 @@
       { 'is-disabled opacity-60': disabled, 'is-compacted': compacted },
       align === 'top' ? 'align-top' : 'align-center',
     ]"
-    class="base-form-row box-border flex w-full flex-col"
+    class="base-form-row flex w-full flex-col"
   >
     <div
       :class="[
@@ -13,13 +13,13 @@
           : [align === 'top' ? 'items-start' : 'items-center', compacted ? 'is-compacted gap-sm' : 'gap-md'],
         layout === 'horizontal' && align === 'center' ? CONTROL_HEIGHT_CLASSES.md : '',
       ]"
-      class="form-row-main box-border flex w-full"
+      class="form-row-main flex w-full"
     >
       <label
         v-if="label || $slots['label']"
         :class="[
           'form-row-label shrink-0 truncate font-semibold select-none',
-          resolvedLabelSize === '2xs' ? 'text-2xs' : 'text-xs',
+          LABEL_SIZE_CLASSES[resolvedLabelSize],
           layout === 'horizontal' && align === 'top' ? labelTopPaddingClass : '',
           required ? 'flex items-center gap-1' : '',
           resolvedLabelTone === 'muted' ? 'text-fg-muted' : 'text-fg-body',
@@ -113,8 +113,11 @@ const {
   help?: string;
   /** 标签亮度：'body' 常规（默认）| 'muted' 次级（弱化标签，用于让分组标题更突出） */
   labelTone?: 'body' | 'muted';
-  /** 标签字号：'xs' 常规（默认）| '2xs' 缩小（用于弱化层级让分组标题更突出） */
-  labelSize?: 'xs' | '2xs';
+  /**
+   * 标签字号：与控件尺寸标尺（sm/md/lg）同构，调用方无需在两套命名间切换。
+   * 'xs'（默认）| '2xs' 缩小（弱化层级让分组标题更突出）| 'sm' / 'md' / 'lg' 逐级放大
+   */
+  labelSize?: '2xs' | 'xs' | 'sm' | 'md' | 'lg';
   /** 语义关联：显式指定关联控件 id */
   for?: string;
   /** 自动关联控件 id；与 for 二选一 */
@@ -124,10 +127,23 @@ const {
 // 使用 Vue 3.5 useId 保证 SSR 与客户端水合一致
 const autoId = useId();
 
-// 密度上下文：BaseCollapse 等容器注入默认值，行内显式 props 优先
+// 密度上下文：BaseForm 等容器注入默认值，行内显式 props 优先
 const densityContext = inject<FormRowDensityContext | null>(FORM_ROW_DENSITY_KEY, null);
 const resolvedLabelTone = computed(() => labelTone ?? densityContext?.labelTone ?? 'body');
 const resolvedLabelSize = computed(() => labelSize ?? densityContext?.labelSize ?? 'xs');
+
+/**
+ * 标签字号档位 → 文本类：新增档位只在此补一行。
+ * 与控件尺寸标尺（CONTROL_HEIGHT_CLASSES）刻意解耦——标签是文本语义，不复用控件高度档位。
+ */
+const LABEL_SIZE_CLASSES: Record<'2xs' | 'xs' | 'sm' | 'md' | 'lg', string> = {
+  '2xs': 'text-2xs',
+  'xs': 'text-xs',
+  'sm': 'text-sm',
+  // @theme 无 --text-md 令牌，md 档落到 --text-base（16px）
+  'md': 'text-base',
+  'lg': 'text-lg',
+};
 /** 供默认插槽接收的控件 id（自动生成一个稳定 id，便于需要自接 id 的控件使用） */
 const slotControlId = computed(() => forProp || inputId || `form-row-control-${autoId}`);
 // label 的 for 仅在调用方显式给出 for/inputId 时才输出：多数控件（BaseInput/BaseSwitch）用各自的

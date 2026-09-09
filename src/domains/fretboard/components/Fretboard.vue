@@ -1,7 +1,7 @@
 <template>
   <div
     :style="{ width: `${realScaledWidth}px`, height: `${realScaledHeight}px` }"
-    class="pointer-events-auto relative box-border transition-[width,height] duration-slow ease-sidebar"
+    class="pointer-events-auto relative transition-[width,height] duration-slow ease-sidebar"
   >
     <div
       :style="{
@@ -13,7 +13,7 @@
       }"
       @contextmenu="handleRightClickRoot($event)"
       data-focusable-outline
-      class="relative box-border flex cursor-default touch-none flex-col items-center transition-[transform,height,background-color,border-color] duration-slow ease-sidebar outline-none select-none"
+      class="relative flex cursor-default touch-none flex-col items-center transition-[transform,height,background-color,border-color] duration-slow ease-sidebar outline-none select-none"
       ref="fretBoardRef"
       tabindex="0"
     >
@@ -21,7 +21,7 @@
         :style="{ height: `${CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT}px`, paddingTop: '0px' }"
         @contextmenu.stop
         @pointerdown.stop
-        class="box-border flex w-full max-w-full shrink-0 cursor-text items-center justify-center overflow-hidden px-sm font-[Helvetica_Neue,Arial,sans-serif] whitespace-nowrap select-none"
+        class="flex w-full max-w-full shrink-0 cursor-text items-center justify-center overflow-hidden px-sm font-[Helvetica_Neue,Arial,sans-serif] whitespace-nowrap select-none"
       >
         <!-- 和弦名行内编辑：底层 DOM/选区/占位符协议均由 BaseEditableText 承接 -->
         <BaseEditableText
@@ -32,7 +32,7 @@
           @cancel="handleEscape()"
           @commit="commitOrRevert($event)"
           aria-label="和弦名称"
-          class="no-scrollbar box-border flex size-full min-h-0 max-w-full cursor-text items-center justify-center-safe overflow-x-auto overflow-y-hidden px-0.5 text-center font-[Helvetica_Neue,Arial,sans-serif] leading-[1.15] font-bold whitespace-nowrap text-fg-title"
+          class="no-scrollbar flex size-full min-h-0 max-w-full cursor-text items-center justify-center-safe overflow-x-auto overflow-y-hidden px-0.5 text-center font-[Helvetica_Neue,Arial,sans-serif] leading-[1.15] font-bold whitespace-nowrap text-fg-title"
           placeholder="CHORD"
         />
       </div>

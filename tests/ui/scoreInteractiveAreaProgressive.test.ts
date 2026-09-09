@@ -39,7 +39,7 @@ describe('ScoreInteractiveArea 渐进式视口渲染与按需隔离守卫', () =
         stubs: {
           ChordSlotCell: true,
           ActionButton: true,
-          EmptyState: true,
+          Feedback: true,
         },
       },
     });
@@ -126,7 +126,7 @@ describe('ScoreInteractiveArea 渐进式视口渲染与按需隔离守卫', () =
         stubs: {
           ChordSlotCell: true,
           ActionButton: true,
-          EmptyState: true,
+          Feedback: true,
         },
       },
     });

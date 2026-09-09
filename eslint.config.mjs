@@ -165,10 +165,12 @@ export default tseslint.config(
       'better-tailwindcss/no-conflicting-classes': 'error',
       // 拼接检测只看模板属性：全局变量全开后，日志前缀/路径拼接等非类名字符串会产生海量误报
       'better-tailwindcss/no-concatenated-classes': ['error', { variables: [], callees: [] }],
-      // 类名（token 列表）排序交由 prettier-plugin-tailwindcss 独占；
-      // 而 important 修饰符位置、变体堆叠顺序、var() 语法属 within-token 规范化，
-      // prettier-plugin-tailwindcss 不处理，故保留于此（与 prettier 各管一维，互不冲突）
-      'better-tailwindcss/enforce-consistent-class-order': 'error',
+      // 类名（token 列表）整体排序交由 prettier-plugin-tailwindcss 独占；
+      // 故关闭此规则——否则它要求的顺序与 prettier 输出的 Tailwind v4 规范顺序冲突，
+      // 会导致 lint 永远无法与 format 同时通过（整个项目皆然，非个别文件）。
+      // important 修饰符位置、变体堆叠顺序、var() 语法属 within-token 规范化，
+      // prettier-plugin-tailwindcss 不处理，故保留其余规则（与 prettier 各管一维，互不冲突）。
+      'better-tailwindcss/enforce-consistent-class-order': 'off',
       'better-tailwindcss/enforce-consistent-important-position': 'error',
       'better-tailwindcss/enforce-consistent-variant-order': 'error',
       'better-tailwindcss/enforce-consistent-variable-syntax': 'error',

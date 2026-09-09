@@ -155,16 +155,18 @@ const settingsStore = useSettingsStore();
 const FORM_LABEL_WIDTH = '4.5rem';
 
 // computed 解构到顶层，模板中才会自动解包
-const exportStats = backupModals.exportStats;
-const exportAvailability = backupModals.exportAvailability;
-const importAvailability = backupModals.importAvailability;
-const importStats = backupModals.importStats;
-const hasExportSelection = backupModals.hasExportSelection;
-const hasImportSelection = backupModals.hasImportSelection;
-const isExportAll = backupModals.isExportAll;
-const isImportAll = backupModals.isImportAll;
-const isExportIndeterminate = backupModals.isExportIndeterminate;
-const isImportIndeterminate = backupModals.isImportIndeterminate;
+const {
+  exportStats,
+  exportAvailability,
+  importAvailability,
+  importStats,
+  hasExportSelection,
+  hasImportSelection,
+  isExportAll,
+  isImportAll,
+  isExportIndeterminate,
+  isImportIndeterminate,
+} = backupModals;
 
 /** 当前是否存在非空凭证（Token / 密码），用于决定是否展示安全警告 */
 const hasCredentials = computed(() =>

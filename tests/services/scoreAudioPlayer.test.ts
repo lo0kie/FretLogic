@@ -8,48 +8,113 @@ import { Tuning } from '@/domains/chord/theory/theory';
 
 import type { Chord } from '@/domains/chord/types';
 
-vi.mock('tone', () => ({
-  start: vi.fn().mockResolvedValue(undefined),
-  now: vi.fn(() => 0),
-  getContext: vi.fn(() => ({ state: 'running' })),
-  Frequency: vi.fn(() => ({ toFrequency: () => 440 })),
-  Destination: {},
-  Reverb: class {
-    generate = vi.fn().mockResolvedValue(undefined);
-    dispose = vi.fn();
-  },
-  Compressor: class {
-    dispose = vi.fn();
-  },
-  Chorus: class {
-    wet = { value: 0 };
-    start = vi.fn();
-    dispose = vi.fn();
-  },
-  Panner: class {
-    pan = { value: 0 };
-    dispose = vi.fn();
-  },
-  FMSynth: class {
-    volume = { value: 0 };
-    chain = vi.fn();
-    triggerRelease = vi.fn();
-    triggerAttack = vi.fn();
-    triggerAttackRelease = vi.fn();
-    dispose = vi.fn();
-  },
-  PolySynth: class {
-    volume = { value: 0 };
-    chain = vi.fn();
-    releaseAll = vi.fn();
-    triggerAttackRelease = vi.fn();
-    dispose = vi.fn();
-  },
-}));
+// 原生 Web Audio 引擎下，jsdom 不提供 AudioContext；注入最小 mock 供 initAudioEngine 使用。
+// （旧实现依赖 tone.js 并在此 vi.mock('tone')，移除依赖后改为直连 Web Audio API。）
+class MockAudioParam {
+  value = 0;
+  setValueAtTime() {
+    return this;
+  }
+  linearRampToValueAtTime() {
+    return this;
+  }
+  exponentialRampToValueAtTime() {
+    return this;
+  }
+  setTargetAtTime() {
+    return this;
+  }
+  cancelScheduledValues() {
+    return this;
+  }
+}
+class MockAudioContext {
+  currentTime = 0;
+  state = 'running';
+  sampleRate = 44100;
+  destination = {
+    connect() {
+      return this;
+    },
+    disconnect() {},
+  };
+  createGain() {
+    return {
+      gain: new MockAudioParam(),
+      connect() {
+        return this;
+      },
+      disconnect() {},
+    } as unknown as GainNode;
+  }
+  createOscillator() {
+    return {
+      type: 'sine',
+      frequency: new MockAudioParam(),
+      connect() {
+        return this;
+      },
+      disconnect() {},
+      start() {},
+      stop() {},
+    } as unknown as OscillatorNode;
+  }
+  createDelay() {
+    return {
+      delayTime: new MockAudioParam(),
+      connect() {
+        return this;
+      },
+      disconnect() {},
+    } as unknown as DelayNode;
+  }
+  createDynamicsCompressor() {
+    return {
+      threshold: new MockAudioParam(),
+      knee: new MockAudioParam(),
+      ratio: new MockAudioParam(),
+      attack: new MockAudioParam(),
+      release: new MockAudioParam(),
+      connect() {
+        return this;
+      },
+      disconnect() {},
+    } as unknown as DynamicsCompressorNode;
+  }
+  createConvolver() {
+    return {
+      buffer: null,
+      connect() {
+        return this;
+      },
+      disconnect() {},
+    } as unknown as ConvolverNode;
+  }
+  createStereoPanner() {
+    return {
+      pan: new MockAudioParam(),
+      connect() {
+        return this;
+      },
+      disconnect() {},
+    } as unknown as StereoPannerNode;
+  }
+  createBuffer(_channels: number, length: number) {
+    return { getChannelData: () => new Float32Array(length) } as unknown as AudioBuffer;
+  }
+  resume() {
+    return Promise.resolve();
+  }
+}
+
+const installAudioContextMock = (): void => {
+  (window as unknown as { AudioContext: typeof MockAudioContext }).AudioContext = MockAudioContext;
+};
 
 describe('全曲乐谱音频播放调度引擎 (useAudioPlayer Score Playback)', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    installAudioContextMock();
     vi.useFakeTimers();
   });
 

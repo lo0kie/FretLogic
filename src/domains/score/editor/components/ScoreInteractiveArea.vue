@@ -4,11 +4,11 @@
     :style="{ '--score-font-scale': scoreEditor.effectiveFontScale / 100, ...maskStyle }"
     @scroll="syncEdgeFades()"
     @scroll.passive="handleScroll()"
-    class="no-scrollbar interactive-score-zone relative box-border min-w-0 flex-1 py-6 pr-0 pl-xl max-md:pt-sm max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] max-md:pl-sm"
+    class="no-scrollbar interactive-score-zone relative min-w-0 flex-1 py-6 pr-0 pl-xl max-md:pt-sm max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] max-md:pl-sm"
     ref="scoreZoneRef"
   >
     <div class="contents">
-      <EmptyState
+      <Feedback
         v-if="!scoreEditor.activeSong?.lyrics.trim()"
         description="请先在“编辑歌词”模式下输入文本内容"
         icon="file-text"
@@ -37,13 +37,11 @@
           class="line-row flex w-max min-w-full items-stretch"
         >
           <div
-            :class="{
-              'is-empty-line': lineData.chars.length === 0,
-            }"
+            :class="{ 'is-empty-line': lineData.chars.length === 0 }"
             :data-line-idx="lineData.lineId"
             @mouseenter="hoveredLineKey = lineData.lineId"
             @mouseleave="hoveredLineKey = null"
-            class="lyrics-line relative box-border flex w-max min-w-0 flex-[1_1_auto] flex-nowrap items-stretch gap-0 rounded-md border border-transparent px-sm py-xs transition-all duration-base select-none focus-within:border-border-base focus-within:bg-surface-panel-hover hover:border-border-base hover:bg-surface-panel-hover"
+            class="lyrics-line relative flex w-max min-w-0 flex-[1_1_auto] flex-nowrap items-stretch gap-0 rounded-md border border-transparent px-sm py-xs transition-all duration-base select-none focus-within:border-border-base focus-within:bg-surface-panel-hover hover:border-border-base hover:bg-surface-panel-hover"
           >
             <div class="mr-2 flex shrink-0 items-end pb-0.5 select-none">
               <span
@@ -109,7 +107,7 @@
                 v-wave="{}"
                 :aria-label="`字符 ${item.char === ' ' ? '空格' : item.char}，未分配和弦，按 Enter 添加`"
                 :class="[
-                  'char-box group relative box-border flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 px-0.5 transition-all duration-fast outline-none hover:bg-tint-primary-88 focus-visible:shadow-(--focus-ring) [&.is-drop-target]:bg-tint-primary-85!',
+                  'char-box group relative flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 px-0.5 transition-all duration-fast outline-none hover:bg-tint-primary-88 focus-visible:shadow-(--focus-ring) [&.is-drop-target]:bg-tint-primary-85!',
                   { 'is-drop-widened': isLineActiveDrop(lineData.lineId) },
                 ]"
                 :data-slot-key="item.slotKey"
@@ -170,7 +168,7 @@
                       ? 'font-normal text-fg-muted'
                       : 'font-semibold text-fg-title',
                   ]"
-                  class="char-text mt-auto box-border inline-flex min-h-[calc(1.15rem*var(--score-font-scale,1))] items-center justify-center px-0.5 text-[calc(var(--score-font-scale,1)*0.875rem)]/[1.15rem] whitespace-pre transition-all duration-fast group-hover:text-primary"
+                  class="char-text mt-auto inline-flex min-h-[calc(1.15rem*var(--score-font-scale,1))] items-center justify-center px-0.5 text-[calc(var(--score-font-scale,1)*0.875rem)]/[1.15rem] whitespace-pre transition-all duration-fast group-hover:text-primary"
                 >
                   {{ item.char === ' ' ? '\u00A0' : item.char }}
                 </span>
@@ -292,7 +290,7 @@ import {
 } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseFab from '@/platform/ui/floating-bar/BaseFab.vue';
 import { useLyricsDragDrop } from '@/domains/score/editor/composables/useLyricsDragDrop';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
@@ -460,11 +458,7 @@ const handleScrollToBottom = (): Promise<void> => {
       if (renderedLineCount.value < total) {
         renderedLineCount.value = Math.min(total, renderedLineCount.value + BATCH_PER_FRAME);
         scrollToBottom('auto');
-        if (typeof requestAnimationFrame !== 'undefined') {
-          expandToBottomRafId = requestAnimationFrame(step);
-        } else {
-          step();
-        }
+        expandToBottomRafId = requestAnimationFrame(step);
       } else {
         isExpandingToBottom = false;
         expandToBottomResolve = null;
@@ -473,11 +467,7 @@ const handleScrollToBottom = (): Promise<void> => {
       }
     };
 
-    if (typeof requestAnimationFrame !== 'undefined') {
-      expandToBottomRafId = requestAnimationFrame(step);
-    } else {
-      step();
-    }
+    expandToBottomRafId = requestAnimationFrame(step);
   });
 };
 
@@ -686,12 +676,12 @@ defineExpose({ scoreZoneRef, expandNextBatch, handleScrollToBottom });
 /* 拖拽期间仅当前活动落点行空字符槽/添加槽统一撑开：
    与 ChordSlotCell.vue 保持完全一致的尺寸过渡，保证落点分区有充裕高度且无外边距抖动闪烁 */
 .is-drop-widened {
-  box-sizing: content-box;
-  min-width: 58px;
-  min-height: 108px;
   transition:
     min-width 0.12s cubic-bezier(0.25, 0.1, 0.25, 1),
     min-height 0.12s cubic-bezier(0.25, 0.1, 0.25, 1);
+  box-sizing: content-box;
+  min-width: 58px;
+  min-height: 108px;
 }
 
 /* 拖拽期间全局 body.is-global-dragging 驱动纯空行自动撑高，

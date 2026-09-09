@@ -15,7 +15,7 @@
     @pointerleave="handlePointerLeave($event)"
     @pointerup="handlePointerUp($event)"
     data-focusable-inline
-    class="action-button box-border inline-flex shrink-0 cursor-pointer items-center justify-center border border-solid font-semibold outline-none select-none focus-visible:ring-2 focus-visible:ring-primary/70 active:not-disabled:brightness-95 disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
+    class="action-button inline-flex shrink-0 cursor-pointer items-center justify-center border border-solid font-semibold outline-none select-none focus-visible:ring-2 focus-visible:ring-primary/70 active:not-disabled:brightness-95 disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
   >
     <BaseIcon
       v-if="loading"
@@ -367,9 +367,9 @@ const normalizedStyle = computed(() => {
 @use '@/assets/tokens' as *;
 
 .action-button {
+  transition-duration: $duration-fast;
   transition-property:
     color, background-color, border-color, box-shadow, filter, opacity, transform, translate, scale, rotate;
-  transition-duration: $duration-fast;
   transition-timing-function: $bezier-standard;
 }
 </style>

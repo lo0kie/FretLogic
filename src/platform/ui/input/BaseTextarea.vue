@@ -1,5 +1,5 @@
-﻿<template>
-  <div :class="['base-textarea relative box-border w-full', rootClass]" :style="rootStyle">
+﻿﻿<template>
+  <div :class="['base-textarea relative w-full', rootClass]" :style="rootStyle">
     <textarea
       v-bind="restAttrs"
       :autocomplete
@@ -22,7 +22,7 @@
       @focus="handleFocus($event)"
       @input="handleInput($event)"
       data-focusable-inline
-      class="no-scrollbar box-border size-full resize-none rounded-lg border border-solid p-xl font-[inherit] text-base/relaxed text-fg-title caret-primary transition-all duration-fast outline-none select-text placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus-visible:ring-2 focus:enabled:bg-surface-panel disabled:cursor-not-allowed disabled:bg-surface-body disabled:opacity-45 disabled:select-none"
+      class="no-scrollbar size-full resize-none rounded-lg border border-solid p-xl font-[inherit] text-base/relaxed text-fg-title caret-primary transition-all duration-fast outline-none select-text placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus-visible:ring-2 focus:enabled:bg-surface-panel disabled:cursor-not-allowed disabled:bg-surface-body disabled:opacity-45 disabled:select-none"
       ref="textareaRef"
     />
     <span

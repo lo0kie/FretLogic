@@ -117,8 +117,6 @@ export const STORAGE_KEYS = {
   WORKBENCH_CHORD_SHORTHAND: 'CHORD_LAB_WORKBENCH_CHORD_SHORTHAND_V1',
   /** 工作台：和弦分析面板是否收起折叠（持久化） */
   WORKBENCH_CHORD_ANALYSIS_COLLAPSED: 'CHORD_LAB_WORKBENCH_CHORD_ANALYSIS_COLLAPSED_V1',
-  /** 工作台：设置面板是否收起折叠（持久化） */
-  WORKBENCH_SETTINGS_COLLAPSED: 'CHORD_LAB_WORKBENCH_SETTINGS_COLLAPSED_V1',
   /** 工作台：导出面板是否收起折叠（持久化） */
   WORKBENCH_EXPORT_COLLAPSED: 'CHORD_LAB_WORKBENCH_EXPORT_COLLAPSED_V1',
   /** 工作台：多指法变体面板是否收起折叠（持久化） */
@@ -155,6 +153,8 @@ export const STORAGE_KEYS = {
   SCORE_PREVIEW_ZOOM_PERCENT: 'CHORD_LAB_SCORE_PREVIEW_ZOOM_PERCENT_V1',
   /** 乐谱：是否绘制大横按 */
   SCORE_SHOW_BARRE: 'CHORD_LAB_SCORE_SHOW_BARRE_V1',
+  /** 预览/导出：是否显示页脚页码 */
+  SCORE_SHOW_FOOTER: 'CHORD_LAB_SCORE_SHOW_FOOTER_V1',
   /** 预览/导出：歌词字重（light 细 / regular 常规 / bold 粗） */
   SCORE_LYRICS_FONT_WEIGHT: 'CHORD_LAB_SCORE_LYRICS_FONT_WEIGHT_V1',
   /** 预览/导出：JPEG 压缩质量百分比（30~100，默认 95） */
@@ -222,6 +222,8 @@ export const CONTEXT_MENU_REPOSITION_EASING = 'cubic-bezier(0.25, 0.1, 0.25, 1)'
 // ===================== 浮层默认延时 =====================
 /** Popover 悬停关闭默认延迟（ms） */
 export const POPOVER_HOVER_CLOSE_DELAY_MS = 150;
+/** 级联子菜单浮层与触发项之间的间距（px） */
+export const MENU_SUBMENU_OFFSET_DISTANCE = 4;
 
 // ===================== 文字传递格式 =====================
 /** 跨实例文字传递格式：魔数与版本，供 textCodec 识别/校验 */

@@ -28,7 +28,9 @@
     "",
     "^[./]",
     "",
-    "<TYPES>"
+    "<TYPES>",
+    "",
+    "<SIDE_EFFECT>"
   ],
   "attributeGroups": ["^v-", "^#", "^:", "^@", "$DEFAULT"],
   "attributeSort": "ASC",

@@ -1,78 +1,97 @@
 /**
- * 拼音分组工具：乐谱「拼音分组」排序与分组标题使用。
- * pinyin-pro 通过动态 import 按需加载（独立 chunk，首次进入拼音分组时才请求，不阻塞首屏）；
- * 加载完成前退化为兜底逻辑（浏览器 zh-Hans-CN 排序 / 非字母归 '#'），
- * 就绪后 pinyinReady 翻转，依赖它的 computed（sortedSongs、songRows 等）自动重算。
+ * 拼音分组工具（零依赖）：乐谱「拼音分组」排序与分组标题使用。
+ *
+ * 复用浏览器内置 Intl.Collator('zh-Hans-CN') 的拼音排序能力，
+ * 通过 23 个拼音首字母的 CJK 边界锚点反查分组键，彻底移除 pinyin-pro 等大体积依赖。
+ * 边界锚点本身已按拼音序（即 collator 顺序）排列，故分组键与排序由同一 collator 驱动、二者天然一致。
+ *
+ * 说明：分组键仅用于 A-Z 导航与同组聚合；个别字受 ICU 拼音表差异影响可能落在相邻字母，
+ * 已知偏差字通过 PINYIN_OVERRIDES（见 pinyinOverrides.ts，全量比对自动生成）修正。
  */
-import { ref } from 'vue';
+import { PINYIN_OVERRIDES } from './pinyinOverrides';
 
-import type * as PinyinNs from 'pinyin-pro';
+const collator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'variant' });
 
-const ASCII_LETTER_RE = /^[a-zA-Z]/;
-const CJK_RE = /^[\u4e00-\u9fff]/;
-const DIGIT_RE = /^[0-9]/;
+// 拼音首字母边界锚点（无 I/U/V：普通话无对应音节声母）。
+// 每个锚点取该字母拼音序最靠前的常用字；collator 顺序即拼音序，故锚点已按 A→Z 升序。
+const PINYIN_BOUNDARIES: readonly (readonly [string, string])[] = [
+  ['A', '阿'],
+  ['B', '八'],
+  ['C', '擦'],
+  ['D', '搭'],
+  ['E', '额'],
+  ['F', '发'],
+  ['G', '噶'],
+  ['H', '哈'],
+  ['J', '击'],
+  ['K', '喀'],
+  ['L', '垃'],
+  ['M', '妈'],
+  ['N', '拿'],
+  ['O', '哦'],
+  ['P', '趴'],
+  ['Q', '七'],
+  ['R', '然'],
+  ['S', '撒'],
+  ['T', '塌'],
+  ['W', '挖'],
+  ['X', '昔'],
+  ['Y', '呀'],
+  ['Z', '匝'],
+];
 
-type PinyinModule = typeof PinyinNs;
+const ASCII_LETTER_RE = /^[a-zA-Z]$/;
+const CJK_RE = /^[一-龥]$/;
+const DIGIT_RE = /^[0-9]$/;
 
-let pinyinModule: PinyinModule | null = null;
-let pinyinPromise: Promise<PinyinModule> | null = null;
+// 拼音分组例外表见 pinyinOverrides.ts：U+4E00–U+9FFF 全量比对 pinyin-pro 首字母生成（803 条）。
 
-/** pinyin-pro 是否已加载完成（响应式：就绪后依赖方 computed 自动重算） */
-export const pinyinReady = ref(false);
-
-/** 动态加载 pinyin-pro（幂等，可重复调用） */
-export const preloadPinyin = (): Promise<PinyinModule> => {
-  if (!pinyinPromise) {
-    pinyinPromise = import('pinyin-pro').then(mod => {
-      pinyinModule = mod;
-      pinyinReady.value = true;
-      return mod;
-    });
-  }
-  return pinyinPromise;
-};
-
-/** 计算单个汉字的分组字母（pinyin-pro 首选拼音首字母），未就绪时归 '#'。 */
-const cjkGroupKey = (ch: string): string => {
-  if (pinyinModule) {
-    const py = pinyinModule.pinyin(ch, { toneType: 'none', type: 'array' })[0] ?? '';
-    const m = ASCII_LETTER_RE.exec(py);
-    if (m) return m[0].toUpperCase();
-  }
-  // 未加载完成时无精确拼音：非拉丁字母一律先归 '#'，加载完成后自动重算为 A-Z
-  return '#';
-};
-
-/** 标题首字母分组键：A-Z；非字母开头（数字/符号/生僻字等）统一归 '#' */
+/** 标题首字母分组键：A-Z；数字 / 符号 / 非汉字可见字统一归 '#'。 */
 export const pinyinGroupKey = (title: string): string => {
-  void pinyinReady.value; // 订阅就绪状态：加载完成后依赖方（songRows 等）会重算
   const ch = title.trim().charAt(0);
   if (!ch) return '#';
-  const code = ch.charCodeAt(0);
-  if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) return ch.toUpperCase();
+  if (PINYIN_OVERRIDES[ch]) return PINYIN_OVERRIDES[ch]!;
+  if (ASCII_LETTER_RE.test(ch)) return ch.toUpperCase();
   if (DIGIT_RE.test(ch)) return '#';
-  if (CJK_RE.test(ch)) return cjkGroupKey(ch);
-  return '#';
-};
-
-/** 标题的拼音全拼（小写），用于组内排序；pinyin-pro 未就绪/转换失败时回退原文小写 */
-export const pinyinTitleKey = (title: string): string => {
-  void pinyinReady.value;
-  if (pinyinModule) {
-    try {
-      return pinyinModule.pinyin(title, { toneType: 'none' }).toLowerCase();
-    } catch {
-      return title.toLowerCase();
-    }
+  if (!CJK_RE.test(ch)) return '#';
+  let prev = PINYIN_BOUNDARIES[0]![0];
+  for (const [letter, anchor] of PINYIN_BOUNDARIES) {
+    if (collator.compare(ch, anchor) < 0) return prev;
+    prev = letter;
   }
-  return title.toLowerCase();
+  return 'Z';
 };
 
-/** 拼音分组排序比较器：# 组置后，其余按拼音全拼升序 */
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/** 分组键的展示顺序：A-Z → 0..25；#（数字 / 符号）及非法键 → 置末。 */
+const groupOrder = (key: string): number => {
+  const idx = ALPHABET.indexOf(key);
+  return idx === -1 ? ALPHABET.length : idx;
+};
+
+/** 标题首字符的文种类别：拉丁字母 0 / 汉字 1 / 其他（数字·符号·空）2。 */
+const scriptClass = (title: string): number => {
+  const ch = title.trim().charAt(0);
+  if (ASCII_LETTER_RE.test(ch)) return 0;
+  if (CJK_RE.test(ch)) return 1;
+  return 2;
+};
+
+/**
+ * 拼音分组排序比较器（三级）：
+ * 1) 先按 A-Z→# 的分组序，保证 A-Z 整体在前、# 置末；
+ * 2) 同分组内字母开头领先汉字——zh-CN 排序把所有拉丁字母排在汉字之后，
+ *    若直接用 collator 作主键会让字母开头的歌整体沉到列表底部，故此处显式让字母领先；
+ * 3) 最后由 collator 在同类内按拼音 / 字母序升序。
+ * 因此字母开头的歌归入各自 A-Z 分组、不再沉底。
+ */
 export const compareByPinyin = (a: string, b: string): number => {
-  const ka = pinyinGroupKey(a);
-  const kb = pinyinGroupKey(b);
-  if (ka === '#' && kb !== '#') return 1;
-  if (ka !== '#' && kb === '#') return -1;
-  return pinyinTitleKey(a).localeCompare(pinyinTitleKey(b));
+  const orderA = groupOrder(pinyinGroupKey(a));
+  const orderB = groupOrder(pinyinGroupKey(b));
+  if (orderA !== orderB) return orderA - orderB;
+  const ca = scriptClass(a);
+  const cb = scriptClass(b);
+  if (ca !== cb) return ca - cb;
+  return collator.compare(a, b);
 };

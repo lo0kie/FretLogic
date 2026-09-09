@@ -30,7 +30,7 @@
     @keydown.enter="handleKeydown($event)"
     @keydown.space="handleKeydown($event)"
     data-focusable-inline
-    class="char-box group relative box-border flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 transition-all duration-fast outline-none hover:bg-tint-primary-88 [&.is-dragging-source]:opacity-35! [&.is-drop-target]:bg-tint-primary-85!"
+    class="char-box group relative flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 transition-all duration-fast outline-none hover:bg-tint-primary-88 [&.is-dragging-source]:opacity-35! [&.is-drop-target]:bg-tint-primary-85!"
     ref="charBoxRef"
     role="button"
   >
@@ -140,7 +140,7 @@
           char === '|' || char === '｜' ? 'font-normal text-fg-muted' : 'font-semibold text-fg-title',
           char === ' ' ? '' : chord ? 'underline decoration-fg-disabled/80 decoration-dashed underline-offset-8' : '',
         ]"
-        class="char-text mt-auto box-border inline-flex min-h-[calc(1.15rem*var(--score-font-scale,1))] items-center justify-center px-0.5 text-[calc(var(--score-font-scale,1)*0.875rem)]/[1.15rem] whitespace-pre transition-all duration-fast"
+        class="char-text mt-auto inline-flex min-h-[calc(1.15rem*var(--score-font-scale,1))] items-center justify-center px-0.5 text-[calc(var(--score-font-scale,1)*0.875rem)]/[1.15rem] whitespace-pre transition-all duration-fast"
       >
         {{ char === ' ' ? '\u00A0' : char }}
       </span>
@@ -455,20 +455,20 @@ const ariaLabelText = computed(() => {
    min-width/min-height 只作下限、不缩窄；平滑过渡尺寸，
    保证拖拽到空行或未排和弦的行时落点与两块分区有充足高度，且绝无外边距抖动闪烁 */
 .is-drop-widened {
-  box-sizing: content-box;
-  min-width: 58px;
-  min-height: 108px;
   transition:
     min-width 0.12s cubic-bezier(0.25, 0.1, 0.25, 1),
     min-height 0.12s cubic-bezier(0.25, 0.1, 0.25, 1);
+  box-sizing: content-box;
+  min-width: 58px;
+  min-height: 108px;
 }
 
 /* 聚焦环与拖拽源高亮描边统一引用 tokens 的 --focus-ring 令牌（见 FOCUS_RING_SHADOW_CLASS） */
 
 /* 触摸长按等待期的按压反馈：源槽位渐显主色描边并轻微放大，提示即将进入拖拽 */
 .char-box.is-press-arming {
-  box-shadow: 0 0 0 2px var(--color-primary);
   transform: scale(1.04);
+  box-shadow: 0 0 0 2px var(--color-primary);
 }
 
 /* 拖拽源槽位高亮外边框（与聚焦环同描边） */

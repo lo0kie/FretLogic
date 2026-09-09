@@ -1,7 +1,7 @@
 <template>
   <GlobalToast />
 
-  <div class="box-border flex h-screen w-full min-w-[320px] flex-col overflow-hidden">
+  <div class="flex h-screen w-full min-w-[320px] flex-col overflow-hidden">
     <div class="shrink-0">
       <TopHeader />
     </div>
@@ -12,7 +12,7 @@
       <main class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <div
           :style="{ paddingLeft: mainPaddingLeft }"
-          class="absolute inset-0 box-border transition-[padding-left] duration-slow ease-sidebar"
+          class="absolute inset-0 transition-[padding-left] duration-slow ease-sidebar"
         >
           <RouterView #="{ Component, route }">
             <Transition mode="out-in" name="v-transition-fade">

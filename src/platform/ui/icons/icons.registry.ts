@@ -2,6 +2,9 @@
 import AlertCircle from '~icons/lucide/alert-circle';
 import AlertTriangle from '~icons/lucide/alert-triangle';
 import ArrowUpDown from '~icons/lucide/arrow-up-down';
+import AudioLines from '~icons/lucide/audio-lines';
+import AudioWaveform from '~icons/lucide/audio-waveform';
+import ChartColumn from '~icons/lucide/chart-column';
 import Check from '~icons/lucide/check';
 import CheckCircle2 from '~icons/lucide/check-circle-2';
 import ChevronDown from '~icons/lucide/chevron-down';
@@ -17,6 +20,7 @@ import Download from '~icons/lucide/download';
 import Eraser from '~icons/lucide/eraser';
 import Eye from '~icons/lucide/eye';
 import EyeOff from '~icons/lucide/eye-off';
+import FileArchive from '~icons/lucide/file-archive';
 import FileQuestion from '~icons/lucide/file-question';
 import FileText from '~icons/lucide/file-text';
 import FolderOpen from '~icons/lucide/folder-open';
@@ -25,10 +29,12 @@ import GitBranch from '~icons/lucide/git-branch';
 import GripVertical from '~icons/lucide/grip-vertical';
 import Guitar from '~icons/lucide/guitar';
 import Image from '~icons/lucide/image';
+import ImageDown from '~icons/lucide/image-down';
 import Inbox from '~icons/lucide/inbox';
 import Info from '~icons/lucide/info';
 import Laptop from '~icons/lucide/laptop';
 import LayoutGrid from '~icons/lucide/layout-grid';
+import LayoutTemplate from '~icons/lucide/layout-template';
 import Link2 from '~icons/lucide/link-2';
 import List from '~icons/lucide/list';
 import Loader2 from '~icons/lucide/loader-2';
@@ -68,6 +74,9 @@ export const ICON_REGISTRY = {
   'alert-circle': AlertCircle,
   'alert-triangle': AlertTriangle,
   'arrow-up-down': ArrowUpDown,
+  'audio-lines': AudioLines,
+  'audio-waveform': AudioWaveform,
+  'chart-column': ChartColumn,
   'check': Check,
   'check-circle-2': CheckCircle2,
   'chevron-down': ChevronDown,
@@ -83,6 +92,7 @@ export const ICON_REGISTRY = {
   'eraser': Eraser,
   'eye': Eye,
   'eye-off': EyeOff,
+  'file-archive': FileArchive,
   'file-question': FileQuestion,
   'file-text': FileText,
   'folder-open': FolderOpen,
@@ -91,10 +101,12 @@ export const ICON_REGISTRY = {
   'grip-vertical': GripVertical,
   'guitar': Guitar,
   'image': Image,
+  'image-down': ImageDown,
   'inbox': Inbox,
   'info': Info,
   'laptop': Laptop,
   'layout-grid': LayoutGrid,
+  'layout-template': LayoutTemplate,
   'link-2': Link2,
   'list': List,
   'loader-2': Loader2,

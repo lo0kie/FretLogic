@@ -17,7 +17,7 @@
     :tabindex="disabled ? -1 : 0"
     @keydown="handleWrapperKeydown($event)"
     @wheel="handleWheel($event)"
-    class="group box-border inline-flex items-center justify-between rounded-full border transition-all duration-fast select-none focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/70"
+    class="group inline-flex items-center justify-between rounded-full border transition-all duration-fast select-none focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/70"
     ref="wrapperRef"
     role="spinbutton"
   >
@@ -49,7 +49,7 @@
       @blur="commitInput()"
       @keydown.enter="commitInput()"
       @keydown.esc="cancelInput()"
-      class="m-0 box-border w-0 flex-1 [appearance:textfield] border-none bg-transparent p-0 text-center font-[inherit] font-bold text-primary outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      class="m-0 w-0 flex-1 [appearance:textfield] border-none bg-transparent p-0 text-center font-[inherit] font-bold text-primary outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       inputmode="numeric"
       ref="inputRef"
       type="text"
@@ -93,13 +93,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+import { computed, inject, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { ComponentSize } from '@/platform/types';
+import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 
 const modelValue = defineModel<number>({ required: true });
@@ -153,7 +155,6 @@ const props = withDefaults(
     min: 0,
     max: 100,
     step: 1,
-    size: 'md',
     width: 'auto',
     variant: 'default',
     useIcons: false,
@@ -198,6 +199,9 @@ const tempValue = ref('');
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
 const wrapperRef = useTemplateRef<HTMLDivElement>('wrapperRef');
 const resolvedWidth = computed(() => resolveComponentWidth(props.width));
+/** 尺寸解析优先级：行内 size props > BaseForm 下发的 FormControlContext > 默认 md */
+const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
+const resolvedSize = computed<ComponentSize>(() => props.size ?? controlContext?.size ?? 'md');
 
 const NUMBER_INPUT_CONFIG: Record<'sm' | 'md' | 'lg', { wrapperClass: string; btnClass: string; textClass: string }> = {
   sm: {
@@ -217,7 +221,7 @@ const NUMBER_INPUT_CONFIG: Record<'sm' | 'md' | 'lg', { wrapperClass: string; bt
   },
 };
 
-const currentConfig = computed(() => NUMBER_INPUT_CONFIG[props.size] ?? NUMBER_INPUT_CONFIG.md);
+const currentConfig = computed(() => NUMBER_INPUT_CONFIG[resolvedSize.value] ?? NUMBER_INPUT_CONFIG.md);
 
 // 健壮的小数位推导：兼容小写/大写科学计数法（如 1e-5 或 1E-5）
 const countDecimals = (n: number): number => {

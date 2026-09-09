@@ -1,64 +1,56 @@
 <template>
-  <WorkbenchPanel
-    :has-content="hasFrettedNotes"
-    :storage-key="STORAGE_KEYS.WORKBENCH_EXPORT_COLLAPSED"
-    icon="image"
-    mode-aria-label="导出面板行为"
-    title="导出图片"
-  >
-    <div class="flex flex-col gap-md p-1 pt-3">
-      <!-- 预览区 -->
-      <div class="flex justify-center">
-        <div
-          :class="[
-            previewBg === 'transparent'
-              ? 'bg-[repeating-conic-gradient(#ccc_0%_25%,#fff_0%_50%)] bg-size-[12px_12px]'
-              : previewBg === 'white'
-                ? 'bg-white'
-                : 'bg-[#18181a]',
-          ]"
-          class="inline-block overflow-hidden rounded-md p-2 shadow-inner"
-        >
-          <FretboardCanvas
-            v-bind="fretBoardConfig"
-            :chord="editorStore.draftChord"
-            :chord-name-scale="0.7"
-            :is-dark-mode="previewBg === 'dark'"
-            :scale="1.8"
-            :shorthand="settingsStore.workbenchChordShorthand"
-            :theme="previewBg === 'dark' ? 'dark' : 'light'"
-          />
-        </div>
-      </div>
-
-      <!-- 背景选项 -->
-      <BaseFormRow label="背景">
-        <BaseSegmentedControl v-model="previewBg" :options="BG_OPTIONS" compacted size="sm" />
-      </BaseFormRow>
-
-      <!-- 操作按钮 -->
-      <div class="flex gap-4">
-        <ActionButton
-          :disabled="isActing"
-          @click="handleCopy()"
-          class="flex-1"
-          color="default"
-          icon="copy"
-          label="复制"
-          variant="subtle"
-        />
-        <ActionButton
-          :disabled="isActing"
-          @click="handleDownload()"
-          class="flex-1"
-          color="primary"
-          icon="download"
-          label="下载"
-          variant="subtle"
+  <div class="flex flex-col gap-md">
+    <!-- 预览区 -->
+    <div class="flex justify-center">
+      <div
+        :class="[
+          previewBg === 'transparent'
+            ? 'bg-[repeating-conic-gradient(#ccc_0%_25%,#fff_0%_50%)] bg-size-[12px_12px]'
+            : previewBg === 'white'
+              ? 'bg-white'
+              : 'bg-[#18181a]',
+        ]"
+        class="inline-block overflow-hidden rounded-md p-2 shadow-inner"
+      >
+        <FretboardCanvas
+          v-bind="fretBoardConfig"
+          :chord="editorStore.draftChord"
+          :chord-name-scale="0.7"
+          :is-dark-mode="previewBg === 'dark'"
+          :scale="1.8"
+          :shorthand="settingsStore.workbenchChordShorthand"
+          :theme="previewBg === 'dark' ? 'dark' : 'light'"
         />
       </div>
     </div>
-  </WorkbenchPanel>
+
+    <!-- 背景选项 -->
+    <BaseFormRow label="背景">
+      <BaseSegmentedControl v-model="previewBg" :options="BG_OPTIONS" compacted size="sm" />
+    </BaseFormRow>
+
+    <!-- 操作按钮 -->
+    <div class="flex gap-4">
+      <ActionButton
+        :disabled="isActing"
+        @click="handleCopy()"
+        class="flex-1"
+        color="default"
+        icon="copy"
+        label="复制"
+        variant="subtle"
+      />
+      <ActionButton
+        :disabled="isActing"
+        @click="handleDownload()"
+        class="flex-1"
+        color="primary"
+        icon="download"
+        label="下载"
+        variant="subtle"
+      />
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -76,9 +68,6 @@ import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { canvasToBlob, triggerBlobDownload } from '@/platform/utils/canvas';
-import { STORAGE_KEYS } from '@/platform/utils/constants';
-
-import WorkbenchPanel from './WorkbenchPanel.vue';
 
 import type { ExportBgMode } from '@/platform/types';
 import type { SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
@@ -88,10 +77,6 @@ const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 
 const fretBoardConfig = { showChordName: true, showOpenStringNotes: true, showFretNumbers: true, showBoldNut: true };
-
-// ---- 面板行为：三态（自动跟随音符 / 始终展开 / 始终收起），由 WorkbenchPanel 外壳统一承载 ----
-// auto 的展开依据：草稿和弦存在至少一根按音弦（有内容才值得导出）
-const hasFrettedNotes = () => editorStore.draftChord.strings.some(str => str && str[0] > 0);
 
 // ---- 背景选项（偏好持久化于 settingsStore，设备级不随偏好备份同步） ----
 const BG_OPTIONS: SegmentOption<ExportBgMode>[] = [

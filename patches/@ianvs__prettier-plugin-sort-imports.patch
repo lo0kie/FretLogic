@@ -62,3 +62,88 @@ index 455ac0c07a330ddf8a613a169dc58500d8ec5024..b831c4efe5c156c62e26115bb79aee0a
 +    });
  };
  exports.getSortedNodesGroup = getSortedNodesGroup;
+diff --git a/lib/src/constants.js b/lib/src/constants.js
+index 78e210a..32e4a35 100644
+--- a/lib/src/constants.js
++++ b/lib/src/constants.js
+@@ -31,6 +31,9 @@ exports.BUILTIN_MODULES_SPECIAL_WORD = '<BUILTIN_MODULES>';
+  */
+ exports.THIRD_PARTY_MODULES_SPECIAL_WORD = '<THIRD_PARTY_MODULES>';
+ exports.TYPES_SPECIAL_WORD = '<TYPES>';
++// FretLogic 扩展：<SIDE_EFFECT> 分组用于收纳所有无具名导入（side-effect import，
++// 如 import '@/assets/main.scss'），使其可被排序并沉到 importOrder 中该组所在的位置。
++exports.SIDE_EFFECT_SPECIAL_WORD = '<SIDE_EFFECT>';
+ const PRETTIER_PLUGIN_SORT_IMPORTS_NEW_LINE = 'PRETTIER_PLUGIN_SORT_IMPORTS_NEW_LINE';
+ /** Use this to force a newline at top-level scope (good for newlines generated between import blocks) */
+ exports.newLineNode = (0, types_1.expressionStatement)((0, types_1.stringLiteral)(PRETTIER_PLUGIN_SORT_IMPORTS_NEW_LINE));
+diff --git a/lib/src/utils/get-chunk-type-of-node.js b/lib/src/utils/get-chunk-type-of-node.js
+index 3b60d0a..2111593 100644
+--- a/lib/src/utils/get-chunk-type-of-node.js
++++ b/lib/src/utils/get-chunk-type-of-node.js
+@@ -32,12 +32,15 @@ const cachedRegExp = (regExp) => {
+  * @param importOrderSafeSideEffects An array of regex patterns to consider "safe" side-effect imports.
+  * @returns The type of the chunk into which the node should be put.
+  */
+-const getChunkTypeOfNode = (node, importOrderSafeSideEffects) => {
++const getChunkTypeOfNode = (node, importOrderSafeSideEffects, hasSideEffectGroup = false) => {
+     let isSafe = false;
+     const hasNoImportedSymbols = node.specifiers.length === 0;
+     const isIgnored = (0, has_ignore_next_node_1.hasIgnoreNextNode)(node.leadingComments);
+     if (hasNoImportedSymbols) {
+-        isSafe = importOrderSafeSideEffects.some((regex) => node.source.value.match(cachedRegExp(regex)) !== null);
++        // FretLogic 扩展：配置了 <SIDE_EFFECT> 分组时，无具名导入视为可排序。
++        isSafe =
++            hasSideEffectGroup ||
++                importOrderSafeSideEffects.some((regex) => node.source.value.match(cachedRegExp(regex)) !== null);
+     }
+     return isIgnored || (hasNoImportedSymbols && !isSafe)
+         ? constants_1.chunkTypeUnsortable
+diff --git a/lib/src/utils/get-import-nodes-matched-group.js b/lib/src/utils/get-import-nodes-matched-group.js
+index 4d4a7c5..9ad7902 100644
+--- a/lib/src/utils/get-import-nodes-matched-group.js
++++ b/lib/src/utils/get-import-nodes-matched-group.js
+@@ -21,6 +21,10 @@ const cachedRegExp = (regExp) => {
+  * @param importOrder a list of [regexp or special-word] groups (no separators)
+  */
+ const getImportNodesMatchedGroup = (node, importOrder) => {
++    // FretLogic 扩展：无具名导入（side-effect）统一归入 <SIDE_EFFECT> 分组（若已配置）。
++    if (node.specifiers.length === 0 && importOrder.includes(constants_1.SIDE_EFFECT_SPECIAL_WORD)) {
++        return constants_1.SIDE_EFFECT_SPECIAL_WORD;
++    }
+     const includesTypesSpecialWord = importOrder.some((group) => group.includes(constants_1.TYPES_SPECIAL_WORD));
+     const groupWithRegExp = importOrder
+         .map((group) => ({
+diff --git a/lib/src/utils/get-sorted-nodes.js b/lib/src/utils/get-sorted-nodes.js
+index 9933c73..8cf8835 100644
+--- a/lib/src/utils/get-sorted-nodes.js
++++ b/lib/src/utils/get-sorted-nodes.js
+@@ -27,7 +27,8 @@ const getSortedNodes = (nodes, options) => {
+     // Split nodes at each boundary between a side-effect node and a
+     // non-side-effect node, keeping both types of nodes together.
+     const splitBySideEffectNodes = nodes.reduce((chunks, node) => {
+-        const type = (0, get_chunk_type_of_node_1.getChunkTypeOfNode)(node, importOrderSafeSideEffects);
++        // FretLogic 扩展：启用 <SIDE_EFFECT> 分组时，无具名导入不再作为排序边界。
++        const type = (0, get_chunk_type_of_node_1.getChunkTypeOfNode)(node, importOrderSafeSideEffects, importOrder.includes(constants_1.SIDE_EFFECT_SPECIAL_WORD));
+         const last = chunks[chunks.length - 1];
+         if (last === undefined || last.type !== type) {
+             chunks.push({ type, nodes: [node] });
+diff --git a/lib/src/utils/get-sorted-nodes-by-import-order.js b/lib/src/utils/get-sorted-nodes-by-import-order.js
+index 686cef3027457ab92db9dd3604b59368f8496ccc..467765904f801525afc28a9bd8072d430d1b19f5 100644
+--- a/lib/src/utils/get-sorted-nodes-by-import-order.js
++++ b/lib/src/utils/get-sorted-nodes-by-import-order.js
+@@ -60,9 +60,15 @@ const getSortedNodesByImportOrder = (originalNodes, { importOrder, importOrderCaseSensitive, }) => {
+         const groupNodes = importOrderGroups[group];
+         if (groupNodes.length === 0)
+             continue;
++        // FretLogic 扩展：<SIDE_EFFECT> 分组内不做排序，保留作者手写顺序。
++        if (group === constants_1.SIDE_EFFECT_SPECIAL_WORD) {
++            groupNodes.forEach((node) => (0, get_sorted_import_specifiers_1.getSortedImportSpecifiers)(node, { importOrderCaseSensitive }));
++            finalNodes.push(...groupNodes);
++            continue;
++        }
+         const sortedInsideGroup = (0, get_sorted_nodes_group_1.getSortedNodesGroup)(groupNodes, {
+             importOrderCaseSensitive,
+         });
+         // Sort the import specifiers
+         sortedInsideGroup.forEach((node) => (0, get_sorted_import_specifiers_1.getSortedImportSpecifiers)(node, { importOrderCaseSensitive }));
+         finalNodes.push(...sortedInsideGroup);

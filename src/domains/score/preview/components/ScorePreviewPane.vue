@@ -1,7 +1,7 @@
 <template>
-  <div class="relative box-border flex min-h-0 flex-1 flex-col">
+  <div class="relative flex min-h-0 flex-1 flex-col">
     <div v-if="!scoreEditor.activeSong || !hasLyricsText" class="flex flex-1 items-center justify-center">
-      <EmptyState
+      <Feedback
         description="请先在“编辑歌词”模式下输入歌词内容，再查看整曲预览"
         icon="file-text"
         size="lg"
@@ -16,7 +16,7 @@
       <div
         v-scrollbar="{ onScroll: closeAllPopovers }"
         v-wheel-scroll="{ disabled: isTallerThanViewport, smooth: true }"
-        class="relative box-border min-h-0 flex-1 p-6 py-4"
+        class="relative min-h-0 flex-1 p-6 py-4"
         ref="previewScrollRef"
       >
         <!-- 内容行：够宽时自动水平居中（mx-auto），超宽时 margin 归 0 自然从左侧滚动；
@@ -26,22 +26,17 @@
           class="mx-auto flex w-max gap-xl"
         >
           <!-- 首帧渲染中 -->
-          <div
-            v-if="isRendering && pages.length === 0"
-            class="flex min-w-[320px] items-center justify-center gap-2 text-sm text-fg-disabled"
-          >
-            <BaseIcon class="size-4 animate-spin text-primary" name="loader-2" />
-            <span>正在生成预览...</span>
-          </div>
+          <Feedback v-if="isRendering && pages.length === 0" description="正在生成预览..." size="sm" type="loading" />
 
           <!-- 渲染失败（无任何页） -->
-          <div
+          <Feedback
             v-else-if="!isRendering && errorMessage && pages.length === 0"
-            class="flex min-w-[320px] flex-col items-center gap-2 text-sm"
-          >
-            <span class="text-danger">{{ errorMessage }}</span>
-            <ActionButton @click="generate(true)" label="重试" size="sm" variant="subtle" />
-          </div>
+            :description="errorMessage"
+            @action="generate(true)"
+            action-text="重试"
+            size="sm"
+            type="error"
+          />
 
           <!-- 分页页流：按缩放模式决定高度（自适应=fitPercent 换算高，自定义=按百分比等比），横向排列。
                容器首次测量前（containerHeight=0）禁用高度过渡：此时 fitPercent 回退 100% 会先渲染放大尺寸，
@@ -85,7 +80,7 @@
 
           <template v-if="!isFitMode">
             <BaseSlider
-              v-model.lazy="customZoomPercent"
+              v-model="customZoomPercent"
               :default-value="PREVIEW_DEFAULT_ZOOM_PERCENT"
               :formatter="val => `${Math.round(val)}%`"
               :max="PREVIEW_MAX_ZOOM_PERCENT"
@@ -117,7 +112,7 @@
     </template>
 
     <!-- 右键单页的上下文菜单：复制 / 下载当前页（零尺寸挂载于根层，不参与滚动内容） -->
-    <ContextMenu :items="pageMenuItems" :title="pageMenuTitle" @close="menuTargetIndex = -1" ref="previewMenuRef" />
+    <BaseMenu :items="pageMenuItems" @close="menuTargetIndex = -1" ref="previewMenuRef" trigger="contextmenu" />
   </div>
 </template>
 
@@ -134,12 +129,10 @@ import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, ref, t
 
 import { useDebounceFn, useElementSize, useEventListener } from '@vueuse/core';
 
-import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
-import ContextMenu from '@/platform/ui/context-menu/ContextMenu.vue';
-import EmptyState from '@/platform/ui/feedback/EmptyState.vue';
+import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseFloatingBar from '@/platform/ui/floating-bar/BaseFloatingBar.vue';
-import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import {
@@ -164,7 +157,7 @@ import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
 
-import type { ContextMenuItem } from '@/platform/ui/context-menu/ContextMenuItems.vue';
+import type { MenuItem } from '@/platform/ui/menu/types';
 
 defineOptions({ name: 'ScorePreviewPane' });
 // ===== 会话级 A4 分页预览缓存（模块作用域，组件卸载/切换标签后仍保留）：内容键 → 各页图 URL =====
@@ -253,7 +246,7 @@ const buildContentKey = () => {
   }
   refSignatures.sort();
 
-  return `${song.id}_${song.title}_${song.playKey}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_q${settingsStore.scoreExportQuality}_pm${settingsStore.scorePageMargin}_ps${settingsStore.scorePageSize}_fz${scoreEditor.fontScale}_fb${scoreEditor.fretboardScale}_ref${refSignatures.length}_${refSignatures.join('|')}`;
+  return `${song.id}_${song.title}_${song.playKey}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_ft${settingsStore.scoreShowFooter ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_q${settingsStore.scoreExportQuality}_pm${settingsStore.scorePageMargin}_ps${settingsStore.scorePageSize}_fz${scoreEditor.fontScale}_fb${scoreEditor.fretboardScale}_ref${refSignatures.length}_${refSignatures.join('|')}`;
 };
 
 /** 响应式内容键：内容/排版任一依赖变化即重算，作为「重渲染触发」的单一 watch 源 */
@@ -300,7 +293,8 @@ const generate = async (force = false) => {
       settingsStore.scoreLyricsFontWeight,
       settingsStore.scoreExportQuality,
       settingsStore.scorePageMargin,
-      settingsStore.scorePageSize
+      settingsStore.scorePageSize,
+      settingsStore.scoreShowFooter
     );
     const { blobs: pageBlobs } = await runWorkerExport(payload);
     if (token !== runToken) return;
@@ -334,7 +328,7 @@ const cancelPendingExport = () => {
 };
 
 // ===== 单页右键菜单：复制 / 下载当前页图 =====
-const previewMenuRef = ref<InstanceType<typeof ContextMenu> | null>(null);
+const previewMenuRef = ref<InstanceType<typeof BaseMenu> | null>(null);
 const menuTargetIndex = ref(-1);
 
 /** 预览横向滚动容器 */
@@ -427,8 +421,6 @@ const fetchPageBlob = async (index: number): Promise<Blob | null> => {
   return res.ok ? res.blob() : null;
 };
 
-const pageMenuTitle = computed(() => (menuTargetIndex.value >= 0 ? `预览 · 第 ${menuTargetIndex.value + 1} 页` : ''));
-
 /** 复制指定页到系统剪贴板（JPEG 不兼容时自动转 PNG 写入） */
 const copyPage = async (index: number) => {
   const blob = await fetchPageBlob(index);
@@ -450,7 +442,7 @@ const downloadPage = async (index: number) => {
   uiStore.toast.success('已开始下载');
 };
 
-const pageMenuItems = computed<ContextMenuItem[]>(() => [
+const pageMenuItems = computed<MenuItem[]>(() => [
   {
     label: '复制本页',
     icon: 'copy',

@@ -6,7 +6,7 @@
     @focusout="isFocused = false"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
-    class="group relative box-border flex items-center rounded-full"
+    class="group relative flex items-center rounded-full"
     ref="rootRef"
   >
     <div
@@ -58,7 +58,7 @@
       @keydown="handleKeydown($event)"
       @keyup.enter="$emit('enter')"
       data-focusable-inline
-      class="box-border w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid bg-surface-body font-[inherit] font-medium text-ellipsis text-fg-title caret-primary transition-all duration-fast outline-none placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus-visible:ring-2 focus:enabled:bg-surface-body disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45 disabled:select-none"
+      class="w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid bg-surface-body font-[inherit] font-medium text-ellipsis text-fg-title caret-primary transition-all duration-fast outline-none placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus-visible:ring-2 focus:enabled:bg-surface-body disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45 disabled:select-none"
       data-1p-ignore="true"
       data-bwignore="true"
       data-form-type="other"
@@ -151,7 +151,7 @@
         class="overflow-x-hidden transition-[height] duration-base ease-sidebar"
         ref="searchScrollRef"
       >
-        <div class="box-border p-1">
+        <div class="p-1">
           <slot
             :active-index="searchActiveIndex"
             :close="closeResults"
@@ -166,16 +166,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
+import {
+  computed,
+  inject,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useId,
+  useSlots,
+  useTemplateRef,
+  watch,
+} from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
-import { vAutoHeight } from '@/platform/directives/vAutoHeight';
-import { vScrollbar } from '@/platform/directives/vScrollbar';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { ComponentSize } from '@/platform/types';
+import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 import type { VirtualElement } from '@floating-ui/vue';
@@ -191,7 +202,7 @@ const {
   searchMaxHeightClass = 'max-h-64',
   isPassword = false,
   prefixIcon = undefined,
-  size = 'md',
+  size = undefined,
   width = 'full',
   fontSize = 'md',
   autofocus = false,
@@ -274,6 +285,9 @@ const emit = defineEmits<{
 }>();
 const id = useId();
 const slots = useSlots();
+/** 尺寸解析：行内 props > BaseForm 注入上下文 > 默认 md */
+const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
+const resolvedSize = computed<ComponentSize>(() => size ?? controlContext?.size ?? 'md');
 
 /** lazy 修饰符：打字期间只更新本地显示值，change/blur 等提交点才写回 model */
 const isLazy = computed(() => !!modelModifiers?.lazy);
@@ -434,7 +448,7 @@ watch(
 );
 
 const computedPaddingRight = computed(() => {
-  const base = PR_BASE[size] ?? 10;
+  const base = PR_BASE[resolvedSize.value] ?? 10;
   // 叠加容器实测宽度 + right-2 偏移（8px）+ 文本间隙 base，即为距输入框右缘的总预留
   return `${base + (rightSlotWidth.value > 0 ? rightSlotWidth.value + RIGHT_OFFSET : 0)}px`;
 });
@@ -468,7 +482,7 @@ const INPUT_CONFIG: Record<
   },
 };
 
-const currentConfig = computed(() => INPUT_CONFIG[size] ?? INPUT_CONFIG.md);
+const currentConfig = computed(() => INPUT_CONFIG[resolvedSize.value] ?? INPUT_CONFIG.md);
 /** 是否存在前缀区（#prefix slot 优先，其次 prefix-icon prop）：决定容器显隐与输入框左内边距 */
 const hasPrefix = computed(() => Boolean(slots['prefix']) || Boolean(prefixIcon));
 const resolvedWidth = computed(() => resolveComponentWidth(width) ?? '100%');
