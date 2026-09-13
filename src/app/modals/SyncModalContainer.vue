@@ -22,8 +22,18 @@
 
           <template v-if="selectedProvider === 'server'">
             <div class="flex flex-col gap-sm py-xs">
+              <BaseInput
+                v-model="settingsStore.serverToken"
+                :disabled="isBusy"
+                :maxlength="100"
+                clearable
+                is-password
+                show-count
+                placeholder="服务器 Token"
+              />
               <p class="form-hint m-0">
-                免配置开箱即用，由系统自动连接云端数据库。直接点击下方按钮进行测试、拉取或同步。
+                上传数据时通过 Authorization 请求头携带 Token；拉取与测试连接无需 Token。Token
+                仅本次会话内存持有，刷新页面后需重新填写。
               </p>
             </div>
           </template>
@@ -208,11 +218,13 @@ const isPullDisabled = computed(() => {
   return false;
 });
 
-// 同步（推送）配置禁用判断：GitHub/Gitee 需填 Token，WebDAV 需填服务器地址，服务器免密
+// 同步（推送）配置禁用判断：GitHub/Gitee/Server 需填 Token，WebDAV 需填服务器地址与密码
 const isSyncDisabled = computed(() => {
   if (selectedProvider.value === 'github') return !settingsStore.githubToken.trim();
   if (selectedProvider.value === 'gitee') return !settingsStore.giteeToken.trim();
-  if (selectedProvider.value === 'webdav') return !settingsStore.webdavServerUrl.trim();
+  if (selectedProvider.value === 'server') return !settingsStore.serverToken.trim();
+  if (selectedProvider.value === 'webdav')
+    return !settingsStore.webdavServerUrl.trim() || !settingsStore.webdavPassword.trim();
   return false;
 });
 
@@ -250,7 +262,8 @@ const syncTooltip = computed(() => {
   if (isSyncDisabled.value) {
     if (selectedProvider.value === 'github') return '推送写回分支需先填写 GitHub Token';
     if (selectedProvider.value === 'gitee') return '推送写回仓库需先填写 Gitee Token';
-    return '请先填写 WebDAV 服务器地址';
+    if (selectedProvider.value === 'server') return '推送上传需先填写服务器 Token';
+    return '请先填写 WebDAV 服务器地址和密码';
   }
   return '将本地数据推送到云端';
 });

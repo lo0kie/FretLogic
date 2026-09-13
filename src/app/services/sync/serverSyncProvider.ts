@@ -18,9 +18,11 @@ import type { ServerSyncConfig, SyncProvider } from './provider.ts';
  *  - testConnection(): GET ${serverUrl} 探测连通性。
  */
 
-/** 创建线上服务器同步 provider：pull 走 GET、push 走 POST，环境标识随请求头分发。 */
+/** 创建线上服务器同步 provider：pull 走 GET、push 走 POST，环境标识随请求头分发。
+ *  token 仅在上传（push）请求上携带，拉取/探测保持公开（与同步设置面板"仅推送需 Token"一致）。 */
 export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): SyncProvider {
   const serverUrl = (config?.serverUrl?.trim() || CLOUD_SYNC_CONFIG.SERVER_URL).trim();
+  const serverToken = config?.token?.trim();
 
   const baseHeaders: Record<string, string> = {
     'X-Environment': CLOUD_SYNC_CONFIG.MODE,
@@ -67,7 +69,10 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
     async push(payload) {
       const response = await request({
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(serverToken ? { Authorization: `Bearer ${serverToken}` } : {}),
+        },
         body: serializeForStorage(payload),
       });
       if (!response.ok) {

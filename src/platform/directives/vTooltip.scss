@@ -44,3 +44,16 @@
 .v-tooltip-arrow {
   //
 }
+
+// 紧凑数字读数气泡（滑块 tooltip 经 customClass 挂载）：覆盖默认玻璃标题提示的观感
+// 背景对齐 --bg-panel，保证与浮层指示箭头（默认取 --bg-panel）颜色一致
+.v-tooltip-box.v-tooltip-compact {
+  box-shadow: $shadow-md;
+  border-radius: $radius-sm;
+  background-color: var(--bg-panel);
+  padding: $space-2xs $space-sm;
+  color: var(--text-title);
+  font-weight: 700;
+  font-size: $fs-2xs;
+  line-height: 1.25;
+}

@@ -1,6 +1,6 @@
 /**
  * 同步与偏好设置 store：同步目标（GitHub / Gitee / WebDAV / Server）凭据与路径、应用偏好项。
- * 敏感字段（token/密码）仅驻留内存，不参与云同步推送。
+ * 敏感字段（token/密码）仅驻留内存，不落盘，不参与云同步推送。
  */
 import { ref } from 'vue';
 
@@ -74,6 +74,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 线上服务器同步配置
   const serverUrl = useStorage(STORAGE_KEYS.SERVER_URL, '');
+  // 服务器 Token：与 GitHub/Gitee/WebDAV 密码一致，仅驻留内存，不落盘
   const serverToken = ref('');
 
   // 工作台乐理显示偏好
@@ -90,6 +91,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 预览/导出：是否显示页脚页码（仅 A4 分页预览生效）
   const scoreShowFooter = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_FOOTER, true);
+
+  // 预览/导出：忽略无和弦空格（canvas 中该空格不占列宽，整行更紧凑）
+  const scoreIgnoreEmptySpace = useStorage<boolean>(STORAGE_KEYS.SCORE_IGNORE_EMPTY_SPACE, false);
 
   // 预览/导出：歌词字重（light 细 / regular 常规 / bold 粗）
   const scoreLyricsFontWeight = useStorage<ScoreLyricsFontWeight>(STORAGE_KEYS.SCORE_LYRICS_FONT_WEIGHT, 'regular');
@@ -203,6 +207,7 @@ export const useSettingsStore = defineStore('settings', () => {
     scoreLayoutAlign,
     scoreShowBarre,
     scoreShowFooter,
+    scoreIgnoreEmptySpace,
     scoreLyricsFontWeight,
     scoreExportQuality,
     scorePageMargin,

@@ -16,6 +16,8 @@ export type LineId = Brand<string, 'LineId'>;
 export interface Song {
   id: SongId;
   title: string;
+  /** 歌手（纯展示元数据，空串表示无；不参与指纹/乐理计算） */
+  singer: string;
   lyrics: string;
   lineIds: LineId[];
   playKey: string;

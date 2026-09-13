@@ -124,6 +124,7 @@
 
         <div
           v-if="!isRange"
+          v-tooltip.manual.compact="singleTooltipOpts"
           :aria-disabled="disabled || undefined"
           :aria-valuemax="max"
           :aria-valuemin="min"
@@ -144,22 +145,11 @@
           class="absolute cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
           role="slider"
           tabindex="0"
-        >
-          <Transition name="v-transition-fade">
-            <div
-              v-if="shouldShowTooltip(0)"
-              :class="
-                vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'
-              "
-              class="pointer-events-none absolute z-float rounded-sm border border-glass-border bg-surface-elevated px-1.5 py-0.5 font-mono text-2xs font-bold whitespace-nowrap text-fg-title shadow-md"
-            >
-              {{ singleDisplayText }}
-            </div>
-          </Transition>
-        </div>
+        ></div>
 
         <template v-else>
           <div
+            v-tooltip.compact.manual="rangeTooltip0Opts"
             :aria-valuemax="rangeValues[1]"
             :aria-valuemin="min"
             :aria-valuenow="rangeValues[0]"
@@ -179,21 +169,10 @@
             class="absolute cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
             role="slider"
             tabindex="0"
-          >
-            <Transition name="v-transition-fade">
-              <div
-                v-if="shouldShowRangeTooltip(0)"
-                :class="
-                  vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'
-                "
-                class="pointer-events-none absolute z-float rounded-sm border border-glass-border bg-surface-elevated px-1.5 py-0.5 font-mono text-2xs font-bold whitespace-nowrap text-fg-title shadow-md"
-              >
-                {{ formatVal(rangeValues[0]) }}
-              </div>
-            </Transition>
-          </div>
+          ></div>
 
           <div
+            v-tooltip="rangeTooltip1Opts"
             :aria-valuemax="max"
             :aria-valuemin="rangeValues[0]"
             :aria-valuenow="rangeValues[1]"
@@ -213,19 +192,7 @@
             class="absolute cursor-pointer rounded-full border-2 border-surface-body bg-primary shadow-sm outline-none group-hover:scale-125 hover:scale-125 active:scale-135"
             role="slider"
             tabindex="0"
-          >
-            <Transition name="v-transition-fade">
-              <div
-                v-if="shouldShowRangeTooltip(1)"
-                :class="
-                  vertical ? 'top-1/2 left-full ml-2 -translate-y-1/2' : 'bottom-full left-1/2 mb-2 -translate-x-1/2'
-                "
-                class="pointer-events-none absolute z-float rounded-sm border border-glass-border bg-surface-elevated px-1.5 py-0.5 font-mono text-2xs font-bold whitespace-nowrap text-fg-title shadow-md"
-              >
-                {{ formatVal(rangeValues[1]) }}
-              </div>
-            </Transition>
-          </div>
+          ></div>
         </template>
       </div>
 
@@ -321,6 +288,7 @@ import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
+import type { TooltipOptions } from '@/platform/directives/vTooltip';
 import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { FormComponentWidth } from '@/platform/utils/constants';
@@ -605,6 +573,23 @@ const countDecimals = (n: number): number => {
 };
 
 const isTrackHovered = ref(false);
+
+/**
+ * 滚轮步进时的数值气泡续显：滚轮是离散事件（不像拖拽有持续的 isDragging 态），
+ * 用短延时在最后一次滚动后把气泡多留片刻，使 wheelable / wheelOnHover 下改值也能看到当前数值。
+ */
+const WHEEL_TOOLTIP_LINGER_MS = 700;
+const isWheelActive = ref(false);
+let wheelTooltipTimer: ReturnType<typeof setTimeout> | null = null;
+const pulseWheelTooltip = () => {
+  isWheelActive.value = true;
+  if (wheelTooltipTimer !== null) clearTimeout(wheelTooltipTimer);
+  wheelTooltipTimer = setTimeout(() => {
+    isWheelActive.value = false;
+    wheelTooltipTimer = null;
+  }, WHEEL_TOOLTIP_LINGER_MS);
+};
+
 const stepDecimals = computed(() => countDecimals(props.step));
 
 /** 将任意值对齐到步长网格并夹紧到 [min, max]，同时消除浮点误差与负零 */
@@ -676,7 +661,7 @@ const activeBarStyle = computed(() => {
 const shouldShowTooltip = (index: number) => {
   if (props.showTooltip === 'never') return false;
   if (props.showTooltip === 'always') return true;
-  if (props.showTooltip === 'drag') return isDragging.value === index;
+  if (props.showTooltip === 'drag') return isDragging.value === index || isWheelActive.value;
   if (props.showTooltip === 'hover') return isHovered.value || isTrackHovered.value || isDragging.value === index;
   return false;
 };
@@ -685,7 +670,8 @@ const shouldShowTooltip = (index: number) => {
 const shouldShowRangeTooltip = (index: number) => {
   if (props.showTooltip === 'never') return false;
   if (props.showTooltip === 'always') return true;
-  if (props.showTooltip === 'drag') return isDragging.value === index;
+  // 滚轮步进只作用于 0 号拇指，故滚轮续显仅对 index 0 生效
+  if (props.showTooltip === 'drag') return isDragging.value === index || (index === 0 && isWheelActive.value);
   if (props.showTooltip === 'hover') {
     return (
       (index === 0 ? isHoveredThumb0.value : isHoveredThumb1.value) ||
@@ -695,6 +681,31 @@ const shouldShowRangeTooltip = (index: number) => {
   }
   return false;
 };
+
+/**
+ * 数值气泡改为全局 v-tooltip 浮层（manual + visible 驱动）：
+ * 借助其 teleport 到 body 与动态最高层级，彻底摆脱折叠容器 overflow 裁剪/遮挡；
+ * 用指令内建 compact 复刻紧凑读数观感，placement/间距对齐原内联气泡（mb/ml-2 = 8px）。
+ */
+const baseTooltipOpts = computed<TooltipOptions>(() => ({ placement: props.vertical ? 'left' : 'top' }));
+
+const singleTooltipOpts = computed<TooltipOptions>(() => ({
+  ...baseTooltipOpts.value,
+  content: singleDisplayText.value,
+  visible: shouldShowTooltip(0),
+}));
+
+const rangeTooltip0Opts = computed<TooltipOptions>(() => ({
+  ...baseTooltipOpts.value,
+  content: formatVal(rangeValues.value[0]),
+  visible: shouldShowRangeTooltip(0),
+}));
+
+const rangeTooltip1Opts = computed<TooltipOptions>(() => ({
+  ...baseTooltipOpts.value,
+  content: formatVal(rangeValues.value[1]),
+  visible: shouldShowRangeTooltip(1),
+}));
 
 const tickValues = computed<number[]>(() => {
   if (props.marks && Object.keys(props.marks).length) {
@@ -898,6 +909,8 @@ const applyWheelStep = (e: WheelEvent) => {
   if (e.deltaY === 0) return;
   const direction = e.deltaY > 0 ? -1 : 1;
   stepBy(props.reverseWheel ? -direction : direction, e);
+  // 滚轮改值与拖拽一样浮出数值气泡（离散事件，靠短延时续显）
+  pulseWheelTooltip();
 };
 
 /**
@@ -948,5 +961,6 @@ const cancelEdit = () => {
 onBeforeUnmount(() => {
   window.removeEventListener('pointermove', onPointerMove);
   window.removeEventListener('pointerup', onPointerUp);
+  if (wheelTooltipTimer !== null) clearTimeout(wheelTooltipTimer);
 });
 </script>

@@ -21,7 +21,9 @@
           <span class="min-w-0 flex-1 truncate text-xs font-semibold text-fg-title">
             {{ item.song.title }}
           </span>
-          <BaseBadge appearance="subtle" size="xs" variant="primary"> {{ item.count }} 处 </BaseBadge>
+          <BaseBadge :title="`${item.count} 处引用`" appearance="subtle" size="xs" variant="primary">
+            {{ item.count }} 处
+          </BaseBadge>
         </button>
       </li>
     </ul>

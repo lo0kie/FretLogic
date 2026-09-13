@@ -1,4 +1,4 @@
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 
 import { FULL_BACKUP_SELECTION, useImportExportService } from '@/app/services/backup/useImportExportService';
 import { useChordStore } from '@/domains/chord/store/chordStore';
@@ -84,6 +84,25 @@ export function useBackupModals() {
   const hasSelection = (sel: BackupSelection) => sel.chords || sel.songs || sel.syncSettings || sel.preferences;
   const hasExportSelection = computed(() => hasSelection(modalData.exportSelection));
   const hasImportSelection = computed(() => hasSelection(modalData.importSelection));
+
+  /**
+   * 关闭导入/导出弹窗时清空勾选状态（不做保存），下次打开重新按可用项初始化。
+   * 模块级 modalData 在弹窗间共享，若关闭时不清理，上次勾选会残留在内存里；
+   * 归位到各自「打开时的默认值」而非保留用户操作，避免脏选择泄漏到下一次打开。
+   */
+  watch(
+    () => [modals.export, modals.import],
+    () => {
+      if (!modals.export) {
+        modalData.exportSelection = { ...FULL_BACKUP_SELECTION, syncSettings: false };
+      }
+      if (!modals.import) {
+        modalData.importSelection = { ...FULL_BACKUP_SELECTION };
+        modalData.parsedPayload = null;
+        modalData.fileName = '';
+      }
+    }
+  );
 
   /** 全选状态：可用类别全部勾选（供全选按钮高亮与 toggle 判断） */
   const isAllSelected = (sel: BackupSelection, availability: BackupSelection) =>

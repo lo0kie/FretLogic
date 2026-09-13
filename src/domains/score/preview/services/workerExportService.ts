@@ -46,7 +46,8 @@ export const prepareWorkerExportPayload = (
   exportQualityPct = 95,
   pageMarginPx: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
   pageSize = 'a4',
-  showFooter = true
+  showFooter = true,
+  ignoreEmptySpace = false
 ): WorkerExportPayload => {
   const lyricsLines = song.lyrics.split('\n');
   const chordMap = song.chordMap;
@@ -102,6 +103,8 @@ export const prepareWorkerExportPayload = (
 
   return {
     title: song.title || DEFAULT_SCORE_TITLE,
+    // 歌手（纯展示元数据，空串表示无；canvas 表头非空时绘制副标题行）
+    singer: song.singer ?? '',
     keyText,
     capoText,
     lines,
@@ -121,6 +124,8 @@ export const prepareWorkerExportPayload = (
     pageMargin: pageMarginPx,
     // 导出单页尺寸档位（a4 / a5 / letter）
     pageSize,
+    // 忽略无和弦空格：canvas 中该空格不占列宽（缺省关闭，保持既有排版）
+    ignoreEmptySpace,
   };
 };
 
@@ -165,5 +170,41 @@ export const runWorkerExport = (
     };
 
     worker.postMessage(payload);
+  });
+};
+
+/**
+ * 预估导出文件尺寸：复用 Worker 真实渲染管线（长图模式）返回字节数，主线程 0 阻塞。
+ * 用于下载下拉标题展示「预估文件尺寸」，与最终下载的长图实际字节数一致（仅取整误差）。
+ */
+export const runWorkerEstimate = (payload: WorkerExportPayload): Promise<{ longImageBytes: number }> => {
+  return new Promise((resolve, reject) => {
+    if (typeof OffscreenCanvas === 'undefined') {
+      reject(new Error('当前浏览器环境不支持 OffscreenCanvas 离屏渲染'));
+      return;
+    }
+
+    const worker = new Worker(new URL('@/domains/score/preview/workers/scoreExportWorker', import.meta.url), {
+      type: 'module',
+    });
+
+    worker.onmessage = (e: MessageEvent<WorkerExportMessage>) => {
+      const msg = e.data;
+      if (msg.type === 'estimate') {
+        worker.terminate();
+        resolve({ longImageBytes: msg.longImageBytes });
+      } else if (msg.type === 'error') {
+        worker.terminate();
+        reject(new Error(msg.message));
+      }
+    };
+
+    worker.onerror = err => {
+      worker.terminate();
+      reject(err);
+    };
+
+    // 覆盖为预估模式：仅渲染长图并返回字节数，不产出 Blob 列表
+    worker.postMessage({ ...payload, mode: 'estimate' });
   });
 };

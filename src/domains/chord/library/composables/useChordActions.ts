@@ -61,8 +61,8 @@ export function useChordActions() {
     triggerDeleteChords([chord]);
   };
 
-  /** 保存/更新当前编辑草稿：构建校验后的 payload；未变更时仅提示，成功后立即落盘防刷新丢失 */
-  const persistCurrentChord = () => {
+  /** 保存/更新当前编辑草稿：构建校验后的 payload；未变更时仅提示，成功后立即落盘防刷新丢失。返回是否保存成功（校验失败返回 false） */
+  const persistCurrentChord = (): boolean => {
     const result = chordStore.buildChordForSave(editorStore.draftChord, editorStore.isEditing);
 
     if (!result.ok) {
@@ -72,12 +72,12 @@ export function useChordActions() {
         uiStore.toast.success(`和弦已更新${groupTip}`);
         editorStore.resetEditor();
         uiStore.clearActionToasts();
-        return;
+        return true;
       }
 
       const msg = warningMessages[result.reason];
       if (msg) uiStore.toast.warning(msg);
-      return;
+      return false;
     }
 
     const targetGroup = chordStore.groups.find(g => g.id === result.payload.groupId);
@@ -99,6 +99,7 @@ export function useChordActions() {
 
     editorStore.resetEditor();
     uiStore.clearActionToasts();
+    return true;
   };
 
   /** 把当前草稿转为「另存为新和弦」模式，提示选择目标分组 */

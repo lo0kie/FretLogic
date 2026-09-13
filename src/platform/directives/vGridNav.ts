@@ -25,14 +25,7 @@ export interface GridNavOptions {
 
 export type GridNavBinding = number | GridNavOptions | boolean | undefined;
 export type GridNavModifiers =
-  | 'stop'
-  | 'loop'
-  | 'horizontal'
-  | 'vertical'
-  | 'preventScroll'
-  | 'prevent_scroll'
-  | 'disabled'
-  | (string & Record<never, never>);
+  'stop' | 'loop' | 'horizontal' | 'vertical' | 'prevent-scroll' | 'disabled' | (string & Record<never, never>);
 
 interface Entry {
   el: HTMLElement;
@@ -85,7 +78,8 @@ const resolveOptions = (binding: DirectiveBinding<GridNavBinding>): GridNavOptio
   if (mods['loop']) opts.loop = true;
   if (mods['horizontal']) opts.orientation = 'horizontal';
   if (mods['vertical']) opts.orientation = 'vertical';
-  if (mods['preventScroll'] || mods['prevent_scroll']) opts.preventScroll = true;
+  // 静态修饰符 .prevent-scroll：聚焦时阻止原生页面跳滚（连字符拼写，与 .no-pause 一致）
+  if (mods['prevent-scroll']) opts.preventScroll = true;
   // 静态修饰符 .disabled（编译期固定，动态禁用请用绑定值 { disabled }）
   if (mods['disabled']) opts.disabled = true;
 

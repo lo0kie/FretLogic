@@ -38,6 +38,8 @@ export interface WebdavSyncConfig extends BaseSyncConfig {
 export interface ServerSyncConfig extends BaseSyncConfig {
   kind: 'server';
   serverUrl?: string;
+  /** 服务器上传鉴权 Token（可选，仅 push 上传请求携带） */
+  token?: string;
 }
 
 export type SyncConfig = GithubSyncConfig | GiteeSyncConfig | WebdavSyncConfig | ServerSyncConfig;

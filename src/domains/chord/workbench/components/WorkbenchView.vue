@@ -62,10 +62,9 @@ import { ref } from 'vue';
 import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
-import { nameToSegments } from '@/domains/chord/theory/theory';
+import { useChordDraftEditing } from '@/domains/chord/workbench/composables/useChordDraftEditing';
 import { useWorkbenchPanelExpanded } from '@/domains/chord/workbench/composables/useWorkbenchPanelExpanded';
 import { useWorkbenchPanelsOrder } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder.ts';
-import { toFretOffset, toStringIndex } from '@/domains/fretboard/model/coordinates';
 import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
 import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry.ts';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
@@ -76,9 +75,7 @@ import WorkbenchFloatingBar from './WorkbenchFloatingBar.vue';
 import WorkbenchVariantsPanel from './WorkbenchVariantsPanel.vue';
 import { useWorkbenchRouteSync } from '../composables/useWorkbenchRouteSync';
 
-import type { ChordNameSegments } from '@/domains/chord/types';
 import type { WorkbenchPanelId } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder.ts';
-import type { BarreEntity, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { Component, Ref } from 'vue';
 
@@ -121,54 +118,17 @@ const { panels } = useWorkbenchPanelsOrder();
 
 // ==================== 指板交互草稿编辑 ====================
 
-/** 和弦草稿编辑：Fretboard 读写 draftChord，任一编辑操作把草稿标记为「创建中」 */
+/** 和弦草稿编辑：Fretboard 读写 draftChord（交互写入逻辑抽至 useChordDraftEditing 供选器和弦抽屉共用） */
 const editorStore = useChordEditorStore();
+const {
+  handleBarresChange,
+  handleChordNameChange,
+  handleFretOffsetUpdate,
+  handleNameSegmentsChange,
+  handleRootStringChange,
+  handleStringsChange,
+} = useChordDraftEditing();
 
 // URL ↔ Store 状态同构（#/workbench?group=&chord=&v=）：本组件注册双向 watcher 与 KeepAlive 重激活回放
 useWorkbenchRouteSync();
-
-const markCreating = () => {
-  if (!editorStore.isEditing) editorStore.isCreating = true;
-};
-
-/** 用户在指板上调整品位偏移后写入草稿 */
-const handleFretOffsetUpdate = (offset: number) => {
-  editorStore.draftChord.fretOffset = toFretOffset(offset);
-  markCreating();
-};
-
-/** 用户按弦变化后同步整份按弦模型到草稿 */
-const handleStringsChange = (strings: GuitarStringsModel) => {
-  strings.forEach((str, i) => {
-    editorStore.draftChord.strings[i] = [str[0], str[1]];
-  });
-  markCreating();
-};
-
-/** 用户切换根音弦后写入草稿（目标弦无按音时视为取消根音） */
-const handleRootStringChange = (index: number | null) => {
-  const validIndex: StringIndex | null =
-    index !== null && (editorStore.draftChord.strings[index]?.[0] ?? -1) >= 0 ? toStringIndex(index) : null;
-  editorStore.draftChord.rootStringIndex = validIndex;
-  markCreating();
-};
-
-/** 用户输入和弦名后解析为音名段写入草稿（清空名则置空） */
-const handleChordNameChange = (name: string) => {
-  const segs = name ? nameToSegments(name) : null;
-  editorStore.draftChord.nameSegments = segs;
-  markCreating();
-};
-
-/** 用户编辑音名段后写入草稿 */
-const handleNameSegmentsChange = (segments: ChordNameSegments | null) => {
-  editorStore.draftChord.nameSegments = segments;
-  markCreating();
-};
-
-/** 用户在指板上点击横按切换标记后同步到草稿 */
-const handleBarresChange = (barres: BarreEntity[] | undefined) => {
-  editorStore.setBarres(barres);
-  markCreating();
-};
 </script>

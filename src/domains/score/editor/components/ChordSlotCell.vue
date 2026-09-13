@@ -451,6 +451,14 @@ const ariaLabelText = computed(() => {
 </script>
 
 <style scoped lang="scss">
+/* 字符盒 min-* 基线显式归零：min-width/min-height 初始值为 auto，
+   auto 与长度之间无法插值（过渡按离散翻转，表现为瞬间跳变）；
+   归零后 .is-drop-widened 的 0.12s 撑开过渡才能真实生效（收拢回落到本基线同样平滑） */
+.char-box {
+  min-width: 0;
+  min-height: 0;
+}
+
 /* 拖拽期间仅当前活动落点行空字符槽/添加槽统一撑开：
    min-width/min-height 只作下限、不缩窄；平滑过渡尺寸，
    保证拖拽到空行或未排和弦的行时落点与两块分区有充足高度，且绝无外边距抖动闪烁 */

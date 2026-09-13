@@ -1,30 +1,32 @@
 <template>
   <GlobalToast />
 
-  <div class="flex h-screen w-full min-w-[320px] flex-col overflow-hidden">
-    <div class="shrink-0">
-      <TopHeader />
-    </div>
+  <Suspense>
+    <div class="flex h-screen w-full min-w-[320px] flex-col overflow-hidden">
+      <div class="shrink-0">
+        <TopHeader />
+      </div>
 
-    <div class="relative flex min-h-0 flex-1 overflow-hidden">
-      <SidebarLeft />
+      <div class="relative flex min-h-0 flex-1 overflow-hidden">
+        <SidebarLeft />
 
-      <main class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-        <div
-          :style="{ paddingLeft: mainPaddingLeft }"
-          class="absolute inset-0 transition-[padding-left] duration-slow ease-sidebar"
-        >
-          <RouterView #="{ Component, route }">
-            <Transition mode="out-in" name="v-transition-fade">
-              <KeepAlive :max="12">
-                <component :is="Component" :key="route.name || route.path" />
-              </KeepAlive>
-            </Transition>
-          </RouterView>
-        </div>
-      </main>
+        <main class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+          <div
+            :style="{ paddingLeft: mainPaddingLeft }"
+            class="absolute inset-0 transition-[padding-left] duration-slow ease-sidebar"
+          >
+            <RouterView #="{ Component, route }">
+              <Transition mode="out-in" name="v-transition-fade">
+                <KeepAlive :max="12">
+                  <component :is="Component" :key="route.name || route.path" />
+                </KeepAlive>
+              </Transition>
+            </RouterView>
+          </div>
+        </main>
+      </div>
     </div>
-  </div>
+  </Suspense>
 </template>
 
 <script setup lang="ts">

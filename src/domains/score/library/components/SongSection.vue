@@ -30,40 +30,59 @@
                 'border-border-base bg-surface-panel-hover': isOpen,
               }"
               :data-song-id="row.song!.id"
+              :title="row.song?.title"
               @click="handleSelectSong(row.song!.id)"
               data-focusable-inline
               class="song-card-item w-full cursor-pointer rounded-md border border-border-light bg-surface-body p-sm px-md transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover"
             >
-              <div class="flex w-full items-center justify-between gap-sm">
-                <div v-marquee.fade class="min-w-0 flex-1">
-                  <span
-                    :class="isSongActive(row.song!.id) ? 'font-bold text-primary!' : 'text-fg-title'"
-                    class="text-xs font-semibold"
-                  >
-                    {{ row.song!.title }}
-                  </span>
-                </div>
+              <div class="flex w-full flex-col gap-2xs">
+                <div class="flex w-full items-center justify-between gap-sm">
+                  <div v-marquee.fade class="min-w-0 flex-1">
+                    <span
+                      :class="isSongActive(row.song!.id) ? 'font-bold text-primary!' : 'text-fg-title'"
+                      class="text-xs font-semibold"
+                    >
+                      {{ row.song!.title }}
+                    </span>
+                  </div>
 
-                <div class="flex shrink-0 gap-xs">
-                  <BaseBadge
-                    :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
-                    :aria-label="songKeyAriaLabel(row.song!)"
-                    size="xs"
-                    variant="neutral"
-                    width="2rem"
-                  >
-                    <span v-chord-name="`${computeSongKey(row.song!.playKey, row.song!.capo)}调`" />
-                  </BaseBadge>
+                  <div class="flex shrink-0 gap-xs">
+                    <template v-if="row.song!.singer">
+                      <BaseBadge
+                        :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
+                        :aria-label="`歌手 ${row.song!.singer}`"
+                        :title="`歌手：${row.song!.singer}`"
+                        size="2xs"
+                        variant="neutral"
+                      >
+                        <span class="block max-w-[7rem] truncate">{{ row.song!.singer }}</span>
+                      </BaseBadge>
+                    </template>
 
-                  <BaseBadge
-                    :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
-                    :aria-label="`变调夹 capo ${row.song!.capo} 品`"
-                    size="xs"
-                    variant="neutral"
-                    width="2.8rem"
-                  >
-                    Capo {{ row.song!.capo }}
-                  </BaseBadge>
+                    <template v-else>
+                      <BaseBadge
+                        :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
+                        :aria-label="songKeyAriaLabel(row.song!)"
+                        :title="songKeyTitle(row.song!)"
+                        size="2xs"
+                        variant="neutral"
+                        width="2rem"
+                      >
+                        <span v-chord-name="`${computeSongKey(row.song!.playKey, row.song!.capo)}调`" />
+                      </BaseBadge>
+
+                      <BaseBadge
+                        :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
+                        :aria-label="`变调夹 capo ${row.song!.capo} 品`"
+                        :title="`变调夹 ${row.song!.capo} 品`"
+                        size="2xs"
+                        variant="neutral"
+                        width="2.8rem"
+                      >
+                        Capo {{ row.song!.capo }}
+                      </BaseBadge>
+                    </template>
+                  </div>
                 </div>
               </div>
             </div>
@@ -181,6 +200,9 @@ const songCardAriaLabel = (song: Song): string =>
 /** 调性徽标无障碍描述：最终计算调 */
 const songKeyAriaLabel = (song: Song): string => `调性 ${computeSongKey(song.playKey, song.capo)} 调`;
 
+/** 调性徽标悬停提示：展示变调夹前的原调 */
+const songKeyTitle = (song: Song): string => `原调 ${song.playKey}`;
+
 // 乐谱右键菜单项：每次直接构建（仅 3 项），不缓存
 const getSongMenuItems = (song: Song): MenuItem[] => {
   const items: MenuItem[] = [
@@ -201,7 +223,6 @@ const getSongMenuItems = (song: Song): MenuItem[] => {
     {
       label: '清空和弦',
       icon: 'eraser',
-      disabled: song.chordMap.size === 0 || song.id !== scoreEditor.activeSongId,
       action: () => {
         emit('open-clear', song);
       },

@@ -1,4 +1,4 @@
-﻿import { autoUpdate, computePosition } from '@floating-ui/dom';
+import { autoUpdate, computePosition } from '@floating-ui/dom';
 
 import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
 import { buildFloatingMiddlewares } from '@/platform/ui/popover/floatingCore';
@@ -33,6 +33,21 @@ export interface TooltipOptions {
    */
   interactive?: boolean;
   /**
+   * 手动控制模式：为 true 时忽略鼠标悬停/聚焦的自动显隐，仅由 visible 驱动。
+   * 用于需要外部以编程方式控制 tooltip 显隐的场景（如滑块拖拽数值气泡）。
+   */
+  manual?: boolean;
+  /**
+   * 手动控制下的显隐开关（配合 manual:true 使用，否则忽略）。
+   * 响应式变化时对应显示/隐藏，并同步刷新内容与定位。
+   */
+  visible?: boolean;
+  /**
+   * 紧凑读数气泡：覆盖默认玻璃标题提示为窄边距的小号加粗读数（如滑块数值），
+   * 与指示箭头共享 --bg-panel 底色；亦可用 .compact 修饰符开启。
+   */
+  compact?: boolean;
+  /**
    * 内容是否按 HTML 渲染（默认 false，使用 textContent 防 XSS）。
    * 亦可用 `.html` 修饰符开启。
    * 仅当内容为可信的静态字符串时使用；切勿传入用户输入，否则有注入风险。
@@ -48,6 +63,8 @@ export interface TooltipOptions {
  * - `no-arrow`：隐藏箭头（等价于 `showArrow:false`）
  * - `interactive`：开启交互式（等价于 `interactive:true`）
  * - `html`：内容按 HTML 渲染（等价于 `html:true`）
+ * - `manual`：开启手动控制，忽略悬停/聚焦自动显隐，仅由 `visible` 驱动（等价于 `manual:true`）
+ * - `compact`：紧凑读数气泡（等价于 `compact:true`）
  * - `disabled`：禁用提示（等价于 `disabled:true`）
  *
  * 修饰符与对象选项等效，对象显式赋值优先级更高。
@@ -70,6 +87,8 @@ export type TooltipModifiers =
   | 'no-arrow'
   | 'interactive'
   | 'html'
+  | 'manual'
+  | 'compact'
   | 'disabled'
   | (string & Record<never, never>);
 
@@ -146,6 +165,14 @@ export const normalize = (value: TooltipBinding, modifiers?: Record<string, bool
   // 禁用默认 false；显式传了 disabled 以对象为准，否则用 .disabled 修饰符关闭
   if (base.disabled === undefined) {
     base.disabled = !!modifiers?.['disabled'];
+  }
+  // 手动控制默认 false；显式传了 manual 以对象为准，否则用 .manual 修饰符开启
+  if (base.manual === undefined) {
+    base.manual = !!modifiers?.['manual'];
+  }
+  // 紧凑读数默认 false；显式传了 compact 以对象为准，否则用 .compact 修饰符开启
+  if (base.compact === undefined) {
+    base.compact = !!modifiers?.['compact'];
   }
   return base;
 };
@@ -415,6 +442,8 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
     appliedCustomClass = opts.customClass;
     globalContent.classList.add(...appliedCustomClass.split(' ').filter(Boolean));
   }
+  // compact 为指令内建样式：随显隐开关在 content 上追加/移除，与 customClass 无冲突
+  globalContent.classList.toggle('v-tooltip-compact', Boolean(opts.compact));
 
   setTooltipContent(globalContent, opts);
 
@@ -474,8 +503,12 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
     !immediate && handler?.opts.interactive && hide === 0 ? TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS : hide;
   const delayMs = immediate ? 0 : effectiveHide;
 
-  if (delayMs > 0) {
-    hideTimer = setTimeout(() => {
+  // 手动模式（visible 驱动）隐藏时即使无 hideDelay 也播放淡出，避免瞬时收起丢失出场动画；
+  // 其余即时场景照旧走 `v-tooltip-instant` 关过渡的隐藏分支
+  const manualFade = !immediate && Boolean(handler?.opts.manual);
+
+  if (delayMs > 0 || manualFade) {
+    const runFade = () => {
       if (currentTargetEl === el && globalBox) {
         // 离场：淡出并缩回 scale(.95)（即时路径才关过渡，见下）
         globalBox.style.opacity = '0';
@@ -498,7 +531,9 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
         }, TOOLTIP_HIDE_CLEANUP_DELAY_MS);
       }
       hideTimer = null;
-    }, delayMs);
+    };
+    if (delayMs > 0) hideTimer = setTimeout(runFade, delayMs);
+    else runFade();
   } else {
     if (globalBox) {
       // 滚动 / 失焦 / 卸载：关过渡，立即隐藏，避免跟随锚点漂移时仍淡出
@@ -542,11 +577,20 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     const opts = normalize(binding.value, binding.modifiers);
     const handler: TooltipHandler = {
       opts,
-      onMouseEnter: () => showTooltip(el, handler.opts, false),
-      onMouseLeave: () => hideTooltip(el, false),
+      onMouseEnter: () => {
+        // 手动模式下忽略悬停，显隐完全交由 visible 驱动
+        if (!handler.opts.manual) showTooltip(el, handler.opts, false);
+      },
+      onMouseLeave: () => {
+        if (!handler.opts.manual) hideTooltip(el, false);
+      },
       // 键盘 Tab 聚焦时能够正常无障碍唤起
-      onFocus: () => showTooltip(el, handler.opts, true),
-      onBlur: () => hideTooltip(el, true),
+      onFocus: () => {
+        if (!handler.opts.manual) showTooltip(el, handler.opts, true);
+      },
+      onBlur: () => {
+        if (!handler.opts.manual) hideTooltip(el, true);
+      },
     };
 
     handlerMap.set(el, handler);
@@ -555,7 +599,10 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     el.addEventListener('focus', handler.onFocus);
     el.addEventListener('blur', handler.onBlur);
 
-    if (el.matches?.(':hover')) {
+    if (opts.manual && opts.visible) {
+      // 手动模式初始即显示
+      showTooltip(el, handler.opts, true);
+    } else if (el.matches?.(':hover')) {
       showTooltip(el, handler.opts, false);
     }
   },
@@ -564,6 +611,25 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     const handler = handlerMap.get(el);
     if (!handler) return;
     handler.opts = normalize(binding.value, binding.modifiers);
+    const { manual, visible } = handler.opts;
+
+    if (manual) {
+      // 手动模式：显隐完全由 visible 驱动，并随内容变化实时刷新
+      if (visible) {
+        if (currentTargetEl !== el) {
+          // 从隐藏到显示
+          showTooltip(el, handler.opts, true);
+        } else if (globalContent) {
+          // 显示中：同步最新内容与定位
+          setTooltipContent(globalContent, handler.opts);
+          updatePosition(el, handler.opts);
+        }
+      } else if (currentTargetEl === el) {
+        // 非即时隐藏：manualFade 会播放淡出出场动画
+        hideTooltip(el, false);
+      }
+      return;
+    }
 
     if (currentTargetEl === el) {
       if (handler.opts.disabled || !hasTooltipContent(handler.opts)) {

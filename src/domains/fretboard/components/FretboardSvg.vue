@@ -17,8 +17,8 @@
           v-if="activeHoveredBarre && displayBubbleBarre"
           :class="[
             displayBubbleBarre.isMarked
-              ? 'border-primary bg-primary text-white shadow-[0_6px_20px_rgba(59,130,246,0.45)] dark:shadow-[0_8px_26px_rgba(96,165,250,0.55)]'
-              : 'border-primary/40 bg-surface-panel text-primary shadow-[0_6px_20px_rgba(0,0,0,0.22)] hover:bg-tint-primary-88 dark:shadow-[0_8px_26px_rgba(0,0,0,0.65)]',
+              ? 'border-primary bg-primary text-white shadow-[0_2px_8px_rgba(var(--color-primary-rgb),0.28)]'
+              : 'border-primary/40 bg-surface-panel text-primary shadow-[0_2px_8px_rgba(0,0,0,0.12)] hover:bg-tint-primary-88 dark:shadow-[0_2px_10px_rgba(0,0,0,0.3)]',
           ]"
           @mousedown.prevent.stop
           @pointerdown.prevent.stop
@@ -686,9 +686,13 @@ watch(() => hoverPoint, syncBarreHover, { deep: true });
 watch(displayBarres, syncBarreHover, { flush: 'post' });
 </script>
 
-<style lang="scss">
+<style scoped lang="scss">
 @use '@/assets/tokens' as *;
 
+/* 必须保持 scoped：气泡元素自带 Tailwind 的 transition-[background-color,border-color,box-shadow]
+   工具类（与下列过渡规则同为单类选择器 (0,1,0)、且在样式表中位置更靠后）。scoped 会给选择器附加
+   [data-v-*]，特异性提升到 (0,2,0) 才能压过该工具类；一旦去掉 scoped，进入/离开的 opacity+transform
+   过渡会被工具类覆盖，气泡入场出场动画即失效。 */
 .barre-bubble-transition-enter-active,
 .barre-bubble-transition-leave-active {
   transition:

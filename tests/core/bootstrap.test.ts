@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { chordRepository, songRepository } from '@/app/services/data';
 import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/app/services/data/bootstrap';

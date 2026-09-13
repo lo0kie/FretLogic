@@ -122,7 +122,7 @@
       >
         <div class="header-title-zone flex min-w-0 items-center gap-sm">
           <span class="sidebar-title text-xs font-bold tracking-tight whitespace-nowrap text-fg-title">乐谱列表</span>
-          <BaseBadge appearance="filled" size="xs" variant="neutral">
+          <BaseBadge appearance="filled" size="xs" title="乐谱数量" variant="neutral">
             {{ songStore.songs.length }}
           </BaseBadge>
         </div>
