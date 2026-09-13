@@ -9,6 +9,7 @@
     :class="[sizeClasses, themeVariantClasses, roundedClasses, { 'w-full': block }]"
     :disabled="disabled || loading"
     :style="normalizedStyle"
+    :title="resolvedTitle"
     @click="handleInternalClick($event)"
     @pointercancel="handlePointerCancel($event)"
     @pointerdown="handlePointerDown($event)"
@@ -80,6 +81,7 @@ import {
   BUTTON_SUBTLE_THEME_MAP,
   BUTTON_TEXT_THEME_MAP,
 } from '@/platform/ui/button/buttonThemes';
+import { resolveTextTitle } from '@/platform/utils/slotText';
 
 import type { ComponentSize, ThemeColor } from '@/platform/types';
 import type { BaseIconProps } from '@/platform/ui/icons/BaseIcon.vue';
@@ -110,6 +112,7 @@ const {
   suffixIcon = undefined,
   holdable = false,
   holdDelay = 300,
+  title = undefined,
 } = defineProps<{
   /** 原生 button 的 type，默认 'button' 避免在表单内意外触发表单提交 */
   type?: 'button' | 'submit' | 'reset';
@@ -163,6 +166,8 @@ const {
   holdable?: boolean;
   /** holdable 时判定“长按”的阈值(ms)，默认 300 */
   holdDelay?: number;
+  /** 悬停提示文本；缺省时回退到 label，其次默认插槽文本 */
+  title?: string;
 }>();
 
 const emit = defineEmits<{
@@ -294,6 +299,9 @@ const hasDefaultSlot = computed(() => Boolean(slots['default']));
 const resolvedIcon = computed<IconName | undefined>(() => icon ?? prefixIcon);
 /** 是否有文案内容（默认插槽或 label），决定 icon 属性是作前缀还是主体 */
 const hasText = computed(() => hasDefaultSlot.value || Boolean(label));
+
+/** 悬停提示：显式 title > label > 默认插槽纯文本 */
+const resolvedTitle = computed(() => resolveTextTitle(title, label, slots['default']?.() ?? []));
 /** 图标主体态：显式 iconOnly，或主图标且无文案（图标即整个按钮主体） */
 const isIconOnly = computed(() => iconOnly || (Boolean(resolvedIcon.value) && !hasText.value));
 

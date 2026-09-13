@@ -195,10 +195,12 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     activeSongId.value = id;
   };
 
-  // 「最近编辑乐谱」冷启动指针：URL 无选歌参数（裸访问）时作为回灌种子；取消选中不主动清除，
-  // 保证「上次编辑过哪首」在选中态清空后仍可被回退恢复。
+  // 「最近编辑乐谱」冷启动指针：URL 无选歌参数（裸访问）时作为回灌种子；
+  // 取消选中（id 为 null）时同步清除指针，否则用户已主动取消的选择会在刷新后被回灌复活。
   watch(activeSongId, id => {
-    if (id && typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEYS.LAST_SONG_ID, id);
+    if (typeof localStorage === 'undefined') return;
+    if (id) localStorage.setItem(STORAGE_KEYS.LAST_SONG_ID, id);
+    else localStorage.removeItem(STORAGE_KEYS.LAST_SONG_ID);
   });
 
   // 记录「最近的乐谱主 Tab」冷启动指针：仅当存在激活歌曲且当前为主 Tab（非 edit）时写入，

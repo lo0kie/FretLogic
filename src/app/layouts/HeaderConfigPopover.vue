@@ -46,6 +46,35 @@
               readout-position="left"
             />
           </BaseFormRow>
+
+          <template v-if="isPreviewTab">
+            <BaseFormRow label="乐谱对齐">
+              <BaseSegmentedControl
+                v-model="settingsStore.scoreLayoutAlign"
+                :options="[
+                  { value: 'start', label: '起始位置' },
+                  { value: 'center', label: '居中对齐' },
+                ]"
+                compacted
+              />
+            </BaseFormRow>
+
+            <BaseFormRow label="歌词字重">
+              <BaseSegmentedControl
+                v-model="settingsStore.scoreLyricsFontWeight"
+                :options="[
+                  { value: 'light', label: '细' },
+                  { value: 'regular', label: '常规' },
+                  { value: 'bold', label: '粗' },
+                ]"
+                compacted
+              />
+            </BaseFormRow>
+
+            <BaseFormRow help="歌词中未挂和弦的空格不再占位，排版更紧凑" label="忽略空格">
+              <BaseSwitch v-model="settingsStore.scoreIgnoreEmptySpace" aria-label="是否让无和弦的空格不占位" />
+            </BaseFormRow>
+          </template>
         </BaseForm>
       </BaseCollapse>
 
@@ -68,6 +97,12 @@
           <BaseFormRow help="关闭后指板图仅保留按弦圆点" label="显示横按">
             <BaseSwitch v-model="settingsStore.scoreShowBarre" aria-label="是否显示大横按" />
           </BaseFormRow>
+
+          <template v-if="isPreviewTab">
+            <BaseFormRow help="A4 分页预览底部居中显示页码" label="显示页脚">
+              <BaseSwitch v-model="settingsStore.scoreShowFooter" aria-label="是否显示页脚页码" />
+            </BaseFormRow>
+          </template>
         </BaseForm>
       </BaseCollapse>
 
@@ -84,33 +119,6 @@
         title="版面"
       >
         <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
-          <BaseFormRow label="乐谱对齐">
-            <BaseSegmentedControl
-              v-model="settingsStore.scoreLayoutAlign"
-              :options="[
-                { value: 'start', label: '起始位置' },
-                { value: 'center', label: '居中对齐' },
-              ]"
-              compacted
-            />
-          </BaseFormRow>
-
-          <BaseFormRow label="歌词字重">
-            <BaseSegmentedControl
-              v-model="settingsStore.scoreLyricsFontWeight"
-              :options="[
-                { value: 'light', label: '细' },
-                { value: 'regular', label: '常规' },
-                { value: 'bold', label: '粗' },
-              ]"
-              compacted
-            />
-          </BaseFormRow>
-
-          <BaseFormRow help="A4 分页预览底部居中显示页码" label="显示页脚">
-            <BaseSwitch v-model="settingsStore.scoreShowFooter" aria-label="是否显示页脚页码" />
-          </BaseFormRow>
-
           <BaseFormRow help="标准单页尺寸，A4/Letter 常用于打印输出" label="单页尺寸">
             <BaseSegmentedControl
               v-model="settingsStore.scorePageSize"
@@ -170,6 +178,20 @@
             />
           </BaseFormRow>
 
+          <BaseFormRow help="和弦试听音量" label="试听音量">
+            <BaseSlider
+              v-model="settingsStore.audioPlayback.volumeDb"
+              :default-value="-8"
+              :formatter="val => `${Math.round(val)}dB`"
+              :max="0"
+              :min="-30"
+              :show-buttons="false"
+              :step="2"
+              bordered
+              readout-position="left"
+            />
+          </BaseFormRow>
+
           <BaseFormRow help="扫弦方向（由内向外：从中音弦向两侧交替展开）" label="扫弦方向">
             <BaseSegmentedControl
               v-model="settingsStore.audioPlayback.strumDirection"
@@ -210,20 +232,6 @@
         title="效果"
       >
         <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
-          <BaseFormRow help="和弦试听音量" label="试听音量">
-            <BaseSlider
-              v-model="settingsStore.audioPlayback.volumeDb"
-              :default-value="-8"
-              :formatter="val => `${Math.round(val)}dB`"
-              :max="0"
-              :min="-30"
-              :show-buttons="false"
-              :step="2"
-              bordered
-              readout-position="left"
-            />
-          </BaseFormRow>
-
           <BaseFormRow help="混响尾音占比" label="混响">
             <BaseSlider
               v-model="settingsStore.audioPlayback.reverbWet"

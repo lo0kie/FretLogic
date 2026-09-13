@@ -9,4 +9,5 @@ export * from './filePicker.ts';
 export * from './logger.ts';
 export * from './lruCache.ts';
 export * from './pinyin.ts';
+export * from './slotText.ts';
 export * from './validateSettings.ts';

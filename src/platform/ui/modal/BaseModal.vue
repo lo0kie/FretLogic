@@ -71,7 +71,7 @@
             <div
               :class="[
                 { 'has-header': hasHeader, 'has-footer': showFooter, 'py-sm': !$slots['default'] },
-                isAutoHeight ? 'h-auto max-h-[calc(85vh-8rem)]' : 'min-h-0 flex-1',
+                isAutoHeight ? 'h-auto max-h-[calc(800px-8rem)]' : 'min-h-0 flex-1',
               ]"
               class="modal-body-scrollable no-scrollbar flex flex-col overflow-y-auto px-xl py-lg"
             >
@@ -119,32 +119,17 @@ import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, useTemplateR
 import { useEventListener, useScrollLock } from '@vueuse/core';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import {
+  hasActiveOverlays,
+  isClient,
+  isTopOverlay,
+  registerOverlay,
+  unregisterOverlay,
+} from '@/platform/ui/overlay/overlayStack';
 
 import type { ModalCloseReason } from './modalCloseReason';
 import type { ThemeColor } from '@/platform/types';
 
-// 全局弹窗层级栈：必须放在模块作用域（<script setup> 体每次实例化都会重新执行），
-// 否则每个实例各自持有独立 Set，多层弹窗的 inert 协调与 Esc 栈顶判断都会失效
-const activeModalOverlays = new Set<HTMLElement>();
-const isClient = typeof document !== 'undefined';
-
-/** 依据弹窗栈顶同步 body 直接子元素的 inert 属性：仅栈顶弹窗可交互 */
-const updateGlobalInertState = () => {
-  if (!isClient) return;
-  const currentTopOverlay = Array.from(activeModalOverlays).pop();
-
-  document.body.childNodes.forEach(node => {
-    if (node.nodeType !== Node.ELEMENT_NODE) return;
-    const el = node as HTMLElement;
-    if (currentTopOverlay && el === currentTopOverlay) {
-      el.removeAttribute('inert');
-    } else if (activeModalOverlays.size > 0) {
-      el.setAttribute('inert', '');
-    } else {
-      el.removeAttribute('inert');
-    }
-  });
-};
 // （ModalCloseReason 类型在 ./modalCloseReason.ts，<script setup> 内不允许 export）
 </script>
 
@@ -254,59 +239,43 @@ const topStyle = computed(() => {
     return { marginTop: t };
   }
   if (!props.centered) {
-    return { marginTop: '10vh' };
+    return { marginTop: '96px' };
   }
   return {};
 });
 
-// 预设尺寸映射：width|maxWidth / height|maxHeight
+// 预设尺寸映射：全部为固定像素尺寸，不再携带 vw/vh 上限（弹窗尺寸不随视口变化）
 const WIDTH_MAP: Record<string, string> = {
-  'w-sm': '380px|90vw',
-  'w-md': '480px|90vw',
-  'w-80': '480px|90vw',
-  'w-lg': '640px|90vw',
-  'w-large': '840px|90vw',
-  'w-xl': '840px|90vw',
-  'w-wide': '1080px|92vw',
-  'w-full': '1320px|95vw',
+  'w-sm': '380px',
+  'w-md': '480px',
+  'w-80': '480px',
+  'w-lg': '640px',
+  'w-large': '840px',
+  'w-xl': '840px',
+  'w-wide': '1080px',
+  'w-full': '1320px',
 };
 const HEIGHT_MAP: Record<string, string> = {
-  'h-auto': 'auto|80vh',
-  'h-sm': '320px|80vh',
-  'h-md': '480px|80vh',
-  'h-lg': '640px|85vh',
-  'h-xl': '800px|90vh',
-  'h-full': '90vh|90vh',
+  'h-auto': 'auto',
+  'h-sm': '320px',
+  'h-md': '480px',
+  'h-lg': '640px',
+  'h-xl': '800px',
+  'h-full': '800px',
 };
 
 const sizeStyle = computed<Record<string, string>>(() => {
   const style: Record<string, string> = {};
   const w = props.width;
-  if (typeof w === 'number') {
-    style['width'] = `${w}px`;
-    style['maxWidth'] = '90vw';
-  } else if (w && WIDTH_MAP[w]) {
-    const parts = WIDTH_MAP[w].split('|');
-    if (parts[0]) style['width'] = parts[0];
-    if (parts[1]) style['maxWidth'] = parts[1];
-  } else if (typeof w === 'string' && w) {
-    style['width'] = w;
-  }
+  if (typeof w === 'number') style['width'] = `${w}px`;
+  else if (w) style['width'] = WIDTH_MAP[w] ?? w;
+
   const h = props.height;
-  if (typeof h === 'number') {
-    style['height'] = `${h}px`;
-    style['maxHeight'] = '90vh';
-  } else if (h && HEIGHT_MAP[h]) {
-    const parts = HEIGHT_MAP[h].split('|');
-    if (parts[0] === 'auto') {
-      // 自适应高度由 v-auto-height 动态测量与过渡
-    } else if (parts[0]) {
-      style['height'] = parts[0];
-    }
-    if (parts[1]) style['maxHeight'] = parts[1];
-  } else if (typeof h === 'string' && h) {
-    style['height'] = h;
-  }
+  if (typeof h === 'number') style['height'] = `${h}px`;
+  else if (h && HEIGHT_MAP[h]) {
+    // 'auto' 不写死高度：交由 v-auto-height 测量内容并过渡
+    if (HEIGHT_MAP[h] !== 'auto') style['height'] = HEIGHT_MAP[h];
+  } else if (typeof h === 'string' && h) style['height'] = h;
   return style;
 });
 
@@ -323,18 +292,13 @@ const clearListeners = () => {
   stopKeydownListener = null;
 };
 
-// 仅当自身位于弹窗栈顶时才响应 Esc，避免一次按键同时关闭所有层叠弹窗
-const isTopOverlay = () => {
-  if (!overlayRef.value) return false;
-  // 刚打开还未完成 nextTick 入栈（DOM 已挂载但尚未登记）时视为栈顶
-  if (!activeModalOverlays.has(overlayRef.value)) return true;
-  return Array.from(activeModalOverlays).pop() === overlayRef.value;
-};
+// 仅当自身位于阻断层栈顶时才响应 Esc，避免一次按键同时关闭所有层叠弹窗
+const isTopOverlayActive = () => isTopOverlay(overlayRef.value);
 
 /** Esc 关闭：keyboard 开启且自身为栈顶时生效 */
 const handleEscape = (e: KeyboardEvent) => {
   if (e.key !== 'Escape') return;
-  if (!props.keyboard || !isTopOverlay()) return;
+  if (!props.keyboard || !isTopOverlayActive()) return;
   close('esc');
 };
 
@@ -344,20 +308,18 @@ watch(
     if (!isOpen) {
       clearListeners();
       if (overlayRef.value) {
-        activeModalOverlays.delete(overlayRef.value);
-        updateGlobalInertState();
+        unregisterOverlay(overlayRef.value);
       }
-      isBodyLocked.value = activeModalOverlays.size > 0;
+      isBodyLocked.value = hasActiveOverlays() > 0;
     } else {
       isBodyLocked.value = true;
       stopKeydownListener = useEventListener(window, 'keydown', handleEscape);
       // 待 DOM 挂载后加入激活栈。用 nextTick（渲染冲刷后的微任务）而非裸 setTimeout(0)（下一个宏任务）：
-      // 语义更贴合「DOM 已更新」，且多个弹窗几乎同时打开时，入栈顺序与各 watch 的触发顺序严格一致，
+      // 语义更贴合「DOM 已更新」，且多个层叠元素几乎同时打开时，入栈顺序与各 watch 的触发顺序严格一致，
       // 不会因宏任务排队时机与其它异步逻辑交织而错序。
       void nextTick(() => {
         if (overlayRef.value) {
-          activeModalOverlays.add(overlayRef.value);
-          updateGlobalInertState();
+          registerOverlay(overlayRef.value);
         }
       });
     }
@@ -391,10 +353,9 @@ const handleKeydownTrap = (e: KeyboardEvent) => {
 onBeforeUnmount(() => {
   clearListeners();
   if (overlayRef.value) {
-    activeModalOverlays.delete(overlayRef.value);
-    updateGlobalInertState();
+    unregisterOverlay(overlayRef.value);
   }
-  isBodyLocked.value = activeModalOverlays.size > 0;
+  isBodyLocked.value = hasActiveOverlays() > 0;
 });
 
 // 统一关闭入口：加载中禁止关闭，并支持 beforeClose 拦截；reason 标识关闭来源

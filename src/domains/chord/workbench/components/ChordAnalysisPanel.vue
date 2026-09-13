@@ -1,13 +1,18 @@
 <template>
   <template v-if="hasNotes">
     <div class="flex min-h-0 w-full flex-row items-stretch gap-2 overflow-hidden">
-      <div v-grid-nav class="flex min-h-0 min-w-0 flex-[0_0_56%] flex-wrap content-start gap-1 overflow-y-auto p-1">
+      <div
+        v-grid-nav
+        :class="candidatesOnly ? 'min-h-0 w-full' : 'min-h-0 min-w-0 flex-[0_0_56%]'"
+        class="flex flex-wrap content-start gap-1 overflow-y-auto p-1"
+      >
         <template v-if="candidates.length > 0">
           <BaseBadge
             v-wave
             v-for="candidate in candidates"
             :appearance="isCandidateActive(candidate) ? 'filled' : 'subtle'"
             :key="candidate.chordName"
+            :title="candidate.chordName"
             :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
             @click="handleSelectCandidate(candidate)"
             interactive
@@ -19,46 +24,49 @@
         <Feedback v-else bordered description="暂无匹配和弦" icon="search-x" size="sm" />
       </div>
 
-      <div class="my-0 h-auto w-px shrink-0 self-stretch bg-border-light" />
+      <template v-if="!candidatesOnly">
+        <div class="my-0 h-auto w-px shrink-0 self-stretch bg-border-light" />
 
-      <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-1 p-0.5">
-        <div
-          v-wave
-          v-for="note in notes"
-          :class="[
-            note.isRoot
-              ? 'border-tint-warning-65 bg-tint-warning-90 hover:border-tint-warning-78 hover:bg-tint-warning-88'
-              : 'border-border-light bg-surface-body hover:border-border-base hover:bg-surface-panel-hover',
-          ]"
-          :key="note.stringIndex"
-          class="flex min-w-0 shrink-0 items-center justify-between gap-1.5 rounded-md border px-1.5 py-1 transition-colors select-none"
-        >
-          <div class="flex min-w-0 shrink-0 items-center gap-1">
-            <span
-              :class="note.isRoot ? 'font-bold text-warning' : 'text-fg-disabled'"
-              class="shrink-0 text-2xs font-semibold whitespace-nowrap"
-            >
-              {{ 6 - note.stringIndex }}弦
-            </span>
-            <span
-              :class="note.isRoot ? 'font-extrabold text-warning' : 'font-bold text-fg-title'"
-              class="shrink-0 text-xs whitespace-nowrap"
-            >
-              <span v-chord-name="note.label" />
-            </span>
-          </div>
-
-          <BaseBadge
-            :appearance="note.isRoot ? 'filled' : 'subtle'"
-            :class="note.isRoot ? 'shadow-[0_1px_4px_rgba(255,149,0,0.5)]' : undefined"
-            :variant="note.isRoot ? 'warning' : 'neutral'"
-            class="font-mono tabular-nums"
-            size="xs"
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-1 p-0.5">
+          <div
+            v-wave
+            v-for="note in notes"
+            :class="[
+              note.isRoot
+                ? 'border-tint-warning-65 bg-tint-warning-90 hover:border-tint-warning-78 hover:bg-tint-warning-88'
+                : 'border-border-light bg-surface-body hover:border-border-base hover:bg-surface-panel-hover',
+            ]"
+            :key="note.stringIndex"
+            class="flex min-w-0 shrink-0 items-center justify-between gap-1.5 rounded-md border px-1.5 py-1 transition-colors select-none"
           >
-            <span v-chord-name="{ degrees: noteDegrees(note) }" class="font-bold" />
-          </BaseBadge>
+            <div class="flex min-w-0 shrink-0 items-center gap-1">
+              <span
+                :class="note.isRoot ? 'font-bold text-warning' : 'text-fg-disabled'"
+                class="shrink-0 text-2xs font-semibold whitespace-nowrap"
+              >
+                {{ 6 - note.stringIndex }}弦
+              </span>
+              <span
+                :class="note.isRoot ? 'font-extrabold text-warning' : 'font-bold text-fg-title'"
+                class="shrink-0 text-xs whitespace-nowrap"
+              >
+                <span v-chord-name="note.label" />
+              </span>
+            </div>
+
+            <BaseBadge
+              :appearance="note.isRoot ? 'filled' : 'subtle'"
+              :class="note.isRoot ? 'shadow-[0_1px_4px_rgba(255,149,0,0.5)]' : undefined"
+              :title="`${6 - note.stringIndex}弦 音级`"
+              :variant="note.isRoot ? 'warning' : 'neutral'"
+              class="font-mono tabular-nums"
+              size="xs"
+            >
+              <span v-chord-name="{ degrees: noteDegrees(note) }" class="font-bold" />
+            </BaseBadge>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
   </template>
 
@@ -100,6 +108,11 @@ interface RenderNoteItem extends NoteInput {
   intervalAccidental: '' | 'b' | '#';
   canAccidentalToggle: boolean;
 }
+
+/** 仅显示候选区（用于抽屉等狭窄场景），隐藏右侧按音分析列 */
+defineProps<{
+  candidatesOnly?: boolean;
+}>();
 
 const editorStore = useChordEditorStore();
 

@@ -1,4 +1,4 @@
-﻿import { createPinia, setActivePinia } from 'pinia';
+import { createPinia, setActivePinia } from 'pinia';
 import { describe, expect, it } from 'vitest';
 
 import { sanitizePersistedData } from '@/app/services/validation/persistedData';

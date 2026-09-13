@@ -9,11 +9,11 @@
     width="w-wide"
   >
     <template #header-extra>
-      <ActionButton @click="goToWorkbenchToCreate()" color="primary" icon="plus" label="新建和弦" variant="subtle" />
+      <ActionButton @click="openCreateDrawer()" color="primary" icon="plus" label="新建和弦" variant="subtle" />
     </template>
 
     <div class="chord-picker-wrapper relative flex h-full flex-col overflow-hidden">
-      <div class="picker-fixed-header flex shrink-0 flex-col gap-md">
+      <div class="picker-fixed-header relative z-10 flex shrink-0 flex-col gap-md shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
         <div class="picker-controls-row flex flex-wrap items-center justify-between gap-sm p-1 sm:gap-lg">
           <div class="search-input-wrapper min-w-[200px] flex-1 sm:max-w-64">
             <BaseInput
@@ -91,7 +91,7 @@
               >
                 {{ section.title }}
               </span>
-              <BaseBadge> {{ section.chords.length }} </BaseBadge>
+              <BaseBadge :title="`${section.chords.length} 个和弦`"> {{ section.chords.length }} </BaseBadge>
             </div>
             <TransitionGroup
               :aria-label="`${section.title} 和弦组`"
@@ -122,7 +122,7 @@
                   :tabindex="editHoverMap.get(chord.id) ? 0 : -1"
                   @mousedown.stop
                   @pointerdown.stop
-                  @click.stop="goToWorkbenchToEdit(chord)"
+                  @click.stop="openEditDrawer(chord)"
                   icon-only
                   aria-label="去修改该和弦"
                   class="picker-edit-btn pointer-events-auto absolute top-1 right-1 z-float p-1.5! opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100"
@@ -171,11 +171,11 @@
         @click="scrollToBottom()"
         disabled-teleport
         align="end"
-        aria-label="滚动到底部查看全部和弦"
+        aria-label="滚动到底部"
         bottom="1rem"
         icon="chevron-down"
         position="absolute"
-        tooltip="滚动到底部查看全部和弦"
+        tooltip="滚动到底部"
       />
     </div>
 
@@ -223,12 +223,17 @@
       </div>
     </template>
   </BaseModal>
+
+  <!-- 和弦编辑抽屉：新建/编辑就地完成，不跳转工作台；选择器保持打开，保存后列表经响应式自动刷新 -->
+  <ChordEditorDrawer
+    v-model:visible="editorDrawerVisible"
+    :editing-chord="editorDrawerChord"
+    :preset-group-id="selectedGroupId"
+  />
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onDeactivated, reactive, ref, useTemplateRef, watch } from 'vue';
-
-import { useRouter } from 'vue-router';
 
 import KeySelector from '@/domains/chord/components/KeySelector.vue';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
@@ -239,9 +244,8 @@ import BaseFab from '@/platform/ui/floating-bar/BaseFab.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
-import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
-import { getGroupSortKey, toGroupId } from '@/domains/chord/theory/entityFactories';
+import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
 import {
   computeChordFingerprint,
   getChordName,
@@ -256,8 +260,9 @@ import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
 import { useResponsive } from '@/platform/composables/useResponsive';
 import { isDark } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
-import { useUiStore } from '@/platform/store/uiStore';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle';
+
+import ChordEditorDrawer from './ChordEditorDrawer.vue';
 
 import type { Chord } from '@/domains/chord/types';
 
@@ -292,11 +297,8 @@ const visibleModel = computed({
   get: () => props.visible,
   set: val => emit('update:visible', val),
 });
-const router = useRouter();
-const editorStore = useChordEditorStore();
 const chordStore = useChordStore();
 const scoreEditor = useScoreEditorStore();
-const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
 const { chordsLookupMap } = useScoreLinesData();
 
@@ -609,32 +611,20 @@ const handleSelectChord = (chord: Chord) => {
 };
 
 /**
- * 用户点击"新建和弦"：关闭弹窗并重置编辑器后跳转工作台；
+ * 用户点击"新建和弦"：就地打开和弦编辑抽屉（不跳转工作台）；
  * 若当前选中的是具体分组，则把新和弦草稿预归入该组
  */
-const goToWorkbenchToCreate = () => {
-  visibleModel.value = false;
-  // 工作台的和弦编辑依赖左侧栏（分组树/草稿上下文），跳转前确保侧栏展开
-  uiStore.isLeftOpen = true;
-  editorStore.resetEditor();
-  if (selectedGroupId.value && selectedGroupId.value !== 'ALL') {
-    chordStore.selectAndExpandGroup(selectedGroupId.value);
-    editorStore.draftChord.groupId = toGroupId(selectedGroupId.value);
-  } else {
-    chordStore.collapseAllGroups();
-    chordStore.setSelectedGroupId(null);
-  }
-  router.push('/');
+const editorDrawerVisible = ref(false);
+const editorDrawerChord = ref<Chord | null>(null);
+const openCreateDrawer = () => {
+  editorDrawerChord.value = null;
+  editorDrawerVisible.value = true;
 };
 
-/** 用户点击卡片上的编辑按钮：关闭弹窗并加载该和弦到工作台编辑 */
-const goToWorkbenchToEdit = (chord: Chord) => {
-  visibleModel.value = false;
-  // 工作台的和弦编辑依赖左侧栏（分组树/草稿上下文），跳转前确保侧栏展开
-  uiStore.isLeftOpen = true;
-  editorStore.setEditor(chord);
-  chordStore.selectAndExpandGroup(chord.groupId);
-  router.push('/');
+/** 用户点击卡片上的编辑按钮：打开和弦编辑抽屉加载该和弦（不跳转工作台） */
+const openEditDrawer = (chord: Chord) => {
+  editorDrawerChord.value = chord;
+  editorDrawerVisible.value = true;
 };
 
 /** 用户点击 footer 跳转 chip：平滑滚动到指定分区并将其标记为激活 */

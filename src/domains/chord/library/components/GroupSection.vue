@@ -19,7 +19,7 @@
                class/data-*/aria-* 经 $attrs 落到头部按钮本体（拖拽把手、键盘导航标记、状态 tint）。
                px-3 覆盖内置 px-2：Tailwind 同工具类按数值升序产出，px-3 必然在样式表中靠后 -->
           <BaseCollapse
-            v-scroll-into-view.y="group.id === chordStore.selectedGroupId"
+            v-scroll-into-view.y.settle="group.id === editorStore.draftChord.groupId"
             :aria-label="groupTitleAriaLabel(group)"
             :class="[
               'group-title-row h-[2.4rem] border border-transparent px-3 transition-all duration-fast hover:border-border-base',
@@ -31,7 +31,6 @@
             @update:expanded="chordActions.executeGroupToggle(group)"
             data-focusable-inline
             unpadded
-            chevron-side="start"
           >
             <template #title>
               <div v-marquee.fade title="点击折叠/展开分组">
@@ -47,7 +46,7 @@
                   :aria-label="`按${getSortLabel(group)}自动排序`"
                   appearance="outline"
                   class="opacity-80"
-                  size="xs"
+                  size="2xs"
                   title="排序方法"
                   variant="neutral"
                   width="2rem"
@@ -58,8 +57,9 @@
                 <BaseBadge
                   :appearance="isGroupContentOpen(group) ? 'subtle' : 'filled'"
                   :aria-label="chordCountAriaLabel(group)"
+                  :title="`${getGroupChordsCount(group.id)} 个和弦`"
                   class="font-mono"
-                  size="xs"
+                  size="2xs"
                   variant="neutral"
                   width="1.5rem"
                 >

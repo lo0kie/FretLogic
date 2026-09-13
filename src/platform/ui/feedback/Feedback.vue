@@ -13,7 +13,7 @@
     <div :class="[zoneClass, toneClass]" class="icon-zone shrink-0">
       <slot :size="iconSize" name="icon">
         <img
-          v-if="!isLoadingState && !isImageError"
+          v-if="image && !isLoadingState && !isImageError"
           :src="image"
           @error="isImageError = true"
           alt=""

@@ -97,6 +97,14 @@
 // =============================================================================
 // 4. 向上滑动淡入淡出 (Slide Up) - 全局轻提示 Toast / 底部抽屉
 // =============================================================================
+// -move 必须声明在 enter/leave-active 之前：三者同为单类特异性，源顺序靠后者获胜。
+// TransitionGroup 的 FLIP 会把 flex 容器中的离场元素（转为 absolute 后静态位置存在
+// 亚像素偏移）误判为位移项并追加 -move 类；若 -move 排在后面，其 transition: transform
+// 会整个顶掉 leave-active 的 opacity+transform 过渡，导致 opacity 瞬间跳变（消失无动画）。
+.v-transition-slide-up-move {
+  transition: transform $duration-base $bezier-spring;
+}
+
 .v-transition-slide-up-enter-active,
 .v-transition-slide-up-leave-active {
   transition:
@@ -121,13 +129,14 @@
   opacity: 1;
 }
 
-.v-transition-slide-up-move {
-  transition: transform $duration-base $bezier-spring;
-}
-
 // =============================================================================
 // 5. 向下滑动淡入淡出 (Slide Down) - 顶部通知 Toast / 顶部下拉横幅
 // =============================================================================
+// -move 必须声明在 enter/leave-active 之前（原因同第 4 节注释）
+.v-transition-slide-down-move {
+  transition: transform $duration-base $bezier-spring;
+}
+
 .v-transition-slide-down-enter-active,
 .v-transition-slide-down-leave-active {
   transition:
@@ -157,13 +166,14 @@
   opacity: 1;
 }
 
-.v-transition-slide-down-move {
-  transition: transform $duration-base $bezier-spring;
-}
-
 // =============================================================================
 // 6. 列表 FLIP 排版平移动画 (List Move) - 用于 TransitionGroup 列表增删/重排
 // =============================================================================
+// -move 必须声明在 enter/leave-active 之前（原因同第 4 节注释）
+.v-transition-list-move {
+  transition: transform $duration-base $bezier-sidebar;
+}
+
 .v-transition-list-enter-active,
 .v-transition-list-leave-active {
   transition:
@@ -187,6 +197,59 @@
   opacity: 1;
 }
 
-.v-transition-list-move {
-  transition: transform $duration-base $bezier-sidebar;
+// =============================================================================
+// 7. 抽屉滑入滑出 (Drawer) - 遮罩渐隐 + 面板沿贴边方向滑入滑出（4 个方位）
+// 遮罩层 opacity 过渡在容器上，面板 transform 过渡在 .drawer-panel 上，
+// 命名与 BaseDrawer 的 placement 动态 Transition name（v-drawer-*）一一对应
+// =============================================================================
+.drawer-panel {
+  transition: transform $duration-slow $bezier-standard;
+  will-change: transform;
+}
+
+.v-drawer-right-enter-active,
+.v-drawer-right-leave-active,
+.v-drawer-left-enter-active,
+.v-drawer-left-leave-active,
+.v-drawer-top-enter-active,
+.v-drawer-top-leave-active,
+.v-drawer-bottom-enter-active,
+.v-drawer-bottom-leave-active {
+  transition: opacity $duration-slow $bezier-standard;
+}
+
+.v-drawer-right-enter-from,
+.v-drawer-right-leave-to {
+  opacity: 0;
+
+  .drawer-panel {
+    transform: translateX(100%);
+  }
+}
+
+.v-drawer-left-enter-from,
+.v-drawer-left-leave-to {
+  opacity: 0;
+
+  .drawer-panel {
+    transform: translateX(-100%);
+  }
+}
+
+.v-drawer-top-enter-from,
+.v-drawer-top-leave-to {
+  opacity: 0;
+
+  .drawer-panel {
+    transform: translateY(-100%);
+  }
+}
+
+.v-drawer-bottom-enter-from,
+.v-drawer-bottom-leave-to {
+  opacity: 0;
+
+  .drawer-panel {
+    transform: translateY(100%);
+  }
 }

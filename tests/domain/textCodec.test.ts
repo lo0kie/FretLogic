@@ -66,6 +66,7 @@ const makeSong = (): { song: Song; byId: Map<ChordId, Chord> } => {
     song: {
       id: 's_test' as Song['id'],
       title: '测试歌',
+      singer: '',
       lyrics: '第一行歌词\n第二行歌词',
       lineIds: ['l1' as Song['lineIds'][number], 'l2' as Song['lineIds'][number]],
       playKey: 'C',
@@ -317,5 +318,42 @@ describe('textCodec 乐谱往返', () => {
     expect(result.data.slots).toHaveLength(2);
     expect(result.data.slots[0]?.chord.name).toBe('C');
     expect(result.data.slots[1]?.chord.name).toBe('G');
+  });
+
+  it('singer 序列化为 SINGER: 行并往返一致；无 singer 的旧格式解析为空串', () => {
+    const { song, byId } = makeSong();
+    const withSinger: Song = { ...song, singer: '周杰伦' };
+    const serialized = serializeSongToText(withSinger, id => byId.get(id));
+    expect(serialized).toContain('SINGER:周杰伦');
+
+    const result = parseSongFromText(serialized);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.singer).toBe('周杰伦');
+
+    // 旧格式文本无 SINGER 行：解析结果 singer 为空串（向后兼容）
+    const legacy = parseSongFromText(serializeSongToText(song, id => byId.get(id)));
+    expect(legacy.ok).toBe(true);
+    if (!legacy.ok) return;
+    expect(legacy.data.singer).toBe('');
+  });
+
+  it('智能宽容导入：ChordPro {artist:} / {singer:} 指令识别为歌手', () => {
+    const raw = ['{title: 晴天}', '{artist: 周杰伦}', '{singer: 周杰伦}', '故事的小黄花', '童年的荡秋千'].join('\n');
+    const result = parseSongFromText(raw);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.singer).toBe('周杰伦');
+    expect(result.data.lyrics).toBe('故事的小黄花\n童年的荡秋千');
+  });
+
+  it('智能宽容导入：首行 歌手：xxx 识别为歌手并视为结构信号', () => {
+    const raw = ['歌手：周杰伦', '第一行歌词', '第二行歌词'].join('\n');
+    const result = parseSongFromText(raw);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.singer).toBe('周杰伦');
+    expect(result.data.needsConfirm).toBe(false);
+    expect(result.data.lyrics).toBe('第一行歌词\n第二行歌词');
   });
 });

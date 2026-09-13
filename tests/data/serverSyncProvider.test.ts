@@ -1,4 +1,4 @@
-﻿import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createServerSyncProvider } from '@/app/services/sync/serverSyncProvider';
 
@@ -39,6 +39,23 @@ describe('server sync provider', () => {
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['X-Environment']).toBeDefined();
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+  });
+
+  it('carries Bearer token on push when configured, but not on pull/exists', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 200, headers: { etag: 'etag-9' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const withToken = createServerSyncProvider({ ...config, token: 'srv-token-abc' });
+
+    await withToken.push(payload);
+    const pushInit = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((pushInit.headers as Record<string, string>)['Authorization']).toBe('Bearer srv-token-abc');
+
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(jsonResponse(payload));
+    await withToken.pull();
+    const pullInit = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((pullInit.headers as Record<string, string>)['Authorization']).toBeUndefined();
   });
 
   it('pulls and validates remote content', async () => {

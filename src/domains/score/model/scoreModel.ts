@@ -161,6 +161,7 @@ export const toSongId = (value: string): SongId => value as SongId;
 export const createSong = (title: string): Song => ({
   id: toSongId('s_' + generateUUID().slice(0, 8)),
   title: title.trim() || '未命名乐谱',
+  singer: '',
   lyrics: '',
   playKey: 'C',
   capo: 0,

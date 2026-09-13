@@ -673,6 +673,14 @@ defineExpose({ scoreZoneRef, expandNextBatch, handleScrollToBottom });
   contain-intrinsic-size: 0 120px;
 }
 
+/* 字符盒 min-* 基线显式归零：min-width/min-height 初始值为 auto，
+   auto 与长度之间无法插值（过渡按离散翻转，表现为瞬间跳变）；
+   归零后 .is-drop-widened 的 0.12s 撑开过渡才能真实生效（收拢回落到本基线同样平滑） */
+.char-box {
+  min-width: 0;
+  min-height: 0;
+}
+
 /* 拖拽期间仅当前活动落点行空字符槽/添加槽统一撑开：
    与 ChordSlotCell.vue 保持完全一致的尺寸过渡，保证落点分区有充裕高度且无外边距抖动闪烁 */
 .is-drop-widened {

@@ -34,6 +34,8 @@ export interface PortableSongSlot {
 /** 跨实例乐谱载荷 */
 export interface PortableSong {
   title: string;
+  /** 歌手（纯展示元数据，空串表示无；旧格式文本解析结果为空串） */
+  singer: string;
   playKey: string;
   capo: Capo;
   lyrics: string;
@@ -77,7 +79,7 @@ const hasScoreStructuralMarker = (text: string): boolean => {
   }
   const firstLine = text.trimStart().split('\n')[0]?.trim() ?? '';
   if (DIRECTIVE_REGEX.test(firstLine)) return true;
-  return /^(?:歌名|曲名|Title)\s*[:：]/.test(firstLine);
+  return /^(?:歌名|曲名|Title|歌手|演唱)\s*[:：]/.test(firstLine);
 };
 
 /**
@@ -90,6 +92,7 @@ const parsePlainLyricsFromText = (text: string): PortableSong | null => {
   if (meaningfulLines.length < 2 || text.trim().length < 6) return null;
   return {
     title: '',
+    singer: '',
     playKey: 'C',
     capo: 0,
     lyrics: lines.join('\n'),
@@ -119,6 +122,7 @@ const createFallbackPortableChord = (name: string): PortableChord => {
 const parseSmartSongFromText = (text: string): PortableSong | null => {
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
   let title = '';
+  let singer = '';
   let playKey = 'C';
   let capoNum = 0;
   const cleanLyricsLines: string[] = [];
@@ -142,16 +146,24 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
       const key = dirMatch[1]?.toLowerCase();
       const val = dirMatch[2]?.trim() ?? '';
       if (key === 'title' || key === 't') title = val;
+      else if (key === 'artist' || key === 'singer') singer = val;
       else if (key === 'key') playKey = val;
       else if (key === 'capo') capoNum = Number(val);
       continue;
     }
 
-    // 检查是否有首行标记，如 歌名：xxx / Title: xxx
+    // 检查是否有首行标记，如 歌名：xxx / 歌手：xxx / Title: xxx
     if (cleanLyricsLines.length === 0 && !title) {
       const titleMatch = /^(?:歌名|曲名|Title)\s*[:：]\s*(.*)$/i.exec(trimmed);
       if (titleMatch) {
         title = titleMatch[1]?.trim() ?? '';
+        continue;
+      }
+    }
+    if (cleanLyricsLines.length === 0 && !singer) {
+      const singerMatch = /^(?:歌手|演唱)\s*[:：]\s*(.*)$/i.exec(trimmed);
+      if (singerMatch) {
+        singer = singerMatch[1]?.trim() ?? '';
         continue;
       }
     }
@@ -191,6 +203,7 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
 
   return {
     title,
+    singer,
     playKey,
     capo: clamp(Number.isFinite(capoNum) ? capoNum : 0, 0, 12) as Capo,
     lyrics: cleanLyricsLines.join('\n'),
@@ -200,18 +213,21 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
 
 /** 序列化乐谱为文字（含歌词与全部和弦槽位，按字典化紧凑格式输出） */
 export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord | undefined): string => {
-  const lines = [HEADER_SONG, `TITLE:${song.title}`, `PLAYKEY:${song.playKey}`, `CAPO:${song.capo}`];
+  // singer 兼容容错：旧调用方/旧测试手写的 Song 可能没有该字段（?? '' 防止序列化出 SINGER:undefined）
+  const lines = [HEADER_SONG, `TITLE:${song.title}`];
+  if (song.singer) lines.push(`SINGER:${song.singer}`);
+  lines.push(`PLAYKEY:${song.playKey}`, `CAPO:${song.capo}`);
 
   const steps = extractSongChordSequence(song, resolver);
   if (steps.length > 0) {
     lines.push('CHORDS:');
-    // 字典化：按和弦字段去重，提取 alias 映射
+    // 字典化：按和弦 id 去重（同一和弦复用共享一个 alias；不同和弦即使同名同指法也各自独立条目），提取 alias 映射
     const chordDict = new Map<string, { key: string; chord: Chord }>();
     const usedKeys = new Set<string>();
 
     for (const step of steps) {
-      const fields = serializeChordFields(step.chord);
-      if (!chordDict.has(fields)) {
+      const chordId = step.chordId;
+      if (!chordDict.has(chordId)) {
         const baseName = getChordName(step.chord, { useUnicode: false }) || 'Chord';
         let key = baseName;
         let counter = 2;
@@ -219,12 +235,12 @@ export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord
           key = `${baseName}_${counter++}`;
         }
         usedKeys.add(key);
-        chordDict.set(fields, { key, chord: step.chord });
+        chordDict.set(chordId, { key, chord: step.chord });
       }
     }
 
-    for (const [fields, { key }] of chordDict) {
-      lines.push(`${key}=${fields}`);
+    for (const [, { key, chord }] of chordDict) {
+      lines.push(`${key}=${serializeChordFields(chord)}`);
     }
 
     lines.push('LYRICS:');
@@ -234,8 +250,7 @@ export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord
     for (const step of steps) {
       const lineIdx = (song.lineIds ?? []).indexOf(step.lineId as LineId);
       if (lineIdx === -1) continue;
-      const fields = serializeChordFields(step.chord);
-      const alias = chordDict.get(fields)?.key ?? '';
+      const alias = chordDict.get(step.chordId)?.key ?? '';
       lines.push(`${lineIdx}:${step.type}:${step.index}:${alias}`);
     }
   } else {
@@ -268,6 +283,7 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
   }
 
   let title = '';
+  let singer = '';
   let playKey = 'C';
   let capoNum = 0;
   const lyricsLines: string[] = [];
@@ -282,6 +298,8 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
     if (section === 'header') {
       if (trimmed.startsWith('TITLE:')) {
         title = trimmed.slice(6).trim();
+      } else if (trimmed.startsWith('SINGER:')) {
+        singer = trimmed.slice(7).trim();
       } else if (trimmed.startsWith('PLAYKEY:')) {
         playKey = trimmed.slice(8).trim();
       } else if (trimmed.startsWith('CAPO:')) {
@@ -349,6 +367,7 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
     ok: true,
     data: {
       title,
+      singer,
       playKey,
       capo: clamp(Number.isFinite(capoNum) ? capoNum : 0, 0, 12) as Capo,
       lyrics,

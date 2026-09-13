@@ -18,11 +18,12 @@
         >
           <BaseBadge
             v-if="cardData.hasVariants"
+            :title="variantBadgeTitle"
             :variant="isActive ? 'primary' : 'neutral'"
             @click.stop="toggleVariantsDropdown()"
             appearance="filled"
-            class="absolute -top-1.5 -right-1.5 z-card cursor-pointer border border-surface-body shadow-sm transition-all duration-fast ease-bounce"
-            size="xs"
+            class="absolute -top-1 -right-1 z-card cursor-pointer border border-surface-body shadow-sm transition-all duration-fast ease-bounce"
+            size="2xs"
           >
             <span v-if="isActive"> {{ activeVariantIndex + 1 }}/{{ cardData.variantCount }} </span>
             <span v-else> {{ cardData.variantCount }} </span>
@@ -83,6 +84,13 @@ const activeVariantIndex = computed(() => {
   }
   return localVariantIndex.value;
 });
+
+/** 指法徽标悬停提示：当前展示的第几个指法 */
+const variantBadgeTitle = computed(() =>
+  props.isActive
+    ? `第 ${activeVariantIndex.value + 1}/${props.cardData.variantCount} 指法`
+    : `${props.cardData.variantCount} 个指法`
+);
 
 const activeChord = computed(() => {
   return props.cardData.variants[activeVariantIndex.value] ?? props.cardData.mainChord;

@@ -57,6 +57,10 @@ export const SCORE_EXPORT_CONFIG = {
   FRET_NUMBER_X_OFFSET: 3.8,
   /** 标题字号（px） */
   TITLE_FONT_SIZE: 32,
+  /** 歌手副标题字号（px，仅 singer 非空时绘制于标题下方） */
+  SINGER_SUBTITLE_FONT_SIZE: 18,
+  /** 歌手副标题与标题/元信息行之间的垂直间距（px） */
+  SINGER_SUBTITLE_GAP: 10,
   /** 元信息（调号/变调夹）字号（px，加大） */
   META_FONT_SIZE: 18,
   /** 元信息调号升降号上标字号（px） */
@@ -69,10 +73,10 @@ export const SCORE_EXPORT_CONFIG = {
   SPACE_CHAR_WIDTH: 18,
   /** 普通汉字/单字基准列宽（px） */
   REGULAR_CHAR_WIDTH: 30,
-  /** 指板槽位额外列宽补偿（px） */
-  CHORD_COLUMN_EXTRA_PAD: 8,
+  /** 指板槽位额外列宽补偿（px；指板居中于槽位，故实际表现为左右各半的边距） */
+  CHORD_COLUMN_EXTRA_PAD: 4,
   /** 行内连续和弦间距（px） */
-  INLINE_CHORD_GAP: 10,
+  INLINE_CHORD_GAP: 0,
   /** 边和弦与歌词正文间距（px） */
   EDGE_CHORD_SECTION_GAP: 6,
   /** 指板图底部与歌词字符之间的垂直间距（px，保持紧贴连贯） */

@@ -23,6 +23,7 @@ export type ScrollIntoViewModifiers =
   | 'once'
   | 'mountOnly'
   | 'keepAlive'
+  | 'settle'
   | (string & Record<never, never>);
 
 export interface ScrollIntoViewOptions {
@@ -38,8 +39,15 @@ export interface ScrollIntoViewOptions {
   behavior?: ScrollBehavior;
   /** 是否仅在初次挂载时触发，后续激活态更新不重复触发 */
   once?: boolean;
-  /** 是否在宿主组件被 KeepAlive 缓存后重新激活时再次滚动（需显式 .keep-alive 修饰符开启） */
+  /**
+   * 是否在宿主组件被 KeepAlive 缓存后重新激活时再次滚动（需显式 .keep-alive 修饰符开启）
+   */
   keepAlive?: boolean;
+  /**
+   * 激活期间监视元素尺寸变化（如折叠/展开过渡），待布局稳定后自动重滚，保证异步展开后仍定位正确。
+   * 需显式 .settle 修饰符开启；once 模式下不生效。
+   */
+  settle?: boolean;
   /** 延迟触发时间（毫秒），如需等待折叠过渡动画完成时使用 */
   delay?: number;
 }
@@ -87,6 +95,11 @@ const normalizeOptions = (
 
     if (modifiers['once'] || modifiers['mountOnly'] || modifiers['mount_only']) {
       opts.once = true;
+    }
+
+    // 布局稳定后自动重滚（解决折叠/展开过渡期间触发导致定位到半展开位置的问题）
+    if (modifiers['settle']) {
+      opts.settle = true;
     }
 
     // KeepAlive 缓存激活后再次滚动需显式 .keep-alive 修饰符开启，不作默认行为。
@@ -190,6 +203,82 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
   }
 };
 
+// ==================== .settle：异步布局稳定后自愈重滚 ====================
+// 用于折叠/展开过渡这类「激活时元素尺寸尚未定型」的场景：激活期间监视目标元素的
+// ResizeObserver，去抖地重滚一次，弥补 mounted/updated 用过渡中准高度定位导致的偏差。
+
+/** 尺寸变化去抖时长（ms）：连续变化内只记一次，停止变化后才触发重滚，避免过渡期间抖动多次滚动。 */
+const SETTLE_DEBOUNCE_MS = 150;
+
+interface SettleTracker {
+  ro: ResizeObserver | null;
+  debounceTimer: number | null;
+  // 承接最新配置：updated 时回写，激活回调读取实时值
+  optsRef: { current: ScrollIntoViewOptions };
+}
+
+const settleMap = new WeakMap<HTMLElement, SettleTracker>();
+
+/** 开始/保持对元素尺寸变化的去抖重滚监视（仅在 settle 且激活且非 once 时生效）。 */
+const settleStart = (el: HTMLElement, opts: ScrollIntoViewOptions) => {
+  let tracker = settleMap.get(el);
+  if (!tracker) {
+    tracker = { ro: null, debounceTimer: null, optsRef: { current: opts } };
+    settleMap.set(el, tracker);
+  } else {
+    tracker.optsRef.current = opts;
+  }
+
+  // 未开启 settle、once 模式或处于非激活态时，不响应尺寸变化
+  if (!opts.settle || opts.once || !opts.active) return;
+  // 每次激活都重建一次性观察器：丢弃上一次激活残留实例，避免「激活时已展开无 resize、
+  // 观察器存续」的边界下后续手动开合又触发滚动
+  if (tracker.ro) {
+    tracker.ro.disconnect();
+    tracker.ro = null;
+  }
+
+  tracker.ro = new ResizeObserver(() => {
+    const latest = settleMap.get(el)?.optsRef.current;
+    if (!latest?.active) return;
+    if (tracker.debounceTimer !== null) clearTimeout(tracker.debounceTimer);
+    tracker.debounceTimer = window.setTimeout(() => {
+      tracker.debounceTimer = null;
+      // 待尺寸稳定后按当前激活态重滚（非挂载，走默认 smooth/auto 语义）
+      executeScroll(el, latest, false);
+      // 一次性修正：仅弥补「激活时用半展开高度定位」的偏差；修正后即停，
+      // 避免后续（如手动开合）对选中项的再次 resize 也触发滚动
+      settleStop(el);
+    }, SETTLE_DEBOUNCE_MS);
+  });
+  tracker.ro.observe(el);
+};
+
+/** `updated` 或 `unmounted` 时刷新配置并存续监视（非激活即无需继续响应尺寸变化）。 */
+const settleUpdate = (el: HTMLElement, opts: ScrollIntoViewOptions) => {
+  const tracker = settleMap.get(el);
+  if (!tracker) return;
+  tracker.optsRef.current = opts;
+  if (!opts.settle || opts.once || !opts.active) {
+    settleStop(el);
+  } else if (tracker.ro) {
+    // 已激活并已观察：仅刷新配置即可，无需重建
+  }
+};
+
+/** 停用并释放尺寸监视。 */
+const settleStop = (el: HTMLElement) => {
+  const tracker = settleMap.get(el);
+  if (!tracker) return;
+  if (tracker.debounceTimer !== null) {
+    clearTimeout(tracker.debounceTimer);
+    tracker.debounceTimer = null;
+  }
+  tracker.ro?.disconnect();
+  tracker.ro = null;
+  settleMap.delete(el);
+};
+
 // Vue 内部生命周期钩子槽位：activated 存放在组件实例的 `a` 数组（LifecycleHooks.ACTIVATED），
 // KeepAlive 缓存激活时会调用该数组。指令本身无法注册 onActivated（仅 setup 可用），故借助
 // KeepAlive 直接子组件实例的 activated 钩子数组感知「组件被缓存后重新激活」。此为 Vue 运行时
@@ -275,6 +364,7 @@ export const vScrollIntoView: Directive<HTMLElement, ScrollIntoViewBinding, Scro
     if (isActive(binding.value)) {
       const opts = normalizeOptions(binding.value, binding.modifiers);
       executeScroll(el, opts, true);
+      settleStart(el, opts);
     }
     registerKeepAliveActivation(el, binding);
   },
@@ -287,6 +377,7 @@ export const vScrollIntoView: Directive<HTMLElement, ScrollIntoViewBinding, Scro
     }
 
     const opts = normalizeOptions(binding.value, binding.modifiers);
+    settleUpdate(el, opts);
     if (opts.once) return;
 
     const currentActive = isActive(binding.value);
@@ -294,9 +385,11 @@ export const vScrollIntoView: Directive<HTMLElement, ScrollIntoViewBinding, Scro
 
     if (currentActive && !previousActive) {
       executeScroll(el, opts, false);
+      settleStart(el, opts);
     }
   },
   unmounted(el) {
     unregisterKeepAliveActivation(el);
+    settleStop(el);
   },
 };

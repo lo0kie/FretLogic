@@ -185,10 +185,11 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
     },
   },
   server: {
-    resolveConfig: () => ({
+    resolveConfig: s => ({
       config: {
         kind: 'server',
         serverUrl: CLOUD_SYNC_CONFIG.SERVER_URL,
+        token: s.serverToken.trim() || undefined,
       },
     }),
     create: config => createServerSyncProvider(config as ServerSyncConfig),

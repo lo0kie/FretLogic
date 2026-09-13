@@ -44,6 +44,7 @@
     :role="badgeRole"
     :style="normalizedStyle"
     :tabindex="clickableNonButton ? 0 : undefined"
+    :title="resolvedTitle"
     :type="isNativeButton ? 'button' : undefined"
     @click="handleClick($event)"
     @keydown="handleKeydown($event)"
@@ -94,6 +95,7 @@ import { computed, useAttrs, useSlots, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { logger } from '@/platform/utils/logger';
+import { resolveTextTitle } from '@/platform/utils/slotText';
 
 import type { IconSizePreset, IconSizeValue } from '@/platform/ui/icons/iconSizes';
 
@@ -133,6 +135,8 @@ const props = withDefaults(
     width?: string | number;
     /** 角标偏移量 [x, y]，支持数值（px）或带单位字符串；仅提供 target 插槽时有意义 */
     offset?: [number | string, number | string];
+    /** 原生悬停提示文本 */
+    title?: string;
   }>(),
   {
     variant: 'neutral',
@@ -238,6 +242,9 @@ const truncatedContent = computed(() =>
 );
 
 const formattedContent = computed(() => truncatedContent.value ?? props.content);
+
+/** 悬停提示：显式 title > content > 默认插槽纯文本（与 ActionButton 保持同一套回退规则） */
+const resolvedTitle = computed(() => resolveTextTitle(props.title, props.content, slots['default']?.() ?? []));
 
 /** 通用无障碍描述：外部传入优先；其余仅在「可见文本不足以表意」时补齐 */
 const ariaLabelText = computed(() => {

@@ -22,6 +22,17 @@
         />
       </BaseFormRow>
 
+      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="歌手">
+        <BaseInput
+          v-model="songModals.modalData.singer"
+          :maxlength="MAX_SONG_NAME_LENGTH"
+          @enter="songModals.handleConfigSong"
+          clearable
+          placeholder="选填，导出图片表头会显示"
+          width="lg"
+        />
+      </BaseFormRow>
+
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="指法调 (Play)">
         <KeySelector v-model="songModals.modalData.playKey" width="md" />
       </BaseFormRow>

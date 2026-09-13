@@ -36,10 +36,12 @@ export interface ExportLineItem {
 
 export interface WorkerExportPayload {
   title: string;
+  /** 歌手（纯展示元数据；非空时表头在标题下绘制居中副标题行） */
+  singer?: string;
   keyText: string;
   capoText: string;
   lines: ExportLineItem[];
-  mode: 'normal' | 'a4';
+  mode: 'normal' | 'a4' | 'estimate';
   /** 画布配色（单一来源 tokens.scss 的 --fbc-* 变量，由主线程 resolveFretboardCanvasPalette 解析后传入；Worker 无 DOM 不能自取） */
   colors: FretboardCanvasPalette;
   layoutAlign?: 'start' | 'center';
@@ -51,6 +53,8 @@ export interface WorkerExportPayload {
   showBarre?: boolean;
   /** 是否显示页脚页码（缺省 true；仅 A4 分页模式生效） */
   showFooter?: boolean;
+  /** 忽略无和弦空格：该类空格不占列宽（缺省 false，保持既有排版） */
+  ignoreEmptySpace?: boolean;
   /** 歌词字重（缺省 regular 常规） */
   lyricsFontWeight?: ScoreLyricsFontWeight;
   /** 导出 JPEG 压缩质量（0.3~1，缺省 0.95） */
@@ -68,6 +72,7 @@ export type WorkerExportMessage =
       blobs: Blob[];
       /** a4 模式下每页覆盖的原始歌词行序号（升序去重），供外部按页重组内容；normal 模式为 undefined */ pageLineRanges?: number[][];
     }
+  | { type: 'estimate'; longImageBytes: number }
   | { type: 'error'; message: string };
 
 /** 输出图固定编码质量（导出质量设置已移除，预览与后续入口统一使用） */
@@ -140,6 +145,12 @@ const applyLayoutScales = (fontScale: number, fretboardScale: number): void => {
   mutableLayoutConfig.getExportFretboardWidth = (stringCount: number) =>
     BASE_GET_EXPORT_FRETBOARD_WIDTH(stringCount) * fretboardFactor;
 };
+
+/**
+ * 忽略无和弦空格开关（模块级，每次渲染消息写入）：
+ * 开启后此类空格列宽为 0——测量（软折行）与绘制共用 getCharColumnWidth，两处行为天然一致。
+ */
+let ignoreEmptySpace = false;
 
 /** 模块级 Token 解析缓存，避免同曲目内重复出现的和弦名反复正则分割 */
 const tokenCache = new Map<string, ChordNameToken[]>();
@@ -253,6 +264,8 @@ const NO_LINE_START_CHARS = new Set([
 /** 计算单个字符槽位所占用的总宽度（含半角/全角字符区分与指板图补偿） */
 function getCharColumnWidth(item: ExportCharItem): number {
   if (item.char === ' ' || item.char === '　') {
+    // 忽略无和弦空格：不占列宽（挂和弦的空格仍需占位以承载指板图）
+    if (!item.chord && ignoreEmptySpace) return 0;
     const spaceW = SCORE_EXPORT_CONFIG.SPACE_CHAR_WIDTH;
     return item.chord
       ? Math.max(SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH + SCORE_EXPORT_CONFIG.CHORD_COLUMN_EXTRA_PAD, spaceW)
@@ -661,17 +674,22 @@ function renderScoreLine(
   return { nextY: y + contentH + rowGap, width: currentX - startX };
 }
 
-/** 表头总高度（模块级预计算常量，onmessage 中直接引用，无需每次调用函数） */
-const HEADER_HEIGHT =
+/**
+ * 表头总高度：singer 非空时在标题下多绘制一行居中副标题（字号 + 上下间距）；
+ * 无 singer 时与既有表头高度完全一致（零回归）。
+ */
+const getHeaderHeight = (hasSinger: boolean): number =>
   SCORE_EXPORT_CONFIG.TITLE_FONT_SIZE +
   SCORE_EXPORT_CONFIG.TITLE_TO_META_GAP +
+  (hasSinger ? SCORE_EXPORT_CONFIG.SINGER_SUBTITLE_FONT_SIZE + SCORE_EXPORT_CONFIG.SINGER_SUBTITLE_GAP : 0) +
   SCORE_EXPORT_CONFIG.META_FONT_SIZE +
   SCORE_EXPORT_CONFIG.HEADER_BOTTOM_GAP;
 
-/** 绘制乐谱表头（标题、调号与变调夹，竖线分隔符严格与标题中心对齐，竖线采用弱化淡色） */
+/** 绘制乐谱表头（标题、可选歌手副标题、调号与变调夹，竖线分隔符严格与标题中心对齐，竖线采用弱化淡色） */
 function renderHeader(
   ctx: OffscreenCanvasRenderingContext2D,
   title: string,
+  singer: string,
   keyText: string,
   capoText: string,
   width: number,
@@ -687,6 +705,15 @@ function renderHeader(
   ctx.textAlign = 'center';
   ctx.fillText(title, centerX, y + SCORE_EXPORT_CONFIG.TITLE_FONT_SIZE);
   y += SCORE_EXPORT_CONFIG.TITLE_FONT_SIZE + SCORE_EXPORT_CONFIG.TITLE_TO_META_GAP;
+
+  // 1.5 歌手副标题（仅 singer 非空时绘制：标题下居中，弱化色与元信息行一致）
+  if (singer) {
+    ctx.font = `500 ${SCORE_EXPORT_CONFIG.SINGER_SUBTITLE_FONT_SIZE}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+    ctx.fillStyle = colors.SUB_TEXT;
+    ctx.textAlign = 'center';
+    ctx.fillText(singer, centerX, y + SCORE_EXPORT_CONFIG.SINGER_SUBTITLE_FONT_SIZE);
+    y += SCORE_EXPORT_CONFIG.SINGER_SUBTITLE_FONT_SIZE + SCORE_EXPORT_CONFIG.SINGER_SUBTITLE_GAP;
+  }
 
   // 2. 元信息行（竖线分隔符居中对齐 centerX，调号向左排布，变调夹向右排布）
   const baselineY = y + SCORE_EXPORT_CONFIG.META_FONT_SIZE;
@@ -746,11 +773,82 @@ function renderFooter(
   ctx.fillText(`第 ${pageIndex + 1} 页`, width / 2, height - pageMargin / 2);
 }
 
+/**
+ * 长图模式离屏渲染：自适应最宽行宽度绘制整曲为单张 JPEG，返回 Blob。
+ * 供「下载为长图」导出与「预估文件尺寸」估算两处复用——估算即真实渲染后取 blob.size，
+ * 因此预估值与最终导出文件字节数一致（仅取整误差）。
+ */
+async function renderLongImageBlob(
+  lines: ExportLineItem[],
+  title: string,
+  singer: string,
+  keyText: string,
+  capoText: string,
+  colors: ThemeColors,
+  layoutAlign: 'start' | 'center',
+  showBarre: boolean,
+  lyricsFontWeight: number,
+  jpegQuality: number,
+  pageMargin: number
+): Promise<Blob> {
+  const availWidth = SCORE_EXPORT_CONFIG.NORMAL_CONTENT_MAX_WIDTH;
+  const allSegments = wrapScoreLines(lines, availWidth);
+
+  // 单次遍历同时计算：最宽段宽度、内容总高、行间距总高
+  let maxSegmentW = 0;
+  let totalContentH = 0;
+  let totalGapsH = 0;
+  for (let i = 0; i < allSegments.length; i++) {
+    const seg = allSegments[i]!;
+    const segW = getSegmentWidth(seg);
+    if (segW > maxSegmentW) maxSegmentW = segW;
+    totalContentH += seg.contentHeight;
+    if (i < allSegments.length - 1) {
+      totalGapsH += seg.isLastSubLine ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
+    }
+  }
+
+  const headerH = getHeaderHeight(Boolean(singer));
+  const canvasW = Math.max(SCORE_EXPORT_CONFIG.NORMAL_CANVAS_MIN_WIDTH, Math.round(maxSegmentW + pageMargin * 2));
+  const canvasH = pageMargin + headerH + totalContentH + totalGapsH + pageMargin;
+
+  const canvas = new OffscreenCanvas(
+    canvasW * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
+    canvasH * SCORE_EXPORT_CONFIG.PIXEL_RATIO
+  );
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(SCORE_EXPORT_CONFIG.PIXEL_RATIO, SCORE_EXPORT_CONFIG.PIXEL_RATIO);
+
+  ctx.fillStyle = colors.BG;
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  let curY: number = pageMargin;
+  curY = renderHeader(ctx, title, singer, keyText, capoText, canvasW, curY, colors);
+
+  for (let i = 0; i < allSegments.length; i++) {
+    const seg = allSegments[i]!;
+    const isLast = i === allSegments.length - 1;
+    const defaultGap = seg.isLastSubLine ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
+    const rowGap = isLast ? 0 : defaultGap;
+    const segW = getSegmentWidth(seg);
+    const isCenter = layoutAlign === 'center';
+    const startX = isCenter
+      ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) +
+        (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0)
+      : pageMargin + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
+    const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
+    curY = res.nextY;
+  }
+
+  return canvas.convertToBlob({ type: 'image/jpeg', quality: jpegQuality });
+}
+
 if (typeof self !== 'undefined') {
   self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
     try {
       const {
         title,
+        singer = '',
         keyText,
         capoText,
         lines,
@@ -761,6 +859,7 @@ if (typeof self !== 'undefined') {
         fretboardScale = 100,
         showBarre = true,
         showFooter = true,
+        ignoreEmptySpace: ignoreEmptySpaceMode = false,
         lyricsFontWeight: lyricsFontWeightMode = 'regular',
         exportQuality = EXPORT_JPEG_QUALITY,
         pageMargin = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
@@ -779,6 +878,9 @@ if (typeof self !== 'undefined') {
       // 排列和弦配置的缩放参数先于任何布局计算生效
       applyLayoutScales(fontScale, fretboardScale);
 
+      // 忽略无和弦空格开关：写入模块级状态，供 getCharColumnWidth 在测量与绘制两处共用
+      ignoreEmptySpace = ignoreEmptySpaceMode;
+
       const blobs: Blob[] = [];
       // a4 模式下每页覆盖的原始歌词行序号；normal 模式不产出
       let pageLineRanges: number[][] | undefined;
@@ -786,7 +888,7 @@ if (typeof self !== 'undefined') {
       if (mode === 'a4') {
         // ===== 单页分页模式（尺寸按档位 A4 / A5 / Letter） =====
         const contentHeight = pageH - pageMargin * 2;
-        const headerH = HEADER_HEIGHT;
+        const headerH = getHeaderHeight(Boolean(singer));
         const availWidth = pageW - pageMargin * 2;
 
         // 1. 超长行软折行
@@ -882,7 +984,7 @@ if (typeof self !== 'undefined') {
 
           let curY: number = pageMargin;
           if (pIdx === 0) {
-            curY = renderHeader(ctx, title, keyText, capoText, canvasW, curY, colors);
+            curY = renderHeader(ctx, title, singer, keyText, capoText, canvasW, curY, colors);
           }
 
           // 合并为单次循环：计算 space-between 参数 + 逐段绘制
@@ -936,62 +1038,38 @@ if (typeof self !== 'undefined') {
             percent: Math.round(((pIdx + 1) / pages.length) * 100),
           } as WorkerExportMessage);
         }
+      } else if (mode === 'estimate') {
+        // ===== 预估模式：复用长图真实渲染管线，仅回传字节数（不产出 Blob 列表） =====
+        const blob = await renderLongImageBlob(
+          lines,
+          title,
+          singer,
+          keyText,
+          capoText,
+          colors,
+          layoutAlign ?? 'start',
+          showBarre,
+          lyricsFontWeight,
+          jpegQuality,
+          pageMargin
+        );
+        self.postMessage({ type: 'estimate', longImageBytes: blob.size } as WorkerExportMessage);
+        return;
       } else {
         // ===== 普通长图模式（画布宽度自适应实际最宽行，左右对称 pageMargin 页边距，彻底消除右侧空白） =====
-        const availWidth = SCORE_EXPORT_CONFIG.NORMAL_CONTENT_MAX_WIDTH;
-        const allSegments = wrapScoreLines(lines, availWidth);
-
-        // 单次遍历同时计算：最宽段宽度、内容总高、行间距总高
-        let maxSegmentW = 0;
-        let totalContentH = 0;
-        let totalGapsH = 0;
-        for (let i = 0; i < allSegments.length; i++) {
-          const seg = allSegments[i]!;
-          const segW = getSegmentWidth(seg);
-          if (segW > maxSegmentW) maxSegmentW = segW;
-          totalContentH += seg.contentHeight;
-          if (i < allSegments.length - 1) {
-            totalGapsH += seg.isLastSubLine
-              ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP
-              : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
-          }
-        }
-
-        const headerH = HEADER_HEIGHT;
-        const canvasW = Math.max(SCORE_EXPORT_CONFIG.NORMAL_CANVAS_MIN_WIDTH, Math.round(maxSegmentW + pageMargin * 2));
-        const canvasH = pageMargin + headerH + totalContentH + totalGapsH + pageMargin;
-
-        const canvas = new OffscreenCanvas(
-          canvasW * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
-          canvasH * SCORE_EXPORT_CONFIG.PIXEL_RATIO
+        const blob = await renderLongImageBlob(
+          lines,
+          title,
+          singer,
+          keyText,
+          capoText,
+          colors,
+          layoutAlign ?? 'start',
+          showBarre,
+          lyricsFontWeight,
+          jpegQuality,
+          pageMargin
         );
-        const ctx = canvas.getContext('2d')!;
-        ctx.scale(SCORE_EXPORT_CONFIG.PIXEL_RATIO, SCORE_EXPORT_CONFIG.PIXEL_RATIO);
-
-        ctx.fillStyle = colors.BG;
-        ctx.fillRect(0, 0, canvasW, canvasH);
-
-        let curY: number = pageMargin;
-        curY = renderHeader(ctx, title, keyText, capoText, canvasW, curY, colors);
-
-        for (let i = 0; i < allSegments.length; i++) {
-          const seg = allSegments[i]!;
-          const isLast = i === allSegments.length - 1;
-          const defaultGap = seg.isLastSubLine
-            ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP
-            : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
-          const rowGap = isLast ? 0 : defaultGap;
-          const segW = getSegmentWidth(seg);
-          const isCenter = layoutAlign === 'center';
-          const startX = isCenter
-            ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) +
-              (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0)
-            : pageMargin + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
-          const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
-          curY = res.nextY;
-        }
-
-        const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: jpegQuality });
         blobs.push(blob);
 
         self.postMessage({ type: 'progress', percent: 100 } as WorkerExportMessage);

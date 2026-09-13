@@ -1,6 +1,11 @@
 <template>
   <div class="relative flex min-h-0 flex-1 flex-col">
-    <div v-if="!scoreEditor.activeSong || !hasLyricsText" class="flex flex-1 items-center justify-center">
+    <!-- 无 activeSong（即将离场/清除选中）：由父级 ScoreView 统一展示「未选择乐谱」，
+         这里渲染空占位避免离场渐隐时闪现本面板自身的空提示 -->
+    <div v-if="!scoreEditor.activeSong" class="flex flex-1" />
+
+    <!-- 有乐谱但无歌词：预览无内容，展示面板内独立空提示 -->
+    <div v-else-if="!hasLyricsText" class="flex flex-1 items-center justify-center">
       <Feedback
         description="请先在“编辑歌词”模式下输入歌词内容，再查看整曲预览"
         icon="file-text"
@@ -246,7 +251,7 @@ const buildContentKey = () => {
   }
   refSignatures.sort();
 
-  return `${song.id}_${song.title}_${song.playKey}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_ft${settingsStore.scoreShowFooter ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_q${settingsStore.scoreExportQuality}_pm${settingsStore.scorePageMargin}_ps${settingsStore.scorePageSize}_fz${scoreEditor.fontScale}_fb${scoreEditor.fretboardScale}_ref${refSignatures.length}_${refSignatures.join('|')}`;
+  return `${song.id}_${song.title}_${song.singer}_${song.playKey}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_ft${settingsStore.scoreShowFooter ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_q${settingsStore.scoreExportQuality}_pm${settingsStore.scorePageMargin}_ps${settingsStore.scorePageSize}_fz${scoreEditor.fontScale}_fb${scoreEditor.fretboardScale}_ies${settingsStore.scoreIgnoreEmptySpace ? 1 : 0}_ref${refSignatures.length}_${refSignatures.join('|')}`;
 };
 
 /** 响应式内容键：内容/排版任一依赖变化即重算，作为「重渲染触发」的单一 watch 源 */
@@ -294,7 +299,8 @@ const generate = async (force = false) => {
       settingsStore.scoreExportQuality,
       settingsStore.scorePageMargin,
       settingsStore.scorePageSize,
-      settingsStore.scoreShowFooter
+      settingsStore.scoreShowFooter,
+      settingsStore.scoreIgnoreEmptySpace
     );
     const { blobs: pageBlobs } = await runWorkerExport(payload);
     if (token !== runToken) return;

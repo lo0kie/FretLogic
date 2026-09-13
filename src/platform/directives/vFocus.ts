@@ -6,19 +6,11 @@ import type { Directive } from 'vue';
 
 /**
  * v-focus 指令：元素挂载或绑定值激活时自动聚焦。
- * 支持光标定位（start/end/all）、延时触发与 preventScroll 等选项。
+ * 支持光标定位（start/end/all）、延时触发与 .prevent-scroll 修饰符等。
  */
 
 export type FocusModifiers =
-  | 'select'
-  | 'delay'
-  | 'start'
-  | 'end'
-  | 'all'
-  | 'disabled'
-  | 'preventScroll'
-  | 'prevent_scroll'
-  | (string & Record<never, never>);
+  'select' | 'delay' | 'start' | 'end' | 'all' | 'disabled' | 'prevent-scroll' | (string & Record<never, never>);
 
 export interface FocusOptions {
   select?: boolean;
@@ -58,9 +50,7 @@ const executeFocus = (el: HTMLElement, modifiers?: Record<string, boolean>, opti
   const target = findFocusTarget(el);
   if (!target) return;
 
-  const preventScroll = Boolean(
-    modifiers?.['preventScroll'] || modifiers?.['prevent_scroll'] || options?.preventScroll
-  );
+  const preventScroll = Boolean(modifiers?.['prevent-scroll'] || options?.preventScroll);
   target.focus({ preventScroll });
 
   const cursorMode: 'start' | 'end' | 'all' | undefined =

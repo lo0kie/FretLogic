@@ -155,6 +155,8 @@ export const STORAGE_KEYS = {
   SCORE_SHOW_BARRE: 'CHORD_LAB_SCORE_SHOW_BARRE_V1',
   /** 预览/导出：是否显示页脚页码 */
   SCORE_SHOW_FOOTER: 'CHORD_LAB_SCORE_SHOW_FOOTER_V1',
+  /** 预览/导出：忽略无和弦空格（canvas 中该空格不占列宽，整行更紧凑） */
+  SCORE_IGNORE_EMPTY_SPACE: 'CHORD_LAB_SCORE_IGNORE_EMPTY_SPACE_V1',
   /** 预览/导出：歌词字重（light 细 / regular 常规 / bold 粗） */
   SCORE_LYRICS_FONT_WEIGHT: 'CHORD_LAB_SCORE_LYRICS_FONT_WEIGHT_V1',
   /** 预览/导出：JPEG 压缩质量百分比（30~100，默认 95） */
