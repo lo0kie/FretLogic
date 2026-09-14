@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { validateImportExportPayload } from '@/app/services/validation/payload';
 import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';

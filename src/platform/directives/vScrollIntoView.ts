@@ -50,6 +50,10 @@ export interface ScrollIntoViewOptions {
   settle?: boolean;
   /** 延迟触发时间（毫秒），如需等待折叠过渡动画完成时使用 */
   delay?: number;
+  /** 定位间距（px）：滚动定位时元素与滚动容器可视边缘的最小间距，经 CSS scroll-margin 实现。
+   *  修饰符写法 .gap-16。用于目标贴边会被渐隐遮罩/圆角裁切的容器（如带 v-edge-fade 的下拉面板）；
+   *  内联 scroll-margin 随元素存续，同元素的后续 focus scrolling 也保持该间距不退回贴边 */
+  gap?: number;
 }
 
 export type ScrollIntoViewBinding = boolean | ScrollIntoViewOptions | null | undefined;
@@ -102,6 +106,20 @@ const normalizeOptions = (
       opts.settle = true;
     }
 
+    // 延迟触发（毫秒）：等待折叠/展开过渡完成再滚动，避免量到中间态高度；.delay-220 → 220ms
+    const delayKey = Object.keys(modifiers).find(k => k.startsWith('delay-'));
+    const delayMatch = delayKey ? /^delay-(\d+)$/.exec(delayKey) : null;
+    if (delayMatch) {
+      opts.delay = Number(delayMatch[1]);
+    }
+
+    // 定位间距（px）：.gap-16 → 16px，经 scroll-margin 交给原生 scrollIntoView 消费
+    const gapKey = Object.keys(modifiers).find(k => k.startsWith('gap-'));
+    const gapMatch = gapKey ? /^gap-(\d+)$/.exec(gapKey) : null;
+    if (gapMatch) {
+      opts.gap = Number(gapMatch[1]);
+    }
+
     // KeepAlive 缓存激活后再次滚动需显式 .keep-alive 修饰符开启，不作默认行为。
     // 注意 Vue 的 binding.modifiers 保留修饰符字面键（.keep-alive → 'keep-alive'，不 camelize）
     if (modifiers['keep-alive'] || modifiers['keepAlive'] || modifiers['keep_alive']) {
@@ -152,6 +170,10 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
   const doScroll = () => {
     if (!el.isConnected) return;
     const behavior = opts.behavior ?? (isMount ? 'auto' : 'smooth');
+    const gap = opts.gap ?? 0;
+    // scroll-margin 让原生 scrollIntoView 的 nearest/center/start/end 全部尊重间距。
+    // 内联样式随元素存续刻意不清除：同元素后续的 focus scrolling 也保持间距不退回贴边
+    if (gap > 0) el.style.scrollMargin = `${gap}px`;
 
     // 纯横向模式：直接在最近的横向滚动容器内按 scrollLeft 滚动，绝不冒泡触发外层纵向视口跳动
     if (opts.direction === 'x') {
@@ -166,14 +188,14 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
           const containerCenter = containerRect.left + containerRect.width / 2;
           scrollTarget += cardCenter - containerCenter;
         } else if (opts.inline === 'start') {
-          scrollTarget += elRect.left - containerRect.left;
+          scrollTarget += elRect.left - containerRect.left - gap;
         } else if (opts.inline === 'end') {
-          scrollTarget += elRect.right - containerRect.right;
+          scrollTarget += elRect.right - containerRect.right + gap;
         } else {
-          if (elRect.left < containerRect.left) {
-            scrollTarget += elRect.left - containerRect.left;
-          } else if (elRect.right > containerRect.right) {
-            scrollTarget += elRect.right - containerRect.right;
+          if (elRect.left < containerRect.left + gap) {
+            scrollTarget += elRect.left - containerRect.left - gap;
+          } else if (elRect.right > containerRect.right - gap) {
+            scrollTarget += elRect.right - containerRect.right + gap;
           }
         }
 

@@ -573,6 +573,75 @@ export const getChordName = (
   return '';
 };
 
+// ===== 搜索匹配 =====
+// 匹配本身是「查询词变体 × 和弦别名」的双重遍历，二者都与对方无关：
+// 查询词变体只随输入变化、别名只随和弦变化，各自缓存后每键入一个字符只重算一次查询词侧。
+
+/** 查询词变体缓存：一次搜索里整个和弦列表共用同一个查询词，
+ *  逐和弦重建 7 条正则替换链是纯重复——按查询词缓存后每键入一个新字符只算一次 */
+const searchVariantsCache = createLruCache<string[]>(16);
+
+/** 生成查询词的等价变体 (ASCII 变音符 & Unicode 变音符 & 符号替换) */
+const buildSearchVariants = (qLower: string): string[] => {
+  const cached = searchVariantsCache.get(qLower);
+  if (cached) return cached;
+
+  const variants = [
+    qLower,
+    qLower.replace(/♯/g, '#').replace(/♭/g, 'b'),
+    qLower.replace(/#/g, '♯').replace(/b/g, '♭'),
+    qLower.replace(/δ|Δ/g, 'maj').replace(/♯/g, '#').replace(/♭/g, 'b'),
+    qLower.replace(/δ|Δ/g, 'm').replace(/♯/g, '#').replace(/♭/g, 'b'),
+    qLower.replace(/ø|ø7/g, 'm7b5').replace(/♯/g, '#').replace(/♭/g, 'b'),
+    qLower.replace(/°/g, 'dim').replace(/♯/g, '#').replace(/♭/g, 'b'),
+  ];
+
+  searchVariantsCache.set(qLower, variants);
+  return variants;
+};
+
+/** 单和弦等价别名集合：只与和弦内容有关、与查询词无关，按对象引用缓存。
+ *  和弦库的编辑总是产生新对象（草稿为 cloneDeep 副本），故按引用缓存不会读到过期别名 */
+const chordAliasCache = new WeakMap<object, string[]>();
+
+/** 收集和弦的全部等价别名字符串（标准全称 / 简写 / Unicode 与 ASCII 变体 / Δ·δ 符号别名） */
+const collectChordAliases = (chord: { nameSegments?: ChordNameSegments | null; chordName?: string }): string[] => {
+  if (typeof chord === 'object') {
+    const cached = chordAliasCache.get(chord);
+    if (cached) return cached;
+  }
+
+  const names = new Set<string>();
+  if (chord.chordName) names.add(chord.chordName.toLowerCase());
+
+  // 标准全称 (ASCII & Unicode)
+  const fullNameAscii = getChordName(chord, { shorthand: false, useUnicode: false }).toLowerCase();
+  const fullNameUnicode = getChordName(chord, { shorthand: false, useUnicode: true }).toLowerCase();
+  if (fullNameAscii) names.add(fullNameAscii);
+  if (fullNameUnicode) names.add(fullNameUnicode);
+
+  // 简写名称 (ASCII & Unicode, 如 CM7, C°, Cø7, C+)
+  const shortNameAscii = getChordName(chord, { shorthand: true, useUnicode: false }).toLowerCase();
+  const shortNameUnicode = getChordName(chord, { shorthand: true, useUnicode: true }).toLowerCase();
+  if (shortNameAscii) names.add(shortNameAscii);
+  if (shortNameUnicode) names.add(shortNameUnicode);
+
+  // 扩展特殊符号别名 (如 Δ7 对应 M7 / maj7)
+  if (fullNameAscii.includes('maj')) {
+    names.add(fullNameAscii.replace(/maj/g, 'δ'));
+    names.add(fullNameAscii.replace(/maj/g, 'Δ'));
+    names.add(fullNameAscii.replace(/maj/g, 'm'));
+  }
+  if (shortNameAscii.includes('m7')) {
+    names.add(shortNameAscii.replace(/m7/g, 'δ7'));
+    names.add(shortNameAscii.replace(/m7/g, 'Δ7'));
+  }
+
+  const aliases = Array.from(names);
+  if (typeof chord === 'object') chordAliasCache.set(chord, aliases);
+  return aliases;
+};
+
 /**
  * 智能模糊匹配和弦名称（支持全称、简写缩写、Unicode/ASCII 变音记号互通）
  * 例如：搜索 CM7 / CΔ7 / Cmaj7 均能匹配到 Cmaj7；
@@ -589,51 +658,10 @@ export const matchChordSearch = (
   const rawQ = query.trim();
   if (!rawQ) return true;
 
-  const qLower = rawQ.toLowerCase();
+  const aliases = collectChordAliases(chord);
+  const queryVariants = buildSearchVariants(rawQ.toLowerCase());
 
-  // 1. 收集和弦的所有等价别名字符串
-  const candidateNames = new Set<string>();
-
-  if (chord.chordName) {
-    candidateNames.add(chord.chordName.toLowerCase());
-  }
-
-  // 标准全称 (ASCII & Unicode)
-  const fullNameAscii = getChordName(chord, { shorthand: false, useUnicode: false }).toLowerCase();
-  const fullNameUnicode = getChordName(chord, { shorthand: false, useUnicode: true }).toLowerCase();
-  if (fullNameAscii) candidateNames.add(fullNameAscii);
-  if (fullNameUnicode) candidateNames.add(fullNameUnicode);
-
-  // 简写名称 (ASCII & Unicode, 如 CM7, C°, Cø7, C+)
-  const shortNameAscii = getChordName(chord, { shorthand: true, useUnicode: false }).toLowerCase();
-  const shortNameUnicode = getChordName(chord, { shorthand: true, useUnicode: true }).toLowerCase();
-  if (shortNameAscii) candidateNames.add(shortNameAscii);
-  if (shortNameUnicode) candidateNames.add(shortNameUnicode);
-
-  // 扩展特殊符号别名 (如 Δ7 对应 M7 / maj7)
-  if (fullNameAscii.includes('maj')) {
-    candidateNames.add(fullNameAscii.replace(/maj/g, 'δ').toLowerCase());
-    candidateNames.add(fullNameAscii.replace(/maj/g, 'Δ').toLowerCase());
-    candidateNames.add(fullNameAscii.replace(/maj/g, 'm').toLowerCase());
-  }
-  if (shortNameAscii.includes('m7')) {
-    candidateNames.add(shortNameAscii.replace(/m7/g, 'δ7').toLowerCase());
-    candidateNames.add(shortNameAscii.replace(/m7/g, 'Δ7').toLowerCase());
-  }
-
-  // 2. 生成查询词的变体 (ASCII 变音符 & Unicode 变音符 & 符号替换)
-  const queryVariants = [
-    qLower,
-    qLower.replace(/♯/g, '#').replace(/♭/g, 'b'),
-    qLower.replace(/#/g, '♯').replace(/b/g, '♭'),
-    qLower.replace(/δ|Δ/g, 'maj').replace(/♯/g, '#').replace(/♭/g, 'b'),
-    qLower.replace(/δ|Δ/g, 'm').replace(/♯/g, '#').replace(/♭/g, 'b'),
-    qLower.replace(/ø|ø7/g, 'm7b5').replace(/♯/g, '#').replace(/♭/g, 'b'),
-    qLower.replace(/°/g, 'dim').replace(/♯/g, '#').replace(/♭/g, 'b'),
-  ];
-
-  // 3. 检查任意候选名称是否包含任意查询词变体
-  for (const name of candidateNames) {
+  for (const name of aliases) {
     for (const q of queryVariants) {
       if (name.includes(q)) return true;
     }
@@ -641,6 +669,7 @@ export const matchChordSearch = (
 
   return false;
 };
+
 /**
  * 解析和弦名：基于 AST 分片拆出根音、斜杠低音与和弦后缀。
  * "Bm7/A" -> { rootLabel:'B', rootPitch:11, bassLabel:'A', bassPitch:9, hasBass:true, suffix:'m7' }
@@ -879,6 +908,7 @@ const DIATONIC_DEGREE_MAP = Object.freeze([1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6, 7]);
 
 interface SortMeta {
   chord: Chord;
+  name: string; // 标准全称，供并列兜底比较器复用（比较器内若现场调 getChordName 会变成 O(n log n) 次拼名）
   rootPitch: number;
   isInverted: boolean;
   colorNoteCount: number;
@@ -887,8 +917,16 @@ interface SortMeta {
   qualityKind: 'maj' | 'min' | 'dim'; // 三和弦性质（大/小/减），用于「调内级数」校验性质是否匹配调的该级
 }
 
+/** 排序元数据缓存：元数据只由和弦自身内容决定，按对象引用缓存即可
+ *  （和弦库的保存路径总是 new 出新对象、草稿是 cloneDeep 副本，故不会读到被原地改动的旧数据）。
+ *  排序每次调用都要为全库每个和弦构建元数据，而列表可能因一次键入、一次切换排序规则重排多次 */
+const sortMetaCache = new WeakMap<object, SortMeta>();
+
 /** 预计算单个和弦的排序元数据（根音/转位/复杂度/性质聚类等），供排序比较器复用。 */
 const buildSortMeta = (chord: Chord): SortMeta => {
+  const cached = sortMetaCache.get(chord);
+  if (cached) return cached;
+
   const name = getChordName(chord);
   const parsed = parseChordName(name);
   const rootPitch =
@@ -897,8 +935,9 @@ const buildSortMeta = (chord: Chord): SortMeta => {
       : resolveChordRootPitch(chord.strings, chord.fretOffset, chord.tuning, chord, chord.rootStringIndex);
   const { colorNoteCount } = getColorNoteCountAndPitches(chord, rootPitch);
   const suffix = parsed.suffix || '';
-  return {
+  const meta: SortMeta = {
     chord,
+    name,
     rootPitch,
     isInverted: computeIsInverted(chord.strings, chord.fretOffset, chord.tuning, chord, chord.rootStringIndex),
     colorNoteCount,
@@ -906,6 +945,8 @@ const buildSortMeta = (chord: Chord): SortMeta => {
     qualityRank: isMinorFlavored(parsed.suffix) ? 0 : 1,
     qualityKind: /^(dim|°|ø|m7b5)/i.test(suffix) ? 'dim' : isMinorFlavored(suffix) ? 'min' : 'maj',
   };
+  sortMetaCache.set(chord, meta);
+  return meta;
 };
 
 /** 分组排序规则选项（供 BaseSegmentedControl 等 UI 使用） */
@@ -927,6 +968,7 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
   if (effectiveRule === GroupSortRule.NAME_ASC) {
     // 预映射 [chord, name] 后再排序：避免比较器内 O(n log n) 次重复 getChordName 拼名，
     // 与下方 ROOT_PITCH/KEY_DEGREE 分支先 buildSortMeta 再比较的预构建模式保持一致
+    // （两个分支的并列兜底都取已缓存的 meta.name，比较器内不再有任何 getChordName 调用）
     return chords
       .map((chord): [Chord, string] => [chord, getChordName(chord)])
       .sort((a, b) => a[1].localeCompare(b[1]))
@@ -944,7 +986,7 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
       if (a.complexityRank !== b.complexityRank) return a.complexityRank - b.complexityRank;
       if (a.qualityRank !== b.qualityRank) return a.qualityRank - b.qualityRank;
       if (a.colorNoteCount !== b.colorNoteCount) return a.colorNoteCount - b.colorNoteCount;
-      return getChordName(a.chord).localeCompare(getChordName(b.chord));
+      return a.name.localeCompare(b.name);
     });
   } else if (effectiveRule === GroupSortRule.KEY_DEGREE) {
     // 支持大小调调名（'A' 或 'Am'）；关键音高取根音字母，小调用自然小调的三音程性质表
@@ -979,7 +1021,7 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
       if (a.complexityRank !== b.complexityRank) return a.complexityRank - b.complexityRank;
       if (a.qualityRank !== b.qualityRank) return a.qualityRank - b.qualityRank;
       if (a.colorNoteCount !== b.colorNoteCount) return a.colorNoteCount - b.colorNoteCount;
-      return getChordName(a.chord).localeCompare(getChordName(b.chord));
+      return a.name.localeCompare(b.name);
     });
   } else {
     return chords.slice();

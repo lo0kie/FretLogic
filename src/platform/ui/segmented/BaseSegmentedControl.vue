@@ -4,7 +4,9 @@
     :aria-disabled="disabled || undefined"
     :class="controlClasses"
     :style="resolvedWidth ? { width: resolvedWidth } : undefined"
+    @click.capture="handleClickCapture($event)"
     @keydown="handleKeydown($event)"
+    @pointerdown="handlePointerDown($event)"
     aria-orientation="horizontal"
     class="segmented-control relative inline-flex items-center select-none"
     ref="containerRef"
@@ -23,7 +25,7 @@
         v-wave="{ disabled: disabled || opt.disabled }"
         :aria-checked="isSelected(opt.value)"
         :aria-label="isOptionIconOnly(opt) ? opt.label : undefined"
-        :class="itemClasses(opt)"
+        :class="itemClasses(opt, i)"
         :disabled="disabled || opt.disabled"
         :ref="el => setItemRef(el, i)"
         :tabindex="getTabindex(opt, i)"
@@ -133,6 +135,9 @@ const props = withDefaults(
      *  激活项以透明占位保留 2px 高度、露出主色下划线。默认 false（仅激活项有下划线）。
      *  与 pill/text 形态无关，非 tabbed 下忽略 */
     showInactiveBorder?: boolean;
+    /** 是否启用拖动滑块切换（默认 true）：仅「激活块（滑块所在段）」按下才进入拖动——
+     *  按住横向跟手、松手落定到指针所在选项；其他段按下仍走普通点击，避免横向滑过误切选项 */
+    draggable?: boolean;
   }>(),
   {
     size: undefined,
@@ -146,6 +151,7 @@ const props = withDefaults(
     compacted: false,
     fullHeight: false,
     showInactiveBorder: false,
+    draggable: true,
   }
 );
 
@@ -250,14 +256,31 @@ const getTabindex = (opt: SegmentOption<T>, i: number): number => {
 
 /** 滑块定位：用 left/top（布局属性）而非 transform——transform 合成层在分数 DPR
  * （如 Windows 150% 缩放）下会对齐整数设备像素，与流内渲染的按钮/聚焦圈错位约半像素；
- * left/top 与按钮走同一渲染路径，任意缩放比下严格重合（元素极小，过渡时的重排开销可忽略） */
-const indicatorStyle = computed(() => ({
-  width: `${indicatorPosition.value.width}px`,
-  height: `${indicatorPosition.value.height}px`,
-  left: `${indicatorPosition.value.x}px`,
-  top: `${indicatorPosition.value.y}px`,
-  opacity: indicatorPosition.value.opacity,
-}));
+ * left/top 与按钮走同一渲染路径，任意缩放比下严格重合（元素极小，过渡时的重排开销可忽略）。
+ * 拖动中优先渲染 dragPosition（跟手位置，无过渡），松手后回落到测量位置并恢复过渡 */
+const indicatorStyle = computed(() => {
+  const drag = dragPosition.value;
+  if (drag) {
+    return {
+      width: `${drag.width}px`,
+      height: `${drag.height}px`,
+      left: `${drag.x}px`,
+      top: `${drag.y}px`,
+      opacity: 1,
+      // 位置（left）逐帧跟手不加过渡；几何（宽/高/纵）变化过渡平滑贴合预览项
+      transition: 'width 200ms ease-out, height 200ms ease-out, top 200ms ease-out',
+    };
+  }
+  return {
+    width: `${indicatorPosition.value.width}px`,
+    height: `${indicatorPosition.value.height}px`,
+    left: `${indicatorPosition.value.x}px`,
+    top: `${indicatorPosition.value.y}px`,
+    opacity: indicatorPosition.value.opacity,
+    // 回落非拖动态：清掉拖动期的几何过渡，交还给类的 transition-all（贴合/弹回动画）
+    transition: undefined,
+  };
+});
 
 const controlClasses = computed(() => [
   props.fullHeight ? 'h-full' : sizeConfig.value.wrapper,
@@ -268,6 +291,8 @@ const controlClasses = computed(() => [
       : 'bg-transparent gap-xs',
   props.disabled ? 'opacity-50 cursor-not-allowed' : '',
   isFullWidth.value ? 'w-full' : '',
+  // 横向拖动由组件消费（拖动滑块切换），纵向滚动仍交还页面
+  'touch-pan-y',
 ]);
 
 /** 滑块外观：pill 为覆盖整段的圆角胶囊（浅主色底 + 描边），tabbed 为贴底主色下划线 */
@@ -281,9 +306,34 @@ const sliderClasses = computed(() => [
 /** 下划线高度（px）：tabbed 形态贴段底部的主色细线 */
 const TAB_LINE_HEIGHT = 2;
 
-/** 选项类名：按生效形态（pill / text / tabbed）与选中态拼装（整体禁用时不显示激活样式） */
-const itemClasses = (opt: SegmentOption<T>): (string | Record<string, boolean>)[] => {
-  const active = !props.disabled && isSelected(opt.value);
+/**
+ * 把「选项段几何」换算为「滑块在该段上应处的几何」——静止测量与拖动跟手预览共用同一换算，
+ * 保证两种状态下指示器形状/位置严格一致（拖动时不会变成另一种形状）。
+ *
+ * - pill：与段同宽同高、顶部对齐；
+ * - tabbed：恒为贴段底部的主色细线（高度固定 TAB_LINE_HEIGHT，纵向 = 段顶 + 段高 − 线厚）。
+ *   开启 showInactiveBorder 时容器底部有 border-b 贯穿线（位于内容区下方 2px），
+ *   滑块需下移到该 border 区与之重合，才能盖住浅色线、形成连续同厚的激活段。
+ *
+ * 注意：tabbed 下**不能**沿用选项段自身的 height/top，否则拖动时下划线会被撑成覆盖整段的高块。
+ */
+const resolveIndicatorGeometry = (item: { width: number; height: number; top: number }) => {
+  if (visualVariant.value === 'tabbed') {
+    const lineShift = props.showInactiveBorder ? TAB_LINE_HEIGHT : 0;
+    return {
+      width: item.width,
+      height: TAB_LINE_HEIGHT,
+      y: item.top + item.height - TAB_LINE_HEIGHT + lineShift,
+    };
+  }
+  return { width: item.width, height: item.height, y: item.top };
+};
+
+/** 选项类名：按生效形态（pill / text / tabbed）与选中态拼装（整体禁用时不显示激活样式）；
+ *  拖动滑块经过的可用选项以选中态文字色做落点预览高亮 */
+const itemClasses = (opt: SegmentOption<T>, index: number): (string | Record<string, boolean>)[] => {
+  const dragHover = isDragging.value && dragOverIndex.value === index && !opt.disabled;
+  const active = dragHover || (!props.disabled && isSelected(opt.value));
   const isExpand = isFullWidth.value;
 
   if (visualVariant.value === 'pill') {
@@ -374,27 +424,9 @@ const updateIndicatorPosition = async (animate = true) => {
     return;
   }
 
-  if (visualVariant.value === 'tabbed') {
-    // 下划线形态：滑块是一条贴段底部的主色细线，宽度随选中段
-    // 开启 showInactiveBorder 时，容器底部有 border-b 贯穿线（位于内容区下方 2px），
-    // 滑块需下移到该 border 区与之重合，才能盖住浅色线、形成连续同厚的激活段
-    const lineShift = props.showInactiveBorder ? TAB_LINE_HEIGHT : 0;
-    indicatorPosition.value = {
-      width,
-      height: TAB_LINE_HEIGHT,
-      x,
-      y: y + height - TAB_LINE_HEIGHT + lineShift,
-      opacity: 1,
-    };
-  } else {
-    indicatorPosition.value = {
-      width,
-      height,
-      x,
-      y,
-      opacity: 1,
-    };
-  }
+  // 几何按生效形态换算：pill 取整段，tabbed 取贴段底部的主色细线（见 resolveIndicatorGeometry）
+  const geometry = resolveIndicatorGeometry({ width, height, top: y });
+  indicatorPosition.value = { ...geometry, x, opacity: 1 };
 
   if (!isInitialized.value) {
     requestAnimationFrame(() => {
@@ -440,6 +472,191 @@ const handleKeydown = (e: KeyboardEvent) => {
       return;
     }
   }
+};
+
+// ─── 拖动滑块切换：仅在激活块按下并拖动时滑块跟手，松手落定到指针所在选项 ───
+// 位移超过阈值才算拖动（阈值内仍走原生 click 选择）；拖动期间暂停滑块过渡跟手移动、
+// v-model 不变，松手才提交一次 change；落点在禁用项/空白时滑块弹回原选中项。
+// 非激活块按下不进入拖动（见 handlePointerDown 的按下位置判定），仅响应点击选择。
+const DRAG_THRESHOLD_PX = 4;
+let dragStartX: number | null = null;
+/** 拖动已激活（位移超阈值）：滑块脱离选项测量位置跟手移动 */
+const isDragging = ref(false);
+/** 拖动中滑块的实时位置（indicatorStyle 优先渲染此值）；null = 非拖动态 */
+const dragPosition = ref<{ x: number; width: number; height: number; y: number } | null>(null);
+/** 拖动中指针悬停的选项下标（落点预览高亮），-1 = 无 */
+const dragOverIndex = ref(-1);
+/** 拖动松手后浏览器会向起点按钮补发 click：抑制一次，防止落定选择被 click 的起点选择覆盖 */
+let suppressClick = false;
+/** 拖动激活时快照的滑块几何（尺寸/纵向位置保持选中段，仅横向跟手） */
+let dragSnapshot = { width: 0, height: 0, y: 0 };
+/** 拖动激活时缓存的选项完整几何（padding-box 局部坐标）：拖动期间布局不变，一次测量全程使用。
+ *  供落点判定（left/right）与预览滑块贴合悬停项（width/height/top） */
+let dragItemRects: { left: number; right: number; width: number; height: number; top: number; index: number }[] = [];
+/** 拖动激活时测量的容器左右内边距（分数级）：滑块横向钳制在内边距内侧，
+ *  与流内按钮的可达范围一致，不会拖到胶囊底板 padding 区之上 */
+let dragPadding = { left: 0, right: 0 };
+/** 拖动激活时测量的容器边框（分数级）：滑块 left/top 是 absolute 的 padding-box 定位基准，
+ *  选项/指针的 border-box 坐标须扣除边框才与滑块同系——否则错开一个边框宽（滑块「超出一点点」的根因） */
+let dragInset = { left: 0, top: 0, right: 0 };
+/** 拖动激活时记录的抓取偏移（指针相对滑块左缘，padding-box 坐标）：拖动中 x = 指针 − 偏移，
+ *  与宽度过渡完全解耦——若按「指针居中于滑块」随目标宽度重算 x，宽度渐变期间左右缘会
+ *  先跳后滑（悬停在选项边界抖动时即抽动）；抓取偏移让 x 连续、宽度独立渐变 */
+let dragGrabOffset = 0;
+
+/** 落点判定（夹逼语义）：选项间空隙与容器两侧越界都归并到更近一侧的选项——
+ *  拖到边缘外一直拖再松手，仍能切换到最边缘的选项 */
+const hitDragIndex = (localX: number): number => {
+  if (dragItemRects.length === 0) return -1;
+  for (let i = 0; i < dragItemRects.length; i++) {
+    const rect = dragItemRects[i]!;
+    if (localX < rect.left) {
+      const prev = dragItemRects[i - 1];
+      if (!prev) return rect.index;
+      return localX - prev.right <= rect.left - localX ? prev.index : rect.index;
+    }
+    if (localX < rect.right) return rect.index;
+  }
+  return dragItemRects[dragItemRects.length - 1]!.index;
+};
+
+const cleanupDragListeners = () => {
+  window.removeEventListener('pointermove', handleDragPointerMove);
+  window.removeEventListener('pointerup', handleDragPointerUp);
+  window.removeEventListener('pointercancel', handleDragPointerUp);
+};
+
+const handlePointerDown = (e: PointerEvent) => {
+  if (props.disabled || !props.draggable || e.button !== 0) return;
+  // text 形态无滑块、无选中段时无从拖起
+  if (visualVariant.value === 'text' || !showSlider.value) return;
+  // 仅激活块（滑块覆盖的选中段，滑块本身 pointer-events-none 由底下的按钮承接事件）可发起拖动：
+  // 其余段按下一律走原生 click 选择，横向滑过控件不会再被误判为拖动手势
+  const activeButton = toEl(items.value[activeIndex.value]);
+  if (!activeButton?.contains(e.target as Node)) return;
+  dragStartX = e.clientX;
+  window.addEventListener('pointermove', handleDragPointerMove);
+  window.addEventListener('pointerup', handleDragPointerUp);
+  window.addEventListener('pointercancel', handleDragPointerUp);
+};
+
+const handleDragPointerMove = (e: PointerEvent) => {
+  if (dragStartX === null) return;
+  const container = containerRef.value;
+  if (!container) return;
+
+  if (!isDragging.value) {
+    if (Math.abs(e.clientX - dragStartX) < DRAG_THRESHOLD_PX) return;
+    if (indicatorPosition.value.opacity === 0) return;
+    // 激活拖动：快照当前滑块几何、缓存选项区间与容器内边距
+    dragSnapshot = {
+      width: indicatorPosition.value.width,
+      height: indicatorPosition.value.height,
+      y: indicatorPosition.value.y,
+    };
+    const rect = container.getBoundingClientRect();
+    const containerStyle = getComputedStyle(container);
+    // 分数级测量 padding 与 border（同指示器边框补偿策略）：选项/指针坐标统一换算到
+    // 滑块 left/top 的 padding-box 基准，避免绝对定位滑块与测量值错开一个边框宽
+    dragPadding = {
+      left: parseFloat(containerStyle.paddingLeft) || 0,
+      right: parseFloat(containerStyle.paddingRight) || 0,
+    };
+    dragInset = {
+      left: parseFloat(containerStyle.borderLeftWidth) || 0,
+      top: parseFloat(containerStyle.borderTopWidth) || 0,
+      right: parseFloat(containerStyle.borderRightWidth) || 0,
+    };
+    // 抓取偏移：以激活时刻指针位置相对当前滑块左缘记录（若拖满整个拖动期不变，
+    // 滑块随指针平移时保持抓取点相对位置自然），后续宽度伸缩不再反过来影响 x
+    dragGrabOffset = e.clientX - rect.left - dragInset.left - indicatorPosition.value.x;
+    dragItemRects = items.value
+      .map((raw, index) => {
+        const item = toEl(raw);
+        if (!item) return null;
+        const r = item.getBoundingClientRect();
+        return {
+          left: r.left - rect.left - dragInset.left,
+          right: r.right - rect.left - dragInset.left,
+          width: r.width,
+          height: r.height,
+          top: r.top - rect.top - dragInset.top,
+          index,
+        };
+      })
+      .filter(
+        (v): v is { left: number; right: number; width: number; height: number; top: number; index: number } =>
+          v !== null
+      );
+    isDragging.value = true;
+    transitionEnabled.value = false;
+  }
+
+  e.preventDefault();
+  const rect = container.getBoundingClientRect();
+  // 统一到滑块的 padding-box 坐标系：指针的 border-box 坐标扣除左边框
+  const localX = e.clientX - rect.left - dragInset.left;
+  // 落点预览：禁用项不高亮、滑块也不贴合
+  const hoverIdx = hitDragIndex(localX);
+  const disabledHover = hoverIdx >= 0 && Boolean(normalizedOptions.value[hoverIdx]?.disabled);
+  dragOverIndex.value = disabledHover ? -1 : hoverIdx;
+  // 滑块几何贴合当前悬停的可用选项（pill：宽/高/纵随预览项变化，宽选项滑块变宽；
+  // tabbed：高度恒为贴底细线，仅横向贴合）。无预览（禁用项上）时保持起始选中段快照。
+  // x 以指针为中心跟手，钳制在 padding 范围内
+  const preview = !disabledHover && hoverIdx >= 0 ? dragItemRects[hoverIdx] : undefined;
+  const geometry = preview ? resolveIndicatorGeometry(preview) : dragSnapshot;
+  const width = geometry.width;
+  const height = geometry.height;
+  const top = geometry.y;
+  // padding-box 可用宽度 = border-box 宽 - 两侧边框；滑块右缘不得越过右 padding 内缘
+  const paddingBoxWidth = rect.width - dragInset.left - dragInset.right;
+  const minX = dragPadding.left;
+  const maxX = Math.max(minX, paddingBoxWidth - dragPadding.right - width);
+  dragPosition.value = {
+    width,
+    height,
+    y: top,
+    x: Math.min(Math.max(localX - dragGrabOffset, minX), maxX),
+  };
+};
+
+const handleDragPointerUp = (e: PointerEvent) => {
+  const wasDragging = isDragging.value;
+  cleanupDragListeners();
+  dragStartX = null;
+  if (!wasDragging) return;
+
+  const container = containerRef.value;
+  const idx = container ? hitDragIndex(e.clientX - container.getBoundingClientRect().left) : -1;
+  const target = idx >= 0 ? normalizedOptions.value[idx] : undefined;
+  if (target && !target.disabled && !props.disabled && !isSelected(target.value)) {
+    modelValue.value = target.value;
+    emit('change', emitValue(target.value));
+    items.value[idx]?.focus();
+  }
+  dragOverIndex.value = -1;
+  dragPosition.value = null;
+  isDragging.value = false;
+  // 恢复过渡：滑块从跟手位置动画贴合到最终选中项（落定提交或弹回）
+  transitionEnabled.value = true;
+  void nextTick(() => updateIndicatorPosition());
+  // 拖动手势吞掉浏览器可能补发的 click（down/up 同元素时 up 后会补发并触发 select，
+  // 拖回原位松手会在 closeable 下误触取消选中）。
+  // 兜底复位：拖出容器松手时 up 目标在组件外、click 不派发，flag 若不清除会吞掉
+  // 用户下一次真实点击（第一次点击不生效的根因）——补发 click 事件任务先于 timer
+  // 执行，先到则由 capture 处理器消耗，timer 仅清理未发生场景
+  suppressClick = true;
+  window.setTimeout(() => {
+    suppressClick = false;
+  }, 0);
+};
+
+/** 捕获阶段拦截拖动松手后浏览器补发的 click，吞掉一次防止触发起点选项的 select */
+const handleClickCapture = (e: MouseEvent) => {
+  if (!suppressClick) return;
+  suppressClick = false;
+  e.stopPropagation();
+  e.preventDefault();
 };
 
 // 监听值与禁用状态变化实时更新滑块位置
@@ -501,6 +718,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  cleanupDragListeners();
   cancelPendingUpdate();
   if (resumeTransitionTimer) clearTimeout(resumeTransitionTimer);
   ro?.disconnect();

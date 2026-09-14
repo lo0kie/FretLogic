@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <Teleport :disabled="disabledTeleport" :to="teleportTo">
     <Transition
       :name="transitionName"
@@ -18,7 +18,7 @@
         :aria-label="computedAriaLabel"
         :class="[positionClass, alignClass, zIndexClass, fabSizeClass]"
         :style="outerStyle"
-        class="base-fab pointer-events-auto flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full border border-glass-border bg-surface-panel/95 shadow-floating backdrop-blur-xl select-none hover:ring-2 hover:ring-primary/70 active:scale-95"
+        class="base-fab pointer-events-auto flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full border border-glass-border bg-surface-panel/95 shadow-lg backdrop-blur-xl select-none hover:ring-2 hover:ring-primary/70 active:scale-95"
         type="button"
       >
         <slot>

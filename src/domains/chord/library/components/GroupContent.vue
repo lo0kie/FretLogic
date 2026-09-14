@@ -15,6 +15,7 @@
           cardData.variantCount,
           cardData.mainChord.id === activeMainId,
           cardData.mainChord.id === activeMainId ? editorStore.draftChord.id : '',
+          // 卡片和弦名跟随简写设置：开关变化需让卡片重渲染（v-memo 依赖）
           settingsStore.workbenchChordShorthand,
         ]"
         v-scroll-into-view.y.once="cardData.mainChord.id === activeMainId"

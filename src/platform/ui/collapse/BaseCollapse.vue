@@ -1,5 +1,5 @@
 <template>
-  <section class="base-collapse w-full">
+  <section class="base-collapse w-full" ref="rootRef">
     <!-- inheritAttrs:false + $attrs 重定向：调用方的 class / data-* / aria-* 必须落在头部按钮本体——
          侧栏分组行等自定义折叠头要把拖拽把手类、键盘导航标记、状态 tint 挂在可聚焦元素上，
          这些无法经插槽表达；落到根 section 上则不参与焦点定位 -->
@@ -54,6 +54,7 @@
       :aria-hidden="!expanded"
       :inert="!expanded ? true : undefined"
       class="overflow-hidden transition-[height] duration-base ease-standard"
+      ref="collapseBodyRef"
     >
       <div :class="unpadded ? '' : 'flex flex-col gap-3 px-3 py-1.5'">
         <slot />
@@ -63,7 +64,10 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, useTemplateRef, watch } from 'vue';
+
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { COLLAPSE_SCROLL_COMPENSATION_MAX_MS } from '@/platform/utils/constants';
 
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
@@ -115,4 +119,86 @@ defineSlots<{
   /** 行尾附加内容（计数徽标等），渲染于内置 chevron 之前 */
   trailing?(): unknown;
 }>();
+
+// ---------- 收起时的滚动钳位补偿 ----------
+// 折叠体收缩会同步缩小祖先滚动容器的可滚动量（scrollHeight - clientHeight）。浏览器的滚动
+// 钳位在过渡期间的每一帧布局后都会同步执行：只要 scrollTop 越界就瞬时拉回，没有动画——
+// 这个动作被压缩进 height 过渡曲线的高速中段，感知为闪现。
+// 原方案「预判收起后上限 + scrollTo(smooth)」防住了触发时刻的钳位，却防不住过渡过程中的
+// 逐帧钳位：原生平滑滚动与 CSS height 过渡两条时间线互不感知，smooth 启动阶段缓动位移极少，
+// 强制钳位总是先一步介入。
+// 现方案：rAF 逐帧读取实时 scrollHeight（随 height 过渡逐帧变化），每一帧抢先于浏览器钳位
+// 把 scrollTop 收紧到当前上限——补偿与高度过渡同源同步，逐帧微调视觉上平滑跟随收起节奏，
+// 钳位条件（scrollTop + clientHeight > scrollHeight）永远没有成立的机会。
+const rootRef = useTemplateRef<HTMLElement>('rootRef');
+const collapseBodyRef = useTemplateRef<HTMLElement>('collapseBodyRef');
+
+/** 沿祖先链向上找最近的纵向滚动容器（v-scrollbar 注入的内联 overflowY 同样命中） */
+const findScrollParent = (): HTMLElement | null => {
+  let el = rootRef.value?.parentElement ?? null;
+  while (el && el !== document.body && el !== document.documentElement) {
+    const overflowY = window.getComputedStyle(el).overflowY;
+    if (overflowY === 'auto' || overflowY === 'scroll') return el;
+    el = el.parentElement;
+  }
+  return null;
+};
+
+// 逐帧循环句柄提升到组件作用域：收起途中被重新展开、或组件卸载时都能正确取消上一轮
+let compensationRafId: number | null = null;
+let compensationCleanup: (() => void) | null = null;
+
+const stopScrollCompensation = () => {
+  if (compensationRafId !== null) cancelAnimationFrame(compensationRafId);
+  compensationRafId = null;
+  compensationCleanup?.();
+  compensationCleanup = null;
+};
+
+onBeforeUnmount(stopScrollCompensation);
+
+watch(expanded, (open, prevOpen) => {
+  // 展开方向无需补偿；收起途中被重新展开时停掉仍在运行的上一轮循环
+  if (!prevOpen || open) {
+    stopScrollCompensation();
+    return;
+  }
+  const container = findScrollParent();
+  const collapseBody = collapseBodyRef.value;
+  if (!container || !collapseBody) return;
+  const { scrollTop, scrollHeight, clientHeight } = container;
+  if (scrollTop <= 0) return;
+  // 预判量仅用作「是否需要补偿」的门槛（watch 先于渲染冲刷，量到的是收起前状态）：
+  // 收起后的可滚动上限若仍不小于当前 scrollTop，全程不会触发钳位，无需启动逐帧循环
+  const maxScrollAfter = Math.max(0, scrollHeight - collapseBody.offsetHeight - clientHeight);
+  if (scrollTop <= maxScrollAfter) return;
+
+  stopScrollCompensation(); // 兜底：清掉可能残留的上一轮循环
+
+  // height 实际过渡的元素就是 collapseBody 本体（transition-[height] 挂在其上），在其上监听收尾；
+  // 同元素若有其他属性过渡（opacity 等）会多次触发 transitionend，按 propertyName 过滤
+  const handleTransitionEnd = (e: TransitionEvent) => {
+    if (e.target !== collapseBody || e.propertyName !== 'height') return;
+    // 末帧布局与最后一次 rAF 之间可能还差 ≤1px，收尾补一次钳位再停
+    const liveMax = Math.max(0, container.scrollHeight - container.clientHeight);
+    if (container.scrollTop > liveMax) container.scrollTop = liveMax;
+    stopScrollCompensation();
+  };
+  collapseBody.addEventListener('transitionend', handleTransitionEnd);
+  compensationCleanup = () => collapseBody.removeEventListener('transitionend', handleTransitionEnd);
+
+  const startedAt = performance.now();
+  const tick = () => {
+    compensationRafId = null;
+    const liveMax = Math.max(0, container.scrollHeight - container.clientHeight);
+    if (container.scrollTop > liveMax) container.scrollTop = liveMax;
+    // 兜底上限：过渡被禁用（如 prefers-reduced-motion）时 transitionend 永不触发，循环不能无限空转
+    if (performance.now() - startedAt >= COLLAPSE_SCROLL_COMPENSATION_MAX_MS) {
+      stopScrollCompensation();
+      return;
+    }
+    compensationRafId = requestAnimationFrame(tick);
+  };
+  compensationRafId = requestAnimationFrame(tick);
+});
 </script>

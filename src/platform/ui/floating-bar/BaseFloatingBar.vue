@@ -1,4 +1,4 @@
-﻿﻿<template>
+<template>
   <Teleport :disabled="disabledTeleport" :to="teleportTo">
     <Transition
       :name="transitionName"

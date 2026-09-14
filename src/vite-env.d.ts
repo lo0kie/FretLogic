@@ -3,6 +3,7 @@ import type { ChordNameBinding } from './domains/chord/directives/vChordName.ts'
 import type { ActionCardBinding } from './platform/directives/vActionCard.ts';
 import type { AutoHeightBinding } from './platform/directives/vAutoHeight.ts';
 import type { AutoWidthBinding, AutoWidthModifiers } from './platform/directives/vAutoWidth.ts';
+import type { EdgeFadeBinding, EdgeFadeModifiers } from './platform/directives/vEdgeFade.ts';
 import type { FocusBinding, FocusModifiers } from './platform/directives/vFocus.ts';
 import type { GridNavBinding, GridNavModifiers } from './platform/directives/vGridNav.ts';
 import type { MarqueeBinding, MarqueeModifiers } from './platform/directives/vMarquee.ts';
@@ -107,6 +108,7 @@ declare module '@vue/runtime-core' {
     vScrollIntoView: TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
     vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
+    vEdgeFade: TypedDirective<HTMLElement, EdgeFadeBinding, EdgeFadeModifiers>;
     vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
     vScrollbar: TypedDirective<HTMLElement, ScrollbarBinding, ScrollbarModifiers>;
     vAutoWidth: TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
@@ -131,6 +133,8 @@ declare module '@vue/runtime-core' {
     'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     'vMarquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
     'v-marquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
+    'vEdgeFade': TypedDirective<HTMLElement, EdgeFadeBinding, string>;
+    'v-edge-fade': TypedDirective<HTMLElement, EdgeFadeBinding, EdgeFadeModifiers>;
     'vChordName': TypedDirective<HTMLElement, ChordNameBinding, string>;
     'v-chord-name': TypedDirective<HTMLElement, ChordNameBinding, string>;
     'vScrollbar': TypedDirective<HTMLElement, ScrollbarBinding, ScrollbarModifiers>;
@@ -151,6 +155,7 @@ declare module 'vue' {
     vScrollIntoView: TypedDirective<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers>;
     vGridNav: TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     vMarquee: TypedDirective<HTMLElement, MarqueeBinding, MarqueeModifiers>;
+    vEdgeFade: TypedDirective<HTMLElement, EdgeFadeBinding, EdgeFadeModifiers>;
     vChordName: TypedDirective<HTMLElement, ChordNameBinding, string>;
     vScrollbar: TypedDirective<HTMLElement, ScrollbarBinding, ScrollbarModifiers>;
     vAutoWidth: TypedDirective<HTMLElement, AutoWidthBinding, AutoWidthModifiers>;
@@ -175,6 +180,8 @@ declare module 'vue' {
     'v-grid-nav': TypedDirective<HTMLElement, GridNavBinding, GridNavModifiers>;
     'vMarquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
     'v-marquee': TypedDirective<HTMLElement, MarqueeBinding, string>;
+    'vEdgeFade': TypedDirective<HTMLElement, EdgeFadeBinding, string>;
+    'v-edge-fade': TypedDirective<HTMLElement, EdgeFadeBinding, EdgeFadeModifiers>;
     'vChordName': TypedDirective<HTMLElement, ChordNameBinding, string>;
     'v-chord-name': TypedDirective<HTMLElement, ChordNameBinding, string>;
     'vScrollbar': TypedDirective<HTMLElement, ScrollbarBinding, ScrollbarModifiers>;

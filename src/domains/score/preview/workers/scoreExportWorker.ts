@@ -685,7 +685,7 @@ const getHeaderHeight = (hasSinger: boolean): number =>
   SCORE_EXPORT_CONFIG.META_FONT_SIZE +
   SCORE_EXPORT_CONFIG.HEADER_BOTTOM_GAP;
 
-/** 绘制乐谱表头（标题、可选歌手副标题、调号与变调夹，竖线分隔符严格与标题中心对齐，竖线采用弱化淡色） */
+/** 绘制乐谱表头（标题、可选歌手副标题、调号与变调夹，元信息行整体水平居中，无分隔符） */
 function renderHeader(
   ctx: OffscreenCanvasRenderingContext2D,
   title: string,
@@ -715,43 +715,53 @@ function renderHeader(
     y += SCORE_EXPORT_CONFIG.SINGER_SUBTITLE_FONT_SIZE + SCORE_EXPORT_CONFIG.SINGER_SUBTITLE_GAP;
   }
 
-  // 2. 元信息行（竖线分隔符居中对齐 centerX，调号向左排布，变调夹向右排布）
+  // 2. 元信息行（调号 + 变调夹连为一体，整体水平居中，无竖线分隔符）
   const baselineY = y + SCORE_EXPORT_CONFIG.META_FONT_SIZE;
   const metaBaseFont = `500 ${SCORE_EXPORT_CONFIG.META_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
   const metaAccFont = `bold ${SCORE_EXPORT_CONFIG.META_ACCIDENTAL_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
-  const META_GAP = 14;
+  const META_GAP = 12;
 
-  // 中央竖线分隔符：严格居中于 centerX，使用淡色（colors.FB_LINE），使视觉与标题中心严密垂直对齐
-  ctx.font = metaBaseFont;
-  ctx.fillStyle = colors.FB_LINE;
-  ctx.textAlign = 'center';
-  ctx.fillText('|', centerX, baselineY);
-
-  // 左侧调号：右端对齐至 (centerX - META_GAP)，支持升降号上标
-  const keyTokens = parseChordNameTokens(keyText);
+  // 调号段：以「选调」为界拆成两组（原调 X / 选调 Y），仅组之间用 META_GAP 分隔；
+  // 组内空格保留字面宽度（只用于标签与调名之间），token 绘制支持升降号上标
+  const keyGroups = keyText
+    .split(/(?=选调)/)
+    .map(s => s.trim())
+    .filter(Boolean);
   let keyWidth = 0;
-  const measuredKeyTokens = keyTokens.map(token => {
-    ctx.font = token.isAccidental ? metaAccFont : metaBaseFont;
-    const w = ctx.measureText(token.text).width;
-    keyWidth += w;
-    return { ...token, width: w };
+  const measuredGroups = keyGroups.map(segment => {
+    const tokens = parseChordNameTokens(segment).map(token => {
+      ctx.font = token.isAccidental ? metaAccFont : metaBaseFont;
+      const w = ctx.measureText(token.text).width;
+      keyWidth += w;
+      return { ...token, width: w };
+    });
+    return { tokens };
   });
+  // 组间隔计入总宽：N 组有 N-1 个 META_GAP
+  keyWidth += META_GAP * Math.max(0, keyGroups.length - 1);
 
-  let curKeyX = centerX - META_GAP - keyWidth;
-  ctx.fillStyle = colors.SUB_TEXT;
-  ctx.textAlign = 'left';
-  for (const item of measuredKeyTokens) {
-    ctx.font = item.isAccidental ? metaAccFont : metaBaseFont;
-    const itemY = item.isAccidental ? baselineY + SCORE_EXPORT_CONFIG.META_ACCIDENTAL_SUPERSCRIPT_OFFSET : baselineY;
-    ctx.fillText(item.text, curKeyX, itemY);
-    curKeyX += item.width;
-  }
-
-  // 右侧变调夹：左端对齐至 (centerX + META_GAP)
+  // 变调夹段宽度
   ctx.font = metaBaseFont;
+  const capoLabel = `Capo: ${capoText}`;
+  const capoWidth = ctx.measureText(capoLabel).width;
+
+  // 整体水平居中：先算两段总宽（变调夹在左、调号在右），再从起点左对齐依次绘制
+  const metaStartX = centerX - (capoWidth + META_GAP + keyWidth) / 2;
   ctx.fillStyle = colors.SUB_TEXT;
   ctx.textAlign = 'left';
-  ctx.fillText(`Capo: ${capoText}`, centerX + META_GAP, baselineY);
+  ctx.fillText(capoLabel, metaStartX, baselineY);
+
+  // 调号段：与变调夹同基线，间隔 META_GAP；「原调」「选调」两组之间同样以 META_GAP 分隔
+  let curX = metaStartX + capoWidth + META_GAP;
+  measuredGroups.forEach((segment, segIdx) => {
+    if (segIdx > 0) curX += META_GAP;
+    for (const item of segment.tokens) {
+      ctx.font = item.isAccidental ? metaAccFont : metaBaseFont;
+      const itemY = item.isAccidental ? baselineY + SCORE_EXPORT_CONFIG.META_ACCIDENTAL_SUPERSCRIPT_OFFSET : baselineY;
+      ctx.fillText(item.text, curX, itemY);
+      curX += item.width;
+    }
+  });
 
   y += SCORE_EXPORT_CONFIG.META_FONT_SIZE + SCORE_EXPORT_CONFIG.HEADER_BOTTOM_GAP;
 

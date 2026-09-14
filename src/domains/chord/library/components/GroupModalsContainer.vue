@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <PromptInputModal
     v-model="groupModals.modalData.inputValue"
     v-model:visible="groupModals.modals.create"

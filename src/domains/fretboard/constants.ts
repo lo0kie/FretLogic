@@ -41,6 +41,7 @@ export const OPEN_STRING_MARKER_Y = 34;
 const OFFSET_Y_BOTTOM = 20;
 /** 指板自带和弦名区域高度（px）；需比 CHORD_NAME_FONT_SIZE × 行高 略大，给 j / g 等下伸部留余量，避免被裁脚 */
 export const CHORD_NAME_ZONE_HEIGHT = 100;
+
 /**
  * 指板自带和弦名字号（px）：全局唯一值，不再按 sm/md/lg 分档（原档位表只有一个消费方且从不传值）。
  * 与行高配合：字号 80 × 行高 1.15 ≈ 92px 的 line-box，落在 100px 的区域内，j / g 下伸部完整可见

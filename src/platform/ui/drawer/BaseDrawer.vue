@@ -32,7 +32,7 @@
         >
           <div
             v-if="hasHeader"
-            class="drawer-header-zone relative z-10 flex min-h-[3.1rem] shrink-0 items-center justify-between gap-lg px-xl pt-lg pb-md shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+            class="drawer-header-zone relative z-10 flex min-h-[3.1rem] shrink-0 items-center justify-between gap-lg px-xl pt-lg pb-md"
           >
             <div class="drawer-header-left flex min-w-0 flex-1 items-center">
               <slot :title-id name="title">
@@ -64,15 +64,28 @@
           </div>
 
           <div
-            :class="{ 'has-header': hasHeader, 'has-footer': $slots['footer'], 'py-sm': !$slots['default'] }"
-            class="drawer-body-scrollable no-scrollbar min-h-0 flex-1 overflow-y-auto px-xl py-lg"
+            v-edge-fade
+            v-scrollbar
+            :class="[
+              {
+                // body 四向 padding 独立推导（与 BaseModal 同模型）：贴卡片边缘恒为 xl，
+                // 与相邻区块之间有内容时 lg、空内容垫片时 sm；缺 header/footer 的方向升级为贴边 xl
+                'pt-lg': hasHeader && !!$slots['default'],
+                'pt-sm': hasHeader && !$slots['default'],
+                'pt-xl': !hasHeader,
+                'pb-lg': !!$slots['footer'] && !!$slots['default'],
+                'pb-sm': !!$slots['footer'] && !$slots['default'],
+                'pb-xl': !$slots['footer'],
+              },
+            ]"
+            class="drawer-body-scrollable no-scrollbar min-h-0 flex-1 overflow-y-auto px-xl"
           >
             <slot />
           </div>
 
           <div
             v-if="$slots['footer']"
-            class="drawer-footer-zone relative z-10 flex w-full shrink-0 items-center justify-center gap-sm px-xl pt-md pb-lg shadow-[0_-2px_8px_rgba(0,0,0,0.06)]"
+            class="drawer-footer-zone relative z-10 flex w-full shrink-0 items-center justify-center gap-sm px-xl pt-md pb-lg"
           >
             <slot name="footer" />
           </div>
@@ -268,11 +281,13 @@ watch(
       if (overlayRef.value) {
         unregisterOverlay(overlayRef.value);
       }
-      isBodyLocked.value = hasActiveOverlays() > 0;
+      // 仅遮罩模式参与 body 滚动锁，非遮罩（调色盘）抽屉不锁背景
+      isBodyLocked.value = props.mask && hasActiveOverlays() > 0;
     } else {
       // 打开瞬间收拢全局存量 Popover：抽屉为模态阻断层，不允许被先前浮层压在头上
       closeAllPopovers();
-      isBodyLocked.value = true;
+      // 滚动锁仅在遮罩模式下生效：mask=false 为调色盘模式，背景（谱面区）须可正常滚动与点击
+      isBodyLocked.value = props.mask;
       stopKeydownListener = useEventListener(window, 'keydown', handleEscape);
       // 层号在打开瞬间即刻分配（早于内容渲染）：保证与并发打开的浮层时序严格一致
       floatingZ.value = acquireFloatingZ();
@@ -359,7 +374,8 @@ onBeforeUnmount(() => {
   if (overlayRef.value) {
     unregisterOverlay(overlayRef.value);
   }
-  isBodyLocked.value = hasActiveOverlays() > 0;
+  // 仅遮罩模式参与 body 滚动锁
+  isBodyLocked.value = props.mask && hasActiveOverlays() > 0;
   // 兜底释放层号：抽屉在离场动画完成前被卸载（如父组件销毁）时 after-leave 不会触发
   if (floatingZ.value) {
     releaseFloatingZ(floatingZ.value);

@@ -26,7 +26,10 @@ export type AutoHeightBinding = boolean | AutoHeightOptions | undefined;
 interface AutoHeightState {
   opts: AutoHeightOptions;
   observer?: ResizeObserver;
+  mutationObserver?: MutationObserver;
   targetEl?: HTMLElement | null;
+  /** 已被 RO 观察的 target 直接子元素集合：childList 变化时增量增删，避免重复 observe */
+  observedChildren: Set<Element>;
   lastMeasuredPx: number;
 }
 
@@ -85,9 +88,33 @@ const syncHeight = (container: HTMLElement, state: AutoHeightState, force = fals
   }
 };
 
+/**
+ * 增量维护 target 直接子元素的 RO 观察：深层列表（如 TransitionGroup 卡片网格）的
+ * 行数增删不必然传导为包装层自身的高度变化，逐子元素观察让深层内容尺寸变化直接触发重测。
+ */
+const updateObservedChildren = (state: AutoHeightState): void => {
+  const target = state.targetEl;
+  if (!target) return;
+  const current = new Set(Array.from(target.children));
+  for (const observed of state.observedChildren) {
+    if (!current.has(observed)) {
+      state.observer?.unobserve(observed);
+      state.observedChildren.delete(observed);
+    }
+  }
+  for (const child of current) {
+    if (!state.observedChildren.has(child)) {
+      state.observer?.observe(child);
+      state.observedChildren.add(child);
+    }
+  }
+};
+
 /** 绑定 ResizeObserver 到测量目标 */
 const observeTarget = (container: HTMLElement, state: AutoHeightState) => {
   state.observer?.disconnect();
+  state.mutationObserver?.disconnect();
+  state.observedChildren.clear();
   if (state.opts.disabled) return;
 
   state.targetEl = resolveTargetEl(container, state.opts.target);
@@ -96,6 +123,21 @@ const observeTarget = (container: HTMLElement, state: AutoHeightState) => {
 
   state.observer = new ResizeObserver(() => syncHeight(container, state));
   state.observer.observe(state.targetEl);
+  // 深层内容（列表项增删/TransitionGroup FLIP 重排）的高度变化依赖「包装层高度被动传导」
+  // 才能触达只观察包装层的 RO——传导一旦失败容器就停留在旧高度（内容下方留白）。
+  // 逐直接子元素观察 + 子树 childList/文本 MutationObserver 兜底，对齐 vScrollbar / vEdgeFade
+  // 的完备观察模式：任何深层内容变化都有直达的重测路径
+  for (const child of Array.from(state.targetEl.children)) {
+    state.observer.observe(child);
+    state.observedChildren.add(child);
+  }
+  if (typeof MutationObserver !== 'undefined') {
+    state.mutationObserver = new MutationObserver(() => {
+      updateObservedChildren(state);
+      syncHeight(container, state);
+    });
+    state.mutationObserver.observe(state.targetEl, { childList: true, subtree: true, characterData: true });
+  }
   syncHeight(container, state, true);
 };
 
@@ -104,6 +146,7 @@ export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
     const opts = normalizeOptions(binding.value, binding.modifiers);
     const state: AutoHeightState = {
       opts,
+      observedChildren: new Set(),
       lastMeasuredPx: 0,
     };
     stateMap.set(el, state);
@@ -131,6 +174,8 @@ export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
 
     if (currentDisabled) {
       state.observer?.disconnect();
+      state.mutationObserver?.disconnect();
+      state.observedChildren.clear();
       return;
     }
 
@@ -160,6 +205,7 @@ export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
     const state = stateMap.get(el);
     if (state) {
       state.observer?.disconnect();
+      state.mutationObserver?.disconnect();
       stateMap.delete(el);
     }
   },

@@ -1,22 +1,25 @@
 <template>
-  <div class="flex flex-col gap-xs p-xs">
+  <div class="flex flex-col gap-xs p-xs" ref="rootRef">
     <template v-if="title">
-      <div class="truncate px-md py-[0.15rem] text-2xs leading-none font-semibold text-fg-disabled select-none">
+      <div class="truncate px-md text-2xs leading-tight font-semibold text-fg-disabled select-none">
         {{ title }}
       </div>
-      <div class="mx-1 my-0.5 h-px bg-border-light" role="separator" />
+      <div class="mx-1 h-px bg-border-light/60" role="separator" />
     </template>
 
     <template v-for="(item, index) in items" :key="item.label + index">
-      <div v-if="item.divided" class="mx-1 my-0.5 h-px bg-border-light" role="separator" />
+      <div v-if="item.divided" class="mx-1 my-0.5 h-px bg-border-light/60" role="separator" />
 
       <MenuSubmenu
-        v-if="item.expandChildren ?? Boolean(item.children?.length)"
+        v-if="item.expandChildren ?? Boolean(item.children?.length || item.content)"
         :item
         :on-select
         :panel-class
+        :panel-scrollbar
         :size
         :item-ref-cb="el => setItemEl(el, index)"
+        :ref="el => setSubmenuInstance(el, index)"
+        @open="handleSubmenuOpen(index)"
       />
 
       <button
@@ -88,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUpdate, ref } from 'vue';
+import { onBeforeUnmount, onBeforeUpdate, onMounted, ref, useTemplateRef } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 
@@ -105,6 +108,7 @@ const {
   title = '',
   size = 'md',
   panelClass = 'context-menu-box',
+  panelScrollbar = false,
   onSelect = undefined,
 } = defineProps<{
   /** 菜单项数据列表（children 级联项委托给 MenuSubmenu 渲染） */
@@ -115,6 +119,8 @@ const {
   size?: ComponentSize;
   /** 级联子菜单面板样式类 */
   panelClass?: string;
+  /** 级联子菜单面板是否用 v-scrollbar 自绘滚动条（透传 MenuSubmenu → BasePopover） */
+  panelScrollbar?: boolean;
   /** 菜单项选中回调：由容器统一处理（执行 action、关闭浮层等） */
   onSelect?: (item: MenuItem) => void;
 }>();
@@ -128,9 +134,60 @@ const setItemEl = (el: unknown, index: number) => {
   }
 };
 
+type MenuSubmenuInstance = InstanceType<typeof MenuSubmenu>;
+/** 收集级联子面板实例（函数式 ref），供兄弟互斥关闭 */
+const submenuInstances = ref<(MenuSubmenuInstance | null)[]>([]);
+const setSubmenuInstance = (el: unknown, index: number) => {
+  submenuInstances.value[index] = (el as MenuSubmenuInstance | null) ?? null;
+};
+
 onBeforeUpdate(() => {
   itemEls.value = [];
+  submenuInstances.value = [];
 });
+
+/** 级联兄弟互斥：任一子面板打开即关闭上一个打开的兄弟子面板。
+ *  兄弟被「点击钉住」后 hover 离开不再自行关闭（pinned 早退），不做互斥会出现
+ *  两个子菜单同时展开；close 幂等，重复关闭无副作用 */
+let lastOpenSubmenuIndex = -1;
+/** 滚动收起后的打开抑制窗口（ms）：惯性/连续滚动期间，迟到的 hover 打开会被下一个
+ *  scroll 事件立刻收掉，表现为预览闪一下又消失。窗口内的 open 在同一调用栈内同步关闭——
+ *  open+close 不产生任何一次绘制，肉眼无闪烁；窗口过后悬停恢复正常打开 */
+const SCROLL_SUPPRESS_OPEN_MS = 250;
+let lastScrollClosedAt = 0;
+const handleSubmenuOpen = (index: number) => {
+  if (Date.now() - lastScrollClosedAt < SCROLL_SUPPRESS_OPEN_MS) {
+    submenuInstances.value[index]?.close();
+    return;
+  }
+  if (lastOpenSubmenuIndex !== -1 && lastOpenSubmenuIndex !== index) {
+    submenuInstances.value[lastOpenSubmenuIndex]?.close();
+  }
+  lastOpenSubmenuIndex = index;
+};
+
+/** 收起本层当前展开的子面板，并复位互斥游标；byScroll 时登记抑制窗口起点 */
+const closeAllSubmenus = (byScroll = false) => {
+  if (lastOpenSubmenuIndex === -1) return;
+  submenuInstances.value[lastOpenSubmenuIndex]?.close();
+  lastOpenSubmenuIndex = -1;
+  if (byScroll) lastScrollClosedAt = Date.now();
+};
+
+// —— 菜单滚动时收起已展开的级联子面板 ——
+// 滚轮滚动不派发 mouseover/mouseleave：指针停在原地、列表内容滚走，
+// 已展开的子面板会跟着触发元素被 floating-ui 重新定位到视口上/下边缘之外，
+// 直到指针移到另一个条目才被互斥关闭。故在捕获阶段监听 window 滚动（scroll 不冒泡，
+// 但捕获阶段会沿祖先链传播），滚动容器是本层菜单面板（含本层根节点）时立即收起。
+const rootRef = useTemplateRef<HTMLElement>('rootRef');
+const handleAncestorScroll = (e: Event) => {
+  if (lastOpenSubmenuIndex === -1) return;
+  const root = rootRef.value;
+  if (!root || !(e.target instanceof Node) || !e.target.contains(root)) return;
+  closeAllSubmenus(true);
+};
+onMounted(() => window.addEventListener('scroll', handleAncestorScroll, true));
+onBeforeUnmount(() => window.removeEventListener('scroll', handleAncestorScroll, true));
 
 /** 菜单项点击 / 回车：禁用态忽略，调用 onSelect 回调交给容器处理 */
 const handleItemClick = (item: MenuItem) => {

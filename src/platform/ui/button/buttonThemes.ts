@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ActionButton 主题映射（单一来源）
  *
  * ActionButton 与 BaseCheckbox buttonized 形态共用同一份色板与尺寸，

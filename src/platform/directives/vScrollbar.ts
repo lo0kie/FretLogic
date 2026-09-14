@@ -20,6 +20,15 @@ import { SCROLL_INTERACTIVE_WINDOW_MS } from '@/platform/utils/constants';
 import type { Directive } from 'vue';
 
 export interface ScrollbarOptions {
+  /** 轨道/拇指 overlay 的挂载容器：默认取宿主父元素。
+   *  Vue 托管的容器（其子节点由 v-if/Transition 动态切换，如浮层面板宿主）必须显式传入一个
+   *  独立的、模板内无子节点的稳定容器——把外来节点追加进 Vue 会 diff 的容器，
+   *  会破坏补丁锚点（切换子节点时触发 insertBefore NotFoundError） */
+  overlayParent?: HTMLElement | null | (() => HTMLElement | null | undefined);
+  /** 是否启用指令；false 时整体惰性——不注入样式、不挂 overlay、不注册状态（默认 true）。
+   *  供「指令必须常驻模板、启用与否由运行时 prop 决定」的宿主（如 BasePopover 面板）使用，
+   *  避免在 <Transition> 内用 v-if/v-else 双分支切换指令挂载（会触发锚点补丁错误） */
+  enabled?: boolean;
   /** 生效轴向：'y' 纵向 / 'x' 横向；与 vScrollIntoView 的 direction 约定一致。
    *  省略（且无方向修饰符）时默认启用双轴（x+y），各轴仅在确有溢出时显示，对齐原生滚动条限制 */
   direction?: 'x' | 'y';
@@ -626,8 +635,15 @@ const buildState = (
   };
 };
 
+/** overlay 挂载容器：显式指定优先，缺省回落到宿主父元素（见 options.overlayParent 注释） */
+const resolveOverlayParent = (host: HTMLElement, options: ScrollbarOptions): HTMLElement | null => {
+  const target = typeof options.overlayParent === 'function' ? options.overlayParent() : options.overlayParent;
+  return target ?? host.parentElement;
+};
+
 const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?: Record<string, boolean>): void => {
-  const parent = host.parentElement;
+  const options = binding ?? {};
+  const parent = resolveOverlayParent(host, options);
   if (!parent) return;
   if (typeof document === 'undefined') return;
   ensureGlobalStyle();
@@ -848,9 +864,17 @@ const unmountScrollbar = (host: HTMLElement): void => {
 
 export const vScrollbar: Directive<HTMLElement, ScrollbarBinding> = {
   mounted: (el, binding) => {
+    // enabled=false：惰性挂载（不注册状态、不注入样式、不挂 overlay），
+    // 翻转为启用时由 updated 增量挂载；关闭时由 updated 完整卸载
+    if (binding.value?.enabled === false) return;
     mountScrollbar(el, binding.value, binding.modifiers);
   },
   updated: (el, binding) => {
+    if (binding.value?.enabled === false) {
+      // 启用 → 禁用：完整卸载；本就未挂载时为幂等空操作
+      unmountScrollbar(el);
+      return;
+    }
     // Vue patch class 时会重写 className，把挂载时外加的宿主类抹掉（原生滚动条闪现），幂等补挂
     el.classList.add(HOST_CLASS);
     // 选项/修饰符变化时整体重建（指令选项变更频率低，重建成本可忽略）

@@ -91,7 +91,7 @@ const getDpr = () => {
   return Math.max(userDpr, 2.5);
 };
 
-const bitmapCache = createLruCache<ImageBitmap | HTMLCanvasElement>(64, {
+const bitmapCache = createLruCache<ImageBitmap | HTMLCanvasElement>(192, {
   onEvict: (_key, item) => {
     if ('close' in item && typeof item.close === 'function') {
       item.close();

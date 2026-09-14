@@ -44,6 +44,8 @@ export const sanitizeSongEntity = (raw: unknown): SongDraft | null => {
     lyrics: typeof raw['lyrics'] === 'string' ? raw['lyrics'] : '',
     // 旧持久化数据无 singer 字段：清洗层自动补齐空串，无迁移成本
     singer: typeof raw['singer'] === 'string' ? raw['singer'] : '',
+    // 旧持久化数据无 originalKey 字段：同上自动补齐空串
+    originalKey: typeof raw['originalKey'] === 'string' ? raw['originalKey'] : '',
     lineIds: Array.isArray(raw['lineIds']) ? (raw['lineIds'].filter(isNonEmptyString) as LineId[]) : [],
     playKey: typeof raw['playKey'] === 'string' && raw['playKey'] ? raw['playKey'] : legacyKey,
     capo: isCapoValue(raw['capo']) ? raw['capo'] : 0,

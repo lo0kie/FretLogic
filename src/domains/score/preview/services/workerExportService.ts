@@ -5,7 +5,7 @@
 import { computeSongKey, getChordName } from '@/domains/chord/theory/theory';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { DEFAULT_SCORE_TITLE, SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
-import { charKey, collectEdgeChordIds } from '@/domains/score/model/scoreModel';
+import { buildEdgeChordIndex, charKey } from '@/domains/score/model/scoreModel';
 
 import type { Chord } from '@/domains/chord/types';
 import type {
@@ -52,6 +52,8 @@ export const prepareWorkerExportPayload = (
   const lyricsLines = song.lyrics.split('\n');
   const chordMap = song.chordMap;
   const lineIds = song.lineIds;
+  // 一次遍历建边和弦索引：否则下列循环里每行两侧各扫一遍整张 chordMap（行数 × 绑定数）
+  const edgeChordIndex = buildEdgeChordIndex(chordMap);
 
   const lines: ExportLineItem[] = [];
 
@@ -60,7 +62,7 @@ export const prepareWorkerExportPayload = (
     const lineId = lineIds[idx] ?? `line_${idx}`;
 
     // 收集行首和弦
-    const startIds = collectEdgeChordIds(chordMap, lineId, 'start');
+    const startIds = edgeChordIndex.get(lineId, 'start');
     const startChords = startIds
       .map(id => {
         const chord = chordsLookupMap.get(id);
@@ -80,7 +82,7 @@ export const prepareWorkerExportPayload = (
     });
 
     // 收集行尾和弦
-    const endIds = collectEdgeChordIds(chordMap, lineId, 'end');
+    const endIds = edgeChordIndex.get(lineId, 'end');
     const endChords = endIds
       .map(id => {
         const chord = chordsLookupMap.get(id);
@@ -97,14 +99,19 @@ export const prepareWorkerExportPayload = (
   }
 
   const rawKey = computeSongKey(song.playKey, song.capo);
-  const formattedKey = rawKey.replace(/#/g, '♯').replace(/b/g, '♭');
-  const keyText = `${formattedKey} 调`;
+  const formatKey = (key: string) => key.replace(/#/g, '♯').replace(/b/g, '♭');
+  const formattedKey = formatKey(rawKey);
+  // 原调（'' 表示未设置）：设置后表头元信息行显示「原调 X 选调 Y」；未设置只显示「选调 Y」，
+  // 统一「原调/选调」标签 + 调名，不带「调」后缀，升降号由 token 渲染统一上标
+  const originalKey = song.originalKey ?? '';
+  const keyText = originalKey ? `原调 ${formatKey(originalKey)} 选调 ${formattedKey}` : `选调 ${formattedKey}`;
   const capoText = `${song.capo}`;
 
   return {
     title: song.title || DEFAULT_SCORE_TITLE,
     // 歌手（纯展示元数据，空串表示无；canvas 表头非空时绘制副标题行）
     singer: song.singer ?? '',
+    // 原调（'' 表示未设置）：已并入 keyText 元信息行左段（「原调 X → 演唱调」），无需单独字段
     keyText,
     capoText,
     lines,

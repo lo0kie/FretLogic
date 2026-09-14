@@ -84,6 +84,8 @@ export function useTextTransfer() {
     const lyrics = sanitizeLyricsText(p.lyrics);
     const title = p.title.trim() || DEFAULT_SCORE_TITLE;
     const playKey = /^[A-Ga-g][#b]?$/.test(p.playKey) ? p.playKey : 'C';
+    // 原调同 playKey 口径校验：非法格式回退未设置（''），防止脏文本注入展示层
+    const originalKey = /^[A-Ga-g][#b]?$/.test(p.originalKey) ? p.originalKey : '';
     const capo = toCapo(p.capo);
 
     const newSong = songStore.createSong(title);
@@ -105,7 +107,15 @@ export function useTextTransfer() {
 
     if (createdCount > 0) chordStore.flushChordsToStorage();
 
-    songStore.updateSongMeta(newSong.id, { lyrics, lineIds, playKey, capo, chordMap, singer: p.singer ?? '' });
+    songStore.updateSongMeta(newSong.id, {
+      lyrics,
+      lineIds,
+      playKey,
+      capo,
+      chordMap,
+      singer: p.singer ?? '',
+      originalKey,
+    });
     scoreEditor.setActiveSong(newSong.id);
     scoreEditor.activeTab = 'edit';
 

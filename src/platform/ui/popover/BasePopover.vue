@@ -23,9 +23,13 @@
       class="popover-floating-host pointer-events-auto"
       ref="floatingRef"
     >
+      <!-- panelScrollbar：面板自身作为滚动容器挂 v-scrollbar（注入 overflow 并隐藏原生滚动条），
+           高度上限仍由 panelClass 提供。指令经 enabled 绑定值惰性启停，面板保持单分支——
+           禁止改回 Transition 内 v-if/v-else 双分支（分支切换会触发 insertBefore 补丁错误） -->
       <Transition :name="transitionName" @after-leave="handleAfterLeave()" appear>
         <div
           v-if="isShown"
+          v-scrollbar="panelScrollbarBinding"
           :aria-label
           :aria-modal="false"
           :class="panelClass"
@@ -42,6 +46,16 @@
           <slot :close />
         </div>
       </Transition>
+      <!-- v-scrollbar overlay 独立挂载层：模板内恒无子节点，Vue 永不 diff 它的 children。
+           必须常驻（不与 isShown 联动）且晚于面板挂载，overlay 才能盖在面板之上且 ref 先就绪。
+           禁止让指令把 overlay 追加到浮层宿主本身——宿主的 children 由 Transition 动态切换，
+           外来节点会破坏补丁锚点（insertBefore NotFoundError） -->
+      <div
+        v-if="panelScrollbar"
+        aria-hidden="true"
+        class="popover-scrollbar-layer pointer-events-none absolute inset-0 z-panel"
+        ref="scrollbarLayerRef"
+      />
     </div>
   </Teleport>
 </template>
@@ -64,6 +78,7 @@ import { acquireFloatingZ, FLOATING_Z_BASE, releaseFloatingZ } from '@/platform/
 import { registerOpenPopover, unregisterOpenPopover } from '@/platform/ui/popover/popoverRegistry';
 import { POPOVER_HOVER_CLOSE_DELAY_MS } from '@/platform/utils/constants';
 
+import type { ScrollbarOptions } from '@/platform/directives/vScrollbar';
 import type { Placement, VirtualElement } from '@floating-ui/vue';
 import type { CSSProperties, MaybeRef } from 'vue';
 
@@ -109,6 +124,7 @@ const {
   contextTriggerEl = null,
   closeOnContextTriggerClick = true,
   autoFocus = false,
+  panelScrollbar = false,
 } = defineProps<{
   /** 触发方式：click / hover / focus / contextmenu */
   trigger?: 'click' | 'hover' | 'focus' | 'contextmenu';
@@ -156,6 +172,8 @@ const {
   closeOnContextTriggerClick?: boolean;
   /** 打开后是否自动聚焦面板内首个可聚焦元素 */
   autoFocus?: boolean;
+  /** 面板是否用 v-scrollbar 指令自绘滚动条（替换原生滚动条）；高度上限由 panelClass 提供 */
+  panelScrollbar?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -166,6 +184,7 @@ const emit = defineEmits<{
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
 const panelRef = useTemplateRef<HTMLDivElement>('panelRef');
+const scrollbarLayerRef = useTemplateRef<HTMLElement>('scrollbarLayerRef');
 const arrowRef = useTemplateRef<HTMLElement>('arrowRef');
 const isMounted = ref(false);
 const isShown = ref(false);
@@ -241,6 +260,12 @@ const mergedPanelStyle = computed<CSSProperties>(() => ({
   transformOrigin: panelTransformOrigin.value,
   ...(typeof panelStyle === 'object' && !Array.isArray(panelStyle) ? panelStyle : {}),
 }));
+
+/** v-scrollbar 绑定值：开启时接管面板纵轴；关闭时惰性占位（指令常驻模板但不注入任何样式/DOM）。
+ *  面板必须保持单分支——<Transition> 内 v-if/v-else 双分支切换会触发 insertBefore 补丁错误 */
+const panelScrollbarBinding = computed<ScrollbarOptions>(() =>
+  panelScrollbar ? { direction: 'y', endInset: 8, overlayParent: () => scrollbarLayerRef.value } : { enabled: false }
+);
 
 const arrowStyle = computed<CSSProperties>(() => {
   if (!showArrow || !middlewareData.value.arrow) return {};
@@ -504,11 +529,14 @@ const isChildFloatingLayer = (el: HTMLElement | null): boolean => {
   return false;
 };
 
-/** 判断事件目标是否在「合法区域」内：触发元素、面板或嵌套子浮层 */
+/** 判断事件目标是否在「合法区域」内：触发元素、面板（含 v-scrollbar 自绘轨道/拇指等
+ *  挂在浮层宿主下的兄弟 overlay）或嵌套子浮层 */
 const isEventInside = (target: EventTarget | null): boolean => {
   if (!(target instanceof Node)) return false;
   if (referenceRef.value?.contains(target)) return true;
-  if (panelRef.value?.contains(target)) return true;
+  // v-scrollbar 的轨道/拇指是 panelRef 的兄弟节点（vScrollbar 挂到宿主父元素上），
+  // 必须按浮层宿主整体判定，否则点击/悬停滚动条会被判为外部而关闭面板
+  if (floatingRef.value?.contains(target)) return true;
   if (target instanceof HTMLElement && isChildFloatingLayer(target)) return true;
   return false;
 };

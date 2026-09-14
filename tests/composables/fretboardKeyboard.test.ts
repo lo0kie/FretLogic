@@ -1,4 +1,4 @@
-﻿import { ref } from 'vue';
+import { ref } from 'vue';
 
 import { describe, expect, it, vi } from 'vitest';
 

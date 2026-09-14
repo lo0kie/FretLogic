@@ -68,7 +68,10 @@
                         variant="neutral"
                         width="2rem"
                       >
-                        <span v-chord-name="`${computeSongKey(row.song!.playKey, row.song!.capo)}调`" />
+                        <!-- 「调」走 suffix 显式声明：拼进 name 会让整串解析失败、升降号退化成普通字符 -->
+                        <span
+                          v-chord-name="{ name: computeSongKey(row.song!.playKey, row.song!.capo), suffix: '调' }"
+                        />
                       </BaseBadge>
 
                       <BaseBadge
@@ -194,14 +197,20 @@ const songRows = computed<SongListRow[]>(() => {
 /** 乐谱是否为当前打开的乐谱 */
 const isSongActive = (songId: string) => scoreEditor.activeSongId === songId;
 
-/** 乐谱卡无障碍描述：标题、调性与 Capo，选中时追加状态 */
+/** 乐谱卡无障碍描述：标题、演唱调与 Capo，选中时追加状态 */
 const songCardAriaLabel = (song: Song): string =>
-  `乐谱 ${song.title}，${song.playKey}调，Capo ${song.capo}${isSongActive(song.id) ? '，已选中' : ''}`;
-/** 调性徽标无障碍描述：最终计算调 */
-const songKeyAriaLabel = (song: Song): string => `调性 ${computeSongKey(song.playKey, song.capo)} 调`;
+  `乐谱 ${song.title}，${computeSongKey(song.playKey, song.capo)}调，Capo ${song.capo}${isSongActive(song.id) ? '，已选中' : ''}`;
+/** 调性徽标无障碍描述：演唱调（已记录原调时附注原调） */
+const songKeyAriaLabel = (song: Song): string =>
+  song.originalKey
+    ? `原调 ${song.originalKey}，演唱调 ${computeSongKey(song.playKey, song.capo)} 调`
+    : `调性 ${computeSongKey(song.playKey, song.capo)} 调`;
 
-/** 调性徽标悬停提示：展示变调夹前的原调 */
-const songKeyTitle = (song: Song): string => `原调 ${song.playKey}`;
+/** 调性徽标悬停提示：原调（未记录时明示）+ Capo → 演唱调推导链 */
+const songKeyTitle = (song: Song): string =>
+  song.originalKey
+    ? `原调 ${song.originalKey} · Capo ${song.capo} → ${computeSongKey(song.playKey, song.capo)}`
+    : `未记录原调 · Capo ${song.capo} → ${computeSongKey(song.playKey, song.capo)}`;
 
 // 乐谱右键菜单项：每次直接构建（仅 3 项），不缓存
 const getSongMenuItems = (song: Song): MenuItem[] => {

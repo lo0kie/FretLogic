@@ -34,9 +34,10 @@
 
     <template #footer>
       <ActionButton
+        v-if="!editorStore.isEditing"
         :disabled="isPristine"
-        :label="editorStore.isEditing ? '放弃修改' : '重置指板'"
         @click="handleReset()"
+        label="重置指板"
         variant="ghost"
       />
       <ActionButton
@@ -84,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
 
 import ChordAnalysisPanel from '@/domains/chord/workbench/components/ChordAnalysisPanel.vue';
 import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
@@ -92,7 +93,7 @@ import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseDrawer from '@/platform/ui/drawer/BaseDrawer.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
-import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
+import { CHORD_EDITOR_STORE_KEY, useDrawerChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { toGroupId } from '@/domains/chord/theory/entityFactories';
 import {
@@ -108,7 +109,7 @@ const props = defineProps<{
   visible: boolean;
   /** 编辑模式：null=新建空白草稿；传和弦对象则加载该和弦进入编辑 */
   editingChord: Chord | null;
-  /** 新建时的预归入分组（选器和弦当前选中的分组 id；'ALL' 或 null 视为未选） */
+  /** 新建时的预归入分组（选择和弦面板当前选中的分组 id；'ALL' 或 null 视为未选） */
   presetGroupId?: string | null;
 }>();
 
@@ -123,9 +124,12 @@ const visibleModel = computed({
   set: val => emit('update:visible', val),
 });
 
-const editorStore = useChordEditorStore();
+// 抽屉专用草稿（纯内存）：与工作台草稿完全隔离，抽屉内编辑/新建不再改动工作台指板，反之亦然
+const editorStore = useDrawerChordEditorStore();
+// 子树（和弦候选面板等）经注入解析到本抽屉草稿；provide 对自身不可见，故下方 composable 显式传参
+provide(CHORD_EDITOR_STORE_KEY, editorStore);
 const chordStore = useChordStore();
-const chordActions = useChordActions();
+const chordActions = useChordActions(editorStore);
 const {
   handleBarresChange,
   handleChordNameChange,
@@ -133,8 +137,8 @@ const {
   handleNameSegmentsChange,
   handleRootStringChange,
   handleStringsChange,
-} = useChordDraftEditing();
-const { isPristine, isSaveDisabled } = useChordDraftSaveState();
+} = useChordDraftEditing(editorStore);
+const { isPristine, isSaveDisabled } = useChordDraftSaveState(editorStore);
 
 const drawerTitle = computed(() => (editorStore.isEditing ? '编辑和弦' : '新建和弦'));
 
@@ -183,6 +187,17 @@ watch(groupModalOpen, open => {
     groupModalZ.value = 0;
   }
 });
+
+/**
+ * 抽屉被外部收起（宿主随 KeepAlive 停用而一并关闭等）时同步收起分组选择弹窗：
+ * 该弹窗同样 Teleport 到 body，不会随抽屉 DOM 一起摘除，会独立残留在页面上。
+ */
+watch(
+  () => props.visible,
+  open => {
+    if (!open) groupModalOpen.value = false;
+  }
+);
 
 onBeforeUnmount(() => {
   if (groupModalZ.value) {

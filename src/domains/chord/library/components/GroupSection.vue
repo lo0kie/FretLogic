@@ -30,6 +30,7 @@
             :expanded="isGroupContentOpen(group)"
             @update:expanded="chordActions.executeGroupToggle(group)"
             data-focusable-inline
+            initial-auto
             unpadded
           >
             <template #title>

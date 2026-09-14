@@ -17,7 +17,7 @@
             @click="handleSelectCandidate(candidate)"
             interactive
           >
-            <span v-chord-name="{ segments: candidate.segments, name: candidate.chordName }" />
+            <span v-chord-name="{ segments: candidate.segments, name: candidate.chordName, shorthand }" />
           </BaseBadge>
         </template>
 
@@ -78,7 +78,7 @@ import { computed } from 'vue';
 
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
-import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
+import { useActiveChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';
 import {
   areChordsEnharmonicallyEquivalent,
@@ -109,12 +109,16 @@ interface RenderNoteItem extends NoteInput {
   canAccidentalToggle: boolean;
 }
 
-/** 仅显示候选区（用于抽屉等狭窄场景），隐藏右侧按音分析列 */
+/** 仅显示候选区（用于抽屉等狭窄场景），隐藏右侧按音分析列；
+ *  shorthand：候选和弦名是否用简写符号，缺省 false（完整名）——
+ *  由调用方按场景显式传入（工作台传工作台偏好、乐谱抽屉传乐谱偏好），组件不自行读取设置 */
 defineProps<{
   candidatesOnly?: boolean;
+  shorthand?: boolean;
 }>();
 
-const editorStore = useChordEditorStore();
+// 解析当前生效的草稿实例：位于选器和弦抽屉子树内时取抽屉独立草稿，否则取工作台草稿
+const editorStore = useActiveChordEditorStore();
 
 const INTERVAL_MAP: Record<number, { degree: string; acc: '' | 'b' | '#' }> = {
   0: { degree: '1', acc: '' },
@@ -306,13 +310,13 @@ const syncUserPitchPreferences = (
   }
 };
 
-/** 清除当前选中的和弦名与根音标记（应用于再点已选中候选） */
+/** 清除当前选中的和弦名，并把根音弦还原到点候选前的状态（应用于再点已选中候选） */
 const clearDraftSelection = () => {
   editorStore.draftChord.nameSegments = null;
-  editorStore.draftChord.rootStringIndex = null;
+  editorStore.restoreRootOnCandidateCancel();
 };
 
-/** 用户点击候选：已选中则清除和弦名与根音标记，否则应用候选名并把根音指到对应琴弦 */
+/** 用户点击候选：已选中则清除和弦名并还原根音，否则应用候选名并把根音指到对应琴弦 */
 const handleSelectCandidate = (candidate: CandidateResult) => {
   if (isCandidateSelected(candidate)) {
     clearDraftSelection();
@@ -320,6 +324,7 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   }
 
   const parsedSegs = parseCandidateSegments(candidate);
+  editorStore.snapshotRootBeforeCandidate();
   const assignedRootStringIdx = assignRootString(candidate);
   if (parsedSegs) {
     syncUserPitchPreferences(parsedSegs, assignedRootStringIdx);

@@ -306,7 +306,9 @@ export const useSongStore = defineStore('song', () => {
    */
   const updateSongMeta = (
     id: string,
-    payload: Partial<Pick<Song, 'title' | 'singer' | 'playKey' | 'capo' | 'lyrics' | 'lineIds' | 'chordMap'>>
+    payload: Partial<
+      Pick<Song, 'title' | 'singer' | 'originalKey' | 'playKey' | 'capo' | 'lyrics' | 'lineIds' | 'chordMap'>
+    >
   ) => {
     const target = songMap.value.get(id);
     if (!target) return;
@@ -318,6 +320,10 @@ export const useSongStore = defineStore('song', () => {
     }
     if (payload.singer !== undefined && target.singer !== payload.singer) {
       target.singer = payload.singer;
+      hasChanged = true;
+    }
+    if (payload.originalKey !== undefined && target.originalKey !== payload.originalKey) {
+      target.originalKey = payload.originalKey;
       hasChanged = true;
     }
     if (payload.playKey !== undefined && target.playKey !== payload.playKey) {

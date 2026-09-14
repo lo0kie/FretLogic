@@ -62,6 +62,7 @@
                     icon-size="xl"
                     icon-stroke="bold"
                     size="sm"
+                    title="关闭"
                     variant="ghost"
                   />
                 </div>
@@ -70,10 +71,19 @@
 
             <div
               :class="[
-                { 'has-header': hasHeader, 'has-footer': showFooter, 'py-sm': !$slots['default'] },
+                {
+                  // body 四向 padding 独立推导：贴卡片边缘恒为 xl，与相邻区块之间有内容时 lg、
+                  // 空内容垫片时 sm；缺 header/footer 的方向升级为贴边 xl，避免间距塌陷
+                  'pt-lg': hasHeader && !!$slots['default'],
+                  'pt-sm': hasHeader && !$slots['default'],
+                  'pt-xl': !hasHeader,
+                  'pb-lg': showFooter && !!$slots['default'],
+                  'pb-sm': showFooter && !$slots['default'],
+                  'pb-xl': !showFooter,
+                },
                 isAutoHeight ? 'h-auto max-h-[calc(800px-8rem)]' : 'min-h-0 flex-1',
               ]"
-              class="modal-body-scrollable no-scrollbar flex flex-col overflow-y-auto px-xl py-lg"
+              class="modal-body-scrollable no-scrollbar flex flex-col overflow-y-auto px-xl"
             >
               <slot />
             </div>

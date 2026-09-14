@@ -16,6 +16,49 @@ export const charKey = (lineId: string, index: number): SlotKey => `line_${lineI
 /** 边和弦槽位的前缀，用于整体清除某行某侧的槽位 */
 export const edgeSlotPrefix = (lineId: string, type: EdgeSlotType): string => `line_${lineId}_${type}_`;
 
+/** 边和弦索引：一次性把「行 + 侧 → 有序和弦 id」聚好，避免逐行逐侧回头看整张表 */
+export interface EdgeChordIndex {
+  /** 取某行某侧的有序和弦 id（无绑定返回空数组） */
+  get(lineId: string, type: EdgeSlotType): string[];
+}
+
+const EMPTY_CHORD_IDS: string[] = [];
+
+/** 边槽位 key 的形态：line_<lineId>_<start|end>_<index>。
+ *  lineId 自身可能含下划线（如 l_3f2a1b8c），故按尾部锚定解析、不做 split */
+const EDGE_SLOT_KEY_RE = /^line_(.+)_(start|end)_(\d+)$/;
+
+/**
+ * 构建边和弦索引：谱面行数据重建时每行每侧都要取一次边缘和弦 id，
+ * 直接按前缀在整张表里扫是 O(行数 × 绑定数)（长歌 + 多绑定下每次改和弦都要重扫一遍）；
+ * 预热成索引后建表 O(绑定数)，之后每次取用 O(1)。
+ */
+export const buildEdgeChordIndex = (chordMap: ReadonlyMap<string, string>): EdgeChordIndex => {
+  const buckets = new Map<string, { index: number; id: string }[]>();
+  for (const [key, id] of chordMap) {
+    if (!id) continue;
+    const matched = EDGE_SLOT_KEY_RE.exec(key);
+    if (!matched) continue;
+    const index = parseInt(matched[3]!, 10);
+    if (Number.isNaN(index)) continue;
+    const bucketKey = `${matched[1]}_${matched[2]}`;
+    const list = buckets.get(bucketKey);
+    if (list) list.push({ index, id });
+    else buckets.set(bucketKey, [{ index, id }]);
+  }
+
+  const ids = new Map<string, string[]>();
+  for (const [bucketKey, list] of buckets) {
+    list.sort((a, b) => a.index - b.index);
+    ids.set(
+      bucketKey,
+      list.map(entry => entry.id)
+    );
+  }
+
+  return { get: (lineId, type) => ids.get(`${lineId}_${type}`) ?? EMPTY_CHORD_IDS };
+};
+
 /** 按序收集某行某侧边和弦槽位中存储的和弦 id（只读，兼容裸 Map） */
 export const collectEdgeChordIds = (
   chordMap: ReadonlyMap<string, string>,
@@ -162,6 +205,7 @@ export const createSong = (title: string): Song => ({
   id: toSongId('s_' + generateUUID().slice(0, 8)),
   title: title.trim() || '未命名乐谱',
   singer: '',
+  originalKey: '',
   lyrics: '',
   playKey: 'C',
   capo: 0,

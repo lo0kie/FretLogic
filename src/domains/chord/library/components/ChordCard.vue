@@ -1,6 +1,7 @@
 <template>
   <div class="w-full">
     <BaseMenu #="{ isOpen }" :items="menuItems" trigger="contextmenu">
+      <!-- 和弦库分组内的和弦卡片跟随简写设置（其余场景一律完整名） -->
       <div :title="getChordName(activeChord, { shorthand: settingsStore.workbenchChordShorthand })" class="w-full">
         <div
           v-action-card

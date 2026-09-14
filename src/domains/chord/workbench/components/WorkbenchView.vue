@@ -3,19 +3,17 @@
     <div class="relative flex size-full items-start overflow-auto px-2xl pt-2xl pb-3xl">
       <!-- 交互指板卡片：点击/编辑即写和弦草稿，含横按标记与和弦名直改 -->
       <div
-        class="pointer-events-auto relative mx-auto flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel/90 px-2xl py-xl shadow-panel backdrop-blur-lg transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg"
+        class="pointer-events-auto relative z-base mx-auto flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel/90 px-2xl py-xl shadow-panel backdrop-blur-lg transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg"
       >
-        <div class="relative z-base flex w-full shrink-0 justify-center">
-          <Fretboard
-            :chord="editorStore.draftChord"
-            @update:barres="handleBarresChange($event)"
-            @update:chord-name="handleChordNameChange($event)"
-            @update:fret-offset="handleFretOffsetUpdate($event)"
-            @update:name-segments="handleNameSegmentsChange($event)"
-            @update:root-string-index="handleRootStringChange($event)"
-            @update:strings="handleStringsChange($event)"
-          />
-        </div>
+        <Fretboard
+          :chord="editorStore.draftChord"
+          @update:barres="handleBarresChange($event)"
+          @update:chord-name="handleChordNameChange($event)"
+          @update:fret-offset="handleFretOffsetUpdate($event)"
+          @update:name-segments="handleNameSegmentsChange($event)"
+          @update:root-string-index="handleRootStringChange($event)"
+          @update:strings="handleStringsChange($event)"
+        />
       </div>
 
       <!-- 右侧卡片列：外层定位且不滚动，内层承载滚动。
@@ -26,11 +24,9 @@
            列顶 top-8（32px）与指板同高，滚动时卡片最多上移到 32px，不会比指板更高 -->
       <div class="pointer-events-auto absolute inset-y-2xl right-8 z-panel">
         <div
+          v-edge-fade.y
           v-scrollbar="{ onScroll: closeAllPopovers, endInset: 12 }"
-          :style="maskStyle"
-          @scroll="syncEdgeFades()"
           class="flex size-full w-72 flex-col items-stretch gap-lg *:shrink-0"
-          ref="scrollRef"
         >
           <!-- 面板卡片外壳：由 View 统一封装（卡片 chrome + 折叠 + 展开态持久化），各业务面板保持纯内容。
        useWorkbenchPanelExpanded 为 composable（内部封装 useStorage），在此调用符合项目约束 -->
@@ -44,8 +40,14 @@
               :icon="PANEL_META[panelId].icon"
               :title="PANEL_META[panelId].title"
               @update:expanded="setPanelExpanded(panelId, $event)"
+              initial-auto
             >
-              <component :is="PANEL_COMPONENT_MAP[panelId]" />
+              <!-- 简写偏好显式传给「和弦分析」面板（其余面板传 undefined 不产生多余属性）：
+                   简写只对工作台场景开放，由本视图按场景传入，组件与指令均不自行读取设置 -->
+              <component
+                :is="PANEL_COMPONENT_MAP[panelId]"
+                :shorthand="panelId === 'analysis' ? settingsStore.workbenchChordShorthand : undefined"
+              />
             </BaseCollapse>
           </div>
         </div>
@@ -57,15 +59,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-
 import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordDraftEditing } from '@/domains/chord/workbench/composables/useChordDraftEditing';
 import { useWorkbenchPanelExpanded } from '@/domains/chord/workbench/composables/useWorkbenchPanelExpanded';
 import { useWorkbenchPanelsOrder } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder.ts';
-import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
+import { useSettingsStore } from '@/platform/store/settingsStore';
 import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry.ts';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
@@ -78,11 +78,6 @@ import { useWorkbenchRouteSync } from '../composables/useWorkbenchRouteSync';
 import type { WorkbenchPanelId } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder.ts';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { Component, Ref } from 'vue';
-
-// 滚动边缘渐隐（mask 方案）：未滚动时顶部不遮罩（首卡完整可见），上滚后顶部渐隐柔化切口；
-// 底部仅未滚到底时渐隐，滚到底隐藏（末卡不被遮挡）。渐变直接作用于内容透明度，不依赖背景色
-const scrollRef = ref<HTMLElement | null>(null);
-const { maskStyle, syncEdgeFades } = useScrollEdgeFades(scrollRef);
 
 const PANEL_COMPONENT_MAP: Record<WorkbenchPanelId, Component> = {
   analysis: ChordAnalysisPanel,
@@ -115,6 +110,8 @@ const setPanelExpanded = (id: WorkbenchPanelId, value: boolean): void => {
 };
 
 const { panels } = useWorkbenchPanelsOrder();
+/** 工作台偏好：简写开关只在本视图内显式下发给需要它的面板，不扩散到全局推断 */
+const settingsStore = useSettingsStore();
 
 // ==================== 指板交互草稿编辑 ====================
 
