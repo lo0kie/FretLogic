@@ -8,6 +8,7 @@
     :hover-open-delay
     :offset-distance
     :panel-class
+    :panel-scrollbar
     :panel-style
     :placement
     :trigger
@@ -21,7 +22,7 @@
     </template>
 
     <div :class="panelInnerClass" @keydown="handleMenuKeydown($event)" ref="menuBoxRef" role="menu" tabindex="-1">
-      <MenuItems :items :panel-class :size :title :on-select="handleItemSelect" ref="itemsRef" />
+      <MenuItems :items :panel-class :panel-scrollbar :size :title :on-select="handleItemSelect" ref="itemsRef" />
     </div>
   </BasePopover>
 
@@ -42,6 +43,7 @@
       :disabled
       :offset-distance
       :panel-class
+      :panel-scrollbar
       :panel-style
       :placement
       :virtual-ref
@@ -52,7 +54,7 @@
       ref="popoverRef"
     >
       <div :class="panelInnerClass" @keydown="handleMenuKeydown($event)" ref="menuBoxRef" role="menu" tabindex="-1">
-        <MenuItems :items :panel-class :size :title :on-select="handleItemSelect" ref="itemsRef" />
+        <MenuItems :items :panel-class :panel-scrollbar :size :title :on-select="handleItemSelect" ref="itemsRef" />
       </div>
     </BasePopover>
   </template>
@@ -86,6 +88,7 @@ const {
   panelClass = 'context-menu-box',
   panelStyle = {},
   closeOnContextTriggerClick = true,
+  panelScrollbar = false,
 } = defineProps<{
   /** 菜单项数据列表（支持 children 级联子菜单） */
   items: MenuItem[];
@@ -111,6 +114,8 @@ const {
   panelStyle?: CSSProperties;
   /** 右键分支：左键点击触发区内部时是否关闭浮层 */
   closeOnContextTriggerClick?: boolean;
+  /** 面板与级联子面板是否用 v-scrollbar 自绘滚动条（替换原生滚动条）；透传 BasePopover / MenuItems */
+  panelScrollbar?: boolean;
 }>();
 
 const emit = defineEmits<{

@@ -1,5 +1,5 @@
 // src/stores/chordEditorStore.ts
-import { computed, toRaw, watch } from 'vue';
+import { computed, inject, ref, toRaw, watch } from 'vue';
 
 import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -24,6 +24,7 @@ import { cloneDeep } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import type { BarreEntity, Chord, GuitarStringEntity, StringIndex } from '@/domains/chord/types';
+import type { InjectionKey } from 'vue';
 
 /** 构造空白和弦草稿（指定弦数全部静音、匹配默认调弦、3 品窗口），作为编辑器初始态。 */
 const createDefaultChord = (stringCount: number = 6): Chord => ({
@@ -123,13 +124,19 @@ export const reconcileBarres = (
   return chord;
 };
 
-export const useChordEditorStore = defineStore('editor', () => {
+/**
+ * 草稿 store 的 setup 工厂：同一套草稿逻辑可实例化多份，各自持有独立的和弦草稿。
+ * @param persist 草稿与编辑态是否落盘（true：刷新后续编；false：纯内存草稿，销毁即弃）
+ */
+const createChordEditorSetup = (persist: boolean) => () => {
   const chordStore = useChordStore();
-  const draftChord = useStorage<Chord>(STORAGE_KEYS.EDITING_DRAFT, createDefaultChord(), localStorage);
+  const draftChord = persist
+    ? useStorage<Chord>(STORAGE_KEYS.EDITING_DRAFT, createDefaultChord(), localStorage)
+    : ref(createDefaultChord());
   draftChord.value = normalizeDraftChord(draftChord.value);
-  const isEditing = useStorage(STORAGE_KEYS.IS_EDITING, false);
-  const isCreating = useStorage(STORAGE_KEYS.IS_CREATING, false);
-
+  const isEditing = persist ? useStorage(STORAGE_KEYS.IS_EDITING, false) : ref(false);
+  const isCreating = persist ? useStorage(STORAGE_KEYS.IS_CREATING, false) : ref(false);
+  // 自动横按是全局偏好（头部配置面板统一切换），不随草稿实例分裂：所有实例共用同一存储键
   const autoBarre = useStorage(STORAGE_KEYS.AUTO_BARRE, true);
 
   const isFretBoardEmpty = computed(() => draftChord.value.strings.every(s => s[0] < 0));
@@ -149,6 +156,27 @@ export const useChordEditorStore = defineStore('editor', () => {
     },
     { deep: true }
   );
+
+  /** 候选应用前的根音弦快照（内存态；undefined = 当前无快照）。取消候选时用它还原根音弦，
+   *  避免「点候选 → 再点取消」把用户手动设置的根音一并清掉。 */
+  let preCandidateRootStringIndex: StringIndex | null | undefined = undefined;
+
+  /** 应用和弦候选前快照当前根音弦（assignRootString 会改写 rootStringIndex，须先记录原值） */
+  const snapshotRootBeforeCandidate = () => {
+    preCandidateRootStringIndex = draftChord.value.rootStringIndex;
+  };
+
+  /** 取消和弦候选：把根音弦还原到快照值（含还原为「无根音」），无快照则保持不动 */
+  const restoreRootOnCandidateCancel = () => {
+    if (preCandidateRootStringIndex === undefined) return;
+    draftChord.value.rootStringIndex = preCandidateRootStringIndex;
+    preCandidateRootStringIndex = undefined;
+  };
+
+  /** 丢弃根音快照：手动改根音或整体替换草稿后快照已过期，取消候选不再回退根音 */
+  const discardRootSnapshot = () => {
+    preCandidateRootStringIndex = undefined;
+  };
 
   /** 多指法：只查 chordStore，nameKey 规则不在这里重复 */
   const currentMultiFingering = computed(() => {
@@ -316,6 +344,7 @@ export const useChordEditorStore = defineStore('editor', () => {
     isEditing.value = true;
     draftChord.value = cloneDeep(toRaw(chord));
     isProgrammaticStringsChange = false;
+    discardRootSnapshot();
   };
 
   /** 从和弦库重新加载当前草稿对应的原始数据（草稿丢失/脏污时的恢复入口）。 */
@@ -333,6 +362,7 @@ export const useChordEditorStore = defineStore('editor', () => {
     isProgrammaticStringsChange = false;
     isCreating.value = false;
     isEditing.value = false;
+    discardRootSnapshot();
   };
 
   /** 以当前草稿为模板另存为新和弦：清空 id 并切换为新建态。 */
@@ -361,5 +391,26 @@ export const useChordEditorStore = defineStore('editor', () => {
     resetEditor,
     saveAsNewChord,
     setMultiFingeringIndex,
+    snapshotRootBeforeCandidate,
+    restoreRootOnCandidateCancel,
+    discardRootSnapshot,
   };
-});
+};
+
+/** 工作台草稿（全局唯一、落盘持久化）：工作台视图与全局服务（音频/同步/导入导出/URL 镜像）统一消费 */
+export const useChordEditorStore = defineStore('editor', createChordEditorSetup(true));
+
+/** 选器和弦抽屉草稿（纯内存）：与工作台草稿完全隔离——抽屉内编辑/新建不再改动工作台指板，
+ *  工作台的编辑也不会串进抽屉；抽屉关闭后草稿随之丢弃，不留残留 localStorage */
+export const useDrawerChordEditorStore = defineStore('editor-drawer', createChordEditorSetup(false));
+
+/** 草稿 store 实例类型：两个实例同构，取联合以容纳不同 $id 字面量，便于跨实例传递（provide 的抽屉实例） */
+export type ChordEditorStore = ReturnType<typeof useChordEditorStore> | ReturnType<typeof useDrawerChordEditorStore>;
+
+/** 注入键：抽屉把自己的草稿实例 provide 给子树（和弦候选面板等），替代全局单例解析 */
+export const CHORD_EDITOR_STORE_KEY: InjectionKey<ChordEditorStore> = Symbol('chord-editor-store');
+
+/** 解析当前生效的草稿 store：祖先 provide 了独立实例（抽屉）则用之，否则回落到工作台草稿。
+ *  注意：provide 只对其子树可见，同组件内 provide 后 inject 不到——抽屉自身需把实例显式传给 composable */
+export const useActiveChordEditorStore = (): ChordEditorStore =>
+  inject(CHORD_EDITOR_STORE_KEY, undefined) ?? useChordEditorStore();

@@ -48,7 +48,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const activeSongId = ref<string | null>(null);
   // 当前标签页仅内存态：URL `?tab=` 全权接管（刷新由 URL 恢复，裸访问回落到 edit 默认）
   const activeTabRef = ref<ScoreActiveTab>('edit');
-  const selectedSlotKey = ref<SlotKey | null>(null);
   // 缩放以百分制存储（100 = 100%），序列化处迁移旧版倍率（0.6~1.5）为百分制
   const fontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 100, localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
@@ -177,7 +176,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
         return;
       }
       currentActiveSongId = newSong?.id ?? null;
-      selectedSlotKey.value = null;
       historyStack.length = 0;
       historyIndex = -1;
       if (!newSong) {
@@ -324,7 +322,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   return {
     activeSongId,
     activeTab,
-    selectedSlotKey,
     activeSong,
     hasLyrics,
     setActiveSong,

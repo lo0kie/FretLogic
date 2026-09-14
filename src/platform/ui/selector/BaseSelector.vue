@@ -147,6 +147,7 @@
 
         <div class="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           <div
+            v-edge-fade.y="{ size: 16, flushEps: 2 }"
             v-scrollbar="{ endInset: 8 }"
             :aria-multiselectable="isMultiple || undefined"
             :style="{
@@ -155,7 +156,6 @@
               ...(filteredOptions.length === 0 ? { overflow: 'hidden' } : {}),
             }"
             @keydown="handleDropdownKeydown($event, close)"
-            @scroll.passive="syncEdgeFades()"
             class="flex w-full flex-col gap-0.5 overflow-y-auto p-xs outline-none"
             ref="dropdownRef"
             role="listbox"
@@ -227,10 +227,6 @@
               </div>
             </template>
           </div>
-
-          <!-- 顶部/底部滚动渐隐 -->
-          <component :is="topFade" />
-          <component :is="bottomFade" />
         </div>
 
         <slot v-if="$slots['footer']" name="footer" />
@@ -248,7 +244,6 @@ import { computed, inject, nextTick, onBeforeUpdate, ref, useAttrs, useTemplateR
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
-import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
@@ -410,11 +405,7 @@ onBeforeUpdate(() => {
   optionEls.value = [];
 });
 
-const { topFade, bottomFade, syncEdgeFades } = useScrollEdgeFades(dropdownRef, {
-  threshold: 2,
-  fadeSize: 16,
-  color: 'var(--bg-elevated)',
-});
+// 选项增删后渐隐遮罩由 v-edge-fade 的 MutationObserver 自动重测，无需手动同步
 
 const isMultiple = computed(() => multiple);
 
@@ -778,14 +769,7 @@ watch(isOpen, opened => {
   }
 });
 
-watch(
-  () => options,
-  () => {
-    if (isOpen.value) {
-      nextTick(syncEdgeFades);
-    }
-  }
-);
+// 选项变化时无需重测渐隐：子元素增删由 v-edge-fade 的 MutationObserver 捕获（原 nextTick(syncEdgeFades) 已随 composable 移除）
 
 // 打开后：将焦点移入列表（或搜索框），确保键盘方向键从当前/首个有效项开始定位
 const scrollToSelected = async () => {
@@ -804,17 +788,18 @@ const scrollToSelected = async () => {
       if (targetElement) {
         const containerRect = container.getBoundingClientRect();
         const itemRect = targetElement.getBoundingClientRect();
-        const gapOffset = 6;
+        // 间距对齐 v-edge-fade.y 的 size:16：低于该值选中项落在上下渐隐遮罩区内，观感如同贴边
+        const gapOffset = 16;
         if (itemRect.top - gapOffset < containerRect.top) {
           container.scrollTop -= containerRect.top - itemRect.top + gapOffset;
         } else if (itemRect.bottom + gapOffset > containerRect.bottom) {
           container.scrollTop += itemRect.bottom - containerRect.bottom + gapOffset;
         }
-        targetElement.focus();
+        // focus 原生的 focus scrolling 以「恰好可见 = 零间距」为准，会在面板 scale 过渡期间
+        // （rect 为缩放中坐标，滚动计算失真）把刚定位好的选项重滚成贴边——焦点必须与滚动解耦
+        targetElement.focus({ preventScroll: true });
       }
     }
-
-    syncEdgeFades();
   });
 };
 </script>

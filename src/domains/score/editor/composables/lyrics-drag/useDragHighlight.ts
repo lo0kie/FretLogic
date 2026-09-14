@@ -1,20 +1,16 @@
 /**
- * 歌词拖拽高亮：管理拖拽源/落点槽位的 DOM class 高亮（is-drop-target / is-drag-source），
- * 以及落点分区（上下两块，对应不同落地动作）判定。
+ * 歌词拖拽高亮：管理拖拽源/落点槽位的 DOM class 高亮（is-drop-target / is-drag-source）
+ * 与当前落点槽位判定（落地动作由槽位是否已占用和弦决定，与指针在槽内的位置无关）。
  */
 import { ref } from 'vue';
 
-import { resolveDropZone } from './dropZone.ts';
+import { resolveHoverLine, snapToSlotInLine } from './dropGeometry.ts';
 
-import type { DropZone } from './dropZone.ts';
-
-/** 拖拽高亮管理：源槽位与落点槽位的 DOM class 标记及落点分区判定 */
+/** 拖拽高亮管理：源槽位与落点槽位的 DOM class 标记 */
 export function useDragHighlight() {
   const dragOverSlotKey = ref<string | null>(null);
   /** 当前悬停的歌词行 ID（只要指针在行内，跨越字符间隙时保持恒定，避免行状态高频抖动闪烁） */
   const activeDropLineId = ref<string | null>(null);
-  /** 当前落点分区（仅当悬停在有效目标槽位上时有值） */
-  const dropZone = ref<DropZone | null>(null);
   let currentDropKey: string | null = null;
   let sourceKey: string | null = null;
   let sourceClass: string | null = null;
@@ -34,7 +30,7 @@ export function useDragHighlight() {
     }
   };
 
-  /** 标记拖拽源槽位：className 由调用方按拖拽模式选择（换位虚化 / 复制仅描边） */
+  /** 标记拖拽源槽位：className 由调用方给出（当前拖拽语义唯一为「移动」，源槽虚化 is-dragging-source） */
   const markDragSource = (key: string, className: string) => {
     sourceKey = key;
     sourceClass = className;
@@ -51,49 +47,68 @@ export function useDragHighlight() {
     }
     dragOverSlotKey.value = null;
     activeDropLineId.value = null;
-    dropZone.value = null;
   };
 
-  /** 按指针坐标更新落点槽位与分区（elementFromPoint 命中检测），返回命中的 slot key 或 null */
+  /** 指针离开谱面区/浮层之上：槽位与行的高亮一起清空 */
+  const clearDropTarget = (): null => {
+    dragOverSlotKey.value = null;
+    activeDropLineId.value = null;
+    applyDropHighlight(null);
+    return null;
+  };
+
+  /** 按指针坐标更新落点槽位（elementFromPoint 命中检测），返回命中的 slot key 或 null */
   const updateDropTarget = (clientX: number, clientY: number): string | null => {
     const el = document.elementFromPoint(clientX, clientY);
-    if (!el) {
-      dragOverSlotKey.value = null;
-      activeDropLineId.value = null;
-      dropZone.value = null;
-      applyDropHighlight(null);
-      return null;
-    }
+    if (!el) return clearDropTarget();
 
-    const lineEl = el.closest<HTMLElement>('[data-line-idx]');
-    activeDropLineId.value = lineEl?.dataset['lineIdx'] ?? null;
-
-    const slotEl = el.closest('[data-slot-key]');
-    if (slotEl instanceof HTMLElement) {
+    // 精确命中：指针真的落在某个字符槽上，直接取该槽
+    const slotEl = el.closest<HTMLElement>('[data-slot-key]');
+    if (slotEl) {
       const key = slotEl.dataset['slotKey'] ?? null;
       dragOverSlotKey.value = key;
-      // 槽位切换时清空迟滞记忆（prevZone 传 null），避免相邻槽位间 2px 迟滞带互相污染
-      dropZone.value = key
-        ? resolveDropZone(slotEl.getBoundingClientRect(), clientY, key === currentDropKey ? dropZone.value : null)
-        : null;
+      activeDropLineId.value = slotEl.closest<HTMLElement>('[data-line-idx]')?.dataset['lineIdx'] ?? null;
       applyDropHighlight(key);
       return key;
     }
 
-    // 落点判定严格限制在指针命中的槽位自身，不做行首/行尾的推测吸附
+    const zoneEl = el.closest<HTMLElement>('.interactive-score-zone');
+    if (!zoneEl) return clearDropTarget();
 
-    dragOverSlotKey.value = null;
-    dropZone.value = null;
-    applyDropHighlight(null);
-    return null;
+    const lines = Array.from(zoneEl.querySelectorAll<HTMLElement>('[data-line-idx]'));
+
+    // 撑开行：宽容判断——只要指针处在某行的垂直范围内就撑开该行，行内水平位置（字符间隙、
+    // 行首行号区、行被 min-w-full 拉伸出的行尾空白）不影响，避免指针一移出字符行状态就闪断
+    const hoveredLine = resolveHoverLine(lines, clientY);
+
+    // 落点槽位：精确判断（见 dropGeometry）——还必须落在该行槽位并集的水平容差内，
+    // 所以行首/行尾的拉伸空白只撑开行、不给落点边框，落点始终与视觉所见一致。
+    // 复用上面已解析出的行，避免重复一遍行矩形读取（指针移动事件上每次都要强制布局）
+    const snapped = hoveredLine ? snapToSlotInLine(hoveredLine, clientX) : null;
+
+    dragOverSlotKey.value = snapped?.key ?? null;
+    activeDropLineId.value = hoveredLine?.lineId ?? null;
+    applyDropHighlight(snapped?.key ?? null);
+    return snapped?.key ?? null;
+  };
+
+  /** 外部拖拽源专用：按几何就近计算的结果直接设置高亮（绕过 elementFromPoint——
+   *  抽屉等浮层会干扰命中测试）。
+   *  两个参数独立：key 决定落点边框与落地写入，lineId 决定哪一行撑开。
+   *  key 为 null 而 lineId 非 null 是正常组合——指针在行内但没有对准任何槽位（行首/行尾空白），
+   *  此时只撑开行、不落点，松手不写入 */
+  const setExternalDropTarget = (key: string | null, lineId: string | null) => {
+    dragOverSlotKey.value = key;
+    activeDropLineId.value = lineId;
+    applyDropHighlight(key);
   };
 
   return {
     dragOverSlotKey,
     activeDropLineId,
-    dropZone,
     markDragSource,
     clearDragClasses,
     updateDropTarget,
+    setExternalDropTarget,
   };
 }

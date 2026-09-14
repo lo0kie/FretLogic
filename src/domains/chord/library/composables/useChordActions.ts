@@ -1,8 +1,9 @@
-import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
+import { useActiveChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
 
+import type { ChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import type { Chord, Group } from '@/domains/chord/types';
 
 const warningMessages: Record<string, string> = {
@@ -13,10 +14,11 @@ const warningMessages: Record<string, string> = {
   NO_SELECTED_GROUP: '保存失败：请先选择目标分组',
 };
 
-/** 和弦实体的通用动作：加载编辑、分组折叠、删除（可撤销）、保存/另存 */
-export function useChordActions() {
+/** 和弦实体的通用动作：加载编辑、分组折叠、删除（可撤销）、保存/另存。
+ *  draftStore 可显式指定草稿来源（选器和弦抽屉传自己的独立草稿），默认解析当前生效实例 */
+export function useChordActions(draftStore: ChordEditorStore = useActiveChordEditorStore()) {
   const chordStore = useChordStore();
-  const editorStore = useChordEditorStore();
+  const editorStore = draftStore;
   const uiStore = useUiStore();
 
   /** 把和弦载入指板编辑器 */

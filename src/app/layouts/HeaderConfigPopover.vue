@@ -1,19 +1,19 @@
 <template>
   <div
+    v-edge-fade.y
     v-scrollbar="{ endInset: 8 }"
-    :style="maskStyle"
     @scroll="handleScroll()"
     class="config-popover-card flex max-h-80 w-[360px] flex-col gap-1 p-md outline-none"
     ref="scrollRef"
   >
     <template v-if="isScoreRoute">
       <BaseCollapse
+        v-scroll-into-view.y.delay-220="isScoreGroupOpen('layout')"
         :class="scoreOpenGroup === 'layout' ? 'bg-tint-panelhover-50!' : ''"
         :expanded="scoreOpenGroup === 'layout'"
         @update:expanded="toggleScoreGroup('layout', $event)"
         initial-auto
         class="scroll-mt-2"
-        data-collapse-key="layout"
         icon="type"
         icon-size="xl"
         title="排版"
@@ -79,12 +79,12 @@
       </BaseCollapse>
 
       <BaseCollapse
+        v-scroll-into-view.y.delay-220="isScoreGroupOpen('display')"
         :class="scoreOpenGroup === 'display' ? 'bg-tint-panelhover-50!' : ''"
         :expanded="scoreOpenGroup === 'display'"
         @update:expanded="toggleScoreGroup('display', $event)"
         initial-auto
         class="scroll-mt-2"
-        data-collapse-key="display"
         icon="eye"
         icon-size="xl"
         title="显示"
@@ -108,12 +108,12 @@
 
       <BaseCollapse
         v-if="isPreviewTab"
+        v-scroll-into-view.y.delay-220="isScoreGroupOpen('export')"
         :class="scoreOpenGroup === 'export' ? 'bg-tint-panelhover-50!' : ''"
         :expanded="scoreOpenGroup === 'export'"
         @update:expanded="toggleScoreGroup('export', $event)"
         initial-auto
         class="scroll-mt-2"
-        data-collapse-key="export"
         icon="layout-template"
         icon-size="xl"
         title="版面"
@@ -154,12 +154,12 @@
 
     <template v-else>
       <BaseCollapse
+        v-scroll-into-view.y.delay-220="isWorkbenchGroupOpen('timbre')"
         :class="workbenchOpenGroup === 'timbre' ? 'bg-tint-panelhover-50!' : ''"
         :expanded="workbenchOpenGroup === 'timbre'"
         @update:expanded="toggleWorkbenchGroup('timbre', $event)"
         initial-auto
         class="scroll-mt-2"
-        data-collapse-key="timbre"
         icon="audio-lines"
         icon-size="xl"
         title="音色"
@@ -221,12 +221,12 @@
       </BaseCollapse>
 
       <BaseCollapse
+        v-scroll-into-view.y.delay-220="isWorkbenchGroupOpen('effect')"
         :class="workbenchOpenGroup === 'effect' ? 'bg-tint-panelhover-50!' : ''"
         :expanded="workbenchOpenGroup === 'effect'"
         @update:expanded="toggleWorkbenchGroup('effect', $event)"
         initial-auto
         class="scroll-mt-2"
-        data-collapse-key="effect"
         icon="audio-waveform"
         icon-size="xl"
         title="效果"
@@ -257,12 +257,12 @@
       </BaseCollapse>
 
       <BaseCollapse
+        v-scroll-into-view.y.delay-220="isWorkbenchGroupOpen('display')"
         :class="workbenchOpenGroup === 'display' ? 'bg-tint-panelhover-50!' : ''"
         :expanded="workbenchOpenGroup === 'display'"
         @update:expanded="toggleWorkbenchGroup('display', $event)"
         initial-auto
         class="scroll-mt-2"
-        data-collapse-key="display"
         icon="eye"
         icon-size="xl"
         title="显示"
@@ -275,12 +275,12 @@
       </BaseCollapse>
 
       <BaseCollapse
+        v-scroll-into-view.y.delay-220="isWorkbenchGroupOpen('fretboard')"
         :class="workbenchOpenGroup === 'fretboard' ? 'bg-tint-panelhover-50!' : ''"
         :expanded="workbenchOpenGroup === 'fretboard'"
         @update:expanded="toggleWorkbenchGroup('fretboard', $event)"
         initial-auto
         class="scroll-mt-2"
-        data-collapse-key="fretboard"
         icon="guitar"
         icon-size="xl"
         title="指板"
@@ -348,7 +348,6 @@ import { Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
 import { FRET_COUNTS, INTERACTION_CONFIG } from '@/domains/fretboard/constants';
 import { SCORE_PAGE_MARGIN_PRESETS, SCORE_PAGE_SIZE_PRESETS } from '@/domains/score/constants';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
 
@@ -365,7 +364,6 @@ const workbenchScrollTopState = ref(0);
 
 <script setup lang="ts">
 const scrollRef = useTemplateRef('scrollRef');
-const { syncEdgeFades, maskStyle } = useScrollEdgeFades(scrollRef);
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 const editorStore = useChordEditorStore();
@@ -384,27 +382,21 @@ const workbenchOpenGroup = workbenchOpenGroupState;
 function toggleScoreGroup(group: '' | 'layout' | 'display' | 'export', value: boolean) {
   const target = isPreviewTab.value ? scorePreviewOpenGroupState : scoreEditOpenGroupState;
   target.value = value ? group : '';
-  if (value) scrollGroupIntoView(group);
 }
 
 /** 切换工作台页分组：展开即排他选中该组，收起（value=false）则回到全部折叠 */
 function toggleWorkbenchGroup(group: '' | 'timbre' | 'effect' | 'display' | 'fretboard', value: boolean) {
   workbenchOpenGroupState.value = value ? group : '';
-  if (value) scrollGroupIntoView(group);
 }
 
 /**
- * 打开分组后待高度过渡（--duration-base: 0.18s）稳定，再把该分组头部滚入弹层可视区顶部（策略 B）。
- * 之所以延迟再滚：若在过渡中途滚动，scrollIntoView 量到的是动画中的中间态高度，最终落点会偏移。
- * 折叠头经 BaseCollapse 的 $attrs 落到 <button> 本体，故可直接以 data-collapse-key 查询该按钮。
+ * 展开判定：供 v-scroll-into-view 在分组展开（false→true）时，待高度过渡（--duration-base: 0.18s）
+ * 稳定后把该分组头部滚入弹层可视区顶部（.delay-220 即过渡时长）。头部按钮本身带 scroll-mt-2 保证 8px 上边距。
+ * 展开为排他手风琴，故任意时刻仅一个分组为 true，天然只滚动刚打开的那一组。
  */
-function scrollGroupIntoView(group: string) {
-  const target = scrollRef.value?.querySelector<HTMLElement>(`[data-collapse-key="${group}"]`);
-  if (!target) return;
-  window.setTimeout(() => {
-    target.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }, 220);
-}
+const isScoreGroupOpen = (group: '' | 'layout' | 'display' | 'export'): boolean => scoreOpenGroup.value === group;
+const isWorkbenchGroupOpen = (group: '' | 'timbre' | 'effect' | 'display' | 'fretboard'): boolean =>
+  workbenchOpenGroup.value === group;
 
 /** 调音方案选项：仅列出与当前弦数匹配的预设 */
 const tuningOptions = computed(() =>
@@ -423,11 +415,10 @@ const setSessionScrollTop = (top: number) => {
   (isScoreRoute.value ? scoreScrollTopState : workbenchScrollTopState).value = top;
 };
 
-/** 滚动时刷新边缘渐隐遮罩，并维护会话级滚动位置 */
+/** 滚动时维护会话级滚动位置（边缘渐隐由 v-edge-fade 指令自动处理，无需手动同步） */
 function handleScroll() {
   const el = scrollRef.value;
   if (el) setSessionScrollTop(el.scrollTop);
-  syncEdgeFades();
 }
 
 /**

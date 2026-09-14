@@ -24,6 +24,7 @@ export { default as BaseFormRow } from './form/BaseFormRow.vue';
 export { default as BaseCollapse } from './collapse/BaseCollapse.vue';
 export { default as BaseFloatingBar } from './floating-bar/BaseFloatingBar.vue';
 export { default as BaseFab } from './floating-bar/BaseFab.vue';
+export { default as BaseFloatingPanel } from './floating-panel/BaseFloatingPanel.vue';
 export { default as BaseSegmentedControl } from './segmented/BaseSegmentedControl.vue';
 export { default as BaseSlider } from './slider/BaseSlider.vue';
 export { default as BaseSwitch } from './switch/BaseSwitch.vue';

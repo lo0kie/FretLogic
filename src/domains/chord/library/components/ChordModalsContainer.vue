@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <BaseModal v-model:visible="groupModals.modals.move" @confirm="groupModals.handleMoveChord" title="移动至新分组">
     <div v-grid-nav="3" class="no-scrollbar grid max-h-[50vh] grid-cols-3 gap-md">
       <button
@@ -25,12 +25,14 @@
     </div>
   </BaseModal>
 
-  <BaseModal
-    v-model:visible="groupModals.modals.chordVariantsDelete"
-    :show-footer="false"
-    :title="deleteVariantsTitle"
-    width="w-large"
-  >
+  <BaseModal v-model:visible="groupModals.modals.chordVariantsDelete" :show-footer="false" width="w-large">
+    <template #title>
+      <span
+        v-chord-name="{ name: groupModals.modalData.referenceChordName, prefix: '删除和弦 ', suffix: ' 的指法' }"
+        class="font-bold text-fg-title"
+      />
+    </template>
+
     <template #header-extra>
       <BaseCheckbox
         :indeterminate="isVariantsIndeterminate"
@@ -115,7 +117,6 @@ import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import { useChordStore } from '@/domains/chord/store/chordStore';
-import { getChordName } from '@/domains/chord/theory/theory';
 import { isDark } from '@/platform/composables/useTheme';
 import { injectModalController } from '@/platform/store/useModalController';
 
@@ -136,11 +137,6 @@ const isVariantsIndeterminate = computed(() => {
   const selectedCount = variants.filter(v => groupModals.modalData.selectedVariantIds.has(v.id)).length;
   return selectedCount > 0 && selectedCount < variants.length;
 });
-
-/** 删除指法弹窗标题：拼接主和弦名 */
-const deleteVariantsTitle = computed(
-  () => `删除和弦 "${getChordName(groupModals.modalData.activeGroupCard?.mainChord)}" 的指法`
-);
 
 /** 全选/取消全选待删除的指法 */
 const handleToggleSelectAllVariants = () => {

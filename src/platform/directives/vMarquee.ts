@@ -129,7 +129,7 @@ function shouldAnimate(state: MarqueeState): boolean {
 
 /**
  * 按配置在两端应用羽化渐变遮罩；未开启或未溢出时清除遮罩。
- * 遮罩方向跟随滚动位置，语义与 useScrollEdgeFades 一致——边缘贴住内容时不加渐隐：
+ * 遮罩方向跟随滚动位置，语义与 vEdgeFade 一致——边缘贴住内容时不加渐隐：
  * - 动画进行中：由 maskLoop 按动画相位逐帧计算（起点/终点贴边侧不渐隐）；
  * - 静止复位态：direction 'left' 停在起点（左缘贴内容）→ 仅右端渐隐；
  *   direction 'right' 停在终点（右缘贴内容）→ 仅左端渐隐。

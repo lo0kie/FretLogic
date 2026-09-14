@@ -162,7 +162,7 @@
     </div>
 
     <div class="left-group-list-container left-group-list relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-      <div v-scrollbar="{ onScroll: closeAllPopovers }" class="scroll-body flex-1 p-md" ref="scrollRef">
+      <div v-edge-fade.y v-scrollbar="{ onScroll: closeAllPopovers }" class="scroll-body flex-1 p-md" ref="scrollRef">
         <KeepAlive :max="12">
           <GroupSection
             v-if="route.path === ROUTE_PATHS.WORKBENCH"
@@ -183,10 +183,6 @@
           />
         </KeepAlive>
       </div>
-
-      <!-- 顶部/底部滚动渐隐 -->
-      <component :is="topFade" />
-      <component :is="bottomFade" />
     </div>
 
     <div class="left-panel-footer w-full shrink-0 border-t border-glass-border p-md px-lg">
@@ -230,8 +226,6 @@ import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { useSongModals } from '@/domains/score/library/composables/useSongModals';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
-import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
 import { LEFT_SIDEBAR_WIDTH_PIXEL, ROUTE_PATHS } from '@/platform/utils/constants';
@@ -244,15 +238,13 @@ import type { MenuItem } from '@/platform/ui/menu/types';
 defineOptions({ inheritAttrs: false });
 
 const searchQuery = ref('');
-const settingsStore = useSettingsStore();
 
 /** 搜索无结果文案：含当前查询词，抽出 computed 避免模板内长串 */
 const noResultText = computed(() => `未找到与“${searchQuery.value.trim()}”相关的和弦`);
 
 const getSearchItemTitle = (item: { card: GroupedChordCard; groupName: string }) => {
-  const chordName = getChordName(item.card.mainChord, {
-    shorthand: settingsStore.workbenchChordShorthand,
-  });
+  // 侧栏搜索结果不属于「工作台 / 乐谱」场景：一律完整和弦名
+  const chordName = getChordName(item.card.mainChord);
   const parts = [chordName, `分组：${item.groupName}`];
   if (item.card.variantCount > 1) {
     parts.push(`共 ${item.card.variantCount} 个指法`);
@@ -277,8 +269,6 @@ const uiStore = useUiStore();
 const chordStore = useChordStore();
 const songStore = useSongStore();
 
-const { topFade, bottomFade, syncEdgeFades } = useScrollEdgeFades(scrollRef);
-
 // 两个 section（KeepAlive）共用同一个滚动容器，滚动位置无法随组件 DOM 天然保持：
 // 按路由 key 手动缓存 scrollTop，切走时保存、切回时在内容重挂载后恢复
 const SCROLL_CACHE = new Map<string, number>();
@@ -287,11 +277,11 @@ watch(
   () => route.path,
   (next, prev) => {
     if (prev) SCROLL_CACHE.set(prev, scrollRef.value?.scrollTop ?? 0);
+    // 恢复 scrollTop 会触发 scroll 事件 → v-edge-fade 自动重测渐隐，无需手动同步
     nextTick(() => {
       const el = scrollRef.value;
       if (!el) return;
       el.scrollTop = SCROLL_CACHE.get(next) ?? 0;
-      syncEdgeFades();
     });
   }
 );
@@ -299,8 +289,12 @@ watch(
 watch(
   () => uiStore.isLeftOpen,
   isOpen => {
+    // 侧栏重开时容器尺寸 0→实际值，v-edge-fade 的 ResizeObserver 自动触发重测
     if (isOpen) {
-      nextTick(syncEdgeFades);
+      nextTick(() => {
+        const el = scrollRef.value;
+        if (el) el.scrollTop = SCROLL_CACHE.get(route.path) ?? el.scrollTop;
+      });
     }
   }
 );

@@ -124,7 +124,7 @@
         <HeaderConfigPopover />
       </BasePopover>
 
-      <BaseMenu :items="syncMenuItems">
+      <BaseMenu :items="syncMenuItems" :title="`当前选择 ${settingsStore.syncTarget}`">
         <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
             :aria-expanded="isOpen"

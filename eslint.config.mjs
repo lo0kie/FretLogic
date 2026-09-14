@@ -217,6 +217,15 @@ export default tseslint.config(
       'no-console': 'off',
     },
   },
+  {
+    // 文件编码规范：禁止 UTF-8 BOM（U+FEFF）。
+    // BOM 会被部分工具反复叠加写入（同一文件可堆出多层），且会让首行内容解析异常，
+    // 故在提交前的 lint 关卡统一拦截；配合 .editorconfig 的 charset = utf-8 从写入侧根治。
+    files: ['**/*.{ts,tsx,vue,js,mjs,cjs}'],
+    rules: {
+      'unicode-bom': ['error', 'never'],
+    },
+  },
   // 必须最后：关闭所有与 Prettier 排版冲突的 ESLint 规则（html-indent / html-self-closing 等），
   // 让 Prettier 独占格式化主导权，消除 eslint --fix 与 prettier --write 的反复互改。
   // 注：vue/attributes-order 需另行显式关闭（见上方 src 规则块），因属性顺序现由

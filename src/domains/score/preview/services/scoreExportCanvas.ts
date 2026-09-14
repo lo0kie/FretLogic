@@ -1,9 +1,10 @@
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
 import { plainToChordMap } from '@/domains/score/model/chordSlots';
-import { charKey, chordSlotKey, collectEdgeChordIds } from '@/domains/score/model/scoreModel';
+import { buildEdgeChordIndex, charKey, chordSlotKey } from '@/domains/score/model/scoreModel';
 
 import type { Chord } from '@/domains/chord/types';
+import type { EdgeChordIndex } from '@/domains/score/model/scoreModel';
 import type { SlotKey } from '@/domains/score/types';
 
 // ===== scoreLines: 谱面行数据与缓存 =====
@@ -33,12 +34,12 @@ const prevEdgeChordsCache = new Map<string, { sig: string; chords: EdgeChordItem
 
 /** 读取某行某侧的边和弦（含缓存）：签名含和弦内容，和弦编辑后能正确失效缓存；同时给出下一个可用槽位键。 */
 function getEdgeChordsWithNextKey(
-  chordMap: Map<string, string>,
+  edgeChordIndex: EdgeChordIndex,
   lineId: string,
   type: 'start' | 'end',
   chordsLookupMap: Map<string, Chord>
 ) {
-  const ids = collectEdgeChordIds(chordMap, lineId, type);
+  const ids = edgeChordIndex.get(lineId, type);
   // 签名必须包含和弦内容（指纹 + barres），否则编辑同一 id 的和弦后缓存命中旧对象，乐谱行首/行尾不刷新
   const sig = ids
     .map((id, idx) => {
@@ -86,21 +87,23 @@ export function buildLyricsLinesWithEdges(
   existingLineIds: string[] = []
 ): LineData[] {
   // 序列化边界守卫：内存契约要求 chordMap 为 Map；若从持久化/同步链路拿到普通对象，
-  // 在此归一化为 Map，避免 collectEdgeChordIds 迭代直接抛错。纯等价转换，不改语义。
+  // 在此归一化为 Map，避免边和弦索引建表时迭代直接抛错。纯等价转换，不改语义。
   const normalizedChordMap = chordMap instanceof Map ? chordMap : plainToChordMap(chordMap);
+  // 一次遍历建边和弦索引：否则下面的逐行取值会变成「每行两侧各扫一遍整张 chordMap」
+  const edgeChordIndex = buildEdgeChordIndex(normalizedChordMap);
   const rawLines = lyrics.split('\n');
   const activeIds = new Set<string>();
   const result = rawLines.map((lineText, lineIdx) => {
     const lineId = existingLineIds[lineIdx] || String(lineIdx);
     activeIds.add(lineId);
     const { chords: startChords, nextKey: nextStartKey } = getEdgeChordsWithNextKey(
-      normalizedChordMap,
+      edgeChordIndex,
       lineId,
       'start',
       chordsLookupMap
     );
     const { chords: endChords, nextKey: nextEndKey } = getEdgeChordsWithNextKey(
-      normalizedChordMap,
+      edgeChordIndex,
       lineId,
       'end',
       chordsLookupMap

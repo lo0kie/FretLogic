@@ -36,6 +36,8 @@ export interface PortableSong {
   title: string;
   /** 歌手（纯展示元数据，空串表示无；旧格式文本解析结果为空串） */
   singer: string;
+  /** 原调（歌曲原始调性，'' 表示未设置；旧格式文本解析结果为空串） */
+  originalKey: string;
   playKey: string;
   capo: Capo;
   lyrics: string;
@@ -60,7 +62,7 @@ const classifyHeader = (header: string): 'UNKNOWN_FORMAT' | 'INVALID_HEADER' => 
  * 智能宽容解析：从普通歌词文本或内嵌 [Chord] 格式提取歌词与槽位。
  * 支持：
  * - 标准内嵌和弦：`[C]故事的小黄花 从出生那年[G]就飘着`
- * - ChordPro 标签：`{title: 晴天}`、`{t: 晴天}`、`{key: C}`、`{capo: 1}`
+ * - ChordPro 标签：`{title: 晴天}`、`{t: 晴天}`、`{key: C}`、`{capo: 1}`、`{artist: 周杰伦}`、`{origkey: C#}`
  * - 纯歌词多行文本（无和弦时纯导入歌词）
  */
 const BRACKET_CHORD_REGEX = /\[([A-Ga-g][#b]?(?:[a-zA-Z0-9#b/()（）+ø°△\-^]){0,15})\]/gi;
@@ -93,6 +95,7 @@ const parsePlainLyricsFromText = (text: string): PortableSong | null => {
   return {
     title: '',
     singer: '',
+    originalKey: '',
     playKey: 'C',
     capo: 0,
     lyrics: lines.join('\n'),
@@ -123,6 +126,7 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
   let title = '';
   let singer = '';
+  let originalKey = '';
   let playKey = 'C';
   let capoNum = 0;
   const cleanLyricsLines: string[] = [];
@@ -147,6 +151,7 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
       const val = dirMatch[2]?.trim() ?? '';
       if (key === 'title' || key === 't') title = val;
       else if (key === 'artist' || key === 'singer') singer = val;
+      else if (key === 'origkey' || key === 'originalkey') originalKey = val;
       else if (key === 'key') playKey = val;
       else if (key === 'capo') capoNum = Number(val);
       continue;
@@ -164,6 +169,13 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
       const singerMatch = /^(?:歌手|演唱)\s*[:：]\s*(.*)$/i.exec(trimmed);
       if (singerMatch) {
         singer = singerMatch[1]?.trim() ?? '';
+        continue;
+      }
+    }
+    if (cleanLyricsLines.length === 0 && !originalKey) {
+      const origKeyMatch = /^原调\s*[:：]\s*(.*)$/.exec(trimmed);
+      if (origKeyMatch) {
+        originalKey = origKeyMatch[1]?.trim() ?? '';
         continue;
       }
     }
@@ -204,6 +216,7 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
   return {
     title,
     singer,
+    originalKey,
     playKey,
     capo: clamp(Number.isFinite(capoNum) ? capoNum : 0, 0, 12) as Capo,
     lyrics: cleanLyricsLines.join('\n'),
@@ -213,9 +226,10 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
 
 /** 序列化乐谱为文字（含歌词与全部和弦槽位，按字典化紧凑格式输出） */
 export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord | undefined): string => {
-  // singer 兼容容错：旧调用方/旧测试手写的 Song 可能没有该字段（?? '' 防止序列化出 SINGER:undefined）
+  // singer/originalKey 兼容容错：旧调用方/旧测试手写的 Song 可能没有该字段（?? '' 防止序列化出 undefined 值行）
   const lines = [HEADER_SONG, `TITLE:${song.title}`];
   if (song.singer) lines.push(`SINGER:${song.singer}`);
+  if (song.originalKey) lines.push(`ORIGKEY:${song.originalKey}`);
   lines.push(`PLAYKEY:${song.playKey}`, `CAPO:${song.capo}`);
 
   const steps = extractSongChordSequence(song, resolver);
@@ -284,6 +298,7 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
 
   let title = '';
   let singer = '';
+  let originalKey = '';
   let playKey = 'C';
   let capoNum = 0;
   const lyricsLines: string[] = [];
@@ -300,6 +315,8 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
         title = trimmed.slice(6).trim();
       } else if (trimmed.startsWith('SINGER:')) {
         singer = trimmed.slice(7).trim();
+      } else if (trimmed.startsWith('ORIGKEY:')) {
+        originalKey = trimmed.slice(8).trim();
       } else if (trimmed.startsWith('PLAYKEY:')) {
         playKey = trimmed.slice(8).trim();
       } else if (trimmed.startsWith('CAPO:')) {
@@ -368,6 +385,7 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
     data: {
       title,
       singer,
+      originalKey,
       playKey,
       capo: clamp(Number.isFinite(capoNum) ? capoNum : 0, 0, 12) as Capo,
       lyrics,

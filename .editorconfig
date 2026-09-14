@@ -1,0 +1,26 @@
+# EditorConfig：跨编辑器统一基础编码与换行约定（https://editorconfig.org）
+# charset = utf-8 是防止文件被写成「UTF-8 with BOM」的关键：
+# 部分工具/编辑器在缺少该声明时会按系统代码页（GBK）或 utf-8-sig 落盘，
+# 导致首部出现 U+FEFF（BOM）甚至中文乱码。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Markdown 的行尾双空格是换行语义，不能裁
+[*.md]
+trim_trailing_whitespace = false
+
+# 二进制资源不参与文本规范化
+[*.{png,jpg,jpeg,gif,ico,webp,woff,woff2,ttf}]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+indent_size = unset

@@ -22,6 +22,7 @@ const { modals, modalData, open, close } = useModalController(
     inputValue: '',
     title: '',
     singer: '',
+    originalKey: '',
     playKey: 'C',
     capo: 0,
   }
@@ -52,6 +53,7 @@ export function useSongModals() {
     modalData.inputValue = '';
     modalData.title = '';
     modalData.singer = '';
+    modalData.originalKey = '';
     modalData.playKey = 'C';
     modalData.capo = 0;
   };
@@ -79,13 +81,14 @@ export function useSongModals() {
     uiStore.toast.success('新建乐谱成功');
   };
 
-  /** 打开乐谱配置弹窗，回填当前标题/歌手/调性/变调夹 */
+  /** 打开乐谱配置弹窗，回填当前标题/歌手/原调/调性/变调夹 */
   const openConfig = (song: Song) => {
     // key 由 playKey + capo 实时派生，无需单独读取持久化字段
     open('config', {
       activeSong: song,
       title: song.title,
       singer: song.singer ?? '',
+      originalKey: song.originalKey ?? '',
       playKey: song.playKey || 'C',
       capo: song.capo || 0,
     });
@@ -98,6 +101,7 @@ export function useSongModals() {
       songStore.updateSongMeta(modalData.activeSong.id, {
         title: newTitle,
         singer: modalData.singer.trim(),
+        originalKey: modalData.originalKey,
         playKey: modalData.playKey,
         capo: toCapo(modalData.capo ?? 0),
       });

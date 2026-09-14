@@ -1,4 +1,4 @@
-﻿import { ref, useTemplateRef } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 
 import { useEventListener } from '@vueuse/core';
 

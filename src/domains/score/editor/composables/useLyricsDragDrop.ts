@@ -4,7 +4,7 @@ import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorSto
 import { logger } from '@/platform/utils/logger';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
-import { resolveDropAction } from './lyrics-drag/dropZone.ts';
+import { resolveHoverLine, snapToSlotInLine } from './lyrics-drag/dropGeometry.ts';
 import { useDragAutoScroll } from './lyrics-drag/useDragAutoScroll.ts';
 import { useDragGhost } from './lyrics-drag/useDragGhost.ts';
 import { useDragHighlight } from './lyrics-drag/useDragHighlight.ts';
@@ -13,7 +13,7 @@ import type { Chord } from '@/domains/chord/types';
 import type { SlotKey } from '@/domains/score/types';
 import type { ComponentPublicInstance, Ref } from 'vue';
 
-/** 歌词行和弦槽位拖拽核心：鼠标阈值起拖 + 触摸长按起拖，ghost/落点更新按帧合帧，松手按分区落地 */
+/** 歌词行和弦槽位拖拽核心：鼠标阈值起拖 + 触摸长按起拖，ghost/落点更新按帧合帧，松手按落点落地 */
 export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) {
   const scoreEditor = useScoreEditorStore();
 
@@ -29,8 +29,14 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     setGhostChord,
   } = useDragGhost();
 
-  const { dragOverSlotKey, activeDropLineId, dropZone, markDragSource, clearDragClasses, updateDropTarget } =
-    useDragHighlight();
+  const {
+    dragOverSlotKey,
+    activeDropLineId,
+    markDragSource,
+    clearDragClasses,
+    updateDropTarget,
+    setExternalDropTarget,
+  } = useDragHighlight();
 
   // 落点命中节流：与 ghost 位置一样合并进 rAF，避免每帧同步执行 elementFromPoint 命中测试
   const {
@@ -113,7 +119,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
   /** 判定事件是否属于当前拖拽会话的活动指针（多指/鼠标混用时忽略非活动指针） */
   const isEventForActivePointer = (e: PointerEvent): boolean => {
-    if (activeSourceKey === null && !isDragging.value) return false;
+    if (activeChord === null && !isDragging.value) return false;
     if (
       startPointer.pointerId !== -1 &&
       startPointer.pointerId !== e.pointerId &&
@@ -125,28 +131,26 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     return true;
   };
 
-  /** 按当前落点分区执行落地动作（交换/替换/复制/移位），无有效目标返回 false */
+  /** 按当前落点执行落地（空槽=移动、占用槽=替换），无有效目标返回 false */
   const resolveLandingAction = (): boolean => {
-    if (
-      !isDragging.value ||
-      !draggingSlotKey.value ||
-      !dragOverSlotKey.value ||
-      !dropZone.value ||
-      draggingSlotKey.value === dragOverSlotKey.value ||
-      !scoreEditor.activeSong
-    ) {
+    if (!isDragging.value || !dragOverSlotKey.value || !scoreEditor.activeSong) {
       return false;
     }
     const targetKey = dragOverSlotKey.value;
-    const occupied = Boolean(scoreEditor.activeSong.chordMap.get(targetKey as SlotKey));
-    const action = resolveDropAction(dropZone.value, occupied);
-    const dropActionHandlers: Record<'swap' | 'copy' | 'replace' | 'move', (src: string, tgt: string) => void> = {
-      swap: (src, tgt) => scoreEditor.swapSlotChords(src, tgt),
-      copy: (src, tgt) => scoreEditor.copySlotChord(src as SlotKey, tgt as SlotKey),
-      replace: (src, tgt) => scoreEditor.moveSlotChord(src as SlotKey, tgt as SlotKey),
-      move: (src, tgt) => scoreEditor.moveSlotChord(src as SlotKey, tgt as SlotKey),
-    };
-    dropActionHandlers[action]?.(draggingSlotKey.value, targetKey);
+
+    // 外部拖拽源（选器和弦抽屉等，无源槽位）：落到任意字符槽即写入该槽位的和弦
+    if (!draggingSlotKey.value) {
+      if (!activeChord) return false;
+      scoreEditor.setSlotChord(targetKey as SlotKey, activeChord);
+      return true;
+    }
+
+    if (draggingSlotKey.value === targetKey || !activeChord) {
+      return false;
+    }
+    // 拖拽只保留「移动」语义（复制已移除，取用和弦走右侧选择面板的卡片）：
+    // 落点为空槽即搬移、落点已占用即覆盖（替换），两者数据层同为「目标覆盖 + 源清空」
+    scoreEditor.moveSlotChord(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
     return true;
   };
 
@@ -162,13 +166,21 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
   /** 真正进入拖拽：标记源槽位样式、设置 ghost 内容、全局拖拽态与触觉反馈 */
   const startDrag = (clientX: number, clientY: number) => {
-    if (!activeSourceKey || !activeChord) return;
+    if (!activeChord) return;
     setPressArming(false);
     isDragging.value = true;
     wasDraggingInSession = true;
+    // 外部拖拽源（选器和弦抽屉）无源槽位：draggingSlotKey 为 null，落地走 setSlotChord 分支
     draggingSlotKey.value = activeSourceKey;
-    markDragSource(activeSourceKey, 'is-dragging-source');
+    if (activeSourceKey) {
+      markDragSource(activeSourceKey, 'is-dragging-source');
+    }
     setGhostChord(activeChord);
+    if (!activeSourceKey) {
+      // 外部拖拽源：快照当前已渲染的歌词行，供几何就近计算使用
+      const zone = scrollContainerRef?.value;
+      externalLineEls = zone ? Array.from(zone.querySelectorAll<HTMLElement>('[data-line-idx]')) : [];
+    }
     document.body.classList.add('is-global-dragging');
 
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
@@ -180,7 +192,12 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     }
 
     scheduleGhostPos(clientX, clientY);
-    updateDropTarget(clientX, clientY);
+    if (activeSourceKey) {
+      updateDropTarget(clientX, clientY);
+    } else {
+      // 外部拖拽源：起拖即做一次几何落点计算
+      resolveExternalDropTarget(clientX, clientY);
+    }
   };
 
   /** 全局指针移动：未拖拽时按阈值/长按规则判定起拖；拖拽中更新 ghost 与落点并处理边缘自动滚动 */
@@ -210,7 +227,12 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
     e.preventDefault();
     scheduleGhostPos(e.clientX, e.clientY);
-    scheduleDropTargetUpdate(e.clientX, e.clientY);
+    if (draggingSlotKey.value) {
+      scheduleDropTargetUpdate(e.clientX, e.clientY);
+    } else {
+      // 外部拖拽源：几何就近计算（绕过 elementFromPoint——抽屉等浮层会干扰命中测试）
+      resolveExternalDropTarget(e.clientX, e.clientY);
+    }
 
     if (!isScrolling()) {
       checkAutoScroll(scrollContainerRef?.value, currentPointerPos, () => {
@@ -219,7 +241,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     }
   };
 
-  /** 全局抬起：按当前落点分区执行落地动作（交换/替换/复制/移位），随后统一收尾 */
+  /** 全局抬起：按当前落点执行落地（空槽移动 / 占用替换），随后统一收尾 */
   const handleGlobalPointerUp = (e: PointerEvent) => {
     if (!isEventForActivePointer(e)) return;
 
@@ -232,7 +254,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       flushGhostPos();
       flushDropTargetUpdate();
 
-      // 分区落地：松手所在分区直接决定动作（交换/替换/复制/移位），无有效目标则取消
+      // 落点落地：空槽移动、占用槽替换（无有效目标则取消）
       resolveLandingAction();
     } catch (e) {
       logger.warn('lyrics-drag', '拖拽落地失败，已保留原状态（可手动撤销兜底）', e);
@@ -269,8 +291,68 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
   /** 窗口失焦（如切换应用）视为拖拽取消，防止状态悬挂 */
   const handleWindowBlur = () => {
-    if (isDragging.value || activeSourceKey !== null) {
+    if (isDragging.value || activeSourceKey !== null || activeChord !== null) {
       handleGlobalPointerCancel(new PointerEvent('pointercancel'));
+    }
+  };
+
+  /** 外部拖拽会话缓存的歌词行元素（起拖时快照，落地/拖拽中布局不变） */
+  let externalLineEls: HTMLElement[] = [];
+
+  /** 外部拖拽源的几何就近落点：以谱面区真实矩形为边界，再做几何判定。
+   *  完全绕过 elementFromPoint——抽屉等全屏浮层（pointer-events 已处理但仍可能与内容层叠）不再影响命中。
+   *  判定分两层（见 dropGeometry）：撑开行用宽容的垂直命中带（行内水平位置无关，
+   *  含行首行号区与 min-w-full 拉伸出的行尾空白）；落点槽位额外要求落在槽位并集的水平容差内，
+   *  因此行首 / 行尾空白只撑开行、不落点，松手不写入。 */
+  const resolveExternalDropTarget = (x: number, y: number) => {
+    // 指针在浮动面板（BaseFloatingPanel 及自带留白拦截层 / 抽屉）上方：不产生任何落点——不撑开同水平歌词行、不吸附槽位、松手不写入。
+    // （谱面区矩形延伸到面板底下，仅靠区域判断会把面板内位置就近吸附到行尾槽位）
+    // 判据取 platform/ui 的形状契约（data 属性），不依赖任何具体业务面板
+    const hoverEl = document.elementFromPoint(x, y);
+    if (hoverEl?.closest('[data-floating-panel], [data-floating-panel-scrim], .drawer-overlay-container')) {
+      setExternalDropTarget(null, null);
+      return;
+    }
+    const zone = scrollContainerRef?.value;
+    if (!zone) {
+      setExternalDropTarget(null, null);
+      return;
+    }
+    const zoneRect = zone.getBoundingClientRect();
+    // 指针在谱面区外（含 24px 容差）不落地
+    if (x < zoneRect.left - 24 || x > zoneRect.right + 24 || y < zoneRect.top - 24 || y > zoneRect.bottom + 24) {
+      setExternalDropTarget(null, null);
+      return;
+    }
+    // 撑开行宽容、落点精确：指针在行内空白处时 key 为 null、lineId 有效——撑开该行但不给落点。
+    // 槽位吸附复用已解析出的行，避免在指针移动的热路径上重复扫描行矩形
+    const hoveredLine = resolveHoverLine(externalLineEls, y);
+    const snapped = hoveredLine ? snapToSlotInLine(hoveredLine, x) : null;
+    setExternalDropTarget(snapped?.key ?? null, hoveredLine?.lineId ?? null);
+  };
+
+  /** 外部拖拽源入口（选器和弦抽屉等）：无源槽位，按下登记意图，移动超阈值起拖，落地写入目标槽位 */
+  const startExternalChordDrag = (chord: Chord, e: PointerEvent) => {
+    if (activeChord !== null || isDragging.value) return;
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+    clearLongPressTimer();
+    wasDraggingInSession = false;
+    startPointer = {
+      x: e.clientX,
+      y: e.clientY,
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+    };
+    currentPointerPos = { x: e.clientX, y: e.clientY };
+    activeSourceKey = null;
+    activeChord = chord;
+
+    window.getSelection()?.removeAllRanges();
+    window.addEventListener('contextmenu', preventContextMenu, true);
+
+    if (e.pointerType === 'touch') {
+      armLongPressStart(currentPointerPos.x, currentPointerPos.y);
     }
   };
 
@@ -279,7 +361,9 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     if (activeSourceKey !== null) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const target = e.target as HTMLElement;
-    if (target.closest('.remove-chord-btn')) return;
+    // 按下的是真实按钮（悬停删除钮等）：不登记拖拽意图，避免「点删除」被当成拖动起点。
+    // （按钮自身的 pointerdown 已 stopPropagation，此处按标签再兜一层，防止后续按钮改动漏掉）
+    if (target.closest('button')) return;
 
     clearLongPressTimer();
 
@@ -331,9 +415,9 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     draggingSlotKey,
     dragOverSlotKey,
     activeDropLineId,
-    dropZone,
     ghostChordName,
     setGhostEl,
     handlePointerDown,
+    startExternalChordDrag,
   };
 }

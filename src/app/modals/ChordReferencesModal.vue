@@ -1,10 +1,13 @@
 <template>
-  <BaseModal
-    v-model:visible="groupModals.modals.chordReferences"
-    :show-footer="false"
-    :title="`和弦引用 · ${groupModals.modalData.referenceChordName}`"
-    width="w-md"
-  >
+  <BaseModal v-model:visible="groupModals.modals.chordReferences" :show-footer="false" width="w-md">
+    <template #title>
+      <!-- 前缀文本走 prefix 显式声明：拼进 name 会让整串解析失败、升降号退化成普通字符 -->
+      <span
+        v-chord-name="{ name: groupModals.modalData.referenceChordName, prefix: '和弦引用 ' }"
+        class="font-bold text-fg-title"
+      />
+    </template>
+
     <ul
       v-if="references.length > 0"
       class="no-scrollbar m-0 flex max-h-[50vh] list-none flex-col gap-md overflow-y-auto p-1"

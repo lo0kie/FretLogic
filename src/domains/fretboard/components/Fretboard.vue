@@ -18,13 +18,14 @@
       tabindex="0"
     >
       <div
-        :style="{ height: `${CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT}px`, paddingTop: '0px' }"
+        :style="chordNameZoneStyle"
         @contextmenu.stop
         @pointerdown.stop
         class="flex w-full max-w-full shrink-0 cursor-text items-center justify-center overflow-hidden px-sm font-[Helvetica_Neue,Arial,sans-serif] whitespace-nowrap select-none"
       >
         <!-- 和弦名行内编辑：底层 DOM/选区/占位符协议均由 BaseEditableText 承接 -->
         <BaseEditableText
+          v-edge-fade.x
           v-model="inputChordName"
           v-model:editing="isInputFocused"
           :maxlength="MAX_CHORD_NAME_LENGTH"
@@ -193,6 +194,16 @@ const handleEscape = () => {
  * 逼近 80px 的容器高度，导致 j / g 等带下伸部的字母被容器裁掉底部（砍脚）
  */
 const chordNameFontSizeStyle: CSSProperties = { fontSize: `${CHORD_NAME_FONT_SIZE}px` };
+
+/**
+ * 和弦名区域样式：仅固定区域高度与垂直留白。
+ * 超长名称在 BaseEditableText 内部横向滚动，左右羽化遮罩由 v-edge-fade 指令
+ * 按滚动位置/溢出状态动态挂载（见 platform/directives/vEdgeFade.ts），无需在此常驻。
+ */
+const chordNameZoneStyle: CSSProperties = {
+  height: `${CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT}px`,
+  paddingTop: '0px',
+};
 
 const {
   fretBoardRef,

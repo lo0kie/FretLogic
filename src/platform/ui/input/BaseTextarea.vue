@@ -1,4 +1,4 @@
-﻿﻿<template>
+<template>
   <div :class="['base-textarea relative w-full', rootClass]" :style="rootStyle">
     <textarea
       v-bind="restAttrs"

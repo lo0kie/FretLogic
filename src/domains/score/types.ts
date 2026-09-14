@@ -18,6 +18,8 @@ export interface Song {
   title: string;
   /** 歌手（纯展示元数据，空串表示无；不参与指纹/乐理计算） */
   singer: string;
+  /** 原调（歌曲原始调性，'' 表示未设置；不参与乐理计算，仅展示与导出表头） */
+  originalKey: string;
   lyrics: string;
   lineIds: LineId[];
   playKey: string;

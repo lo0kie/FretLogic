@@ -89,13 +89,13 @@
             ? 'pointer-events-auto size-4 scale-100 opacity-100'
             : 'pointer-events-none -mr-1.5 h-4 w-0 scale-0 opacity-0'
         "
+        :tabindex="clearVisible ? 0 : -1"
+        :title="clearVisible ? '清空内容' : undefined"
         @mousedown.stop
         @pointerdown.stop
         @click.stop="handleClear()"
         data-focusable-inline
         class="flex cursor-pointer items-center justify-center overflow-hidden rounded-full border-none bg-surface-panel-hover p-0 text-fg-disabled transition-all duration-200 outline-none hover:bg-danger hover:text-fg-on-accent active:scale-90"
-        tabindex="0"
-        title="清空内容"
         type="button"
       >
         <BaseIcon icon-size="sm" icon-stroke="bold" name="x" />
@@ -322,6 +322,27 @@ const closeResults = () => {
   resultsOpen.value = false;
   searchActiveIndex.value = -1;
 };
+
+// ─── searchable：面板打开期间的全局焦点监听 ───
+// Tab 移动焦点、点击外部时收起面板：仅靠 input blur 单点判定不够——焦点进入面板内
+// 结果按钮（Teleport 于 body）或清空/眼睛按钮后再离开时已无 blur 可监听，面板会残留。
+// 捕获式 focusin 覆盖任意起点的焦点迁移：焦点落到输入框自身或面板内（等待键盘/点击
+// 选中）时豁免，落到其它任何位置（含清空/眼睛按钮、组件外）即收起。
+const handleGlobalFocusIn = (e: FocusEvent) => {
+  const target = e.target;
+  if (!(target instanceof Node)) return;
+  if (target === inputRef.value || searchScrollRef.value?.contains(target)) return;
+  closeResults();
+};
+
+watch(resultsOpen, open => {
+  if (typeof document === 'undefined') return;
+  if (open) {
+    document.addEventListener('focusin', handleGlobalFocusIn, true);
+  } else {
+    document.removeEventListener('focusin', handleGlobalFocusIn, true);
+  }
+});
 /** 聚焦或输入时展开结果面板；禁用/只读不弹 */
 const openResults = () => {
   if (!searchable || disabled || readonly) return;
@@ -603,6 +624,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener('focusin', handleGlobalFocusIn, true);
   rightSlotObserver?.disconnect();
   rootSizeObserver?.disconnect();
 });

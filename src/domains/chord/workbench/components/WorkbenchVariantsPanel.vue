@@ -4,10 +4,9 @@
        自动让位给列表，不会出现「没在条上滚却被联动」的劫持。无 CSS scroll-smooth 避免动量滑动失控 -->
   <div
     v-wheel-scroll.auto.smooth
+    v-edge-fade.x="{ size: 24, flushEps: 4 }"
     v-if="hasVariants"
     v-scrollbar.x="{ onScroll: closeAllPopovers }"
-    :style="maskStyle"
-    @scroll.passive="syncEdgeFades()"
     class="flex w-full items-stretch gap-4 p-1 select-none"
     ref="scrollRef"
   >
@@ -56,7 +55,6 @@ import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { computeChordFingerprint, getChordName } from '@/domains/chord/theory/theory';
-import { useScrollEdgeFades } from '@/platform/composables/useScrollEdgeFades';
 import { isDark } from '@/platform/composables/useTheme';
 import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry.ts';
 
@@ -68,21 +66,18 @@ const chordStore = useChordStore();
 const isChordOpened = computed(() => Boolean(editorStore.draftChord.id));
 
 const scrollRef = ref<HTMLElement | null>(null);
-const { maskStyle, syncEdgeFades } = useScrollEdgeFades(scrollRef, {
-  direction: 'horizontal',
-  threshold: 4,
-  fadeSize: 24,
-});
 
 const chordName = computed(() => getChordName(editorStore.draftChord).trim());
 
-/** 获取当前和弦的多指法变体：严格限定在当前分组内查找，不跨分组混入同名指法 */
+/** 获取当前和弦的多指法变体：严格限定在当前分组内查找，不跨分组混入同名指法；
+ *  且仅当草稿是库中已保存的和弦（有 id + groupId）时才查找——手动在指板按出的同名
+ *  指法不得借 selectedGroupId 回退关联库中和弦，否则变体会被加载并可在点击时覆盖手动输入 */
 const variants = computed<Chord[]>(() => {
+  const chord = editorStore.draftChord;
   const name = chordName.value;
-  const groupId = editorStore.draftChord.groupId || chordStore.selectedGroupId;
-  if (!name || !groupId) return [];
+  if (!chord.id || !chord.groupId || !name) return [];
 
-  const grouped = chordStore.getMultiFingering(groupId, name);
+  const grouped = chordStore.getMultiFingering(chord.groupId, name);
   return grouped?.variants ?? [];
 });
 

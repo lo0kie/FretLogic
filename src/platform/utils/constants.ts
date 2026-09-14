@@ -216,6 +216,10 @@ export const MARQUEE_FADE_TRANSITION_MS = 200;
  *  否则视为浏览器布局钳位 / 程序化设位，消费端可据此过滤非用户触发的滚动信号 */
 export const SCROLL_INTERACTIVE_WINDOW_MS = 120;
 
+/** BaseCollapse 收起时滚动钳位补偿的逐帧循环兜底上限（ms）：高度过渡实际为 duration-base(180ms)，
+ *  但过渡被禁用（如 prefers-reduced-motion）时 transitionend 永不触发，循环不能无限空转 */
+export const COLLAPSE_SCROLL_COMPENSATION_MAX_MS = 1000;
+
 /** 右键菜单已打开时换位动画时长（ms，WAAPI 实现） */
 export const CONTEXT_MENU_REPOSITION_DURATION_MS = 80;
 /** 右键菜单换位动画缓动（与 tokens.scss 的 $bezier-standard 一致） */

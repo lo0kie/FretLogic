@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <PromptInputModal
     v-model="songModals.modalData.inputValue"
     v-model:visible="songModals.modals.create"
@@ -31,6 +31,10 @@
           placeholder="选填，导出图片表头会显示"
           width="lg"
         />
+      </BaseFormRow>
+
+      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="原调 (Original)">
+        <KeySelector v-model="songModals.modalData.originalKey" allow-empty width="md" />
       </BaseFormRow>
 
       <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="指法调 (Play)">

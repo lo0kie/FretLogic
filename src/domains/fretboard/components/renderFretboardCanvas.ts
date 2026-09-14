@@ -169,7 +169,8 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
     chord,
     colors,
     chordNameScale = 1.0,
-    shorthand = true,
+    // 默认完整和弦名：简写只对「工作台 / 乐谱」场景开放，由调用方显式传 true
+    shorthand = false,
     showChordName = true,
     showOpenStringNotes = true,
     showFretNumbers = true,

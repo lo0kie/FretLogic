@@ -177,7 +177,7 @@ export function useWorkbenchRouteSync() {
   /** 时序保证：先做一次 URL→Store 回灌，再启动 Store→URL 镜像 watcher，
    *  避免镜像在回灌前用持久化草稿覆盖深链参数（如 #/workbench?chord=x 被改回旧值） */
   syncRouteToStore();
-  // groupId 单列进源数组：ChordPickerModal 存在对 draftChord.groupId 的就地写入（引用不变），
+  // groupId 单列进源数组：和弦编辑抽屉（ChordEditorDrawer）存在对 draftChord.groupId 的就地写入（引用不变），
   // 仅浅监听 draftChord 引用会漏掉该路径导致 URL group 参数失镜
   watch(() => [editorStore.draftChord, editorStore.draftChord.groupId] as const, mirrorStoreToUrl);
   watch(

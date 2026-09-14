@@ -171,9 +171,15 @@ export function useChordGroupModals() {
     uiStore.toast.success('排序配置已更新');
   };
 
-  /** 打开批量删除指法弹窗，清空上次的勾选 */
+  /** 打开批量删除指法弹窗，清空上次的勾选。
+   *  referenceChordName 必须一并写入：modalData 是所有弹窗共用的单份对象，标题读它却不在 patch 里
+   *  就会显示上一个弹窗残留的和弦名（弹窗常驻不卸载，表现为「名字不更新」） */
   const openChordVariantsDelete = (cardData: GroupedChordCard) => {
-    open('chordVariantsDelete', { activeGroupCard: cardData, selectedVariantIds: new Set<string>() });
+    open('chordVariantsDelete', {
+      activeGroupCard: cardData,
+      selectedVariantIds: new Set<string>(),
+      referenceChordName: getChordName(cardData.mainChord),
+    });
   };
 
   /** 勾选/取消勾选一个待删除的变体指法 */
