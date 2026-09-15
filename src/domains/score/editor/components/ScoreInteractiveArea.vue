@@ -1,13 +1,13 @@
 <template>
-  <div
-    v-edge-fade
-    v-scrollbar="{ onScroll: closeAllPopovers }"
+  <BaseScrollArea
     :style="{
       '--score-font-scale': scoreEditor.effectiveFontScale / 100,
     }"
     @scroll.passive="handleScroll()"
-    class="no-scrollbar interactive-score-zone relative min-w-0 flex-1 py-6 pr-0 pl-xl max-md:pt-sm max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] max-md:pl-sm"
-    ref="scoreZoneRef"
+    close-popovers
+    axis="both"
+    class="interactive-score-zone relative min-w-0 flex-1 py-6 pr-0 pl-xl max-md:pt-sm max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] max-md:pl-sm"
+    ref="scoreZoneAreaRef"
   >
     <div class="contents">
       <Feedback
@@ -252,12 +252,12 @@
          面板与视口上/右/下三条留白由外壳的 intercept 能力接管指针事件。
          context-key 传当前乐谱 id：换歌时清空面板的选择记忆（面板不读本域 store，保持与宿主解耦） -->
     <ChordPickerPanel
-      v-model:visible="isPickerDrawerOpen"
+      v-model:visible="isPickerPanelOpen"
       :is-dragging
       :context-key="scoreEditor.activeSongId"
       :drag-chord-starter="startExternalChordDrag"
     />
-  </div>
+  </BaseScrollArea>
 </template>
 
 <script setup lang="ts">
@@ -277,12 +277,13 @@ import ChordPickerPanel from '@/domains/chord/components/ChordPickerPanel.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseFab from '@/platform/ui/floating-bar/BaseFab.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useLyricsDragDrop } from '@/domains/score/editor/composables/useLyricsDragDrop';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
 import { useUiStore } from '@/platform/store/uiStore';
-import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry.ts';
+import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
 
 import ChordSlotCell from './ChordSlotCell.vue';
@@ -290,13 +291,16 @@ import ChordSlotCell from './ChordSlotCell.vue';
 import type { Chord } from '@/domains/chord/types';
 import type { LineData } from '@/domains/score/preview/services/scoreExportCanvas';
 import type { LineId, SlotKey } from '@/domains/score/types';
+import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 defineOptions({ name: 'ScoreInteractiveArea' });
 
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 
-const scoreZoneRef = useTemplateRef<HTMLElement>('scoreZoneRef');
+const scoreZoneAreaRef = useTemplateRef<ScrollAreaHandle>('scoreZoneAreaRef');
+/** 谱面滚动容器元素（虚拟化预加载 / 拖拽自动滚动 / 边缘滚动入口 / 滚动位置存档都需要元素本身） */
+const scoreZoneRef = useScrollAreaElement(scoreZoneAreaRef);
 
 /** 边缘滚动入口：顶部/底部浮动按钮。内容可滚且未贴该边时可见，点击平滑滚至对应边 */
 const {
@@ -312,7 +316,7 @@ const scrollBottomVisible = computed(() => edgeVisible.bottom);
 
 const hoveredLineKey = ref<string | null>(null);
 /** 选器和弦浮动面板开关（非模态：不占布局、不作遮罩，支持拖拽和弦到字符槽） */
-const isPickerDrawerOpen = ref(false);
+const isPickerPanelOpen = ref(false);
 /** 删除行按钮的无障碍文本与悬停提示 */
 const deleteLineButtonTitle = '删除此行';
 
@@ -560,7 +564,7 @@ onDeactivated(() => {
   // 面板与其中的编辑抽屉都 Teleport 到 body，而渲染器对 Teleport 一律按 REORDER 搬移
   // （只挪锚点、不动已被传送的内容），宿主停用时它们不会随组件树一起摘除，
   // 结果就是切到别的页面后浮层仍挂在 body 上继续显示。故此处主动闭合成关闭态。
-  isPickerDrawerOpen.value = false;
+  isPickerPanelOpen.value = false;
   cancelExpandToBottom();
   clearDragHintToast();
   if (sentinelObserver) {
@@ -634,7 +638,7 @@ watch(
  *  拖拽中或点击抑制期忽略，避免拖拽松手误触发 */
 const handleTogglePicker = () => {
   if (isDragging.value || isSuppressingClick.value) return;
-  isPickerDrawerOpen.value = !isPickerDrawerOpen.value;
+  isPickerPanelOpen.value = !isPickerPanelOpen.value;
 };
 
 /** 本行是否为当前拖拽落点所在的行（由稳定的 activeDropLineId 驱动，跨越字符间隙时恒定为 true，绝无间距闪烁） */

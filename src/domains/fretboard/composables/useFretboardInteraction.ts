@@ -11,10 +11,11 @@ import {
 } from '@/domains/chord/theory/theory';
 import { useFretboardKeyboard } from '@/domains/fretboard/composables/useFretboardKeyboard';
 import { calculateFretboardPoint, useFretboardLayout } from '@/domains/fretboard/composables/useFretboardLayout';
+import { useFretboardWheel } from '@/domains/fretboard/composables/useFretboardWheel';
 import { cloneGuitarStrings } from '@/platform/utils/common';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
-import { CANVAS_CONFIG, INTERACTION_CONFIG } from '../constants';
+import { CANVAS_CONFIG } from '../constants';
 
 import type { FretboardProps } from '@/domains/fretboard/components/Fretboard.vue';
 import type { GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
@@ -30,13 +31,10 @@ export function useFretboardInteraction(
   const hoverPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
   const focusPoint = ref<{ stringIndex: number; fretIndex: number } | null>(null);
   const isFocused = ref(false);
-
   const layout = useFretboardLayout(() => props.chord.fretCount, {
     extraTopHeight: CANVAS_CONFIG.CHORD_NAME_ZONE_HEIGHT,
     stringCount: () => props.chord.strings.length,
   });
-
-  let wheelAccumulator = 0;
 
   /** 把指针事件坐标换算为指板逻辑坐标（弦序号/品位），未命中有效区域时返回 null */
   const getCanvasPoint = (clientX: number, clientY: number) => {
@@ -259,54 +257,16 @@ export function useFretboardInteraction(
     isFocused.value = false;
   };
 
-  // 滚轮合帧：触摸板快速连续滚动时只在 rAF 执行最后累加值，并在命中音符时切换升降号，未命中时调整品位偏移
-  const { schedule: scheduleWheelFrame } = useRafThrottle<{
-    clientX: number;
-    clientY: number;
-    deltaY: number;
-  }>(pending => {
-    const point = getCanvasPoint(pending.clientX, pending.clientY);
-    if (point) {
-      const { stringIndex: sIdx, fretIndex: fIdx } = point;
-      const currentStr = props.chord.strings[sIdx];
-      // 悬停在已按音符上（含空弦 open 音符）：切换升降号，不触发品位偏移
-      const isHoveringActiveNote =
-        (fIdx > 0 && fIdx <= props.chord.fretCount && currentStr?.[0] === fIdx) ||
-        (fIdx === 0 && currentStr !== undefined && isOpen(currentStr));
-      if (isHoveringActiveNote && currentStr !== undefined) {
-        if (
-          canTogglePitchAccidental(
-            sIdx,
-            currentStr[0],
-            props.chord.fretOffset,
-            getActiveBaseStrings(props.chord.tuning)
-          )
-        ) {
-          handleTogglePitchName(sIdx);
-        }
-        return;
-      }
-      // 空弦区域（SVG 起始线上方）非音符处：不响应滚轮
-      if (fIdx === 0) return;
-    }
-    wheelAccumulator += pending.deltaY;
-    if (Math.abs(wheelAccumulator) < INTERACTION_CONFIG.WHEEL_THRESHOLD) return;
-    if (wheelAccumulator > 0) {
-      onFretOffsetChange(Math.min(INTERACTION_CONFIG.MAX_CAPO_LIMIT, props.chord.fretOffset + 1));
-    } else {
-      onFretOffsetChange(Math.max(INTERACTION_CONFIG.MIN_CAPO_LIMIT, props.chord.fretOffset - 1));
-    }
-    wheelAccumulator = 0;
+  // 滚轮交互（合帧 / 升降号切换 / 品位偏移，机制见 useFretboardWheel）
+  const { handleWheel } = useFretboardWheel({
+    getCanvasPoint,
+    getStrings: () => props.chord.strings,
+    getFretCount: () => props.chord.fretCount,
+    getFretOffset: () => props.chord.fretOffset,
+    getTuning: () => props.chord.tuning,
+    onTogglePitchName: handleTogglePitchName,
+    onFretOffsetChange,
   });
-
-  /** wheel 入口：只记录事件并按帧合帧处理，忽略 Ctrl/Cmd 缩放手势 */
-  const handleWheel = (e: WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) return;
-    // 仅命中指板有效区域（品位格/空弦行）时才接管滚轮；和弦名区与容器其余部分放行默认滚动，不触发品位偏移
-    if (!getCanvasPoint(e.clientX, e.clientY)) return;
-    e.preventDefault();
-    scheduleWheelFrame({ clientX: e.clientX, clientY: e.clientY, deltaY: e.deltaY });
-  };
 
   useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
   useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {

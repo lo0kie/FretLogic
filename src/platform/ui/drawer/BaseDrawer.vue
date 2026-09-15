@@ -63,9 +63,7 @@
             </div>
           </div>
 
-          <div
-            v-edge-fade
-            v-scrollbar
+          <BaseScrollArea
             :class="[
               {
                 // body 四向 padding 独立推导（与 BaseModal 同模型）：贴卡片边缘恒为 xl，
@@ -78,10 +76,11 @@
                 'pb-xl': !$slots['footer'],
               },
             ]"
-            class="drawer-body-scrollable no-scrollbar min-h-0 flex-1 overflow-y-auto px-xl"
+            axis="both"
+            class="drawer-body-scrollable min-h-0 flex-1 px-xl"
           >
             <slot />
-          </div>
+          </BaseScrollArea>
 
           <div
             v-if="$slots['footer']"
@@ -103,6 +102,7 @@ import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, useTemplateR
 import { useEventListener, useScrollLock } from '@vueuse/core';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import {
   hasActiveOverlays,
   isClient,

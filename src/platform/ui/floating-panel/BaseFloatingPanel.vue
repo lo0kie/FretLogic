@@ -25,24 +25,18 @@
       <div :style="stripWidthStyle" class="pointer-events-auto absolute right-0 bottom-0 h-lg" />
     </div>
 
-    <Transition
-      @after-leave="handleAfterLeave()"
-      @before-enter="handleBeforeEnter($event)"
-      @before-leave="handleBeforeLeave($event)"
-      @enter="handleEnter($event)"
-      appear
-    >
+    <Transition @after-leave="handleAfterLeave()" @before-leave="handleBeforeLeave()" appear name="floating-panel">
       <aside
-        v-if="visibleModel"
+        v-show="visibleModel"
         :aria-labelledby="hasHeader ? titleId : undefined"
-        :class="PANEL_CLASS"
+        :class="[PANEL_CLASS, offsetActive && 'offset-active']"
         :style="panelStyle"
         data-floating-panel
         ref="panelRef"
         role="region"
       >
         <div
-          v-if="hasHeader"
+          v-if="hasHeader && contentMounted"
           class="floating-panel-header flex shrink-0 items-center justify-between gap-md px-lg pt-lg pb-md"
         >
           <slot :title-id name="title">
@@ -65,11 +59,11 @@
           </div>
         </div>
 
-        <div class="floating-panel-body relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div v-if="contentMounted" class="floating-panel-body relative flex min-h-0 flex-1 flex-col overflow-hidden">
           <slot />
         </div>
 
-        <div v-if="$slots['footer']" class="floating-panel-footer flex w-full shrink-0 items-center">
+        <div v-if="$slots['footer'] && contentMounted" class="floating-panel-footer flex w-full shrink-0 items-center">
           <slot name="footer" />
         </div>
       </aside>
@@ -107,6 +101,8 @@ const props = withDefaults(
     teleportTo?: string | HTMLElement;
     /** 禁用 Teleport，在当前父节点就地渲染 */
     disabledTeleport?: boolean;
+    /** 关闭后是否销毁内容（卸载插槽）：默认 true，与旧行为一致；false 时保留内容挂载以保留内部状态（滚动位置 / 输入等） */
+    destroyOnClose?: boolean;
   }>(),
   {
     title: '',
@@ -118,6 +114,7 @@ const props = withDefaults(
     closeAriaLabel: '关闭',
     teleportTo: 'body',
     disabledTeleport: false,
+    destroyOnClose: true,
   }
 );
 
@@ -151,55 +148,32 @@ const stripWidthStyle = computed(() => ({ width: `calc(min(${cssWidth.value}, 92
 const floatingZ = ref(0);
 
 /**
- * 进场/出场相位：closed = 完全右移出屏（起点/终点），open = 归位。
- * 进场由响应式驱动（元素仍在树中，样式可被 patch）；出场必须直接写 DOM，见下方钩子说明。
+ * 内容挂载态：控制插槽是否真正渲染（卸载即销毁内部状态）。
+ * 初始仅在已打开时挂载；打开前不渲染以省成本。
+ * 打开（watch 可见性）即挂载；关闭后仅当 destroyOnClose 才卸载（handleAfterLeave 里置 false），
+ * 否则保留挂载、仅由 v-show 隐藏，内部状态（滚动位置 / 输入）得以保留。
  */
-const animPhase = ref<'closed' | 'open'>('open');
+const contentMounted = ref(props.visible);
 
-/** 三种位移端点：屏外（进出场）、让位、归位。共用同一 transform 通道 */
-const OFFSCREEN_TRANSFORM = 'translateX(calc(100% + 1rem))';
-
-/** 归位态位移：让位会话期间右移只留一截，否则完全归位 */
-const restTransform = () => (props.offsetActive ? `translateX(calc(100% - ${props.offsetVisible}))` : 'translateX(0)');
-
+/**
+ * 面板内联样式：层号、尺寸与让位偏移 CSS 变量。
+ * 注意 transform 故意不走这里——inline style 优先级高于 class，会把
+ * <Transition> 的 enter-from / leave-to 端点 class 压住、掐断进出场动画。
+ * 三种位移端点（屏外 / 归位 / 让位）全部由底部 scoped 样式的 class 规则表达。
+ */
 const panelStyle = computed(() => ({
   zIndex: floatingZ.value,
   width: cssWidth.value,
   maxWidth: '92vw',
-  transform: animPhase.value === 'closed' ? OFFSCREEN_TRANSFORM : restTransform(),
+  ...(props.offsetActive ? { '--fp-offset-visible': props.offsetVisible } : {}),
 }));
 
 const PANEL_CLASS =
   'floating-panel fixed top-lg right-lg bottom-lg flex flex-col overflow-hidden rounded-lg border border-border-light bg-surface-panel shadow-floating transition-transform duration-slow ease-out';
 
-/** 直接写元素内联 transform（Transition 钩子内使用） */
-const writePanelTransform = (el: Element, value: string) => {
-  if (el instanceof HTMLElement) el.style.transform = value;
-};
-
-/**
- * 出场：必须直接操作 DOM。
- *
- * Transition 的离场元素已从 vnode 树中摘除，组件重渲染不会再 patch 它——
- * 只改 animPhase（响应式）不会反映到 DOM，元素既不产生 transform 过渡（出场动画消失），
- * 又要等 Vue 兜底超时才被移除。故此处同时写 DOM 与相位（相位保证复挂载时初值正确）。
- */
-const handleBeforeLeave = (el: Element) => {
-  animPhase.value = 'closed';
-  writePanelTransform(el, OFFSCREEN_TRANSFORM);
+/** 离场开始：派发 close（位移端点已由 Transition 的 leave-to class 接管） */
+const handleBeforeLeave = () => {
   emit('close');
-};
-
-/** 进场：元素仍在树中，DOM 直写与相位双管齐下——相位让进场窗口内的重渲染维持屏外初值，不被 patch 回屏内而掐断动画 */
-const handleBeforeEnter = (el: Element) => {
-  animPhase.value = 'closed';
-  writePanelTransform(el, OFFSCREEN_TRANSFORM);
-};
-
-/** 进场收尾：切到归位（让位中则为右移位置），浏览器从屏外过渡到该位置形成右侧滑入 */
-const handleEnter = (el: Element) => {
-  animPhase.value = 'open';
-  writePanelTransform(el, restTransform());
 };
 
 /** 离场动画结束：释放层号供后续浮层复用，并派发 closed */
@@ -208,6 +182,8 @@ const handleAfterLeave = () => {
     releaseFloatingZ(floatingZ.value);
     floatingZ.value = 0;
   }
+  // destroyOnClose 为 true 时此处才真正卸载内容；false 时内容始终保留
+  if (props.destroyOnClose) contentMounted.value = false;
   emit('closed');
 };
 
@@ -230,6 +206,7 @@ watch(
     }
     floatingZ.value = acquireFloatingZ();
     window.addEventListener('keydown', handleEscape);
+    contentMounted.value = true;
     emit('open');
     await nextTick();
     emit('opened');
@@ -246,3 +223,23 @@ onBeforeUnmount(() => {
   }
 });
 </script>
+
+<style scoped lang="scss">
+.floating-panel {
+  // 静止态归位
+  transform: translateX(0);
+
+  // 让位会话：右移只留一截（偏移量由 :style 注入的 --fp-offset-visible 变量提供）
+  &.offset-active {
+    transform: translateX(calc(100% - var(--fp-offset-visible)));
+  }
+
+  // 进出场端点：完全右移出屏。
+  // 双类特异性压过上面两条静止态规则；Transition 移除 enter-from / 追加 leave-to 即滑入/滑出，
+  // 过渡本体沿用 PANEL_CLASS 的 transition-transform duration-slow
+  &.floating-panel-enter-from,
+  &.floating-panel-leave-to {
+    transform: translateX(calc(100% + 1rem));
+  }
+}
+</style>

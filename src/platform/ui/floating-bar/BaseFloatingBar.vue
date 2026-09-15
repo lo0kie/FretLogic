@@ -21,14 +21,14 @@
         role="toolbar"
         tabindex="-1"
       >
-        <slot :divider="FloatingBarDivider" />
+        <slot />
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, onActivated, onDeactivated, ref } from 'vue';
+import { computed, onActivated, onDeactivated, ref } from 'vue';
 
 import { ALIGN_CLASS_MAP, toPositionLength } from './floatingPositions';
 
@@ -125,18 +125,6 @@ const outerStyle = computed(() => {
     style['zIndex'] = props.zIndex;
   }
   return style;
-});
-
-// 纯静态分隔线组件，避免在 setup 渲染函数中重复创建闭包
-const FloatingBarDivider = defineComponent({
-  name: 'FloatingBarDivider',
-  render() {
-    return h('div', {
-      'class': 'w-0.5 h-4 bg-border-base opacity-60 shrink-0 rounded-full',
-      'role': 'separator',
-      'aria-orientation': 'vertical',
-    });
-  },
 });
 </script>
 

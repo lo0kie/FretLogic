@@ -101,19 +101,22 @@ export const prepareWorkerExportPayload = (
   const rawKey = computeSongKey(song.playKey, song.capo);
   const formatKey = (key: string) => key.replace(/#/g, '♯').replace(/b/g, '♭');
   const formattedKey = formatKey(rawKey);
-  // 原调（'' 表示未设置）：设置后表头元信息行显示「原调 X 选调 Y」；未设置只显示「选调 Y」，
+  // 原调（'' 表示未设置）：设置后表头 meta 行按「原调 X │ Capo N │ 选调 Y」推导链排布；未设置只显示「选调 Y」，
   // 统一「原调/选调」标签 + 调名，不带「调」后缀，升降号由 token 渲染统一上标
   const originalKey = song.originalKey ?? '';
   const keyText = originalKey ? `原调 ${formatKey(originalKey)} 选调 ${formattedKey}` : `选调 ${formattedKey}`;
   const capoText = `${song.capo}`;
+  // 拍号（'' 表示未设置）：设置后表头元信息行最右段显示如「4/4」，未设置不绘制
+  const timeSignatureText = song.timeSignature;
 
   return {
     title: song.title || DEFAULT_SCORE_TITLE,
     // 歌手（纯展示元数据，空串表示无；canvas 表头非空时绘制副标题行）
     singer: song.singer ?? '',
-    // 原调（'' 表示未设置）：已并入 keyText 元信息行左段（「原调 X → 演唱调」），无需单独字段
+    // 原调（'' 表示未设置）：已并入 keyText 元信息行右段（「原调 X → 演唱调」），无需单独字段
     keyText,
     capoText,
+    timeSignatureText,
     lines,
     mode,
     // 画布配色单一来源是 tokens.scss 的 --fbc-* 变量，主线程解析后传给 Worker（Worker 无 DOM）

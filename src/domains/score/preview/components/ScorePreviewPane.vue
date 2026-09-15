@@ -18,12 +18,12 @@
          页面超出视口高度（自定义放大）时切换为纵向浏览：禁用横向翻页滚轮、保留双轴滚动，
          滚轮回归竖向滚动以便阅读超高页 -->
     <template v-else>
-      <div
-        v-edge-fade.x
-        v-scrollbar="{ onScroll: closeAllPopovers }"
-        v-wheel-scroll="{ disabled: isTallerThanViewport, smooth: true }"
+      <BaseScrollArea
+        :wheel="{ disabled: isTallerThanViewport, smooth: true }"
+        close-popovers
+        axis="both"
         class="relative min-h-0 flex-1 p-6 py-4"
-        ref="previewScrollRef"
+        ref="previewAreaRef"
       >
         <!-- 内容行：够宽时自动水平居中（mx-auto），超宽时 margin 归 0 自然从左侧滚动；
              页面超出视口高度时改为顶部对齐，避免 Flex 居中在负方向裁切掉页面顶部 -->
@@ -68,7 +68,7 @@
             />
           </div>
         </div>
-      </div>
+      </BaseScrollArea>
 
       <!-- 右下角缩放胶囊：复用 BaseFloatingBar（sm 紧凑形态），适应开关 + 毛玻璃百分比步进器 -->
       <BaseFloatingBar
@@ -81,39 +81,59 @@
         position="absolute"
         size="sm"
       >
-        <template #default="{ divider }">
-          <!-- 适应开关：按钮化 checkbox（选中=主色高亮，撑满语义图标），控制自适应满高模式 -->
-
-          <template v-if="!isFitMode">
-            <BaseSlider
-              v-model="customZoomPercent"
-              :default-value="PREVIEW_DEFAULT_ZOOM_PERCENT"
-              :formatter="val => `${Math.round(val)}%`"
-              :max="PREVIEW_MAX_ZOOM_PERCENT"
-              :min="PREVIEW_MIN_ZOOM_PERCENT"
-              :show-buttons="false"
-              :step="2"
-              bordered
-              wheel-on-hover
-              readout-position="left"
-              size="sm"
-              width="md"
-            />
-
-            <component :is="divider" />
-          </template>
-
-          <BaseCheckbox
-            v-model="isFitMode"
-            v-tooltip="'自适应窗口高度'"
-            buttonized
-            icon-only
-            aria-label="自适应窗口高度"
-            icon="scan"
+        <template v-if="!isFitMode">
+          <BaseSlider
+            v-model="customZoomPercent"
+            :default-value="PREVIEW_DEFAULT_ZOOM_PERCENT"
+            :formatter="val => `${Math.round(val)}%`"
+            :max="PREVIEW_MAX_ZOOM_PERCENT"
+            :min="PREVIEW_MIN_ZOOM_PERCENT"
+            :show-buttons="false"
+            :step="2"
+            bordered
+            wheel-on-hover
+            readout-position="left"
             size="sm"
-            title="自适应窗口高度"
+            width="md"
+          />
+
+          <BaseDivider
+            class="rounded-full opacity-60"
+            color="base"
+            length="1rem"
+            orientation="vertical"
+            thickness="0.125rem"
           />
         </template>
+
+        <BaseCheckbox
+          v-model="isFitMode"
+          v-tooltip="'自适应窗口高度'"
+          buttonized
+          icon-only
+          aria-label="自适应窗口高度"
+          icon="scan"
+          size="sm"
+          title="自适应窗口高度"
+        />
+      </BaseFloatingBar>
+
+      <!-- 页码提示：底部居中浮动胶囊（复用 BaseFloatingBar 的玻璃 chrome 与进出场动画），
+           滚动/翻页/切歌/进入预览时浮现，停顿后自动淡出；单页固定显示 1 / 1 -->
+      <BaseFloatingBar
+        :bottom="'1.5rem'"
+        :safe-area-inset="false"
+        :visible="pages.length > 0 && isPageHintVisible"
+        :z-index="'z-float'"
+        disabled-teleport
+        align="center"
+        aria-label="页码提示"
+        position="absolute"
+        size="sm"
+      >
+        <span aria-live="polite" class="px-1 text-xs font-semibold text-fg-body tabular-nums select-none">
+          {{ currentPage }} / {{ pages.length }}
+        </span>
       </BaseFloatingBar>
     </template>
 
@@ -131,14 +151,26 @@
 </script>
 
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, ref, toRef, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  ref,
+  toRef,
+  useTemplateRef,
+  watch,
+} from 'vue';
 
 import { useDebounceFn, useElementSize, useEventListener } from '@vueuse/core';
 
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
+import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseFloatingBar from '@/platform/ui/floating-bar/BaseFloatingBar.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import {
@@ -161,9 +193,10 @@ import { prepareWorkerExportPayload, runWorkerExport } from '@/domains/score/pre
 import { isDark } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
+import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 import type { MenuItem } from '@/platform/ui/menu/types';
+import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 defineOptions({ name: 'ScorePreviewPane' });
 // ===== 会话级 A4 分页预览缓存（模块作用域，组件卸载/切换标签后仍保留）：内容键 → 各页图 URL =====
@@ -218,6 +251,8 @@ const allLineIndices = computed<number[]>(() => {
 const pages = ref<string[]>([]);
 const isRendering = ref(false);
 const errorMessage = ref('');
+/** 首帧页码提示待展示标记：组件挂载（含刷新）与切歌后待新页流落位展示一次，缓存命中与重新生成两条路径共用 */
+let pendingIntroPageHint = true;
 let runToken = 0;
 let currentContentKey = '';
 let isPaneActive = true;
@@ -277,6 +312,7 @@ const generate = async (force = false) => {
     isRendering.value = false;
     errorMessage.value = '';
     dismissUpdateToast();
+    consumeIntroPageHint();
     return;
   }
 
@@ -311,6 +347,7 @@ const generate = async (force = false) => {
     pages.value = urls;
     currentContentKey = contentKey;
     cachePut(contentKey, urls);
+    consumeIntroPageHint();
   } catch (err) {
     if (token === runToken) {
       errorMessage.value = err instanceof Error ? err.message : '预览生成失败';
@@ -338,8 +375,11 @@ const cancelPendingExport = () => {
 const previewMenuRef = ref<InstanceType<typeof BaseMenu> | null>(null);
 const menuTargetIndex = ref(-1);
 
-/** 预览横向滚动容器 */
-const previewScrollRef = ref<HTMLElement | null>(null);
+/** 预览横向滚动容器元素（尺寸测量 / 缩放滚轮绑定 / 滚动位置存取都需要元素本身） */
+const previewAreaRef = useTemplateRef<ScrollAreaHandle>('previewAreaRef');
+const previewScrollRef = useScrollAreaElement(previewAreaRef);
+/** 响应式滚动状态：BaseScrollArea 句柄内聚维护（scroll 事件 + 容器尺寸观察自动同步），消费方免手写监听 */
+const scrollState = computed(() => previewAreaRef.value?.scrollState ?? null);
 /** 滚动位置存档：双轴，纵向浏览（放大超高模式）切 Tab 后同样回位；
  *  本面板以固定 key 跨歌复用实例，切歌时由渲染重置流程归零 */
 let savedScroll = { top: 0, left: 0 };
@@ -420,6 +460,51 @@ const handlePageContextMenu = (e: MouseEvent, index: number) => {
   void previewMenuRef.value?.openMenuAt(e.clientX, e.clientY);
 };
 
+// ===== 页码指示：由 BaseScrollArea 句柄的响应式滚动状态推导当前页 =====
+/** 当前页码（1 基）：滚动进度 scrollLeft / (scrollWidth - clientWidth) 与均匀页宽的页序线性对应 */
+const currentPage = computed(() => {
+  const state = scrollState.value;
+  const total = pages.value.length;
+  if (!state || total <= 1) return 1;
+  const maxScroll = state.scrollWidth - state.clientWidth;
+  if (maxScroll <= 0) return 1;
+  const progress = Math.min(1, Math.max(0, state.scrollLeft / maxScroll));
+  return Math.round(progress * (total - 1)) + 1;
+});
+/** 页码提示自动淡出时延（ms）：滚动停顿超过该时长即隐藏 */
+const PAGE_HINT_AUTO_HIDE_MS = 1200;
+/** 页码提示可见性：横向滚动时浮现，停顿后自动淡出；纵向浏览超高页流不打扰 */
+const isPageHintVisible = ref(false);
+const hidePageHint = useDebounceFn(() => {
+  isPageHintVisible.value = false;
+}, PAGE_HINT_AUTO_HIDE_MS);
+const showPageHint = () => {
+  isPageHintVisible.value = true;
+  hidePageHint();
+};
+/** 消费首帧提示标记：页流存在即展示一次（单页显示 1 / 1）；无内容则静默清除（避免残留到下一次内容编辑） */
+const consumeIntroPageHint = () => {
+  if (!pendingIntroPageHint) return;
+  pendingIntroPageHint = false;
+  if (pages.value.length > 0) showPageHint();
+};
+// 横向滚动浮现提示；纵向浏览超高页流（scrollLeft 不变）不打扰
+watch(
+  () => scrollState.value?.scrollLeft,
+  (now, prev) => {
+    if (now === undefined || prev === undefined) return;
+    if (Math.abs(now - prev) > 1 && pages.value.length > 0) showPageHint();
+  }
+);
+// 可滚动距离变化（缩放/页流增删等内容尺寸变化，由句柄自动同步）同样浮现提示
+watch(
+  () => scrollState.value?.scrollableX,
+  (now, prev) => {
+    if (now === undefined || prev === undefined || now === prev) return;
+    if (pages.value.length > 0) showPageHint();
+  }
+);
+
 /** 读取指定页的原始 Blob（object URL 同源 fetch 可读回，Worker 导出为 image/jpeg） */
 const fetchPageBlob = async (index: number): Promise<Blob | null> => {
   const url = pages.value[index];
@@ -490,6 +575,9 @@ watch(
       return;
     }
 
+    // 切歌后展示一次新乐谱的页码提示：置在失活早退之前，异标签切歌回到预览时同样生效
+    pendingIntroPageHint = true;
+
     // 仅在当前处于预览标签激活状态时，切歌才同步触发导出生成；
     // 若在编辑歌词或排列和弦标签休眠（已失活），绝不在后台抢跑 Worker 耗能，待切回预览标签时（onActivated）由唤醒守卫按需生成
     if (!isPaneActive) {
@@ -500,11 +588,13 @@ watch(
 
     const contentKey = buildContentKey();
     const cached = cacheGet(contentKey);
+    // 缓存命中直接消费，重新生成由 generate 完成后消费
     if (cached && cached.length > 0) {
       pages.value = cached;
       currentContentKey = contentKey;
       isRendering.value = false;
       errorMessage.value = '';
+      consumeIntroPageHint();
     } else {
       pages.value = [];
       currentContentKey = '';
@@ -553,6 +643,9 @@ onActivated(async () => {
     el.scrollTop = savedScroll.top;
     el.scrollLeft = savedScroll.left;
   }
+
+  // 切回预览标签：与切歌/首帧一致，页流存在即浮现一次页码提示（单页显示 1 / 1）
+  if (pages.value.length > 0) showPageHint();
 });
 
 onDeactivated(() => {

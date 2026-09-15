@@ -63,10 +63,8 @@ export function useAudioPlayer() {
     applyChorusEnabled(settingsStore.audioPlayback.chorusEnabled);
   };
 
-  /** 播放任意指定和弦实体 */
-  const playChord = async (chord: Chord) => {
-    if (isPlaying.value) return;
-    isPlaying.value = true;
+  /** 单次扫弦公共管线：引擎就绪 → 同步音色 → 释放旧音 → 扫弦 → 尾部释放后复位 isPlaying。 */
+  const strumOnce = async (chord: Chord, failLabel: string) => {
     try {
       const ready = await ensureAudioReady();
       if (!ready) {
@@ -88,9 +86,16 @@ export function useAudioPlayer() {
         (strumDuration + AUDIO_CONFIG.AUDIO_RELEASE_TAIL) * 1000
       );
     } catch (e) {
-      console.error('播放和弦失败:', e);
+      console.error(failLabel, e);
       isPlaying.value = false;
     }
+  };
+
+  /** 播放任意指定和弦实体 */
+  const playChord = async (chord: Chord) => {
+    if (isPlaying.value) return;
+    isPlaying.value = true;
+    await strumOnce(chord, '播放和弦失败:');
   };
 
   /** 从低音到高音扫弦式播放当前草稿和弦，力度/时间带随机 humanize，尾部释放完成后自动复位状态 */
@@ -98,34 +103,7 @@ export function useAudioPlayer() {
     // 不做 isPlaying 早退：释放尾窗口内的重复点击应立即重新扫弦（开头会先释放旧音，不会叠音），
     // 否则点击会被保护窗口静默吞掉，表现为「要点两下才播放」
     isPlaying.value = true;
-
-    try {
-      const ready = await ensureAudioReady();
-      if (!ready) {
-        isPlaying.value = false;
-        return;
-      }
-
-      syncEngineToneSettings();
-      releaseSynthNotes();
-      const strumDuration = triggerChordStrum(editorStore.draftChord, buildStrumOptions());
-
-      if (strumDuration === 0) {
-        isPlaying.value = false;
-        return;
-      }
-
-      if (playTimer) clearTimeout(playTimer);
-      playTimer = setTimeout(
-        () => {
-          isPlaying.value = false;
-        },
-        (strumDuration + AUDIO_CONFIG.AUDIO_RELEASE_TAIL) * 1000
-      );
-    } catch (error) {
-      console.error('和弦音频引擎调度失败:', error);
-      isPlaying.value = false;
-    }
+    await strumOnce(editorStore.draftChord, '和弦音频引擎调度失败:');
   };
 
   // ===== 持续发声（长按试听）：triggerAttack 保持延音，松开后统一释放 =====

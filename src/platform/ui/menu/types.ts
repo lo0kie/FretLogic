@@ -7,6 +7,8 @@ export interface MenuItem {
   icon?: IconName | Component;
   action?: () => void;
   checked?: boolean;
+  /** 勾选标记位置：'left' 占据前导图标槽（默认，勾选时替换 icon）；'right' 置于行尾（shortcut 之后），前导槽留给 icon */
+  checkPosition?: 'left' | 'right';
   color?: string;
   danger?: boolean;
   disabled?: boolean;

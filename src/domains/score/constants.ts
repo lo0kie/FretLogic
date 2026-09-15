@@ -6,6 +6,13 @@ import { FRETBOARD_CANVAS_CONFIG } from '@/domains/fretboard/constants';
 /** 无标题乐谱导出/保存时使用的默认标题文案 */
 export const DEFAULT_SCORE_TITLE = '歌词谱';
 
+/** 乐谱拍号预设选项（配置弹窗下拉 + 文本导入导出共用同一取值域） */
+export const SONG_TIME_SIGNATURES: readonly string[] = ['2/4', '3/4', '4/4', '6/8', '12/8', '5/4', '7/8'];
+
+/** 拍号格式校验（分子/分母各 1~2 位数字）；'' 表示未设置，由调用方单独处理 */
+export const isValidTimeSignature = (value: unknown): value is string =>
+  typeof value === 'string' && /^\d{1,2}\/\d{1,2}$/.test(value);
+
 /** 乐谱离屏导出引擎（Worker / OffscreenCanvas）UI 尺寸、排版与主题配色常量 */
 export const SCORE_EXPORT_CONFIG = {
   // ---- 画布与页面尺寸 ----

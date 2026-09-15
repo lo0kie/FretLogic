@@ -1,6 +1,5 @@
 // 和弦与乐理领域公共门面
 export { default as GroupSection } from './library/components/GroupSection.vue';
-export { default as GroupContent } from './library/components/GroupContent.vue';
 export { default as ChordCard } from './library/components/ChordCard.vue';
 export { default as ChordModalsContainer } from './library/components/ChordModalsContainer.vue';
 export { default as GroupModalsContainer } from './library/components/GroupModalsContainer.vue';
@@ -8,7 +7,6 @@ export { default as KeySelector } from './components/KeySelector.vue';
 export { default as ChordPickerPanel } from './components/ChordPickerPanel.vue';
 export { default as ChordEditorDrawer } from './components/ChordEditorDrawer.vue';
 export { default as WorkbenchView } from './workbench/components/WorkbenchView.vue';
-export { default as WorkbenchFloatingBar } from './workbench/components/WorkbenchFloatingBar.vue';
 export { default as WorkbenchExportPanel } from './workbench/components/WorkbenchExportPanel.vue';
 export { default as WorkbenchVariantsPanel } from './workbench/components/WorkbenchVariantsPanel.vue';
 export { default as ChordAnalysisPanel } from './workbench/components/ChordAnalysisPanel.vue';

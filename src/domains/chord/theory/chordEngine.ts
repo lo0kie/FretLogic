@@ -392,7 +392,12 @@ function evaluateTemplate(
   totalInputNotes: number,
   explicitRoot: boolean
 ): RawHitCandidate | null {
-  if ((intervalMask & comp.conflictMask) !== 0) return null;
+  // 低音豁免：slash 低音只是「按在低音区的那个音」，不参与和弦性质的冲突判定。
+  // 例如音集 E G# B D（低音 D）：D 对 E 大三模板是 m7 冲突音，但作为低音应放行出 E/D 候选
+  // （否则只剩 E7/D 一种解读）。仅豁免最低音这一个音程；必选音与其余冲突检查不变，
+  // 非低音音符仍须满足模板约束，候选空间不会发散。
+  const effectiveConflictMask = isSlash ? comp.conflictMask & ~(1 << lowestInterval) : comp.conflictMask;
+  if ((intervalMask & effectiveConflictMask) !== 0) return null;
   if ((intervalMask & comp.reqMask) !== comp.reqMask) return null;
 
   let explainedMask = intervalMask & (comp.reqMask | comp.optMask);

@@ -128,6 +128,25 @@
         </div>
 
         <div class="header-actions flex shrink-0 items-center gap-xs">
+          <BaseMenu :items="songFilterMenuItems" placement="bottom">
+            <template #trigger="{ isOpen, pinToggle }">
+              <ActionButton
+                :aria-expanded="isOpen"
+                :color="songStore.hasSongFilter ? 'primary' : isOpen ? 'primary' : 'default'"
+                :title="songFilterButtonTitle"
+                :variant="songStore.hasSongFilter || isOpen ? 'subtle' : 'ghost'"
+                @click="pinToggle()"
+                icon-only
+                aria-haspopup="menu"
+                aria-label="筛选乐谱"
+                icon-size="xl"
+                icon-stroke="regular"
+              >
+                <BaseIcon icon-size="xl" icon-stroke="regular" name="filter" />
+              </ActionButton>
+            </template>
+          </BaseMenu>
+
           <BaseMenu :items="songSortMenuItems" placement="bottom">
             <template #trigger="{ isOpen, pinToggle }">
               <ActionButton
@@ -162,7 +181,7 @@
     </div>
 
     <div class="left-group-list-container left-group-list relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-      <div v-edge-fade.y v-scrollbar="{ onScroll: closeAllPopovers }" class="scroll-body flex-1 p-md" ref="scrollRef">
+      <BaseScrollArea close-popovers axis="y" class="scroll-body flex-1 p-md" ref="scrollAreaRef">
         <KeepAlive :max="12">
           <GroupSection
             v-if="route.path === ROUTE_PATHS.WORKBENCH"
@@ -182,7 +201,7 @@
             key="score"
           />
         </KeepAlive>
-      </div>
+      </BaseScrollArea>
     </div>
 
     <div class="left-panel-footer w-full shrink-0 border-t border-glass-border p-md px-lg">
@@ -218,6 +237,7 @@ import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
 import { CHORD_REFERENCE_LOOKUP } from '@/domains/chord/library/injectionKeys';
@@ -227,13 +247,14 @@ import { getChordName } from '@/domains/chord/theory/theory';
 import { useSongModals } from '@/domains/score/library/composables/useSongModals';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
+import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { LEFT_SIDEBAR_WIDTH_PIXEL, ROUTE_PATHS } from '@/platform/utils/constants';
 import { pickFile } from '@/platform/utils/filePicker';
 
 import type { GroupedChordCard } from '@/domains/chord/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { MenuItem } from '@/platform/ui/menu/types';
+import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 defineOptions({ inheritAttrs: false });
 
@@ -262,7 +283,9 @@ const handleSelectSearchIndex = (index: number) => {
   searchQuery.value = '';
 };
 
-const scrollRef = useTemplateRef<HTMLElement>('scrollRef');
+const scrollAreaRef = useTemplateRef<ScrollAreaHandle>('scrollAreaRef');
+/** 侧栏滚动容器元素：会话级滚动位置存取用 */
+const scrollRef = useScrollAreaElement(scrollAreaRef);
 
 const route = useRoute();
 const uiStore = useUiStore();
@@ -346,6 +369,62 @@ const handleImportTrigger = async () => {
 };
 
 /** 乐谱排序菜单（交互参考主题切换：Popover + 菜单项，选中项带勾选标记） */
+/** 乐谱过滤级联菜单：全部乐谱 / 按歌手 / 按拍号；子项带选中态，选择即生效（会话内状态，不持久化） */
+const songFilterMenuItems = computed<MenuItem[]>(() => {
+  const clearBoth = () => songStore.setSongFilters('', '');
+  const singerChildren: MenuItem[] = [
+    {
+      label: '全部',
+      checked: songStore.singerFilter === '',
+      checkPosition: 'right',
+      action: () => songStore.setSongFilters('', songStore.timeSignatureFilter),
+    },
+    ...songStore.availableSingerFilters.map(singer => ({
+      label: singer,
+      checked: songStore.singerFilter === singer,
+      checkPosition: 'right' as const,
+      action: () => songStore.setSongFilters(singer, songStore.timeSignatureFilter),
+    })),
+  ];
+  const timeSigChildren: MenuItem[] = [
+    {
+      label: '全部',
+      checked: songStore.timeSignatureFilter === '',
+      checkPosition: 'right',
+      action: () => songStore.setSongFilters(songStore.singerFilter, ''),
+    },
+    ...songStore.availableTimeSignatureFilters.map(sig => ({
+      label: sig,
+      checked: songStore.timeSignatureFilter === sig,
+      checkPosition: 'right' as const,
+      action: () => songStore.setSongFilters(songStore.singerFilter, sig),
+    })),
+  ];
+  return [
+    {
+      label: '全部乐谱',
+      icon: 'inbox',
+      checked: !songStore.hasSongFilter,
+      disabled: !songStore.hasSongFilter,
+      action: clearBoth,
+    },
+    { label: '按歌手', icon: 'mic', children: singerChildren },
+    { label: '按拍号', icon: 'clock', children: timeSigChildren },
+  ];
+});
+
+/** 过滤按钮悬停提示：无过滤时说明入口，激活时展示当前条件 */
+const songFilterButtonTitle = computed(() =>
+  !songStore.hasSongFilter
+    ? '筛选乐谱（按歌手 / 拍号）'
+    : `筛选中：${[
+        songStore.singerFilter && `歌手 ${songStore.singerFilter}`,
+        songStore.timeSignatureFilter && `拍号 ${songStore.timeSignatureFilter}`,
+      ]
+        .filter(Boolean)
+        .join(' · ')}`
+);
+
 const songSortMenuItems = computed<MenuItem[]>(() => [
   {
     label: '手动排序',

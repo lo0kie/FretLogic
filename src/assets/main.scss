@@ -70,8 +70,54 @@ body {
   }
 }
 
-.drag-ghost-style {
-  opacity: 0;
+/* 拖拽排序（useSortableList）：Sortable 走 fallback 通道后自带的跟随克隆退化为纯几何载体，
+   它必须脱离文档流（否则作为兄弟节点会撑开列表），视觉一律交给下面的 .drag-preview */
+.drag-fallback-hidden {
+  position: fixed;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* 拖拽影像浮现动画：阴影与透明度渐入，避免起拖瞬间阴影生硬砸出。
+   只动 box-shadow / opacity —— transform 由 JS 每帧直接写、scale 是独立属性，均不可碰 */
+@keyframes drag-preview-in {
+  from {
+    opacity: 0.55;
+    box-shadow: 0 0 0 0 rgb(0 0 0 / 0%);
+  }
+
+  to {
+    opacity: 0.92;
+    box-shadow: $shadow-floating;
+  }
+}
+
+/* 拖拽影像本体：JS 只写 transform 与宽高，其余外观全部在这里 */
+.drag-preview {
+  position: fixed;
+  top: 0;
+  left: 0;
+  scale: 1.02; /* 独立变换属性，不与 JS 写的 transform 抢同一个属性；此值在 useSortableList 的 PREVIEW_SCALE 有镜像 */
+  opacity: 0.92;
+  z-index: var(--z-top); /* 最高静态层，注释见 tokens.scss 的 --z-top */
+  animation: drag-preview-in 160ms $bezier-standard;
+  /* 跟随指针期间不能有过渡：位置由 JS 每帧直接写，任何过渡都会让影像滞后于指针。
+     松手复位不走这条属性（走 Web Animations），所以这里保持 none 即可 */
+  transition: none;
+  will-change: transform;
+  box-shadow: $shadow-floating;
+  border-radius: $radius-lg;
+  /* 兜底底色：被拖项自身透明时（和弦分组行），影像不至于只剩文字和边框飘着 */
+  background-color: var(--bg-panel);
+  pointer-events: none;
+
+  /* 副本内的过渡/动画一律停掉：拖拽中若触发 hover / enter 动画，影像会跟着抖 */
+  & * {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 .form-hint {

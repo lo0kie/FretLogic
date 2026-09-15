@@ -4,11 +4,11 @@
       <div class="truncate px-md text-2xs leading-tight font-semibold text-fg-disabled select-none">
         {{ title }}
       </div>
-      <div class="mx-1 h-px bg-border-light/60" role="separator" />
+      <BaseDivider class="opacity-60" inset="0.25rem" />
     </template>
 
     <template v-for="(item, index) in items" :key="item.label + index">
-      <div v-if="item.divided" class="mx-1 my-0.5 h-px bg-border-light/60" role="separator" />
+      <BaseDivider v-if="item.divided" class="my-0.5 opacity-60" inset="0.25rem" />
 
       <MenuSubmenu
         v-if="item.expandChildren ?? Boolean(item.children?.length || item.content)"
@@ -55,8 +55,9 @@
         class="group relative flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left transition-colors duration-fast outline-none select-none enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover)) disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
         type="button"
       >
+        <!-- 前导槽：勾选在左时 check 占据槽位（替换 icon），否则渲染 icon -->
         <BaseIcon
-          v-if="item.checked"
+          v-if="item.checked && item.checkPosition !== 'right'"
           aria-hidden="true"
           class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
           icon-size="md"
@@ -85,6 +86,16 @@
         <span v-if="item.shortcut" class="ml-3 shrink-0 font-mono text-2xs tracking-tight opacity-45 select-none">
           {{ item.shortcut }}
         </span>
+
+        <!-- 勾选在右：行尾追加 check，不占前导图标槽 -->
+        <BaseIcon
+          v-if="item.checked && item.checkPosition === 'right'"
+          aria-hidden="true"
+          class="ml-3 shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
+          icon-size="md"
+          icon-stroke="bold"
+          name="check"
+        />
       </button>
     </template>
   </div>
@@ -93,6 +104,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onBeforeUpdate, onMounted, ref, useTemplateRef } from 'vue';
 
+import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 
 import MenuSubmenu from './MenuSubmenu.vue';

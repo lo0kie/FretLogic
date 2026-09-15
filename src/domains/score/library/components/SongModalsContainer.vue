@@ -9,8 +9,8 @@
   />
 
   <BaseModal v-model:visible="songModals.modals.config" @confirm="songModals.handleConfigSong" title="乐谱配置">
-    <div class="config-modal-body flex flex-col gap-lg py-xs">
-      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="乐谱名称">
+    <BaseForm :label-width="FORM_LABEL_WIDTH" class="config-modal-body py-xs" gap="lg">
+      <BaseFormRow label="乐谱名称">
         <BaseInput
           v-focus.select
           v-model="songModals.modalData.title"
@@ -22,36 +22,47 @@
         />
       </BaseFormRow>
 
-      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="歌手">
+      <BaseFormRow label="歌手">
         <BaseInput
           v-model="songModals.modalData.singer"
           :maxlength="MAX_SONG_NAME_LENGTH"
           @enter="songModals.handleConfigSong"
           clearable
-          placeholder="选填，导出图片表头会显示"
           width="lg"
         />
       </BaseFormRow>
 
-      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="原调 (Original)">
+      <BaseFormRow label="拍号 (Time)">
+        <BaseSelector
+          v-model="songModals.modalData.timeSignature"
+          :default-value="''"
+          :options="[...SONG_TIME_SIGNATURES]"
+          clearable
+          placeholder="未设置"
+          width="md"
+        />
+      </BaseFormRow>
+
+      <BaseFormRow label="原调 (Original)">
         <KeySelector v-model="songModals.modalData.originalKey" allow-empty width="md" />
       </BaseFormRow>
 
-      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="指法调 (Play)">
+      <BaseFormRow label="指法调 (Play)">
         <KeySelector v-model="songModals.modalData.playKey" width="md" />
       </BaseFormRow>
 
-      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="演唱调 (Key)">
+      <BaseFormRow label="演唱调 (Key)">
         <KeySelector v-model="songModals.key.value" width="md" />
       </BaseFormRow>
 
-      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="变调夹 (Capo)">
+      <BaseFormRow label="变调夹 (Capo)">
         <BaseNumberInput v-model="songModals.modalData.capo" :max="11" :min="0" />
       </BaseFormRow>
+
       <p class="form-hint mt-xs text-2xs/relaxed text-fg-disabled">
         提示：在此处修改调式不会触发已排布和弦的自动移调。如需整体移调请使用顶部工具栏。
       </p>
-    </div>
+    </BaseForm>
   </BaseModal>
 
   <BaseModal
@@ -68,19 +79,22 @@
 
 <script setup lang="ts">
 import KeySelector from '@/domains/chord/components/KeySelector.vue';
+import BaseForm from '@/platform/ui/form/BaseForm.vue';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseNumberInput from '@/platform/ui/input/BaseNumberInput.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import PromptInputModal from '@/platform/ui/prompt/PromptInputModal.vue';
+import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
+import { SONG_TIME_SIGNATURES } from '@/domains/score/constants';
 import { injectModalController } from '@/platform/store/useModalController';
 
 import type { useSongModals } from '@/domains/score/library/composables/useSongModals';
 
 const songModals = injectModalController<ReturnType<typeof useSongModals>>('songModals');
 
-/** 表单行统一 Label 宽度 */
-const FORM_LABEL_WIDTH = '5rem';
+/** 表单行统一 Label 宽度：由 BaseForm 容器下发，各行无需重复声明 */
+const FORM_LABEL_WIDTH = '6rem';
 /** 乐谱名称最大长度 */
 const MAX_SONG_NAME_LENGTH = 15;
 </script>

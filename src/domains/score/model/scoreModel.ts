@@ -146,6 +146,27 @@ const matchSimilarLines = (
       const oldLen = oldLine.length;
       const maxLength = Math.max(oldLen, newLen) || 1;
 
+      // 包含快路径：行尾/行首追加式编辑时，编辑距离随新增字符线性增长，
+      // 相似度按「旧长 / 新长」比值衰减——短歌词行尾部输入长文本会被误判为新行，
+      // 导致该行 lineId 重建、chordMap 槽位被回收（和弦丢失根因）。
+      // 一方是另一方的前缀/后缀（且较短方非空）是同一条目被局部编辑的强信号，按长度差认领。
+      const shorterLen = Math.min(oldLen, newLen);
+      if (shorterLen > 0) {
+        const prefixOrSuffix =
+          newLine.startsWith(oldLine) ||
+          oldLine.startsWith(newLine) ||
+          newLine.endsWith(oldLine) ||
+          oldLine.endsWith(newLine);
+        if (prefixOrSuffix) {
+          const lenDiff = maxLength - shorterLen;
+          if (lenDiff < minDistance) {
+            minDistance = lenDiff;
+            bestMatchIdx = j;
+          }
+          continue;
+        }
+      }
+
       const lengthDiff = Math.abs(oldLen - newLen);
       const maxPossibleSimilarity = 1 - lengthDiff / maxLength;
       if (maxPossibleSimilarity < SIMILARITY_THRESHOLD) continue;
@@ -206,6 +227,7 @@ export const createSong = (title: string): Song => ({
   title: title.trim() || '未命名乐谱',
   singer: '',
   originalKey: '',
+  timeSignature: '',
   lyrics: '',
   playKey: 'C',
   capo: 0,

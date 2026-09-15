@@ -6,6 +6,7 @@
        留白拦截与拖拽让位交给外壳的 intercept / offsetActive 能力，本组件不再自管浮层与进出场动画 -->
   <BaseFloatingPanel
     v-model:visible="visibleModel"
+    :destroy-on-close="false"
     :offset-active="isDragging"
     :title="title ?? DEFAULT_TITLE"
     :width="PANEL_WIDTH"
@@ -56,10 +57,11 @@
           />
         </div>
       </div>
-      <div
-        v-edge-fade
-        v-wheel-scroll.smooth
-        class="picker-group-pills-bar no-scrollbar flex items-center overflow-x-auto scroll-smooth px-lg pt-sm"
+      <BaseScrollArea
+        :scrollbar="false"
+        :wheel="{ smooth: true }"
+        axis="x"
+        class="picker-group-pills-bar flex items-center scroll-smooth px-lg pt-sm"
       >
         <BaseSegmentedControl
           v-model="selectedGroupId"
@@ -72,14 +74,13 @@
             <span class="group-count pl-1.5 text-2xs font-semibold">{{ option.count }}</span>
           </template>
         </BaseSegmentedControl>
-      </div>
+      </BaseScrollArea>
     </div>
-    <div
-      v-edge-fade.y
-      v-scrollbar
+    <BaseScrollArea
       v-grid-nav="{ cols: gridCols, selector: '.picker-chord-card' }"
+      axis="y"
       class="picker-scroll-content min-h-0 flex-1 px-lg pt-sm pb-lg"
-      ref="scrollWrapperRef"
+      ref="scrollAreaRef"
     >
       <Transition name="v-transition-fade">
         <div v-if="filteredChords.length === 0" class="flex size-full items-center justify-center">
@@ -98,7 +99,7 @@
           :key="section.id"
           class="picker-section-block flex flex-col gap-sm"
         >
-          <div class="picker-section-header flex items-center gap-md py-md select-none">
+          <div class="picker-section-header flex items-center gap-md py-xs select-none">
             <span
               v-chord-name="section.title"
               class="picker-section-title text-sm font-extrabold tracking-tight text-fg-title"
@@ -109,7 +110,7 @@
           </div>
           <TransitionGroup
             :aria-label="`${section.title} 和弦组`"
-            class="picker-cards-grid-cols relative grid grid-cols-2 items-start gap-lg"
+            class="picker-cards-grid-cols relative grid grid-cols-3 items-start gap-md"
             name="v-transition-list"
             role="group"
             tag="div"
@@ -154,12 +155,12 @@
               >
                 {{ getSourceGroupName(chord) }}
               </span>
-              <FretboardCanvas :chord :chord-name-scale="0.7" :is-dark-mode="isDark" :scale="pickerScale" lazy />
+              <FretboardCanvas :chord :chord-name-scale="0.75" :is-dark-mode="isDark" :scale="pickerScale" lazy />
             </div>
           </TransitionGroup>
         </div>
       </TransitionGroup>
-    </div>
+    </BaseScrollArea>
 
     <BaseFab
       :visible="scrollTopVisible"
@@ -185,10 +186,13 @@
     />
 
     <template #footer>
-      <div
-        v-wheel-scroll.smooth
+      <BaseScrollArea
+        :fade="false"
+        :scrollbar="false"
+        :wheel="{ smooth: true }"
         aria-label="和弦分区定位"
-        class="picker-section-nav no-scrollbar flex w-full shrink-0 items-center overflow-x-auto scroll-smooth px-2xl pt-lg pb-lg"
+        axis="x"
+        class="picker-section-nav flex w-full shrink-0 items-center scroll-smooth px-2xl pt-lg pb-lg"
         role="navigation"
       >
         <!-- w-max + min-w-full：分区少时整条居中，分区多时横向滚动且左端可达 -->
@@ -201,7 +205,7 @@
             size="sm"
           />
         </div>
-      </div>
+      </BaseScrollArea>
     </template>
   </BaseFloatingPanel>
 
@@ -224,18 +228,23 @@ import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseFab from '@/platform/ui/floating-bar/BaseFab.vue';
 import BaseFloatingPanel from '@/platform/ui/floating-panel/BaseFloatingPanel.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
-import { getChordName, parseChordName, resolveChordRootPitch, SORT_RULE_CONFIG } from '@/domains/chord/theory/theory';
+import { getChordName, SORT_RULE_CONFIG } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
 import { isDark } from '@/platform/composables/useTheme';
+import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
 import ChordEditorDrawer from './ChordEditorDrawer.vue';
+import { buildChordSections } from './ChordPickerPanel.logic';
 
+import type { ChordPickerSection } from './ChordPickerPanel.logic';
 import type { Chord } from '@/domains/chord/types';
+import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 const props = defineProps<{
   visible: boolean;
@@ -261,16 +270,16 @@ const emit = defineEmits<{
 const DEFAULT_TITLE = '拖动添加和弦';
 
 /** 面板宽度：固定值，与视口无关（外壳内部再统一施加 92vw 上限） */
-const PANEL_WIDTH = 480;
+const PANEL_WIDTH = 520;
 
 /** 网格列数：面板固定 2 列（与模板 grid-cols-2 同步），供键盘上下导航换行 */
 const gridCols = computed(() => 2);
 
-const pickerScale = 2;
+const pickerScale = 1.6;
 /** 和弦卡片类名（设定充足 min-h 与顶部呼吸空间，避免顶栏操作压住和弦名）。
  *  卡片只作拖动来源，不再有「当前已绑定」的激活态变体 */
 const CHORD_CARD_BASE_CLASS =
-  'picker-chord-card group relative z-card flex min-h-[196px] w-full cursor-grab flex-col items-center justify-center self-start rounded-md border border-border-light bg-surface-body px-2 pt-4 pb-2 transition-all duration-fast outline-none hover:border-primary hover:shadow-md active:scale-[0.97] active:cursor-grabbing [&:has(.picker-edit-btn:active)]:scale-100';
+  'picker-chord-card group relative z-card flex w-full cursor-grab flex-col items-center justify-center self-start rounded-md border border-border-light bg-surface-body px-2 pt-4 pb-2 transition-all duration-fast outline-none hover:border-primary hover:shadow-md active:scale-[0.97] active:cursor-grabbing [&:has(.picker-edit-btn:active)]:scale-100';
 
 const visibleModel = computed({
   get: () => props.visible,
@@ -278,7 +287,9 @@ const visibleModel = computed({
 });
 const chordStore = useChordStore();
 
-const scrollWrapperRef = useTemplateRef<HTMLElement>('scrollWrapperRef');
+const scrollAreaRef = useTemplateRef<ScrollAreaHandle>('scrollAreaRef');
+/** 和弦列表滚动容器元素（分区定位 / 边缘滚动入口 / 滚动监听都需要元素本身） */
+const scrollWrapperRef = useScrollAreaElement(scrollAreaRef);
 
 /** 边缘滚动入口：顶部/底部浮动按钮。列表可滚且未贴该边时显示，点击平滑滚至对应边 */
 const {
@@ -454,87 +465,9 @@ const chordNameMap = computed(() => {
   return map;
 });
 
-const rootCategoryCache = new WeakMap<Chord, { key: string; label: string }>();
+/** 根音类别解析与分区构建：纯逻辑见 ChordPickerPanel.logic.ts */
 
-/**
- * 解析和弦根音类别：优先取名称段的根音，其次解析和弦名，最后按根音音高反推；
- * key 用 ASCII（分区 id 与排序），label 用 ♯/♭ 展示。结果按和弦实例缓存
- */
-const getChordRootCategory = (chord: Chord): { key: string; label: string } => {
-  const cached = rootCategoryCache.get(chord);
-  if (cached) return cached;
-
-  let result: { key: string; label: string };
-  if (chord.nameSegments?.root) {
-    const [letter, acc] = chord.nameSegments.root;
-    const accAscii = acc === 1 ? '#' : acc === -1 ? 'b' : '';
-    const accUnicode = acc === 1 ? '♯' : acc === -1 ? '♭' : '';
-    result = { key: `${letter}${accAscii}`, label: `${letter}${accUnicode}` };
-  } else {
-    const name = getChordName(chord).trim();
-    if (name) {
-      const parsed = parseChordName(name);
-      if (parsed.rootLabel) {
-        const natural = parsed.rootLabel[0] || '';
-        const accChar = parsed.rootLabel.slice(1);
-        const accAscii = accChar === '#' || accChar === '♯' ? '#' : accChar === 'b' || accChar === '♭' ? 'b' : '';
-        const accUnicode = accAscii === '#' ? '♯' : accAscii === 'b' ? '♭' : '';
-        result = { key: `${natural}${accAscii}`, label: `${natural}${accUnicode}` };
-      } else {
-        result = resolveRootPitchCategory(chord);
-      }
-    } else {
-      result = resolveRootPitchCategory(chord);
-    }
-  }
-
-  rootCategoryCache.set(chord, result);
-  return result;
-};
-
-/** 按根音音高反推根音类别（名称缺失时的兜底路径） */
-const resolveRootPitchCategory = (chord: Chord): { key: string; label: string } => {
-  const rootPitch = resolveChordRootPitch(chord.strings, chord.fretOffset, chord.tuning, chord, chord.rootStringIndex);
-  if (rootPitch >= 0 && rootPitch < 12) {
-    const SHARP_KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const SHARP_LABELS = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
-    return { key: SHARP_KEYS[rootPitch] ?? 'OTHER', label: SHARP_LABELS[rootPitch] ?? '其他' };
-  }
-  return { key: 'OTHER', label: '其他' };
-};
-
-interface ChordPickerSection {
-  id: string;
-  title: string;
-  chords: Chord[];
-}
-
-const chordSections = computed<ChordPickerSection[]>(() => {
-  const chords = filteredChords.value;
-  if (chords.length === 0) return [];
-
-  const sectionMap = new Map<string, ChordPickerSection>();
-  const orderedKeys: string[] = [];
-
-  for (const chord of chords) {
-    const rootInfo = getChordRootCategory(chord);
-    let sec = sectionMap.get(rootInfo.key);
-    if (!sec) {
-      sec = {
-        id: rootInfo.key,
-        title: rootInfo.label,
-        chords: [],
-      };
-      sectionMap.set(rootInfo.key, sec);
-      orderedKeys.push(rootInfo.key);
-    }
-    sec.chords.push(chord);
-  }
-
-  // 分区顺序跟随当前排序规则（filteredChords 已按右上角 selector 的规则排好）中首个音符出现的次序，
-  // 使「按主音分组 + 跟随分组排序」同时成立；C-B 规则下自然呈现 C→C♯→D…，此时为稳定排序保持原序
-  return orderedKeys.map(k => sectionMap.get(k)!);
-});
+const chordSections = computed<ChordPickerSection[]>(() => buildChordSections(filteredChords.value));
 
 /** 和弦卡片按下：交给宿主拖拽系统登记外部拖拽会话（移动超阈值起拖，落点与落地动作由宿主决定）。
  *  宿主未注入 dragChordStarter 时卡片不参与拖拽，交互退化为点击派发 select */

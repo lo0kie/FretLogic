@@ -20,6 +20,8 @@ export interface Song {
   singer: string;
   /** 原调（歌曲原始调性，'' 表示未设置；不参与乐理计算，仅展示与导出表头） */
   originalKey: string;
+  /** 拍号（如 4/4、6/8，'' 表示未设置；纯展示元数据，不参与乐理计算） */
+  timeSignature: string;
   lyrics: string;
   lineIds: LineId[];
   playKey: string;

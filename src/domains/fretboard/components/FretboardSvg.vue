@@ -196,18 +196,20 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/domains/chord/theory/theory';
-import { computeBarreCandidates, isBarreStillValid } from '@/domains/fretboard/model/coordinates';
 import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
 
 import FretboardNote from './FretboardNote.vue';
+import { BARRE_ARROW_TRANSITION_MS, CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '../constants';
 import {
-  BARRE_ARROW_TRANSITION_MS,
-  CANVAS_CONFIG,
-  FRETBOARD_LINE_WIDTH,
-  NOTE_DISPLAY,
-  OPEN_STRING_MARKER_Y,
-} from '../constants';
+  barreGeometryOf,
+  computeDisplayBarres,
+  getBarreFill as getBarreFillOf,
+  getBarreStroke as getBarreStrokeOf,
+  getStringNoteY as getStringNoteYOf,
+  isPointInBarre as isPointInBarreOf,
+} from './FretboardSvg.logic';
 
+import type { DisplayBarre } from './FretboardSvg.logic';
 import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
 import type { CSSProperties } from 'vue';
 
@@ -338,13 +340,8 @@ const isRoot = (sIdx: number) => rootStringIndex === sIdx;
 
 // ==================== 一弦一音符持久模型与沿弦滑行动画 ====================
 
-/** 根据品位计算音符中心 Y 坐标：0 品/静音位于 34px，1~N 品位于对应品格中心 (80 + (fret - 0.5) * 100) */
-const getStringNoteY = (fret: number) => {
-  if (fret <= 0) {
-    return OPEN_STRING_MARKER_Y;
-  }
-  return CANVAS_CONFIG.OFFSET_Y_TOP + (fret - 0.5) * CANVAS_CONFIG.FRET_HEIGHT;
-};
+/** 根据品位计算音符中心 Y 坐标（纯函数见 FretboardSvg.logic.ts） */
+const getStringNoteY = (fret: number) => getStringNoteYOf(fret);
 
 /** 正在沿弦滑动的琴弦索引集合：仅在品位变更时激活 transition，避免浏览器缩放/resize 时因矩阵微调误触发过渡抽动 */
 const movingStringIndices = ref<Set<number>>(new Set());
@@ -400,19 +397,8 @@ const isNoteFocused = (sIdx: number, fret: number) =>
 
 // ==================== 横按梁几何与交互 ====================
 
-/** 横按梁几何：圆角圆心对齐最外侧音符中心（pad = 厚度一半），y 对齐所在品中心 */
-const barreGeometry = (barre: BarreEntity) => {
-  const pad = barreThickness / 2;
-  const x1 = stringXPositions[barre.fromString] ?? 0;
-  const x2 = stringXPositions[barre.toString] ?? 0;
-  const xLeft = Math.min(x1, x2) - pad;
-  const xRight = Math.max(x1, x2) + pad;
-  return {
-    x: xLeft,
-    width: Math.max(0, xRight - xLeft),
-    y: CANVAS_CONFIG.OFFSET_Y_TOP + (barre.fret - 0.5) * CANVAS_CONFIG.FRET_HEIGHT - pad,
-  };
-};
+/** 横按梁几何：圆角圆心对齐最外侧音符中心（纯函数见 FretboardSvg.logic.ts） */
+const barreGeometry = (barre: BarreEntity) => barreGeometryOf(barre, stringXPositions, barreThickness);
 
 /** 视觉横按梁内联几何样式：显式驱动 CSS transition 实现平滑形态形变与跨度伸缩 */
 const barreBeamStyle = (barre: BarreEntity): CSSProperties => {
@@ -433,63 +419,13 @@ const barreHotspotStyle = (barre: BarreEntity): CSSProperties => {
   };
 };
 
-/**
- * 汇总当前指板上需要展示的所有横按（推导出的候选 + 已标记横按）：
- * - 已标记横按（用户显式设置）：isMarked = true
- * - 推导出的未标记横按：isMarked = false
- */
-interface DisplayBarre extends BarreEntity {
-  isMarked: boolean;
-  key: string;
-}
+/** 展示用横按集合（推导候选 + 已标记合并，纯函数见 FretboardSvg.logic.ts） */
+const displayBarres = computed<DisplayBarre[]>(() => computeDisplayBarres(strings, barres, fretCount));
 
-const displayBarres = computed<DisplayBarre[]>(() => {
-  const validMarked = barres.filter(b => isBarreStillValid(strings, b) && b.fret >= 1 && b.fret <= fretCount);
-  const candidates = computeBarreCandidates(strings, fretCount).filter(c => c.fret >= 1 && c.fret <= fretCount);
+/** 横按梁填充色 / 边框色：暗色模式差异由纯函数处理 */
+const getBarreFill = (isMarked: boolean) => getBarreFillOf(isMarked, isDarkMode);
 
-  const map = new Map<string, { barre: BarreEntity; isMarked: boolean }>();
-
-  // 1. 注入推导出的候选横按（初始为未标记）
-  for (const c of candidates) {
-    const key = `${c.fret}_${c.fromString}_${c.toString}`;
-    map.set(key, { barre: c, isMarked: false });
-  }
-
-  // 2. 将已有标记的横按设为已标记（覆盖已有候选或补充特例）
-  for (const m of validMarked) {
-    const key = `${m.fret}_${m.fromString}_${m.toString}`;
-    map.set(key, { barre: m, isMarked: true });
-  }
-
-  // 采用稳定品位键 barre-fret-{fret}，琴弦跨度变化（如 xxx222 改为 xx2222）时复用已有 DOM 节点，触发平滑连续形态延展
-  const fretCounters = new Map<number, number>();
-  return Array.from(map.values()).map(({ barre, isMarked }) => {
-    const count = fretCounters.get(barre.fret) ?? 0;
-    fretCounters.set(barre.fret, count + 1);
-    const key = count === 0 ? `barre-fret-${barre.fret}` : `barre-fret-${barre.fret}-${count}`;
-    return {
-      ...barre,
-      isMarked,
-      key,
-    };
-  });
-});
-
-/** 横按梁填充色：已标记加深蓝色，推导未标记为更淡的蓝色 */
-const getBarreFill = (isMarked: boolean) => {
-  if (isMarked) {
-    return isDarkMode ? 'rgba(96, 165, 250, 0.62)' : 'rgba(59, 130, 246, 0.58)';
-  }
-  return isDarkMode ? 'rgba(96, 165, 250, 0.16)' : 'rgba(59, 130, 246, 0.14)';
-};
-
-/** 横按梁边框色：已标记为深色清晰描边，未标记为虚线更淡描边 */
-const getBarreStroke = (isMarked: boolean) => {
-  if (isMarked) {
-    return isDarkMode ? 'rgba(96, 165, 250, 0.90)' : 'rgba(59, 130, 246, 0.85)';
-  }
-  return isDarkMode ? 'rgba(96, 165, 250, 0.38)' : 'rgba(59, 130, 246, 0.35)';
-};
+const getBarreStroke = (isMarked: boolean) => getBarreStrokeOf(isMarked, isDarkMode);
 
 // ==================== 浮动横按操作气泡交互 ====================
 const activeHoveredBarreKey = ref<string | null>(null);
@@ -659,13 +595,9 @@ const barreArrowStyle = computed<CSSProperties>(() => {
   };
 });
 
-const isPointInBarre = (pt: { stringIndex: number; fretIndex: number } | null, b: BarreEntity) => {
-  if (!pt) return false;
-  if (pt.fretIndex !== b.fret) return false;
-  const minS = Math.min(b.fromString, b.toString);
-  const maxS = Math.max(b.fromString, b.toString);
-  return pt.stringIndex >= minS && pt.stringIndex <= maxS;
-};
+/** 指位是否落在横按范围内（纯函数见 FretboardSvg.logic.ts） */
+const isPointInBarre = (pt: { stringIndex: number; fretIndex: number } | null, b: BarreEntity) =>
+  isPointInBarreOf(pt, b);
 
 const syncBarreHover = () => {
   if (isBubbleHovered.value) return;

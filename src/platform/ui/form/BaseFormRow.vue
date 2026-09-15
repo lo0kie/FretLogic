@@ -95,7 +95,7 @@ const {
   layout?: 'horizontal' | 'vertical';
   /** 水平布局时的垂直对齐：'center' 居中（默认） | 'top' 顶部对齐 */
   align?: 'center' | 'top';
-  /** 标签宽度；数值自动补齐 px */
+  /** 标签宽度；数值自动补齐 px。未传时回落到 BaseForm 容器下发的 label-width */
   labelWidth?: string | number;
   /** 控件区宽度档位或具体值；未传时自适应拉伸占满 */
   controlWidth?: FormComponentWidth;
@@ -131,6 +131,7 @@ const autoId = useId();
 const densityContext = inject<FormRowDensityContext | null>(FORM_ROW_DENSITY_KEY, null);
 const resolvedLabelTone = computed(() => labelTone ?? densityContext?.labelTone ?? 'body');
 const resolvedLabelSize = computed(() => labelSize ?? densityContext?.labelSize ?? 'xs');
+const resolvedLabelWidth = computed(() => labelWidth ?? densityContext?.labelWidth);
 
 /**
  * 标签字号档位 → 文本类：新增档位只在此补一行。
@@ -152,8 +153,9 @@ const slotControlId = computed(() => forProp || inputId || `form-row-control-${a
 const effectiveForId = computed(() => forProp || inputId || undefined);
 
 const normalizedLabelWidth = computed(() => {
-  if (labelWidth === undefined) return undefined;
-  return typeof labelWidth === 'number' ? `${labelWidth}px` : labelWidth;
+  const width = resolvedLabelWidth.value;
+  if (width === undefined) return undefined;
+  return typeof width === 'number' ? `${width}px` : width;
 });
 
 const labelStyle = computed(() => {

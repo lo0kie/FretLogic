@@ -1,7 +1,8 @@
 <template>
   <Feedback v-if="songStore.songs.length === 0" description="暂无乐谱，点击右上角新建" icon="music" />
+  <Feedback v-else-if="songStore.filteredSongs.length === 0" description="没有符合筛选条件的乐谱" icon="search-x" />
 
-  <!-- 统一容器：手动排序时经 useDraggable 支持拖拽，非手动时仅展示；
+  <!-- 统一容器：手动排序时经 useSortableList 支持拖拽，非手动时仅展示；
        排序方法切换（含手动↔拼音分组等）都在同一 TransitionGroup 内重排，FLIP 动画全程生效；
        拼音分组模式在列表中插入分组小标题行，分组显隐同样走 enter/leave 过渡 -->
   <div v-else v-grid-nav.stop="{ cols: 1, selector: '.song-card-item' }">
@@ -97,9 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, useTemplateRef, watch } from 'vue';
-
-import { useDraggable } from 'vue-draggable-plus';
+import { computed, useTemplateRef } from 'vue';
 
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
@@ -109,13 +108,14 @@ import { useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRo
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
+import { useSortableList } from '@/platform/composables/useSortableList';
 import { useUiStore } from '@/platform/store/uiStore';
 import { TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
 import { pinyinGroupKey } from '@/platform/utils/pinyin';
 
 import type { Song } from '@/domains/score/types';
 import type { MenuItem } from '@/platform/ui/menu/types';
-import type { DraggableEvent } from 'vue-draggable-plus';
+import type { ComponentPublicInstance } from 'vue';
 
 const emit = defineEmits<{
   (e: 'open-config', song: Song): void;
@@ -128,46 +128,19 @@ const uiStore = useUiStore();
 const { selectSong } = useScoreRouteSync();
 const { copySongText } = useTextTransfer();
 
-const songListRef = useTemplateRef<HTMLElement>('songListRef');
+// ref 在 <TransitionGroup> 组件上：useTemplateRef 拿到的是组件实例，$el 才是列表容器
+// （useSortableList 内部会解析 $el）
+const songListRef = useTemplateRef<ComponentPublicInstance>('songListRef');
 
 // 手动排序时启用拖拽（Sortable 直接操作 DOM，拖拽结束按索引重排后经 reorderSongs 持久化）；
-// 非手动排序时禁用，排序方法切换由 TransitionGroup 的 FLIP 动画呈现。
-// immediate:false —— 库默认在 mounted 时初始化；空乐谱列表走 Feedback 分支，容器不存在，
-// 直接初始化会抛 "Root element not found / Sortable: el must be an HTMLElement"。
-// 改为等列表真正渲染出来（有乐谱且 ref 就绪）再手动 start()，清空/重建时也能重新初始化。
-const draggableList = useDraggable(songListRef, {
-  immediate: false,
-  animation: 200,
-  ghostClass: 'drag-ghost-style',
-  chosenClass: 'drag-chosen-style',
-  dragClass: 'drag-active-style',
-  swapThreshold: 0.5,
-  disabled: songStore.songSortMethod !== 'manual',
-  onEnd: (event: DraggableEvent<Song>) => {
-    const { oldIndex, newIndex } = event;
-    if (oldIndex == null || newIndex == null || oldIndex === newIndex) return;
-    const next = [...songStore.songs];
-    const [moved] = next.splice(oldIndex, 1);
-    if (!moved) return;
-    next.splice(newIndex, 0, moved);
-    songStore.reorderSongs(next);
-  },
+// 非手动排序或过滤激活时禁用（过滤后 DOM 序与全量数组序不一致，按索引重排会错位）。
+// 空列表守卫、容器就绪后再初始化、以及 disabled 的响应式跟随都由 useSortableList 承担。
+useSortableList<Song>({
+  target: songListRef,
+  items: () => songStore.songs,
+  enabled: computed(() => songStore.songSortMethod === 'manual' && !songStore.hasSongFilter),
+  onReorder: next => songStore.reorderSongs(next),
 });
-// Sortable 的 disabled 不是响应式，用 option() 跟随排序方式变化
-watch(
-  () => songStore.songSortMethod !== 'manual',
-  sorted => draggableList.option('disabled', sorted)
-);
-// 空列表（Feedback）时容器不存在，此时不初始化；列表渲染/重建后再 start
-watch(
-  () => songStore.songs.length > 0 && songListRef.value,
-  () => {
-    if (songStore.songs.length > 0 && songListRef.value) {
-      nextTick(() => draggableList.start());
-    }
-  },
-  { immediate: true }
-);
 
 type SongListRow = {
   key: string;
@@ -176,14 +149,14 @@ type SongListRow = {
   song?: Song;
 };
 
-/** 列表行：拼音分组模式在歌曲间插入分组小标题行（键前缀 group: 避免与歌曲 id 冲突），其余排序模式为纯歌曲行 */
+/** 列表行：拼音分组模式在歌曲间插入分组小标题行（键前缀 group: 避免与歌曲 id 冲突），其余排序模式为纯歌曲行；数据源为过滤后的歌曲 */
 const songRows = computed<SongListRow[]>(() => {
   if (songStore.songSortMethod !== 'title') {
-    return songStore.sortedSongs.map(song => ({ key: song.id, type: 'song' as const, song }));
+    return songStore.filteredSongs.map(song => ({ key: song.id, type: 'song' as const, song }));
   }
   const rows: SongListRow[] = [];
   let currentGroup = '';
-  for (const song of songStore.sortedSongs) {
+  for (const song of songStore.filteredSongs) {
     const group = pinyinGroupKey(song.title);
     if (group !== currentGroup) {
       currentGroup = group;

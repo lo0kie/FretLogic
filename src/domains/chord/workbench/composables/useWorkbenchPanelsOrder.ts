@@ -31,14 +31,11 @@ export interface UseWorkbenchPanelsOrderReturn {
   panels: Ref<WorkbenchPanelId[]>;
   storedOrder: Ref<WorkbenchPanelId[]>;
   setOrder: (newOrder: WorkbenchPanelId[]) => void;
-  resetOrder: () => void;
-  movePanel: (fromIndex: number, toIndex: number) => void;
-  movePanelById: (id: WorkbenchPanelId, targetIndex: number) => void;
 }
 
 /**
- * 工作台面板顺序管理的组合式函数（底层能力）：
- * 维护面板展示顺序、自动与 LocalStorage 保持双向同步、提供重排/重置/位移等自定义能力。
+ * 工作台面板顺序管理的组合式函数：
+ * 维护面板展示顺序、自动与 LocalStorage 保持双向同步，对外仅暴露 setOrder 一个重排入口。
  */
 export function useWorkbenchPanelsOrder(): UseWorkbenchPanelsOrderReturn {
   const storedOrder = useStorage<WorkbenchPanelId[]>(
@@ -70,41 +67,9 @@ export function useWorkbenchPanelsOrder(): UseWorkbenchPanelsOrderReturn {
     syncToStorage(newOrder);
   };
 
-  const resetOrder = () => {
-    syncToStorage([...DEFAULT_WORKBENCH_PANEL_ORDER]);
-  };
-
-  const movePanel = (fromIndex: number, toIndex: number) => {
-    if (
-      fromIndex < 0 ||
-      fromIndex >= panels.value.length ||
-      toIndex < 0 ||
-      toIndex >= panels.value.length ||
-      fromIndex === toIndex
-    ) {
-      return;
-    }
-    const next = [...panels.value];
-    const [item] = next.splice(fromIndex, 1);
-    if (item) {
-      next.splice(toIndex, 0, item);
-      syncToStorage(next);
-    }
-  };
-
-  const movePanelById = (id: WorkbenchPanelId, targetIndex: number) => {
-    const fromIndex = panels.value.indexOf(id);
-    if (fromIndex !== -1) {
-      movePanel(fromIndex, targetIndex);
-    }
-  };
-
   return {
     panels,
     storedOrder,
     setOrder,
-    resetOrder,
-    movePanel,
-    movePanelById,
   };
 }

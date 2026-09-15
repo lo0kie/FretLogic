@@ -70,7 +70,7 @@ import { CONTEXT_MENU_REPOSITION_DURATION_MS, CONTEXT_MENU_REPOSITION_EASING } f
 
 import type { ComponentSize } from '@/platform/types';
 import type { MenuItem } from '@/platform/ui/menu/types';
-import type { Placement } from '@floating-ui/vue';
+import type { Placement } from '@floating-ui/dom';
 import type { CSSProperties } from 'vue';
 
 defineOptions({ name: 'BaseMenu', inheritAttrs: false });

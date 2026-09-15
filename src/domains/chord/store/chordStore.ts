@@ -1,6 +1,8 @@
 /**
  * 和弦 store：和弦与分组数据的加载、增删改、排序及持久化。
  * 维护分组-和弦卡片视图模型（GroupedChordCard）与和弦指法历史（撤销-重做）。
+ * 纯逻辑拆分见同目录：chordGrouping（分组卡片构建）、chordEventBus（跨领域事件）、
+ * chordDraftValidation（草稿校验）、chordMergeOps（重复合并检测）。
  */
 import { computed, ref, toRaw, watch } from 'vue';
 
@@ -8,73 +10,22 @@ import { useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
 import { createChordRepository } from '@/domains/chord/model/chordRepository';
-import {
-  buildGroupVariant,
-  createChord,
-  createGroup,
-  getGroupSortKey,
-  toGroupId,
-} from '@/domains/chord/theory/entityFactories';
-import {
-  computeChordFingerprint,
-  computeIsInverted,
-  getChordName,
-  isValidChordName,
-  matchChordSearch,
-  segmentsToString,
-  sortChordsByRule,
-  validateBassConsistency,
-} from '@/domains/chord/theory/theory';
+import { buildGroupVariant, createGroup, getGroupSortKey, toGroupId } from '@/domains/chord/theory/entityFactories';
+import { matchChordSearch, sortChordsByRule } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
-import { areBarresEqual } from '@/domains/fretboard/model/coordinates';
-import { cloneDeep, cloneGuitarStrings, generateUUID } from '@/platform/utils/common';
+import { cloneDeep, generateUUID } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
-import type { ChordOrName } from '@/domains/chord/theory/theory';
+import { validateChordDraft } from './chordDraftValidation';
+import { createChordEventBus } from './chordEventBus';
+import { buildGroupedChordCards, buildMultiFingeringData, nameKeyOf } from './chordGrouping';
+import { detectMergedDuplicates } from './chordMergeOps';
+
 import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
 
 const DEFAULT_SORT_RULE: GroupSortRule = GroupSortRule.ROOT_PITCH;
 
-type ChordValidationResult =
-  | { ok: true; payload: Chord; cleanName: string; warn?: string | null }
-  | {
-      ok: false;
-      reason:
-        | 'EMPTY_NAME'
-        | 'INVALID_CHORD_SYNTAX'
-        | 'NO_GROUPS'
-        | 'NO_SELECTED_GROUP'
-        | 'DUPLICATE_FINGERPRINT'
-        | 'UNCHANGED';
-      cleanName?: string;
-    };
-
-/** 计算和弦的归一化名称键（去空格、转小写），用于同名变体的分组匹配。 */
-function nameKeyOf(chordOrName: string | ChordOrName): string {
-  if (typeof chordOrName === 'string') return chordOrName.trim().toLowerCase();
-  return getChordName(chordOrName).trim().toLowerCase();
-}
-
-/** 对同一和弦名的多个指法变体排序：转位在后，其余按品位偏移升序。 */
-function sortVariants(variants: Chord[]): Chord[] {
-  return [...variants].sort((a, b) => {
-    const aInv = computeIsInverted(a.strings, a.fretOffset, a.tuning, a, a.rootStringIndex);
-    const bInv = computeIsInverted(b.strings, b.fretOffset, b.tuning, b, b.rootStringIndex);
-    if (aInv !== bInv) return aInv ? 1 : -1;
-    return (a.fretOffset ?? 0) - (b.fretOffset ?? 0);
-  });
-}
-
-/** 将一组同名和弦变体包装成卡片视图模型，取排序后的首个作为主指法。 */
-function toGroupedCard(variants: Chord[]): GroupedChordCard {
-  const sorted = variants.length > 1 ? sortVariants(variants) : variants;
-  return {
-    mainChord: sorted[0]!,
-    variants: sorted,
-    hasVariants: sorted.length > 1,
-    variantCount: sorted.length,
-  };
-}
+export type { ChordValidationResult } from './chordDraftValidation';
 
 export const useChordStore = defineStore('chord', () => {
   const chordRepository = createChordRepository(localStorage);
@@ -115,6 +66,7 @@ export const useChordStore = defineStore('chord', () => {
     clone: v => cloneDeep(toRaw(v)),
   });
 
+  // ---- 派生视图模型（纯逻辑见 chordGrouping） ----
   const groupChordMap = computed(() => {
     const map = new Map<string, Chord[]>();
     savedChordsList.value.forEach(chord => {
@@ -125,63 +77,17 @@ export const useChordStore = defineStore('chord', () => {
     return map;
   });
 
-  const multiFingeringData = computed(() => {
-    const byGroup = new Map<string, Map<string, Chord[]>>();
-    savedChordsList.value.forEach(chord => {
-      const key = nameKeyOf(chord);
-      let nameMap = byGroup.get(chord.groupId);
-      if (!nameMap) {
-        nameMap = new Map();
-        byGroup.set(chord.groupId, nameMap);
-      }
-      const list = nameMap.get(key);
-      if (list) list.push(chord);
-      else nameMap.set(key, [chord]);
-    });
+  const multiFingeringData = computed(() => buildMultiFingeringData(savedChordsList.value));
 
-    const result = new Map<string, Map<string, GroupedChordCard>>();
-    byGroup.forEach((nameMap, groupId) => {
-      const multiMap = new Map<string, GroupedChordCard>();
-      nameMap.forEach((variants, key) => {
-        if (variants.length <= 1) return;
-        multiMap.set(key, toGroupedCard(variants));
-      });
-      if (multiMap.size > 0) result.set(groupId, multiMap);
-    });
-    return result;
-  });
+  const groupedChordMap = computed(() =>
+    buildGroupedChordCards(groups.value, groupChordMap.value, multiFingeringData.value, DEFAULT_SORT_RULE)
+  );
 
   /** 查询指定分组下某和弦名的多指法卡片；不存在或仅单指法时返回 null。 */
   const getMultiFingering = (groupId: string, chordName: string): GroupedChordCard | null => {
     if (!groupId || !chordName) return null;
     return multiFingeringData.value.get(groupId)?.get(nameKeyOf(chordName)) ?? null;
   };
-
-  const groupedChordMap = computed(() => {
-    const result = new Map<string, GroupedChordCard[]>();
-    groups.value.forEach(group => {
-      const chords = groupChordMap.value.get(group.id) ?? [];
-      const multi = multiFingeringData.value.get(group.id);
-      const visited = new Set<string>();
-      const cards: GroupedChordCard[] = [];
-
-      chords.forEach(chord => {
-        const key = nameKeyOf(chord);
-        if (visited.has(key)) return;
-        visited.add(key);
-        cards.push(multi?.get(key) ?? toGroupedCard([chord]));
-      });
-
-      const sortedMains = sortChordsByRule(
-        cards.map(c => c.mainChord),
-        group.sortRule ?? DEFAULT_SORT_RULE,
-        getGroupSortKey(group) ?? 'C'
-      );
-      const byMainId = new Map(cards.map(c => [c.mainChord.id, c]));
-      result.set(group.id, sortedMains.map(m => byMainId.get(m.id)!).filter(Boolean));
-    });
-    return result;
-  });
 
   /** 获取分组内按规则排序后的和弦卡片列表；传入搜索词时仅保留匹配项。 */
   const getGroupedCards = (groupId: string, searchQuery = ''): GroupedChordCard[] => {
@@ -223,6 +129,8 @@ export const useChordStore = defineStore('chord', () => {
     const effectiveKey = sortKey ?? 'C';
     return sortChordsByRule(list, effectiveRule, effectiveKey);
   };
+
+  // ---- 分组选中 / 展开 / CRUD ----
 
   /** 用新列表整体覆盖分组列表（写入 localStorage）。 */
   const overwriteGroups = (newGroups: Group[]) => {
@@ -314,55 +222,8 @@ export const useChordStore = defineStore('chord', () => {
     }
   };
 
-  // ---- 跨领域副作用事件：和弦被删除 / 撤销恢复时向外广播（由应用层桥接乐谱槽位解绑，避免 chord→score 反向依赖） ----
-  type ChordIdsListener = (chordIds: string[]) => void;
-  /** 和弦合并事件参数：key 为被丢弃的重复和弦 id，value 为合并后保留的和弦 id */
-  type ChordsMergedListener = (mapping: Map<string, string>) => void;
-  const chordsRemovedListeners: ChordIdsListener[] = [];
-  const chordsRestoredListeners: ChordIdsListener[] = [];
-  const chordsMergedListeners: ChordsMergedListener[] = [];
-
-  /** 订阅「和弦被删除」事件；返回取消订阅函数 */
-  const onChordsRemoved = (cb: ChordIdsListener): (() => void) => {
-    chordsRemovedListeners.push(cb);
-    return () => {
-      const idx = chordsRemovedListeners.indexOf(cb);
-      if (idx >= 0) chordsRemovedListeners.splice(idx, 1);
-    };
-  };
-
-  /** 订阅「和弦被撤销恢复」事件；返回取消订阅函数 */
-  const onChordsRestored = (cb: ChordIdsListener): (() => void) => {
-    chordsRestoredListeners.push(cb);
-    return () => {
-      const idx = chordsRestoredListeners.indexOf(cb);
-      if (idx >= 0) chordsRestoredListeners.splice(idx, 1);
-    };
-  };
-
-  const emitChordsRemoved = (chordIds: string[]) => {
-    if (chordIds.length === 0) return;
-    chordsRemovedListeners.forEach(cb => cb(chordIds));
-  };
-
-  const emitChordsRestored = (chordIds: string[]) => {
-    if (chordIds.length === 0) return;
-    chordsRestoredListeners.forEach(cb => cb(chordIds));
-  };
-
-  /** 订阅「和弦被合并（重复项丢弃）」事件；返回取消订阅函数 */
-  const onChordsMerged = (cb: ChordsMergedListener): (() => void) => {
-    chordsMergedListeners.push(cb);
-    return () => {
-      const idx = chordsMergedListeners.indexOf(cb);
-      if (idx >= 0) chordsMergedListeners.splice(idx, 1);
-    };
-  };
-
-  const emitChordsMerged = (mapping: Map<string, string>) => {
-    if (mapping.size === 0) return;
-    chordsMergedListeners.forEach(cb => cb(mapping));
-  };
+  // ---- 跨领域副作用事件（机制见 chordEventBus） ----
+  const eventBus = createChordEventBus();
 
   /** 删除分组及其名下全部和弦，并联动清除展开/选中状态（两者均写入 localStorage）。 */
   const deleteGroup = (groupId: string) => {
@@ -373,7 +234,7 @@ export const useChordStore = defineStore('chord', () => {
     if (selectedGroupId.value === groupId) {
       selectedGroupId.value = null;
     }
-    emitChordsRemoved(removedChordIds);
+    eventBus.emitChordsRemoved(removedChordIds);
   };
 
   /**
@@ -435,30 +296,14 @@ export const useChordStore = defineStore('chord', () => {
       return c;
     });
 
-    // 同名变体内两两比对：指纹一致且横按一致才视为"完全相同"（指纹不含 barres，需补充比对）
     const sameNameVariants = savedChordsList.value.filter(
       c => c.groupId === resolvedTargetGroupId && nameKeyOf(c) === targetName
     );
-    const droppedIds = new Set<string>();
-    const mergeMapping = new Map<string, string>();
-    for (let i = 0; i < sameNameVariants.length; i++) {
-      const a = sameNameVariants[i]!;
-      if (droppedIds.has(a.id)) continue;
-      for (let j = i + 1; j < sameNameVariants.length; j++) {
-        const b = sameNameVariants[j]!;
-        if (droppedIds.has(b.id)) continue;
-        if (computeChordFingerprint(a) !== computeChordFingerprint(b)) continue;
-        if (!areBarresEqual(a.barres, b.barres)) continue;
-        // 优先保留目标分组原有项；两者同为移入项（源分组历史重复数据）时保留靠前者
-        const [drop, keep] = movedIds.has(a.id) && !movedIds.has(b.id) ? [a, b] : [b, a];
-        droppedIds.add(drop.id);
-        mergeMapping.set(drop.id, keep.id);
-      }
-    }
+    const { droppedIds, mergeMapping } = detectMergedDuplicates(sameNameVariants, movedIds);
     if (droppedIds.size === 0) return;
 
     savedChordsList.value = savedChordsList.value.filter(c => !droppedIds.has(c.id));
-    emitChordsMerged(mergeMapping);
+    eventBus.emitChordsMerged(mergeMapping);
   };
 
   /**
@@ -469,7 +314,7 @@ export const useChordStore = defineStore('chord', () => {
     const beforeIds = new Set(savedChordsList.value.map(c => c.id));
     rawUndo();
     // 撤销后重新出现的和弦即"被恢复的和弦"，广播给乐谱侧回填此前的槽位解绑
-    emitChordsRestored(savedChordsList.value.filter(c => !beforeIds.has(c.id)).map(c => c.id));
+    eventBus.emitChordsRestored(savedChordsList.value.filter(c => !beforeIds.has(c.id)).map(c => c.id));
     const validGroupIds = new Set(groups.value.map(g => g.id));
     let hasOrphans = false;
     savedChordsList.value.forEach(chord => {
@@ -508,84 +353,19 @@ export const useChordStore = defineStore('chord', () => {
     if (targetIds.size === 0) return targetIds;
     savedChordsList.value = savedChordsList.value.filter(c => !targetIds.has(c.id));
     // 广播删除事件：由应用层桥接解绑乐谱槽位（返回值保留给需要显式感知的调用方）
-    emitChordsRemoved([...targetIds]);
+    eventBus.emitChordsRemoved([...targetIds]);
     return targetIds;
   };
 
   /**
-   * 将编辑草稿校验并构建为可保存的和弦实体。
-   * 依次校验名称非空、语法合法、分组存在且已选中；编辑模式下识别无修改并保留 createdAt。
-   * 同分组内指纹重复视为重复和弦；返回值带低音弦一致性警告（warn）。
+   * 将编辑草稿校验并构建为可保存的和弦实体（校验逻辑见 chordDraftValidation）。
    */
-  const buildChordForSave = (draft: Chord, isEditing: boolean): ChordValidationResult => {
-    const nameSegments = draft.nameSegments;
-    const cleanName = nameSegments ? segmentsToString(nameSegments) : '';
-    const isFretBoardEmpty = draft.strings.every(s => s[0] < 0);
-    if (!cleanName || isFretBoardEmpty) {
-      return { ok: false, reason: 'EMPTY_NAME' };
-    }
-    if (!nameSegments || !isValidChordName(cleanName)) {
-      return { ok: false, reason: 'INVALID_CHORD_SYNTAX', cleanName };
-    }
-    if (groups.value.length === 0) {
-      return { ok: false, reason: 'NO_GROUPS' };
-    }
-    if (!selectedGroupId.value) {
-      return { ok: false, reason: 'NO_SELECTED_GROUP' };
-    }
-
-    const id = isEditing ? draft.id : null;
-    const targetGroupId = isEditing
-      ? savedChordsList.value.find(c => c.id === id)?.groupId || selectedGroupId.value
-      : selectedGroupId.value;
-
-    const currentStrings = cloneGuitarStrings(draft.strings);
-    // 根音标记须指向有效且已按音的弦，否则按未指定处理
-    const rootStringIndex =
-      draft.rootStringIndex !== null &&
-      draft.rootStringIndex !== undefined &&
-      draft.rootStringIndex >= 0 &&
-      draft.rootStringIndex < currentStrings.length &&
-      (currentStrings[draft.rootStringIndex]?.[0] ?? -1) >= 0
-        ? draft.rootStringIndex
-        : null;
-
-    const payload = createChord({
-      id,
-      nameSegments,
-      strings: currentStrings,
-      fretCount: draft.fretCount,
-      fretOffset: draft.fretOffset,
-      groupId: targetGroupId,
-      tuning: draft.tuning,
-      rootStringIndex,
-      barres: draft.barres,
+  const buildChordForSave = (draft: Chord, isEditing: boolean) =>
+    validateChordDraft(draft, isEditing, {
+      groups: groups.value,
+      selectedGroupId: selectedGroupId.value,
+      savedChords: savedChordsList.value,
     });
-    const fingerprint = computeChordFingerprint(payload);
-
-    if (isEditing) {
-      const original = savedChordsList.value.find(c => c.id === id);
-      // 指纹不含 barres，因此"仅修改横按"时指纹不变；需同时比较 barres 才能识别真正的无修改
-      const sameBarres = areBarresEqual(original?.barres, payload.barres);
-      if (original && computeChordFingerprint(original) === fingerprint && sameBarres) {
-        return { ok: false, reason: 'UNCHANGED' };
-      }
-      // 编辑保存：保留最初创建时间，刷新更新时间
-      if (original?.createdAt !== undefined) payload.createdAt = original.createdAt;
-      payload.updatedAt = Date.now();
-    }
-
-    const isDuplicate = savedChordsList.value.some(
-      existing =>
-        existing.id !== id && existing.groupId === payload.groupId && computeChordFingerprint(existing) === fingerprint
-    );
-    if (isDuplicate) {
-      return { ok: false, reason: 'DUPLICATE_FINGERPRINT', cleanName };
-    }
-
-    const bassWarn = validateBassConsistency(payload.strings, payload.fretOffset, payload.tuning, payload);
-    return { ok: true, payload, cleanName, warn: bassWarn };
-  };
 
   return {
     savedChordsList,
@@ -613,9 +393,9 @@ export const useChordStore = defineStore('chord', () => {
     moveVariantsByName,
     executeUndoRestore,
     removeChords,
-    onChordsRemoved,
-    onChordsRestored,
-    onChordsMerged,
+    onChordsRemoved: eventBus.onChordsRemoved,
+    onChordsRestored: eventBus.onChordsRestored,
+    onChordsMerged: eventBus.onChordsMerged,
     buildChordForSave,
     replaceAllData,
   };

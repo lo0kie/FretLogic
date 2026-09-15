@@ -146,7 +146,7 @@ function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
     if (state.lastFade !== null) {
       state.lastFade = null;
       el.style.maskImage = '';
-      el.style.webkitMaskImage = '';
+      el.style.setProperty('-webkit-mask-image', '');
       el.style.removeProperty('--fade-start');
       el.style.removeProperty('--fade-end');
       el.style.transition = '';
@@ -159,7 +159,7 @@ function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
     const fadeWidth = typeof fade === 'number' ? fade : MARQUEE_DEFAULT_FADE_WIDTH;
     const mask = buildEdgeFadeMask('x', fadeWidth);
     el.style.maskImage = mask;
-    el.style.webkitMaskImage = mask;
+    el.style.setProperty('-webkit-mask-image', mask);
     el.style.transition = fadeTransition(MARQUEE_FADE_TRANSITION_MS);
   }
   const active = state.overflowing && !state.reducedMotion && shouldAnimate(state);
@@ -273,6 +273,126 @@ function measure(el: HTMLElement): void {
   update(el);
 }
 
+/** 静止位 transform：向右滚动的内容静止在「尾部可见」位，否则归零 */
+function restTransform(el: HTMLElement, state: MarqueeState): string {
+  const { inner, options } = state;
+  return options.direction === 'right'
+    ? `translateX(-${Math.max(0, inner.scrollWidth - el.clientWidth)}px)`
+    : 'translateX(0px)';
+}
+
+/** 停止滚动：取消进行中的循环动画，从当前位置平滑滚回静止位（避免移出瞬间硬切）。 */
+function deactivateMarquee(el: HTMLElement, state: MarqueeState): void {
+  const { inner, options } = state;
+  stopMaskLoop(state);
+  state.sig = null;
+  if (state.animation) {
+    // 先取样当前滚动位置，cancel 后元素会瞬间回落到 inline 静止位
+    const current = getComputedStyle(inner).transform;
+    state.animation.cancel();
+    state.animation = null;
+    if (!state.reducedMotion && current !== 'none') {
+      // 从当前位置平滑滚回起始位，避免移出瞬间的硬切
+      const target = restTransform(el, state);
+      const reset = inner.animate([{ transform: current }, { transform: target }], {
+        duration: MARQUEE_RESET_DURATION_MS,
+        easing: MARQUEE_RESET_EASING,
+      });
+      reset.onfinish = () => {
+        // 期间可能已被再次激活并取消，仅当仍是本次复位动画时才落定静止位
+        if (state.resetAnim === reset) {
+          state.resetAnim = null;
+          inner.style.transform = target;
+        }
+      };
+      state.resetAnim = reset;
+      inner.style.animation = '';
+      // 提前return前补发 end 事件，保持生命周期回调语义与直落路径一致
+      if (state.wasActive) emit(el, 'marquee-end', undefined, options.onEnd);
+      state.wasActive = false;
+      return;
+    }
+  }
+  if (state.resetAnim) return; // 复位动画进行中，让其自然结束
+  inner.style.animation = '';
+  inner.style.transform = restTransform(el, state);
+}
+
+/** continuous 无缝循环模式：全程位移 = 内容宽 + gap，线性匀速无限循环。 */
+function startContinuous(_el: HTMLElement, state: MarqueeState): void {
+  const { inner, options } = state;
+  const travelDist = inner.scrollWidth + options.gap;
+  const moveMs =
+    options.duration != null
+      ? options.duration
+      : Math.max(MARQUEE_MIN_DURATION_CONTINUOUS_MS, (travelDist / options.speed) * 1000);
+  const frames =
+    options.direction === 'right'
+      ? [
+          { offset: 0, transform: `translateX(-${travelDist}px)` },
+          { offset: 1, transform: 'translateX(0px)' },
+        ]
+      : [
+          { offset: 0, transform: 'translateX(0px)' },
+          { offset: 1, transform: `translateX(-${travelDist}px)` },
+        ];
+
+  const sig = `continuous|${travelDist}|${moveMs}|${options.direction}`;
+  if (state.sig !== sig) {
+    if (state.animation) state.animation.cancel();
+    state.animation = inner.animate(frames, {
+      duration: moveMs,
+      iterations: Infinity,
+      easing: 'linear',
+      delay: Math.max(0, options.delay),
+    });
+    state.sig = sig;
+  }
+}
+
+/** ping-pong 往返摆动模式：去-停-回-停 四段关键帧，边缘可停留。 */
+function startPingpong(el: HTMLElement, state: MarqueeState): void {
+  const { inner, options } = state;
+  const dist = inner.scrollWidth - el.clientWidth;
+  const moveMs =
+    options.duration != null
+      ? options.duration
+      : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / options.speed) * 1000);
+  const pauseMs = options.pauseOnEdges ? Math.max(0, options.pauseDuration) : 0;
+  const total = 2 * moveMs + 2 * pauseMs;
+  const moveFrac = moveMs / total;
+  const pauseFrac = pauseMs / total;
+
+  const frames =
+    options.direction === 'right'
+      ? [
+          { offset: 0, transform: `translateX(-${dist}px)` },
+          { offset: moveFrac, transform: 'translateX(0px)' },
+          { offset: moveFrac + pauseFrac, transform: 'translateX(0px)' },
+          { offset: 2 * moveFrac + pauseFrac, transform: `translateX(-${dist}px)` },
+          { offset: 1, transform: `translateX(-${dist}px)` },
+        ]
+      : [
+          { offset: 0, transform: 'translateX(0px)' },
+          { offset: moveFrac, transform: `translateX(-${dist}px)` },
+          { offset: moveFrac + pauseFrac, transform: `translateX(-${dist}px)` },
+          { offset: 2 * moveFrac + pauseFrac, transform: 'translateX(0px)' },
+          { offset: 1, transform: 'translateX(0px)' },
+        ];
+
+  const sig = `pingpong|${dist}|${moveMs}|${pauseMs}|${options.direction}`;
+  if (state.sig !== sig) {
+    if (state.animation) state.animation.cancel();
+    state.animation = inner.animate(frames, {
+      duration: total,
+      iterations: Infinity,
+      easing: 'linear',
+      delay: Math.max(0, options.delay),
+    });
+    state.sig = sig;
+  }
+}
+
 /** 核心：根据溢出/激活状态启停 Web Animations；continuous 与 pingpong 各自构造关键帧，签名未变时复用动画。 */
 function update(el: HTMLElement): void {
   const state = STATES.get(el);
@@ -285,127 +405,22 @@ function update(el: HTMLElement): void {
   applyFadeMask(el, state);
 
   if (!active) {
-    stopMaskLoop(state);
-    state.sig = null;
-    if (state.animation) {
-      // 先取样当前滚动位置，cancel 后元素会瞬间回落到 inline 静止位
-      const current = getComputedStyle(inner).transform;
-      state.animation.cancel();
-      state.animation = null;
-      if (!state.reducedMotion && current !== 'none') {
-        // 从当前位置平滑滚回起始位，避免移出瞬间的硬切
-        const restTransform =
-          options.direction === 'right'
-            ? `translateX(-${Math.max(0, inner.scrollWidth - el.clientWidth)}px)`
-            : 'translateX(0px)';
-        const reset = inner.animate([{ transform: current }, { transform: restTransform }], {
-          duration: MARQUEE_RESET_DURATION_MS,
-          easing: MARQUEE_RESET_EASING,
-        });
-        reset.onfinish = () => {
-          // 期间可能已被再次激活并取消，仅当仍是本次复位动画时才落定静止位
-          if (state.resetAnim === reset) {
-            state.resetAnim = null;
-            inner.style.transform = restTransform;
-          }
-        };
-        state.resetAnim = reset;
-        inner.style.animation = '';
-        // 提前return前补发 end 事件，保持生命周期回调语义与直落路径一致
-        if (state.wasActive) emit(el, 'marquee-end', undefined, options.onEnd);
-        state.wasActive = false;
-        return;
-      }
-    }
-    if (state.resetAnim) return; // 复位动画进行中，让其自然结束
-    inner.style.animation = '';
-    inner.style.transform =
-      options.direction === 'right'
-        ? `translateX(-${Math.max(0, inner.scrollWidth - el.clientWidth)}px)`
-        : 'translateX(0px)';
+    deactivateMarquee(el, state);
   } else {
     // 重新激活：立即结束尚未完成的复位动画并落定到静止位，循环从头开始
     if (state.resetAnim) {
       state.resetAnim.cancel();
       state.resetAnim = null;
-      inner.style.transform =
-        options.direction === 'right'
-          ? `translateX(-${Math.max(0, inner.scrollWidth - el.clientWidth)}px)`
-          : 'translateX(0px)';
+      inner.style.transform = restTransform(el, state);
     }
-    const dist = inner.scrollWidth - el.clientWidth;
-    const isContinuous = options.loopMode === 'continuous';
     // 逐帧遮罩同步所需的全程位移：continuous 为内容宽+gap，pingpong 为溢出距离
-    let maskDist = dist;
+    let maskDist = inner.scrollWidth - el.clientWidth;
 
-    if (isContinuous) {
-      const travelDist = inner.scrollWidth + options.gap;
-      maskDist = travelDist;
-      const moveMs =
-        options.duration != null
-          ? options.duration
-          : Math.max(MARQUEE_MIN_DURATION_CONTINUOUS_MS, (travelDist / options.speed) * 1000);
-      const frames =
-        options.direction === 'right'
-          ? [
-              { offset: 0, transform: `translateX(-${travelDist}px)` },
-              { offset: 1, transform: 'translateX(0px)' },
-            ]
-          : [
-              { offset: 0, transform: 'translateX(0px)' },
-              { offset: 1, transform: `translateX(-${travelDist}px)` },
-            ];
-
-      const sig = `continuous|${travelDist}|${moveMs}|${options.direction}`;
-      if (state.sig !== sig) {
-        if (state.animation) state.animation.cancel();
-        state.animation = inner.animate(frames, {
-          duration: moveMs,
-          iterations: Infinity,
-          easing: 'linear',
-          delay: Math.max(0, options.delay),
-        });
-        state.sig = sig;
-      }
+    if (options.loopMode === 'continuous') {
+      maskDist = inner.scrollWidth + options.gap;
+      startContinuous(el, state);
     } else {
-      // Ping-pong 往返摆动模式
-      const moveMs =
-        options.duration != null
-          ? options.duration
-          : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / options.speed) * 1000);
-      const pauseMs = options.pauseOnEdges ? Math.max(0, options.pauseDuration) : 0;
-      const total = 2 * moveMs + 2 * pauseMs;
-      const moveFrac = moveMs / total;
-      const pauseFrac = pauseMs / total;
-
-      const frames =
-        options.direction === 'right'
-          ? [
-              { offset: 0, transform: `translateX(-${dist}px)` },
-              { offset: moveFrac, transform: 'translateX(0px)' },
-              { offset: moveFrac + pauseFrac, transform: 'translateX(0px)' },
-              { offset: 2 * moveFrac + pauseFrac, transform: `translateX(-${dist}px)` },
-              { offset: 1, transform: `translateX(-${dist}px)` },
-            ]
-          : [
-              { offset: 0, transform: 'translateX(0px)' },
-              { offset: moveFrac, transform: `translateX(-${dist}px)` },
-              { offset: moveFrac + pauseFrac, transform: `translateX(-${dist}px)` },
-              { offset: 2 * moveFrac + pauseFrac, transform: 'translateX(0px)' },
-              { offset: 1, transform: 'translateX(0px)' },
-            ];
-
-      const sig = `pingpong|${dist}|${moveMs}|${pauseMs}|${options.direction}`;
-      if (state.sig !== sig) {
-        if (state.animation) state.animation.cancel();
-        state.animation = inner.animate(frames, {
-          duration: total,
-          iterations: Infinity,
-          easing: 'linear',
-          delay: Math.max(0, options.delay),
-        });
-        state.sig = sig;
-      }
+      startPingpong(el, state);
     }
 
     // 动画激活期间逐帧同步遮罩：起点/终点贴边的一侧不渐隐

@@ -5,7 +5,7 @@ import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
 import { useChordStore } from '@/domains/chord/store/chordStore';
-import { toChordId, toGroupId, toGuitarStringsModel } from '@/domains/chord/theory/entityFactories';
+import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { normalizeChord } from '@/domains/chord/theory/normalizeChord';
 import {
   createString,
@@ -15,16 +15,15 @@ import {
   TUNING_PRESETS,
 } from '@/domains/chord/theory/theory';
 import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
-import {
-  computeBarreCandidates,
-  isBarreStillValid,
-  normalizeAndMergeBarres,
-} from '@/domains/fretboard/model/coordinates';
 import { cloneDeep } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
+import { mergeAutoBarres, pruneForFretCount, pruneForStringCount, reconcileBarres } from './chordBarreLogic';
+
 import type { BarreEntity, Chord, GuitarStringEntity, StringIndex } from '@/domains/chord/types';
 import type { InjectionKey } from 'vue';
+
+export { reconcileBarres } from './chordBarreLogic';
 
 /** 构造空白和弦草稿（指定弦数全部静音、匹配默认调弦、3 品窗口），作为编辑器初始态。 */
 const createDefaultChord = (stringCount: number = 6): Chord => ({
@@ -39,70 +38,6 @@ const createDefaultChord = (stringCount: number = 6): Chord => ({
   groupId: toGroupId(''),
   rootStringIndex: null,
 });
-
-/**
- * 音符变化时精准修正既有横按：外侧锚点被移除则边界向内收缩，剩余范围的有效性
- * 统一复用 isBarreStillValid 判定（范围内出现静音弦/空弦/更低品位即废弃），
- * 保证与 normalizeChord 持久化校验语义一致。
- */
-export const reconcileBarres = (
-  newFrets: number[],
-  oldFrets: number[] | undefined,
-  oldBarres: BarreEntity[]
-): BarreEntity[] | undefined => {
-  const changed = new Set<number>();
-  newFrets.forEach((fret, s) => {
-    if (fret !== oldFrets?.[s]) changed.add(s);
-  });
-
-  if (changed.size === 0) return oldBarres;
-
-  // 以新品位构造临时弦模型，供 isBarreStillValid 做统一校验
-  const newStrings = toGuitarStringsModel(newFrets.map((f): [number, boolean] => [f, false]));
-
-  const newBarres: BarreEntity[] = [];
-
-  oldBarres.forEach(oldBarre => {
-    let newFrom = oldBarre.fromString;
-    let newTo = oldBarre.toString;
-
-    // 智能边界收缩：如果横按最外侧的锚点音符被移除了，自动向内收缩边界
-    while (newFrom <= newTo && (newFrets[newFrom] ?? -1) !== oldBarre.fret) {
-      newFrom++;
-    }
-    while (newTo >= newFrom && (newFrets[newTo] ?? -1) !== oldBarre.fret) {
-      newTo--;
-    }
-
-    // 收缩后为空（全部锚点消失）直接废弃
-    if (newFrom > newTo) {
-      return;
-    }
-
-    const reconciled: BarreEntity = {
-      fret: oldBarre.fret,
-      fromString: newFrom as StringIndex,
-      toString: newTo as StringIndex,
-      finger: oldBarre.finger,
-    };
-    if (isBarreStillValid(newStrings, reconciled)) {
-      newBarres.push(reconciled);
-    }
-  });
-
-  const merged = normalizeAndMergeBarres(newBarres, newStrings);
-
-  const isSame =
-    merged &&
-    merged.length === oldBarres.length &&
-    merged.every((nb, i) => {
-      const ob = oldBarres[i];
-      return ob && nb.fret === ob.fret && nb.fromString === ob.fromString && nb.toString === ob.toString;
-    });
-
-  if (isSame) return oldBarres;
-  return merged;
-};
 
 /** 规范化草稿：复用统一的 normalizeChord 并在空白草稿时清理残留 C 分片 */ const normalizeDraftChord = (
   draft: Chord
@@ -207,27 +142,7 @@ const createChordEditorSetup = (persist: boolean) => () => {
   const setFretCount = (newVal: Chord['fretCount']) => {
     const oldVal = draftChord.value.fretCount;
     draftChord.value.fretCount = newVal;
-    if (newVal < oldVal) {
-      draftChord.value.strings.forEach(str => {
-        if (str[0] > newVal) {
-          str[0] = -1;
-        }
-      });
-      // 根音所在弦被清除时，根标记一并失效
-      if (
-        draftChord.value.rootStringIndex !== null &&
-        (draftChord.value.strings[draftChord.value.rootStringIndex]?.[0] ?? -1) < 0
-      ) {
-        draftChord.value.rootStringIndex = null;
-      }
-      // 缩品位时同步清理越界横按，保持数据自洽
-      if (draftChord.value.barres) {
-        const kept = draftChord.value.barres.filter(b => b.fret <= newVal);
-        if (kept.length !== draftChord.value.barres.length) {
-          draftChord.value.barres = kept.length > 0 ? kept : undefined;
-        }
-      }
-    }
+    pruneForFretCount(draftChord.value, newVal, oldVal);
   };
 
   const stringCount = computed(() => draftChord.value.strings.length);
@@ -253,16 +168,8 @@ const createChordEditorSetup = (persist: boolean) => () => {
       draftChord.value.tuning = getDefaultTuningForStringCount(count);
     }
 
-    // 清理越界的根音标记
-    if (draftChord.value.rootStringIndex !== null && draftChord.value.rootStringIndex >= count) {
-      draftChord.value.rootStringIndex = null;
-    }
-
-    // 清理越界的横按配置
-    if (draftChord.value.barres) {
-      const kept = draftChord.value.barres.filter(b => b.fromString < count && b.toString < count);
-      draftChord.value.barres = kept.length > 0 ? kept : undefined;
-    }
+    // 清理越界的根音标记与横按配置
+    pruneForStringCount(draftChord.value, count);
   };
 
   /** 设置显式横按列表（undefined / 空数组表示清除横按标记）；不改变自动横按开关状态 */
@@ -276,26 +183,9 @@ const createChordEditorSetup = (persist: boolean) => () => {
   // 程序性整体替换（加载/重置和弦）时跳过横按清除，避免误清已保存的横按
   let isProgrammaticStringsChange = false;
 
-  /**
-   * 自动横按合并：保留仍有效的现有横按（含手动标记，如 x13331 的 2 锚点横按），
-   * 再叠加「横按品位上真实音符 ≥ 3」的自动候选，按品位+弦范围去重。
-   * - ≥3 门槛只约束「自动新增」，不会清掉已有标记；
-   * - 已有横按是否保留以 isBarreStillValid 判定（两端锚点 + 无更低品位阻断），
-   *   音符被移走导致失效时自然清除，与手动模式 reconcile 语义一致。
-   */
-  const mergeAutoBarres = (): BarreEntity[] | undefined => {
-    const strings = draftChord.value.strings;
-    const existing = (draftChord.value.barres ?? []).filter(b => isBarreStillValid(strings, b));
-    const candidates = computeBarreCandidates(strings, draftChord.value.fretCount).filter(c => {
-      let noteCount = 0;
-      for (let s = c.fromString; s <= c.toString; s++) {
-        if (strings[s]?.[0] === c.fret) noteCount++;
-      }
-      return noteCount >= 3;
-    });
-
-    return normalizeAndMergeBarres([...existing, ...candidates], strings);
-  };
+  /** 自动横按合并：保留仍有效的现有横按，再叠加「横按品位上真实音符 ≥ 3」的自动候选（逻辑见 chordBarreLogic）。 */
+  const mergeAutoBarresIntoDraft = (): BarreEntity[] | undefined =>
+    mergeAutoBarres(draftChord.value.strings, draftChord.value.fretCount, draftChord.value.barres);
 
   // 指板音符变化时，精准保留未受影响的横按
   watch(
@@ -306,8 +196,8 @@ const createChordEditorSetup = (persist: boolean) => () => {
       }
 
       if (autoBarre.value) {
-        // 自动横按：保留仍有效的现有横按 + 叠加 ≥3 音符的自动候选（见 mergeAutoBarres）
-        draftChord.value.barres = mergeAutoBarres();
+        // 自动横按：保留仍有效的现有横按 + 叠加 ≥3 音符的自动候选（见 chordBarreLogic）
+        draftChord.value.barres = mergeAutoBarresIntoDraft();
         return;
       }
 
@@ -331,7 +221,7 @@ const createChordEditorSetup = (persist: boolean) => () => {
     isAuto => {
       if (isAuto && !isFretBoardEmpty.value) {
         // 切换到自动横按：不清掉已有标记，只叠加满足 ≥3 音符门槛的自动候选
-        draftChord.value.barres = mergeAutoBarres();
+        draftChord.value.barres = mergeAutoBarresIntoDraft();
       }
     },
     { flush: 'sync' }

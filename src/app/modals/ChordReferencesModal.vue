@@ -8,9 +8,13 @@
       />
     </template>
 
-    <ul
+    <BaseScrollArea
       v-if="references.length > 0"
-      class="no-scrollbar m-0 flex max-h-[50vh] list-none flex-col gap-md overflow-y-auto p-1"
+      :fade="false"
+      :scrollbar="false"
+      axis="y"
+      class="m-0 flex max-h-[50vh] list-none flex-col gap-md p-1"
+      tag="ul"
     >
       <li v-for="item in references" :key="item.song.id">
         <button
@@ -29,7 +33,7 @@
           </BaseBadge>
         </button>
       </li>
-    </ul>
+    </BaseScrollArea>
     <Feedback v-else description="暂无歌词乐谱引用此和弦" size="sm" />
   </BaseModal>
 </template>
@@ -43,6 +47,7 @@ import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { injectModalController } from '@/platform/store/useModalController';

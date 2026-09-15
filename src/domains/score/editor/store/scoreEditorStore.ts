@@ -1,8 +1,8 @@
 /**
  * 乐谱编辑器 store：当前编辑歌曲的歌词 / 和弦槽位 / 谱面状态管理，
- * 含撤销-重做历史栈、调性变换（transpose/capo）与编辑态持久化。
+ * 含撤销-重做历史栈（见 useScoreHistory）、调性变换（transpose/capo）与编辑态持久化。
  */
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { debounceFilter, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -16,8 +16,10 @@ import { matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreMod
 import { generateUUID } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
-import type { Chord, ChordId } from '@/domains/chord/types';
-import type { Capo, LineId, SlotKey, Song } from '@/domains/score/types';
+import { useScoreHistory } from './useScoreHistory';
+
+import type { Chord } from '@/domains/chord/types';
+import type { SlotKey, Song } from '@/domains/score/types';
 
 /** 百分制缩放值序列化器：读取时迁移旧版倍率（0.6~1.5）为百分制（60~150），写回按百分制原样存储 */
 const percentScaleSerializer = {
@@ -31,14 +33,6 @@ const percentScaleSerializer = {
 
 /** 乐谱页主 Tab：编辑歌词 / 排列和弦 / 预览（URL tab 参数的合法值域） */
 export type ScoreActiveTab = 'edit' | 'interactive' | 'preview';
-
-interface HistoryState {
-  lyrics: string;
-  lineIds: LineId[];
-  chordMap: Map<SlotKey, ChordId>;
-  playKey?: string;
-  capo?: Capo;
-}
 
 export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const songStore = useSongStore();
@@ -59,10 +53,6 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   });
   const effectiveFontScale = computed(() => fontScale.value);
   const effectiveFretboardScale = computed(() => fretboardScale.value);
-  const historyStack: HistoryState[] = [];
-  let historyIndex = -1;
-  const isUndoRedoAction = ref(false);
-  const HISTORY_CAPACITY = 20;
 
   const activeSong = computed<Song | null>(() => {
     if (!activeSongId.value) return null;
@@ -88,105 +78,18 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     },
   });
 
-  const cloneHistoryState = (state: HistoryState): HistoryState => ({
-    lyrics: state.lyrics,
-    lineIds: [...state.lineIds],
-    chordMap: new Map(state.chordMap),
-    playKey: state.playKey,
-    capo: state.capo,
+  // ---- 撤销-重做历史栈（机制见 useScoreHistory） ----
+  const {
+    recordHistory,
+    undo,
+    redo,
+    handleSongChange: handleHistorySongChange,
+  } = useScoreHistory({
+    getActiveSong: () => activeSong.value,
+    applyState: (id, state) => songStore.updateSongMeta(id, state),
   });
 
-  const chordMapsEqual = (a: Map<SlotKey, ChordId>, b: Map<SlotKey, ChordId>): boolean => {
-    if (a === b) return true;
-    if (a.size !== b.size) return false;
-    for (const [k, v] of a) {
-      if (b.get(k) !== v) return false;
-    }
-    return true;
-  };
-
-  const lineIdsEqual = (a: LineId[], b: LineId[]): boolean => {
-    if (a === b) return true;
-    if (a.length !== b.length) return false;
-    return a.every((id, i) => id === b[i]);
-  };
-
-  /** 将当前歌曲的歌词/行序/和弦映射快照压入撤销栈（容量 20，撤销-重做期间不记录）。 */
-  const recordHistory = (song?: Song) => {
-    const target = song || activeSong.value;
-    if (!target || isUndoRedoAction.value) return;
-    const nextState = cloneHistoryState({
-      lyrics: target.lyrics,
-      lineIds: target.lineIds,
-      chordMap: target.chordMap,
-      playKey: target.playKey,
-      capo: target.capo,
-    });
-    const currentTop = historyStack[historyIndex];
-    if (
-      currentTop &&
-      currentTop.lyrics === nextState.lyrics &&
-      currentTop.playKey === nextState.playKey &&
-      currentTop.capo === nextState.capo &&
-      lineIdsEqual(currentTop.lineIds, nextState.lineIds) &&
-      chordMapsEqual(currentTop.chordMap, nextState.chordMap)
-    ) {
-      return;
-    }
-    historyStack.splice(historyIndex + 1);
-    historyStack.push(nextState);
-    if (historyStack.length > HISTORY_CAPACITY) {
-      historyStack.shift();
-    }
-    historyIndex = historyStack.length - 1;
-  };
-
-  /** 撤销：回退到上一快照并写回歌曲数据；标记撤销期以避免恢复过程被再次记录。 */
-  const undo = async () => {
-    if (historyIndex > 0 && activeSong.value) {
-      isUndoRedoAction.value = true;
-      historyIndex--;
-      // 快照可能被 songStore 以引用方式接管（chordMap 会被原地修改），恢复时必须克隆
-      const state = cloneHistoryState(historyStack[historyIndex]!);
-      songStore.updateSongMeta(activeSong.value.id, state);
-      await nextTick();
-      await nextTick();
-      isUndoRedoAction.value = false;
-    }
-  };
-
-  /** 重做：前进到下一快照并写回歌曲数据；标记撤销期以避免恢复过程被再次记录。 */
-  const redo = async () => {
-    if (historyIndex < historyStack.length - 1 && activeSong.value) {
-      isUndoRedoAction.value = true;
-      historyIndex++;
-      const state = cloneHistoryState(historyStack[historyIndex]!);
-      songStore.updateSongMeta(activeSong.value.id, state);
-      await nextTick();
-      await nextTick();
-      isUndoRedoAction.value = false;
-    }
-  };
-
-  let currentActiveSongId: string | null = null;
-  watch(
-    activeSong,
-    newSong => {
-      if (newSong && newSong.id === currentActiveSongId && historyStack.length > 0) {
-        return;
-      }
-      currentActiveSongId = newSong?.id ?? null;
-      historyStack.length = 0;
-      historyIndex = -1;
-      if (!newSong) {
-        return;
-      }
-      if (!isUndoRedoAction.value) {
-        recordHistory(newSong);
-      }
-    },
-    { immediate: true }
-  );
+  watch(activeSong, newSong => handleHistorySongChange(newSong), { immediate: true });
 
   /** 设置当前编辑的歌曲 id（仅内存）；URL `?id=` 负责刷新/深链恢复。 */
   const setActiveSong = (id: string | null) => {

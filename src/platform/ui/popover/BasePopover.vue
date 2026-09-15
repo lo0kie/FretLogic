@@ -65,7 +65,6 @@
 // 下方 <script setup> 直接复用这些绑定
 import { computed, nextTick, onBeforeUnmount, ref, unref, useTemplateRef, watch } from 'vue';
 
-import { autoUpdate, useFloating } from '@floating-ui/vue';
 import { useEventListener } from '@vueuse/core';
 
 import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
@@ -76,10 +75,11 @@ import {
 } from '@/platform/ui/popover/floatingCore';
 import { acquireFloatingZ, FLOATING_Z_BASE, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
 import { registerOpenPopover, unregisterOpenPopover } from '@/platform/ui/popover/popoverRegistry';
+import { useFloatingPosition } from '@/platform/ui/popover/useFloatingPosition';
 import { POPOVER_HOVER_CLOSE_DELAY_MS } from '@/platform/utils/constants';
 
 import type { ScrollbarOptions } from '@/platform/directives/vScrollbar';
-import type { Placement, VirtualElement } from '@floating-ui/vue';
+import type { Placement, VirtualElement } from '@floating-ui/dom';
 import type { CSSProperties, MaybeRef } from 'vue';
 
 // 浮层全局状态：必须放在模块作用域（<script setup> 体每次实例化都会重新执行），
@@ -209,21 +209,22 @@ const middlewareList = computed(() =>
   })
 );
 
+// 定位编排走 platform 内的 useFloatingPosition（直接 computePosition + autoUpdate），
+// 不再用 @floating-ui/vue 的 useFloating——它的 open/isPositioned 语义、组件实例解包
+// 在本组件全是空转，且其 options 里的 whileElementsMounted 只是 autoUpdate 的透传。
+// 三个输出的消费方式不变：placement 是 flip 后的实际方位（不是入参 placement）
 const {
-  floatingStyles: computedFloatingStyles,
+  floatingStyles,
   middlewareData,
   placement: currentPlacement,
   update,
-} = useFloating(activeReference, floatingRef, {
-  strategy: 'fixed',
-  placement: computed(() => placement),
-  whileElementsMounted: autoUpdate,
+} = useFloatingPosition({
+  reference: activeReference,
+  floating: floatingRef,
+  placement: () => placement,
   middleware: middlewareList,
+  strategy: 'fixed',
 });
-
-const floatingStyles = computed<CSSProperties>(() => ({
-  ...computedFloatingStyles.value,
-}));
 
 /**
  * 浮层入场缩放的原点：跟随实际(flip 后)placement，让面板从「贴着触发点的那一侧」长出，
@@ -554,11 +555,8 @@ useEventListener(
     // 而 BaseInput 的 input 本身位于 contextTriggerEl 内且点击会立即重开面板，关闭再重开只会闪烁
     if (!closeOnContextTriggerClick && contextTriggerEl?.contains(e.target as Node)) return;
     if (isEventInside(e.target)) {
-      // hover 模式：在「面板内容」上按下一次即视为「钉住」，此后悬停离开不再关闭。
-      // 仅限面板本身，排除触发按钮——按钮自带 pinToggle 逻辑，若在此一并置位会被它的再次切换关掉自己
-      if (trigger === 'hover' && !pinned.value && panelRef.value?.contains(e.target as Node)) {
-        pinned.value = true;
-      }
+      // hover 模式：面板内点击不置钉住——移出面板仍按延时关闭；
+      // 「始终钉住」仅由触发器点击（pinToggle）触发
       clearHoverTimer();
       return;
     }

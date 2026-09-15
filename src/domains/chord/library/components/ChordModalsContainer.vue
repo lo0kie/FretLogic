@@ -53,8 +53,11 @@
           个
         </p>
       </div>
-      <div
-        class="no-scrollbar grid max-h-[52vh] grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-lg overflow-y-auto p-xs"
+      <BaseScrollArea
+        :fade="false"
+        :scrollbar="false"
+        axis="y"
+        class="grid max-h-[52vh] grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-lg p-xs"
       >
         <div
           v-wave
@@ -85,7 +88,7 @@
             />
           </div>
         </div>
-      </div>
+      </BaseScrollArea>
       <div class="mt-[0.15rem] flex items-center justify-between gap-md border-t border-border-light pt-md pb-xs">
         <ActionButton @click="groupModals.modals.chordVariantsDelete = false" label="取消" variant="ghost" />
 
@@ -116,6 +119,7 @@ import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue'
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { isDark } from '@/platform/composables/useTheme';
 import { injectModalController } from '@/platform/store/useModalController';

@@ -146,18 +146,19 @@
         </div>
 
         <div class="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-          <div
-            v-edge-fade.y="{ size: 16, flushEps: 2 }"
-            v-scrollbar="{ endInset: 8 }"
+          <BaseScrollArea
             :aria-multiselectable="isMultiple || undefined"
+            :fade="{ size: 16, flushEps: 2 }"
+            :scrollbar="{ endInset: 8 }"
             :style="{
               maxHeight: dropdownMaxHeight,
               // 空选项时禁止滚动（空占位可能略高于容器，避免出现可滚动的空面板）
               ...(filteredOptions.length === 0 ? { overflow: 'hidden' } : {}),
             }"
             @keydown="handleDropdownKeydown($event, close)"
-            class="flex w-full flex-col gap-0.5 overflow-y-auto p-xs outline-none"
-            ref="dropdownRef"
+            axis="y"
+            class="flex w-full flex-col gap-0.5 p-xs outline-none"
+            ref="dropdownAreaRef"
             role="listbox"
             tabindex="-1"
           >
@@ -226,7 +227,7 @@
                 />
               </div>
             </template>
-          </div>
+          </BaseScrollArea>
         </div>
 
         <slot v-if="$slots['footer']" name="footer" />
@@ -244,13 +245,16 @@ import { computed, inject, nextTick, onBeforeUpdate, ref, useAttrs, useTemplateR
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
-import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import { calcDropdownMaxHeight, createOptionHelpers, SELECTOR_CONFIG } from '@/platform/ui/selector/BaseSelector.logic';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
+import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 import type { Component } from 'vue';
 
@@ -361,18 +365,23 @@ const attrs = useAttrs();
 /** 尺寸解析优先级：行内 size props > BaseForm 下发的 FormControlContext > 默认 md */
 const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
 const resolvedSize = computed<ComponentSize>(() => size ?? controlContext?.size ?? 'md');
-const labelKey = computed(() => fieldNames?.label ?? 'label');
-const valueKey = computed(() => fieldNames?.value ?? 'value');
-const disabledKey = computed(() => fieldNames?.disabled ?? 'disabled');
-const iconKey = computed(() => fieldNames?.icon ?? 'icon');
-
-/** 读取选项图标：仅对象选项且对应字段存在时返回 */
-const getOptionIcon = (option: AnyOption): IconName | Component | undefined => {
-  if (option !== null && typeof option === 'object' && iconKey.value in option) {
-    return (option as Record<string, unknown>)[iconKey.value] as IconName | Component | undefined;
-  }
-  return undefined;
-};
+/** 选项访问器：字段名映射 / 比较器 / 格式化注入到纯逻辑工厂（见 BaseSelector.logic.ts） */
+const {
+  getOptionLabel,
+  getOptionValue,
+  isOptionDisabled,
+  getOptionIcon,
+  equalsValue,
+  formattedOption,
+  getOptionTitle,
+} = createOptionHelpers<V>({
+  labelKey: fieldNames?.label ?? 'label',
+  valueKey: fieldNames?.value ?? 'value',
+  disabledKey: fieldNames?.disabled ?? 'disabled',
+  iconKey: fieldNames?.icon ?? 'icon',
+  formatOption,
+  valueComparator,
+});
 
 const selectedOption = computed(() => {
   if (isMultiple.value) return undefined;
@@ -388,7 +397,9 @@ const currentTriggerIcon = computed<IconName | Component | undefined>(() => {
 });
 
 const isOpen = ref(false);
-const dropdownRef = useTemplateRef<HTMLElement>('dropdownRef');
+const dropdownAreaRef = useTemplateRef<ScrollAreaHandle>('dropdownAreaRef');
+/** 下拉选项滚动容器元素（键盘导航 / 滚动到选中项需要原生能力） */
+const dropdownRef = useScrollAreaElement(dropdownAreaRef);
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const optionEls = ref<(HTMLElement | null)[]>([]);
 const filterInputRef = useTemplateRef<HTMLInputElement>('filterInputRef');
@@ -409,77 +420,9 @@ onBeforeUpdate(() => {
 
 const isMultiple = computed(() => multiple);
 
-const SELECTOR_CONFIG: Record<'sm' | 'md' | 'lg', { triggerClass: string; itemClass: string }> = {
-  sm: { triggerClass: `${CONTROL_HEIGHT_CLASSES.sm} px-2 text-2xs`, itemClass: `${CONTROL_HEIGHT_CLASSES.sm}` },
-  md: { triggerClass: `${CONTROL_HEIGHT_CLASSES.md} px-2.5 text-xs`, itemClass: `${CONTROL_HEIGHT_CLASSES.md}` },
-  lg: { triggerClass: `${CONTROL_HEIGHT_CLASSES.lg} px-3.5 text-xs`, itemClass: `${CONTROL_HEIGHT_CLASSES.lg}` },
-};
-
 const currentConfig = computed(() => SELECTOR_CONFIG[resolvedSize.value] ?? SELECTOR_CONFIG.md);
 
-const ITEM_HEIGHT: Record<'sm' | 'md' | 'lg', number> = { sm: 1.6, md: 1.9, lg: 2.3 };
-const GAP_REM = 0.125;
-const PADDING_REM = 0.375 * 2;
-
-// 对象类型 value 高性能稳健比较：优先使用主键/比较器，避免每次全量 JSON.stringify
-const equalsValue = (a: V, b: V): boolean => {
-  if (valueComparator) return valueComparator(a, b);
-  if (Object.is(a, b)) return true;
-  if (a == null || b == null) return false;
-
-  if (typeof a === 'object' && typeof b === 'object') {
-    const vk = valueKey.value;
-    const aRecord = a as Record<string, unknown>;
-    const bRecord = b as Record<string, unknown>;
-    if (vk in aRecord && vk in bRecord) {
-      return Object.is(aRecord[vk], bRecord[vk]);
-    }
-    try {
-      return JSON.stringify(a) === JSON.stringify(b);
-    } catch {
-      return false;
-    }
-  }
-  return String(a) === String(b);
-};
-
-/** 读取选项展示文本：对象选项走 fieldNames.label，原始值直接字符串化 */
-const getOptionLabel = (option: AnyOption): string => {
-  if (option !== null && typeof option === 'object' && labelKey.value in option) {
-    return String((option as Record<string, unknown>)[labelKey.value]);
-  }
-  return String(option);
-};
-
-/** 读取选项绑值：对象选项走 fieldNames.value，原始值即其自身 */
-const getOptionValue = (option: AnyOption): V => {
-  if (option !== null && typeof option === 'object' && valueKey.value in option) {
-    return (option as Record<string, unknown>)[valueKey.value] as V;
-  }
-  return option as unknown as V;
-};
-
-/** 读取选项禁用态（原始值恒为可选项） */
-const isOptionDisabled = (option: AnyOption): boolean => {
-  return (
-    option !== null && typeof option === 'object' && Boolean((option as Record<string, unknown>)[disabledKey.value])
-  );
-};
-
-/** 选项展示文本：原始值选项支持 formatOption 自定义，其余走 label 字段 */
-const formattedOption = (option: AnyOption): string => {
-  if (formatOption && (typeof option === 'string' || typeof option === 'number')) return formatOption(option);
-  return getOptionLabel(option);
-};
-
-/** 选项行 tooltip：显式 title 字段优先，未指定时用展示文本（与行内一致，含 formatter） */
-const getOptionTitle = (option: AnyOption): string | undefined => {
-  if (option !== null && typeof option === 'object' && 'title' in option) {
-    const t = (option as Record<string, unknown>)['title'];
-    if (typeof t === 'string' && t) return t;
-  }
-  return formattedOption(option) || undefined;
-};
+/** 读取选项展示文本 / 绑值 / 禁用态 / 比较等纯函数由 createOptionHelpers 工厂提供 */
 
 const selectedValues = computed<V[]>(() =>
   isMultiple.value
@@ -587,13 +530,13 @@ const displayText = computed(() => {
   return String(modelValue.value ?? '');
 });
 
-const dropdownMaxHeight = computed(() => {
-  const list = filteredOptions.value;
-  if (list.length === 0) return '6rem';
-  const visibleCount = Math.min(Math.max(1, displayItems), list.length);
-  const total = visibleCount * ITEM_HEIGHT[resolvedSize.value] + (visibleCount - 1) * GAP_REM + PADDING_REM;
-  return `${total}rem`;
-});
+const dropdownMaxHeight = computed(() =>
+  calcDropdownMaxHeight({
+    optionCount: filteredOptions.value.length,
+    displayItems,
+    size: resolvedSize.value,
+  })
+);
 
 /** auto 宽度模式下，选项文案变化（标签宽度随之变化）时平滑过渡触发器宽度 */
 let widthAnim: Animation | undefined;

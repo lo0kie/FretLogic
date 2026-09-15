@@ -35,19 +35,19 @@
     title="分组和弦排序配置"
     width="w-md"
   >
-    <div class="sort-modal-body flex flex-col gap-lg py-xs">
-      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="排序规则">
+    <BaseForm :label-width="FORM_LABEL_WIDTH" class="sort-modal-body py-xs" gap="lg">
+      <BaseFormRow label="排序规则">
         <BaseSegmentedControl v-model="groupModals.modalData.sortRule" :options="SORT_RULE_CONFIG" />
       </BaseFormRow>
 
-      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="调式设定">
+      <BaseFormRow label="调式设定">
         <KeySelector
           v-model="groupModals.modalData.sortKey"
           :disabled="groupModals.modalData.sortRule !== 'KEY_DEGREE'"
           width="md"
         />
       </BaseFormRow>
-    </div>
+    </BaseForm>
   </BaseModal>
 </template>
 
@@ -55,6 +55,7 @@
 import { computed } from 'vue';
 
 import KeySelector from '@/domains/chord/components/KeySelector.vue';
+import BaseForm from '@/platform/ui/form/BaseForm.vue';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import PromptInputModal from '@/platform/ui/prompt/PromptInputModal.vue';
@@ -66,7 +67,7 @@ import type { useChordGroupModals } from '@/domains/chord/library/composables/us
 
 const groupModals = injectModalController<ReturnType<typeof useChordGroupModals>>('groupModals');
 
-/** 表单行统一 Label 宽度 */
+/** 表单行统一 Label 宽度：由 BaseForm 容器下发，各行无需重复声明 */
 const FORM_LABEL_WIDTH = '4.2rem';
 /** 分组名称最大长度 */
 const MAX_GROUP_NAME_LENGTH = 15;

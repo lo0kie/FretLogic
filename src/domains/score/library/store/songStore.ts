@@ -1,45 +1,37 @@
 /**
  * 歌曲 store：歌曲列表的加载、增删改与分片持久化（localStorage 按歌曲单键存储）。
  * 提供和弦引用反查倒排索引；旧版单键（SONGS）数据在首次加载时自动迁移后清除。
+ * 纯逻辑拆分见同目录：songPersistence（防抖刷写/迁移）、songChordOps（批量绑定/移调重映射）、
+ * songIndex（引用倒排索引）、songMeta（元信息 diff）。
  */
 import { computed, ref } from 'vue';
 
 import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
-import { getChordName, transposeChordName } from '@/domains/chord/theory/theory';
+import { createSongRepository } from '@/app/services';
+import { transposeChordName } from '@/domains/chord/theory/theory';
 import { toCapo } from '@/domains/fretboard/model/coordinates';
 import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/domains/score/model/chordSlots';
 import { createSong as createSongEntity } from '@/domains/score/model/scoreModel';
-import { createSongRepository, sanitizeSongList } from '@/domains/score/model/songRepository';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { compareByPinyin } from '@/platform/utils/pinyin';
 
-import type { Chord, ChordId } from '@/domains/chord/types';
-import type { SlotKey, Song } from '@/domains/score/types';
+import {
+  remapChordBindingsInSongs,
+  remapTransposedChordMap,
+  restoreChordBindingsToSongs,
+  unbindChordIdsFromSongs,
+} from './songChordOps';
+import { buildChordReferenceIndex, collectChordReferences } from './songIndex';
+import { applySongMeta, touchSong } from './songMeta';
+import { createSongPersistence } from './songPersistence';
 
-const FLUSH_DELAY = 400;
-const FLUSH_MAX_WAIT = 1500;
+import type { ChordId } from '@/domains/chord/types';
+import type { SlotKey, Song } from '@/domains/score/types';
 
 /** 乐谱排序方式：manual 手动（拖拽顺序）/ title 按标题 / createdAt 按创建时间 */
 export type SongSortMethod = 'manual' | 'title' | 'createdAt';
-
-/** 比较两组行 id 序列是否逐项相同，避免引用相等时的无谓更新。 */
-const lineIdsEqual = (a: string[], b: string[]) => {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  return a.every((v, i) => v === b[i]);
-};
-
-/** 从 JSON 文本解析歌曲 id 索引数组；解析失败或结构非法时返回 null。 */
-const readJsonSongIds = (raw: string): string[] | null => {
-  try {
-    const ids = JSON.parse(raw);
-    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : null;
-  } catch {
-    return null;
-  }
-};
 
 /** 读取持久化的乐谱排序方式；存储不可用或值非法时回退为手动排序。 */
 const readSongSortMethod = (): SongSortMethod => {
@@ -59,89 +51,20 @@ export const useSongStore = defineStore('song', () => {
   const songMap = computed(() => new Map<string, Song>(songs.value.map(s => [s.id, s])));
   const lastDeletedSongInfo = ref<{ song: Song; index: number } | null>(null);
 
-  /**
-   * 响应式全局和弦引用倒排索引（Inverted Index）：
-   * 建立 chordId -> { song: Song, count: number }[] 的映射
-   * 在歌曲发生增删或绑定变更时自动由 computed 更新并缓存，反查复杂度为 O(1)。
-   */
-  const chordReferencesIndex = computed<Map<string, { song: Song; count: number }[]>>(() => {
-    const index = new Map<string, { song: Song; count: number }[]>();
-    for (const song of songs.value) {
-      const countMap = new Map<string, number>();
-      for (const chordId of song.chordMap.values()) {
-        if (!chordId) continue;
-        countMap.set(chordId, (countMap.get(chordId) ?? 0) + 1);
-      }
-      for (const [chordId, count] of countMap.entries()) {
-        let list = index.get(chordId);
-        if (!list) {
-          list = [];
-          index.set(chordId, list);
-        }
-        list.push({ song, count });
-      }
-    }
-    return index;
-  });
-
-  /**
-   * 快速反查一组和弦 ID 关联的歌曲引用列表（去重合并同歌曲内多指法的引用次数）
-   */
-  const getChordReferences = (chordIds: Iterable<string>): { song: Song; count: number }[] => {
-    const songCountMap = new Map<string, { song: Song; count: number }>();
-    const idx = chordReferencesIndex.value;
-    for (const chordId of chordIds) {
-      const refs = idx.get(chordId);
-      if (!refs) continue;
-      for (const { song, count } of refs) {
-        const existing = songCountMap.get(song.id);
-        if (existing) {
-          existing.count += count;
-        } else {
-          songCountMap.set(song.id, { song, count });
-        }
-      }
-    }
-    return Array.from(songCountMap.values());
-  };
-
-  let migratedFromLegacy = false;
-
-  /**
-   * 初始化加载歌曲列表：优先按索引键分片读取（并清除旧版单键数据），
-   * 索引缺失/损坏时回退读取旧版 SONGS 单键并走清洗层迁移。
-   */
-  const loadInitialSongs = (): Song[] => {
-    try {
-      const indexRaw = localStorage.getItem(STORAGE_KEYS.SONGS_INDEX);
-      if (indexRaw) {
-        const ids = readJsonSongIds(indexRaw);
-        if (ids) {
-          songRepository.removeLegacySongs();
-          return songRepository.loadSongs();
-        }
-      }
-    } catch {
-      /* 索引损坏，回退旧单键 */
-    }
-    const legacyRaw = localStorage.getItem(STORAGE_KEYS.SONGS);
-    if (legacyRaw) {
-      try {
-        const legacy = JSON.parse(legacyRaw);
-        if (Array.isArray(legacy)) {
-          // 旧单键格式统一走清洗层（逐字段校验 + chordMap Map 化 + 时间戳补齐）
-          const loaded = sanitizeSongList(legacy);
-          if (loaded.length > 0) migratedFromLegacy = true;
-          return loaded;
-        }
-      } catch {
-        /* 旧数据损坏，视为空 */
-      }
-    }
-    return [];
-  };
+  const { persistence, loadInitialSongs } = createSongPersistence(songRepository, () => songs.value);
+  const { markSongDirty, markSongRemoved, markSongRestored, markIndexDirty, flushSongsNow } = persistence;
 
   songs.value = loadInitialSongs();
+
+  /**
+   * 响应式全局和弦引用倒排索引：chordId -> { song, count }[]，
+   * 歌曲增删或绑定变更时自动更新并缓存，反查 O(1)。
+   */
+  const chordReferencesIndex = computed(() => buildChordReferenceIndex(songs.value));
+
+  /** 快速反查一组和弦 ID 关联的歌曲引用列表（去重合并同歌曲内多指法的引用次数） */
+  const getChordReferences = (chordIds: Iterable<string>) =>
+    collectChordReferences(chordReferencesIndex.value, chordIds);
 
   // ---- 乐谱排序方式（持久化；manual 为拖拽顺序，其余为展示排序，非 manual 时禁用拖拽重排） ----
   const songSortMethod = ref<SongSortMethod>(readSongSortMethod());
@@ -165,6 +88,31 @@ export const useSongStore = defineStore('song', () => {
     return songs.value;
   });
 
+  // ---- 乐谱过滤（会话内状态，不持久化）：按歌手 / 拍号筛选列表展示，'' 表示不过滤 ----
+  const singerFilter = ref('');
+  const timeSignatureFilter = ref('');
+  const setSongFilters = (singer: string, timeSignature: string) => {
+    singerFilter.value = singer;
+    timeSignatureFilter.value = timeSignature;
+  };
+  const hasSongFilter = computed(() => singerFilter.value !== '' || timeSignatureFilter.value !== '');
+  const filteredSongs = computed<Song[]>(() =>
+    sortedSongs.value.filter(
+      song =>
+        (singerFilter.value === '' || song.singer === singerFilter.value) &&
+        (timeSignatureFilter.value === '' || song.timeSignature === timeSignatureFilter.value)
+    )
+  );
+  /** 可选筛选项：现有乐谱中实际出现的歌手 / 拍号（去重升序），菜单子项数据源 */
+  const availableSingerFilters = computed(() =>
+    [...new Set(songs.value.map(s => s.singer).filter((s): s is string => Boolean(s)))].sort((a, b) =>
+      a.localeCompare(b, 'zh-Hans-CN')
+    )
+  );
+  const availableTimeSignatureFilters = computed(() =>
+    [...new Set(songs.value.map(s => s.timeSignature).filter(Boolean))].sort()
+  );
+
   // 与 chordStore 的 useStorage 行为对齐：监听外部对 localStorage 的变更（DevTools 清空 / 其他标签页写入）。
   // 本页自身写 localStorage 不会触发 storage 事件（规范），因此不会自我循环；
   // 外部整体 clear 时 e.key 为 null，命中后重载为空 → 乐谱与和弦库一样能对外部清空即时响应，无需刷新。
@@ -177,75 +125,7 @@ export const useSongStore = defineStore('song', () => {
     songs.value = songRepository.loadSongs();
   });
 
-  // ---- 持久化层：脏标记 + 防抖刷写（400ms / 最长 1500ms） ----
-  const dirtySongIds = new Set<string>();
-  const removedSongIds = new Set<string>();
-  let indexDirty = false;
-  let flushTimer: ReturnType<typeof setTimeout> | null = null;
-  let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
-
-  /** 立即刷写持久化：处理删除、脏歌曲、索引更新与旧数据清理，失败时记录日志。 */
-  const flushSongsNow = () => {
-    if (flushTimer) {
-      clearTimeout(flushTimer);
-      flushTimer = null;
-    }
-    if (maxWaitTimer) {
-      clearTimeout(maxWaitTimer);
-      maxWaitTimer = null;
-    }
-    try {
-      removedSongIds.forEach(id => songRepository.removeSong(id));
-      removedSongIds.clear();
-
-      const byId = new Map<string, Song>(songs.value.map(s => [s.id, s]));
-      dirtySongIds.forEach(id => {
-        const song = byId.get(id);
-        if (song) songRepository.saveSong(song);
-        else songRepository.removeSong(id);
-      });
-      dirtySongIds.clear();
-
-      if (indexDirty) {
-        songRepository.saveSongIds(songs.value.map(s => s.id));
-        indexDirty = false;
-      }
-
-      if (migratedFromLegacy) {
-        songRepository.removeLegacySongs();
-        migratedFromLegacy = false;
-      }
-    } catch (err) {
-      console.error('[songStore] flush failed:', err);
-    }
-  };
-
-  /** 安排一次防抖刷写（400ms，最长等待 1500ms 强制落盘），合并短时间内的多次变更。 */
-  const scheduleFlush = () => {
-    if (!maxWaitTimer) {
-      maxWaitTimer = setTimeout(() => {
-        maxWaitTimer = null;
-        flushSongsNow();
-      }, FLUSH_MAX_WAIT);
-    }
-    if (flushTimer) clearTimeout(flushTimer);
-    flushTimer = setTimeout(() => {
-      flushTimer = null;
-      flushSongsNow();
-    }, FLUSH_DELAY);
-  };
-
-  /** 标记歌曲为脏，纳入下次防抖刷写。 */
-  const markSongDirty = (id: string) => {
-    dirtySongIds.add(id);
-    scheduleFlush();
-  };
-
-  /** 标记歌曲索引为脏，下次刷写时重建 id 索引。 */
-  const markIndexDirty = () => {
-    indexDirty = true;
-    scheduleFlush();
-  };
+  // ---- CRUD ----
 
   /** 新建歌曲并加入列表尾部，返回创建的实体；标记脏并调度持久化。 */
   const createSong = (title: string): Song => {
@@ -260,25 +140,18 @@ export const useSongStore = defineStore('song', () => {
   const deleteSong = (id: string) => {
     const index = songs.value.findIndex(s => s.id === id);
     if (index === -1) return;
-    lastDeletedSongInfo.value = {
-      song: { ...songs.value[index]! },
-      index,
-    };
+    lastDeletedSongInfo.value = { song: { ...songs.value[index]! }, index };
     songs.value = songs.value.filter(s => s.id !== id);
-    dirtySongIds.delete(id);
-    removedSongIds.add(id);
+    markSongRemoved(id);
     markIndexDirty();
   };
 
-  /**
-   * 恢复指定歌曲到列表指定位置（或末尾）并重标记脏落盘。
-   */
+  /** 恢复指定歌曲到列表指定位置（或末尾）并重标记脏落盘。 */
   const restoreSong = (song: Song, index?: number) => {
     if (songs.value.some(s => s.id === song.id)) return;
     const targetIndex = index !== undefined ? Math.min(Math.max(0, index), songs.value.length) : songs.value.length;
     songs.value.splice(targetIndex, 0, song);
-    removedSongIds.delete(song.id);
-    markSongDirty(song.id);
+    markSongRestored(song.id);
     markIndexDirty();
     if (lastDeletedSongInfo.value?.song.id === song.id) {
       lastDeletedSongInfo.value = null;
@@ -304,52 +177,11 @@ export const useSongStore = defineStore('song', () => {
    * 批量更新歌曲元信息（标题/调式/变调夹/歌词/行序/和弦映射）。
    * 仅写入有实际变化的字段，变更后递增 version、刷新 updatedAt 并调度持久化。
    */
-  const updateSongMeta = (
-    id: string,
-    payload: Partial<
-      Pick<Song, 'title' | 'singer' | 'originalKey' | 'playKey' | 'capo' | 'lyrics' | 'lineIds' | 'chordMap'>
-    >
-  ) => {
+  const updateSongMeta = (id: string, payload: Parameters<typeof applySongMeta>[1]) => {
     const target = songMap.value.get(id);
     if (!target) return;
-
-    let hasChanged = false;
-    if (payload.title !== undefined && target.title !== payload.title) {
-      target.title = payload.title;
-      hasChanged = true;
-    }
-    if (payload.singer !== undefined && target.singer !== payload.singer) {
-      target.singer = payload.singer;
-      hasChanged = true;
-    }
-    if (payload.originalKey !== undefined && target.originalKey !== payload.originalKey) {
-      target.originalKey = payload.originalKey;
-      hasChanged = true;
-    }
-    if (payload.playKey !== undefined && target.playKey !== payload.playKey) {
-      target.playKey = payload.playKey;
-      hasChanged = true;
-    }
-    if (payload.capo !== undefined && target.capo !== payload.capo) {
-      target.capo = payload.capo;
-      hasChanged = true;
-    }
-    if (payload.lyrics !== undefined && target.lyrics !== payload.lyrics) {
-      target.lyrics = payload.lyrics;
-      hasChanged = true;
-    }
-    if (payload.lineIds !== undefined && !lineIdsEqual(target.lineIds, payload.lineIds)) {
-      target.lineIds = payload.lineIds;
-      hasChanged = true;
-    }
-    if (payload.chordMap !== undefined && target.chordMap !== payload.chordMap) {
-      target.chordMap = payload.chordMap;
-      hasChanged = true;
-    }
-
-    if (hasChanged) {
-      target.version = (target.version ?? 1) + 1;
-      target.updatedAt = Date.now();
+    if (applySongMeta(target, payload)) {
+      touchSong(target);
       markSongDirty(id);
     }
   };
@@ -361,8 +193,7 @@ export const useSongStore = defineStore('song', () => {
     if (target.chordMap.get(slotKey) === chordId) return;
     bindNewChordToSlot(target.chordMap, slotKey, chordId);
     target.chordMap = new Map(target.chordMap);
-    target.version = (target.version ?? 1) + 1;
-    target.updatedAt = Date.now();
+    touchSong(target);
     markSongDirty(songId);
   };
 
@@ -373,8 +204,7 @@ export const useSongStore = defineStore('song', () => {
     const removed = removeChordFromSlot(target.chordMap, slotKey);
     if (!removed) return;
     target.chordMap = new Map(target.chordMap);
-    target.version = (target.version ?? 1) + 1;
-    target.updatedAt = Date.now();
+    touchSong(target);
     markSongDirty(songId);
   };
 
@@ -384,81 +214,34 @@ export const useSongStore = defineStore('song', () => {
     if (!target) return;
     swapOrMoveSlotChords(target.chordMap, sourceKey, targetKey);
     target.chordMap = new Map(target.chordMap);
-    target.version = (target.version ?? 1) + 1;
-    target.updatedAt = Date.now();
+    touchSong(target);
     markSongDirty(songId);
   };
 
   /**
-   * 全曲移调：
-   * 1. 移调演奏调（playKey）
-   * 2. 若提供和弦解析与创建器，则对全曲 chordMap 进行换算映射（优先复用和弦库既有指法，无匹配时自动生成新和弦）
+   * 全曲移调：移调演奏调（playKey）；若提供和弦解析选项，则对全曲 chordMap
+   * 进行换算映射（优先复用和弦库既有指法，无匹配时自动生成新和弦）。
    */
   const transposeSong = (
     songId: string,
     semitones: number,
-    options?: {
-      chordResolver: (id: ChordId) => Chord | undefined;
-      chordFinder?: (name: string, originalChord: Chord) => Chord | undefined;
-      chordCreator?: (originalChord: Chord, targetName: string) => Chord;
-    }
+    options?: Parameters<typeof remapTransposedChordMap>[2]
   ) => {
     if (semitones === 0) return;
     const target = songMap.value.get(songId);
     if (!target) return;
 
-    const newPlayKey = transposeChordName(target.playKey || 'C', semitones);
-    target.playKey = newPlayKey;
+    target.playKey = transposeChordName(target.playKey || 'C', semitones);
 
     if (options && target.chordMap.size > 0) {
-      const newChordMap = new Map<SlotKey, ChordId>();
-      const chordIdCache = new Map<string, ChordId>();
-
-      for (const [slotKey, chordId] of target.chordMap) {
-        if (!chordId) continue;
-        if (chordIdCache.has(chordId)) {
-          newChordMap.set(slotKey, chordIdCache.get(chordId)!);
-          continue;
-        }
-
-        const originalChord = options.chordResolver(chordId);
-        if (!originalChord) {
-          newChordMap.set(slotKey, chordId);
-          continue;
-        }
-
-        const currentName = getChordName(originalChord);
-        const targetName = transposeChordName(currentName, semitones);
-
-        // 1. 优先从库中查找同名且弦数/调弦相同的和弦
-        const existing = options.chordFinder?.(targetName, originalChord);
-        if (existing) {
-          chordIdCache.set(chordId, existing.id);
-          newChordMap.set(slotKey, existing.id);
-          continue;
-        }
-
-        // 2. 库中无对应和弦时，调用创建器生成新和弦并登记
-        if (options.chordCreator) {
-          const created = options.chordCreator(originalChord, targetName);
-          chordIdCache.set(chordId, created.id);
-          newChordMap.set(slotKey, created.id);
-        } else {
-          newChordMap.set(slotKey, chordId);
-        }
-      }
-
-      target.chordMap = newChordMap;
+      target.chordMap = remapTransposedChordMap(target.chordMap, semitones, options);
     }
 
-    target.version = (target.version ?? 1) + 1;
-    target.updatedAt = Date.now();
+    touchSong(target);
     markSongDirty(songId);
   };
 
-  /**
-   * 全曲变调夹品位调整（Capo 增减，自动收敛至 [0, 12]）
-   */
+  /** 全曲变调夹品位调整（Capo 增减，自动收敛至 [0, 12]） */
   const transposeSongCapo = (songId: string, deltaCapo: number) => {
     if (deltaCapo === 0) return;
     const target = songMap.value.get(songId);
@@ -468,8 +251,7 @@ export const useSongStore = defineStore('song', () => {
     if (newCapo === target.capo) return;
 
     target.capo = newCapo;
-    target.version = (target.version ?? 1) + 1;
-    target.updatedAt = Date.now();
+    touchSong(target);
     markSongDirty(songId);
   };
 
@@ -482,10 +264,9 @@ export const useSongStore = defineStore('song', () => {
     orphanIds.forEach(id => songRepository.removeSong(id));
 
     songs.value.forEach(s => {
-      if (!newIds.has(s.id)) removedSongIds.add(s.id);
+      if (!newIds.has(s.id)) markSongRemoved(s.id);
     });
     songs.value = [...newSongs];
-    dirtySongIds.clear();
     newSongs.forEach(s => markSongDirty(s.id));
     markIndexDirty();
     // 全量覆盖后立即落盘，不等防抖
@@ -515,89 +296,29 @@ export const useSongStore = defineStore('song', () => {
     flushSongsNow();
   };
 
-  interface RemovedChordBinding {
-    songId: string;
-    slotKey: SlotKey;
-    chordId: ChordId;
-  }
-
-  /**
-   * 从全部歌曲中解除对指定和弦 id 集合的槽位绑定（供删除和弦后联动调用）。
-   * @returns 被解除的绑定列表，可传给 restoreChordBindings 做撤销恢复。
-   */
-  const unbindChordIds = (targetIds: Set<string>): RemovedChordBinding[] => {
-    const removedBindings: RemovedChordBinding[] = [];
-    songs.value.forEach(song => {
-      let hasChanged = false;
-      for (const [key, boundChordId] of song.chordMap) {
-        if (boundChordId && targetIds.has(boundChordId)) {
-          removedBindings.push({
-            songId: song.id,
-            slotKey: key,
-            chordId: boundChordId,
-          });
-          song.chordMap.delete(key);
-          hasChanged = true;
-        }
-      }
-      if (hasChanged) {
-        song.chordMap = new Map(song.chordMap);
-        song.version = (song.version ?? 1) + 1;
-        song.updatedAt = Date.now();
-        markSongDirty(song.id);
-      }
-    });
-    return removedBindings;
-  };
+  /** 从全部歌曲中解除对指定和弦 id 集合的槽位绑定（供删除和弦后联动调用）。 */
+  const unbindChordIds = (targetIds: Set<string>) => unbindChordIdsFromSongs(songs.value, targetIds, markSongDirty);
 
   /** 撤销删除和弦/分组时，把此前被解绑的槽位绑定恢复回去 */
-  const restoreChordBindings = (bindings: RemovedChordBinding[]) => {
-    if (bindings.length === 0) return;
-    bindings.forEach(({ songId, slotKey, chordId }) => {
-      const target = songMap.value.get(songId);
-      if (!target) return;
-      if (target.chordMap.get(slotKey) === undefined) {
-        target.chordMap.set(slotKey, chordId);
-        target.version = (target.version ?? 1) + 1;
-        target.updatedAt = Date.now();
-        markSongDirty(songId);
-      }
-    });
-  };
+  const restoreChordBindings = (bindings: Parameters<typeof restoreChordBindingsToSongs>[1]) =>
+    restoreChordBindingsToSongs(id => songMap.value.get(id), bindings, markSongDirty);
 
-  /**
-   * 和弦合并重定向：把全部歌曲中绑定在「被丢弃重复项」上的槽位改绑到「保留项」。
-   * 与 unbindChordIds（删除后解绑）不同，合并不丢失引用，仅做 id 重映射。
-   * @returns 发生重定向的槽位数量（用于提示）。
-   */
-  const remapChordBindings = (mapping: Map<string, string>): number => {
-    if (mapping.size === 0) return 0;
-    let remappedCount = 0;
-    songs.value.forEach(song => {
-      let hasChanged = false;
-      for (const [key, boundChordId] of song.chordMap) {
-        const newChordId = mapping.get(boundChordId) as ChordId | undefined;
-        if (newChordId !== undefined && newChordId !== boundChordId) {
-          song.chordMap.set(key, newChordId);
-          hasChanged = true;
-          remappedCount++;
-        }
-      }
-      if (hasChanged) {
-        song.chordMap = new Map(song.chordMap);
-        song.version = (song.version ?? 1) + 1;
-        song.updatedAt = Date.now();
-        markSongDirty(song.id);
-      }
-    });
-    return remappedCount;
-  };
+  /** 和弦合并重定向：把「被丢弃重复项」上的槽位改绑到「保留项」。@returns 重定向的槽位数量 */
+  const remapChordBindings = (mapping: Map<string, string>) =>
+    remapChordBindingsInSongs(songs.value, mapping, markSongDirty);
 
   return {
     songs,
     songSortMethod,
     sortedSongs,
     setSongSortMethod,
+    singerFilter,
+    timeSignatureFilter,
+    setSongFilters,
+    hasSongFilter,
+    filteredSongs,
+    availableSingerFilters,
+    availableTimeSignatureFilters,
     chordReferencesIndex,
     getChordReferences,
     createSong,

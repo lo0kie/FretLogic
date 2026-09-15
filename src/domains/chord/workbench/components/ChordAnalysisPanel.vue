@@ -25,7 +25,7 @@
       </div>
 
       <template v-if="!candidatesOnly">
-        <div class="my-0 h-auto w-px shrink-0 self-stretch bg-border-light" />
+        <BaseDivider orientation="vertical" />
 
         <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-1 p-0.5">
           <div
@@ -77,6 +77,7 @@
 import { computed } from 'vue';
 
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
+import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import { useActiveChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';

@@ -1,18 +1,7 @@
 <template>
   <Feedback v-if="chordStore.groups.length === 0" description="还没有添加分组" icon="folder-open" />
   <div v-else v-grid-nav.stop="{ cols: 1, selector: '.group-title-row' }">
-    <VueDraggable
-      :animation="200"
-      :disabled="!isAllCollapsed"
-      :model-value="chordStore.groups"
-      :swap-threshold="0.5"
-      @update:model-value="chordStore.overwriteGroups($event)"
-      chosen-class="drag-chosen-style"
-      class="draggable-list flex flex-col gap-sm"
-      drag-class="drag-active-style"
-      ghost-class="drag-ghost-style"
-      handle=".group-title-row"
-    >
+    <div class="draggable-list flex flex-col gap-sm" ref="groupListRef">
       <div v-for="(group, index) in chordStore.groups" :key="group.id">
         <BaseMenu #="{ isOpen }" :items="getGroupMenuItems(group)" trigger="contextmenu">
           <!-- 头部复用 BaseCollapse：点击/键盘切换、aria-expanded、chevron 旋转全部内聚在组件内；
@@ -69,28 +58,42 @@
               </div>
             </template>
 
-            <LeftChordGroupContent
-              :group
-              :ref="el => setContentOuterRef(el, index)"
-              @delete-chord="handleLocalDeleteChord($event)"
-              @open-delete-variants="emit('open-delete-variants', $event)"
-              @open-move="emit('open-move', $event)"
-              @open-references="emit('open-references', $event)"
-              @select-chord="handleSelectChord($event)"
-            />
+            <!-- 组内容（原 GroupContent 内联合并）：卡片网格 + 空状态；
+                 折叠动画由外层 BaseCollapse 的折叠体承担，这里保持纯内容 -->
+            <div :ref="el => setContentOuterRef(el, index)" @contextmenu.stop>
+              <TransitionGroup
+                v-grid-nav.stop="{ cols: GRID_COLS, selector: '.chord-thumb-card' }"
+                v-if="getGroupedCards(group).length > 0"
+                class="relative z-panel grid min-h-[2.2rem] grid-cols-3 items-center gap-sm px-sm pt-md pb-xs"
+                name="v-transition-list"
+                tag="div"
+              >
+                <ChordCard
+                  v-for="cardData in getGroupedCards(group)"
+                  v-scroll-into-view.y.once="cardData.mainChord.id === getActiveMainId(group)"
+                  :card-data
+                  :is-active="cardData.mainChord.id === getActiveMainId(group)"
+                  :key="cardData.mainChord.id"
+                  @delete="handleLocalDeleteChord($event)"
+                  @delete-variants="emit('open-delete-variants', $event)"
+                  @move="emit('open-move', $event)"
+                  @open-references="emit('open-references', $event)"
+                  @select="handleSelectChord($event)"
+                />
+              </TransitionGroup>
+              <Feedback v-else description="暂无和弦" size="sm" />
+            </div>
           </BaseCollapse>
         </BaseMenu>
       </div>
-    </VueDraggable>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 
-import { VueDraggable } from 'vue-draggable-plus';
-
-import LeftChordGroupContent from '@/domains/chord/library/components/GroupContent.vue';
+import ChordCard from '@/domains/chord/library/components/ChordCard.vue';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
@@ -99,7 +102,9 @@ import { useChordActions } from '@/domains/chord/library/composables/useChordAct
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
+import { getChordName } from '@/domains/chord/theory/theory';
 import { useChordTransfer } from '@/domains/chord/transfer/useChordTransfer';
+import { useSortableList } from '@/platform/composables/useSortableList';
 
 import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
 import type { MenuItem } from '@/platform/ui/menu/types';
@@ -119,6 +124,8 @@ const editorStore = useChordEditorStore();
 const chordActions = useChordActions();
 const { copyGroupText } = useChordTransfer();
 
+const groupListRef = useTemplateRef<HTMLElement>('groupListRef');
+
 const contentOuterComponentEls = new Map<number, ComponentPublicInstance | Element | null>();
 
 /** 按索引登记/注销分组内容组件的实例引用 */
@@ -127,9 +134,54 @@ const setContentOuterRef = (el: Element | ComponentPublicInstance | null, index:
   else contentOuterComponentEls.delete(index);
 };
 
+// ==================== 组内容（原 GroupContent 内联合并） ====================
+
+/** 卡片网格列数：与 v-grid-nav 的键盘导航配置共用 */
+const GRID_COLS = 3;
+
+/** 组内分组卡片数据 */
+const getGroupedCards = (group: Group): GroupedChordCard[] => chordStore.getGroupedCards(group.id);
+
+/** 当前激活卡片的主和弦 id：草稿是某变体时映射回主卡；编辑中同名同组草稿也视为激活 */
+const getActiveMainId = (group: Group): string | null => {
+  const cards = getGroupedCards(group);
+  const draft = editorStore.draftChord;
+  if (draft.id) {
+    for (const card of cards) {
+      if (card.variants.some(v => v.id === draft.id)) return card.mainChord.id;
+    }
+  }
+
+  if (editorStore.isEditing) {
+    const draftName = getChordName(draft).trim().toLowerCase();
+    if (draftName) {
+      for (const card of cards) {
+        if (
+          card.mainChord.groupId === draft.groupId &&
+          getChordName(card.mainChord).trim().toLowerCase() === draftName
+        ) {
+          return card.mainChord.id;
+        }
+      }
+    }
+  }
+  return null;
+};
+
 /** 分组内容是否展开（store 折叠状态取反） */
 const isGroupContentOpen = (group: Group): boolean => !chordStore.isGroupCollapsed(group.id);
 const isAllCollapsed = computed(() => chordStore.groups.every(g => chordStore.isGroupCollapsed(g.id)));
+
+// 仅在全部折叠时允许拖拽排序：任一组展开时其内容会撑高行高，拖动会错位。
+// Sortable 直接操作 DOM，拖拽结束按索引重排后经 overwriteGroups 持久化；
+// 空列表守卫（groups 为空走 Feedback 分支）、容器就绪后再初始化、以及 disabled 的响应式跟随都由 useSortableList 承担。
+useSortableList<Group>({
+  target: groupListRef,
+  items: () => chordStore.groups,
+  enabled: computed(() => isAllCollapsed.value),
+  handle: '.group-title-row',
+  onReorder: next => chordStore.overwriteGroups(next),
+});
 
 /** 用户点击和弦卡片：若正在编辑同一和弦则退出编辑，否则载入编辑器 */
 const handleSelectChord = (chord: Chord) => {
