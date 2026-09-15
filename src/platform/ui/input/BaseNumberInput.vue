@@ -65,9 +65,11 @@
             : 'text-fg-title',
       ]"
       @click="startEditing()"
-      class="w-0 flex-1 text-center font-bold whitespace-nowrap outline-none"
+      class="flex w-0 flex-1 items-center justify-center font-bold whitespace-nowrap outline-none"
     >
-      {{ displayText }}
+      <!-- 数值变化时逐字符翻页。关掉 aria-live：外层 spinbutton 已通过 aria-valuetext
+           播报数值，组件内的 live region 会让屏幕阅读器重复朗读一遍 -->
+      <BaseRollingText :text="displayText" aria-live="off" class="tabular-nums" />
     </span>
 
     <button
@@ -96,6 +98,7 @@
 import { computed, inject, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
@@ -126,6 +129,8 @@ const props = withDefaults(
     disabled?: boolean;
     /** 聚焦时允许滚轮步进 */
     wheelable?: boolean;
+    /** 悬停即允许滚轮步进，无需聚焦（与 wheelable 独立；两者同时开启时本项优先，是否聚焦均可） */
+    wheelOnHover?: boolean;
     /** 越界时循环到另一端（min/max 首尾相接） */
     loopable?: boolean;
     /** 是否允许手动键入编辑（false 时仅能通过按钮/滚轮/方向键步进） */
@@ -160,6 +165,7 @@ const props = withDefaults(
     useIcons: false,
     disabled: false,
     wheelable: false,
+    wheelOnHover: false,
     loopable: false,
     editable: true,
     stepStrictly: false,
@@ -383,10 +389,13 @@ const startContinuousStep = (sign: number, e: PointerEvent) => {
   }, 350);
 };
 
-/** 滚轮步进：仅在 wheelable 且组件持有焦点时生效 */
+/**
+ * 滚轮步进：两种开启方式（互不影响）——wheelOnHover 悬停即生效、无需聚焦；
+ * wheelable 需组件持有焦点。方向默认上滚增值、下滚减值。
+ */
 const handleWheel = (e: WheelEvent) => {
-  if (props.disabled || !props.wheelable || isEditing.value) return;
-  if (!wrapperRef.value?.contains(document.activeElement)) return;
+  if (props.disabled || isEditing.value) return;
+  if (!props.wheelOnHover && !(props.wheelable && wrapperRef.value?.contains(document.activeElement))) return;
   e.preventDefault();
   if (e.deltaY < 0) handleStep(1, e);
   else if (e.deltaY > 0) handleStep(-1, e);

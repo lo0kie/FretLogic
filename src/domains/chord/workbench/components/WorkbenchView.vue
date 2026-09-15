@@ -3,7 +3,7 @@
     <div class="relative flex size-full items-start overflow-auto px-2xl pt-2xl pb-3xl">
       <!-- 交互指板卡片：点击/编辑即写和弦草稿，含横按标记与和弦名直改 -->
       <div
-        class="pointer-events-auto relative z-base mx-auto flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel/90 px-2xl py-xl shadow-panel backdrop-blur-lg transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg"
+        class="pointer-events-auto relative z-base mx-auto flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel/90 px-2xl py-xl shadow-panel backdrop-blur-lg transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg hover:delay-150"
       >
         <Fretboard
           :chord="editorStore.draftChord"

@@ -9,7 +9,7 @@
       :aria-expanded="expanded"
       :title="props.title"
       @click="expanded = !expanded"
-      class="group/head flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-out outline-none select-none hover:bg-surface-panel-hover focus-visible:ring-2 focus-visible:ring-primary/60"
+      class="group/head flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-out outline-none select-none hover:bg-surface-panel-hover hover:delay-100 focus-visible:ring-2 focus-visible:ring-primary/60"
       type="button"
     >
       <!-- 传入 #icon 插槽时优先使用插槽内容（Vue 插槽默认内容的天然规则）；

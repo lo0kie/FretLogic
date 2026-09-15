@@ -131,9 +131,10 @@
         position="absolute"
         size="sm"
       >
-        <span aria-live="polite" class="px-1 text-xs font-semibold text-fg-body tabular-nums select-none">
-          {{ currentPage }} / {{ pages.length }}
-        </span>
+        <BaseRollingText
+          :text="`${currentPage} / ${pages.length}`"
+          class="px-1 text-xs font-semibold text-fg-body tabular-nums"
+        />
       </BaseFloatingBar>
     </template>
 
@@ -170,6 +171,7 @@ import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseFloatingBar from '@/platform/ui/floating-bar/BaseFloatingBar.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
+import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';

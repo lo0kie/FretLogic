@@ -9,6 +9,7 @@ import { getChordName } from '@/domains/chord/theory/theory';
 import { computeFretboardLayout, renderFretboard } from '@/domains/fretboard/components/renderFretboardCanvas';
 import { DEFAULT_FRET_COUNT, MIN_FRET_COUNT } from '@/domains/fretboard/constants';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
+import { activeTheme } from '@/platform/composables/useTheme';
 import { observeVisibility } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
 
@@ -103,7 +104,9 @@ function getCacheKey(): string {
   const c = props.chord;
   const strSig = c.strings.map(s => s[0]).join(',');
   const barreSig = (c.barres ?? []).map(b => `${b.fret}:${b.fromString}-${b.toString}`).join('|');
-  return `${displayChordName.value}_${c.fretOffset}_${fretCount.value}_${strSig}_${barreSig}_${props.isDarkMode ? 1 : 0}_th${props.theme ?? ''}_${props.chordNameScale}_${props.showChordName ? 1 : 0}_${props.showOpenStringNotes ? 1 : 0}_${props.showFretNumbers ? 1 : 0}_${props.showBoldNut ? 1 : 0}_${props.showBarre ? 1 : 0}_${cssWidth.value}x${cssHeight.value}`;
+  // th 段记「实际生效的配色主题」：未显式指定时跟随应用主题，必须把它写进 key——
+  // 否则 light 与 high-contrast 会共用同一个 key，切主题时命中旧缓存、配色不更新
+  return `${displayChordName.value}_${c.fretOffset}_${fretCount.value}_${strSig}_${barreSig}_${props.isDarkMode ? 1 : 0}_th${props.theme ?? activeTheme.value}_${props.chordNameScale}_${props.showChordName ? 1 : 0}_${props.showOpenStringNotes ? 1 : 0}_${props.showFretNumbers ? 1 : 0}_${props.showBoldNut ? 1 : 0}_${props.showBarre ? 1 : 0}_${cssWidth.value}x${cssHeight.value}`;
 }
 
 function draw() {
@@ -194,6 +197,15 @@ onBeforeUnmount(() => {
 
 // 主题切换时重新解析配色再重绘（应用主题变化经 isDarkMode 联动；显式 theme 由导出面板传入）
 watch([() => props.isDarkMode, () => props.theme], () => {
+  themeColors.value = resolveThemeColors();
+  if (hasDrawn.value) draw();
+});
+
+// 未显式指定 theme 时配色跟随应用主题。仅靠 isDarkMode 监听接不住 light ↔ high-contrast：
+// 两者都算「非 dark」，isDarkMode 不变，但 --fbc-* 与 high-contrast 配色是不同的。
+// 显式指定了 theme 的场合（导出面板固定白/暗底）不受应用主题影响，故跳过。
+watch(activeTheme, () => {
+  if (props.theme) return;
   themeColors.value = resolveThemeColors();
   if (hasDrawn.value) draw();
 });

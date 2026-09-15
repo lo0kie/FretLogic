@@ -301,7 +301,7 @@
               :editable="false"
               :max="INTERACTION_CONFIG.MAX_CAPO_LIMIT"
               :min="0"
-              wheelable
+              wheel-on-hover
               width="auto"
             />
           </BaseFormRow>
@@ -350,6 +350,7 @@ import { FRET_COUNTS, INTERACTION_CONFIG } from '@/domains/fretboard/constants';
 import { SCORE_PAGE_MARGIN_PRESETS, SCORE_PAGE_SIZE_PRESETS } from '@/domains/score/constants';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { usePopoverPin } from '@/platform/ui/popover/popoverPin';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
 
@@ -384,14 +385,19 @@ const scoreOpenGroup = computed(() =>
 );
 const workbenchOpenGroup = workbenchOpenGroupState;
 
+/** 用户与面板内容交互（展开/折叠分组）即钉住浮层：hover 移出不再自动关闭，点外部/Esc 仍可关闭 */
+const pinPopover = usePopoverPin();
+
 /** 切换乐谱页分组：展开即排他选中该组，收起（value=false）则回到全部折叠；按当前 tab 记忆到对应维度 */
 function toggleScoreGroup(group: '' | 'layout' | 'display' | 'export', value: boolean) {
+  pinPopover();
   const target = isPreviewTab.value ? scorePreviewOpenGroupState : scoreEditOpenGroupState;
   target.value = value ? group : '';
 }
 
 /** 切换工作台页分组：展开即排他选中该组，收起（value=false）则回到全部折叠 */
 function toggleWorkbenchGroup(group: '' | 'timbre' | 'effect' | 'display' | 'fretboard', value: boolean) {
+  pinPopover();
   workbenchOpenGroupState.value = value ? group : '';
 }
 

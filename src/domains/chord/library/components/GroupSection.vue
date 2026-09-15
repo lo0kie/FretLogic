@@ -53,7 +53,7 @@
                   variant="neutral"
                   width="1.5rem"
                 >
-                  {{ getGroupChordsCount(group.id) }}
+                  <BaseRollingText :text="`${getGroupChordsCount(group.id)}`" class="tabular-nums" />
                 </BaseBadge>
               </div>
             </template>
@@ -98,6 +98,7 @@ import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
+import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';

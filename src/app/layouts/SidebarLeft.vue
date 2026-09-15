@@ -79,7 +79,7 @@
                       size="2xs"
                       variant="primary"
                     >
-                      {{ item.card.variantCount }}指法
+                      <BaseRollingText :text="`${item.card.variantCount}指法`" class="tabular-nums" />
                     </BaseBadge>
 
                     <span
@@ -123,7 +123,7 @@
         <div class="header-title-zone flex min-w-0 items-center gap-sm">
           <span class="sidebar-title text-xs font-bold tracking-tight whitespace-nowrap text-fg-title">乐谱列表</span>
           <BaseBadge appearance="filled" size="xs" title="乐谱数量" variant="neutral">
-            {{ songStore.songs.length }}
+            <BaseRollingText :text="`${songStore.songs.length}`" class="tabular-nums" />
           </BaseBadge>
         </div>
 
@@ -237,6 +237,7 @@ import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
+import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';

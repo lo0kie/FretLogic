@@ -58,7 +58,7 @@
       @keydown.space.prevent="handleReadoutClick()"
       class="inline-block rounded-sm text-center font-mono text-2xs font-bold text-fg-title tabular-nums"
     >
-      {{ singleDisplayText }}
+      <BaseRollingText :text="singleDisplayText" />
     </span>
 
     <button
@@ -267,7 +267,7 @@
       @keydown.space.prevent="handleReadoutClick()"
       class="inline-block rounded-sm text-center font-mono text-2xs font-bold text-fg-title tabular-nums"
     >
-      {{ singleDisplayText }}
+      <BaseRollingText :text="singleDisplayText" />
     </span>
 
     <span
@@ -284,6 +284,7 @@
 import { computed, inject, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
