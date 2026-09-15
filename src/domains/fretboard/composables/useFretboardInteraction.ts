@@ -172,6 +172,47 @@ export function useFretboardInteraction(
     });
   };
 
+  // ===== 滑动绘制：按住左键滑过品位格连续添加/删除音符 =====
+  // 按下处已有音符 → 本次滑动为「删除」模式（经过的音符被抹掉）；空白处 → 「添加」模式（经过的品位按上音符）。
+  // 每根弦同时只持有一个音符：添加模式滑过同弦其他品位等效于移动音符。
+  interface DragPaintSession {
+    mode: 'add' | 'mute';
+    /**
+     * 会话内的工作副本：props 要等父组件重渲染才回流，pointermove 连续触发时
+     * 直接克隆 props 会让前几格的改动被旧数据覆盖（音符丢失/闪烁），
+     * 因此滑动期间的所有修改都累积在这份本地模型上再整体上报。
+     */
+    working: GuitarStringsModel;
+    /** 上一次作用的品位格（stringIndex:fretIndex），跨格去重避免同格重复派发 */
+    lastCell: string;
+  }
+  let dragPaint: DragPaintSession | null = null;
+
+  /** 结束本次滑动绘制会话 */
+  const endDragPaint = () => {
+    dragPaint = null;
+  };
+
+  /** 滑动经过某品位格：按会话模式在工作副本上添加或删除音符，并整体上报（相对初始按下的行为取向） */
+  const paintCell = (sIdx: number, fIdx: number) => {
+    if (!dragPaint) return;
+    const cellKey = `${sIdx}:${fIdx}`;
+    if (cellKey === dragPaint.lastCell) return;
+    dragPaint.lastCell = cellKey;
+
+    const { mode, working } = dragPaint;
+    const str = working[sIdx];
+    if (!str) return;
+    if (mode === 'add') {
+      // 添加：滑过同弦其他品位等效移动音符到当前品位（一弦一音）
+      if (str[0] !== fIdx) setStringFret(str, fIdx, sIdx);
+    } else if (str[0] === fIdx) {
+      // 删除：仅抹掉滑动经过的音符格，空格保持原状
+      setStringFret(str, -1, sIdx);
+    }
+    onStringsChange(working);
+  };
+
   /** 切换某弦的升降号偏好（如 C#/Db），仅在该位置允许变体时生效 */
   const handleTogglePitchName = (sIdx: number) => {
     fretBoardRef.value?.focus();
@@ -221,7 +262,7 @@ export function useFretboardInteraction(
     hoverPoint.value = null;
   };
 
-  /** 左键按下：焦点定位到命中点；空弦区切换空弦态，品位区切换音符（已有则清除） */
+  /** 左键按下：焦点定位到命中点；空弦区切换空弦态，品位区切换音符并开启滑动绘制会话（已有则清除） */
   const handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
     fretBoardRef.value?.focus();
@@ -229,7 +270,7 @@ export function useFretboardInteraction(
     if (!pt) return;
     focusPoint.value = pt;
 
-    // 空弦区域点击（品位 0）
+    // 空弦区域点击（品位 0）：切换空弦态，不进入滑动绘制
     if (pt.fretIndex === 0) {
       handleLocalToggleOpenString(pt.stringIndex);
       return;
@@ -237,8 +278,19 @@ export function useFretboardInteraction(
 
     if (pt.fretIndex < 1 || pt.fretIndex > props.chord.fretCount) return;
 
-    // 单击品位：切换音符（已有则清除，无则按下到该品位）
-    toggleNoteAt(pt.stringIndex, pt.fretIndex);
+    // 滑动绘制会话：基于本地工作副本起步，按下即完成第一次切换音符（不再单发 toggleNoteAt，
+    // 避免它和后续滑动各自克隆旧 props 互相覆盖）。按下处已有音符 → 删除模式；空白 → 添加模式。
+    // 捕获指针让滑出指板边界后松开仍能收到 pointerup 正常收尾
+    const working = cloneGuitarStrings(props.chord.strings);
+    const initialStr = working[pt.stringIndex];
+    const initialHasNote = initialStr?.[0] === pt.fretIndex;
+    if (initialStr) {
+      if (initialHasNote) setStringFret(initialStr, -1, pt.stringIndex);
+      else setStringFret(initialStr, pt.fretIndex, pt.stringIndex);
+      onStringsChange(working);
+    }
+    dragPaint = { mode: initialHasNote ? 'mute' : 'add', working, lastCell: `${pt.stringIndex}:${pt.fretIndex}` };
+    fretBoardRef.value?.setPointerCapture(e.pointerId);
   };
 
   /** 获得键盘焦点：显示焦点框，首次聚焦时给一个默认焦点位置 */
@@ -270,8 +322,17 @@ export function useFretboardInteraction(
 
   useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
   useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {
+    // 滑动绘制进行中：按当前指针位置作用品位格（跨格去重），并照常合帧刷新 hover 高亮
+    if (dragPaint) {
+      const pt = getCanvasPoint(e.clientX, e.clientY);
+      if (pt && pt.fretIndex >= 1 && pt.fretIndex <= props.chord.fretCount) {
+        paintCell(pt.stringIndex, pt.fretIndex);
+      }
+    }
     scheduleHoverFrame({ clientX: e.clientX, clientY: e.clientY });
   });
+  useEventListener(fretBoardRef, 'pointerup', endDragPaint);
+  useEventListener(fretBoardRef, 'pointercancel', endDragPaint);
 
   useEventListener(fretBoardRef, 'pointerleave', handlePointerLeave);
   useEventListener(fretBoardRef, 'wheel', handleWheel, { passive: false });

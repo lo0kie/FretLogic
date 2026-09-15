@@ -135,6 +135,8 @@ const songListRef = useTemplateRef<ComponentPublicInstance>('songListRef');
 // 手动排序时启用拖拽（Sortable 直接操作 DOM，拖拽结束按索引重排后经 reorderSongs 持久化）；
 // 非手动排序或过滤激活时禁用（过滤后 DOM 序与全量数组序不一致，按索引重排会错位）。
 // 空列表守卫、容器就绪后再初始化、以及 disabled 的响应式跟随都由 useSortableList 承担。
+// 列表自身的 TransitionGroup 只管增删与排序方法切换的 enter/leave/move：拖拽松手时 DOM
+// 已被 Sortable 摆成最终顺序，patch 前后位置一致、它的 FLIP 位移为 0，不会与拖拽动画打架
 useSortableList<Song>({
   target: songListRef,
   items: () => songStore.songs,

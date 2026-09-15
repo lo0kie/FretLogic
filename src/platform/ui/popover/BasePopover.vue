@@ -63,7 +63,7 @@
 <script lang="ts">
 // 双 script 块的 SFC 视为同一模块：import 必须整体置于第一个块顶部（import/first），
 // 下方 <script setup> 直接复用这些绑定
-import { computed, nextTick, onBeforeUnmount, ref, unref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, provide, ref, unref, useTemplateRef, watch } from 'vue';
 
 import { useEventListener } from '@vueuse/core';
 
@@ -74,6 +74,7 @@ import {
   resolveArrowAwareOffset,
 } from '@/platform/ui/popover/floatingCore';
 import { acquireFloatingZ, FLOATING_Z_BASE, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
+import { POPOVER_PIN_KEY } from '@/platform/ui/popover/popoverPin';
 import { registerOpenPopover, unregisterOpenPopover } from '@/platform/ui/popover/popoverRegistry';
 import { useFloatingPosition } from '@/platform/ui/popover/useFloatingPosition';
 import { POPOVER_HOVER_CLOSE_DELAY_MS } from '@/platform/utils/constants';
@@ -412,6 +413,16 @@ const toggle = () => {
     open();
   }
 };
+
+/**
+ * 面板内容主动钉住：内容组件在发生明确交互（如展开折叠分组）后调用。
+ * 仅在已打开时置钉住态——之后 hover 移出不再自动关闭，点击外部 / Escape 仍正常关闭。
+ * 通过 provide 下发给面板内容，未注入的消费方（usePopoverPin 默认值）为空操作。
+ */
+const pin = () => {
+  if (model.value) pinned.value = true;
+};
+provide(POPOVER_PIN_KEY, pin);
 
 /**
  * hover 模式的「钉住」切换：打开并钉住（悬停关闭失效，仅点击外部关闭）；

@@ -110,18 +110,18 @@ src/
 
 ## 📦 脚本
 
-| 命令                       | 说明                                                 |
-| -------------------------- | ---------------------------------------------------- |
-| `pnpm dev`                 | 开发服务器                                           |
-| `pnpm dev:proxy`           | WebDAV CORS 转发代理                                 |
-| `pnpm preview`             | 构建产物本地预览                                     |
-| `pnpm build`               | 生产构建（GitHub Pages 路径：`/FretLogic/`）         |
-| `pnpm verify`              | 全量质检（Format + Lint + Typecheck + Test + Build） |
-| `pnpm typecheck`           | 类型检查                                             |
-| `pnpm lint` / `lint:fix`   | ESLint 检查 / 修复并格式化                           |
-| `pnpm format`              | Prettier 格式化                                      |
-| `pnpm test` / `test:watch` | 单元测试（单次 / 监听模式）                          |
-| `pnpm test:coverage`       | 覆盖率                                               |
+| 命令                       | 说明                                                          |
+| -------------------------- | ------------------------------------------------------------- |
+| `pnpm dev`                 | 开发服务器                                                    |
+| `pnpm dev:proxy`           | WebDAV CORS 转发代理                                          |
+| `pnpm preview`             | 构建产物本地预览                                              |
+| `pnpm build`               | 生产构建（相对 base，兼容 GitHub Pages / EdgeOne 等任意托管） |
+| `pnpm verify`              | 全量质检（Format + Lint + Typecheck + Test + Build）          |
+| `pnpm typecheck`           | 类型检查                                                      |
+| `pnpm lint` / `lint:fix`   | ESLint 检查 / 修复并格式化                                    |
+| `pnpm format`              | Prettier 格式化                                               |
+| `pnpm test` / `test:watch` | 单元测试（单次 / 监听模式）                                   |
+| `pnpm test:coverage`       | 覆盖率                                                        |
 
 ## 🤝 贡献
 

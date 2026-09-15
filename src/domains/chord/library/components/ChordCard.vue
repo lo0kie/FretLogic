@@ -26,8 +26,12 @@
             class="absolute -top-1 -right-1 z-card cursor-pointer border border-surface-body shadow-sm transition-all duration-fast ease-bounce"
             size="2xs"
           >
-            <span v-if="isActive"> {{ activeVariantIndex + 1 }}/{{ cardData.variantCount }} </span>
-            <span v-else> {{ cardData.variantCount }} </span>
+            <BaseRollingText
+              v-if="isActive"
+              :text="`${activeVariantIndex + 1}/${cardData.variantCount}`"
+              class="tabular-nums"
+            />
+            <BaseRollingText v-else :text="`${cardData.variantCount}`" class="tabular-nums" />
           </BaseBadge>
 
           <div v-marquee.fade class="min-w-0 flex-1">
@@ -48,6 +52,7 @@ import { computed, inject, ref } from 'vue';
 
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
+import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { CHORD_REFERENCE_LOOKUP } from '@/domains/chord/library/injectionKeys';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';

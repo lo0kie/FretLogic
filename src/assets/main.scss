@@ -80,11 +80,16 @@ body {
   pointer-events: none;
 }
 
-/* 拖拽影像浮现动画：阴影与透明度渐入，避免起拖瞬间阴影生硬砸出。
-   只动 box-shadow / opacity —— transform 由 JS 每帧直接写、scale 是独立属性，均不可碰 */
+/* 拖拽影像浮现动画：阴影渐入 + 不透明度从「原位元素的原值」缓降到拖拽值。
+   渐变方向不可反过来：影像是接管原位元素（此刻刚被置为 opacity: 0）的接替者，不是凭空出现
+   的新元素 —— 起点若低于终点，起拖那一帧该区域会先空掉变淡、再爬回终值，看起来就是
+   「暗一下又回来」的一闪。所以起点取 1（与原位元素一致）、终点取 .drag-preview 的 0.92，
+   全程只有 8% 的下降，观感是「轻轻浮起」而不是「淡入」。
+   抬起的观感由阴影与 1.02 缩放承担；落位时由 JS 的复位动画把不透明度再升回 1。
+   只动 box-shadow / opacity —— transform 由 JS 每帧直接写，不可碰 */
 @keyframes drag-preview-in {
   from {
-    opacity: 0.55;
+    opacity: 1;
     box-shadow: 0 0 0 0 rgb(0 0 0 / 0%);
   }
 
@@ -99,7 +104,10 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  scale: 1.02; /* 独立变换属性，不与 JS 写的 transform 抢同一个属性；此值在 useSortableList 的 PREVIEW_SCALE 有镜像 */
+  /* 抬起的放大倍数刻意不给独立 scale 属性：独立属性与 transform 的合成顺序是
+     「先 transform、后 scale」，translate 会被一并放大，影像整体偏移 t×(s-1)（视口下方
+     即十几像素的下坠）。由 JS 写成 transform 里的 scale(...)（见 useSortableList 的
+     applyPreviewTransform），顺序变为「先关于中心缩放、再平移」，与抓取点补偿公式同假设 */
   opacity: 0.92;
   z-index: var(--z-top); /* 最高静态层，注释见 tokens.scss 的 --z-top */
   animation: drag-preview-in 160ms $bezier-standard;

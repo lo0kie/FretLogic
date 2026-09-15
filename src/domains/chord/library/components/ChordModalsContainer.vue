@@ -50,6 +50,10 @@
           <strong class="font-bold text-danger">
             {{ groupModals.modalData.activeGroupCard?.variants.length || 0 }}
           </strong>
+          个，已选
+          <strong class="font-bold text-danger">
+            <BaseRollingText :text="`${groupModals.modalData.selectedVariantIds.size}`" class="tabular-nums" />
+          </strong>
           个
         </p>
       </div>
@@ -119,6 +123,7 @@ import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue'
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
+import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { isDark } from '@/platform/composables/useTheme';

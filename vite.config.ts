@@ -112,8 +112,9 @@ const testConfig: ViteUserConfig = {
 };
 
 export default defineConfig(({ mode }) => {
-  // 单一部署目标：GitHub Pages 子路径 /FretLogic/
-  const base = '/FretLogic/';
+  // 相对 base：产物可在任意根路径部署（GitHub Pages 子路径 /FretLogic/、EdgeOne 根路径等），
+  // 配合 hash 路由无需平台级路径重写，`pnpm build` 单命令通吃所有托管平台。
+  const base = './';
 
   return {
     // 统一缓存收纳：Vite 依赖预构建/构建缓存与 Vitest 测试结果缓存都落在 node_modules/.cache/vite，
