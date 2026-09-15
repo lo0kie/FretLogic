@@ -284,9 +284,20 @@
 import { computed, inject, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
-import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
+
+import {
+  activeBarStyleOf,
+  computeTickValues,
+  countDecimals,
+  isValueEqual,
+  markLabelOf,
+  resolveMultiplier,
+  SLIDER_CONFIG,
+  thumbPositionStyle,
+  tickPositionStyle,
+} from './BaseSlider.logic';
 
 import type { TooltipOptions } from '@/platform/directives/vTooltip';
 import type { ComponentSize } from '@/platform/types';
@@ -488,62 +499,6 @@ const wrapperStyle = computed(() => {
   return resolvedWidth.value ? { width: resolvedWidth.value } : {};
 });
 
-/**
- * 尺寸档位样式表：除高度/内边距外，轨道厚度、拇指直径、极值内缩与命中区扩展一并按档位缩放，
- * 使 size 真正作用于「轨道高度与圆点大小」（与 props.size 文档一致）。
- * md 为设计基线，取值与既有视觉完全一致，保证存量 UI 零回归。
- */
-interface SliderSizeConfig {
-  /** wrapper 高度与横向内边距 */
-  wrapperClass: string;
-  /** 横向基线 / 填充条厚度 */
-  barClass: string;
-  /** 纵向基线 / 填充条厚度 */
-  barClassV: string;
-  /** 拇指直径 */
-  thumbClass: string;
-  /** 极值内缩：取「拇指半径 - 3px」，使各档拇指溢出胶囊边框的幅度保持一致 */
-  insetClass: string;
-  insetClassV: string;
-  /** 轨道纵向扩展命中区（矮档位收窄，避免与相邻控件重叠） */
-  hitClass: string;
-  /** width="auto" 时的固定轨道宽度 */
-  autoWidth: string;
-}
-
-const SLIDER_CONFIG: Record<'sm' | 'md' | 'lg', SliderSizeConfig> = {
-  sm: {
-    wrapperClass: `${CONTROL_HEIGHT_CLASSES.sm} px-xs`,
-    barClass: 'h-0.5',
-    barClassV: 'w-0.5',
-    thumbClass: 'size-3',
-    insetClass: 'right-[3px] left-[3px]',
-    insetClassV: 'top-[3px] bottom-[3px]',
-    hitClass: 'before:-inset-y-2',
-    autoWidth: 'w-16',
-  },
-  md: {
-    wrapperClass: `${CONTROL_HEIGHT_CLASSES.md} px-sm`,
-    barClass: 'h-1',
-    barClassV: 'w-1',
-    thumbClass: 'size-3.5',
-    insetClass: 'right-[4px] left-[4px]',
-    insetClassV: 'top-[4px] bottom-[4px]',
-    hitClass: 'before:-inset-y-4',
-    autoWidth: 'w-24',
-  },
-  lg: {
-    wrapperClass: `${CONTROL_HEIGHT_CLASSES.lg} px-sm`,
-    barClass: 'h-1.5',
-    barClassV: 'w-1.5',
-    thumbClass: 'size-4',
-    insetClass: 'right-[5px] left-[5px]',
-    insetClassV: 'top-[5px] bottom-[5px]',
-    hitClass: 'before:-inset-y-4',
-    autoWidth: 'w-32',
-  },
-};
-
 const currentConfig = computed(() => SLIDER_CONFIG[resolvedSize.value] ?? SLIDER_CONFIG.md);
 
 /**
@@ -558,19 +513,7 @@ const readoutSpanClass = computed(() => (isCompactReadout.value ? 'min-w-6' : 'm
 /** 编辑态输入框同理：w-16（64px）在窄档位下会直接撑破盒子 */
 const readoutInputClass = computed(() => (isCompactReadout.value ? 'w-10' : 'w-16'));
 
-/** 计算数值的小数位数（兼容科学计数法表示） */
-const countDecimals = (n: number): number => {
-  if (!isFinite(n)) return 0;
-  const s = String(n).toLowerCase();
-  if (s.includes('e')) {
-    const [mantissa, expStr] = s.split('e');
-    const exp = parseInt(expStr ?? '0', 10);
-    const mantissaDecimals = mantissa?.includes('.') ? mantissa.split('.')[1]!.length : 0;
-    return Math.max(0, mantissaDecimals - exp);
-  }
-  const dot = s.indexOf('.');
-  return dot === -1 ? 0 : s.length - dot - 1;
-};
+/** 计算数值的小数位数（兼容科学计数法表示），见 BaseSlider.logic.ts */
 
 const isTrackHovered = ref(false);
 
@@ -619,25 +562,11 @@ const getPct = (val: number) => {
   return Math.min(100, Math.max(0, ((val - props.min) / (props.max - props.min)) * 100));
 };
 
-const singleThumbStyle = computed(() => {
-  const pct = getPct(singleValue.value);
-  if (props.vertical) {
-    return { bottom: `${pct}%`, left: '50%' };
-  }
-  return { left: `${pct}%`, top: '50%' };
-});
+const singleThumbStyle = computed(() => thumbPositionStyle(getPct(singleValue.value), props.vertical));
 
-const rangeThumb0Style = computed(() => {
-  const pct = getPct(rangeValues.value[0]);
-  if (props.vertical) return { bottom: `${pct}%`, left: '50%' };
-  return { left: `${pct}%`, top: '50%' };
-});
+const rangeThumb0Style = computed(() => thumbPositionStyle(getPct(rangeValues.value[0]), props.vertical));
 
-const rangeThumb1Style = computed(() => {
-  const pct = getPct(rangeValues.value[1]);
-  if (props.vertical) return { bottom: `${pct}%`, left: '50%' };
-  return { left: `${pct}%`, top: '50%' };
-});
+const rangeThumb1Style = computed(() => thumbPositionStyle(getPct(rangeValues.value[1]), props.vertical));
 
 const activeBarStyle = computed(() => {
   if (isRange.value) {
@@ -645,16 +574,9 @@ const activeBarStyle = computed(() => {
     const p1 = getPct(rangeValues.value[1]);
     const start = Math.min(p0, p1);
     const length = Math.abs(p1 - p0);
-    if (props.vertical) {
-      return { bottom: `${start}%`, height: `${length}%` };
-    }
-    return { left: `${start}%`, width: `${length}%` };
+    return activeBarStyleOf(start, length, props.vertical, false);
   }
-  const pct = getPct(singleValue.value);
-  if (props.vertical) {
-    return { bottom: '0%', height: `${pct}%` };
-  }
-  return { left: '0%', width: `${pct}%` };
+  return activeBarStyleOf(0, getPct(singleValue.value), props.vertical, true);
 });
 
 /** 单值滑块 tooltip 显隐：按 showTooltip 策略（always/hover/drag/never）判定 */
@@ -707,31 +629,22 @@ const rangeTooltip1Opts = computed<TooltipOptions>(() => ({
   visible: shouldShowRangeTooltip(1),
 }));
 
-const tickValues = computed<number[]>(() => {
-  if (props.marks && Object.keys(props.marks).length) {
-    return Object.keys(props.marks)
-      .map(Number)
-      .filter(v => v >= props.min && v <= props.max)
-      .sort((a, b) => a - b);
-  }
-  if (!props.showTicks || props.max <= props.min) return [];
-  const stepVal = Math.max(props.step, (props.max - props.min) / 20);
-  const out: number[] = [];
-  for (let v = props.min; v <= props.max + 1e-9; v += stepVal) out.push(snapToStep(v));
-  return out;
-});
+const tickValues = computed<number[]>(() =>
+  computeTickValues({
+    marks: props.marks,
+    showTicks: props.showTicks,
+    min: props.min,
+    max: props.max,
+    step: props.step,
+    snap: snapToStep,
+  })
+);
 
 /** 刻度定位样式：按值换算百分比并居中平移 */
-const getTickPositionStyle = (v: number) => {
-  const pct = getPct(v);
-  if (props.vertical) {
-    return { bottom: `${pct}%`, transform: 'translateY(50%)' };
-  }
-  return { left: `${pct}%`, transform: 'translateX(-50%)' };
-};
+const getTickPositionStyle = (v: number) => tickPositionStyle(getPct(v), props.vertical);
 
 /** 刻度文本：marks 提供标签时优先使用，否则回退数值本身 */
-const markLabel = (v: number) => (props.marks ? (props.marks[v] ?? String(v)) : String(v));
+const markLabel = (v: number) => markLabelOf(v, props.marks);
 
 /**
  * 统一取值更新入口：夹紧、对齐步长并写回模型；
@@ -766,12 +679,7 @@ const updateValue = (rawNextVal: number | [number, number], options?: { commit?:
   }
 };
 
-/** 修饰键步进倍率：Alt 精调 ×0.1，Shift 粗调 ×10 */
-const resolveMultiplier = (e?: { shiftKey?: boolean; altKey?: boolean }) => {
-  if (e?.altKey) return 0.1;
-  if (e?.shiftKey) return 10;
-  return 1;
-};
+/** 修饰键步进倍率：Alt 精调 ×0.1，Shift 粗调 ×10（见 BaseSlider.logic.ts） */
 
 /** 按符号步进（区间模式作用于指定拇指），支持修饰键倍率 */
 const stepBy = (sign: number, e?: { shiftKey?: boolean; altKey?: boolean }, thumbIdx = 0) => {
@@ -832,13 +740,7 @@ const onPointerMove = (e: PointerEvent) => {
   }
 };
 
-/** 拖拽结束判断值是否变化：数组按分量比较，其余严格相等 */
-const isValueEqual = (v1: unknown, v2: unknown) => {
-  if (Array.isArray(v1) && Array.isArray(v2)) {
-    return v1[0] === v2[0] && v1[1] === v2[1];
-  }
-  return v1 === v2;
-};
+/** 拖拽结束判断值是否变化（见 BaseSlider.logic.ts 的 isValueEqual） */
 
 // 仅在开发环境中提示非法区间，生产构建时被完全 Tree-shaking
 if (import.meta.env.DEV) {

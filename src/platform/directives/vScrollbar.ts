@@ -470,6 +470,42 @@ const jumpToPointer = (
   host.scrollTo(axis === 'y' ? { top: target, behavior } : { left: target, behavior });
 };
 
+/** 轨道点击（thumb 之外、非抑制态）：'jump' 直接跳到指针处，'page' 以拇指当前位置为界翻页（同原生滚动条）。 */
+const handleTrackAreaClick = (state: ScrollbarState, axis: 'x' | 'y', e: MouseEvent): void => {
+  const host = state.host;
+  const endInset = state.options.endInset;
+  const realClient = axis === 'y' ? host.clientHeight : host.clientWidth;
+  // 有效轨道长度扣除两侧留白，点击位同样扣除上/左缘留白
+  const clientLength = realClient - 2 * endInset;
+  const scrollLength = getLength(host, axis, 'scroll');
+  if (scrollLength <= clientLength) return;
+  const current = getScrollPos(host, axis);
+  if (state.options.trackClick === 'jump') {
+    jumpToPointer(state, axis, e);
+    return;
+  }
+  const hostRect = host.getBoundingClientRect();
+  const rawPos = axis === 'y' ? e.clientY - hostRect.top : e.clientX - hostRect.left;
+  const clickPos = Math.min(Math.max(rawPos - endInset, 0), clientLength);
+  // 翻页方向以拇指当前位置为界（同原生滚动条）：点在拇指上方/左侧 = 向回翻，反之向前翻
+  const geo = computeThumbGeometry(
+    scrollLength,
+    clientLength,
+    current,
+    state.options.minThumbSize,
+    Math.max(0, scrollLength - realClient)
+  );
+  const thumbCenter = endInset + geo.thumbOffset + geo.thumbSize / 2;
+  const forward = clickPos > thumbCenter;
+  const page = realClient * 0.8;
+  const next = current + (forward ? page : -page);
+  cancelWheelAnim(state);
+  host.scrollTo({
+    [axis === 'y' ? 'top' : 'left']: Math.min(Math.max(next, 0), Math.max(0, scrollLength - realClient)),
+    behavior: 'smooth',
+  });
+};
+
 /** 轨道点击：thumb 之外的区域按策略翻页或跳转（监听挂在 track overlay 上）；
  *  长按轨道时持续滚动到指针位置——按住期间用指针捕获把整个手势事件稳定钉在 track 上，
  *  即使光标移出细窄轨道甚至移到内容区也继续「滚到此处」；每次移动都用最新指针位置与最新滚动
@@ -561,38 +597,7 @@ const attachTrackClick = (state: ScrollbarState, axis: 'x' | 'y'): void => {
       suppressClick = false;
       return;
     }
-    const host = state.host;
-    const endInset = state.options.endInset;
-    const realClient = axis === 'y' ? host.clientHeight : host.clientWidth;
-    // 有效轨道长度扣除两侧留白，点击位同样扣除上/左缘留白
-    const clientLength = realClient - 2 * endInset;
-    const scrollLength = getLength(host, axis, 'scroll');
-    if (scrollLength <= clientLength) return;
-    const current = getScrollPos(host, axis);
-    if (state.options.trackClick === 'jump') {
-      jumpToPointer(state, axis, e);
-      return;
-    }
-    const hostRect = host.getBoundingClientRect();
-    const rawPos = axis === 'y' ? e.clientY - hostRect.top : e.clientX - hostRect.left;
-    const clickPos = Math.min(Math.max(rawPos - endInset, 0), clientLength);
-    // 翻页方向以拇指当前位置为界（同原生滚动条）：点在拇指上方/左侧 = 向回翻，反之向前翻
-    const geo = computeThumbGeometry(
-      scrollLength,
-      clientLength,
-      current,
-      state.options.minThumbSize,
-      Math.max(0, scrollLength - realClient)
-    );
-    const thumbCenter = endInset + geo.thumbOffset + geo.thumbSize / 2;
-    const forward = clickPos > thumbCenter;
-    const page = realClient * 0.8;
-    const next = current + (forward ? page : -page);
-    cancelWheelAnim(state);
-    host.scrollTo({
-      [axis === 'y' ? 'top' : 'left']: Math.min(Math.max(next, 0), Math.max(0, scrollLength - realClient)),
-      behavior: 'smooth',
-    });
+    handleTrackAreaClick(state, axis, e);
   });
 };
 
@@ -641,30 +646,8 @@ const resolveOverlayParent = (host: HTMLElement, options: ScrollbarOptions): HTM
   return target ?? host.parentElement;
 };
 
-const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?: Record<string, boolean>): void => {
-  const options = binding ?? {};
-  const parent = resolveOverlayParent(host, options);
-  if (!parent) return;
-  if (typeof document === 'undefined') return;
-  ensureGlobalStyle();
-  const state = buildState(host, parent, binding, modifiers);
-  states.set(host, state);
-
-  // overlay 元素挂宿主父元素；父元素需为定位容器（static 时补 relative）
-  const pos = getComputedStyle(parent).position;
-  if (pos === 'static') parent.style.position = 'relative';
-  host.classList.add(HOST_CLASS);
-  // 内联隐藏原生滚动条：Vue patch 会重写 className 抹掉宿主类（切换 tab 时原生滚动条闪现），
-  // 内联属性不受 patch 影响；::-webkit-scrollbar 仍靠宿主类兜底（伪元素无法内联设置）
-  host.style.scrollbarWidth = 'none';
-  host.style.setProperty('-ms-overflow-style', 'none');
-  // 注入滚动所必需的 overflow：指令托管哪个轴，就把哪个轴设为 auto，调用方无需再手写 overflow-* 工具类。
-  // 同为内联设置（理由同上：className 会被 Vue patch 重写，内联不受影响）。
-  // 注：CSS 规范下 overflow 一轴非 visible 时，另一轴的 visible 会计算为 auto——
-  // 故对现有「只声明了单轴 overflow-*」的宿主，注入后计算值不变，无回归。
-  if (state.axes.includes('y')) host.style.overflowY = 'auto';
-  if (state.axes.includes('x')) host.style.overflowX = 'auto';
-
+/** 创建各轴 overlay（拇指/轨道）并挂事件：轨道点击与长按跟随、overlay 悬停显隐、wheel 同参重派发到宿主。 */
+const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): void => {
   const makeEl = (cls: string) => {
     const el = document.createElement('div');
     el.className = cls;
@@ -701,50 +684,57 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
         setTracksVisible(state, false);
         if (state.dragAxis === null) scheduleHide(state);
       });
-      // wheel 不会冒泡到宿主（兄弟节点）：同参重派发到宿主元素，宿主上的滚动监听/指令
-      // （如 v-wheel-scroll）按自身策略消费，以 defaultPrevented 判定消费与否；
-      // 无人消费才走自身兜底转发。ctrl/meta/alt 交还浏览器默认（缩放等组合键）
-      // 合成事件刻意 bubbles:false：只投递给宿主自身消费，不向上冒泡，
-      // 避免宿主祖先上依赖 wheel 冒泡的委托（若存在）被这份转发事件二次处理。
-      // 注意：真实事件不能在探测前无条件 preventDefault——若宿主策略选择放行
-      // （如 v-wheel-scroll 的 overscroll:'auto' 在边界处），需要让真实事件保留默认行为，
-      // 浏览器才能对非受信合成事件无法执行的「原生滚动链」进行兜底（穿透到祖先滚动容器）。
-      el.addEventListener(
-        'wheel',
-        (e: WheelEvent) => {
-          if (e.ctrlKey || e.metaKey || e.altKey) return;
-          const resent = new WheelEvent('wheel', {
-            deltaX: e.deltaX,
-            deltaY: e.deltaY,
-            deltaZ: e.deltaZ,
-            deltaMode: e.deltaMode,
-            shiftKey: e.shiftKey,
-            bubbles: false,
-            cancelable: true,
-          });
-          state.host.dispatchEvent(resent);
-          if (resent.defaultPrevented) {
-            // 宿主侧已消费：把消费决定镜像回真实事件，抑制其默认滚动
-            e.preventDefault();
-            return;
-          }
-          // 宿主侧放行（如边界穿透）：真实事件默认行为不被抑制，浏览器原生滚动链可继续生效；
-          // 同时走自身兜底转发驱动宿主轴（边界放行场景下该轴已无可滚余量，等价于空操作）
-          const scale = e.deltaMode === 1 ? 40 : 1; // 行模式（Firefox）按行高近似换算
-          // 滚动条所在轴决定驱动哪条轴：纵向滚动条→纵向、横向滚动条→横向，
-          // 不再双向同时滚动（避免停在横向滚动条上时纵向内容被误带）。
-          // 横向滚动条同时接纳鼠标滚轮（deltaY）与触控板横向滑动（deltaX），保证鼠标可用。
-          if (axis === 'y') {
-            wheelScroll(state, 0, e.deltaY * scale);
-          } else {
-            wheelScroll(state, (e.deltaX + e.deltaY) * scale, 0);
-          }
-        },
-        { passive: false }
-      );
+      attachOverlayWheelForward(state, axis, el);
     }
   }
+};
 
+/** overlay 的 wheel 转发：wheel 不会冒泡到宿主（兄弟节点），同参重派发到宿主元素由指令按策略消费。 */
+const attachOverlayWheelForward = (state: ScrollbarState, axis: 'x' | 'y', el: HTMLElement): void => {
+  // 宿主上的滚动监听/指令（如 v-wheel-scroll）按自身策略消费，以 defaultPrevented 判定消费与否；
+  // 无人消费才走自身兜底转发。ctrl/meta/alt 交还浏览器默认（缩放等组合键）
+  // 合成事件刻意 bubbles:false：只投递给宿主自身消费，不向上冒泡，
+  // 避免宿主祖先上依赖 wheel 冒泡的委托（若存在）被这份转发事件二次处理。
+  // 注意：真实事件不能在探测前无条件 preventDefault——若宿主策略选择放行
+  // （如 v-wheel-scroll 的 overscroll:'auto' 在边界处），需要让真实事件保留默认行为，
+  // 浏览器才能对非受信合成事件无法执行的「原生滚动链」进行兜底（穿透到祖先滚动容器）。
+  el.addEventListener(
+    'wheel',
+    (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const resent = new WheelEvent('wheel', {
+        deltaX: e.deltaX,
+        deltaY: e.deltaY,
+        deltaZ: e.deltaZ,
+        deltaMode: e.deltaMode,
+        shiftKey: e.shiftKey,
+        bubbles: false,
+        cancelable: true,
+      });
+      state.host.dispatchEvent(resent);
+      if (resent.defaultPrevented) {
+        // 宿主侧已消费：把消费决定镜像回真实事件，抑制其默认滚动
+        e.preventDefault();
+        return;
+      }
+      // 宿主侧放行（如边界穿透）：真实事件默认行为不被抑制，浏览器原生滚动链可继续生效；
+      // 同时走自身兜底转发驱动宿主轴（边界放行场景下该轴已无可滚余量，等价于空操作）
+      const scale = e.deltaMode === 1 ? 40 : 1; // 行模式（Firefox）按行高近似换算
+      // 滚动条所在轴决定驱动哪条轴：纵向滚动条→纵向、横向滚动条→横向，
+      // 不再双向同时滚动（避免停在横向滚动条上时纵向内容被误带）。
+      // 横向滚动条同时接纳鼠标滚轮（deltaY）与触控板横向滑动（deltaX），保证鼠标可用。
+      if (axis === 'y') {
+        wheelScroll(state, 0, e.deltaY * scale);
+      } else {
+        wheelScroll(state, (e.deltaX + e.deltaY) * scale, 0);
+      }
+    },
+    { passive: false }
+  );
+};
+
+/** 宿主 scroll 监听：刷新几何 + 显示拇指 + 对外派发滚动明细（interactive 区分用户手势与程序化设位）。 */
+const attachHostScroll = (state: ScrollbarState): void => {
   // 宿主监听统一登记进 disposers：updated 重建路径会先 unmount 再 mount，
   // 若不摘除旧监听，同一宿主会累积多份 scroll/mouseenter/mouseleave（闭包持有旧 state）
   const onHostScroll = (): void => {
@@ -768,11 +758,13 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
     };
     state.options.onScroll?.(detail);
   };
-  host.addEventListener('scroll', onHostScroll, { passive: true });
-  state.disposers.push(() => host.removeEventListener('scroll', onHostScroll));
+  state.host.addEventListener('scroll', onHostScroll, { passive: true });
+  state.disposers.push(() => state.host.removeEventListener('scroll', onHostScroll));
+};
 
-  // 用户滚动手势埋点：pointerdown（滚轮拖拽/轨道点击/拇指拖拽/触屏）与 wheel 均视为用户发起，
-  // 供 onScroll 判定 interactive；gesturestart 兜底触屏双臂缩放类滚动
+/** 用户滚动手势埋点：pointerdown 与 wheel 均视为用户发起，供 onScroll 判定 interactive。 */
+const attachInteractionStamps = (state: ScrollbarState): void => {
+  const host = state.host;
   const stampInteraction = (): void => {
     state.lastInteractionAt = Date.now();
   };
@@ -780,9 +772,12 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
   host.addEventListener('wheel', stampInteraction, { passive: true });
   state.disposers.push(() => host.removeEventListener('pointerdown', stampInteraction));
   state.disposers.push(() => host.removeEventListener('wheel', stampInteraction));
+};
 
-  // 尺寸观测：宿主与全部子元素任一尺寸变化都刷新几何；
-  // 内容增删（MutationObserver）触发后需把新子元素补进观察集（缺失环境降级为仅 scroll 驱动）
+/** 尺寸观测：宿主与全部子元素任一尺寸变化都刷新几何；内容增删（MutationObserver）触发后需把新子元素补进观察集。 */
+const attachSizeObservers = (state: ScrollbarState): void => {
+  const host = state.host;
+  // 缺失环境降级为仅 scroll 驱动
   if (typeof ResizeObserver !== 'undefined') {
     state.resizeObserver = new ResizeObserver(() => {
       refreshAll(state);
@@ -816,11 +811,11 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
     });
     state.mutationObserver.observe(host, { childList: true, subtree: true, characterData: true });
   }
+};
 
-  refreshAll(state);
-  // 挂载时布局可能尚未稳定（如模态框开启动画/字体加载），连续两帧后再刷新一次
-  requestAnimationFrame(() => requestAnimationFrame(() => refreshAll(state)));
-  // 悬停宿主即显示且常显（overlay 与宿主是兄弟节点，无法用 CSS :hover 后代选择器表达）；离开后倒计时隐藏
+/** 悬停宿主即显示滚动条且常显（overlay 与宿主是兄弟节点，无法用 CSS :hover 表达）；离开后倒计时隐藏。 */
+const attachHoverVisibility = (state: ScrollbarState): void => {
+  const host = state.host;
   const onHostMouseEnter = (): void => {
     state.hovering = true;
     refreshAll(state);
@@ -837,6 +832,41 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
     host.removeEventListener('mouseleave', onHostMouseLeave);
   });
   if (state.options.autoHide === false) setThumbsVisible(state, true);
+};
+
+const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?: Record<string, boolean>): void => {
+  const options = binding ?? {};
+  const parent = resolveOverlayParent(host, options);
+  if (!parent) return;
+  if (typeof document === 'undefined') return;
+  ensureGlobalStyle();
+  const state = buildState(host, parent, binding, modifiers);
+  states.set(host, state);
+
+  // overlay 元素挂宿主父元素；父元素需为定位容器（static 时补 relative）
+  const pos = getComputedStyle(parent).position;
+  if (pos === 'static') parent.style.position = 'relative';
+  host.classList.add(HOST_CLASS);
+  // 内联隐藏原生滚动条：Vue patch 会重写 className 抹掉宿主类（切换 tab 时原生滚动条闪现），
+  // 内联属性不受 patch 影响；::-webkit-scrollbar 仍靠宿主类兜底（伪元素无法内联设置）
+  host.style.scrollbarWidth = 'none';
+  host.style.setProperty('-ms-overflow-style', 'none');
+  // 注入滚动所必需的 overflow：指令托管哪个轴，就把哪个轴设为 auto，调用方无需再手写 overflow-* 工具类。
+  // 同为内联设置（理由同上：className 会被 Vue patch 重写，内联不受影响）。
+  // 注：CSS 规范下 overflow 一轴非 visible 时，另一轴的 visible 会计算为 auto——
+  // 故对现有「只声明了单轴 overflow-*」的宿主，注入后计算值不变，无回归。
+  if (state.axes.includes('y')) host.style.overflowY = 'auto';
+  if (state.axes.includes('x')) host.style.overflowX = 'auto';
+
+  createAxisOverlays(state, parent);
+  attachHostScroll(state);
+  attachInteractionStamps(state);
+  attachSizeObservers(state);
+
+  refreshAll(state);
+  // 挂载时布局可能尚未稳定（如模态框开启动画/字体加载），连续两帧后再刷新一次
+  requestAnimationFrame(() => requestAnimationFrame(() => refreshAll(state)));
+  attachHoverVisibility(state);
 };
 
 const unmountScrollbar = (host: HTMLElement): void => {

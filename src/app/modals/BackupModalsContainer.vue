@@ -14,11 +14,10 @@
         size="sm"
       />
     </template>
-    <div class="flex flex-col gap-md py-xs">
+    <BaseForm :label-width="FORM_LABEL_WIDTH" class="py-xs" gap="md">
       <BaseFormRow
         :disabled="!exportAvailability.chords"
         :help="`全部分组与和弦（当前 ${exportStats.groupCount} 组 / ${exportStats.chordCount} 个）`"
-        :label-width="FORM_LABEL_WIDTH"
         label="和弦库"
       >
         <BaseSwitch
@@ -31,7 +30,6 @@
       <BaseFormRow
         :disabled="!exportAvailability.songs"
         :help="`全部乐谱（当前 ${exportStats.songCount} 份）`"
-        :label-width="FORM_LABEL_WIDTH"
         label="乐谱库"
       >
         <BaseSwitch
@@ -41,7 +39,7 @@
         />
       </BaseFormRow>
 
-      <BaseFormRow :label-width="FORM_LABEL_WIDTH" label="同步配置">
+      <BaseFormRow label="同步配置">
         <template #help>
           <div class="flex h-[18px] items-center text-2xs leading-none">
             <span
@@ -57,10 +55,10 @@
         <BaseSwitch v-model="backupModals.modalData.exportSelection.syncSettings" aria-label="导出同步配置" />
       </BaseFormRow>
 
-      <BaseFormRow :label-width="FORM_LABEL_WIDTH" help="工作台与乐谱的乐理显示偏好" label="偏好设置">
+      <BaseFormRow help="工作台与乐谱的乐理显示偏好" label="偏好设置">
         <BaseSwitch v-model="backupModals.modalData.exportSelection.preferences" aria-label="导出偏好设置" />
       </BaseFormRow>
-    </div>
+    </BaseForm>
   </BaseModal>
 
   <BaseModal
@@ -79,11 +77,10 @@
         size="sm"
       />
     </template>
-    <div class="flex flex-col gap-md py-xs">
+    <BaseForm :label-width="FORM_LABEL_WIDTH" class="py-xs" gap="md">
       <BaseFormRow
         :disabled="!importAvailability.chords"
         :help="`备份包含 ${importStats?.groupCount ?? 0} 组 / ${importStats?.chordCount ?? 0} 个和弦`"
-        :label-width="FORM_LABEL_WIDTH"
         label="和弦库"
       >
         <BaseSwitch
@@ -96,7 +93,6 @@
       <BaseFormRow
         :disabled="!importAvailability.songs"
         :help="`备份包含 ${importStats?.songCount ?? 0} 份乐谱`"
-        :label-width="FORM_LABEL_WIDTH"
         label="乐谱库"
       >
         <BaseSwitch
@@ -109,7 +105,6 @@
       <BaseFormRow
         :disabled="!importAvailability.syncSettings"
         :help="`云端后端：${importStats?.syncTargetLabel ?? '-'}（含凭据）`"
-        :label-width="FORM_LABEL_WIDTH"
         label="同步配置"
       >
         <BaseSwitch
@@ -119,19 +114,14 @@
         />
       </BaseFormRow>
 
-      <BaseFormRow
-        :disabled="!importAvailability.preferences"
-        :label-width="FORM_LABEL_WIDTH"
-        help="工作台与乐谱的乐理显示偏好"
-        label="偏好设置"
-      >
+      <BaseFormRow :disabled="!importAvailability.preferences" help="工作台与乐谱的乐理显示偏好" label="偏好设置">
         <BaseSwitch
           v-model="backupModals.modalData.importSelection.preferences"
           :disabled="!importAvailability.preferences"
           aria-label="导入偏好设置"
         />
       </BaseFormRow>
-    </div>
+    </BaseForm>
   </BaseModal>
 </template>
 
@@ -139,6 +129,7 @@
 import { computed } from 'vue';
 
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
+import BaseForm from '@/platform/ui/form/BaseForm.vue';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
@@ -151,7 +142,7 @@ import type { useBackupModals } from '@/app/modals/useBackupModals';
 const backupModals = injectModalController<ReturnType<typeof useBackupModals>>('backupModals');
 const settingsStore = useSettingsStore();
 
-/** 表单行统一 Label 宽度 */
+/** 表单行统一 Label 宽度：由 BaseForm 容器下发，各行无需重复声明 */
 const FORM_LABEL_WIDTH = '4.5rem';
 
 // computed 解构到顶层，模板中才会自动解包

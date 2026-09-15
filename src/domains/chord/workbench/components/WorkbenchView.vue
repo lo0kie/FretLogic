@@ -23,55 +23,103 @@
            · 底部仅未滚到底时渐隐，滚到底自动取消 → 末卡不被遮挡
            列顶 top-8（32px）与指板同高，滚动时卡片最多上移到 32px，不会比指板更高 -->
       <div class="pointer-events-auto absolute inset-y-2xl right-8 z-panel">
-        <div
-          v-edge-fade.y
-          v-scrollbar="{ onScroll: closeAllPopovers, endInset: 12 }"
-          class="flex size-full w-72 flex-col items-stretch gap-lg *:shrink-0"
-        >
-          <!-- 面板卡片外壳：由 View 统一封装（卡片 chrome + 折叠 + 展开态持久化），各业务面板保持纯内容。
+        <BaseScrollArea :scrollbar="{ endInset: 12 }" close-popovers axis="y" class="flex size-full w-72 flex-col">
+          <!-- 面板列表：拖拽排序容器，其直接子元素即三张面板卡片。
+               刻意不把排序容器与滚动宿主合并：滚动宿主是 v-scrollbar 的书写目标（加宿主类 + 写内联
+               overflow），而 Sortable 会把容器的直接子元素一律当成可排序项，两种语义不该共用一个节点。
+               shrink-0 必需——本容器是滚动宿主的唯一 flex 子项，若能收缩则永远滚不动。 -->
+          <div class="flex w-full shrink-0 flex-col items-stretch gap-lg *:shrink-0" ref="panelListRef">
+            <!-- 面板卡片外壳：由 View 统一封装（卡片 chrome + 折叠 + 展开态持久化），各业务面板保持纯内容。
        useWorkbenchPanelExpanded 为 composable（内部封装 useStorage），在此调用符合项目约束 -->
-          <div
-            v-for="panelId in panels"
-            :key="panelId"
-            class="w-full overflow-hidden rounded-xl border border-glass-border bg-surface-panel p-xs"
-          >
-            <BaseCollapse
-              :expanded="getPanelExpanded(panelId)"
-              :icon="PANEL_META[panelId].icon"
-              :title="PANEL_META[panelId].title"
-              @update:expanded="setPanelExpanded(panelId, $event)"
-              initial-auto
+            <div
+              v-for="panelId in panels"
+              :key="panelId"
+              class="w-full overflow-hidden rounded-xl border border-glass-border bg-surface-panel p-xs"
             >
-              <!-- 简写偏好显式传给「和弦分析」面板（其余面板传 undefined 不产生多余属性）：
+              <BaseCollapse
+                :expanded="getPanelExpanded(panelId)"
+                :icon="PANEL_META[panelId].icon"
+                :title="PANEL_META[panelId].title"
+                @update:expanded="setPanelExpanded(panelId, $event)"
+                initial-auto
+                class="panel-title-row"
+              >
+                <!-- 简写偏好显式传给「和弦分析」面板（其余面板传 undefined 不产生多余属性）：
                    简写只对工作台场景开放，由本视图按场景传入，组件与指令均不自行读取设置 -->
-              <component
-                :is="PANEL_COMPONENT_MAP[panelId]"
-                :shorthand="panelId === 'analysis' ? settingsStore.workbenchChordShorthand : undefined"
-              />
-            </BaseCollapse>
+                <component
+                  :is="PANEL_COMPONENT_MAP[panelId]"
+                  :shorthand="panelId === 'analysis' ? settingsStore.workbenchChordShorthand : undefined"
+                />
+              </BaseCollapse>
+            </div>
           </div>
-        </div>
+        </BaseScrollArea>
       </div>
     </div>
 
-    <WorkbenchFloatingBar />
+    <!-- 保存操作栏：仅草稿有改动时浮现，随指板品位数调整贴底位置 -->
+    <BaseFloatingBar :bottom="barBottomPosition" :visible="!isPristine">
+      <ActionButton
+        :disabled="isPristine"
+        :label="editorStore.isEditing ? '放弃修改' : '重置指板'"
+        @click="editorStore.resetEditor"
+        variant="ghost"
+      />
+
+      <template v-if="editorStore.isEditing">
+        <BaseDivider
+          class="rounded-full opacity-60"
+          color="base"
+          length="1rem"
+          orientation="vertical"
+          thickness="0.125rem"
+        />
+        <ActionButton @click="chordActions.saveAsNewChord" label="作为新和弦保存" variant="ghost" />
+      </template>
+
+      <BaseDivider
+        class="rounded-full opacity-60"
+        color="base"
+        length="1rem"
+        orientation="vertical"
+        thickness="0.125rem"
+      />
+
+      <ActionButton
+        :disabled="isSaveDisabled"
+        :label="editorStore.isEditing ? '更新保存' : '确认保存'"
+        @click="chordActions.persistCurrentChord"
+        color="primary"
+        variant="subtle"
+      />
+    </BaseFloatingBar>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, useTemplateRef } from 'vue';
+
 import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
+import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
+import BaseFloatingBar from '@/platform/ui/floating-bar/BaseFloatingBar.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
+import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
-import { useChordDraftEditing } from '@/domains/chord/workbench/composables/useChordDraftEditing';
+import {
+  useChordDraftEditing,
+  useChordDraftSaveState,
+} from '@/domains/chord/workbench/composables/useChordDraftEditing';
 import { useWorkbenchPanelExpanded } from '@/domains/chord/workbench/composables/useWorkbenchPanelExpanded';
 import { useWorkbenchPanelsOrder } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder.ts';
+import { getFloatingBarBottom } from '@/domains/fretboard/constants';
+import { useSortableList } from '@/platform/composables/useSortableList';
 import { useSettingsStore } from '@/platform/store/settingsStore';
-import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry.ts';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import ChordAnalysisPanel from './ChordAnalysisPanel.vue';
 import WorkbenchExportPanel from './WorkbenchExportPanel.vue';
-import WorkbenchFloatingBar from './WorkbenchFloatingBar.vue';
 import WorkbenchVariantsPanel from './WorkbenchVariantsPanel.vue';
 import { useWorkbenchRouteSync } from '../composables/useWorkbenchRouteSync';
 
@@ -109,7 +157,23 @@ const setPanelExpanded = (id: WorkbenchPanelId, value: boolean): void => {
   panelExpanded[id].value = value;
 };
 
-const { panels } = useWorkbenchPanelsOrder();
+const { panels, setOrder } = useWorkbenchPanelsOrder();
+
+/** 拖拽排序容器：三张面板卡片的直接父节点（与滚动宿主刻意分开，理由见模板注释） */
+const panelListRef = useTemplateRef<HTMLElement>('panelListRef');
+
+// 面板顺序拖拽排序：把手限定在折叠头（标题行），不与面板内容的手势竞争。
+// 空列表守卫、容器就绪后再建实例、disabled 的响应式跟随，以及「Sortable 只搬 DOM、
+// 新顺序交给宿主落盘」的约定都由 useSortableList 承担。
+// 顺序经 setOrder 写回 WORKBENCH_PANEL_ORDER（内部已含 sanitizePanelOrder 校验、去重与默认项补齐）
+useSortableList<WorkbenchPanelId>({
+  target: panelListRef,
+  items: panels,
+  enabled: true,
+  handle: '.panel-title-row',
+  onReorder: next => setOrder(next),
+});
+
 /** 工作台偏好：简写开关只在本视图内显式下发给需要它的面板，不扩散到全局推断 */
 const settingsStore = useSettingsStore();
 
@@ -125,6 +189,11 @@ const {
   handleRootStringChange,
   handleStringsChange,
 } = useChordDraftEditing();
+
+/** 保存操作栏状态：草稿洁净度决定浮现与否，保存可用性由编辑态派生 */
+const chordActions = useChordActions();
+const { isPristine, isSaveDisabled } = useChordDraftSaveState();
+const barBottomPosition = computed(() => getFloatingBarBottom(editorStore.draftChord.fretCount));
 
 // URL ↔ Store 状态同构（#/workbench?group=&chord=&v=）：本组件注册双向 watcher 与 KeepAlive 重激活回放
 useWorkbenchRouteSync();

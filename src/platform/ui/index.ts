@@ -26,6 +26,8 @@ export { default as BaseFloatingBar } from './floating-bar/BaseFloatingBar.vue';
 export { default as BaseFab } from './floating-bar/BaseFab.vue';
 export { default as BaseFloatingPanel } from './floating-panel/BaseFloatingPanel.vue';
 export { default as BaseSegmentedControl } from './segmented/BaseSegmentedControl.vue';
+export { default as BaseScrollArea } from './scroll-area/BaseScrollArea.vue';
+export * from './scroll-area/scrollAreaHandle';
 export { default as BaseSlider } from './slider/BaseSlider.vue';
 export { default as BaseSwitch } from './switch/BaseSwitch.vue';
 export { default as PromptInputModal } from './prompt/PromptInputModal.vue';

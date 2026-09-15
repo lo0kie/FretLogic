@@ -1,5 +1,6 @@
 import { fillMissingTimestamps } from '@/domains/chord/model/chordRepository';
 import { isCapoValue } from '@/domains/fretboard/model/coordinates';
+import { isValidTimeSignature } from '@/domains/score/constants';
 import { pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
 import { toSongId } from '@/domains/score/model/scoreModel';
 import { serializeForStorage } from '@/platform/utils/common';
@@ -46,6 +47,8 @@ export const sanitizeSongEntity = (raw: unknown): SongDraft | null => {
     singer: typeof raw['singer'] === 'string' ? raw['singer'] : '',
     // 旧持久化数据无 originalKey 字段：同上自动补齐空串
     originalKey: typeof raw['originalKey'] === 'string' ? raw['originalKey'] : '',
+    // 旧持久化数据无 timeSignature 字段：自动补齐空串；格式校验兜底防脏数据进表头
+    timeSignature: isValidTimeSignature(raw['timeSignature']) ? raw['timeSignature'] : '',
     lineIds: Array.isArray(raw['lineIds']) ? (raw['lineIds'].filter(isNonEmptyString) as LineId[]) : [],
     playKey: typeof raw['playKey'] === 'string' && raw['playKey'] ? raw['playKey'] : legacyKey,
     capo: isCapoValue(raw['capo']) ? raw['capo'] : 0,

@@ -5,10 +5,10 @@ import type { Middleware, Placement } from '@floating-ui/dom';
 /**
  * floating-ui 定位编排的唯一实现处。
  *
- * BasePopover（@floating-ui/vue 的 useFloating）与 vTooltip（@floating-ui/dom 的
- * computePosition）此前各写了一份 offset/flip/shift/arrow/size 中间件组装与虚拟锚点
- * 构造，散落两处且参数漂移。本模块收敛为单一来源：
- * - buildFloatingMiddlewares：中间件列表（两消费方通用，dom/vue 的中间件同源于 core）
+ * BasePopover 与 vTooltip 此前各写了一份 offset/flip/shift/arrow/size 中间件组装与虚拟锚点
+ * 构造，散落两处且参数漂移。本模块收敛为单一来源。两消费方现在同走 @floating-ui/dom 的
+ * computePosition（BasePopover 经 useFloatingPosition 取响应式定位，vTooltip 直接调用）：
+ * - buildFloatingMiddlewares：中间件列表（两消费方通用，中间件实现同源于 @floating-ui/core）
  * - createVirtualElementRect：以鼠标坐标 / 任意点构造零尺寸虚拟锚点
  */
 

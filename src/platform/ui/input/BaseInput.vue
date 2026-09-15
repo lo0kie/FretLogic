@@ -142,14 +142,16 @@
       placement="bottom-start"
       ref="searchPopoverRef"
     >
-      <div
+      <BaseScrollArea
         v-auto-height
-        v-scrollbar="{ direction: 'y', showTrack: false, endInset: 8 }"
         :class="searchMaxHeightClass"
+        :fade="false"
+        :scrollbar="{ showTrack: false, endInset: 8 }"
         @mousedown.stop
         @mouseleave="setSearchActiveIndex(-1)"
+        axis="y"
         class="overflow-x-hidden transition-[height] duration-base ease-sidebar"
-        ref="searchScrollRef"
+        ref="searchAreaRef"
       >
         <div class="p-1">
           <slot
@@ -160,7 +162,7 @@
             name="search-results"
           />
         </div>
-      </div>
+      </BaseScrollArea>
     </BasePopover>
   </div>
 </template>
@@ -181,19 +183,22 @@ import {
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
+import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import type { FormComponentWidth } from '@/platform/utils/constants';
-import type { VirtualElement } from '@floating-ui/vue';
+import type { VirtualElement } from '@floating-ui/dom';
 
 const modelValue = defineModel<string>({ required: true });
 const {
-  placeholder = '',
+  placeholder = '请输入...',
   disabled = false,
   readonly = false,
   clearable = false,
@@ -355,7 +360,9 @@ const handleInputClick = (e: MouseEvent) => {
 
 // ─── searchable 键盘导航与活跃项状态 ───
 const searchActiveIndex = ref(-1);
-const searchScrollRef = useTemplateRef<HTMLDivElement>('searchScrollRef');
+const searchAreaRef = useTemplateRef<ScrollAreaHandle>('searchAreaRef');
+/** 搜索结果面板滚动容器元素（焦点归属判定与活跃项滚动需要原生能力） */
+const searchScrollRef = useScrollAreaElement(searchAreaRef);
 
 const setSearchActiveIndex = (index: number) => {
   searchActiveIndex.value = index;

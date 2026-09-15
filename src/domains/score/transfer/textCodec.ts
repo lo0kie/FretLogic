@@ -6,6 +6,7 @@
 import { getChordName, getDefaultTuningForStringCount, isValidChordName } from '@/domains/chord/theory/theory';
 import { parseChordFields, serializeChordFields } from '@/domains/chord/transfer/chordTextCodec';
 import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
+import { isValidTimeSignature } from '@/domains/score/constants';
 import { extractSongChordSequence } from '@/domains/score/model/chordSlots';
 import { clamp } from '@/platform/utils/common';
 import { TEXT_FORMAT } from '@/platform/utils/constants';
@@ -38,6 +39,8 @@ export interface PortableSong {
   singer: string;
   /** 原调（歌曲原始调性，'' 表示未设置；旧格式文本解析结果为空串） */
   originalKey: string;
+  /** 拍号（如 4/4、6/8，'' 表示未设置；旧格式文本解析结果为空串） */
+  timeSignature: string;
   playKey: string;
   capo: Capo;
   lyrics: string;
@@ -96,6 +99,7 @@ const parsePlainLyricsFromText = (text: string): PortableSong | null => {
     title: '',
     singer: '',
     originalKey: '',
+    timeSignature: '',
     playKey: 'C',
     capo: 0,
     lyrics: lines.join('\n'),
@@ -127,6 +131,7 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
   let title = '';
   let singer = '';
   let originalKey = '';
+  let timeSignature = '';
   let playKey = 'C';
   let capoNum = 0;
   const cleanLyricsLines: string[] = [];
@@ -152,7 +157,9 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
       if (key === 'title' || key === 't') title = val;
       else if (key === 'artist' || key === 'singer') singer = val;
       else if (key === 'origkey' || key === 'originalkey') originalKey = val;
-      else if (key === 'key') playKey = val;
+      else if (key === 'ts' || key === 'time') {
+        if (isValidTimeSignature(val)) timeSignature = val;
+      } else if (key === 'key') playKey = val;
       else if (key === 'capo') capoNum = Number(val);
       continue;
     }
@@ -217,6 +224,7 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
     title,
     singer,
     originalKey,
+    timeSignature,
     playKey,
     capo: clamp(Number.isFinite(capoNum) ? capoNum : 0, 0, 12) as Capo,
     lyrics: cleanLyricsLines.join('\n'),
@@ -226,10 +234,11 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
 
 /** 序列化乐谱为文字（含歌词与全部和弦槽位，按字典化紧凑格式输出） */
 export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord | undefined): string => {
-  // singer/originalKey 兼容容错：旧调用方/旧测试手写的 Song 可能没有该字段（?? '' 防止序列化出 undefined 值行）
+  // singer/originalKey/timeSignature 兼容容错：旧调用方/旧测试手写的 Song 可能没有该字段（?? '' 防止序列化出 undefined 值行）
   const lines = [HEADER_SONG, `TITLE:${song.title}`];
   if (song.singer) lines.push(`SINGER:${song.singer}`);
   if (song.originalKey) lines.push(`ORIGKEY:${song.originalKey}`);
+  if (song.timeSignature) lines.push(`TS:${song.timeSignature}`);
   lines.push(`PLAYKEY:${song.playKey}`, `CAPO:${song.capo}`);
 
   const steps = extractSongChordSequence(song, resolver);
@@ -299,6 +308,7 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
   let title = '';
   let singer = '';
   let originalKey = '';
+  let timeSignature = '';
   let playKey = 'C';
   let capoNum = 0;
   const lyricsLines: string[] = [];
@@ -317,6 +327,9 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
         singer = trimmed.slice(7).trim();
       } else if (trimmed.startsWith('ORIGKEY:')) {
         originalKey = trimmed.slice(8).trim();
+      } else if (trimmed.startsWith('TS:')) {
+        const val = trimmed.slice(3).trim();
+        if (isValidTimeSignature(val)) timeSignature = val;
       } else if (trimmed.startsWith('PLAYKEY:')) {
         playKey = trimmed.slice(8).trim();
       } else if (trimmed.startsWith('CAPO:')) {
@@ -386,6 +399,7 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
       title,
       singer,
       originalKey,
+      timeSignature,
       playKey,
       capo: clamp(Number.isFinite(capoNum) ? capoNum : 0, 0, 12) as Capo,
       lyrics,

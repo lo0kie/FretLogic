@@ -82,43 +82,46 @@ pnpm dev
 | 层       | 技术                                         |
 | -------- | -------------------------------------------- |
 | 框架     | Vue 3.5（组合式 API）+ TypeScript 5.4        |
-| 构建     | Vite 5                                       |
+| 构建     | Vite 5 + PWA（vite-plugin-pwa，可安装）      |
 | 状态     | Pinia                                        |
 | 样式     | Tailwind CSS v4 + SCSS 设计令牌（三主题）    |
+| 拖拽     | sortablejs（列表排序，自建拖拽影像）         |
 | 存储     | IndexedDB（v2 契约）+ 旧数据迁移             |
 | 音频     | 原生 Web Audio（无第三方音频库）             |
 | 导出     | Web Worker 离屏渲染（OffscreenCanvas → PNG） |
-| 测试     | Vitest（单元）+ Playwright（E2E）            |
+| 测试     | Vitest（单元）                               |
 | 代码质量 | ESLint（含架构约束）+ Prettier + vue-tsc     |
 
 ## 📂 项目结构
 
 ```
 src/
-  components/   # 可复用 Vue 组件（.vue）
-  views/        # 页面级视图（TopHeader、ScoreView、SidebarLeft、WorkbenchView、各 Modal）
-  composables/  # Vue 组合式函数（use*）
-  services/     # 服务层：sync providers、repositories、领域逻辑、errors、storage、data bootstrap
-  stores/       # Pinia stores
-  router/       # 路由
-  directives/   # 指令（vTooltip）
-  assets/       # 静态资源与样式
-  types/        # 全局类型
-  utils/        # 通用工具与全局常量（constants.ts）
+  app/        # 应用壳：App、路由、全局类型、备份/导入导出、四种云同步 Provider、
+              # 数据引导与旧数据迁移
+  platform/   # 平台层（与业务无关）：UI 原语组件（按钮/浮层/菜单/表单等）、
+              # 通用 composables、Pinia store、基础服务（IndexedDB / 错误 / 剪贴板）、
+              # 指令（vTooltip、vFocus 等）、工具函数
+  domains/    # 业务领域
+    chord/      # 和弦：识别引擎与乐理（theory）、和弦库（library）、工作台（workbench）
+    fretboard/  # 指板：布局、交互、键盘导航
+    score/      # 乐谱：歌词和弦谱编辑器（editor，含拖拽编排）、曲库（library）、
+                # 数据模型（model）、文本导入导出（transfer）
 ```
 
 ## 📦 脚本
 
-| 命令             | 说明                                         |
-| ---------------- | -------------------------------------------- |
-| `pnpm dev`       | 开发服务器                                   |
-| `pnpm dev:proxy` | WebDAV CORS 转发代理                         |
-| `pnpm build`     | 生产构建（GitHub Pages 路径：`/FretLogic/`） |
-| `pnpm verify`    | 全量质检（Lint + Typecheck + Test + Build）  |
-| `pnpm typecheck` | 类型检查                                     |
-| `pnpm lint`      | ESLint                                       |
-| `pnpm test`      | 单元测试                                     |
-| `pnpm coverage`  | 覆盖率                                       |
+| 命令                       | 说明                                                 |
+| -------------------------- | ---------------------------------------------------- |
+| `pnpm dev`                 | 开发服务器                                           |
+| `pnpm dev:proxy`           | WebDAV CORS 转发代理                                 |
+| `pnpm preview`             | 构建产物本地预览                                     |
+| `pnpm build`               | 生产构建（GitHub Pages 路径：`/FretLogic/`）         |
+| `pnpm verify`              | 全量质检（Format + Lint + Typecheck + Test + Build） |
+| `pnpm typecheck`           | 类型检查                                             |
+| `pnpm lint` / `lint:fix`   | ESLint 检查 / 修复并格式化                           |
+| `pnpm format`              | Prettier 格式化                                      |
+| `pnpm test` / `test:watch` | 单元测试（单次 / 监听模式）                          |
+| `pnpm test:coverage`       | 覆盖率                                               |
 
 ## 🤝 贡献
 

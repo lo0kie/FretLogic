@@ -160,6 +160,156 @@ export function computeFretboardLayout(opts: {
   };
 }
 
+/** 空弦 / 静音标记（○ 空弦圆点、× 静音叉号） */
+function drawOpenStringMarkers(
+  ctx: CanvasRenderingContext2D,
+  chord: Chord,
+  startStrX: number,
+  markerCenterY: number,
+  stringCount: number,
+  colors: FretboardCanvasPalette
+): void {
+  const markerY = markerCenterY;
+  for (let s = 0; s < stringCount; s++) {
+    const sx = startStrX + s * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
+    const strData = chord.strings[s];
+    const fret = strData ? strData[0] : 0;
+
+    if (fret === -1) {
+      ctx.strokeStyle = colors.FB_MUTE;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(sx - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
+      ctx.lineTo(sx + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
+      ctx.moveTo(sx + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
+      ctx.lineTo(sx - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
+      ctx.stroke();
+    } else if (fret === 0) {
+      ctx.strokeStyle = colors.FB_OPEN;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(sx, markerY, FRETBOARD_CANVAS_CONFIG.OPEN_CIRCLE_RADIUS, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+}
+
+/** 网格线（琴弦竖线 + 品丝横线） */
+function drawGridLines(
+  ctx: CanvasRenderingContext2D,
+  startStrX: number,
+  gridTop: number,
+  gridBottom: number,
+  gridRight: number,
+  stringCount: number,
+  fretCount: number,
+  colors: FretboardCanvasPalette
+): void {
+  ctx.strokeStyle = colors.FB_LINE;
+  ctx.lineWidth = 1;
+  for (let s = 0; s < stringCount; s++) {
+    const sx = startStrX + s * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
+    ctx.beginPath();
+    ctx.moveTo(sx, gridTop);
+    ctx.lineTo(sx, gridBottom);
+    ctx.stroke();
+  }
+  for (let f = 0; f <= fretCount; f++) {
+    const fy = gridTop + f * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
+    ctx.beginPath();
+    ctx.moveTo(startStrX, fy);
+    ctx.lineTo(gridRight, fy);
+    ctx.stroke();
+  }
+}
+
+/** 弦枕（仅零品绘制）：showBoldNut=true 画粗弦枕块；false 时零品仅留普通品丝线条粗细 */
+function drawNut(
+  ctx: CanvasRenderingContext2D,
+  startStrX: number,
+  gridTop: number,
+  stringCount: number,
+  fretOffset: number,
+  showBoldNut: boolean,
+  colors: FretboardCanvasPalette
+): void {
+  if (fretOffset !== 0 || !showBoldNut) return;
+  ctx.fillStyle = colors.FB_NUT;
+  ctx.fillRect(
+    startStrX - 0.5,
+    gridTop - FRETBOARD_CANVAS_CONFIG.NUT_HEIGHT,
+    (stringCount - 1) * FRETBOARD_CANVAS_CONFIG.STRING_SPACING + 1,
+    FRETBOARD_CANVAS_CONFIG.NUT_HEIGHT
+  );
+}
+
+/** 品号（偏移时显示实际品位 = offset + 品序） */
+function drawFretNumbers(
+  ctx: CanvasRenderingContext2D,
+  startStrX: number,
+  gridTop: number,
+  fretCount: number,
+  fretOffset: number,
+  colors: FretboardCanvasPalette
+): void {
+  ctx.font = `bold ${FRETBOARD_CANVAS_CONFIG.CAPO_TEXT_FONT_SIZE}px system-ui, sans-serif`;
+  ctx.fillStyle = colors.SUB_TEXT;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (let f = 1; f < fretCount; f++) {
+    const fy = gridTop + f * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
+    const fretNumber = fretOffset > 0 ? fretOffset + f : f;
+    ctx.fillText(String(fretNumber), startStrX - FRETBOARD_CANVAS_CONFIG.FRET_NUMBER_X_OFFSET, fy);
+  }
+  ctx.textBaseline = 'alphabetic';
+}
+
+/** 大横按梁（圆角矩形） */
+function drawBarres(
+  ctx: CanvasRenderingContext2D,
+  chord: Chord,
+  startStrX: number,
+  gridTop: number,
+  colors: FretboardCanvasPalette
+): void {
+  if (!chord.barres || chord.barres.length === 0) return;
+  const barreHalfH = FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS / 2;
+  for (const b of chord.barres) {
+    const bx1 = startStrX + b.fromString * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
+    const bx2 = startStrX + b.toString * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
+    const by = gridTop + (b.fret - 0.5) * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
+    const minX = Math.min(bx1, bx2) - barreHalfH;
+    const w = Math.abs(bx2 - bx1) + FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS;
+    ctx.fillStyle = colors.FB_BARRE;
+    ctx.beginPath();
+    ctx.roundRect(minX, by - barreHalfH, w, FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS, barreHalfH);
+    ctx.fill();
+  }
+}
+
+/** 按弦圆点 */
+function drawPressedDots(
+  ctx: CanvasRenderingContext2D,
+  chord: Chord,
+  startStrX: number,
+  gridTop: number,
+  stringCount: number,
+  colors: FretboardCanvasPalette
+): void {
+  for (let s = 0; s < stringCount; s++) {
+    const strData = chord.strings[s];
+    const fret = strData ? strData[0] : 0;
+    if (fret > 0) {
+      const cx = startStrX + s * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
+      const cy = gridTop + (fret - 0.5) * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
+      ctx.beginPath();
+      ctx.arc(cx, cy, FRETBOARD_CANVAS_CONFIG.DOT_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = colors.FB_NOTE;
+      ctx.fill();
+    }
+  }
+}
+
 /**
  * 在给定的 CanvasRenderingContext2D 上绘制完整指板图。
  * 调用者负责 clearRect、scale 等前置准备；此函数不清空画布，也不做背景填充。
@@ -194,112 +344,36 @@ export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretb
   const boardCenterX = startStrX + ((stringCount - 1) * FRETBOARD_CANVAS_CONFIG.STRING_SPACING) / 2;
   const gridBottom = gridTop + fc * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
   const gridRight = startStrX + (stringCount - 1) * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
+  const fretOffset = chord.fretOffset ?? 0;
 
   // 1. 和弦名称（基线取自配置，保证图内顶部留白）
   if (showChordName) {
     drawFormattedChordName(ctx, boardCenterX, chordNameBaselineY, chordName, colors.TEXT, chordNameScale);
   }
 
-  // 2. 空弦 / 静音标记（○ 空弦圆点、× 静音叉号）
+  // 2. 空弦 / 静音标记
   if (showOpenStringNotes) {
-    const markerY = markerCenterY;
-    for (let s = 0; s < stringCount; s++) {
-      const sx = startStrX + s * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
-      const strData = chord.strings[s];
-      const fret = strData ? strData[0] : 0;
-
-      if (fret === -1) {
-        ctx.strokeStyle = colors.FB_MUTE;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(sx - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
-        ctx.lineTo(sx + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
-        ctx.moveTo(sx + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
-        ctx.lineTo(sx - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
-        ctx.stroke();
-      } else if (fret === 0) {
-        ctx.strokeStyle = colors.FB_OPEN;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.arc(sx, markerY, FRETBOARD_CANVAS_CONFIG.OPEN_CIRCLE_RADIUS, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
+    drawOpenStringMarkers(ctx, chord, startStrX, markerCenterY, stringCount, colors);
   }
 
-  // 3. 网格线（琴弦竖线 + 品丝横线）
-  ctx.strokeStyle = colors.FB_LINE;
-  ctx.lineWidth = 1;
-  for (let s = 0; s < stringCount; s++) {
-    const sx = startStrX + s * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
-    ctx.beginPath();
-    ctx.moveTo(sx, gridTop);
-    ctx.lineTo(sx, gridBottom);
-    ctx.stroke();
-  }
-  for (let f = 0; f <= fc; f++) {
-    const fy = gridTop + f * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
-    ctx.beginPath();
-    ctx.moveTo(startStrX, fy);
-    ctx.lineTo(gridRight, fy);
-    ctx.stroke();
-  }
+  // 3. 网格线
+  drawGridLines(ctx, startStrX, gridTop, gridBottom, gridRight, stringCount, fc, colors);
 
-  // 4. 弦枕（仅零品绘制）：showBoldNut=true 画粗弦枕块；false 时零品仅留普通品丝线条粗细
-  const offset = chord.fretOffset ?? 0;
-  if (offset === 0 && showBoldNut) {
-    ctx.fillStyle = colors.FB_NUT;
-    ctx.fillRect(
-      startStrX - 0.5,
-      gridTop - FRETBOARD_CANVAS_CONFIG.NUT_HEIGHT,
-      (stringCount - 1) * FRETBOARD_CANVAS_CONFIG.STRING_SPACING + 1,
-      FRETBOARD_CANVAS_CONFIG.NUT_HEIGHT
-    );
-  }
+  // 4. 弦枕
+  drawNut(ctx, startStrX, gridTop, stringCount, fretOffset, showBoldNut, colors);
 
   // 5. 品号
   if (showFretNumbers) {
-    ctx.font = `bold ${FRETBOARD_CANVAS_CONFIG.CAPO_TEXT_FONT_SIZE}px system-ui, sans-serif`;
-    ctx.fillStyle = colors.SUB_TEXT;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    for (let f = 1; f < fc; f++) {
-      const fy = gridTop + f * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
-      const fretNumber = offset > 0 ? offset + f : f;
-      ctx.fillText(String(fretNumber), startStrX - FRETBOARD_CANVAS_CONFIG.FRET_NUMBER_X_OFFSET, fy);
-    }
-    ctx.textBaseline = 'alphabetic';
+    drawFretNumbers(ctx, startStrX, gridTop, fc, fretOffset, colors);
   }
 
   // 6. 大横按（showBarre=false 时隐藏横按梁）
-  if (showBarre && chord.barres && chord.barres.length > 0) {
-    const barreHalfH = FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS / 2;
-    for (const b of chord.barres) {
-      const bx1 = startStrX + b.fromString * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
-      const bx2 = startStrX + b.toString * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
-      const by = gridTop + (b.fret - 0.5) * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
-      const minX = Math.min(bx1, bx2) - barreHalfH;
-      const w = Math.abs(bx2 - bx1) + FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS;
-      ctx.fillStyle = colors.FB_BARRE;
-      ctx.beginPath();
-      ctx.roundRect(minX, by - barreHalfH, w, FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS, barreHalfH);
-      ctx.fill();
-    }
+  if (showBarre) {
+    drawBarres(ctx, chord, startStrX, gridTop, colors);
   }
 
   // 7. 按弦圆点
-  for (let s = 0; s < stringCount; s++) {
-    const strData = chord.strings[s];
-    const fret = strData ? strData[0] : 0;
-    if (fret > 0) {
-      const cx = startStrX + s * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
-      const cy = gridTop + (fret - 0.5) * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
-      ctx.beginPath();
-      ctx.arc(cx, cy, FRETBOARD_CANVAS_CONFIG.DOT_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = colors.FB_NOTE;
-      ctx.fill();
-    }
-  }
+  drawPressedDots(ctx, chord, startStrX, gridTop, stringCount, colors);
 }
 
 /** 导出渲染参数：复用 RenderFretboardOptions 的公共字段，仅扩展导出专属项 */

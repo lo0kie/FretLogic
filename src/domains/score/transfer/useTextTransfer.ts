@@ -12,7 +12,7 @@ import {
   useChordTransfer,
 } from '@/domains/chord/transfer/useChordTransfer';
 import { toCapo } from '@/domains/fretboard/model/coordinates';
-import { DEFAULT_SCORE_TITLE } from '@/domains/score/constants';
+import { DEFAULT_SCORE_TITLE, isValidTimeSignature } from '@/domains/score/constants';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { charKey, chordSlotKey, matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
@@ -86,6 +86,8 @@ export function useTextTransfer() {
     const playKey = /^[A-Ga-g][#b]?$/.test(p.playKey) ? p.playKey : 'C';
     // 原调同 playKey 口径校验：非法格式回退未设置（''），防止脏文本注入展示层
     const originalKey = /^[A-Ga-g][#b]?$/.test(p.originalKey) ? p.originalKey : '';
+    // 拍号同口径校验：非「数字/数字」格式回退未设置（''）
+    const timeSignature = isValidTimeSignature(p.timeSignature) ? p.timeSignature : '';
     const capo = toCapo(p.capo);
 
     const newSong = songStore.createSong(title);
@@ -115,6 +117,7 @@ export function useTextTransfer() {
       chordMap,
       singer: p.singer ?? '',
       originalKey,
+      timeSignature,
     });
     scoreEditor.setActiveSong(newSong.id);
     scoreEditor.activeTab = 'edit';

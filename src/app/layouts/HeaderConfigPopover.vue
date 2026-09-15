@@ -1,10 +1,10 @@
 <template>
-  <div
-    v-edge-fade.y
-    v-scrollbar="{ endInset: 8 }"
+  <BaseScrollArea
+    :scrollbar="{ endInset: 8 }"
     @scroll="handleScroll()"
+    axis="y"
     class="config-popover-card flex max-h-80 w-[360px] flex-col gap-1 p-md outline-none"
-    ref="scrollRef"
+    ref="scrollAreaRef"
   >
     <template v-if="isScoreRoute">
       <BaseCollapse
@@ -324,7 +324,7 @@
         </BaseForm>
       </BaseCollapse>
     </template>
-  </div>
+  </BaseScrollArea>
 </template>
 
 <script lang="ts">
@@ -339,6 +339,7 @@ import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
 import BaseForm from '@/platform/ui/form/BaseForm.vue';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
 import BaseNumberInput from '@/platform/ui/input/BaseNumberInput.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
@@ -349,7 +350,10 @@ import { FRET_COUNTS, INTERACTION_CONFIG } from '@/domains/fretboard/constants';
 import { SCORE_PAGE_MARGIN_PRESETS, SCORE_PAGE_SIZE_PRESETS } from '@/domains/score/constants';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
+
+import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 /** 乐谱页折叠分组展开项（排他手风琴：会话级记忆，重开仍停留原分组，可收起至全部折叠）。
  *  按编辑 tab（排列和弦）与预览 tab 分维度记忆，两 tab 各自独立、互不共用 */
@@ -363,7 +367,9 @@ const workbenchScrollTopState = ref(0);
 </script>
 
 <script setup lang="ts">
-const scrollRef = useTemplateRef('scrollRef');
+const scrollAreaRef = useTemplateRef<ScrollAreaHandle>('scrollAreaRef');
+/** 设置面板滚动容器元素：会话级滚动位置存取用 */
+const scrollRef = useScrollAreaElement(scrollAreaRef);
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
 const editorStore = useChordEditorStore();

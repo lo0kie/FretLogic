@@ -17,6 +17,7 @@ import { syncProviderRegistry } from './registry';
 
 import type { SyncBranchesProvider, SyncProvider, SyncProviderKind } from './provider';
 import type { ImportExportPayload } from '@/app/types';
+import type { Ref } from 'vue';
 
 const isSyncing = ref(false);
 const isPulling = ref(false);
@@ -66,9 +67,58 @@ export function useSyncService() {
     }
   };
 
+  /**
+   * 推送前的凭据前置检查：按目标类型给出缺失项文案（齐全返回 null）。
+   * 与 SyncModalContainer 的按钮禁用判据一致——推送（写云端）必须带凭据，
+   * 拉取/测试连接不在此列（公开仓库与服务器 GET 无需 Token）。
+   */
+  const resolvePushCredentialIssue = (target: SyncProviderKind = settingsStore.syncTarget): string | null => {
+    if (target === 'github') return settingsStore.githubToken.trim() ? null : '请先填写 GitHub Token';
+    if (target === 'gitee') return settingsStore.giteeToken.trim() ? null : '请先填写 Gitee Token';
+    if (target === 'server') return settingsStore.serverToken.trim() ? null : '请先填写服务器 Token';
+    if (target === 'webdav')
+      return settingsStore.webdavServerUrl.trim() && settingsStore.webdavPassword.trim()
+        ? null
+        : '请先填写 WebDAV 服务器地址与密码';
+    return null;
+  };
+
+  /**
+   * 通用云端动作管线：互斥守卫 → loading toast → 执行 → 失败统一提示，finally 复位进行中状态。
+   * @returns run 的返回值；重入守卫退出或执行失败时返回 null（成功提示由调用方在返回后追加，保证先移除 loading）
+   */
+  const runCloudAction = async <T>(opts: {
+    busy: Ref<boolean>;
+    loadingText: string;
+    errorPrefix: string;
+    run: () => Promise<T>;
+  }): Promise<T | null> => {
+    if (opts.busy.value) return null;
+    opts.busy.value = true;
+    let loadingToastId: number | null = null;
+    try {
+      loadingToastId = uiStore.toast.loading(opts.loadingText, { closable: false });
+      const result = await opts.run();
+      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
+      return result;
+    } catch (err: unknown) {
+      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
+      showSyncError(opts.errorPrefix, err);
+      return null;
+    } finally {
+      opts.busy.value = false;
+    }
+  };
+
   /** 推送本地数据到云端（不含凭据类同步配置），全程互斥防重入；返回是否成功 */
   const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> => {
     if (isSyncing.value) return false;
+    // 凭据缺失时不发起任何请求，仅提示
+    const credentialIssue = resolvePushCredentialIssue(target);
+    if (credentialIssue) {
+      uiStore.toast.error(credentialIssue);
+      return false;
+    }
     const provider = resolveProvider('同步失败', target);
     if (!provider) return false;
     // 云端推送不携带同步配置（含 Token/密码等凭据），仅手动备份导出才包含；采用宽容模式避免单条脏记录阻断同步
@@ -83,21 +133,15 @@ export function useSyncService() {
     if (warnings.length > 0) {
       console.warn('[syncToRemote] 数据清洗提示:', warnings);
     }
-    isSyncing.value = true;
-    let loadingToastId: number | null = null;
-    try {
-      loadingToastId = uiStore.toast.loading('正在后台同步到云端...', { closable: false });
-      await provider.push(payload);
-      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
-      uiStore.toast.success('成功同步至云端');
-      return true;
-    } catch (err: unknown) {
-      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
-      showSyncError('同步失败', err);
-      return false;
-    } finally {
-      isSyncing.value = false;
-    }
+    const ok = await runCloudAction({
+      busy: isSyncing,
+      loadingText: '正在后台同步到云端...',
+      errorPrefix: '同步失败',
+      run: () => provider.push(payload),
+    });
+    if (ok === null) return false;
+    uiStore.toast.success('成功同步至云端');
+    return true;
   };
 
   /** 从云端拉取原始数据包（仅拉取不应用，应用由调用方走 openImportWithPayload/applyOverwriteWithCloud） */
@@ -106,20 +150,12 @@ export function useSyncService() {
     const provider = resolveProvider('拉取失败', target);
     if (!provider) return null;
 
-    isPulling.value = true;
-    let loadingToastId: number | null = null;
-    try {
-      loadingToastId = uiStore.toast.loading('正在从云端获取数据...', { closable: false });
-      const payload = await provider.pull();
-      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
-      return payload;
-    } catch (err: unknown) {
-      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
-      showSyncError('拉取失败', err);
-      return null;
-    } finally {
-      isPulling.value = false;
-    }
+    return runCloudAction({
+      busy: isPulling,
+      loadingText: '正在从云端获取数据...',
+      errorPrefix: '拉取失败',
+      run: () => provider.pull(),
+    });
   };
 
   /** 用云端数据完全覆盖本地实体与偏好设置，并复位指板编辑草稿 */
@@ -157,27 +193,21 @@ export function useSyncService() {
       settingsStore.githubBranch = '';
     }
 
-    isFetchingBranches.value = true;
-    let loadingToastId: number | null = null;
-    try {
-      loadingToastId = uiStore.toast.loading('正在获取远程分支列表...', { closable: false });
-      const branches = await branchesProvider.listBranches();
-      if (isGitee) {
-        settingsStore.giteeBranches = branches;
-      } else {
-        settingsStore.githubBranches = branches;
-      }
+    const branches = await runCloudAction({
+      busy: isFetchingBranches,
+      loadingText: '正在获取远程分支列表...',
+      errorPrefix: '获取分支失败',
+      run: () => branchesProvider.listBranches(),
+    });
+    if (branches === null) return false;
 
-      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
-      uiStore.toast.success(`成功获取 ${branches.length} 个分支`);
-      return true;
-    } catch (err: unknown) {
-      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
-      showSyncError('获取分支失败', err);
-      return false;
-    } finally {
-      isFetchingBranches.value = false;
+    if (isGitee) {
+      settingsStore.giteeBranches = branches;
+    } else {
+      settingsStore.githubBranches = branches;
     }
+    uiStore.toast.success(`成功获取 ${branches.length} 个分支`);
+    return true;
   };
 
   /** 触发全局同步（推送到云端），语义同 syncToRemote 的对外别名 */
@@ -194,26 +224,21 @@ export function useSyncService() {
     }
     const provider = factory.create(resolved.config);
 
-    isTestingConnection.value = true;
-    let loadingToastId: number | null = null;
-    try {
-      loadingToastId = uiStore.toast.loading('正在测试连接...', { closable: false });
-      const detail = await provider.testConnection();
-      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
-      uiStore.toast.success(`连接成功：${detail}`);
-      return true;
-    } catch (err: unknown) {
-      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
-      showSyncError('测试连接失败', err);
-      return false;
-    } finally {
-      isTestingConnection.value = false;
-    }
+    const detail = await runCloudAction({
+      busy: isTestingConnection,
+      loadingText: '正在测试连接...',
+      errorPrefix: '测试连接失败',
+      run: () => provider.testConnection(),
+    });
+    if (detail === null) return false;
+    uiStore.toast.success(`连接成功：${detail}`);
+    return true;
   };
 
   return {
     syncToRemote,
     triggerGlobalSync,
+    resolvePushCredentialIssue,
     pullFromRemote,
     isSyncing,
     isPulling,

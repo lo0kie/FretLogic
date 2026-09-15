@@ -2,7 +2,7 @@
   <header
     class="@media(display-mode:window-controls-overlay):[-webkit-app-region:drag] @media(display-mode:window-controls-overlay):[app-region:drag] @media(display-mode:window-controls-overlay):min-h-[max(2.5rem,env(titlebar-area-height,2.5rem))] @media(display-mode:window-controls-overlay):pl-[max(env(titlebar-area-inset-left,0px),1rem)] @media(display-mode:window-controls-overlay):pr-[max(env(titlebar-area-inset-right,0px),1rem)] relative z-header flex min-h-10 w-full shrink-0 items-center justify-between border-b border-glass-border bg-surface-panel/90 px-4 backdrop-blur-lg select-none"
   >
-    <div :class="NO_DRAG_REGION_CLASS" class="flex min-w-0 flex-1 items-center justify-start gap-sm">
+    <div :class="NO_DRAG_REGION_CLASS" class="flex min-w-0 flex-1 items-center justify-start">
       <BaseCheckbox
         v-model="uiStore.isLeftOpen"
         v-tooltip="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'"
@@ -12,7 +12,14 @@
         icon="panel-left"
       />
 
-      <div class="mx-0.5 h-3.5 w-px shrink-0 bg-glass-border opacity-80" />
+      <BaseDivider
+        :inset="'1rem'"
+        :length="'0.875rem'"
+        :thickness="2"
+        class="opacity-80"
+        color="glass"
+        orientation="vertical"
+      />
 
       <div class="flex items-center gap-md">
         <button
@@ -70,39 +77,48 @@
         variant="ghost"
       />
       <!-- 复制/粘贴：和弦页与乐谱页共用，按当前路由分派动作与文案；
-           乐谱「预览」tab 无文字编辑语义，改派为整曲长图的复制 / 下载；
-           「编辑歌词」tab 不渲染复制/粘贴按钮 -->
-      <ActionButton
-        v-for="btn in transferButtons"
-        v-tooltip="btn.tooltip"
-        :aria-label="btn.tooltip"
-        :disabled="btn.disabled"
-        :icon="btn.icon"
-        :key="btn.key"
-        @click="btn.onClick"
-        icon-only
-        icon-size="xl"
-        variant="ghost"
-      />
+           乐谱页粘贴乐谱在所有 tab 常驻（导入乐谱与当前 tab 无关）；
+           「预览」tab 复制改派为整曲长图，其余 tab（含编辑歌词）为文字复制 -->
+      <template v-for="(btn, btnIndex) in transferButtons" :key="btn.key">
+        <!-- 下载乐谱：乐谱导出 tab 时插在复制与「剪切板（粘贴）」之间 -->
+        <BaseMenu v-if="btnIndex === downloadBeforeIndex" :items="downloadExportMenuItems" :title="downloadMenuTitle">
+          <template #trigger="{ isOpen, pinToggle }">
+            <ActionButton
+              :aria-expanded="isOpen"
+              :color="isOpen ? 'primary' : 'default'"
+              :disabled="uiStore.isCopying || !scoreEditor.hasLyrics"
+              :variant="isOpen ? 'subtle' : 'ghost'"
+              @click="pinToggle()"
+              icon-only
+              aria-haspopup="menu"
+              aria-label="导出下载"
+              icon="download"
+              icon-size="xl"
+              icon-stroke="regular"
+            />
+          </template>
+        </BaseMenu>
+        <ActionButton
+          v-tooltip="btn.tooltip"
+          :aria-label="btn.tooltip"
+          :disabled="btn.disabled"
+          :icon="btn.icon"
+          @click="btn.onClick"
+          icon-only
+          icon-size="xl"
+          variant="ghost"
+        />
+      </template>
 
-      <!-- 乐谱预览：下载下拉（Hover）——长图 / 分页 Zip -->
-      <BaseMenu v-if="isPreviewExportMode" :items="downloadExportMenuItems" :title="downloadMenuTitle">
-        <template #trigger="{ isOpen, pinToggle }">
-          <ActionButton
-            :aria-expanded="isOpen"
-            :color="isOpen ? 'primary' : 'default'"
-            :disabled="uiStore.isCopying || !scoreEditor.hasLyrics"
-            :variant="isOpen ? 'subtle' : 'ghost'"
-            @click="pinToggle()"
-            icon-only
-            aria-haspopup="menu"
-            aria-label="导出下载"
-            icon="download"
-            icon-size="xl"
-            icon-stroke="regular"
-          />
-        </template>
-      </BaseMenu>
+      <!-- 分组分隔线：左侧为文档操作（试听/复制/下载/粘贴），右侧为应用偏好（设置/同步/主题/仓库） -->
+      <BaseDivider
+        :inset="'0.25rem'"
+        :length="'0.875rem'"
+        :thickness="2"
+        class="opacity-80"
+        color="glass"
+        orientation="vertical"
+      />
 
       <BasePopover v-if="showHeaderSettings" placement="bottom-end" trigger="hover">
         <template #trigger="{ isOpen, pinToggle }">
@@ -236,39 +252,31 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, ref } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
+import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
+import { useScoreExportActions } from '@/app/layouts/useScoreExportActions';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
 import { useSyncService } from '@/app/services/sync/useSyncService';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
-import { getScorePageSize } from '@/domains/score/constants';
-import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import {
-  prepareWorkerExportPayload,
-  runWorkerEstimate,
-  runWorkerExport,
-} from '@/domains/score/preview/services/workerExportService';
 import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
 import { useTheme } from '@/platform/composables/useTheme';
-import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { buildExportFileName, triggerBlobDownload } from '@/platform/utils/canvas';
-import { ROUTE_PATHS } from '@/platform/utils/constants';
-import { buildImagePdf } from '@/platform/utils/pdf';
+import { ROUTE_PATHS, TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
 
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 
@@ -279,7 +287,6 @@ import type { SyncProviderKind } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
-import type { PdfImagePage } from '@/platform/utils/pdf';
 
 const route = useRoute();
 const router = useRouter();
@@ -288,10 +295,18 @@ const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
 const { isPlaying, isSustaining, playCurrentChord, startChordSustain, stopChordSustain } = useAudioPlayer();
 
-const { chordsLookupMap } = useScoreLinesData();
 const { copyChordText, pasteChordFromClipboard, copySongText, pasteSongFromClipboard, importPortableSong } =
   useTextTransfer();
 const scoreRouteSync = useScoreRouteSync();
+
+/** 乐谱「预览」导出动作与下载菜单标题（长图/PDF/Zip + 尺寸预估），逻辑见 useScoreExportActions.ts */
+const { isPreviewExportMode, handleScoreExport, downloadExportMenuItems, downloadMenuTitle } = useScoreExportActions();
+
+/** 下载菜单插入位：仅预览 tab 时插在「剪切板（粘贴）」按钮之前，其余场景不渲染（-1） */
+const downloadBeforeIndex = computed(() => {
+  if (!isPreviewExportMode.value) return -1;
+  return transferButtons.value.findIndex(btn => btn.key === 'paste');
+});
 
 /** 无结构纯歌词「确认兜底」：待确认的载荷 + 确认弹窗开关 */
 const pendingLyricsImport = ref<PortableSong | null>(null);
@@ -352,8 +367,8 @@ const openSourceRepository = () => {
 /** 复制/粘贴按钮配置：和弦页与乐谱页共用，按当前路由分派动作、文案与禁用态 */
 const transferButtons = computed<TransferButton[]>(() => {
   const isScore = route.path === ROUTE_PATHS.SCORE;
-  // 乐谱「预览」tab：此处无文字编辑语义，复制/粘贴乐谱文本不成立，
-  // 改派为整曲长图的复制与下载（复用预览导出链路 handleScoreExport）
+  // 乐谱「预览」tab：无文字编辑语义，复制改派为整曲长图（复用预览导出链路 handleScoreExport）；
+  // 粘贴保持全 tab 可用（导入乐谱与当前 tab 无关，导入后由导入链路自行选中并切换）
   if (isScore && scoreEditor.activeTab === 'preview') {
     const longImageDisabled = uiStore.isCopying || !scoreEditor.hasLyrics;
     return [
@@ -364,10 +379,16 @@ const transferButtons = computed<TransferButton[]>(() => {
         disabled: longImageDisabled,
         onClick: () => void handleScoreExport('copy'),
       },
+      {
+        key: 'paste',
+        icon: 'clipboard-paste',
+        tooltip: '从剪切板粘贴',
+        disabled: uiStore.isCopying,
+        onClick: handlePasteSong,
+      },
     ];
   }
-  // 乐谱「编辑歌词」tab：header 不提供复制/粘贴（歌词的取用与写入都在编辑区内完成）
-  if (isScore && scoreEditor.activeTab === 'edit') return [];
+  // 乐谱「编辑歌词」tab：复制/粘贴回落到默认分支（文字复制乐谱），不再特殊处理
 
   return [
     {
@@ -386,8 +407,6 @@ const transferButtons = computed<TransferButton[]>(() => {
     },
   ];
 });
-
-const isPreviewExportMode = computed(() => route.path === ROUTE_PATHS.SCORE && scoreEditor.activeTab === 'preview');
 
 const activeNavPath = computed(() => {
   const matched = NAV_OPTIONS.find(opt => opt.value === route.path);
@@ -435,7 +454,7 @@ const themeMenuItems = computed<MenuItem[]>(() => [
   },
 ]);
 
-const { triggerGlobalSync, pullFromRemote, isSyncing, isPulling } = useSyncService();
+const { triggerGlobalSync, pullFromRemote, resolvePushCredentialIssue, isSyncing, isPulling } = useSyncService();
 const backupModals = useBackupModals();
 const settingsStore = useSettingsStore();
 
@@ -475,14 +494,35 @@ const handleConfirmPull = async () => {
   }
 };
 
+/** 打开同步设置弹窗，并把弹窗内的方案选择器对齐到当前同步目标（保证看到的就是缺 Token 的那一项） */
+const openSyncSettings = () => {
+  uiStore.syncModalProvider = settingsStore.syncTarget;
+  isSyncModalOpen.value = true;
+};
+
+/** 菜单「同步」入口的凭据预检：缺失时不进入确认流程、不发起请求，
+ *  改为提示并提供「去配置」入口直接打开对应目标的同步设置弹窗 */
+const handleSyncMenuClick = () => {
+  const issue = resolvePushCredentialIssue();
+  if (issue) {
+    uiStore.toast.warning(issue, {
+      actionText: '去配置',
+      duration: TOAST_WARNING_DURATION_MS,
+      onAction: () => {
+        openSyncSettings();
+      },
+    });
+    return;
+  }
+  isSyncConfirmOpen.value = true;
+};
+
 const syncMenuItems = computed<MenuItem[]>(() => [
   {
     label: isSyncing.value ? '同步中...' : '同步',
     icon: 'refresh-cw',
     disabled: isSyncing.value || isPulling.value,
-    action: () => {
-      isSyncConfirmOpen.value = true;
-    },
+    action: handleSyncMenuClick,
   },
   {
     label: isPulling.value ? '拉取中...' : '拉取',
@@ -570,316 +610,6 @@ const scoreModeOptions = computed<SegmentOption<ScoreActiveTab>[]>(() => [
 const handleScoreTabChange = (val: ScoreActiveTab) => {
   void scoreRouteSync.switchTab(val);
 };
-
-/** 整曲全部歌词行索引（预览/导出始终覆盖全曲） */
-const allLyricsLineIndices = (): number[] => {
-  const lyrics = scoreEditor.activeSong?.lyrics;
-  if (!lyrics) return [];
-  return Array.from({ length: lyrics.split('\n').length }, (_, i) => i);
-};
-
-/**
- * 预览 tab 的导出：整曲经 Worker 离屏渲染为一张长图（normal 模式），
- * 再按操作写入剪贴板或触发浏览器下载。
- */
-const handleScoreExport = async (op: 'copy' | 'download') => {
-  if (uiStore.isCopying) return;
-  const song = scoreEditor.activeSong;
-  const lineIndices = allLyricsLineIndices();
-  if (!song || lineIndices.length === 0) return;
-
-  uiStore.isCopying = true;
-  // 后台异步渲染使用常驻 LOADING Toast，避免 info 自动销毁导致超时渲染失去「进行中」反馈；
-  // 渲染完成后移除该常驻提示，再由下方 success/error 给出结论
-  const exportLoadingToastId = uiStore.toast.loading('正在渲染整曲长图...');
-  try {
-    const payload = prepareWorkerExportPayload(
-      song,
-      lineIndices,
-      chordsLookupMap.value,
-      'normal',
-      settingsStore.scoreChordShorthand,
-      settingsStore.scoreLayoutAlign,
-      scoreEditor.fontScale,
-      scoreEditor.fretboardScale,
-      settingsStore.scoreShowBarre,
-      settingsStore.scoreLyricsFontWeight,
-      settingsStore.scoreExportQuality,
-      settingsStore.scorePageMargin,
-      settingsStore.scorePageSize,
-      settingsStore.scoreShowFooter,
-      settingsStore.scoreIgnoreEmptySpace
-    );
-    const { blobs } = await runWorkerExport(payload);
-    if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
-
-    if (op === 'copy') {
-      await writeBlobToClipboard(blobs[0]!);
-      uiStore.toast.success('成功复制至系统剪贴板');
-    } else {
-      triggerBlobDownload(blobs[0]!, `${buildExportFileName(song.title || '')}.jpg`);
-      uiStore.toast.success('已开始下载');
-    }
-  } catch (err) {
-    console.error('Score export error:', err);
-    uiStore.toast.error(err instanceof Error ? err.message : '导出失败');
-  } finally {
-    uiStore.removeToast(exportLoadingToastId);
-    uiStore.isCopying = false;
-  }
-};
-
-/** 预览 tab 的分页导出为 Zip：经 Worker 离屏渲染为 A4 分页图片，再打包为一个 zip 文件下载 */
-const handleScoreExportZip = async () => {
-  if (uiStore.isCopying) return;
-  const song = scoreEditor.activeSong;
-  const lineIndices = allLyricsLineIndices();
-  if (!song || lineIndices.length === 0) return;
-
-  uiStore.isCopying = true;
-  const exportLoadingToastId = uiStore.toast.loading('正在渲染分页图片并打包...');
-  try {
-    const payload = prepareWorkerExportPayload(
-      song,
-      lineIndices,
-      chordsLookupMap.value,
-      'a4',
-      settingsStore.scoreChordShorthand,
-      settingsStore.scoreLayoutAlign,
-      scoreEditor.fontScale,
-      scoreEditor.fretboardScale,
-      settingsStore.scoreShowBarre,
-      settingsStore.scoreLyricsFontWeight,
-      settingsStore.scoreExportQuality,
-      settingsStore.scorePageMargin,
-      settingsStore.scorePageSize,
-      settingsStore.scoreShowFooter,
-      settingsStore.scoreIgnoreEmptySpace
-    );
-    const { blobs } = await runWorkerExport(payload);
-    if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
-
-    // 每页为已压缩的 JPEG，Zip 内采用 store(level 0) 直接归档，避免重复压缩耗时
-    const files: Record<string, Uint8Array> = {};
-    const base = buildExportFileName(song.title || '');
-    for (let i = 0; i < blobs.length; i++) {
-      const buf = await blobs[i]!.arrayBuffer();
-      files[`${base}_第${i + 1}页.jpg`] = new Uint8Array(buf);
-    }
-    // 动态导入 fflate：不进首屏 chunk，仅点击「下载为分页 Zip」时拉取
-    const { zipSync } = await import('fflate');
-    const zipData = zipSync(files, { level: 0 });
-    triggerBlobDownload(new Blob([zipData], { type: 'application/zip' }), `${base}.zip`);
-    uiStore.toast.success('已开始下载');
-  } catch (err) {
-    console.error('Score export zip error:', err);
-    uiStore.toast.error(err instanceof Error ? err.message : '导出失败');
-  } finally {
-    uiStore.removeToast(exportLoadingToastId);
-    uiStore.isCopying = false;
-  }
-};
-
-/** 预览 tab 的分页导出为 PDF：经 Worker 渲染 A4 分页图片后，用 pdf-lib（按需懒加载）把
- *  每页 JPEG 原样嵌入 PDF（/DCTDecode，不二次编码），每页铺满对应 MediaBox 后下载 */
-const handleScoreExportPdf = async () => {
-  if (uiStore.isCopying) return;
-  const song = scoreEditor.activeSong;
-  const lineIndices = allLyricsLineIndices();
-  if (!song || lineIndices.length === 0) return;
-
-  uiStore.isCopying = true;
-  const exportLoadingToastId = uiStore.toast.loading('正在渲染分页图片并生成 PDF...');
-  try {
-    const payload = prepareWorkerExportPayload(
-      song,
-      lineIndices,
-      chordsLookupMap.value,
-      'a4',
-      settingsStore.scoreChordShorthand,
-      settingsStore.scoreLayoutAlign,
-      scoreEditor.fontScale,
-      scoreEditor.fretboardScale,
-      settingsStore.scoreShowBarre,
-      settingsStore.scoreLyricsFontWeight,
-      settingsStore.scoreExportQuality,
-      settingsStore.scorePageMargin,
-      settingsStore.scorePageSize,
-      settingsStore.scoreShowFooter,
-      settingsStore.scoreIgnoreEmptySpace
-    );
-    const { blobs } = await runWorkerExport(payload);
-    if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
-
-    // 页面物理尺寸：worker 以 96dpi 点阵渲染，PDF 采用 pt(72dpi)，进行 0.75 = 72/96 换算；
-    // 像素尺寸用于图片 XObject 的 /Width /Height，物理尺寸用于 MediaBox 与铺满变换
-    const { width, height } = getScorePageSize(settingsStore.scorePageSize);
-    const wPt = Math.round((width * 72) / 96);
-    const hPt = Math.round((height * 72) / 96);
-
-    // 手写极简 PDF 图像容器：各页 JPEG 以 /DCTDecode 原样嵌入，零二次编码、零依赖
-    const pages: PdfImagePage[] = [];
-    for (const blob of blobs) {
-      pages.push({
-        jpeg: new Uint8Array(await blob.arrayBuffer()),
-        pixelWidth: width,
-        pixelHeight: height,
-        widthPt: wPt,
-        heightPt: hPt,
-      });
-    }
-    const pdfData = buildImagePdf(pages);
-    const base = buildExportFileName(song.title || '');
-    // pdfData 为 Uint8Array<ArrayBufferLike>，切片得到精确长度的 ArrayBuffer 以匹配 BlobPart
-    triggerBlobDownload(new Blob([pdfData.slice()], { type: 'application/pdf' }), `${base}.pdf`);
-    uiStore.toast.success('已开始下载');
-  } catch (err) {
-    console.error('Score export pdf error:', err);
-    uiStore.toast.error(err instanceof Error ? err.message : '导出失败');
-  } finally {
-    uiStore.removeToast(exportLoadingToastId);
-    uiStore.isCopying = false;
-  }
-};
-
-/** 乐谱「预览」tab 下载下拉菜单项：长图 / 分页 PDF / 分页 Zip，Hover 触发 */
-const downloadExportMenuItems: MenuItem[] = [
-  {
-    label: '下载为长图',
-    icon: 'image-down',
-    action: () => void handleScoreExport('download'),
-  },
-  {
-    label: '下载为 PDF',
-    icon: 'file-text',
-    action: () => void handleScoreExportPdf(),
-  },
-  {
-    label: '下载为 ZIP',
-    icon: 'file-archive',
-    action: () => void handleScoreExportZip(),
-  },
-];
-
-/** 字节数 → 人类可读尺寸（中文单位：B / KB / MB / GB） */
-const formatBytes = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ['KB', 'MB', 'GB'];
-  let value = bytes / 1024;
-  let unitIdx = 0;
-  while (value >= 1024 && unitIdx < units.length - 1) {
-    value /= 1024;
-    unitIdx++;
-  }
-  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${units[unitIdx]}`;
-};
-
-/** 下载下拉标题：展示预估长图文件尺寸（进入预览导出态时经 Worker 真实渲染测量） */
-const estimatedLongImageBytes = ref<number | null>(null);
-const isEstimating = ref(false);
-/** 上次估算的输入指纹：输入未变化则跳过重复渲染 */
-const lastEstimateKey = ref('');
-
-/** 构建与「下载为长图」完全一致的 Worker 预估载荷（normal 模式） */
-const buildEstimatePayload = () =>
-  prepareWorkerExportPayload(
-    scoreEditor.activeSong!,
-    allLyricsLineIndices(),
-    chordsLookupMap.value,
-    'normal',
-    settingsStore.scoreChordShorthand,
-    settingsStore.scoreLayoutAlign,
-    scoreEditor.fontScale,
-    scoreEditor.fretboardScale,
-    settingsStore.scoreShowBarre,
-    settingsStore.scoreLyricsFontWeight,
-    settingsStore.scoreExportQuality,
-    settingsStore.scorePageMargin,
-    settingsStore.scorePageSize,
-    settingsStore.scoreShowFooter,
-    settingsStore.scoreIgnoreEmptySpace
-  );
-
-/** 聚合影响导出尺寸的响应式输入，作为估算去重指纹 */
-const buildEstimateKey = (): string => {
-  const song = scoreEditor.activeSong;
-  if (!song) return '';
-  return [
-    song.lyrics,
-    song.singer ?? '',
-    song.title ?? '',
-    song.chordMap === undefined ? '0' : '1',
-    chordsLookupMap.value?.size ?? 0,
-    settingsStore.scoreChordShorthand,
-    settingsStore.scoreLayoutAlign,
-    scoreEditor.fontScale,
-    scoreEditor.fretboardScale,
-    settingsStore.scoreShowBarre,
-    settingsStore.scoreLyricsFontWeight,
-    settingsStore.scoreExportQuality,
-    settingsStore.scorePageMargin,
-    settingsStore.scorePageSize,
-    settingsStore.scoreShowFooter,
-    settingsStore.scoreIgnoreEmptySpace,
-  ].join('|');
-};
-
-/** 触发尺寸预估：复用 Worker 真实渲染管线，仅取长图 blob 字节数 */
-const updateExportSizeEstimate = async () => {
-  const key = buildEstimateKey();
-  if (!key || isEstimating.value || key === lastEstimateKey.value) return;
-
-  isEstimating.value = true;
-  try {
-    const payload = buildEstimatePayload();
-    const { longImageBytes } = await runWorkerEstimate(payload);
-    // 渲染期间输入可能已变化，仅在指纹未被覆盖时采纳结果
-    if (key === buildEstimateKey()) {
-      estimatedLongImageBytes.value = longImageBytes;
-      lastEstimateKey.value = key;
-    }
-  } catch {
-    estimatedLongImageBytes.value = null;
-  } finally {
-    isEstimating.value = false;
-  }
-};
-
-/** 下载下拉标题文本：空态返回 ''（不渲染标题行）；计算中/就绪分别给出状态 */
-const downloadMenuTitle = computed(() => {
-  if (!isPreviewExportMode.value) return '';
-  const bytes = estimatedLongImageBytes.value;
-  if (bytes == null) return isEstimating.value ? '预估文件尺寸计算中…' : '预估文件尺寸';
-  return `预估文件大小 ${formatBytes(bytes)}`;
-});
-
-/** 进入预览导出态或任一影响尺寸的设定变更时，按需刷新预估尺寸 */
-watch(
-  [
-    isPreviewExportMode,
-    () => scoreEditor.activeSong?.lyrics,
-    () => scoreEditor.activeSong?.singer,
-    () => scoreEditor.activeSong?.chordMap,
-    () => chordsLookupMap.value,
-    () => settingsStore.scoreChordShorthand,
-    () => settingsStore.scoreLayoutAlign,
-    () => scoreEditor.fontScale,
-    () => scoreEditor.fretboardScale,
-    () => settingsStore.scoreShowBarre,
-    () => settingsStore.scoreLyricsFontWeight,
-    () => settingsStore.scoreExportQuality,
-    () => settingsStore.scorePageMargin,
-    () => settingsStore.scorePageSize,
-    () => settingsStore.scoreShowFooter,
-    () => settingsStore.scoreIgnoreEmptySpace,
-  ],
-  () => {
-    if (isPreviewExportMode.value) void updateExportSizeEstimate();
-  },
-  // 立即执行：页面刷新后若已处于预览导出态（URL 持久化到 preview tab）且歌曲已同步水合，
-  // watch 不会因「值从未变化」而触发，需 immediate 主动跑一次预估，否则 size 一直为空
-  { immediate: true }
-);
 
 const isSyncModalOpen = ref(false);
 /** PWA 窗口控制拖拽拦截类名 */

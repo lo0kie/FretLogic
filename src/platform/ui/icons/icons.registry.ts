@@ -23,6 +23,7 @@ import EyeOff from '~icons/lucide/eye-off';
 import FileArchive from '~icons/lucide/file-archive';
 import FileQuestion from '~icons/lucide/file-question';
 import FileText from '~icons/lucide/file-text';
+import Filter from '~icons/lucide/filter';
 import FolderOpen from '~icons/lucide/folder-open';
 import FolderSync from '~icons/lucide/folder-sync';
 import GitBranch from '~icons/lucide/git-branch';
@@ -39,6 +40,7 @@ import Link2 from '~icons/lucide/link-2';
 import List from '~icons/lucide/list';
 import Loader2 from '~icons/lucide/loader-2';
 import Maximize2 from '~icons/lucide/maximize-2';
+import Mic from '~icons/lucide/mic';
 import Minus from '~icons/lucide/minus';
 import Moon from '~icons/lucide/moon';
 import Move from '~icons/lucide/move';
@@ -95,6 +97,7 @@ export const ICON_REGISTRY = {
   'file-archive': FileArchive,
   'file-question': FileQuestion,
   'file-text': FileText,
+  'filter': Filter,
   'folder-open': FolderOpen,
   'folder-sync': FolderSync,
   'git-branch': GitBranch,
@@ -111,6 +114,7 @@ export const ICON_REGISTRY = {
   'list': List,
   'loader-2': Loader2,
   'maximize-2': Maximize2,
+  'mic': Mic,
   'minus': Minus,
   'moon': Moon,
   'move': Move,

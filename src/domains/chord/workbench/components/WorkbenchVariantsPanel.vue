@@ -2,13 +2,13 @@
   <!-- 横向滚轮滚动列表：单行固定高度排列全部变体指法；光标驻留其上时双向滚轮均驱动（向下滚到最右
        后由 .auto 边界放行列表下滑，向上则向左回滚）；列表滚动把条带到光标下时 v-wheel-scroll
        自动让位给列表，不会出现「没在条上滚却被联动」的劫持。无 CSS scroll-smooth 避免动量滑动失控 -->
-  <div
-    v-wheel-scroll.auto.smooth
-    v-edge-fade.x="{ size: 24, flushEps: 4 }"
+  <BaseScrollArea
     v-if="hasVariants"
-    v-scrollbar.x="{ onScroll: closeAllPopovers }"
+    :fade="{ size: 24, flushEps: 4 }"
+    :wheel="{ smooth: true, overscroll: 'auto' }"
+    close-popovers
+    axis="x"
     class="flex w-full items-stretch gap-4 p-1 select-none"
-    ref="scrollRef"
   >
     <div
       v-wave
@@ -37,7 +37,7 @@
         />
       </div>
     </div>
-  </div>
+  </BaseScrollArea>
 
   <Feedback
     v-else
@@ -48,15 +48,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { computeChordFingerprint, getChordName } from '@/domains/chord/theory/theory';
 import { isDark } from '@/platform/composables/useTheme';
-import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry.ts';
 
 import type { Chord } from '@/domains/chord/types';
 
@@ -64,8 +64,6 @@ const editorStore = useChordEditorStore();
 const chordStore = useChordStore();
 
 const isChordOpened = computed(() => Boolean(editorStore.draftChord.id));
-
-const scrollRef = ref<HTMLElement | null>(null);
 
 const chordName = computed(() => getChordName(editorStore.draftChord).trim());
 

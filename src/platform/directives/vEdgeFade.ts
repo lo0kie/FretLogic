@@ -9,6 +9,7 @@
  *   <div v-edge-fade.x="24">…可横向滚动内容…</div>  // .x 横向
  *   <div v-edge-fade="40">…</div>                    // 无修饰符：自动检测溢出轴（含双轴）
  *   <div v-edge-fade.y="{ size: 24, flushEps: 2 }">…</div>
+ *   <div v-edge-fade="{ direction: 'y' }">…</div>    // 选项定向（包装组件按 prop 传方向，修饰符优先）
  *   <div v-edge-fade.y="'1.5rem'">…</div>            // 带宽支持任意 CSS 长度字符串
  *   <div v-edge-fade>…</div>                         // 默认带宽 20px
  *   <div v-edge-fade="false">…</div>                 // 显式关闭
@@ -39,6 +40,9 @@ export interface EdgeFadeOptions {
   size?: number | string;
   /** 贴边判定容差（px）：内容与边缘间距小于该值视为贴边不渐隐，缺省 1 */
   flushEps?: number;
+  /** 羽化轴向：等价于 .x / .y 修饰符，供包装组件按 prop 定向时使用（修饰符优先于本项）。
+   *  省略时按溢出自动判定——两轴均有溢出即双轴羽化（见 resolveFadeMode） */
+  direction?: EdgeFadeDirection;
 }
 
 /** 羽化方向：'.x' 横向 / '.y' 纵向；无修饰符时自动按溢出主轴判断 */
@@ -69,6 +73,8 @@ interface EdgeFadeState {
   lastFade: string | null;
   /** 已挂遮罩模式：模式切换（溢出轴增减）时重建模板 */
   lastMode?: FadeMode;
+  /** 平滑卸载的延时句柄：端点过渡回 0 后再摘 mask；重新挂载时取消 */
+  clearTimer: ReturnType<typeof setTimeout> | null;
   observer: ResizeObserver;
   mutationObserver: MutationObserver;
   /** 已被 observer 观察的直接子元素集合：childList 变化时增量增删，避免重复 observe */
@@ -76,11 +82,23 @@ interface EdgeFadeState {
   cleanups: (() => void)[];
 }
 
+/** 全部羽化端点属性（单轴 + 双轴）：重置/清理时统一遍历，避免按模式挑拣遗漏 */
+const ALL_FADE_PROPS = [
+  '--fade-start',
+  '--fade-end',
+  '--fade-x-start',
+  '--fade-x-end',
+  '--fade-y-start',
+  '--fade-y-end',
+] as const;
+
 const STATES = new WeakMap<HTMLElement, EdgeFadeState>();
 
 /** 合并绑定值与修饰符：数字/字符串即带宽，true/缺省用默认带宽，false 显式关闭 */
 function resolveOptions(binding: EdgeFadeBinding, modifiers: Record<string, boolean>): ResolvedOptions {
-  const direction = modifiers['y'] ? 'y' : modifiers['x'] ? 'x' : undefined;
+  // 方向优先级：.y / .x 修饰符 > 选项对象 direction > undefined（按溢出自动判定两轴）
+  const optionDirection = binding && typeof binding === 'object' ? binding.direction : undefined;
+  const direction = modifiers['y'] ? 'y' : modifiers['x'] ? 'x' : optionDirection;
   if (binding === false) {
     return { enabled: false, size: DEFAULT_FADE_SIZE, flushEps: DEFAULT_FLUSH_EPS, direction };
   }
@@ -104,25 +122,27 @@ function writeFade(el: HTMLElement, state: EdgeFadeState, values: Record<string,
   }
 }
 
-/** 卸载遮罩与羽化量（内容不再溢出或指令关闭时回收）；单轴/双轴端点与 composite 一并清理 */
+/**
+ * 平滑卸载遮罩：先把端点过渡回 0（羽化在过渡时长内收起），过渡结束后再移除 mask 模板。
+ * 直接同步清掉 mask 会瞬间失去羽化（生硬消失）；期间重新溢出会走挂载路径并取消本延时。
+ */
 function clearFade(el: HTMLElement, state: EdgeFadeState): void {
   if (state.lastFade === null) return;
+  const zeros: Record<string, number> = {};
+  for (const prop of ALL_FADE_PROPS) zeros[prop] = 0;
+  writeFade(el, state, zeros);
   state.lastFade = null;
-  el.style.maskImage = '';
-  el.style.webkitMaskImage = '';
-  el.style.maskComposite = '';
-  el.style.webkitMaskComposite = '';
-  for (const prop of [
-    '--fade-start',
-    '--fade-end',
-    '--fade-x-start',
-    '--fade-x-end',
-    '--fade-y-start',
-    '--fade-y-end',
-  ]) {
-    el.style.removeProperty(prop);
-  }
-  el.style.transition = '';
+  if (state.clearTimer) clearTimeout(state.clearTimer);
+  state.clearTimer = setTimeout(() => {
+    state.clearTimer = null;
+    if (state.lastFade !== null) return; // 延时期间已重新挂载，不摘遮罩
+    el.style.maskImage = '';
+    el.style.setProperty('-webkit-mask-image', '');
+    el.style.maskComposite = '';
+    el.style.setProperty('-webkit-mask-composite', '');
+    for (const prop of ALL_FADE_PROPS) el.style.removeProperty(prop);
+    el.style.transition = '';
+  }, FADE_TRANSITION_MS + 30);
 }
 
 /** 当前轴上的溢出量（px），未溢出返回 <= flushEps */
@@ -177,6 +197,51 @@ function updateObservedChildren(el: HTMLElement, state: EdgeFadeState): void {
   }
 }
 
+/** 当前模式下的端点透明度值：双轴四端点 / 单轴两端点 */
+function computeFadeValues(el: HTMLElement, mode: FadeMode, flushEps: number): Record<string, number> {
+  if (mode === 'dual') {
+    const [xStart, xEnd] = endFades(el, 'x', flushEps);
+    const [yStart, yEnd] = endFades(el, 'y', flushEps);
+    return { '--fade-x-start': xStart, '--fade-x-end': xEnd, '--fade-y-start': yStart, '--fade-y-end': yEnd };
+  }
+  const [start, end] = endFades(el, mode, flushEps);
+  return { '--fade-start': start, '--fade-end': end };
+}
+
+/** 挂载/重建 mask 模板，并让端点从 0 平滑过渡到目标值：
+ *  先写入全 0 端点（遮罩全不透明，等价无羽化）并强制样式重算，使「transition 已生效且端点为 0」
+ *  成为已计算的旧值；随后写入目标端点才会触发 0→1 过渡——同一帧内直接写入不会产生动画，
+ *  这是羽化出场瞬变的根因。 */
+function mountFadeMask(el: HTMLElement, state: EdgeFadeState, mode: FadeMode): void {
+  // 取消未完成的平滑卸载：重新溢出要立即接管遮罩
+  if (state.clearTimer) {
+    clearTimeout(state.clearTimer);
+    state.clearTimer = null;
+  }
+  ensureFadeProperties();
+  const mask =
+    mode === 'dual'
+      ? buildDualEdgeFadeMask(state.options.size, state.options.size)
+      : buildEdgeFadeMask(mode, state.options.size);
+  el.style.maskImage = mask;
+  el.style.setProperty('-webkit-mask-image', mask);
+  if (mode === 'dual') {
+    // 双层 mask 必须取交集：默认 add 为并集，角落处只取较亮一层，两个方向的渐隐无法同时生效
+    el.style.maskComposite = 'intersect';
+    el.style.setProperty('-webkit-mask-composite', 'source-in');
+  } else {
+    // 从 dual 降回单轴时清理 composite，避免残留 intersect 改变单层 mask 语义
+    el.style.maskComposite = '';
+    el.style.setProperty('-webkit-mask-composite', '');
+  }
+  el.style.transition = fadeTransition(FADE_TRANSITION_MS);
+  for (const prop of ALL_FADE_PROPS) el.style.setProperty(prop, '0');
+  void el.offsetWidth; // 强制样式重算：固化为过渡起点
+  state.lastFade = null;
+  state.lastMode = mode;
+  writeFade(el, state, computeFadeValues(el, mode, state.options.flushEps));
+}
+
 /**
  * 按当前滚动位置与溢出轴同步羽化：
  * - 未溢出：清除遮罩（内容完整可见，无需羽化）；
@@ -198,39 +263,11 @@ function syncEdgeFade(el: HTMLElement, state: EdgeFadeState): void {
 
   // 铺遮罩前记录所用模式，模式切换（溢出轴增减）时重建模板
   if (state.lastFade === null || state.lastMode !== mode) {
-    ensureFadeProperties();
-    const mask =
-      mode === 'dual' ? buildDualEdgeFadeMask(options.size, options.size) : buildEdgeFadeMask(mode, options.size);
-    el.style.maskImage = mask;
-    el.style.webkitMaskImage = mask;
-    if (mode === 'dual') {
-      // 双层 mask 必须取交集：默认 add 为并集，角落处只取较亮一层，两个方向的渐隐无法同时生效
-      el.style.maskComposite = 'intersect';
-      el.style.webkitMaskComposite = 'source-in';
-    } else {
-      // 从 dual 降回单轴时清理 composite，避免残留 intersect 改变单层 mask 语义
-      el.style.maskComposite = '';
-      el.style.webkitMaskComposite = '';
-    }
-    el.style.transition = fadeTransition(FADE_TRANSITION_MS);
-    // 模式切换时强制重写端点（旧模式的 lastFade 签名不再可信），避免跳过写入
-    state.lastFade = null;
-    state.lastMode = mode;
+    mountFadeMask(el, state, mode);
+    return;
   }
 
-  if (mode === 'dual') {
-    const [xStart, xEnd] = endFades(el, 'x', options.flushEps);
-    const [yStart, yEnd] = endFades(el, 'y', options.flushEps);
-    writeFade(el, state, {
-      '--fade-x-start': xStart,
-      '--fade-x-end': xEnd,
-      '--fade-y-start': yStart,
-      '--fade-y-end': yEnd,
-    });
-  } else {
-    const [start, end] = endFades(el, mode, options.flushEps);
-    writeFade(el, state, { '--fade-start': start, '--fade-end': end });
-  }
+  writeFade(el, state, computeFadeValues(el, mode, options.flushEps));
 }
 
 export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifiers> = {
@@ -239,6 +276,7 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
       options: resolveOptions(binding.value, binding.modifiers),
       lastFade: null,
       lastMode: undefined,
+      clearTimer: null,
       observer: undefined as unknown as ResizeObserver,
       mutationObserver: undefined as unknown as MutationObserver,
       observedChildren: new Set(),
@@ -287,6 +325,7 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
   unmounted(el) {
     const state = STATES.get(el);
     if (!state) return;
+    if (state.clearTimer) clearTimeout(state.clearTimer);
     state.cleanups.forEach(fn => fn());
     STATES.delete(el);
   },

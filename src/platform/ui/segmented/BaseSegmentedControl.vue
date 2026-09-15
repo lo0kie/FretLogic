@@ -70,15 +70,23 @@ import {
 } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
-import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
+import {
+  COMPACTED_SIZE_MAP,
+  DEFAULT_ICON_SIZES,
+  hitDragIndexOf as hitDragIndexPure,
+  resolveIndicatorGeometry as resolveIndicatorGeometryOf,
+  SIZE_MAP,
+  toEl,
+} from './BaseSegmentedControl.logic';
+
 import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
-import type { IconSizePreset, IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
+import type { IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 
 export interface SegmentOption<T> {
@@ -197,19 +205,6 @@ const isFullWidth = computed(() => props.block || resolvedWidth.value === '100%'
 /** 某选项是否为当前选中值 */
 const isSelected = (val: unknown) => Object.is(modelValue.value, val);
 
-const SIZE_MAP: Record<'sm' | 'md' | 'lg', { wrapper: string; item: string; textItem: string }> = {
-  sm: { wrapper: `${CONTROL_HEIGHT_CLASSES.sm}`, item: 'px-2 text-2xs', textItem: 'px-2 py-1 text-2xs' },
-  md: { wrapper: `${CONTROL_HEIGHT_CLASSES.md}`, item: 'px-3 text-2xs', textItem: 'px-2.5 py-1 text-xs' },
-  lg: { wrapper: `${CONTROL_HEIGHT_CLASSES.lg}`, item: 'px-3 text-xs', textItem: 'px-3 py-1.5 text-sm' },
-};
-
-/** 紧凑模式尺寸：进一步缩小按钮左右内边距（超紧凑） */
-const COMPACTED_SIZE_MAP: Record<'sm' | 'md' | 'lg', { wrapper: string; item: string; textItem: string }> = {
-  sm: { wrapper: `${CONTROL_HEIGHT_CLASSES.sm}`, item: 'px-1 text-2xs', textItem: 'px-1 py-1 text-2xs' },
-  md: { wrapper: `${CONTROL_HEIGHT_CLASSES.md}`, item: 'px-1.5 text-2xs', textItem: 'px-1.5 py-1 text-xs' },
-  lg: { wrapper: `${CONTROL_HEIGHT_CLASSES.lg}`, item: 'px-1.5 text-xs', textItem: 'px-1.5 py-1.5 text-sm' },
-};
-
 // 尺寸解析：行内 props > BaseForm 注入上下文 > 默认 md
 const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
 const resolvedSize = computed<ComponentSize>(() => props.size ?? controlContext?.size ?? 'md');
@@ -217,12 +212,6 @@ const resolvedSize = computed<ComponentSize>(() => props.size ?? controlContext?
 const sizeConfig = computed(() =>
   props.compacted ? COMPACTED_SIZE_MAP[resolvedSize.value] : SIZE_MAP[resolvedSize.value]
 );
-
-const DEFAULT_ICON_SIZES: Record<'sm' | 'md' | 'lg', IconSizePreset> = {
-  sm: 'sm',
-  md: 'md',
-  lg: 'xl',
-};
 
 const resolvedIconSize = computed(() => props.iconSize ?? DEFAULT_ICON_SIZES[resolvedSize.value]);
 
@@ -303,31 +292,9 @@ const sliderClasses = computed(() => [
     : 'bg-tint-primary-88 border-tint-primary-60 rounded-full border shadow-[0_1px_3px_rgba(var(--color-primary-rgb),0.12)]',
 ]);
 
-/** 下划线高度（px）：tabbed 形态贴段底部的主色细线 */
-const TAB_LINE_HEIGHT = 2;
-
-/**
- * 把「选项段几何」换算为「滑块在该段上应处的几何」——静止测量与拖动跟手预览共用同一换算，
- * 保证两种状态下指示器形状/位置严格一致（拖动时不会变成另一种形状）。
- *
- * - pill：与段同宽同高、顶部对齐；
- * - tabbed：恒为贴段底部的主色细线（高度固定 TAB_LINE_HEIGHT，纵向 = 段顶 + 段高 − 线厚）。
- *   开启 showInactiveBorder 时容器底部有 border-b 贯穿线（位于内容区下方 2px），
- *   滑块需下移到该 border 区与之重合，才能盖住浅色线、形成连续同厚的激活段。
- *
- * 注意：tabbed 下**不能**沿用选项段自身的 height/top，否则拖动时下划线会被撑成覆盖整段的高块。
- */
-const resolveIndicatorGeometry = (item: { width: number; height: number; top: number }) => {
-  if (visualVariant.value === 'tabbed') {
-    const lineShift = props.showInactiveBorder ? TAB_LINE_HEIGHT : 0;
-    return {
-      width: item.width,
-      height: TAB_LINE_HEIGHT,
-      y: item.top + item.height - TAB_LINE_HEIGHT + lineShift,
-    };
-  }
-  return { width: item.width, height: item.height, y: item.top };
-};
+/** 下划线高度与滑块几何换算：见 BaseSegmentedControl.logic.ts */
+const resolveIndicatorGeometry = (item: { width: number; height: number; top: number }) =>
+  resolveIndicatorGeometryOf(item, visualVariant.value, props.showInactiveBorder);
 
 /** 选项类名：按生效形态（pill / text / tabbed）与选中态拼装（整体禁用时不显示激活样式）；
  *  拖动滑块经过的可用选项以选中态文字色做落点预览高亮 */
@@ -361,17 +328,7 @@ const itemClasses = (opt: SegmentOption<T>, index: number): (string | Record<str
   ];
 };
 
-// 兼容组件实例（$el）与原生元素（el）
-const toEl = (raw: unknown): HTMLElement | null => {
-  if (!raw) return null;
-  if (raw instanceof HTMLElement) return raw;
-  if (raw && typeof raw === 'object') {
-    const r = raw as Record<string, unknown>;
-    if (r['$el'] instanceof HTMLElement) return r['$el'];
-    if (r['el'] instanceof HTMLElement) return r['el'];
-  }
-  return null;
-};
+// 兼容组件实例（$el）与原生元素（el）的解包逻辑见 BaseSegmentedControl.logic.ts
 
 /** 测量选中项位置并更新滑块指示器；无选中时隐藏。
  *  animate=false（ResizeObserver 路径）时暂停过渡直接贴合，避免连续布局变化下的缓动追赶抖动 */
@@ -504,21 +461,8 @@ let dragInset = { left: 0, top: 0, right: 0 };
  *  先跳后滑（悬停在选项边界抖动时即抽动）；抓取偏移让 x 连续、宽度独立渐变 */
 let dragGrabOffset = 0;
 
-/** 落点判定（夹逼语义）：选项间空隙与容器两侧越界都归并到更近一侧的选项——
- *  拖到边缘外一直拖再松手，仍能切换到最边缘的选项 */
-const hitDragIndex = (localX: number): number => {
-  if (dragItemRects.length === 0) return -1;
-  for (let i = 0; i < dragItemRects.length; i++) {
-    const rect = dragItemRects[i]!;
-    if (localX < rect.left) {
-      const prev = dragItemRects[i - 1];
-      if (!prev) return rect.index;
-      return localX - prev.right <= rect.left - localX ? prev.index : rect.index;
-    }
-    if (localX < rect.right) return rect.index;
-  }
-  return dragItemRects[dragItemRects.length - 1]!.index;
-};
+/** 落点判定（纯函数见 BaseSegmentedControl.logic.ts） */
+const hitDragIndex = (localX: number): number => hitDragIndexPure(localX, dragItemRects);
 
 const cleanupDragListeners = () => {
   window.removeEventListener('pointermove', handleDragPointerMove);

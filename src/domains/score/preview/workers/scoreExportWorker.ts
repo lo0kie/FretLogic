@@ -40,6 +40,8 @@ export interface WorkerExportPayload {
   singer?: string;
   keyText: string;
   capoText: string;
+  /** 拍号文本（如「拍号 4/4」，'' 表示未设置不绘制；旧 payload 缺省兼容） */
+  timeSignatureText?: string;
   lines: ExportLineItem[];
   mode: 'normal' | 'a4' | 'estimate';
   /** 画布配色（单一来源 tokens.scss 的 --fbc-* 变量，由主线程 resolveFretboardCanvasPalette 解析后传入；Worker 无 DOM 不能自取） */
@@ -685,13 +687,14 @@ const getHeaderHeight = (hasSinger: boolean): number =>
   SCORE_EXPORT_CONFIG.META_FONT_SIZE +
   SCORE_EXPORT_CONFIG.HEADER_BOTTOM_GAP;
 
-/** 绘制乐谱表头（标题、可选歌手副标题、调号与变调夹，元信息行整体水平居中，无分隔符） */
+/** 绘制乐谱表头（标题、可选歌手副标题、元信息行：原调 → Capo → 选调 推导链 + 拍号，竖线分隔，整体居中） */
 function renderHeader(
   ctx: OffscreenCanvasRenderingContext2D,
   title: string,
   singer: string,
   keyText: string,
   capoText: string,
+  timeSignatureText: string,
   width: number,
   startY: number,
   colors: ThemeColors
@@ -715,51 +718,106 @@ function renderHeader(
     y += SCORE_EXPORT_CONFIG.SINGER_SUBTITLE_FONT_SIZE + SCORE_EXPORT_CONFIG.SINGER_SUBTITLE_GAP;
   }
 
-  // 2. 元信息行（调号 + 变调夹连为一体，整体水平居中，无竖线分隔符）
+  // 2. 元信息行（方案 A：原调 → Capo → 选调 推导链 + 拍号，各项之间用竖线分隔，整体水平居中）
   const baselineY = y + SCORE_EXPORT_CONFIG.META_FONT_SIZE;
   const metaBaseFont = `500 ${SCORE_EXPORT_CONFIG.META_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
   const metaAccFont = `bold ${SCORE_EXPORT_CONFIG.META_ACCIDENTAL_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
-  const META_GAP = 12;
+  const metaLabelFont = `400 ${SCORE_EXPORT_CONFIG.META_FONT_SIZE - 2}px system-ui, -apple-system, sans-serif`;
+  const META_GAP = 10;
 
-  // 调号段：以「选调」为界拆成两组（原调 X / 选调 Y），仅组之间用 META_GAP 分隔；
-  // 组内空格保留字面宽度（只用于标签与调名之间），token 绘制支持升降号上标
+  // 统一的 meta 项结构：弱化标签 + 值 token（升降号上标），所有项同一字重与颜色
+  interface MetaItem {
+    label: string;
+    tokens: { text: string; isAccidental: boolean; width: number }[];
+    width: number;
+  }
+
+  // 把 keyText（「原调 X 选调 Y」或「选调 Y」）拆为带标签的项，并按 原调 → Capo → 选调 重排
+  const buildKeyItem = (segment: string): { label: string; valueText: string } => {
+    const trimmed = segment.trim();
+    for (const label of ['原调', '选调'] as const) {
+      if (trimmed.startsWith(label)) {
+        return { label, valueText: trimmed.slice(label.length).trim() };
+      }
+    }
+    return { label: '', valueText: trimmed };
+  };
+
+  const measureValueTokens = (valueText: string): MetaItem['tokens'] =>
+    parseChordNameTokens(valueText).map(token => {
+      ctx.font = token.isAccidental ? metaAccFont : metaBaseFont;
+      return { ...token, width: ctx.measureText(token.text).width };
+    });
+
+  const items: MetaItem[] = [];
   const keyGroups = keyText
     .split(/(?=选调)/)
     .map(s => s.trim())
     .filter(Boolean);
-  let keyWidth = 0;
-  const measuredGroups = keyGroups.map(segment => {
-    const tokens = parseChordNameTokens(segment).map(token => {
-      ctx.font = token.isAccidental ? metaAccFont : metaBaseFont;
-      const w = ctx.measureText(token.text).width;
-      keyWidth += w;
-      return { ...token, width: w };
-    });
-    return { tokens };
-  });
-  // 组间隔计入总宽：N 组有 N-1 个 META_GAP
-  keyWidth += META_GAP * Math.max(0, keyGroups.length - 1);
 
-  // 变调夹段宽度
-  ctx.font = metaBaseFont;
-  const capoLabel = `Capo: ${capoText}`;
-  const capoWidth = ctx.measureText(capoLabel).width;
+  const originalGroup = keyGroups.find(g => g.startsWith('原调'));
+  const playGroup = keyGroups.find(g => g.startsWith('选调')) ?? (originalGroup ? undefined : keyGroups[0]);
+  const playParsed = playGroup ? buildKeyItem(playGroup) : null;
 
-  // 整体水平居中：先算两段总宽（变调夹在左、调号在右），再从起点左对齐依次绘制
-  const metaStartX = centerX - (capoWidth + META_GAP + keyWidth) / 2;
+  if (originalGroup) {
+    const { label, valueText } = buildKeyItem(originalGroup);
+    const tokens = measureValueTokens(valueText);
+    items.push({ label, tokens, width: tokens.reduce((sum, t) => sum + t.width, 0) });
+  }
+  {
+    const tokens = measureValueTokens(capoText);
+    items.push({ label: 'Capo', tokens, width: tokens.reduce((sum, t) => sum + t.width, 0) });
+  }
+  if (playParsed) {
+    const tokens = measureValueTokens(playParsed.valueText);
+    items.push({ label: playParsed.label, tokens, width: tokens.reduce((sum, t) => sum + t.width, 0) });
+  }
+  if (timeSignatureText) {
+    const tokens = measureValueTokens(timeSignatureText);
+    items.push({ label: '拍号', tokens, width: tokens.reduce((sum, t) => sum + t.width, 0) });
+  }
+
+  // 标签宽度计入项宽；项间竖线分隔 = 两侧 META_GAP + 1px 线
+  const labelWidthOf = (label: string) => {
+    if (!label) return 0;
+    ctx.font = metaLabelFont;
+    return ctx.measureText(`${label} `).width;
+  };
+  const totalItemsWidth = items.reduce((sum, it) => sum + labelWidthOf(it.label) + it.width, 0);
+  const sepWidth = META_GAP * 2 + 1;
+  const metaStartX = centerX - (totalItemsWidth + sepWidth * Math.max(0, items.length - 1)) / 2;
+
+  let curX = metaStartX;
   ctx.fillStyle = colors.SUB_TEXT;
   ctx.textAlign = 'left';
-  ctx.fillText(capoLabel, metaStartX, baselineY);
-
-  // 调号段：与变调夹同基线，间隔 META_GAP；「原调」「选调」两组之间同样以 META_GAP 分隔
-  let curX = metaStartX + capoWidth + META_GAP;
-  measuredGroups.forEach((segment, segIdx) => {
-    if (segIdx > 0) curX += META_GAP;
-    for (const item of segment.tokens) {
-      ctx.font = item.isAccidental ? metaAccFont : metaBaseFont;
-      const itemY = item.isAccidental ? baselineY + SCORE_EXPORT_CONFIG.META_ACCIDENTAL_SUPERSCRIPT_OFFSET : baselineY;
-      ctx.fillText(item.text, curX, itemY);
-      curX += item.width;
+  items.forEach((item, itemIdx) => {
+    if (itemIdx > 0) {
+      // 竖线分隔：与值同基线，高度约一个字号
+      ctx.fillStyle = colors.DIVIDER;
+      ctx.fillRect(
+        curX + META_GAP,
+        baselineY - SCORE_EXPORT_CONFIG.META_FONT_SIZE + 3,
+        1,
+        SCORE_EXPORT_CONFIG.META_FONT_SIZE - 3
+      );
+      curX += sepWidth;
+      ctx.fillStyle = colors.SUB_TEXT;
+    }
+    // 标签：弱化小字号
+    if (item.label) {
+      ctx.font = metaLabelFont;
+      ctx.fillText(`${item.label} `, curX, baselineY);
+      curX += labelWidthOf(item.label);
+    }
+    // 值 token：统一次级色；升降号上标
+    for (const token of item.tokens) {
+      ctx.font = token.isAccidental ? metaAccFont : metaBaseFont;
+      ctx.fillStyle = colors.SUB_TEXT;
+      const tokenY = token.isAccidental
+        ? baselineY + SCORE_EXPORT_CONFIG.META_ACCIDENTAL_SUPERSCRIPT_OFFSET
+        : baselineY;
+      ctx.fillText(token.text, curX, tokenY);
+      curX += token.width;
     }
   });
 
@@ -794,6 +852,7 @@ async function renderLongImageBlob(
   singer: string,
   keyText: string,
   capoText: string,
+  timeSignatureText: string,
   colors: ThemeColors,
   layoutAlign: 'start' | 'center',
   showBarre: boolean,
@@ -833,7 +892,7 @@ async function renderLongImageBlob(
   ctx.fillRect(0, 0, canvasW, canvasH);
 
   let curY: number = pageMargin;
-  curY = renderHeader(ctx, title, singer, keyText, capoText, canvasW, curY, colors);
+  curY = renderHeader(ctx, title, singer, keyText, capoText, timeSignatureText, canvasW, curY, colors);
 
   for (let i = 0; i < allSegments.length; i++) {
     const seg = allSegments[i]!;
@@ -853,6 +912,192 @@ async function renderLongImageBlob(
   return canvas.convertToBlob({ type: 'image/jpeg', quality: jpegQuality });
 }
 
+/**
+ * A4 分页装箱：软折行后的分段按页高动态装箱。
+ * - 整句歌词跨页断裂保护：原始行首个分段放不下整句但全新一页放得下时，提前开新页；
+ * - 页首空行优化：新页尚未放入任何歌词时跳过纯空行，避免页首留白。
+ */
+function packA4Pages(allSegments: RenderSegment[], contentHeight: number, headerH: number): RenderSegment[][] {
+  const pages: RenderSegment[][] = [];
+  let curPageSegments: RenderSegment[] = [];
+  let curPageUsedH: number = headerH;
+
+  const isEmptySegment = (seg: RenderSegment) =>
+    seg.chars.length === 0 && !seg.startChords?.length && !seg.endChords?.length;
+
+  for (let i = 0; i < allSegments.length; i++) {
+    const seg = allSegments[i]!;
+
+    // 页首空行优化：如果新页尚未放入任何歌词，遇到纯空行直接跳过，避免页首留白
+    if (curPageSegments.length === 0 && isEmptySegment(seg)) {
+      continue;
+    }
+
+    const segContentH = seg.contentHeight;
+    const lastSeg = curPageSegments[curPageSegments.length - 1];
+    const gap = lastSeg
+      ? lastSeg.isLastSubLine
+        ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP
+        : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP
+      : 0;
+
+    let willOverflow = false;
+
+    // 整句歌词跨页保护：当这是一个原始歌词行的首个分段时，前瞻该原始行所有分段的总高度
+    if (!seg.isContinuation && curPageSegments.length > 0) {
+      let entireLineH = gap + segContentH;
+      for (let j = i + 1; j < allSegments.length; j++) {
+        const nextSeg = allSegments[j]!;
+        if (nextSeg.lineIdx !== seg.lineIdx) break;
+        entireLineH += SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP + nextSeg.contentHeight;
+      }
+      // 当前页放不下整句，但全新一页放得下 → 提前开新页，保证整句歌词完整留在同一页
+      if (curPageUsedH + entireLineH > contentHeight && entireLineH <= contentHeight) {
+        willOverflow = true;
+      }
+    }
+
+    // 常规溢出判定（单段放不下）
+    if (!willOverflow && curPageUsedH + gap + segContentH > contentHeight && curPageSegments.length > 0) {
+      willOverflow = true;
+    }
+
+    if (willOverflow) {
+      pages.push(curPageSegments);
+      curPageSegments = [];
+      curPageUsedH = 0;
+
+      // 新页若遇到纯空行则跳过
+      if (isEmptySegment(seg)) {
+        continue;
+      }
+    }
+
+    const effectiveGap = willOverflow || curPageSegments.length === 0 ? 0 : gap;
+    curPageSegments.push(seg);
+    curPageUsedH += effectiveGap + segContentH;
+  }
+  if (curPageSegments.length > 0 || pages.length === 0) {
+    pages.push(curPageSegments);
+  }
+
+  return pages;
+}
+
+/** 装箱后按段的 lineIdx 归集每页覆盖的原始歌词行序号（升序去重），供外部按页重组内容 */
+function computePageLineRanges(pages: RenderSegment[][]): number[][] {
+  return pages.map(pageSegments => {
+    const seen = new Set<number>();
+    for (const seg of pageSegments) seen.add(seg.lineIdx);
+    return [...seen].sort((a, b) => a - b);
+  });
+}
+
+interface A4PageRenderOptions {
+  pageSegments: RenderSegment[];
+  pageIndex: number;
+  /** 首页绘制表头 */
+  isFirstPage: boolean;
+  isFullPage: boolean;
+  title: string;
+  singer: string;
+  keyText: string;
+  capoText: string;
+  timeSignatureText: string;
+  canvasW: number;
+  canvasH: number;
+  pageMargin: number;
+  colors: ThemeColors;
+  layoutAlign: 'start' | 'center';
+  showBarre: boolean;
+  showFooter: boolean;
+  lyricsFontWeight: number;
+  jpegQuality: number;
+}
+
+/** 渲染单页 A4：整页时按 space-between 动态膨胀行距（上限 1.35 倍默认行距），含可选页脚页码。 */
+async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
+  const {
+    pageSegments,
+    pageIndex,
+    isFirstPage,
+    isFullPage,
+    title,
+    singer,
+    keyText,
+    capoText,
+    timeSignatureText,
+    canvasW,
+    canvasH,
+    pageMargin,
+    colors,
+    layoutAlign,
+    showBarre,
+    showFooter,
+    lyricsFontWeight,
+    jpegQuality,
+  } = opts;
+
+  const canvas = new OffscreenCanvas(
+    canvasW * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
+    canvasH * SCORE_EXPORT_CONFIG.PIXEL_RATIO
+  );
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(SCORE_EXPORT_CONFIG.PIXEL_RATIO, SCORE_EXPORT_CONFIG.PIXEL_RATIO);
+
+  ctx.fillStyle = colors.BG;
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  let curY: number = pageMargin;
+  if (isFirstPage) {
+    curY = renderHeader(ctx, title, singer, keyText, capoText, timeSignatureText, canvasW, curY, colors);
+  }
+
+  // 合并为单次循环：计算 space-between 参数 + 逐段绘制
+  const pageAvailH = canvasH - pageMargin - curY;
+
+  let totalContentH = 0;
+  let totalWrappedGapsH = 0;
+  let majorGapCount = 0;
+  for (let i = 0; i < pageSegments.length - 1; i++) {
+    const s = pageSegments[i]!;
+    totalContentH += s.contentHeight;
+    if (s.isLastSubLine) majorGapCount++;
+    else totalWrappedGapsH += SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
+  }
+  if (pageSegments.length > 0) totalContentH += pageSegments[pageSegments.length - 1]!.contentHeight;
+
+  let dynamicRowGap: number = SCORE_EXPORT_CONFIG.LINE_ROW_GAP;
+  if (isFullPage && majorGapCount > 0) {
+    const rawGap = (pageAvailH - totalContentH - totalWrappedGapsH) / majorGapCount;
+    // 限制最大膨胀上限为默认行距的 1.35 倍，避免因整句跨页保护导致少行时行距被暴力拉伸至夸张间距
+    const maxAllowedGap = SCORE_EXPORT_CONFIG.LINE_ROW_GAP * 1.35;
+    dynamicRowGap = Math.min(maxAllowedGap, Math.max(SCORE_EXPORT_CONFIG.LINE_ROW_GAP, rawGap));
+  }
+
+  for (let i = 0; i < pageSegments.length; i++) {
+    const seg = pageSegments[i]!;
+    const isLastInPage = i === pageSegments.length - 1;
+    const defaultGap = seg.isLastSubLine ? dynamicRowGap : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
+    const rowGap = isLastInPage ? 0 : defaultGap;
+    const segW = getSegmentWidth(seg);
+    const isCenter = layoutAlign === 'center';
+    const startX = isCenter
+      ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) +
+        (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0)
+      : pageMargin + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
+    const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
+    curY = res.nextY;
+  }
+
+  // 页脚页码：在底部页边距内居中显示「第 X 页」，开关关闭时跳过
+  if (showFooter) {
+    renderFooter(ctx, pageIndex, canvasW, canvasH, pageMargin, colors);
+  }
+
+  return canvas.convertToBlob({ type: 'image/jpeg', quality: jpegQuality });
+}
+
 if (typeof self !== 'undefined') {
   self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
     try {
@@ -861,6 +1106,7 @@ if (typeof self !== 'undefined') {
         singer = '',
         keyText,
         capoText,
+        timeSignatureText = '',
         lines,
         mode,
         colors,
@@ -901,146 +1147,34 @@ if (typeof self !== 'undefined') {
         const headerH = getHeaderHeight(Boolean(singer));
         const availWidth = pageW - pageMargin * 2;
 
-        // 1. 超长行软折行
+        // 1. 超长行软折行 → 2. 动态装箱分页（整句跨页保护 + 页首空行优化）
         const allSegments = wrapScoreLines(lines, availWidth);
+        const pages = packA4Pages(allSegments, contentHeight, headerH);
 
-        // 2. 动态装箱分页：合并 neededGap/actualGap 为单变量，溢出时置零
-        // 2. 动态装箱分页：整句歌词跨页断裂保护 + 页首空行优化
-        const pages: RenderSegment[][] = [];
-        let curPageSegments: RenderSegment[] = [];
-        let curPageUsedH: number = headerH;
-
-        for (let i = 0; i < allSegments.length; i++) {
-          const seg = allSegments[i]!;
-
-          // 页首空行优化：如果新页尚未放入任何歌词，遇到纯空行直接跳过，避免页首留白
-          if (
-            curPageSegments.length === 0 &&
-            seg.chars.length === 0 &&
-            !seg.startChords?.length &&
-            !seg.endChords?.length
-          ) {
-            continue;
-          }
-
-          const segContentH = seg.contentHeight;
-          const lastSeg = curPageSegments[curPageSegments.length - 1];
-          const gap = lastSeg
-            ? lastSeg.isLastSubLine
-              ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP
-              : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP
-            : 0;
-
-          let willOverflow = false;
-
-          // 整句歌词跨页保护：当这是一个原始歌词行的首个分段时，前瞻该原始行所有分段的总高度
-          if (!seg.isContinuation && curPageSegments.length > 0) {
-            let entireLineH = gap + segContentH;
-            for (let j = i + 1; j < allSegments.length; j++) {
-              const nextSeg = allSegments[j]!;
-              if (nextSeg.lineIdx !== seg.lineIdx) break;
-              entireLineH += SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP + nextSeg.contentHeight;
-            }
-            // 当前页放不下整句，但全新一页放得下 → 提前开新页，保证整句歌词完整留在同一页
-            if (curPageUsedH + entireLineH > contentHeight && entireLineH <= contentHeight) {
-              willOverflow = true;
-            }
-          }
-
-          // 常规溢出判定（单段放不下）
-          if (!willOverflow && curPageUsedH + gap + segContentH > contentHeight && curPageSegments.length > 0) {
-            willOverflow = true;
-          }
-
-          if (willOverflow) {
-            pages.push(curPageSegments);
-            curPageSegments = [];
-            curPageUsedH = 0;
-
-            // 新页若遇到纯空行则跳过
-            if (seg.chars.length === 0 && !seg.startChords?.length && !seg.endChords?.length) {
-              continue;
-            }
-          }
-
-          const effectiveGap = willOverflow || curPageSegments.length === 0 ? 0 : gap;
-          curPageSegments.push(seg);
-          curPageUsedH += effectiveGap + segContentH;
-        }
-        if (curPageSegments.length > 0 || pages.length === 0) {
-          pages.push(curPageSegments);
-        }
-
-        // 每页覆盖的原始歌词行序号（升序去重）：装箱后按段的 lineIdx 归集，供外部按页重组内容
-        pageLineRanges = pages.map(pageSegments => {
-          const seen = new Set<number>();
-          for (const seg of pageSegments) seen.add(seg.lineIdx);
-          return [...seen].sort((a, b) => a - b);
-        });
+        // 每页覆盖的原始歌词行序号（升序去重）
+        pageLineRanges = computePageLineRanges(pages);
 
         for (let pIdx = 0; pIdx < pages.length; pIdx++) {
-          const pageSegments = pages[pIdx]!;
-          const canvasW = pageW;
-          const canvasH = pageH;
-          const canvas = new OffscreenCanvas(
-            canvasW * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
-            canvasH * SCORE_EXPORT_CONFIG.PIXEL_RATIO
-          );
-          const ctx = canvas.getContext('2d')!;
-          ctx.scale(SCORE_EXPORT_CONFIG.PIXEL_RATIO, SCORE_EXPORT_CONFIG.PIXEL_RATIO);
-
-          ctx.fillStyle = colors.BG;
-          ctx.fillRect(0, 0, canvasW, canvasH);
-
-          let curY: number = pageMargin;
-          if (pIdx === 0) {
-            curY = renderHeader(ctx, title, singer, keyText, capoText, canvasW, curY, colors);
-          }
-
-          // 合并为单次循环：计算 space-between 参数 + 逐段绘制
-          const pageAvailH = canvasH - pageMargin - curY;
-          const isFullPage = pIdx < pages.length - 1;
-
-          let totalContentH = 0;
-          let totalWrappedGapsH = 0;
-          let majorGapCount = 0;
-          for (let i = 0; i < pageSegments.length - 1; i++) {
-            const s = pageSegments[i]!;
-            totalContentH += s.contentHeight;
-            if (s.isLastSubLine) majorGapCount++;
-            else totalWrappedGapsH += SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
-          }
-          if (pageSegments.length > 0) totalContentH += pageSegments[pageSegments.length - 1]!.contentHeight;
-
-          let dynamicRowGap: number = SCORE_EXPORT_CONFIG.LINE_ROW_GAP;
-          if (isFullPage && majorGapCount > 0) {
-            const rawGap = (pageAvailH - totalContentH - totalWrappedGapsH) / majorGapCount;
-            // 限制最大膨胀上限为默认行距的 1.35 倍，避免因整句跨页保护导致少行时行距被暴力拉伸至夸张间距
-            const maxAllowedGap = SCORE_EXPORT_CONFIG.LINE_ROW_GAP * 1.35;
-            dynamicRowGap = Math.min(maxAllowedGap, Math.max(SCORE_EXPORT_CONFIG.LINE_ROW_GAP, rawGap));
-          }
-
-          for (let i = 0; i < pageSegments.length; i++) {
-            const seg = pageSegments[i]!;
-            const isLastInPage = i === pageSegments.length - 1;
-            const defaultGap = seg.isLastSubLine ? dynamicRowGap : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
-            const rowGap = isLastInPage ? 0 : defaultGap;
-            const segW = getSegmentWidth(seg);
-            const isCenter = layoutAlign === 'center';
-            const startX = isCenter
-              ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) +
-                (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0)
-              : pageMargin + (seg.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0);
-            const res = renderScoreLine(ctx, seg, startX, curY, colors, showBarre, lyricsFontWeight, rowGap);
-            curY = res.nextY;
-          }
-
-          // 页脚页码：在底部页边距内居中显示「第 X 页」，开关关闭时跳过
-          if (showFooter) {
-            renderFooter(ctx, pIdx, canvasW, canvasH, pageMargin, colors);
-          }
-
-          const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: jpegQuality });
+          const blob = await renderA4Page({
+            pageSegments: pages[pIdx]!,
+            pageIndex: pIdx,
+            isFirstPage: pIdx === 0,
+            isFullPage: pIdx < pages.length - 1,
+            title,
+            singer,
+            keyText,
+            capoText,
+            timeSignatureText,
+            canvasW: pageW,
+            canvasH: pageH,
+            pageMargin,
+            colors,
+            layoutAlign: layoutAlign ?? 'start',
+            showBarre,
+            showFooter,
+            lyricsFontWeight,
+            jpegQuality,
+          });
           blobs.push(blob);
 
           self.postMessage({
@@ -1056,6 +1190,7 @@ if (typeof self !== 'undefined') {
           singer,
           keyText,
           capoText,
+          timeSignatureText,
           colors,
           layoutAlign ?? 'start',
           showBarre,
@@ -1073,6 +1208,7 @@ if (typeof self !== 'undefined') {
           singer,
           keyText,
           capoText,
+          timeSignatureText,
           colors,
           layoutAlign ?? 'start',
           showBarre,
