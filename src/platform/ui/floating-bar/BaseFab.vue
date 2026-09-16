@@ -17,7 +17,7 @@
         v-tooltip.top="computedTooltip"
         :aria-label="computedAriaLabel"
         :class="[positionClass, alignClass, zIndexClass, fabSizeClass]"
-        :style="outerStyle"
+        :style="positionStyle"
         class="base-fab pointer-events-auto flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full border border-glass-border bg-surface-panel/95 shadow-lg backdrop-blur-xl select-none hover:ring-2 hover:ring-primary/70 active:scale-95"
         type="button"
       >
@@ -30,12 +30,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, ref } from 'vue';
+import { computed } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { logger } from '@/platform/utils/logger';
 
-import { ALIGN_CLASS_MAP, toPositionLength } from './floatingPositions';
+import { ALIGN_CLASS_MAP } from './floatingPositions';
+import { useFloatingPosition, useKeepAliveVisible } from './useFloatingPosition';
 
 import type { TooltipOptions } from '@/platform/directives/vTooltip';
 import type { ComponentSize } from '@/platform/types';
@@ -117,7 +118,7 @@ const emit = defineEmits<{
   (e: 'after-leave', el: Element): void;
 }>();
 
-// left/right 与 top/bottom 的互斥规则分别落在 alignClass 与 outerStyle 两处、纯靠 !== undefined 约定。
+// left/right 与 top/bottom 的互斥规则分别落在 alignClass 与 positionStyle 两处、纯靠 !== undefined 约定。
 // 同时传入时高优先级一方胜出、另一方被静默忽略（无类型层约束）——开发期显式提示，避免调用方踩空。
 if (import.meta.env.DEV) {
   if (props.left !== undefined && props.right !== undefined) {
@@ -128,21 +129,11 @@ if (import.meta.env.DEV) {
   }
 }
 
-// 初始为 true：保证首次挂载（含 KeepAlive 初始激活）即可见；
-// 切走时 onDeactivated 置 false 隐藏，切回时 onActivated 置 true 恢复。
-const isViewActive = ref(true);
-
-onActivated(() => {
-  isViewActive.value = true;
-});
-
-onDeactivated(() => {
-  isViewActive.value = false;
-});
+const isViewActive = useKeepAliveVisible();
 
 const isButtonVisible = computed(() => Boolean(props.visible && isViewActive.value));
 
-const positionClass = computed(() => (props.position === 'absolute' ? 'absolute' : 'fixed'));
+const { positionClass, zIndexClass, positionStyle } = useFloatingPosition(props, 'BaseFab');
 
 const alignClass = computed(() => {
   // 显式指定 left/right 时，仅用其对侧 auto 收边，距边距离交给 inline style 处理
@@ -153,8 +144,6 @@ const alignClass = computed(() => {
   if (props.align === 'center') return ALIGN_CLASS_MAP.center;
   return ALIGN_CLASS_MAP.end;
 });
-
-const zIndexClass = computed(() => (typeof props.zIndex === 'string' ? props.zIndex : ''));
 
 const FAB_SIZE_MAP: Record<'sm' | 'md' | 'lg', string> = {
   sm: 'h-[1.9rem] w-[1.9rem]',
@@ -178,55 +167,15 @@ const computedTooltip = computed<TooltipOptions | undefined>(() => {
     offset: props.tooltipOffset ?? 12,
   };
 });
-
-// 安全区与边定位：垂直优先 top，否则 bottom（叠加底部安全区）；水平优先 left/right，否则由 alignClass 决定（默认靠右 1rem）。
-// 各定位值经 toPositionLength 统一转 px/校验（非法字符串开发期告警）
-const outerStyle = computed(() => {
-  const style: Record<string, string | number> = {};
-  if (props.top !== undefined) {
-    style['top'] = toPositionLength(props.top, 'BaseFab');
-  } else {
-    const b = toPositionLength(props.bottom, 'BaseFab');
-    style['bottom'] = props.safeAreaInset ? `calc(${b} + env(safe-area-inset-bottom, 0px))` : b;
-  }
-  if (props.left !== undefined) {
-    style['left'] = toPositionLength(props.left, 'BaseFab');
-  } else if (props.right !== undefined) {
-    style['right'] = toPositionLength(props.right, 'BaseFab');
-  }
-  if (typeof props.zIndex === 'number') {
-    style['zIndex'] = props.zIndex;
-  }
-  return style;
-});
 </script>
 
 <style scoped lang="scss">
-/* 常态 hover 过渡：只影响底色/边框/阴影，不与进出场动画抢 transition-property */
+/* 常态 hover 过渡：只影响底色/边框/阴影，不与进出场动画抢 transition-property。
+   进出场动画 v-floating-bar-slide-* 收拢于 assets/transitions.scss（与 BaseFloatingPill 共用） */
 .base-fab {
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease,
     box-shadow 0.15s ease;
-}
-
-/* 进出场动画：!important 确保在 enter/leave 阶段强制覆盖 transition-property */
-:global(.v-floating-bar-slide-enter-active),
-:global(.v-floating-bar-slide-leave-active) {
-  transition:
-    opacity 0.25s cubic-bezier(0, 0, 0.2, 1),
-    transform 0.25s cubic-bezier(0, 0, 0.2, 1) !important;
-}
-
-:global(.v-floating-bar-slide-enter-from),
-:global(.v-floating-bar-slide-leave-to) {
-  transform: translateY(16px) scale(0.96);
-  opacity: 0;
-}
-
-:global(.v-floating-bar-slide-enter-to),
-:global(.v-floating-bar-slide-leave-from) {
-  transform: translateY(0) scale(1);
-  opacity: 1;
 }
 </style>

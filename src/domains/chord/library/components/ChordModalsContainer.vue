@@ -25,7 +25,7 @@
     </div>
   </BaseModal>
 
-  <BaseModal v-model:visible="groupModals.modals.chordVariantsDelete" :show-footer="false" width="w-large">
+  <BaseModal v-model:visible="groupModals.modals.chordVariantsDelete" :show-footer="false" width="xl">
     <template #title>
       <span
         v-chord-name="{ name: groupModals.modalData.referenceChordName, prefix: '删除和弦 ', suffix: ' 的指法' }"

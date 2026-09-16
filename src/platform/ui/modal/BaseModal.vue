@@ -2,7 +2,7 @@
   <Teleport :disabled="disabledTeleport" :to="teleportTo">
     <Transition
       @after-enter="emit('opened')"
-      @after-leave="emit('closed')"
+      @after-leave="handleAfterLeave()"
       @before-enter="emit('open')"
       @before-leave="emit('close')"
       name="v-transition-modal"
@@ -12,6 +12,7 @@
         v-if="destroyOnClose ? visible : true"
         v-show="visible"
         :class="overlayAlignClass"
+        :style="{ zIndex: overlayZ > 0 ? overlayZ : undefined }"
         @click.self="handleMaskClick($event)"
         @mousedown="handleMaskMousedown($event)"
         class="modal-overlay-container fixed inset-0 z-overlay flex overflow-y-auto bg-black/50 p-md"
@@ -53,7 +54,7 @@
                   <slot name="header-extra" />
                   <ActionButton
                     v-if="showClose"
-                    :disabled="confirmLoading"
+                    :disabled="closeButtonDisabled || closeLocked"
                     @click="close('close')"
                     icon-only
                     aria-label="关闭"
@@ -98,7 +99,7 @@
               <slot name="footer">
                 <slot name="cancel-btn">
                   <ActionButton
-                    :disabled="cancelButtonDisabled || confirmLoading"
+                    :disabled="cancelButtonDisabled || closeLocked"
                     :label="cancelText"
                     @click="close('cancel')"
                     variant="default"
@@ -127,19 +128,18 @@
 <script lang="ts">
 // 双 script 块的 SFC 视为同一模块：import 必须整体置于第一个块顶部（import/first），
 // 下方 <script setup> 直接复用这些绑定
-import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
-
-import { useEventListener, useScrollLock } from '@vueuse/core';
+import { computed, useId, useSlots, useTemplateRef } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import {
-  hasActiveOverlays,
-  isClient,
-  isTopOverlay,
-  registerOverlay,
-  unregisterOverlay,
-} from '@/platform/ui/overlay/overlayStack';
+  useOverlayCloseGuard,
+  useOverlayEscape,
+  useOverlayFocusTrap,
+  useOverlayMaskClose,
+} from '@/platform/ui/overlay/overlayGuards';
+import { useOverlayLifecycle } from '@/platform/ui/overlay/overlayLifecycle';
+import { isTopOverlay } from '@/platform/ui/overlay/overlayStack';
 
 import type { ModalCloseReason } from './modalCloseReason';
 import type { ThemeColor } from '@/platform/types';
@@ -154,8 +154,9 @@ const props = withDefaults(
   defineProps<{
     /** 弹窗标题（配合默认 footer 或独立使用） */
     title?: string;
-    /** 预设别名或任意自定义值：number 视为 px，字符串如 "520px" 直接生效 */
-    width?: 'w-sm' | 'w-md' | 'w-80' | 'w-lg' | 'w-large' | 'w-xl' | 'w-wide' | 'w-full' | (string & {}) | number;
+    /** 宽度预设档位（sm 380 / md 480 / lg 640 / xl 840 / 2xl 1080 / full 1320 px），
+     *  也支持自定义：number 视为 px，字符串如 "520px" 直接生效 */
+    width?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | (string & {}) | number;
     /** 高度预设别名或自定义值：number 视为 px，字符串原样生效 */
     height?: 'h-auto' | 'h-sm' | 'h-md' | 'h-lg' | 'h-xl' | 'h-full' | (string & {}) | number;
     /** 是否渲染底部按钮区（取消/确认），默认 true */
@@ -178,6 +179,10 @@ const props = withDefaults(
     confirmButtonDisabled?: boolean;
     /** 禁用取消按钮 */
     cancelButtonDisabled?: boolean;
+    /** 禁用右上角关闭（X）按钮（仅影响 X，不阻塞遮罩/ESC/取消关闭） */
+    closeButtonDisabled?: boolean;
+    /** 锁定关闭：禁用所有用户关闭路径（X / 取消 / 遮罩 / ESC），仅允许父级程序化置 v-model 关闭 */
+    closeLocked?: boolean;
     /** 关闭前拦截：返回 false 或 Promise<false> 可阻止关闭（取消按钮、遮罩、ESC、X 均生效） */
     beforeClose?: () => boolean | Promise<boolean>;
     /** Teleport 挂载目标，默认 'body' */
@@ -193,7 +198,7 @@ const props = withDefaults(
   }>(),
   {
     title: '',
-    width: 'w-80',
+    width: 'md',
     height: 'h-auto',
     showFooter: true,
     showClose: true,
@@ -205,6 +210,8 @@ const props = withDefaults(
     confirmLoading: false,
     confirmButtonDisabled: false,
     cancelButtonDisabled: false,
+    closeButtonDisabled: false,
+    closeLocked: false,
     teleportTo: 'body',
     disabledTeleport: false,
     centered: true,
@@ -235,9 +242,6 @@ const isAutoHeight = computed(() => {
   return false;
 });
 
-// SSR 安全：服务端无 document，降级为普通 ref，避免运行时崩溃
-const isBodyLocked = isClient ? useScrollLock(document.body) : ref(false);
-
 const isCentered = computed(() => props.centered && props.top === undefined);
 
 const overlayAlignClass = computed(() => {
@@ -258,16 +262,14 @@ const topStyle = computed(() => {
   return {};
 });
 
-// 预设尺寸映射：全部为固定像素尺寸，不再携带 vw/vh 上限（弹窗尺寸不随视口变化）
+// 预设尺寸映射（语义档位，全固定像素，不随视口变化）
 const WIDTH_MAP: Record<string, string> = {
-  'w-sm': '380px',
-  'w-md': '480px',
-  'w-80': '480px',
-  'w-lg': '640px',
-  'w-large': '840px',
-  'w-xl': '840px',
-  'w-wide': '1080px',
-  'w-full': '1320px',
+  'sm': '380px',
+  'md': '480px',
+  'lg': '640px',
+  'xl': '840px',
+  '2xl': '1080px',
+  'full': '1320px',
 };
 const HEIGHT_MAP: Record<string, string> = {
   'h-auto': 'auto',
@@ -293,121 +295,42 @@ const sizeStyle = computed<Record<string, string>>(() => {
   return style;
 });
 
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const hasHeader = computed(() =>
   Boolean(slots['header'] || slots['header-extra'] || slots['title'] || props.title || props.showClose)
 );
 
-let stopKeydownListener: (() => void) | null = null;
-/** 解绑全局键盘监听 */
-const clearListeners = () => {
-  stopKeydownListener?.();
-  stopKeydownListener = null;
-};
-
-// 仅当自身位于阻断层栈顶时才响应 Esc，避免一次按键同时关闭所有层叠弹窗
-const isTopOverlayActive = () => isTopOverlay(overlayRef.value);
-
-/** Esc 关闭：keyboard 开启且自身为栈顶时生效 */
-const handleEscape = (e: KeyboardEvent) => {
-  if (e.key !== 'Escape') return;
-  if (!props.keyboard || !isTopOverlayActive()) return;
-  close('esc');
-};
-
-watch(
+// ---------- 共享浮层生命周期与交互守卫（唯一来源：platform/ui/overlay/*） ----------
+const close = useOverlayCloseGuard({
   visible,
-  async isOpen => {
-    if (!isOpen) {
-      clearListeners();
-      if (overlayRef.value) {
-        unregisterOverlay(overlayRef.value);
-      }
-      isBodyLocked.value = hasActiveOverlays() > 0;
-    } else {
-      isBodyLocked.value = true;
-      stopKeydownListener = useEventListener(window, 'keydown', handleEscape);
-      // 待 DOM 挂载后加入激活栈。用 nextTick（渲染冲刷后的微任务）而非裸 setTimeout(0)（下一个宏任务）：
-      // 语义更贴合「DOM 已更新」，且多个层叠元素几乎同时打开时，入栈顺序与各 watch 的触发顺序严格一致，
-      // 不会因宏任务排队时机与其它异步逻辑交织而错序。
-      void nextTick(() => {
-        if (overlayRef.value) {
-          registerOverlay(overlayRef.value);
-        }
-      });
-    }
-  },
-  { immediate: true }
-);
-
-/** Tab 焦点圈定：在弹窗内首个/末个可聚焦元素间循环 */
-const handleKeydownTrap = (e: KeyboardEvent) => {
-  if (e.key !== 'Tab' || !modalCardRef.value) return;
-  const focusables = Array.from(modalCardRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-  if (focusables.length === 0) {
-    modalCardRef.value.focus();
-    return;
-  }
-  const firstEl = focusables[0]!;
-  const lastEl = focusables[focusables.length - 1]!;
-  if (e.shiftKey) {
-    if (document.activeElement === firstEl || document.activeElement === modalCardRef.value) {
-      e.preventDefault();
-      lastEl.focus();
-    }
-  } else {
-    if (document.activeElement === lastEl) {
-      e.preventDefault();
-      firstEl.focus();
-    }
-  }
-};
-
-onBeforeUnmount(() => {
-  clearListeners();
-  if (overlayRef.value) {
-    unregisterOverlay(overlayRef.value);
-  }
-  isBodyLocked.value = hasActiveOverlays() > 0;
+  isLocked: () => props.closeLocked,
+  getBeforeClose: () => props.beforeClose,
+  onCancel: reason => emit('cancel', reason),
 });
 
-// 统一关闭入口：加载中禁止关闭，并支持 beforeClose 拦截；reason 标识关闭来源
-let closePending = false;
-const close = async (reason: ModalCloseReason = 'cancel') => {
-  // beforeClose 执行期间防重入：遮罩 / X / Esc 并发触发（或二次确认期间再次点击）时，
-  // 只让一次请求进入拦截，避免异步 beforeClose（二次确认 / 远端校验）被重复拉起。
-  // 拦截成功放行后可见性同步置 false，组件随即卸载/隐藏，不再有新的点击窗口。
-  if (closePending || props.confirmLoading) return;
-  if (props.beforeClose) {
-    closePending = true;
-    try {
-      const ok = await props.beforeClose();
-      if (ok === false) return; // 拦截：放弃本次关闭，closePending 由 finally 复位，允许下次重试
-    } finally {
-      closePending = false;
-    }
-  }
-  emit('cancel', reason);
-  visible.value = false;
-};
+const handleEscape = useOverlayEscape({
+  enabled: () => props.keyboard && !props.closeLocked,
+  isTop: () => isTopOverlay(overlayRef.value),
+  close,
+});
+
+const { overlayZ, handleAfterLeave } = useOverlayLifecycle({
+  visible,
+  overlayRef,
+  onEscape: handleEscape,
+  locksBody: () => true,
+  onAfterLeave: () => emit('closed'),
+});
+
+const handleKeydownTrap = useOverlayFocusTrap(modalCardRef);
+
+const { handleMaskMousedown, handleMaskClick } = useOverlayMaskClose({
+  canClose: () => props.closeOnMask && !props.closeLocked,
+  close,
+});
 
 /** 确认按钮：loading 中防重复，派发 confirm */
 const handleConfirm = () => {
   if (props.confirmLoading) return; // 防止重复触发
   emit('confirm');
-};
-
-let mousedownTarget: EventTarget | null = null;
-/** 记录按下位置：仅「按下与松开都在蒙层上」才视为点击蒙层 */
-const handleMaskMousedown = (e: MouseEvent) => {
-  mousedownTarget = e.target;
-};
-/** 蒙层点击关闭：校验按下/松开目标一致，避免从弹窗内拖拽出来误关 */
-const handleMaskClick = (e: MouseEvent) => {
-  if (props.closeOnMask && e.target === e.currentTarget && mousedownTarget === e.currentTarget) {
-    close('mask');
-  }
-  mousedownTarget = null;
 };
 </script>

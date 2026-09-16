@@ -5,46 +5,30 @@
  * - A4 分页 PDF 下载
  * - 下载菜单标题的文件尺寸预估（复用 Worker 真实渲染）
  *
- * 从 TopHeader.vue 抽离：三段导出共享 payload 构造与 toast/错误样板，收敛为
- * runWorkerExportWithToast 通用管线，组件内只保留菜单项与响应式绑定。
+ * 从 TopHeader.vue 抽离：三段导出共享 payload 构造与 toast/错误样板，统一走
+ * runBusyAction 通用管线，组件内只保留菜单项与响应式绑定。
  */
-import { computed, ref, watch } from 'vue';
+import { computed } from 'vue';
 
+import { storeToRefs } from 'pinia';
 import { useRoute } from 'vue-router';
 
 import { getScorePageSize } from '@/domains/score/constants';
-import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import {
-  prepareWorkerExportPayload,
-  runWorkerEstimate,
-  runWorkerExport,
-} from '@/domains/score/preview/services/workerExportService';
+import { currentRenderData, fetchA4PageBlob, isPreviewRendering } from '@/domains/score/preview/scorePreviewCache';
+import { runWorkerExport } from '@/domains/score/preview/services/workerExportService';
+import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
+import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { buildExportFileName, triggerBlobDownload } from '@/platform/utils/canvas';
+import { formatBytes } from '@/platform/utils/common';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
 import { buildImagePdf } from '@/platform/utils/pdf';
 
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { PdfImagePage } from '@/platform/utils/pdf';
-
-/** Worker 导出载荷类型（prepareWorkerExportPayload 返回值） */
-type ExportPayload = ReturnType<typeof prepareWorkerExportPayload>;
-
-/** 字节数 → 人类可读尺寸（中文单位：B / KB / MB / GB） */
-const formatBytes = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ['KB', 'MB', 'GB'];
-  let value = bytes / 1024;
-  let unitIdx = 0;
-  while (value >= 1024 && unitIdx < units.length - 1) {
-    value /= 1024;
-    unitIdx++;
-  }
-  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${units[unitIdx]}`;
-};
 
 /** 预览导出模式：乐谱页且处于预览 tab（下载菜单与尺寸预估仅在此 tab 提供） */
 const isPreviewExportModeOf = () => {
@@ -57,241 +41,143 @@ export const useScoreExportActions = () => {
   const scoreEditor = useScoreEditorStore();
   const settingsStore = useSettingsStore();
   const uiStore = useUiStore();
-  const { chordsLookupMap } = useScoreLinesData();
+  const { isCopying } = storeToRefs(uiStore);
   const isPreviewExportMode = isPreviewExportModeOf();
-
-  /** 整曲全部歌词行索引（预览/导出始终覆盖全曲） */
-  const allLyricsLineIndices = (): number[] => {
-    const lyrics = scoreEditor.activeSong?.lyrics;
-    if (!lyrics) return [];
-    return Array.from({ length: lyrics.split('\n').length }, (_, i) => i);
-  };
-
-  /** 统一构造 Worker 导出载荷（normal / a4 模式共用同一组设置项） */
-  const buildExportPayload = (mode: 'normal' | 'a4'): ExportPayload =>
-    prepareWorkerExportPayload(
-      scoreEditor.activeSong!,
-      allLyricsLineIndices(),
-      chordsLookupMap.value,
-      mode,
-      settingsStore.scoreChordShorthand,
-      settingsStore.scoreLayoutAlign,
-      scoreEditor.fontScale,
-      scoreEditor.fretboardScale,
-      settingsStore.scoreShowBarre,
-      settingsStore.scoreLyricsFontWeight,
-      settingsStore.scoreExportQuality,
-      settingsStore.scorePageMargin,
-      settingsStore.scorePageSize,
-      settingsStore.scoreShowFooter,
-      settingsStore.scoreIgnoreEmptySpace
-    );
+  // Worker 渲染载荷统一构建（全曲行索引 + 设置项读取），与预览面板共享同一来源
+  const { getAllLineIndices, buildRenderPayload } = useScoreRenderPayload();
 
   /**
    * 预览 tab 的导出：整曲经 Worker 离屏渲染为一张长图（normal 模式），
    * 再按操作写入剪贴板或触发浏览器下载。
    */
-  const handleScoreExport = async (op: 'copy' | 'download') => {
-    if (uiStore.isCopying) return;
+  const handleScoreExport = (op: 'copy' | 'download') => {
     const song = scoreEditor.activeSong;
-    const lineIndices = allLyricsLineIndices();
-    if (!song || lineIndices.length === 0) return;
+    if (!song || getAllLineIndices().length === 0) return Promise.resolve(null);
 
-    uiStore.isCopying = true;
-    const exportLoadingToastId = uiStore.toast.loading('正在渲染整曲长图...');
-    try {
-      const payload = buildExportPayload('normal');
-      const { blobs } = await runWorkerExport(payload);
-      if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
-
-      if (op === 'copy') {
-        await writeBlobToClipboard(blobs[0]!);
-        uiStore.toast.success('成功复制至系统剪贴板');
-      } else {
-        triggerBlobDownload(blobs[0]!, `${buildExportFileName(song.title || '')}.jpg`);
-        uiStore.toast.success('已开始下载');
-      }
-    } catch (err) {
-      console.error('Score export error:', err);
-      uiStore.toast.error(err instanceof Error ? err.message : '导出失败');
-    } finally {
-      uiStore.removeToast(exportLoadingToastId);
-      uiStore.isCopying = false;
-    }
+    return runBusyAction({
+      busy: isCopying,
+      loadingText: '正在渲染整曲长图...',
+      logPrefix: 'Score export error:',
+      errorFallback: '导出失败',
+      run: async () => {
+        const blob = await getLongImageBlob();
+        if (op === 'copy') {
+          await writeBlobToClipboard(blob);
+          return '成功复制至系统剪贴板';
+        }
+        triggerBlobDownload(blob, `${buildExportFileName(song.title || '')}.jpg`);
+        return '已开始下载';
+      },
+      successText: message => message,
+    });
   };
 
   /** 预览 tab 的分页导出为 Zip：经 Worker 离屏渲染为 A4 分页图片，再打包为一个 zip 文件下载 */
-  const handleScoreExportZip = async () => {
-    if (uiStore.isCopying) return;
+  const handleScoreExportZip = () => {
     const song = scoreEditor.activeSong;
-    const lineIndices = allLyricsLineIndices();
-    if (!song || lineIndices.length === 0) return;
+    if (!song || getAllLineIndices().length === 0) return Promise.resolve(null);
 
-    uiStore.isCopying = true;
-    const exportLoadingToastId = uiStore.toast.loading('正在渲染分页图片并打包...');
-    try {
-      const payload = buildExportPayload('a4');
-      const { blobs } = await runWorkerExport(payload);
-      if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
+    return runBusyAction({
+      busy: isCopying,
+      loadingText: '正在渲染分页图片并打包...',
+      logPrefix: 'Score export zip error:',
+      errorFallback: '导出失败',
+      run: async () => {
+        const blobs = await getA4Blobs();
+        if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
 
-      // 每页为已压缩的 JPEG，Zip 内采用 store(level 0) 直接归档，避免重复压缩耗时
-      const files: Record<string, Uint8Array> = {};
-      const base = buildExportFileName(song.title || '');
-      for (let i = 0; i < blobs.length; i++) {
-        const buf = await blobs[i]!.arrayBuffer();
-        files[`${base}_第${i + 1}页.jpg`] = new Uint8Array(buf);
-      }
-      // 动态导入 fflate：不进首屏 chunk，仅点击「下载为分页 Zip」时拉取
-      const { zipSync } = await import('fflate');
-      const zipData = zipSync(files, { level: 0 });
-      triggerBlobDownload(new Blob([zipData], { type: 'application/zip' }), `${base}.zip`);
-      uiStore.toast.success('已开始下载');
-    } catch (err) {
-      console.error('Score export zip error:', err);
-      uiStore.toast.error(err instanceof Error ? err.message : '导出失败');
-    } finally {
-      uiStore.removeToast(exportLoadingToastId);
-      uiStore.isCopying = false;
-    }
+        // 每页为已压缩的 JPEG，Zip 内采用 store(level 0) 直接归档，避免重复压缩耗时
+        const files: Record<string, Uint8Array> = {};
+        const base = buildExportFileName(song.title || '');
+        for (let i = 0; i < blobs.length; i++) {
+          const buf = await blobs[i]!.arrayBuffer();
+          files[`${base}_第${i + 1}页.jpg`] = new Uint8Array(buf);
+        }
+        // 动态导入 fflate：不进首屏 chunk，仅点击「下载为分页 Zip」时拉取
+        const { zipSync } = await import('fflate');
+        const zipData = zipSync(files, { level: 0 });
+        triggerBlobDownload(new Blob([zipData], { type: 'application/zip' }), `${base}.zip`);
+        return '已开始下载';
+      },
+      successText: message => message,
+    });
   };
 
-  /** 预览 tab 的分页导出为 PDF：经 Worker 渲染 A4 分页图片后，用 pdf-lib（按需懒加载）把
-   *  每页 JPEG 原样嵌入 PDF（/DCTDecode，不二次编码），每页铺满对应 MediaBox 后下载 */
-  const handleScoreExportPdf = async () => {
-    if (uiStore.isCopying) return;
+  /** 预览 tab 的分页导出为 PDF：经 Worker 渲染 A4 分页图片后，把每页 JPEG 原样嵌入 PDF 后下载 */
+  const handleScoreExportPdf = () => {
     const song = scoreEditor.activeSong;
-    const lineIndices = allLyricsLineIndices();
-    if (!song || lineIndices.length === 0) return;
+    if (!song || getAllLineIndices().length === 0) return Promise.resolve(null);
 
-    uiStore.isCopying = true;
-    const exportLoadingToastId = uiStore.toast.loading('正在渲染分页图片并生成 PDF...');
-    try {
-      const payload = buildExportPayload('a4');
-      const { blobs } = await runWorkerExport(payload);
-      if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
+    return runBusyAction({
+      busy: isCopying,
+      loadingText: '正在渲染分页图片并生成 PDF...',
+      logPrefix: 'Score export pdf error:',
+      errorFallback: '导出失败',
+      run: async () => {
+        const blobs = await getA4Blobs();
+        if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
 
-      // 页面物理尺寸：worker 以 96dpi 点阵渲染，PDF 采用 pt(72dpi)，进行 0.75 = 72/96 换算；
-      // 像素尺寸用于图片 XObject 的 /Width /Height，物理尺寸用于 MediaBox 与铺满变换
-      const { width, height } = getScorePageSize(settingsStore.scorePageSize);
-      const wPt = Math.round((width * 72) / 96);
-      const hPt = Math.round((height * 72) / 96);
+        // 页面物理尺寸：worker 以 96dpi 点阵渲染，PDF 采用 pt(72dpi)，进行 0.75 = 72/96 换算；
+        // 像素尺寸用于图片 XObject 的 /Width /Height，物理尺寸用于 MediaBox 与铺满变换
+        const { width, height } = getScorePageSize(settingsStore.scorePageSize);
+        const wPt = Math.round((width * 72) / 96);
+        const hPt = Math.round((height * 72) / 96);
 
-      // 手写极简 PDF 图像容器：各页 JPEG 以 /DCTDecode 原样嵌入，零二次编码、零依赖
-      const pages: PdfImagePage[] = [];
-      for (const blob of blobs) {
-        pages.push({
-          jpeg: new Uint8Array(await blob.arrayBuffer()),
-          pixelWidth: width,
-          pixelHeight: height,
-          widthPt: wPt,
-          heightPt: hPt,
-        });
-      }
-      const pdfData = buildImagePdf(pages);
-      const base = buildExportFileName(song.title || '');
-      // pdfData 为 Uint8Array<ArrayBufferLike>，切片得到精确长度的 ArrayBuffer 以匹配 BlobPart
-      triggerBlobDownload(new Blob([pdfData.slice()], { type: 'application/pdf' }), `${base}.pdf`);
-      uiStore.toast.success('已开始下载');
-    } catch (err) {
-      console.error('Score export pdf error:', err);
-      uiStore.toast.error(err instanceof Error ? err.message : '导出失败');
-    } finally {
-      uiStore.removeToast(exportLoadingToastId);
-      uiStore.isCopying = false;
+        // 手写极简 PDF 图像容器：各页 JPEG 以 /DCTDecode 原样嵌入，零二次编码、零依赖
+        const pages: PdfImagePage[] = [];
+        for (const blob of blobs) {
+          pages.push({
+            jpeg: new Uint8Array(await blob.arrayBuffer()),
+            pixelWidth: width,
+            pixelHeight: height,
+            widthPt: wPt,
+            heightPt: hPt,
+          });
+        }
+        const pdfData = buildImagePdf(pages);
+        const base = buildExportFileName(song.title || '');
+        // pdfData 为 Uint8Array<ArrayBufferLike>，切片得到精确长度的 ArrayBuffer 以匹配 BlobPart
+        triggerBlobDownload(new Blob([pdfData.slice()], { type: 'application/pdf' }), `${base}.pdf`);
+        return '已开始下载';
+      },
+      successText: message => message,
+    });
+  };
+
+  /**
+   * 直接从预览共享缓存取已渲染的 Blob，避免重复触发 Worker 渲染：
+   * 预览面板在渲染/切歌时已把 A4 分页产物写入 scorePreviewCache，
+   * 下载菜单的预估尺寸与三种导出均复用该结果，仅缓存缺失时回退重新渲染。
+   */
+  /** 取 A4 分页 Blob（PDF / ZIP 导出复用预览已渲染结果） */
+  const getA4Blobs = async (): Promise<Blob[]> => {
+    const data = currentRenderData.value;
+    if (data && data.a4Urls.length > 0) {
+      const blobs = await Promise.all(data.a4Urls.map(fetchA4PageBlob));
+      return blobs.filter((blob): blob is Blob => blob !== null);
     }
+    const { blobs } = await runWorkerExport(buildRenderPayload('a4'));
+    if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
+    return blobs;
   };
 
-  /** 下载下拉标题：展示预估长图文件尺寸（进入预览导出态时经 Worker 真实渲染测量） */
-  const estimatedLongImageBytes = ref<number | null>(null);
-  const isEstimating = ref(false);
-  /** 上次估算的输入指纹：输入未变化则跳过重复渲染 */
-  const lastEstimateKey = ref('');
-
-  /** 聚合影响导出尺寸的响应式输入，作为估算去重指纹 */
-  const buildEstimateKey = (): string => {
-    const song = scoreEditor.activeSong;
-    if (!song) return '';
-    // 和弦排列指纹：槽位→和弦 id 的绑定关系决定渲染出哪些指板图，
-    // 仅记「有无」会在增删/换绑和弦后产生相同指纹而跳过重估（store 变更时替换新 Map 引用）
-    const chordMapKey = song.chordMap
-      ? [...song.chordMap.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).join('|')
-      : '0';
-    return [
-      song.lyrics,
-      song.singer ?? '',
-      song.title ?? '',
-      chordMapKey,
-      chordsLookupMap.value?.size ?? 0,
-      settingsStore.scoreChordShorthand,
-      settingsStore.scoreLayoutAlign,
-      scoreEditor.fontScale,
-      scoreEditor.fretboardScale,
-      settingsStore.scoreShowBarre,
-      settingsStore.scoreLyricsFontWeight,
-      settingsStore.scoreExportQuality,
-      settingsStore.scorePageMargin,
-      settingsStore.scorePageSize,
-      settingsStore.scoreShowFooter,
-      settingsStore.scoreIgnoreEmptySpace,
-    ].join('|');
+  /** 取长图 Blob（「下载为长图」按需渲染，预览不预渲染长图，故每次都走 Worker） */
+  const getLongImageBlob = async (): Promise<Blob> => {
+    const { blobs } = await runWorkerExport(buildRenderPayload('normal'));
+    if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
+    return blobs[0]!;
   };
 
-  /** 触发尺寸预估：复用 Worker 真实渲染管线，仅取长图 blob 字节数 */
-  const updateExportSizeEstimate = async () => {
-    const key = buildEstimateKey();
-    if (!key || isEstimating.value || key === lastEstimateKey.value) return;
-
-    isEstimating.value = true;
-    try {
-      const payload = buildExportPayload('normal');
-      const { longImageBytes } = await runWorkerEstimate(payload);
-      // 渲染期间输入可能已变化，仅在指纹未被覆盖时采纳结果
-      if (key === buildEstimateKey()) {
-        estimatedLongImageBytes.value = longImageBytes;
-        lastEstimateKey.value = key;
-      }
-    } catch {
-      estimatedLongImageBytes.value = null;
-    } finally {
-      isEstimating.value = false;
-    }
-  };
-
-  /** 下载下拉标题文本：空态返回 ''（不渲染标题行）；计算中/就绪分别给出状态 */
+  /** 下载下拉标题：直接读预览共享缓存中 A4 分页各页字节数累加（渲染时即算好，UI 仅展示） */
   const downloadMenuTitle = computed(() => {
     if (!isPreviewExportMode.value) return '';
-    const bytes = estimatedLongImageBytes.value;
-    if (bytes == null) return isEstimating.value ? '预估文件尺寸计算中…' : '预估文件尺寸';
-    return `预估文件大小 ${formatBytes(bytes)}`;
+    const data = currentRenderData.value;
+    if (!data || data.a4Urls.length === 0) {
+      return isPreviewRendering.value ? '预估文件尺寸计算中…' : '预估文件尺寸';
+    }
+    const total = data.a4Sizes.reduce((sum, n) => sum + n, 0);
+    return `预估文件 ${formatBytes(total)}`;
   });
-
-  /** 进入预览导出态或任一影响尺寸的设定变更时，按需刷新预估尺寸 */
-  watch(
-    [
-      isPreviewExportMode,
-      () => scoreEditor.activeSong?.lyrics,
-      () => scoreEditor.activeSong?.singer,
-      () => scoreEditor.activeSong?.chordMap,
-      () => chordsLookupMap.value,
-      () => settingsStore.scoreChordShorthand,
-      () => settingsStore.scoreLayoutAlign,
-      () => scoreEditor.fontScale,
-      () => scoreEditor.fretboardScale,
-      () => settingsStore.scoreShowBarre,
-      () => settingsStore.scoreLyricsFontWeight,
-      () => settingsStore.scoreExportQuality,
-      () => settingsStore.scorePageMargin,
-      () => settingsStore.scorePageSize,
-      () => settingsStore.scoreShowFooter,
-      () => settingsStore.scoreIgnoreEmptySpace,
-    ],
-    () => {
-      if (isPreviewExportMode.value) void updateExportSizeEstimate();
-    },
-    // 立即执行：页面刷新后若已处于预览导出态（URL 持久化到 preview tab）且歌曲已同步水合，
-    // watch 不会因「值从未变化」而触发，需 immediate 主动跑一次预估，否则 size 一直为空
-    { immediate: true }
-  );
 
   /** 下载菜单：长图 / 分页 PDF / 分页 Zip 三个导出入口 */
   const downloadExportMenuItems: MenuItem[] = [

@@ -46,7 +46,7 @@ describe('workerExportService', () => {
       updatedAt: Date.now(),
     };
 
-    const payload = prepareWorkerExportPayload(song, [0, 1], chordsLookupMap, 'a4');
+    const payload = prepareWorkerExportPayload({ song, selectedIndices: [0, 1], chordsLookupMap, mode: 'a4' });
 
     expect(payload.title).toBe('晴天');
     expect(payload.mode).toBe('a4');
@@ -94,16 +94,18 @@ describe('workerExportService', () => {
       updatedAt: Date.now(),
     };
 
-    const fullPayload = prepareWorkerExportPayload(song, [0], chordsLookupMap, 'a4', false);
+    const base = { song, selectedIndices: [0], chordsLookupMap, mode: 'a4' } as const;
+
+    const fullPayload = prepareWorkerExportPayload({ ...base, shorthand: false });
     expect(fullPayload.lines[0]?.chars[0]?.chord?.chordName).toBe('Cmaj7');
 
-    const shortPayload = prepareWorkerExportPayload(song, [0], chordsLookupMap, 'a4', true);
+    const shortPayload = prepareWorkerExportPayload({ ...base, shorthand: true });
     expect(shortPayload.lines[0]?.chars[0]?.chord?.chordName).toBe('CM7');
 
-    const defaultAlignPayload = prepareWorkerExportPayload(song, [0], chordsLookupMap, 'a4');
+    const defaultAlignPayload = prepareWorkerExportPayload({ ...base });
     expect(defaultAlignPayload.layoutAlign).toBe('start');
 
-    const centerAlignPayload = prepareWorkerExportPayload(song, [0], chordsLookupMap, 'a4', false, 'center');
+    const centerAlignPayload = prepareWorkerExportPayload({ ...base, layoutAlign: 'center' });
     expect(centerAlignPayload.layoutAlign).toBe('center');
   });
 });

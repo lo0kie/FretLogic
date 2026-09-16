@@ -74,7 +74,6 @@ export type WorkerExportMessage =
       blobs: Blob[];
       /** a4 模式下每页覆盖的原始歌词行序号（升序去重），供外部按页重组内容；normal 模式为 undefined */ pageLineRanges?: number[][];
     }
-  | { type: 'estimate'; longImageBytes: number }
   | { type: 'error'; message: string };
 
 /** 输出图固定编码质量（导出质量设置已移除，预览与后续入口统一使用） */
@@ -1182,24 +1181,6 @@ if (typeof self !== 'undefined') {
             percent: Math.round(((pIdx + 1) / pages.length) * 100),
           } as WorkerExportMessage);
         }
-      } else if (mode === 'estimate') {
-        // ===== 预估模式：复用长图真实渲染管线，仅回传字节数（不产出 Blob 列表） =====
-        const blob = await renderLongImageBlob(
-          lines,
-          title,
-          singer,
-          keyText,
-          capoText,
-          timeSignatureText,
-          colors,
-          layoutAlign ?? 'start',
-          showBarre,
-          lyricsFontWeight,
-          jpegQuality,
-          pageMargin
-        );
-        self.postMessage({ type: 'estimate', longImageBytes: blob.size } as WorkerExportMessage);
-        return;
       } else {
         // ===== 普通长图模式（画布宽度自适应实际最宽行，左右对称 pageMargin 页边距，彻底消除右侧空白） =====
         const blob = await renderLongImageBlob(

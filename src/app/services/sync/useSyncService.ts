@@ -9,6 +9,7 @@ import { FULL_BACKUP_SELECTION } from '@/app/services/backup/useImportExportServ
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 
@@ -85,6 +86,7 @@ export function useSyncService() {
 
   /**
    * 通用云端动作管线：互斥守卫 → loading toast → 执行 → 失败统一提示，finally 复位进行中状态。
+   * 委托给通用 runBusyAction 管线，仅注入按 SyncError code 映射的错误提示。
    * @returns run 的返回值；重入守卫退出或执行失败时返回 null（成功提示由调用方在返回后追加，保证先移除 loading）
    */
   const runCloudAction = async <T>(opts: {
@@ -92,23 +94,13 @@ export function useSyncService() {
     loadingText: string;
     errorPrefix: string;
     run: () => Promise<T>;
-  }): Promise<T | null> => {
-    if (opts.busy.value) return null;
-    opts.busy.value = true;
-    let loadingToastId: number | null = null;
-    try {
-      loadingToastId = uiStore.toast.loading(opts.loadingText, { closable: false });
-      const result = await opts.run();
-      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
-      return result;
-    } catch (err: unknown) {
-      if (loadingToastId !== null) uiStore.removeToast(loadingToastId);
-      showSyncError(opts.errorPrefix, err);
-      return null;
-    } finally {
-      opts.busy.value = false;
-    }
-  };
+  }): Promise<T | null> =>
+    runBusyAction({
+      busy: opts.busy,
+      loadingText: opts.loadingText,
+      run: opts.run,
+      onError: err => showSyncError(opts.errorPrefix, err),
+    });
 
   /** 推送本地数据到云端（不含凭据类同步配置），全程互斥防重入；返回是否成功 */
   const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> => {

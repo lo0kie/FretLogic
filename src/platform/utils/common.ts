@@ -106,37 +106,45 @@ export const getEditDistance = (a: string, b: string): number => {
  */
 type VisibilityCallback = (visible: boolean) => void;
 
-const observersByRoot = new Map<Element | null, IntersectionObserver>();
-const elementCallbacks = new WeakMap<Element, VisibilityCallback>();
+/** 单个共享 observer 及其专属回调表：回调按 root 维度隔离，同一元素被不同 root 观察时互不覆盖 */
+interface SharedVisibilityObserver {
+  observer: IntersectionObserver;
+  callbacks: WeakMap<Element, VisibilityCallback>;
+}
 
-/** 取（或创建）绑定到指定 root 的共享 IntersectionObserver 实例。 */
-const getObserverForRoot = (root: Element | null): IntersectionObserver => {
-  let observer = observersByRoot.get(root);
-  if (!observer) {
-    observer = new IntersectionObserver(
+const sharedObservers = new Map<Element | null, SharedVisibilityObserver>();
+
+/** 取（或创建）绑定到指定 root 的共享 IntersectionObserver 实例及其回调表。 */
+const getObserverForRoot = (root: Element | null): SharedVisibilityObserver => {
+  let shared = sharedObservers.get(root);
+  if (!shared) {
+    const callbacks = new WeakMap<Element, VisibilityCallback>();
+    const observer = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
-          elementCallbacks.get(entry.target)?.(entry.isIntersecting);
+          callbacks.get(entry.target)?.(entry.isIntersecting);
         }
       },
       { root }
     );
-    observersByRoot.set(root, observer);
+    shared = { observer, callbacks };
+    sharedObservers.set(root, shared);
   }
-  return observer;
+  return shared;
 };
 
 /**
  * 观察元素可见性，返回停止观察的清理函数。
  * 回调可能被多次调用（滚动进出视口），调用方自行决定何时 stop。
+ * 同一元素可被不同 root 各自观察，回调互不干扰；同一元素在同一 root 下重复观察以最后一次为准。
  */
 export function observeVisibility(el: Element, cb: VisibilityCallback, root?: Element | null): () => void {
-  const observer = getObserverForRoot(root ?? null);
-  elementCallbacks.set(el, cb);
-  observer.observe(el);
+  const shared = getObserverForRoot(root ?? null);
+  shared.callbacks.set(el, cb);
+  shared.observer.observe(el);
   return () => {
-    elementCallbacks.delete(el);
-    observer.unobserve(el);
+    shared.callbacks.delete(el);
+    shared.observer.unobserve(el);
   };
 }
 
@@ -168,6 +176,19 @@ export const base64DecodeUtf8 = (b64: string): string => {
 
 /** 数值夹取：把 value 限制在 [min, max] 区间内 */
 export const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+// ===== formatBytes: 字节数 → 人类可读尺寸 =====
+const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+export const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+
+  const unitIdx = Math.min(Math.floor(Math.log2(bytes) / 10), UNITS.length - 1);
+  const value = bytes / 1024 ** unitIdx;
+
+  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${UNITS[unitIdx]}`;
+};
 
 /**
  * 本地时间戳 → 文件名安全串（如 2026-09-03_10-05-33）。

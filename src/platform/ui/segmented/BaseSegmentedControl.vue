@@ -130,7 +130,7 @@ const props = withDefaults(
     closeable?: C;
     /** 是否撑满父容器宽度 */
     block?: boolean;
-    /** 宽度：auto / full 或具体 CSS 宽度值 */
+    /** 宽度：预设档位（sm/md/lg/xl/auto/full）或具体 CSS 宽度值，默认 md */
     width?: FormComponentWidth;
     /** 根容器 radiogroup 的无障碍标签 */
     ariaLabel?: string;
@@ -155,7 +155,7 @@ const props = withDefaults(
     iconOnly: false,
     iconStroke: 'regular',
     block: false,
-    width: 'auto',
+    width: 'md',
     compacted: false,
     fullHeight: false,
     showInactiveBorder: false,
@@ -301,7 +301,8 @@ const resolveIndicatorGeometry = (item: { width: number; height: number; top: nu
 const itemClasses = (opt: SegmentOption<T>, index: number): (string | Record<string, boolean>)[] => {
   const dragHover = isDragging.value && dragOverIndex.value === index && !opt.disabled;
   const active = dragHover || (!props.disabled && isSelected(opt.value));
-  const isExpand = isFullWidth.value;
+  // 容器有显式宽度（档位 / block / 自定义值）即让选项均分拉伸铺满；仅 auto（内容自适应）不拉伸
+  const isExpand = resolvedWidth.value !== undefined;
 
   if (visualVariant.value === 'pill') {
     return [

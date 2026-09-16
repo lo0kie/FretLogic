@@ -39,7 +39,8 @@ export function buildImagePdf(pages: PdfImagePage[]): Uint8Array {
 
   const chunks: Uint8Array[] = [];
   let size = 0;
-  const offsets = new Map<number, number>();
+  // 对象编号从 1 连续递增，用稀疏数组按下标存偏移（替代 Map，省去装箱/哈希开销）
+  const offsets: number[] = [];
 
   /** 追加 ASCII 文本（全 ASCII，字节长 == 字符串长） */
   const pushText = (text: string): void => {
@@ -54,7 +55,7 @@ export function buildImagePdf(pages: PdfImagePage[]): Uint8Array {
   };
   /** 开启一个对象：记录其字节起始偏移并写入对象头 */
   const startObj = (num: number): void => {
-    offsets.set(num, size);
+    offsets[num] = size;
     pushText(`${num} 0 obj\n`);
   };
   const endObj = (): void => {
@@ -105,9 +106,12 @@ export function buildImagePdf(pages: PdfImagePage[]): Uint8Array {
     // 内容流：把单位正方形缩放到 MediaBox 并贴图铺满
     // eslint-disable-next-line better-tailwindcss/no-duplicate-classes -- PDF 变换矩阵需多个“0”坐标操作数，非 Tailwind 类名
     const cm = `q ${wPt} 0 0 ${hPt} 0 0 cm /Im1 Do Q`;
+    // 只编码一次：/Length 必须写「流内数据的精确字节数」，用编码结果兜底（cm 当前全 ASCII，
+    // 字符长 == 字节长，但不依赖该假设，未来混入非 ASCII 字符也不会损坏 PDF）
+    const cmBytes = enc.encode(cm);
     startObj(contentObj);
-    pushText(`<< /Length ${cm.length} >>\nstream\n`);
-    pushBytes(enc.encode(cm));
+    pushText(`<< /Length ${cmBytes.length} >>\nstream\n`);
+    pushBytes(cmBytes);
     pushText('\nendstream\n');
     endObj();
   }
@@ -118,14 +122,13 @@ export function buildImagePdf(pages: PdfImagePage[]): Uint8Array {
   const lines: string[] = [`xref`, `0 ${total + 1}`];
   lines.push(`0000000000 65535 f `);
   for (let obj = 1; obj <= total; obj++) {
-    lines.push(`${String(offsets.get(obj)).padStart(10, '0')} 00000 n `);
+    lines.push(`${String(offsets[obj]).padStart(10, '0')} 00000 n `);
   }
   lines.push(`trailer`, `<< /Size ${total + 1} /Root 1 0 R >>`, `startxref`, `${xrefOffset}`, `%%EOF`);
   pushText(lines.join('\n') + '\n');
 
-  // 合并所有分段为一个连续 Uint8Array
-  const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
-  const out = new Uint8Array(totalLength);
+  // 合并所有分段为一个连续 Uint8Array（size 全程增量维护，无需再遍历 chunks 求和）
+  const out = new Uint8Array(size);
   let pos = 0;
   for (const c of chunks) {
     out.set(c, pos);

@@ -5,6 +5,7 @@ import { parseAndValidatePayload } from '@/app/services/validation/payload';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { triggerBlobDownload, wait } from '@/platform/utils/canvas';
@@ -47,25 +48,25 @@ export function useImportExportService() {
     if (selection.chords || selection.songs) useChordEditorStore().resetEditor();
   };
 
-  /** 解析备份文件为经校验清洗的 payload（失败抛错并 toast，由调用方决定后续流程） */
-  const parseBackupFile = async (file: File): Promise<ImportExportPayload> => {
-    const loadingId = uiStore.toast.loading('正在解析并恢复数据...');
-    await wait(30);
-    try {
-      const result = parseAndValidatePayload(await file.text());
-      if (result.error || !result.payload) throw new Error(`备份解析失败：${result.error}`);
-      if (result.warnings && result.warnings.length > 0) {
-        uiStore.toast.warning(`导入时已自动清理部分数据：${result.warnings.join('；')}`);
-      }
-      return result.payload;
-    } catch (err) {
-      console.error('备份解析拦截:', err);
-      uiStore.toast.error('文件非标准备份或核心数据已损坏');
-      throw err;
-    } finally {
-      uiStore.removeToast(loadingId);
-    }
-  };
+  /** 解析备份文件为经校验清洗的 payload（失败 toast 提示并重抛，由调用方决定后续流程） */
+  const parseBackupFile = (file: File): Promise<ImportExportPayload> =>
+    runBusyAction({
+      loadingText: '正在解析并恢复数据...',
+      run: async () => {
+        await wait(30);
+        const result = parseAndValidatePayload(await file.text());
+        if (result.error || !result.payload) throw new Error(`备份解析失败：${result.error}`);
+        if (result.warnings && result.warnings.length > 0) {
+          uiStore.toast.warning(`导入时已自动清理部分数据：${result.warnings.join('；')}`);
+        }
+        return result.payload;
+      },
+      onError: err => {
+        console.error('备份解析拦截:', err);
+        uiStore.toast.error('文件非标准备份或核心数据已损坏');
+      },
+      rethrowError: true,
+    }) as Promise<ImportExportPayload>;
 
   /** 按勾选导出备份文件；返回是否真正导出成功（供调用方决定是否关闭弹窗） */
   const triggerFullExport = (selection: BackupSelection = FULL_BACKUP_SELECTION): boolean => {

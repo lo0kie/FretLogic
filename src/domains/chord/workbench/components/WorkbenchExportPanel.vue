@@ -73,6 +73,7 @@ import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { renderFretboardToCanvas } from '@/domains/fretboard/components/renderFretboardCanvas';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
+import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
@@ -123,32 +124,29 @@ function buildFilename(): string {
 }
 
 /** 复制为 PNG 到剪贴板（复用 score-export 的降级与环境检测能力） */
-async function handleCopy() {
-  if (isActing.value) return;
-  isActing.value = true;
-  try {
-    const blob = await canvasToBlob(buildCanvas());
-    await writeBlobToClipboard(blob);
-    uiStore.toast.success('图片已复制到剪贴板');
-  } catch {
-    uiStore.toast.error('复制失败，请尝试下载');
-  } finally {
-    isActing.value = false;
-  }
-}
+const handleCopy = () =>
+  runBusyAction({
+    busy: isActing,
+    run: async () => {
+      const blob = await canvasToBlob(buildCanvas());
+      await writeBlobToClipboard(blob);
+      return '图片已复制到剪贴板';
+    },
+    successText: message => message,
+    onError: () => uiStore.toast.error('复制失败，请尝试下载'),
+  });
 
 /** 下载为 PNG */
-async function handleDownload() {
-  if (isActing.value) return;
-  isActing.value = true;
-  try {
-    const blob = await canvasToBlob(buildCanvas());
-    triggerBlobDownload(blob, buildFilename());
-    uiStore.toast.success(`已下载 ${buildFilename()}`);
-  } catch {
-    uiStore.toast.error('下载失败');
-  } finally {
-    isActing.value = false;
-  }
-}
+const handleDownload = () =>
+  runBusyAction({
+    busy: isActing,
+    run: async () => {
+      const blob = await canvasToBlob(buildCanvas());
+      const filename = buildFilename();
+      triggerBlobDownload(blob, filename);
+      return `已下载 ${filename}`;
+    },
+    successText: message => message,
+    onError: () => uiStore.toast.error('下载失败'),
+  });
 </script>

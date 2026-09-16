@@ -29,22 +29,16 @@
     </p>
   </BaseModal>
 
-  <BaseModal
-    v-model:visible="groupModals.modals.sort"
-    @confirm="groupModals.handleSaveSort"
-    title="分组和弦排序配置"
-    width="w-md"
-  >
+  <BaseModal v-model:visible="groupModals.modals.sort" @confirm="groupModals.handleSaveSort" title="分组和弦排序配置">
     <BaseForm :label-width="FORM_LABEL_WIDTH" class="sort-modal-body py-xs" gap="lg">
       <BaseFormRow label="排序规则">
-        <BaseSegmentedControl v-model="groupModals.modalData.sortRule" :options="SORT_RULE_CONFIG" />
+        <BaseSegmentedControl v-model="groupModals.modalData.sortRule" :options="SORT_RULE_CONFIG" width="auto" />
       </BaseFormRow>
 
       <BaseFormRow label="调式设定">
         <KeySelector
           v-model="groupModals.modalData.sortKey"
           :disabled="groupModals.modalData.sortRule !== 'KEY_DEGREE'"
-          width="md"
         />
       </BaseFormRow>
     </BaseForm>

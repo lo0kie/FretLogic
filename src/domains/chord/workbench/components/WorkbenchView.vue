@@ -58,7 +58,7 @@
     </div>
 
     <!-- 保存操作栏：仅草稿有改动时浮现，随指板品位数调整贴底位置 -->
-    <BaseFloatingBar :bottom="barBottomPosition" :visible="!isPristine">
+    <BaseFloatingPill :bottom="barBottomPosition" :visible="!isPristine">
       <ActionButton
         :disabled="isPristine"
         :label="editorStore.isEditing ? '放弃修改' : '重置指板'"
@@ -92,7 +92,7 @@
         color="primary"
         variant="subtle"
       />
-    </BaseFloatingBar>
+    </BaseFloatingPill>
   </div>
 </template>
 
@@ -103,7 +103,7 @@ import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
-import BaseFloatingBar from '@/platform/ui/floating-bar/BaseFloatingBar.vue';
+import BaseFloatingPill from '@/platform/ui/floating-bar/BaseFloatingPill.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';

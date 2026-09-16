@@ -1,7 +1,7 @@
 import { logger } from '@/platform/utils/logger';
 
 /**
- * 浮动元素水平对齐 → 距边 class。BaseFloatingBar / BaseFab 共用：
+ * 浮动元素水平对齐 → 距边 class。BaseFloatingPill / BaseFab 共用：
  * 两个组件曾各维护一份完全相同的映射表，统一调整对齐边距只改本表即可。
  */
 export const ALIGN_CLASS_MAP: Record<'start' | 'end' | 'center', string> = {

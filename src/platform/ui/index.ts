@@ -22,7 +22,7 @@ export { default as BaseCheckbox } from './checkbox/BaseCheckbox.vue';
 export { default as BaseForm } from './form/BaseForm.vue';
 export { default as BaseFormRow } from './form/BaseFormRow.vue';
 export { default as BaseCollapse } from './collapse/BaseCollapse.vue';
-export { default as BaseFloatingBar } from './floating-bar/BaseFloatingBar.vue';
+export { default as BaseFloatingPill } from './floating-bar/BaseFloatingPill.vue';
 export { default as BaseFab } from './floating-bar/BaseFab.vue';
 export { default as BaseFloatingPanel } from './floating-panel/BaseFloatingPanel.vue';
 export { default as BaseSegmentedControl } from './segmented/BaseSegmentedControl.vue';

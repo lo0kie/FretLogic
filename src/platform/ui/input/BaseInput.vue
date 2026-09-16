@@ -208,7 +208,7 @@ const {
   isPassword = false,
   prefixIcon = undefined,
   size = undefined,
-  width = 'full',
+  width = 'md',
   fontSize = 'md',
   autofocus = false,
   type = 'text',
@@ -245,7 +245,7 @@ const {
   prefixIcon?: IconName;
   /** 尺寸档位（影响高度与字号） */
   size?: ComponentSize;
-  /** 宽度：预设档位名或自定义值（数字按 px） */
+  /** 宽度：预设档位（sm/md/lg/xl/auto/full）或自定义值（数字按 px），默认 md */
   width?: FormComponentWidth;
   /** 文字字号覆写（默认随 size 档位） */
   fontSize?: 'xs' | 'md' | 'lg';

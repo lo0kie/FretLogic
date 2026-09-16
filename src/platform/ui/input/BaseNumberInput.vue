@@ -119,7 +119,7 @@ const props = withDefaults(
     step?: number;
     /** 尺寸档位（影响高度与字号） */
     size?: ComponentSize;
-    /** 宽度：预设档位名或自定义值（数字按 px） */
+    /** 宽度：预设档位（sm/md/lg/xl/auto/full）或自定义值（数字按 px），默认 md */
     width?: FormComponentWidth;
     /** 视觉变体：default 实底 / glass 玻璃拟态 */
     variant?: 'default' | 'glass';
@@ -160,7 +160,7 @@ const props = withDefaults(
     min: 0,
     max: 100,
     step: 1,
-    width: 'auto',
+    width: 'md',
     variant: 'default',
     useIcons: false,
     disabled: false,

@@ -35,7 +35,12 @@
             Fret Logic
           </span>
         </button>
-        <BaseSegmentedControl :model-value="activeNavPath" :options="NAV_OPTIONS" @change="router.push($event)" />
+        <BaseSegmentedControl
+          :model-value="activeNavPath"
+          :options="NAV_OPTIONS"
+          @change="router.push($event)"
+          width="auto"
+        />
       </div>
     </div>
 
@@ -189,17 +194,12 @@
 
   <BaseModal
     v-model:visible="isSyncConfirmOpen"
-    :before-close="() => !isSyncing"
-    :cancel-button-disabled="isSyncing"
-    :close-on-mask="!isSyncing"
+    :close-locked="isSyncing"
     :confirm-loading="isSyncing"
-    :keyboard="!isSyncing"
-    :show-close="!isSyncing"
     @confirm="handleConfirmSync()"
     cancel-text="取消"
     confirm-text="确认同步"
     title="确认同步到云端"
-    width="w-80"
   >
     <div class="py-xs">
       <p class="m-0 text-xs/relaxed text-fg-body">
@@ -211,17 +211,12 @@
 
   <BaseModal
     v-model:visible="isPullConfirmOpen"
-    :before-close="() => !isPulling"
-    :cancel-button-disabled="isPulling"
-    :close-on-mask="!isPulling"
+    :close-locked="isPulling"
     :confirm-loading="isPulling"
-    :keyboard="!isPulling"
-    :show-close="!isPulling"
     @confirm="handleConfirmPull()"
     cancel-text="取消"
     confirm-text="确认拉取"
     title="确认从云端拉取"
-    width="w-80"
   >
     <div class="py-xs">
       <p class="m-0 text-xs/relaxed text-fg-body">
@@ -238,7 +233,6 @@
     cancel-text="取消"
     confirm-text="仍要导入"
     title="导入确认"
-    width="w-80"
   >
     <div class="py-xs">
       <p class="m-0 text-xs/relaxed text-fg-body">

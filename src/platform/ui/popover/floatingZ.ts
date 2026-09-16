@@ -8,6 +8,8 @@
  * 超过后不再递增（同号 11000 退回 DOM 顺序决定），为静态高层 --z-top（12000）/ --z-toast（13000）
  * 留出安全边界——正常并发浮层远达不到该数量，clamp 只是防御性兜底。
  */
+import { onScopeDispose, ref } from 'vue';
+
 export const FLOATING_Z_BASE = 9999; // 对应 tokens.scss 的 --z-menu
 export const FLOATING_Z_CEILING = 11000;
 const activeFloatingZ = new Set<number>();
@@ -30,4 +32,27 @@ export function acquireFloatingZ(ceiling?: number): number {
 /** 释放浮层层号，供后续浮层复用。 */
 export function releaseFloatingZ(z: number): void {
   activeFloatingZ.delete(z);
+}
+
+/**
+ * 组合式浮层号管理：封装「ref 登记 + 打开时 acquire + 关闭/卸载时 release」的配对样板，
+ * onScopeDispose 兜底释放（浮层在离场动画完成前被卸载时调用方无需再写 onBeforeUnmount）。
+ * 返回的 z 为响应式层号（0 表示未持有），由调用方绑定到浮层根元素的内联 style。
+ */
+export function useFloatingZ() {
+  const z = ref(0);
+  /** 取号（当前最高占用 + 1），重复调用会先释放旧号再取新号 */
+  const acquire = (ceiling?: number) => {
+    release();
+    z.value = acquireFloatingZ(ceiling);
+  };
+  /** 释放当前持有的层号（未持有时为 no-op） */
+  const release = () => {
+    if (z.value) {
+      releaseFloatingZ(z.value);
+      z.value = 0;
+    }
+  };
+  onScopeDispose(release);
+  return { z, acquire, release };
 }

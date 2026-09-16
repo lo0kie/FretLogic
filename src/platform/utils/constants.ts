@@ -179,6 +179,10 @@ export const STORAGE_KEYS = {
   SCORE_PAGE_PADDING: 'CHORD_LAB_SCORE_PAGE_PADDING_V1',
   /** 左侧栏开合状态 */
   UI_LEFT_OPEN: 'CHORD_LAB_UI_LEFT_OPEN',
+
+  // ---- 应用级一次性状态（非用户偏好，由程序自行写入） ----
+  /** 是否访问过本应用：true 表示已访问过，首次打开引导（是否从线上拉取数据）只弹一次的判据 */
+  HAS_VISITED: 'CHORD_LAB_HAS_VISITED_V1',
 } as const;
 
 // ===================== 界面提示 / 交互延时 =====================
@@ -249,7 +253,8 @@ export const TEXT_FORMAT = {
 export const CLOUD_SYNC_CONFIG = {
   /** 服务端接口地址（优先读取环境变量 VITE_SYNC_SERVER_URL，默认为线上 Cloudflare Worker 接口） */
   SERVER_URL:
-    (import.meta.env['VITE_SYNC_SERVER_URL'] as string | undefined) || 'https://fret-logic.server-lookie.workers.dev/',
+    (import.meta.env['VITE_SYNC_SERVER_URL'] as string | undefined) ||
+    'https://fret-logic-service.server-lookie.workers.dev/',
   /** 当前构建模式（如 'development' | 'production'） */
   MODE: import.meta.env.MODE,
   /** 是否为开发环境构建 */
@@ -278,7 +283,10 @@ export const GITEE_SYNC_CONFIG = {
 /** WebDAV 同步预设配置 */
 export const WEBDAV_SYNC_CONFIG = {
   /** 默认预设 CORS 代理地址 */
-  DEFAULT_PROXY_URL: 'https://proxy.server-lookie.workers.dev/',
+  /** 默认预设 CORS 代理地址（优先读取环境变量 VITE_WEBDAV_PROXY_URL，默认为线上 Cloudflare Worker 代理） */
+  DEFAULT_PROXY_URL:
+    (import.meta.env['VITE_WEBDAV_PROXY_URL'] as string | undefined) ||
+    'https://fret-logic-proxy.server-lookie.workers.dev/',
 } as const;
 
 // ===================== 音频试听默认参数 =====================

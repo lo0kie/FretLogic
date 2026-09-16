@@ -1,6 +1,9 @@
 <template>
   <GlobalToast />
 
+  <!-- 首次打开引导：询问是否从线上（默认 Gitee）拉取备份数据，仅弹一次 -->
+  <FirstRunPullModal />
+
   <Suspense>
     <div class="flex h-screen w-full min-w-[320px] flex-col overflow-hidden">
       <div class="shrink-0">
@@ -33,6 +36,7 @@
 import { computed, defineAsyncComponent } from 'vue';
 
 import TopHeader from '@/app/layouts/TopHeader.vue';
+import FirstRunPullModal from '@/app/modals/FirstRunPullModal.vue';
 import GlobalToast from '@/platform/ui/feedback/GlobalToast.vue';
 import { setupChordScoreBridge } from '@/app/services/chordScoreBridge';
 import { useUiStore } from '@/platform/store/uiStore';

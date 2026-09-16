@@ -320,7 +320,7 @@ const props = withDefaults(
     step?: number;
     /** 尺寸档位（影响轨道高度与圆点大小） */
     size?: ComponentSize;
-    /** 轨道宽度：预设档位名或自定义值（数字按 px） */
+    /** 轨道宽度：预设档位（sm/md/lg/xl/auto/full）或自定义值（数字按 px），默认 md */
     width?: FormComponentWidth;
     /** 自定义轨道高度（数字按 px）；vertical 模式下为轨道总高 */
     height?: string | number;
@@ -370,7 +370,7 @@ const props = withDefaults(
     max: 100,
     step: 1,
     size: undefined,
-    width: 'auto',
+    width: 'md',
     height: '10rem',
     label: '',
     labelPosition: 'left',
