@@ -31,6 +31,10 @@ export const triggerBlobDownload = (blob: Blob, filename: string): void => {
   const link = document.createElement('a');
   link.href = objectUrl;
   link.download = filename;
+  link.style.display = 'none';
+  // 挂载到 DOM 再点击：游离节点直接 click() 在部分浏览器（老 Firefox、部分移动 webview）不触发下载
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(objectUrl), URL_REVOKE_DELAY_MS);
 };

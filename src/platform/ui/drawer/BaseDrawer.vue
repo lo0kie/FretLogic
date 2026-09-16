@@ -12,7 +12,7 @@
         v-if="destroyOnClose ? visible : true"
         v-show="visible"
         :class="[overlayAlignClass, mask ? 'bg-black/50' : 'pointer-events-none bg-transparent']"
-        :style="{ zIndex: floatingZ }"
+        :style="{ zIndex: overlayZ > 0 ? overlayZ : undefined }"
         @click.self="handleMaskClick($event)"
         @mousedown="handleMaskMousedown($event)"
         class="drawer-overlay-container fixed inset-0 flex overflow-hidden"
@@ -50,6 +50,7 @@
               <slot name="header-extra" />
               <ActionButton
                 v-if="showClose"
+                :disabled="closeButtonDisabled || closeLocked"
                 @click="close('close')"
                 icon-only
                 aria-label="关闭"
@@ -97,20 +98,18 @@
 <script lang="ts">
 // 双 script 块的 SFC 视为同一模块：import 必须整体置于第一个块顶部（import/first），
 // 下方 <script setup> 直接复用这些绑定
-import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
-
-import { useEventListener, useScrollLock } from '@vueuse/core';
+import { computed, useId, useSlots, useTemplateRef } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import {
-  hasActiveOverlays,
-  isClient,
-  isTopOverlay,
-  registerOverlay,
-  unregisterOverlay,
-} from '@/platform/ui/overlay/overlayStack';
-import { acquireFloatingZ, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
+  useOverlayCloseGuard,
+  useOverlayEscape,
+  useOverlayFocusTrap,
+  useOverlayMaskClose,
+} from '@/platform/ui/overlay/overlayGuards';
+import { useOverlayLifecycle } from '@/platform/ui/overlay/overlayLifecycle';
+import { isTopOverlay } from '@/platform/ui/overlay/overlayStack';
 import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
 
 import type { ModalCloseReason } from '@/platform/ui/modal/modalCloseReason';
@@ -148,6 +147,11 @@ const props = withDefaults(
     showClose?: boolean;
     /** 关闭前拦截：返回 false 或 Promise<false> 可阻止关闭（X / 遮罩 / ESC 均生效） */
     beforeClose?: () => boolean | Promise<boolean>;
+    /** 仅禁用右上角关闭（X）按钮：视觉置灰且点击无效，不影响遮罩 / ESC */
+    closeButtonDisabled?: boolean;
+    /** 锁死全部用户关闭路径（X / 遮罩 / ESC）：仅允许父级程序化 visible=false 关闭；
+     *  优先级高于 beforeClose，锁定时连 beforeClose 都不进 */
+    closeLocked?: boolean;
     /** 关闭时是否彻底销毁内部 DOM，默认 true */
     destroyOnClose?: boolean;
     /** Teleport 挂载目标，默认 'body' */
@@ -164,6 +168,8 @@ const props = withDefaults(
     keyboard: true,
     showClose: true,
     beforeClose: undefined,
+    closeButtonDisabled: false,
+    closeLocked: false,
     destroyOnClose: true,
     teleportTo: 'body',
     disabledTeleport: false,
@@ -185,11 +191,6 @@ const drawerPanelRef = useTemplateRef<HTMLDivElement>('drawerPanelRef');
 const titleId = `base-drawer-title-${useId()}`;
 
 const hasHeader = computed(() => Boolean(slots['header-extra'] || slots['title'] || props.title || props.showClose));
-
-// ---------- 层级联动：与 Popover / ContextMenu / Selector 下拉共享同一动态层池 ----------
-// 打开时取「当前最高占用 + 1」：后开的抽屉必定压住已开的抽屉与浮层；
-// 抽屉内容里再打开 Popover 会分配到更高层号，天然盖在抽屉之上（与 Modal 内弹层行为一致）
-const floatingZ = ref(0);
 
 const overlayAlignClass = computed(() => {
   switch (props.placement) {
@@ -252,134 +253,35 @@ const panelBorderClass = computed(() => {
   }
 });
 
-// ---------- 滚动锁与 Esc ----------
-const isBodyLocked = isClient ? useScrollLock(document.body) : ref(false);
-
-// 仅当自身位于阻断层栈顶时才响应 Esc，避免一次按键同时关闭所有层叠抽屉
-const isTopDrawer = () => isTopOverlay(overlayRef.value);
-
-/** Esc 关闭：keyboard 开启且自身为栈顶时生效 */
-const handleEscape = (e: KeyboardEvent) => {
-  if (e.key !== 'Escape') return;
-  if (!props.keyboard || !isTopDrawer()) return;
-  close('esc');
-};
-
-let stopKeydownListener: (() => void) | null = null;
-/** 解绑全局键盘监听 */
-const clearListeners = () => {
-  stopKeydownListener?.();
-  stopKeydownListener = null;
-};
-
-// ---------- 开关生命周期 ----------
-watch(
+// ---------- 共享浮层生命周期与交互守卫（唯一来源：platform/ui/overlay/*） ----------
+const close = useOverlayCloseGuard({
   visible,
-  async isOpen => {
-    if (!isOpen) {
-      clearListeners();
-      if (overlayRef.value) {
-        unregisterOverlay(overlayRef.value);
-      }
-      // 仅遮罩模式参与 body 滚动锁，非遮罩（调色盘）抽屉不锁背景
-      isBodyLocked.value = props.mask && hasActiveOverlays() > 0;
-    } else {
-      // 打开瞬间收拢全局存量 Popover：抽屉为模态阻断层，不允许被先前浮层压在头上
-      closeAllPopovers();
-      // 滚动锁仅在遮罩模式下生效：mask=false 为调色盘模式，背景（谱面区）须可正常滚动与点击
-      isBodyLocked.value = props.mask;
-      stopKeydownListener = useEventListener(window, 'keydown', handleEscape);
-      // 层号在打开瞬间即刻分配（早于内容渲染）：保证与并发打开的浮层时序严格一致
-      floatingZ.value = acquireFloatingZ();
-      // 待 DOM 挂载后加入激活栈（语义与 BaseModal 一致：nextTick 保证入栈顺序与 watch 触发顺序一致）
-      void nextTick(() => {
-        if (overlayRef.value) {
-          registerOverlay(overlayRef.value);
-        }
-      });
-    }
-  },
-  { immediate: true }
-);
+  isLocked: () => props.closeLocked,
+  getBeforeClose: () => props.beforeClose,
+  onCancel: reason => emit('cancel', reason),
+});
 
-/** 离场动画结束：释放层号供后续浮层复用，并派发 closed */
-const handleAfterLeave = () => {
-  if (floatingZ.value) {
-    releaseFloatingZ(floatingZ.value);
-    floatingZ.value = 0;
-  }
-  emit('closed');
-};
+const handleEscape = useOverlayEscape({
+  enabled: () => props.keyboard && !props.closeLocked,
+  isTop: () => isTopOverlay(overlayRef.value),
+  close,
+});
 
-// ---------- Tab 焦点圈定：在抽屉内首个/末个可聚焦元素间循环 ----------
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const { overlayZ, handleAfterLeave } = useOverlayLifecycle({
+  visible,
+  overlayRef,
+  onEscape: handleEscape,
+  // 仅遮罩模式参与 body 滚动锁，非遮罩（调色盘）抽屉不锁背景
+  locksBody: () => props.mask,
+  // 打开瞬间收拢全局存量 Popover：抽屉为模态阻断层，不允许被先前浮层压在头上
+  onOpen: () => closeAllPopovers(),
+  onAfterLeave: () => emit('closed'),
+});
 
-const handleKeydownTrap = (e: KeyboardEvent) => {
-  if (e.key !== 'Tab' || !drawerPanelRef.value) return;
-  const focusables = Array.from(drawerPanelRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-  if (focusables.length === 0) {
-    drawerPanelRef.value.focus();
-    return;
-  }
-  const firstEl = focusables[0]!;
-  const lastEl = focusables[focusables.length - 1]!;
-  if (e.shiftKey) {
-    if (document.activeElement === firstEl || document.activeElement === drawerPanelRef.value) {
-      e.preventDefault();
-      lastEl.focus();
-    }
-  } else {
-    if (document.activeElement === lastEl) {
-      e.preventDefault();
-      firstEl.focus();
-    }
-  }
-};
+const handleKeydownTrap = useOverlayFocusTrap(drawerPanelRef);
 
-// ---------- 统一关闭入口：beforeClose 拦截 + 防重入（与 BaseModal 语义一致） ----------
-let closePending = false;
-const close = async (reason: ModalCloseReason = 'cancel') => {
-  // beforeClose 执行期间防重入：遮罩 / X / Esc 并发触发时只放行一次请求，
-  // 避免异步 beforeClose（二次确认 / 远端校验）被重复拉起
-  if (closePending) return;
-  if (props.beforeClose) {
-    closePending = true;
-    try {
-      const ok = await props.beforeClose();
-      if (ok === false) return; // 拦截：放弃本次关闭，closePending 由 finally 复位
-    } finally {
-      closePending = false;
-    }
-  }
-  emit('cancel', reason);
-  visible.value = false;
-};
-
-let mousedownTarget: EventTarget | null = null;
-/** 记录按下位置：仅「按下与松开都在遮罩上」才视为点击遮罩 */
-const handleMaskMousedown = (e: MouseEvent) => {
-  mousedownTarget = e.target;
-};
-/** 遮罩点击关闭：校验按下/松开目标一致，避免从抽屉内拖拽出来误关 */
-const handleMaskClick = (e: MouseEvent) => {
-  if (props.mask && props.closeOnMask && e.target === e.currentTarget && mousedownTarget === e.currentTarget) {
-    close('mask');
-  }
-  mousedownTarget = null;
-};
-
-onBeforeUnmount(() => {
-  clearListeners();
-  if (overlayRef.value) {
-    unregisterOverlay(overlayRef.value);
-  }
-  // 仅遮罩模式参与 body 滚动锁
-  isBodyLocked.value = props.mask && hasActiveOverlays() > 0;
-  // 兜底释放层号：抽屉在离场动画完成前被卸载（如父组件销毁）时 after-leave 不会触发
-  if (floatingZ.value) {
-    releaseFloatingZ(floatingZ.value);
-    floatingZ.value = 0;
-  }
+const { handleMaskMousedown, handleMaskClick } = useOverlayMaskClose({
+  canClose: () => props.mask && props.closeOnMask && !props.closeLocked,
+  close,
 });
 </script>

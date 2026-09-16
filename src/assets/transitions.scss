@@ -253,3 +253,29 @@
     transform: translateY(100%);
   }
 }
+
+// ============================================================
+// 浮动条 / 浮动按钮进出场（v-floating-bar-slide）
+// 命名与 BaseFloatingPill / BaseFab 的默认 Transition name 一一对应。
+// 此前两组件各维护一份逐字节相同的 :global 规则，收拢至此为唯一来源。
+// !important 确保在 enter/leave 阶段强制覆盖 transition-property，
+// 否则容器任意 transition-* 工具类都会把 opacity/transform 排除导致动画瞬时完成。
+// ============================================================
+.v-floating-bar-slide-enter-active,
+.v-floating-bar-slide-leave-active {
+  transition:
+    opacity 0.25s cubic-bezier(0, 0, 0.2, 1),
+    transform 0.25s cubic-bezier(0, 0, 0.2, 1) !important;
+}
+
+.v-floating-bar-slide-enter-from,
+.v-floating-bar-slide-leave-to {
+  transform: translateY(16px) scale(0.96);
+  opacity: 0;
+}
+
+.v-floating-bar-slide-enter-to,
+.v-floating-bar-slide-leave-from {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}

@@ -85,7 +85,10 @@
             </template>
             <div v-else v-marquee.fade class="min-w-0 flex-1">
               <span class="block whitespace-nowrap">
-                <slot :selected="modelValue" name="label">{{ displayText }}</slot>
+                <slot :rolling-label="BaseRollingText" :selected="modelValue" name="label">
+                  <BaseRollingText v-if="rollingText" :text="displayText" always-roll class="tabular-nums" />
+                  <template v-else>{{ displayText }}</template>
+                </slot>
               </span>
             </div>
           </span>
@@ -245,6 +248,7 @@ import { computed, inject, nextTick, onBeforeUpdate, ref, useAttrs, useTemplateR
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
+import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
@@ -255,26 +259,12 @@ import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import type { BaseSelectorOption, OptionValue, SelectorFieldNames } from '@/platform/ui/selector/BaseSelector.logic';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 import type { Component } from 'vue';
 
-export interface SelectorFieldNames {
-  label?: string;
-  value?: string;
-  disabled?: string;
-  icon?: string;
-}
-
-export interface BaseSelectorOption<V = unknown> {
-  label: string;
-  value: V;
-  disabled?: boolean;
-  icon?: IconName | Component;
-  [key: string]: unknown;
-}
-
-/** 从选项类型中提取对应的绑值类型 */
-export type OptionValue<Opt> = Opt extends { value: infer V } ? V : Opt;
+// 键名/选项/绑值类型以 BaseSelector.logic.ts 为唯一来源，此处 re-export 保持既有从 .vue 导入的路径兼容
+export type { BaseSelectorOption, OptionValue, SelectorFieldNames };
 </script>
 
 <script
@@ -291,7 +281,7 @@ const modelValue = defineModel<M extends true ? V[] : V>({ required: true });
 const {
   options,
   size = undefined,
-  width = 'full',
+  width = 'md',
   placeholder = '请选择...',
   icon = undefined,
   clearable = false,
@@ -310,12 +300,14 @@ const {
   valueComparator = undefined,
   highlightNonDefault = false,
   keepOpenOnSelect = false,
+  /** 触发器选中标签是否启用翻页动画：true 时整段标签随文案变化翻滚；false = 普通文本 */
+  rollingText = false,
 } = defineProps<{
   /** 选项列表：对象数组（label/value 等字段）或原始值数组 */
   options: O[];
   /** 尺寸档位：sm/md/lg */
   size?: ComponentSize;
-  /** 触发器宽度：full / auto 或具体 CSS 宽度值 */
+  /** 触发器宽度：预设档位（sm/md/lg/xl/auto/full）或具体 CSS 宽度值，默认 md */
   width?: FormComponentWidth;
   /** 未选中时的占位提示文本 */
   placeholder?: string;
@@ -354,6 +346,8 @@ const {
   highlightNonDefault?: boolean;
   /** 单选选中后是否保持面板打开（默认 false 选中即关；用于快捷切换场景，Esc/点外部仍可关闭） */
   keepOpenOnSelect?: boolean;
+  /** 触发器选中标签是否启用翻页动画：true 时整段标签随文案变化翻滚；false = 普通文本 */
+  rollingText?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -616,7 +610,8 @@ const handleRemoveTag = (option: AnyOption) => {
   emit('removeTag', option, val);
 };
 
-/** 清空选择：回退到 defaultValue（多选为空数组）并派发 change / clear */
+/** 清空选择：回退到 defaultValue（多选为空数组）并派发 change / clear；
+ *  无论 keepOpenOnSelect 如何，清空都关闭面板（清空即结束本次选择交互） */
 const handleClear = () => {
   if (disabled) return;
   const fallback = (defaultValue !== undefined
@@ -627,6 +622,7 @@ const handleClear = () => {
   modelValue.value = fallback;
   emit('change', modelValue.value);
   emit('clear');
+  isOpen.value = false;
 };
 
 /** 触发器键盘：方向键 / 回车 / 空格打开面板 */

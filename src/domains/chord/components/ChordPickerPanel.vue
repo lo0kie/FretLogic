@@ -27,9 +27,8 @@
            因此绝不使用 sm:/md: 这类视口断点——那会让同一块面板在宽屏与窄屏下变成两套布局。
            搜索独占一行铺满（宽度 100% 跟随面板），排序规则与调式键在下一行左对齐成组：
            三者同取 sm 控件档位（1.6rem）保证同行同高；排序组永不压缩，窄面板下也不挤压 -->
-      <div class="picker-controls-row flex flex-col gap-sm px-lg pt-2xs pb-md">
+      <div class="picker-controls-row flex flex-col gap-md px-lg pt-2xs pb-md">
         <BaseInput
-          v-focus
           v-model="pickerSearchQuery"
           :maxlength="15"
           clearable
@@ -38,21 +37,19 @@
           font-size="xs"
           placeholder="搜索和弦名称..."
           prefix-icon="search"
-          size="sm"
           width="full"
         />
-        <div class="sort-action-group flex shrink-0 items-center gap-sm">
+        <div class="sort-action-group flex shrink-0 items-center gap-md">
           <BaseSegmentedControl
             v-model="sortOverride"
             :options="SORT_RULE_CONFIG"
             @update:model-value="handleSortRuleChange($event)"
-            size="sm"
+            width="auto"
           />
           <KeySelector
             v-model="tempSortKey"
             :disabled="sortOverride !== GroupSortRule.KEY_DEGREE"
             @update:model-value="handleSortKeyChange($event)"
-            size="sm"
             width="sm"
           />
         </div>
@@ -203,6 +200,7 @@
             :options="sectionOptions"
             aria-label="切换和弦分区"
             size="sm"
+            width="auto"
           />
         </div>
       </BaseScrollArea>

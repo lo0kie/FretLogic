@@ -50,13 +50,9 @@
     </template>
   </BaseDrawer>
 
-  <!-- 新建和弦时的目标分组选择：复用「移动至新分组」的交互与外观 -->
-  <BaseModal
-    v-model:visible="groupModalOpen"
-    :style="{ zIndex: groupModalZ }"
-    @confirm="handleConfirmGroupSelect()"
-    title="选择保存分组"
-  >
+  <!-- 新建和弦时的目标分组选择：复用「移动至新分组」的交互与外观
+       （层号由 BaseModal 自行从浮层池取号，天然高于抽屉，无需外部注入） -->
+  <BaseModal v-model:visible="groupModalOpen" @confirm="handleConfirmGroupSelect()" title="选择保存分组">
     <div v-grid-nav="3" class="no-scrollbar grid max-h-[50vh] grid-cols-3 gap-md">
       <button
         v-wave
@@ -85,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
+import { computed, provide, ref, watch } from 'vue';
 
 import ChordAnalysisPanel from '@/domains/chord/workbench/components/ChordAnalysisPanel.vue';
 import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
@@ -101,7 +97,6 @@ import {
   useChordDraftSaveState,
 } from '@/domains/chord/workbench/composables/useChordDraftEditing';
 import { useUiStore } from '@/platform/store/uiStore';
-import { acquireFloatingZ, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
 
 import type { Chord } from '@/domains/chord/types';
 
@@ -172,21 +167,11 @@ const handleReset = () => {
 const uiStore = useUiStore();
 
 /**
- * 新建和弦目标分组弹窗状态：弹层开关、当前预选分组与动态层号。
- * 抽屉自身走动态浮层池（floatingZ，≥9999），而 BaseModal 默认用静态 z-overlay（2000），
- * 若不加盖动态层号，弹窗会被压在抽屉之下。故在打开时从浮动层池分配「抽屉层号 + 1」并注入弹窗。
+ * 新建和弦目标分组弹窗状态：弹层开关与当前预选分组。
+ * 层级无需手动管理——BaseModal 打开时自行从浮层池取号，天然高于抽屉层号。
  */
 const groupModalOpen = ref(false);
 const selectedTargetGroupId = ref('');
-const groupModalZ = ref(0);
-
-/** 弹窗关闭（含离场）后释放动态层号，避免层号泄漏 */
-watch(groupModalOpen, open => {
-  if (!open && groupModalZ.value) {
-    releaseFloatingZ(groupModalZ.value);
-    groupModalZ.value = 0;
-  }
-});
 
 /**
  * 抽屉被外部收起（宿主随 KeepAlive 停用而一并关闭等）时同步收起分组选择弹窗：
@@ -199,17 +184,9 @@ watch(
   }
 );
 
-onBeforeUnmount(() => {
-  if (groupModalZ.value) {
-    releaseFloatingZ(groupModalZ.value);
-    groupModalZ.value = 0;
-  }
-});
-
-/** 打开新建分组选择弹窗：从浮动层池分配高于抽屉的层号，并预选当前已生效分组 */
+/** 打开新建分组选择弹窗：预选当前已生效分组 */
 const openGroupSelect = () => {
   selectedTargetGroupId.value = String(editorStore.draftChord.groupId || chordStore.selectedGroupId || '');
-  groupModalZ.value = acquireFloatingZ();
   groupModalOpen.value = true;
 };
 

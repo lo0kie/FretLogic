@@ -14,10 +14,10 @@
         v-auto-width
         v-bind="$attrs"
         v-if="isBarVisible"
-        :aria-label="ariaLabel ?? '浮动操作栏'"
+        :aria-label="ariaLabel ?? '浮动胶囊'"
         :class="[positionClass, alignClass, zIndexClass, sizeClass]"
-        :style="outerStyle"
-        class="base-floating-bar pointer-events-auto flex w-max max-w-[calc(100vw-2rem)] items-center rounded-full border border-glass-border bg-surface-panel/95 shadow-floating backdrop-blur-xl hover:ring-2 hover:ring-primary/70"
+        :style="positionStyle"
+        class="base-floating-pill pointer-events-auto flex w-max max-w-[calc(100vw-2rem)] items-center rounded-full border border-glass-border bg-surface-panel/95 shadow-floating backdrop-blur-xl hover:ring-2 hover:ring-primary/70"
         role="toolbar"
         tabindex="-1"
       >
@@ -28,12 +28,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, ref } from 'vue';
+import { computed } from 'vue';
 
-import { ALIGN_CLASS_MAP, toPositionLength } from './floatingPositions';
+import { ALIGN_CLASS_MAP } from './floatingPositions';
+import { useFloatingPosition, useKeepAliveVisible } from './useFloatingPosition';
 
 defineOptions({
-  name: 'BaseFloatingBar',
+  name: 'BaseFloatingPill',
   inheritAttrs: false,
 });
 
@@ -85,21 +86,11 @@ const emit = defineEmits<{
   (e: 'after-leave', el: Element): void;
 }>();
 
-// 初始为 true：保证首次挂载（含 KeepAlive 初始激活）即可见；
-// 切走时 onDeactivated 置 false 隐藏，切回时 onActivated 置 true 恢复。
-const isViewActive = ref(true);
-
-onActivated(() => {
-  isViewActive.value = true;
-});
-
-onDeactivated(() => {
-  isViewActive.value = false;
-});
+const isViewActive = useKeepAliveVisible();
 
 const isBarVisible = computed(() => Boolean(props.visible && isViewActive.value));
 
-const positionClass = computed(() => (props.position === 'absolute' ? 'absolute' : 'fixed'));
+const { positionClass, zIndexClass, positionStyle } = useFloatingPosition(props, 'BaseFloatingPill');
 
 const alignClass = computed(() =>
   props.align ? (ALIGN_CLASS_MAP[props.align] ?? ALIGN_CLASS_MAP.center) : ALIGN_CLASS_MAP.center
@@ -112,49 +103,15 @@ const SIZE_CLASS_MAP: Record<'sm' | 'md', string> = {
   md: 'gap-sm px-md py-sm',
 };
 const sizeClass = computed(() => SIZE_CLASS_MAP[props.size] ?? SIZE_CLASS_MAP.md);
-
-const zIndexClass = computed(() => (typeof props.zIndex === 'string' ? props.zIndex : ''));
-
-// 安全区与底部定位：将 bottom 直接作用于定位容器（toPositionLength 内含非法值 dev 校验）
-const outerStyle = computed(() => {
-  const b = toPositionLength(props.bottom, 'BaseFloatingBar');
-  const style: Record<string, string | number> = {
-    bottom: props.safeAreaInset ? `calc(${b} + env(safe-area-inset-bottom, 0px))` : b,
-  };
-  if (typeof props.zIndex === 'number') {
-    style['zIndex'] = props.zIndex;
-  }
-  return style;
-});
 </script>
 
 <style scoped lang="scss">
-/* 常态 hover 过渡：只影响底色/边框/阴影，不与进出场动画抢 transition-property */
-.base-floating-bar {
+/* 常态 hover 过渡：只影响底色/边框/阴影，不与进出场动画抢 transition-property。
+   进出场动画 v-floating-bar-slide-* 收拢于 assets/transitions.scss（与 BaseFab 共用） */
+.base-floating-pill {
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease,
     box-shadow 0.15s ease;
-}
-
-/* 进出场动画：!important 确保在 enter/leave 阶段强制覆盖 transition-property，
-   否则容器任意 transition-* 工具类都会把 opacity/transform 排除导致动画瞬时完成 */
-:global(.v-floating-bar-slide-enter-active),
-:global(.v-floating-bar-slide-leave-active) {
-  transition:
-    opacity 0.25s cubic-bezier(0, 0, 0.2, 1),
-    transform 0.25s cubic-bezier(0, 0, 0.2, 1) !important;
-}
-
-:global(.v-floating-bar-slide-enter-from),
-:global(.v-floating-bar-slide-leave-to) {
-  transform: translateY(16px) scale(0.96);
-  opacity: 0;
-}
-
-:global(.v-floating-bar-slide-enter-to),
-:global(.v-floating-bar-slide-leave-from) {
-  transform: translateY(0) scale(1);
-  opacity: 1;
 }
 </style>

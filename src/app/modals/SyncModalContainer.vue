@@ -1,14 +1,7 @@
 <template>
-  <BaseModal
-    v-model:visible="isSyncModalOpen"
-    :close-on-mask="modalCloseable"
-    :keyboard="modalCloseable"
-    :show-close="modalCloseable"
-    title="同步设置"
-    width="w-80"
-  >
+  <BaseModal v-model:visible="isSyncModalOpen" :close-locked="!modalCloseable" title="同步设置">
     <template #header-extra>
-      <BaseSelector v-model="selectedProvider" :disabled="!modalCloseable" :options="providerOptions" width="md" />
+      <BaseSelector v-model="selectedProvider" :disabled="!modalCloseable" :options="providerOptions" />
     </template>
 
     <template #default>
@@ -30,6 +23,7 @@
                 is-password
                 show-count
                 placeholder="服务器 Token"
+                width="auto"
               />
               <p class="form-hint m-0">
                 上传数据时通过 Authorization 请求头携带 Token；拉取与测试连接无需 Token。Token
@@ -48,6 +42,7 @@
                 is-password
                 show-count
                 placeholder="GitHub Token (ghp_...)"
+                width="auto"
               />
 
               <p class="form-hint m-0">提示：推送写回分支需配置 Token；拉取公开分支无需 Token。</p>
@@ -64,6 +59,7 @@
                 is-password
                 show-count
                 placeholder="Gitee 私人令牌 (Token)"
+                width="auto"
               />
 
               <p class="form-hint m-0">
@@ -85,6 +81,7 @@
                 clearable
                 show-count
                 placeholder="WebDAV 服务器根地址 (例如 https://dav.example.com)"
+                width="auto"
               />
 
               <BaseInput
@@ -94,6 +91,7 @@
                 clearable
                 show-count
                 placeholder="用户名 (可选)"
+                width="auto"
               />
 
               <BaseInput
@@ -104,6 +102,7 @@
                 is-password
                 show-count
                 placeholder="密码"
+                width="auto"
               />
             </div>
           </template>
@@ -123,6 +122,7 @@
             clearable
             show-count
             placeholder="自定义代理地址 (留空则直连)"
+            width="auto"
           />
 
           <p class="form-hint m-0">

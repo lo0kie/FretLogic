@@ -13,8 +13,6 @@
 export interface PickFileOptions {
   /** 接受的 MIME 类型 / 扩展名列表（传给 <input accept>），如 '.json'、'application/json' */
   accept?: string;
-  /** 是否允许多选（默认 false，返回单个 File） */
-  multiple?: boolean;
 }
 
 /** 判定浏览器是否具备 File System Access API（隐式 Feature Detection，避免直接引用未定义全局） */
@@ -79,7 +77,6 @@ const pickViaInput = (options: PickFileOptions): Promise<File | null> =>
     const input = document.createElement('input');
     input.type = 'file';
     if (options.accept) input.accept = options.accept;
-    input.multiple = options.multiple ?? false;
     // 必须先用 CSS 隐藏再 append 到文档，点击前不可见、点击后不可残留
     input.className = 'hidden absolute';
     input.style.display = 'none';
@@ -120,12 +117,12 @@ const pickViaInput = (options: PickFileOptions): Promise<File | null> =>
   });
 
 /**
- * 打开系统文件选择框并返回第一个（或唯一）所选 File。
+ * 打开系统文件选择框（单选）并返回所选 File。
  * - File System Access API 环境原生返回 File（句柄 getFile），取消返回 null；
  * - 其它环境（或 API 调用抛错）降级为动态 input，取消 / 无选返回 null。
  */
 export async function pickFile(options: PickFileOptions = {}): Promise<File | null> {
-  const { accept, multiple = false } = options;
+  const { accept } = options;
 
   // 优先：File System Access API（仅限用户手势中调用；本函数默认在点击处理里触发）
   if (supportsShowOpenFilePicker()) {
@@ -139,7 +136,7 @@ export async function pickFile(options: PickFileOptions = {}): Promise<File | nu
         }
       ).showOpenFilePicker;
       const types = accept ? derivePickerTypes(accept) : null;
-      const handles = await picker({ multiple, ...(types ? { types } : {}) });
+      const handles = await picker({ multiple: false, ...(types ? { types } : {}) });
       if (!handles?.length) return null;
       const first = handles[0];
       if (!first) return null;
@@ -149,10 +146,10 @@ export async function pickFile(options: PickFileOptions = {}): Promise<File | nu
       // 仅「用户取消」返回 null（等价于关闭选择框）；其它异常（如缺手势/参数非法）降级到
       // 动态 input 兜底，避免静默失败导致「点击导入无任何反应」
       if (err instanceof DOMException && err.name === 'AbortError') return null;
-      return pickViaInput({ accept, multiple });
+      return pickViaInput({ accept });
     }
   }
 
   // 降级：动态 input 触发
-  return pickViaInput({ accept, multiple });
+  return pickViaInput({ accept });
 }

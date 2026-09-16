@@ -70,8 +70,8 @@
         </div>
       </BaseScrollArea>
 
-      <!-- 右下角缩放胶囊：复用 BaseFloatingBar（sm 紧凑形态），适应开关 + 毛玻璃百分比步进器 -->
-      <BaseFloatingBar
+      <!-- 右下角缩放胶囊：复用 BaseFloatingPill（sm 紧凑形态），适应开关 + 毛玻璃百分比步进器 -->
+      <BaseFloatingPill
         :bottom="'1.5rem'"
         :safe-area-inset="false"
         :z-index="'z-float'"
@@ -94,7 +94,6 @@
             wheel-on-hover
             readout-position="left"
             size="sm"
-            width="md"
           />
 
           <BaseDivider
@@ -116,11 +115,11 @@
           size="sm"
           title="自适应窗口高度"
         />
-      </BaseFloatingBar>
+      </BaseFloatingPill>
 
-      <!-- 页码提示：底部居中浮动胶囊（复用 BaseFloatingBar 的玻璃 chrome 与进出场动画），
+      <!-- 页码提示：底部居中浮动胶囊（复用 BaseFloatingPill 的玻璃 chrome 与进出场动画），
            滚动/翻页/切歌/进入预览时浮现，停顿后自动淡出；单页固定显示 1 / 1 -->
-      <BaseFloatingBar
+      <BaseFloatingPill
         :bottom="'1.5rem'"
         :safe-area-inset="false"
         :visible="pages.length > 0 && isPageHintVisible"
@@ -135,11 +134,18 @@
           :text="`${currentPage} / ${pages.length}`"
           class="px-1 text-xs font-semibold text-fg-body tabular-nums"
         />
-      </BaseFloatingBar>
+      </BaseFloatingPill>
     </template>
 
-    <!-- 右键单页的上下文菜单：复制 / 下载当前页（零尺寸挂载于根层，不参与滚动内容） -->
-    <BaseMenu :items="pageMenuItems" @close="menuTargetIndex = -1" ref="previewMenuRef" trigger="contextmenu" />
+    <!-- 右键单页的上下文菜单：复制 / 下载当前页（零尺寸挂载于根层，不参与滚动内容）；
+         标题行展示当前乐谱标题 + 页码 + 当前页图片大小预估 -->
+    <BaseMenu
+      :items="pageMenuItems"
+      :title="menuTitle"
+      @close="menuTargetIndex = -1"
+      ref="previewMenuRef"
+      trigger="contextmenu"
+    />
   </div>
 </template>
 
@@ -169,7 +175,7 @@ import { useDebounceFn, useElementSize, useEventListener } from '@vueuse/core';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
-import BaseFloatingBar from '@/platform/ui/floating-bar/BaseFloatingBar.vue';
+import BaseFloatingPill from '@/platform/ui/floating-bar/BaseFloatingPill.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
@@ -187,53 +193,40 @@ import {
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import {
+  currentRenderData,
+  fetchA4PageBlob,
+  getCachedRender,
+  isPreviewRendering,
+  putCachedRender,
+  setCurrentRender,
+} from '@/domains/score/preview/scorePreviewCache';
+import {
   buildExportFileName,
   triggerBlobDownload,
   writeBlobToClipboard,
 } from '@/domains/score/preview/services/scoreExportCanvas';
-import { prepareWorkerExportPayload, runWorkerExport } from '@/domains/score/preview/services/workerExportService';
+import { runWorkerExport } from '@/domains/score/preview/services/workerExportService';
+import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
 import { isDark } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import { formatBytes } from '@/platform/utils/common';
 
+import type { PreviewRenderData } from '@/domains/score/preview/scorePreviewCache';
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 defineOptions({ name: 'ScorePreviewPane' });
-// ===== 会话级 A4 分页预览缓存（模块作用域，组件卸载/切换标签后仍保留）：内容键 → 各页图 URL =====
+
+// ===== 会话级 A4 分页预览缓存已下沉至 scorePreviewCache 共享模块 =====
 let rememberedContainerHeight = 0;
-const CACHE_MAX = 4;
-const previewCache = new Map<string, string[]>(); // Map 迭代序 = 最近使用序
 
-const revokePages = (urls: string[]) => {
-  for (const url of urls) {
-    URL.revokeObjectURL(url);
-  }
-};
-
-/** 命中缓存：按最近使用上浮（LRU），无命中返回 null */
-const cacheGet = (key: string): string[] | null => {
-  const hit = previewCache.get(key);
-  if (!hit) return null;
-  previewCache.delete(key);
-  previewCache.set(key, hit);
-  return hit;
-};
-
-/** 写入缓存：超出容量时驱逐最久未用项并释放其 URL */
-const cachePut = (key: string, urls: string[]) => {
-  const prev = previewCache.get(key);
-  if (prev) previewCache.delete(key);
-  previewCache.set(key, urls);
-  if (previewCache.size > CACHE_MAX) {
-    const oldestKey = previewCache.keys().next().value as string | undefined;
-    if (oldestKey !== undefined) {
-      const oldest = previewCache.get(oldestKey);
-      previewCache.delete(oldestKey);
-      if (oldest) revokePages(oldest);
-    }
-  }
+/** 当前展示页流对应的渲染数据（含各页字节数 + 长图产物）：切歌/生成时由 applyEntry 同步更新，
+ *  右键菜单标题直接读数；同时写入共享缓存供 TopHeader 下载菜单复用，避免重复渲染 */
+const applyEntry = (data: PreviewRenderData | null) => {
+  setCurrentRender(data);
+  pages.value = data ? data.a4Urls : [];
 };
 
 const scoreEditor = useScoreEditorStore();
@@ -243,12 +236,11 @@ const { chordsLookupMap } = useScoreLinesData();
 
 const hasLyricsText = computed(() => Boolean(scoreEditor.activeSong?.lyrics?.trim()));
 
+// Worker 渲染载荷统一构建（全曲行索引 + 设置项读取），与 TopHeader 导出共享同一来源
+const { getAllLineIndices, buildRenderPayload } = useScoreRenderPayload();
+
 /** 整曲全部行索引：预览始终覆盖全曲（不随选中行变化） */
-const allLineIndices = computed<number[]>(() => {
-  const lyrics = scoreEditor.activeSong?.lyrics;
-  if (!lyrics) return [];
-  return Array.from({ length: lyrics.split('\n').length }, (_, i) => i);
-});
+const allLineIndices = computed<number[]>(() => getAllLineIndices());
 
 const pages = ref<string[]>([]);
 const isRendering = ref(false);
@@ -295,11 +287,12 @@ const buildContentKey = () => {
 /** 响应式内容键：内容/排版任一依赖变化即重算，作为「重渲染触发」的单一 watch 源 */
 const reactiveContentKey = computed(() => buildContentKey());
 
-/** 整曲 A4 自动分页渲染：Worker 内部按可用高度装箱分页并逐页绘制表头，返回各页图 */
+/** 整曲渲染：Worker 离屏渲染 A4 分页（预览展示 / 右键下载本页 / Header 的 PDF·ZIP 下载均复用此结果），
+ *  结果一次写入共享缓存，UI 层（预览页流 / 右键菜单 / Header 下载菜单）直接读数，不再各算各的 */
 const generate = async (force = false) => {
   const song = scoreEditor.activeSong;
   if (!song || allLineIndices.value.length === 0) {
-    pages.value = [];
+    applyEntry(null);
     currentContentKey = '';
     return;
   }
@@ -307,9 +300,9 @@ const generate = async (force = false) => {
   const contentKey = buildContentKey();
 
   // 命中缓存：直接展示已渲染的页流（同内容来回切换/重进预览标签零重复渲染）
-  const cached = cacheGet(contentKey);
-  if (!force && cached && cached.length > 0) {
-    pages.value = cached;
+  const cached = getCachedRender(contentKey);
+  if (!force && cached && cached.a4Urls.length > 0) {
+    applyEntry(cached);
     currentContentKey = contentKey;
     isRendering.value = false;
     errorMessage.value = '';
@@ -320,35 +313,23 @@ const generate = async (force = false) => {
 
   const token = ++runToken;
   isRendering.value = true;
+  isPreviewRendering.value = true;
   errorMessage.value = '';
   // 已有页面的增量更新才弹「更新中」Toast；首次构建（无页）留给内容区居中加载框
   if (pages.value.length > 0) showUpdateToast();
   try {
-    const payload = prepareWorkerExportPayload(
-      song,
-      allLineIndices.value,
-      chordsLookupMap.value,
-      'a4', // 自动分页模式
-      settingsStore.scoreChordShorthand,
-      settingsStore.scoreLayoutAlign,
-      scoreEditor.fontScale,
-      scoreEditor.fretboardScale,
-      settingsStore.scoreShowBarre,
-      settingsStore.scoreLyricsFontWeight,
-      settingsStore.scoreExportQuality,
-      settingsStore.scorePageMargin,
-      settingsStore.scorePageSize,
-      settingsStore.scoreShowFooter,
-      settingsStore.scoreIgnoreEmptySpace
-    );
-    const { blobs: pageBlobs } = await runWorkerExport(payload);
+    const a4Result = await runWorkerExport(buildRenderPayload('a4'));
     if (token !== runToken) return;
-    if (pageBlobs.length === 0) throw new Error('未能生成有效的预览数据');
+    if (a4Result.blobs.length === 0) throw new Error('未能生成有效的预览数据');
 
-    const urls = pageBlobs.map(blob => URL.createObjectURL(blob));
-    pages.value = urls;
+    const a4Urls = a4Result.blobs.map(blob => URL.createObjectURL(blob));
+    // 各页字节数随渲染数据一并缓存：生成时 Blob 即在内存，直接取 size 免二次 fetch
+    const a4Sizes = a4Result.blobs.map(blob => blob.size);
+
+    const entry: PreviewRenderData = { a4Urls, a4Sizes };
     currentContentKey = contentKey;
-    cachePut(contentKey, urls);
+    putCachedRender(contentKey, entry);
+    applyEntry(entry);
     consumeIntroPageHint();
   } catch (err) {
     if (token === runToken) {
@@ -357,6 +338,7 @@ const generate = async (force = false) => {
   } finally {
     if (token === runToken) {
       isRendering.value = false;
+      isPreviewRendering.value = false;
       dismissUpdateToast();
     }
   }
@@ -370,12 +352,30 @@ const cancelPendingExport = () => {
   // 不 revoke：页 URL 已写入模块级缓存，切回预览可复用；内存由 LRU 容量控制
   runToken++;
   isRendering.value = false;
+  isPreviewRendering.value = false;
   dismissUpdateToast();
 };
 
 // ===== 单页右键菜单：复制 / 下载当前页图 =====
 const previewMenuRef = ref<InstanceType<typeof BaseMenu> | null>(null);
 const menuTargetIndex = ref(-1);
+/**
+ * 各页图片字节数：直接读共享缓存 currentRenderData（含 a4Sizes），不另立缓存结构，
+ * 随预览渲染/切歌同步刷新、随 LRU 驱逐回收。
+ */
+
+/** 当前右键页的字节数，未取回前为 null（currentRenderData 由 applyEntry 在切歌/生成时同步设定） */
+const menuPageSize = computed(() => {
+  const i = menuTargetIndex.value;
+  const data = currentRenderData.value;
+  return data && i >= 0 && i < data.a4Sizes.length ? data.a4Sizes[i] : null;
+});
+
+/** 右键菜单标题：当前页图片大小预估 */
+const menuTitle = computed(() => {
+  const cur = menuPageSize.value != null ? formatBytes(menuPageSize.value) : '…';
+  return `预估文件 ${cur}`;
+});
 
 /** 预览横向滚动容器元素（尺寸测量 / 缩放滚轮绑定 / 滚动位置存取都需要元素本身） */
 const previewAreaRef = useTemplateRef<ScrollAreaHandle>('previewAreaRef');
@@ -456,7 +456,7 @@ useEventListener(
   { passive: false }
 );
 
-/** 右键某页：记录目标页码并在光标处打开上下文菜单 */
+/** 右键某页：记录目标页码并在光标处打开上下文菜单（单页大小已在共享缓存 currentRenderData 中，无需额外取数） */
 const handlePageContextMenu = (e: MouseEvent, index: number) => {
   menuTargetIndex.value = index;
   void previewMenuRef.value?.openMenuAt(e.clientX, e.clientY);
@@ -507,12 +507,11 @@ watch(
   }
 );
 
-/** 读取指定页的原始 Blob（object URL 同源 fetch 可读回，Worker 导出为 image/jpeg） */
+/** 读取指定页的原始 Blob（统一走缓存模块的 object URL 读回） */
 const fetchPageBlob = async (index: number): Promise<Blob | null> => {
   const url = pages.value[index];
   if (!url) return null;
-  const res = await fetch(url);
-  return res.ok ? res.blob() : null;
+  return fetchA4PageBlob(url);
 };
 
 /** 复制指定页到系统剪贴板（JPEG 不兼容时自动转 PNG 写入） */
@@ -572,7 +571,7 @@ watch(
     }
 
     if (!scoreEditor.activeSong || !hasLyricsText.value) {
-      pages.value = [];
+      applyEntry(null);
       currentContentKey = '';
       return;
     }
@@ -583,22 +582,22 @@ watch(
     // 仅在当前处于预览标签激活状态时，切歌才同步触发导出生成；
     // 若在编辑歌词或排列和弦标签休眠（已失活），绝不在后台抢跑 Worker 耗能，待切回预览标签时（onActivated）由唤醒守卫按需生成
     if (!isPaneActive) {
-      pages.value = [];
+      applyEntry(null);
       currentContentKey = '';
       return;
     }
 
     const contentKey = buildContentKey();
-    const cached = cacheGet(contentKey);
+    const cached = getCachedRender(contentKey);
     // 缓存命中直接消费，重新生成由 generate 完成后消费
-    if (cached && cached.length > 0) {
-      pages.value = cached;
+    if (cached && cached.a4Urls.length > 0) {
+      applyEntry(cached);
       currentContentKey = contentKey;
       isRendering.value = false;
       errorMessage.value = '';
       consumeIntroPageHint();
     } else {
-      pages.value = [];
+      applyEntry(null);
       currentContentKey = '';
       void generate();
     }
@@ -623,14 +622,14 @@ onActivated(async () => {
   const contentKey = buildContentKey();
   // 唤醒守卫：如果休眠（在其他 Tab）期间切过歌或改过内容，先与已渲染内容比对
   if (contentKey !== currentContentKey) {
-    const cached = contentKey ? cacheGet(contentKey) : null;
-    if (cached && cached.length > 0) {
-      pages.value = cached;
+    const cached = contentKey ? getCachedRender(contentKey) : null;
+    if (cached && cached.a4Urls.length > 0) {
+      applyEntry(cached);
       currentContentKey = contentKey;
       isRendering.value = false;
       errorMessage.value = '';
     } else {
-      pages.value = [];
+      applyEntry(null);
       currentContentKey = '';
       await generate();
     }

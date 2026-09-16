@@ -180,6 +180,24 @@ export default defineConfig(({ mode }) => {
             },
           ],
         },
+        workbox: {
+          // 只预缓存「应用外壳」：HTML、样式、图标与 manifest，刻意不预缓存 JS chunk。
+          // 默认的 globPatterns（**/*.{js,css,html,ico,png,svg}）会把 dist 下所有 js 全量拉进
+          // precache —— 懒加载路由 chunk、导出 worker 及其依赖都在内，SW 首次安装就要把整套
+          // 产物下载一遍，流量与安装耗时翻倍，且每次发版（hash 全变）再重来一次。
+          //
+          // 更关键的是它会让首屏那条 <link rel="modulepreload"> 白费：预载请求被 SW 从 Cache
+          // Storage 应答，Chromium 判定其 world 与页面不匹配（cross-world service worker
+          // resource mismatch），转而去重新请求一次，控制台于是报「preloaded but not used」。
+          // JS 交给 HTTP 缓存即可：产物文件名带 hash、静态资源本就是长效缓存，离线打开时
+          // 浏览器缓存同样能被命中。
+          globPatterns: ['index.html', 'manifest.webmanifest', 'assets/*.css', '**/*.{png,svg,ico,webp}'],
+          navigateFallback: 'index.html',
+          // 不再注册任何匹配脚本的 runtimeCaching：只要 SW 应答脚本请求，上面的 mismatch 就会
+          // 原样复现（缓存命中与否都一样，因为响应同样经由 SW 返回）。
+          // 若日后确实需要「断网也能打开」，在此给 destination === 'script' 加一条
+          // StaleWhileRevalidate 即可，代价是那条预载警告会回来。
+        },
       }),
     ],
     base,
@@ -207,9 +225,28 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       target: 'es2020',
+      // 彻底关掉模块预载：既不注入 polyfill，也不产出任何 <link rel="modulepreload">（index.html 与
+      // __vitePreload 运行时都不再生成）。
+      //
+      // 起因：只有部署到 EdgeOne 的线上站会在控制台报「… was preloaded using link preload but not used
+      // within a few seconds」，指向 assets/*.js。本地 dev / 本地预览没有平台在中间，所以复现不了。
+      // 平台在 HTML 输出链路上会处理这条 modulepreload（据其推导并下发 Early Hints / Link 头），
+      // 预载请求与真正那次模块请求的匹配条件因此对不上，Chromium 判定预载白费、重新请求一次并告警。
+      // HTML 里干脆不存在预载链接，平台就无从推导，这类警告从源头消失。
+      //
+      // CSS 不受影响，这点是查过 Vite 源码确认的：importAnalysisBuild 会把 .css 依赖从
+      // resolveDependencies 的入参里剥离出来，modulePreload 为 false 时依然把这些 CSS deps 原样传给
+      // __vitePreload，由它用 <link rel="stylesheet"> 注入（源码原注释：CSS deps use the same mechanism
+      // as module preloads, so even if disabled, we still need to pass these deps to the preload helper）。
+      // 所以懒加载路由的样式照旧，不需要写 resolveDependencies: () => [] 这种自制过滤。
+      //
+      // 代价：入口的静态依赖（manualChunks 拆出的 vendor）不再与入口并行预载，首屏多一跳 RTT；
+      // 懒加载 chunk 的兄弟 chunk 预载同样取消。若某天想回退成「只关 polyfill、保留预载」，
+      // 改回 modulePreload: { polyfill: false } 即可。
+      modulePreload: false,
       rollupOptions: {
         output: {
-          // 文件名纯哈希化：去除源文件名前缀（BaseFloatingBar / ScoreView / Fretboard 等），避免从产物名反推模块结构
+          // 文件名纯哈希化：去除源文件名前缀（BaseFab / ScoreView / Fretboard 等），避免从产物名反推模块结构
           entryFileNames: 'assets/[hash].js',
           chunkFileNames: 'assets/[hash].js',
           assetFileNames: 'assets/[hash][extname]',

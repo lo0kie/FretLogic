@@ -39,20 +39,19 @@
           :options="[...SONG_TIME_SIGNATURES]"
           clearable
           placeholder="未设置"
-          width="md"
         />
       </BaseFormRow>
 
       <BaseFormRow label="原调 (Original)">
-        <KeySelector v-model="songModals.modalData.originalKey" allow-empty width="md" />
+        <KeySelector v-model="songModals.modalData.originalKey" allow-empty />
       </BaseFormRow>
 
       <BaseFormRow label="指法调 (Play)">
-        <KeySelector v-model="songModals.modalData.playKey" width="md" />
+        <KeySelector v-model="songModals.modalData.playKey" />
       </BaseFormRow>
 
       <BaseFormRow label="演唱调 (Key)">
-        <KeySelector v-model="songModals.key.value" width="md" />
+        <KeySelector v-model="songModals.key.value" />
       </BaseFormRow>
 
       <BaseFormRow label="变调夹 (Capo)">

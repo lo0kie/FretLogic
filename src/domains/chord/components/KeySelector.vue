@@ -9,10 +9,11 @@
     :options="selectorOptions"
     clearable
   >
-    <template #label="{ selected }">
-      <span v-if="selected === ''" class="text-fg-disabled">未设置</span>
-      <!-- 「调」走 suffix 显式声明：拼进 name 会让整串解析失败、升降号退化成普通字符 -->
-      <span v-else v-chord-name="{ name: selected, suffix: '调' }" />
+    <template #label="{ selected, rollingLabel }">
+      <component :is="rollingLabel" :roll-key="selected">
+        <span v-if="selected === ''" class="text-fg-disabled">未设置</span>
+        <span v-else v-chord-name="{ name: selected, suffix: '调' }" />
+      </component>
     </template>
 
     <template #option="{ option }">

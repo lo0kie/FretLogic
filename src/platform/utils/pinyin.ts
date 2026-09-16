@@ -49,34 +49,46 @@ const DIGIT_RE = /^[0-9]$/;
 /** 记忆表容量上限：超出整体清空（标题总量与乐谱库同量级，正常不会触发） */
 const MEMO_LIMIT = 4096;
 
-/** 分组键记忆表：比较器里同一标题会被反复取键（每轮排序 O(n log n) 次），
- *  而结果只由首字符决定——记忆后汉字标题的 23 次 collator 比较每首只做一次 */
-const groupKeyMemo = new Map<string, string>();
+/** 标题派生元信息：分组键与文种类别都只由首字符决定，合并为一次计算、一张记忆表
+ *  （比较器里同一标题原先要各查 groupKey / scriptClass 两张表，现收敛为单次查找） */
+interface TitleMeta {
+  groupKey: string;
+  scriptClass: number;
+}
 
-/** 标题首字母分组键：A-Z；数字 / 符号 / 非汉字可见字统一归 '#'。 */
-export const pinyinGroupKey = (title: string): string => {
-  const memo = groupKeyMemo.get(title);
-  if (memo !== undefined) return memo;
+const titleMetaMemo = new Map<string, TitleMeta>();
+
+/** 计算并缓存标题元信息：同一标题每轮排序 O(n log n) 次比较只会真正算一次 */
+const getTitleMeta = (title: string): TitleMeta => {
+  const memo = titleMetaMemo.get(title);
+  if (memo) return memo;
 
   const ch = title.trim().charAt(0);
-  let key: string;
-  if (!ch) key = '#';
-  else if (PINYIN_OVERRIDES[ch]) key = PINYIN_OVERRIDES[ch]!;
-  else if (ASCII_LETTER_RE.test(ch)) key = ch.toUpperCase();
-  else if (DIGIT_RE.test(ch) || !CJK_RE.test(ch)) key = '#';
+  let groupKey: string;
+  if (!ch) groupKey = '#';
+  else if (PINYIN_OVERRIDES[ch]) groupKey = PINYIN_OVERRIDES[ch]!;
+  else if (ASCII_LETTER_RE.test(ch)) groupKey = ch.toUpperCase();
+  else if (DIGIT_RE.test(ch) || !CJK_RE.test(ch)) groupKey = '#';
   else {
     let prev = PINYIN_BOUNDARIES[0]![0];
     for (const [letter, anchor] of PINYIN_BOUNDARIES) {
       if (collator.compare(ch, anchor) < 0) break;
       prev = letter;
     }
-    key = prev;
+    groupKey = prev;
   }
+  const meta: TitleMeta = {
+    groupKey,
+    scriptClass: ASCII_LETTER_RE.test(ch) ? 0 : CJK_RE.test(ch) ? 1 : 2,
+  };
 
-  if (groupKeyMemo.size >= MEMO_LIMIT) groupKeyMemo.clear();
-  groupKeyMemo.set(title, key);
-  return key;
+  if (titleMetaMemo.size >= MEMO_LIMIT) titleMetaMemo.clear();
+  titleMetaMemo.set(title, meta);
+  return meta;
 };
+
+/** 标题首字母分组键：A-Z；数字 / 符号 / 非汉字可见字统一归 '#'。 */
+export const pinyinGroupKey = (title: string): string => getTitleMeta(title).groupKey;
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
@@ -84,22 +96,6 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const groupOrder = (key: string): number => {
   const idx = ALPHABET.indexOf(key);
   return idx === -1 ? ALPHABET.length : idx;
-};
-
-/** 文种类别记忆表：同样在比较器里被反复调用，结果只由首字符决定 */
-const scriptClassMemo = new Map<string, number>();
-
-/** 标题首字符的文种类别：拉丁字母 0 / 汉字 1 / 其他（数字·符号·空）2。 */
-const scriptClass = (title: string): number => {
-  const memo = scriptClassMemo.get(title);
-  if (memo !== undefined) return memo;
-
-  const ch = title.trim().charAt(0);
-  const cls = ASCII_LETTER_RE.test(ch) ? 0 : CJK_RE.test(ch) ? 1 : 2;
-
-  if (scriptClassMemo.size >= MEMO_LIMIT) scriptClassMemo.clear();
-  scriptClassMemo.set(title, cls);
-  return cls;
 };
 
 /**
@@ -111,11 +107,11 @@ const scriptClass = (title: string): number => {
  * 因此字母开头的歌归入各自 A-Z 分组、不再沉底。
  */
 export const compareByPinyin = (a: string, b: string): number => {
-  const orderA = groupOrder(pinyinGroupKey(a));
-  const orderB = groupOrder(pinyinGroupKey(b));
+  const metaA = getTitleMeta(a);
+  const metaB = getTitleMeta(b);
+  const orderA = groupOrder(metaA.groupKey);
+  const orderB = groupOrder(metaB.groupKey);
   if (orderA !== orderB) return orderA - orderB;
-  const ca = scriptClass(a);
-  const cb = scriptClass(b);
-  if (ca !== cb) return ca - cb;
+  if (metaA.scriptClass !== metaB.scriptClass) return metaA.scriptClass - metaB.scriptClass;
   return collator.compare(a, b);
 };

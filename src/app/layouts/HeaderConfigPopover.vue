@@ -175,6 +175,7 @@
                 { value: 'pluck', label: '拨弦' },
               ]"
               compacted
+              width="auto"
             />
           </BaseFormRow>
 
@@ -314,7 +315,7 @@
               :options="tuningOptions"
               clearable
               keep-open-on-select
-              width="md"
+              rolling-text
             />
           </BaseFormRow>
 

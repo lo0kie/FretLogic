@@ -7,6 +7,7 @@
       :placeholder
       @enter="emit('confirm')"
       clearable
+      width="auto"
     />
   </BaseModal>
 </template>

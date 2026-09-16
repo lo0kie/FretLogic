@@ -31,24 +31,59 @@ const extractExportChordData = (chord: Chord, shorthand = false): ExportChordDat
   })),
 });
 
-/** 将歌曲模型与选中行转换为 Worker 专用的轻量渲染结构 */
-export const prepareWorkerExportPayload = (
-  song: Song,
-  selectedIndices: number[],
-  chordsLookupMap: Map<string, Chord>,
-  mode: 'normal' | 'a4',
-  shorthand = false,
-  layoutAlign: 'start' | 'center' = 'start',
-  fontScale = 100,
-  fretboardScale = 100,
-  showBarre = true,
-  lyricsFontWeight: ScoreLyricsFontWeight = 'regular',
-  exportQualityPct = 95,
-  pageMarginPx: number = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
-  pageSize = 'a4',
-  showFooter = true,
-  ignoreEmptySpace = false
-): WorkerExportPayload => {
+/** Worker 渲染载荷入参：可选字段均有与旧签名一致的默认值（见函数解构） */
+export interface WorkerExportPayloadInput {
+  /** 歌曲模型 */
+  song: Song;
+  /** 参与渲染的歌词行索引 */
+  selectedIndices: number[];
+  /** 和弦 id → 和弦模型查询表 */
+  chordsLookupMap: Map<string, Chord>;
+  /** 渲染模式：normal 长图 / a4 自动分页 */
+  mode: 'normal' | 'a4';
+  /** 和弦名简写（如 Cmaj → C） */
+  shorthand?: boolean;
+  /** 排版对齐：start 左对齐 / center 居中 */
+  layoutAlign?: 'start' | 'center';
+  /** 歌词字号缩放百分比 */
+  fontScale?: number;
+  /** 指板图缩放百分比 */
+  fretboardScale?: number;
+  /** 是否绘制横按符号 */
+  showBarre?: boolean;
+  /** 歌词字重档位 */
+  lyricsFontWeight?: ScoreLyricsFontWeight;
+  /** JPEG 导出质量百分制（30~100） */
+  exportQualityPct?: number;
+  /** 导出页面边距（标准档位 窄/标准/宽，px） */
+  pageMarginPx?: number;
+  /** 导出单页尺寸档位（a4 / a5 / letter） */
+  pageSize?: string;
+  /** 是否显示页脚页码（仅 A4 分页生效） */
+  showFooter?: boolean;
+  /** 忽略无和弦空格：canvas 中该空格不占列宽 */
+  ignoreEmptySpace?: boolean;
+}
+
+/** 将歌曲模型与选中行转换为 Worker 专用的轻量渲染结构（options 对象入参，避免多位置参数逐位对齐） */
+export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): WorkerExportPayload => {
+  const {
+    song,
+    selectedIndices,
+    chordsLookupMap,
+    mode,
+    shorthand = false,
+    layoutAlign = 'start',
+    fontScale = 100,
+    fretboardScale = 100,
+    showBarre = true,
+    lyricsFontWeight = 'regular',
+    exportQualityPct = 95,
+    pageMarginPx = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
+    pageSize = 'a4',
+    showFooter = true,
+    ignoreEmptySpace = false,
+  } = input;
   const lyricsLines = song.lyrics.split('\n');
   const chordMap = song.chordMap;
   const lineIds = song.lineIds;
@@ -180,41 +215,5 @@ export const runWorkerExport = (
     };
 
     worker.postMessage(payload);
-  });
-};
-
-/**
- * 预估导出文件尺寸：复用 Worker 真实渲染管线（长图模式）返回字节数，主线程 0 阻塞。
- * 用于下载下拉标题展示「预估文件尺寸」，与最终下载的长图实际字节数一致（仅取整误差）。
- */
-export const runWorkerEstimate = (payload: WorkerExportPayload): Promise<{ longImageBytes: number }> => {
-  return new Promise((resolve, reject) => {
-    if (typeof OffscreenCanvas === 'undefined') {
-      reject(new Error('当前浏览器环境不支持 OffscreenCanvas 离屏渲染'));
-      return;
-    }
-
-    const worker = new Worker(new URL('@/domains/score/preview/workers/scoreExportWorker', import.meta.url), {
-      type: 'module',
-    });
-
-    worker.onmessage = (e: MessageEvent<WorkerExportMessage>) => {
-      const msg = e.data;
-      if (msg.type === 'estimate') {
-        worker.terminate();
-        resolve({ longImageBytes: msg.longImageBytes });
-      } else if (msg.type === 'error') {
-        worker.terminate();
-        reject(new Error(msg.message));
-      }
-    };
-
-    worker.onerror = err => {
-      worker.terminate();
-      reject(err);
-    };
-
-    // 覆盖为预估模式：仅渲染长图并返回字节数，不产出 Blob 列表
-    worker.postMessage({ ...payload, mode: 'estimate' });
   });
 };
