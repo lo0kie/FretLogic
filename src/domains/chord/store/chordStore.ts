@@ -6,7 +6,7 @@
  */
 import { computed, ref, toRaw, watch } from 'vue';
 
-import { useRefHistory, useStorage } from '@vueuse/core';
+import { useDebounceFn, useRefHistory, useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
 import { createChordRepository } from '@/domains/chord/model/chordRepository';
@@ -29,9 +29,15 @@ export type { ChordValidationResult } from './chordDraftValidation';
 
 export const useChordStore = defineStore('chord', () => {
   const chordRepository = createChordRepository(localStorage);
-  // 不启用防抖：任何变更（保存/删除/排序/换组）立即写入 localStorage，
-  // 避免刷新时落入防抖窗口导致数据回退
-  const savedChordsList = useStorage<Chord[]>(STORAGE_KEYS.CHORD_LIST, [], localStorage);
+  // 和弦列表体积大（大库下全量 JSON 序列化达 MB 级），持久化不走 useStorage：
+  // ① useStorage 的深度 watch 每次变更都在触发帧内深遍历整个列表（千级和弦 = 数万次 proxy 读）；
+  // ② 其 listenToStorageChanges 默认开着，防抖写入会触发 storage 事件被自己读回——
+  //    JSON.parse 全量 4MB → 重新赋值 → 再触发一轮快照克隆 + 视图模型重建（实测单次 260ms 长任务）。
+  // 改为普通 ref + 浅 watch（全部变更都是整列表替换，见下）+ 400ms 防抖写，与乐谱域 songPersistence 对齐；
+  // 「防抖窗口内刷新丢数据」由下方 pagehide / visibilitychange 强制刷盘兜底。多标签页实时同步随之关闭
+  // （此前 storage 回环在千级数据下得不偿失）。
+  const savedChordsList = ref<Chord[]>([]);
+  // 分组列表体积小，useStorage 立即同步写没有感知成本
   const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
   // 选中/展开分组仅内存态：URL `?group=` 是唯一数据源，localStorage 只维护一个「最近编辑分组」指针
   // 供裸访问入口冷启动回灌；不再双写完整选中态。
@@ -49,7 +55,16 @@ export const useChordStore = defineStore('chord', () => {
     else localStorage.removeItem(STORAGE_KEYS.LAST_GROUP_ID);
   });
 
-  // 持久化分层：常规变更由 useStorage 响应式自动同步；保存等关键入口提供 flushChordsToStorage 作为同步刷盘保障
+  // 持久化分层：和弦列表变更经浅 watch 感知（整列表替换必改引用），400ms 防抖全量写；
+  // 保存等关键入口提供 flushChordsToStorage 作为同步刷盘保障
+  const persistChordsDebounced = useDebounceFn(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CHORD_LIST, JSON.stringify(toRaw(savedChordsList.value)));
+    } catch {
+      // 存储失败静默忽略
+    }
+  }, 400);
+  watch(savedChordsList, () => persistChordsDebounced());
 
   // 启动时以 chordRepository 清洗与迁移后的数据为准，避免全量 JSON.stringify 比对
   {
@@ -58,10 +73,12 @@ export const useChordStore = defineStore('chord', () => {
     savedChordsList.value = sanitized.chords;
   }
 
-  // 每次提交都会克隆整个和弦列表，容量控制在 8 份以限制内存驻留
+  // 每次提交都会克隆整个和弦列表，容量控制在 8 份以限制内存驻留。
+  // deep: false —— 所有变更路径都是整列表替换（唯一例外「撤销恢复孤儿收容」也已改为不可变更新），
+  // 浅比较即可感知；省掉每次变更对千级列表的深度遍历。
   const { undo: rawUndo } = useRefHistory(savedChordsList, {
     capacity: 8,
-    deep: true,
+    deep: false,
     flush: 'post',
     clone: v => cloneDeep(toRaw(v)),
   });
@@ -227,8 +244,15 @@ export const useChordStore = defineStore('chord', () => {
 
   /** 删除分组及其名下全部和弦，并联动清除展开/选中状态（两者均写入 localStorage）。 */
   const deleteGroup = (groupId: string) => {
-    const removedChordIds = savedChordsList.value.filter(c => c.groupId === groupId).map(c => c.id);
-    savedChordsList.value = savedChordsList.value.filter(c => c.groupId !== groupId);
+    // 单趟同时完成「挑出待删 id」与「保留其余和弦」：拆成 filter + map + filter 是三次全量遍历
+    // （千级列表下纯属重复扫描），与 removeChords 的单趟写法对齐
+    const removedChordIds: string[] = [];
+    const keptChords: Chord[] = [];
+    for (const chord of savedChordsList.value) {
+      if (chord.groupId === groupId) removedChordIds.push(chord.id);
+      else keptChords.push(chord);
+    }
+    savedChordsList.value = keptChords;
     groups.value = groups.value.filter(g => g.id !== groupId);
     if (expandedGroupId.value === groupId) expandedGroupId.value = null;
     if (selectedGroupId.value === groupId) {
@@ -264,7 +288,8 @@ export const useChordStore = defineStore('chord', () => {
 
   /**
    * 同步紧急落盘：立即将和弦列表同步写入 localStorage。
-   * 供保存/更新等关键动作成功后调用，消除 Vue 响应式 watch 微任务延迟，避免用户操作后光速刷新导致数据未落盘。
+   * 供保存/更新等关键动作成功后调用，消除防抖窗口与 Vue 响应式 watch 微任务延迟，
+   * 避免用户操作后光速刷新导致数据未落盘。
    */
   const flushChordsToStorage = () => {
     try {
@@ -273,6 +298,16 @@ export const useChordStore = defineStore('chord', () => {
       // 存储失败静默忽略（与 useStorage 行为一致）
     }
   };
+
+  // 防抖落盘的兜底：页面隐藏 / 关闭（含刷新）前把仍在防抖窗口内的变更强制落盘。
+  // 关闭前这一次全量写不影响交互感知；没有它，防抖窗口内的刷新会丢掉最后一次变更。
+  if (typeof window !== 'undefined') {
+    const flushOnHide = () => flushChordsToStorage();
+    window.addEventListener('pagehide', flushOnHide);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushOnHide();
+    });
+  }
 
   /**
    * 将源分组内某和弦名（含全部指法变体）整体移动到目标分组。
@@ -316,10 +351,8 @@ export const useChordStore = defineStore('chord', () => {
     // 撤销后重新出现的和弦即"被恢复的和弦"，广播给乐谱侧回填此前的槽位解绑
     eventBus.emitChordsRestored(savedChordsList.value.filter(c => !beforeIds.has(c.id)).map(c => c.id));
     const validGroupIds = new Set(groups.value.map(g => g.id));
-    let hasOrphans = false;
-    savedChordsList.value.forEach(chord => {
-      if (!validGroupIds.has(chord.groupId)) hasOrphans = true;
-    });
+    // 存在性检测用 some：命中即提前退出，且比 forEach + 外部 flag 更直白
+    const hasOrphans = savedChordsList.value.some(chord => !validGroupIds.has(chord.groupId));
     if (!hasOrphans) return;
 
     let recoveryGroup = groups.value.find(g => g.id.startsWith('g_recovery_'));
@@ -333,9 +366,11 @@ export const useChordStore = defineStore('chord', () => {
       };
       groups.value = [recoveryGroup, ...groups.value];
     }
-    savedChordsList.value.forEach(chord => {
-      if (!validGroupIds.has(chord.groupId)) chord.groupId = recoveryGroup!.id;
-    });
+    // 孤儿收容必须走不可变更新（替换整列表）：和弦历史与持久化 watch 均为浅比较，
+    // 原地改 chord.groupId 不会触发快照提交与落盘
+    savedChordsList.value = savedChordsList.value.map(chord =>
+      validGroupIds.has(chord.groupId) ? chord : { ...chord, groupId: recoveryGroup!.id }
+    );
   };
 
   /**

@@ -114,6 +114,15 @@ function resolveOptions(binding: MarqueeBinding, modifiers?: Record<string, bool
   return { ...DEFAULTS, ...base };
 }
 
+/**
+ * 配置是否与上次等价（逐字段比较，含回调引用）。
+ *
+ * 不能按对象引用比：宿主模板里写 `v-marquee="{ mode: 'always' }"` 时每次渲染都会产生新字面量，
+ * 引用比较恒为「已变化」，守卫等于没加。逐字段比才能让「配置没动」的常规更新走快路径。
+ */
+const OPTION_KEYS = Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[];
+const isSameOptions = (a: typeof DEFAULTS, b: typeof DEFAULTS): boolean => OPTION_KEYS.every(key => a[key] === b[key]);
+
 /** 在宿主元素上派发不冒泡的 CustomEvent，并同步调用绑定值里的回调。 */
 function emit<T = unknown>(el: HTMLElement, name: string, detail?: T, cb?: (value: T) => void): void {
   el.dispatchEvent(new CustomEvent(name, { detail, bubbles: false }));
@@ -432,6 +441,42 @@ function update(el: HTMLElement): void {
   state.wasActive = active;
 }
 
+/* ---- 共享的「外部变化」监听 ----
+   本指令挂在**列表的每一项**上（乐谱卡标题、和弦卡标题、分组标题…），整库渲染就是数百个实例。
+   原先每元素各建一个 ResizeObserver、各注册一个 matchMedia 监听 —— 它们之间没有任何隔离需求，
+   却让挂载/卸载成本随列表长度线性增长（过滤时数百个元素同时卸载，等于同时 disconnect 数百个
+   观察者）。收敛为模块级单例 + 注册表后，实例数从「每元素一个」降为「全局一个」，
+   语义完全不变：仍然是「el 或 inner 尺寸变化 → measure(el)」，尺寸与文本变化依旧不会漏帧。 */
+const RO_OWNERS = new Map<Element, HTMLElement>();
+let sharedObserver: ResizeObserver | null = null;
+
+/** 共享测量观察者（惰性创建：模块求值期未必存在 ResizeObserver） */
+const getSharedObserver = (): ResizeObserver =>
+  (sharedObserver ??= new ResizeObserver(entries => {
+    for (const entry of entries) {
+      const owner = RO_OWNERS.get(entry.target);
+      if (owner) measure(owner);
+    }
+  }));
+
+/** 已登记、需要在系统「减弱动态效果」偏好变化时回落重算的状态集合 */
+const MQL_STATES = new Set<MarqueeState>();
+let reducedMotionMql: MediaQueryList | null = null;
+
+/** 共享的 prefers-reduced-motion 监听（惰性创建：模块求值期未必存在 window.matchMedia） */
+const getReducedMotionMql = (): MediaQueryList => {
+  if (reducedMotionMql) return reducedMotionMql;
+  const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+  mql.addEventListener('change', () => {
+    for (const state of MQL_STATES) {
+      state.reducedMotion = mql.matches;
+      update(state.el);
+    }
+  });
+  reducedMotionMql = mql;
+  return mql;
+};
+
 export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> = {
   mounted(el, binding) {
     const options = resolveOptions(binding.value, binding.modifiers);
@@ -464,13 +509,10 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     };
     STATES.set(el, state);
 
-    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const mql = getReducedMotionMql();
     state.mql = mql;
-    const onMql = () => {
-      state.reducedMotion = mql.matches;
-      update(el);
-    };
-    mql.addEventListener('change', onMql);
+    // 变更监听由模块级共享监听统一驱动（见 getReducedMotionMql），这里只把自身登记进集合
+    MQL_STATES.add(state);
     state.reducedMotion = mql.matches;
 
     const onEnter = () => {
@@ -494,8 +536,11 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     el.addEventListener('focusin', onFocusIn);
     el.addEventListener('focusout', onFocusOut);
 
-    // 重点：同时监听容器 el 与内部内容 inner，确保内部文本变化时也能立即触发测量
-    const observer = new ResizeObserver(() => measure(el));
+    // 重点：同时监听容器 el 与内部内容 inner，确保内部文本变化时也能立即触发测量。
+    // 观察者取模块级共享实例（各元素之间无隔离需求），实例数不随列表长度增长
+    const observer = getSharedObserver();
+    RO_OWNERS.set(el, el);
+    RO_OWNERS.set(inner, el);
     observer.observe(el);
     observer.observe(inner);
     state.observer = observer;
@@ -505,8 +550,12 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       el.removeEventListener('mouseleave', onLeave);
       el.removeEventListener('focusin', onFocusIn);
       el.removeEventListener('focusout', onFocusOut);
-      mql.removeEventListener('change', onMql);
-      observer.disconnect();
+      MQL_STATES.delete(state);
+      // 共享观察者不能 disconnect：只摘掉本元素自己的两个观测目标
+      observer.unobserve(el);
+      observer.unobserve(inner);
+      RO_OWNERS.delete(el);
+      RO_OWNERS.delete(inner);
       stopMaskLoop(state);
       state.animation?.cancel();
       state.resetAnim?.cancel();
@@ -520,14 +569,28 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     if (!state) return;
 
     // 1. 同步最新的 binding 配置与修饰符
-    state.options = resolveOptions(binding.value, binding.modifiers);
+    const nextOptions = resolveOptions(binding.value, binding.modifiers);
+    const optionsChanged = !isSameOptions(state.options, nextOptions);
+    state.options = nextOptions;
 
-    // 2. 将 Vue 动态更新到 el 下的新子节点平滑收拢进 inner
-    Array.from(el.childNodes).forEach(node => {
-      if (node !== state.inner) state.inner.appendChild(node);
-    });
+    // 2. 将 Vue 动态更新到 el 下的新子节点平滑收拢进 inner。
+    //    常态下 el 只有 inner 一个子节点（挂载时已把原内容搬进 inner，之后 Vue patch 的是 inner
+    //    里的那些节点），故先判后搬，省下每次更新的 childNodes 遍历与数组分配
+    const hasStrayChildren = el.firstChild !== state.inner || el.childNodes.length !== 1;
+    if (hasStrayChildren) {
+      Array.from(el.childNodes).forEach(node => {
+        if (node !== state.inner) state.inner.appendChild(node);
+      });
+    }
 
-    measure(el);
+    // 3. 只在配置或子树结构真的变了才重测。
+    //    measure 会读 inner.scrollWidth / el.clientWidth —— 两者都是「写后必重排」的强制同步布局，
+    //    而本指令挂在**列表的每一项**上（侧栏乐谱卡标题、和弦卡标题、分组标题…）。无条件重测会把
+    //    「一次列表更新」放大成 N 次强制布局：侧栏过滤/排序时数百张卡片同时 updated，每次读都因
+    //    上一项刚被 patch 而布局失效，于是逐项触发全量重排 —— 那阵掉帧主要来自这里。
+    //    纯尺寸 / 文本变化由 mounted 注册的 ResizeObserver 覆盖（它同时观察 el 与 inner，回调在
+    //    layout 之后、paint 之前触发，不会漏帧），这里无需重复兜底。
+    if (optionsChanged || hasStrayChildren) measure(el);
   },
 
   unmounted(el) {

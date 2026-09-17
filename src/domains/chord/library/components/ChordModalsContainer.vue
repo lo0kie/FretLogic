@@ -83,12 +83,15 @@
           tabindex="0"
         >
           <div class="pointer-events-none flex w-full items-center justify-center p-xs">
+            <!-- 不画和弦名但预留其版面（reserve-chord-name）→ 几何与和弦库 picker 一致、直接命中同一批
+                 位图；组件会裁掉预留段，故缩略图外观与之前完全相同 -->
             <FretboardCanvas
               :chord="variant"
               :chord-name-scale="0.8"
               :is-dark-mode="isDark"
               :scale="1.8"
               :show-chord-name="false"
+              reserve-chord-name
             />
           </div>
         </div>

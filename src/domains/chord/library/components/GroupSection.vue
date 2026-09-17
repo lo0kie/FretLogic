@@ -59,20 +59,29 @@
             </template>
 
             <!-- 组内容（原 GroupContent 内联合并）：卡片网格 + 空状态；
-                 折叠动画由外层 BaseCollapse 的折叠体承担，这里保持纯内容 -->
-            <div :ref="el => setContentOuterRef(el, index)" @contextmenu.stop>
+                 折叠动画由外层 BaseCollapse 的折叠体承担，这里保持纯内容。
+
+                 卡片网格只在「展开中」或「收起动画的保留窗口内」渲染：单展开模式下同时至多一组展开，
+                 其余分组的卡片既看不见（height:0 + overflow:hidden）也点不着（折叠体带 inert），
+                 全量常驻等于白养一棵巨大的 DOM —— 千级和弦库下侧栏会挂上万个节点，于是每次开合都要
+                 为整棵树付布局 / 绘制 / vnode 重建的代价（掉帧来源），首屏也要同步挂载全部和弦。
+                 收起方向必须走保留窗口：内容在收起首帧就消失的话，看到的是空箱收起（视觉回归）。 -->
+            <div v-if="isGroupContentRenderable(group)" :ref="el => setContentOuterRef(el, index)" @contextmenu.stop>
+              <!-- 键盘导航按 ChordCard 上的 .chord-thumb-card 收集条目：该标记类只作导航钩子、不承载样式，
+                   故卡片类名大改时极易被一并清掉，导航随即静默失效（历史上已发生一次，见 v-grid-nav 的脱钩告警）。
+                   改名时请同步这里与 ChordCard 的 focusable 卡片元素。 -->
               <TransitionGroup
                 v-grid-nav.stop="{ cols: GRID_COLS, selector: '.chord-thumb-card' }"
-                v-if="getGroupedCards(group).length > 0"
+                v-if="cardsOf(group).length > 0"
+                :name="chunked.isFilling(group.id) ? 'v-transition-fill' : 'v-transition-list'"
                 class="relative z-panel grid min-h-[2.2rem] grid-cols-3 items-center gap-sm px-sm pt-md pb-xs"
-                name="v-transition-list"
                 tag="div"
               >
                 <ChordCard
-                  v-for="cardData in getGroupedCards(group)"
-                  v-scroll-into-view.y.once="cardData.mainChord.id === getActiveMainId(group)"
+                  v-for="cardData in chunked.slice(cardsOf(group), group.id)"
+                  v-scroll-into-view.y.once="cardData.mainChord.id === activeMainIdOf(group)"
                   :card-data
-                  :is-active="cardData.mainChord.id === getActiveMainId(group)"
+                  :is-active="cardData.mainChord.id === activeMainIdOf(group)"
                   :key="cardData.mainChord.id"
                   @delete="handleLocalDeleteChord($event)"
                   @delete-variants="emit('open-delete-variants', $event)"
@@ -91,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useTemplateRef } from 'vue';
+import { computed, onBeforeUnmount, reactive, useTemplateRef, watch } from 'vue';
 
 import ChordCard from '@/domains/chord/library/components/ChordCard.vue';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
@@ -105,7 +114,9 @@ import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { useChordTransfer } from '@/domains/chord/transfer/useChordTransfer';
+import { createChunkedMount } from '@/platform/composables/useChunkedMount';
 import { useSortableList } from '@/platform/composables/useSortableList';
+import { COLLAPSE_CONTENT_RETENTION_MS } from '@/platform/utils/constants';
 
 import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
 import type { MenuItem } from '@/platform/ui/menu/types';
@@ -123,7 +134,7 @@ const emit = defineEmits<{
 const chordStore = useChordStore();
 const editorStore = useChordEditorStore();
 const chordActions = useChordActions();
-const { copyGroupText } = useChordTransfer();
+const { copyGroupText, shareGroupLink } = useChordTransfer();
 
 const groupListRef = useTemplateRef<HTMLElement>('groupListRef');
 
@@ -140,12 +151,11 @@ const setContentOuterRef = (el: Element | ComponentPublicInstance | null, index:
 /** 卡片网格列数：与 v-grid-nav 的键盘导航配置共用 */
 const GRID_COLS = 3;
 
-/** 组内分组卡片数据 */
-const getGroupedCards = (group: Group): GroupedChordCard[] => chordStore.getGroupedCards(group.id);
+/** 空卡片列表的稳定引用：模板直接消费，避免每次求值都新建数组让 TransitionGroup 误判为整表更新 */
+const EMPTY_CARDS: GroupedChordCard[] = [];
 
 /** 当前激活卡片的主和弦 id：草稿是某变体时映射回主卡；编辑中同名同组草稿也视为激活 */
-const getActiveMainId = (group: Group): string | null => {
-  const cards = getGroupedCards(group);
+const resolveActiveMainId = (cards: GroupedChordCard[]): string | null => {
   const draft = editorStore.draftChord;
   if (draft.id) {
     for (const card of cards) {
@@ -169,9 +179,144 @@ const getActiveMainId = (group: Group): string | null => {
   return null;
 };
 
+/**
+ * 分组 id → { 卡片列表, 激活主卡 id } 派生表。
+ *
+ * 此前模板里直接调函数：`getGroupedCards` 被 v-if 与 v-for 各调一次，而每张卡片又要调
+ * 两次 `getActiveMainId` —— 后者自己全量扫一遍组内卡片、对每张卡取一次和弦名，于是单次渲染
+ * 是 O(卡片数²) 次取名字；而它在依赖链上挂着编辑草稿（拖动/输入时每帧变化），等于每帧重跑。
+ * 现在每组只算一遍，模板按 group.id 做 O(1) 取值。
+ */
+const groupViews = computed(() => {
+  const views = new Map<string, { cards: GroupedChordCard[]; activeMainId: string | null }>();
+  for (const group of chordStore.groups) {
+    const cards = chordStore.getGroupedCards(group.id);
+    views.set(group.id, { cards, activeMainId: resolveActiveMainId(cards) });
+  }
+  return views;
+});
+
+/** 组内分组卡片数据（取派生结果，O(1)） */
+const cardsOf = (group: Group): GroupedChordCard[] => groupViews.value.get(group.id)?.cards ?? EMPTY_CARDS;
+
+/** 当前激活卡片的主和弦 id（取派生结果，O(1)） */
+const activeMainIdOf = (group: Group): string | null => groupViews.value.get(group.id)?.activeMainId ?? null;
+
 /** 分组内容是否展开（store 折叠状态取反） */
 const isGroupContentOpen = (group: Group): boolean => !chordStore.isGroupCollapsed(group.id);
 const isAllCollapsed = computed(() => chordStore.groups.every(g => chordStore.isGroupCollapsed(g.id)));
+
+// ==================== 组内容的挂载门控 ====================
+// 侧栏是全应用唯一「把整库和弦全部挂出来」的地方：单展开模式下只有一组可见可交互，其余分组的卡片
+// 网格常驻纯属浪费（千级和弦库 = 上万个节点），且这份浪费要按帧付账——开合分组的高度过渡会让承载
+// 它们的滚动容器每帧重排重绘，于是节点越多越掉帧（与和弦引擎、位图缓存无关的独立瓶颈）。
+// 做法：只有展开组渲染卡片；收起方向给一个保留窗口，让内容陪高度过渡走完再卸载（保留裁切观感），
+// 展开方向不需要窗口（本来就要渲染）。节点量因此从「全库」降到「单组」。
+//
+// 单组全量仍是百级卡片（huge 档每组 ~190 张，每张含 BaseMenu 等整套 setup），一帧内全量挂载
+// 就是展开瞬间的掉帧来源。于是再拆一层**分块**：展开方向每帧补挂一批直到挂满（展开高度过渡
+// 期间内容自上而下揭示，补挂发生在视口外或过渡未揭示到的行，视觉无感）；收起方向在保留窗口
+// 到期（折叠体已收到 0、内容不可见）后每帧卸一批。补挂/卸载期间关闭 TransitionGroup 动画
+// （前缀换成无样式的类名），只保留用户增删和弦时的真实增删动画。
+
+/** 处在「收起动画保留窗口」内的分组 id（这些组的内容继续挂载，供高度过渡逐帧裁切） */
+const retainedGroupIds = reactive(new Set<string>());
+/** 各保留分组的到期定时器：重复登记按 id 去重，重新展开时即刻取消 */
+const retentionTimers = new Map<string, number>();
+
+/** 组内容是否渲染：展开中，或仍在收起动画的保留窗口内 */
+const isGroupContentRenderable = (group: Group): boolean => isGroupContentOpen(group) || retainedGroupIds.has(group.id);
+
+/** 分组展开/收起路径共用的开合判定（store 侧按 id 判，不依赖遍历 groups） */
+const isGroupOpenId = (groupId: string): boolean => !chordStore.isGroupCollapsed(groupId);
+
+// ---------- 分块挂载 / 分块卸载（通用机制见 platform/composables/useChunkedMount） ----------
+/** 每帧补挂/卸载的卡片数（3 列 × 12 行） */
+const MOUNT_BATCH = 36;
+
+const chunked = createChunkedMount<string>(MOUNT_BATCH);
+
+/** 展开方向的分块补挂：从当前限额起每帧补一批，直到挂满（挂满后移除限额回全量渲染） */
+const startFill = (groupId: string) => {
+  chunked.startFill(
+    groupId,
+    () => chordStore.groupChordMap.get(groupId)?.length ?? 0,
+    // 补挂途中被收起：循环停摆，保留窗口/卸载循环接管后续
+    () => isGroupOpenId(groupId)
+  );
+};
+
+/** 收起方向保留窗口到期后的分块卸载：折叠体已收到 0、内容不可见，每帧卸一批直到清空 */
+const startDrain = (groupId: string) => {
+  chunked.startDrain(
+    groupId,
+    () => chordStore.groupChordMap.get(groupId)?.length ?? 0,
+    key => {
+      retainedGroupIds.delete(key);
+      retentionTimers.delete(key);
+    }
+  );
+};
+
+/** 登记保留窗口：到点后不再一次性卸载，转入分块卸载循环 */
+const retainGroupContent = (groupId: string) => {
+  retainedGroupIds.add(groupId);
+  const pending = retentionTimers.get(groupId);
+  if (pending !== undefined) clearTimeout(pending);
+  retentionTimers.set(
+    groupId,
+    window.setTimeout(() => {
+      retentionTimers.delete(groupId);
+      if (isGroupOpenId(groupId)) {
+        retainedGroupIds.delete(groupId);
+        return;
+      }
+      startDrain(groupId);
+    }, COLLAPSE_CONTENT_RETENTION_MS)
+  );
+};
+
+/** 释放保留窗口：重新展开同一组时取消待释放的定时器，避免窗口在展开态下把内容卸掉 */
+const releaseGroupContent = (groupId: string) => {
+  const pending = retentionTimers.get(groupId);
+  if (pending !== undefined) {
+    clearTimeout(pending);
+    retentionTimers.delete(groupId);
+  }
+  retainedGroupIds.delete(groupId);
+};
+
+/**
+ * 展开组切换 → 给「刚被收起的那一组」登记保留窗口，并让新展开组从首批开始分块补挂。
+ *
+ * **必须 flush: 'sync'**：保留窗口要赶在「状态变更引发的这次渲染」之前登记好。本组件的更新任务
+ * id 小于 setup 期创建的 watcher，默认 pre 冲刷下更新先出队 —— 收起首帧就是「未展开且未保留」，
+ * 卡片会被整体卸载，只剩空箱收起。同步触发点落在状态写入处，必然先于渲染。
+ *
+ * 同步监听而不是改事件回调：状态也可能由路由回灌、搜索结果选中、导入/删除分组等路径写入，
+ * 这些路径都不过组件的点击回调。
+ *
+ * immediate：组件挂载时已处于展开态的分组（载入即展开 / 路由回灌）同样从首批开始补挂——
+ * 限额在**首次渲染前**生效，避免「全量渲染后再裁剪回填」的闪烁。
+ */
+watch(
+  () => chordStore.expandedGroupId,
+  (expandedId, prevExpandedId) => {
+    if (prevExpandedId && prevExpandedId !== expandedId) retainGroupContent(prevExpandedId);
+    if (expandedId) {
+      releaseGroupContent(expandedId);
+      startFill(expandedId);
+    }
+  },
+  { flush: 'sync', immediate: true }
+);
+
+onBeforeUnmount(() => {
+  for (const timer of retentionTimers.values()) clearTimeout(timer);
+  retentionTimers.clear();
+  retainedGroupIds.clear();
+  // 分块循环的 rAF 由 createChunkedMount 随组件作用域销毁自动清理（onScopeDispose）
+});
 
 // 仅在全部折叠时允许拖拽排序：任一组展开时其内容会撑高行高，拖动会错位。
 // Sortable 直接操作 DOM，拖拽结束按索引重排后经 overwriteGroups 持久化；
@@ -235,6 +380,15 @@ const getGroupMenuItems = (group: Group): MenuItem[] => {
       icon: 'copy',
       action: () => {
         void copyGroupText(group);
+      },
+    },
+    {
+      // 分享：与「复制分组」同一份载体（token：分组名 + 排序规则 + 组内全部和弦），只是外面套了一条地址，对方打开即自动建组导入
+      label: '分享分组',
+      icon: 'share-2',
+      disabled: getGroupChordsCount(group.id) === 0,
+      action: () => {
+        void shareGroupLink(group);
       },
     },
     {

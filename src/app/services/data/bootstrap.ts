@@ -9,9 +9,9 @@
  * 数据不会因 IDB 备份而"复活"，真正的清空能立即生效。
  * IDB 副本仍完整保留，供将来 store 切换到 v2 契约（Phase 3 逐 feature 迁移）备好数据源。
  */
+import { readJsonArray } from '@/platform/services/storage/localStorage';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
-import { readJsonArray } from '@/platform/utils/storage';
 
 import { migrateLegacyData } from './migrateLegacy.ts';
 import { chordRepository, songRepository } from './repositories.ts';

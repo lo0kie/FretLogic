@@ -39,12 +39,15 @@ import TopHeader from '@/app/layouts/TopHeader.vue';
 import FirstRunPullModal from '@/app/modals/FirstRunPullModal.vue';
 import GlobalToast from '@/platform/ui/feedback/GlobalToast.vue';
 import { setupChordScoreBridge } from '@/app/services/chordScoreBridge';
+import { setupShareLinkBridge } from '@/app/services/shareLinkBridge';
 import { useUiStore } from '@/platform/store/uiStore';
 import { LEFT_SIDEBAR_WIDTH_PIXEL } from '@/platform/utils/constants';
 
 const uiStore = useUiStore();
 // 跨领域装配：和弦删除/撤销与乐谱槽位解绑的事件桥接（chord 域因此无需依赖 score 域）
 setupChordScoreBridge();
+// 跨领域装配：消费 URL 上的分享载荷（乐谱 / 和弦 / 分组），导入落地后从 URL 移除参数
+setupShareLinkBridge();
 const SidebarLeft = defineAsyncComponent(() => import('@/app/layouts/SidebarLeft.vue'));
 const mainPaddingLeft = computed(() => (uiStore.isLeftOpen ? LEFT_SIDEBAR_WIDTH_PIXEL.value : '0px'));
 </script>

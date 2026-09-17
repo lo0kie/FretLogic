@@ -4,7 +4,7 @@
  * 命中已按音符时切换升降号（不触发品位偏移），未命中音符时调整品位偏移（capo）。
  */
 import { canTogglePitchAccidental, getActiveBaseStrings, isOpen } from '@/domains/chord/theory/theory';
-import { useRafThrottle } from '@/platform/utils/useRafThrottle';
+import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 
 import { INTERACTION_CONFIG } from '../constants';
 

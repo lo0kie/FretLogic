@@ -4,9 +4,9 @@ import { computeChordFingerprint, Tuning } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { FRET_COUNTS } from '@/domains/fretboard/constants';
 import { isCapoValue, isFretOffsetValue, toFretOffset } from '@/domains/fretboard/model/coordinates';
+import { readJson } from '@/platform/services/storage/localStorage';
 import { serializeForStorage } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
-import { readJson } from '@/platform/utils/storage';
 
 import type { Chord, Group, StringIndex } from '@/domains/chord/types';
 

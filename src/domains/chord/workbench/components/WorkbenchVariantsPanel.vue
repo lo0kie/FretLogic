@@ -23,13 +23,16 @@
       @click="handleSelectVariant(variant)"
       class="group flex shrink-0 cursor-pointer flex-col items-center rounded-md border-2 p-1.5 transition-colors duration-fast"
     >
-      <!-- 指板缩略图：顶部对齐以保证所有卡片的琴枕与空弦基准高度恒定一致 -->
+      <!-- 指板缩略图：顶部对齐以保证所有卡片的琴枕与空弦基准高度恒定一致。
+           不画和弦名但仍预留其版面（reserve-chord-name）→ 几何与和弦库 picker 逐像素一致，
+           直接命中同一批位图；组件会把预留段裁掉，故卡片外观与之前完全相同 -->
       <div class="flex w-full shrink-0 items-start justify-center overflow-hidden pt-0.5">
         <FretboardCanvas
           :chord="variant"
           :is-dark-mode="isDark"
           :scale="1.8"
           :show-chord-name="false"
+          reserve-chord-name
           show-bold-nut
           show-fret-numbers
           show-open-string-notes

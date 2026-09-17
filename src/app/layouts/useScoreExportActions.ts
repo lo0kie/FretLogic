@@ -13,9 +13,9 @@ import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRoute } from 'vue-router';
 
-import { getScorePageSize } from '@/domains/score/constants';
+import { DEFAULT_SCORE_TITLE, getScorePageSize, getScorePageSizeMm } from '@/domains/score/constants';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import { currentRenderData, fetchA4PageBlob, isPreviewRendering } from '@/domains/score/preview/scorePreviewCache';
+import { currentRenderData, isPreviewRendering, readA4PageBlob } from '@/domains/score/preview/scorePreviewCache';
 import { runWorkerExport } from '@/domains/score/preview/services/workerExportService';
 import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
@@ -26,6 +26,7 @@ import { buildExportFileName, triggerBlobDownload } from '@/platform/utils/canva
 import { formatBytes } from '@/platform/utils/common';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
 import { buildImagePdf } from '@/platform/utils/pdf';
+import { printImagePages } from '@/platform/utils/print';
 
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { PdfImagePage } from '@/platform/utils/pdf';
@@ -44,7 +45,7 @@ export const useScoreExportActions = () => {
   const { isCopying } = storeToRefs(uiStore);
   const isPreviewExportMode = isPreviewExportModeOf();
   // Worker 渲染载荷统一构建（全曲行索引 + 设置项读取），与预览面板共享同一来源
-  const { getAllLineIndices, buildRenderPayload } = useScoreRenderPayload();
+  const { getAllLineIndices, buildRenderPayload, composePageFooter } = useScoreRenderPayload();
 
   /**
    * 预览 tab 的导出：整曲经 Worker 离屏渲染为一张长图（normal 模式），
@@ -145,20 +146,51 @@ export const useScoreExportActions = () => {
   };
 
   /**
+   * 预览 tab 的打印：与 PDF 导出同源（复用预览已渲染的分页图 + 页脚合成），
+   * 区别是不产出任何文件，直接把各页图片交给系统打印对话框逐页打印。
+   */
+  const handleScorePrint = () => {
+    const song = scoreEditor.activeSong;
+    if (!song || getAllLineIndices().length === 0) return Promise.resolve(null);
+
+    return runBusyAction({
+      busy: isCopying,
+      loadingText: '正在渲染分页图片并准备打印...',
+      logPrefix: 'Score print error:',
+      errorFallback: '打印失败',
+      // 刻意不给成功提示：紧接着弹出的系统打印对话框本身就是结果反馈，再叠一条 toast 只会抢焦点
+      run: async () => {
+        const blobs = await getA4Blobs();
+        if (blobs.length === 0) throw new Error('未能生成有效的打印页');
+        // 纸张尺寸按当前档位解析为 mm 标准纸型：与页图物理比例严格一致，打印时不被缩放
+        const { widthMm, heightMm } = getScorePageSizeMm(settingsStore.scorePageSize);
+        await printImagePages(blobs, {
+          pageWidthMm: widthMm,
+          pageHeightMm: heightMm,
+          title: song.title || DEFAULT_SCORE_TITLE,
+        });
+        return null;
+      },
+    });
+  };
+
+  /**
    * 直接从预览共享缓存取已渲染的 Blob，避免重复触发 Worker 渲染：
    * 预览面板在渲染/切歌时已把 A4 分页产物写入 scorePreviewCache，
    * 下载菜单的预估尺寸与三种导出均复用该结果，仅缓存缺失时回退重新渲染。
+   * 缓存中的页面栅格不含页脚（页脚是独立合成层，见 services/footerOverlay），
+   * 故此处统一按「显示页脚」开关合成一次：开关关闭时为零开销的原样返回。
    */
-  /** 取 A4 分页 Blob（PDF / ZIP 导出复用预览已渲染结果） */
+  /** 取 A4 分页 Blob（PDF / ZIP 导出复用预览已渲染结果 + 按需合成页脚） */
   const getA4Blobs = async (): Promise<Blob[]> => {
     const data = currentRenderData.value;
     if (data && data.a4Urls.length > 0) {
-      const blobs = await Promise.all(data.a4Urls.map(fetchA4PageBlob));
-      return blobs.filter((blob): blob is Blob => blob !== null);
+      const cached = await Promise.all(data.a4Urls.map(readA4PageBlob));
+      return composePageFooter(cached.filter((blob): blob is Blob => blob !== null));
     }
     const { blobs } = await runWorkerExport(buildRenderPayload('a4'));
     if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
-    return blobs;
+    return composePageFooter(blobs);
   };
 
   /** 取长图 Blob（「下载为长图」按需渲染，预览不预渲染长图，故每次都走 Worker） */
@@ -179,7 +211,7 @@ export const useScoreExportActions = () => {
     return `预估文件 ${formatBytes(total)}`;
   });
 
-  /** 下载菜单：长图 / 分页 PDF / 分页 Zip 三个导出入口 */
+  /** 下载菜单：长图 / 分页 PDF / 分页 Zip 三个下载入口，末项为打印（直接调系统打印对话框，不产出文件） */
   const downloadExportMenuItems: MenuItem[] = [
     {
       label: '下载为长图',
@@ -195,6 +227,13 @@ export const useScoreExportActions = () => {
       label: '下载为 ZIP',
       icon: 'file-archive',
       action: () => void handleScoreExportZip(),
+    },
+    {
+      label: '打印',
+      icon: 'printer',
+      // 打印不是下载，与上方三项用分割线隔开，避免被读成「下载为打印」
+      divided: true,
+      action: () => void handleScorePrint(),
     },
   ];
 

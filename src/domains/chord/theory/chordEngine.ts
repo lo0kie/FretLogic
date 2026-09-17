@@ -1,3 +1,4 @@
+import { estimateValueBytes } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
 
 import { GRAMMAR_TEMPLATES } from './grammar.ts';
@@ -137,17 +138,38 @@ const POPCOUNT = (() => {
 
 const bitCount = (m: number) => POPCOUNT[m & 0xfff] ?? 0;
 
-interface RawHitCandidate {
-  template: GrammarTemplate;
-  rootPitch: number;
-  rootLabel: string;
+/**
+ * 相对命中：只保留「音集相对结构」决定的信息（根音相对音程 + 模板 + 纯度/外音/得分），
+ * 不含任何绝对音高与音名。绝对音高、音名、和弦名、分段全部由落地相 materialize 按本次调用
+ * 的实际输入重新推导 —— 这是缓存可以跨调/跨把位复用的前提。
+ */
+interface RelativeHit {
+  templateIndex: number;
+  rootInterval: number;
   intervalMask: number;
   lowestInterval: number;
   isSlash: boolean;
-  slashBassLabel: string;
   purity: number;
   extraCount: number;
   score: number;
+}
+
+/** 相对缓存存的就是命中表：无音名、无分段、无分层，比整份 AnalyzeResult 小一个量级 */
+
+/** 一次分析的「位置相关」上下文：绝对音高、音名、低音、相对签名都在这里一次性算好 */
+interface AnalyzeContext {
+  /** 以最低弦音的 pitchClass 为 bit0 的相对音集掩码（12 位） */
+  relMask: number;
+  /** 相对签名：`relMask:显示根音相对音程`，与调 / 把位 / 变调夹 / 调弦无关 */
+  relKey: string;
+  /** 显式根音的相对音程：未显式指定为 -1 */
+  relExplicit: number;
+  /** 基准音 = 最低弦音的 pitchClass（斜杠低音与根音枚举的锚点） */
+  bassPitch: number;
+  /** 最低弦音的音名（斜杠低音后缀直接用这个） */
+  bassLabel: string;
+  labelByPitch: (string | undefined)[];
+  explicitRootPitch: number | null;
 }
 
 function fastSoftScore(
@@ -214,8 +236,22 @@ function createRole(
   };
 }
 
-function populateRoles(hit: RawHitCandidate, labelByPitch: (string | undefined)[]): ChordCandidate {
-  const { rootPitch, rootLabel, intervalMask, lowestInterval, isSlash, slashBassLabel, template } = hit;
+/**
+ * 落地相单条：把「相对命中」+ 本次调用的实际上下文合成完整候选。
+ * 绝对根音音高、根音/各音音名、斜杠低音、和弦名、分段全部在这里按实际输入重新推导，
+ * 因此相对缓存里不需要、也不应该存任何音名 —— 这是跨调复用不会串名的原因。
+ */
+function materializeCandidate(hit: RelativeHit, rootPitch: number, ctx: AnalyzeContext): ChordCandidate {
+  const { labelByPitch, bassLabel, explicitRootPitch } = ctx;
+  const template = COMPILED_TEMPLATES[hit.templateIndex]!.template;
+  const { intervalMask, lowestInterval, isSlash } = hit;
+  const rootLabel = getPreferredRootLabel(
+    rootPitch,
+    labelByPitch,
+    template.suffix,
+    explicitRootPitch !== null ? rootPitch : null
+  );
+  const slashBassLabel = isSlash ? `/${bassLabel}` : '';
   const roles: RoleAssignment[] = [];
   const usedIntervals = new Set<number>();
 
@@ -291,7 +327,21 @@ function assignTiers(candidates: ChordCandidate[]): void {
   }
 }
 
-const cache = createLruCache<AnalyzeResult>(80);
+// 分析结果缓存：键是和弦签名（根音+后缀+音集），单条含候选数组（KB 级）。
+// 上限 4096 与其余和弦数据缓存对齐：整库浏览 / 搜索 / 变体面板并排展示时活跃签名可达数百，
+// 128 会持续击穿并反复重跑候选匹配；单条 KB 级，满配也只是几 MB
+const cache = createLruCache<AnalyzeResult>(4096, {
+  name: '和弦引擎解析',
+  weigh: (_, value) => estimateValueBytes(value),
+});
+
+// 相对（位置无关）命中缓存：键只由「音集相对结构 + 显式根音相对音程」组成，
+// 值与调/把位/变调夹/调弦无关 —— 同一形状的全部移调共用同一条，命中即省掉整轮模板匹配。
+// 单条只存相对命中（几个数字），比绝对层的 AnalyzeResult 小一个量级，故同样给 4096 上限
+const relativeCache = createLruCache<RelativeHit[]>(4096, {
+  name: '和弦引擎解析·相对',
+  weigh: (_, value) => estimateValueBytes(value),
+});
 
 /** 构造一次空分析结果：每次返回新对象，避免缓存与调用方共享同一引用后被意外改写 */
 function createEmptyResult(): AnalyzeResult {
@@ -369,29 +419,31 @@ function collectNoteContext(notes: NoteInput[], explicitRootPitch: number | null
   return { pitchMask, labelByPitch, lowestNote };
 }
 
-/** 枚举候选根音：显式指定时只用该音，否则取输入中出現的全部音高 */
-function resolveRootPitches(pitchMask: number, explicitRootPitch: number | null): number[] {
-  if (explicitRootPitch !== null) return [normalizePitch(explicitRootPitch)];
+/** 枚举候选根音的「相对音程」：显式指定时只用该音，否则取输入中出現的全部音级（基准音为 0） */
+function resolveRootIntervals(relMask: number, relExplicitRoot: number): number[] {
+  if (relExplicitRoot >= 0) return [relExplicitRoot];
 
-  const rootPitches: number[] = [];
+  const rootIntervals: number[] = [];
   for (let p = 0; p < 12; p++) {
-    if (pitchMask & (1 << p)) rootPitches.push(p);
+    if (relMask & (1 << p)) rootIntervals.push(p);
   }
-  return rootPitches;
+  return rootIntervals;
 }
 
-/** 用单个模板匹配当前音集：不冲突且必选音齐全时给出纯度与分数，否则判定为不匹配 */
+/**
+ * 用单个模板匹配当前音集：不冲突且必选音齐全时给出纯度与分数，否则判定为不匹配。
+ * 全程只用到相对音程（根音为 bit0 的音程掩码 + 相对最低音），因此与绝对调性/把位无关。
+ */
 function evaluateTemplate(
+  templateIndex: number,
   comp: CompiledTemplate,
-  rootPitch: number,
-  rootLabel: string,
+  rootInterval: number,
   intervalMask: number,
   lowestInterval: number,
   isSlash: boolean,
-  slashBassLabel: string,
   totalInputNotes: number,
   explicitRoot: boolean
-): RawHitCandidate | null {
+): RelativeHit | null {
   // 低音豁免：slash 低音只是「按在低音区的那个音」，不参与和弦性质的冲突判定。
   // 例如音集 E G# B D（低音 D）：D 对 E 大三模板是 m7 冲突音，但作为低音应放行出 E/D 候选
   // （否则只剩 E7/D 一种解读）。仅豁免最低音这一个音程；必选音与其余冲突检查不变，
@@ -411,84 +463,71 @@ function evaluateTemplate(
   const score = fastSoftScore(purity, extraCount, isSlash, lowestInterval, explicitRoot, comp.template);
 
   return {
-    template: comp.template,
-    rootPitch,
-    rootLabel,
+    templateIndex,
+    rootInterval,
     intervalMask,
     lowestInterval,
     isSlash,
-    slashBassLabel,
     purity,
     extraCount,
     score,
   };
 }
 
-/** 遍历「根音 × 模板」的全部组合，收集通过纯度门槛的候选命中 */
-function collectRawHits(
-  rootPitches: number[],
-  pitchMask: number,
-  labelByPitch: (string | undefined)[],
-  lowestNote: NoteInput,
-  explicitRoot: boolean
-): RawHitCandidate[] {
-  const totalInputNotes = bitCount(pitchMask);
-  const rawHits: RawHitCandidate[] = [];
+/** 遍历「根音相对音程 × 模板」的全部组合，收集通过纯度门槛的候选命中（纯相对运算，不碰音名） */
+function collectRelativeHits(relMask: number, relExplicitRoot: number): RelativeHit[] {
+  const totalInputNotes = bitCount(relMask);
+  const rootIntervals = resolveRootIntervals(relMask, relExplicitRoot);
+  const explicitRoot = relExplicitRoot >= 0;
+  const hits: RelativeHit[] = [];
 
-  for (const rootPitch of rootPitches) {
-    const intervalMask = toIntervalMask(pitchMask, rootPitch);
-    const lowestInterval = normalizePitch(lowestNote.pitchIndex - rootPitch);
-    const isSlash = normalizePitch(lowestNote.pitchIndex) !== rootPitch;
-    const slashBassLabel = isSlash ? `/${lowestNote.label}` : '';
+  for (const rootInterval of rootIntervals) {
+    const intervalMask = toIntervalMask(relMask, rootInterval);
+    // 基准音（最低弦音）相对根音的音程：rootInterval 为 0 时即根音原位，不构成斜杠
+    const lowestInterval = normalizePitch(-rootInterval);
+    const isSlash = rootInterval !== 0;
 
-    for (const comp of COMPILED_TEMPLATES) {
-      const rootLabel = getPreferredRootLabel(
-        rootPitch,
-        labelByPitch,
-        comp.template.suffix,
-        explicitRoot ? rootPitch : null
-      );
+    for (let ti = 0; ti < COMPILED_TEMPLATES.length; ti++) {
       const hit = evaluateTemplate(
-        comp,
-        rootPitch,
-        rootLabel,
+        ti,
+        COMPILED_TEMPLATES[ti]!,
+        rootInterval,
         intervalMask,
         lowestInterval,
         isSlash,
-        slashBassLabel,
         totalInputNotes,
         explicitRoot
       );
-      if (hit) rawHits.push(hit);
+      if (hit) hits.push(hit);
     }
   }
 
-  return rawHits;
+  return hits;
 }
 
-/** 按分数降序去重（同一和弦名只保留最高分者），取前 TOP_EVALUATE_LIMIT 个命中 */
-function dedupeTopHits(rawHits: RawHitCandidate[]): RawHitCandidate[] {
-  rawHits.sort((a, b) => b.score - a.score);
-
-  const seen = new Set<string>();
-  const topHits: RawHitCandidate[] = [];
-  for (const h of rawHits) {
-    const name = `${h.rootLabel}${h.template.suffix}${h.slashBassLabel}`;
-    if (seen.has(name)) continue;
-    seen.add(name);
-    topHits.push(h);
-    if (topHits.length >= TOP_EVALUATE_LIMIT) break;
+/**
+ * 去重：同一「根音相对音程 + 模板后缀」只保留最高分者（模板后缀当前全表唯一，这里是重复后缀的兜底）。
+ * 不在这里做 top-N 截断 —— 截断要按「绝对根音升序」处理平局，属位置相关信息，
+ * 放到落地相 materialize 在绝对序上做，这样同一形状跨调复用与全量重算结果一致。
+ */
+function dedupeRelativeHits(hits: RelativeHit[]): RelativeHit[] {
+  const best = new Map<string, RelativeHit>();
+  for (const h of hits) {
+    const key = `${h.rootInterval}|${COMPILED_TEMPLATES[h.templateIndex]!.template.suffix}`;
+    const prev = best.get(key);
+    // 同分保留模板序靠前者，与原实现「稳定排序后取首个」一致
+    if (!prev || h.score > prev.score) best.set(key, h);
   }
-  return topHits;
+  return [...best.values()];
 }
 
 /** 完成分层并把候选拆成 best / alternatives / theoretical，同时给出最佳根音 */
-function groupCandidates(candidates: ChordCandidate[], lowestNote: NoteInput): AnalyzeResult {
+function groupCandidates(candidates: ChordCandidate[], bassPitch: number): AnalyzeResult {
   assignTiers(candidates);
 
   return {
     candidates,
-    bestRootPitch: candidates.length > 0 ? candidates[0]!.rootPitch : normalizePitch(lowestNote.pitchIndex),
+    bestRootPitch: candidates.length > 0 ? candidates[0]!.rootPitch : bassPitch,
     best: candidates.find(c => c.tier === 'best'),
     alternatives: candidates.filter(c => c.tier === 'alternative'),
     theoretical: candidates.filter(c => c.tier === 'theoretical'),
@@ -496,18 +535,74 @@ function groupCandidates(candidates: ChordCandidate[], lowestNote: NoteInput): A
   };
 }
 
-/** 和弦识别主流程：收集音集 → 枚举根音 → 模板打分 → 去重取优 → 角色填充 → 分层 */
-function rawAnalyze(notes: NoteInput[], explicitRootPitch: number | null): AnalyzeResult {
-  if (notes.length === 0) return createEmptyResult();
+/**
+ * 候选排序规则：分数降序 → 绝对根音升序 → 模板序升序。
+ * 与旧实现「按分做稳定排序（插入序 = 绝对根音升序 × 模板序）」得到的总序完全一致，
+ * 因此落地相排序 + 截断 top-N 的结果与旧实现逐位相同。落地相排序与「只问最佳根音」的快路径共用本规则。
+ */
+const compareCandidateOrder = (
+  aS: number,
+  aRoot: number,
+  aTpl: number,
+  bS: number,
+  bRoot: number,
+  bTpl: number
+): number => bS - aS || aRoot - bRoot || aTpl - bTpl;
 
+/** 取相对声明的显式根音音程：未显式指定返回 -1（与 relMask 的 0~11 音程区分开） */
+const relativeExplicitRoot = (explicitRootPitch: number | null, bassPitch: number): number =>
+  explicitRootPitch === null ? -1 : normalizePitch(explicitRootPitch - bassPitch);
+
+/** 汇总一次分析的位置相关上下文：相对签名（音集旋转到基准音）+ 绝对音高 + 音名表 */
+function buildContext(notes: NoteInput[], explicitRootPitch: number | null): AnalyzeContext {
   const { pitchMask, labelByPitch, lowestNote } = collectNoteContext(notes, explicitRootPitch);
-  const rootPitches = resolveRootPitches(pitchMask, explicitRootPitch);
-  const rawHits = collectRawHits(rootPitches, pitchMask, labelByPitch, lowestNote, explicitRootPitch !== null);
-  const uniqueCandidates = dedupeTopHits(rawHits).map(h => populateRoles(h, labelByPitch));
+  const bassPitch = normalizePitch(lowestNote.pitchIndex);
+  const relMask = toIntervalMask(pitchMask, bassPitch);
+  const relExplicit = relativeExplicitRoot(explicitRootPitch, bassPitch);
 
-  return groupCandidates(uniqueCandidates, lowestNote);
+  return {
+    relMask,
+    relKey: `${relMask.toString(16)}:${relExplicit}`,
+    relExplicit,
+    bassPitch,
+    bassLabel: lowestNote.label,
+    labelByPitch,
+    explicitRootPitch,
+  };
 }
 
+/** 相对（位置无关）命中表：先查相对缓存，未命中才跑一遍模板匹配 */
+function getRelativeHits(ctx: AnalyzeContext): RelativeHit[] {
+  const cached = relativeCache.get(ctx.relKey);
+  if (cached) return cached;
+
+  const hits = dedupeRelativeHits(collectRelativeHits(ctx.relMask, ctx.relExplicit));
+  relativeCache.set(ctx.relKey, hits);
+  return hits;
+}
+
+/** 落地相：相对命中 + 实际上下文 → 绝对序排序 → 截断 top-N → 合成候选 → 分层 */
+function materialize(relHits: RelativeHit[], ctx: AnalyzeContext): AnalyzeResult {
+  const ordered = relHits.map(hit => ({ hit, rootPitch: normalizePitch(ctx.bassPitch + hit.rootInterval) }));
+  ordered.sort((a, b) =>
+    compareCandidateOrder(a.hit.score, a.rootPitch, a.hit.templateIndex, b.hit.score, b.rootPitch, b.hit.templateIndex)
+  );
+
+  const candidates = ordered
+    .slice(0, TOP_EVALUATE_LIMIT)
+    .map(({ hit, rootPitch }) => materializeCandidate(hit, rootPitch, ctx));
+
+  return groupCandidates(candidates, ctx.bassPitch);
+}
+
+/**
+ * 和弦识别主流程（两层缓存）：
+ * 1. 相对层：以「最低弦音的 pitchClass」为基准，把音集旋转成相对音集掩码当签名 —— 同一个「形状」
+ *    在不同调 / 不同把位 / 不同变调夹下签名相同（空弦不随 fretOffset 偏移、异调弦差异都天然体现在掩码里），
+ *    因此一条命中可服务同一形状的全部移调。值里只有相对命中（根音相对音程 + 模板 + 纯度/外分），无音名。
+ * 2. 绝对层：按本次实际输入（含逐音音名）落地。命中即返回同一个对象引用（保持既有引用稳定语义），
+ *    未命中则不再重跑模板匹配，只花一次落地相的开销。
+ */
 export function analyzeChordGraph(notes: NoteInput[], explicitRootPitch: number | null = null): AnalyzeResult {
   if (notes.length === 0) return createEmptyResult();
 
@@ -519,8 +614,34 @@ export function analyzeChordGraph(notes: NoteInput[], explicitRootPitch: number 
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const result = rawAnalyze(notes, explicitRootPitch);
+  const ctx = buildContext(notes, explicitRootPitch);
+  const result = materialize(getRelativeHits(ctx), ctx);
 
   cache.set(key, result);
   return result;
+}
+
+/**
+ * 只求最佳根音音高（不合成候选 / 角色 / 音名 / 分段）。
+ * 供只要根音的调用方使用（排序元数据、重复判定、拾取面板、分组）：命中相对缓存时不产生任何对象分配，
+ * 与 analyzeChordGraph 共用同一套签名与排序规则，故取值口径完全一致。
+ */
+export function analyzeBestRootPitch(notes: NoteInput[], explicitRootPitch: number | null = null): number {
+  if (notes.length === 0) return 0;
+
+  const ctx = buildContext(notes, explicitRootPitch);
+  const relHits = getRelativeHits(ctx);
+  if (relHits.length === 0) return ctx.bassPitch;
+
+  let best = relHits[0]!;
+  let bestRoot = normalizePitch(ctx.bassPitch + best.rootInterval);
+  for (let i = 1; i < relHits.length; i++) {
+    const h = relHits[i]!;
+    const absRoot = normalizePitch(ctx.bassPitch + h.rootInterval);
+    if (compareCandidateOrder(h.score, absRoot, h.templateIndex, best.score, bestRoot, best.templateIndex) < 0) {
+      best = h;
+      bestRoot = absRoot;
+    }
+  }
+  return bestRoot;
 }

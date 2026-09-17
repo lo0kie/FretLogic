@@ -160,7 +160,31 @@
           </g>
         </g>
 
-        <!-- 3. 一弦一音符持久实体（6 根琴弦对应 6 颗 Note，脱离 clipPath，左右与上方弧度 100% 完整显示；
+        <!-- 3. 空品位预览环（悬停 / 键盘焦点落点反馈）：指针悬停或方向键把焦点移到「该弦当前无音符」的品位格时，
+             用与音符外圈高亮环等大的描边环画出落点；落在音符所在格时由 FretboardNote 自身的高亮环接手，此处不重复绘制；
+             空弦区（品位 0）恒有 FretboardNote 的空弦圆点兜底，故不在此绘制。
+             层级：压在横按梁之上、音符之下，与音符自身「外环在内点下方」的层叠关系一致 -->
+        <circle
+          v-if="showEmptyHoverRing"
+          :cx="stringXPositions[hoverPoint!.stringIndex] ?? 0"
+          :cy="getStringNoteY(hoverPoint!.fretIndex)"
+          :fill="hoverFillColor"
+          :r="emptyRingRadius"
+          :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
+          stroke="var(--color-primary)"
+        />
+
+        <circle
+          v-if="showEmptyFocusRing"
+          :cx="stringXPositions[focusPoint!.stringIndex] ?? 0"
+          :cy="getStringNoteY(focusPoint!.fretIndex)"
+          :fill="hoverFillColor"
+          :r="emptyRingRadius"
+          :stroke-width="NOTE_DISPLAY.FINGER_OUTLINE_WIDTH"
+          stroke="var(--color-primary)"
+        />
+
+        <!-- 4. 一弦一音符持久实体（6 根琴弦对应 6 颗 Note，脱离 clipPath，左右与上方弧度 100% 完整显示；
              品位变化时由 CSS transform 驱动沿琴弦垂直滑行） -->
         <g>
           <g
@@ -614,8 +638,45 @@ const syncBarreHover = () => {
   }
 };
 
-watch(() => hoverPoint, syncBarreHover, { deep: true });
+// hover 坐标仅两个数字，用字符串签名判等即可：deep 遍历对象换不来额外信息，
+// 而签名能让「指针在同一格内移动」不再重复跑一遍横按命中查找（syncBarreHover 内含 find 遍历）
+watch(() => (hoverPoint ? `${hoverPoint.stringIndex},${hoverPoint.fretIndex}` : ''), syncBarreHover);
 watch(displayBarres, syncBarreHover, { flush: 'post' });
+
+// ==================== 空品位预览环（悬停 / 键盘焦点落点） ====================
+
+/** 空品位预览环填充色：与 FretboardNote 的高亮环同源 token，明暗主题随 tokens 切换 */
+const hoverFillColor = computed(() => 'var(--fb-hover)');
+
+/** 空品位预览环半径：与音符外圈描边环等大，保证「空位落点」与「音符落点」视觉体量一致 */
+const emptyRingRadius = computed(() => NOTE_DISPLAY.FINGER_OUTLINE_RADIUS);
+
+/** 该弦的音符是否正落在给定品位（静音态归位到空弦位 0 品，与 isNoteFocused 的判定口径保持一致） */
+const hasNoteAt = (sIdx: number, fretIndex: number) => Math.max(0, strings[sIdx]?.[0] ?? 0) === fretIndex;
+
+/**
+ * 空品位悬停预览环：
+ * 指针悬停在横按气泡上时坚决不绘制——气泡浮于指板上方，此时 hover 坐标会滞留在原格，环会误留在原地
+ */
+const showEmptyHoverRing = computed(() => {
+  if (isBubbleHovered.value) return false;
+  const hp = hoverPoint;
+  if (!hp || hp.fretIndex <= 0 || hp.fretIndex > fretCount) return false;
+  return !hasNoteAt(hp.stringIndex, hp.fretIndex);
+});
+
+/**
+ * 空品位键盘焦点预览环：
+ * 与悬停点重合时让位给悬停环，避免两枚半透明填充环叠画导致该格填充色明显深于其它格
+ */
+const showEmptyFocusRing = computed(() => {
+  const fp = focusPoint;
+  if (!fp || fp.fretIndex <= 0 || fp.fretIndex > fretCount) return false;
+  if (hoverPoint && hoverPoint.stringIndex === fp.stringIndex && hoverPoint.fretIndex === fp.fretIndex) {
+    return false;
+  }
+  return !hasNoteAt(fp.stringIndex, fp.fretIndex);
+});
 </script>
 
 <style scoped lang="scss">

@@ -44,15 +44,18 @@
       </div>
     </div>
 
+    <!-- 居中 Tab 栏：整行绝对铺满 + 内部 justify-center —— 居中锚点只取决于 header 自己的盒宽，
+         与左右两组节点的宽窄 / 内容增减完全无关（既不占 flex 流，也不靠左右分栏均分来「凑」居中，
+         所以两侧节点怎么变都不会把它顶偏，也不需要 -translate-x-1/2 那层位移）。
+         整行铺满故自身不吃指针事件（pointer-events-none），交互与 PWA 拖拽豁免都交给其上的 Tab 栏控件；
+         titlebar 左右留白以 padding 让出，居中落在窗口按钮之外的可用区内 -->
     <div
-      :class="[
-        NO_DRAG_REGION_CLASS,
-        route.path === ROUTE_PATHS.SCORE ? 'inset-y-0 items-stretch' : 'top-1/2 -translate-y-1/2 items-center',
-      ]"
-      class="@media(display-mode:window-controls-overlay):-translate-x-[calc(50%-(env(titlebar-area-inset-left,0px)-env(titlebar-area-inset-right,0px))/2)] pointer-events-auto absolute left-1/2 z-inner flex -translate-x-1/2"
+      :class="route.path === ROUTE_PATHS.SCORE ? 'items-stretch' : 'items-center'"
+      class="@media(display-mode:window-controls-overlay):pl-[env(titlebar-area-inset-left,0px)] @media(display-mode:window-controls-overlay):pr-[env(titlebar-area-inset-right,0px)] pointer-events-none absolute inset-0 z-inner flex justify-center"
     >
       <BaseSegmentedControl
         v-if="route.path === ROUTE_PATHS.SCORE"
+        :class="[NO_DRAG_REGION_CLASS, 'pointer-events-auto']"
         :disabled="!scoreEditor.activeSong"
         :model-value="scoreEditor.activeTab"
         :options="scoreModeOptions"
@@ -60,6 +63,7 @@
         full-height
         tabbed
         size="lg"
+        width="auto"
       />
     </div>
 
@@ -189,8 +193,33 @@
         icon-size="xl"
         variant="ghost"
       />
+
+      <template v-if="IS_DEV">
+        <BaseDivider
+          :inset="'0.25rem'"
+          :length="'0.875rem'"
+          :thickness="2"
+          class="opacity-80"
+          color="glass"
+          orientation="vertical"
+        />
+
+        <!-- 开发面板：仅开发构建渲染，线上产物不含此按钮 -->
+        <ActionButton
+          v-tooltip="'打开开发面板'"
+          @click="isDevPanelOpen = true"
+          icon-only
+          aria-label="打开开发面板"
+          icon="wrench"
+          icon-size="xl"
+          variant="ghost"
+        />
+      </template>
     </div>
   </header>
+
+  <!-- 判据用 DevPanel 而非 IS_DEV：该绑定在生产构建被摇成 undefined，两者等价（见脚本内注释） -->
+  <DevPanel v-if="DevPanel" v-model:visible="isDevPanelOpen" />
 
   <BaseModal
     v-model:visible="isSyncConfirmOpen"
@@ -566,15 +595,17 @@ const syncMenuItems = computed<MenuItem[]>(() => [
           settingsStore.syncTarget = 'webdav';
         },
       },
-      {
-        label: '同步设置...',
-        icon: 'settings',
-        divided: true,
-        action: () => {
-          isSyncModalOpen.value = true;
-        },
-      },
     ],
+  },
+  // 同步设置入口放在一级：子菜单里的四项只负责切换「同步 / 拉取的目标」，
+  // 真正填写凭据的弹窗不该再藏进子菜单里多绕一层
+  {
+    label: '同步设置',
+    icon: 'settings',
+    divided: true,
+    // 走 openSyncSettings 而非直接置位：弹窗内的方案选择器需对齐当前同步目标，
+    // 保证看到的就是缺凭据的那一项
+    action: openSyncSettings,
   },
 ]);
 
@@ -606,6 +637,18 @@ const handleScoreTabChange = (val: ScoreActiveTab) => {
 };
 
 const isSyncModalOpen = ref(false);
+/** 开发面板（仅 dev 构建挂载）：构建信息 / 数据概览 / 缓存与存储操作 */
+const IS_DEV = import.meta.env.DEV;
+const isDevPanelOpen = ref(false);
+// DEV 判据必须落在**模块顶层**，否则这块 dev-only 代码摇不掉：`defineAsyncComponent(() => import(...))`
+// 是不透明调用，Rollup 不能假设它无副作用，顶层无条件执行时那条动态 import 边必然保留 —— dist 里会
+// 白多出一个永不被请求的 chunk（DevPanel + devSeedData，约 20KB）。写成下面的三元后，构建期
+// `import.meta.env.DEV` 被 vite:define 换成字面量 false，整个调用连同 import 边一起被摇掉。
+// （已用本项目实装的 rollup 4.60.4 + @vue/compiler-sfc 3.5.11 跑单进程探针验证：三元式不产出该 chunk，
+// 无条件式产出；不必为了复核它去跑一次全量构建。）
+// 代价是类型为 `DefineComponent | undefined`，故模板侧用 `v-if="DevPanel"` 而非 `v-if="IS_DEV"`：生产
+// 构建下两者恒等（字面量 false 同样只剩 undefined 分支），但判据与「组件是否存在」不会再各说各话。
+const DevPanel = IS_DEV ? defineAsyncComponent(() => import('@/app/modals/DevPanel.vue')) : undefined;
 /** PWA 窗口控制拖拽拦截类名 */
 const NO_DRAG_REGION_CLASS =
   '@media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag]';

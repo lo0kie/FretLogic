@@ -74,7 +74,7 @@
       </BaseScrollArea>
     </div>
     <BaseScrollArea
-      v-grid-nav="{ cols: gridCols, selector: '.picker-chord-card' }"
+      v-grid-nav="{ cols: PICKER_GRID_COLS, selector: '.picker-chord-card', onEdge: handleNavEdge }"
       axis="y"
       class="picker-scroll-content min-h-0 flex-1 px-lg pt-sm pb-lg"
       ref="scrollAreaRef"
@@ -84,14 +84,15 @@
           <Feedback description="当前搜索或分组下暂无匹配和弦。" size="lg" />
         </div>
       </Transition>
-      <TransitionGroup
+      <!-- 虚拟化分区列表：分区壳（标题行）常驻——分区滚动定位与滚动高亮联动都依赖真实 DOM；
+           网格行按窗口挂载（见 updateWindow），容器高度由行规划精确给出，滚动条不跳 -->
+      <div
         v-if="filteredChords.length > 0"
         class="picker-sections-list relative flex w-full flex-col gap-xl"
-        name="v-transition-list"
-        tag="div"
+        ref="sectionsListRef"
       >
         <div
-          v-for="section in chordSections"
+          v-for="(section, sectionIndex) in chordSections"
           :data-section-id="section.id"
           :key="section.id"
           class="picker-section-block flex flex-col gap-sm"
@@ -105,58 +106,65 @@
             </span>
             <BaseBadge :title="`${section.chords.length} 个和弦`"> {{ section.chords.length }} </BaseBadge>
           </div>
-          <TransitionGroup
+          <div
             :aria-label="`${section.title} 和弦组`"
-            class="picker-cards-grid-cols relative grid grid-cols-3 items-start gap-md"
-            name="v-transition-list"
+            :style="{ height: (sectionPlans[sectionIndex]?.gridHeight ?? 0) + 'px' }"
+            class="picker-cards-grid relative w-full"
             role="group"
-            tag="div"
           >
             <div
-              v-wave
-              v-for="chord in section.chords"
-              :aria-label="`和弦 ${chordNameMap.get(chord.id) ?? ''}`"
-              :class="CHORD_CARD_BASE_CLASS"
-              :data-chord-id="chord.id"
-              :key="chord.id"
-              @click="handleCardSelect(chord)"
-              @keydown.enter.prevent="handleCardSelect(chord)"
-              @keydown.space.prevent="handleCardSelect(chord)"
-              @mouseenter="editHoverMap.set(chord.id, true)"
-              @mouseleave="editHoverMap.set(chord.id, false)"
-              @pointerdown="handleCardPointerDown($event, chord)"
-              data-focusable-inline
-              role="button"
-              tabindex="0"
+              v-for="row in visibleRows(sectionIndex)"
+              :key="row.top"
+              :style="{ top: row.top + 'px', height: row.height + 'px' }"
+              class="picker-cards-grid-cols absolute inset-x-0 grid grid-cols-3 items-start gap-md"
+              role="group"
             >
-              <ActionButton
-                :tabindex="editHoverMap.get(chord.id) ? 0 : -1"
-                @mousedown.stop
-                @pointerdown.stop
-                @click.stop="openEditDrawer(chord)"
-                icon-only
-                aria-label="去修改该和弦"
-                class="picker-edit-btn pointer-events-auto absolute top-1 right-1 z-float p-1.5! opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100"
-                color="primary"
-                icon="pencil"
-                icon-size="sm"
-                icon-stroke="thin"
-                size="sm"
-                title="去修改该和弦"
-                variant="ghost"
-              />
-              <span
-                v-if="selectedGroupId === 'ALL' && getSourceGroupName(chord)"
-                :title="getSourceGroupName(chord)"
-                class="picker-source-group pointer-events-none absolute top-1 left-1 z-panel max-w-[60%] truncate rounded-sm border border-border-light bg-surface-panel/90 px-1 py-0.5 text-2xs leading-none font-semibold text-fg-muted select-none"
+              <div
+                v-wave
+                v-for="chord in row.items"
+                :aria-label="`和弦 ${chordNameMap.get(chord.id) ?? ''}`"
+                :class="CHORD_CARD_BASE_CLASS"
+                :data-chord-id="chord.id"
+                :key="chord.id"
+                @click="handleCardSelect(chord)"
+                @keydown.enter.prevent="handleCardSelect(chord)"
+                @keydown.space.prevent="handleCardSelect(chord)"
+                @mouseenter="handleCardHover($event, chord.id, true)"
+                @mouseleave="handleCardHover($event, chord.id, false)"
+                @pointerdown="handleCardPointerDown($event, chord)"
+                data-focusable-inline
+                role="button"
+                tabindex="0"
               >
-                {{ getSourceGroupName(chord) }}
-              </span>
-              <FretboardCanvas :chord :chord-name-scale="0.75" :is-dark-mode="isDark" :scale="pickerScale" lazy />
+                <ActionButton
+                  :tabindex="-1"
+                  @mousedown.stop
+                  @pointerdown.stop
+                  @click.stop="openEditDrawer(chord)"
+                  icon-only
+                  aria-label="去修改该和弦"
+                  class="picker-edit-btn pointer-events-auto absolute top-1 right-1 z-float p-1.5! opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100"
+                  color="primary"
+                  icon="pencil"
+                  icon-size="sm"
+                  icon-stroke="thin"
+                  size="sm"
+                  title="去修改该和弦"
+                  variant="ghost"
+                />
+                <span
+                  v-if="selectedGroupId === 'ALL' && getSourceGroupName(chord)"
+                  :title="getSourceGroupName(chord)"
+                  class="picker-source-group pointer-events-none absolute top-1 left-1 z-panel max-w-[60%] truncate rounded-sm border border-border-light bg-surface-panel/90 px-1 py-0.5 text-2xs leading-none font-semibold text-fg-muted select-none"
+                >
+                  {{ getSourceGroupName(chord) }}
+                </span>
+                <FretboardCanvas :chord :chord-name-scale="0.75" :is-dark-mode="isDark" :scale="pickerScale" />
+              </div>
             </div>
-          </TransitionGroup>
+          </div>
         </div>
-      </TransitionGroup>
+      </div>
     </BaseScrollArea>
 
     <BaseFab
@@ -216,7 +224,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onDeactivated, reactive, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
 
 import KeySelector from '@/domains/chord/components/KeySelector.vue';
 import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue';
@@ -233,15 +241,17 @@ import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
 import { getChordName, SORT_RULE_CONFIG } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
+import { useRafThrottle } from '@/platform/composables/useRafThrottle';
+import { useRowWindowing } from '@/platform/composables/useRowWindowing';
 import { isDark } from '@/platform/composables/useTheme';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
-import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
 import ChordEditorDrawer from './ChordEditorDrawer.vue';
-import { buildChordSections } from './ChordPickerPanel.logic';
+import { buildChordSections, buildPickerRowPlan, getPickerGridGapPx } from './ChordPickerPanel.logic';
 
 import type { ChordPickerSection } from './ChordPickerPanel.logic';
 import type { Chord } from '@/domains/chord/types';
+import type { VirtualSectionPlan } from '@/platform/composables/useRowWindowing';
 import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 const props = defineProps<{
@@ -270,8 +280,8 @@ const DEFAULT_TITLE = '拖动添加和弦';
 /** 面板宽度：固定值，与视口无关（外壳内部再统一施加 92vw 上限） */
 const PANEL_WIDTH = 520;
 
-/** 网格列数：面板固定 2 列（与模板 grid-cols-2 同步），供键盘上下导航换行 */
-const gridCols = computed(() => 2);
+/** 网格列数：面板固定 3 列（与模板 grid-cols-3 同步），供键盘上下导航换行与行规划切分 */
+const PICKER_GRID_COLS = 3;
 
 const pickerScale = 1.6;
 /** 和弦卡片类名（设定充足 min-h 与顶部呼吸空间，避免顶栏操作压住和弦名）。
@@ -300,7 +310,20 @@ const {
 const scrollTopVisible = computed(() => edgeVisible.top);
 const scrollBottomVisible = computed(() => edgeVisible.bottom);
 
-const editHoverMap = reactive(new Map<string, boolean>());
+/**
+ * 卡片悬停记录（**非响应式**）：hover 只影响「编辑按钮可否 Tab 聚焦」这一件事。
+ * 曾用 reactive Map + 模板 :tabindex 读取 —— 任意卡片的 mouseenter/mouseleave 都会让
+ * 整个面板重渲染（所有分区与卡片 vnode 全量重建再 diff，775 卡下每次悬停都是一次
+ * 全量 vnode 创建），而视觉上的按钮显隐本就由 CSS group-hover 承担，响应式纯属浪费。
+ * 改为直接写按钮 DOM 的 tabIndex（初次渲染静态 tabindex="-1"），Map 仅用于去重。
+ */
+const editHoverMap = new Map<string, boolean>();
+const handleCardHover = (e: MouseEvent, chordId: string, entering: boolean) => {
+  if (editHoverMap.get(chordId) === entering) return;
+  editHoverMap.set(chordId, entering);
+  const btn = (e.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('.picker-edit-btn');
+  if (btn) btn.tabIndex = entering ? 0 : -1;
+};
 
 const selectedGroupId = ref<string>('ALL');
 const pickerSearchQuery = ref<string>('');
@@ -425,12 +448,14 @@ watch(
     scrollWrapperRef.value?.addEventListener('scroll', handleScroll, { passive: true });
     rebuildSectionEls();
     updateActiveSection();
+    updateWindow();
     if (chordSections.value.length > 0) {
       activeSectionId.value = chordSections.value[0]?.id ?? null;
     }
     setTimeout(() => {
       rebuildSectionEls();
       updateActiveSection();
+      updateWindow();
     }, 150);
   }
 );
@@ -466,6 +491,30 @@ const chordNameMap = computed(() => {
 /** 根音类别解析与分区构建：纯逻辑见 ChordPickerPanel.logic.ts */
 
 const chordSections = computed<ChordPickerSection[]>(() => buildChordSections(filteredChords.value));
+
+/* ---- 网格行虚拟化 ----
+   卡片挂载是选择器的性能大头（卡片壳 + ActionButton + FretboardCanvas 的整套 setup，
+   实测 ~0.8ms/张：775 卡全量挂载（打开面板 / 切回"全部"）单帧 ~600ms，且与位图缓存冷热无关）。
+   分区壳（标题行）常驻——分区滚动定位与滚动高亮联动都依赖真实 DOM；只有网格**行**参与窗口化：
+   未挂载的行由行规划（纯几何高度）预留空间，滚动条与行位置因此不跳。
+   窗口随滚动合帧更新（与激活分区高亮共用同一 rAF），overscan 多渲染约 4 行，滚动无感。 */
+const OVERSCAN_PX = 260;
+
+/** 每个分区的行规划（行高 / 行偏移 / 网格总高）；通用切分机制见 useRowWindowing */
+const sectionPlans = computed<VirtualSectionPlan<Chord>[]>(() =>
+  buildPickerRowPlan(chordSections.value, PICKER_GRID_COLS, pickerScale)
+);
+
+const sectionsListRef = useTemplateRef<HTMLElement>('sectionsListRef');
+
+/** 分区行窗口化：滚动时重算各分区可见行区间 [first, last]，分区壳常驻、网格行按窗口挂载 */
+const { updateWindow, visibleRows } = useRowWindowing<Chord>({
+  getScroller: () => scrollWrapperRef.value,
+  getList: () => sectionsListRef.value,
+  getPlans: () => sectionPlans.value,
+  gridSelector: '.picker-cards-grid',
+  overscanPx: OVERSCAN_PX,
+});
 
 /** 和弦卡片按下：交给宿主拖拽系统登记外部拖拽会话（移动超阈值起拖，落点与落地动作由宿主决定）。
  *  宿主未注入 dragChordStarter 时卡片不参与拖拽，交互退化为点击派发 select */
@@ -564,10 +613,11 @@ const updateActiveSection = () => {
   activeSectionId.value = currentId ?? chordSections.value[0]!.id;
 };
 
-/** 滚动事件按帧合帧：每帧只做一次激活分区计算 */
-const { schedule: scheduleActiveSectionUpdate, cancel: cancelActiveSectionUpdate } = useRafThrottle(() =>
-  updateActiveSection()
-);
+/** 滚动事件按帧合帧：每帧只做一次激活分区计算 + 可见行窗口更新 */
+const { schedule: scheduleActiveSectionUpdate, cancel: cancelActiveSectionUpdate } = useRafThrottle(() => {
+  updateActiveSection();
+  updateWindow();
+});
 const handleScroll = () => scheduleActiveSectionUpdate();
 
 watch(
@@ -582,10 +632,56 @@ watch(
     }
     nextTick(() => {
       updateActiveSection();
+      updateWindow();
     });
   },
   { immediate: true }
 );
+
+/**
+ * 键盘导航到窗口边缘的兜底：网格里只挂了可见行，方向键在已渲染卡片间找不到下一张时由
+ * v-grid-nav 的 onEdge 回调到这里。按行规划的几何直接算出目标行应到的滚动位置并滚动
+ * （目标行尚未挂载，不能 scrollIntoView），窗口随滚动更新后再聚焦目标卡。
+ */
+const handleNavEdge = (key: string, currentEl: HTMLElement) => {
+  if (key !== 'ArrowDown' && key !== 'ArrowUp') return;
+  const scroller = scrollWrapperRef.value;
+  const list = sectionsListRef.value;
+  if (!scroller || !list) return;
+  const chordId = currentEl.dataset['chordId'];
+  if (!chordId) return;
+  const sectionIndex = chordSections.value.findIndex(section => section.chords.some(c => c.id === chordId));
+  const plan = sectionPlans.value[sectionIndex];
+  if (!plan) return;
+  const fromRow = plan.rows.findIndex(row => row.items.some(c => c.id === chordId));
+  if (fromRow < 0) return;
+  const colIndex = plan.rows[fromRow]!.items.findIndex(c => c.id === chordId);
+  const targetRowIndex = key === 'ArrowDown' ? fromRow + 1 : fromRow - 1;
+  const targetRow = plan.rows[targetRowIndex];
+  if (!targetRow) return;
+  const target = targetRow.items[Math.min(colIndex, targetRow.items.length - 1)];
+  if (!target) return;
+  const gridEl = list.querySelectorAll<HTMLElement>('.picker-cards-grid')[sectionIndex];
+  if (!gridEl) return;
+  const scRect = scroller.getBoundingClientRect();
+  const rowScreenTop = gridEl.getBoundingClientRect().top + targetRow.top;
+  const margin = getPickerGridGapPx();
+  if (key === 'ArrowDown' && rowScreenTop + targetRow.height > scRect.bottom) {
+    scroller.scrollTop += rowScreenTop + targetRow.height - scRect.bottom + margin;
+  } else if (key === 'ArrowUp' && rowScreenTop < scRect.top) {
+    scroller.scrollTop -= scRect.top - rowScreenTop + margin;
+  }
+  // 两跳 rAF：滚动事件合帧 → 窗口更新渲染 → 目标卡可查询。偶尔仍未就绪再退避一帧重试
+  const focusTarget = (retry = true) => {
+    const el = list.querySelector<HTMLElement>(`[data-chord-id="${target.id}"]`);
+    if (el) {
+      el.focus({ preventScroll: true });
+    } else if (retry) {
+      requestAnimationFrame(() => focusTarget(false));
+    }
+  };
+  requestAnimationFrame(() => requestAnimationFrame(() => focusTarget()));
+};
 
 onDeactivated(() => {
   cancelActiveSectionUpdate();

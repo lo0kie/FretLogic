@@ -123,9 +123,18 @@ const emit = defineEmits<{
   (e: 'close'): void;
 }>();
 
+/**
+ * 调试日志开关与实例序号（仅开发期）。
+ * `import.meta.env.DEV` 在生产构建被替换为字面量 false，下方日志分支随之被摇掉。
+ */
+const IS_DEV = import.meta.env.DEV;
+
+/** 菜单实例递增序号：dev 日志里区分同一时刻的多个菜单（互斥关闭时尤其需要） */
+const menuInstanceSeqState = { seq: 0 };
+
 // 模块级互斥：一组菜单同时只允许打开一个（打开新菜单时只关其他菜单，非关闭所有浮层）。
 // 必须放在模块作用域而非 <script setup> 体，否则每个实例各持一份、跨实例互斥失效。
-const mutexCloseRef = ref<(() => void) | null>(null);
+const mutexCloseRef = ref<((reason?: string) => void) | null>(null);
 
 /** 尺寸 → 类名静态映射：避免模板字符串拼接（Tailwind/扫描器无法识别动态拼接的类） */
 const MENU_SIZE_CLASS: Record<ComponentSize, string> = {
@@ -157,15 +166,32 @@ const panelInnerClass = computed(() => [menuSizeClass.value, 'context-menu-inner
 /** 右键分支专用虚拟锚点：以鼠标坐标构造定位点 */
 const virtualRef = computed(() => (trigger === 'contextmenu' ? createVirtualElementRect(x.value, y.value) : null));
 
+/** dev 日志标识：#序号 + 菜单标题（无标题时取首项文案），用于在多个菜单的日志里认出实例 */
+const instanceId = `#${++menuInstanceSeqState.seq}(${title || (items?.[0]?.label ?? '未命名')})`;
+
+/** dev 日志用调用栈：定位「谁关的菜单」 */
+const callStack = (): string =>
+  (new Error().stack ?? '')
+    .split('\n')
+    .slice(1, 7)
+    .map(s => s.trim().replace(/^at\s+/, ''))
+    .join(' <- ');
+
 /** 关闭本菜单并清理全局互斥记录 */
-const closeMenu = () => {
-  popoverRef.value?.close();
+const closeMenu = (reason = 'unmarked') => {
+  if (IS_DEV && isOpen.value) {
+    console.debug(`[menu${instanceId}] closeMenu reason=${reason}`, { stack: callStack() });
+  }
+  popoverRef.value?.close(`menu:${reason}`);
 };
 
 /** 互斥登记：打开时关掉其他菜单并登记自己，关闭时清空指向自己的登记 */
 watch(isOpen, val => {
   if (val) {
-    if (mutexCloseRef.value && mutexCloseRef.value !== closeMenu) mutexCloseRef.value();
+    if (mutexCloseRef.value && mutexCloseRef.value !== closeMenu) {
+      if (IS_DEV) console.debug(`[menu${instanceId}] 互斥关闭上一个菜单`);
+      mutexCloseRef.value('mutex-by-other-menu');
+    }
     mutexCloseRef.value = closeMenu;
   } else if (mutexCloseRef.value === closeMenu) {
     mutexCloseRef.value = null;
@@ -182,6 +208,7 @@ watch(isOpen, async val => {
 
 /** 菜单关闭回调：清互斥登记，并向父级转发关闭事件 */
 const handlePopoverClose = () => {
+  if (IS_DEV) console.debug(`[menu${instanceId}] popover 已关闭（浮层侧发出）`);
   if (mutexCloseRef.value === closeMenu) {
     mutexCloseRef.value = null;
   }
@@ -192,7 +219,7 @@ const handlePopoverClose = () => {
 const handleItemSelect = (item: MenuItem) => {
   emit('select', item);
   item.action?.();
-  if (!item.keepOpen) closeMenu();
+  if (!item.keepOpen) closeMenu('item-select');
 };
 
 /** 在指定坐标打开菜单：先互斥关闭其他菜单，再定位、打开并聚焦首个可用项 */
@@ -261,7 +288,7 @@ const handleMenuKeydown = (e: KeyboardEvent) => {
     if (prevIdx !== -1) itemEls[prevIdx]?.focus();
   } else if (e.key === 'Tab') {
     e.preventDefault();
-    closeMenu();
+    closeMenu('keydown-tab');
   }
 };
 

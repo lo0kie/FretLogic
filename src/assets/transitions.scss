@@ -39,6 +39,13 @@
   will-change: opacity, transform;
 }
 
+// 离场期间元素仍在文档里（要等过渡结束才被移除），但它在逻辑上已经关闭：
+// 此时必须停止命中测试，否则「已关闭的面板」仍会吃掉这一片的点击（现象是菜单看着没了，
+// 在原位置点一下却还能选中其中的菜单项）。入场同理无需处理——入场元素本就该可交互。
+.v-transition-scale-leave-active {
+  pointer-events: none;
+}
+
 .v-transition-scale-enter-from,
 .v-transition-scale-leave-to {
   transform: scale(0.95);

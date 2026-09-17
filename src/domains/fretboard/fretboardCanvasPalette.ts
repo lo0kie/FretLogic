@@ -56,6 +56,28 @@ const readPaletteFrom = (root: Element): FretboardCanvasPalette => {
 };
 
 /**
+ * 调色板记忆：主题键 → 已解析配色。
+ *
+ * readPaletteFrom 会触发 getComputedStyle(root)（强制同步样式重算），而 FretboardCanvas 是
+ * v-for 里逐实例挂载的（和弦选择面板、变体面板、乐谱槽位），此前每个实例在 setup 里各解析一次
+ * —— 打开一次面板就是 N 次样式重算 + N 份等值对象。
+ *
+ * 键由「主题」决定而非「实例」：显式传 theme 时以 theme 为键；不传时按 <html> 上的
+ * data-theme / .dark 组合取键（useTheme.apply 保证两者同步更新，故主题一变键即变，
+ * 自然失效取到新配色，无需额外的主动清理）。
+ */
+const paletteCache = new Map<string, FretboardCanvasPalette>();
+
+/** 空调色板（Node 测试环境无 DOM 时返回；调用方仅为导出 Worker，测试不消费颜色值） */
+const emptyPalette = (): FretboardCanvasPalette => {
+  const palette = {} as Record<keyof FretboardCanvasPalette, string>;
+  for (const key of Object.keys(PALETTE_VAR_MAP)) {
+    palette[key as keyof FretboardCanvasPalette] = '';
+  }
+  return palette;
+};
+
+/**
  * 解析指定主题的画布配色。
  *
  * 约束：--fbc-* 变量在 tokens.scss 的 :root 必有定义，正常返回值恒非空；
@@ -65,27 +87,36 @@ const readPaletteFrom = (root: Element): FretboardCanvasPalette => {
  *              显式传入时同步换装 `<html>` 的 data-theme/.dark 读取后再恢复，
  *              全程无中间绘制（getComputedStyle 强制同步样式重算），供导出面板
  *              在任意应用主题下固定导出亮/暗配色。
+ * @returns 同一主题下恒为同一个对象引用（已记忆），调用方可直接做引用比较
  */
 export const resolveFretboardCanvasPalette = (theme?: 'light' | 'dark' | 'high-contrast'): FretboardCanvasPalette => {
   // Node 测试环境无 DOM：返回空串调色板（调用方仅为导出 Worker，测试不会消费颜色值）
-  if (typeof document === 'undefined') {
-    const emptyPalette = {} as Record<keyof FretboardCanvasPalette, string>;
-    for (const key of Object.keys(PALETTE_VAR_MAP)) {
-      emptyPalette[key as keyof FretboardCanvasPalette] = '';
-    }
-    return emptyPalette;
-  }
+  if (typeof document === 'undefined') return emptyPalette();
 
   const root = document.documentElement;
-  if (!theme) return readPaletteFrom(root);
+  // 显式主题的键即主题名；跟随应用主题时把 data-theme 与 .dark 一起入键
+  // （tokens.scss 的暗色选择器是 .dark，二者任一变都要视为另一份配色）
+  const cacheKey = theme
+    ? `t:${theme}`
+    : `l:${root.getAttribute('data-theme') ?? ''}:${root.classList.contains('dark') ? 1 : 0}`;
 
-  const prevTheme = root.getAttribute('data-theme');
-  const prevDark = root.classList.contains('dark');
-  root.setAttribute('data-theme', theme);
-  root.classList.toggle('dark', theme === 'dark');
-  const palette = readPaletteFrom(root);
-  if (prevTheme === null) root.removeAttribute('data-theme');
-  else root.setAttribute('data-theme', prevTheme);
-  root.classList.toggle('dark', prevDark);
+  const memo = paletteCache.get(cacheKey);
+  if (memo) return memo;
+
+  let palette: FretboardCanvasPalette;
+  if (!theme) {
+    palette = readPaletteFrom(root);
+  } else {
+    const prevTheme = root.getAttribute('data-theme');
+    const prevDark = root.classList.contains('dark');
+    root.setAttribute('data-theme', theme);
+    root.classList.toggle('dark', theme === 'dark');
+    palette = readPaletteFrom(root);
+    if (prevTheme === null) root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', prevTheme);
+    root.classList.toggle('dark', prevDark);
+  }
+
+  paletteCache.set(cacheKey, palette);
   return palette;
 };

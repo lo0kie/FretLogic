@@ -190,6 +190,51 @@ export const formatBytes = (bytes: number): string => {
   return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${UNITS[unitIdx]}`;
 };
 
+// ===== estimateValueBytes: JS 值内存占用粗估（开发面板用） =====
+/** 估算深度上限：足够覆盖业务数据结构，深树/环状引用不会拖慢面板 */
+const ESTIMATE_MAX_DEPTH = 6;
+
+/**
+ * 粗略估算单个 JS 值的内存占用（字节）。口径：字符串按 UTF-16 每字符 2 字节、
+ * 数值 8 字节、布尔 4 字节，数组与普通对象按结构递归累加（对象含键名）；
+ * 类实例（ImageBitmap、DOM、Map/Set 等原生对象）不做估算计 0——这类资源请由调用方
+ * 自行给出精确口径（如位图 w×h×4）。
+ *
+ * 仅用于开发面板的相对参考，非精确统计；环状引用与超深结构按 0 截断。
+ */
+export const estimateValueBytes = (value: unknown, depth = 0, seen?: Set<object>): number => {
+  if (value == null) return 0;
+
+  const type = typeof value;
+  if (type === 'string') return (value as string).length * 2;
+  if (type === 'number' || type === 'bigint') return 8;
+  if (type === 'boolean') return 4;
+  if (type !== 'object') return 0; // function / symbol 不计
+  if (depth >= ESTIMATE_MAX_DEPTH) return 0;
+
+  const object = value as object;
+  const guard = seen ?? new Set<object>();
+  if (guard.has(object)) return 0; // 环状引用
+  guard.add(object);
+
+  let total = 8; // 对象头近似
+  if (Array.isArray(object)) {
+    for (const item of object) total += estimateValueBytes(item, depth + 1, guard);
+    return total;
+  }
+
+  // 只处理普通对象（字面量/JSON 反序列化结果）；类实例不猜内部布局
+  const proto: unknown = Object.getPrototypeOf(object);
+  if (proto !== Object.prototype && proto !== null) return total;
+  // for...in + hasOwnProperty 而非 Object.entries：后者每层都要分配一个 [key, value] 数组，
+  // 面对上千条目的缓存结构（开发面板逐条估算）会产生大量短命数组
+  for (const key in object) {
+    if (!Object.prototype.hasOwnProperty.call(object, key)) continue;
+    total += key.length * 2 + estimateValueBytes((object as Record<string, unknown>)[key], depth + 1, guard);
+  }
+  return total;
+};
+
 /**
  * 本地时间戳 → 文件名安全串（如 2026-09-03_10-05-33）。
  * 用 getTimezoneOffset 换算为本地时间再格式化，避免 toISOString 的 UTC 偏差；

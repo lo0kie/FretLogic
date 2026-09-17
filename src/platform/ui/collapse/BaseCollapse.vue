@@ -7,9 +7,14 @@
       v-wave
       v-bind="$attrs"
       :aria-expanded="expanded"
-      :title="props.title"
+      :class="[
+        'group/head flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-out outline-none select-none hover:bg-surface-panel-hover hover:delay-100 focus-visible:ring-2 focus-visible:ring-primary/60',
+        // 吸附态需自铺底色遮挡下方滚过的内容，故仅适用于底色同为 surface-panel 的面板
+        sticky ? 'sticky z-panel bg-surface-panel' : '',
+      ]"
+      :style="stickyStyle"
+      :title="headTooltip"
       @click="expanded = !expanded"
-      class="group/head flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-out outline-none select-none hover:bg-surface-panel-hover hover:delay-100 focus-visible:ring-2 focus-visible:ring-primary/60"
       type="button"
     >
       <!-- 传入 #icon 插槽时优先使用插槽内容（Vue 插槽默认内容的天然规则）；
@@ -37,6 +42,14 @@
         </slot>
       </div>
       <slot name="trailing" />
+      <!-- 标题右侧描述：贴行尾、紧邻 chevron。标题区是 flex-1（basis 0），收缩权重为 0，
+           因此空间不足时先截断描述、标题始终完整（完整文本见头部原生 tooltip） -->
+      <span
+        v-if="description || $slots['description']"
+        class="min-w-0 shrink truncate text-2xs font-normal text-fg-muted"
+      >
+        <slot name="description">{{ description }}</slot>
+      </span>
       <BaseIcon
         :class="expanded ? 'rotate-0' : '-rotate-90'"
         class="text-fg-secondary shrink-0 transition-transform duration-base ease-out group-hover/head:text-fg-title"
@@ -64,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, useTemplateRef, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { COLLAPSE_SCROLL_COMPENSATION_MAX_MS } from '@/platform/utils/constants';
@@ -87,6 +100,10 @@ const props = withDefaults(
   defineProps<{
     /** 分组标题 */
     title?: string;
+    /** 行尾补充描述：小字、弱色，贴在折叠头右侧（chevron 左侧，trailing 槽之后）。
+     *  默认渲染 description 文本，可用 #description 插槽自定义；空间不足时描述先截断，
+     *  完整文本见头部原生 tooltip */
+    description?: string;
     /** 标题前导图标；支持图标名称字符串或图标组件（传组件时该组件须支持
      *  项目标准图标尺寸档位 `icon-size` prop，如 'sm'，否则尺寸档位静默不生效） */
     icon?: IconName | Component;
@@ -99,14 +116,24 @@ const props = withDefaults(
     /** 挂载即展开时初始高度直接采用 auto 而非 0→N 展开动画：
      *  用于容器整体展开（如设置弹层首次打开）时默认展开的分组无需播放首帧高度过渡 */
     initialAuto?: boolean;
+    /** 折叠头吸附在最近滚动容器顶部：长内容滚动时标题不随内容滚走。
+     *  吸附期间头部自铺 bg-surface-panel 底色遮挡下方内容，故仅适用于面板底色同为
+     *  surface-panel 的场景 */
+    sticky?: boolean;
+    /** 吸附偏移（CSS 长度，默认 '0px'）：上方另有常驻粘性头部时用它让位，可为负值。
+     *  基准是容器**可视上沿**（已补偿容器 padding-top，见下方吸附补偿说明） */
+    stickyOffset?: string;
   }>(),
   {
     title: undefined,
+    description: undefined,
     icon: undefined,
     iconSize: 'md',
     iconStroke: 'regular',
     unpadded: false,
     initialAuto: false,
+    sticky: false,
+    stickyOffset: '0px',
   }
 );
 
@@ -116,9 +143,16 @@ defineSlots<{
   icon?(): unknown;
   /** 标题内容（缺省渲染 title 文本）；用于跑马灯等自定义标题结构 */
   title?(): unknown;
+  /** 行尾描述（缺省渲染 description 文本） */
+  description?(): unknown;
   /** 行尾附加内容（计数徽标等），渲染于内置 chevron 之前 */
   trailing?(): unknown;
 }>();
+
+/** 头部原生 tooltip：有描述时并入（描述被截断时可悬浮看全）；未传 title 时保持原样不下发 */
+const headTooltip = computed(() =>
+  props.title ? (props.description ? `${props.title} · ${props.description}` : props.title) : undefined
+);
 
 // ---------- 收起时的滚动钳位补偿 ----------
 // 折叠体收缩会同步缩小祖先滚动容器的可滚动量（scrollHeight - clientHeight）。浏览器的滚动
@@ -143,6 +177,27 @@ const findScrollParent = (): HTMLElement | null => {
   }
   return null;
 };
+
+// ---------- 吸附：补偿滚动容器的顶部 padding ----------
+// sticky 的坐标以滚动容器的**内容盒**为原点（容器的内边距同样约束粘性盒，它不会上移进 padding 带）。
+// 于是裸的 top: 0 实际吸附在「内容盒顶」：容器若有 padding-top，那条 padding 带会一直露着正在滚出的
+// 内容——标题遮住了它下方的内容，头顶那一条却漏着。测量容器 padding-top 并从吸附线里减掉，头部才
+// 真正贴住可视上沿（容器无 padding-top 时结果与裸 top 一致）。
+const stickyInsetTop = ref(0);
+
+const measureStickyInset = () => {
+  if (!props.sticky) return;
+  const container = findScrollParent();
+  stickyInsetTop.value = container ? Number.parseFloat(window.getComputedStyle(container).paddingTop) || 0 : 0;
+};
+
+onMounted(measureStickyInset);
+watch(() => props.sticky, measureStickyInset);
+
+/** 仅在开启 sticky 时下发 top 偏移，未开启则完全不写 style（避免与 $attrs 里的 style 相扰） */
+const stickyStyle = computed(() =>
+  props.sticky ? { top: `calc(${props.stickyOffset} - ${stickyInsetTop.value}px)` } : undefined
+);
 
 // 逐帧循环句柄提升到组件作用域：收起途中被重新展开、或组件卸载时都能正确取消上一轮
 let compensationRafId: number | null = null;

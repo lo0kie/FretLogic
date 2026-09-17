@@ -143,10 +143,14 @@ export const STORAGE_KEYS = {
   SONGS_SORT_METHOD: 'CHORD_LAB_SONGS_SORT_METHOD_V1',
 
   // ---- 谱面视图偏好 ----
-  /** 谱面字号缩放 */
+  /** 谱面字号缩放（预览 / 导出维度；排列和弦维度见 SCORE_ARRANGE_FONT_SCALE） */
   SCORE_FONT_SCALE: 'CHORD_LAB_SCORE_FONT_SCALE_V1',
-  /** 谱面内嵌指板缩放 */
+  /** 谱面内嵌指板缩放（预览 / 导出维度；排列和弦维度见 SCORE_ARRANGE_FRETBOARD_SCALE） */
   SCORE_FRETBOARD_SCALE: 'CHORD_LAB_SCORE_FRETBOARD_SCALE_V1',
+  /** 排列和弦 tab 专用字号缩放（只影响编辑区排版，与预览 / 导出互不干扰） */
+  SCORE_ARRANGE_FONT_SCALE: 'CHORD_LAB_SCORE_ARRANGE_FONT_SCALE_V1',
+  /** 排列和弦 tab 专用内嵌指板缩放 */
+  SCORE_ARRANGE_FRETBOARD_SCALE: 'CHORD_LAB_SCORE_ARRANGE_FRETBOARD_SCALE_V1',
   /** 预览：是否自适应满高 */
   SCORE_PREVIEW_FIT_MODE: 'CHORD_LAB_SCORE_PREVIEW_FIT_MODE_V1',
   /** 预览：自定义缩放百分比 */
@@ -183,6 +187,8 @@ export const STORAGE_KEYS = {
   // ---- 应用级一次性状态（非用户偏好，由程序自行写入） ----
   /** 是否访问过本应用：true 表示已访问过，首次打开引导（是否从线上拉取数据）只弹一次的判据 */
   HAS_VISITED: 'CHORD_LAB_HAS_VISITED_V1',
+  /** 已消费的分享链接 token（sessionStorage，防同一标签页重复导入同一链接；非用户数据） */
+  CONSUMED_SHARE_TOKENS: 'CHORD_LAB_CONSUMED_SHARE_TOKENS_V1',
 } as const;
 
 // ===================== 界面提示 / 交互延时 =====================
@@ -223,6 +229,12 @@ export const SCROLL_INTERACTIVE_WINDOW_MS = 120;
 /** BaseCollapse 收起时滚动钳位补偿的逐帧循环兜底上限（ms）：高度过渡实际为 duration-base(180ms)，
  *  但过渡被禁用（如 prefers-reduced-motion）时 transitionend 永不触发，循环不能无限空转 */
 export const COLLAPSE_SCROLL_COMPENSATION_MAX_MS = 1000;
+
+/** 折叠体收起动画期间「继续挂载内容」的保留窗口（ms）。
+ *  收起期间内容要被逐帧裁切才自然，故不能在第一帧就卸载；此值须**不短于**折叠体的高度过渡
+ *  （tokens.scss 的 --duration-base = 180ms），提前释放会让卡片整体消失、只剩空箱收起。
+ *  略长于过渡只是多留一帧不可见的 DOM（已被 height:0 + overflow:hidden 裁掉），无副作用。 */
+export const COLLAPSE_CONTENT_RETENTION_MS = 220;
 
 /** 右键菜单已打开时换位动画时长（ms，WAAPI 实现） */
 export const CONTEXT_MENU_REPOSITION_DURATION_MS = 80;

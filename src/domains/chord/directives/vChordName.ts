@@ -4,6 +4,7 @@ import {
   getChordName,
   nameToSegments,
 } from '@/domains/chord/theory/theory';
+import { estimateValueBytes } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
 
 import type { AccidentalType, Chord, ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
@@ -77,8 +78,12 @@ interface RenderedChordName {
 
 /** 渲染结果缓存：同一份渲染输入（快照键）在多个元素上出现时复用已构建的 HTML。
  *  乐库 / 侧栏里同名和弦（尤其调号）会成百上千次重复，逐元素重拼字符串是纯浪费；
- *  上限与 theory 层解析缓存同量级——常用和弦名远少于 512，重复输入基本都能命中 */
-const renderCache = createLruCache<RenderedChordName>(512);
+ *  值为 class 串 + HTML 片段（几十~几百字节），上限与 theory 层解析缓存同量级放宽到 4096，
+ *  整库渲染时不再击穿（键含 sizeClass 等呈现参数，实际键空间比和弦名数量还多一档） */
+const renderCache = createLruCache<RenderedChordName>(4096, {
+  name: '和弦名渲染',
+  weigh: (_, value) => estimateValueBytes(value),
+});
 
 /** 上次渲染快照键，避免无效 DOM 写入 */
 const stateMap = new WeakMap<HTMLElement, string>();
@@ -189,11 +194,33 @@ const applyStructured = (el: HTMLElement, classes: string, html: string): void =
   el.innerHTML = html;
 };
 
+/** 渲染内容键：只拼「真正决定 HTML 输出」的字段，替代原先的 JSON.stringify(input)。
+ *  逐项与下游一致：
+ *  - segments ←→ buildNameHtml 的入参（根音 / 性质 / 扩展音 / 斜杠低音），升降号经 formatAccidental
+ *    归一，故 '#'、'1'、'♯' 这些等价写法收敛成同一个键；
+ *  - degrees ←→ buildDegreesHtml 同构；fallback 覆盖纯文本兜底分支，prefix/suffix 覆盖附加文本；
+ *  - shorthand / useUnicode / sizeClass 即三个呈现开关。
+ *  收益：键长从上百字节降到几十字节，且构造只遍历分片数组、不再对嵌套对象做深序列化——
+ *  updated 钩子是整库渲染里最热的路径；同语义输入恒得同键（不依赖属性书写顺序），命中率不低于原先。 */
+const buildRenderKey = (input: ResolvedInput): string => {
+  const seg = input.segments;
+  const segKey = seg
+    ? [
+        `${seg.root[0]}${formatAccidentalTheory(seg.root[1], false)}`,
+        seg.quality ?? seg.unknownQuality ?? '',
+        (seg.extensions ?? []).map(([deg, acc]) => `${deg}${formatAccidentalTheory(acc, false)}`).join(','),
+        seg.bass ? `${seg.bass[0]}${formatAccidentalTheory(seg.bass[1], false)}` : '',
+      ].join('|')
+    : '';
+  const degKey = input.degrees?.map(([deg, acc]) => `${deg}${formatAccidentalTheory(acc, false)}`).join(',') ?? '';
+  return `${segKey}#${degKey}#${input.fallback}#${input.prefix}#${input.suffix}#${input.shorthand ? 1 : 0}${input.useUnicode ? 1 : 0}#${input.sizeClass}`;
+};
+
 /** 渲染入口（mounted/updated 共用）：输入快照未变化时跳过；
  *  结构化内容先查渲染缓存（跨元素复用结果），未命中才拼串；纯文本兜底不缓存。 */
 const renderChordName = (el: HTMLElement, binding: { value: ChordNameBinding }): void => {
   const input = resolveInput(binding.value);
-  const snapshotKey = JSON.stringify(input);
+  const snapshotKey = buildRenderKey(input);
   if (stateMap.get(el) === snapshotKey) return;
 
   const structuredClasses = `${DISPLAY_CLASS}${input.sizeClass ? ` ${input.sizeClass}` : ''}`;

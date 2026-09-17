@@ -1,9 +1,14 @@
-import { clamp } from '@/platform/utils/common';
+import { clamp, estimateValueBytes } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
 
 import type { BarreEntity, BarreFret, Capo, FretOffset, GuitarStringsModel, StringIndex } from '../types';
 
-const barreCandidatesCache = createLruCache<BarreEntity[]>(64);
+// 横按候选缓存：键是「各弦品位 + 品数」，值是一组候选（每条几十字节，储备便宜）。
+// 上限 4096 相当于放开——实际键空间按指法组合自然增长，容量不再成为淘汰动因
+const barreCandidatesCache = createLruCache<BarreEntity[]>(4096, {
+  name: '指板横按候选',
+  weigh: (_, value) => estimateValueBytes(value),
+});
 
 /**
  * 计算当前指板「可被手动标记的横按」候选列表（供横按编辑弹窗展示，用户选择后写入 barres，不自动应用）。

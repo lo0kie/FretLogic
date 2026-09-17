@@ -10,6 +10,7 @@
       <BaseCollapse
         v-scroll-into-view.y.delay-220="isScoreGroupOpen('layout')"
         :class="scoreOpenGroup === 'layout' ? 'bg-tint-panelhover-50!' : ''"
+        :description="layoutGroupDescription"
         :expanded="scoreOpenGroup === 'layout'"
         @update:expanded="toggleScoreGroup('layout', $event)"
         initial-auto
@@ -21,7 +22,7 @@
         <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
           <BaseFormRow label="字号缩放">
             <BaseSlider
-              v-model.lazy="scoreEditor.fontScale"
+              v-model.lazy="fontScaleModel"
               :default-value="100"
               :formatter="val => `${Math.round(val)}%`"
               :max="150"
@@ -35,7 +36,7 @@
 
           <BaseFormRow label="和弦缩放">
             <BaseSlider
-              v-model.lazy="scoreEditor.fretboardScale"
+              v-model.lazy="fretboardScaleModel"
               :default-value="100"
               :formatter="val => `${Math.round(val)}%`"
               :max="150"
@@ -81,6 +82,7 @@
       <BaseCollapse
         v-scroll-into-view.y.delay-220="isScoreGroupOpen('display')"
         :class="scoreOpenGroup === 'display' ? 'bg-tint-panelhover-50!' : ''"
+        :description="displayGroupDescription"
         :expanded="scoreOpenGroup === 'display'"
         @update:expanded="toggleScoreGroup('display', $event)"
         initial-auto
@@ -114,6 +116,7 @@
         @update:expanded="toggleScoreGroup('export', $event)"
         initial-auto
         class="scroll-mt-2"
+        description="尺寸与质量"
         icon="layout-template"
         icon-size="xl"
         title="版面"
@@ -160,6 +163,7 @@
         @update:expanded="toggleWorkbenchGroup('timbre', $event)"
         initial-auto
         class="scroll-mt-2"
+        description="音色与扫弦"
         icon="audio-lines"
         icon-size="xl"
         title="音色"
@@ -228,6 +232,7 @@
         @update:expanded="toggleWorkbenchGroup('effect', $event)"
         initial-auto
         class="scroll-mt-2"
+        description="混响与拟真"
         icon="audio-waveform"
         icon-size="xl"
         title="效果"
@@ -264,6 +269,7 @@
         @update:expanded="toggleWorkbenchGroup('display', $event)"
         initial-auto
         class="scroll-mt-2"
+        description="和弦简写"
         icon="eye"
         icon-size="xl"
         title="显示"
@@ -282,6 +288,7 @@
         @update:expanded="toggleWorkbenchGroup('fretboard', $event)"
         initial-auto
         class="scroll-mt-2"
+        description="品数与调音"
         icon="guitar"
         icon-size="xl"
         title="指板"
@@ -385,6 +392,36 @@ const scoreOpenGroup = computed(() =>
   isPreviewTab.value ? scorePreviewOpenGroupState.value : scoreEditOpenGroupState.value
 );
 const workbenchOpenGroup = workbenchOpenGroupState;
+
+/**
+ * 排版缩放按 tab 分维度读写：
+ *  - 排列和弦 tab → 编辑视图维度，只改编辑区看谱的字号/和弦大小；
+ *  - 预览 tab → 预览 / 导出维度，只改出图排版。
+ * 两者各存一份、互不覆盖，故同一个滑块在不同 tab 下是不同的值。
+ */
+const fontScaleModel = computed({
+  get: () => (isPreviewTab.value ? scoreEditor.previewFontScale : scoreEditor.arrangeFontScale),
+  set: (val: number) => {
+    if (isPreviewTab.value) scoreEditor.previewFontScale = val;
+    else scoreEditor.arrangeFontScale = val;
+  },
+});
+const fretboardScaleModel = computed({
+  get: () => (isPreviewTab.value ? scoreEditor.previewFretboardScale : scoreEditor.arrangeFretboardScale),
+  set: (val: number) => {
+    if (isPreviewTab.value) scoreEditor.previewFretboardScale = val;
+    else scoreEditor.arrangeFretboardScale = val;
+  },
+});
+
+/**
+ * 分组行尾描述按 tab 取用：两项设置（乐谱对齐、显示页脚）都只作用于预览 / 导出，
+ * 排列和弦 tab 下并不渲染，写死在描述里会指向一个当前 tab 没有的设置项。
+ */
+/** 「排版」组：预览 tab 含对齐，排列和弦 tab 只有字号与和弦两个缩放项 */
+const layoutGroupDescription = computed(() => (isPreviewTab.value ? '缩放与对齐' : '字号与和弦'));
+/** 「显示」组：页脚（A4 分页页码）仅预览显示，排列和弦 tab 只剩简写与横按 */
+const displayGroupDescription = computed(() => (isPreviewTab.value ? '简写与页脚' : '简写与横按'));
 
 /** 用户与面板内容交互（展开/折叠分组）即钉住浮层：hover 移出不再自动关闭，点外部/Esc 仍可关闭 */
 const pinPopover = usePopoverPin();

@@ -30,8 +30,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import { useFloatingPosition } from './floatingPosition';
 import { ALIGN_CLASS_MAP } from './floatingPositions';
-import { useFloatingPosition, useKeepAliveVisible } from './useFloatingPosition';
+import { useKeepAliveVisible } from './useKeepAliveVisible';
 
 defineOptions({
   name: 'BaseFloatingPill',

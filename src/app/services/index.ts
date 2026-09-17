@@ -11,4 +11,5 @@ export * from './validation/persistedData';
 export * from './data/repositories';
 export * from './data/bootstrap';
 export * from './data/migrateLegacy';
-export { createChordRepository, createSongRepository } from './repositories';
+export { createChordRepository, type ChordLibrarySnapshot } from '@/domains/chord';
+export { createSongRepository } from '@/domains/score';

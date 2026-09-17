@@ -2,6 +2,8 @@ import { reactive, toValue, watch } from 'vue';
 
 import { useEventListener, useResizeObserver } from '@vueuse/core';
 
+import { useRafThrottle } from '@/platform/composables/useRafThrottle';
+
 import type { MaybeRef } from 'vue';
 
 /** 可跟踪的容器边：任意子集组合，决定暴露哪些“滚到该边”入口 */
@@ -51,12 +53,18 @@ export const useEdgeScroll = (target: MaybeRef<HTMLElement | null>, options: Use
     visible.left = has('left') ? scrollableX && !reachLeft : false;
   };
 
-  const handleScroll = () => refresh();
+  /**
+   * 滚动与尺寸变化按帧合帧后再重测：一次 refresh 要读 6 个布局属性并写 4 个 reactive 字段，
+   * 而动量滚动下 scroll 成串派发、布局抖动时 ResizeObserver 也会连续回调 —— 同一帧内算多次
+   * 是纯浪费（写回同值虽不会触发渲染，但布局读数与比较照付）。合并后每帧至多一次，
+   * 代价是 visible 的翻转最多晚一帧，而它只驱动「滚到底」按钮的显隐，察觉不到。
+   */
+  const { schedule: scheduleRefresh } = useRafThrottle(refresh);
 
   // 滚动与尺寸监听交给 VueUse：target 换绑/卸载时自动清理，无需手工 removeEventListener / disconnect
-  useEventListener(target, 'scroll', handleScroll, { passive: true });
+  useEventListener(target, 'scroll', () => scheduleRefresh(), { passive: true });
   // 内容高度变化（增删行/搜索过滤）也会改变“能否滚动/是否贴边”，需跟踪尺寸
-  useResizeObserver(target, refresh);
+  useResizeObserver(target, () => scheduleRefresh());
 
   // target 换绑（切歌/切容器）后立即刷新一次贴边状态
   watch(

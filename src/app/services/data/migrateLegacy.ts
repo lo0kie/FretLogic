@@ -8,8 +8,8 @@
  */
 import { validateImportExportPayload } from '@/app/services/validation/payload';
 import { idb } from '@/platform/services/storage';
+import { readJson } from '@/platform/services/storage/localStorage';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
-import { readJson } from '@/platform/utils/storage';
 
 import { chordRepository, songRepository } from './repositories.ts';
 

@@ -21,6 +21,12 @@ export interface GridNavOptions {
   autoScroll?: boolean;
   /** 导航切换焦点时的回调钩子 */
   onNavigate?: (toEl: HTMLElement, fromEl: HTMLElement) => void;
+  /**
+   * 方向键在已收集元素中找不到可移动目标时的回调（返回后不再聚焦）。
+   * 典型场景：虚拟化列表只渲染了窗口内的元素，边缘外的下一行尚未挂载 —— 宿主在此把
+   * 目标行滚进窗口并补聚焦。真到达列表尽头时宿主自行早退即可。
+   */
+  onEdge?: (key: string, currentEl: HTMLElement) => void;
 }
 
 export type GridNavBinding = number | GridNavOptions | boolean | undefined;
@@ -234,6 +240,26 @@ interface ElementGridNavState {
 
 const stateMap = new WeakMap<HTMLElement, ElementGridNavState>();
 
+/** 已告警过的容器：同一容器只提示一次，避免每次按键刷屏 */
+const warnedSelectors = new WeakSet<HTMLElement>();
+
+/**
+ * 选择器与 DOM 脱钩的告警。
+ *
+ * 显式 selector 基本都按类名/标记挂钩，一旦被挂钩的标记类被改名或清掉，`querySelectorAll`
+ * 只会静默返回空集 —— 表现是「方向键毫无反应」而不是任何报错，极难自查（本指令的网格
+ * 就曾因卡片类名被重构而整体失效）。判据刻意收紧为「容器内确实存在可聚焦元素、却一个都
+ * 没命中」，空列表网格（分组为空等）因此不会误报。
+ */
+const warnSelectorMismatch = (containerEl: HTMLElement, selector: string): void => {
+  if (!import.meta.env?.DEV || warnedSelectors.has(containerEl)) return;
+  if (!containerEl.querySelector('[data-focusable-inline], [data-focusable-outline], [tabindex]')) return;
+  warnedSelectors.add(containerEl);
+  console.warn(
+    `[v-grid-nav] 选择器 "${selector}" 未命中任何元素，方向键导航将失效（容器内存在可聚焦元素）。请核对被挂钩的标记类是否被改名或删除。`
+  );
+};
+
 /** 创建容器 keydown 监听：按方向/几何策略定位目标元素并转移焦点，忽略输入类控件内的按键。 */
 const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) => {
   const state = stateMap.get(containerEl);
@@ -264,7 +290,10 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
   }));
 
   const total = entries.length;
-  if (total === 0) return;
+  if (total === 0) {
+    warnSelectorMismatch(containerEl, selector);
+    return;
+  }
 
   const activeEl = document.activeElement as HTMLElement;
   let currentIndex = entries.findIndex(entry => entry.el === activeEl);
@@ -300,6 +329,8 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
       }
 
       state.options.onNavigate?.(toEl, fromEl);
+    } else {
+      state.options.onEdge?.(e.key, activeEl);
     }
   }
 };

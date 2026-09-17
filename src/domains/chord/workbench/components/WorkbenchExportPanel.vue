@@ -28,6 +28,7 @@
           :scale="1.8"
           :shorthand="settingsStore.workbenchChordShorthand"
           :theme="previewTheme"
+          mutable-chord
           class="relative"
         />
       </div>

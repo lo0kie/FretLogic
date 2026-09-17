@@ -1,5 +1,15 @@
 /**
- * 乐谱域文字传递服务：把乐谱复制为文字到剪贴板，或从剪贴板文字导入（始终新建一首乐谱）。
+ * 乐谱域文字传递服务：复制乐谱到剪贴板、从剪贴板导入（始终新建一首乐谱），以及生成分享链接。
+ *
+ * 四条入口共用**一种载体**（token：载荷文本 + 压缩编码）：
+ * - 生成侧：`buildSongPayload`（载荷）→ `buildSongToken`（载体）是唯一来源，复制与分享都调它，
+ *   差别只是分享在 token 外套了一层地址；
+ * - 消费侧：`resolveTransferPayload` 把「地址 / 裸 token / 手写歌词 / 旧版纯文本」归一成同一份文本，
+ *   再由 `importPortableSong` 这一个落地实现建谱。
+ * 入口宽容度的唯一分叉在**载体之外**：剪贴板里可能是用户手写的**无结构纯歌词**（放行，由调用方弹确认框），
+ * 而 URL 载荷必定出自本应用的序列化器，半截/篡改的参数必须判无效，不能兜底成一堆乱码歌词
+ * （该判定在 app/services/shareLinkBridge）。
+ *
  * 文字中未入库的和弦自动生成并归入「{乐谱名}」分组。
  * 单和弦的复制/粘贴能力委托和弦域 useChordTransfer（编解码、剪贴板与 toast 收敛在 chord/transfer）。
  */
@@ -19,6 +29,8 @@ import { charKey, chordSlotKey, matchLineIds, sanitizeLyricsText } from '@/domai
 import { parseSongFromText, serializeSongToText } from '@/domains/score/transfer/textCodec';
 import { readTextFromClipboard, writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useUiStore } from '@/platform/store/uiStore';
+import { ROUTE_PATHS } from '@/platform/utils/constants';
+import { buildShareUrl, encodeShareToken, resolveTransferPayload } from '@/platform/utils/shareLink';
 
 import type { ChordId } from '@/domains/chord/types';
 import type { PortableChord, PortableSong } from '@/domains/score/transfer/textCodec';
@@ -37,12 +49,23 @@ export function useTextTransfer() {
   // 和弦域能力委托：单和弦复制/粘贴（编解码、剪贴板与 toast 细节收敛在 chord/transfer）
   const { copyChordText, copyChordCardText, pasteChordFromClipboard } = useChordTransfer();
 
-  /** 复制当前乐谱为文字到剪贴板 */
+  /**
+   * 乐谱载荷构建：`复制乐谱` 与 `分享链接` 共用这一份，两处不得各拼一次。
+   * 载荷为 FLSONG 文本，内嵌所引用和弦的完整指法数据——收件方无需依赖发送方的和弦库即可还原。
+   */
+  const buildSongPayload = (song: Song): string => {
+    const resolver = new Map(chordStore.savedChordsList.map(c => [c.id, c]));
+    return serializeSongToText(song, id => resolver.get(id));
+  };
+
+  /** 乐谱 → 传递载体 token（剪贴板与分享地址共用的唯一载体） */
+  const buildSongToken = (song: Song): Promise<string> => encodeShareToken(buildSongPayload(song));
+
+  /** 复制当前乐谱到剪贴板（载体：裸 token，可在另一实例粘贴导入） */
   const copySongText = async (song: Song | null): Promise<void> => {
     if (!song) return;
     try {
-      const resolver = new Map(chordStore.savedChordsList.map(c => [c.id, c]));
-      await writeTextToClipboard(serializeSongToText(song, id => resolver.get(id)));
+      await writeTextToClipboard(await buildSongToken(song));
       uiStore.toast.success(`已复制乐谱到剪贴板`);
     } catch (err) {
       uiStore.toast.error(err instanceof Error ? err.message : '复制失败');
@@ -129,18 +152,28 @@ export function useTextTransfer() {
   };
 
   /**
-   * 乐谱粘贴：读取剪贴板并解析。含结构信号（内嵌和弦/指令/标题）直接建谱返回 imported；
+   * 乐谱粘贴：读取剪贴板 → 载体归一 → 解析。含结构信号（内嵌和弦/指令/标题）直接建谱返回 imported；
    * 无结构的纯歌词返回 needsConfirm，由调用方弹出确认后回调 importPortableSong 落地。
    */
   const pasteSongFromClipboard = async (): Promise<PasteSongOutcome> => {
-    let text: string;
+    let raw: string;
     try {
-      text = await readTextFromClipboard();
+      raw = await readTextFromClipboard();
     } catch (err) {
       uiStore.toast.error(err instanceof Error ? err.message : '读取剪贴板失败');
       return { status: 'none' };
     }
-    const result = parseSongFromText(text);
+    // 载体归一：分享地址 / 裸 token / 手写歌词 都收敛成同一份文本，之后一律按纯文本处理
+    const resolved = await resolveTransferPayload(raw);
+    if (resolved.status === 'empty') {
+      uiStore.toast.warning('剪贴板为空');
+      return { status: 'none' };
+    }
+    if (resolved.status === 'broken') {
+      uiStore.toast.warning('传递内容已损坏，无法解析');
+      return { status: 'none' };
+    }
+    const result = parseSongFromText(resolved.payload);
     if (!result.ok) {
       pasteErrorToast(result.reason, '乐谱');
       return { status: 'none' };
@@ -151,6 +184,21 @@ export function useTextTransfer() {
     return { status: 'imported' };
   };
 
+  /**
+   * 生成并复制乐谱分享链接（token 外面包一层地址，链接打开后自动导入为一首新乐谱）。
+   * 与「复制乐谱」共用同一个载体构建函数（`buildSongToken`），差别只在是否套地址外壳；
+   * 链接里带的是完整谱面与指法数据，收件方无需依赖发送方的和弦库即可还原。
+   */
+  const shareSongLink = async (song: Song | null): Promise<void> => {
+    if (!song) return;
+    try {
+      await writeTextToClipboard(buildShareUrl(ROUTE_PATHS.SCORE, await buildSongToken(song)));
+      uiStore.toast.success(`已复制乐谱「${song.title}」的分享链接`);
+    } catch (err) {
+      uiStore.toast.error(err instanceof Error ? err.message : '生成分享链接失败');
+    }
+  };
+
   return {
     copyChordText,
     copyChordCardText,
@@ -158,5 +206,6 @@ export function useTextTransfer() {
     copySongText,
     pasteSongFromClipboard,
     importPortableSong,
+    shareSongLink,
   };
 }

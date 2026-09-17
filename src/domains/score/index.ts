@@ -20,7 +20,6 @@ export * from './transfer/textCodec';
 export * from './transfer/useTextTransfer';
 export * from './model/scoreModel';
 export * from './model/chordSlots';
-export * from './model/chordNameTokens';
 export * from './model/songRepository';
 export * from './constants';
 export * from './types';
