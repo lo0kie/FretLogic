@@ -205,7 +205,7 @@ const buildFingering = (
 const fingeringSignature = (strings: GuitarStringEntity[], offset: number, fretCount: number): string =>
   `${offset}/${fretCount}/${strings.map(s => s[0]).join(',')}`;
 
-/** 规模档位：控制在 localStorage 配额（通常 5MB）以内 */
+/** 规模档位：从「中等」到「极端」，覆盖常规到极限压力（持久化已迁 IDB，不再受 5MB 配额约束） */
 export interface DevTestDataScale {
   key: string;
   label: string;
@@ -236,8 +236,8 @@ export interface DevTestDataSet {
   chords: Chord[];
   songs: Song[];
   /**
-   * 预估落盘体积（字节）：localStorage 按 UTF-16 计，故取 JSON 字符数 × 2 作为上界估计，
-   * 面板据此提示是否已接近配额。
+   * 预估数据体积（字节）：按 JSON 字符数 × 2 的上界估计，仅作为数据规模的粗略参照
+   * （持久化已迁 IDB，实际磁盘占用由浏览器引擎编码决定）。
    */
   estimatedBytes: number;
 }
@@ -394,7 +394,7 @@ const buildSongs = (chords: Chord[], scale: DevTestDataScale, baseTime: number):
     const seedLines = buildSongLines(rng, chordRefs, targetLines);
     const lines = seedLines.map(line => line.text);
     const lyrics = lines.join('\n');
-    const lineIds = matchLineIds([], lines, []);
+    const lineIds = matchLineIds([], lines, []).lineIds;
 
     // 逐行绑定字符槽位：纯和弦行按和弦名首字符对齐，歌词行随机落 1~3 个，
     // 标记行与空行不绑（与真实谱面一致——那两类行上不会有和弦）

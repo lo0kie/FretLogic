@@ -5,6 +5,25 @@
     <link href="/favicon.png" rel="icon" type="image/png" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>FretLogic</title>
+    <script>
+      // 首帧防闪白：在 CSS 应用前读 cookie 中的主题偏好并预置 data-theme / .dark。
+      // 主题偏好存 cookie（同步可读）；IDB 只有异步 API，内联脚本拿不到，故不能替代 cookie。
+      (function () {
+        try {
+          var m = document.cookie.match(/(?:^|;\s*)fret-logic:theme-preference=([^;]*)/);
+          var p = m ? m[1] : 'auto';
+          var dark =
+            p === 'dark' ||
+            (p === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var theme = dark ? 'dark' : p === 'high-contrast' ? 'high-contrast' : 'light';
+          var root = document.documentElement;
+          root.setAttribute('data-theme', theme);
+          if (dark) root.classList.add('dark');
+        } catch (e) {
+          /* 解析失败交由应用初始化时兜底 */
+        }
+      })();
+    </script>
   </head>
 
   <body>

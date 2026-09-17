@@ -1,9 +1,9 @@
 import { computed, watch } from 'vue';
 
-import { FULL_BACKUP_SELECTION, useImportExportService } from '@/app/services/backup/useImportExportService';
+import { FULL_BACKUP_SELECTION } from '@/app/services/backup/backupSelection';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import { useUiStore } from '@/platform/store/uiStore';
+import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useModalController } from '@/platform/store/useModalController';
 
 import type { BackupSelection } from '@/app/services/backup/useImportExportService';
@@ -20,19 +20,69 @@ const { modals, modalData, open, close } = useModalController(
     parsedPayload: null as ImportExportPayload | null,
     fileName: '',
     isParsing: false,
+    /** 导出密码：勾选同步配置时用于加密包内凭据（AES-GCM），导入方需输入同一密码 */
+    exportPassphrase: '',
+    /** 导入密码：备份包内含加密凭据块时必填，用于解密还原凭据 */
+    importPassphrase: '',
+    /** 凭据解密失败标记：置位后保持弹窗打开让用户重试密码 */
+    secretDecryptFailed: false,
   }
 );
+
+/**
+ * 备份包内各数据类别的实际可用性（导入面板据此禁用无效勾选）。
+ * 提升到模块级：openImportWithPayload（含懒加载实现模块）与 useBackupModals 共用。
+ */
+const importAvailability = computed(() => {
+  const p = modalData.parsedPayload;
+  if (!p) return { chords: false, songs: false, syncSettings: false, preferences: false };
+  return {
+    chords: (p.groups?.length ?? 0) > 0 || (p.chords?.length ?? 0) > 0,
+    songs: (p.songs?.length ?? 0) > 0,
+    syncSettings: p.syncSettings !== undefined,
+    preferences: p.preferences !== undefined,
+  };
+});
+
+/** 直接以载荷打开导入勾选面板（用于云端拉取、扫描等非文件流入口）。
+ *  模块级导出：懒加载实现模块（backupModalActions）解析完成后经此打开面板。 */
+export const openImportWithPayload = (payload: ImportExportPayload, fileName = '云端同步数据') => {
+  const availability = importAvailability.value;
+  open('import', {
+    parsedPayload: payload,
+    fileName,
+    importSelection: {
+      chords: availability.chords,
+      songs: availability.songs,
+      syncSettings: availability.syncSettings,
+      preferences: availability.preferences,
+    },
+  });
+};
+
+/** 供懒加载实现模块（backupModalActions）读写共享弹窗状态与关闭弹窗 */
+export { close, modalData };
 
 /**
  * 备份导入/导出弹窗状态：
  * - 导出：勾选要写进备份包的数据类别（和弦/乐谱/同步配置/偏好设置）
  * - 导入：文件解析成功后展示包内实际包含的数据类别，勾选要应用的部分
+ *
+ * 状态壳：开关/勾选/统计等响应式状态只读 store，留在本模块；
+ * 涉及 useImportExportService 的三个确认动作（文件解析/导出/导入）移入 backupModalActions.ts
+ * 动态 import，避免把备份载荷与加密链路拖进首屏闭包。
  */
 export function useBackupModals() {
-  const ioService = useImportExportService();
-  const uiStore = useUiStore();
   const chordStore = useChordStore();
   const songStore = useSongStore();
+  const settingsStore = useSettingsStore();
+
+  /** 当前是否存在非空凭据（Token / 密码）：决定导出面板的加密密码行显隐 */
+  const hasCredentials = computed(() =>
+    [settingsStore.githubToken, settingsStore.giteeToken, settingsStore.webdavPassword, settingsStore.serverToken].some(
+      v => typeof v === 'string' && v.trim().length > 0
+    )
+  );
 
   /** 当前本地数据规模（导出面板展示） */
   const exportStats = computed(() => ({
@@ -49,17 +99,7 @@ export function useBackupModals() {
     preferences: true,
   }));
 
-  /** 备份包内各数据类别的实际可用性（导入面板据此禁用无效勾选） */
-  const importAvailability = computed(() => {
-    const p = modalData.parsedPayload;
-    if (!p) return { chords: false, songs: false, syncSettings: false, preferences: false };
-    return {
-      chords: (p.groups?.length ?? 0) > 0 || (p.chords?.length ?? 0) > 0,
-      songs: (p.songs?.length ?? 0) > 0,
-      syncSettings: p.syncSettings !== undefined,
-      preferences: p.preferences !== undefined,
-    };
-  });
+  /** 备份包内各数据类别的实际可用性（导入面板据此禁用无效勾选；模块级单例，见文件顶部） */
 
   /** 备份包内各类数据的规模明细（导入面板 help 提示展示） */
   const importStats = computed(() => {
@@ -85,6 +125,15 @@ export function useBackupModals() {
   const hasExportSelection = computed(() => hasSelection(modalData.exportSelection));
   const hasImportSelection = computed(() => hasSelection(modalData.importSelection));
 
+  /** 导入包是否携带加密凭据块（决定导入面板是否需要密码输入行） */
+  const hasEncryptedSecrets = computed(() => modalData.parsedPayload?.syncSettings?.secrets !== undefined);
+  /** 导出确认是否可点：勾选同步配置且本地存在凭据时，必须已填写导出密码 */
+  const isExportConfirmReady = computed(
+    () =>
+      hasExportSelection.value &&
+      (!modalData.exportSelection.syncSettings || !hasCredentials.value || modalData.exportPassphrase.length > 0)
+  );
+
   /**
    * 关闭导入/导出弹窗时清空勾选状态（不做保存），下次打开重新按可用项初始化。
    * 模块级 modalData 在弹窗间共享，若关闭时不清理，上次勾选会残留在内存里；
@@ -95,11 +144,15 @@ export function useBackupModals() {
     () => {
       if (!modals.export) {
         modalData.exportSelection = { ...FULL_BACKUP_SELECTION, syncSettings: false };
+        // 密码不残留：关闭即丢弃，下次导出重新输入
+        modalData.exportPassphrase = '';
       }
       if (!modals.import) {
         modalData.importSelection = { ...FULL_BACKUP_SELECTION };
         modalData.parsedPayload = null;
         modalData.fileName = '';
+        modalData.importPassphrase = '';
+        modalData.secretDecryptFailed = false;
       }
     }
   );
@@ -144,53 +197,27 @@ export function useBackupModals() {
     modalData.importSelection = toggleSelection(modalData.importSelection, importAvailability.value);
   };
 
-  /** 直接以载荷打开导入勾选面板（用于云端拉取、扫描等非文件流入口） */
-  const openImportWithPayload = (payload: ImportExportPayload, fileName = '云端同步数据') => {
-    const availability = importAvailability.value;
-    open('import', {
-      parsedPayload: payload,
-      fileName,
-      importSelection: {
-        chords: availability.chords,
-        songs: availability.songs,
-        syncSettings: availability.syncSettings,
-        preferences: availability.preferences,
-      },
-    });
-  };
-
-  /** 文件选择入口：解析成功后打开导入勾选面板（失败已 toast，静默返回） */
+  /** 文件选择入口：解析成功后打开导入勾选面板（失败已 toast，静默返回）。
+   *  isParsing 加载态与输入框复位留在壳层（与触发按钮同步），解析实现懒加载。 */
   const handleFileChange = async (file: File, resetInput: () => void) => {
     modalData.isParsing = true;
     try {
-      const payload = await ioService.parseBackupFile(file);
-      openImportWithPayload(payload, file.name);
-    } catch {
-      // 解析失败：parseBackupFile 内已 toast，无需额外处理
+      const { parseBackupFileAndOpen } = await import('./backupModalActions');
+      await parseBackupFileAndOpen(file);
     } finally {
       modalData.isParsing = false;
       resetInput();
     }
   };
 
-  /** 确认导出：成功才关闭弹窗，失败保持打开让用户调整勾选 */
-  const handleExportConfirm = () => {
-    // 导出失败（数据损坏/无可导出内容）时保持弹窗打开，让用户调整勾选
-    if (!ioService.triggerFullExport(modalData.exportSelection)) return;
-    close('export');
+  /** 确认导出：实现懒加载（triggerFullExport 含载荷构建/加密/下载整条链） */
+  const handleExportConfirm = async () => {
+    await (await import('./backupModalActions')).handleExportConfirm();
   };
 
-  /** 确认导入：按勾选把备份包覆盖写入本地 */
-  const handleImportConfirm = () => {
-    const payload = modalData.parsedPayload;
-    if (!payload) {
-      uiStore.toast.error('备份包未就绪，请重新选择文件');
-      close('import');
-      return;
-    }
-    ioService.applyImportSelection(payload, modalData.importSelection);
-    close('import');
-    uiStore.toast.success('已导入所选数据并覆盖本地');
+  /** 确认导入：实现懒加载（按勾选覆盖写入 + 加密凭据解密） */
+  const handleImportConfirm = async () => {
+    await (await import('./backupModalActions')).handleImportConfirm();
   };
 
   return {
@@ -200,6 +227,9 @@ export function useBackupModals() {
     exportAvailability,
     importAvailability,
     importStats,
+    hasCredentials,
+    hasEncryptedSecrets,
+    isExportConfirmReady,
     hasExportSelection,
     hasImportSelection,
     isExportAll,

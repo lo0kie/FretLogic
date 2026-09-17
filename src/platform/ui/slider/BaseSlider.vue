@@ -286,6 +286,7 @@ import { computed, inject, nextTick, onBeforeUnmount, ref, useTemplateRef, watch
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { useSliderInteraction } from '@/platform/ui/slider/useSliderInteraction';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import {
@@ -294,7 +295,6 @@ import {
   countDecimals,
   isValueEqual,
   markLabelOf,
-  resolveMultiplier,
   SLIDER_CONFIG,
   thumbPositionStyle,
   tickPositionStyle,
@@ -303,10 +303,8 @@ import {
 import type { TooltipOptions } from '@/platform/directives/vTooltip';
 import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
+import type { SliderValue } from '@/platform/ui/slider/useSliderInteraction';
 import type { FormComponentWidth } from '@/platform/utils/constants';
-
-/** 滑块值的内部统一视图：R 未解析时条件类型无法直接收窄，读写在别名处集中断言 */
-type SliderValue = number | [number, number];
 
 const model = defineModel<R extends true ? [number, number] : number>({ required: true });
 
@@ -473,8 +471,7 @@ const editValue = ref('');
 const isHovered = ref(false);
 const isHoveredThumb0 = ref(false);
 const isHoveredThumb1 = ref(false);
-const isDragging = ref<number | null>(null);
-const dragStartValue = ref<SliderValue | null>(null);
+// 拖拽状态（isDragging / dragStartValue）与键盘/滚轮步进抽离至 useSliderInteraction
 
 const isRange = computed(() => props.range ?? false);
 
@@ -680,68 +677,39 @@ const updateValue = (rawNextVal: number | [number, number], options?: { commit?:
   }
 };
 
-/** 修饰键步进倍率：Alt 精调 ×0.1，Shift 粗调 ×10（见 BaseSlider.logic.ts） */
-
-/** 按符号步进（区间模式作用于指定拇指），支持修饰键倍率 */
-const stepBy = (sign: number, e?: { shiftKey?: boolean; altKey?: boolean }, thumbIdx = 0) => {
-  // 与 snapToStep 保持一致的步长兜底：非正数 step 一律按 1 走，避免按钮/键盘静默失效
-  const step = props.step > 0 ? props.step : 1;
-  const delta = step * sign * resolveMultiplier(e);
-  if (isRange.value) {
-    const [v0, v1] = rangeValues.value;
-    if (thumbIdx === 0) updateValue([v0 + delta, v1], { commit: true });
-    else updateValue([v0, v1 + delta], { commit: true });
-  } else {
-    updateValue(singleValue.value + delta, { commit: true });
+// ─── 交互层（拖拽 / 键盘方向键 / 滚轮 / 轨道点击）抽离至 useSliderInteraction ───
+// 取值计算（snapToStep / updateValue）与事件派发（drag-start / drag-end / change）留在本组件
+const { isDragging, stepBy, handleRangeKeydown, startDrag, handleTrackPointerDown, handleWheel } = useSliderInteraction(
+  {
+    trackRef,
+    wrapperRef,
+    isDisabled: () => props.disabled,
+    isRange: () => isRange.value,
+    getRangeValues: () => rangeValues.value,
+    getSingleValue: () => singleValue.value,
+    getCurrentValue: () => modelValue.value,
+    isEditing: () => isEditing.value,
+    applyValue: (v, commit) => updateValue(v, { commit }),
+    snap: snapToStep,
+    onDragStart: thumbIndex => emit('drag-start', thumbIndex),
+    onDragEnd: (startValue, currentValue) => {
+      // lazy 模式：拖拽结束作为提交点，把最终值写回 model
+      if (isLazy.value) model.value = emitValue(modelValue.value);
+      emit('drag-end', emitValue(modelValue.value));
+      if (!isValueEqual(startValue, currentValue)) {
+        emit('change', emitValue(modelValue.value));
+      }
+    },
+    pulseWheelTooltip,
+    wheelable: () => props.wheelable ?? false,
+    wheelOnHover: () => props.wheelOnHover ?? false,
+    reverseWheel: () => props.reverseWheel ?? false,
+    step: () => props.step ?? 1,
+    min: () => props.min,
+    max: () => props.max,
+    vertical: () => props.vertical ?? false,
   }
-};
-
-/** 拇指键盘方向键步进 */
-const handleRangeKeydown = (e: KeyboardEvent, thumbIdx = 0) => {
-  if (props.disabled) return;
-  if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
-    e.preventDefault();
-    stepBy(1, e, thumbIdx);
-  } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
-    e.preventDefault();
-    stepBy(-1, e, thumbIdx);
-  }
-};
-
-/** 指针坐标 → 轨道值：按横向/纵向换算比例并吸附步长 */
-const calculateValueFromPointer = (e: PointerEvent): number => {
-  if (!trackRef.value) return props.min;
-  const rect = trackRef.value.getBoundingClientRect();
-  const ratio = Math.max(
-    0,
-    Math.min(1, props.vertical ? (rect.bottom - e.clientY) / rect.height : (e.clientX - rect.left) / rect.width)
-  );
-  const raw = props.min + ratio * (props.max - props.min);
-  return snapToStep(raw);
-};
-
-/** 拖拽中：根据指针位置实时更新对应拇指的值（不派发 change） */
-const onPointerMove = (e: PointerEvent) => {
-  if (isDragging.value === null) return;
-  // 拖拽中途被禁用：立即终止拖拽态，圆点不再跟手（值由 updateValue 的 disabled 守卫兜底）
-  if (props.disabled) {
-    onPointerUp();
-    return;
-  }
-  const val = calculateValueFromPointer(e);
-  if (isRange.value) {
-    const [v0, v1] = rangeValues.value;
-    if (isDragging.value === 0) {
-      updateValue([val, v1], { commit: false });
-    } else {
-      updateValue([v0, val], { commit: false });
-    }
-  } else {
-    updateValue(val, { commit: false });
-  }
-};
-
-/** 拖拽结束判断值是否变化（见 BaseSlider.logic.ts 的 isValueEqual） */
+);
 
 // 仅在开发环境中提示非法区间，生产构建时被完全 Tree-shaking
 if (import.meta.env.DEV) {
@@ -755,82 +723,6 @@ if (import.meta.env.DEV) {
     { immediate: true }
   );
 }
-
-/** 拖拽结束：派发 drag-end，值有变化时补发 change，并解绑全局指针监听 */
-const onPointerUp = () => {
-  if (isDragging.value !== null) {
-    isDragging.value = null;
-    // lazy 模式：拖拽结束作为提交点，把最终值写回 model
-    if (isLazy.value) model.value = emitValue(modelValue.value);
-    emit('drag-end', emitValue(modelValue.value));
-    if (!isValueEqual(dragStartValue.value, modelValue.value)) {
-      emit('change', emitValue(modelValue.value));
-    }
-  }
-  window.removeEventListener('pointermove', onPointerMove);
-  window.removeEventListener('pointerup', onPointerUp);
-};
-
-/** 开始拖拽指定拇指：记录起始值、派发 drag-start 并挂载全局指针监听 */
-const startDrag = (thumbIndex: number) => {
-  if (props.disabled) return;
-  isDragging.value = thumbIndex;
-  dragStartValue.value = Array.isArray(modelValue.value) ? [...modelValue.value] : modelValue.value;
-  emit('drag-start', thumbIndex);
-  window.addEventListener('pointermove', onPointerMove);
-  window.addEventListener('pointerup', onPointerUp);
-};
-
-/** 聚焦指定拇指（单值只有第 0 个；聚焦后滚轮步进立即生效，无需二次点击） */
-const focusThumb = (index: number) => {
-  const thumbs = wrapperRef.value?.querySelectorAll<HTMLElement>('[role="slider"]') ?? [];
-  thumbs[index]?.focus();
-};
-
-/** 点击轨道：就近选中拇指、聚焦并直接跳到点击位置 */
-const handleTrackPointerDown = (e: PointerEvent) => {
-  if (props.disabled) return;
-  const clickedVal = calculateValueFromPointer(e);
-  if (isRange.value) {
-    const [v0, v1] = rangeValues.value;
-    const d0 = Math.abs(clickedVal - v0);
-    const d1 = Math.abs(clickedVal - v1);
-    const targetThumb = d0 <= d1 ? 0 : 1;
-    startDrag(targetThumb);
-    focusThumb(targetThumb);
-    if (targetThumb === 0) updateValue([clickedVal, v1], { commit: false });
-    else updateValue([v0, clickedVal], { commit: false });
-  } else {
-    startDrag(0);
-    focusThumb(0);
-    updateValue(clickedVal, { commit: false });
-  }
-};
-
-/** 滚轮 deltaY → 步进方向：上滚加值、下滚减值（修饰键倍率见 resolveMultiplier）；reverseWheel 时方向取反 */
-const applyWheelStep = (e: WheelEvent) => {
-  if (e.deltaY === 0) return;
-  const direction = e.deltaY > 0 ? -1 : 1;
-  stepBy(props.reverseWheel ? -direction : direction, e);
-  // 滚轮改值与拖拽一样浮出数值气泡（离散事件，靠短延时续显）
-  pulseWheelTooltip();
-};
-
-/**
- * 滚轮步进：事件绑定在轨道上，标签/按钮/读数区域滚动不会误触。
- * 两种开启方式（互不影响）：wheelable 需组件持有焦点；wheelOnHover 悬停即生效、无需聚焦。
- */
-const handleWheel = (e: WheelEvent) => {
-  if (props.disabled || isEditing.value) return;
-  if (props.wheelOnHover) {
-    e.preventDefault();
-    applyWheelStep(e);
-    return;
-  }
-  if (!props.wheelable || !wrapperRef.value?.contains(document.activeElement)) return;
-  e.preventDefault();
-  applyWheelStep(e);
-};
 
 /** 进入精确数值编辑：预填当前值并聚焦全选输入框 */
 const startEdit = () => {
@@ -862,8 +754,6 @@ const cancelEdit = () => {
 };
 
 onBeforeUnmount(() => {
-  window.removeEventListener('pointermove', onPointerMove);
-  window.removeEventListener('pointerup', onPointerUp);
   if (wheelTooltipTimer !== null) clearTimeout(wheelTooltipTimer);
 });
 </script>

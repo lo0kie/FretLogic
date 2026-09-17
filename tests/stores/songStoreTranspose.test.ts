@@ -5,14 +5,18 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { idb } from '@/platform/services/storage';
+import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 import type { Chord, ChordId } from '@/domains/chord/types';
 import type { LineId, SlotKey } from '@/domains/score/types';
 
 describe('歌曲移调动作 (songStore.transposeSong & transposeSongCapo)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // 重置 kv 镜像（IDB kv 库 + 内存 Map），保证用例间小状态隔离
+    await idb.clear('kv');
+    await hydrateIdbKv();
     setActivePinia(createPinia());
-    localStorage.clear();
   });
 
   it('transposeSong: 移调 playKey 并换算 chordMap 中和弦引用', () => {

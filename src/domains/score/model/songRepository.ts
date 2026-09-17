@@ -3,9 +3,8 @@ import { isCapoValue } from '@/domains/fretboard/model/coordinates';
 import { isValidTimeSignature } from '@/domains/score/constants';
 import { pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
 import { toSongId } from '@/domains/score/model/scoreModel';
-import { readJson } from '@/platform/services/storage/localStorage';
-import { serializeForStorage } from '@/platform/utils/common';
-import { STORAGE_KEYS } from '@/platform/utils/constants';
+import { idb } from '@/platform/services/storage';
+import { toPlainPersistable } from '@/platform/utils/common';
 
 import type { ChordId } from '@/domains/chord/types';
 import type { LineId, SlotKey, Song } from '@/domains/score/types';
@@ -89,73 +88,71 @@ export const sanitizeSongList = (songs: unknown[], validChordIds?: Set<string>):
   );
 };
 
+/**
+ * 歌曲仓储：IDB（songs 库按歌存单条记录；顺序索引存 syncMeta 的 'song-order' 记录）。
+ * IDB getAll 按主键序返回、无法承载手动拖拽顺序，顺序信息独立持久化；索引与歌曲集合
+ * 允许短暂不一致（读侧以实际记录为准兜底），批量变更经 flushChanges 单事务原子落库。
+ */
 export interface SongRepository {
-  loadSongs(): Song[];
-  saveSong(song: Song): void;
-  removeSong(id: string): void;
-  saveSongIds(ids: string[]): void;
-  listSongIds(): string[];
-  removeLegacySongs(): void;
+  /** 加载全部歌曲：优先按顺序索引排列，未被索引覆盖的记录追加在尾部 */
+  loadSongs(): Promise<Song[]>;
+  saveSong(song: Song): Promise<void>;
+  removeSong(id: string): Promise<void>;
+  /** 写入歌曲顺序索引（syncMeta） */
+  saveSongIds(ids: string[]): Promise<void>;
+  /** 实际存储中的全部歌曲 id（来自主键扫描，不受索引漂移影响；孤儿清理用） */
+  listSongIds(): Promise<string[]>;
+  /** 单事务批量刷写：删除 + 脏歌曲 + 顺序索引（可选），保证三者的同生共死 */
+  flushChanges(changes: { removedIds: string[]; dirtySongs: Song[]; orderIds?: string[] }): Promise<void>;
 }
 
-const SONG_ENTRY_PREFIX = `${STORAGE_KEYS.SONG_ENTRY}:`;
+const SONG_ORDER_META_KEY = 'song-order';
 
-const writeJson = (storage: Storage, key: string, value: unknown): void => {
-  try {
-    storage.setItem(key, serializeForStorage(value));
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-      const quotaError: Error & { cause?: unknown } = new Error('PERSISTENCE_QUOTA_EXCEEDED');
-      quotaError.cause = error;
-      throw quotaError;
-    }
-    throw error;
-  }
+interface SongOrderMeta {
+  name: typeof SONG_ORDER_META_KEY;
+  ids: string[];
+}
+
+export const songRepository: SongRepository = {
+  async loadSongs() {
+    const [stored, orderMeta] = await Promise.all([idb.getAll('songs'), idb.get('syncMeta', SONG_ORDER_META_KEY)]);
+    const sanitized = sanitizeSongList(stored);
+    const metaIds = orderMeta?.ids;
+    const ids = Array.isArray(metaIds) ? metaIds : [];
+    const byId = new Map(sanitized.map(song => [song.id, song]));
+    // 索引命中者按索引序输出；索引缺失/漂移的记录追加尾部，绝不因索引损坏而丢歌
+    const ordered = ids.flatMap(id => {
+      const songId = toSongId(id);
+      const song = byId.get(songId);
+      byId.delete(songId);
+      return song ? [song] : [];
+    });
+    return [...ordered, ...byId.values()];
+  },
+  async saveSong(song) {
+    // toRaw：store 传入的可能是响应式代理，Proxy 无法被 IDB structuredClone（DataCloneError）
+    await idb.put('songs', toPlainPersistable(song));
+  },
+  async removeSong(id) {
+    await idb.delete('songs', id);
+  },
+  async saveSongIds(ids) {
+    const meta: SongOrderMeta = { name: SONG_ORDER_META_KEY, ids };
+    await idb.put('syncMeta', meta);
+  },
+  async listSongIds() {
+    const keys = await idb.getAllKeys('songs');
+    return keys.filter((key): key is string => typeof key === 'string');
+  },
+  async flushChanges({ removedIds, dirtySongs, orderIds }) {
+    await idb.runTx(['songs', 'syncMeta'], 'readwrite', get => {
+      const songStore = get('songs');
+      for (const id of removedIds) songStore.delete(id);
+      for (const song of dirtySongs) songStore.put(toPlainPersistable(song));
+      if (orderIds) {
+        const meta: SongOrderMeta = { name: SONG_ORDER_META_KEY, ids: orderIds };
+        get('syncMeta').put(meta);
+      }
+    });
+  },
 };
-
-export function createSongRepository(storage: Storage): SongRepository {
-  const songKey = (id: string) => `${SONG_ENTRY_PREFIX}${id}`;
-
-  const loadIds = (): string[] => {
-    const ids = readJson(storage, STORAGE_KEYS.SONGS_INDEX);
-    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
-  };
-
-  const listStoredSongIds = (): string[] => {
-    const storedIds: string[] = [];
-    for (let index = 0; index < storage.length; index += 1) {
-      const key = storage.key(index);
-      if (!key?.startsWith(SONG_ENTRY_PREFIX)) continue;
-      storedIds.push(key.slice(SONG_ENTRY_PREFIX.length));
-    }
-    return storedIds;
-  };
-
-  return {
-    loadSongs() {
-      return loadIds().flatMap(id => {
-        const song = readJson(storage, songKey(id));
-        return sanitizeSongList([song]);
-      });
-    },
-    saveSong(song) {
-      writeJson(storage, songKey(song.id), song);
-      const ids = loadIds();
-      if (!ids.includes(song.id)) this.saveSongIds([...ids, song.id]);
-    },
-    removeSong(id) {
-      storage.removeItem(songKey(id));
-      const ids = loadIds();
-      if (ids.includes(id)) this.saveSongIds(ids.filter(songId => songId !== id));
-    },
-    saveSongIds(ids) {
-      writeJson(storage, STORAGE_KEYS.SONGS_INDEX, ids);
-    },
-    listSongIds() {
-      return listStoredSongIds();
-    },
-    removeLegacySongs() {
-      storage.removeItem(STORAGE_KEYS.SONGS);
-    },
-  };
-}

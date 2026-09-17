@@ -1,11 +1,26 @@
 /** 测试全局 setup：注入 fake IndexedDB 与浏览器 API polyfill（jsdom 不内置） */
 import { config } from '@vue/test-utils';
-import { IDBKeyRange, indexedDB } from 'fake-indexeddb';
+import {
+  IDBCursor,
+  IDBCursorWithValue,
+  IDBDatabase,
+  IDBFactory,
+  IDBIndex,
+  IDBKeyRange,
+  IDBObjectStore,
+  IDBOpenDBRequest,
+  IDBRequest,
+  IDBTransaction,
+  IDBVersionChangeEvent,
+  indexedDB,
+} from 'fake-indexeddb';
 
 import { vChordName } from '@/domains/chord/directives/vChordName';
 import { vAutoHeight } from '@/platform/directives/vAutoHeight';
 import { vAutoWidth } from '@/platform/directives/vAutoWidth';
 
+// idb 包在 wrap 层用 `instanceof IDBRequest` 等全局构造器判定请求类型，jsdom 下这些全局不存在，
+// 只注入 indexedDB/IDBKeyRange 会抛 ReferenceError: IDBRequest is not defined，故注入全套类全局
 Object.defineProperty(globalThis, 'indexedDB', {
   value: indexedDB,
   writable: true,
@@ -14,6 +29,19 @@ Object.defineProperty(globalThis, 'indexedDB', {
 Object.defineProperty(globalThis, 'IDBKeyRange', {
   value: IDBKeyRange,
   writable: true,
+});
+
+Object.assign(globalThis, {
+  IDBFactory,
+  IDBDatabase,
+  IDBObjectStore,
+  IDBIndex,
+  IDBRequest,
+  IDBOpenDBRequest,
+  IDBTransaction,
+  IDBCursor,
+  IDBCursorWithValue,
+  IDBVersionChangeEvent,
 });
 
 /** IntersectionObserver：jsdom 缺失，观测回调立即触发一次 */

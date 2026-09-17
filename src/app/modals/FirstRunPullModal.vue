@@ -21,11 +21,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 
-import { useStorage } from '@vueuse/core';
-
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { useSyncService } from '@/app/services/sync/useSyncService';
+import { useStorage } from '@/platform/composables/useStorage';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 

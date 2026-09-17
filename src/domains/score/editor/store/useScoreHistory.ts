@@ -87,6 +87,19 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
     historyIndex = historyStack.length - 1;
   };
 
+  /**
+   * 恢复快照后、解除撤销期标记前等待响应式传播结算。
+   *
+   * isUndoRedoAction 为 true 期间的写入都不进撤销栈，所以必须在 applyState 引发的传播全部
+   * 结算完之后才解除。传播不止一帧：store 字段变更先进 pre 队列（消费方 watcher / 组件更新），
+   * 其中又可能派生出新的变更进入下一轮队列（编辑器本地缓冲回写、lineIds / chordMap 的连带同步）。
+   * 等两帧是覆盖这条级联的安全下界；提前解除会让级联中的写入被后续记录当作新编辑处理。
+   */
+  const settleReactivePropagation = async () => {
+    await nextTick();
+    await nextTick();
+  };
+
   /** 撤销：回退到上一快照并写回歌曲数据；标记撤销期以避免恢复过程被再次记录。 */
   const undo = async () => {
     if (historyIndex > 0 && getActiveSong()) {
@@ -95,8 +108,7 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
       // 快照可能被 songStore 以引用方式接管（chordMap 会被原地修改），恢复时必须克隆
       const state = cloneHistoryState(historyStack[historyIndex]!);
       applyState(getActiveSong()!.id, state);
-      await nextTick();
-      await nextTick();
+      await settleReactivePropagation();
       isUndoRedoAction.value = false;
     }
   };
@@ -108,8 +120,7 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
       historyIndex++;
       const state = cloneHistoryState(historyStack[historyIndex]!);
       applyState(getActiveSong()!.id, state);
-      await nextTick();
-      await nextTick();
+      await settleReactivePropagation();
       isUndoRedoAction.value = false;
     }
   };

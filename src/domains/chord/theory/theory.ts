@@ -16,7 +16,7 @@ import type {
   RootSegment,
 } from '@/domains/chord/types';
 import type { BarreEntity, GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
-import type { SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
+import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
 
 /** 接受"和弦实体或名称字符串"的通用入参形态，统一多处多态签名 */
 export type ChordOrName = { nameSegments?: ChordNameSegments | null; chordName?: string };
@@ -174,6 +174,44 @@ export const getDefaultTuningForStringCount = (stringCount: number): Tuning =>
 /** 根据弦数筛选匹配的调弦枚举列表 */
 export const getTuningsByStringCount = (stringCount: number): Tuning[] =>
   (Object.keys(TUNING_PRESETS) as Tuning[]).filter(t => TUNING_PRESETS[t]?.stringCount === stringCount);
+
+/** 弦数超过预设时的向下延伸音程：吉他族标准调弦的相邻低弦为纯四度（5 半音） */
+const LOWER_STRING_INTERVAL = 5;
+
+/**
+ * 取指定调弦下覆盖 stringCount 根弦的空弦音高数组（低→高）。
+ *
+ * 调弦预设只覆盖 4/6/7/8 弦，其余弦数（编辑器允许 3~10）原先一律回落到 6 弦标准映射，
+ * 多出来的弦靠 `calcPitchIndex` 里的 `baseStrings[sIdx] ?? 0` 兜底 —— 第 7 根起音高静默塌成 0，
+ * 使 9/10 弦和弦的识别、分析面板与转位判定全部失真。
+ * 这里按吉他族惯例向下补纯四度（EADGBE → BEADGBE → F#BEADGBE，与 9 弦标准调弦一致）；
+ * 弦数少于预设时截取低音侧（EADGBE 取 3 根 → EAD）。
+ */
+export const getBaseStringsFor = (tuning: Tuning | string, stringCount: number): readonly number[] => {
+  const base = TUNING_PRESETS[tuning as Tuning]?.mapping ?? DEFAULT_TUNING_MAPPING;
+  if (stringCount === base.length) return base;
+  if (stringCount < base.length) return base.slice(0, stringCount);
+
+  const extended: number[] = [];
+  let lowest = base[0] ?? 0;
+  for (let i = base.length; i < stringCount; i++) {
+    lowest -= LOWER_STRING_INTERVAL;
+    extended.unshift(lowest);
+  }
+  return [...extended, ...base];
+};
+
+/**
+ * 调弦是否「重入」（reentrant）：弦序最小的弦并非物理最低音。
+ * 典型是尤克里里 GCEA —— 弦 0 的 G4(67) 高于弦 1 的 C4(60)，
+ * 此时「按弦序取第一根非静音弦当低音」得到的不是真正的低音。
+ * 用于决定识别器取低音的口径（见 chordEngine 的 bassByPitch）。
+ */
+export const isReentrantTuning = (tuning: Tuning | string): boolean => {
+  const preset = TUNING_PRESETS[tuning as Tuning];
+  const mapping = getBaseStringsFor(tuning, preset?.stringCount ?? DEFAULT_TUNING_MAPPING.length);
+  return mapping.length > 1 && mapping[0] !== Math.min(...mapping);
+};
 
 const ACCIDENTAL_PITCH = Object.freeze([false, true, false, true, false, false, true, false, true, false, true, false]);
 /** 判断相对根音的音程是否属于和弦特征音（根音/小三/大三/纯五度）。 */
@@ -605,9 +643,14 @@ const buildSearchVariants = (qLower: string): string[] => {
   const variants = [
     qLower,
     qLower.replace(/♯/g, '#').replace(/♭/g, 'b'),
-    qLower.replace(/#/g, '♯').replace(/b/g, '♭'),
+    // 只把「紧跟在音名后」的 b 当降号（Bb→B♭、Ab→A♭）。裸 /b/g 会把音名 B 本身也替换掉
+    // （Bm → ♭m、Bbmaj7 → ♭♭maj7），凭空造出脏变体、扩大误匹配面。
+    // 不用 lookbehind（Safari 16.4 之前不支持，会在解析期直接抛 SyntaxError）：
+    // 消费音名再回填同效，且 m7b5 这类「数字后的 b」本就不该替换（ASCII 别名已覆盖）。
+    qLower.replace(/#/g, '♯').replace(/([a-gA-G])b/g, '$1♭'),
+    // Δ/δ 是「大」的记号，只映射 maj。早先这里与下一行并列生成 'm' 变体，
+    // 结果「搜 CΔ7」会命中 Cm7（大七被当成小七）
     qLower.replace(/δ|Δ/g, 'maj').replace(/♯/g, '#').replace(/♭/g, 'b'),
-    qLower.replace(/δ|Δ/g, 'm').replace(/♯/g, '#').replace(/♭/g, 'b'),
     qLower.replace(/ø|ø7/g, 'm7b5').replace(/♯/g, '#').replace(/♭/g, 'b'),
     qLower.replace(/°/g, 'dim').replace(/♯/g, '#').replace(/♭/g, 'b'),
   ];
@@ -648,11 +691,6 @@ const collectChordAliases = (chord: { nameSegments?: ChordNameSegments | null; c
     names.add(fullNameAscii.replace(/maj/g, 'Δ'));
     names.add(fullNameAscii.replace(/maj/g, 'm'));
   }
-  if (shortNameAscii.includes('m7')) {
-    names.add(shortNameAscii.replace(/m7/g, 'δ7'));
-    names.add(shortNameAscii.replace(/m7/g, 'Δ7'));
-  }
-
   const aliases = Array.from(names);
   if (typeof chord === 'object') chordAliasCache.set(chord, aliases);
   return aliases;
@@ -767,7 +805,9 @@ export const getChordRootPitch = (chordName: string): number => {
 export const collectChordNotes = (
   strings: GuitarStringEntity[],
   fretOffset: number = 0,
-  baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
+  // 缺省按实际弦数解析（不足预设则延伸、超出则截取），
+  // 避免调用方省略该参数时第 7 根起的空弦音高被 `?? 0` 静默塌成 0
+  baseStrings: readonly number[] = getBaseStringsFor(Tuning.STANDARD, strings.length)
 ): { notes: NoteInput[]; bassPitch: number } => {
   const notes: NoteInput[] = [];
   let bassPitch = -1;
@@ -804,7 +844,7 @@ export const resolveChordRootPitch = (
   chordOrName?: string | ChordOrName,
   rootStringIndex: number | null = null
 ): number => {
-  const baseStrings = TUNING_PRESETS[tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
+  const baseStrings = getBaseStringsFor(tuning, strings.length);
   // 1. 手动标记优先
   if (rootStringIndex !== null && rootStringIndex >= 0 && rootStringIndex < strings.length) {
     const markedStr = strings[rootStringIndex];
@@ -821,7 +861,8 @@ export const resolveChordRootPitch = (
   // 3. 自动推导（基于指板音集）：只问最佳根音，命中相对签名时不合成候选/音名
   const { notes } = collectNotes(strings, fretOffset, baseStrings);
   if (notes.length === 0) return 99;
-  return analyzeBestRootPitch(notes, null);
+  // 重入调弦（尤克里里）必须按真实音高取低音，否则锚点落在物理上并非最低的弦上
+  return analyzeBestRootPitch(notes, null, isReentrantTuning(tuning));
 };
 
 /** 判断指法是否为转位：物理最低音不等于（已解析的）根音即为转位；无法解析时视为非转位。 */
@@ -832,7 +873,7 @@ export const computeIsInverted = (
   chordOrName?: string | ChordOrName,
   rootStringIndex: number | null = null
 ): boolean => {
-  const baseStrings = TUNING_PRESETS[tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
+  const baseStrings = getBaseStringsFor(tuning, strings.length);
   const { bassPitch } = collectNotes(strings, fretOffset, baseStrings);
   const rootPitch = resolveChordRootPitch(strings, fretOffset, tuning, chordOrName, rootStringIndex);
   return bassPitch !== -1 && rootPitch !== 99 && bassPitch !== rootPitch;
@@ -858,7 +899,7 @@ export const validateBassConsistency = (
   const chordName = typeof chordOrName === 'string' ? chordOrName : getChordName(chordOrName);
   const parsed = parseChordName(chordName);
   if (!parsed.hasBass || parsed.bassPitch === 99) return null;
-  const baseStrings = TUNING_PRESETS[tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
+  const baseStrings = getBaseStringsFor(tuning, strings.length);
   const { bassPitch } = collectNotes(strings, fretOffset, baseStrings);
   if (bassPitch === -1) return null;
   // 音高模 12 比较（忽略八度）
@@ -871,7 +912,7 @@ export const validateBassConsistency = (
 /** 统计指法中相对根音的"和弦外音"（非特征音）数量，并用 12 位位掩码记录出现的音级。 */
 const getColorNoteCountAndPitches = (chord: Chord, rootPitch: number) => {
   if (rootPitch === 99) return { colorNoteCount: 0, pitchMask: 0 };
-  const baseStrings = TUNING_PRESETS[chord.tuning as Tuning]?.mapping || DEFAULT_TUNING_MAPPING;
+  const baseStrings = getBaseStringsFor(chord.tuning, chord.strings.length);
   let pitchMask = 0;
   const strings = chord.strings;
   for (let sIdx = 0; sIdx < strings.length; sIdx++) {
@@ -1116,9 +1157,11 @@ export const computeChordFingerprint = (chord: {
   return fp;
 };
 
-/** 取指定调弦预设的空弦基准音高数组；未知调弦回退标准调弦。 */
-export const getActiveBaseStrings = (tuning: Tuning) => {
-  return TUNING_PRESETS[tuning]?.mapping || DEFAULT_TUNING_MAPPING;
+/** 取指定调弦预设的空弦基准音高数组；未知调弦回退标准调弦。
+ *  stringCount 缺省取预设自身弦数（保持既有调用语义）；传入实际弦数时按弦数延伸/截取。 */
+export const getActiveBaseStrings = (tuning: Tuning, stringCount?: number) => {
+  const presetCount = TUNING_PRESETS[tuning]?.stringCount;
+  return getBaseStringsFor(tuning, stringCount ?? presetCount ?? DEFAULT_TUNING_MAPPING.length);
 };
 
 /** 音高半音移调运算：保证结果收敛在 [0, 11] */
@@ -1158,7 +1201,11 @@ export const transposeChordSegments = (
     root: newRoot,
     ...(segments.quality ? { quality: segments.quality } : {}),
     ...(segments.unknownQuality ? { unknownQuality: segments.unknownQuality } : {}),
-    ...(segments.extensions ? { extensions: segments.extensions.map(e => ({ ...e })) } : {}),
+    // ExtensionSegment 是元组 [degree, accidental?]，必须逐位按元组复制。
+    // 曾误用 { ...e } 做「深拷贝」—— 数组摊成 {0, 1} 普通对象后不再是元组，
+    // 下游所有 ([deg, acc]) => 解构（segmentsToString / vChordName / areChordsEnharmonicallyEquivalent）
+    // 一律抛 "is not iterable"，且实体已入库，后续取名/指纹/渲染会连续崩。
+    ...(segments.extensions ? { extensions: segments.extensions.map(e => [e[0], e[1]] as ExtensionSegment) } : {}),
     ...(newBass ? { bass: newBass } : {}),
   };
 };

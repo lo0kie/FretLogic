@@ -51,6 +51,30 @@ export function cloneDeep<T>(value: T): T {
 }
 
 /**
+ * 深度转 plain：逐层剥离 Vue 响应式代理，产出可被 IDB structuredClone 的普通对象/数组/Map。
+ * 与 cloneDeep 的差异：保留 Map/Set 类型（structuredClone 原生支持），且不做 JSON 回退
+ * （JSON 会把 Map 变 {}，静默丢数据）。写入 IndexedDB 前必须经此转换——Proxy 无法被克隆。
+ */
+export function toPlainPersistable<T>(value: T): T {
+  if (value === null || typeof value !== 'object') return value;
+  const raw: unknown = isProxy(value) ? toRaw(value) : value;
+  if (isRef(raw)) return toPlainPersistable(unref(raw)) as T;
+  if (raw instanceof Map) {
+    return new Map([...raw].map(([k, v]) => [k, toPlainPersistable(v)])) as unknown as T;
+  }
+  if (raw instanceof Set) {
+    return new Set([...raw].map(v => toPlainPersistable(v))) as unknown as T;
+  }
+  if (raw instanceof Date || raw instanceof RegExp) return raw as unknown as T;
+  if (Array.isArray(raw)) return raw.map(v => toPlainPersistable(v)) as unknown as T;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    out[k] = toPlainPersistable(v);
+  }
+  return out as T;
+}
+
+/**
  * 持久化/备份/同步专用 JSON 序列化：把嵌套的 Map（如 Song.chordMap）转为普通对象。
  * 直接 JSON.stringify(Map) 会得到 {}，造成静默数据丢失。
  */

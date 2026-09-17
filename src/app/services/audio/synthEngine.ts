@@ -8,7 +8,7 @@ import type { AudioTimbreId, StrumDirection } from '@/platform/types';
 let isEngineInitialized = false;
 let initPromise: Promise<void> | null = null;
 
-/** 原生 Web Audio 上下文（懒创建，dispose 时保留以便重建） */
+/** 原生 Web Audio 上下文（懒创建，dispose 时关闭并置空，下次播放重建全新上下文） */
 let audioCtx: AudioContext | null = null;
 
 /** 共享效果链节点：逐弦声部 → 声像 → chorusInput → … → destination */
@@ -294,11 +294,13 @@ export const buildStrumOrder = (count: number, direction: StrumDirection): numbe
   return Array.from({ length: count }, (_, i) => i);
 };
 
+/** 读取合成引擎音频时钟当前时刻（秒）；引擎未创建时返回 0。供播放器做 lookahead 排程用 */
+export const getAudioTime = (): number => audioCtx?.currentTime ?? 0;
+
 /** 扫弦触发可调参数：未提供的项回退 AUDIO_CONFIG 常量 */
 export interface ChordStrumOptions {
   /** 音频上下文起始时间戳（秒），缺省为当前时刻 */
-  startTime?: number;
-  /** 相邻弦触发间隔（秒） */
+  startTime?: number; /** 相邻弦触发间隔（秒） */
   delayStep?: number;
   /** 扫弦方向（缺省下扫） */
   direction?: StrumDirection;
@@ -359,11 +361,21 @@ export const triggerChordStrum = (
 
     const triggerTime = triggerBaseTime + strumDelay;
     const humanizeVelocity = velocityMin + Math.random() * velocityRange;
+    // 时序 humanize：每步固定理论间隔作基准锚点，抖动只作用于本弦的局部偏移，
+    // 不累进到后续琴弦的基准时间戳——避免随机项逐弦累积导致单次扫弦总跨度大幅漂移
+    const jitterOffset = delayStep * (Math.random() * 2 - 1) * timingJitter;
 
-    triggerNote(frequency, triggerTime, AUDIO_CONFIG.ENV_RELEASE, humanizeVelocity, preset, panner, false);
+    triggerNote(
+      frequency,
+      triggerTime + jitterOffset,
+      AUDIO_CONFIG.ENV_RELEASE,
+      humanizeVelocity,
+      preset,
+      panner,
+      false
+    );
 
-    // 时序 humanize：每步延迟在 ±jitter 比例内抖动（jitter=0 时精确等间隔）
-    strumDelay += delayStep * (1 + (Math.random() * 2 - 1) * timingJitter);
+    strumDelay += delayStep;
     notesTriggered++;
   }
 
@@ -402,9 +414,11 @@ export const triggerChordSustain = (
     const currentMidiNote = calcNoteMidi(sIdx, targetStr[0], chord.fretOffset, baseStrings);
     const frequency = midiToFreq(currentMidiNote);
 
+    // 与 triggerChordStrum 相同的时序策略：固定基准 + 本弦局部抖动，不逐弦累进
+    const jitterOffset = delayStep * (Math.random() * 2 - 1) * timingJitter;
     triggerNote(
       frequency,
-      triggerBaseTime + strumDelay,
+      triggerBaseTime + strumDelay + jitterOffset,
       0,
       velocityMin + Math.random() * velocityRange,
       preset,
@@ -412,7 +426,7 @@ export const triggerChordSustain = (
       true
     );
 
-    strumDelay += delayStep * (1 + (Math.random() * 2 - 1) * timingJitter);
+    strumDelay += delayStep;
     notesTriggered++;
   }
 
@@ -526,4 +540,35 @@ export const disposeSynthEngine = (): void => {
   appliedVolumeDb = AUDIO_CONFIG.MAIN_VOLUME_DB;
   appliedChorusEnabled = false;
   appliedReverbWet = AUDIO_CONFIG.REVERB_WET_GAIN;
+
+  // 彻底关闭上下文：节点已全部断开置空，长期挂起的 AudioContext 在部分移动端
+  // （尤其 iOS WebKit）会持续占用底层音频硬件通路，增加功耗并干扰后台静音策略。
+  // 置空后下次 initAudioEngine 会创建全新上下文（声部/效果链随之重建）。
+  if (audioCtx) {
+    const ctx = audioCtx;
+    audioCtx = null;
+    try {
+      void ctx.close();
+    } catch {
+      /* 已关闭/正在关闭 */
+    }
+  }
 };
+
+/* ---------------------------------------------------------------------------
+ * 移动端 Autoplay 策略兜底：iOS Safari 等在非手势调用栈里 resume 会静默失败
+ * （如 ensureAudioReady 的 await 之后才调 resume，手势栈已断，首次发声被吞）。
+ * 常驻手势监听：任何 pointerdown/keydown 时若上下文处于 suspended 即刻唤醒。
+ * 常驻而非 once：suspended 可能反复出现（切后台回前台），检查本身是 O(1) 状态读取。
+ * ------------------------------------------------------------------------- */
+if (typeof window !== 'undefined') {
+  const unlockAudioContext = (): void => {
+    if (audioCtx && audioCtx.state === 'suspended') {
+      void audioCtx.resume().catch(() => {
+        /* 唤醒失败由下次手势重试 */
+      });
+    }
+  };
+  window.addEventListener('pointerdown', unlockAudioContext, { capture: true, passive: true });
+  window.addEventListener('keydown', unlockAudioContext, { capture: true });
+}

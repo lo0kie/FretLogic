@@ -34,7 +34,9 @@ export const resolveComponentWidth = (width?: FormComponentWidth): string | unde
 
 // ===================== 存储键 =====================
 
-/** localStorage 存储键统一管理（避免魔法字符串散落） */
+/** 存储键统一管理（避免魔法字符串散落）。键名沿用历史命名，现作为 IDB kv 库的 key；
+ *  运行时后端为 IDB：偏好/UI 态走 kv 镜像（idbKv.ts），实体走 IDB 对象库（SONGS_INDEX /
+ *  SONG_ENTRY / SONGS 三个键仅旧数据转录 migrateLegacy.ts 解析历史数据时使用）。 */
 export const STORAGE_KEYS = {
   // ---- 和弦库数据 ----
   /** 已保存和弦列表（V4 版本化键名） */

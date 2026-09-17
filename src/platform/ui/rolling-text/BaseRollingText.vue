@@ -127,7 +127,7 @@ const blockKey = computed<PropertyKey>(() => props.rollKey ?? props.text ?? '');
 const durationSec = computed(() => `${(props.duration ?? 200) / 1000}s`);
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 /* 过渡类名无法用 Tailwind 表达（Transition 进出场状态类）；窗口/字符静态样式已内联为工具类 */
 .br-roll-enter-active,
 .br-roll-leave-active {

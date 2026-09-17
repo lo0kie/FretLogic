@@ -186,6 +186,7 @@ import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { useSearchResultsPanel } from '@/platform/ui/input/useSearchResultsPanel';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
@@ -194,7 +195,6 @@ import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import type { FormComponentWidth } from '@/platform/utils/constants';
-import type { VirtualElement } from '@floating-ui/dom';
 
 const modelValue = defineModel<string>({ required: true });
 const {
@@ -316,101 +316,39 @@ const rootRef = useTemplateRef<HTMLDivElement>('rootRef');
 const searchPopoverRef = useTemplateRef<InstanceType<typeof BasePopover>>('searchPopoverRef');
 const showPassword = ref(false);
 
-// ─── searchable 下拉：以输入框根元素为虚拟锚点的 BasePopover ───
-const resultsOpen = ref(false);
-/** 锚点虚拟元素：每次定位实时读取根元素矩形，随输入框尺寸/位置自动跟随 */
-const searchVirtualRef = computed<VirtualElement | null>(() => {
-  if (!searchable) return null;
-  return { getBoundingClientRect: () => rootRef.value?.getBoundingClientRect() ?? new DOMRect() };
-});
-const closeResults = () => {
-  resultsOpen.value = false;
-  searchActiveIndex.value = -1;
-};
+const searchAreaRef = useTemplateRef<ScrollAreaHandle>('searchAreaRef');
+/** 搜索结果面板滚动容器元素（焦点归属判定与活跃项滚动需要原生能力） */
+const searchScrollRef = useScrollAreaElement(searchAreaRef);
 
-// ─── searchable：面板打开期间的全局焦点监听 ───
-// Tab 移动焦点、点击外部时收起面板：仅靠 input blur 单点判定不够——焦点进入面板内
-// 结果按钮（Teleport 于 body）或清空/眼睛按钮后再离开时已无 blur 可监听，面板会残留。
-// 捕获式 focusin 覆盖任意起点的焦点迁移：焦点落到输入框自身或面板内（等待键盘/点击
-// 选中）时豁免，落到其它任何位置（含清空/眼睛按钮、组件外）即收起。
-const handleGlobalFocusIn = (e: FocusEvent) => {
-  const target = e.target;
-  if (!(target instanceof Node)) return;
-  if (target === inputRef.value || searchScrollRef.value?.contains(target)) return;
-  closeResults();
-};
-
-watch(resultsOpen, open => {
-  if (typeof document === 'undefined') return;
-  if (open) {
-    document.addEventListener('focusin', handleGlobalFocusIn, true);
-  } else {
-    document.removeEventListener('focusin', handleGlobalFocusIn, true);
-  }
+// ─── searchable 下拉：开合 / 全局焦点收起 / 键盘导航 / 虚拟锚点抽离至 useSearchResultsPanel ───
+const {
+  resultsOpen,
+  searchActiveIndex,
+  searchVirtualRef,
+  openResults,
+  closeResults,
+  setSearchActiveIndex,
+  resetActiveIndex,
+  handleKeydown,
+} = useSearchResultsPanel({
+  isSearchable: () => searchable,
+  isDisabled: () => disabled,
+  isReadonly: () => readonly,
+  rootRef,
+  inputRef,
+  scrollEl: searchScrollRef,
+  itemCount: () => searchItemCount ?? 0,
+  onSelectActive: index => emit('select-search-index', index),
 });
-/** 聚焦或输入时展开结果面板；禁用/只读不弹 */
-const openResults = () => {
-  if (!searchable || disabled || readonly) return;
-  resultsOpen.value = true;
-};
+
 const handleInputClick = (e: MouseEvent) => {
   openResults();
   emit('click', e);
 };
 
-// ─── searchable 键盘导航与活跃项状态 ───
-const searchActiveIndex = ref(-1);
-const searchAreaRef = useTemplateRef<ScrollAreaHandle>('searchAreaRef');
-/** 搜索结果面板滚动容器元素（焦点归属判定与活跃项滚动需要原生能力） */
-const searchScrollRef = useScrollAreaElement(searchAreaRef);
-
-const setSearchActiveIndex = (index: number) => {
-  searchActiveIndex.value = index;
-};
-
 watch(localValue, () => {
-  searchActiveIndex.value = -1;
+  resetActiveIndex();
 });
-
-const scrollActiveItemIntoView = () => {
-  nextTick(() => {
-    if (!searchScrollRef.value || searchActiveIndex.value < 0) return;
-    const items = searchScrollRef.value.querySelectorAll<HTMLElement>('button, [role="button"], [data-search-item]');
-    const activeEl = items[searchActiveIndex.value];
-    activeEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  });
-};
-
-const handleKeydown = (e: KeyboardEvent) => {
-  if (searchable && resultsOpen.value) {
-    const count = searchItemCount ?? 0;
-    if (count > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        searchActiveIndex.value = (searchActiveIndex.value + 1) % count;
-        scrollActiveItemIntoView();
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        searchActiveIndex.value = (searchActiveIndex.value - 1 + count) % count;
-        scrollActiveItemIntoView();
-        return;
-      }
-      if (e.key === 'Enter' && searchActiveIndex.value >= 0) {
-        e.preventDefault();
-        emit('select-search-index', searchActiveIndex.value);
-        closeResults();
-        return;
-      }
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      closeResults();
-      return;
-    }
-  }
-};
 
 const isPasswordMode = computed(() => isPassword || type === 'password');
 
@@ -631,7 +569,6 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  document.removeEventListener('focusin', handleGlobalFocusIn, true);
   rightSlotObserver?.disconnect();
   rootSizeObserver?.disconnect();
 });

@@ -48,7 +48,8 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
   });
 
   // PUT 前确保父集合存在：自顶向下对每个祖先目录发 MKCOL。
-  // 201=已创建，405=已存在（均可视为成功）；401/403 视为权限错误抛出。
+  // 仅白名单状态码视为成功：201=已创建，200/405=已存在（部分服务器对已存在目录返回 200）；
+  // 401/403 权限错误、423 Locked、507 配额满、5xx 等一律显式抛错，不再静默吞掉。
   const ensureParentCollections = async (): Promise<void> => {
     const rel = WEBDAV_REMOTE_FILE_PATH.replace(/^\/+/, '');
     const lastSlash = rel.lastIndexOf('/');
@@ -58,9 +59,11 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
     for (const seg of segments) {
       acc += `/${seg}`;
       const res = await request({ method: 'MKCOL' }, acc);
+      if (res.status === 201 || res.status === 200 || res.status === 405) continue;
       if (res.status === 401 || res.status === 403) {
         throw new SyncError('REQUEST_FAILED', `WebDAV 创建目录失败（状态码 ${res.status}），请检查账号权限`);
       }
+      throw new SyncError('REQUEST_FAILED', `WebDAV 创建目录失败（状态码 ${res.status}）`);
     }
   };
 
@@ -85,10 +88,24 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
     },
     async push(payload) {
       await ensureParentCollections();
+      // 条件写（If-Match）：推送前探测当前 ETag，携带后若云端已被其他设备更新，
+      // 服务器将以 412 拒绝写入，避免静默覆盖造成丢失更新（走下方 CONFLICT 分支）。
+      // 服务器不返回 ETag（或 HEAD 探测失败）时退化为无条件写，与历史行为一致。
+      let ifMatch: string | undefined;
+      try {
+        const head = await request({ method: 'HEAD' });
+        if (head.ok) {
+          const etag = head.headers.get('ETag');
+          // If-Match 仅接受强验证器，弱 ETag（W/ 前缀）不能用于条件写
+          if (etag && !etag.startsWith('W/')) ifMatch = etag;
+        }
+      } catch {
+        // 探测失败不阻断推送
+      }
       const response = await request(
         {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(ifMatch ? { 'If-Match': ifMatch } : {}) },
           body: serializeForStorage(payload),
         },
         fileUrl

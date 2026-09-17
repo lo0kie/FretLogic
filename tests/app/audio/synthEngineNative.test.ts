@@ -121,9 +121,11 @@ class MockPanner extends MockNode {
   pan = new MockAudioParam();
 }
 
+/** 下一个新建 AudioContext 的初始 state（默认 running）；用例可预置 suspended 验证恢复路径 */
+let nextCtxState: AudioContextState = 'running';
 class MockAudioContext {
   currentTime = 0;
-  state = 'running';
+  state = nextCtxState;
   sampleRate = 44100;
   destination = new MockNode();
   resumeCount = 0;
@@ -174,6 +176,12 @@ class MockAudioContext {
   resume(): Promise<void> {
     this.resumeCount += 1;
     this.state = 'running';
+    return Promise.resolve();
+  }
+  closeCount = 0;
+  close(): Promise<void> {
+    this.closeCount += 1;
+    this.state = 'closed';
     return Promise.resolve();
   }
 }
@@ -280,6 +288,7 @@ beforeAll(() => {
 afterEach(() => {
   disposeSynthEngine();
   resetSpies();
+  nextCtxState = 'running';
 });
 
 // buildStrumOrder 的常规方向已由 tests/app/audio/synthEngine.test.ts 覆盖，
@@ -369,11 +378,10 @@ describe('引擎初始化与共享效果链', () => {
 
   it('上下文处于 suspended 时初始化会尝试恢复', async () => {
     await initAudioEngine();
-    disposeSynthEngine(); // 复位就绪标记，使下次 init 重走状态检查
-    ctxInstance!.state = 'suspended';
-    const before = ctxInstance!.resumeCount;
+    disposeSynthEngine(); // 弃用旧上下文并复位就绪标记
+    nextCtxState = 'suspended'; // 下次 init 重建的上下文初始即挂起
     await initAudioEngine();
-    expect(ctxInstance!.resumeCount).toBe(before + 1);
+    expect(ctxInstance!.resumeCount).toBe(1);
   });
 });
 

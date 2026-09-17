@@ -4,9 +4,8 @@ import { computeChordFingerprint, Tuning } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { FRET_COUNTS } from '@/domains/fretboard/constants';
 import { isCapoValue, isFretOffsetValue, toFretOffset } from '@/domains/fretboard/model/coordinates';
-import { readJson } from '@/platform/services/storage/localStorage';
-import { serializeForStorage } from '@/platform/utils/common';
-import { STORAGE_KEYS } from '@/platform/utils/constants';
+import { idb } from '@/platform/services/storage';
+import { toPlainPersistable } from '@/platform/utils/common';
 
 import type { Chord, Group, StringIndex } from '@/domains/chord/types';
 
@@ -163,35 +162,30 @@ export interface ChordLibrarySnapshot {
   chords: Chord[];
 }
 
-export interface ChordRepository {
-  load(): ChordLibrarySnapshot;
-  save(snapshot: ChordLibrarySnapshot): void;
+/**
+ * 和弦库仓储：IDB（groups / chords 两库，save 为跨库单事务原子写）。
+ * load 走清洗层兜底（容错历史/手工改库的脏数据）；save 的实体均已经过规范化，直接落库。
+ */
+export interface ChordLibraryRepository {
+  load(): Promise<ChordLibrarySnapshot>;
+  save(snapshot: ChordLibrarySnapshot): Promise<void>;
 }
 
-const writeJson = (storage: Storage, key: string, value: unknown): void => {
-  try {
-    storage.setItem(key, serializeForStorage(value));
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-      const quotaError: Error & { cause?: unknown } = new Error('PERSISTENCE_QUOTA_EXCEEDED');
-      quotaError.cause = error;
-      throw quotaError;
-    }
-    throw error;
-  }
+export const chordRepository: ChordLibraryRepository = {
+  async load() {
+    const [rawGroups, rawChords] = await Promise.all([idb.getAll('groups'), idb.getAll('chords')]);
+    return sanitizeChordLibrary({ groups: rawGroups, chords: rawChords });
+  },
+  async save(snapshot) {
+    // groups 与 chords 必须同生共死：分组清了和弦还在会变成孤儿（引用已删分组），反之同理
+    // toRaw：store 传入的可能是响应式代理，Proxy 无法被 IDB structuredClone（DataCloneError）
+    await idb.runTx(['groups', 'chords'], 'readwrite', get => {
+      const groupStore = get('groups');
+      const chordStore = get('chords');
+      groupStore.clear();
+      for (const group of snapshot.groups) groupStore.put(toPlainPersistable(group));
+      chordStore.clear();
+      for (const chord of snapshot.chords) chordStore.put(toPlainPersistable(chord));
+    });
+  },
 };
-
-export function createChordRepository(storage: Storage): ChordRepository {
-  return {
-    load() {
-      return sanitizeChordLibrary({
-        groups: readJson(storage, STORAGE_KEYS.GROUPS),
-        chords: readJson(storage, STORAGE_KEYS.CHORD_LIST),
-      });
-    },
-    save(snapshot) {
-      writeJson(storage, STORAGE_KEYS.GROUPS, snapshot.groups);
-      writeJson(storage, STORAGE_KEYS.CHORD_LIST, snapshot.chords);
-    },
-  };
-}

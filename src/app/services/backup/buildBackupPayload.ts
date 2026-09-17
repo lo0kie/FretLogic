@@ -1,7 +1,6 @@
 /**
  * 备份包构造器：把当前 store 快照组装为可导出 / 可推送的 ImportExportPayload。
  */
-import { validateImportExportPayload } from '@/app/services/validation/payload';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -30,8 +29,10 @@ export interface BuildBackupResult {
 
 /**
  * 从当前 store 快照生成经清洗后的备份结果包（包含详细的 issues 与 warnings）。
+ * payload 校验模块（含 zod）为动态加载：备份构造只发生在导出/推送时，
+ * 静态引入会把 zod 拖进首屏闭包（check-bundle 220KB 预算）。
  */
-export function buildBackupPayloadResult(options?: BuildBackupOptions): BuildBackupResult {
+export async function buildBackupPayloadResult(options?: BuildBackupOptions): Promise<BuildBackupResult> {
   const selection = options?.selection ?? FULL_BACKUP_SELECTION;
   const mode = options?.mode ?? 'lenient';
   const chordStore = useChordStore();
@@ -83,6 +84,7 @@ export function buildBackupPayloadResult(options?: BuildBackupOptions): BuildBac
     ...(preferences ? { preferences } : {}),
   };
 
+  const { validateImportExportPayload } = await import('@/app/services/validation/payload');
   const { isValid, payload, issues, warnings = [] } = validateImportExportPayload(raw, { mode });
   if (!isValid || !payload) {
     console.error('[buildBackupPayload] invalid:', issues);
@@ -91,6 +93,6 @@ export function buildBackupPayloadResult(options?: BuildBackupOptions): BuildBac
   return { payload, issues: [], warnings };
 }
 
-export function buildBackupPayload(options?: BuildBackupOptions): ImportExportPayload | null {
-  return buildBackupPayloadResult(options).payload;
+export async function buildBackupPayload(options?: BuildBackupOptions): Promise<ImportExportPayload | null> {
+  return (await buildBackupPayloadResult(options)).payload;
 }

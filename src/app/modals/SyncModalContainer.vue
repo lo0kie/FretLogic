@@ -5,7 +5,18 @@
     </template>
 
     <template #default>
-      <div class="flex flex-col gap-md">
+      <!-- BaseForm 以 tag="form" 渲染（不可退回默认的 div）：本弹窗是全仓唯一出现 type="password" 的地方
+           （GitHub / Gitee / 服务器 Token 与 WebDAV 密码共 4 处），而这两个字段组此前都没有表单归属。
+           Chrome 对「无 form 的密码框」会打 `[DOM] Password field is not contained in a form`；提醒本身
+           无害，但它指向的真实问题是：密码管理器只能靠启发式猜这串字符属于哪组凭据 —— WebDAV 的账号密码
+           是真凭据，有 form 才谈得上正确保存/回填；Token 那几个字段则继续靠 BaseInput 上的 data-*-ignore
+           + autocomplete="off" 拦住第三方管理器。
+           `@submit.prevent` 与 form 同等必要：表单内只有一个「可阻止隐式提交」字段时（Token 那几个方案
+           正好只有一个输入框），浏览器会因回车触发提交，未拦截即整页导航，SPA 直接被刷掉。此处刻意不把
+           submit 绑到任何动作 —— 在 Token 框里回车不应默默把本地数据推到云端。
+           间距沿用容器默认档 md（与原 div 的 gap-md 一致）；容器未下发 size，控件尺寸解析仍回落到默认 md，
+           与本弹窗改用容器之前一致。 -->
+      <BaseForm @submit.prevent tag="form">
         <div
           class="sync-panel-card flex w-full flex-col gap-md rounded-lg border border-glass-border bg-surface-panel p-md"
         >
@@ -140,7 +151,7 @@
             服务器直接配置 CORS 支持直连，或部署自建代理。
           </p>
         </div>
-      </div>
+      </BaseForm>
     </template>
 
     <template #footer>
@@ -162,6 +173,7 @@
 import { computed, toRef } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
+import BaseForm from '@/platform/ui/form/BaseForm.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';

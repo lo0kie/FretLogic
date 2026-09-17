@@ -1,33 +1,35 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { chordRepository, songRepository } from '@/app/services/data';
-import { bootstrapDataLayer, syncLocalStorageToIdb } from '@/app/services/data/bootstrap';
+import { bootstrapDataLayer } from '@/app/services/data/bootstrap';
 import { idb } from '@/platform/services/storage';
+import { hydrateIdbKv, kvGet } from '@/platform/services/storage/idbKv';
+import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import type { Song } from '@/domains/score/types';
 
-class MemoryStorage implements Storage {
-  private map = new Map<string, string>();
-  get length() {
-    return this.map.size;
-  }
-  clear(): void {
-    this.map.clear();
-  }
-  getItem(key: string): string | null {
-    return this.map.get(key) ?? null;
-  }
-  key(index: number): string | null {
-    return Array.from(this.map.keys())[index] ?? null;
-  }
-  removeItem(key: string): void {
-    this.map.delete(key);
-  }
-  setItem(key: string, value: string): void {
-    this.map.set(key, value);
-  }
-}
+/** 转录完成标记（存于 kv 镜像）—— 与 migrateLegacy.ts 保持一致 */
+const RETIRED_FLAG_KEY = 'localStorage-retired';
 
+const group = { id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' };
+const chord = {
+  id: 'c1',
+  chordName: 'C',
+  strings: [
+    [-1, false],
+    [3, false],
+    [2, false],
+    [0, false],
+    [1, false],
+    [0, false],
+  ],
+  fretCount: 3,
+  fretOffset: 0,
+  groupId: 'g1',
+  tuning: 'STANDARD',
+  rootStringIndex: null,
+};
 const song: Song = {
   id: 's1',
   title: 'Song',
@@ -37,95 +39,54 @@ const song: Song = {
   capo: 0,
   chordMap: { line_l1_char_0: 'c1' },
   version: 1,
-};
+} as unknown as Song;
 
 describe('bootstrap 数据层引导', () => {
-  let storage: MemoryStorage;
-
   beforeEach(async () => {
-    storage = new MemoryStorage();
+    localStorage.clear();
     await idb.clear('chords');
     await idb.clear('groups');
     await idb.clear('songs');
     await idb.clear('syncMeta');
-    await idb.put('syncMeta', { name: 'legacy-migration-done', done: true });
+    await idb.clear('kv');
+    await hydrateIdbKv();
   });
 
-  it('IndexedDB 仅作备份，启动时不再回填 localStorage（清空后数据不会"复活"）', async () => {
-    // 预置 IDB 数据（模拟已有备份）
-    await chordRepository.saveGroups([{ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' }]);
-    await chordRepository.saveChords([
-      {
-        id: 'c1',
-        chordName: 'C',
-        strings: [
-          [-1, false],
-          [3, false],
-          [2, false],
-          [0, false],
-          [1, false],
-          [0, false],
-        ],
-        fretCount: 3,
-        fretOffset: 0,
-        groupId: 'g1',
-        tuning: 'STANDARD',
-        rootStringIndex: null,
-      },
-    ]);
+  it('IDB 是唯一权威存储：引导后既有数据原样保留，localStorage 不参与回填', async () => {
+    await chordRepository.save({ groups: [group], chords: [chord] });
     await songRepository.saveSong(song);
 
-    await bootstrapDataLayer(storage);
+    await bootstrapDataLayer();
 
-    // IDB 纯备份不回填：localStorage 保持为空，清空后数据不会"复活"
-    expect(storage.getItem('CHORD_LAB_GROUPS')).toBeNull();
-    expect(storage.getItem('CHORD_LAB_LIST_V4')).toBeNull();
-    expect(storage.getItem('CHORD_LAB_SONGS_INDEX_V1')).toBeNull();
-    expect(storage.getItem('CHORD_LAB_SONG_ENTRY_V1:s1')).toBeNull();
+    const snapshot = await chordRepository.load();
+    expect(snapshot.groups).toHaveLength(1);
+    expect(snapshot.chords).toHaveLength(1);
+    expect(await songRepository.loadSongs()).toHaveLength(1);
   });
 
-  it('localStorage 有数据时同步到 IDB（权威备份）', async () => {
-    storage.setItem('CHORD_LAB_GROUPS', JSON.stringify([{ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' }]));
-    storage.setItem(
-      'CHORD_LAB_LIST_V4',
-      JSON.stringify([
-        {
-          id: 'c1',
-          chordName: 'C',
-          strings: [
-            [-1, false],
-            [3, false],
-            [2, false],
-            [0, false],
-            [1, false],
-            [0, false],
-          ],
-          fretCount: 3,
-          fretOffset: 0,
-          groupId: 'g1',
-          tuning: 'STANDARD',
-          rootStringIndex: null,
-        },
-      ])
-    );
-    storage.setItem(`CHORD_LAB_SONG_ENTRY_V1:${song.id}`, JSON.stringify(song));
+  it('localStorage 有旧数据时引导完成转录并清空', async () => {
+    localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify([group]));
+    localStorage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:${song.id}`, JSON.stringify(song));
 
-    await syncLocalStorageToIdb(storage);
+    await bootstrapDataLayer();
 
-    expect(await chordRepository.loadGroups()).toHaveLength(1);
-    expect(await chordRepository.loadChords()).toHaveLength(1);
-    expect(await songRepository.loadSongs()).toEqual([song]);
+    const snapshot = await chordRepository.load();
+    expect(snapshot.groups).toHaveLength(1);
+    expect(await songRepository.loadSongs()).toHaveLength(1);
+    expect(localStorage.length).toBe(0);
+    expect(kvGet(RETIRED_FLAG_KEY)).toBe('1');
   });
 
-  it('IDB 曲库为空时保留 localStorage 歌曲（localStorage 是实时权威源）', async () => {
-    await chordRepository.saveGroups([{ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' }]);
-    storage.setItem('CHORD_LAB_SONGS_INDEX_V1', JSON.stringify(['stale']));
-    storage.setItem('CHORD_LAB_SONG_ENTRY_V1:stale', JSON.stringify({ ...song, id: 'stale' }));
+  it('转录幂等：完成后再次出现旧键不会二次搬移或覆盖 IDB', async () => {
+    localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify([group]));
+    await bootstrapDataLayer();
 
-    await bootstrapDataLayer(storage);
+    // 模拟旧键「复活」（如用户从旧备份恢复了浏览器数据）
+    localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify([{ id: 'stale', name: 'X', sortRule: 'ROOT_PITCH' }]));
 
-    // IDB 为空只代表备份尚未同步，不得据此清空 localStorage 的实时数据（避免刷新竞态丢数据）
-    expect(storage.getItem('CHORD_LAB_SONGS_INDEX_V1')).toContain('stale');
-    expect(storage.getItem('CHORD_LAB_SONG_ENTRY_V1:stale')).toBeTruthy();
+    await bootstrapDataLayer();
+
+    const snapshot = await chordRepository.load();
+    expect(snapshot.groups.map(g => g.id)).toEqual(['g1']);
   });
 });

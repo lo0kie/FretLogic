@@ -309,7 +309,7 @@ import type { PasteSongOutcome } from '@/domains/score/transfer/useTextTransfer'
 import type { SyncProviderKind } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { MenuItem } from '@/platform/ui/menu/types';
-import type { SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
+import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
 
 const route = useRoute();
 const router = useRouter();

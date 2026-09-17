@@ -14,11 +14,17 @@
 import { onActivated, watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
+import { z } from 'zod';
 
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { computeChordFingerprint, getChordName } from '@/domains/chord/theory/theory';
+import { kvGet, kvRemove } from '@/platform/services/storage/idbKv';
 import { ROUTE_PATHS, STORAGE_KEYS } from '@/platform/utils/constants';
+
+// URL query 参数 schema（替代手写 typeof 守卫）：group/chord 为非空 id 串；v 为非负整数十进制串
+const QUERY_ID = z.string().min(1);
+const QUERY_V = z.string().regex(/^\d+$/);
 
 /** 本页会话内是否已完成冷启动回灌（防重入：避免用户取消选择后被回灌复活） */
 let resumed = false;
@@ -132,24 +138,25 @@ export function useWorkbenchRouteSync() {
     //    避免指针覆盖显式传入的 group 参数，也避免用户取消选择后被回灌复活。
     if (!resumed) {
       resumed = true;
-      const hasNoAddress =
-        (typeof queryChord !== 'string' || !queryChord) && (typeof queryGroup !== 'string' || !queryGroup);
+      const hasNoAddress = !QUERY_ID.safeParse(queryChord).success && !QUERY_ID.safeParse(queryGroup).success;
       if (hasNoAddress) {
-        const lastGroup = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.LAST_GROUP_ID) : null;
+        const lastGroup = kvGet(STORAGE_KEYS.LAST_GROUP_ID);
         if (lastGroup) {
           if (chordStore.groups.some(g => g.id === lastGroup)) {
             replaceQuery({ group: lastGroup });
             return;
           }
           // 失效指针：清理，避免每次激活重复补位失败
-          localStorage.removeItem(STORAGE_KEYS.LAST_GROUP_ID);
+          kvRemove(STORAGE_KEYS.LAST_GROUP_ID);
         }
       }
     }
 
-    // 1. chord 参数优先：合法目标且草稿不脏时载入（含变体切换）
-    if (typeof queryChord === 'string' && queryChord) {
-      if (applyChordParam(queryChord, typeof queryV === 'string' ? queryV : undefined)) return;
+    // 1. chord 参数优先：合法目标且草稿不脏时载入（含变体切换）；v 仅接受纯数字串
+    const chordResult = QUERY_ID.safeParse(queryChord);
+    if (chordResult.success) {
+      const vResult = QUERY_V.safeParse(queryV);
+      if (applyChordParam(chordResult.data, vResult.success ? vResult.data : undefined)) return;
       replaceQuery({ chord: undefined, v: undefined });
       return;
     }
@@ -157,9 +164,11 @@ export function useWorkbenchRouteSync() {
     // 2. 分组参数：聚焦分组；无效 id 纠偏移除。URL 完全无 group 地址时回到「无选中分组」
     //    （空态保底）：正常路径下 group 参数由镜像 watcher 持续维持；只有存在未保存草稿时，草稿
     //    镜像才会以 draft.groupId 写回 URL，因此本分支不会误伤「正在编辑草稿」所在的组。
-    if (typeof queryGroup === 'string' && queryGroup) {
-      if (chordStore.groups.some(g => g.id === queryGroup)) {
-        if (chordStore.selectedGroupId !== queryGroup) chordStore.selectAndExpandGroup(queryGroup);
+    const groupResult = QUERY_ID.safeParse(queryGroup);
+    if (groupResult.success) {
+      const groupId = groupResult.data;
+      if (chordStore.groups.some(g => g.id === groupId)) {
+        if (chordStore.selectedGroupId !== groupId) chordStore.selectAndExpandGroup(groupId);
       } else {
         replaceQuery({ group: undefined });
       }

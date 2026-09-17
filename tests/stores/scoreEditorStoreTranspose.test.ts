@@ -9,14 +9,18 @@ import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { idb } from '@/platform/services/storage';
+import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 import type { Chord } from '@/domains/chord/types';
 import type { LineId, SlotKey } from '@/domains/score/types';
 
 describe('乐谱编辑器移调与撤销栈 (scoreEditorStore Transpose & Undo)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // 重置 kv 镜像（IDB kv 库 + 内存 Map），保证用例间小状态隔离
+    await idb.clear('kv');
+    await hydrateIdbKv();
     setActivePinia(createPinia());
-    localStorage.clear();
   });
 
   it('transposeActiveSong: 移调并在撤销 (undo) 后恢复原调与和弦绑定，重做 (redo) 后重现', async () => {

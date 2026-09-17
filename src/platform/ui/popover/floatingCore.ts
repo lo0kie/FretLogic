@@ -110,3 +110,33 @@ export const createVirtualElementRect = (x: number, y: number, width = 0, height
     getBoundingClientRect: () => rect,
   };
 };
+
+/**
+ * 浮层入场缩放的原点：跟随实际(flip 后)placement，让面板从「贴着触发点的那一侧」长出，
+ * 而不是固定 top 中心（视觉像从中心弹开）。
+ *
+ * floating-ui 的 placement 描述「浮层相对锚点的方位」：
+ *  - main 轴为 bottom/top/left/right → 贴锚点的边是该方位的反边（bottom → 从面板 top 生长）；
+ *  - cross 轴为 start/end → 另一个维度也贴近锚点（bottom-start → top-left 角贴触发点）。
+ * 无 cross 时该维度居中，水平主轴与垂直主轴分别拼装 transform-origin。
+ */
+export const computePanelTransformOrigin = (placement: Placement): string => {
+  const [main = '', cross] = placement.split('-');
+  const mainNear: Record<string, string> = { bottom: 'top', top: 'bottom', right: 'left', left: 'right' };
+  const mainIsVertical = main === 'bottom' || main === 'top';
+
+  // 主轴贴边（必含）；交叉轴仅在有 start/end 时贴近，否则居中
+  const mainPart = mainNear[main] ?? 'center';
+  const crossPart =
+    cross === 'start'
+      ? mainIsVertical
+        ? 'left'
+        : 'top'
+      : cross === 'end'
+        ? mainIsVertical
+          ? 'right'
+          : 'bottom'
+        : 'center';
+
+  return mainIsVertical ? `${mainPart} ${crossPart}` : `${crossPart} ${mainPart}`;
+};

@@ -10,6 +10,8 @@ import { createChord } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { charKey } from '@/domains/score/model/scoreModel';
+import { idb } from '@/platform/services/storage';
+import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 import type { Chord } from '@/domains/chord/types';
 
@@ -31,8 +33,10 @@ const makeChord = (name: string): Chord =>
   });
 
 describe('chordScoreBridge：和弦删除/撤销与乐谱槽位解绑的跨域桥接', () => {
-  beforeEach(() => {
-    localStorage.clear();
+  beforeEach(async () => {
+    // 重置 kv 镜像（IDB kv 库 + 内存 Map），保证用例间小状态隔离
+    await idb.clear('kv');
+    await hydrateIdbKv();
     setActivePinia(createPinia());
     setupChordScoreBridge();
   });

@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     v-model:visible="backupModals.modals.export"
-    :confirm-button-disabled="!hasExportSelection"
+    :confirm-button-disabled="!isExportConfirmReady"
     @confirm="backupModals.handleExportConfirm"
     title="导出备份"
   >
@@ -43,16 +43,29 @@
         <template #help>
           <div class="flex h-[18px] items-center text-2xs leading-none">
             <span
-              v-if="backupModals.modalData.exportSelection.syncSettings && hasCredentials"
+              v-if="backupModals.modalData.exportSelection.syncSettings && backupModals.hasCredentials.value"
               class="flex items-center gap-1 font-medium text-warning"
             >
               <BaseIcon :icon-size="11" class="shrink-0" name="alert-triangle" />
-              <span>包含 Token / 密码明文，请妥善保管勿公开分享</span>
+              <span>Token / 密码将以导出密码加密（AES-GCM），导入时需输入同一密码</span>
             </span>
             <span v-else>云端同步的后端与账号信息</span>
           </div>
         </template>
         <BaseSwitch v-model="backupModals.modalData.exportSelection.syncSettings" aria-label="导出同步配置" />
+      </BaseFormRow>
+
+      <BaseFormRow
+        v-if="backupModals.modalData.exportSelection.syncSettings && backupModals.hasCredentials.value"
+        help="用于加密备份包内的 Token / 密码，导入这些凭据时必须输入同一密码；请勿与备份文件一起分享"
+        label="导出密码"
+      >
+        <BaseInput
+          v-model="backupModals.modalData.exportPassphrase"
+          aria-label="导出密码"
+          placeholder="输入导出密码以加密凭据"
+          type="password"
+        />
       </BaseFormRow>
 
       <BaseFormRow help="工作台与乐谱的乐理显示偏好" label="偏好设置">
@@ -104,13 +117,32 @@
 
       <BaseFormRow
         :disabled="!importAvailability.syncSettings"
-        :help="`云端后端：${importStats?.syncTargetLabel ?? '-'}（含凭据）`"
+        :help="`云端后端：${importStats?.syncTargetLabel ?? '-'}${
+          backupModals.hasEncryptedSecrets.value ? '（凭据已加密，需输入导出密码）' : '（含凭据）'
+        }`"
         label="同步配置"
       >
         <BaseSwitch
           v-model="backupModals.modalData.importSelection.syncSettings"
           :disabled="!importAvailability.syncSettings"
           aria-label="导入同步配置"
+        />
+      </BaseFormRow>
+
+      <BaseFormRow
+        v-if="backupModals.hasEncryptedSecrets.value && backupModals.modalData.importSelection.syncSettings"
+        :help="
+          backupModals.modalData.secretDecryptFailed
+            ? '解密失败：请确认密码与导出时一致'
+            : '输入该备份导出时设置的密码，用于解密 Token / 密码'
+        "
+        label="解密密码"
+      >
+        <BaseInput
+          v-model="backupModals.modalData.importPassphrase"
+          aria-label="凭据解密密码"
+          placeholder="输入导出时设置的密码"
+          type="password"
         />
       </BaseFormRow>
 
@@ -126,21 +158,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseForm from '@/platform/ui/form/BaseForm.vue';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
-import { useSettingsStore } from '@/platform/store/settingsStore';
 import { injectModalController } from '@/platform/store/useModalController';
 
 import type { useBackupModals } from '@/app/modals/useBackupModals';
 
 const backupModals = injectModalController<ReturnType<typeof useBackupModals>>('backupModals');
-const settingsStore = useSettingsStore();
 
 /** 表单行统一 Label 宽度：由 BaseForm 容器下发，各行无需重复声明 */
 const FORM_LABEL_WIDTH = '4.5rem';
@@ -151,18 +180,11 @@ const {
   exportAvailability,
   importAvailability,
   importStats,
-  hasExportSelection,
   hasImportSelection,
   isExportAll,
   isImportAll,
   isExportIndeterminate,
   isImportIndeterminate,
+  isExportConfirmReady,
 } = backupModals;
-
-/** 当前是否存在非空凭证（Token / 密码），用于决定是否展示安全警告 */
-const hasCredentials = computed(() =>
-  [settingsStore.githubToken, settingsStore.giteeToken, settingsStore.webdavPassword, settingsStore.serverToken].some(
-    v => typeof v === 'string' && v.trim().length > 0
-  )
-);
 </script>

@@ -117,7 +117,11 @@ describe('webdav testConnection', () => {
   });
 
   it('throws CONFLICT on 409 during push', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(response(201)).mockResolvedValueOnce(response(409));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(201)) // MKCOL 建父目录
+      .mockResolvedValueOnce(response(404)) // HEAD 探测：云端无文件，无条件写
+      .mockResolvedValueOnce(response(409));
     vi.stubGlobal('fetch', fetchMock);
 
     const provider = createWebdavSyncProvider(webdavConfig);
@@ -128,7 +132,11 @@ describe('webdav testConnection', () => {
   });
 
   it('throws CONFLICT on 412 during push', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(response(201)).mockResolvedValueOnce(response(412));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(201)) // MKCOL 建父目录
+      .mockResolvedValueOnce(response(404)) // HEAD 探测
+      .mockResolvedValueOnce(response(412));
     vi.stubGlobal('fetch', fetchMock);
 
     const provider = createWebdavSyncProvider(webdavConfig);
@@ -136,6 +144,24 @@ describe('webdav testConnection', () => {
       code: 'CONFLICT',
       message: expect.stringContaining('版本冲突'),
     });
+  });
+
+  it('sends If-Match with probed ETag on push', async () => {
+    const etagResponse = (status: number, etag?: string) =>
+      new Response('', { status, headers: etag ? { ETag: etag } : {} });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(201)) // MKCOL
+      .mockResolvedValueOnce(etagResponse(200, '"strong-etag-1"')) // HEAD 探测到强 ETag
+      .mockResolvedValueOnce(etagResponse(200, '"new-etag"'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = createWebdavSyncProvider(webdavConfig);
+    await provider.push({ version: 4, groups: [], chords: [], songs: [] });
+
+    const putInit = fetchMock.mock.calls[2][1] as RequestInit;
+    expect(putInit.method).toBe('PUT');
+    expect((putInit.headers as Record<string, string>)['If-Match']).toBe('"strong-etag-1"');
   });
 });
 
