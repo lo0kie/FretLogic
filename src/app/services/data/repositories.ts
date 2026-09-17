@@ -1,55 +1,9 @@
 /**
- * v2 数据仓库层：基于 IndexedDB 的异步 repository。
+ * 数据仓库层入口：统一 re-export 领域侧的 IDB 仓储实现。
  *
- * 职责：提供对 IDB 对象库的类型化读写，封装存储细节。
- * 与 UI 解耦；store 层负责把仓库数据映射为响应式状态。
+ * 历史说明：本文件曾各自维护一份与领域仓储平行的 IDB 实现（v2 备份链路专用），
+ * IDB 成为唯一权威存储后两份实现合并为领域侧单例，这里只保留聚合出口
+ * （转录链路 migrateLegacy 经此消费）。
  */
-import { idb } from '@/platform/services/storage';
-
-import type { Chord, Group } from '@/domains/chord/types';
-import type { Song } from '@/domains/score/types';
-
-export interface ChordRepository {
-  loadGroups(): Promise<Group[]>;
-  loadChords(): Promise<Chord[]>;
-  /** 全量保存（replace 语义） */
-  saveGroups(groups: Group[]): Promise<void>;
-  saveChords(chords: Chord[]): Promise<void>;
-}
-
-export interface SongRepository {
-  loadSongs(): Promise<Song[]>;
-  saveSong(song: Song): Promise<void>;
-  saveSongs(songs: Song[]): Promise<void>;
-  removeSong(id: string): Promise<void>;
-}
-
-export const chordRepository: ChordRepository = {
-  async loadGroups() {
-    return idb.getAll<Group>('groups');
-  },
-  async loadChords() {
-    return idb.getAll<Chord>('chords');
-  },
-  async saveGroups(groups) {
-    await idb.replaceAll('groups', groups);
-  },
-  async saveChords(chords) {
-    await idb.replaceAll('chords', chords);
-  },
-};
-
-export const songRepository: SongRepository = {
-  async loadSongs() {
-    return idb.getAll<Song>('songs');
-  },
-  async saveSong(song) {
-    await idb.put('songs', song);
-  },
-  async saveSongs(songs) {
-    await idb.replaceAll('songs', songs);
-  },
-  async removeSong(id) {
-    await idb.delete('songs', id);
-  },
-};
+export { chordRepository } from '@/domains/chord/model/chordRepository';
+export { songRepository } from '@/domains/score/model/songRepository';

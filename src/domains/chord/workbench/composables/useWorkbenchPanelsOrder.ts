@@ -1,7 +1,6 @@
 import { ref, watch } from 'vue';
 
-import { useStorage } from '@vueuse/core';
-
+import { useStorage } from '@/platform/composables/useStorage';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import type { Ref } from 'vue';
@@ -35,14 +34,12 @@ export interface UseWorkbenchPanelsOrderReturn {
 
 /**
  * 工作台面板顺序管理的组合式函数：
- * 维护面板展示顺序、自动与 LocalStorage 保持双向同步，对外仅暴露 setOrder 一个重排入口。
+ * 维护面板展示顺序、自动与持久化存储（kv 镜像）保持双向同步，对外仅暴露 setOrder 一个重排入口。
  */
 export function useWorkbenchPanelsOrder(): UseWorkbenchPanelsOrderReturn {
-  const storedOrder = useStorage<WorkbenchPanelId[]>(
-    STORAGE_KEYS.WORKBENCH_PANEL_ORDER,
-    [...DEFAULT_WORKBENCH_PANEL_ORDER],
-    localStorage
-  );
+  const storedOrder = useStorage<WorkbenchPanelId[]>(STORAGE_KEYS.WORKBENCH_PANEL_ORDER, [
+    ...DEFAULT_WORKBENCH_PANEL_ORDER,
+  ]);
 
   const panels = ref<WorkbenchPanelId[]>(sanitizePanelOrder(storedOrder.value));
 

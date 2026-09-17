@@ -1,7 +1,7 @@
 <template>
-  <div :class="['base-form flex flex-col', gapClass]">
+  <component :class="['base-form flex flex-col', gapClass]" :is="tag">
     <slot />
-  </div>
+  </component>
 </template>
 
 <script setup lang="ts">
@@ -22,9 +22,17 @@ defineOptions({ name: 'BaseForm' });
  * - 表单控件通用属性（size，后续可扩展 disabled 等）。
  * 均由业务层通过 props 显式声明（不内置隐式默认），
  * 子 FormRow / 子控件行内显式 props 仍可覆盖容器下发的默认值。
+ *
+ * 渲染标签可换（tag 透传到 <component :is>）：需要**原生表单语义**时传 tag="form"，例如承载
+ * `type="password"` 字段的场景 —— 无 form 归属的密码框会被 Chrome 打
+ * `[DOM] Password field is not contained in a form`，且密码管理器拿不到归属、只能靠启发式猜凭据分组。
+ * 换标签只改承载元素，布局与下发的上下文不变；消费方传的 class / 原生事件（如 @submit.prevent）
+ * 经 attrs 落到这个根元素上。
  */
 const props = withDefaults(
   defineProps<{
+    /** 渲染标签：默认 div；需要原生表单语义（承载 type="password" 字段、供密码管理器归属）时传 'form' */
+    tag?: string;
     /** 字段间的垂直间距档位 */
     gap?: 'sm' | 'md' | 'lg';
     /** 下发子 FormRow 的标签亮度（容器级默认，行内 props 可覆盖） */
@@ -37,6 +45,7 @@ const props = withDefaults(
     size?: ComponentSize;
   }>(),
   {
+    tag: 'div',
     gap: 'md',
     labelTone: undefined,
     labelSize: undefined,

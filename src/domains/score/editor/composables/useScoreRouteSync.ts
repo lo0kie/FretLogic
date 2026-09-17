@@ -1,9 +1,11 @@
 import { effectScope, onActivated, watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
+import { z } from 'zod';
 
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { kvGet, kvRemove } from '@/platform/services/storage/idbKv';
 import { useUiStore } from '@/platform/store/uiStore';
 import { ROUTE_PATHS, STORAGE_KEYS } from '@/platform/utils/constants';
 
@@ -22,6 +24,10 @@ import type { EffectScope } from 'vue';
 
 /** URL tab 参数合法值域（edit 为默认态，镜像 URL 时省略） */
 const TAB_QUERY_VALUES = ['edit', 'interactive', 'preview'] as const satisfies readonly ScoreActiveTab[];
+
+// URL query 参数 schema：id 为非空串；tab 限定合法值域（替代手写 typeof 守卫与枚举 cast）
+const QUERY_ID = z.string().min(1);
+const QUERY_TAB = z.enum(TAB_QUERY_VALUES);
 
 interface ScoreRouteSyncApi {
   syncRouteToStore: () => void;
@@ -92,23 +98,21 @@ function createScoreRouteSync(): ScoreRouteSyncApi {
       //    id，也避免用户取消选择后被回灌复活。
       if (!resumed) {
         resumed = true;
-        const hasNoAddress = typeof queryId !== 'string' || !queryId;
+        const hasNoAddress = !QUERY_ID.safeParse(queryId).success;
         if (hasNoAddress) {
-          const lastSongId =
-            typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.LAST_SONG_ID) : null;
+          const lastSongId = kvGet(STORAGE_KEYS.LAST_SONG_ID);
           if (lastSongId) {
             if (songStore.songs.some(s => s.id === lastSongId)) {
               // 随「最近乐谱」一并回灌最近的 Tab（镜像省略 edit 时 URL 即无 tab），保证裸入口刷新后
-              // 回到上次的主 Tab（例：预览页）而非回退到默认编辑态；tab 合法性由下方 Tab 同步分支兜底
+              // 回到上次的主 Tab（例：预览页）而非回退到默认编辑态；tab 合法性由 QUERY_TAB 兜底
               const patch: Record<string, string> = { id: lastSongId };
-              const lastTab =
-                typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE_TAB) : null;
-              if (lastTab && TAB_QUERY_VALUES.includes(lastTab as ScoreActiveTab)) patch['tab'] = lastTab;
+              const lastTab = QUERY_TAB.safeParse(kvGet(STORAGE_KEYS.LAST_ACTIVE_TAB));
+              if (lastTab.success) patch['tab'] = lastTab.data;
               void router.replace({ query: { ...route.query, ...patch } });
               return;
             }
             // 失效指针：清理，避免每次激活重复补位失败
-            localStorage.removeItem(STORAGE_KEYS.LAST_SONG_ID);
+            kvRemove(STORAGE_KEYS.LAST_SONG_ID);
           }
         }
       }
@@ -116,9 +120,11 @@ function createScoreRouteSync(): ScoreRouteSyncApi {
       // 1. 同步选歌：URL 有 id 时 URL 优先；不存在的 id 从 URL 移除；URL 无 id 时回到未选中——
       //    但仅限「页内编辑」（freshEntry=false）：刚进入本页时导航已清空 query，中段是由上方回灌恢复，
       //    此刻绝不清空内存中仍有效的选中（否则切页就丢选歌/丢 URL）。
-      if (typeof queryId === 'string' && queryId) {
-        if (songStore.songs.some(s => s.id === queryId)) {
-          if (scoreEditor.activeSongId !== queryId) scoreEditor.setActiveSong(queryId);
+      const idResult = QUERY_ID.safeParse(queryId);
+      if (idResult.success) {
+        const songId = idResult.data;
+        if (songStore.songs.some(s => s.id === songId)) {
+          if (scoreEditor.activeSongId !== songId) scoreEditor.setActiveSong(songId);
         } else {
           void router.replace({ query: { ...route.query, id: undefined } });
         }
@@ -127,8 +133,9 @@ function createScoreRouteSync(): ScoreRouteSyncApi {
       }
 
       // 2. 同步主 Tab：合法性结合「是否有歌词」守卫；tab=edit 为默认态，从 URL 中省略
-      if (typeof queryTab === 'string' && TAB_QUERY_VALUES.includes(queryTab as ScoreActiveTab)) {
-        const tab = queryTab as ScoreActiveTab;
+      const tabResult = QUERY_TAB.safeParse(queryTab);
+      if (tabResult.success) {
+        const tab = tabResult.data;
         if (tab !== 'edit' && !scoreEditor.hasLyrics) {
           // toast 仅在 tab 实际被纠正时弹出：同一次导航内多触发源（路由 watcher / onActivated）重入时不再重复提示
           if (scoreEditor.activeTab !== 'edit') {

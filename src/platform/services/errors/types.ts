@@ -2,7 +2,7 @@
 export const ErrorCode = {
   /** 输入/参数校验失败 */
   INVALID_INPUT: 'INVALID_INPUT',
-  /** 存储层（IndexedDB/localStorage）读写失败 */
+  /** 存储层（IndexedDB）读写失败 */
   STORAGE: 'STORAGE',
   /** 网络/同步失败（GitHub 同步） */
   NETWORK: 'NETWORK',

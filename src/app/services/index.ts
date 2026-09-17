@@ -11,5 +11,6 @@ export * from './validation/persistedData';
 export * from './data/repositories';
 export * from './data/bootstrap';
 export * from './data/migrateLegacy';
-export { createChordRepository, type ChordLibrarySnapshot } from '@/domains/chord';
-export { createSongRepository } from '@/domains/score';
+export { chordRepository, type ChordLibrarySnapshot, type ChordLibraryRepository } from '@/domains/chord';
+export { songRepository, type SongRepository } from '@/domains/score';
+export { sanitizeSongList } from '@/domains/score';

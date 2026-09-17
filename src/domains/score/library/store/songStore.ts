@@ -1,19 +1,19 @@
 /**
- * 歌曲 store：歌曲列表的加载、增删改与分片持久化（localStorage 按歌曲单键存储）。
- * 提供和弦引用反查倒排索引；旧版单键（SONGS）数据在首次加载时自动迁移后清除。
- * 纯逻辑拆分见同目录：songPersistence（防抖刷写/迁移）、songChordOps（批量绑定/移调重映射）、
+ * 歌曲 store：歌曲列表的加载、增删改与分片持久化（IDB songs 库按歌存单条记录）。
+ * 提供和弦引用反查倒排索引；启动时经 hydrate() 异步水合（装配层挂载前 await）。
+ * 纯逻辑拆分见同目录：songPersistence（防抖刷写）、songChordOps（批量绑定/移调重映射）、
  * songIndex（引用倒排索引）、songMeta（元信息 diff）。
  */
 import { computed, ref, watch } from 'vue';
 
-import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
-import { createSongRepository } from '@/app/services';
 import { transposeChordName } from '@/domains/chord/theory/theory';
 import { toCapo } from '@/domains/fretboard/model/coordinates';
 import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/domains/score/model/chordSlots';
 import { createSong as createSongEntity } from '@/domains/score/model/scoreModel';
+import { songRepository } from '@/domains/score/model/songRepository';
+import { kvGet, kvSet } from '@/platform/services/storage/idbKv';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { compareByPinyin } from '@/platform/utils/pinyin';
 
@@ -37,20 +37,14 @@ export type SongSortMethod = 'manual' | 'title' | 'createdAt';
 /** 歌手筛选项的排序比较器（模块级单例）：localeCompare 每次调用都要重新解析 locale 与选项 */
 const SINGER_COLLATOR = new Intl.Collator('zh-Hans-CN');
 
-/** 读取持久化的乐谱排序方式；存储不可用或值非法时回退为手动排序。 */
+/** 读取持久化的乐谱排序方式（kv 镜像同步读）；值非法时回退为手动排序。 */
 const readSongSortMethod = (): SongSortMethod => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SONGS_SORT_METHOD);
-    return raw === 'title' || raw === 'createdAt' ? raw : 'manual';
-  } catch {
-    return 'manual';
-  }
+  const raw = kvGet(STORAGE_KEYS.SONGS_SORT_METHOD);
+  return raw === 'title' || raw === 'createdAt' ? raw : 'manual';
 };
 
 export const useSongStore = defineStore('song', () => {
-  const songRepository = createSongRepository(localStorage);
-  // 按歌曲拆分持久化：编辑一首歌只序列化那一首，避免每次改动全量 JSON.stringify 所有歌曲。
-  // 旧版单键（SONGS）数据在首次加载时自动迁移，迁移成功后清除。
+  // 按歌曲拆分持久化：编辑一首歌只序列化那一首，避免每次改动全量序列化所有歌曲。
   const songs = ref<Song[]>([]);
   const songMap = computed(() => new Map<string, Song>(songs.value.map(s => [s.id, s])));
   const lastDeletedSongInfo = ref<{ song: Song; index: number } | null>(null);
@@ -58,7 +52,14 @@ export const useSongStore = defineStore('song', () => {
   const { persistence, loadInitialSongs } = createSongPersistence(songRepository, () => songs.value);
   const { markSongDirty, markSongRemoved, markSongRestored, markIndexDirty, flushSongsNow } = persistence;
 
-  songs.value = loadInitialSongs();
+  // 水合门禁：hydrate() 由应用装配层在挂载前 await，完成后 songs 才有数据
+  let hydrated = false;
+  /** 异步水合：从 IDB 加载歌曲列表（按顺序索引排列）；失败时上报并保持空列表。 */
+  const hydrate = async (): Promise<void> => {
+    if (hydrated) return;
+    hydrated = true;
+    songs.value = await loadInitialSongs();
+  };
 
   /**
    * 响应式全局和弦引用倒排索引：chordId -> { song, count }[]，反查 O(1)。
@@ -120,14 +121,10 @@ export const useSongStore = defineStore('song', () => {
 
   // ---- 乐谱排序方式（持久化；manual 为拖拽顺序，其余为展示排序，非 manual 时禁用拖拽重排） ----
   const songSortMethod = ref<SongSortMethod>(readSongSortMethod());
-  /** 设置乐谱排序方式并持久化到 localStorage；存储不可用时仅保持内存态。 */
+  /** 设置乐谱排序方式并持久化（kv 镜像，IDB 落盘）。 */
   const setSongSortMethod = (method: SongSortMethod) => {
     songSortMethod.value = method;
-    try {
-      localStorage.setItem(STORAGE_KEYS.SONGS_SORT_METHOD, method);
-    } catch {
-      /* 存储不可用时仅保持内存态 */
-    }
+    kvSet(STORAGE_KEYS.SONGS_SORT_METHOD, method);
   };
   const sortedSongs = computed<Song[]>(() => {
     if (songSortMethod.value === 'title') {
@@ -165,17 +162,8 @@ export const useSongStore = defineStore('song', () => {
     [...new Set(songs.value.map(s => s.timeSignature).filter(Boolean))].sort()
   );
 
-  // 与 chordStore 的 useStorage 行为对齐：监听外部对 localStorage 的变更（DevTools 清空 / 其他标签页写入）。
-  // 本页自身写 localStorage 不会触发 storage 事件（规范），因此不会自我循环；
-  // 外部整体 clear 时 e.key 为 null，命中后重载为空 → 乐谱与和弦库一样能对外部清空即时响应，无需刷新。
-  useEventListener(window, 'storage', (event: StorageEvent) => {
-    const key = event.key;
-    const songEntryPrefix = `${STORAGE_KEYS.SONG_ENTRY}:`;
-    const isSongKey =
-      key === null || key === STORAGE_KEYS.SONGS_INDEX || (typeof key === 'string' && key.startsWith(songEntryPrefix));
-    if (!isSongKey) return;
-    songs.value = songRepository.loadSongs();
-  });
+  // 多标签页不做实时同步：IDB 没有 storage 事件等价物（历史同步机制已随旧存储移除），
+  // IDB 无等价跨页事件（自建 BroadcastChannel 成本高于收益），迁移后该能力随之移除。
 
   // ---- CRUD ----
 
@@ -273,6 +261,10 @@ export const useSongStore = defineStore('song', () => {
   /**
    * 全曲移调：移调演奏调（playKey）；若提供和弦解析选项，则对全曲 chordMap
    * 进行换算映射（优先复用和弦库既有指法，无匹配时自动生成新和弦）。
+   *
+   * playKey 与 chordMap 的写入都排在换算之后：chordCreator 依和弦数据可能抛错，
+   * 若先把 playKey 落下去，抛点之后就会留下「演唱调已变、和弦还是旧调」的半完成态。
+   * 换算结果先落在局部变量，抛错时两处都不写。
    */
   const transposeSong = (
     songId: string,
@@ -283,11 +275,11 @@ export const useSongStore = defineStore('song', () => {
     const target = songMap.value.get(songId);
     if (!target) return;
 
-    target.playKey = transposeChordName(target.playKey || 'C', semitones);
+    const nextChordMap =
+      options && target.chordMap.size > 0 ? remapTransposedChordMap(target.chordMap, semitones, options) : null;
 
-    if (options && target.chordMap.size > 0) {
-      target.chordMap = remapTransposedChordMap(target.chordMap, semitones, options);
-    }
+    if (nextChordMap) target.chordMap = nextChordMap;
+    target.playKey = transposeChordName(target.playKey || 'C', semitones);
 
     touchSong(target);
     markSongDirty(songId);
@@ -307,22 +299,22 @@ export const useSongStore = defineStore('song', () => {
     markSongDirty(songId);
   };
 
-  /** 用新列表全量覆盖歌曲集合：清理孤立存储键、标记全部为脏并立即落盘。 */
-  const overwriteSongs = (newSongs: Song[]) => {
+  /** 用新列表全量覆盖歌曲集合：清理孤立存储记录（含孤儿）、标记全部为脏并立即落盘。 */
+  const overwriteSongs = async (newSongs: Song[]) => {
     const newIds = new Set<string>(newSongs.map(s => s.id));
 
-    // 清理存储中不属于新集合的孤立歌曲键（全量覆盖是罕见操作，扫描一遍可接受）
-    const orphanIds = new Set(songRepository.listSongIds().filter(id => !newIds.has(id)));
-    orphanIds.forEach(id => songRepository.removeSong(id));
-
+    // 清理存储中不属于新集合的孤立歌曲记录（全量覆盖是罕见操作，扫描一遍可接受）
+    const orphanIds = new Set((await songRepository.listSongIds()).filter(id => !newIds.has(id)));
+    orphanIds.forEach(id => markSongRemoved(id));
     songs.value.forEach(s => {
       if (!newIds.has(s.id)) markSongRemoved(s.id);
     });
+
     songs.value = [...newSongs];
     newSongs.forEach(s => markSongDirty(s.id));
     markIndexDirty();
     // 全量覆盖后立即落盘，不等防抖
-    flushSongsNow();
+    await flushSongsNow();
   };
 
   /**
@@ -359,6 +351,15 @@ export const useSongStore = defineStore('song', () => {
   /** 从全部歌曲中解除对指定和弦 id 集合的槽位绑定（供删除和弦后联动调用）。 */
   const unbindChordIds = (targetIds: Set<string>) => unbindChordIdsFromSongs(songs.value, targetIds, markSongDirty);
 
+  // 防抖落盘的兜底：页面隐藏 / 关闭（含刷新）前把仍在防抖窗口内的变更强制落盘（与 chordStore 对齐）
+  if (typeof window !== 'undefined') {
+    const flushOnHide = () => void flushSongsNow();
+    window.addEventListener('pagehide', flushOnHide);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushOnHide();
+    });
+  }
+
   /** 撤销删除和弦/分组时，把此前被解绑的槽位绑定恢复回去 */
   const restoreChordBindings = (bindings: Parameters<typeof restoreChordBindingsToSongs>[1]) =>
     restoreChordBindingsToSongs(id => songMap.value.get(id), bindings, markSongDirty);
@@ -371,6 +372,8 @@ export const useSongStore = defineStore('song', () => {
     songs,
     songSortMethod,
     sortedSongs,
+    /** 异步水合（应用装配层挂载前 await） */
+    hydrate,
     setSongSortMethod,
     singerFilter,
     timeSignatureFilter,

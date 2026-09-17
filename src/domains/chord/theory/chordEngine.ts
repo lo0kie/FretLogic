@@ -391,11 +391,16 @@ function getPreferredRootLabel(
   }
 }
 
-/** 收集输入音符的音高掩码、最低音（按弦序）与各音高对应的音名（显式根音音高优先保留其音名，空缺由标准音名兜底） */
-function collectNoteContext(notes: NoteInput[], explicitRootPitch: number | null) {
+/** 收集输入音符的音高掩码、最低音与各音高对应的音名（显式根音音高优先保留其音名，空缺由标准音名兜底）。
+ *  最低音默认按弦序取（弦 0 为基准）——标准吉他调弦下空弦音高随弦序递增，两者等价。
+ *  重入调弦（尤克里里 GCEA：弦 0 的 G4 高于弦 1 的 C4）必须传 bassByPitch，
+ *  否则会拿物理上并不是最低的弦当低音，把 C 识别成 C/G、并连带污染转位判定。 */
+function collectNoteContext(notes: NoteInput[], explicitRootPitch: number | null, bassByPitch = false) {
   let pitchMask = 0;
   const labelByPitch: (string | undefined)[] = new Array(12);
-  const lowestNote = notes.reduce((min, n) => (n.stringIndex < min.stringIndex ? n : min), notes[0]!);
+  const lowestNote = bassByPitch
+    ? notes.reduce((min, n) => (n.pitchIndex < min.pitchIndex ? n : min), notes[0]!)
+    : notes.reduce((min, n) => (n.stringIndex < min.stringIndex ? n : min), notes[0]!);
 
   const normExplicit = explicitRootPitch !== null ? normalizePitch(explicitRootPitch) : null;
 
@@ -554,8 +559,8 @@ const relativeExplicitRoot = (explicitRootPitch: number | null, bassPitch: numbe
   explicitRootPitch === null ? -1 : normalizePitch(explicitRootPitch - bassPitch);
 
 /** 汇总一次分析的位置相关上下文：相对签名（音集旋转到基准音）+ 绝对音高 + 音名表 */
-function buildContext(notes: NoteInput[], explicitRootPitch: number | null): AnalyzeContext {
-  const { pitchMask, labelByPitch, lowestNote } = collectNoteContext(notes, explicitRootPitch);
+function buildContext(notes: NoteInput[], explicitRootPitch: number | null, bassByPitch = false): AnalyzeContext {
+  const { pitchMask, labelByPitch, lowestNote } = collectNoteContext(notes, explicitRootPitch, bassByPitch);
   const bassPitch = normalizePitch(lowestNote.pitchIndex);
   const relMask = toIntervalMask(pitchMask, bassPitch);
   const relExplicit = relativeExplicitRoot(explicitRootPitch, bassPitch);
@@ -602,11 +607,18 @@ function materialize(relHits: RelativeHit[], ctx: AnalyzeContext): AnalyzeResult
  *    因此一条命中可服务同一形状的全部移调。值里只有相对命中（根音相对音程 + 模板 + 纯度/外分），无音名。
  * 2. 绝对层：按本次实际输入（含逐音音名）落地。命中即返回同一个对象引用（保持既有引用稳定语义），
  *    未命中则不再重跑模板匹配，只花一次落地相的开销。
+ *
+ * bassByPitch：低音取法。缺省按弦序（弦 0），重入调弦须置 true 按真实音高取最低音 —— 见 collectNoteContext。
  */
-export function analyzeChordGraph(notes: NoteInput[], explicitRootPitch: number | null = null): AnalyzeResult {
+export function analyzeChordGraph(
+  notes: NoteInput[],
+  explicitRootPitch: number | null = null,
+  bassByPitch = false
+): AnalyzeResult {
   if (notes.length === 0) return createEmptyResult();
 
-  let key = `${explicitRootPitch ?? 'auto'}:`;
+  // bassByPitch 必须入缓存键：同一组音集在两种低音口径下结果不同，不入键会互相命中
+  let key = `${explicitRootPitch ?? 'auto'}:${bassByPitch ? 'p' : 's'}:`;
   for (const n of notes) {
     key += `${n.stringIndex}_${n.pitchIndex}_${n.label}|`;
   }
@@ -614,7 +626,7 @@ export function analyzeChordGraph(notes: NoteInput[], explicitRootPitch: number 
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const ctx = buildContext(notes, explicitRootPitch);
+  const ctx = buildContext(notes, explicitRootPitch, bassByPitch);
   const result = materialize(getRelativeHits(ctx), ctx);
 
   cache.set(key, result);
@@ -626,10 +638,14 @@ export function analyzeChordGraph(notes: NoteInput[], explicitRootPitch: number 
  * 供只要根音的调用方使用（排序元数据、重复判定、拾取面板、分组）：命中相对缓存时不产生任何对象分配，
  * 与 analyzeChordGraph 共用同一套签名与排序规则，故取值口径完全一致。
  */
-export function analyzeBestRootPitch(notes: NoteInput[], explicitRootPitch: number | null = null): number {
+export function analyzeBestRootPitch(
+  notes: NoteInput[],
+  explicitRootPitch: number | null = null,
+  bassByPitch = false
+): number {
   if (notes.length === 0) return 0;
 
-  const ctx = buildContext(notes, explicitRootPitch);
+  const ctx = buildContext(notes, explicitRootPitch, bassByPitch);
   const relHits = getRelativeHits(ctx);
   if (relHits.length === 0) return ctx.bassPitch;
 

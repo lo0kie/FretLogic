@@ -1,7 +1,21 @@
 export type SyncProviderKind = 'github' | 'gitee' | 'webdav' | 'server';
 
+/** 备份包内经 AES-GCM 加密的敏感凭据块（算法细节见 app/services/backup/backupCrypto.ts） */
+export interface EncryptedSecrets {
+  /** 格式版本（当前固定 1） */
+  v: number;
+  /** PBKDF2 盐（base64） */
+  salt: string;
+  /** AES-GCM IV（base64） */
+  iv: string;
+  /** 密文（base64）：明文为 { [字段名]: string } 的 JSON */
+  data: string;
+}
+
 export interface SyncSettingsBackup {
   syncTarget?: SyncProviderKind;
+  /** 加密敏感凭据块：存在时四个 Token/密码字段已被剥离出明文 */
+  secrets?: EncryptedSecrets;
   githubToken?: string;
   githubOwner?: string;
   githubRepo?: string;

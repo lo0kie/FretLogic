@@ -244,19 +244,22 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
       expect(normalized.chord.barres![0]).toEqual({ fret: 2, fromString: 0, toString: 6 });
     });
 
-    it('settingsStore 中 webdavPassword 不再持久化到 localStorage', async () => {
+    it('settingsStore 中 webdavPassword 为纯内存态，不落任何盘', async () => {
       const { STORAGE_KEYS } = await import('@/platform/utils/constants');
+      const { kvGet } = await import('@/platform/services/storage/idbKv');
       localStorage.setItem(STORAGE_KEYS.WEBDAV_PASSWORD, 'old_plaintext_password');
       const { useSettingsStore } = await import('@/platform/store/settingsStore');
       const store = useSettingsStore();
 
-      // 初始化时清除历史遗留的 localStorage 密码
-      expect(localStorage.getItem(STORAGE_KEYS.WEBDAV_PASSWORD)).toBeNull();
+      // store 自身不触碰 localStorage：历史明文密码由一次性转录丢弃
+      //（见 migrateLegacy：WEBDAV_PASSWORD 列入 EXCLUDED_KEYS，不转录进 kv）
+      expect(localStorage.getItem(STORAGE_KEYS.WEBDAV_PASSWORD)).toBe('old_plaintext_password');
 
-      // 设置新密码后仍为内存态，不写入 localStorage
+      // 设置新密码后仍为内存态，不写入 localStorage / kv 镜像
       store.webdavPassword = 'new_session_password';
       expect(store.webdavPassword).toBe('new_session_password');
-      expect(localStorage.getItem(STORAGE_KEYS.WEBDAV_PASSWORD)).toBeNull();
+      expect(localStorage.getItem(STORAGE_KEYS.WEBDAV_PASSWORD)).toBe('old_plaintext_password');
+      expect(kvGet(STORAGE_KEYS.WEBDAV_PASSWORD)).toBeNull();
     });
   });
 });

@@ -4,9 +4,9 @@
  */
 import { ref } from 'vue';
 
-import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
+import { useStorage } from '@/platform/composables/useStorage';
 import {
   AUDIO_SETTINGS_DEFAULTS,
   GITEE_SYNC_CONFIG,
@@ -64,11 +64,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // WebDAV 同步配置（支持选择使用预设代理或自定义代理）
   const webdavServerUrl = useStorage(STORAGE_KEYS.WEBDAV_SERVER_URL, '');
   const webdavUsername = useStorage(STORAGE_KEYS.WEBDAV_USERNAME, '');
-  // WebDAV 密码统一为纯内存态（与 githubToken/giteeToken/serverToken 一致，不落盘 localStorage）
+  // WebDAV 密码统一为纯内存态（与 githubToken/giteeToken/serverToken 一致，不落盘）；
+  // 历史版本曾把密码落盘，旧数据转录时该键被排除、不进 kv 库（见 migrateLegacy.ts）
   const webdavPassword = ref('');
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem(STORAGE_KEYS.WEBDAV_PASSWORD);
-  }
   const webdavUseDefaultProxy = useStorage(STORAGE_KEYS.WEBDAV_USE_DEFAULT_PROXY, true);
   const webdavProxyUrl = useStorage(STORAGE_KEYS.WEBDAV_PROXY_URL, '');
 
@@ -127,7 +125,6 @@ export const useSettingsStore = defineStore('settings', () => {
       reverbWet: AUDIO_SETTINGS_DEFAULTS.reverbWet,
       chorusEnabled: false,
     },
-    undefined,
     { mergeDefaults: true, serializer: audioPlaybackSerializer }
   );
 

@@ -2,12 +2,12 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createSongRepository } from '@/app/services';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { songRepository } from '@/domains/score/model/songRepository';
+import { idb } from '@/platform/services/storage';
+import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 import type { Song } from '@/domains/score/types';
-
-const SONG_ENTRY_PREFIX = 'CHORD_LAB_SONG_ENTRY_V1:';
 
 const buildSong = (id: string): Song => ({
   id,
@@ -25,40 +25,48 @@ const buildSong = (id: string): Song => ({
 const seedIds = ['s1', 's2', 's3'];
 
 describe('songStore.reorderSongs 排序不应删除数据', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    localStorage.setItem('CHORD_LAB_SONGS_INDEX_V1', JSON.stringify(seedIds));
+  beforeEach(async () => {
+    // 种子直接进 IDB（IDB 是唯一权威存储），再经 hydrate() 水合进 store
+    await idb.clear('chords');
+    await idb.clear('groups');
+    await idb.clear('songs');
+    await idb.clear('syncMeta');
+    await idb.clear('kv');
+    await hydrateIdbKv();
     for (const id of seedIds) {
-      localStorage.setItem(`${SONG_ENTRY_PREFIX}${id}`, JSON.stringify(buildSong(id)));
+      await songRepository.saveSong(buildSong(id));
     }
+    await songRepository.saveSongIds(seedIds);
     setActivePinia(createPinia());
+    await useSongStore().hydrate();
   });
 
-  it('重排顺序后，三首歌都还在（含存储键）', () => {
+  it('重排顺序后，三首歌都还在（含 IDB 记录与顺序索引）', async () => {
     const songStore = useSongStore();
-    const songRepository = createSongRepository(localStorage);
     const [a, b, c] = [...songStore.songs];
 
     songStore.reorderSongs([c!, a!, b!]);
+    await songStore.flushSongsNow();
 
     expect(songStore.songs.map(s => s.id)).toEqual([c!.id, a!.id, b!.id]);
     expect(songStore.songs).toHaveLength(3);
-    expect(songRepository.listSongIds().sort()).toEqual(seedIds);
+    expect((await songRepository.listSongIds()).sort()).toEqual(seedIds);
+    expect((await songRepository.loadSongs()).map(s => s.id)).toEqual([c!.id, a!.id, b!.id]);
   });
 
-  it('传入不完整集合时拒绝重排，不删除任何歌曲', () => {
+  it('传入不完整集合时拒绝重排，不删除任何歌曲', async () => {
     const songStore = useSongStore();
-    const songRepository = createSongRepository(localStorage);
     const [a] = [...songStore.songs];
 
     songStore.reorderSongs([a!]);
+    await songStore.flushSongsNow();
 
     expect(songStore.songs.map(s => s.id)).toEqual(seedIds);
     expect(songStore.songs).toHaveLength(3);
-    expect(songRepository.listSongIds().sort()).toEqual(seedIds);
+    expect((await songRepository.listSongIds()).sort()).toEqual(seedIds);
   });
 
-  it('删除乐谱后支持 undoDeleteSong 恢复到原位置', () => {
+  it('删除乐谱后支持 undoDeleteSong 恢复到原位置', async () => {
     const songStore = useSongStore();
     const [a, b, c] = [...songStore.songs];
 
@@ -70,9 +78,12 @@ describe('songStore.reorderSongs 排序不应删除数据', () => {
     const restored = songStore.undoDeleteSong();
     expect(restored?.id).toBe(b!.id);
     expect(songStore.songs.map(s => s.id)).toEqual([a!.id, b!.id, c!.id]);
+
+    await songStore.flushSongsNow();
+    expect((await songRepository.loadSongs()).map(s => s.id)).toEqual(['s1', 's2', 's3']);
   });
 
-  it('restoreSong 能准确将歌曲恢复至指定索引', () => {
+  it('restoreSong 能准确将歌曲恢复至指定索引', async () => {
     const songStore = useSongStore();
     const [a, b, c] = [...songStore.songs];
 
@@ -81,5 +92,8 @@ describe('songStore.reorderSongs 排序不应删除数据', () => {
 
     songStore.restoreSong(a!, 0);
     expect(songStore.songs.map(s => s.id)).toEqual([a!.id, b!.id, c!.id]);
+
+    await songStore.flushSongsNow();
+    expect((await songRepository.loadSongs()).map(s => s.id)).toEqual(['s1', 's2', 's3']);
   });
 });

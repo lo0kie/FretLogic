@@ -1,14 +1,44 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sanitizePersistedData } from '@/app/services/validation/persistedData';
+import { chordRepository, sanitizeChordLibrary } from '@/domains/chord/model/chordRepository';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { Tuning } from '@/domains/chord/theory/theory';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { sanitizeSongList, songRepository } from '@/domains/score/model/songRepository';
 import { serializeForStorage } from '@/platform/utils/common';
 
 import type { Chord, Group } from '@/domains/chord/types';
 import type { Song } from '@/domains/score/types';
+
+// 存储已迁移为 IDB 唯一权威（localStorage 退役）：store 启动数据来自 repository.hydrate()。
+// 这里 mock repository 层喂入脏数据，验证「暴露前清洗」契约在 hydrate 路径上仍然成立。
+// 注意用 importOriginal 保留同名纯函数（sanitizeGroups 等被 persistedData 复用），只替换仓储对象的方法。
+vi.mock('@/domains/chord/model/chordRepository', async importOriginal => {
+  const mod = await importOriginal<typeof import('@/domains/chord/model/chordRepository')>();
+  return {
+    ...mod,
+    chordRepository: {
+      load: vi.fn(),
+      save: vi.fn(),
+    },
+  };
+});
+vi.mock('@/domains/score/model/songRepository', async importOriginal => {
+  const mod = await importOriginal<typeof import('@/domains/score/model/songRepository')>();
+  return {
+    ...mod,
+    songRepository: {
+      loadSongs: vi.fn(),
+      saveSong: vi.fn(),
+      removeSong: vi.fn(),
+      saveSongIds: vi.fn(),
+      listSongIds: vi.fn(),
+      flushChanges: vi.fn(),
+    },
+  };
+});
 
 const group: Group = { id: 'group-1', name: 'C', sortRule: 'ROOT_PITCH' };
 const validChord: Chord = {
@@ -210,33 +240,39 @@ describe('sanitizePersistedData', () => {
 });
 
 describe('store startup sanitization', () => {
-  it('cleans malformed localStorage chord data before exposing it', () => {
-    localStorage.clear();
-    localStorage.setItem('CHORD_LAB_GROUPS', JSON.stringify([group]));
-    localStorage.setItem('CHORD_LAB_LIST_V4', JSON.stringify([validChord, { ...validChord, id: 'bad' }]));
+  beforeEach(() => {
+    vi.mocked(chordRepository.load).mockReset();
+    vi.mocked(songRepository.loadSongs).mockReset();
+  });
+
+  it('cleans malformed chord data during hydrate before exposing it', async () => {
+    vi.mocked(chordRepository.load).mockImplementation(async () =>
+      sanitizeChordLibrary({ groups: [group], chords: [validChord, { ...validChord, id: 'bad', strings: 'broken' }] })
+    );
     setActivePinia(createPinia());
     const chordStore = useChordStore();
+    await chordStore.hydrate();
 
     expect(chordStore.savedChordsList).toHaveLength(1);
   });
 
-  it('cleans malformed localStorage song data before exposing it', () => {
-    localStorage.clear();
-    localStorage.setItem('CHORD_LAB_SONGS_INDEX_V1', JSON.stringify(['song-1']));
-    localStorage.setItem(
-      'CHORD_LAB_SONG_ENTRY_V1:song-1',
-      JSON.stringify({
-        id: 'song-1',
-        title: 'Song',
-        lyrics: 'Hello',
-        lineIds: ['line-1', 42],
-        playKey: 'C',
-        capo: 99,
-        chordMap: { 'line_line-1_char_0': 'chord-1' },
-      })
+  it('cleans malformed song data during hydrate before exposing it', async () => {
+    vi.mocked(songRepository.loadSongs).mockImplementation(async () =>
+      sanitizeSongList([
+        {
+          id: 'song-1',
+          title: 'Song',
+          lyrics: 'Hello',
+          lineIds: ['line-1', 42],
+          playKey: 'C',
+          capo: 99,
+          chordMap: { 'line_line-1_char_0': 'chord-1' },
+        } as unknown as Song,
+      ])
     );
     setActivePinia(createPinia());
     const songStore = useSongStore();
+    await songStore.hydrate();
 
     expect(songStore.songs).toHaveLength(1);
     expect(songStore.songs[0].capo).toBe(0);

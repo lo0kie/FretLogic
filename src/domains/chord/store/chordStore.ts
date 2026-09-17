@@ -4,15 +4,16 @@
  * 纯逻辑拆分见同目录：chordGrouping（分组卡片构建）、chordEventBus（跨领域事件）、
  * chordDraftValidation（草稿校验）、chordMergeOps（重复合并检测）。
  */
-import { computed, ref, toRaw, watch } from 'vue';
+import { computed, nextTick, ref, toRaw, watch } from 'vue';
 
-import { useDebounceFn, useRefHistory, useStorage } from '@vueuse/core';
+import { useDebounceFn, useRefHistory } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
-import { createChordRepository } from '@/domains/chord/model/chordRepository';
+import { chordRepository } from '@/domains/chord/model/chordRepository';
 import { buildGroupVariant, createGroup, getGroupSortKey, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { matchChordSearch, sortChordsByRule } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
+import { clearPersistFailure, kvRemove, kvSet, reportPersistFailure } from '@/platform/services/storage';
 import { cloneDeep, generateUUID } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
@@ -25,21 +26,23 @@ import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
 
 const DEFAULT_SORT_RULE: GroupSortRule = GroupSortRule.ROOT_PITCH;
 
+/** 和弦撤销历史深度（整列表深拷贝，8 份即已控制住千级列表的内存驻留，详见 useRefHistory 处说明）。
+ *  导出供应用装配层复用：chordScoreBridge 按同一深度保留解绑记录，两处数字不再各自漂移。 */
+export const CHORD_HISTORY_CAPACITY = 8;
+
 export type { ChordValidationResult } from './chordDraftValidation';
 
 export const useChordStore = defineStore('chord', () => {
-  const chordRepository = createChordRepository(localStorage);
-  // 和弦列表体积大（大库下全量 JSON 序列化达 MB 级），持久化不走 useStorage：
-  // ① useStorage 的深度 watch 每次变更都在触发帧内深遍历整个列表（千级和弦 = 数万次 proxy 读）；
-  // ② 其 listenToStorageChanges 默认开着，防抖写入会触发 storage 事件被自己读回——
-  //    JSON.parse 全量 4MB → 重新赋值 → 再触发一轮快照克隆 + 视图模型重建（实测单次 260ms 长任务）。
-  // 改为普通 ref + 浅 watch（全部变更都是整列表替换，见下）+ 400ms 防抖写，与乐谱域 songPersistence 对齐；
-  // 「防抖窗口内刷新丢数据」由下方 pagehide / visibilitychange 强制刷盘兜底。多标签页实时同步随之关闭
-  // （此前 storage 回环在千级数据下得不偿失）。
+  // 和弦列表体积大（大库下全量序列化达 MB 级），持久化不走 useStorage 的深度 watch：
+  // ① 深度 watch 每次变更都在触发帧内深遍历整个列表（千级和弦 = 数万次 proxy 读）；
+  // ② JSON 解析回环会触发「全量重建 → 再触发一轮快照克隆 + 视图模型重建」（实测单次 260ms 长任务）。
+  // 改为普通 ref + 浅 watch（全部变更都是整列表替换，见下）+ 400ms 防抖写 IDB（groups/chords 单事务）；
+  // 「防抖窗口内刷新丢数据」由下方 pagehide / visibilitychange 强制刷盘兜底。多标签页不做实时同步
+  // （此前 storage 回环在千级数据下得不偿失，迁移后同样关闭）。
   const savedChordsList = ref<Chord[]>([]);
-  // 分组列表体积小，useStorage 立即同步写没有感知成本
-  const groups = useStorage<Group[]>(STORAGE_KEYS.GROUPS, [], localStorage);
-  // 选中/展开分组仅内存态：URL `?group=` 是唯一数据源，localStorage 只维护一个「最近编辑分组」指针
+  // 分组列表与和弦列表共用一次防抖事务刷写（分组与和弦同生共死），不再单独 useStorage
+  const groups = ref<Group[]>([]);
+  // 选中/展开分组仅内存态：URL `?group=` 是唯一数据源，持久化只维护一个「最近编辑分组」指针
   // 供裸访问入口冷启动回灌；不再双写完整选中态。
   const selectedGroupId = ref<string | null>(null);
   // 单一展开状态同属内存态（与 selectedGroupId 联动，URL group 回灌时经 selectAndExpandGroup 一并恢复）
@@ -50,38 +53,74 @@ export const useChordStore = defineStore('chord', () => {
   // 「最近编辑分组」冷启动指针：选中非空时写入；取消选中时清除，
   // 避免「关闭分组后刷新」被冷启动回灌重新打开（URL 方已移除 group 参数，指针须同步失效）
   watch(selectedGroupId, id => {
-    if (typeof localStorage === 'undefined') return;
-    if (id) localStorage.setItem(STORAGE_KEYS.LAST_GROUP_ID, id);
-    else localStorage.removeItem(STORAGE_KEYS.LAST_GROUP_ID);
+    if (id) kvSet(STORAGE_KEYS.LAST_GROUP_ID, id);
+    else kvRemove(STORAGE_KEYS.LAST_GROUP_ID);
   });
 
-  // 持久化分层：和弦列表变更经浅 watch 感知（整列表替换必改引用），400ms 防抖全量写；
-  // 保存等关键入口提供 flushChordsToStorage 作为同步刷盘保障
-  const persistChordsDebounced = useDebounceFn(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.CHORD_LIST, JSON.stringify(toRaw(savedChordsList.value)));
-    } catch {
-      // 存储失败静默忽略
-    }
-  }, 400);
-  watch(savedChordsList, () => persistChordsDebounced());
+  // 水合门禁：hydrate() 完成前为 false，期间 ref 变更（含水合赋值本身）不触发写回
+  let hydrated = false;
 
-  // 启动时以 chordRepository 清洗与迁移后的数据为准，避免全量 JSON.stringify 比对
-  {
-    const sanitized = chordRepository.load();
-    groups.value = sanitized.groups;
-    savedChordsList.value = sanitized.chords;
-  }
+  // 持久化分层：两个列表变更经浅 watch 感知（整列表替换必改引用），400ms 防抖合并写 IDB；
+  // 保存等关键入口提供 flushChordsToStorage 作为即时刷盘保障
+  const persistAll = async (): Promise<void> => {
+    if (!hydrated) return;
+    try {
+      await chordRepository.save({ groups: toRaw(groups.value), chords: toRaw(savedChordsList.value) });
+      clearPersistFailure('chords');
+    } catch (error) {
+      // 不再静默吞掉：配额超限等写入失败上报到平台层，由装配层统一提示用户
+      reportPersistFailure('chords', error);
+    }
+  };
+  const persistAllDebounced = useDebounceFn(() => void persistAll(), 400);
+  // 水合赋值本身会触发 watch：抑制期（hydrate 结束前）不调度写回，避免启动时把刚读入的数据原样全量写回一次
+  let suppressPersistWatch = true;
+  watch([savedChordsList, groups], () => {
+    if (suppressPersistWatch) return;
+    persistAllDebounced();
+  });
 
   // 每次提交都会克隆整个和弦列表，容量控制在 8 份以限制内存驻留。
+  // 与乐谱历史（useScoreHistory 的 20 步）不对称是刻意的：和弦单次快照是整列表深拷贝、
+  // 量级可达千条，深栈会显著抬高常驻内存；乐谱快照是按条拆分的轻量对象。
   // deep: false —— 所有变更路径都是整列表替换（唯一例外「撤销恢复孤儿收容」也已改为不可变更新），
   // 浅比较即可感知；省掉每次变更对千级列表的深度遍历。
-  const { undo: rawUndo } = useRefHistory(savedChordsList, {
-    capacity: 8,
+  const {
+    undo: rawUndo,
+    pause: pauseHistory,
+    resume: resumeHistory,
+  } = useRefHistory(savedChordsList, {
+    capacity: CHORD_HISTORY_CAPACITY,
     deep: false,
     flush: 'post',
     clone: v => cloneDeep(toRaw(v)),
   });
+
+  /**
+   * 异步水合：从 IDB 加载并清洗和弦库（chordRepository.load）。
+   * 由应用装配层在挂载前 await；水合赋值期间暂停撤销历史（首装载数据不算一次「撤销点」），
+   * 且 hydrated 置位先于赋值，防抖写回不会把刚读入的数据原样写回。
+   */
+  const hydrate = async (): Promise<void> => {
+    if (hydrated) return;
+    let snapshot: { groups: Group[]; chords: Chord[] };
+    try {
+      snapshot = await chordRepository.load();
+    } catch (error) {
+      reportPersistFailure('chords', error);
+      // 水合失败也开启写回门禁：本会话的用户改动仍应尝试落库（失败会继续上报），不能因读取失败而全部静默丢弃
+      hydrated = true;
+      suppressPersistWatch = false;
+      return;
+    }
+    hydrated = true;
+    pauseHistory();
+    groups.value = snapshot.groups;
+    savedChordsList.value = snapshot.chords;
+    await nextTick();
+    resumeHistory();
+    suppressPersistWatch = false;
+  };
 
   // ---- 派生视图模型（纯逻辑见 chordGrouping） ----
   const groupChordMap = computed(() => {
@@ -149,7 +188,7 @@ export const useChordStore = defineStore('chord', () => {
 
   // ---- 分组选中 / 展开 / CRUD ----
 
-  /** 用新列表整体覆盖分组列表（写入 localStorage）。 */
+  /** 用新列表整体覆盖分组列表（随下次防抖刷写落库）。 */
   const overwriteGroups = (newGroups: Group[]) => {
     groups.value = [...newGroups];
   };
@@ -242,7 +281,7 @@ export const useChordStore = defineStore('chord', () => {
   // ---- 跨领域副作用事件（机制见 chordEventBus） ----
   const eventBus = createChordEventBus();
 
-  /** 删除分组及其名下全部和弦，并联动清除展开/选中状态（两者均写入 localStorage）。 */
+  /** 删除分组及其名下全部和弦，并联动清除展开/选中状态与「最近编辑分组」指针。 */
   const deleteGroup = (groupId: string) => {
     // 单趟同时完成「挑出待删 id」与「保留其余和弦」：拆成 filter + map + filter 是三次全量遍历
     // （千级列表下纯属重复扫描），与 removeChords 的单趟写法对齐
@@ -287,20 +326,14 @@ export const useChordStore = defineStore('chord', () => {
   };
 
   /**
-   * 同步紧急落盘：立即将和弦列表同步写入 localStorage。
+   * 即时刷盘：绕过防抖窗口，立即将分组与和弦列表写入 IDB（单事务）。
    * 供保存/更新等关键动作成功后调用，消除防抖窗口与 Vue 响应式 watch 微任务延迟，
    * 避免用户操作后光速刷新导致数据未落盘。
    */
-  const flushChordsToStorage = () => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.CHORD_LIST, JSON.stringify(toRaw(savedChordsList.value)));
-    } catch {
-      // 存储失败静默忽略（与 useStorage 行为一致）
-    }
-  };
+  const flushChordsToStorage = () => void persistAll();
 
   // 防抖落盘的兜底：页面隐藏 / 关闭（含刷新）前把仍在防抖窗口内的变更强制落盘。
-  // 关闭前这一次全量写不影响交互感知；没有它，防抖窗口内的刷新会丢掉最后一次变更。
+  // 关闭前这一次 IDB 写入在 pagehide 时同步入队，通常能完成；没有它，防抖窗口内的刷新会丢掉最后一次变更。
   if (typeof window !== 'undefined') {
     const flushOnHide = () => flushChordsToStorage();
     window.addEventListener('pagehide', flushOnHide);
@@ -407,6 +440,8 @@ export const useChordStore = defineStore('chord', () => {
     groups,
     selectedGroupId,
     expandedGroupId,
+    /** 异步水合（应用装配层挂载前 await） */
+    hydrate,
     groupChordMap,
     groupedChordMap,
     getMultiFingering,

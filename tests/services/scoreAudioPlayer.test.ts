@@ -158,12 +158,12 @@ describe('全曲乐谱音频播放调度引擎 (useAudioPlayer Score Playback)',
       onStep: idx => stepsTriggered.push(idx),
     });
 
-    // 暂停
-    player.pauseScorePlayback();
+    // 暂停（壳层动作经动态 import 懒加载实现，需 await 保证状态已翻转）
+    await player.pauseScorePlayback();
     expect(player.isScorePlaying.value).toBe(false);
 
     // 停止并复位
-    player.stopScorePlayback();
+    await player.stopScorePlayback();
     expect(player.isScorePlaying.value).toBe(false);
     expect(player.currentPlayingStepIndex.value).toBe(-1);
 

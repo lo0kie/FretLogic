@@ -4,29 +4,22 @@
  */
 import { clamp } from '@/platform/utils/common';
 
-import { charKey, chordSlotKey, collectEdgeChordIds, edgeSlotPrefix } from './scoreModel.ts';
+import {
+  buildCharIndexRemap,
+  charKey,
+  chordSlotKey,
+  collectEdgeChordIds,
+  edgeSlotPrefix,
+  parseSlotKey,
+} from './scoreModel.ts';
 
+import type { ParsedSlotKey } from './scoreModel.ts';
 import type { Chord, ChordId } from '@/domains/chord/types';
-import type { SlotKey, Song } from '@/domains/score/types';
+import type { LineId, SlotKey, Song } from '@/domains/score/types';
 
-// ===== chordMap: 和弦槽位映射与和弦数据归一化 =====
-
-export interface ParsedSlotKey {
-  lineId: string;
-  type: 'char' | 'start' | 'end';
-  index: number;
-}
-/** 解析槽位键（line_{lineId}_{char|start|end}_{index}）为结构化对象；格式非法返回 null。 */
-export function parseSlotKey(slotKey: string): ParsedSlotKey | null {
-  const str = String(slotKey);
-  const match = str.match(/^line_(.+?)_(char|start|end)_(\d+)$/);
-  if (!match) return null;
-  return {
-    lineId: match[1] ?? '',
-    type: (match[2] ?? 'char') as 'char' | 'start' | 'end',
-    index: parseInt(match[3] ?? '0', 10),
-  };
-}
+// 槽位键的解析实现与构造器同处 scoreModel（唯一真相源），此处仅转出以保持既有引用路径可用。
+export { parseSlotKey };
+export type { ParsedSlotKey };
 
 export function getEdgeChords(
   chordMap: ReadonlyMap<SlotKey, ChordId>,
@@ -173,22 +166,98 @@ function insertChordAtParsedLocation(chordMap: Map<SlotKey, ChordId>, parsed: Pa
     setEdgeChords(chordMap, parsed.lineId, parsed.type, list);
   }
 }
-/** 歌词编辑后的 chordMap 垃圾回收：删除属于已不存在行的槽位键，返回新映射及是否有变更。 */
+/**
+ * 歌词编辑后的 chordMap 垃圾回收：
+ * 1. 删除属于已不存在行的槽位键；
+ * 2. 传入 finalLineLengths 时，一并删除下标越界的字符槽位（行尾删字后遗留的 line_x_char_9 之类）。
+ *    这类槽位 UI 渲染不到（逐行按当前字符数渲染），却会经 extractSongChordSequence 进入文本导出，
+ *    是真实的数据外泄；而载入期清洗只按 chordId 清孤儿引用、不校验下标，不会自愈，故在此收口。
+ *
+ * @param finalLineLengths 与 finalLineIds 一一对应的行字符数；缺省则不做越界检查（保持原行为）
+ */
 export const garbageCollectChordMap = (
   chordMap: Map<SlotKey, ChordId>,
-  finalLineIds: string[]
+  finalLineIds: string[],
+  finalLineLengths?: readonly number[]
 ): { map: Map<SlotKey, ChordId>; changed: boolean } => {
   const finalIdsSet = new Set(finalLineIds);
+  const lineLengthById = new Map<string, number>();
+  finalLineIds.forEach((id, idx) => {
+    const len = finalLineLengths?.[idx];
+    if (len !== undefined) lineLengthById.set(id, len);
+  });
+
   const updatedMap = new Map(chordMap);
   let changed = false;
   for (const key of updatedMap.keys()) {
     const parsed = parseSlotKey(key);
-    if (parsed && !finalIdsSet.has(parsed.lineId)) {
+    if (!parsed) continue;
+    if (!finalIdsSet.has(parsed.lineId)) {
+      updatedMap.delete(key);
+      changed = true;
+      continue;
+    }
+    // 只有字符槽位受行长约束；边和弦是行级密列表，行长变化不改变其合法性
+    if (parsed.type !== 'char') continue;
+    const lineLength = lineLengthById.get(parsed.lineId);
+    if (lineLength !== undefined && parsed.index >= lineLength) {
       updatedMap.delete(key);
       changed = true;
     }
   }
   return { map: updatedMap, changed };
+};
+
+/**
+ * 歌词被编辑后平移存活行的字符槽位下标（与 matchLineIds 配套使用）。
+ *
+ * 只在「同一 lineId 同时出现在旧行序与新行序」时平移：lineId 保住即说明该行是被局部编辑的同一条，
+ * 按 buildCharIndexRemap 对齐下标；无对应位置的下标（-1）丢弃。行级新增/删除不在两侧交集内，
+ * 交给 garbageCollectChordMap 处理。
+ *
+ * 边和弦槽位原样保留：它们是行级密列表，不随字符位置移动。
+ */
+export const shiftCharSlotsForEditedLines = (
+  chordMap: Map<SlotKey, ChordId>,
+  oldLines: readonly string[],
+  newLines: readonly string[],
+  oldLineIds: readonly LineId[],
+  newLineIds: readonly LineId[]
+): { map: Map<SlotKey, ChordId>; changed: boolean } => {
+  const oldIndexByLineId = new Map<string, number>();
+  oldLineIds.forEach((id, idx) => {
+    if (!oldIndexByLineId.has(id)) oldIndexByLineId.set(id, idx);
+  });
+  const newIndexByLineId = new Map<string, number>();
+  newLineIds.forEach((id, idx) => {
+    if (!newIndexByLineId.has(id)) newIndexByLineId.set(id, idx);
+  });
+
+  const remapByLineId = new Map<string, number[]>();
+  for (const [lineId, oldIdx] of oldIndexByLineId) {
+    const newIdx = newIndexByLineId.get(lineId);
+    if (newIdx === undefined) continue;
+    const oldLine = oldLines[oldIdx];
+    const newLine = newLines[newIdx];
+    if (oldLine === undefined || newLine === undefined) continue;
+    remapByLineId.set(lineId, buildCharIndexRemap(oldLine, newLine));
+  }
+  if (remapByLineId.size === 0) return { map: chordMap, changed: false };
+
+  const updatedMap = new Map(chordMap);
+  let changed = false;
+  for (const [key, chordId] of chordMap) {
+    const parsed = parseSlotKey(key);
+    if (!parsed || parsed.type !== 'char') continue;
+    const remap = remapByLineId.get(parsed.lineId);
+    if (!remap || parsed.index >= remap.length) continue;
+    const nextIndex = remap[parsed.index];
+    if (nextIndex === undefined || nextIndex < 0 || nextIndex === parsed.index) continue;
+    updatedMap.delete(key);
+    updatedMap.set(charKey(parsed.lineId, nextIndex), chordId);
+    changed = true;
+  }
+  return changed ? { map: updatedMap, changed: true } : { map: chordMap, changed: false };
 };
 
 /** 清理 chordMap 中指向不存在和弦 id 的孤儿引用（导入校验 / 删除和弦后使用） */
@@ -210,7 +279,7 @@ export const pruneOrphanChordRefs = (
 
 // ===== 序列化边界：内存统一用 Map，JSON/持久化用普通对象 =====
 
-/** 普通对象 -> Map（读取 localStorage / 导入备份 / 同步拉取用），容忍非法条目；
+/** 普通对象 -> Map（读取持久化数据 / 导入备份 / 同步拉取用），容忍非法条目；
  *  key/value 已通过 string 类型过滤，品牌收窄信任该过滤 */
 export const plainToChordMap = (raw: unknown): Map<SlotKey, ChordId> => {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return new Map();

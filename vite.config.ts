@@ -4,6 +4,7 @@ import { resolve } from 'path';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
 import Icons from 'unplugin-icons/vite';
+import VueDevTools from 'vite-plugin-vue-devtools';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { VitePWA } from 'vite-plugin-pwa';
 import { configDefaults, defineConfig } from 'vitest/config';
@@ -43,31 +44,48 @@ const testConfig: ViteUserConfig = {
       reporter: ['text'],
       clean: false,
       // 分层覆盖率门槛（基于当前可达水平设定，可随测试补齐提升）：
-      // - 领域层（services/music、services/validation）核心算法 ≥85%/80%
-      // - 数据仓储层（services/repositories）≥80%
-      // - 服务基础设施（services/*：errors/storage/data/sync）≥55%
+      // - 乐理领域（domains/chord/theory）核心算法 ≥85%/80%
+      // - 数据校验（app/services/validation）≥80%
+      // - 数据仓储（domains/*/model）≥80%
+      // - 服务基础设施（platform/services、app/services）≥55%
       // - 全局 ≥70%（设计文档原目标，ui/views 后续 phase 提升）
+      // 路径必须是源码当前所在位置：此前仍写 src/services/**，而该目录在分层迁移后已不存在，
+      // 阈值匹配到空集 → 检查恒通过，等于没有门槛。
+      // autoUpdate：实跑覆盖率高于阈值时自动回写配置，避免阈值长期停在偏低档位而失去作用。
       thresholds: {
         'perFile': false,
-        'src/services/music/**': {
+        'autoUpdate': true,
+        'src/domains/chord/theory/**': {
           lines: 85,
           functions: 70,
           statements: 85,
           branches: 60,
         },
-        'src/services/validation/**': {
+        'src/app/services/validation/**': {
           lines: 80,
           functions: 80,
           statements: 80,
           branches: 60,
         },
-        'src/services/repositories/**': {
+        'src/domains/chord/model/**': {
           lines: 80,
           functions: 80,
           statements: 80,
           branches: 60,
         },
-        'src/services/**': {
+        'src/domains/score/model/**': {
+          lines: 80,
+          functions: 80,
+          statements: 80,
+          branches: 60,
+        },
+        'src/platform/services/**': {
+          lines: 55,
+          functions: 50,
+          statements: 55,
+          branches: 50,
+        },
+        'src/app/services/**': {
           lines: 55,
           functions: 50,
           statements: 55,
@@ -82,8 +100,8 @@ const testConfig: ViteUserConfig = {
           name: 'logic',
           environment: 'node' as const,
           include: ['tests/**/*.test.ts'],
-          // 依赖 DOM/localStorage/浏览器 API 的测试归入 ui 项目
-          //（barre/repositories/sanitizePersistedData 经 store 链路触碰 localStorage，其余依赖 jsdom 组件环境）
+          // 依赖 DOM/浏览器 API 的测试归入 ui 项目
+          //（repositories/sanitizePersistedData 走 store 链路需要完整组件环境，其余依赖 jsdom 组件挂载）
           exclude: [
             ...configDefaults.exclude,
             '**/performance.test.ts',
@@ -111,10 +129,15 @@ const testConfig: ViteUserConfig = {
   },
 };
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   // 相对 base：产物可在任意根路径部署（GitHub Pages 子路径 /FretLogic/、EdgeOne 根路径等），
   // 配合 hash 路由无需平台级路径重写，`pnpm build` 单命令通吃所有托管平台。
   const base = './';
+
+  // Vue DevTools 只在开发服务器注册。插件自身已声明 apply: 'serve'，构建（含 build:analyze）
+  // 本来就拿不到它，这里再显式排掉测试模式 —— Vitest 同样以 serve 命令启动，不排的话每个 .vue
+  // 转换都要多走一遍组件 inspector 注入，白白拖慢测试链路。
+  const enableVueDevTools = command === 'serve' && mode !== 'test';
 
   return {
     // 统一缓存收纳：Vite 依赖预构建/构建缓存与 Vitest 测试结果缓存都落在 node_modules/.cache/vite，
@@ -123,6 +146,8 @@ export default defineConfig(({ mode }) => {
     // 单测配置（仅 Vitest 消费，Vite 构建忽略该字段）
     ...testConfig,
     plugins: [
+      // 官方要求排在 vue() 之前；插件自带 enforce: 'pre' 已保证执行序，这里靠前只是与文档一致
+      ...(enableVueDevTools ? [VueDevTools()] : []),
       tailwindcss(),
       vue({
         template: {
@@ -245,14 +270,31 @@ export default defineConfig(({ mode }) => {
       // 改回 modulePreload: { polyfill: false } 即可。
       modulePreload: false,
       rollupOptions: {
+        // 过滤第三方发行包内部的 @__PURE__ 注释位置告警（zod v4 dist 自带）：
+        // Rollup 只是丢弃无法解读的注释，对产物零影响，无需在每次构建时刷屏
+        onwarn: (warning, warn) => {
+          if (warning.code === 'INVALID_ANNOTATION' && warning.id?.includes('node_modules')) return;
+          warn(warning);
+        },
         output: {
           // 文件名纯哈希化：去除源文件名前缀（BaseFab / ScoreView / Fretboard 等），避免从产物名反推模块结构
           entryFileNames: 'assets/[hash].js',
           chunkFileNames: 'assets/[hash].js',
           assetFileNames: 'assets/[hash][extname]',
-          // 拆出稳定的 vendor 分组：业务代码迭代不再导致框架层缓存全量失效
+          // 拆出稳定的 vendor 分组：业务代码迭代不再导致框架层缓存全量失效。
+          // 分组依据是入口静态闭包的实际体积构成（对 597KB 单 chunk 的拆分）：
+          // - vendor：vue 生态（占大头），版本同进退，拆出后业务发版不影响其缓存；
+          // - zod：v4 全量约 120KB raw，由 payload 校验层动态引入（导入/同步/转录时才加载），
+          //   单独成块避免与业务代码搅在一起（zod 升级只失效这一块）；
+          // - sortable：useSortableList 内部对 sortablejs 动态 import（懒加载），独立成块；
+          //   不能与 floating 合块，否则会经 SidebarLeft → SongSection/GroupSection 的静态链
+          //   被拖进首屏闭包、吃掉首屏预算（check-bundle 220KB）；
+          // - zod：由 payload 校验层经动态 import 引入（导入/同步/转录时才加载），保持懒加载。
           manualChunks: {
             vendor: ['vue', 'vue-router', 'pinia', '@vueuse/core'],
+            zod: ['zod'],
+            floating: ['@floating-ui/dom'],
+            sortable: ['sortablejs'],
           },
         },
       },

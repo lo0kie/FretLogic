@@ -7,13 +7,34 @@ import {
   toFretOffset,
 } from '@/domains/fretboard/model/coordinates';
 
-import type { Chord } from '@/domains/chord/types';
+import type { Chord, ExtensionSegment } from '@/domains/chord/types';
 import type { FretOffset, GuitarStringEntity, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
+
+/**
+ * 把 extensions 统一重建为元组 [degree, accidental?]。
+ *
+ * 历史缺陷：transposeChordSegments 曾用 `{ ...e }` 复制元组，落盘后成为 `{0, 1}` 普通对象，
+ * 而下游（segmentsToString / vChordName / areChordsEnharmonicallyEquivalent）一律按元组做
+ * `([deg, acc])` 数组解构，遇到普通对象会抛 "is not iterable"。此处按索引逐位重建。
+ * 对已是合法元组的输入返回原引用，调用方据 `===` 判断是否真的发生了修复。
+ */
+const repairExtensions = (extensions: unknown): ExtensionSegment[] | undefined => {
+  if (!Array.isArray(extensions)) return undefined;
+  let dirty = false;
+  const next = (extensions as unknown[]).map(entry => {
+    if (Array.isArray(entry)) return entry as ExtensionSegment;
+    dirty = true;
+    const indexed = entry as Record<number, unknown>;
+    return [indexed[0], indexed[1]] as ExtensionSegment;
+  });
+  return dirty ? next : (extensions as ExtensionSegment[]);
+};
 
 /**
  * 和弦实体归一化：迁移旧数据结构并修复非法字段。
  * 覆盖：strings 对象数组 → 二维数组、弦级 isRoot → 单点 rootStringIndex（含有效性校验）、
- * 旧字段（isInverted/fingerprint/chordName）清理、横按合法性过滤、chordName → nameSegments 迁移。
+ * 旧字段（isInverted/fingerprint/chordName）清理、横按合法性过滤、chordName → nameSegments 迁移、
+ * extensions 元组塌陷修复（历史坏数据自愈）。
  * @returns 规范化实体与是否发生变更（未变更时原样返回引用，避免无谓的深拷贝/写盘）
  */
 export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean } => {
@@ -96,10 +117,22 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
 
   let nameSegments = chord.nameSegments;
   let nameMigrated = false;
+  let nameRepaired = false;
   if (nameSegments === undefined) {
     nameMigrated = true;
     const rawName = legacyChord.chordName?.trim() || '';
     nameSegments = rawName ? (nameToSegments(rawName) ?? null) : null;
+  } else if (nameSegments) {
+    // 存量修复：extensions 可能因历史缺陷被落盘成 {0,1} 普通对象，载入即重建为元组，
+    // 否则任何一次取名/指纹/渲染都会抛 not iterable（读取路径不会自愈，只归一化 undefined 分支）。
+    const fixedExtensions = repairExtensions(nameSegments.extensions);
+    if (fixedExtensions !== nameSegments.extensions) {
+      nameRepaired = true;
+      const repaired: typeof nameSegments = { ...nameSegments };
+      if (fixedExtensions) repaired.extensions = fixedExtensions;
+      else delete repaired.extensions;
+      nameSegments = repaired;
+    }
   }
   delete legacyChord.chordName;
 
@@ -107,6 +140,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
     stringsMigrated ||
     stringsBounded ||
     nameMigrated ||
+    nameRepaired ||
     chord.fretOffset !== fretOffset ||
     chord.tuning !== tuning ||
     chord.fretCount !== fretCount ||

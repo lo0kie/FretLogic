@@ -2,11 +2,22 @@
  * 和弦 store 的跨领域事件总线（纯机制，与 Pinia 无关）：
  * 和弦被删除 / 撤销恢复 / 合并（重复项丢弃）时向外广播，
  * 由应用层桥接乐谱槽位解绑，避免 chord → score 反向依赖。
+ *
+ * 底层基于 `mitt`（<200B）承担订阅表与派发机制；本文件只保留
+ * 类型化事件载荷与「空载荷不发事件」的领域语义。
  */
+import mitt from 'mitt';
 
 type ChordIdsListener = (chordIds: string[]) => void;
 /** 和弦合并事件参数：key 为被丢弃的重复和弦 id，value 为合并后保留的和弦 id */
 type ChordsMergedListener = (mapping: Map<string, string>) => void;
+
+/** 注意：必须用 type 而非 interface——mitt 泛型约束要求可满足 Record<string, unknown> 的索引签名 */
+type ChordEvents = {
+  removed: string[];
+  restored: string[];
+  merged: Map<string, string>;
+};
 
 export interface ChordEventBus {
   /** 订阅「和弦被删除」事件；返回取消订阅函数 */
@@ -21,33 +32,35 @@ export interface ChordEventBus {
 }
 
 export const createChordEventBus = (): ChordEventBus => {
-  const chordsRemovedListeners: ChordIdsListener[] = [];
-  const chordsRestoredListeners: ChordIdsListener[] = [];
-  const chordsMergedListeners: ChordsMergedListener[] = [];
-
-  const subscribe = <T extends unknown[]>(listeners: ((...args: T) => void)[], cb: (...args: T) => void) => {
-    listeners.push(cb);
-    return () => {
-      const idx = listeners.indexOf(cb);
-      if (idx >= 0) listeners.splice(idx, 1);
-    };
-  };
+  const emitter = mitt<ChordEvents>();
 
   return {
-    onChordsRemoved: cb => subscribe(chordsRemovedListeners, cb),
-    onChordsRestored: cb => subscribe(chordsRestoredListeners, cb),
-    onChordsMerged: cb => subscribe(chordsMergedListeners, cb),
+    onChordsRemoved: cb => {
+      const handler = (ids: string[]): void => cb(ids);
+      emitter.on('removed', handler);
+      return () => emitter.off('removed', handler);
+    },
+    onChordsRestored: cb => {
+      const handler = (ids: string[]): void => cb(ids);
+      emitter.on('restored', handler);
+      return () => emitter.off('restored', handler);
+    },
+    onChordsMerged: cb => {
+      const handler = (mapping: Map<string, string>): void => cb(mapping);
+      emitter.on('merged', handler);
+      return () => emitter.off('merged', handler);
+    },
     emitChordsRemoved: chordIds => {
       if (chordIds.length === 0) return;
-      chordsRemovedListeners.forEach(cb => cb(chordIds));
+      emitter.emit('removed', chordIds);
     },
     emitChordsRestored: chordIds => {
       if (chordIds.length === 0) return;
-      chordsRestoredListeners.forEach(cb => cb(chordIds));
+      emitter.emit('restored', chordIds);
     },
     emitChordsMerged: mapping => {
       if (mapping.size === 0) return;
-      chordsMergedListeners.forEach(cb => cb(mapping));
+      emitter.emit('merged', mapping);
     },
   };
 };

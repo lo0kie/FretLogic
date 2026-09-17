@@ -180,15 +180,15 @@
             :content="lsTotalText"
             appearance="subtle"
             size="2xs"
-            title="localStorage 键数 / 合计占用（键值均按 UTF-16 计 2 字节/字符）"
+            title="IDB 各对象库记录数 / kv 键数（占用见站点级读数）"
             variant="neutral"
           />
         </div>
 
-        <!-- localStorage 明细：按键占用降序，条长表示相对占比 -->
+        <!-- IDB 对象库明细：记录数，条长表示相对最大库的占比 -->
         <BaseDivider class="my-2" />
         <div class="flex flex-col gap-1">
-          <div class="text-2xs text-fg-muted">localStorage 明细</div>
+          <div class="text-2xs text-fg-muted">IndexedDB 明细</div>
           <div v-for="entry in lsEntries" :key="entry.key" class="flex flex-col gap-0.5">
             <div class="flex items-center justify-between gap-sm">
               <span :title="entry.key" class="min-w-0 truncate">{{ entry.key }}</span>
@@ -305,8 +305,8 @@
       <!-- 危险区：红色语义卡片包裹，与上方常规区块在视觉上强区分 -->
       <BaseCollapse sticky description="不可恢复" icon="alert-triangle" title="危险区">
         <div class="flex flex-col gap-xs rounded-md border border-danger/30 bg-danger/5 p-sm">
-          <ActionButton @click="handleDumpLocalStorage()" icon="eraser" size="sm" variant="subtle">
-            导出 localStorage 键清单
+          <ActionButton @click="handleDumpStorageKeys()" icon="eraser" size="sm" variant="subtle">
+            导出 IDB 键清单
           </ActionButton>
           <!-- 真正破坏性的两个动作走 danger 语义色（导出键清单只是读，保持中性） -->
           <ActionButton
@@ -319,7 +319,7 @@
             清空 IndexedDB（刷新后生效）
           </ActionButton>
           <ActionButton @click="handleWipeAndReload()" color="danger" icon="refresh-cw" size="sm" variant="subtle">
-            清空 localStorage 并重载
+            清空 IndexedDB 并重载
           </ActionButton>
           <p class="m-0 text-2xs text-fg-muted">以上操作不可恢复，仅用于本地排查。</p>
         </div>
@@ -336,7 +336,8 @@
   >
     <div class="py-xs">
       <p class="m-0 text-xs/relaxed text-fg-body">
-        将删除 <strong class="text-fg-title">fret-logic-v2</strong> 中全部对象库（和弦、分组、乐谱、同步元数据）。
+        将删除
+        <strong class="text-fg-title">fret-logic-v2</strong> 中全部对象库（和弦、分组、乐谱、同步元数据、偏好键值）。
         此操作不可恢复，确定继续吗？
       </p>
     </div>
@@ -382,6 +383,7 @@ import { CLOUD_SYNC_CONFIG, ROUTE_PATHS, WEBDAV_SYNC_CONFIG } from '@/platform/u
 
 import { buildDevTestData, DEV_TEST_SCALES } from './devSeedData';
 
+import type { StoreName } from '@/platform/services/storage/idb';
 import type { CacheStat } from '@/platform/utils/cacheRegistry';
 
 const visible = defineModel<boolean>('visible', { required: true });
@@ -593,9 +595,7 @@ const handleClearPreviewCache = () => {
 
 /* ---- 存储占用 ---- */
 
-/** localStorage 占用：键值均按 UTF-16 计 2 字节/字符（与浏览器配额口径一致） */
-const lsBytes = (key: string, value: string): number => 2 * (key.length + value.length);
-
+/** IDB 各对象库记录数（不取值）；kv 库是偏好/UI 态，其余为实体与同步元数据 */
 const lsEntries = ref<{ key: string; text: string; pct: number }[]>([]);
 const lsTotalText = ref('—');
 const originUsageText = ref('—');
@@ -609,18 +609,25 @@ const originUsagePctText = ref('—');
 const originUsageAlert = computed(() => originUsagePct.value >= 80);
 
 const refreshStorageUsage = async () => {
-  // localStorage 按键统计：条长按各键相对最大键的比例（最小 4% 保证小键仍可见）
-  const items = Object.entries(localStorage)
-    .map(([key, value]) => ({ key, bytes: lsBytes(key, value) }))
-    .sort((a, b) => b.bytes - a.bytes);
-  const total = items.reduce((sum, item) => sum + item.bytes, 0);
-  const max = items[0]?.bytes ?? 0;
-  lsEntries.value = items.map(item => ({
-    key: item.key,
-    text: formatBytes(item.bytes),
-    pct: max > 0 ? Math.max(4, Math.round((item.bytes / max) * 100)) : 4,
+  // IDB 按对象库统计记录数：条长按各库相对最大库的比例（最小 4% 保证小库仍可见）
+  const storeNames = Object.keys(SCHEMA) as StoreName[];
+  const counts = await Promise.all(
+    storeNames.map(async name => {
+      try {
+        const keys = await idb.getAllKeys(name);
+        return { name, count: keys.length };
+      } catch {
+        return { name, count: 0 };
+      }
+    })
+  );
+  const max = Math.max(...counts.map(c => c.count), 0);
+  lsEntries.value = counts.map(item => ({
+    key: item.name,
+    text: `${item.count} 条`,
+    pct: max > 0 ? Math.max(4, Math.round((item.count / max) * 100)) : 4,
   }));
-  lsTotalText.value = `${items.length} 键 / ${formatBytes(total)}`;
+  lsTotalText.value = `${storeNames.length} 库 / ${counts.reduce((sum, item) => sum + item.count, 0)} 条`;
 
   // 站点级用量（含 IndexedDB / CacheStorage 等）；estimate 不可用时降级为未知
   if (navigator.storage?.estimate) {
@@ -654,7 +661,7 @@ refreshStorageUsage();
 
 /* ---- 测试数据 ---- */
 
-/** 默认「大」档位：足以压出滚动/分组/缓存压力，又不至于逼近 localStorage 配额 */
+/** 默认「大」档位：足以压出滚动/分组/缓存压力，又不至于逼近磁盘配额 */
 const seedScaleKey = ref(DEV_TEST_SCALES[1]!.key);
 const seedScaleOptions = DEV_TEST_SCALES.map(scale => ({ label: scale.label, value: scale.key }));
 const isSeedConfirmOpen = ref(false);
@@ -673,9 +680,9 @@ const seedSummaryText = computed(() => {
  * 生成测试数据并整体覆盖两个数据域。
  *
  * 生成是同步 CPU（大档位下数百毫秒），随后各自整体替换：
- *  - 和弦走 `replaceAllData` + 立即刷盘（绕过 VueUse 的写入微任务延迟）；
- *  - 乐谱走 `overwriteSongs`（内部会清理孤立存储键并 flush）。
- * 数据量超出 localStorage 配额时会抛 QuotaExceededError —— 此时内存已替换、落盘失败，
+ *  - 和弦走 `replaceAllData` + 立即刷盘（绕过防抖窗口）；
+ *  - 乐谱走 `overwriteSongs`（内部会清理孤立存储记录并 flush）。
+ * 落盘失败（如磁盘配额超限）时内存已替换、持久化失败经上报链路提示，
  * 故提示改用更小档位，而不是假装成功。
  */
 const handleSeedTestData = () => {
@@ -684,14 +691,14 @@ const handleSeedTestData = () => {
     const data = buildDevTestData(activeSeedScale.value);
     chordStore.replaceAllData({ groups: data.groups, chords: data.chords });
     chordStore.flushChordsToStorage();
-    songStore.overwriteSongs(data.songs);
+    void songStore.overwriteSongs(data.songs);
     uiStore.toast.success(
       `已覆盖：${data.chords.length} 条和弦 / ${data.songs.length} 首乐谱（约 ${formatBytes(data.estimatedBytes)}）`
     );
     isSeedConfirmOpen.value = false;
   } catch (err) {
     console.error('[dev] 生成测试数据失败', err);
-    uiStore.toast.error('生成或落盘失败（可能超出 localStorage 配额），请改用更小档位');
+    uiStore.toast.error('生成或落盘失败，请改用更小档位');
   } finally {
     isSeeding.value = false;
   }
@@ -699,26 +706,41 @@ const handleSeedTestData = () => {
 
 /* ---- 危险区 ---- */
 
-/** 导出 localStorage 全部键名（仅键名，不含值，避免把 token 打到界面上） */
-const handleDumpLocalStorage = () => {
-  const keys = Object.keys(localStorage).sort();
-  void navigator.clipboard.writeText(keys.join('\n'));
-  uiStore.toast.success(`已复制 ${keys.length} 个键名到剪贴板`);
+/** 导出 IDB 键清单：kv 库导出键名（可能含 token 类配置，仅键名不含值），实体库导出记录数 */
+const handleDumpStorageKeys = async () => {
+  const lines: string[] = [];
+  try {
+    const kvKeys = (await idb.getAllKeys('kv')).filter((k): k is string => typeof k === 'string');
+    lines.push(`# kv (${kvKeys.length})`, ...kvKeys.sort());
+    for (const name of Object.keys(SCHEMA) as StoreName[]) {
+      if (name === 'kv') continue;
+      lines.push(`# ${name} (${(await idb.getAllKeys(name)).length})`);
+    }
+  } catch {
+    uiStore.toast.error('读取 IndexedDB 失败，请看控制台');
+    return;
+  }
+  void navigator.clipboard.writeText(lines.join('\n'));
+  uiStore.toast.success('已复制 IDB 键清单到剪贴板');
 };
 
 const isWipeIdbConfirmOpen = ref(false);
 
 const handleWipeIdb = async () => {
   try {
-    await Promise.all(Object.keys(SCHEMA).map(name => idb.clear(name)));
+    await Promise.all((Object.keys(SCHEMA) as StoreName[]).map(name => idb.clear(name)));
     uiStore.toast.warning('IndexedDB 已清空，刷新页面后生效');
   } catch {
     uiStore.toast.error('清空 IndexedDB 失败，请看控制台');
   }
 };
 
-const handleWipeAndReload = () => {
-  localStorage.clear();
+const handleWipeAndReload = async () => {
+  try {
+    await Promise.all((Object.keys(SCHEMA) as StoreName[]).map(name => idb.clear(name)));
+  } catch {
+    /* 清空失败也要重载：残留数据交由下次启动处理 */
+  }
   window.location.reload();
 };
 </script>

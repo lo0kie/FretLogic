@@ -18,14 +18,19 @@ import { useDebounceFn } from '@vueuse/core';
 import BaseTextarea from '@/platform/ui/input/BaseTextarea.vue';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { useUiStore } from '@/platform/store/uiStore';
 
 defineOptions({ name: 'ScoreLyricsEditor' });
 
 const MAX_LINE_LENGTH = 100;
+/** 超长截断提示的节流间隔：连续输入超长文本时每次按键都会触发截断，逐次提示会刷爆 toast */
+const CLAMP_WARN_INTERVAL = 3000;
 
 const scoreEditor = useScoreEditorStore();
 const songStore = useSongStore();
+const uiStore = useUiStore();
 const localLyrics = ref(scoreEditor.activeSong?.lyrics ?? '');
+let lastClampWarnAt = 0;
 
 // 锁定本编辑器实例绑定到的歌曲 id：ScoreView 用 :key 按 activeSong 重挂载本组件，
 // 因此实例生命周期内绑定的就是创建时的 current activeSong。卸载/切歌时 activeSongId 已变为新歌，
@@ -59,13 +64,25 @@ const commitLyrics = useDebounceFn((songId: string, value: string) => {
     return;
   }
   dirty.value = false;
-  scoreEditor.updateLyrics(value, songId);
+  const result = scoreEditor.updateLyrics(value, songId);
+  // 未匹配行数超阈值时整行会拿到新 id、原有和弦被回收（大段粘贴场景），静默丢和弦不可接受
+  if (result.skippedSimilarMatch) {
+    uiStore.toast.warning('大段歌词未能与原有行对齐，相关行的和弦已一并清除', {
+      description: '可立即撤销恢复，或分批粘贴以保留原有和弦。',
+    });
+  }
 }, 300);
 
 watch(localLyrics, value => {
   const clamped = clampLinesLength(value);
   if (clamped !== value) {
     localLyrics.value = clamped;
+    // 截断是静默丢字，必须告知；但超长输入期间每次按键都会触发，按时间节流只提示一次
+    const now = Date.now();
+    if (now - lastClampWarnAt > CLAMP_WARN_INTERVAL) {
+      lastClampWarnAt = now;
+      uiStore.toast.warning(`单行歌词最多 ${MAX_LINE_LENGTH} 个字符，超出的部分已截断`);
+    }
     return;
   }
   // 与基线一致的值视为来自 store 的同步回写，无需再调度提交。

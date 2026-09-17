@@ -67,14 +67,34 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
       );
     },
     async push(payload) {
+      // 条件写（If-Match）：推送前探测当前 ETag，携带后若服务端数据已被其他设备更新，
+      // 服务器将以 412 拒绝写入，避免后写静默覆盖前写（走下方 CONFLICT 分支）。
+      // 服务端不返回 ETag（或 HEAD 未实现/探测失败）时退化为无条件写，与历史行为一致。
+      let ifMatch: string | undefined;
+      try {
+        const head = await request({
+          method: 'HEAD',
+          headers: serverToken ? { Authorization: `Bearer ${serverToken}` } : {},
+        });
+        if (head.ok) {
+          const etag = head.headers.get('ETag');
+          if (etag && !etag.startsWith('W/')) ifMatch = etag;
+        }
+      } catch {
+        // 探测失败不阻断推送
+      }
       const response = await request({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(serverToken ? { Authorization: `Bearer ${serverToken}` } : {}),
+          ...(ifMatch ? { 'If-Match': ifMatch } : {}),
         },
         body: serializeForStorage(payload),
       });
+      if (response.status === 412) {
+        throw new SyncError('CONFLICT', '服务端数据已被其他设备更新，请先拉取最新数据');
+      }
       if (!response.ok) {
         const errorDetail = await extractApiErrorDetail(response);
         throw new SyncError(

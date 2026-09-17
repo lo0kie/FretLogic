@@ -47,21 +47,32 @@ export const unbindChordIdsFromSongs = (
   return removedBindings;
 };
 
-/** 撤销删除和弦/分组时，把此前被解绑的槽位绑定恢复回去。 */
+/**
+ * 撤销删除和弦/分组时，把此前被解绑的槽位绑定恢复回去。
+ *
+ * 与 unbind / remap 两条路径对齐：写入后统一换成新 Map。song 的 chordMap 是全库范围内
+ * 「引用级失效」的约定（引用计数分片、消费方 memo 都依赖每次变更得到新 Map），只改内容不换
+ * 引用会让下游看不见变更；同时把同一首歌的多条绑定合并为一次 touch + markDirty。
+ */
 export const restoreChordBindingsToSongs = (
   findSong: (id: string) => Song | undefined,
   bindings: RemovedChordBinding[],
   markDirty: MarkDirty
 ) => {
   if (bindings.length === 0) return;
+  const changedSongs = new Map<string, Song>();
   bindings.forEach(({ songId, slotKey, chordId }) => {
     const target = findSong(songId);
     if (!target) return;
-    if (target.chordMap.get(slotKey) === undefined) {
-      target.chordMap.set(slotKey, chordId);
-      touchSong(target);
-      markDirty(songId);
-    }
+    // 目标槽位已被占用（如撤销前又绑了别的和弦）时跳过，不覆盖用户后续的编辑
+    if (target.chordMap.get(slotKey) !== undefined) return;
+    target.chordMap.set(slotKey, chordId);
+    changedSongs.set(songId, target);
+  });
+  changedSongs.forEach((target, songId) => {
+    target.chordMap = new Map(target.chordMap);
+    touchSong(target);
+    markDirty(songId);
   });
 };
 

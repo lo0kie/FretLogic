@@ -3,9 +3,9 @@
  */
 import { ref } from 'vue';
 
-import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
+import { useStorage } from '@/platform/composables/useStorage';
 import { ToastType } from '@/platform/types';
 import { STORAGE_KEYS, TOAST_DEFAULT_DURATION_MS } from '@/platform/utils/constants';
 

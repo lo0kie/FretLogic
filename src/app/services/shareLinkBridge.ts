@@ -7,36 +7,16 @@
  * 属装配层职责（与 chordScoreBridge 同层）。
  * 载体解析与「粘贴剪贴板」共用同一个入口（platform/utils/shareLink 的 `resolveTransferPayload`），
  * 两者只在入口宽容度上分叉：URL 参数必须是 token，剪贴板则额外接受纯文本。
- * 解析用的压缩库是动态导入的，故这条链路整体是异步的；落地与清参数在同一异步流程里收口。
- * 在 App 装配时调用一次即可。
+ * 载体解码与落地（shareLinkApply：编解码链 + 各域导入能力）均为动态 import——只有 URL 上
+ * 真的出现分享参数时才拉取，装配本桥不产生任何首屏成本。在 App 装配时调用一次即可。
  */
 import { watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
-import { parseChordFromText, parseGroupFromText } from '@/domains/chord/transfer/chordTextCodec';
-import { useChordTransfer } from '@/domains/chord/transfer/useChordTransfer';
-import { parseSongFromText } from '@/domains/score/transfer/textCodec';
-import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
 import { useUiStore } from '@/platform/store/uiStore';
-import { STORAGE_KEYS, TEXT_FORMAT } from '@/platform/utils/constants';
+import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { resolveTransferPayload, SHARE_LINK_PARAM } from '@/platform/utils/shareLink';
-
-/** 分享载荷类型：与 TEXT_FORMAT 的三个魔数一一对应 */
-type SharePayloadKind = 'song' | 'group' | 'chord';
-
-/**
- * 按首行魔数严格判定载荷类型。
- * 刻意不走解析器的宽容匹配：`parseSongFromText` 对任意散文文本都会尝试「纯歌词兜底」，
- * 若凭它分流，一条被篡改/截断的参数会被静默吞成一堆乱码歌词。
- */
-const detectPayloadKind = (text: string): SharePayloadKind | null => {
-  const header = text.split('\n')[0]?.trim() ?? '';
-  if (header.startsWith(TEXT_FORMAT.SONG)) return 'song';
-  if (header.startsWith(TEXT_FORMAT.GROUP)) return 'group';
-  if (header.startsWith(TEXT_FORMAT.CHORD)) return 'chord';
-  return null;
-};
 
 /** 读取本标签页已消费的 token 集合（sessionStorage 不可用时退化为空集，仅内存去重） */
 const readConsumedTokens = (): Set<string> => {
@@ -62,8 +42,6 @@ export function setupShareLinkBridge(): void {
   const route = useRoute();
   const router = useRouter();
   const uiStore = useUiStore();
-  const { importPortableSong } = useTextTransfer();
-  const { importSharedChord, importSharedGroup } = useChordTransfer();
 
   /**
    * 已消费 token 集合。
@@ -72,48 +50,27 @@ export function setupShareLinkBridge(): void {
    */
   const consumedTokens = readConsumedTokens();
 
-  /** 载荷落地：按类型分发到对应域的导入能力；返回是否成功（各域内部自带成功提示） */
-  const applyPayload = (text: string): boolean => {
-    const kind = detectPayloadKind(text);
-    if (!kind) return false;
-
-    if (kind === 'song') {
-      const result = parseSongFromText(text);
-      // needsConfirm 为 true 说明走的不是结构化解析、而是「纯文本兜底」（版本不匹配 / 载荷被破坏），
-      // 分享链路一律判为无效，免得把半截载荷当成一堆歌词导进库里
-      if (!result.ok || result.data.needsConfirm) return false;
-      importPortableSong(result.data);
-      return true;
-    }
-
-    if (kind === 'group') {
-      const result = parseGroupFromText(text);
-      if (!result.ok) return false;
-      importSharedGroup(result.data);
-      return true;
-    }
-
-    const result = parseChordFromText(text);
-    if (!result.ok) return false;
-    importSharedChord(result.data);
-    return true;
-  };
-
   /**
    * 从 URL 移除分享参数。
-   * 用「导航落地后复查」而非一次了事：消费恰好发生在路由就绪瞬间，此时路由组件可能正并发发起
+   * 用「导航落地后复查」而非一次了事：消费恰好发生在路由就绪瞬间，路由组件可能正并发发起
    * 自己的 replace（如乐谱页冷启动用「最近乐谱」补位），两侧都以各自的 query 快照合并，
-   * 后提交的一方会把先清掉的参数写回来。参数不会再由任何其它来源出现，故复查一两轮即收敛。
+   * 后提交的一方会把先清掉的参数写回来。
+   * 实现要点：每轮循环都从 `router.currentRoute` 读**最新** query（响应式 `route` 的快照在
+   * await 期间可能滞后，用它合并等于把旧参数写回去）；上限 3 轮防极端导航重入。
+   * 参数不会再由任何其它来源出现，正常 1 轮即收敛。同 token 不会重复导入
+   * （consumedTokens 已先记账），复查只负责把残留参数擦干净。
    */
-  const clearShareParam = async (depth = 0): Promise<void> => {
-    if (depth > 2 || typeof route.query[SHARE_LINK_PARAM] !== 'string') return;
-    try {
-      await router.replace({ query: { ...route.query, [SHARE_LINK_PARAM]: undefined } });
-    } catch {
-      // 导航失败（被取消等）：保留参数，由 watch 下次触发时再清
-      return;
+  const clearShareParam = async (): Promise<void> => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const query = router.currentRoute.value.query;
+      if (typeof query[SHARE_LINK_PARAM] !== 'string') return;
+      try {
+        await router.replace({ query: { ...query, [SHARE_LINK_PARAM]: undefined } });
+      } catch {
+        // 导航失败（被取消等）：保留参数，由 watch 下次触发时再清
+        return;
+      }
     }
-    await clearShareParam(depth + 1);
   };
 
   const consume = async (token: string): Promise<void> => {
@@ -126,12 +83,16 @@ export function setupShareLinkBridge(): void {
     consumedTokens.add(token);
     writeConsumedTokens(consumedTokens);
 
-    // 与「粘贴剪贴板」共用同一个载体解析入口；URL 上必须是 token，纯文本参数一律判损坏
+    // 与「粘贴剪贴板」共用同一个载体解析入口；URL 上必须是 token，纯文本参数一律判损坏。
+    // 落地实现（编解码链 + 各域导入能力）懒加载，见 shareLinkApply.ts 文件头注释
     const resolved = await resolveTransferPayload(token);
     if (resolved.status !== 'ok' || resolved.carrier !== 'token') {
       uiStore.toast.warning('分享链接已损坏，无法解析');
-    } else if (!applyPayload(resolved.payload)) {
-      uiStore.toast.warning('分享链接内容无法识别或已损坏');
+    } else {
+      const { applyPayload } = await import('./shareLinkApply');
+      if (!applyPayload(resolved.payload)) {
+        uiStore.toast.warning('分享链接内容无法识别或已损坏');
+      }
     }
 
     void clearShareParam();

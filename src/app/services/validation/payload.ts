@@ -1,3 +1,6 @@
+import { z } from 'zod';
+
+import { isValidEncryptedSecrets } from '@/app/services/backup/backupCrypto';
 import { getChordName, nameToSegments } from '@/domains/chord/theory/theory';
 import { pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
 import { cloneDeep } from '@/platform/utils/common';
@@ -96,6 +99,28 @@ export interface PayloadValidationResult {
 
 /** @deprecated 请改用 {@link PayloadValidationResult}。保留别名以便存量导入平滑迁移。 */
 export type { PayloadValidationResult as ValidationResult };
+
+/* ---------------------------------------------------------------------------
+ * zod 结构门禁：声明式描述「进入实体清洗内核前」的最小结构要求，
+ * 未知字段默认剥离（.strip），实现「仅保留已知字段」的清洗承诺。
+ * 注意：门禁只做结构判断；旧字段兜底/派生清理仍在 sanitize*Entity 业务内核（repair 模式）。
+ * ------------------------------------------------------------------------- */
+
+/** 分组门禁：进入实体内核前必须有 id / name 字符串 */
+const groupGateSchema = z.object({ id: z.string(), name: z.string() });
+
+/** 琴弦节点：[fret, preferFlat] 元组，音品为有限数且 >= -1 */
+const stringTupleSchema = z.tuple([z.number().finite().gte(-1), z.boolean()]);
+
+/** 和弦门禁第 1 层：基础识别属性 */
+const chordBaseGateSchema = z.object({ id: z.string(), groupId: z.string() });
+/** 和弦门禁第 2/3 层：琴弦数组长度与节点形状（分层校验以保留既有的分级错误文案） */
+const chordStringsLengthSchema = z.array(z.unknown()).min(3).max(10);
+const chordStringsShapeSchema = z.array(stringTupleSchema);
+
+/** 歌曲门禁：进入实体内核前必须有 id / title 字符串 */
+const songGateSchema = z.object({ id: z.string(), title: z.string() });
+
 /** 清洗备份包中的分组列表：结构非法的条目在 strict 模式记入 issues，在 lenient 模式记入 warnings 并丢弃。 */
 const sanitizeGroups = (
   groups: unknown,
@@ -110,7 +135,8 @@ const sanitizeGroups = (
   const result: GroupDraft[] = [];
   for (let index = 0; index < groups.length; index++) {
     const g = groups[index] as RawGroup;
-    if (!g || typeof g !== 'object' || typeof g.id !== 'string' || typeof g.name !== 'string') {
+    const gate = groupGateSchema.safeParse(g);
+    if (!gate.success) {
       const msg = `groups[${index}] 结构损坏，缺失必要属性`;
       if (mode === 'strict') {
         issues.push(msg);
@@ -153,7 +179,8 @@ const sanitizeChords = (chords: unknown, issues: string[], warnings: string[], m
       }
       continue;
     }
-    if (typeof c.id !== 'string' || typeof c.groupId !== 'string' || (!c['chordName'] && !c.nameSegments)) {
+    // 三层结构门禁分层解析，保留既有的分级错误文案（基础属性 / 数量 / 节点形状）
+    if (!chordBaseGateSchema.safeParse(c).success || (!c['chordName'] && !c.nameSegments)) {
       const msg = `chords[${index}] (${c.id || index}) 缺失基础识别属性`;
       if (mode === 'strict') {
         issues.push(msg);
@@ -162,7 +189,7 @@ const sanitizeChords = (chords: unknown, issues: string[], warnings: string[], m
       }
       continue;
     }
-    if (!Array.isArray(c.strings) || c.strings.length < 3 || c.strings.length > 10) {
+    if (!chordStringsLengthSchema.safeParse(c.strings).success) {
       const msg = `chords[${index}] (${c.id}) 琴弦数组损坏 (琴弦数量须在 3-10 之间)`;
       if (mode === 'strict') {
         issues.push(msg);
@@ -171,17 +198,7 @@ const sanitizeChords = (chords: unknown, issues: string[], warnings: string[], m
       }
       continue;
     }
-    // 二维数组校验：每项必须是 [fret, preferFlat] 元组，音品非负或 -1
-    const isStringsValid = c.strings.every(
-      (s): s is [number, boolean] =>
-        Array.isArray(s) &&
-        s.length === 2 &&
-        typeof s[0] === 'number' &&
-        Number.isFinite(s[0]) &&
-        s[0] >= -1 &&
-        typeof s[1] === 'boolean'
-    );
-    if (!isStringsValid) {
+    if (!chordStringsShapeSchema.safeParse(c.strings).success) {
       const msg = `chords[${index}] (${c.id}) 内部存在损坏的琴弦节点`;
       if (mode === 'strict') {
         issues.push(msg);
@@ -238,7 +255,7 @@ const sanitizeSongs = (
   const result: SongDraft[] = [];
   for (let index = 0; index < songs.length; index++) {
     const s = songs[index] as RawSong;
-    if (!s || typeof s !== 'object' || typeof s.id !== 'string' || typeof s.title !== 'string') {
+    if (!songGateSchema.safeParse(s).success) {
       const msg = `songs[${index}] 结构损坏，缺失必要识别属性`;
       if (mode === 'strict') {
         issues.push(msg);
@@ -261,10 +278,7 @@ const sanitizeSongs = (
   }
   return result;
 };
-/**
- * 防御性清洗 syncSettings：同步配置属辅助数据，字段损坏只丢弃该字段，
- * 绝不因配置问题拒绝整包导入。仅保留已知字符串字段与合法的 syncTarget。
- */
+/** 同步配置的可选字符串字段（Token / 仓库定位 / 凭据等） */
 const SYNC_STRING_FIELDS = [
   'githubToken',
   'githubOwner',
@@ -284,32 +298,57 @@ const SYNC_STRING_FIELDS = [
   'serverToken',
 ] as const;
 
+/**
+ * 防御性清洗 syncSettings：同步配置属辅助数据，字段损坏只丢弃该字段，
+ * 绝不因配置问题拒绝整包导入。zod 声明已知字段（未知键默认剥离）；
+ * 每个叶节点挂 .catch(undefined)——单字段非法时仅丢弃该字段（对齐旧实现语义）；
+ * transform 中折叠旧字段名 webdavUseProxy → webdavUseDefaultProxy。
+ */
+const optionalStringField = z.string().optional().catch(undefined);
+const optionalBooleanField = z.boolean().optional().catch(undefined);
+
+const syncSettingsSchema = z
+  .object({
+    syncTarget: z.enum(['github', 'gitee', 'webdav', 'server']).optional().catch(undefined),
+    ...(Object.fromEntries(SYNC_STRING_FIELDS.map(field => [field, optionalStringField])) as {
+      [K in (typeof SYNC_STRING_FIELDS)[number]]: typeof optionalStringField;
+    }),
+    webdavUseDefaultProxy: optionalBooleanField,
+    /** 旧字段名：仅作清洗输入，折叠后不进入输出 */
+    webdavUseProxy: optionalBooleanField,
+    /** 加密凭据块（v1 格式）原样保留：密文不在清洗范围内，结构损坏时整体丢弃该块 */
+    secrets: z
+      .custom<NonNullable<SyncSettingsBackup['secrets']>>(value => isValidEncryptedSecrets(value))
+      .optional()
+      .catch(undefined),
+  })
+  .transform(source => {
+    const result: SyncSettingsBackup = {};
+    if (source.syncTarget) result.syncTarget = source.syncTarget;
+    if (source.webdavUseDefaultProxy !== undefined) {
+      result.webdavUseDefaultProxy = source.webdavUseDefaultProxy;
+    } else if (source.webdavUseProxy !== undefined) {
+      // 兼容旧字段名
+      result.webdavUseDefaultProxy = source.webdavUseProxy;
+    }
+    for (const field of SYNC_STRING_FIELDS) {
+      const value = source[field];
+      if (typeof value === 'string') {
+        result[field] = value;
+      }
+    }
+    if (source.secrets !== undefined) {
+      result.secrets = source.secrets;
+    }
+    return result;
+  });
+
 /** 清洗备份包中的同步配置（仅保留已知字段，兼容旧字段名 webdavUseProxy）；无有效字段返回 undefined。 */
 const sanitizeSyncSettings = (raw: unknown): SyncSettingsBackup | undefined => {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-  const source = raw as RawRecord;
-  const result: SyncSettingsBackup = {};
-  if (
-    source['syncTarget'] === 'github' ||
-    source['syncTarget'] === 'gitee' ||
-    source['syncTarget'] === 'webdav' ||
-    source['syncTarget'] === 'server'
-  ) {
-    result.syncTarget = source['syncTarget'];
-  }
-  if (typeof source['webdavUseDefaultProxy'] === 'boolean') {
-    result.webdavUseDefaultProxy = source['webdavUseDefaultProxy'];
-  } else if (typeof source['webdavUseProxy'] === 'boolean') {
-    // 兼容旧字段名
-    result.webdavUseDefaultProxy = source['webdavUseProxy'];
-  }
-  for (const field of SYNC_STRING_FIELDS) {
-    const value = source[field];
-    if (typeof value === 'string') {
-      result[field] = value;
-    }
-  }
-  return Object.keys(result).length > 0 ? result : undefined;
+  const parsed = syncSettingsSchema.safeParse(raw);
+  if (!parsed.success) return undefined;
+  return Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
 };
 
 /** 偏好设置字段（全部 boolean） */
@@ -317,22 +356,35 @@ const PREFERENCE_BOOLEAN_FIELDS = ['workbenchChordShorthand', 'scoreChordShortha
 
 /**
  * 防御性清洗 preferences：偏好属辅助数据，字段损坏只丢弃该字段，
- * 绝不因偏好问题拒绝整包导入。仅保留已知 boolean 字段。
+ * 绝不因偏好问题拒绝整包导入。zod 声明已知字段，未知键默认剥离。
  */
+const preferencesSchema = z
+  .object({
+    ...(Object.fromEntries(PREFERENCE_BOOLEAN_FIELDS.map(field => [field, optionalBooleanField])) as {
+      [K in (typeof PREFERENCE_BOOLEAN_FIELDS)[number]]: typeof optionalBooleanField;
+    }),
+    scoreLayoutAlign: z.enum(['start', 'center']).optional().catch(undefined),
+  })
+  .transform(source => {
+    const result: AppPreferencesBackup = {};
+    for (const field of PREFERENCE_BOOLEAN_FIELDS) {
+      const value = source[field];
+      if (typeof value === 'boolean') {
+        result[field] = value;
+      }
+    }
+    if (source.scoreLayoutAlign !== undefined) {
+      result.scoreLayoutAlign = source.scoreLayoutAlign;
+    }
+    return result;
+  });
+
+/** 清洗备份包中的偏好设置（仅保留已知字段）；无有效字段返回 undefined。 */
 const sanitizePreferences = (raw: unknown): AppPreferencesBackup | undefined => {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-  const source = raw as RawRecord;
-  const result: AppPreferencesBackup = {};
-  for (const field of PREFERENCE_BOOLEAN_FIELDS) {
-    const value = source[field];
-    if (typeof value === 'boolean') {
-      result[field] = value;
-    }
-  }
-  if (source['scoreLayoutAlign'] === 'start' || source['scoreLayoutAlign'] === 'center') {
-    result.scoreLayoutAlign = source['scoreLayoutAlign'];
-  }
-  return Object.keys(result).length > 0 ? result : undefined;
+  const parsed = preferencesSchema.safeParse(raw);
+  if (!parsed.success) return undefined;
+  return Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
 };
 
 export interface ValidatePayloadOptions {
@@ -383,7 +435,7 @@ export const validateImportExportPayload = (
     warnings.push(`检测并清除了 ${orphanChords.length} 个所属分组不存在的孤儿和弦`);
   }
 
-  // 同组 + 同指纹去重（与保存及 localStorage 链路共用同一套去重逻辑）
+  // 同组 + 同指纹去重（与保存及转录/导入链路共用同一套去重逻辑）
   const { kept: dedupedChords, dupes } = dedupeChordsByFingerprint(filteredChords);
   // 重复项不写入 issues，避免「仅重复」就整包拒绝；需要可观测可 console.warn
   dupes.forEach(c => console.warn(`[validatePayload] 丢弃同组重复指纹: ${getChordName(c)} (${c.id})`));

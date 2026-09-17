@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { songRepository } from '@/domains/score/model/songRepository';
+import { idb } from '@/platform/services/storage';
+import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 /**
  * 复现用户上报的跨乐谱联动 bug：
@@ -10,8 +13,10 @@ import { useSongStore } from '@/domains/score/library/store/songStore';
  * 若多首乐谱共享了 chordMap/lineIds 引用，此测试会失败。
  */
 describe('歌曲间数据隔离', () => {
-  beforeEach(() => {
-    localStorage.clear();
+  beforeEach(async () => {
+    // 重置 kv 镜像（IDB kv 库 + 内存 Map），保证用例间小状态隔离
+    await idb.clear('kv');
+    await hydrateIdbKv();
     setActivePinia(createPinia());
   });
 
@@ -24,7 +29,7 @@ describe('歌曲间数据隔离', () => {
     expect(s1.lineIds).not.toBe(s2.lineIds);
   });
 
-  it('编辑第 1 首的第 2 行歌词，不影响第 2 首的和弦', () => {
+  it('编辑第 1 首的第 2 行歌词，不影响第 2 首的和弦', async () => {
     const store = useSongStore();
     const editor = useScoreEditorStore();
 
@@ -46,13 +51,13 @@ describe('歌曲间数据隔离', () => {
     // 第 2 首的和弦必须原样保留
     expect(s2.chordMap.get('line_a1_char_0')).toBe('c1');
 
-    // 触发落盘后，第 2 首在 localStorage 里的条目也必须原样保留
-    store.flushSongsNow();
-    const persistedS2 = JSON.parse(localStorage.getItem(`CHORD_LAB_SONG_ENTRY_V1:${s2.id}`) ?? '{}');
-    expect(persistedS2.chordMap?.['line_a1_char_0']).toBe('c1');
+    // 触发落盘后，第 2 首在 IDB 里的记录也必须原样保留
+    await store.flushSongsNow();
+    const persistedS2 = (await songRepository.loadSongs()).find(s => s.id === s2.id);
+    expect(persistedS2?.chordMap.get('line_a1_char_0')).toBe('c1');
   });
 
-  it('切歌后防抖挂起的旧歌词仍应写回原歌，而非串写到当前歌曲并清空其和弦', () => {
+  it('切歌后防抖挂起的旧歌词仍应写回原歌，而非串写到当前歌曲并清空其和弦', async () => {
     const store = useSongStore();
     const editor = useScoreEditorStore();
 
@@ -75,8 +80,8 @@ describe('歌曲间数据隔离', () => {
     expect(s2.lyrics).toBe('甲行\n乙行');
     expect(s2.chordMap.get('line_a1_char_0')).toBe('c1');
 
-    store.flushSongsNow();
-    const persistedS2 = JSON.parse(localStorage.getItem(`CHORD_LAB_SONG_ENTRY_V1:${s2.id}`) ?? '{}');
-    expect(persistedS2.chordMap?.['line_a1_char_0']).toBe('c1');
+    await store.flushSongsNow();
+    const persistedS2 = (await songRepository.loadSongs()).find(s => s.id === s2.id);
+    expect(persistedS2?.chordMap.get('line_a1_char_0')).toBe('c1');
   });
 });

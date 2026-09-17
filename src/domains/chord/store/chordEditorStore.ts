@@ -1,7 +1,6 @@
 // src/stores/chordEditorStore.ts
 import { computed, inject, ref, toRaw, watch } from 'vue';
 
-import { useStorage } from '@vueuse/core';
 import { defineStore } from 'pinia';
 
 import { useChordStore } from '@/domains/chord/store/chordStore';
@@ -9,12 +8,13 @@ import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { normalizeChord } from '@/domains/chord/theory/normalizeChord';
 import {
   createString,
-  DEFAULT_TUNING_MAPPING,
+  getBaseStringsFor,
   getChordName,
   getDefaultTuningForStringCount,
   TUNING_PRESETS,
 } from '@/domains/chord/theory/theory';
 import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
+import { useStorage } from '@/platform/composables/useStorage';
 import { cloneDeep } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
@@ -66,7 +66,7 @@ const createDefaultChord = (stringCount: number = 6): Chord => ({
 const createChordEditorSetup = (persist: boolean) => () => {
   const chordStore = useChordStore();
   const draftChord = persist
-    ? useStorage<Chord>(STORAGE_KEYS.EDITING_DRAFT, createDefaultChord(), localStorage)
+    ? useStorage<Chord>(STORAGE_KEYS.EDITING_DRAFT, createDefaultChord())
     : ref(createDefaultChord());
   draftChord.value = normalizeDraftChord(draftChord.value);
   const isEditing = persist ? useStorage(STORAGE_KEYS.IS_EDITING, false) : ref(false);
@@ -75,7 +75,9 @@ const createChordEditorSetup = (persist: boolean) => () => {
   const autoBarre = useStorage(STORAGE_KEYS.AUTO_BARRE, true);
 
   const isFretBoardEmpty = computed(() => draftChord.value.strings.every(s => s[0] < 0));
-  const activeBaseStrings = computed(() => TUNING_PRESETS[draftChord.value.tuning]?.mapping || DEFAULT_TUNING_MAPPING);
+  // 按草稿实际弦数解析基准弦：9/10 弦（无调弦预设）原先会落回 6 弦映射，
+  // 第 7 根起音高静默塌成 0，分析面板与转位判定随之失真
+  const activeBaseStrings = computed(() => getBaseStringsFor(draftChord.value.tuning, draftChord.value.strings.length));
 
   /** 数据层兜底：主音绝不指向禁用的弦。
    *  任何写入路径（右键设根、设弦状态、缩品位、加载和弦等）只要把 rootStringIndex 落到
@@ -297,7 +299,7 @@ const createChordEditorSetup = (persist: boolean) => () => {
 export const useChordEditorStore = defineStore('editor', createChordEditorSetup(true));
 
 /** 选器和弦抽屉草稿（纯内存）：与工作台草稿完全隔离——抽屉内编辑/新建不再改动工作台指板，
- *  工作台的编辑也不会串进抽屉；抽屉关闭后草稿随之丢弃，不留残留 localStorage */
+ *  工作台的编辑也不会串进抽屉；抽屉关闭后草稿随之丢弃，不留残留持久化键 */
 export const useDrawerChordEditorStore = defineStore('editor-drawer', createChordEditorSetup(false));
 
 /** 草稿 store 实例类型：两个实例同构，取联合以容纳不同 $id 字面量，便于跨实例传递（provide 的抽屉实例） */

@@ -20,6 +20,11 @@ const EXCLUDED_DIRS = ['node_modules'];
 const EXCLUDED_FILES = ['all_code.txt'];
 const EXCLUDED_EXT = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico'];
 
+// 默认剥离注释：dump 更紧凑，token 占用更低。
+// 加 --keep-comments 保留注释，用于需要看到设计意图、取舍说明与"为什么这么写"的场合
+// （剥离模式下这类信息全部丢失，阅读方容易把刻意决策误判成疏漏）。
+const KEEP_COMMENTS = process.argv.includes('--keep-comments');
+
 function collectFiles(dir, fileList = []) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
@@ -114,12 +119,17 @@ function stripComments(content) {
   return result;
 }
 
-function removeCommentsAndBlankLines(content) {
-  content = content.replace(/<!--[\s\S]*?-->/g, '');
-  content = stripComments(content);
+/** 去掉空行（注释去留由调用方决定，两种模式都压缩空行以控制 dump 体积） */
+function collapseBlankLines(content) {
   const lines = content.split('\n');
   const filtered = lines.filter(line => line.trim() !== '');
   return filtered.join('\n');
+}
+
+function removeCommentsAndBlankLines(content) {
+  content = content.replace(/<!--[\s\S]*?-->/g, '');
+  content = stripComments(content);
+  return collapseBlankLines(content);
 }
 
 function main() {
@@ -148,6 +158,7 @@ function main() {
 
   const files = Array.from(new Set(allFiles));
   console.log(`找到 ${files.length} 个文件`);
+  console.log(KEEP_COMMENTS ? '模式：保留注释' : '模式：剥离注释（加 --keep-comments 可保留）');
 
   const writeStream = fs.createWriteStream(OUTPUT_FILE, { encoding: 'utf8' });
   let isFirstFile = true;
@@ -161,7 +172,7 @@ function main() {
       }
 
       content = content.replace(/\r\n/g, '\n');
-      content = removeCommentsAndBlankLines(content);
+      content = KEEP_COMMENTS ? collapseBlankLines(content) : removeCommentsAndBlankLines(content);
       content = content.replace(/\n{2,}/g, '\n');
 
       let relPath = path.relative(process.cwd(), file);

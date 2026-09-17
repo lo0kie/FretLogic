@@ -1,4 +1,3 @@
-import { parseAndValidatePayload } from '@/app/services/validation/payload';
 import { base64DecodeUtf8 } from '@/platform/utils/common';
 
 import { SyncError } from './provider.ts';
@@ -87,6 +86,8 @@ export function createSyncProviderBase(deps: SyncBaseDeps) {
 
   /** 读取响应原文并解析为 JSON，再经导入校验；解析或校验失败均抛 INVALID_CLOUD_DATA。 */
   const decodePayload = async (response: Response): Promise<ImportExportPayload> => {
+    // payload 校验模块（含 zod）动态加载：仅拉取数据时才需要，保持其离开首屏闭包
+    const { parseAndValidatePayload } = await import('@/app/services/validation/payload');
     const result = parseAndValidatePayload(await readRaw(response));
     if (result.error === 'EMPTY') {
       throw new SyncError('INVALID_CLOUD_DATA', '云端数据为空');

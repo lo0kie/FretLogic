@@ -88,6 +88,7 @@ import {
   collectChordNotes,
   computeStringLabelAccidental,
   getChordName,
+  isReentrantTuning,
   nameToSegments,
   parsePitchSegment,
   ROOT_PITCH_MAP,
@@ -152,7 +153,12 @@ const graphAnalysis = computed(() => {
     explicitRootPitch = calcPitchIndex(rootIdx, strings[rootIdx]![0], fretOffset, baseStrings);
   }
 
-  const { candidates, bestRootPitch } = analyzeChordGraph(rawNotes, explicitRootPitch);
+  // 重入调弦（尤克里里 GCEA）按真实音高取低音，与 theory.resolveChordRootPitch 口径一致
+  const { candidates, bestRootPitch } = analyzeChordGraph(
+    rawNotes,
+    explicitRootPitch,
+    isReentrantTuning(editorStore.draftChord.tuning)
+  );
   return { strings, fretOffset, baseStrings, rawNotes, candidates, bestRootPitch };
 });
 

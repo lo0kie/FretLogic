@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import { clamp, estimateValueBytes } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
 
@@ -65,13 +67,14 @@ export const toFretOffset = (value: number): FretOffset => clamp(Math.trunc(valu
 export const toStringIndex = (value: number, maxIndex: number = 9): StringIndex =>
   clamp(Math.trunc(value), 0, maxIndex) as StringIndex;
 
+/** 品位位置公共值域 schema（变调夹品位 / 把位偏移共用）：整数 0~12 */
+const fretPositionSchema = z.number().int().min(0).max(12);
+
 /** 值域校验：变调夹品位（清洗层用，用于区分"非法值"与"合法 0 品"） */
-export const isCapoValue = (value: unknown): value is Capo =>
-  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 12;
+export const isCapoValue = (value: unknown): value is Capo => fretPositionSchema.safeParse(value).success;
 
 /** 值域校验：品位/把位偏移量（清洗层用，用于区分"非法值"与"合法 0 品"） */
-export const isFretOffsetValue = (value: unknown): value is FretOffset =>
-  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 12;
+export const isFretOffsetValue = (value: unknown): value is FretOffset => fretPositionSchema.safeParse(value).success;
 
 /** 判断两根同品弦之间的所有弦是否都能被横按食指覆盖（品位 >= fret 即可，更高品视为垫底，空弦/静音弦会切断） */
 const canBarreCover = (strings: GuitarStringsModel, from: number, to: number, fret: number): boolean => {
@@ -122,26 +125,64 @@ export const isBarreStillValid = (strings: GuitarStringsModel, barre: BarreEntit
   return isValid;
 };
 
+/**
+ * 横按条目 schema（工厂式注入运行时上限 maxIndex）。
+ * 语义与旧手写校验逐条对齐：
+ * - fret/fromString/toString 必须是有限数值，先 Math.floor 截断（修复语义）再判定；
+ * - 值域：fret >= 1、fromString >= 0、toString <= maxIndex、fromString <= toString，违反即整条拒绝；
+ * - finger 仅在 1~4 时保留，其余值（含非数字）只丢字段、不拒绝条目；
+ * - 未知字段一律剥除（z.object 默认行为）。
+ */
+const makeBarreEntrySchema = (maxIndex: number) =>
+  z
+    .object({
+      fret: z.number().finite(),
+      fromString: z.number().finite(),
+      toString: z.number().finite(),
+      finger: z.unknown(),
+    })
+    .transform(b => ({
+      fret: Math.floor(b.fret),
+      fromString: Math.floor(b.fromString),
+      toString: Math.floor(b.toString),
+      finger: (b.finger === 1 || b.finger === 2 || b.finger === 3 || b.finger === 4 ? b.finger : undefined) as
+        1 | 2 | 3 | 4 | undefined,
+    }))
+    .refine(b => b.fret >= 1 && b.fromString >= 0 && b.toString <= maxIndex && b.fromString <= b.toString);
+
+/**
+ * schema 按 maxIndex 记忆化：schema 构造（object→transform→refine 链）远贵于 safeParse 本身，
+ * normalizeBarres 在大规模数据清洗（如 1000 条和弦基准）中逐条调用，若每次重建 schema
+ * 会使构造开销放大千倍。实际取值只有各弦数（4~7）对应的少数几种，Map 缓存命中即免构造。
+ */
+const barreEntrySchemaCache = new Map<number, ReturnType<typeof makeBarreEntrySchema>>();
+const getBarreEntrySchema = (maxIndex: number): ReturnType<typeof makeBarreEntrySchema> => {
+  let schema = barreEntrySchemaCache.get(maxIndex);
+  if (!schema) {
+    schema = makeBarreEntrySchema(maxIndex);
+    barreEntrySchemaCache.set(maxIndex, schema);
+  }
+  return schema;
+};
+
 /** 规范化显式横按列表：过滤非法条目（品格/弦序越界、from > to），返回 undefined 表示无有效横按 */
 export const normalizeBarres = (barres: unknown, maxStrings: number = 10): BarreEntity[] | undefined => {
   if (!Array.isArray(barres)) return undefined;
-  const out: BarreEntity[] = [];
   const maxIndex = Math.max(0, maxStrings - 1);
+  const entrySchema = getBarreEntrySchema(maxIndex);
+  const out: BarreEntity[] = [];
   for (const raw of barres) {
     if (!raw || typeof raw !== 'object') continue;
-    const b = raw as Partial<BarreEntity>;
-    const fret = typeof b.fret === 'number' && Number.isFinite(b.fret) ? Math.floor(b.fret) : NaN;
-    const fromString =
-      typeof b.fromString === 'number' && Number.isFinite(b.fromString) ? Math.floor(b.fromString) : NaN;
-    const toString = typeof b.toString === 'number' && Number.isFinite(b.toString) ? Math.floor(b.toString) : NaN;
-    if (fret < 1 || fromString < 0 || toString > maxIndex || fromString > toString) continue;
-    // 上一行已完成 0~maxIndex 值域校验，此处收窄为 StringIndex；fret 已通过 >= 1 校验收窄为 BarreFret
+    const result = entrySchema.safeParse(raw);
+    if (!result.success) continue;
+    const { fret, fromString, toString, finger } = result.data;
+    // 值域已由 schema refine 收窄，此处断言为品牌化索引/品位类型
     const item: BarreEntity = {
       fret: fret as BarreFret,
       fromString: fromString as StringIndex,
       toString: toString as StringIndex,
     };
-    if (b.finger === 1 || b.finger === 2 || b.finger === 3 || b.finger === 4) item.finger = b.finger;
+    if (finger !== undefined) item.finger = finger;
     out.push(item);
   }
   return out.length > 0 ? out : undefined;

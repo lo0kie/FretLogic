@@ -81,7 +81,7 @@ import { useUiStore } from '@/platform/store/uiStore';
 import { canvasToBlob, triggerBlobDownload } from '@/platform/utils/canvas';
 
 import type { ExportBgMode } from '@/platform/types';
-import type { SegmentOption } from '@/platform/ui/segmented/BaseSegmentedControl.vue';
+import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
 
 const editorStore = useChordEditorStore();
 const settingsStore = useSettingsStore();

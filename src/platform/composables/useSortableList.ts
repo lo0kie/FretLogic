@@ -39,10 +39,11 @@
  */
 import { nextTick, onUnmounted, toValue, watch } from 'vue';
 
-import Sortable from 'sortablejs';
-
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 
+// Sortable 仅在首次建实例（组件挂载且列表非空）时才需要，动态加载使其脱离首屏闭包
+// （SidebarLeft 静态引入 SongSection/GroupSection，静态 import 会把 sortablejs 拖进首屏预算）
+import type Sortable from 'sortablejs';
 import type { ComponentPublicInstance, MaybeRefOrGetter } from 'vue';
 
 /** 交给 Sortable 的占位类名契约：它在 start 时必定往被拖元素上挂一个类，这里给无样式类，视觉由内联 opacity 控制 */
@@ -123,6 +124,30 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
 
   /** 当前实例；容器未就绪 / 列表为空 / 未挂载时为 null */
   let instance: Sortable | null = null;
+
+  // ==================== Sortable 模块懒加载 ====================
+
+  /** Sortable 构造器类型：动态加载拿到的是可构造的类本身（实例类型即上方 import type 的 Sortable） */
+  type SortableFactory = new (element: HTMLElement, options: Sortable.SortableOptions) => Sortable;
+
+  /** Sortable 模块的加载 promise（进程内共享，多次建实例只加载一次） */
+  let sortableModulePromise: Promise<SortableFactory> | null = null;
+  const loadSortable = (): Promise<SortableFactory> => {
+    sortableModulePromise ??= import('sortablejs').then(mod => {
+      // CJS（export = Sortable）经打包器互操作后动态 import 得到 { default: Sortable }；
+      // ESM 形态下模块本身即可构造。两种形态统一归一为可构造的类
+      const withDefault = mod as { default?: SortableFactory };
+      return withDefault.default ?? (mod as unknown as SortableFactory);
+    });
+    return sortableModulePromise;
+  };
+
+  /**
+   * start 代际号：Sortable 模块异步加载期间若发生 destroy（容器换掉、列表清空、卸载）
+   * 或新的 start，加载完成后返回的旧流程凭代际不符而放弃，避免把实例建在已销毁的宿主上
+   * （同步版本不存在此问题，动态化后必须补上）。
+   */
+  let startGeneration = 0;
 
   // ==================== 自建拖拽影像 ====================
 
@@ -599,6 +624,8 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
   };
 
   const destroy = () => {
+    // 推进代际：作废仍在等待模块加载的 start 流程（见 startGeneration 注释）
+    startGeneration++;
     // 销毁可能发生在拖拽中途（容器被换掉、列表清空、卸载）。顺序不需要补救——落定走的
     // 是「以 DOM 为真源」，下次起拖会重新快照，不会像下标运算那样把错位一代代累积下去；
     // 真正要收干净的是影像与未跑完的位移动画，否则残留的内联 transform 会盖住后续布局
@@ -618,13 +645,18 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
    * 建（或重建）实例。这里就是「容器守卫」的落点：容器不存在时直接放弃，
    * 不需要像封装那样靠 catch 或提前 start 来回避 "el must be an HTMLElement"。
    * disabled 在建实例时现读一次——不存在「创建前的选项变更被丢弃」这种状态。
+   * Sortable 模块为动态加载：等待期间宿主可能 destroy/重建，凭代际守卫作废过期流程。
    */
-  const start = () => {
+  const start = async () => {
     const element = resolveTarget();
     if (!element) return;
     destroy();
     bindPointerWatchers();
-    instance = new Sortable(element, {
+    const generation = ++startGeneration;
+    const SortableCtor = await loadSortable();
+    // 模块加载期间宿主被销毁（destroy 已推进代际）或被新的 start 取代：放弃本次创建
+    if (generation !== startGeneration) return;
+    instance = new SortableCtor(element, {
       // 换位动画由本组合式统一接管（见 playFlip）。Sortable 自己那套是「先写回旧位置的
       // transform 再过渡到 0」，起点取布局位置而非视觉位置——连续换位时会先把元素瞬移回
       // 布局位置再重新起跳；松手时若还在飞又留下内联残留。给 0 之后它只搬 DOM、不做任何
