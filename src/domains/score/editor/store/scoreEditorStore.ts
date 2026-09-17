@@ -42,17 +42,35 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const activeSongId = ref<string | null>(null);
   // 当前标签页仅内存态：URL `?tab=` 全权接管（刷新由 URL 恢复，裸访问回落到 edit 默认）
   const activeTabRef = ref<ScoreActiveTab>('edit');
-  // 缩放以百分制存储（100 = 100%），序列化处迁移旧版倍率（0.6~1.5）为百分制
-  const fontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 100, localStorage, {
+  // 缩放以百分制存储（100 = 100%），序列化处迁移旧版倍率（0.6~1.5）为百分制。
+  // 分两个维度各存一份：**预览 / 导出** 与 **排列和弦（编辑视图）** 互不干扰 —— 编辑时要大字号看谱、
+  // 出图时要另一套排版比例，共用一份就会「调好编辑区，导出的图跟着变」。
+  // 预览维度沿用旧键，老用户的既有设置继续生效。
+  const previewFontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 100, localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
     serializer: percentScaleSerializer,
   });
-  const fretboardScale = useStorage(STORAGE_KEYS.SCORE_FRETBOARD_SCALE, 100, localStorage, {
+  const previewFretboardScale = useStorage(STORAGE_KEYS.SCORE_FRETBOARD_SCALE, 100, localStorage, {
     eventFilter: debounceFilter(400, { maxWait: 1500 }),
     serializer: percentScaleSerializer,
   });
-  const effectiveFontScale = computed(() => fontScale.value);
-  const effectiveFretboardScale = computed(() => fretboardScale.value);
+  // 排列和弦维度用新键，默认值取预览维度的当前值：拆分后两侧都与原设置一致，不会「一夜回到 100%」
+  const arrangeFontScale = useStorage(STORAGE_KEYS.SCORE_ARRANGE_FONT_SCALE, previewFontScale.value, localStorage, {
+    eventFilter: debounceFilter(400, { maxWait: 1500 }),
+    serializer: percentScaleSerializer,
+  });
+  const arrangeFretboardScale = useStorage(
+    STORAGE_KEYS.SCORE_ARRANGE_FRETBOARD_SCALE,
+    previewFretboardScale.value,
+    localStorage,
+    {
+      eventFilter: debounceFilter(400, { maxWait: 1500 }),
+      serializer: percentScaleSerializer,
+    }
+  );
+  /** 编辑视图（排列和弦）实际生效的缩放：ChordSlotCell / ScoreInteractiveArea 消费 */
+  const effectiveFontScale = computed(() => arrangeFontScale.value);
+  const effectiveFretboardScale = computed(() => arrangeFretboardScale.value);
 
   const activeSong = computed<Song | null>(() => {
     if (!activeSongId.value) return null;
@@ -236,8 +254,10 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     moveSlotChord,
     transposeActiveSong,
     transposeActiveCapo,
-    fontScale,
-    fretboardScale,
+    previewFontScale,
+    previewFretboardScale,
+    arrangeFontScale,
+    arrangeFretboardScale,
     effectiveFontScale,
     effectiveFretboardScale,
     undo,

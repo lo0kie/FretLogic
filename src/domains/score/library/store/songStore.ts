@@ -4,7 +4,7 @@
  * 纯逻辑拆分见同目录：songPersistence（防抖刷写/迁移）、songChordOps（批量绑定/移调重映射）、
  * songIndex（引用倒排索引）、songMeta（元信息 diff）。
  */
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useEventListener } from '@vueuse/core';
 import { defineStore } from 'pinia';
@@ -23,15 +23,19 @@ import {
   restoreChordBindingsToSongs,
   unbindChordIdsFromSongs,
 } from './songChordOps';
-import { buildChordReferenceIndex, collectChordReferences } from './songIndex';
+import { buildSongRefCounts, collectChordReferences, mergeSongRefCounts } from './songIndex';
 import { applySongMeta, touchSong } from './songMeta';
 import { createSongPersistence } from './songPersistence';
 
+import type { ChordReferenceIndex } from './songIndex';
 import type { ChordId } from '@/domains/chord/types';
 import type { SlotKey, Song } from '@/domains/score/types';
 
 /** 乐谱排序方式：manual 手动（拖拽顺序）/ title 按标题 / createdAt 按创建时间 */
 export type SongSortMethod = 'manual' | 'title' | 'createdAt';
+
+/** 歌手筛选项的排序比较器（模块级单例）：localeCompare 每次调用都要重新解析 locale 与选项 */
+const SINGER_COLLATOR = new Intl.Collator('zh-Hans-CN');
 
 /** 读取持久化的乐谱排序方式；存储不可用或值非法时回退为手动排序。 */
 const readSongSortMethod = (): SongSortMethod => {
@@ -57,10 +61,58 @@ export const useSongStore = defineStore('song', () => {
   songs.value = loadInitialSongs();
 
   /**
-   * 响应式全局和弦引用倒排索引：chordId -> { song, count }[]，
-   * 歌曲增删或绑定变更时自动更新并缓存，反查 O(1)。
+   * 响应式全局和弦引用倒排索引：chordId -> { song, count }[]，反查 O(1)。
+   *
+   * 不能直接对 songs.value 做一次全量构建：那种 computed 在构建时要遍历每首歌的 chordMap，
+   * 依赖就挂到了**全库每首歌**上——而绑定/解绑一个槽位只会替换那一首的 chordMap 引用，却会让
+   * 整个索引全量重建（extreme 档 80 首 × 每首数百个绑定 = 数万次 Map 迭代，实测 5~17ms）。
+   * 而它的消费方不是「用户主动查看引用情况」——每张和弦卡的 menuItems computed 都要读它来决定
+   * 「引用反查」菜单项是否置灰，属常驻依赖，于是「连续绑定和弦」每次绑定都要付一次全库重建。
+   *
+   * 改为「每首歌一个独立 computed 分片 + 上层按 id 合并」：分片的依赖只挂在本首歌的 chordMap 上，
+   * 单首变更只让那一首的分片重算，其余分片命中缓存；上层合并遍历的是各分片已按 chordId 去重的
+   * 计数表，不再逐槽位重扫全库。
    */
-  const chordReferencesIndex = computed(() => buildChordReferenceIndex(songs.value));
+  const makeSongRefCountShard = (id: string) =>
+    computed(() => {
+      // 经 songMap 取当前对象：同 id 的歌曲被替换时也能读到最新，不会持有旧引用
+      const song = songMap.value.get(id);
+      return song ? buildSongRefCounts(song.chordMap) : new Map<string, number>();
+    });
+
+  const songRefCountShards = new Map<string, ReturnType<typeof makeSongRefCountShard>>();
+
+  /** 取（或惰性创建）某首歌的引用计数分片 */
+  const getSongRefCountShard = (id: string): ReturnType<typeof makeSongRefCountShard> => {
+    let shard = songRefCountShards.get(id);
+    if (!shard) {
+      shard = makeSongRefCountShard(id);
+      songRefCountShards.set(id, shard);
+    }
+    return shard;
+  };
+
+  const chordReferencesIndex = computed<ChordReferenceIndex>(() => {
+    const index: ChordReferenceIndex = new Map();
+    for (const song of songs.value) {
+      mergeSongRefCounts(index, song, getSongRefCountShard(song.id).value);
+    }
+    return index;
+  });
+
+  // 歌曲删除后修剪其分片：分片表若只增不减，会随「删歌 → 新建」长期积累失效的 computed
+  watch(
+    () => songs.value.map(s => s.id),
+    ids => {
+      // 显式声明为 Set<string>：ids 是品牌类型 SongId[]，而分片表的键是普通 string
+      // （分片本身不关心 id 来源），不标注则 Set 被推断成 Set<SongId>，has(string) 过不了类型检查
+      const live = new Set<string>(ids);
+      for (const id of [...songRefCountShards.keys()]) {
+        if (!live.has(id)) songRefCountShards.delete(id);
+      }
+    },
+    { flush: 'post' }
+  );
 
   /** 快速反查一组和弦 ID 关联的歌曲引用列表（去重合并同歌曲内多指法的引用次数） */
   const getChordReferences = (chordIds: Iterable<string>) =>
@@ -106,7 +158,7 @@ export const useSongStore = defineStore('song', () => {
   /** 可选筛选项：现有乐谱中实际出现的歌手 / 拍号（去重升序），菜单子项数据源 */
   const availableSingerFilters = computed(() =>
     [...new Set(songs.value.map(s => s.singer).filter((s): s is string => Boolean(s)))].sort((a, b) =>
-      a.localeCompare(b, 'zh-Hans-CN')
+      SINGER_COLLATOR.compare(a, b)
     )
   );
   const availableTimeSignatureFilters = computed(() =>
@@ -279,6 +331,7 @@ export const useSongStore = defineStore('song', () => {
    */
   const reorderSongs = (orderedSongs: Song[]) => {
     const currentIds = new Set<string>(songs.value.map(s => s.id));
+    const currentById = songMap.value;
     const seen = new Set<string>();
     const next: Song[] = [];
 
@@ -290,8 +343,15 @@ export const useSongStore = defineStore('song', () => {
 
     if (next.length !== songs.value.length) return;
 
+    // 顺序信息完全由索引键承载（loadInitialSongs 按 saveSongIds 的顺序逐首读回），歌曲内容一无所变，
+    // 因此正常路径只需 markIndexDirty。此前对每首歌都 markSongDirty 会把全库每首歌的**内容**重新
+    // 序列化写进各自的键——N 次全歌序列化，且 repository.saveSong 内部每首都还要 parse 一次索引键
+    // 并做 O(N) 的 includes 查找（整体 O(N²)），拖拽一次即全库重写，与「按歌曲拆分持久化」的初衷相反。
+    // 守卫：调用契约是「传入 songs 里的同一批对象、仅顺序不同」（useSortableList 按引用比较后回传）。
+    // 若调用方传入了新对象（可能夹带内容变更），退回逐首标脏，避免静默丢改动。
+    const carriesNewObjects = next.some(song => currentById.get(song.id) !== song);
     songs.value = next;
-    next.forEach(s => markSongDirty(s.id));
+    if (carriesNewObjects) next.forEach(s => markSongDirty(s.id));
     markIndexDirty();
     flushSongsNow();
   };

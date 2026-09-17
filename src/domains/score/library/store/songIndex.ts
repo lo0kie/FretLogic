@@ -1,30 +1,35 @@
 /**
  * 和弦引用倒排索引的纯构建与反查（与 store 无关）：
  * 建立 chordId -> { song, count }[] 的映射，供删除/合并和弦前的引用反查。
+ *
+ * 构建刻意拆成「单首计数」+「并入索引」两步而不是一个整表构建函数：store 侧要让每首歌的
+ * 依赖独立成片（见 songStore 的 chordReferencesIndex），才能在单首歌的绑定变更时只重算那一首。
  */
-import type { Song } from '@/domains/score/types';
+import type { ChordId } from '@/domains/chord/types';
+import type { SlotKey, Song } from '@/domains/score/types';
 
 export type ChordReferenceIndex = Map<string, { song: Song; count: number }[]>;
 
-/** 由歌曲列表构建 chordId -> 引用列表 的倒排索引（同歌曲内多指法引用合并计数）。 */
-export const buildChordReferenceIndex = (songs: Song[]): ChordReferenceIndex => {
-  const index: ChordReferenceIndex = new Map();
-  for (const song of songs) {
-    const countMap = new Map<string, number>();
-    for (const chordId of song.chordMap.values()) {
-      if (!chordId) continue;
-      countMap.set(chordId, (countMap.get(chordId) ?? 0) + 1);
-    }
-    for (const [chordId, count] of countMap.entries()) {
-      let list = index.get(chordId);
-      if (!list) {
-        list = [];
-        index.set(chordId, list);
-      }
-      list.push({ song, count });
-    }
+/** 单首歌的 chordId -> 引用次数计数表（同歌曲内多个槽位引用同一和弦合并计数）。 */
+export const buildSongRefCounts = (chordMap: Map<SlotKey, ChordId>): Map<string, number> => {
+  const counts = new Map<string, number>();
+  for (const chordId of chordMap.values()) {
+    if (!chordId) continue;
+    counts.set(chordId, (counts.get(chordId) ?? 0) + 1);
   }
-  return index;
+  return counts;
+};
+
+/** 把单首歌的计数表并入倒排索引（歌曲引用一并记入，反查时可直接拿到所属歌曲）。 */
+export const mergeSongRefCounts = (index: ChordReferenceIndex, song: Song, counts: Map<string, number>): void => {
+  for (const [chordId, count] of counts) {
+    let list = index.get(chordId);
+    if (!list) {
+      list = [];
+      index.set(chordId, list);
+    }
+    list.push({ song, count });
+  }
 };
 
 /** 快速反查一组和弦 ID 关联的歌曲引用列表（去重合并同歌曲内多指法的引用次数）。 */

@@ -12,8 +12,8 @@ import {
 import { useFretboardKeyboard } from '@/domains/fretboard/composables/useFretboardKeyboard';
 import { calculateFretboardPoint, useFretboardLayout } from '@/domains/fretboard/composables/useFretboardLayout';
 import { useFretboardWheel } from '@/domains/fretboard/composables/useFretboardWheel';
+import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { cloneGuitarStrings } from '@/platform/utils/common';
-import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
 import { CANVAS_CONFIG } from '../constants';
 
@@ -213,6 +213,17 @@ export function useFretboardInteraction(
     onStringsChange(working);
   };
 
+  /**
+   * 按事件坐标落笔：命中品位区（1..fretCount）时把**焦点与音符一并**落到该格。
+   * 焦点与落笔同源是这里的要害：两者若各算各的，焦点环就会停在上一格/起点，与音符落点错位。
+   */
+  const paintFromEvent = (clientX: number, clientY: number) => {
+    const pt = getCanvasPoint(clientX, clientY);
+    if (!pt || pt.fretIndex < 1 || pt.fretIndex > props.chord.fretCount) return;
+    syncFocusPointTo(pt.stringIndex, pt.fretIndex);
+    paintCell(pt.stringIndex, pt.fretIndex);
+  };
+
   /** 切换某弦的升降号偏好（如 C#/Db），仅在该位置允许变体时生效 */
   const handleTogglePitchName = (sIdx: number) => {
     fretBoardRef.value?.focus();
@@ -256,6 +267,19 @@ export function useFretboardInteraction(
     clientY: number;
   }>(pos => updateHoverFromEvent(pos.clientX, pos.clientY));
 
+  /**
+   * 把焦点落点同步到指定格（位置未变化时不触发响应式更新）。
+   *
+   * 焦点环（空品位预览环 / 音符自身焦点环）与悬停环是两套独立的落点语义：悬停环随指针逐格移动，
+   * 焦点环只在按下、右击、键盘导航时改写。滑动绘制期间若只刷新悬停而不管焦点，焦点环就会滞留在
+   * 按下那一格——拖动越远偏离越大，松手后依然留在起点，看起来正是「预览圆点不在最终落点」。
+   */
+  const syncFocusPointTo = (sIdx: number, fIdx: number) => {
+    const prev = focusPoint.value;
+    if (prev && prev.stringIndex === sIdx && prev.fretIndex === fIdx) return;
+    focusPoint.value = { stringIndex: sIdx, fretIndex: fIdx };
+  };
+
   /** 指针离开：丢弃待处理的 hover 帧并清空高亮 */
   const handlePointerLeave = () => {
     cancelHoverUpdate();
@@ -293,6 +317,22 @@ export function useFretboardInteraction(
     fretBoardRef.value?.setPointerCapture(e.pointerId);
   };
 
+  /**
+   * 松开左键：先把落笔补齐到「实际松手那一格」，再用松手坐标收尾预览。
+   *
+   * 两件事都必须在松手这一刻做，否则落点与预览会各停一处：
+   * - pointermove 逐帧派发，快速拖动/事件合并时最后一格可能只体现在 pointerup 上，仅按 move 落笔会让
+   *   音符与焦点停在最后一次移动处；
+   * - 合帧队列里待处理的 hover 载荷是「上一次移动」的坐标，直接 flush 会把预览环挪回上一格。
+   * 同格重复落笔由 paintCell 的 lastCell 去重兜住（单击流程不受影响）。
+   */
+  const handlePointerUp = (e: PointerEvent) => {
+    if (dragPaint && e.button === 0) paintFromEvent(e.clientX, e.clientY);
+    cancelHoverUpdate();
+    updateHoverFromEvent(e.clientX, e.clientY);
+    endDragPaint();
+  };
+
   /** 获得键盘焦点：显示焦点框，首次聚焦时给一个默认焦点位置 */
   const handleFocus = () => {
     isFocused.value = true;
@@ -322,16 +362,11 @@ export function useFretboardInteraction(
 
   useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
   useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {
-    // 滑动绘制进行中：按当前指针位置作用品位格（跨格去重），并照常合帧刷新 hover 高亮
-    if (dragPaint) {
-      const pt = getCanvasPoint(e.clientX, e.clientY);
-      if (pt && pt.fretIndex >= 1 && pt.fretIndex <= props.chord.fretCount) {
-        paintCell(pt.stringIndex, pt.fretIndex);
-      }
-    }
+    // 滑动绘制进行中：按当前指针位置落笔（焦点跟随 + 跨格去重），并照常合帧刷新 hover 高亮
+    if (dragPaint) paintFromEvent(e.clientX, e.clientY);
     scheduleHoverFrame({ clientX: e.clientX, clientY: e.clientY });
   });
-  useEventListener(fretBoardRef, 'pointerup', endDragPaint);
+  useEventListener(fretBoardRef, 'pointerup', handlePointerUp);
   useEventListener(fretBoardRef, 'pointercancel', endDragPaint);
 
   useEventListener(fretBoardRef, 'pointerleave', handlePointerLeave);

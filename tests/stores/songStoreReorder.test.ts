@@ -2,7 +2,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createSongRepository } from '@/app/services/repositories';
+import { createSongRepository } from '@/app/services';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 
 import type { Song } from '@/domains/score/types';

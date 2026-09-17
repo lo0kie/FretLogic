@@ -89,6 +89,21 @@ export default tseslint.config(
         },
       ],
       // ---- 代码质量 ----
+      // 关闭核心 no-undef：未定义标识符由 vue-tsc 以 ts(2304)/ts(2552) 精确检查，而该规则不做类型
+      // 分析，把「未解析的引用」一律判为未定义 —— 落在类型位置上就会误报纯类型全局。
+      // 这类名字「只有类型、没有运行时值」，因此不在 globals.browser 里（它收的是运行时值：
+      // ImageBitmap / Blob / MouseEvent / HTMLCanvasElement 在，`CanvasImageSource` 这类 lib 类型别名
+      // 不在），往 globals 里补类型名属语义污染且会不断复发，不能这么修。
+      // 这活本该由 typescript-eslint 的 eslint-recommended 兜底，但它的 files 只匹配
+      // `**/*.ts|tsx|mts|cts`（@typescript-eslint/eslint-plugin/dist/configs/eslint-recommended-raw.js），
+      // 不含 `**/*.vue` —— 于是 .vue 里的 no-undef 一直是开的（.ts 里 RequestInit / IDBValidKey
+      // 这类纯 DOM 类型一直没报，正是因为那边关了）。
+      // 注意别把范围想大了：scope-manager 的默认 lib 是 `['es2018']`（未配 parserOptions.project 时
+      // 不会从 tsconfig 推导 lib），es5→es2018 的隐式 lib 变量（Record / ReturnType / PropertyKey …）
+      // 都是有声明的、不报；真正会踩的只有 lib.dom.d.ts 那一类（当前 dom 未启用）。
+      // 替代修法是给 parser 配 project/projectService 让 lib 从 tsconfig 推导，但那等于引入
+      // 类型感知 lint，与「全量类型检查交给 vue-tsc」的分工相悖，代价不成比例。
+      'no-undef': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
       // 统一数组类型写法为 T[]（Array<T> 由 --fix 机械转换）

@@ -26,6 +26,7 @@
  *   —— 这类变化不改变容器自身盒尺寸，也不产生 childList/characterData 变更，必须单独观察）；
  * - 子元素增删 / 文本增删（MutationObserver，如搜索过滤、contenteditable 输入）。
  */
+import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import {
   buildDualEdgeFadeMask,
   buildEdgeFadeMask,
@@ -180,19 +181,27 @@ function resolveFadeMode(el: HTMLElement, options: ResolvedOptions): FadeMode | 
  * 增量维护直接子元素的 ResizeObserver 观察：
  * 手风琴折叠展开、列表项高度变化只改子元素盒尺寸（容器盒尺寸与 childList 均不变），
  * 仅观察容器会漏测，必须逐子节点观察；childList 变化时在此增量增删。
+ *
+ * 只处理本次 mutation 记录里的增删节点，不做「全量快照 + diff」：addedNodes / removedNodes
+ * 对「成为 / 离开宿主直接子元素」这个事实是完备的（初始挂载由 mounted 的全量循环覆盖），
+ * 而全量快照是 O(子元素数) 的 Set 构造 + 逐项比对，长列表（和弦库展开后上百张卡）批量渲染、
+ * 拖拽排序时每帧都要付一次。
  */
-function updateObservedChildren(el: HTMLElement, state: EdgeFadeState): void {
-  const currentChildren = new Set(Array.from(el.children));
-  for (const observed of state.observedChildren) {
-    if (!currentChildren.has(observed)) {
-      state.observer.unobserve(observed);
-      state.observedChildren.delete(observed);
+function updateObservedChildren(el: HTMLElement, state: EdgeFadeState, mutations: MutationRecord[]): void {
+  for (const mutation of mutations) {
+    for (const node of mutation.removedNodes) {
+      if (node instanceof Element && state.observedChildren.has(node)) {
+        state.observer.unobserve(node);
+        state.observedChildren.delete(node);
+      }
     }
-  }
-  for (const child of currentChildren) {
-    if (!state.observedChildren.has(child)) {
-      state.observer.observe(child);
-      state.observedChildren.add(child);
+    for (const node of mutation.addedNodes) {
+      // 只收直接子元素：subtree 下深层后代的增删不归本层观察，其宿主盒尺寸变化会经由
+      // 已观察的直接子元素间接体现
+      if (node.parentNode === el && node instanceof Element && !state.observedChildren.has(node)) {
+        state.observer.observe(node);
+        state.observedChildren.add(node);
+      }
     }
   }
 }
@@ -284,11 +293,19 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
     };
     STATES.set(el, state);
 
-    const onScroll = () => syncEdgeFade(el, state);
+    /**
+     * 重测一律走帧末合帧：scroll / ResizeObserver / MutationObserver 在同一帧内都能触发多次
+     * （批量增删子节点、折叠动画期间子元素连续改尺寸、动量滚动的成串 scroll），
+     * 而每次 syncEdgeFade 都要读一批布局属性，走挂载路径时还会在 mountFadeMask 里强制样式重算。
+     * 合并成每帧一次后，读数也落在布局已干净时，且反复写同一份端点量被签名判等直接跳过。
+     */
+    const { schedule: scheduleSync, cancel: cancelSync } = useRafThrottle(() => syncEdgeFade(el, state));
+
+    const onScroll = () => scheduleSync();
     el.addEventListener('scroll', onScroll, { passive: true });
 
     // 容器自身与直接子元素共用同一个 observer：任一盒尺寸变化都触发重测
-    const observer = new ResizeObserver(() => syncEdgeFade(el, state));
+    const observer = new ResizeObserver(() => scheduleSync());
     observer.observe(el);
     for (const child of Array.from(el.children)) {
       observer.observe(child);
@@ -299,15 +316,16 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
     // 子元素增删（搜索过滤/路由切换）需增量维护子观察并重测；
     // 文本增删（contenteditable）只改变 scrollWidth、不改变任何盒尺寸，ResizeObserver 捕获不到，
     // 需 MutationObserver 兜底重测
-    const mutationObserver = new MutationObserver(() => {
-      updateObservedChildren(el, state);
-      syncEdgeFade(el, state);
+    const mutationObserver = new MutationObserver(mutations => {
+      updateObservedChildren(el, state, mutations);
+      scheduleSync();
     });
     mutationObserver.observe(el, { childList: true, subtree: true, characterData: true });
     state.mutationObserver = mutationObserver;
 
     state.cleanups.push(() => {
       el.removeEventListener('scroll', onScroll);
+      cancelSync();
       observer.disconnect();
       mutationObserver.disconnect();
     });

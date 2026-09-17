@@ -1,8 +1,8 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { logger } from '@/platform/utils/logger';
-import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
 import { createExternalDropResolver } from './lyrics-drag/externalDropTarget.ts';
 import { useDragAutoScroll } from './lyrics-drag/useDragAutoScroll.ts';

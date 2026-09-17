@@ -32,7 +32,7 @@
           class="mx-auto flex w-max gap-xl"
         >
           <!-- 首帧渲染中 -->
-          <Feedback v-if="isRendering && pages.length === 0" description="正在生成预览..." size="sm" type="loading" />
+          <Feedback v-if="isRendering && pages.length === 0" description="正在生成预览..." size="lg" type="loading" />
 
           <!-- 渲染失败（无任何页） -->
           <Feedback
@@ -65,6 +65,17 @@
               :src="url"
               class="block h-full w-auto select-none"
               draggable="false"
+            />
+
+            <!-- 页脚页码合成层：页图不含页码，此处按开关叠加（与导出走同一绘制函数，逐像素同源） -->
+            <ScorePageFooter
+              v-if="settingsStore.scoreShowFooter"
+              :color="footerMarkColor"
+              :page-height="previewPageSize.height"
+              :page-index="index"
+              :page-margin="settingsStore.scorePageMargin"
+              :page-width="previewPageSize.width"
+              :scale="activePercent / 100"
             />
           </div>
         </div>
@@ -172,6 +183,7 @@ import {
 
 import { useDebounceFn, useElementSize, useEventListener } from '@vueuse/core';
 
+import ScorePageFooter from '@/domains/score/preview/components/ScorePageFooter.vue';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
@@ -181,6 +193,7 @@ import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
+import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import {
   getScorePageSize,
   PREVIEW_DEFAULT_ZOOM_PERCENT,
@@ -194,10 +207,10 @@ import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLi
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import {
   currentRenderData,
-  fetchA4PageBlob,
   getCachedRender,
   isPreviewRendering,
   putCachedRender,
+  readA4PageBlob,
   setCurrentRender,
 } from '@/domains/score/preview/scorePreviewCache';
 import {
@@ -207,7 +220,7 @@ import {
 } from '@/domains/score/preview/services/scoreExportCanvas';
 import { runWorkerExport } from '@/domains/score/preview/services/workerExportService';
 import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
-import { isDark } from '@/platform/composables/useTheme';
+import { activeTheme, isDark } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
@@ -237,7 +250,7 @@ const { chordsLookupMap } = useScoreLinesData();
 const hasLyricsText = computed(() => Boolean(scoreEditor.activeSong?.lyrics?.trim()));
 
 // Worker 渲染载荷统一构建（全曲行索引 + 设置项读取），与 TopHeader 导出共享同一来源
-const { getAllLineIndices, buildRenderPayload } = useScoreRenderPayload();
+const { getAllLineIndices, buildRenderPayload, composePageFooter } = useScoreRenderPayload();
 
 /** 整曲全部行索引：预览始终覆盖全曲（不随选中行变化） */
 const allLineIndices = computed<number[]>(() => getAllLineIndices());
@@ -266,7 +279,9 @@ const dismissUpdateToast = () => {
   }
 };
 
-/** 内容缓存键：内容/调式/标题/变调夹/暗色/简写任一变化即视为失效并重新渲染 */
+/** 内容缓存键：内容/调式/标题/变调夹/暗色/简写任一变化即视为失效并重新渲染。
+ *  「显示页脚」刻意不在键内：页脚是独立合成层（见 services/footerOverlay），
+ *  开关只影响叠在页图之上的页码层，既不该触发重渲染，也不该为同一首歌多存一份缓存。 */
 const buildContentKey = () => {
   const song = scoreEditor.activeSong;
   if (!song) return '';
@@ -281,7 +296,7 @@ const buildContentKey = () => {
   }
   refSignatures.sort();
 
-  return `${song.id}_${song.title}_${song.singer}_${song.playKey}_ok${song.originalKey}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_ft${settingsStore.scoreShowFooter ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_q${settingsStore.scoreExportQuality}_pm${settingsStore.scorePageMargin}_ps${settingsStore.scorePageSize}_fz${scoreEditor.fontScale}_fb${scoreEditor.fretboardScale}_ies${settingsStore.scoreIgnoreEmptySpace ? 1 : 0}_ref${refSignatures.length}_${refSignatures.join('|')}`;
+  return `${song.id}_${song.title}_${song.singer}_${song.playKey}_ok${song.originalKey}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_q${settingsStore.scoreExportQuality}_pm${settingsStore.scorePageMargin}_ps${settingsStore.scorePageSize}_fz${scoreEditor.previewFontScale}_fb${scoreEditor.previewFretboardScale}_ies${settingsStore.scoreIgnoreEmptySpace ? 1 : 0}_ref${refSignatures.length}_${refSignatures.join('|')}`;
 };
 
 /** 响应式内容键：内容/排版任一依赖变化即重算，作为「重渲染触发」的单一 watch 源 */
@@ -297,7 +312,8 @@ const generate = async (force = false) => {
     return;
   }
 
-  const contentKey = buildContentKey();
+  // 读响应式内容键（computed 缓存）：同一 tick 内已被 watch 求值过则直接取用，不再重建整串
+  const contentKey = reactiveContentKey.value;
 
   // 命中缓存：直接展示已渲染的页流（同内容来回切换/重进预览标签零重复渲染）
   const cached = getCachedRender(contentKey);
@@ -318,17 +334,20 @@ const generate = async (force = false) => {
   // 已有页面的增量更新才弹「更新中」Toast；首次构建（无页）留给内容区居中加载框
   if (pages.value.length > 0) showUpdateToast();
   try {
-    const a4Result = await runWorkerExport(buildRenderPayload('a4'));
+    // isObsolete：连续编辑期间的过期渲染在排队阶段即被判废，不占用渲染线程
+    const a4Result = await runWorkerExport(buildRenderPayload('a4'), {
+      isObsolete: () => token !== runToken,
+    });
     if (token !== runToken) return;
     if (a4Result.blobs.length === 0) throw new Error('未能生成有效的预览数据');
 
     const a4Urls = a4Result.blobs.map(blob => URL.createObjectURL(blob));
-    // 各页字节数随渲染数据一并缓存：生成时 Blob 即在内存，直接取 size 免二次 fetch
+    // 各页字节数与原始 Blob 随渲染数据一并缓存：生成时 Blob 即在内存，直接取用免二次 fetch
     const a4Sizes = a4Result.blobs.map(blob => blob.size);
 
-    const entry: PreviewRenderData = { a4Urls, a4Sizes };
+    const entry: PreviewRenderData = { a4Urls, a4Sizes, a4Blobs: a4Result.blobs };
     currentContentKey = contentKey;
-    putCachedRender(contentKey, entry);
+    putCachedRender(contentKey, entry, song.id);
     applyEntry(entry);
     consumeIntroPageHint();
   } catch (err) {
@@ -431,6 +450,13 @@ const renderedPageHeight = computed(
   () => `${Math.round((previewPageSize.value.height * activePercent.value) / 100)}px`
 );
 
+/** 页脚页码层的文字色：取值同导出配色的弱化文字色（页图会因主题变化重渲，两者同步） */
+const footerMarkColor = ref(resolveFretboardCanvasPalette().SUB_TEXT);
+// 主题切换后重新解析 --fbc-*；仅靠 isDark 接不住 light ↔ high-contrast（两者都算非 dark）
+watch(activeTheme, () => {
+  footerMarkColor.value = resolveFretboardCanvasPalette().SUB_TEXT;
+});
+
 /** 页面是否超出视口可用高度：决定顶部对齐、纵向滚动浏览与禁用横向翻页滚轮。
  *  判定必须与真实纵向溢出严格一致（页高 > 滚动容器内容区高）：useElementSize 量到的
  *  containerHeight 已是 content-box（排除 p-6 内边距），不得再减 PREVIEW_FIT_PADDING_PX——
@@ -507,11 +533,15 @@ watch(
   }
 );
 
-/** 读取指定页的原始 Blob（统一走缓存模块的 object URL 读回） */
+/** 读取指定页的原始 Blob（统一走缓存模块的 object URL 读回）。
+ *  缓存页面不含页脚，故按开关合成后再交给剪贴板 / 下载，产物与预览所见一致。 */
 const fetchPageBlob = async (index: number): Promise<Blob | null> => {
   const url = pages.value[index];
   if (!url) return null;
-  return fetchA4PageBlob(url);
+  const blob = await readA4PageBlob(url);
+  if (!blob) return null;
+  const [composed] = await composePageFooter([blob], [index]);
+  return composed ?? blob;
 };
 
 /** 复制指定页到系统剪贴板（JPEG 不兼容时自动转 PNG 写入） */
@@ -587,7 +617,7 @@ watch(
       return;
     }
 
-    const contentKey = buildContentKey();
+    const contentKey = reactiveContentKey.value;
     const cached = getCachedRender(contentKey);
     // 缓存命中直接消费，重新生成由 generate 完成后消费
     if (cached && cached.a4Urls.length > 0) {
@@ -619,7 +649,7 @@ watch(
 
 onActivated(async () => {
   isPaneActive = true;
-  const contentKey = buildContentKey();
+  const contentKey = reactiveContentKey.value;
   // 唤醒守卫：如果休眠（在其他 Tab）期间切过歌或改过内容，先与已渲染内容比对
   if (contentKey !== currentContentKey) {
     const cached = contentKey ? getCachedRender(contentKey) : null;

@@ -11,18 +11,25 @@
       >
     </Transition>
   </span>
-  <!-- 逐字符模式：纯文本，仅内容变化的字符翻页，未变位保持静止 -->
+  <!-- 逐字符模式：纯文本，仅内容变化的字符翻页，未变位保持静止。
+       窗口 key 来自字符单元的稳定标识（前缀/后缀对齐），而非数组下标——
+       长度变化时（如 9/30 → 10/30）未变化的字符必须保持原 key 静止，
+       按下标对位会让整段字符集体错位翻滚 -->
   <span v-else aria-live="polite" class="inline-flex items-center leading-none select-none">
-    <span v-for="(_, i) in chars" :key="i" class="relative inline-block overflow-hidden leading-none whitespace-pre">
+    <span
+      v-for="cell in cells"
+      :key="cell.key"
+      class="relative inline-block overflow-hidden leading-none whitespace-pre"
+    >
       <Transition name="br-roll">
-        <span :key="chars[i]" :style="{ '--br-duration': durationSec }" class="inline-block">{{ chars[i] }}</span>
+        <span :key="cell.char" :style="{ '--br-duration': durationSec }" class="inline-block">{{ cell.char }}</span>
       </Transition>
     </span>
   </span>
 </template>
 
 <script setup lang="ts">
-import { computed, useSlots } from 'vue';
+import { computed, ref, useSlots, watch } from 'vue';
 
 /**
  * BaseRollingText 翻页文本（逐字符 / 整块 合一）。
@@ -56,8 +63,62 @@ const slots = useSlots();
 /** 整块模式：提供了富文本插槽，或显式要求整段滚动 */
 const blockMode = computed(() => !!slots['default'] || props.alwaysRoll === true);
 
-/** 逐字符模式拆分的字符数组（Unicode 码点） */
-const chars = computed(() => Array.from(props.text ?? ''));
+/** 逐字符模式的字符单元：key 是跨文本变化的稳定标识，供窗口 span 复用（未变字符不重挂、不翻页） */
+interface RollCell {
+  key: number;
+  char: string;
+}
+
+/**
+ * 字符单元序列：text 变化时按「公共前缀 + 公共后缀」对齐新旧字符。
+ * 关键约束：窗口 span 的 key 必须跨变化**稳定**，翻页动画靠内层 Transition 以字符值为 key
+ * 触发——窗口一旦重挂载（新 key），内层是初始渲染，不会播翻页。因此：
+ *  - 前后缀匹配的字符沿用旧 cell（key 与字符都不变 → 窗口与内容双静止）；
+ *  - 中间变化的字符**按位复用旧 cell 的 key**、只替换字符 → 外层窗口不重挂，内层 key 变化 → 翻页；
+ *  - 中间多出的新槽位（长度增长）才分配新 key（新窗口初始渲染，内容直接出现，不翻页）。
+ * 这样「9/30 → 10/30」里首槽 '9'→'1' 翻页，"/30" 原位静止；按下标对位的写法会让整体右移、
+ * 未变字符集体错位翻滚，而「变化字符给全新 key」的写法会让窗口重挂、什么都不翻。
+ */
+const cells = ref<RollCell[]>([]);
+let nextCellKey = 0;
+
+watch(
+  () => props.text ?? '',
+  next => {
+    const newChars = Array.from(next);
+    const old = cells.value;
+
+    // 公共后缀：从两端末尾逐字比较（长度变化时后缀通常不变，先算它才能锁住尾段）
+    let suffixLen = 0;
+    while (
+      suffixLen < old.length &&
+      suffixLen < newChars.length &&
+      old[old.length - 1 - suffixLen]!.char === newChars[newChars.length - 1 - suffixLen]!
+    ) {
+      suffixLen++;
+    }
+    // 公共前缀：不得越过公共后缀（全等时二者相接，不重叠）
+    let prefixLen = 0;
+    while (
+      prefixLen < old.length - suffixLen &&
+      prefixLen < newChars.length - suffixLen &&
+      old[prefixLen]!.char === newChars[prefixLen]!
+    ) {
+      prefixLen++;
+    }
+
+    const keptPrefix = old.slice(0, prefixLen);
+    const keptSuffix = old.slice(old.length - suffixLen);
+    const oldMiddle = old.slice(prefixLen, old.length - suffixLen);
+    const inserted: RollCell[] = newChars.slice(prefixLen, newChars.length - suffixLen).map((char, i) =>
+      // 有旧槽位就复用其 key（同窗口内换字 → 内层翻页）；多出的才是全新槽位
+      i < oldMiddle.length ? { key: oldMiddle[i]!.key, char } : { key: nextCellKey++, char }
+    );
+
+    cells.value = [...keptPrefix, ...inserted, ...keptSuffix];
+  },
+  { immediate: true, flush: 'pre' }
+);
 
 /** 整块过渡 key：rollKey 优先，回退到 text，确保始终为合法 PropertyKey */
 const blockKey = computed<PropertyKey>(() => props.rollKey ?? props.text ?? '');

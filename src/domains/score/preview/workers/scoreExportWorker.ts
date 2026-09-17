@@ -3,11 +3,13 @@
  * 100% 运行在后台 Worker 线程，主线程 0ms 阻塞。
  * 支持绘制完整的吉他指板图、升降号上标和弦名、等粗横按、品丝对齐品号、紧随歌词排版及 A4 满页 Space-Between 垂直均分对齐。
  */
+import { parseChordNameTokens as parseChordNameTokensCore } from '@/domains/chord/theory/chordNameTokens';
 import { getScorePageSize, SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
-import { parseChordNameTokens as parseChordNameTokensCore } from '@/domains/score/model/chordNameTokens';
+import { drawFooterMark } from '@/domains/score/preview/services/footerOverlay';
+import { createLruCache } from '@/platform/utils/lruCache';
 
+import type { ChordNameToken } from '@/domains/chord/theory/chordNameTokens';
 import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
-import type { ChordNameToken } from '@/domains/score/model/chordNameTokens';
 import type { ScoreLyricsFontWeight } from '@/platform/types';
 
 export interface ExportChordData {
@@ -35,6 +37,8 @@ export interface ExportLineItem {
 }
 
 export interface WorkerExportPayload {
+  /** 请求判别字段：整谱渲染请求（页脚合成为另一类请求，见 ScoreWorkerRequest） */
+  kind: 'export';
   title: string;
   /** 歌手（纯展示元数据；非空时表头在标题下绘制居中副标题行） */
   singer?: string;
@@ -53,8 +57,6 @@ export interface WorkerExportPayload {
   fretboardScale?: number;
   /** 是否绘制大横按（缺省 true；false 时隐藏横按梁，仅保留按弦圆点） */
   showBarre?: boolean;
-  /** 是否显示页脚页码（缺省 true；仅 A4 分页模式生效） */
-  showFooter?: boolean;
   /** 忽略无和弦空格：该类空格不占列宽（缺省 false，保持既有排版） */
   ignoreEmptySpace?: boolean;
   /** 歌词字重（缺省 regular 常规） */
@@ -75,6 +77,30 @@ export type WorkerExportMessage =
       /** a4 模式下每页覆盖的原始歌词行序号（升序去重），供外部按页重组内容；normal 模式为 undefined */ pageLineRanges?: number[][];
     }
   | { type: 'error'; message: string };
+
+/**
+ * 页脚合成请求：把已渲染的页面图（不含页脚）贴回整页画布后画上页码再编码。
+ * 页面栅格与页脚解耦（见 services/footerOverlay），故预览缓存只需保留一份「无页脚」页面：
+ * 切换「显示页脚」既不重渲染也不产生第二份缓存条目，导出时再按需合成。
+ */
+export interface FooterComposePayload {
+  kind: 'footer-compose';
+  /** 待合成的页面图（image/jpeg，尺寸须与 pageSize 档位的设备像素一致） */
+  pages: Blob[];
+  /** 各页真实页序号（从 0 起，与 pages 同序）；缺省按数组下标 */
+  pageIndexes?: number[];
+  /** 单页尺寸档位（a4 / a5 / letter，缺省 a4） */
+  pageSize?: string;
+  /** 页边距（px，逻辑坐标系；缺省 SCORE_EXPORT_CONFIG.PAGE_MARGIN） */
+  pageMargin?: number;
+  /** 页码文字色（弱化文字色，取值同导出配色 SUB_TEXT） */
+  color: string;
+  /** 输出 JPEG 质量（0.3~1，缺省 0.95） */
+  exportQuality?: number;
+}
+
+/** 渲染线程请求联合：整谱渲染 / 页脚合成（判别字段 kind） */
+export type ScoreWorkerRequest = WorkerExportPayload | FooterComposePayload;
 
 /** 输出图固定编码质量（导出质量设置已移除，预览与后续入口统一使用） */
 const EXPORT_JPEG_QUALITY = 0.95;
@@ -145,6 +171,8 @@ const applyLayoutScales = (fontScale: number, fretboardScale: number): void => {
   }
   mutableLayoutConfig.getExportFretboardWidth = (stringCount: number) =>
     BASE_GET_EXPORT_FRETBOARD_WIDTH(stringCount) * fretboardFactor;
+  // 字体纪元自增：字号类布局键已重算，任何缓存的字体字符串（含弦名 / 升降号 / 品号 / 歌词）就此失效
+  fontEpoch++;
 };
 
 /**
@@ -153,8 +181,13 @@ const applyLayoutScales = (fontScale: number, fretboardScale: number): void => {
  */
 let ignoreEmptySpace = false;
 
-/** 模块级 Token 解析缓存，避免同曲目内重复出现的和弦名反复正则分割 */
-const tokenCache = new Map<string, ChordNameToken[]>();
+/** 字体纪元：applyLayoutScales 每次执行自增，作为字体字符串缓存的失效信号（声明在此以便其函数体引用） */
+let fontEpoch = 0;
+
+/** 模块级 Token 解析缓存，避免同曲目内重复出现的和弦名反复正则分割。
+ *  上限 1024：Worker 现在跨次渲染常驻，跨曲目累积的分片结果需要兜底回收（此前每次渲完即销毁，无需上限）。
+ *  单条仅几十字节，1024 条可忽略不计，足够覆盖一整个乐库的去重和弦名。 */
+const tokenCache = createLruCache<ChordNameToken[]>(1024);
 
 /** 带缓存的和弦名分片解析（核心实现见 utils/score/chordNameTokens） */
 function parseChordNameTokens(chordName: string): ChordNameToken[] {
@@ -179,25 +212,84 @@ function drawTokenizedText(
   const tokens = parseChordNameTokens(text);
   if (tokens.length === 0) return;
 
-  // 预先测量各 Token 宽度以计算居中起始坐标
+  // 预先测量各 Token 宽度以计算居中起始坐标；顺带把该 Token 选中的字体一并存下，
+  // 绘制阶段直接取用，不再重复做 isAccidental 判定与字体选择
   let totalW = 0;
-  const measured = tokens.map(token => {
-    ctx.font = token.isAccidental ? accFont : baseFont;
+  const measured: { text: string; isAccidental: boolean; width: number; font: string }[] = [];
+  for (const token of tokens) {
+    const font = token.isAccidental ? accFont : baseFont;
+    ctx.font = font;
     const w = ctx.measureText(token.text).width;
     totalW += w;
-    return { ...token, width: w };
-  });
+    measured.push({ text: token.text, isAccidental: token.isAccidental, width: w, font });
+  }
 
   // 居中依次绘制各分片
   let curX = centerX - totalW / 2;
   ctx.fillStyle = color;
   ctx.textAlign = 'left';
   for (const item of measured) {
-    ctx.font = item.isAccidental ? accFont : baseFont;
+    ctx.font = item.font;
     const y = item.isAccidental ? baselineY + superscriptOffset : baselineY;
     ctx.fillText(item.text, curX, y);
     curX += item.width;
   }
+}
+
+/**
+ * 字体字符串缓存（按「字体纪元」失效）。
+ *
+ * 字体串里只有 SCORE_EXPORT_CONFIG 的字号参与拼接，而这些字号仅在 applyLayoutScales 执行时变化；
+ * 该方法在每条渲染消息开头都会调用一次（缩放不变时写入的是同样的值），因此在其中自增纪元，
+ * 由这里按纪元重建缓存即可。收益集中在高频路径：drawTokenizedText / measureChordNameWidth 里
+ * 每个和弦名的每个分片都要取一次字体，缓存后不再重复拼模板串、不再产生短命字符串。
+ *
+ * 注：表头（标题 / 歌手 / 元信息）字体不随本缓存 —— 它们每次 renderHeader 只构造一次、
+ * 不在分片循环内，缓存收益可忽略，保持就地构造更直观。
+ */
+let fontsEpoch = -1;
+const fontCache = {
+  chordNameBase: '',
+  chordNameAccidental: '',
+  capo: '',
+};
+
+/** 取当前纪元的字体集（纪元未变则直接复用缓存对象） */
+const refreshFonts = () => {
+  if (fontsEpoch === fontEpoch) return fontCache;
+  fontCache.chordNameBase = `bold ${SCORE_EXPORT_CONFIG.CHORD_NAME_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
+  fontCache.chordNameAccidental = `bold ${SCORE_EXPORT_CONFIG.ACCIDENTAL_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
+  fontCache.capo = `bold ${SCORE_EXPORT_CONFIG.CAPO_TEXT_FONT_SIZE}px system-ui, sans-serif`;
+  fontsEpoch = fontEpoch;
+  return fontCache;
+};
+
+/** 和弦名正文字体（绘制与测量共用同一来源，避免两处字号漂移） */
+const chordNameBaseFont = (): string => refreshFonts().chordNameBase;
+
+/** 和弦名上标升降号字体（同上） */
+const chordNameAccidentalFont = (): string => refreshFonts().chordNameAccidental;
+
+/** 歌词字体缓存：字号随「字号缩放」变化（纪元），字重随导出参数变化，故按二者联合记忆 */
+let lyricsFontKey = '';
+let lyricsFontValue = '';
+const getLyricsFont = (weight: number): string => {
+  const key = `${fontEpoch}:${weight}`;
+  if (key !== lyricsFontKey) {
+    lyricsFontKey = key;
+    lyricsFontValue = `${weight} ${SCORE_EXPORT_CONFIG.LYRICS_FONT_SIZE}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+  }
+  return lyricsFontValue;
+};
+
+/** 量出和弦名分片后的总宽度（含上标升降号）：供指板位图留白与居中绘制共用 */
+function measureChordNameWidth(ctx: OffscreenCanvasRenderingContext2D, chordName: string): number {
+  let total = 0;
+  for (const token of parseChordNameTokens(chordName)) {
+    ctx.font = token.isAccidental ? chordNameAccidentalFont() : chordNameBaseFont();
+    total += ctx.measureText(token.text).width;
+  }
+  return total;
 }
 
 /** 绘制带上标升降号（# / b / ♯ / ♭）的和弦名称，严格水平居中对齐 */
@@ -214,8 +306,8 @@ function drawFormattedChordName(
     baselineY,
     chordName,
     color,
-    `bold ${SCORE_EXPORT_CONFIG.CHORD_NAME_FONT_SIZE}px system-ui, -apple-system, sans-serif`,
-    `bold ${SCORE_EXPORT_CONFIG.ACCIDENTAL_FONT_SIZE}px system-ui, -apple-system, sans-serif`,
+    chordNameBaseFont(),
+    chordNameAccidentalFont(),
     SCORE_EXPORT_CONFIG.ACCIDENTAL_SUPERSCRIPT_OFFSET
   );
 }
@@ -229,6 +321,7 @@ export interface RenderSegment {
   isContinuation: boolean; // 是否为续行（渲染时缩进 WRAPPED_LINE_INDENT）
   isLastSubLine: boolean; // 是否为该物理行的最后一段（决定后方行距是 WRAPPED_LINE_ROW_GAP 还是 LINE_ROW_GAP）
   contentHeight: number; // 预计算内容高度，避免渲染与装箱时重复遍历和弦列表
+  width: number; // 预计算水平总宽（含续行缩进 / 段首段尾和弦组），避免渲染与装箱时重复遍历字符算列宽
 }
 
 /** 中文排版避头尾：禁止出现在行首的标点符号集合 */
@@ -333,6 +426,7 @@ function wrapScoreLines(lines: ExportLineItem[], maxAvailableWidth: number): Ren
         isContinuation: false,
         isLastSubLine: true,
         contentHeight: computeLineContentHeight([], line.startChords, line.endChords),
+        width: getChordsGroupWidth(line.startChords) + getChordsGroupWidth(line.endChords),
       });
       continue;
     }
@@ -342,6 +436,9 @@ function wrapScoreLines(lines: ExportLineItem[], maxAvailableWidth: number): Ren
     let isFirstSubLine = true;
 
     const startChordsW = getChordsGroupWidth(line.startChords);
+    // curW = 当前段的水平占用：首行含段首和弦组宽度，续行不含缩进（缩进在段落入列时补上，
+    // 与渲染侧「续行缩进 + 字符列宽 + 边和弦」的口径一致），随字符入段同步累加，
+    // 因此段落宽度无需在渲染阶段再遍历一遍 chars 重算。
     let curW = startChordsW;
     const maxWForFirst = maxAvailableWidth;
     const maxWForContinuation = maxAvailableWidth - SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT;
@@ -363,8 +460,10 @@ function wrapScoreLines(lines: ExportLineItem[], maxAvailableWidth: number): Ren
           const lastPrev = curChars[curChars.length - 1];
           if (lastPrev && !lastPrev.chord) {
             curChars.pop();
+            const borrowedW = getCharColumnWidth(lastPrev);
+            curW -= borrowedW; // 回借给下一段的字符不再计入本段宽度
             nextInitialChars = [lastPrev, charItem];
-            nextInitialW = getCharColumnWidth(lastPrev) + charColW;
+            nextInitialW = borrowedW + charColW;
           }
         }
 
@@ -376,6 +475,7 @@ function wrapScoreLines(lines: ExportLineItem[], maxAvailableWidth: number): Ren
           isContinuation: !isFirstSubLine,
           isLastSubLine: false,
           contentHeight: computeLineContentHeight(curChars, segStartChords, undefined),
+          width: curW + (isFirstSubLine ? 0 : SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT),
         });
         curChars = nextInitialChars;
         curW = nextInitialW;
@@ -393,6 +493,9 @@ function wrapScoreLines(lines: ExportLineItem[], maxAvailableWidth: number): Ren
         const lastPrev = prevSeg.chars[prevSeg.chars.length - 1];
         if (lastPrev && !lastPrev.chord) {
           prevSeg.chars.pop();
+          const borrowedW = getCharColumnWidth(lastPrev);
+          prevSeg.width -= borrowedW; // 与避头尾回借同理：宽度随字符一起转移
+          curW += borrowedW;
           curChars.unshift(lastPrev);
           prevSeg.contentHeight = computeLineContentHeight(prevSeg.chars, prevSeg.startChords, undefined);
         }
@@ -409,12 +512,15 @@ function wrapScoreLines(lines: ExportLineItem[], maxAvailableWidth: number): Ren
         isContinuation: !isFirstSubLine,
         isLastSubLine: true,
         contentHeight: computeLineContentHeight(curChars, segStartChords, line.endChords),
+        width:
+          curW + (isFirstSubLine ? 0 : SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT) + getChordsGroupWidth(line.endChords),
       });
     } else if (lineSegments.length > 0) {
       const lastSeg = lineSegments[lineSegments.length - 1]!;
       lastSeg.endChords = line.endChords;
       lastSeg.isLastSubLine = true;
       lastSeg.contentHeight = computeLineContentHeight(lastSeg.chars, lastSeg.startChords, line.endChords);
+      lastSeg.width += getChordsGroupWidth(line.endChords);
     }
 
     if (lineSegments.length > 0) {
@@ -427,23 +533,173 @@ function wrapScoreLines(lines: ExportLineItem[], maxAvailableWidth: number): Ren
   return allSegments;
 }
 
-/** 计算单段乐谱渲染时的水平总占用宽度（包含缩进与边和弦） */
-function getSegmentWidth(segment: RenderSegment): number {
-  let w = segment.isContinuation ? SCORE_EXPORT_CONFIG.WRAPPED_LINE_INDENT : 0;
-  if (segment.startChords && segment.startChords.length > 0) {
-    w += getChordsGroupWidth(segment.startChords);
-  }
-  for (const c of segment.chars) {
-    w += getCharColumnWidth(c);
-  }
-  if (segment.endChords && segment.endChords.length > 0) {
-    w += getChordsGroupWidth(segment.endChords);
-  }
-  return w;
+/**
+ * 指板位图合成缓存（Worker 内，随 Worker 实例常驻）。
+ *
+ * 同一份指板状态（和弦名 / 弦位 / 品数 / 把位 / 横按）在一首歌里通常重复出现几十次，
+ * 每次重复都走一遍完整矢量绘制（网格 10+ 条线、逐弦标记、圆点、横按圆角矩形、
+ * 和弦名逐分片测量 + 绘制）是纯重复劳动。改为：首次矢量光栅化成一张离屏位图，
+ * 其余出现位置直接 drawImage 合成 —— 位图数量≈不同指板状态数（十几张），
+ * 而绘制次数是它的数倍，页数越多、和弦重复越多，收益越大。
+ *
+ * 位图自带四周留白（和弦名可能比指板框更宽、品号向左侧伸出），合成时按各条目自身的
+ * 留白偏移回贴；位图与页面同用 PIXEL_RATIO 超采样且 1:1 贴图，视觉结果与逐次矢量绘制等价。
+ */
+interface FretboardRaster {
+  /** 光栅化结果（设备像素） */
+  canvas: OffscreenCanvas;
+  /** 位图逻辑尺寸（含留白）：合成时按此尺寸贴图，源与目标同为整设备像素，不重采样 */
+  width: number;
+  height: number;
+  /** 内容原点（即矢量绘制时的 x / y）相对位图左上角的留白（逻辑 px） */
+  padX: number;
+  padY: number;
 }
 
-/** 绘制单个吉他和弦指板图到 Canvas */
+/** 位图条数上限：一首歌的不同指板状态通常十几个，64 条足够覆盖并留跨曲余量 */
+const FRETBOARD_RASTER_LIMIT = 64;
+
+/**
+ * 渲染线程自己的指板位图实例，与主线程 FretboardCanvas.vue 的 '指板位图' 缓存**互不相干**：
+ * 那边存的是不含和弦名/品号的主体层（固定参考分辨率，显示时缩放），这边存的是含和弦名与品号的
+ * 整条光栅（键含 chordName / fretOffset / 缩放后几何，与页面 PIXEL_RATIO 1:1 贴图）。
+ * 粒度与分辨率契约都不同，跨线程也只能传位图副本（transfer 会 detach 主线程那份），
+ * 故同一指板在此各光栅化一次是既定设计，不要试图让两边共用一条缓存。
+ */
+const fretboardRasterCache = createLruCache<FretboardRaster>(FRETBOARD_RASTER_LIMIT, {
+  // OffscreenCanvas 没有 close()：归零尺寸即可让底层缓冲当场归还，不必等 GC
+  onEvict: (_, raster) => {
+    raster.canvas.width = 0;
+    raster.canvas.height = 0;
+  },
+});
+
+/** 位图样式纪元：主题配色 + 指板缩放后的几何常量。变化即整体清空，不留旧样式位图占坑 */
+let fretboardStyleKey = '';
+
+/** 计算当前样式纪元：取参与指板绘制的全部配色与（已按缩放重算过的）几何常量 */
+function computeFretboardStyleKey(colors: ThemeColors): string {
+  const c = SCORE_EXPORT_CONFIG;
+  return [
+    c.FRETBOARD_LEFT_PAD,
+    c.FRETBOARD_GRID_TOP,
+    c.FRET_HEIGHT,
+    c.STRING_SPACING,
+    c.FRETBOARD_WIDTH,
+    // 指板框宽度是函数（随缩放重算），取一个代表值入键，保证它变化时纪元也跟着变
+    c.getExportFretboardWidth(6),
+    c.NUT_HEIGHT,
+    c.DOT_RADIUS,
+    c.BARRE_THICKNESS,
+    c.MARKER_CENTER_Y,
+    c.MUTE_CROSS_RADIUS,
+    c.OPEN_CIRCLE_RADIUS,
+    c.CHORD_NAME_BASELINE_Y,
+    c.CHORD_NAME_FONT_SIZE,
+    c.ACCIDENTAL_FONT_SIZE,
+    c.ACCIDENTAL_SUPERSCRIPT_OFFSET,
+    c.CAPO_TEXT_FONT_SIZE,
+    c.FRET_NUMBER_X_OFFSET,
+    colors.TEXT,
+    colors.SUB_TEXT,
+    colors.FB_LINE,
+    colors.FB_NUT,
+    colors.FB_NOTE,
+    colors.FB_OPEN,
+    colors.FB_BARRE,
+    colors.FB_MUTE,
+  ].join('|');
+}
+
+/** 指板位图键：决定位图内容的全部输入（主题与缩放维度由 fretboardStyleKey 承担） */
+function buildChordRasterKey(chord: ExportChordData, showBarre: boolean): string {
+  const strings = chord.strings ?? [];
+  // 弦位只需 fret 值：弦数据的第 2 个布尔位不参与绘制（导出图统一音符色，不区分主音）
+  let fretSig = '';
+  for (const s of strings) fretSig += `${s ? s[0] : 0},`;
+  let barreSig = '';
+  if (chord.barres) for (const b of chord.barres) barreSig += `${b.fret}:${b.fromString}-${b.toString},`;
+  // 品数归一化到绘制实际使用的值：fretCount 3 与 0/1/2 画出来完全一样，不该各占一条
+  const fretCount = Math.max(3, chord.fretCount || 4);
+  const offset = chord.fretOffset ?? chord.capo ?? 0;
+  return `${chord.chordName}|${strings.length}|${fretCount}|${offset}|${fretSig}|${barreSig}|${showBarre ? 1 : 0}`;
+}
+
+/** 光栅化一张指板位图（ctx 仅用于测量和弦名宽度，measureText 不受 ctx 变换影响） */
+function createFretboardRaster(
+  ctx: OffscreenCanvasRenderingContext2D,
+  chord: ExportChordData,
+  colors: ThemeColors,
+  showBarre: boolean
+): FretboardRaster {
+  const fretCount = Math.max(3, chord.fretCount || 4);
+  const stringCount = chord.strings?.length || 6;
+  const fbWidth = SCORE_EXPORT_CONFIG.getExportFretboardWidth(stringCount);
+  // 内容高度口径与 computeLineContentHeight 一致：网格顶部偏移 + 品数 × 品高
+  const contentH = SCORE_EXPORT_CONFIG.FRETBOARD_GRID_TOP + fretCount * SCORE_EXPORT_CONFIG.FRET_HEIGHT;
+
+  // 上留白：和弦名正文基线与上标升降号基线各上推一个字号，取更靠上者；不越顶时留 1px 抗锯齿余量
+  const nameTop = Math.min(
+    SCORE_EXPORT_CONFIG.CHORD_NAME_BASELINE_Y - SCORE_EXPORT_CONFIG.CHORD_NAME_FONT_SIZE,
+    SCORE_EXPORT_CONFIG.CHORD_NAME_BASELINE_Y +
+      SCORE_EXPORT_CONFIG.ACCIDENTAL_SUPERSCRIPT_OFFSET -
+      SCORE_EXPORT_CONFIG.ACCIDENTAL_FONT_SIZE
+  );
+  const padTop = Math.ceil(Math.max(0, -nameTop)) + 1;
+
+  // 左右留白：和弦名比指板框宽时两侧同时溢出（长名 / 多扩展音 / 斜杠低音），留白不足会被裁掉；
+  // 溢出量的一半各归一侧，另加 2px 抗锯齿余量。左侧下限取 FRETBOARD_LEFT_PAD
+  // —— 品号是右对齐在首弦左侧的，已由该留白容纳。
+  const nameW = measureChordNameWidth(ctx, chord.chordName);
+  const padX = Math.max(SCORE_EXPORT_CONFIG.FRETBOARD_LEFT_PAD, Math.ceil(Math.max(0, nameW - fbWidth) / 2) + 2);
+
+  const width = Math.ceil(fbWidth) + padX * 2;
+  // 下边只到网格底（无内容低于网格），留 1px 抗锯齿余量即可
+  const height = Math.ceil(contentH) + padTop + 1;
+  const deviceW = Math.ceil(width * SCORE_EXPORT_CONFIG.PIXEL_RATIO);
+  const deviceH = Math.ceil(height * SCORE_EXPORT_CONFIG.PIXEL_RATIO);
+
+  const canvas = new OffscreenCanvas(deviceW, deviceH);
+  const rasterCtx = canvas.getContext('2d')!;
+  rasterCtx.setTransform(SCORE_EXPORT_CONFIG.PIXEL_RATIO, 0, 0, SCORE_EXPORT_CONFIG.PIXEL_RATIO, 0, 0);
+  // 内容原点平移到留白内：此后 drawFretboardVector 的 (0,0) 即矢量绘制时的 (x,y)
+  rasterCtx.translate(padX, padTop);
+  drawFretboardVector(rasterCtx, 0, 0, chord, colors, showBarre);
+
+  // 逻辑尺寸按设备像素反推（deviceW / RATIO），保证合成时源与目标同为整设备像素
+  return {
+    canvas,
+    width: deviceW / SCORE_EXPORT_CONFIG.PIXEL_RATIO,
+    height: deviceH / SCORE_EXPORT_CONFIG.PIXEL_RATIO,
+    padX,
+    padY: padTop,
+  };
+}
+
+/** 绘制单个吉他和弦指板图到 Canvas：命中位图缓存直接合成，未命中先光栅化再合成 */
 function drawFretboard(
+  ctx: OffscreenCanvasRenderingContext2D,
+  x: number,
+  y: number,
+  chord: ExportChordData,
+  colors: ThemeColors,
+  showBarre: boolean
+) {
+  const key = `${fretboardStyleKey}|${buildChordRasterKey(chord, showBarre)}`;
+  let raster = fretboardRasterCache.get(key);
+  if (!raster) {
+    raster = createFretboardRaster(ctx, chord, colors, showBarre);
+    fretboardRasterCache.set(key, raster);
+  }
+  // 目标位置对齐到整设备像素：避免半像素相位差让 drawImage 走重采样而糊边
+  const ratio = SCORE_EXPORT_CONFIG.PIXEL_RATIO;
+  const dx = Math.round((x - raster.padX) * ratio) / ratio;
+  const dy = Math.round((y - raster.padY) * ratio) / ratio;
+  ctx.drawImage(raster.canvas, dx, dy, raster.width, raster.height);
+}
+
+/** 单个和弦指板图的矢量绘制（原实现，现作为位图光栅化内核；坐标系以 (x, y) 为内容原点） */
+function drawFretboardVector(
   ctx: OffscreenCanvasRenderingContext2D,
   x: number,
   y: number,
@@ -531,8 +787,8 @@ function drawFretboard(
   }
 
   // 左侧显示除首末（0品与最后一品）的所有品号，严格垂直居中对齐品丝
-  // 品号字体在绘制循环外预构造，避免循环内重复字符串拼接
-  const capoFont = `bold ${SCORE_EXPORT_CONFIG.CAPO_TEXT_FONT_SIZE}px system-ui, sans-serif`;
+  // 品号字体在绘制循环外预构造（走字体缓存，缩放纪元变化才重建）
+  const capoFont = refreshFonts().capo;
   ctx.font = capoFont;
   ctx.fillStyle = colors.SUB_TEXT;
   ctx.textAlign = 'right';
@@ -627,7 +883,7 @@ function renderScoreLine(
 
   // 2. 绘制每个字符与其上方的和弦指板图
   // 歌词字体、颜色、对齐方式在循环外设置一次，避免每字重复赋值
-  const lyricsFont = `${lyricsFontWeight} ${SCORE_EXPORT_CONFIG.LYRICS_FONT_SIZE}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+  const lyricsFont = getLyricsFont(lyricsFontWeight);
   ctx.font = lyricsFont;
   ctx.fillStyle = colors.TEXT;
   ctx.textAlign = 'center';
@@ -825,19 +1081,74 @@ function renderHeader(
   return y;
 }
 
-/** 绘制页脚页码：在底部页边距内水平居中显示「第 X 页」，使用弱化文字色 */
-function renderFooter(
-  ctx: OffscreenCanvasRenderingContext2D,
-  pageIndex: number,
+/**
+ * 整页离屏画布（模块级复用）。
+ *
+ * A4 分页每页都是一张 1600×2300 级别的画布，底层缓冲约 15MB；原来逐页新建再丢弃，
+ * 一本 10 页的乐谱就会反复分配 150MB。改为复用同一张（尺寸档位变化时才重建），
+ * 每次取用重置变换并清底，语义与「新建画布 + 填充背景」一致。
+ * 复用安全的前提：convertToBlob 在被调用时即同步拷贝画布位图（规范约定），
+ * 因此每页 await 完成后才进入下一页，不会读到被覆盖的像素。
+ */
+let pageCanvas: OffscreenCanvas | null = null;
+let pageCtx: OffscreenCanvasRenderingContext2D | null = null;
+
+/** 取整页画布与上下文（需要时按新尺寸重建），返回前已重置变换、清底交由调用方填充背景 */
+function acquirePageCanvas(
   width: number,
-  height: number,
-  pageMargin: number,
-  colors: ThemeColors
-): void {
-  ctx.font = `500 ${SCORE_EXPORT_CONFIG.FOOTER_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
-  ctx.fillStyle = colors.SUB_TEXT;
-  ctx.textAlign = 'center';
-  ctx.fillText(`第 ${pageIndex + 1} 页`, width / 2, height - pageMargin / 2);
+  height: number
+): { canvas: OffscreenCanvas; ctx: OffscreenCanvasRenderingContext2D } {
+  const deviceW = Math.round(width * SCORE_EXPORT_CONFIG.PIXEL_RATIO);
+  const deviceH = Math.round(height * SCORE_EXPORT_CONFIG.PIXEL_RATIO);
+  if (!pageCanvas || pageCanvas.width !== deviceW || pageCanvas.height !== deviceH) {
+    pageCanvas = new OffscreenCanvas(deviceW, deviceH);
+    pageCtx = pageCanvas.getContext('2d');
+  }
+  const ctx = pageCtx!;
+  // 必须 setTransform 而非 scale：复用画布要重置变换，否则缩放逐页累乘
+  ctx.setTransform(SCORE_EXPORT_CONFIG.PIXEL_RATIO, 0, 0, SCORE_EXPORT_CONFIG.PIXEL_RATIO, 0, 0);
+  return { canvas: pageCanvas, ctx };
+}
+
+/**
+ * 页脚合成：把无页脚的页面图贴回整页画布 → 画页码 → 重编码为 JPEG。
+ *
+ * 页面栅格与页脚解耦的原因：若页脚画进页面栅格，「显示页脚」便成了内容的一部分，
+ * 预览缓存必须为开关两态各存一份（同一首歌两份条目、字节数翻倍）。改为合成层后只留一份
+ * 无页脚页面；代价是导出时多一次 JPEG 编码（质量档位与页面渲染相同，视觉无损级）。
+ */
+async function composeFooterPages(payload: FooterComposePayload): Promise<Blob[]> {
+  const { width, height } = getScorePageSize(payload.pageSize ?? 'a4');
+  const pageMargin = payload.pageMargin ?? SCORE_EXPORT_CONFIG.PAGE_MARGIN;
+  const quality = Math.min(1, Math.max(0.3, payload.exportQuality ?? EXPORT_JPEG_QUALITY));
+  const { canvas, ctx } = acquirePageCanvas(width, height);
+
+  const blobs: Blob[] = [];
+  for (let i = 0; i < payload.pages.length; i++) {
+    // 页图为设备像素（逻辑尺寸 × PIXEL_RATIO），贴图用恒等变换保证 1:1 不重采样
+    const bitmap = await createImageBitmap(payload.pages[i]!);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+
+    // 回到逻辑坐标系画页码：与预览展示层共用同一绘制函数，字号/位置逐像素同源
+    ctx.setTransform(SCORE_EXPORT_CONFIG.PIXEL_RATIO, 0, 0, SCORE_EXPORT_CONFIG.PIXEL_RATIO, 0, 0);
+    drawFooterMark(ctx, {
+      pageIndex: payload.pageIndexes?.[i] ?? i,
+      width,
+      height,
+      pageMargin,
+      color: payload.color,
+    });
+
+    blobs.push(await canvas.convertToBlob({ type: 'image/jpeg', quality }));
+    self.postMessage({
+      type: 'progress',
+      percent: Math.round(((i + 1) / payload.pages.length) * 100),
+    } as WorkerExportMessage);
+  }
+  return blobs;
 }
 
 /**
@@ -862,13 +1173,13 @@ async function renderLongImageBlob(
   const availWidth = SCORE_EXPORT_CONFIG.NORMAL_CONTENT_MAX_WIDTH;
   const allSegments = wrapScoreLines(lines, availWidth);
 
-  // 单次遍历同时计算：最宽段宽度、内容总高、行间距总高
+  // 单次遍历同时计算：最宽段宽度、内容总高、行间距总高（段宽已在软折行阶段预计算）
   let maxSegmentW = 0;
   let totalContentH = 0;
   let totalGapsH = 0;
   for (let i = 0; i < allSegments.length; i++) {
     const seg = allSegments[i]!;
-    const segW = getSegmentWidth(seg);
+    const segW = seg.width;
     if (segW > maxSegmentW) maxSegmentW = segW;
     totalContentH += seg.contentHeight;
     if (i < allSegments.length - 1) {
@@ -880,13 +1191,10 @@ async function renderLongImageBlob(
   const canvasW = Math.max(SCORE_EXPORT_CONFIG.NORMAL_CANVAS_MIN_WIDTH, Math.round(maxSegmentW + pageMargin * 2));
   const canvasH = pageMargin + headerH + totalContentH + totalGapsH + pageMargin;
 
-  const canvas = new OffscreenCanvas(
-    canvasW * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
-    canvasH * SCORE_EXPORT_CONFIG.PIXEL_RATIO
-  );
-  const ctx = canvas.getContext('2d')!;
-  ctx.scale(SCORE_EXPORT_CONFIG.PIXEL_RATIO, SCORE_EXPORT_CONFIG.PIXEL_RATIO);
+  const { canvas, ctx } = acquirePageCanvas(canvasW, canvasH);
 
+  // 清底后铺背景：画布复用，背景色若含透明度则需先清掉上一页残留
+  ctx.clearRect(0, 0, canvasW, canvasH);
   ctx.fillStyle = colors.BG;
   ctx.fillRect(0, 0, canvasW, canvasH);
 
@@ -898,7 +1206,7 @@ async function renderLongImageBlob(
     const isLast = i === allSegments.length - 1;
     const defaultGap = seg.isLastSubLine ? SCORE_EXPORT_CONFIG.LINE_ROW_GAP : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
     const rowGap = isLast ? 0 : defaultGap;
-    const segW = getSegmentWidth(seg);
+    const segW = seg.width;
     const isCenter = layoutAlign === 'center';
     const startX = isCenter
       ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) +
@@ -994,7 +1302,6 @@ function computePageLineRanges(pages: RenderSegment[][]): number[][] {
 
 interface A4PageRenderOptions {
   pageSegments: RenderSegment[];
-  pageIndex: number;
   /** 首页绘制表头 */
   isFirstPage: boolean;
   isFullPage: boolean;
@@ -1009,16 +1316,15 @@ interface A4PageRenderOptions {
   colors: ThemeColors;
   layoutAlign: 'start' | 'center';
   showBarre: boolean;
-  showFooter: boolean;
   lyricsFontWeight: number;
   jpegQuality: number;
 }
 
-/** 渲染单页 A4：整页时按 space-between 动态膨胀行距（上限 1.35 倍默认行距），含可选页脚页码。 */
+/** 渲染单页 A4：整页时按 space-between 动态膨胀行距（上限 1.35 倍默认行距）。
+ *  页脚页码不在本函数内绘制——它是独立合成层，见 composeFooterPages。 */
 async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
   const {
     pageSegments,
-    pageIndex,
     isFirstPage,
     isFullPage,
     title,
@@ -1032,18 +1338,14 @@ async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
     colors,
     layoutAlign,
     showBarre,
-    showFooter,
     lyricsFontWeight,
     jpegQuality,
   } = opts;
 
-  const canvas = new OffscreenCanvas(
-    canvasW * SCORE_EXPORT_CONFIG.PIXEL_RATIO,
-    canvasH * SCORE_EXPORT_CONFIG.PIXEL_RATIO
-  );
-  const ctx = canvas.getContext('2d')!;
-  ctx.scale(SCORE_EXPORT_CONFIG.PIXEL_RATIO, SCORE_EXPORT_CONFIG.PIXEL_RATIO);
+  const { canvas, ctx } = acquirePageCanvas(canvasW, canvasH);
 
+  // 清底后铺背景：画布复用，背景色若含透明度则需先清掉上一页残留
+  ctx.clearRect(0, 0, canvasW, canvasH);
   ctx.fillStyle = colors.BG;
   ctx.fillRect(0, 0, canvasW, canvasH);
 
@@ -1079,7 +1381,7 @@ async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
     const isLastInPage = i === pageSegments.length - 1;
     const defaultGap = seg.isLastSubLine ? dynamicRowGap : SCORE_EXPORT_CONFIG.WRAPPED_LINE_ROW_GAP;
     const rowGap = isLastInPage ? 0 : defaultGap;
-    const segW = getSegmentWidth(seg);
+    const segW = seg.width;
     const isCenter = layoutAlign === 'center';
     const startX = isCenter
       ? Math.max(pageMargin, Math.round((canvasW - segW) / 2)) +
@@ -1089,16 +1391,27 @@ async function renderA4Page(opts: A4PageRenderOptions): Promise<Blob> {
     curY = res.nextY;
   }
 
-  // 页脚页码：在底部页边距内居中显示「第 X 页」，开关关闭时跳过
-  if (showFooter) {
-    renderFooter(ctx, pageIndex, canvasW, canvasH, pageMargin, colors);
-  }
-
   return canvas.convertToBlob({ type: 'image/jpeg', quality: jpegQuality });
 }
 
 if (typeof self !== 'undefined') {
-  self.onmessage = async (e: MessageEvent<WorkerExportPayload>) => {
+  self.onmessage = async (e: MessageEvent<ScoreWorkerRequest>) => {
+    const payload = e.data;
+
+    // 页脚合成请求：只做「贴图 + 画页码 + 重编码」，与整谱渲染共用渲染线程（服务层同一队列串行下发）
+    if (payload.kind === 'footer-compose') {
+      try {
+        const blobs = await composeFooterPages(payload);
+        self.postMessage({ type: 'complete', blobs } as WorkerExportMessage);
+      } catch (err) {
+        self.postMessage({
+          type: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        } as WorkerExportMessage);
+      }
+      return;
+    }
+
     try {
       const {
         title,
@@ -1113,13 +1426,12 @@ if (typeof self !== 'undefined') {
         fontScale = 100,
         fretboardScale = 100,
         showBarre = true,
-        showFooter = true,
         ignoreEmptySpace: ignoreEmptySpaceMode = false,
         lyricsFontWeight: lyricsFontWeightMode = 'regular',
         exportQuality = EXPORT_JPEG_QUALITY,
         pageMargin = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
         pageSize = 'a4',
-      } = e.data;
+      } = payload;
 
       // 导出单页尺寸：按档位解析宽高（A4 / A5 / Letter），仅 A4 分页模式使用
       const { width: pageW, height: pageH } = getScorePageSize(pageSize);
@@ -1132,6 +1444,14 @@ if (typeof self !== 'undefined') {
 
       // 排列和弦配置的缩放参数先于任何布局计算生效
       applyLayoutScales(fontScale, fretboardScale);
+
+      // 样式纪元（主题配色 + 缩放后几何）变化即清空指板位图缓存：旧位图画法已不成立，
+      // 留着只会被 LRU 顶替而白占内存（缩放滑块连续拖动会产生一串新纪元）
+      const styleKey = computeFretboardStyleKey(colors);
+      if (styleKey !== fretboardStyleKey) {
+        fretboardStyleKey = styleKey;
+        fretboardRasterCache.clear();
+      }
 
       // 忽略无和弦空格开关：写入模块级状态，供 getCharColumnWidth 在测量与绘制两处共用
       ignoreEmptySpace = ignoreEmptySpaceMode;
@@ -1156,7 +1476,6 @@ if (typeof self !== 'undefined') {
         for (let pIdx = 0; pIdx < pages.length; pIdx++) {
           const blob = await renderA4Page({
             pageSegments: pages[pIdx]!,
-            pageIndex: pIdx,
             isFirstPage: pIdx === 0,
             isFullPage: pIdx < pages.length - 1,
             title,
@@ -1170,7 +1489,6 @@ if (typeof self !== 'undefined') {
             colors,
             layoutAlign: layoutAlign ?? 'start',
             showBarre,
-            showFooter,
             lyricsFontWeight,
             jpegQuality,
           });

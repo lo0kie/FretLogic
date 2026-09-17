@@ -66,6 +66,10 @@ app  →  domains  →  platform
 - `store/`：chordStore（含删除/恢复领域事件）、chordEditorStore；
 - `library/`、`workbench/`、`directives/`：和弦库 UI、工作台面板、和弦名指令。
 
+> **组件归属原则**：组件归属于**拥有其数据模型**的域，而非使用它的场景。 `chord/components/`（ChordPickerPanel /
+> KeySelector /
+> ChordEditorDrawer）是 chord 域对外暴露的 UI 层——它们读写 chord 域的 store 与 theory，被 score（编辑器挂和弦、歌曲转调）等域消费是正常的单向依赖；不得因「在 score 里用」而移入 score，否则 workbench 等场景复用时会形成反向依赖。
+
 ### score（乐谱排版）
 
 - `model/`：谱面模型、槽位、songRepository；

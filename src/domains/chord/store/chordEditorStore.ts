@@ -80,16 +80,22 @@ const createChordEditorSetup = (persist: boolean) => () => {
   /** 数据层兜底：主音绝不指向禁用的弦。
    *  任何写入路径（右键设根、设弦状态、缩品位、加载和弦等）只要把 rootStringIndex 落到
    *  静音弦（fret < 0）上，立刻清空。这样数据里永远不存在“禁用的弦=主音”的垃圾状态，
-   *  渲染层只需做相等判断，无需再在视图里掩盖不一致。 */
+   *  渲染层只需做相等判断，无需再在视图里掩盖不一致。
+   *
+   *  watch 源取「根音下标 + 各弦品位」的字符串签名而非 deep 遍历整个草稿：
+   *  回调只读这两项，字符串签名足以判定，且拖动时每帧 `strings` 都被换新数组、
+   *  深层遍历整份草稿（含调弦映射、横按列表等与此无关的字段）纯属浪费。 */
   watch(
-    () => [draftChord.value.rootStringIndex, draftChord.value.strings.map(s => s[0])] as const,
+    () => {
+      const chord = draftChord.value;
+      return `${chord.rootStringIndex ?? ''}|${chord.strings.map(s => s[0]).join(',')}`;
+    },
     () => {
       const idx = draftChord.value.rootStringIndex;
       if (idx !== null && (draftChord.value.strings[idx]?.[0] ?? -1) < 0) {
         draftChord.value.rootStringIndex = null;
       }
-    },
-    { deep: true }
+    }
   );
 
   /** 候选应用前的根音弦快照（内存态；undefined = 当前无快照）。取消候选时用它还原根音弦，

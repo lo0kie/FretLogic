@@ -1,7 +1,8 @@
 import { CHORD_QUALITIES, GroupSortRule } from '@/domains/chord/types';
+import { estimateValueBytes } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
 
-import { analyzeChordGraph } from './chordEngine.ts';
+import { analyzeBestRootPitch } from './chordEngine.ts';
 
 import type {
   AccidentalType,
@@ -368,13 +369,24 @@ export const pitchSegmentToString = (seg: RootSegment, useUnicode = false): stri
   return `${natural}${formatAccidental(acc, useUnicode)}`;
 };
 
-const nameSegmentsCache = createLruCache<ChordNameSegments | null>(512);
+/** 和弦名归一键：去首尾空白 + 全角括号转半角。
+ *  分片 / 解析 / 根音三层缓存共用同一键空间——否则同一串名字（如「C（m7）」与「C(m7)」）
+ *  会在各层分别占位，层级之间还可能互相击穿，白占条数。
+ *  刻意不做大小写折叠：解析结果的 rootLabel 保留原文大小写（'cm7' 与 'Cm7' 的显示本就不同），
+ *  折叠会让先写入者的形态改写另一方的显示。 */
+const toChordNameKey = (chordName: string): string => chordName.trim().replace(/（/g, '(').replace(/）/g, ')');
+
+// 以下是纯文本级小数据缓存（键为和弦名、值为几十~几百字节的结构/字符串）：
+// 条数上限按「一个乐库里不同和弦名的量级」放宽到 4096，避免整库渲染时反复击穿导致解析重算
+const nameSegmentsCache = createLruCache<ChordNameSegments | null>(4096, {
+  name: '和弦名分词',
+  weigh: (_, value) => estimateValueBytes(value),
+});
 
 /** 将任意和弦名文本解析为结构化分片 ChordNameSegments */
 export const nameToSegments = (chordName: string): ChordNameSegments | null => {
   if (!chordName || typeof chordName !== 'string') return null;
-  const trimmed = chordName.trim();
-  const normalized = trimmed.replace(/（/g, '(').replace(/）/g, ')');
+  const normalized = toChordNameKey(chordName);
   const cached = nameSegmentsCache.get(normalized);
   if (cached !== undefined) return cached;
 
@@ -578,8 +590,12 @@ export const getChordName = (
 // 查询词变体只随输入变化、别名只随和弦变化，各自缓存后每键入一个字符只重算一次查询词侧。
 
 /** 查询词变体缓存：一次搜索里整个和弦列表共用同一个查询词，
- *  逐和弦重建 7 条正则替换链是纯重复——按查询词缓存后每键入一个新字符只算一次 */
-const searchVariantsCache = createLruCache<string[]>(16);
+ *  逐和弦重建 7 条正则替换链是纯重复——按查询词缓存后每键入一个新字符只算一次。
+ *  值是几条短字符串（单条 ~0.1KB），上限与同组文本级缓存统一取 4096，按敲过的查询词量级放足 */
+const searchVariantsCache = createLruCache<string[]>(4096, {
+  name: '搜索变体',
+  weigh: (_, value) => estimateValueBytes(value),
+});
 
 /** 生成查询词的等价变体 (ASCII 变音符 & Unicode 变音符 & 符号替换) */
 const buildSearchVariants = (qLower: string): string[] => {
@@ -674,7 +690,10 @@ export const matchChordSearch = (
  * 解析和弦名：基于 AST 分片拆出根音、斜杠低音与和弦后缀。
  * "Bm7/A" -> { rootLabel:'B', rootPitch:11, bassLabel:'A', bassPitch:9, hasBass:true, suffix:'m7' }
  */
-const parsedChordNameCache = createLruCache<ParsedChordName>(512);
+const parsedChordNameCache = createLruCache<ParsedChordName>(4096, {
+  name: '和弦名解析',
+  weigh: (_, value) => estimateValueBytes(value),
+});
 
 /**
  * 解析和弦名为结构化元数据（根音/低音音高、后缀），解析失败时返回空结果（pitch=99）。
@@ -690,15 +709,15 @@ export const parseChordName = (chordName: string): ParsedChordName => {
     suffix: '',
   };
   if (!chordName || typeof chordName !== 'string') return empty;
-  const trimmed = chordName.trim();
-  if (!trimmed) return empty;
+  const key = toChordNameKey(chordName);
+  if (!key) return empty;
 
-  const cached = parsedChordNameCache.get(trimmed);
+  const cached = parsedChordNameCache.get(key);
   if (cached !== undefined) return cached;
 
-  const segs = nameToSegments(trimmed);
+  const segs = nameToSegments(key);
   if (!segs || !segs.root) {
-    parsedChordNameCache.set(trimmed, empty);
+    parsedChordNameCache.set(key, empty);
     return empty;
   }
 
@@ -728,20 +747,17 @@ export const parseChordName = (chordName: string): ParsedChordName => {
     suffix,
   };
 
-  parsedChordNameCache.set(trimmed, result);
+  parsedChordNameCache.set(key, result);
   return result;
 };
 
-const rootPitchCache = createLruCache<number>(512);
-
-/** 取和弦名的根音音高（含斜杠低音时仍取斜杠前的根音），带 LRU 缓存 */
+/** 取和弦名的根音音高（含斜杠低音时仍取斜杠前的根音）。
+ *  直接复用 parseChordName 的解析缓存：rootPitch 本就是 ParsedChordName 的一个字段，
+ *  原先另开一层 4096 条的「根音音高」缓存，等于把同一份数据按另一套键（且未做归一）再存一遍，
+ *  既多一个键空间也多一次查找；合并后命中路径等价（同一名字第二次起仍是缓存直取）。 */
 export const getChordRootPitch = (chordName: string): number => {
   if (!chordName) return 99;
-  const cached = rootPitchCache.get(chordName);
-  if (cached !== undefined) return cached;
-  const pitch = parseChordName(chordName).rootPitch;
-  rootPitchCache.set(chordName, pitch);
-  return pitch;
+  return parseChordName(chordName).rootPitch;
 };
 
 /**
@@ -802,14 +818,10 @@ export const resolveChordRootPitch = (
     const namePitch = getChordRootPitch(chordName);
     if (namePitch !== 99) return namePitch;
   }
-  // 3. 自动推导（基于指板音集）
+  // 3. 自动推导（基于指板音集）：只问最佳根音，命中相对签名时不合成候选/音名
   const { notes } = collectNotes(strings, fretOffset, baseStrings);
   if (notes.length === 0) return 99;
-  const analysis = analyzeChordGraph(notes, null);
-  if (analysis && analysis.bestRootPitch !== undefined && analysis.bestRootPitch !== -1) {
-    return analysis.bestRootPitch;
-  }
-  return 99;
+  return analyzeBestRootPitch(notes, null);
 };
 
 /** 判断指法是否为转位：物理最低音不等于（已解析的）根音即为转位；无法解析时视为非转位。 */
@@ -949,12 +961,31 @@ const buildSortMeta = (chord: Chord): SortMeta => {
   return meta;
 };
 
+/**
+ * 取和弦是否转位（走 sortMetaCache 的引用级缓存）。
+ *
+ * 裸调 computeIsInverted 要跑 collectNotes（逐音位算音高）+ 根音推导（名字解析或音集分析），
+ * 而排序比较器在一次排序里被调用 n·log n 次、同一个和弦被反复求值 —— 同名变体排序
+ * （chordGrouping 的 sortVariants）改用它之后，每个和弦只算一次；转位信息本就在排序元数据里，
+ * 复用同一份缓存也避免了「两处各自记忆化、各自一套失效前提」。
+ */
+export const getChordIsInverted = (chord: Chord): boolean => buildSortMeta(chord).isInverted;
+
 /** 分组排序规则选项（供 BaseSegmentedControl 等 UI 使用） */
 export const SORT_RULE_CONFIG = <SegmentOption<GroupSortRule>[]>[
   { label: '调内级数', value: GroupSortRule.KEY_DEGREE },
   { label: 'C-B', value: GroupSortRule.ROOT_PITCH },
   { label: 'A-Z', value: GroupSortRule.NAME_ASC },
 ];
+
+/**
+ * 和弦名排序比较器（模块级单例）。
+ *
+ * 不用 `String.prototype.localeCompare`：后者每次调用都要重新解析默认 locale 与选项，
+ * 而比较器在一次排序里会被调用 n·log n 次。`new Intl.Collator()` 不传参数即与
+ * `localeCompare(b)` 语义完全一致（同为默认 locale、默认选项），只是把解析结果复用。
+ */
+const NAME_COLLATOR = new Intl.Collator();
 
 /**
  * 按分组排序规则排列和弦：
@@ -971,7 +1002,7 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
     // （两个分支的并列兜底都取已缓存的 meta.name，比较器内不再有任何 getChordName 调用）
     return chords
       .map((chord): [Chord, string] => [chord, getChordName(chord)])
-      .sort((a, b) => a[1].localeCompare(b[1]))
+      .sort((a, b) => NAME_COLLATOR.compare(a[1], b[1]))
       .map(pair => pair[0]);
   }
   const n = chords.length;
@@ -986,7 +1017,7 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
       if (a.complexityRank !== b.complexityRank) return a.complexityRank - b.complexityRank;
       if (a.qualityRank !== b.qualityRank) return a.qualityRank - b.qualityRank;
       if (a.colorNoteCount !== b.colorNoteCount) return a.colorNoteCount - b.colorNoteCount;
-      return a.name.localeCompare(b.name);
+      return NAME_COLLATOR.compare(a.name, b.name);
     });
   } else if (effectiveRule === GroupSortRule.KEY_DEGREE) {
     // 支持大小调调名（'A' 或 'Am'）；关键音高取根音字母，小调用自然小调的三音程性质表
@@ -1021,7 +1052,7 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
       if (a.complexityRank !== b.complexityRank) return a.complexityRank - b.complexityRank;
       if (a.qualityRank !== b.qualityRank) return a.qualityRank - b.qualityRank;
       if (a.colorNoteCount !== b.colorNoteCount) return a.colorNoteCount - b.colorNoteCount;
-      return a.name.localeCompare(b.name);
+      return NAME_COLLATOR.compare(a.name, b.name);
     });
   } else {
     return chords.slice();

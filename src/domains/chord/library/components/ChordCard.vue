@@ -15,7 +15,7 @@
           }"
           @click="handleCardClick()"
           data-focusable-inline
-          class="relative flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border border-border-light bg-surface-body px-2 transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover active:border-border-base active:bg-surface-panel-hover"
+          class="chord-thumb-card relative flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border border-border-light bg-surface-body px-2 transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover active:border-border-base active:bg-surface-panel-hover"
         >
           <BaseBadge
             v-if="cardData.hasVariants"
@@ -77,7 +77,7 @@ const emit = defineEmits<{
 
 const editorStore = useChordEditorStore();
 const settingsStore = useSettingsStore();
-const { copyChordCardText } = useChordTransfer();
+const { copyChordCardText, shareChordLink } = useChordTransfer();
 // 引用反查能力由应用层注入（桥接乐谱域）；未注入时按无引用处理
 const lookupChordReferences = inject(CHORD_REFERENCE_LOOKUP, () => 0);
 
@@ -138,6 +138,18 @@ const menuItems = computed<MenuItem[]>(() => {
         label: `指法 ${index + 1}`,
         icon: 'copy',
         action: () => void copyChordCardText(variant),
+      })),
+    },
+    {
+      // 分享：单指法直接分享当前展示的指法，多指法与「复制和弦」一致展开逐个分享
+      label: '分享和弦',
+      icon: 'share-2',
+      expandChildren: props.cardData.hasVariants,
+      action: () => void shareChordLink(activeChord.value),
+      children: props.cardData.variants.map((variant, index) => ({
+        label: `指法 ${index + 1}`,
+        icon: 'share-2',
+        action: () => void shareChordLink(variant),
       })),
     },
     {

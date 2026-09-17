@@ -6,8 +6,9 @@
       @contextmenu="handleTriggerContextMenu($event)"
       @focusin="handleTriggerFocusIn()"
       @focusout="handleTriggerFocusOut($event)"
-      @mouseenter="handleTriggerMouseEnter()"
-      @mouseleave="handleTriggerMouseLeave()"
+      @mouseenter="handleTriggerMouseEnter($event)"
+      @mouseleave="handleTriggerMouseLeave($event)"
+      @mousemove="handleTriggerMouseMove($event)"
       class="popover-trigger inline-flex"
       ref="referenceRef"
     >
@@ -36,7 +37,7 @@
           :style="mergedPanelStyle"
           @focusout="handleFocusOut($event)"
           @mouseenter="handlePanelMouseEnter()"
-          @mouseleave="handlePanelMouseLeave()"
+          @mouseleave="handlePanelMouseLeave($event)"
           class="popover-panel relative z-panel rounded-md border border-glass-border bg-surface-elevated shadow-floating backdrop-blur-xl outline-none"
           ref="panelRef"
           role="dialog"
@@ -83,6 +84,17 @@ import type { ScrollbarOptions } from '@/platform/directives/vScrollbar';
 import type { Placement, VirtualElement } from '@floating-ui/dom';
 import type { CSSProperties, MaybeRef } from 'vue';
 
+/**
+ * 调试日志开关与实例序号（仅开发期）。
+ *
+ * `import.meta.env.DEV` 在生产构建被 Vite 替换为字面量 false，下方所有 `if (IS_DEV)` 分支
+ * 随之成为死代码被摇掉——与「DevPanel 是否进产物」无关，这里只关心日志本身不进生产。
+ */
+const IS_DEV = import.meta.env.DEV;
+
+/** 浮层实例递增序号：dev 日志里区分同一时刻的多个浮层（层级竞争、互斥关闭都靠它定位） */
+const popoverInstanceSeqState = { seq: 0 };
+
 // 浮层全局状态：必须放在模块作用域（<script setup> 体每次实例化都会重新执行），
 // 否则每个实例各自持有独立登记表，跨实例的引用映射与层级预算（父面板不反超子浮层）都会失效
 const globalFloatingReferenceMap = new WeakMap<HTMLElement, HTMLElement>();
@@ -96,6 +108,44 @@ interface PopoverLayerEntry {
 
 /** 打开中的浮层实例登记（供 bring-to-front 时计算后代层级预算，保证父面板不反超打开中的子浮层） */
 const openedPopovers = new Set<PopoverLayerEntry>();
+
+/**
+ * 全局指针位置：所有浮层实例共享一个监听，供关闭前做**几何复核**。
+ *
+ * 只靠 `:hover` 判定「指针是否还在区域内」有个致命盲点：`:hover` 只描述**最顶层**命中的元素。
+ * 相邻菜单、级联子菜单、Tooltip 等任何另一个浮层压在指针下时，本浮层的 `:hover` 会凭空消失，
+ * 而它的面板其实正被指针压着 —— 计时到期就关，现象即「鼠标明明还压在菜单上，它自己关了」。
+ * 几何判定不看层级，只看坐标是否落在合法矩形内，正好补上这一刀。
+ *
+ * 用「最近一次 pointermove 的坐标」而不是「mouseleave 时的坐标（leavePoint）」：后者在指针
+ * 快速移动时可能已经远在界外，且指针停下后永远不会再刷新，据此判据会时真时假 —— 这正是
+ * 「偶尔自己关」这类不稳定现象的温床。
+ */
+let pointerX = -1;
+let pointerY = -1;
+/** 是否已有可用坐标（指针离开窗口后失效，此时不宜再据旧坐标判定「在里面」） */
+let pointerTracked = false;
+let pointerBound = false;
+
+const trackPointer = (e: PointerEvent) => {
+  pointerX = e.clientX;
+  pointerY = e.clientY;
+  pointerTracked = true;
+};
+
+/** 指针移出文档（移到浏览器 UI / 其它窗口）：坐标就此作废，回退到「不在区域内」的保守判定 */
+const dropPointer = () => {
+  pointerTracked = false;
+};
+
+/** 首个浮层实例初始化时挂上唯一的全局监听（捕获 + 被动，开销可忽略） */
+const ensurePointerTracking = () => {
+  if (pointerBound) return;
+  pointerBound = true;
+  window.addEventListener('pointermove', trackPointer, { capture: true, passive: true });
+  document.addEventListener('pointerleave', dropPointer, { capture: true, passive: true });
+  window.addEventListener('blur', dropPointer);
+};
 </script>
 
 <script setup lang="ts">
@@ -181,6 +231,17 @@ const emit = defineEmits<{
   (e: 'open'): void;
   (e: 'close'): void;
 }>();
+
+/** dev 日志标识：#序号 + 无障碍标签，用于在同一时刻多个浮层的日志里认出具体实例 */
+const instanceId = `#${++popoverInstanceSeqState.seq}(${ariaLabel})`;
+
+/** dev 日志用调用栈：关闭入口有 8 处，光看 reason 不够，得能看见是谁调的 */
+const callStack = (): string =>
+  (new Error().stack ?? '')
+    .split('\n')
+    .slice(1, 7)
+    .map(s => s.trim().replace(/^at\s+/, ''))
+    .join(' <- ');
 
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
@@ -284,13 +345,178 @@ const arrowStyle = computed<CSSProperties>(() => {
   });
 });
 
+/**
+ * hover 开/关延时共用的计时槽。
+ *
+ * 计时器触发时必须把槽位清空（见下方 scheduleOpen / scheduleClose）：否则「槽位非空」不再等价于
+ * 「有计时在等待」——已触发的旧 id 会一直占着槽位，让凭 `!hoverTimer` 判断「当前没有计时」的调用点
+ * 恒判为假（关闭安全网装不上），而任何一次区域内的 mouseover 又把它清成 null 使判据恢复为真。
+ * 同一操作两次结果不同，正是「偶尔」这类不确定现象的温床。
+ */
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
-/** 清除 hover 开/关延时计时器 */
+
+/**
+ * 关闭后是否抑制「再次悬停打开」。
+ *
+ * 选中菜单项后面板关闭，而指针往往还停在触发器上（点完手没动）；另一种情况是列表因排序
+ * 变更重排，浏览器对指针下的元素重做命中测试而**补发** mouseenter（指针压根没动）。
+ * 两者都会让刚关掉的菜单立刻又弹出来，现象即「选完又开，反复闪」。
+ *
+ * 抑制一直持续到**指针真的移动过**（见 releaseSuppressIfPointerMoved）或离开触发器为止，
+ * 符合「一次操作只弹一次」的直觉，也不会影响首次打开。
+ */
+let suppressHoverReopen = false;
+
+/**
+ * 抑制生效那一刻的指针坐标。
+ *
+ * 它是区分两类事件的关键：**指针没动却被补发的 mouseenter**（列表重排后浏览器重做命中测试）
+ * 坐标与关闭时完全一致，而**用户真的把鼠标移回来了**必然产生位移。
+ */
+let suppressAnchor: { x: number; y: number } | null = null;
+
+/** 判定「指针确实移动过」的位移阈值（px）：低于此值视为手抖或坐标取整，不算移动 */
+const HOVER_REOPEN_MOVE_THRESHOLD_PX = 4;
+
+/**
+ * 指针自抑制生效后确实移动过 → 解除抑制（返回是否可继续走打开流程）。
+ *
+ * 只靠触发器 mouseleave 解除是不够的：选中菜单项时指针停在**面板**上，触发器根本没收过
+ * mouseleave，抑制也就没有解除的机会 —— 用户移回触发器时 mouseenter 被吃掉，必须再移出
+ * 一次才开，现象即「切换排序后要第二次移入才显示」。位移才是「用户主动移回来了」的可靠判据。
+ */
+const releaseSuppressIfPointerMoved = (x: number, y: number): boolean => {
+  if (!suppressHoverReopen) return true;
+  const moved =
+    !suppressAnchor ||
+    Math.abs(x - suppressAnchor.x) >= HOVER_REOPEN_MOVE_THRESHOLD_PX ||
+    Math.abs(y - suppressAnchor.y) >= HOVER_REOPEN_MOVE_THRESHOLD_PX;
+  if (!moved) return false;
+  suppressHoverReopen = false;
+  suppressAnchor = null;
+  return true;
+};
+
+/**
+ * 是否正由 close() 内部置 false：供下方 watch 区分「走 close()」与「外部直接改 v-model」。
+ * 后者不经过任何关闭入口，日志里若不单独标出，这类关闭就是完全隐形的。
+ */
+let closingInternally = false;
+
+/** 清除 hover 计时器（对已触发的 id 调 clear 是空操作，槽位语义不受影响） */
 const clearHoverTimer = () => {
   if (hoverTimer) {
     clearTimeout(hoverTimer);
     hoverTimer = null;
   }
+};
+
+ensurePointerTracking();
+
+/** 指针给定坐标是否落在「合法区域任一矩形外扩 offsetDistance」内（几何判定，与层级无关）。
+ *  触发器 / contextTriggerEl / 浮层宿主**各自**外扩后逐一判定：取并集会把面板两侧、
+ *  触发器左右的大片空白也算成合法区域，菜单会黏住不走。 */
+const isPointerInRect = (point: { x: number; y: number }): boolean => {
+  const pad = Math.max(offsetDistance, 4);
+  for (const el of [referenceRef.value, contextTriggerEl, floatingRef.value]) {
+    const r = el?.getBoundingClientRect();
+    if (!r) continue;
+    if (point.x >= r.left - pad && point.x <= r.right + pad && point.y >= r.top - pad && point.y <= r.bottom + pad) {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * 指针此刻是否真的落在合法区域内 —— 关闭计时到期前的复核，由三层判据组成：
+ *
+ * 1. `:hover`：由浏览器按当前命中目标维护，指针确实压在触发器上时恒为真。
+ *    浮层一挂载 / 一重排，浏览器会对指针下的元素重新做命中测试并补发 mouseout / mouseover，
+ *    这类补发不代表指针移动，却足以把关闭计时装上；而指针此后静止便再无 mouseover 来取消它
+ *    —— 到期复核一次即可免掉「鼠标没移出，菜单闪一下就关了」。
+ * 2. 子浮层链：面板内 Selector 的下拉等后代浮层同样算「区域内」，
+ *    宿主层逐一枚举后用 isChildFloatingLayer 归属判定（该函数在下方定义，此处仅在调用点求值）。
+ * 3. **几何复核（关键）**：`:hover` 只描述**最顶层**命中的元素。相邻菜单、级联子菜单、Tooltip
+ *    等任何另一个浮层压在指针下时，本浮层的 `:hover` 会凭空消失，而面板其实正被指针压着 ——
+ *    少了这一刀就会出现「鼠标还压在菜单上，它自己关了」。几何判定不看层级，只看坐标是否落在
+ *    合法矩形内，正好补上这个盲点。坐标取「最近一次 pointermove」（见模块级 pointerX/Y）。
+ */
+const isPointerInside = (): boolean => {
+  if (referenceRef.value?.matches(':hover')) return true;
+  for (const layer of document.querySelectorAll<HTMLElement>('[data-floating-layer]:hover')) {
+    if (layer === floatingRef.value || isChildFloatingLayer(layer)) return true;
+  }
+  // 几何复核：`:hover` 只认最顶层元素，别的浮层压在指针下时会假性失效
+  // （见模块级 pointerX/Y 注释）。有实时坐标就用实时坐标；只有在从未收到过 pointermove
+  // 的场景（触摸、程序化打开）才退回「离开时坐标」的走廊判定。
+  return pointerTracked ? isPointerInRect({ x: pointerX, y: pointerY }) : isPointerInCorridor();
+};
+
+/** 延时打开：槽位若被占用则重新计时（触发器 mouseenter 唯一入口） */
+const scheduleOpen = (delay: number) => {
+  clearHoverTimer();
+  // 抑制窗口内不自动重开（指针未移动过 → 视为补发事件，见 suppressHoverReopen 注释）
+  if (suppressHoverReopen) return;
+  hoverTimer = setTimeout(() => {
+    hoverTimer = null;
+    open();
+  }, delay);
+};
+
+/**
+ * 最近一次「疑似离开」时的指针坐标（触发器移出 / 面板移出 / 全局 hover 路由判定落在区域外）。
+ * 仅在从未收到过 pointermove 时作为兜底坐标参与判定（见 isPointerInside 第 3 层的分支）。
+ */
+let leavePoint: { x: number; y: number } | null = null;
+
+/**
+ * 指针是否仍落在合法区域（几何判定）——**兜底路径**，仅在还没有任何 pointermove 坐标时生效
+ * （触摸设备、或浮层在指针从未移动过的情况下被程序打开）。
+ *
+ * 正常鼠标操作下计时到期前用的是「最近一次 pointermove 的实时坐标」：指针停下后不会再派发
+ * 事件，leavePoint 会永远停在离开那一刻的位置，据此判定就会一直沿用过期坐标。
+ */
+const isPointerInCorridor = (): boolean => {
+  if (!leavePoint) return false;
+  return isPointerInRect(leavePoint);
+};
+
+/**
+ * 延时关闭：三条路径（触发器移出 / 面板移出 / 全局 hover 路由判定落入区域外）共用，
+ * 到期时先复核钉住态与指针位置，指针仍在区域内则视为事件抖动、不关。
+ */
+const scheduleClose = (delay: number) => {
+  clearHoverTimer();
+  hoverTimer = setTimeout(() => {
+    hoverTimer = null;
+    const inside = isPointerInside();
+    if (IS_DEV) {
+      console.debug(`[popover${instanceId}] hover 计时到期`, {
+        delay,
+        pinned: pinned.value,
+        inside,
+        triggerHover: referenceRef.value?.matches(':hover') ?? null,
+        pointer: pointerTracked ? { x: pointerX, y: pointerY } : 'untracked',
+        // 几何复核的判定依据：三个合法矩形与外扩量，缺一不可（漏掉哪个矩形就会误判为「已离开」）
+        pad: Math.max(offsetDistance, 4),
+        rects: [referenceRef.value, contextTriggerEl, floatingRef.value].map(el => {
+          const r = el?.getBoundingClientRect();
+          return r
+            ? `${Math.round(r.left)},${Math.round(r.top)} ~ ${Math.round(r.right)},${Math.round(r.bottom)}`
+            : null;
+        }),
+      });
+    }
+    if (pinned.value || inside) {
+      // 判为「仍在区域内」后不自动续计时：指针此刻就在区域内，等它真离开时必然有新的
+      // mouseleave / mouseover 重新装上计时；而「指针已停在区域外」这一情形由 isPointerInside
+      // 的实时坐标直接判否并关闭，不需要靠续计时兜底。
+      leavePoint = null;
+      return;
+    }
+    close('hover-timeout');
+  }, delay);
 };
 
 watch(
@@ -302,14 +528,23 @@ watch(
   { immediate: true }
 );
 
-// 全局注册：打开中的浮层登记关闭函数，供容器滚动等场景联动关闭（close 幂等，嵌套重复关闭安全）
+/**
+ * 本浮层的锚点元素：右键（虚拟锚点）模式下取承载右键的真实触发元素，否则取触发包裹层。
+ * 供注册表按「锚点是否落在某个滚动容器内」精确关闭（见 popoverRegistry.closePopoversWithin）。
+ */
+const getAnchorEl = (): HTMLElement | null => contextTriggerEl ?? referenceRef.value ?? null;
+
+// 全局注册：打开中的浮层登记关闭函数与锚点，供容器滚动等场景联动关闭（close 幂等，嵌套重复关闭安全）
 watch(model, val => {
-  if (val) registerOpenPopover(close);
+  if (val) registerOpenPopover(close, getAnchorEl);
   else unregisterOpenPopover(close);
 });
 
 watch(model, async val => {
   if (!val) {
+    if (IS_DEV && !closingInternally) {
+      console.debug(`[popover${instanceId}] model 被外部直接置 false（未走 close()）`, { stack: callStack() });
+    }
     clearHoverTimer();
     isShown.value = false;
   } else {
@@ -349,16 +584,46 @@ const open = async () => {
   openedPopovers.add(ownLayerEntry);
   ownLayerEntry.open = true;
   isMounted.value = true;
+  if (IS_DEV) console.debug(`[popover${instanceId}] OPEN`, { trigger, stack: callStack() });
   model.value = true;
   emit('open');
 };
 
-/** 关闭浮层：复位钉住与右键虚拟锚点，并派发 close */
-const close = () => {
+/**
+ * 关闭浮层：复位钉住与右键虚拟锚点，并派发 close。
+ *
+ * `reason` 仅服务于 dev 日志：关闭入口散布在 8 处（hover 计时、外部点击、Esc、失焦、
+ * 注册表滚动联动、toggle / pinToggle、消费方主动调用），「菜单自己关了」这类现象
+ * 必须能一眼看出走的是哪条路径，否则只能靠猜测定位。
+ */
+const close = (reason = 'unmarked') => {
   if (!model.value && !isShown.value) return;
+  if (IS_DEV) {
+    console.debug(`[popover${instanceId}] CLOSE reason=${reason}`, {
+      pinned: pinned.value,
+      trigger,
+      wasShown: isShown.value,
+      stack: callStack(),
+    });
+  }
+  leavePoint = null;
+  // 关闭即进入「不自动重开」窗口，但 hover 自然移出（hover-timeout）除外：
+  // 那种关闭发生在指针**已离开**触发器之后，此时放开抑制，用户移回来才能正常再次悬停打开
+  // （收起再悬停是常规操作）；而菜单项选中、外部点击、Esc、失焦这类「明确操作」导致的关闭，
+  // 指针往往还停在触发器上，必须抑制，否则刚关就又弹出来。
+  if (reason !== 'hover-timeout') {
+    // 没有可用指针坐标（触摸、程序化打开）时不抑制：那种场景不会有 mouseleave 来解除抑制，
+    // 菜单会彻底卡在「悬停打不开」，比「刚关又弹出来」严重得多
+    suppressHoverReopen = pointerTracked;
+    suppressAnchor = pointerTracked ? { x: pointerX, y: pointerY } : null;
+  }
   ownLayerEntry.open = false;
   isShown.value = false;
+  closingInternally = true;
   model.value = false;
+  void nextTick(() => {
+    closingInternally = false;
+  });
   pinned.value = false;
   contextMenuVirtualRef.value = null;
   emit('close');
@@ -408,7 +673,7 @@ const releaseOwnedZ = () => {
 /** 切换开关状态 */
 const toggle = () => {
   if (model.value) {
-    close();
+    close('trigger-toggle');
   } else {
     open();
   }
@@ -432,7 +697,7 @@ const pinned = ref(false);
 /** 钉住切换的具体实现：已钉住并打开时关闭，否则钉住并打开 */
 const pinToggle = () => {
   if (model.value && pinned.value) {
-    close();
+    close('pin-toggle');
   } else {
     pinned.value = true;
     open();
@@ -462,28 +727,42 @@ const handleTriggerFocusIn = () => {
 // a11y：aria-expanded / aria-haspopup 由触发插槽内的真实交互元素承载（插槽已提供 isOpen），
 // 包裹层 div 无角色时不允许挂载这两个属性（axe: aria-allowed-attr）
 /** hover 触发：延时打开，并让已打开的浮层置顶 */
-const handleTriggerMouseEnter = () => {
+const handleTriggerMouseEnter = (e: MouseEvent) => {
   if (trigger !== 'hover' || disabled) return;
-  clearHoverTimer();
-  hoverTimer = setTimeout(() => {
-    open();
-  }, hoverOpenDelay);
+  leavePoint = null;
+  if (releaseSuppressIfPointerMoved(e.clientX, e.clientY)) scheduleOpen(hoverOpenDelay);
   // 已打开的浮层（如被钉住的）在鼠标再次进入时置顶，保证「最近交互者在上」
   bringToFront();
 };
 
-/** hover 触发：延时关闭（钉住时不关） */
-const handleTriggerMouseLeave = () => {
-  if (trigger !== 'hover' || pinned.value) return;
-  clearHoverTimer();
-  hoverTimer = setTimeout(() => {
-    close();
-  }, hoverCloseDelay);
+/**
+ * hover 触发：抑制窗口内指针在触发器上移动时补一次打开。
+ *
+ * 覆盖「关闭那一刻指针恰好停在触发器上、之后只在触发器内小幅移动」的场景 —— 那种情况
+ * 不会再有 mouseenter，只有 mousemove 能证明用户真的动过鼠标。解除后抑制即关闭，
+ * 后续 mousemove 直接早退，不会反复重置打开延时。
+ */
+const handleTriggerMouseMove = (e: MouseEvent) => {
+  if (trigger !== 'hover' || disabled) return;
+  if (!suppressHoverReopen) return;
+  if (releaseSuppressIfPointerMoved(e.clientX, e.clientY)) scheduleOpen(hoverOpenDelay);
 };
 
-/** 鼠标移入面板：取消关闭计时并置顶 */
+/** hover 触发：记下离开时的指针坐标并延时关闭（钉住时不关） */
+const handleTriggerMouseLeave = (e: MouseEvent) => {
+  // 指针真正离开触发器 → 解除「关闭后不重开」窗口（须早于下方 trigger/pinned 早退，
+  // 否则钉住态下离开不会解除，菜单再也悬停不开）
+  suppressHoverReopen = false;
+  suppressAnchor = null;
+  if (trigger !== 'hover' || pinned.value) return;
+  leavePoint = { x: e.clientX, y: e.clientY };
+  scheduleClose(hoverCloseDelay);
+};
+
+/** 鼠标移入面板：取消关闭计时、作废离开坐标并置顶 */
 const handlePanelMouseEnter = () => {
   if (trigger !== 'hover') return;
+  leavePoint = null;
   clearHoverTimer();
   // 从别的浮层移入本面板时置顶（「最近交互者在上」）
   bringToFront();
@@ -496,13 +775,11 @@ const bringToFront = () => {
   acquireOwnedZ();
 };
 
-/** 鼠标移出面板：延时关闭（钉住时不关） */
-const handlePanelMouseLeave = () => {
+/** 鼠标移出面板：记下离开时的指针坐标并延时关闭（钉住时不关） */
+const handlePanelMouseLeave = (e: MouseEvent) => {
   if (trigger !== 'hover' || pinned.value) return;
-  clearHoverTimer();
-  hoverTimer = setTimeout(() => {
-    close();
-  }, hoverCloseDelay);
+  leavePoint = { x: e.clientX, y: e.clientY };
+  scheduleClose(hoverCloseDelay);
 };
 
 /**
@@ -516,11 +793,11 @@ useEventListener(
   (e: MouseEvent) => {
     if (trigger !== 'hover' || !model.value || pinned.value) return;
     if (isEventInside(e.target)) {
+      leavePoint = null;
       clearHoverTimer();
     } else if (!hoverTimer) {
-      hoverTimer = setTimeout(() => {
-        close();
-      }, hoverCloseDelay);
+      leavePoint = { x: e.clientX, y: e.clientY };
+      scheduleClose(hoverCloseDelay);
     }
   },
   true
@@ -571,8 +848,13 @@ useEventListener(
       clearHoverTimer();
       return;
     }
-
-    close();
+    if (IS_DEV) {
+      const t = e.target;
+      console.debug(`[popover${instanceId}] 外部 pointerdown → 关闭`, {
+        target: t instanceof HTMLElement ? `${t.tagName}.${String(t.className).slice(0, 60)}` : String(t),
+      });
+    }
+    close('outside-pointerdown');
   },
   true
 );
@@ -587,7 +869,8 @@ useEventListener(
   (e: MouseEvent) => {
     if (!closeOnClickOutside || !model.value || !isShown.value) return;
     if (isEventInside(e.target) || contextTriggerEl?.contains(e.target as Node)) return;
-    close();
+    if (IS_DEV) console.debug(`[popover${instanceId}] 外部 contextmenu → 关闭`);
+    close('outside-contextmenu');
   },
   true
 );
@@ -628,7 +911,7 @@ useEventListener(
     // 嵌套浮层下，仅最上层（z 最大）的实例响应 Escape，避免一次按键把所有浮层一次性全部关闭
     if (!isTopmostOpenPopover()) return;
     e.stopPropagation();
-    close();
+    close('esc');
   },
   { capture: true }
 );
@@ -640,11 +923,29 @@ const handleFocusOut = (e: FocusEvent) => {
   if (isPointerDown.value) return;
 
   const nextFocused = e.relatedTarget as HTMLElement | null;
-  // relatedTarget 为 null（焦点移出到浏览器地址栏 / iframe / 开发者工具等）时视为离开合法区域，
-  // 保守关闭；拖拽过程中已由上方 isPointerDown 守卫拦截
-  if (!nextFocused || !isEventInside(nextFocused)) {
-    close();
+
+  // relatedTarget 为 null：焦点通常不是「被移走」，而是**原焦点元素被移除**——
+  // 列表因排序变更重排、或面板内容重渲染时，浏览器把焦点丢回 body 并补发 focusout，
+  // 而用户（和指针）什么都没做。此时直接关闭就是「菜单自己关了」。
+  // 故延后一帧复核：焦点已回到合法区域内、或指针仍在合法区域内，都说明不是用户主动离开。
+  if (!nextFocused) {
+    requestAnimationFrame(() => {
+      if (!model.value) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && isEventInside(active)) return;
+      if (isPointerInside()) return;
+      close('panel-focusout-null');
+    });
+    return;
   }
+
+  if (isEventInside(nextFocused)) return;
+  if (IS_DEV) {
+    console.debug(`[popover${instanceId}] 面板失焦 → 关闭`, {
+      relatedTarget: `${nextFocused.tagName}.${String(nextFocused.className).slice(0, 60)}`,
+    });
+  }
+  close('panel-focusout');
 };
 
 /** focus 触发模式下的触发元素失焦：焦点未移入合法区域则关闭 */
@@ -655,7 +956,12 @@ const handleTriggerFocusOut = (e: FocusEvent) => {
 
   const nextFocused = e.relatedTarget as HTMLElement | null;
   if (nextFocused && isEventInside(nextFocused)) return;
-  close();
+  if (IS_DEV) {
+    console.debug(`[popover${instanceId}] 触发器失焦 → 关闭`, {
+      relatedTarget: nextFocused ? `${nextFocused.tagName}.${String(nextFocused.className).slice(0, 60)}` : null,
+    });
+  }
+  close('trigger-focusout');
 };
 
 onBeforeUnmount(() => {

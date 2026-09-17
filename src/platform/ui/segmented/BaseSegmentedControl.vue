@@ -70,9 +70,9 @@ import {
 } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
-import { useRafThrottle } from '@/platform/utils/useRafThrottle';
 
 import {
   COMPACTED_SIZE_MAP,
@@ -243,10 +243,12 @@ const getTabindex = (opt: SegmentOption<T>, i: number): number => {
   return i === firstFocusableIndex.value ? 0 : -1;
 };
 
-/** 滑块定位：用 left/top（布局属性）而非 transform——transform 合成层在分数 DPR
+/**
+ * 滑块定位：用 left/top（布局属性）而非 transform——transform 合成层在分数 DPR
  * （如 Windows 150% 缩放）下会对齐整数设备像素，与流内渲染的按钮/聚焦圈错位约半像素；
  * left/top 与按钮走同一渲染路径，任意缩放比下严格重合（元素极小，过渡时的重排开销可忽略）。
- * 拖动中优先渲染 dragPosition（跟手位置，无过渡），松手后回落到测量位置并恢复过渡 */
+ * 拖动中优先渲染 dragPosition（逐帧跟手；横向无过渡，仅跨段跳变的宽度带过渡），
+ * 松手后回落到测量位置并恢复类的 transition-all 过渡 */
 const indicatorStyle = computed(() => {
   const drag = dragPosition.value;
   if (drag) {
@@ -256,8 +258,17 @@ const indicatorStyle = computed(() => {
       left: `${drag.x}px`,
       top: `${drag.y}px`,
       opacity: 1,
-      // 位置（left）逐帧跟手不加过渡；几何（宽/高/纵）变化过渡平滑贴合预览项
-      transition: 'width 200ms ease-out, height 200ms ease-out, top 200ms ease-out',
+      // 拖动中要不要过渡，按「该量是逐帧量还是跨段跳变量」分流，两种量不能混为一谈：
+      // - 逐帧量（两种形态的 x）：指针在哪它就在哪，逐帧重写，绝不能过渡——加了就变成拖在指针
+      //   之后的滞后尾巴（这也是上一轮「不跟鼠标」的成因之一）；
+      // - 跨段跳变量：取值只在换段那一刻离散跳变，帧与帧之间是常量，加过渡才平滑。
+      //   tabbed 的宽度正属此类（宽度取「指针所指那一段」的宽，跨段时 72px ↔ 48px 跳变），
+      //   故拖动中给 width 加过渡：下划线是「变宽 / 变窄」过去，而不是瞬间换一根长度。
+      //   其余两项无需列入：tabbed 的高/纵是常量（贴底等厚细线），pill 的宽/高/纵沿用原过渡。
+      transition:
+        visualVariant.value === 'tabbed'
+          ? 'width 200ms ease-out'
+          : 'width 200ms ease-out, height 200ms ease-out, top 200ms ease-out',
     };
   }
   return {
@@ -436,6 +447,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 // 位移超过阈值才算拖动（阈值内仍走原生 click 选择）；拖动期间暂停滑块过渡跟手移动、
 // v-model 不变，松手才提交一次 change；落点在禁用项/空白时滑块弹回原选中项。
 // 非激活块按下不进入拖动（见 handlePointerDown 的按下位置判定），仅响应点击选择。
+// 横向锚点按形态分流：pill = 抓取偏移搬运，tabbed = 以指针为几何中心（理由与钳制范围见 applyDragMove）
 const DRAG_THRESHOLD_PX = 4;
 let dragStartX: number | null = null;
 /** 拖动已激活（位移超阈值）：滑块脱离选项测量位置跟手移动 */
@@ -448,18 +460,33 @@ const dragOverIndex = ref(-1);
 let suppressClick = false;
 /** 拖动激活时快照的滑块几何（尺寸/纵向位置保持选中段，仅横向跟手） */
 let dragSnapshot = { width: 0, height: 0, y: 0 };
-/** 拖动激活时缓存的选项完整几何（padding-box 局部坐标）：拖动期间布局不变，一次测量全程使用。
- *  供落点判定（left/right）与预览滑块贴合悬停项（width/height/top） */
-let dragItemRects: { left: number; right: number; width: number; height: number; top: number; index: number }[] = [];
-/** 拖动激活时测量的容器左右内边距（分数级）：滑块横向钳制在内边距内侧，
- *  与流内按钮的可达范围一致，不会拖到胶囊底板 padding 区之上 */
+/** 选项完整几何（padding-box 局部坐标）：一次测量同时供落点判定（left/right）与预览滑块贴合（width/height/top） */
+interface DragItemRect {
+  left: number;
+  right: number;
+  width: number;
+  height: number;
+  top: number;
+  index: number;
+}
+
+/** 拖动激活时缓存的选项区间（已跳过测量缺失项），供落点判定 hitDragIndex 使用 */
+let dragItemRects: DragItemRect[] = [];
+/** 同上但按**选项下标**稠密存放（缺失项为 undefined）：hitDragIndex 返回的是选项下标，
+ *  用它索引上面那个已过滤的数组在有缺失项时会整体错位；滑块几何贴合一律走本数组 */
+let dragRectByIndex: (DragItemRect | undefined)[] = [];
+/** 拖动激活时测量的容器左右内边距（分数级）：仅在选项段实测失败（dragItemRects 为空）时，
+ *  作为滑块横向钳制范围的兜底；正常一律取实测选项段的首/末边界（见 applyDragMove） */
 let dragPadding = { left: 0, right: 0 };
 /** 拖动激活时测量的容器边框（分数级）：滑块 left/top 是 absolute 的 padding-box 定位基准，
  *  选项/指针的 border-box 坐标须扣除边框才与滑块同系——否则错开一个边框宽（滑块「超出一点点」的根因） */
 let dragInset = { left: 0, top: 0, right: 0 };
-/** 拖动激活时记录的抓取偏移（指针相对滑块左缘，padding-box 坐标）：拖动中 x = 指针 − 偏移，
- *  与宽度过渡完全解耦——若按「指针居中于滑块」随目标宽度重算 x，宽度渐变期间左右缘会
- *  先跳后滑（悬停在选项边界抖动时即抽动）；抓取偏移让 x 连续、宽度独立渐变 */
+/** 拖动激活时记录的抓取偏移（指针相对滑块左缘，padding-box 坐标）：**仅 pill 形态使用**，
+ *  拖动中 x = 指针 − 偏移，与宽度过渡完全解耦——若按「指针居中于滑块」随目标宽度重算 x，
+ *  宽度渐变期间左右缘会先跳后滑（悬停在选项边界抖动时即抽动）；抓取偏移让 x 连续、宽度独立渐变。
+ *  tabbed 下划线不用它：下划线宽度最大可达整段，用抓取偏移会让末尾的 tab 永远够不到——
+ *  x = 指针 − 偏移 会先撞上 maxX 钳位，指针继续走而下划线停住（即「拖不动」）。
+ *  tabbed 一律以指针为几何中心，见 applyDragMove 的 targetX */
 let dragGrabOffset = 0;
 
 /** 落点判定（纯函数见 BaseSegmentedControl.logic.ts） */
@@ -485,13 +512,14 @@ const handlePointerDown = (e: PointerEvent) => {
   window.addEventListener('pointercancel', handleDragPointerUp);
 };
 
-const handleDragPointerMove = (e: PointerEvent) => {
+/** 拖动跟手的一帧计算：处在本帧最后一次指针位置上的落点判定、预览高亮与滑块几何 */
+const applyDragMove = (clientX: number) => {
   if (dragStartX === null) return;
   const container = containerRef.value;
   if (!container) return;
 
   if (!isDragging.value) {
-    if (Math.abs(e.clientX - dragStartX) < DRAG_THRESHOLD_PX) return;
+    if (Math.abs(clientX - dragStartX) < DRAG_THRESHOLD_PX) return;
     if (indicatorPosition.value.opacity === 0) return;
     // 激活拖动：快照当前滑块几何、缓存选项区间与容器内边距
     dragSnapshot = {
@@ -514,65 +542,103 @@ const handleDragPointerMove = (e: PointerEvent) => {
     };
     // 抓取偏移：以激活时刻指针位置相对当前滑块左缘记录（若拖满整个拖动期不变，
     // 滑块随指针平移时保持抓取点相对位置自然），后续宽度伸缩不再反过来影响 x
-    dragGrabOffset = e.clientX - rect.left - dragInset.left - indicatorPosition.value.x;
-    dragItemRects = items.value
-      .map((raw, index) => {
-        const item = toEl(raw);
-        if (!item) return null;
-        const r = item.getBoundingClientRect();
-        return {
-          left: r.left - rect.left - dragInset.left,
-          right: r.right - rect.left - dragInset.left,
-          width: r.width,
-          height: r.height,
-          top: r.top - rect.top - dragInset.top,
-          index,
-        };
-      })
-      .filter(
-        (v): v is { left: number; right: number; width: number; height: number; top: number; index: number } =>
-          v !== null
-      );
+    dragGrabOffset = clientX - rect.left - dragInset.left - indicatorPosition.value.x;
+    dragRectByIndex = items.value.map((raw, index) => {
+      const item = toEl(raw);
+      if (!item) return undefined;
+      const r = item.getBoundingClientRect();
+      return {
+        left: r.left - rect.left - dragInset.left,
+        right: r.right - rect.left - dragInset.left,
+        width: r.width,
+        height: r.height,
+        top: r.top - rect.top - dragInset.top,
+        index,
+      };
+    });
+    dragItemRects = dragRectByIndex.filter((v): v is DragItemRect => v !== undefined);
     isDragging.value = true;
     transitionEnabled.value = false;
   }
 
-  e.preventDefault();
   const rect = container.getBoundingClientRect();
   // 统一到滑块的 padding-box 坐标系：指针的 border-box 坐标扣除左边框
-  const localX = e.clientX - rect.left - dragInset.left;
-  // 落点预览：禁用项不高亮、滑块也不贴合
+  const localX = clientX - rect.left - dragInset.left;
+  // 落点判定：hoverIdx 是「指针所在选项」（禁用项也照常命中，是否可落定另行判定）
   const hoverIdx = hitDragIndex(localX);
   const disabledHover = hoverIdx >= 0 && Boolean(normalizedOptions.value[hoverIdx]?.disabled);
   dragOverIndex.value = disabledHover ? -1 : hoverIdx;
-  // 滑块几何贴合当前悬停的可用选项（pill：宽/高/纵随预览项变化，宽选项滑块变宽；
-  // tabbed：高度恒为贴底细线，仅横向贴合）。无预览（禁用项上）时保持起始选中段快照。
-  // x 以指针为中心跟手，钳制在 padding 范围内
-  const preview = !disabledHover && hoverIdx >= 0 ? dragItemRects[hoverIdx] : undefined;
+  // 滑块几何贴合哪一段：
+  // - pill：只贴合「可落定的选项」——禁用项/空白上无预览，滑块保持起始选中段快照；
+  // - tabbed 下划线：宽度取「指针所在选项」（禁用段也照取）——下划线长度即它要落进去的那一段的宽度，
+  //   指针停在某段中点时下划线与该段严丝合缝；贴着禁用段但不给高亮，正是「此处不可落定」的表达。
+  const previewIdx = visualVariant.value === 'tabbed' ? hoverIdx : disabledHover ? -1 : hoverIdx;
+  const preview = previewIdx >= 0 ? dragRectByIndex[previewIdx] : undefined;
   const geometry = preview ? resolveIndicatorGeometry(preview) : dragSnapshot;
   const width = geometry.width;
   const height = geometry.height;
   const top = geometry.y;
-  // padding-box 可用宽度 = border-box 宽 - 两侧边框；滑块右缘不得越过右 padding 内缘
+  // 横向落点（两种形态语义不同，勿混用）：
+  // - pill 是「按住并搬运一块实体」：保留抓取偏移（按下的点相对滑块恒定），滑块就跟在指针后
+  //   grabOffset 处平移，宽度渐变不会反过来把 x 推来推去；
+  // - tabbed 是「下划线以指针为几何中心」：x = 指针 − 半宽，指针恒落在下划线中点。这条是**必须**的，
+  //   不是手感偏好：下划线宽度最大可达整段，若改用抓取偏移（x = 指针 − 偏移），向右拖时 x 会先撞上
+  //   maxX 钳位，此后指针继续走而下划线停住——末尾的 tab 永远够不到，正是「拖不动了」。
+  //   以指针为中心时每一段都可达（把指针压到任一段中点即正中该段）；钳制边界取首个/末个选项段的
+  //   实测左右缘（见下），与静止态同源，故钳位只会在「下划线已经到位」时生效，不会半路卡住。
+  const targetX = visualVariant.value === 'tabbed' ? localX - width / 2 : localX - dragGrabOffset;
+  // 横向可动范围取**实测选项段**的首/末边界，而不是容器自身的盒子。原因：选项按钮是
+  // whitespace-nowrap + min-width:auto，而 tabbed（下划线 Tab）容器带档位宽度（未显式传 width 时
+  // 默认 8rem），tab 数量/文字一长就把容器撑破——容器不裁剪、静止下划线也照实测位置画到容器之外。
+  // 若仍按容器宽度算 maxX，滑块会被钳死在容器右缘以内：选中末段时静止位置在容器外，一按下就被
+  // 拽回容器内，其后末尾几段永远够不到（就是「拖不动」「下划线跳回去」）。按选项实测边界算，则
+  // 跟手范围与静止态同源。正常情形（选项段恰好铺满容器 padding-box，pill 的 p-1 亦然）两种取法等价。
+  const stripLeft = dragItemRects[0]?.left;
+  const stripRight = dragItemRects[dragItemRects.length - 1]?.right;
+  // padding-box 可用宽度 = border-box 宽 - 两侧边框（仅在选项段测不到时作为钳制兜底）
   const paddingBoxWidth = rect.width - dragInset.left - dragInset.right;
-  const minX = dragPadding.left;
-  const maxX = Math.max(minX, paddingBoxWidth - dragPadding.right - width);
+  const minX = stripLeft ?? dragPadding.left;
+  const maxX = Math.max(minX, (stripRight ?? paddingBoxWidth - dragPadding.right) - width);
   dragPosition.value = {
     width,
     height,
     y: top,
-    x: Math.min(Math.max(localX - dragGrabOffset, minX), maxX),
+    x: Math.min(Math.max(targetX, minX), maxX),
   };
 };
 
+/**
+ * 拖动跟手按帧合帧：pointermove 在高回报率指针（120Hz 以上）下一次移动可派发多帧次，
+ * 而每次都要读容器 rect 并写 dragPosition（= 触发一次渲染）。合并到帧末只保留最后一次指针位置，
+ * 滑块仍是一帧一动、跟手感不变，帧内多余的计算与渲染则被吃掉。
+ */
+const {
+  schedule: scheduleDragFrame,
+  flush: flushDragFrame,
+  cancel: cancelDragFrame,
+} = useRafThrottle<number>(applyDragMove);
+
+const handleDragPointerMove = (e: PointerEvent) => {
+  if (dragStartX === null) return;
+  // preventDefault 只能在事件派发期间调用（延后到帧回调里等同于没调）：
+  // 超阈值起同步抑制文本选中/原生手势，阈值内的微小移动维持原有「不干预」行为
+  if (isDragging.value || Math.abs(e.clientX - dragStartX) >= DRAG_THRESHOLD_PX) e.preventDefault();
+  scheduleDragFrame(e.clientX);
+};
+
 const handleDragPointerUp = (e: PointerEvent) => {
+  // 先冲刷待处理帧：起手与松手落在同一帧时（快速拖拽），drag 的激活判定在那帧里，
+  // 不冲刷会被当作未拖动而漏掉本次落点提交
+  flushDragFrame();
   const wasDragging = isDragging.value;
   cleanupDragListeners();
   dragStartX = null;
   if (!wasDragging) return;
 
   const container = containerRef.value;
-  const idx = container ? hitDragIndex(e.clientX - container.getBoundingClientRect().left) : -1;
+  // 与拖动期同一坐标系：指针的 border-box 坐标须扣掉左边框（见 applyDragMove 的 localX），
+  // 否则胶囊形态（容器带 1px 边框）的落点判定会比跟手预览偏移一个边框宽
+  const idx = container ? hitDragIndex(e.clientX - container.getBoundingClientRect().left - dragInset.left) : -1;
   const target = idx >= 0 ? normalizedOptions.value[idx] : undefined;
   if (target && !target.disabled && !props.disabled && !isSelected(target.value)) {
     modelValue.value = target.value;
@@ -664,6 +730,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   cleanupDragListeners();
+  cancelDragFrame();
   cancelPendingUpdate();
   if (resumeTransitionTimer) clearTimeout(resumeTransitionTimer);
   ro?.disconnect();

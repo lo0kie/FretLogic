@@ -20,6 +20,10 @@ export const SCORE_EXPORT_CONFIG = {
   A4_WIDTH: 794,
   /** A4 标准高度（px @96dpi，297mm） */
   A4_HEIGHT: 1123,
+  /** A4 标准宽度（mm，打印纸张物理尺寸基准；px 档位是其 @96dpi 取整值，二者同源但不可互相推导） */
+  A4_WIDTH_MM: 210,
+  /** A4 标准高度（mm，打印纸张物理尺寸基准） */
+  A4_HEIGHT_MM: 297,
   /** 导出页面安全边距（px，统一为 A4 标准 15mm 边距 56px） */
   PAGE_MARGIN: 56,
   /** 离屏绘制像素比（超采样抗锯齿） */
@@ -117,11 +121,21 @@ export const SCORE_PAGE_MARGIN_PRESETS = [
   { label: '宽', value: 76 },
 ] as const;
 
-/** 预览/导出标准单页尺寸档位（px @96dpi；默认取 A4） */
+/**
+ * 预览/导出标准单页尺寸档位：px @96dpi 供渲染与预览（默认取 A4），
+ * mm 供打印纸张尺寸使用（标准纸型标称值，与 px 档位同源，不做 px↔mm 换算以避开取整误差）。
+ */
 export const SCORE_PAGE_SIZE_PRESETS = [
-  { id: 'a4', label: 'A4', width: 794, height: 1123 },
-  { id: 'a5', label: 'A5', width: 559, height: 794 },
-  { id: 'letter', label: 'Letter', width: 816, height: 1056 },
+  {
+    id: 'a4',
+    label: 'A4',
+    width: 794,
+    height: 1123,
+    widthMm: SCORE_EXPORT_CONFIG.A4_WIDTH_MM,
+    heightMm: SCORE_EXPORT_CONFIG.A4_HEIGHT_MM,
+  },
+  { id: 'a5', label: 'A5', width: 559, height: 794, widthMm: 148, heightMm: 210 },
+  { id: 'letter', label: 'Letter', width: 816, height: 1056, widthMm: 215.9, heightMm: 279.4 },
 ] as const;
 
 /** 按档位 id 解析页面宽高（A4 794×1123 / A5 559×794 / Letter 816×1056 px @96dpi）；未知 id 回退 A4 */
@@ -130,3 +144,11 @@ export const getScorePageSize = (id: string): { width: number; height: number } 
     width: SCORE_EXPORT_CONFIG.A4_WIDTH,
     height: SCORE_EXPORT_CONFIG.A4_HEIGHT,
   };
+
+/** 按档位 id 解析单页物理尺寸（mm，打印纸张尺寸基准）；未知 id 回退 A4 */
+export const getScorePageSizeMm = (id: string): { widthMm: number; heightMm: number } => {
+  const preset = SCORE_PAGE_SIZE_PRESETS.find(p => p.id === id);
+  return preset
+    ? { widthMm: preset.widthMm, heightMm: preset.heightMm }
+    : { widthMm: SCORE_EXPORT_CONFIG.A4_WIDTH_MM, heightMm: SCORE_EXPORT_CONFIG.A4_HEIGHT_MM };
+};

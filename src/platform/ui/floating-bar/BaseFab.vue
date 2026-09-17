@@ -35,8 +35,9 @@ import { computed } from 'vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { logger } from '@/platform/utils/logger';
 
+import { useFloatingPosition } from './floatingPosition';
 import { ALIGN_CLASS_MAP } from './floatingPositions';
-import { useFloatingPosition, useKeepAliveVisible } from './useFloatingPosition';
+import { useKeepAliveVisible } from './useKeepAliveVisible';
 
 import type { TooltipOptions } from '@/platform/directives/vTooltip';
 import type { ComponentSize } from '@/platform/types';

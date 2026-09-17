@@ -41,7 +41,7 @@ import { nextTick, onUnmounted, toValue, watch } from 'vue';
 
 import Sortable from 'sortablejs';
 
-import { useRafThrottle } from '@/platform/utils/useRafThrottle';
+import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 
 import type { ComponentPublicInstance, MaybeRefOrGetter } from 'vue';
 

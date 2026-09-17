@@ -8,6 +8,8 @@
  * 说明：分组键仅用于 A-Z 导航与同组聚合；个别字受 ICU 拼音表差异影响可能落在相邻字母，
  * 已知偏差字通过 PINYIN_OVERRIDES（见 pinyinOverrides.ts，全量比对自动生成）修正。
  */
+import { registerCache } from './cacheRegistry';
+import { estimateValueBytes } from './common';
 import { PINYIN_OVERRIDES } from './pinyinOverrides';
 
 const collator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'variant' });
@@ -46,7 +48,9 @@ const DIGIT_RE = /^[0-9]$/;
 
 // 拼音分组例外表见 pinyinOverrides.ts：U+4E00–U+9FFF 全量比对 pinyin-pro 首字母生成（803 条）。
 
-/** 记忆表容量上限：超出整体清空（标题总量与乐谱库同量级，正常不会触发） */
+/** 记忆表容量上限：超出整体清空。值为标题 + 几十字节的元信息（纯文本小数据），
+ *  上限与其余文本级缓存统一取 4096——按整个乐库的标题量级绰绰有余，正常不触发；
+ *  真正触发时说明标题量异常大，整体清空重来即可 */
 const MEMO_LIMIT = 4096;
 
 /** 标题派生元信息：分组键与文种类别都只由首字符决定，合并为一次计算、一张记忆表
@@ -57,6 +61,19 @@ interface TitleMeta {
 }
 
 const titleMetaMemo = new Map<string, TitleMeta>();
+
+// 开发面板展示：标题记忆表登记为无上限缓存（达到 MEMO_LIMIT 时整体清空重来）
+registerCache({
+  name: '拼音排序记忆表',
+  limit: MEMO_LIMIT,
+  size: () => titleMetaMemo.size,
+  bytes: () => {
+    let total = 0;
+    for (const [title, meta] of titleMetaMemo) total += estimateValueBytes(title) + estimateValueBytes(meta);
+    return total;
+  },
+  clear: () => titleMetaMemo.clear(),
+});
 
 /** 计算并缓存标题元信息：同一标题每轮排序 O(n log n) 次比较只会真正算一次 */
 const getTitleMeta = (title: string): TitleMeta => {

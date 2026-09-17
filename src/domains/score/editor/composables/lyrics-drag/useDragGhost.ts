@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 
 import { getChordName } from '@/domains/chord/theory/theory';
-import { useRafThrottle } from '@/platform/utils/useRafThrottle';
+import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 
 import type { Chord } from '@/domains/chord/types';
 import type { ComponentPublicInstance } from 'vue';

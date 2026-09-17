@@ -16,7 +16,7 @@
 <script setup lang="ts">
 /**
  * BaseScrollArea 滚动容器原语：把「可滚动区域」这件基础能力收成一处，业务层不再手拼
- * overflow-* / no-scrollbar + v-edge-fade + v-scrollbar + onScroll: closeAllPopovers 这套组合。
+ * overflow-* / no-scrollbar + v-edge-fade + v-scrollbar + onScroll: 按锚点关闭浮层 这套组合。
  *
  * 内聚的能力：
  * - 按 axis 注入 overflow 工具类（v-scrollbar 挂载时会注入同值内联样式，二者一致）；
@@ -24,7 +24,7 @@
  * - 边缘羽化（v-edge-fade）：单轴时显式定向，双轴时交回指令按溢出自动判定；
  * - 自绘滚动条（v-scrollbar）：单轴时显式定向；
  * - 可选滚轮接管（v-wheel-scroll）：横向列表用 smooth / overscroll 等档位；
- * - 可选「滚动即关闭全部浮层」（closePopovers）：内容区滚动时收起下拉与右键菜单。
+ * - 可选「滚动即关闭浮层」（closePopovers）：内容区滚动时收起**锚点在区内**的下拉与右键菜单；
  *
  * 注意：浮层（BasePopover 面板）内部的滚动容器必须保持 closePopovers 关闭，
  * 否则滚动面板会把自己的浮层一起关掉。
@@ -43,7 +43,8 @@
  */
 import { computed, onBeforeUnmount, onMounted, reactive, useTemplateRef } from 'vue';
 
-import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
+import { useRafThrottle } from '@/platform/composables/useRafThrottle';
+import { closePopoversWithin } from '@/platform/ui/popover/popoverRegistry';
 
 import type { EdgeFadeBinding } from '@/platform/directives/vEdgeFade';
 import type { ScrollbarBinding } from '@/platform/directives/vScrollbar';
@@ -64,7 +65,8 @@ const props = withDefaults(
     axis?: ScrollAreaAxis;
     /** 边缘羽化：true（默认，按 axis 定向）/ false 关闭 / 数值·CSS 长度·选项对象透传 v-edge-fade */
     fade?: ScrollAreaFade;
-    /** 自绘滚动条：true（默认，按 axis 定向）/ false 关闭 / 选项对象透传 v-scrollbar */
+    /** 自绘滚动条：true（默认，按 axis 定向）/ false 关闭 / 选项对象透传 v-scrollbar
+     *  （含滚动气泡提示，如 :scrollbar="{ bubble: true }" 或 { bubble: { format } }） */
     scrollbar?: ScrollAreaScrollbar;
     /** 滚轮接管：false（默认，原生滚动）/ true 默认档 / 选项对象透传 v-wheel-scroll */
     wheel?: ScrollAreaWheel;
@@ -150,10 +152,22 @@ const sync = () => {
   scrollState.scrollableY = Math.max(0, el.scrollHeight - el.clientHeight);
 };
 
-const handleScroll = () => {
+/**
+ * 滚动即收起浮层 —— 只收「锚点在本滚动容器内」的那些。
+ *
+ * 无差别 closeAllPopovers 会连带收掉锚点在容器外的浮层（侧边栏顶部的排序/筛选菜单就锚在
+ * 工具栏上，与滚动区平级），内容滚动并不会让它们错位，却被一起关掉。见 popoverRegistry 的说明。
+ *
+ * 按帧合帧：一次处理要读 6 个布局属性并写 8 个 reactive 字段，还要遍历浮层注册表逐个读 rect；
+ * 动量滚动下同一帧可派发多次 scroll，合并后每帧至多一次。代价是状态刷新与「滚动收起浮层」
+ * 最晚晚一帧生效——视觉上仍是滚一下就收。
+ */
+const { schedule: scheduleScrollSync } = useRafThrottle(() => {
   sync();
-  if (props.closePopovers) closeAllPopovers();
-};
+  if (props.closePopovers) closePopoversWithin(rootRef.value);
+});
+
+const handleScroll = () => scheduleScrollSync();
 
 // 滚动与容器尺寸变化抓不到「仅内容尺寸变化」（列表项增删/子元素缩放，scroll 距离变了但容器不变）：
 // 用「直接子元素 ResizeObserver + childList MutationObserver」补齐，可滚动距离变化始终能被宿主 watch 到

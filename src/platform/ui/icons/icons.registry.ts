@@ -50,12 +50,14 @@ import Pencil from '~icons/lucide/pencil';
 import Play from '~icons/lucide/play';
 import PlugZap from '~icons/lucide/plug-zap';
 import Plus from '~icons/lucide/plus';
+import Printer from '~icons/lucide/printer';
 import RefreshCw from '~icons/lucide/refresh-cw';
 import Scan from '~icons/lucide/scan';
 import Search from '~icons/lucide/search';
 import SearchX from '~icons/lucide/search-x';
 import Server from '~icons/lucide/server';
 import Settings from '~icons/lucide/settings';
+import Share2 from '~icons/lucide/share-2';
 import SlidersHorizontal from '~icons/lucide/sliders-horizontal';
 import Sparkles from '~icons/lucide/sparkles';
 import Square from '~icons/lucide/square';
@@ -124,12 +126,14 @@ export const ICON_REGISTRY = {
   'play': Play,
   'plug-zap': PlugZap,
   'plus': Plus,
+  'printer': Printer,
   'refresh-cw': RefreshCw,
   'scan': Scan,
   'search': Search,
   'search-x': SearchX,
   'server': Server,
   'settings': Settings,
+  'share-2': Share2,
   'sliders-horizontal': SlidersHorizontal,
   'sparkles': Sparkles,
   'square': Square,

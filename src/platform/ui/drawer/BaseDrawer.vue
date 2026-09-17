@@ -68,9 +68,8 @@
             :class="[
               {
                 // body 四向 padding 独立推导（与 BaseModal 同模型）：贴卡片边缘恒为 xl，
-                // 与相邻区块之间有内容时 lg、空内容垫片时 sm；缺 header/footer 的方向升级为贴边 xl
-                'pt-lg': hasHeader && !!$slots['default'],
-                'pt-sm': hasHeader && !$slots['default'],
+                // 顶部有 header 时 header 自带 pb-md、body 只补 pt-sm，叠加后间距适中；缺 header 侧贴边 xl
+                'pt-sm': hasHeader,
                 'pt-xl': !hasHeader,
                 'pb-lg': !!$slots['footer'] && !!$slots['default'],
                 'pb-sm': !!$slots['footer'] && !$slots['default'],
