@@ -26,6 +26,12 @@ export type PasteSongOutcome =
 /** 懒加载传递实现（见 textTransferActions.ts 文件头注释） */
 const loadActions = () => import('./textTransferActions');
 
+/**
+ * 预取传递实现模块（只拉取不执行）：
+ * 供宿主 UI 挂载 / 空闲时机调用，把 chunk 下载提前到用户触发复制/粘贴之前，消除反馈死区。
+ */
+export const preloadTextTransferActions = (): Promise<unknown> => loadActions();
+
 export function useTextTransfer() {
   return {
     copyChordText: (chord: Chord) => loadActions().then(m => m.copyChordText(chord)),

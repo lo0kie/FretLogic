@@ -49,7 +49,7 @@
     @click="handleClick($event)"
     @keydown="handleKeydown($event)"
     data-focusable-inline
-    class="inline-flex shrink-0 items-center justify-center rounded-full border border-transparent leading-none font-semibold tracking-tight whitespace-nowrap transition-all duration-fast outline-none select-none"
+    class="base-badge inline-flex shrink-0 items-center justify-center rounded-full border border-transparent leading-none font-semibold tracking-tight whitespace-nowrap outline-none select-none"
   >
     <span v-if="hasDot" aria-hidden="true" class="size-1.5 shrink-0 rounded-full bg-current" />
 
@@ -336,3 +336,32 @@ const handleKeydown = (e: KeyboardEvent) => {
   handleClick(e);
 };
 </script>
+
+<!--
+  状态切换过渡。分两档时长，因为角标上「状态」与「交互反馈」是两件事：
+  - 状态色（variant / appearance / disabled 的配色，含 hoverClose 的 danger 配色与边框）：用 $duration-base，
+    状态切换本身要看得见——0.1s 的色变在这么小的元素上基本等于瞬切；
+  - hover 抬升 / 按压缩放（translate、scale）与 hoverClose 换图（opacity）：用 $duration-fast 保持跟手。
+  一次声明完整属性表，任何状态切换都走同一条过渡，不再被调用方零散的 transition-* 工具类各自重写
+  transition-property 互相覆盖（工具类在 @layer utilities 内，优先级低于本条未分层规则）。
+
+  刻意不用 transition-all：它会把 width / height / font-size / padding 一并纳入过渡——宽度会与 v-auto-width
+  的 WAAPI 宽度补间互相抢驱动源，size 档位切换时内边距与字号也会被拉伸而不是干脆换档。缓动与平台约定一致
+  （$bezier-standard，同 ActionButton）。
+-->
+<style scoped lang="scss">
+@use '@/assets/tokens' as *;
+
+.base-badge {
+  transition:
+    color $duration-base $bezier-standard,
+    background-color $duration-base $bezier-standard,
+    border-color $duration-base $bezier-standard,
+    box-shadow $duration-base $bezier-standard,
+    opacity $duration-fast $bezier-standard,
+    transform $duration-fast $bezier-standard,
+    translate $duration-fast $bezier-standard,
+    scale $duration-fast $bezier-standard,
+    rotate $duration-fast $bezier-standard;
+}
+</style>

@@ -198,7 +198,9 @@ function parseChordNameTokens(chordName: string): ChordNameToken[] {
   return tokens;
 }
 
-/** 通用分片文字绘制（居中，升降号上标），供 drawFormattedChordName 与 drawFormattedMeta 共用 */
+/** 分片文字绘制（居中，升降号上标）。当前唯一调用方是 drawFormattedChordName。
+ *  注意：表头元信息不经过这里 —— 它走 renderHeader 内独立的 measureValueTokens + 自带绘制循环，
+ *  修改本函数不会影响元信息排版。 */
 function drawTokenizedText(
   ctx: OffscreenCanvasRenderingContext2D,
   centerX: number,

@@ -16,6 +16,13 @@ import type { SyncProviderKind } from '@/platform/types';
 const loadActions = () => import('./syncActions');
 
 /**
+ * 预取同步动作实现模块（只拉取不执行）：
+ * 供同步相关 UI 挂载 / 空闲时机调用，把 chunk 下载提前到用户点击之前——
+ * 否则首次点击要等「chunk 网络请求 → 模块求值」完成后 busy/loading 才置位，按钮出现反馈死区。
+ */
+export const preloadSyncActions = (): Promise<unknown> => loadActions();
+
+/**
  * 推送前的凭据前置检查：按目标类型给出缺失项文案（齐全返回 null）。
  * 与 SyncModalContainer 的按钮禁用判据一致——推送（写云端）必须带凭据，
  * 拉取/测试连接不在此列（公开仓库与服务器 GET 无需 Token）。

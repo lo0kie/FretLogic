@@ -333,20 +333,23 @@ export function useFretboardInteraction(
     endDragPaint();
   };
 
-  /** 获得键盘焦点：显示焦点框，首次聚焦时给一个默认焦点位置 */
+  /** 获得键盘焦点：显示焦点框并一律重置到默认落点。
+   *  不能沿用旧落点：失焦若未走 handleBlur（如焦点从未离开、仅靠 Tab 回归），
+   *  焦点环会在用户上次点过的位置凭空复现。点击路径不受影响——pointerdown 里
+   *  focus() 同步触发本函数后，紧接着就会把 focusPoint 写为真实点击落点 */
   const handleFocus = () => {
     isFocused.value = true;
-    if (!focusPoint.value) {
-      focusPoint.value = {
-        stringIndex: 0,
-        fretIndex: 0,
-      };
-    }
+    focusPoint.value = {
+      stringIndex: 0,
+      fretIndex: 0,
+    };
   };
 
-  /** 失焦：隐藏焦点框 */
+  /** 失焦：隐藏焦点框，并连同落点一起清空——否则下次聚焦会在旧位置凭空复现焦点环
+   *  （handleFocus 只在 focusPoint 为空时给默认位置），清空后每次聚焦都从默认落点重新开始 */
   const handleBlur = () => {
     isFocused.value = false;
+    focusPoint.value = null;
   };
 
   // 滚轮交互（合帧 / 升降号切换 / 品位偏移，机制见 useFretboardWheel）

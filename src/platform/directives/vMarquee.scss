@@ -1,0 +1,18 @@
+// directives/vMarquee.scss
+// 跑马灯视口与内容层的骨架样式，由 vMarquee.ts 在挂载时配合内联注入（white-space 不换行也由指令负责）
+
+.marquee-viewport {
+  display: flex;
+  position: relative;
+  align-items: center;
+  overflow: hidden;
+}
+
+.marquee-inner {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  will-change: transform;
+  width: max-content;
+  max-width: none;
+}

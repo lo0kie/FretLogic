@@ -25,7 +25,7 @@
         :title="triggerTitle"
         @keydown="handleTriggerKeydown($event)"
         aria-haspopup="listbox"
-        class="group relative flex items-center justify-between gap-2 rounded-full border border-border-light bg-surface-body text-fg-title transition-all duration-150 outline-none select-none hover:border-border-base focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/70"
+        class="group relative flex items-center justify-between gap-2 rounded-full border border-border-light bg-surface-body text-fg-title transition-all duration-150 outline-none select-none hover:border-border-base focus-visible:ring-2 focus-visible:ring-primary/70"
         ref="referenceRef"
         role="combobox"
       >
@@ -84,12 +84,10 @@
               </span>
             </template>
             <div v-else v-marquee.fade class="min-w-0 flex-1">
-              <span class="block whitespace-nowrap">
-                <slot :rolling-label="BaseRollingText" :selected="modelValue" name="label">
-                  <BaseRollingText v-if="rollingText" :text="displayText" always-roll class="tabular-nums" />
-                  <template v-else>{{ displayText }}</template>
-                </slot>
-              </span>
+              <slot :rolling-label="BaseRollingText" :selected="modelValue" name="label">
+                <BaseRollingText v-if="rollingText" :text="displayText" always-roll class="tabular-nums" />
+                <template v-else>{{ displayText }}</template>
+              </slot>
             </div>
           </span>
           <slot name="suffix" />
@@ -213,11 +211,9 @@
                     icon-stroke="bold"
                   />
                   <div v-marquee.fade class="min-w-0">
-                    <span class="block whitespace-nowrap">
-                      <slot :index :option="entry.option" name="option">
-                        {{ formattedOption(entry.option) }}
-                      </slot>
-                    </span>
+                    <slot :index :option="entry.option" name="option">
+                      {{ formattedOption(entry.option) }}
+                    </slot>
                   </div>
                 </span>
                 <BaseIcon

@@ -28,6 +28,12 @@ const isPreviewExportModeOf = () => {
 /** 懒加载导出动作实现（见 scoreExportHandlers.ts 文件头注释） */
 const loadHandlers = () => import('./scoreExportHandlers');
 
+/**
+ * 预取导出动作实现模块（只拉取不执行）：
+ * 供宿主 UI 挂载 / 空闲时机调用，把 chunk 下载提前到用户点击之前，消除首次点击的反馈死区。
+ */
+export const preloadExportHandlers = (): Promise<unknown> => loadHandlers();
+
 export const useScoreExportActions = () => {
   const isPreviewExportMode = isPreviewExportModeOf();
 

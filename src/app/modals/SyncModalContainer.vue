@@ -170,7 +170,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, toRef } from 'vue';
+import { computed, onMounted, toRef } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseForm from '@/platform/ui/form/BaseForm.vue';
@@ -179,7 +179,7 @@ import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
-import { useSyncService } from '@/app/services/sync/useSyncService';
+import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 
@@ -190,6 +190,8 @@ import type { BaseSelectorOption } from '@/platform/ui/selector/BaseSelector.vue
 const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true });
 const { triggerGlobalSync, pullFromRemote, testConnection, isSyncing, isPulling, isTestingConnection } =
   useSyncService();
+// 弹窗打开即预取同步动作 chunk：用户点「测试连接/推送/拉取」时模块已在缓存，busy 立即翻转
+onMounted(() => void preloadSyncActions());
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 const backupModals = useBackupModals();

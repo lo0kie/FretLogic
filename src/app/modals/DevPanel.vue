@@ -1,8 +1,17 @@
 <template>
   <BaseDrawer v-model:visible="visible" :destroy-on-close="false" size="24rem" title="开发面板">
-    <div class="flex flex-col gap-1.5 text-xs/relaxed text-fg-body">
+    <div class="flex flex-col gap-1.5 text-xs/relaxed text-fg-body" ref="devListRef">
       <!-- 构建 -->
-      <BaseCollapse v-model:expanded="buildOpen" initial-auto sticky description="当前产物" icon="wrench" title="构建">
+      <BaseCollapse
+        v-model:expanded="buildOpen"
+        :style="{ top: stickyTopCss }"
+        initial-auto
+        class="sticky z-panel bg-surface-panel"
+        data-dev-sec="build"
+        description="当前产物"
+        icon="wrench"
+        title="构建"
+      >
         <!-- 状态用徽标（附语义色），提交号/构建时间是标识符，保留等宽文本便于比对 -->
         <div class="grid grid-cols-3 gap-xs">
           <div class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
@@ -46,7 +55,14 @@
       </BaseCollapse>
 
       <!-- 数据概览 -->
-      <BaseCollapse sticky description="本机内容" icon="list" title="数据">
+      <BaseCollapse
+        :style="{ top: stickyTopCss }"
+        class="sticky z-panel bg-surface-panel"
+        data-dev-sec="data"
+        description="本机内容"
+        icon="list"
+        title="数据"
+      >
         <div class="grid grid-cols-3 gap-xs">
           <div v-for="item in dataRows" :key="item.label" class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
             <div class="text-2xs text-fg-muted">{{ item.label }}</div>
@@ -57,7 +73,14 @@
       </BaseCollapse>
 
       <!-- 内存缓存 -->
-      <BaseCollapse sticky description="刷新即失" icon="chart-column" title="内存缓存">
+      <BaseCollapse
+        :style="{ top: stickyTopCss }"
+        class="sticky z-panel bg-surface-panel"
+        data-dev-sec="cache"
+        description="刷新即失"
+        icon="chart-column"
+        title="内存缓存"
+      >
         <div class="flex flex-col gap-1">
           <div class="flex items-center justify-between text-2xs text-fg-muted">
             <span>{{ memoryCaches.length }} 项已登记缓存</span>
@@ -135,7 +158,14 @@
       </BaseCollapse>
 
       <!-- 存储占用 -->
-      <BaseCollapse sticky description="持久化" icon="folder-open" title="存储占用">
+      <BaseCollapse
+        :style="{ top: stickyTopCss }"
+        class="sticky z-panel bg-surface-panel"
+        data-dev-sec="storage"
+        description="持久化"
+        icon="folder-open"
+        title="存储占用"
+      >
         <!-- 指标卡：站点总用量 / 配额（容量读数走徽标） -->
         <div class="grid grid-cols-2 gap-xs">
           <div class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
@@ -207,7 +237,14 @@
       </BaseCollapse>
 
       <!-- 预览缓存 -->
-      <BaseCollapse sticky description="当前乐谱" icon="image" title="预览缓存">
+      <BaseCollapse
+        :style="{ top: stickyTopCss }"
+        class="sticky z-panel bg-surface-panel"
+        data-dev-sec="preview"
+        description="当前乐谱"
+        icon="image"
+        title="预览缓存"
+      >
         <div class="grid grid-cols-2 gap-xs">
           <div class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
             <div class="text-2xs text-fg-muted">页数</div>
@@ -265,7 +302,14 @@
       </BaseCollapse>
 
       <!-- 路由跳转 -->
-      <BaseCollapse sticky description="快捷跳转" icon="move" title="路由">
+      <BaseCollapse
+        :style="{ top: stickyTopCss }"
+        class="sticky z-panel bg-surface-panel"
+        data-dev-sec="route"
+        description="快捷跳转"
+        icon="move"
+        title="路由"
+      >
         <div class="flex flex-col gap-1">
           <div class="flex items-center gap-sm py-sm text-2xs text-fg-muted">
             <span>当前</span>
@@ -284,7 +328,14 @@
       </BaseCollapse>
 
       <!-- 测试数据：一键生成大规模数据集并整体覆盖（仅 dev 构建可见） -->
-      <BaseCollapse sticky description="一键覆盖" icon="server" title="测试数据">
+      <BaseCollapse
+        :style="{ top: stickyTopCss }"
+        class="sticky z-panel bg-surface-panel"
+        data-dev-sec="seed"
+        description="一键覆盖"
+        icon="server"
+        title="测试数据"
+      >
         <div class="flex flex-col gap-xs">
           <BaseSegmentedControl
             :model-value="seedScaleKey"
@@ -303,7 +354,14 @@
       </BaseCollapse>
 
       <!-- 危险区：红色语义卡片包裹，与上方常规区块在视觉上强区分 -->
-      <BaseCollapse sticky description="不可恢复" icon="alert-triangle" title="危险区">
+      <BaseCollapse
+        :style="{ top: stickyTopCss }"
+        class="sticky z-panel bg-surface-panel"
+        data-dev-sec="danger"
+        description="不可恢复"
+        icon="alert-triangle"
+        title="危险区"
+      >
         <div class="flex flex-col gap-xs rounded-md border border-danger/30 bg-danger/5 p-sm">
           <ActionButton @click="handleDumpStorageKeys()" icon="eraser" size="sm" variant="subtle">
             导出 IDB 键清单
@@ -361,7 +419,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
@@ -375,6 +433,7 @@ import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.v
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { clearPreviewCache, currentRenderData } from '@/domains/score/preview/scorePreviewCache';
+import { useStickyHeads } from '@/platform/composables/useStickyHeads';
 import { idb, SCHEMA } from '@/platform/services/storage/idb';
 import { useUiStore } from '@/platform/store/uiStore';
 import { createCacheSampler } from '@/platform/utils/cacheRegistry';
@@ -393,6 +452,30 @@ const router = useRouter();
 const uiStore = useUiStore();
 const chordStore = useChordStore();
 const songStore = useSongStore();
+
+const devListRef = useTemplateRef<HTMLElement>('devListRef');
+
+/**
+ * 折叠头的吸附是「宿主环境相关」的能力，与侧栏和弦库同源（见 useStickyHeads 的说明）：
+ * 一次发现滚动容器、批量判定哪些头被顶在吸附线上，并按吸附头的**实测高度**让开容器顶部羽化带
+ * ——面板里的头是默认行高，与侧栏的固定行高不同，写死内缩量必然漂移。
+ *
+ * 定位几何（sticky / top / z / 底色）仍由本文件的类与 style 下发；收起时「把头按回吸附线」与
+ * 滚动钳位补偿由 BaseCollapse 自带的平台 composable 负责，这里不必接线。
+ * id 取各段头上的 data-dev-sec（DevPanel 是排查工具，顺带给每段一个稳定的 DOM 钩子）。
+ */
+const { insetPx: stickyInsetPx } = useStickyHeads({
+  listRef: devListRef,
+  idAttribute: 'data-dev-sec',
+  // 吸附线 = 容器可视上沿：头顶不留间隙，滚过的内容直接被头部自身遮住
+  offset: '0px',
+  // 有头吸附时：容器顶部羽化带内缩一个头高，让开吸附中的头
+  fadeOffset: true,
+});
+
+/** 吸附线：sticky 以滚动容器的**内容盒**为原点，抽屉 body 自带 padding-top，需从 top 里减掉才能
+ *  贴住可视上沿——否则那条 padding 带属于可滚动区、且在裁剪边界之内，会一直漏着滚过的内容 */
+const stickyTopCss = computed(() => `-${stickyInsetPx.value}px`);
 
 const ROUTE_OPTIONS = [
   { label: '工作台', path: ROUTE_PATHS.WORKBENCH },

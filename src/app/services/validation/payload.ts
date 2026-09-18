@@ -316,7 +316,7 @@ const syncSettingsSchema = z
     webdavUseDefaultProxy: optionalBooleanField,
     /** 旧字段名：仅作清洗输入，折叠后不进入输出 */
     webdavUseProxy: optionalBooleanField,
-    /** 加密凭据块（v1 格式）原样保留：密文不在清洗范围内，结构损坏时整体丢弃该块 */
+    /** 加密凭据块（v1 / v2 格式）原样保留：密文不在清洗范围内，结构损坏时整体丢弃该块 */
     secrets: z
       .custom<NonNullable<SyncSettingsBackup['secrets']>>(value => isValidEncryptedSecrets(value))
       .optional()

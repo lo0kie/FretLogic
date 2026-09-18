@@ -3,10 +3,8 @@
     v-edge-fade="fadeBinding"
     v-scrollbar="scrollbarBinding"
     v-wheel-scroll="wheelBinding"
-    :class="axisClass"
     :is="tag"
     @scroll="handleScroll()"
-    class="no-scrollbar"
     ref="rootRef"
   >
     <slot />
@@ -19,8 +17,7 @@
  * overflow-* / no-scrollbar + v-edge-fade + v-scrollbar + onScroll: 按锚点关闭浮层 这套组合。
  *
  * 内聚的能力：
- * - 按 axis 注入 overflow 工具类（v-scrollbar 挂载时会注入同值内联样式，二者一致）；
- * - 隐藏原生滚动条（no-scrollbar）：由 v-scrollbar 自绘，或由宿主选择「无滚动条」；
+ * - overflow 与原生滚动条隐藏：由 v-scrollbar 指令注入（enabled:false 被动模式同样注入），本组件不手写；
  * - 边缘羽化（v-edge-fade）：单轴时显式定向，双轴时交回指令按溢出自动判定；
  * - 自绘滚动条（v-scrollbar）：单轴时显式定向；
  * - 可选滚轮接管（v-wheel-scroll）：横向列表用 smooth / overscroll 等档位；
@@ -88,17 +85,8 @@ const rootRef = useTemplateRef<HTMLElement>('rootRef');
 /** 单轴时把方向显式下发给指令；双轴留空 → 指令按溢出自动判定（与手写无修饰符写法等价） */
 const axisDirection = computed(() => (props.axis === 'both' ? undefined : props.axis));
 
-/** 滚动容器自身接管哪个轴，就注入哪个轴的 overflow 工具类（v-scrollbar 挂载时注入同值内联样式） */
-const axisClass = computed(() => {
-  switch (props.axis) {
-    case 'x':
-      return 'overflow-x-auto';
-    case 'both':
-      return 'overflow-auto';
-    default:
-      return 'overflow-y-auto';
-  }
-});
+// overflow 工具类与 no-scrollbar 均不在此手写：v-scrollbar 指令（含 enabled:false 被动模式）
+// 统一注入对应轴的 overflow 并隐藏原生滚动条，滚动基建由指令单点托管
 
 const fadeBinding = computed<EdgeFadeBinding>(() => {
   const value = props.fade;

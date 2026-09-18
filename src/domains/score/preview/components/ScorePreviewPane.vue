@@ -64,6 +64,7 @@
               :alt="`乐谱预览第 ${index + 1} 页`"
               :src="url"
               class="block h-full w-auto select-none"
+              decoding="async"
               draggable="false"
             />
 

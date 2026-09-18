@@ -305,7 +305,11 @@ const itemClasses = (opt: SegmentOption<T>, index: number): (string | Record<str
     return [
       sizeConfig.value.item,
       'rounded-full',
-      active ? 'text-primary! font-extrabold' : '',
+      // 未选中段 hover 提亮底色做「悬浮胶囊」预览；选中段 hover 叠更深一档的主色底
+      // （tint-primary-80 半透明压在滑块 tint-primary-88 上形成可见加深，文字强调不变）
+      active
+        ? 'text-primary! font-extrabold enabled:hover:bg-tint-primary-80/70'
+        : 'enabled:hover:bg-surface-panel-hover/60',
       { 'flex-1': isExpand },
     ];
   }

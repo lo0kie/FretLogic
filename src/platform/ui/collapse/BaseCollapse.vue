@@ -1,22 +1,34 @@
 <template>
-  <section class="base-collapse w-full" ref="rootRef">
+  <section data-collapse class="base-collapse w-full">
     <!-- inheritAttrs:false + $attrs 重定向：调用方的 class / data-* / aria-* 必须落在头部按钮本体——
          侧栏分组行等自定义折叠头要把拖拽把手类、键盘导航标记、状态 tint 挂在可聚焦元素上，
          这些无法经插槽表达；落到根 section 上则不参与焦点定位 -->
+    <!-- 稳定钩子：data-collapse / data-collapse-head 供业务与平台工具（如 useStickyHeads）
+         定位折叠段与头部，避免业务依赖组件内部类名（类名重构会静默脱钩）。
+         静态属性写在 v-bind 之前，业务经 $attrs 传同名属性时可覆盖 -->
     <button
       v-wave
       v-bind="$attrs"
       :aria-expanded="expanded"
       :class="[
-        'group/head flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-out outline-none select-none hover:bg-surface-panel-hover hover:delay-100 focus-visible:ring-2 focus-visible:ring-primary/60',
-        // 吸附态需自铺底色遮挡下方滚过的内容，故仅适用于底色同为 surface-panel 的面板
-        sticky ? 'sticky z-panel bg-surface-panel' : '',
+        // 底色、吸附（sticky / top / z）等布局属性一概由业务经 class 下发——折叠组件不假设宿主布局。
+        // 焦点环走覆盖子元素而非 ring/box-shadow：ring 画在背景相位，会被头部内任何带底色的
+        // 子元素（业务自绘的吸附露出带等）盖住；覆盖子元素在定位层绘制，永远在最上
+        'group/head relative flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-out outline-none select-none hover:bg-surface-panel-hover hover:delay-100',
       ]"
-      :style="stickyStyle"
       :title="headTooltip"
       @click="expanded = !expanded"
+      data-collapse-head
+      ref="collapseHeadRef"
       type="button"
     >
+      <!-- 焦点环：绝对定位子元素，绘制于头部所有内容之上（含业务自行渲染的露出带）。
+           ring-inset：环画在头部盒内而非向外扩张——外扩的环伸出头部边界后会被滚动容器的
+           overflow 裁掉上边（吸附时头部正贴着容器可视上沿，外环的上半圈落在容器外） -->
+      <span
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-0 rounded-md opacity-0 ring-2 ring-primary/60 ring-inset group-focus-visible/head:opacity-100"
+      />
       <!-- 传入 #icon 插槽时优先使用插槽内容（Vue 插槽默认内容的天然规则）；
            未提供插槽才回退到下方解析 icon prop 渲染前导图标 -->
       <slot name="icon">
@@ -58,18 +70,21 @@
       />
     </button>
 
-    <!-- 折叠体：由 v-auto-height 指令测量内容真实高度并写入 style.height（px），配合 transition-[height]
-         平滑过渡。相比 CSS grid-template-rows 0fr↔1fr 技巧，它不但覆盖「收起↔展开」的轨道动画，
+    <!-- 折叠体：由 v-auto-height 指令测量内容真实高度并写入 style.height（px），height 过渡也由指令注入。
+         相比 CSS grid-template-rows 0fr↔1fr 技巧，它不但覆盖「收起↔展开」的轨道动画，
          还能在面板已展开时对内部内容高度变化（如空态↔列表）产生平滑动画。
          unpadded 时内容区不带默认内边距，间距由调用方内容自行控制（如侧栏分组网格自带 px-sm pt-md） -->
     <div
       v-auto-height="{ expanded, initialAuto: props.initialAuto }"
       :aria-hidden="!expanded"
       :inert="!expanded ? true : undefined"
-      class="overflow-hidden transition-[height] duration-base ease-standard"
+      class="overflow-hidden"
       ref="collapseBodyRef"
     >
-      <div :class="unpadded ? '' : 'flex flex-col gap-3 px-3 py-1.5'">
+      <!-- 内容元素单独取 ref：收起补偿要把它在盒内上移（盒下移 + 内容上移相抵），
+           视窗里的内容才不会被换成段首那几行。位移目标必须是内容而非折叠体盒本身：
+           盒是随 height 收缩的裁剪盒，动它会连带把裁剪边界上移 -->
+      <div :class="unpadded ? '' : 'flex flex-col gap-3 px-3 py-1.5'" ref="collapseInnerRef">
         <slot />
       </div>
     </div>
@@ -77,10 +92,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
-import { COLLAPSE_SCROLL_COMPENSATION_MAX_MS } from '@/platform/utils/constants';
+import { useCollapseScrollCompensation } from '@/platform/composables/useCollapseScrollCompensation';
 
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
@@ -116,13 +131,9 @@ const props = withDefaults(
     /** 挂载即展开时初始高度直接采用 auto 而非 0→N 展开动画：
      *  用于容器整体展开（如设置弹层首次打开）时默认展开的分组无需播放首帧高度过渡 */
     initialAuto?: boolean;
-    /** 折叠头吸附在最近滚动容器顶部：长内容滚动时标题不随内容滚走。
-     *  吸附期间头部自铺 bg-surface-panel 底色遮挡下方内容，故仅适用于面板底色同为
-     *  surface-panel 的场景 */
-    sticky?: boolean;
-    /** 吸附偏移（CSS 长度，默认 '0px'）：上方另有常驻粘性头部时用它让位，可为负值。
-     *  基准是容器**可视上沿**（已补偿容器 padding-top，见下方吸附补偿说明） */
-    stickyOffset?: string;
+    /** 业务显式注入的滚动容器（收起时的滚动钳位补偿用）：业务本就知道自己的滚动容器，
+     *  注入后免去找容器的开销；不传时由平台补偿逻辑沿祖先链查找 */
+    scrollContainer?: HTMLElement | null;
   }>(),
   {
     title: undefined,
@@ -132,8 +143,7 @@ const props = withDefaults(
     iconStroke: 'regular',
     unpadded: false,
     initialAuto: false,
-    sticky: false,
-    stickyOffset: '0px',
+    scrollContainer: null,
   }
 );
 
@@ -154,106 +164,22 @@ const headTooltip = computed(() =>
   props.title ? (props.description ? `${props.title} · ${props.description}` : props.title) : undefined
 );
 
-// ---------- 收起时的滚动钳位补偿 ----------
-// 折叠体收缩会同步缩小祖先滚动容器的可滚动量（scrollHeight - clientHeight）。浏览器的滚动
-// 钳位在过渡期间的每一帧布局后都会同步执行：只要 scrollTop 越界就瞬时拉回，没有动画——
-// 这个动作被压缩进 height 过渡曲线的高速中段，感知为闪现。
-// 原方案「预判收起后上限 + scrollTo(smooth)」防住了触发时刻的钳位，却防不住过渡过程中的
-// 逐帧钳位：原生平滑滚动与 CSS height 过渡两条时间线互不感知，smooth 启动阶段缓动位移极少，
-// 强制钳位总是先一步介入。
-// 现方案：rAF 逐帧读取实时 scrollHeight（随 height 过渡逐帧变化），每一帧抢先于浏览器钳位
-// 把 scrollTop 收紧到当前上限——补偿与高度过渡同源同步，逐帧微调视觉上平滑跟随收起节奏，
-// 钳位条件（scrollTop + clientHeight > scrollHeight）永远没有成立的机会。
-const rootRef = useTemplateRef<HTMLElement>('rootRef');
+// ---------- 收起时的滚动位置补偿 ----------
+// 折叠体收缩会同时让「吸附头的钉住位置」与「滚动容器的可滚动量上限」失真：前者表现为「刚点的
+// 标题飞出视窗上方」，后者表现为浏览器逐帧强制钳位导致的闪现。两者都属于宿主环境适配（要找容器、
+// 要跟过渡同步、要读吸附几何），已抽到平台 composable；组件只提供折叠头 / 折叠体 / 折叠体内容
+// 三个元素与展开态，容器优先用业务注入的（业务本来就知道自己的滚动容器）。
+// 头的归位只读本段几何（段与头的相对位置），头未吸附时差值恒为 0 —— 未吸附的折叠走同一条路径
+// 自然无副作用，故不需要业务声明「我这个折叠头是吸附的」。
 const collapseBodyRef = useTemplateRef<HTMLElement>('collapseBodyRef');
+const collapseHeadRef = useTemplateRef<HTMLElement>('collapseHeadRef');
+const collapseInnerRef = useTemplateRef<HTMLElement>('collapseInnerRef');
 
-/** 沿祖先链向上找最近的纵向滚动容器（v-scrollbar 注入的内联 overflowY 同样命中） */
-const findScrollParent = (): HTMLElement | null => {
-  let el = rootRef.value?.parentElement ?? null;
-  while (el && el !== document.body && el !== document.documentElement) {
-    const overflowY = window.getComputedStyle(el).overflowY;
-    if (overflowY === 'auto' || overflowY === 'scroll') return el;
-    el = el.parentElement;
-  }
-  return null;
-};
-
-// ---------- 吸附：补偿滚动容器的顶部 padding ----------
-// sticky 的坐标以滚动容器的**内容盒**为原点（容器的内边距同样约束粘性盒，它不会上移进 padding 带）。
-// 于是裸的 top: 0 实际吸附在「内容盒顶」：容器若有 padding-top，那条 padding 带会一直露着正在滚出的
-// 内容——标题遮住了它下方的内容，头顶那一条却漏着。测量容器 padding-top 并从吸附线里减掉，头部才
-// 真正贴住可视上沿（容器无 padding-top 时结果与裸 top 一致）。
-const stickyInsetTop = ref(0);
-
-const measureStickyInset = () => {
-  if (!props.sticky) return;
-  const container = findScrollParent();
-  stickyInsetTop.value = container ? Number.parseFloat(window.getComputedStyle(container).paddingTop) || 0 : 0;
-};
-
-onMounted(measureStickyInset);
-watch(() => props.sticky, measureStickyInset);
-
-/** 仅在开启 sticky 时下发 top 偏移，未开启则完全不写 style（避免与 $attrs 里的 style 相扰） */
-const stickyStyle = computed(() =>
-  props.sticky ? { top: `calc(${props.stickyOffset} - ${stickyInsetTop.value}px)` } : undefined
-);
-
-// 逐帧循环句柄提升到组件作用域：收起途中被重新展开、或组件卸载时都能正确取消上一轮
-let compensationRafId: number | null = null;
-let compensationCleanup: (() => void) | null = null;
-
-const stopScrollCompensation = () => {
-  if (compensationRafId !== null) cancelAnimationFrame(compensationRafId);
-  compensationRafId = null;
-  compensationCleanup?.();
-  compensationCleanup = null;
-};
-
-onBeforeUnmount(stopScrollCompensation);
-
-watch(expanded, (open, prevOpen) => {
-  // 展开方向无需补偿；收起途中被重新展开时停掉仍在运行的上一轮循环
-  if (!prevOpen || open) {
-    stopScrollCompensation();
-    return;
-  }
-  const container = findScrollParent();
-  const collapseBody = collapseBodyRef.value;
-  if (!container || !collapseBody) return;
-  const { scrollTop, scrollHeight, clientHeight } = container;
-  if (scrollTop <= 0) return;
-  // 预判量仅用作「是否需要补偿」的门槛（watch 先于渲染冲刷，量到的是收起前状态）：
-  // 收起后的可滚动上限若仍不小于当前 scrollTop，全程不会触发钳位，无需启动逐帧循环
-  const maxScrollAfter = Math.max(0, scrollHeight - collapseBody.offsetHeight - clientHeight);
-  if (scrollTop <= maxScrollAfter) return;
-
-  stopScrollCompensation(); // 兜底：清掉可能残留的上一轮循环
-
-  // height 实际过渡的元素就是 collapseBody 本体（transition-[height] 挂在其上），在其上监听收尾；
-  // 同元素若有其他属性过渡（opacity 等）会多次触发 transitionend，按 propertyName 过滤
-  const handleTransitionEnd = (e: TransitionEvent) => {
-    if (e.target !== collapseBody || e.propertyName !== 'height') return;
-    // 末帧布局与最后一次 rAF 之间可能还差 ≤1px，收尾补一次钳位再停
-    const liveMax = Math.max(0, container.scrollHeight - container.clientHeight);
-    if (container.scrollTop > liveMax) container.scrollTop = liveMax;
-    stopScrollCompensation();
-  };
-  collapseBody.addEventListener('transitionend', handleTransitionEnd);
-  compensationCleanup = () => collapseBody.removeEventListener('transitionend', handleTransitionEnd);
-
-  const startedAt = performance.now();
-  const tick = () => {
-    compensationRafId = null;
-    const liveMax = Math.max(0, container.scrollHeight - container.clientHeight);
-    if (container.scrollTop > liveMax) container.scrollTop = liveMax;
-    // 兜底上限：过渡被禁用（如 prefers-reduced-motion）时 transitionend 永不触发，循环不能无限空转
-    if (performance.now() - startedAt >= COLLAPSE_SCROLL_COMPENSATION_MAX_MS) {
-      stopScrollCompensation();
-      return;
-    }
-    compensationRafId = requestAnimationFrame(tick);
-  };
-  compensationRafId = requestAnimationFrame(tick);
+useCollapseScrollCompensation({
+  bodyRef: collapseBodyRef,
+  contentRef: collapseInnerRef,
+  headRef: collapseHeadRef,
+  expanded,
+  containerRef: computed(() => props.scrollContainer),
 });
 </script>

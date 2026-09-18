@@ -7,8 +7,8 @@ import { useSongStore } from '@/domains/score/library/store/songStore';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { triggerBlobDownload, wait } from '@/platform/utils/canvas';
-import { formatLocalTimestampForFile, serializeForStorage } from '@/platform/utils/common';
+import { triggerBlobDownload } from '@/platform/utils/canvas';
+import { formatLocalTimestampForFile, serializeForStorage, wait } from '@/platform/utils/common';
 
 import { decryptSyncSettingsSecrets, encryptSyncSettingsSecrets } from './backupCrypto';
 import { FULL_BACKUP_SELECTION } from './backupSelection';

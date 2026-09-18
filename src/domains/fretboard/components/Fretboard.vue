@@ -4,6 +4,7 @@
     class="pointer-events-auto relative transition-[width,height] duration-slow ease-sidebar"
   >
     <div
+      :class="hoverPoint ? 'cursor-pointer' : 'cursor-default'"
       :style="{
         width: `${boardWidth}px`,
         height: `${rawHeight}px`,
@@ -13,7 +14,7 @@
       }"
       @contextmenu="handleRightClickRoot($event)"
       data-focusable-outline
-      class="relative flex cursor-default touch-none flex-col items-center transition-[transform,height,background-color,border-color] duration-slow ease-sidebar outline-none select-none"
+      class="relative flex touch-none flex-col items-center transition-[transform,height,background-color,border-color] duration-slow ease-sidebar outline-none select-none"
       ref="fretBoardRef"
       tabindex="0"
     >

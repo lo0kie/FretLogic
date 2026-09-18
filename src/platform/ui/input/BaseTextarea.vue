@@ -137,10 +137,11 @@ const variantClasses = computed(() =>
     : 'bg-surface-body border-border-light hover:enabled:border-border-base'
 );
 
+// 聚焦态只由 ring 指示（与 BaseInput 一致）：1px 边框变色叠加紧贴其外的 2px ring 会呈双边框
 const stateBorderClasses = computed(() =>
   props.invalid
-    ? 'border-danger hover:enabled:border-danger focus:enabled:border-danger focus-visible:ring-danger/70'
-    : 'border-border-light hover:enabled:border-border-base focus:enabled:border-primary focus-visible:ring-primary/70'
+    ? 'border-danger hover:enabled:border-danger focus-visible:ring-danger/70'
+    : 'border-border-light hover:enabled:border-border-base focus-visible:ring-primary/70'
 );
 
 const isAtLimit = computed(
