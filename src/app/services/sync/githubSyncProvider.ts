@@ -1,7 +1,12 @@
 import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
 import { SyncError } from './provider.ts';
-import { buildSyncCommitMessage, createSyncProviderBase, decodeBase64Envelope } from './syncBase.ts';
+import {
+  buildSyncCommitMessage,
+  createSyncProviderBase,
+  decodeBase64Envelope,
+  extractApiErrorDetail,
+} from './syncBase.ts';
 
 import type { GithubSyncConfig, SyncBranchesProvider } from './provider.ts';
 
@@ -18,6 +23,12 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranches
     defaultUrl: `${apiUrl}?ref=${config.branch}`,
     readRaw: decodeBase64Envelope,
   });
+
+  /** GitHub 文案格式：错误详情前置「：」（提取逻辑见 syncBase.extractApiErrorDetail） */
+  const describeError = async (response: Response): Promise<string> => {
+    const detail = await extractApiErrorDetail(response);
+    return detail ? `：${detail}` : '';
+  };
 
   return {
     async pull() {
@@ -55,9 +66,22 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranches
         apiUrl
       );
       if (response.status === 409) {
-        throw new SyncError('CONFLICT', 'GitHub 提示版本冲突：云端文件已被其他提交更新，请先拉取');
+        throw new SyncError(
+          'CONFLICT',
+          `GitHub 提示版本冲突：云端文件已被其他提交更新，请先拉取${await describeError(response)}`
+        );
       }
-      if (!response.ok) throw new SyncError('REQUEST_FAILED', `GitHub 返回错误状态码：${response.status}`);
+      if (!response.ok) {
+        const detail = await extractApiErrorDetail(response);
+        const suffix = detail ? `：${detail}` : '';
+        // 409 是官方文档里「sha 不匹配」的状态码；个别网关/旧行为改用 422 并在 message 里点出 sha。
+        // 只认 detail 里出现 sha 的报错：真正的请求体校验失败（422 Validation failed）仍按 REQUEST_FAILED 抛，
+        // 否则会把「文件内容不合法」误报成「版本冲突，请先拉取」，给出完全错误的处置方向。
+        if (detail.toLowerCase().includes('sha')) {
+          throw new SyncError('CONFLICT', `GitHub 提示版本冲突：云端文件已被其他提交更新，请先拉取${suffix}`);
+        }
+        throw new SyncError('REQUEST_FAILED', `GitHub 返回错误状态码：${response.status}${suffix}`);
+      }
       const body = await response.json();
       return { sha: String(body.commit?.sha ?? body.sha ?? '') };
     },

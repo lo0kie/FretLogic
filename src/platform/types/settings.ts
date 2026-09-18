@@ -2,8 +2,13 @@ export type SyncProviderKind = 'github' | 'gitee' | 'webdav' | 'server';
 
 /** 备份包内经 AES-GCM 加密的敏感凭据块（算法细节见 app/services/backup/backupCrypto.ts） */
 export interface EncryptedSecrets {
-  /** 格式版本（当前固定 1） */
+  /** 格式版本：1 = 无 iter（解密按历史常量 150k）；2 = 随包携带 iter */
   v: number;
+  /**
+   * PBKDF2 迭代次数（v2 起必填）。解密侧必须读它而不能跟随当前常量，否则一旦调高迭代数，
+   * 所有历史备份都会派生出不同密钥、被 GCM 判为损坏（用户只会看到「密码错误」）。
+   */
+  iter?: number;
   /** PBKDF2 盐（base64） */
   salt: string;
   /** AES-GCM IV（base64） */

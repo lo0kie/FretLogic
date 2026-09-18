@@ -17,7 +17,7 @@
     :tabindex="disabled ? -1 : 0"
     @keydown="handleWrapperKeydown($event)"
     @wheel="handleWheel($event)"
-    class="group inline-flex items-center justify-between rounded-full border transition-all duration-fast select-none focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/70"
+    class="group inline-flex items-center justify-between rounded-full border transition-all duration-fast select-none focus-within:ring-2 focus-within:ring-primary/70"
     ref="wrapperRef"
     role="spinbutton"
   >

@@ -19,11 +19,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
-import { useSyncService } from '@/app/services/sync/useSyncService';
+import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
 import { useStorage } from '@/platform/composables/useStorage';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
@@ -40,6 +40,8 @@ const hasVisited = useStorage<boolean>(STORAGE_KEYS.HAS_VISITED, false);
 const settingsStore = useSettingsStore();
 const backupModals = useBackupModals();
 const { pullFromRemote, isPulling } = useSyncService();
+// 挂载即预取同步动作 chunk，用户点「拉取」时 busy 立即翻转（消除 chunk 拉取死区）
+onMounted(() => void preloadSyncActions());
 
 /** 同步方案展示名（首访时 syncTarget 为默认值 gitee，见 GITEE_SYNC_CONFIG 预设） */
 const SYNC_TARGET_LABELS: Record<SyncProviderKind, string> = {

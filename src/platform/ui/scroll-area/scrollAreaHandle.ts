@@ -21,7 +21,7 @@ export type ScrollAreaAxis = 'x' | 'y' | 'both';
 /** 边缘羽化：true 按 axis 定向 | false 关闭 | 数值·CSS 长度·选项对象透传 v-edge-fade */
 export type ScrollAreaFade = boolean | number | string | EdgeFadeOptions;
 
-/** 自绘滚动条：true 按 axis 定向 | false 关闭（只保留原生滚动、由 no-scrollbar 隐藏） | 选项对象透传 v-scrollbar
+/** 自绘滚动条：true 按 axis 定向 | false 关闭（指令被动模式：仍注入 overflow 并隐藏原生滚动条，不挂 overlay） | 选项对象透传 v-scrollbar
  *  （选项对象可带 bubble 滚动气泡提示，见 v-scrollbar 的 ScrollbarBubbleOptions） */
 export type ScrollAreaScrollbar = boolean | ScrollbarOptions;
 

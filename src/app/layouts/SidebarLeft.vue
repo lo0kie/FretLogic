@@ -30,12 +30,15 @@
           size="sm"
           title="搜索和弦（支持名称与和弦级数检索）"
         >
-          <template #search-results="{ query, close, activeIndex, setActiveIndex }">
-            <template v-if="query.trim()">
-              <div v-if="searchResults.length > 0" class="flex flex-col gap-0.5">
+          <template #search-results="{ query, activeIndex, setActiveIndex }">
+            <!-- 三态（结果 / 无结果 / 未输入引导）out-in 交叉切换；高度变化由面板
+                 v-auto-height + transition-[height] 承担，这里只负责内容透明度过渡 -->
+            <Transition mode="out-in" name="v-transition-fade">
+              <div v-if="query.trim() && searchResults.length > 0" class="flex flex-col gap-0.5" key="results">
                 <button
                   v-wave
                   v-for="(item, itemIndex) in searchResults"
+                  v-scroll-into-view.y.center="isCardActive(item.card)"
                   :class="[
                     itemIndex === activeIndex
                       ? 'bg-primary/12 text-primary'
@@ -45,29 +48,16 @@
                   ]"
                   :key="item.card.mainChord.id"
                   :title="getSearchItemTitle(item)"
-                  @click="
-                    selectSearchResult(item.card);
-                    searchQuery = '';
-                    close();
-                  "
+                  @click="selectSearchResult(item.card)"
                   @mouseenter="setActiveIndex(itemIndex)"
                   class="flex min-h-[2rem] w-full cursor-pointer items-center justify-between rounded-md border-none px-2.5 py-1 text-left transition-colors duration-fast ease-out outline-none select-none"
                   type="button"
                 >
                   <!-- 左侧：和弦名（首字绝对左对齐） + 激活标记（紧贴和弦名后缀，不顶开左右边缘） -->
                   <span class="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 leading-normal">
-                    <span class="truncate text-xs/normal font-semibold">
+                    <span v-marquee.fade class="max-w-[90px] text-xs/normal font-semibold">
                       <span v-chord-name="{ chord: item.card.mainChord }" />
                     </span>
-                    <BaseIcon
-                      v-if="isCardActive(item.card)"
-                      aria-hidden="true"
-                      class="shrink-0 text-primary"
-                      icon-size="xl"
-                      icon-stroke="bold"
-                      name="check"
-                      title="当前正在编辑的和弦"
-                    />
                   </span>
 
                   <!-- 右侧：指法数微徽标与分组名（右边缘绝对对齐） -->
@@ -83,8 +73,9 @@
                     </BaseBadge>
 
                     <span
+                      v-marquee.fade
                       :title="`所属分组：${item.groupName}`"
-                      class="max-w-[40px] truncate py-0.5 text-2xs/normal font-semibold text-fg-disabled"
+                      class="max-w-[48px] py-0.5 text-2xs/normal font-semibold text-fg-disabled"
                     >
                       {{ item.groupName }}
                     </span>
@@ -93,11 +84,11 @@
               </div>
 
               <!-- 搜索无结果：复用通用空状态（search 预设） -->
-              <Feedback v-else :description="noResultText" size="sm" type="search" />
-            </template>
+              <Feedback v-else-if="query.trim()" :description="noResultText" key="no-result" size="sm" type="search" />
 
-            <!-- 未输入时的引导提示：复用通用空状态 -->
-            <Feedback v-else description="输入和弦名称搜索..." icon="search" size="sm" />
+              <!-- 未输入时的引导提示：复用通用空状态 -->
+              <Feedback v-else description="输入和弦名称搜索..." icon="search" key="guide" size="sm" />
+            </Transition>
           </template>
         </BaseInput>
 
@@ -180,8 +171,17 @@
       </div>
     </div>
 
-    <div class="left-group-list-container left-group-list relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-      <BaseScrollArea close-popovers axis="y" class="scroll-body flex-1 p-md" ref="scrollAreaRef">
+    <!-- 顶部留白放在滚动容器**外面**：padding 若在滚动容器内，它属于可滚动区且在裁剪边界之内，
+         sticky 头贴住上沿时那一条 padding 带会一直漏着滚过的内容（此前只能靠遮挡带硬遮）。
+         留白外移后，滚动容器的裁剪边界就在留白下沿，吸附头 top:0 既贴住可视上沿（不漏内容），
+         视觉上又与上方 header 隔开了这段留白；内容也从留白下沿起被干净裁断。
+         上下留白都放外层（py-md），滚动容器自身只留横向 padding -->
+    <div
+      class="left-group-list-container left-group-list relative flex min-h-0 w-full flex-1 flex-col overflow-hidden py-md"
+    >
+      <!-- 顶部羽化的起始缘内缩量由 GroupSection 按「此刻是否有头吸附」声明目标值
+           （--fade-offset-target），指令走「淡出 → 改位置 → 淡入」的时序应用，位置变化不可见 -->
+      <BaseScrollArea close-popovers axis="y" class="scroll-body flex-1 px-md" ref="scrollAreaRef">
         <KeepAlive :max="12">
           <GroupSection
             v-if="route.path === ROUTE_PATHS.WORKBENCH"

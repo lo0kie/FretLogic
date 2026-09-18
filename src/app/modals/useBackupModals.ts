@@ -220,9 +220,13 @@ export function useBackupModals() {
     await (await import('./backupModalActions')).handleImportConfirm();
   };
 
+  /** 预取备份动作实现模块（只拉取不执行）：弹窗容器挂载时调用，消除确认按钮的 chunk 拉取死区 */
+  const preloadBackupActions = (): Promise<unknown> => import('./backupModalActions');
+
   return {
     modals,
     modalData,
+    preloadBackupActions,
     exportStats,
     exportAvailability,
     importAvailability,

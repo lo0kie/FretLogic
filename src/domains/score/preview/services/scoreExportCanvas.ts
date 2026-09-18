@@ -135,6 +135,7 @@ export function clearLyricsLineCharsCache() {
 }
 
 // 通用 Canvas / 下载工具已下沉平台层单一来源；此处保留转发以兼容既有导入路径（score 内部消费方）。
-export { buildExportFileName, canvasToBlob, triggerBlobDownload, wait } from '@/platform/utils/canvas';
+export { buildExportFileName, canvasToBlob, triggerBlobDownload } from '@/platform/utils/canvas';
+export { wait } from '@/platform/utils/common';
 
 export { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';

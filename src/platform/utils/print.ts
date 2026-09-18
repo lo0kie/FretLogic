@@ -16,7 +16,7 @@
  *    强制 `break-after: page` 反而会在页面边界上多顶出一张空白页；
  * 3. 必须等所有页图解码完成再触发打印，否则拿到的是尚未绘制的空白文档。
  */
-import { wait } from '@/platform/utils/canvas';
+import { wait } from '@/platform/utils/common';
 
 /** 等待页图就绪的兜底超时（ms）：图片异常时不至于永远卡在等待 */
 const IMAGE_READY_TIMEOUT_MS = 10_000;

@@ -20,14 +20,10 @@ interface UsePopoverHoverOptions {
   isOpen: () => boolean;
   /** 是否处于钉住态（钉住时 hover 移出不自动关闭） */
   isPinned: () => boolean;
-  /** 触发器当前是否被指针悬停（`:hover` 判定，供关闭复核日志） */
-  isTriggerHovered: () => boolean;
   /** 指针此刻是否真的落在合法区域内（几何复核，宿主实现） */
   isPointerInside: () => boolean;
   /** 事件目标是否在浮层合法区域内（宿主实现） */
   isEventInside: (target: EventTarget | null) => boolean;
-  /** dev 日志用：合法矩形快照与外扩量 */
-  getDebugRects: () => { pad: number; rects: (string | null)[] };
   /** hover 打开延时（ms，来自宿主 props） */
   hoverOpenDelay: number;
   /** hover 关闭延时（ms，来自宿主 props） */
@@ -36,27 +32,11 @@ interface UsePopoverHoverOptions {
   close: (reason?: string) => void;
   /** 鼠标再次进入时置顶（「最近交互者在上」） */
   bringToFront: () => void;
-  /** dev 日志标识 */
-  instanceId: string;
 }
 
 export function usePopoverHover(options: UsePopoverHoverOptions) {
-  const {
-    isHoverMode,
-    isEnabled,
-    isOpen,
-    isPinned,
-    isTriggerHovered,
-    isPointerInside,
-    isEventInside,
-    getDebugRects,
-    open,
-    close,
-    bringToFront,
-    instanceId,
-  } = options;
-
-  const IS_DEV = import.meta.env.DEV;
+  const { isHoverMode, isEnabled, isOpen, isPinned, isPointerInside, isEventInside, open, close, bringToFront } =
+    options;
 
   /**
    * hover 开/关延时共用的计时槽。
@@ -141,18 +121,6 @@ export function usePopoverHover(options: UsePopoverHoverOptions) {
     hoverTimer = setTimeout(() => {
       hoverTimer = null;
       const inside = isPointerInside();
-      if (IS_DEV) {
-        const pointer = getPointerState();
-        console.debug(`[popover${instanceId}] hover 计时到期`, {
-          delay,
-          pinned: isPinned(),
-          inside,
-          triggerHover: isTriggerHovered() ? true : null,
-          pointer: pointer.tracked ? { x: pointer.x, y: pointer.y } : 'untracked',
-          // 几何复核的判定依据：三个合法矩形与外扩量，缺一不可（漏掉哪个矩形就会误判为「已离开」）
-          ...getDebugRects(),
-        });
-      }
       if (isPinned() || inside) {
         // 判为「仍在区域内」后不自动续计时：指针此刻就在区域内，等它真离开时必然有新的
         // mouseleave / mouseover 重新装上计时；而「指针已停在区域外」这一情形由 isPointerInside

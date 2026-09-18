@@ -196,6 +196,18 @@ export const base64DecodeUtf8 = (b64: string): string => {
   return new TextDecoder().decode(bytes);
 };
 
+// ===== wait: 宏任务延时 =====
+
+/**
+ * 延时工具（默认 0ms）：Promise 化的 setTimeout。
+ *
+ * 与 nextTick 的分工：nextTick 让出的是微任务队列（等 Vue 的 flush 队列结算完），本函数让出的
+ * 是「宏任务」边界 —— 事件循环会把微任务队列排空到不再产生新微任务之后才执行它，因此可以用来
+ * 等待一串自延迟的响应式级联彻底跑完（见 useScoreHistory 的撤销结算窗口）。
+ * 注意它并不等于「等一帧渲染」，后者用 requestAnimationFrame。
+ */
+export const wait = (ms = 0): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
 // ===== clamp / 时间戳 =====
 
 /** 数值夹取：把 value 限制在 [min, max] 区间内 */

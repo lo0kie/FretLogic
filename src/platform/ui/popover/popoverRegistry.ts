@@ -4,9 +4,6 @@
  * 与右键菜单互斥注册表不同：浮层允许多实例（含嵌套子浮层）并存，全局关闭即全部关闭。
  */
 
-/** 调试日志开关（仅开发期）：生产构建替换为字面量 false，下方日志分支被摇掉 */
-const IS_DEV = import.meta.env.DEV;
-
 interface OpenPopoverEntry {
   close: (reason?: string) => void;
   /**
@@ -33,7 +30,6 @@ export const unregisterOpenPopover = (close: (reason?: string) => void) => {
 
 /** 关闭全局所有打开中的浮层（无打开浮层时空操作；close 自带幂等守卫，父子嵌套重复关闭安全） */
 export const closeAllPopovers = () => {
-  if (IS_DEV && openPopovers.size) console.debug(`[popoverRegistry] closeAllPopovers，关闭 ${openPopovers.size} 个`);
   for (const entry of [...openPopovers]) {
     entry.close('registry:close-all');
   }
@@ -53,12 +49,6 @@ export const closePopoversWithin = (container: HTMLElement | null | undefined) =
   for (const entry of [...openPopovers]) {
     const anchor = entry.getAnchor();
     if (anchor && container.contains(anchor)) {
-      if (IS_DEV) {
-        console.debug('[popoverRegistry] 滚动容器联动关闭：锚点落在容器内', {
-          container: `${container.tagName}.${String(container.className).slice(0, 60)}`,
-          anchor: `${anchor.tagName}.${String(anchor.className).slice(0, 60)}`,
-        });
-      }
       entry.close('registry:scroll-within');
     }
   }

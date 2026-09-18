@@ -139,8 +139,28 @@ export default tseslint.config(
       'vue/define-emits-declaration': ['error', 'type-based'],
       // defineProps 同样必须用类型字面量声明
       'vue/define-props-declaration': ['error', 'type-based'],
-      // 注：vue/prefer-define-model 在 eslint-plugin-vue v10 已移除，无法作为规则启用；
-      // 存量已全部迁移至 defineModel，新代码靠 review 约定。
+      // defineModel 迁移守卫：eslint-plugin-vue 并未提供 prefer-define-model（v10.10.0 的 252 条规则与
+      // 官方文档的 Removed 表里都没有该 id —— 此前的「v10 已移除」注释有误），故用 no-restricted-syntax
+      // 按 AST 自建等价约束，避免「双向绑定退回 modelValue prop + update:modelValue 事件」只靠 review 兜底。
+      // 只锁「默认模型」的精确命名（存量经核对为 0 命中）：具名模型形态（update:visible / update:strings
+      // 等）在 BaseFloatingPanel、Fretboard、BaseEditableText 中仍在使用，选择器一旦放宽成 /^update:/
+      // 会在这些文件当场告警；要收紧得先把它们迁到 defineModel，属另一件事。
+      // 选择器 C 用于兜住「emit 签名来自外部类型别名、B 无法在声明处命中」的情形。
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.name='defineProps'] TSPropertySignature[key.name='modelValue']",
+          message: '双向绑定请用 defineModel()，不要在 defineProps 中声明 modelValue。',
+        },
+        {
+          selector: "CallExpression[callee.name='defineEmits'] TSLiteralType > Literal[value='update:modelValue']",
+          message: '双向绑定请用 defineModel()，不要在 defineEmits 中声明 update:modelValue。',
+        },
+        {
+          selector: "CallExpression > Literal[value='update:modelValue']",
+          message: "双向绑定请用 defineModel()，不要手写 emit('update:modelValue')。",
+        },
+      ],
       // 禁止空的 template/script/style 块
       'vue/no-empty-component-block': 'error',
       // 响应性丢失检测（AST 级，对 ref 工厂解构/vueuse 有误报可能，先以 warn 试跑）

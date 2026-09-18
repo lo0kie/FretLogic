@@ -89,6 +89,8 @@ export const useChordStore = defineStore('chord', () => {
     undo: rawUndo,
     pause: pauseHistory,
     resume: resumeHistory,
+    commit: commitHistory,
+    clear: clearHistory,
   } = useRefHistory(savedChordsList, {
     capacity: CHORD_HISTORY_CAPACITY,
     deep: false,
@@ -119,6 +121,11 @@ export const useChordStore = defineStore('chord', () => {
     savedChordsList.value = snapshot.chords;
     await nextTick();
     resumeHistory();
+    // 关键修复：pause 期间 useRefHistory 的 last 快照不会同步（仍停留在初始空列表 []），
+    // 若不处理，水合后第一次变更会把 [] 压入撤销栈——用户对首次删除点撤销即整库清空。
+    // 先 commit 让 last 追上水合数据，再 clear 清掉 commit 顺带压入的伪撤销点（含初始空态）。
+    commitHistory();
+    clearHistory();
     suppressPersistWatch = false;
   };
 

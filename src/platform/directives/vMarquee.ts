@@ -11,6 +11,8 @@ import { buildEdgeFadeMask, ensureFadeProperties, fadeTransition } from '@/platf
 
 import type { Directive } from 'vue';
 
+import './vMarquee.scss';
+
 export interface MarqueeOptions {
   /** 触发模式：hover 悬停/聚焦时滚动，always 常驻轮播，none 永不滚动 */
   mode?: 'hover' | 'always' | 'none';
@@ -482,6 +484,9 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     const options = resolveOptions(binding.value, binding.modifiers);
 
     el.classList.add('marquee-viewport');
+    // 文字不换行由指令负责注入：跑马灯的测量（scrollWidth 对比 clientWidth）以单行内容为前提，
+    // 宿主不必手动补 whitespace-nowrap
+    el.style.whiteSpace = 'nowrap';
 
     const inner = document.createElement('span');
     inner.className = 'marquee-inner';
@@ -561,7 +566,15 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       state.resetAnim?.cancel();
     });
 
-    measure(el);
+    // 首次测量延到帧末：本指令挂在**列表的每一项**上（和弦卡标题、乐谱卡标题…），展开一个
+    // 大分组时一帧内会有几十个新元素 mounted。同步测量是在「刚插入 DOM、布局已失效」的当口
+    // 逐个读 inner.scrollWidth / el.clientWidth —— 每读一次就是一次全量重排，几十项就是几十次
+    // （典型 layout thrashing），开合大分组时那点轻微延迟主要来自这里。
+    // 延到 rAF 后，同帧挂载的条目在同一批回调里测量：第一次读算完布局，后续读都落在干净布局上
+    // （measure 写入的是 mask 端点 / transform / animation，都不使布局失效），一帧只重排一次。
+    // 实际首测通常由共享 ResizeObserver 的初始回调先完成——它本就发生在布局之后，同样安全
+    const firstMeasureRaf = requestAnimationFrame(() => measure(el));
+    state.cleanups.push(() => cancelAnimationFrame(firstMeasureRaf));
   },
 
   updated(el, binding) {

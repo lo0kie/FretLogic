@@ -3,7 +3,9 @@
  * 以「歌词 / 行序 / 和弦映射 / 调性 / 变调夹」为快照粒度，容量有限（默认 20），
  * 相邻重复快照不记录；撤销-重做窗口内暂停记录，避免恢复过程被再次入栈。
  */
-import { nextTick, ref } from 'vue';
+import { ref } from 'vue';
+
+import { wait } from '@/platform/utils/common';
 
 import type { ChordId } from '@/domains/chord/types';
 import type { Capo, LineId, SlotKey, Song } from '@/domains/score/types';
@@ -92,13 +94,28 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
    *
    * isUndoRedoAction 为 true 期间的写入都不进撤销栈，所以必须在 applyState 引发的传播全部
    * 结算完之后才解除。传播不止一帧：store 字段变更先进 pre 队列（消费方 watcher / 组件更新），
-   * 其中又可能派生出新的变更进入下一轮队列（编辑器本地缓冲回写、lineIds / chordMap 的连带同步）。
-   * 等两帧是覆盖这条级联的安全下界；提前解除会让级联中的写入被后续记录当作新编辑处理。
+   * 其中又可能派生出新的变更进入下一轮队列（编辑器本地缓冲回写、lineIds / chordMap 的连带同步），
+   * 而级联上的 watcher 还能自己 `await nextTick()` 把后续写入再往后推若干帧。
+   *
+   * 为什么不用固定帧数、也不用「采样到状态稳定就收工」：
+   * 帧数是拍出来的下界，级联深度取决于派生链长度（歌词 → 行序重排 → 和弦槽位再对齐…），
+   * 猜小了级联尾部的写入就会落到窗口外被误记入栈，表现为撤销「跳步」（再撤销一次仿佛没动）；
+   * 而按帧采样「状态有没有变」同样判不出来——一条自延迟 N 帧的派生链，在每个采样点上都与
+   * 「已经结算完」长得一模一样（都是「这一帧没有变化」），深度超过采样窗口时必然漏判。
+   *
+   * 改用的判据是「任务边界」：恢复发生在某个宏任务的同步段内，它派生的一切响应式副作用 ——
+   * Vue 的 flush 队列（pre / post）以及 watcher 内部 `await nextTick()` 这类自延迟续延 ——
+   * 都是该任务微任务链的后人；事件循环会把微任务队列排空到「不再产生新微任务」之后才执行
+   * 下一个宏任务。所以让出一个宏任务再解除，级联无论多深都已跑完，且没有任何需要调的魔数。
+   *
+   * 残留边界（有意为之，非疏漏）：自身跨宏任务再回写的派生层（debounce / setTimeout / rAF
+   * 之后再写）不在覆盖范围内 —— 那类写入与「用户自己发起的一次编辑」在信号上不可区分，无法归因。
+   *
+   * 覆盖用例见 tests/stores/scoreEditorStoreUndoCascade.test.ts：同帧级联与跨 1/2/3/6 帧的级联，
+   * 其记录调用都不得入栈（把窗口改回固定帧数时，3 / 6 两档会红）。
    */
-  const settleReactivePropagation = async () => {
-    await nextTick();
-    await nextTick();
-  };
+  // wait() 默认 0ms，即上面说的「让出一个宏任务边界」（Promise 化的 setTimeout）。
+  const settleReactivePropagation = (): Promise<void> => wait();
 
   /** 撤销：回退到上一快照并写回歌曲数据；标记撤销期以避免恢复过程被再次记录。 */
   const undo = async () => {

@@ -570,7 +570,14 @@ const scrollToSection = (sectionId: string) => {
   if (!target) return;
 
   activeSectionId.value = sectionId;
-  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // 不用 scrollIntoView(block:'start')：它把分区顶齐到滚动容器最顶端，吞掉了分区列表
+  // 的 gap-xl 间距，视觉上多滚一段。改为手动定位：目标绝对偏移减去列表行间距（gap），
+  // 让分区标题落定后上方仍保留与其他分区一致的间距
+  const list = sectionsListRef.value;
+  const gap = list ? parseFloat(getComputedStyle(list).rowGap) || 0 : 0;
+  const top = target.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop - gap;
+  scrollEl.scrollTo({ top, behavior: 'smooth' });
 };
 
 /** 预留的分区元素重建钩子，当前为空实现 */

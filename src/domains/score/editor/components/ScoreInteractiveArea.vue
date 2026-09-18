@@ -654,7 +654,9 @@ defineExpose({ scoreZoneRef, expandNextBatch, handleScrollToBottom });
    消除长乐谱切歌时主线程同步挂载数万节点的卡顿。contain-intrinsic-size 给出离屏占位高度。 */
 .line-row {
   content-visibility: auto;
-  contain-intrinsic-size: 0 120px;
+  /* auto 前缀：记住该行上次渲染的实际尺寸，离屏占位不再退回 0×120 兜底值，
+     避免 KeepAlive 重挂载/滚动到行时的二次布局跳动（宽度按真实内容算，滚动条不闪跳） */
+  contain-intrinsic-size: auto 120px;
 }
 
 /* 字符盒 min-* 基线显式归零：min-width/min-height 初始值为 auto，

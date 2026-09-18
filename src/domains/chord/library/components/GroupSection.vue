@@ -8,23 +8,36 @@
                class/data-*/aria-* 经 $attrs 落到头部按钮本体（拖拽把手、键盘导航标记、状态 tint）。
                px-3 覆盖内置 px-2：Tailwind 同工具类按数值升序产出，px-3 必然在样式表中靠后 -->
           <BaseCollapse
-            v-scroll-into-view.y.settle="group.id === editorStore.draftChord.groupId"
+            v-scroll-into-view.y.settle.gap-sm="group.id === editorStore.draftChord.groupId"
             :aria-label="groupTitleAriaLabel(group)"
             :class="[
-              'group-title-row h-[2.4rem] border border-transparent px-3 transition-all duration-fast hover:border-border-base',
-              isGroupContentOpen(group) ? 'bg-tint-panelhover-50!' : '',
+              // 吸附是宿主列表的布局决策，全部由业务下发：定位（sticky/top/z）与底色。
+              // 头部**齐平贴住容器可视上沿**（top 抵消容器 padding），头顶不留间隙 → 没有露出带，
+              // 也就不需要任何遮挡片/伪元素：此前所有「边框/焦点环被挡」的坑都源自那条遮挡带。
+              // z-float 高于卡片网格的 z-panel：两者同层时网格在 DOM 里靠后，会把吸附头盖住。
+              // 不再自带 border：焦点环已画在头部盒内（ring-inset），再叠一圈边框就是双边框。
+              // 也不挂 data-focusable-inline：全局那条规则给的是**外扩** box-shadow 焦点环
+              // （--focus-ring 4px 外扩），头部齐平贴住容器上沿时它的上半圈必被 overflow 裁掉；
+              // 焦点态统一交给折叠组件画在盒内的环（键盘聚焦时出现，不会被裁）
+              'group-title-row sticky z-float h-[2.4rem] px-3 transition-all duration-fast',
+              isGroupContentOpen(group)
+                ? 'bg-tint-panelhover-50!'
+                : stuckGroupIds.has(group.id)
+                  ? 'bg-surface-panel'
+                  : '',
               isOpen ? 'bg-tint-panelhover-30!' : '',
             ]"
             :data-group-id="group.id"
             :expanded="isGroupContentOpen(group)"
+            :scroll-container="stickyContainer"
+            :style="{ top: stickyTopCss }"
             @update:expanded="chordActions.executeGroupToggle(group)"
-            data-focusable-inline
             initial-auto
             unpadded
           >
             <template #title>
               <div v-marquee.fade title="点击折叠/展开分组">
-                <span class="text-xs font-bold whitespace-nowrap text-fg-title">
+                <span class="text-xs font-bold text-fg-title">
                   {{ group.name }}
                 </span>
               </div>
@@ -116,6 +129,7 @@ import { getChordName } from '@/domains/chord/theory/theory';
 import { useChordTransfer } from '@/domains/chord/transfer/useChordTransfer';
 import { createChunkedMount } from '@/platform/composables/useChunkedMount';
 import { useSortableList } from '@/platform/composables/useSortableList';
+import { useStickyHeads } from '@/platform/composables/useStickyHeads';
 import { COLLAPSE_CONTENT_RETENTION_MS } from '@/platform/utils/constants';
 
 import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
@@ -137,6 +151,32 @@ const chordActions = useChordActions();
 const { copyGroupText, shareGroupLink } = useChordTransfer();
 
 const groupListRef = useTemplateRef<HTMLElement>('groupListRef');
+
+// 分组头的吸附是「宿主环境相关」的能力，全部由业务侧承担：
+// useStickyHeads 统一发现滚动容器、批量判定哪些头此刻被顶在吸附线上（一次监听，而非每个头一套），
+// 并按吸附头的实测高度让开容器顶部羽化带；定位几何（sticky / top）则由本组件经 class 与 style
+// 下发给折叠头——折叠组件本身不假设宿主布局。
+// 收起时「把头按回吸附线」的补偿与滚动钳位补偿由 BaseCollapse 自带的平台 composable 负责
+// （只读折叠头与折叠段的相对位置，未吸附的折叠自然零副作用），此处不必再接线。
+const {
+  stuckIds: stuckGroupIds,
+  insetPx: stickyInsetPx,
+  container: stickyContainer,
+} = useStickyHeads({
+  listRef: groupListRef,
+  // id 取分组头上的 data-group-id；头/段容器用 BaseCollapse 暴露的稳定钩子，不依赖内部类名
+  idAttribute: 'data-group-id',
+  // 吸附线 = 容器可视上沿：头顶不留间隙，滚过的内容直接被头部自身遮住
+  offset: '0px',
+  // 有头吸附时：容器顶部羽化带内缩一个头高，让开吸附中的头
+  fadeOffset: true,
+});
+
+/** 吸附线：sticky 以滚动容器的**内容盒**为原点，容器若仍有 padding-top，需从 top 里减掉才能
+ *  贴住可视上沿——否则那条 padding 带属于可滚动区、且在裁剪边界之内，会一直漏着滚过的内容。
+ *  左栏的留白已移到滚动容器之外（见 SidebarLeft），此处量得 0、表达式退化为 0px；
+ *  保留补偿是为了容器回归带 padding 时不用改这里 */
+const stickyTopCss = computed(() => `-${stickyInsetPx.value}px`);
 
 const contentOuterComponentEls = new Map<number, ComponentPublicInstance | Element | null>();
 

@@ -1,5 +1,7 @@
 import { nextTick } from 'vue';
 
+import { findScrollParent } from '@/platform/utils/dom';
+
 import type { Directive, DirectiveBinding } from 'vue';
 
 /**
@@ -54,6 +56,10 @@ export interface ScrollIntoViewOptions {
    *  修饰符写法 .gap-16。用于目标贴边会被渐隐遮罩/圆角裁切的容器（如带 v-edge-fade 的下拉面板）；
    *  内联 scroll-margin 随元素存续，同元素的后续 focus scrolling 也保持该间距不退回贴边 */
   gap?: number;
+  /** 定位间距的 spacing token 名：修饰符写法 .gap-sm → scroll-margin: var(--spacing-sm)。
+   *  rem 基准的间距在非 16px 根字号下不是整数 px，用 token 变量表达可跟随主题缩放；
+   *  运行时解析回 px 数值供横向定位数学复用。与 gap 互斥，token 优先 */
+  gapToken?: string;
 }
 
 export type ScrollIntoViewBinding = boolean | ScrollIntoViewOptions | null | undefined;
@@ -64,18 +70,9 @@ const isActive = (val: ScrollIntoViewBinding): boolean => {
   return false;
 };
 
-const getScrollContainer = (el: HTMLElement, direction: 'x' | 'y'): HTMLElement | null => {
-  let parent = el.parentElement;
-  while (parent && parent !== document.body && parent !== document.documentElement) {
-    const style = window.getComputedStyle(parent);
-    const overflow = direction === 'x' ? style.overflowX : style.overflowY;
-    if (overflow === 'auto' || overflow === 'scroll') {
-      return parent;
-    }
-    parent = parent.parentElement;
-  }
-  return null;
-};
+/** 找滚动容器：统一走平台工具，避免各处各写一份祖先链循环导致口径漂移 */
+const getScrollContainer = (el: HTMLElement, direction: 'x' | 'y'): HTMLElement | null =>
+  findScrollParent(el, direction);
 
 const normalizeOptions = (
   bindingValue: ScrollIntoViewBinding,
@@ -113,11 +110,17 @@ const normalizeOptions = (
       opts.delay = Number(delayMatch[1]);
     }
 
-    // 定位间距（px）：.gap-16 → 16px，经 scroll-margin 交给原生 scrollIntoView 消费
+    // 定位间距：.gap-16 → 16px；.gap-sm 等 spacing token → var(--spacing-sm)。
+    // 经 scroll-margin 交给原生 scrollIntoView 消费
     const gapKey = Object.keys(modifiers).find(k => k.startsWith('gap-'));
-    const gapMatch = gapKey ? /^gap-(\d+)$/.exec(gapKey) : null;
-    if (gapMatch) {
-      opts.gap = Number(gapMatch[1]);
+    if (gapKey) {
+      const gapMatch = /^gap-(\d+(?:\.\d+)?)$/.exec(gapKey);
+      if (gapMatch) {
+        opts.gap = Number(gapMatch[1]);
+      } else {
+        const token = gapKey.slice(4);
+        if (/^[a-z][a-z0-9]*$/i.test(token)) opts.gapToken = token;
+      }
     }
 
     // KeepAlive 缓存激活后再次滚动需显式 .keep-alive 修饰符开启，不作默认行为。
@@ -170,10 +173,16 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
   const doScroll = () => {
     if (!el.isConnected) return;
     const behavior = opts.behavior ?? (isMount ? 'auto' : 'smooth');
-    const gap = opts.gap ?? 0;
     // scroll-margin 让原生 scrollIntoView 的 nearest/center/start/end 全部尊重间距。
+    // token 写法先落 var() 再读回计算值（px），横向定位数学直接复用该数值。
     // 内联样式随元素存续刻意不清除：同元素后续的 focus scrolling 也保持间距不退回贴边
-    if (gap > 0) el.style.scrollMargin = `${gap}px`;
+    let gap = opts.gap ?? 0;
+    if (opts.gapToken) {
+      el.style.scrollMargin = `var(--spacing-${opts.gapToken})`;
+      gap = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+    } else if (gap > 0) {
+      el.style.scrollMargin = `${gap}px`;
+    }
 
     // 纯横向模式：直接在最近的横向滚动容器内按 scrollLeft 滚动，绝不冒泡触发外层纵向视口跳动
     if (opts.direction === 'x') {

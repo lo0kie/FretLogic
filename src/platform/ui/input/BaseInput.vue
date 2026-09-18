@@ -143,14 +143,13 @@
       ref="searchPopoverRef"
     >
       <BaseScrollArea
-        v-auto-height
+        v-auto-height="{ transition: 'height var(--duration-base) var(--ease-sidebar, var(--bezier-sidebar, ease))' }"
         :class="searchMaxHeightClass"
-        :fade="false"
         :scrollbar="{ showTrack: false, endInset: 8 }"
         @mousedown.stop
         @mouseleave="setSearchActiveIndex(-1)"
         axis="y"
-        class="overflow-x-hidden transition-[height] duration-base ease-sidebar"
+        class="overflow-x-hidden"
         ref="searchAreaRef"
       >
         <div class="p-1">
@@ -362,11 +361,13 @@ const resolvedType = computed(() => {
 
 const isAtLimit = computed(() => Boolean(maxlength) && (localValue.value?.length ?? 0) >= (maxlength as number));
 
-// 边框/焦点环配色按校验状态二选一，避免两组同权重 Tailwind 类共存时由 CSS 顺序决定胜者
+// 边框/焦点环配色按校验状态二选一，避免两组同权重 Tailwind 类共存时由 CSS 顺序决定胜者。
+// 聚焦态只由 ring 指示：ring 是不占布局的 box-shadow、紧贴 1px 边框外侧，
+// 若再叠 focus:border-* 变色就会呈现「实线边框 + 半透明环」两道圈（双边框）
 const stateBorderClasses = computed(() =>
   invalid
-    ? 'border-danger hover:enabled:border-danger focus:enabled:border-danger focus-visible:ring-danger/70'
-    : 'border-border-light hover:enabled:border-border-base focus:enabled:border-primary focus-visible:ring-primary/70'
+    ? 'border-danger hover:enabled:border-danger focus-visible:ring-danger/70'
+    : 'border-border-light hover:enabled:border-border-base focus-visible:ring-primary/70'
 );
 
 const isClearAvailable = computed(() => clearable && !disabled && !readonly);

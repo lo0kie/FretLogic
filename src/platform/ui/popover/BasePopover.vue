@@ -87,17 +87,6 @@ import type { ScrollbarOptions } from '@/platform/directives/vScrollbar';
 import type { Placement, VirtualElement } from '@floating-ui/dom';
 import type { CSSProperties, MaybeRef } from 'vue';
 
-/**
- * 调试日志开关与实例序号（仅开发期）。
- *
- * `import.meta.env.DEV` 在生产构建被 Vite 替换为字面量 false，下方所有 `if (IS_DEV)` 分支
- * 随之成为死代码被摇掉——与「DevPanel 是否进产物」无关，这里只关心日志本身不进生产。
- */
-const IS_DEV = import.meta.env.DEV;
-
-/** 浮层实例递增序号：dev 日志里区分同一时刻的多个浮层（层级竞争、互斥关闭都靠它定位） */
-const popoverInstanceSeqState = { seq: 0 };
-
 // 浮层间共享状态已抽离：
 // - 指针位置跟踪 → popoverPointerTracking.ts（几何复核用）
 // - 打开中浮层登记表 / 锚点引用映射 / 层级所有权 → usePopoverZLayer.ts
@@ -187,17 +176,6 @@ const emit = defineEmits<{
   (e: 'open'): void;
   (e: 'close'): void;
 }>();
-
-/** dev 日志标识：#序号 + 无障碍标签，用于在同一时刻多个浮层的日志里认出具体实例 */
-const instanceId = `#${++popoverInstanceSeqState.seq}(${ariaLabel})`;
-
-/** dev 日志用调用栈：关闭入口有 8 处，光看 reason 不够，得能看见是谁调的 */
-const callStack = (): string =>
-  (new Error().stack ?? '')
-    .split('\n')
-    .slice(1, 7)
-    .map(s => s.trim().replace(/^at\s+/, ''))
-    .join(' <- ');
 
 const referenceRef = useTemplateRef<HTMLElement>('referenceRef');
 const floatingRef = useTemplateRef<HTMLElement>('floatingRef');
@@ -306,29 +284,14 @@ const {
   isEnabled: () => !disabled,
   isOpen: () => model.value,
   isPinned: () => pinned.value,
-  isTriggerHovered: () => referenceRef.value?.matches(':hover') ?? false,
   isPointerInside: () => isPointerInside(),
   isEventInside: target => isEventInside(target),
-  getDebugRects: () => ({
-    pad: Math.max(offsetDistance, 4),
-    rects: [referenceRef.value, contextTriggerEl, floatingRef.value].map(el => {
-      const r = el?.getBoundingClientRect();
-      return r ? `${Math.round(r.left)},${Math.round(r.top)} ~ ${Math.round(r.right)},${Math.round(r.bottom)}` : null;
-    }),
-  }),
   open: () => open(),
   close: reason => close(reason),
   bringToFront: () => bringToFront(),
   hoverOpenDelay,
   hoverCloseDelay,
-  instanceId,
 });
-
-/**
- * 是否正由 close() 内部置 false：供下方 watch 区分「走 close()」与「外部直接改 v-model」。
- * 后者不经过任何关闭入口，日志里若不单独标出，这类关闭就是完全隐形的。
- */
-let closingInternally = false;
 
 ensurePointerTracking();
 
@@ -399,9 +362,6 @@ watch(model, val => {
 
 watch(model, async val => {
   if (!val) {
-    if (IS_DEV && !closingInternally) {
-      console.debug(`[popover${instanceId}] model 被外部直接置 false（未走 close()）`, { stack: callStack() });
-    }
     clearHoverTimer();
     isShown.value = false;
   } else {
@@ -435,7 +395,6 @@ const open = async () => {
   releaseOwnedZ();
   acquireOwnedZ();
   isMounted.value = true;
-  if (IS_DEV) console.debug(`[popover${instanceId}] OPEN`, { trigger, stack: callStack() });
   model.value = true;
   emit('open');
 };
@@ -443,29 +402,16 @@ const open = async () => {
 /**
  * 关闭浮层：复位钉住与右键虚拟锚点，并派发 close。
  *
- * `reason` 仅服务于 dev 日志：关闭入口散布在 8 处（hover 计时、外部点击、Esc、失焦、
- * 注册表滚动联动、toggle / pinToggle、消费方主动调用），「菜单自己关了」这类现象
- * 必须能一眼看出走的是哪条路径，否则只能靠猜测定位。
+ * `reason` 标记关闭入口（hover 计时、外部点击、Esc、失焦、注册表滚动联动、toggle / pinToggle、
+ * 消费方主动调用），随 onCloseStart 下发，供抑制逻辑按原因区分。
  */
 const close = (reason = 'unmarked') => {
   if (!model.value && !isShown.value) return;
-  if (IS_DEV) {
-    console.debug(`[popover${instanceId}] CLOSE reason=${reason}`, {
-      pinned: pinned.value,
-      trigger,
-      wasShown: isShown.value,
-      stack: callStack(),
-    });
-  }
   // 关闭即进入「不自动重开」窗口（作废离开坐标 + 按原因装抑制，hover 自然移出除外），详见 onCloseStart
   onCloseStart(reason);
   ownLayerEntry.open = false;
   isShown.value = false;
-  closingInternally = true;
   model.value = false;
-  void nextTick(() => {
-    closingInternally = false;
-  });
   pinned.value = false;
   contextMenuVirtualRef.value = null;
   emit('close');
@@ -583,12 +529,6 @@ useEventListener(
       clearHoverTimer();
       return;
     }
-    if (IS_DEV) {
-      const t = e.target;
-      console.debug(`[popover${instanceId}] 外部 pointerdown → 关闭`, {
-        target: t instanceof HTMLElement ? `${t.tagName}.${String(t.className).slice(0, 60)}` : String(t),
-      });
-    }
     close('outside-pointerdown');
   },
   true
@@ -604,7 +544,6 @@ useEventListener(
   (e: MouseEvent) => {
     if (!closeOnClickOutside || !model.value || !isShown.value) return;
     if (isEventInside(e.target) || contextTriggerEl?.contains(e.target as Node)) return;
-    if (IS_DEV) console.debug(`[popover${instanceId}] 外部 contextmenu → 关闭`);
     close('outside-contextmenu');
   },
   true
@@ -666,11 +605,6 @@ const handleFocusOut = (e: FocusEvent) => {
   }
 
   if (isEventInside(nextFocused)) return;
-  if (IS_DEV) {
-    console.debug(`[popover${instanceId}] 面板失焦 → 关闭`, {
-      relatedTarget: `${nextFocused.tagName}.${String(nextFocused.className).slice(0, 60)}`,
-    });
-  }
   close('panel-focusout');
 };
 
@@ -682,11 +616,6 @@ const handleTriggerFocusOut = (e: FocusEvent) => {
 
   const nextFocused = e.relatedTarget as HTMLElement | null;
   if (nextFocused && isEventInside(nextFocused)) return;
-  if (IS_DEV) {
-    console.debug(`[popover${instanceId}] 触发器失焦 → 关闭`, {
-      relatedTarget: nextFocused ? `${nextFocused.tagName}.${String(nextFocused.className).slice(0, 60)}` : null,
-    });
-  }
   close('trigger-focusout');
 };
 

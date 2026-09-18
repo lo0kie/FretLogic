@@ -51,7 +51,11 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
   const handleGlobalFocusIn = (e: FocusEvent) => {
     const target = e.target;
     if (!(target instanceof Node)) return;
-    if (target === inputRef.value || scrollEl.value?.contains(target)) return;
+    // 组件根内部的焦点迁移（input / 清空 / 眼睛按钮）不收起：点清空时焦点先落到按钮、
+    // handleClear 再把焦点还给 input，若按「按钮在面板外」收起会经历关闭→重开的闪动；
+    // 焦点真正迁出组件根时依旧会被本监听捕获并收起
+    if (rootRef.value?.contains(target) || target === inputRef.value) return;
+    if (scrollEl.value?.contains(target)) return;
     closeResults();
   };
 

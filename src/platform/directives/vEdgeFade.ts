@@ -11,6 +11,7 @@
  *   <div v-edge-fade.y="{ size: 24, flushEps: 2 }">…</div>
  *   <div v-edge-fade="{ direction: 'y' }">…</div>    // 选项定向（包装组件按 prop 传方向，修饰符优先）
  *   <div v-edge-fade.y="'1.5rem'">…</div>            // 带宽支持任意 CSS 长度字符串
+ *   <div v-edge-fade.y="{ offset: '2.4rem' }">…</div> // 起始缘内缩：羽化从 2.4rem 处才开始
  *   <div v-edge-fade>…</div>                         // 默认带宽 20px
  *   <div v-edge-fade="false">…</div>                 // 显式关闭
  *
@@ -31,6 +32,8 @@ import {
   buildDualEdgeFadeMask,
   buildEdgeFadeMask,
   ensureFadeProperties,
+  FADE_OFFSET_PROP,
+  FADE_OFFSET_TARGET_PROP,
   fadeTransition,
 } from '@/platform/utils/fadeMask';
 
@@ -39,6 +42,12 @@ import type { Directive } from 'vue';
 export interface EdgeFadeOptions {
   /** 羽化带宽（px 数值或 CSS 长度字符串，如 24 / '1.5rem'），缺省 20 */
   size?: number | string;
+  /** 起始缘内缩量（px 数值或 CSS 长度字符串，如 '2.4rem'），缺省 0。
+   *  0~offset 一段不羽化，羽化带从 offset 处开始——容器上沿有常驻吸附头（sticky 分组标题）时
+   *  传它的高度，羽化才会落在标题下沿而不是被标题盖住。
+   *  值可以是引用宿主变量的 var() 串（如 'var(--sticky-head-offset, 0px)'）：内缩量写在
+   *  注册过的 --fade-offset 上，可参与 transition，宿主改写时羽化带平滑移动而非瞬跳 */
+  offset?: number | string;
   /** 贴边判定容差（px）：内容与边缘间距小于该值视为贴边不渐隐，缺省 1 */
   flushEps?: number;
   /** 羽化轴向：等价于 .x / .y 修饰符，供包装组件按 prop 定向时使用（修饰符优先于本项）。
@@ -60,6 +69,8 @@ const FADE_TRANSITION_MS = 150;
 interface ResolvedOptions {
   enabled: boolean;
   size: number | string;
+  /** 起始缘内缩量：0~offset 不羽化。省略则不下发 --fade-offset（宿主可自行在元素上改写它） */
+  offset?: number | string;
   flushEps: number;
   /** 用户显式指定的方向；undefined = 自动按溢出主轴判断 */
   direction?: EdgeFadeDirection;
@@ -72,8 +83,16 @@ interface EdgeFadeState {
   options: ResolvedOptions;
   /** 羽化端点量签名（各端点值拼接）：相同则跳过重复样式写入；null=未挂遮罩 */
   lastFade: string | null;
-  /** 已挂遮罩模式：模式切换（溢出轴增减）时重建模板 */
+  /** 已挂 mask 模板的模式：模式切换（溢出轴增减）时重建模板 */
   lastMode?: FadeMode;
+  /** 已挂模板的带宽签名：带宽变化需重建模板（内缩量不走模板，写 --fade-offset，无需重建） */
+  lastTemplate: string | null;
+  /** 已下发的内缩量（--fade-offset）原文 */
+  lastOffset: string | null;
+  /** 内缩量切换时序的延时句柄：非空表示当前处于「已淡出、等待淡入」的中间态 */
+  offsetSwitchTimer: ReturnType<typeof setTimeout> | null;
+  /** 已应用的内缩量目标值（与宿主写的 --fade-offset-target 比对，不同才启动切换时序） */
+  appliedOffset: string;
   /** 平滑卸载的延时句柄：端点过渡回 0 后再摘 mask；重新挂载时取消 */
   clearTimer: ReturnType<typeof setTimeout> | null;
   observer: ResizeObserver;
@@ -107,8 +126,8 @@ function resolveOptions(binding: EdgeFadeBinding, modifiers: Record<string, bool
     return { enabled: true, size: binding, flushEps: DEFAULT_FLUSH_EPS, direction };
   }
   if (binding && typeof binding === 'object') {
-    const { size = DEFAULT_FADE_SIZE, flushEps = DEFAULT_FLUSH_EPS } = binding;
-    return { enabled: true, size, flushEps, direction };
+    const { size = DEFAULT_FADE_SIZE, offset, flushEps = DEFAULT_FLUSH_EPS } = binding;
+    return { enabled: true, size, offset, flushEps, direction };
   }
   return { enabled: true, size: DEFAULT_FADE_SIZE, flushEps: DEFAULT_FLUSH_EPS, direction };
 }
@@ -121,6 +140,19 @@ function writeFade(el: HTMLElement, state: EdgeFadeState, values: Record<string,
   for (const [prop, value] of Object.entries(values)) {
     el.style.setProperty(prop, String(value));
   }
+}
+
+/** 下发起始缘内缩量：写在注册过的 --fade-offset 上，值变化由 transition 平滑过渡。
+ *  options.offset 允许是 var() 串（宿主变量），此时原文不变、由被引用的宿主变量驱动过渡；
+ *  省略时完全不写该属性——宿主可以直接在元素上改写它（长度值），指令不与之争夺 */
+function writeFadeOffset(el: HTMLElement, state: EdgeFadeState): string {
+  const value = state.options.offset;
+  if (value === undefined) return '';
+  const text = typeof value === 'number' ? `${value}px` : value;
+  if (state.lastOffset === text) return text;
+  state.lastOffset = text;
+  el.style.setProperty(FADE_OFFSET_PROP, text);
+  return text;
 }
 
 /**
@@ -142,6 +174,8 @@ function clearFade(el: HTMLElement, state: EdgeFadeState): void {
     el.style.maskComposite = '';
     el.style.setProperty('-webkit-mask-composite', '');
     for (const prop of ALL_FADE_PROPS) el.style.removeProperty(prop);
+    // 刻意不清 --fade-offset：它可能由宿主直接维护（元素上改写内缩量的用法），
+    // 摘掉 mask 后残留值不产生任何视觉；下次挂载时正好延续宿主最后写的值
     el.style.transition = '';
   }, FADE_TRANSITION_MS + 30);
 }
@@ -206,7 +240,54 @@ function updateObservedChildren(el: HTMLElement, state: EdgeFadeState, mutations
   }
 }
 
-/** 当前模式下的端点透明度值：双轴四端点 / 单轴两端点 */
+/** 当前模板几何签名：模式 + 带宽，任一变化都需要重建 mask 模板 */
+const templateKey = (mode: FadeMode, options: ResolvedOptions): string => `${mode}|${String(options.size)}`;
+/**
+ * 内缩量的**时序切换**：先把端点归零让羽化淡出 → 在羽化不可见时改内缩量 → 再淡入到目标端点。
+ *
+ * 位置变化本身无法既正确又无感：直接改会瞬跳（回顶时闪一下），加过渡则整条羽化带平移过去
+ * （比闪更显眼）。利用「两端点均为 0 时整条渐变不透明、内缩量怎么动都看不见」这一点，
+ * 把位置变化藏在羽化的淡出—淡入之间：看到的是羽化在原处收起、在新处展开，中间没有平移。
+ *
+ * @returns 本次端点已由时序接管（调用方不要再写端点）
+ */
+function switchFadeOffset(el: HTMLElement, state: EdgeFadeState, mode: FadeMode): boolean {
+  if (state.offsetSwitchTimer !== null) return true; // 时序进行中，端点归它管
+  const target = el.style.getPropertyValue(FADE_OFFSET_TARGET_PROP).trim();
+  if (!target || target === state.appliedOffset) return false;
+
+  state.appliedOffset = target;
+
+  const values = computeFadeValues(el, mode, state.options.flushEps);
+  // 当前根本没有羽化（两端点都是 0）：位置变化不可见，直接改、不必走时序
+  if (Object.values(values).every(v => v === 0)) {
+    applyFadeOffsetInstantly(el, target);
+    return false;
+  }
+
+  const zeros: Record<string, number> = {};
+  for (const prop of Object.keys(values)) zeros[prop] = 0;
+  writeFade(el, state, zeros); // 端点归零：羽化收起
+  // 位置必须等羽化**彻底**收起后再动：淡出是渐进的，前段羽化仍可见，
+  // 若位置与淡出同时开始，就会看到羽化带一边变淡一边平移——这正是要避免的观感
+  state.offsetSwitchTimer = setTimeout(() => {
+    state.offsetSwitchTimer = null;
+    // 此刻羽化不可见，位置瞬时到位（过渡与否都看不见，瞬时最省事也最保险）
+    applyFadeOffsetInstantly(el, target);
+    writeFade(el, state, computeFadeValues(el, mode, state.options.flushEps)); // 在新位置淡入
+  }, FADE_TRANSITION_MS + 20);
+  return true;
+}
+
+/** 内缩量瞬时到位：临时关掉过渡 → 写入 → 强制重算固化 → 恢复过渡。
+ *  只在羽化不可见时调用（端点全 0），否则会是一次可见的瞬跳 */
+function applyFadeOffsetInstantly(el: HTMLElement, value: string): void {
+  el.style.transition = fadeTransition(0);
+  el.style.setProperty(FADE_OFFSET_PROP, value);
+  void el.offsetWidth; // 强制样式重算：把新位置固化成已计算值，恢复过渡后不再补一次动画
+  el.style.transition = fadeTransition(FADE_TRANSITION_MS);
+}
+
 function computeFadeValues(el: HTMLElement, mode: FadeMode, flushEps: number): Record<string, number> {
   if (mode === 'dual') {
     const [xStart, xEnd] = endFades(el, 'x', flushEps);
@@ -245,9 +326,17 @@ function mountFadeMask(el: HTMLElement, state: EdgeFadeState, mode: FadeMode): v
   }
   el.style.transition = fadeTransition(FADE_TRANSITION_MS);
   for (const prop of ALL_FADE_PROPS) el.style.setProperty(prop, '0');
+  // 内缩量在固化起点之前写入：首次挂载时羽化带不该从 0 位置「滑」到 offset，
+  // 之后的宿主改写才交给切换时序（淡出→改位置→淡入）。
+  // 宿主若已声明目标值，挂载即按它定位，并记为「已应用」，避免首帧多走一次淡出—淡入
+  const hostTarget = el.style.getPropertyValue(FADE_OFFSET_TARGET_PROP).trim();
+  const optionText = writeFadeOffset(el, state);
+  if (!optionText && hostTarget) el.style.setProperty(FADE_OFFSET_PROP, hostTarget);
+  state.appliedOffset = optionText || hostTarget;
   void el.offsetWidth; // 强制样式重算：固化为过渡起点
   state.lastFade = null;
   state.lastMode = mode;
+  state.lastTemplate = templateKey(mode, state.options);
   writeFade(el, state, computeFadeValues(el, mode, state.options.flushEps));
 }
 
@@ -270,12 +359,17 @@ function syncEdgeFade(el: HTMLElement, state: EdgeFadeState): void {
     return;
   }
 
-  // 铺遮罩前记录所用模式，模式切换（溢出轴增减）时重建模板
-  if (state.lastFade === null || state.lastMode !== mode) {
+  // 铺遮罩前记录所用几何：模式切换（溢出轴增减）或带宽变化时重建模板
+  if (state.lastFade === null || state.lastMode !== mode || state.lastTemplate !== templateKey(mode, options)) {
     mountFadeMask(el, state, mode);
     return;
   }
 
+  // 内缩量变化交给时序（淡出→改位置→淡入），期间端点由它接管
+  if (switchFadeOffset(el, state, mode)) return;
+
+  // 内缩量走 --fade-offset，不进模板，故无需因它重建 mask
+  writeFadeOffset(el, state);
   writeFade(el, state, computeFadeValues(el, mode, options.flushEps));
 }
 
@@ -285,6 +379,10 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
       options: resolveOptions(binding.value, binding.modifiers),
       lastFade: null,
       lastMode: undefined,
+      lastTemplate: null,
+      lastOffset: null,
+      offsetSwitchTimer: null,
+      appliedOffset: '',
       clearTimer: null,
       observer: undefined as unknown as ResizeObserver,
       mutationObserver: undefined as unknown as MutationObserver,
@@ -344,6 +442,7 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
     const state = STATES.get(el);
     if (!state) return;
     if (state.clearTimer) clearTimeout(state.clearTimer);
+    if (state.offsetSwitchTimer) clearTimeout(state.offsetSwitchTimer);
     state.cleanups.forEach(fn => fn());
     STATES.delete(el);
   },

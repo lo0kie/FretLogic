@@ -95,7 +95,7 @@
             <ActionButton
               :aria-expanded="isOpen"
               :color="isOpen ? 'primary' : 'default'"
-              :disabled="uiStore.isCopying || !scoreEditor.hasLyrics"
+              :disabled="uiStore.isCopying || isPreviewRendering || !scoreEditor.hasLyrics"
               :variant="isOpen ? 'subtle' : 'ghost'"
               @click="pinToggle()"
               icon-only
@@ -275,7 +275,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
@@ -287,15 +287,16 @@ import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
-import { useScoreExportActions } from '@/app/layouts/useScoreExportActions';
+import { preloadExportHandlers, useScoreExportActions } from '@/app/layouts/useScoreExportActions';
 import { useBackupModals } from '@/app/modals/useBackupModals';
-import { useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
-import { useSyncService } from '@/app/services/sync/useSyncService';
+import { preloadAudioPlayback, useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
+import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
+import { isPreviewRendering } from '@/domains/score/preview/scorePreviewCache';
+import { preloadTextTransferActions, useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
 import { useTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
@@ -393,7 +394,9 @@ const transferButtons = computed<TransferButton[]>(() => {
   // 乐谱「预览」tab：无文字编辑语义，复制改派为整曲长图（复用预览导出链路 handleScoreExport）；
   // 粘贴保持全 tab 可用（导入乐谱与当前 tab 无关，导入后由导入链路自行选中并切换）
   if (isScore && scoreEditor.activeTab === 'preview') {
-    const longImageDisabled = uiStore.isCopying || !scoreEditor.hasLyrics;
+    // 预览渲染中（A4 分页图尚未出全）禁止复制/下载/粘贴，避免导出半成品或中途竞态
+    const previewBusy = uiStore.isCopying || isPreviewRendering.value;
+    const longImageDisabled = previewBusy || !scoreEditor.hasLyrics;
     return [
       {
         key: 'copy-long-image',
@@ -406,7 +409,7 @@ const transferButtons = computed<TransferButton[]>(() => {
         key: 'paste',
         icon: 'clipboard-paste',
         tooltip: '从剪切板粘贴',
-        disabled: uiStore.isCopying,
+        disabled: previewBusy,
         onClick: handlePasteSong,
       },
     ];
@@ -478,6 +481,20 @@ const themeMenuItems = computed<MenuItem[]>(() => [
 ]);
 
 const { triggerGlobalSync, pullFromRemote, resolvePushCredentialIssue, isSyncing, isPulling } = useSyncService();
+// 空闲时预取各懒加载动作链的 chunk（同步/导出/试听/复制粘贴）：
+// 首次点击不再经历「chunk 下载 → 模块求值」的反馈死区，busy/loading 状态立即翻转
+onMounted(() => {
+  const idle = (cb: () => void): void => {
+    if ('requestIdleCallback' in window) requestIdleCallback(cb, { timeout: 5000 });
+    else setTimeout(cb, 2000);
+  };
+  idle(() => {
+    void preloadSyncActions();
+    void preloadExportHandlers();
+    void preloadAudioPlayback();
+    void preloadTextTransferActions();
+  });
+});
 const backupModals = useBackupModals();
 const settingsStore = useSettingsStore();
 
@@ -542,13 +559,13 @@ const handleSyncMenuClick = () => {
 
 const syncMenuItems = computed<MenuItem[]>(() => [
   {
-    label: isSyncing.value ? '同步中...' : '同步',
+    label: isSyncing.value ? '推送中...' : '推送到云端',
     icon: 'refresh-cw',
     disabled: isSyncing.value || isPulling.value,
     action: handleSyncMenuClick,
   },
   {
-    label: isPulling.value ? '拉取中...' : '拉取',
+    label: isPulling.value ? '拉取中...' : '从云端拉取',
     icon: 'cloud-download',
     disabled: isSyncing.value || isPulling.value,
     action: () => {
@@ -556,7 +573,7 @@ const syncMenuItems = computed<MenuItem[]>(() => [
     },
   },
   {
-    label: '配置',
+    label: '同步目标',
     icon: SYNC_TARGET_ICONS[settingsStore.syncTarget] || 'server',
     children: [
       {
@@ -597,10 +614,10 @@ const syncMenuItems = computed<MenuItem[]>(() => [
       },
     ],
   },
-  // 同步设置入口放在一级：子菜单里的四项只负责切换「同步 / 拉取的目标」，
+  // 同步设置入口放在一级：「同步目标」子菜单只负责切换「推送 / 拉取」使用的云端方案，
   // 真正填写凭据的弹窗不该再藏进子菜单里多绕一层
   {
-    label: '同步设置',
+    label: '同步设置…',
     icon: 'settings',
     divided: true,
     // 走 openSyncSettings 而非直接置位：弹窗内的方案选择器需对齐当前同步目标，

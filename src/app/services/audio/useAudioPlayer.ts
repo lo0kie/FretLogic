@@ -18,6 +18,13 @@ export const currentPlayingStepIndex = ref<number>(-1);
 /** 懒加载播放逻辑实现（见 audioPlayback.ts 文件头注释） */
 const loadPlayback = () => import('./audioPlayback');
 
+/**
+ * 预取播放逻辑实现模块（只拉取不执行）：
+ * 供宿主 UI 挂载 / 空闲时机调用，把 WebAudio 合成器链路的 chunk 下载
+ * 提前到用户点击试听之前，消除首次点击的反馈死区。
+ */
+export const preloadAudioPlayback = (): Promise<unknown> => loadPlayback();
+
 /** 和弦试听播放器：引擎与播放状态为模块级单例，多个组件共享 */
 export function useAudioPlayer() {
   return {

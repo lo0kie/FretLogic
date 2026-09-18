@@ -12,12 +12,15 @@
  */
 import { storeToRefs } from 'pinia';
 
+import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import { DEFAULT_SCORE_TITLE, getScorePageSize, getScorePageSizeMm } from '@/domains/score/constants';
+import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { currentRenderData, readA4PageBlob } from '@/domains/score/preview/scorePreviewCache';
 import { runWorkerExport } from '@/domains/score/preview/services/workerExportService';
 import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
+import { isDark } from '@/platform/composables/useTheme';
 import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
@@ -32,6 +35,50 @@ const settingsStore = useSettingsStore();
 const { isCopying } = storeToRefs(useUiStore());
 // Worker 渲染载荷统一构建（全曲行索引 + 设置项读取），与预览面板共享同一来源
 const { getAllLineIndices, buildRenderPayload, composePageFooter } = useScoreRenderPayload();
+const { chordsLookupMap } = useScoreLinesData();
+
+/**
+ * 长图结果单槽缓存：复制→下载这类连击（内容未变）直接复用上一次渲染产物，
+ * 省掉一次约 2s 的 Worker 渲染。键覆盖与预览内容键相同的失效维度
+ * （歌曲内容/元数据/版本 + 全部导出排版设置 + 主题明暗 + 槽位引用和弦指纹），
+ * 任一变化即未命中并覆盖重渲染——只留最新一份，长图体积大（可达几十 MB）不宜多槽。
+ */
+let longImageCacheKey = '';
+let longImageCacheBlob: Blob | null = null;
+
+const buildLongImageCacheKey = (): string => {
+  const song = scoreEditor.activeSong;
+  if (!song) return '';
+  // 槽位引用和弦指纹：与 ScorePreviewPane.buildContentKey 同口径，改和弦姿势即失效
+  const refSignatures: string[] = [];
+  for (const chordId of song.chordMap.values()) {
+    const chord = chordsLookupMap.value.get(chordId ?? '');
+    refSignatures.push(chord ? computeChordFingerprint(chord) : `?${chordId}`);
+  }
+  refSignatures.sort();
+  return [
+    song.id,
+    song.title,
+    song.singer,
+    song.playKey,
+    song.originalKey,
+    song.capo,
+    song.version,
+    song.lyrics,
+    settingsStore.scoreChordShorthand,
+    settingsStore.scoreLayoutAlign,
+    settingsStore.scoreShowBarre,
+    settingsStore.scoreLyricsFontWeight,
+    settingsStore.scoreExportQuality,
+    settingsStore.scorePageMargin,
+    settingsStore.scorePageSize,
+    settingsStore.scoreIgnoreEmptySpace,
+    scoreEditor.previewFontScale,
+    scoreEditor.previewFretboardScale,
+    isDark.value,
+    refSignatures.join('|'),
+  ].join('\u0001');
+};
 
 /**
  * 预览 tab 的导出：整曲经 Worker 离屏渲染为一张长图（normal 模式），
@@ -181,9 +228,14 @@ const getA4Blobs = async (): Promise<Blob[]> => {
   return composePageFooter(blobs);
 };
 
-/** 取长图 Blob（「下载为长图」按需渲染，预览不预渲染长图，故每次都走 Worker） */
+/** 取长图 Blob：优先命中单槽缓存（复制后紧接着下载即复用同一份产物），未命中才走 Worker 渲染 */
 const getLongImageBlob = async (): Promise<Blob> => {
+  const key = buildLongImageCacheKey();
+  if (key && key === longImageCacheKey && longImageCacheBlob) return longImageCacheBlob;
+
   const { blobs } = await runWorkerExport(buildRenderPayload('normal'));
   if (blobs.length === 0) throw new Error('未能生成有效的导出图片');
-  return blobs[0]!;
+  longImageCacheKey = key;
+  longImageCacheBlob = blobs[0]!;
+  return longImageCacheBlob;
 };

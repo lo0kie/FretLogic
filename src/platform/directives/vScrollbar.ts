@@ -1252,17 +1252,44 @@ const unmountScrollbar = (host: HTMLElement): void => {
   states.delete(host);
 };
 
+/**
+ * 被动模式（enabled:false）：不挂自绘 overlay，但仍托管「可滚动」本身——
+ * 注入 overflow 与隐藏原生滚动条。宿主（如 BaseScrollArea）因此无需为关闭自绘滚动条的
+ * 场景再手写 overflow-* / no-scrollbar：启用与禁用两种形态下滚动基建都由指令统一注入。
+ */
+const mountPassiveScrollbar = (
+  host: HTMLElement,
+  binding: ScrollbarBinding,
+  modifiers?: Record<string, boolean>
+): void => {
+  if (typeof document === 'undefined') return;
+  ensureGlobalStyle();
+  host.classList.add(HOST_CLASS);
+  // 与完整挂载同款双保险：类会被 Vue patch 重写，内联属性不受影响（::-webkit-scrollbar 靠类兜底）
+  host.style.scrollbarWidth = 'none';
+  host.style.setProperty('-ms-overflow-style', 'none');
+  const options = binding && typeof binding === 'object' ? binding : {};
+  const axes = resolveAxes(options, modifiers);
+  if (axes.includes('y')) host.style.overflowY = 'auto';
+  if (axes.includes('x')) host.style.overflowX = 'auto';
+};
+
 export const vScrollbar: Directive<HTMLElement, ScrollbarBinding> = {
   mounted: (el, binding) => {
-    // enabled=false：惰性挂载（不注册状态、不注入样式、不挂 overlay），
+    // enabled=false：被动挂载（只注入 overflow 与隐藏原生滚动条，不注册状态、不挂 overlay），
     // 翻转为启用时由 updated 增量挂载；关闭时由 updated 完整卸载
-    if (binding.value?.enabled === false) return;
+    if (binding.value?.enabled === false) {
+      mountPassiveScrollbar(el, binding.value, binding.modifiers);
+      return;
+    }
     mountScrollbar(el, binding.value, binding.modifiers);
   },
   updated: (el, binding) => {
     if (binding.value?.enabled === false) {
-      // 启用 → 禁用：完整卸载；本就未挂载时为幂等空操作
+      // 启用 → 禁用：完整卸载；本就未挂载时为幂等空操作。
+      // 卸载后回放被动注入：Vue patch 会重写 className 抹掉宿主类，内联注入需幂等补挂
       unmountScrollbar(el);
+      mountPassiveScrollbar(el, binding.value, binding.modifiers);
       return;
     }
     // Vue patch class 时会重写 className，把挂载时外加的宿主类抹掉（原生滚动条闪现），幂等补挂

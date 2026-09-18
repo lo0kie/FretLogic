@@ -158,6 +158,8 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue';
+
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseForm from '@/platform/ui/form/BaseForm.vue';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
@@ -170,6 +172,9 @@ import { injectModalController } from '@/platform/store/useModalController';
 import type { useBackupModals } from '@/app/modals/useBackupModals';
 
 const backupModals = injectModalController<ReturnType<typeof useBackupModals>>('backupModals');
+
+// 弹窗打开即预取备份动作 chunk：点「确认导出/导入」时模块已在缓存，loading 立即出现
+onMounted(() => void backupModals.preloadBackupActions());
 
 /** 表单行统一 Label 宽度：由 BaseForm 容器下发，各行无需重复声明 */
 const FORM_LABEL_WIDTH = '4.5rem';
