@@ -1,33 +1,45 @@
 <template>
   <template v-if="hasNotes">
-    <div class="flex min-h-0 w-full flex-row items-stretch gap-2 overflow-hidden">
-      <div
-        v-grid-nav
-        :class="candidatesOnly ? 'min-h-0 w-full' : 'min-h-0 min-w-0 flex-[0_0_56%]'"
-        class="flex flex-wrap content-start gap-1 overflow-y-auto p-1"
-      >
-        <template v-if="candidates.length > 0">
-          <BaseBadge
-            v-wave
-            v-for="candidate in candidates"
-            :appearance="isCandidateActive(candidate) ? 'filled' : 'subtle'"
-            :key="candidate.chordName"
-            :title="candidate.chordName"
-            :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
-            @click="handleSelectCandidate(candidate)"
-            interactive
-          >
-            <span v-chord-name="{ segments: candidate.segments, name: candidate.chordName, shorthand }" />
-          </BaseBadge>
-        </template>
+    <!-- 两列高度以右侧按音列为准：左列内容绝对定位脱离流、不参与行高计算，超出时自身滚动 -->
+    <div
+      :class="candidatesOnly ? 'grid-cols-1' : 'grid-cols-[56%_auto_1fr]'"
+      class="grid min-h-0 w-full gap-xs overflow-hidden"
+    >
+      <!-- 左列占位壳：只作定位上下文与滚动条 overlay 的挂载点，自身不提供内容高度 -->
+      <div class="relative min-h-0 min-w-0" ref="candidatePaneRef">
+        <!-- 内容层绝对定位脱离流 → 不参与 grid 行高计算，行高由右列独占决定；超出则本区滚动 -->
+        <BaseScrollArea
+          v-grid-nav
+          :class="candidatesOnly ? undefined : 'absolute inset-0'"
+          :fade="{ size: 12 }"
+          :scrollbar="{ overlayParent: candidateOverlayParent }"
+          axis="y"
+          class="flex flex-wrap content-start gap-1 p-1"
+        >
+          <template v-if="candidates.length > 0">
+            <BaseBadge
+              v-wave
+              v-for="candidate in candidates"
+              :appearance="isCandidateActive(candidate) ? 'filled' : 'subtle'"
+              :key="candidate.chordName"
+              :title="candidate.chordName"
+              :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
+              @click="handleSelectCandidate(candidate)"
+              interactive
+            >
+              <span v-chord-name="{ segments: candidate.segments, name: candidate.chordName, shorthand }" />
+            </BaseBadge>
+          </template>
 
-        <Feedback v-else bordered description="暂无匹配和弦" icon="search-x" size="sm" />
+          <Feedback v-else bordered description="暂无匹配和弦" icon="search-x" size="sm" />
+        </BaseScrollArea>
       </div>
 
       <template v-if="!candidatesOnly">
         <BaseDivider orientation="vertical" />
 
-        <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-1 p-0.5">
+        <!-- 右列：按音列表在流中，独占决定整行高度（左列已脱离流） -->
+        <div class="flex min-h-0 min-w-0 flex-col gap-1 p-0.5">
           <div
             v-wave
             v-for="note in notes"
@@ -74,11 +86,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useActiveChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';
 import {
@@ -210,6 +223,17 @@ const candidates = computed(() => analysis.value.candidates);
 const notes = computed(() => analysis.value.notes);
 /** 有按音（分析图存在即代表至少一个按音，决定内容/空态分支） */
 const hasNotes = computed(() => analysis.value.notes.length > 0);
+
+/** 左列占位壳元素：滚动条 overlay 的挂载点（见 candidateOverlayParent） */
+const candidatePaneRef = useTemplateRef<HTMLElement>('candidatePaneRef');
+
+/**
+ * 滚动条 overlay 显式挂到左列占位壳，避开 v-scrollbar 默认的「宿主父元素」回落路径。
+ * 默认回落会把 overlay 插进折叠体的子节点列表，成为 Vue 逐子 diff 时的外来兄弟节点；
+ * 本面板整体由 hasNotes 的 v-if 控制挂载/卸载，锚点会被外来节点打乱 →
+ * insertBefore NotFoundError、DOM 卡在半更新态（反推和弦面板曾踩过同一坑）。
+ */
+const candidateOverlayParent = () => candidatePaneRef.value ?? null;
 
 /** 候选和弦是否为当前激活项（与草稿名相同，或音名段序列/等音异名一致均视为匹配） */
 const isCandidateActive = (candidate: CandidateResult): boolean => {

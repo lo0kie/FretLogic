@@ -13,6 +13,7 @@
  * - false → 不注入（宿主元素上有自己的多属性过渡时必传，内联 transition-property 会覆盖类过渡）。
  */
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
+import { hasTransitionItem, mergeTransitionItem, removeTransitionItems } from '@/platform/utils/motion';
 
 import type { Directive, DirectiveBinding } from 'vue';
 
@@ -36,6 +37,24 @@ export type AutoHeightBinding = boolean | AutoHeightOptions | undefined;
 /** 默认注入的 height 过渡：时长/缓动走主题 token，缺省值兜底无 token 环境 */
 const DEFAULT_HEIGHT_TRANSITION = 'height var(--duration-base, 0.18s) var(--ease-standard, ease)';
 
+/**
+ * 写高度前确保 height 过渡在场（缺失则条目级补回）。
+ *
+ * 宿主元素常与其它指令共享（如 BaseScrollArea 根元素同时挂 v-edge-fade），后者会在
+ * 溢出状态变化时改写 transition——若发生在本指令写高度的同一帧内、样式重算之前，
+ * 被覆盖的 height 过渡会让本次高度变化瞬变。applyTransition 已改为条目级合并，
+ * 这里是兜底：任何路径把 height 条目挤掉后，下一次写高度前自动补回。
+ */
+const ensureHeightTransition = (el: HTMLElement, state: AutoHeightState): void => {
+  if (state.opts.transition === false || !state.injectedTransition) return;
+  if (hasTransitionItem(el.style.transition, 'height')) return;
+  const desired =
+    typeof state.opts.transition === 'string' && state.opts.transition
+      ? state.opts.transition
+      : DEFAULT_HEIGHT_TRANSITION;
+  el.style.transition = mergeTransitionItem(el.style.transition, desired);
+};
+
 interface AutoHeightState {
   opts: AutoHeightOptions;
   observer?: ResizeObserver;
@@ -53,17 +72,19 @@ interface AutoHeightState {
 
 const stateMap = new WeakMap<HTMLElement, AutoHeightState>();
 
-/** 按配置向宿主注入/回收内联 height 过渡（内联 transition-property 会覆盖宿主类过渡，故 false 时回收） */
+/** 按配置向宿主写入/回收 height 过渡（条目级合并：同元素上其它指令的过渡条目原位保留，
+ *  整条覆盖会把它们吞掉——典型如 BaseScrollArea 根元素上共存的 v-edge-fade） */
 const applyTransition = (el: HTMLElement, state: AutoHeightState): void => {
   const { transition } = state.opts;
   if (transition === false) {
     if (state.injectedTransition) {
-      el.style.removeProperty('transition');
+      el.style.transition = removeTransitionItems(el.style.transition, 'height');
       state.injectedTransition = false;
     }
     return;
   }
-  el.style.transition = typeof transition === 'string' && transition ? transition : DEFAULT_HEIGHT_TRANSITION;
+  const desired = typeof transition === 'string' && transition ? transition : DEFAULT_HEIGHT_TRANSITION;
+  el.style.transition = mergeTransitionItem(el.style.transition, desired);
   state.injectedTransition = true;
 };
 
@@ -119,6 +140,7 @@ const syncHeight = (container: HTMLElement, state: AutoHeightState, force = fals
     measured > 0 &&
     (force || prevInline === 'auto' || prevInline === '0px' || Math.abs(measured - state.lastMeasuredPx) >= threshold);
   if (shouldWrite) {
+    ensureHeightTransition(container, state);
     state.lastMeasuredPx = measured;
     container.style.height = `${measured}px`;
   }
@@ -240,7 +262,7 @@ export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
 
     if (currentDisabled) {
       if (state.injectedTransition) {
-        el.style.removeProperty('transition');
+        el.style.transition = removeTransitionItems(el.style.transition, 'height');
         state.injectedTransition = false;
       }
       state.observer?.disconnect();

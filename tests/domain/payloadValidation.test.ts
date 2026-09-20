@@ -40,6 +40,52 @@ describe('payload validation migration matrix', () => {
     expect(result.payload?.chords[0]).not.toHaveProperty('fingerprint');
   });
 
+  it('preserves rootStringIndex for both v7 object strings and legacy tuple strings', () => {
+    // 回归:导入链路先把旧元组琴弦迁移为对象(migratePayloadVersion v6→v7),而根音标记推导
+    // 曾只认元组形态——两条载入路径(导入 / IDB 载入)的 rootStringIndex 都会被清成 null,
+    // 表现为「导入旧数据后根音标记丢失」。
+    const legacyTuples = [
+      [-1, 0],
+      [3, 0],
+      [2, 0],
+      [0, 0],
+      [1, 0],
+      [0, 0],
+    ];
+    const result = validateImportExportPayload({
+      version: 6,
+      groups: [group],
+      chords: [
+        {
+          id: 'c1',
+          chordName: 'C',
+          strings: legacyTuples,
+          fretCount: 3,
+          fretOffset: 0,
+          groupId: 'g1',
+          tuning: 'STANDARD',
+          rootStringIndex: 1,
+        },
+        {
+          id: 'c2',
+          chordName: 'C',
+          // 改一个品位避免与 c1 指纹相同(同组重复指纹会被去重器丢弃,与本测试无关)
+          strings: strings.map((s, i) => ({ ...s, fret: i === 5 ? 3 : s.fret })),
+          fretCount: 3,
+          fretOffset: 0,
+          groupId: 'g1',
+          tuning: 'STANDARD',
+          rootStringIndex: 1,
+        },
+      ],
+      songs: [],
+    });
+
+    expect(result.isValid).toBe(true);
+    expect(result.payload?.chords[0]?.rootStringIndex).toBe(1); // 旧元组形态
+    expect(result.payload?.chords[1]?.rootStringIndex).toBe(1); // v7 对象形态
+  });
+
   it('migrates v2 object strings and numeric ids', () => {
     const result = validateImportExportPayload({
       version: 2,

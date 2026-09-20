@@ -261,25 +261,6 @@
           </BaseFormRow>
         </BaseForm>
       </BaseCollapse>
-
-      <BaseCollapse
-        v-scroll-into-view.y.delay-220="isWorkbenchGroupOpen('display')"
-        :class="workbenchOpenGroup === 'display' ? 'bg-tint-panelhover-50!' : ''"
-        :expanded="workbenchOpenGroup === 'display'"
-        @update:expanded="toggleWorkbenchGroup('display', $event)"
-        initial-auto
-        class="scroll-mt-2"
-        description="和弦简写"
-        icon="eye"
-        icon-size="xl"
-        title="显示"
-      >
-        <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
-          <BaseFormRow help="仅工作台生效" label="符号简写 (M/°/+)">
-            <BaseSwitch v-model="settingsStore.workbenchChordShorthand" aria-label="工作台符号简写" />
-          </BaseFormRow>
-        </BaseForm>
-      </BaseCollapse>
     </template>
   </BaseScrollArea>
 </template>
@@ -312,8 +293,9 @@ import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandl
  *  按编辑 tab（排列和弦）与预览 tab 分维度记忆，两 tab 各自独立、互不共用 */
 const scoreEditOpenGroupState = ref<'' | 'layout' | 'display' | 'export'>('layout');
 const scorePreviewOpenGroupState = ref<'' | 'layout' | 'display' | 'export'>('layout');
-/** 工作台页折叠分组展开项（排他手风琴：会话级记忆，重开仍停留原分组，可收起至全部折叠） */
-const workbenchOpenGroupState = ref<'' | 'timbre' | 'effect' | 'display'>('timbre');
+/** 工作台页折叠分组展开项（排他手风琴：会话级记忆，重开仍停留原分组，可收起至全部折叠）。
+ *  原第三组「显示」仅含和弦简写一项，已迁入工作台指板设置面板，分组随之移除 */
+const workbenchOpenGroupState = ref<'' | 'timbre' | 'effect'>('timbre');
 /** 会话级滚动位置记忆：关闭/重开设置弹窗仍返回上次滚动位置（浮层 v-if 销毁重建容器，避免"闪回顶部"） */
 const scoreScrollTopState = ref(0);
 const workbenchScrollTopState = ref(0);
@@ -377,7 +359,7 @@ function toggleScoreGroup(group: '' | 'layout' | 'display' | 'export', value: bo
 }
 
 /** 切换工作台页分组：展开即排他选中该组，收起（value=false）则回到全部折叠 */
-function toggleWorkbenchGroup(group: '' | 'timbre' | 'effect' | 'display', value: boolean) {
+function toggleWorkbenchGroup(group: '' | 'timbre' | 'effect', value: boolean) {
   pinPopover();
   workbenchOpenGroupState.value = value ? group : '';
 }
@@ -388,8 +370,7 @@ function toggleWorkbenchGroup(group: '' | 'timbre' | 'effect' | 'display', value
  * 展开为排他手风琴，故任意时刻仅一个分组为 true，天然只滚动刚打开的那一组。
  */
 const isScoreGroupOpen = (group: '' | 'layout' | 'display' | 'export'): boolean => scoreOpenGroup.value === group;
-const isWorkbenchGroupOpen = (group: '' | 'timbre' | 'effect' | 'display'): boolean =>
-  workbenchOpenGroup.value === group;
+const isWorkbenchGroupOpen = (group: '' | 'timbre' | 'effect'): boolean => workbenchOpenGroup.value === group;
 
 /** 按当前路由维度读取会话级滚动位置（乐谱/工作台各自独立记忆，高度不同避免交错钳位） */
 const getSessionScrollTop = () => (isScoreRoute.value ? scoreScrollTopState : workbenchScrollTopState).value;

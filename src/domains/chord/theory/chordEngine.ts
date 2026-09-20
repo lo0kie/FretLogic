@@ -22,7 +22,7 @@ import { estimateValueBytes } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
 
 import { chordQualityAstToIntervals, QUALITY_TOKENS } from './chordQualityAst';
-import { categoryOfAst, recognizeByIntervals, rolesOfAst, weightOf } from './chordRecognitionAst';
+import { categoryOfAst, compositeTokens, recognizeByIntervals, rolesOfAst, weightOf } from './chordRecognitionAst';
 import { nameToSegments, parsePitchSegment } from './theory.ts';
 
 import type { ChordQualityAst } from './chordQualityAst';
@@ -119,26 +119,41 @@ interface Recipe {
   order: number;
 }
 
-const RECIPES: Recipe[] = QUALITY_TOKENS.map((t, order) => {
-  const iv = chordQualityAstToIntervals(t.ast);
+const buildRecipe = (tokenId: string, ast: ChordQualityAst, suffix: string, order: number): Recipe => {
+  const iv = chordQualityAstToIntervals(ast);
   let mask = 0;
   for (const s of iv.all) mask |= 1 << (s % 12);
   let coreMask = 0;
   for (const s of iv.core) coreMask |= 1 << (s % 12);
   return {
-    tokenId: t.id,
-    ast: t.ast,
-    suffix: t.spellings[0]!,
-    category: categoryOfAst(t.ast),
+    tokenId,
+    ast,
+    suffix,
+    category: categoryOfAst(ast),
     mask,
     coreMask,
     extensionCount: iv.extensions.length,
     coreIntervals: iv.core,
     extensionIntervals: iv.extensions,
-    commonness: weightOf(t.ast) / 200,
+    commonness: weightOf(ast) / 200,
     order,
   };
-});
+};
+
+/**
+ * 候选配方池 = token 表原生配方 + 组合候选（见 chordRecognitionAst 的 `compositeTokens`）。
+ *
+ * 组合候选（`m7add11` / `maj7add9` …）不在 token 表里，但识别器会产出它们——若不在此注册对应
+ * Recipe，`collectRecipeHitsForRoot` 的 `RECIPE_BY_TOKEN.get(rec.tokenId)` 会拿不到而把 hit
+ * 整条丢弃（这是组合候选此前无法从指法反推的第二处阻塞点，第一处在识别器候选池）。
+ * suffix 用识别器给出的规范写法 `<基础>add<度>`，与解析侧 `Gm7add11` 的 quality（整词
+ * `'m7add11'`）同形，「输入 ⇄ 识别」才对称；order 排在全部基础配方之后，同分裁决让基础写法优先
+ * （与 preferredHit 的 token 序裁决一致）。
+ */
+const RECIPES: Recipe[] = [
+  ...QUALITY_TOKENS.map((t, order) => buildRecipe(t.id, t.ast, t.spellings[0]!, order)),
+  ...compositeTokens().map((c, i) => buildRecipe(c.id, c.ast, c.suffix, QUALITY_TOKENS.length + i)),
+];
 
 const RECIPE_BY_TOKEN = new Map<string, Recipe>(RECIPES.map(r => [r.tokenId, r]));
 
@@ -370,15 +385,23 @@ function materializeCandidate(hit: RelativeHit, rootPitch: number, ctx: AnalyzeC
 
 function assignTiers(candidates: ChordCandidate[]): void {
   if (candidates.length === 0) return;
-  const highQualityCandidates = candidates.filter(c => c.purity >= MIN_PURITY);
-  const bestScore = highQualityCandidates.length > 0 ? highQualityCandidates[0]!.score : candidates[0]!.score;
+  // 排序为「纯度优先、同纯度内分数降序」，分层随之按纯度带进行：
+  //  - low_confidence：纯度 < MIN_PURITY（不变）；
+  //  - best：纯度等于最高纯度、且分数距该带内最高分 ≤0.5（并列首选组，语义同 preferredHit）。
+  //    旧实现按全局分数划 best——低音在骨架内的根音位读法会凭加分压过「多解释一个音」的
+  //    高纯度转位读法（实测 {A,G#,B,E} 选了丢大七度的 Asus2 而非 E/A）；纯度优先排序后
+  //    分数不再单调降序，必须以「同纯度带」为 best 的前提；
+  //  - alternative：其余达纯度门槛者，距最高纯度带内最高分 ≤ BEST_GAP；
+  //  - theoretical：达纯度门槛的其余候选。
+  const topPurity = candidates[0]!.purity; // 排序保证首位纯度最高
+  const topBandBestScore = Math.max(...candidates.filter(c => c.purity === topPurity).map(c => c.score));
 
   for (const c of candidates) {
     if (c.purity < MIN_PURITY) {
       c.tier = 'low_confidence';
     } else {
-      const gap = bestScore - c.score;
-      if (gap <= 0.5) c.tier = 'best';
+      const gap = topBandBestScore - c.score;
+      if (c.purity === topPurity && gap <= 0.5) c.tier = 'best';
       else if (gap <= BEST_GAP) c.tier = 'alternative';
       else c.tier = 'theoretical';
     }
@@ -527,7 +550,12 @@ function collectRecipeHitsForRoot(
   }
 
   const hits: RelativeHit[] = [];
-  for (const rec of recognizeByIntervals(semitones, { allowMissing: 1, maxExtra: 3 })) {
+  for (const rec of recognizeByIntervals(semitones, {
+    allowMissing: 1,
+    maxExtra: 3,
+    // 低音隔离：低音音级（相对根音）传给归因模型——延伸槽位不得用低音音级归因
+    bassSemitone: lowestInterval,
+  })) {
     const recipe = RECIPE_BY_TOKEN.get(rec.tokenId);
     if (!recipe) continue;
 
@@ -539,6 +567,11 @@ function collectRecipeHitsForRoot(
     // 识别器不区分「缺哪个音」，只给一个 `missing` 计数，故这一层判据由本引擎补上。
     const missingCore = recipe.coreMask & ~intervalMask;
     if ((missingCore & ~FIFTH_INTERVALS_MASK) !== 0) continue;
+    // 强力和弦（5）的「内容」就是根音 + 五音两条，五音缺席等于只剩一个音——
+    // 「五音可省」的豁免是为三和弦 / 6 和弦设的（省五仍能表意），不能套到 power 上：
+    // 否则任意音集只要含某音、再配一个低音（低音豁免再送一票纯度），就能读出 X5/低音
+    // （实测 {C,E,G} 会冒出 E5/C、G5/C 这类垃圾候选）。
+    if (recipe.category === 'power' && missingCore !== 0) continue;
 
     // 槽位一致性：配方在某槽位填了音，输入**不能填成另一个**。
     //
@@ -551,13 +584,11 @@ function collectRecipeHitsForRoot(
     // 纯度层已通过 `explainedMask |= intervalMask & lowestBit` 对低音豁免，此处对称处理。
     if (hasSlotContradiction(recipe.mask, isSlash ? intervalMask & ~lowestBit : intervalMask)) continue;
 
-    // 配方是否基本没被实例化：声明的扩展音有一半以上在输入里找不到，说明它表达的不是这个和弦。
-    //
-    // `C E G` 上 `C6`（声明六音）与 `Cadd9`（声明九音）纯度都是 1.0、常用度也不低，
-    // 旧引擎靠手写 `conflicts` 挡掉它们；这里用「扩展音实例化率」这个结构判据挡。
-    // 取「半数以上」而非「全有」是刻意的：`C13` 省掉十一音是常见弹法，不该因此被拒，
-    // 而 `C6` 在完全没有六音时只是另一个和弦。
-    if (recipe.extensionCount > 0 && rec.unusedDeclared * 2 >= recipe.extensionCount) continue;
+    // 延伸音归因门槛（统一模型，取代旧「斜杠低音色彩门」+「半数实例化门」两处补丁）：
+    // **不可省**的延伸音必须有独立证据——缺席、或仅由低音音位支撑（低音隔离）都算无证据。
+    // 可省槽位（13 系的 9/11 还原音）免于门槛与惩罚——省是 13 系和弦的预期形态。
+    // 低音占据 core 槽位（转位）不受此限；power 的五音门槛属 core 归因，另行保留。
+    if (rec.extensionAttribution.unclaimedNonOmittable > 0) continue;
 
     let explainedMask = intervalMask & recipe.mask;
     // 低音豁免：斜杠低音本身不计入「未解释」——它只表示按在低音区，不参与性质判定
@@ -633,7 +664,12 @@ function groupCandidates(candidates: ChordCandidate[], bassPitch: number): Analy
 }
 
 /**
- * 候选排序规则：分数降序 → 绝对根音升序 → 配方序升序。
+ * 候选排序规则：纯度降序 → 分数降序 → 绝对根音升序 → 配方序升序。
+ *
+ * 纯度（含低音豁免后「解释了多少音」）必须排在低音加分之前：低音在骨架内的候选有加分，
+ * 但那不能补偿「少解释一个音」——否则 {A,G#,B,E} 会选丢掉大七度的 Asus2（p0.75），
+ * 而不是四音全保的 E/A（p1.00）；{C,G,B,F} 同理会选 Csus4 而非惯例的 G7/C。
+ * 低音偏好只在**同纯度**内裁决。
  *
  * 第三键从旧的「模板序」换成「token 表声明序」，语义一致 —— 都是**人工排定的优先级**，
  * 用来裁决同分候选。它承担着一件实事：`six` 与 `add13` 的 AST 完全相同（`C6` 的两种说法），
@@ -641,13 +677,15 @@ function groupCandidates(candidates: ChordCandidate[], bassPitch: number): Analy
  * （实测踩过：`C E G A` 被显示成 `Cadd13`）。
  */
 const compareCandidateOrder = (
+  aPurity: number,
   aS: number,
   aRoot: number,
   aRecipe: number,
+  bPurity: number,
   bS: number,
   bRoot: number,
   bRecipe: number
-): number => bS - aS || aRoot - bRoot || aRecipe - bRecipe;
+): number => bPurity - aPurity || bS - aS || aRoot - bRoot || aRecipe - bRecipe;
 
 /** 取相对声明的显式根音音程：未显式指定返回 -1（与 relMask 的 0~11 音程区分开） */
 const relativeExplicitRoot = (explicitRootPitch: number | null, bassPitch: number): number =>
@@ -685,7 +723,16 @@ function getRelativeHits(ctx: AnalyzeContext): RelativeHit[] {
 function materialize(relHits: RelativeHit[], ctx: AnalyzeContext): AnalyzeResult {
   const ordered = relHits.map(hit => ({ hit, rootPitch: normalizePitch(ctx.bassPitch + hit.rootInterval) }));
   ordered.sort((a, b) =>
-    compareCandidateOrder(a.hit.score, a.rootPitch, a.hit.order, b.hit.score, b.rootPitch, b.hit.order)
+    compareCandidateOrder(
+      a.hit.purity,
+      a.hit.score,
+      a.rootPitch,
+      a.hit.order,
+      b.hit.purity,
+      b.hit.score,
+      b.rootPitch,
+      b.hit.order
+    )
   );
 
   const candidates = ordered
@@ -749,7 +796,7 @@ export function analyzeBestRootPitch(
   for (let i = 1; i < relHits.length; i++) {
     const h = relHits[i]!;
     const absRoot = normalizePitch(ctx.bassPitch + h.rootInterval);
-    if (compareCandidateOrder(h.score, absRoot, h.order, best.score, bestRoot, best.order) < 0) {
+    if (compareCandidateOrder(h.purity, h.score, absRoot, h.order, best.purity, best.score, bestRoot, best.order) < 0) {
       best = h;
       bestRoot = absRoot;
     }

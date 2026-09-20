@@ -17,6 +17,6 @@
       "database_id": "a59eb92a-e0bb-4c7e-ab5f-3a5498cbae6c",
     },
   ],
-  // SERVER_TOKEN 不写入仓库：本地用 `wrangler secret put SERVER_TOKEN`，
-  // CI 用仓库 Secret 并通过 `--var SERVER_TOKEN:...` 注入（见 .github/workflows/deploy-worker.yml）。
+  // SERVER_TOKEN 不写入仓库：由 worker/scripts/deploy-worker.mjs 在部署前执行
+  // `wrangler secret put SERVER_TOKEN` 加密注入（本地读 .env.production，CI 用仓库 Secret 环境变量）。
 }

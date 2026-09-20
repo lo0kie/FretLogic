@@ -8,6 +8,7 @@
  * - 读操作（GET 数据 / GET /meta / HEAD）保持公开，与前端「仅推送需 Token」一致；
  * - 写操作 POST 校验 `Authorization: Bearer <SERVER_TOKEN>`（环境变量 / secret），防止他人覆盖云端数据；
  * - GET /auth-check 仅做写鉴权探测、不落库，供前端「测试连接」区分有无 Token（避免真实 POST 污染历史版本）；
+ * - POST 支持 `If-Match` 条件写：以前端 HEAD 拿到的 ETag 为基线比对，不一致即 412，防止并发覆盖；
  * - 附带永久历史版本归档（sync_history）与轻量校验元数据（data_md5 + data_updated_at，供前端启动时只拉最小数据比对）。
  */
 import { Hono } from 'hono';
@@ -22,15 +23,34 @@ const MAX_PAYLOAD_BYTES = 25 * 1024 * 1024;
 /** sync_history 保留的历史版本数：超出即裁掉最旧的，避免无限累积撑配额 */
 const SYNC_HISTORY_LIMIT = 50;
 
+/**
+ * ETag 与条件写基线：ETag 就是快照行的写入时刻 `updated_at`（毫秒）。
+ * 读路径（GET/HEAD）下发它，写路径用 `If-Match` 回收比对——两端必须共用同一套
+ * 编解码，否则会出现「读回来带引号、比对时没剥引号」这种恒不相等的假冲突。
+ * 选择写入时刻而非内容 md5：md5 相同也可能是两次独立写入，用它做基线会漏判并发覆盖。
+ */
+const etagOf = updatedAt => `"${updatedAt}"`;
+/** 剥掉 RFC 允许的弱校验前缀 `W/` 与两侧引号，取出裸值用于比对 */
+const parseIfMatch = raw =>
+  raw
+    .trim()
+    .replace(/^W\//i, '')
+    .replace(/^"(.*)"$/, '$1');
+
 const app = new Hono();
 
-// CORS 与 OPTIONS 预检统一交给中间件：原先手写的 CORS_HEADERS 与 OPTIONS 分支整段省掉
+// CORS 与 OPTIONS 预检统一交给中间件：原先手写的 CORS_HEADERS 与 OPTIONS 分支整段省掉。
+// 两项与条件写直接相关，漏一个整条 If-Match 链路都会在浏览器侧断掉（前端读不到 / 发不出）：
+//  - exposeHeaders 含 ETag：ETag 不在 CORS 安全响应头清单内，不显式暴露的话
+//    前端 HEAD 后 `headers.get('ETag')` 恒为 null，条件写基线根本拿不到；
+//  - allowHeaders 含 If-Match：该头非安全请求头，会触发预检，不在白名单里浏览器直接拦下请求。
 app.use(
   '*',
   cors({
     origin: '*',
     allowMethods: ['GET', 'POST', 'HEAD', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Environment'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Environment', 'If-Match'],
+    exposeHeaders: ['ETag'],
     maxAge: 86400,
   })
 );
@@ -121,8 +141,8 @@ const readSnapshot = async c => {
   if (!row) {
     return c.json({ message: '暂无数据存档' }, 404);
   }
-  c.header('ETag', `"${row.updated_at}"`);
-  // HEAD 只回 ETag 不带体：前端拿它做存在性探测与 If-Match 条件写的基线
+  c.header('ETag', etagOf(row.updated_at));
+  // HEAD 只回 ETag 不带体：前端拿它做存在性探测与 If-Match 条件写的基线（POST 分支实现比对）
   if (c.req.method === 'HEAD') return c.body('', 200);
   return c.body(row.data, 200, { 'Content-Type': 'application/json; charset=utf-8' });
 };
@@ -134,6 +154,29 @@ app.post('*', async c => {
   if (!isAuthorized(c)) {
     return c.json({ error: '鉴权失败：Token 无效或缺失' }, 401);
   }
+
+  // 条件写（If-Match）：前端推送前先 HEAD 取 ETag 作为基线，此处与当前行的写入时刻比对。
+  // 不一致 = 探测之后已有别的设备写过，返回 412 让前端走 CONFLICT 分支，
+  // 避免「后写静默覆盖前写」。两个作用：
+  //   1. 补上协议层防线——此前只有前端 fetchMeta 比 updatedAt 一道（两次请求之间仍有窗口）；
+  //   2. 让前端 push() 里那个 412 分支从死代码变成真能命中。
+  // 未带 If-Match 时退化为无条件写，行为与旧版一致（旧客户端 / 直连调用不受影响）。
+  const ifMatchRaw = c.req.header('If-Match');
+  if (ifMatchRaw) {
+    const current = await c.env.DB.prepare('SELECT updated_at FROM sync_data WHERE id = ?')
+      .bind('latest_backup')
+      .first();
+    const expected = parseIfMatch(ifMatchRaw);
+    const exists = Boolean(current);
+    // `*`：RFC 语义是「资源存在即放行」，不比对具体值；其余按 ETag 严格比对
+    const matched = expected === '*' ? exists : exists && String(current.updated_at) === expected;
+    if (!matched) {
+      // 一并把当前 ETag 回给调用方，便于前端直接刷新基线、少一次 HEAD 往返
+      if (current) c.header('ETag', etagOf(current.updated_at));
+      return c.json({ error: '数据已被其他设备更新，请先拉取最新数据后再上传' }, 412);
+    }
+  }
+
   const payloadText = await c.req.text();
   // 体积上限：超过即拒绝，避免超大 body 一次性落库 / 撑爆 D1 配额
   if (payloadText.length > MAX_PAYLOAD_BYTES) {
@@ -171,6 +214,9 @@ app.post('*', async c => {
       .bind(SYNC_HISTORY_LIMIT),
   ]);
 
+  // 写入成功同样回 ETag（=本次写入时刻），前端 push() 直接拿它作为返回的 sha，
+  // 不必再退化到 Date.now() 兜底——整条链路的基线口径统一到服务端写入时刻。
+  c.header('ETag', etagOf(now));
   return c.json({ success: true, updatedAt: now }, 200);
 });
 

@@ -23,6 +23,7 @@
  */
 
 import {
+  astToKey,
   chordQualityAstToIntervals,
   degreeToSemitone,
   isDimFlavored,
@@ -31,7 +32,7 @@ import {
 } from './chordQualityAst';
 
 import type { ChordSlot, RoleAssignment, RoleConfidence } from './chordEngine';
-import type { ChordQualityAst } from './chordQualityAst';
+import type { ChordQualityAst, ExtensionDegree } from './chordQualityAst';
 
 // ============================================================
 // 一、候选签名
@@ -74,6 +75,15 @@ export interface RecognitionSignature {
   declaredExtensionCount: number;
   /** 冗余扩展音数（`add11` 的十一度、`add13` 的十三度等与核心音同音者） */
   redundantExtensionCount: number;
+  /**
+   * 延伸槽位清单：每条声明的延伸音一个槽位（归因模型的核心数据）。
+   *
+   * `omittable` = 合法可省：**13 音在场的 13 系和弦**里，9 / 11 度是惯例省音
+   * （11 与大三音构成小九度冲突、9 被 13 顶替），且只省**还原**音——
+   * 变化音（#11 / b9 / b13）是和弦的色彩性格，绝不进省略清单。
+   * 可省槽位缺席时：免于未归因惩罚、不计入实例化分母（见 `recognizeByIntervals`）。
+   */
+  extSlots: { semitone: number; degree: ExtensionDegree; omittable: boolean }[];
   /** 槽位指纹 */
   slots: SlotProfile;
 }
@@ -98,6 +108,13 @@ export const buildSignature = (token: { id: string; ast: ChordQualityAst }): Rec
     const semitone = degreeToSemitone(ext.degree, ext.accidental);
     if (coreMask & (1 << semitone)) redundant++;
   }
+  // 可忽略清单：13 音在场时，9 / 11 度是惯例省音（只省还原音，变化音免疫）
+  const has13 = declared.some(e => e.degree === '13');
+  const extSlots = declared.map(e => ({
+    semitone: degreeToSemitone(e.degree, e.accidental) % 12,
+    degree: e.degree,
+    omittable: has13 && (e.degree === '9' || e.degree === '11') && e.accidental === 0,
+  }));
   return {
     tokenId: token.id,
     ast: token.ast,
@@ -107,6 +124,7 @@ export const buildSignature = (token: { id: string; ast: ChordQualityAst }): Rec
     coreCount: iv.core.length,
     declaredExtensionCount: declared.length,
     redundantExtensionCount: redundant,
+    extSlots,
     slots: slotProfileOf(token.ast),
   };
 };
@@ -125,6 +143,118 @@ export const buildSignature = (token: { id: string; ast: ChordQualityAst }): Rec
 export const RECOGNITION_SIGNATURES: RecognitionSignature[] = QUALITY_TOKENS.filter(t => t.notationOnly !== true).map(
   buildSignature
 );
+
+/**
+ * 「组合候选」：核心配方（有七音 / 挂留）× 音集里出现、但该配方未声明的单个「add 类」还原扩展音
+ * （9 / 11 / 13，不带升降号）。
+ *
+ * 动机：文本侧（`parseQualityAst`）已是组合式的——`Gm7add11` 能解析、能渲染、能往返；但识别侧的
+ * 候选池 `RECOGNITION_SIGNATURES` 是 token 表逐条生成的**固定清单**，没有「m7 + add11」这条配方，
+ * 于是同一个和弦「能输入、能被解析」却**永远无法从真实指法反推**——这正是 AST 重构要消灭的那类
+ * 单向不对称，只是从「文本拼写 vs 语法表」搬到了「识别候选清单 vs 解析器组合能力」。
+ *
+ * 生成规则（刻意保守，避免噪音与倒挂）：
+ *  - 只对**有七音或挂留**的核心配方叠加：三和弦 + add 已由 `addN` 系列 token 覆盖；
+ *  - 只叠加**单个**还原扩展音，且不与该配方已有音同音（冗余）；
+ *  - 度数取 9 / 11 / 13，**不含 6**：六度与十三度同音（半音都是 9），而本节只对带七音 / 挂留的
+ *    核心叠加，该音按延伸惯例记作十三度；若同时收 6 会凭空多出一条同音异名候选；
+ *  - 与已有 token 的 AST 等价者跳过：凡现有 token 能解释的（`six` / `add13` / `dom9`…）都不生成
+ *    组合候选，杜绝「任何音集都能凭空组合出一个 add 候选」的过度泛化；
+ *  - 运行时只把「该 add 音确实出现在本次音集里」的组合放进候选（见 `recognizeByIntervals`）。
+ *
+ * 规范写法统一为 `<基础写法>add<度>`（`m7add11` / `maj7add9` / `7add13`），与解析侧同口径
+ * （`parseQualityWithToken` 的 add 分支把 `add11` 留在 spelling 里，故 `Gm7add11` 的 quality
+ * 是整词 `'m7add11'`）——「输入什么写法 ⇄ 识别什么写法」才是对称。刻意**不**走
+ * `renderQualityAst` 的组合兜底：那条路是「骨架 + 扩展音串联」、不带 `add`，会渲成 `m711`。
+ *
+ * ---- 已知边界：多重附加音（`Cm7add9,13`）暂不支持 ----
+ * 现状只枚举**单个**附加音。这是刻意留下的边界，不是漏做：按下面的触发条件启动即可，
+ * 不必重新设计。
+ *
+ * **触发条件（满足任一即启动）**
+ *  1. 语料库（`tests/domain/chordCorpus.test.ts`）里出现「识别结果丢了两个以上同时存在的
+ *     附加音」的失败断言——比如指法真的同时弹出九度与十三度，当前只会给出两个并列的
+ *     单附加候选，选不出一个能同时解释两个音的写法；
+ *  2. 有真实谱面素材明确需要这种记法（扒谱时遇到 `Cm7add9,13` 一类标记）。
+ *
+ * **实现草图**（照抄现有单层逻辑改一层循环，不涉及新结构）
+ *  - 单层 `for (const degree of COMPOSITE_ADD_DEGREES)` 改为遍历非空子集
+ *    `powerSetUpTo(COMPOSITE_ADD_DEGREES, 2)`：只到 2 元素子集——三个度数全挂既罕见
+ *    又让候选数爆炸，不做；
+ *  - `baseAllMask` 判重逻辑不变；`suffix` 拼接改为 `add9,13` 这类逗号分隔形式；
+ *  - **唯一需要认真设计的新东西**是折扣分级：现有 `COMPOSITE_SCORE_DISCOUNT` 是给
+ *    单一附加音定的固定值，子集扩大后不能沿用——子集越大，配方越接近「什么音都能解释」，
+ *    折扣必须越重，否则会重新引入单层时代由 `seenAstKeys` 去重挡住的过度泛化问题。
+ *    落点即把它从常量改成按 `degreeSet.length` 分级的函数。
+ */
+const COMPOSITE_ADD_DEGREES: readonly ExtensionDegree[] = ['9', '11', '13'];
+
+/** 组合候选 token：id + AST + 规范写法 + 基础配方序号（供 chordEngine 编译对应 Recipe）。 */
+export interface CompositeToken {
+  id: string;
+  ast: ChordQualityAst;
+  /** 规范写法（`m7add11` 等） */
+  suffix: string;
+  /** 基础 token 在 QUALITY_TOKENS 的序号——组合候选的 order 紧随其后，并列时让位于基础配方 */
+  baseOrder: number;
+}
+
+interface CompositeEntry {
+  token: CompositeToken;
+  sig: RecognitionSignature;
+  /** 叠加音的半音值（运行时据此筛「该音是否出现在本次音集里」） */
+  addedSemitone: number;
+}
+
+const COMPOSITE_ENTRIES: CompositeEntry[] = (() => {
+  const entries: CompositeEntry[] = [];
+  const seenAstKeys = new Set(RECOGNITION_SIGNATURES.map(s => astToKey(s.ast)));
+  QUALITY_TOKENS.forEach((token, baseOrder) => {
+    if (token.notationOnly === true) return;
+    const ast = token.ast;
+    const hasSeventh = ast.seventh !== undefined && ast.seventh !== 'none';
+    const isSus = ast.sus === 'sus4' || ast.sus === 'sus2';
+    if (!hasSeventh && !isSus) return;
+    const baseAllMask = buildSignature({ id: token.id, ast }).allMask;
+    for (const degree of COMPOSITE_ADD_DEGREES) {
+      const addedSemitone = degreeToSemitone(degree, 0) % 12;
+      // 叠加音与该配方已有音同音 → 冗余，不生成：否则同一个音被声明两遍
+      // （如 sus4 的四音恰为十一度，会凭空多出 Gsus4add11 这类同音异名垃圾候选）
+      if (baseAllMask & (1 << addedSemitone)) continue;
+      const compositeAst: ChordQualityAst = {
+        ...ast,
+        extensions: [...(ast.extensions ?? []), { degree, accidental: 0 }],
+      };
+      const key = astToKey(compositeAst);
+      if (seenAstKeys.has(key)) continue; // 现有 token 已覆盖该 AST，不重复生成
+      seenAstKeys.add(key);
+      const compositeToken: CompositeToken = {
+        id: `${token.id}+add${degree}`,
+        ast: compositeAst,
+        suffix: `${token.spellings[0]!}add${degree}`,
+        baseOrder,
+      };
+      entries.push({
+        token: compositeToken,
+        sig: buildSignature({ id: compositeToken.id, ast: compositeAst }),
+        addedSemitone,
+      });
+    }
+  });
+  return entries;
+})();
+
+/** 组合候选 token（顺序稳定），供 chordEngine 编译对应 Recipe。 */
+export const compositeTokens = (): readonly CompositeToken[] => COMPOSITE_ENTRIES.map(e => e.token);
+
+/**
+ * 组合候选的并列折扣：排序主键（purity / slotMismatch / inflation）全等时，让基础写法胜出——
+ * 与 `preferredHit` 用 token 表序裁决同向（合成候选不在 token 表、rank 取 MAX，本就少一票）。
+ *
+ * 固定值只对「单个附加音」成立。多重附加音一旦开放（`COMPOSITE_ADD_DEGREES` 处的触发条件），
+ * 这里必须改成按叠加音个数分级的函数，否则子集越大越容易靠分数压过基础写法。
+ */
+const COMPOSITE_SCORE_DISCOUNT = 20;
 
 // ============================================================
 // 二、权重规则层
@@ -155,6 +285,8 @@ export interface RecognitionWeight {
   perExtension: number;
   /** 每个「配方声明但音集里没有」的音（凭空补音，是专指度不足的信号） */
   perUnusedDeclared: number;
+  /** 每个**合法可省**的延伸音缺席（13 系的 9/11 还原音）：撤回预支分，净 0 */
+  perOmittedExtension: number;
   /**
    * 每个**声明了却与核心音同音**的音（`add11` 的十一度 = 四音、`add13` 的十三度 = 六音）。
    *
@@ -187,6 +319,11 @@ export const RECOGNITION_WEIGHT: RecognitionWeight = {
    * 取 60 > 25*2 的量级，保证「声明了却没出现」的音一律成为净负担。
    */
   perUnusedDeclared: -60,
+  /**
+   * **合法可省**的延伸音缺席（13 系的 9/11，只省还原音）：撤回 `weightOf` 为其预支的
+   * +25，净 0——省是 13 系和弦的预期形态，不是虚报，故远轻于 `perUnusedDeclared`。
+   */
+  perOmittedExtension: -25,
   perRedundantExtension: -35,
   sus: -5,
   dim: -30,
@@ -232,21 +369,28 @@ export const weightOf = (ast: ChordQualityAst, w: RecognitionWeight = RECOGNITIO
 export interface RecognitionHit {
   tokenId: string;
   ast: ChordQualityAst;
+  /** 是否由「组合候选」生成（非 token 表原生配方），见 COMPOSITE_ENTRIES */
+  composite: boolean;
   /** 权重分 */
   score: number;
-  /** 未解释音（在音集里但配方不含） */
+  /** 未解释音（在音集里但配方不含，低音除外——低音恒归 slash_bass 或 core 槽） */
   extraCount: number;
   /** 缺少的必需音（配方含核心音但音集里没有） */
   missingCount: number;
-  /** 配方声明但音集里没出现的音数——专指度不足的直接度量 */
-  unusedDeclared: number;
   /**
-   * 配方声明、但**与自身核心音同音**的扩展音数（静态量，来自签名）。
-   *
-   * 这类音没有独立的一块音可听（`add11` 的十一度就是三和弦的四音），
-   * 属「无害巧合」而非「真缺音」，故调用方对它的扣分应轻于 `unusedDeclared`。
+   * 延伸槽位归因（统一模型的延伸音读数，替代原先散落的 absent / 冗余两条惩罚线）：
+   * 每条声明的延伸音按四态归因——
+   *  - claimed：音集里有该音级，且不被 core 槽 / 低音占用 → 独立证据成立；
+   *  - unclaimedNonOmittable：无证据且不可省（缺席，或**仅由低音音位支撑**）→ 实例化门槛据此拒绝；
+   *  - unclaimedOmittable：无证据但合法可省（13 系的 9/11，只省还原音）→ 免罚、免门槛；
+   *  - redundant：与 core 槽同音的重复声明（如 sus4 系的十一度）。
    */
-  redundantExtensions: number;
+  extensionAttribution: {
+    claimed: number;
+    unclaimedNonOmittable: number;
+    unclaimedOmittable: number;
+    redundant: number;
+  };
   /**
    * 槽位失配数。
    *
@@ -256,11 +400,11 @@ export interface RecognitionHit {
    */
   slotMismatch: number;
   /**
-   * **虚报音数**：`unusedDeclared + redundantExtensionCount`。
+   * **虚报音数**：`unclaimedNonOmittable + redundant`。
    *
-   * 配方声明了却在输入里找不到独立一块音的音数（不论是「整个缺席」还是
-   * 「与核心音同音」）。它是排序的第三判据——越小越贴合输入的实际构成，
-   * 且不依赖任何手调权重。详见 `recognizeByIntervals` 内的注释。
+   * 配方声明了却在输入里找不到**独立**一块音的音数（缺席、被低音冒用、与核心音同音）。
+   * 合法可省的缺席（13 系的 9/11）不计入——省是预期形态，不是专指度不足。
+   * 它是排序的第三判据——越小越贴合输入的实际构成，且不依赖任何手调权重。
    */
   inflation: number;
   /** 纯度：解释音 / 音集音数 */
@@ -333,31 +477,69 @@ export const inputSlotsOf = (semitones: readonly number[], options: { dim7?: boo
  */
 export const recognizeByIntervals = (
   semitones: readonly number[],
-  options: { allowMissing?: number; maxExtra?: number } = {}
+  options: { allowMissing?: number; maxExtra?: number; bassSemitone?: number } = {}
 ): RecognitionHit[] => {
   const allowMissing = options.allowMissing ?? 0;
   const maxExtra = options.maxExtra ?? 2;
+  /**
+   * 低音音级（相对根音）。归因模型的「低音隔离」据此生效：
+   * 低音音级只能归 core 槽或 slash_bass，**永不**归延伸槽——低音不算色彩证据。
+   * 未传（识别器直接调用的场景）按无低音处理，延伸音不受隔离。
+   */
+  const bassBit = options.bassSemitone !== undefined ? 1 << (options.bassSemitone % 12) : 0;
 
   const inputMask = toMask(semitones);
   const inputCount = new Set(semitones.map(s => s % 12)).size;
   const hits: RecognitionHit[] = [];
 
-  for (const sig of RECOGNITION_SIGNATURES) {
+  // 候选池 = 基础配方 + 「叠加音确实出现在本次音集里」的组合候选（见 COMPOSITE_ENTRIES）
+  const candidates: { sig: RecognitionSignature; composite: boolean }[] = RECOGNITION_SIGNATURES.map(sig => ({
+    sig,
+    composite: false,
+  }));
+  for (const entry of COMPOSITE_ENTRIES) {
+    if (inputMask & (1 << entry.addedSemitone)) candidates.push({ sig: entry.sig, composite: true });
+  }
+
+  for (const { sig, composite } of candidates) {
     // 槽位快照依赖配方：9 半音是「六度」还是「减七度」只有配方知道
     const inputSlots = inputSlotsOf(semitones, { dim7: sig.ast.seventh === 'dim7' });
     const missing = popcount(sig.coreMask & ~inputMask);
     if (missing > allowMissing) continue;
 
-    const extras = popcount(inputMask & ~sig.allMask);
+    // 低音恒有归属（slash_bass 或 core 槽），不计入未解释音
+    const extras = popcount(inputMask & ~sig.allMask & ~bassBit);
     if (extras > maxExtra) continue;
 
-    // 专指度惩罚只算**扩展音**未出现的那部分：核心音缺席已由 missing 罚过，
-    // 重复计入会把 `Cm7`（五音常省略）这类正常省略也一并打压。
-    // 判据的意图很明确：`add9` 声明了一个九音，若音集里没有九音，它就不该被选中。
-    const declaredExtMask = sig.extensionMask;
-    const unusedExtensions = popcount(declaredExtMask & ~inputMask);
-    const unusedDeclared = unusedExtensions;
-    const explained = popcount(inputMask & sig.allMask);
+    // —— 延伸槽位逐条归因（统一模型，替代散落的 absent 惩罚线与冗余线） ——
+    // 每条声明的延伸音四态：claimed / absent / bass-blocked / redundant（与 core 同音）。
+    //  - claimed：独立证据成立，+perExtension（weightOf 已含）；
+    //  - absent / bass-blocked：无证据。不可省 → 实例化门槛拒绝 + 重罚；
+    //    可省（13 系的 9/11 还原音）→ 撤回预支分，免门槛——省是预期形态；
+    //  - redundant（与 core 同音，如 sus4 系的十一度）：重复声明，-35。
+    let claimedExtensions = 0;
+    let unclaimedNonOmittable = 0;
+    let unclaimedOmittable = 0;
+    let redundantExtensions = 0;
+    for (const slot of sig.extSlots) {
+      const bit = 1 << slot.semitone;
+      if (sig.coreMask & bit) {
+        redundantExtensions++;
+        continue;
+      }
+      if (!(inputMask & bit)) {
+        if (slot.omittable) unclaimedOmittable++;
+        else unclaimedNonOmittable++;
+        continue;
+      }
+      if (bassBit && bit & bassBit) {
+        if (slot.omittable) unclaimedOmittable++;
+        else unclaimedNonOmittable++;
+        continue;
+      }
+      claimedExtensions++;
+    }
+    const explained = popcount(inputMask & (sig.allMask | bassBit));
 
     const slotMismatch =
       (sig.slots.expectsThird !== inputSlots.hasThird ? 1 : 0) +
@@ -377,22 +559,29 @@ export const recognizeByIntervals = (
      * `add13`（虚报 1）不再压过 `six`（虚报 0），`no3`（虚报 0）不再被
      * `add11`（虚报 1）挤到后面。凡是两者都 0 的候选，才继续比分数。
      */
-    const inflation = unusedDeclared + sig.redundantExtensionCount;
+    const inflation = unclaimedNonOmittable + redundantExtensions;
 
     hits.push({
       tokenId: sig.tokenId,
       ast: sig.ast,
+      composite,
       score:
         weightOf(sig.ast) +
-        unusedDeclared * RECOGNITION_WEIGHT.perUnusedDeclared +
-        sig.redundantExtensionCount * RECOGNITION_WEIGHT.perRedundantExtension -
+        unclaimedNonOmittable * RECOGNITION_WEIGHT.perUnusedDeclared +
+        unclaimedOmittable * RECOGNITION_WEIGHT.perOmittedExtension +
+        redundantExtensions * RECOGNITION_WEIGHT.perRedundantExtension -
         extras * 15 -
         missing * 40 -
-        slotMismatch * 45,
+        slotMismatch * 45 -
+        (composite ? COMPOSITE_SCORE_DISCOUNT : 0),
       extraCount: extras,
       missingCount: missing,
-      unusedDeclared,
-      redundantExtensions: sig.redundantExtensionCount,
+      extensionAttribution: {
+        claimed: claimedExtensions,
+        unclaimedNonOmittable,
+        unclaimedOmittable,
+        redundant: redundantExtensions,
+      },
       slotMismatch,
       inflation,
       purity: inputCount === 0 ? 0 : explained / inputCount,
