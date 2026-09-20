@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { lineCharChord } from '@/domains/score/model/scoreModel';
 import { songRepository } from '@/domains/score/model/songRepository';
 import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
@@ -49,12 +50,12 @@ describe('歌曲间数据隔离', () => {
     editor.updateLyrics('第一行\n第二行X');
 
     // 第 2 首的和弦必须原样保留
-    expect(s2.chordMap.get('line_a1_char_0')).toBe('c1');
+    expect(lineCharChord(s2.chordMap, 'a1', 0)).toBe('c1');
 
     // 触发落盘后，第 2 首在 IDB 里的记录也必须原样保留
     await store.flushSongsNow();
     const persistedS2 = (await songRepository.loadSongs()).find(s => s.id === s2.id);
-    expect(persistedS2?.chordMap.get('line_a1_char_0')).toBe('c1');
+    expect(persistedS2 && lineCharChord(persistedS2.chordMap, 'a1', 0)).toBe('c1');
   });
 
   it('切歌后防抖挂起的旧歌词仍应写回原歌，而非串写到当前歌曲并清空其和弦', async () => {
@@ -78,10 +79,10 @@ describe('歌曲间数据隔离', () => {
     expect(s1.lyrics).toBe('第一行\n第二行X');
     // 第 2 首歌词与和弦都保持原样
     expect(s2.lyrics).toBe('甲行\n乙行');
-    expect(s2.chordMap.get('line_a1_char_0')).toBe('c1');
+    expect(lineCharChord(s2.chordMap, 'a1', 0)).toBe('c1');
 
     await store.flushSongsNow();
     const persistedS2 = (await songRepository.loadSongs()).find(s => s.id === s2.id);
-    expect(persistedS2?.chordMap.get('line_a1_char_0')).toBe('c1');
+    expect(persistedS2 && lineCharChord(persistedS2.chordMap, 'a1', 0)).toBe('c1');
   });
 });

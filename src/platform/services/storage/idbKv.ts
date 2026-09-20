@@ -28,11 +28,15 @@ let flushTimer: ReturnType<typeof setTimeout> | null = null;
  * 跨标签页同步：IDB 没有 storage 事件等价物，自建 BroadcastChannel 补上。
  * 语义与 localStorage 的 storage 事件对齐：
  * - 写入方：flushNow 落盘成功后广播本轮变更键（只发通知，不携带值，接收方回读 IDB）；
- * - 接收方：按键回读 IDB → 更新内存镜像 → 派发 `vueuse:${key}` 自定义事件，
- *   已挂载的 useStorage ref 会据此刷新（vueuse 对自定义 StorageLike 的事件约定）。
+ * - 接收方：按键回读 IDB → 更新内存镜像 → 派发 `vueuse-storage` 自定义事件
+ *   （detail 携带 storageArea = idbKvStorage），已挂载的 useStorage ref 会据此刷新。
  * 冲突策略：同键并发写为 last-write-wins（与 storage 事件时代语义一致）。
  * ------------------------------------------------------------------------- */
 const SYNC_CHANNEL_NAME = 'fret-logic:idb-kv-sync';
+// 与 @vueuse/core 内部的 customStorageEventName 一致（该常量未导出，本地固化）。
+// useStorage 对非 Storage 后端监听的是这个事件名，且 update() 要求 detail.storageArea
+// 与其持有的 StorageLike 同一实例（@vueuse/core dist update(): `event.storageArea !== storage` 即早退）。
+const VUEUSE_STORAGE_EVENT = 'vueuse-storage';
 let syncChannel: BroadcastChannel | null = null;
 
 const broadcastKvUpdate = (keys: string[]): void => {
@@ -57,7 +61,9 @@ const applyRemoteKvUpdate = async (keys: string[]): Promise<void> => {
     if (oldValue === newValue) continue;
     if (newValue === null) memory.delete(key);
     else memory.set(key, newValue);
-    window.dispatchEvent(new CustomEvent(`vueuse:${key}`, { detail: { key, oldValue, newValue } }));
+    window.dispatchEvent(
+      new CustomEvent(VUEUSE_STORAGE_EVENT, { detail: { key, oldValue, newValue, storageArea: idbKvStorage } })
+    );
   }
 };
 
@@ -77,18 +83,35 @@ const flushNow = async (): Promise<void> => {
   cancelPendingFlush();
   if (dirtyKeys.size === 0) return;
   const keys = [...dirtyKeys];
-  dirtyKeys.clear();
-  await idb.runTx([KV_STORE], 'readwrite', get => {
-    const store = get(KV_STORE);
-    for (const key of keys) {
-      const value = memory.get(key);
-      if (value === undefined) store.delete(key);
-      // 配额熔断：跳过写入（内存镜像继续工作，删除类操作放行以释放空间）
-      else if (!isPersistBlocked()) store.put({ key, value });
-    }
-  });
-  // 落盘成功后通知其他标签页回读这些键（失败不广播，各页下次自然对齐）
-  broadcastKvUpdate(keys);
+  // 事务成功前不清 dirtyKeys：一旦 clear() 早于事务执行，事务失败（abort/熔断/连接失效）
+  // 时这批键就被当成「已落盘」丢弃，永不重试，内存与 IDB 永久分叉（P1 审计 N 系）。
+  // 先在事务回调内逐键摘除成功项，事务 complete 后统一收口。
+  const writtenKeys: string[] = [];
+  try {
+    await idb.runTx([KV_STORE], 'readwrite', get => {
+      const store = get(KV_STORE);
+      for (const key of keys) {
+        const value = memory.get(key);
+        if (value === undefined) {
+          store.delete(key);
+          writtenKeys.push(key);
+        }
+        // 配额熔断：跳过写入（内存镜像继续工作，删除类操作放行以释放空间）
+        else if (!isPersistBlocked()) {
+          store.put({ key, value });
+          writtenKeys.push(key);
+        }
+      }
+    });
+    // 事务已 complete：这批键真正落盘，才允许从脏集合摘除
+    for (const key of writtenKeys) dirtyKeys.delete(key);
+    // 只广播真正落盘的键：熔断跳写的键 IDB 里仍是旧值，广播出去会让其它标签页
+    // 回读旧值并派发刷新，把本页用户新输入回退掉
+    broadcastKvUpdate(writtenKeys);
+  } catch (error) {
+    // 事务失败：dirtyKeys 保持原样（含本轮 keys），下个 flush 周期自然重试
+    reportKvFailure(keys[0] ?? 'flush', error);
+  }
 };
 
 const scheduleFlush = (): void => {

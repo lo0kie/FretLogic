@@ -12,10 +12,9 @@ import {
 import { useFretboardKeyboard } from '@/domains/fretboard/composables/useFretboardKeyboard';
 import { calculateFretboardPoint, useFretboardLayout } from '@/domains/fretboard/composables/useFretboardLayout';
 import { useFretboardWheel } from '@/domains/fretboard/composables/useFretboardWheel';
+import { CANVAS_CONFIG } from '@/domains/fretboard/constants';
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { cloneGuitarStrings } from '@/platform/utils/common';
-
-import { CANVAS_CONFIG } from '../constants';
 
 import type { FretboardProps } from '@/domains/fretboard/components/Fretboard.vue';
 import type { GuitarStringEntity, GuitarStringsModel } from '@/domains/fretboard/types';
@@ -76,12 +75,12 @@ export function useFretboardInteraction(
   /** 设置某弦品位，并按乐理默认赋予初始升降号状态（如 10 为 Bb, 3 为 Eb）。
    *  清除/移动音符时一并复位为新品位的乐理默认。 */
   const setStringFret = (str: GuitarStringEntity, fret: number, sIdx: number) => {
-    str[0] = fret;
+    str.fret = fret;
     if (fret >= 0) {
       const pitch = calcPitchIndex(sIdx, fret, props.chord.fretOffset, getActiveBaseStrings(props.chord.tuning));
-      str[1] = getDefaultPreferFlatForPitch(pitch);
+      str.preferFlat = getDefaultPreferFlatForPitch(pitch);
     } else {
-      str[1] = false;
+      str.preferFlat = false;
     }
   };
 
@@ -110,7 +109,7 @@ export function useFretboardInteraction(
 
     // 指板上的品位
     if (fIdx > 0 && fIdx <= props.chord.fretCount) {
-      if (currentStringAsset?.[0] === fIdx) {
+      if (currentStringAsset?.fret === fIdx) {
         // 已有该品位音符：切换主音（原有逻辑）
         e.stopPropagation();
         emitToggleRootString(sIdx);
@@ -125,7 +124,7 @@ export function useFretboardInteraction(
     // 空弦区
     if (fIdx === 0 && currentStringAsset !== undefined) {
       e.stopPropagation();
-      if (currentStringAsset[0] === 0) {
+      if (currentStringAsset.fret === 0) {
         emitToggleRootString(sIdx);
       } else {
         setAvailableAndRoot(sIdx, 0);
@@ -141,7 +140,7 @@ export function useFretboardInteraction(
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
       if (!str) return;
-      if (str[0] > 0) {
+      if (str.fret > 0) {
         setStringFret(str, 0, sIdx);
       } else if (isOpen(str)) {
         setStringFret(str, -1, sIdx);
@@ -156,7 +155,7 @@ export function useFretboardInteraction(
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
       if (!str) return;
-      if (str[0] === fret) {
+      if (str.fret === fret) {
         setStringFret(str, -1, sIdx);
       } else {
         setStringFret(str, fret, sIdx);
@@ -188,9 +187,10 @@ export function useFretboardInteraction(
   }
   let dragPaint: DragPaintSession | null = null;
 
-  /** 结束本次滑动绘制会话 */
+  /** 结束本次滑动绘制会话（连带丢弃未执行的合帧落笔，防悬挂帧在会话结束后改写数据） */
   const endDragPaint = () => {
     dragPaint = null;
+    cancelPaintFrame();
   };
 
   /** 滑动经过某品位格：按会话模式在工作副本上添加或删除音符，并整体上报（相对初始按下的行为取向） */
@@ -205,8 +205,8 @@ export function useFretboardInteraction(
     if (!str) return;
     if (mode === 'add') {
       // 添加：滑过同弦其他品位等效移动音符到当前品位（一弦一音）
-      if (str[0] !== fIdx) setStringFret(str, fIdx, sIdx);
-    } else if (str[0] === fIdx) {
+      if (str.fret !== fIdx) setStringFret(str, fIdx, sIdx);
+    } else if (str.fret === fIdx) {
       // 删除：仅抹掉滑动经过的音符格，空格保持原状
       setStringFret(str, -1, sIdx);
     }
@@ -227,7 +227,7 @@ export function useFretboardInteraction(
   /** 切换某弦的升降号偏好（如 C#/Db），仅在该位置允许变体时生效 */
   const handleTogglePitchName = (sIdx: number) => {
     fretBoardRef.value?.focus();
-    const currentFret = props.chord.strings[sIdx]?.[0];
+    const currentFret = props.chord.strings[sIdx]?.fret;
     focusPoint.value = {
       stringIndex: sIdx,
       fretIndex: currentFret !== undefined && currentFret > 0 ? currentFret : 0,
@@ -236,9 +236,9 @@ export function useFretboardInteraction(
       const str = cloned[sIdx];
       if (
         str &&
-        canTogglePitchAccidental(sIdx, str[0], props.chord.fretOffset, getActiveBaseStrings(props.chord.tuning))
+        canTogglePitchAccidental(sIdx, str.fret, props.chord.fretOffset, getActiveBaseStrings(props.chord.tuning))
       ) {
-        str[1] = !str[1];
+        str.preferFlat = !str.preferFlat;
       }
     });
   };
@@ -266,6 +266,14 @@ export function useFretboardInteraction(
     clientX: number;
     clientY: number;
   }>(pos => updateHoverFromEvent(pos.clientX, pos.clientY));
+
+  // 滑动落笔同样合帧（pointerdown 首笔与 pointerup 补笔仍直发，保手感与收尾语义）：
+  // paintFromEvent 每次 getBoundingClientRect，pointermove 事件频率远高于显示帧率时
+  // 全是白算的坐标换算；合帧后每显示帧最多一次。跨格去重仍由 paintCell.lastCell 兜底
+  const { schedule: schedulePaintFrame, cancel: cancelPaintFrame } = useRafThrottle<{
+    clientX: number;
+    clientY: number;
+  }>(pos => paintFromEvent(pos.clientX, pos.clientY));
 
   /**
    * 把焦点落点同步到指定格（位置未变化时不触发响应式更新）。
@@ -307,7 +315,7 @@ export function useFretboardInteraction(
     // 捕获指针让滑出指板边界后松开仍能收到 pointerup 正常收尾
     const working = cloneGuitarStrings(props.chord.strings);
     const initialStr = working[pt.stringIndex];
-    const initialHasNote = initialStr?.[0] === pt.fretIndex;
+    const initialHasNote = initialStr?.fret === pt.fretIndex;
     if (initialStr) {
       if (initialHasNote) setStringFret(initialStr, -1, pt.stringIndex);
       else setStringFret(initialStr, pt.fretIndex, pt.stringIndex);
@@ -365,9 +373,11 @@ export function useFretboardInteraction(
 
   useEventListener(fretBoardRef, 'pointerdown', handlePointerDown);
   useEventListener(fretBoardRef, 'pointermove', (e: PointerEvent) => {
-    // 滑动绘制进行中：按当前指针位置落笔（焦点跟随 + 跨格去重），并照常合帧刷新 hover 高亮
-    if (dragPaint) paintFromEvent(e.clientX, e.clientY);
-    scheduleHoverFrame({ clientX: e.clientX, clientY: e.clientY });
+    const pos = { clientX: e.clientX, clientY: e.clientY };
+    // 滑动绘制进行中：落笔合帧（首笔已在 pointerdown 直发、末笔由 pointerup 直发补齐），
+    // 悬停高亮照常单独合帧刷新
+    if (dragPaint) schedulePaintFrame(pos);
+    scheduleHoverFrame(pos);
   });
   useEventListener(fretBoardRef, 'pointerup', handlePointerUp);
   useEventListener(fretBoardRef, 'pointercancel', endDragPaint);

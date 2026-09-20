@@ -11,7 +11,7 @@ import {
 import type { BarreEntity, GuitarStringsModel } from '@/domains/fretboard/types';
 
 /** 按弦序构造六弦模型（全部不偏好降号） */
-const strings = (...frets: number[]): GuitarStringsModel => frets.map(f => [f, false]) as unknown as GuitarStringsModel;
+const strings = (...frets: number[]): GuitarStringsModel => frets.map(f => ({ fret: f, preferFlat: false }));
 
 describe('setBarres（编辑器 store）', () => {
   beforeEach(() => {
@@ -178,12 +178,12 @@ describe('横按包含吸收与打断拆分（用户 222x22 场景）', () => {
     expect(store.draftChord.barres).toHaveLength(2);
 
     // 3. 把 x 也改成 2（变成 2 2 2 2 2 2）
-    store.draftChord.strings[3]![0] = 2;
+    store.draftChord.strings[3]!.fret = 2;
     // 此时全横按形成，应吸收原本的两个碎横按
     expect(store.draftChord.barres).toMatchObject([{ fret: 2, fromString: 0, toString: 5 }]);
 
     // 4. 再把该音符删除（变回 2 2 2 x 2 2）
-    store.draftChord.strings[3]![0] = -1;
+    store.draftChord.strings[3]!.fret = -1;
     // 预期应仅保留左侧三个音符的横按，右侧两个音符不足 3 颗音符不作为横按保留！
     expect(store.draftChord.barres).toMatchObject([{ fret: 2, fromString: 0, toString: 2 }]);
   });

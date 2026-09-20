@@ -29,12 +29,12 @@ function generateTestChords(count: number): Chord[] {
         : undefined;
 
     const strings: GuitarStringsModel = [
-      [i % 4, false],
-      [(i + 1) % 4, false],
-      [(i + 2) % 4, false],
-      [(i + 3) % 4, false],
-      [0, false],
-      [-1, false],
+      { fret: i % 4, preferFlat: false },
+      { fret: (i + 1) % 4, preferFlat: false },
+      { fret: (i + 2) % 4, preferFlat: false },
+      { fret: (i + 3) % 4, preferFlat: false },
+      { fret: 0, preferFlat: false },
+      { fret: -1, preferFlat: false },
     ];
 
     chords.push(

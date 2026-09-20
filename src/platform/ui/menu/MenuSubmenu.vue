@@ -64,7 +64,7 @@
     <template #default>
       <!-- content 优先：提供渲染函数时面板渲染自定义内容（如和弦指板 Canvas），否则渲染 children 列表 -->
       <component v-if="item.content" :is="item.content" />
-      <MenuItems v-else :on-select :icon-size="size" :items="item.children" />
+      <MenuItems v-else :on-select :size :items="item.children" />
     </template>
   </BasePopover>
 </template>

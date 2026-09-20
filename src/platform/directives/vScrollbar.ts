@@ -4,9 +4,9 @@
  * 用法：<div v-scrollbar>…</div>（指令自行注入 overflow 并隐藏原生滚动条，无需手写 overflow-* 类）
  * 不带修饰符/方向选项时默认同时渲染横、纵双轴滚动条，各轴仅在确有内容溢出时显示（对齐原生限制）。
  * 带选项/单向限制：<div v-scrollbar="{ direction: 'x', autoHide: 1200 }"> 或 v-scrollbar.vertical
- * 可选滚动气泡提示：<div v-scrollbar="{ bubble: true }">（默认关）；传选项对象可自定义读数
- * （<div v-scrollbar="{ bubble: { format: d => `第 3 组 · ${Math.round(d.progressY * 100)}%` } }">），
- * 见 ScrollbarBubbleOptions。
+ * 可选滚动气泡提示：<div v-scrollbar="{ bubble: true }">（默认关）；传选项对象可自定义读数与档位
+ * （<div v-scrollbar="{ bubble: { size: 'md', format: d => `第 3 组 · ${Math.round(d.progressY * 100)}%` } }">），
+ * 读数的变化默认逐字符翻页（复用 BaseRollingText 的对位算法与过渡类），见 ScrollbarBubbleOptions.roll。
  *
  * 结构（overlay 模式）：轨道与拇指不挂在滚动容器内，而是挂到宿主的父元素上，
  * 绝对定位覆盖宿主可视区——不随内容滚走、无需 scrollPos 叠加补偿，
@@ -16,11 +16,17 @@
  * - 内容不足一屏时拇指自动隐藏；ResizeObserver 缺失的环境降级为仅 scroll 事件驱动；
  * - 拇指带 ::after 扩展热区（可视 6px + 四向 4px），细条不难点；
  * - 拖拽拇指使用 pointer capture，拖拽目标显式钳制防越界；轨道点击按页滚动；
+ * - 滚动气泡带指向滚动条的箭头（复用 Popover/Tooltip 的浮层箭头逻辑），寿命以滚动条可见期为上界；
  * - 卸载时完整清理（观察器/监听器/DOM/宿主样式），可重复挂载。
  */
+import { isWheelScrollSeen } from '@/platform/directives/vWheelScroll';
+import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
 import { SCROLL_INTERACTIVE_WINDOW_MS } from '@/platform/utils/constants';
+import { resolveScrollBehavior } from '@/platform/utils/motion';
+import { alignRollCells } from '@/platform/utils/rollingText';
 
-import type { Directive } from 'vue';
+import type { RollCell } from '@/platform/utils/rollingText';
+import type { CSSProperties, Directive } from 'vue';
 
 export interface ScrollbarOptions {
   /** 轨道/拇指 overlay 的挂载容器：默认取宿主父元素。
@@ -55,10 +61,12 @@ export interface ScrollbarOptions {
 }
 
 /**
- * 滚动气泡提示：滚动期间在滚动条旁浮出一枚读数气泡，随拇指中位移动，闲置后随滚动条一起淡出。
+ * 滚动气泡提示：滚动期间在滚动条旁浮出一枚读数气泡，随拇指中位移动，带指向滚动条的箭头，
+ * 读数变化时逐字符翻页，闲置后随滚动条一起淡出——生命周期以滚动条的可见期为上界（拇指隐藏即一并收起，见 setThumbsVisible）。
  *
- * 与「拇指常显 / 轨道悬停显形」解耦——气泡只在发生滚动时出现，单纯把鼠标移进滚动区不会弹提示，
- * 避免每一次指向滚动区都糊上一块读数。默认读数取所属轴的滚动进度百分比。
+ * 触发与「拇指常显 / 轨道悬停显形」解耦——气泡只在发生滚动时出现，单纯把鼠标移进滚动区不会弹提示，
+ * 避免每一次指向滚动区都糊上一块读数。且只认所属轴（见 axis）：双轴可滚的宿主里滚另一轴时读数没变，
+ * 那时显形等于展示一份陈旧读数。默认读数取所属轴的滚动进度百分比。
  */
 export interface ScrollbarBubbleOptions {
   /** 是否启用；对象形式下显式传 false 可关闭（省略即开启） */
@@ -69,17 +77,28 @@ export interface ScrollbarBubbleOptions {
    * 默认显示所属轴进度百分比（如 "42%"）；宿主可据此渲染「第 3 组 · 42%」等自算读数。
    */
   format?: (detail: ScrollbarScrollDetail) => string;
-  /** 气泡所属轴：默认取启用轴中的 'y'（只有横向滚动条时回落 'x'） */
+  /** 气泡所属轴（同时也是读数归属轴）：默认取启用轴中的 'y'（只有横向滚动条时回落 'x'）。
+   *  只有该轴真的位移时气泡才显形——见 ScrollbarBubbleOptions 的说明 */
   axis?: 'x' | 'y';
-  /** 气泡与滚动条之间的间距（px），默认 12 */
+  /** 气泡与滚动条之间的间距（px），默认 12；箭头由气泡朝滚动条一侧探出，占其中的一小段 */
   offset?: number;
-  /** 闲置后自动淡出的毫秒数；false 表示不自动隐藏。
-   *  默认跟随 autoHide（与滚动条同步淡出）；autoHide 为 false（拇指常显）时回落 1200ms */
+  /** 观感档位：'sm' 紧凑读数（默认，对齐 v-tooltip 的 compact）/ 'md' 放大一档（字号与留白各进一级） */
+  size?: ScrollbarBubbleSize;
+  /** 读数变化时逐字符翻页（旧字上滑离场、新字自下滑入），复用 BaseRollingText 的对位算法与过渡类。
+   *  默认开。变化密集时（如逐帧跳字的百分比读数）自动退化为直接换字——逐帧重启过渡只会变成持续抖动；
+   *  长文案（读数本身比气泡宽、依赖省略号收敛）也建议关掉：翻页要求逐字成格，省略号的表现会打折。 */
+  roll?: boolean;
+  /** 闲置后自动淡出的毫秒数；false 表示不按自身节奏倒计时。
+   *  默认跟随 autoHide（与滚动条同步淡出）；autoHide 为 false（拇指常显）时回落 1200ms。
+   *  注意与拇指 autoHide 独立计时：气泡自身时限再长也活不过滚动条，拇指一隐藏即被一并收起 */
   hideDelay?: number | false;
   /** 仅在用户滚动手势（滚轮 / 拖拽拇指 / 轨道点击）引发的滚动中显示，
    *  过滤掉程序化 scrollTo、布局钳位、选中项 scrollIntoView 等非手势滚动；默认 false */
   onlyInteractive?: boolean;
 }
+
+/** 气泡观感档位：'sm' 紧凑读数（默认）/ 'md' 放大一档；两档均在注入样式里各有一条规则，见 ensureGlobalStyle */
+export type ScrollbarBubbleSize = 'sm' | 'md';
 
 export type ScrollbarBinding = ScrollbarOptions | null | undefined;
 
@@ -124,8 +143,21 @@ const resolveAxes = (options: ScrollbarOptions, modifiers?: Record<string, boole
 
 /** 滚动气泡与滚动条之间的默认间距（px）；导出供测试从常量推导期望值 */
 export const BUBBLE_OFFSET = 12;
+/** 气泡指向箭头的边长（px，按档位取）：随气泡高度成比例——小气泡挂 12px 大箭头会盖住读数 */
+export const BUBBLE_ARROW_SIZE: Record<ScrollbarBubbleSize, number> = { sm: 8, md: 10 };
 /** 气泡闲置自动隐藏的兜底时长（ms）：autoHide 为 false（拇指常显）时的默认值 */
 const BUBBLE_FALLBACK_HIDE_MS = 1200;
+/** 气泡读数单次翻页的时长（ms）：注入样式把它写成读数节点上的 --br-duration，
+ *  供全局 .br-roll-*（与 BaseRollingText 共用的那份过渡规则）读取——不复用其兜底值，
+ *  免得时长这个数字在两处各写一份。与 BaseRollingText 的默认 duration 一致 */
+const BUBBLE_ROLL_MS = 200;
+/** 翻页收尾宽限（ms）：过渡结束与摘除离场节点之间留一点余量，不在动画最后一帧抢跑 */
+const BUBBLE_ROLL_SETTLE_SLACK_MS = 40;
+/** 翻页过渡的类名：与 transitions.scss 的 .br-roll-* 逐字同名（全局规则按名匹配，改这里必须同步改那边） */
+const ROLL_ENTER_FROM_CLASS = 'br-roll-enter-from';
+const ROLL_ENTER_ACTIVE_CLASS = 'br-roll-enter-active';
+const ROLL_LEAVE_ACTIVE_CLASS = 'br-roll-leave-active';
+const ROLL_LEAVE_TO_CLASS = 'br-roll-leave-to';
 /** 气泡单行读数的半高上界（px）：仅用于两端钳制——单行 nowrap 读数实际半高更小，
  *  取上界可保证钳制后气泡完整落在宿主可视区内（宁可多留白，不可越界被裁） */
 const BUBBLE_HALF_SIZE = 16;
@@ -136,6 +168,8 @@ interface ResolvedBubbleOptions {
   format: (detail: ScrollbarScrollDetail) => string;
   axis: 'x' | 'y';
   offset: number;
+  size: ScrollbarBubbleSize;
+  roll: boolean;
   hideDelay: number | false;
   onlyInteractive: boolean;
 }
@@ -146,6 +180,8 @@ const DISABLED_BUBBLE: ResolvedBubbleOptions = {
   format: () => '',
   axis: 'y',
   offset: BUBBLE_OFFSET,
+  size: 'sm',
+  roll: false,
   hideDelay: false,
   onlyInteractive: false,
 };
@@ -175,6 +211,11 @@ const resolveBubbleOptions = (
       ((detail: ScrollbarScrollDetail) => `${Math.round((axis === 'y' ? detail.progressY : detail.progressX) * 100)}%`),
     axis,
     offset: opts.offset ?? BUBBLE_OFFSET,
+    // 默认档位取 'sm'（既有观感，对齐 v-tooltip compact）；放大档由宿主显式声明
+    size: opts.size ?? 'sm',
+    // 翻页默认开：读数以「滚动条注释」身份出现，逐字符翻页让离散读数（页码等）的变化可辨，
+    // 密集变化由 renderBubbleText 的间隔判据自动退化为直写
+    roll: opts.roll ?? true,
     hideDelay: opts.hideDelay ?? (autoHide === false ? BUBBLE_FALLBACK_HIDE_MS : autoHide),
     onlyInteractive: opts.onlyInteractive ?? false,
   };
@@ -213,8 +254,14 @@ interface ScrollbarState {
   axes: ('x' | 'y')[];
   /** 滚动气泡元素（未启用时恒为 null）；与拇指/轨道同为 overlay 兄弟节点 */
   bubble: HTMLElement | null;
+  /** 气泡内承载读数的子节点：气泡本体必须 overflow:visible（否则把指向箭头裁掉），省略号与文本写入都落在它身上 */
+  bubbleLabel: HTMLElement | null;
   /** 最近一次写入气泡的文本：textContent 每次赋值都会让该节点失效，而滚动帧内读数常常连续多帧不变，先比对再写 */
   bubbleText: string;
+  /** 读数翻页器（bubble.roll 开启时创建，见 BubbleRoller）；关闭时为 null，读数退化为一次 textContent */
+  bubbleRoller: BubbleRoller | null;
+  /** 所属轴上一次的滚动位置读数（判据见 attachHostScroll）；挂载取基线前为 null */
+  bubbleAxisPos: number | null;
   /** 气泡闲置隐藏定时器；独立于拇指的 hideTimer——两者隐藏时长可分别配置，合并会互相拖累 */
   bubbleTimer: ReturnType<typeof setTimeout> | null;
   options: {
@@ -275,11 +322,12 @@ const ensureGlobalStyle = (): void => {
     `:root{--v-scrollbar-thumb:#c7c7cc;--v-scrollbar-thumb-hover:#8e8e93;}` +
     `.dark{--v-scrollbar-thumb:#55555a;--v-scrollbar-thumb-hover:#a3a3ab;}` +
     `.${HOST_CLASS}::-webkit-scrollbar{display:none;}` +
-    `/* 轨道颜色固定不随状态变化；默认仅透明隐藏（保留 visibility，否则收不到 hover/点击），悬停拇指/轨道时由指令切换可见类 */` +
-    `.v-scrollbar-track{position:absolute;z-index:29;pointer-events:auto;cursor:pointer;` +
+    `/* 轨道颜色固定不随状态变化；默认仅透明隐藏（保留 visibility，否则收不到 hover/点击），悬停拇指/轨道时由指令切换可见类。
+       隐藏态必须 pointer-events:none：否则透明轨道常驻吞掉宿主内缘指针事件（点击/滚动被拦截，探针命中内缘 2~13px）；可见时恢复 */` +
+    `.v-scrollbar-track{position:absolute;z-index:29;pointer-events:none;cursor:pointer;` +
     `background:var(--border-light);opacity:0;border-radius:999px;` +
     `transition:opacity 250ms ease,width 150ms ease,height 150ms ease,transform 150ms ease;}` +
-    `.v-scrollbar-track--visible{opacity:1;}` +
+    `.v-scrollbar-track--visible{opacity:1;pointer-events:auto;}` +
     `/* 轨道粗细由类控制，与拇指同步加宽内移（thumb:hover ~ track 兄弟选择器，保持同心） */` +
     `.v-scrollbar-track--y{width:${THICKNESS}px;}` +
     `.v-scrollbar-track--x{height:${THICKNESS}px;}` +
@@ -302,15 +350,33 @@ const ensureGlobalStyle = (): void => {
     `/* 无可滚动区域：结构性隐藏，优先级高于可见类 */` +
     `.v-scrollbar-thumb--off{opacity:0 !important;visibility:hidden !important;pointer-events:none !important;}` +
     `/* 滚动气泡提示：同为 overlay 兄弟节点（绝对定位参照宿主父元素），随拇指中位移动；
-       观感对齐 v-tooltip 的 compact 紧凑读数（同底色/描边/圆角/字号字重），但刻意不复用 tooltip 单例——
+       观感对齐 v-tooltip 的 compact 紧凑读数（同底色/描边/圆角/字号字重 + 同源的指向箭头），但刻意不复用 tooltip 单例——
        tooltip 在任意 scroll 事件上都会立即隐藏（vTooltip 的 window 捕获监听），承担不了「滚动期间持续可见」的读数职责。
-       max-width:100% + 省略号：超长自定义文案收敛为气泡宽度，不越出宿主（钳制按半高上界，见 BUBBLE_HALF_SIZE） */` +
+       max-width:100%：超长自定义文案收敛在宿主可视区内（钳制按半高上界，见 BUBBLE_HALF_SIZE）；
+       气泡自身 overflow:visible —— 箭头楔形朝滚动条一侧探出，若沿用 overflow:hidden 会被整个裁掉，
+       故省略号另落内层 .v-scrollbar-bubble-text（读数本就写在它上面，见 applyBubble） */` +
     `.v-scrollbar-bubble{position:absolute;z-index:31;pointer-events:none;white-space:nowrap;` +
-    `overflow:hidden;text-overflow:ellipsis;max-width:100%;` +
-    `padding:0.125rem 0.5rem;border:1px solid var(--glass-border);border-radius:0.375rem;` +
+    `overflow:visible;max-width:100%;` +
+    `border:1px solid var(--glass-border);` +
     `background:var(--bg-panel);box-shadow:var(--shadow-md);color:var(--text-title);` +
-    `font-size:0.625rem;font-weight:700;line-height:1.25;` +
+    `font-weight:700;line-height:1.25;` +
     `opacity:0;visibility:hidden;transition:opacity 150ms ease,visibility 0s linear 150ms;}` +
+    `/* 档位只管度量（字号/留白/圆角）：底色描边等观感两档共用，与 tooltip compact 逐值对齐（sm） */` +
+    `.v-scrollbar-bubble--sm{padding:0.125rem 0.5rem;border-radius:0.375rem;font-size:0.625rem;}` +
+    `.v-scrollbar-bubble--md{padding:0.25rem 0.75rem;border-radius:0.5rem;font-size:0.75rem;}` +
+    `/* 读数承载节点（renderBubbleText 的写入目标）：省略号落在这里，气泡本体才能保持 overflow:visible；
+       开启翻页时它是单元节点的宿主，关闭时就是一个纯文本节点。
+       --br-duration 写在这里：全局 .br-roll-* 用它定时长，别处不再重复这个数字 */` +
+    `.v-scrollbar-bubble-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;` +
+    `--br-duration:${BUBBLE_ROLL_MS / 1000}s;}` +
+    `/* 逐字符翻页的单元/字符两层：结构同 BaseRollingText 的逐字符模式（inline-block 窗口 + overflow:hidden 裁切上下滑行），
+       line-height 继承气泡（窗口高即行高，字形位置与不开翻页时逐像素一致）；
+       过渡类 .br-roll-* 在 transitions.scss——与组件共用的唯一来源，此处刻意不重复声明 */` +
+    `.v-scrollbar-bubble-cell{position:relative;display:inline-block;overflow:hidden;white-space:pre;line-height:inherit;vertical-align:top;}` +
+    `.v-scrollbar-bubble-char{display:inline-block;}` +
+    `/* 指向箭头：方块尺寸/旋转/裁剪楔形/保留边框全部由 buildFloatingArrowStyle 内联写入
+       （与 BasePopover、vTooltip 同一份逻辑），交叉轴居中偏移也在创建时按边长内联算出 */` +
+    `.v-scrollbar-bubble-arrow{pointer-events:none;}` +
     `.v-scrollbar-bubble--visible{opacity:1;visibility:visible;transition:opacity 150ms ease,visibility 0s;}` +
     `/* 伸缩方向：纵向滚动条贴容器右缘，气泡整宽向左展开；横向滚动条贴容器下缘，气泡向上展开 */` +
     `.v-scrollbar-bubble--y{transform:translate(-100%,-50%);}` +
@@ -343,10 +409,24 @@ const getHostOffset = (
   let left = 0;
   let top = 0;
   let el: HTMLElement | null = host;
-  while (el && el !== parent) {
+  let reachedParent = false;
+  while (el) {
+    if (el === parent) {
+      reachedParent = true;
+      break;
+    }
     left += el.offsetLeft;
     top += el.offsetTop;
     el = el.offsetParent as HTMLElement | null;
+  }
+  if (!reachedParent) {
+    // 不变式兜底（V7）：offsetParent 链未终止于 parent（如 overlayParent 指向非定位祖先、
+    // 或中间有 transform/fixed 元素改变 offsetParent 链）时，链式累加结果是错的。
+    // 回落到 rect 差值：无过渡变换时结果正确；过渡期间可能有偏差，但好于必然错误的累加值。
+    const hr = host.getBoundingClientRect();
+    const pr = parent.getBoundingClientRect();
+    left = hr.left - pr.left;
+    top = hr.top - pr.top;
   }
   return { left, top, width: host.offsetWidth, height: host.offsetHeight };
 };
@@ -406,6 +486,16 @@ const applyAxis = (state: ScrollbarState, axis: 'x' | 'y', off: HostOffset, m: A
   state.thumbLens[axis] = thumbSize;
   // 无可滚动区域时结构性隐藏（off 类硬切）；有滚动区域时交给可见类做淡入淡出
   thumb.classList.toggle(THUMB_OFF_CLASS, hidden);
+  // a11y（V11）：role=scrollbar 的动态值随每次几何刷新同步
+  if (hidden) {
+    thumb.setAttribute('aria-valuenow', '0');
+  } else {
+    const scrollLength = getLength(state.host, axis, 'scroll');
+    const clientLength = getLength(state.host, axis, 'client');
+    const max = Math.max(0, scrollLength - clientLength);
+    thumb.setAttribute('aria-valuemax', String(max));
+    thumb.setAttribute('aria-valuenow', String(Math.round(getScrollPos(state.host, axis))));
+  }
 
   if (axis === 'y') {
     if (track) {
@@ -468,6 +558,144 @@ export const computeBubblePosition = (
   };
 };
 
+/** 进行一次翻页的单元记录：该单元内的离场/入场字符节点 */
+interface PendingRoll {
+  leaving: HTMLElement;
+  entering: HTMLElement;
+}
+
+/**
+ * 气泡读数的翻页器：把读数变化渲染成「旧字上滑离场、新字自下滑入」，观感与 BaseRollingText 逐字符模式一致。
+ *
+ * 为什么不直接复用它那个组件：气泡是指令内 document.createElement 造出来的纯 DOM 节点，不在 Vue 组件树里，
+ * 要用组件就得为每个滚动区单开一个 Vue 应用（createApp + 响应式实例），既让底层指令反向依赖 UI 组件，
+ * 又把「谁拥有这段 DOM」搅成两套所有权。所以这里复用的是**可复用的那部分**：
+ * 过渡规则（全局 .br-roll-*，见 transitions.scss）与字符对位算法（alignRollCells，见 rollingText.ts），
+ * 只有「怎么驱动过渡」这一层是各写各的——Vue 侧交给 <Transition>，这里手工按帧切类。
+ */
+interface BubbleRoller {
+  /** 当前字符单元（与 nodes 一一对应，供 alignRollCells 对位） */
+  cells: RollCell[];
+  /** 与 cells 一一对应的单元节点 */
+  nodes: HTMLElement[];
+  /** 新槽位的 key 游标：让 alignRollCells 保持无状态 */
+  nextKey: number;
+  /** 最近一次读数变化的时刻：变化密集时不翻页（见 renderBubbleText） */
+  lastChangeAt: number;
+  /** 进行中的翻页：新读数到来时先收尾，让节点结构回到「一单元一字符」 */
+  pending: PendingRoll[];
+  /** 收尾定时器（过渡结束后摘除离场节点） */
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+/** 造一个单元节点：窗口 + 字符两层（静态样式见注入样式里的 .v-scrollbar-bubble-cell/char） */
+const makeBubbleCell = (char: string): HTMLElement => {
+  const cell = document.createElement('span');
+  cell.className = BUBBLE_CELL_CLASS;
+  const ch = document.createElement('span');
+  ch.className = BUBBLE_CHAR_CLASS;
+  ch.textContent = char;
+  cell.appendChild(ch);
+  return cell;
+};
+
+/**
+ * 结束进行中的翻页：摘除离场节点、去掉入场节点的过渡类（此刻它已是当前字符），并撤销收尾定时器。
+ * 提前收尾（新读数在动画中途到来）会让做了一半的翻页瞬移到终态——读数即时性优先于动画完整，
+ * 且此处只由「新读数」或「卸载」调用，静止时不会有人清它，不会留下半张的节点。
+ */
+const settleBubbleRoll = (roller: BubbleRoller): void => {
+  if (roller.timer !== null) {
+    clearTimeout(roller.timer);
+    roller.timer = null;
+  }
+  for (const p of roller.pending) {
+    p.leaving.remove();
+    p.entering.classList.remove(ROLL_ENTER_ACTIVE_CLASS);
+  }
+  roller.pending = [];
+};
+
+/** 单元内换字：roll 为真播翻页，否则就地替换字符（读数密集变化时的退化路径） */
+const setBubbleCellChar = (roller: BubbleRoller, cell: HTMLElement, char: string, roll: boolean): void => {
+  // 调用前必已 settle，故首个子节点就是当前字符
+  const current = cell.firstElementChild as HTMLElement;
+  if (!roll) {
+    current.textContent = char;
+    return;
+  }
+  const entering = document.createElement('span');
+  entering.className = `${BUBBLE_CHAR_CLASS} ${ROLL_ENTER_FROM_CLASS} ${ROLL_ENTER_ACTIVE_CLASS}`;
+  entering.textContent = char;
+  cell.appendChild(entering);
+  roller.pending.push({ leaving: current, entering });
+  // 插入与切类必须分帧：同一帧内完成的话浏览器只做一次样式计算，「from」与目标态被合并，过渡没有起点
+  // （Vue <Transition> 的 nextFrame 同理）。收尾可能先于本帧回调发生，故用 pending 归属当门闩
+  requestAnimationFrame(() => {
+    if (!roller.pending.some(p => p.entering === entering)) return;
+    entering.classList.remove(ROLL_ENTER_FROM_CLASS);
+    current.classList.add(ROLL_LEAVE_ACTIVE_CLASS, ROLL_LEAVE_TO_CLASS);
+  });
+  if (roller.timer !== null) clearTimeout(roller.timer);
+  roller.timer = setTimeout(() => {
+    roller.timer = null;
+    settleBubbleRoll(roller);
+  }, BUBBLE_ROLL_MS + BUBBLE_ROLL_SETTLE_SLACK_MS);
+};
+
+/**
+ * 把读数写进气泡读数节点。
+ *
+ * 开启翻页时按字符对位复用单元节点——未变的字符节点原地不动（天然静止），只有变化的字符翻页；
+ * 关闭翻页时就是一次 textContent（与引入翻页前一致）。两种路径都不碰气泡本体：那里还挂着指向箭头，
+ * 直接写 textContent 会把箭头一起抹掉。
+ */
+const renderBubbleText = (state: ScrollbarState, label: HTMLElement, text: string): void => {
+  const roller = state.bubbleRoller;
+  if (!roller) {
+    label.textContent = text;
+    return;
+  }
+  settleBubbleRoll(roller);
+  // 变化间隔小于一次翻页时长的读数（如进度百分比逐帧跳字）不翻页：逐帧重启过渡只会变成持续抖动，
+  // 而连续读数本就无「离散变化」可读。只在读数稳定后的下一次变化翻页——页码这类离散读数即此情形
+  const now = Date.now();
+  const roll = now - roller.lastChangeAt >= BUBBLE_ROLL_MS;
+  roller.lastChangeAt = now;
+
+  const aligned = alignRollCells(roller.cells, text, roller.nextKey);
+  const prevNodes = new Map<number, HTMLElement>();
+  const prevChars = new Map<number, string>();
+  roller.cells.forEach((cell, i) => {
+    prevNodes.set(cell.key, roller.nodes[i]!);
+    prevChars.set(cell.key, cell.char);
+  });
+
+  const nodes: HTMLElement[] = [];
+  for (const cell of aligned.cells) {
+    const existing = prevNodes.get(cell.key);
+    if (!existing) {
+      // 新槽位（读数变长）：直接呈现、不播翻页——与组件版一致，新窗口是初始渲染
+      nodes.push(makeBubbleCell(cell.char));
+      continue;
+    }
+    if (prevChars.get(cell.key) !== cell.char) setBubbleCellChar(roller, existing, cell.char, roll);
+    nodes.push(existing);
+  }
+  // 消失的单元（读数变短）：此时已 settle，节点内只剩当前字符，直接摘除
+  for (const [key, node] of prevNodes) {
+    if (!aligned.cells.some(c => c.key === key)) node.remove();
+  }
+  // 顺序对齐：只在真的错位时移动，未变字符的节点不重排（重排会让它们闪动）
+  nodes.forEach((node, i) => {
+    if (label.children[i] !== node) label.insertBefore(node, label.children[i] ?? null);
+  });
+
+  roller.cells = aligned.cells;
+  roller.nodes = nodes;
+  roller.nextKey = aligned.nextKey;
+};
+
 /**
  * 由本次已读到的轴读数拼装滚动明细（供气泡 format 消费）。
  *
@@ -515,8 +743,8 @@ const applyBubble = (state: ScrollbarState, off: HostOffset, metrics: (AxisMetri
   bubble.style.left = `${pos.left}px`;
   bubble.style.top = `${pos.top}px`;
   const text = format(buildBubbleDetail(state, metrics));
-  if (text !== state.bubbleText) {
-    bubble.textContent = text;
+  if (text !== state.bubbleText && state.bubbleLabel) {
+    renderBubbleText(state, state.bubbleLabel, text);
     state.bubbleText = text;
   }
 };
@@ -552,11 +780,23 @@ const TRACK_VISIBLE_CLASS = 'v-scrollbar-track--visible';
 const BUBBLE_VISIBLE_CLASS = 'v-scrollbar-bubble--visible';
 /** 气泡所属轴无溢出的结构性隐藏类（与拇指同一判据，优先级高于可见类） */
 const BUBBLE_OFF_CLASS = 'v-scrollbar-bubble--off';
+/** 翻页单元与字符的类名（静态样式在注入样式里；结构对齐 BaseRollingText 的逐字符窗口） */
+const BUBBLE_CELL_CLASS = 'v-scrollbar-bubble-cell';
+const BUBBLE_CHAR_CLASS = 'v-scrollbar-bubble-char';
 
+/**
+ * 拇指显隐切换：overlay 与宿主是兄弟关系，显隐必须落在拇指自身类上。
+ *
+ * 「拇指隐藏」同时把气泡一并收起：气泡是滚动条的注释，滚动条都已淡出，读数再停留就是孤悬的半截提示。
+ * 两者各自计时且气泡侧可能长得多（宿主常按读数节奏把 hideDelay 配得比 autoHide 大，如页码读数 1200ms vs 400ms），
+ * 各按各路走就会留下一段「滚动条没了、气泡还挂着」的残留窗口——把上界收敛在此处（而不是散在调用点），
+ * 将来新增拇指隐藏路径也无需记得补一句。
+ */
 const setThumbsVisible = (state: ScrollbarState, visible: boolean): void => {
   for (const t of [state.thumbs.y, state.thumbs.x]) {
     t?.classList.toggle(THUMB_VISIBLE_CLASS, visible);
   }
+  if (!visible) hideBubble(state);
 };
 
 const setTracksVisible = (state: ScrollbarState, visible: boolean): void => {
@@ -570,6 +810,7 @@ const scheduleHide = (state: ScrollbarState): void => {
   if (state.options.autoHide === false) return;
   if (state.hideTimer !== null) clearTimeout(state.hideTimer);
   state.hideTimer = setTimeout(() => {
+    // 气泡随拇指一并收起：本轮隐藏由 setThumbsVisible 统一兜住（见该函数注释）
     setThumbsVisible(state, false);
     state.hideTimer = null;
   }, state.options.autoHide);
@@ -589,8 +830,8 @@ const showThumb = (state: ScrollbarState): void => {
  * 显示滚动气泡并重置其闲置倒计时。
  *
  * 只由「发生滚动」触发（宿主 scroll 事件上派发），不由悬停触发——把鼠标移进滚动区就弹读数会糊屏；
- * 隐藏时长与拇指的 autoHide 相互独立：气泡是瞬时读数，即使拇指因悬停/常显留在屏幕上，读数也该按自己的
- * 节奏淡出（见 resolveBubbleOptions 的 hideDelay 默认）。
+ * 隐藏时长按自身 hideDelay 计时（见 resolveBubbleOptions 的默认），但**上限是滚动条的可见期**：
+ * 拇指一旦自动隐藏（scheduleHide）就一并把气泡收起，不存在「滚动条没了、读数还挂着」的窗口。
  */
 const showBubble = (state: ScrollbarState): void => {
   if (!state.bubble) return;
@@ -607,7 +848,7 @@ const showBubble = (state: ScrollbarState): void => {
   }, hideDelay);
 };
 
-/** 立即收起气泡并清掉倒计时（卸载 / 无溢出时调用；不直接摘可见类会留下游离定时器） */
+/** 立即收起气泡并清掉倒计时（卸载 / 无溢出 / 滚动条自动隐藏时调用；不直接摘可见类会留下游离定时器） */
 const hideBubble = (state: ScrollbarState): void => {
   if (state.bubbleTimer !== null) {
     clearTimeout(state.bubbleTimer);
@@ -801,7 +1042,7 @@ const handleTrackAreaClick = (state: ScrollbarState, axis: 'x' | 'y', e: MouseEv
   cancelWheelAnim(state);
   host.scrollTo({
     [axis === 'y' ? 'top' : 'left']: Math.min(Math.max(next, 0), Math.max(0, scrollLength - realClient)),
-    behavior: 'smooth',
+    behavior: resolveScrollBehavior('smooth'),
   });
 };
 
@@ -889,6 +1130,13 @@ const attachTrackClick = (state: ScrollbarState, axis: 'x' | 'y'): void => {
   document.addEventListener('pointerup', endPress, true);
   document.addEventListener('pointercancel', endPress, true);
   state.disposers.push(() => {
+    // 兜底清理：updated 重建路径摘除监听时，若长按定时器仍挂起或 userSelect 写死，必须一并复位，
+    // 否则旧宿主残留 userSelect:'none'（V5）。
+    cancelLongPress();
+    if (longPressActive) {
+      longPressActive = false;
+      state.host.style.userSelect = '';
+    }
     document.removeEventListener('pointerup', endPress, true);
     document.removeEventListener('pointercancel', endPress, true);
   });
@@ -921,7 +1169,11 @@ const buildState = (
     thumbLens: { y: 0, x: 0 },
     axes,
     bubble: null,
+    bubbleLabel: null,
     bubbleText: '',
+    bubbleRoller: null,
+    // 所属轴基线（滚动位置的上一帧读数）：由 attachHostScroll 在挂载时取，取到之前为 null
+    bubbleAxisPos: null,
     bubbleTimer: null,
     options: {
       direction: options.direction,
@@ -974,11 +1226,49 @@ const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): void =>
       // 拇指在前、轨道在后：z-index 控制层叠（拇指在上），兄弟选择器 thumb:hover ~ track 依赖此顺序
       state.thumbs[axis] = makeEl(`v-scrollbar-thumb v-scrollbar-thumb--${axis}`);
       state.tracks[axis] = makeEl(`v-scrollbar-track v-scrollbar-track--${axis}`);
+      // trackClick:'none'：轨道纯视觉，永久撤掉指针事件（可见类的 pointer-events:auto 不覆盖内联样式）
+      if (state.options.trackClick === 'none') state.tracks[axis]!.style.pointerEvents = 'none';
       attachTrackClick(state, axis);
     } else {
       state.thumbs[axis] = makeEl(`v-scrollbar-thumb v-scrollbar-thumb--${axis}`);
     }
     attachThumbDrag(state, axis);
+
+    // a11y（V11）：拇指承载 role=scrollbar + 键盘滚动（方向键/PageUp/Down/Home/End）。
+    // aria-controls 需要宿主有 id 才有意义：宿主无 id 时生成一个并回填（空串等于未设，
+    // AT 会认为控件不关联任何可滚区域——P1 审计 N 系）
+    const hostEl = state.host;
+    if (!hostEl.id) hostEl.id = `v-scrollbar-host-${Math.random().toString(36).slice(2, 8)}`;
+    const thumbEl = state.thumbs[axis]!;
+    thumbEl.setAttribute('role', 'scrollbar');
+    thumbEl.setAttribute('aria-orientation', axis === 'y' ? 'vertical' : 'horizontal');
+    thumbEl.setAttribute('aria-controls', hostEl.id);
+    thumbEl.setAttribute('tabindex', '0');
+    thumbEl.addEventListener('keydown', (e: KeyboardEvent) => {
+      const host = state.host;
+      const step = getLength(host, axis, 'client') * 0.1;
+      let delta = 0;
+      if (axis === 'y') {
+        if (e.key === 'ArrowDown') delta = step;
+        else if (e.key === 'ArrowUp') delta = -step;
+        else if (e.key === 'PageDown') delta = getLength(host, 'y', 'client');
+        else if (e.key === 'PageUp') delta = -getLength(host, 'y', 'client');
+        else if (e.key === 'Home') delta = -Infinity;
+        else if (e.key === 'End') delta = Infinity;
+      } else {
+        if (e.key === 'ArrowRight') delta = step;
+        else if (e.key === 'ArrowLeft') delta = -step;
+        else if (e.key === 'Home') delta = -Infinity;
+        else if (e.key === 'End') delta = Infinity;
+      }
+      if (delta === 0) return;
+      e.preventDefault();
+      const max = Math.max(0, getLength(host, axis, 'scroll') - getLength(host, axis, 'client'));
+      const cur = getScrollPos(host, axis);
+      const next = delta === Infinity ? max : delta === -Infinity ? 0 : Math.min(max, Math.max(0, cur + delta));
+      if (axis === 'y') host.scrollTop = next;
+      else host.scrollLeft = next;
+    });
 
     // overlay 是宿主的兄弟节点：指针落在轨道/拇指上时宿主已 mouseleave，
     // 需由 overlay 自身接管悬停状态，否则会误启动自动隐藏；轨道仅在这两种悬停下显示
@@ -1005,22 +1295,82 @@ const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): void =>
   // 所属轴必须真在启用轴内：否则 applyBubble 取不到该轴读数（会早退），气泡既不定位也不写文案，
   // 却在滚动时被 showBubble 加上可见类——一枚空气泡滞留在父元素左上角。显式写错轴时宁可不建。
   if (state.options.bubble.enabled && state.axes.includes(state.options.bubble.axis)) {
-    const bubble = makeEl(`v-scrollbar-bubble v-scrollbar-bubble--${state.options.bubble.axis}`);
+    const { axis, size } = state.options.bubble;
+    // 档位类两档都写在注入样式里（各管一套度量），此处按解出的档位直接挂上，无需分支
+    const bubble = makeEl(`v-scrollbar-bubble v-scrollbar-bubble--${axis} v-scrollbar-bubble--${size}`);
     // 纯视觉读数：同一信息消费端可由滚动位置得到，重复播报只会干扰读屏
     bubble.setAttribute('aria-hidden', 'true');
+    // 读数节点：气泡本体保持 overflow:visible 供箭头探出，省略号与文本都落在它身上（见 renderBubbleText）
+    const label = document.createElement('span');
+    label.className = 'v-scrollbar-bubble-text';
+    bubble.appendChild(label);
+    state.bubbleLabel = label;
+    // 翻页器：单元节点直接挂在读数节点下（结构见 makeBubbleCell）；未开 roll 时读数节点退回纯文本节点
+    if (state.options.bubble.roll) {
+      state.bubbleRoller = {
+        cells: [],
+        nodes: [],
+        nextKey: 0,
+        lastChangeAt: Date.now(),
+        pending: [],
+        timer: null,
+      };
+    }
+    // 指向箭头：贴在气泡朝滚动条的那条边，随气泡一起被 showBubble/hideBubble 控制显隐
+    const arrow = document.createElement('div');
+    arrow.className = 'v-scrollbar-bubble-arrow';
+    applyArrowStyle(arrow, buildBubbleArrowStyle(axis, BUBBLE_ARROW_SIZE[size]));
+    bubble.appendChild(arrow);
     state.bubble = bubble;
   }
 };
 
-/** overlay 的 wheel 转发：wheel 不会冒泡到宿主（兄弟节点），同参重派发到宿主元素由指令按策略消费。 */
+/**
+ * 气泡指向箭头的样式：**复用 Popover/Tooltip 的浮层箭头逻辑**（buildFloatingArrowStyle——
+ * 45° 旋转方块 + 裁掉插入面板内的那一半 + 只保留楔形两侧边框），保证三处箭头观感一致。
+ *
+ * 与那两处不同，气泡方位是恒定的（纵向滚动条的气泡恒在轨道左侧、横向的恒在轨道上方），不存在 flip，
+ * 因此不需要 floating-ui 的 arrow middleware：用假 placement 表达「贴哪条边」即可——
+ * 气泡在锚点左侧 → placement 'left' → 箭头贴气泡右缘（朝滚动条一侧），
+ * 交叉轴居中偏移在创建时按边长直接写 calc（尺寸像素级已知，省掉一次测量与一整套中间件）。
+ */
+const buildBubbleArrowStyle = (axis: 'x' | 'y', size: number): CSSProperties => {
+  const style = buildFloatingArrowStyle({
+    placement: axis === 'y' ? 'left' : 'top',
+    background: 'var(--bg-panel)',
+    borderColor: 'var(--glass-border)',
+    size,
+    // 气泡自带 1px 边框，与 BasePopover 传同款修正，把箭头原点对齐回 border-box 边缘
+    borderWidth: 1,
+  });
+  // 交叉轴居中：纵向气泡的箭头贴右缘靠 top 居中，横向气泡的箭头贴下缘靠 left 居中
+  if (axis === 'y') style.top = `calc(50% - ${size / 2}px)`;
+  else style.left = `calc(50% - ${size / 2}px)`;
+  return style;
+};
+
+/** 把箭头样式对象写入元素：写法与 vTooltip 一致（-webkit- 前缀属性只能走 setProperty，其余按 camelCase 直赋） */
+const applyArrowStyle = (el: HTMLElement, style: CSSProperties): void => {
+  for (const [key, value] of Object.entries(style)) {
+    if (value == null) continue;
+    if (key === 'WebkitBackdropFilter') el.style.setProperty('-webkit-backdrop-filter', String(value));
+    else (el.style as unknown as Record<string, string>)[key] = String(value);
+  }
+};
+
+/** overlay 的 wheel 转发：wheel 不会冒泡到宿主（兄弟节点），同参重派发到宿主元素由指令按策略消费；
+ *  宿主侧**没有生效策略**时才由自身兜底驱动本轴（有策略而选择放行时不得二次驱动，见下）。 */
 const attachOverlayWheelForward = (state: ScrollbarState, axis: 'x' | 'y', el: HTMLElement): void => {
-  // 宿主上的滚动监听/指令（如 v-wheel-scroll）按自身策略消费，以 defaultPrevented 判定消费与否；
-  // 无人消费才走自身兜底转发。ctrl/meta/alt 交还浏览器默认（缩放等组合键）
+  // 三种归宿，按序判定：
+  // ① 宿主侧消费（defaultPrevented）→ 把消费决定镜像回真实事件，抑制其默认滚动；
+  // ② 宿主侧有生效策略但刻意放行（如 v-wheel-scroll 的 overscroll:'auto' 在边界处让位、
+  //    或本轮已让位给外层）→ 结论就是「交给外层滚动链」，兜底不得再驱动本轴；
+  // ③ 宿主侧无策略（未挂 v-wheel-scroll，或挂了但 disabled）→ 兜底接手驱动本轴。
+  // 注意：真实事件不能在探测前无条件 preventDefault——② 需要让真实事件保留默认行为，
+  // 浏览器才能对非受信合成事件无法执行的「原生滚动链」进行兜底（穿透到祖先滚动容器）。
+  // ctrl/meta/alt 交还浏览器默认（缩放等组合键）；
   // 合成事件刻意 bubbles:false：只投递给宿主自身消费，不向上冒泡，
   // 避免宿主祖先上依赖 wheel 冒泡的委托（若存在）被这份转发事件二次处理。
-  // 注意：真实事件不能在探测前无条件 preventDefault——若宿主策略选择放行
-  // （如 v-wheel-scroll 的 overscroll:'auto' 在边界处），需要让真实事件保留默认行为，
-  // 浏览器才能对非受信合成事件无法执行的「原生滚动链」进行兜底（穿透到祖先滚动容器）。
   el.addEventListener(
     'wheel',
     (e: WheelEvent) => {
@@ -1040,16 +1390,30 @@ const attachOverlayWheelForward = (state: ScrollbarState, axis: 'x' | 'y', el: H
         e.preventDefault();
         return;
       }
-      // 宿主侧放行（如边界穿透）：真实事件默认行为不被抑制，浏览器原生滚动链可继续生效；
-      // 同时走自身兜底转发驱动宿主轴（边界放行场景下该轴已无可滚余量，等价于空操作）
-      const scale = e.deltaMode === 1 ? 40 : 1; // 行模式（Firefox）按行高近似换算
+      // 宿主侧没拦截，但可能正是「有策略、且策略选择放行」：让位给外层滚动是本轮结论，
+      // 兜底不得再驱动本轴——否则宿主被兜底拖着动、外层同时也在滚（两者同时位移）。
+      // 兜底只服务真的没人管的场景（宿主未挂 v-wheel-scroll，或挂了但 disabled）
+      if (isWheelScrollSeen(resent)) return;
+      // 宿主侧无策略：真实事件默认行为不被抑制，浏览器原生滚动链可继续生效（穿透到祖先滚动容器），
+      // 同时由兜底补上原生那套轴回退（事件到不了宿主，只能在这里代为驱动）
+      // deltaMode 归一化：行模式（Firefox）按约一行高度近似；页模式按宿主该轴可视尺寸折算
+      //（否则页单位被当 1px、几乎不动。口径与 v-wheel-scroll 的 toPixelDelta 对齐）
+      const scale =
+        e.deltaMode === 1
+          ? 40
+          : e.deltaMode === 2
+            ? axis === 'y'
+              ? state.host.clientHeight
+              : state.host.clientWidth
+            : 1;
+      const fallbackDelta = axis === 'y' ? e.deltaY * scale : (e.deltaX + e.deltaY) * scale;
       // 滚动条所在轴决定驱动哪条轴：纵向滚动条→纵向、横向滚动条→横向，
       // 不再双向同时滚动（避免停在横向滚动条上时纵向内容被误带）。
       // 横向滚动条同时接纳鼠标滚轮（deltaY）与触控板横向滑动（deltaX），保证鼠标可用。
       if (axis === 'y') {
-        wheelScroll(state, 0, e.deltaY * scale);
+        wheelScroll(state, 0, fallbackDelta);
       } else {
-        wheelScroll(state, (e.deltaX + e.deltaY) * scale, 0);
+        wheelScroll(state, fallbackDelta, 0);
       }
     },
     { passive: false }
@@ -1081,11 +1445,23 @@ const attachHostScroll = (state: ScrollbarState): void => {
     };
     state.options.onScroll?.(detail);
     // 滚动气泡：所有滚动路径都汇聚到宿主 scroll 事件（原生滚动、拇指拖拽、轨道跳转/翻页、滚轮转发、
-    // 程序化 scrollTo），故只需在此显形即可覆盖全部交互；onlyInteractive 时过滤非手势滚动
-    if (state.options.bubble.enabled && (!state.options.bubble.onlyInteractive || detail.interactive)) {
-      showBubble(state);
+    // 程序化 scrollTo），故只需在此显形即可覆盖全部交互。
+    // 但显形只认气泡所属轴：宿主双轴可滚时，滚另一轴并不会让读数变化，此刻浮现的是一份陈旧读数，
+    // 看起来却像「跟着当前滚动在动」。非所属轴滚动时不显形也不重置倒计时——气泡按自己的节奏淡出。
+    // onlyInteractive 时再过滤掉非手势滚动（布局钳位 / 程序化设位）。
+    const { bubble } = state.options;
+    if (bubble.enabled) {
+      const axisPos = bubble.axis === 'y' ? detail.scrollTop : detail.scrollLeft;
+      const moved = axisPos !== state.bubbleAxisPos;
+      state.bubbleAxisPos = axisPos;
+      if (moved && (!bubble.onlyInteractive || detail.interactive)) showBubble(state);
     }
   };
+  // 所属轴基线：气泡「只认所属轴」的判据是位置有没有变，故先记一次当前值。
+  // 取在这里而不是 buildState——updated 每次都以 buildState 造候选 state 做比较，
+  // 在那条路径上读 scrollTop 会在 Vue patch 之后强制一次同步布局（乐谱预览这类大页代价可观）；
+  // 挂载路径上紧接着就是 refreshAll 的量测，这里的读不额外造成回流。
+  state.bubbleAxisPos = getScrollPos(state.host, state.options.bubble.axis);
   state.host.addEventListener('scroll', onHostScroll, { passive: true });
   state.disposers.push(() => state.host.removeEventListener('scroll', onHostScroll));
 };
@@ -1217,7 +1593,12 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
 
   refreshAll(state);
   // 挂载时布局可能尚未稳定（如模态框开启动画/字体加载），连续两帧后再刷新一次
-  requestAnimationFrame(() => requestAnimationFrame(() => refreshAll(state)));
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      // 两帧后宿主可能已卸载（updated 重建 / 元素移除）：state 已失效则跳过刷新（同 scheduleRefresh 的守卫）
+      if (states.get(state.host) === state) refreshAll(state);
+    })
+  );
   attachHoverVisibility(state);
 };
 
@@ -1242,6 +1623,13 @@ const unmountScrollbar = (host: HTMLElement): void => {
   state.tracks.x?.remove();
   state.bubble?.remove();
   state.bubble = null;
+  // 翻页器持有收尾定时器与节点引用，随卸载一并作废（同 hideBubble：只摘 DOM 不撤定时器会漏引用）
+  if (state.bubbleRoller) {
+    settleBubbleRoll(state.bubbleRoller);
+    state.bubbleRoller = null;
+  }
+  // 读数节点随气泡一起脱离 DOM，引用必须同步置空：否则 state 已删出 WeakMap，旧的 label 仍被闭包外的引用链挂着
+  state.bubbleLabel = null;
   host.classList.remove(HOST_CLASS);
   host.style.removeProperty('scrollbar-width');
   host.style.removeProperty('-ms-overflow-style');
@@ -1326,6 +1714,10 @@ export const vScrollbar: Directive<HTMLElement, ScrollbarBinding> = {
       prev.options.bubble.axis === next.options.bubble.axis &&
       prev.options.bubble.offset === next.options.bubble.offset &&
       prev.options.bubble.hideDelay === next.options.bubble.hideDelay &&
+      // size 决定气泡档位类与箭头边长，两者都在挂载时落到 DOM/内联样式上，必须纳入重建判据
+      prev.options.bubble.size === next.options.bubble.size &&
+      // roll 决定读数节点是「单元宿主」还是纯文本节点，同样只在挂载时定型
+      prev.options.bubble.roll === next.options.bubble.roll &&
       prev.options.bubble.onlyInteractive === next.options.bubble.onlyInteractive
     ) {
       return;

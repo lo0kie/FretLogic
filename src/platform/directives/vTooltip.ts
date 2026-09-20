@@ -186,6 +186,8 @@ let globalArrow: HTMLDivElement | null = null;
 let currentTargetEl: HTMLElement | null = null;
 let cleanupAutoUpdate: (() => void) | null = null;
 let showTimer: ReturnType<typeof setTimeout> | null = null;
+/** showTimer 归属的宿主元素：卸载时据以判断挂起的延时显示是否属于本实例（单例定时器的归属标记） */
+let showTimerEl: HTMLElement | null = null;
 let hideTimer: ReturnType<typeof setTimeout> | null = null;
 // 淡出结束后的「补设 visibility:hidden」清理定时器：独立于 hideTimer 之外、同样纳入统一清理
 let hideCleanupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -338,6 +340,7 @@ const clearTimers = () => {
   if (showTimer) {
     clearTimeout(showTimer);
     showTimer = null;
+    showTimerEl = null;
   }
   if (hideTimer) {
     clearTimeout(hideTimer);
@@ -481,9 +484,11 @@ const showTooltip = (el: HTMLElement, opts: TooltipOptions, immediate = false) =
   const delayMs = immediate ? 0 : show;
 
   if (delayMs > 0) {
+    showTimerEl = el;
     showTimer = setTimeout(() => {
       executeShow(el, opts);
       showTimer = null;
+      showTimerEl = null;
     }, delayMs);
   } else {
     executeShow(el, opts);
@@ -649,6 +654,12 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
       el.removeEventListener('focus', handler.onFocus);
       el.removeEventListener('blur', handler.onBlur);
       handlerMap.delete(el);
+    }
+    // 挂起中的延时显示若属于本实例必须摘除：否则定时器稍后触发会把浮层打在 (0,0) 无人收起
+    if (showTimerEl === el && showTimer) {
+      clearTimeout(showTimer);
+      showTimer = null;
+      showTimerEl = null;
     }
     if (currentTargetEl === el) {
       hideTooltip(el, true);

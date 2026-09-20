@@ -3,11 +3,11 @@ import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
 import { getChordName } from '@/domains/chord/theory/theory';
+import { GroupSortRule } from '@/domains/chord/types';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useModalController } from '@/platform/store/useModalController';
-import { TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
 
-import type { Chord, Group, GroupedChordCard, GroupSortRule } from '@/domains/chord/types';
+import type { Chord, Group, GroupedChordCard } from '@/domains/chord/types';
 
 const DEFAULT_GROUP_SORT_RULE = 'ROOT_PITCH' as const;
 const DEFAULT_SORT_KEY = 'C';
@@ -58,16 +58,16 @@ export function useChordGroupModals() {
   const handleCreateGroup = () => {
     const val = modalData.inputValue.trim();
     if (!val) {
-      uiStore.toast.error('确认失败：请输入有效内容');
+      uiStore.message.error('确认失败：请输入有效内容');
       return;
     }
     if (chordStore.groups.some(g => g.name === val)) {
-      uiStore.toast.warning('创建失败：该分组名称已存在');
+      uiStore.message.warning('创建失败：该分组名称已存在');
       return;
     }
     chordStore.addGroup(val);
     close('create');
-    uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
+    uiStore.message.success(MESSAGES.SUCCESS_OPERATION);
   };
 
   /** 打开重命名弹窗并预填当前分组名 */
@@ -79,14 +79,24 @@ export function useChordGroupModals() {
   const handleRenameGroup = () => {
     const val = modalData.inputValue.trim();
     if (!val) {
-      uiStore.toast.error('确认失败：请输入有效内容');
+      uiStore.message.error('确认失败：请输入有效内容');
       return;
     }
-    if (modalData.activeGroup) {
-      chordStore.renameGroup(modalData.activeGroup.id, val);
+    const target = modalData.activeGroup;
+    if (!target) {
+      // 分组对象丢失（正常流程不会发生）：明确告警而非谎报成功
+      uiStore.message.warning('重命名失败：未找到目标分组');
+      close('rename');
+      return;
     }
+    if (val === target.name) {
+      // 名称未变化：renameGroup 会静默 no-op，直接关窗即可，不发成功提示
+      close('rename');
+      return;
+    }
+    chordStore.renameGroup(target.id, val);
     close('rename');
-    uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
+    uiStore.message.success(MESSAGES.SUCCESS_OPERATION);
   };
 
   /** 打开删除分组确认弹窗 */
@@ -94,7 +104,7 @@ export function useChordGroupModals() {
     open('delete', { activeGroup: group });
   };
 
-  /** 确认删除分组：联动编辑器复位与歌曲解绑（删除/撤销事件经应用层桥接），toast 提供 4 秒撤销 */
+  /** 确认删除分组：联动编辑器复位与歌曲解绑（删除/撤销事件经应用层桥接），message 提供 4 秒撤销 */
   const handleDeleteGroup = () => {
     if (!modalData.activeGroup) return;
     const targetGid = modalData.activeGroup.id;
@@ -110,14 +120,15 @@ export function useChordGroupModals() {
     chordStore.deleteGroup(targetGid);
 
     close('delete');
-    uiStore.toast.info(`已删除分组 "${groupName}"`, {
+    // 通知而非常驻 Message：撤销入口随 toast 飘走就没了，用户必须能回看并补做
+    uiStore.notice.info({
+      title: `已删除分组 "${groupName}"`,
       actionText: '撤销',
-      duration: TOAST_WARNING_DURATION_MS,
       onAction: () => {
         chordStore.overwriteGroups(groupsSnapshot);
         chordStore.executeUndoRestore();
         chordStore.selectedGroupId = targetGid;
-        uiStore.toast.success(`已恢复分组 "${groupName}"`);
+        uiStore.message.success(`已恢复分组 "${groupName}"`);
       },
     });
   };
@@ -130,20 +141,26 @@ export function useChordGroupModals() {
   /** 确认移动：按和弦名把该分组下所有变体指法移到目标分组 */
   const handleMoveChord = () => {
     if (!modalData.moveTargetId) {
-      uiStore.toast.error('确认失败：请选择有效分组');
+      uiStore.message.error('确认失败：请选择有效分组');
       return;
     }
-    if (!modalData.activeChord) return;
+    const source = modalData.activeChord;
+    if (!source) {
+      uiStore.message.warning('移动失败：未找到源和弦');
+      close('move');
+      return;
+    }
+    if (modalData.moveTargetId === source.groupId) {
+      // moveVariantsByName 对同组移动是静默 no-op，不谎报成功
+      uiStore.message.warning('移动失败：目标分组与当前分组相同');
+      return;
+    }
 
-    chordStore.moveVariantsByName(
-      modalData.activeChord.groupId,
-      getChordName(modalData.activeChord),
-      modalData.moveTargetId
-    );
+    chordStore.moveVariantsByName(source.groupId, getChordName(source), modalData.moveTargetId);
 
-    uiStore.clearActionToasts();
+    uiStore.clearActionMessages();
     close('move');
-    uiStore.toast.success(MESSAGES.SUCCESS_OPERATION);
+    uiStore.message.success(MESSAGES.SUCCESS_OPERATION);
   };
 
   /** 移动弹窗中目标分组的样式态：源分组禁用、已选中高亮、其余常态 */
@@ -164,11 +181,25 @@ export function useChordGroupModals() {
 
   /** 确认保存排序配置 */
   const handleSaveSort = () => {
-    if (modalData.activeGroup) {
-      chordStore.updateGroupSort(modalData.activeGroup.id, modalData.sortRule, modalData.sortKey);
+    const target = modalData.activeGroup;
+    if (!target) {
+      // 分组对象丢失：明确告警而非谎报成功
+      uiStore.message.warning('保存失败：未找到目标分组');
+      close('sort');
+      return;
     }
+    const sortUnchanged =
+      target.sortRule === modalData.sortRule &&
+      (modalData.sortRule !== GroupSortRule.KEY_DEGREE ||
+        (getGroupSortKey(target) || DEFAULT_SORT_KEY) === modalData.sortKey);
+    if (sortUnchanged) {
+      // 与 updateGroupSort 的静默 no-op 分支保持一致：值未变直接关窗，不发成功提示
+      close('sort');
+      return;
+    }
+    chordStore.updateGroupSort(target.id, modalData.sortRule, modalData.sortKey);
     close('sort');
-    uiStore.toast.success('排序配置已更新');
+    uiStore.message.success('排序配置已更新');
   };
 
   /** 打开批量删除指法弹窗，清空上次的勾选。
@@ -195,7 +226,7 @@ export function useChordGroupModals() {
   /** 确认删除勾选的指法（走统一删除流程，可撤销） */
   const handleDeleteSelectedVariants = () => {
     if (!modalData.activeGroupCard || modalData.selectedVariantIds.size === 0) {
-      uiStore.toast.warning('请至少选择一个要删除的指法');
+      uiStore.message.warning('请至少选择一个要删除的指法');
       return;
     }
     const chordsToDelete = modalData.activeGroupCard.variants.filter(v => modalData.selectedVariantIds.has(v.id));

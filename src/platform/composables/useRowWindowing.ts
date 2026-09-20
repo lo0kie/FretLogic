@@ -124,6 +124,12 @@ export const useRowWindowing = <T>(options: {
       const last = Math.max(findLastRowAt(plan.rows, bottom - gridTop), first - 1);
       next.push({ first, last });
     }
+    // 等值守卫：每滚动帧都会调用本函数，区间没动时赋新数组会白白触发下游（picker 整屏）
+    // 重渲染——只有任一分区窗口真的变化才替换引用（同 useStickyHeads 的 sameSet 范式）
+    const prev = windowRanges.value;
+    if (prev.length === next.length && prev.every((r, i) => r.first === next[i]!.first && r.last === next[i]!.last)) {
+      return;
+    }
     windowRanges.value = next;
   };
 

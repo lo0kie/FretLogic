@@ -25,6 +25,9 @@ import { vScrollIntoView } from './platform/directives/vScrollIntoView.ts';
 import { vTooltip } from './platform/directives/vTooltip.ts';
 import { vWheelScroll } from './platform/directives/vWheelScroll.ts';
 
+// AppDBSchema 的 declaration merging 必须在程序内生效（idb 编译期绑定依赖它）；
+// 显式引用一次，防止构建路径裁剪掉这个只有类型声明的模块
+import '@/app/services/storage/appDbSchema';
 import '@/assets/tailwind.css';
 import '@/assets/main.scss';
 
@@ -64,7 +67,13 @@ const initializeEditor = () => {
  */
 const initApp = async () => {
   try {
-    await bootstrapDataLayer();
+    // IDB 升级被其它标签页阻塞时 open 可能永久挂起（不 resolve 也不 reject），
+    // 加超时兜底：超时即继续启动（hydrate 各自容错），避免整屏空白且 console 零报错
+    const DATA_LAYER_TIMEOUT_MS = 8000;
+    await Promise.race([
+      bootstrapDataLayer(),
+      new Promise<undefined>(resolve => setTimeout(resolve, DATA_LAYER_TIMEOUT_MS)),
+    ]);
   } catch (error) {
     logger.error('main', '数据层引导失败', error);
   }
@@ -73,14 +82,26 @@ const initApp = async () => {
   // 这里同步重读偏好（cookie 缺失时可从 kv 镜像迁移历史持久化值）并落 cookie
   useTheme().initTheme();
 
-  // 数据域水合：挂载前完成，首帧即有数据
+  // 数据域水合：挂载前完成，首帧即有数据。
+  // 与上方 bootstrap 同款超时兜底：hydrate 同样打 IDB（open 被其它标签页阻塞时可永久挂起），
+  // 裸 await 会让 finally 里的 mount 永远到不了——整屏空白零报错。超时即挂载（水合 Promise
+  // 不取消，晚到时 store 各自的响应式赋值仍会把数据补进已挂载的 UI）
   try {
-    await Promise.all([useChordStore(pinia).hydrate(), useSongStore(pinia).hydrate()]);
+    const HYDRATE_TIMEOUT_MS = 8000;
+    await Promise.race([
+      Promise.all([useChordStore(pinia).hydrate(), useSongStore(pinia).hydrate()]),
+      new Promise<undefined>(resolve => setTimeout(resolve, HYDRATE_TIMEOUT_MS)),
+    ]);
   } catch (error) {
     logger.error('main', '数据域水合失败', error);
   } finally {
     app.mount('#app');
     initializeEditor();
+    // 启动后非阻塞比对云端数据校验和（dataMd5），不一致时 message 提示引导同步（懒加载，不进首屏闭包）
+    // 补 .catch 兜底：避免探测异常（未预期的 promise rejection）在控制台成为 unhandled rejection
+    void import('@/app/services/sync/syncActions')
+      .then(m => m.checkCloudDataChange())
+      .catch(error => logger.error('main', '云端数据一致性检测失败', error));
   }
 };
 

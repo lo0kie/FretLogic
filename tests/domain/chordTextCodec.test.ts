@@ -15,10 +15,10 @@ import type { Chord } from '@/domains/chord/types';
 import type { BarreEntity } from '@/domains/fretboard/types';
 
 /** 构造测试和弦：默认标准调弦 6 弦、3 品、根音 5 弦 */
-const makeChord = (name: string, strings: Array<[number, boolean]>, barres?: BarreEntity[]): Chord =>
+const makeChord = (name: string, strings: Chord['strings'], barres?: BarreEntity[]): Chord =>
   createChord({
     nameSegments: nameToSegments(name),
-    strings: strings as Chord['strings'],
+    strings,
     fretCount: 3,
     groupId: 'g_test',
     tuning: Tuning.STANDARD,
@@ -31,12 +31,12 @@ describe('chordTextCodec 和弦文字编解码（chord 域单一来源）', () =
     const chord = makeChord(
       'F#m7b5',
       [
-        [-1, false],
-        [1, true],
-        [3, false],
-        [2, false],
-        [2, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 1, preferFlat: true },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
       [{ fret: 2, fromString: 2, toString: 4, finger: 2 }]
     );
@@ -49,12 +49,12 @@ describe('chordTextCodec 和弦文字编解码（chord 域单一来源）', () =
     expect(result.data.fretOffset).toBe(0);
     expect(result.data.rootStringIndex).toBe(5);
     expect(result.data.strings).toEqual([
-      [-1, false],
-      [1, true],
-      [3, false],
-      [2, false],
-      [2, false],
-      [0, false],
+      { fret: -1, preferFlat: false },
+      { fret: 1, preferFlat: true },
+      { fret: 3, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 0, preferFlat: false },
     ]);
     expect(result.data.barres).toEqual([{ fret: 2, fromString: 2, toString: 4, finger: 2 }]);
   });
@@ -75,20 +75,20 @@ describe('chordTextCodec 分组文字编解码', () => {
   it('分组序列化 → 解析往返保真（名称/排序规则/组内和弦保序）', () => {
     const chords = [
       makeChord('Am7', [
-        [-1, false],
-        [0, false],
-        [0, false],
-        [0, false],
-        [0, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ]),
       makeChord('C', [
-        [-1, false],
-        [3, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ]),
     ];
     const text = serializeGroupToText({ name: '测试分组', sortRule: GroupSortRule.KEY_DEGREE, sortKey: 'G' }, chords);

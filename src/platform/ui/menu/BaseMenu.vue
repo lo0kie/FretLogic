@@ -67,6 +67,7 @@ import MenuItems from '@/platform/ui/menu/MenuItems.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import { createVirtualElementRect } from '@/platform/ui/popover/floatingCore';
 import { CONTEXT_MENU_REPOSITION_DURATION_MS, CONTEXT_MENU_REPOSITION_EASING } from '@/platform/utils/constants';
+import { logger } from '@/platform/utils/logger';
 
 import type { ComponentSize } from '@/platform/types';
 import type { MenuItem } from '@/platform/ui/menu/types';
@@ -180,7 +181,7 @@ const callStack = (): string =>
 /** 关闭本菜单并清理全局互斥记录 */
 const closeMenu = (reason = 'unmarked') => {
   if (IS_DEV && isOpen.value) {
-    console.debug(`[menu${instanceId}] closeMenu reason=${reason}`, { stack: callStack() });
+    logger.debug('BaseMenu', `[menu${instanceId}] closeMenu reason=${reason}`, { stack: callStack() });
   }
   popoverRef.value?.close(`menu:${reason}`);
 };
@@ -189,7 +190,7 @@ const closeMenu = (reason = 'unmarked') => {
 watch(isOpen, val => {
   if (val) {
     if (mutexCloseRef.value && mutexCloseRef.value !== closeMenu) {
-      if (IS_DEV) console.debug(`[menu${instanceId}] 互斥关闭上一个菜单`);
+      if (IS_DEV) logger.debug('BaseMenu', `[menu${instanceId}] 互斥关闭上一个菜单`);
       mutexCloseRef.value('mutex-by-other-menu');
     }
     mutexCloseRef.value = closeMenu;
@@ -208,7 +209,7 @@ watch(isOpen, async val => {
 
 /** 菜单关闭回调：清互斥登记，并向父级转发关闭事件 */
 const handlePopoverClose = () => {
-  if (IS_DEV) console.debug(`[menu${instanceId}] popover 已关闭（浮层侧发出）`);
+  if (IS_DEV) logger.debug('BaseMenu', `[menu${instanceId}] popover 已关闭（浮层侧发出）`);
   if (mutexCloseRef.value === closeMenu) {
     mutexCloseRef.value = null;
   }

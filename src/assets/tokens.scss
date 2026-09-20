@@ -1,9 +1,12 @@
 /* ============================================================
-   统一设计令牌（单一来源，集中管理）
-   经 vite additionalData 全局注入，任意 .vue <style lang="scss"> 与 .scss 均可直接使用。
-   - 颜色 / 阴影 / 动画：保留原有主题系统
-   - 间距 / 圆角 / 字号：收敛为少数成比例、互相协调的档位，形成视觉节奏
-     要调整整体密度 / 圆润度 / 字号层级，改这一份即可。
+   CSS 设计令牌规则层（单一来源，集中管理）
+   只包含 :root / .dark / [data-theme='high-contrast'] 的 CSS 自定义属性规则，
+   由 main.scss 引入恰好一次——不要把本文件 @use 进任何 <style scoped>：
+   scoped 会把 :root 改写为 :root[data-v-x] 永不命中（死规则），并在每个组件里复制一份。
+
+   SCSS 变量层（$space-* / $radius-* / $fs-* 等，经 vite additionalData 全局注入）
+   见 token-vars.scss——该文件不得包含任何 CSS 规则，两份各司其职。
+   要调整整体密度 / 圆润度 / 字号层级，改这一份即可。
    ============================================================ */
 
 :root {
@@ -89,6 +92,11 @@
   --duration-slow: 0.35s;
   --bezier-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --bezier-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 以下三项供 tailwind.css 的 --ease-bounce/-standard/-sidebar 引用；
+     此前未定义导致 14 个 ease- 工具类 IACVT 落初始值（无缓动） */
+  --bezier-bounce: cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  --bezier-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --bezier-sidebar: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* ===== 背景模糊 ===== */
   --blur-xs: blur(4px);
@@ -277,80 +285,50 @@
 
   --text-on-accent: #000000;
   --overlay-bg: #000000;
+
+  /* O9：高对比缺失项——不覆盖则回落 :root 亮色值，导致指板画布白字近白底、
+     panelhover 色调与 HC 底色冲突（白底白字）。逐项对齐 .dark 基础上再提对比。 */
+  /* 指板画布配色（对齐 .dark：深底白字） */
+  --fbc-bg: #0a0a0c;
+  --fbc-sub-text: #d4d4dc;
+  --fbc-divider: #3a3a42;
+  --fbc-line: #8e8e96;
+  --fbc-nut: #ffffff;
+  --fbc-note: #ffffff;
+  --fbc-open: #ffffff;
+  --fbc-barre: #ffffff;
+  --fbc-mute: #ffffff;
+
+  /* 实时 SVG 指板配色（--fb-*）：HC 不挂 .dark，若不覆盖会回落 :root 亮色值，
+     使琴枕 / 音符（深色 #18181b / #0f172a）贴在 HC 深底上近不可见。逐项对齐 .dark，
+     并把网格线 / 次要线 / hover 对齐 HC 自身已提高的 --fbc-* / border / panelhover 色阶。 */
+  --fb-line: #8e8e96;
+  --fb-line-dim: #4a4a52;
+  --fb-nut: #ffffff;
+  --fb-note: #ffffff;
+  --fb-hover: #2a2a2e;
+  --fb-label: #e2e8f0;
+  --fb-root: var(--color-warning);
+  --fb-dot: #3b82f6;
+  --fb-root-text: #29323d;
+  --fb-open-bg: #182737;
+  --fb-open-border: #144477;
+  --fb-open-root-bg: #2d2012;
+  --fb-open-root-border: #6b4712;
+  --fb-open-muted-bg: #351f20;
+  --fb-open-muted-border: #762b28;
+
+  /* 阴影：HC 靠边框而非阴影区分层次，阴影加深保证可见 */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.18);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.2);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.22);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.22);
+  --shadow-panel: 0 10px 28px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.2);
+  --shadow-floating: 0 24px 56px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.22);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.7);
+  --focus-ring: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--color-primary);
+
+  /* panelhover 色调：对齐 HC 面板底色族，避免白底白字 */
+  --tint-panelhover-30: #2a2a2e;
+  --tint-panelhover-50: #26262a;
 }
-
-$primary: var(--color-primary);
-$brand-primary: var(--color-primary);
-$danger: var(--color-danger);
-$brand-danger: var(--color-danger);
-$warning: var(--color-warning);
-
-$text-title: var(--text-title);
-$text-body: var(--text-body);
-$text-subtitle: var(--text-muted);
-
-/* ===== 间距系统：4px 节奏（收敛为协调的 8 档，2px 用于极紧间隙） ===== */
-$space-2xs: 0.125rem; /* 2px  */
-$space-xs: 0.25rem; /* 4px  */
-$space-sm: 0.5rem; /* 8px  */
-$space-md: 0.75rem; /* 12px */
-$space-lg: 1rem; /* 16px */
-$space-xl: 1.5rem; /* 24px */
-$space-2xl: 2rem; /* 32px */
-$space-3xl: 3rem; /* 48px */
-
-/* ===== 桌面端最小宽度：低于此宽度应用不再收缩，而是保持该宽度并横向滚动 ===== */
-$app-min-width: 1024px;
-
-/* ===== 圆角系统：小(控件) / 中 / 大(卡片) / 胶囊 ===== */
-$radius-sm: 0.375rem; /* 6px  控件、标签 */
-$radius-md: 0.625rem; /* 10px 按钮、输入框 */
-$radius-lg: 1rem; /* 16px 卡片、弹窗 */
-$radius-pill: 9999px; /* 胶囊 */
-
-/* ===== 字号系统：密集 UI 的类型阶梯（1.25 → 1.5 → 2.25 → 3.2 平滑过渡） ===== */
-$fs-sup: 0.46rem; /* 上角标（音程标记） */
-$fs-2xs: 0.625rem; /* 极小说明文字 */
-$fs-xs: 0.75rem; /* 次要文字 */
-$fs-sm: 0.875rem; /* 默认小字 UI */
-$fs-base: 1rem; /* 正文 / 中等 */
-$fs-lg: 1.25rem; /* 标题 */
-$fs-xl: 1.5rem; /* 次级强调 */
-$fs-2xl: 2.25rem; /* 大标题 */
-$fs-display: 3.2rem; /* 大数字（和弦名 / 品位） */
-
-$border-width-base: 1px;
-$border-solid-base: $border-width-base solid var(--border-base);
-$border-solid-light: $border-width-base solid var(--border-light);
-$border-dashed-base: $border-width-base dashed var(--border-base);
-
-$shadow-sm: var(--shadow-sm);
-$shadow-md: var(--shadow-md);
-$shadow-lg: var(--shadow-lg);
-$shadow-xl: var(--shadow-xl);
-
-$shadow-panel: var(--shadow-panel);
-$shadow-floating: var(--shadow-floating);
-$shadow-xs: var(--shadow-xs);
-
-/* ===== 动效时长：SCSS 侧统一引用 CSS 变量，消除同名双源（旧值 0.16/0.28/0.42s 已废弃） ===== */
-$duration-fast: var(--duration-fast);
-$duration-base: var(--duration-base);
-$duration-slow: var(--duration-slow);
-$bezier-bounce: cubic-bezier(0.34, 1.3, 0.64, 1);
-$bezier-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-$bezier-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
-$bezier-sidebar: cubic-bezier(0.2, 0.8, 0.2, 1);
-
-$transition-base: all $duration-base $bezier-standard;
-$transition-fast: all $duration-fast $bezier-standard;
-$transition-interactive:
-  background-color $duration-fast ease,
-  border-color $duration-fast ease,
-  box-shadow $duration-fast ease,
-  color $duration-fast ease;
-$transition-colors:
-  background-color $duration-fast ease,
-  border-color $duration-fast ease,
-  color $duration-fast ease;
-$transition-spring: transform $duration-base $bezier-spring;

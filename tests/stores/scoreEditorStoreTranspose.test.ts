@@ -13,7 +13,7 @@ import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 import type { Chord } from '@/domains/chord/types';
-import type { LineId, SlotKey } from '@/domains/score/types';
+import type { LineId } from '@/domains/score/types';
 
 describe('乐谱编辑器移调与撤销栈 (scoreEditorStore Transpose & Undo)', () => {
   beforeEach(async () => {
@@ -34,12 +34,12 @@ describe('乐谱编辑器移调与撤销栈 (scoreEditorStore Transpose & Undo)'
       groupId: toGroupId('g1'),
       nameSegments: nameToSegments('C'),
       strings: [
-        [-1, false],
-        [3, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
       fretCount: 4,
       fretOffset: 0,
@@ -52,11 +52,10 @@ describe('乐谱编辑器移调与撤销栈 (scoreEditorStore Transpose & Undo)'
 
     // 创建歌曲并设置激活
     const song = songStore.createSong('乐谱移调撤销测试');
-    const slotKey = 'line_l1_start_0' as SlotKey;
     song.lineIds = ['l1' as LineId];
     song.lyrics = '测试歌词';
     song.playKey = 'C';
-    song.chordMap.set(slotKey, chordC.id);
+    song.chordMap.set('l1' as LineId, { char: new Map(), start: [chordC.id], end: [] });
 
     scoreEditorStore.setActiveSong(song.id);
     await nextTick();
@@ -66,19 +65,19 @@ describe('乐谱编辑器移调与撤销栈 (scoreEditorStore Transpose & Undo)'
     scoreEditorStore.transposeActiveSong(2);
 
     expect(scoreEditorStore.activeSong?.playKey).toBe('D');
-    const newChordId = scoreEditorStore.activeSong?.chordMap.get(slotKey);
+    const newChordId = scoreEditorStore.activeSong?.chordMap.get('l1' as LineId)?.start[0];
     expect(newChordId).toBeDefined();
     expect(newChordId).not.toBe(chordC.id);
 
     // 撤销 undo
     await scoreEditorStore.undo();
     expect(scoreEditorStore.activeSong?.playKey).toBe('C');
-    expect(scoreEditorStore.activeSong?.chordMap.get(slotKey)).toBe(chordC.id);
+    expect(scoreEditorStore.activeSong?.chordMap.get('l1' as LineId)?.start[0]).toBe(chordC.id);
 
     // 重做 redo
     await scoreEditorStore.redo();
     expect(scoreEditorStore.activeSong?.playKey).toBe('D');
-    expect(scoreEditorStore.activeSong?.chordMap.get(slotKey)).toBe(newChordId);
+    expect(scoreEditorStore.activeSong?.chordMap.get('l1' as LineId)?.start[0]).toBe(newChordId);
   });
 
   it('transposeActiveCapo: 变调夹微调并支持 undo/redo', async () => {

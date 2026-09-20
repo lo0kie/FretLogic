@@ -36,7 +36,7 @@
         <BaseSelector
           v-model="songModals.modalData.timeSignature"
           :default-value="''"
-          :options="[...SONG_TIME_SIGNATURES]"
+          :options="SONG_TIME_SIGNATURES"
           clearable
           placeholder="未设置"
         />

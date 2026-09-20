@@ -34,6 +34,8 @@ export interface MarqueeOptions {
   pauseDuration?: number;
   /** 是否在两端添加羽化渐变遮罩，可指定渐变宽度（px） */
   fade?: boolean | number;
+  /** 是否只滚动一次：溢出时播放单个循环后停在终帧，不再无限循环（默认 false）。配合 mode:'always' 常用于一次性提示（如 toast） */
+  once?: boolean;
   /** 生命周期回调 */
   onStart?: () => void;
   onEnd?: () => void;
@@ -53,6 +55,7 @@ export type MarqueeModifiers =
   | 'continuous'
   | 'pingpong'
   | 'fade'
+  | 'once'
   | (string & Record<never, never>);
 
 const DEFAULTS: Required<Omit<MarqueeOptions, 'onStart' | 'onEnd' | 'onOverflowChange'>> &
@@ -67,6 +70,7 @@ const DEFAULTS: Required<Omit<MarqueeOptions, 'onStart' | 'onEnd' | 'onOverflowC
   pauseOnEdges: true,
   pauseDuration: 1000,
   fade: false,
+  once: false,
   onStart: undefined,
   onEnd: undefined,
   onOverflowChange: undefined,
@@ -81,6 +85,8 @@ interface MarqueeState {
   focused: boolean;
   reducedMotion: boolean;
   wasActive: boolean;
+  /** 单次播放（once）是否已播完：播完后停在终帧、不再重启 */
+  playedOnce: boolean;
   sig: string | null;
   animation: Animation | null;
   /** 停用后的平滑复位动画（进行中时阻止重复触发与循环重启） */
@@ -111,6 +117,7 @@ function resolveOptions(binding: MarqueeBinding, modifiers?: Record<string, bool
     if (modifiers['continuous']) base.loopMode = 'continuous';
     if (modifiers['pingpong']) base.loopMode = 'pingpong';
     if (modifiers['fade']) base.fade = true;
+    if (modifiers['once']) base.once = true;
   }
 
   return { ...DEFAULTS, ...base };
@@ -203,15 +210,18 @@ const FLUSH_EPS_PX = 1;
 /**
  * 由动画当前时间计算内容位移偏移（0 = 起点贴边，dist = 终点贴边）。
  * pingpong：第一段由静止位滚向远端 → 远端停顿 → 返回 → 静止位停顿；
- * continuous：单向循环，offset 在 [0, travelDist) 内循环。
+ * continuous：单向循环，offset 在 [0, travel) 内循环。
+ *
+ * `dist` / `travel` 均由调用方预先算好传入，**本函数不读任何布局属性**：它唯一的调用者是逐帧
+ * 遮罩循环，若在这里读 inner.scrollWidth，就等于每帧强制一次样式/布局重算；而这两个量在一次
+ * 动画期间是不变的（transform 不改变 scrollWidth，内容变化另由 ResizeObserver 触发 update 重算）。
  */
-function sampleOffset(state: MarqueeState, dist: number): number {
+function sampleOffset(state: MarqueeState, dist: number, travel: number): number {
   const anim = state.animation;
   if (!anim) return state.options.direction === 'left' ? 0 : dist;
-  const { direction, gap } = state.options;
+  const { direction } = state.options;
   const t = Number(anim.currentTime ?? 0);
   if (state.options.loopMode === 'continuous') {
-    const travel = inner_scrollWidth(state) + gap;
     const moveMs = anim.effect?.getTiming().duration;
     const dur = typeof moveMs === 'number' ? moveMs : 0;
     if (dur <= 0) return 0;
@@ -221,7 +231,9 @@ function sampleOffset(state: MarqueeState, dist: number): number {
   // pingpong：与 update() 的时间轴分段一致
   const speed = state.options.speed;
   const duration = state.options.duration;
-  const moveMs = duration != null ? duration : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / speed) * 1000);
+  // duration 下限取 1ms（与 startPingpong 同口径）：否则 duration:0 时 total=0、相位除零得出 NaN
+  const moveMs =
+    duration != null ? Math.max(1, duration) : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / speed) * 1000);
   const pauseMs = state.options.pauseOnEdges ? Math.max(0, state.options.pauseDuration) : 0;
   const total = 2 * moveMs + 2 * pauseMs;
   const phase = total > 0 ? t % total : 0;
@@ -234,18 +246,18 @@ function sampleOffset(state: MarqueeState, dist: number): number {
   return direction === 'left' ? dist * fracToFar : dist * (1 - fracToFar);
 }
 
-/** 读取 inner 内容宽度（隔离采样函数内的 DOM 访问） */
-function inner_scrollWidth(state: MarqueeState): number {
-  return state.inner.scrollWidth;
-}
-
-/** 动画激活期间逐帧同步遮罩：起点贴边 → 仅右端羽化；终点贴边 → 仅左端羽化；区间内 → 双端 */
-function startMaskLoop(state: MarqueeState, dist: number): void {
+/**
+ * 动画激活期间逐帧同步遮罩：起点贴边 → 仅右端羽化；终点贴边 → 仅左端羽化；区间内 → 双端。
+ *
+ * `dist` / `travel` 由 update 一次算好传入（那里本就要读布局），循环内只做纯计算 + 写 CSS
+ * 自定义属性，不读任何布局属性——这是本循环能稳稳跑在每帧预算内的前提。
+ */
+function startMaskLoop(state: MarqueeState, dist: number, travel: number): void {
   if (state.maskRaf !== 0) return;
   const step = (): void => {
     state.maskRaf = 0;
     if (!state.animation) return;
-    const offset = sampleOffset(state, dist);
+    const offset = sampleOffset(state, dist, travel);
     if (offset <= FLUSH_EPS_PX) {
       setFade(state, 0, 1); // 起点贴边：左缘不渐隐
     } else if (offset >= dist - FLUSH_EPS_PX) {
@@ -329,13 +341,27 @@ function deactivateMarquee(el: HTMLElement, state: MarqueeState): void {
   inner.style.transform = restTransform(el, state);
 }
 
-/** continuous 无缝循环模式：全程位移 = 内容宽 + gap，线性匀速无限循环。 */
+/** 单次播放（once）结束回调：标记已播放、停逐帧遮罩、派发 end。终帧由 fill:'forwards' 保持，不重置不重启。 */
+function attachOnceFinish(state: MarqueeState, el: HTMLElement): void {
+  const anim = state.animation;
+  if (!anim) return;
+  anim.onfinish = () => {
+    // 期间若被新动画取代（once 关闭后重新进入），以 state.animation 为准，忽略本次回调
+    if (state.animation !== anim) return;
+    state.playedOnce = true;
+    stopMaskLoop(state);
+    emit(el, 'marquee-end', undefined, state.options.onEnd);
+    state.wasActive = false;
+  };
+}
+
+/** continuous 无缝循环模式：全程位移 = 内容宽 + gap，线性匀速。once 时只播一轮并停在终帧。 */
 function startContinuous(_el: HTMLElement, state: MarqueeState): void {
   const { inner, options } = state;
   const travelDist = inner.scrollWidth + options.gap;
   const moveMs =
     options.duration != null
-      ? options.duration
+      ? Math.max(1, options.duration) // duration:0 → 0 时长动画，下限取 1ms
       : Math.max(MARQUEE_MIN_DURATION_CONTINUOUS_MS, (travelDist / options.speed) * 1000);
   const frames =
     options.direction === 'right'
@@ -348,15 +374,17 @@ function startContinuous(_el: HTMLElement, state: MarqueeState): void {
           { offset: 1, transform: `translateX(-${travelDist}px)` },
         ];
 
-  const sig = `continuous|${travelDist}|${moveMs}|${options.direction}`;
+  const sig = `continuous|${travelDist}|${moveMs}|${options.direction}|${options.once ? 1 : 0}`;
   if (state.sig !== sig) {
     if (state.animation) state.animation.cancel();
     state.animation = inner.animate(frames, {
       duration: moveMs,
-      iterations: Infinity,
+      iterations: options.once ? 1 : Infinity,
       easing: 'linear',
       delay: Math.max(0, options.delay),
+      fill: options.once ? 'forwards' : 'none',
     });
+    if (options.once) attachOnceFinish(state, _el);
     state.sig = sig;
   }
 }
@@ -367,7 +395,7 @@ function startPingpong(el: HTMLElement, state: MarqueeState): void {
   const dist = inner.scrollWidth - el.clientWidth;
   const moveMs =
     options.duration != null
-      ? options.duration
+      ? Math.max(1, options.duration) // duration:0 → total=0 → moveFrac=0/0=NaN 关键帧，下限取 1ms
       : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / options.speed) * 1000);
   const pauseMs = options.pauseOnEdges ? Math.max(0, options.pauseDuration) : 0;
   const total = 2 * moveMs + 2 * pauseMs;
@@ -391,15 +419,17 @@ function startPingpong(el: HTMLElement, state: MarqueeState): void {
           { offset: 1, transform: 'translateX(0px)' },
         ];
 
-  const sig = `pingpong|${dist}|${moveMs}|${pauseMs}|${options.direction}`;
+  const sig = `pingpong|${dist}|${moveMs}|${pauseMs}|${options.direction}|${options.once ? 1 : 0}`;
   if (state.sig !== sig) {
     if (state.animation) state.animation.cancel();
     state.animation = inner.animate(frames, {
       duration: total,
-      iterations: Infinity,
+      iterations: options.once ? 1 : Infinity,
       easing: 'linear',
       delay: Math.max(0, options.delay),
+      fill: options.once ? 'forwards' : 'none',
     });
+    if (options.once) attachOnceFinish(state, el);
     state.sig = sig;
   }
 }
@@ -411,6 +441,23 @@ function update(el: HTMLElement): void {
   const { inner, options, overflowing } = state;
 
   const active = overflowing && !state.reducedMotion && shouldAnimate(state);
+
+  // once 关闭后允许重新进入播放（复位单次标记，使后续可再次播一轮）
+  if (!options.once) state.playedOnce = false;
+
+  // 单次播放模式：首轮播完后停在终帧，不再重启、不重置（避免归位跳变）。
+  // 内容不再溢出时退化为常规静态，正常回到静止位。
+  if (options.once && state.playedOnce) {
+    if (!overflowing) {
+      deactivateMarquee(el, state);
+    } else {
+      stopMaskLoop(state);
+      // 静态羽化跟随静止位：贴内容一侧不渐隐
+      setFade(state, options.direction === 'left' ? 0 : 1, options.direction === 'left' ? 1 : 0);
+      state.wasActive = false;
+    }
+    return;
+  }
 
   // 激活/静止切换时同步遮罩方向（激活=双端，静止=贴内容侧不渐隐）
   applyFadeMask(el, state);
@@ -424,18 +471,22 @@ function update(el: HTMLElement): void {
       state.resetAnim = null;
       inner.style.transform = restTransform(el, state);
     }
-    // 逐帧遮罩同步所需的全程位移：continuous 为内容宽+gap，pingpong 为溢出距离
-    let maskDist = inner.scrollWidth - el.clientWidth;
+    // 逐帧遮罩同步所需的两个位移量在此一次算好：本函数是事件驱动的同步路径，本来就要读布局，
+    // 让遮罩循环逐帧复用这两个数即可（循环内不再碰布局属性）。
+    // continuous：全程位移 = 内容宽 + gap；pingpong：位移 = 溢出距离
+    const contentWidth = inner.scrollWidth;
+    const travelDist = contentWidth + options.gap;
+    let maskDist = contentWidth - el.clientWidth;
 
     if (options.loopMode === 'continuous') {
-      maskDist = inner.scrollWidth + options.gap;
+      maskDist = travelDist;
       startContinuous(el, state);
     } else {
       startPingpong(el, state);
     }
 
     // 动画激活期间逐帧同步遮罩：起点/终点贴边的一侧不渐隐
-    startMaskLoop(state, maskDist);
+    startMaskLoop(state, maskDist, travelDist);
   }
 
   if (active && !state.wasActive) emit(el, 'marquee-start', undefined, options.onStart);
@@ -503,6 +554,7 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       focused: false,
       reducedMotion: false,
       wasActive: false,
+      playedOnce: false,
       sig: null,
       animation: null,
       resetAnim: null,

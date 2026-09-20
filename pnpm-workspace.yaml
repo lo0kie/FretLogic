@@ -7,6 +7,9 @@ allowBuilds:
   esbuild: true
   unrs-resolver: true
   vue-demi: true
+  # workerd = Cloudflare Workers 官方运行时二进制（wrangler 的依赖，deploy:worker 链路）。
+  # postinstall 需要下载平台二进制，必须允许构建脚本，否则 wrangler 起不来
+  workerd: true
 
 overrides:
   dompurify: ^3.4.14

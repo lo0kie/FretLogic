@@ -5,9 +5,19 @@ import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import type { Ref } from 'vue';
 
-export type WorkbenchPanelId = 'analysis' | 'variants' | 'export';
+export type WorkbenchPanelId = 'analysis' | 'variants' | 'export' | 'fretboard';
 
-export const DEFAULT_WORKBENCH_PANEL_ORDER: readonly WorkbenchPanelId[] = ['variants', 'analysis', 'export'] as const;
+/**
+ * 默认面板顺序：指板设置置顶——它管的就是左侧那块指板本身（品数 / 调音 / 偏移），
+ * 与指板相邻最常被随手调整；其余按「变体 → 分析 → 导出」的查看动线排。
+ * 老用户已存的顺序里缺这一项时由 sanitizePanelOrder 补在末尾（用户可拖拽改序）。
+ */
+export const DEFAULT_WORKBENCH_PANEL_ORDER: readonly WorkbenchPanelId[] = [
+  'fretboard',
+  'variants',
+  'analysis',
+  'export',
+] as const;
 
 /**
  * 校验并清洗工作台面板顺序：保证所有默认面板存在、无未知项且不重复

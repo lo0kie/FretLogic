@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { charKey } from '@/domains/score/model/scoreModel';
 import { prepareWorkerExportPayload } from '@/domains/score/preview/services/workerExportService';
 
 import type { Chord } from '@/domains/chord/types';
-import type { LineId, Song, SongId } from '@/domains/score/types';
+import type { ChordLineSlots, LineId, Song, SongId } from '@/domains/score/types';
 
 describe('workerExportService', () => {
   it('正确将 Song 数据转换为 Worker 渲染所需的轻量 Payload（含指板图数据）', () => {
@@ -12,12 +11,12 @@ describe('workerExportService', () => {
       id: 'chord_c',
       nameSegments: { root: ['C', 0] },
       strings: [
-        [-1, false],
-        [3, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
       rootStringIndex: 1,
       fretCount: 4,
@@ -30,8 +29,8 @@ describe('workerExportService', () => {
 
     const chordsLookupMap = new Map<string, Chord>([['chord_c', mockChord]]);
 
-    const chordMap = new Map<string, string>();
-    chordMap.set(charKey('line_0', 0), 'chord_c');
+    const chordMap = new Map<LineId, ChordLineSlots>();
+    chordMap.set('line_0' as LineId, { char: new Map([[0, 'chord_c']]), start: [], end: [] });
 
     const song: Song = {
       id: 'song_1' as SongId,
@@ -61,12 +60,12 @@ describe('workerExportService', () => {
       id: 'chord_cmaj7',
       nameSegments: { root: ['C', 0], quality: 'maj7' },
       strings: [
-        [-1, false],
-        [3, false],
-        [2, false],
-        [0, false],
-        [0, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
       rootStringIndex: 1,
       fretCount: 4,
@@ -78,8 +77,8 @@ describe('workerExportService', () => {
     };
 
     const chordsLookupMap = new Map<string, Chord>([['chord_cmaj7', mockMaj7Chord]]);
-    const chordMap = new Map<string, string>();
-    chordMap.set(charKey('line_0', 0), 'chord_cmaj7');
+    const chordMap = new Map<LineId, ChordLineSlots>();
+    chordMap.set('line_0' as LineId, { char: new Map([[0, 'chord_cmaj7']]), start: [], end: [] });
 
     const song: Song = {
       id: 'song_1' as SongId,

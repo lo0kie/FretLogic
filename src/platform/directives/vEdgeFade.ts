@@ -100,6 +100,8 @@ interface EdgeFadeState {
   /** 已被 observer 观察的直接子元素集合：childList 变化时增量增删，避免重复 observe */
   observedChildren: Set<Element>;
   cleanups: (() => void)[];
+  /** 合帧重测排帧器：mounted 内创建后回填（排帧器需引用 state，只能等 state 建好），供 updated 复用同一份帧 */
+  scheduleSync: () => void;
 }
 
 /** 全部羽化端点属性（单轴 + 双轴）：重置/清理时统一遍历，避免按模式挑拣遗漏 */
@@ -388,6 +390,8 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
       mutationObserver: undefined as unknown as MutationObserver,
       observedChildren: new Set(),
       cleanups: [],
+      // 占位：排帧器回调要引用 state 自身，故只能在 state 建好后创建再回填，见下方赋值处
+      scheduleSync: () => {},
     };
     STATES.set(el, state);
 
@@ -396,8 +400,11 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
      * （批量增删子节点、折叠动画期间子元素连续改尺寸、动量滚动的成串 scroll），
      * 而每次 syncEdgeFade 都要读一批布局属性，走挂载路径时还会在 mountFadeMask 里强制样式重算。
      * 合并成每帧一次后，读数也落在布局已干净时，且反复写同一份端点量被签名判等直接跳过。
+     * `updated`（选项变更触发的重测）同样复用这一份帧：它一样发生在 patch 期间，就地重测的
+     * 代价与 observer 路径没有区别。
      */
     const { schedule: scheduleSync, cancel: cancelSync } = useRafThrottle(() => syncEdgeFade(el, state));
+    state.scheduleSync = scheduleSync;
 
     const onScroll = () => scheduleSync();
     el.addEventListener('scroll', onScroll, { passive: true });
@@ -435,7 +442,12 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
     const state = STATES.get(el);
     if (!state) return;
     state.options = resolveOptions(binding.value, binding.modifiers);
-    syncEdgeFade(el, state);
+    // 与 scroll / observer 路径共用同一份帧，而非就地同步重测：updated 发生在组件 patch 期间，
+    // 此刻同一轮 patch 的其它节点尚未落定，就地读一批布局会强制一次**中间态**样式重算，
+    // 且很可能被紧随其后的 DOM 变更作废、下一轮 patch 再算一次——正是本文件开头
+    // 「重测一律走帧末合帧」要避免的情形。选项变更属低频事件，延后一帧在视觉上不可辨；
+    // rAF 回调仍早于下一帧绘制，不会出现无羽化的闪帧。
+    state.scheduleSync();
   },
 
   unmounted(el) {

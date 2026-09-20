@@ -17,28 +17,50 @@ export interface EncryptedSecrets {
   data: string;
 }
 
-export interface SyncSettingsBackup {
-  syncTarget?: SyncProviderKind;
-  /** 加密敏感凭据块：存在时四个 Token/密码字段已被剥离出明文 */
-  secrets?: EncryptedSecrets;
-  githubToken?: string;
-  githubOwner?: string;
-  githubRepo?: string;
-  githubBranch?: string;
-  githubPath?: string;
-  giteeToken?: string;
-  giteeOwner?: string;
-  giteeRepo?: string;
-  giteeBranch?: string;
-  giteePath?: string;
-  webdavServerUrl?: string;
-  webdavUsername?: string;
-  webdavPassword?: string;
-  webdavUseDefaultProxy?: boolean;
-  webdavProxyUrl?: string;
-  serverUrl?: string;
-  serverToken?: string;
+/** GitHub 同步后端配置 */
+export interface GithubSyncBackup {
+  kind: 'github';
+  token?: string;
+  owner: string;
+  repo: string;
+  branch: string;
+  path: string;
 }
+
+/** Gitee 同步后端配置 */
+export interface GiteeSyncBackup {
+  kind: 'gitee';
+  token?: string;
+  owner: string;
+  repo: string;
+  branch: string;
+  path: string;
+}
+
+/** WebDAV 同步后端配置 */
+export interface WebdavSyncBackup {
+  kind: 'webdav';
+  serverUrl: string;
+  username?: string;
+  password?: string;
+  useDefaultProxy?: boolean;
+  proxyUrl?: string;
+}
+
+/** 线上服务器同步后端配置 */
+export interface ServerSyncBackup {
+  kind: 'server';
+  serverUrl?: string;
+  token?: string;
+}
+
+/** 备份包内同步配置：按 kind 判别联合，编译器强制各分支字段配套（不再允许 syncTarget:'webdav' 携带 github* 字段） */
+export type SyncSettingsBackup = GithubSyncBackup | GiteeSyncBackup | WebdavSyncBackup | ServerSyncBackup;
+
+/** 携带加密凭据块的同步配置（加密后 token/password 被剥离出明文区，secret 块随包携带） */
+export type EncryptedSyncSettingsBackup = SyncSettingsBackup & {
+  secrets?: EncryptedSecrets;
+};
 
 export interface AppPreferencesBackup {
   workbenchChordShorthand?: boolean;

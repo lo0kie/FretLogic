@@ -16,10 +16,7 @@
  */
 import { logger } from '@/platform/utils/logger';
 
-import type { EncryptedSecrets, SyncSettingsBackup } from '@/platform/types';
-
-/** 参与加密的敏感字段：这些字段绝不再以明文出现在加密后的备份包里 */
-export const SECRET_SYNC_FIELDS = ['githubToken', 'giteeToken', 'webdavPassword', 'serverToken'] as const;
+import type { EncryptedSecrets, EncryptedSyncSettingsBackup, SyncSettingsBackup } from '@/platform/types';
 
 /** 加密侧写入包体的迭代数：OWASP 对 PBKDF2-SHA256 的建议为 ≥600k */
 const PBKDF2_ITERATIONS = 600_000;
@@ -64,12 +61,28 @@ const deriveKey = async (passphrase: string, salt: Uint8Array, iterations: numbe
   );
 };
 
-/** 从同步配置中提取待加密的敏感字段；无任何非空敏感字段时返回 undefined */
+/**
+ * 从同步配置中提取待加密的敏感字段（按判别联合各分支的 token/password）；
+ * 无任何非空敏感字段时返回 undefined。键名沿用旧扁平字段名，解密侧按同一套键还原。
+ */
 const collectSecrets = (settings: SyncSettingsBackup): Record<string, string> | undefined => {
   const secrets: Record<string, string> = {};
-  for (const field of SECRET_SYNC_FIELDS) {
-    const value = settings[field];
+  const push = (field: string, value: string | undefined) => {
     if (typeof value === 'string' && value.length > 0) secrets[field] = value;
+  };
+  switch (settings.kind) {
+    case 'github':
+      push('githubToken', settings.token);
+      break;
+    case 'gitee':
+      push('giteeToken', settings.token);
+      break;
+    case 'webdav':
+      push('webdavPassword', settings.password);
+      break;
+    case 'server':
+      push('serverToken', settings.token);
+      break;
   }
   return Object.keys(secrets).length > 0 ? secrets : undefined;
 };
@@ -81,7 +94,7 @@ const collectSecrets = (settings: SyncSettingsBackup): Record<string, string> | 
 export async function encryptSyncSettingsSecrets(
   settings: SyncSettingsBackup,
   passphrase: string
-): Promise<SyncSettingsBackup> {
+): Promise<EncryptedSyncSettingsBackup> {
   const secrets = collectSecrets(settings);
   if (!secrets) return { ...settings };
 
@@ -94,8 +107,18 @@ export async function encryptSyncSettingsSecrets(
     new TextEncoder().encode(JSON.stringify(secrets))
   );
 
-  const { ...rest } = settings;
-  for (const field of SECRET_SYNC_FIELDS) delete rest[field];
+  const rest = { ...settings } as SyncSettingsBackup & Record<string, unknown>;
+  // 按 kind 剥除已加密的敏感字段（token/password），保留其余配置
+  switch (settings.kind) {
+    case 'github':
+    case 'gitee':
+    case 'server':
+      delete rest.token;
+      break;
+    case 'webdav':
+      delete rest.password;
+      break;
+  }
   return {
     ...rest,
     secrets: {
@@ -105,7 +128,7 @@ export async function encryptSyncSettingsSecrets(
       iv: toB64(iv),
       data: toB64(new Uint8Array(cipher)),
     },
-  };
+  } as EncryptedSyncSettingsBackup;
 }
 
 /**
@@ -150,7 +173,18 @@ export const isValidEncryptedSecrets = (value: unknown): value is EncryptedSecre
   const version = v['v'];
   if (version !== SECRETS_FORMAT_V1 && version !== SECRETS_FORMAT_VERSION) return false;
   if (version === SECRETS_FORMAT_VERSION && !isUsableIterations(v['iter'])) return false;
-  return typeof v['salt'] === 'string' && typeof v['iv'] === 'string' && typeof v['data'] === 'string';
+  // 长度上限：salt/iv 仅几十字节（base64 后数百字符），data 为整包密文（上限 5MB 密文）；
+  // 否则解密前 atob + TypedArray 双份分配会在超大值时 OOM（与 S1 同入口）
+  const len = (x: unknown): number => (typeof x === 'string' ? x.length : -1);
+  const MAX_SECRETS_DATA_LEN = 5_000_000;
+  return (
+    len(v['salt']) <= 256 &&
+    len(v['iv']) <= 256 &&
+    len(v['data']) <= MAX_SECRETS_DATA_LEN &&
+    typeof v['salt'] === 'string' &&
+    typeof v['iv'] === 'string' &&
+    typeof v['data'] === 'string'
+  );
 };
 
 /** 解密失败的统一用户提示语（不区分密码错与密文损坏，避免给攻击者探测信息） */

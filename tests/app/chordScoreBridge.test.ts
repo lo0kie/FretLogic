@@ -9,23 +9,24 @@ import { useChordStore } from '@/domains/chord/store/chordStore';
 import { createChord } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import { charKey } from '@/domains/score/model/scoreModel';
+import { lineCharChord } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 import type { Chord } from '@/domains/chord/types';
+import type { LineId } from '@/domains/score/types';
 
 const makeChord = (name: string): Chord =>
   createChord({
     nameSegments: nameToSegments(name),
     strings: [
-      [-1, false],
-      [3, false],
-      [2, false],
-      [0, false],
-      [1, false],
-      [0, false],
-    ] as Chord['strings'],
+      { fret: -1, preferFlat: false },
+      { fret: 3, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 0, preferFlat: false },
+      { fret: 1, preferFlat: false },
+      { fret: 0, preferFlat: false },
+    ],
     fretCount: 3,
     groupId: 'g_test',
     tuning: Tuning.STANDARD,
@@ -50,24 +51,23 @@ describe('chordScoreBridge：和弦删除/撤销与乐谱槽位解绑的跨域�
     // 撤销历史为 flush:'post'：先等「添加」入史，删除后才存在可撤销的快照
     await nextTick();
     const song = songStore.createSong('测试歌');
-    const slotKey = charKey('l1', 0);
     songStore.updateSongMeta(song.id, {
       lyrics: 'ab',
       lineIds: ['l1'],
       playKey: 'C',
       capo: 0,
-      chordMap: new Map([[slotKey, chord.id]]),
+      chordMap: new Map([['l1' as LineId, { char: new Map([[0, chord.id]]), start: [], end: [] }]]),
     });
 
     chordStore.removeChords([chord]);
     const afterDelete = songStore.songs.find(s => s.id === song.id)!;
-    expect(afterDelete.chordMap.has(slotKey)).toBe(false);
+    expect(lineCharChord(afterDelete.chordMap, 'l1', 0)).toBeNull();
 
     // chordStore 撤销历史为 flush:'post'，先等删除动作入史，再执行撤销
     await nextTick();
     chordStore.executeUndoRestore();
     const afterUndo = songStore.songs.find(s => s.id === song.id)!;
-    expect(afterUndo.chordMap.get(slotKey)).toBe(chord.id);
+    expect(lineCharChord(afterUndo.chordMap, 'l1', 0)).toBe(chord.id);
   });
 
   it('删除未被乐谱引用的和弦时，桥接不产生副作用', () => {
@@ -99,18 +99,17 @@ describe('chordScoreBridge：和弦删除/撤销与乐谱槽位解绑的跨域�
     chord.groupId = group.id;
     chordStore.addChord(chord);
     const song = songStore.createSong('分组歌');
-    const slotKey = charKey('l1', 1);
     songStore.updateSongMeta(song.id, {
       lyrics: 'ab',
       lineIds: ['l1'],
       playKey: 'C',
       capo: 0,
-      chordMap: new Map([[slotKey, chord.id]]),
+      chordMap: new Map([['l1' as LineId, { char: new Map([[1, chord.id]]), start: [], end: [] }]]),
     });
 
     chordStore.deleteGroup(group.id);
     const afterDelete = songStore.songs.find(s => s.id === song.id)!;
-    expect(afterDelete.chordMap.has(slotKey)).toBe(false);
+    expect(lineCharChord(afterDelete.chordMap, 'l1', 1)).toBeNull();
   });
 
   it('移动和弦到目标分组遇到完全相同指法时自动合并，槽位引用重定向到保留项', () => {
@@ -130,13 +129,12 @@ describe('chordScoreBridge：和弦删除/撤销与乐谱槽位解绑的跨域�
 
     // 乐谱绑定的是"将被合并丢弃"的移入项，合并后应重定向到保留项
     const song = songStore.createSong('合并歌');
-    const slotKey = charKey('l1', 0);
     songStore.updateSongMeta(song.id, {
       lyrics: 'ab',
       lineIds: ['l1'],
       playKey: 'C',
       capo: 0,
-      chordMap: new Map([[slotKey, moved.id]]),
+      chordMap: new Map([['l1' as LineId, { char: new Map([[0, moved.id]]), start: [], end: [] }]]),
     });
 
     chordStore.moveVariantsByName(sourceGroup.id, 'C', targetGroup.id);
@@ -148,7 +146,7 @@ describe('chordScoreBridge：和弦删除/撤销与乐谱槽位解绑的跨域�
 
     // 槽位引用被重定向到保留项，而不是变成死引用
     const target = songStore.songs.find(s => s.id === song.id)!;
-    expect(target.chordMap.get(slotKey)).toBe(kept.id);
+    expect(lineCharChord(target.chordMap, 'l1', 0)).toBe(kept.id);
   });
 
   it('移动和弦到目标分组时，指法不同（横按不同）的同名和弦不会误合并', () => {
@@ -167,13 +165,12 @@ describe('chordScoreBridge：和弦删除/撤销与乐谱槽位解绑的跨域�
     chordStore.addChord(kept);
 
     const song = songStore.createSong('横按歌');
-    const slotKey = charKey('l1', 0);
     songStore.updateSongMeta(song.id, {
       lyrics: 'ab',
       lineIds: ['l1'],
       playKey: 'C',
       capo: 0,
-      chordMap: new Map([[slotKey, moved.id]]),
+      chordMap: new Map([['l1' as LineId, { char: new Map([[0, moved.id]]), start: [], end: [] }]]),
     });
 
     chordStore.moveVariantsByName(sourceGroup.id, 'C', targetGroup.id);
@@ -181,6 +178,6 @@ describe('chordScoreBridge：和弦删除/撤销与乐谱槽位解绑的跨域�
     // 横按不同不属于"完全相同"，两个和弦都保留，引用不动
     expect(chordStore.savedChordsList.filter(c => c.groupId === targetGroup.id)).toHaveLength(2);
     const target = songStore.songs.find(s => s.id === song.id)!;
-    expect(target.chordMap.get(slotKey)).toBe(moved.id);
+    expect(lineCharChord(target.chordMap, 'l1', 0)).toBe(moved.id);
   });
 });

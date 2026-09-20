@@ -368,10 +368,15 @@ watch(model, async val => {
     // v-model 外部置 true 的打开路径不经过 open()，必须在这里补层级分配，
     // 否则浮层停留在兜底层号 9999，会被任何已打开的浮层压住
     if (!isZOwned()) acquireOwnedZ();
-    isMounted.value = true;
     await nextTick();
+    // 打开期间若被外部置 false（快速开关）：视为打开被打断，归还层号并保持未挂载状态，
+    // 否则 isMounted 永久 true（Teleport 宿主残留 body）、层级泄漏，压低后续浮层预算（U10）
+    if (!model.value) {
+      releaseOwnedZ();
+      return;
+    }
+    isMounted.value = true;
     update();
-    if (!model.value) return;
     isShown.value = true;
     if (autoFocus) {
       await nextTick();

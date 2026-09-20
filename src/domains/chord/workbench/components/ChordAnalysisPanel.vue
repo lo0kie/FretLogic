@@ -44,7 +44,7 @@
                 :class="note.isRoot ? 'font-bold text-warning' : 'text-fg-disabled'"
                 class="shrink-0 text-2xs font-semibold whitespace-nowrap"
               >
-                {{ 6 - note.stringIndex }}弦
+                {{ stringCount - note.stringIndex }}弦
               </span>
               <span
                 :class="note.isRoot ? 'font-extrabold text-warning' : 'font-bold text-fg-title'"
@@ -57,7 +57,7 @@
             <BaseBadge
               :appearance="note.isRoot ? 'filled' : 'subtle'"
               :class="note.isRoot ? 'shadow-[0_1px_4px_rgba(255,149,0,0.5)]' : undefined"
-              :title="`${6 - note.stringIndex}弦 音级`"
+              :title="`${stringCount - note.stringIndex}弦 音级`"
               :variant="note.isRoot ? 'warning' : 'neutral'"
               class="font-mono tabular-nums"
               size="xs"
@@ -122,6 +122,9 @@ defineProps<{
 // 解析当前生效的草稿实例：位于选器和弦抽屉子树内时取抽屉独立草稿，否则取工作台草稿
 const editorStore = useActiveChordEditorStore();
 
+/** 草稿弦数：弦号显示基准（6 弦吉他/4 弦尤克里里/自定义调弦通用），与 FretboardSvg 的 strings.length - sIdx 口径一致 */
+const stringCount = computed(() => editorStore.draftChord.strings.length);
+
 const INTERVAL_MAP: Record<number, { degree: string; acc: '' | 'b' | '#' }> = {
   0: { degree: '1', acc: '' },
   1: { degree: '2·9', acc: 'b' },
@@ -149,8 +152,8 @@ const graphAnalysis = computed(() => {
 
   let explicitRootPitch: number | null = null;
   const rootIdx = editorStore.draftChord.rootStringIndex;
-  if (rootIdx !== null && strings[rootIdx]?.[0] !== undefined && strings[rootIdx]![0] >= 0) {
-    explicitRootPitch = calcPitchIndex(rootIdx, strings[rootIdx]![0], fretOffset, baseStrings);
+  if (rootIdx !== null && strings[rootIdx]?.fret !== undefined && strings[rootIdx]!.fret >= 0) {
+    explicitRootPitch = calcPitchIndex(rootIdx, strings[rootIdx]!.fret, fretOffset, baseStrings);
   }
 
   // 重入调弦（尤克里里 GCEA）按真实音高取低音，与 theory.resolveChordRootPitch 口径一致
@@ -182,7 +185,7 @@ const analysis = computed(() => {
       const semitones = (n.pitchIndex - activeRootPitch + 12) % 12;
       const stringObj = strings[n.stringIndex];
       const canToggle =
-        stringObj !== undefined && canTogglePitchAccidental(n.stringIndex, stringObj[0], fretOffset, baseStrings);
+        stringObj !== undefined && canTogglePitchAccidental(n.stringIndex, stringObj.fret, fretOffset, baseStrings);
       const interval = INTERVAL_MAP[semitones] || { degree: `${semitones}半音`, acc: '' };
 
       return {
@@ -261,8 +264,8 @@ const assignRootString = (candidate: CandidateResult): number | null => {
   let rootAssigned = false;
   let assignedIdx: number | null = null;
   strs.forEach((str, sIdx) => {
-    if (str[0] >= 0 && !rootAssigned) {
-      const pitch = calcPitchIndex(sIdx, str[0], editorStore.draftChord.fretOffset, editorStore.activeBaseStrings);
+    if (str.fret >= 0 && !rootAssigned) {
+      const pitch = calcPitchIndex(sIdx, str.fret, editorStore.draftChord.fretOffset, editorStore.activeBaseStrings);
       if (pitch === candidate.rootPitch) {
         editorStore.draftChord.rootStringIndex = toStringIndex(sIdx);
         assignedIdx = sIdx;
@@ -286,13 +289,13 @@ const syncUserPitchPreferences = (
     if (str) {
       const { label: curNatural, isAccidental } = computeStringLabelAccidental(
         rootStringIdx,
-        str[0],
+        str.fret,
         editorStore.draftChord.fretOffset,
-        str[1],
+        str.preferFlat,
         editorStore.activeBaseStrings
       );
       if (isAccidental) {
-        const curAcc: AccidentalType = str[1] ? -1 : 1;
+        const curAcc: AccidentalType = str.preferFlat ? -1 : 1;
         parsedSegs.root = [curNatural as NaturalPitchLetter, curAcc];
       }
     }
@@ -306,10 +309,10 @@ const syncUserPitchPreferences = (
     const bassPitch = ((ROOT_PITCH_MAP[bassNatural] ?? 0) + bassAcc + 12) % 12;
     for (let s = 0; s < editorStore.draftChord.strings.length; s++) {
       const str = editorStore.draftChord.strings[s];
-      if (str && str[0] >= 0) {
-        const p = calcPitchIndex(s, str[0], editorStore.draftChord.fretOffset, editorStore.activeBaseStrings);
+      if (str && str.fret >= 0) {
+        const p = calcPitchIndex(s, str.fret, editorStore.draftChord.fretOffset, editorStore.activeBaseStrings);
         if (p % 12 === bassPitch) {
-          str[1] = bassIsFlat;
+          str.preferFlat = bassIsFlat;
         }
         break;
       }
@@ -330,7 +333,11 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
     return;
   }
 
-  const parsedSegs = parseCandidateSegments(candidate);
+  // parseCandidateSegments 经 nameToSegments 返回 theory.ts 的 LRU 缓存实例；下方 syncUserPitchPreferences
+  // 会就地改 .root，若直接操作缓存实例会污染它、牵连后续同名和弦解析出错误根音（P1 审计 #6）。
+  // 这里克隆一份，仅改克隆体，缓存原实例不受影响（不动 theory.ts 的 LRU 返回）。
+  let parsedSegs = parseCandidateSegments(candidate);
+  if (parsedSegs) parsedSegs = { ...parsedSegs };
   editorStore.snapshotRootBeforeCandidate();
   const assignedRootStringIdx = assignRootString(candidate);
   if (parsedSegs) {

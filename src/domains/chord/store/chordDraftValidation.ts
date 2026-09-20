@@ -40,7 +40,7 @@ export interface ChordDraftContext {
 export const validateChordDraft = (draft: Chord, isEditing: boolean, ctx: ChordDraftContext): ChordValidationResult => {
   const nameSegments = draft.nameSegments;
   const cleanName = nameSegments ? segmentsToString(nameSegments) : '';
-  const isFretBoardEmpty = draft.strings.every(s => s[0] < 0);
+  const isFretBoardEmpty = draft.strings.every(s => s.fret < 0);
   if (!cleanName || isFretBoardEmpty) {
     return { ok: false, reason: 'EMPTY_NAME' };
   }
@@ -66,7 +66,7 @@ export const validateChordDraft = (draft: Chord, isEditing: boolean, ctx: ChordD
     draft.rootStringIndex !== undefined &&
     draft.rootStringIndex >= 0 &&
     draft.rootStringIndex < currentStrings.length &&
-    (currentStrings[draft.rootStringIndex]?.[0] ?? -1) >= 0
+    (currentStrings[draft.rootStringIndex]?.fret ?? -1) >= 0
       ? draft.rootStringIndex
       : null;
 

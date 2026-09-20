@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { computeChordFingerprint, getChordName } from '@/domains/chord/theory/theory';
+import { areBarresEqual } from '@/domains/fretboard/model/coordinates';
 import { kvGet, kvRemove } from '@/platform/services/storage/idbKv';
 import { ROUTE_PATHS, STORAGE_KEYS } from '@/platform/utils/constants';
 
@@ -56,7 +57,9 @@ export function useWorkbenchRouteSync() {
   /**
    * 草稿是否携带未保存内容（脏草稿守卫）：
    * - 新建态（isCreating）：指板非空即脏（空白新建草稿可安全覆盖）；
-   * - 编辑态（isEditing）：草稿与库中原始实体指纹/名称不一致即脏。
+   * - 编辑态（isEditing）：草稿与库中原始实体指纹/名称/横按不一致即脏。
+   *   指纹（computeChordFingerprint）不含 barres，横按改动必须单独比较，否则
+   *   仅调横按的未保存草稿会被误判干净而被 URL 回灌覆盖。
    */
   const isDraftDirty = (): boolean => {
     if (editorStore.isCreating) return !editorStore.isFretBoardEmpty;
@@ -66,7 +69,9 @@ export function useWorkbenchRouteSync() {
     const saved = chordStore.savedChordsList.find(c => c.id === draft.id);
     if (!saved) return false;
     return (
-      computeChordFingerprint(draft) !== computeChordFingerprint(saved) || getChordName(draft) !== getChordName(saved)
+      computeChordFingerprint(draft) !== computeChordFingerprint(saved) ||
+      getChordName(draft) !== getChordName(saved) ||
+      !areBarresEqual(draft.barres, saved.barres)
     );
   };
 

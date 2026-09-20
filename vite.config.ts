@@ -9,7 +9,7 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import { VitePWA } from 'vite-plugin-pwa';
 import { configDefaults, defineConfig } from 'vitest/config';
 
-import { injectScssTokens } from './scripts/scss-inject';
+import { injectScssTokens } from './scripts/scss-inject.mjs';
 
 import type { ViteUserConfig } from 'vitest/config';
 
@@ -48,13 +48,16 @@ const testConfig: ViteUserConfig = {
       // - 数据校验（app/services/validation）≥80%
       // - 数据仓储（domains/*/model）≥80%
       // - 服务基础设施（platform/services、app/services）≥55%
-      // - 全局 ≥70%（设计文档原目标，ui/views 后续 phase 提升）
       // 路径必须是源码当前所在位置：此前仍写 src/services/**，而该目录在分层迁移后已不存在，
       // 阈值匹配到空集 → 检查恒通过，等于没有门槛。
-      // autoUpdate：实跑覆盖率高于阈值时自动回写配置，避免阈值长期停在偏低档位而失去作用。
+      // 注意：注释里曾写「全局 ≥70%」，但 thresholds 只有分层 glob、从未配置全局键——
+      // 全局门槛实际不存在。要启用它需先跑一次 coverage 看真实全局水位再定档
+      //（在 thresholds 顶层加 lines/functions/statements/branches 四个全局键）。
+      // autoUpdate 必须关：coverage 跑测试时会**回写本文件**（git 跟踪中），工作树被静默改脏，
+      // 误提交会把阈值抬到与本机跑数耦合的值；阈值应随测试补齐由人显式提升。
       thresholds: {
         'perFile': false,
-        'autoUpdate': true,
+        'autoUpdate': false,
         'src/domains/chord/theory/**': {
           lines: 85,
           functions: 70,
@@ -104,7 +107,6 @@ const testConfig: ViteUserConfig = {
           //（repositories/sanitizePersistedData 走 store 链路需要完整组件环境，其余依赖 jsdom 组件挂载）
           exclude: [
             ...configDefaults.exclude,
-            '**/performance.test.ts',
             'tests/ui/**',
             'tests/utils/barre.test.ts',
             'tests/data/repositories.test.ts',
@@ -174,7 +176,8 @@ export default defineConfig(({ command, mode }) => {
         ? [
             visualizer({
               open: true,
-              filename: 'stats.html',
+              // 落 .temp/（AGENTS §5：临时产物不落根目录；.temp 已 gitignore）
+              filename: '.temp/stats.html',
               gzipSize: true,
               brotliSize: true,
             }),

@@ -15,8 +15,9 @@ const CONFIG_FILES = [
   'pnpm-workspace.yaml',
   'index.html',
 ];
-const OUTPUT_FILE = 'all_code.txt';
-const EXCLUDED_DIRS = ['node_modules'];
+// 输出收敛到 .temp/（AGENTS §5：临时产物不落根目录；.temp 已 gitignore）
+const OUTPUT_FILE = '.temp/all_code.txt';
+const EXCLUDED_DIRS = ['node_modules', '.temp'];
 const EXCLUDED_FILES = ['all_code.txt'];
 const EXCLUDED_EXT = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico'];
 
@@ -160,6 +161,7 @@ function main() {
   console.log(`找到 ${files.length} 个文件`);
   console.log(KEEP_COMMENTS ? '模式：保留注释' : '模式：剥离注释（加 --keep-comments 可保留）');
 
+  fs.mkdirSync(path.dirname(OUTPUT_FILE), { recursive: true });
   const writeStream = fs.createWriteStream(OUTPUT_FILE, { encoding: 'utf8' });
   let isFirstFile = true;
 

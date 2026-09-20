@@ -29,6 +29,38 @@ import type { useSettingsStore } from '@/platform/store/settingsStore';
 type SettingsStore = ReturnType<typeof useSettingsStore>;
 
 /**
+ * 分区内的配置收窄（判别式收窄的唯一出口）。
+ *
+ * `ProviderFactory.create` 收的是 `SyncConfig` 联合类型，所以每个分区里 `config` 的静态类型
+ * 仍是整个联合。原先直接写 `config as GithubSyncConfig` 是纯强转——「分区与 kind 一致」这个
+ * 前提没有任何人校验：将来若把某分区的 create 接到别的 kind 上（或新增分区时抄错），编译器
+ * 不会出声，运行时才以「provider 内读到 undefined 字段」的形式炸在别处、且离现场很远。
+ * 改为判别式收窄后，类型由控制流得出而非断言，kind 不符立即抛出并指出两侧。
+ *
+ * 正常路径恒真：每个分区的 resolveConfig / resolveTestConfig 都只产出自己的 kind，
+ * 而 syncActions 总是用同一分区的工厂消费它（见 resolveProvider / testConnection）。
+ */
+const takeGithubConfig = (config: SyncConfig): GithubSyncConfig => {
+  if (config.kind !== 'github') throw new Error(`同步配置类型不匹配：期望 github，实际收到 ${config.kind}`);
+  return config;
+};
+
+const takeGiteeConfig = (config: SyncConfig): GiteeSyncConfig => {
+  if (config.kind !== 'gitee') throw new Error(`同步配置类型不匹配：期望 gitee，实际收到 ${config.kind}`);
+  return config;
+};
+
+const takeWebdavConfig = (config: SyncConfig): WebdavSyncConfig => {
+  if (config.kind !== 'webdav') throw new Error(`同步配置类型不匹配：期望 webdav，实际收到 ${config.kind}`);
+  return config;
+};
+
+const takeServerConfig = (config: SyncConfig): ServerSyncConfig => {
+  if (config.kind !== 'server') throw new Error(`同步配置类型不匹配：期望 server，实际收到 ${config.kind}`);
+  return config;
+};
+
+/**
  * 同步 provider 注册表（工厂 + 策略）。
  * 新增一种同步后端只需在此追加一项，useSyncService 的派发逻辑无需改动，
  * 消除了原先散落在 useSyncService / SyncModalContainer 中的 if/else 分发。
@@ -74,7 +106,7 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
         },
       };
     },
-    create: config => createGithubSyncProvider(config as GithubSyncConfig),
+    create: config => createGithubSyncProvider(takeGithubConfig(config)),
     // 测试连接只需 owner/repo（Token 与公开性在探测时自动区分），branch/path 不参与
     resolveTestConfig: s => {
       const owner = s.githubOwner.trim() || GITHUB_SYNC_CONFIG.DEFAULT_OWNER;
@@ -121,7 +153,7 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
         },
       };
     },
-    create: config => createGiteeSyncProvider(config as GiteeSyncConfig),
+    create: config => createGiteeSyncProvider(takeGiteeConfig(config)),
     // 测试连接同样只需 owner/repo；Gitee 写操作强制要求 Token，连接测试宽松处理
     resolveTestConfig: s => {
       const owner = s.giteeOwner.trim() || GITEE_SYNC_CONFIG.DEFAULT_OWNER;
@@ -164,7 +196,7 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
         },
       };
     },
-    create: config => createWebdavSyncProvider(config as WebdavSyncConfig),
+    create: config => createWebdavSyncProvider(takeWebdavConfig(config)),
     // 测试连接只需 serverUrl（账号密码可选，认证失败在探测时反馈）
     resolveTestConfig: s => {
       const serverUrl = s.webdavServerUrl.trim();
@@ -192,11 +224,14 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
         token: s.serverToken.trim() || undefined,
       },
     }),
-    create: config => createServerSyncProvider(config as ServerSyncConfig),
-    resolveTestConfig: () => ({
+    create: config => createServerSyncProvider(takeServerConfig(config)),
+    // 测试连接必须带与真实同步同一份 Token：否则用户配了 serverToken 也永远按「无 Token」探测，
+    // 既测不出写鉴权，给出的结论也与实际推送能力不符
+    resolveTestConfig: s => ({
       config: {
         kind: 'server',
         serverUrl: CLOUD_SYNC_CONFIG.SERVER_URL,
+        token: s.serverToken.trim() || undefined,
       },
     }),
   },

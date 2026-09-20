@@ -1,8 +1,14 @@
 /**
- * verify 的静默驱动：串行执行 format → lint → typecheck → test → build，
+ * verify 的静默驱动：串行执行 format:check → lint → typecheck → test → build，
  * 正常情况只回显每步的命令行（`$ eslint .` 这种），各工具的详细输出一律不打印；
  * 某步失败时才把它攒下的输出整段回放 —— 否则一次 verify 会滚屏几千行，
  * 真正要看的那几行错误早被刷没了。
+ *
+ * 为什么首步是 format:check 而不是 format：
+ * verify 挂在 pre-push 上（.husky/pre-push），而 format 是 `prettier --write`。
+ * 写成 write 会在「推送前」把工作树就地格式化，但**被推的那次 commit 内容不变**——
+ * 于是本地验证通过、CI 检出同一 commit 跑 format:check 却红。校验型步骤只读，
+ * 不制造「本地绿、远端红」的假通过；真需要格式化就自己跑 pnpm format 再提交。
  *
  * 命令字符串从 package.json 的 scripts 里读，不在这里重复一份，避免改了一处漏了另一处。
  * 传 --verbose 可退回实时输出（排查工具本身的问题时用）。
@@ -15,8 +21,8 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-/** 步骤顺序：与原先 run-s 的入参一致 */
-const STEP_NAMES = ['format', 'lint', 'typecheck', 'test', 'build'];
+/** 步骤顺序：校验全部只读；build:budget 必须排在 build 之后（消费 dist 产物做体积预算） */
+const STEP_NAMES = ['format:check', 'lint', 'typecheck', 'test', 'build', 'build:budget'];
 /** 失败时回放的行数上限：eslint / vitest 的报错动辄上千行，全量打印反而不利于定位 */
 const MAX_REPLAY_LINES = 400;
 

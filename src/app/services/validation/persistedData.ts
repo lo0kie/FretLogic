@@ -14,6 +14,7 @@ import { sanitizeSongEntity, sanitizeSongs } from '@/domains/score/model/songRep
 import type { GroupDraft, Timestamped } from '@/domains/chord/model/chordRepository';
 import type { Group } from '@/domains/chord/types';
 import type { SongDraft } from '@/domains/score/model/songRepository';
+import type { ChordLineSlots, LineId } from '@/domains/score/types';
 
 export {
   dedupeChordsByFingerprint,
@@ -35,13 +36,14 @@ export const sanitizePersistedData = (data: { groups?: unknown; chords?: unknown
   const now = Date.now();
   const groups = fillMissingTimestamps(sanitizeGroups(data.groups), now) as Group[];
   const hasChordSnapshot = data.chords !== null;
-  const chords = fillMissingTimestamps(sanitizeChords(data.chords, new Set(groups.map(group => group.id))), now);
+  const sanitizedChords = sanitizeChords(data.chords, new Set(groups.map(group => group.id)));
+  const chords = fillMissingTimestamps(sanitizedChords.chords, now);
   const validChordIds = new Set(chords.map(chord => chord.id));
   const songs = fillMissingTimestamps(
     hasChordSnapshot
       ? sanitizeSongs(data.songs).map(song => {
           const { map } = pruneOrphanChordRefs(song.chordMap, validChordIds, { preserveUnknown: true });
-          return { ...song, chordMap: map };
+          return { ...song, chordMap: map as Map<LineId, ChordLineSlots> };
         })
       : sanitizeSongs(data.songs),
     now

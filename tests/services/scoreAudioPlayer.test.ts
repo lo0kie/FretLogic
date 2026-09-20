@@ -123,12 +123,12 @@ describe('全曲乐谱音频播放调度引擎 (useAudioPlayer Score Playback)',
     groupId: toGroupId('g1'),
     nameSegments: null,
     strings: [
-      [-1, false],
-      [0, false],
-      [2, false],
-      [2, false],
-      [2, false],
-      [0, false],
+      { fret: -1, preferFlat: false },
+      { fret: 0, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 0, preferFlat: false },
     ],
     fretCount: 4,
     fretOffset: 0,
@@ -151,12 +151,20 @@ describe('全曲乐谱音频播放调度引擎 (useAudioPlayer Score Playback)',
     const stepsTriggered: number[] = [];
     const sequence = [chordA, chordB];
 
-    // 启动乐谱播放
+    // 启动乐谱播放（bpm 120 × 2 拍 = 每步 1s；首步起振余量 120ms）
     await player.startScorePlayback(sequence, {
       bpm: 120,
       beatsPerChord: 2,
       onStep: idx => stepsTriggered.push(idx),
     });
+    // start 必须真实生效：此前没有任何断言验证 isScorePlaying 翻转，引擎初始化失败也会「全绿」
+    expect(player.isScorePlaying.value).toBe(true);
+
+    // 推进 fake 时间触发 lookahead 窗口内 step 0 的 UI 高亮定时器（~120ms）：
+    // 此前 onStep 从未被推进过，「step」分支纯空跑
+    await vi.advanceTimersByTimeAsync(250);
+    expect(stepsTriggered).toEqual([0]);
+    expect(player.currentPlayingStepIndex.value).toBe(0);
 
     // 暂停（壳层动作经动态 import 懒加载实现，需 await 保证状态已翻转）
     await player.pauseScorePlayback();

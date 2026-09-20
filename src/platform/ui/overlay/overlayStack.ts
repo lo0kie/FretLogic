@@ -6,7 +6,9 @@ const activeOverlays = new Set<HTMLElement>();
 
 export const isClient = typeof document !== 'undefined';
 
-/** 依据栈顶同步 body 直接子元素的 inert 属性：仅栈顶阻断层可交互，其余阻断与后方内容全部 inert */
+/** 依据栈顶同步 body 直接子元素的 inert 属性：仅栈顶阻断层可交互，其余阻断与后方内容全部 inert。
+ *  豁免 [data-overlay-exempt] 标记的元素（如全局通知浮层）：它们 z-index 高于模态遮罩且必须保持可交互，
+ *  否则被 inert 后点击会穿透到遮罩上，反而误触「点遮罩关闭」。 */
 const updateOverlayInertState = () => {
   if (!isClient) return;
   const currentTopOverlay = Array.from(activeOverlays).pop();
@@ -14,7 +16,9 @@ const updateOverlayInertState = () => {
   document.body.childNodes.forEach(node => {
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     const el = node as HTMLElement;
-    if (currentTopOverlay && el === currentTopOverlay) {
+    if (el.hasAttribute('data-overlay-exempt')) {
+      el.removeAttribute('inert');
+    } else if (currentTopOverlay && el === currentTopOverlay) {
       el.removeAttribute('inert');
     } else if (activeOverlays.size > 0) {
       el.setAttribute('inert', '');

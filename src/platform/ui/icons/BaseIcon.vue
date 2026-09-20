@@ -1,12 +1,11 @@
 <template>
   <component
-    v-bind="$attrs"
+    v-bind="{ 'aria-hidden': 'true', ...$attrs }"
     v-if="resolvedComponent"
     :class="['base-icon shrink-0 align-middle', { 'animate-spin': spin }]"
     :data-icon-stroke="iconStroke !== undefined ? '' : undefined"
     :is="resolvedComponent"
     :style="customStyle"
-    aria-hidden="true"
   />
 </template>
 
@@ -58,6 +57,11 @@ const {
   spin = false,
 } = defineProps<BaseIconProps>();
 
+// 无障碍契约：图标默认是装饰性的（模板里 aria-hidden 默认 'true'），但**必须允许调用方覆盖**。
+// 模板用 `v-bind="{ 'aria-hidden': 'true', ...$attrs }"`——默认值在前、$attrs 在后，
+// 显式传入的 aria-hidden / role / tabindex 才能生效。此前写成静态 aria-hidden="true" 且排在
+// v-bind="$attrs" 之后，调用方传什么都盖不住它：图标被永久移出无障碍树，即便外面配了
+// role="button" + tabindex 也只是「可聚焦但对辅助技术不存在」（BaseSelector 的标签删除按钮即此形态）。
 const resolvedComponent = computed(() => ICON_REGISTRY[name] || null);
 
 // 未注册的图标名（拼写错误 / 后端动态返回的图标名强转为 IconName）会静默渲染成空白，

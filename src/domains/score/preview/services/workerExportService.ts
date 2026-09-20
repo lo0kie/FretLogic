@@ -6,7 +6,7 @@
 import { computeSongKey, getChordName } from '@/domains/chord/theory/theory';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { DEFAULT_SCORE_TITLE, SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
-import { buildEdgeChordIndex, charKey } from '@/domains/score/model/scoreModel';
+import { lineCharChord, lineEdgeChords } from '@/domains/score/model/scoreModel';
 
 import type { Chord } from '@/domains/chord/types';
 import type {
@@ -22,7 +22,7 @@ import type { ScoreLyricsFontWeight } from '@/platform/types';
 /** 将 Chord 模型转为 Worker 绘图所需的轻量指板实体 */
 const buildExportChordData = (chord: Chord, shorthand: boolean): ExportChordData => ({
   chordName: getChordName(chord, { shorthand, useUnicode: true }),
-  strings: chord.strings.map(s => [s[0], s[1]]),
+  strings: chord.strings.map(s => [s.fret, s.preferFlat]),
   fretCount: chord.fretCount,
   fretOffset: chord.fretOffset,
   rootStringIndex: chord.rootStringIndex ?? null,
@@ -113,8 +113,6 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
   const lyricsLines = song.lyrics.split('\n');
   const chordMap = song.chordMap;
   const lineIds = song.lineIds;
-  // 一次遍历建边和弦索引：否则下列循环里每行两侧各扫一遍整张 chordMap（行数 × 绑定数）
-  const edgeChordIndex = buildEdgeChordIndex(chordMap);
 
   const lines: ExportLineItem[] = [];
 
@@ -122,8 +120,8 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     const rawText = lyricsLines[idx] ?? '';
     const lineId = lineIds[idx] ?? `line_${idx}`;
 
-    // 收集行首和弦
-    const startIds = edgeChordIndex.get(lineId, 'start');
+    // 收集行首和弦（嵌套结构下行级直读，O(1)）
+    const startIds = lineEdgeChords(chordMap, lineId, 'start');
     const startChords = startIds
       .map(id => {
         const chord = chordsLookupMap.get(id);
@@ -132,9 +130,10 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
       .filter((c): c is ExportChordData => Boolean(c));
 
     // 收集字符与上方和弦
-    const chars = Array.from(rawText).map((char, charIdx) => {
-      const key = charKey(lineId, charIdx);
-      const chordId = chordMap.get(key);
+    // 必须与 scoreModel 的 charKey 码元口径一致（split('')），不能用 Array.from 按码点切：
+    // 否则歌词含 emoji/生僻字时该字符之后的和弦整体左移、行尾和弦掉出（仅导出复现，预览正常）
+    const chars = rawText.split('').map((char, charIdx) => {
+      const chordId = lineCharChord(chordMap, lineId, charIdx);
       const chord = chordId ? chordsLookupMap.get(chordId) : undefined;
       return {
         char,
@@ -143,7 +142,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     });
 
     // 收集行尾和弦
-    const endIds = edgeChordIndex.get(lineId, 'end');
+    const endIds = lineEdgeChords(chordMap, lineId, 'end');
     const endChords = endIds
       .map(id => {
         const chord = chordsLookupMap.get(id);

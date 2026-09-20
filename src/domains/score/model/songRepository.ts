@@ -1,13 +1,12 @@
 import { fillMissingTimestamps } from '@/domains/chord/model/chordRepository';
 import { isCapoValue } from '@/domains/fretboard/model/coordinates';
 import { isValidTimeSignature } from '@/domains/score/constants';
-import { pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
+import { plainToChordMap, pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
 import { toSongId } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage';
 import { toPlainPersistable } from '@/platform/utils/common';
 
-import type { ChordId } from '@/domains/chord/types';
-import type { LineId, SlotKey, Song } from '@/domains/score/types';
+import type { ChordLineSlots, LineId, Song } from '@/domains/score/types';
 
 type RawRecord = Record<string, unknown>;
 
@@ -16,18 +15,9 @@ const isNonEmptyString = (value: unknown): value is string => typeof value === '
 const isValidTimestamp = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0;
 
-const sanitizeChordMap = (chordMap: unknown): Map<SlotKey, ChordId> => {
-  const collect = (entries: Iterable<[unknown, unknown]>): Map<SlotKey, ChordId> => {
-    const out = new Map<SlotKey, ChordId>();
-    for (const [key, chordId] of entries) {
-      if (isNonEmptyString(key) && isNonEmptyString(chordId)) out.set(key as SlotKey, chordId as ChordId);
-    }
-    return out;
-  };
-
-  if (chordMap instanceof Map) return collect(chordMap);
-  if (!isRecord(chordMap)) return new Map();
-  return collect(Object.entries(chordMap));
+const sanitizeChordMap = (chordMap: unknown): Map<LineId, ChordLineSlots> => {
+  // 兼容旧扁平对象 / 新嵌套对象 / 嵌套 Map 三态；key/value 已通过 plainToChordMap 过滤，品牌收窄信任该过滤
+  return plainToChordMap(chordMap) as Map<LineId, ChordLineSlots>;
 };
 
 export type SongDraft = Omit<Song, 'createdAt' | 'updatedAt'> & Partial<Pick<Song, 'createdAt' | 'updatedAt'>>;
@@ -82,7 +72,7 @@ export const sanitizeSongList = (songs: unknown[], validChordIds?: Set<string>):
   return fillMissingTimestamps(
     drafts.map(song => {
       const { map } = pruneOrphanChordRefs(song.chordMap, validChordIds, { preserveUnknown: true });
-      return { ...song, chordMap: map };
+      return { ...song, chordMap: map as Map<LineId, ChordLineSlots> };
     }),
     now
   );

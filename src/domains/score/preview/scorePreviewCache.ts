@@ -23,6 +23,11 @@ export interface PreviewRenderData {
   a4Urls: string[];
   /** A4 分页各页字节数（右键菜单单页大小 / 下载菜单总体积读数） */
   a4Sizes: number[];
+  /** 渲染时实际使用的纸张档位：页脚合成必须按它（而非实时设置）取纸型，
+   *  否则改档位的在途窗口内下载会把新纸型页脚贴到旧尺寸页图上 */
+  pageSize: string;
+  /** 渲染时实际使用的页边距（px）：页脚合成同 pageSize 口径，必须与页图同边距 */
+  pageMargin: number;
   /** A4 分页各页原始 Blob（与 a4Urls 同序）：PDF / ZIP 导出与「复制本页」直接取用，
    *  免去对 blob: URL 再发一次 fetch。object URL 本身已持有该 Blob，这里只是多存一份引用，不增加内存 */
   a4Blobs: Blob[];

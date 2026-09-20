@@ -7,7 +7,7 @@ import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv, kvGet } from '@/platform/services/storage/idbKv';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
-import type { Song } from '@/domains/score/types';
+import type { LineId, Song } from '@/domains/score/types';
 
 /** 转录完成标记（存于 kv 镜像）—— 与 migrateLegacy.ts 保持一致 */
 const RETIRED_FLAG_KEY = 'localStorage-retired';
@@ -17,12 +17,12 @@ const chord = {
   id: 'c1',
   chordName: 'C',
   strings: [
-    [-1, false],
-    [3, false],
-    [2, false],
-    [0, false],
-    [1, false],
-    [0, false],
+    { fret: -1, preferFlat: false },
+    { fret: 3, preferFlat: false },
+    { fret: 2, preferFlat: false },
+    { fret: 0, preferFlat: false },
+    { fret: 1, preferFlat: false },
+    { fret: 0, preferFlat: false },
   ],
   fretCount: 3,
   fretOffset: 0,
@@ -78,7 +78,13 @@ describe('localStorage 退役转录（transcribeLegacyLocalStorage）', () => {
     const loadedSongs = await songRepository.loadSongs();
     expect(loadedSongs).toHaveLength(1);
     expect(loadedSongs[0]?.id).toBe('s1');
-    expect(loadedSongs[0]?.chordMap).toEqual(new Map([['line_l1_char_0', 'c1']]));
+    // 旧扁平槽位经转录清洗归一为嵌套结构
+    expect(loadedSongs[0]?.chordMap.size).toBe(1);
+    expect(loadedSongs[0]?.chordMap.get('l1' as LineId)).toEqual({
+      char: new Map([[0, 'c1']]),
+      start: [],
+      end: [],
+    });
     // 顺序索引按旧索引恢复
     expect(loadedSongs.map(s => s.id)).toEqual(['s1']);
     expect(localStorage.length).toBe(0);

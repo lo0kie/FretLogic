@@ -3,6 +3,11 @@
  */
 export function useDragAutoScroll() {
   let autoScrollRafId: number | null = null;
+  // O5：rAF 循环每帧读「最近一次上报的指针位置」。旧实现递归闭包捕获首帧的 pointerPos 对象，
+  // 调用方每次 pointermove 传入新对象时循环拿不到更新，指针回中心后仍持续滚动、永不中止。
+  let latestPos: { x: number; y: number } | null = null;
+  let activeContainer: HTMLElement | null = null;
+  let activeTick: (() => void) | null = null;
 
   const SCROLL_THRESHOLD = 50;
   const MAX_SCROLL_SPEED = 14;
@@ -13,15 +18,17 @@ export function useDragAutoScroll() {
       cancelAnimationFrame(autoScrollRafId);
       autoScrollRafId = null;
     }
+    activeContainer = null;
+    activeTick = null;
   };
 
-  /** 检查指针是否接近容器边缘并渐加速滚动（越近越快），仍可滚动时安排下一帧继续 */
-  const checkAutoScroll = (
-    container: HTMLElement | null | undefined,
-    pointerPos: { x: number; y: number },
-    onScrollTick?: () => void
-  ) => {
-    if (!container) {
+  /** 单帧：按最新指针位置计算边缘速度并滚动；仍在边缘则排下一帧，否则自然结束 */
+  const scrollFrame = () => {
+    autoScrollRafId = null;
+    const container = activeContainer;
+    const onScrollTick = activeTick;
+    const pointerPos = latestPos;
+    if (!container || !pointerPos) {
       stopAutoScroll();
       return;
     }
@@ -60,10 +67,31 @@ export function useDragAutoScroll() {
       container.scrollTop += actualScrollY;
       container.scrollLeft += actualScrollX;
       onScrollTick?.();
-      autoScrollRafId = requestAnimationFrame(() => checkAutoScroll(container, pointerPos, onScrollTick));
+      autoScrollRafId = requestAnimationFrame(scrollFrame);
     } else {
       stopAutoScroll();
     }
+  };
+
+  /** 检查指针是否接近容器边缘并渐加速滚动（越近越快）；循环进行中重复调用仅更新指针位置，不叠加 rAF */
+  const checkAutoScroll = (
+    container: HTMLElement | null | undefined,
+    pointerPos: { x: number; y: number },
+    onScrollTick?: () => void
+  ) => {
+    if (!container) {
+      stopAutoScroll();
+      return;
+    }
+    // 始终记录最新已知指针位置（副本，防调用方复用/替换对象造成的陈旧读数）
+    latestPos = { x: pointerPos.x, y: pointerPos.y };
+    if (autoScrollRafId !== null) {
+      // 循环已在跑：只更新位置，下一帧 scrollFrame 自然按新位置决策（含停止）
+      return;
+    }
+    activeContainer = container;
+    activeTick = onScrollTick ?? null;
+    autoScrollRafId = requestAnimationFrame(scrollFrame);
   };
 
   /** 是否正在进行边缘自动滚动 */

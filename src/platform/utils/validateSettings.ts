@@ -29,11 +29,16 @@ export interface ServerSettingsPayload {
   serverToken?: string;
 }
 
-export interface ValidationResult<T> {
-  isValid: boolean;
-  data: T;
-  errors: string[];
-}
+/**
+ * 校验结果：成功与失败是两个分支，而不是「一个 `data: T` 走天下」。
+ *
+ * 为什么必须区分：`validateByRules` 对「必填但留空」的字段写入的是 `undefined`，所以**失败分支
+ * 的 data 并不满足 T**（T 的必填字段声明为 string）。若统一声明成 `data: T`，等于让类型系统
+ * 替运行时撒谎——调用方漏判 `isValid` 就会拿到 undefined，而编译器一声不吭。
+ * 改成判别式联合后，「先判 isValid，再用 data」由编译器强制，失败分支只能看见 `Partial<T>`。
+ */
+export type ValidationResult<T> =
+  { isValid: true; data: T; errors: string[] } | { isValid: false; data: Partial<T>; errors: string[] };
 
 /** 字段校验规则：声明式描述单个配置项如何清洗与校验，核心据此统一跑流程。 */
 interface FieldRule {
@@ -99,10 +104,20 @@ const validateByRules = (
   return { errors, data };
 };
 
-/** 包一层对外契约：薄壳校验器调用它即可，无需关心核心实现。 */
+/**
+ * 包一层对外契约：薄壳校验器调用它即可，无需关心核心实现。
+ *
+ * 断言按分支收口：只有 errors 为空时才把 data 断言为 T——这时的 T 是**真**的（每个必填字段
+ * 都非空、每条 pattern 都通过）；失败分支只断言到 Partial<T>，与运行时实际的「部分字段为
+ * undefined」一致。断言无法消除（T 是泛型、规则表是运行时数据，编译器无从推导），
+ * 但被压缩到唯一一处、且每个分支各自成立。
+ */
 const buildResult = <T>(payload: T, rules: readonly FieldRule[]): ValidationResult<T> => {
   const { errors, data } = validateByRules(payload as Record<string, unknown>, rules);
-  return { isValid: errors.length === 0, data: data as unknown as T, errors };
+  if (errors.length === 0) {
+    return { isValid: true, data: data as unknown as T, errors };
+  }
+  return { isValid: false, data: data as unknown as Partial<T>, errors };
 };
 
 const URL_PATTERN = /^https?:\/\/.+/;

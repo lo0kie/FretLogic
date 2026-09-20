@@ -2,9 +2,75 @@
 
 import { generateUUID, getEditDistance } from '@/platform/utils/common';
 
-import type { LineId, SlotKey, Song, SongId } from '@/domains/score/types';
+import type { ChordId } from '@/domains/chord/types';
+import type { ChordLineSlots, LineId, SlotKey, Song, SongId } from '@/domains/score/types';
 
 export type EdgeSlotType = 'start' | 'end';
+
+/**
+ * 按行分组的槽位结构（v7 起）：
+ * - 读：`lineSlots(chordMap, lineId)` → `{ char: Map<number, ChordId>, start: ChordId[], end: ChordId[] }`，无则空壳
+ * - 写：`setLineSlots(chordMap, lineId, { char, start, end })`；`deleteLineSlots(chordMap, lineId)` 删除整行（GC 自然回收）
+ * 删除某行即删除整条键，僵尸槽位在结构上不可能存在（替代旧「删前缀 + 重写」的全表扫描）。
+ */
+
+/** 取某行的槽位容器；行不存在时返回空壳（不写入，保持只读） */
+export const lineSlots = (chordMap: ReadonlyMap<string, ChordLineSlots>, lineId: string): ChordLineSlots =>
+  chordMap.get(lineId) ?? { char: new Map(), start: [], end: [] };
+
+/** 取某行某侧的边和弦列表（只读快照副本） */
+export const lineEdgeChords = (
+  chordMap: ReadonlyMap<string, ChordLineSlots>,
+  lineId: string,
+  type: EdgeSlotType
+): ChordId[] => lineSlots(chordMap, lineId)[type];
+
+/** 重写某行行首/行尾的和弦列表（就地写新数组引用） */
+export const setLineEdgeChords = (
+  chordMap: Map<string, ChordLineSlots>,
+  lineId: string,
+  type: EdgeSlotType,
+  chordIds: ChordId[]
+): void => {
+  const slots = chordMap.get(lineId);
+  if (slots) {
+    slots[type] = [...chordIds];
+  } else {
+    chordMap.set(lineId, {
+      char: new Map(),
+      start: type === 'start' ? [...chordIds] : [],
+      end: type === 'end' ? [...chordIds] : [],
+    });
+  }
+};
+
+/** 取某行字符槽位的和弦 id（无返回 null） */
+export const lineCharChord = (
+  chordMap: ReadonlyMap<string, ChordLineSlots>,
+  lineId: string,
+  index: number
+): ChordId | null => lineSlots(chordMap, lineId).char.get(index) ?? null;
+
+/** 写入某行字符槽位 */
+export const setLineCharChord = (
+  chordMap: Map<string, ChordLineSlots>,
+  lineId: string,
+  index: number,
+  chordId: ChordId
+): void => {
+  const slots = chordMap.get(lineId);
+  if (slots) slots.char.set(index, chordId);
+  else chordMap.set(lineId, { char: new Map([[index, chordId]]), start: [], end: [] });
+};
+
+/** 删除某行全部槽位（歌词行删除时的 GC） */
+export const deleteLineSlots = (chordMap: Map<string, ChordLineSlots>, lineId: string): void => {
+  chordMap.delete(lineId);
+};
+
+// ===== 以下为兼容层：旧扁平槽位 key（line_{lineId}_{char|start|end}_{index}）的构造/解析 ====
+// v7 起内存结构已按行分组，这些仅用于：文本编解码的 SLOTS 段、旧备份迁移读取、以及
+// 少数仍以槽位 key 交互的外部接口（UI 拖拽落点、撤销历史快照）。
 
 /** 边和弦（行首/行尾）槽位的存储 key */
 export const chordSlotKey = (lineId: string, type: EdgeSlotType, index: number): SlotKey =>
@@ -15,14 +81,6 @@ export const charKey = (lineId: string, index: number): SlotKey => `line_${lineI
 
 /** 边和弦槽位的前缀，用于整体清除某行某侧的槽位 */
 export const edgeSlotPrefix = (lineId: string, type: EdgeSlotType): string => `line_${lineId}_${type}_`;
-
-/** 边和弦索引：一次性把「行 + 侧 → 有序和弦 id」聚好，避免逐行逐侧回头看整张表 */
-export interface EdgeChordIndex {
-  /** 取某行某侧的有序和弦 id（无绑定返回空数组） */
-  get(lineId: string, type: EdgeSlotType): string[];
-}
-
-const EMPTY_CHORD_IDS: string[] = [];
 
 /** 槽位 key 的结构化形态（构造器 chordSlotKey / charKey 的逆向） */
 export interface ParsedSlotKey {
@@ -53,57 +111,6 @@ export function parseSlotKey(slotKey: string): ParsedSlotKey | null {
     index,
   };
 }
-
-/**
- * 构建边和弦索引：谱面行数据重建时每行每侧都要取一次边缘和弦 id，
- * 直接按前缀在整张表里扫是 O(行数 × 绑定数)（长歌 + 多绑定下每次改和弦都要重扫一遍）；
- * 预热成索引后建表 O(绑定数)，之后每次取用 O(1)。
- */
-export const buildEdgeChordIndex = (chordMap: ReadonlyMap<string, string>): EdgeChordIndex => {
-  const buckets = new Map<string, { index: number; id: string }[]>();
-  for (const [key, id] of chordMap) {
-    if (!id) continue;
-    const parsed = parseSlotKey(key);
-    // 本索引只服务边和弦：字符槽位与格式非法的键都不入桶
-    if (!parsed || parsed.type === 'char') continue;
-    const bucketKey = `${parsed.lineId}_${parsed.type}`;
-    const list = buckets.get(bucketKey);
-    if (list) list.push({ index: parsed.index, id });
-    else buckets.set(bucketKey, [{ index: parsed.index, id }]);
-  }
-
-  const ids = new Map<string, string[]>();
-  for (const [bucketKey, list] of buckets) {
-    list.sort((a, b) => a.index - b.index);
-    ids.set(
-      bucketKey,
-      list.map(entry => entry.id)
-    );
-  }
-
-  return { get: (lineId, type) => ids.get(`${lineId}_${type}`) ?? EMPTY_CHORD_IDS };
-};
-
-/** 按序收集某行某侧边和弦槽位中存储的和弦 id（只读，兼容裸 Map） */
-export const collectEdgeChordIds = (
-  chordMap: ReadonlyMap<string, string>,
-  lineId: string,
-  type: EdgeSlotType
-): string[] => {
-  const prefix = `line_${lineId}_${type}_`;
-  const entries: { index: number; id: string }[] = [];
-  for (const [k, id] of chordMap) {
-    if (k.startsWith(prefix)) {
-      const idxStr = k.slice(prefix.length);
-      const idx = parseInt(idxStr, 10);
-      if (!isNaN(idx) && id) {
-        entries.push({ index: idx, id });
-      }
-    }
-  }
-  entries.sort((a, b) => a.index - b.index);
-  return entries.map(e => e.id);
-};
 
 // ===== 歌词行 id 匹配与清洗 =====
 

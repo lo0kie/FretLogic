@@ -65,10 +65,10 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
         groupId: 'g_default',
         chordName: 'C',
         strings: [
-          [0, false],
-          [0, false],
-          [0, false],
-          [3, false],
+          { fret: 0, preferFlat: false },
+          { fret: 0, preferFlat: false },
+          { fret: 0, preferFlat: false },
+          { fret: 3, preferFlat: false },
         ],
         fretCount: 3,
         capo: 0,
@@ -87,13 +87,13 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
         groupId: 'g_default',
         chordName: 'B5',
         strings: [
-          [0, false],
-          [2, false],
-          [2, false],
-          [-1, false],
-          [-1, false],
-          [-1, false],
-          [-1, false],
+          { fret: 0, preferFlat: false },
+          { fret: 2, preferFlat: false },
+          { fret: 2, preferFlat: false },
+          { fret: -1, preferFlat: false },
+          { fret: -1, preferFlat: false },
+          { fret: -1, preferFlat: false },
+          { fret: -1, preferFlat: false },
         ],
         fretCount: 3,
         capo: 0,
@@ -112,8 +112,8 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
         groupId: 'g_default',
         chordName: 'X',
         strings: [
-          [0, false],
-          [0, false],
+          { fret: 0, preferFlat: false },
+          { fret: 0, preferFlat: false },
         ], // 仅 2 根弦
       };
       expect(sanitizeChordEntity(rawTooFew)).toBeNull();
@@ -122,7 +122,7 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
         id: 'c_many',
         groupId: 'g_default',
         chordName: 'X',
-        strings: Array.from({ length: 12 }, () => [0, false]), // 12 根弦
+        strings: Array.from({ length: 12 }, () => ({ fret: 0, preferFlat: false })), // 12 根弦
       };
       expect(sanitizeChordEntity(rawTooMany)).toBeNull();
     });
@@ -131,10 +131,10 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
   describe('克隆与尺寸计算', () => {
     it('cloneGuitarStrings 应完整克隆任意长度的弦数组', () => {
       const strings4: GuitarStringEntity[] = [
-        [0, false],
-        [1, true],
-        [2, false],
-        [3, true],
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: true },
+        { fret: 2, preferFlat: false },
+        { fret: 3, preferFlat: true },
       ];
       const cloned = cloneGuitarStrings(strings4);
       expect(cloned).toEqual(strings4);
@@ -179,10 +179,10 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
             groupId: 'g1',
             nameSegments: { root: ['C', 0] },
             strings: [
-              [0, false],
-              [0, false],
-              [0, false],
-              [3, false],
+              { fret: 0, preferFlat: false },
+              { fret: 0, preferFlat: false },
+              { fret: 0, preferFlat: false },
+              { fret: 3, preferFlat: false },
             ],
             fretCount: 3,
             capo: 0,
@@ -193,13 +193,13 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
             groupId: 'g1',
             nameSegments: { root: ['B', 11] },
             strings: [
-              [0, false],
-              [2, false],
-              [2, false],
-              [-1, false],
-              [-1, false],
-              [-1, false],
-              [-1, false],
+              { fret: 0, preferFlat: false },
+              { fret: 2, preferFlat: false },
+              { fret: 2, preferFlat: false },
+              { fret: -1, preferFlat: false },
+              { fret: -1, preferFlat: false },
+              { fret: -1, preferFlat: false },
+              { fret: -1, preferFlat: false },
             ],
             fretCount: 3,
             capo: 0,
@@ -224,14 +224,14 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
         groupId: 'g1',
         nameSegments: { root: ['B', 11] },
         strings: [
-          [2, false],
-          [2, false],
-          [2, false],
-          [2, false],
-          [2, false],
-          [2, false],
-          [2, false],
-        ] as GuitarStringEntity[],
+          { fret: 2, preferFlat: false },
+          { fret: 2, preferFlat: false },
+          { fret: 2, preferFlat: false },
+          { fret: 2, preferFlat: false },
+          { fret: 2, preferFlat: false },
+          { fret: 2, preferFlat: false },
+          { fret: 2, preferFlat: false },
+        ],
         barres: [{ fret: 2 as BarreFret, fromString: 0, toString: 6 }],
         fretCount: 4 as const,
         capo: 0 as const,

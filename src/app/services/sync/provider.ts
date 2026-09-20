@@ -46,13 +46,26 @@ export type SyncConfig = GithubSyncConfig | GiteeSyncConfig | WebdavSyncConfig |
 
 export interface SyncProvider {
   pull(): Promise<ImportExportPayload>;
-  push(payload: ImportExportPayload): Promise<{ sha: string }>;
+  /**
+   * 上传载荷。meta 为调用方已算好的校验元数据：需要它的 provider（server 拼 query）
+   * 直接消费，不得再自行全量 stringify 一遍（一次推送已付两次序列化——校验和与上传体）。
+   */
+  push(payload: ImportExportPayload, meta?: SyncMeta): Promise<{ sha: string }>;
   exists(): Promise<boolean>;
   /**
    * 测试远端连通性与凭据有效性（不发数据写请求）。
-   * 返回人类可读的成功描述（供 toast 展示）；失败抛 SyncError，按 code 细分原因。
+   * 返回人类可读的成功描述（供 message 展示）；失败抛 SyncError，按 code 细分原因。
    */
   testConnection(): Promise<string>;
+  /**
+   * 读取云端校验元数据；云端无 meta（旧数据/从未上传）时返回 null。
+   * 四种 provider（GitHub/Gitee/WebDAV/Server）全部实现——历史上 server 曾被当作
+   * 「单端点不支持」，后来补齐（fetchMeta 走独立路由、pushMeta 为合法 no-op，md5 随 push 的
+   * query 上传），此后 `‘fetchMeta’ in provider` 式守卫恒真，按可选能力表达只会留下死分支。
+   */
+  fetchMeta(): Promise<SyncMeta | null>;
+  /** 写入/更新云端 meta（随一次上传调用） */
+  pushMeta(meta: SyncMeta): Promise<void>;
 }
 
 /**
@@ -61,6 +74,12 @@ export interface SyncProvider {
  */
 export interface SyncBranchesProvider extends SyncProvider {
   listBranches(): Promise<string[]>;
+}
+
+/** 云端心跳校验元数据（最小比对数据）：数据源的 MD5 校验和与最新修改时间戳，独立于数据源分开上传。 */
+export interface SyncMeta {
+  md5: string;
+  updatedAt: number;
 }
 
 export type SyncErrorCode =

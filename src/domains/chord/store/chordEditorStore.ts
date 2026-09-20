@@ -43,7 +43,7 @@ const createDefaultChord = (stringCount: number = 6): Chord => ({
   draft: Chord
 ): Chord => {
   const { chord } = normalizeChord(draft);
-  if (!chord.id && Array.isArray(chord.strings) && chord.strings.every(s => Array.isArray(s) && s[0] < 0)) {
+  if (!chord.id && Array.isArray(chord.strings) && chord.strings.every(s => s.fret < 0)) {
     if (
       chord.nameSegments &&
       chord.nameSegments.root?.[0] === 'C' &&
@@ -74,7 +74,7 @@ const createChordEditorSetup = (persist: boolean) => () => {
   // 自动横按是全局偏好（头部配置面板统一切换），不随草稿实例分裂：所有实例共用同一存储键
   const autoBarre = useStorage(STORAGE_KEYS.AUTO_BARRE, true);
 
-  const isFretBoardEmpty = computed(() => draftChord.value.strings.every(s => s[0] < 0));
+  const isFretBoardEmpty = computed(() => draftChord.value.strings.every(s => s.fret < 0));
   // 按草稿实际弦数解析基准弦：9/10 弦（无调弦预设）原先会落回 6 弦映射，
   // 第 7 根起音高静默塌成 0，分析面板与转位判定随之失真
   const activeBaseStrings = computed(() => getBaseStringsFor(draftChord.value.tuning, draftChord.value.strings.length));
@@ -90,11 +90,11 @@ const createChordEditorSetup = (persist: boolean) => () => {
   watch(
     () => {
       const chord = draftChord.value;
-      return `${chord.rootStringIndex ?? ''}|${chord.strings.map(s => s[0]).join(',')}`;
+      return `${chord.rootStringIndex ?? ''}|${chord.strings.map(s => s.fret).join(',')}`;
     },
     () => {
       const idx = draftChord.value.rootStringIndex;
-      if (idx !== null && (draftChord.value.strings[idx]?.[0] ?? -1) < 0) {
+      if (idx !== null && (draftChord.value.strings[idx]?.fret ?? -1) < 0) {
         draftChord.value.rootStringIndex = null;
       }
     }
@@ -197,7 +197,7 @@ const createChordEditorSetup = (persist: boolean) => () => {
 
   // 指板音符变化时，精准保留未受影响的横按
   watch(
-    () => draftChord.value.strings.map(s => s[0]),
+    () => draftChord.value.strings.map(s => s.fret),
     (newFrets, oldFrets) => {
       if (isProgrammaticStringsChange) {
         return;

@@ -191,19 +191,19 @@
             v-for="(str, sIdx) in strings"
             :class="{ 'is-moving': movingStringIndices.has(sIdx) }"
             :key="'string-note-' + sIdx"
-            :style="getStringNoteStyle(sIdx, str[0])"
+            :style="getStringNoteStyle(sIdx, str.fret)"
             class="string-note-move"
           >
             <FretboardNote
               :aria-label="stringNoteAriaLabel(sIdx, str)"
-              :is-accidental="currentNoteInfo(sIdx, str).isAccidental"
-              :is-focused="isNoteFocused(sIdx, str[0])"
-              :is-hovered="isNoteHovered(sIdx, str[0])"
-              :is-muted="str[0] < 0"
-              :is-open-string="str[0] <= 0"
+              :is-accidental="stringNoteInfos[sIdx]!.isAccidental"
+              :is-focused="isNoteFocused(sIdx, str.fret)"
+              :is-hovered="isNoteHovered(sIdx, str.fret)"
+              :is-muted="str.fret < 0"
+              :is-open-string="str.fret <= 0"
               :is-root="isRoot(sIdx)"
-              :label="currentNoteInfo(sIdx, str).label"
-              :prefer-flat="str[1]"
+              :label="stringNoteInfos[sIdx]!.label"
+              :prefer-flat="str.preferFlat"
               :x="0"
               :y="0"
               @toggle-pitch="emit('toggle-pitch', sIdx)"
@@ -220,10 +220,15 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/domains/chord/theory/theory';
+import {
+  BARRE_ARROW_TRANSITION_MS,
+  CANVAS_CONFIG,
+  FRETBOARD_LINE_WIDTH,
+  NOTE_DISPLAY,
+} from '@/domains/fretboard/constants';
 import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
 
 import FretboardNote from './FretboardNote.vue';
-import { BARRE_ARROW_TRANSITION_MS, CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '../constants';
 import {
   barreGeometryOf,
   computeDisplayBarres,
@@ -231,6 +236,7 @@ import {
   getBarreStroke as getBarreStrokeOf,
   getStringNoteY as getStringNoteYOf,
   isPointInBarre as isPointInBarreOf,
+  parseBarreFretFromKey,
 } from './FretboardSvg.logic';
 
 import type { DisplayBarre } from './FretboardSvg.logic';
@@ -340,13 +346,13 @@ const boardAriaLabel = computed(
 /** 单根弦指位描述：弦序、品格与音名（v-for 内调用） */
 const stringNoteAriaLabel = (sIdx: number, str: GuitarStringEntity) => {
   const stringNum = strings.length - sIdx;
-  if (str[0] > 0) {
-    return `第 ${stringNum} 弦第 ${str[0]} 品，音名 ${formatStringLabel(sIdx, str[0], str[1], fretOffset, activeBaseStrings)}`;
+  if (str.fret > 0) {
+    return `第 ${stringNum} 弦第 ${str.fret} 品，音名 ${formatStringLabel(sIdx, str.fret, str.preferFlat, fretOffset, activeBaseStrings)}`;
   }
-  if (str[0] < 0) {
+  if (str.fret < 0) {
     return `第 ${stringNum} 弦（静音）`;
   }
-  return `第 ${stringNum} 弦（空弦 ${formatStringLabel(sIdx, 0, str[1], fretOffset, activeBaseStrings)}）`;
+  return `第 ${stringNum} 弦（空弦 ${formatStringLabel(sIdx, 0, str.preferFlat, fretOffset, activeBaseStrings)}）`;
 };
 
 /** 品号定位：置于指板左侧、精准对齐横向品丝 */
@@ -372,7 +378,7 @@ const movingStringIndices = ref<Set<number>>(new Set());
 let movingTimer: ReturnType<typeof setTimeout> | null = null;
 
 watch(
-  () => strings.map(s => s[0]),
+  () => strings.map(s => s.fret),
   (newFrets, oldFrets) => {
     // 初始挂载时不触发过渡动画，保持瞬间就位
     if (!oldFrets) return;
@@ -407,9 +413,18 @@ const getStringNoteStyle = (sIdx: number, fret: number): CSSProperties => ({
 
 /** 当前音符音名计算：0 品及静音计算空弦音名，按品计算当前品位音名 */
 const currentNoteInfo = (sIdx: number, str: GuitarStringEntity) => {
-  const effectiveFret = str[0] > 0 ? str[0] : 0;
-  return computeStringLabelAccidental(sIdx, effectiveFret, fretOffset, str[1], activeBaseStrings);
+  const effectiveFret = str.fret > 0 ? str.fret : 0;
+  return computeStringLabelAccidental(sIdx, effectiveFret, fretOffset, str.preferFlat, activeBaseStrings);
 };
+
+/**
+ * 每根弦的音名信息，供模板按索引取用。
+ *
+ * 模板原先在 `FretboardNote` 上分两处调用 `currentNoteInfo(sIdx, str)`（:is-accidental 与
+ * :label），即同一根弦在同一轮渲染里被算两遍；而本组件随 hoverPoint 逐帧重渲染（悬停移动），
+ * 于是每帧都付双份计算与对象分配。这里按 strings 一次算好，索引与 `v-for` 同源、必然对齐。
+ */
+const stringNoteInfos = computed(() => strings.map((str, sIdx) => currentNoteInfo(sIdx, str)));
 
 /** 该按弦点是否处于 hover 位 */
 const isNoteHovered = (sIdx: number, fret: number) =>
@@ -463,11 +478,18 @@ const activeHoveredBarre = computed<DisplayBarre | null>(() => {
     if (direct) return direct;
 
     // 关键优化：音符连续点按时横按弦跨度扩展（例如从 0..1 延伸到 0..2），新旧 key 不一致但属于同一品位横按的连续生长
-    // 此时平滑延续当前品位的最新横按，绝不返回 null 触发 DOM 节点销毁重建，确保 CSS 移位平滑过渡！
-    const oldFret = Number(activeHoveredBarreKey.value.split('-')[1]);
-    const continued = displayBarres.value.find(
-      b => b.fret === oldFret && ((hoverPoint && isPointInBarre(hoverPoint, b)) || true)
-    );
+    // 此时平滑延续当前品位的最新横按，绝不返回 null 触发 DOM 节点销毁重建，确保 CSS 移位平滑过渡
+    //
+    // 这里踩过两个坑，都不是「写法不够好」，而是**判定从未按预期生效**：
+    // ① 品位曾用 `split('-')[1]` 解析，而 key 形如 `barre-fret-5`——下标 1 取到的是字面量
+    //    `'fret'`，`Number('fret') === NaN`，`b.fret === NaN` 恒为 false，整条分支形同不存在。
+    //    改由 key 的定义方 `parseBarreFretFromKey` 解析，格式变更时不会再静默退化。
+    // ② 谓词曾写成 `(... && isPointInBarre(...)) || true`，`|| true` 使它退化为「同品取第一条」，
+    //    可能延续到同品的另一条横按（同一品可以并存多条）。现按注释原意收敛为「同品且光标仍落在
+    //    该横按跨度内」：跨度只向相邻弦生长，光标既然原本在原跨度内，就必然落在新跨度内。
+    const oldFret = parseBarreFretFromKey(activeHoveredBarreKey.value);
+    const continued =
+      oldFret === null ? undefined : displayBarres.value.find(b => b.fret === oldFret && isPointInBarre(hoverPoint, b));
     if (continued) {
       return continued;
     }
@@ -652,7 +674,7 @@ const hoverFillColor = computed(() => 'var(--fb-hover)');
 const emptyRingRadius = computed(() => NOTE_DISPLAY.FINGER_OUTLINE_RADIUS);
 
 /** 该弦的音符是否正落在给定品位（静音态归位到空弦位 0 品，与 isNoteFocused 的判定口径保持一致） */
-const hasNoteAt = (sIdx: number, fretIndex: number) => Math.max(0, strings[sIdx]?.[0] ?? 0) === fretIndex;
+const hasNoteAt = (sIdx: number, fretIndex: number) => Math.max(0, strings[sIdx]?.fret ?? 0) === fretIndex;
 
 /**
  * 空品位悬停预览环：
@@ -680,7 +702,7 @@ const showEmptyFocusRing = computed(() => {
 </script>
 
 <style scoped lang="scss">
-@use '@/assets/tokens' as *;
+@use '@/assets/token-vars' as *;
 
 /* 必须保持 scoped：气泡元素自带 Tailwind 的 transition-[background-color,border-color,box-shadow]
    工具类（与下列过渡规则同为单类选择器 (0,1,0)、且在样式表中位置更靠后）。scoped 会给选择器附加

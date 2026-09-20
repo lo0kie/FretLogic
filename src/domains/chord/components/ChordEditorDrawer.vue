@@ -212,7 +212,7 @@ const handleSave = () => {
 /** 确认分组选择：把所选分组写入草稿后保存新建和弦，并展开切到该分组（选中 + 展开，与打开抽屉时的入口一致）。关闭弹窗，但保存失败时保留抽屉供继续修改 */
 const handleConfirmGroupSelect = () => {
   if (!selectedTargetGroupId.value) {
-    uiStore.toast.warning('请先选择要保存到的分组');
+    uiStore.message.warning('请先选择要保存到的分组');
     return;
   }
   editorStore.draftChord.groupId = toGroupId(selectedTargetGroupId.value);

@@ -387,6 +387,7 @@
 
   <BaseModal
     v-model:visible="isWipeIdbConfirmOpen"
+    :confirm-loading="isWipingIdb"
     @confirm="handleWipeIdb()"
     cancel-text="取消"
     confirm-text="清空"
@@ -526,7 +527,7 @@ const dataRows = computed(() => [
 
 const copyText = (value: string, label: string) => {
   void navigator.clipboard.writeText(value);
-  uiStore.toast.success(`已复制${label}`);
+  uiStore.message.success(`已复制${label}`);
 };
 
 /* ---- 内存缓存 ---- */
@@ -635,7 +636,7 @@ const memoryCacheTotalText = computed(() => {
 const clearMemoryCache = (cache: CacheStat) => {
   cache.clear?.();
   refreshMemoryCaches();
-  uiStore.toast.success(`已清空「${cache.name}」`);
+  uiStore.message.success(`已清空「${cache.name}」`);
 };
 
 /* ---- 预览缓存 ---- */
@@ -673,7 +674,7 @@ const previewHintText = computed(() => {
 const handleClearPreviewCache = () => {
   clearPreviewCache();
   refreshMemoryCaches();
-  uiStore.toast.success('预览缓存已清空，改动内容或切歌后将重新渲染');
+  uiStore.message.success('预览缓存已清空，改动内容或切歌后将重新渲染');
 };
 
 /* ---- 存储占用 ---- */
@@ -775,13 +776,13 @@ const handleSeedTestData = () => {
     chordStore.replaceAllData({ groups: data.groups, chords: data.chords });
     chordStore.flushChordsToStorage();
     void songStore.overwriteSongs(data.songs);
-    uiStore.toast.success(
+    uiStore.message.success(
       `已覆盖：${data.chords.length} 条和弦 / ${data.songs.length} 首乐谱（约 ${formatBytes(data.estimatedBytes)}）`
     );
     isSeedConfirmOpen.value = false;
   } catch (err) {
     console.error('[dev] 生成测试数据失败', err);
-    uiStore.toast.error('生成或落盘失败，请改用更小档位');
+    uiStore.message.error('生成或落盘失败，请改用更小档位');
   } finally {
     isSeeding.value = false;
   }
@@ -800,27 +801,39 @@ const handleDumpStorageKeys = async () => {
       lines.push(`# ${name} (${(await idb.getAllKeys(name)).length})`);
     }
   } catch {
-    uiStore.toast.error('读取 IndexedDB 失败，请看控制台');
+    uiStore.message.error('读取 IndexedDB 失败，请看控制台');
     return;
   }
   void navigator.clipboard.writeText(lines.join('\n'));
-  uiStore.toast.success('已复制 IDB 键清单到剪贴板');
+  uiStore.message.success('已复制 IDB 键清单到剪贴板');
 };
 
 const isWipeIdbConfirmOpen = ref(false);
+const isWipingIdb = ref(false);
+
+/** 清空全部对象库（SCHEMA 声明的每一库）：wipe 确认框与 wipe+reload 两个动作共用 */
+const clearAllIdbStores = async () => {
+  await Promise.all((Object.keys(SCHEMA) as StoreName[]).map(name => idb.clear(name)));
+};
 
 const handleWipeIdb = async () => {
+  isWipingIdb.value = true;
   try {
-    await Promise.all((Object.keys(SCHEMA) as StoreName[]).map(name => idb.clear(name)));
-    uiStore.toast.warning('IndexedDB 已清空，刷新页面后生效');
+    await clearAllIdbStores();
+    uiStore.message.warning('IndexedDB 已清空，刷新页面后生效');
   } catch {
-    uiStore.toast.error('清空 IndexedDB 失败，请看控制台');
+    uiStore.message.error('清空 IndexedDB 失败，请看控制台');
+  } finally {
+    isWipingIdb.value = false;
+    // 必须显式复位：BaseModal 的确认按钮只 emit('confirm') 不自关（见其模板），
+    // 不复位会让确认框常驻，且每点一次「清空」就把整库再 clear 一遍
+    isWipeIdbConfirmOpen.value = false;
   }
 };
 
 const handleWipeAndReload = async () => {
   try {
-    await Promise.all((Object.keys(SCHEMA) as StoreName[]).map(name => idb.clear(name)));
+    await clearAllIdbStores();
   } catch {
     /* 清空失败也要重载：残留数据交由下次启动处理 */
   }

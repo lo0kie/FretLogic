@@ -173,7 +173,7 @@ describe('server testConnection', () => {
       kind: 'server',
       serverUrl: 'https://api.example.com/sync',
     }).testConnection();
-    expect(detail).toContain('已连通线上数据库');
+    expect(detail).toContain('已连通开发环境');
     const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
     expect(headers?.['X-Environment']).toBeDefined();
   });
@@ -184,7 +184,7 @@ describe('server testConnection', () => {
       kind: 'server',
       serverUrl: 'https://api.example.com/sync',
     }).testConnection();
-    expect(detail).toContain('暂无数据存档');
+    expect(detail).toContain('开发环境在线，暂无存档');
   });
 
   it('rejects with server error message on failure', async () => {

@@ -263,11 +263,7 @@ import type { Component } from 'vue';
 export type { BaseSelectorOption, OptionValue, SelectorFieldNames };
 </script>
 
-<script
-  setup
-  generic="O extends Record<string, unknown> | string | number, M extends boolean = false, V = OptionValue<O>"
-  lang="ts"
->
+<script setup generic="O extends object | string | number, M extends boolean = false, V = OptionValue<O>" lang="ts">
 type AnyOption = O;
 
 defineOptions({ inheritAttrs: false });
@@ -299,8 +295,12 @@ const {
   /** 触发器选中标签是否启用翻页动画：true 时整段标签随文案变化翻滚；false = 普通文本 */
   rollingText = false,
 } = defineProps<{
-  /** 选项列表：对象数组（label/value 等字段）或原始值数组 */
-  options: O[];
+  /** 选项列表：对象数组（label/value 等字段）或原始值数组。
+   *  元素类型 O 即绑值类型的推导来源（见 OptionValue）。两点约束取舍：
+   *  - 用 `object` 而非 `Record<string, unknown>`：后者要求隐式索引签名，而**接口声明的选项类型
+   *    （如 BaseSelectorOption）拿不到它**，传进来会报 “Index signature is missing”；
+   *  - 声明为 readonly：可以直接传 `as const` / readonly 常量表，不必再由调用方展开拷贝一份。 */
+  options: readonly O[];
   /** 尺寸档位：sm/md/lg */
   size?: ComponentSize;
   /** 触发器宽度：预设档位（sm/md/lg/xl/auto/full）或具体 CSS 宽度值，默认 md */
@@ -578,6 +578,35 @@ watch(displayText, () => {
   animateTriggerWidth();
 });
 
+/**
+ * 写入 modelValue 并派发 change 的唯一出口。
+ *
+ * `multiple` 只活在类型层（`M extends boolean`）：运行时它就是个普通 prop，所以「写入形态与
+ * multiple 一致」编译器无从保证，这里必然需要一次断言。原先 `as unknown as M extends true ?
+ * V[] : V` 在 4 个调用点各写一遍——改错任何一处都不会被发现，值类型等于零保护；集中到此后
+ * 只剩一处，并在开发期校验形态：多选却写单值、单选却写数组，都会立刻在控制台点名，而不是等
+ * 下游按错误形态消费（把单值当数组取 .length、把数组当单值比较，都是静默出错）。
+ *
+ * 想把它升级为**编译期**保护，只能改组件 API（拆成单选/多选两个组件，或把 (multiple, modelValue)
+ * 收成一个判别联合 prop）——那是一次对外契约变更，不属于本轮修复范围。
+ *
+ * `source` 仅用于告警文案，指向调用点。
+ */
+const commitValue = (value: V | V[] | undefined, source: string): void => {
+  if (import.meta.env.DEV && value !== undefined) {
+    const expectsArray = isMultiple.value;
+    if (Array.isArray(value) !== expectsArray) {
+      console.warn(
+        `[BaseSelector] ${source}：写入值与 multiple=${String(isMultiple.value)} 形态不符（期望${expectsArray ? '数组' : '单值'}）`,
+        value
+      );
+    }
+  }
+  const typed = value as unknown as M extends true ? V[] : V;
+  modelValue.value = typed;
+  emit('change', typed);
+};
+
 /** 选择选项：多选切换勾选，单选写值后关闭面板（keepOpenOnSelect 时保持面板打开便于连续切换） */
 const handleSelect = (option: AnyOption, close: () => void) => {
   if (isOptionDisabled(option)) return;
@@ -587,11 +616,9 @@ const handleSelect = (option: AnyOption, close: () => void) => {
     const i = arr.findIndex(v => equalsValue(v, val));
     if (i >= 0) arr.splice(i, 1);
     else arr.push(val);
-    modelValue.value = arr as unknown as M extends true ? V[] : V;
-    emit('change', arr as unknown as M extends true ? V[] : V);
+    commitValue(arr, 'handleSelect');
   } else {
-    modelValue.value = val as unknown as M extends true ? V[] : V;
-    emit('change', val as unknown as M extends true ? V[] : V);
+    commitValue(val, 'handleSelect');
     if (!keepOpenOnSelect) close();
   }
 };
@@ -600,9 +627,10 @@ const handleSelect = (option: AnyOption, close: () => void) => {
 const handleRemoveTag = (option: AnyOption) => {
   if (disabled || isOptionDisabled(option)) return;
   const val = getOptionValue(option);
-  const arr = selectedValues.value.filter(v => !equalsValue(v, val));
-  modelValue.value = arr as unknown as M extends true ? V[] : V;
-  emit('change', arr as unknown as M extends true ? V[] : V);
+  commitValue(
+    selectedValues.value.filter(v => !equalsValue(v, val)),
+    'handleRemoveTag'
+  );
   emit('removeTag', option, val);
 };
 
@@ -610,13 +638,7 @@ const handleRemoveTag = (option: AnyOption) => {
  *  无论 keepOpenOnSelect 如何，清空都关闭面板（清空即结束本次选择交互） */
 const handleClear = () => {
   if (disabled) return;
-  const fallback = (defaultValue !== undefined
-    ? defaultValue
-    : isMultiple.value
-      ? []
-      : undefined) as unknown as M extends true ? V[] : V;
-  modelValue.value = fallback;
-  emit('change', modelValue.value);
+  commitValue(defaultValue !== undefined ? defaultValue : isMultiple.value ? [] : undefined, 'handleClear');
   emit('clear');
   isOpen.value = false;
 };

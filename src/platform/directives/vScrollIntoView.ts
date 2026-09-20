@@ -1,6 +1,7 @@
 import { nextTick } from 'vue';
 
 import { findScrollParent } from '@/platform/utils/dom';
+import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import type { Directive, DirectiveBinding } from 'vue';
 
@@ -172,7 +173,8 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
 
   const doScroll = () => {
     if (!el.isConnected) return;
-    const behavior = opts.behavior ?? (isMount ? 'auto' : 'smooth');
+    // 系统要求减弱动效时降级为瞬时跳转（CSS 的 reduced-motion 管不住 JS 显式传入的 smooth）
+    const behavior = resolveScrollBehavior(opts.behavior ?? (isMount ? 'auto' : 'smooth'));
     // scroll-margin 让原生 scrollIntoView 的 nearest/center/start/end 全部尊重间距。
     // token 写法先落 var() 再读回计算值（px），横向定位数学直接复用该数值。
     // 内联样式随元素存续刻意不清除：同元素后续的 focus scrolling 也保持间距不退回贴边
@@ -355,8 +357,9 @@ const registerKeepAliveActivation = (
   // 仅显式指定 .keep-alive 且非 once 时，才注册 KeepAlive 激活回调；其余场景保持仅 mounted/updated 触发
   if (opts.once || !opts.keepAlive) return;
 
-  const host = (el as unknown as { __vueParentComponent?: HookableInstance }).__vueParentComponent;
-  const target = findKeepAliveHost(host);
+  // 不能用 el.__vueParentComponent：那是 Vue 仅在 DEV 环境挂的属性，prod 构建下恒为 undefined
+  // （keep-alive 重滚在 prod 恒失效的根因）。改走 binding.instance.$ —— 组件实例代理的稳定公开入口。
+  const target = findKeepAliveHost((binding.instance as unknown as { $?: HookableInstance } | null)?.$ ?? null);
   if (!target) return;
 
   // 用可变容器持有 binding：mounted 后 binding 对象自此不再更新，updated 传入的是全新对象。

@@ -109,8 +109,6 @@ export const PREVIEW_MIN_ZOOM_PERCENT = 30;
 export const PREVIEW_MAX_ZOOM_PERCENT = 200;
 /** 乐谱预览缩放：默认缩放百分比（%） */
 export const PREVIEW_DEFAULT_ZOOM_PERCENT = 70;
-/** 乐谱预览缩放：自适应模式下预留给上下呼吸的视口内边距（px，上下合计） */
-export const PREVIEW_FIT_PADDING_PX = 48;
 /** 乐谱预览缩放：Ctrl+滚轮/捏合的灵敏度（每像素 deltaY 对应的百分比变化） */
 export const PREVIEW_WHEEL_ZOOM_SENSITIVITY = 0.15;
 

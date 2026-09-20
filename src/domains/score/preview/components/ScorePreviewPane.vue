@@ -19,17 +19,18 @@
          滚轮回归竖向滚动以便阅读超高页 -->
     <template v-else>
       <BaseScrollArea
-        :wheel="{ disabled: isTallerThanViewport, smooth: true }"
+        :scrollbar="previewScrollbar"
+        :wheel="{ disabled: isTallerThanViewport, smooth: true, double: true }"
         close-popovers
         axis="both"
-        class="relative min-h-0 flex-1 p-6 py-4"
+        class="relative min-h-0 flex-1 p-lg"
         ref="previewAreaRef"
       >
         <!-- 内容行：够宽时自动水平居中（mx-auto），超宽时 margin 归 0 自然从左侧滚动；
              页面超出视口高度时改为顶部对齐，避免 Flex 居中在负方向裁切掉页面顶部 -->
         <div
           :class="isTallerThanViewport ? 'min-h-full items-start' : 'h-full items-center'"
-          class="mx-auto flex w-max gap-xl"
+          class="mx-auto flex w-max gap-lg"
         >
           <!-- 首帧渲染中 -->
           <Feedback v-if="isRendering && pages.length === 0" description="正在生成预览..." size="lg" type="loading" />
@@ -44,9 +45,11 @@
             type="error"
           />
 
-          <!-- 分页页流：按缩放模式决定高度（自适应=fitPercent 换算高，自定义=按百分比等比），横向排列。
-               容器首次测量前（containerHeight=0）禁用高度过渡：此时 fitPercent 回退 100% 会先渲染放大尺寸，
+          <!-- 分页页流：按缩放模式决定高度（自适应=容器内容盒高，自定义=按百分比等比），横向排列。
+               容器首次测量前（containerHeight=0）禁用高度过渡：此时自适应页高回退整页高会先渲染放大尺寸，
                测量完成回落到实际比例——带过渡会回放“从大缩小”的闪动，未测量期禁用后同帧落位无动画 -->
+          <!-- content-visibility:auto：屏外页跳过渲染与位图解码（每页 794×1123@DPR2 ≈14MB 解码，
+               20 页全部即刻解码峰值可达数百 MB）；contain-intrinsic-size 兜住估算高度防滚动条跳动 -->
           <div
             v-for="(url, index) in pages"
             :class="[
@@ -56,7 +59,11 @@
                 : 'transition-[outline,box-shadow,ring-color]',
             ]"
             :key="url"
-            :style="{ height: renderedPageHeight }"
+            :style="{
+              height: renderedPageHeight,
+              contentVisibility: 'auto',
+              containIntrinsicSize: `auto ${renderedPageHeight}`,
+            }"
             @contextmenu.prevent="handlePageContextMenu($event, index)"
             class="relative block w-auto overflow-hidden rounded-sm shadow-panel ring-1 ring-transparent outline-2 -outline-offset-2 duration-fast ease-out select-none hover:shadow-floating hover:ring-glass-border"
           >
@@ -128,25 +135,6 @@
           title="自适应窗口高度"
         />
       </BaseFloatingPill>
-
-      <!-- 页码提示：底部居中浮动胶囊（复用 BaseFloatingPill 的玻璃 chrome 与进出场动画），
-           滚动/翻页/切歌/进入预览时浮现，停顿后自动淡出；单页固定显示 1 / 1 -->
-      <BaseFloatingPill
-        :bottom="'1.5rem'"
-        :safe-area-inset="false"
-        :visible="pages.length > 0 && isPageHintVisible"
-        :z-index="'z-float'"
-        disabled-teleport
-        align="center"
-        aria-label="页码提示"
-        position="absolute"
-        size="sm"
-      >
-        <BaseRollingText
-          :text="`${currentPage} / ${pages.length}`"
-          class="px-1 text-xs font-semibold text-fg-body tabular-nums"
-        />
-      </BaseFloatingPill>
     </template>
 
     <!-- 右键单页的上下文菜单：复制 / 下载当前页（零尺寸挂载于根层，不参与滚动内容）；
@@ -164,7 +152,7 @@
 <script lang="ts">
 /**
  * 模块级记忆的滚动容器高度：预览页 v-if 重挂载（切 tab 回来）时 ResizeObserver 的异步测量
- * 滞后于首帧渲染，若首帧拿到 0 会令 fitPercent 回退 100%——页面先放大再回落产生闪动。
+ * 滞后于首帧渲染，若首帧拿到 0 会令自适应页高回退整页高——页面先放大再回落产生闪动。
  * 用上次会话的测量值兜底，保证重挂载首帧即为正确比例（组件单实例，模块级即实例级）。
  */
 </script>
@@ -190,15 +178,14 @@ import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseFloatingPill from '@/platform/ui/floating-bar/BaseFloatingPill.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
-import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
+import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
 import {
   getScorePageSize,
   PREVIEW_DEFAULT_ZOOM_PERCENT,
-  PREVIEW_FIT_PADDING_PX,
   PREVIEW_MAX_ZOOM_PERCENT,
   PREVIEW_MIN_ZOOM_PERCENT,
   PREVIEW_WHEEL_ZOOM_SENSITIVITY,
@@ -229,7 +216,7 @@ import { formatBytes } from '@/platform/utils/common';
 
 import type { PreviewRenderData } from '@/domains/score/preview/scorePreviewCache';
 import type { MenuItem } from '@/platform/ui/menu/types';
-import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import type { ScrollAreaHandle, ScrollAreaScrollbar } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 defineOptions({ name: 'ScorePreviewPane' });
 
@@ -259,24 +246,22 @@ const allLineIndices = computed<number[]>(() => getAllLineIndices());
 const pages = ref<string[]>([]);
 const isRendering = ref(false);
 const errorMessage = ref('');
-/** 首帧页码提示待展示标记：组件挂载（含刷新）与切歌后待新页流落位展示一次，缓存命中与重新生成两条路径共用 */
-let pendingIntroPageHint = true;
 let runToken = 0;
 let currentContentKey = '';
 let isPaneActive = true;
 
-/** 「更新中」常驻 LOADING Toast：仅在实际渲染（已有页面）时弹出，渲染结束统一移除。
- *  LOADING 型不自动销毁，故用 id 手动 remove；首次构建（无页）仍由内容区居中加载框承担，不弹 Toast */
-let updateToastId: number | null = null;
-const showUpdateToast = () => {
-  if (updateToastId === null) {
-    updateToastId = uiStore.toast.loading('预览更新中…', { closable: false });
+/** 「更新中」常驻 LOADING Message：仅在实际渲染（已有页面）时弹出，渲染结束统一移除。
+ *  LOADING 型不自动销毁，故用 id 手动 remove；首次构建（无页）仍由内容区居中加载框承担，不弹 Message */
+let updateMessageId: number | null = null;
+const showUpdateMessage = () => {
+  if (updateMessageId === null) {
+    updateMessageId = uiStore.message.loading('预览更新中…', { closable: false });
   }
 };
-const dismissUpdateToast = () => {
-  if (updateToastId !== null) {
-    uiStore.removeToast(updateToastId);
-    updateToastId = null;
+const dismissUpdateMessage = () => {
+  if (updateMessageId !== null) {
+    uiStore.removeMessage(updateMessageId);
+    updateMessageId = null;
   }
 };
 
@@ -291,13 +276,21 @@ const buildContentKey = () => {
   // 都使键失效。不能只按 chordsLookupMap（整个和弦库）的数量判定——排列「库中已存在」的和弦时
   // 库数量不变，会命中旧的渲染缓存导致预览不更新。查不到的和弦以 ?<id> 占位兜底。
   const refSignatures: string[] = [];
-  for (const chordId of song.chordMap.values()) {
-    const chord = chordsLookupMap.value.get(chordId ?? '');
-    refSignatures.push(chord ? computeChordFingerprint(chord) : `?${chordId}`);
+  for (const slots of song.chordMap.values()) {
+    for (const chordId of [...slots.char.values(), ...slots.start, ...slots.end]) {
+      const chord = chordsLookupMap.value.get(chordId ?? '');
+      // 指纹不含 barres，须并拼横按签名（与 scoreExportCanvas 同构）：
+      // 否则仅改横按时键不变，预览/右键下载/PDF/ZIP 全部陈旧
+      refSignatures.push(
+        chord ? `${computeChordFingerprint(chord)}:${computeBarresSignature(chord.barres)}` : `?${chordId}`
+      );
+    }
   }
   refSignatures.sort();
 
-  return `${song.id}_${song.title}_${song.singer}_${song.playKey}_ok${song.originalKey}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_q${settingsStore.scoreExportQuality}_pm${settingsStore.scorePageMargin}_ps${settingsStore.scorePageSize}_fz${scoreEditor.previewFontScale}_fb${scoreEditor.previewFretboardScale}_ies${settingsStore.scoreIgnoreEmptySpace ? 1 : 0}_ref${refSignatures.length}_${refSignatures.join('|')}`;
+  // timeSignature 参与谱面绘制（页眉拍号标记），必须入键——否则改拍号只靠 _v${song.version}
+  // 侥幸失效（改拍号会 touchSong bump version，但键维度完整性不应依赖这条间接保证）
+  return `${song.id}_${song.title}_${song.singer}_${song.playKey}_ok${song.originalKey}_ts${song.timeSignature}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_q${settingsStore.scoreExportQuality}_pm${settingsStore.scorePageMargin}_ps${settingsStore.scorePageSize}_fz${scoreEditor.previewFontScale}_fb${scoreEditor.previewFretboardScale}_ies${settingsStore.scoreIgnoreEmptySpace ? 1 : 0}_ref${refSignatures.length}_${refSignatures.join('|')}`;
 };
 
 /** 响应式内容键：内容/排版任一依赖变化即重算，作为「重渲染触发」的单一 watch 源 */
@@ -323,8 +316,7 @@ const generate = async (force = false) => {
     currentContentKey = contentKey;
     isRendering.value = false;
     errorMessage.value = '';
-    dismissUpdateToast();
-    consumeIntroPageHint();
+    dismissUpdateMessage();
     return;
   }
 
@@ -332,8 +324,8 @@ const generate = async (force = false) => {
   isRendering.value = true;
   isPreviewRendering.value = true;
   errorMessage.value = '';
-  // 已有页面的增量更新才弹「更新中」Toast；首次构建（无页）留给内容区居中加载框
-  if (pages.value.length > 0) showUpdateToast();
+  // 已有页面的增量更新才弹「更新中」Message；首次构建（无页）留给内容区居中加载框
+  if (pages.value.length > 0) showUpdateMessage();
   try {
     // isObsolete：连续编辑期间的过期渲染在排队阶段即被判废，不占用渲染线程
     const a4Result = await runWorkerExport(buildRenderPayload('a4'), {
@@ -346,11 +338,16 @@ const generate = async (force = false) => {
     // 各页字节数与原始 Blob 随渲染数据一并缓存：生成时 Blob 即在内存，直接取用免二次 fetch
     const a4Sizes = a4Result.blobs.map(blob => blob.size);
 
-    const entry: PreviewRenderData = { a4Urls, a4Sizes, a4Blobs: a4Result.blobs };
+    const entry: PreviewRenderData = {
+      a4Urls,
+      a4Sizes,
+      a4Blobs: a4Result.blobs,
+      pageSize: settingsStore.scorePageSize,
+      pageMargin: settingsStore.scorePageMargin,
+    };
     currentContentKey = contentKey;
     putCachedRender(contentKey, entry, song.id);
     applyEntry(entry);
-    consumeIntroPageHint();
   } catch (err) {
     if (token === runToken) {
       errorMessage.value = err instanceof Error ? err.message : '预览生成失败';
@@ -359,7 +356,7 @@ const generate = async (force = false) => {
     if (token === runToken) {
       isRendering.value = false;
       isPreviewRendering.value = false;
-      dismissUpdateToast();
+      dismissUpdateMessage();
     }
   }
 };
@@ -373,7 +370,7 @@ const cancelPendingExport = () => {
   runToken++;
   isRendering.value = false;
   isPreviewRendering.value = false;
-  dismissUpdateToast();
+  dismissUpdateMessage();
 };
 
 // ===== 单页右键菜单：复制 / 下载当前页图 =====
@@ -400,8 +397,17 @@ const menuTitle = computed(() => {
 /** 预览横向滚动容器元素（尺寸测量 / 缩放滚轮绑定 / 滚动位置存取都需要元素本身） */
 const previewAreaRef = useTemplateRef<ScrollAreaHandle>('previewAreaRef');
 const previewScrollRef = useScrollAreaElement(previewAreaRef);
-/** 响应式滚动状态：BaseScrollArea 句柄内聚维护（scroll 事件 + 容器尺寸观察自动同步），消费方免手写监听 */
-const scrollState = computed(() => previewAreaRef.value?.scrollState ?? null);
+/**
+ * 预览滚动时收起单页右键菜单：该菜单锚点是零尺寸 contextmenu 包裹层，挂在预览根层（BaseScrollArea 之外），
+ * 平台 closePopovers 机制按「锚点是否在滚动区内」精确关闭收不到它，故在此手动联动。
+ * 右键菜单弹出期间滚动预览，菜单应随内容一起消失，避免悬在错位位置。
+ */
+const closeMenuOnPreviewScroll = () => previewMenuRef.value?.closeMenu('preview-scroll');
+watch(previewScrollRef, (el, prev) => {
+  prev?.removeEventListener('scroll', closeMenuOnPreviewScroll);
+  el?.addEventListener('scroll', closeMenuOnPreviewScroll);
+});
+onBeforeUnmount(() => previewScrollRef.value?.removeEventListener('scroll', closeMenuOnPreviewScroll));
 /** 滚动位置存档：双轴，纵向浏览（放大超高模式）切 Tab 后同样回位；
  *  本面板以固定 key 跨歌复用实例，切歌时由渲染重置流程归零 */
 let savedScroll = { top: 0, left: 0 };
@@ -418,38 +424,55 @@ const { height: measuredContainerHeight } = useElementSize(previewScrollRef);
 watch(measuredContainerHeight, h => {
   if (h > 0) rememberedContainerHeight = h;
 });
-/** 滚动容器可视高度（px）：自适应百分比与超高判定的基准（重挂载首帧用记忆值兜底） */
+/** 滚动容器可视高度（px，content-box）：自适应页高与超高判定的基准（重挂载首帧用记忆值兜底） */
 const containerHeight = computed(() => measuredContainerHeight.value || rememberedContainerHeight);
 
 /** 当前选中的单页尺寸（按 settingsStore.scorePageSize 档位解析，未命中回退 A4）；预览页高/超高判定以此为基准 */
 const previewPageSize = computed(() => getScorePageSize(settingsStore.scorePageSize));
 
-/** 自适应模式下的等比百分比：容器可用高度换算为当前单页高度的百分比 */
-const fitPercent = computed(() => {
-  if (containerHeight.value <= 0) return 100;
-  return Math.max(
-    PREVIEW_MIN_ZOOM_PERCENT,
-    Math.round(((containerHeight.value - PREVIEW_FIT_PADDING_PX) / previewPageSize.value.height) * 100)
-  );
+/** 单页在指定百分比下的显示高度（px，取整到整像素）：百分比只是对外读数，布局真值一律走 px */
+const pageHeightAt = (percent: number): number => Math.round((previewPageSize.value.height * percent) / 100);
+
+/** 视口可用高度（px，向下取整）：自适应目标高与超高判定共用同一个取整值。
+ *  取整方向必须向下——目标高恒 ≤ 真实内容盒高，页面才不会因不足 1px 的越界被判超高 */
+const availableHeight = computed(() => Math.floor(containerHeight.value));
+
+/** 自适应模式下的页面显示高度（px）：直接取滚动容器的内容盒高，即内容行 h-full 的高度，
+ *  图片满高贴合、上下不再空档。
+ *  刻意不经「换算百分比 → 再乘回页高」的取整回环：该回环有最多 ±0.5%（A4 约 ±6px）的误差，
+ *  会把页高推过内容盒高而被判超高 → 切顶部对齐 + 禁用横向翻页滚轮，此时原生纵向又无可滚距离，
+ *  滚轮彻底失灵。旧写法靠 PREVIEW_FIT_PADDING（上下合计 48px）兜住这段误差，代价是自适应态下
+ *  图片恒比满高的行矮 48px（每侧 24px）——现由向下取整从构造上保证不越界，留白回归容器自身 py-4。
+ *  容器尚未测量（0）时回退整页高：宁可按 100% 渲染等测量落地，压成 0 高更糟。
+ *  下限与自定义态同源（MIN 百分比）：视口极矮时不把页面压成一条线，交由超高判定转纵向浏览 */
+const fitPageHeight = computed(() => {
+  if (availableHeight.value <= 0) return previewPageSize.value.height;
+  return Math.max(pageHeightAt(PREVIEW_MIN_ZOOM_PERCENT), availableHeight.value);
 });
 
+/** 自适应态的等效百分比：由实际显示高度反推，只作读数与页脚画布的栅格分辨率，不参与布局 */
+const fitZoomPercent = computed(() => Math.round((fitPageHeight.value / previewPageSize.value.height) * 100));
+
 /**
- * 当前生效的缩放百分比（供 Ctrl+滚轮读写）：
- * 读：自适应模式实时反映窗口换算值；写：滚轮缩放自动解除自适应并写入自定义值
+ * 当前生效的缩放百分比（供 Ctrl+滚轮读写与页脚画布的栅格清晰度）：
+ * 读：自适应态取等效百分比；写：滚轮缩放自动解除自适应并写入自定义值
  */
 const activePercent = computed<number>({
-  get: () => (isFitMode.value ? fitPercent.value : customZoomPercent.value),
+  get: () => (isFitMode.value ? fitZoomPercent.value : customZoomPercent.value),
   set: val => {
     isFitMode.value = false;
     customZoomPercent.value = Math.min(PREVIEW_MAX_ZOOM_PERCENT, Math.max(PREVIEW_MIN_ZOOM_PERCENT, val));
   },
 });
 
-/** 页面渲染高度：始终用 px 绝对值（适应态 = fitPercent 换算高，自定义态 = 自定义百分比换算高）。
- * 不在适应态用 '100%'——% 与 px 混合插值不可靠会导致切换时高度闪跳；同为 px 后过渡平滑且两态数值同源 */
-const renderedPageHeight = computed(
-  () => `${Math.round((previewPageSize.value.height * activePercent.value) / 100)}px`
+/** 页面显示高度（px，布局真值）：自适应态 = 容器内容盒高，自定义态 = 自定义百分比换算高。
+ * 不在自适应态写 '100%'——% 与 px 混合插值不可靠会导致切换时高度闪跳；同为 px 后过渡平滑且两态数值同源 */
+const renderedPageHeightPx = computed(() =>
+  isFitMode.value ? fitPageHeight.value : pageHeightAt(customZoomPercent.value)
 );
+
+/** 页面渲染高度（内联样式）：真值统一由 renderedPageHeightPx 提供，此处只做单位拼接 */
+const renderedPageHeight = computed(() => `${renderedPageHeightPx.value}px`);
 
 /** 页脚页码层的文字色：取值同导出配色的弱化文字色（页图会因主题变化重渲，两者同步） */
 const footerMarkColor = ref(resolveFretboardCanvasPalette().SUB_TEXT);
@@ -459,16 +482,13 @@ watch(activeTheme, () => {
 });
 
 /** 页面是否超出视口可用高度：决定顶部对齐、纵向滚动浏览与禁用横向翻页滚轮。
- *  判定必须与真实纵向溢出严格一致（页高 > 滚动容器内容区高）：useElementSize 量到的
- *  containerHeight 已是 content-box（排除 p-6 内边距），不得再减 PREVIEW_FIT_PADDING_PX——
- *  旧写法重复扣一次内边距，把「页面尚能放下、无纵向溢出」的一段放大倍率误判为超高：
+ *  判据是「实际显示高度 > 真实内容盒高」——两侧同为 px、无百分比取整回环，故不会抖动；
+ *  自适应态由 availableHeight 的向下取整从构造上保证不越界，仅容器矮到触 MIN 下限时为真。
+ *  判据里不得再对内容盒高做任何内边距修正：containerHeight 已是 content-box（排除 p-6 内边距），
+ *  旧写法在这里多扣一次内边距，把「页面尚能放下、无纵向溢出」的一段放大倍率误判为超高——
  *  该区间 v-wheel-scroll 被禁用而原生又无纵向可滚距离，滚轮完全无响应（横向翻页失灵）。
- *  也不留正向容差：真实溢出哪怕 1px 也须切顶部对齐（items-center 会在负方向裁掉页面顶部）；
- *  fitPercent 取整误差最多 ±6px，距边界尚有整个 FIT_PADDING（48px）余量，边界不会抖动 */
-const isTallerThanViewport = computed(() => {
-  const pageHeight = Math.round((previewPageSize.value.height * activePercent.value) / 100);
-  return pageHeight > containerHeight.value;
-});
+ *  也不留正向容差：真实溢出哪怕 1px 也须切顶部对齐（items-center 会在负方向裁掉页面顶部） */
+const isTallerThanViewport = computed(() => renderedPageHeightPx.value > containerHeight.value);
 
 /** Ctrl+滚轮 / 触控板捏合：拦截浏览器页面缩放，按 deltaY 平滑换算预览百分比 */
 useEventListener(
@@ -489,50 +509,33 @@ const handlePageContextMenu = (e: MouseEvent, index: number) => {
   void previewMenuRef.value?.openMenuAt(e.clientX, e.clientY);
 };
 
-// ===== 页码指示：由 BaseScrollArea 句柄的响应式滚动状态推导当前页 =====
-/** 当前页码（1 基）：滚动进度 scrollLeft / (scrollWidth - clientWidth) 与均匀页宽的页序线性对应 */
-const currentPage = computed(() => {
-  const state = scrollState.value;
-  const total = pages.value.length;
-  if (!state || total <= 1) return 1;
-  const maxScroll = state.scrollWidth - state.clientWidth;
-  if (maxScroll <= 0) return 1;
-  const progress = Math.min(1, Math.max(0, state.scrollLeft / maxScroll));
-  return Math.round(progress * (total - 1)) + 1;
-});
-/** 页码提示自动淡出时延（ms）：滚动停顿超过该时长即隐藏 */
+// ===== 页码读数：挂在横向滚动条上的滚动气泡 =====
+/** 页码读数自动淡出时延（ms）：滚动停顿超过该时长即淡出。
+ *  这是气泡自身的节奏；滚动条先淡出时（未悬停 → autoHide 400ms）会把读数一并收起，
+ *  悬停期间拇指常显、才轮到这里的 1200ms 生效——两者不会再各走各的 */
 const PAGE_HINT_AUTO_HIDE_MS = 1200;
-/** 页码提示可见性：横向滚动时浮现，停顿后自动淡出；纵向浏览超高页流不打扰 */
-const isPageHintVisible = ref(false);
-const hidePageHint = useDebounceFn(() => {
-  isPageHintVisible.value = false;
-}, PAGE_HINT_AUTO_HIDE_MS);
-const showPageHint = () => {
-  isPageHintVisible.value = true;
-  hidePageHint();
+/** 读数（`当前页 / 总页数`，1 基）：把横向可滚动距离均分为总页数段，落点在第几段就是第几页 ——
+ *  progress=0 为首页、progress=1 为末页，每跨过 1/total 的进度即进一页。
+ *  页流等宽等距排列，故进度与页序线性对应；末页单独 clamp，避免 progress 取到 1 时越界 */
+const pageHintFromProgress = (progressX: number): string => {
+  const total = pages.value.length;
+  if (total <= 0) return '';
+  return `${Math.min(total, Math.floor(progressX * total) + 1)} / ${total}`;
 };
-/** 消费首帧提示标记：页流存在即展示一次（单页显示 1 / 1）；无内容则静默清除（避免残留到下一次内容编辑） */
-const consumeIntroPageHint = () => {
-  if (!pendingIntroPageHint) return;
-  pendingIntroPageHint = false;
-  if (pages.value.length > 0) showPageHint();
-};
-// 横向滚动浮现提示；纵向浏览超高页流（scrollLeft 不变）不打扰
-watch(
-  () => scrollState.value?.scrollLeft,
-  (now, prev) => {
-    if (now === undefined || prev === undefined) return;
-    if (Math.abs(now - prev) > 1 && pages.value.length > 0) showPageHint();
-  }
-);
-// 可滚动距离变化（缩放/页流增删等内容尺寸变化，由句柄自动同步）同样浮现提示
-watch(
-  () => scrollState.value?.scrollableX,
-  (now, prev) => {
-    if (now === undefined || prev === undefined || now === prev) return;
-    if (pages.value.length > 0) showPageHint();
-  }
-);
+
+/** 横向滚动条气泡：读数随拇指中位移动，滚动时浮现、闲置后淡出。
+ *  与拇指同一判据 —— 无横向可滚余量（单页 / 页流窄于视口）时结构性隐藏，
+ *  不会留下「没有滚动条却挂着页码」的孤悬读数。
+ *  axis 既是读数归属也是触发条件：只有横向滚动才浮现（纵向滚动时读数并没变，指令不显形）；
+ *  读数变化走逐字符翻页（bubble.roll 默认开），「3 / 12 → 4 / 12」只有数字翻动、"/ 12" 保持静止。
+ *  format 只在滚动时读取 pages，故 computed 不因页数变化而重建（引用稳定，指令侧只做替换不重建滚动条） */
+const previewScrollbar = computed<ScrollAreaScrollbar>(() => ({
+  bubble: {
+    axis: 'x',
+    hideDelay: PAGE_HINT_AUTO_HIDE_MS,
+    format: ({ progressX }) => pageHintFromProgress(progressX),
+  },
+}));
 
 /** 读取指定页的原始 Blob（统一走缓存模块的 object URL 读回）。
  *  缓存页面不含页脚，故按开关合成后再交给剪贴板 / 下载，产物与预览所见一致。 */
@@ -541,29 +544,41 @@ const fetchPageBlob = async (index: number): Promise<Blob | null> => {
   if (!url) return null;
   const blob = await readA4PageBlob(url);
   if (!blob) return null;
-  const [composed] = await composePageFooter([blob], [index]);
+  // 页脚按缓存渲染时的纸张档位与边距合成，不读实时设置（改设置在途窗口内两者可能不一致）
+  const [composed] = await composePageFooter(
+    [blob],
+    [index],
+    currentRenderData.value?.pageSize,
+    currentRenderData.value?.pageMargin
+  );
   return composed ?? blob;
 };
 
 /** 复制指定页到系统剪贴板（JPEG 不兼容时自动转 PNG 写入） */
 const copyPage = async (index: number) => {
   const blob = await fetchPageBlob(index);
-  if (!blob) return;
+  if (!blob) {
+    uiStore.message.warning('该页数据不可用（可能尚未渲染完成），请稍后重试');
+    return;
+  }
   try {
     await writeBlobToClipboard(blob);
-    uiStore.toast.success('已复制当前页到剪贴板');
+    uiStore.message.success('已复制当前页到剪贴板');
   } catch (err) {
-    uiStore.toast.error(err instanceof Error ? err.message : '复制失败');
+    uiStore.message.error(err instanceof Error ? err.message : '复制失败');
   }
 };
 
 /** 下载指定页为独立图片文件 */
 const downloadPage = async (index: number) => {
   const blob = await fetchPageBlob(index);
-  if (!blob) return;
+  if (!blob) {
+    uiStore.message.warning('该页数据不可用（可能尚未渲染完成），请稍后重试');
+    return;
+  }
   const baseName = buildExportFileName(scoreEditor.activeSong?.title || '');
   triggerBlobDownload(blob, `${baseName}_${index + 1}.jpg`);
-  uiStore.toast.success('已开始下载');
+  uiStore.message.success('已开始下载');
 };
 
 const pageMenuItems = computed<MenuItem[]>(() => [
@@ -607,9 +622,6 @@ watch(
       return;
     }
 
-    // 切歌后展示一次新乐谱的页码提示：置在失活早退之前，异标签切歌回到预览时同样生效
-    pendingIntroPageHint = true;
-
     // 仅在当前处于预览标签激活状态时，切歌才同步触发导出生成；
     // 若在编辑歌词或排列和弦标签休眠（已失活），绝不在后台抢跑 Worker 耗能，待切回预览标签时（onActivated）由唤醒守卫按需生成
     if (!isPaneActive) {
@@ -626,7 +638,6 @@ watch(
       currentContentKey = contentKey;
       isRendering.value = false;
       errorMessage.value = '';
-      consumeIntroPageHint();
     } else {
       applyEntry(null);
       currentContentKey = '';
@@ -637,12 +648,17 @@ watch(
 
 /**
  * 监听当前歌曲内部内容与排版微调：
- * 走 150ms 防抖重渲染，避免用户编辑歌词/切换开关时高频触发导出
+ * 走 150ms 防抖重渲染，避免用户编辑歌词/切换开关时高频触发导出。
+ * 激活判定必须放在**监视源**（isPaneActive && reactiveContentKey 的 computed）：
+ * 放回调里时 computed 仍会作为 watch 源被求值——KeepAlive 休眠的预览面板在用户于
+ * 编辑标签打字期间，每次键入都要 O(槽位) 算指纹+横按签名+排序+含全歌词的字符串拼接，
+ * 算完再丢弃（对照上方切歌 watch 的同款修法）。
  */
+const activeContentKey = computed(() => (isPaneActive ? reactiveContentKey.value : ''));
 watch(
-  reactiveContentKey,
-  () => {
-    if (!isPaneActive) return;
+  activeContentKey,
+  key => {
+    if (!key) return;
     debouncedGenerate();
   },
   { immediate: false }
@@ -675,9 +691,6 @@ onActivated(async () => {
     el.scrollTop = savedScroll.top;
     el.scrollLeft = savedScroll.left;
   }
-
-  // 切回预览标签：与切歌/首帧一致，页流存在即浮现一次页码提示（单页显示 1 / 1）
-  if (pages.value.length > 0) showPageHint();
 });
 
 onDeactivated(() => {

@@ -17,7 +17,13 @@ import { TEXT_FORMAT } from '@/platform/utils/constants';
 
 import type { Tuning } from '@/domains/chord/theory/theory';
 import type { Chord } from '@/domains/chord/types';
-import type { BarreEntity, FretOffset, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
+import type {
+  BarreEntity,
+  FretOffset,
+  GuitarStringEntity,
+  GuitarStringsModel,
+  StringIndex,
+} from '@/domains/fretboard/types';
 
 /** 跨实例和弦载荷：剥离 id / groupId / 时间戳等本实例私有字段 */
 export interface PortableChord {
@@ -48,7 +54,7 @@ const classifyHeader = (header: string): 'UNKNOWN_FORMAT' | 'INVALID_HEADER' => 
 };
 
 /** 单弦编码：`品位,preferFlat`（-1 静音 / 0 空弦 / ≥1 品位） */
-const encodeString = (s: [number, boolean]): string => `${s[0]},${s[1] ? 1 : 0}`;
+const encodeString = (s: GuitarStringEntity): string => `${s.fret},${s.preferFlat ? 1 : 0}`;
 
 /** 横按条目编码：`品位:起弦:止弦:指法` */
 const encodeBarre = (b: BarreEntity): string => `${b.fret}:${b.fromString}:${b.toString}:${b.finger ?? 1}`;
@@ -76,16 +82,22 @@ export const parseChordFields = (fields: string): PortableChord | null => {
   const normalizedName = (name ?? '').trim();
   if (!normalizedName || !isValidChordName(normalizedName) || !nameToSegments(normalizedName)) return null;
 
-  // 调弦非法时回退默认，并按弦数截/补 strings（补的弦为静音）
+  // 调弦非法时回退默认。弦数优先取 strings 自带段数（编码写侧按实际弦数逐弦输出，
+  // 每弦自带 -1 静音占位），段数在 3..10 合法域内时以它为准；预设 stringCount 只作
+  // 调弦不匹配时的兜底——否则非 6 弦和弦跨载体往返会被强行改弦数（P1 审计 N 系）
   const tuning = TUNING_KEYS.includes(tuningStr as Tuning) ? (tuningStr as Tuning) : getDefaultTuningForStringCount(6);
-  const stringCount = TUNING_PRESETS[tuning]?.stringCount ?? 6;
-  // 品位为可视窗口内的相对值（渲染按 fret 直接映射网格行），合法值域 -1/0/1..fretCount，越界置 -1 静音
-  const fretCount: Chord['fretCount'] = fretStr === '4' ? 4 : 3;
   const rawStrings = (stringsStr ?? '').split('|');
+  const rawCount = rawStrings.length;
+  const stringCount = rawCount >= 3 && rawCount <= 10 ? rawCount : (TUNING_PRESETS[tuning]?.stringCount ?? 6);
+  // 品位为可视窗口内的相对值（渲染按 fret 直接映射网格行），合法值域 -1/0/1..fretCount，越界置 -1 静音
+  // 真实窗口大小（3/4/5 品）原样还原，避免 5 品和弦被读侧硬编码压成 3 品导致 4~5 品指法/横按整条丢失
+  const parsedFret = Number(fretStr);
+  const fretCount: Chord['fretCount'] =
+    Number.isFinite(parsedFret) && parsedFret >= 3 && parsedFret <= 5 ? (parsedFret as Chord['fretCount']) : 3;
   const strings: GuitarStringsModel = Array.from({ length: stringCount }, (_, i) => {
     const [fretStr, flatStr] = rawStrings[i]?.split(',') ?? [];
     const fret = Number(fretStr);
-    return [Number.isFinite(fret) && fret >= -1 && fret <= fretCount ? fret : -1, flatStr === '1'] as [number, boolean];
+    return { fret: Number.isFinite(fret) && fret >= -1 && fret <= fretCount ? fret : -1, preferFlat: flatStr === '1' };
   });
 
   const offsetNum = Number(offsetStr);
@@ -102,14 +114,27 @@ export const parseChordFields = (fields: string): PortableChord | null => {
           const fromString = Number(from);
           const toString = Number(to);
           if (!Number.isFinite(fret) || !Number.isFinite(fromString) || !Number.isFinite(toString)) return null;
-          // 横按品位同为窗口相对值，越界条目直接丢弃
+          // 横按品位同为窗口相对值，越界条目直接丢弃；
+          // 弦号越界同样丢弃——fromString/toString/finger 未验即 as 会把脏数据带进库（P1 审计 N 系）
           if (fret < 1 || fret > fretCount) return null;
+          if (
+            !Number.isInteger(fromString) ||
+            fromString < 0 ||
+            fromString >= stringCount ||
+            !Number.isInteger(toString) ||
+            toString < 0 ||
+            toString >= stringCount
+          ) {
+            return null;
+          }
           const fingerNum = Number(finger);
           return {
             fret,
             fromString,
             toString,
-            ...(Number.isFinite(fingerNum) ? { finger: fingerNum as 1 | 2 | 3 | 4 } : {}),
+            ...(Number.isInteger(fingerNum) && fingerNum >= 1 && fingerNum <= 4
+              ? { finger: fingerNum as 1 | 2 | 3 | 4 }
+              : {}),
           } as BarreEntity;
         })
         .filter((b): b is BarreEntity => b !== null)

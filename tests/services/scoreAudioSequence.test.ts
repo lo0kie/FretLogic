@@ -5,8 +5,8 @@ import { Tuning } from '@/domains/chord/theory/theory';
 import { extractSongChordSequence } from '@/domains/score/model/chordSlots';
 import { toSongId } from '@/domains/score/model/scoreModel';
 
-import type { Chord, ChordId } from '@/domains/chord/types';
-import type { LineId, SlotKey, Song } from '@/domains/score/types';
+import type { Chord } from '@/domains/chord/types';
+import type { ChordLineSlots, LineId, Song } from '@/domains/score/types';
 
 describe('乐谱时间序列和弦提取 (extractSongChordSequence)', () => {
   const mockChordC: Chord = {
@@ -14,12 +14,12 @@ describe('乐谱时间序列和弦提取 (extractSongChordSequence)', () => {
     groupId: toGroupId('g1'),
     nameSegments: null,
     strings: [
-      [-1, false],
-      [3, false],
-      [2, false],
-      [0, false],
-      [1, false],
-      [0, false],
+      { fret: -1, preferFlat: false },
+      { fret: 3, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 0, preferFlat: false },
+      { fret: 1, preferFlat: false },
+      { fret: 0, preferFlat: false },
     ],
     fretCount: 4,
     fretOffset: 0,
@@ -55,11 +55,9 @@ describe('乐谱时间序列和弦提取 (extractSongChordSequence)', () => {
     const line1 = 'l1' as LineId;
     const line2 = 'l2' as LineId;
 
-    const chordMap = new Map<SlotKey, ChordId>([
-      ['line_l1_end_0' as SlotKey, mockChordAm.id],
-      ['line_l1_char_2' as SlotKey, mockChordG.id],
-      ['line_l1_start_0' as SlotKey, mockChordC.id],
-      ['line_l2_start_0' as SlotKey, mockChordF.id],
+    const chordMap = new Map<LineId, ChordLineSlots>([
+      ['l1', { char: new Map([[2, mockChordG.id]]), start: [mockChordC.id], end: [mockChordAm.id] }],
+      ['l2', { char: new Map(), start: [mockChordF.id], end: [] }],
     ]);
 
     const mockSong: Song = {
@@ -94,9 +92,8 @@ describe('乐谱时间序列和弦提取 (extractSongChordSequence)', () => {
 
   it('跳过不存在的和弦或无效槽位', () => {
     const line1 = 'l1' as LineId;
-    const chordMap = new Map<SlotKey, ChordId>([
-      ['line_l1_start_0' as SlotKey, toChordId('c_non_existent')],
-      ['line_l1_char_0' as SlotKey, mockChordC.id],
+    const chordMap = new Map<LineId, ChordLineSlots>([
+      ['l1', { char: new Map([[0, mockChordC.id]]), start: [toChordId('c_non_existent')], end: [] }],
     ]);
 
     const mockSong: Song = {

@@ -1,7 +1,6 @@
 import { useActiveChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
 
 import type { ChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import type { Chord, Group } from '@/domains/chord/types';
@@ -37,7 +36,7 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
     if (draftLeftVisibleGroup) editorStore.resetEditor();
   };
 
-  /** 批量删除指法：乐谱槽位解绑由 chordStore 删除事件经应用层桥接完成，toast 提供 4 秒撤销 */
+  /** 批量删除指法：乐谱槽位解绑由 chordStore 删除事件经应用层桥接完成，message 提供 4 秒撤销 */
   const triggerDeleteChords = (chords: Chord[]) => {
     if (chords.length === 0) return;
 
@@ -47,13 +46,14 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
       editorStore.resetEditor();
     }
 
-    uiStore.toast.info(`已删除 ${chords.length} 个指法`, {
+    // 通知而非常驻 Message：撤销入口随 toast 飘走就没了，用户必须能回看并补做
+    uiStore.notice.info({
+      title: `已删除 ${chords.length} 个指法`,
       actionText: '撤销',
-      duration: TOAST_WARNING_DURATION_MS,
       onAction: () => {
         // 撤销恢复和弦后，乐谱槽位回填由 chordStore 恢复事件经应用层桥接完成
         chordStore.executeUndoRestore();
-        uiStore.toast.success('已恢复刚才删除的和弦');
+        uiStore.message.success('已恢复刚才删除的和弦');
       },
     });
   };
@@ -71,14 +71,14 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
       if (result.reason === 'UNCHANGED') {
         const targetGroup = chordStore.groups.find(g => g.id === editorStore.draftChord.groupId);
         const groupTip = !uiStore.isLeftOpen && targetGroup ? `至分组 "${targetGroup.name}"` : '';
-        uiStore.toast.success(`和弦已更新${groupTip}`);
+        uiStore.message.success(`和弦已更新${groupTip}`);
         editorStore.resetEditor();
-        uiStore.clearActionToasts();
+        uiStore.clearActionMessages();
         return true;
       }
 
       const msg = warningMessages[result.reason];
-      if (msg) uiStore.toast.warning(msg);
+      if (msg) uiStore.message.warning(msg);
       return false;
     }
 
@@ -86,28 +86,33 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
     const groupTip = !uiStore.isLeftOpen && targetGroup ? `至分组 "${targetGroup.name}"` : '';
 
     if (editorStore.isEditing) {
-      chordStore.updateChord(result.payload);
-      uiStore.toast.success(`和弦已更新${groupTip}`);
+      const updated = chordStore.updateChord(result.payload);
+      if (!updated) {
+        // 编辑中的和弦 id 已不存在（被删/未落库）：updateChord 静默 no-op，此处据返回值拦截，避免假「已更新」
+        uiStore.message.warning('原和弦已不存在，无法更新');
+        return false;
+      }
+      uiStore.message.success(`和弦已更新${groupTip}`);
     } else {
       chordStore.addChord(result.payload);
-      uiStore.toast.success(`和弦已保存${groupTip}`);
+      uiStore.message.success(`和弦已保存${groupTip}`);
     }
     // 立即落盘（绕过 useStorage 防抖），保证保存后刷新不丢失横按等数据
     chordStore.flushChordsToStorage();
 
     if (result.warn) {
-      uiStore.toast.warning(result.warn);
+      uiStore.message.warning(result.warn);
     }
 
     editorStore.resetEditor();
-    uiStore.clearActionToasts();
+    uiStore.clearActionMessages();
     return true;
   };
 
   /** 把当前草稿转为「另存为新和弦」模式，提示选择目标分组 */
   const saveAsNewChord = () => {
     editorStore.saveAsNewChord();
-    uiStore.toast.info('请选择目标分组后保存');
+    uiStore.message.info('请选择目标分组后保存');
   };
 
   return {

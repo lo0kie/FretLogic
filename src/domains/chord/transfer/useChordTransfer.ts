@@ -10,7 +10,7 @@
  *   剪贴板粘贴与打开链接的差别只在显式参数（`persist`：粘贴只载入草稿，链接直接入库）。
  * 新增入口时请复用这两组函数，勿另起一份拼装/落地代码。
  *
- * 剪贴板读写与 toast 全部收敛于此，组件保持薄；乐谱域的 useTextTransfer 委托本模块提供和弦能力。
+ * 剪贴板读写与 message 全部收敛于此，组件保持薄；乐谱域的 useTextTransfer 委托本模块提供和弦能力。
  */
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
@@ -23,6 +23,7 @@ import {
   serializeGroupToText,
 } from '@/domains/chord/transfer/chordTextCodec';
 import { GroupSortRule } from '@/domains/chord/types';
+import { areBarresEqual } from '@/domains/fretboard/model/coordinates';
 import { readTextFromClipboard, writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useUiStore } from '@/platform/store/uiStore';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
@@ -49,18 +50,18 @@ export const buildDraftChordFromPortable = (p: PortableChord): Chord =>
   });
 
 /** 解析失败按原因分流提示（和弦/乐谱共用） */
-export const pasteErrorToast = (reason: TextParseReason, target: '和弦' | '乐谱') => {
+export const pasteErrorMessage = (reason: TextParseReason, target: '和弦' | '乐谱') => {
   const uiStore = useUiStore();
   if (reason === 'UNKNOWN_FORMAT') {
-    uiStore.toast.warning('无法识别的格式');
+    uiStore.message.warning('无法识别的格式');
   } else if (reason === 'WRONG_TYPE') {
-    uiStore.toast.warning(target === '和弦' ? '请到乐谱页粘贴' : '请到和弦页粘贴');
+    uiStore.message.warning(target === '和弦' ? '请到乐谱页粘贴' : '请到和弦页粘贴');
   } else if (reason === 'INVALID_HEADER') {
-    uiStore.toast.warning('文字格式版本不匹配');
+    uiStore.message.warning('文字格式版本不匹配');
   } else if (reason === 'INVALID_NAME') {
-    uiStore.toast.warning('文字中包含无法解析的和弦名');
+    uiStore.message.warning('文字中包含无法解析的和弦名');
   } else {
-    uiStore.toast.warning('文字内容格式不完整');
+    uiStore.message.warning('文字内容格式不完整');
   }
 };
 
@@ -90,9 +91,9 @@ export function useChordTransfer() {
   const copyChordText = async (chord: Chord): Promise<void> => {
     try {
       await writeTextToClipboard(await buildChordToken(chord));
-      uiStore.toast.success(`已复制和弦到剪贴板`);
+      uiStore.message.success(`已复制和弦到剪贴板`);
     } catch (err) {
-      uiStore.toast.error(err instanceof Error ? err.message : '复制失败');
+      uiStore.message.error(err instanceof Error ? err.message : '复制失败');
     }
   };
 
@@ -104,9 +105,9 @@ export function useChordTransfer() {
     const chords = chordStore.groupChordMap.get(group.id) ?? [];
     try {
       await writeTextToClipboard(await buildGroupToken(group, chords));
-      uiStore.toast.success(`已复制分组（${chords.length} 个和弦）到剪贴板`);
+      uiStore.message.success(`已复制分组（${chords.length} 个和弦）到剪贴板`);
     } catch (err) {
-      uiStore.toast.error(err instanceof Error ? err.message : '复制失败');
+      uiStore.message.error(err instanceof Error ? err.message : '复制失败');
     }
   };
 
@@ -117,17 +118,17 @@ export function useChordTransfer() {
     try {
       raw = await readTextFromClipboard();
     } catch (err) {
-      uiStore.toast.error(err instanceof Error ? err.message : '读取剪贴板失败');
+      uiStore.message.error(err instanceof Error ? err.message : '读取剪贴板失败');
       return;
     }
     // 载体归一：分享地址 / 裸 token / 旧版纯文本都收敛成同一份载荷文本，之后一律按纯文本处理
     const resolved = await resolveTransferPayload(raw);
     if (resolved.status === 'empty') {
-      uiStore.toast.warning('剪贴板为空');
+      uiStore.message.warning('剪贴板为空');
       return;
     }
     if (resolved.status === 'broken') {
-      uiStore.toast.warning('传递内容已损坏，无法解析');
+      uiStore.message.warning('传递内容已损坏，无法解析');
       return;
     }
     const result = parseChordFromText(resolved.payload);
@@ -137,7 +138,7 @@ export function useChordTransfer() {
         await pasteGroupFromClipboard(resolved.payload);
         return;
       }
-      pasteErrorToast(result.reason, '和弦');
+      pasteErrorMessage(result.reason, '和弦');
       return;
     }
     // 剪贴板粘贴与分享链接共用同一落地实现，只是深度不同（粘贴不落库）
@@ -180,14 +181,14 @@ export function useChordTransfer() {
   /** 分组导入统一入口（剪贴板粘贴与分享链接共用）：落地并提示 */
   const importSharedGroup = (p: PortableGroup): void => {
     const { name, chords } = applyPortableGroup(p);
-    uiStore.toast.success(`已导入分组「${name}」（${chords} 个和弦）`);
+    uiStore.message.success(`已导入分组「${name}」（${chords} 个和弦）`);
   };
 
   /** 工作台粘贴分组：FLGROUP 文本 → 新建分组（保留排序规则与调式主音）并导入组内全部和弦 */
   const pasteGroupFromClipboard = async (text: string): Promise<void> => {
     const result = parseGroupFromText(text);
     if (!result.ok) {
-      pasteErrorToast(result.reason, '和弦');
+      pasteErrorMessage(result.reason, '和弦');
       return;
     }
     importSharedGroup(result.data);
@@ -205,19 +206,25 @@ export function useChordTransfer() {
     if (!persist) {
       editorStore.setEditor(buildDraftChordFromPortable(p));
       editorStore.saveAsNewChord();
-      uiStore.toast.success(`已加载和弦`);
+      uiStore.message.success(`已加载和弦`);
       return;
     }
 
     const draft = buildDraftChordFromPortable(p);
-    const fingerprint = computeChordFingerprint(draft);
+    // N4：判等必须含横按——computeChordFingerprint 不含 barres，而 chordTextCodec 写侧
+    // 明确携带 BARRES:；漏比会把「同指法不同横按」误判为已存在，分享导入后横按静默丢失
+    const sameBarres = (c: Chord): boolean => areBarresEqual(c.barres, draft.barres);
     const existing = chordStore.savedChordsList.find(
-      c => getChordName(c) === p.name && c.tuning === p.tuning && computeChordFingerprint(c) === fingerprint
+      c =>
+        getChordName(c) === p.name &&
+        c.tuning === p.tuning &&
+        computeChordFingerprint(c) === computeChordFingerprint(draft) &&
+        sameBarres(c)
     );
     if (existing) {
       chordStore.selectAndExpandGroup(existing.groupId);
       editorStore.setEditor(existing);
-      uiStore.toast.success(`已载入分享的和弦「${getChordName(existing)}」`);
+      uiStore.message.success(`已载入分享的和弦「${getChordName(existing)}」`);
       return;
     }
 
@@ -237,7 +244,7 @@ export function useChordTransfer() {
     chordStore.flushChordsToStorage();
     chordStore.selectAndExpandGroup(group.id);
     editorStore.setEditor(chord);
-    uiStore.toast.success(`已从分享链接导入和弦「${getChordName(chord)}」`);
+    uiStore.message.success(`已从分享链接导入和弦「${getChordName(chord)}」`);
   };
 
   /** 分享链接消费入口（shareLinkBridge 专用）：落库 + 选中展开 */
@@ -247,9 +254,9 @@ export function useChordTransfer() {
   const shareChordLink = async (chord: Chord): Promise<void> => {
     try {
       await writeTextToClipboard(buildShareUrl(ROUTE_PATHS.WORKBENCH, await buildChordToken(chord)));
-      uiStore.toast.success(`已复制和弦「${getChordName(chord)}」的分享链接`);
+      uiStore.message.success(`已复制和弦「${getChordName(chord)}」的分享链接`);
     } catch (err) {
-      uiStore.toast.error(err instanceof Error ? err.message : '生成分享链接失败');
+      uiStore.message.error(err instanceof Error ? err.message : '生成分享链接失败');
     }
   };
 
@@ -258,9 +265,9 @@ export function useChordTransfer() {
     const chords = chordStore.groupChordMap.get(group.id) ?? [];
     try {
       await writeTextToClipboard(buildShareUrl(ROUTE_PATHS.WORKBENCH, await buildGroupToken(group, chords)));
-      uiStore.toast.success(`已复制分组「${group.name}」的分享链接`);
+      uiStore.message.success(`已复制分组「${group.name}」的分享链接`);
     } catch (err) {
-      uiStore.toast.error(err instanceof Error ? err.message : '生成分享链接失败');
+      uiStore.message.error(err instanceof Error ? err.message : '生成分享链接失败');
     }
   };
 

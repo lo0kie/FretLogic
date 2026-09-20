@@ -20,6 +20,7 @@ export default tseslint.config(
       'stats.html',
       'test-results/**',
       'playwright-report/**',
+      'worker/dist/**',
     ],
   },
   eslint.configs.recommended,
@@ -38,7 +39,11 @@ export default tseslint.config(
       import: importPlugin,
     },
     settings: {
-      'import/resolver': {
+      // 注意 key 必须是 import-x/resolver：本仓用的是 eslint-plugin-import-x（见 plugins 区），
+      // 运行时只读 'import-x/resolver-next' | 'import-x/resolver-legacy' | 'import-x/resolver' | 'import-x/resolve'，
+      // 没有裸 'import/' 前缀的回退。此前写成 'import/resolver'，解析器从未生效，
+      // no-restricted-paths 解析不了别名路径直接放行——六条架构 zone 全部空转。
+      'import-x/resolver': {
         typescript: true,
       },
     },
@@ -104,6 +109,11 @@ export default tseslint.config(
       // 替代修法是给 parser 配 project/projectService 让 lib 从 tsconfig 推导，但那等于引入
       // 类型感知 lint，与「全量类型检查交给 vue-tsc」的分工相悖，代价不成比例。
       'no-undef': 'off',
+      // `_` 前缀 = 「有意声明但不使用」的显式丢弃约定（如解构剔除 class/style 后的 rest 场景）
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { varsIgnorePattern: '^_', argsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
       // 统一数组类型写法为 T[]（Array<T> 由 --fix 机械转换）
@@ -126,7 +136,22 @@ export default tseslint.config(
       'import/no-self-import': 'error',
       // 禁止跨目录上溯的相对导入（../），统一指向 src 根别名 @/；同目录 ./ 保留。
       // 与 importOrder 的 @/platform|domains|app 分层分组配合，保持依赖流向清晰。
-      'import/no-relative-parent-imports': 'error',
+      //
+      // ⚠️ 不能用 import/no-relative-parent-imports：它按「解析后的路径」判定——
+      // resolve 成功后 path.relative 出 ../ 就报，导致 @/platform 这类**合法的**跨目录
+      // 别名导入被全量误杀（994 处）。而 resolver 失效的年代 resolve() 返回 null，
+      // 这条规则从未运行过——等于从没用对过。这里用字面 patterns 精确表达原意图。
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['..', '../**', '../**/*'],
+              message: '禁止相对路径上溯导入：跨目录引用一律使用 src 根别名 @/（同目录 ./ 保留）。',
+            },
+          ],
+        },
+      ],
       // 属性顺序交由 prettier-plugin-organize-attributes 统一处理，避免与 ESLint 互改。
       'vue/attributes-order': 'off',
       // 强制 v-bind 简写且开启 Vue 3.4+ 同名属性简写（:foo="foo" 必须写为 :foo，:attr-name="attrName" 必须写为 :attr-name）
@@ -234,7 +259,8 @@ export default tseslint.config(
       import: importPlugin,
     },
     settings: {
-      'import/resolver': {
+      // 同上：import-x 只认 import-x/resolver，裸 import/ 前缀静默失效
+      'import-x/resolver': {
         typescript: true,
       },
     },

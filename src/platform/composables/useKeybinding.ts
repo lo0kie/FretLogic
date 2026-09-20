@@ -127,6 +127,12 @@ const parseCombo = (input: string): KeyCombo => {
 /** 判断事件目标是否为可编辑元素（input / textarea / contenteditable） */
 const isEditableTarget = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
-  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return true;
+  if (target instanceof HTMLInputElement) {
+    // 非文本类 input（复选框/单选/按钮等）不是编辑区：点过侧栏开关等控件后 Ctrl+Z 不应被吞
+    const t = target.type;
+    if (t === 'checkbox' || t === 'radio' || t === 'button' || t === 'submit' || t === 'reset') return false;
+    return true;
+  }
+  if (target.tagName === 'TEXTAREA') return true;
   return target.isContentEditable;
 };

@@ -1,8 +1,8 @@
 import {
   formatAccidental as formatAccidentalTheory,
-  formatChordQuality,
   getChordName,
   nameToSegments,
+  toShorthandQuality,
 } from '@/domains/chord/theory/theory';
 import { estimateValueBytes } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
@@ -93,7 +93,16 @@ const appliedClassMap = new WeakMap<HTMLElement, string>();
 /** 同步"本指令拥有"的 class：更新时只增删自己上次写入的 class，不覆盖宿主其他 class。 */
 const syncOwnClasses = (el: HTMLElement, target: string): void => {
   const prev = appliedClassMap.get(el) ?? '';
-  if (prev === target) return;
+  if (prev === target) {
+    // 快照未变不代表类还在 DOM 上：消费方 :class 变化会让 Vue patchClass 整体覆写 className，
+    // 把本指令写入的类一并抹掉；缺失时补回
+    const missing = target
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter(cls => !el.classList.contains(cls));
+    if (missing.length > 0) el.classList.add(...missing);
+    return;
+  }
   if (prev) el.classList.remove(...prev.split(/\s+/).filter(Boolean));
   el.classList.add(...target.split(/\s+/).filter(Boolean));
   appliedClassMap.set(el, target);
@@ -110,17 +119,19 @@ const formatAccidental = (acc: AccidentalType, useUnicode: boolean) => formatAcc
 const formatAccidentalSpan = (acc: AccidentalType | undefined, useUnicode: boolean): string =>
   acc ? `<span class="${ACCIDENTAL_CLASS}">${escapeHtml(formatAccidental(acc, useUnicode))}</span>` : '';
 
-/** 质量标记展示值：简写模式下做 m7b5→ø7 特判与标准简写映射（与原组件行为一致） */
-const resolveQualityText = (
-  segments: ChordNameSegments,
-  extensions: NonNullable<ChordNameSegments['extensions']>,
-  shorthand: boolean
-): string => {
+/**
+ * 质量标记展示值：简写模式下走理论层的统一实现 `toShorthandQuality`。
+ *
+ * 历史特判已删除：`(quality === 'm7' || 'm') && extensions 里有 b5 → 'ø7'`。
+ * 那是第二处「救旧持久化分片」的正则补丁——它是 `nameToSegments` 合成补丁的下游镜像，
+ * 上游一删，这里也随之失效（新分片里半减七是完整的 `'m7b5'`，直接命中简写映射即可）。
+ *
+ * 现在本函数只是理论层 `toShorthandQuality` 的薄封装：简写规则只有一份实现，
+ * 由 token 表驱动（`m7b5` / `m7(b5)` / `ø7` / `min7b5` 收敛到同一展示形态）。
+ */
+const resolveQualityText = (segments: ChordNameSegments, shorthand: boolean): string => {
   const quality = segments.quality ?? segments.unknownQuality ?? '';
-  if (!shorthand) return quality;
-  const b5Idx = extensions.findIndex(([deg, acc]) => (deg === 5 || deg === '5') && acc === -1);
-  if ((quality === 'm7' || quality === 'm') && b5Idx >= 0) return 'ø7';
-  return formatChordQuality(quality, true);
+  return shorthand ? toShorthandQuality(quality) : quality;
 };
 
 /** 将结构化分片拼装为和弦名 HTML：根音（含升降号）→ 性质 → 扩展音 → 斜杠低音。 */
@@ -130,7 +141,7 @@ const buildNameHtml = (segments: ChordNameSegments, shorthand: boolean, useUnico
 
   let html = `<span class="chord-root-group whitespace-nowrap"><span inline align-baseline class="chord-root-letter">${escapeHtml(segments.root[0])}</span>${accidental(segments.root[1])}</span>`;
 
-  const qualityText = resolveQualityText(segments, extensions, shorthand);
+  const qualityText = resolveQualityText(segments, shorthand);
   if (qualityText) html += `<span class="chord-quality font-[inherit]">${escapeHtml(qualityText)}</span>`;
 
   for (const ext of extensions) {
@@ -221,7 +232,12 @@ const buildRenderKey = (input: ResolvedInput): string => {
 const renderChordName = (el: HTMLElement, binding: { value: ChordNameBinding }): void => {
   const input = resolveInput(binding.value);
   const snapshotKey = buildRenderKey(input);
-  if (stateMap.get(el) === snapshotKey) return;
+  if (stateMap.get(el) === snapshotKey) {
+    // 渲染输入未变也可能需要补类：消费方 :class 变化触发的 patchClass 会整体覆写 className
+    const prev = appliedClassMap.get(el);
+    if (prev) syncOwnClasses(el, prev);
+    return;
+  }
 
   const structuredClasses = `${DISPLAY_CLASS}${input.sizeClass ? ` ${input.sizeClass}` : ''}`;
 

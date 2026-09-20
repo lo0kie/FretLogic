@@ -69,7 +69,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import { NOTE_DISPLAY } from '../constants';
+import { NOTE_DISPLAY } from '@/domains/fretboard/constants';
 
 const {
   x,

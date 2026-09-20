@@ -28,6 +28,14 @@ import type { ChordStrumOptions } from './synthEngine';
 import type { Chord } from '@/domains/chord/types';
 import type { ScoreChordStep } from '@/domains/score/model/chordSlots';
 
+// 本模块是懒加载实现（仅由 useAudioPlayer 动态 import），求值必然晚于 app.use(pinia)，
+// 故 store 引用在模块加载时取一次即可复用（同 textTransferActions.ts 写法）；每次扫弦都要
+// 读一次配置，原先反复 useSettingsStore() 属于重复解析同一份引用。
+// 只缓存 store 本身、不往下缓存 settingsStore.audioPlayback：后者是 useStorage 的 ref，
+// 值会被外部存储事件整体替换，取早了会读到 stale 对象，故仍在每次调用时读属性。
+const settingsStore = useSettingsStore();
+const editorStore = useChordEditorStore();
+
 let playTimer: ReturnType<typeof setTimeout> | null = null;
 let scorePlaybackTimer: ReturnType<typeof setTimeout> | null = null;
 /** 待触发的高亮定时器集合：一个 tick 可排程多步，每步各自持有 timer，不能互相顶掉 */
@@ -61,7 +69,7 @@ const stepDurationSec = (): number => (60 / activeBpm) * activeBeatsPerChord;
 
 /** 从 store 当前值组装扫弦可调参数（音色与音量经 syncEngineToneSettings 同步到引擎） */
 const buildStrumOptions = (): ChordStrumOptions => {
-  const playback = useSettingsStore().audioPlayback;
+  const playback = settingsStore.audioPlayback;
   return {
     delayStep: playback.strumDelayMs / 1000,
     direction: playback.strumDirection,
@@ -74,7 +82,7 @@ const buildStrumOptions = (): ChordStrumOptions => {
 
 /** 引擎就绪后同步音色与音量到合成器（幂等，值未变化时引擎内部跳过） */
 const syncEngineToneSettings = () => {
-  const playback = useSettingsStore().audioPlayback;
+  const playback = settingsStore.audioPlayback;
   applyTimbre(playback.timbre);
   setSynthVolume(playback.volumeDb);
   setReverbWet(playback.reverbWet / 100);
@@ -121,7 +129,7 @@ export const playCurrentChord = async () => {
   // 不做 isPlaying 早退：释放尾窗口内的重复点击应立即重新扫弦（开头会先释放旧音，不会叠音），
   // 否则点击会被保护窗口静默吞掉，表现为「要点两下才播放」
   isPlaying.value = true;
-  await strumOnce(useChordEditorStore().draftChord, '和弦音频引擎调度失败:');
+  await strumOnce(editorStore.draftChord, '和弦音频引擎调度失败:');
 };
 
 // ===== 持续发声（长按试听）：triggerAttack 保持延音，松开后统一释放 =====
@@ -224,6 +232,9 @@ export const startScorePlayback = async (
   }
 ) => {
   if (!sequence || sequence.length === 0) return;
+  // 重入互斥：上一次序进仍在播时直接开新一轮会叠音（两套 lookahead 排程并行），
+  // 先停掉旧会话（含释放旧音、清定时器）再起
+  if (isScorePlaying.value) stopScorePlayback();
   const ready = await ensureAudioReady();
   if (!ready) return;
 

@@ -35,33 +35,50 @@ describe('backup payload migration', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.version).toBe(6);
+    expect(result.payload?.version).toBe(7);
     expect(result.payload?.chords[0].id).toBe('1');
-    expect(result.payload?.chords[0].strings[0]).toEqual([-1, false]);
+    expect(result.payload?.chords[0].strings[0]).toEqual({ fret: -1, preferFlat: false });
     expect(result.payload?.songs[0].playKey).toBe('G');
     expect(result.payload?.songs[0]).not.toHaveProperty('key');
   });
 
-  it('syncSettings 随备份往返：合法字段保留，非法字段丢弃', () => {
+  it('syncSettings 随备份往返：判别联合结构，合法字段保留，非法字段丢弃', () => {
     const base = {
       version: 5,
       groups: [],
       chords: [],
       songs: [],
     };
+    // 新结构（v7 起）：判别联合按 kind 分组
     const result = validateImportExportPayload({
       ...base,
       syncSettings: {
-        syncTarget: 'webdav',
-        webdavServerUrl: 'https://dav.jianguoyun.com/dav/',
-        webdavPassword: 123 as unknown as string, // 非字符串 → 丢弃
+        kind: 'webdav',
+        serverUrl: 'https://dav.jianguoyun.com/dav/',
+        password: 123 as unknown as string, // 非字符串 → 丢弃
         evilField: 'x', // 未知字段 → 丢弃
       },
     });
     expect(result.isValid).toBe(true);
     expect(result.payload?.syncSettings).toEqual({
-      syncTarget: 'webdav',
-      webdavServerUrl: 'https://dav.jianguoyun.com/dav/',
+      kind: 'webdav',
+      serverUrl: 'https://dav.jianguoyun.com/dav/',
+    });
+
+    // 旧扁平形态（v7 前）：{ syncTarget, webdavServerUrl, ... } → 归一化为判别联合
+    const legacyNormalized = validateImportExportPayload({
+      ...base,
+      syncSettings: {
+        syncTarget: 'webdav',
+        webdavServerUrl: 'https://dav.jianguoyun.com/dav/',
+        webdavUseProxy: true, // 旧字段名 → 折叠到 useDefaultProxy
+      },
+    });
+    expect(legacyNormalized.isValid).toBe(true);
+    expect(legacyNormalized.payload?.syncSettings).toEqual({
+      kind: 'webdav',
+      serverUrl: 'https://dav.jianguoyun.com/dav/',
+      useDefaultProxy: true,
     });
 
     // 完全损坏的 syncSettings → 整体丢弃，不影响导入

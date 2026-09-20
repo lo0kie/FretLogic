@@ -11,8 +11,13 @@ import { useChordStore } from '@/domains/chord/store/chordStore';
 import { toChordId } from '@/domains/chord/theory/entityFactories';
 import { areChordsEnharmonicallyEquivalent, getChordName, transposeChordEntity } from '@/domains/chord/theory/theory';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import { garbageCollectChordMap, parseSlotKey, shiftCharSlotsForEditedLines } from '@/domains/score/model/chordSlots';
-import { matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
+import {
+  garbageCollectChordMap,
+  getEdgeChords,
+  parseSlotKey,
+  shiftCharSlotsForEditedLines,
+} from '@/domains/score/model/chordSlots';
+import { lineCharChord, matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
 import { useStorage } from '@/platform/composables/useStorage';
 import { kvRemove, kvSet } from '@/platform/services/storage/idbKv';
 import { generateUUID } from '@/platform/utils/common';
@@ -20,8 +25,8 @@ import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import { useScoreHistory } from './useScoreHistory';
 
-import type { Chord } from '@/domains/chord/types';
-import type { SlotKey, Song } from '@/domains/score/types';
+import type { Chord, ChordId } from '@/domains/chord/types';
+import type { ChordLineSlots, LineId, SlotKey, Song } from '@/domains/score/types';
 
 /** 百分制缩放值序列化器：读取时迁移旧版倍率（0.6~1.5）为百分制（60~150），写回按百分制原样存储 */
 const percentScaleSerializer = {
@@ -37,7 +42,7 @@ const percentScaleSerializer = {
 export type ScoreActiveTab = 'edit' | 'interactive' | 'preview';
 
 /**
- * updateLyrics 的结果反馈。store 层不直接弹 toast（domain 层不反向依赖 UI 状态），
+ * updateLyrics 的结果反馈。store 层不直接弹 message（domain 层不反向依赖 UI 状态），
  * 由调用方按此决定是否提示用户。
  */
 export interface UpdateLyricsResult {
@@ -168,7 +173,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     songStore.updateSongMeta(target.id, {
       lyrics: sanitizedLyrics,
       lineIds: newIds,
-      chordMap: chordMapChanged ? collectedChordMap : target.chordMap,
+      chordMap: chordMapChanged ? (collectedChordMap as Map<LineId, ChordLineSlots>) : target.chordMap,
     });
     if (activeSong.value?.id === target.id) recordHistory();
     if (activeSong.value?.id === target.id && !sanitizedLyrics.trim()) {
@@ -196,6 +201,15 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   /** 拖拽来源是 DOM data-slot-key（不可信边界）：必须能被 parseSlotKey 完整解析才收窄为 SlotKey
    *  （原实现只判 `line_` 前缀，畸形键如 `line_foo_bar` 会被放行到 store 层；与槽位解析共用同一套判据） */
   const isSlotKey = (value: string): value is SlotKey => parseSlotKey(value) !== null;
+
+  /** 只读探测某槽位当前绑定的和弦 id（复制/移位读取源槽位用） */
+  const peekSlotChord = (song: Song, slotKey: string): ChordId | null => {
+    const parsed = parseSlotKey(slotKey);
+    if (!parsed) return null;
+    if (parsed.type === 'char') return lineCharChord(song.chordMap, parsed.lineId, parsed.index);
+    return getEdgeChords(song.chordMap, parsed.lineId, parsed.type)[parsed.index] ?? null;
+  };
+
   /** 交换两个槽位的和弦绑定（拖拽互换），并记录撤销历史。 */
   const swapSlotChords = (sourceKey: string, targetKey: string) => {
     if (!activeSong.value || sourceKey === targetKey) return;
@@ -209,7 +223,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const copySlotChord = (sourceKey: string, targetKey: string) => {
     if (!activeSong.value || sourceKey === targetKey) return;
     if (!isSlotKey(sourceKey) || !isSlotKey(targetKey)) return;
-    const sourceChordId = activeSong.value.chordMap.get(sourceKey);
+    const sourceChordId = peekSlotChord(activeSong.value, sourceKey);
     if (!sourceChordId) return;
     recordHistory();
     songStore.setCharChord(activeSong.value.id, targetKey, sourceChordId);
@@ -220,7 +234,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const moveSlotChord = (sourceKey: string, targetKey: string) => {
     if (!activeSong.value || sourceKey === targetKey) return;
     if (!isSlotKey(sourceKey) || !isSlotKey(targetKey)) return;
-    const sourceChordId = activeSong.value.chordMap.get(sourceKey);
+    const sourceChordId = peekSlotChord(activeSong.value, sourceKey);
     if (!sourceChordId) return;
     recordHistory();
     songStore.setCharChord(activeSong.value.id, targetKey, sourceChordId);
@@ -283,6 +297,8 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     arrangeFretboardScale,
     effectiveFontScale,
     effectiveFretboardScale,
+    // 供编辑域外的合法变更入口（如「清空乐谱和弦」弹窗）在同一套撤销栈上记录历史
+    recordHistory,
     undo,
     redo,
   };

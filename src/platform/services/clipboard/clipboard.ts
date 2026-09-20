@@ -13,7 +13,7 @@ const withCause = (message: string, cause: unknown): Error => {
 /** 把剪贴板权限/安全类错误映射为中文引导提示 */
 const clipboardErrorHint = (err: unknown): string => {
   if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
-    return '剪贴板权限被拒绝，请在浏览器设置中允许，或改用 Ctrl+C / Ctrl+V';
+    return '剪贴板权限被拒绝，请在浏览器设置中允许';
   }
   return err instanceof Error ? err.message : '未知错误';
 };
@@ -93,8 +93,11 @@ const reencodeAsPngInWorker = (blob: Blob): Promise<Blob> =>
  *
  * 优先走转码 Worker（见 reencodeAsPngInWorker）：解码与编码都在后台线程，主线程零阻塞。
  * Worker 不可用（创建失败/超时/转码异常）时退回主线程 OffscreenCanvas——慢但能出结果。
+ *
+ * 对外导出：长图这类大产物每次复制都转码一遍代价过高（解码 + 重绘 + 重编码整张图），
+ * 调用方可自行缓存转码结果（见 scoreExportHandlers 的长图单槽缓存）。
  */
-const reencodeAsPng = async (blob: Blob): Promise<Blob> => {
+export const reencodeAsPng = async (blob: Blob): Promise<Blob> => {
   try {
     return await reencodeAsPngInWorker(blob);
   } catch {

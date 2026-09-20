@@ -27,6 +27,7 @@
     </div>
 
     <input
+      v-bind="inputAttrs"
       :autocomplete
       :disabled
       :id
@@ -55,8 +56,8 @@
       @compositionstart="handleCompositionStart()"
       @focus="handleFocus($event)"
       @input="handleInput($event)"
-      @keydown="handleKeydown($event)"
-      @keyup.enter="$emit('enter')"
+      @keydown="wrappedKeydown($event)"
+      @keyup.enter="handleEnterKeyup()"
       data-focusable-inline
       class="w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid bg-surface-body font-[inherit] font-medium text-ellipsis text-fg-title caret-primary transition-all duration-fast outline-none placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus-visible:ring-2 focus:enabled:bg-surface-body disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45 disabled:select-none"
       data-1p-ignore="true"
@@ -174,6 +175,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  useAttrs,
   useId,
   useSlots,
   useTemplateRef,
@@ -195,6 +197,9 @@ import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 
+// P1 审计 N 系：根 div 未关 inheritAttrs 时透传 attrs（aria-label 等）落在 generic 节点，
+// 对 AT 不可见；改为显式转发到 <input>（class/style 仍留根节点保持视觉语义不变）
+defineOptions({ inheritAttrs: false });
 const modelValue = defineModel<string>({ required: true });
 const {
   placeholder = '请输入...',
@@ -287,6 +292,11 @@ const emit = defineEmits<{
   /** 搜索模式：通过键盘回车选中某个下标项时派发 */
   (e: 'select-search-index', index: number): void;
 }>();
+const attrs = useAttrs();
+const inputAttrs = computed(() => {
+  const { class: _cls, style: _style, ...rest } = attrs;
+  return rest;
+});
 const id = useId();
 const slots = useSlots();
 /** 尺寸解析：行内 props > BaseForm 注入上下文 > 默认 md */
@@ -343,6 +353,20 @@ const {
 const handleInputClick = (e: MouseEvent) => {
   openResults();
   emit('click', e);
+};
+
+/** searchable 面板的 keydown 已把 Enter 用于选中活跃项时，keyup 不再派发 enter（避免一键两事） */
+let searchEnterConsumed = false;
+const wrappedKeydown = (e: KeyboardEvent) => {
+  searchEnterConsumed = e.key === 'Enter' && searchable && resultsOpen.value && searchActiveIndex.value >= 0;
+  handleKeydown(e);
+};
+const handleEnterKeyup = () => {
+  if (searchEnterConsumed) {
+    searchEnterConsumed = false;
+    return;
+  }
+  emit('enter');
 };
 
 watch(localValue, () => {

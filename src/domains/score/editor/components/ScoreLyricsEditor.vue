@@ -23,7 +23,7 @@ import { useUiStore } from '@/platform/store/uiStore';
 defineOptions({ name: 'ScoreLyricsEditor' });
 
 const MAX_LINE_LENGTH = 100;
-/** 超长截断提示的节流间隔：连续输入超长文本时每次按键都会触发截断，逐次提示会刷爆 toast */
+/** 超长截断提示的节流间隔：连续输入超长文本时每次按键都会触发截断，逐次提示会刷爆 message */
 const CLAMP_WARN_INTERVAL = 3000;
 
 const scoreEditor = useScoreEditorStore();
@@ -67,7 +67,7 @@ const commitLyrics = useDebounceFn((songId: string, value: string) => {
   const result = scoreEditor.updateLyrics(value, songId);
   // 未匹配行数超阈值时整行会拿到新 id、原有和弦被回收（大段粘贴场景），静默丢和弦不可接受
   if (result.skippedSimilarMatch) {
-    uiStore.toast.warning('大段歌词未能与原有行对齐，相关行的和弦已一并清除', {
+    uiStore.message.warning('大段歌词未能与原有行对齐，相关行的和弦已一并清除', {
       description: '可立即撤销恢复，或分批粘贴以保留原有和弦。',
     });
   }
@@ -81,7 +81,7 @@ watch(localLyrics, value => {
     const now = Date.now();
     if (now - lastClampWarnAt > CLAMP_WARN_INTERVAL) {
       lastClampWarnAt = now;
-      uiStore.toast.warning(`单行歌词最多 ${MAX_LINE_LENGTH} 个字符，超出的部分已截断`);
+      uiStore.message.warning(`单行歌词最多 ${MAX_LINE_LENGTH} 个字符，超出的部分已截断`);
     }
     return;
   }
@@ -115,7 +115,14 @@ const flushLyrics = () => {
   // 无未提交编辑、或 store 已被外部改动（不再是基线）时，丢弃本地陈旧文本，不覆盖。
   if (!dirty.value || current === undefined || current !== baseline.value) return;
   if (localLyrics.value === current) return;
-  scoreEditor.updateLyrics(localLyrics.value, boundSongId);
+  const result = scoreEditor.updateLyrics(localLyrics.value, boundSongId);
+  // 与防抖提交同口径：skippedSimilarMatch 不能吞掉，否则同一次编辑在「切 tab」与
+  // 「原地输入」两条路径下结局不同（一个有警告可撤销、一个静默丢和弦）
+  if (result.skippedSimilarMatch) {
+    uiStore.message.warning('大段歌词未能与原有行对齐，相关行的和弦已一并清除', {
+      description: '可立即撤销恢复，或分批粘贴以保留原有和弦。',
+    });
+  }
 };
 
 onDeactivated(flushLyrics);

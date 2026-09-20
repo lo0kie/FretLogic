@@ -316,6 +316,8 @@ const handleEscape = useOverlayEscape({
 const { overlayZ, handleAfterLeave } = useOverlayLifecycle({
   visible,
   overlayRef,
+  // 初始焦点落在对话框卡片（带 tabindex="-1"）而非外层遮罩容器：后者不可聚焦，focus() 无效
+  panelRef: modalCardRef,
   onEscape: handleEscape,
   locksBody: () => true,
   onAfterLeave: () => emit('closed'),

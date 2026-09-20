@@ -39,31 +39,73 @@ export async function buildBackupPayloadResult(options?: BuildBackupOptions): Pr
   const songStore = useSongStore();
   const settingsStore = useSettingsStore();
 
-  const groups = selection.chords ? chordStore.groups : [];
-  const chords = selection.chords ? chordStore.savedChordsList : [];
+  const baseChords = selection.chords ? chordStore.savedChordsList : [];
   const songs = selection.songs ? songStore.songs : [];
-
-  const syncSettings: SyncSettingsBackup | undefined = selection.syncSettings
-    ? {
-        syncTarget: settingsStore.syncTarget,
-        githubToken: settingsStore.githubToken,
-        githubOwner: settingsStore.githubOwner,
-        githubRepo: settingsStore.githubRepo,
-        githubBranch: settingsStore.githubBranch,
-        githubPath: settingsStore.githubPath,
-        giteeToken: settingsStore.giteeToken,
-        giteeOwner: settingsStore.giteeOwner,
-        giteeRepo: settingsStore.giteeRepo,
-        giteeBranch: settingsStore.giteeBranch,
-        giteePath: settingsStore.giteePath,
-        webdavServerUrl: settingsStore.webdavServerUrl,
-        webdavUsername: settingsStore.webdavUsername,
-        webdavPassword: settingsStore.webdavPassword,
-        webdavUseDefaultProxy: settingsStore.webdavUseDefaultProxy,
-        webdavProxyUrl: settingsStore.webdavProxyUrl,
-        serverUrl: settingsStore.serverUrl,
-        serverToken: settingsStore.serverToken,
+  // 导出乐谱时必须连带其引用的和弦：即便未勾选「和弦」，歌曲 chordMap 引用的和弦也应一并导出，
+  // 否则导入端 pruneOrphanChordRefs 会把悬空引用剪光，乐谱变成无和弦空壳（D14）
+  let chords = baseChords;
+  if (selection.songs && !selection.chords) {
+    const referencedIds = new Set<string>();
+    for (const song of songs) {
+      for (const slots of song.chordMap.values()) {
+        for (const id of [...slots.char.values(), ...slots.start, ...slots.end]) {
+          if (id) referencedIds.add(id);
+        }
       }
+    }
+    const existingIds = new Set(baseChords.map(c => c.id));
+    const referenced = chordStore.savedChordsList.filter(c => referencedIds.has(c.id) && !existingIds.has(c.id));
+    chords = [...baseChords, ...referenced];
+  }
+  // N1：补进的被引用和弦不能悬空——其所属分组必须连带导出，否则导出路径自身的
+  // 孤儿清洗（validateImportExportPayload → pruneOrphanChordRefs）会把它们全部剪掉，
+  // D14 的修复空转，产物仍是「无和弦空壳」
+  let groups = selection.chords ? chordStore.groups : [];
+  if (selection.songs && !selection.chords) {
+    const neededGroupIds = new Set(chords.map(c => c.groupId));
+    const referencedGroups = chordStore.groups.filter(g => neededGroupIds.has(g.id));
+    if (referencedGroups.length > 0) groups = referencedGroups;
+  }
+
+  // 同步配置按当前 syncTarget 组装为判别联合的对应分支
+  const syncSettings: SyncSettingsBackup | undefined = selection.syncSettings
+    ? (() => {
+        switch (settingsStore.syncTarget) {
+          case 'github':
+            return {
+              kind: 'github',
+              token: settingsStore.githubToken,
+              owner: settingsStore.githubOwner,
+              repo: settingsStore.githubRepo,
+              branch: settingsStore.githubBranch,
+              path: settingsStore.githubPath,
+            } satisfies SyncSettingsBackup;
+          case 'gitee':
+            return {
+              kind: 'gitee',
+              token: settingsStore.giteeToken,
+              owner: settingsStore.giteeOwner,
+              repo: settingsStore.giteeRepo,
+              branch: settingsStore.giteeBranch,
+              path: settingsStore.giteePath,
+            } satisfies SyncSettingsBackup;
+          case 'webdav':
+            return {
+              kind: 'webdav',
+              serverUrl: settingsStore.webdavServerUrl,
+              username: settingsStore.webdavUsername,
+              password: settingsStore.webdavPassword,
+              useDefaultProxy: settingsStore.webdavUseDefaultProxy,
+              proxyUrl: settingsStore.webdavProxyUrl,
+            } satisfies SyncSettingsBackup;
+          case 'server':
+            return {
+              kind: 'server',
+              serverUrl: settingsStore.serverUrl,
+              token: settingsStore.serverToken,
+            } satisfies SyncSettingsBackup;
+        }
+      })()
     : undefined;
 
   // 偏好设置不含凭据，本地导出与云端推送均携带（v6 起）

@@ -1,9 +1,12 @@
-import { CHORD_QUALITIES, GroupSortRule } from '@/domains/chord/types';
+import { GroupSortRule } from '@/domains/chord/types';
 import { estimateValueBytes } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
 
 import { analyzeBestRootPitch } from './chordEngine.ts';
+import { isHalfDiminished, QUALITY_TOKENS, qualityKindOfAst } from './chordQualityAst';
+import { findTokenByAst, parseQualityText, renderQualityAst } from './chordQualityAstParse';
 
+import type { ChordQualityAst } from './chordQualityAst';
 import type {
   AccidentalType,
   Chord,
@@ -218,11 +221,11 @@ const ACCIDENTAL_PITCH = Object.freeze([false, true, false, true, false, false, 
 const isChordToneRelative = (rel: number) => rel === 0 || rel === 3 || rel === 4 || rel === 7;
 
 /** 判断弦是否为静音态（品位 -1）。 */
-export const isMuted = (s: GuitarStringEntity) => s[0] === -1;
+export const isMuted = (s: GuitarStringEntity) => s.fret === -1;
 /** 判断弦是否为空弦态（品位 0）。 */
-export const isOpen = (s: GuitarStringEntity) => s[0] === 0;
-/** 创建默认琴弦元组：[-1（静音）, false（升号偏好）] */
-export const createString = (): GuitarStringEntity => [-1, false];
+export const isOpen = (s: GuitarStringEntity) => s.fret === 0;
+/** 创建默认琴弦实体：{ fret: -1（静音）, preferFlat: false（升号偏好） } */
+export const createString = (): GuitarStringEntity => ({ fret: -1, preferFlat: false });
 
 // 自然字母（不含升降号），按 preferFlat 选择拼写对应的基础字母
 const NATURAL_LETTER_SHARP = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
@@ -367,6 +370,14 @@ export interface ParsedChordName {
   hasBass: boolean;
   /** 斜杠后的后缀（和弦性质，如 m7/6/sus4） */
   suffix: string;
+  /**
+   * 已识别的标准性质（来自 nameToSegments 的 token 表写法）；无性质/未知性质时为 undefined。
+   *
+   * 类型是 `string` 而非旧枚举联合 —— 值域真相源已从手抄的 `CHORD_QUALITIES`
+   * 迁到 `QUALITY_TOKENS`，后者刻意收录了枚举里没有的同义写法（`min7b5` / `7#5` /
+   * `Maj7(b5)` …），把它们排除在外正是「能输入却判非法」的来源。
+   */
+  quality?: string;
 }
 
 /**
@@ -455,34 +466,55 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
 
   const rest = remaining.trim();
 
-  // 提取 extensions / tensions，例如 (#9), #9, b5, #11, b13, b9 等
+  // 性质与张力音的切分（D10-A：以 AST token 表为 SSOT，不再用正则剥离张力音）。
+  //
+  // 半减七（m7b5 / m7(b5) / m7♭5 / ø7 …）是**一个完整的整质量**，整体保留为 'm7b5'——
+  // 它的 b5 与真实张力音语法同形，若走「剥离张力」逻辑会被剥成 'm7' + b5 扩展音，
+  // 使 CHORD_QUALITIES 里的 'm7b5' 成为自动解析永远产不出的死枚举。故先判 AST 是否为半减七。
+  //
+  // 其余写法一律取 AST 结果：整词命中（7b5 / 7#9 / 7(b9) / mb5 / no3 …）→ quality 即该 token 的
+  // 标准写法（括号收敛、同义词取首选），不产生 extensions；组合写作（maj7#9 / sus4add9#11 …）→
+  // 基础写法作 quality，张力音落 extensions。旧持久化形态（quality:'7' + extensions:[[9,1]]）
+  // 由 normalizeChord 一次性迁移。
+  const nameAst = parseQualityText(rest);
+  // 下面三个分支（半减七 / 已识别 / 未识别）互斥且穷尽，quality 必被赋值——
+  // 故不写初始值（写了也是死赋值，触发 eslint no-useless-assignment）
+  let quality: string;
   const extensions: ExtensionSegment[] = [];
-  const tensionRegex = /\(?([#b♯♭])([0-9]+)\)?/g;
-  let tMatch: RegExpExecArray | null;
-  const matchedTensionRanges: [number, number][] = [];
 
-  while ((tMatch = tensionRegex.exec(rest)) !== null) {
-    const accChar = tMatch[1];
-    const deg = parseInt(tMatch[2]!, 10);
-    const acc: AccidentalType = accChar === '#' || accChar === '♯' ? 1 : accChar === 'b' || accChar === '♭' ? -1 : 0;
-    extensions.push([deg, acc]);
-    matchedTensionRanges.push([tMatch.index, tMatch.index + tMatch[0].length]);
-  }
-
-  let quality = rest;
-  if (extensions.length > 0) {
-    for (let i = matchedTensionRanges.length - 1; i >= 0; i--) {
-      const [start, end] = matchedTensionRanges[i]!;
-      quality = quality.slice(0, start) + quality.slice(end);
+  if (isHalfDiminished(nameAst.ast)) {
+    // 半减七：整体输出 'm7b5'，尾随扩展音（如 m7b5(b9)）照常单列
+    quality = 'm7b5';
+    for (const ext of nameAst.trailing) {
+      extensions.push([Number(ext.degree), ext.accidental]);
     }
-    quality = quality.trim();
+  } else if (nameAst.recognized) {
+    // 取 AST 整词 quality（与半减七分支同源），不再手写正则剥离张力音（D10-A）：
+    // - 整词命中（7#9 / 7b5 / 7b9 / 7#11 / no3 …）→ 经 renderQualityAst 归一到标准写法
+    //   （括号收敛为无括号、同义写法取首选拼写），trailing 为空、不产生 extensions；
+    // - 组合写作（maj7#9 / sus4add9#11 …）→ spelling 即基础写法，张力音在 trailing 单独列出。
+    // 空性质串（裸三和弦 C）保持 quality=''。
+    quality =
+      nameAst.spelling === ''
+        ? ''
+        : nameAst.tokenId !== undefined
+          ? renderQualityAst(nameAst.ast, { tokenId: nameAst.tokenId, spelling: nameAst.spelling })
+          : nameAst.spelling;
+    for (const ext of nameAst.trailing) {
+      extensions.push([Number(ext.degree), ext.accidental]);
+    }
+  } else {
+    // 性质无法识别：保留原始文本，落 unknownQuality 兜底（与旧行为一致，isValidChordName 据此判非法）
+    quality = rest;
   }
 
   const result: ChordNameSegments = {
     root,
+    // 已知性质收窄为 ChordQuality；未知残余降级落 unknownQuality（仅展示兜底）。
+    // 张力整词（7#9 / 7b5 / no3 …）不在 KNOWN_QUALITIES 白名单里，但已被 AST 识别（recognized），
+    // 属合法性质，一并收作 quality —— 否则会落入 unknownQuality，isValidChordName 据此误判为非法（D10-A）。
     ...(quality
-      ? // 已知性质收窄为 ChordQuality；未知残余降级落 unknownQuality（仅展示兜底）
-        KNOWN_QUALITIES_SET.has(quality.toLowerCase())
+      ? KNOWN_QUALITIES_SET.has(quality.toLowerCase()) || nameAst.recognized
         ? { quality: quality as ChordNameSegments['quality'] }
         : { unknownQuality: quality }
       : {}),
@@ -493,17 +525,158 @@ export const nameToSegments = (chordName: string): ChordNameSegments | null => {
   return result;
 };
 
-/** 已知的标准乐理和弦性质集合（值域真相源在 types/chord.ts 的 CHORD_QUALITIES，此处附空串并保持 string 形态供小写比对） */
-export const KNOWN_QUALITIES: string[] = ['', ...CHORD_QUALITIES];
+/**
+ * 已知的标准乐理和弦性质写法集合（供 UI / 文档列举用）。
+ *
+ * 注意：**校验路径已不再使用它**。合法性的判据是「解析器能否识别」
+ * （见 `nameToSegments` 与 `isValidChordName`），因为合法写法是**可组合**的——
+ * `sus4add9` 由 `sus4` 拼上 `add9` 生成，不可能被任何有限清单枚举完整。
+ * 本常量保留用于「有哪些标准写法」这类列举场景，值域真相源是 `QUALITY_TOKENS`。
+ */
+export const KNOWN_QUALITIES: string[] = [
+  '',
+  'm',
+  'min',
+  '-',
+  'maj',
+  'Maj',
+  'M',
+  'Δ',
+  '7',
+  'maj7',
+  'Maj7',
+  'M7',
+  'Δ7',
+  'm7',
+  'min7',
+  '-7',
+  'dim',
+  'dim7',
+  '°',
+  '°7',
+  'aug',
+  'aug7',
+  '+',
+  '+7',
+  'sus',
+  'sus4',
+  'sus2',
+  '7sus4',
+  '7sus2',
+  '7sus',
+  '9sus4',
+  '9sus2',
+  '9sus',
+  '11sus4',
+  '11sus2',
+  '11sus',
+  '13sus4',
+  '13sus2',
+  '13sus',
+  '5',
+  '6',
+  'm6',
+  'min6',
+  '-6',
+  '6/9',
+  '69',
+  'm6/9',
+  'm69',
+  'min6/9',
+  'add9',
+  'add2',
+  'add4',
+  'add11',
+  'add13',
+  'madd9',
+  'madd11',
+  'madd13',
+  'madd4',
+  'madd2',
+  '9',
+  'm9',
+  'min9',
+  '-9',
+  'maj9',
+  'Maj9',
+  'M9',
+  'Δ9',
+  '11',
+  'm11',
+  'min11',
+  '-11',
+  'maj11',
+  'Maj11',
+  'M11',
+  'Δ11',
+  '13',
+  'm13',
+  'min13',
+  '-13',
+  'maj13',
+  'Maj13',
+  'M13',
+  'Δ13',
+  'm7b5',
+  'm7(b5)',
+  'ø',
+  'ø7',
+  'mMaj7',
+  'mmaj7',
+  'mM7',
+  'mΔ7',
+  '-M7',
+  '-Δ7',
+  'mMaj9',
+  'mmaj9',
+  'mM9',
+  'mΔ9',
+  '-M9',
+  '-Δ9',
+  'mMaj11',
+  'mmaj11',
+  'mM11',
+  'mΔ11',
+  '-M11',
+  '-Δ11',
+  'mMaj13',
+  'mmaj13',
+  'mM13',
+  'mΔ13',
+  '-M13',
+  '-Δ13',
+  'dimMaj7',
+  'dimmaj7',
+  '°M7',
+  '°Δ7',
+  'augMaj7',
+  'augmaj7',
+  '+M7',
+  '+Δ7',
+  'alt',
+  '7alt',
+  'no3',
+  '(no3)',
+  'no5',
+  '(no5)',
+];
 
 const KNOWN_QUALITIES_SET = new Set(KNOWN_QUALITIES.map(q => q.toLowerCase()));
 
 /**
- * 校验和弦名称是否在乐理与语法上合法：
+ * 校验和弦名称是否在乐理与语法上合法。
+ *
+ * **判据已定为「解析器能否识别」，而非「写法是否在清单内」**（此为本轮明确裁决的语义）：
  * 1. 必须能解析出有效的根音（A~G，可选升降号）
- * 2. 和弦性质必须符合通用乐理词汇体系
+ * 2. 性质必须被性质解析器识别；识别失败落 `unknownQuality`，即判非法
  * 3. 变化/扩展音度数必须在合理范围（2~13）
- * 4. 斜杠低音必须有效
+ * 4. 斜杠低音必须有效（解析器已校验，解析不出即不会写入 bass）
+ *
+ * 为什么不再用写法白名单：合法写法是**可组合**的（`sus4` + `add9` = `sus4add9`、
+ * `7` + `b13` = `7b13`），有限清单无法覆盖可生成的语言。白名单方案的实测后果是
+ * `Esus4add9` / `Cmin7b5` / `C7#5` 这类**解析器明明能完整解析**的名字被判成非法 ——
+ * 「能输入、却存不下」。放宽后这类名字可正常保存；代价是保存门槛略降，
+ * 即接受所有解析器认识的性质写法。
  */
 export const isValidChordName = (chordName: string): boolean => {
   if (!chordName || typeof chordName !== 'string') return false;
@@ -513,7 +686,7 @@ export const isValidChordName = (chordName: string): boolean => {
   const segments = nameToSegments(trimmed);
   if (!segments || !segments.root) return false;
 
-  // quality 已由解析器收窄为已知集合；出现 unknownQuality 说明性质不在已知值域内
+  // 出现 unknownQuality 即性质未被解析器识别（合法性质一律落 quality 字段）
   if (segments.unknownQuality) {
     return false;
   }
@@ -527,7 +700,16 @@ export const isValidChordName = (chordName: string): boolean => {
   return true;
 };
 
-/** 和弦性质简写/符号映射（如 maj7 -> M7, dim -> °, aug -> +, dimMaj7 -> °M7） */
+/**
+ * 和弦性质简写/符号映射（如 maj7 -> M7, dim -> °, aug -> +, dimMaj7 -> °M7）。
+ *
+ * ⚠️ 这是**遗留的按字符串**映射表。展示层的简写渲染已统一到 `toShorthandQuality`
+ * （按 token 表的配方收敛，`min`/`-`/`Δ7` 等未被本表列出的写法也能正确简写）。
+ * 本表保留有两个用途：① `toShorthandQuality` 对**未识别**性质的回退；
+ * ② 既有单测（`tests/domain/chordSegments.test.ts`）锁定了它的输出。
+ * 注意本表 `maj` → `M` 与 AST 路径的 `major` → `''`（大三和弦简写即裸音名）并不一致，
+ * 但差异只在**已识别**性质上、而该分支已由 AST 路径接管，故不影响实际显示。
+ */
 export const SHORTHAND_QUALITY_MAP: Record<string, string> = {
   'maj7': 'M7',
   'maj9': 'M9',
@@ -573,6 +755,28 @@ export const formatChordQuality = (quality?: string, shorthand = false): string 
   return SHORTHAND_QUALITY_MAP[quality] ?? SHORTHAND_QUALITY_MAP[quality.toLowerCase()] ?? quality;
 };
 
+/**
+ * 性质串 → 简写写法。**简写渲染的唯一实现**。
+ *
+ * `segmentsToString` 与 `vChordName` 都调它，避免出现「两套独立事实源」——
+ * 那正是本次重构要消灭的问题：旧实现在两处各自维护一份简写逻辑，
+ * 一处查 `SHORTHAND_QUALITY_MAP`，另一处还要额外特判 `m7` + `b5` → `ø7`。
+ *
+ * 主路径走 AST 渲染（与解析共用同一张 token 表）：
+ * `min` / `min7` / `-7` 命中的都是同一个 token，自然收敛到同一简写；
+ * 未识别的性质才回落旧映射表，保证未知输入原样透传。
+ */
+export const toShorthandQuality = (quality: string): string => {
+  if (!quality) return '';
+  const ast = parseQualityText(quality);
+  if (!ast.recognized) return formatChordQuality(quality, true);
+  return renderQualityAst(ast.ast, {
+    shorthand: true,
+    ...(ast.tokenId ? { tokenId: ast.tokenId } : {}),
+    ...(ast.spelling !== undefined ? { spelling: ast.spelling } : {}),
+  });
+};
+
 /** 将分片结构还原为标准和弦字符串 */
 export const segmentsToString = (
   segments: ChordNameSegments,
@@ -585,7 +789,11 @@ export const segmentsToString = (
   let quality = segments.quality ?? segments.unknownQuality ?? '';
   let extensions = segments.extensions ?? [];
 
+  // 简写渲染：走写法映射表 `SHORTHAND_QUALITY_MAP`（与 `formatChordQuality` 同源），
+  // 覆盖 maj→M、m7b5→ø7 等显式简写约定。
   if (shorthand) {
+    // 半减七特判：quality 为 'm' / 'm7' 且带 b5 扩展音时（如结构化的 F#m7b5/A），
+    // 应整体渲染为 'ø7' 并消费掉该 b5 扩展音，否则会拼成 'm7b5'（F♯m7b5/A）。
     const b5Idx = extensions.findIndex(([deg, acc]) => (deg === 5 || deg === '5') && acc === -1);
     if ((quality === 'm7' || quality === 'm') && b5Idx >= 0) {
       quality = 'ø7';
@@ -594,6 +802,10 @@ export const segmentsToString = (
       quality = formatChordQuality(quality, true);
     }
   }
+
+  // 整词 quality 自带变音（7#9 / 7b5 / m7b5 …）：偏好 unicode 时与扩展音同口径渲染为 ♯/♭，
+  // 否则张力整词会在 unicode 显示下漏出 ASCII #/b（D10-A 整词化后的必要对齐）。
+  if (useUnicode) quality = quality.replace(/#/g, '♯').replace(/b/g, '♭');
 
   const extsStr = extensions
     .map(([deg, acc]) => {
@@ -783,6 +995,7 @@ export const parseChordName = (chordName: string): ParsedChordName => {
     bassPitch,
     hasBass,
     suffix,
+    quality: segs.quality,
   };
 
   parsedChordNameCache.set(key, result);
@@ -813,16 +1026,20 @@ export const collectChordNotes = (
   let bassPitch = -1;
   for (let sIdx = 0; sIdx < strings.length; sIdx++) {
     const str = strings[sIdx];
-    if (!str || str[0] < 0) continue;
-    const pitch = calcPitchIndex(sIdx, str[0], fretOffset, baseStrings);
+    if (!str || str.fret < 0) continue;
+    const pitch = calcPitchIndex(sIdx, str.fret, fretOffset, baseStrings);
     const { label: naturalLabel, isAccidental } = computeStringLabelAccidental(
       sIdx,
-      str[0],
+      str.fret,
       fretOffset,
-      str[1],
+      str.preferFlat,
       baseStrings
     );
-    notes.push({ stringIndex: sIdx, pitchIndex: pitch, label: composeNoteLabel(naturalLabel, isAccidental, str[1]) });
+    notes.push({
+      stringIndex: sIdx,
+      pitchIndex: pitch,
+      label: composeNoteLabel(naturalLabel, isAccidental, str.preferFlat),
+    });
     if (bassPitch === -1) bassPitch = pitch;
   }
   return { notes, bassPitch };
@@ -848,8 +1065,8 @@ export const resolveChordRootPitch = (
   // 1. 手动标记优先
   if (rootStringIndex !== null && rootStringIndex >= 0 && rootStringIndex < strings.length) {
     const markedStr = strings[rootStringIndex];
-    if (markedStr && markedStr[0] >= 0) {
-      return calcPitchIndex(rootStringIndex, markedStr[0], fretOffset, baseStrings);
+    if (markedStr && markedStr.fret >= 0) {
+      return calcPitchIndex(rootStringIndex, markedStr.fret, fretOffset, baseStrings);
     }
   }
   // 2. 名字/分片解析
@@ -917,8 +1134,8 @@ const getColorNoteCountAndPitches = (chord: Chord, rootPitch: number) => {
   const strings = chord.strings;
   for (let sIdx = 0; sIdx < strings.length; sIdx++) {
     const str = strings[sIdx];
-    if (str && str[0] >= 0) {
-      const p = calcPitchIndex(sIdx, str[0], chord.fretOffset, baseStrings);
+    if (str && str.fret >= 0) {
+      const p = calcPitchIndex(sIdx, str.fret, chord.fretOffset, baseStrings);
       pitchMask |= 1 << p;
     }
   }
@@ -943,17 +1160,79 @@ const getComplexityRank = (suffix: string): number => {
 };
 
 /**
- * 和弦性质归类：小调类（小三/小七/半减七/减和弦等）归为 0，其余（大三/属七/大七/挂留/加九等）归为 1。
- * 用途：同根音下先按性质聚类，使 Em 与其扩展 Em7 因同属小调类而相邻，属七 E7 排在其后；同类内部再按复杂度排列。
+ * 和弦名的性质 AST 查询（带缓存）。
+ *
+ * 这是本文件里「性质判定」的唯一入口。此前 `isMinorFlavoredQuality` /
+ * `isDimFlavoredQuality` / `qualityKindOf` 三个函数各自对**拼接出来的 suffix 字符串**
+ * 跑正则（`/^(maj|M|Δ)/`、`/^(dim|°|ø|m7b5)/` …），与解析器是两套独立的事实源——
+ * 解析器改一处、这三处不会跟着动，漂移只是时间问题：
+ * `qualityKindOf` 里的 `m7b5` 分支就因为自动解析产不出该枚举而**从未被执行过**，
+ * 半减七一直被误判成普通小调。
+ *
+ * 改为读 AST 后，判据只剩「字段是什么」：
+ * - 减系 = `fifth === 'dim5' || seventh === 'dim7'`（读字段，不读拼写）
+ * - 小调系 = `third === 'min3'`
+ * - 大小调归属 = `third`，与写法完全解耦
+ *
+ * 于是 `C-7` / `Cmin7` / `Cm7` 三种写法必然归为同一类（它们的 AST 相同），
+ * 而 `CM7` 与 `Cm7` 必然分开（AST 的 `third` 与 `seventh` 都不同）。
  */
-const isMinorFlavored = (suffix: string): boolean => {
-  if (!suffix) return false;
-  // 大和弦体系：maj, Maj, M7, M9, M11, M13, Δ 等绝非小调
-  if (/^(maj|M|Δ)/.test(suffix)) return false;
-  // 小调体系：m, min, - 开头（且非 M/maj），减和弦 dim, °, 半减七 ø, ø7, m7b5 等
-  if (/^(m|min|-)/.test(suffix)) return true;
-  if (/^(dim|°|ø|m7b5)/.test(suffix)) return true;
-  return false;
+const astByNameCache = createLruCache<ChordQualityAst | null>(4096, {
+  name: '和弦性质AST',
+  weigh: (_, value) => estimateValueBytes(value),
+});
+
+/**
+ * 由**性质串**取出性质 AST；解析不出时返回 null。
+ *
+ * 入参是性质文本（`m7b5` / `7alt` / `min`），不是完整和弦名 —— 调用点传的都是
+ * `segments.quality`，本就没有根音。故用 `parseQualityText` 而非 `parseChordNameAst`
+ * （后者要求开头是音名，喂性质串会一律判成「无根音」而返回 null）。
+ */
+export const chordQualityAstOfName = (quality: string): ChordQualityAst | null => {
+  if (!quality) return null;
+  const key = toChordNameKey(quality);
+  const cached = astByNameCache.get(key);
+  if (cached !== undefined) return cached;
+  const parsed = parseQualityText(key);
+  const ast = parsed.recognized ? parsed.ast : null;
+  astByNameCache.set(key, ast);
+  return ast;
+};
+
+/**
+ * 小调系判定（小三 / 小七 / 半减 / 减和弦等）。
+ *
+ * 用途：同根音下先按性质聚类，使 Em 与其扩展 Em7 因同属小调类而相邻，属七 E7 排在其后。
+ * 减系也归入此类（旧实现的注释与行为一致：`dim/°/ø` 均返回 true）。
+ */
+const isMinorFlavoredQuality = (quality?: string): boolean => {
+  if (!quality) return false;
+  const ast = chordQualityAstOfName(quality);
+  if (!ast) return false;
+  return ast.third === 'min3' || ast.fifth === 'dim5' || ast.seventh === 'dim7';
+};
+
+/**
+ * 减/半减性质判定。
+ *
+ * 直接读 AST 字段，取代旧实现遍布各处的 `/^(dim|°|ø|m7b5)/` 正则族。
+ * 这条正则不仅要同时列出四种拼写，还漏掉了 `min7b5` / `-7b5` / `ø7` 等变体；
+ * 读字段则天然覆盖全部写法。
+ */
+const isDimFlavoredQuality = (quality?: string): boolean => {
+  if (!quality) return false;
+  const ast = chordQualityAstOfName(quality);
+  if (!ast) return false;
+  return ast.fifth === 'dim5' || ast.seventh === 'dim7';
+};
+
+/** 调内性质归类：减/半减 → dim，小调类 → min，其余 → maj。与识别层共用同一份 AST 判据。 */
+const qualityKindOf = (quality?: string): 'maj' | 'min' | 'dim' => {
+  if (!quality) return 'maj';
+  const ast = chordQualityAstOfName(quality);
+  if (!ast) return 'maj';
+  return qualityKindOfAst(ast);
 };
 
 const DIATONIC_INTERVALS_MASK = (1 << 0) | (1 << 2) | (1 << 4) | (1 << 5) | (1 << 7) | (1 << 9) | (1 << 11);
@@ -987,7 +1266,6 @@ const buildSortMeta = (chord: Chord): SortMeta => {
       ? parsed.rootPitch
       : resolveChordRootPitch(chord.strings, chord.fretOffset, chord.tuning, chord, chord.rootStringIndex);
   const { colorNoteCount } = getColorNoteCountAndPitches(chord, rootPitch);
-  const suffix = parsed.suffix || '';
   const meta: SortMeta = {
     chord,
     name,
@@ -995,8 +1273,8 @@ const buildSortMeta = (chord: Chord): SortMeta => {
     isInverted: computeIsInverted(chord.strings, chord.fretOffset, chord.tuning, chord, chord.rootStringIndex),
     colorNoteCount,
     complexityRank: getComplexityRank(parsed.suffix),
-    qualityRank: isMinorFlavored(parsed.suffix) ? 0 : 1,
-    qualityKind: /^(dim|°|ø|m7b5)/i.test(suffix) ? 'dim' : isMinorFlavored(suffix) ? 'min' : 'maj',
+    qualityRank: isMinorFlavoredQuality(parsed.quality) ? 0 : 1,
+    qualityKind: qualityKindOf(parsed.quality),
   };
   sortMetaCache.set(chord, meta);
   return meta;
@@ -1136,7 +1414,6 @@ export const computeChordFingerprint = (chord: {
   chordName?: string;
   nameSegments?: ChordNameSegments | null;
   fretOffset?: number;
-  capo?: number;
   fretCount: number;
   tuning: Tuning | string;
   strings: GuitarStringsModel;
@@ -1146,10 +1423,10 @@ export const computeChordFingerprint = (chord: {
     const cached = chordFingerprintCache.get(chord);
     if (cached !== undefined) return cached;
   }
-  const offset = chord.fretOffset ?? chord.capo ?? 0;
+  const offset = chord.fretOffset ?? 0;
   const name = getChordName(chord);
   const isInverted = computeIsInverted(chord.strings, offset, chord.tuning, chord, chord.rootStringIndex);
-  const strSig = chord.strings.map(s => `${s[0]}_${s[1] ? 1 : 0}`).join('|');
+  const strSig = chord.strings.map(s => `${s.fret}_${s.preferFlat ? 1 : 0}`).join('|');
   const fp = `${name.trim()}:${offset}:${chord.fretCount}:${chord.tuning}:${isInverted ? 1 : 0}:${String(chord.rootStringIndex)}:${strSig}`;
   if (chord && typeof chord === 'object') {
     chordFingerprintCache.set(chord, fp);
@@ -1230,14 +1507,15 @@ export const transposeChordEntity = (
     ? transposeChordSegments(chord.nameSegments, semitones, options?.preferFlat)
     : null;
 
-  let newStrings = chord.strings.map(s => [...s] as GuitarStringEntity);
+  let newStrings = chord.strings.map(s => ({ ...s }));
   let newBarres = chord.barres ? chord.barres.map(b => ({ ...b })) : undefined;
 
   if (mode === 'shift_frets' && semitones !== 0) {
-    newStrings = newStrings.map(([fret, flat]) => {
-      if (fret <= 0) return [fret, flat];
-      const shifted = fret + semitones;
-      return [shifted > 0 ? shifted : -1, flat];
+    newStrings = newStrings.map(s => {
+      if (s.fret <= 0) return s;
+      const shifted = s.fret + semitones;
+      // 上界钳制到 fretCount（越界不静音丢弦，保持可听）；下界仍按惯例静音
+      return { fret: shifted > 0 ? Math.min(shifted, chord.fretCount) : -1, preferFlat: s.preferFlat };
     });
     if (newBarres) {
       newBarres = newBarres
@@ -1273,6 +1551,148 @@ export interface ChordDegreeResult {
  * @param chordOrName 和弦实体或和弦名字符串
  * @param key 调式基准名（如 'C', 'G', 'F', 'Am', 'Em', 'Bb'）
  */
+/**
+ * 标准性质枚举 → 罗马数字级数后缀。覆盖 CHORD_QUALITIES 全部有后缀的条目，
+ * 三和弦/plain（m/min/-/maj/M/Δ/5/sus/no3/no5 等）不在此表内、默认空串（由小写为小写罗马体体现小调）。
+ * 用枚举映射取代原 if-else 链，补齐 9~13 / add 家族（除 add9）/ 6 / aug7 等此前静默丢失的分支，且新增性质时编译器会强制补表。
+ */
+const ROMAN_SUFFIX_BY_QUALITY: Partial<Record<string, string>> = {
+  '7': '7',
+  'maj7': 'maj7',
+  'Maj7': 'maj7',
+  'M7': 'maj7',
+  'Δ7': 'maj7',
+  'm7': '7',
+  'min7': '7',
+  '-7': '7',
+  'dim': '°',
+  '°': '°',
+  'dim7': '°7',
+  '°7': '°7',
+  'aug': '+',
+  '+': '+',
+  'aug7': '+7',
+  '+7': '+7',
+  '7sus4': '7sus4',
+  '7sus2': '7sus2',
+  '7sus': '7sus',
+  'sus4': 'sus4',
+  'sus2': 'sus2',
+  '6': '6',
+  'm6': 'm6',
+  'min6': 'm6',
+  '-6': 'm6',
+  '6/9': '6/9',
+  '69': '6/9',
+  'm6/9': 'm6/9',
+  'm69': 'm6/9',
+  'min6/9': 'm6/9',
+  'add9': 'add9',
+  'madd9': 'madd9',
+  'add2': 'add2',
+  'madd2': 'madd2',
+  'add4': 'add4',
+  'madd4': 'madd4',
+  'add11': 'add11',
+  'madd11': 'add11',
+  'add13': 'add13',
+  'madd13': 'add13',
+  '9': '9',
+  'm9': '9',
+  'min9': '9',
+  '-9': '9',
+  'maj9': 'maj9',
+  'Maj9': 'maj9',
+  'M9': 'maj9',
+  'Δ9': 'maj9',
+  '11': '11',
+  'm11': '11',
+  'min11': '11',
+  '-11': '11',
+  'maj11': 'maj11',
+  'Maj11': 'maj11',
+  'M11': 'maj11',
+  'Δ11': 'maj11',
+  '13': '13',
+  'm13': '13',
+  'min13': '13',
+  '-13': '13',
+  'maj13': 'maj13',
+  'Maj13': 'maj13',
+  'M13': 'maj13',
+  'Δ13': 'maj13',
+  '9sus4': '9sus4',
+  '9sus2': '9sus2',
+  '9sus': '9sus',
+  '11sus4': '11sus4',
+  '11sus2': '11sus2',
+  '11sus': '11sus',
+  '13sus4': '13sus4',
+  '13sus2': '13sus2',
+  '13sus': '13sus',
+  'm7b5': 'ø7',
+  'm7(b5)': 'ø7',
+  'ø': 'ø',
+  'ø7': 'ø7',
+  'mMaj7': 'mMaj7',
+  'mmaj7': 'mMaj7',
+  'mM7': 'mMaj7',
+  'mΔ7': 'mMaj7',
+  '-M7': 'mMaj7',
+  '-Δ7': 'mMaj7',
+  'mMaj9': 'mMaj9',
+  'mmaj9': 'mMaj9',
+  'mM9': 'mMaj9',
+  'mΔ9': 'mMaj9',
+  '-M9': 'mMaj9',
+  '-Δ9': 'mMaj9',
+  'mMaj11': 'mMaj11',
+  'mmaj11': 'mMaj11',
+  'mM11': 'mMaj11',
+  'mΔ11': 'mMaj11',
+  '-M11': 'mMaj11',
+  '-Δ11': 'mMaj11',
+  'mMaj13': 'mMaj13',
+  'mmaj13': 'mMaj13',
+  'mM13': 'mMaj13',
+  'mΔ13': 'mMaj13',
+  '-M13': 'mMaj13',
+  '-Δ13': 'mMaj13',
+  'dimMaj7': '°Maj7',
+  'dimmaj7': '°Maj7',
+  '°M7': '°Maj7',
+  '°Δ7': '°Maj7',
+  'augMaj7': '+Maj7',
+  'augmaj7': '+Maj7',
+  '+M7': '+Maj7',
+  '+Δ7': '+Maj7',
+  'alt': 'alt',
+  '7alt': 'alt',
+};
+
+/**
+ * 取性质串对应的罗马数字级数后缀（含同义写法）。
+ *
+ * 表是**按写法**建的，但同一个配方的写法远不止表里列的那几条
+ * （`halfDim7` 一个 token 就有 `m7b5` / `m7(b5)` / `ø7` / `ø` / `min7b5` / `-7b5` 六种拼写）。
+ * 逐条把别名抄进表里，等于把「同义收敛」这件事在每个消费点重做一遍 —— 而它已在
+ * 解析层（token 表）做过一次了。因此这里改成：**先查写法，查不到就经 token 归一到首选写法再查**。
+ *
+ * 于是 `min7b5` / `-7b5` 自动继承 `m7b5` 的 `ø7`，新增别名时无需改这张表。
+ */
+const romanSuffixOf = (quality?: string): string => {
+  if (!quality) return '';
+  const direct = ROMAN_SUFFIX_BY_QUALITY[quality];
+  if (direct !== undefined) return direct;
+
+  const parsed = parseQualityText(quality);
+  if (!parsed.recognized) return '';
+  // 经 token 归一到首选写法：`min7b5` → halfDim7 → `m7b5` → 表里命中 `ø7`
+  const token = parsed.tokenId ? QUALITY_TOKENS.find(t => t.id === parsed.tokenId) : findTokenByAst(parsed.ast);
+  const canonical = token?.spellings[0];
+  return canonical ? (ROMAN_SUFFIX_BY_QUALITY[canonical] ?? '') : '';
+};
+
 export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 'C'): ChordDegreeResult => {
   const empty: ChordDegreeResult = { roman: '', degree: 0, isDiatonic: false };
   if (!chordOrName || !key) return empty;
@@ -1335,11 +1755,11 @@ export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 
     isDiatonic: false,
   };
 
-  const suffix = parsed.suffix || '';
-  const isMinorChord = isMinorFlavored(suffix);
-  const isHalfDim = /^(ø|m7b5)/.test(suffix);
-  const isDim = /^(dim|°)/.test(suffix) || isHalfDim;
-  const isAug = /^(aug|\+)/.test(suffix);
+  const isMinorChord = isMinorFlavoredQuality(parsed.quality);
+  // 「是不是减」只读性质 AST 一处：与 qualityKindOf / 识别层共用同一个 isDimFlavoredQuality，
+  // 不再对拼接 suffix 跑 `/^(dim|°|ø|m7b5)/` —— 那条正则必然漏写法
+  // （`min7b5` / `-7b5` / `ø7` 都不在它的候选里），而读 AST 字段天然覆盖全部拼写。
+  const isDim = isDimFlavoredQuality(parsed.quality);
 
   const prefixMatch = def.base.match(/^([b#])?(.*)$/);
   const prefix = prefixMatch?.[1] ?? '';
@@ -1350,31 +1770,10 @@ export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 
     romanBody = romanBody.toLowerCase();
   }
 
-  let romanSuffix = '';
-  if (isHalfDim) {
-    romanSuffix = 'ø7';
-  } else if (isDim) {
-    romanSuffix = '°';
-    if (/7/.test(suffix)) romanSuffix += '7';
-  } else if (isAug) {
-    romanSuffix = '+';
-  } else if (/^(maj7|Maj7|M7|Δ7)\b/.test(suffix)) {
-    romanSuffix = 'maj7';
-  } else if (/^(m7|min7|-7)\b/i.test(suffix)) {
-    romanSuffix = '7';
-  } else if (/^7sus4\b/i.test(suffix)) {
-    romanSuffix = '7sus4';
-  } else if (/^sus4\b/i.test(suffix)) {
-    romanSuffix = 'sus4';
-  } else if (/^sus2\b/i.test(suffix)) {
-    romanSuffix = 'sus2';
-  } else if (/^7\b/.test(suffix)) {
-    romanSuffix = '7';
-  } else if (/^9\b/.test(suffix)) {
-    romanSuffix = '9';
-  } else if (/^add9\b/i.test(suffix)) {
-    romanSuffix = 'add9';
-  }
+  // 级数后缀直接由标准性质枚举映射，覆盖 CHORD_QUALITIES 全部条目；
+  // 原 if-else 链仅命中 11 类，9~13 / add 家族（除 add9）/ 6 / aug7 等此前静默丢失，现已补齐且不会漂移。
+  // 后缀同样只读枚举映射：'m7b5' / 'ø7' 在该表里都指向 'ø7'，裸 'ø' 指向 'ø'，无需再分支特判
+  const romanSuffix = romanSuffixOf(parsed.quality);
 
   let finalRoman = `${prefix}${romanBody}${romanSuffix}`;
 

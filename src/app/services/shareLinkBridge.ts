@@ -87,11 +87,15 @@ export function setupShareLinkBridge(): void {
     // 落地实现（编解码链 + 各域导入能力）懒加载，见 shareLinkApply.ts 文件头注释
     const resolved = await resolveTransferPayload(token);
     if (resolved.status !== 'ok' || resolved.carrier !== 'token') {
-      uiStore.toast.warning('分享链接已损坏，无法解析');
+      uiStore.message.warning('分享链接已损坏，无法解析');
     } else {
       const { applyPayload } = await import('./shareLinkApply');
-      if (!applyPayload(resolved.payload)) {
-        uiStore.toast.warning('分享链接内容无法识别或已损坏');
+      // URL 分享参数不能免确认直接落库：诱导点击即可污染曲库并随下次同步扩散。
+      // 先经用户确认再落地（window.confirm 为应用内确认弹窗基建就绪前的最小门禁）。
+      if (window.confirm('此链接携带分享数据，是否导入到本机曲库？')) {
+        if (!applyPayload(resolved.payload)) {
+          uiStore.message.warning('分享链接内容无法识别或已损坏');
+        }
       }
     }
 

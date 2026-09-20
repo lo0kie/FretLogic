@@ -245,6 +245,7 @@ import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { useRowWindowing } from '@/platform/composables/useRowWindowing';
 import { isDark } from '@/platform/composables/useTheme';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
+import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import ChordEditorDrawer from './ChordEditorDrawer.vue';
 import { buildChordSections, buildPickerRowPlan, getPickerGridGapPx } from './ChordPickerPanel.logic';
@@ -577,7 +578,7 @@ const scrollToSection = (sectionId: string) => {
   const list = sectionsListRef.value;
   const gap = list ? parseFloat(getComputedStyle(list).rowGap) || 0 : 0;
   const top = target.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop - gap;
-  scrollEl.scrollTo({ top, behavior: 'smooth' });
+  scrollEl.scrollTo({ top, behavior: resolveScrollBehavior('smooth') });
 };
 
 /** 预留的分区元素重建钩子，当前为空实现 */
