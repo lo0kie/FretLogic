@@ -5,6 +5,7 @@ import { createLruCache } from '@/platform/utils/lruCache';
 import { analyzeBestRootPitch } from './chordEngine.ts';
 import { isHalfDiminished, QUALITY_TOKENS, qualityKindOfAst } from './chordQualityAst';
 import { findTokenByAst, parseQualityText, renderQualityAst } from './chordQualityAstParse';
+import { isSelfConsistentQualityAst } from './chordQualityAstSemantics';
 
 import type { ChordQualityAst } from './chordQualityAst';
 import type {
@@ -671,6 +672,10 @@ const KNOWN_QUALITIES_SET = new Set(KNOWN_QUALITIES.map(q => q.toLowerCase()));
  * 2. 性质必须被性质解析器识别；识别失败落 `unknownQuality`，即判非法
  * 3. 变化/扩展音度数必须在合理范围（2~13）
  * 4. 斜杠低音必须有效（解析器已校验，解析不出即不会写入 bass）
+ * 5. **字段组合必须在乐理上自洽**（见 `chordQualityAstSemantics`）：
+ *    新增于「字段化 AST」之后——旧的字符串枚举表达不了这类约束，
+ *    于是 `third/fifth 同时 omit`、`dim7 配非减五` 这类**能解析成功但自相矛盾**的名字
+ *    此前一律被判合法（重构文档里那条未拍板的待拍板事项）。现在补上这一层。
  *
  * 为什么不再用写法白名单：合法写法是**可组合**的（`sus4` + `add9` = `sus4add9`、
  * `7` + `b13` = `7b13`），有限清单无法覆盖可生成的语言。白名单方案的实测后果是
@@ -695,6 +700,13 @@ export const isValidChordName = (chordName: string): boolean => {
     const validDegrees = new Set([2, 4, 5, 6, 7, 9, 11, 13]);
     const allExtsValid = segments.extensions.every(([deg]) => validDegrees.has(Number(deg)));
     if (!allExtsValid) return false;
+  }
+
+  // 语义层：解析成功不等于讲得通。空性质串（裸三和弦 `C` / `C/E`）时该函数返回 null，
+  // 跳过本层——大三和弦配方恒自洽，无需判定
+  const qualityAst = chordQualityAstOfName(segments.quality ?? '');
+  if (qualityAst && !isSelfConsistentQualityAst(qualityAst)) {
+    return false;
   }
 
   return true;

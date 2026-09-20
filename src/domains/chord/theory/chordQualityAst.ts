@@ -423,7 +423,7 @@ export const QUALITY_TOKENS: QualityToken[] = [
   {
     id: 'minMaj7',
     ast: { third: 'min3', fifth: 'perf5', seventh: 'maj7' },
-    spellings: ['mMaj7', 'mmaj7', 'mM7', 'mΔ7', '-M7', '-Δ7'],
+    spellings: ['mMaj7', 'mmaj7', 'minMaj7', 'mM7', 'mΔ7', '-M7', '-Δ7'],
   },
   {
     id: 'halfDim7',
@@ -503,27 +503,27 @@ export const QUALITY_TOKENS: QualityToken[] = [
   {
     id: 'madd9',
     ast: { third: 'min3', fifth: 'perf5', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['madd9'],
+    spellings: ['madd9', 'minadd9'],
   },
   {
     id: 'madd2',
     ast: { third: 'min3', fifth: 'perf5', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['madd2'],
+    spellings: ['madd2', 'minadd2'],
   },
   {
     id: 'madd11',
     ast: { third: 'min3', fifth: 'perf5', extensions: [{ degree: '11', accidental: 0 }] },
-    spellings: ['madd11'],
+    spellings: ['madd11', 'minadd11'],
   },
   {
     id: 'madd4',
     ast: { third: 'min3', fifth: 'perf5', extensions: [{ degree: '11', accidental: 0 }] },
-    spellings: ['madd4'],
+    spellings: ['madd4', 'minadd4'],
   },
   {
     id: 'madd13',
     ast: { third: 'min3', fifth: 'perf5', extensions: [{ degree: '13', accidental: 0 }] },
-    spellings: ['madd13'],
+    spellings: ['madd13', 'minadd13'],
   },
   // ---------- 属扩展 ----------
   {
@@ -591,8 +591,12 @@ export const QUALITY_TOKENS: QualityToken[] = [
   },
   {
     id: 'sus2dom9',
+    // 9sus2 的「九音」与挂二音**同音**（都是 2 半音）：同一块音被声明两遍，属纯记谱写法。
+    // 同样的音集由 7sus2（无冗余声明）覆盖并稳定胜出，故不参与识别候选（同 no3/no5 的取舍）；
+    // 解析 / 渲染照常，输入 A9sus2 仍合法。对比 9sus4：九音与挂四音是两个不同的音，不冗余。
     ast: { third: 'none', sus: 'sus2', fifth: 'perf5', seventh: 'min7', extensions: [{ degree: '9', accidental: 0 }] },
     spellings: ['9sus2'],
+    notationOnly: true,
   },
   {
     id: 'sus2dom11',
@@ -660,7 +664,7 @@ export const QUALITY_TOKENS: QualityToken[] = [
   {
     id: 'minMaj9',
     ast: { third: 'min3', fifth: 'perf5', seventh: 'maj7', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['mMaj9', 'mmaj9', 'mM9', 'mΔ9', '-M9', '-Δ9'],
+    spellings: ['mMaj9', 'mmaj9', 'minMaj9', 'mM9', 'mΔ9', '-M9', '-Δ9'],
   },
   {
     id: 'minMaj11',
@@ -673,7 +677,7 @@ export const QUALITY_TOKENS: QualityToken[] = [
         { degree: '11', accidental: 0 },
       ],
     },
-    spellings: ['mMaj11', 'mmaj11', 'mM11', 'mΔ11', '-M11', '-Δ11'],
+    spellings: ['mMaj11', 'mmaj11', 'minMaj11', 'mM11', 'mΔ11', '-M11', '-Δ11'],
   },
   {
     id: 'minMaj13',
@@ -687,12 +691,12 @@ export const QUALITY_TOKENS: QualityToken[] = [
         { degree: '13', accidental: 0 },
       ],
     },
-    spellings: ['mMaj13', 'mmaj13', 'mM13', 'mΔ13', '-M13', '-Δ13'],
+    spellings: ['mMaj13', 'mmaj13', 'minMaj13', 'mM13', 'mΔ13', '-M13', '-Δ13'],
   },
   {
     id: 'min9flat5',
     ast: { third: 'min3', fifth: 'dim5', seventh: 'min7', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['m9b5', 'm9(b5)', 'ø9'],
+    spellings: ['m9b5', 'm9(b5)', 'min9b5', 'ø9'],
   },
   // ---------- 大扩展 ----------
   {

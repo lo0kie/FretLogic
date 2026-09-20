@@ -88,7 +88,10 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
       )}`;
       // 条件写（If-Match）：推送前探测当前 ETag，携带后若服务端数据已被其他设备更新，
       // 服务器将以 412 拒绝写入，避免后写静默覆盖前写（走下方 CONFLICT 分支）。
-      // 服务端不返回 ETag（或 HEAD 未实现/探测失败）时退化为无条件写，与历史行为一致。
+      // 这是「协议层」防线，与 syncActions 里 fetchMeta 比对的「逻辑层」防线互补：
+      // 后者只在推送前那一刻生效，两次请求之间仍可能被并发写入插入，这一层正好补上该窗口。
+      // 服务端（worker/index.mjs 的 POST 分支）已实现 If-Match 比对；拿不到 ETag 时
+      // （旧版 Worker / 第三方服务器 / 探测失败）仍退化为无条件写，与历史行为一致。
       let ifMatch: string | undefined;
       try {
         const head = await request({

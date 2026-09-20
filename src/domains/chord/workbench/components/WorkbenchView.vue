@@ -24,7 +24,7 @@
            列顶 top-8（32px）与指板同高，滚动时卡片最多上移到 32px，不会比指板更高 -->
       <div class="pointer-events-auto absolute inset-y-2xl right-8 z-panel">
         <BaseScrollArea :scrollbar="{ endInset: 12 }" close-popovers axis="y" class="flex size-full w-72 flex-col">
-          <!-- 面板列表：拖拽排序容器，其直接子元素即四张面板卡片。
+          <!-- 面板列表：拖拽排序容器，其直接子元素即五张面板卡片。
                刻意不把排序容器与滚动宿主合并：滚动宿主是 v-scrollbar 的书写目标（加宿主类 + 写内联
                overflow），而 Sortable 会把容器的直接子元素一律当成可排序项，两种语义不该共用一个节点。
                shrink-0 必需——本容器是滚动宿主的唯一 flex 子项，若能收缩则永远滚不动。 -->
@@ -139,7 +139,7 @@ const PANEL_COMPONENT_MAP: Record<WorkbenchPanelId, Component> = {
 /**
  * 各面板的卡片元数据：图标 + 标题 + 行尾小标题（description）+ 展开持久化键。
  * 小标题走 BaseCollapse 的 description（标题右侧小字弱色，空间不足时先截断它、标题保持完整），
- * 用于一眼区分四张同构卡片里装的是什么——标题只两三个字，光看标题分不清内容边界。
+ * 用于一眼区分五张同构卡片里装的是什么——标题只两三个字，光看标题分不清内容边界。
  */
 const PANEL_META: Record<WorkbenchPanelId, { icon: IconName; title: string; description: string; storageKey: string }> =
   {

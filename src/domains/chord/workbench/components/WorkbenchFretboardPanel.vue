@@ -2,8 +2,8 @@
   <div class="flex flex-col gap-md">
     <!-- 指板设置：管的就是左侧那块交互指板本身（品数窗口 / 品位偏移 / 调音 / 自动横按），
          原挂在顶部设置弹窗的「指板」分组里，与指板隔了一层浮层；收进工作台面板后与指板同屏，
-         调完即刻看见指板变化。前三项绑定的都是和弦草稿（draftChord），随草稿走而非全局偏好——
-         唯「自动横按」是全局偏好（见 chordEditorStore.autoBarre 的说明）。 -->
+         调完即刻看见指板变化。品数 / 偏移 / 调音三项绑定的是和弦草稿（draftChord），随草稿走
+         而非全局偏好——「自动横按」与「符号简写」（自 header 设置弹窗迁入）是全局偏好。 -->
     <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
       <BaseFormRow label="显示品数">
         <BaseSegmentedControl
@@ -40,6 +40,10 @@
       <BaseFormRow help="指板有可横按弦组时自动标记" label="自动横按">
         <BaseSwitch v-model="editorStore.autoBarre" aria-label="自动标记横按" />
       </BaseFormRow>
+
+      <BaseFormRow help="工作台面板的和弦名" label="符号简写 (M/°/+)">
+        <BaseSwitch v-model="settingsStore.workbenchChordShorthand" aria-label="工作台符号简写" />
+      </BaseFormRow>
     </BaseForm>
   </div>
 </template>
@@ -56,10 +60,12 @@ import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
 import { FRET_COUNTS, INTERACTION_CONFIG } from '@/domains/fretboard/constants';
+import { useSettingsStore } from '@/platform/store/settingsStore';
 
 import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
 
 const editorStore = useChordEditorStore();
+const settingsStore = useSettingsStore();
 
 /** 品数档位类型：与 Chord['fretCount'] 同源，取自 FRET_COUNTS 的字面量联合（3 | 4 | 5） */
 type FretCount = (typeof FRET_COUNTS)[number];

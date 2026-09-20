@@ -33,7 +33,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Deploy worker to Cloudflare (prod)
-        # 凭据经 Repo Secrets 注入环境变量，由 worker/scripts/deploy-worker.mjs 交给 wrangler（无需 .env）
+        # 凭据经 Repo Secrets 注入环境变量，由 worker/scripts/deploy-worker.mjs 交给 wrangler（无需 .env）：
+        # SERVER_TOKEN 由该脚本以 `wrangler secret put` 加密写入（不经 --var，不留明文在部署历史）。
         # 必须显式 :prod——部署脚本的缺省目标是 dev，只有这里有权发布生产
         # 上面的 paths 含 worker/scripts/：改打包/部署脚本本身也会触发重新发版
         run: pnpm deploy:worker:prod

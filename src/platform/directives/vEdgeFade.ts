@@ -36,6 +36,7 @@ import {
   FADE_OFFSET_TARGET_PROP,
   fadeTransition,
 } from '@/platform/utils/fadeMask';
+import { mergeTransitionItem, removeTransitionItems } from '@/platform/utils/motion';
 
 import type { Directive } from 'vue';
 
@@ -177,8 +178,9 @@ function clearFade(el: HTMLElement, state: EdgeFadeState): void {
     el.style.setProperty('-webkit-mask-composite', '');
     for (const prop of ALL_FADE_PROPS) el.style.removeProperty(prop);
     // 刻意不清 --fade-offset：它可能由宿主直接维护（元素上改写内缩量的用法），
-    // 摘掉 mask 后残留值不产生任何视觉；下次挂载时正好延续宿主最后写的值
-    el.style.transition = '';
+    // 摘掉 mask 后残留值不产生任何视觉；下次挂载时正好延续宿主最后写的值。
+    // 只摘 fade 条目而非整条清空：同元素上其它指令（v-auto-height 等）的过渡条目要存活
+    el.style.transition = removeTransitionItems(el.style.transition, ...ALL_FADE_PROPS);
   }, FADE_TRANSITION_MS + 30);
 }
 
@@ -281,13 +283,20 @@ function switchFadeOffset(el: HTMLElement, state: EdgeFadeState, mode: FadeMode)
   return true;
 }
 
+/** 写入 fade 条目过渡：条目级合并而非整条覆盖——宿主元素可能同时挂 v-auto-height 等
+ *  其它写 transition 的指令（典型：BaseScrollArea 根元素），覆盖会把它们的过渡吞掉，
+ *  且吞没与否随触发时序摇摆（变高瞬变、变矮正常这类不对称都源于此） */
+const writeFadeTransition = (el: HTMLElement, ms: number): void => {
+  el.style.transition = mergeTransitionItem(el.style.transition, fadeTransition(ms));
+};
+
 /** 内缩量瞬时到位：临时关掉过渡 → 写入 → 强制重算固化 → 恢复过渡。
  *  只在羽化不可见时调用（端点全 0），否则会是一次可见的瞬跳 */
 function applyFadeOffsetInstantly(el: HTMLElement, value: string): void {
-  el.style.transition = fadeTransition(0);
+  writeFadeTransition(el, 0);
   el.style.setProperty(FADE_OFFSET_PROP, value);
   void el.offsetWidth; // 强制样式重算：把新位置固化成已计算值，恢复过渡后不再补一次动画
-  el.style.transition = fadeTransition(FADE_TRANSITION_MS);
+  writeFadeTransition(el, FADE_TRANSITION_MS);
 }
 
 function computeFadeValues(el: HTMLElement, mode: FadeMode, flushEps: number): Record<string, number> {
@@ -326,7 +335,7 @@ function mountFadeMask(el: HTMLElement, state: EdgeFadeState, mode: FadeMode): v
     el.style.maskComposite = '';
     el.style.setProperty('-webkit-mask-composite', '');
   }
-  el.style.transition = fadeTransition(FADE_TRANSITION_MS);
+  writeFadeTransition(el, FADE_TRANSITION_MS);
   for (const prop of ALL_FADE_PROPS) el.style.setProperty(prop, '0');
   // 内缩量在固化起点之前写入：首次挂载时羽化带不该从 0 位置「滑」到 offset，
   // 之后的宿主改写才交给切换时序（淡出→改位置→淡入）。

@@ -1,3 +1,4 @@
+import { parseChordNameTokens } from '@/domains/chord/theory/chordNameTokens';
 import {
   formatAccidental as formatAccidentalTheory,
   getChordName,
@@ -134,6 +135,18 @@ const resolveQualityText = (segments: ChordNameSegments, shorthand: boolean): st
   return shorthand ? toShorthandQuality(quality) : quality;
 };
 
+/** 质量段渲染：整质量名里自带的变音（`m7b5` / `7b9` / `7#9`…）与根音、延伸音同口径——
+ *  复用理论层唯一的 token 解析器 `parseChordNameTokens`（fretboard 画布与导出 worker
+ *  也在用它）,把变音 token 包上标 span,其余文本原样输出。token 的 text 已规整为
+ *  ♯/♭,此处映射回升降号数值再走 `formatAccidentalSpan`,以保留 useUnicode 开关。 */
+const buildQualityHtml = (qualityText: string, useUnicode: boolean): string =>
+  parseChordNameTokens(qualityText)
+    .map(token => {
+      if (!token.isAccidental) return escapeHtml(token.text);
+      return formatAccidentalSpan(token.text === '♯' ? 1 : -1, useUnicode);
+    })
+    .join('');
+
 /** 将结构化分片拼装为和弦名 HTML：根音（含升降号）→ 性质 → 扩展音 → 斜杠低音。 */
 const buildNameHtml = (segments: ChordNameSegments, shorthand: boolean, useUnicode: boolean): string => {
   const extensions = segments.extensions ?? [];
@@ -142,7 +155,8 @@ const buildNameHtml = (segments: ChordNameSegments, shorthand: boolean, useUnico
   let html = `<span class="chord-root-group whitespace-nowrap"><span inline align-baseline class="chord-root-letter">${escapeHtml(segments.root[0])}</span>${accidental(segments.root[1])}</span>`;
 
   const qualityText = resolveQualityText(segments, shorthand);
-  if (qualityText) html += `<span class="chord-quality font-[inherit]">${escapeHtml(qualityText)}</span>`;
+  if (qualityText)
+    html += `<span class="chord-quality font-[inherit]">${buildQualityHtml(qualityText, useUnicode)}</span>`;
 
   for (const ext of extensions) {
     html += `<span class="chord-ext-item inline align-baseline whitespace-nowrap">${accidental(ext[1])}<span class="chord-ext-degree">${escapeHtml(String(ext[0]))}</span></span>`;

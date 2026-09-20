@@ -154,12 +154,68 @@
         ref="searchAreaRef"
       >
         <div class="p-1">
-          <slot
-            :active-index="searchActiveIndex"
-            :close="closeResults"
-            :query="localValue"
-            :set-active-index="setSearchActiveIndex"
-            name="search-results"
+          <!-- 搜索回退态收敛：传入 search-guide-text 即启用托管——「未输入引导 / 正在搜索 / 无结果」
+             三态由组件渲染并接管切换，#search-results 插槽只在「有可显示结果」时挂载：
+             - 查询为空 → 引导；
+             - 有结果（含防抖窗口内的过期结果，渐进收窄不闪）→ 插槽；
+             - 无结果且未同步（防抖中）→ 正在搜索；
+             - 无结果且已同步 → 无结果。
+             未传 search-guide-text 时插槽原样渲染（完全自管，向后兼容） -->
+          <Feedback
+            v-if="searchFallbackManaged && !searchQueryText"
+            :description="searchGuideText"
+            class="v-fade-in-quick"
+            icon="search"
+            key="search-guide"
+            size="sm"
+          />
+          <div v-else-if="showSearchSlot" class="v-fade-in-quick flex flex-col gap-0.5">
+            <!-- 托管结果行：外壳样式（min-h / 圆角 / 内边距 / 悬停与键盘活跃高亮）统一收敛于此，
+               行内容由 #search-item 插槽决定；点击行与键盘 Enter 走同一条 select-search-index 路径 -->
+            <template v-if="searchItems">
+              <button
+                v-wave
+                v-for="(item, index) in searchItems"
+                :class="
+                  index === searchActiveIndex
+                    ? 'bg-primary/12 text-primary'
+                    : 'text-fg-title hover:bg-surface-panel-hover'
+                "
+                :key="index"
+                :title="searchItemTitle?.(item)"
+                @click="emit('select-search-index', index)"
+                @mouseenter="setSearchActiveIndex(index)"
+                class="flex min-h-[2rem] w-full cursor-pointer items-center justify-between gap-2 rounded-md border-none px-2.5 py-1 text-left transition-colors duration-fast ease-out outline-none select-none"
+                type="button"
+              >
+                <slot :index :item :active="index === searchActiveIndex" name="search-item" />
+              </button>
+            </template>
+            <!-- 未传 searchItems 的调用方：仍走自管插槽（结果行样式与交互自行负责） -->
+            <slot
+              v-else
+              :active-index="searchActiveIndex"
+              :close="closeResults"
+              :query="localValue"
+              :set-active-index="setSearchActiveIndex"
+              name="search-results"
+            />
+          </div>
+          <Feedback
+            v-else-if="!searchSynced"
+            :description="resolvedSearchLoadingText"
+            class="v-fade-in-quick"
+            key="search-loading"
+            size="sm"
+            type="loading"
+          />
+          <Feedback
+            v-else
+            :description="resolvedSearchNoResultText"
+            class="v-fade-in-quick"
+            key="search-no-result"
+            size="sm"
+            type="search"
           />
         </div>
       </BaseScrollArea>
@@ -167,7 +223,7 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup generic="T = unknown" lang="ts">
 import {
   computed,
   inject,
@@ -182,6 +238,7 @@ import {
   watch,
 } from 'vue';
 
+import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
@@ -208,7 +265,13 @@ const {
   clearable = false,
   searchable = false,
   searchItemCount = undefined,
+  searchItems = undefined,
+  searchItemTitle = undefined,
   searchMaxHeightClass = 'max-h-64',
+  searchGuideText = undefined,
+  searchSynced = true,
+  searchLoadingText = undefined,
+  searchNoResultText = undefined,
   isPassword = false,
   prefixIcon = undefined,
   size = undefined,
@@ -241,8 +304,23 @@ const {
   searchable?: boolean;
   /** 搜索候选项总数（用于组件内置的键盘上下键循环导航与回车选中） */
   searchItemCount?: number;
+  /** 托管结果列表数据源：传入后组件渲染标准化结果行（行外壳样式与选中交互统一收敛，
+   *  行内容由 #search-item 插槽决定），并取代 searchItemCount 作为键盘导航的计数来源 */
+  searchItems?: readonly T[];
+  /** 托管结果行的悬停提示文案生成器（可选项；不传则行无 title） */
+  searchItemTitle?: (item: T) => string;
   /** 搜索结果面板最大高度类，默认 'max-h-64' */
   searchMaxHeightClass?: string;
+  /** 未输入时的引导文案；传入即启用**回退态托管**——「引导 / 正在搜索 / 无结果」由组件渲染，
+   *  #search-results 插槽只在有可显示结果时挂载；未传时插槽原样渲染（完全自管，向后兼容） */
+  searchGuideText?: string;
+  /** 结果列表是否与当前查询同步（防抖场景：false = 防抖窗口内，旧结果是过期读数）。
+   *  仅在托管模式下消费；默认 true（无防抖的调用方无需关心） */
+  searchSynced?: boolean;
+  /** 「正在搜索」文案，默认 '正在搜索...'；仅在托管模式下消费 */
+  searchLoadingText?: string;
+  /** 「无结果」文案（可含查询词，由调用方拼好传入）；缺省按查询词生成；仅在托管模式下消费 */
+  searchNoResultText?: string;
   /** 密码模式：显示明文/密文切换按钮（type 需为 password） */
   isPassword?: boolean;
   /** 前缀图标名（注册表枚举）：无需包 #prefix slot 即可在输入框左侧渲染图标；传了 #prefix slot 时 slot 优先 */
@@ -291,6 +369,17 @@ const emit = defineEmits<{
   (e: 'click', event: MouseEvent): void;
   /** 搜索模式：通过键盘回车选中某个下标项时派发 */
   (e: 'select-search-index', index: number): void;
+}>();
+defineSlots<{
+  'prefix'?: () => unknown;
+  'suffix'?: () => unknown;
+  'search-results'?: (props: {
+    activeIndex: number;
+    close: () => void;
+    query: string;
+    setActiveIndex: (index: number) => void;
+  }) => unknown;
+  'search-item'?: (props: { active: boolean; index: number; item: T }) => unknown;
 }>();
 const attrs = useAttrs();
 const inputAttrs = computed(() => {
@@ -346,9 +435,12 @@ const {
   rootRef,
   inputRef,
   scrollEl: searchScrollRef,
-  itemCount: () => searchItemCount ?? 0,
+  itemCount: () => resolvedSearchItemCount.value,
   onSelectActive: index => emit('select-search-index', index),
 });
+
+/** 结果条目数：托管列表模式取 items 长度，否则退回计数 prop */
+const resolvedSearchItemCount = computed(() => (searchItems ? searchItems.length : (searchItemCount ?? 0)));
 
 const handleInputClick = (e: MouseEvent) => {
   openResults();
@@ -374,6 +466,19 @@ watch(localValue, () => {
 });
 
 const isPasswordMode = computed(() => isPassword || type === 'password');
+
+// ─── 搜索回退态托管：引导 / 正在搜索 / 无结果 三态的可见性判据 ───
+/** 实时查询词（trim 后）：三态切换的基准 */
+const searchQueryText = computed(() => localValue.value?.trim() ?? '');
+/** 托管开关：传了引导文案即接管三态；未传时插槽原样渲染（向后兼容） */
+const searchFallbackManaged = computed(() => searchable && searchGuideText !== undefined);
+/** 结果插槽是否挂载：托管模式下「查询非空且有结果（含防抖窗口内的过期结果）」；
+ *  过期结果保留展示是实现「渐进收窄不闪」的关键——精修查询词时旧列表保持到新结果就绪 */
+const showSearchSlot = computed(
+  () => !searchFallbackManaged.value || (searchQueryText.value !== '' && resolvedSearchItemCount.value > 0)
+);
+const resolvedSearchLoadingText = computed(() => searchLoadingText ?? '正在搜索...');
+const resolvedSearchNoResultText = computed(() => searchNoResultText ?? `未找到与“${searchQueryText.value}”相关的内容`);
 
 // 密码框模式下默认隐藏明文（'password'），点击眼睛时切换至 'text'
 const resolvedType = computed(() => {

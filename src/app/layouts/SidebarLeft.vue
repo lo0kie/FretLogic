@@ -20,7 +20,10 @@
       >
         <BaseInput
           v-model="searchQuery"
-          :search-item-count="searchResults.length"
+          :search-item-title="getSearchItemTitle"
+          :search-items="searchResults"
+          :search-no-result-text="noResultText"
+          :search-synced="isSearchSynced"
           @select-search-index="handleSelectSearchIndex($event)"
           clearable
           searchable
@@ -28,68 +31,39 @@
           font-size="xs"
           placeholder="搜索和弦..."
           prefix-icon="search"
-          size="sm"
+          search-guide-text="输入和弦名称搜索..."
           title="搜索和弦（支持名称与和弦级数检索）"
+          width="full"
         >
-          <template #search-results="{ query, activeIndex, setActiveIndex }">
-            <!-- 三态（结果 / 无结果 / 未输入引导）out-in 交叉切换；高度变化由面板
-                 v-auto-height + transition-[height] 承担，这里只负责内容透明度过渡 -->
-            <Transition mode="out-in" name="v-transition-fade">
-              <div v-if="query.trim() && searchResults.length > 0" class="flex flex-col gap-0.5" key="results">
-                <button
-                  v-wave
-                  v-for="(item, itemIndex) in searchResults"
-                  v-scroll-into-view.y.center="isCardActive(item.card)"
-                  :class="[
-                    itemIndex === activeIndex
-                      ? 'bg-primary/12 text-primary'
-                      : isCardActive(item.card)
-                        ? 'bg-primary/8 text-primary'
-                        : 'text-fg-title hover:bg-surface-panel-hover',
-                  ]"
-                  :key="item.card.mainChord.id"
-                  :title="getSearchItemTitle(item)"
-                  @click="selectSearchResult(item.card)"
-                  @mouseenter="setActiveIndex(itemIndex)"
-                  class="flex min-h-[2rem] w-full cursor-pointer items-center justify-between rounded-md border-none px-2.5 py-1 text-left transition-colors duration-fast ease-out outline-none select-none"
-                  type="button"
-                >
-                  <!-- 左侧：和弦名（首字绝对左对齐） + 激活标记（紧贴和弦名后缀，不顶开左右边缘） -->
-                  <span class="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 leading-normal">
-                    <span v-marquee.fade class="max-w-[90px] text-xs/normal font-semibold">
-                      <span v-chord-name="{ chord: item.card.mainChord }" />
-                    </span>
-                  </span>
+          <template #search-item="{ item }">
+            <!-- 只负责行内容；行外壳（高度/圆角/悬停/键盘活跃高亮/点击选中）由 BaseInput 统一渲染 -->
+            <!-- 左侧：和弦名（首字绝对左对齐） -->
+            <span class="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 leading-normal">
+              <span v-marquee.fade class="max-w-[90px] text-xs/normal font-semibold">
+                <span v-chord-name="{ chord: item.card.mainChord }" />
+              </span>
+            </span>
 
-                  <!-- 右侧：指法数微徽标与分组名（右边缘绝对对齐） -->
-                  <span class="flex shrink-0 items-center gap-1.5 text-2xs/normal">
-                    <BaseBadge
-                      v-if="item.card.variantCount > 1"
-                      :title="`共 ${item.card.variantCount}个指法`"
-                      appearance="subtle"
-                      size="2xs"
-                      variant="primary"
-                    >
-                      <BaseRollingText :text="`${item.card.variantCount}指法`" class="tabular-nums" />
-                    </BaseBadge>
+            <!-- 右侧：指法数微徽标与分组名（右边缘绝对对齐） -->
+            <span class="flex shrink-0 items-center gap-1.5 text-2xs/normal">
+              <BaseBadge
+                v-if="item.card.variantCount > 1"
+                :title="`共 ${item.card.variantCount}个指法`"
+                appearance="subtle"
+                size="2xs"
+                variant="primary"
+              >
+                <BaseRollingText :text="`${item.card.variantCount}指法`" class="tabular-nums" />
+              </BaseBadge>
 
-                    <span
-                      v-marquee.fade
-                      :title="`所属分组：${item.groupName}`"
-                      class="max-w-[48px] py-0.5 text-2xs/normal font-semibold text-fg-disabled"
-                    >
-                      {{ item.groupName }}
-                    </span>
-                  </span>
-                </button>
-              </div>
-
-              <!-- 搜索无结果：复用通用空状态（search 预设） -->
-              <Feedback v-else-if="query.trim()" :description="noResultText" key="no-result" size="sm" type="search" />
-
-              <!-- 未输入时的引导提示：复用通用空状态 -->
-              <Feedback v-else description="输入和弦名称搜索..." icon="search" key="guide" size="sm" />
-            </Transition>
+              <span
+                v-marquee.fade
+                :title="`所属分组：${item.groupName}`"
+                class="max-w-[48px] py-0.5 text-2xs/normal font-semibold text-fg-disabled"
+              >
+                {{ item.groupName }}
+              </span>
+            </span>
           </template>
         </BaseInput>
 
@@ -235,7 +209,6 @@ import SongModalsContainer from '@/domains/score/library/components/SongModalsCo
 import SongSection from '@/domains/score/library/components/SongSection.vue';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
-import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
@@ -343,8 +316,15 @@ const debouncedSearchQuery = refDebounced(
   computed(() => searchQuery.value.trim()),
   200
 );
+/** 防抖值与输入框实时值是否一致：不一致 = 正处在防抖窗口内，旧结果是过期读数 */
+const isSearchSynced = computed(() => debouncedSearchQuery.value === searchQuery.value.trim());
 const searchResults = computed(() => {
+  // 防抖值为空（初始 / 清空瞬间）不出结果：getGroupedCards(id, '') 语义是全库，
+  // 不挡这里就会在键入第一个字符时闪一帧全表再变成过滤结果。
+  // 防抖窗口内的过期结果保留展示（渐进收窄，不闪「正在搜索」），由传入 BaseInput 的
+  // search-synced（isSearchSynced）驱动其托管的「正在搜索 / 无结果」回退态
   const q = debouncedSearchQuery.value;
+  if (!q) return [];
   const items: { card: GroupedChordCard; groupName: string }[] = [];
   for (const group of chordStore.groups) {
     for (const card of chordStore.getGroupedCards(group.id, q)) {

@@ -63,10 +63,14 @@ const resolveRootStringIndex = (chord: RawRecord): StringIndex | null => {
   const index = chord['rootStringIndex'];
   if (!Array.isArray(chord['strings']) || !isBoundedNumber(index, 0, chord['strings'].length - 1)) return null;
 
-  const stringEntity = chord['strings'][index];
-  return Array.isArray(stringEntity) && typeof stringEntity[0] === 'number' && stringEntity[0] >= 0
-    ? (index as StringIndex)
-    : null;
+  // 兼容两态：v7 对象 {fret, preferFlat} 与旧元组 [fret, preferFlat]。
+  // 导入链路会先把元组迁移成对象（migratePayloadVersion v6→v7），而 IDB 存量本身就是对象形态——
+  // 若此处只认元组，两条载入路径的 rootStringIndex 都会被清成 null（根音标记整体丢失，实测复现）。
+  const stringEntity: unknown = chord['strings'][index];
+  const fret = Array.isArray(stringEntity)
+    ? stringEntity[0]
+    : (stringEntity as { fret?: unknown } | null | undefined)?.fret;
+  return typeof fret === 'number' && Number.isFinite(fret) && fret >= 0 ? (index as StringIndex) : null;
 };
 
 export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 'repair' }): Chord | null => {
