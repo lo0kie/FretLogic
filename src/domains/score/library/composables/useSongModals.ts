@@ -70,7 +70,7 @@ export function useSongModals() {
   const handleCreateSong = () => {
     const title = modalData.inputValue.trim();
     if (!title) {
-      uiStore.toast.warning('创建失败：请输入乐谱名称');
+      uiStore.message.warning('创建失败：请输入乐谱名称');
       return;
     }
     const newSong = songStore.createSong(title);
@@ -80,7 +80,7 @@ export function useSongModals() {
 
     close('create');
     resetModalData();
-    uiStore.toast.success('新建乐谱成功');
+    uiStore.message.success('新建乐谱成功');
   };
 
   /** 打开乐谱配置弹窗，回填当前标题/歌手/原调/拍号/调性/变调夹 */
@@ -109,7 +109,7 @@ export function useSongModals() {
         playKey: modalData.playKey,
         capo: toCapo(modalData.capo ?? 0),
       });
-      uiStore.toast.success('乐谱配置已更新');
+      uiStore.message.success('乐谱配置已更新');
     }
     close('config');
     resetModalData();
@@ -123,8 +123,13 @@ export function useSongModals() {
   /** 确认清空该乐谱的全部和弦槽位 */
   const handleClearChords = () => {
     if (modalData.activeSong) {
-      songStore.updateSongMeta(modalData.activeSong.id, { chordMap: new Map() });
-      uiStore.toast.success('已清除该乐谱的所有和弦');
+      const target = modalData.activeSong;
+      // 与 updateLyrics 同款守卫：仅清空的是当前激活歌曲时记撤销历史，否则历史栈混入非激活歌曲快照
+      const isActive = scoreEditor.activeSong?.id === target.id;
+      if (isActive) scoreEditor.recordHistory();
+      songStore.updateSongMeta(target.id, { chordMap: new Map() });
+      if (isActive) scoreEditor.recordHistory();
+      uiStore.message.success('已清除该乐谱的所有和弦');
     }
     close('clear');
     resetModalData();

@@ -265,7 +265,9 @@ const alignToStep = (val: number): number => {
 const clampValue = (val: number): number => {
   let v = Math.min(props.max, Math.max(props.min, val));
   if (props.stepStrictly) {
+    // 对齐后可能溢出上界（min=0/step=10/max=25 输入 25 → round(2.5)=3 → 30），必须复夹
     v = alignToStep(v);
+    v = Math.min(props.max, Math.max(props.min, v));
   }
   return roundToPrecision(v);
 };

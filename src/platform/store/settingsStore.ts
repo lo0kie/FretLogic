@@ -100,10 +100,10 @@ export const useSettingsStore = defineStore('settings', () => {
   const scoreExportQuality = useStorage<number>(STORAGE_KEYS.SCORE_EXPORT_QUALITY, 95);
 
   // 预览/导出：页边距（px，标准档位 窄/标准/宽，默认 56px 标准 15mm；设备级，不随偏好备份同步）
-  const scorePageMargin = useStorage<number>(STORAGE_KEYS.SCORE_PAGE_MARGIN, 56);
+  const scorePageMargin = useStorage<38 | 56 | 76>(STORAGE_KEYS.SCORE_PAGE_MARGIN, 56);
 
   // 预览/导出：标准单页尺寸档位（a4 / a5 / letter，默认 a4；设备级，不随偏好备份同步）
-  const scorePageSize = useStorage<string>(STORAGE_KEYS.SCORE_PAGE_SIZE, 'a4');
+  const scorePageSize = useStorage<'a4' | 'a5' | 'letter'>(STORAGE_KEYS.SCORE_PAGE_SIZE, 'a4');
 
   // 预览显示偏好（设备级，不随偏好备份同步）：自适应满高 / 自定义缩放百分比
   const previewFitMode = useStorage<boolean>(STORAGE_KEYS.SCORE_PREVIEW_FIT_MODE, true);
@@ -131,31 +131,83 @@ export const useSettingsStore = defineStore('settings', () => {
   /** 从备份包恢复同步配置（导入备份/云端拉取时调用）。分支缓存随旧配置失效。 */
   const applySyncBackup = (sync?: SyncSettingsBackup) => {
     if (!sync) return;
-    if (
-      sync.syncTarget === 'github' ||
-      sync.syncTarget === 'gitee' ||
-      sync.syncTarget === 'webdav' ||
-      sync.syncTarget === 'server'
-    ) {
-      syncTarget.value = sync.syncTarget;
+    // 兼容旧备份：v7 前为平铺 { syncTarget, githubToken, ... } 形态
+    const legacy = sync as unknown as {
+      syncTarget?: SyncProviderKind;
+      githubToken?: string;
+      githubOwner?: string;
+      githubRepo?: string;
+      githubBranch?: string;
+      githubPath?: string;
+      giteeToken?: string;
+      giteeOwner?: string;
+      giteeRepo?: string;
+      giteeBranch?: string;
+      giteePath?: string;
+      webdavServerUrl?: string;
+      webdavUsername?: string;
+      webdavPassword?: string;
+      webdavUseDefaultProxy?: boolean;
+      webdavProxyUrl?: string;
+      serverUrl?: string;
+      serverToken?: string;
+    };
+    if (!('kind' in sync) && legacy.syncTarget) {
+      const t = legacy.syncTarget;
+      if (t === 'github' || t === 'gitee' || t === 'webdav' || t === 'server') syncTarget.value = t;
+      if (typeof legacy.githubToken === 'string') githubToken.value = legacy.githubToken;
+      if (typeof legacy.githubOwner === 'string') githubOwner.value = legacy.githubOwner;
+      if (typeof legacy.githubRepo === 'string') githubRepo.value = legacy.githubRepo;
+      if (typeof legacy.githubBranch === 'string') githubBranch.value = legacy.githubBranch;
+      if (typeof legacy.githubPath === 'string') githubPath.value = legacy.githubPath;
+      if (typeof legacy.giteeToken === 'string') giteeToken.value = legacy.giteeToken;
+      if (typeof legacy.giteeOwner === 'string') giteeOwner.value = legacy.giteeOwner;
+      if (typeof legacy.giteeRepo === 'string') giteeRepo.value = legacy.giteeRepo;
+      if (typeof legacy.giteeBranch === 'string') giteeBranch.value = legacy.giteeBranch;
+      if (typeof legacy.giteePath === 'string') giteePath.value = legacy.giteePath;
+      if (typeof legacy.webdavServerUrl === 'string') webdavServerUrl.value = legacy.webdavServerUrl;
+      if (typeof legacy.webdavUsername === 'string') webdavUsername.value = legacy.webdavUsername;
+      if (typeof legacy.webdavPassword === 'string') webdavPassword.value = legacy.webdavPassword;
+      if (typeof legacy.webdavUseDefaultProxy === 'boolean') webdavUseDefaultProxy.value = legacy.webdavUseDefaultProxy;
+      if (typeof legacy.webdavProxyUrl === 'string') webdavProxyUrl.value = legacy.webdavProxyUrl;
+      if (typeof legacy.serverUrl === 'string') serverUrl.value = legacy.serverUrl;
+      if (typeof legacy.serverToken === 'string') serverToken.value = legacy.serverToken;
+      githubBranches.value = [];
+      giteeBranches.value = [];
+      return;
     }
-    if (typeof sync.githubToken === 'string') githubToken.value = sync.githubToken;
-    if (typeof sync.githubOwner === 'string') githubOwner.value = sync.githubOwner;
-    if (typeof sync.githubRepo === 'string') githubRepo.value = sync.githubRepo;
-    if (typeof sync.githubBranch === 'string') githubBranch.value = sync.githubBranch;
-    if (typeof sync.githubPath === 'string') githubPath.value = sync.githubPath;
-    if (typeof sync.giteeToken === 'string') giteeToken.value = sync.giteeToken;
-    if (typeof sync.giteeOwner === 'string') giteeOwner.value = sync.giteeOwner;
-    if (typeof sync.giteeRepo === 'string') giteeRepo.value = sync.giteeRepo;
-    if (typeof sync.giteeBranch === 'string') giteeBranch.value = sync.giteeBranch;
-    if (typeof sync.giteePath === 'string') giteePath.value = sync.giteePath;
-    if (typeof sync.webdavServerUrl === 'string') webdavServerUrl.value = sync.webdavServerUrl;
-    if (typeof sync.webdavUsername === 'string') webdavUsername.value = sync.webdavUsername;
-    if (typeof sync.webdavPassword === 'string') webdavPassword.value = sync.webdavPassword;
-    if (typeof sync.webdavUseDefaultProxy === 'boolean') webdavUseDefaultProxy.value = sync.webdavUseDefaultProxy;
-    if (typeof sync.webdavProxyUrl === 'string') webdavProxyUrl.value = sync.webdavProxyUrl;
-    if (typeof sync.serverUrl === 'string') serverUrl.value = sync.serverUrl;
-    if (typeof sync.serverToken === 'string') serverToken.value = sync.serverToken;
+    // 新结构：按 kind 判别联合分支恢复
+    switch (sync.kind) {
+      case 'github':
+        syncTarget.value = 'github';
+        if (typeof sync.token === 'string') githubToken.value = sync.token;
+        if (typeof sync.owner === 'string') githubOwner.value = sync.owner;
+        if (typeof sync.repo === 'string') githubRepo.value = sync.repo;
+        if (typeof sync.branch === 'string') githubBranch.value = sync.branch;
+        if (typeof sync.path === 'string') githubPath.value = sync.path;
+        break;
+      case 'gitee':
+        syncTarget.value = 'gitee';
+        if (typeof sync.token === 'string') giteeToken.value = sync.token;
+        if (typeof sync.owner === 'string') giteeOwner.value = sync.owner;
+        if (typeof sync.repo === 'string') giteeRepo.value = sync.repo;
+        if (typeof sync.branch === 'string') giteeBranch.value = sync.branch;
+        if (typeof sync.path === 'string') giteePath.value = sync.path;
+        break;
+      case 'webdav':
+        syncTarget.value = 'webdav';
+        if (typeof sync.serverUrl === 'string') webdavServerUrl.value = sync.serverUrl;
+        if (typeof sync.username === 'string') webdavUsername.value = sync.username;
+        if (typeof sync.password === 'string') webdavPassword.value = sync.password;
+        if (typeof sync.useDefaultProxy === 'boolean') webdavUseDefaultProxy.value = sync.useDefaultProxy;
+        if (typeof sync.proxyUrl === 'string') webdavProxyUrl.value = sync.proxyUrl;
+        break;
+      case 'server':
+        syncTarget.value = 'server';
+        if (typeof sync.serverUrl === 'string') serverUrl.value = sync.serverUrl;
+        if (typeof sync.token === 'string') serverToken.value = sync.token;
+        break;
+    }
     githubBranches.value = [];
     giteeBranches.value = [];
   };

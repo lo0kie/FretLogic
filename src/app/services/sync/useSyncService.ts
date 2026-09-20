@@ -41,6 +41,9 @@ export const resolvePushCredentialIssue = (target: SyncProviderKind = useSetting
 
 /** 云同步服务入口：返回推拉同步、覆盖应用、连接测试、分支获取等动作与各进行中状态 */
 export function useSyncService() {
+  // 「按当前同步目标」的两个动作缺省读 settingsStore.syncTarget：原先每次调用都现取一次 store
+  // 引用，改为随本 composable（在组件 setup 内调用）取一次，后续调用直接复用。
+  const settingsStore = useSettingsStore();
   return {
     syncToRemote: (target?: SyncProviderKind) => loadActions().then(m => m.syncToRemote(target)),
     /** 触发全局同步（推送到云端），语义同 syncToRemote 的对外别名 */
@@ -53,9 +56,9 @@ export function useSyncService() {
     applyOverwriteWithCloud: (cloudData: ImportExportPayload) =>
       loadActions().then(m => m.applyOverwriteWithCloud(cloudData)),
     fetchGithubBranches: (target?: SyncProviderKind) =>
-      loadActions().then(m => m.fetchGithubBranches(target ?? useSettingsStore().syncTarget)),
+      loadActions().then(m => m.fetchGithubBranches(target ?? settingsStore.syncTarget)),
     testConnection: (target?: SyncProviderKind) =>
-      loadActions().then(m => m.testConnection(target ?? useSettingsStore().syncTarget)),
+      loadActions().then(m => m.testConnection(target ?? settingsStore.syncTarget)),
     isTestingConnection,
     isFetchingBranches,
   };

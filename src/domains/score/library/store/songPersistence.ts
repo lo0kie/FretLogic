@@ -80,6 +80,15 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
         orderIds,
       });
     } catch (error) {
+      // 落盘失败：本批 delta 已从脏集合摘除，必须重新登记回去等下次刷写重试，
+      // 否则这批删除/脏歌曲/索引会随集合清空而永久丢失
+      for (const id of removed) {
+        dirtySongIds.delete(id);
+        removedSongIds.add(id);
+      }
+      for (const song of dirtySongs) dirtySongIds.add(song.id);
+      for (const id of dirtyRemovals) dirtySongIds.add(id);
+      if (orderIds) indexDirty = true;
       // 与 chordStore 对齐：上报到平台层统一提示（日志由上报点输出，不再就地 console）
       reportPersistFailure(PERSIST_FAILURE_KEY, error);
     }

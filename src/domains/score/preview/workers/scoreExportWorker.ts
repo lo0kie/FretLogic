@@ -16,10 +16,8 @@ export interface ExportChordData {
   chordName: string;
   strings: [number, boolean][];
   fretCount: number;
-  /** 品位/把位偏移量；`capo` 为历史备份兼容名（旧版本导出数据可能仍是 capo） */
+  /** 品位/把位偏移量 */
   fretOffset?: number;
-  /** @deprecated 旧版字段，仅兼容历史备份；新数据请用 fretOffset */
-  capo?: number;
   rootStringIndex: number | null;
   barres?: { fret: number; fromString: number; toString: number }[];
 }
@@ -623,7 +621,7 @@ function buildChordRasterKey(chord: ExportChordData, showBarre: boolean): string
   if (chord.barres) for (const b of chord.barres) barreSig += `${b.fret}:${b.fromString}-${b.toString},`;
   // 品数归一化到绘制实际使用的值：fretCount 3 与 0/1/2 画出来完全一样，不该各占一条
   const fretCount = Math.max(3, chord.fretCount || 4);
-  const offset = chord.fretOffset ?? chord.capo ?? 0;
+  const offset = chord.fretOffset ?? 0;
   return `${chord.chordName}|${strings.length}|${fretCount}|${offset}|${fretSig}|${barreSig}|${showBarre ? 1 : 0}`;
 }
 
@@ -776,7 +774,7 @@ function drawFretboardVector(
   }
 
   // 4. 弦枕（offset 为 0 时绘制）与品号（除首末所有品，对齐品丝）
-  const offset = chord.fretOffset ?? chord.capo ?? 0;
+  const offset = chord.fretOffset ?? 0;
   if (offset === 0) {
     // 0 品位偏移即从 1 品起步，绘制加粗枕条
     ctx.fillStyle = colors.FB_NUT;

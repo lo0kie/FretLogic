@@ -1,4 +1,5 @@
-@use '@/assets/tokens' as *;
+@use '@/assets/tokens'; /* CSS 规则层（:root/.dark/高对比），全站唯一引入点 */
+@use '@/assets/token-vars' as *; /* SCSS 变量层 */
 @use './transitions.scss';
 @import 'nprogress/nprogress.css';
 

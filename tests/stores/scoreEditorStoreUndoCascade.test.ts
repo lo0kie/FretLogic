@@ -29,11 +29,12 @@ import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useScoreHistory } from '@/domains/score/editor/store/useScoreHistory';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { lineCharChord } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 import type { Chord } from '@/domains/chord/types';
-import type { LineId, SlotKey } from '@/domains/score/types';
+import type { LineId } from '@/domains/score/types';
 
 /**
  * 搭建「store 侧响应式歌曲 + 真实历史栈」：applyState 走与生产接线完全一致的 updateSongMeta，
@@ -181,12 +182,12 @@ describe('经 store 公共 API 的多级联撤销（集成）', () => {
       groupId: toGroupId('g1'),
       nameSegments: nameToSegments('C'),
       strings: [
-        [-1, false],
-        [3, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
       fretCount: 4,
       fretOffset: 0,
@@ -214,7 +215,7 @@ describe('经 store 公共 API 的多级联撤销（集成）', () => {
       () => scoreEditorStore.activeSong?.chordMap,
       () => {
         derivedRebinds++;
-        if (scoreEditorStore.activeSong?.chordMap.get(slotKey) === chordC.id) {
+        if (scoreEditorStore.activeSong && lineCharChord(scoreEditorStore.activeSong.chordMap, 'l1', 0) === chordC.id) {
           scoreEditorStore.setSlotChord(slotKey, chordC);
         }
       },
@@ -230,16 +231,16 @@ describe('经 store 公共 API 的多级联撤销（集成）', () => {
     // 撤销第 1 步：回到 s1（两行歌词 + 和弦仍绑定）
     await scoreEditorStore.undo();
     expect(scoreEditorStore.activeSong?.lyrics).toBe('行1\n行2');
-    expect(scoreEditorStore.activeSong?.chordMap.get(slotKey)).toBe(chordC.id);
+    expect(lineCharChord(scoreEditorStore.activeSong!.chordMap, 'l1', 0)).toBe(chordC.id);
 
     // 撤销第 2 步：s0 与 s1 只差在和弦绑定上，它必须真的消失。若派生写入在撤销期被误记入栈，
     // 这一步会停在同一个状态（跳步）、和弦仍在
     await scoreEditorStore.undo();
-    expect(scoreEditorStore.activeSong?.chordMap.get(slotKey)).toBeUndefined();
+    expect(lineCharChord(scoreEditorStore.activeSong!.chordMap, 'l1', 0)).toBeNull();
 
     // 重做原路走回 s1
     await scoreEditorStore.redo();
-    expect(scoreEditorStore.activeSong?.chordMap.get(slotKey)).toBe(chordC.id);
+    expect(lineCharChord(scoreEditorStore.activeSong!.chordMap, 'l1', 0)).toBe(chordC.id);
 
     stopCascade();
   });

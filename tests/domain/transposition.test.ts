@@ -56,12 +56,12 @@ describe('乐理移调核心算法', () => {
       groupId: toGroupId('g_test'),
       nameSegments: nameToSegments('Am')!,
       strings: [
-        [-1, false],
-        [0, false],
-        [2, false],
-        [2, false],
-        [1, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
       fretCount: 4,
       fretOffset: 0,
@@ -74,12 +74,35 @@ describe('乐理移调核心算法', () => {
     // 默认模式 update_name：指法品位不变，仅和弦名与元数据更新
     const transposedNameOnly = transposeChordEntity(originalChord, 2);
     expect(getChordName(transposedNameOnly)).toBe('Bm');
-    expect(transposedNameOnly.strings[2]![0]).toBe(2);
+    expect(transposedNameOnly.strings[2]!.fret).toBe(2);
 
     // shift_frets 模式：品位平移
     const transposedFretShift = transposeChordEntity(originalChord, 2, { mode: 'shift_frets' });
     expect(getChordName(transposedFretShift)).toBe('Bm');
-    expect(transposedFretShift.strings[2]![0]).toBe(4); // 2 + 2 = 4
-    expect(transposedFretShift.strings[0]![0]).toBe(-1); // 静音弦仍为 -1
+    expect(transposedFretShift.strings[2]!.fret).toBe(4); // 2 + 2 = 4
+    expect(transposedFretShift.strings[0]!.fret).toBe(-1); // 静音弦仍为 -1
+  });
+
+  it('shift_frets 移调超出 fretCount 时钳制到 fretCount，不产生越界品', () => {
+    const originalChord: Chord = {
+      id: toChordId('c_test'),
+      groupId: toGroupId('g_test'),
+      nameSegments: nameToSegments('C')!,
+      strings: [
+        { fret: 3, preferFlat: false },
+        { fret: 4, preferFlat: false },
+      ],
+      fretCount: 4,
+      fretOffset: 0,
+      tuning: Tuning.STANDARD,
+      rootStringIndex: 1,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    // +2 后 4 -> 6 超出 fretCount=4，应钳制到 4（不越界、不静音丢弦）
+    const shifted = transposeChordEntity(originalChord, 2, { mode: 'shift_frets' });
+    expect(shifted.strings[1]!.fret).toBe(4);
+    expect(shifted.strings[0]!.fret).toBe(4); // 3+2=5 > 4，钳制到 4
   });
 });

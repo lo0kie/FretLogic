@@ -2,6 +2,10 @@
 @import 'tailwindcss/preflight.css';
 @import 'tailwindcss/utilities.css';
 
+/* O4：PWA window-controls-overlay 变体。裸 `@media(display-mode:...):[...]` 候选
+ * Tailwind v4 变体注册表不识别（产物中零命中，顶栏拖拽/内缩全部失效），改用具名变体。 */
+@custom-variant wco (@media (display-mode: window-controls-overlay));
+
 @theme {
   --color-primary: var(--color-primary);
   --color-success: var(--color-success);
@@ -27,7 +31,11 @@
   --color-control-border: var(--control-border);
   --color-separator: var(--separator);
 
-  /* 文字层级颜色：颜色名不带属性角色词，避免 text-text-* 叠加 */
+  /* 文字层级颜色：颜色名不带属性角色词，避免 text-text-* 叠加。
+     仅此四档（+ 强调色上的文字）：title > body > muted > disabled。
+     没有 fg-secondary / text-secondary 这一档——写 text-fg-secondary 不会报错也不会生效
+     （未注册的主题键不生成工具类，元素静默回落到继承色），曾因此漏掉 5 处。
+     需要「次级」时按层级取 body，需要更淡取 muted；真要新增中间档须先在此注册并由设计拍板。 */
   --color-fg-title: var(--text-title);
   --color-fg-body: var(--text-body);
   --color-fg-muted: var(--text-muted);

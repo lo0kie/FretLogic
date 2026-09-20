@@ -6,7 +6,7 @@ export { default as BaseSelector } from './selector/BaseSelector.vue';
 export { default as BaseInput } from './input/BaseInput.vue';
 export { default as BaseNumberInput } from './input/BaseNumberInput.vue';
 export { default as BaseTextarea } from './input/BaseTextarea.vue';
-export { default as GlobalToast } from './feedback/GlobalToast.vue';
+export { default as GlobalNotification } from './feedback/GlobalNotification.vue';
 export { default as Feedback } from './feedback/Feedback.vue';
 export { default as BasePopover } from './popover/BasePopover.vue';
 export { default as BaseMenu } from './menu/BaseMenu.vue';

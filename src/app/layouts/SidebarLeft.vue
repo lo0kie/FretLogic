@@ -2,6 +2,7 @@
   <aside
     v-bind="$attrs"
     :aria-label="route.path === ROUTE_PATHS.SCORE ? '乐谱库' : '指法库'"
+    :inert="!uiStore.isLeftOpen ? true : undefined"
     :style="{
       width: LEFT_SIDEBAR_WIDTH_PIXEL,
       transform: uiStore.isLeftOpen ? 'translateX(0)' : 'translateX(-100%)',
@@ -222,6 +223,7 @@
 <script setup lang="ts">
 import { computed, nextTick, provide, ref, useTemplateRef, watch } from 'vue';
 
+import { refDebounced } from '@vueuse/core';
 import { useRoute } from 'vue-router';
 
 import BackupModalsContainer from '@/app/modals/BackupModalsContainer.vue';
@@ -290,6 +292,10 @@ const scrollRef = useScrollAreaElement(scrollAreaRef);
 
 const route = useRoute();
 const uiStore = useUiStore();
+// 收起态除了移出视野（translateX(-100%) + opacity:0 + pointerEvents:none），还必须对键盘与
+// 辅助技术一并消失：只做视觉隐藏时，侧栏整棵子树仍在 tab 序里——Tab 会落到看不见的搜索框、
+// 分组按钮上，焦点还会把页面滚到那个"已经被推走"的位置。故模板对根节点绑 inert
+//（与 BaseCollapse 同一写法，vGridNav 的 isEligible 也已识别 [inert] 子树）。
 const chordStore = useChordStore();
 const songStore = useSongStore();
 
@@ -329,10 +335,16 @@ const backupModals = useBackupModals();
 const editorStore = useChordEditorStore();
 
 /** 搜索下拉：按卡片（多指法合并）匹配，附带分组名，截取前 30 张；
- *  收敛为单次 computed 计算，避免同一输入事件触发多次全库扫描 */
+ *  收敛为单次 computed 计算，避免同一输入事件触发多次全库扫描。
+ *  查询词 200ms 防抖：每次键入对全库跑 matchChordSearch（theory 的别名×变体展开，theory 属
+ *  保护区不能在内部加缓存），调用侧防抖把「连打一词」收敛为一次扫描，交互上无感知差异 */
 const SEARCH_RESULT_LIMIT = 30;
+const debouncedSearchQuery = refDebounced(
+  computed(() => searchQuery.value.trim()),
+  200
+);
 const searchResults = computed(() => {
-  const q = searchQuery.value.trim();
+  const q = debouncedSearchQuery.value;
   const items: { card: GroupedChordCard; groupName: string }[] = [];
   for (const group of chordStore.groups) {
     for (const card of chordStore.getGroupedCards(group.id, q)) {

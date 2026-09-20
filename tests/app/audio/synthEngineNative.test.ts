@@ -258,24 +258,24 @@ const ampEnvelopes = (): MockGain[] => gains.filter(g => g.gain.countOf('linearR
 
 const SIX_STRING_CHORD = {
   strings: [
-    [0, false],
-    [1, false],
-    [2, false],
-    [3, false],
-    [4, false],
-    [5, false],
-  ] as [number, boolean][],
+    { fret: 0, preferFlat: false },
+    { fret: 1, preferFlat: false },
+    { fret: 2, preferFlat: false },
+    { fret: 3, preferFlat: false },
+    { fret: 4, preferFlat: false },
+    { fret: 5, preferFlat: false },
+  ],
   fretOffset: 0,
   tuning: Tuning.STANDARD,
 };
 
 const FOUR_STRING_CHORD = {
   strings: [
-    [0, false],
-    [2, false],
-    [2, false],
-    [0, false],
-  ] as [number, boolean][],
+    { fret: 0, preferFlat: false },
+    { fret: 2, preferFlat: false },
+    { fret: 2, preferFlat: false },
+    { fret: 0, preferFlat: false },
+  ],
   fretOffset: 0,
   tuning: Tuning.STANDARD,
 };
@@ -464,13 +464,13 @@ describe('扫弦触发与 FM 调度', () => {
     await initAudioEngine();
     const chord = {
       strings: [
-        [-1, false],
-        [0, false],
-        [2, false],
-        [-1, false],
-        [2, false],
-        [0, false],
-      ] as [number, boolean][],
+        { fret: -1, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: -1, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+      ],
       fretOffset: 0,
       tuning: Tuning.STANDARD,
     };
@@ -490,12 +490,16 @@ describe('扫弦触发与 FM 调度', () => {
 });
 
 describe('延音触发与释放', () => {
-  it('延音触发返回发声弦数，且不排定自动停止', async () => {
+  it('延音触发返回发声弦数，且不按包络提前停止（仅 30s 泄漏硬上限）', async () => {
     await initAudioEngine();
     const count = triggerChordSustain(SIX_STRING_CHORD, { timingJitter: 0, velocityRange: 0 });
     expect(count).toBe(6);
     for (const c of splitVoices(TIMBRE_PRESETS.standard).carriers) {
-      expect(c.stopTime! - c.startTime!).toBeGreaterThan(1e6);
+      // 松手事件丢失（pointercancel/窗外松开）时无人调用释放：有限硬上限保证节点链
+      // 最坏情况也会自动结束并触发 onended 清理（旧的 1e9 占位即整链泄漏）
+      const life = c.stopTime! - c.startTime!;
+      expect(life).toBeGreaterThan(10);
+      expect(life).toBeLessThanOrEqual(30);
     }
   });
 

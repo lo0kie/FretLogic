@@ -81,10 +81,14 @@ export function toPlainPersistable<T>(value: T): T {
 export const serializeForStorage = (value: unknown): string =>
   JSON.stringify(value, (_key, val) => (val instanceof Map ? Object.fromEntries(val) : val));
 
-/** 克隆琴弦模型：剥响应式代理后逐弦复制 [品位, 升降偏好] 元组，得到纯净的可写副本。 */
-export function cloneGuitarStrings<T extends [number, boolean][]>(strings: T): T {
-  const raw = toRaw(strings);
-  return raw.map(s => [s[0], s[1]]) as unknown as T;
+/** 克隆琴弦模型：剥响应式代理后逐弦复制（兼容对象 {fret,preferFlat} 与旧二维元组），得到纯净的可写副本。 */
+export function cloneGuitarStrings<T extends readonly unknown[]>(strings: T): T {
+  const raw = toRaw(strings) as readonly unknown[];
+  return raw.map(s => {
+    if (Array.isArray(s)) return [s[0], s[1]] as [number, boolean];
+    const obj = s as { fret?: number; preferFlat?: boolean };
+    return { fret: obj.fret, preferFlat: obj.preferFlat };
+  }) as unknown as T;
 }
 
 // ===== stringDistance: 编辑距离 =====

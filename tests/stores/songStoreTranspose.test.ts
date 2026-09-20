@@ -9,7 +9,7 @@ import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 import type { Chord, ChordId } from '@/domains/chord/types';
-import type { LineId, SlotKey } from '@/domains/score/types';
+import type { LineId } from '@/domains/score/types';
 
 describe('歌曲移调动作 (songStore.transposeSong & transposeSongCapo)', () => {
   beforeEach(async () => {
@@ -28,12 +28,12 @@ describe('歌曲移调动作 (songStore.transposeSong & transposeSongCapo)', () 
       groupId: toGroupId('g1'),
       nameSegments: nameToSegments('C'),
       strings: [
-        [-1, false],
-        [3, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
       fretCount: 4,
       fretOffset: 0,
@@ -48,12 +48,12 @@ describe('歌曲移调动作 (songStore.transposeSong & transposeSongCapo)', () 
       groupId: toGroupId('g1'),
       nameSegments: nameToSegments('D'),
       strings: [
-        [-1, false],
-        [-1, false],
-        [0, false],
-        [2, false],
-        [3, false],
-        [2, false],
+        { fret: -1, preferFlat: false },
+        { fret: -1, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
       ],
       fretCount: 4,
       fretOffset: 0,
@@ -68,9 +68,8 @@ describe('歌曲移调动作 (songStore.transposeSong & transposeSongCapo)', () 
       [chordD.id, chordD],
     ]);
 
-    const slotKey = 'line_l1_start_0' as SlotKey;
     song.lineIds = ['l1' as LineId];
-    song.chordMap.set(slotKey, chordC.id);
+    song.chordMap.set('l1' as LineId, { char: new Map(), start: [chordC.id], end: [] });
     song.playKey = 'C';
 
     // 移调 +2 半音 (C -> D)
@@ -81,7 +80,7 @@ describe('歌曲移调动作 (songStore.transposeSong & transposeSongCapo)', () 
 
     const updated = songStore.songs.find(s => s.id === song.id)!;
     expect(updated.playKey).toBe('D');
-    expect(updated.chordMap.get(slotKey)).toBe(chordD.id);
+    expect(updated.chordMap.get('l1' as LineId)?.start).toEqual([chordD.id]);
   });
 
   it('transposeSongCapo: 增减变调夹品位并 clamp 在 [0, 12]', () => {

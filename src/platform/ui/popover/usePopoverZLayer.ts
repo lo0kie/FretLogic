@@ -61,6 +61,9 @@ export function usePopoverZLayer(options: UsePopoverZLayerOptions) {
 
   /** 从层级池获取新层号并登记到打开中浮层表（含后代层级预算约束） */
   const acquireOwnedZ = () => {
+    // 重复 open（如 v-show 退场被打断、@after-leave 不触发）此前不归还旧层号，
+    // 层号池会单调爬到 ceiling 且「后开者在上」失效；先归还再取新号
+    if (zOwned) releaseOwnedZ();
     let budget = Number.POSITIVE_INFINITY;
     if (panelEl.value) {
       for (const entry of openedPopovers) {
@@ -80,10 +83,14 @@ export function usePopoverZLayer(options: UsePopoverZLayerOptions) {
     return floatingZIndex.value;
   };
 
-  /** 归还本实例持有的层号（未持有时空操作） */
+  /** 归还本实例持有的层号（未持有时空操作）。归还必须同时摘除打开态登记：
+   * 只还层号不出表的话，幽灵条目仍 open:true 占着 topZ，isTopmostOpenPopover 会
+   * 把已关闭的层当最上层，后续浮层的 Esc 逐个失效（U10 修复只做一半的残尾） */
   const releaseOwnedZ = () => {
     if (!zOwned) return;
     releaseFloatingZ(floatingZIndex.value);
+    ownLayerEntry.open = false;
+    openedPopovers.delete(ownLayerEntry);
     zOwned = false;
   };
 
@@ -100,7 +107,14 @@ export function usePopoverZLayer(options: UsePopoverZLayerOptions) {
     for (const entry of openedPopovers) {
       if (entry.open) topZ = Math.max(topZ, entry.z);
     }
-    return floatingZIndex.value >= topZ;
+    if (floatingZIndex.value < topZ) return false;
+    // 同号并列（退场动画期间旧层尚未摘除等）时只允许登记序首个匹配者胜出，避免一次 Esc 全关
+    if (floatingZIndex.value === topZ) {
+      for (const entry of openedPopovers) {
+        if (entry.open && entry.z === topZ) return entry === ownLayerEntry;
+      }
+    }
+    return true;
   };
 
   /** 实例卸载清理：移出登记表并归还层号 */

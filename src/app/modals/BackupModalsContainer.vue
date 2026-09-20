@@ -2,6 +2,7 @@
   <BaseModal
     v-model:visible="backupModals.modals.export"
     :confirm-button-disabled="!isExportConfirmReady"
+    :confirm-loading="backupModals.modalData.exportBusy"
     @confirm="backupModals.handleExportConfirm"
     title="导出备份"
   >
@@ -55,8 +56,11 @@
         <BaseSwitch v-model="backupModals.modalData.exportSelection.syncSettings" aria-label="导出同步配置" />
       </BaseFormRow>
 
+      <!-- O7：密码行只看「是否勾选同步配置」，不再看内存态 hasCredentials——
+           Token 为纯内存态，刷新后恒空；按 hasCredentials 显隐会让刷新后「导出同步配置」
+           无处输入密码、服务侧硬拒绝，成为死路。本地无凭据时勾选导出也只是空 secrets。 -->
       <BaseFormRow
-        v-if="backupModals.modalData.exportSelection.syncSettings && backupModals.hasCredentials.value"
+        v-if="backupModals.modalData.exportSelection.syncSettings"
         help="用于加密备份包内的 Token / 密码，导入这些凭据时必须输入同一密码；请勿与备份文件一起分享"
         label="导出密码"
       >
@@ -77,6 +81,7 @@
   <BaseModal
     v-model:visible="backupModals.modals.import"
     :confirm-button-disabled="!hasImportSelection"
+    :confirm-loading="backupModals.modalData.importBusy"
     @confirm="backupModals.handleImportConfirm"
     confirm-type="danger"
     title="导入备份"
@@ -91,6 +96,18 @@
       />
     </template>
     <BaseForm :label-width="FORM_LABEL_WIDTH" class="py-xs" gap="md">
+      <!-- O8：导入覆盖不可逆，明示本机将被整体替换的规模（和弦库/乐谱库是覆盖式写入） -->
+      <BaseFormRow
+        v-if="importAvailability.chords || importAvailability.songs"
+        help="导入按所选类别整库覆盖：本机对应类别现有数据将被替换且不可恢复"
+        label="覆盖范围"
+      >
+        <div class="text-2xs whitespace-nowrap text-fg-muted">
+          将整库覆盖本地 {{ exportStats.groupCount }} 组 / {{ exportStats.chordCount }} 个和弦 /
+          {{ exportStats.songCount }}
+          份乐谱
+        </div>
+      </BaseFormRow>
       <BaseFormRow
         :disabled="!importAvailability.chords"
         :help="`备份包含 ${importStats?.groupCount ?? 0} 组 / ${importStats?.chordCount ?? 0} 个和弦`"
@@ -118,7 +135,7 @@
       <BaseFormRow
         :disabled="!importAvailability.syncSettings"
         :help="`云端后端：${importStats?.syncTargetLabel ?? '-'}${
-          backupModals.hasEncryptedSecrets.value ? '（凭据已加密，需输入导出密码）' : '（含凭据）'
+          backupModals.hasEncryptedSecrets.value ? '（凭据已加密，需输入导出密码）' : '（不含凭据）'
         }`"
         label="同步配置"
       >
@@ -168,13 +185,15 @@ import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { injectModalController } from '@/platform/store/useModalController';
+import { prefetch } from '@/platform/utils/prefetch';
 
 import type { useBackupModals } from '@/app/modals/useBackupModals';
 
 const backupModals = injectModalController<ReturnType<typeof useBackupModals>>('backupModals');
 
-// 弹窗打开即预取备份动作 chunk：点「确认导出/导入」时模块已在缓存，loading 立即出现
-onMounted(() => void backupModals.preloadBackupActions());
+// 弹窗打开即预取备份动作 chunk：点「确认导出/导入」时模块已在缓存，loading 立即出现。
+// 经 prefetch 吞掉失败：预取失败不应产生未处理 rejection，点击时会按原路径重新加载。
+onMounted(() => prefetch(backupModals.preloadBackupActions, 'BackupModalsContainer'));
 
 /** 表单行统一 Label 宽度：由 BaseForm 容器下发，各行无需重复声明 */
 const FORM_LABEL_WIDTH = '4.5rem';

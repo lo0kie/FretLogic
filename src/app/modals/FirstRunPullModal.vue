@@ -27,6 +27,7 @@ import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncS
 import { useStorage } from '@/platform/composables/useStorage';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
+import { prefetch } from '@/platform/utils/prefetch';
 
 import type { SyncProviderKind } from '@/platform/types';
 
@@ -40,8 +41,9 @@ const hasVisited = useStorage<boolean>(STORAGE_KEYS.HAS_VISITED, false);
 const settingsStore = useSettingsStore();
 const backupModals = useBackupModals();
 const { pullFromRemote, isPulling } = useSyncService();
-// 挂载即预取同步动作 chunk，用户点「拉取」时 busy 立即翻转（消除 chunk 拉取死区）
-onMounted(() => void preloadSyncActions());
+// 挂载即预取同步动作 chunk，用户点「拉取」时 busy 立即翻转（消除 chunk 拉取死区）；
+// 经 prefetch 吞掉失败，避免弱网下产生未处理 rejection
+onMounted(() => prefetch(preloadSyncActions, 'FirstRunPullModal'));
 
 /** 同步方案展示名（首访时 syncTarget 为默认值 gitee，见 GITEE_SYNC_CONFIG 预设） */
 const SYNC_TARGET_LABELS: Record<SyncProviderKind, string> = {

@@ -350,7 +350,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   （$bezier-standard，同 ActionButton）。
 -->
 <style scoped lang="scss">
-@use '@/assets/tokens' as *;
+@use '@/assets/token-vars' as *;
 
 .base-badge {
   transition:

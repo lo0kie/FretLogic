@@ -1,11 +1,11 @@
 <template>
-  <component :class="['base-form flex flex-col', gapClass]" :is="tag">
+  <component :class="['base-form flex flex-col', gapClass]" :is="tag" @submit="handleSubmit($event)">
     <slot />
   </component>
 </template>
 
 <script setup lang="ts">
-import { computed, provide } from 'vue';
+import { computed, provide, useAttrs } from 'vue';
 
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { FORM_ROW_DENSITY_KEY } from '@/platform/ui/form/formRowContext';
@@ -67,4 +67,14 @@ provide<FormRowDensityContext>(FORM_ROW_DENSITY_KEY, {
 provide<FormControlContext>(FORM_CONTROL_CONTEXT_KEY, {
   size: props.size,
 });
+
+// U14：tag="form" 时拦截原生隐式提交——表单内单个文本框回车会触发整页刷新（SPA 白屏级回归）。
+// 消费方自己的 @submit（落在 $attrs）会与这里的兜底处理器同时执行，故只在无外部 submit 监听时
+// 才 preventDefault，不吞业务提交逻辑。
+const attrs = useAttrs();
+const handleSubmit = (e: Event): void => {
+  if (props.tag === 'form' && !attrs['onSubmit']) {
+    e.preventDefault();
+  }
+};
 </script>

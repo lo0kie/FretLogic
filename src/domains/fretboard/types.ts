@@ -1,7 +1,12 @@
 import type { Brand } from '@/platform/types/brand';
 
-/** 单根琴弦：[0] 品位（-1 静音 / 0 空弦 / >=1 按品），[1] 是否偏好降号 */
-export type GuitarStringEntity = [fret: number, preferFlat: boolean];
+/** 琴弦实体：品位是物理事实，升降号偏好是纯显示偏好，二者拆分存放（避免同指纹只因显示偏好不同被判重） */
+export interface GuitarStringEntity {
+  /** 按哪品（-1 表示静音弦；合法域 -1/0/1..fretCount） */
+  fret: number;
+  /** 该音写成升号还是降号（纯显示偏好） */
+  preferFlat: boolean;
+}
 
 /** 琴弦模型：动态长度的琴弦数组（支持 3~10 弦，常用 4/6/7/8 弦） */
 export type GuitarStringsModel = GuitarStringEntity[];

@@ -1,5 +1,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
+import { resolveScrollBehavior } from '@/platform/utils/motion';
+
 import type { VirtualElement } from '@floating-ui/dom';
 import type { Ref } from 'vue';
 
@@ -88,7 +90,7 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
       if (!scrollEl.value || searchActiveIndex.value < 0) return;
       const items = scrollEl.value.querySelectorAll<HTMLElement>('button, [role="button"], [data-search-item]');
       const activeEl = items[searchActiveIndex.value];
-      activeEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      activeEl?.scrollIntoView({ block: 'nearest', behavior: resolveScrollBehavior('smooth') });
     });
   };
 

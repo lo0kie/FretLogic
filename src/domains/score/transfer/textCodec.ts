@@ -10,10 +10,11 @@ import { isValidTimeSignature } from '@/domains/score/constants';
 import { extractSongChordSequence } from '@/domains/score/model/chordSlots';
 import { clamp } from '@/platform/utils/common';
 import { TEXT_FORMAT } from '@/platform/utils/constants';
+import { logger } from '@/platform/utils/logger';
 
 import type { PortableChord, TextParseResult } from '@/domains/chord/transfer/chordTextCodec';
 import type { Chord, ChordId } from '@/domains/chord/types';
-import type { Capo, LineId, Song } from '@/domains/score/types';
+import type { Capo, Song } from '@/domains/score/types';
 
 // 和弦编解码 API 转发（兼容既有导入路径，如 tests/domain/textCodec.test.ts）
 export {
@@ -116,12 +117,12 @@ const createFallbackPortableChord = (name: string): PortableChord => {
     fretOffset: 0,
     rootStringIndex: null,
     strings: [
-      [-1, false],
-      [-1, false],
-      [-1, false],
-      [-1, false],
-      [-1, false],
-      [-1, false],
+      { fret: -1, preferFlat: false },
+      { fret: -1, preferFlat: false },
+      { fret: -1, preferFlat: false },
+      { fret: -1, preferFlat: false },
+      { fret: -1, preferFlat: false },
+      { fret: -1, preferFlat: false },
     ],
   };
 };
@@ -187,17 +188,19 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
       }
     }
 
-    // 解析行内的 [Chord] 标签
+    // 解析行内的 [Chord] 标签：strip 行首缩进，使字符下标对齐最终落地（sanitizeLyricsText 按行 trim）的行，
+    // 否则缩进/制表符会让和弦错挂到别的字（4 空格）或整槽被下标越界判定静默丢弃（6 制表符）
+    const lineRaw = raw.replace(/^\s+/, '');
     let cleanLine = '';
     let lastIndex = 0;
     let match: RegExpExecArray | null;
     BRACKET_CHORD_REGEX.lastIndex = 0;
 
-    while ((match = BRACKET_CHORD_REGEX.exec(raw)) !== null) {
+    while ((match = BRACKET_CHORD_REGEX.exec(lineRaw)) !== null) {
       const chordName = match[1]?.trim() ?? '';
       if (isValidChordName(chordName)) {
         hasValidChords = true;
-        cleanLine += raw.slice(lastIndex, match.index);
+        cleanLine += lineRaw.slice(lastIndex, match.index);
         const charIdx = cleanLine.length;
         slots.push({
           lineIdx,
@@ -208,7 +211,7 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
         lastIndex = match.index + match[0].length;
       }
     }
-    cleanLine += raw.slice(lastIndex);
+    cleanLine += lineRaw.slice(lastIndex);
 
     if (cleanLine.trim()) meaningfulContentCount++;
     cleanLyricsLines.push(cleanLine);
@@ -267,24 +270,48 @@ export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord
     }
 
     lines.push('LYRICS:');
-    if (song.lyrics) lines.push(...song.lyrics.split('\n'));
+    if (song.lyrics) lines.push(...song.lyrics.split('\n').map(escapeLyricsLine));
 
     lines.push('SLOTS:');
+    // N6：lineId 必须精确相等——旧实现的 indexOf 是子串匹配（l1 会命中 l10），上游
+    // songRepository 的 filter 让 lineIds 变短后又反查命中另一行，产物看似完整却全部错挂。
+    // 未命中的槽位逐条计数并入日志，不再静默 continue
+    const lineIdList = song.lineIds ?? [];
+    let missedSlots = 0;
     for (const step of steps) {
-      const lineIdx = (song.lineIds ?? []).indexOf(step.lineId as LineId);
-      if (lineIdx === -1) continue;
+      const lineIdx = lineIdList.findIndex(id => String(id) === String(step.lineId));
+      if (lineIdx === -1) {
+        missedSlots += 1;
+        continue;
+      }
       const alias = chordDict.get(step.chordId)?.key ?? '';
       lines.push(`${lineIdx}:${step.type}:${step.index}:${alias}`);
     }
+    if (missedSlots > 0) {
+      logger.warn(
+        'textCodec',
+        `导出乐谱文本：${missedSlots} 个槽位未命中当前行列表，已跳过（歌曲可能存在行残留引用）`,
+        {
+          songId: song.id,
+        }
+      );
+    }
   } else {
     lines.push('LYRICS:');
-    if (song.lyrics) lines.push(...song.lyrics.split('\n'));
+    if (song.lyrics) lines.push(...song.lyrics.split('\n').map(escapeLyricsLine));
   }
 
   return lines.join('\n');
 };
 
 const SLOT_RE = /^(\d+):(char|start|end):(\d+):(.*)$/;
+
+/** R6 段标记转义：歌词行恰好是裸段标记（CHORDS:/SLOTS:/LYRICS:）时会被解析当段切换吞掉，往返截断。
+ *  序列化对这类行加「\」前缀；解析侧识别后剥掉。 */
+const LYRICS_SECTION_MARKERS = new Set(['CHORDS:', 'SLOTS:', 'LYRICS:']);
+const escapeLyricsLine = (line: string): string => (LYRICS_SECTION_MARKERS.has(line.trim()) ? `\\${line}` : line);
+const unescapeLyricsLine = (raw: string): string =>
+  raw.startsWith('\\') && LYRICS_SECTION_MARKERS.has(raw.slice(1).trim()) ? raw.slice(1) : raw;
 
 /** 解析乐谱文字；返回 PortableSong 或错误分类（槽位越界/字段非法只跳过单条） */
 export const parseSongFromText = (text: string): TextParseResult<SmartSongImport> => {
@@ -374,7 +401,7 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
         // 兼容旧版：旧版格式中 CHORDS: 在 LYRICS: 之后
         section = 'chords';
       } else {
-        lyricsLines.push(raw);
+        lyricsLines.push(unescapeLyricsLine(raw));
       }
       continue;
     }

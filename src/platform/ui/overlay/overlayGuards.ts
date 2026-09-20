@@ -75,13 +75,35 @@ export function useOverlayMaskClose(opts: { canClose: () => boolean; close: (rea
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/**
+ * 圈选元素是否真实可聚焦：querySelectorAll 只能按选择器初筛，选出结果里仍混有
+ * 「自身/祖先 display:none、visibility:hidden」与「inert 子树」内的元素——focus() 落空、
+ * 焦点丢给 body，Tab 循环在边界处（first/last 恰是这类元素时）失效。逐层剔除。
+ */
+const isActuallyFocusable = (panel: HTMLElement, el: HTMLElement): boolean => {
+  // inert 子树：浮层内嵌套的关闭中 Drawer / 让位 FloatingPanel 等场景
+  if (el.closest('[inert]')) return false;
+  let node: HTMLElement | null = el;
+  while (node && node !== panel) {
+    const style = getComputedStyle(node);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    node = node.parentElement;
+  }
+  return true;
+};
+
 /** Tab 焦点圈定：在浮层面板内首个/末个可聚焦元素间循环（面板无可聚焦元素时聚焦面板自身） */
 export function useOverlayFocusTrap(panelRef: Ref<HTMLElement | null>): (e: KeyboardEvent) => void {
   return (e: KeyboardEvent) => {
     if (e.key !== 'Tab' || !panelRef.value) return;
-    const focusables = Array.from(panelRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+    const panel = panelRef.value;
+    // 中间元素的跳转由浏览器原生 Tab 顺序兜底（原生会自动跳过 hidden/inert），
+    // 这里只需保证 first/last 边界元素真实可聚焦
+    const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(el =>
+      isActuallyFocusable(panel, el)
+    );
     if (focusables.length === 0) {
-      panelRef.value.focus();
+      panel.focus();
       return;
     }
     const firstEl = focusables[0]!;

@@ -22,3 +22,13 @@ export interface SegmentOption<T> {
   /** 选项附带数量角标（如分组条目数），组件不消费，仅透传给 item-suffix 插槽供调用方渲染 */
   count?: number;
 }
+
+/**
+ * 从选项类型中提取对应的绑值类型：对象选项取 value，原始值即其自身。
+ *
+ * 与 BaseSelector 的 OptionValue 同形——选项类型（`O`）由调用方传入、绑值类型由它推导，
+ * 组件不再把「绑值类型」当泛型参数去猜：猜的过程正是字面量联合退化成宽类型的地方
+ * （`options` 写成 `(T | SegmentOption<T>)[]` 时，TS 要在一个含裸类型变量的联合里
+ * 挑推断来源，`3 | 4 | 5` 这类字面量联合会被抹平）。
+ */
+export type SegmentOptionValue<Opt> = Opt extends { value: infer V } ? V : Opt;

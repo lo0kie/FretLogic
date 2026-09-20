@@ -32,7 +32,7 @@ export const useChordDraftEditing = (draftStore: ChordEditorStore = useActiveCho
   /** 用户按弦变化后同步整份按弦模型到草稿 */
   const handleStringsChange = (strings: GuitarStringsModel) => {
     strings.forEach((str, i) => {
-      editorStore.draftChord.strings[i] = [str[0], str[1]];
+      editorStore.draftChord.strings[i] = { fret: str.fret, preferFlat: str.preferFlat };
     });
     markCreating();
   };
@@ -40,7 +40,7 @@ export const useChordDraftEditing = (draftStore: ChordEditorStore = useActiveCho
   /** 用户切换根音弦后写入草稿（目标弦无按音时视为取消根音）；手动改根音后候选根音快照过期 */
   const handleRootStringChange = (index: number | null) => {
     const validIndex: StringIndex | null =
-      index !== null && (editorStore.draftChord.strings[index]?.[0] ?? -1) >= 0 ? toStringIndex(index) : null;
+      index !== null && (editorStore.draftChord.strings[index]?.fret ?? -1) >= 0 ? toStringIndex(index) : null;
     editorStore.draftChord.rootStringIndex = validIndex;
     editorStore.discardRootSnapshot();
     markCreating();

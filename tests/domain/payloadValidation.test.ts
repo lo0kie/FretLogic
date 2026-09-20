@@ -5,12 +5,12 @@ import { sanitizePersistedData } from '@/app/services/validation/persistedData';
 
 const group = { id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' };
 const strings = [
-  [-1, false],
-  [3, false],
-  [2, false],
-  [0, false],
-  [1, false],
-  [0, false],
+  { fret: -1, preferFlat: false },
+  { fret: 3, preferFlat: false },
+  { fret: 2, preferFlat: false },
+  { fret: 0, preferFlat: false },
+  { fret: 1, preferFlat: false },
+  { fret: 0, preferFlat: false },
 ];
 
 describe('payload validation migration matrix', () => {
@@ -34,7 +34,7 @@ describe('payload validation migration matrix', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.version).toBe(6);
+    expect(result.payload?.version).toBe(7);
     expect(result.payload?.groups[0]).not.toHaveProperty('collapsed');
     expect(result.payload?.chords[0]).not.toHaveProperty('isInverted');
     expect(result.payload?.chords[0]).not.toHaveProperty('fingerprint');
@@ -48,7 +48,12 @@ describe('payload validation migration matrix', () => {
         {
           id: 7,
           chordName: 'C',
-          strings: strings.map(([fret, preferFlat]) => ({ fret, preferFlat })),
+          // v2 格式：对象数组 [{fret, preferFlat}]
+          strings: [
+            { fret: -1, preferFlat: false },
+            { fret: 1, preferFlat: true },
+            { fret: 0, preferFlat: false },
+          ],
           fretCount: 3,
           fretOffset: 0,
           groupId: 'g1',
@@ -60,7 +65,39 @@ describe('payload validation migration matrix', () => {
 
     expect(result.isValid).toBe(true);
     expect(result.payload?.chords[0].id).toBe('7');
-    expect(result.payload?.chords[0].strings[0]).toEqual([-1, false]);
+    expect(result.payload?.chords[0].strings[0]).toEqual({ fret: -1, preferFlat: false });
+  });
+
+  it('v6->v7 迁移：二维元组琴弦转为对象型', () => {
+    const result = validateImportExportPayload({
+      version: 6,
+      groups: [group],
+      chords: [
+        {
+          id: 'c1',
+          chordName: 'C',
+          // v6 旧格式：二维元组 [[fret, preferFlat]]
+          strings: [
+            [-1, false],
+            [3, true],
+            [0, false],
+          ],
+          fretCount: 3,
+          fretOffset: 0,
+          groupId: 'g1',
+          tuning: 'STANDARD',
+        },
+      ],
+      songs: [],
+    });
+
+    expect(result.isValid).toBe(true);
+    expect(result.payload?.version).toBe(7);
+    expect(result.payload?.chords[0].strings).toEqual([
+      { fret: -1, preferFlat: false },
+      { fret: 3, preferFlat: true },
+      { fret: 0, preferFlat: false },
+    ]);
   });
 
   it('migrates legacy song key to playKey at v3', () => {
@@ -153,10 +190,11 @@ describe('payload validation migration matrix', () => {
           id: 's1',
           title: 'S',
           lyrics: '',
-          lineIds: [],
+          lineIds: ['l1'],
           playKey: 'C',
           capo: 0,
-          chordMap: { slot: 'missing', slot2: 'c1' },
+          // 旧扁平槽位：v7 迁移归一为嵌套后，'missing' 作为孤儿引用被剪除
+          chordMap: { line_l1_char_0: 'missing', line_l1_char_1: 'c1' },
         },
       ],
     });
@@ -277,5 +315,18 @@ describe('payload validation migration matrix', () => {
     expect(result.payload?.chords).toHaveLength(1);
     expect(result.payload?.chords[0]?.id).toBe('c1');
     expect(result.warnings?.some(w => w.includes('孤儿和弦'))).toBe(true);
+  });
+
+  it('拉取时透传云端 dataMd5 / dataUpdatedAt 校验元数据，供启动比对使用', () => {
+    const result = validateImportExportPayload({
+      groups: [group],
+      chords: [],
+      songs: [],
+      dataMd5: 'abc123checksum',
+      dataUpdatedAt: 1700000000000,
+    });
+    expect(result.isValid).toBe(true);
+    expect(result.payload?.dataMd5).toBe('abc123checksum');
+    expect(result.payload?.dataUpdatedAt).toBe(1700000000000);
   });
 });

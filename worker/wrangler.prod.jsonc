@@ -1,0 +1,22 @@
+{
+  // 生产环境 Worker 配置（fret-logic-service，仅绑生产库，与开发 Worker 完全隔离）
+  // 与根 wrangler.jsonc 的静态站点互不影响；开发环境见 worker/wrangler.dev.jsonc
+  // 部署：pnpm deploy:worker:prod（CI 专用；部署脚本缺省目标是 dev，本地手滑不会发到这里）
+  "name": "fret-logic-service",
+  // 指向 worker/scripts/build-worker.mjs 的打包产物（hono 已打进单文件），故开 no_bundle 让 wrangler 不再二次打包。
+  // 路径按「本配置文件所在目录」解析，故下面的 dist/index.mjs 即 worker/dist/index.mjs。
+  // 不放根 dist/：那是 vite 的应用产物目录（build 会清空、Pages 会整目录发布），混放会互相污染。
+  "main": "dist/index.mjs",
+  "no_bundle": true,
+  "compatibility_date": "2026-09-15",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      // 生产库：对应 Cloudflare 控制台里的 fret-logic
+      "database_name": "fret-logic",
+      "database_id": "a59eb92a-e0bb-4c7e-ab5f-3a5498cbae6c",
+    },
+  ],
+  // SERVER_TOKEN 不写入仓库：本地用 `wrangler secret put SERVER_TOKEN`，
+  // CI 用仓库 Secret 并通过 `--var SERVER_TOKEN:...` 注入（见 .github/workflows/deploy-worker.yml）。
+}

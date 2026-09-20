@@ -1,4 +1,4 @@
-import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
+import { nameToSegments, segmentsToString, Tuning } from '@/domains/chord/theory/theory';
 import {
   isCapoValue,
   isFretOffsetValue,
@@ -7,8 +7,29 @@ import {
   toFretOffset,
 } from '@/domains/fretboard/model/coordinates';
 
-import type { Chord, ExtensionSegment } from '@/domains/chord/types';
-import type { FretOffset, GuitarStringEntity, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
+import type { Chord, ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
+import type { BarreEntity, FretOffset, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
+
+/**
+ * 两个和弦名分片是否等价（根音 / 性质 / 扩展音 / 低音逐项比对）。
+ *
+ * 用于存量迁移时判断「重解析后的分片是否与原来不同」，从而决定要不要写盘。
+ * 只比对话义有影响的部分：元组的元素个数差异（`[5]` 与 `[5, 0]`）视为等价，
+ * 因为 `segmentsToString` 对两者的输出完全相同，为它们触发一次写盘没有意义。
+ */
+const areSegmentsEqual = (a: ChordNameSegments, b: ChordNameSegments): boolean => {
+  const pitch = (seg: readonly (string | number | undefined)[] | undefined): string =>
+    seg ? `${seg[0]}:${seg[1] ?? 0}` : '';
+  const exts = (list: ExtensionSegment[] | undefined): string =>
+    (list ?? []).map(([deg, acc]) => `${deg}:${acc ?? 0}`).join(',');
+  return (
+    pitch(a.root) === pitch(b.root) &&
+    (a.quality ?? '') === (b.quality ?? '') &&
+    (a.unknownQuality ?? '') === (b.unknownQuality ?? '') &&
+    pitch(a.bass) === pitch(b.bass) &&
+    exts(a.extensions) === exts(b.extensions)
+  );
+};
 
 /**
  * 把 extensions 统一重建为元组 [degree, accidental?]。
@@ -31,10 +52,21 @@ const repairExtensions = (extensions: unknown): ExtensionSegment[] | undefined =
 };
 
 /**
+ * 横按比较用的规范串：把**空数组**与 `undefined` 折算成同一种形态。
+ *
+ * 原先两侧直接 `JSON.stringify` 比较，而 `normalizeBarres([], n)` 返回的是 `undefined`，
+ * 于是 `JSON.stringify([])`（`'[]'`）与 `JSON.stringify(undefined)`（`undefined`）**恒不相等** ——
+ * 任何 `barres: []` 的和弦每次归一化都被判为「已变更」，反复触发写盘。
+ * 空数组与 undefined 在语义上都是「没有横按」，比较前必须统一。
+ */
+const barresForCompare = (barres: BarreEntity[] | undefined): string =>
+  JSON.stringify(barres && barres.length > 0 ? barres : undefined);
+
+/**
  * 和弦实体归一化：迁移旧数据结构并修复非法字段。
  * 覆盖：strings 对象数组 → 二维数组、弦级 isRoot → 单点 rootStringIndex（含有效性校验）、
  * 旧字段（isInverted/fingerprint/chordName）清理、横按合法性过滤、chordName → nameSegments 迁移、
- * extensions 元组塌陷修复（历史坏数据自愈）。
+ * extensions 元组塌陷修复（历史坏数据自愈）、旧「性质 + 散装张力音」分片迁移为性质整词形态。
  * @returns 规范化实体与是否发生变更（未变更时原样返回引用，避免无谓的深拷贝/写盘）
  */
 export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean } => {
@@ -47,7 +79,10 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   const tuning = chord.tuning || Tuning.STANDARD;
   const fretCount = chord.fretCount ?? 3;
 
-  // 迁移：strings 由旧对象数组 [{fret, preferFlat}] 升级为二维数组 [[fret, preferFlat]]
+  // 迁移：strings 由旧二维元组 `[[fret, preferFlat]]` 升级为对象数组 `[{ fret, preferFlat }]`。
+  // 对象形态是 `GuitarStringEntity` 的**声明形态**（见 fretboard/types.ts），也是当前落盘形态；
+  // 元组只是历史遗留，读到即转换并置位 `stringsMigrated`。
+  //
   // 注意：fret 合法值是 -1/0/正整数，不能用 `|| -1` 兜底（0 是空弦，会被误判为 -1 静音）
   // 品位清洗：fret 为可视窗口内的相对值，合法值域 -1/0/1..fretCount，越界一律置 -1 静音
   let stringsMigrated = false;
@@ -59,14 +94,17 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   };
   const strings = (chord.strings as unknown[]).map(s => {
     if (Array.isArray(s)) {
-      return [
-        typeof s[0] === 'number' && Number.isFinite(s[0]) ? boundFret(s[0]) : -1,
-        Boolean(s[1]),
-      ] as GuitarStringEntity;
+      // 旧形态：二维元组 → 转对象，并置位「已迁移」
+      stringsMigrated = true;
+      return {
+        fret: typeof s[0] === 'number' && Number.isFinite(s[0]) ? boundFret(s[0]) : -1,
+        preferFlat: Boolean(s[1]),
+      };
     }
-    stringsMigrated = true;
-    const legacy = s as { fret?: number; preferFlat?: boolean; isRoot?: boolean };
-    return [typeof legacy?.fret === 'number' ? boundFret(legacy.fret) : -1, !!legacy?.preferFlat] as GuitarStringEntity;
+    // 当前形态：对象。**不得置位 `stringsMigrated`** —— 那会让每个已规范化的和弦
+    // 每次载入都被判为「已变更」而反复写盘（与横按 `[] !== undefined` 是同一类误判）。
+    const cur = s as { fret?: number; preferFlat?: boolean; isRoot?: boolean };
+    return { fret: typeof cur?.fret === 'number' ? boundFret(cur.fret) : -1, preferFlat: !!cur?.preferFlat };
   }) as GuitarStringsModel;
 
   // 迁移：旧数据每根弦各自维护 isRoot，统一为单点 rootStringIndex
@@ -83,8 +121,8 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
     rootStringIndex !== null &&
     (rootStringIndex < 0 ||
       rootStringIndex >= strings.length ||
-      strings[rootStringIndex]?.[0] === undefined ||
-      strings[rootStringIndex]![0] < 0)
+      strings[rootStringIndex]?.fret === undefined ||
+      strings[rootStringIndex]!.fret < 0)
   ) {
     rootStringIndex = null;
   }
@@ -113,7 +151,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   const rawBarres = normalizeBarres(chord.barres, strings.length);
   const finalBarres = normalizeAndMergeBarres(rawBarres, strings);
 
-  const barresChanged = JSON.stringify(chord.barres ?? undefined) !== JSON.stringify(finalBarres);
+  const barresChanged = barresForCompare(chord.barres) !== barresForCompare(finalBarres);
 
   let nameSegments = chord.nameSegments;
   let nameMigrated = false;
@@ -132,6 +170,30 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
       if (fixedExtensions) repaired.extensions = fixedExtensions;
       else delete repaired.extensions;
       nameSegments = repaired;
+    }
+
+    // 存量迁移：把「性质 + 散装张力音」的旧分片重解析为**性质整词**的新分片。
+    //
+    // 旧解析路径先用张力正则剥走 `#b数字`，于是 `Cm7b5` 落盘成
+    // `{ quality: 'm7', extensions: [[5,-1]] }` —— 半减七被拆成「小七 + 降五」两半。
+    // 新解析器把 `m7b5` 当**一个 token**整体识别，落盘成 `{ quality: 'm7b5' }`。
+    // 两种形态渲染全称时结果相同（都是 `Cm7b5`），但简写不同：
+    // 旧形态下 `m7` 走小七简写、`b5` 单挂尾部，简写模式会显示 `Cm7b5` 而非 `Cø7`。
+    //
+    // 这正是当初在 `segmentsToString` / `vChordName` 各补一处正则特判要救的问题。
+    // 那两处特判已删除，改为在这里**一次性迁移**：把旧分片渲染回名字串、再交新解析器，
+    // 即得规范形态。迁移是幂等的 —— 新分片重渲染再解析必然与自身一致，
+    // 故第二次载入 `changed` 即为 false，不会反复写盘。
+    //
+    // 仅在「有性质且有扩展音」时才走这条路径：这是旧形态**唯一**可能与新形态不同的组合
+    // （三和弦/纯七和弦等没有扩展音，新旧分片完全一致），避免给全库每次载入都加一遍重解析。
+    if (nameSegments.quality && nameSegments.extensions && nameSegments.extensions.length > 0) {
+      const rendered = segmentsToString(nameSegments);
+      const reparsed = rendered ? nameToSegments(rendered) : null;
+      if (reparsed && !areSegmentsEqual(reparsed, nameSegments)) {
+        nameRepaired = true;
+        nameSegments = reparsed;
+      }
     }
   }
   delete legacyChord.chordName;

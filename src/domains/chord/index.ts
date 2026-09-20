@@ -17,7 +17,6 @@ export * from './store/chordStore';
 export * from './store/chordEditorStore';
 export * from './theory/theory';
 export * from './theory/chordEngine';
-export * from './theory/grammar';
 export * from './theory/models';
 export * from './theory/entityFactories';
 export * from './theory/normalizeChord';

@@ -60,7 +60,7 @@ describe('gitee sync provider', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ content: btoa(JSON.stringify(payload)) })));
     const provider = createGiteeSyncProvider(config);
     const result = await provider.pull();
-    expect(result?.version).toBe(6);
+    expect(result?.version).toBe(7);
     expect(result?.groups).toHaveLength(1);
     expect(result?.groups[0]).toMatchObject({ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' });
   });

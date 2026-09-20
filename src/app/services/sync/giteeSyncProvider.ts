@@ -24,6 +24,11 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
     const base = `${GITEE_API_BASE}/repos/${config.owner}/${config.repo}/contents/${config.path}`;
     return ref ? `${base}?ref=${encodeURIComponent(ref)}` : base;
   };
+  /** 独立校验元数据载体：数据源文件同目录下的 `.meta.json`，启动检测只拉这份最小数据 */
+  const metaFileUrl = (ref?: string) => {
+    const base = `${GITEE_API_BASE}/repos/${config.owner}/${config.repo}/contents/${config.path}.meta.json`;
+    return ref ? `${base}?ref=${encodeURIComponent(ref)}` : base;
+  };
 
   const repoUrl = () => `${GITEE_API_BASE}/repos/${config.owner}/${config.repo}`;
 
@@ -120,6 +125,58 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
       }
       const branches: { name: string }[] = await response.json();
       return branches.map(b => b.name).filter(name => !name.startsWith('dependabot/'));
+    },
+    async fetchMeta() {
+      const response = await request({ method: 'GET' }, metaFileUrl(config.branch));
+      if (response.status === 404) return null; // 旧数据/从未上传：无独立 meta
+      if (!response.ok)
+        throw new SyncError(
+          'REQUEST_FAILED',
+          `Gitee 返回错误状态码：${response.status}${await describeError(response)}`
+        );
+      try {
+        const parsed = JSON.parse(await decodeBase64Envelope(response)) as { md5?: unknown; updatedAt?: unknown };
+        if (typeof parsed.md5 === 'string' && typeof parsed.updatedAt === 'number') {
+          return { md5: parsed.md5, updatedAt: parsed.updatedAt };
+        }
+        return null;
+      } catch {
+        return null; // meta 损坏视为无 meta，引导重传
+      }
+    },
+    async pushMeta(meta) {
+      // 探测必须带 ref（T1）：不带 branch 参数时 Gitee 读默认分支，
+      // 目标分支已有 meta 而默认分支没有时会误判 200+[]（拿不到 sha）→ POST 新建必失败。
+      const existing = await request({ method: 'GET' }, metaFileUrl(config.branch));
+      let sha = '';
+      if (existing.ok) {
+        const body = await existing.json();
+        sha = String(Array.isArray(body) ? '' : (body.sha ?? ''));
+      } else if (existing.status !== 404) {
+        throw new SyncError(
+          'REQUEST_FAILED',
+          `Gitee 返回错误状态码：${existing.status}${await describeError(existing)}`
+        );
+      }
+      const method = sha ? 'PUT' : 'POST';
+      const response = await request(
+        {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: base64EncodeUtf8(serializeForStorage(meta)),
+            message: buildSyncCommitMessage(),
+            branch: config.branch,
+            ...(sha ? { sha } : {}),
+          }),
+        },
+        metaFileUrl()
+      );
+      if (!response.ok)
+        throw new SyncError(
+          'REQUEST_FAILED',
+          `Gitee meta 写入返回错误状态码：${response.status}${await describeError(response)}`
+        );
     },
     async testConnection(): Promise<string> {
       const response = await request({ method: 'GET' }, repoUrl());

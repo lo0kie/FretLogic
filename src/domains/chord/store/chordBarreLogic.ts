@@ -92,7 +92,7 @@ export const mergeAutoBarres = (
   const candidates = computeBarreCandidates(strings, fretCount).filter(c => {
     let noteCount = 0;
     for (let s = c.fromString; s <= c.toString; s++) {
-      if (strings[s]?.[0] === c.fret) noteCount++;
+      if (strings[s]?.fret === c.fret) noteCount++;
     }
     return noteCount >= 3;
   });
@@ -108,12 +108,12 @@ export const pruneForFretCount = (
 ): void => {
   if (newVal >= oldVal) return;
   state.strings.forEach(str => {
-    if (str[0] > newVal) {
-      str[0] = -1;
+    if (str.fret > newVal) {
+      str.fret = -1;
     }
   });
   // 根音所在弦被清除时，根标记一并失效
-  if (state.rootStringIndex !== null && (state.strings[state.rootStringIndex]?.[0] ?? -1) < 0) {
+  if (state.rootStringIndex !== null && (state.strings[state.rootStringIndex]?.fret ?? -1) < 0) {
     state.rootStringIndex = null;
   }
   // 缩品位时同步清理越界横按

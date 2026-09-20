@@ -254,7 +254,7 @@ const getDpr = () => {
 function getCacheKey(): string {
   const c = props.chord;
   const strings = c.strings ?? [];
-  const strSig = strings.map(s => s[0]).join(',');
+  const strSig = strings.map(s => s.fret).join(',');
   const barreSig = (c.barres ?? []).map(b => `${b.fret}:${b.fromString}-${b.toString}`).join('|');
   const flagSig = [
     reserveName.value,

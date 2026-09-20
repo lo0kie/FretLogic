@@ -71,10 +71,9 @@ import {
   segmentsToString,
 } from '@/domains/chord/theory/theory';
 import { useFretboardInteraction } from '@/domains/fretboard/composables/useFretboardInteraction';
+import { CANVAS_CONFIG, CHORD_NAME_FONT_SIZE } from '@/domains/fretboard/constants';
 import { isDark } from '@/platform/composables/useTheme';
 import { useUiStore } from '@/platform/store/uiStore';
-
-import { CANVAS_CONFIG, CHORD_NAME_FONT_SIZE } from '../constants';
 
 import type { Chord, ChordNameSegments } from '@/domains/chord/types';
 import type { BarreEntity, GuitarStringsModel } from '@/domains/fretboard/types';
@@ -111,7 +110,8 @@ const handleToggleBarre = (barre: BarreEntity) => {
     const filtered = current.filter((_, idx) => idx !== existsIndex);
     next = filtered.length > 0 ? filtered : undefined;
   } else {
-    next = [...current, { fret: barre.fret, fromString: barre.fromString, toString: barre.toString }];
+    // 保留入参携带的 finger（持久化字段，导出文本指法依赖它）；手工重建会把它丢掉
+    next = [...current, { ...barre }];
   }
   emit('update:barres', next);
 };
@@ -143,7 +143,7 @@ const MAX_CHORD_NAME_LENGTH = 16;
  * 1. 无修改 -> 保持原名称
  * 2. 删空 -> 清空和弦名
  * 3. 合法名称 -> 派发生效
- * 4. 非法名称 -> Toast 警告并恢复修改前的有效名称
+ * 4. 非法名称 -> Message 警告并恢复修改前的有效名称
  */
 const commitOrRevert = (rawText: string) => {
   const trimmed = rawText.trim();
@@ -176,7 +176,7 @@ const commitOrRevert = (rawText: string) => {
   }
 
   // 4. 非法名称：警告并回退（Esc 恢复由 BaseEditableText 在 cancel 时同步回 modelValue）
-  uiStore.toast.warning('和弦名称不合法');
+  uiStore.message.warning('和弦名称不合法');
   inputChordName.value = currentName;
 };
 
@@ -185,7 +185,7 @@ const handleEscape = () => {
   const isChanged = inputChordName.value.trim() !== displayChordName.value.trim();
   inputChordName.value = displayChordName.value;
   if (isChanged) {
-    uiStore.toast.info('已取消编辑');
+    uiStore.message.info('已取消编辑');
   }
 };
 

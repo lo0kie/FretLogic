@@ -301,16 +301,15 @@ const ariaLabelText = computed(() => {
 .char-box {
   min-width: 0;
   min-height: 0;
+  /* 关键：min-width/min-height 过渡必须落在基类上——松开拖拽时 .is-drop-widened 被摘除，
+     过渡若只写在状态类里会在同一帧随类一起消失，导致收拢瞬间跳回原宽而无过渡。
+     box-sizing 恒定 content-box，避免收拢时宽度口径翻转造成离散跳变（撑开/收拢始终平滑）。 */
+  box-sizing: content-box;
+  transition: all 0.12s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-/* 拖拽期间仅当前活动落点行空字符槽/添加槽统一撑开：
-   min-width/min-height 只作下限、不缩窄；平滑过渡尺寸，
-   保证拖拽到空行或未排和弦的行时落点边框有充足高度，且绝无外边距抖动闪烁 */
+/* 拖拽期间仅当前活动落点行空字符槽/添加槽统一撑开：尺寸走基类的 all 过渡，撑开与收拢双向往返均平滑 */
 .is-drop-widened {
-  transition:
-    min-width 0.12s cubic-bezier(0.25, 0.1, 0.25, 1),
-    min-height 0.12s cubic-bezier(0.25, 0.1, 0.25, 1);
-  box-sizing: content-box;
   min-width: 58px;
   min-height: 108px;
 }

@@ -13,8 +13,6 @@ import { errors } from '@/platform/services/errors';
 
 import { isPersistBlocked } from './persistFailure';
 
-import type { Chord, Group } from '@/domains/chord/types';
-import type { Song } from '@/domains/score/types';
 import type { IDBPDatabase, IDBPTransaction } from 'idb';
 
 export const DB_NAME = 'fret-logic-v2';
@@ -52,14 +50,17 @@ export const SCHEMA: Record<string, ObjectStoreSchema> = {
  * 编译期 Schema 绑定（零运行时代码）：把每个对象库的「主键类型 / 记录类型 / 索引类型」
  * 与 SCHEMA 对应起来，idb 各方法的 storeName 收紧为 keyof AppDBSchema——
  * 拼错库名、往库里塞错类型记录、按不存在的索引查询，均在编译期报错。
- * 类型来源仅限 import type，不引入对 domains 的运行时依赖。
+ *
+ * ⚠️ 本文件属于 platform，**不得 import 任何 domain 类型**（AGENTS §3，eslint
+ * no-restricted-paths 把关）。因此 AppDBSchema 在这里只声明 platform 自有的
+ * syncMeta / kv 两库；chords / groups / songs 三库的记录类型由应用层经
+ * declaration merging 填充（见 src/app/services/storage/appDbSchema.ts）——
+ * app 允许同时看见 platform 与 domains，是唯一合法的「类型汇合点」。
  * ------------------------------------------------------------------------- */
 export interface AppDBSchema {
-  chords: { key: string; value: Chord; indexes: { groupId: string } };
-  groups: { key: string; value: Group };
-  songs: { key: string; value: Song };
   /** 通用元信息记录：name 为主键；已知用途为 song-order 顺序索引（见 songRepository） */
   syncMeta: { key: string; value: { name: string; ids?: string[] } };
+  /** 小状态 KV（idbKv 内存镜像的落盘目标）：记录形如 { key, value: string } */
   kv: { key: string; value: { key: string; value: string } };
 }
 
@@ -112,12 +113,24 @@ function upgrade(
   }
 }
 
+/** 当前已打开的数据库连接：versionchange 阻塞回调据此关闭本页旧连接放行升级 */
+let activeDb: IDBPDatabase | null = null;
+
 /** 按指定版本号打开连接（undefined = 跟随磁盘当前版本，不触发 upgrade；upgrade 逻辑见 upgrade()）。 */
 function openAt(version?: number): Promise<IDBPDatabase> {
   const options = {
     upgrade,
     // 升级被其他标签页占用时等待其释放后自动继续（替代旧实现的立即报错，体验更平滑）
     blocked: () => undefined,
+    // 本页旧连接收到 versionchange 时必须主动关闭，否则它不注册释放逻辑
+    // （idb 只在提供 blocking 时才监听 versionchange），其它标签页的升级会永久挂起。
+    // 同时必须作废 dbPromise：连接已 close，若缓存仍返回旧 Promise，本页所有后续
+    // 读写会在已关闭连接上抛 InvalidStateError 且永不自愈（P1 审计 N 系）
+    blocking: () => {
+      activeDb?.close();
+      activeDb = null;
+      dbPromise = null;
+    },
   };
   return version === undefined ? openIdb(DB_NAME, undefined, options) : openIdb(DB_NAME, version, options);
 }
@@ -147,7 +160,13 @@ async function openDb(): Promise<IDBPDatabase> {
       // 自愈路径会把磁盘库 bump 到高于 DB_VERSION 的版本；此后按声明版本打开会抛
       // VersionError —— 此时改用「不指定版本」打开（跟随磁盘版本，不触发 upgrade）。
       if (isVersionError(error)) db = await openAt(undefined);
-      else throw errors.storage('打开 IndexedDB 失败', { context: { db: DB_NAME }, cause: error });
+      else {
+        // 打开失败必须作废 dbPromise：否则缓存里永远留着这条 rejected promise，
+        // 之后所有 openDb() 都返回它、在已失败的连接上反复抛同一错且永不自愈
+        // （P0 审计 #5：冷启动 IDB 偶发失败 → 整 tab 持久化永久毒化，且无恢复路径）。
+        dbPromise = null;
+        throw errors.storage('打开 IndexedDB 失败', { context: { db: DB_NAME }, cause: error });
+      }
     }
     const missingStores = Object.keys(SCHEMA).filter(name => !db.objectStoreNames.contains(name));
     if (missingStores.length > 0) {
@@ -156,9 +175,12 @@ async function openDb(): Promise<IDBPDatabase> {
       const stillMissing = Object.keys(SCHEMA).filter(name => !db.objectStoreNames.contains(name));
       if (stillMissing.length > 0) {
         db.close();
+        // 同上：补建失败也要作废，否则该 rejected promise 会毒化后续所有读写。
+        dbPromise = null;
         throw errors.storage('IndexedDB 对象库补建失败', { context: { db: DB_NAME, stores: stillMissing } });
       }
     }
+    activeDb = db;
     return db;
   })();
   return dbPromise;
@@ -186,8 +208,11 @@ export const idb = {
     return guard('操作', { storeName }, () => db.getAll(storeName)) as Promise<AppDBSchema[K]['value'][]>;
   },
   async put<K extends StoreName>(storeName: K, value: AppDBSchema[K]['value']): Promise<IDBValidKey> {
-    // 配额熔断：存储已满时不再反复冲击写入（数据保留在内存层，刷新前可导出救急）
-    if (isPersistBlocked()) return Promise.resolve('');
+    // 配额熔断：存储已满时不再反复冲击写入，但必须让调用方感知失败——
+    // 静默 resolve 会让上层误判已落盘（chordStore.persistAll 会据此解除冷却、chordRepository.save
+    // 随后更新镜像），下一轮 diff 跳过 put 导致数据永久写不进 IDB（P0 审计 #1）。改为抛错，由调用方
+    // catch 后保留脏标记并上报，下一轮重试。删除/清空类操作不受熔断影响（见 delete/clear）。
+    if (isPersistBlocked()) throw errors.storage('存储配额已超限，写入已暂停', { context: { storeName } });
     const db = await openDb();
     return guard('操作', { storeName }, () => db.put(storeName, value));
   },
@@ -201,7 +226,9 @@ export const idb = {
   },
   /** 批量写入同一事务（保证原子性）：tx.done 等价于旧实现的 oncomplete/onerror 手写监听 */
   async bulkPut<K extends StoreName>(storeName: K, values: AppDBSchema[K]['value'][]): Promise<void> {
-    if (values.length === 0 || isPersistBlocked()) return;
+    if (values.length === 0) return;
+    // 配额熔断：已满时不再反复冲击写入，但必须让调用方感知失败（同 put 口径，P0 审计 #1）
+    if (isPersistBlocked()) throw errors.storage('存储配额已超限，写入已暂停', { context: { storeName } });
     const db = await openDb();
     await guard('批量写入', { storeName }, async () => {
       const tx = db.transaction(storeName, 'readwrite');
@@ -224,8 +251,9 @@ export const idb = {
   },
   /** 全量替换：同一事务内先清空再批量写入（原子，避免 clear/put 跨事务竞态） */
   async replaceAll<K extends StoreName>(storeName: K, values: AppDBSchema[K]['value'][]): Promise<void> {
-    // 熔断期间短路（不执行 clear：全量替换会先清空后写入，中断会丢库内数据）
-    if (isPersistBlocked()) return;
+    // 熔断期间短路（不执行 clear：全量替换会先清空后写入，中断会丢库内数据）；
+    // 但必须让调用方感知失败，改为抛错而非静默 return（同 put 口径，P0 审计 #1）
+    if (isPersistBlocked()) throw errors.storage('存储配额已超限，写入已暂停', { context: { storeName } });
     const db = await openDb();
     await guard('全量替换', { storeName }, async () => {
       const tx = db.transaction(storeName, 'readwrite');
@@ -261,6 +289,12 @@ export const idb = {
     mode: IDBTransactionMode,
     fn: (get: (storeName: string) => IDBObjectStore) => void
   ): Promise<void> {
+    // 配额熔断：写型事务不再冲击已满存储（与 put/bulkPut 同口径）；但必须抛错让调用方感知失败——
+    // 静默 return 会让 chordRepository.save（事务后更新镜像）、songPersistence.flushSongsNow（catch 只
+    // 在抛错时恢复脏集合）误判提交成功，导致内存与 IDB 永久分叉、编辑被标「已落盘」（P0 审计 #1）。
+    // 改为抛错：上层 catch 据以保留脏标记 / 镜像并重试。读型事务不受熔断影响（本身不写）。
+    if (mode === 'readwrite' && isPersistBlocked())
+      throw errors.storage('存储配额已超限，写入已暂停', { context: { storeNames, mode } });
     const db = await openDb();
     await guard('事务', { storeNames }, async () => {
       const transaction = db.transaction(storeNames, mode);

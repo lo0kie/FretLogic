@@ -121,7 +121,7 @@
 
         <div v-if="selectedProvider === 'webdav'" class="flex flex-col gap-xs px-xs">
           <div class="flex items-center justify-between py-0.5">
-            <span class="text-fg-secondary text-xs font-medium">使用预设代理</span>
+            <span class="text-xs font-medium text-fg-body">使用预设代理</span>
             <BaseSwitch v-model="settingsStore.webdavUseDefaultProxy" :disabled="isBusy" aria-label="使用预设代理" />
           </div>
 
@@ -182,6 +182,7 @@ import { useBackupModals } from '@/app/modals/useBackupModals';
 import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
+import { prefetch } from '@/platform/utils/prefetch';
 
 import type { SyncProviderKind } from '@/platform/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
@@ -190,8 +191,9 @@ import type { BaseSelectorOption } from '@/platform/ui/selector/BaseSelector.vue
 const isSyncModalOpen = defineModel<boolean>('isSyncModalOpen', { required: true });
 const { triggerGlobalSync, pullFromRemote, testConnection, isSyncing, isPulling, isTestingConnection } =
   useSyncService();
-// 弹窗打开即预取同步动作 chunk：用户点「测试连接/推送/拉取」时模块已在缓存，busy 立即翻转
-onMounted(() => void preloadSyncActions());
+// 弹窗打开即预取同步动作 chunk：用户点「测试连接/推送/拉取」时模块已在缓存，busy 立即翻转；
+// 经 prefetch 吞掉失败，避免弱网下产生未处理 rejection
+onMounted(() => prefetch(preloadSyncActions, 'SyncModalContainer'));
 const settingsStore = useSettingsStore();
 const uiStore = useUiStore();
 const backupModals = useBackupModals();

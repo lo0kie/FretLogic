@@ -52,7 +52,7 @@ describe('github sync provider', () => {
     const provider = createGithubSyncProvider(config);
     const result = await provider.pull();
     // 校验层会把 v4 迁移到当前版本（v6），并补齐实体时间戳
-    expect(result?.version).toBe(6);
+    expect(result?.version).toBe(7);
     expect(result?.groups).toHaveLength(1);
     expect(result?.groups[0]).toMatchObject({ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' });
     expect(result?.groups[0]?.createdAt).toBeTypeOf('number');

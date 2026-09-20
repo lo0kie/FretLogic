@@ -2,9 +2,8 @@
  * FretboardSvg 纯逻辑模块：横按展示集合推导、几何/颜色计算、音符坐标等无响应式依赖部分。
  * 组件内保留状态、定时器与事件交互。
  */
+import { CANVAS_CONFIG, OPEN_STRING_MARKER_Y } from '@/domains/fretboard/constants';
 import { computeBarreCandidates, isBarreStillValid } from '@/domains/fretboard/model/coordinates';
-
-import { CANVAS_CONFIG, OPEN_STRING_MARKER_Y } from '../constants';
 
 import type { BarreEntity, GuitarStringsModel } from '@/domains/fretboard/types';
 
@@ -53,6 +52,20 @@ export const computeDisplayBarres = (
       key,
     };
   });
+};
+
+/**
+ * 从渲染 key 解析品位（格式见 computeDisplayBarres：`barre-fret-{fret}` / `barre-fret-{fret}-{count}`）。
+ *
+ * 单独抽出、而不是各调用点自行 `split('-')` 取下标：key 格式一旦变更，下标法会**静默失效**
+ * 而不报错——历史上调用点按 `split('-')[1]` 取到的是字面量 `'fret'`，`Number('fret') === NaN`，
+ * `b.fret === NaN` 恒为 false，那条「同品延续」分支因此从未生效过。格式只在此处定义一次。
+ *
+ * @returns 品位；无法解析时返回 `null`，调用方必须显式处理，不得拿 `NaN` 参与比较
+ */
+export const parseBarreFretFromKey = (key: string): number | null => {
+  const match = /^barre-fret-(\d+)(?:-|$)/.exec(key);
+  return match ? Number(match[1]) : null;
 };
 
 /** 横按梁填充色：已标记加深蓝色，推导未标记为更淡的蓝色 */

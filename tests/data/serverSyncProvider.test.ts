@@ -39,7 +39,12 @@ describe('server sync provider', () => {
     const headInit = fetchMock.mock.calls[0][1] as RequestInit;
     expect(headInit.method).toBe('HEAD');
     const call = fetchMock.mock.calls[1];
-    expect(call[0]).toBe('https://api.example.com/sync');
+    // 推送地址在源 URL 上追加校验元数据 query（md5 / updatedAt），供后端 /meta 轻量读取
+    const callUrl = new URL(String(call[0]), 'http://placeholder');
+    expect(callUrl.pathname).toBe('/sync');
+    const query = callUrl.searchParams;
+    expect(query.get('md5')).toMatch(/^[a-f0-9]{32}$/);
+    expect(query.get('updatedAt')).not.toBeNull();
     const init = call[1] as RequestInit;
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['If-Match']).toBe('etag-prev');
@@ -95,7 +100,7 @@ describe('server sync provider', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
     const provider = createServerSyncProvider(config);
     const result = await provider.pull();
-    expect(result.version).toBe(6);
+    expect(result.version).toBe(7);
     expect(result.groups).toHaveLength(1);
     expect(result.groups[0]).toMatchObject({ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' });
   });
@@ -110,5 +115,19 @@ describe('server sync provider', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 200 })));
     const provider = createServerSyncProvider(config);
     expect(await provider.exists()).toBe(true);
+  });
+
+  it('fetchMeta 读取 /meta 最小元数据，云端无 meta（404）时返回 null', async () => {
+    const provider = createServerSyncProvider(config);
+    const meta = { md5: 'a'.repeat(32), updatedAt: 1700000000000 };
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(meta)));
+    await expect(provider.fetchMeta()).resolves.toEqual(meta);
+    const [baseUrl, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect(init.method).toBe('GET');
+    expect(String(baseUrl).endsWith('/meta')).toBe(true);
+
+    vi.mocked(fetch).mockResolvedValue(new Response('', { status: 404 }));
+    await expect(provider.fetchMeta()).resolves.toBeNull();
   });
 });

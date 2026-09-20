@@ -1,3 +1,5 @@
+import { resolveScrollBehavior } from '@/platform/utils/motion';
+
 import type { Directive, DirectiveBinding } from 'vue';
 
 export type GridNavOrientation = 'horizontal' | 'vertical' | 'both';
@@ -325,7 +327,11 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
       toEl.focus({ preventScroll: state.options.preventScroll });
 
       if (state.options.autoScroll && typeof toEl.scrollIntoView === 'function') {
-        toEl.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+        toEl.scrollIntoView({
+          block: 'nearest',
+          inline: 'nearest',
+          behavior: resolveScrollBehavior('smooth'),
+        });
       }
 
       state.options.onNavigate?.(toEl, fromEl);

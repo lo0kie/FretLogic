@@ -28,7 +28,7 @@
           v-else
           v-wave
           v-scroll-into-view.y="isSongActive(row.song!.id)"
-          :aria-label="songCardAriaLabel(row.song!)"
+          :aria-label="isSongActive(row.song!.id) ? `${row.cardAriaLabel}，已选中` : row.cardAriaLabel"
           :aria-pressed="isSongActive(row.song!.id)"
           :class="{
             'border-tint-primary-60! bg-tint-primary-92! hover:border-primary! hover:bg-tint-primary-82! hover:shadow-[0_0_0_1px_var(--color-primary)]':
@@ -68,14 +68,14 @@
                 <template v-else>
                   <BaseBadge
                     :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
-                    :aria-label="songKeyAriaLabel(row.song!)"
-                    :title="songKeyTitle(row.song!)"
+                    :aria-label="row.keyAriaLabel"
+                    :title="row.keyTitle"
                     size="2xs"
                     variant="neutral"
                     width="2rem"
                   >
                     <!-- 「调」走 suffix 显式声明：拼进 name 会让整串解析失败、升降号退化成普通字符 -->
-                    <span v-chord-name="{ name: computeSongKey(row.song!.playKey, row.song!.capo), suffix: '调' }" />
+                    <span v-chord-name="{ name: row.songKeyText, suffix: '调' }" />
                   </BaseBadge>
 
                   <BaseBadge
@@ -114,7 +114,6 @@ import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
 import { useSortableList } from '@/platform/composables/useSortableList';
 import { useUiStore } from '@/platform/store/uiStore';
-import { TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
 import { pinyinGroupKey } from '@/platform/utils/pinyin';
 
 import type { Song } from '@/domains/score/types';
@@ -153,12 +152,35 @@ type SongListRow = {
   type: 'group' | 'song';
   label?: string;
   song?: Song;
+  /** 以下为 song 行的构建期预计算（每行只算一次，替代模板渲染期的 10 次函数调用）：
+   *  调性串与三段 aria/title 都只依赖 song 自身字段，纯派生；isSongActive/isMenuTarget
+   *  依赖响应式状态、且只是字符串比较，保留为模板内函数调用 */
+  songKeyText?: string;
+  cardAriaLabel?: string;
+  keyAriaLabel?: string;
+  keyTitle?: string;
+};
+
+/** 组装 song 行：派生量在构建期一次算完（computeSongKey 此前每行被调 3 次） */
+const songRowOf = (song: Song): SongListRow => {
+  const songKeyText = computeSongKey(song.playKey, song.capo);
+  return {
+    key: song.id,
+    type: 'song',
+    song,
+    songKeyText,
+    cardAriaLabel: `乐谱 ${song.title}，${songKeyText}调，Capo ${song.capo}`,
+    keyAriaLabel: song.originalKey ? `原调 ${song.originalKey}，演唱调 ${songKeyText} 调` : `调性 ${songKeyText} 调`,
+    keyTitle: song.originalKey
+      ? `原调 ${song.originalKey} · Capo ${song.capo} → ${songKeyText}`
+      : `未记录原调 · Capo ${song.capo} → ${songKeyText}`,
+  };
 };
 
 /** 列表行：拼音分组模式在歌曲间插入分组小标题行（键前缀 group: 避免与歌曲 id 冲突），其余排序模式为纯歌曲行；数据源为过滤后的歌曲 */
 const songRows = computed<SongListRow[]>(() => {
   if (songStore.songSortMethod !== 'title') {
-    return songStore.filteredSongs.map(song => ({ key: song.id, type: 'song' as const, song }));
+    return songStore.filteredSongs.map(songRowOf);
   }
   const rows: SongListRow[] = [];
   let currentGroup = '';
@@ -168,28 +190,13 @@ const songRows = computed<SongListRow[]>(() => {
       currentGroup = group;
       rows.push({ key: `group:${group}`, type: 'group', label: group });
     }
-    rows.push({ key: song.id, type: 'song', song });
+    rows.push(songRowOf(song));
   }
   return rows;
 });
 
 /** 乐谱是否为当前打开的乐谱 */
 const isSongActive = (songId: string) => scoreEditor.activeSongId === songId;
-
-/** 乐谱卡无障碍描述：标题、演唱调与 Capo，选中时追加状态 */
-const songCardAriaLabel = (song: Song): string =>
-  `乐谱 ${song.title}，${computeSongKey(song.playKey, song.capo)}调，Capo ${song.capo}${isSongActive(song.id) ? '，已选中' : ''}`;
-/** 调性徽标无障碍描述：演唱调（已记录原调时附注原调） */
-const songKeyAriaLabel = (song: Song): string =>
-  song.originalKey
-    ? `原调 ${song.originalKey}，演唱调 ${computeSongKey(song.playKey, song.capo)} 调`
-    : `调性 ${computeSongKey(song.playKey, song.capo)} 调`;
-
-/** 调性徽标悬停提示：原调（未记录时明示）+ Capo → 演唱调推导链 */
-const songKeyTitle = (song: Song): string =>
-  song.originalKey
-    ? `原调 ${song.originalKey} · Capo ${song.capo} → ${computeSongKey(song.playKey, song.capo)}`
-    : `未记录原调 · Capo ${song.capo} → ${computeSongKey(song.playKey, song.capo)}`;
 
 // 乐谱右键菜单项：按需构建（仅在右键命中某张卡片后构建一次），不缓存
 const getSongMenuItems = (song: Song): MenuItem[] => {
@@ -235,15 +242,16 @@ const getSongMenuItems = (song: Song): MenuItem[] => {
         if (isCurrentActive) {
           scoreEditor.setActiveSong(null);
         }
-        uiStore.toast.info(`已删除乐谱 "${song.title}"`, {
+        // 通知而非常驻 Message：撤销入口随 toast 飘走就没了，用户必须能回看并补做
+        uiStore.notice.info({
+          title: `已删除乐谱 "${song.title}"`,
           actionText: '撤销',
-          duration: TOAST_WARNING_DURATION_MS,
           onAction: () => {
             songStore.restoreSong(deletedSong, originalIndex >= 0 ? originalIndex : undefined);
             if (isCurrentActive) {
               scoreEditor.setActiveSong(deletedSong.id);
             }
-            uiStore.toast.success(`已恢复乐谱 "${deletedSong.title}"`);
+            uiStore.message.success(`已恢复乐谱 "${deletedSong.title}"`);
           },
         });
       },

@@ -2,40 +2,35 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sanitizePersistedData } from '@/app/services/validation/persistedData';
-import { chordRepository, sanitizeChordLibrary } from '@/domains/chord/model/chordRepository';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { Tuning } from '@/domains/chord/theory/theory';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import { sanitizeSongList, songRepository } from '@/domains/score/model/songRepository';
+import { idb } from '@/platform/services/storage/idb';
 import { serializeForStorage } from '@/platform/utils/common';
 
 import type { Chord, Group } from '@/domains/chord/types';
-import type { Song } from '@/domains/score/types';
+import type { LineId, Song } from '@/domains/score/types';
 
-// 存储已迁移为 IDB 唯一权威（localStorage 退役）：store 启动数据来自 repository.hydrate()。
-// 这里 mock repository 层喂入脏数据，验证「暴露前清洗」契约在 hydrate 路径上仍然成立。
-// 注意用 importOriginal 保留同名纯函数（sanitizeGroups 等被 persistedData 复用），只替换仓储对象的方法。
-vi.mock('@/domains/chord/model/chordRepository', async importOriginal => {
-  const mod = await importOriginal<typeof import('@/domains/chord/model/chordRepository')>();
+// 存储已迁移为 IDB 唯一权威：store 启动数据链路 = idb.getAll → repository.load（清洗+去重）→ store.hydrate。
+// 清洗责任在 repository.load 内部（sanitizeChordLibrary / sanitizeSongList），因此本文件
+// mock 的必须是 **IDB 层** 而非 repository——mock repository 会把清洗层一并 mock 掉，
+// 喂进去的脏数据原样穿过 store（此前两版都栽在这里：先「mock 里调 sanitize」同义反复，
+// 后「mock load 直吐脏数据」绕过清洗）。mock IDB 后走的是与生产完全相同的真实链路。
+vi.mock('@/platform/services/storage/idb', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/platform/services/storage/idb')>();
   return {
-    ...mod,
-    chordRepository: {
-      load: vi.fn(),
-      save: vi.fn(),
-    },
-  };
-});
-vi.mock('@/domains/score/model/songRepository', async importOriginal => {
-  const mod = await importOriginal<typeof import('@/domains/score/model/songRepository')>();
-  return {
-    ...mod,
-    songRepository: {
-      loadSongs: vi.fn(),
-      saveSong: vi.fn(),
-      removeSong: vi.fn(),
-      saveSongIds: vi.fn(),
-      listSongIds: vi.fn(),
-      flushChanges: vi.fn(),
+    ...actual,
+    idb: {
+      ...actual.idb,
+      getAll: vi.fn(async () => []),
+      get: vi.fn(async () => undefined),
+      getAllKeys: vi.fn(async () => []),
+      put: vi.fn(async () => 0),
+      delete: vi.fn(async () => undefined),
+      clear: vi.fn(async () => undefined),
+      runTx: vi.fn(async (_names: string[], _mode: string, fn: (get: (n: string) => unknown) => void) => {
+        fn(() => ({}));
+      }),
     },
   };
 });
@@ -45,12 +40,12 @@ const validChord: Chord = {
   id: 'chord-1',
   nameSegments: { root: ['C', 0] },
   strings: [
-    [-1, false],
-    [3, false],
-    [2, false],
-    [0, false],
-    [1, false],
-    [0, false],
+    { fret: -1, preferFlat: false },
+    { fret: 3, preferFlat: false },
+    { fret: 2, preferFlat: false },
+    { fret: 0, preferFlat: false },
+    { fret: 1, preferFlat: false },
+    { fret: 0, preferFlat: false },
   ],
   fretCount: 3,
   fretOffset: 0,
@@ -69,9 +64,10 @@ describe('sanitizePersistedData', () => {
       lineIds: ['line-1'],
       playKey: 'C',
       capo: 0,
+      // 旧扁平槽位对象：载入清洗层归一为嵌套结构后按行剪枝孤儿引用
       chordMap: { 'line_line-1_char_0': 'chord-1', 'line_line-1_char_1': 'missing' },
       version: 1,
-    };
+    } as unknown as Song;
 
     const result = sanitizePersistedData({
       groups: [group, null],
@@ -81,8 +77,14 @@ describe('sanitizePersistedData', () => {
 
     expect(result.groups).toHaveLength(1);
     expect(result.chords).toHaveLength(1);
-    expect(result.chords[0]).toMatchObject(validChord);
-    expect(result.songs[0].chordMap).toEqual(new Map([['line_line-1_char_0', 'chord-1']]));
+    expect(result.chords[0].id).toBe('chord-1');
+    expect(result.chords[0].strings).toEqual(validChord.strings);
+    expect(result.songs[0].chordMap.size).toBe(1);
+    expect(result.songs[0].chordMap.get('line-1' as LineId)).toEqual({
+      char: new Map([[0, 'chord-1']]),
+      start: [],
+      end: [],
+    });
   });
 
   it('deduplicates identical fingerprints within one group', () => {
@@ -100,11 +102,16 @@ describe('sanitizePersistedData', () => {
       capo: 0,
       chordMap: { 'line_line-1_char_0': 'chord-1' },
       version: 1,
-    };
+    } as unknown as Song;
 
     const result = sanitizePersistedData({ groups: [], chords: null, songs: [song] });
 
-    expect(result.songs[0].chordMap).toEqual(new Map([['line_line-1_char_0', 'chord-1']]));
+    expect(result.songs[0].chordMap.size).toBe(1);
+    expect(result.songs[0].chordMap.get('line-1' as LineId)).toEqual({
+      char: new Map([[0, 'chord-1']]),
+      start: [],
+      end: [],
+    });
   });
 
   it('分组缺失时间戳时按数组顺序递增补全', () => {
@@ -131,12 +138,12 @@ describe('sanitizePersistedData', () => {
       ...validChord,
       id: 'chord-2',
       strings: [
-        [-1, false],
-        [0, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
     } as unknown as Chord;
 
@@ -191,7 +198,7 @@ describe('sanitizePersistedData', () => {
     expect(result.groups[1].createdAt!).toBeGreaterThan(result.groups[0].createdAt!);
   });
 
-  it('chordMap 序列化往返：Map 落盘为对象，读回还原为 Map', () => {
+  it('chordMap 序列化往返：嵌套 Map 落盘为对象，读回还原为嵌套 Map', () => {
     const song: Song = {
       id: 'song-1',
       title: 'Song',
@@ -199,18 +206,18 @@ describe('sanitizePersistedData', () => {
       lineIds: ['line-1'],
       playKey: 'C',
       capo: 0,
-      chordMap: new Map([['line_line-1_char_0', 'chord-1']]),
+      chordMap: new Map([['line-1', { char: new Map([[0, 'chord-1']]), start: [], end: [] }]]),
       version: 1,
-    };
+    } as unknown as Song;
 
-    // 落盘：Map 必须序列化为普通对象（直接 stringify Map 会得到 {}）
+    // 落盘：嵌套 Map 必须序列化为普通对象（直接 stringify Map 会得到 {}）
     const stored = JSON.parse(serializeForStorage(song));
-    expect(stored.chordMap).toEqual({ 'line_line-1_char_0': 'chord-1' });
+    expect(stored.chordMap).toEqual({ 'line-1': { char: { '0': 'chord-1' }, start: [], end: [] } });
 
-    // 读回：普通对象还原为 Map
+    // 读回：普通对象还原为嵌套 Map
     const result = sanitizePersistedData({ songs: [stored] });
     expect(result.songs[0].chordMap).toBeInstanceOf(Map);
-    expect(result.songs[0].chordMap.get('line_line-1_char_0')).toBe('chord-1');
+    expect(result.songs[0].chordMap.get('line-1' as LineId)?.char.get(0)).toBe('chord-1');
   });
 
   it('迁移旧版和弦顶层 capo -> fretOffset：合法旧值 2 保留为 fretOffset 2 且不再含 capo 字段', () => {
@@ -218,12 +225,12 @@ describe('sanitizePersistedData', () => {
       id: 'chord-legacy',
       chordName: 'C',
       strings: [
-        [-1, false],
-        [3, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
       fretCount: 3,
       capo: 2,
@@ -241,13 +248,20 @@ describe('sanitizePersistedData', () => {
 
 describe('store startup sanitization', () => {
   beforeEach(() => {
-    vi.mocked(chordRepository.load).mockReset();
-    vi.mocked(songRepository.loadSongs).mockReset();
+    vi.mocked(idb.getAll).mockClear();
+    vi.mocked(idb.getAll).mockImplementation(async () => []);
+    vi.mocked(idb.get).mockImplementation(async () => undefined);
   });
 
   it('cleans malformed chord data during hydrate before exposing it', async () => {
-    vi.mocked(chordRepository.load).mockImplementation(async () =>
-      sanitizeChordLibrary({ groups: [group], chords: [validChord, { ...validChord, id: 'bad', strings: 'broken' }] })
+    // 脏数据从 IDB 层进入：真实链路 = idb.getAll → chordRepository.load（sanitizeChordLibrary
+    // 清洗+去重）→ chordStore.hydrate。mock 掉 load 会连清洗层一起 mock 掉（见文件头说明）
+    vi.mocked(idb.getAll).mockImplementation(async (store: string) =>
+      store === 'groups'
+        ? [group]
+        : store === 'chords'
+          ? [validChord, { ...validChord, id: 'bad', strings: 'broken' }]
+          : []
     );
     setActivePinia(createPinia());
     const chordStore = useChordStore();
@@ -257,18 +271,21 @@ describe('store startup sanitization', () => {
   });
 
   it('cleans malformed song data during hydrate before exposing it', async () => {
-    vi.mocked(songRepository.loadSongs).mockImplementation(async () =>
-      sanitizeSongList([
-        {
-          id: 'song-1',
-          title: 'Song',
-          lyrics: 'Hello',
-          lineIds: ['line-1', 42],
-          playKey: 'C',
-          capo: 99,
-          chordMap: { 'line_line-1_char_0': 'chord-1' },
-        } as unknown as Song,
-      ])
+    // 同上：脏 Song 从 IDB 层进入，经 songRepository.loadSongs 内的 sanitizeSongList 清洗
+    vi.mocked(idb.getAll).mockImplementation(async (store: string) =>
+      store === 'songs'
+        ? [
+            {
+              id: 'song-1',
+              title: 'Song',
+              lyrics: 'Hello',
+              lineIds: ['line-1', 42],
+              playKey: 'C',
+              capo: 99,
+              chordMap: { 'line_line-1_char_0': 'chord-1' },
+            } as unknown as Song,
+          ]
+        : []
     );
     setActivePinia(createPinia());
     const songStore = useSongStore();
@@ -277,6 +294,11 @@ describe('store startup sanitization', () => {
     expect(songStore.songs).toHaveLength(1);
     expect(songStore.songs[0].capo).toBe(0);
     expect(songStore.songs[0].lineIds).toEqual(['line-1']);
-    expect(songStore.songs[0].chordMap).toEqual(new Map([['line_line-1_char_0', 'chord-1']]));
+    expect(songStore.songs[0].chordMap.size).toBe(1);
+    expect(songStore.songs[0].chordMap.get('line-1' as LineId)).toEqual({
+      char: new Map([[0, 'chord-1']]),
+      start: [],
+      end: [],
+    });
   });
 });

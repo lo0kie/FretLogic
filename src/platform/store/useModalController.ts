@@ -2,7 +2,7 @@ import { inject, reactive } from 'vue';
 
 /**
  * 模态控制器：统一「弹窗开关集合 + 弹窗数据」的声明与打开/关闭样板。
- * 分组/乐谱/备份三类模态 composable 复用；各自的业务动作（校验/写 store/toast）仍留在调用方。
+ * 分组/乐谱/备份三类模态 composable 复用；各自的业务动作（校验/写 store/message）仍留在调用方。
  * 返回的 modals 与 modalData 均为响应式对象，模板可直接 v-model 绑定。
  */
 export function useModalController<F extends Record<string, boolean>, D extends object>(

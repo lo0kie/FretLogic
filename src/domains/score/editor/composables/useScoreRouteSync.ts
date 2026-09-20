@@ -35,7 +35,7 @@ interface ScoreRouteSyncApi {
   switchTab: (tab: ScoreActiveTab) => Promise<void>;
 }
 
-/** 单例缓存：watcher 全局只注册一份，避免多组件实例重复镜像 / 重复 toast */
+/** 单例缓存：watcher 全局只注册一份，避免多组件实例重复镜像 / 重复 message */
 let singleton: ScoreRouteSyncApi | null = null;
 /** 单例的 watcher 作用域：HMR 重挂载宿主组件后旧作用域被销毁，需据此重建单例（生产环境永不触发） */
 let singletonScope: EffectScope | null = null;
@@ -137,10 +137,10 @@ function createScoreRouteSync(): ScoreRouteSyncApi {
       if (tabResult.success) {
         const tab = tabResult.data;
         if (tab !== 'edit' && !scoreEditor.hasLyrics) {
-          // toast 仅在 tab 实际被纠正时弹出：同一次导航内多触发源（路由 watcher / onActivated）重入时不再重复提示
+          // message 仅在 tab 实际被纠正时弹出：同一次导航内多触发源（路由 watcher / onActivated）重入时不再重复提示
           if (scoreEditor.activeTab !== 'edit') {
             scoreEditor.activeTab = 'edit';
-            uiStore.toast.warning('请先在“编辑歌词”模式下输入歌词内容');
+            uiStore.message.warning('请先在“编辑歌词”模式下输入歌词内容');
           }
           void router.replace({ query: { ...route.query, tab: undefined } });
         } else if (scoreEditor.activeTab !== tab) {
@@ -162,7 +162,7 @@ function createScoreRouteSync(): ScoreRouteSyncApi {
      */
     const switchTab = async (tab: ScoreActiveTab) => {
       if (tab !== 'edit' && !scoreEditor.hasLyrics) {
-        uiStore.toast.warning('请先在“编辑歌词”模式下输入歌词内容');
+        uiStore.message.warning('请先在“编辑歌词”模式下输入歌词内容');
         return;
       }
       if (hasRouter) await router.push({ query: { ...route.query, tab: tab === 'edit' ? undefined : tab } });

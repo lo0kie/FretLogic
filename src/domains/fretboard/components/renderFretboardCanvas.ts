@@ -5,6 +5,7 @@
 import { parseChordNameTokens } from '@/domains/chord/theory/chordNameTokens';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { DEFAULT_FRET_COUNT, FRETBOARD_CANVAS_CONFIG, MIN_FRET_COUNT } from '@/domains/fretboard/constants';
+import { isBarreStillValid } from '@/domains/fretboard/model/coordinates';
 
 import type { Chord } from '@/domains/chord/types';
 import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
@@ -220,7 +221,7 @@ function drawOpenStringMarkers(
   for (let s = 0; s < stringCount; s++) {
     const sx = startStrX + s * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
     const strData = chord.strings[s];
-    const fret = strData ? strData[0] : 0;
+    const fret = strData ? strData.fret : 0;
 
     if (fret === -1) {
       ctx.strokeStyle = colors.FB_MUTE;
@@ -317,11 +318,16 @@ function drawBarres(
   chord: Chord,
   startStrX: number,
   gridTop: number,
+  fretCount: number,
   colors: FretboardCanvasPalette
 ): void {
   if (!chord.barres || chord.barres.length === 0) return;
   const barreHalfH = FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS / 2;
   for (const b of chord.barres) {
+    // 与 SVG 侧同判据（computeDisplayBarres）：无效横按或越出可见品位窗口的不绘制，
+    // 避免库卡/乐谱/导出画出编辑器里不显示的越界梁
+    if (b.fret < 1 || b.fret > fretCount) continue;
+    if (!isBarreStillValid(chord.strings, b)) continue;
     const bx1 = startStrX + b.fromString * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
     const bx2 = startStrX + b.toString * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
     const by = gridTop + (b.fret - 0.5) * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
@@ -345,7 +351,7 @@ function drawPressedDots(
 ): void {
   for (let s = 0; s < stringCount; s++) {
     const strData = chord.strings[s];
-    const fret = strData ? strData[0] : 0;
+    const fret = strData ? strData.fret : 0;
     if (fret > 0) {
       const cx = startStrX + s * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
       const cy = gridTop + (fret - 0.5) * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
@@ -424,7 +430,7 @@ export function renderFretboardBody(ctx: CanvasRenderingContext2D, opts: RenderF
   }
   drawGridLines(ctx, layout.startStrX, layout.gridTop, gridBottom, gridRight, stringCount, fretCount, colors);
   if (showBarre) {
-    drawBarres(ctx, chord, layout.startStrX, layout.gridTop, colors);
+    drawBarres(ctx, chord, layout.startStrX, layout.gridTop, fretCount, colors);
   }
   drawPressedDots(ctx, chord, layout.startStrX, layout.gridTop, stringCount, colors);
 }
@@ -519,7 +525,14 @@ export function renderFretboardToCanvas(chord: Chord, opts: RenderFretboardToCan
   canvas.width = physW;
   canvas.height = physH;
 
-  const ctx = canvas.getContext('2d')!;
+  // getContext('2d') 在极端情况下返回 null（上下文配额耗尽 / canvas 被策略禁用），而下方全部
+  // 绘制都依赖它。原先以 `!` 断言吞掉这个分支，届时抛出的是「Cannot set properties of null」
+  // 这类指不出原因的错误；这里显式判空并给出可诊断的信息（同文件上方 measureCtx 即此写法）。
+  // 不用「返回空白画布」兜底：那会让调用方把一张空图当成功结果保存或上传，事故更隐蔽。
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('无法创建 2D 绘图上下文，指板图导出中止');
+  }
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 

@@ -1,5 +1,7 @@
 <template>
-  <!-- 整块模式：富文本插槽，或纯文本强制整段滚动（alwaysRoll）。rollKey 变化时整块翻滚 -->
+  <!-- 整块模式：富文本插槽，或纯文本强制整段滚动（alwaysRoll）。rollKey 变化时整块翻滚。
+       翻页过渡的类名规则（.br-roll-*）在全局 transitions.scss，不在此组件——滚动气泡读数
+       （v-scrollbar 内的纯 DOM 节点，没有 Vue 实例）按帧手工切同一组类，故 CSS 收在全局唯一来源 -->
   <span
     v-if="blockMode"
     :style="{ '--br-duration': durationSec }"
@@ -31,6 +33,10 @@
 <script setup lang="ts">
 import { computed, ref, useSlots, watch } from 'vue';
 
+import { alignRollCells } from '@/platform/utils/rollingText';
+
+import type { RollCell } from '@/platform/utils/rollingText';
+
 /**
  * BaseRollingText 翻页文本（逐字符 / 整块 合一）。
  *
@@ -40,7 +46,9 @@ import { computed, ref, useSlots, watch } from 'vue';
  *   将整段内容作为一块，rollKey（或 text）变化时整体翻滚。适于无法用字符串逐字表达的标签。
  *
  * 外观由宿主 class/attrs 控制（字号、颜色、字重、对齐等）；组件自身保证窗口的垂直居中与裁切。
- * prefers-reduced-motion 下退化为直接切换。
+ * 翻页过渡的类名规则（.br-roll-*）在全局 transitions.scss——它同时服务滚动气泡读数，
+ * 那里没有 Vue 实例、按帧手工切类驱动同一组规则，故不放组件 scoped。
+ * prefers-reduced-motion 下退化为直接切换（由 main.scss 的全局规则兜住）。
  */
 const props = defineProps<{
   /** 纯文本模式：提供时逐字符翻页；整块模式下作为插槽缺省内容 */
@@ -63,59 +71,18 @@ const slots = useSlots();
 /** 整块模式：提供了富文本插槽，或显式要求整段滚动 */
 const blockMode = computed(() => !!slots['default'] || props.alwaysRoll === true);
 
-/** 逐字符模式的字符单元：key 是跨文本变化的稳定标识，供窗口 span 复用（未变字符不重挂、不翻页） */
-interface RollCell {
-  key: number;
-  char: string;
-}
-
-/**
- * 字符单元序列：text 变化时按「公共前缀 + 公共后缀」对齐新旧字符。
- * 关键约束：窗口 span 的 key 必须跨变化**稳定**，翻页动画靠内层 Transition 以字符值为 key
- * 触发——窗口一旦重挂载（新 key），内层是初始渲染，不会播翻页。因此：
- *  - 前后缀匹配的字符沿用旧 cell（key 与字符都不变 → 窗口与内容双静止）；
- *  - 中间变化的字符**按位复用旧 cell 的 key**、只替换字符 → 外层窗口不重挂，内层 key 变化 → 翻页；
- *  - 中间多出的新槽位（长度增长）才分配新 key（新窗口初始渲染，内容直接出现，不翻页）。
- * 这样「9/30 → 10/30」里首槽 '9'→'1' 翻页，"/30" 原位静止；按下标对位的写法会让整体右移、
- * 未变字符集体错位翻滚，而「变化字符给全新 key」的写法会让窗口重挂、什么都不翻。
- */
+/** 逐字符模式的字符单元序列：对位算法与滚动气泡读数共用（规则见 alignRollCells 的注释），
+ *  本组件只负责把结果喂给响应式 cells——Vue 侧的翻页由 <Transition name="br-roll"> 驱动 */
 const cells = ref<RollCell[]>([]);
+/** 新槽位的 key 游标：alignRollCells 保持无状态，游标由各消费者实例持有 */
 let nextCellKey = 0;
 
 watch(
   () => props.text ?? '',
   next => {
-    const newChars = Array.from(next);
-    const old = cells.value;
-
-    // 公共后缀：从两端末尾逐字比较（长度变化时后缀通常不变，先算它才能锁住尾段）
-    let suffixLen = 0;
-    while (
-      suffixLen < old.length &&
-      suffixLen < newChars.length &&
-      old[old.length - 1 - suffixLen]!.char === newChars[newChars.length - 1 - suffixLen]!
-    ) {
-      suffixLen++;
-    }
-    // 公共前缀：不得越过公共后缀（全等时二者相接，不重叠）
-    let prefixLen = 0;
-    while (
-      prefixLen < old.length - suffixLen &&
-      prefixLen < newChars.length - suffixLen &&
-      old[prefixLen]!.char === newChars[prefixLen]!
-    ) {
-      prefixLen++;
-    }
-
-    const keptPrefix = old.slice(0, prefixLen);
-    const keptSuffix = old.slice(old.length - suffixLen);
-    const oldMiddle = old.slice(prefixLen, old.length - suffixLen);
-    const inserted: RollCell[] = newChars.slice(prefixLen, newChars.length - suffixLen).map((char, i) =>
-      // 有旧槽位就复用其 key（同窗口内换字 → 内层翻页）；多出的才是全新槽位
-      i < oldMiddle.length ? { key: oldMiddle[i]!.key, char } : { key: nextCellKey++, char }
-    );
-
-    cells.value = [...keptPrefix, ...inserted, ...keptSuffix];
+    const aligned = alignRollCells(cells.value, next, nextCellKey);
+    cells.value = aligned.cells;
+    nextCellKey = aligned.nextKey;
   },
   { immediate: true, flush: 'pre' }
 );
@@ -126,36 +93,3 @@ const blockKey = computed<PropertyKey>(() => props.rollKey ?? props.text ?? '');
 /** 进出场时长（秒），供内联 style 注入过渡时长 */
 const durationSec = computed(() => `${(props.duration ?? 200) / 1000}s`);
 </script>
-
-<style scoped lang="scss">
-/* 过渡类名无法用 Tailwind 表达（Transition 进出场状态类）；窗口/字符静态样式已内联为工具类 */
-.br-roll-enter-active,
-.br-roll-leave-active {
-  transition:
-    transform var(--br-duration, 0.2s) cubic-bezier(0.33, 0, 0.2, 1),
-    opacity var(--br-duration, 0.2s) cubic-bezier(0.33, 0, 0.2, 1);
-}
-
-/* 新内容自下滑入；旧内容绝对定位叠在原位向上滑出，两者同时进行形成翻页 */
-.br-roll-enter-from {
-  transform: translateY(110%);
-  opacity: 0;
-}
-
-.br-roll-leave-active {
-  position: absolute;
-  inset: 0;
-}
-
-.br-roll-leave-to {
-  transform: translateY(-110%);
-  opacity: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .br-roll-enter-active,
-  .br-roll-leave-active {
-    transition: none;
-  }
-}
-</style>

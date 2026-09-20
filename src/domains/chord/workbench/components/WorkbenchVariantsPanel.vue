@@ -1,14 +1,16 @@
 <template>
   <!-- 横向滚轮滚动列表：单行固定高度排列全部变体指法；光标驻留其上时双向滚轮均驱动（向下滚到最右
-       后由 .auto 边界放行列表下滑，向上则向左回滚）；列表滚动把条带到光标下时 v-wheel-scroll
-       自动让位给列表，不会出现「没在条上滚却被联动」的劫持。无 CSS scroll-smooth 避免动量滑动失控 -->
+       后本列表先吃满当前这轮连续滚动，停手再滚才由 .auto 边界放行、交外层纵向容器接手，且接手后
+       本轮余下事件含反向回滑都不再被列表收回——见 v-wheel-scroll 的 edgeLock；向上则向左回滚）；
+       列表滚动把条带到光标下时 v-wheel-scroll 自动让位给列表，不会出现「没在条上滚却被联动」的劫持。
+       无 CSS scroll-smooth 避免动量滑动失控 -->
   <BaseScrollArea
     v-if="hasVariants"
     :fade="{ size: 24, flushEps: 4 }"
     :wheel="{ smooth: true, overscroll: 'auto' }"
     close-popovers
     axis="x"
-    class="flex w-full items-stretch gap-4 p-1 select-none"
+    class="flex w-full items-stretch gap-lg p-1 select-none"
   >
     <div
       v-wave

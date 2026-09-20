@@ -57,6 +57,8 @@ export const STORAGE_KEYS = {
   SYNC_TARGET: 'CHORD_LAB_SYNC_TARGET',
   /** 同步设置弹窗内临时查看/操作的方案（与全局 syncTarget 相互独立，仅弹窗内持久化） */
   SYNC_MODAL_PROVIDER: 'CHORD_LAB_SYNC_MODAL_PROVIDER',
+  /** 已提示过的启动期数据不一致签名（`${target}:${localMd5}:${cloudMd5}`），同组只提示一次 */
+  SYNC_MISMATCH_ACK: 'CHORD_LAB_SYNC_MISMATCH_ACK',
 
   // ---- GitHub 同步配置 ----
   /** GitHub 仓库 owner */
@@ -123,6 +125,8 @@ export const STORAGE_KEYS = {
   WORKBENCH_EXPORT_COLLAPSED: 'CHORD_LAB_WORKBENCH_EXPORT_COLLAPSED_V1',
   /** 工作台：多指法变体面板是否收起折叠（持久化） */
   WORKBENCH_VARIANTS_COLLAPSED: 'CHORD_LAB_WORKBENCH_VARIANTS_COLLAPSED_V1',
+  /** 工作台：指板设置面板是否收起折叠（持久化） */
+  WORKBENCH_FRETBOARD_COLLAPSED: 'CHORD_LAB_WORKBENCH_FRETBOARD_COLLAPSED_V1',
   /** 工作台：导出面板背景模式（transparent / white / dark） */
   WORKBENCH_EXPORT_BG: 'CHORD_LAB_WORKBENCH_EXPORT_BG_V1',
   /** 工作台：右侧卡片列面板排序顺序（持久化） */
@@ -194,10 +198,10 @@ export const STORAGE_KEYS = {
 } as const;
 
 // ===================== 界面提示 / 交互延时 =====================
-/** Toast 默认展示时长（ms） */
-export const TOAST_DEFAULT_DURATION_MS = 3000;
-/** 警告类 Toast 展示时长（ms）：内容较多需要更长阅读时间 */
-export const TOAST_WARNING_DURATION_MS = 4000;
+/** Message 默认展示时长（ms） */
+export const MESSAGE_DEFAULT_DURATION_MS = 3000;
+/** 警告类 Message 展示时长（ms）：内容较多需要更长阅读时间 */
+export const MESSAGE_WARNING_DURATION_MS = 4000;
 /** 聚焦默认延迟（ms，v-focus 未指定 delay 时使用） */
 export const FOCUS_DEFAULT_DELAY_MS = 60;
 /** 悬浮提示隐藏后清理 DOM 的延迟（ms，配合淡出过渡，v-tooltip 使用） */

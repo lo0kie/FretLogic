@@ -13,6 +13,8 @@ import type { GithubSyncConfig, SyncBranchesProvider } from './provider.ts';
 /** 创建 GitHub Contents API 同步 provider：远端为单个 base64 信封文件，按分支读写。 */
 export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranchesProvider {
   const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
+  /** 独立校验元数据载体：数据源文件同目录下的 `.meta.json`，启动检测只拉这份最小数据 */
+  const metaFileUrl = `${apiUrl}.meta.json`;
   const baseHeaders: Record<string, string> = {
     Accept: 'application/vnd.github.v3+json',
     ...(config.token ? { Authorization: `Bearer ${config.token}` } : {}),
@@ -95,6 +97,47 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranches
       }
       const branches: { name: string }[] = await response.json();
       return branches.map(b => b.name).filter(name => !name.startsWith('dependabot/'));
+    },
+    async fetchMeta() {
+      const response = await request({ method: 'GET' }, `${metaFileUrl}?ref=${encodeURIComponent(config.branch)}`);
+      if (response.status === 404) return null; // 旧数据/从未上传：无独立 meta
+      if (!response.ok) throw new SyncError('REQUEST_FAILED', `GitHub 返回错误状态码：${response.status}`);
+      try {
+        const parsed = JSON.parse(await decodeBase64Envelope(response)) as { md5?: unknown; updatedAt?: unknown };
+        if (typeof parsed.md5 === 'string' && typeof parsed.updatedAt === 'number') {
+          return { md5: parsed.md5, updatedAt: parsed.updatedAt };
+        }
+        return null;
+      } catch {
+        return null; // meta 损坏视为无 meta，引导重传
+      }
+    },
+    async pushMeta(meta) {
+      let sha = '';
+      // 探测必须带 ref（T1 同源修复）：不带 ref 时 GitHub 读默认分支，目标分支已有 meta 会被误判
+      const existing = await request({ method: 'GET' }, `${metaFileUrl}?ref=${encodeURIComponent(config.branch)}`);
+      if (existing.ok) {
+        const body = await existing.json();
+        sha = String(Array.isArray(body) ? '' : (body.sha ?? ''));
+      } else if (existing.status !== 404) {
+        throw new SyncError('REQUEST_FAILED', `GitHub 返回错误状态码：${existing.status}`);
+      }
+      const response = await request(
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: buildSyncCommitMessage(),
+            content: base64EncodeUtf8(serializeForStorage(meta)),
+            branch: config.branch,
+            ...(sha ? { sha } : {}),
+          }),
+        },
+        metaFileUrl
+      );
+      if (!response.ok) {
+        throw new SyncError('REQUEST_FAILED', `GitHub meta 写入返回错误状态码：${response.status}`);
+      }
     },
     async testConnection(): Promise<string> {
       // 仅探测仓库可达性与 Token 有效性，不依赖 branch/path（分支与文件路径由「查询分支」/拉取负责）

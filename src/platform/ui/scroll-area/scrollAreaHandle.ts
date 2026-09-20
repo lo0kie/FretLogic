@@ -25,7 +25,8 @@ export type ScrollAreaFade = boolean | number | string | EdgeFadeOptions;
  *  （选项对象可带 bubble 滚动气泡提示，见 v-scrollbar 的 ScrollbarBubbleOptions） */
 export type ScrollAreaScrollbar = boolean | ScrollbarOptions;
 
-/** 滚轮接管：true 默认档 | false 不接管（原生滚动） | 选项对象透传 v-wheel-scroll（smooth / overscroll / disabled 等） */
+/** 滚轮接管：true 默认档 | false 不接管（原生滚动） | 选项对象透传 v-wheel-scroll
+ *  （smooth / double / triple / overscroll / disabled 等；double 翻倍、triple 三倍，等价指令的 .double / .triple 修饰符） */
 export type ScrollAreaWheel = boolean | WheelScrollOptions;
 
 /** 响应式滚动状态快照：BaseScrollArea 内部维护（scroll 事件 + 容器/子元素尺寸观察兜底），宿主在 computed/watch 中直接消费 */

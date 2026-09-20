@@ -1,9 +1,32 @@
+/**
+ * 和弦识别引擎：指板音集 → 候选和弦名（含角色分配、纯度、分档、最佳根音）。
+ *
+ * ===== 候选来源（本次改造的核心）=====
+ * 候选配方由 `QUALITY_TOKENS`（63 条 token，每条形如「一个 AST 配方 + 它的全部可接受写法」）
+ * **编译**而来，识别交给 `recognizeByIntervals`。
+ *
+ * 此前候选来自 `GRAMMAR_TEMPLATES` —— 47 条手写模板，每条要把
+ * `suffix` / `category` / `baseWeight` / `required` / `optional` / `conflicts` 逐项抄全。
+ * 手抄必然漏项：实测模板表只覆盖语料的 42/74，且是**整族缺失**
+ * （`maj7`/`M7`/`Δ7`、`min7`/`-7`、`aug7`/`+7`、`ø7`/`ø`、`no3`/`no5`、`add2`、`alt`/`7alt`、`7b13`），
+ * 于是这些和弦「能输入、却识别不出」。改为从 token 表派生后，写法变体、音程掩码、
+ * 角色分配、分类全部自动就绪，新增性质只需在 token 表加一条。
+ *
+ * ===== 保留不动的部分 =====
+ * 相对签名缓存（跨调/跨把位复用）、评分公式与权重、纯度门槛、分档阈值、
+ * 根音拼写偏好、截断限流 —— 全部原样保留，故外部行为（`AnalyzeResult` 形状、
+ * 分数口径、分档口径）与旧实现可比。分数仍是 0~1000 量级。
+ */
+
 import { estimateValueBytes } from '@/platform/utils/common';
 import { createLruCache } from '@/platform/utils/lruCache';
 
-import { GRAMMAR_TEMPLATES } from './grammar.ts';
+import { chordQualityAstToIntervals, QUALITY_TOKENS } from './chordQualityAst';
+import { categoryOfAst, recognizeByIntervals, rolesOfAst, weightOf } from './chordRecognitionAst';
 import { nameToSegments, parsePitchSegment } from './theory.ts';
 
+import type { ChordQualityAst } from './chordQualityAst';
+import type { CategoryOfAst } from './chordRecognitionAst';
 import type { ChordNameSegments, NoteInput } from '@/domains/chord/types';
 
 export type ChordSlot =
@@ -62,57 +85,120 @@ export interface AnalyzeResult {
   lowConfidence: ChordCandidate[];
 }
 
-interface SlotDef {
-  interval: number;
-  role: ChordSlot;
-  confidence: RoleConfidence;
-}
-
-export interface GrammarTemplate {
+/**
+ * 一个识别配方：token 表的 AST + 为匹配预计算的掩码与评分素材。
+ *
+ * 取代旧 `COMPILED_TEMPLATES`。关键差别是**来源**：旧表是 47 条手写模板，
+ * 每条要把 `required` / `optional` / `conflicts` / `baseWeight` / `suffix` 逐项抄一遍，
+ * 于是必然漏项（实测只覆盖语料的 42/74，`M7`/`Δ7`/`ø7`/`no3`/`alt`/`maj7` 整族缺失）；
+ * 新表由 `QUALITY_TOKENS`（63 条 token）**编译**而来，写法变体、音程、角色、分类全部自动派生。
+ */
+interface Recipe {
+  tokenId: string;
+  ast: ChordQualityAst;
+  /** 首选写法，用于拼和弦名（如 `m7b5` / `7b9` / `sus4`） */
   suffix: string;
-  category: ChordCandidate['category'];
-  baseWeight: number;
-  required: SlotDef[];
-  optional?: SlotDef[];
-  conflicts: number[];
+  category: CategoryOfAst;
+  /** 配方声明的全部音程掩码（核心 ∪ 扩展），用于算「解释了多少音」 */
+  mask: number;
+  /** 核心音掩码，用于判「缺了哪些骨架音」 */
+  coreMask: number;
+  /** 扩展音个数，用于判「配方是否基本没被实例化」 */
+  extensionCount: number;
+  /** 核心音程（根音/三音/五音/七音/挂留），用于低音评分判断低音是否在骨架内 */
+  coreIntervals: number[];
+  /** 扩展音程，用于低音评分的次一级判断 */
+  extensionIntervals: number[];
+  /**
+   * 常用度 0~1，替代旧模板的手写 `baseWeight / 200`。
+   * 取 `weightOf(ast) / 200`：该权重函数与旧 `baseWeight` 同量级
+   * （`major`=100 与旧表一致、`dom7`=160 亦一致），故评分公式可原样沿用。
+   */
+  commonness: number;
+  /** token 表声明序，作为同分时的稳定裁决（`six` 先于 `add13` 等同音同义写法） */
+  order: number;
 }
 
-interface CompiledTemplate {
-  template: GrammarTemplate;
-  reqMask: number;
-  optMask: number;
-  conflictMask: number;
-}
-
-const COMPILED_TEMPLATES: CompiledTemplate[] = GRAMMAR_TEMPLATES.map(t => {
-  let reqMask = 0;
-  for (const r of t.required) reqMask |= 1 << r.interval;
-  let optMask = 0;
-  if (t.optional) {
-    for (const o of t.optional) optMask |= 1 << o.interval;
-  }
-  let conflictMask = 0;
-  for (const c of t.conflicts) conflictMask |= 1 << c;
-  return { template: t, reqMask, optMask, conflictMask };
+const RECIPES: Recipe[] = QUALITY_TOKENS.map((t, order) => {
+  const iv = chordQualityAstToIntervals(t.ast);
+  let mask = 0;
+  for (const s of iv.all) mask |= 1 << (s % 12);
+  let coreMask = 0;
+  for (const s of iv.core) coreMask |= 1 << (s % 12);
+  return {
+    tokenId: t.id,
+    ast: t.ast,
+    suffix: t.spellings[0]!,
+    category: categoryOfAst(t.ast),
+    mask,
+    coreMask,
+    extensionCount: iv.extensions.length,
+    coreIntervals: iv.core,
+    extensionIntervals: iv.extensions,
+    commonness: weightOf(t.ast) / 200,
+    order,
+  };
 });
 
-const WEIGHTS = {
-  PURITY: 0.5,
-  BASS: 0.28,
-  COMMONNESS: 0.1,
-  EXTRA_PENALTY: 0.25,
-};
+const RECIPE_BY_TOKEN = new Map<string, Recipe>(RECIPES.map(r => [r.tokenId, r]));
 
 /** 候选和弦纯度门槛（60%）：低于此纯度的和弦组合归入 low_confidence 评级，不参与第一梯队竞争 */
 const MIN_PURITY = 0.6;
-/** 粗筛阶段绝对纯度底线（45%）：低于此阈值的模板组合直接丢弃不纳入候选池，大幅裁剪无效搜索空间 */
+/** 粗筛阶段绝对纯度底线（45%）：低于此阈值的配方组合直接丢弃不纳入候选池，大幅裁剪无效搜索空间 */
 const LOW_PURITY_THRESHOLD = 0.45;
-/** 梯队分差窗口（6分）：纯度达标前提下，与第一名最佳和弦分差在 6 分内的判定为可信替代和弦（alternative），超出则归为理论和弦 */
-const BEST_GAP = 6;
+/**
+ * 梯队分差窗口：纯度达标前提下，与第一名分差在此以内判为可信替代和弦（alternative），超出归理论和弦。
+ *
+ * 旧实现是 6 分 —— 但那是**旧分数量级**（best ≈ 87）下的 6 分，约 6.9%。
+ * 本次结构分改用识别器量级（best ≈ 100~235），故按同一**相对比例**折算：160 × 6.9% ≈ 11。
+ */
+const BEST_GAP = 11;
 /** 识别结果候选上限（10个）：按最终得分去重后保留的最大候选条数，保证转位多样性的同时防止冗余扩散 */
 const TOP_EVALUATE_LIMIT = 10;
 
 const STANDARD_ROOT_NAMES: readonly string[] = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+/** 五音类音程（减五 / 纯五 / 增五）：骨架音里唯一允许缺席的一类，见 `collectRecipeHitsForRoot` */
+const FIFTH_INTERVALS_MASK = (1 << 6) | (1 << 7) | (1 << 8);
+
+/**
+ * 音程「槽位」分组：同一组内的音程互斥（一个槽位只能填一个音）。
+ *
+ * 用于判「配方与输入矛盾」——见 `hasSlotContradiction`。
+ * - 三音槽：小三 / 大三
+ * - 五音槽：减五 / 纯五 / 增五
+ * - 七音槽：减七 / 小七 / 大七
+ *
+ * **刻意不设挂留槽**（`sus2` 的 2 与 `sus4` 的 5）：虽然 sus2 与 sus4 互斥，
+ * 但 2 半音同时也是**九音**的模 12 值（`add9` / `9`），把它俩放进同一组会让
+ * `Csus4add9`（{0,2,5,7}，含 F 与 D）被判成「槽位矛盾」而整个丢候选 —— 实测踩到。
+ * sus2 / sus4 的互斥由 `missingCore`（只允许五音缺席）自然覆盖：
+ * sus4 配方遇到 sus2 输入时缺的是「四音」，不属五音类，直接判缺音淘汰。
+ */
+const SLOT_GROUPS: readonly number[] = [
+  (1 << 3) | (1 << 4),
+  (1 << 6) | (1 << 7) | (1 << 8),
+  (1 << 9) | (1 << 10) | (1 << 11),
+];
+
+/**
+ * 配方与输入是否存在槽位矛盾：某个槽位配方填了 A、输入却填了 B（A≠B）。
+ *
+ * 输入该槽位**为空**不算矛盾（那是「省略」，由 `missingCore` 单独把关）；
+ * 只有「填成了另一个音」才算 —— 这正是旧手写 `conflicts` 想表达的规则。
+ */
+function hasSlotContradiction(recipeMask: number, inputMask: number): boolean {
+  for (const group of SLOT_GROUPS) {
+    const recipeSlot = recipeMask & group;
+    const inputSlot = inputMask & group;
+    // 仅当「配方在该槽位填了音（recipeSlot≠0）且输入填成了另一个音（inputSlot≠0 且 ≠ recipeSlot）」
+    // 才算槽位矛盾。输入在配方**留空**的槽位额外多按了一个音（例如 sus4 输入里多出来的九音 A），
+    // 那是外音/噪声，由 purity 与 extraCount 把关——不应在此误判为矛盾而把候选整条丢掉
+    // （此前 Csus4 + 噪声音会被判空候选，违反 low-confidence 兜底契约）。
+    if (recipeSlot !== 0 && inputSlot !== 0 && inputSlot !== recipeSlot) return true;
+  }
+  return false;
+}
 
 const normalizePitch = (p: number) => ((p % 12) + 12) % 12;
 
@@ -139,12 +225,14 @@ const POPCOUNT = (() => {
 const bitCount = (m: number) => POPCOUNT[m & 0xfff] ?? 0;
 
 /**
- * 相对命中：只保留「音集相对结构」决定的信息（根音相对音程 + 模板 + 纯度/外音/得分），
+ * 相对命中：只保留「音集相对结构」决定的信息（根音相对音程 + 配方 + 纯度/外音/得分），
  * 不含任何绝对音高与音名。绝对音高、音名、和弦名、分段全部由落地相 materialize 按本次调用
  * 的实际输入重新推导 —— 这是缓存可以跨调/跨把位复用的前提。
  */
 interface RelativeHit {
-  templateIndex: number;
+  tokenId: string;
+  /** 配方声明序，兼作旧 `templateIndex` 的排序位（同分时的稳定裁决） */
+  order: number;
   rootInterval: number;
   intervalMask: number;
   lowestInterval: number;
@@ -172,69 +260,58 @@ interface AnalyzeContext {
   explicitRootPitch: number | null;
 }
 
-function fastSoftScore(
-  purity: number,
-  extraCount: number,
+/**
+ * 候选打分。
+ *
+ * 结构分**直接采用识别器的分数**（`recognizeByIntervals` 给出的 `rec.score`），
+ * 只在其上加一项低音偏好。这样做的理由：
+ *
+ * 旧实现的结构分是「纯度 0.5 + 低音 0.28 + 常用度 0.1 + 杂项」的**手调加权和**，
+ * 其中常用度来自逐条手抄的 `baseWeight`。本次改造把候选来源换成 token 表后，
+ * `baseWeight` 这类手抄常量已不存在，若继续在引擎侧自造一套结构分，就会出现
+ * **两套结构判据并存**（识别器一套、引擎一套），且实测立刻跑偏 ——
+ * 引擎侧自造的弱惩罚挡不住 `C6/9` 压过 `C`（前者常用度更高、纯度同样是 1.0）。
+ *
+ * 识别器的分数已经过语料验证（63/63 自检、`C E G`→`C`、`C6`→`six`、`Cm7b5`→`halfDim7`
+ * 等歧义裁决全部正确），它内含旧引擎没有的**专指度**判据
+ * （`unusedDeclared` 声明却未出现的音、`slotMismatch` 槽位失配、`inflation` 虚报音数），
+ * 正是压制这类误判所必需。故这里复用它、不再另造。
+ *
+ * 低音偏好无法由识别器提供（它是纯音集运算，不知道哪个音在最低弦），
+ * 因此保留旧引擎的 `bassScore` 语义，按新旧分数量级比（旧 ≈870 / 新 ≈200 ≈ 4.35 倍）
+ * 缩放成加项：`BASS_SCALE × (bassScore − 1)`，取值域 0 ~ −27。
+ */
+function softScore(
+  recognitionScore: number,
   isSlash: boolean,
   lowestInterval: number,
   explicitRoot: boolean,
-  template: GrammarTemplate
+  recipe: Recipe
 ): number {
-  let bassScore = 1.0;
-
-  if (isSlash) {
-    if (explicitRoot) {
-      bassScore = 1.0;
-    } else {
-      const bassInCore = template.required.some(r => r.interval === lowestInterval);
-      const bassInOpt = template.optional?.some(r => r.interval === lowestInterval) ?? false;
-
-      if (bassInCore) {
-        bassScore = 0.78;
-      } else if (bassInOpt) {
-        bassScore = 0.68;
-      } else if (template.category === 'triad' || template.category === 'power') {
-        bassScore = 0.55;
-      } else {
-        bassScore = 0.35;
-      }
-    }
+  if (!isSlash || explicitRoot) {
+    // 非斜杠，或用户**显式指定**了根音：低音就是根音，不构成「转位可疑」，不加不减
+    return recognitionScore;
   }
 
-  const commonness = template.baseWeight / 200;
-  const extraPenalty = Math.min(extraCount * WEIGHTS.EXTRA_PENALTY, 0.75);
+  const bassInCore = recipe.coreIntervals.includes(lowestInterval);
+  const bassInExt = recipe.extensionIntervals.includes(lowestInterval);
 
-  let naturalBonus = 0;
-  if (!isSlash && purity >= 0.95) {
-    naturalBonus = 0.04;
-  }
+  let bassScore: number;
+  if (bassInCore) bassScore = 0.78;
+  else if (bassInExt) bassScore = 0.68;
+  else if (recipe.category === 'triad' || recipe.category === 'power') bassScore = 0.55;
+  else bassScore = 0.35;
 
-  const total =
-    purity * WEIGHTS.PURITY + bassScore * WEIGHTS.BASS + commonness * WEIGHTS.COMMONNESS - extraPenalty + naturalBonus;
-
-  return Math.round(total * 1000) / 10;
+  return Math.round((recognitionScore + BASS_SCALE * (bassScore - 1)) * 10) / 10;
 }
 
 /**
- * 构造一个角色归属：把根音与音程换算为实际音高，并取该音高上记录的首个音名。
- * 必选音、可选音、转位低音、外音四处共用同一套构造规则。
+ * 低音偏好的缩放系数：`(bassScore − 1) × BASS_SCALE` 即低音项对总分的加减。
+ *
+ * 取值依据见 `softScore` 注释：斜杠候选整体打折，折扣幅度对齐旧实现
+ * （旧实现低音项占满分约 31%，`bassScore` 从 1.0 降到 0.78 即扣约 10% 总分）。
  */
-function createRole(
-  rootPitch: number,
-  interval: number,
-  role: ChordSlot,
-  confidence: RoleConfidence,
-  labelByPitch: (string | undefined)[]
-): RoleAssignment {
-  const pitchIndex = (rootPitch + interval) % 12;
-  return {
-    noteLabel: labelByPitch[pitchIndex] || '',
-    pitchIndex,
-    interval,
-    role,
-    confidence,
-  };
-}
+const BASS_SCALE = 200;
 
 /**
  * 落地相单条：把「相对命中」+ 本次调用的实际上下文合成完整候选。
@@ -243,44 +320,25 @@ function createRole(
  */
 function materializeCandidate(hit: RelativeHit, rootPitch: number, ctx: AnalyzeContext): ChordCandidate {
   const { labelByPitch, bassLabel, explicitRootPitch } = ctx;
-  const template = COMPILED_TEMPLATES[hit.templateIndex]!.template;
+  const recipe = RECIPE_BY_TOKEN.get(hit.tokenId)!;
   const { intervalMask, lowestInterval, isSlash } = hit;
   const rootLabel = getPreferredRootLabel(
     rootPitch,
     labelByPitch,
-    template.suffix,
+    recipe.suffix,
     explicitRootPitch !== null ? rootPitch : null
   );
   const slashBassLabel = isSlash ? `/${bassLabel}` : '';
-  const roles: RoleAssignment[] = [];
-  const usedIntervals = new Set<number>();
+  // 角色由 AST 结构直接推导（旧实现只能读手写模板的 required/optional 槽位）。
+  // `skipAbsentExtensions` 必不可少：配方声明的扩展音未必真被按响，
+  // 照配方全量派角色会造出「角色表里有九音、音集里没有」的幽灵音。
+  const roles: RoleAssignment[] = rolesOfAst(recipe.ast, rootPitch, labelByPitch, {
+    inputMask: intervalMask,
+    ...(isSlash ? { bassInterval: lowestInterval } : {}),
+    skipAbsentExtensions: true,
+  });
 
-  for (const req of template.required) {
-    roles.push(createRole(rootPitch, req.interval, req.role, req.confidence, labelByPitch));
-    usedIntervals.add(req.interval);
-  }
-
-  if (template.optional) {
-    for (const opt of template.optional) {
-      if (intervalMask & (1 << opt.interval) && !usedIntervals.has(opt.interval)) {
-        roles.push(createRole(rootPitch, opt.interval, opt.role, opt.confidence, labelByPitch));
-        usedIntervals.add(opt.interval);
-      }
-    }
-  }
-
-  if (isSlash && !usedIntervals.has(lowestInterval)) {
-    roles.push(createRole(rootPitch, lowestInterval, 'slash_bass', 'optional', labelByPitch));
-    usedIntervals.add(lowestInterval);
-  }
-
-  for (let i = 0; i < 12; i++) {
-    if (intervalMask & (1 << i) && !usedIntervals.has(i)) {
-      roles.push(createRole(rootPitch, i, 'extra', 'extra', labelByPitch));
-    }
-  }
-
-  const chordName = `${rootLabel}${template.suffix}${slashBassLabel}`;
+  const chordName = `${rootLabel}${recipe.suffix}${slashBassLabel}`;
   let segments = nameToSegments(chordName) ?? undefined;
   if (!segments) {
     const parsedRoot = parsePitchSegment(rootLabel);
@@ -289,7 +347,7 @@ function materializeCandidate(hit: RelativeHit, rootPitch: number, ctx: AnalyzeC
       const parsedBass = isSlash ? (parsePitchSegment(cleanBassLabel) ?? undefined) : undefined;
       segments = {
         root: parsedRoot,
-        unknownQuality: template.suffix || undefined,
+        unknownQuality: recipe.suffix || undefined,
         bass: parsedBass,
       };
     }
@@ -299,8 +357,8 @@ function materializeCandidate(hit: RelativeHit, rootPitch: number, ctx: AnalyzeC
     chordName,
     rootLabel,
     rootPitch,
-    suffix: template.suffix,
-    category: template.category,
+    suffix: recipe.suffix,
+    category: recipe.category,
     roles,
     purity: hit.purity,
     extraCount: hit.extraCount,
@@ -436,50 +494,98 @@ function resolveRootIntervals(relMask: number, relExplicitRoot: number): number[
 }
 
 /**
- * 用单个模板匹配当前音集：不冲突且必选音齐全时给出纯度与分数，否则判定为不匹配。
- * 全程只用到相对音程（根音为 bit0 的音程掩码 + 相对最低音），因此与绝对调性/把位无关。
+ * 收集某个根音下的全部候选配方。
+ *
+ * 候选来源是 AST 识别（`recognizeByIntervals`）而非手写模板遍历 —— 这是本次切换的核心：
+ * 配方、写法、角色、分类全部由 token 表派生，新增一个和弦性质时识别端自动获得能力，
+ * 不再需要「往 47 条模板里再抄一行」（旧表因漏抄而只覆盖语料 42/74）。
+ *
+ * 识别器负责「哪些配方在结构上说得通」（骨架音齐全、外音不超限、槽位贴合），
+ * 本函数负责把它的结果换算回旧引擎的评分口径：
+ * - `purity` / `extraCount` 沿用旧公式（含**低音豁免**：斜杠低音不计入未解释音）
+ * - 纯度低于 `LOW_PURITY_THRESHOLD` 直接丢弃（与旧实现同一门槛、同一量纲）
+ *
+ * 低音豁免的必要性见旧实现注释：音集 E G# B D（低音 D）里 D 对 E 大三配方是「小七度冲突音」，
+ * 但作为低音应放行出 E/D 候选，否则只剩 E7/D 一种解读。
  */
-function evaluateTemplate(
-  templateIndex: number,
-  comp: CompiledTemplate,
+function collectRecipeHitsForRoot(
   rootInterval: number,
-  intervalMask: number,
-  lowestInterval: number,
-  isSlash: boolean,
+  relMask: number,
   totalInputNotes: number,
   explicitRoot: boolean
-): RelativeHit | null {
-  // 低音豁免：slash 低音只是「按在低音区的那个音」，不参与和弦性质的冲突判定。
-  // 例如音集 E G# B D（低音 D）：D 对 E 大三模板是 m7 冲突音，但作为低音应放行出 E/D 候选
-  // （否则只剩 E7/D 一种解读）。仅豁免最低音这一个音程；必选音与其余冲突检查不变，
-  // 非低音音符仍须满足模板约束，候选空间不会发散。
-  const effectiveConflictMask = isSlash ? comp.conflictMask & ~(1 << lowestInterval) : comp.conflictMask;
-  if ((intervalMask & effectiveConflictMask) !== 0) return null;
-  if ((intervalMask & comp.reqMask) !== comp.reqMask) return null;
+): RelativeHit[] {
+  const intervalMask = toIntervalMask(relMask, rootInterval);
+  // 基准音（最低弦音）相对根音的音程：rootInterval 为 0 时即根音原位，不构成斜杠
+  const lowestInterval = normalizePitch(-rootInterval);
+  const isSlash = rootInterval !== 0;
+  const lowestBit = 1 << lowestInterval;
 
-  let explainedMask = intervalMask & (comp.reqMask | comp.optMask);
-  if (isSlash) explainedMask |= intervalMask & (1 << lowestInterval);
+  // 输入音集旋转到「以该根音为 0」的相对半音列表，供识别器匹配
+  const semitones: number[] = [];
+  for (let i = 0; i < 12; i++) {
+    if (relMask & (1 << i)) semitones.push(normalizePitch(i - rootInterval));
+  }
 
-  const explainedCount = bitCount(explainedMask);
-  const purity = totalInputNotes === 0 ? 0 : explainedCount / totalInputNotes;
-  if (purity < LOW_PURITY_THRESHOLD) return null;
+  const hits: RelativeHit[] = [];
+  for (const rec of recognizeByIntervals(semitones, { allowMissing: 1, maxExtra: 3 })) {
+    const recipe = RECIPE_BY_TOKEN.get(rec.tokenId);
+    if (!recipe) continue;
 
-  const extraCount = totalInputNotes - explainedCount;
-  const score = fastSoftScore(purity, extraCount, isSlash, lowestInterval, explicitRoot, comp.template);
+    // 骨架音缺失的口径：**只允许五音缺席**。
+    //
+    // 三音定义大/小调、七音定义和弦类型，缺了它们就是另一个和弦，必须严格在场；
+    // 纯五音是最不定义和弦身份的音，乐器上常被省略（三和弦省五、`6` 和弦省五都常见），
+    // 旧手写模板正是把五音标成 `optional` 来放行这类输入。
+    // 识别器不区分「缺哪个音」，只给一个 `missing` 计数，故这一层判据由本引擎补上。
+    const missingCore = recipe.coreMask & ~intervalMask;
+    if ((missingCore & ~FIFTH_INTERVALS_MASK) !== 0) continue;
 
-  return {
-    templateIndex,
-    rootInterval,
-    intervalMask,
-    lowestInterval,
-    isSlash,
-    purity,
-    extraCount,
-    score,
-  };
+    // 槽位一致性：配方在某槽位填了音，输入**不能填成另一个**。
+    //
+    // 这是旧手写 `conflicts` 的正则化替代。举例：`C E G` 上 `aug`（五音增五）与
+    // `no3`（三音槽撤销）都「骨架音齐全或只缺五音」，但它们与输入**矛盾** ——
+    // 大三和弦的纯五音恰好否定了增五，齐全的三音恰好否定了 no3。
+    // 只判「缺不缺」看不出矛盾，必须按槽位分组比对。
+    // 槽位矛盾判定对斜杠低音位豁免：低音只是按在低音区，不参与性质判定
+    // （如 Bbadd9/F# 的 F# 是 ♭5，落在五音槽，与 add9 的纯五音冲突——若计入会整条丢弃候选）。
+    // 纯度层已通过 `explainedMask |= intervalMask & lowestBit` 对低音豁免，此处对称处理。
+    if (hasSlotContradiction(recipe.mask, isSlash ? intervalMask & ~lowestBit : intervalMask)) continue;
+
+    // 配方是否基本没被实例化：声明的扩展音有一半以上在输入里找不到，说明它表达的不是这个和弦。
+    //
+    // `C E G` 上 `C6`（声明六音）与 `Cadd9`（声明九音）纯度都是 1.0、常用度也不低，
+    // 旧引擎靠手写 `conflicts` 挡掉它们；这里用「扩展音实例化率」这个结构判据挡。
+    // 取「半数以上」而非「全有」是刻意的：`C13` 省掉十一音是常见弹法，不该因此被拒，
+    // 而 `C6` 在完全没有六音时只是另一个和弦。
+    if (recipe.extensionCount > 0 && rec.unusedDeclared * 2 >= recipe.extensionCount) continue;
+
+    let explainedMask = intervalMask & recipe.mask;
+    // 低音豁免：斜杠低音本身不计入「未解释」——它只表示按在低音区，不参与性质判定
+    if (isSlash) explainedMask |= intervalMask & lowestBit;
+
+    const explainedCount = bitCount(explainedMask);
+    const purity = totalInputNotes === 0 ? 0 : explainedCount / totalInputNotes;
+    if (purity < LOW_PURITY_THRESHOLD) continue;
+
+    const extraCount = totalInputNotes - explainedCount;
+    const score = softScore(rec.score, isSlash, lowestInterval, explicitRoot, recipe);
+
+    hits.push({
+      tokenId: recipe.tokenId,
+      order: recipe.order,
+      rootInterval,
+      intervalMask,
+      lowestInterval,
+      isSlash,
+      purity,
+      extraCount,
+      score,
+    });
+  }
+  return hits;
 }
 
-/** 遍历「根音相对音程 × 模板」的全部组合，收集通过纯度门槛的候选命中（纯相对运算，不碰音名） */
+/** 遍历全部候选根音，收集通过纯度门槛的候选命中（纯相对运算，不碰音名） */
 function collectRelativeHits(relMask: number, relExplicitRoot: number): RelativeHit[] {
   const totalInputNotes = bitCount(relMask);
   const rootIntervals = resolveRootIntervals(relMask, relExplicitRoot);
@@ -487,40 +593,26 @@ function collectRelativeHits(relMask: number, relExplicitRoot: number): Relative
   const hits: RelativeHit[] = [];
 
   for (const rootInterval of rootIntervals) {
-    const intervalMask = toIntervalMask(relMask, rootInterval);
-    // 基准音（最低弦音）相对根音的音程：rootInterval 为 0 时即根音原位，不构成斜杠
-    const lowestInterval = normalizePitch(-rootInterval);
-    const isSlash = rootInterval !== 0;
-
-    for (let ti = 0; ti < COMPILED_TEMPLATES.length; ti++) {
-      const hit = evaluateTemplate(
-        ti,
-        COMPILED_TEMPLATES[ti]!,
-        rootInterval,
-        intervalMask,
-        lowestInterval,
-        isSlash,
-        totalInputNotes,
-        explicitRoot
-      );
-      if (hit) hits.push(hit);
-    }
+    hits.push(...collectRecipeHitsForRoot(rootInterval, relMask, totalInputNotes, explicitRoot));
   }
 
   return hits;
 }
 
 /**
- * 去重：同一「根音相对音程 + 模板后缀」只保留最高分者（模板后缀当前全表唯一，这里是重复后缀的兜底）。
+ * 去重：同一「根音相对音程 + 配方 token」只保留最高分者（同分保留配方序靠前者，见下方比较）。
+ *
+ * 当前 tokenId 在每个根音下唯一，故这条去重在无同义 token 时是恒等变换——保留它是为了兜住
+ * 「同一 token 由多条 token 表条目派生」的将来情形（同义写法若拆成多条 token），以及同 token 多命中下的取最高分。
  * 不在这里做 top-N 截断 —— 截断要按「绝对根音升序」处理平局，属位置相关信息，
  * 放到落地相 materialize 在绝对序上做，这样同一形状跨调复用与全量重算结果一致。
  */
 function dedupeRelativeHits(hits: RelativeHit[]): RelativeHit[] {
   const best = new Map<string, RelativeHit>();
   for (const h of hits) {
-    const key = `${h.rootInterval}|${COMPILED_TEMPLATES[h.templateIndex]!.template.suffix}`;
+    const key = `${h.rootInterval}|${h.tokenId}`;
     const prev = best.get(key);
-    // 同分保留模板序靠前者，与原实现「稳定排序后取首个」一致
+    // 同分保留配方序靠前者，与原实现「稳定排序后取首个」一致
     if (!prev || h.score > prev.score) best.set(key, h);
   }
   return [...best.values()];
@@ -541,18 +633,21 @@ function groupCandidates(candidates: ChordCandidate[], bassPitch: number): Analy
 }
 
 /**
- * 候选排序规则：分数降序 → 绝对根音升序 → 模板序升序。
- * 与旧实现「按分做稳定排序（插入序 = 绝对根音升序 × 模板序）」得到的总序完全一致，
- * 因此落地相排序 + 截断 top-N 的结果与旧实现逐位相同。落地相排序与「只问最佳根音」的快路径共用本规则。
+ * 候选排序规则：分数降序 → 绝对根音升序 → 配方序升序。
+ *
+ * 第三键从旧的「模板序」换成「token 表声明序」，语义一致 —— 都是**人工排定的优先级**，
+ * 用来裁决同分候选。它承担着一件实事：`six` 与 `add13` 的 AST 完全相同（`C6` 的两种说法），
+ * 分数必然相同，只有声明序能把常用的 `6` 排在前面，否则会按名字字母序偶然选中 `add13`
+ * （实测踩过：`C E G A` 被显示成 `Cadd13`）。
  */
 const compareCandidateOrder = (
   aS: number,
   aRoot: number,
-  aTpl: number,
+  aRecipe: number,
   bS: number,
   bRoot: number,
-  bTpl: number
-): number => bS - aS || aRoot - bRoot || aTpl - bTpl;
+  bRecipe: number
+): number => bS - aS || aRoot - bRoot || aRecipe - bRecipe;
 
 /** 取相对声明的显式根音音程：未显式指定返回 -1（与 relMask 的 0~11 音程区分开） */
 const relativeExplicitRoot = (explicitRootPitch: number | null, bassPitch: number): number =>
@@ -590,7 +685,7 @@ function getRelativeHits(ctx: AnalyzeContext): RelativeHit[] {
 function materialize(relHits: RelativeHit[], ctx: AnalyzeContext): AnalyzeResult {
   const ordered = relHits.map(hit => ({ hit, rootPitch: normalizePitch(ctx.bassPitch + hit.rootInterval) }));
   ordered.sort((a, b) =>
-    compareCandidateOrder(a.hit.score, a.rootPitch, a.hit.templateIndex, b.hit.score, b.rootPitch, b.hit.templateIndex)
+    compareCandidateOrder(a.hit.score, a.rootPitch, a.hit.order, b.hit.score, b.rootPitch, b.hit.order)
   );
 
   const candidates = ordered
@@ -654,7 +749,7 @@ export function analyzeBestRootPitch(
   for (let i = 1; i < relHits.length; i++) {
     const h = relHits[i]!;
     const absRoot = normalizePitch(ctx.bassPitch + h.rootInterval);
-    if (compareCandidateOrder(h.score, absRoot, h.templateIndex, best.score, bestRoot, best.templateIndex) < 0) {
+    if (compareCandidateOrder(h.score, absRoot, h.order, best.score, bestRoot, best.order) < 0) {
       best = h;
       bestRoot = absRoot;
     }

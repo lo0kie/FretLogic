@@ -1,4 +1,4 @@
-@use '@/assets/tokens' as *;
+@use '@/assets/token-vars' as *;
 
 // =============================================================================
 // 1. 通用淡入淡出 (Fade) - 页面切换 / Tab 切换 / 遮罩层
@@ -174,6 +174,45 @@
 }
 
 // =============================================================================
+// 5b. 向上飞出淡出 (Fly Up) - 顶部浮层离场：明确向上飞出视口并淡出
+//     与 slide-down 的区别仅在离场方向：leave-to 直接 translateY(-120%) 飞出，
+//     而不是 slide-down 那种 -8px 微缩，给用户「向上飘走」的明确方向感。
+// =============================================================================
+// -move 必须声明在 enter/leave-active 之前（原因同第 4 节注释）
+.v-transition-fly-up-move {
+  transition: transform $duration-base $bezier-spring;
+}
+
+.v-transition-fly-up-enter-active,
+.v-transition-fly-up-leave-active {
+  transition:
+    opacity $duration-fast $bezier-standard,
+    transform $duration-fast $bezier-spring;
+  will-change: opacity, transform;
+}
+
+.v-transition-fly-up-leave-active {
+  position: absolute !important;
+  pointer-events: none;
+}
+
+.v-transition-fly-up-enter-from {
+  transform: translateY(-16px) scale(0.96);
+  opacity: 0;
+}
+
+.v-transition-fly-up-leave-to {
+  transform: translateY(-120%) scale(0.92);
+  opacity: 0;
+}
+
+.v-transition-fly-up-enter-to,
+.v-transition-fly-up-leave-from {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+// =============================================================================
 // 6. 列表 FLIP 排版平移动画 (List Move) - 用于 TransitionGroup 列表增删/重排
 // =============================================================================
 // -move 必须声明在 enter/leave-active 之前（原因同第 4 节注释）
@@ -285,4 +324,37 @@
 .v-floating-bar-slide-leave-from {
   transform: translateY(0) scale(1);
   opacity: 1;
+}
+
+// ============================================================
+// 逐字符翻页（br-roll）：旧字上滑离场、新字自下滑入
+// 类名对应 BaseRollingText 的 Transition name="br-roll"；时长读 --br-duration（组件的字符节点内联，
+// 滚动气泡写在读数节点上），两处消费者都显式给出，规则里的 0.2s 只是兜底。
+// 放在全局而非组件的 scoped 里：滚动气泡读数（v-scrollbar 指令内的纯 DOM 节点，没有 Vue 实例）
+// 同样要逐字符翻页，它复用这组类名、按帧手工切换类来驱动过渡（见 vScrollbar 的 BubbleRoller）——
+// 各留一份逐值相同的规则必然漂移，此处为唯一来源。
+// prefers-reduced-motion 的退化由 main.scss 的全局
+// `*, ::before, ::after { transition-duration: 0.01ms !important }` 兜住，不再单列一份。
+// ============================================================
+.br-roll-enter-active,
+.br-roll-leave-active {
+  transition:
+    transform var(--br-duration, 0.2s) cubic-bezier(0.33, 0, 0.2, 1),
+    opacity var(--br-duration, 0.2s) cubic-bezier(0.33, 0, 0.2, 1);
+}
+
+.br-roll-enter-from {
+  transform: translateY(110%);
+  opacity: 0;
+}
+
+// 离场元素绝对定位叠在原位：让入场元素立刻占据单元格，两者同时进行才形成「翻页」
+.br-roll-leave-active {
+  position: absolute;
+  inset: 0;
+}
+
+.br-roll-leave-to {
+  transform: translateY(-110%);
+  opacity: 0;
 }

@@ -53,14 +53,23 @@ export const useScoreRenderPayload = () => {
    * 页脚合成：页面栅格不含页脚（见 services/footerOverlay），开关打开时在渲染线程按需叠加。
    * 关闭时原样返回，零额外开销；开关本身不参与预览缓存的内容键，故切换不重渲染、不新增缓存条目。
    * @param pageIndexes 各页真实页序号（缺省按数组下标）
+   * @param pageSizeOverride 页图实际使用的纸张档位：缓存命中路径必须传渲染时档位，
+   *        缺省才读实时设置——改档位的在途窗口内两者可能不一致
+   * @param pageMarginOverride 页边距同上：页图与页脚必须同边距合成，重渲染在途窗口内
+   *        读实时值会按两套边距产出错位页脚（P1 审计 N 系）
    */
-  const composePageFooter = (blobs: Blob[], pageIndexes?: number[]): Promise<Blob[]> => {
+  const composePageFooter = (
+    blobs: Blob[],
+    pageIndexes?: number[],
+    pageSizeOverride?: string,
+    pageMarginOverride?: number
+  ): Promise<Blob[]> => {
     if (!settingsStore.scoreShowFooter || blobs.length === 0) return Promise.resolve(blobs);
     return runWorkerFooterCompose({
       pages: blobs,
       pageIndexes,
-      pageSize: settingsStore.scorePageSize,
-      pageMargin: settingsStore.scorePageMargin,
+      pageSize: pageSizeOverride ?? settingsStore.scorePageSize,
+      pageMargin: pageMarginOverride ?? settingsStore.scorePageMargin,
       // 页脚文字色与页面渲染同源（同一套 --fbc-* 变量），保证预览合成层与导出图一致
       color: resolveFretboardCanvasPalette().SUB_TEXT,
       // 与页面渲染同质量档位（百分制转 0.3~1）

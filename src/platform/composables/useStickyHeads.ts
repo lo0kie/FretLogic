@@ -150,10 +150,12 @@ export function useStickyHeads(options: UseStickyHeadsOptions) {
 
   onMounted(bindWithRetry);
 
-  // 列表根可能晚于 composable 初始化才出现（空态 → 列表的 v-if 切换），出现后重新绑定
+  // 列表根可能晚于 composable 初始化才出现（空态 → 列表的 v-if 切换）：
+  // el 为空（列表被卸载）时解绑旧根；el 存在时才重新绑定——原实现早退方向写反
+  //（el 为空时 return、非空且已绑定也 return），新根永远不会进 RO，吸附头长期陈旧
   watch(options.listRef, el => {
-    if (!el || container) return;
     detach();
+    if (!el) return;
     bindWithRetry();
   });
 

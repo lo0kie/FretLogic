@@ -3,6 +3,7 @@ import { reactive, toValue, watch } from 'vue';
 import { useEventListener, useResizeObserver } from '@vueuse/core';
 
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
+import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import type { MaybeRef } from 'vue';
 
@@ -73,8 +74,10 @@ export const useEdgeScroll = (target: MaybeRef<HTMLElement | null>, options: Use
     { immediate: true }
   );
 
-  /** 规范化滚动行为：仅接受 'auto' | 'instant'，传入 Event 或未知值时一律安全回退到 'smooth' */
-  const resolveBehavior = (val?: unknown): ScrollBehavior => (val === 'auto' || val === 'instant' ? val : 'smooth');
+  /** 规范化滚动行为：仅接受 'auto' | 'instant'，传入 Event 或未知值时一律安全回退到 'smooth'；
+   *  再经 resolveScrollBehavior 尊重系统「减弱动态效果」偏好（smooth 降级为 auto） */
+  const resolveBehavior = (val?: unknown): ScrollBehavior =>
+    resolveScrollBehavior(val === 'auto' || val === 'instant' ? val : 'smooth');
 
   /** 平滑滚动至指定边（如容器已卸载则静默返回） */
   const scrollToEdge = (edge: ScrollEdge, behavior?: ScrollBehavior | unknown) => {

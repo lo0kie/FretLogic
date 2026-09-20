@@ -1,6 +1,6 @@
 import { computed, toValue } from 'vue';
 
-import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, getBoardWidth } from '../constants';
+import { CANVAS_CONFIG, FRETBOARD_SCALE_MAP, getBoardWidth } from '@/domains/fretboard/constants';
 
 import type { MaybeRefOrGetter } from 'vue';
 

@@ -24,7 +24,7 @@
            列顶 top-8（32px）与指板同高，滚动时卡片最多上移到 32px，不会比指板更高 -->
       <div class="pointer-events-auto absolute inset-y-2xl right-8 z-panel">
         <BaseScrollArea :scrollbar="{ endInset: 12 }" close-popovers axis="y" class="flex size-full w-72 flex-col">
-          <!-- 面板列表：拖拽排序容器，其直接子元素即三张面板卡片。
+          <!-- 面板列表：拖拽排序容器，其直接子元素即四张面板卡片。
                刻意不把排序容器与滚动宿主合并：滚动宿主是 v-scrollbar 的书写目标（加宿主类 + 写内联
                overflow），而 Sortable 会把容器的直接子元素一律当成可排序项，两种语义不该共用一个节点。
                shrink-0 必需——本容器是滚动宿主的唯一 flex 子项，若能收缩则永远滚不动。 -->
@@ -37,6 +37,7 @@
               class="w-full overflow-hidden rounded-xl border border-glass-border bg-surface-panel p-xs"
             >
               <BaseCollapse
+                :description="PANEL_META[panelId].description"
                 :expanded="getPanelExpanded(panelId)"
                 :icon="PANEL_META[panelId].icon"
                 :title="PANEL_META[panelId].title"
@@ -113,6 +114,7 @@ import {
 } from '@/domains/chord/workbench/composables/useChordDraftEditing';
 import { useWorkbenchPanelExpanded } from '@/domains/chord/workbench/composables/useWorkbenchPanelExpanded';
 import { useWorkbenchPanelsOrder } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder.ts';
+import { useWorkbenchRouteSync } from '@/domains/chord/workbench/composables/useWorkbenchRouteSync';
 import { getFloatingBarBottom } from '@/domains/fretboard/constants';
 import { useSortableList } from '@/platform/composables/useSortableList';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -120,8 +122,8 @@ import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import ChordAnalysisPanel from './ChordAnalysisPanel.vue';
 import WorkbenchExportPanel from './WorkbenchExportPanel.vue';
+import WorkbenchFretboardPanel from './WorkbenchFretboardPanel.vue';
 import WorkbenchVariantsPanel from './WorkbenchVariantsPanel.vue';
-import { useWorkbenchRouteSync } from '../composables/useWorkbenchRouteSync';
 
 import type { WorkbenchPanelId } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder.ts';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
@@ -131,21 +133,45 @@ const PANEL_COMPONENT_MAP: Record<WorkbenchPanelId, Component> = {
   analysis: ChordAnalysisPanel,
   variants: WorkbenchVariantsPanel,
   export: WorkbenchExportPanel,
+  fretboard: WorkbenchFretboardPanel,
 };
 
-/** 各面板的卡片元数据：图标 + 标题 + 展开持久化键（键位沿用历史 *_COLLAPSED，语义收敛为布尔展开态） */
-const PANEL_META: Record<WorkbenchPanelId, { icon: IconName; title: string; storageKey: string }> = {
-  analysis: {
-    icon: 'chart-column',
-    title: '和弦分析',
-    storageKey: STORAGE_KEYS.WORKBENCH_CHORD_ANALYSIS_COLLAPSED,
-  },
-  variants: { icon: 'git-branch', title: '多指法', storageKey: STORAGE_KEYS.WORKBENCH_VARIANTS_COLLAPSED },
-  export: { icon: 'image-down', title: '导出图片', storageKey: STORAGE_KEYS.WORKBENCH_EXPORT_COLLAPSED },
-};
+/**
+ * 各面板的卡片元数据：图标 + 标题 + 行尾小标题（description）+ 展开持久化键。
+ * 小标题走 BaseCollapse 的 description（标题右侧小字弱色，空间不足时先截断它、标题保持完整），
+ * 用于一眼区分四张同构卡片里装的是什么——标题只两三个字，光看标题分不清内容边界。
+ */
+const PANEL_META: Record<WorkbenchPanelId, { icon: IconName; title: string; description: string; storageKey: string }> =
+  {
+    fretboard: {
+      icon: 'guitar',
+      title: '指板设置',
+      description: '品数与调音',
+      storageKey: STORAGE_KEYS.WORKBENCH_FRETBOARD_COLLAPSED,
+    },
+    variants: {
+      icon: 'git-branch',
+      title: '多指法',
+      description: '候选把位',
+      storageKey: STORAGE_KEYS.WORKBENCH_VARIANTS_COLLAPSED,
+    },
+    analysis: {
+      icon: 'chart-column',
+      title: '和弦分析',
+      description: '候选名与音级',
+      storageKey: STORAGE_KEYS.WORKBENCH_CHORD_ANALYSIS_COLLAPSED,
+    },
+    export: {
+      icon: 'image-down',
+      title: '导出图片',
+      description: 'PNG 与背景',
+      storageKey: STORAGE_KEYS.WORKBENCH_EXPORT_COLLAPSED,
+    },
+  };
 
 /** 展开态持久化：每面板独立实例（v-for 循环内不能调用 hook，故按 panelId 逐一索引调用） */
 const panelExpanded: Record<WorkbenchPanelId, Ref<boolean>> = {
+  fretboard: useWorkbenchPanelExpanded(PANEL_META.fretboard.storageKey),
   analysis: useWorkbenchPanelExpanded(PANEL_META.analysis.storageKey),
   variants: useWorkbenchPanelExpanded(PANEL_META.variants.storageKey),
   export: useWorkbenchPanelExpanded(PANEL_META.export.storageKey),
@@ -159,7 +185,7 @@ const setPanelExpanded = (id: WorkbenchPanelId, value: boolean): void => {
 
 const { panels, setOrder } = useWorkbenchPanelsOrder();
 
-/** 拖拽排序容器：三张面板卡片的直接父节点（与滚动宿主刻意分开，理由见模板注释） */
+/** 拖拽排序容器：四张面板卡片的直接父节点（与滚动宿主刻意分开，理由见模板注释） */
 const panelListRef = useTemplateRef<HTMLElement>('panelListRef');
 
 // 面板顺序拖拽排序：把手限定在折叠头（标题行），不与面板内容的手势竞争。

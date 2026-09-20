@@ -1,8 +1,12 @@
 /**
  * 模态浮层（Modal / Drawer）共享的开关生命周期：
- * 打开 → 收拢动作 + body 滚动锁 + 从浮层池取号 + 挂全局 Esc + 入阻断栈；
- * 关闭 → 解绑 Esc + 出栈 + 复位滚动锁；离场动画结束 → 释放层号；卸载 → 全量兜底清理。
+ * 打开 → 收拢动作 + body 滚动锁 + 从浮层池取号 + 挂全局 Esc + 入阻断栈 + 焦点移入面板；
+ * 关闭 → 解绑 Esc + 出栈 + 复位滚动锁 + 焦点归还触发器；离场动画结束 → 释放层号；
+ * 卸载 → 全量兜底清理（含焦点归还）。
  * BaseModal 与 BaseDrawer 此前各自维护一份逐字重复的实现，本 composable 为唯一来源。
+ *
+ * 焦点管理为何属于这里：遮罩、滚动锁、inert 都只处理「鼠标与视觉」，焦点是独立的第三条通道，
+ * 而且正是键盘/读屏用户唯一的通道——此前三条通道里唯一没被这条生命周期覆盖的就是它。
  */
 import { nextTick, onScopeDispose, ref, watch } from 'vue';
 
@@ -19,6 +23,11 @@ export interface OverlayLifecycleOptions {
   visible: Ref<boolean>;
   /** 浮层根容器元素（阻断栈以该元素判栈顶） */
   overlayRef: Ref<HTMLElement | null>;
+  /**
+   * 打开后接收初始焦点的面板元素（Modal 传带 tabindex="-1" 的对话框卡片）。
+   * 缺省回落到 overlayRef——但外层容器通常不可聚焦，focus() 会静默无效，故实际调用方都应显式传。
+   */
+  panelRef?: Ref<HTMLElement | null>;
   /** Esc 处理器：打开期间挂到 window keydown，关闭/卸载时解绑 */
   onEscape: (e: KeyboardEvent) => void;
   /** 该浮层是否参与 body 滚动锁（Modal 恒 true；Drawer 仅遮罩模式） */
@@ -42,6 +51,46 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
     stopKeydownListener = null;
   };
 
+  // ---------- 焦点管理 ----------
+  /** 打开前的焦点位置（触发器）：关闭时归还，键盘用户才能「从哪来回哪去」 */
+  let previouslyFocused: HTMLElement | null = null;
+
+  /**
+   * 把焦点移入浮层面板。
+   *
+   * 为什么必须有：body 滚动锁 + 后台 inert 都不管焦点——打开后焦点仍停在触发器上，读屏软件不会
+   * 播报这个对话框，键盘用户要按一次 Tab 才「碰巧」进到内容里；而 Esc 关闭与 Tab 圈定的语义都
+   * 建立在「焦点已在浮层内」这个前提上（useOverlayFocusTrap 对 activeElement === 面板 的处理
+   * 就是为此写的，只是从未有人在打开时把焦点送进去）。
+   *
+   * 落点取**面板自身**而非第一个可聚焦元素：面板带 tabindex="-1"，聚焦它会让读屏播报对话框的
+   * role 与名称，且不会把焦点意外落在「删除」这类恰好排在最前的按钮上；随后按 Tab 自然进入首个
+   * 控件。面板不可聚焦时 focus() 是空操作，不会报错。
+   */
+  const focusPanel = () => {
+    if (!isClient) return;
+    (opts.panelRef ?? opts.overlayRef).value?.focus();
+  };
+
+  /** 关闭时把焦点归还给打开前的元素（见下方两处调用的时机说明） */
+  const restoreFocus = () => {
+    if (!isClient) return;
+    const target = previouslyFocused;
+    previouslyFocused = null;
+    if (!target?.isConnected) return;
+
+    // 只在「焦点仍留在浮层里」或「已丢给 body」时归还：若关闭期间用户已经把焦点移到别处
+    // （紧接着点了另一个按钮），抢回来是打断操作而不是帮忙。点遮罩关闭时 activeElement 就是
+    // body（div 不可聚焦），故这一条同时覆盖了鼠标关闭路径。
+    const active = document.activeElement;
+    const overlay = opts.overlayRef.value;
+    const stillInsideOverlay = active instanceof HTMLElement && overlay !== null && overlay.contains(active);
+    const focusLost = active === null || active === document.body;
+    if (!stillInsideOverlay && !focusLost) return;
+
+    target.focus();
+  };
+
   watch(
     opts.visible,
     isOpen => {
@@ -52,7 +101,13 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
         }
         // 仅参与滚动锁的浮层（遮罩模式）复位锁：栈内还有其它阻断层时保持锁定
         isBodyLocked.value = opts.locksBody() && hasActiveOverlays() > 0;
+        // 归还时机取「关闭瞬间」而非离场动画结束：面板随后即被移除，届时焦点会被浏览器丢给 body，
+        // 读屏用户就「掉」在了页面开头。
+        restoreFocus();
       } else {
+        // 必须在焦点被移入浮层**之前**记录来路：否则重复打开时记到的是浮层内部元素
+        const active = isClient ? document.activeElement : null;
+        previouslyFocused = active instanceof HTMLElement ? active : null;
         opts.onOpen?.();
         isBodyLocked.value = opts.locksBody();
         // 层号在打开瞬间即刻分配（早于内容渲染）：保证与并发打开的浮层时序严格一致
@@ -63,6 +118,8 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
           if (opts.overlayRef.value) {
             registerOverlay(opts.overlayRef.value);
           }
+          // 焦点同样要等这一 tick：destroyOnClose / v-if 的面板此刻才挂上，早于此调用拿不到元素
+          focusPanel();
         });
       }
     },
@@ -83,6 +140,8 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
       unregisterOverlay(opts.overlayRef.value);
     }
     isBodyLocked.value = opts.locksBody() && hasActiveOverlays() > 0;
+    // 组件在打开状态被卸载（父级销毁）时也归还焦点，否则键盘用户同样会「掉」在页面里
+    restoreFocus();
   });
 
   return { overlayZ, releaseZ, handleAfterLeave };

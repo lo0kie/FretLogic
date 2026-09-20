@@ -6,6 +6,8 @@ import { createSyncProviderBase } from './syncBase.ts';
 import type { SyncProvider, WebdavSyncConfig } from './provider.ts';
 
 const WEBDAV_REMOTE_FILE_PATH = 'FretLogic/chords.json'; // 内部写死
+/** 独立校验元数据载体：数据源文件同目录下的一份小文件，启动检测只拉这份最小数据 */
+const WEBDAV_META_FILE_PATH = 'FretLogic/chords.meta.json';
 
 /**
  * WebDAV 同步 provider。
@@ -20,8 +22,29 @@ const WEBDAV_REMOTE_FILE_PATH = 'FretLogic/chords.json'; // 内部写死
  *    PUT 会返回 409 Conflict。因此 push 前会先用 MKCOL 自顶向下创建父集合。
  */
 export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider {
+  // 凭据安全门禁（构造期即拒绝，避免把问题带进请求）：
+  //  1. 非 https 的服务器地址一律拒绝（localhost/127.0.0.1 供本地调试豁免）——
+  //     Basic 凭据走明文 http 等于公开；
+  //  2. 地址里内嵌 userinfo（https://user:pass@host）一律拒绝—— userinfo 会被
+  //     encodeURIComponent 进代理 URL（?url=），凭据随之扩散到代理侧可解可日志。
+  const trimmedServerUrl = config.serverUrl.trim();
+  let parsedServerUrl: URL;
+  try {
+    parsedServerUrl = new URL(trimmedServerUrl);
+  } catch {
+    throw new SyncError('REQUEST_FAILED', 'WebDAV 服务器地址无效');
+  }
+  const isLocalDev = parsedServerUrl.hostname === 'localhost' || parsedServerUrl.hostname === '127.0.0.1';
+  if (parsedServerUrl.protocol !== 'https:' && !isLocalDev) {
+    throw new SyncError('REQUEST_FAILED', 'WebDAV 服务器必须使用 HTTPS（本地调试可使用 localhost）');
+  }
+  if (parsedServerUrl.username || parsedServerUrl.password) {
+    throw new SyncError('REQUEST_FAILED', 'WebDAV 地址不应内嵌账号密码，请分别填写用户名与密码字段');
+  }
+
   const serverBase = config.serverUrl.replace(/\/+$/, '');
   const fileUrl = `${serverBase}/${WEBDAV_REMOTE_FILE_PATH.replace(/^\/+/, '')}`;
+  const metaFileUrl = `${serverBase}/${WEBDAV_META_FILE_PATH.replace(/^\/+/, '')}`;
   // 配置了代理则经代理转发，用于绕开浏览器跨域限制
   const buildRequestUrl = (resourceUrl: string): string =>
     config.proxyUrl ? `${config.proxyUrl.replace(/\/+$/, '')}?url=${encodeURIComponent(resourceUrl)}` : resourceUrl;
@@ -116,6 +139,29 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
       if (!response.ok) throw new SyncError('REQUEST_FAILED', `WebDAV 服务器返回错误状态码：${response.status}`);
       const etag = response.headers.get('ETag') ?? '';
       return { sha: etag };
+    },
+    async fetchMeta() {
+      const response = await request({ method: 'GET' }, metaFileUrl);
+      if (response.status === 404) return null; // 旧数据/从未上传：无独立 meta
+      if (!response.ok) throw new SyncError('REQUEST_FAILED', `WebDAV 服务器返回错误状态码：${response.status}`);
+      try {
+        const parsed = (await response.json()) as { md5?: unknown; updatedAt?: unknown };
+        if (typeof parsed.md5 === 'string' && typeof parsed.updatedAt === 'number') {
+          return { md5: parsed.md5, updatedAt: parsed.updatedAt };
+        }
+        return null;
+      } catch {
+        return null; // meta 损坏视为无 meta，引导重传
+      }
+    },
+    async pushMeta(meta) {
+      // meta 与数据源同目录，父集合由数据源 push 建立，直接复用确保逻辑
+      await ensureParentCollections();
+      const response = await request(
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: serializeForStorage(meta) },
+        metaFileUrl
+      );
+      if (!response.ok) throw new SyncError('REQUEST_FAILED', `WebDAV meta 写入返回错误状态码：${response.status}`);
     },
     async testConnection(): Promise<string> {
       // PROPFIND 根集合（Depth: 0）是 WebDAV 标准连通性探测：同时验证地址、账号密码与服务器支持。

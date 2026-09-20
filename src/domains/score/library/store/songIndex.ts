@@ -6,16 +6,21 @@
  * 依赖独立成片（见 songStore 的 chordReferencesIndex），才能在单首歌的绑定变更时只重算那一首。
  */
 import type { ChordId } from '@/domains/chord/types';
-import type { SlotKey, Song } from '@/domains/score/types';
+import type { ChordLineSlots, LineId, Song } from '@/domains/score/types';
 
 export type ChordReferenceIndex = Map<string, { song: Song; count: number }[]>;
 
 /** 单首歌的 chordId -> 引用次数计数表（同歌曲内多个槽位引用同一和弦合并计数）。 */
-export const buildSongRefCounts = (chordMap: Map<SlotKey, ChordId>): Map<string, number> => {
+export const buildSongRefCounts = (chordMap: Map<LineId, ChordLineSlots>): Map<string, number> => {
   const counts = new Map<string, number>();
-  for (const chordId of chordMap.values()) {
-    if (!chordId) continue;
+  const add = (chordId: ChordId) => {
+    if (!chordId) return;
     counts.set(chordId, (counts.get(chordId) ?? 0) + 1);
+  };
+  for (const slots of chordMap.values()) {
+    for (const chordId of slots.char.values()) add(chordId);
+    slots.start.forEach(add);
+    slots.end.forEach(add);
   }
   return counts;
 };

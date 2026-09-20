@@ -1,5 +1,5 @@
 <template>
-  <GlobalToast />
+  <GlobalNotification />
 
   <!-- 首次打开引导：询问是否从线上（默认 Gitee）拉取备份数据，仅弹一次 -->
   <FirstRunPullModal v-if="showFirstRunPull" />
@@ -34,7 +34,7 @@
 import { computed, defineAsyncComponent } from 'vue';
 
 import TopHeader from '@/app/layouts/TopHeader.vue';
-import GlobalToast from '@/platform/ui/feedback/GlobalToast.vue';
+import GlobalNotification from '@/platform/ui/feedback/GlobalNotification.vue';
 import { setupChordScoreBridge } from '@/app/services/chordScoreBridge';
 import { setupPersistFailureNotice } from '@/app/services/persistFailureNotice';
 import { setupShareLinkBridge } from '@/app/services/shareLinkBridge';
@@ -47,7 +47,7 @@ const uiStore = useUiStore();
 setupChordScoreBridge();
 // 跨领域装配：消费 URL 上的分享载荷（乐谱 / 和弦 / 分组），导入落地后从 URL 移除参数
 setupShareLinkBridge();
-// 持久化失败提示：domain 层只上报「写入失败」，此处统一转成 Toast（配额满时用户必须知情）
+// 持久化失败提示：domain 层只上报「写入失败」，此处统一转成 Message（配额满时用户必须知情）
 setupPersistFailureNotice();
 const SidebarLeft = defineAsyncComponent(() => import('@/app/layouts/SidebarLeft.vue'));
 // 首访引导改为条件渲染 + 异步组件：只有首访才拉取该 chunk（内含同步/备份服务与 zod），

@@ -9,11 +9,12 @@ import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { lineCharChord } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 import type { Chord } from '@/domains/chord/types';
-import type { LineId, SlotKey } from '@/domains/score/types';
+import type { LineId } from '@/domains/score/types';
 
 describe('乐谱编辑器基础撤销栈 (scoreEditorStore Undo & Redo)', () => {
   beforeEach(async () => {
@@ -82,12 +83,12 @@ describe('乐谱编辑器基础撤销栈 (scoreEditorStore Undo & Redo)', () => 
       groupId: toGroupId('g1'),
       nameSegments: nameToSegments('C'),
       strings: [
-        [-1, false],
-        [3, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
       fretCount: 4,
       fretOffset: 0,
@@ -105,26 +106,26 @@ describe('乐谱编辑器基础撤销栈 (scoreEditorStore Undo & Redo)', () => 
     await nextTick();
 
     const slotKey = 'line_l1_char_0' as SlotKey;
-    expect(scoreEditorStore.activeSong?.chordMap.get(slotKey)).toBeUndefined();
+    expect(scoreEditorStore.activeSong?.chordMap.get('l1' as LineId)).toBeUndefined();
 
     // 绑定和弦
     scoreEditorStore.setSlotChord(slotKey, chordC);
-    expect(scoreEditorStore.activeSong?.chordMap.get(slotKey)).toBe(chordC.id);
+    expect(lineCharChord(scoreEditorStore.activeSong!.chordMap, 'l1', 0)).toBe(chordC.id);
 
     // 首次撤销：和弦应被移除
     await scoreEditorStore.undo();
-    expect(scoreEditorStore.activeSong?.chordMap.get(slotKey)).toBeUndefined();
+    expect(lineCharChord(scoreEditorStore.activeSong!.chordMap, 'l1', 0)).toBeNull();
 
     // 重做：和弦恢复
     await scoreEditorStore.redo();
-    expect(scoreEditorStore.activeSong?.chordMap.get(slotKey)).toBe(chordC.id);
+    expect(lineCharChord(scoreEditorStore.activeSong!.chordMap, 'l1', 0)).toBe(chordC.id);
 
     // 移除和弦
     scoreEditorStore.removeSlotChord(slotKey);
-    expect(scoreEditorStore.activeSong?.chordMap.get(slotKey)).toBeUndefined();
+    expect(lineCharChord(scoreEditorStore.activeSong!.chordMap, 'l1', 0)).toBeNull();
 
     // 首次撤销：和弦应重新出现
     await scoreEditorStore.undo();
-    expect(scoreEditorStore.activeSong?.chordMap.get(slotKey)).toBe(chordC.id);
+    expect(lineCharChord(scoreEditorStore.activeSong!.chordMap, 'l1', 0)).toBe(chordC.id);
   });
 });

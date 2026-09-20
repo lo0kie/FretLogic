@@ -34,3 +34,8 @@ docs/
 coverage/
 .workbuddy/
 .trae/
+.wrangler/
+
+.env.development
+.zcodeignore
+.wrangler

@@ -37,14 +37,9 @@
           :icon-stroke
           :icon-size="props.iconSize"
           :name="props.icon"
-          class="text-fg-secondary shrink-0"
+          class="shrink-0 text-fg-body"
         />
-        <component
-          v-else-if="props.icon"
-          :icon-size="props.iconSize"
-          :is="props.icon"
-          class="text-fg-secondary shrink-0"
-        />
+        <component v-else-if="props.icon" :icon-size="props.iconSize" :is="props.icon" class="shrink-0 text-fg-body" />
       </slot>
       <div class="min-w-0 flex-1">
         <slot name="title">
@@ -64,7 +59,7 @@
       </span>
       <BaseIcon
         :class="expanded ? 'rotate-0' : '-rotate-90'"
-        class="text-fg-secondary shrink-0 transition-transform duration-base ease-out group-hover/head:text-fg-title"
+        class="shrink-0 text-fg-body transition-transform duration-base ease-out group-hover/head:text-fg-title"
         icon-size="md"
         name="chevron-down"
       />

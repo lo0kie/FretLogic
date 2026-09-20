@@ -372,7 +372,7 @@ const normalizedStyle = computed(() => {
   时长锁定设计令牌 $duration-fast，缓动用 $bezier-standard。
 -->
 <style scoped lang="scss">
-@use '@/assets/tokens' as *;
+@use '@/assets/token-vars' as *;
 
 .action-button {
   transition-duration: $duration-fast;

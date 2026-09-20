@@ -36,12 +36,12 @@ describe('theory: 和弦指纹', () => {
       fretCount: 3,
       tuning: 'STANDARD' as const,
       strings: [
-        [-1, false],
-        [3, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
       rootStringIndex: 2,
     };
@@ -55,12 +55,12 @@ describe('theory: 和弦指纹', () => {
       fretCount: 3,
       tuning: 'STANDARD' as const,
       strings: [
-        [-1, false],
-        [3, false],
-        [2, false],
-        [0, false],
-        [1, false],
-        [0, false],
+        { fret: -1, preferFlat: false },
+        { fret: 3, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 0, preferFlat: false },
+        { fret: 1, preferFlat: false },
+        { fret: 0, preferFlat: false },
       ],
       rootStringIndex: 2,
     };
@@ -73,7 +73,7 @@ describe('theory: 调弦预设', () => {
   it('返回标准调弦的基弦（6 根，MIDI 音高）', () => {
     const mapping = getActiveBaseStrings('STANDARD');
     expect(mapping).toHaveLength(6);
-    // 6 弦空弦 = 低音 E = MIDI 64
+    // mapping[5] = 1 弦空弦 = 高音 E = MIDI 64（低音 E 是 mapping[0] = 40；E2=40、E4=64）
     expect(mapping[5]).toBe(64);
   });
 

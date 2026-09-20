@@ -280,57 +280,6 @@
           </BaseFormRow>
         </BaseForm>
       </BaseCollapse>
-
-      <BaseCollapse
-        v-scroll-into-view.y.delay-220="isWorkbenchGroupOpen('fretboard')"
-        :class="workbenchOpenGroup === 'fretboard' ? 'bg-tint-panelhover-50!' : ''"
-        :expanded="workbenchOpenGroup === 'fretboard'"
-        @update:expanded="toggleWorkbenchGroup('fretboard', $event)"
-        initial-auto
-        class="scroll-mt-2"
-        description="品数与调音"
-        icon="guitar"
-        icon-size="xl"
-        title="指板"
-      >
-        <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
-          <BaseFormRow label="显示品数">
-            <BaseSegmentedControl
-              :model-value="editorStore.draftChord.fretCount"
-              :options="FRET_OPTIONS"
-              @update:model-value="editorStore.setFretCount($event)"
-              compacted
-            />
-          </BaseFormRow>
-
-          <BaseFormRow label="品位偏移 (Offset)">
-            <BaseNumberInput
-              v-model="editorStore.draftChord.fretOffset"
-              :editable="false"
-              :max="INTERACTION_CONFIG.MAX_CAPO_LIMIT"
-              :min="0"
-              wheel-on-hover
-              width="auto"
-            />
-          </BaseFormRow>
-
-          <BaseFormRow label="调音方案">
-            <BaseSelector
-              v-model="editorStore.draftChord.tuning"
-              :default-value="Tuning.STANDARD"
-              :format-option="formatTuningOption"
-              :options="tuningOptions"
-              clearable
-              keep-open-on-select
-              rolling-text
-            />
-          </BaseFormRow>
-
-          <BaseFormRow help="指板有可横按弦组时自动标记" label="自动横按">
-            <BaseSwitch v-model="editorStore.autoBarre" aria-label="自动标记横按" />
-          </BaseFormRow>
-        </BaseForm>
-      </BaseCollapse>
     </template>
   </BaseScrollArea>
 </template>
@@ -346,15 +295,10 @@ import { useRoute } from 'vue-router';
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
 import BaseForm from '@/platform/ui/form/BaseForm.vue';
 import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
-import BaseNumberInput from '@/platform/ui/input/BaseNumberInput.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
-import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
-import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
-import { Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
-import { FRET_COUNTS, INTERACTION_CONFIG } from '@/domains/fretboard/constants';
 import { SCORE_PAGE_MARGIN_PRESETS, SCORE_PAGE_SIZE_PRESETS } from '@/domains/score/constants';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -369,7 +313,7 @@ import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandl
 const scoreEditOpenGroupState = ref<'' | 'layout' | 'display' | 'export'>('layout');
 const scorePreviewOpenGroupState = ref<'' | 'layout' | 'display' | 'export'>('layout');
 /** 工作台页折叠分组展开项（排他手风琴：会话级记忆，重开仍停留原分组，可收起至全部折叠） */
-const workbenchOpenGroupState = ref<'' | 'timbre' | 'effect' | 'display' | 'fretboard'>('timbre');
+const workbenchOpenGroupState = ref<'' | 'timbre' | 'effect' | 'display'>('timbre');
 /** 会话级滚动位置记忆：关闭/重开设置弹窗仍返回上次滚动位置（浮层 v-if 销毁重建容器，避免"闪回顶部"） */
 const scoreScrollTopState = ref(0);
 const workbenchScrollTopState = ref(0);
@@ -381,7 +325,6 @@ const scrollAreaRef = useTemplateRef<ScrollAreaHandle>('scrollAreaRef');
 const scrollRef = useScrollAreaElement(scrollAreaRef);
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
-const editorStore = useChordEditorStore();
 const route = useRoute();
 /** 乐谱专属子项（缩放/对齐/简写）仅在乐谱页显示；音频项在工作台显示 */
 const isScoreRoute = computed(() => route.path === ROUTE_PATHS.SCORE);
@@ -434,7 +377,7 @@ function toggleScoreGroup(group: '' | 'layout' | 'display' | 'export', value: bo
 }
 
 /** 切换工作台页分组：展开即排他选中该组，收起（value=false）则回到全部折叠 */
-function toggleWorkbenchGroup(group: '' | 'timbre' | 'effect' | 'display' | 'fretboard', value: boolean) {
+function toggleWorkbenchGroup(group: '' | 'timbre' | 'effect' | 'display', value: boolean) {
   pinPopover();
   workbenchOpenGroupState.value = value ? group : '';
 }
@@ -445,18 +388,8 @@ function toggleWorkbenchGroup(group: '' | 'timbre' | 'effect' | 'display' | 'fre
  * 展开为排他手风琴，故任意时刻仅一个分组为 true，天然只滚动刚打开的那一组。
  */
 const isScoreGroupOpen = (group: '' | 'layout' | 'display' | 'export'): boolean => scoreOpenGroup.value === group;
-const isWorkbenchGroupOpen = (group: '' | 'timbre' | 'effect' | 'display' | 'fretboard'): boolean =>
+const isWorkbenchGroupOpen = (group: '' | 'timbre' | 'effect' | 'display'): boolean =>
   workbenchOpenGroup.value === group;
-
-/** 调音方案选项：仅列出与当前弦数匹配的预设 */
-const tuningOptions = computed(() =>
-  (Object.keys(TUNING_PRESETS) as Tuning[]).filter(t => TUNING_PRESETS[t]?.stringCount === editorStore.stringCount)
-);
-/** 可选品数段选项 */
-const FRET_OPTIONS = computed(() => FRET_COUNTS.map(f => ({ label: `${f}品`, value: f })));
-/** 调音方案格式化为预设名（无匹配时回退标准调弦），供调音选择器展示 */
-const formatTuningOption = (val: string | number) =>
-  (typeof val === 'string' ? TUNING_PRESETS[val as Tuning]?.name : undefined) || Tuning.STANDARD;
 
 /** 按当前路由维度读取会话级滚动位置（乐谱/工作台各自独立记忆，高度不同避免交错钳位） */
 const getSessionScrollTop = () => (isScoreRoute.value ? scoreScrollTopState : workbenchScrollTopState).value;

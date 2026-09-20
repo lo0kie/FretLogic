@@ -1,5 +1,5 @@
 // directives/vTooltip.scss
-@use '@/assets/tokens' as *;
+@use '@/assets/token-vars' as *;
 
 .v-tooltip-box {
   backdrop-filter: var(--blur-xl);

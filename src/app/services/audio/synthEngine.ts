@@ -3,6 +3,7 @@ import { calcNoteMidi, getActiveBaseStrings, Tuning } from '@/domains/chord/theo
 import { AUDIO_CONFIG, CHORUS_CONFIG, TIMBRE_PRESETS } from './constants';
 
 import type { TimbrePreset } from './constants';
+import type { GuitarStringsModel } from '@/domains/fretboard/types';
 import type { AudioTimbreId, StrumDirection } from '@/platform/types';
 
 let isEngineInitialized = false;
@@ -48,6 +49,9 @@ let appliedChorusEnabled = false;
 let appliedReverbWet: number = AUDIO_CONFIG.REVERB_WET_GAIN;
 
 const MIDI_TO_FREQ_CACHE = new Map<number, number>();
+
+/** 延音硬上限（秒）：松手事件丢失时的最坏发声时长，超时节点自动结束并清理 */
+const MAX_SUSTAIN_SECONDS = 30;
 
 /** MIDI 号转频率，带缓存避免重复换算（公式与 AUDIO_CONFIG 的 A4 基准一致） */
 const midiToFreq = (midiNote: number): number => {
@@ -212,8 +216,10 @@ const triggerNote = (
 
   let stopAt: number;
   if (sustain) {
-    // 延音保持：不自动释放，交由 releaseSynthNotes；用极远停止时间占位
-    stopAt = startTime + 1e9;
+    // 延音保持：不自动释放，交由 releaseSynthNotes 做包络淡出。
+    // 占位停止时间必须有限：松手事件丢失（pointercancel/窗外松开）时无人调用释放，
+    // 有限的硬上限保证最坏情况延音有界、节点仍会自动结束并触发 onended 清理（1e9 会泄漏整条节点链）
+    stopAt = startTime + MAX_SUSTAIN_SECONDS;
   } else {
     const releaseStart = startTime + Math.max(duration, attack + decay);
     ampEnv.gain.setValueAtTime(Math.max(0.0001, sustainLevel * peak), releaseStart);
@@ -312,9 +318,15 @@ export interface ChordStrumOptions {
   timingJitter?: number;
 }
 
-/** 按方向构建触发顺序并逐弦触发核心循环的公共前置：解析可调参数 */
-const resolveStrumParams = (options?: ChordStrumOptions, tuning: Tuning | string = Tuning.STANDARD) => {
-  const baseStrings = getActiveBaseStrings(tuning as Tuning);
+/** 按方向构建触发顺序并逐弦触发核心循环的公共前置：解析可调参数。
+ *  stringCount 必须传真实弦数：getActiveBaseStrings 缺省回落调弦预设自身弦数，
+ *  7~10 弦和弦多出的弦会以 MIDI≈0 的基音发声（听感与指板音名不符）。 */
+const resolveStrumParams = (
+  options?: ChordStrumOptions,
+  tuning: Tuning | string = Tuning.STANDARD,
+  stringCount?: number
+) => {
+  const baseStrings = getActiveBaseStrings(tuning as Tuning, stringCount);
   return {
     baseStrings,
     delayStep: options?.delayStep ?? AUDIO_CONFIG.STRUM_DELAY_STEP,
@@ -333,7 +345,7 @@ const resolveStrumParams = (options?: ChordStrumOptions, tuning: Tuning | string
  */
 export const triggerChordStrum = (
   chord: {
-    strings: [number, boolean][];
+    strings: GuitarStringsModel;
     fretOffset: number;
     tuning: Tuning | string;
   },
@@ -343,7 +355,8 @@ export const triggerChordStrum = (
   ensureStringVoices(chord.strings.length);
   const { baseStrings, delayStep, velocityMin, velocityRange, timingJitter, triggerBaseTime } = resolveStrumParams(
     options,
-    chord.tuning
+    chord.tuning,
+    chord.strings.length
   );
   const order = buildStrumOrder(chord.strings.length, options?.direction ?? 'low');
   const preset = TIMBRE_PRESETS[appliedTimbre];
@@ -352,11 +365,11 @@ export const triggerChordStrum = (
 
   for (const sIdx of order) {
     const targetStr = chord.strings[sIdx];
-    if (!targetStr || targetStr[0] < 0) continue;
+    if (!targetStr || targetStr.fret < 0) continue;
     const panner = stringPanners[sIdx];
     if (!panner) continue;
 
-    const currentMidiNote = calcNoteMidi(sIdx, targetStr[0], chord.fretOffset, baseStrings);
+    const currentMidiNote = calcNoteMidi(sIdx, targetStr.fret, chord.fretOffset, baseStrings);
     const frequency = midiToFreq(currentMidiNote);
 
     const triggerTime = triggerBaseTime + strumDelay;
@@ -388,7 +401,7 @@ export const triggerChordStrum = (
  */
 export const triggerChordSustain = (
   chord: {
-    strings: [number, boolean][];
+    strings: GuitarStringsModel;
     fretOffset: number;
     tuning: Tuning | string;
   },
@@ -398,7 +411,8 @@ export const triggerChordSustain = (
   ensureStringVoices(chord.strings.length);
   const { baseStrings, delayStep, velocityMin, velocityRange, timingJitter, triggerBaseTime } = resolveStrumParams(
     options,
-    chord.tuning
+    chord.tuning,
+    chord.strings.length
   );
   const order = buildStrumOrder(chord.strings.length, options?.direction ?? 'low');
   const preset = TIMBRE_PRESETS[appliedTimbre];
@@ -407,11 +421,11 @@ export const triggerChordSustain = (
 
   for (const sIdx of order) {
     const targetStr = chord.strings[sIdx];
-    if (!targetStr || targetStr[0] < 0) continue;
+    if (!targetStr || targetStr.fret < 0) continue;
     const panner = stringPanners[sIdx];
     if (!panner) continue;
 
-    const currentMidiNote = calcNoteMidi(sIdx, targetStr[0], chord.fretOffset, baseStrings);
+    const currentMidiNote = calcNoteMidi(sIdx, targetStr.fret, chord.fretOffset, baseStrings);
     const frequency = midiToFreq(currentMidiNote);
 
     // 与 triggerChordStrum 相同的时序策略：固定基准 + 本弦局部抖动，不逐弦累进

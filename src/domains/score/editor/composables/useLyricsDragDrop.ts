@@ -1,6 +1,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { parseSlotKey } from '@/domains/score/model/chordSlots';
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { logger } from '@/platform/utils/logger';
 
@@ -50,7 +51,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     scheduleDropFrame({ x, y });
   };
 
-  const { checkAutoScroll, stopAutoScroll, isScrolling } = useDragAutoScroll();
+  const { checkAutoScroll, stopAutoScroll } = useDragAutoScroll();
 
   // 外部拖拽源（无源槽位）的几何落点解析（见 lyrics-drag/externalDropTarget）
   const externalDropResolver = createExternalDropResolver(scrollContainerRef);
@@ -153,9 +154,23 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     if (draggingSlotKey.value === targetKey || !activeChord) {
       return false;
     }
-    // 拖拽只保留「移动」语义（复制已移除，取用和弦走右侧选择面板的卡片）：
-    // 落点为空槽即搬移、落点已占用即覆盖（替换），两者数据层同为「目标覆盖 + 源清空」
-    scoreEditor.moveSlotChord(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
+    // 同行同类边和弦（行首/行尾）拖拽是列表内重排，必须走 swapOrMoveSlotChords，
+    // 否则 moveSlotChord 的「源清空 + 目标覆盖」会破坏边和弦列表（[A,B] 拖 start_0→start_1 只剩 [A]）
+    const sourceParsed = parseSlotKey(draggingSlotKey.value);
+    const targetParsed = parseSlotKey(targetKey);
+    const isEdgeReorder =
+      sourceParsed &&
+      targetParsed &&
+      sourceParsed.type !== 'char' &&
+      targetParsed.type !== 'char' &&
+      sourceParsed.lineId === targetParsed.lineId &&
+      sourceParsed.type === targetParsed.type;
+    if (isEdgeReorder) {
+      scoreEditor.swapSlotChords(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
+    } else {
+      // 其它落点保留「移动」语义：空槽搬移、占用槽覆盖（替换），数据层同为「目标覆盖 + 源清空」
+      scoreEditor.moveSlotChord(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
+    }
     return true;
   };
 
@@ -238,11 +253,10 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       resolveExternalDropTarget(e.clientX, e.clientY);
     }
 
-    if (!isScrolling()) {
-      checkAutoScroll(scrollContainerRef?.value, currentPointerPos, () => {
-        scheduleDropTargetUpdate(currentPointerPos.x, currentPointerPos.y);
-      });
-    }
+    // 每次 move 都喂最新指针位置：循环进行中会只更新位置不叠加 rAF（见 useDragAutoScroll）
+    checkAutoScroll(scrollContainerRef?.value, currentPointerPos, () => {
+      scheduleDropTargetUpdate(currentPointerPos.x, currentPointerPos.y);
+    });
   };
 
   /** 全局抬起：按当前落点执行落地（空槽移动 / 占用替换），随后统一收尾 */

@@ -74,8 +74,12 @@ sizes.forEach(({ file, bytes }) => {
 console.log(`Approximate initial JS: ${initialKb} KB gzip (${initialSizes.length} chunks)`);
 
 if (oversizedChunks.length > 0) {
-  console.error('\nOversized chunks:');
+  console.error(`\nOversized chunks (> ${CHUNK_BUDGET_KB} KB gzip)：`);
   oversizedChunks.forEach(({ file, bytes }) => console.error(`${file}: ${(bytes / 1024).toFixed(2)} KB`));
+  // 必须失败退出：预算只打印不拦截就只是日志（此前如此，超预算的懒加载 chunk 照样上线）。
+  // 若某个 chunk 合法地大（如重依赖导出链），正确动作是调高 CHUNK_BUDGET_KB 并在注释写明理由，
+  // 而不是让这条门槛永远哑火。
+  process.exitCode = 1;
 }
 
 if (initialBytes > INITIAL_BUDGET_KB * 1024) {

@@ -269,6 +269,8 @@ const handleEscape = useOverlayEscape({
 const { overlayZ, handleAfterLeave } = useOverlayLifecycle({
   visible,
   overlayRef,
+  // 初始焦点落在抽屉面板（带 tabindex="-1"）而非外层遮罩容器：后者不可聚焦，focus() 无效
+  panelRef: drawerPanelRef,
   onEscape: handleEscape,
   // 仅遮罩模式参与 body 滚动锁，非遮罩（调色盘）抽屉不锁背景
   locksBody: () => props.mask,

@@ -171,7 +171,12 @@ const observeTarget = (container: HTMLElement, state: AutoHeightState) => {
 
   state.targetEl = resolveTargetEl(container, state.opts.target);
 
-  if (!state.targetEl || typeof ResizeObserver === 'undefined') return;
+  if (!state.targetEl || typeof ResizeObserver === 'undefined') {
+    // 无观察者环境 / 测量目标缺失时也必须落一次初始高度（syncHeight 会按缺目标退化为 auto/0px），
+    // 否则 mounted 里预置的 height:0px 无人改写，容器永久钉死、内容被裁没
+    syncHeight(container, state, true);
+    return;
+  }
 
   // 观察者路径一律走帧末合帧：syncHeight 要读 offsetHeight / scrollHeight / getComputedStyle，
   // 每次都是强制布局。展开一个上百张卡的分组时，分批挂载会在一帧内投递多批 mutation、

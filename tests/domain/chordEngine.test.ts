@@ -13,13 +13,15 @@ const note = (stringIndex: number, pitchIndex: number, label: string): NoteInput
 
 const cMajor = [note(3, 0, 'C'), note(4, 4, 'E'), note(5, 7, 'G')];
 const aMinor = [note(3, 9, 'A'), note(4, 0, 'C'), note(5, 4, 'E')];
-const gSeven = [note(3, 7, 'G'), note(4, 11, 'B'), note(5, 10, 'F'), note(6, 2, 'D')];
+// G 属七（G7 = G B D F）：第三个音 pitchIndex 必须是 5（F）——
+// 此前写成 10（F#/Gb）却挂着 'F' 标签，音集实为 Gmaj7，断言 'BmMaj7/G' 是纯垃圾输出
+const gSeven = [note(3, 7, 'G'), note(4, 11, 'B'), note(5, 5, 'F'), note(6, 2, 'D')];
 
 describe('chord engine boundary', () => {
   it('identifies explicit major, minor and dominant seventh chords', () => {
     expect(analyzeChordGraph(cMajor, 0).best?.chordName).toBe('C');
     expect(analyzeChordGraph(aMinor, 9).best?.chordName).toBe('Am');
-    expect(analyzeChordGraph(gSeven, null).best?.chordName).toBe('BmMaj7/G');
+    expect(analyzeChordGraph(gSeven, null).best?.chordName).toBe('G7');
   });
 
   it('keeps slash bass in the chord name', () => {

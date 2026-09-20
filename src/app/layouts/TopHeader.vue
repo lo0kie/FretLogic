@@ -1,6 +1,6 @@
 <template>
   <header
-    class="@media(display-mode:window-controls-overlay):[-webkit-app-region:drag] @media(display-mode:window-controls-overlay):[app-region:drag] @media(display-mode:window-controls-overlay):min-h-[max(2.5rem,env(titlebar-area-height,2.5rem))] @media(display-mode:window-controls-overlay):pl-[max(env(titlebar-area-inset-left,0px),1rem)] @media(display-mode:window-controls-overlay):pr-[max(env(titlebar-area-inset-right,0px),1rem)] relative z-header flex min-h-10 w-full shrink-0 items-center justify-between border-b border-glass-border bg-surface-panel/90 px-4 backdrop-blur-lg select-none"
+    class="relative z-header flex min-h-10 w-full shrink-0 items-center justify-between border-b border-glass-border bg-surface-panel/90 px-4 backdrop-blur-lg select-none wco:min-h-[max(2.5rem,env(titlebar-area-height,2.5rem))] wco:pr-[max(env(titlebar-area-inset-right,0px),1rem)] wco:pl-[max(env(titlebar-area-inset-left,0px),1rem)] wco:[-webkit-app-region:drag] wco:[app-region:drag]"
   >
     <div :class="NO_DRAG_REGION_CLASS" class="flex min-w-0 flex-1 items-center justify-start">
       <BaseCheckbox
@@ -50,11 +50,11 @@
          整行铺满故自身不吃指针事件（pointer-events-none），交互与 PWA 拖拽豁免都交给其上的 Tab 栏控件；
          titlebar 左右留白以 padding 让出，居中落在窗口按钮之外的可用区内 -->
     <div
+      v-if="route.path === ROUTE_PATHS.SCORE"
       :class="route.path === ROUTE_PATHS.SCORE ? 'items-stretch' : 'items-center'"
-      class="@media(display-mode:window-controls-overlay):pl-[env(titlebar-area-inset-left,0px)] @media(display-mode:window-controls-overlay):pr-[env(titlebar-area-inset-right,0px)] pointer-events-none absolute inset-0 z-inner flex justify-center"
+      class="pointer-events-none absolute inset-0 z-inner flex justify-center wco:pr-[env(titlebar-area-inset-right,0px)] wco:pl-[env(titlebar-area-inset-left,0px)]"
     >
       <BaseSegmentedControl
-        v-if="route.path === ROUTE_PATHS.SCORE"
         :class="[NO_DRAG_REGION_CLASS, 'pointer-events-auto']"
         :disabled="!scoreEditor.activeSong"
         :model-value="scoreEditor.activeTab"
@@ -68,34 +68,113 @@
     </div>
 
     <div :class="NO_DRAG_REGION_CLASS" class="flex min-w-0 flex-1 items-center justify-end gap-xs">
-      <!-- 工作台：试听当前和弦（置于右侧操作区最左侧） -->
-      <ActionButton
-        v-if="route.path === ROUTE_PATHS.WORKBENCH"
-        v-tooltip="'播放/试听当前和弦（长按持续发声）'"
-        :disabled="editorStore.isFretBoardEmpty || isPlaying"
-        :hold-delay="300"
-        :icon="isPlaying || isSustaining ? 'square' : 'play'"
-        @click="playCurrentChord()"
-        @hold-end="stopChordSustain()"
-        @hold-start="void startChordSustain(editorStore.draftChord)"
-        holdable
-        icon-only
-        aria-label="播放/试听当前和弦（长按持续发声）"
-        color="primary"
-        icon-size="xl"
-        variant="ghost"
-      />
-      <!-- 复制/粘贴：和弦页与乐谱页共用，按当前路由分派动作与文案；
-           乐谱页粘贴乐谱在所有 tab 常驻（导入乐谱与当前 tab 无关）；
-           「预览」tab 复制改派为整曲长图，其余 tab（含编辑歌词）为文字复制 -->
-      <template v-for="(btn, btnIndex) in transferButtons" :key="btn.key">
-        <!-- 下载乐谱：乐谱导出 tab 时插在复制与「剪切板（粘贴）」之间 -->
-        <BaseMenu v-if="btnIndex === downloadBeforeIndex" :items="downloadExportMenuItems" :title="downloadMenuTitle">
+      <!-- 文档操作区：工作台与乐谱页各由一块独立 template 承载，用 v-if / v-else-if 显式切换。
+           两侧的按钮数量、顺序、禁用判据互不相干 —— 增删任一侧不必去读另一侧的条件，
+           也不再需要「一份配置数组 + 插入位 + 按 key 把菜单插进 v-for」那套间接层。
+
+           两条贯穿本区的约定：
+           1) 一个按钮只做一件事、只用一个图标 —— 「复制文字」与「复制长图」是两个独立按钮，
+              不按 tab 改派同一个按钮的动作；
+           2) 禁用态不挂 tooltip —— 它描述的是「点下去会做什么」，按钮做不了这件事时还提示它
+              只会误导。（解释「为什么禁用」的提示不在此列，见 SyncModalContainer 的用法） -->
+
+      <!-- 工作台：试听当前和弦（置于本区最左侧），随后复制 / 粘贴当前和弦 -->
+      <template v-if="route.path === ROUTE_PATHS.WORKBENCH">
+        <ActionButton
+          v-tooltip="isPlayDisabled ? undefined : '播放/试听当前和弦（长按持续发声）'"
+          :disabled="isPlayDisabled"
+          :hold-delay="300"
+          :icon="isPlaying || isSustaining ? 'square' : 'play'"
+          @click="playCurrentChord()"
+          @hold-end="stopChordSustain()"
+          @hold-start="void startChordSustain(editorStore.draftChord)"
+          holdable
+          icon-only
+          aria-label="播放/试听当前和弦（长按持续发声）"
+          color="primary"
+          icon-size="xl"
+          variant="ghost"
+        />
+
+        <ActionButton
+          v-tooltip="isCopyChordDisabled ? undefined : '复制当前和弦'"
+          :disabled="isCopyChordDisabled"
+          @click="handleCopyChord()"
+          icon-only
+          aria-label="复制当前和弦"
+          icon="copy"
+          icon-size="xl"
+          variant="ghost"
+        />
+
+        <ActionButton
+          v-tooltip="isPasteChordDisabled ? undefined : '从剪切板粘贴'"
+          :disabled="isPasteChordDisabled"
+          @click="handlePasteChord()"
+          icon-only
+          aria-label="从剪切板粘贴"
+          icon="clipboard-paste"
+          icon-size="xl"
+          variant="ghost"
+        />
+      </template>
+
+      <template v-else-if="route.path === ROUTE_PATHS.SCORE">
+        <!-- 乐谱页：文本进出（复制文字 / 粘贴）在前，导出产物（复制长图 / 下载）在后 ——
+             同组动作相邻、中间不夹异类按钮。
+             四个按钮在三个 tab 都常驻显示，用「互斥的禁用态」表达当前 tab 支持哪一种，
+             不做 tab 级显隐 —— 切 tab 时按钮不会左右横跳 -->
+        <!-- 复制文字：读写的是乐谱文本本身，与当前看的是编辑视图还是导出预览无关，故三个 tab 常驻可用。
+             唯一例外是「预览正在渲染」时暂禁 —— 与粘贴同源（isPreviewBusy），避免与导出链路竞态。
+             （历史：拆分前曾按 tab 禁用，注释留了「删掉 isPreviewExportMode 即可放开」的说明；
+             该项已按此说明移除，现改为按渲染态禁用，避免注释与 isCopyScoreTextDisabled 的实际判据矛盾） -->
+        <ActionButton
+          v-tooltip="isCopyScoreTextDisabled ? undefined : '复制乐谱文字'"
+          :disabled="isCopyScoreTextDisabled"
+          @click="handleCopySong()"
+          icon-only
+          aria-label="复制乐谱文字"
+          icon="copy"
+          icon-size="xl"
+          variant="ghost"
+        />
+
+        <!-- 粘贴：紧邻复制文字 —— 文本进出是同一组动作。
+             导入乐谱与当前 tab 无关，全 tab 可用；仅「预览渲染中」（分页图尚未出全）暂禁，
+             避免与导出链路竞态 -->
+        <ActionButton
+          v-tooltip="isPasteScoreDisabled ? undefined : '从剪切板粘贴'"
+          :disabled="isPasteScoreDisabled"
+          @click="handlePasteSong()"
+          icon-only
+          aria-label="从剪切板粘贴"
+          icon="clipboard-paste"
+          icon-size="xl"
+          variant="ghost"
+        />
+
+        <!-- 复制长图：走预览导出链路，依赖预览渲染产物，故仅「预览」tab 且产物就绪时可用。
+             判据与下载菜单同源（canExportScore）—— 两者依赖同一份产物，
+             分开写才会冒出「长图能复制、下载却禁用」这类不一致 -->
+        <ActionButton
+          v-tooltip="canExportScore ? '复制整曲长图' : undefined"
+          :disabled="!canExportScore"
+          @click="void handleScoreExport('copy')"
+          icon-only
+          aria-label="复制整曲长图"
+          icon="image"
+          icon-size="xl"
+          variant="ghost"
+        />
+
+        <!-- 下载：菜单与触发按钮必须共用 canExportScore。只禁按钮不禁菜单时，hover 仍会展开面板
+             并给按钮套上「打开中」的强调样式（禁用元素却表现成可交互） -->
+        <BaseMenu :disabled="!canExportScore" :items="downloadExportMenuItems" :title="downloadMenuTitle">
           <template #trigger="{ isOpen, pinToggle }">
             <ActionButton
               :aria-expanded="isOpen"
               :color="isOpen ? 'primary' : 'default'"
-              :disabled="uiStore.isCopying || isPreviewRendering || !scoreEditor.hasLyrics"
+              :disabled="!canExportScore"
               :variant="isOpen ? 'subtle' : 'ghost'"
               @click="pinToggle()"
               icon-only
@@ -107,19 +186,10 @@
             />
           </template>
         </BaseMenu>
-        <ActionButton
-          v-tooltip="btn.tooltip"
-          :aria-label="btn.tooltip"
-          :disabled="btn.disabled"
-          :icon="btn.icon"
-          @click="btn.onClick"
-          icon-only
-          icon-size="xl"
-          variant="ghost"
-        />
       </template>
 
-      <!-- 分组分隔线：左侧为文档操作（试听/复制/下载/粘贴），右侧为应用偏好（设置/同步/主题/仓库） -->
+      <!-- 分组分隔线：左侧为文档操作（工作台：试听 / 复制 / 粘贴；乐谱：复制文字 / 粘贴 / 复制长图 / 下载），
+           右侧为应用偏好（设置 / 同步 / 主题 / 仓库） -->
       <BaseDivider
         :inset="'0.25rem'"
         :length="'0.875rem'"
@@ -129,11 +199,12 @@
         orientation="vertical"
       />
 
-      <BasePopover v-if="showHeaderSettings" placement="bottom-end" trigger="hover">
+      <BasePopover :disabled="!canUseHeaderSettings" placement="bottom-end" ref="settingsPopoverRef" trigger="hover">
         <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
             :aria-expanded="isOpen"
             :color="isOpen ? 'primary' : 'default'"
+            :disabled="!canUseHeaderSettings"
             :variant="isOpen ? 'subtle' : 'ghost'"
             @click="pinToggle()"
             icon-only
@@ -149,7 +220,7 @@
         <HeaderConfigPopover />
       </BasePopover>
 
-      <BaseMenu :items="syncMenuItems" :title="`当前选择 ${settingsStore.syncTarget}`">
+      <BaseMenu :items="syncMenuItems" :title="`当前选择 ${currentSchemeName}`">
         <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
             :aria-expanded="isOpen"
@@ -227,12 +298,12 @@
     :confirm-loading="isSyncing"
     @confirm="handleConfirmSync()"
     cancel-text="取消"
-    confirm-text="确认同步"
-    title="确认同步到云端"
+    confirm-text="确认上传"
+    title="确认上传至云端"
   >
     <div class="py-xs">
       <p class="m-0 text-xs/relaxed text-fg-body">
-        确定要将本地数据（和弦库、乐谱库与设置）同步上传至
+        确定要将本地数据（和弦库、乐谱库与设置）上传至
         <strong class="text-fg-title">{{ currentSchemeName }}</strong> 吗？
       </p>
     </div>
@@ -275,7 +346,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, ref, useTemplateRef, watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
@@ -300,7 +371,8 @@ import { preloadTextTransferActions, useTextTransfer } from '@/domains/score/tra
 import { useTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { ROUTE_PATHS, TOAST_WARNING_DURATION_MS } from '@/platform/utils/constants';
+import { ROUTE_PATHS } from '@/platform/utils/constants';
+import { prefetch } from '@/platform/utils/prefetch';
 
 import HeaderConfigPopover from './HeaderConfigPopover.vue';
 
@@ -326,24 +398,25 @@ const scoreRouteSync = useScoreRouteSync();
 /** 乐谱「预览」导出动作与下载菜单标题（长图/PDF/Zip + 尺寸预估），逻辑见 useScoreExportActions.ts */
 const { isPreviewExportMode, handleScoreExport, downloadExportMenuItems, downloadMenuTitle } = useScoreExportActions();
 
-/** 下载菜单插入位：仅预览 tab 时插在「剪切板（粘贴）」按钮之前，其余场景不渲染（-1） */
-const downloadBeforeIndex = computed(() => {
-  if (!isPreviewExportMode.value) return -1;
-  return transferButtons.value.findIndex(btn => btn.key === 'paste');
-});
+/** 「预览导出产物已就绪」判据：预览 tab、非渲染中 / 复制中、有歌词。
+ *  由乐谱页三个出口共用 —— 复制长图按钮、下载菜单、下载触发按钮：三者依赖的是同一份产物，
+ *  判据分开写迟早会出现「长图能复制、下载却禁用」这类不一致。
+ *  菜单侧漏禁更糟：按钮已禁用而菜单仍可 hover 展开时，会弹出面板并给按钮套上「打开中」的强调样式 */
+const canExportScore = computed(
+  () => isPreviewExportMode.value && !uiStore.isCopying && !isPreviewRendering.value && scoreEditor.hasLyrics
+);
+
+/**
+ * 预览渲染中（且当前就在预览 tab）：复制乐谱文字 / 粘贴乐谱都与导出链路共用同一条渲染线程，
+ * 分页图尚未出全时暂禁，避免与导出竞态。
+ * 判据只在此处写一份、两个按钮共用 —— 分开写迟早冒出「粘贴能用、复制却禁用」这类不一致。
+ * 注意渲染标记只在预览 tab 参与判断：后台残留的渲染不该禁用其他 tab 的动作。
+ */
+const isPreviewBusy = computed(() => isPreviewExportMode.value && isPreviewRendering.value);
 
 /** 无结构纯歌词「确认兜底」：待确认的载荷 + 确认弹窗开关 */
 const pendingLyricsImport = ref<PortableSong | null>(null);
 const isLyricsImportConfirmOpen = ref(false);
-
-/** 复制/粘贴按钮配置项：由 transferButtons 统一描述，供模板 v-for 渲染 */
-interface TransferButton {
-  key: string;
-  icon: IconName;
-  tooltip: string;
-  disabled: boolean;
-  onClick: () => void;
-}
 
 /** 复制/粘贴防重入锁：包装异步动作，执行期间禁用按钮 */
 const withTransferLock = (fn: () => Promise<void>): void => {
@@ -356,6 +429,26 @@ const withTransferLock = (fn: () => Promise<void>): void => {
 
 /** 工作台可复制条件：指板非空且已解析出和弦名 */
 const canCopyChord = computed(() => !editorStore.isFretBoardEmpty && Boolean(getChordName(editorStore.draftChord)));
+
+/** 试听按钮可用判据：模板里同时驱动禁用态与提示的挂载开关（禁用即不挂 tooltip，见该按钮注释） */
+const isPlayDisabled = computed(() => editorStore.isFretBoardEmpty || isPlaying.value);
+
+// ===== 文档操作区各按钮的禁用判据 =====
+// 每条判据同时驱动「禁用态」与「是否挂 tooltip」—— 两处引用同一个 computed，
+// 就不会出现「按钮已经禁用、提示还写着点它会怎样」的自相矛盾。
+
+/** 工作台·复制当前和弦：防重入锁期间，或指板为空 / 解不出和弦名 */
+const isCopyChordDisabled = computed(() => uiStore.isCopying || !canCopyChord.value);
+
+/** 工作台·粘贴和弦：仅防重入锁（剪贴板内容在读取时才知道是否可用，不预先禁用） */
+const isPasteChordDisabled = computed(() => uiStore.isCopying);
+
+/** 乐谱·复制文字：防重入锁 + 未打开乐谱 + 预览渲染中（与粘贴同源，见 isPreviewBusy）。
+ *  判据与 tab 无关（含「预览」tab 也可用），只有「正在渲染」这一条临时禁用 */
+const isCopyScoreTextDisabled = computed(() => uiStore.isCopying || !scoreEditor.activeSong || isPreviewBusy.value);
+
+/** 乐谱·粘贴乐谱：防重入锁 + 预览渲染中（与复制文字同源，见 isPreviewBusy） */
+const isPasteScoreDisabled = computed(() => uiStore.isCopying || isPreviewBusy.value);
 
 /** 工作台：复制当前编辑的和弦文字到剪贴板 */
 const handleCopyChord = () => withTransferLock(() => copyChordText(editorStore.draftChord));
@@ -387,52 +480,6 @@ const handleConfirmLyricsImport = () => {
 const openSourceRepository = () => {
   window.open('https://github.com/lo0kie/FretLogic', '_blank', 'noopener,noreferrer');
 };
-
-/** 复制/粘贴按钮配置：和弦页与乐谱页共用，按当前路由分派动作、文案与禁用态 */
-const transferButtons = computed<TransferButton[]>(() => {
-  const isScore = route.path === ROUTE_PATHS.SCORE;
-  // 乐谱「预览」tab：无文字编辑语义，复制改派为整曲长图（复用预览导出链路 handleScoreExport）；
-  // 粘贴保持全 tab 可用（导入乐谱与当前 tab 无关，导入后由导入链路自行选中并切换）
-  if (isScore && scoreEditor.activeTab === 'preview') {
-    // 预览渲染中（A4 分页图尚未出全）禁止复制/下载/粘贴，避免导出半成品或中途竞态
-    const previewBusy = uiStore.isCopying || isPreviewRendering.value;
-    const longImageDisabled = previewBusy || !scoreEditor.hasLyrics;
-    return [
-      {
-        key: 'copy-long-image',
-        icon: 'copy',
-        tooltip: '复制整曲长图',
-        disabled: longImageDisabled,
-        onClick: () => void handleScoreExport('copy'),
-      },
-      {
-        key: 'paste',
-        icon: 'clipboard-paste',
-        tooltip: '从剪切板粘贴',
-        disabled: previewBusy,
-        onClick: handlePasteSong,
-      },
-    ];
-  }
-  // 乐谱「编辑歌词」tab：复制/粘贴回落到默认分支（文字复制乐谱），不再特殊处理
-
-  return [
-    {
-      key: 'copy',
-      icon: 'copy',
-      tooltip: isScore ? '复制当前乐谱' : '复制当前和弦',
-      disabled: uiStore.isCopying || (isScore ? !scoreEditor.activeSong : !canCopyChord.value),
-      onClick: isScore ? handleCopySong : handleCopyChord,
-    },
-    {
-      key: 'paste',
-      icon: 'clipboard-paste',
-      tooltip: isScore ? '从剪切板粘贴' : '从剪切板粘贴',
-      disabled: uiStore.isCopying,
-      onClick: isScore ? handlePasteSong : handlePasteChord,
-    },
-  ];
-});
 
 const activeNavPath = computed(() => {
   const matched = NAV_OPTIONS.find(opt => opt.value === route.path);
@@ -482,17 +529,19 @@ const themeMenuItems = computed<MenuItem[]>(() => [
 
 const { triggerGlobalSync, pullFromRemote, resolvePushCredentialIssue, isSyncing, isPulling } = useSyncService();
 // 空闲时预取各懒加载动作链的 chunk（同步/导出/试听/复制粘贴）：
-// 首次点击不再经历「chunk 下载 → 模块求值」的反馈死区，busy/loading 状态立即翻转
+// 首次点击不再经历「chunk 下载 → 模块求值」的反馈死区，busy/loading 状态立即翻转。
+// 经 prefetch 统一吞掉失败：弱网/断网下 chunk 拉不到是常态，不能让它变成未处理 rejection，
+// 也不能让上面这句承诺在失败时静默失真（详见 platform/utils/prefetch）。
 onMounted(() => {
   const idle = (cb: () => void): void => {
     if ('requestIdleCallback' in window) requestIdleCallback(cb, { timeout: 5000 });
     else setTimeout(cb, 2000);
   };
   idle(() => {
-    void preloadSyncActions();
-    void preloadExportHandlers();
-    void preloadAudioPlayback();
-    void preloadTextTransferActions();
+    prefetch(preloadSyncActions, 'TopHeader');
+    prefetch(preloadExportHandlers, 'TopHeader');
+    prefetch(preloadAudioPlayback, 'TopHeader');
+    prefetch(preloadTextTransferActions, 'TopHeader');
   });
 });
 const backupModals = useBackupModals();
@@ -517,7 +566,7 @@ const SYNC_TARGET_ICONS: Record<SyncProviderKind, IconName> = {
 
 const currentSchemeName = computed(() => SYNC_TARGET_LABELS[settingsStore.syncTarget] || '线上服务器');
 
-/** 用户确认同步：执行全局同步，成功后关闭确认弹窗 */
+/** 用户确认上传：执行全局同步，成功后关闭确认弹窗 */
 const handleConfirmSync = async () => {
   const ok = await triggerGlobalSync();
   if (ok) {
@@ -545,9 +594,10 @@ const openSyncSettings = () => {
 const handleSyncMenuClick = () => {
   const issue = resolvePushCredentialIssue();
   if (issue) {
-    uiStore.toast.warning(issue, {
+    // 通知而非常驻 Message：「去配置」入口随 toast 飘走就没了，用户得记住自己去顶栏找设置
+    uiStore.notice.warning({
+      title: issue,
       actionText: '去配置',
-      duration: TOAST_WARNING_DURATION_MS,
       onAction: () => {
         openSyncSettings();
       },
@@ -617,7 +667,7 @@ const syncMenuItems = computed<MenuItem[]>(() => [
   // 同步设置入口放在一级：「同步目标」子菜单只负责切换「推送 / 拉取」使用的云端方案，
   // 真正填写凭据的弹窗不该再藏进子菜单里多绕一层
   {
-    label: '同步设置…',
+    label: '同步设置',
     icon: 'settings',
     divided: true,
     // 走 openSyncSettings 而非直接置位：弹窗内的方案选择器需对齐当前同步目标，
@@ -626,12 +676,21 @@ const syncMenuItems = computed<MenuItem[]>(() => [
   },
 ]);
 
-/** 右侧「设置面板」按钮显示范围：工作台常驻显示；乐谱页仅在已打开乐谱且处于
- *  「排列和弦」「预览」tab 时显示——「编辑歌词」tab 及未打开乐谱时不显示（缩放/对齐等设置对纯歌词编辑无意义） */
-const showHeaderSettings = computed(() => {
+/** 右侧「设置面板」按钮的可用判据（按钮本身常驻显示，条件不满足时禁用而非隐藏）：
+ *  工作台可用；乐谱页需已打开乐谱且处于「排列和弦」「预览」tab ——
+ *  「编辑歌词」tab 及未打开乐谱时禁用（缩放/对齐等设置对纯歌词编辑无意义） */
+const canUseHeaderSettings = computed(() => {
   if (route.path === ROUTE_PATHS.WORKBENCH) return true;
   if (route.path !== ROUTE_PATHS.SCORE) return false;
   return Boolean(scoreEditor.activeSong) && scoreEditor.activeTab !== 'edit';
+});
+
+/** 设置面板改为常驻后，可用性失效时要显式收起已展开的面板：
+ *  原先是靠 v-if 卸载整个 BasePopover 达成的，常驻后不会再有那次卸载
+ *  （例：预览 tab 上面板开着时，后退到「编辑歌词」tab） */
+const settingsPopoverRef = useTemplateRef<InstanceType<typeof BasePopover>>('settingsPopoverRef');
+watch(canUseHeaderSettings, canUse => {
+  if (!canUse) settingsPopoverRef.value?.close('settings-unavailable');
 });
 
 const scoreModeOptions = computed<SegmentOption<ScoreActiveTab>[]>(() => [
@@ -667,8 +726,7 @@ const isDevPanelOpen = ref(false);
 // 构建下两者恒等（字面量 false 同样只剩 undefined 分支），但判据与「组件是否存在」不会再各说各话。
 const DevPanel = IS_DEV ? defineAsyncComponent(() => import('@/app/modals/DevPanel.vue')) : undefined;
 /** PWA 窗口控制拖拽拦截类名 */
-const NO_DRAG_REGION_CLASS =
-  '@media(display-mode:window-controls-overlay):[-webkit-app-region:no-drag] @media(display-mode:window-controls-overlay):[app-region:no-drag]';
+const NO_DRAG_REGION_CLASS = 'wco:[-webkit-app-region:no-drag] wco:[app-region:no-drag]';
 const SyncModalContainer = defineAsyncComponent(() => import('@/app/modals/SyncModalContainer.vue'));
 /** GitHub 按钮 tooltip：构建信息 + 点击跳转仓库提示（交互式，字符串数组多行换行） */
 const buildRepoTooltip = computed(() => {

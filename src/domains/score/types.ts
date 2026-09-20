@@ -13,6 +13,18 @@ export type { Capo };
 /** 谱面行 id（品牌字符串，防与其他 string 混用；由 matchLineIds 生成） */
 export type LineId = Brand<string, 'LineId'>;
 
+/**
+ * 某行谱面的和弦槽位（v7 起 chordMap 按行分组）：
+ * - `char`：字符槽位 index -> 和弦 id（index 受该行文本长度约束）
+ * - `start` / `end`：行首 / 行尾的有序边和弦 id 列表
+ * 引用完整性由结构天然表达：删除某行即删除整条 `Map<LineId, ChordLineSlots>` 键，僵尸槽位在结构上不可能存在。
+ */
+export interface ChordLineSlots {
+  char: Map<number, ChordId>;
+  start: ChordId[];
+  end: ChordId[];
+}
+
 export interface Song {
   id: SongId;
   title: string;
@@ -26,8 +38,8 @@ export interface Song {
   lineIds: LineId[];
   playKey: string;
   capo: Capo;
-  /** 槽位 key -> 和弦 id；内存中用 Map（size/has/delete 更直接），持久化/同步时序列化为普通对象 */
-  chordMap: Map<SlotKey, ChordId>;
+  /** 按行分组的和弦槽位：lineId -> { char, start, end }；内存中用 Map，持久化/同步时序列化为嵌套普通对象 */
+  chordMap: Map<LineId, ChordLineSlots>;
   /** 乐观锁版本号；清洗层与工厂保证补齐 */
   version: number;
   /** 创建时间戳（毫秒）；清洗层保证补齐 */

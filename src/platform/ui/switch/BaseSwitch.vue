@@ -106,12 +106,18 @@ const props = withDefaults(
     id?: string;
     /** 无障碍标签（缺省回退到 label） */
     ariaLabel?: string;
+    /**
+     * 以下三项用 NoInfer 挡住推断：T 的唯一推断源应当是 v-model 的绑值。
+     * 否则调用方传字面量（如 `active-value="on"`）时，TS 会在「模型值类型」与「字面量」
+     * 之间取公共父类型，把 T 从模型值拽宽，写回的 update 事件也随之失去精度。
+     * 挡掉之后 T 恒等于模型值类型，这三项仍按 T 做赋值校验，只是不再影响推断。
+     */
     /** 激活时的值，默认 true */
-    activeValue?: T;
+    activeValue?: NoInfer<T>;
     /** 关闭时的值，默认 false */
-    inactiveValue?: T;
+    inactiveValue?: NoInfer<T>;
     /** 切换前拦截钩子：返回 false（或抛错）阻止本次变更，等待期间显示 loading */
-    beforeChange?: (val: T) => boolean | Promise<boolean>;
+    beforeChange?: NoInfer<(val: T) => boolean | Promise<boolean>>;
   }>(),
   {
     size: undefined,

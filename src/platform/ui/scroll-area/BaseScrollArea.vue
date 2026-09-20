@@ -20,7 +20,7 @@
  * - overflow 与原生滚动条隐藏：由 v-scrollbar 指令注入（enabled:false 被动模式同样注入），本组件不手写；
  * - 边缘羽化（v-edge-fade）：单轴时显式定向，双轴时交回指令按溢出自动判定；
  * - 自绘滚动条（v-scrollbar）：单轴时显式定向；
- * - 可选滚轮接管（v-wheel-scroll）：横向列表用 smooth / overscroll 等档位；
+ * - 可选滚轮接管（v-wheel-scroll）：横向列表用 smooth / double / triple / overscroll 等档位；
  * - 可选「滚动即关闭浮层」（closePopovers）：内容区滚动时收起**锚点在区内**的下拉与右键菜单；
  *
  * 注意：浮层（BasePopover 面板）内部的滚动容器必须保持 closePopovers 关闭，
@@ -65,7 +65,8 @@ const props = withDefaults(
     /** 自绘滚动条：true（默认，按 axis 定向）/ false 关闭 / 选项对象透传 v-scrollbar
      *  （含滚动气泡提示，如 :scrollbar="{ bubble: true }" 或 { bubble: { format } }） */
     scrollbar?: ScrollAreaScrollbar;
-    /** 滚轮接管：false（默认，原生滚动）/ true 默认档 / 选项对象透传 v-wheel-scroll */
+    /** 滚轮接管：false（默认，原生滚动）/ true 默认档 / 选项对象透传 v-wheel-scroll
+     *  （smooth / double / triple / overscroll / disabled 等；修饰符穿不过组件，翻倍走 { double: true }、三倍走 { triple: true }） */
     wheel?: ScrollAreaWheel;
     /** 滚动时是否关闭全部打开中浮层；默认 false（浮层内部滚动容器必须保持关闭） */
     closePopovers?: boolean;
@@ -149,13 +150,32 @@ const sync = () => {
  * 按帧合帧：一次处理要读 6 个布局属性并写 8 个 reactive 字段，还要遍历浮层注册表逐个读 rect；
  * 动量滚动下同一帧可派发多次 scroll，合并后每帧至多一次。代价是状态刷新与「滚动收起浮层」
  * 最晚晚一帧生效——视觉上仍是滚一下就收。
+ *
+ * 尺寸 / 子节点观察者走同一份帧（见 scheduleMeasureSync）：RO / MO 回调里就地 sync 的代价与
+ * scroll 路径完全相同，而且更糟——sync 写的是 reactive 字段，写回引发重渲染又可能改尺寸，
+ * 于是「回调 → 写状态 → 重渲染 → 再回调」自我驱动循环；折叠动画期间子元素每帧改尺寸时，
+ * 更是每帧一次全量重测。合并到帧末后同一帧内至多跑一次。
  */
+// 「本帧内发生过滚动」标记：滚动要收浮层，单纯改尺寸不要（锚点未错位，收了是误伤）。
+// 不用给 schedule 传载荷，是因为载荷会被后来的调用覆盖——同帧内先滚动、后改尺寸就会丢掉
+// 这次滚动，标记法保证「本帧只要滚过就一定收」。
+let popoversNeedClose = false;
+
 const { schedule: scheduleScrollSync } = useRafThrottle(() => {
   sync();
-  if (props.closePopovers) closePopoversWithin(rootRef.value);
+  if (popoversNeedClose) {
+    popoversNeedClose = false;
+    if (props.closePopovers) closePopoversWithin(rootRef.value);
+  }
 });
 
-const handleScroll = () => scheduleScrollSync();
+const handleScroll = () => {
+  popoversNeedClose = true;
+  scheduleScrollSync();
+};
+
+/** 尺寸 / 子节点变化触发的重测与 scroll 合并到同一帧，但不请求收起浮层 */
+const scheduleMeasureSync = () => scheduleScrollSync();
 
 // 滚动与容器尺寸变化抓不到「仅内容尺寸变化」（列表项增删/子元素缩放，scroll 距离变了但容器不变）：
 // 用「直接子元素 ResizeObserver + childList MutationObserver」补齐，可滚动距离变化始终能被宿主 watch 到
@@ -177,12 +197,12 @@ onMounted(() => {
   const el = rootRef.value;
   if (!el) return;
   sync();
-  containerObserver = new ResizeObserver(sync);
+  containerObserver = new ResizeObserver(scheduleMeasureSync);
   containerObserver.observe(el);
-  childrenObserver = new ResizeObserver(sync);
+  childrenObserver = new ResizeObserver(scheduleMeasureSync);
   observeChildren();
   childrenMutationObserver = new MutationObserver(() => {
-    sync();
+    scheduleMeasureSync();
     observeChildren();
   });
   childrenMutationObserver.observe(el, { childList: true });

@@ -7,31 +7,47 @@ import { ref } from 'vue';
 
 import { wait } from '@/platform/utils/common';
 
-import type { ChordId } from '@/domains/chord/types';
-import type { Capo, LineId, SlotKey, Song } from '@/domains/score/types';
+import type { Capo, ChordLineSlots, LineId, Song } from '@/domains/score/types';
 import type { Ref } from 'vue';
 
 export interface HistoryState {
   lyrics: string;
   lineIds: LineId[];
-  chordMap: Map<SlotKey, ChordId>;
+  chordMap: Map<LineId, ChordLineSlots>;
   playKey?: string;
   capo?: Capo;
 }
 
+/** 深拷贝嵌套 chordMap：char Map 与 start/end 数组都要复制，否则快照间共享行容器，编辑会污染历史 */
+const cloneChordMap = (chordMap: Map<LineId, ChordLineSlots>): Map<LineId, ChordLineSlots> => {
+  const copy = new Map<LineId, ChordLineSlots>();
+  for (const [lineId, slots] of chordMap) {
+    copy.set(lineId, { char: new Map(slots.char), start: [...slots.start], end: [...slots.end] });
+  }
+  return copy;
+};
+
 const cloneHistoryState = (state: HistoryState): HistoryState => ({
   lyrics: state.lyrics,
   lineIds: [...state.lineIds],
-  chordMap: new Map(state.chordMap),
+  chordMap: cloneChordMap(state.chordMap),
   playKey: state.playKey,
   capo: state.capo,
 });
 
-const chordMapsEqual = (a: Map<SlotKey, ChordId>, b: Map<SlotKey, ChordId>): boolean => {
+const chordMapsEqual = (a: Map<LineId, ChordLineSlots>, b: Map<LineId, ChordLineSlots>): boolean => {
   if (a === b) return true;
   if (a.size !== b.size) return false;
-  for (const [k, v] of a) {
-    if (b.get(k) !== v) return false;
+  for (const [lineId, slots] of a) {
+    const other = b.get(lineId);
+    if (!other) return false;
+    if (slots.char.size !== other.char.size) return false;
+    for (const [idx, id] of slots.char) {
+      if (other.char.get(idx) !== id) return false;
+    }
+    if (slots.start.length !== other.start.length || slots.end.length !== other.end.length) return false;
+    if (!slots.start.every((id, i) => id === other.start[i])) return false;
+    if (!slots.end.every((id, i) => id === other.end[i])) return false;
   }
   return true;
 };
@@ -117,8 +133,9 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
   // wait() 默认 0ms，即上面说的「让出一个宏任务边界」（Promise 化的 setTimeout）。
   const settleReactivePropagation = (): Promise<void> => wait();
 
-  /** 撤销：回退到上一快照并写回歌曲数据；标记撤销期以避免恢复过程被再次记录。 */
-  const undo = async () => {
+  /** 撤销：回退到上一快照并写回歌曲数据；标记撤销期以避免恢复过程被再次记录。
+   * 返回是否真正执行了回退（无可撤销快照时为 false，供调用方避免空操作提示）。 */
+  const undo = async (): Promise<boolean> => {
     if (historyIndex > 0 && getActiveSong()) {
       isUndoRedoAction.value = true;
       historyIndex--;
@@ -127,7 +144,9 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
       applyState(getActiveSong()!.id, state);
       await settleReactivePropagation();
       isUndoRedoAction.value = false;
+      return true;
     }
+    return false;
   };
 
   /** 重做：前进到下一快照并写回歌曲数据；标记撤销期以避免恢复过程被再次记录。 */

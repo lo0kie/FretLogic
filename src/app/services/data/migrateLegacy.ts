@@ -6,10 +6,12 @@
  * - 实体（groups/chords/songs）经统一 payload 宽容清洗后原子写入 IDB；
  * - 其余键（偏好/UI 态）按原始字符串原样写入 kv 镜像（useStorage 后端）；
  * - 敏感键（如历史版本遗留的 WebDAV 密码）不转录、直接丢弃；
- * - 全部写入成功后 localStorage.clear()，并写入标记；校验失败则不清空，下次启动重试。
+ * - 全部写入成功**且回读核验通过**后，才精准清除已消费的键并写入标记；
+ *   校验失败 / 持久化熔断 / 回读对不上，都保留 localStorage 不动，下次启动重试。
  */
 import { chordRepository, songRepository } from '@/app/services/data/repositories';
 import { toSongId } from '@/domains/score/model/scoreModel';
+import { idb, isPersistBlocked } from '@/platform/services/storage';
 import { flushIdbKv, kvGet, kvSet } from '@/platform/services/storage/idbKv';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
@@ -20,8 +22,8 @@ import type { Song } from '@/domains/score/types';
 /** 转录完成标记（存于 kv 镜像，随 IDB 落盘） */
 const RETIRED_FLAG_KEY = 'localStorage-retired';
 
-/** 不转录进 kv 的键：历史版本遗留的敏感信息（密码曾落 localStorage，迁移时丢弃） */
-const EXCLUDED_KEYS: ReadonlySet<string> = new Set([STORAGE_KEYS.WEBDAV_PASSWORD]);
+/** 不转录进 kv 的键：历史版本遗留的敏感信息（密码/Token 曾落 localStorage，迁移时丢弃） */
+const EXCLUDED_KEYS: ReadonlySet<string> = new Set([STORAGE_KEYS.WEBDAV_PASSWORD, STORAGE_KEYS.SERVER_TOKEN]);
 
 const SONG_ENTRY_PREFIX = `${STORAGE_KEYS.SONG_ENTRY}:`;
 
@@ -32,6 +34,41 @@ const parseJson = (raw: string | undefined): unknown => {
   } catch {
     return undefined;
   }
+};
+
+/**
+ * 回读 IDB 核对实体是否真的落了库（数量不少于本次写入数即视为成功）。
+ *
+ * 存在的理由：转录末尾要删掉 localStorage——那是用户唯一副本，删掉即不可逆。而写入层的失败
+ * 可能没有信号（配额熔断时 idb.put 直接 resolve('')），故不能只凭「await 没抛错」判定成功，
+ * 必须在删除前用一次真实回读确认结果。idb.getAll 不受熔断影响（只短路写路径）。
+ */
+const verifyEntitiesPersisted = async (expected: {
+  groups: number;
+  chords: number;
+  songs: number;
+  /** D15：本批写入的主键清单——只比总量「≥」会被既有行掩盖本批失败，必须逐主键核对 */
+  groupIds: string[];
+  chordIds: string[];
+  songIds: string[];
+}): Promise<boolean> => {
+  const [groupRows, chordRows, songRows] = await Promise.all([
+    idb.getAll('groups'),
+    idb.getAll('chords'),
+    idb.getAll('songs'),
+  ]);
+  if (groupRows.length < expected.groups || chordRows.length < expected.chords || songRows.length < expected.songs) {
+    return false;
+  }
+  const groupIdSet = new Set(groupRows.map(r => String((r as { id?: unknown }).id ?? '')));
+  const chordIdSet = new Set(chordRows.map(r => String((r as { id?: unknown }).id ?? '')));
+  // 歌曲 id 统一经 toSongId 归一后比对（与写入路径同一口径）
+  const songIdSet = new Set(songRows.map(r => toSongId(String((r as { id?: unknown }).id ?? ''))));
+  return (
+    expected.groupIds.every(id => groupIdSet.has(id)) &&
+    expected.chordIds.every(id => chordIdSet.has(id)) &&
+    expected.songIds.every(id => songIdSet.has(toSongId(id)))
+  );
 };
 
 export interface TranscriptionResult {
@@ -72,9 +109,20 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
   const legacySongs = parseJson(entries.get(STORAGE_KEYS.SONGS));
   if (Array.isArray(legacySongs)) rawSongs.push(...legacySongs);
 
-  const hasEntityData = entries.has(STORAGE_KEYS.GROUPS) || entries.has(STORAGE_KEYS.CHORD_LIST) || rawSongs.length > 0;
+  // N2：chordRepository.save 是「同一事务内 clear() + 全量 put」——只在确有和弦库旧键
+  // （GROUPS / CHORD_LIST）时才允许走它；仅残留歌曲旧键时若照搬全量写，会把 IDB 里
+  // 已有的分组/和弦库清成 0（expected=0 让回读核验恒真，删源键后无退路）。
+  const hasChordLibraryKeys = entries.has(STORAGE_KEYS.GROUPS) || entries.has(STORAGE_KEYS.CHORD_LIST);
+  const hasEntityData = hasChordLibraryKeys || rawSongs.length > 0;
 
-  let entityCounts = { groups: 0, chords: 0, songs: 0 };
+  let entityCounts = {
+    groups: 0,
+    chords: 0,
+    songs: 0,
+    groupIds: [] as string[],
+    chordIds: [] as string[],
+    songIds: [] as string[],
+  };
   if (hasEntityData) {
     // 用统一的 payload 宽容清洗/迁移，保证结构合法且不被单条旧脏数据阻塞。
     // 键缺失时缺省为空数组；键存在但数据损坏时，如实传入以触发校验拦截。
@@ -99,8 +147,30 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
     const chords = (payload.chords ?? []) as Chord[];
     const songs = (payload.songs ?? []) as Song[];
 
-    // 实体先落库（成功后才清空 localStorage）：歌曲与顺序索引走单事务原子写入
-    await chordRepository.save({ groups, chords });
+    // D16：宽容清洗会静默丢弃不合法记录——丢弃量如实入日志，删 localStorage 前留可审计痕迹
+    const rawInput = {
+      groups: entries.has(STORAGE_KEYS.GROUPS) && Array.isArray(rawGroups) ? rawGroups.length : 0,
+      chords: entries.has(STORAGE_KEYS.CHORD_LIST) && Array.isArray(rawChords) ? rawChords.length : 0,
+      songs: rawSongs.length,
+    };
+    const dropped = {
+      groups: rawInput.groups - groups.length,
+      chords: rawInput.chords - chords.length,
+      songs: rawInput.songs - songs.length,
+    };
+    if (dropped.groups > 0 || dropped.chords > 0 || dropped.songs > 0) {
+      logger.warn(
+        'transcribe',
+        `宽容清洗丢弃记录：分组 ${dropped.groups} / 和弦 ${dropped.chords} / 乐谱 ${dropped.songs}（结构不合法，已无法恢复）`
+      );
+    }
+
+    // 实体先落库（成功后才清空 localStorage）：歌曲与顺序索引走单事务原子写入。
+    // 和弦库仅在有旧键时全量写（见上方 N2 说明）；歌曲路径 flushChanges 按 id diff、从不 clear，
+    // 空列表不会波及 IDB 既有记录，可安全调用
+    if (hasChordLibraryKeys) {
+      await chordRepository.save({ groups, chords });
+    }
     if (songs.length > 0) {
       // 顺序索引：优先取旧分片索引中仍存在的 id，未被索引覆盖的歌曲由读侧兜底追加尾部
       const indexRaw = parseJson(entries.get(STORAGE_KEYS.SONGS_INDEX));
@@ -110,7 +180,14 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
         : [];
       await songRepository.flushChanges({ removedIds: [], dirtySongs: songs, orderIds });
     }
-    entityCounts = { groups: groups.length, chords: chords.length, songs: songs.length };
+    entityCounts = {
+      groups: groups.length,
+      chords: chords.length,
+      songs: songs.length,
+      groupIds: groups.map(g => g.id),
+      chordIds: chords.map(c => c.id),
+      songIds: songs.map(s => toSongId(s.id)),
+    };
   }
 
   // 其余键原样写入 kv 镜像（偏好/UI 态字符串），敏感键丢弃；
@@ -128,6 +205,27 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
   }
   kvSet(RETIRED_FLAG_KEY, '1');
   await flushIdbKv();
+
+  // ── 删除前的诚实核验：本流程唯一不可逆动作的守门 ──────────────────────────────
+  // 写入层有两种情况会把「失败」伪装成成功，都不能作为可删依据：
+  //   ① 配额熔断期：idb.put 直接 `return Promise.resolve('')`（见 idb.ts 的 isPersistBlocked 分支），
+  //      kv 落盘在 flushNow 里被整段跳过，而事务照常 complete、Promise 照常 resolve；
+  //   ② 本轮写入自身刚把熔断器打开：reportPersistFailure 收到 QuotaExceeded 即置位，
+  //      此后 kvSet / flushIdbKv 全部静默失效（RETIRED_FLAG_KEY 也写不进去）。
+  // 若在这种状态下照旧 removeItem，就是真删掉用户唯一的本地副本且下次启动已无可重试的源数据。
+  // 故这里熔断即放弃；否则再回读 IDB 核对一次实体数量，对不上同样放弃（保留本地、下次重试）。
+  if (isPersistBlocked()) {
+    logger.error('transcribe', '持久化已熔断，本轮写入未真正落库；保留 localStorage 以便下次启动重试');
+    return null;
+  }
+  if (!(await verifyEntitiesPersisted(entityCounts))) {
+    logger.error(
+      'transcribe',
+      '转录回读核对失败：IDB 实体数量少于本次写入量；保留 localStorage 以便下次启动重试',
+      entityCounts
+    );
+    return null;
+  }
 
   // 精准清除本应用消费过的键（实体键 + 已转录偏好键 + 丢弃的敏感键）；未知键原样保留
   for (const key of [STORAGE_KEYS.GROUPS, STORAGE_KEYS.CHORD_LIST, STORAGE_KEYS.SONGS]) {

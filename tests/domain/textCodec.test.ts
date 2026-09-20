@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { QUALITY_TOKENS } from '@/domains/chord/theory/chordQualityAst';
 import { createChord } from '@/domains/chord/theory/entityFactories';
-import { GRAMMAR_TEMPLATES } from '@/domains/chord/theory/grammar';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
-import { charKey, chordSlotKey } from '@/domains/score/model/scoreModel';
 import {
   parseChordFromText,
   parseSongFromText,
@@ -12,14 +11,14 @@ import {
 } from '@/domains/score/transfer/textCodec';
 
 import type { Chord, ChordId } from '@/domains/chord/types';
-import type { BarreEntity } from '@/domains/fretboard/types';
-import type { SlotKey, Song } from '@/domains/score/types';
+import type { BarreEntity, GuitarStringsModel } from '@/domains/fretboard/types';
+import type { ChordLineSlots, LineId, Song } from '@/domains/score/types';
 
 /** 构造测试和弦：默认标准调弦 6 弦、3 品、根音 5 弦 */
-const makeChord = (name: string, strings: Array<[number, boolean]>, barres?: BarreEntity[]): Chord =>
+const makeChord = (name: string, strings: GuitarStringsModel, barres?: BarreEntity[]): Chord =>
   createChord({
     nameSegments: nameToSegments(name),
-    strings: strings as Chord['strings'],
+    strings,
     fretCount: 3,
     groupId: 'g_test',
     tuning: Tuning.STANDARD,
@@ -30,38 +29,48 @@ const makeChord = (name: string, strings: Array<[number, boolean]>, barres?: Bar
 /** 构造含三处槽位的测试乐谱，返回乐谱与按 id 反查和弦的 resolver */
 const makeSong = (): { song: Song; byId: Map<ChordId, Chord> } => {
   const chordC = makeChord('C', [
-    [-1, false],
-    [3, false],
-    [2, false],
-    [0, false],
-    [1, false],
-    [0, false],
+    { fret: -1, preferFlat: false },
+    { fret: 3, preferFlat: false },
+    { fret: 2, preferFlat: false },
+    { fret: 0, preferFlat: false },
+    { fret: 1, preferFlat: false },
+    { fret: 0, preferFlat: false },
   ]);
   const chordAm = makeChord('Am', [
-    [-1, false],
-    [0, false],
-    [2, false],
-    [2, false],
-    [1, false],
-    [0, false],
+    { fret: -1, preferFlat: false },
+    { fret: 0, preferFlat: false },
+    { fret: 2, preferFlat: false },
+    { fret: 2, preferFlat: false },
+    { fret: 1, preferFlat: false },
+    { fret: 0, preferFlat: false },
   ]);
   const chordG = makeChord('G', [
-    [3, false],
-    [2, false],
-    [0, false],
-    [0, false],
-    [0, false],
-    [3, false],
+    { fret: 3, preferFlat: false },
+    { fret: 2, preferFlat: false },
+    { fret: 0, preferFlat: false },
+    { fret: 0, preferFlat: false },
+    { fret: 0, preferFlat: false },
+    { fret: 3, preferFlat: false },
   ]);
   const byId = new Map<ChordId, Chord>([
     [chordC.id, chordC],
     [chordAm.id, chordAm],
     [chordG.id, chordG],
   ]);
-  const chordMap = new Map<SlotKey, ChordId>();
-  chordMap.set(chordSlotKey('l1', 'start', 0), chordC.id);
-  chordMap.set(charKey('l1', 2), chordAm.id);
-  chordMap.set(chordSlotKey('l2', 'start', 0), chordG.id);
+  const chordMap = new Map<LineId, ChordLineSlots>();
+  const ensureLine = (lineId: string): ChordLineSlots => {
+    let slots = chordMap.get(lineId as LineId);
+    if (!slots) {
+      slots = { char: new Map(), start: [], end: [] };
+      chordMap.set(lineId as LineId, slots);
+    }
+    return slots;
+  };
+  // 三处槽位：行 l1 行首 C、行 l1 字符 2 处 Am、行 l2 行首 G
+  const l1 = ensureLine('l1');
+  l1.start[0] = chordC.id;
+  l1.char.set(2, chordAm.id);
+  ensureLine('l2').start[0] = chordG.id;
   return {
     song: {
       id: 's_test' as Song['id'],
@@ -83,12 +92,12 @@ const makeSong = (): { song: Song; byId: Map<ChordId, Chord> } => {
 describe('textCodec 和弦往返', () => {
   it('普通和弦（含静音/空弦/按品）往返一致', () => {
     const chord = makeChord('Am7', [
-      [-1, false],
-      [0, false],
-      [2, false],
-      [2, false],
-      [1, false],
-      [0, false],
+      { fret: -1, preferFlat: false },
+      { fret: 0, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 1, preferFlat: false },
+      { fret: 0, preferFlat: false },
     ]);
     const result = parseChordFromText(serializeChordToText(chord));
     expect(result.ok).toBe(true);
@@ -103,12 +112,12 @@ describe('textCodec 和弦往返', () => {
     const chord = makeChord(
       'F#m7b5',
       [
-        [2, false],
-        [4, false],
-        [2, false],
-        [2, false],
-        [2, false],
-        [2, false],
+        { fret: 2, preferFlat: false },
+        { fret: 4, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 2, preferFlat: false },
+        { fret: 2, preferFlat: false },
       ],
       [{ fret: 2, fromString: 5, toString: 0, finger: 1 }]
     );
@@ -144,17 +153,17 @@ describe('textCodec 和弦往返', () => {
     expect(result.data.tuning).toBe(Tuning.STANDARD);
     expect(result.data.strings).toHaveLength(6);
     // 未提供的弦补为静音
-    expect(result.data.strings[5]).toEqual([-1, false]);
+    expect(result.data.strings[5]).toEqual({ fret: -1, preferFlat: false });
   });
 
   it('CRLF 换行的和弦文本仍能解析', () => {
     const chord = makeChord('Am7', [
-      [-1, false],
-      [0, false],
-      [2, false],
-      [2, false],
-      [1, false],
-      [0, false],
+      { fret: -1, preferFlat: false },
+      { fret: 0, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 1, preferFlat: false },
+      { fret: 0, preferFlat: false },
     ]);
     const result = parseChordFromText(serializeChordToText(chord).replace(/\n/g, '\r\n'));
     expect(result.ok).toBe(true);
@@ -193,12 +202,12 @@ describe('textCodec 乐谱往返', () => {
 
   it('和弦文本粘到乐谱解析返回 WRONG_TYPE', () => {
     const chord = makeChord('C', [
-      [-1, false],
-      [3, false],
-      [2, false],
-      [0, false],
-      [1, false],
-      [0, false],
+      { fret: -1, preferFlat: false },
+      { fret: 3, preferFlat: false },
+      { fret: 2, preferFlat: false },
+      { fret: 0, preferFlat: false },
+      { fret: 1, preferFlat: false },
+      { fret: 0, preferFlat: false },
     ]);
     const result = parseSongFromText(serializeChordToText(chord));
     expect(result.ok).toBe(false);
@@ -296,9 +305,11 @@ describe('textCodec 乐谱往返', () => {
     expect(result.data.slots[3]?.chord.name).toBe('G/B');
   });
 
-  it('智能宽容导入：GRAMMAR_TEMPLATES 中全部理论和弦类型均能通过方括号标记正确抓取并生成槽位', () => {
-    for (const t of GRAMMAR_TEMPLATES) {
-      const chordName = `C${t.suffix}`;
+  it('智能宽容导入：引擎全部输出写法均能通过方括号标记正确抓取并生成槽位', () => {
+    // 原为遍历 `GRAMMAR_TEMPLATES`（47 条手写模板）；引擎候选来源已换成 token 表，
+    // 故取每个 token 的首选写法（即引擎会输出的写法），覆盖面由 47 条扩大到 63 条。
+    for (const token of QUALITY_TOKENS) {
+      const chordName = `C${token.spellings[0]!}`;
       const line = `歌词[${chordName}]片段`;
       const result = parseSongFromText(`{title: 测试}\n${line}`);
       expect(result.ok).toBe(true);

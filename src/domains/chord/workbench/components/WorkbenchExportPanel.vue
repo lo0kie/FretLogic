@@ -40,7 +40,7 @@
     </BaseFormRow>
 
     <!-- 操作按钮 -->
-    <div class="flex gap-4">
+    <div class="flex gap-lg">
       <ActionButton
         :disabled="isActing"
         @click="handleCopy()"
@@ -78,7 +78,7 @@ import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { canvasToBlob, triggerBlobDownload } from '@/platform/utils/canvas';
+import { buildExportFileName, canvasToBlob, triggerBlobDownload } from '@/platform/utils/canvas';
 
 import type { ExportBgMode } from '@/platform/types';
 import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
@@ -119,9 +119,13 @@ function buildCanvas(): HTMLCanvasElement {
   });
 }
 
+/** 下载文件名：必须经 buildExportFileName 剔非法字符。
+ *  转位和弦名自带斜杠（如 C/E，见 theory 的斜杠低音），直接拼进 link.download 会被浏览器
+ *  改写/丢弃该段，导致「提示语说已下载 C/E.png、实际存成 C 或 C_E.png」的名实不符。
+ *  回落名 'chord' 由调用方在清洗前兜住（buildExportFileName 空串时回落的是乐谱域的 'score'，
+ *  不适用工作台）；清洗后不可能为空，故结果必然非空。 */
 function buildFilename(): string {
-  const name = getChordName(editorStore.draftChord).trim() || 'chord';
-  return `${name}.png`;
+  return `${buildExportFileName(getChordName(editorStore.draftChord).trim() || 'chord')}.png`;
 }
 
 /** 复制为 PNG 到剪贴板（复用 score-export 的降级与环境检测能力） */
@@ -134,7 +138,7 @@ const handleCopy = () =>
       return '图片已复制到剪贴板';
     },
     successText: message => message,
-    onError: () => uiStore.toast.error('复制失败，请尝试下载'),
+    onError: () => uiStore.message.error('复制失败，请尝试下载'),
   });
 
 /** 下载为 PNG */
@@ -148,6 +152,6 @@ const handleDownload = () =>
       return `已下载 ${filename}`;
     },
     successText: message => message,
-    onError: () => uiStore.toast.error('下载失败'),
+    onError: () => uiStore.message.error('下载失败'),
   });
 </script>

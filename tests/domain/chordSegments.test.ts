@@ -9,6 +9,7 @@ import {
 } from '@/domains/chord/theory/theory';
 
 import type { Tuning } from '@/domains/chord/theory/theory';
+import type { AccidentalType, ExtensionSegment, NaturalPitchLetter } from '@/domains/chord/types';
 import type { GuitarStringsModel } from '@/domains/fretboard/types';
 
 describe('Chord Name Segmentation (AST/Tokenization)', () => {
@@ -125,22 +126,24 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
       expect(segmentsToString(sixNinePlain!)).toBe('C6/9');
     });
 
-    it('should parse and extract tension alterations like #9, b5', () => {
+    it('should parse tension alterations (#9, b9) as whole-word token qualities', () => {
+      // D10-A：7#9 / 7b9 在 token 表里是完整配方，quality 取整词，张力音不再散落进 extensions
       const altered = nameToSegments('Eb7#9');
       expect(altered).toEqual({
         root: ['E', -1],
-        quality: '7',
-        extensions: [[9, 1]],
+        quality: '7#9',
+        extensions: undefined,
         bass: undefined,
       });
       expect(segmentsToString(altered!)).toBe('Eb7#9');
       expect(segmentsToString(altered!, true)).toBe('E♭7♯9');
 
+      // 括号写法收敛到无括号标准形态：C7(b9) → quality '7b9'
       const bracketed = nameToSegments('C7(b9)');
       expect(bracketed).toEqual({
         root: ['C', 0],
-        quality: '7',
-        extensions: [[9, -1]],
+        quality: '7b9',
+        extensions: undefined,
         bass: undefined,
       });
       expect(segmentsToString(bracketed!)).toBe('C7b9');
@@ -233,12 +236,12 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
             id: 'c1',
             chordName: 'C#m7',
             strings: [
-              [-1, false],
-              [4, false],
-              [6, false],
-              [6, false],
-              [5, false],
-              [4, false],
+              { fret: -1, preferFlat: false },
+              { fret: 4, preferFlat: false },
+              { fret: 6, preferFlat: false },
+              { fret: 6, preferFlat: false },
+              { fret: 5, preferFlat: false },
+              { fret: 4, preferFlat: false },
             ],
             fretCount: 3,
             capo: 0,
@@ -306,6 +309,27 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
       expect(segmentsToString(cSharpDimMaj7!, { shorthand: true, useUnicode: true })).toBe('C♯°M7/F♯');
     });
 
+    it('should synthesize half-diminished as a real m7b5 quality instead of m7 + b5 extension', async () => {
+      const { nameToSegments } = await import('@/domains/chord/theory/theory');
+
+      // b5 与张力音语法同形，若被剥进 extensions，quality 会退化成 'm7'，
+      // 使 CHORD_QUALITIES 里的 'm7b5' 成为自动解析永远产不出的死枚举（下游只能各自对 suffix 补正则）
+      expect(nameToSegments('Am7b5')).toEqual({
+        root: ['A', 0],
+        quality: 'm7b5',
+        extensions: undefined,
+        bass: undefined,
+      });
+      expect(nameToSegments('Cm7(b5)')!.quality).toBe('m7b5');
+      expect(nameToSegments('F#m7♭5')!.quality).toBe('m7b5');
+
+      // 属七降五（7b5）与 m(b5) 在 token 表里各有专属整词配方（7b5 / mb5），
+      // 都不是半减七，但 quality 同样取整词、张力音不再散落进 extensions（D10-A）
+      expect(nameToSegments('C7b5')!.quality).toBe('7b5');
+      expect(nameToSegments('C7b5')!.extensions).toBeUndefined();
+      expect(nameToSegments('Amb5')!.quality).toBe('mb5');
+    });
+
     it('should accurately distinguish valid chord names from invalid ones', async () => {
       const { isValidChordName } = await import('@/domains/chord/theory/theory');
 
@@ -345,12 +369,12 @@ describe('Chord Name Segmentation (AST/Tokenization)', () => {
           bass: ['A', 0] as [NaturalPitchLetter, AccidentalType],
         },
         strings: [
-          [-1, false],
-          [0, false],
-          [2, false],
-          [2, false],
-          [2, false],
-          [0, false],
+          { fret: -1, preferFlat: false },
+          { fret: 0, preferFlat: false },
+          { fret: 2, preferFlat: false },
+          { fret: 2, preferFlat: false },
+          { fret: 2, preferFlat: false },
+          { fret: 0, preferFlat: false },
         ] as GuitarStringsModel,
         fretCount: 3 as const,
         capo: 0,

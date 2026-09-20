@@ -56,7 +56,15 @@
   </div>
 </template>
 
-<script setup generic="T extends string | number | boolean, C extends boolean = false" lang="ts">
+<script
+  setup
+  generic="
+    O extends SegmentOption<unknown> | string | number | boolean,
+    C extends boolean = false,
+    V = SegmentOptionValue<O>
+  "
+  lang="ts"
+>
 import {
   computed,
   inject,
@@ -83,20 +91,28 @@ import {
   toEl,
 } from './BaseSegmentedControl.logic';
 
-import type { SegmentOption } from './segmentOption';
+import type { SegmentOption, SegmentOptionValue } from './segmentOption';
 import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 
-type OptionInput<T> = T | SegmentOption<T>;
-
-const model = defineModel<C extends true ? T | undefined : T>({ required: true });
+/**
+ * 绑值类型 V **只由选项推导**，不从 modelValue 反推：
+ *
+ * 用 NoInfer 挡住 modelValue 这一路推断的原因——closeable 下 modelValue 的形态是
+ * `V | undefined`，若放任 TS 从它反推，调用方传 `undefined`（清空的初始态）会把 V 直接
+ * 推成 `undefined`，选项携带的品数/枚举信息全被覆盖。挡掉之后 V 恒等于
+ * SegmentOptionValue<O>：`3 | 4 | 5` 这类字面量联合不会被抹平成 number。
+ */
+const model = defineModel<NoInfer<C extends true ? V | undefined : V>>({ required: true });
 
 const props = withDefaults(
   defineProps<{
-    /** 选项数组：支持原始值（字符串/数字等）或 SegmentOption 对象 */
-    options: OptionInput<T>[];
+    /** 选项数组：支持原始值（字符串/数字/布尔）或 SegmentOption 对象；
+     *  元素类型 O 即绑值类型的推导来源（见 SegmentOptionValue）。声明为 readonly，
+     *  便于直接传 `as const` 选项表 / 常量元组，无需调用方再拷贝一份可变数组 */
+    options: readonly O[];
     /** 尺寸档位：sm/md/lg */
     size?: ComponentSize;
     /** 视觉形态：pill 胶囊底板 / text 纯文字 */
@@ -150,17 +166,17 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  (e: 'change', value: C extends true ? T | undefined : T): void;
+  (e: 'change', value: C extends true ? V | undefined : V): void;
 }>();
 /** 内部读写别名：closeable 时模型允许 undefined，仅在别名处集中断言 */
 const modelValue = computed({
-  get: () => model.value as T | undefined,
-  set: (v: T | undefined) => {
-    model.value = v as C extends true ? T | undefined : T;
+  get: () => model.value as V | undefined,
+  set: (v: V | undefined) => {
+    model.value = v as NoInfer<C extends true ? V | undefined : V>;
   },
 });
 /** 对外派发值类型收窄：把统一视图断言回对外泛型形态 */
-const emitValue = (v: T | undefined): C extends true ? T | undefined : T => v as C extends true ? T | undefined : T;
+const emitValue = (v: V | undefined): C extends true ? V | undefined : V => v as C extends true ? V | undefined : V;
 
 const containerRef = useTemplateRef<HTMLElement>('containerRef');
 const items = ref<(HTMLElement | null)[]>([]);
@@ -201,14 +217,20 @@ const sizeConfig = computed(() =>
 
 const resolvedIconSize = computed(() => props.iconSize ?? DEFAULT_ICON_SIZES[resolvedSize.value]);
 
-const isOptionIconOnly = (opt: SegmentOption<T>): boolean => Boolean(opt.icon && (opt.iconOnly ?? props.iconOnly));
+const isOptionIconOnly = (opt: SegmentOption<V>): boolean => Boolean(opt.icon && (opt.iconOnly ?? props.iconOnly));
 
-const normalizedOptions = computed<SegmentOption<T>[]>(() =>
+/**
+ * 归一化为对象选项：原始值补上 `label = String(value)`。
+ * 形态判断与绑值类型都由运行时守卫后的断言承担——O 是调用方给的选项类型，
+ * 编译器无从知道「O 里有 value」这件事（它只看得到约束 `SegmentOption<unknown> | 原始值`），
+ * 故此处断言；O 与 V 的同源关系由 SegmentOptionValue 在类型层保证。
+ */
+const normalizedOptions = computed<SegmentOption<V>[]>(() =>
   props.options.map(o => {
     if (o !== null && typeof o === 'object' && 'value' in (o as object)) {
-      return o as SegmentOption<T>;
+      return o as unknown as SegmentOption<V>;
     }
-    return { label: String(o), value: o as T };
+    return { label: String(o), value: o as unknown as V };
   })
 );
 
@@ -221,7 +243,7 @@ const showSlider = computed(() => !props.disabled && visualVariant.value !== 'te
 const firstFocusableIndex = computed(() => normalizedOptions.value.findIndex(o => !o.disabled && !props.disabled));
 
 /** roving tabindex：无选中时首个可用项可聚焦，有选中时仅选中项可聚焦 */
-const getTabindex = (opt: SegmentOption<T>, i: number): number => {
+const getTabindex = (opt: SegmentOption<V>, i: number): number => {
   if (props.disabled || opt.disabled) return -1;
   if (activeIndex.value >= 0) {
     return isSelected(opt.value) ? 0 : -1;
@@ -295,7 +317,7 @@ const resolveIndicatorGeometry = (item: { width: number; height: number; top: nu
 
 /** 选项类名：按生效形态（pill / text / tabbed）与选中态拼装（整体禁用时不显示激活样式）；
  *  拖动滑块经过的可用选项以选中态文字色做落点预览高亮 */
-const itemClasses = (opt: SegmentOption<T>, index: number): (string | Record<string, boolean>)[] => {
+const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<string, boolean>)[] => {
   const dragHover = isDragging.value && dragOverIndex.value === index && !opt.disabled;
   const active = dragHover || (!props.disabled && isSelected(opt.value));
   // 容器有显式宽度（档位 / block / 自定义值）即让选项均分拉伸铺满；仅 auto（内容自适应）不拉伸
@@ -395,7 +417,7 @@ const updateIndicatorPosition = async (animate = true) => {
 };
 
 /** 选中选项：closeable 时再点已选项取消选中；随后聚焦并更新指示器 */
-const select = async (opt: SegmentOption<T>, index: number) => {
+const select = async (opt: SegmentOption<V>, index: number) => {
   if (props.disabled || opt.disabled) return;
   if (isSelected(opt.value)) {
     if (props.closeable) {
@@ -449,8 +471,8 @@ const { isDragging, dragPosition, dragOverIndex, handlePointerDown, handleClickC
   transitionEnabled,
   isSelected,
   commitSelect: value => {
-    modelValue.value = value as T;
-    emit('change', emitValue(value as T));
+    modelValue.value = value as V;
+    emit('change', emitValue(value as V));
   },
   focusItem: index => {
     items.value[index]?.focus();

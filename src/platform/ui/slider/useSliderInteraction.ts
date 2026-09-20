@@ -122,6 +122,12 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
   /** 拖拽中：根据指针位置实时更新对应拇指的值（不派发 change） */
   const onPointerMove = (e: PointerEvent) => {
     if (isDragging.value === null) return;
+    // 指针在窗口外松手 / 手势被接管时，pointerup 可能收不到而 isDragging 仍为真，
+    // 此时后续 move 的 buttons 为 0 —— 不判会「裸移动改值」。借此自愈收尾。
+    if (e.buttons === 0) {
+      onPointerUp();
+      return;
+    }
     // 拖拽中途被禁用：立即终止拖拽态，圆点不再跟手（值由 applyValue 的 disabled 守卫兜底）
     if (isDisabled()) {
       onPointerUp();
@@ -148,6 +154,7 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
     }
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerUp);
   };
 
   /** 开始拖拽指定拇指：记录起始值、派发 drag-start 并挂载全局指针监听 */
@@ -159,6 +166,7 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
     onDragStart(thumbIndex);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
   };
 
   /** 聚焦指定拇指（单值只有第 0 个；聚焦后滚轮步进立即生效，无需二次点击） */
@@ -215,6 +223,8 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
   onBeforeUnmount(() => {
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
+    // pointercancel 与 startDrag 成对挂载，卸载清理同样不能漏（P1 审计 N 系）
+    window.removeEventListener('pointercancel', onPointerUp);
   });
 
   return {

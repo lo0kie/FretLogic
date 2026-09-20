@@ -11,7 +11,7 @@ import { defineStore } from 'pinia';
 
 import { chordRepository } from '@/domains/chord/model/chordRepository';
 import { buildGroupVariant, createGroup, getGroupSortKey, toGroupId } from '@/domains/chord/theory/entityFactories';
-import { matchChordSearch, sortChordsByRule } from '@/domains/chord/theory/theory';
+import { computeChordFingerprint, matchChordSearch, sortChordsByRule } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { clearPersistFailure, kvRemove, kvSet, reportPersistFailure } from '@/platform/services/storage';
 import { cloneDeep, generateUUID } from '@/platform/utils/common';
@@ -102,23 +102,35 @@ export const useChordStore = defineStore('chord', () => {
    * 异步水合：从 IDB 加载并清洗和弦库（chordRepository.load）。
    * 由应用装配层在挂载前 await；水合赋值期间暂停撤销历史（首装载数据不算一次「撤销点」），
    * 且 hydrated 置位先于赋值，防抖写回不会把刚读入的数据原样写回。
+   *
+   * 读取失败时**保持写回门禁关闭**（见 catch 内说明）：此时两个列表是空初值，落库会清空整库。
+   * 代价是本会话改动不落库——但失败已上报、且 hydrate() 可被重试，优于静默毁库。
+   * 唯一的开门出口是 replaceAllData（导入/恢复/云端覆盖）：那条路径的内存数据是用户显式给出的
+   * 完整内容，落盘安全，且它正是读失败后用户自救的必经之路。
    */
   const hydrate = async (): Promise<void> => {
     if (hydrated) return;
-    let snapshot: { groups: Group[]; chords: Chord[] };
+    let snapshot: { groups: Group[]; chords: Chord[]; mergedIds?: Map<string, string> };
     try {
       snapshot = await chordRepository.load();
     } catch (error) {
       reportPersistFailure('chords', error);
-      // 水合失败也开启写回门禁：本会话的用户改动仍应尝试落库（失败会继续上报），不能因读取失败而全部静默丢弃
-      hydrated = true;
-      suppressPersistWatch = false;
+      // 读取失败时**绝不开启写回门禁**：此刻 groups / savedChordsList 仍是空初值，而 chordRepository.save
+      // 是「同一事务内 clear() + 全量 put」——任何一次落库（含 pagehide 兜底刷盘）都会把 IDB 里的真实库
+      // 覆盖成空或残缺。宁可本会话改动不落库（失败已由 reportPersistFailure 上报、装配层会提示用户），
+      // 也绝不盲写覆盖真实数据。
+      // hydrated 保持 false 的额外好处：hydrate() 的重入判定仍为假，IDB 瞬时故障可重试；
+      // 且 suppressPersistWatch 仍为 true，浅 watch 也不会调度写回——两道门同时关着。
+      // 附注：歌曲域无此风险——songRepository.flushChanges 走按条 diff（removedIds / dirtySongs），
+      // 从不 clear()，空列表不会波及库内其他记录；两域协议不同，勿照搬此处结论。
       return;
     }
     hydrated = true;
     pauseHistory();
     groups.value = snapshot.groups;
     savedChordsList.value = snapshot.chords;
+    // 读侧清洗去重丢弃的重复项：水合早于桥接层订阅，事件通道收不到，暂存供装配时消费
+    hydrateMergeMapping = snapshot.mergedIds && snapshot.mergedIds.size > 0 ? snapshot.mergedIds : null;
     await nextTick();
     resumeHistory();
     // 关键修复：pause 期间 useRefHistory 的 last 快照不会同步（仍停留在初始空列表 []），
@@ -129,6 +141,14 @@ export const useChordStore = defineStore('chord', () => {
     suppressPersistWatch = false;
   };
 
+  /** 水合去重产生的重定向映射（被丢弃 id → 保留 id）。桥接层装配时消费，取走即清空。 */
+  let hydrateMergeMapping: Map<string, string> | null = null;
+  const consumeHydrateMergeMapping = (): Map<string, string> | null => {
+    const mapping = hydrateMergeMapping;
+    hydrateMergeMapping = null;
+    return mapping;
+  };
+
   // ---- 派生视图模型（纯逻辑见 chordGrouping） ----
   const groupChordMap = computed(() => {
     const map = new Map<string, Chord[]>();
@@ -136,6 +156,21 @@ export const useChordStore = defineStore('chord', () => {
       const list = map.get(chord.groupId);
       if (list) list.push(chord);
       else map.set(chord.groupId, [chord]);
+    });
+    return map;
+  });
+
+  /**
+   * 全库和弦查找表：id → 实体 与 指纹 → 实体 双键合一（computed 常驻，全库变更才重建）。
+   * 消费方：谱面行数据（useScoreLinesData 的歌词行解析按槽位绑定 id / 指纹两种形态查实体）、
+   * 预览内容键、和弦选器。此前该表在 useScoreLinesData 内自建，歌谱域之外无法共享，
+   * 每个消费者各付一次 O(库) 重建；下沉后全仓一份。
+   */
+  const chordsLookupMap = computed(() => {
+    const map = new Map<string, Chord>();
+    savedChordsList.value.forEach(c => {
+      map.set(c.id, c);
+      map.set(computeChordFingerprint(c), c);
     });
     return map;
   });
@@ -308,14 +343,25 @@ export const useChordStore = defineStore('chord', () => {
   };
 
   /**
-   * 用导入的数据整体替换分组与和弦列表（常用于导入/恢复）。
-   * 默认折叠全部分组并清空选中；可通过 options 调整。
+   * 用导入的数据整体替换分组与和弦列表（导入 / 恢复 / 云端覆盖 / 造数共用）。
+   * 替换后折叠全部分组并清空选中。
    */
   const replaceAllData = (data: { groups: Group[]; chords: Chord[] }): void => {
     groups.value = [...data.groups];
     expandedGroupId.value = null;
     savedChordsList.value = [...data.chords];
     selectedGroupId.value = null;
+    // 写回门禁只在 hydrate() 成功后打开（见其 catch 内说明）。但本方法是**唯一**「外部显式交出
+    // 完整库内容」的入口：此刻内存里的两个列表就是目标真值，不再是读失败留下的空初值，
+    // 门禁赖以成立的前提（内存可能残缺）不成立，必须顺势打开并立即落盘。
+    // 否则 hydrate 读失败后用户拿备份恢复，会得到最坏的一种假象：界面显示已恢复、IDB 里却
+    // 始终是旧数据（甚至已被清空），下次启动又回到损坏现场——而用户以为已经救回来了。
+    // 已水合的正常路径不动（门禁本就开着，仍由 400ms 防抖负责），避免改变既有写盘时机。
+    if (!hydrated) {
+      hydrated = true;
+      suppressPersistWatch = false;
+      void persistAll();
+    }
   };
 
   /** 将和弦插入列表头部（新和弦优先展示）。 */
@@ -323,13 +369,14 @@ export const useChordStore = defineStore('chord', () => {
     savedChordsList.value = [chord, ...savedChordsList.value];
   };
 
-  /** 按 id 替换更新指定和弦；id 不存在时静默忽略。 */
-  const updateChord = (chord: Chord) => {
+  /** 按 id 替换更新指定和弦；id 不存在时返回 false（调用方据以提示而非假成功）。 */
+  const updateChord = (chord: Chord): boolean => {
     const idx = savedChordsList.value.findIndex(c => c.id === chord.id);
-    if (idx < 0) return;
+    if (idx < 0) return false;
     const next = [...savedChordsList.value];
     next[idx] = chord;
     savedChordsList.value = next;
+    return true;
   };
 
   /**
@@ -450,6 +497,7 @@ export const useChordStore = defineStore('chord', () => {
     /** 异步水合（应用装配层挂载前 await） */
     hydrate,
     groupChordMap,
+    chordsLookupMap,
     groupedChordMap,
     getMultiFingering,
     getGroupedCards,
@@ -474,6 +522,7 @@ export const useChordStore = defineStore('chord', () => {
     onChordsRestored: eventBus.onChordsRestored,
     onChordsMerged: eventBus.onChordsMerged,
     buildChordForSave,
+    consumeHydrateMergeMapping,
     replaceAllData,
   };
 });

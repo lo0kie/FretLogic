@@ -3,14 +3,12 @@ import { computed, watch } from 'vue';
 import { getActivePinia } from 'pinia';
 
 import { useChordStore } from '@/domains/chord/store/chordStore';
-import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import {
   buildLyricsLinesWithEdges,
   clearLyricsLineCharsCache,
 } from '@/domains/score/preview/services/scoreExportCanvas';
 
-import type { Chord } from '@/domains/chord/types';
 import type { LineData } from '@/domains/score/preview/services/scoreExportCanvas';
 
 // 模块级单例：ScoreView 与 ScoreInteractiveArea 共享同一套 computed，
@@ -23,14 +21,10 @@ function buildSingleton() {
   const scoreEditor = useScoreEditorStore();
   const chordStore = useChordStore();
 
-  const chordsLookupMap = computed(() => {
-    const map = new Map<string, Chord>();
-    chordStore.savedChordsList.forEach(c => {
-      map.set(c.id, c);
-      map.set(computeChordFingerprint(c), c);
-    });
-    return map;
-  });
+  // 查找表下沉到 chordStore（id/指纹双键，computed 常驻）：谱面/预览/选器共用同一份，
+  // 不再各自 O(库) 重建（见 chordStore.chordsLookupMap 注释）。
+  // store 实例会解包 ref，这里再包一层 computed 维持「.value」消费签名不变
+  const chordsLookupMap = computed(() => chordStore.chordsLookupMap);
 
   const lyricsLinesWithEdges = computed<LineData[]>(() => {
     if (!scoreEditor.activeSong) return [];

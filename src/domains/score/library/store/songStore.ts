@@ -10,8 +10,14 @@ import { defineStore } from 'pinia';
 
 import { transposeChordName } from '@/domains/chord/theory/theory';
 import { toCapo } from '@/domains/fretboard/model/coordinates';
-import { bindNewChordToSlot, removeChordFromSlot, swapOrMoveSlotChords } from '@/domains/score/model/chordSlots';
-import { createSong as createSongEntity } from '@/domains/score/model/scoreModel';
+import {
+  bindNewChordToSlot,
+  getEdgeChords,
+  parseSlotKey,
+  removeChordFromSlot,
+  swapOrMoveSlotChords,
+} from '@/domains/score/model/chordSlots';
+import { createSong as createSongEntity, lineCharChord } from '@/domains/score/model/scoreModel';
 import { songRepository } from '@/domains/score/model/songRepository';
 import { kvGet, kvSet } from '@/platform/services/storage/idbKv';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
@@ -54,11 +60,22 @@ export const useSongStore = defineStore('song', () => {
 
   // 水合门禁：hydrate() 由应用装配层在挂载前 await，完成后 songs 才有数据
   let hydrated = false;
+  let hydrating: Promise<void> | null = null;
   /** 异步水合：从 IDB 加载歌曲列表（按顺序索引排列）；失败时上报并保持空列表。 */
   const hydrate = async (): Promise<void> => {
     if (hydrated) return;
-    hydrated = true;
-    songs.value = await loadInitialSongs();
+    // 门禁必须在 loadInitialSongs 完成后才置位：先置位等于 no-op，
+    // 加载失败时会让本会话的排序索引覆盖真实索引（丢手动排序）
+    if (hydrating) return hydrating;
+    hydrating = (async () => {
+      songs.value = await loadInitialSongs();
+      hydrated = true;
+    })();
+    try {
+      await hydrating;
+    } finally {
+      hydrating = null;
+    }
   };
 
   /**
@@ -230,7 +247,14 @@ export const useSongStore = defineStore('song', () => {
   const setCharChord = (songId: string, slotKey: SlotKey, chordId: ChordId) => {
     const target = songMap.value.get(songId);
     if (!target) return;
-    if (target.chordMap.get(slotKey) === chordId) return;
+    // 值未变化时跳过：解析槽位 key 后与嵌套结构的当前值比较
+    const parsed = parseSlotKey(slotKey);
+    const current = parsed
+      ? parsed.type === 'char'
+        ? lineCharChord(target.chordMap, parsed.lineId, parsed.index)
+        : (getEdgeChords(target.chordMap, parsed.lineId, parsed.type)[parsed.index] ?? null)
+      : undefined;
+    if (current === chordId) return;
     bindNewChordToSlot(target.chordMap, slotKey, chordId);
     target.chordMap = new Map(target.chordMap);
     touchSong(target);

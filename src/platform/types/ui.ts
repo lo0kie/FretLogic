@@ -1,5 +1,5 @@
-/** Toast 提示类型 */
-export enum ToastType {
+/** Message 提示类型 */
+export enum MessageType {
   INFO = 'info',
   SUCCESS = 'success',
   ERROR = 'error',
@@ -9,10 +9,10 @@ export enum ToastType {
   NEUTRAL = 'neutral',
 }
 
-export interface Toast {
+export interface Message {
   id: number;
   msg: string;
-  type: ToastType;
+  type: MessageType;
   description?: string;
   /** 操作按钮回调；存在即渲染按钮（取代原先冗余的 hasAction 布尔标记） */
   onAction?: () => void | Promise<void>;
@@ -26,8 +26,8 @@ export interface Toast {
   spinner?: boolean;
 }
 
-/** 创建 toast 的入参：id / msg / type 由 store 生成，duration 可缺省 */
-export type ToastOptions = Omit<Toast, 'id' | 'msg' | 'type' | 'duration'> & { duration?: number };
+/** 创建 message 的入参：id / msg / type 由 store 生成，duration 可缺省 */
+export type MessageOptions = Omit<Message, 'id' | 'msg' | 'type' | 'duration'> & { duration?: number };
 
 /** 主题语义色：ActionButton / BaseModal 等基础组件共用的 color 联合（新增语义色只改这里） */
 export type ThemeColor = 'default' | 'primary' | 'danger' | 'warning' | 'success';

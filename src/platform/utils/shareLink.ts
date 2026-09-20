@@ -77,12 +77,27 @@ export const encodeShareToken = async (payload: string): Promise<string> => {
  * 对任意脏输入（非法 base64、非法 deflate 流、压缩库加载失败）一律返回 null，不抛错：
  * 输入来自 URL 参数或用户剪贴板，必须假设它可能被截断、篡改或过期。
  */
+/**
+ * 解压输出上限（字节）：fflate 0.8.3 无 maxSize 选项，故借固定 `out` 缓冲把输出内存锁死，
+ * 防解压炸弹（压缩后极小的恶意串可解压出数百 MB，直接撑爆内存）。
+ * 真实分享载荷体积极小，8MB 余量充足。
+ * 注意：fflate 0.8.3 的 inflateSync(...,{out}) 输出超出缓冲时是**静默截断**（不抛错，
+ * 探针实测返回满缓冲）——因此结果恰好填满缓冲时无法与「合法的超大载荷」区分，
+ * 按可疑截断处理返回 null（契约：脏输入一律 null）。
+ */
+const MAX_SHARE_DECODE_BYTES = 8 * 1024 * 1024;
+
 export const decodeShareToken = async (token: string): Promise<string | null> => {
   const bytes = base64UrlToBytes(token);
   if (!bytes || bytes.length === 0) return null;
+  // 长度前置判：原始压缩串异常长直接拒绝（解压炸弹压缩后体积极小，此举为分配内存双保险）
+  if (bytes.length > MAX_SHARE_DECODE_BYTES) return null;
   try {
     const { inflateSync, strFromU8 } = await import('fflate');
-    return strFromU8(inflateSync(bytes));
+    // 借 out 缓冲约束输出内存；恰好填满缓冲视为截断（见上方注释），拒绝而不是吐半截内容
+    const decompressed = inflateSync(bytes, { out: new Uint8Array(MAX_SHARE_DECODE_BYTES) });
+    if (decompressed.length >= MAX_SHARE_DECODE_BYTES) return null;
+    return strFromU8(decompressed);
   } catch {
     return null;
   }
