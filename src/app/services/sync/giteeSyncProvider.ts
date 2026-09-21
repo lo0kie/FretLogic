@@ -1,15 +1,15 @@
 import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
-import { SyncError } from './provider.ts';
+import { SyncError } from './provider';
 import {
   buildSyncCommitMessage,
   createSyncProviderBase,
   decodeBase64Envelope,
   describeApiError,
   extractApiErrorDetail,
-} from './syncBase.ts';
+} from './syncBase';
 
-import type { GiteeSyncConfig, SyncBranchesProvider } from './provider.ts';
+import type { GiteeSyncConfig, SyncProvider } from './provider';
 
 const GITEE_API_BASE = 'https://gitee.com/api/v5';
 
@@ -20,7 +20,7 @@ const GITEE_API_BASE = 'https://gitee.com/api/v5';
  * 2. 创建文件用 POST、更新文件用 PUT（更新必须在 body 携带文件 blob sha），无 sha 时 GitHub 的
  *    单 PUT 自动创建在这里不适用，故 push 先探测已存在与否再选择方法。
  */
-export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesProvider {
+export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncProvider {
   const fileUrl = (ref?: string) => {
     const base = `${GITEE_API_BASE}/repos/${config.owner}/${config.repo}/contents/${config.path}`;
     return ref ? `${base}?ref=${encodeURIComponent(ref)}` : base;
@@ -32,8 +32,6 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
   };
 
   const repoUrl = () => `${GITEE_API_BASE}/repos/${config.owner}/${config.repo}`;
-
-  const branchesUrl = () => `${GITEE_API_BASE}/repos/${config.owner}/${config.repo}/branches?per_page=100`;
 
   const { request, decodePayload } = createSyncProviderBase({
     // Gitee API v5 标准认证：Authorization: token <token> 请求头
@@ -109,17 +107,6 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
         );
       const body = await response.json();
       return { sha: String(body.commit?.sha ?? body.sha ?? '') };
-    },
-    async listBranches(): Promise<string[]> {
-      const response = await request({ method: 'GET' }, branchesUrl());
-      if (!response.ok)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `获取分支失败，状态码：${response.status}${await describeApiError(response)}`
-        );
-
-      const branches: { name: string }[] = await response.json();
-      return branches.map(b => b.name).filter(name => !name.startsWith('dependabot/'));
     },
     async fetchMeta() {
       const response = await request({ method: 'GET' }, metaFileUrl(config.branch));

@@ -1,7 +1,12 @@
 import { getChordName, nameToSegments, parseChordName, ROOT_PITCH_MAP, segmentsToString } from './chordName';
 import { findRomanSuffixBySpelling, QUALITY_TOKENS } from './chordQualityAst';
 import { findTokenByAst, parseQualityText } from './chordQualityAstParse';
-import { DIATONIC_DEGREE_MAP, isDimFlavoredQuality, isMinorFlavoredQuality } from './theory.shared';
+import {
+  DIATONIC_DEGREE_MAP,
+  isDimFlavoredQuality,
+  isMinorFlavoredQuality,
+  MINOR_DIATONIC_DEGREE_MAP,
+} from './theory.shared';
 
 import type { ChordOrName } from './chordName';
 import type { ChordNameSegments } from '@/domains/chord/types';
@@ -88,7 +93,8 @@ export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 
     11: { degree: 7, base: 'VII', isDiatonic: true },
   };
 
-  // 小调音级：0: I (i), 2: II (ii°), 3: III, 5: IV (iv), 7: V (v/V), 8: VI, 10: VII
+  // 小调音级（自然小调为调内基准）：0: I (i), 2: II (ii°), 3: III, 5: IV (iv), 7: V (v/V), 8: VI, 10: VII,
+  // 11: #VII（和声/旋律小调的升七级导音，非自然小调调内音）
   const MINOR_INTERVAL_MAP: Record<number, DegreeDef> = {
     0: { degree: 1, base: 'I', isDiatonic: true },
     1: { degree: 2, base: 'bII', isDiatonic: false },
@@ -101,7 +107,7 @@ export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 
     8: { degree: 6, base: 'VI', isDiatonic: true },
     9: { degree: 6, base: '#VI', isDiatonic: false },
     10: { degree: 7, base: 'VII', isDiatonic: true },
-    11: { degree: 7, base: 'VII', isDiatonic: true },
+    11: { degree: 7, base: '#VII', isDiatonic: false },
   };
 
   const def = (isMinorKey ? MINOR_INTERVAL_MAP[interval] : MAJOR_INTERVAL_MAP[interval]) ?? {
@@ -133,7 +139,7 @@ export const getChordDegree = (chordOrName: ChordOrName | string, key: string = 
   // 斜杠转位低音：若存在，计算低音相对调根音的音级，格式化为 /3, /5, /7 等
   if (parsed.hasBass && parsed.bassPitch !== 99) {
     const bassInterval = (parsed.bassPitch - keyRootPitch + 12) % 12;
-    const bassDegree = DIATONIC_DEGREE_MAP[bassInterval] ?? 1;
+    const bassDegree = (isMinorKey ? MINOR_DIATONIC_DEGREE_MAP : DIATONIC_DEGREE_MAP)[bassInterval] ?? 1;
     finalRoman = `${finalRoman}/${bassDegree}`;
   }
 

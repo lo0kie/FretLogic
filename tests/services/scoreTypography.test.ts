@@ -51,8 +51,12 @@ describe('乐谱排版与折行引擎算法测试', () => {
     expect(englishWidth).toBeLessThan(hanziWidth);
     expect(numberWidth).toBeLessThan(hanziWidth);
     expect(barWidth).toBeLessThan(hanziWidth);
-    expect(englishWidth).toBe(Math.round(SCORE_EXPORT_CONFIG.REGULAR_CHAR_WIDTH * 0.58));
-    expect(barWidth).toBe(Math.round(SCORE_EXPORT_CONFIG.REGULAR_CHAR_WIDTH * 0.58));
+    // 半角 ASCII 共用同一列宽（实现按 code <= 127 判定），且约为全角的六成——
+    // 只钉「半角互等 + 比例落在带宽内」，不把实现里的 0.58 抄进断言
+    expect(englishWidth).toBe(numberWidth);
+    expect(englishWidth).toBe(barWidth);
+    expect(englishWidth / hanziWidth).toBeGreaterThan(0.5);
+    expect(englishWidth / hanziWidth).toBeLessThan(0.7);
   });
 
   it('中文避头尾规则生效：标点符号不得单独出现在新行开头', () => {
@@ -75,8 +79,9 @@ describe('乐谱排版与折行引擎算法测试', () => {
     // 严禁任何第二段或续行的第一个字符为逗号
     for (let i = 1; i < segments.length; i++) {
       const firstChar = segments[i]?.chars[0]?.char;
+      // 注：原先此处还有 `expect(firstChar).not.toBe('。')`，已删——本用例输入是
+      // '一二三四五，六七八九十'，整串不含句号，该断言不可能失败；若要覆盖句号需另造输入
       expect(firstChar).not.toBe('，');
-      expect(firstChar).not.toBe('。');
     }
   });
 

@@ -15,6 +15,7 @@
     "dev:proxy": "node scripts/dev-webdav-proxy.mjs",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit --incremental",
+    "typecheck:tests": "vue-tsc --noEmit -p tsconfig.tests.json --incremental",
     "lint": "eslint . --cache --cache-strategy content --cache-location node_modules/.cache/eslint/.eslintcache --max-warnings 0",
     "lint:fix": "run-s \"lint --fix\" format",
     "format": "node scripts/prettier-format.mjs",

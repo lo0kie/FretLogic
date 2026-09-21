@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';
-import { nameToSegments, parsePitchSegment } from '@/domains/chord/theory/theory';
+import { segmentsToString } from '@/domains/chord/theory/theory';
 
 import type { NoteInput } from '@/domains/chord/types';
 
@@ -44,12 +44,23 @@ describe('chord engine boundary', () => {
   });
 
   it('guarantees segments are defined for all candidates', () => {
-    const result = analyzeChordGraph(cMajor, 0);
-    expect(result.candidates.length).toBeGreaterThan(0);
-    for (const c of result.candidates) {
-      expect(c.segments).toBeDefined();
-      expect(c.segments?.root).toBeDefined();
-      expect(Array.isArray(c.segments?.root)).toBe(true);
+    // 三条推导路径各取一例：普通三和弦、含延伸音的属七、斜杠低音；低置信候选同样要满足
+    const inputs: Array<[NoteInput[], number | null]> = [
+      [cMajor, 0],
+      [gSeven, null],
+      [[note(2, 4, 'E'), note(3, 0, 'C'), note(4, 4, 'E'), note(5, 7, 'G')], 0],
+    ];
+    for (const [notes, explicitRoot] of inputs) {
+      const { candidates, lowConfidence } = analyzeChordGraph(notes, explicitRoot);
+      const all = [...candidates, ...lowConfidence];
+      expect(all.length).toBeGreaterThan(0);
+      for (const c of all) {
+        // segments 在类型上是可选字段，本用例的核心契约正是「所有候选（含低置信）都带上了它」——
+        // 原先只做 root 的存在性断言（root 是必填元组，任何退化都测不出），改为断语义一致性：
+        // segments 必须能无损还原为 chordName（往返契约已由 chordSegments.test.ts 多形态确立）
+        expect(c.segments).toBeDefined();
+        expect(segmentsToString(c.segments!)).toBe(c.chordName);
+      }
     }
   });
 
@@ -99,31 +110,6 @@ describe('chord engine boundary', () => {
     expect(result.candidates.length).toBeGreaterThan(0);
     expect(result.lowConfidence.length).toBeGreaterThan(0);
     expect(result.lowConfidence.some(c => c.chordName.startsWith('Csus'))).toBe(true);
-  });
-
-  it('guarantees fallback segments can be derived for arbitrary candidate structures without clearing chord name', () => {
-    // Simulated candidate with no pre-parsed segments and non-standard quality
-    const candidate = {
-      chordName: 'C(custom)',
-      rootLabel: 'C',
-      score: 10,
-      rootPitch: 0,
-      segments: undefined,
-    };
-    const parsedSegs = candidate.segments ?? nameToSegments(candidate.chordName);
-    let resolvedSegs = parsedSegs;
-    if (!resolvedSegs) {
-      const parsedRoot = parsePitchSegment(candidate.rootLabel);
-      if (parsedRoot) {
-        resolvedSegs = {
-          root: parsedRoot,
-          unknownQuality: candidate.chordName.slice(candidate.rootLabel.length).replace(/^\//, '') || undefined,
-        };
-      }
-    }
-    expect(resolvedSegs).toBeDefined();
-    expect(resolvedSegs?.root).toEqual(['C', 0]);
-    expect(resolvedSegs?.unknownQuality).toBe('(custom)');
   });
 
   it('233332 指法下能够正确推导出 Bbadd9/F#', () => {

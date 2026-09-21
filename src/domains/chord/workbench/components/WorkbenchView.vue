@@ -113,7 +113,7 @@ import {
   useChordDraftSaveState,
 } from '@/domains/chord/workbench/composables/useChordDraftEditing';
 import { useWorkbenchPanelExpanded } from '@/domains/chord/workbench/composables/useWorkbenchPanelExpanded';
-import { useWorkbenchPanelsOrder } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder.ts';
+import { useWorkbenchPanelsOrder } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder';
 import { useWorkbenchRouteSync } from '@/domains/chord/workbench/composables/useWorkbenchRouteSync';
 import { getFloatingBarBottom } from '@/domains/fretboard/constants';
 import { useSortableList } from '@/platform/composables/useSortableList';
@@ -125,7 +125,7 @@ import WorkbenchExportPanel from './WorkbenchExportPanel.vue';
 import WorkbenchFretboardPanel from './WorkbenchFretboardPanel.vue';
 import WorkbenchVariantsPanel from './WorkbenchVariantsPanel.vue';
 
-import type { WorkbenchPanelId } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder.ts';
+import type { WorkbenchPanelId } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { Component, Ref } from 'vue';
 

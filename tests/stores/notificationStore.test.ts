@@ -12,11 +12,11 @@ describe('useUiStore 通知中心持久消息队列', () => {
     const ui = useUiStore();
     const id = ui.notice.success({ title: '已同步', message: '数据已上传' });
     expect(ui.notices[0]).toMatchObject({ id, type: 'success', title: '已同步', read: false });
-    expect(typeof ui.notices[0].ts).toBe('number');
+    expect(typeof ui.notices[0]!.ts).toBe('number');
 
     const infoId = ui.notice.info({ title: '提醒' });
-    expect(ui.notices[0].id).toBe(infoId); // 最新在前
-    expect(ui.notices[0].type).toBe('info');
+    expect(ui.notices[0]!.id).toBe(infoId); // 最新在前
+    expect(ui.notices[0]!.type).toBe('info');
   });
 
   it('dismissNotice 移除、dismissAllNotices 清空、markNoticeRead 标记已读', () => {
@@ -44,6 +44,6 @@ describe('useUiStore 通知中心持久消息队列', () => {
     }
     expect(ui.notices).toHaveLength(NOTICE_MAX_COUNT);
     // 最新保留在前，最旧的被淘汰
-    expect(ui.notices[0].title).toBe(`n${NOTICE_MAX_COUNT + 4}`);
+    expect(ui.notices[0]!.title).toBe(`n${NOTICE_MAX_COUNT + 4}`);
   });
 });

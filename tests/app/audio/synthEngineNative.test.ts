@@ -34,7 +34,7 @@ class MockAudioParam {
   private _value = 0;
   /** 直接赋值 .value 的次数（用于断言「同值重复设置 → 早退」这类分支） */
   writes = 0;
-  calls: [string, ...number[]][] = [];
+  calls: [string, number, ...number[]][] = [];
 
   get value(): number {
     return this._value;
@@ -536,8 +536,11 @@ describe('延音触发与释放', () => {
     expect(countTargets()).toBe(afterFirst);
   });
 
-  it('未初始化时释放为空操作', () => {
-    expect(() => releaseSynthNotes()).not.toThrow();
+  it('未初始化时释放为空操作（不建节点、不调度）', () => {
+    releaseSynthNotes();
+    // not.toThrow() 无区分度：未初始化即早退（synthEngine.ts:487 `if (!audioCtx) return`），必然不抛。
+    // 改为断言零副作用——未就绪时不得创建任何音频节点（对照下方「未就绪时设置音量」的 gains.length 写法）
+    expect(gains.length).toBe(0);
   });
 });
 
@@ -625,8 +628,10 @@ describe('热更新：音色 / 音量 / 混响 / 合唱', () => {
 });
 
 describe('销毁与状态复位', () => {
-  it('未初始化时销毁为空操作', () => {
-    expect(() => disposeSynthEngine()).not.toThrow();
+  it('未初始化时销毁为空操作（不建节点）', () => {
+    disposeSynthEngine();
+    // 同 releaseSynthNotes：未初始化走早退，not.toThrow() 恒真；断言零副作用
+    expect(gains.length).toBe(0);
   });
 
   it('销毁后引擎不再就绪，触发返回 0', async () => {

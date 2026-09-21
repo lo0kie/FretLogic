@@ -34,7 +34,7 @@ import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
 import type { Chord } from '@/domains/chord/types';
-import type { LineId } from '@/domains/score/types';
+import type { LineId, SlotKey } from '@/domains/score/types';
 
 /**
  * 搭建「store 侧响应式歌曲 + 真实历史栈」：applyState 走与生产接线完全一致的 updateSongMeta，

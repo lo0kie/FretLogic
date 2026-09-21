@@ -56,13 +56,16 @@ describe('乐谱时间序列和弦提取 (extractSongChordSequence)', () => {
     const line2 = 'l2' as LineId;
 
     const chordMap = new Map<LineId, ChordLineSlots>([
-      ['l1', { char: new Map([[2, mockChordG.id]]), start: [mockChordC.id], end: [mockChordAm.id] }],
-      ['l2', { char: new Map(), start: [mockChordF.id], end: [] }],
+      [line1, { char: new Map([[2, mockChordG.id]]), start: [mockChordC.id], end: [mockChordAm.id] }],
+      [line2, { char: new Map(), start: [mockChordF.id], end: [] }],
     ]);
 
     const mockSong: Song = {
       id: toSongId('s_test'),
       title: '测试乐谱',
+      singer: '',
+      originalKey: '',
+      timeSignature: '',
       lyrics: '一二三四\n五六七八',
       lineIds: [line1, line2],
       playKey: 'C',
@@ -93,12 +96,15 @@ describe('乐谱时间序列和弦提取 (extractSongChordSequence)', () => {
   it('跳过不存在的和弦或无效槽位', () => {
     const line1 = 'l1' as LineId;
     const chordMap = new Map<LineId, ChordLineSlots>([
-      ['l1', { char: new Map([[0, mockChordC.id]]), start: [toChordId('c_non_existent')], end: [] }],
+      [line1, { char: new Map([[0, mockChordC.id]]), start: [toChordId('c_non_existent')], end: [] }],
     ]);
 
     const mockSong: Song = {
       id: toSongId('s_test2'),
       title: '测试乐谱2',
+      singer: '',
+      originalKey: '',
+      timeSignature: '',
       lyrics: '测试',
       lineIds: [line1],
       playKey: 'C',

@@ -33,6 +33,7 @@ all_code.txt
 docs/
 coverage/
 .workbuddy/
+.workbuddy-ai/
 .trae/
 .wrangler/
 

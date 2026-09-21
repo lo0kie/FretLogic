@@ -75,8 +75,13 @@ const classifyHeader = (header: string): 'UNKNOWN_FORMAT' | 'INVALID_HEADER' => 
 /** 单弦编码：`品位,preferFlat`（-1 静音 / 0 空弦 / ≥1 品位） */
 const encodeString = (s: GuitarStringEntity): string => `${s.fret},${s.preferFlat ? 1 : 0}`;
 
-/** 横按条目编码：`品位:起弦:止弦:指法` */
-const encodeBarre = (b: BarreEntity): string => `${b.fret}:${b.fromString}:${b.toString}:${b.finger ?? 1}`;
+/** 横按条目编码：`品位:起弦:止弦:指法`。
+ *  指法缺失时写**空字段**而非兜底成 1：解析端对非 [1,4] 的指法本就省略 finger（见 parseChordFields），
+ *  故空字段能原样还原「无指序」。此前 `?? 1` 会把无指序凭空写成指序 1，
+ *  使和弦身份在文本往返后改变 —— 而 finger 参与横按签名（computeBarresSignature withFinger），
+ *  该签名又是 areBarresEqual 与 chordRepository 重复判定的口径（D26：标指不同即不同和弦），
+ *  于是往返一次就可能被去重静默丢一条。 */
+const encodeBarre = (b: BarreEntity): string => `${b.fret}:${b.fromString}:${b.toString}:${b.finger ?? ''}`;
 
 /** 和弦单行紧凑编码（供乐谱 CHORDS 段复用） */
 export const serializeChordFields = (chord: Chord): string => {

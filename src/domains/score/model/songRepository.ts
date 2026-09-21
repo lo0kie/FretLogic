@@ -6,7 +6,7 @@ import { toSongId } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage';
 import { toPlainPersistable } from '@/platform/utils/common';
 
-import type { ChordLineSlots, LineId, Song } from '@/domains/score/types';
+import type { ChordLineSlots, LineId, Song, SongId } from '@/domains/score/types';
 
 type RawRecord = Record<string, unknown>;
 
@@ -86,13 +86,14 @@ export interface SongRepository {
   /** 加载全部歌曲：优先按顺序索引排列，未被索引覆盖的记录追加在尾部 */
   loadSongs(): Promise<Song[]>;
   saveSong(song: Song): Promise<void>;
-  removeSong(id: string): Promise<void>;
+  /** 以下 id 一律 SongId：品牌只在编译期存在（落库即普通 string），但能挡住把和弦/行 id 误当歌曲 id 传进来 */
+  removeSong(id: SongId): Promise<void>;
   /** 写入歌曲顺序索引（syncMeta） */
-  saveSongIds(ids: string[]): Promise<void>;
+  saveSongIds(ids: SongId[]): Promise<void>;
   /** 实际存储中的全部歌曲 id（来自主键扫描，不受索引漂移影响；孤儿清理用） */
-  listSongIds(): Promise<string[]>;
+  listSongIds(): Promise<SongId[]>;
   /** 单事务批量刷写：删除 + 脏歌曲 + 顺序索引（可选），保证三者的同生共死 */
-  flushChanges(changes: { removedIds: string[]; dirtySongs: Song[]; orderIds?: string[] }): Promise<void>;
+  flushChanges(changes: { removedIds: SongId[]; dirtySongs: Song[]; orderIds?: SongId[] }): Promise<void>;
 }
 
 const SONG_ORDER_META_KEY = 'song-order';
@@ -131,7 +132,8 @@ export const songRepository: SongRepository = {
   },
   async listSongIds() {
     const keys = await idb.getAllKeys('songs');
-    return keys.filter((key): key is string => typeof key === 'string');
+    // IDB 主键天然是裸 string：这里是整条链唯一的品牌注入点，不再把裸 string 漏给调用方
+    return keys.filter((key): key is string => typeof key === 'string').map(toSongId);
   },
   async flushChanges({ removedIds, dirtySongs, orderIds }) {
     await idb.runTx(['songs', 'syncMeta'], 'readwrite', get => {

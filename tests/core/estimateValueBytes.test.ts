@@ -42,7 +42,7 @@ describe('estimateValueBytes', () => {
       try {
         return estimateValueBytes({ own: 'x' });
       } finally {
-        const removed = delete (Object.prototype as Record<string, unknown>).__estimateProbe__;
+        const removed = delete (Object.prototype as Record<string, unknown>)['__estimateProbe__'];
         expect(removed).toBe(true);
       }
     })();
@@ -62,13 +62,13 @@ describe('estimateValueBytes', () => {
 
   it('null 原型对象按普通对象展开（无原型即无「类实例」判定）', () => {
     const bare = Object.create(null) as Record<string, unknown>;
-    bare.a = 'xy';
+    bare['a'] = 'xy';
     expect(estimateValueBytes(bare)).toBe(8 + 2 + 4);
   });
 
   it('环状与重复引用按 0 截断：同一次遍历内每个对象只计一次', () => {
     const cyclic: Record<string, unknown> = { x: 1 };
-    cyclic.self = cyclic;
+    cyclic['self'] = cyclic;
     expect(estimateValueBytes(cyclic)).toBe(8 + 2 + 8 + 'self'.length * 2);
 
     // 共享同一对象的两处只算一次（估算因而偏小，属刻意的近似）

@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createGithubSyncProvider } from '@/app/services/sync/githubSyncProvider';
+import { CURRENT_PAYLOAD_VERSION } from '@/app/services/validation/payloadMigrations';
+import { buildGroupVariant } from '@/domains/chord/theory/entityFactories';
+import { GroupSortRule } from '@/domains/chord/types';
 
 import type { GithubSyncConfig } from '@/app/services/sync/provider';
+import type { ImportExportPayload } from '@/app/types';
 
 const config: GithubSyncConfig = {
   kind: 'github',
@@ -13,9 +17,10 @@ const config: GithubSyncConfig = {
   path: 'backup/data.json',
 };
 
-const payload = {
+/** version 刻意停留在旧包版本号 4：用例验证校验层会逐级迁移到 CURRENT_PAYLOAD_VERSION */
+const payload: ImportExportPayload = {
   version: 4,
-  groups: [{ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' }],
+  groups: [buildGroupVariant({ id: 'g1', name: 'C' }, GroupSortRule.ROOT_PITCH)],
   chords: [],
   songs: [],
 };
@@ -40,21 +45,24 @@ describe('github sync provider', () => {
 
     expect(result).toEqual({ sha: 'commit-sha' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    const putInit = fetchMock.mock.calls[1][1] as RequestInit;
+    const putInit = fetchMock.mock.calls[1]![1] as RequestInit;
     const body = JSON.parse(String(putInit.body));
     expect(body.sha).toBe('file-sha');
     expect(body.branch).toBe('main');
-    expect((putInit.headers as Record<string, string>).Authorization).toBe('Bearer ghp_abcdefghijklmnop');
+    expect((putInit.headers as Record<string, string>)['Authorization']).toBe('Bearer ghp_abcdefghijklmnop');
   });
 
   it('pulls and validates remote content', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ content: btoa(JSON.stringify(payload)) })));
     const provider = createGithubSyncProvider(config);
     const result = await provider.pull();
-    // 校验层会把 v4 迁移到当前版本（v6），并补齐实体时间戳
-    expect(result?.version).toBe(7);
+    // 校验层会把旧版本包逐级迁移到当前版本，并补齐实体时间戳
+    expect(result?.version).toBe(CURRENT_PAYLOAD_VERSION);
     expect(result?.groups).toHaveLength(1);
     expect(result?.groups[0]).toMatchObject({ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' });
+    // 守卫哨兵（保留）：只断「时间戳字段存在且为数字」——工厂 buildGroupVariant 的缺省 0 同样是
+    // number，故它守不住「迁移层真的补齐了时间戳」这一语义，只保证字段不被删成 undefined。
+    // 取值正确性由 payloadMigrations / migrateLegacy 的用例覆盖
     expect(result?.groups[0]?.createdAt).toBeTypeOf('number');
     expect(result?.groups[0]?.updatedAt).toBeTypeOf('number');
   });

@@ -11,7 +11,14 @@ import { GroupSortRule } from '@/domains/chord/types';
 import { getChordName, parseChordName, ROOT_PITCH_MAP } from './chordName';
 import { computeIsInverted, resolveChordRootPitch } from './chordSearch';
 import { calcPitchIndex } from './pitch';
-import { DIATONIC_DEGREE_MAP, DIATONIC_INTERVALS_MASK, isMinorFlavoredQuality, qualityKindOf } from './theory.shared';
+import {
+  DIATONIC_DEGREE_MAP,
+  DIATONIC_INTERVALS_MASK,
+  isMinorFlavoredQuality,
+  MINOR_DIATONIC_DEGREE_MAP,
+  MINOR_DIATONIC_INTERVALS_MASK,
+  qualityKindOf,
+} from './theory.shared';
 import { getBaseStringsFor } from './tuning';
 
 import type { Chord } from '@/domains/chord/types';
@@ -161,6 +168,9 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
     const DEGREE_QUALITY = isMinorKey
       ? ['', 'min', 'dim', 'maj', 'min', 'min', 'maj', 'maj']
       : ['', 'maj', 'min', 'min', 'maj', 'maj', 'min', 'dim'];
+    // 调内掩码与度数表随调性切换：自然小调的 3/6/7 级比大调低半音，沿大调表会把 III/VI/VII 判成调外
+    const DEGREE_MAP = isMinorKey ? MINOR_DIATONIC_DEGREE_MAP : DIATONIC_DEGREE_MAP;
+    const SCALE_MASK = isMinorKey ? MINOR_DIATONIC_INTERVALS_MASK : DIATONIC_INTERVALS_MASK;
     mappedList.sort((a, b) => {
       let aDiatonic = false;
       let bDiatonic = false;
@@ -168,15 +178,15 @@ export const sortChordsByRule = (chords: Chord[], rule?: GroupSortRule, sortKey 
       let bDegree = 99;
       if (a.rootPitch !== 99) {
         const ia = (a.rootPitch - keyPitch + 12) % 12;
-        aDegree = DIATONIC_DEGREE_MAP[ia] ?? 99;
+        aDegree = DEGREE_MAP[ia] ?? 99;
         // 真正的调内和弦需「根音在调内」且「三和弦性质匹配该级」：D 是大调 IV（调内），Dm 是借用 iv，不得与 D 同级
-        const rootInScale = (DIATONIC_INTERVALS_MASK & (1 << ia)) !== 0;
+        const rootInScale = (SCALE_MASK & (1 << ia)) !== 0;
         aDiatonic = rootInScale && a.qualityKind === DEGREE_QUALITY[aDegree];
       }
       if (b.rootPitch !== 99) {
         const ib = (b.rootPitch - keyPitch + 12) % 12;
-        bDegree = DIATONIC_DEGREE_MAP[ib] ?? 99;
-        const rootInScale = (DIATONIC_INTERVALS_MASK & (1 << ib)) !== 0;
+        bDegree = DEGREE_MAP[ib] ?? 99;
+        const rootInScale = (SCALE_MASK & (1 << ib)) !== 0;
         bDiatonic = rootInScale && b.qualityKind === DEGREE_QUALITY[bDegree];
       }
       if (aDiatonic !== bDiatonic) return aDiatonic ? -1 : 1;

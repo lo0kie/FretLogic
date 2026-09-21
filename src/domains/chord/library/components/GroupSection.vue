@@ -258,8 +258,15 @@ const retentionTimers = new Map<string, number>();
 const isGroupContentRenderable = (group: Group): boolean => isGroupContentOpen(group) || retainedGroupIds.has(group.id);
 
 // ---------- 分块挂载 / 分块卸载（通用机制见 platform/composables/useChunkedMount） ----------
-/** 每帧补挂/卸载的卡片数（3 列 × 12 行） */
-const MOUNT_BATCH = 36;
+/**
+ * 每帧补挂/卸载的卡片数（3 列 × 4 行）。
+ *
+ * 原值 36（3 列 × 12 行）与真实单卡成本不匹配：单张 ChordCard 热态约 1.25ms、冷态约 3.3ms
+ * （每卡常驻 ChordCard + BaseMenu + BasePopover 三个组件），一帧 16.7ms 的预算只容得下约 5~13 张，
+ * 而首批 36 张实测构成单个 111~120ms 主线程长任务 + 116~124ms 掉帧，即分块机制没起到摊平作用。
+ * 收敛到 12 后单帧批次落在预算内，代价是填充由 2 帧变 4 帧（补挂发生在高度过渡未揭示到的行，视觉无感）。
+ */
+const MOUNT_BATCH = 12;
 
 const chunked = createChunkedMount<string>(MOUNT_BATCH);
 

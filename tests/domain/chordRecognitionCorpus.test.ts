@@ -105,13 +105,17 @@ describe('和弦识别语料库（回归基线）', () => {
     // 真正的强力和弦（根音 + 五音齐全）不受影响；同音过滤不误伤 sus4 + add13（E 是独立的一块音）
     expect(names).toContain('C5');
     expect(compositeTokens().some(c => c.suffix === 'sus4add13')).toBe(true);
-    expect(preferredId([0, 7])).toBe('power');
+    // 注：原先此处还有一条 `preferredId([0, 7]) === 'power'`，与上方「历史坑点」用例 :78 逐字重复
+    // —— preferredId 是纯函数，同输入必同输出，重复断言无新增覆盖，已删
   });
 
   it('识别覆盖自检:每个 token 的配方展开音集都能被识别回自己(非 notationOnly 全量)', () => {
     // 识别器自带的覆盖率报告此前没有任何测试调用——这里把它锁死:
     // token 表里每个可识别配方(排除 no3/no5/9sus2 这类纯记谱写法)展开出的音集,
     // 必须能被识别引擎找回自己的 tokenId。任何候选生成 / 签名构建的回归都会在这里爆。
+    // 守卫哨兵（保留，勿按「恒真」删除）：下面三条断言的确实是实现形状而非行为——
+    // recovered === total 与 failures 为空是同一循环的互补计数，total 又是 token 表 filter 的复算。
+    // 其价值在于：实现若漏算 token、提前 break 或未跑遍全表，任一断言即红
     const { total, recovered, failures } = selfCheckCoverage();
     expect(failures).toEqual([]);
     expect(recovered).toBe(total);
@@ -199,6 +203,8 @@ describe('和弦识别语料库（回归基线）', () => {
     const tokenKeys = new Set(QUALITY_TOKENS.map(t => astToKey(t.ast)));
     const ids = new Set<string>();
     for (const c of compositeTokens()) {
+      // 守卫哨兵（保留）：以下两条复述的是生成器内部的 `if (seenAstKeys.has(key)) continue` 去重逻辑，
+      // 属实现形状而非新行为；但生成期去重一旦失效（组合候选与 token 表撞 AST、或彼此撞 id），此处即红
       expect(tokenKeys.has(astToKey(c.ast))).toBe(false);
       expect(ids.has(c.id)).toBe(false);
       ids.add(c.id);

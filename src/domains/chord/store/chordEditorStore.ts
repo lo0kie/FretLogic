@@ -14,7 +14,7 @@ import {
 } from '@/domains/chord/theory/theory';
 import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
 import { useStorage } from '@/platform/composables/useStorage';
-import { cloneDeep } from '@/platform/utils/common';
+import { clamp, cloneDeep } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import { mergeAutoBarres, pruneForFretCount, pruneForStringCount, reconcileBarres } from './chordBarreLogic';
@@ -153,7 +153,7 @@ const createChordEditorSetup = (persist: boolean) => () => {
 
   /** 设置琴弦数量（3~10 弦，典型覆盖 4 弦尤克里里/贝斯、6 弦吉他、7/8 弦重金属） */
   const setStringCount = (targetCount: number) => {
-    const count = Math.min(10, Math.max(3, Math.round(targetCount)));
+    const count = clamp(Math.round(targetCount), 3, 10);
     const current = draftChord.value.strings;
     if (current.length === count) return;
 

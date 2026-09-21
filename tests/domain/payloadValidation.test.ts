@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseAndValidatePayload, validateImportExportPayload } from '@/app/services/validation/payload';
+import { CURRENT_PAYLOAD_VERSION } from '@/app/services/validation/payloadMigrations';
 import { sanitizePersistedData } from '@/app/services/validation/persistedData';
+
+import type { LineId } from '@/domains/score/types';
 
 const group = { id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' };
 const strings = [
@@ -34,7 +37,7 @@ describe('payload validation migration matrix', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.version).toBe(7);
+    expect(result.payload?.version).toBe(CURRENT_PAYLOAD_VERSION);
     expect(result.payload?.groups[0]).not.toHaveProperty('collapsed');
     expect(result.payload?.chords[0]).not.toHaveProperty('isInverted');
     expect(result.payload?.chords[0]).not.toHaveProperty('fingerprint');
@@ -110,8 +113,8 @@ describe('payload validation migration matrix', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.chords[0].id).toBe('7');
-    expect(result.payload?.chords[0].strings[0]).toEqual({ fret: -1, preferFlat: false });
+    expect(result.payload?.chords[0]?.id).toBe('7');
+    expect(result.payload?.chords[0]?.strings[0]).toEqual({ fret: -1, preferFlat: false });
   });
 
   it('v6->v7 迁移：二维元组琴弦转为对象型', () => {
@@ -138,8 +141,8 @@ describe('payload validation migration matrix', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.version).toBe(7);
-    expect(result.payload?.chords[0].strings).toEqual([
+    expect(result.payload?.version).toBe(CURRENT_PAYLOAD_VERSION);
+    expect(result.payload?.chords[0]?.strings).toEqual([
       { fret: -1, preferFlat: false },
       { fret: 3, preferFlat: true },
       { fret: 0, preferFlat: false },
@@ -154,29 +157,42 @@ describe('payload validation migration matrix', () => {
       songs: [{ id: 's1', title: 'Legacy', key: 'G', lyrics: '', capo: 2, chordMap: {}, lineIds: [] }],
     });
 
-    expect(result.payload?.songs[0].playKey).toBe('G');
+    expect(result.payload?.songs[0]?.playKey).toBe('G');
     expect(result.payload?.songs[0]).not.toHaveProperty('key');
   });
 
-  it('rejects invalid string arrays and oversized capo values', () => {
-    const invalid = validateImportExportPayload({
-      version: 4,
-      groups: [group],
-      chords: [
-        {
-          id: 'bad',
-          chordName: 'C',
-          strings: 'broken',
-          fretCount: 3,
-          fretOffset: 99,
-          groupId: 'g1',
-          tuning: 'STANDARD',
-        },
-      ],
-      songs: [],
-    });
-    expect(invalid.isValid).toBe(false);
+  it('rejects structurally damaged string arrays and repairs out-of-range position values', () => {
+    const base = { version: 4, groups: [group], songs: [] };
+    const baseChord = { id: 'bad', chordName: 'C', fretCount: 3, groupId: 'g1', tuning: 'STANDARD' };
 
+    // 结构门禁：strings 不是弦数组 → 整包拒绝。issue 必须能定位到具体那一条，
+    // 否则「isValid === false」无法归因到哪个缺陷（原先两条缺陷塞进同一输入，正是丢了这个信息）
+    const badStrings = validateImportExportPayload({
+      ...base,
+      chords: [{ ...baseChord, strings: 'broken', fretOffset: 0 }],
+    });
+    expect(badStrings.isValid).toBe(false);
+    expect(badStrings.issues.join('\n')).toContain('chords[0] (bad) 琴弦数组损坏');
+
+    // 值域越界不走结构门禁（见 payload.ts「门禁只做结构判断…清理在 sanitize*Entity 内核」）：
+    // 实体内核按 repair 口径钳制后照常放行。上界闭区间端点 12 原样保留
+    const atUpperBound = validateImportExportPayload({
+      ...base,
+      chords: [{ ...baseChord, strings, fretOffset: 12 }],
+    });
+    expect(atUpperBound.isValid).toBe(true);
+    expect(atUpperBound.payload?.chords[0]?.fretOffset).toBe(12);
+
+    // 上界外一格：13 被钳回 0 —— 与上一例配对，证明这是区间守卫，而非「越界即一律清零」
+    const oversizedOffset = validateImportExportPayload({
+      ...base,
+      chords: [{ ...baseChord, strings, fretOffset: 13 }],
+    });
+    expect(oversizedOffset.isValid).toBe(true);
+    expect(oversizedOffset.payload?.chords[0]?.fretOffset).toBe(0);
+
+    // IDB 启动清洗链路与导入链路共用同一套 repair 内核（sanitizeChordEntity / songRepository）：
+    // 和弦 fretOffset 与歌曲 capo 的越界值同样被钳回 0，而不是让整份数据落不下来
     const sanitized = sanitizePersistedData({
       groups: [group],
       chords: [
@@ -194,8 +210,8 @@ describe('payload validation migration matrix', () => {
       songs: [{ id: 's1', title: 'S', lyrics: '', lineIds: [], playKey: 'C', capo: 99, chordMap: {} }],
     });
 
-    expect(sanitized.chords[0].fretOffset).toBe(0);
-    expect(sanitized.songs[0].capo).toBe(0);
+    expect(sanitized.chords[0]?.fretOffset).toBe(0);
+    expect(sanitized.songs[0]?.capo).toBe(0);
   });
 
   it('deduplicates fingerprints and prunes orphan song references on import', () => {
@@ -223,7 +239,7 @@ describe('payload validation migration matrix', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.songs[0].chordMap).toEqual(new Map());
+    expect(result.payload?.songs[0]?.chordMap).toEqual(new Map());
   });
 
   it('清除失效引用时记录 warnings，避免静默丢数据', () => {
@@ -246,7 +262,7 @@ describe('payload validation migration matrix', () => {
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.payload?.songs[0].chordMap.size).toBe(1);
+    expect(result.payload?.songs[0]?.chordMap.size).toBe(1);
     expect(result.warnings?.some(w => w.includes('引用'))).toBe(true);
   });
 
@@ -312,7 +328,9 @@ describe('payload validation migration matrix', () => {
       songs: [],
     });
     expect(strictResult.isValid).toBe(false);
-    expect(strictResult.issues.length).toBeGreaterThan(0);
+    // 注：原先此处还有 `issues.length > 0`，已删——payload.ts:466 的
+    // `if (issues.length > 0) return { isValid: false, issues }` 使 isValid===false 与 issues 非空
+    // 严格等价（true 分支在同函数末尾），该断言属同义反复
 
     // lenient 模式：跳过损坏和弦，保留有效和弦，不阻断整包
     const lenientResult = validateImportExportPayload(
@@ -408,7 +426,7 @@ describe('payload validation migration matrix', () => {
     });
 
     expect(result.isValid).toBe(true);
-    const slots = result.payload?.songs[0].chordMap.get('l1');
+    const slots = result.payload?.songs[0]?.chordMap.get('l1' as LineId);
     expect(slots?.char.get(0)).toBe('c1');
     expect(slots?.start).toEqual(['c2', 'c1']);
     expect(slots?.end).toEqual(['c2']);
@@ -508,26 +526,10 @@ describe('payload validation migration matrix', () => {
     expect(result.payload?.syncSettings).not.toHaveProperty('path');
   });
 
-  it('旧平铺 webdav / server 同步配置归一化，兼容旧字段名 webdavUseProxy', () => {
-    const webdav = validateImportExportPayload({
-      version: 7,
-      groups: [group],
-      chords: [],
-      songs: [],
-      syncSettings: {
-        syncTarget: 'webdav',
-        webdavServerUrl: 'https://dav.example.com',
-        webdavUsername: 'u',
-        webdavPassword: 'p',
-        // 旧字段名：新字段 webdavUseDefaultProxy 缺失时回退读取
-        webdavUseProxy: true,
-      },
-    });
-    expect(webdav.payload?.syncSettings).toMatchObject({
-      kind: 'webdav',
-      serverUrl: 'https://dav.example.com',
-      useDefaultProxy: true,
-    });
+  it('旧平铺 server 同步配置归一化（webdav 半段的同源覆盖见 coreRegression 的 syncSettings 往返用例）', () => {
+    // 原先此处还有 webdav 半段（syncTarget:'webdav' + webdavUseProxy → useDefaultProxy），已删：
+    // coreRegression.test.ts:39-52 的同源用例用 toEqual 严格断言（连「无多余字段」一并校验），
+    // 强于本处的 toMatchObject 子集匹配，重复覆盖无新增保障
 
     const server = validateImportExportPayload({
       version: 7,

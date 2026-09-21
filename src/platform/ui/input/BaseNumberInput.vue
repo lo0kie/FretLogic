@@ -102,6 +102,7 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { countDecimals } from '@/platform/ui/slider/BaseSlider.logic';
 import { clamp } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
@@ -228,20 +229,6 @@ const NUMBER_INPUT_CONFIG: Record<'sm' | 'md' | 'lg', { wrapperClass: string; bt
 };
 
 const currentConfig = computed(() => NUMBER_INPUT_CONFIG[resolvedSize.value] ?? NUMBER_INPUT_CONFIG.md);
-
-// 健壮的小数位推导：兼容小写/大写科学计数法（如 1e-5 或 1E-5）
-const countDecimals = (n: number): number => {
-  if (!isFinite(n)) return 0;
-  const s = String(n).toLowerCase();
-  if (s.includes('e')) {
-    const [mantissa, expStr] = s.split('e');
-    const exp = parseInt(expStr ?? '0', 10);
-    const mantissaDecimals = mantissa?.includes('.') ? mantissa.split('.')[1]!.length : 0;
-    return Math.max(0, mantissaDecimals - exp);
-  }
-  const dot = s.indexOf('.');
-  return dot === -1 ? 0 : s.length - dot - 1;
-};
 
 const stepDecimals = computed(() => countDecimals(props.step));
 const effectiveDecimals = computed(() => (props.precision != null ? props.precision : stepDecimals.value));

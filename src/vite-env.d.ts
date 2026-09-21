@@ -1,16 +1,16 @@
 /// <reference types="vite/client" />
-import type { ChordNameBinding } from './domains/chord/directives/vChordName.ts';
-import type { ActionCardBinding } from './platform/directives/vActionCard.ts';
-import type { AutoHeightBinding } from './platform/directives/vAutoHeight.ts';
-import type { AutoWidthBinding, AutoWidthModifiers } from './platform/directives/vAutoWidth.ts';
-import type { EdgeFadeBinding, EdgeFadeModifiers } from './platform/directives/vEdgeFade.ts';
-import type { FocusBinding, FocusModifiers } from './platform/directives/vFocus.ts';
-import type { GridNavBinding, GridNavModifiers } from './platform/directives/vGridNav.ts';
-import type { MarqueeBinding, MarqueeModifiers } from './platform/directives/vMarquee.ts';
+import type { ChordNameBinding } from './domains/chord/directives/vChordName';
+import type { ActionCardBinding } from './platform/directives/vActionCard';
+import type { AutoHeightBinding } from './platform/directives/vAutoHeight';
+import type { AutoWidthBinding, AutoWidthModifiers } from './platform/directives/vAutoWidth';
+import type { EdgeFadeBinding, EdgeFadeModifiers } from './platform/directives/vEdgeFade';
+import type { FocusBinding, FocusModifiers } from './platform/directives/vFocus';
+import type { GridNavBinding, GridNavModifiers } from './platform/directives/vGridNav';
+import type { MarqueeBinding, MarqueeModifiers } from './platform/directives/vMarquee';
 import type { ScrollbarBinding, ScrollbarModifiers } from './platform/directives/vScrollbar';
-import type { ScrollIntoViewBinding, ScrollIntoViewModifiers } from './platform/directives/vScrollIntoView.ts';
-import type { TooltipBinding, TooltipModifiers } from './platform/directives/vTooltip.ts';
-import type { WheelScrollBinding, WheelScrollModifiers } from './platform/directives/vWheelScroll.ts';
+import type { ScrollIntoViewBinding, ScrollIntoViewModifiers } from './platform/directives/vScrollIntoView';
+import type { TooltipBinding, TooltipModifiers } from './platform/directives/vTooltip';
+import type { WheelScrollBinding, WheelScrollModifiers } from './platform/directives/vWheelScroll';
 import type { IVWaveDirectiveOptions } from 'v-wave';
 import type { ComponentPublicInstance, VNode } from 'vue';
 

@@ -110,7 +110,8 @@ export const transposeChordEntity = (
     });
     if (newBarres)
       newBarres = newBarres
-        .map(b => ({ ...b, fret: (b.fret + semitones) as BarreEntity['fret'] }))
+        // 与上方弦处理同口径：上界钳到 fretCount，避免移调后横按越出可视品位窗口
+        .map(b => ({ ...b, fret: Math.min(b.fret + semitones, chord.fretCount) as BarreEntity['fret'] }))
         .filter(b => b.fret > 0);
   }
 

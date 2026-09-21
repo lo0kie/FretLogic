@@ -4,7 +4,7 @@
          原挂在顶部设置弹窗的「指板」分组里，与指板隔了一层浮层；收进工作台面板后与指板同屏，
          调完即刻看见指板变化。品数 / 偏移 / 调音三项绑定的是和弦草稿（draftChord），随草稿走
          而非全局偏好——「自动横按」与「符号简写」（自 header 设置弹窗迁入）是全局偏好。 -->
-    <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
+    <BaseForm gap="sm" label-size="2xs" label-tone="muted" size="sm">
       <BaseFormRow label="显示品数">
         <BaseSegmentedControl
           :model-value="editorStore.draftChord.fretCount"

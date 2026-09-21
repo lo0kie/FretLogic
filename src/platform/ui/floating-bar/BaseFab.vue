@@ -34,6 +34,7 @@
 import { computed } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { CONTROL_SQUARE_CLASSES } from '@/platform/ui/controlSizes';
 import { logger } from '@/platform/utils/logger';
 
 import { useFloatingPosition } from './floatingPosition';
@@ -147,7 +148,8 @@ const alignClass = computed(() => {
 });
 
 const FAB_SIZE_MAP: Record<'sm' | 'md' | 'lg', string> = {
-  sm: 'h-[1.9rem] w-[1.9rem]',
+  // sm 与控件标准档同高（浮层内与其他控件并排），引用标尺而非重抄一遍数值
+  sm: CONTROL_SQUARE_CLASSES.md,
   md: 'h-[2.25rem] w-[2.25rem]',
   lg: 'h-[2.6rem] w-[2.6rem]',
 };

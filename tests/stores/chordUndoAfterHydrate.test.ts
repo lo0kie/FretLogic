@@ -6,8 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chordRepository } from '@/domains/chord/model/chordRepository';
 import { useChordStore } from '@/domains/chord/store/chordStore';
-import { createChord } from '@/domains/chord/theory/entityFactories';
+import { createChord, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { nameToSegments, Tuning } from '@/domains/chord/theory/theory';
+import { GroupSortRule } from '@/domains/chord/types';
 
 import type { Chord, Group } from '@/domains/chord/types';
 
@@ -23,9 +24,9 @@ vi.mock('@/domains/chord/model/chordRepository', async importOriginal => {
 });
 
 const testGroup: Group = {
-  id: 'g_test',
+  id: toGroupId('g_test'),
   name: '测试分组',
-  sortRule: 'ROOT_PITCH' as Group['sortRule'],
+  sortRule: GroupSortRule.ROOT_PITCH,
   createdAt: 100,
   updatedAt: 100,
 };

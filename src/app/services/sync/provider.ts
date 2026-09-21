@@ -68,14 +68,6 @@ export interface SyncProvider {
   pushMeta(meta: SyncMeta): Promise<void>;
 }
 
-/**
- * 可选能力：仅仓库型 provider（GitHub / Gitee）具备（拉取远程分支列表）。
- * 调用方用 `'listBranches' in provider` 守卫，不要求所有 provider 实现。
- */
-export interface SyncBranchesProvider extends SyncProvider {
-  listBranches(): Promise<string[]>;
-}
-
 /** 云端心跳校验元数据（最小比对数据）：数据源的 MD5 校验和与最新修改时间戳，独立于数据源分开上传。 */
 export interface SyncMeta {
   md5: string;

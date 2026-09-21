@@ -324,7 +324,8 @@ describe('和弦语料库 · 断言二：渲染回显（规范写法 + 幂等）
     expect(rendered, `${entry.name} 的规范写法`).toBe(canonicalOf(entry));
     // 幂等：解析 → 渲染 → 再解析，AST 不得漂移（不需要手写期望值即可抓同义收敛回归）
     expect(astKeyOfName(rendered), `${entry.name} → ${rendered} 后 AST 漂移`).toBe(astKeyOfName(entry.name));
-    expect(isValidChordName(rendered)).toBe(true);
+    // 注：原先此处还有 `isValidChordName(rendered) === true`，与断言一 :314 对语料库名的合法性校验重复
+    // —— rendered 已断言等于 canonicalOf(entry)（语料库内的规范写法），其合法性由 :314 全量覆盖，已删
   });
 });
 

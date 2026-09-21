@@ -23,13 +23,12 @@ import { computed, onMounted, ref } from 'vue';
 
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
+import { getSyncProviderLabel } from '@/app/services/sync/providerMeta';
 import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
 import { useStorage } from '@/platform/composables/useStorage';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { prefetch } from '@/platform/utils/prefetch';
-
-import type { SyncProviderKind } from '@/platform/types';
 
 /**
  * 首次打开引导：仅当本次是「第一次打开」时弹出一次，询问是否从线上拉取备份数据。
@@ -46,13 +45,7 @@ const { pullFromRemote, isPulling } = useSyncService();
 onMounted(() => prefetch(preloadSyncActions, 'FirstRunPullModal'));
 
 /** 同步方案展示名（首访时 syncTarget 为默认值 gitee，见 GITEE_SYNC_CONFIG 预设） */
-const SYNC_TARGET_LABELS: Record<SyncProviderKind, string> = {
-  server: '线上服务器',
-  github: 'GitHub',
-  gitee: 'Gitee',
-  webdav: 'WebDAV',
-};
-const schemeName = computed(() => SYNC_TARGET_LABELS[settingsStore.syncTarget] || 'Gitee');
+const schemeName = computed(() => getSyncProviderLabel(settingsStore.syncTarget));
 
 const isFirstVisit = !hasVisited.value;
 const isOpen = ref(isFirstVisit);

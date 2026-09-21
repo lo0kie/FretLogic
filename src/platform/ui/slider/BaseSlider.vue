@@ -4,9 +4,7 @@
       currentConfig.wrapperClass,
       vertical ? 'h-auto flex-col rounded-2xl! py-sm' : '',
       tickValues.length && !vertical ? 'h-auto! rounded-2xl! pt-1 pb-5' : '',
-      bordered
-        ? 'border-border-light hover:border-border-base has-focus-visible:border-primary'
-        : 'border-transparent hover:border-transparent has-focus-visible:border-transparent',
+      bordered ? 'border-border-light hover:border-border-base' : 'border-transparent hover:border-transparent',
       { 'cursor-not-allowed opacity-45': disabled, 'w-full': resolvedWidth === '100%' },
     ]"
     :style="wrapperStyle"
@@ -33,8 +31,9 @@
       @blur="commitEdit()"
       @keydown.enter="commitEdit()"
       @keydown.esc="cancelEdit()"
+      data-focusable-outline
       aria-label="输入精确数值"
-      class="h-5 [appearance:textfield] rounded-sm border border-border-light bg-surface-body text-center font-mono text-2xs font-bold text-primary tabular-nums outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      class="h-5 [appearance:textfield] rounded-sm border border-border-light bg-surface-body text-center font-mono text-2xs font-bold text-primary tabular-nums outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       ref="readoutInputRef"
       type="number"
     />
@@ -242,8 +241,9 @@
       @blur="commitEdit()"
       @keydown.enter="commitEdit()"
       @keydown.esc="cancelEdit()"
+      data-focusable-outline
       aria-label="输入精确数值"
-      class="h-5 [appearance:textfield] rounded-sm border border-border-light bg-surface-body text-center font-mono text-2xs font-bold text-primary tabular-nums outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      class="h-5 [appearance:textfield] rounded-sm border border-border-light bg-surface-body text-center font-mono text-2xs font-bold text-primary tabular-nums outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       ref="readoutInputRef"
       type="number"
     />
@@ -554,7 +554,7 @@ const singleDisplayText = computed(() => formatVal(singleValue.value));
 /** 值在轨道上的百分比位置（0-100，已夹紧） */
 const getPct = (val: number) => {
   if (props.max === props.min) return 0;
-  return Math.min(100, Math.max(0, ((val - props.min) / (props.max - props.min)) * 100));
+  return clamp(((val - props.min) / (props.max - props.min)) * 100, 0, 100);
 };
 
 const singleThumbStyle = computed(() => thumbPositionStyle(getPct(singleValue.value), props.vertical));
@@ -651,8 +651,8 @@ const updateValue = (rawNextVal: number | [number, number], options?: { commit?:
     const raw0 = (Array.isArray(rawNextVal) ? rawNextVal[0] : rawNextVal) ?? props.min;
     const raw1 = (Array.isArray(rawNextVal) ? rawNextVal[1] : rawNextVal) ?? props.max;
     // 用另一拇指当前值做夹紧边界，防止两拇指交叉互换身份（对齐 aria-valuemin/max 的约束语义）
-    const c0 = snapToStep(Math.min(rangeValues.value[1], Math.max(props.min, raw0)));
-    const c1 = snapToStep(Math.max(rangeValues.value[0], Math.min(props.max, raw1)));
+    const c0 = snapToStep(clamp(raw0, props.min, rangeValues.value[1]));
+    const c1 = snapToStep(clamp(raw1, rangeValues.value[0], props.max));
     const nextArr: [number, number] = [Math.min(c0, c1), Math.max(c0, c1)];
     modelValue.value = nextArr;
     if (options?.commit) {

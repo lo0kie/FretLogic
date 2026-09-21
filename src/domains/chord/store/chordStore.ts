@@ -13,6 +13,7 @@ import { chordRepository } from '@/domains/chord/model/chordRepository';
 import { buildGroupVariant, createGroup, getGroupSortKey, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { computeChordFingerprint, matchChordSearch, sortChordsByRule } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
+import { registerExitFlusher } from '@/platform/services/lifecycle/exitFlush';
 import { clearPersistFailure, kvRemove, kvSet, reportPersistFailure } from '@/platform/services/storage';
 import { cloneDeep, generateUUID } from '@/platform/utils/common';
 import { PERSIST_DEBOUNCE_MS, STORAGE_KEYS } from '@/platform/utils/constants';
@@ -104,7 +105,7 @@ export const useChordStore = defineStore('chord', () => {
    * 由应用装配层在挂载前 await；水合赋值期间暂停撤销历史（首装载数据不算一次「撤销点」），
    * 且 hydrated 置位先于赋值，防抖写回不会把刚读入的数据原样写回。
    *
-   * 读取失败时**保持写回门禁关闭**（见 catch 内说明）：此时两个列表是空初值，落库会清空整库。
+   * 读取失败时**保持写回门禁关闭**（见 catch 内说明）：此时两个列表是空初值，库状态未知，不做任何写回。
    * 代价是本会话改动不落库——但失败已上报、且 hydrate() 可被重试，优于静默毁库。
    * 唯一的开门出口是 replaceAllData（导入/恢复/云端覆盖）：那条路径的内存数据是用户显式给出的
    * 完整内容，落盘安全，且它正是读失败后用户自救的必经之路。
@@ -116,14 +117,13 @@ export const useChordStore = defineStore('chord', () => {
       snapshot = await chordRepository.load();
     } catch (error) {
       reportPersistFailure('chords', error);
-      // 读取失败时**绝不开启写回门禁**：此刻 groups / savedChordsList 仍是空初值，而 chordRepository.save
-      // 是「同一事务内 clear() + 全量 put」——任何一次落库（含 pagehide 兜底刷盘）都会把 IDB 里的真实库
-      // 覆盖成空或残缺。宁可本会话改动不落库（失败已由 reportPersistFailure 上报、装配层会提示用户），
-      // 也绝不盲写覆盖真实数据。
+      // 读取失败时**绝不开启写回门禁**：此刻 groups / savedChordsList 仍是空初值，内存视图与 IDB 已不一致，
+      // 在「看不全库」的状态下做任何写回都是把残缺视图当成权威事实继续增量落库。宁可本会话改动不落库
+      // （失败已由 reportPersistFailure 上报、装配层会提示用户），也不在库状态未知时盲写。
+      // 注：chordRepository.save 现为「同事务 + 按引用 diff（无 clear()）」，空快照本身不会清空整库；
+      // 关闭门禁是保守不变量，与 save 采用哪种写入协议无关。
       // hydrated 保持 false 的额外好处：hydrate() 的重入判定仍为假，IDB 瞬时故障可重试；
       // 且 suppressPersistWatch 仍为 true，浅 watch 也不会调度写回——两道门同时关着。
-      // 附注：歌曲域无此风险——songRepository.flushChanges 走按条 diff（removedIds / dirtySongs），
-      // 从不 clear()，空列表不会波及库内其他记录；两域协议不同，勿照搬此处结论。
       return;
     }
     hydrated = true;
@@ -380,13 +380,8 @@ export const useChordStore = defineStore('chord', () => {
 
   // 防抖落盘的兜底：页面隐藏 / 关闭（含刷新）前把仍在防抖窗口内的变更强制落盘。
   // 关闭前这一次 IDB 写入在 pagehide 时同步入队，通常能完成；没有它，防抖窗口内的刷新会丢掉最后一次变更。
-  if (typeof window !== 'undefined') {
-    const flushOnHide = () => void persistAll();
-    window.addEventListener('pagehide', flushOnHide);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') flushOnHide();
-    });
-  }
+  // 监听本身收敛在 platform 的退出落盘注册表里（此前 idbKv / chordStore / songStore 各挂了一份）
+  if (typeof window !== 'undefined') registerExitFlusher(() => void persistAll());
 
   /**
    * 将源分组内某和弦名（含全部指法变体）整体移动到目标分组。

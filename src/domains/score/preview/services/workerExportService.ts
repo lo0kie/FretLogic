@@ -7,6 +7,7 @@ import { computeSongKey, getChordName } from '@/domains/chord/theory/theory';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { DEFAULT_SCORE_TITLE, SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { lineCharChord, lineEdgeChords } from '@/domains/score/model/scoreModel';
+import { clamp } from '@/platform/utils/common';
 
 import type { Chord } from '@/domains/chord/types';
 import type {
@@ -188,7 +189,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     showBarre,
     lyricsFontWeight,
     // 导出质量：百分制（30~100）转为 0.3~1 的比例值，由 Worker 侧 clamp 兜底
-    exportQuality: Math.min(1, Math.max(0.3, exportQualityPct / 100)),
+    exportQuality: clamp(exportQualityPct / 100, 0.3, 1),
     // 导出页面边距（标准档位 窄/标准/宽，px）
     pageMargin: pageMarginPx,
     // 导出单页尺寸档位（a4 / a5 / letter）

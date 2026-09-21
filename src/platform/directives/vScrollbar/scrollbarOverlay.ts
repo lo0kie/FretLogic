@@ -6,6 +6,7 @@
  */
 
 import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
+import { clamp } from '@/platform/utils/common';
 import { SCROLL_INTERACTIVE_WINDOW_MS } from '@/platform/utils/constants';
 
 import {
@@ -86,7 +87,7 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
       e.preventDefault();
       const max = Math.max(0, getLength(host, axis, 'scroll') - getLength(host, axis, 'client'));
       const cur = getScrollPos(host, axis);
-      const next = delta === Infinity ? max : delta === -Infinity ? 0 : Math.min(max, Math.max(0, cur + delta));
+      const next = delta === Infinity ? max : delta === -Infinity ? 0 : clamp(cur + delta, 0, max);
       if (axis === 'y') host.scrollTop = next;
       else host.scrollLeft = next;
     });

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { FULL_BACKUP_SELECTION } from '@/app/services/backup/backupSelection';
 import { buildBackupPayload } from '@/app/services/backup/buildBackupPayload';
+import { buildGroupVariant, toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -61,11 +62,12 @@ describe('云同步 Payload 凭据隔离与安全断言', () => {
     type ChordItem = import('@/domains/chord/types').Chord;
     const chordStore = useChordStore();
 
-    chordStore.groups = [{ id: 'g1', name: 'C', sortRule: GroupSortRule.ROOT_PITCH }];
-    // 一条正常和弦，一条琴弦数据损坏的和弦
+    // 一条正常和弦（刻意保持 v7 前的老 chordName 形态、无时间戳——被测的正是清洗层的历史兼容分支），
+    // 一条琴弦数据损坏的和弦
+    chordStore.groups = [buildGroupVariant({ id: 'g1', name: 'C' }, GroupSortRule.ROOT_PITCH)];
     chordStore.savedChordsList = [
       {
-        id: 'valid_c',
+        id: toChordId('valid_c'),
         chordName: 'C',
         strings: [
           { fret: -1, preferFlat: false },
@@ -77,10 +79,10 @@ describe('云同步 Payload 凭据隔离与安全断言', () => {
         ],
         fretCount: 3,
         fretOffset: 0,
-        groupId: 'g1',
+        groupId: toGroupId('g1'),
         tuning: Tuning.STANDARD,
         rootStringIndex: null,
-      },
+      } as unknown as ChordItem,
       {
         id: 'corrupt_c',
         chordName: 'Dm',

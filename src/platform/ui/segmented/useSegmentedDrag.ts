@@ -2,6 +2,7 @@ import { nextTick, onBeforeUnmount, ref } from 'vue';
 
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { hitDragIndexOf } from '@/platform/ui/segmented/BaseSegmentedControl.logic';
+import { clamp } from '@/platform/utils/common';
 
 import type { Ref } from 'vue';
 
@@ -226,7 +227,7 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
       width,
       height,
       y: top,
-      x: Math.min(Math.max(targetX, minX), maxX),
+      x: clamp(targetX, minX, maxX),
     };
   };
 

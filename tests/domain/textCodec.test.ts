@@ -76,6 +76,8 @@ const makeSong = (): { song: Song; byId: Map<ChordId, Chord> } => {
       id: 's_test' as Song['id'],
       title: '测试歌',
       singer: '',
+      originalKey: '',
+      timeSignature: '',
       lyrics: '第一行歌词\n第二行歌词',
       lineIds: ['l1' as Song['lineIds'][number], 'l2' as Song['lineIds'][number]],
       playKey: 'C',
@@ -108,40 +110,10 @@ describe('textCodec 和弦往返', () => {
     expect(result.data.rootStringIndex).toBe(5);
   });
 
-  it('带横按与升降号和弦往返一致', () => {
-    const chord = makeChord(
-      'F#m7b5',
-      [
-        { fret: 2, preferFlat: false },
-        { fret: 4, preferFlat: false },
-        { fret: 2, preferFlat: false },
-        { fret: 2, preferFlat: false },
-        { fret: 2, preferFlat: false },
-        { fret: 2, preferFlat: false },
-      ],
-      [{ fret: 2, fromString: 5, toString: 0, finger: 1 }]
-    );
-    const result = parseChordFromText(serializeChordToText(chord));
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data.name).toBe('F#m7b5');
-    expect(result.data.barres).toEqual([{ fret: 2, fromString: 5, toString: 0, finger: 1 }]);
-  });
-
-  it('乐谱文本粘到和弦解析返回 WRONG_TYPE', () => {
-    const { song, byId } = makeSong();
-    const result = parseChordFromText(serializeSongToText(song, id => byId.get(id)));
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.reason).toBe('WRONG_TYPE');
-  });
-
-  it('垃圾文本返回 UNKNOWN_FORMAT', () => {
-    const result = parseChordFromText('随便写点什么\n不是格式');
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.reason).toBe('UNKNOWN_FORMAT');
-  });
+  // 原此处三条「和弦编解码」用例（横按与升降号往返 / 乐谱文本误贴 WRONG_TYPE / 垃圾文本 UNKNOWN_FORMAT）
+  // 已删：本文件经 @/domains/score/transfer/textCodec 访问的和弦 API 是 chord 域实现的**纯转发**
+  // （见 textCodec.ts:19-26「转发以兼容既有导入路径」），与 chordTextCodec.test.ts 的同名用例
+  // 测的是同一份代码，且后者断言更完整（逐弦 strings / fretOffset / rootStringIndex 一并校验）
 
   it('非法调弦回退默认并补足弦数', () => {
     const text = ['FLCHORD 1', 'NAME:C', 'TUNING:BOGUS', 'FRETS:3', 'OFFSET:0', 'ROOT:5', 'STRINGS:-1,0|3,0'].join(

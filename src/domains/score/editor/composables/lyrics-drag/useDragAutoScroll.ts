@@ -1,6 +1,9 @@
 /**
  * 歌词拖拽自动滚动：指针接近容器边缘时以 rAF 驱动渐加速滚动，拖拽结束即停。
  */
+
+import { clamp } from '@/platform/utils/common';
+
 export function useDragAutoScroll() {
   let autoScrollRafId: number | null = null;
   // O5：rAF 循环每帧读「最近一次上报的指针位置」。旧实现递归闭包捕获首帧的 pointerPos 对象，
@@ -41,18 +44,18 @@ export function useDragAutoScroll() {
 
     if (y < rect.top + SCROLL_THRESHOLD && y > rect.top - 20) {
       const intensity = (rect.top + SCROLL_THRESHOLD - y) / SCROLL_THRESHOLD;
-      scrollDeltaY = -Math.min(MAX_SCROLL_SPEED, Math.max(2, intensity * MAX_SCROLL_SPEED));
+      scrollDeltaY = -clamp(intensity * MAX_SCROLL_SPEED, 2, MAX_SCROLL_SPEED);
     } else if (y > rect.bottom - SCROLL_THRESHOLD && y < rect.bottom + 20) {
       const intensity = (y - (rect.bottom - SCROLL_THRESHOLD)) / SCROLL_THRESHOLD;
-      scrollDeltaY = Math.min(MAX_SCROLL_SPEED, Math.max(2, intensity * MAX_SCROLL_SPEED));
+      scrollDeltaY = clamp(intensity * MAX_SCROLL_SPEED, 2, MAX_SCROLL_SPEED);
     }
 
     if (x < rect.left + SCROLL_THRESHOLD && x > rect.left - 20) {
       const intensity = (rect.left + SCROLL_THRESHOLD - x) / SCROLL_THRESHOLD;
-      scrollDeltaX = -Math.min(MAX_SCROLL_SPEED, Math.max(2, intensity * MAX_SCROLL_SPEED));
+      scrollDeltaX = -clamp(intensity * MAX_SCROLL_SPEED, 2, MAX_SCROLL_SPEED);
     } else if (x > rect.right - SCROLL_THRESHOLD && x < rect.right + 20) {
       const intensity = (x - (rect.right - SCROLL_THRESHOLD)) / SCROLL_THRESHOLD;
-      scrollDeltaX = Math.min(MAX_SCROLL_SPEED, Math.max(2, intensity * MAX_SCROLL_SPEED));
+      scrollDeltaX = clamp(intensity * MAX_SCROLL_SPEED, 2, MAX_SCROLL_SPEED);
     }
 
     const canScrollUp = scrollDeltaY < 0 && container.scrollTop > 0;

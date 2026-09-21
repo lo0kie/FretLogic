@@ -7,18 +7,18 @@ import { reportPersistFailure } from '@/platform/services/storage';
 import { PERSIST_DEBOUNCE_MS, PERSIST_MAX_WAIT_MS } from '@/platform/utils/constants';
 
 import type { SongRepository } from '@/domains/score/model/songRepository';
-import type { Song } from '@/domains/score/types';
+import type { Song, SongId } from '@/domains/score/types';
 
 /** 持久化失败上报键：歌曲按记录分片写入，统一归到同一语义单元去重 */
 const PERSIST_FAILURE_KEY = 'songs';
 
 export interface SongPersistence {
   /** 标记歌曲为脏，纳入下次防抖刷写。 */
-  markSongDirty: (id: string) => void;
+  markSongDirty: (id: SongId) => void;
   /** 标记歌曲为已删除：从脏集合移除并登记删除，刷写时直接移除存储记录。 */
-  markSongRemoved: (id: string) => void;
+  markSongRemoved: (id: SongId) => void;
   /** 标记被删除的歌曲被恢复：从删除集合移除并重新标记脏。 */
-  markSongRestored: (id: string) => void;
+  markSongRestored: (id: SongId) => void;
   /** 标记歌曲索引为脏，下次刷写时重建 id 索引。 */
   markIndexDirty: () => void;
   /**
@@ -40,8 +40,8 @@ export interface SongPersistenceHandles {
  * @param getSongs   取当前完整歌曲列表（刷写索引与脏歌曲时使用）
  */
 export const createSongPersistence = (repository: SongRepository, getSongs: () => Song[]): SongPersistenceHandles => {
-  const dirtySongIds = new Set<string>();
-  const removedSongIds = new Set<string>();
+  const dirtySongIds = new Set<SongId>();
+  const removedSongIds = new Set<SongId>();
   let indexDirty = false;
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -55,10 +55,10 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
       clearTimeout(maxWaitTimer);
       maxWaitTimer = null;
     }
-    const byId = new Map<string, Song>(getSongs().map(s => [s.id, s]));
+    const byId = new Map<SongId, Song>(getSongs().map(s => [s.id, s]));
     const removed = [...removedSongIds];
     const dirtySongs: Song[] = [];
-    const dirtyRemovals: string[] = [];
+    const dirtyRemovals: SongId[] = [];
     for (const id of dirtySongIds) {
       const song = byId.get(id);
       if (song) dirtySongs.push(song);

@@ -202,22 +202,6 @@ const stopScrollListening = () => {
   }
 };
 
-/** 销毁全局单例 tooltip DOM 与关联监听器（用于应用卸载、微前端或测试环境清理）。 */
-export const destroyGlobalTooltip = () => {
-  clearTimers();
-  stopScrollListening();
-  cleanupAutoUpdate?.();
-  cleanupAutoUpdate = null;
-  releaseBoxZ();
-  if (globalBox && globalBox.parentElement) globalBox.parentElement.removeChild(globalBox);
-
-  globalBox = null;
-  globalContent = null;
-  globalArrow = null;
-  currentTargetEl = null;
-  appliedCustomClass = '';
-};
-
 /** 惰性创建全局单例 tooltip DOM（box > content + arrow），并注册交互式悬停监听。 */
 const getOrCreateGlobalBox = (): HTMLDivElement | null => {
   if (!isClient) return null;
@@ -496,7 +480,7 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
         cleanupAutoUpdate?.();
         cleanupAutoUpdate = null;
 
-        // 淡出动画结束后的补设 visibility:hidden：存引用并纳入 clearTimers/destroy 统一清理，
+        // 淡出动画结束后的补设 visibility:hidden：存引用并纳入 clearTimers 统一清理，
         // 避免窗口期（动画播放中）触发元素被卸载后仍留下游离定时器访问模块单例
         hideCleanupTimer = setTimeout(() => {
           hideCleanupTimer = null;

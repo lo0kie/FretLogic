@@ -39,7 +39,7 @@
         <BaseSegmentedControl
           :model-value="activeNavPath"
           :options="NAV_OPTIONS"
-          @change="router.push($event)"
+          @change="router.push(navTarget($event))"
           width="auto"
         />
       </div>
@@ -362,10 +362,16 @@ import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.v
 import { preloadExportActions, useScoreExport } from '@/app/layouts/useScoreExport';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { preloadAudioPlayback, useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
+import {
+  getSyncProviderLabel,
+  getSyncProviderMeta,
+  SYNC_PROVIDER_META,
+  SYNC_PROVIDER_ORDER,
+} from '@/app/services/sync/providerMeta';
 import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
-import { useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
+import { buildScoreQuery, useScoreRouteSync } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { isPreviewRendering } from '@/domains/score/preview/scorePreviewCache';
 import { preloadTextTransferActions, useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
@@ -380,8 +386,6 @@ import HeaderConfigPopover from './HeaderConfigPopover.vue';
 import type { ScoreActiveTab } from '@/domains/score/editor/store/scoreEditorStore';
 import type { PortableSong } from '@/domains/score/transfer/textCodec';
 import type { PasteSongOutcome } from '@/domains/score/transfer/useTextTransfer';
-import type { SyncProviderKind } from '@/platform/types';
-import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
 
@@ -478,6 +482,18 @@ const activeNavPath = computed(() => {
   return matched?.value ?? '';
 });
 
+/**
+ * 顶栏导航目标：进乐谱页时直接落到带参完整 URL（选中乐谱 + 主 Tab），而不是推裸路径。
+ *
+ * 裸路径会让乐谱页的镜像 watcher 立刻回写补参数，产生一次多余导航；更糟的是「已在乐谱页时
+ * 再点乐谱」会先把 URL 打回裸路径（丢掉 id/tab）再由镜像恢复，等于自己把可寻址状态抖掉一次。
+ * URL 形状规则与镜像共用 buildScoreQuery，避免两处各写一遍「edit 省略」逻辑而漂移。
+ */
+const navTarget = (path: string) =>
+  path === ROUTE_PATHS.SCORE && scoreEditor.activeSongId
+    ? { path, query: buildScoreQuery(scoreEditor.activeSongId, scoreEditor.activeTab) }
+    : path;
+
 const NAV_OPTIONS: SegmentOption<string>[] = [
   { label: '和弦', value: ROUTE_PATHS.WORKBENCH, icon: 'layout-grid' },
   { label: '乐谱', value: ROUTE_PATHS.SCORE, icon: 'music' },
@@ -542,21 +558,7 @@ const settingsStore = useSettingsStore();
 const isSyncConfirmOpen = ref(false);
 const isPullConfirmOpen = ref(false);
 
-const SYNC_TARGET_LABELS: Record<SyncProviderKind, string> = {
-  server: '线上服务器',
-  github: 'GitHub',
-  gitee: 'Gitee',
-  webdav: 'WebDAV',
-};
-
-const SYNC_TARGET_ICONS: Record<SyncProviderKind, IconName> = {
-  server: 'server',
-  github: 'github',
-  gitee: 'git-branch',
-  webdav: 'folder-sync',
-};
-
-const currentSchemeName = computed(() => SYNC_TARGET_LABELS[settingsStore.syncTarget] || '线上服务器');
+const currentSchemeName = computed(() => getSyncProviderLabel(settingsStore.syncTarget));
 
 /** 用户确认上传：执行全局同步，成功后关闭确认弹窗 */
 const handleConfirmSync = async () => {
@@ -612,45 +614,16 @@ const syncMenuItems = computed<MenuItem[]>(() => [
   },
   {
     label: '同步目标',
-    icon: SYNC_TARGET_ICONS[settingsStore.syncTarget] || 'server',
-    children: [
-      {
-        label: '线上服务器',
-        icon: 'server',
-        checked: settingsStore.syncTarget === 'server',
-        keepOpen: true,
-        action: () => {
-          settingsStore.syncTarget = 'server';
-        },
+    icon: getSyncProviderMeta(settingsStore.syncTarget).icon,
+    children: SYNC_PROVIDER_ORDER.map(kind => ({
+      label: SYNC_PROVIDER_META[kind].label,
+      icon: SYNC_PROVIDER_META[kind].icon,
+      checked: settingsStore.syncTarget === kind,
+      keepOpen: true,
+      action: () => {
+        settingsStore.syncTarget = kind;
       },
-      {
-        label: 'GitHub',
-        icon: 'github',
-        checked: settingsStore.syncTarget === 'github',
-        keepOpen: true,
-        action: () => {
-          settingsStore.syncTarget = 'github';
-        },
-      },
-      {
-        label: 'Gitee',
-        icon: 'git-branch',
-        checked: settingsStore.syncTarget === 'gitee',
-        keepOpen: true,
-        action: () => {
-          settingsStore.syncTarget = 'gitee';
-        },
-      },
-      {
-        label: 'WebDAV',
-        icon: 'folder-sync',
-        checked: settingsStore.syncTarget === 'webdav',
-        keepOpen: true,
-        action: () => {
-          settingsStore.syncTarget = 'webdav';
-        },
-      },
-    ],
+    })),
   },
   // 同步设置入口放在一级：「同步目标」子菜单只负责切换「推送 / 拉取」使用的云端方案，
   // 真正填写凭据的弹窗不该再藏进子菜单里多绕一层

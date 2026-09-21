@@ -2,13 +2,10 @@
  * 全局常量集中管理。
  * 由原先分散在 src/constants/* 的模块合并而来，按领域分组。
  */
-import { computed, ref } from 'vue';
 
 // ===================== 布局 =====================
-/** 左侧栏宽度（px） */
-export const LEFT_SIDEBAR_WIDTH = ref(344);
-/** 左侧栏宽度（px 字符串形式，供 CSS 绑定） */
-export const LEFT_SIDEBAR_WIDTH_PIXEL = computed(() => `${LEFT_SIDEBAR_WIDTH.value}px`);
+/** 左侧栏宽度（供 CSS 绑定）。固定值：侧栏不可拖拽，全项目没有写入点 */
+export const LEFT_SIDEBAR_WIDTH_PIXEL = '344px';
 
 /** 表单组件预设宽度映射（rem / %） */
 export const FORM_COMPONENT_WIDTH_MAP = {
@@ -66,6 +63,8 @@ export const STORAGE_KEYS = {
   SYNC_MODAL_PROVIDER: 'CHORD_LAB_SYNC_MODAL_PROVIDER',
   /** 已提示过的启动期数据不一致签名（`${target}:${localMd5}:${cloudMd5}`），同组只提示一次 */
   SYNC_MISMATCH_ACK: 'CHORD_LAB_SYNC_MISMATCH_ACK',
+  /** 上次云端比对基准（同步目标 + 本地/云端 md5 + 校验时间），本地未变时跳过重复比对请求 */
+  SYNC_COMPARE_BASELINE: 'CHORD_LAB_SYNC_COMPARE_BASELINE',
 
   // ---- GitHub 同步配置 ----
   /** GitHub 仓库 owner */
@@ -76,7 +75,6 @@ export const STORAGE_KEYS = {
   GH_BRANCH: 'CHORD_LAB_GH_BRANCH',
   /** GitHub 存储路径 */
   GH_PATH: 'CHORD_LAB_GH_PATH',
-  GH_BRANCHES: 'CHORD_LAB_GH_BRANCHES',
 
   // ---- Gitee 同步配置 ----
   /** Gitee 仓库 owner */
@@ -87,7 +85,6 @@ export const STORAGE_KEYS = {
   GE_BRANCH: 'CHORD_LAB_GE_BRANCH',
   /** Gitee 存储路径 */
   GE_PATH: 'CHORD_LAB_GE_PATH',
-  GE_BRANCHES: 'CHORD_LAB_GE_BRANCHES',
 
   // ---- WebDAV 同步配置 ----
   /** WebDAV 服务器地址 */

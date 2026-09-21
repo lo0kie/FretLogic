@@ -10,13 +10,13 @@ import { charKey, chordSlotKey, lineCharChord, parseSlotKey, setLineCharChord } 
 import { touchSong } from './songMeta';
 
 import type { Chord, ChordId } from '@/domains/chord/types';
-import type { ChordLineSlots, LineId, SlotKey, Song } from '@/domains/score/types';
+import type { ChordLineSlots, LineId, SlotKey, Song, SongId } from '@/domains/score/types';
 
 /** 标脏回调：由 store 提供（内部走防抖持久化） */
-export type MarkDirty = (songId: string) => void;
+export type MarkDirty = (songId: SongId) => void;
 
 export interface RemovedChordBinding {
-  songId: string;
+  songId: SongId;
   slotKey: SlotKey;
   chordId: ChordId;
 }
@@ -93,7 +93,7 @@ export const restoreChordBindingsToSongs = (
   markDirty: MarkDirty
 ) => {
   if (bindings.length === 0) return;
-  const changedSongs = new Map<string, Song>();
+  const changedSongs = new Map<SongId, Song>();
   bindings.forEach(({ songId, slotKey, chordId }) => {
     const target = findSong(songId);
     if (!target) return;

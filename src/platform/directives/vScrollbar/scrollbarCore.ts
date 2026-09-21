@@ -8,6 +8,7 @@
  * 故收敛成一个只依赖 geometry + roll 的枢纽；行为模块一律单向依赖本文件，依赖图保持无环。
  */
 
+import { clamp } from '@/platform/utils/common';
 import { SCROLL_INTERACTIVE_WINDOW_MS } from '@/platform/utils/constants';
 import { alignRollCells } from '@/platform/utils/motion';
 
@@ -409,8 +410,8 @@ const buildBubbleDetail = (state: ScrollbarState, metrics: (AxisMetrics | null)[
   const mx = pick('x');
   const maxScrollTop = my ? Math.max(0, my.scrollLength - my.clientLength) : 0;
   const maxScrollLeft = mx ? Math.max(0, mx.scrollLength - mx.clientLength) : 0;
-  const scrollTop = my ? Math.min(Math.max(my.scrollPos, 0), maxScrollTop) : 0;
-  const scrollLeft = mx ? Math.min(Math.max(mx.scrollPos, 0), maxScrollLeft) : 0;
+  const scrollTop = my ? clamp(my.scrollPos, 0, maxScrollTop) : 0;
+  const scrollLeft = mx ? clamp(mx.scrollPos, 0, maxScrollLeft) : 0;
   return {
     scrollTop,
     scrollLeft,

@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // 与主配置同一套严格选项，唯一差别是把 tests/** 纳入检查面（故不能复用主配置的增量缓存）
+    "tsBuildInfoFile": "node_modules/.cache/vue-tsc/tsconfig.tests.tsbuildinfo"
+  },
+  // 主 tsconfig 的 include 刻意不含 tests（见其内注释）；本配置专用于 `pnpm typecheck:tests`，
+  // 让测试夹具的品牌类型/字段缺失/越界索引有人守，而不是等 IDE 提示兜底。
+  "include": [
+    "./src/**/*.ts",
+    "./src/**/*.d.ts",
+    "./src/**/*.tsx",
+    "./src/**/*.vue",
+    "./vite.config.ts",
+    "./scripts/**/*.ts",
+    "./tests/**/*.ts"
+  ]
+}

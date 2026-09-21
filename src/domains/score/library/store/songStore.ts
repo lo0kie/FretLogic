@@ -17,9 +17,11 @@ import {
   removeChordFromSlot,
   swapOrMoveSlotChords,
 } from '@/domains/score/model/chordSlots';
-import { createSong as createSongEntity, lineCharChord } from '@/domains/score/model/scoreModel';
+import { createSong as createSongEntity, lineCharChord, toSongId } from '@/domains/score/model/scoreModel';
 import { songRepository } from '@/domains/score/model/songRepository';
+import { registerExitFlusher } from '@/platform/services/lifecycle/exitFlush';
 import { kvGet, kvSet } from '@/platform/services/storage/idbKv';
+import { clamp } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 import { compareByPinyin } from '@/platform/utils/pinyin';
 
@@ -196,14 +198,14 @@ export const useSongStore = defineStore('song', () => {
     if (index === -1) return;
     lastDeletedSongInfo.value = { song: { ...songs.value[index]! }, index };
     songs.value = songs.value.filter(s => s.id !== id);
-    markSongRemoved(id);
+    markSongRemoved(toSongId(id));
     markIndexDirty();
   };
 
   /** 恢复指定歌曲到列表指定位置（或末尾）并重标记脏落盘。 */
   const restoreSong = (song: Song, index?: number) => {
     if (songs.value.some(s => s.id === song.id)) return;
-    const targetIndex = index !== undefined ? Math.min(Math.max(0, index), songs.value.length) : songs.value.length;
+    const targetIndex = index !== undefined ? clamp(index, 0, songs.value.length) : songs.value.length;
     songs.value.splice(targetIndex, 0, song);
     markSongRestored(song.id);
     markIndexDirty();
@@ -234,7 +236,7 @@ export const useSongStore = defineStore('song', () => {
     if (!target) return;
     if (applySongMeta(target, payload)) {
       touchSong(target);
-      markSongDirty(id);
+      markSongDirty(toSongId(id));
     }
   };
 
@@ -253,7 +255,7 @@ export const useSongStore = defineStore('song', () => {
     bindNewChordToSlot(target.chordMap, slotKey, chordId);
     target.chordMap = new Map(target.chordMap);
     touchSong(target);
-    markSongDirty(songId);
+    markSongDirty(toSongId(songId));
   };
 
   /** 移除歌词字符槽位上的和弦绑定；槽位本为空时跳过。 */
@@ -264,7 +266,7 @@ export const useSongStore = defineStore('song', () => {
     if (!removed) return;
     target.chordMap = new Map(target.chordMap);
     touchSong(target);
-    markSongDirty(songId);
+    markSongDirty(toSongId(songId));
   };
 
   /** 交换或移动两个歌词槽位的和弦绑定（拖拽重排槽位用）。 */
@@ -274,7 +276,7 @@ export const useSongStore = defineStore('song', () => {
     swapOrMoveSlotChords(target.chordMap, sourceKey, targetKey);
     target.chordMap = new Map(target.chordMap);
     touchSong(target);
-    markSongDirty(songId);
+    markSongDirty(toSongId(songId));
   };
 
   /**
@@ -301,7 +303,7 @@ export const useSongStore = defineStore('song', () => {
     target.playKey = transposeChordName(target.playKey || 'C', semitones);
 
     touchSong(target);
-    markSongDirty(songId);
+    markSongDirty(toSongId(songId));
   };
 
   /** 全曲变调夹品位调整（Capo 增减，自动收敛至 [0, 12]） */
@@ -315,23 +317,24 @@ export const useSongStore = defineStore('song', () => {
 
     target.capo = newCapo;
     touchSong(target);
-    markSongDirty(songId);
+    markSongDirty(toSongId(songId));
   };
 
-  /** 用新列表全量覆盖歌曲集合：清理孤立存储记录（含孤儿）、标记全部为脏并立即落盘。 */
+  /** 用新列表全量覆盖歌曲集合：清理孤立存储记录（含孤儿）、标记全部为脏并立即落盘。
+   *  内存替换是**同步段**（调用方多为 fire-and-forget，返回即须生效）；IDB 扫描与落盘才走 await。 */
   const overwriteSongs = async (newSongs: Song[]) => {
     const newIds = new Set<string>(newSongs.map(s => s.id));
+
+    songs.value.forEach(s => {
+      if (!newIds.has(s.id)) markSongRemoved(s.id);
+    });
+    songs.value = [...newSongs];
+    newSongs.forEach(s => markSongDirty(s.id));
+    markIndexDirty();
 
     // 清理存储中不属于新集合的孤立歌曲记录（全量覆盖是罕见操作，扫描一遍可接受）
     const orphanIds = new Set((await songRepository.listSongIds()).filter(id => !newIds.has(id)));
     orphanIds.forEach(id => markSongRemoved(id));
-    songs.value.forEach(s => {
-      if (!newIds.has(s.id)) markSongRemoved(s.id);
-    });
-
-    songs.value = [...newSongs];
-    newSongs.forEach(s => markSongDirty(s.id));
-    markIndexDirty();
     // 全量覆盖后立即落盘，不等防抖
     await flushSongsNow();
   };
@@ -371,13 +374,8 @@ export const useSongStore = defineStore('song', () => {
   const unbindChordIds = (targetIds: Set<string>) => unbindChordIdsFromSongs(songs.value, targetIds, markSongDirty);
 
   // 防抖落盘的兜底：页面隐藏 / 关闭（含刷新）前把仍在防抖窗口内的变更强制落盘（与 chordStore 对齐）
-  if (typeof window !== 'undefined') {
-    const flushOnHide = () => void flushSongsNow();
-    window.addEventListener('pagehide', flushOnHide);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') flushOnHide();
-    });
-  }
+  // 监听本身收敛在 platform 的退出落盘注册表里（此前 idbKv / chordStore / songStore 各挂了一份）
+  if (typeof window !== 'undefined') registerExitFlusher(() => void flushSongsNow());
 
   /** 撤销删除和弦/分组时，把此前被解绑的槽位绑定恢复回去 */
   const restoreChordBindings = (bindings: Parameters<typeof restoreChordBindingsToSongs>[1]) =>

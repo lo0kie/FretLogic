@@ -1,6 +1,7 @@
 // Fret-Logic ESLint 扁平配置（ESLint 10）
-// 扁平目录结构下的架构约定见 .github/CONTRIBUTING.md：跨层依赖方向为单向
-// views/components → composables → stores/services → utils。
+// 垂直领域目录下的架构约定见 .github/CONTRIBUTING.md「架构约定」：依赖方向由下方
+// import/no-restricted-paths 的 6 条 zone 强制——platform ↛ domains/app，domains ↛ app，
+// domain 之间（fretboard/model、chord、score）互不横向依赖。
 import eslint from '@eslint/js';
 import prettier from 'eslint-config-prettier/flat';
 import betterTailwind from 'eslint-plugin-better-tailwindcss';
@@ -217,6 +218,35 @@ export default tseslint.config(
       'import/newline-after-import': 'error',
       // 防御性规则：禁止模块自引用
       'import/no-self-import': 'error',
+      // 模块说明符统一**不写** .ts 后缀（.vue / .css / .scss / .json 例外，见下 pattern）。
+      // 现状曾是混杂的：main.ts 的 11 条指令导入带 .ts，而 vScrollbar 那条不带。
+      //
+      // ⚠️ pattern 必须显式列出 vue/css/scss/json：规则对「未列出的扩展名」一律回落到
+      // defaultConfig（此处 'never'），不列就会反过来要求把 .vue、.json 后缀**删掉**——
+      // 而它们是解析所必需的（Vite 的 resolve.extensions 不含 .vue；@data/*.json 靠后缀定位），
+      // 删了直接构建失败。判断依据在源码 extensions.js:157-159 的 getModifier()。
+      //
+      // ⚠️ checkTypeImports 必须显式打开：规则默认**跳过 `import type`**
+      //（extensions.js:200-204，importKind === 'type' 直接 return），而本仓 type-only 导入
+      // 占比不低（vite-env.d.ts 整文件、sync/provider.ts 的契约类型、BaseIcon 的 IconName 等），
+      // 不开等于只治了一半。
+      //
+      // fix: true 的安全性来自规则自身的护栏：只在 isResolvableWithoutExtension() 为真
+      //（即去掉后缀后仍能解析到同一个文件）时才报告（extensions.js:248-250），
+      // 故 --fix 不可能产出解析不到的路径。若将来觉得模块路径不该被 --fix 自动改写，
+      // 删掉 fix 即退回「只报错 + 给 suggestion」。
+      //
+      // 注：`new URL('.../index.ts', import.meta.url)` 这类 worker 入口不受本规则管辖
+      //（不是 import/export 语句），其 .ts 后缀是 Vite 定位入口所必需，保持原样。
+      'import/extensions': [
+        'error',
+        'never',
+        {
+          pattern: { vue: 'always', css: 'always', scss: 'always', json: 'always' },
+          checkTypeImports: true,
+          fix: true,
+        },
+      ],
       // 禁止跨目录上溯的相对导入（../），统一指向 src 根别名 @/；同目录 ./ 保留。
       // 与 importOrder 的 @/platform|domains|app 分层分组配合，保持依赖流向清晰。
       //

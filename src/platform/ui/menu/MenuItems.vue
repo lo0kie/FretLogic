@@ -102,13 +102,14 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onBeforeUpdate, onMounted, ref, useTemplateRef } from 'vue';
+import { onBeforeUnmount, onBeforeUpdate, ref, useTemplateRef } from 'vue';
 
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 
 import MenuSubmenu from './MenuSubmenu.vue';
 import { getItemStyle, menuRowSizeClass } from './menuRowStyle';
+import { registerSubmenuScrollGuard } from './submenuScrollGuard';
 
 import type { MenuItem } from './types';
 import type { ComponentSize } from '@/platform/types';
@@ -165,6 +166,32 @@ let lastOpenSubmenuIndex = -1;
  *  open+close 不产生任何一次绘制，肉眼无闪烁；窗口过后悬停恢复正常打开 */
 const SCROLL_SUPPRESS_OPEN_MS = 250;
 let lastScrollClosedAt = 0;
+// —— 菜单滚动时收起已展开的级联子面板 ——
+// 滚轮滚动不派发 mouseover/mouseleave：指针停在原地、列表内容滚走，已展开的子面板会跟着触发元素
+// 被 floating-ui 重新定位到视口上/下边缘之外，直到指针移到另一个条目才被互斥关闭。故需在捕获阶段
+// 监听滚动（scroll 不冒泡，但捕获阶段会沿祖先链传播），滚动容器是本层菜单面板（含本层根节点）时收起。
+//
+// 监听收敛在 submenuScrollGuard 的全局登记表里：**只在有子面板展开时登记、收起即注销**。
+// 此前是每个菜单实例各挂一条常驻 window 监听——每个和弦卡片都带一个菜单，监听数随卡片数线性增长，
+// 而绝大多数实例当时并没有展开的子面板，handler 首行即空转返回。
+const rootRef = useTemplateRef<HTMLElement>('rootRef');
+/** 本层「有子面板展开」期间持有的滚动守卫注销函数 */
+let unregisterScrollGuard: (() => void) | null = null;
+
+/** 展开子面板时登记滚动守卫（同一次展开期间幂等，只登记一条） */
+const retainScrollGuard = () => {
+  if (unregisterScrollGuard) return;
+  const root = rootRef.value;
+  if (!root) return;
+  unregisterScrollGuard = registerSubmenuScrollGuard({ root, close: () => closeAllSubmenus(true) });
+};
+
+/** 收起子面板时释放滚动守卫（登记表清空后全局监听随之摘除） */
+const releaseScrollGuard = () => {
+  unregisterScrollGuard?.();
+  unregisterScrollGuard = null;
+};
+
 const handleSubmenuOpen = (index: number) => {
   if (Date.now() - lastScrollClosedAt < SCROLL_SUPPRESS_OPEN_MS) {
     submenuInstances.value[index]?.close();
@@ -174,6 +201,7 @@ const handleSubmenuOpen = (index: number) => {
     submenuInstances.value[lastOpenSubmenuIndex]?.close();
 
   lastOpenSubmenuIndex = index;
+  retainScrollGuard();
 };
 
 /** 收起本层当前展开的子面板，并复位互斥游标；byScroll 时登记抑制窗口起点 */
@@ -181,23 +209,13 @@ const closeAllSubmenus = (byScroll = false) => {
   if (lastOpenSubmenuIndex === -1) return;
   submenuInstances.value[lastOpenSubmenuIndex]?.close();
   lastOpenSubmenuIndex = -1;
+  releaseScrollGuard();
   if (byScroll) lastScrollClosedAt = Date.now();
 };
 
-// —— 菜单滚动时收起已展开的级联子面板 ——
-// 滚轮滚动不派发 mouseover/mouseleave：指针停在原地、列表内容滚走，
-// 已展开的子面板会跟着触发元素被 floating-ui 重新定位到视口上/下边缘之外，
-// 直到指针移到另一个条目才被互斥关闭。故在捕获阶段监听 window 滚动（scroll 不冒泡，
-// 但捕获阶段会沿祖先链传播），滚动容器是本层菜单面板（含本层根节点）时立即收起。
-const rootRef = useTemplateRef<HTMLElement>('rootRef');
-const handleAncestorScroll = (e: Event) => {
-  if (lastOpenSubmenuIndex === -1) return;
-  const root = rootRef.value;
-  if (!root || !(e.target instanceof Node) || !e.target.contains(root)) return;
-  closeAllSubmenus(true);
-};
-onMounted(() => window.addEventListener('scroll', handleAncestorScroll, true));
-onBeforeUnmount(() => window.removeEventListener('scroll', handleAncestorScroll, true));
+// 卸载兜底释放：子面板展开期间组件被卸载（菜单随浮层一起销毁）时 closeAllSubmenus 不会跑到，
+// 守卫会连同已脱离文档的 root 一起留在登记表里
+onBeforeUnmount(releaseScrollGuard);
 
 /** 菜单项点击 / 回车：禁用态忽略，调用 onSelect 回调交给容器处理 */
 const handleItemClick = (item: MenuItem) => {

@@ -4,7 +4,7 @@
  */
 import { ref } from 'vue';
 
-import { resolveHoverLine, snapToSlotInLine } from './dropGeometry.ts';
+import { resolveHoverLine, snapToSlotInLine } from './dropGeometry';
 
 /** 拖拽高亮管理：源槽位与落点槽位的 DOM class 标记 */
 export function useDragHighlight() {

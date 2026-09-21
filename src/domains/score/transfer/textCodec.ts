@@ -63,6 +63,13 @@ const classifyHeader = (header: string): 'UNKNOWN_FORMAT' | 'INVALID_HEADER' => 
 };
 
 /**
+ * capo 归一：收敛为 0–12 的整数。取整是必需的而非锦上添花——下游 `isCapoValue`
+ * 只认可 0..12 的整数，小数 capo 会一路带到品位坐标计算才炸，报错点离输入太远。
+ */
+const normalizeCapo = (capoNum: number): Capo =>
+  Math.round(clamp(Number.isFinite(capoNum) ? capoNum : 0, 0, 12)) as Capo;
+
+/**
  * 智能宽容解析：从普通歌词文本或内嵌 [Chord] 格式提取歌词与槽位。
  * 支持：
  * - 标准内嵌和弦：`[C]故事的小黄花 从出生那年[G]就飘着`
@@ -226,7 +233,7 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
     originalKey,
     timeSignature,
     playKey,
-    capo: clamp(Number.isFinite(capoNum) ? capoNum : 0, 0, 12) as Capo,
+    capo: normalizeCapo(capoNum),
     lyrics: cleanLyricsLines.join('\n'),
     slots,
   };
@@ -411,7 +418,7 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
       originalKey,
       timeSignature,
       playKey,
-      capo: clamp(Number.isFinite(capoNum) ? capoNum : 0, 0, 12) as Capo,
+      capo: normalizeCapo(capoNum),
       lyrics,
       slots,
       needsConfirm: false,

@@ -1,5 +1,5 @@
 /**
- * verify 的静默驱动：串行执行 format:check → lint → typecheck → test → build，
+ * verify 的静默驱动：串行执行 format:check → lint → typecheck → test:coverage → build → build:budget，
  * 正常情况只回显每步的命令行（`$ eslint .` 这种），各工具的详细输出一律不打印；
  * 某步失败时才把它攒下的输出整段回放 —— 否则一次 verify 会滚屏几千行，
  * 真正要看的那几行错误早被刷没了。
@@ -21,8 +21,10 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-/** 步骤顺序：校验全部只读；build:budget 必须排在 build 之后（消费 dist 产物做体积预算） */
-const STEP_NAMES = ['format:check', 'lint', 'typecheck', 'test', 'build', 'build:budget'];
+/** 步骤顺序：校验全部只读；build:budget 必须排在 build 之后（消费 dist 产物做体积预算）。
+ *  测试用 test:coverage 与 CI 同门槛（分层覆盖率不达标即失败），而非只跑用例的 test。
+ *  CI 另有 `pnpm bench` 一步：该脚本自述为信息性输出、恒 exit 0，挂在 pre-push 只是白等，故不纳入。 */
+const STEP_NAMES = ['format:check', 'lint', 'typecheck', 'typecheck:tests', 'test:coverage', 'build', 'build:budget'];
 /** 失败时回放的行数上限：eslint / vitest 的报错动辄上千行，全量打印反而不利于定位 */
 const MAX_REPLAY_LINES = 400;
 

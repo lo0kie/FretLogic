@@ -1,13 +1,13 @@
 /**
- * 云同步服务**状态壳**（对外 API 与拆分前完全一致）：
+ * 云同步服务**状态壳**（只做动态 import 转发与状态持有，不含云访问实现）：
  * - 进行中状态 refs 在 syncState.ts（模块级单例）；
- * - 推拉同步/连接测试/分支获取的实现（provider 注册表、备份载荷构建链）在 syncActions.ts，
+ * - 推拉同步/连接测试的实现（provider 注册表、备份载荷构建链）在 syncActions.ts，
  *   经动态 import 懒加载 —— 只有用户真正触发同步动作时才拉取，不进首屏闭包。
  * - resolvePushCredentialIssue 只读 settingsStore，属轻量预检，留在壳层同步可用。
  */
 import { useSettingsStore } from '@/platform/store/settingsStore';
 
-import { isFetchingBranches, isPulling, isSyncing, isTestingConnection } from './syncState';
+import { isPulling, isSyncing, isTestingConnection } from './syncState';
 
 import type { ImportExportPayload } from '@/app/types';
 import type { SyncProviderKind } from '@/platform/types';
@@ -39,9 +39,9 @@ export const resolvePushCredentialIssue = (target: SyncProviderKind = useSetting
   return null;
 };
 
-/** 云同步服务入口：返回推拉同步、覆盖应用、连接测试、分支获取等动作与各进行中状态 */
+/** 云同步服务入口：返回推拉同步、覆盖应用、连接测试等动作与各进行中状态 */
 export function useSyncService() {
-  // 「按当前同步目标」的两个动作缺省读 settingsStore.syncTarget：原先每次调用都现取一次 store
+  // 按当前同步目标缺省的动作（testConnection）读 settingsStore.syncTarget：原先每次调用都现取一次 store
   // 引用，改为随本 composable（在组件 setup 内调用）取一次，后续调用直接复用。
   const settingsStore = useSettingsStore();
   return {
@@ -55,11 +55,8 @@ export function useSyncService() {
     isPulling,
     applyOverwriteWithCloud: (cloudData: ImportExportPayload) =>
       loadActions().then(m => m.applyOverwriteWithCloud(cloudData)),
-    fetchGithubBranches: (target?: SyncProviderKind) =>
-      loadActions().then(m => m.fetchGithubBranches(target ?? settingsStore.syncTarget)),
     testConnection: (target?: SyncProviderKind) =>
       loadActions().then(m => m.testConnection(target ?? settingsStore.syncTarget)),
     isTestingConnection,
-    isFetchingBranches,
   };
 }

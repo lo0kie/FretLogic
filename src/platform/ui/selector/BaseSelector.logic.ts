@@ -2,8 +2,10 @@
  * BaseSelector 纯逻辑模块：选项字段访问、值比较、尺寸配置与下拉高度计算。
  * 与响应式解耦，键名/比较器等依赖通过工厂参数注入，组件内仅保留状态与事件。
  */
-import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { CONTROL_HEIGHT_CLASSES, CONTROL_HEIGHT_PRESETS } from '@/platform/ui/controlSizes';
+import { clamp } from '@/platform/utils/common';
 
+import type { ControlSize } from '@/platform/ui/controlSizes';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { Component } from 'vue';
 
@@ -33,8 +35,13 @@ export const SELECTOR_CONFIG: Record<'sm' | 'md' | 'lg', { triggerClass: string;
   lg: { triggerClass: `${CONTROL_HEIGHT_CLASSES.lg} px-3.5 text-xs`, itemClass: `${CONTROL_HEIGHT_CLASSES.lg}` },
 };
 
-/** 下拉面板高度估算常量（rem）：行高按尺寸档位、行间距与纵向内边距 */
-export const ITEM_HEIGHT: Record<'sm' | 'md' | 'lg', number> = { sm: 1.6, md: 1.9, lg: 2.3 };
+/** 下拉面板行高（rem）：数值直接由尺寸标尺换算，避免与 CONTROL_HEIGHT_PRESETS 各记一份高度 */
+export const ITEM_HEIGHT: Record<ControlSize, number> = {
+  sm: Number.parseFloat(CONTROL_HEIGHT_PRESETS.sm),
+  md: Number.parseFloat(CONTROL_HEIGHT_PRESETS.md),
+  lg: Number.parseFloat(CONTROL_HEIGHT_PRESETS.lg),
+};
+/** 面板行间距与纵向内边距（rem）：与行高一起构成下拉面板总高 */
 export const GAP_REM = 0.125;
 export const PADDING_REM = 0.375 * 2;
 
@@ -46,7 +53,7 @@ export const calcDropdownMaxHeight = (opts: {
 }): string => {
   const { optionCount, displayItems, size } = opts;
   if (optionCount === 0) return '6rem';
-  const visibleCount = Math.min(Math.max(1, displayItems), optionCount);
+  const visibleCount = clamp(displayItems, 1, optionCount);
   const total = visibleCount * ITEM_HEIGHT[size] + (visibleCount - 1) * GAP_REM + PADDING_REM;
   return `${total}rem`;
 };

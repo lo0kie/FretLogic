@@ -3,17 +3,24 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { toSongId } from '@/domains/score/model/scoreModel';
 import { songRepository } from '@/domains/score/model/songRepository';
 import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 
-import type { Song } from '@/domains/score/types';
+import type { LineId, Song, SongId } from '@/domains/score/types';
+
+/** 夹具窄化：lineId 在源码里是 branded string，测试按字面量书写后集中转换一次（每次调用返回新数组，保持歌曲间引用隔离） */
+const toLineIds = (...values: string[]): LineId[] => values.map(v => v as LineId);
 
 const buildSong = (id: string): Song => ({
-  id,
+  id: toSongId(id),
   title: `Song-${id}`,
+  singer: '',
+  originalKey: '',
+  timeSignature: '',
   lyrics: 'la',
-  lineIds: ['l1'],
+  lineIds: toLineIds('l1'),
   playKey: 'C',
   capo: 0,
   chordMap: new Map(),
@@ -22,7 +29,8 @@ const buildSong = (id: string): Song => ({
   updatedAt: 1,
 });
 
-const seedIds = ['s1', 's2', 's3'];
+/** 夹具窄化：仓储 id 契约为 branded SongId，与 toLineIds 同一形态集中注入 */
+const seedIds: SongId[] = ['s1', 's2', 's3'].map(toSongId);
 
 describe('songStore.reorderSongs 排序不应删除数据', () => {
   beforeEach(async () => {

@@ -121,18 +121,15 @@
                 data-focusable-outline
                 title="点击开关和弦面板"
               >
-                <!-- 瘦槽位作为落点时的轻量绝对定位提示层：只给一圈主题色边框、不铺底色、不遮挡字符 -->
-                <Transition
-                  enter-active-class="transition-[opacity,scale] duration-fast"
-                  enter-from-class="opacity-0 scale-100"
-                  leave-active-class="transition-[opacity,scale] duration-fast"
-                  leave-to-class="opacity-0 scale-100"
-                >
-                  <div
-                    v-if="isSlotDropTarget(item.slotKey)"
-                    class="pointer-events-none absolute inset-[2px] z-3 rounded-[5px] border-2 border-primary transition-all duration-fast"
-                  />
-                </Transition>
+                <!-- 瘦槽位作为落点时的轻量绝对定位提示层：只给一圈主题色边框、不铺底色、不遮挡字符。
+                     过渡改由本元素自身的类切换承担（原外层 <Transition> 每槽位会多实例化 Transition +
+                     BaseTransition 两个组件，纯装饰性提示不值得付组件开销；原 enter/leave 的 scale
+                     两端都是 100，实际只有 opacity 在变，故 transition-property 收敛为 opacity,visibility） -->
+                <div
+                  :class="isSlotDropTarget(item.slotKey) ? 'visible opacity-100' : 'invisible opacity-0'"
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-[2px] z-3 rounded-[5px] border-2 border-primary transition-[opacity,visibility] duration-fast"
+                />
 
                 <div class="chord-display-slot flex w-full flex-1 items-start justify-center" />
                 <span
@@ -181,13 +178,13 @@
             </div>
 
             <ActionButton
-              :aria-hidden="hoveredLineKey !== lineData.lineId"
               :aria-label="deleteLineButtonTitle"
-              :class="hoveredLineKey === lineData.lineId ? 'opacity-100' : 'opacity-0'"
-              :tabindex="hoveredLineKey === lineData.lineId ? 0 : -1"
+              :class="hoveredLineKey === lineData.lineId ? 'opacity-100' : 'opacity-0 focus:opacity-100'"
+              :tabindex="0"
               :title="deleteLineButtonTitle"
               @pointerdown.stop
               @click.stop="deleteLine(lineData)"
+              data-focusable-outline
               icon-only
               class="ml-auto shrink-0 self-center pl-sm text-danger transition-opacity duration-fast"
               icon="trash-2"
@@ -363,10 +360,30 @@ const lineChordSignatures = computed(() => {
   return sigs;
 });
 
-/** 渐进式视口渲染：初始渲染行数与单次扩容行数。超大乐谱首屏挂载仅渲染前 30 行，实现瞬间秒开 */
-const INITIAL_RENDER_LINE_COUNT = 30;
-const RENDER_BATCH_SIZE = 30;
-const renderedLineCount = ref(INITIAL_RENDER_LINE_COUNT);
+// —— 渐进式视口渲染参数 ——
+// 实测：超大乐谱首屏一次性同步挂载固定 30 行时，单个长任务内要创建数百个字符槽 + 数十个指板画布，
+// 主线程被占满约 350ms。故改为「同步挂载最小行数 → 按实测行高补齐到填满视口 → 其余交给滚动哨兵按需扩容」
+// 三段式：首帧只承担最小行数的挂载成本，后续行全部落在后续帧/后续交互里。
+/** 首屏同步挂载的最小行数：只保证首帧一定有内容，不追求填满视口（补齐由 ensureSufficientRenderedLines 完成） */
+const MIN_INITIAL_RENDER_LINE_COUNT = 8;
+/** 单次扩容行数：取小批量以摊平滚动中的单帧挂载成本（大批量会在滚动时制造长任务） */
+const RENDER_BATCH_SIZE = 10;
+/** 视口之外额外预渲染的像素高度：首屏补齐目标，也是滚动预加载的基准窗口 */
+const VIEWPORT_PRELOAD_PX = 400;
+/** 滚动哨兵提前触发距离：必须小于 VIEWPORT_PRELOAD_PX，否则首屏挂载后哨兵立刻命中、白白多扩容一批 */
+const SENTINEL_ROOT_MARGIN_PX = 200;
+/** 滚动兜底扩容阈值：剩余可滚动距离小于该值时立即扩容。故意大于预加载窗口，用于快速拖拽滚动条时不露白 */
+const SCROLL_PRELOAD_THRESHOLD_PX = 800;
+
+const renderedLineCount = ref(MIN_INITIAL_RENDER_LINE_COUNT);
+
+/** 实测单行高度（含行间距）：取首个已渲染行的布局高度。
+ *  行高随字号/和弦行/视口宽度变化，用固定像素估算会在高分屏或大视口下算少行数而露出空白，故实测。 */
+const measureLineRowHeight = (el: HTMLElement): number => {
+  const firstRow = el.querySelector<HTMLElement>('.line-row');
+  const height = firstRow?.getBoundingClientRect().height ?? 0;
+  return height > 0 ? height : 0;
+};
 
 /** 当前视口渲染窗口内的歌词行：只渲染前 renderedLineCount 行，滚动接近当前底部时静默追加渲染 */
 const visibleLines = computed(() => lyricsLinesWithEdges.value.slice(0, renderedLineCount.value));
@@ -396,7 +413,7 @@ const setupSentinelObserver = () => {
     },
     {
       root,
-      rootMargin: '1000px 0px',
+      rootMargin: `${SENTINEL_ROOT_MARGIN_PX}px 0px`,
     }
   );
   sentinelObserver.observe(sentinel);
@@ -417,12 +434,20 @@ watch(
   }
 );
 
-/** 确保首屏已渲染的行数足以产生滚动或填满视口（高分屏或大视口下自动扩容至产生滚动条） */
+/** 确保首屏已渲染的行数足以填满视口（高分屏或大视口下自动补齐），并在不足时按批兜底扩容 */
 const ensureSufficientRenderedLines = async () => {
   await nextTick();
   const el = scoreZoneRef.value;
   if (!el || el.clientHeight === 0) return;
-  while (renderedLineCount.value < lyricsLinesWithEdges.value.length && el.scrollHeight <= el.clientHeight + 1000) {
+  // 按实测行高把渲染窗口补齐到「视口 + 预加载」，避免为填满视口而多挂载一整批行
+  const rowHeight = measureLineRowHeight(el);
+  if (rowHeight > 0) {
+    const needed = Math.ceil((el.clientHeight + VIEWPORT_PRELOAD_PX) / rowHeight);
+    if (needed > renderedLineCount.value) renderedLineCount.value = Math.min(lyricsLinesWithEdges.value.length, needed);
+    await nextTick();
+  }
+  // 兜底：行高估算偏低（超矮行 / 极端窄视口）时继续按批扩容，直到内容真的能滚动
+  while (renderedLineCount.value < lyricsLinesWithEdges.value.length && el.scrollHeight <= el.clientHeight) {
     renderedLineCount.value = Math.min(lyricsLinesWithEdges.value.length, renderedLineCount.value + RENDER_BATCH_SIZE);
     await nextTick();
   }
@@ -441,7 +466,7 @@ const handleScroll = () => {
   const el = scoreZoneRef.value;
   if (!el || renderedLineCount.value >= lyricsLinesWithEdges.value.length) return;
   const remainingScroll = el.scrollHeight - el.scrollTop - el.clientHeight;
-  if (remainingScroll < 1500) expandNextBatch();
+  if (remainingScroll < SCROLL_PRELOAD_THRESHOLD_PX) expandNextBatch();
 };
 
 let isExpandingToBottom = false;
@@ -647,7 +672,7 @@ onActivated(async () => {
   setupSentinelObserver();
   if (lastRenderedSongId !== scoreEditor.activeSongId) {
     lastRenderedSongId = scoreEditor.activeSongId;
-    renderedLineCount.value = INITIAL_RENDER_LINE_COUNT;
+    renderedLineCount.value = MIN_INITIAL_RENDER_LINE_COUNT;
     savedScroll.top = 0;
     savedScroll.left = 0;
     const el = scoreZoneRef.value;
@@ -671,7 +696,7 @@ watch(
     cancelExpandToBottom();
     lastRenderedSongId = newId;
     hoveredLineKey.value = null;
-    renderedLineCount.value = INITIAL_RENDER_LINE_COUNT;
+    renderedLineCount.value = MIN_INITIAL_RENDER_LINE_COUNT;
     savedScroll.top = 0;
     savedScroll.left = 0;
     const el = scoreZoneRef.value;

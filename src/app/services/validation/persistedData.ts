@@ -11,7 +11,7 @@ import {
 import { pruneOrphanChordRefs } from '@/domains/score/model/chordSlots';
 import { sanitizeSongEntity, sanitizeSongs } from '@/domains/score/model/songRepository';
 
-import type { GroupDraft, Timestamped } from '@/domains/chord/model/chordRepository';
+import type { ChordDraft, GroupDraft, Timestamped } from '@/domains/chord/model/chordRepository';
 import type { Group } from '@/domains/chord/types';
 import type { SongDraft } from '@/domains/score/model/songRepository';
 import type { ChordLineSlots, LineId } from '@/domains/score/types';
@@ -22,6 +22,7 @@ export {
   sanitizeChordEntity,
   sanitizeGroupEntity,
   sanitizeSongEntity,
+  type ChordDraft,
   type GroupDraft,
   type SongDraft,
   type Timestamped,

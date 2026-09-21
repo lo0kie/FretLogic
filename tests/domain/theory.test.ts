@@ -41,9 +41,17 @@ describe('theory: 音名格式化', () => {
     expect(formatStringLabel(3, -1, false, 0)).toBe('✕');
   });
 
-  it('升降号偏好影响显示', () => {
-    // 1 弦 1 品 = F（pitch 5，非变化音）应显示 F
+  it('升降号偏好只影响变化音显示，自然音不受影响', () => {
+    // 原用例传的是自然音 F（pitch 5）——preferFlat 在 composeNoteLabel 里只对变化音生效，
+    // 该分支从未被触达。改为在变化音上验证：1 弦 9 品 = C#（pitch 1）
+    const sharp = formatStringLabel(0, 9, false, 0);
+    const flat = formatStringLabel(0, 9, true, 0);
+    expect(sharp).not.toBe(flat); // 偏好确实改变了变化音的写法
+    expect(sharp.endsWith('#')).toBe(true);
+    expect(flat.endsWith('b')).toBe(true);
+    // 自然音不受偏好影响（两条路径输出一致）
     expect(formatStringLabel(0, 1, false, 0)).toBe('F');
+    expect(formatStringLabel(0, 1, true, 0)).toBe('F');
   });
 });
 

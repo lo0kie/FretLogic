@@ -1,17 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createServerSyncProvider } from '@/app/services/sync/serverSyncProvider';
+import { CURRENT_PAYLOAD_VERSION } from '@/app/services/validation/payloadMigrations';
+import { buildGroupVariant } from '@/domains/chord/theory/entityFactories';
+import { GroupSortRule } from '@/domains/chord/types';
+import { CLOUD_SYNC_CONFIG } from '@/platform/utils/constants';
 
 import type { ServerSyncConfig } from '@/app/services/sync/provider';
+import type { ImportExportPayload } from '@/app/types';
 
 const config: ServerSyncConfig = {
   kind: 'server',
   serverUrl: 'https://api.example.com/sync',
 };
 
-const payload = {
+/** version 刻意停留在旧包版本号 4：用例验证校验层会逐级迁移到 CURRENT_PAYLOAD_VERSION */
+const payload: ImportExportPayload = {
   version: 4,
-  groups: [{ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' }],
+  groups: [buildGroupVariant({ id: 'g1', name: 'C' }, GroupSortRule.ROOT_PITCH)],
   chords: [],
   songs: [],
 };
@@ -36,9 +42,9 @@ describe('server sync provider', () => {
 
     expect(result.sha).toBe('etag-123');
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    const headInit = fetchMock.mock.calls[0][1] as RequestInit;
+    const headInit = fetchMock.mock.calls[0]![1] as RequestInit;
     expect(headInit.method).toBe('HEAD');
-    const call = fetchMock.mock.calls[1];
+    const call = fetchMock.mock.calls[1]!;
     // 推送地址在源 URL 上追加校验元数据 query（md5 / updatedAt），供后端 /meta 轻量读取
     const callUrl = new URL(String(call[0]), 'http://placeholder');
     expect(callUrl.pathname).toBe('/sync');
@@ -48,7 +54,9 @@ describe('server sync provider', () => {
     const init = call[1] as RequestInit;
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['If-Match']).toBe('etag-prev');
-    expect((init.headers as Record<string, string>)['X-Environment']).toBeDefined();
+    // 原为 toBeDefined()（弱断言，只要头存在即过）；改为断言取值来源——
+    // MODE 由构建模式决定，引用常量而非写死字面量，避免换环境即噪音红
+    expect((init.headers as Record<string, string>)['X-Environment']).toBe(CLOUD_SYNC_CONFIG.MODE);
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
   });
 
@@ -62,7 +70,8 @@ describe('server sync provider', () => {
     const provider = createServerSyncProvider(config);
     await provider.push(payload);
 
-    const init = fetchMock.mock.calls[1][1] as RequestInit;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const init = fetchMock.mock.calls[1]![1] as RequestInit;
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['If-Match']).toBeUndefined();
   });
@@ -85,22 +94,31 @@ describe('server sync provider', () => {
     const withToken = createServerSyncProvider({ ...config, token: 'srv-token-abc' });
 
     await withToken.push(payload);
-    const pushInit = fetchMock.mock.calls[1][1] as RequestInit;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const pushInit = fetchMock.mock.calls[1]![1] as RequestInit;
     expect(pushInit.method).toBe('POST');
     expect((pushInit.headers as Record<string, string>)['Authorization']).toBe('Bearer srv-token-abc');
 
     fetchMock.mockClear();
     fetchMock.mockResolvedValue(jsonResponse(payload));
     await withToken.pull();
-    const pullInit = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const pullInit = fetchMock.mock.calls[0]![1] as RequestInit;
     expect((pullInit.headers as Record<string, string>)['Authorization']).toBeUndefined();
+
+    // 补 exists()：用例名声称「not on pull/exists」，原版却从未调用它，属名实不符的空缺口
+    fetchMock.mockClear();
+    await withToken.exists();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const existsInit = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect((existsInit.headers as Record<string, string>)['Authorization']).toBeUndefined();
   });
 
   it('pulls and validates remote content', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
     const provider = createServerSyncProvider(config);
     const result = await provider.pull();
-    expect(result.version).toBe(7);
+    expect(result.version).toBe(CURRENT_PAYLOAD_VERSION);
     expect(result.groups).toHaveLength(1);
     expect(result.groups[0]).toMatchObject({ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' });
   });
@@ -112,9 +130,13 @@ describe('server sync provider', () => {
   });
 
   it('checks exists via HEAD', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 200 })));
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
     const provider = createServerSyncProvider(config);
     expect(await provider.exists()).toBe(true);
+    // 用例名声称 "via HEAD"，原版只断返回值、从未验 method——补上
+    // （exists 首选 HEAD，仅遇 405 才回退 GET，见 serverSyncProvider.ts:60-67）
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).method).toBe('HEAD');
   });
 
   it('fetchMeta 读取 /meta 最小元数据，云端无 meta（404）时返回 null', async () => {

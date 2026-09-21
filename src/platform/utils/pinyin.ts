@@ -55,7 +55,7 @@ interface TitleMeta {
 
 const titleMetaMemo = new Map<string, TitleMeta>();
 
-// 开发面板展示：标题记忆表登记为无上限缓存（达到 MEMO_LIMIT 时整体清空重来）
+// 开发面板展示：与 MEMO_LIMIT 同源于同一常量，淘汰策略是「满则整体清空」而非 LRU 逐出
 registerCache({
   name: '拼音排序记忆表',
   limit: MEMO_LIMIT,

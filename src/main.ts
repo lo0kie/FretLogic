@@ -10,21 +10,22 @@ import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useTheme } from '@/platform/composables/useTheme';
+import { setupExitFlush } from '@/platform/services/lifecycle/exitFlush';
 import { setupFocusOutlineRing } from '@/platform/ui/focus-ring/focusRingOverlay';
 import { logger } from '@/platform/utils/logger';
 
-import { vChordName } from './domains/chord/directives/vChordName.ts';
-import { vActionCard } from './platform/directives/vActionCard.ts';
-import { vAutoHeight } from './platform/directives/vAutoHeight.ts';
-import { vAutoWidth } from './platform/directives/vAutoWidth.ts';
-import { vEdgeFade } from './platform/directives/vEdgeFade.ts';
-import { vFocus } from './platform/directives/vFocus.ts';
-import { vGridNav } from './platform/directives/vGridNav.ts';
-import { vMarquee } from './platform/directives/vMarquee.ts';
+import { vChordName } from './domains/chord/directives/vChordName';
+import { vActionCard } from './platform/directives/vActionCard';
+import { vAutoHeight } from './platform/directives/vAutoHeight';
+import { vAutoWidth } from './platform/directives/vAutoWidth';
+import { vEdgeFade } from './platform/directives/vEdgeFade';
+import { vFocus } from './platform/directives/vFocus';
+import { vGridNav } from './platform/directives/vGridNav';
+import { vMarquee } from './platform/directives/vMarquee';
 import { vScrollbar } from './platform/directives/vScrollbar';
-import { vScrollIntoView } from './platform/directives/vScrollIntoView.ts';
-import { vTooltip } from './platform/directives/vTooltip.ts';
-import { vWheelScroll } from './platform/directives/vWheelScroll.ts';
+import { vScrollIntoView } from './platform/directives/vScrollIntoView';
+import { vTooltip } from './platform/directives/vTooltip';
+import { vWheelScroll } from './platform/directives/vWheelScroll';
 
 // AppDBSchema 的 declaration merging 必须在程序内生效（idb 编译期绑定依赖它）；
 // 显式引用一次，防止构建路径裁剪掉这个只有类型声明的模块
@@ -100,6 +101,9 @@ const initApp = async () => {
     initializeEditor();
     // 外扩聚焦环（JS overlay）：CSS 外扩 outline 会被父 overflow:hidden 裁剪，改由顶层跟随环渲染
     setupFocusOutlineRing();
+    // 退出落盘兜底：唯一的那对 pagehide / visibilitychange 监听由平台层持有，各 store 只登记回调。
+    // 幂等（registerExitFlusher 首次登记时也会补挂），这里显式挂接以保持装配层自述
+    setupExitFlush();
     // 启动后非阻塞比对云端数据校验和（dataMd5），不一致时 message 提示引导同步（懒加载，不进首屏闭包）
     // 补 .catch 兜底：避免探测异常（未预期的 promise rejection）在控制台成为 unhandled rejection
     void import('@/app/services/sync/syncActions')

@@ -64,6 +64,19 @@ describe('调式和弦级数推导 (Roman Numerals)', () => {
       expect(getChordDegree('F', 'Am')).toEqual({ roman: 'VI', degree: 6, isDiatonic: true });
       expect(getChordDegree('G', 'Am')).toEqual({ roman: 'VII', degree: 7, isDiatonic: true });
     });
+
+    it('和声小调升七级导音与自然小调七级的区分', () => {
+      // 11 半音是自然小调 VII（G）的等音上方：G# 属升七级导音，不在自然小调音阶内
+      expect(getChordDegree('G#dim', 'Am')).toEqual({ roman: '#vii°', degree: 7, isDiatonic: false });
+      expect(getChordDegree('Bdim', 'Am')).toEqual({ roman: 'ii°', degree: 2, isDiatonic: true });
+    });
+
+    it('斜杠低音级数走本调音阶（自然小调度数表）', () => {
+      // 低音 C 距 A 为小三度：自然小调里是 III 级（大调度数表会错判成 II 级）
+      expect(getChordDegree('Dm/C', 'Am').roman).toBe('iv/3');
+      // 大调路径不受影响：C 大调中 Dm/C 的低音 C 仍是 I 级
+      expect(getChordDegree('Dm/C', 'C').roman).toBe('ii/1');
+    });
   });
 
   describe('扩展与复合性质全覆盖（修复 romanSuffix 静默丢失）', () => {

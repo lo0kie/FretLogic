@@ -1,6 +1,6 @@
 import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
-import { SyncError } from './provider.ts';
+import { SyncError } from './provider';
 import {
   buildSyncCommitMessage,
   createSyncProviderBase,
@@ -8,12 +8,12 @@ import {
   describeApiError,
   extractApiErrorDetail,
   formatApiErrorDetail,
-} from './syncBase.ts';
+} from './syncBase';
 
-import type { GithubSyncConfig, SyncBranchesProvider } from './provider.ts';
+import type { GithubSyncConfig, SyncProvider } from './provider';
 
 /** 创建 GitHub Contents API 同步 provider：远端为单个 base64 信封文件，按分支读写。 */
-export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranchesProvider {
+export function createGithubSyncProvider(config: GithubSyncConfig): SyncProvider {
   const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
   /** 独立校验元数据载体：数据源文件同目录下的 `.meta.json`，启动检测只拉这份最小数据 */
   const metaFileUrl = `${apiUrl}.meta.json`;
@@ -90,20 +90,6 @@ export function createGithubSyncProvider(config: GithubSyncConfig): SyncBranches
       }
       const body = await response.json();
       return { sha: String(body.commit?.sha ?? body.sha ?? '') };
-    },
-    async listBranches(): Promise<string[]> {
-      const response = await request(
-        { method: 'GET' },
-        `https://api.github.com/repos/${config.owner}/${config.repo}/branches?per_page=100`
-      );
-      if (!response.ok)
-        throw new SyncError(
-          'REQUEST_FAILED',
-          `获取分支失败，状态码：${response.status}${await describeApiError(response)}`
-        );
-
-      const branches: { name: string }[] = await response.json();
-      return branches.map(b => b.name).filter(name => !name.startsWith('dependabot/'));
     },
     async fetchMeta() {
       const response = await request({ method: 'GET' }, `${metaFileUrl}?ref=${encodeURIComponent(config.branch)}`);

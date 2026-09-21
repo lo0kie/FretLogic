@@ -1,5 +1,7 @@
 import { toValue } from 'vue';
 
+import { clamp } from '@/platform/utils/common';
+
 import type { MaybeRefOrGetter, Ref } from 'vue';
 
 /** 指板键盘可达性所需的外部依赖：焦点位置、音域边界与三个编辑动作 */
@@ -63,8 +65,8 @@ export function useFretboardKeyboard(deps: FretboardKeyboardDeps) {
 
     const current = focusPoint.value
       ? {
-          stringIndex: Math.min(maxString, Math.max(0, focusPoint.value.stringIndex)),
-          fretIndex: Math.min(maxFret, Math.max(minFret, focusPoint.value.fretIndex)),
+          stringIndex: clamp(focusPoint.value.stringIndex, 0, maxString),
+          fretIndex: clamp(focusPoint.value.fretIndex, minFret, maxFret),
         }
       : defaultFocus();
 

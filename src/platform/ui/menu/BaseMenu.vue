@@ -60,7 +60,8 @@
   </template>
 </template>
 
-<script setup lang="ts">
+<script lang="ts">
+// 双 script 块：imports 整体置于首个块顶部（import/first），跨实例单例声明于模块作用域。
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 import MenuItems from '@/platform/ui/menu/MenuItems.vue';
@@ -73,6 +74,12 @@ import type { MenuItem } from '@/platform/ui/menu/types';
 import type { Placement } from '@floating-ui/dom';
 import type { CSSProperties } from 'vue';
 
+// 模块级互斥：一组菜单同时只允许打开一个（打开新菜单时只关其他菜单，非关闭所有浮层）。
+// 必须放在模块作用域而非 <script setup> 体，否则每个实例各持一份、跨实例互斥失效。
+const mutexCloseRef = ref<((reason?: string) => void) | null>(null);
+</script>
+
+<script setup lang="ts">
 defineOptions({ name: 'BaseMenu', inheritAttrs: false });
 
 const {
@@ -122,10 +129,6 @@ const emit = defineEmits<{
   (e: 'select', item: MenuItem): void;
   (e: 'close'): void;
 }>();
-
-// 模块级互斥：一组菜单同时只允许打开一个（打开新菜单时只关其他菜单，非关闭所有浮层）。
-// 必须放在模块作用域而非 <script setup> 体，否则每个实例各持一份、跨实例互斥失效。
-const mutexCloseRef = ref<((reason?: string) => void) | null>(null);
 
 /** 尺寸 → 类名静态映射：避免模板字符串拼接（Tailwind/扫描器无法识别动态拼接的类） */
 const MENU_SIZE_CLASS: Record<ComponentSize, string> = {

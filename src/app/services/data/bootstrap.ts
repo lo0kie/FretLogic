@@ -13,7 +13,7 @@
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 import { logger } from '@/platform/utils/logger';
 
-import { transcribeLegacyLocalStorage } from './migrateLegacy.ts';
+import { transcribeLegacyLocalStorage } from './migrateLegacy';
 
 /** 启动引导：kv 水合 + 旧存储退役转录（幂等、失败不阻塞） */
 export async function bootstrapDataLayer(): Promise<void> {

@@ -54,16 +54,22 @@ export const createChord = (input: {
   barres?: Chord['barres'];
   /** 编辑既有和弦时传入原 id，否则自动生成 */
   id?: string | null;
-}): Chord => ({
-  id: toChordId(input.id || `c_${generateUUID().slice(0, 10)}`),
-  nameSegments: input.nameSegments,
-  strings: input.strings,
-  fretCount: input.fretCount,
-  fretOffset: (input.fretOffset ?? 0) as FretOffset,
-  groupId: toGroupId(input.groupId),
-  tuning: input.tuning,
-  rootStringIndex: input.rootStringIndex,
-  ...(input.barres !== undefined && input.barres.length > 0 ? { barres: input.barres } : {}),
-  createdAt: Date.now(),
-  updatedAt: Date.now(),
-});
+  /** 时间戳注入点：装配新和弦时缺省取当前时间（两者同一刻，保证 createdAt <= updatedAt） */
+  createdAt?: number;
+  updatedAt?: number;
+}): Chord => {
+  const now = Date.now();
+  return {
+    id: toChordId(input.id || `c_${generateUUID().slice(0, 10)}`),
+    nameSegments: input.nameSegments,
+    strings: input.strings,
+    fretCount: input.fretCount,
+    fretOffset: (input.fretOffset ?? 0) as FretOffset,
+    groupId: toGroupId(input.groupId),
+    tuning: input.tuning,
+    rootStringIndex: input.rootStringIndex,
+    ...(input.barres !== undefined && input.barres.length > 0 ? { barres: input.barres } : {}),
+    createdAt: input.createdAt ?? now,
+    updatedAt: input.updatedAt ?? now,
+  };
+};

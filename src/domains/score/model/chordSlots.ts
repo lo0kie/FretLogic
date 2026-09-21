@@ -16,9 +16,9 @@ import {
   parseSlotKey,
   setLineCharChord,
   setLineEdgeChords,
-} from './scoreModel.ts';
+} from './scoreModel';
 
-import type { ParsedSlotKey } from './scoreModel.ts';
+import type { ParsedSlotKey } from './scoreModel';
 import type { Chord, ChordId } from '@/domains/chord/types';
 import type { ChordLineSlots, LineId, SlotKey, Song } from '@/domains/score/types';
 
@@ -149,7 +149,7 @@ export function swapOrMoveSlotChords(
  */
 function resolveEdgeInsertIndex(index: number, listLength: number, type: 'start' | 'end'): number {
   if (index >= listLength) return type === 'start' ? 0 : listLength;
-  return Math.min(Math.max(index, 0), listLength);
+  return clamp(index, 0, listLength);
 }
 
 /** 向结构化槽位插入和弦：字符槽位直接写入；边和弦槽位按索引插入（占位符目标视为首/末位）。 */

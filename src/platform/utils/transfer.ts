@@ -36,7 +36,7 @@ export const SHARE_LINK_PARAM = 's';
  * URL 本身可到 MB 级，但地址栏可读性、IM 转发与部分客户端的链接截断阈值都远小于此；
  * 超限时宁可明确报错，也不生成一条大概率被截断、打开即失败的链接。
  */
-export const MAX_SHARE_TOKEN_LENGTH = 24000;
+const MAX_SHARE_TOKEN_LENGTH = 24000;
 
 /** 单次 fromCharCode 的字节数：过大数组展开会爆栈，分块转换 */
 const CHAR_CHUNK_SIZE = 0x8000;
@@ -96,7 +96,7 @@ export const encodeShareToken = async (payload: string): Promise<string> => {
  */
 const MAX_SHARE_DECODE_BYTES = 8 * 1024 * 1024;
 
-export const decodeShareToken = async (token: string): Promise<string | null> => {
+const decodeShareToken = async (token: string): Promise<string | null> => {
   const bytes = base64UrlToBytes(token);
   if (!bytes || bytes.length === 0) return null;
   // 长度前置判：原始压缩串异常长直接拒绝（解压炸弹压缩后体积极小，此举为分配内存双保险）
@@ -125,7 +125,7 @@ const SHARE_PARAM_PATTERN = new RegExp(`[?&]${SHARE_LINK_PARAM}=([A-Za-z0-9_-]{$
  * 从任意粘贴内容中提取 token 候选：整串是 token，或串中含分享地址（IM 转发常带前后文字与标点）。
  * 纯字符串判定，不触发压缩库加载；不像 token 时返回 null。
  */
-export const extractShareToken = (raw: string): string | null => {
+const extractShareToken = (raw: string): string | null => {
   const text = raw.trim();
   if (text.length >= MIN_TOKEN_LENGTH && TOKEN_PATTERN.test(text)) return text;
   return SHARE_PARAM_PATTERN.exec(text)?.[1] ?? null;

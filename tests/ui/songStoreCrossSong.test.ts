@@ -1,12 +1,18 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { toChordId } from '@/domains/chord/theory/entityFactories';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import { lineCharChord } from '@/domains/score/model/scoreModel';
+import { charKey, lineCharChord } from '@/domains/score/model/scoreModel';
 import { songRepository } from '@/domains/score/model/songRepository';
 import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
+
+import type { LineId } from '@/domains/score/types';
+
+/** 夹具窄化：lineId 在源码里是 branded string，测试按字面量书写后集中转换一次（每次返回新数组，避免歌谱间共享引用） */
+const toLineIds = (...values: string[]): LineId[] => values.map(v => v as LineId);
 
 /**
  * 复现用户上报的跨乐谱联动 bug：
@@ -37,11 +43,11 @@ describe('歌曲间数据隔离', () => {
     const s1 = store.createSong('S1');
     const s2 = store.createSong('S2');
 
-    store.updateSongMeta(s1.id, { lyrics: '第一行\n第二行', lineIds: ['l1', 'l2'] });
-    store.updateSongMeta(s2.id, { lyrics: '甲行\n乙行', lineIds: ['a1', 'a2'] });
+    store.updateSongMeta(s1.id, { lyrics: '第一行\n第二行', lineIds: toLineIds('l1', 'l2') });
+    store.updateSongMeta(s2.id, { lyrics: '甲行\n乙行', lineIds: toLineIds('a1', 'a2') });
 
     // 给第 2 首摆一个和弦（作为"应被保留"的观测点）
-    store.setCharChord(s2.id, 'line_a1_char_0', 'c1');
+    store.setCharChord(s2.id, charKey('a1', 0), toChordId('c1'));
     const s2ChordMapBefore = new Map(s2.chordMap);
     expect(s2ChordMapBefore.size).toBeGreaterThan(0);
 
@@ -49,7 +55,9 @@ describe('歌曲间数据隔离', () => {
     editor.setActiveSong(s1.id);
     editor.updateLyrics('第一行\n第二行X');
 
-    // 第 2 首的和弦必须原样保留
+    // 第 2 首的和弦必须原样保留——与编辑前的快照比对（原先快照只被喂了一句 size>0、从未参与比对；
+    // 只盯单个槽位测不出「其它槽位被误清」这类部分损伤）
+    expect(s2.chordMap.size).toBe(s2ChordMapBefore.size);
     expect(lineCharChord(s2.chordMap, 'a1', 0)).toBe('c1');
 
     // 触发落盘后，第 2 首在 IDB 里的记录也必须原样保留
@@ -64,11 +72,11 @@ describe('歌曲间数据隔离', () => {
 
     const s1 = store.createSong('S1');
     const s2 = store.createSong('S2');
-    store.updateSongMeta(s1.id, { lyrics: '第一行\n第二行', lineIds: ['l1', 'l2'] });
+    store.updateSongMeta(s1.id, { lyrics: '第一行\n第二行', lineIds: toLineIds('l1', 'l2') });
 
     // 给第 2 首摆和弦并激活，模拟"正在编辑第 1 首时不落盘就切到第 2 首"
-    store.updateSongMeta(s2.id, { lyrics: '甲行\n乙行', lineIds: ['a1', 'a2'] });
-    store.setCharChord(s2.id, 'line_a1_char_0', 'c1');
+    store.updateSongMeta(s2.id, { lyrics: '甲行\n乙行', lineIds: toLineIds('a1', 'a2') });
+    store.setCharChord(s2.id, charKey('a1', 0), toChordId('c1'));
     editor.setActiveSong(s2.id);
 
     // 旧 bug：挂起回调此时若以"当前激活歌曲"为提交对象，会把第 1 首的歌词写进第 2 首，

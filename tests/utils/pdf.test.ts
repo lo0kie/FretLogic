@@ -83,8 +83,11 @@ describe('buildImagePdf 极简 PDF 图像容器生成器', () => {
     }
   });
 
-  it('空页列表：返回最小但仍以 %PDF 开头的文档', () => {
+  it('空页列表：返回最小占位文档（仅头部 + EOF，不生成 xref）', () => {
     const pdf = buildImagePdf([]);
-    expect(toLatin1(pdf).startsWith('%PDF-1.4')).toBe(true);
+    // 契约：空页走 output.ts 的早退分支，直接返回最小占位、不生成对象与 xref 表。
+    // 原断言 startsWith('%PDF-1.4') 恒真（头部是无条件先写的，见单页用例 :33），任何退化都测不出；
+    // 改为锁定精确输出——头部 / 换行 / EOF 任一变化即红
+    expect(toLatin1(pdf)).toBe('%PDF-1.4\n%%EOF');
   });
 });

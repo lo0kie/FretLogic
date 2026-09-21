@@ -1,19 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
-import { matchChordSearch, nameToSegments } from '@/domains/chord/theory/theory';
+import { createChord } from '@/domains/chord/theory/entityFactories';
+import { matchChordSearch, nameToSegments, Tuning } from '@/domains/chord/theory/theory';
 
 import type { Chord } from '@/domains/chord/types';
 
-const createMockChord = (chordName: string): Chord => ({
-  id: `chord-${chordName}`,
-  groupId: 'group-1',
-  chordName,
-  nameSegments: nameToSegments(chordName),
-  fingers: [],
-  barres: [],
-  strings: [0, 0, 0, 0, 0, 0],
-  capo: 0,
-});
+/** 夹具：六根空弦按真实 GuitarStringEntity 形状构造（matchChordSearch 只读 nameSegments，弦模型仅占位） */
+const openStrings = (): Chord['strings'] => [0, 0, 0, 0, 0, 0].map(fret => ({ fret, preferFlat: false }));
+
+const createMockChord = (chordName: string): Chord =>
+  createChord({
+    id: `chord-${chordName}`,
+    nameSegments: nameToSegments(chordName),
+    strings: openStrings(),
+    fretCount: 4,
+    groupId: 'group-1',
+    tuning: Tuning.STANDARD,
+    rootStringIndex: null,
+  });
 
 describe('matchChordSearch - 智能和弦缩写与模糊匹配', () => {
   it('matches standard and shorthand major 7th chord names', () => {

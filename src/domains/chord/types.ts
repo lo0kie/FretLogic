@@ -77,6 +77,14 @@ export interface Chord {
   updatedAt: number;
 }
 
+/**
+ * 和弦草稿：清洗层逐字段修历史记录的中间形态——除时间戳外均已合规。
+ * 与 `GroupDraft`（chordRepository）/ `SongDraft`（songRepository）同构：
+ * `sanitize*Entity` 产出草稿，`fillMissingTimestamps` 才是把草稿落成实体的那一步。
+ * 原先清洗入口直接自称返回 `Chord`，掩盖了「时间戳此刻可能仍缺」这一事实。
+ */
+export type ChordDraft = Omit<Chord, 'createdAt' | 'updatedAt'> & Partial<Pick<Chord, 'createdAt' | 'updatedAt'>>;
+
 interface GroupBase {
   id: GroupId;
   name: string;

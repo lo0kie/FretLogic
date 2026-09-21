@@ -1,6 +1,6 @@
 /**
  * 云同步动作实现（懒加载模块，由 useSyncService 状态壳动态 import）：
- * 基于 Provider（GitHub / WebDAV / Gitee / 服务器）的推拉同步、连接测试与分支列表获取。
+ * 基于 Provider（GitHub / WebDAV / Gitee / 服务器）的推拉同步与连接测试。
  * 推送使用不含凭据的 selection（见 buildBackupPayload），拉取结果走统一清洗层后应用。
  *
  * 独立成模块的原因：provider 注册表、备份载荷构建（buildBackupPayload）整条链只在用户
@@ -21,10 +21,10 @@ import { logger } from '@/platform/utils/logger';
 import { computePayloadMaxUpdatedAt, computePayloadMd5 } from './payloadChecksum';
 import { SyncError } from './provider';
 import { syncProviderRegistry } from './registry';
-import { isFetchingBranches, isPulling, isSyncing, isTestingConnection } from './syncState';
+import { isPulling, isSyncing, isTestingConnection } from './syncState';
 import { resolvePushCredentialIssue } from './useSyncService';
 
-import type { SyncBranchesProvider, SyncConfig, SyncMeta, SyncProvider, SyncProviderKind } from './provider';
+import type { SyncConfig, SyncMeta, SyncProvider, SyncProviderKind } from './provider';
 import type { ProviderFactory } from './registry';
 import type { ImportExportPayload } from '@/app/types';
 import type { Ref } from 'vue';
@@ -188,36 +188,6 @@ export const applyOverwriteWithCloud = (cloudData: ImportExportPayload) => {
   editorStore.resetEditor();
 };
 
-/** 拉取远程分支列表写入 settingsStore（仅支持分支能力的 Provider：GitHub / Gitee） */
-export const fetchGithubBranches = async (target: SyncProviderKind): Promise<boolean> => {
-  const factory = syncProviderRegistry[target];
-  if (!factory.supportsBranches || isFetchingBranches.value) return false;
-  const provider = resolveProvider('获取分支失败', target);
-  if (!provider) return false;
-  const branchesProvider = provider as SyncBranchesProvider;
-  const isGitee = target === 'gitee';
-
-  // T3：先拉取、成功后再替换——失败时不清空用户已选分支，
-  // 否则后续同步会改写到错误远端目标（旧实现在请求前就清空）。
-  const branches = await runCloudAction({
-    busy: isFetchingBranches,
-    loadingText: '正在获取远程分支列表...',
-    errorPrefix: '获取分支失败',
-    run: () => branchesProvider.listBranches(),
-  });
-  if (branches === null) return false;
-
-  if (isGitee) {
-    settingsStore.giteeBranches = branches;
-    if (!branches.includes(settingsStore.giteeBranch)) settingsStore.giteeBranch = branches[0] ?? '';
-  } else {
-    settingsStore.githubBranches = branches;
-    if (!branches.includes(settingsStore.githubBranch)) settingsStore.githubBranch = branches[0] ?? '';
-  }
-  uiStore.message.success(`成功获取 ${branches.length} 个分支`);
-  return true;
-};
-
 /** 测试同步后端的连通性（探测请求，不读写业务数据） */
 export const testConnection = async (target: SyncProviderKind): Promise<boolean> => {
   if (isTestingConnection.value) return false;
@@ -297,6 +267,21 @@ const buildSyncFixAction = (
  *  任一侧数据发生变化（上传/拉取/继续编辑）签名即失效，重新出现不一致时会再次提示。 */
 const acknowledgedMismatch = useStorage<string>(STORAGE_KEYS.SYNC_MISMATCH_ACK, '');
 
+/**
+ * 云端比对基准缓存：本地数据未变且上次已确认云端一致时，跳过本次 fetchMeta 请求，
+ * 直接兑现「已比对过的数据不再发请求」，避免匿名 Gitee API 被 Baidu WAF 限流（实测匿名配额仅数十/小时）。
+ * - 用 localStorage 而非默认 IDB：需跨整页刷新同步可读，否则首次检测常被 IDB 异步水合 race 成「必发一次」。
+ * - 仅在 `localMd5 === remoteMd5`（上次验证云端=本地）且本地未改、未超 TTL 时短路；TTL 到期仍重拉 meta 复核云端是否有他人改动。
+ */
+interface CloudCompareBaseline {
+  target: SyncProviderKind;
+  localMd5: string;
+  remoteMd5: string;
+  checkedAt: number;
+}
+const CLOUD_COMPARE_TTL_MS = 10 * 60 * 1000;
+const compareBaseline = useStorage<CloudCompareBaseline | null>(STORAGE_KEYS.SYNC_COMPARE_BASELINE, null, localStorage);
+
 /** 不一致时以常驻 notice 提示（留痕可回看 + 一键修正），避免 toast 飘走后操作入口消失。
  *  同一签名（同一同步目标 + 同一对本地/云端校验和）只提示一次，已提示过的重启后静默跳过。 */
 const notifyCloudMismatch = (
@@ -317,9 +302,8 @@ const notifyCloudMismatch = (
 };
 
 /**
- * 启动时比对云端与本地数据校验和：优先走独立 meta（只拉最小数据，不下载全量数据源）；
- * 不支持 meta 的 provider（server 单端点）退化为拉全量数据源读 dataMd5 比对。
- * 不一致时结合 dataUpdatedAt 判断「本地 / 云端」哪边更新，以常驻 notice 提示：
+ * 启动时比对云端与本地数据校验和：只拉独立 meta（最小元数据），四种 provider 均支持，不再下载全量数据源。
+ * 不一致时结合 meta.updatedAt 判断「本地 / 云端」哪边更新，以常驻 notice 提示：
  * 本地较新可一键上传、云端较新可一键拉取覆盖，方向不明则引导手动同步（留痕可回看）。
  * 云端无校验数据（旧数据 / 从未上传）时提示先行上传；目标未配置或探测异常则静默跳过。
  */
@@ -336,6 +320,19 @@ export const checkCloudDataChange = async (): Promise<void> => {
     const localMd5 = computePayloadMd5(localPayload);
     const localUpdatedAt = computePayloadMaxUpdatedAt(localPayload);
 
+    // 本地未改且上次已确认云端一致 → 跳过 fetchMeta（已比对过的数据不再发请求）
+    const baseline = compareBaseline.value;
+    if (
+      baseline &&
+      baseline.target === settingsStore.syncTarget &&
+      baseline.localMd5 === localMd5 &&
+      baseline.remoteMd5 === localMd5 &&
+      Date.now() - baseline.checkedAt < CLOUD_COMPARE_TTL_MS
+    ) {
+      logger.debug('sync', '本地数据未变且上次云端比对一致，跳过云端比对请求');
+      return;
+    }
+
     // 四种 provider 均支持独立 meta：只拉最小元数据，避免每次启动下载全量数据源
     const meta = await provider.fetchMeta();
     if (!meta) {
@@ -344,6 +341,13 @@ export const checkCloudDataChange = async (): Promise<void> => {
       });
       return;
     }
+    // 记录本次基准（一致与否都记）：后续「本地未变」时可短路；不一致时 remoteMd5≠localMd5 不会误跳
+    compareBaseline.value = {
+      target: settingsStore.syncTarget,
+      localMd5,
+      remoteMd5: meta.md5,
+      checkedAt: Date.now(),
+    };
     if (localMd5 === meta.md5) return;
     notifyCloudMismatch(localMd5, meta.md5, localUpdatedAt, meta.updatedAt);
   } catch (error) {

@@ -48,6 +48,7 @@ import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
+import { buildScoreQuery } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { injectModalController } from '@/platform/store/useModalController';
@@ -74,6 +75,7 @@ const references = computed<{ song: Song; count: number }[]>(() => {
 const handleOpenSong = (songId: string) => {
   scoreEditor.setActiveSong(songId);
   groupModals.modals.chordReferences = false;
-  router.push(ROUTE_PATHS.SCORE);
+  // 直接落到带参完整 URL：推裸路径会让乐谱页的镜像 watcher 立刻回写补参数，多出一次导航
+  void router.push({ path: ROUTE_PATHS.SCORE, query: buildScoreQuery(songId, scoreEditor.activeTab) });
 };
 </script>
