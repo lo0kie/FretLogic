@@ -43,12 +43,13 @@ describe('useWorkbenchPanelExpanded 持久化协议', () => {
     expect(reloaded.value).toBe(false); // 持久化应保留收起态
   });
 
-  it('展开(true)写入后，读回仍为展开', async () => {
+  it('展开(true)写入后，存储落盘为 expanded 字面量', async () => {
     const expanded = useWorkbenchPanelExpanded('PROBE_EXPANDED_V1', mem);
     expanded.value = true;
     await nextTick();
-    const reloaded = useWorkbenchPanelExpanded('PROBE_EXPANDED_V1', mem);
-    expect(reloaded.value).toBe(true);
+    // 默认值本就是 true（见上一用例 :37），断言「读回为 true」无法区分持久化是否生效——
+    // 整条持久化链路坏掉也照样为绿。改断写入的存储字面量，这才是本模块的持久化契约
+    expect(mem.getItem('PROBE_EXPANDED_V1')).toBe('expanded');
   });
 
   it('兼容历史三态字符串值', () => {

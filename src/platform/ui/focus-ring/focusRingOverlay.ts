@@ -66,6 +66,7 @@
  * 可见区域的裁剪同样吸附到设备像素线，切口也不会带出半透明边。
  */
 import { FLOATING_Z_BASE } from '@/platform/ui/popover/floatingZ';
+import { clamp } from '@/platform/utils/common';
 
 const FOCUSABLE_OUTLINE_SELECTOR = '[data-focusable-outline]';
 /** 环上需要挖孔让位的外凸装饰标记（与目标同层渲染、但几何上骑出目标边界的元素） */
@@ -187,7 +188,7 @@ export function setupFocusOutlineRing(): () => void {
    */
   const roundRectPath = (x: number, y: number, w: number, h: number, r: number) => {
     if (w <= 0 || h <= 0) return;
-    const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+    const rr = clamp(r, 0, Math.min(w / 2, h / 2));
     ctx.moveTo(x + rr, y);
     ctx.arcTo(x + w, y, x + w, y + h, rr);
     ctx.arcTo(x + w, y + h, x, y + h, rr);

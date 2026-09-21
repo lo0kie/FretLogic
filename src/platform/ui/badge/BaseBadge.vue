@@ -34,7 +34,7 @@
         'cursor-pointer hover:opacity-85': isClickable && !disabled,
         'cursor-not-allowed opacity-40': disabled,
         'px-0!': Boolean(width),
-        'group hover:border-tint-danger-75! hover:bg-tint-danger-88! hover:text-danger! focus-visible:border-tint-danger-75! focus-visible:bg-tint-danger-88! focus-visible:text-danger!':
+        'group hover:border-tint-danger-75! hover:bg-tint-danger-88! hover:text-danger! focus-visible:bg-tint-danger-88! focus-visible:text-danger!':
           hoverClose && !disabled,
       },
     ]"

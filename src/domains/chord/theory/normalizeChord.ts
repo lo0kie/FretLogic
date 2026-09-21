@@ -8,7 +8,7 @@ import {
   toFretOffset,
 } from '@/domains/fretboard/model/coordinates';
 
-import type { Chord, ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
+import type { ChordDraft, ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
 import type { BarreEntity, FretOffset, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
 
 /**
@@ -68,9 +68,13 @@ const barresForCompare = (barres: BarreEntity[] | undefined): string =>
  * 覆盖：strings 对象数组 → 二维数组、弦级 isRoot → 单点 rootStringIndex（含有效性校验）、
  * 旧字段（isInverted/fingerprint/chordName）清理、横按合法性过滤、chordName → nameSegments 迁移、
  * extensions 元组塌陷修复（历史坏数据自愈）、旧「性质 + 散装张力音」分片迁移为性质整词形态。
- * @returns 规范化实体与是否发生变更（未变更时原样返回引用，避免无谓的深拷贝/写盘）
+ *
+ * 入参用 `ChordDraft`（时间戳可缺）而非 `Chord`：本函数处理的正是「历史脏记录」，
+ * 时间戳由下游 `fillMissingTimestamps` 补齐，不在此处承诺。泛型保住输入形态——
+ * 传合规 `Chord`（编辑器保存路径）拿回 `Chord`，传 `ChordDraft`（载入清洗路径）拿回 `ChordDraft`。
+ * @returns 规范化结果与是否发生变更（未变更时原样返回引用，避免无谓的深拷贝/写盘）
  */
-export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean } => {
+export const normalizeChord = <T extends ChordDraft>(chord: T): { chord: T; changed: boolean } => {
   const rawChord = chord as unknown as Record<string, unknown>;
   const fretOffset = isFretOffsetValue(rawChord['fretOffset'])
     ? (rawChord['fretOffset'] as FretOffset)
@@ -209,6 +213,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   const changed = dirtyFromCleaning || differsFromInput;
   if (!changed) return { chord, changed: false };
   return {
+    // 展开 T 后只覆盖 T 本就存在的字段（值已归一），结构上仍是 T，故此处窄化安全
     chord: {
       ...chord,
       nameSegments,
@@ -218,7 +223,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
       rootStringIndex,
       strings,
       ...(finalBarres !== undefined ? { barres: finalBarres } : {}),
-    },
+    } as T,
     changed: true,
   };
 };

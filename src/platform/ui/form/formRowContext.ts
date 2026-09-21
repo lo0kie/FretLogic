@@ -6,8 +6,8 @@
 import type { InjectionKey } from 'vue';
 
 export interface FormRowDensityContext {
-  /** 标签亮度：'body' 常规 | 'title' 弱化 */
-  labelTone?: 'body' | 'title';
+  /** 标签亮度：'body' 常规（默认）| 'muted' 次级弱化（让所在分组的标题更突出） */
+  labelTone?: 'body' | 'muted';
   /** 标签列宽（数值补 px）；容器级默认，行内 label-width 可覆盖 */
   labelWidth?: string | number;
   /**

@@ -6,9 +6,11 @@
  * 跨标签页：写入方落盘成功后经 BroadcastChannel 通知，其他标签页回读对齐内存（见下方同步段）。
  *
  * 之所以需要镜像：IndexedDB 只有异步 API，而 vueuse 的 useStorage 要求同步 StorageLike；
- * 既有抽象（60 处调用点）不动，代价是把「小状态」的读写收敛到这一层。
+ * 既有抽象（settingsStore / uiStore 与两个编辑器 store 的所有 useStorage 调用点）不动，
+ * 代价是把「小状态」的读写收敛到这一层。
  */
 import { errors } from '@/platform/services/errors';
+import { registerExitFlusher } from '@/platform/services/lifecycle/exitFlush';
 import { idb } from '@/platform/services/storage/idb';
 import { isPersistBlocked, reportPersistFailure } from '@/platform/services/storage/persistFailure';
 
@@ -159,10 +161,9 @@ export const flushIdbKvOnExit = (): void => {
 };
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', flushIdbKvOnExit);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flushIdbKvOnExit();
-  });
+  // 退出落盘兜底：登记进全局唯一的退出落盘注册表（platform/services/lifecycle/exitFlush.ts），
+  // 不再自行挂 pagehide / visibilitychange（同一关注点此前在三个模块里各挂了一份）
+  registerExitFlusher(flushIdbKvOnExit);
   // 跨标签页同步频道：尽早建立，收到变更通知即回读（Browser 环境不支持时静默降级）
   if (typeof BroadcastChannel !== 'undefined')
     try {

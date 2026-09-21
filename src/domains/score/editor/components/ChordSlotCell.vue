@@ -15,8 +15,6 @@
         // 拖拽落点行内整行空字符槽统一撑开（仅活动落点行触发）：
         // 尺寸与外边距平滑过渡，保证落点边框有充裕高度且行内相对位置不抽动
         'is-drop-widened': !chord && isActiveDropLine,
-        // 聚焦时和弦自身保持外边框（焦点可能落在内部删除钮上，故用 isFocused 状态而非 :focus）
-        [FOCUS_RING_SHADOW_CLASS]: isFocused,
       },
     ]"
     :data-slot-key="slotKey"
@@ -68,18 +66,15 @@
       <!-- 拖拽落点提示：只给一圈主题色边框，不铺底色、不遮挡和弦与字符。
            层级说明：z-[3] 低于操作按钮层 z-card(5)，因拖拽中操作按钮被 isDragActive 抑制为
            opacity-0 + pointer-events-none，且本层自身 pointer-events-none，二者无交互冲突。
-           外层 Transition 负责边框整体出现/消失的透明度过渡 -->
-      <Transition
-        enter-active-class="transition-[opacity,scale] duration-fast"
-        enter-from-class="opacity-0 scale-100"
-        leave-active-class="transition-[opacity,scale] duration-fast"
-        leave-to-class="opacity-0 scale-100"
-      >
-        <div
-          v-if="isDropTarget"
-          class="pointer-events-none absolute inset-[2px] z-3 rounded-[5px] border-2 border-primary transition-all duration-fast"
-        />
-      </Transition>
+           过渡改由本元素自身的类切换承担（原外层 <Transition> 每槽位会多实例化 Transition +
+           BaseTransition 两个组件，纯装饰性提示不值得付组件开销；原 enter/leave 的 scale 两端
+           都是 100，实际只有 opacity 在变，故 transition-property 收敛为 opacity,visibility）。
+           visibility 与 opacity 同过渡：淡出结束后才转 hidden，既不建层叠上下文也不参与命中。 -->
+      <div
+        :class="isDropTarget ? 'visible opacity-100' : 'invisible opacity-0'"
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-[2px] z-3 rounded-[5px] border-2 border-primary transition-[opacity,visibility] duration-fast"
+      />
       <div
         v-if="chord"
         class="inline-fretboard-card relative flex flex-col items-center rounded-sm bg-transparent px-0 py-xs transition-all duration-fast select-none"
@@ -179,8 +174,7 @@ const addButtonEl = useTemplateRef<{ $el: HTMLButtonElement }>('addButtonEl');
 const isActive = computed(() => (isHovered.value || isFocused.value) && !props.isDragActive);
 
 // 拖拽/焦点高亮与过渡常量
-// 聚焦环与拖拽源高亮描边统一引用 tokens 的 --focus-ring 令牌，不再本地各存一份同值字符串
-const FOCUS_RING_SHADOW_CLASS = 'shadow-(--focus-ring)!';
+// 拖拽源高亮描边引用 tokens 的 --focus-ring 令牌（聚焦外环改由 JS 注入的 data-focusable-outline 承担）
 // 落点提示淡入淡出统一使用 duration-fast 令牌（双源统一后 fast=100ms）
 const FAST_TRANSITION_CLASS = 'transition-all duration-fast';
 /** 悬停删除钮的无障碍文本与原生提示 */
@@ -312,7 +306,7 @@ const ariaLabelText = computed(() => {
   min-height: 108px;
 }
 
-/* 聚焦环与拖拽源高亮描边统一引用 tokens 的 --focus-ring 令牌（见 FOCUS_RING_SHADOW_CLASS） */
+/* 拖拽源高亮外边框引用 tokens 的 --focus-ring 令牌；聚焦外环统一由 JS 注入（data-focusable-outline） */
 
 /* 触摸长按等待期的按压反馈：源槽位渐显主色描边并轻微放大，提示即将进入拖拽 */
 .char-box.is-press-arming {
@@ -320,7 +314,7 @@ const ariaLabelText = computed(() => {
   box-shadow: 0 0 0 2px var(--color-primary);
 }
 
-/* 拖拽源槽位高亮外边框（与聚焦环同描边） */
+/* 拖拽源槽位高亮外边框 */
 .char-box.is-dragging-source {
   box-shadow: var(--focus-ring) !important;
 }

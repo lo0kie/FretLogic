@@ -3,8 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sanitizePersistedData } from '@/app/services/validation/persistedData';
 import { useChordStore } from '@/domains/chord/store/chordStore';
+import { buildGroupVariant, toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { Tuning } from '@/domains/chord/theory/theory';
+import { GroupSortRule } from '@/domains/chord/types';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { toSongId } from '@/domains/score/model/scoreModel';
 import { idb } from '@/platform/services/storage/idb';
 import { serializeForStorage } from '@/platform/utils/common';
 
@@ -35,9 +38,10 @@ vi.mock('@/platform/services/storage/idb', async importOriginal => {
   };
 });
 
-const group: Group = { id: 'group-1', name: 'C', sortRule: 'ROOT_PITCH' };
+/** 分组夹具走 src 工厂：GroupId 品牌化与 ROOT_PITCH 判别分支由 buildGroupVariant 保证 */
+const group = buildGroupVariant({ id: 'group-1', name: 'C' }, GroupSortRule.ROOT_PITCH);
 const validChord: Chord = {
-  id: 'chord-1',
+  id: toChordId('chord-1'),
   nameSegments: { root: ['C', 0] },
   strings: [
     { fret: -1, preferFlat: false },
@@ -49,10 +53,16 @@ const validChord: Chord = {
   ],
   fretCount: 3,
   fretOffset: 0,
-  groupId: 'group-1',
+  groupId: toGroupId('group-1'),
   tuning: Tuning.STANDARD,
   rootStringIndex: 4,
+  // 0 = 仓库既有的「时间戳缺失」哨兵值（见 buildGroupVariant），由清洗层识别并递增补全
+  createdAt: 0,
+  updatedAt: 0,
 };
+
+/** 故意构造的落盘脏数据（琴弦写成字符串）：经 as unknown as Chord 才能进 IDB mock 的记录类型 */
+const brokenStoredChord = { ...validChord, id: 'bad', strings: 'broken' } as unknown as Chord;
 
 describe('sanitizePersistedData', () => {
   it('removes invalid persisted chords and prunes orphan song references', () => {
@@ -77,10 +87,10 @@ describe('sanitizePersistedData', () => {
 
     expect(result.groups).toHaveLength(1);
     expect(result.chords).toHaveLength(1);
-    expect(result.chords[0].id).toBe('chord-1');
-    expect(result.chords[0].strings).toEqual(validChord.strings);
-    expect(result.songs[0].chordMap.size).toBe(1);
-    expect(result.songs[0].chordMap.get('line-1' as LineId)).toEqual({
+    expect(result.chords[0]!.id).toBe('chord-1');
+    expect(result.chords[0]!.strings).toEqual(validChord.strings);
+    expect(result.songs[0]?.chordMap.size).toBe(1);
+    expect(result.songs[0]?.chordMap.get('line-1' as LineId)).toEqual({
       char: new Map([[0, 'chord-1']]),
       start: [],
       end: [],
@@ -88,8 +98,19 @@ describe('sanitizePersistedData', () => {
   });
 
   it('deduplicates identical fingerprints within one group', () => {
-    const result = sanitizePersistedData({ groups: [group], chords: [validChord, { ...validChord }] });
+    // 指纹以 groupId 打头、不含 id：同组同指法即使 id 不同也应合并，且保留先出现的那条
+    const sameShapeOtherId: Chord = { ...validChord, id: toChordId('chord-2') };
+    const result = sanitizePersistedData({ groups: [group], chords: [validChord, sameShapeOtherId] });
     expect(result.chords).toHaveLength(1);
+    expect(result.chords[0]?.id).toBe(validChord.id);
+  });
+
+  it('does not merge identical shapes across different groups', () => {
+    const group2 = buildGroupVariant({ id: 'group-2', name: 'G' }, GroupSortRule.ROOT_PITCH);
+    const otherGroupChord: Chord = { ...validChord, id: toChordId('chord-2'), groupId: toGroupId('group-2') };
+    const result = sanitizePersistedData({ groups: [group, group2], chords: [validChord, otherGroupChord] });
+    // 指纹打头是 groupId：跨组同指法互不判重
+    expect(result.chords).toHaveLength(2);
   });
 
   it('preserves score chord bindings when loading a song without a chord library snapshot', () => {
@@ -106,8 +127,8 @@ describe('sanitizePersistedData', () => {
 
     const result = sanitizePersistedData({ groups: [], chords: null, songs: [song] });
 
-    expect(result.songs[0].chordMap.size).toBe(1);
-    expect(result.songs[0].chordMap.get('line-1' as LineId)).toEqual({
+    expect(result.songs[0]?.chordMap.size).toBe(1);
+    expect(result.songs[0]?.chordMap.get('line-1' as LineId)).toEqual({
       char: new Map([[0, 'chord-1']]),
       start: [],
       end: [],
@@ -150,25 +171,31 @@ describe('sanitizePersistedData', () => {
     const result = sanitizePersistedData({ groups: [group], chords: [validChord, secondChord] });
 
     expect(result.chords).toHaveLength(2);
-    expect(result.chords[0].createdAt!).toBeLessThan(result.chords[1].createdAt!);
+    expect(result.chords[0]!.createdAt!).toBeLessThan(result.chords[1]!.createdAt!);
   });
 
   it('乐谱缺失时间戳时按数组顺序递增补全', () => {
     const buildSong = (id: string): Song => ({
-      id,
+      id: toSongId(id),
       title: `Song-${id}`,
+      singer: '',
+      originalKey: '',
+      timeSignature: '',
       lyrics: '',
       lineIds: [],
       playKey: 'C',
       capo: 0,
-      chordMap: {},
+      chordMap: new Map(),
       version: 1,
+      // 同上：0 表示时间戳缺失，交给清洗层递增补全
+      createdAt: 0,
+      updatedAt: 0,
     });
 
     const result = sanitizePersistedData({ groups: [], chords: [], songs: [buildSong('s1'), buildSong('s2')] });
 
     expect(result.songs).toHaveLength(2);
-    expect(result.songs[0].createdAt!).toBeLessThan(result.songs[1].createdAt!);
+    expect(result.songs[0]!.createdAt!).toBeLessThan(result.songs[1]!.createdAt!);
   });
 
   it('已有时间戳保持不变，updatedAt 缺失时回退为 createdAt', () => {
@@ -181,9 +208,11 @@ describe('sanitizePersistedData', () => {
       songs: [],
     });
 
-    expect(result.groups[0].updatedAt).toBe(result.groups[0].createdAt);
-    expect(result.groups[1].createdAt).toBe(1000);
-    expect(result.groups[1].updatedAt).toBe(2000);
+    // 补出来的必须是真实时间戳：只比「两者相等」在两个值都是 undefined 时也成立（同义反复）
+    expect(result.groups[0]?.createdAt).toBeGreaterThan(0);
+    expect(result.groups[0]?.updatedAt).toBe(result.groups[0]?.createdAt);
+    expect(result.groups[1]?.createdAt).toBe(1000);
+    expect(result.groups[1]?.updatedAt).toBe(2000);
   });
 
   it('非法时间戳视为缺失并参与递增补全', () => {
@@ -194,8 +223,9 @@ describe('sanitizePersistedData', () => {
 
     const result = sanitizePersistedData({ groups: rawGroups, chords: [], songs: [] });
 
-    expect(Number.isFinite(result.groups[0].createdAt!)).toBe(true);
-    expect(result.groups[1].createdAt!).toBeGreaterThan(result.groups[0].createdAt!);
+    expect(result.groups).toHaveLength(2);
+    expect(Number.isFinite(result.groups[0]!.createdAt)).toBe(true);
+    expect(result.groups[1]!.createdAt).toBeGreaterThan(result.groups[0]!.createdAt);
   });
 
   it('chordMap 序列化往返：嵌套 Map 落盘为对象，读回还原为嵌套 Map', () => {
@@ -216,8 +246,8 @@ describe('sanitizePersistedData', () => {
 
     // 读回：普通对象还原为嵌套 Map
     const result = sanitizePersistedData({ songs: [stored] });
-    expect(result.songs[0].chordMap).toBeInstanceOf(Map);
-    expect(result.songs[0].chordMap.get('line-1' as LineId)?.char.get(0)).toBe('chord-1');
+    expect(result.songs[0]?.chordMap).toBeInstanceOf(Map);
+    expect(result.songs[0]?.chordMap.get('line-1' as LineId)?.char.get(0)).toBe('chord-1');
   });
 
   it('迁移旧版和弦顶层 capo -> fretOffset：合法旧值 2 保留为 fretOffset 2 且不再含 capo 字段', () => {
@@ -241,7 +271,7 @@ describe('sanitizePersistedData', () => {
 
     const result = sanitizePersistedData({ groups: [group], chords: [legacyChord], songs: [] });
 
-    expect(result.chords[0].fretOffset).toBe(2);
+    expect(result.chords[0]?.fretOffset).toBe(2);
     expect(result.chords[0]).not.toHaveProperty('capo');
   });
 });
@@ -257,17 +287,15 @@ describe('store startup sanitization', () => {
     // 脏数据从 IDB 层进入：真实链路 = idb.getAll → chordRepository.load（sanitizeChordLibrary
     // 清洗+去重）→ chordStore.hydrate。mock 掉 load 会连清洗层一起 mock 掉（见文件头说明）
     vi.mocked(idb.getAll).mockImplementation(async (store: string) =>
-      store === 'groups'
-        ? [group]
-        : store === 'chords'
-          ? [validChord, { ...validChord, id: 'bad', strings: 'broken' }]
-          : []
+      store === 'groups' ? [group] : store === 'chords' ? [validChord, brokenStoredChord] : []
     );
     setActivePinia(createPinia());
     const chordStore = useChordStore();
     await chordStore.hydrate();
 
+    // 幸存者必须是合法那条：脏记录（strings 写成字符串）被丢弃，而非数量对但内容错
     expect(chordStore.savedChordsList).toHaveLength(1);
+    expect(chordStore.savedChordsList[0]?.id).toBe(validChord.id);
   });
 
   it('cleans malformed song data during hydrate before exposing it', async () => {
@@ -292,10 +320,10 @@ describe('store startup sanitization', () => {
     await songStore.hydrate();
 
     expect(songStore.songs).toHaveLength(1);
-    expect(songStore.songs[0].capo).toBe(0);
-    expect(songStore.songs[0].lineIds).toEqual(['line-1']);
-    expect(songStore.songs[0].chordMap.size).toBe(1);
-    expect(songStore.songs[0].chordMap.get('line-1' as LineId)).toEqual({
+    expect(songStore.songs[0]!.capo).toBe(0);
+    expect(songStore.songs[0]!.lineIds).toEqual(['line-1']);
+    expect(songStore.songs[0]!.chordMap.size).toBe(1);
+    expect(songStore.songs[0]!.chordMap.get('line-1' as LineId)).toEqual({
       char: new Map([[0, 'chord-1']]),
       start: [],
       end: [],

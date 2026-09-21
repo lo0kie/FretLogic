@@ -4,44 +4,13 @@ import { validateImportExportPayload } from '@/app/services/validation/payload';
 import { analyzeChordGraph } from '@/domains/chord/theory/chordEngine';
 import { computeSongKey } from '@/domains/chord/theory/theory';
 
-const legacyPayload = {
-  chords: [
-    {
-      id: 1,
-      chordName: ' C ',
-      strings: [
-        { fret: -1, preferFlat: false },
-        { fret: 3, preferFlat: false },
-        { fret: 2, preferFlat: false },
-        { fret: 0, preferFlat: false },
-        { fret: 1, preferFlat: false },
-        { fret: 0, preferFlat: false },
-      ],
-      fretCount: 3,
-      fretOffset: 0,
-      groupId: 'g1',
-      tuning: 'STANDARD',
-    },
-  ],
-  songs: [{ id: 's1', title: 'Legacy', key: 'G', lyrics: '', capo: 2, chordMap: {}, lineIds: [] }],
-};
+// 原先此处有 legacyPayload 夹具与 'migrates legacy string objects and song keys' 用例，一并删除：
+// 该用例与 payloadValidation.test.ts 的两条同源用例重复且更弱——
+//   · v2 迁移（对象数组 strings + 数字 id → 字符串 id）：payloadValidation.test.ts:92-118
+//   · v3 迁移（song.key → playKey）：payloadValidation.test.ts:152-162
+// 两者走同一个 validateImportExportPayload，重复覆盖无新增保障
 
 describe('backup payload migration', () => {
-  it('migrates legacy string objects and song keys', () => {
-    const result = validateImportExportPayload({
-      version: 2,
-      groups: [{ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' }],
-      ...legacyPayload,
-    });
-
-    expect(result.isValid).toBe(true);
-    expect(result.payload?.version).toBe(7);
-    expect(result.payload?.chords[0].id).toBe('1');
-    expect(result.payload?.chords[0].strings[0]).toEqual({ fret: -1, preferFlat: false });
-    expect(result.payload?.songs[0].playKey).toBe('G');
-    expect(result.payload?.songs[0]).not.toHaveProperty('key');
-  });
-
   it('syncSettings 随备份往返：判别联合结构，合法字段保留，非法字段丢弃', () => {
     const base = {
       version: 5,

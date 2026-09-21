@@ -77,7 +77,7 @@
               />
 
               <p class="form-hint m-0">
-                提示：数据同步至 Gitee 仓库 look1e/fret-logic 的 backup/chords.json。需先在 Gitee 「私人令牌」页创建
+                提示：数据同步至 Gitee 仓库 {{ giteeTarget }}。需先在 Gitee 「私人令牌」页创建
                 Token；私有仓库拉取同样需要 Token。
               </p>
               <p class="form-hint m-0">
@@ -182,9 +182,11 @@ import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
+import { SYNC_PROVIDER_META, SYNC_PROVIDER_ORDER } from '@/app/services/sync/providerMeta';
 import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
+import { GITEE_SYNC_CONFIG } from '@/platform/utils/constants';
 import { prefetch } from '@/platform/utils/prefetch';
 
 import type { SyncProviderKind } from '@/platform/types';
@@ -204,6 +206,14 @@ const backupModals = useBackupModals();
 // 弹窗内方案选择器：独立持久化（不联动全局 syncTarget，仅记录弹窗当前查看/操作的方案）
 const selectedProvider = toRef(uiStore, 'syncModalProvider');
 
+/** Gitee 实际落点（供提示文案插值）：留空回落预设，与 registry.resolveConfig 同口径 */
+const giteeTarget = computed(() => {
+  const owner = settingsStore.giteeOwner.trim() || GITEE_SYNC_CONFIG.DEFAULT_OWNER;
+  const repo = settingsStore.giteeRepo.trim() || GITEE_SYNC_CONFIG.DEFAULT_REPO;
+  const path = settingsStore.giteePath.trim() || GITEE_SYNC_CONFIG.DEFAULT_PATH;
+  return `${owner}/${repo} 的 ${path}`;
+});
+
 /** 用户点击"同步"：按当前选中的方案推送本地数据，成功后关闭弹窗 */
 const handleSyncClick = async () => {
   const ok = await triggerGlobalSync(selectedProvider.value);
@@ -219,12 +229,11 @@ const handlePullClick = async () => {
   }
 };
 
-const providerOptions: BaseSelectorOption<SyncProviderKind>[] = [
-  { label: '线上服务器', value: 'server', icon: 'server' },
-  { label: 'GitHub', value: 'github', icon: 'github' },
-  { label: 'Gitee', value: 'gitee', icon: 'git-branch' },
-  { label: 'WebDAV', value: 'webdav', icon: 'folder-sync' },
-];
+const providerOptions: BaseSelectorOption<SyncProviderKind>[] = SYNC_PROVIDER_ORDER.map(kind => ({
+  label: SYNC_PROVIDER_META[kind].label,
+  value: kind,
+  icon: SYNC_PROVIDER_META[kind].icon,
+}));
 
 /** 任一同异步操作进行中时，锁定全部操作按钮并禁止关闭弹窗 */
 const isBusy = computed(() => isSyncing.value || isPulling.value || isTestingConnection.value);

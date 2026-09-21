@@ -1,6 +1,7 @@
 import { computed, watch } from 'vue';
 
 import { FULL_BACKUP_SELECTION } from '@/app/services/backup/backupSelection';
+import { getSyncProviderLabel } from '@/app/services/sync/providerMeta';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -10,18 +11,11 @@ import type { ImportExportPayload } from '@/app/types';
 import type { BackupSelection } from '@/app/types/payload';
 import type { SyncSettingsBackup } from '@/platform/types';
 
-/** 同步目标的中文标签：按 kind 查表；缺失/未知值显式标「未知」，不再静默误标 GitHub */
-const SYNC_TARGET_LABELS: Record<string, string> = {
-  github: 'GitHub',
-  gitee: 'Gitee',
-  webdav: 'WebDAV',
-  server: '线上服务器',
-};
-
+/** 同步目标的中文标签：按 kind 查 providerMeta 单源表；缺失/未知值显式标「未知」，不再静默误标 GitHub */
 const syncTargetLabelOf = (sync?: SyncSettingsBackup): string => {
   if (!sync) return '未配置';
   const kind = 'kind' in sync ? sync.kind : (sync as { syncTarget?: string }).syncTarget;
-  return (kind && SYNC_TARGET_LABELS[kind]) || '未知';
+  return getSyncProviderLabel(kind);
 };
 
 /** 备份导入/导出弹窗的模块级共享状态：保证任意组件取用的都是同一份开关与导入数据 */

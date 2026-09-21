@@ -290,6 +290,9 @@ export function resolveTextTitle(
  * `v-focus` 反之、Popover 用的是更宽的 `[href]`），而清单之间的**差集就是缺陷**：
  * Tab 圈定会漏掉可编辑元素导致焦点逃出浮层，自动聚焦会漏掉链接而把焦点停在面板本身。
  * 这里取并集，使「什么算可聚焦」只有一个定义。
+ *
+ * 注意边界：`vGridNav` 的 `DEFAULT_SELECTOR` 不在此列，它问的是「哪些节点可作方向键导航候选」
+ * （须容纳不带 tabindex 的 `[data-focusable-outline]` 格子），是另一件事，不要合并进来。
  */
 export const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';

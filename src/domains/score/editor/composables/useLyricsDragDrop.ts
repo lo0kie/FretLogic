@@ -5,10 +5,10 @@ import { parseSlotKey } from '@/domains/score/model/chordSlots';
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { logger } from '@/platform/utils/logger';
 
-import { createExternalDropResolver } from './lyrics-drag/externalDropTarget.ts';
-import { useDragAutoScroll } from './lyrics-drag/useDragAutoScroll.ts';
-import { useDragGhost } from './lyrics-drag/useDragGhost.ts';
-import { useDragHighlight } from './lyrics-drag/useDragHighlight.ts';
+import { createExternalDropResolver } from './lyrics-drag/externalDropTarget';
+import { useDragAutoScroll } from './lyrics-drag/useDragAutoScroll';
+import { useDragGhost } from './lyrics-drag/useDragGhost';
+import { useDragHighlight } from './lyrics-drag/useDragHighlight';
 
 import type { Chord } from '@/domains/chord/types';
 import type { SlotKey } from '@/domains/score/types';

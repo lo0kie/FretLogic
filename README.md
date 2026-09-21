@@ -70,10 +70,14 @@ pnpm dev
 #### 4. 自建 HTTP 服务器（Server Sync）
 
 - **原理**：轻量标准 RESTful JSON 接口（GET / PUT），适合自建私人 API 服务。
-- **接口契约**：
-  - `GET {serverUrl}`：Header 携带 `Authorization: Bearer {serverToken}`，返回备份 JSON 载荷；
-  - `PUT {serverUrl}`：Header 携带 `Authorization: Bearer {serverToken}` 与
-    `Content-Type: application/json`，Body 为全量备份载荷。
+- **接口契约**（以 `worker/index.mjs` 为准；**读不校验鉴权，写才校验**）：
+  - `GET {serverUrl}`：仅带 `X-Environment`，返回备份 JSON 载荷；
+  - `GET {serverUrl}/meta`：同上，返回最小元数据 `{md5, updatedAt}`（启动一致性比对用，避免为比对拉全量）；
+  - `POST {serverUrl}`：Header 携带 `Authorization: Bearer {serverToken}` 与
+    `Content-Type: application/json`，Body 为全量备份载荷；带 `If-Match: <ETag>`
+    时服务端做乐观并发校验，不符返回 412（避免后写静默覆盖前写）；
+  - `GET {serverUrl}/auth-check`：仅校验写鉴权、不落库，供「测试连接」区分有无 Token。
+  - 写操作 fail-closed：服务端未配置 `SERVER_TOKEN` 时**拒绝一切写**（含 `/auth-check`）。
 - **本地联调步骤**：可使用本地简易 Express / Fastify / Python 脚本监听本地端口（如
   `http://localhost:3000/api/sync`），并在系统设置中填入 Server URL 与任意测试 Token 即可联调。
 
@@ -82,7 +86,7 @@ pnpm dev
 | 层       | 技术                                         |
 | -------- | -------------------------------------------- |
 | 框架     | Vue 3.5（组合式 API）+ TypeScript 5.4        |
-| 构建     | Vite 5 + PWA（vite-plugin-pwa，可安装）      |
+| 构建     | Vite 6 + PWA（vite-plugin-pwa，可安装）      |
 | 状态     | Pinia                                        |
 | 样式     | Tailwind CSS v4 + SCSS 设计令牌（三主题）    |
 | 拖拽     | sortablejs（列表排序，自建拖拽影像）         |

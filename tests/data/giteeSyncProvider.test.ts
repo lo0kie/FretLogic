@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createGiteeSyncProvider } from '@/app/services/sync/giteeSyncProvider';
+import { CURRENT_PAYLOAD_VERSION } from '@/app/services/validation/payloadMigrations';
+import { buildGroupVariant } from '@/domains/chord/theory/entityFactories';
+import { GroupSortRule } from '@/domains/chord/types';
 
 import type { GiteeSyncConfig } from '@/app/services/sync/provider';
+import type { ImportExportPayload } from '@/app/types';
 
 const config: GiteeSyncConfig = {
   kind: 'gitee',
@@ -13,9 +17,10 @@ const config: GiteeSyncConfig = {
   path: 'backup/data.json',
 };
 
-const payload = {
+/** version 刻意停留在旧包版本号 4：用例验证校验层会逐级迁移到 CURRENT_PAYLOAD_VERSION */
+const payload: ImportExportPayload = {
   version: 4,
-  groups: [{ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' }],
+  groups: [buildGroupVariant({ id: 'g1', name: 'C' }, GroupSortRule.ROOT_PITCH)],
   chords: [],
   songs: [],
 };
@@ -41,26 +46,26 @@ describe('gitee sync provider', () => {
     expect(result).toEqual({ sha: 'commit-sha' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    const getUrl = String(fetchMock.mock.calls[0][0]);
+    const getUrl = String(fetchMock.mock.calls[0]![0]);
     expect(getUrl).not.toContain('access_token');
-    const getInit = fetchMock.mock.calls[0][1] as RequestInit;
-    expect((getInit.headers as Record<string, string>).Authorization).toBe('token gitee_test_token_123');
+    const getInit = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect((getInit.headers as Record<string, string>)['Authorization']).toBe('token gitee_test_token_123');
 
-    const putUrl = String(fetchMock.mock.calls[1][0]);
+    const putUrl = String(fetchMock.mock.calls[1]![0]);
     expect(putUrl).not.toContain('access_token');
-    const putInit = fetchMock.mock.calls[1][1] as RequestInit;
+    const putInit = fetchMock.mock.calls[1]![1] as RequestInit;
     const body = JSON.parse(String(putInit.body));
     expect(body.sha).toBe('file-sha');
     expect(body.branch).toBe('main');
     expect(body.access_token).toBeUndefined();
-    expect((putInit.headers as Record<string, string>).Authorization).toBe('token gitee_test_token_123');
+    expect((putInit.headers as Record<string, string>)['Authorization']).toBe('token gitee_test_token_123');
   });
 
   it('pulls and validates remote content', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ content: btoa(JSON.stringify(payload)) })));
     const provider = createGiteeSyncProvider(config);
     const result = await provider.pull();
-    expect(result?.version).toBe(7);
+    expect(result?.version).toBe(CURRENT_PAYLOAD_VERSION);
     expect(result?.groups).toHaveLength(1);
     expect(result?.groups[0]).toMatchObject({ id: 'g1', name: 'C', sortRule: 'ROOT_PITCH' });
   });

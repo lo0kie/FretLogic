@@ -11,10 +11,10 @@ import {
   validateWebdavSettings,
 } from '@/platform/utils/transfer';
 
-import { createGiteeSyncProvider } from './giteeSyncProvider.ts';
-import { createGithubSyncProvider } from './githubSyncProvider.ts';
-import { createServerSyncProvider } from './serverSyncProvider.ts';
-import { createWebdavSyncProvider } from './webdavSyncProvider.ts';
+import { createGiteeSyncProvider } from './giteeSyncProvider';
+import { createGithubSyncProvider } from './githubSyncProvider';
+import { createServerSyncProvider } from './serverSyncProvider';
+import { createWebdavSyncProvider } from './webdavSyncProvider';
 
 import type {
   GiteeSyncConfig,
@@ -24,7 +24,7 @@ import type {
   SyncProvider,
   SyncProviderKind,
   WebdavSyncConfig,
-} from './provider.ts';
+} from './provider';
 import type { useSettingsStore } from '@/platform/store/settingsStore';
 
 type SettingsStore = ReturnType<typeof useSettingsStore>;
@@ -77,8 +77,6 @@ const resolveServerSettings = (settings: SettingsStore): { config?: SyncConfig; 
  * 消除了原先散落在 useSyncService / SyncModalContainer 中的 if/else 分发。
  */
 export interface ProviderFactory {
-  /** 是否支持分支列表（GitHub 专有） */
-  supportsBranches?: boolean;
   /** 从设置解析并校验配置；校验失败返回 error，否则返回 config */
   resolveConfig: (settings: SettingsStore) => { config?: SyncConfig; error?: string };
   create: (config: SyncConfig) => SyncProvider;
@@ -92,7 +90,6 @@ export interface ProviderFactory {
 
 export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
   github: {
-    supportsBranches: true,
     resolveConfig: s => {
       const owner = s.githubOwner.trim() || GITHUB_SYNC_CONFIG.DEFAULT_OWNER;
       const repo = s.githubRepo.trim() || GITHUB_SYNC_CONFIG.DEFAULT_REPO;
@@ -139,7 +136,6 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
     },
   },
   gitee: {
-    supportsBranches: true,
     resolveConfig: s => {
       const owner = s.giteeOwner.trim() || GITEE_SYNC_CONFIG.DEFAULT_OWNER;
       const repo = s.giteeRepo.trim() || GITEE_SYNC_CONFIG.DEFAULT_REPO;

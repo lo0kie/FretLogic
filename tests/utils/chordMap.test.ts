@@ -10,7 +10,12 @@ import {
   swapOrMoveSlotChords,
 } from '@/domains/score/model/chordSlots';
 
-import type { ChordLineSlots } from '@/domains/score/types';
+import type { ChordId } from '@/domains/chord/types';
+import type { ChordLineSlots, SlotKey } from '@/domains/score/types';
+
+/** 夹具窄化：槽位值与键在源码里是 branded string，测试按字面量书写后集中转换一次 */
+const chordIds = (...values: string[]): ChordId[] => values.map(v => v as ChordId);
+const slotKey = (value: string): SlotKey => value as SlotKey;
 
 /** 构造嵌套 chordMap：{ lineId: { char: {idx: id}, start: [], end: [] } } */
 const buildMap = (
@@ -19,9 +24,9 @@ const buildMap = (
   const map = new Map<string, ChordLineSlots>();
   for (const [lineId, slots] of Object.entries(lines)) {
     map.set(lineId, {
-      char: new Map(slots.char ? Object.entries(slots.char).map(([k, v]) => [Number(k), v]) : []),
-      start: slots.start ? [...slots.start] : [],
-      end: slots.end ? [...slots.end] : [],
+      char: new Map(slots.char ? Object.entries(slots.char).map(([k, v]) => [Number(k), v as ChordId]) : []),
+      start: slots.start ? chordIds(...slots.start) : [],
+      end: slots.end ? chordIds(...slots.end) : [],
     });
   }
   return map;
@@ -52,22 +57,23 @@ describe('chordMap: 边缘和弦读写（嵌套结构）', () => {
 
   it('setEdgeChords 替换原序列', () => {
     const map = buildMap({ l1: { start: ['a', 'b'] } });
-    setEdgeChords(map, 'l1', 'start', ['x', 'y']);
-    expect(map.size).toBe(1);
+    setEdgeChords(map, 'l1', 'start', chordIds('x', 'y'));
+    // 注：原先此处还有 `map.size === 1`，已删——buildMap 只喂了 l1 一个键，setEdgeChords 只替换
+    // 该行的 start 序列、不增删行键，外层 size 恒为 1，属恒真断言；实质覆盖是下一行的序列替换
     expect(getEdgeChords(map, 'l1', 'start')).toEqual(['x', 'y']);
   });
 
   it('removeChordFromSlot 删除并返回原值', () => {
     const map = buildMap({ l1: { char: { 2: 'c1' } } });
-    expect(removeChordFromSlot(map, 'line_l1_char_2')).toBe('c1');
+    expect(removeChordFromSlot(map, slotKey('line_l1_char_2'))).toBe('c1');
     expect(map.get('l1')?.char.size).toBe(0);
-    expect(removeChordFromSlot(map, 'line_l1_char_2')).toBeNull();
+    expect(removeChordFromSlot(map, slotKey('line_l1_char_2'))).toBeNull();
   });
 
   it('swapOrMoveSlotChords 拖动到行首添加按钮时插入到已有和弦的左侧(0位)', () => {
     const map = buildMap({ l1: { char: { 3: 'chordMoving' }, start: ['chordExisting'] } });
     // 拖动 chordMoving 到行首添加按钮 (line_l1_start_1)
-    swapOrMoveSlotChords(map, 'line_l1_char_3', 'line_l1_start_1');
+    swapOrMoveSlotChords(map, slotKey('line_l1_char_3'), slotKey('line_l1_start_1'));
     expect(getEdgeChords(map, 'l1', 'start')).toEqual(['chordMoving', 'chordExisting']);
     expect(map.get('l1')?.char.size).toBe(0);
   });
@@ -77,7 +83,7 @@ describe('chordMap: 边缘和弦读写（嵌套结构）', () => {
     // 与「跨槽位新增」路径（resolveEdgeInsertIndex：start 越界落 0 位=头部）刻意不同——前者是重排、
     // 后者是新增，语义不同故落点不同，勿合并。
     const map = buildMap({ l1: { start: ['a', 'b'] } });
-    swapOrMoveSlotChords(map, 'line_l1_start_0', 'line_l1_start_2');
+    swapOrMoveSlotChords(map, slotKey('line_l1_start_0'), slotKey('line_l1_start_2'));
     expect(getEdgeChords(map, 'l1', 'start')).toEqual(['b', 'a']);
   });
 });

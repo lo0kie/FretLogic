@@ -8,7 +8,7 @@
 import { createLruCache } from '@/platform/utils/cache';
 import { estimateValueBytes } from '@/platform/utils/common';
 
-import { analyzeBestRootPitch } from './chordEngine.ts';
+import { analyzeBestRootPitch } from './chordEngine';
 import { getChordName, getChordRootPitch } from './chordName';
 import { calcPitchIndex, composeNoteLabel, computeStringLabelAccidental } from './pitch';
 import { transposeChordName } from './transpose';
@@ -124,6 +124,8 @@ export const collectChordNotes = (
   baseStrings: readonly number[] = getBaseStringsFor(Tuning.STANDARD, strings.length)
 ): { notes: NoteInput[]; bassPitch: number } => {
   const notes: NoteInput[] = [];
+  // 低音取实际最低音高，而非「最先按下的弦」：重入定弦（尤克里里 GCEA）下弦序最外的弦并不最低，
+  // 与 chordEngine.collectNoteContext 的 bassByPitch 同口径，否则同一和弦两条路转位/斜杠低音判定相反
   let bassPitch = -1;
   for (let sIdx = 0; sIdx < strings.length; sIdx++) {
     const str = strings[sIdx];
@@ -141,7 +143,7 @@ export const collectChordNotes = (
       pitchIndex: pitch,
       label: composeNoteLabel(naturalLabel, isAccidental, str.preferFlat),
     });
-    if (bassPitch === -1) bassPitch = pitch;
+    if (bassPitch === -1 || pitch < bassPitch) bassPitch = pitch;
   }
   return { notes, bassPitch };
 };

@@ -5,6 +5,7 @@
  * 依赖 core 与 wheel（跳转前掐断缓动），并被 overlay 单向依赖（overlay 建好轨道后挂这些监听）。
  */
 
+import { clamp } from '@/platform/utils/common';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import { stampInteraction } from './scrollbarCore';
@@ -31,13 +32,13 @@ export const jumpToPointer = (
   if (maxScroll <= 0) return;
   const hostRect = host.getBoundingClientRect();
   const rawPos = axis === 'y' ? e.clientY - hostRect.top : e.clientX - hostRect.left;
-  const clickPos = Math.min(Math.max(rawPos - endInset, 0), clientLength);
+  const clickPos = clamp(rawPos - endInset, 0, clientLength);
   // 与显示映射互逆：点击位 → 拇指行程占比 → 滚动量（拇指居中于点击位）。
   // 偏移量用实际 thumbSize（可能被 minThumbSize 钳制）的一半，保证超长内容下落点仍贴合指针；
   // 旧的 realClient/2 写法仅在拇指未被钳制时近似成立，长内容下误差随可滚动长度线性放大。
   const { thumbSize } = computeThumbGeometry(scrollLength, clientLength, 0, state.options.minThumbSize, maxScroll);
   const maxThumbOffset = Math.max(1, clientLength - thumbSize);
-  const target = Math.min(Math.max(((clickPos - thumbSize / 2) / maxThumbOffset) * maxScroll, 0), maxScroll);
+  const target = clamp(((clickPos - thumbSize / 2) / maxThumbOffset) * maxScroll, 0, maxScroll);
   cancelWheelAnim(state);
   host.scrollTo(axis === 'y' ? { top: target, behavior } : { left: target, behavior });
 };
@@ -58,7 +59,7 @@ export const handleTrackAreaClick = (state: ScrollbarState, axis: 'x' | 'y', e: 
   }
   const hostRect = host.getBoundingClientRect();
   const rawPos = axis === 'y' ? e.clientY - hostRect.top : e.clientX - hostRect.left;
-  const clickPos = Math.min(Math.max(rawPos - endInset, 0), clientLength);
+  const clickPos = clamp(rawPos - endInset, 0, clientLength);
   // 翻页方向以拇指当前位置为界（同原生滚动条）：点在拇指上方/左侧 = 向回翻，反之向前翻
   const geo = computeThumbGeometry(
     scrollLength,
@@ -73,7 +74,7 @@ export const handleTrackAreaClick = (state: ScrollbarState, axis: 'x' | 'y', e: 
   const next = current + (forward ? page : -page);
   cancelWheelAnim(state);
   host.scrollTo({
-    [axis === 'y' ? 'top' : 'left']: Math.min(Math.max(next, 0), Math.max(0, scrollLength - realClient)),
+    [axis === 'y' ? 'top' : 'left']: clamp(next, 0, Math.max(0, scrollLength - realClient)),
     behavior: resolveScrollBehavior('smooth'),
   });
 };

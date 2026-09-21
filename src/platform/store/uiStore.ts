@@ -24,23 +24,24 @@ export const useUiStore = defineStore('ui', () => {
   /** 同步弹窗上次选中的提供商（UI 瞬时偏好，跨会话保留） */
   const syncModalProvider = useStorage<SyncProviderKind>(STORAGE_KEYS.SYNC_MODAL_PROVIDER, 'gitee');
   const timersMap = new Map<number, ReturnType<typeof setTimeout>>();
+  const remainingMap = new Map<number, number>();
+  const startedAtMap = new Map<number, number>();
 
   /** 清除所有带操作按钮（onAction）的 Message，避免旧的行动入口叠加显示。 */
   const clearActionMessages = () => {
     messages.value = messages.value.filter(m => !m.onAction);
   };
 
-  /** 按 id 移除指定 Message，并清理其对应的自动销毁定时器。 */
+  /** 按 id 移除指定 Message，并清理其对应的自动销毁定时器与暂停/恢复记账。 */
   const removeMessage = (id: number) => {
     messages.value = messages.value.filter(m => m.id !== id);
     if (timersMap.has(id)) {
       clearTimeout(timersMap.get(id));
       timersMap.delete(id);
     }
+    remainingMap.delete(id);
+    startedAtMap.delete(id);
   };
-
-  const remainingMap = new Map<number, number>();
-  const startedAtMap = new Map<number, number>();
 
   /** 为 Message 安排延时销毁定时器，并记录起始时间与剩余时长以支持暂停/恢复。 */
   const scheduleMessageRemoval = (id: number, delay: number) => {

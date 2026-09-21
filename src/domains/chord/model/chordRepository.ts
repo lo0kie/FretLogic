@@ -12,7 +12,7 @@ import {
 import { idb } from '@/platform/services/storage';
 import { toPlainPersistable } from '@/platform/utils/common';
 
-import type { Chord, Group, StringIndex } from '@/domains/chord/types';
+import type { Chord, ChordDraft, Group, StringIndex } from '@/domains/chord/types';
 import type { GuitarStringEntity } from '@/domains/fretboard/types';
 
 type RawRecord = Record<string, unknown>;
@@ -46,6 +46,8 @@ const isValidStringEntity = (value: unknown): value is GuitarStringEntity => {
 };
 
 export type GroupDraft = Omit<Group, 'createdAt' | 'updatedAt'> & Partial<Pick<Group, 'createdAt' | 'updatedAt'>>;
+// ChordDraft 与 Chord 同处声明（chord/types.ts），本行只为「草稿三件套同一入口」而重导出
+export type { ChordDraft };
 
 export const sanitizeGroupEntity = (raw: unknown): GroupDraft | null => {
   if (!isRecord(raw)) return null;
@@ -74,7 +76,7 @@ const resolveRootStringIndex = (chord: RawRecord): StringIndex | null => {
   return typeof fret === 'number' && Number.isFinite(fret) && fret >= 0 ? (index as StringIndex) : null;
 };
 
-export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 'repair' }): Chord | null => {
+export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 'repair' }): ChordDraft | null => {
   const mode = options?.mode ?? 'strict';
   if (!isRecord(raw)) return null;
   if (typeof raw['id'] !== 'string' || !raw['id']) return null;
@@ -103,8 +105,8 @@ export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 
   const rawCapo = raw['capo'];
   const fretOffset = isFretOffsetValue(rawOffset) ? rawOffset : isCapoValue(rawCapo) ? toFretOffset(rawCapo) : 0;
 
-  const draft: Chord = {
-    ...(raw as unknown as Chord),
+  const draft: ChordDraft = {
+    ...(raw as unknown as ChordDraft),
     fretCount,
     fretOffset,
     tuning: Object.values(Tuning).includes(raw['tuning'] as Tuning) ? (raw['tuning'] as Tuning) : Tuning.STANDARD,
@@ -125,14 +127,14 @@ export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 
  * 指纹不含 barres，读库去重必须补充比对，否则「同指法不同横按」两条共存入库、下次启动静默丢一条，
  * 并经 hydrateMergeMapping 把乐谱引用重定向到错的那条——N3。
  */
-const barresSignature = (chord: Chord): string => computeBarresSignature(chord.barres, { withFinger: true });
+const barresSignature = (chord: ChordDraft): string => computeBarresSignature(chord.barres, { withFinger: true });
 
-export const dedupeChordsByFingerprint = (
-  chords: Chord[]
-): { kept: Chord[]; dupes: Chord[]; mapping: Map<string, string> } => {
+export const dedupeChordsByFingerprint = <T extends ChordDraft>(
+  chords: T[]
+): { kept: T[]; dupes: T[]; mapping: Map<string, string> } => {
   const seen = new Map<string, string>();
-  const kept: Chord[] = [];
-  const dupes: Chord[] = [];
+  const kept: T[] = [];
+  const dupes: T[] = [];
   /** 被丢弃 id → 保留 id：调用方据以重定向乐谱槽位引用，避免死引用 */
   const mapping = new Map<string, string>();
 
@@ -180,11 +182,11 @@ export const sanitizeGroups = (groups: unknown): GroupDraft[] => {
 export const sanitizeChords = (
   chords: unknown,
   validGroupIds: Set<string>
-): { chords: Chord[]; mergedIds: Map<string, string> } => {
+): { chords: ChordDraft[]; mergedIds: Map<string, string> } => {
   if (!Array.isArray(chords)) return { chords: [], mergedIds: new Map() };
   const byGroup = chords
     .map(raw => sanitizeChordEntity(raw))
-    .filter((chord): chord is Chord => chord !== null && validGroupIds.has(chord.groupId));
+    .filter((chord): chord is ChordDraft => chord !== null && validGroupIds.has(chord.groupId));
   const { kept, mapping } = dedupeChordsByFingerprint(byGroup);
   return { chords: kept, mergedIds: mapping };
 };
@@ -196,6 +198,7 @@ export const sanitizeChordLibrary = (data: {
   const now = Date.now();
   const groups = fillMissingTimestamps(sanitizeGroups(data.groups), now) as Group[];
   const sanitized = sanitizeChords(data.chords, new Set(groups.map(g => g.id)));
+  // 时间戳补齐即实体：ChordDraft 与 Chord 只差这两个字段，故无需再窄化
   const chords = fillMissingTimestamps(sanitized.chords, now);
   return { groups, chords, mergedIds: sanitized.mergedIds };
 };

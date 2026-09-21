@@ -25,6 +25,19 @@ import type { EffectScope } from 'vue';
 /** URL tab 参数合法值域（edit 为默认态，镜像 URL 时省略） */
 const TAB_QUERY_VALUES = ['edit', 'interactive', 'preview'] as const satisfies readonly ScoreActiveTab[];
 
+/**
+ * 由 Store 当前状态推导乐谱页 URL 的 query 子集：`edit` 为默认态省略；未选歌时 `tab` 一并移除。
+ *
+ * 导出为纯函数（不依赖 router / 组件实例），供两处共用同一条 URL 形状规则：
+ * - 本模块的镜像 watcher（Store → URL）；
+ * - 顶栏「乐谱」导航入口——直接落到完整 URL，而不是先推裸路径再由镜像回写补参数
+ *   （后者会产生一次多余导航，且「已在乐谱页时再点乐谱」会先把 URL 打回裸路径再恢复）。
+ */
+export const buildScoreQuery = (songId: string | null, tab: ScoreActiveTab): Record<string, string | undefined> => ({
+  id: songId ?? undefined,
+  tab: songId && tab !== 'edit' ? tab : undefined,
+});
+
 // URL query 参数 schema：id 为非空串；tab 限定合法值域（替代手写 typeof 守卫与枚举 cast）
 const QUERY_ID = z.string().min(1);
 const QUERY_TAB = z.enum(TAB_QUERY_VALUES);
@@ -66,11 +79,7 @@ function createScoreRouteSync(): ScoreRouteSyncApi {
 
     const mirrorStoreToUrl = () => {
       if (!hasRouter || route.path !== ROUTE_PATHS.SCORE) return;
-      const patch = {
-        id: scoreEditor.activeSongId ?? undefined,
-        // edit 为默认态从 URL 省略；未选歌时 tab 参数失去意义一并移除
-        tab: scoreEditor.activeSongId && scoreEditor.activeTab !== 'edit' ? scoreEditor.activeTab : undefined,
-      };
+      const patch = buildScoreQuery(scoreEditor.activeSongId, scoreEditor.activeTab);
       if (isQuerySame(patch)) return;
       void router.replace({ query: { ...route.query, ...patch } });
     };

@@ -33,6 +33,7 @@
     }
   },
   // 检查范围：src + 构建与脚本 TS 文件（vite.config / scripts/*.ts，需 node types）。
-  // tests 不纳入严格类型检查（vitest 走 esbuild 转译运行，类型由 IDE 宽松提示兜底）
+  // tests 不进这条链（保持 `pnpm typecheck` 秒级），由 tsconfig.tests.json / `pnpm typecheck:tests`
+  // 以同一套严格选项单独把守——测试夹具的品牌类型、缺字段与越界索引在那边归零，不靠 IDE 提示兜底。
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue", "vite.config.ts", "scripts/**/*.ts"]
 }

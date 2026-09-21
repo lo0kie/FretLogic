@@ -6,6 +6,7 @@
  */
 
 import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
+import type { BarreEntity } from '@/domains/fretboard/types';
 import type { ScoreLyricsFontWeight } from '@/platform/types';
 
 export interface ExportChordData {
@@ -15,7 +16,7 @@ export interface ExportChordData {
   /** 品位/把位偏移量 */
   fretOffset?: number;
   rootStringIndex: number | null;
-  barres?: { fret: number; fromString: number; toString: number }[];
+  barres?: BarreEntity[];
 }
 
 export interface ExportCharItem {

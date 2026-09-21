@@ -341,7 +341,7 @@ const themeVariantClasses = computed(() => {
 
   if (variant === 'text')
     // 紧凑模式下进一步收紧文字按钮的左右内边距（类名必须以完整字面量出现，供 Tailwind 静态扫描）
-    return `${compacted ? 'px-[0.15rem]' : 'px-[0.3rem]'} bg-transparent! border-transparent focus:border-primary active:enabled:border-primary focus-visible:border-primary ${BUTTON_TEXT_THEME_MAP[resolvedColor.value]}`;
+    return `${compacted ? 'px-[0.15rem]' : 'px-[0.3rem]'} bg-transparent! border-transparent active:enabled:border-primary ${BUTTON_TEXT_THEME_MAP[resolvedColor.value]}`;
 
   return BUTTON_DEFAULT_THEME_MAP[resolvedColor.value];
 });
@@ -349,7 +349,6 @@ const themeVariantClasses = computed(() => {
 const normalizedStyle = computed(() => {
   const style: Record<string, string> = {};
   if (width !== undefined) style['width'] = typeof width === 'number' ? `${width}px` : width;
-
   if (height !== undefined) style['height'] = typeof height === 'number' ? `${height}px` : height;
 
   return style;

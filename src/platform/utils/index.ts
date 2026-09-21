@@ -12,17 +12,17 @@
  */
 
 // 基础件
-export * from './common.ts';
-export * from './constants.ts';
-export * from './logger.ts';
-export * from './prefetch.ts';
+export * from './common';
+export * from './constants';
+export * from './logger';
+export * from './prefetch';
 
 // 拼音（例外表已迁到仓库根 data/pinyin-overrides.json，由脚本生成后经 @data 别名注入）
-export * from './pinyin.ts';
+export * from './pinyin';
 
 // 职责模块
-export * from './cache.ts';
-export * from './dom.ts';
-export * from './motion.ts';
-export * from './output.ts';
-export * from './transfer.ts';
+export * from './cache';
+export * from './dom';
+export * from './motion';
+export * from './output';
+export * from './transfer';

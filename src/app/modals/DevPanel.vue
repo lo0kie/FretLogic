@@ -438,7 +438,7 @@ import { useStickyHeads } from '@/platform/composables/useStickyHeads';
 import { idb, SCHEMA } from '@/platform/services/storage/idb';
 import { useUiStore } from '@/platform/store/uiStore';
 import { createCacheSampler } from '@/platform/utils/cache';
-import { formatBytes } from '@/platform/utils/common';
+import { clamp, formatBytes } from '@/platform/utils/common';
 import { CLOUD_SYNC_CONFIG, ROUTE_PATHS, WEBDAV_SYNC_CONFIG } from '@/platform/utils/constants';
 
 import { buildDevTestData, DEV_TEST_SCALES } from './devSeedData';
@@ -585,7 +585,7 @@ const memoryCacheRows = computed(() => {
     const bytes = cache.bytes?.();
     // 满载（含多实例聚合后的溢出）即不再有新条目能被留住，值得警示
     const full = cache.limit !== null && size >= cache.limit;
-    const pct = Math.max(size > 0 ? 4 : 0, Math.min(100, Math.round((size / base) * 100)));
+    const pct = clamp(Math.round((size / base) * 100), size > 0 ? 4 : 0, 100);
 
     // 命中率：条数天然不变的全命中缓存（如尺寸/名字变化都不作废位图）与「一次都没被用过」的缓存
     // 读数完全相同，只靠条数无从分辨 —— 命中数是判断缓存是否真在生效的直接证据
@@ -721,7 +721,7 @@ const refreshStorageUsage = async () => {
       originQuotaText.value = quota != null ? formatBytes(quota) : '未知';
       if (usage != null && quota) {
         const pct = (usage / quota) * 100;
-        originUsagePct.value = Math.min(100, Math.max(pct > 0 ? 1 : 0, pct));
+        originUsagePct.value = clamp(pct, pct > 0 ? 1 : 0, 100);
         originUsagePctText.value = `${pct < 0.1 ? '<0.1' : pct.toFixed(1)}%`;
       } else {
         originUsagePct.value = 0;

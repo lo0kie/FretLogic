@@ -89,9 +89,8 @@ useModalController）、指令（vTooltip / vFocus / vWheelScroll 等）、纯�
 云同步被抽象为 `SyncProvider` 接口（`pull` / `push` /
 `exists`），UI 与 stores 永远不直接接触传输细节。每个后端实现同一契约：
 
-- **GitHub**（`githubSyncProvider`）— 调用 Contents API；并额外暴露可选的 `listBranches`
-  能力（`SyncBranchesProvider`），调用处用 `'listBranches' in provider` 守卫。
-- **Gitee**（`giteeSyncProvider`）— 与 GitHub 同构。
+- **GitHub**（`githubSyncProvider`）— 调用 Contents API，按分支读写单个 base64 信封文件。
+- **Gitee**（`giteeSyncProvider`）— 与 GitHub 同构（认证走 `Authorization: token` 头，创建/更新分用 POST/PUT）。
 - **WebDAV**（`webdavSyncProvider`）— GET/PUT 原始 JSON；在 `PUT` 前用 `MKCOL`
   自动创建父集合（避免父目录不存在时的 409）；支持可选的
   **CORS 代理**（`${proxyUrl}?url=<target>`）以绕过服务器未发送 CORS 头时的浏览器跨域限制。
@@ -116,7 +115,8 @@ Every change must pass:
 pnpm verify
 ```
 
-This runs formatting, unit tests, type checks, bundle budgets, and production dependency audit.
+This runs formatting check, lint (with the architecture zone rules), type checks, the full test suite with per-layer
+coverage thresholds, the production build, and bundle budgets. Neither `pnpm verify` nor CI runs a dependency audit.
 
 ## Performance rules
 

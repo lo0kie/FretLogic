@@ -35,16 +35,18 @@ describe('calculateFretboardPoint', () => {
     expect(res?.fretIndex).toBe(1);
   });
 
-  it('能够正确计算所有 6 根弦的索引并实现就近四舍五入吸附', () => {
+  it('横向按最近弦四舍五入吸附：半弦距内归本弦，越过半弦距进位到下一弦', () => {
+    const half = CANVAS_CONFIG.STRING_SPACING / 2;
+    const pointAt = (clientX: number) => calculateFretboardPoint({ ...defaultParams, clientX, clientY: 50 + 230 });
+
     for (let s = 0; s < 6; s++) {
       const stringX = 100 + CANVAS_CONFIG.OFFSET_X_LEFT + s * CANVAS_CONFIG.STRING_SPACING;
-      // 稍微偏右 5px 仍能吸附到当前弦
-      const res = calculateFretboardPoint({
-        ...defaultParams,
-        clientX: stringX + 5,
-        clientY: 50 + 230,
-      });
-      expect(res?.stringIndex).toBe(s);
+      // 尚未越过半弦距：四舍五入向下，仍落在本弦
+      expect(pointAt(stringX + half - 1)?.stringIndex).toBe(s);
+      // 越过半弦距：四舍五入向上进位；末弦进位即越界返回 null
+      const past = pointAt(stringX + half + 1);
+      if (s < 5) expect(past?.stringIndex).toBe(s + 1);
+      else expect(past).toBeNull();
     }
   });
 

@@ -8,4 +8,3 @@ import { ref } from 'vue';
 export const isSyncing = ref(false);
 export const isPulling = ref(false);
 export const isTestingConnection = ref(false);
-export const isFetchingBranches = ref(false);

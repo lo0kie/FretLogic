@@ -78,9 +78,10 @@ describe('和弦识别引擎与解析器语法一致性保证', () => {
 
     const res = validateImportExportPayload(payloadWithCorruptChord);
     expect(res.isValid).toBe(true);
-    // 必须有明确 issues/warnings 提示已记录并重置
+    // 「不静默」是可观测契约：损坏名必须出现在告警里（用户能看到是哪一条），
+    // 且该和弦的名称确实被重置为默认根音 C —— 只断言行为，不绑实现里的中文文案
     const allMsgs = [...(res.issues || []), ...(res.warnings || [])];
-    const hasWarning = allMsgs.some(msg => msg.includes('InvalidUnknownChordX999') && msg.includes('重置'));
-    expect(hasWarning).toBe(true);
+    expect(allMsgs.some(msg => msg.includes('InvalidUnknownChordX999'))).toBe(true);
+    expect(res.payload?.chords[0]?.nameSegments?.root).toEqual(['C', 0]);
   });
 });

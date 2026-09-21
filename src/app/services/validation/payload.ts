@@ -16,9 +16,9 @@ import {
 } from './persistedData';
 
 import type { RawChord, RawGroup, RawSong } from './payloadRawShapes';
-import type { GroupDraft, SongDraft } from './persistedData';
+import type { ChordDraft, GroupDraft, SongDraft } from './persistedData';
 import type { AppPreferencesBackup, ImportExportPayload, SyncSettingsBackup } from '@/app/types';
-import type { Chord, ChordNameSegments, Group } from '@/domains/chord/types';
+import type { ChordNameSegments, Group } from '@/domains/chord/types';
 import type { ChordLineSlots, LineId } from '@/domains/score/types';
 import type { EncryptedSyncSettingsBackup } from '@/platform/types/settings';
 
@@ -85,13 +85,18 @@ const sanitizeGroups = (
 };
 
 /** 清洗备份包中的和弦列表：逐项校验结构，旧数据仅有 chordName 时兜底解析分片；lenient 模式跳过单条坏数据并记录 warning。 */
-const sanitizeChords = (chords: unknown, issues: string[], warnings: string[], mode: 'strict' | 'lenient'): Chord[] => {
+const sanitizeChords = (
+  chords: unknown,
+  issues: string[],
+  warnings: string[],
+  mode: 'strict' | 'lenient'
+): ChordDraft[] => {
   if (!Array.isArray(chords)) {
     issues.push('chords 字段必须为数组');
     return [];
   }
 
-  const result: Chord[] = [];
+  const result: ChordDraft[] = [];
   for (let index = 0; index < chords.length; index++) {
     const c = chords[index] as RawChord;
     if (!c || typeof c !== 'object') {

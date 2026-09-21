@@ -1,6 +1,6 @@
 import { base64DecodeUtf8 } from '@/platform/utils/common';
 
-import { SyncError } from './provider.ts';
+import { SyncError } from './provider';
 
 import type { ImportExportPayload } from '@/app/types';
 

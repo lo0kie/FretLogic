@@ -12,7 +12,7 @@ import { GroupSortRule } from '@/domains/chord/types';
 import { TEXT_FORMAT } from '@/platform/utils/constants';
 
 import type { Chord } from '@/domains/chord/types';
-import type { BarreEntity } from '@/domains/fretboard/types';
+import type { BarreEntity, BarreFret } from '@/domains/fretboard/types';
 
 /** 构造测试和弦：默认标准调弦 6 弦、3 品、根音 5 弦 */
 const makeChord = (name: string, strings: Chord['strings'], barres?: BarreEntity[]): Chord =>
@@ -38,7 +38,7 @@ describe('chordTextCodec 和弦文字编解码（chord 域单一来源）', () =
         { fret: 2, preferFlat: false },
         { fret: 0, preferFlat: false },
       ],
-      [{ fret: 2, fromString: 2, toString: 4, finger: 2 }]
+      [{ fret: 2 as BarreFret, fromString: 2, toString: 4, finger: 2 }]
     );
     const text = serializeChordToText(chord);
     const result = parseChordFromText(text);

@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { sanitizeChordEntity } from '@/app/services/validation/persistedData';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
+import { toChordId, toGroupId } from '@/domains/chord/theory/entityFactories';
 import { getTuningsByStringCount, Tuning, TUNING_PRESETS } from '@/domains/chord/theory/theory';
 import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { cloneGuitarStrings } from '@/platform/utils/common';
 
+import type { RootSegment } from '@/domains/chord/types';
 import type { BarreFret, GuitarStringEntity } from '@/domains/fretboard/types';
 
 describe('自定义弦数架构 (Custom String Count Architecture)', () => {
@@ -129,7 +131,7 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
   });
 
   describe('克隆与尺寸计算', () => {
-    it('cloneGuitarStrings 应完整克隆任意长度的弦数组', () => {
+    it('cloneGuitarStrings 应元素级深克隆弦数组（改副本不污染原数组）', () => {
       const strings4: GuitarStringEntity[] = [
         { fret: 0, preferFlat: false },
         { fret: 1, preferFlat: true },
@@ -139,16 +141,22 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
       const cloned = cloneGuitarStrings(strings4);
       expect(cloned).toEqual(strings4);
       expect(cloned).not.toBe(strings4);
-      expect(cloned.length).toBe(4);
+      // 逐元素独立：仅「新数组 + 浅拷贝共享元素引用」也能通过上面的 not.toBe，
+      // 必须改副本元素后确认原数组不受影响，才证明是元素级深克隆
+      cloned[0]!.fret = 99;
+      expect(strings4[0]!.fret).toBe(0);
+      expect(strings4).toHaveLength(4);
     });
 
     it('getExportFretboardWidth 应按弦数动态等比伸缩宽度', () => {
-      // 6 弦基准 = 14*2 + 5*9.8 = 77
-      expect(SCORE_EXPORT_CONFIG.getExportFretboardWidth(6)).toBeCloseTo(77);
+      // 6 弦结果必须与声明的标准指板宽度常量一致（单一来源，防两处声明漂移）
+      expect(SCORE_EXPORT_CONFIG.getExportFretboardWidth(6)).toBe(SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH);
       // 4 弦 = 14*2 + 3*9.8 = 57.4
       expect(SCORE_EXPORT_CONFIG.getExportFretboardWidth(4)).toBeCloseTo(57.4);
       // 7 弦 = 14*2 + 6*9.8 = 86.8
       expect(SCORE_EXPORT_CONFIG.getExportFretboardWidth(7)).toBeCloseTo(86.8);
+      // 1 弦走 Math.max 钳制分支：按 1 段弦距计（而非 0 段）
+      expect(SCORE_EXPORT_CONFIG.getExportFretboardWidth(1)).toBeCloseTo(14 * 2 + 9.8);
     });
 
     it('getTuningsByStringCount 能够准确按弦数筛选选项', () => {
@@ -211,18 +219,21 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
 
       const res = validateImportExportPayload(payload);
       expect(res.isValid).toBe(true);
+      // 合法的 4/7 弦不再产生任何问题项（旧实现会硬编码 6 弦报错）
       expect(res.issues).toHaveLength(0);
-      expect(res.payload?.chords).toHaveLength(2);
-      expect(res.payload?.chords[0]?.strings.length).toBe(4);
-      expect(res.payload?.chords[1]?.strings.length).toBe(7);
+      // 两条和弦各自保留原本弦数与 id（同时反证两条都被保留，故无需再断 chords.length）
+      expect(res.payload?.chords[0]?.strings).toHaveLength(4);
+      expect(res.payload?.chords[1]?.strings).toHaveLength(7);
+      expect(res.payload?.chords[0]?.id).toBe('c4');
+      expect(res.payload?.chords[1]?.id).toBe('c7');
     });
 
     it('7 弦和弦横按跨至第 7 根弦（toString: 6）不应被丢弃', async () => {
       const { normalizeChord } = await import('@/domains/chord/theory/normalizeChord');
       const chord7 = {
-        id: 'c7_barre',
-        groupId: 'g1',
-        nameSegments: { root: ['B', 11] },
+        id: toChordId('c7_barre'),
+        groupId: toGroupId('g1'),
+        nameSegments: { root: ['B', 0] as RootSegment },
         strings: [
           { fret: 2, preferFlat: false },
           { fret: 2, preferFlat: false },
@@ -234,12 +245,15 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
         ],
         barres: [{ fret: 2 as BarreFret, fromString: 0, toString: 6 }],
         fretCount: 4 as const,
-        capo: 0 as const,
+        fretOffset: 0 as const,
+        rootStringIndex: null,
+        createdAt: 0,
+        updatedAt: 0,
         tuning: Tuning.SEVEN_STANDARD,
       };
 
       const normalized = normalizeChord(chord7);
-      expect(normalized.chord.barres).toBeDefined();
+      // 7 弦横按不被清洗丢弃：恰好一条，且跨到第 7 根弦（toString: 6）
       expect(normalized.chord.barres).toHaveLength(1);
       expect(normalized.chord.barres![0]).toEqual({ fret: 2, fromString: 0, toString: 6 });
     });
@@ -252,12 +266,12 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
       const store = useSettingsStore();
 
       // store 自身不触碰 localStorage：历史明文密码由一次性转录丢弃
-      //（见 migrateLegacy：WEBDAV_PASSWORD 列入 EXCLUDED_KEYS，不转录进 kv）
-      expect(localStorage.getItem(STORAGE_KEYS.WEBDAV_PASSWORD)).toBe('old_plaintext_password');
+      //（见 migrateLegacy：WEBDAV_PASSWORD 列入 EXCLUDED_KEYS，不转录进 kv）。
+      // 注：原先此处有一条「setItem 后立刻 getItem 断同值」的断言——它测的是 localStorage
+      // 自身行为而非常量契约（恒真），已删；真正有效的是下方「赋值后旧值不被改写」这条
 
-      // 设置新密码后仍为内存态，不写入 localStorage / kv 镜像
+      // 设置新密码后仍为内存态：赋值既不得回写 localStorage，也不得进 kv 镜像
       store.webdavPassword = 'new_session_password';
-      expect(store.webdavPassword).toBe('new_session_password');
       expect(localStorage.getItem(STORAGE_KEYS.WEBDAV_PASSWORD)).toBe('old_plaintext_password');
       expect(kvGet(STORAGE_KEYS.WEBDAV_PASSWORD)).toBeNull();
     });

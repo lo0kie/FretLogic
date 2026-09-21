@@ -3,7 +3,7 @@
  * 完全绕过 elementFromPoint 的槽位命中——浮动面板 / 抽屉等全屏浮层
  * （pointer-events 已处理但仍可能与内容层叠）不再影响命中。
  */
-import { resolveHoverLine, snapToSlotInLine } from './dropGeometry.ts';
+import { resolveHoverLine, snapToSlotInLine } from './dropGeometry';
 
 import type { Ref } from 'vue';
 

@@ -4,6 +4,8 @@
  * 从 vScrollbar.ts 抽出（原 885~952 行）。
  * 依赖 core（显隐/埋点）与 wheel（拖拽起手要掐断进行中的滚轮缓动），不被它们反向依赖。
  */
+import { clamp } from '@/platform/utils/common';
+
 import { setThumbsVisible, showThumb, stampInteraction } from './scrollbarCore';
 import { getLength, getScrollPos } from './scrollbarGeometry';
 import { cancelWheelAnim } from './scrollbarWheel';
@@ -25,7 +27,7 @@ export const handleThumbPointerMove = (state: ScrollbarState, e: PointerEvent, a
   const maxThumbOffset = Math.max(0, clientLength - state.thumbLens[axis]);
   if (maxThumbOffset <= 0 || maxScroll <= 0) return;
   const delta = (axis === 'y' ? e.clientY : e.clientX) - state.dragStartPos;
-  const target = Math.min(Math.max(state.dragStartScroll + (delta / maxThumbOffset) * maxScroll, 0), maxScroll);
+  const target = clamp(state.dragStartScroll + (delta / maxThumbOffset) * maxScroll, 0, maxScroll);
   if (axis === 'y') host.scrollTop = target;
   else host.scrollLeft = target;
 };

@@ -138,7 +138,8 @@
               @pointerdown.stop
               @keydown.down.prevent="handleFilterKeydownDown()"
               @keydown.enter.prevent="handleFilterKeydownEnter(close)"
-              class="h-7 w-full rounded-sm border border-border-light bg-surface-body px-2 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+              data-focusable-outline
+              class="h-7 w-full rounded-sm border border-border-light bg-surface-body px-2 text-xs outline-none"
               ref="filterInputRef"
               type="text"
             />

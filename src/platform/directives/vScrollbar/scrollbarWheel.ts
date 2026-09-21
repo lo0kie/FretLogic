@@ -6,6 +6,7 @@
  */
 
 import { EDGE_LOCK_MS, isWheelScrollSeen } from '@/platform/directives/vWheelScroll';
+import { clamp } from '@/platform/utils/common';
 import { toPixelDelta } from '@/platform/utils/dom';
 
 import type { ScrollbarState } from './scrollbarCore';
@@ -33,8 +34,8 @@ export const wheelScroll = (state: ScrollbarState, dx: number, dy: number): void
       if (!a) return;
       const maxTop = Math.max(0, host.scrollHeight - host.clientHeight);
       const maxLeft = Math.max(0, host.scrollWidth - host.clientWidth);
-      a.top = Math.min(Math.max(a.top, 0), maxTop);
-      a.left = Math.min(Math.max(a.left, 0), maxLeft);
+      a.top = clamp(a.top, 0, maxTop);
+      a.left = clamp(a.left, 0, maxLeft);
       const dTop = a.top - host.scrollTop;
       const dLeft = a.left - host.scrollLeft;
       if (Math.abs(dTop) < 1 && Math.abs(dLeft) < 1) {

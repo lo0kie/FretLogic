@@ -144,9 +144,10 @@
                   @mousedown.stop
                   @pointerdown.stop
                   @click.stop="openEditDrawer(chord)"
+                  data-focusable-outline
                   icon-only
                   aria-label="去修改该和弦"
-                  class="picker-edit-btn pointer-events-auto absolute top-1 right-1 z-float p-1.5! opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100"
+                  class="picker-edit-btn pointer-events-auto absolute top-1 right-1 z-float p-1.5! opacity-0 transition-opacity duration-fast group-focus-within:opacity-100 group-hover:opacity-100 focus:opacity-100"
                   color="primary"
                   icon="pencil"
                   icon-size="sm"

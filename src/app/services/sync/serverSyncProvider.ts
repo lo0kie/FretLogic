@@ -2,10 +2,10 @@ import { serializeForStorage } from '@/platform/utils/common';
 import { CLOUD_SYNC_CONFIG } from '@/platform/utils/constants';
 
 import { computePayloadMaxUpdatedAt, computePayloadMd5 } from './payloadChecksum';
-import { SyncError } from './provider.ts';
-import { createSyncProviderBase, extractApiErrorDetail } from './syncBase.ts';
+import { SyncError } from './provider';
+import { createSyncProviderBase, extractApiErrorDetail } from './syncBase';
 
-import type { ServerSyncConfig, SyncProvider } from './provider.ts';
+import type { ServerSyncConfig, SyncProvider } from './provider';
 
 /**
  * 线上服务器（Custom Server / Cloudflare Worker D1）同步 provider。

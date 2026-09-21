@@ -64,29 +64,33 @@ describe('localStorage 退役转录（transcribeLegacyLocalStorage）', () => {
   });
 
   it('实体数据转录进 IDB（分组/和弦/歌曲与顺序索引），完成后清空 localStorage', async () => {
+    // SongId 是品牌类型，测试夹具按上方 song 的既有风格用双重断言构造
+    const song2 = { ...song, id: 's2', title: 'Song2' } as unknown as Song;
     localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify([group]));
     localStorage.setItem(STORAGE_KEYS.CHORD_LIST, JSON.stringify([chord]));
     localStorage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:${song.id}`, JSON.stringify(song));
-    localStorage.setItem(STORAGE_KEYS.SONGS_INDEX, JSON.stringify([song.id]));
+    localStorage.setItem(`${STORAGE_KEYS.SONG_ENTRY}:${song2.id}`, JSON.stringify(song2));
+    // 索引刻意与键写入顺序相反：只有真正读回旧 SONGS_INDEX 才会得到 s2 在前的顺序
+    localStorage.setItem(STORAGE_KEYS.SONGS_INDEX, JSON.stringify(['s2', 's1']));
 
     const result = await transcribeLegacyLocalStorage();
 
-    expect(result).toEqual({ groups: 1, chords: 1, songs: 1, kvKeys: 0 });
+    expect(result).toEqual({ groups: 1, chords: 1, songs: 2, kvKeys: 0 });
     const snapshot = await chordRepository.load();
     expect(snapshot.groups).toHaveLength(1);
     expect(snapshot.chords).toHaveLength(1);
     const loadedSongs = await songRepository.loadSongs();
-    expect(loadedSongs).toHaveLength(1);
-    expect(loadedSongs[0]?.id).toBe('s1');
+    expect(loadedSongs).toHaveLength(2);
+    // 顺序索引按旧索引恢复（而非键插入顺序 s1,s2）
+    expect(loadedSongs.map(s => s.id)).toEqual(['s2', 's1']);
     // 旧扁平槽位经转录清洗归一为嵌套结构
-    expect(loadedSongs[0]?.chordMap.size).toBe(1);
-    expect(loadedSongs[0]?.chordMap.get('l1' as LineId)).toEqual({
+    const s1 = loadedSongs.find(s => s.id === 's1');
+    expect(s1?.chordMap.size).toBe(1);
+    expect(s1?.chordMap.get('l1' as LineId)).toEqual({
       char: new Map([[0, 'c1']]),
       start: [],
       end: [],
     });
-    // 顺序索引按旧索引恢复
-    expect(loadedSongs.map(s => s.id)).toEqual(['s1']);
     expect(localStorage.length).toBe(0);
   });
 

@@ -1,9 +1,9 @@
 import { base64EncodeUtf8, serializeForStorage } from '@/platform/utils/common';
 
-import { SyncError } from './provider.ts';
-import { createSyncProviderBase } from './syncBase.ts';
+import { SyncError } from './provider';
+import { createSyncProviderBase } from './syncBase';
 
-import type { SyncProvider, WebdavSyncConfig } from './provider.ts';
+import type { SyncProvider, WebdavSyncConfig } from './provider';
 
 const WEBDAV_REMOTE_FILE_PATH = 'FretLogic/chords.json'; // 内部写死
 /** 独立校验元数据载体：数据源文件同目录下的一份小文件，启动检测只拉这份最小数据 */

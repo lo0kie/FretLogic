@@ -341,7 +341,7 @@ const handlePointerUp = async (e: PointerEvent) => {
 
   if (wasDragging && hasMovedSignificantly) {
     const initialPos = startValue ? maxTravelDistance : 0;
-    const targetPos = Math.min(Math.max(0, initialPos + deltaX), maxTravelDistance);
+    const targetPos = clamp(initialPos + deltaX, 0, maxTravelDistance);
     const finalChecked = targetPos >= maxTravelDistance * 0.5;
 
     if (finalChecked !== isChecked.value) {

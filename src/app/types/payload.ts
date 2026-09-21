@@ -20,9 +20,13 @@ export interface ImportExportPayload {
   /** 同步配置：判别联合（kind）+ 可选加密凭据块 */
   syncSettings?: EncryptedSyncSettingsBackup;
   preferences?: AppPreferencesBackup;
-  /** 上传至云端时的数据校验和（MD5，覆盖不含本字段的其余载荷内容），供启动时与本地比对判定是否一致 */
+  /**
+   * 历史字段：早期上传把 MD5 校验和内嵌进载荷。现上传路径改写入独立 meta 载体
+   *（github/gitee/webdav 的 `.meta.json`、server 的 query + `/meta`），客户端不再写这两个字段；
+   * 保留仅为兼容历史云端包，校验层会把包里已有的值原样透传（比对逻辑本身读 meta，不读这里）。
+   */
   dataMd5?: string;
-  /** 上传时载荷内实体的最新修改时间戳（max updatedAt），供启动比对时判断「本地/云端」哪边更新 */
+  /** 历史字段，语义同 dataMd5：早期内嵌的「载荷内实体最新修改时间戳」，现由 meta.updatedAt 承担 */
   dataUpdatedAt?: number;
 }
 

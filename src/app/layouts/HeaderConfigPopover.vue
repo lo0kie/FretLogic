@@ -19,7 +19,7 @@
         icon-size="xl"
         title="排版"
       >
-        <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
+        <BaseForm gap="sm" label-size="2xs" label-tone="muted" size="sm">
           <BaseFormRow label="字号缩放">
             <BaseSlider
               v-model.lazy="fontScaleModel"
@@ -91,7 +91,7 @@
         icon-size="xl"
         title="显示"
       >
-        <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
+        <BaseForm gap="sm" label-size="2xs" label-tone="muted" size="sm">
           <BaseFormRow help="仅乐谱生效" label="符号简写 (M/°/+)">
             <BaseSwitch v-model="settingsStore.scoreChordShorthand" aria-label="乐谱符号简写" />
           </BaseFormRow>
@@ -121,7 +121,7 @@
         icon-size="xl"
         title="版面"
       >
-        <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
+        <BaseForm gap="sm" label-size="2xs" label-tone="muted" size="sm">
           <BaseFormRow help="标准单页尺寸，A4/Letter 常用于打印输出" label="单页尺寸">
             <BaseSegmentedControl
               v-model="settingsStore.scorePageSize"
@@ -168,7 +168,7 @@
         icon-size="xl"
         title="音色"
       >
-        <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
+        <BaseForm gap="sm" label-size="2xs" label-tone="muted" size="sm">
           <BaseFormRow help="和弦试听音色" label="音色">
             <BaseSegmentedControl
               v-model="settingsStore.audioPlayback.timbre"
@@ -237,7 +237,7 @@
         icon-size="xl"
         title="效果"
       >
-        <BaseForm gap="sm" label-size="2xs" label-tone="title" size="sm">
+        <BaseForm gap="sm" label-size="2xs" label-tone="muted" size="sm">
           <BaseFormRow help="混响尾音占比" label="混响">
             <BaseSlider
               v-model="settingsStore.audioPlayback.reverbWet"

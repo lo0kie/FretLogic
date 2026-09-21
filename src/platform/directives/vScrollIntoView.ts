@@ -1,5 +1,6 @@
 import { nextTick } from 'vue';
 
+import { clamp } from '@/platform/utils/common';
 import { findScrollParent } from '@/platform/utils/dom';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
@@ -199,7 +200,7 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
 
         const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
         container.scrollTo({
-          left: Math.max(0, Math.min(maxScroll, scrollTarget)),
+          left: clamp(scrollTarget, 0, maxScroll),
           behavior,
         });
         return;
@@ -275,10 +276,8 @@ const settleUpdate = (el: HTMLElement, opts: ScrollIntoViewOptions) => {
   const tracker = settleMap.get(el);
   if (!tracker) return;
   tracker.optsRef.current = opts;
+  // 只负责「该不该继续监视」的开关：条件不再满足即释放；仍在监视时无需任何动作（配置已就地刷新）
   if (!opts.settle || opts.once || !opts.active) settleStop(el);
-  else if (tracker.ro) {
-    // 已激活并已观察：仅刷新配置即可，无需重建
-  }
 };
 
 /** 停用并释放尺寸监视。 */

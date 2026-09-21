@@ -77,6 +77,8 @@ import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, useTemplateR
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import { acquireFloatingZ, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
 
+import { registerPanelEscape } from './escapeDispatcher';
+
 defineOptions({ name: 'BaseFloatingPanel' });
 
 const props = withDefaults(
@@ -187,18 +189,32 @@ const handleAfterLeave = () => {
   emit('closed');
 };
 
-/** Esc 关闭：仅当焦点在面板内时响应（非模态面板不抢占宿主页面的 Esc） */
-const handleEscape = (e: KeyboardEvent) => {
-  if (e.key !== 'Escape' || !visibleModel.value) return;
-  const panel = panelRef.value;
-  if (panel && document.activeElement && panel.contains(document.activeElement)) visibleModel.value = false;
+/**
+ * 全局 Esc 分发器中的登记句柄。关闭动作交给分发器统一裁决（「含当前焦点且内联层号最高」的那个面板），
+ * 因此这里只声明「本面板可见 + 如何关闭」，不再各自挂一条 window keydown。
+ * 非模态面板不抢占宿主页面的 Esc —— 焦点不在任何登记面板内时分发器直接不处理，与原语义一致。
+ */
+let unregisterEscape: (() => void) | null = null;
+
+/** 登记本面板参与 Esc 关闭（幂等） */
+const retainEscape = () => {
+  if (unregisterEscape) return;
+  const el = panelRef.value;
+  if (!el) return;
+  unregisterEscape = registerPanelEscape({ el, close: () => (visibleModel.value = false) });
+};
+
+/** 释放 Esc 登记（面板不可见 / 组件卸载时） */
+const releaseEscape = () => {
+  unregisterEscape?.();
+  unregisterEscape = null;
 };
 
 watch(
   () => props.visible,
   async val => {
     if (!val) {
-      window.removeEventListener('keydown', handleEscape);
+      releaseEscape();
       // 层号在离场动画结束后释放（见 handleAfterLeave）；此处不释放，避免离场期间被后续浮层抢占层号
       return;
     }
@@ -207,17 +223,19 @@ watch(
     // 若此处无条件再取新号，旧号会悬空泄漏，而 after-leave 会误把新号放掉（面板 zIndex 掉 0）
     if (!floatingZ.value) floatingZ.value = acquireFloatingZ();
 
-    window.addEventListener('keydown', handleEscape);
     contentMounted.value = true;
     emit('open');
     await nextTick();
+    // 登记排在 nextTick 之后：面板根节点此时才挂载，且层号已写进内联 style ——
+    // 分发器正是按内联层号挑出「层叠最高且含焦点」的那个面板
+    retainEscape();
     emit('opened');
   },
   { immediate: true }
 );
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleEscape);
+  releaseEscape();
   // 兜底释放层号：面板在离场动画完成前被卸载时 after-leave 不会触发
   if (floatingZ.value) {
     releaseFloatingZ(floatingZ.value);

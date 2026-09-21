@@ -10,6 +10,7 @@
  */
 
 import { clampDrawFretCount } from '@/domains/fretboard/constants';
+import { isBarreStillValid } from '@/domains/fretboard/model/coordinates';
 import { createLruCache } from '@/platform/utils/cache';
 
 import { capoFont, drawFormattedChordName, LAYOUT, measureChordNameWidth, requireContext2D } from './scoreExportLayout';
@@ -277,7 +278,12 @@ function drawFretboardVector(
   // 5. 大横按（Barres）——两端带饱满圆角，完全覆盖音符点；showBarre=false 时隐藏横按梁
   if (showBarre && chord.barres && chord.barres.length > 0) {
     const barreHalfH = LAYOUT.BARRE_THICKNESS / 2;
+    // 与两处屏幕渲染器同判据（computeDisplayBarres / drawBarresOnCanvas）：越出可视品位窗口或已被
+    // 指法破坏的横按不绘制。线格式是 [fret, preferFlat] 元组，判据要琴弦模型，按原值还原即可。
+    const stringModel = (chord.strings ?? []).map(s => ({ fret: s ? s[0] : 0, preferFlat: s ? s[1] : false }));
     for (const b of chord.barres) {
+      if (b.fret < 1 || b.fret > fretCount) continue;
+      if (!isBarreStillValid(stringModel, b)) continue;
       const bx1 = startStrX + b.fromString * LAYOUT.STRING_SPACING;
       const bx2 = startStrX + b.toString * LAYOUT.STRING_SPACING;
       const by = gridTop + (b.fret - 0.5) * LAYOUT.FRET_HEIGHT;

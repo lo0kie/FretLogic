@@ -14,11 +14,11 @@ import { computed, watchEffect } from 'vue';
 
 import { logger } from '@/platform/utils/logger';
 
-import { ICON_REGISTRY } from './icons.registry.ts';
-import { resolveIconSize, resolveIconStroke } from './iconSizes.ts';
+import { ICON_REGISTRY } from './icons.registry';
+import { resolveIconSize, resolveIconStroke } from './iconSizes';
 
-import type { IconName } from './icons.registry.ts';
-import type { IconSizeValue, IconStrokeValue } from './iconSizes.ts';
+import type { IconName } from './icons.registry';
+import type { IconSizeValue, IconStrokeValue } from './iconSizes';
 import type { CSSProperties } from 'vue';
 
 export interface BaseIconProps {

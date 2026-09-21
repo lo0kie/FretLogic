@@ -211,7 +211,7 @@ import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
-import { formatBytes } from '@/platform/utils/common';
+import { clamp, formatBytes } from '@/platform/utils/common';
 
 import type { PreviewRenderData } from '@/domains/score/preview/scorePreviewCache';
 import type { MenuItem } from '@/platform/ui/menu/types';
@@ -431,7 +431,7 @@ const activePercent = computed<number>({
   get: () => (isFitMode.value ? fitZoomPercent.value : customZoomPercent.value),
   set: val => {
     isFitMode.value = false;
-    customZoomPercent.value = Math.min(PREVIEW_MAX_ZOOM_PERCENT, Math.max(PREVIEW_MIN_ZOOM_PERCENT, val));
+    customZoomPercent.value = clamp(val, PREVIEW_MIN_ZOOM_PERCENT, PREVIEW_MAX_ZOOM_PERCENT);
   },
 });
 

@@ -27,8 +27,8 @@ export const AUDIO_CONFIG = {
   /** 压缩器释音时间（s） */
   COMPRESSOR_RELEASE: 0.25,
 
-  /** 扫弦时相邻弦触发间隔（s） */
-  STRUM_DELAY_STEP: 0.06,
+  /** 扫弦时相邻弦触发间隔（s）：默认值真源在 platform/utils 的 AUDIO_SETTINGS_DEFAULTS（存毫秒，此处换算为秒） */
+  STRUM_DELAY_STEP: AUDIO_SETTINGS_DEFAULTS.strumDelayMs / 1000,
   /** 音符释放后额外静音等待（s，防止尾音截断） */
   AUDIO_RELEASE_TAIL: 0.6,
   /** 扫弦力度随机区间：下限（0~1，模拟不同力度） */

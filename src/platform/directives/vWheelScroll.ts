@@ -22,6 +22,7 @@
  * 普通 scrollLeft 赋值不会同步生效——回读仍是动画中的旧值，
  * 会造成「位移不按真实距离映射」且「倍率被动画吞掉看不出差别」。
  */
+import { clamp } from '@/platform/utils/common';
 import { resolveWheelDeltaPx, toPixelDelta } from '@/platform/utils/dom';
 
 import type { Directive } from 'vue';
@@ -369,7 +370,7 @@ const performSmoothScroll = (el: HTMLElement, axis: 'x' | 'y', scrollAmount: num
     state.target = readOffset(el, axis);
 
   // 累加位移并限制在合法滚动区间
-  state.target = Math.max(0, Math.min(maxOffset(el, axis), state.target + scrollAmount));
+  state.target = clamp(state.target + scrollAmount, 0, maxOffset(el, axis));
 
   if (state.rafId !== null) return;
 
@@ -505,7 +506,7 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
         if (handler.opts.stop) e.stopPropagation();
 
         const notifyScroll = () => {
-          const currentProgress = maxScrollLeft > 0 ? Math.min(1, Math.max(0, el.scrollLeft / maxScrollLeft)) : 0;
+          const currentProgress = maxScrollLeft > 0 ? clamp(el.scrollLeft / maxScrollLeft, 0, 1) : 0;
 
           if (handler.opts.onScroll) handler.opts.onScroll(e, currentProgress);
 

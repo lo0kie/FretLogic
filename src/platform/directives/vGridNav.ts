@@ -40,6 +40,12 @@ interface Entry {
   eligible: boolean;
 }
 
+/**
+ * 方向键导航的**候选节点**宽集合。与 dom.ts 的 FOCUSABLE_SELECTOR（「什么算 Tab 可聚焦」，
+ * 供焦点圈定/自动聚焦用）不是同一事实，故不合并：此处必须额外容纳 `[data-focusable-outline]`
+ * 这类不带 tabindex 的自定义格子节点，而 disabled/不可见/inert 的排除统一由 isEligible 负责，
+ * 选择器里重复写 `:not([disabled])` 只会造成两处规则漂移。
+ */
 const DEFAULT_SELECTOR = '[data-focusable-outline], [tabindex="0"], button, input, select, textarea, a[href]';
 
 const isTestEnv = typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test';

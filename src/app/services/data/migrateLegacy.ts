@@ -176,7 +176,9 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
       const indexRaw = parseJson(entries.get(STORAGE_KEYS.SONGS_INDEX));
       const songIds = new Set(songs.map(s => s.id));
       const orderIds = Array.isArray(indexRaw)
-        ? indexRaw.filter((id): id is string => typeof id === 'string' && songIds.has(toSongId(id)))
+        ? indexRaw
+            .filter((id): id is string => typeof id === 'string' && songIds.has(toSongId(id)))
+            .map(toSongId)
         : [];
       await songRepository.flushChanges({ removedIds: [], dirtySongs: songs, orderIds });
     }

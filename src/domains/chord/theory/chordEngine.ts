@@ -23,7 +23,7 @@ import { estimateValueBytes } from '@/platform/utils/common';
 
 import { chordQualityAstToIntervals, QUALITY_TOKENS } from './chordQualityAst';
 import { categoryOfAst, compositeTokens, recognizeByIntervals, rolesOfAst, weightOf } from './chordRecognitionAst';
-import { nameToSegments, parsePitchSegment } from './theory.ts';
+import { nameToSegments, parsePitchSegment } from './theory';
 
 import type { ChordQualityAst } from './chordQualityAst';
 import type { CategoryOfAst } from './chordRecognitionAst';

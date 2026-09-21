@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createGithubSyncProvider } from '@/app/services/sync/githubSyncProvider';
 import { createServerSyncProvider } from '@/app/services/sync/serverSyncProvider';
 import { createWebdavSyncProvider } from '@/app/services/sync/webdavSyncProvider';
+import { CLOUD_SYNC_CONFIG } from '@/platform/utils/constants';
 
 import type { GithubSyncConfig, WebdavSyncConfig } from '@/app/services/sync/provider';
 
@@ -36,7 +37,8 @@ describe('github testConnection', () => {
     const detail = await createGithubSyncProvider(githubConfig).testConnection();
     expect(detail).toContain('Token 有效');
     // 探测仓库 API，而非 contents 文件路径
-    expect(String(fetchMock.mock.calls[0][0])).toBe('https://api.github.com/repos/owner/repo');
+    expect(fetchMock).toHaveBeenCalled();
+    expect(String(fetchMock.mock.calls[0]![0])).toBe('https://api.github.com/repos/owner/repo');
   });
 
   it('notes missing token for public repos', async () => {
@@ -70,9 +72,10 @@ describe('webdav testConnection', () => {
     vi.stubGlobal('fetch', fetchMock);
     const detail = await createWebdavSyncProvider(webdavConfig).testConnection();
     expect(detail).toContain('账号密码有效');
-    expect(String(fetchMock.mock.calls[0][0])).toBe('https://dav.example.com');
-    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('PROPFIND');
-    expect((fetchMock.mock.calls[0][1] as RequestInit).headers).toMatchObject({ Depth: '0' });
+    expect(fetchMock).toHaveBeenCalled();
+    expect(String(fetchMock.mock.calls[0]![0])).toBe('https://dav.example.com');
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).method).toBe('PROPFIND');
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).headers).toMatchObject({ Depth: '0' });
   });
 
   it('reports direct connection when no proxy configured', async () => {
@@ -92,7 +95,8 @@ describe('webdav testConnection', () => {
     }).testConnection();
     expect(detail).toContain('经代理转发');
     // 请求经代理转发，目标地址被编码为 url 参数
-    expect(String(fetchMock.mock.calls[0][0])).toContain('proxy.example.com');
+    expect(fetchMock).toHaveBeenCalled();
+    expect(String(fetchMock.mock.calls[0]![0])).toContain('proxy.example.com');
   });
 
   it('rejects with credential message on 401', async () => {
@@ -159,7 +163,8 @@ describe('webdav testConnection', () => {
     const provider = createWebdavSyncProvider(webdavConfig);
     await provider.push({ version: 4, groups: [], chords: [], songs: [] });
 
-    const putInit = fetchMock.mock.calls[2][1] as RequestInit;
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
+    const putInit = fetchMock.mock.calls[2]![1] as RequestInit;
     expect(putInit.method).toBe('PUT');
     expect((putInit.headers as Record<string, string>)['If-Match']).toBe('"strong-etag-1"');
   });
@@ -174,8 +179,10 @@ describe('server testConnection', () => {
       serverUrl: 'https://api.example.com/sync',
     }).testConnection();
     expect(detail).toContain('已连通开发环境');
-    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
-    expect(headers?.['X-Environment']).toBeDefined();
+    expect(fetchMock).toHaveBeenCalled();
+    const headers = fetchMock.mock.calls[0]![1]?.headers as Record<string, string>;
+    // 原为 toBeDefined()（弱断言）；改为断言取值来源，与 serverSyncProvider.test.ts 同口径
+    expect(headers?.['X-Environment']).toBe(CLOUD_SYNC_CONFIG.MODE);
   });
 
   it('returns 404 friendly message with environment indicator', async () => {

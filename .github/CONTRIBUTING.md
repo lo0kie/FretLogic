@@ -14,25 +14,27 @@ pnpm dev          # 本地开发（http://localhost:5173）
 
 ## 常用命令
 
-| 命令             | 说明                      |
-| ---------------- | ------------------------- |
-| `pnpm dev`       | 启动开发服务器            |
-| `pnpm build`     | 生产构建                  |
-| `pnpm typecheck` | 类型检查（vue-tsc）       |
-| `pnpm lint`      | ESLint 检查（含架构约束） |
-| `pnpm test`      | 单元测试（Vitest）        |
-| `pnpm coverage`  | 测试覆盖率                |
-| `pnpm format`    | Prettier 格式化           |
+| 命令                 | 说明                                       |
+| -------------------- | ------------------------------------------ |
+| `pnpm dev`           | 启动开发服务器                             |
+| `pnpm build`         | 生产构建                                   |
+| `pnpm typecheck`     | 类型检查（vue-tsc）                        |
+| `pnpm lint`          | ESLint 检查（含架构约束）                  |
+| `pnpm test`          | 单元测试（Vitest）                         |
+| `pnpm test:coverage` | 单元测试 + 分层覆盖率门槛                  |
+| `pnpm build:budget`  | 产物体积预算检查                           |
+| `pnpm bench`         | 领域纯函数性能基准（信息性输出，不设阈值） |
+| `pnpm format`        | Prettier 格式化                            |
+| `pnpm verify`        | 串行跑完下列全部门禁（挂在 pre-push）      |
 
 ## 提交前检查
 
-提交代码前请确保本地通过全部质量门禁：
-
 ```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
+pnpm verify
 ```
 
-CI（GitHub Actions）也会执行同样的检查，失败将阻止合并。
+等价于 `format:check → lint → typecheck → test:coverage → build → build:budget`。CI（GitHub
+Actions）执行同一组检查，额外多一步信息性的 `pnpm bench`；任一步失败将阻止合并。
 
 ## 架构约定
 
@@ -69,7 +71,8 @@ src/
 ## 测试
 
 - 领域层（乐理/和弦引擎）与数据层必须有单元测试
-- 新增基础组件应附组件测试
+- 新增**带内部状态或交互逻辑**的组件应附组件测试；纯透传 Props 的基础 UI 组件（Icon / Badge / FormRow / Input /
+  SegmentedControl 等）与无状态展示包装层属**免测区**，不写单测（口径见 `AGENTS.md` 第七节「测试价值准入原则」）
 - 修改主流程后建议补充 Playwright E2E 冒烟用例
 
 ## 提交 Pull Request

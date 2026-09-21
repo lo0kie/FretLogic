@@ -44,7 +44,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const githubRepo = useStorage(STORAGE_KEYS.GH_REPO, GITHUB_SYNC_CONFIG.DEFAULT_REPO);
   const githubBranch = useStorage(STORAGE_KEYS.GH_BRANCH, GITHUB_SYNC_CONFIG.DEFAULT_BRANCH);
   const githubPath = useStorage(STORAGE_KEYS.GH_PATH, GITHUB_SYNC_CONFIG.DEFAULT_PATH);
-  const githubBranches = useStorage(STORAGE_KEYS.GH_BRANCHES, <string[]>[]);
 
   // Gitee 同步配置（默认由 GITEE_SYNC_CONFIG 提供仓库与分支）
   const giteeToken = ref('');
@@ -52,7 +51,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const giteeRepo = useStorage(STORAGE_KEYS.GE_REPO, GITEE_SYNC_CONFIG.DEFAULT_REPO);
   const giteeBranch = useStorage(STORAGE_KEYS.GE_BRANCH, GITEE_SYNC_CONFIG.DEFAULT_BRANCH);
   const giteePath = useStorage(STORAGE_KEYS.GE_PATH, GITEE_SYNC_CONFIG.DEFAULT_PATH);
-  const giteeBranches = useStorage(STORAGE_KEYS.GE_BRANCHES, <string[]>[]);
 
   // 迁移一次性兼容：早期 Gitee 预设曾沿用 GitHub 值（lo0kie/FretLogic）且分支固定 master，
   // useStorage 的持久化值优先于新默认，故在此把历史遗留值纠正到新预设（分支按 dev/prod 分流）
@@ -127,7 +125,7 @@ export const useSettingsStore = defineStore('settings', () => {
     { mergeDefaults: true, serializer: audioPlaybackSerializer }
   );
 
-  /** 从备份包恢复同步配置（导入备份/云端拉取时调用）。分支缓存随旧配置失效。 */
+  /** 从备份包恢复同步配置（导入备份/云端拉取时调用）。 */
   const applySyncBackup = (sync?: SyncSettingsBackup) => {
     if (!sync) return;
     // 兼容旧备份：v7 前为平铺 { syncTarget, githubToken, ... } 形态
@@ -171,8 +169,6 @@ export const useSettingsStore = defineStore('settings', () => {
       if (typeof legacy.webdavProxyUrl === 'string') webdavProxyUrl.value = legacy.webdavProxyUrl;
       if (typeof legacy.serverUrl === 'string') serverUrl.value = legacy.serverUrl;
       if (typeof legacy.serverToken === 'string') serverToken.value = legacy.serverToken;
-      githubBranches.value = [];
-      giteeBranches.value = [];
       return;
     }
     // 新结构：按 kind 判别联合分支恢复
@@ -207,8 +203,6 @@ export const useSettingsStore = defineStore('settings', () => {
         if (typeof sync.token === 'string') serverToken.value = sync.token;
         break;
     }
-    githubBranches.value = [];
-    giteeBranches.value = [];
   };
 
   /** 从备份包恢复偏好设置（导入备份/云端拉取时调用）。仅覆盖包中携带的字段。 */
@@ -236,13 +230,11 @@ export const useSettingsStore = defineStore('settings', () => {
     githubRepo,
     githubBranch,
     githubPath,
-    githubBranches,
     giteeToken,
     giteeOwner,
     giteeRepo,
     giteeBranch,
     giteePath,
-    giteeBranches,
     webdavServerUrl,
     webdavUsername,
     webdavPassword,

@@ -8,6 +8,7 @@ import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanv
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { clamp } from '@/platform/utils/common';
 
 import { prepareWorkerExportPayload, runWorkerFooterCompose } from './services/workerExportService';
 
@@ -76,7 +77,7 @@ export const useScoreRenderPayload = () => {
       // 页脚文字色与页面渲染同源（同一套 --fbc-* 变量），保证预览合成层与导出图一致
       color: resolveFretboardCanvasPalette().SUB_TEXT,
       // 与页面渲染同质量档位（百分制转 0.3~1）
-      exportQuality: Math.min(1, Math.max(0.3, settingsStore.scoreExportQuality / 100)),
+      exportQuality: clamp(settingsStore.scoreExportQuality / 100, 0.3, 1),
     });
   };
 

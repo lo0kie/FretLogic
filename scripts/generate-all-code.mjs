@@ -25,24 +25,35 @@ const EXCLUDED_EXT = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico'];
 // （剥离模式下这类信息全部丢失，阅读方容易把刻意决策误判成疏漏）。
 const KEEP_COMMENTS = process.argv.includes('--keep-comments');
 
-function collectFiles(dir, fileList = []) {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (EXCLUDED_DIRS.includes(entry.name)) continue;
-      collectFiles(fullPath, fileList);
-      continue;
+function collectFiles(dir) {
+  // Node ≥18.17 的 readdir recursive 直接展开所有后代（条目为相对 dir 的路径，含目录项），
+  // 需再 stat 过滤出文件，并套用排除规则；单个条目读取失败仅跳过，不中断整体 dump
+  const descendants = fs.readdirSync(dir, { recursive: true });
+  const files = [];
+  for (const rel of descendants) {
+    if (EXCLUDED_DIRS.some(seg => rel.split(path.sep).includes(seg))) continue;
+    if (EXCLUDED_FILES.includes(path.basename(rel))) continue;
+    if (EXCLUDED_EXT.includes(path.extname(rel).toLowerCase())) continue;
+    const fullPath = path.join(dir, rel);
+    try {
+      if (fs.statSync(fullPath).isFile()) files.push(fullPath);
+    } catch {
+      /* 并发删除/权限异常：跳过该条目 */
     }
-    if (!entry.isFile()) continue;
-    if (EXCLUDED_FILES.includes(entry.name)) continue;
-    const ext = path.extname(entry.name).toLowerCase();
-    if (EXCLUDED_EXT.includes(ext)) continue;
-    fileList.push(fullPath);
   }
-  return fileList;
+  return files;
 }
 
+/** 去掉空行（注释去留由调用方决定，两种模式都压缩空行以控制 dump 体积） */
+function collapseBlankLines(content) {
+  const lines = content.split('\n');
+  const filtered = lines.filter(line => line.trim() !== '');
+  return filtered.join('\n');
+}
+
+/** 手写字符扫描器剥注释：跳过字符串/模板字面量，统一删行注释与块注释；
+ *  与语言无关，对 .ts/.vue/.scss 等一律生效。已知边缘：正则字面量内的引号可能误判，
+ *  但真实文件从未踩中，属此工具可接受的取舍。 */
 function stripComments(content) {
   let result = '';
   let i = 0;
@@ -117,13 +128,6 @@ function stripComments(content) {
   }
 
   return result;
-}
-
-/** 去掉空行（注释去留由调用方决定，两种模式都压缩空行以控制 dump 体积） */
-function collapseBlankLines(content) {
-  const lines = content.split('\n');
-  const filtered = lines.filter(line => line.trim() !== '');
-  return filtered.join('\n');
 }
 
 function removeCommentsAndBlankLines(content) {

@@ -165,8 +165,8 @@ export const stopChordSustain = () => {
   isSustaining.value = false;
 };
 
-/** lookahead 排程器：把 lookahead 窗口内的步按绝对音频时间戳排入引擎，UI 高亮按同刻对齐 */
-const scheduleScoreSteps = () => {
+/** lookahead 排程器（异常兜底见下方 scheduleScoreSteps）：把 lookahead 窗口内的步按绝对音频时间戳排入引擎，UI 高亮按同刻对齐 */
+const scheduleScoreStepsImpl = () => {
   scorePlaybackTimer = null;
   if (!isScorePlaying.value) return;
   const now = getAudioTime();
@@ -198,7 +198,12 @@ const scheduleScoreSteps = () => {
     const currentItem = activeSequence[stepIndex]!;
     const chord = 'chord' in currentItem ? currentItem.chord : currentItem;
 
-    triggerChordStrum(chord, { ...buildStrumOptions(), startTime: nextStepAudioTime });
+    // startTime 不得落在过去：tick 迟到（主线程卡顿 / 后台节流）时 nextStepAudioTime 可能已早于当下，
+    // 而引擎包络是按 startTime 的绝对时刻排程的（synthEngine 的 setValueAtTime / linearRampToValueAtTime），
+    // 过去时刻会被立刻求值完 —— attack 段整段丢失，听感从拨弦起振变成硬起音爆点。
+    // 钳到当下即可保住起振包络；节拍真相源仍是 nextStepAudioTime（不被钳位改写），故迟到不累积漂移。
+    const startAt = Math.max(nextStepAudioTime, now);
+    triggerChordStrum(chord, { ...buildStrumOptions(), startTime: startAt });
 
     // UI 高亮与回调按音频时间对齐（排程提前量与音频起点之差）
     const highlightDelayMs = Math.max(0, (nextStepAudioTime - now) * 1000);
@@ -220,6 +225,24 @@ const scheduleScoreSteps = () => {
   scorePlaybackTimer = setTimeout(scheduleScoreSteps, delayMs);
 };
 
+/**
+ * tick 入口：给排程体套一层异常兜底。
+ *
+ * tick 体里任何抛出（引擎内部异常、序列数据异常）都会让「下一轮 tick 的 setTimeout」执行不到，
+ * 而 isScorePlaying 已经停在 true —— UI 永久卡在「播放中」、高亮不再推进，且定时器句柄已置 null
+ * 无法再取消。故此处统一兜底：记日志并走 stopScorePlayback 落定全部状态与定时器。
+ */
+const scheduleScoreSteps = () => {
+  scorePlaybackTimer = null;
+  if (!isScorePlaying.value) return;
+  try {
+    scheduleScoreStepsImpl();
+  } catch (error) {
+    logger.error('audio', '序进排程 tick 异常，已停止播放', error);
+    stopScorePlayback();
+  }
+};
+
 /** 开始全曲和弦序进播放 */
 export const startScorePlayback = async (
   sequence: (ScoreChordStep | Chord)[],
@@ -236,8 +259,15 @@ export const startScorePlayback = async (
   // 重入互斥：上一次序进仍在播时直接开新一轮会叠音（两套 lookahead 排程并行），
   // 先停掉旧会话（含释放旧音、清定时器）再起
   if (isScorePlaying.value) stopScorePlayback();
-  const ready = await ensureAudioReady();
-  if (!ready) return;
+  // 引擎就绪可能因自动播放策略拒绝 resume() 而 reject（synthEngine 的 initAudioEngine 不吞该异常，
+  // 刻意让失败可见并可在下次用户手势后重试）。此处是唯一没有 try 包住的调用点：漏包会让
+  // startScorePlayback 返回 rejected promise，调用方（TopHeader）不接 → 未处理拒绝。故显式兜底。
+  try {
+    if (!(await ensureAudioReady())) return;
+  } catch (error) {
+    logger.error('audio', '乐谱序进启动失败（音频引擎未就绪）', error);
+    return;
+  }
 
   activeSequence = sequence;
   activeStepIndex = options?.startIndex ?? 0;
