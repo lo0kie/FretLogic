@@ -58,8 +58,8 @@
       @input="handleInput($event)"
       @keydown="wrappedKeydown($event)"
       @keyup.enter="handleEnterKeyup()"
-      data-focusable-inline
-      class="w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid bg-surface-body font-[inherit] font-medium text-ellipsis text-fg-title caret-primary transition-all duration-fast outline-none placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus-visible:ring-2 focus:enabled:bg-surface-body disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45 disabled:select-none"
+      data-focusable-outline
+      class="w-full min-w-0 cursor-text overflow-hidden rounded-full border border-solid bg-surface-body font-[inherit] font-medium text-ellipsis text-fg-title caret-primary transition-all duration-fast outline-none placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus:enabled:bg-surface-body disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45 disabled:select-none"
       data-1p-ignore="true"
       data-bwignore="true"
       data-form-type="other"
@@ -95,7 +95,7 @@
         @mousedown.stop
         @pointerdown.stop
         @click.stop="handleClear()"
-        data-focusable-inline
+        data-focusable-outline
         class="flex cursor-pointer items-center justify-center overflow-hidden rounded-full border-none bg-surface-panel-hover p-0 text-fg-disabled transition-all duration-200 outline-none hover:bg-danger hover:text-fg-on-accent active:scale-90"
         type="button"
       >
@@ -118,11 +118,11 @@
             @mousedown.stop
             @pointerdown.stop
             @click.stop="!disabled && (showPassword = !showPassword)"
-            data-focusable-inline
+            data-focusable-outline
             class="flex size-4 items-center justify-center rounded-full border-none bg-transparent p-0 text-fg-disabled transition-all duration-fast outline-none"
             type="button"
           >
-            <BaseIcon :icon-size="'xs'" :name="showPassword ? 'eye' : 'eye-off'" />
+            <BaseIcon :name="showPassword ? 'eye' : 'eye-off'" icon-size="xs" />
           </button>
         </slot>
       </div>
@@ -171,7 +171,8 @@
           />
           <div v-else-if="showSearchSlot" class="v-fade-in-quick flex flex-col gap-0.5">
             <!-- 托管结果行：外壳样式（min-h / 圆角 / 内边距 / 悬停与键盘活跃高亮）统一收敛于此，
-               行内容由 #search-item 插槽决定；点击行与键盘 Enter 走同一条 select-search-index 路径 -->
+               行内容由 #search-item 插槽决定；点击行与键盘 Enter 走同一条 select-search-index 路径
+               （selectIndex 内部：派发选中 + 收起面板） -->
             <template v-if="searchItems">
               <button
                 v-wave
@@ -183,7 +184,7 @@
                 "
                 :key="index"
                 :title="searchItemTitle?.(item)"
-                @click="emit('select-search-index', index)"
+                @click="selectIndex(index)"
                 @mouseenter="setSearchActiveIndex(index)"
                 class="flex min-h-[2rem] w-full cursor-pointer items-center justify-between gap-2 rounded-md border-none px-2.5 py-1 text-left transition-colors duration-fast ease-out outline-none select-none"
                 type="button"
@@ -393,9 +394,9 @@ const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KE
 const resolvedSize = computed<ComponentSize>(() => size ?? controlContext?.size ?? 'md');
 
 /** lazy 修饰符：打字期间只更新本地显示值，change/blur 等提交点才写回 model */
-const isLazy = computed(() => !!modelModifiers?.lazy);
+const isLazy = computed(() => Boolean(modelModifiers?.lazy));
 /** .trim 修饰符与 trim prop 同义：提交时去首尾空格 */
-const isTrimEnabled = computed(() => trim || !!modelModifiers?.trim);
+const isTrimEnabled = computed(() => trim || Boolean(modelModifiers?.trim));
 /** 本地即时值：lazy 模式下打字中间态先落在这里，避免逐键写回 model（初值为一次性快照，后续由 watch 同步；AST 规则误报豁免） */
 // eslint-disable-next-line vue/no-ref-object-reactivity-loss
 const localValue = ref<string>(modelValue.value);
@@ -425,6 +426,7 @@ const {
   searchVirtualRef,
   openResults,
   closeResults,
+  selectIndex,
   setSearchActiveIndex,
   resetActiveIndex,
   handleKeydown,
@@ -482,9 +484,8 @@ const resolvedSearchNoResultText = computed(() => searchNoResultText ?? `未找�
 
 // 密码框模式下默认隐藏明文（'password'），点击眼睛时切换至 'text'
 const resolvedType = computed(() => {
-  if (isPasswordMode.value) {
-    return showPassword.value ? 'text' : 'password';
-  }
+  if (isPasswordMode.value) return showPassword.value ? 'text' : 'password';
+
   return type;
 });
 
@@ -494,9 +495,7 @@ const isAtLimit = computed(() => Boolean(maxlength) && (localValue.value?.length
 // 聚焦态只由 ring 指示：ring 是不占布局的 box-shadow、紧贴 1px 边框外侧，
 // 若再叠 focus:border-* 变色就会呈现「实线边框 + 半透明环」两道圈（双边框）
 const stateBorderClasses = computed(() =>
-  invalid
-    ? 'border-danger hover:enabled:border-danger focus-visible:ring-danger/70'
-    : 'border-border-light hover:enabled:border-border-base focus-visible:ring-primary/70'
+  invalid ? 'border-danger hover:enabled:border-danger' : 'border-border-light hover:enabled:border-border-base'
 );
 
 const isClearAvailable = computed(() => clearable && !disabled && !readonly);
@@ -595,16 +594,12 @@ const isComposing = ref(false);
 /** 应用 trim 与 formatter 后写回模型，并同步 DOM 值 */
 const formatAndCommit = (raw: string) => {
   let val = raw;
-  if (isTrimEnabled.value) {
-    val = val.trim();
-  }
-  if (formatter) {
-    val = formatter(val);
-  }
+  if (isTrimEnabled.value) val = val.trim();
+
+  if (formatter) val = formatter(val);
+
   commitLocal(val);
-  if (inputRef.value && inputRef.value.value !== val) {
-    inputRef.value.value = val;
-  }
+  if (inputRef.value && inputRef.value.value !== val) inputRef.value.value = val;
 };
 
 /** 输入同步：输入法合成期间跳过（由 compositionend 统一提交） */
@@ -612,11 +607,8 @@ const handleInput = (e: Event) => {
   if (isComposing.value) return;
   openResults();
   const targetVal = (e.target as HTMLInputElement).value;
-  if (formatter) {
-    formatAndCommit(targetVal);
-  } else {
-    commitLocal(targetVal);
-  }
+  if (formatter) formatAndCommit(targetVal);
+  else commitLocal(targetVal);
 };
 
 /** change（失焦/回车）：lazy 模式下的提交点，把最终输入写回 model */
@@ -651,9 +643,8 @@ const handleBlur = (e: FocusEvent) => {
     isComposing.value = false;
     const targetVal = (e.target as HTMLInputElement).value;
     formatAndCommit(targetVal);
-  } else if (isTrimEnabled.value) {
-    formatAndCommit((e.target as HTMLInputElement).value);
-  }
+  } else if (isTrimEnabled.value) formatAndCommit((e.target as HTMLInputElement).value);
+
   emit('blur', e);
 };
 
@@ -686,12 +677,11 @@ onMounted(() => {
     rightSlotObserver.observe(rightSlotRef.value);
   }
   // 兜底：异步字体加载完成后再测一次
-  if (typeof document !== 'undefined' && 'fonts' in document) {
+  if (typeof document !== 'undefined' && 'fonts' in document)
     document.fonts.ready.then(measureRightSlot).catch(() => undefined);
-  }
-  if (autofocus) {
-    nextTick(() => inputRef.value?.focus());
-  }
+
+  if (autofocus) nextTick(() => inputRef.value?.focus());
+
   if (searchable && rootRef.value && typeof ResizeObserver !== 'undefined') {
     rootSizeObserver = new ResizeObserver(() => searchPopoverRef.value?.update());
     rootSizeObserver.observe(rootRef.value);

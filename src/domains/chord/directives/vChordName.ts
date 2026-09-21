@@ -5,8 +5,8 @@ import {
   nameToSegments,
   toShorthandQuality,
 } from '@/domains/chord/theory/theory';
+import { createLruCache } from '@/platform/utils/cache';
 import { estimateValueBytes } from '@/platform/utils/common';
-import { createLruCache } from '@/platform/utils/lruCache';
 
 import type { AccidentalType, Chord, ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
 import type { Directive } from 'vue';
@@ -158,13 +158,12 @@ const buildNameHtml = (segments: ChordNameSegments, shorthand: boolean, useUnico
   if (qualityText)
     html += `<span class="chord-quality font-[inherit]">${buildQualityHtml(qualityText, useUnicode)}</span>`;
 
-  for (const ext of extensions) {
+  for (const ext of extensions)
     html += `<span class="chord-ext-item inline align-baseline whitespace-nowrap">${accidental(ext[1])}<span class="chord-ext-degree">${escapeHtml(String(ext[0]))}</span></span>`;
-  }
 
-  if (segments.bass) {
+  if (segments.bass)
     html += `<span class="chord-slash mx-px opacity-85">/</span><span class="chord-bass-group inline align-baseline whitespace-nowrap"><span class="chord-bass-letter">${escapeHtml(segments.bass[0])}</span>${accidental(segments.bass[1])}</span>`;
-  }
+
   return html;
 };
 

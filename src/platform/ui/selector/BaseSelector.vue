@@ -19,13 +19,13 @@
           _isOpen ? 'border-primary ring-1 ring-primary' : '',
           disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer',
         ]"
-        :data-focusable-inline="!disabled || undefined"
         :style="{ width: triggerWidthStyle }"
         :tabindex="disabled ? -1 : 0"
         :title="triggerTitle"
         @keydown="handleTriggerKeydown($event)"
+        data-focusable-outline
         aria-haspopup="listbox"
-        class="group relative flex items-center justify-between gap-2 rounded-full border border-border-light bg-surface-body text-fg-title transition-all duration-150 outline-none select-none hover:border-border-base focus-visible:ring-2 focus-visible:ring-primary/70"
+        class="group relative flex items-center justify-between gap-2 rounded-full border border-border-light bg-surface-body text-fg-title transition-all duration-150 outline-none select-none hover:border-border-base"
         ref="referenceRef"
         role="combobox"
       >
@@ -380,9 +380,8 @@ const selectedOption = computed(() => {
 
 const currentTriggerIcon = computed<IconName | Component | undefined>(() => {
   if (icon) return icon;
-  if (!isMultiple.value && selectedOption.value) {
-    return getOptionIcon(selectedOption.value);
-  }
+  if (!isMultiple.value && selectedOption.value) return getOptionIcon(selectedOption.value);
+
   return undefined;
 });
 
@@ -397,9 +396,7 @@ const searchQuery = ref('');
 
 /** 收集选项 DOM（函数式 ref），供键盘导航聚焦使用 */
 const setOptionEl = (el: unknown, index: number) => {
-  if (el instanceof HTMLElement) {
-    optionEls.value[index] = el;
-  }
+  if (el instanceof HTMLElement) optionEls.value[index] = el;
 };
 
 onBeforeUpdate(() => {
@@ -442,10 +439,10 @@ const filteredOptions = computed(() => {
  */
 const filteredEntries = computed(() => {
   const list = filteredOptions.value;
-  if (list === options) {
+  if (list === options)
     // 未过滤 / 非 filterable：行序即原始序，下标即稳定 key
     return list.map((option, index) => ({ option, key: index }));
-  }
+
   // 已过滤：按引用回查原始下标（选项列表通常为常驻数组且规模小，indexOf 成本可忽略）
   return list.map(option => ({ option, key: options.indexOf(option) }));
 });
@@ -487,9 +484,8 @@ const isNonDefault = computed(() => highlightNonDefault && isNonDefaultValue.val
 
 const canClear = computed(() => {
   if (isEmpty.value) return false;
-  if (defaultValue !== undefined) {
-    return isNonDefaultValue.value;
-  }
+  if (defaultValue !== undefined) return isNonDefaultValue.value;
+
   return true;
 });
 
@@ -514,9 +510,8 @@ const displayText = computed(() => {
   }
   if (isEmpty.value) return placeholder;
   const currentOption = options.find(opt => isSelected(getOptionValue(opt)));
-  if (currentOption !== undefined) {
-    return formattedOption(currentOption);
-  }
+  if (currentOption !== undefined) return formattedOption(currentOption);
+
   return String(modelValue.value ?? '');
 });
 
@@ -595,12 +590,11 @@ watch(displayText, () => {
 const commitValue = (value: V | V[] | undefined, source: string): void => {
   if (import.meta.env.DEV && value !== undefined) {
     const expectsArray = isMultiple.value;
-    if (Array.isArray(value) !== expectsArray) {
+    if (Array.isArray(value) !== expectsArray)
       console.warn(
         `[BaseSelector] ${source}：写入值与 multiple=${String(isMultiple.value)} 形态不符（期望${expectsArray ? '数组' : '单值'}）`,
         value
       );
-    }
   }
   const typed = value as unknown as M extends true ? V[] : V;
   modelValue.value = typed;
@@ -648,26 +642,20 @@ const handleTriggerKeydown = (e: KeyboardEvent) => {
   if (disabled) return;
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
-    if (!isOpen.value) {
-      isOpen.value = true;
-    }
+    if (!isOpen.value) isOpen.value = true;
   }
 };
 
 /** 搜索框按 ↓：聚焦首个可用选项 */
 const handleFilterKeydownDown = () => {
   const firstValidIndex = filteredOptions.value.findIndex(o => !isOptionDisabled(o));
-  if (firstValidIndex !== -1) {
-    optionEls.value[firstValidIndex]?.focus();
-  }
+  if (firstValidIndex !== -1) optionEls.value[firstValidIndex]?.focus();
 };
 
 /** 搜索框按回车：直接选中首个可用选项 */
 const handleFilterKeydownEnter = (close: () => void) => {
   const firstValid = filteredOptions.value.find(o => !isOptionDisabled(o));
-  if (firstValid) {
-    handleSelect(firstValid, close);
-  }
+  if (firstValid) handleSelect(firstValid, close);
 };
 
 /** 列表键盘导航：跳过禁用项，↑ 在顶部时回到搜索框，Esc / Tab 关闭 */
@@ -680,12 +668,9 @@ const handleDropdownKeydown = (e: KeyboardEvent, close: () => void) => {
   if (e.key === 'ArrowDown') {
     e.preventDefault();
     let nextIndex = currentIndex + 1;
-    while (nextIndex < filteredOptions.value.length && isOptionDisabled(filteredOptions.value[nextIndex]!)) {
-      nextIndex++;
-    }
-    if (nextIndex < filteredOptions.value.length) {
-      elements[nextIndex]?.focus();
-    }
+    while (nextIndex < filteredOptions.value.length && isOptionDisabled(filteredOptions.value[nextIndex]!)) nextIndex++;
+
+    if (nextIndex < filteredOptions.value.length) elements[nextIndex]?.focus();
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
     if (currentIndex === 0 && filterable) {
@@ -693,12 +678,9 @@ const handleDropdownKeydown = (e: KeyboardEvent, close: () => void) => {
       return;
     }
     let prevIndex = currentIndex - 1;
-    while (prevIndex >= 0 && isOptionDisabled(filteredOptions.value[prevIndex]!)) {
-      prevIndex--;
-    }
-    if (prevIndex >= 0) {
-      elements[prevIndex]?.focus();
-    }
+    while (prevIndex >= 0 && isOptionDisabled(filteredOptions.value[prevIndex]!)) prevIndex--;
+
+    if (prevIndex >= 0) elements[prevIndex]?.focus();
   } else if (e.key === 'Escape') {
     e.preventDefault();
     close();
@@ -735,9 +717,8 @@ const scrollToSelected = async () => {
     const container = dropdownRef.value;
     if (!container) return;
 
-    if (filterable) {
-      filterInputRef.value?.focus();
-    } else {
+    if (filterable) filterInputRef.value?.focus();
+    else {
       const list = filteredOptions.value;
       const activeIdx = list.findIndex(o => isSelected(getOptionValue(o)));
       const targetIdx = activeIdx !== -1 ? activeIdx : 0;
@@ -747,11 +728,11 @@ const scrollToSelected = async () => {
         const itemRect = targetElement.getBoundingClientRect();
         // 间距对齐 v-edge-fade.y 的 size:16：低于该值选中项落在上下渐隐遮罩区内，观感如同贴边
         const gapOffset = 16;
-        if (itemRect.top - gapOffset < containerRect.top) {
+        if (itemRect.top - gapOffset < containerRect.top)
           container.scrollTop -= containerRect.top - itemRect.top + gapOffset;
-        } else if (itemRect.bottom + gapOffset > containerRect.bottom) {
+        else if (itemRect.bottom + gapOffset > containerRect.bottom)
           container.scrollTop += itemRect.bottom - containerRect.bottom + gapOffset;
-        }
+
         // focus 原生的 focus scrolling 以「恰好可见 = 零间距」为准，会在面板 scale 过渡期间
         // （rect 为缩放中坐标，滚动计算失真）把刚定位好的选项重滚成贴边——焦点必须与滚动解耦
         targetElement.focus({ preventScroll: true });

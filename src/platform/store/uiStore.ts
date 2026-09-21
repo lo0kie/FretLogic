@@ -71,12 +71,11 @@ export const useUiStore = defineStore('ui', () => {
   /** 恢复所有 Message 的销毁倒计时（常驻型 Message 除外）。 */
   const resumeAllTimers = () => {
     messages.value.forEach(message => {
-      if (!isPersistentMessage(message.type)) {
+      if (!isPersistentMessage(message.type))
         scheduleMessageRemoval(
           message.id,
           remainingMap.get(message.id) ?? message.duration ?? MESSAGE_DEFAULT_DURATION_MS
         );
-      }
     });
   };
 
@@ -103,9 +102,8 @@ export const useUiStore = defineStore('ui', () => {
       spinner: options.spinner ?? type === MessageType.LOADING,
     });
 
-    if (!isPersistentMessage(type)) {
-      scheduleMessageRemoval(id, duration);
-    }
+    if (!isPersistentMessage(type)) scheduleMessageRemoval(id, duration);
+
     return id;
   };
 

@@ -71,6 +71,14 @@ export const DEFAULT_FRET_COUNT = 3;
 /** 品数下限：渲染层对异常数据的兜底钳制下界 */
 export const MIN_FRET_COUNT: number = Math.min(...FRET_COUNTS);
 
+/**
+ * 品位窗口品数的渲染口径：缺省 / 0 / NaN 回落到默认档位，再钳到下限。
+ * 主线程绘制与导出 Worker 必须走同一函数——两处曾各自写兜底（一边 4、一边 3），
+ * 同一和弦在预览与导出图里会画出不同品数。
+ */
+export const clampDrawFretCount = (fretCount: number | null | undefined): number =>
+  Math.max(MIN_FRET_COUNT, fretCount || DEFAULT_FRET_COUNT);
+
 /** 各品数下浮动操作栏的 bottom 定位（画布随品数增高，栏位随之贴近底部） */
 export const FRET_COUNT_BAR_BOTTOM_MAP: Record<number, string> = {
   3: '5rem',

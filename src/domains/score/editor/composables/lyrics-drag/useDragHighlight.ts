@@ -21,13 +21,10 @@ export function useDragHighlight() {
   /** 切换落点高亮：仅在目标变化时增删 class，避免重复 DOM 操作 */
   const applyDropHighlight = (key: string | null) => {
     if (key === currentDropKey) return;
-    if (currentDropKey !== null) {
-      findSlotEls(currentDropKey).forEach(el => el.classList.remove('is-drop-target'));
-    }
+    if (currentDropKey !== null) findSlotEls(currentDropKey).forEach(el => el.classList.remove('is-drop-target'));
+
     currentDropKey = key;
-    if (key !== null) {
-      findSlotEls(key).forEach(el => el.classList.add('is-drop-target'));
-    }
+    if (key !== null) findSlotEls(key).forEach(el => el.classList.add('is-drop-target'));
   };
 
   /** 标记拖拽源槽位：className 由调用方给出（当前拖拽语义唯一为「移动」，源槽虚化 is-dragging-source） */
@@ -67,7 +64,7 @@ export function useDragHighlight() {
     if (slotEl) {
       const key = slotEl.dataset['slotKey'] ?? null;
       dragOverSlotKey.value = key;
-      activeDropLineId.value = slotEl.closest<HTMLElement>('[data-line-idx]')?.dataset['lineIdx'] ?? null;
+      activeDropLineId.value = slotEl.closest<HTMLElement>('[data-line-index]')?.dataset['lineIndex'] ?? null;
       applyDropHighlight(key);
       return key;
     }
@@ -75,7 +72,7 @@ export function useDragHighlight() {
     const zoneEl = el.closest<HTMLElement>('.interactive-score-zone');
     if (!zoneEl) return clearDropTarget();
 
-    const lines = Array.from(zoneEl.querySelectorAll<HTMLElement>('[data-line-idx]'));
+    const lines = Array.from(zoneEl.querySelectorAll<HTMLElement>('[data-line-index]'));
 
     // 撑开行：宽容判断——只要指针处在某行的垂直范围内就撑开该行，行内水平位置（字符间隙、
     // 行首行号区、行被 min-w-full 拉伸出的行尾空白）不影响，避免指针一移出字符行状态就闪断

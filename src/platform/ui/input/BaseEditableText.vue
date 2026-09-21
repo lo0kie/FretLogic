@@ -179,9 +179,7 @@ const handleBlur = () => {
   const el = editorRef.value;
   if (el) {
     const selection = window.getSelection();
-    if (selection && selection.anchorNode && el.contains(selection.anchorNode)) {
-      selection.removeAllRanges();
-    }
+    if (selection && selection.anchorNode && el.contains(selection.anchorNode)) selection.removeAllRanges();
   }
   isEditing.value = false;
   emit('update:editing', false);

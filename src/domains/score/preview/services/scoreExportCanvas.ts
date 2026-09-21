@@ -48,16 +48,12 @@ function getEdgeChordsWithNextKey(
     .join('');
   const cacheKey = `${lineId}_${type}`;
   const cached = prevEdgeChordsCache.get(cacheKey);
-  if (cached && cached.sig === sig) {
-    return { chords: cached.chords, nextKey: chordSlotKey(lineId, type, ids.length) };
-  }
+  if (cached && cached.sig === sig) return { chords: cached.chords, nextKey: chordSlotKey(lineId, type, ids.length) };
 
   const chords: EdgeChordItem[] = [];
   ids.forEach((chordId, idx) => {
     const foundChord = chordsLookupMap.get(chordId);
-    if (foundChord) {
-      chords.push({ slotKey: chordSlotKey(lineId, type, idx), chord: foundChord });
-    }
+    if (foundChord) chords.push({ slotKey: chordSlotKey(lineId, type, idx), chord: foundChord });
   });
   prevEdgeChordsCache.set(cacheKey, { sig, chords });
   return { chords, nextKey: chordSlotKey(lineId, type, ids.length) };
@@ -66,9 +62,8 @@ function getEdgeChordsWithNextKey(
 /** 构建一行歌词的字符槽位序列，行文本未变化时复用缓存。 */
 function buildChars(lineId: string, lineText: string): CharItem[] {
   const cached = prevCharsByLineId.get(lineId);
-  if (cached && cached.text === lineText) {
-    return cached.chars;
-  }
+  if (cached && cached.text === lineText) return cached.chars;
+
   const chars = lineText.split('').map((char, charIdx) => ({
     char,
     slotKey: charKey(lineId, charIdx),
@@ -114,13 +109,13 @@ export function buildLyricsLinesWithEdges(
       nextEndKey,
     };
   });
-  for (const id of prevCharsByLineId.keys()) {
+  for (const id of prevCharsByLineId.keys())
     if (!activeIds.has(id)) {
       prevCharsByLineId.delete(id);
       prevEdgeChordsCache.delete(`${id}_start`);
       prevEdgeChordsCache.delete(`${id}_end`);
     }
-  }
+
   return result;
 }
 
@@ -131,7 +126,7 @@ export function clearLyricsLineCharsCache() {
 }
 
 // 通用 Canvas / 下载工具已下沉平台层单一来源；此处保留转发以兼容既有导入路径（score 内部消费方）。
-export { buildExportFileName, canvasToBlob, triggerBlobDownload } from '@/platform/utils/canvas';
+export { buildExportFileName, canvasToBlob, triggerBlobDownload } from '@/platform/utils/output';
 export { wait } from '@/platform/utils/common';
 
 export { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';

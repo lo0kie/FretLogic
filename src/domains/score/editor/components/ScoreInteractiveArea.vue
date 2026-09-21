@@ -43,7 +43,7 @@
         >
           <div
             :class="{ 'is-empty-line': lineData.chars.length === 0 }"
-            :data-line-idx="lineData.lineId"
+            :data-line-index="lineData.lineId"
             @mouseenter="hoveredLineKey = lineData.lineId"
             @mouseleave="hoveredLineKey = null"
             class="lyrics-line relative flex w-max min-w-0 flex-[1_1_auto] flex-nowrap items-stretch gap-0 rounded-md border border-transparent px-sm py-xs transition-all duration-base select-none focus-within:border-border-base focus-within:bg-surface-panel-hover hover:border-border-base hover:bg-surface-panel-hover"
@@ -113,12 +113,12 @@
                 v-wave="{}"
                 :aria-label="`字符 ${item.char === ' ' ? '空格' : item.char}，未分配和弦，按 Enter 开关和弦面板`"
                 :class="[
-                  'char-box group relative flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 px-0.5 transition-all duration-fast outline-none hover:bg-tint-primary-88 focus-visible:shadow-(--focus-ring)',
+                  'char-box group relative flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 px-0.5 transition-all duration-fast outline-none hover:bg-tint-primary-88',
                   { 'is-drop-widened': isLineActiveDrop(lineData.lineId) },
                 ]"
                 :data-slot-key="item.slotKey"
                 @click="handleTogglePicker()"
-                data-focusable-inline
+                data-focusable-outline
                 title="点击开关和弦面板"
               >
                 <!-- 瘦槽位作为落点时的轻量绝对定位提示层：只给一圈主题色边框、不铺底色、不遮挡字符 -->
@@ -358,9 +358,8 @@ const lineChordSignatures = computed(() => {
       if (chordId) pushToken(lineId, `${chordSlotKey(lineId, 'end', index)}=${chordId};`);
     });
   }
-  for (const [lineId, entries] of perLine) {
-    sigs.set(lineId, entries.sort().join(''));
-  }
+  for (const [lineId, entries] of perLine) sigs.set(lineId, entries.sort().join(''));
+
   return sigs;
 });
 
@@ -377,9 +376,8 @@ let sentinelObserver: IntersectionObserver | null = null;
 
 /** 视口渲染扩容：扩容哨兵可见时追加渲染行数 */
 const expandNextBatch = () => {
-  if (renderedLineCount.value < lyricsLinesWithEdges.value.length) {
+  if (renderedLineCount.value < lyricsLinesWithEdges.value.length)
     renderedLineCount.value = Math.min(lyricsLinesWithEdges.value.length, renderedLineCount.value + RENDER_BATCH_SIZE);
-  }
 };
 
 /** 建立/重建 IntersectionObserver：观察扩容哨兵，接近底部时静默扩容 */
@@ -394,9 +392,7 @@ const setupSentinelObserver = () => {
   if (!root || !sentinel) return;
   sentinelObserver = new IntersectionObserver(
     entries => {
-      if (entries.some(e => e.isIntersecting)) {
-        expandNextBatch();
-      }
+      if (entries.some(e => e.isIntersecting)) expandNextBatch();
     },
     {
       root,
@@ -445,9 +441,7 @@ const handleScroll = () => {
   const el = scoreZoneRef.value;
   if (!el || renderedLineCount.value >= lyricsLinesWithEdges.value.length) return;
   const remainingScroll = el.scrollHeight - el.scrollTop - el.clientHeight;
-  if (remainingScroll < 1500) {
-    expandNextBatch();
-  }
+  if (remainingScroll < 1500) expandNextBatch();
 };
 
 let isExpandingToBottom = false;
@@ -468,8 +462,8 @@ const cancelExpandToBottom = () => {
 };
 
 /** 点击「滚动到底部」悬浮按钮：分帧流式挂载（每帧 60 行），避免一次性同步创建数万节点卡死主线程 */
-const handleScrollToBottom = (): Promise<void> => {
-  return new Promise(resolve => {
+const handleScrollToBottom = (): Promise<void> =>
+  new Promise(resolve => {
     const total = lyricsLinesWithEdges.value.length;
     if (renderedLineCount.value >= total) {
       scrollToBottom();
@@ -507,7 +501,6 @@ const handleScrollToBottom = (): Promise<void> => {
 
     expandToBottomRafId = requestAnimationFrame(step);
   });
-};
 
 /** 行号展示为两位数字（01、02…） */
 const formatLineIndex = (index: number) => String(index + 1).padStart(2, '0');
@@ -531,9 +524,7 @@ const isLeftAdjacentChord = (lineData: LineData, currentIndex: number): boolean 
   if (currentIndex > 0) {
     const prevCharSlotKey = lineData.chars[currentIndex - 1]?.slotKey;
     if (prevCharSlotKey && getCharChord(prevCharSlotKey)) return true;
-  } else if (lineData.startChords.length > 0) {
-    return true;
-  }
+  } else if (lineData.startChords.length > 0) return true;
 
   return false;
 };
@@ -595,12 +586,12 @@ const lineDropTargetKey = (lineId: string): string | null =>
 // 拖拽中的落地规则提示：neutral message 常驻不自动消失、无转圈（非后台任务），拖拽结束手动移除
 let dragHintMessageId: number | null = null;
 watch(isDragging, dragging => {
-  if (dragging) {
+  if (dragging)
     dragHintMessageId = uiStore.message.neutral('拖到空槽：移动  拖到和弦：替换', {
       closable: false,
       customClass: 'drag-hint-toast',
     });
-  } else if (dragHintMessageId !== null) {
+  else if (dragHintMessageId !== null) {
     uiStore.removeMessage(dragHintMessageId);
     dragHintMessageId = null;
   }

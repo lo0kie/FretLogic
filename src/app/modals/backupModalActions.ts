@@ -8,8 +8,13 @@
  * 只在用户实际确认导入/导出时才需要，静态挂在弹窗状态壳上会把链条拖进首屏闭包。
  * 弹窗状态（modals/modalData）与打开动作仍由 useBackupModals 提供（只读 store，零重依赖）。
  */
+import { toRef } from 'vue';
+
+import { describeSecretDecryptFailure } from '@/app/services/backup/backupCrypto';
 import { useImportExportService } from '@/app/services/backup/useImportExportService';
+import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { useUiStore } from '@/platform/store/uiStore';
+import { logger } from '@/platform/utils/logger';
 
 import { close, modalData, openImportWithPayload } from './useBackupModals';
 
@@ -32,52 +37,57 @@ export const parseBackupFileAndOpen = async (file: File): Promise<void> => {
 
 /** 确认导出：成功才关闭弹窗，失败保持打开让用户调整勾选/密码；busy 置位防 PBKDF2 await 窗口内重复点击 */
 export const handleExportConfirm = async (): Promise<void> => {
-  if (modalData.exportBusy) return;
-  modalData.exportBusy = true;
-  try {
-    // 导出失败（数据损坏/无可导出内容/加密失败）时保持弹窗打开，让用户调整
-    const ok = await ioService.triggerFullExport(modalData.exportSelection, modalData.exportPassphrase);
-    if (!ok) return;
-    close('export');
-  } catch (err) {
-    console.error('导出失败:', err);
-    uiStore.message.error('导出失败，请重试');
-  } finally {
-    modalData.exportBusy = false;
-  }
+  // run 的返回值即「是否导出成功」；重入守卫退出与失败都归为 null/false → 不关闭弹窗
+  const ok = await runBusyAction({
+    busy: toRef(modalData, 'exportBusy'),
+    onError: err => {
+      logger.error('backup', '导出失败', err);
+      uiStore.message.error('导出失败，请重试');
+    },
+    run: async () => ioService.triggerFullExport(modalData.exportSelection, modalData.exportPassphrase),
+  });
+  if (!ok) return;
+  close('export');
 };
 
 /** 确认导入：按勾选把备份包覆盖写入本地；含加密凭据块时先解密还原；busy 置位防重复触发（O7） */
 export const handleImportConfirm = async (): Promise<void> => {
-  if (modalData.importBusy) return;
   const payload = modalData.parsedPayload;
   if (!payload) {
     uiStore.message.error('备份包未就绪，请重新选择文件');
     close('import');
     return;
   }
-  modalData.importBusy = true;
-  try {
-    // 勾选同步配置且包内凭据已加密：必须提供密码并解密成功才应用
-    if (modalData.importSelection.syncSettings && payload.syncSettings?.secrets) {
-      if (!modalData.importPassphrase) {
-        modalData.secretDecryptFailed = true;
-        uiStore.message.warning('该备份的凭据已加密，请输入导出时设置的密码');
-        return;
+  // run 返回 false = 中途退出（缺密码 / 解密失败），弹窗保持打开供重试且不提示成功
+  const applied = await runBusyAction({
+    busy: toRef(modalData, 'importBusy'),
+    onError: err => {
+      logger.error('backup', '导入失败', err);
+      uiStore.message.error('导入失败，请重试');
+    },
+    run: async () => {
+      // 勾选同步配置且包内凭据已加密：必须提供密码并解密成功才应用
+      if (modalData.importSelection.syncSettings && payload.syncSettings?.secrets) {
+        if (!modalData.importPassphrase) {
+          modalData.secretDecryptFailed = true;
+          uiStore.message.warning('该备份的凭据已加密，请输入导出时设置的密码');
+          return false;
+        }
+        try {
+          await ioService.revealEncryptedSyncSettings(payload.syncSettings, modalData.importPassphrase);
+        } catch (err) {
+          // 密码错误 / 密文损坏：保持弹窗打开供重试，不清空已输入密码
+          // 文案（不区分两种失败，避免探测信息）与 warn 留痕统一由 describeSecretDecryptFailure 负责
+          modalData.secretDecryptFailed = true;
+          uiStore.message.error(describeSecretDecryptFailure(err));
+          return false;
+        }
       }
-      try {
-        await ioService.revealEncryptedSyncSettings(payload.syncSettings, modalData.importPassphrase);
-      } catch {
-        // 密码错误 / 密文损坏：保持弹窗打开供重试，不清空已输入密码
-        modalData.secretDecryptFailed = true;
-        uiStore.message.error('凭据解密失败：导出密码错误或备份已损坏');
-        return;
-      }
-    }
-    ioService.applyImportSelection(payload, modalData.importSelection);
-    close('import');
-    uiStore.message.success('已导入所选数据并覆盖本地');
-  } finally {
-    modalData.importBusy = false;
-  }
+      ioService.applyImportSelection(payload, modalData.importSelection);
+      return true;
+    },
+  });
+  if (!applied) return;
+  close('import');
+  uiStore.message.success('已导入所选数据并覆盖本地');
 };

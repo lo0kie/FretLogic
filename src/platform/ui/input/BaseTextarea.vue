@@ -21,8 +21,8 @@
       @compositionstart="isComposing = true"
       @focus="handleFocus($event)"
       @input="handleInput($event)"
-      data-focusable-inline
-      class="no-scrollbar size-full resize-none rounded-lg border border-solid p-xl font-[inherit] text-base/relaxed text-fg-title caret-primary transition-all duration-fast outline-none select-text placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus-visible:ring-2 focus:enabled:bg-surface-panel disabled:cursor-not-allowed disabled:bg-surface-body disabled:opacity-45 disabled:select-none"
+      data-focusable-outline
+      class="no-scrollbar size-full resize-none rounded-lg border border-solid p-xl font-[inherit] text-base/relaxed text-fg-title caret-primary transition-all duration-fast outline-none select-text placeholder:truncate placeholder:font-normal placeholder:text-fg-disabled focus:enabled:bg-surface-panel disabled:cursor-not-allowed disabled:bg-surface-body disabled:opacity-45 disabled:select-none"
       ref="textareaRef"
     />
     <span
@@ -107,7 +107,7 @@ const emit = defineEmits<{
 }>();
 const id = useId();
 /** lazy 修饰符：输入期间只更新本地显示值，change/blur 等提交点才写回 model */
-const isLazy = computed(() => !!props.modelModifiers?.lazy);
+const isLazy = computed(() => Boolean(props.modelModifiers?.lazy));
 /** 本地即时值：lazy 模式下输入中间态先落在这里，避免逐键写回 model（初值为一次性快照，后续由 watch 同步；AST 规则误报豁免） */
 // eslint-disable-next-line vue/no-ref-object-reactivity-loss
 const localValue = ref<string>(modelValue.value);
@@ -139,9 +139,7 @@ const variantClasses = computed(() =>
 
 // 聚焦态只由 ring 指示（与 BaseInput 一致）：1px 边框变色叠加紧贴其外的 2px ring 会呈双边框
 const stateBorderClasses = computed(() =>
-  props.invalid
-    ? 'border-danger hover:enabled:border-danger focus-visible:ring-danger/70'
-    : 'border-border-light hover:enabled:border-border-base focus-visible:ring-primary/70'
+  props.invalid ? 'border-danger hover:enabled:border-danger' : 'border-border-light hover:enabled:border-border-base'
 );
 
 const isAtLimit = computed(
@@ -181,9 +179,8 @@ const handleFocus = (e: FocusEvent) => {
 const handleBlur = (e: FocusEvent) => {
   const wasComposing = isComposing.value;
   isComposing.value = false;
-  if (wasComposing || isLazy.value) {
-    commitLocal((e.target as HTMLTextAreaElement).value);
-  }
+  if (wasComposing || isLazy.value) commitLocal((e.target as HTMLTextAreaElement).value);
+
   emit('blur', e);
 };
 

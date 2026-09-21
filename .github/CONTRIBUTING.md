@@ -42,7 +42,7 @@ CI（GitHub Actions）也会执行同样的检查，失败将阻止合并。
 src/
   app/          # 应用装配外壳：App.vue / router / 顶层布局 / 全局模态 / backup、sync、data、audio 编排服务
   assets/       # 样式与设计令牌（tokens.scss / transitions.scss）
-  domains/      # 纵向业务领域（公共 API 由各自领域根 index.ts 显式导出）
+  domains/      # 纵向业务领域（跨领域消费走深路径导入；领域根 index.ts 仅为模块清单，不作导入入口）
     fretboard/  # 指板引擎：model（纯几何物理模型）/ components（乐器呈现）/ composables
     chord/      # 和弦乐理与和弦库：theory（乐理内核）/ store / library / workbench / transfer
     score/      # 乐谱排版：editor / library / preview / model / transfer

@@ -10,7 +10,7 @@
  * 本模块改用「**由一个 AST 配方生成候选签名**」：
  * 1. `QUALITY_TOKENS` 是配方真相源，每个 token 一个 AST
  * 2. 由 AST 展开出**音集签名**（半音集合），作为匹配键
- * 3. 权重不由模板手写，而由 `RECOGNITION_RULES` 按**结构特征**计算
+ * 3. 权重不由模板手写，而由 `weightOf` 按**结构特征**在 `RECOGNITION_WEIGHT` 权重表上累加
  *    （有无三音 / 七音 / 张力音、是否 alt、是否 sus…）
  *
  * 好处是新增一个配方时，识别、渲染、解析三处**同时**生效，不会再出现
@@ -211,7 +211,7 @@ const COMPOSITE_ENTRIES: CompositeEntry[] = (() => {
   const seenAstKeys = new Set(RECOGNITION_SIGNATURES.map(s => astToKey(s.ast)));
   QUALITY_TOKENS.forEach((token, baseOrder) => {
     if (token.notationOnly === true) return;
-    const ast = token.ast;
+    const { ast } = token;
     const hasSeventh = ast.seventh !== undefined && ast.seventh !== 'none';
     const isSus = ast.sus === 'sus4' || ast.sus === 'sus2';
     if (!hasSeventh && !isSus) return;
@@ -497,9 +497,8 @@ export const recognizeByIntervals = (
     sig,
     composite: false,
   }));
-  for (const entry of COMPOSITE_ENTRIES) {
+  for (const entry of COMPOSITE_ENTRIES)
     if (inputMask & (1 << entry.addedSemitone)) candidates.push({ sig: entry.sig, composite: true });
-  }
 
   for (const { sig, composite } of candidates) {
     // 槽位快照依赖配方：9 半音是「六度」还是「减七度」只有配方知道
@@ -763,17 +762,17 @@ export const rolesOfAst = (
   // 省略标记必须与 `chordQualityAstToIntervals` 的口径一致：AST 说撤掉哪个音，
   // 角色表里也不能给它派角色 —— 否则会「音集里没有、角色表里却有」，
   // 下游按角色取音去算指法时就会去找一个不存在的音。
-  if (!ast.omitThird) {
+  if (!ast.omitThird)
     if (ast.third === 'maj3') push(4, 'third_major', 'core');
     else if (ast.third === 'min3') push(3, 'third_minor', 'core');
-  }
+
   if (ast.sus === 'sus4') push(5, 'sus4', 'core');
   else if (ast.sus === 'sus2') push(2, 'sus2', 'core');
-  if (!ast.omitFifth) {
+  if (!ast.omitFifth)
     if (ast.fifth === 'perf5') push(7, 'fifth_perfect', 'core');
     else if (ast.fifth === 'dim5') push(6, 'fifth_dim', 'core');
     else if (ast.fifth === 'aug5') push(8, 'fifth_aug', 'core');
-  }
+
   if (ast.seventh === 'min7') push(10, 'seventh_minor', 'core');
   else if (ast.seventh === 'maj7') push(11, 'seventh_major', 'core');
   else if (ast.seventh === 'dim7') push(9, 'seventh_dim', 'core');
@@ -790,10 +789,8 @@ export const rolesOfAst = (
 
   if (bassInterval !== undefined) push(bassInterval, 'slash_bass', 'optional');
 
-  if (inputMask !== undefined) {
-    for (let i = 0; i < 12; i++) {
-      if (inputMask & (1 << i) && !used.has(i)) push(i, 'extra', 'extra');
-    }
-  }
+  if (inputMask !== undefined)
+    for (let i = 0; i < 12; i++) if (inputMask & (1 << i) && !used.has(i)) push(i, 'extra', 'extra');
+
   return roles;
 };

@@ -144,9 +144,8 @@ const muteStrokeColor = computed(() => 'var(--color-danger)');
 
 const noteRingColor = computed(() => {
   if (showRootStyle.value) return 'var(--color-warning)';
-  if (isOpenString && isMuted) {
-    return 'var(--color-danger)';
-  }
+  if (isOpenString && isMuted) return 'var(--color-danger)';
+
   return 'var(--color-primary)';
 });
 

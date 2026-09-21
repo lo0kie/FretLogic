@@ -35,8 +35,8 @@ const PITCH_RE = /^([A-Ga-g])([#b]?)/;
 export const parsePitchAt = (text: string, start = 0): { segment: RootSegment; length: number } | null => {
   const match = PITCH_RE.exec(text.slice(start));
   if (!match) return null;
-  const natural = match[1]!.toUpperCase() as NaturalPitchLetter;
-  const accChar = match[2];
+  const [, naturalRaw, accChar] = match;
+  const natural = naturalRaw!.toUpperCase() as NaturalPitchLetter;
   const accidental: AccidentalType = accChar === '#' ? 1 : accChar === 'b' ? -1 : 0;
   return { segment: [natural, accidental], length: match[0].length };
 };
@@ -247,15 +247,14 @@ const parseQualityWithToken = (
   if (trimmed === '') return { ast: MAJOR_TOKEN().ast, tokenId: 'major', spelling: '', trailing: [] };
 
   const wholeHit = matchQualityToken(trimmed);
-  if (wholeHit && wholeHit.length === trimmed.length) {
+  if (wholeHit && wholeHit.length === trimmed.length)
     return { ast: wholeHit.token.ast, tokenId: wholeHit.token.id, spelling: wholeHit.spelling, trailing: [] };
-  }
 
   // 基础写作：整词命中但未覆盖全部输入时，它仍是**质量部分的文本**
   // （`7b9b13` 的 `7b9`、`7#9#11` 的 `7#9`），必须保留而不是丢弃。
   const baseHit = wholeHit ?? { token: MAJOR_TOKEN(), spelling: '', length: 0 };
   let ast: ChordQualityAst = { ...baseHit.token.ast };
-  let spelling = baseHit.spelling;
+  let { spelling } = baseHit;
   let i = baseHit.length;
   const trailing: ExtensionNode[] = [];
 
@@ -339,13 +338,12 @@ export const parseChordNameAst = (input: string): ParseChordNameAstResult | null
   const qualityText = text.slice(rootHit.length, qualityEnd);
   const parsed = parseQualityWithToken(qualityText);
 
-  if (!parsed) {
+  if (!parsed)
     return {
       ast: { root: rootHit.segment, quality: {}, ...(bass ? { bass } : {}) },
       qualityRecognized: false,
       unknownQuality: qualityText,
     };
-  }
 
   return {
     ast: { root: rootHit.segment, quality: parsed.ast, ...(bass ? { bass } : {}) },
@@ -363,9 +361,6 @@ const DEGREE_RENDER_ORDER: ExtensionDegree[] = ['6', '9', '11', '13'];
 
 const formatAccidentalText = (acc: AccidentalType, useUnicode: boolean): string =>
   acc === 1 ? (useUnicode ? '♯' : '#') : acc === -1 ? (useUnicode ? '♭' : 'b') : '';
-
-const rootToString = (seg: RootSegment, useUnicode: boolean): string =>
-  `${seg[0]}${formatAccidentalText(seg[1], useUnicode)}`;
 
 const sortExtensions = (exts: ExtensionNode[]): ExtensionNode[] =>
   [...exts].sort(
@@ -415,31 +410,11 @@ const baseTriadText = (ast: ChordQualityAst): string => {
   return `${third}${seat}${fifth}${omitText}`;
 };
 
-/** 简写模式下与全称不同的条目（未列出的条目简写 = 全称首选写法）。 */
-const SHORTHAND_SPELLING: Record<string, string> = {
-  major: '',
-  minor: 'm',
-  dim: '°',
-  aug: '+',
-  maj7: 'M7',
-  min7: 'm7',
-  halfDim7: 'ø7',
-  dim7: '°7',
-  minMaj7: 'mM7',
-  aug7: '+7',
-  augMaj7: '+M7',
-  sus4: 'sus',
-  sus4dom7: '7sus',
-  sus4dom9: '9sus',
-  sus4dom13: '13sus',
-  maj9: 'M9',
-  maj11: 'M11',
-  maj13: 'M13',
-  minMaj9: 'mM9',
-  minMaj11: 'mM11',
-  minMaj13: 'mM13',
-  dimMaj7: '°M7',
-};
+/**
+ * 简写（`maj7` → `M7`）原先在这里按 token id 列成一张 22 条的表，现已随 token 合并进
+ * `data/chord-qualities.json` 的 `shorthand` 字段（缺省即 `spellings[0]`）。
+ * 合并后「同一配方的全称与简写」在数据文件里相邻可读，不再分处两个模块、靠 id 字符串对齐。
+ */
 
 /**
  * 需要「组合式」输出而非 token 首选写法的条目。
@@ -512,7 +487,7 @@ export const renderQualityAst = (
     const byId = QUALITY_TOKENS.find(t => t.id === options.tokenId);
     if (byId && astEqualsToken(byId.ast, ast)) {
       if (COMPOSED_QUALITY_IDS.has(byId.id)) return renderComposed(byId, ast);
-      if (shorthand) return SHORTHAND_SPELLING[byId.id] ?? byId.spellings[0]!;
+      if (shorthand) return byId.shorthand ?? byId.spellings[0]!;
       return byId.spellings[0]!;
     }
   }
@@ -521,7 +496,7 @@ export const renderQualityAst = (
   const hit = findTokenByAst(ast);
   if (hit) {
     if (COMPOSED_QUALITY_IDS.has(hit.id)) return renderComposed(hit, ast);
-    if (shorthand) return SHORTHAND_SPELLING[hit.id] ?? hit.spellings[0]!;
+    if (shorthand) return hit.shorthand ?? hit.spellings[0]!;
     return hit.spellings[0]!;
   }
 
@@ -536,25 +511,9 @@ export const renderQualityAst = (
   }
 
   let text = baseTriadText(ast);
-  for (const node of sortExtensions(ast.extensions ?? [])) {
+  for (const node of sortExtensions(ast.extensions ?? []))
     text += `${formatAccidentalText(node.accidental, false)}${node.degree}`;
-  }
+
   if (ast.alt) text += 'alt';
   return text;
-};
-
-/** 渲染完整和弦名 AST 为文本。 */
-export const renderChordNameAst = (
-  ast: ChordNameAst,
-  options: { useUnicode?: boolean; shorthand?: boolean; tokenId?: string; spelling?: string } = {}
-): string => {
-  const useUnicode = options.useUnicode ?? false;
-  const root = rootToString(ast.root, useUnicode);
-  const quality = renderQualityAst(ast.quality, {
-    shorthand: options.shorthand ?? false,
-    ...(options.tokenId ? { tokenId: options.tokenId } : {}),
-    ...(options.spelling !== undefined ? { spelling: options.spelling } : {}),
-  });
-  const bass = ast.bass ? `/${rootToString(ast.bass, useUnicode)}` : '';
-  return `${root}${quality}${bass}`;
 };

@@ -13,6 +13,7 @@
     @pointerdown="handlePointerDown($event)"
     @pointermove="handlePointerMove($event)"
     @pointerup="handlePointerUp($event)"
+    data-focusable-outline
     class="group m-0 inline-flex cursor-pointer touch-none items-center gap-sm rounded-full border-none bg-transparent p-0 align-middle outline-none select-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
     ref="switchBtnRef"
     role="switch"
@@ -21,7 +22,7 @@
     <span
       v-wave="{ disabled: disabled || isCurrentLoading }"
       :class="[currentConfig.trackClass, trackColorClass]"
-      class="switch-track relative inline-flex shrink-0 items-center overflow-hidden rounded-full transition-all duration-base group-focus-visible:ring-2 group-focus-visible:ring-primary/70"
+      class="switch-track relative inline-flex shrink-0 items-center overflow-hidden rounded-full transition-all duration-base"
       ref="trackRef"
     >
       <span
@@ -80,6 +81,7 @@
 import { computed, inject, ref, useId, useTemplateRef } from 'vue';
 
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { clamp } from '@/platform/utils/common';
 
 import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
@@ -183,12 +185,13 @@ const SWITCH_CONFIG: Record<
   },
 };
 
-const resolvedActiveValue = computed<T>(() =>
-  props.activeValue !== undefined ? props.activeValue : (true as unknown as T)
-);
-const resolvedInactiveValue = computed<T>(() =>
-  props.inactiveValue !== undefined ? props.inactiveValue : (false as unknown as T)
-);
+/** 未显式给 active/inactiveValue 时按布尔开关语义取值。调用方用非布尔模型值时必须成对给出这两个 prop——
+ *  「T 含 boolean 时才可省略」类型层无从表达，断言集中在此一处 */
+const DEFAULT_ACTIVE_VALUE = true as unknown as T;
+const DEFAULT_INACTIVE_VALUE = false as unknown as T;
+
+const resolvedActiveValue = computed<T>(() => props.activeValue ?? DEFAULT_ACTIVE_VALUE);
+const resolvedInactiveValue = computed<T>(() => props.inactiveValue ?? DEFAULT_INACTIVE_VALUE);
 
 const autoId = useId();
 const resolvedId = computed(() => props.id || autoId);
@@ -222,7 +225,7 @@ const currentConfig = computed(() => SWITCH_CONFIG[resolvedSize.value] ?? SWITCH
 const isDragPastHalf = computed(() => {
   if (!isDragging.value) return null;
   const initialPos = startValue ? maxTravelDistance : 0;
-  const clampedX = Math.min(Math.max(0, initialPos + dragOffset.value), maxTravelDistance);
+  const clampedX = clamp(initialPos + dragOffset.value, 0, maxTravelDistance);
   return clampedX >= maxTravelDistance * 0.5;
 });
 
@@ -244,9 +247,8 @@ const settleChange = async (nextVal: T): Promise<boolean> => {
       const allowed = await props.beforeChange(nextVal);
       if (!allowed) return false;
     } catch (err) {
-      if (import.meta.env.DEV) {
-        console.error('[BaseSwitch] beforeChange 抛错，已阻止本次切换。', err);
-      }
+      if (import.meta.env.DEV) console.error('[BaseSwitch] beforeChange 抛错，已阻止本次切换。', err);
+
       return false;
     } finally {
       isPending.value = false;
@@ -285,9 +287,7 @@ const handlePointerDown = (e: PointerEvent) => {
     const padRight = parseFloat(style.paddingRight) || 0;
     const calculatedTravel = trackRef.value.clientWidth - thumbRef.value.offsetWidth - (padLeft + padRight);
     maxTravelDistance = Math.max(0, calculatedTravel);
-  } else {
-    maxTravelDistance = currentConfig.value.travelPx;
-  }
+  } else maxTravelDistance = currentConfig.value.travelPx;
 
   pressBasePos = isChecked.value ? maxTravelDistance : 0;
   dragStartX = e.clientX;
@@ -367,7 +367,7 @@ const dragThumbStyle = computed(() => {
   if (isDragging.value) {
     const deltaX = dragOffset.value;
     const initialPos = pressBasePos;
-    const clampedX = Math.min(Math.max(0, initialPos + deltaX), maxTravelDistance);
+    const clampedX = clamp(initialPos + deltaX, 0, maxTravelDistance);
 
     const dir = deltaX >= 0 ? 1 : -1;
     const travelRatio = maxTravelDistance > 0 ? Math.min(Math.abs(deltaX) / maxTravelDistance, 1) : 0;

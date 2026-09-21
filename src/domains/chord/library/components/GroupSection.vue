@@ -197,24 +197,14 @@ const EMPTY_CARDS: GroupedChordCard[] = [];
 /** 当前激活卡片的主和弦 id：草稿是某变体时映射回主卡；编辑中同名同组草稿也视为激活 */
 const resolveActiveMainId = (cards: GroupedChordCard[]): string | null => {
   const draft = editorStore.draftChord;
-  if (draft.id) {
-    for (const card of cards) {
-      if (card.variants.some(v => v.id === draft.id)) return card.mainChord.id;
-    }
-  }
+  if (draft.id) for (const card of cards) if (card.variants.some(v => v.id === draft.id)) return card.mainChord.id;
 
   if (editorStore.isEditing) {
     const draftName = getChordName(draft).trim().toLowerCase();
-    if (draftName) {
-      for (const card of cards) {
-        if (
-          card.mainChord.groupId === draft.groupId &&
-          getChordName(card.mainChord).trim().toLowerCase() === draftName
-        ) {
+    if (draftName)
+      for (const card of cards)
+        if (card.mainChord.groupId === draft.groupId && getChordName(card.mainChord).trim().toLowerCase() === draftName)
           return card.mainChord.id;
-        }
-      }
-    }
   }
   return null;
 };
@@ -242,9 +232,9 @@ const cardsOf = (group: Group): GroupedChordCard[] => groupViews.value.get(group
 /** 当前激活卡片的主和弦 id（取派生结果，O(1)） */
 const activeMainIdOf = (group: Group): string | null => groupViews.value.get(group.id)?.activeMainId ?? null;
 
-/** 分组内容是否展开（store 折叠状态取反） */
-const isGroupContentOpen = (group: Group): boolean => !chordStore.isGroupCollapsed(group.id);
-const isAllCollapsed = computed(() => chordStore.groups.every(g => chordStore.isGroupCollapsed(g.id)));
+/** 分组内容是否展开（store 正向展开判定） */
+const isGroupContentOpen = (group: Group): boolean => chordStore.isGroupExpanded(group.id);
+const isAllCollapsed = computed(() => chordStore.groups.every(g => !chordStore.isGroupExpanded(g.id)));
 
 // ==================== 组内容的挂载门控 ====================
 // 侧栏是全应用唯一「把整库和弦全部挂出来」的地方：单展开模式下只有一组可见可交互，其余分组的卡片
@@ -267,9 +257,6 @@ const retentionTimers = new Map<string, number>();
 /** 组内容是否渲染：展开中，或仍在收起动画的保留窗口内 */
 const isGroupContentRenderable = (group: Group): boolean => isGroupContentOpen(group) || retainedGroupIds.has(group.id);
 
-/** 分组展开/收起路径共用的开合判定（store 侧按 id 判，不依赖遍历 groups） */
-const isGroupOpenId = (groupId: string): boolean => !chordStore.isGroupCollapsed(groupId);
-
 // ---------- 分块挂载 / 分块卸载（通用机制见 platform/composables/useChunkedMount） ----------
 /** 每帧补挂/卸载的卡片数（3 列 × 12 行） */
 const MOUNT_BATCH = 36;
@@ -282,7 +269,7 @@ const startFill = (groupId: string) => {
     groupId,
     () => chordStore.groupChordMap.get(groupId)?.length ?? 0,
     // 补挂途中被收起：循环停摆，保留窗口/卸载循环接管后续
-    () => isGroupOpenId(groupId)
+    () => chordStore.isGroupExpanded(groupId)
   );
 };
 
@@ -307,7 +294,7 @@ const retainGroupContent = (groupId: string) => {
     groupId,
     window.setTimeout(() => {
       retentionTimers.delete(groupId);
-      if (isGroupOpenId(groupId)) {
+      if (chordStore.isGroupExpanded(groupId)) {
         retainedGroupIds.delete(groupId);
         return;
       }
@@ -371,11 +358,8 @@ useSortableList<Group>({
 
 /** 用户点击和弦卡片：若正在编辑同一和弦则退出编辑，否则载入编辑器 */
 const handleSelectChord = (chord: Chord) => {
-  if (editorStore.draftChord.id === chord.id) {
-    editorStore.resetEditor();
-  } else {
-    editorStore.setEditor(chord);
-  }
+  if (editorStore.draftChord.id === chord.id) editorStore.resetEditor();
+  else editorStore.setEditor(chord);
 };
 
 const sortLabelStrategies: Record<Group['sortRule'], (group: Group) => string> = {
@@ -388,13 +372,11 @@ const sortLabelStrategies: Record<Group['sortRule'], (group: Group) => string> =
 const getSortLabel = (group: Group): string => sortLabelStrategies[group.sortRule]?.(group) ?? 'C-B';
 
 /** 组内和弦总数 */
-const getGroupChordsCount = (groupId: string) => {
-  return chordStore.groupChordMap.get(groupId)?.length ?? 0;
-};
+const getGroupChordsCount = (groupId: string) => chordStore.groupChordMap.get(groupId)?.length ?? 0;
 
 /** 分组行无障碍描述：名称、和弦数与展开/折叠状态 */
 const groupTitleAriaLabel = (group: Group): string =>
-  `${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${chordStore.isGroupCollapsed(group.id) ? '已折叠' : '已展开'}`;
+  `${group.name} 分组，共 ${getGroupChordsCount(group.id)} 个和弦，${chordStore.isGroupExpanded(group.id) ? '已展开' : '已折叠'}`;
 /** 组内和弦计数无障碍描述：仅显示总数 */
 const chordCountAriaLabel = (group: Group): string => `共 ${getGroupChordsCount(group.id)} 个和弦`;
 

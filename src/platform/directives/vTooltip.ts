@@ -121,17 +121,11 @@ const getPlacementFromModifiers = (modifiers?: Record<string, boolean>): Placeme
   if (baseSide) {
     const alignment = ['start', 'end'].find(align => modifiers[align]);
     const combined = (alignment ? `${baseSide}-${alignment}` : baseSide) as Placement;
-    if (VALID_PLACEMENTS.includes(combined)) {
-      return combined;
-    }
+    if (VALID_PLACEMENTS.includes(combined)) return combined;
   }
 
   // 兜底：直接命中完整方位修饰符（如 v-tooltip.bottom-start 作为单键）
-  for (const key of keys) {
-    if (VALID_PLACEMENTS.includes(key as Placement)) {
-      return key as Placement;
-    }
-  }
+  for (const key of keys) if (VALID_PLACEMENTS.includes(key as Placement)) return key as Placement;
 
   return undefined;
 };
@@ -146,34 +140,26 @@ export const normalize = (value: TooltipBinding, modifiers?: Record<string, bool
   const base: TooltipOptions = typeof value === 'string' || Array.isArray(value) ? { content: value } : { ...value };
   if (!base.placement) {
     const modifierPlacement = getPlacementFromModifiers(modifiers);
-    if (modifierPlacement) {
-      base.placement = modifierPlacement;
-    }
+    if (modifierPlacement) base.placement = modifierPlacement;
   }
   // 箭头默认显示；显式传了 showArrow 以对象为准，否则用 .no-arrow 修饰符关闭
-  if (base.showArrow === undefined) {
-    base.showArrow = !modifiers?.['no-arrow'];
-  }
+  if (base.showArrow === undefined) base.showArrow = !modifiers?.['no-arrow'];
+
   // 交互式默认 false；显式传了 interactive 以对象为准，否则用 .interactive 修饰符开启
-  if (base.interactive === undefined) {
-    base.interactive = !!modifiers?.['interactive'];
-  }
+  if (base.interactive === undefined) base.interactive = Boolean(modifiers?.['interactive']);
+
   // 内容 HTML 渲染默认 false；显式传了 html 以对象为准，否则用 .html 修饰符开启
-  if (base.html === undefined) {
-    base.html = !!modifiers?.['html'];
-  }
+  if (base.html === undefined) base.html = Boolean(modifiers?.['html']);
+
   // 禁用默认 false；显式传了 disabled 以对象为准，否则用 .disabled 修饰符关闭
-  if (base.disabled === undefined) {
-    base.disabled = !!modifiers?.['disabled'];
-  }
+  if (base.disabled === undefined) base.disabled = Boolean(modifiers?.['disabled']);
+
   // 手动控制默认 false；显式传了 manual 以对象为准，否则用 .manual 修饰符开启
-  if (base.manual === undefined) {
-    base.manual = !!modifiers?.['manual'];
-  }
+  if (base.manual === undefined) base.manual = Boolean(modifiers?.['manual']);
+
   // 紧凑读数默认 false；显式传了 compact 以对象为准，否则用 .compact 修饰符开启
-  if (base.compact === undefined) {
-    base.compact = !!modifiers?.['compact'];
-  }
+  if (base.compact === undefined) base.compact = Boolean(modifiers?.['compact']);
+
   return base;
 };
 
@@ -223,9 +209,8 @@ export const destroyGlobalTooltip = () => {
   cleanupAutoUpdate?.();
   cleanupAutoUpdate = null;
   releaseBoxZ();
-  if (globalBox && globalBox.parentElement) {
-    globalBox.parentElement.removeChild(globalBox);
-  }
+  if (globalBox && globalBox.parentElement) globalBox.parentElement.removeChild(globalBox);
+
   globalBox = null;
   globalContent = null;
   globalArrow = null;
@@ -308,7 +293,7 @@ const updatePosition = async (el: HTMLElement, opts: TooltipOptions): Promise<vo
   globalBox.style.left = `${x}px`;
   globalBox.style.top = `${y}px`;
 
-  if (globalArrow) {
+  if (globalArrow)
     if (opts.showArrow && middlewareData.arrow) {
       // 与 BasePopover 共用同一份箭头构建逻辑（zIndex: 2 垫在 content 之下）
       const style = buildFloatingArrowStyle({
@@ -323,16 +308,10 @@ const updatePosition = async (el: HTMLElement, opts: TooltipOptions): Promise<vo
       globalArrow.style.display = 'block';
       for (const [key, value] of Object.entries(style)) {
         if (value == null) continue;
-        if (key === 'WebkitBackdropFilter') {
-          globalArrow.style.setProperty('-webkit-backdrop-filter', value);
-        } else {
-          (globalArrow.style as unknown as Record<string, string>)[key] = value;
-        }
+        if (key === 'WebkitBackdropFilter') globalArrow.style.setProperty('-webkit-backdrop-filter', value);
+        else (globalArrow.style as unknown as Record<string, string>)[key] = value;
       }
-    } else {
-      globalArrow.style.display = 'none';
-    }
-  }
+    } else globalArrow.style.display = 'none';
 };
 
 /** 清空显示/隐藏的延时定时器（含淡出后的清理定时器）。 */
@@ -389,17 +368,14 @@ const setTooltipContent = (el: HTMLElement, opts: TooltipOptions): void => {
       if (html) {
         warnIfDangerousHtml(line);
         lineEl.innerHTML = line;
-      } else {
-        lineEl.textContent = line;
-      }
+      } else lineEl.textContent = line;
+
       el.appendChild(lineEl);
     }
   } else if (html) {
     warnIfDangerousHtml(content);
     el.innerHTML = content;
-  } else {
-    el.textContent = content;
-  }
+  } else el.textContent = content;
 };
 
 /** 解析最终生效的显示/隐藏延迟：delay 数组/单值与 showDelay/hideDelay，后者优先。 */
@@ -490,9 +466,7 @@ const showTooltip = (el: HTMLElement, opts: TooltipOptions, immediate = false) =
       showTimer = null;
       showTimerEl = null;
     }, delayMs);
-  } else {
-    executeShow(el, opts);
-  }
+  } else executeShow(el, opts);
 };
 
 /** 隐藏入口：区分立即隐藏（滚动/失焦/卸载）与延迟淡出（鼠标移出）；交互式浮层套用最小隐藏延迟。 */
@@ -571,9 +545,7 @@ const handlerMap = new WeakMap<HTMLElement, TooltipHandler>();
  */
 export const hideTooltipInside = (container?: HTMLElement | null) => {
   if (!container || !isClient || !currentTargetEl) return;
-  if (container === currentTargetEl || container.contains(currentTargetEl)) {
-    hideTooltip(currentTargetEl, true);
-  }
+  if (container === currentTargetEl || container.contains(currentTargetEl)) hideTooltip(currentTargetEl, true);
 };
 
 export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> = {
@@ -604,12 +576,10 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     el.addEventListener('focus', handler.onFocus);
     el.addEventListener('blur', handler.onBlur);
 
-    if (opts.manual && opts.visible) {
+    if (opts.manual && opts.visible)
       // 手动模式初始即显示
       showTooltip(el, handler.opts, true);
-    } else if (el.matches?.(':hover')) {
-      showTooltip(el, handler.opts, false);
-    }
+    else if (el.matches?.(':hover')) showTooltip(el, handler.opts, false);
   },
   updated(el, binding) {
     if (!isClient) return;
@@ -621,29 +591,27 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     if (manual) {
       // 手动模式：显隐完全由 visible 驱动，并随内容变化实时刷新
       if (visible) {
-        if (currentTargetEl !== el) {
+        if (currentTargetEl !== el)
           // 从隐藏到显示
           showTooltip(el, handler.opts, true);
-        } else if (globalContent) {
+        else if (globalContent) {
           // 显示中：同步最新内容与定位
           setTooltipContent(globalContent, handler.opts);
           updatePosition(el, handler.opts);
         }
-      } else if (currentTargetEl === el) {
+      } else if (currentTargetEl === el)
         // 非即时隐藏：manualFade 会播放淡出出场动画
         hideTooltip(el, false);
-      }
+
       return;
     }
 
-    if (currentTargetEl === el) {
-      if (handler.opts.disabled || !hasTooltipContent(handler.opts)) {
-        hideTooltip(el, true);
-      } else if (globalContent) {
+    if (currentTargetEl === el)
+      if (handler.opts.disabled || !hasTooltipContent(handler.opts)) hideTooltip(el, true);
+      else if (globalContent) {
         setTooltipContent(globalContent, handler.opts);
         updatePosition(el, handler.opts);
       }
-    }
   },
   unmounted(el) {
     if (!isClient) return;
@@ -661,8 +629,6 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
       showTimer = null;
       showTimerEl = null;
     }
-    if (currentTargetEl === el) {
-      hideTooltip(el, true);
-    }
+    if (currentTargetEl === el) hideTooltip(el, true);
   },
 };

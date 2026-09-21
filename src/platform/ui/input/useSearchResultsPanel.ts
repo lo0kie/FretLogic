@@ -25,6 +25,7 @@ interface UseSearchResultsPanelOptions {
 /**
  * searchable 下拉结果面板：开合状态、全局焦点监听收起、键盘导航（环绕式上下移动 +
  * Enter 选中 + Escape 关闭）、活跃项滚动定位、虚拟锚点。
+ * 「选中即收起」统一由 selectIndex 承担（鼠标点击行与键盘 Enter 同一条路径）。
  * 结果渲染与选中业务语义留在宿主，本 composable 只拥有面板的「开合与导航」时序。
  */
 export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
@@ -45,13 +46,26 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
     searchActiveIndex.value = -1;
   };
 
+  /**
+   * 选中并收起：**结果行的鼠标点击与键盘 Enter 共用这一条路径**（先派发选中、再收起面板）。
+   *
+   * 收起必须显式发生，不能指望「焦点离开」顺带关掉：点进面板时焦点与指针都还在合法区域内，
+   * 三条兜底全部会放行 —— 本文件的 handleGlobalFocusIn 对面板内容豁免（正是为了等这次点击
+   * 选中）、BasePopover 的面板 focusout 受 isPointerDown / isPointerInside 守卫、外点关闭
+   * 也因「按下面板内部」不成立。宿主的选中回调只处理自己的查询词与业务状态，不掌握面板开合。
+   */
+  const selectIndex = (index: number) => {
+    onSelectActive(index);
+    closeResults();
+  };
+
   // ─── 面板打开期间的全局焦点监听 ───
   // Tab 移动焦点、点击外部时收起面板：仅靠 input blur 单点判定不够——焦点进入面板内
   // 结果按钮（Teleport 于 body）或清空/眼睛按钮后再离开时已无 blur 可监听，面板会残留。
   // 捕获式 focusin 覆盖任意起点的焦点迁移：焦点落到输入框自身或面板内（等待键盘/点击
   // 选中）时豁免，落到其它任何位置（含清空/眼睛按钮、组件外）即收起。
   const handleGlobalFocusIn = (e: FocusEvent) => {
-    const target = e.target;
+    const { target } = e;
     if (!(target instanceof Node)) return;
     // 组件根内部的焦点迁移（input / 清空 / 眼睛按钮）不收起：点清空时焦点先落到按钮、
     // handleClear 再把焦点还给 input，若按「按钮在面板外」收起会经历关闭→重开的闪动；
@@ -63,11 +77,8 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
 
   watch(resultsOpen, open => {
     if (typeof document === 'undefined') return;
-    if (open) {
-      document.addEventListener('focusin', handleGlobalFocusIn, true);
-    } else {
-      document.removeEventListener('focusin', handleGlobalFocusIn, true);
-    }
+    if (open) document.addEventListener('focusin', handleGlobalFocusIn, true);
+    else document.removeEventListener('focusin', handleGlobalFocusIn, true);
   });
 
   /** 聚焦或输入时展开结果面板；禁用/只读不弹 */
@@ -113,8 +124,7 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
       }
       if (e.key === 'Enter' && searchActiveIndex.value >= 0) {
         e.preventDefault();
-        onSelectActive(searchActiveIndex.value);
-        closeResults();
+        selectIndex(searchActiveIndex.value);
         return;
       }
     }
@@ -125,9 +135,7 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
   };
 
   onBeforeUnmount(() => {
-    if (typeof document !== 'undefined') {
-      document.removeEventListener('focusin', handleGlobalFocusIn, true);
-    }
+    if (typeof document !== 'undefined') document.removeEventListener('focusin', handleGlobalFocusIn, true);
   });
 
   return {
@@ -136,6 +144,7 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
     searchVirtualRef,
     openResults,
     closeResults,
+    selectIndex,
     setSearchActiveIndex,
     resetActiveIndex,
     handleKeydown,

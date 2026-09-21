@@ -5,7 +5,7 @@
  *
  * 职责划分：**生成**留在各域（乐谱域、和弦域），**消费**必须同时读懂三种载荷并跨域落地，
  * 属装配层职责（与 chordScoreBridge 同层）。
- * 载体解析与「粘贴剪贴板」共用同一个入口（platform/utils/shareLink 的 `resolveTransferPayload`），
+ * 载体解析与「粘贴剪贴板」共用同一个入口（platform/utils/transfer 的 `resolveTransferPayload`），
  * 两者只在入口宽容度上分叉：URL 参数必须是 token，剪贴板则额外接受纯文本。
  * 载体解码与落地（shareLinkApply：编解码链 + 各域导入能力）均为动态 import——只有 URL 上
  * 真的出现分享参数时才拉取，装配本桥不产生任何首屏成本。在 App 装配时调用一次即可。
@@ -16,7 +16,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { useUiStore } from '@/platform/store/uiStore';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
-import { resolveTransferPayload, SHARE_LINK_PARAM } from '@/platform/utils/shareLink';
+import { resolveTransferPayload, SHARE_LINK_PARAM } from '@/platform/utils/transfer';
 
 /** 读取本标签页已消费的 token 集合（sessionStorage 不可用时退化为空集，仅内存去重） */
 const readConsumedTokens = (): Set<string> => {
@@ -62,7 +62,7 @@ export function setupShareLinkBridge(): void {
    */
   const clearShareParam = async (): Promise<void> => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const query = router.currentRoute.value.query;
+      const { query } = router.currentRoute.value;
       if (typeof query[SHARE_LINK_PARAM] !== 'string') return;
       try {
         await router.replace({ query: { ...query, [SHARE_LINK_PARAM]: undefined } });
@@ -86,17 +86,13 @@ export function setupShareLinkBridge(): void {
     // 与「粘贴剪贴板」共用同一个载体解析入口；URL 上必须是 token，纯文本参数一律判损坏。
     // 落地实现（编解码链 + 各域导入能力）懒加载，见 shareLinkApply.ts 文件头注释
     const resolved = await resolveTransferPayload(token);
-    if (resolved.status !== 'ok' || resolved.carrier !== 'token') {
-      uiStore.message.warning('分享链接已损坏，无法解析');
-    } else {
+    if (resolved.status !== 'ok' || resolved.carrier !== 'token') uiStore.message.warning('分享链接已损坏，无法解析');
+    else {
       const { applyPayload } = await import('./shareLinkApply');
       // URL 分享参数不能免确认直接落库：诱导点击即可污染曲库并随下次同步扩散。
       // 先经用户确认再落地（window.confirm 为应用内确认弹窗基建就绪前的最小门禁）。
-      if (window.confirm('此链接携带分享数据，是否导入到本机曲库？')) {
-        if (!applyPayload(resolved.payload)) {
-          uiStore.message.warning('分享链接内容无法识别或已损坏');
-        }
-      }
+      if (window.confirm('此链接携带分享数据，是否导入到本机曲库？'))
+        if (!applyPayload(resolved.payload)) uiStore.message.warning('分享链接内容无法识别或已损坏');
     }
 
     void clearShareParam();

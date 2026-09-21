@@ -14,7 +14,7 @@
           :fade="{ size: 12 }"
           :scrollbar="{ overlayParent: candidateOverlayParent }"
           axis="y"
-          class="flex flex-wrap content-start gap-1 p-1"
+          class="flex flex-wrap content-start gap-1"
         >
           <template v-if="candidates.length > 0">
             <BaseBadge
@@ -39,7 +39,7 @@
         <BaseDivider orientation="vertical" />
 
         <!-- 右列：按音列表在流中，独占决定整行高度（左列已脱离流） -->
-        <div class="flex min-h-0 min-w-0 flex-col gap-1 p-0.5">
+        <div class="flex min-h-0 min-w-0 flex-col gap-1">
           <div
             v-wave
             v-for="note in notes"
@@ -154,20 +154,17 @@ const INTERVAL_MAP: Record<number, { degree: string; acc: '' | 'b' | '#' }> = {
 };
 
 const graphAnalysis = computed(() => {
-  const strings = editorStore.draftChord.strings;
-  const fretOffset = editorStore.draftChord.fretOffset;
+  const { strings } = editorStore.draftChord;
+  const { fretOffset } = editorStore.draftChord;
   const baseStrings = editorStore.activeBaseStrings;
 
   const { notes: rawNotes } = collectChordNotes(strings, fretOffset, baseStrings);
-  if (rawNotes.length === 0) {
-    return null;
-  }
+  if (rawNotes.length === 0) return null;
 
   let explicitRootPitch: number | null = null;
   const rootIdx = editorStore.draftChord.rootStringIndex;
-  if (rootIdx !== null && strings[rootIdx]?.fret !== undefined && strings[rootIdx]!.fret >= 0) {
+  if (rootIdx !== null && strings[rootIdx]?.fret !== undefined && strings[rootIdx]!.fret >= 0)
     explicitRootPitch = calcPitchIndex(rootIdx, strings[rootIdx]!.fret, fretOffset, baseStrings);
-  }
 
   // 重入调弦（尤克里里 GCEA）按真实音高取低音，与 theory.resolveChordRootPitch 口径一致
   const { candidates, bestRootPitch } = analyzeChordGraph(
@@ -328,16 +325,14 @@ const syncUserPitchPreferences = (
   // 斜杠和弦低音：同步物理最低音弦的升降号偏好
   if (parsedSegs.bass) {
     const bassIsFlat = parsedSegs.bass[1] === -1;
-    const bassNatural = parsedSegs.bass[0];
-    const bassAcc = parsedSegs.bass[1];
+    const [bassNatural, bassAcc] = parsedSegs.bass;
     const bassPitch = ((ROOT_PITCH_MAP[bassNatural] ?? 0) + bassAcc + 12) % 12;
     for (let s = 0; s < editorStore.draftChord.strings.length; s++) {
       const str = editorStore.draftChord.strings[s];
       if (str && str.fret >= 0) {
         const p = calcPitchIndex(s, str.fret, editorStore.draftChord.fretOffset, editorStore.activeBaseStrings);
-        if (p % 12 === bassPitch) {
-          str.preferFlat = bassIsFlat;
-        }
+        if (p % 12 === bassPitch) str.preferFlat = bassIsFlat;
+
         break;
       }
     }
@@ -364,9 +359,8 @@ const handleSelectCandidate = (candidate: CandidateResult) => {
   if (parsedSegs) parsedSegs = { ...parsedSegs };
   editorStore.snapshotRootBeforeCandidate();
   const assignedRootStringIdx = assignRootString(candidate);
-  if (parsedSegs) {
-    syncUserPitchPreferences(parsedSegs, assignedRootStringIdx);
-  }
+  if (parsedSegs) syncUserPitchPreferences(parsedSegs, assignedRootStringIdx);
+
   editorStore.draftChord.nameSegments = parsedSegs;
 };
 </script>

@@ -84,9 +84,8 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   /** 拖拽会话期间屏蔽右键菜单；拖拽中右键视为取消本次拖拽 */
   const preventContextMenu = (e: MouseEvent) => {
     // 拖拽中右键：退出本次拖拽（先取消，再按拖拽会话屏蔽菜单）
-    if (isDragging.value) {
-      handleGlobalPointerCancel(new PointerEvent('pointercancel'));
-    }
+    if (isDragging.value) handleGlobalPointerCancel(new PointerEvent('pointercancel'));
+
     if (isDragging.value || wasDraggingInSession) {
       e.preventDefault();
       e.stopPropagation();
@@ -131,17 +130,16 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       startPointer.pointerId !== e.pointerId &&
       e.pointerType !== 'mouse' &&
       !isDragging.value
-    ) {
+    )
       return false;
-    }
+
     return true;
   };
 
   /** 按当前落点执行落地（空槽=移动、占用槽=替换），无有效目标返回 false */
   const resolveLandingAction = (): boolean => {
-    if (!isDragging.value || !dragOverSlotKey.value || !scoreEditor.activeSong) {
-      return false;
-    }
+    if (!isDragging.value || !dragOverSlotKey.value || !scoreEditor.activeSong) return false;
+
     const targetKey = dragOverSlotKey.value;
 
     // 外部拖拽源（选器和弦浮动面板等，无源槽位）：落到任意字符槽即写入该槽位的和弦
@@ -151,9 +149,8 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       return true;
     }
 
-    if (draggingSlotKey.value === targetKey || !activeChord) {
-      return false;
-    }
+    if (draggingSlotKey.value === targetKey || !activeChord) return false;
+
     // 同行同类边和弦（行首/行尾）拖拽是列表内重排，必须走 swapOrMoveSlotChords，
     // 否则 moveSlotChord 的「源清空 + 目标覆盖」会破坏边和弦列表（[A,B] 拖 start_0→start_1 只剩 [A]）
     const sourceParsed = parseSlotKey(draggingSlotKey.value);
@@ -165,12 +162,11 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       targetParsed.type !== 'char' &&
       sourceParsed.lineId === targetParsed.lineId &&
       sourceParsed.type === targetParsed.type;
-    if (isEdgeReorder) {
-      scoreEditor.swapSlotChords(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
-    } else {
+    if (isEdgeReorder) scoreEditor.swapSlotChords(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
+    else
       // 其它落点保留「移动」语义：空槽搬移、占用槽覆盖（替换），数据层同为「目标覆盖 + 源清空」
       scoreEditor.moveSlotChord(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
-    }
+
     return true;
   };
 
@@ -192,31 +188,27 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     wasDraggingInSession = true;
     // 外部拖拽源（选器和弦浮动面板）无源槽位：draggingSlotKey 为 null，落地走 setSlotChord 分支
     draggingSlotKey.value = activeSourceKey;
-    if (activeSourceKey) {
-      markDragSource(activeSourceKey, 'is-dragging-source');
-    }
+    if (activeSourceKey) markDragSource(activeSourceKey, 'is-dragging-source');
+
     setGhostChord(activeChord);
-    if (!activeSourceKey) {
+    if (!activeSourceKey)
       // 外部拖拽源：快照当前已渲染的歌词行，供几何就近计算使用
       snapshotExternalLineEls();
-    }
+
     document.body.classList.add('is-global-dragging');
 
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator)
       try {
         navigator.vibrate(20);
       } catch {
         /* 触觉反馈不可用则忽略 */
       }
-    }
 
     scheduleGhostPos(clientX, clientY);
-    if (activeSourceKey) {
-      updateDropTarget(clientX, clientY);
-    } else {
+    if (activeSourceKey) updateDropTarget(clientX, clientY);
+    else
       // 外部拖拽源：起拖即做一次几何落点计算
       resolveExternalDropTarget(clientX, clientY);
-    }
   };
 
   /** 全局指针移动：未拖拽时按阈值/长按规则判定起拖；拖拽中更新 ghost 与落点并处理边缘自动滚动 */
@@ -236,22 +228,17 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
           longPressTimer = null;
           setPressArming(false);
         }
-      } else {
-        if (distance >= DRAG_THRESHOLD) {
-          startDrag(e.clientX, e.clientY);
-        }
-      }
+      } else if (distance >= DRAG_THRESHOLD) startDrag(e.clientX, e.clientY);
+
       return;
     }
 
     e.preventDefault();
     scheduleGhostPos(e.clientX, e.clientY);
-    if (draggingSlotKey.value) {
-      scheduleDropTargetUpdate(e.clientX, e.clientY);
-    } else {
+    if (draggingSlotKey.value) scheduleDropTargetUpdate(e.clientX, e.clientY);
+    else
       // 外部拖拽源：几何就近计算（绕过 elementFromPoint——抽屉等浮层会干扰命中测试）
       resolveExternalDropTarget(e.clientX, e.clientY);
-    }
 
     // 每次 move 都喂最新指针位置：循环进行中会只更新位置不叠加 rAF（见 useDragAutoScroll）
     checkAutoScroll(scrollContainerRef?.value, currentPointerPos, () => {
@@ -277,9 +264,8 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     } catch (e) {
       logger.warn('lyrics-drag', '拖拽落地失败，已保留原状态（可手动撤销兜底）', e);
     } finally {
-      if (hadDrag) {
-        triggerClickSuppression();
-      }
+      if (hadDrag) triggerClickSuppression();
+
       cancelDropTargetUpdate();
       resetDragState();
     }
@@ -300,18 +286,16 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     } catch (e) {
       logger.warn('lyrics-drag', '拖拽清理阶段异常（自动滚动/幽灵层/高亮未完全复位）', e);
     } finally {
-      if (hadDrag) {
-        triggerClickSuppression();
-      }
+      if (hadDrag) triggerClickSuppression();
+
       resetDragState();
     }
   };
 
   /** 窗口失焦（如切换应用）视为拖拽取消，防止状态悬挂 */
   const handleWindowBlur = () => {
-    if (isDragging.value || activeSourceKey !== null || activeChord !== null) {
+    if (isDragging.value || activeSourceKey !== null || activeChord !== null)
       handleGlobalPointerCancel(new PointerEvent('pointercancel'));
-    }
   };
 
   /** 外部拖拽源入口（选器和弦浮动面板等）：无源槽位，按下登记意图，移动超阈值起拖，落地写入目标槽位 */
@@ -334,9 +318,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     window.getSelection()?.removeAllRanges();
     window.addEventListener('contextmenu', preventContextMenu, true);
 
-    if (e.pointerType === 'touch') {
-      armLongPressStart(currentPointerPos.x, currentPointerPos.y);
-    }
+    if (e.pointerType === 'touch') armLongPressStart(currentPointerPos.x, currentPointerPos.y);
   };
 
   /** 槽位按下入口：记录起点与拖拽模式；触摸端启动长按计时，鼠标端等待移动超过阈值 */
@@ -364,10 +346,9 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     window.getSelection()?.removeAllRanges();
     window.addEventListener('contextmenu', preventContextMenu, true);
 
-    if (e.pointerType === 'touch') {
+    if (e.pointerType === 'touch')
       // 长按等待期给出按压反馈（is-press-arming），提示即将进入拖拽
       armLongPressStart(currentPointerPos.x, currentPointerPos.y);
-    }
   };
 
   onMounted(() => {

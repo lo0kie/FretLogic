@@ -7,8 +7,9 @@ import {
 import {
   validateGiteeSettings,
   validateGithubSettings,
+  validateServerSettings,
   validateWebdavSettings,
-} from '@/platform/utils/validateSettings';
+} from '@/platform/utils/transfer';
 
 import { createGiteeSyncProvider } from './giteeSyncProvider.ts';
 import { createGithubSyncProvider } from './githubSyncProvider.ts';
@@ -60,6 +61,16 @@ const takeServerConfig = (config: SyncConfig): ServerSyncConfig => {
   return config;
 };
 
+/** server 后端配置解析：地址来自构建期环境变量，配错时给出可读错误而不是让请求在别处失败 */
+const resolveServerSettings = (settings: SettingsStore): { config?: SyncConfig; error?: string } => {
+  const r = validateServerSettings({
+    serverUrl: CLOUD_SYNC_CONFIG.SERVER_URL,
+    serverToken: settings.serverToken,
+  });
+  if (!r.isValid) return { error: r.errors[0] ?? '服务器同步配置无效' };
+  return { config: { kind: 'server', serverUrl: r.data.serverUrl, token: r.data.serverToken } };
+};
+
 /**
  * 同步 provider 注册表（工厂 + 策略）。
  * 新增一种同步后端只需在此追加一项，useSyncService 的派发逻辑无需改动，
@@ -73,7 +84,8 @@ export interface ProviderFactory {
   create: (config: SyncConfig) => SyncProvider;
   /**
    * 「测试连接」专用宽松解析：只要求发起探测请求的最小字段
-   *（GitHub 仅 owner/repo，WebDAV 仅 serverUrl，Server 仅 serverUrl），分支/路径等完整配置不强制。
+   *（GitHub 仅 owner/repo，WebDAV 仅 serverUrl），分支/路径等完整配置不强制。
+   *  Server 例外：后端只有「地址 + 可选 Token」两格，没有可再放宽的子集，故与 resolveConfig 同源。
    */
   resolveTestConfig: (settings: SettingsStore) => { config?: SyncConfig; error?: string };
 }
@@ -217,22 +229,10 @@ export const syncProviderRegistry: Record<SyncProviderKind, ProviderFactory> = {
     },
   },
   server: {
-    resolveConfig: s => ({
-      config: {
-        kind: 'server',
-        serverUrl: CLOUD_SYNC_CONFIG.SERVER_URL,
-        token: s.serverToken.trim() || undefined,
-      },
-    }),
+    resolveConfig: resolveServerSettings,
     create: config => createServerSyncProvider(takeServerConfig(config)),
     // 测试连接必须带与真实同步同一份 Token：否则用户配了 serverToken 也永远按「无 Token」探测，
     // 既测不出写鉴权，给出的结论也与实际推送能力不符
-    resolveTestConfig: s => ({
-      config: {
-        kind: 'server',
-        serverUrl: CLOUD_SYNC_CONFIG.SERVER_URL,
-        token: s.serverToken.trim() || undefined,
-      },
-    }),
+    resolveTestConfig: resolveServerSettings,
   },
 };

@@ -27,9 +27,8 @@ export function useDragGhost() {
   /** 挂载/卸载 ghost 元素，可选地立即定位到初始指针位置 */
   const setGhostEl = (el: Element | ComponentPublicInstance | null, initialPos?: { x: number; y: number }) => {
     ghostEl = el instanceof HTMLElement ? el : null;
-    if (ghostEl && initialPos && initialPos.x !== 0) {
+    if (ghostEl && initialPos && initialPos.x !== 0)
       ghostEl.style.transform = `translate3d(${initialPos.x}px, ${initialPos.y - 20}px, 0)`;
-    }
   };
 
   /** 记录新指针位置并按帧合帧应用 */

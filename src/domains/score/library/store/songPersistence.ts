@@ -1,15 +1,14 @@
 /**
  * 歌曲持久化层（纯逻辑，与 Pinia store 无关）：
- * 按歌曲拆分持久化的脏标记 + 防抖刷写（400ms / 最长 1500ms 强制落盘），
- * 以及启动时的异步加载（IDB songs 库 + 顺序索引）。
+ * 按歌曲拆分持久化的脏标记 + 防抖刷写（窗口与强制落盘节奏统一取 PERSIST_DEBOUNCE_MS /
+ * PERSIST_MAX_WAIT_MS），以及启动时的异步加载（IDB songs 库 + 顺序索引）。
  */
 import { reportPersistFailure } from '@/platform/services/storage';
+import { PERSIST_DEBOUNCE_MS, PERSIST_MAX_WAIT_MS } from '@/platform/utils/constants';
 
 import type { SongRepository } from '@/domains/score/model/songRepository';
 import type { Song } from '@/domains/score/types';
 
-const FLUSH_DELAY = 400;
-const FLUSH_MAX_WAIT = 1500;
 /** 持久化失败上报键：歌曲按记录分片写入，统一归到同一语义单元去重 */
 const PERSIST_FAILURE_KEY = 'songs';
 
@@ -95,17 +94,17 @@ export const createSongPersistence = (repository: SongRepository, getSongs: () =
   };
 
   const scheduleFlush = () => {
-    if (!maxWaitTimer) {
+    if (!maxWaitTimer)
       maxWaitTimer = setTimeout(() => {
         maxWaitTimer = null;
         void flushSongsNow();
-      }, FLUSH_MAX_WAIT);
-    }
+      }, PERSIST_MAX_WAIT_MS);
+
     if (flushTimer) clearTimeout(flushTimer);
     flushTimer = setTimeout(() => {
       flushTimer = null;
       void flushSongsNow();
-    }, FLUSH_DELAY);
+    }, PERSIST_DEBOUNCE_MS);
   };
 
   const persistence: SongPersistence = {

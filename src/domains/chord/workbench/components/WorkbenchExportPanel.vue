@@ -78,7 +78,7 @@ import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { buildExportFileName, canvasToBlob, triggerBlobDownload } from '@/platform/utils/canvas';
+import { buildExportFileName, canvasToBlob, triggerBlobDownload } from '@/platform/utils/output';
 
 import type { ExportBgMode } from '@/platform/types';
 import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';

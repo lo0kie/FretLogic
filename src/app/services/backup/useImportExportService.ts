@@ -7,8 +7,9 @@ import { useSongStore } from '@/domains/score/library/store/songStore';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { triggerBlobDownload } from '@/platform/utils/canvas';
 import { formatLocalTimestampForFile, serializeForStorage, wait } from '@/platform/utils/common';
+import { logger } from '@/platform/utils/logger';
+import { triggerBlobDownload } from '@/platform/utils/output';
 
 import { decryptSyncSettingsSecrets, encryptSyncSettingsSecrets } from './backupCrypto';
 import { FULL_BACKUP_SELECTION } from './backupSelection';
@@ -16,11 +17,6 @@ import { buildBackupPayloadResult } from './buildBackupPayload';
 
 import type { EncryptedSyncSettingsBackup, ImportExportPayload } from '@/app/types';
 import type { BackupSelection } from '@/app/types/payload';
-
-export type { BackupSelection };
-
-// 常量本体在零依赖的 backupSelection.ts（避免壳层模块为取常量引入整个服务），此处 re-export 兼容旧引用
-export { FULL_BACKUP_SELECTION };
 
 /** 导入/导出服务入口：提供备份文件解析、按勾选应用导入、按勾选导出下载三个动作 */
 export function useImportExportService() {
@@ -60,13 +56,13 @@ export function useImportExportService() {
         if (file.size > MAX_BACKUP_BYTES) throw new Error('备份文件过大（上限 50MB）');
         const result = parseAndValidatePayload(await file.text());
         if (result.error || !result.payload) throw new Error(`备份解析失败：${result.error}`);
-        if (result.warnings && result.warnings.length > 0) {
-          uiStore.message.warning(`导入时已自动清理部分数据：${result.warnings.join('；')}`);
-        }
+        if (result.warnings && result.warnings.length > 0)
+          uiStore.message.warning(`导入时已自动清洗部分数据（${result.warnings.length} 项）`);
+
         return result.payload;
       },
       onError: err => {
-        console.error('备份解析拦截:', err);
+        logger.error('backup', '备份解析拦截', err);
         uiStore.message.error('文件非标准备份或核心数据已损坏');
       },
       rethrowError: true,
@@ -85,9 +81,8 @@ export function useImportExportService() {
       uiStore.message.error(`当前本地缓存存在严重破损数据${reason}`);
       return false;
     }
-    if (warnings.length > 0) {
-      uiStore.message.warning(`数据清洗提示：${warnings.slice(0, 2).join('; ')}`);
-    }
+    if (warnings.length > 0) uiStore.message.warning(`数据清洗：${warnings.length} 项`);
+
     // 凭据加密：有明文敏感字段却未提供密码时拒绝导出（防止用户误产出明文凭据文件）
     let finalPayload = payload;
     // 成功文案依据：encryptSyncSettingsSecrets 只在包内真有明文敏感字段时才产出 secrets 块，
@@ -95,7 +90,7 @@ export function useImportExportService() {
     let credentialsEncrypted = false;
     if (selection.syncSettings && payload.syncSettings) {
       if (!secretsPassphrase) {
-        uiStore.message.error('导出同步配置需要设置导出密码，用于加密备份中的 Token / 密码');
+        uiStore.message.error('导出同步需设置导出密码（加密 Token）');
         return false;
       }
       try {
@@ -103,7 +98,7 @@ export function useImportExportService() {
         credentialsEncrypted = encrypted.secrets !== undefined;
         finalPayload = { ...payload, syncSettings: encrypted };
       } catch (err) {
-        console.error('凭据加密失败:', err);
+        logger.error('backup', '凭据加密失败', err);
         uiStore.message.error('凭据加密失败，已取消导出');
         return false;
       }

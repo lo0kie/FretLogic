@@ -27,47 +27,47 @@
           v-action-card
           v-else
           v-wave
-          v-scroll-into-view.y="isSongActive(row.song!.id)"
-          :aria-label="isSongActive(row.song!.id) ? `${row.cardAriaLabel}，已选中` : row.cardAriaLabel"
-          :aria-pressed="isSongActive(row.song!.id)"
+          v-scroll-into-view.y="isSongActive(row.song.id)"
+          :aria-label="isSongActive(row.song.id) ? `${row.cardAriaLabel}，已选中` : row.cardAriaLabel"
+          :aria-pressed="isSongActive(row.song.id)"
           :class="{
             'border-tint-primary-60! bg-tint-primary-92! hover:border-primary! hover:bg-tint-primary-82! hover:shadow-[0_0_0_1px_var(--color-primary)]':
-              isSongActive(row.song!.id),
-            'border-border-base bg-surface-panel-hover': isMenuTarget(row.song!.id),
+              isSongActive(row.song.id),
+            'border-border-base bg-surface-panel-hover': isMenuTarget(row.song.id),
           }"
-          :data-song-id="row.song!.id"
-          :title="row.song?.title"
-          @click="handleSelectSong(row.song!.id)"
-          data-focusable-inline
+          :data-song-id="row.song.id"
+          :title="row.song.title"
+          @click="handleSelectSong(row.song.id)"
+          data-focusable-outline
           class="song-card-item w-full cursor-pointer rounded-md border border-border-light bg-surface-body p-sm px-md transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover"
         >
           <div class="flex w-full flex-col gap-2xs">
             <div class="flex w-full items-center justify-between gap-sm">
               <div v-marquee.fade class="min-w-0 flex-1">
                 <span
-                  :class="isSongActive(row.song!.id) ? 'font-bold text-primary!' : 'text-fg-title'"
+                  :class="isSongActive(row.song.id) ? 'font-bold text-primary!' : 'text-fg-title'"
                   class="text-xs font-semibold"
                 >
-                  {{ row.song!.title }}
+                  {{ row.song.title }}
                 </span>
               </div>
 
               <div class="flex shrink-0 gap-xs">
-                <template v-if="row.song!.singer">
+                <template v-if="row.song.singer">
                   <BaseBadge
-                    :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
-                    :aria-label="`歌手 ${row.song!.singer}`"
-                    :title="`歌手：${row.song!.singer}`"
+                    :appearance="isSongActive(row.song.id) ? 'subtle' : 'filled'"
+                    :aria-label="`歌手 ${row.song.singer}`"
+                    :title="`歌手：${row.song.singer}`"
                     size="2xs"
                     variant="neutral"
                   >
-                    <span class="block max-w-[7rem] truncate">{{ row.song!.singer }}</span>
+                    <span class="block max-w-[7rem] truncate">{{ row.song.singer }}</span>
                   </BaseBadge>
                 </template>
 
                 <template v-else>
                   <BaseBadge
-                    :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
+                    :appearance="isSongActive(row.song.id) ? 'subtle' : 'filled'"
                     :aria-label="row.keyAriaLabel"
                     :title="row.keyTitle"
                     size="2xs"
@@ -79,14 +79,14 @@
                   </BaseBadge>
 
                   <BaseBadge
-                    :appearance="isSongActive(row.song!.id) ? 'subtle' : 'filled'"
-                    :aria-label="`变调夹 capo ${row.song!.capo} 品`"
-                    :title="`变调夹 ${row.song!.capo} 品`"
+                    :appearance="isSongActive(row.song.id) ? 'subtle' : 'filled'"
+                    :aria-label="`变调夹 capo ${row.song.capo} 品`"
+                    :title="`变调夹 ${row.song.capo} 品`"
                     size="2xs"
                     variant="neutral"
                     width="2.8rem"
                   >
-                    Capo {{ row.song!.capo }}
+                    Capo {{ row.song.capo }}
                   </BaseBadge>
                 </template>
               </div>
@@ -147,22 +147,30 @@ useSortableList<Song>({
   onReorder: next => songStore.reorderSongs(next),
 });
 
-type SongListRow = {
+/** 分组小标题行（仅拼音分组模式插入） */
+interface SongGroupRow {
   key: string;
-  type: 'group' | 'song';
-  label?: string;
-  song?: Song;
-  /** 以下为 song 行的构建期预计算（每行只算一次，替代模板渲染期的 10 次函数调用）：
-   *  调性串与三段 aria/title 都只依赖 song 自身字段，纯派生；isSongActive/isMenuTarget
-   *  依赖响应式状态、且只是字符串比较，保留为模板内函数调用 */
-  songKeyText?: string;
-  cardAriaLabel?: string;
-  keyAriaLabel?: string;
-  keyTitle?: string;
-};
+  type: 'group';
+  label: string;
+}
 
-/** 组装 song 行：派生量在构建期一次算完（computeSongKey 此前每行被调 3 次） */
-const songRowOf = (song: Song): SongListRow => {
+/** 歌曲行。派生量在构建期一次算完（computeSongKey 此前每行被调 3 次）：
+ *  调性串与三段 aria/title 都只依赖 song 自身字段，纯派生；isSongActive/isMenuTarget
+ *  依赖响应式状态、且只是字符串比较，保留为模板内函数调用 */
+interface SongItemRow {
+  key: string;
+  type: 'song';
+  song: Song;
+  songKeyText: string;
+  cardAriaLabel: string;
+  keyAriaLabel: string;
+  keyTitle: string;
+}
+
+type SongListRow = SongGroupRow | SongItemRow;
+
+/** 组装 song 行（派生量的口径见 SongItemRow） */
+const songRowOf = (song: Song): SongItemRow => {
   const songKeyText = computeSongKey(song.playKey, song.capo);
   return {
     key: song.id,
@@ -179,9 +187,8 @@ const songRowOf = (song: Song): SongListRow => {
 
 /** 列表行：拼音分组模式在歌曲间插入分组小标题行（键前缀 group: 避免与歌曲 id 冲突），其余排序模式为纯歌曲行；数据源为过滤后的歌曲 */
 const songRows = computed<SongListRow[]>(() => {
-  if (songStore.songSortMethod !== 'title') {
-    return songStore.filteredSongs.map(songRowOf);
-  }
+  if (songStore.songSortMethod !== 'title') return songStore.filteredSongs.map(songRowOf);
+
   const rows: SongListRow[] = [];
   let currentGroup = '';
   for (const song of songStore.filteredSongs) {
@@ -239,18 +246,16 @@ const getSongMenuItems = (song: Song): MenuItem[] => {
         const deletedSong = { ...song, chordMap: new Map(song.chordMap) };
         const originalIndex = songStore.songs.findIndex(s => s.id === song.id);
         songStore.deleteSong(song.id);
-        if (isCurrentActive) {
-          scoreEditor.setActiveSong(null);
-        }
+        if (isCurrentActive) scoreEditor.setActiveSong(null);
+
         // 通知而非常驻 Message：撤销入口随 toast 飘走就没了，用户必须能回看并补做
         uiStore.notice.info({
           title: `已删除乐谱 "${song.title}"`,
           actionText: '撤销',
           onAction: () => {
             songStore.restoreSong(deletedSong, originalIndex >= 0 ? originalIndex : undefined);
-            if (isCurrentActive) {
-              scoreEditor.setActiveSong(deletedSong.id);
-            }
+            if (isCurrentActive) scoreEditor.setActiveSong(deletedSong.id);
+
             uiStore.message.success(`已恢复乐谱 "${deletedSong.title}"`);
           },
         });

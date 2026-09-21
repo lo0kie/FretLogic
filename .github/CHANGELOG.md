@@ -5,6 +5,44 @@
 
 ## [Unreleased]
 
+### 修复 · 全工程逐行审计落地的行为缺陷（2026-09-21）
+
+- **迁移失败可重试**：localStorage 退役标记改到「持久化熔断 + 回读核验」两道守门之后才写入——此前回读核验失败时标记已落库，下次启动被顶部短路直接跳过重试，半截迁移的库永久不再补迁（完整副本留在已无人读取的 localStorage 里）；
+- **导入坏数据不再崩栈**：备份导入 / 云同步 pull / 分享链接 / 启动转录四条入口在边界统一补 `Array.isArray` 守卫，
+  `chords`/`songs` 为非数组或 `strings` 含 `null` 时按校验失败给出可读提示，不再以 `TypeError` 逃逸成未处理拒绝；
+- **乐谱读库失败不覆盖真数据**：`song` 域改用 `chord`
+  域既有的协议——加载失败即本会话不落库，而不是吞成空列表后照常写回，避免一次读失败就把云端/本地索引覆盖成空；
+- **工作台面板折叠状态读对**：旧 `*_COLLAPSED` 布尔键的历史极性（`true`
+  = 收起）此前被读成「展开」，升级后首次进入会看到与离开前相反的面板开合态，现已纠正；
+- **导出图与屏幕预览品位一致**：指板品数兜底收成单一真源 `clampDrawFretCount`，缺 `fretCount`
+  的和弦导出长图 4 品、屏上 3 品的分叉消除（两侧注释本就要求逐像素一致）；
+- **长图缓存随拍号失效**：长图缓存键补上 `timeSignature` 并预览/导出共用同一份键构造，改拍号后不再复用陈旧长图；
+- **移调撤销不留僵尸和弦**：移调自动新建的和弦纳入撤销快照——撤销被新编辑截断（redo 分支失效）时回收这些和弦，且仍被其他乐谱引用的和弦不会被误删；
+- **自建服务端配置补校验**：`server` provider 接上 `validateServerSettings`，四个同步后端现在走同一道配置校验；
+- **重复点击分享不再并发写剪贴板**：`runBusyAction` 支持 `toRef(state, key)`
+  形态的 busy，弹窗与和弦传输侧统一走互斥管线，双击「分享和弦」不会再触发两次剪贴板写入；
+- **无障碍焦点口径统一**：浮层焦点元素选择器收成一份（含 `a[href]` 与 `[contenteditable]`），修掉「弹层里链接能 Tab 到但
+  `vFocus` 进不去」；
+- **GitHub 同步失败给出诊断**：四个 provider 的错误面统一走 `describeError`，失败提示不再只给 HTTP 状态码；
+- **设置项文案不再越权承诺**：「忽略空行」补「仅预览 / 导出生效」限定，与同区块其他项写法一致。
+
+### 变更 · 命名与对外契约统一（2026-09-21）
+
+- **DOM 钩子全名化**：歌词行元素属性 `data-line-idx` → `data-line-index`，DevPanel 分段 `data-dev-sec` →
+  `data-dev-section` （依赖这两个属性做外部脚本定位的话需要同步改名）；
+- **导出模块改名**：状态壳 `useScoreExportActions` → `useScoreExport`、懒加载实现 `scoreExportHandlers.ts` →
+  `scoreExportActions.ts`，与 `useSyncService` + `syncActions` / `useBackupModals` + `backupModalActions`
+  同一种壳/实后缀；
+- **本地落盘不再叫 sync**：面板顺序的本地写入函数 `syncToStorage` → `persistToStorage`，与推云端的 `syncToRemote`
+  不再共用同一个方向词；和弦库的 `flushChordsToStorage` 纯别名删除，统一调 `persistAll`；
+- **主题令牌去双拼**：删除 `--color-color-{primary,success,warning,danger}` 与 `--color-surface-surface`
+  （破本文件「颜色名不带属性角色词」的规矩），调用点改用 `text-primary` / `text-warning` 与 `dark:bg-(--bg-surface)`；
+- **分组展开判定改正向**：`chordStore.isGroupCollapsed` → `isGroupExpanded`、`toggleGroupCollapsed` →
+  `toggleGroupExpansion`，与 score/workbench 侧的 `*GroupOpen` 同极性；
+- **错误词汇表收口**：`platform/services/errors` 只保留实际落地的存储层错误（`AppError` +
+  `errors.storage`），删除零调用的 `toAppError` 与 6 个未用错误码；同步层继续用 `SyncError`，其余业务代码抛原生
+  `Error`。
+
 ### 变更 · 全局通知默认方位改为右上角（2026-09-20）
 
 - **通知位置**：迁移后的全局通知（`GlobalNotification`）默认方位由原 Toast 的「顶部居中」调整为「右上角」——属用户可感知的视觉变化，避免与顶部标题栏 / 模态框重叠。

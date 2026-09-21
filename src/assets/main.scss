@@ -48,28 +48,9 @@ body {
   display: none;
 }
 
-/* 统一清除默认样式并加入过渡 */
-[data-focusable-outline],
-[data-focusable-inline] {
-  transition: $transition-fast;
-  outline: none !important;
-}
-
-/* 1. 外部描边模式 (Outline) - 类似输入框或卡片外扩的聚焦框 */
-[data-focusable-outline]:focus-visible {
-  outline: 2px solid currentColor !important;
-  outline-offset: 2px !important;
-  box-shadow: none !important;
-  color: var(--fretboard-focus-color);
-}
-
-/* 2. 内部阴影环模式 (Inline) - 类似按钮、Badge、圆形图标等不希望撑开布局的紧凑元素 */
-[data-focusable-inline] {
-  &:focus {
-    outline: none !important;
-    box-shadow: var(--focus-ring) !important;
-  }
-}
+/* 聚焦样式统一由 JS 注入（src/platform/ui/focus-ring/focusRingOverlay.ts）：
+   启动时注入「清除默认 outline」并渲染顶层外扩聚焦环，避免外扩 ring 被父容器 overflow 裁剪。
+   data-focusable-inline 已废弃，全部并入 data-focusable-outline。 */
 
 /* 拖拽排序（useSortableList）：Sortable 走 fallback 通道后自带的跟随克隆退化为纯几何载体，
    它必须脱离文档流（否则作为兄弟节点会撑开列表），视觉一律交给下面的 .drag-preview */

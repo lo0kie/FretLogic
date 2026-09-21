@@ -7,7 +7,7 @@
         :style="{ top: stickyTopCss }"
         initial-auto
         class="sticky z-panel bg-surface-panel"
-        data-dev-sec="build"
+        data-dev-section="build"
         description="当前产物"
         icon="wrench"
         title="构建"
@@ -58,7 +58,7 @@
       <BaseCollapse
         :style="{ top: stickyTopCss }"
         class="sticky z-panel bg-surface-panel"
-        data-dev-sec="data"
+        data-dev-section="data"
         description="本机内容"
         icon="list"
         title="数据"
@@ -76,7 +76,7 @@
       <BaseCollapse
         :style="{ top: stickyTopCss }"
         class="sticky z-panel bg-surface-panel"
-        data-dev-sec="cache"
+        data-dev-section="cache"
         description="刷新即失"
         icon="chart-column"
         title="内存缓存"
@@ -161,7 +161,7 @@
       <BaseCollapse
         :style="{ top: stickyTopCss }"
         class="sticky z-panel bg-surface-panel"
-        data-dev-sec="storage"
+        data-dev-section="storage"
         description="持久化"
         icon="folder-open"
         title="存储占用"
@@ -240,7 +240,7 @@
       <BaseCollapse
         :style="{ top: stickyTopCss }"
         class="sticky z-panel bg-surface-panel"
-        data-dev-sec="preview"
+        data-dev-section="preview"
         description="当前乐谱"
         icon="image"
         title="预览缓存"
@@ -305,7 +305,7 @@
       <BaseCollapse
         :style="{ top: stickyTopCss }"
         class="sticky z-panel bg-surface-panel"
-        data-dev-sec="route"
+        data-dev-section="route"
         description="快捷跳转"
         icon="move"
         title="路由"
@@ -331,7 +331,7 @@
       <BaseCollapse
         :style="{ top: stickyTopCss }"
         class="sticky z-panel bg-surface-panel"
-        data-dev-sec="seed"
+        data-dev-section="seed"
         description="一键覆盖"
         icon="server"
         title="测试数据"
@@ -357,7 +357,7 @@
       <BaseCollapse
         :style="{ top: stickyTopCss }"
         class="sticky z-panel bg-surface-panel"
-        data-dev-sec="danger"
+        data-dev-section="danger"
         description="不可恢复"
         icon="alert-triangle"
         title="危险区"
@@ -437,14 +437,14 @@ import { clearPreviewCache, currentRenderData } from '@/domains/score/preview/sc
 import { useStickyHeads } from '@/platform/composables/useStickyHeads';
 import { idb, SCHEMA } from '@/platform/services/storage/idb';
 import { useUiStore } from '@/platform/store/uiStore';
-import { createCacheSampler } from '@/platform/utils/cacheRegistry';
+import { createCacheSampler } from '@/platform/utils/cache';
 import { formatBytes } from '@/platform/utils/common';
 import { CLOUD_SYNC_CONFIG, ROUTE_PATHS, WEBDAV_SYNC_CONFIG } from '@/platform/utils/constants';
 
 import { buildDevTestData, DEV_TEST_SCALES } from './devSeedData';
 
 import type { StoreName } from '@/platform/services/storage/idb';
-import type { CacheStat } from '@/platform/utils/cacheRegistry';
+import type { CacheStat } from '@/platform/utils/cache';
 
 const visible = defineModel<boolean>('visible', { required: true });
 
@@ -463,11 +463,11 @@ const devListRef = useTemplateRef<HTMLElement>('devListRef');
  *
  * 定位几何（sticky / top / z / 底色）仍由本文件的类与 style 下发；收起时「把头按回吸附线」与
  * 滚动钳位补偿由 BaseCollapse 自带的平台 composable 负责，这里不必接线。
- * id 取各段头上的 data-dev-sec（DevPanel 是排查工具，顺带给每段一个稳定的 DOM 钩子）。
+ * id 取各段头上的 data-dev-section（DevPanel 是排查工具，顺带给每段一个稳定的 DOM 钩子）。
  */
 const { insetPx: stickyInsetPx } = useStickyHeads({
   listRef: devListRef,
-  idAttribute: 'data-dev-sec',
+  idAttribute: 'data-dev-section',
   // 吸附线 = 容器可视上沿：头顶不留间隙，滚过的内容直接被头部自身遮住
   offset: '0px',
   // 有头吸附时：容器顶部羽化带内缩一个头高，让开吸附中的头
@@ -714,7 +714,7 @@ const refreshStorageUsage = async () => {
   lsTotalText.value = `${storeNames.length} 库 / ${counts.reduce((sum, item) => sum + item.count, 0)} 条`;
 
   // 站点级用量（含 IndexedDB / CacheStorage 等）；estimate 不可用时降级为未知
-  if (navigator.storage?.estimate) {
+  if (navigator.storage?.estimate)
     try {
       const { usage, quota } = await navigator.storage.estimate();
       originUsageText.value = usage != null ? formatBytes(usage) : '未知';
@@ -733,7 +733,7 @@ const refreshStorageUsage = async () => {
       originUsagePct.value = 0;
       originUsagePctText.value = '未知';
     }
-  } else {
+  else {
     originUsageText.value = '不支持';
     originQuotaText.value = '不支持';
     originUsagePct.value = 0;
@@ -774,7 +774,7 @@ const handleSeedTestData = () => {
   try {
     const data = buildDevTestData(activeSeedScale.value);
     chordStore.replaceAllData({ groups: data.groups, chords: data.chords });
-    chordStore.flushChordsToStorage();
+    void chordStore.persistAll();
     void songStore.overwriteSongs(data.songs);
     uiStore.message.success(
       `已覆盖：${data.chords.length} 条和弦 / ${data.songs.length} 首乐谱（约 ${formatBytes(data.estimatedBytes)}）`

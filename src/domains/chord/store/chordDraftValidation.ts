@@ -38,21 +38,16 @@ export interface ChordDraftContext {
 }
 
 export const validateChordDraft = (draft: Chord, isEditing: boolean, ctx: ChordDraftContext): ChordValidationResult => {
-  const nameSegments = draft.nameSegments;
+  const { nameSegments } = draft;
   const cleanName = nameSegments ? segmentsToString(nameSegments) : '';
   const isFretBoardEmpty = draft.strings.every(s => s.fret < 0);
-  if (!cleanName || isFretBoardEmpty) {
-    return { ok: false, reason: 'EMPTY_NAME' };
-  }
-  if (!nameSegments || !isValidChordName(cleanName)) {
-    return { ok: false, reason: 'INVALID_CHORD_SYNTAX', cleanName };
-  }
-  if (ctx.groups.length === 0) {
-    return { ok: false, reason: 'NO_GROUPS' };
-  }
-  if (!ctx.selectedGroupId) {
-    return { ok: false, reason: 'NO_SELECTED_GROUP' };
-  }
+  if (!cleanName || isFretBoardEmpty) return { ok: false, reason: 'EMPTY_NAME' };
+
+  if (!nameSegments || !isValidChordName(cleanName)) return { ok: false, reason: 'INVALID_CHORD_SYNTAX', cleanName };
+
+  if (ctx.groups.length === 0) return { ok: false, reason: 'NO_GROUPS' };
+
+  if (!ctx.selectedGroupId) return { ok: false, reason: 'NO_SELECTED_GROUP' };
 
   const id = isEditing ? draft.id : null;
   const targetGroupId = isEditing
@@ -87,9 +82,9 @@ export const validateChordDraft = (draft: Chord, isEditing: boolean, ctx: ChordD
     const original = ctx.savedChords.find(c => c.id === id);
     // 指纹不含 barres，因此"仅修改横按"时指纹不变；需同时比较 barres 才能识别真正的无修改
     const sameBarres = areBarresEqual(original?.barres, payload.barres);
-    if (original && computeChordFingerprint(original) === fingerprint && sameBarres) {
+    if (original && computeChordFingerprint(original) === fingerprint && sameBarres)
       return { ok: false, reason: 'UNCHANGED' };
-    }
+
     // 编辑保存：保留最初创建时间，刷新更新时间
     if (original?.createdAt !== undefined) payload.createdAt = original.createdAt;
     payload.updatedAt = Date.now();
@@ -99,9 +94,7 @@ export const validateChordDraft = (draft: Chord, isEditing: boolean, ctx: ChordD
     existing =>
       existing.id !== id && existing.groupId === payload.groupId && computeChordFingerprint(existing) === fingerprint
   );
-  if (isDuplicate) {
-    return { ok: false, reason: 'DUPLICATE_FINGERPRINT', cleanName };
-  }
+  if (isDuplicate) return { ok: false, reason: 'DUPLICATE_FINGERPRINT', cleanName };
 
   const bassWarn = validateBassConsistency(payload.strings, payload.fretOffset, payload.tuning, payload);
   return { ok: true, payload, cleanName, warn: bassWarn };

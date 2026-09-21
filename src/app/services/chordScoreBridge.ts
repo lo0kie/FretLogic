@@ -52,7 +52,5 @@ export function setupChordScoreBridge(): void {
 
   // 水合期清洗去重丢弃的重复项同样要重定向：水合先于本桥接装配，事件已错过，取暂存映射补偿
   const pendingMerged = chordStore.consumeHydrateMergeMapping();
-  if (pendingMerged && pendingMerged.size > 0) {
-    songStore.remapChordBindings(pendingMerged);
-  }
+  if (pendingMerged && pendingMerged.size > 0) songStore.remapChordBindings(pendingMerged);
 }

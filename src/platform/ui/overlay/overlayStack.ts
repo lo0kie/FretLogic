@@ -16,15 +16,10 @@ const updateOverlayInertState = () => {
   document.body.childNodes.forEach(node => {
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     const el = node as HTMLElement;
-    if (el.hasAttribute('data-overlay-exempt')) {
-      el.removeAttribute('inert');
-    } else if (currentTopOverlay && el === currentTopOverlay) {
-      el.removeAttribute('inert');
-    } else if (activeOverlays.size > 0) {
-      el.setAttribute('inert', '');
-    } else {
-      el.removeAttribute('inert');
-    }
+    if (el.hasAttribute('data-overlay-exempt')) el.removeAttribute('inert');
+    else if (currentTopOverlay && el === currentTopOverlay) el.removeAttribute('inert');
+    else if (activeOverlays.size > 0) el.setAttribute('inert', '');
+    else el.removeAttribute('inert');
   });
 };
 

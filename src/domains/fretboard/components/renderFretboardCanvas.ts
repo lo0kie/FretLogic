@@ -4,7 +4,7 @@
  */
 import { parseChordNameTokens } from '@/domains/chord/theory/chordNameTokens';
 import { getChordName } from '@/domains/chord/theory/theory';
-import { DEFAULT_FRET_COUNT, FRETBOARD_CANVAS_CONFIG, MIN_FRET_COUNT } from '@/domains/fretboard/constants';
+import { clampDrawFretCount, FRETBOARD_CANVAS_CONFIG } from '@/domains/fretboard/constants';
 import { isBarreStillValid } from '@/domains/fretboard/model/coordinates';
 
 import type { Chord } from '@/domains/chord/types';
@@ -57,7 +57,7 @@ function measureChordNameLayout(ctx: CanvasRenderingContext2D, chordName: string
   let totalWidth = 0;
   const measured = parseChordNameTokens(chordName).map(token => {
     ctx.font = token.isAccidental ? accFont : baseFont;
-    const width = ctx.measureText(token.text).width;
+    const { width } = ctx.measureText(token.text);
     totalWidth += width;
     return { ...token, width };
   });
@@ -366,7 +366,7 @@ function drawPressedDots(
 /** 由渲染选项推出几何：三层渲染共用同一套推导（纯算术，重复调用无成本） */
 function resolveGeometry(chord: Chord, opts: RenderFretboardOptions) {
   const { showChordName = true, showOpenStringNotes = true, showFretNumbers = true, showBoldNut = true } = opts;
-  const fretCount = Math.max(MIN_FRET_COUNT, chord.fretCount || DEFAULT_FRET_COUNT);
+  const fretCount = clampDrawFretCount(chord.fretCount);
   const stringCount = chord.strings?.length || 6;
   const layout = computeFretboardLayout({
     stringCount,
@@ -425,13 +425,12 @@ export function renderFretboardBody(ctx: CanvasRenderingContext2D, opts: RenderF
   const { chord, colors, showOpenStringNotes = true, showBarre = true } = opts;
   const { stringCount, fretCount, layout, gridBottom, gridRight } = resolveGeometry(chord, opts);
 
-  if (showOpenStringNotes) {
+  if (showOpenStringNotes)
     drawOpenStringMarkers(ctx, chord, layout.startStrX, layout.markerCenterY, stringCount, colors);
-  }
+
   drawGridLines(ctx, layout.startStrX, layout.gridTop, gridBottom, gridRight, stringCount, fretCount, colors);
-  if (showBarre) {
-    drawBarres(ctx, chord, layout.startStrX, layout.gridTop, fretCount, colors);
-  }
+  if (showBarre) drawBarres(ctx, chord, layout.startStrX, layout.gridTop, fretCount, colors);
+
   drawPressedDots(ctx, chord, layout.startStrX, layout.gridTop, stringCount, colors);
 }
 
@@ -447,9 +446,7 @@ export function renderFretboardFretMarks(ctx: CanvasRenderingContext2D, opts: Re
   const fretOffset = chord.fretOffset ?? 0;
 
   drawNut(ctx, layout.startStrX, layout.gridTop, stringCount, fretOffset, showBoldNut, colors);
-  if (showFretNumbers) {
-    drawFretNumbers(ctx, layout.startStrX, layout.gridTop, fretCount, fretOffset, colors);
-  }
+  if (showFretNumbers) drawFretNumbers(ctx, layout.startStrX, layout.gridTop, fretCount, fretOffset, colors);
 }
 
 /**
@@ -489,7 +486,7 @@ export function renderFretboardToCanvas(chord: Chord, opts: RenderFretboardToCan
     showBarre = true,
   } = opts;
 
-  const fc = Math.max(MIN_FRET_COUNT, chord.fretCount || DEFAULT_FRET_COUNT);
+  const fc = clampDrawFretCount(chord.fretCount);
   /** 顶部留白（px，逻辑坐标）：让导出图上方有充足呼吸感 */
   const TOP_PAD = 2;
   /** 和弦名两侧最小留白（px）：名称测宽后按此值扩宽画布，避免长名（如 C♯maj7♯11）被左右裁切 */
@@ -530,9 +527,8 @@ export function renderFretboardToCanvas(chord: Chord, opts: RenderFretboardToCan
   // 这类指不出原因的错误；这里显式判空并给出可诊断的信息（同文件上方 measureCtx 即此写法）。
   // 不用「返回空白画布」兜底：那会让调用方把一张空图当成功结果保存或上传，事故更隐蔽。
   const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('无法创建 2D 绘图上下文，指板图导出中止');
-  }
+  if (!ctx) throw new Error('无法创建 2D 绘图上下文，指板图导出中止');
+
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 

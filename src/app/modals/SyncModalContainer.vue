@@ -5,12 +5,15 @@
     </template>
 
     <template #default>
-      <!-- BaseForm 以 tag="form" 渲染（不可退回默认的 div）：本弹窗是全仓唯一出现 type="password" 的地方
+      <!-- BaseForm 以 tag="form" 渲染（不可退回默认的 div）：本弹窗是**唯一需要表单归属**的密码类字段组
            （GitHub / Gitee / 服务器 Token 与 WebDAV 密码共 4 处），而这两个字段组此前都没有表单归属。
            Chrome 对「无 form 的密码框」会打 `[DOM] Password field is not contained in a form`；提醒本身
            无害，但它指向的真实问题是：密码管理器只能靠启发式猜这串字符属于哪组凭据 —— WebDAV 的账号密码
            是真凭据，有 form 才谈得上正确保存/回填；Token 那几个字段则继续靠 BaseInput 上的 data-*-ignore
            + autocomplete="off" 拦住第三方管理器。
+           对照：备份弹窗的导出/导入口令（BackupModalsContainer）同为 type="password" 却**刻意不包进 form**——
+           那是一次性口令而非登录凭据，表单归属恰是管理器「保存/回填」的判据，登记进浏览器只会误导用户。
+           因此不要按本段注释去给那两处「补齐」表单。
            `@submit.prevent` 与 form 同等必要：表单内只有一个「可阻止隐式提交」字段时（Token 那几个方案
            正好只有一个输入框），浏览器会因回车触发提交，未拦截即整页导航，SPA 直接被刷掉。此处刻意不把
            submit 绑到任何动作 —— 在 Token 框里回车不应默默把本地数据推到云端。
@@ -286,7 +289,7 @@ const syncTooltip = computed(() => {
 
 /** 底部操作按钮组：测试连接 / 拉取 / 同步 —— 结构一致（图标+文案+tooltip+禁用+加载+点击），
  *  差异字段化后由模板 v-for 渲染。经 computed 求值并展开为纯值，模板无需解包 ref */
-type SyncActionButton = {
+interface SyncActionButton {
   key: 'test-connection' | 'pull' | 'sync';
   icon: IconName;
   label: string;
@@ -294,7 +297,7 @@ type SyncActionButton = {
   disabled: boolean;
   loading: boolean;
   onClick: () => void | Promise<void>;
-};
+}
 
 const syncActionButtons = computed<SyncActionButton[]>(() => [
   {

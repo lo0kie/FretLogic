@@ -7,7 +7,7 @@ import type { EdgeFadeBinding, EdgeFadeModifiers } from './platform/directives/v
 import type { FocusBinding, FocusModifiers } from './platform/directives/vFocus.ts';
 import type { GridNavBinding, GridNavModifiers } from './platform/directives/vGridNav.ts';
 import type { MarqueeBinding, MarqueeModifiers } from './platform/directives/vMarquee.ts';
-import type { ScrollbarBinding, ScrollbarModifiers } from './platform/directives/vScrollbar.ts';
+import type { ScrollbarBinding, ScrollbarModifiers } from './platform/directives/vScrollbar';
 import type { ScrollIntoViewBinding, ScrollIntoViewModifiers } from './platform/directives/vScrollIntoView.ts';
 import type { TooltipBinding, TooltipModifiers } from './platform/directives/vTooltip.ts';
 import type { WheelScrollBinding, WheelScrollModifiers } from './platform/directives/vWheelScroll.ts';

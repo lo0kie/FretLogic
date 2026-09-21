@@ -4,7 +4,7 @@
  */
 import { getChordName, parseChordName, resolveChordRootPitch } from '@/domains/chord/theory/theory';
 import { computeFretboardLayout } from '@/domains/fretboard/components/renderFretboardCanvas';
-import { DEFAULT_FRET_COUNT, MIN_FRET_COUNT } from '@/domains/fretboard/constants';
+import { clampDrawFretCount } from '@/domains/fretboard/constants';
 import { buildRowPlans } from '@/platform/composables/useRowWindowing';
 
 import type { Chord } from '@/domains/chord/types';
@@ -54,12 +54,8 @@ export const getChordRootCategory = (chord: Chord): { key: string; label: string
         const accAscii = accChar === '#' || accChar === '♯' ? '#' : accChar === 'b' || accChar === '♭' ? 'b' : '';
         const accUnicode = accAscii === '#' ? '♯' : accAscii === 'b' ? '♭' : '';
         result = { key: `${natural}${accAscii}`, label: `${natural}${accUnicode}` };
-      } else {
-        result = resolveRootPitchCategory(chord);
-      }
-    } else {
-      result = resolveRootPitchCategory(chord);
-    }
+      } else result = resolveRootPitchCategory(chord);
+    } else result = resolveRootPitchCategory(chord);
   }
 
   rootCategoryCache.set(chord, result);
@@ -125,7 +121,7 @@ const canvasCssHeightCache = new Map<string, number>();
  * picker 固定显示和弦名（showChordName 默认 true），布局只随 品数 × 弦数 变化，按其缓存。
  */
 export const getPickerCanvasCssHeight = (chord: Chord, scale: number): number => {
-  const fretCount = Math.max(MIN_FRET_COUNT, chord.fretCount || DEFAULT_FRET_COUNT);
+  const fretCount = clampDrawFretCount(chord.fretCount);
   const stringCount = chord.strings?.length || 6;
   const key = `${stringCount}x${fretCount}x${scale}`;
   let h = canvasCssHeightCache.get(key);
@@ -136,10 +132,6 @@ export const getPickerCanvasCssHeight = (chord: Chord, scale: number): number =>
   }
   return h;
 };
-
-/** 卡片总高（px） */
-export const getPickerCardHeight = (chord: Chord, scale: number): number =>
-  getPickerCanvasCssHeight(chord, scale) + getPickerCardChromePx();
 
 /** 把分区集合按通用行规划切分：行高取行内最高卡片，行 top 逐行累加（含 gap） */
 export const buildPickerRowPlan = (

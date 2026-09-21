@@ -53,15 +53,15 @@ export function removeChordFromSlot(chordMap: Map<string, ChordLineSlots>, slotK
     if (removed === null) return null;
     chordMap.get(lineId)?.char.delete(index);
     return removed;
-  } else {
-    const slots = chordMap.get(lineId);
-    if (!slots) return null;
-    const list = slots[type];
-    if (index < 0 || index >= list.length) return null;
-    const [removed] = list.splice(index, 1);
-    setLineEdgeChords(chordMap, lineId, type, list);
-    return removed ?? null;
   }
+
+  const slots = chordMap.get(lineId);
+  if (!slots) return null;
+  const list = slots[type];
+  if (index < 0 || index >= list.length) return null;
+  const [removed] = list.splice(index, 1);
+  setLineEdgeChords(chordMap, lineId, type, list);
+  return removed ?? null;
 }
 /** 向槽位绑定新和弦：字符槽位直接覆盖；边和弦槽位按索引覆盖/追加（行尾扩展、行首前插）。 */
 export function bindNewChordToSlot(chordMap: Map<string, ChordLineSlots>, slotKey: SlotKey, chordId: ChordId): void {
@@ -73,10 +73,10 @@ export function bindNewChordToSlot(chordMap: Map<string, ChordLineSlots>, slotKe
   }
   const { lineId, type, index } = parsed;
   const list = getEdgeChords(chordMap, lineId, type);
-  if (index >= list.length) {
+  if (index >= list.length)
     if (type === 'start') list.unshift(chordId);
     else list.push(chordId);
-  } else list[index] = chordId;
+  else list[index] = chordId;
   setEdgeChords(chordMap, lineId, type, list);
 }
 
@@ -89,9 +89,8 @@ export function swapOrMoveSlotChords(
   if (sourceKey === targetKey) return;
   const sourceParsed = parseSlotKey(sourceKey);
   const targetParsed = parseSlotKey(targetKey);
-  if (!sourceParsed || !targetParsed) {
-    return;
-  }
+  if (!sourceParsed || !targetParsed) return;
+
   if (
     sourceParsed.lineId === targetParsed.lineId &&
     sourceParsed.type === targetParsed.type &&
@@ -124,15 +123,12 @@ export function swapOrMoveSlotChords(
   if (targetChordId) {
     /** 直接写入某结构化槽位的和弦 id，不触碰其他槽位（互换两槽位内容用）。 */
     const setSlotChordDirect = (parsed: ParsedSlotKey, chordId: ChordId) => {
-      if (parsed.type === 'char') {
-        setLineCharChord(chordMap, parsed.lineId, parsed.index, chordId);
-      } else {
+      if (parsed.type === 'char') setLineCharChord(chordMap, parsed.lineId, parsed.index, chordId);
+      else {
         const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
-        if (parsed.index < list.length) {
-          list[parsed.index] = chordId;
-        } else {
-          list.push(chordId);
-        }
+        if (parsed.index < list.length) list[parsed.index] = chordId;
+        else list.push(chordId);
+
         setEdgeChords(chordMap, parsed.lineId, parsed.type, list);
       }
     };
@@ -162,9 +158,8 @@ function insertChordAtParsedLocation(
   parsed: ParsedSlotKey,
   chordId: ChordId
 ): void {
-  if (parsed.type === 'char') {
-    setLineCharChord(chordMap, parsed.lineId, parsed.index, chordId);
-  } else {
+  if (parsed.type === 'char') setLineCharChord(chordMap, parsed.lineId, parsed.index, chordId);
+  else {
     const list = getEdgeChords(chordMap, parsed.lineId, parsed.type);
     const insertIdx = resolveEdgeInsertIndex(parsed.index, list.length, parsed.type);
     list.splice(insertIdx, 0, chordId);
@@ -207,10 +202,10 @@ export const garbageCollectChordMap = (
     if (!slots || slots.char.size === 0) continue;
     let pruned = false;
     const char = new Map<number, ChordId>();
-    for (const [index, chordId] of slots.char) {
+    for (const [index, chordId] of slots.char)
       if (index < lineLength) char.set(index, chordId);
       else pruned = true;
-    }
+
     if (pruned) {
       updatedMap.set(lineId, { char, start: slots.start, end: slots.end });
       changed = true;
@@ -294,23 +289,20 @@ export const pruneOrphanChordRefs = (
   for (const [lineId, slots] of chordMap) {
     const char = new Map<number, ChordId>();
     let lineChanged = false;
-    for (const [index, id] of slots.char) {
-      if (id !== undefined && (validChordIds.has(id) || preserveUnknown)) {
-        char.set(index, id);
-      } else {
-        lineChanged = true;
-      }
-    }
+    for (const [index, id] of slots.char)
+      if (id !== undefined && (validChordIds.has(id) || preserveUnknown)) char.set(index, id);
+      else lineChanged = true;
+
     const start: ChordId[] = [];
-    for (const id of slots.start) {
+    for (const id of slots.start)
       if (id !== undefined && (validChordIds.has(id) || preserveUnknown)) start.push(id);
       else lineChanged = true;
-    }
+
     const end: ChordId[] = [];
-    for (const id of slots.end) {
+    for (const id of slots.end)
       if (id !== undefined && (validChordIds.has(id) || preserveUnknown)) end.push(id);
       else lineChanged = true;
-    }
+
     if (!lineChanged) {
       updatedMap.set(lineId, slots);
       continue;
@@ -345,13 +337,10 @@ export const remapChordRefs = (
   };
   for (const [lineId, slots] of chordMap) {
     const char = new Map<number, ChordId>();
-    for (const [index, id] of slots.char) {
-      if (id === undefined) {
-        char.set(index, id);
-      } else {
-        char.set(index, remapId(id));
-      }
-    }
+    for (const [index, id] of slots.char)
+      if (id === undefined) char.set(index, id);
+      else char.set(index, remapId(id));
+
     updatedMap.set(lineId, { char, start: slots.start.map(remapId), end: slots.end.map(remapId) });
   }
   return { map: updatedMap, remappedCount };
@@ -369,15 +358,14 @@ const parseIdList = (raw: unknown): ChordId[] => {
  *  旧扁平对象（line_{lineId}_{char|start|end}_{index}）、空。 */
 export const plainToChordMap = (raw: unknown): Map<string, ChordLineSlots> => {
   const entries: [string, unknown][] = [];
-  if (raw instanceof Map) {
+  if (raw instanceof Map)
     for (const [k, v] of raw) {
       if (typeof k === 'string') entries.push([k, v]);
     }
-  } else if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+  else if (raw && typeof raw === 'object' && !Array.isArray(raw))
     entries.push(...Object.entries(raw as Record<string, unknown>));
-  } else {
-    return new Map();
-  }
+  else return new Map();
+
   const result = new Map<string, ChordLineSlots>();
   // 扁平对象的边和弦条目先按 index 收集，最后统一排序落位（缺失 index 不留空洞）
   const edgePending = new Map<string, { type: 'start' | 'end'; index: number; id: ChordId }[]>();
@@ -396,9 +384,8 @@ export const plainToChordMap = (raw: unknown): Map<string, ChordLineSlots> => {
       const parsed = parseSlotKey(k);
       if (!parsed) continue;
       const slots = ensureLine(parsed.lineId);
-      if (parsed.type === 'char') {
-        slots.char.set(parsed.index, v as ChordId);
-      } else {
+      if (parsed.type === 'char') slots.char.set(parsed.index, v as ChordId);
+      else {
         const list = edgePending.get(parsed.lineId) ?? [];
         list.push({ type: parsed.type, index: parsed.index, id: v as ChordId });
         edgePending.set(parsed.lineId, list);
@@ -410,21 +397,19 @@ export const plainToChordMap = (raw: unknown): Map<string, ChordLineSlots> => {
       const rawSlots = v as Record<string, unknown>;
       const slots = ensureLine(k);
       const charRaw = rawSlots['char'];
-      if (charRaw instanceof Map) {
+      if (charRaw instanceof Map)
         for (const [idxRaw, idRaw] of charRaw) {
           const idx = typeof idxRaw === 'number' ? idxRaw : NaN;
-          if (!Number.isNaN(idx) && typeof idRaw === 'string' && idRaw.length > 0) {
+          if (!Number.isNaN(idx) && typeof idRaw === 'string' && idRaw.length > 0)
             slots.char.set(idx, idRaw as ChordId);
-          }
         }
-      } else if (charRaw && typeof charRaw === 'object' && !Array.isArray(charRaw)) {
+      else if (charRaw && typeof charRaw === 'object' && !Array.isArray(charRaw))
         for (const [idxStr, idRaw] of Object.entries(charRaw as Record<string, unknown>)) {
           const idx = parseInt(idxStr, 10);
-          if (!Number.isNaN(idx) && typeof idRaw === 'string' && idRaw.length > 0) {
+          if (!Number.isNaN(idx) && typeof idRaw === 'string' && idRaw.length > 0)
             slots.char.set(idx, idRaw as ChordId);
-          }
         }
-      }
+
       const startIds = parseIdList(rawSlots['start']);
       if (startIds.length > 0) slots.start = startIds;
       const endIds = parseIdList(rawSlots['end']);

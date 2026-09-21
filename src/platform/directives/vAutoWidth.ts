@@ -6,6 +6,8 @@
  * 本指令在元素宽度因内容增减产生跳变时，利用 FLIP 思想由 WAAPI 从旧宽补间到新宽。
  * 针对动画过程中尺寸不断变化并反复触发 RO 的情况，做了防抖与接力（relay）保护。
  */
+import { observeResize } from '@/platform/utils/dom';
+
 import type { Directive, DirectiveBinding } from 'vue';
 
 export interface AutoWidthOptions {
@@ -27,6 +29,8 @@ interface AutoWidthState {
   lastWidth?: number;
   runningAnim?: Animation;
   pendingWidth?: number;
+  /** 停止尺寸观察的清理函数（observeResize 返回）；null 表示未观察 */
+  stop?: (() => void) | null;
 }
 
 const stateMap = new WeakMap<HTMLElement, AutoWidthState>();
@@ -40,13 +44,9 @@ const normalizeOptions = (value: AutoWidthBinding, modifiers?: Record<string, bo
     disabled: false,
   };
 
-  if (typeof value === 'boolean') {
-    opts.disabled = !value;
-  } else if (typeof value === 'number') {
-    opts.duration = value;
-  } else if (value && typeof value === 'object') {
-    Object.assign(opts, value);
-  }
+  if (typeof value === 'boolean') opts.disabled = !value;
+  else if (typeof value === 'number') opts.duration = value;
+  else if (value && typeof value === 'object') Object.assign(opts, value);
 
   if (modifiers) {
     if (modifiers['fast']) opts.duration = 100;
@@ -75,53 +75,40 @@ const startWidthAnim = (el: HTMLElement, state: AutoWidthState, from: number, to
     // 动画期间内容又变了：从当前值接力到最新目标
     const pending = state.pendingWidth;
     state.pendingWidth = undefined;
-    if (pending !== undefined && Math.abs(pending - to) >= (state.opts.threshold ?? 0.5)) {
+    if (pending !== undefined && Math.abs(pending - to) >= (state.opts.threshold ?? 0.5))
       startWidthAnim(el, state, to, pending);
-    }
   };
 };
 
-let sharedRo: ResizeObserver | null = null;
+/** 单个元素尺寸变化处理：脱离文档/隐藏时清除基准，动画进行中只记录目标，否则触发宽度补间 */
+const onResize = (el: HTMLElement) => {
+  const state = stateMap.get(el);
+  if (!state || state.opts.disabled) return;
 
-const handleResize: ResizeObserverCallback = entries => {
-  for (const entry of entries) {
-    const el = entry.target as HTMLElement;
-    const state = stateMap.get(el);
-    if (!state || state.opts.disabled) continue;
+  const newWidth = el.offsetWidth;
 
-    const newWidth = entry.borderBoxSize?.[0]?.inlineSize ?? el.offsetWidth;
-
-    // 元素脱离文档（KeepAlive 摘除）或被隐藏时宽度上报为 0：
-    // 这不是内容宽度变化，清除基准与动画状态，避免恢复可见时回放「0 → 真实宽度」的生长动画
-    if (!el.isConnected || newWidth === 0) {
-      state.runningAnim?.cancel();
-      state.runningAnim = undefined;
-      state.pendingWidth = undefined;
-      state.lastWidth = undefined;
-      continue;
-    }
-
-    // 动画进行中：此刻的布局宽度由动画驱动，仅记录最新目标，结算留给 onfinish
-    if (state.runningAnim) {
-      state.pendingWidth = newWidth;
-      continue;
-    }
-
-    const last = state.lastWidth;
-    state.lastWidth = newWidth;
-
-    if (last === undefined || Math.abs(newWidth - last) < (state.opts.threshold ?? 0.5)) {
-      continue;
-    }
-
-    startWidthAnim(el, state, last, newWidth);
+  // 元素脱离文档（KeepAlive 摘除）或被隐藏时宽度上报为 0：
+  // 这不是内容宽度变化，清除基准与动画状态，避免恢复可见时回放「0 → 真实宽度」的生长动画
+  if (!el.isConnected || newWidth === 0) {
+    state.runningAnim?.cancel();
+    state.runningAnim = undefined;
+    state.pendingWidth = undefined;
+    state.lastWidth = undefined;
+    return;
   }
-};
 
-const getSharedObserver = () => {
-  if (typeof ResizeObserver === 'undefined') return null;
-  sharedRo ??= new ResizeObserver(handleResize);
-  return sharedRo;
+  // 动画进行中：此刻的布局宽度由动画驱动，仅记录最新目标，结算留给 onfinish
+  if (state.runningAnim) {
+    state.pendingWidth = newWidth;
+    return;
+  }
+
+  const last = state.lastWidth;
+  state.lastWidth = newWidth;
+
+  if (last === undefined || Math.abs(newWidth - last) < (state.opts.threshold ?? 0.5)) return;
+
+  startWidthAnim(el, state, last, newWidth);
 };
 
 export const vAutoWidth: Directive<HTMLElement, AutoWidthBinding, AutoWidthModifiers> = {
@@ -133,10 +120,7 @@ export const vAutoWidth: Directive<HTMLElement, AutoWidthBinding, AutoWidthModif
     };
     stateMap.set(el, state);
 
-    if (!opts.disabled) {
-      const ro = getSharedObserver();
-      ro?.observe(el);
-    }
+    if (!opts.disabled) state.stop = observeResize(el, () => onResize(el));
   },
 
   updated(el: HTMLElement, binding: DirectiveBinding<AutoWidthBinding>) {
@@ -146,26 +130,24 @@ export const vAutoWidth: Directive<HTMLElement, AutoWidthBinding, AutoWidthModif
     const prevDisabled = state.opts.disabled;
     state.opts = normalizeOptions(binding.value, binding.modifiers);
 
-    const ro = getSharedObserver();
-    if (ro) {
-      if (!prevDisabled && state.opts.disabled) {
-        ro.unobserve(el);
-        state.runningAnim?.cancel();
-        state.runningAnim = undefined;
-      } else if (prevDisabled && !state.opts.disabled) {
-        state.lastWidth = el.offsetWidth;
-        ro.observe(el);
-      }
+    if (!prevDisabled && state.opts.disabled) {
+      state.stop?.();
+      state.stop = null;
+      state.runningAnim?.cancel();
+      state.runningAnim = undefined;
+    } else if (prevDisabled && !state.opts.disabled) {
+      state.lastWidth = el.offsetWidth;
+      state.stop = observeResize(el, () => onResize(el));
     }
   },
 
   unmounted(el: HTMLElement) {
     const state = stateMap.get(el);
     if (state) {
+      state.stop?.();
+      state.stop = null;
       state.runningAnim?.cancel();
       stateMap.delete(el);
     }
-    const ro = getSharedObserver();
-    ro?.unobserve(el);
   },
 };

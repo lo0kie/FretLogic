@@ -7,7 +7,7 @@ import {
   MARQUEE_RESET_DURATION_MS,
   MARQUEE_RESET_EASING,
 } from '@/platform/utils/constants';
-import { buildEdgeFadeMask, ensureFadeProperties, fadeTransition } from '@/platform/utils/fadeMask';
+import { buildEdgeFadeMask, ensureFadeProperties, fadeTransition, observeResize } from '@/platform/utils/dom';
 
 import type { Directive } from 'vue';
 
@@ -58,13 +58,13 @@ export type MarqueeModifiers =
   | 'once'
   | (string & Record<never, never>);
 
-const DEFAULTS: Required<Omit<MarqueeOptions, 'onStart' | 'onEnd' | 'onOverflowChange'>> &
-  Pick<MarqueeOptions, 'onStart' | 'onEnd' | 'onOverflowChange'> = {
+const DEFAULTS: Required<Omit<MarqueeOptions, 'onStart' | 'onEnd' | 'onOverflowChange' | 'duration'>> &
+  Pick<MarqueeOptions, 'onStart' | 'onEnd' | 'onOverflowChange' | 'duration'> = {
   mode: 'hover',
   loopMode: 'pingpong',
   gap: 24,
   speed: 50,
-  duration: undefined as unknown as number,
+  duration: undefined,
   delay: 0,
   direction: 'left',
   pauseOnEdges: true,
@@ -95,8 +95,8 @@ interface MarqueeState {
   maskRaf: number;
   /** 遮罩状态签名（羽化量 "start|end" 或 null=未启用）：相同则跳过重复样式写入 */
   lastFade: string | null;
-  observer: ResizeObserver;
-  mql: MediaQueryList;
+  /** 停止尺寸观察的清理函数（observeResize 返回）；null 表示尚未挂载观察者 */
+  stopResize: (() => void) | null;
   cleanups: (() => void)[];
 }
 
@@ -153,7 +153,7 @@ function shouldAnimate(state: MarqueeState): boolean {
  *   direction 'right' 停在终点（右缘贴内容）→ 仅左端渐隐。
  *
  * 渐隐量由两个注册自定义属性（@property <number>，--fade-start/--fade-end，注册规则见
- * platform/utils/fadeMask.ts）驱动渐变端点透明度，注册属性可参与 CSS transition——
+ * platform/utils/dom.ts）驱动渐变端点透明度，注册属性可参与 CSS transition——
  * 贴边/离开贴边时羽化以 MARQUEE_FADE_TRANSITION_MS 平滑过渡，
  * 而非整段 mask-image 字符串瞬变（渐变图片本身不可插值）。
  */
@@ -229,8 +229,8 @@ function sampleOffset(state: MarqueeState, dist: number, travel: number): number
     return direction === 'left' ? travel * frac : travel * (1 - frac);
   }
   // pingpong：与 update() 的时间轴分段一致
-  const speed = state.options.speed;
-  const duration = state.options.duration;
+  const { speed } = state.options;
+  const { duration } = state.options;
   // duration 下限取 1ms（与 startPingpong 同口径）：否则 duration:0 时 total=0、相位除零得出 NaN
   const moveMs =
     duration != null ? Math.max(1, duration) : Math.max(MARQUEE_MIN_DURATION_PINGPONG_MS, (dist / speed) * 1000);
@@ -258,13 +258,12 @@ function startMaskLoop(state: MarqueeState, dist: number, travel: number): void 
     state.maskRaf = 0;
     if (!state.animation) return;
     const offset = sampleOffset(state, dist, travel);
-    if (offset <= FLUSH_EPS_PX) {
+    if (offset <= FLUSH_EPS_PX)
       setFade(state, 0, 1); // 起点贴边：左缘不渐隐
-    } else if (offset >= dist - FLUSH_EPS_PX) {
+    else if (offset >= dist - FLUSH_EPS_PX)
       setFade(state, 1, 0); // 终点贴边：右缘不渐隐
-    } else {
-      setFade(state, 1, 1);
-    }
+    else setFade(state, 1, 1);
+
     state.maskRaf = requestAnimationFrame(step);
   };
   state.maskRaf = requestAnimationFrame(step);
@@ -448,9 +447,8 @@ function update(el: HTMLElement): void {
   // 单次播放模式：首轮播完后停在终帧，不再重启、不重置（避免归位跳变）。
   // 内容不再溢出时退化为常规静态，正常回到静止位。
   if (options.once && state.playedOnce) {
-    if (!overflowing) {
-      deactivateMarquee(el, state);
-    } else {
+    if (!overflowing) deactivateMarquee(el, state);
+    else {
       stopMaskLoop(state);
       // 静态羽化跟随静止位：贴内容一侧不渐隐
       setFade(state, options.direction === 'left' ? 0 : 1, options.direction === 'left' ? 1 : 0);
@@ -462,9 +460,8 @@ function update(el: HTMLElement): void {
   // 激活/静止切换时同步遮罩方向（激活=双端，静止=贴内容侧不渐隐）
   applyFadeMask(el, state);
 
-  if (!active) {
-    deactivateMarquee(el, state);
-  } else {
+  if (!active) deactivateMarquee(el, state);
+  else {
     // 重新激活：立即结束尚未完成的复位动画并落定到静止位，循环从头开始
     if (state.resetAnim) {
       state.resetAnim.cancel();
@@ -481,9 +478,7 @@ function update(el: HTMLElement): void {
     if (options.loopMode === 'continuous') {
       maskDist = travelDist;
       startContinuous(el, state);
-    } else {
-      startPingpong(el, state);
-    }
+    } else startPingpong(el, state);
 
     // 动画激活期间逐帧同步遮罩：起点/终点贴边的一侧不渐隐
     startMaskLoop(state, maskDist, travelDist);
@@ -498,19 +493,8 @@ function update(el: HTMLElement): void {
    本指令挂在**列表的每一项**上（乐谱卡标题、和弦卡标题、分组标题…），整库渲染就是数百个实例。
    原先每元素各建一个 ResizeObserver、各注册一个 matchMedia 监听 —— 它们之间没有任何隔离需求，
    却让挂载/卸载成本随列表长度线性增长（过滤时数百个元素同时卸载，等于同时 disconnect 数百个
-   观察者）。收敛为模块级单例 + 注册表后，实例数从「每元素一个」降为「全局一个」，
+   观察者）。观察者单例现统一走 @/platform/utils/dom（与 v-auto-width 共用），
    语义完全不变：仍然是「el 或 inner 尺寸变化 → measure(el)」，尺寸与文本变化依旧不会漏帧。 */
-const RO_OWNERS = new Map<Element, HTMLElement>();
-let sharedObserver: ResizeObserver | null = null;
-
-/** 共享测量观察者（惰性创建：模块求值期未必存在 ResizeObserver） */
-const getSharedObserver = (): ResizeObserver =>
-  (sharedObserver ??= new ResizeObserver(entries => {
-    for (const entry of entries) {
-      const owner = RO_OWNERS.get(entry.target);
-      if (owner) measure(owner);
-    }
-  }));
 
 /** 已登记、需要在系统「减弱动态效果」偏好变化时回落重算的状态集合 */
 const MQL_STATES = new Set<MarqueeState>();
@@ -560,14 +544,12 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       resetAnim: null,
       maskRaf: 0,
       lastFade: null,
-      observer: undefined as unknown as ResizeObserver,
-      mql: undefined as unknown as MediaQueryList,
+      stopResize: null,
       cleanups: [],
     };
     STATES.set(el, state);
 
     const mql = getReducedMotionMql();
-    state.mql = mql;
     // 变更监听由模块级共享监听统一驱动（见 getReducedMotionMql），这里只把自身登记进集合
     MQL_STATES.add(state);
     state.reducedMotion = mql.matches;
@@ -594,13 +576,13 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     el.addEventListener('focusout', onFocusOut);
 
     // 重点：同时监听容器 el 与内部内容 inner，确保内部文本变化时也能立即触发测量。
-    // 观察者取模块级共享实例（各元素之间无隔离需求），实例数不随列表长度增长
-    const observer = getSharedObserver();
-    RO_OWNERS.set(el, el);
-    RO_OWNERS.set(inner, el);
-    observer.observe(el);
-    observer.observe(inner);
-    state.observer = observer;
+    // 观察者取共享单例（各元素之间无隔离需求），实例数不随列表长度增长
+    const stopEl = observeResize(el, () => measure(el));
+    const stopInner = observeResize(inner, () => measure(el));
+    state.stopResize = () => {
+      stopEl();
+      stopInner();
+    };
 
     state.cleanups.push(() => {
       el.removeEventListener('mouseenter', onEnter);
@@ -609,10 +591,8 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       el.removeEventListener('focusout', onFocusOut);
       MQL_STATES.delete(state);
       // 共享观察者不能 disconnect：只摘掉本元素自己的两个观测目标
-      observer.unobserve(el);
-      observer.unobserve(inner);
-      RO_OWNERS.delete(el);
-      RO_OWNERS.delete(inner);
+      state.stopResize?.();
+      state.stopResize = null;
       stopMaskLoop(state);
       state.animation?.cancel();
       state.resetAnim?.cancel();
@@ -642,11 +622,10 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     //    常态下 el 只有 inner 一个子节点（挂载时已把原内容搬进 inner，之后 Vue patch 的是 inner
     //    里的那些节点），故先判后搬，省下每次更新的 childNodes 遍历与数组分配
     const hasStrayChildren = el.firstChild !== state.inner || el.childNodes.length !== 1;
-    if (hasStrayChildren) {
+    if (hasStrayChildren)
       Array.from(el.childNodes).forEach(node => {
         if (node !== state.inner) state.inner.appendChild(node);
       });
-    }
 
     // 3. 只在配置或子树结构真的变了才重测。
     //    measure 会读 inner.scrollWidth / el.clientWidth —— 两者都是「写后必重排」的强制同步布局，

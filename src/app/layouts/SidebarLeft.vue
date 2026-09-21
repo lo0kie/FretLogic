@@ -118,7 +118,6 @@
               <ActionButton
                 :aria-expanded="isOpen"
                 :color="isOpen ? 'primary' : 'default'"
-                :title="'切换乐谱排序方式'"
                 :variant="isOpen ? 'subtle' : 'ghost'"
                 @click="pinToggle()"
                 icon-only
@@ -126,6 +125,7 @@
                 aria-label="切换乐谱排序方式"
                 icon-size="xl"
                 icon-stroke="regular"
+                title="切换乐谱排序方式"
               >
                 <BaseIcon :name="currentSortIcon" icon-size="xl" icon-stroke="regular" />
               </ActionButton>
@@ -225,7 +225,7 @@ import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { LEFT_SIDEBAR_WIDTH_PIXEL, ROUTE_PATHS } from '@/platform/utils/constants';
-import { pickFile } from '@/platform/utils/filePicker';
+import { pickFile } from '@/platform/utils/transfer';
 
 import type { GroupedChordCard } from '@/domains/chord/types';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
@@ -243,12 +243,10 @@ const getSearchItemTitle = (item: { card: GroupedChordCard; groupName: string })
   // 侧栏搜索结果不属于「工作台 / 乐谱」场景：一律完整和弦名
   const chordName = getChordName(item.card.mainChord);
   const parts = [chordName, `分组：${item.groupName}`];
-  if (item.card.variantCount > 1) {
-    parts.push(`共 ${item.card.variantCount} 个指法`);
-  }
-  if (isCardActive(item.card)) {
-    parts.push('当前编辑中');
-  }
+  if (item.card.variantCount > 1) parts.push(`共 ${item.card.variantCount} 个指法`);
+
+  if (isCardActive(item.card)) parts.push('当前编辑中');
+
   return parts.join(' · ');
 };
 
@@ -293,12 +291,11 @@ watch(
   () => uiStore.isLeftOpen,
   isOpen => {
     // 侧栏重开时容器尺寸 0→实际值，v-edge-fade 的 ResizeObserver 自动触发重测
-    if (isOpen) {
+    if (isOpen)
       nextTick(() => {
         const el = scrollRef.value;
         if (el) el.scrollTop = SCROLL_CACHE.get(route.path) ?? el.scrollTop;
       });
-    }
   }
 );
 
@@ -326,12 +323,12 @@ const searchResults = computed(() => {
   const q = debouncedSearchQuery.value;
   if (!q) return [];
   const items: { card: GroupedChordCard; groupName: string }[] = [];
-  for (const group of chordStore.groups) {
+  for (const group of chordStore.groups)
     for (const card of chordStore.getGroupedCards(group.id, q)) {
       items.push({ card, groupName: group.name });
       if (items.length >= SEARCH_RESULT_LIMIT) return items;
     }
-  }
+
   return items;
 });
 

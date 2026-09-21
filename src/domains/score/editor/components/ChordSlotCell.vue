@@ -30,7 +30,7 @@
     @keydown.enter="handleKeydown($event)"
     @keydown.space="handleKeydown($event)"
     @pointerdown="handleSlotPointerDown($event)"
-    data-focusable-inline
+    data-focusable-outline
     class="char-box group relative flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 transition-all duration-fast outline-none hover:bg-tint-primary-88 [&.is-dragging-source]:opacity-35!"
     ref="charBoxRef"
     role="button"
@@ -102,11 +102,11 @@
             ? 'pointer-events-auto opacity-100'
             : 'pointer-events-none opacity-0'
         "
-        :icon-color="'var(--color-primary)'"
         :tabindex="-1"
         :title="addPlaceholderTitle"
         icon-only
         icon="plus"
+        icon-color="var(--color-primary)"
         icon-size="lg"
         icon-stroke="bold"
         ref="addButtonEl"
@@ -199,10 +199,9 @@ const handleFocusIn = (e: FocusEvent) => {
   // 仅当焦点直接落在根槽（Tab/程序聚焦）时才同步到内部按钮；
   // 鼠标点击或槽内按钮间移动时不得重聚焦，否则会把焦点拉回按钮
   if ((e.target as HTMLElement) !== charBoxRef.value) return;
-  if (props.variant === 'add') {
+  if (props.variant === 'add')
     // 添加槽与字符槽共享焦点模型：根槽聚焦时把焦点同步到内部"+"按钮（反向经 focusin 冒泡已天然生效）
     nextTick(() => addButtonEl.value?.$el.focus());
-  }
 };
 // 仅当焦点真正离开本槽子树时才取消激活
 const handleFocusOut = (e: FocusEvent) => {
@@ -282,9 +281,8 @@ const handleDelete = (e: KeyboardEvent) => {
 };
 
 const ariaLabelText = computed(() => {
-  if (props.variant === 'add') {
-    return '添加边缘和弦槽位';
-  }
+  if (props.variant === 'add') return '添加边缘和弦槽位';
+
   const charDisplay = props.char === ' ' ? '空格' : props.char || '边缘槽位';
   if (props.chord) {
     const chordName = getChordName(props.chord);

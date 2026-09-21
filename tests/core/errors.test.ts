@@ -1,45 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
-import { AppError, ErrorCode, errors, toAppError } from '@/platform/services/errors';
+import { AppError, errors } from '@/platform/services/errors';
 
-describe('AppError / toAppError', () => {
-  it('工厂函数构造带分类的错误', () => {
-    const e = errors.input('无效输入');
+describe('AppError', () => {
+  it('工厂函数构造带分类的存储错误', () => {
+    const e = errors.storage('底层写入失败');
     expect(e).toBeInstanceOf(AppError);
     expect(e).toBeInstanceOf(Error);
-    expect(e.code).toBe(ErrorCode.INVALID_INPUT);
-    expect(e.message).toBe('无效输入');
-    expect(e.userMessage).toBe('无效输入');
+    expect(e.code).toBe('STORAGE');
   });
 
-  it('userMessage 可覆盖默认 message', () => {
-    const e = errors.storage('底层写入失败', { userMessage: '保存失败，请重试' });
-    expect(e.userMessage).toBe('保存失败，请重试');
-    expect(e.message).toBe('底层写入失败');
-  });
-
-  it('context 与 cause 被保留', () => {
+  it('context 与 cause 被保留，cause 不进枚举（手动挂接的 ES2022 兼容路径）', () => {
     const cause = new Error('db error');
-    const e = errors.network('同步失败', { context: { url: '/x' }, cause });
+    const e = errors.storage('同步失败', { context: { url: '/x' }, cause });
     expect(e.context).toEqual({ url: '/x' });
     expect(e.cause).toBe(cause);
+    expect(Object.keys(e)).not.toContain('cause');
   });
 
-  it('toAppError 透传 AppError', () => {
-    const original = errors.io('导出失败');
-    expect(toAppError(original)).toBe(original);
-  });
-
-  it('toAppError 包装普通 Error 并带上 fallback 分类', () => {
-    const wrapped = toAppError(new Error('boom'), ErrorCode.INTERNAL);
-    expect(wrapped).toBeInstanceOf(AppError);
-    expect(wrapped.code).toBe(ErrorCode.INTERNAL);
-    expect(wrapped.message).toBe('boom');
-  });
-
-  it('toAppError 兜底非 Error 值', () => {
-    const wrapped = toAppError('字符串错误');
-    expect(wrapped.code).toBe(ErrorCode.INTERNAL);
-    expect(wrapped.message).toBe('字符串错误');
+  it('无 cause 时不创建该属性', () => {
+    const e = errors.storage('写入被暂停');
+    expect('cause' in e).toBe(false);
   });
 });

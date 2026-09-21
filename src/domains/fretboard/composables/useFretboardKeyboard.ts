@@ -35,11 +35,8 @@ export function useFretboardKeyboard(deps: FretboardKeyboardDeps) {
   const handleEnterOrSpace = () => {
     const pt = focusPoint.value;
     if (!pt) return;
-    if (pt.fretIndex === 0) {
-      deps.onToggleOpenString(pt.stringIndex);
-    } else {
-      deps.onToggleNote(pt.stringIndex, pt.fretIndex);
-    }
+    if (pt.fretIndex === 0) deps.onToggleOpenString(pt.stringIndex);
+    else deps.onToggleNote(pt.stringIndex, pt.fretIndex);
   };
 
   /** Delete/Backspace：清除焦点弦上的音符 */
@@ -51,9 +48,7 @@ export function useFretboardKeyboard(deps: FretboardKeyboardDeps) {
 
   const handleKeydown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement | null;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-      return;
-    }
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
 
     const minFret = 0;
     const maxFret = toValue(fretCount);

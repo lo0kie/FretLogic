@@ -143,11 +143,9 @@ export const kvRemove = (key: string): void => {
 export const hydrateIdbKv = async (): Promise<void> => {
   const records = await idb.getAll(KV_STORE);
   memory.clear();
-  for (const record of records) {
-    if (record && typeof record.key === 'string' && typeof record.value === 'string') {
+  for (const record of records)
+    if (record && typeof record.key === 'string' && typeof record.value === 'string')
       memory.set(record.key, record.value);
-    }
-  }
 };
 
 /** 立即落盘（供转录完成、页面退出等关键节点调用） */
@@ -166,7 +164,7 @@ if (typeof window !== 'undefined') {
     if (document.visibilityState === 'hidden') flushIdbKvOnExit();
   });
   // 跨标签页同步频道：尽早建立，收到变更通知即回读（Browser 环境不支持时静默降级）
-  if (typeof BroadcastChannel !== 'undefined') {
+  if (typeof BroadcastChannel !== 'undefined')
     try {
       syncChannel = new BroadcastChannel(SYNC_CHANNEL_NAME);
       syncChannel.onmessage = (event: MessageEvent) => {
@@ -178,7 +176,6 @@ if (typeof window !== 'undefined') {
     } catch {
       syncChannel = null;
     }
-  }
 }
 
 /**

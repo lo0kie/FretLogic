@@ -66,11 +66,10 @@ const commitLyrics = useDebounceFn((songId: string, value: string) => {
   dirty.value = false;
   const result = scoreEditor.updateLyrics(value, songId);
   // 未匹配行数超阈值时整行会拿到新 id、原有和弦被回收（大段粘贴场景），静默丢和弦不可接受
-  if (result.skippedSimilarMatch) {
+  if (result.skippedSimilarMatch)
     uiStore.message.warning('大段歌词未能与原有行对齐，相关行的和弦已一并清除', {
       description: '可立即撤销恢复，或分批粘贴以保留原有和弦。',
     });
-  }
 }, 300);
 
 watch(localLyrics, value => {
@@ -81,7 +80,7 @@ watch(localLyrics, value => {
     const now = Date.now();
     if (now - lastClampWarnAt > CLAMP_WARN_INTERVAL) {
       lastClampWarnAt = now;
-      uiStore.message.warning(`单行歌词最多 ${MAX_LINE_LENGTH} 个字符，超出的部分已截断`);
+      uiStore.message.warning(`单行最多 ${MAX_LINE_LENGTH} 字，超出已截断`);
     }
     return;
   }
@@ -118,11 +117,10 @@ const flushLyrics = () => {
   const result = scoreEditor.updateLyrics(localLyrics.value, boundSongId);
   // 与防抖提交同口径：skippedSimilarMatch 不能吞掉，否则同一次编辑在「切 tab」与
   // 「原地输入」两条路径下结局不同（一个有警告可撤销、一个静默丢和弦）
-  if (result.skippedSimilarMatch) {
+  if (result.skippedSimilarMatch)
     uiStore.message.warning('大段歌词未能与原有行对齐，相关行的和弦已一并清除', {
       description: '可立即撤销恢复，或分批粘贴以保留原有和弦。',
     });
-  }
 };
 
 onDeactivated(flushLyrics);

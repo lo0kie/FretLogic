@@ -2,8 +2,8 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { FULL_BACKUP_SELECTION } from '@/app/services/backup/backupSelection';
 import { buildBackupPayload } from '@/app/services/backup/buildBackupPayload';
-import { FULL_BACKUP_SELECTION } from '@/app/services/backup/useImportExportService';
 import { idb } from '@/platform/services/storage';
 import { hydrateIdbKv } from '@/platform/services/storage/idbKv';
 import { useSettingsStore } from '@/platform/store/settingsStore';

@@ -105,20 +105,14 @@ const parseCombo = (input: string): KeyCombo => {
 
   for (const token of parts.slice(0, -1)) {
     const t = token.toLowerCase();
-    if (t === 'mod') {
+    if (t === 'mod')
       if (isMac) combo.meta = true;
       else combo.ctrl = true;
-    } else if (t === 'ctrl' || t === 'control') {
-      combo.ctrl = true;
-    } else if (t === 'shift') {
-      combo.shift = true;
-    } else if (t === 'alt' || t === 'option') {
-      combo.alt = true;
-    } else if (t === 'meta' || t === 'cmd' || t === 'command' || t === 'win') {
-      combo.meta = true;
-    } else {
-      throw new Error(`[useKeybinding] 未知修饰符 "${token}"（快捷键：${input}）`);
-    }
+    else if (t === 'ctrl' || t === 'control') combo.ctrl = true;
+    else if (t === 'shift') combo.shift = true;
+    else if (t === 'alt' || t === 'option') combo.alt = true;
+    else if (t === 'meta' || t === 'cmd' || t === 'command' || t === 'win') combo.meta = true;
+    else throw new Error(`[useKeybinding] 未知修饰符 "${token}"（快捷键：${input}）`);
   }
 
   return combo;

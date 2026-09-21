@@ -4,9 +4,8 @@ import { isProxy, isRef, toRaw, unref } from 'vue';
 
 /** 生成带可选前缀的短随机 id：优先 crypto.randomUUID，不支持时回退随机串 + 时间戳。 */
 export const generateUUID = (prefix: string = '', length = 8): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
     return (prefix ? `${prefix}_` : '') + crypto.randomUUID().slice(0, length);
-  }
 
   const randomStr = Math.random()
     .toString(36)
@@ -25,9 +24,7 @@ export const generateUUID = (prefix: string = '', length = 8): string => {
  */
 export function cloneDeep<T>(value: T): T {
   // 1. 原始类型
-  if (value === null || typeof value !== 'object') {
-    return value;
-  }
+  if (value === null || typeof value !== 'object') return value;
 
   // 2. 强制剥离所有层的 Vue 代理（reactive/readonly）
   let raw: unknown = isProxy(value) ? toRaw(value) : value;
@@ -59,18 +56,15 @@ export function toPlainPersistable<T>(value: T): T {
   if (value === null || typeof value !== 'object') return value;
   const raw: unknown = isProxy(value) ? toRaw(value) : value;
   if (isRef(raw)) return toPlainPersistable(unref(raw)) as T;
-  if (raw instanceof Map) {
-    return new Map([...raw].map(([k, v]) => [k, toPlainPersistable(v)])) as unknown as T;
-  }
-  if (raw instanceof Set) {
-    return new Set([...raw].map(v => toPlainPersistable(v))) as unknown as T;
-  }
+  if (raw instanceof Map) return new Map([...raw].map(([k, v]) => [k, toPlainPersistable(v)])) as unknown as T;
+
+  if (raw instanceof Set) return new Set([...raw].map(v => toPlainPersistable(v))) as unknown as T;
+
   if (raw instanceof Date || raw instanceof RegExp) return raw as unknown as T;
   if (Array.isArray(raw)) return raw.map(v => toPlainPersistable(v)) as unknown as T;
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    out[k] = toPlainPersistable(v);
-  }
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) out[k] = toPlainPersistable(v);
+
   return out as T;
 }
 
@@ -99,15 +93,13 @@ export const getEditDistance = (a: string, b: string): number => {
   if (b.length === 0) return a.length;
 
   // 让较短的字符串对应数组宽度，这样空间占用取两者中较小的一个
-  if (a.length < b.length) {
-    [a, b] = [b, a];
-  }
+  if (a.length < b.length) [a, b] = [b, a];
 
   const prevRow = new Array(b.length + 1);
   for (let j = 0; j <= b.length; j++) prevRow[j] = j;
 
   for (let i = 1; i <= a.length; i++) {
-    let diag = prevRow[0]; // 相当于原来 matrix[i-1][0]
+    let [diag] = prevRow; // 相当于原来 matrix[i-1][0]
     prevRow[0] = i; // 变成当前行的 matrix[i][0]
 
     for (let j = 1; j <= b.length; j++) {
@@ -149,9 +141,7 @@ const getObserverForRoot = (root: Element | null): SharedVisibilityObserver => {
     const callbacks = new WeakMap<Element, VisibilityCallback>();
     const observer = new IntersectionObserver(
       entries => {
-        for (const entry of entries) {
-          callbacks.get(entry.target)?.(entry.isIntersecting);
-        }
+        for (const entry of entries) callbacks.get(entry.target)?.(entry.isIntersecting);
       },
       { root }
     );
@@ -186,9 +176,8 @@ export const base64EncodeUtf8 = (str: string): string => {
   const bytes = new TextEncoder().encode(str);
   let binary = '';
   const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
+  for (let i = 0; i < bytes.length; i += chunkSize) binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+
   return btoa(binary);
 };
 

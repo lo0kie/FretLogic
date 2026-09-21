@@ -6,9 +6,11 @@
  * 触发复制/粘贴/分享时才需要；ScoreView / SongSection 等路由块引用的是状态壳，
  * 不影响首屏闭包。store 与和弦域传递能力在模块加载时初始化一次（均无生命周期钩子）。
  */
+import { storeToRefs } from 'pinia';
+
 import { useChordStore } from '@/domains/chord/store/chordStore';
-import { createChord } from '@/domains/chord/theory/entityFactories';
-import { computeChordFingerprint, getChordName, nameToSegments } from '@/domains/chord/theory/theory';
+import { computeChordFingerprint, getChordName } from '@/domains/chord/theory/theory';
+import { chordFromPortable } from '@/domains/chord/transfer/chordTextCodec';
 import {
   buildDraftChordFromPortable,
   pasteErrorMessage,
@@ -21,10 +23,11 @@ import { useSongStore } from '@/domains/score/library/store/songStore';
 import { bindNewChordToSlot } from '@/domains/score/model/chordSlots';
 import { charKey, chordSlotKey, matchLineIds, sanitizeLyricsText } from '@/domains/score/model/scoreModel';
 import { parseSongFromText, serializeSongToText } from '@/domains/score/transfer/textCodec';
+import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { readTextFromClipboard, writeTextToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useUiStore } from '@/platform/store/uiStore';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
-import { buildShareUrl, encodeShareToken, resolveTransferPayload } from '@/platform/utils/shareLink';
+import { buildShareUrl, encodeShareToken, resolveTransferPayload } from '@/platform/utils/transfer';
 
 import type { PasteSongOutcome } from './useTextTransfer';
 import type { ChordId } from '@/domains/chord/types';
@@ -35,6 +38,8 @@ const chordStore = useChordStore();
 const songStore = useSongStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();
+// 剪贴板防重入锁的唯一写方（与和弦域动作实现同一口径）：调用方不得再各自包一层
+const { isCopying } = storeToRefs(uiStore);
 
 // 和弦域能力委托：单和弦复制/粘贴（编解码、剪贴板与 message 细节收敛在 chord/transfer）
 const { copyChordText, copyChordCardText, pasteChordFromClipboard } = useChordTransfer();
@@ -56,12 +61,12 @@ const buildSongToken = (song: Song): Promise<string> => encodeShareToken(buildSo
 /** 复制当前乐谱到剪贴板（载体：裸 token，可在另一实例粘贴导入） */
 export const copySongText = async (song: Song | null): Promise<void> => {
   if (!song) return;
-  try {
-    await writeTextToClipboard(await buildSongToken(song));
-    uiStore.message.success(`已复制乐谱到剪贴板`);
-  } catch (err) {
-    uiStore.message.error(err instanceof Error ? err.message : '复制失败');
-  }
+  await runBusyAction({
+    busy: isCopying,
+    errorFallback: '复制失败',
+    successText: '已复制乐谱到剪贴板',
+    run: async () => writeTextToClipboard(await buildSongToken(song)),
+  });
 };
 
 /** 按名字+指法精确复用库中和弦；未命中则生成新和弦并归入指定分组（惰性建组） */
@@ -73,26 +78,17 @@ const findOrCreateChordInLibrary = (p: PortableChord, groupName: string): { chor
   );
   // 降级匹配：智能歌词谱导入（无指法数据）时，优先复用库中同名且同调弦的真实和弦；
   // 排除「全静音」占位和弦（本次导入首批无指法槽位可能已建出的 -1 占位），否则后续真实指法会被误复用顶掉
-  if (!existing) {
+  if (!existing)
     existing = chordStore.savedChordsList.find(
       c => getChordName(c) === p.name && c.tuning === p.tuning && c.strings.some(s => s.fret >= 0)
     );
-  }
+
   if (existing) return { chordId: existing.id, created: false };
 
   // 同名分组已存在则复用，避免重复粘贴产生空分组
   let group = chordStore.groups.find(g => g.name === groupName);
   if (!group) group = chordStore.addGroup(groupName);
-  const chord = createChord({
-    nameSegments: nameToSegments(p.name),
-    strings: p.strings,
-    fretCount: p.fretCount,
-    fretOffset: p.fretOffset,
-    groupId: group.id,
-    tuning: p.tuning,
-    rootStringIndex: p.rootStringIndex,
-    barres: p.barres,
-  });
+  const chord = chordFromPortable(p, group.id);
   chordStore.addChord(chord);
   return { chordId: chord.id, created: true };
 };
@@ -110,7 +106,7 @@ export const importPortableSong = (p: PortableSong) => {
 
   const newSong = songStore.createSong(title);
   const lines = lyrics.split('\n');
-  const lineIds = matchLineIds([], lines, []).lineIds;
+  const { lineIds } = matchLineIds([], lines, []);
   const importGroupName = title;
 
   const chordMap = new Map<LineId, ChordLineSlots>();
@@ -125,7 +121,7 @@ export const importPortableSong = (p: PortableSong) => {
     bindNewChordToSlot(chordMap, key, chordId);
   }
 
-  if (createdCount > 0) chordStore.flushChordsToStorage();
+  if (createdCount > 0) void chordStore.persistAll();
 
   songStore.updateSongMeta(newSong.id, {
     lyrics,
@@ -151,32 +147,41 @@ export const importPortableSong = (p: PortableSong) => {
  * 无结构的纯歌词返回 needsConfirm，由调用方弹出确认后回调 importPortableSong 落地。
  */
 export const pasteSongFromClipboard = async (): Promise<PasteSongOutcome> => {
-  let raw: string;
-  try {
-    raw = await readTextFromClipboard();
-  } catch (err) {
-    uiStore.message.error(err instanceof Error ? err.message : '读取剪贴板失败');
-    return { status: 'none' };
-  }
-  // 载体归一：分享地址 / 裸 token / 手写歌词 都收敛成同一份文本，之后一律按纯文本处理
-  const resolved = await resolveTransferPayload(raw);
-  if (resolved.status === 'empty') {
-    uiStore.message.warning('剪贴板为空');
-    return { status: 'none' };
-  }
-  if (resolved.status === 'broken') {
-    uiStore.message.warning('传递内容已损坏，无法解析');
-    return { status: 'none' };
-  }
-  const result = parseSongFromText(resolved.payload);
-  if (!result.ok) {
-    pasteErrorMessage(result.reason, '乐谱');
-    return { status: 'none' };
-  }
-  const { needsConfirm, ...portable } = result.data;
-  if (needsConfirm) return { status: 'needsConfirm', portable };
-  importPortableSong(portable);
-  return { status: 'imported' };
+  // runBusyAction 仅用作互斥守卫（提示分支由动作内部各自负责）：重入或异常时返回 null，
+  // 对调用方与「没读到可用内容」同义
+  const outcome = await runBusyAction({
+    busy: isCopying,
+    errorFallback: '粘贴失败',
+    run: async (): Promise<PasteSongOutcome> => {
+      let raw: string;
+      try {
+        raw = await readTextFromClipboard();
+      } catch (err) {
+        uiStore.message.error(err instanceof Error ? err.message : '读取剪贴板失败');
+        return { status: 'none' };
+      }
+      // 载体归一：分享地址 / 裸 token / 手写歌词 都收敛成同一份文本，之后一律按纯文本处理
+      const resolved = await resolveTransferPayload(raw);
+      if (resolved.status === 'empty') {
+        uiStore.message.warning('剪贴板为空');
+        return { status: 'none' };
+      }
+      if (resolved.status === 'broken') {
+        uiStore.message.warning('传递内容已损坏，无法解析');
+        return { status: 'none' };
+      }
+      const result = parseSongFromText(resolved.payload);
+      if (!result.ok) {
+        pasteErrorMessage(result.reason, '乐谱');
+        return { status: 'none' };
+      }
+      const { needsConfirm, ...portable } = result.data;
+      if (needsConfirm) return { status: 'needsConfirm', portable };
+      importPortableSong(portable);
+      return { status: 'imported' };
+    },
+  });
+  return outcome ?? { status: 'none' };
 };
 
 /**
@@ -186,10 +191,10 @@ export const pasteSongFromClipboard = async (): Promise<PasteSongOutcome> => {
  */
 export const shareSongLink = async (song: Song | null): Promise<void> => {
   if (!song) return;
-  try {
-    await writeTextToClipboard(buildShareUrl(ROUTE_PATHS.SCORE, await buildSongToken(song)));
-    uiStore.message.success(`已复制乐谱「${song.title}」的分享链接`);
-  } catch (err) {
-    uiStore.message.error(err instanceof Error ? err.message : '生成分享链接失败');
-  }
+  await runBusyAction({
+    busy: isCopying,
+    errorFallback: '生成分享链接失败',
+    successText: `已复制乐谱「${song.title}」的分享链接`,
+    run: async () => writeTextToClipboard(buildShareUrl(ROUTE_PATHS.SCORE, await buildSongToken(song))),
+  });
 };

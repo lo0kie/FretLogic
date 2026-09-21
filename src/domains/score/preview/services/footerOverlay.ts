@@ -34,7 +34,7 @@ export interface FooterMarkOptions {
 export const footerTextOf = (pageIndex: number): string => `第 ${pageIndex + 1} 页`;
 
 /** 页脚字号（px，逻辑坐标系） */
-export const FOOTER_FONT_SIZE = SCORE_EXPORT_CONFIG.FOOTER_FONT_SIZE;
+export const { FOOTER_FONT_SIZE } = SCORE_EXPORT_CONFIG;
 
 /**
  * 在底部页边距内水平居中绘制页码。

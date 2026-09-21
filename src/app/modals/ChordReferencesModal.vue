@@ -20,7 +20,7 @@
         <button
           v-wave
           @click="handleOpenSong(item.song.id)"
-          data-focusable-inline
+          data-focusable-outline
           class="flex w-full cursor-pointer items-center gap-sm rounded-md border border-border-light bg-surface-body px-3 py-2 text-left transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover"
           type="button"
         >

@@ -67,7 +67,6 @@ import MenuItems from '@/platform/ui/menu/MenuItems.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import { createVirtualElementRect } from '@/platform/ui/popover/floatingCore';
 import { CONTEXT_MENU_REPOSITION_DURATION_MS, CONTEXT_MENU_REPOSITION_EASING } from '@/platform/utils/constants';
-import { logger } from '@/platform/utils/logger';
 
 import type { ComponentSize } from '@/platform/types';
 import type { MenuItem } from '@/platform/ui/menu/types';
@@ -124,15 +123,6 @@ const emit = defineEmits<{
   (e: 'close'): void;
 }>();
 
-/**
- * 调试日志开关与实例序号（仅开发期）。
- * `import.meta.env.DEV` 在生产构建被替换为字面量 false，下方日志分支随之被摇掉。
- */
-const IS_DEV = import.meta.env.DEV;
-
-/** 菜单实例递增序号：dev 日志里区分同一时刻的多个菜单（互斥关闭时尤其需要） */
-const menuInstanceSeqState = { seq: 0 };
-
 // 模块级互斥：一组菜单同时只允许打开一个（打开新菜单时只关其他菜单，非关闭所有浮层）。
 // 必须放在模块作用域而非 <script setup> 体，否则每个实例各持一份、跨实例互斥失效。
 const mutexCloseRef = ref<((reason?: string) => void) | null>(null);
@@ -167,36 +157,18 @@ const panelInnerClass = computed(() => [menuSizeClass.value, 'context-menu-inner
 /** 右键分支专用虚拟锚点：以鼠标坐标构造定位点 */
 const virtualRef = computed(() => (trigger === 'contextmenu' ? createVirtualElementRect(x.value, y.value) : null));
 
-/** dev 日志标识：#序号 + 菜单标题（无标题时取首项文案），用于在多个菜单的日志里认出实例 */
-const instanceId = `#${++menuInstanceSeqState.seq}(${title || (items?.[0]?.label ?? '未命名')})`;
-
-/** dev 日志用调用栈：定位「谁关的菜单」 */
-const callStack = (): string =>
-  (new Error().stack ?? '')
-    .split('\n')
-    .slice(1, 7)
-    .map(s => s.trim().replace(/^at\s+/, ''))
-    .join(' <- ');
-
 /** 关闭本菜单并清理全局互斥记录 */
 const closeMenu = (reason = 'unmarked') => {
-  if (IS_DEV && isOpen.value) {
-    logger.debug('BaseMenu', `[menu${instanceId}] closeMenu reason=${reason}`, { stack: callStack() });
-  }
   popoverRef.value?.close(`menu:${reason}`);
 };
 
 /** 互斥登记：打开时关掉其他菜单并登记自己，关闭时清空指向自己的登记 */
 watch(isOpen, val => {
   if (val) {
-    if (mutexCloseRef.value && mutexCloseRef.value !== closeMenu) {
-      if (IS_DEV) logger.debug('BaseMenu', `[menu${instanceId}] 互斥关闭上一个菜单`);
-      mutexCloseRef.value('mutex-by-other-menu');
-    }
+    if (mutexCloseRef.value && mutexCloseRef.value !== closeMenu) mutexCloseRef.value('mutex-by-other-menu');
+
     mutexCloseRef.value = closeMenu;
-  } else if (mutexCloseRef.value === closeMenu) {
-    mutexCloseRef.value = null;
-  }
+  } else if (mutexCloseRef.value === closeMenu) mutexCloseRef.value = null;
 });
 
 /** 打开后自动聚焦面板内首个可用项（三态通用） */
@@ -209,10 +181,8 @@ watch(isOpen, async val => {
 
 /** 菜单关闭回调：清互斥登记，并向父级转发关闭事件 */
 const handlePopoverClose = () => {
-  if (IS_DEV) logger.debug('BaseMenu', `[menu${instanceId}] popover 已关闭（浮层侧发出）`);
-  if (mutexCloseRef.value === closeMenu) {
-    mutexCloseRef.value = null;
-  }
+  if (mutexCloseRef.value === closeMenu) mutexCloseRef.value = null;
+
   emit('close');
 };
 
@@ -238,9 +208,7 @@ const openMenuAt = async (clientX: number, clientY: number) => {
   popoverRef.value?.update();
 
   // 已打开时切换锚点：定位更新后用 WAAPI 从旧坐标平滑滑到新坐标（首次打开走 Transition 入场）
-  if (wasOpen) {
-    animateReposition(prevX, prevY);
-  }
+  if (wasOpen) animateReposition(prevX, prevY);
 };
 
 /** 换位动画：对浮层宿主做 FLIP 位移（从旧坐标偏移归零），尊重系统减弱动态效果偏好 */
@@ -294,9 +262,7 @@ const handleMenuKeydown = (e: KeyboardEvent) => {
 };
 
 onBeforeUnmount(() => {
-  if (mutexCloseRef.value === closeMenu) {
-    mutexCloseRef.value = null;
-  }
+  if (mutexCloseRef.value === closeMenu) mutexCloseRef.value = null;
 });
 
 defineExpose({ openMenuAt, closeMenu });

@@ -8,7 +8,6 @@ const CONFIG_FILES = [
   'package.json',
   'vite.config.ts',
   'tsconfig.json',
-  'tsconfig.node.json',
   'eslint.config.mjs',
   '.prettierrc',
   '.prettierignore',

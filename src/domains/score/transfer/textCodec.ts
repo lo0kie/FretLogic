@@ -80,9 +80,8 @@ const DIRECTIVE_REGEX = /^\{([a-zA-Z]+)\s*:\s*(.*?)\}$/;
 const hasScoreStructuralMarker = (text: string): boolean => {
   let match: RegExpExecArray | null;
   BRACKET_CHORD_REGEX.lastIndex = 0;
-  while ((match = BRACKET_CHORD_REGEX.exec(text)) !== null) {
-    if (isValidChordName(match[1]?.trim() ?? '')) return true;
-  }
+  while ((match = BRACKET_CHORD_REGEX.exec(text)) !== null) if (isValidChordName(match[1]?.trim() ?? '')) return true;
+
   const firstLine = text.trimStart().split('\n')[0]?.trim() ?? '';
   if (DIRECTIVE_REGEX.test(firstLine)) return true;
   return /^(?:歌名|曲名|Title|歌手|演唱)\s*[:：]/.test(firstLine);
@@ -219,9 +218,7 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
   }
 
   // 判定门槛：至少含有合法和弦记号，或者至少有两行有意义的歌词内容且总长度 > 6
-  if (!hasValidChords && (meaningfulContentCount < 2 || text.trim().length < 6)) {
-    return null;
-  }
+  if (!hasValidChords && (meaningfulContentCount < 2 || text.trim().length < 6)) return null;
 
   return {
     title,
@@ -252,22 +249,19 @@ export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord
     const usedKeys = new Set<string>();
 
     for (const step of steps) {
-      const chordId = step.chordId;
+      const { chordId } = step;
       if (!chordDict.has(chordId)) {
         const baseName = getChordName(step.chord, { useUnicode: false }) || 'Chord';
         let key = baseName;
         let counter = 2;
-        while (usedKeys.has(key)) {
-          key = `${baseName}_${counter++}`;
-        }
+        while (usedKeys.has(key)) key = `${baseName}_${counter++}`;
+
         usedKeys.add(key);
         chordDict.set(chordId, { key, chord: step.chord });
       }
     }
 
-    for (const [, { key, chord }] of chordDict) {
-      lines.push(`${key}=${serializeChordFields(chord)}`);
-    }
+    for (const [, { key, chord }] of chordDict) lines.push(`${key}=${serializeChordFields(chord)}`);
 
     lines.push('LYRICS:');
     if (song.lyrics) lines.push(...song.lyrics.split('\n').map(escapeLyricsLine));
@@ -287,7 +281,7 @@ export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord
       const alias = chordDict.get(step.chordId)?.key ?? '';
       lines.push(`${lineIdx}:${step.type}:${step.index}:${alias}`);
     }
-    if (missedSlots > 0) {
+    if (missedSlots > 0)
       logger.warn(
         'textCodec',
         `导出乐谱文本：${missedSlots} 个槽位未命中当前行列表，已跳过（歌曲可能存在行残留引用）`,
@@ -295,7 +289,6 @@ export const serializeSongToText = (song: Song, resolver: (id: ChordId) => Chord
           songId: song.id,
         }
       );
-    }
   } else {
     lines.push('LYRICS:');
     if (song.lyrics) lines.push(...song.lyrics.split('\n').map(escapeLyricsLine));
@@ -348,24 +341,17 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
     const trimmed = raw.trim();
 
     if (section === 'header') {
-      if (trimmed.startsWith('TITLE:')) {
-        title = trimmed.slice(6).trim();
-      } else if (trimmed.startsWith('SINGER:')) {
-        singer = trimmed.slice(7).trim();
-      } else if (trimmed.startsWith('ORIGKEY:')) {
-        originalKey = trimmed.slice(8).trim();
-      } else if (trimmed.startsWith('TS:')) {
+      if (trimmed.startsWith('TITLE:')) title = trimmed.slice(6).trim();
+      else if (trimmed.startsWith('SINGER:')) singer = trimmed.slice(7).trim();
+      else if (trimmed.startsWith('ORIGKEY:')) originalKey = trimmed.slice(8).trim();
+      else if (trimmed.startsWith('TS:')) {
         const val = trimmed.slice(3).trim();
         if (isValidTimeSignature(val)) timeSignature = val;
-      } else if (trimmed.startsWith('PLAYKEY:')) {
-        playKey = trimmed.slice(8).trim();
-      } else if (trimmed.startsWith('CAPO:')) {
-        capoNum = Number(trimmed.slice(5));
-      } else if (trimmed === 'CHORDS:') {
-        section = 'chords';
-      } else if (trimmed === 'LYRICS:') {
-        section = 'lyrics';
-      }
+      } else if (trimmed.startsWith('PLAYKEY:')) playKey = trimmed.slice(8).trim();
+      else if (trimmed.startsWith('CAPO:')) capoNum = Number(trimmed.slice(5));
+      else if (trimmed === 'CHORDS:') section = 'chords';
+      else if (trimmed === 'LYRICS:') section = 'lyrics';
+
       continue;
     }
 
@@ -387,22 +373,19 @@ export const parseSongFromText = (text: string): TextParseResult<SmartSongImport
       const m = SLOT_RE.exec(trimmed);
       if (m && m[4]?.includes(';')) {
         const chord = parseChordFields(m[4]);
-        if (chord) {
+        if (chord)
           slots.push({ lineIdx: Number(m[1]), type: m[2] as 'char' | 'start' | 'end', index: Number(m[3]), chord });
-        }
       }
       continue;
     }
 
     if (section === 'lyrics') {
-      if (trimmed === 'SLOTS:') {
-        section = 'slots';
-      } else if (trimmed === 'CHORDS:') {
+      if (trimmed === 'SLOTS:') section = 'slots';
+      else if (trimmed === 'CHORDS:')
         // 兼容旧版：旧版格式中 CHORDS: 在 LYRICS: 之后
         section = 'chords';
-      } else {
-        lyricsLines.push(unescapeLyricsLine(raw));
-      }
+      else lyricsLines.push(unescapeLyricsLine(raw));
+
       continue;
     }
 

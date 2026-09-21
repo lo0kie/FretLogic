@@ -8,7 +8,8 @@ FretLogic 采用**垂直领域（Domain-First）**源码布局：业务概念所
 src/
   app/            # 应用装配外壳：路由、顶层布局（TopHeader/SidebarLeft）、全局弹窗、
                   # 跨领域编排服务（backup/sync/data/audio）与领域事件桥接（chordScoreBridge）
-  domains/        # 纵向业务领域（各自通过领域根 index.ts 显式导出公共 API）
+  domains/        # 纵向业务领域（跨领域消费一律走 @/domains/<领域>/... 深路径导入；
+                  # 领域根 index.ts 只是模块清单/门面，业务代码不从中导入）
     fretboard/    # 指板引擎：物理几何模型（model/）、交互（composables/）、乐器呈现（components/）
     chord/        # 和弦乐理与和弦库：theory（乐理内核）、store、library、workbench、transfer、directives
     score/        # 乐谱排版：editor、library、preview、model、transfer
@@ -51,7 +52,8 @@ app  →  domains  →  platform
 
 ## Domains
 
-每个领域内聚「类型 + 算法/模型 + store + 组件」，公共 API 由领域根 `index.ts` 显式导出。
+每个领域内聚「类型 + 算法/模型 + store + 组件」。跨领域消费按 `@/domains/<领域>/<子路径>` 深路径导入——领域根 `index.ts`
+只是模块清单（门面），**不作为导入入口**：经它导入会把整个领域（含组件与 store）拉进调用方的静态闭包，与首屏闭包瘦身、按需懒加载和 build:budget 的粒度设计相冲突。
 
 ### fretboard（指板引擎）
 

@@ -58,21 +58,20 @@ export const buildFloatingMiddlewares = (opts: FloatingMiddlewareOptions = {}): 
     m.push(
       size({
         apply({ rects, elements }) {
-          if (strategy === 'minWidth') {
+          if (strategy === 'minWidth')
             Object.assign(elements.floating.style, {
               minWidth: `${rects.reference.width}px`,
             });
-          } else {
+          else
             Object.assign(elements.floating.style, {
               width: `${rects.reference.width}px`,
             });
-          }
         },
       })
     );
   }
 
-  if (opts.showArrow && opts.getArrowEl) {
+  if (opts.showArrow && opts.getArrowEl)
     // Derivable 惰性求值：每次 computePosition 时经 getArrowEl 取箭头元素（模板 ref 形态）。
     // 元素尚未挂载时置 null——core 的 arrow 对 null 有防御（直接跳过本帧），不会抛错
     m.push(
@@ -81,7 +80,6 @@ export const buildFloatingMiddlewares = (opts: FloatingMiddlewareOptions = {}): 
         return { element: element as Element, padding: 6 };
       })
     );
-  }
 
   return m;
 };

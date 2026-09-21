@@ -82,6 +82,7 @@ import { useFloatingPosition } from '@/platform/ui/popover/useFloatingPosition';
 import { usePopoverHover } from '@/platform/ui/popover/usePopoverHover';
 import { globalFloatingReferenceMap, usePopoverZLayer } from '@/platform/ui/popover/usePopoverZLayer';
 import { POPOVER_HOVER_CLOSE_DELAY_MS } from '@/platform/utils/constants';
+import { FOCUSABLE_SELECTOR } from '@/platform/utils/dom';
 
 import type { ScrollbarOptions } from '@/platform/directives/vScrollbar';
 import type { Placement, VirtualElement } from '@floating-ui/dom';
@@ -303,9 +304,8 @@ const isPointerInRect = (point: { x: number; y: number }): boolean => {
   for (const el of [referenceRef.value, contextTriggerEl, floatingRef.value]) {
     const r = el?.getBoundingClientRect();
     if (!r) continue;
-    if (point.x >= r.left - pad && point.x <= r.right + pad && point.y >= r.top - pad && point.y <= r.bottom + pad) {
+    if (point.x >= r.left - pad && point.x <= r.right + pad && point.y >= r.top - pad && point.y <= r.bottom + pad)
       return true;
-    }
   }
   return false;
 };
@@ -326,9 +326,9 @@ const isPointerInRect = (point: { x: number; y: number }): boolean => {
  */
 const isPointerInside = (): boolean => {
   if (referenceRef.value?.matches(':hover')) return true;
-  for (const layer of document.querySelectorAll<HTMLElement>('[data-floating-layer]:hover')) {
+  for (const layer of document.querySelectorAll<HTMLElement>('[data-floating-layer]:hover'))
     if (layer === floatingRef.value || isChildFloatingLayer(layer)) return true;
-  }
+
   // 几何复核：`:hover` 只认最顶层元素，别的浮层压在指针下时会假性失效
   // （见 popoverPointerTracking 注释）。有实时坐标就用实时坐标；只有在从未收到过 pointermove
   // 的场景（触摸、程序化打开）才退回「离开时坐标」的走廊判定。
@@ -345,7 +345,9 @@ const isPointerInside = (): boolean => {
  */
 const isPointerInCorridor = (): boolean => {
   const leave = getLeavePoint();
-  return !!leave && isPointerInRect(leave);
+  // 显式判空而非 !!leave / Boolean(leave)：Boolean() 不是类型守卫，TS 不会据此收窄
+  //（no-implicit-coercion 的 --fix 会把 !!leave 改写成 Boolean(leave)，收窄随之丢失）
+  return leave !== null && isPointerInRect(leave);
 };
 
 /**
@@ -380,9 +382,7 @@ watch(model, async val => {
     isShown.value = true;
     if (autoFocus) {
       await nextTick();
-      const firstFocusable = panelRef.value?.querySelector<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
+      const firstFocusable = panelRef.value?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
       (firstFocusable || panelRef.value)?.focus();
     }
   }
@@ -431,11 +431,8 @@ const handleAfterLeave = () => {
 
 /** 切换开关状态 */
 const toggle = () => {
-  if (model.value) {
-    close('trigger-toggle');
-  } else {
-    open();
-  }
+  if (model.value) close('trigger-toggle');
+  else open();
 };
 
 /**
@@ -455,9 +452,8 @@ provide(POPOVER_PIN_KEY, pin);
 const pinned = ref(false);
 /** 钉住切换的具体实现：已钉住并打开时关闭，否则钉住并打开 */
 const pinToggle = () => {
-  if (model.value && pinned.value) {
-    close('pin-toggle');
-  } else {
+  if (model.value && pinned.value) close('pin-toggle');
+  else {
     pinned.value = true;
     open();
   }
@@ -496,9 +492,8 @@ const isChildFloatingLayer = (el: HTMLElement | null): boolean => {
   while (targetFloating && targetFloating !== floatingRef.value) {
     const childTrigger = globalFloatingReferenceMap.get(targetFloating);
     if (!childTrigger) return false;
-    if (panelRef.value?.contains(childTrigger) || referenceRef.value?.contains(childTrigger)) {
-      return true;
-    }
+    if (panelRef.value?.contains(childTrigger) || referenceRef.value?.contains(childTrigger)) return true;
+
     targetFloating = childTrigger.closest<HTMLElement>('[data-floating-layer]');
   }
   return false;

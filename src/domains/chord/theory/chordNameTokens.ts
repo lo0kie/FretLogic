@@ -18,13 +18,9 @@ export function parseChordNameTokens(chordName: string): ChordNameToken[] {
   const parts = chordName.split(/([#b♯♭])/g);
   for (const part of parts) {
     if (!part) continue;
-    if (part === '#' || part === '♯') {
-      tokens.push({ text: '♯', isAccidental: true });
-    } else if (part === 'b' || part === '♭') {
-      tokens.push({ text: '♭', isAccidental: true });
-    } else {
-      tokens.push({ text: part, isAccidental: false });
-    }
+    if (part === '#' || part === '♯') tokens.push({ text: '♯', isAccidental: true });
+    else if (part === 'b' || part === '♭') tokens.push({ text: '♭', isAccidental: true });
+    else tokens.push({ text: part, isAccidental: false });
   }
   return tokens;
 }

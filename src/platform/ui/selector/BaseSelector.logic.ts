@@ -68,30 +68,29 @@ export const createOptionHelpers = <V>(opts: OptionHelperOptions<V>) => {
 
   /** 读取选项展示文本：对象选项走 labelKey，原始值直接字符串化 */
   const getOptionLabel = (option: unknown): string => {
-    if (option !== null && typeof option === 'object' && labelKey in option) {
+    if (option !== null && typeof option === 'object' && labelKey in option)
       return String((option as Record<string, unknown>)[labelKey]);
-    }
+
     return String(option);
   };
 
   /** 读取选项绑值：对象选项走 valueKey，原始值即其自身 */
   const getOptionValue = (option: unknown): V => {
-    if (option !== null && typeof option === 'object' && valueKey in option) {
+    if (option !== null && typeof option === 'object' && valueKey in option)
       return (option as Record<string, unknown>)[valueKey] as V;
-    }
+
     return option as V;
   };
 
   /** 读取选项禁用态（原始值恒为可选项） */
-  const isOptionDisabled = (option: unknown): boolean => {
-    return option !== null && typeof option === 'object' && Boolean((option as Record<string, unknown>)[disabledKey]);
-  };
+  const isOptionDisabled = (option: unknown): boolean =>
+    option !== null && typeof option === 'object' && Boolean((option as Record<string, unknown>)[disabledKey]);
 
   /** 读取选项图标：仅对象选项且对应字段存在时返回 */
   const getOptionIcon = (option: unknown): IconName | Component | undefined => {
-    if (option !== null && typeof option === 'object' && iconKey in option) {
+    if (option !== null && typeof option === 'object' && iconKey in option)
       return (option as Record<string, unknown>)[iconKey] as IconName | Component | undefined;
-    }
+
     return undefined;
   };
 
@@ -104,9 +103,8 @@ export const createOptionHelpers = <V>(opts: OptionHelperOptions<V>) => {
     if (typeof a === 'object' && typeof b === 'object') {
       const aRecord = a as Record<string, unknown>;
       const bRecord = b as Record<string, unknown>;
-      if (valueKey in aRecord && valueKey in bRecord) {
-        return Object.is(aRecord[valueKey], bRecord[valueKey]);
-      }
+      if (valueKey in aRecord && valueKey in bRecord) return Object.is(aRecord[valueKey], bRecord[valueKey]);
+
       try {
         return JSON.stringify(a) === JSON.stringify(b);
       } catch {
@@ -118,9 +116,9 @@ export const createOptionHelpers = <V>(opts: OptionHelperOptions<V>) => {
 
   /** 选项展示文本：原始值选项支持 formatOption 自定义，其余走 label 字段 */
   const formattedOption = (option: unknown): string => {
-    if (formatOption && (typeof option === 'string' || typeof option === 'number')) {
+    if (formatOption && (typeof option === 'string' || typeof option === 'number'))
       return (formatOption as (o: string | number) => string)(option);
-    }
+
     return getOptionLabel(option);
   };
 

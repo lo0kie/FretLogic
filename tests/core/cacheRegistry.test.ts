@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { cachesFingerprint, createCacheSampler, listCaches, registerCache } from '@/platform/utils/cacheRegistry';
-import { createLruCache } from '@/platform/utils/lruCache';
+import {
+  cachesFingerprint,
+  createCacheSampler,
+  createLruCache,
+  listCaches,
+  registerCache,
+} from '@/platform/utils/cache';
 
-import type { CacheStat } from '@/platform/utils/cacheRegistry';
+import type { CacheStat } from '@/platform/utils/cache';
 
 /** 注册表仅在 DEV 生效（生产构建下 registerCache 为空操作，注册表恒为空），非 DEV 环境跳过依赖它的用例 */
 const NO_REGISTRY = !import.meta.env.DEV;

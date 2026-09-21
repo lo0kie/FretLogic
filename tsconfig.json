@@ -28,7 +28,8 @@
     "types": ["unplugin-icons/types/vue", "node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@data/*": ["./data/*"]
     }
   },
   // 检查范围：src + 构建与脚本 TS 文件（vite.config / scripts/*.ts，需 node types）。

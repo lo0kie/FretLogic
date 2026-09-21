@@ -68,9 +68,7 @@ export function useDragAutoScroll() {
       container.scrollLeft += actualScrollX;
       onScrollTick?.();
       autoScrollRafId = requestAnimationFrame(scrollFrame);
-    } else {
-      stopAutoScroll();
-    }
+    } else stopAutoScroll();
   };
 
   /** 检查指针是否接近容器边缘并渐加速滚动（越近越快）；循环进行中重复调用仅更新指针位置，不叠加 rAF */
@@ -85,10 +83,10 @@ export function useDragAutoScroll() {
     }
     // 始终记录最新已知指针位置（副本，防调用方复用/替换对象造成的陈旧读数）
     latestPos = { x: pointerPos.x, y: pointerPos.y };
-    if (autoScrollRafId !== null) {
+    if (autoScrollRafId !== null)
       // 循环已在跑：只更新位置，下一帧 scrollFrame 自然按新位置决策（含停止）
       return;
-    }
+
     activeContainer = container;
     activeTick = onScrollTick ?? null;
     autoScrollRafId = requestAnimationFrame(scrollFrame);

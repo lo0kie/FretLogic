@@ -3,6 +3,8 @@
  * 统一关闭入口（beforeClose 拦截 + 防重入）、Esc 栈顶判定、遮罩点击关闭、Tab 焦点圈定。
  * BaseModal 与 BaseDrawer 此前各自维护逐字重复的实现，本模块为唯一来源。
  */
+import { FOCUSABLE_SELECTOR } from '@/platform/utils/dom';
+
 import type { ModalCloseReason } from '@/platform/ui/modal/modalCloseReason';
 import type { Ref } from 'vue';
 
@@ -64,16 +66,12 @@ export function useOverlayMaskClose(opts: { canClose: () => boolean; close: (rea
     mousedownTarget = e.target;
   };
   const handleMaskClick = (e: MouseEvent) => {
-    if (opts.canClose() && e.target === e.currentTarget && mousedownTarget === e.currentTarget) {
-      opts.close('mask');
-    }
+    if (opts.canClose() && e.target === e.currentTarget && mousedownTarget === e.currentTarget) opts.close('mask');
+
     mousedownTarget = null;
   };
   return { handleMaskMousedown, handleMaskClick };
 }
-
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * 圈选元素是否真实可聚焦：querySelectorAll 只能按选择器初筛，选出结果里仍混有
@@ -113,11 +111,9 @@ export function useOverlayFocusTrap(panelRef: Ref<HTMLElement | null>): (e: Keyb
         e.preventDefault();
         lastEl.focus();
       }
-    } else {
-      if (document.activeElement === lastEl) {
-        e.preventDefault();
-        firstEl.focus();
-      }
+    } else if (document.activeElement === lastEl) {
+      e.preventDefault();
+      firstEl.focus();
     }
   };
 }

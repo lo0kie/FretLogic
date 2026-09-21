@@ -198,8 +198,8 @@ export function useSegmentedDrag(options: UseSegmentedDragOptions) {
     const previewIdx = visualVariant() === 'tabbed' ? hoverIdx : disabledHover ? -1 : hoverIdx;
     const preview = previewIdx >= 0 ? dragRectByIndex[previewIdx] : undefined;
     const geometry = preview ? resolveIndicatorGeometry(preview) : dragSnapshot;
-    const width = geometry.width;
-    const height = geometry.height;
+    const { width } = geometry;
+    const { height } = geometry;
     const top = geometry.y;
     // 横向落点（两种形态语义不同，勿混用）：
     // - pill 是「按住并搬运一块实体」：保留抓取偏移（按下的点相对滑块恒定），滑块就跟在指针后

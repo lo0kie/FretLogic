@@ -8,6 +8,7 @@
  */
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { logger } from '@/platform/utils/logger';
 
 import { AUDIO_CONFIG } from './constants';
 import {
@@ -112,7 +113,7 @@ const strumOnce = async (chord: Chord, failLabel: string) => {
       (strumDuration + AUDIO_CONFIG.AUDIO_RELEASE_TAIL) * 1000
     );
   } catch (e) {
-    console.error(failLabel, e);
+    logger.error('audio', failLabel, e);
     isPlaying.value = false;
   }
 };
@@ -152,7 +153,7 @@ export const startChordSustain = async (chord: Chord) => {
     releaseSynthNotes();
     triggerChordSustain(chord, buildStrumOptions());
   } catch (error) {
-    console.error('持续发声启动失败:', error);
+    logger.error('audio', '持续发声启动失败', error);
     if (sustainTicket === ticket) isSustaining.value = false;
   }
 };

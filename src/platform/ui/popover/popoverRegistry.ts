@@ -23,16 +23,12 @@ export const registerOpenPopover = (close: (reason?: string) => void, getAnchor?
 
 /** 移除登记（关闭或卸载时调用）：按关闭函数身份删除，与是否登记锚点无关 */
 export const unregisterOpenPopover = (close: (reason?: string) => void) => {
-  for (const entry of openPopovers) {
-    if (entry.close === close) openPopovers.delete(entry);
-  }
+  for (const entry of openPopovers) if (entry.close === close) openPopovers.delete(entry);
 };
 
 /** 关闭全局所有打开中的浮层（无打开浮层时空操作；close 自带幂等守卫，父子嵌套重复关闭安全） */
 export const closeAllPopovers = () => {
-  for (const entry of [...openPopovers]) {
-    entry.close('registry:close-all');
-  }
+  for (const entry of [...openPopovers]) entry.close('registry:close-all');
 };
 
 /**
@@ -48,8 +44,6 @@ export const closePopoversWithin = (container: HTMLElement | null | undefined) =
   if (!container) return;
   for (const entry of [...openPopovers]) {
     const anchor = entry.getAnchor();
-    if (anchor && container.contains(anchor)) {
-      entry.close('registry:scroll-within');
-    }
+    if (anchor && container.contains(anchor)) entry.close('registry:scroll-within');
   }
 };

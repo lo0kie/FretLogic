@@ -15,7 +15,7 @@ import { computeChordFingerprint, matchChordSearch, sortChordsByRule } from '@/d
 import { GroupSortRule } from '@/domains/chord/types';
 import { clearPersistFailure, kvRemove, kvSet, reportPersistFailure } from '@/platform/services/storage';
 import { cloneDeep, generateUUID } from '@/platform/utils/common';
-import { STORAGE_KEYS } from '@/platform/utils/constants';
+import { PERSIST_DEBOUNCE_MS, STORAGE_KEYS } from '@/platform/utils/constants';
 
 import { validateChordDraft } from './chordDraftValidation';
 import { createChordEventBus } from './chordEventBus';
@@ -47,8 +47,8 @@ export const useChordStore = defineStore('chord', () => {
   const selectedGroupId = ref<string | null>(null);
   // 单一展开状态同属内存态（与 selectedGroupId 联动，URL group 回灌时经 selectAndExpandGroup 一并恢复）
   const expandedGroupId = ref<string | null>(null);
-  /** 判断分组是否处于折叠态（与当前展开分组 id 比对）。 */
-  const isGroupCollapsed = (groupId: string): boolean => expandedGroupId.value !== groupId;
+  /** 判断分组是否处于展开态（与当前展开分组 id 比对）。 */
+  const isGroupExpanded = (groupId: string): boolean => expandedGroupId.value === groupId;
 
   // 「最近编辑分组」冷启动指针：选中非空时写入；取消选中时清除，
   // 避免「关闭分组后刷新」被冷启动回灌重新打开（URL 方已移除 group 参数，指针须同步失效）
@@ -60,8 +60,9 @@ export const useChordStore = defineStore('chord', () => {
   // 水合门禁：hydrate() 完成前为 false，期间 ref 变更（含水合赋值本身）不触发写回
   let hydrated = false;
 
-  // 持久化分层：两个列表变更经浅 watch 感知（整列表替换必改引用），400ms 防抖合并写 IDB；
-  // 保存等关键入口提供 flushChordsToStorage 作为即时刷盘保障
+  // 持久化分层：两个列表变更经浅 watch 感知（整列表替换必改引用），400ms 防抖合并写 IDB。
+  // persistAll 即「即时刷盘」：绕过防抖窗口把分组与和弦列表单事务写入 IDB，供保存/导入等关键入口
+  // 成功后 `void persistAll()` 调用，消除防抖窗口与响应式 watch 微任务延迟（操作后光速刷新不丢数据）。
   const persistAll = async (): Promise<void> => {
     if (!hydrated) return;
     try {
@@ -72,7 +73,7 @@ export const useChordStore = defineStore('chord', () => {
       reportPersistFailure('chords', error);
     }
   };
-  const persistAllDebounced = useDebounceFn(() => void persistAll(), 400);
+  const persistAllDebounced = useDebounceFn(() => void persistAll(), PERSIST_DEBOUNCE_MS);
   // 水合赋值本身会触发 watch：抑制期（hydrate 结束前）不调度写回，避免启动时把刚读入的数据原样全量写回一次
   let suppressPersistWatch = true;
   watch([savedChordsList, groups], () => {
@@ -220,9 +221,8 @@ export const useChordStore = defineStore('chord', () => {
     }
 
     let list = savedChordsList.value;
-    if (q) {
-      list = list.filter(c => matchChordSearch(c, q));
-    }
+    if (q) list = list.filter(c => matchChordSearch(c, q));
+
     const effectiveRule = sortRule ?? DEFAULT_SORT_RULE;
     const effectiveKey = sortKey ?? 'C';
     return sortChordsByRule(list, effectiveRule, effectiveKey);
@@ -257,7 +257,7 @@ export const useChordStore = defineStore('chord', () => {
   };
 
   /** 切换分组折叠/展开态；单展开模式下展开其一即折叠其余，折叠会联动清除选中。 */
-  const toggleGroupCollapsed = (groupId: string) => {
+  const toggleGroupExpansion = (groupId: string) => {
     const g = groups.value.find(x => x.id === groupId);
     if (!g) return;
     if (expandedGroupId.value === groupId) {
@@ -329,16 +329,15 @@ export const useChordStore = defineStore('chord', () => {
     // （千级列表下纯属重复扫描），与 removeChords 的单趟写法对齐
     const removedChordIds: string[] = [];
     const keptChords: Chord[] = [];
-    for (const chord of savedChordsList.value) {
+    for (const chord of savedChordsList.value)
       if (chord.groupId === groupId) removedChordIds.push(chord.id);
       else keptChords.push(chord);
-    }
+
     savedChordsList.value = keptChords;
     groups.value = groups.value.filter(g => g.id !== groupId);
     if (expandedGroupId.value === groupId) expandedGroupId.value = null;
-    if (selectedGroupId.value === groupId) {
-      selectedGroupId.value = null;
-    }
+    if (selectedGroupId.value === groupId) selectedGroupId.value = null;
+
     eventBus.emitChordsRemoved(removedChordIds);
   };
 
@@ -379,17 +378,10 @@ export const useChordStore = defineStore('chord', () => {
     return true;
   };
 
-  /**
-   * 即时刷盘：绕过防抖窗口，立即将分组与和弦列表写入 IDB（单事务）。
-   * 供保存/更新等关键动作成功后调用，消除防抖窗口与 Vue 响应式 watch 微任务延迟，
-   * 避免用户操作后光速刷新导致数据未落盘。
-   */
-  const flushChordsToStorage = () => void persistAll();
-
   // 防抖落盘的兜底：页面隐藏 / 关闭（含刷新）前把仍在防抖窗口内的变更强制落盘。
   // 关闭前这一次 IDB 写入在 pagehide 时同步入队，通常能完成；没有它，防抖窗口内的刷新会丢掉最后一次变更。
   if (typeof window !== 'undefined') {
-    const flushOnHide = () => flushChordsToStorage();
+    const flushOnHide = () => void persistAll();
     window.addEventListener('pagehide', flushOnHide);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') flushOnHide();
@@ -412,9 +404,8 @@ export const useChordStore = defineStore('chord', () => {
     if (movedIds.size === 0) return;
 
     savedChordsList.value = savedChordsList.value.map(c => {
-      if (movedIds.has(c.id)) {
-        return { ...c, groupId: resolvedTargetGroupId, updatedAt: now };
-      }
+      if (movedIds.has(c.id)) return { ...c, groupId: resolvedTargetGroupId, updatedAt: now };
+
       return c;
     });
 
@@ -445,7 +436,7 @@ export const useChordStore = defineStore('chord', () => {
     let recoveryGroup = groups.value.find(g => g.id.startsWith('g_recovery_'));
     if (!recoveryGroup) {
       recoveryGroup = {
-        id: toGroupId('g_recovery_' + generateUUID().slice(0, 8)),
+        id: toGroupId(`g_recovery_${generateUUID().slice(0, 8)}`),
         name: '已恢复的和弦',
         sortRule: DEFAULT_SORT_RULE,
         createdAt: Date.now(),
@@ -503,10 +494,10 @@ export const useChordStore = defineStore('chord', () => {
     getGroupedCards,
     getFilteredChords,
     overwriteGroups,
-    isGroupCollapsed,
+    isGroupExpanded,
     setSelectedGroupId,
     selectAndExpandGroup,
-    toggleGroupCollapsed,
+    toggleGroupExpansion,
     collapseAllGroups,
     addGroup,
     renameGroup,
@@ -514,7 +505,8 @@ export const useChordStore = defineStore('chord', () => {
     deleteGroup,
     addChord,
     updateChord,
-    flushChordsToStorage,
+    /** 即时刷盘（绕开防抖窗口）；调用方按需 `void persistAll()` */
+    persistAll,
     moveVariantsByName,
     executeUndoRestore,
     removeChords,

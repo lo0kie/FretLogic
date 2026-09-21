@@ -27,7 +27,7 @@
         :title="item.title ?? item.label"
         @click.stop="handleTriggerClick(pinToggle)"
         @mousedown="item.disabled && $event.preventDefault()"
-        data-focusable-inline
+        data-focusable-outline
         class="group relative flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left transition-colors duration-fast outline-none select-none enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover)) disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
         role="menuitem"
         type="button"
@@ -112,7 +112,7 @@ defineExpose({ close: () => popoverRef.value?.close() });
 /** 触发项点击：自定义内容项（content）视为叶子——点击即选中并关闭；
  *  普通级联项维持「点击钉住/再点关闭」的既有交互 */
 const handleTriggerClick = (pinToggle: () => void) => {
-  const item = props.item;
+  const { item } = props;
   if (item.disabled) return;
   if (item.content) {
     props.onSelect?.(item);

@@ -1,5 +1,5 @@
+import { createLruCache } from '@/platform/utils/cache';
 import { clamp, estimateValueBytes } from '@/platform/utils/common';
-import { createLruCache } from '@/platform/utils/lruCache';
 
 import type {
   BarreEntity,
@@ -32,9 +32,8 @@ export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: n
   const out: BarreEntity[] = [];
   for (let fret = 1; fret <= fretCount; fret++) {
     const atFret: number[] = [];
-    for (let s = 0; s < strings.length; s++) {
-      if (strings[s]!.fret === fret) atFret.push(s);
-    }
+    for (let s = 0; s < strings.length; s++) if (strings[s]!.fret === fret) atFret.push(s);
+
     if (atFret.length < 2) continue;
 
     let segmentStart = 0;
@@ -45,14 +44,14 @@ export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: n
       if (isBroken || isLast) {
         const from = atFret[segmentStart]!;
         const to = atFret[i]!;
-        if (to > from) {
+        if (to > from)
           out.push({
             fret: fret as BarreFret,
             fromString: from as StringIndex,
             toString: to as StringIndex,
             finger: 1,
           });
-        }
+
         segmentStart = i + 1;
       }
     }
@@ -62,11 +61,14 @@ export const computeBarreCandidates = (strings: GuitarStringsModel, fretCount: n
   return out;
 };
 
+/** 品位系值域收窄（0~12，截断取整）：变调夹品位 / 把位偏移共用，两者只是值域相同的两个概念 */
+const toFretPositionValue = (value: number): number => clamp(Math.trunc(value), 0, 12);
+
 /** 数值收窄：变调夹品位（0~12，截断取整） */
-export const toCapo = (value: number): Capo => clamp(Math.trunc(value), 0, 12) as Capo;
+export const toCapo = (value: number): Capo => toFretPositionValue(value) as Capo;
 
 /** 数值收窄：品位/把位偏移量（0~12，截断取整） */
-export const toFretOffset = (value: number): FretOffset => clamp(Math.trunc(value), 0, 12) as FretOffset;
+export const toFretOffset = (value: number): FretOffset => toFretPositionValue(value) as FretOffset;
 
 /** 数值收窄：琴弦索引（截断取整，非负） */
 export const toStringIndex = (value: number, maxIndex: number = 9): StringIndex =>
@@ -88,9 +90,7 @@ export const isFretOffsetValue = (value: unknown): value is FretOffset => isFret
 const canBarreCover = (strings: GuitarStringsModel, from: number, to: number, fret: number): boolean => {
   for (let s = from + 1; s < to; s++) {
     const f = strings[s]?.fret;
-    if (f !== undefined && f < fret) {
-      return false;
-    }
+    if (f !== undefined && f < fret) return false;
   }
   return true;
 };
@@ -102,30 +102,21 @@ const canBarreCover = (strings: GuitarStringsModel, from: number, to: number, fr
  */
 export const isBarreStillValid = (strings: GuitarStringsModel, barre: BarreEntity): boolean => {
   // 1. 基础校验：横按至少需要跨越两根弦
-  if (barre.fret <= 0 || barre.fromString >= barre.toString) {
-    return false;
-  }
+  if (barre.fret <= 0 || barre.fromString >= barre.toString) return false;
 
   // 2. 严格边界校验：横按的两端（起始弦和终止弦）必须严格保留在该品位。
   // 只要两端任意一个音符被移走（移动到其他品位或静音），横按范围即被破坏，判定失效。
   const startFret = strings[barre.fromString]?.fret;
   const endFret = strings[barre.toString]?.fret;
-  if (startFret !== barre.fret || endFret !== barre.fret) {
-    return false;
-  }
+  if (startFret !== barre.fret || endFret !== barre.fret) return false;
 
   let anchorCount = 0;
   for (let s = barre.fromString; s <= barre.toString; s++) {
     const f = strings[s]?.fret;
-    if (f === undefined) {
-      return false;
-    }
+    if (f === undefined) return false;
 
-    if (f === barre.fret) {
-      anchorCount++;
-    } else if (f < barre.fret) {
-      return false;
-    }
+    if (f === barre.fret) anchorCount++;
+    else if (f < barre.fret) return false;
   }
 
   const isValid = anchorCount >= 2;
@@ -152,9 +143,8 @@ const parseBarreEntry = (raw: object, maxIndex: number): BarreEntity | null => {
   const normalizedFret = Math.floor(fret);
   const normalizedFrom = Math.floor(fromString);
   const normalizedTo = Math.floor(toString);
-  if (normalizedFret < 1 || normalizedFrom < 0 || normalizedTo > maxIndex || normalizedFrom > normalizedTo) {
-    return null;
-  }
+  if (normalizedFret < 1 || normalizedFrom < 0 || normalizedTo > maxIndex || normalizedFrom > normalizedTo) return null;
+
   const item: BarreEntity = {
     fret: normalizedFret as BarreFret,
     fromString: normalizedFrom as StringIndex,
@@ -217,16 +207,12 @@ export const normalizeAndMergeBarres = (
       const prev = mergedForFret[mergedForFret.length - 1]!;
 
       // 若 prev 已完全覆盖 item（例如 prev 是 0..5，item 是 0..2 或 4..5）
-      if (prev.fromString <= item.fromString && prev.toString >= item.toString) {
-        continue;
-      }
+      if (prev.fromString <= item.fromString && prev.toString >= item.toString) continue;
 
       // 若 item 与 prev 重叠或首尾相接，且两段之间可连通覆盖
-      if (item.fromString <= prev.toString + 1 && canBarreCover(strings, prev.fromString, item.toString, fret)) {
+      if (item.fromString <= prev.toString + 1 && canBarreCover(strings, prev.fromString, item.toString, fret))
         prev.toString = Math.max(prev.toString, item.toString) as StringIndex;
-      } else {
-        mergedForFret.push(item);
-      }
+      else mergedForFret.push(item);
     }
 
     result.push(...mergedForFret);

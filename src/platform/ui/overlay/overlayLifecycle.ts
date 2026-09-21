@@ -69,7 +69,10 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
    */
   const focusPanel = () => {
     if (!isClient) return;
-    (opts.panelRef ?? opts.overlayRef).value?.focus();
+    // preventScroll 必需：抽屉面板在 focus 落地时仍处于 translateX(100%) 的离屏 enter 相位，
+    // 默认 focus() 会触发 scroll-into-view，把 overflow-hidden 的遮罩容器滚出一段 scrollLeft，
+    // 与随后的 transform 过渡叠加表现为「整个抽屉冲过头再弹回」；Modal 卡片同理（缩放相位）
+    (opts.panelRef ?? opts.overlayRef).value?.focus({ preventScroll: true });
   };
 
   /** 关闭时把焦点归还给打开前的元素（见下方两处调用的时机说明） */
@@ -96,9 +99,8 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
     isOpen => {
       if (!isOpen) {
         clearListeners();
-        if (opts.overlayRef.value) {
-          unregisterOverlay(opts.overlayRef.value);
-        }
+        if (opts.overlayRef.value) unregisterOverlay(opts.overlayRef.value);
+
         // 仅参与滚动锁的浮层（遮罩模式）复位锁：栈内还有其它阻断层时保持锁定
         isBodyLocked.value = opts.locksBody() && hasActiveOverlays() > 0;
         // 归还时机取「关闭瞬间」而非离场动画结束：面板随后即被移除，届时焦点会被浏览器丢给 body，
@@ -115,9 +117,8 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
         stopKeydownListener = useEventListener(window, 'keydown', opts.onEscape);
         // 待 DOM 挂载后加入激活栈：nextTick 保证入栈顺序与 watch 触发顺序严格一致
         void nextTick(() => {
-          if (opts.overlayRef.value) {
-            registerOverlay(opts.overlayRef.value);
-          }
+          if (opts.overlayRef.value) registerOverlay(opts.overlayRef.value);
+
           // 焦点同样要等这一 tick：destroyOnClose / v-if 的面板此刻才挂上，早于此调用拿不到元素
           focusPanel();
         });
@@ -136,9 +137,8 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
   onScopeDispose(() => {
     clearListeners();
     releaseZ();
-    if (opts.overlayRef.value) {
-      unregisterOverlay(opts.overlayRef.value);
-    }
+    if (opts.overlayRef.value) unregisterOverlay(opts.overlayRef.value);
+
     isBodyLocked.value = opts.locksBody() && hasActiveOverlays() > 0;
     // 组件在打开状态被卸载（父级销毁）时也归还焦点，否则键盘用户同样会「掉」在页面里
     restoreFocus();

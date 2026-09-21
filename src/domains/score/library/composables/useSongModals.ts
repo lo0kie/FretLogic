@@ -36,9 +36,7 @@ export function useSongModals() {
   const uiStore = useUiStore();
 
   const key = computed({
-    get: () => {
-      return transposeChordName(modalData.playKey, modalData.capo);
-    },
+    get: () => transposeChordName(modalData.playKey, modalData.capo),
     set: (newKey: string) => {
       const currentKey = key.value;
       if (newKey === currentKey) return;

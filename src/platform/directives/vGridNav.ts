@@ -40,8 +40,7 @@ interface Entry {
   eligible: boolean;
 }
 
-const DEFAULT_SELECTOR =
-  '[data-focusable-inline], [data-focusable-outline], [tabindex="0"], button, input, select, textarea, a[href]';
+const DEFAULT_SELECTOR = '[data-focusable-outline], [tabindex="0"], button, input, select, textarea, a[href]';
 
 const isTestEnv = typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test';
 
@@ -74,13 +73,9 @@ const resolveOptions = (binding: DirectiveBinding<GridNavBinding>): GridNavOptio
   const mods = binding.modifiers;
 
   let opts: GridNavOptions = {};
-  if (typeof val === 'number') {
-    opts.cols = val;
-  } else if (typeof val === 'object' && val !== null) {
-    opts = { ...val };
-  } else if (val === false) {
-    opts.disabled = true;
-  }
+  if (typeof val === 'number') opts.cols = val;
+  else if (typeof val === 'object' && val !== null) opts = { ...val };
+  else if (val === false) opts.disabled = true;
 
   if (mods['stop']) opts.stop = true;
   if (mods['loop']) opts.loop = true;
@@ -141,27 +136,19 @@ interface NavContext {
 
 /** 从 from-1 向前找第一个可导航元素；loop 开启时绕到末尾继续找，找不到返回 -1。 */
 const findEligibleBackward = (entries: Entry[], from: number, loop?: boolean): number => {
-  for (let idx = from - 1; idx >= 0; idx--) {
-    if (entries[idx]?.eligible) return idx;
-  }
-  if (loop) {
-    for (let idx = entries.length - 1; idx > from; idx--) {
-      if (entries[idx]?.eligible) return idx;
-    }
-  }
+  for (let idx = from - 1; idx >= 0; idx--) if (entries[idx]?.eligible) return idx;
+
+  if (loop) for (let idx = entries.length - 1; idx > from; idx--) if (entries[idx]?.eligible) return idx;
+
   return -1;
 };
 
 /** 从 from+1 向后找第一个可导航元素；loop 开启时绕回头部继续找，找不到返回 -1。 */
 const findEligibleForward = (entries: Entry[], from: number, total: number, loop?: boolean): number => {
-  for (let idx = from + 1; idx < total; idx++) {
-    if (entries[idx]?.eligible) return idx;
-  }
-  if (loop) {
-    for (let idx = 0; idx < from; idx++) {
-      if (entries[idx]?.eligible) return idx;
-    }
-  }
+  for (let idx = from + 1; idx < total; idx++) if (entries[idx]?.eligible) return idx;
+
+  if (loop) for (let idx = 0; idx < from; idx++) if (entries[idx]?.eligible) return idx;
+
   return -1;
 };
 
@@ -181,17 +168,15 @@ const navStrategies: Record<string, (ctx: NavContext) => number> = {
     }
     if (cols && cols > 1) {
       let targetIdx = currentIndex - cols;
-      while (targetIdx >= 0 && !entries[targetIdx]?.eligible) {
-        targetIdx -= cols;
-      }
+      while (targetIdx >= 0 && !entries[targetIdx]?.eligible) targetIdx -= cols;
+
       if (targetIdx >= 0 && entries[targetIdx]?.eligible) return targetIdx;
 
       if (loop) {
         let loopedIdx = currentIndex;
         while (loopedIdx + cols < entries.length) loopedIdx += cols;
-        while (loopedIdx >= 0 && !entries[loopedIdx]?.eligible) {
-          loopedIdx -= cols;
-        }
+        while (loopedIdx >= 0 && !entries[loopedIdx]?.eligible) loopedIdx -= cols;
+
         if (loopedIdx >= 0 && entries[loopedIdx]?.eligible) return loopedIdx;
       }
       return currentIndex;
@@ -205,16 +190,14 @@ const navStrategies: Record<string, (ctx: NavContext) => number> = {
     }
     if (cols && cols > 1) {
       let targetIdx = currentIndex + cols;
-      while (targetIdx < total && !entries[targetIdx]?.eligible) {
-        targetIdx += cols;
-      }
+      while (targetIdx < total && !entries[targetIdx]?.eligible) targetIdx += cols;
+
       if (targetIdx < total && entries[targetIdx]?.eligible) return targetIdx;
 
       if (loop) {
         let loopedIdx = currentIndex % cols;
-        while (loopedIdx < total && !entries[loopedIdx]?.eligible) {
-          loopedIdx += cols;
-        }
+        while (loopedIdx < total && !entries[loopedIdx]?.eligible) loopedIdx += cols;
+
         if (loopedIdx < total && entries[loopedIdx]?.eligible) return loopedIdx;
       }
       return currentIndex;
@@ -222,15 +205,13 @@ const navStrategies: Record<string, (ctx: NavContext) => number> = {
     return getSpatialNextIndex(currentIndex, 'down', entries);
   },
   Home: ({ total, entries }) => {
-    for (let idx = 0; idx < total; idx++) {
-      if (entries[idx]?.eligible) return idx;
-    }
+    for (let idx = 0; idx < total; idx++) if (entries[idx]?.eligible) return idx;
+
     return -1;
   },
   End: ({ total, entries }) => {
-    for (let idx = total - 1; idx >= 0; idx--) {
-      if (entries[idx]?.eligible) return idx;
-    }
+    for (let idx = total - 1; idx >= 0; idx--) if (entries[idx]?.eligible) return idx;
+
     return -1;
   },
 };
@@ -255,7 +236,7 @@ const warnedSelectors = new WeakSet<HTMLElement>();
  */
 const warnSelectorMismatch = (containerEl: HTMLElement, selector: string): void => {
   if (!import.meta.env?.DEV || warnedSelectors.has(containerEl)) return;
-  if (!containerEl.querySelector('[data-focusable-inline], [data-focusable-outline], [tabindex]')) return;
+  if (!containerEl.querySelector('[data-focusable-outline], [tabindex]')) return;
   warnedSelectors.add(containerEl);
   console.warn(
     `[v-grid-nav] 选择器 "${selector}" 未命中任何元素，方向键导航将失效（容器内存在可聚焦元素）。请核对被挂钩的标记类是否被改名或删除。`
@@ -268,9 +249,7 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
   if (!state || state.options.disabled) return;
 
   const target = e.target as HTMLElement | null;
-  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-    return;
-  }
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
 
   const isHorizontalKey = ['ArrowLeft', 'ArrowRight'].includes(e.key);
   const isVerticalKey = ['ArrowUp', 'ArrowDown'].includes(e.key);
@@ -326,18 +305,15 @@ const createKeydownListener = (containerEl: HTMLElement) => (e: KeyboardEvent) =
 
       toEl.focus({ preventScroll: state.options.preventScroll });
 
-      if (state.options.autoScroll && typeof toEl.scrollIntoView === 'function') {
+      if (state.options.autoScroll && typeof toEl.scrollIntoView === 'function')
         toEl.scrollIntoView({
           block: 'nearest',
           inline: 'nearest',
           behavior: resolveScrollBehavior('smooth'),
         });
-      }
 
       state.options.onNavigate?.(toEl, fromEl);
-    } else {
-      state.options.onEdge?.(e.key, activeEl);
-    }
+    } else state.options.onEdge?.(e.key, activeEl);
   }
 };
 
@@ -353,9 +329,7 @@ export const vGridNav: Directive<HTMLElement, GridNavBinding, GridNavModifiers> 
   },
   updated(el, binding) {
     const state = stateMap.get(el);
-    if (state) {
-      state.options = resolveOptions(binding);
-    }
+    if (state) state.options = resolveOptions(binding);
   },
   unmounted(el) {
     const state = stateMap.get(el);

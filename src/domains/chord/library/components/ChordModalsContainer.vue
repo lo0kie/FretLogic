@@ -14,7 +14,7 @@
         :key="group.id"
         :title="group.name"
         @click="groupModals.modalData.moveTargetId = group.id"
-        data-focusable-inline
+        data-focusable-outline
         class="flex w-full min-w-0 cursor-pointer items-center rounded-md border border-border-base p-md text-xs font-bold transition-all duration-fast disabled:cursor-not-allowed disabled:border-border-light disabled:bg-surface-main disabled:text-fg-disabled disabled:opacity-50"
       >
         <div v-marquee.fade>
@@ -77,7 +77,7 @@
           @click="groupModals.toggleVariantSelection(variant.id)"
           @keydown.enter.prevent="groupModals.toggleVariantSelection(variant.id)"
           @keydown.space.prevent="groupModals.toggleVariantSelection(variant.id)"
-          data-focusable-inline
+          data-focusable-outline
           class="relative flex min-w-0 cursor-pointer flex-col items-center rounded-md border-[1.5px] border-border-light bg-surface-body px-sm pt-md pb-sm transition-all duration-fast outline-none select-none hover:-translate-y-px hover:border-border-base hover:bg-surface-panel-hover active:scale-[0.98]"
           role="checkbox"
           tabindex="0"
@@ -153,10 +153,7 @@ const isVariantsIndeterminate = computed(() => {
 /** 全选/取消全选待删除的指法 */
 const handleToggleSelectAllVariants = () => {
   const variants = groupModals.modalData.activeGroupCard?.variants ?? [];
-  if (isAllVariantsSelected.value) {
-    variants.forEach(v => groupModals.modalData.selectedVariantIds.delete(v.id));
-  } else {
-    variants.forEach(v => groupModals.modalData.selectedVariantIds.add(v.id));
-  }
+  if (isAllVariantsSelected.value) variants.forEach(v => groupModals.modalData.selectedVariantIds.delete(v.id));
+  else variants.forEach(v => groupModals.modalData.selectedVariantIds.add(v.id));
 };
 </script>

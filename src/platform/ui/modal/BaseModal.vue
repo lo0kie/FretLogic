@@ -245,9 +245,8 @@ const isAutoHeight = computed(() => {
 const isCentered = computed(() => props.centered && props.top === undefined);
 
 const overlayAlignClass = computed(() => {
-  if (isCentered.value) {
-    return 'items-center justify-center';
-  }
+  if (isCentered.value) return 'items-center justify-center';
+
   return 'items-start justify-center';
 });
 
@@ -256,9 +255,8 @@ const topStyle = computed(() => {
     const t = typeof props.top === 'number' ? `${props.top}px` : props.top;
     return { marginTop: t };
   }
-  if (!props.centered) {
-    return { marginTop: '96px' };
-  }
+  if (!props.centered) return { marginTop: '96px' };
+
   return {};
 });
 

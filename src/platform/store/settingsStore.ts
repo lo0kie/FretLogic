@@ -28,9 +28,8 @@ const audioPlaybackSerializer = {
   read: (raw: string): AudioPlaybackSettings => {
     const parsed = JSON.parse(raw) as Partial<AudioPlaybackSettings>;
     // 旧版干湿比上限 1，新版百分制默认 20（下限可为 0），值 < 2 必为旧版小数
-    if (typeof parsed.reverbWet === 'number' && parsed.reverbWet < 2) {
-      parsed.reverbWet = parsed.reverbWet * 100;
-    }
+    if (typeof parsed.reverbWet === 'number' && parsed.reverbWet < 2) parsed.reverbWet *= 100;
+
     return parsed as AudioPlaybackSettings;
   },
   write: (v: AudioPlaybackSettings): string => JSON.stringify(v),

@@ -54,8 +54,8 @@ const interactiveAreaRef = useTemplateRef<InstanceType<typeof ScoreInteractiveAr
 
 // 乐谱撤销/重做全局快捷键：仅在本页（KeepAlive 缓存）激活且有 activeSong 时拦截。
 // 焦点在输入类元素内放行原生输入由 useKeybinding 默认的 ignoreEditable 承担，业务无需手动判焦点。
-useKeybinding('Mod+z', () => scoreEditor.undo(), { enabled: () => !!scoreEditor.activeSong });
-useKeybinding(['Mod+Shift+z', 'Mod+y'], () => scoreEditor.redo(), { enabled: () => !!scoreEditor.activeSong });
+useKeybinding('Mod+z', () => scoreEditor.undo(), { enabled: () => Boolean(scoreEditor.activeSong) });
+useKeybinding(['Mod+Shift+z', 'Mod+y'], () => scoreEditor.redo(), { enabled: () => Boolean(scoreEditor.activeSong) });
 
 const { pasteSongFromClipboard, importPortableSong } = useTextTransfer();
 

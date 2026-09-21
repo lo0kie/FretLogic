@@ -1,4 +1,3 @@
-// src/stores/chordEditorStore.ts
 import { computed, inject, ref, toRaw, watch } from 'vue';
 
 import { defineStore } from 'pinia';
@@ -20,7 +19,7 @@ import { STORAGE_KEYS } from '@/platform/utils/constants';
 
 import { mergeAutoBarres, pruneForFretCount, pruneForStringCount, reconcileBarres } from './chordBarreLogic';
 
-import type { BarreEntity, Chord, GuitarStringEntity, StringIndex } from '@/domains/chord/types';
+import type { BarreEntity, Chord, ChordNameSegments, GuitarStringEntity, StringIndex } from '@/domains/chord/types';
 import type { InjectionKey } from 'vue';
 
 export { reconcileBarres } from './chordBarreLogic';
@@ -39,23 +38,22 @@ const createDefaultChord = (stringCount: number = 6): Chord => ({
   rootStringIndex: null,
 });
 
-/** 规范化草稿：复用统一的 normalizeChord 并在空白草稿时清理残留 C 分片 */ const normalizeDraftChord = (
-  draft: Chord
-): Chord => {
+/** 空草稿的残留名分片：全静音只能被解析成裸的自然音 C（无性质 / 无扩展 / 无低音），
+ *  它不是用户选定的和弦名，草稿态应回填为「未命名」。 */
+const isBareNaturalCResidue = (segments: ChordNameSegments): boolean =>
+  segments.root[0] === 'C' &&
+  segments.root[1] === 0 &&
+  !segments.quality &&
+  !segments.unknownQuality &&
+  !segments.extensions &&
+  !segments.bass;
+
+/** 规范化草稿：复用统一的 normalizeChord，并在空白草稿时清理残留 C 分片 */
+const normalizeDraftChord = (draft: Chord): Chord => {
   const { chord } = normalizeChord(draft);
-  if (!chord.id && Array.isArray(chord.strings) && chord.strings.every(s => s.fret < 0)) {
-    if (
-      chord.nameSegments &&
-      chord.nameSegments.root?.[0] === 'C' &&
-      chord.nameSegments.root?.[1] === 0 &&
-      !chord.nameSegments.quality &&
-      !chord.nameSegments.unknownQuality &&
-      !chord.nameSegments.extensions &&
-      !chord.nameSegments.bass
-    ) {
-      chord.nameSegments = null;
-    }
-  }
+  if (!chord.id && Array.isArray(chord.strings) && chord.strings.every(s => s.fret < 0))
+    if (chord.nameSegments && isBareNaturalCResidue(chord.nameSegments)) chord.nameSegments = null;
+
   return chord;
 };
 
@@ -94,9 +92,7 @@ const createChordEditorSetup = (persist: boolean) => () => {
     },
     () => {
       const idx = draftChord.value.rootStringIndex;
-      if (idx !== null && (draftChord.value.strings[idx]?.fret ?? -1) < 0) {
-        draftChord.value.rootStringIndex = null;
-      }
+      if (idx !== null && (draftChord.value.strings[idx]?.fret ?? -1) < 0) draftChord.value.rootStringIndex = null;
     }
   );
 
@@ -165,16 +161,14 @@ const createChordEditorSetup = (persist: boolean) => () => {
     if (count > current.length) {
       const added: GuitarStringEntity[] = Array.from({ length: count - current.length }, () => createString());
       nextStrings = [...current, ...added];
-    } else {
-      nextStrings = current.slice(0, count);
-    }
+    } else nextStrings = current.slice(0, count);
+
     draftChord.value.strings = nextStrings;
 
     // 调弦方案自动联动：若当前调弦方案与新弦数不匹配，自动选用该弦数对应的默认调弦方案
     const currPreset = TUNING_PRESETS[draftChord.value.tuning];
-    if (!currPreset || currPreset.stringCount !== count) {
+    if (!currPreset || currPreset.stringCount !== count)
       draftChord.value.tuning = getDefaultTuningForStringCount(count);
-    }
 
     // 清理越界的根音标记与横按配置
     pruneForStringCount(draftChord.value, count);
@@ -199,9 +193,7 @@ const createChordEditorSetup = (persist: boolean) => () => {
   watch(
     () => draftChord.value.strings.map(s => s.fret),
     (newFrets, oldFrets) => {
-      if (isProgrammaticStringsChange) {
-        return;
-      }
+      if (isProgrammaticStringsChange) return;
 
       if (autoBarre.value) {
         // 自动横按：保留仍有效的现有横按 + 叠加 ≥3 音符的自动候选（见 chordBarreLogic）
@@ -210,16 +202,12 @@ const createChordEditorSetup = (persist: boolean) => () => {
       }
 
       const oldBarres = draftChord.value.barres;
-      if (!oldBarres || oldBarres.length === 0) {
-        return;
-      }
+      if (!oldBarres || oldBarres.length === 0) return;
 
       // 删除了 draftChord.value.fretCount，现在只传 4 个参数
       const result = reconcileBarres(newFrets, oldFrets, oldBarres);
 
-      if (result !== oldBarres) {
-        draftChord.value.barres = result;
-      }
+      if (result !== oldBarres) draftChord.value.barres = result;
     },
     { flush: 'sync' }
   );
@@ -227,10 +215,9 @@ const createChordEditorSetup = (persist: boolean) => () => {
   watch(
     autoBarre,
     isAuto => {
-      if (isAuto && !isFretBoardEmpty.value) {
+      if (isAuto && !isFretBoardEmpty.value)
         // 切换到自动横按：不清掉已有标记，只叠加满足 ≥3 音符门槛的自动候选
         draftChord.value.barres = mergeAutoBarresIntoDraft();
-      }
     },
     { flush: 'sync' }
   );

@@ -32,10 +32,3 @@ export const CONTROL_SQUARE_CLASSES: Record<ControlSize, string> = {
   md: 'h-[1.9rem] w-[1.9rem]',
   lg: 'h-[2.3rem] w-[2.3rem]',
 };
-
-/** 最小高度类名字典（min-h-[...]），供需要「至少同高」的对齐场景使用 */
-export const CONTROL_MIN_HEIGHT_CLASSES: Record<ControlSize, string> = {
-  sm: 'min-h-[1.6rem]',
-  md: 'min-h-[1.9rem]',
-  lg: 'min-h-[2.3rem]',
-};

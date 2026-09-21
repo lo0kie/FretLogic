@@ -1,4 +1,5 @@
 import { nameToSegments, segmentsToString, Tuning } from '@/domains/chord/theory/theory';
+import { DEFAULT_FRET_COUNT } from '@/domains/fretboard/constants';
 import {
   isCapoValue,
   isFretOffsetValue,
@@ -77,7 +78,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
       ? toFretOffset(rawChord['capo'] as number)
       : 0;
   const tuning = chord.tuning || Tuning.STANDARD;
-  const fretCount = chord.fretCount ?? 3;
+  const fretCount = chord.fretCount ?? DEFAULT_FRET_COUNT;
 
   // 迁移：strings 由旧二维元组 `[[fret, preferFlat]]` 升级为对象数组 `[{ fret, preferFlat }]`。
   // 对象形态是 `GuitarStringEntity` 的**声明形态**（见 fretboard/types.ts），也是当前落盘形态；
@@ -104,7 +105,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
     // 当前形态：对象。**不得置位 `stringsMigrated`** —— 那会让每个已规范化的和弦
     // 每次载入都被判为「已变更」而反复写盘（与横按 `[] !== undefined` 是同一类误判）。
     const cur = s as { fret?: number; preferFlat?: boolean; isRoot?: boolean };
-    return { fret: typeof cur?.fret === 'number' ? boundFret(cur.fret) : -1, preferFlat: !!cur?.preferFlat };
+    return { fret: typeof cur?.fret === 'number' ? boundFret(cur.fret) : -1, preferFlat: Boolean(cur?.preferFlat) };
   }) as GuitarStringsModel;
 
   // 迁移：旧数据每根弦各自维护 isRoot，统一为单点 rootStringIndex
@@ -112,10 +113,10 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   const legacyRoots = (chord.strings as unknown[])
     .map((s, idx) => ((s as { isRoot?: boolean }).isRoot ? idx : -1))
     .filter(idx => idx >= 0);
-  if (rootStringIndex === null && legacyRoots.length > 0) {
+  if (rootStringIndex === null && legacyRoots.length > 0)
     // legacyRoots 是弦索引数组（0~5），取首个后收窄
     rootStringIndex = (legacyRoots[0] ?? null) as StringIndex | null;
-  }
+
   // 校验：rootStringIndex 必须落在有效且已按音的弦上，否则清空
   if (
     rootStringIndex !== null &&
@@ -123,9 +124,8 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
       rootStringIndex >= strings.length ||
       strings[rootStringIndex]?.fret === undefined ||
       strings[rootStringIndex]!.fret < 0)
-  ) {
+  )
     rootStringIndex = null;
-  }
 
   // 清理旧字段：和弦级 isInverted / fingerprint / chordName（现已由 nameSegments 替代）及旧的 capo
   const legacyChord = chord as unknown as {
@@ -153,7 +153,7 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
 
   const barresChanged = barresForCompare(chord.barres) !== barresForCompare(finalBarres);
 
-  let nameSegments = chord.nameSegments;
+  let { nameSegments } = chord;
   let nameMigrated = false;
   let nameRepaired = false;
   if (nameSegments === undefined) {
@@ -198,17 +198,15 @@ export const normalizeChord = (chord: Chord): { chord: Chord; changed: boolean }
   }
   delete legacyChord.chordName;
 
-  const changed =
-    stringsMigrated ||
-    stringsBounded ||
-    nameMigrated ||
-    nameRepaired ||
+  /** 回写判据分两类：清洗步骤就地置位的脏标记，与字段级归一结果同入参的差异。任一命中即数据形态已变 */
+  const dirtyFromCleaning =
+    stringsMigrated || stringsBounded || nameMigrated || nameRepaired || fieldsCleaned || barresChanged;
+  const differsFromInput =
     chord.fretOffset !== fretOffset ||
     chord.tuning !== tuning ||
     chord.fretCount !== fretCount ||
-    chord.rootStringIndex !== rootStringIndex ||
-    fieldsCleaned ||
-    barresChanged;
+    chord.rootStringIndex !== rootStringIndex;
+  const changed = dirtyFromCleaning || differsFromInput;
   if (!changed) return { chord, changed: false };
   return {
     chord: {

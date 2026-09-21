@@ -73,8 +73,6 @@ provide<FormControlContext>(FORM_CONTROL_CONTEXT_KEY, {
 // 才 preventDefault，不吞业务提交逻辑。
 const attrs = useAttrs();
 const handleSubmit = (e: Event): void => {
-  if (props.tag === 'form' && !attrs['onSubmit']) {
-    e.preventDefault();
-  }
+  if (props.tag === 'form' && !attrs['onSubmit']) e.preventDefault();
 };
 </script>

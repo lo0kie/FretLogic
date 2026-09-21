@@ -1,7 +1,6 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
-import { findScrollParent, resolveLengthToPx } from '@/platform/utils/dom';
-import { FADE_OFFSET_TARGET_PROP } from '@/platform/utils/fadeMask';
+import { FADE_OFFSET_TARGET_PROP, findScrollParent, resolveLengthToPx } from '@/platform/utils/dom';
 
 import { useRafThrottle } from './useRafThrottle';
 

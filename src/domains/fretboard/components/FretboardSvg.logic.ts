@@ -68,20 +68,24 @@ export const parseBarreFretFromKey = (key: string): number | null => {
   return match ? Number(match[1]) : null;
 };
 
+/** 指板主题蓝的 RGB 分量（浅色 / 深色）：供 `rgba(分量, α)` 复用，避免硬编码散落多处 */
+export const FRETBOARD_BLUE = {
+  light: '59, 130, 246',
+  dark: '96, 165, 250',
+} as const;
+
 /** 横按梁填充色：已标记加深蓝色，推导未标记为更淡的蓝色 */
 export const getBarreFill = (isMarked: boolean, isDarkMode: boolean): string => {
-  if (isMarked) {
-    return isDarkMode ? 'rgba(96, 165, 250, 0.62)' : 'rgba(59, 130, 246, 0.58)';
-  }
-  return isDarkMode ? 'rgba(96, 165, 250, 0.16)' : 'rgba(59, 130, 246, 0.14)';
+  const c = isDarkMode ? FRETBOARD_BLUE.dark : FRETBOARD_BLUE.light;
+  const a = isMarked ? (isDarkMode ? 0.62 : 0.58) : isDarkMode ? 0.16 : 0.14;
+  return `rgba(${c}, ${a})`;
 };
 
 /** 横按梁边框色：已标记为深色清晰描边，未标记为虚线更淡描边 */
 export const getBarreStroke = (isMarked: boolean, isDarkMode: boolean): string => {
-  if (isMarked) {
-    return isDarkMode ? 'rgba(96, 165, 250, 0.90)' : 'rgba(59, 130, 246, 0.85)';
-  }
-  return isDarkMode ? 'rgba(96, 165, 250, 0.38)' : 'rgba(59, 130, 246, 0.35)';
+  const c = isDarkMode ? FRETBOARD_BLUE.dark : FRETBOARD_BLUE.light;
+  const a = isMarked ? (isDarkMode ? 0.9 : 0.85) : isDarkMode ? 0.38 : 0.35;
+  return `rgba(${c}, ${a})`;
 };
 
 /** 指位是否落在横按覆盖范围内（同品且弦序位于跨度内） */
@@ -95,9 +99,8 @@ export const isPointInBarre = (pt: { stringIndex: number; fretIndex: number } | 
 
 /** 根据品位计算音符中心 Y 坐标：0 品/静音位于空弦标记位，1~N 品位于对应品格中心 */
 export const getStringNoteY = (fret: number): number => {
-  if (fret <= 0) {
-    return OPEN_STRING_MARKER_Y;
-  }
+  if (fret <= 0) return OPEN_STRING_MARKER_Y;
+
   return CANVAS_CONFIG.OFFSET_Y_TOP + (fret - 0.5) * CANVAS_CONFIG.FRET_HEIGHT;
 };
 

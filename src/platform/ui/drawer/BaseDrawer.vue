@@ -15,7 +15,7 @@
         :style="{ zIndex: overlayZ > 0 ? overlayZ : undefined }"
         @click.self="handleMaskClick($event)"
         @mousedown="handleMaskMousedown($event)"
-        class="drawer-overlay-container fixed inset-0 flex overflow-hidden"
+        class="drawer-overlay-container fixed inset-0 flex overflow-clip"
         ref="overlayRef"
       >
         <div
@@ -113,12 +113,13 @@ import { closeAllPopovers } from '@/platform/ui/popover/popoverRegistry';
 
 import type { ModalCloseReason } from '@/platform/ui/modal/modalCloseReason';
 
-/** 尺寸档位映射：值格式「主尺寸|最大尺寸」。left/right 抽屉主尺寸为宽度，top/bottom 为主轴高度 */
-const DRAWER_SIZE_MAP: Record<string, string> = {
-  sm: '380px|85%',
-  md: '480px|90%',
-  lg: '640px|92%',
-  full: '100%|100%',
+/** left/right 抽屉主尺寸为宽度，top/bottom 为主轴高度 */
+const MD_DRAWER_SIZE = { main: '480px', max: '90%' };
+const DRAWER_SIZE_MAP: Record<string, { main: string; max: string } | undefined> = {
+  sm: { main: '380px', max: '85%' },
+  md: MD_DRAWER_SIZE,
+  lg: { main: '640px', max: '92%' },
+  full: { main: '100%', max: '100%' },
 };
 </script>
 
@@ -212,22 +213,10 @@ const isHorizontal = computed(() => props.placement === 'left' || props.placemen
 const panelSizeStyle = computed<Record<string, string>>(() => {
   const style: Record<string, string> = {};
   const raw = props.size;
-  let main: string;
-  let max: string;
-  if (typeof raw === 'number') {
-    main = `${raw}px`;
-    max = '90%';
-  } else if (raw && DRAWER_SIZE_MAP[raw]) {
-    const parts = DRAWER_SIZE_MAP[raw].split('|');
-    main = parts[0]!;
-    max = parts[1]!;
-  } else if (raw) {
-    main = raw;
-    max = '90%';
-  } else {
-    main = DRAWER_SIZE_MAP['md']!;
-    max = '90%';
-  }
+  const preset = typeof raw === 'string' ? DRAWER_SIZE_MAP[raw] : undefined;
+  // 未命中预设档位：数字按 px 作主尺寸、字符串按 CSS 值作主尺寸，最大边长统一 90%
+  const customMain = typeof raw === 'number' ? `${raw}px` : raw;
+  const { main, max } = preset ?? (customMain ? { main: customMain, max: '90%' } : MD_DRAWER_SIZE);
   if (isHorizontal.value) {
     style['width'] = main;
     style['maxWidth'] = max;

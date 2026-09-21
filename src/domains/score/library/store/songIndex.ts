@@ -48,11 +48,8 @@ export const collectChordReferences = (
     if (!refs) continue;
     for (const { song, count } of refs) {
       const existing = songCountMap.get(song.id);
-      if (existing) {
-        existing.count += count;
-      } else {
-        songCountMap.set(song.id, { song, count });
-      }
+      if (existing) existing.count += count;
+      else songCountMap.set(song.id, { song, count });
     }
   }
   return Array.from(songCountMap.values());

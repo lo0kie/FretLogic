@@ -57,9 +57,9 @@ const verifyEntitiesPersisted = async (expected: {
     idb.getAll('chords'),
     idb.getAll('songs'),
   ]);
-  if (groupRows.length < expected.groups || chordRows.length < expected.chords || songRows.length < expected.songs) {
+  if (groupRows.length < expected.groups || chordRows.length < expected.chords || songRows.length < expected.songs) 
     return false;
-  }
+  
   const groupIdSet = new Set(groupRows.map(r => String((r as { id?: unknown }).id ?? '')));
   const chordIdSet = new Set(chordRows.map(r => String((r as { id?: unknown }).id ?? '')));
   // 歌曲 id 统一经 toSongId 归一后比对（与写入路径同一口径）
@@ -100,12 +100,12 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
   const rawGroups = parseJson(entries.get(STORAGE_KEYS.GROUPS));
   const rawChords = parseJson(entries.get(STORAGE_KEYS.CHORD_LIST));
   const rawSongs: unknown[] = [];
-  for (const [key, value] of entries) {
+  for (const [key, value] of entries) 
     if (key.startsWith(SONG_ENTRY_PREFIX)) {
       const song = parseJson(value);
       if (song && typeof song === 'object') rawSongs.push(song);
     }
-  }
+  
   const legacySongs = parseJson(entries.get(STORAGE_KEYS.SONGS));
   if (Array.isArray(legacySongs)) rawSongs.push(...legacySongs);
 
@@ -158,19 +158,19 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
       chords: rawInput.chords - chords.length,
       songs: rawInput.songs - songs.length,
     };
-    if (dropped.groups > 0 || dropped.chords > 0 || dropped.songs > 0) {
+    if (dropped.groups > 0 || dropped.chords > 0 || dropped.songs > 0) 
       logger.warn(
         'transcribe',
         `宽容清洗丢弃记录：分组 ${dropped.groups} / 和弦 ${dropped.chords} / 乐谱 ${dropped.songs}（结构不合法，已无法恢复）`
       );
-    }
+    
 
     // 实体先落库（成功后才清空 localStorage）：歌曲与顺序索引走单事务原子写入。
     // 和弦库仅在有旧键时全量写（见上方 N2 说明）；歌曲路径 flushChanges 按 id diff、从不 clear，
     // 空列表不会波及 IDB 既有记录，可安全调用
-    if (hasChordLibraryKeys) {
+    if (hasChordLibraryKeys) 
       await chordRepository.save({ groups, chords });
-    }
+    
     if (songs.length > 0) {
       // 顺序索引：优先取旧分片索引中仍存在的 id，未被索引覆盖的歌曲由读侧兜底追加尾部
       const indexRaw = parseJson(entries.get(STORAGE_KEYS.SONGS_INDEX));
@@ -203,7 +203,7 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
     consumedKeys.add(key);
     kvKeys += 1;
   }
-  kvSet(RETIRED_FLAG_KEY, '1');
+  // 此处只落偏好键；RETIRED_FLAG_KEY 留到两道守门之后（见下），否则核验失败时标记已落、重试被短路
   await flushIdbKv();
 
   // ── 删除前的诚实核验：本流程唯一不可逆动作的守门 ──────────────────────────────
@@ -227,13 +227,19 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
     return null;
   }
 
+  // 核验通过才落退役标记：顺序若颠倒（标记先于守门），回读失败这一路会把「半截迁移」永久固化——
+  // 顶部 kvGet(RETIRED_FLAG_KEY) 的短路让下次启动不再重试，而运行时已不回读 localStorage。
+  // 若这次 flush 自身触发熔断导致标记未落，下次启动重跑一遍幂等转录即可，属安全方向。
+  kvSet(RETIRED_FLAG_KEY, '1');
+  await flushIdbKv();
+
   // 精准清除本应用消费过的键（实体键 + 已转录偏好键 + 丢弃的敏感键）；未知键原样保留
-  for (const key of [STORAGE_KEYS.GROUPS, STORAGE_KEYS.CHORD_LIST, STORAGE_KEYS.SONGS]) {
+  for (const key of [STORAGE_KEYS.GROUPS, STORAGE_KEYS.CHORD_LIST, STORAGE_KEYS.SONGS]) 
     consumedKeys.add(key);
-  }
-  for (const key of entries.keys()) {
+  
+  for (const key of entries.keys()) 
     if (consumedKeys.has(key) || key.startsWith(SONG_ENTRY_PREFIX)) localStorage.removeItem(key);
-  }
+  
 
   const result: TranscriptionResult = {
     groups: entityCounts.groups,

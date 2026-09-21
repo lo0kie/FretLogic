@@ -7,6 +7,7 @@ import { ref } from 'vue';
 
 import { wait } from '@/platform/utils/common';
 
+import type { Chord } from '@/domains/chord/types';
 import type { Capo, ChordLineSlots, LineId, Song } from '@/domains/score/types';
 import type { Ref } from 'vue';
 
@@ -16,14 +17,21 @@ export interface HistoryState {
   chordMap: Map<LineId, ChordLineSlots>;
   playKey?: string;
   capo?: Capo;
+  /**
+   * 产生该快照的那一步在用户和弦库里**自动新建**的和弦（如移调补弦）。
+   * 快照一旦离开撤销栈（redo 分支被截断 / 超出容量 / 切换歌曲），该状态就再也回不到，
+   * 这些和弦便成了库里够不到的孤儿 —— 由 {@link ScoreHistoryOptions.onSnapshotsDiscarded} 回收；
+   * 不记这个字段的话，「移调 → 撤销」会让每次自动建弦永久留在库里并跟着备份走。
+   */
+  createdChords?: Chord[];
 }
 
 /** 深拷贝嵌套 chordMap：char Map 与 start/end 数组都要复制，否则快照间共享行容器，编辑会污染历史 */
 const cloneChordMap = (chordMap: Map<LineId, ChordLineSlots>): Map<LineId, ChordLineSlots> => {
   const copy = new Map<LineId, ChordLineSlots>();
-  for (const [lineId, slots] of chordMap) {
+  for (const [lineId, slots] of chordMap)
     copy.set(lineId, { char: new Map(slots.char), start: [...slots.start], end: [...slots.end] });
-  }
+
   return copy;
 };
 
@@ -33,6 +41,8 @@ const cloneHistoryState = (state: HistoryState): HistoryState => ({
   chordMap: cloneChordMap(state.chordMap),
   playKey: state.playKey,
   capo: state.capo,
+  // 旁挂记录按引用带走：它描述的是「产生这条快照的那一步」，与快照同生命周期
+  createdChords: state.createdChords,
 });
 
 const chordMapsEqual = (a: Map<LineId, ChordLineSlots>, b: Map<LineId, ChordLineSlots>): boolean => {
@@ -42,9 +52,8 @@ const chordMapsEqual = (a: Map<LineId, ChordLineSlots>, b: Map<LineId, ChordLine
     const other = b.get(lineId);
     if (!other) return false;
     if (slots.char.size !== other.char.size) return false;
-    for (const [idx, id] of slots.char) {
-      if (other.char.get(idx) !== id) return false;
-    }
+    for (const [idx, id] of slots.char) if (other.char.get(idx) !== id) return false;
+
     if (slots.start.length !== other.start.length || slots.end.length !== other.end.length) return false;
     if (!slots.start.every((id, i) => id === other.start[i])) return false;
     if (!slots.end.every((id, i) => id === other.end[i])) return false;
@@ -65,18 +74,37 @@ export interface ScoreHistoryOptions {
   applyState: (songId: string, state: HistoryState) => void;
   /** 栈容量上限，超出时丢弃最旧快照 */
   capacity?: number;
+  /**
+   * 快照离开撤销栈时的回收钩子（redo 分支被截断、超出容量、切换歌曲三种情形）。
+   * 调用方据此处理快照旁挂的 `createdChords`：那些和弦已不可能再被任何状态引用。
+   */
+  onSnapshotsDiscarded?: (states: HistoryState[]) => void;
 }
 
 export const useScoreHistory = (options: ScoreHistoryOptions) => {
-  const { getActiveSong, applyState, capacity = 20 } = options;
+  const { getActiveSong, applyState, onSnapshotsDiscarded, capacity = 20 } = options;
 
   const isUndoRedoAction: Ref<boolean> = ref(false);
   const historyStack: HistoryState[] = [];
   let historyIndex = -1;
   let currentSongId: string | null = null;
 
-  /** 将当前歌曲的歌词/行序/和弦映射快照压入撤销栈（撤销-重做期间不记录）。 */
-  const recordHistory = (song?: Song) => {
+  /**
+   * 离栈快照的旁挂资源回收。只在快照真带 `createdChords` 时才排队，且**延迟一个宏任务**：
+   * 回收动作会经应用层桥接改写乐谱，若在 recordHistory 的同步段里执行就等于在「记录历史」
+   * 的过程中再次改动状态、重入本函数。
+   */
+  const schedulePrune = (discarded: HistoryState[]): void => {
+    if (!onSnapshotsDiscarded || !discarded.some(s => s.createdChords?.length)) return;
+    void wait().then(() => onSnapshotsDiscarded(discarded));
+  };
+
+  /**
+   * 将当前歌曲的歌词/行序/和弦映射快照压入撤销栈（撤销-重做期间不记录）。
+   * @param createdChords 本步在用户和弦库里自动新建的和弦，随快照一起登记以便离栈回收；
+   *                      与栈顶内容等价而早退时该登记一并丢弃——状态未变意味着这些和弦仍被当前谱面引用
+   */
+  const recordHistory = (song?: Song, createdChords?: Chord[]) => {
     const target = song || getActiveSong();
     if (!target || isUndoRedoAction.value) return;
     const nextState = cloneHistoryState({
@@ -85,6 +113,7 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
       chordMap: target.chordMap,
       playKey: target.playKey,
       capo: target.capo,
+      createdChords,
     });
     const currentTop = historyStack[historyIndex];
     if (
@@ -94,15 +123,17 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
       currentTop.capo === nextState.capo &&
       lineIdsEqual(currentTop.lineIds, nextState.lineIds) &&
       chordMapsEqual(currentTop.chordMap, nextState.chordMap)
-    ) {
+    )
       return;
-    }
-    historyStack.splice(historyIndex + 1);
+
+    // 新记录使 redo 分支失效：被截断的快照再也回不到，其旁挂的自动新建和弦可回收
+    const discarded = historyStack.splice(historyIndex + 1);
     historyStack.push(nextState);
-    if (historyStack.length > capacity) {
-      historyStack.shift();
-    }
+    let overflowed: HistoryState | undefined;
+    if (historyStack.length > capacity) overflowed = historyStack.shift();
+
     historyIndex = historyStack.length - 1;
+    schedulePrune(overflowed ? [...discarded, overflowed] : discarded);
   };
 
   /**
@@ -166,18 +197,16 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
    * 同一首歌且已有记录时跳过，否则清空并压入初始快照。
    */
   const handleSongChange = (newSong: Song | null) => {
-    if (newSong && newSong.id === currentSongId && historyStack.length > 0) {
-      return;
-    }
+    if (newSong && newSong.id === currentSongId && historyStack.length > 0) return;
+
     currentSongId = newSong?.id ?? null;
+    // 整栈作废同样是离栈：旧歌那几步自动新建、且此刻已无任何乐谱引用的和弦在此回收
+    schedulePrune([...historyStack]);
     historyStack.length = 0;
     historyIndex = -1;
-    if (!newSong) {
-      return;
-    }
-    if (!isUndoRedoAction.value) {
-      recordHistory(newSong);
-    }
+    if (!newSong) return;
+
+    if (!isUndoRedoAction.value) recordHistory(newSong);
   };
 
   return { isUndoRedoAction, recordHistory, undo, redo, handleSongChange };

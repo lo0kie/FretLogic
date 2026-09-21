@@ -6,18 +6,18 @@
       <BaseCheckbox
         v-model="uiStore.isLeftOpen"
         v-tooltip="uiStore.isLeftOpen ? '收起侧边栏' : '展开侧边栏'"
-        :aria-label="'切换侧边栏'"
         buttonized
         icon-only
+        aria-label="切换侧边栏"
         icon="panel-left"
       />
 
       <BaseDivider
-        :inset="'1rem'"
-        :length="'0.875rem'"
         :thickness="2"
         class="opacity-80"
         color="glass"
+        inset="1rem"
+        length="0.875rem"
         orientation="vertical"
       />
 
@@ -25,8 +25,9 @@
         <button
           v-tooltip="'回到工作台'"
           @click="router.push(ROUTE_PATHS.WORKBENCH)"
+          data-focusable-outline
           aria-label="Fret Logic 首页"
-          class="group flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors outline-none select-none focus-visible:ring-2 focus-visible:ring-primary/70"
+          class="group flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors outline-none select-none"
           type="button"
         >
           <span
@@ -191,11 +192,11 @@
       <!-- 分组分隔线：左侧为文档操作（工作台：试听 / 复制 / 粘贴；乐谱：复制文字 / 粘贴 / 复制长图 / 下载），
            右侧为应用偏好（设置 / 同步 / 主题 / 仓库） -->
       <BaseDivider
-        :inset="'0.25rem'"
-        :length="'0.875rem'"
         :thickness="2"
         class="opacity-80"
         color="glass"
+        inset="0.25rem"
+        length="0.875rem"
         orientation="vertical"
       />
 
@@ -267,11 +268,11 @@
 
       <template v-if="IS_DEV">
         <BaseDivider
-          :inset="'0.25rem'"
-          :length="'0.875rem'"
           :thickness="2"
           class="opacity-80"
           color="glass"
+          inset="0.25rem"
+          length="0.875rem"
           orientation="vertical"
         />
 
@@ -358,7 +359,7 @@ import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
-import { preloadExportHandlers, useScoreExportActions } from '@/app/layouts/useScoreExportActions';
+import { preloadExportActions, useScoreExport } from '@/app/layouts/useScoreExport';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { preloadAudioPlayback, useAudioPlayer } from '@/app/services/audio/useAudioPlayer';
 import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
@@ -395,8 +396,8 @@ const { copyChordText, pasteChordFromClipboard, copySongText, pasteSongFromClipb
   useTextTransfer();
 const scoreRouteSync = useScoreRouteSync();
 
-/** 乐谱「预览」导出动作与下载菜单标题（长图/PDF/Zip + 尺寸预估），逻辑见 useScoreExportActions.ts */
-const { isPreviewExportMode, handleScoreExport, downloadExportMenuItems, downloadMenuTitle } = useScoreExportActions();
+/** 乐谱「预览」导出动作与下载菜单标题（长图/PDF/Zip + 尺寸预估），逻辑见 useScoreExport.ts */
+const { isPreviewExportMode, handleScoreExport, downloadExportMenuItems, downloadMenuTitle } = useScoreExport();
 
 /** 「预览导出产物已就绪」判据：预览 tab、非渲染中 / 复制中、有歌词。
  *  由乐谱页三个出口共用 —— 复制长图按钮、下载菜单、下载触发按钮：三者依赖的是同一份产物，
@@ -417,15 +418,6 @@ const isPreviewBusy = computed(() => isPreviewExportMode.value && isPreviewRende
 /** 无结构纯歌词「确认兜底」：待确认的载荷 + 确认弹窗开关 */
 const pendingLyricsImport = ref<PortableSong | null>(null);
 const isLyricsImportConfirmOpen = ref(false);
-
-/** 复制/粘贴防重入锁：包装异步动作，执行期间禁用按钮 */
-const withTransferLock = (fn: () => Promise<void>): void => {
-  if (uiStore.isCopying) return;
-  uiStore.isCopying = true;
-  void fn().finally(() => {
-    uiStore.isCopying = false;
-  });
-};
 
 /** 工作台可复制条件：指板非空且已解析出和弦名 */
 const canCopyChord = computed(() => !editorStore.isFretBoardEmpty && Boolean(getChordName(editorStore.draftChord)));
@@ -451,22 +443,22 @@ const isCopyScoreTextDisabled = computed(() => uiStore.isCopying || !scoreEditor
 const isPasteScoreDisabled = computed(() => uiStore.isCopying || isPreviewBusy.value);
 
 /** 工作台：复制当前编辑的和弦文字到剪贴板 */
-const handleCopyChord = () => withTransferLock(() => copyChordText(editorStore.draftChord));
+const handleCopyChord = () => void copyChordText(editorStore.draftChord);
 
 /** 工作台：从剪贴板文字载入编辑器草稿（切「新建」态） */
-const handlePasteChord = () => withTransferLock(pasteChordFromClipboard);
+const handlePasteChord = () => void pasteChordFromClipboard();
 
 /** 乐谱：复制当前乐谱文字到剪贴板 */
-const handleCopySong = () => withTransferLock(() => copySongText(scoreEditor.activeSong));
+const handleCopySong = () => void copySongText(scoreEditor.activeSong);
 
-/** 乐谱：从剪贴板文字导入（始终新建一首乐谱）；无结构纯歌词先弹「确认兜底」交给用户决定 */
-const handlePasteSong = () =>
-  withTransferLock(async () => {
-    const outcome: PasteSongOutcome = await pasteSongFromClipboard();
-    if (outcome.status !== 'needsConfirm') return;
-    pendingLyricsImport.value = outcome.portable;
-    isLyricsImportConfirmOpen.value = true;
-  });
+/** 乐谱：从剪贴板文字导入（始终新建一首乐谱）；无结构纯歌词先弹「确认兜底」交给用户决定。
+ *  互斥由动作实现负责（重入时返回 none，不会落地也不会确认） */
+const handlePasteSong = async (): Promise<void> => {
+  const outcome: PasteSongOutcome = await pasteSongFromClipboard();
+  if (outcome.status !== 'needsConfirm') return;
+  pendingLyricsImport.value = outcome.portable;
+  isLyricsImportConfirmOpen.value = true;
+};
 
 /** 用户确认「仍按纯歌词导入」后落地建谱 */
 const handleConfirmLyricsImport = () => {
@@ -495,7 +487,7 @@ const { isDark, setTheme, preference: themePreference } = useTheme();
 
 /** 主题按钮触发图标：暗色显示月亮（primary），亮色显示太阳（warning） */
 const themeTriggerIcon = computed(() => (isDark.value ? 'moon' : 'sun'));
-const themeTriggerIconClass = computed(() => (isDark.value ? 'text-color-primary' : 'text-color-warning'));
+const themeTriggerIconClass = computed(() => (isDark.value ? 'text-primary' : 'text-warning'));
 
 const themeMenuItems = computed<MenuItem[]>(() => [
   {
@@ -539,7 +531,7 @@ onMounted(() => {
   };
   idle(() => {
     prefetch(preloadSyncActions, 'TopHeader');
-    prefetch(preloadExportHandlers, 'TopHeader');
+    prefetch(preloadExportActions, 'TopHeader');
     prefetch(preloadAudioPlayback, 'TopHeader');
     prefetch(preloadTextTransferActions, 'TopHeader');
   });
@@ -569,18 +561,14 @@ const currentSchemeName = computed(() => SYNC_TARGET_LABELS[settingsStore.syncTa
 /** 用户确认上传：执行全局同步，成功后关闭确认弹窗 */
 const handleConfirmSync = async () => {
   const ok = await triggerGlobalSync();
-  if (ok) {
-    isSyncConfirmOpen.value = false;
-  }
+  if (ok) isSyncConfirmOpen.value = false;
 };
 
 /** 用户确认拉取：拉取成功后关闭弹窗，并携带云端数据进入导入面板供勾选应用 */
 const handleConfirmPull = async () => {
   const payload = await pullFromRemote();
   isPullConfirmOpen.value = false;
-  if (payload) {
-    backupModals.openImportWithPayload(payload, '云端同步数据');
-  }
+  if (payload) backupModals.openImportWithPayload(payload, '云端同步数据');
 };
 
 /** 打开同步设置弹窗，并把弹窗内的方案选择器对齐到当前同步目标（保证看到的就是缺 Token 的那一项） */

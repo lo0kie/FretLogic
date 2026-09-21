@@ -1,0 +1,606 @@
+{
+  "_notes": [
+    "和弦性质表 —— 「写法真相源」。一个 token = 一个 AST 配方，写法只是它的多个入口；顺序即优先级（解析时先匹配到的 token 胜出，渲染时用 spellings[0]，长写法排在前面以免 `m` 抢走 `maj7` 的前缀）。",
+    "本文件合并了原先分散在三处的同一批投影：chordQualityTokens 的配方与写法、chordDegree 的罗马数字后缀、chordQualityAstParse 的简写。新增同义写法只改这里。",
+    "字段：ast 性质配方；spellings 可接受写法（首项兼作渲染首选全称）；romanSuffix 罗马数字级数后缀（缺省空串）；shorthand 简写（缺省 = spellings[0]）；romanSuffixBySpelling 同一 token 内按写法区分的后缀覆盖；notationOnly 纯记谱写法（不参与识别）；_note 该条的设计说明。"
+  ],
+  "tokens": [
+    {
+      "id": "major",
+      "ast": { "third": "maj3", "fifth": "perf5" },
+      "spellings": ["", "maj", "Maj", "M", "Δ", "major"],
+      "_note": "`Maj` 是历史 CHORD_QUALITIES 的写法集合。解析靠大小写折叠也能认出来，显式列出只是为了让「列举全部写法」的用途不漏条目，并非解析所必需。"
+    },
+    { "id": "minor", "ast": { "third": "min3", "fifth": "perf5" }, "spellings": ["m", "min", "-", "minor"] },
+    {
+      "id": "dim",
+      "ast": { "third": "min3", "fifth": "dim5" },
+      "spellings": ["dim", "°", "o", "mb5", "m(b5)", "minb5", "-b5"],
+      "romanSuffix": "°",
+      "shorthand": "°",
+      "_note": "`mb5` 系列与 `dim` 是同一配方（小三 + 减五）。旧实现把它拆成「性质 m + 张力音 b5」，于是同一件事有两种形态（`Cdim` / `Cmb5`）；归并后两者 AST 一致。"
+    },
+    {
+      "id": "aug",
+      "ast": { "third": "maj3", "fifth": "aug5" },
+      "spellings": ["aug", "+", "#5", "+5"],
+      "romanSuffix": "+",
+      "shorthand": "+",
+      "_note": "`#5` 是大三和弦升五，与 `aug` 同一配方（旧实现拆成「性质 + 加张力音 #5」），归并理由同 dim。"
+    },
+    { "id": "power", "ast": { "third": "none", "fifth": "perf5" }, "spellings": ["5"] },
+    {
+      "id": "sus4",
+      "ast": { "third": "none", "sus": "sus4", "fifth": "perf5" },
+      "spellings": ["sus4", "sus"],
+      "romanSuffix": "sus4",
+      "shorthand": "sus"
+    },
+    {
+      "id": "sus2",
+      "ast": { "third": "none", "sus": "sus2", "fifth": "perf5" },
+      "spellings": ["sus2"],
+      "romanSuffix": "sus2"
+    },
+    {
+      "id": "no3",
+      "ast": { "third": "maj3", "fifth": "perf5", "omitThird": true },
+      "spellings": ["no3", "(no3)"],
+      "notationOnly": true,
+      "_note": "纯记谱写法：表达的是「本该有的音被撤掉」而非独立配方。解析 / 渲染必须认识它（`Cno3` 往返要原样还原），但**识别端要排除**——音集里少一个音，既可能是「撤掉」也可能是「本来就没弹」，放进候选只会制造无法证伪的歧义。"
+    },
+    {
+      "id": "no5",
+      "ast": { "third": "maj3", "fifth": "perf5", "omitFifth": true },
+      "spellings": ["no5", "(no5)"],
+      "notationOnly": true,
+      "_note": "同 no3：纯记谱写法，不参与识别候选。"
+    },
+    {
+      "id": "six",
+      "ast": { "third": "maj3", "fifth": "perf5", "extensions": [{ "degree": "6", "accidental": 0 }] },
+      "spellings": ["6"],
+      "romanSuffix": "6"
+    },
+    {
+      "id": "m6",
+      "ast": { "third": "min3", "fifth": "perf5", "extensions": [{ "degree": "6", "accidental": 0 }] },
+      "spellings": ["m6", "min6", "-6"],
+      "romanSuffix": "m6"
+    },
+    {
+      "id": "sixNine",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "extensions": [
+          { "degree": "6", "accidental": 0 },
+          { "degree": "9", "accidental": 0 }
+        ]
+      },
+      "spellings": ["6/9", "69"],
+      "romanSuffix": "6/9"
+    },
+    {
+      "id": "m6Nine",
+      "ast": {
+        "third": "min3",
+        "fifth": "perf5",
+        "extensions": [
+          { "degree": "6", "accidental": 0 },
+          { "degree": "9", "accidental": 0 }
+        ]
+      },
+      "spellings": ["m6/9", "m69", "min6/9"],
+      "romanSuffix": "m6/9"
+    },
+    {
+      "id": "dom7",
+      "ast": { "third": "maj3", "fifth": "perf5", "seventh": "min7" },
+      "spellings": ["7"],
+      "romanSuffix": "7"
+    },
+    {
+      "id": "maj7",
+      "ast": { "third": "maj3", "fifth": "perf5", "seventh": "maj7" },
+      "spellings": ["maj7", "Maj7", "M7", "Δ7", "ma7"],
+      "romanSuffix": "maj7",
+      "shorthand": "M7"
+    },
+    {
+      "id": "min7",
+      "ast": { "third": "min3", "fifth": "perf5", "seventh": "min7" },
+      "spellings": ["m7", "min7", "-7"],
+      "romanSuffix": "7"
+    },
+    {
+      "id": "minMaj7",
+      "ast": { "third": "min3", "fifth": "perf5", "seventh": "maj7" },
+      "spellings": ["mMaj7", "mmaj7", "minMaj7", "mM7", "mΔ7", "-M7", "-Δ7"],
+      "romanSuffix": "mMaj7",
+      "shorthand": "mM7"
+    },
+    {
+      "id": "halfDim7",
+      "ast": { "third": "min3", "fifth": "dim5", "seventh": "min7" },
+      "spellings": ["m7b5", "m7(b5)", "ø7", "ø", "min7b5", "-7b5"],
+      "romanSuffix": "ø7",
+      "shorthand": "ø7",
+      "romanSuffixBySpelling": { "ø": "ø" },
+      "_note": "`romanSuffixBySpelling`：裸 `ø` 记作 `ø`、`ø7` 记作 `ø7`（历史约定），其余写法归一后一律取 `ø7`。"
+    },
+    {
+      "id": "dim7",
+      "ast": { "third": "min3", "fifth": "dim5", "seventh": "dim7" },
+      "spellings": ["dim7", "°7", "o7"],
+      "romanSuffix": "°7",
+      "shorthand": "°7"
+    },
+    {
+      "id": "dimMaj7",
+      "ast": { "third": "min3", "fifth": "dim5", "seventh": "maj7" },
+      "spellings": ["dimMaj7", "dimmaj7", "°M7", "°Δ7"],
+      "romanSuffix": "°Maj7",
+      "shorthand": "°M7"
+    },
+    {
+      "id": "aug7",
+      "ast": { "third": "maj3", "fifth": "aug5", "seventh": "min7" },
+      "spellings": ["aug7", "+7", "7#5", "7(#5)"],
+      "romanSuffix": "+7",
+      "shorthand": "+7"
+    },
+    {
+      "id": "augMaj7",
+      "ast": { "third": "maj3", "fifth": "aug5", "seventh": "maj7" },
+      "spellings": ["augMaj7", "augmaj7", "+M7", "+Δ7", "M7#5", "Maj7(#5)"],
+      "romanSuffix": "+Maj7",
+      "shorthand": "+M7"
+    },
+    {
+      "id": "dom7flat5",
+      "ast": { "third": "maj3", "fifth": "dim5", "seventh": "min7" },
+      "spellings": ["7b5", "7(b5)"]
+    },
+    {
+      "id": "maj7flat5",
+      "ast": { "third": "maj3", "fifth": "dim5", "seventh": "maj7" },
+      "spellings": ["Maj7(b5)", "M7b5", "Maj7b5"]
+    },
+    {
+      "id": "sus4dom7",
+      "ast": { "third": "none", "sus": "sus4", "fifth": "perf5", "seventh": "min7" },
+      "spellings": ["7sus4", "7sus"],
+      "romanSuffix": "7sus4",
+      "shorthand": "7sus",
+      "romanSuffixBySpelling": { "7sus": "7sus" },
+      "_note": "`romanSuffixBySpelling`：`7sus` 的罗马后缀保持原写法（`7sus` 而非 `7sus4`）。"
+    },
+    {
+      "id": "sus2dom7",
+      "ast": { "third": "none", "sus": "sus2", "fifth": "perf5", "seventh": "min7" },
+      "spellings": ["7sus2"],
+      "romanSuffix": "7sus2"
+    },
+    {
+      "id": "add9",
+      "ast": { "third": "maj3", "fifth": "perf5", "extensions": [{ "degree": "9", "accidental": 0 }] },
+      "spellings": ["add9"],
+      "romanSuffix": "add9",
+      "_note": "`add2` 与 `add9` 音集相同、但**写法不同且渲染须还原**，故拆成独立 token；解析时由同义收敛合并到同一 AST。"
+    },
+    {
+      "id": "add2",
+      "ast": { "third": "maj3", "fifth": "perf5", "extensions": [{ "degree": "9", "accidental": 0 }] },
+      "spellings": ["add2"],
+      "romanSuffix": "add2"
+    },
+    {
+      "id": "add11",
+      "ast": { "third": "maj3", "fifth": "perf5", "extensions": [{ "degree": "11", "accidental": 0 }] },
+      "spellings": ["add11"],
+      "romanSuffix": "add11",
+      "_note": "`add4` 与 `add11` 同音不同写法，拆 token 的理由同 add9。"
+    },
+    {
+      "id": "add4",
+      "ast": { "third": "maj3", "fifth": "perf5", "extensions": [{ "degree": "11", "accidental": 0 }] },
+      "spellings": ["add4"],
+      "romanSuffix": "add4"
+    },
+    {
+      "id": "add13",
+      "ast": { "third": "maj3", "fifth": "perf5", "extensions": [{ "degree": "13", "accidental": 0 }] },
+      "spellings": ["add13"],
+      "romanSuffix": "add13"
+    },
+    {
+      "id": "madd9",
+      "ast": { "third": "min3", "fifth": "perf5", "extensions": [{ "degree": "9", "accidental": 0 }] },
+      "spellings": ["madd9", "minadd9"],
+      "romanSuffix": "madd9"
+    },
+    {
+      "id": "madd2",
+      "ast": { "third": "min3", "fifth": "perf5", "extensions": [{ "degree": "9", "accidental": 0 }] },
+      "spellings": ["madd2", "minadd2"],
+      "romanSuffix": "madd2"
+    },
+    {
+      "id": "madd11",
+      "ast": { "third": "min3", "fifth": "perf5", "extensions": [{ "degree": "11", "accidental": 0 }] },
+      "spellings": ["madd11", "minadd11"],
+      "romanSuffix": "madd11"
+    },
+    {
+      "id": "madd4",
+      "ast": { "third": "min3", "fifth": "perf5", "extensions": [{ "degree": "11", "accidental": 0 }] },
+      "spellings": ["madd4", "minadd4"],
+      "romanSuffix": "madd4"
+    },
+    {
+      "id": "madd13",
+      "ast": { "third": "min3", "fifth": "perf5", "extensions": [{ "degree": "13", "accidental": 0 }] },
+      "spellings": ["madd13", "minadd13"],
+      "romanSuffix": "madd13"
+    },
+    {
+      "id": "dom9",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [{ "degree": "9", "accidental": 0 }]
+      },
+      "spellings": ["9"],
+      "romanSuffix": "9"
+    },
+    {
+      "id": "dom11",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 0 }
+        ]
+      },
+      "spellings": ["11"],
+      "romanSuffix": "11"
+    },
+    {
+      "id": "dom13",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 0 },
+          { "degree": "13", "accidental": 0 }
+        ]
+      },
+      "spellings": ["13"],
+      "romanSuffix": "13"
+    },
+    {
+      "id": "aug9",
+      "ast": {
+        "third": "maj3",
+        "fifth": "aug5",
+        "seventh": "min7",
+        "extensions": [{ "degree": "9", "accidental": 0 }]
+      },
+      "spellings": ["9#5", "9(#5)"]
+    },
+    {
+      "id": "aug13",
+      "ast": {
+        "third": "maj3",
+        "fifth": "aug5",
+        "seventh": "min7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "13", "accidental": 0 }
+        ]
+      },
+      "spellings": ["13#5", "13(#5)"]
+    },
+    {
+      "id": "dom7flat13",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [{ "degree": "13", "accidental": -1 }]
+      },
+      "spellings": ["7b13", "7(b13)"]
+    },
+    {
+      "id": "sus4dom9",
+      "ast": {
+        "third": "none",
+        "sus": "sus4",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [{ "degree": "9", "accidental": 0 }]
+      },
+      "spellings": ["9sus4", "9sus", "11sus4", "11sus"],
+      "romanSuffix": "9sus4",
+      "shorthand": "9sus",
+      "romanSuffixBySpelling": { "9sus": "9sus", "11sus4": "11sus4", "11sus": "11sus" },
+      "_note": "`11sus4` 与 `9sus4` 是**同一配方**：sus4 的四音（5 半音）本身就是十一音，`11sus4` 只是把该音说清楚的写法。`romanSuffixBySpelling` 保留 `9sus` / `11sus4` / `11sus` 各自的原写法后缀。"
+    },
+    {
+      "id": "sus2dom9",
+      "ast": {
+        "third": "none",
+        "sus": "sus2",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [{ "degree": "9", "accidental": 0 }]
+      },
+      "spellings": ["9sus2"],
+      "romanSuffix": "9sus2",
+      "notationOnly": true,
+      "_note": "`9sus2` 的「九音」与挂二音**同音**（都是 2 半音）：同一块音被声明两遍，属纯记谱写法。同样的音集由 7sus2（无冗余声明）覆盖并稳定胜出，故不参与识别候选；解析 / 渲染照常，输入 `A9sus2` 仍合法。"
+    },
+    {
+      "id": "sus2dom11",
+      "ast": {
+        "third": "none",
+        "sus": "sus2",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 0 }
+        ]
+      },
+      "spellings": ["11sus2"],
+      "romanSuffix": "11sus2",
+      "_note": "sus2 的挂留音是二音（2 半音）、**不是**十一音，故 `11sus2` 需独立声明九音与十一音。这与 `11sus4` 的情形正好相反，是 sus2 / sus4 不能共用一条配方的原因。"
+    },
+    {
+      "id": "sus4dom13",
+      "ast": {
+        "third": "none",
+        "sus": "sus4",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "13", "accidental": 0 }
+        ]
+      },
+      "spellings": ["13sus4", "13sus"],
+      "romanSuffix": "13sus4",
+      "shorthand": "13sus",
+      "romanSuffixBySpelling": { "13sus": "13sus" },
+      "_note": "`romanSuffixBySpelling`：`13sus` 的罗马后缀保持原写法。"
+    },
+    {
+      "id": "min9",
+      "ast": {
+        "third": "min3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [{ "degree": "9", "accidental": 0 }]
+      },
+      "spellings": ["m9", "min9", "-9"],
+      "romanSuffix": "9"
+    },
+    {
+      "id": "min11",
+      "ast": {
+        "third": "min3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 0 }
+        ]
+      },
+      "spellings": ["m11", "min11", "-11"],
+      "romanSuffix": "11"
+    },
+    {
+      "id": "min13",
+      "ast": {
+        "third": "min3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 0 },
+          { "degree": "13", "accidental": 0 }
+        ]
+      },
+      "spellings": ["m13", "min13", "-13"],
+      "romanSuffix": "13"
+    },
+    {
+      "id": "minMaj9",
+      "ast": {
+        "third": "min3",
+        "fifth": "perf5",
+        "seventh": "maj7",
+        "extensions": [{ "degree": "9", "accidental": 0 }]
+      },
+      "spellings": ["mMaj9", "mmaj9", "minMaj9", "mM9", "mΔ9", "-M9", "-Δ9"],
+      "romanSuffix": "mMaj9",
+      "shorthand": "mM9"
+    },
+    {
+      "id": "minMaj11",
+      "ast": {
+        "third": "min3",
+        "fifth": "perf5",
+        "seventh": "maj7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 0 }
+        ]
+      },
+      "spellings": ["mMaj11", "mmaj11", "minMaj11", "mM11", "mΔ11", "-M11", "-Δ11"],
+      "romanSuffix": "mMaj11",
+      "shorthand": "mM11"
+    },
+    {
+      "id": "minMaj13",
+      "ast": {
+        "third": "min3",
+        "fifth": "perf5",
+        "seventh": "maj7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 0 },
+          { "degree": "13", "accidental": 0 }
+        ]
+      },
+      "spellings": ["mMaj13", "mmaj13", "minMaj13", "mM13", "mΔ13", "-M13", "-Δ13"],
+      "romanSuffix": "mMaj13",
+      "shorthand": "mM13"
+    },
+    {
+      "id": "min9flat5",
+      "ast": {
+        "third": "min3",
+        "fifth": "dim5",
+        "seventh": "min7",
+        "extensions": [{ "degree": "9", "accidental": 0 }]
+      },
+      "spellings": ["m9b5", "m9(b5)", "min9b5", "ø9"]
+    },
+    {
+      "id": "maj9",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "maj7",
+        "extensions": [{ "degree": "9", "accidental": 0 }]
+      },
+      "spellings": ["maj9", "Maj9", "M9", "Δ9"],
+      "romanSuffix": "maj9",
+      "shorthand": "M9"
+    },
+    {
+      "id": "maj11",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "maj7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 0 }
+        ]
+      },
+      "spellings": ["maj11", "Maj11", "M11", "Δ11"],
+      "romanSuffix": "maj11",
+      "shorthand": "M11"
+    },
+    {
+      "id": "maj13",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "maj7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 0 },
+          { "degree": "13", "accidental": 0 }
+        ]
+      },
+      "spellings": ["maj13", "Maj13", "M13", "Δ13"],
+      "romanSuffix": "maj13",
+      "shorthand": "M13"
+    },
+    {
+      "id": "maj9sharp11",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "maj7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 1 }
+        ]
+      },
+      "spellings": ["Maj9(#11)", "M9#11"]
+    },
+    {
+      "id": "maj7sharp11",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "maj7",
+        "extensions": [{ "degree": "11", "accidental": 1 }]
+      },
+      "spellings": ["Maj7(#11)", "M7#11"]
+    },
+    {
+      "id": "dom7sharp9",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [{ "degree": "9", "accidental": 1 }]
+      },
+      "spellings": ["7#9", "7(#9)"]
+    },
+    {
+      "id": "dom7flat9",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [{ "degree": "9", "accidental": -1 }]
+      },
+      "spellings": ["7b9", "7(b9)"]
+    },
+    {
+      "id": "dom7sharp11",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [{ "degree": "11", "accidental": 1 }]
+      },
+      "spellings": ["7#11", "7(#11)"]
+    },
+    {
+      "id": "dom9sharp11",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 1 }
+        ]
+      },
+      "spellings": ["9(#11)", "9#11"]
+    },
+    {
+      "id": "dom13sharp11",
+      "ast": {
+        "third": "maj3",
+        "fifth": "perf5",
+        "seventh": "min7",
+        "extensions": [
+          { "degree": "9", "accidental": 0 },
+          { "degree": "11", "accidental": 1 },
+          { "degree": "13", "accidental": 0 }
+        ]
+      },
+      "spellings": ["13(#11)", "13#11"]
+    },
+    {
+      "id": "dom7alt",
+      "ast": { "third": "maj3", "fifth": "perf5", "seventh": "min7", "alt": true },
+      "spellings": ["7alt", "alt"],
+      "romanSuffix": "alt"
+    }
+  ]
+}

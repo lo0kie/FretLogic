@@ -23,7 +23,7 @@ export const createExternalDropResolver = (scrollContainerRef?: Ref<HTMLElement 
 
   const snapshotLineEls = () => {
     const zone = scrollContainerRef?.value;
-    externalLineEls = zone ? Array.from(zone.querySelectorAll<HTMLElement>('[data-line-idx]')) : [];
+    externalLineEls = zone ? Array.from(zone.querySelectorAll<HTMLElement>('[data-line-index]')) : [];
   };
 
   const resolve = (x: number, y: number, setTarget: SetExternalDropTarget) => {

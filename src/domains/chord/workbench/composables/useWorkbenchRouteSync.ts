@@ -174,12 +174,8 @@ export function useWorkbenchRouteSync() {
       const groupId = groupResult.data;
       if (chordStore.groups.some(g => g.id === groupId)) {
         if (chordStore.selectedGroupId !== groupId) chordStore.selectAndExpandGroup(groupId);
-      } else {
-        replaceQuery({ group: undefined });
-      }
-    } else if (!freshEntry && chordStore.selectedGroupId !== null) {
-      chordStore.selectAndExpandGroup(null);
-    }
+      } else replaceQuery({ group: undefined });
+    } else if (!freshEntry && chordStore.selectedGroupId !== null) chordStore.selectAndExpandGroup(null);
   };
 
   watch(

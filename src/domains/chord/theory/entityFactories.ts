@@ -17,9 +17,9 @@ export const buildGroupVariant = (
     createdAt: base.createdAt ?? 0,
     updatedAt: base.updatedAt ?? 0,
   };
-  if (sortRule === GroupSortRule.KEY_DEGREE) {
+  if (sortRule === GroupSortRule.KEY_DEGREE)
     return { ...brandedBase, sortRule, sortKey: typeof rawSortKey === 'string' && rawSortKey ? rawSortKey : 'C' };
-  }
+
   return { ...brandedBase, sortRule };
 };
 
@@ -38,9 +38,8 @@ export const createGroup = (name: string, sortRule: GroupSortRule = GroupSortRul
 };
 
 /** 由 [品位, 降号偏好] 数组构造强类型弦模型（逐项兜底 -1/false） */
-export const toGuitarStringsModel = (strings: [number, boolean][]): GuitarStringsModel => {
-  return strings.map(s => ({ fret: s?.[0] ?? -1, preferFlat: Boolean(s?.[1]) }));
-};
+export const toGuitarStringsModel = (strings: [number, boolean][]): GuitarStringsModel =>
+  strings.map(s => ({ fret: s?.[0] ?? -1, preferFlat: Boolean(s?.[1]) }));
 
 /** 新建和弦：统一 id 前缀（'c_'）与必填字段装配 */
 export const createChord = (input: {
@@ -56,7 +55,7 @@ export const createChord = (input: {
   /** 编辑既有和弦时传入原 id，否则自动生成 */
   id?: string | null;
 }): Chord => ({
-  id: toChordId(input.id || 'c_' + generateUUID().slice(0, 10)),
+  id: toChordId(input.id || `c_${generateUUID().slice(0, 10)}`),
   nameSegments: input.nameSegments,
   strings: input.strings,
   fretCount: input.fretCount,

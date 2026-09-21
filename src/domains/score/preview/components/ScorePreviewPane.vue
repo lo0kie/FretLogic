@@ -91,14 +91,14 @@
 
       <!-- 右下角缩放胶囊：复用 BaseFloatingPill（sm 紧凑形态），适应开关 + 毛玻璃百分比步进器 -->
       <BaseFloatingPill
-        :bottom="'1.5rem'"
         :safe-area-inset="false"
-        :z-index="'z-float'"
         disabled-teleport
         align="end"
         aria-label="预览缩放控制"
+        bottom="1.5rem"
         position="absolute"
         size="sm"
+        z-index="z-float"
       >
         <template v-if="!isFitMode">
           <BaseSlider
@@ -180,9 +180,7 @@ import BaseFloatingPill from '@/platform/ui/floating-bar/BaseFloatingPill.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
-import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
-import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
 import {
   getScorePageSize,
   PREVIEW_DEFAULT_ZOOM_PERCENT,
@@ -201,6 +199,7 @@ import {
   readA4PageBlob,
   setCurrentRender,
 } from '@/domains/score/preview/scorePreviewCache';
+import { buildScoreRenderCacheKey } from '@/domains/score/preview/scoreRenderCacheKey';
 import {
   buildExportFileName,
   triggerBlobDownload,
@@ -208,7 +207,7 @@ import {
 } from '@/domains/score/preview/services/scoreExportCanvas';
 import { runWorkerExport } from '@/domains/score/preview/services/workerExportService';
 import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
-import { activeTheme, isDark } from '@/platform/composables/useTheme';
+import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
@@ -254,9 +253,7 @@ let isPaneActive = true;
  *  LOADING 型不自动销毁，故用 id 手动 remove；首次构建（无页）仍由内容区居中加载框承担，不弹 Message */
 let updateMessageId: number | null = null;
 const showUpdateMessage = () => {
-  if (updateMessageId === null) {
-    updateMessageId = uiStore.message.loading('预览更新中…', { closable: false });
-  }
+  if (updateMessageId === null) updateMessageId = uiStore.message.loading('预览更新中…', { closable: false });
 };
 const dismissUpdateMessage = () => {
   if (updateMessageId !== null) {
@@ -265,33 +262,8 @@ const dismissUpdateMessage = () => {
   }
 };
 
-/** 内容缓存键：内容/调式/标题/变调夹/暗色/简写任一变化即视为失效并重新渲染。
- *  「显示页脚」刻意不在键内：页脚是独立合成层（见 services/footerOverlay），
- *  开关只影响叠在页图之上的页码层，既不该触发重渲染，也不该为同一首歌多存一份缓存。 */
-const buildContentKey = () => {
-  const song = scoreEditor.activeSong;
-  if (!song) return '';
-
-  // 以「当前乐谱各槽位实际引用的和弦渲染指纹」作为和弦维度：任一槽位引用的和弦姿势/名称变化
-  // 都使键失效。不能只按 chordsLookupMap（整个和弦库）的数量判定——排列「库中已存在」的和弦时
-  // 库数量不变，会命中旧的渲染缓存导致预览不更新。查不到的和弦以 ?<id> 占位兜底。
-  const refSignatures: string[] = [];
-  for (const slots of song.chordMap.values()) {
-    for (const chordId of [...slots.char.values(), ...slots.start, ...slots.end]) {
-      const chord = chordsLookupMap.value.get(chordId ?? '');
-      // 指纹不含 barres，须并拼横按签名（与 scoreExportCanvas 同构）：
-      // 否则仅改横按时键不变，预览/右键下载/PDF/ZIP 全部陈旧
-      refSignatures.push(
-        chord ? `${computeChordFingerprint(chord)}:${computeBarresSignature(chord.barres)}` : `?${chordId}`
-      );
-    }
-  }
-  refSignatures.sort();
-
-  // timeSignature 参与谱面绘制（页眉拍号标记），必须入键——否则改拍号只靠 _v${song.version}
-  // 侥幸失效（改拍号会 touchSong bump version，但键维度完整性不应依赖这条间接保证）
-  return `${song.id}_${song.title}_${song.singer}_${song.playKey}_ok${song.originalKey}_ts${song.timeSignature}_c${song.capo}_v${song.version}_${song.lyrics}_d${isDark.value}_sh${settingsStore.scoreChordShorthand}_br${settingsStore.scoreShowBarre ? 1 : 0}_al${settingsStore.scoreLayoutAlign}_fw${settingsStore.scoreLyricsFontWeight}_q${settingsStore.scoreExportQuality}_pm${settingsStore.scorePageMargin}_ps${settingsStore.scorePageSize}_fz${scoreEditor.previewFontScale}_fb${scoreEditor.previewFretboardScale}_ies${settingsStore.scoreIgnoreEmptySpace ? 1 : 0}_ref${refSignatures.length}_${refSignatures.join('|')}`;
-};
+/** 内容缓存键：失效维度与整曲长图导出同源（见 scoreRenderCacheKey），任一处加维度另一处自动跟上 */
+const buildContentKey = () => buildScoreRenderCacheKey(scoreEditor.activeSong, chordsLookupMap.value);
 
 /** 响应式内容键：内容/排版任一依赖变化即重算，作为「重渲染触发」的单一 watch 源 */
 const reactiveContentKey = computed(() => buildContentKey());
@@ -349,9 +321,7 @@ const generate = async (force = false) => {
     putCachedRender(contentKey, entry, song.id);
     applyEntry(entry);
   } catch (err) {
-    if (token === runToken) {
-      errorMessage.value = err instanceof Error ? err.message : '预览生成失败';
-    }
+    if (token === runToken) errorMessage.value = err instanceof Error ? err.message : '预览生成失败';
   } finally {
     if (token === runToken) {
       isRendering.value = false;
@@ -680,9 +650,7 @@ onActivated(async () => {
       currentContentKey = '';
       await generate();
     }
-  } else if (pages.value.length === 0 && hasLyricsText.value) {
-    await generate();
-  }
+  } else if (pages.value.length === 0 && hasLyricsText.value) await generate();
 
   await nextTick();
   // 恢复滚动位置（双轴）：浏览器在 detach→attach 时清零 scrollTop/scrollLeft，与「排列」区同源问题

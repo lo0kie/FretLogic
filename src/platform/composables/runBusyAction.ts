@@ -6,11 +6,14 @@
  */
 import { useUiStore } from '@/platform/store/uiStore';
 
-import type { Ref } from 'vue';
-
 export interface RunBusyActionOptions<T> {
-  /** 互斥进行中标记（storeToRefs 解出的 ref 或组件内 ref）；省略则不做重入守卫与 busy 置位 */
-  busy?: Ref<boolean>;
+  /**
+   * 互斥进行中标记；省略则不做重入守卫与 busy 置位。
+   * 接受任何「可读写的 boolean 容器」：storeToRefs/组件内的 Ref，以及 reactive 对象字段
+   * （用 `toRef(state, 'key')` 传入）。此前类型写死 `Ref<boolean>`，弹窗侧的 busy 挂在
+   * reactive 的 modalData 上塞不进来，只能把整条守卫流水线手抄一遍。
+   */
+  busy?: { value: boolean };
   /** loading message 文案；省略则不弹 loading（轻量快速动作避免 message 噪音） */
   loadingText?: string;
   /** 实际执行的异步动作 */
@@ -38,20 +41,19 @@ export async function runBusyAction<T>(opts: RunBusyActionOptions<T>): Promise<T
   if (opts.busy) opts.busy.value = true;
   let loadingMessageId: number | null = null;
   try {
-    if (opts.loadingText !== undefined) {
+    if (opts.loadingText !== undefined)
       loadingMessageId = uiStore.message.loading(opts.loadingText, { closable: false });
-    }
+
     const result = await opts.run();
     if (loadingMessageId !== null) uiStore.removeMessage(loadingMessageId);
-    if (opts.successText !== undefined) {
+    if (opts.successText !== undefined)
       uiStore.message.success(typeof opts.successText === 'function' ? opts.successText(result) : opts.successText);
-    }
+
     return result;
   } catch (err: unknown) {
     if (loadingMessageId !== null) uiStore.removeMessage(loadingMessageId);
-    if (opts.onError) {
-      opts.onError(err);
-    } else {
+    if (opts.onError) opts.onError(err);
+    else {
       if (opts.logPrefix) console.error(opts.logPrefix, err);
       uiStore.message.error(err instanceof Error ? err.message : (opts.errorFallback ?? '操作失败'));
     }

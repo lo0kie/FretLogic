@@ -71,15 +71,16 @@ export const findLastRowAt = (rows: readonly { top: number }[], y: number): numb
     if (rows[mid]!.top < y) {
       ans = mid;
       lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
+    } else hi = mid - 1;
   }
   return ans;
 };
 
 /** 窗口区间 [first, last]（闭区间）；last < first 表示该分区无可见行 */
-export type RowWindowRange = { first: number; last: number };
+export interface RowWindowRange {
+  first: number;
+  last: number;
+}
 
 /**
  * 分区行窗口化组合式函数：滚动时按视口位置重算每个分区应渲染的行区间。
@@ -127,9 +128,9 @@ export const useRowWindowing = <T>(options: {
     // 等值守卫：每滚动帧都会调用本函数，区间没动时赋新数组会白白触发下游（picker 整屏）
     // 重渲染——只有任一分区窗口真的变化才替换引用（同 useStickyHeads 的 sameSet 范式）
     const prev = windowRanges.value;
-    if (prev.length === next.length && prev.every((r, i) => r.first === next[i]!.first && r.last === next[i]!.last)) {
+    if (prev.length === next.length && prev.every((r, i) => r.first === next[i]!.first && r.last === next[i]!.last))
       return;
-    }
+
     windowRanges.value = next;
   };
 

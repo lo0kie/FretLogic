@@ -87,9 +87,9 @@ function upgrade(
       const store = schema.keyPath
         ? db.createObjectStore(storeName, { keyPath: schema.keyPath })
         : db.createObjectStore(storeName);
-      for (const [indexName, idx] of Object.entries(wantedIndexes)) {
-        store.createIndex(indexName, idx.keyPath, { unique: !!idx.unique });
-      }
+      for (const [indexName, idx] of Object.entries(wantedIndexes))
+        store.createIndex(indexName, idx.keyPath, { unique: Boolean(idx.unique) });
+
       continue;
     }
     // 已存在的 store：既要补建缺失索引，也要删除 SCHEMA 中不再声明的陈旧索引 ——
@@ -102,14 +102,11 @@ function upgrade(
       const indexName = store.indexNames.item(i);
       if (indexName && !wantedNames.has(indexName)) staleIndexNames.push(indexName);
     }
-    for (const indexName of staleIndexNames) {
-      store.deleteIndex(indexName);
-    }
-    for (const [indexName, idx] of Object.entries(wantedIndexes)) {
-      if (!store.indexNames.contains(indexName)) {
-        store.createIndex(indexName, idx.keyPath, { unique: !!idx.unique });
-      }
-    }
+    for (const indexName of staleIndexNames) store.deleteIndex(indexName);
+
+    for (const [indexName, idx] of Object.entries(wantedIndexes))
+      if (!store.indexNames.contains(indexName))
+        store.createIndex(indexName, idx.keyPath, { unique: Boolean(idx.unique) });
   }
 }
 
@@ -232,9 +229,8 @@ export const idb = {
     const db = await openDb();
     await guard('批量写入', { storeName }, async () => {
       const tx = db.transaction(storeName, 'readwrite');
-      for (const value of values) {
-        void tx.store.put(value);
-      }
+      for (const value of values) void tx.store.put(value);
+
       await tx.done;
     });
   },
@@ -243,9 +239,8 @@ export const idb = {
     const db = await openDb();
     await guard('批量删除', { storeName }, async () => {
       const tx = db.transaction(storeName, 'readwrite');
-      for (const key of keys) {
-        void tx.store.delete(key as IDBValidKey);
-      }
+      for (const key of keys) void tx.store.delete(key as IDBValidKey);
+
       await tx.done;
     });
   },
@@ -258,9 +253,8 @@ export const idb = {
     await guard('全量替换', { storeName }, async () => {
       const tx = db.transaction(storeName, 'readwrite');
       tx.store.clear();
-      for (const value of values) {
-        void tx.store.put(value);
-      }
+      for (const value of values) void tx.store.put(value);
+
       await tx.done;
     });
   },
