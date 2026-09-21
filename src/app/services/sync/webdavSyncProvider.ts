@@ -35,12 +35,11 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
     throw new SyncError('REQUEST_FAILED', 'WebDAV 服务器地址无效');
   }
   const isLocalDev = parsedServerUrl.hostname === 'localhost' || parsedServerUrl.hostname === '127.0.0.1';
-  if (parsedServerUrl.protocol !== 'https:' && !isLocalDev) {
+  if (parsedServerUrl.protocol !== 'https:' && !isLocalDev)
     throw new SyncError('REQUEST_FAILED', 'WebDAV 服务器必须使用 HTTPS（本地调试可使用 localhost）');
-  }
-  if (parsedServerUrl.username || parsedServerUrl.password) {
+
+  if (parsedServerUrl.username || parsedServerUrl.password)
     throw new SyncError('REQUEST_FAILED', 'WebDAV 地址不应内嵌账号密码，请分别填写用户名与密码字段');
-  }
 
   const serverBase = config.serverUrl.replace(/\/+$/, '');
   const fileUrl = `${serverBase}/${WEBDAV_REMOTE_FILE_PATH.replace(/^\/+/, '')}`;
@@ -83,9 +82,9 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
       acc += `/${seg}`;
       const res = await request({ method: 'MKCOL' }, acc);
       if (res.status === 201 || res.status === 200 || res.status === 405) continue;
-      if (res.status === 401 || res.status === 403) {
+      if (res.status === 401 || res.status === 403)
         throw new SyncError('REQUEST_FAILED', `WebDAV 创建目录失败（状态码 ${res.status}），请检查账号权限`);
-      }
+
       throw new SyncError('REQUEST_FAILED', `WebDAV 创建目录失败（状态码 ${res.status}）`);
     }
   };
@@ -133,9 +132,9 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
         },
         fileUrl
       );
-      if (response.status === 409 || response.status === 412) {
+      if (response.status === 409 || response.status === 412)
         throw new SyncError('CONFLICT', 'WebDAV 提示版本冲突：云端数据已被修改，请先拉取最新数据');
-      }
+
       if (!response.ok) throw new SyncError('REQUEST_FAILED', `WebDAV 服务器返回错误状态码：${response.status}`);
       const etag = response.headers.get('ETag') ?? '';
       return { sha: etag };
@@ -146,9 +145,9 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
       if (!response.ok) throw new SyncError('REQUEST_FAILED', `WebDAV 服务器返回错误状态码：${response.status}`);
       try {
         const parsed = (await response.json()) as { md5?: unknown; updatedAt?: unknown };
-        if (typeof parsed.md5 === 'string' && typeof parsed.updatedAt === 'number') {
+        if (typeof parsed.md5 === 'string' && typeof parsed.updatedAt === 'number')
           return { md5: parsed.md5, updatedAt: parsed.updatedAt };
-        }
+
         return null;
       } catch {
         return null; // meta 损坏视为无 meta，引导重传
@@ -169,16 +168,16 @@ export function createWebdavSyncProvider(config: WebdavSyncConfig): SyncProvider
       const viaProxy = Boolean(config.proxyUrl);
       const channel = viaProxy ? '经代理转发' : '直连';
       const response = await request({ method: 'PROPFIND', headers: { Depth: '0' } }, serverBase);
-      if (response.ok || response.status === 207) {
+      if (response.ok || response.status === 207)
         return config.username ? `WebDAV ${channel}可达，账号密码有效` : `WebDAV ${channel}可达（未配置账号）`;
-      }
-      if (response.status === 401 || response.status === 403) {
+
+      if (response.status === 401 || response.status === 403)
         throw new SyncError('REQUEST_FAILED', '认证失败：请检查用户名与密码');
-      }
-      if (response.status === 405) {
+
+      if (response.status === 405)
         // 服务器不支持 PROPFIND（非标准 WebDAV 实现），但服务本身有响应
         return `WebDAV ${channel}有响应（不支持 PROPFIND，请以实际同步结果为准）`;
-      }
+
       throw new SyncError('REQUEST_FAILED', `WebDAV 服务器返回错误状态码：${response.status}`);
     },
   };

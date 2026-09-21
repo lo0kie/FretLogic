@@ -6,17 +6,17 @@
  * 独立成模块的原因：provider 注册表、备份载荷构建（buildBackupPayload）整条链只在用户
  * 真正触发同步动作时才需要；状态 refs 在 syncState.ts（模块级单例，壳与实现共享）。
  */
-import { useStorage } from '@vueuse/core';
-
 import { FULL_BACKUP_SELECTION } from '@/app/services/backup/backupSelection';
 import { buildBackupPayloadResult } from '@/app/services/backup/buildBackupPayload';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
+import { useStorage } from '@/platform/composables/useStorage';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { MESSAGE_WARNING_DURATION_MS, STORAGE_KEYS } from '@/platform/utils/constants';
+import { logger } from '@/platform/utils/logger';
 
 import { computePayloadMaxUpdatedAt, computePayloadMd5 } from './payloadChecksum';
 import { SyncError } from './provider';
@@ -24,7 +24,8 @@ import { syncProviderRegistry } from './registry';
 import { isFetchingBranches, isPulling, isSyncing, isTestingConnection } from './syncState';
 import { resolvePushCredentialIssue } from './useSyncService';
 
-import type { SyncBranchesProvider, SyncMeta, SyncProvider, SyncProviderKind } from './provider';
+import type { SyncBranchesProvider, SyncConfig, SyncMeta, SyncProvider, SyncProviderKind } from './provider';
+import type { ProviderFactory } from './registry';
 import type { ImportExportPayload } from '@/app/types';
 import type { Ref } from 'vue';
 
@@ -40,15 +41,24 @@ const editorStore = useChordEditorStore();
 /** 按目标类型解析同步 Provider；配置无效时 message 并返回 null（契约：绝不抛出） */
 const resolveProvider = (errorPrefix: string, target: SyncProviderKind): SyncProvider | null => {
   const factory = syncProviderRegistry[target];
-  const resolved = factory.resolveConfig(settingsStore);
+  return openProvider(factory, factory.resolveConfig(settingsStore), errorPrefix);
+};
+
+/**
+ * 由已解析结果构造 Provider：配置无效或构造期抛错一律提示 + 返回 null（契约：绝不抛出）。
+ * create 会在构造期做凭据 / 地址校验并可能抛错（如 WebDAV 非 https、地址内嵌 userinfo）。
+ * 若在此不收敛，异常会逃逸到调用方（含启动期 checkCloudDataChange 的 void 调用）成为
+ * unhandled rejection，令云一致性检测静默失败（审计 二·1）。
+ */
+const openProvider = (
+  factory: ProviderFactory,
+  resolved: { config?: SyncConfig; error?: string },
+  errorPrefix: string
+): SyncProvider | null => {
   if (resolved.error || !resolved.config) {
     uiStore.message.error(`${errorPrefix}：${resolved.error ?? '配置无效'}`);
     return null;
   }
-  // create 会在构造期做凭据 / 地址校验并可能抛错（如 WebDAV 非 https、地址内嵌 userinfo）。
-  // 本函数契约是「配置无效返回 null、绝不抛出」，故在此收敛为提示 + null——否则异常会逃逸到
-  // 调用方（含启动期 checkCloudDataChange 的 void 调用）成为 unhandled rejection，
-  // 令云一致性检测静默失败（审计 二·1）。
   try {
     return factory.create(resolved.config);
   } catch (error) {
@@ -60,7 +70,7 @@ const resolveProvider = (errorPrefix: string, target: SyncProviderKind): SyncPro
 
 /** 统一同步错误提示：按 SyncError code 映射为用户可读文案，其余错误走通用提示 */
 const showSyncError = (prefix: string, err: unknown) => {
-  console.error('Cloud Sync Error:', err);
+  logger.error('sync', '云端同步失败', err);
   if (err instanceof SyncError) {
     const messageByCode: Record<SyncError['code'], string> = {
       FILE_NOT_FOUND: '云端文件不存在，请先执行一次上传',
@@ -74,9 +84,7 @@ const showSyncError = (prefix: string, err: unknown) => {
     uiStore.message.error(`${prefix}：${messageByCode[err.code]}`);
     return;
   }
-  if (err instanceof Error) {
-    uiStore.message.error(`${prefix}：云端操作失败，请检查网络或配置信息`);
-  }
+  if (err instanceof Error) uiStore.message.error(`${prefix}：云端操作失败，请检查网络或配置信息`);
 };
 
 /**
@@ -117,9 +125,8 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
     uiStore.message.error(`数据校验失败，已取消同步${reason}`);
     return false;
   }
-  if (warnings.length > 0) {
-    console.warn('[syncToRemote] 数据清洗提示:', warnings);
-  }
+  if (warnings.length > 0) logger.warn('sync', '数据清洗提示', warnings);
+
   // 上传：四种 provider 均支持独立 meta（server 的 pushMeta 为 no-op，md5 随 push 的 query 上传）。
   // 校验元数据分开写，数据源不带元数据，启动检测只拉最小 meta。
   {
@@ -135,9 +142,9 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
         // T2 最小防线：推送前重取云端 meta，若云端比本次负载新，说明其他设备在本地基线之后
         // 已更新过——直接覆盖会静默丢他们的数据，改为显式冲突让用户先拉取。
         const remoteMeta = await provider.fetchMeta();
-        if (remoteMeta && remoteMeta.updatedAt > meta.updatedAt && remoteMeta.md5 !== meta.md5) {
+        if (remoteMeta && remoteMeta.updatedAt > meta.updatedAt && remoteMeta.md5 !== meta.md5)
           throw new SyncError('CONFLICT', '云端数据比本地更新（可能其他设备已同步），请先拉取合并后再推送');
-        }
+
         // meta 随 push 传入：server 侧拼 query 需要 md5，复用这里算好的值，
         // 避免 serverSyncProvider 内部为拼 query 把整包再 stringify 一遍
         await provider.push(payload, meta);
@@ -215,12 +222,8 @@ export const fetchGithubBranches = async (target: SyncProviderKind): Promise<boo
 export const testConnection = async (target: SyncProviderKind): Promise<boolean> => {
   if (isTestingConnection.value) return false;
   const factory = syncProviderRegistry[target];
-  const resolved = factory.resolveTestConfig(settingsStore);
-  if (resolved.error || !resolved.config) {
-    uiStore.message.error(`测试连接失败：${resolved.error ?? '配置无效'}`);
-    return false;
-  }
-  const provider = factory.create(resolved.config);
+  const provider = openProvider(factory, factory.resolveTestConfig(settingsStore), '测试连接失败');
+  if (!provider) return false;
 
   const detail = await runCloudAction({
     busy: isTestingConnection,
@@ -270,15 +273,15 @@ const SYNC_DIRECTION_TEXT: Record<SyncDirection, string> = {
 const buildSyncFixAction = (
   direction: SyncDirection
 ): { actionText: string; onAction: () => Promise<void> } | undefined => {
-  if (direction === 'local-newer') {
+  if (direction === 'local-newer')
     return {
       actionText: '上传至云端',
       onAction: async () => {
         await syncToRemote();
       },
     };
-  }
-  if (direction === 'cloud-newer') {
+
+  if (direction === 'cloud-newer')
     return {
       actionText: '拉取云端覆盖本地',
       onAction: async () => {
@@ -286,7 +289,7 @@ const buildSyncFixAction = (
         if (payload) applyOverwriteWithCloud(payload);
       },
     };
-  }
+
   return undefined;
 };
 
@@ -336,7 +339,7 @@ export const checkCloudDataChange = async (): Promise<void> => {
     // 四种 provider 均支持独立 meta：只拉最小元数据，避免每次启动下载全量数据源
     const meta = await provider.fetchMeta();
     if (!meta) {
-      uiStore.message.warning('云端尚无校验元数据，无法自动检测一致性，建议在同步设置中先上传一次', {
+      uiStore.message.warning('无法检测云端一致性，请先上传数据', {
         duration: MESSAGE_WARNING_DURATION_MS,
       });
       return;
@@ -346,11 +349,11 @@ export const checkCloudDataChange = async (): Promise<void> => {
   } catch (error) {
     // 云端从未上传过数据（无文件）：提示引导首次上传建立校验基准；其余启动期异常静默跳过
     if (error instanceof SyncError && error.code === 'FILE_NOT_FOUND') {
-      uiStore.message.warning('云端暂无同步数据，建议在同步设置中上传一次，以开启数据一致性检测', {
+      uiStore.message.warning('云端暂无同步数据，请先上传数据', {
         duration: MESSAGE_WARNING_DURATION_MS,
       });
       return;
     }
-    console.warn('[checkCloudDataChange] 云端比对失败，已跳过', error);
+    logger.warn('sync', '云端比对失败，已跳过', error);
   }
 };

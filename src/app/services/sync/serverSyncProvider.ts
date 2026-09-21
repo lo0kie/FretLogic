@@ -117,9 +117,8 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
         },
         pushUrl
       );
-      if (response.status === 412) {
-        throw new SyncError('CONFLICT', '服务端数据已被其他设备更新，请先拉取最新数据');
-      }
+      if (response.status === 412) throw new SyncError('CONFLICT', '服务端数据已被其他设备更新，请先拉取最新数据');
+
       if (!response.ok) {
         const errorDetail = await extractApiErrorDetail(response);
         throw new SyncError(
@@ -134,13 +133,17 @@ export function createServerSyncProvider(config?: Partial<ServerSyncConfig>): Sy
       const response = await request({ method: 'GET' }, metaUrl);
       if (response.status === 404) return null; // 云端无 meta（旧数据/从未上传）
       if (!response.ok) {
-        throw new SyncError('REQUEST_FAILED', `服务器返回错误状态码 ${response.status}`);
+        const errorDetail = await extractApiErrorDetail(response);
+        throw new SyncError(
+          'REQUEST_FAILED',
+          `服务器返回错误状态码 ${response.status}${errorDetail ? ` (${errorDetail})` : ''}`
+        );
       }
       try {
         const body = (await response.json()) as { md5?: unknown; updatedAt?: unknown };
-        if (typeof body.md5 === 'string' && typeof body.updatedAt === 'number') {
+        if (typeof body.md5 === 'string' && typeof body.updatedAt === 'number')
           return { md5: body.md5, updatedAt: body.updatedAt };
-        }
+
         return null;
       } catch {
         return null; // meta 损坏视为无 meta，引导重传

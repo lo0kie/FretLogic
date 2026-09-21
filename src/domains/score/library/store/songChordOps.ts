@@ -24,9 +24,9 @@ export interface RemovedChordBinding {
 /** 深拷贝嵌套 chordMap（换引用时保证与旧 map 完全隔离） */
 const cloneChordMap = (chordMap: Map<LineId, ChordLineSlots>): Map<LineId, ChordLineSlots> => {
   const copy = new Map<LineId, ChordLineSlots>();
-  for (const [lineId, slots] of chordMap) {
+  for (const [lineId, slots] of chordMap)
     copy.set(lineId, { char: new Map(slots.char), start: [...slots.start], end: [...slots.end] });
-  }
+
   return copy;
 };
 
@@ -45,14 +45,12 @@ export const unbindChordIdsFromSongs = (
     const newMap = new Map<LineId, ChordLineSlots>();
     for (const [lineId, slots] of song.chordMap) {
       const char = new Map<number, ChordId>();
-      for (const [index, boundChordId] of slots.char) {
+      for (const [index, boundChordId] of slots.char)
         if (boundChordId && targetIds.has(boundChordId)) {
           removedBindings.push({ songId: song.id, slotKey: charKey(lineId, index), chordId: boundChordId });
           hasChanged = true;
-        } else {
-          char.set(index, boundChordId);
-        }
-      }
+        } else char.set(index, boundChordId);
+
       const start: ChordId[] = [];
       slots.start.forEach((boundChordId, index) => {
         if (boundChordId && targetIds.has(boundChordId)) {
@@ -62,22 +60,16 @@ export const unbindChordIdsFromSongs = (
             chordId: boundChordId,
           });
           hasChanged = true;
-        } else {
-          start.push(boundChordId);
-        }
+        } else start.push(boundChordId);
       });
       const end: ChordId[] = [];
       slots.end.forEach((boundChordId, index) => {
         if (boundChordId && targetIds.has(boundChordId)) {
           removedBindings.push({ songId: song.id, slotKey: chordSlotKey(lineId, 'end', index), chordId: boundChordId });
           hasChanged = true;
-        } else {
-          end.push(boundChordId);
-        }
+        } else end.push(boundChordId);
       });
-      if (char.size > 0 || start.length > 0 || end.length > 0) {
-        newMap.set(lineId, { char, start, end });
-      }
+      if (char.size > 0 || start.length > 0 || end.length > 0) newMap.set(lineId, { char, start, end });
     }
     if (hasChanged) {
       song.chordMap = newMap;
@@ -127,11 +119,9 @@ export const restoreChordBindingsToSongs = (
     // 边槽列表可能已缩短：钳到「追加到末位」；若目标位已被占用则跳过（下方统一判定）
     const list = getEdgeChords(target.chordMap, parsed.lineId, parsed.type);
     const idx = Math.min(parsed.index, list.length);
-    if (idx < list.length) {
-      list[idx] = chordId;
-    } else {
-      list.push(chordId);
-    }
+    if (idx < list.length) list[idx] = chordId;
+    else list.push(chordId);
+
     setEdgeChords(target.chordMap, parsed.lineId, parsed.type, list);
     changedSongs.set(songId, target);
   });

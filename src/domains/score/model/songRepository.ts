@@ -10,15 +10,15 @@ import type { ChordLineSlots, LineId, Song } from '@/domains/score/types';
 
 type RawRecord = Record<string, unknown>;
 
-const isRecord = (value: unknown): value is RawRecord => !!value && typeof value === 'object' && !Array.isArray(value);
+const isRecord = (value: unknown): value is RawRecord =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
 const isValidTimestamp = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0;
 
-const sanitizeChordMap = (chordMap: unknown): Map<LineId, ChordLineSlots> => {
+const sanitizeChordMap = (chordMap: unknown): Map<LineId, ChordLineSlots> =>
   // 兼容旧扁平对象 / 新嵌套对象 / 嵌套 Map 三态；key/value 已通过 plainToChordMap 过滤，品牌收窄信任该过滤
-  return plainToChordMap(chordMap) as Map<LineId, ChordLineSlots>;
-};
+  plainToChordMap(chordMap) as Map<LineId, ChordLineSlots>;
 
 export type SongDraft = Omit<Song, 'createdAt' | 'updatedAt'> & Partial<Pick<Song, 'createdAt' | 'updatedAt'>>;
 
@@ -66,9 +66,8 @@ export const sanitizeSongs = (songs: unknown): SongDraft[] => {
 export const sanitizeSongList = (songs: unknown[], validChordIds?: Set<string>): Song[] => {
   const drafts = sanitizeSongs(songs);
   const now = Date.now();
-  if (!validChordIds) {
-    return fillMissingTimestamps(drafts, now);
-  }
+  if (!validChordIds) return fillMissingTimestamps(drafts, now);
+
   return fillMissingTimestamps(
     drafts.map(song => {
       const { map } = pruneOrphanChordRefs(song.chordMap, validChordIds, { preserveUnknown: true });

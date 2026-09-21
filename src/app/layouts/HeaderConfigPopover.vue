@@ -8,7 +8,7 @@
   >
     <template v-if="isScoreRoute">
       <BaseCollapse
-        v-scroll-into-view.y.delay-220="isScoreGroupOpen('layout')"
+        v-scroll-into-view.y.delay-220.skip-mount="isScoreGroupOpen('layout')"
         :class="scoreOpenGroup === 'layout' ? 'bg-tint-panelhover-50!' : ''"
         :description="layoutGroupDescription"
         :expanded="scoreOpenGroup === 'layout'"
@@ -72,7 +72,7 @@
               />
             </BaseFormRow>
 
-            <BaseFormRow help="歌词中未挂和弦的空格不再占位，排版更紧凑" label="忽略空格">
+            <BaseFormRow help="仅预览与导出图生效：歌词中未挂和弦的空格不再占位，排版更紧凑" label="忽略空格">
               <BaseSwitch v-model="settingsStore.scoreIgnoreEmptySpace" aria-label="是否让无和弦的空格不占位" />
             </BaseFormRow>
           </template>
@@ -80,7 +80,7 @@
       </BaseCollapse>
 
       <BaseCollapse
-        v-scroll-into-view.y.delay-220="isScoreGroupOpen('display')"
+        v-scroll-into-view.y.delay-220.skip-mount="isScoreGroupOpen('display')"
         :class="scoreOpenGroup === 'display' ? 'bg-tint-panelhover-50!' : ''"
         :description="displayGroupDescription"
         :expanded="scoreOpenGroup === 'display'"
@@ -110,7 +110,7 @@
 
       <BaseCollapse
         v-if="isPreviewTab"
-        v-scroll-into-view.y.delay-220="isScoreGroupOpen('export')"
+        v-scroll-into-view.y.delay-220.skip-mount="isScoreGroupOpen('export')"
         :class="scoreOpenGroup === 'export' ? 'bg-tint-panelhover-50!' : ''"
         :expanded="scoreOpenGroup === 'export'"
         @update:expanded="toggleScoreGroup('export', $event)"
@@ -157,7 +157,7 @@
 
     <template v-else>
       <BaseCollapse
-        v-scroll-into-view.y.delay-220="isWorkbenchGroupOpen('timbre')"
+        v-scroll-into-view.y.delay-220.skip-mount="isWorkbenchGroupOpen('timbre')"
         :class="workbenchOpenGroup === 'timbre' ? 'bg-tint-panelhover-50!' : ''"
         :expanded="workbenchOpenGroup === 'timbre'"
         @update:expanded="toggleWorkbenchGroup('timbre', $event)"
@@ -226,7 +226,7 @@
       </BaseCollapse>
 
       <BaseCollapse
-        v-scroll-into-view.y.delay-220="isWorkbenchGroupOpen('effect')"
+        v-scroll-into-view.y.delay-220.skip-mount="isWorkbenchGroupOpen('effect')"
         :class="workbenchOpenGroup === 'effect' ? 'bg-tint-panelhover-50!' : ''"
         :expanded="workbenchOpenGroup === 'effect'"
         @update:expanded="toggleWorkbenchGroup('effect', $event)"
@@ -368,6 +368,11 @@ function toggleWorkbenchGroup(group: '' | 'timbre' | 'effect', value: boolean) {
  * 展开判定：供 v-scroll-into-view 在分组展开（false→true）时，待高度过渡（--duration-base: 0.18s）
  * 稳定后把该分组头部滚入弹层可视区顶部（.delay-220 即过渡时长）。头部按钮本身带 scroll-mt-2 保证 8px 上边距。
  * 展开为排他手风琴，故任意时刻仅一个分组为 true，天然只滚动刚打开的那一组。
+ *
+ * 各处都挂 .skip-mount（指令只在挂载后的激活态变化时才滚动）：展开态是会话级记忆，重开弹层时
+ * 默认分组在挂载那一刻就已经是 true，指令的挂载分支（同样走 .delay-220，落在入场动画之后）
+ * 会把该分组段滚回视口，把下方 watch 刚恢复好的停留位置顶掉——现象就是「重开、动画结束后自己
+ * 往上跳一段」。跳过挂载触发后，首次定位完全归滚动位置恢复，指令只管用户点开另一组时的对焦。
  */
 const isScoreGroupOpen = (group: '' | 'layout' | 'display' | 'export'): boolean => scoreOpenGroup.value === group;
 const isWorkbenchGroupOpen = (group: '' | 'timbre' | 'effect'): boolean => workbenchOpenGroup.value === group;
@@ -388,6 +393,8 @@ function handleScroll() {
 /**
  * 浮层以 v-if 在重建/换绑容器后默认 scrollTop=0，这里在容器重建（scrollRef 换绑）后立即恢复
  * 会话级滚动位置，保证重新打开时不闪回顶部。
+ * 恢复是重开时**唯一**的定位动作：分组头上的 v-scroll-into-view 一律 .skip-mount，
+ * 不会在挂载后（哪怕延迟 220ms）再来把它顶走。
  *
  * 历史说明：此处曾有一套「MutationObserver 监听 -leave- 类 + rAF 逐帧贴回 scrollTop」的离场保持机制，
  * 用于对抗"关闭瞬间浏览器把 scrollTop 静默钳回 0"。逐帧采样（scrollTop / scrollHeight / clientHeight /

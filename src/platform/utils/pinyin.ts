@@ -6,47 +6,40 @@
  * 边界锚点本身已按拼音序（即 collator 顺序）排列，故分组键与排序由同一 collator 驱动、二者天然一致。
  *
  * 说明：分组键仅用于 A-Z 导航与同组聚合；个别字受 ICU 拼音表差异影响可能落在相邻字母，
- * 已知偏差字通过 PINYIN_OVERRIDES（见 pinyinOverrides.ts，全量比对自动生成）修正。
+ * 已知偏差字通过 PINYIN_OVERRIDES（见 data/pinyin-overrides.json，由 scripts/generate-pinyin-overrides.mjs 全量比对生成）修正。
  */
-import { registerCache } from './cacheRegistry';
+import rawPinyinBoundaries from '@data/pinyin-boundaries.json';
+import rawPinyinOverrides from '@data/pinyin-overrides.json';
+
+import { registerCache } from './cache';
 import { estimateValueBytes } from './common';
-import { PINYIN_OVERRIDES } from './pinyinOverrides';
+
+/** 拼音分组例外表（生成物，见 data/pinyin-overrides.json）：
+ *  JSON 导入的推导类型是「无索引签名的字面量对象」，用 string 逐字索引会触发 TS7053，
+ *  故在此收敛为 Record 形状后再消费。表由 scripts/generate-pinyin-overrides.mjs 生成，勿手改。 */
+const PINYIN_OVERRIDES = rawPinyinOverrides as Readonly<Record<string, string>>;
 
 const collator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'variant' });
 
-// 拼音首字母边界锚点（无 I/U/V：普通话无对应音节声母）。
-// 每个锚点取该字母拼音序最靠前的常用字；collator 顺序即拼音序，故锚点已按 A→Z 升序。
-const PINYIN_BOUNDARIES: readonly (readonly [string, string])[] = [
-  ['A', '阿'],
-  ['B', '八'],
-  ['C', '擦'],
-  ['D', '搭'],
-  ['E', '额'],
-  ['F', '发'],
-  ['G', '噶'],
-  ['H', '哈'],
-  ['J', '击'],
-  ['K', '喀'],
-  ['L', '垃'],
-  ['M', '妈'],
-  ['N', '拿'],
-  ['O', '哦'],
-  ['P', '趴'],
-  ['Q', '七'],
-  ['R', '然'],
-  ['S', '撒'],
-  ['T', '塌'],
-  ['W', '挖'],
-  ['X', '昔'],
-  ['Y', '呀'],
-  ['Z', '匝'],
-];
+/** data/pinyin-boundaries.json 的形状：JSON 导入推导出的是 `string[][]`，此处收敛为只读元组对 */
+interface PinyinBoundariesJson {
+  boundaries: readonly (readonly [string, string])[];
+}
+
+/**
+ * 拼音首字母边界锚点（无 I/U/V：普通话无对应音节声母）：每个锚点取该字母拼音序最靠前的常用字，
+ * collator 顺序即拼音序，故锚点已按 A→Z 升序。
+ *
+ * 与生成脚本 `scripts/generate-pinyin-overrides.mjs` **共用** `data/pinyin-boundaries.json`：
+ * 生成覆盖表靠的就是「用同一套锚点算 ICU 分组键」，此前两处各硬编码一份、靠注释要求人工同步。
+ */
+const PINYIN_BOUNDARIES = (rawPinyinBoundaries as unknown as PinyinBoundariesJson).boundaries;
 
 const ASCII_LETTER_RE = /^[a-zA-Z]$/;
 const CJK_RE = /^[一-龥]$/;
 const DIGIT_RE = /^[0-9]$/;
 
-// 拼音分组例外表见 pinyinOverrides.ts：U+4E00–U+9FFF 全量比对 pinyin-pro 首字母生成（803 条）。
+// 拼音分组例外表见 data/pinyin-overrides.json：U+4E00–U+9FFF 全量比对 pinyin-pro 首字母生成（803 条）。
 
 /** 记忆表容量上限：超出整体清空。值为标题 + 几十字节的元信息（纯文本小数据），
  *  上限与其余文本级缓存统一取 4096——按整个乐库的标题量级绰绰有余，正常不触发；
@@ -87,7 +80,7 @@ const getTitleMeta = (title: string): TitleMeta => {
   else if (ASCII_LETTER_RE.test(ch)) groupKey = ch.toUpperCase();
   else if (DIGIT_RE.test(ch) || !CJK_RE.test(ch)) groupKey = '#';
   else {
-    let prev = PINYIN_BOUNDARIES[0]![0];
+    let [prev] = PINYIN_BOUNDARIES[0]!;
     for (const [letter, anchor] of PINYIN_BOUNDARIES) {
       if (collator.compare(ch, anchor) < 0) break;
       prev = letter;

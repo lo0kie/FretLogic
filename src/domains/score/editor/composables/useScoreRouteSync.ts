@@ -125,12 +125,8 @@ function createScoreRouteSync(): ScoreRouteSyncApi {
         const songId = idResult.data;
         if (songStore.songs.some(s => s.id === songId)) {
           if (scoreEditor.activeSongId !== songId) scoreEditor.setActiveSong(songId);
-        } else {
-          void router.replace({ query: { ...route.query, id: undefined } });
-        }
-      } else if (!freshEntry && scoreEditor.activeSongId !== null) {
-        scoreEditor.setActiveSong(null);
-      }
+        } else void router.replace({ query: { ...route.query, id: undefined } });
+      } else if (!freshEntry && scoreEditor.activeSongId !== null) scoreEditor.setActiveSong(null);
 
       // 2. 同步主 Tab：合法性结合「是否有歌词」守卫；tab=edit 为默认态，从 URL 中省略
       const tabResult = QUERY_TAB.safeParse(queryTab);
@@ -143,9 +139,7 @@ function createScoreRouteSync(): ScoreRouteSyncApi {
             uiStore.message.warning('请先在“编辑歌词”模式下输入歌词内容');
           }
           void router.replace({ query: { ...route.query, tab: undefined } });
-        } else if (scoreEditor.activeTab !== tab) {
-          scoreEditor.activeTab = tab;
-        }
+        } else if (scoreEditor.activeTab !== tab) scoreEditor.activeTab = tab;
       }
     };
 

@@ -9,7 +9,7 @@
  * - 写操作 POST 校验 `Authorization: Bearer <SERVER_TOKEN>`（环境变量 / secret），防止他人覆盖云端数据；
  * - GET /auth-check 仅做写鉴权探测、不落库，供前端「测试连接」区分有无 Token（避免真实 POST 污染历史版本）；
  * - POST 支持 `If-Match` 条件写：以前端 HEAD 拿到的 ETag 为基线比对，不一致即 412，防止并发覆盖；
- * - 附带永久历史版本归档（sync_history）与轻量校验元数据（data_md5 + data_updated_at，供前端启动时只拉最小数据比对）。
+ * - 附带历史版本归档（sync_history，按 SYNC_HISTORY_LIMIT 滚动保留最近若干版）与轻量校验元数据（data_md5 + data_updated_at，供前端启动时只拉最小数据比对）。
  */
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -55,7 +55,7 @@ app.use(
   })
 );
 
-// 最新快照表（含 data_md5 / data_updated_at 校验列）+ 永久历史表
+// 最新快照表（含 data_md5 / data_updated_at 校验列）+ 历史表（每次写入追加一行，按 SYNC_HISTORY_LIMIT 滚动裁剪）
 // 两个时间戳分开放，语义不同、不可互相替代：
 //  - updated_at      = 服务端写入时刻（谁在什么时候推的）
 //  - data_updated_at = 载荷自身的 maxUpdatedAt（数据内容最后被修改的时间，客户端随 POST 提交）

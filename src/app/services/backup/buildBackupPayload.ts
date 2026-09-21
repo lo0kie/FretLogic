@@ -4,11 +4,12 @@
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
+import { logger } from '@/platform/utils/logger';
 
-import { FULL_BACKUP_SELECTION } from './useImportExportService';
+import { FULL_BACKUP_SELECTION } from './backupSelection';
 
-import type { BackupSelection } from './useImportExportService';
 import type { ImportExportPayload, SyncSettingsBackup } from '@/app/types';
+import type { BackupSelection } from '@/app/types/payload';
 
 /**
  * 从当前 store 快照生成经 validate 清洗后的备份包（v5 起可包含同步配置，v6 起携带偏好设置）。
@@ -46,13 +47,10 @@ export async function buildBackupPayloadResult(options?: BuildBackupOptions): Pr
   let chords = baseChords;
   if (selection.songs && !selection.chords) {
     const referencedIds = new Set<string>();
-    for (const song of songs) {
-      for (const slots of song.chordMap.values()) {
-        for (const id of [...slots.char.values(), ...slots.start, ...slots.end]) {
-          if (id) referencedIds.add(id);
-        }
-      }
-    }
+    for (const song of songs)
+      for (const slots of song.chordMap.values())
+        for (const id of [...slots.char.values(), ...slots.start, ...slots.end]) if (id) referencedIds.add(id);
+
     const existingIds = new Set(baseChords.map(c => c.id));
     const referenced = chordStore.savedChordsList.filter(c => referencedIds.has(c.id) && !existingIds.has(c.id));
     chords = [...baseChords, ...referenced];
@@ -129,7 +127,7 @@ export async function buildBackupPayloadResult(options?: BuildBackupOptions): Pr
   const { validateImportExportPayload } = await import('@/app/services/validation/payload');
   const { isValid, payload, issues, warnings = [] } = validateImportExportPayload(raw, { mode });
   if (!isValid || !payload) {
-    console.error('[buildBackupPayload] invalid:', issues);
+    logger.error('backup', '备份包构造校验失败', issues);
     return { payload: null, issues, warnings };
   }
   return { payload, issues: [], warnings };

@@ -67,13 +67,11 @@ const resolvedComponent = computed(() => ICON_REGISTRY[name] || null);
 // 未注册的图标名（拼写错误 / 后端动态返回的图标名强转为 IconName）会静默渲染成空白，
 // 既看不出"没传"也看不出"传错"，排查成本极高——开发期显式告警。
 // 用 watchEffect 而非 setup 内一次性判断：图标名可能随数据动态变化。
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV)
   watchEffect(() => {
-    if (name && !resolvedComponent.value) {
+    if (name && !resolvedComponent.value)
       logger.warn('BaseIcon', `图标名 "${name}" 未在 ICON_REGISTRY 中注册，图标不会渲染`);
-    }
   });
-}
 
 const customStyle = computed<CSSProperties>(() => {
   const style: CSSProperties = {};
@@ -84,17 +82,11 @@ const customStyle = computed<CSSProperties>(() => {
   style.height = formattedSize;
   style.fontSize = formattedSize;
 
-  if (iconStroke !== undefined) {
-    style.strokeWidth = resolveIconStroke(iconStroke);
-  }
+  if (iconStroke !== undefined) style.strokeWidth = resolveIconStroke(iconStroke);
 
-  if (color) {
-    style.color = color;
-  }
+  if (color) style.color = color;
 
-  if (rotate !== undefined) {
-    style.transform = `rotate(${rotate}deg)`;
-  }
+  if (rotate !== undefined) style.transform = `rotate(${rotate}deg)`;
 
   return style;
 });

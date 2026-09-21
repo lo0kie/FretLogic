@@ -109,10 +109,10 @@ const handleToggleBarre = (barre: BarreEntity) => {
   if (existsIndex >= 0) {
     const filtered = current.filter((_, idx) => idx !== existsIndex);
     next = filtered.length > 0 ? filtered : undefined;
-  } else {
+  } else
     // 保留入参携带的 finger（持久化字段，导出文本指法依赖它）；手工重建会把它丢掉
     next = [...current, { ...barre }];
-  }
+
   emit('update:barres', next);
 };
 
@@ -129,9 +129,7 @@ const inputChordName = ref(displayChordName.value);
 watch(
   displayChordName,
   newName => {
-    if (!isInputFocused.value) {
-      inputChordName.value = newName;
-    }
+    if (!isInputFocused.value) inputChordName.value = newName;
   },
   { immediate: true }
 );
@@ -184,9 +182,7 @@ const commitOrRevert = (rawText: string) => {
 const handleEscape = () => {
   const isChanged = inputChordName.value.trim() !== displayChordName.value.trim();
   inputChordName.value = displayChordName.value;
-  if (isChanged) {
-    uiStore.message.info('已取消编辑');
-  }
+  if (isChanged) uiStore.message.info('已取消编辑');
 };
 
 /**

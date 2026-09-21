@@ -99,7 +99,7 @@
       <!-- O8：导入覆盖不可逆，明示本机将被整体替换的规模（和弦库/乐谱库是覆盖式写入） -->
       <BaseFormRow
         v-if="importAvailability.chords || importAvailability.songs"
-        help="导入按所选类别整库覆盖：本机对应类别现有数据将被替换且不可恢复"
+        help="本机对应数据将被替换且不可恢复"
         label="覆盖范围"
       >
         <div class="text-2xs whitespace-nowrap text-fg-muted">

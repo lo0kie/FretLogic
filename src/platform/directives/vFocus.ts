@@ -1,6 +1,7 @@
 import { nextTick } from 'vue';
 
 import { FOCUS_DEFAULT_DELAY_MS } from '@/platform/utils/constants';
+import { FOCUSABLE_SELECTOR } from '@/platform/utils/dom';
 
 import type { Directive } from 'vue';
 
@@ -24,9 +25,6 @@ export type FocusBinding = boolean | FocusOptions | null | undefined;
 
 const timerMap = new WeakMap<HTMLElement, number>();
 
-const FOCUSABLE_SELECTOR =
-  'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
-
 /** 定位实际聚焦目标：宿主自身可聚焦则直接用，否则在其内部按选择器查找第一个可聚焦元素。 */
 const findFocusTarget = (el: HTMLElement): HTMLElement | null => {
   if (
@@ -37,9 +35,8 @@ const findFocusTarget = (el: HTMLElement): HTMLElement | null => {
     el.isContentEditable ||
     (el.hasAttribute('tabindex') && el.getAttribute('tabindex') !== '-1')
   ) {
-    if ('disabled' in el && Boolean((el as HTMLButtonElement).disabled)) {
-      return null;
-    }
+    if ('disabled' in el && Boolean((el as HTMLButtonElement).disabled)) return null;
+
     return el;
   }
   return el.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
@@ -63,16 +60,13 @@ const executeFocus = (el: HTMLElement, modifiers?: Record<string, boolean>, opti
           ? 'all'
           : undefined);
 
-  if (cursorMode) {
+  if (cursorMode)
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-      if (cursorMode === 'start') {
-        target.setSelectionRange(0, 0);
-      } else if (cursorMode === 'end') {
+      if (cursorMode === 'start') target.setSelectionRange(0, 0);
+      else if (cursorMode === 'end') {
         const len = target.value.length;
         target.setSelectionRange(len, len);
-      } else if (cursorMode === 'all') {
-        target.select();
-      }
+      } else if (cursorMode === 'all') target.select();
     } else if (target.isContentEditable) {
       const selection = window.getSelection();
       if (!selection) return;
@@ -83,13 +77,11 @@ const executeFocus = (el: HTMLElement, modifiers?: Record<string, boolean>, opti
       } else if (cursorMode === 'end') {
         range.selectNodeContents(target);
         range.collapse(false);
-      } else if (cursorMode === 'all') {
-        range.selectNodeContents(target);
-      }
+      } else if (cursorMode === 'all') range.selectNodeContents(target);
+
       selection.removeAllRanges();
       selection.addRange(range);
     }
-  }
 };
 
 /** 触发聚焦的时机控制：带 delay 时用定时器延迟执行，否则等 nextTick；重复触发前先清理旧定时器。 */
@@ -110,9 +102,7 @@ const triggerFocusWithTiming = (el: HTMLElement, modifiers?: Record<string, bool
       executeFocus(el, modifiers, options);
     }, delayMs);
     timerMap.set(el, timer);
-  } else {
-    nextTick(() => executeFocus(el, modifiers, options));
-  }
+  } else nextTick(() => executeFocus(el, modifiers, options));
 };
 
 /** 判断绑定值是否为配置对象（区别于布尔开关）。 */

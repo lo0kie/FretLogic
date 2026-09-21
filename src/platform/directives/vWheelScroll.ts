@@ -22,6 +22,8 @@
  * 普通 scrollLeft 赋值不会同步生效——回读仍是动画中的旧值，
  * 会造成「位移不按真实距离映射」且「倍率被动画吞掉看不出差别」。
  */
+import { resolveWheelDeltaPx, toPixelDelta } from '@/platform/utils/dom';
+
 import type { Directive } from 'vue';
 
 /**
@@ -107,13 +109,9 @@ export type WheelScrollBinding = number | boolean | WheelScrollOptions | undefin
 /** 归一化指令配置：绑定值支持速度倍率/开关/选项对象，修饰符叠加并补齐默认值。 */
 const normalize = (value: WheelScrollBinding, modifiers?: Record<string, boolean>): WheelScrollOptions => {
   let opts: WheelScrollOptions = {};
-  if (typeof value === 'number') {
-    opts.speed = value;
-  } else if (typeof value === 'boolean') {
-    opts.disabled = !value;
-  } else if (value && typeof value === 'object') {
-    opts = { ...value };
-  }
+  if (typeof value === 'number') opts.speed = value;
+  else if (typeof value === 'boolean') opts.disabled = !value;
+  else if (value && typeof value === 'object') opts = { ...value };
 
   if (modifiers) {
     if (modifiers['smooth'] !== undefined) opts.smooth = Boolean(modifiers['smooth']);
@@ -130,17 +128,17 @@ const normalize = (value: WheelScrollBinding, modifiers?: Record<string, boolean
     if (modifiers['triple']) opts.triple = true;
   }
 
-  opts.speed = opts.speed ?? 1;
+  opts.speed ??= 1;
   // double / triple：滚动位移的倍率加成，叠加在最终倍率上（含绑定值 speed），
   // 故 speed=1.5 + double 得 3；两者按乘法复合（同时给出得 6 倍）——乘法可交换、次序无关，
   // 且不会静默丢弃其中之一；与 smooth / reverse 正交，可自由组合
   if (opts.double) opts.speed = (opts.speed ?? 1) * 2;
   if (opts.triple) opts.speed = (opts.speed ?? 1) * 3;
-  opts.prevent = opts.prevent ?? true;
-  opts.overscroll = opts.overscroll ?? 'contain';
+  opts.prevent ??= true;
+  opts.overscroll ??= 'contain';
   // edgeLock 只对 'auto' 有意义，但仍无条件补默认值：运行态不必再判 undefined，
   // 且 'contain' 途中切成 'auto' 的那一帧就已经有窗口值可用（updated 只做整体替换）
-  opts.edgeLock = opts.edgeLock ?? EDGE_LOCK_MS;
+  opts.edgeLock ??= EDGE_LOCK_MS;
   return opts;
 };
 
@@ -209,10 +207,6 @@ export const markWheelScrollSeen = (e: WheelEvent): void => {
 /** 本事件是否已被某处生效中的 v-wheel-scroll 策略看过（v-scrollbar 的 overlay 兜底据此决定是否接手） */
 export const isWheelScrollSeen = (e: WheelEvent): boolean => wheelScrollSeenEvents.has(e);
 
-/** 行单位（deltaMode=1）换算的行高基准：line-height 为 normal/auto 取不到时，
- *  回退为「字号 × 1.2」，与浏览器默认行盒比例一致 */
-const LINE_HEIGHT_FALLBACK_RATIO = 1.2;
-
 /**
  * 连续滚动判定窗口默认值（ms，edgeLock 的默认档）：两条滚轮事件间隔小于它即视为同一轮连续滚动
  * ——边界独占与「让位后不回收」都以这轮为界；间隔超过即视为用户停手后重新开滚的新手势。
@@ -224,39 +218,9 @@ const LINE_HEIGHT_FALLBACK_RATIO = 1.2;
 export const EDGE_LOCK_MS = 300;
 
 /**
- * deltaMode 归一化：把某一轴上的一段原始滚轮增量换算为像素。
- *
- * WheelEvent.deltaMode 有三种单位：0=像素 / 1=行 / 2=页。只有像素单位可直接当距离用；
- * 行与页必须按容器实际行高、可视尺寸换算——否则 Firefox（默认行单位，一格约 3 行）
- * 的增量会被当成 3px 处理，横向位移与原生纵向滚动手感完全脱节。
- *
- * 换算基准取**将要被滚的那个容器**（el）而非事件落点：交接给外层时，行高/页高得按外层容器
- * 自己的排版算，否则外层拿到的位移与它的滚动节奏对不上（见 handOffToOuter）。
- */
-const toPixelDelta = (e: WheelEvent, raw: number, el: HTMLElement, axis: 'x' | 'y'): number => {
-  if (raw === 0) return 0;
-
-  if (e.deltaMode === 1) {
-    const style = getComputedStyle(el);
-    const lineHeight = parseFloat(style.lineHeight);
-    const fallback = (parseFloat(style.fontSize) || 16) * LINE_HEIGHT_FALLBACK_RATIO;
-    return raw * (Number.isFinite(lineHeight) && lineHeight > 0 ? lineHeight : fallback);
-  }
-  // 页单位按目标容器该轴的可视尺寸折算：纵向取可视高，横向取可视宽
-  if (e.deltaMode === 2) return raw * (axis === 'y' ? el.clientHeight : el.clientWidth);
-  return raw;
-};
-
-/**
  * 把一次滚轮事件在**本容器主轴**（横向）上应产生的位移换算为像素（即真实滚动距离）。
- *
- * 主轴分量识别：触控板原生横滑优先取 deltaX，普通鼠标纵向滚轮取 deltaY。
+ * 实现见 @/platform/utils/dom（toPixelDelta / resolveWheelDeltaPx，与 v-scrollbar 共用）。
  */
-const resolveWheelDeltaPx = (e: WheelEvent, el: HTMLElement): number => {
-  const dominant: 'x' | 'y' = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? 'x' : 'y';
-  const raw = dominant === 'x' ? e.deltaX : e.deltaY !== 0 ? e.deltaY : e.deltaX;
-  return toPixelDelta(e, raw, el, dominant);
-};
 
 /** 读某轴当前的滚动位置 */
 const readOffset = (el: HTMLElement, axis: 'x' | 'y'): number => (axis === 'y' ? el.scrollTop : el.scrollLeft);
@@ -322,7 +286,7 @@ const scrollBy = (el: HTMLElement, axis: 'x' | 'y', delta: number, smooth?: bool
  * @returns 是否真的交出去了（false = 上级整条链都无处可滚，调用方应继续独占）
  */
 const handOffToOuter = (el: HTMLElement, e: WheelEvent, opts: WheelScrollOptions): boolean => {
-  const smooth = opts.smooth;
+  const { smooth } = opts;
   const multiplier = scrollMultiplier(opts);
   let node: HTMLElement | null = el.parentElement;
   while (node) {
@@ -400,10 +364,9 @@ const performSmoothScroll = (el: HTMLElement, axis: 'x' | 'y', scrollAmount: num
     cancelSmoothScroll(el);
     state.axis = axis;
     state.target = readOffset(el, axis);
-  } else if (state.rafId === null) {
+  } else if (state.rafId === null)
     // 若上一轮缓动已彻底停止，滚动位置可能已被外部点击或拖动改变，需以当前 DOM 实际位置重置基准
     state.target = readOffset(el, axis);
-  }
 
   // 累加位移并限制在合法滚动区间
   state.target = Math.max(0, Math.min(maxOffset(el, axis), state.target + scrollAmount));
@@ -537,20 +500,14 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
 
         // 走到这里代表本轮由本容器独占（含 'auto' 的边界滞留），默认行为一律抑制——
         // 否则即便不再位移，事件仍会把滚动链交给外层容器，独占形同虚设
-        if (handler.opts.prevent) {
-          e.preventDefault();
-        }
+        if (handler.opts.prevent) e.preventDefault();
 
-        if (handler.opts.stop) {
-          e.stopPropagation();
-        }
+        if (handler.opts.stop) e.stopPropagation();
 
         const notifyScroll = () => {
           const currentProgress = maxScrollLeft > 0 ? Math.min(1, Math.max(0, el.scrollLeft / maxScrollLeft)) : 0;
 
-          if (handler.opts.onScroll) {
-            handler.opts.onScroll(e, currentProgress);
-          }
+          if (handler.opts.onScroll) handler.opts.onScroll(e, currentProgress);
 
           el.dispatchEvent(
             new CustomEvent('wheel-scroll', {
@@ -568,9 +525,8 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
           }
         };
 
-        if (handler.opts.smooth) {
-          performSmoothScroll(el, 'x', scrollAmount, notifyScroll);
-        } else {
+        if (handler.opts.smooth) performSmoothScroll(el, 'x', scrollAmount, notifyScroll);
+        else {
           cancelSmoothScroll(el);
           // 瞬时写入（见 setScrollOffset）：保证单次滚轮位移 = 真实像素距离 × 倍率
           setScrollOffset(el, 'x', el.scrollLeft + scrollAmount);

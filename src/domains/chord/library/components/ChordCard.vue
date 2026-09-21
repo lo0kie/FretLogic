@@ -14,7 +14,7 @@
             'border-border-base bg-surface-panel-hover': isOpen,
           }"
           @click="handleCardClick()"
-          data-focusable-inline
+          data-focusable-outline
           class="chord-thumb-card relative flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border border-border-light bg-surface-body px-2 transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover active:border-border-base active:bg-surface-panel-hover"
         >
           <BaseBadge
@@ -22,6 +22,7 @@
             :title="variantBadgeTitle"
             :variant="isActive ? 'primary' : 'neutral'"
             @click.stop="toggleVariantsDropdown()"
+            data-ring-punchout
             appearance="filled"
             class="absolute -top-1 -right-1 z-card cursor-pointer border border-surface-body shadow-sm transition-all duration-fast ease-bounce"
             size="2xs"
@@ -98,9 +99,7 @@ const variantBadgeTitle = computed(() =>
     : `${props.cardData.variantCount} 个指法`
 );
 
-const activeChord = computed(() => {
-  return props.cardData.variants[activeVariantIndex.value] ?? props.cardData.mainChord;
-});
+const activeChord = computed(() => props.cardData.variants[activeVariantIndex.value] ?? props.cardData.mainChord);
 
 /** 用户点击和弦卡：选中当前展示的指法 */
 const handleCardClick = () => {
@@ -112,9 +111,7 @@ const switchVariant = (newIndex: number) => {
   if (props.isActive) {
     const target = props.cardData.variants[newIndex];
     if (target) editorStore.setEditor(target);
-  } else {
-    localVariantIndex.value = newIndex;
-  }
+  } else localVariantIndex.value = newIndex;
 };
 
 /** 用户点击计数徽标：循环切换到下一个指法 */
@@ -168,11 +165,8 @@ const menuItems = computed<MenuItem[]>(() => {
       icon: 'trash-2',
       danger: true,
       action: () => {
-        if (props.cardData.hasVariants) {
-          emit('delete-variants', props.cardData);
-        } else {
-          emit('delete', props.cardData.mainChord);
-        }
+        if (props.cardData.hasVariants) emit('delete-variants', props.cardData);
+        else emit('delete', props.cardData.mainChord);
       },
     },
   ];

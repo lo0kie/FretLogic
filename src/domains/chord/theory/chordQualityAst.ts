@@ -29,8 +29,14 @@
  * ===== 与旧结构的边界 =====
  * 本模块是纯函数 + 纯类型，不 import 旧模块、不接线。第 2 步起由 consumers 逐步切换。
  */
+import { QUALITY_TOKENS } from './chordQualityTokens';
 
+import type { QualityToken } from './chordQualityTokens';
 import type { AccidentalType, RootSegment } from '@/domains/chord/types';
+
+// token 表本体迁往 chordQualityTokens（数据表与逻辑分家）；此处原样重导出，既有 import 路径与导出面不变
+export { QUALITY_TOKENS };
+export type { QualityToken };
 
 // ============================================================
 // 一、音程度数记法
@@ -86,21 +92,6 @@ export interface ChordQualityAst {
 }
 
 /**
- * 带「来源 token」标记的解析结果。
- *
- * 为什么需要它：`add2` 与 `add9`（或 `add4` / `add11`）的 AST **完全相同**，
- * 靠 AST 反查 token 表必然取到表中靠前的那一条，`Cadd2` 会被渲染成 `Cadd9`。
- * 保留来源 token 就等于保留「用户当初写的是哪个同义写法」，渲染即可原样还原。
- * 这是旧枚举方案里 `add2` / `add9` 必须各占一行才能做到的同一件事，
- * 只是这里用「同 AST + 不同表现形式」表达，而非两条并列的字符串。
- */
-export interface ParsedQualityAst {
-  ast: ChordQualityAst;
-  /** 命中的 token id（同义写法之间的区分依据）；组合式兜底时为 undefined */
-  tokenId?: string;
-}
-
-/**
  * 和弦名 AST：根音 + 性质 + 可选斜杠低音。
  * 对应旧的 `ChordNameSegments`，但 `quality` 从字符串换成了结构化 AST。
  */
@@ -148,11 +139,6 @@ export const astToKey = (ast: ChordQualityAst): string => {
   ].join('|');
 };
 
-export const astEquals = (a: ChordQualityAst, b: ChordQualityAst): boolean => astToKey(a) === astToKey(b);
-
-/** 是否为大调系（三音为大三度）。无三音时（5 / no3 / sus）返回 false，由调用方按场景判定。 */
-export const isMajorFlavored = (ast: ChordQualityAst): boolean => ast.third === 'maj3';
-
 /** 是否为小调系（三音为小三度）。 */
 export const isMinorFlavored = (ast: ChordQualityAst): boolean => ast.third === 'min3';
 
@@ -173,9 +159,6 @@ export const isDimFlavored = (ast: ChordQualityAst): boolean =>
 /** 是否为半减（小七 + 减五）——`ø` 的判据，不再靠字符串特判。 */
 export const isHalfDiminished = (ast: ChordQualityAst): boolean =>
   ast.third === 'min3' && ast.fifth === 'dim5' && ast.seventh === 'min7';
-
-/** 是否为增系（五音增五）。 */
-export const isAugFlavored = (ast: ChordQualityAst): boolean => ast.fifth === 'aug5';
 
 /**
  * 调内性质归类：减/半减 → dim，小调类 → min，其余 → maj。
@@ -226,20 +209,17 @@ const SEVENTH_SEMITONES: Record<Exclude<SeventhDegree, 'none'>, number> = { maj7
 export const chordQualityAstToIntervals = (ast: ChordQualityAst): ChordIntervals => {
   const core: number[] = [0];
 
-  if (!ast.omitThird) {
+  if (!ast.omitThird)
     if (ast.third === 'maj3') core.push(4);
     else if (ast.third === 'min3') core.push(3);
-  }
 
-  if (!ast.omitFifth) {
+  if (!ast.omitFifth)
     if (ast.fifth === 'perf5') core.push(7);
     else if (ast.fifth === 'dim5') core.push(6);
     else if (ast.fifth === 'aug5') core.push(8);
-    else if (ast.fifth === 'none' && ast.seventh !== 'none' && ast.seventh !== undefined) {
+    else if (ast.fifth === 'none' && ast.seventh !== 'none' && ast.seventh !== undefined)
       // 五音未指定但和弦有七音：按乐理惯例补纯五（`Cm7` 的 G 在场，只是不写出）
       core.push(7);
-    }
-  }
 
   if (ast.seventh && ast.seventh !== 'none') core.push(SEVENTH_SEMITONES[ast.seventh]);
 
@@ -272,532 +252,8 @@ export const chordQualityAstToIntervals = (ast: ChordQualityAst): ChordIntervals
 };
 
 // ============================================================
-// 四、Token 表 —— 唯一写法真相源
+// 四、Token 表的查表设施（表本体见 chordQualityTokens）
 // ============================================================
-
-/** 一个性质 token：AST 「配方」+ 该配方的全部可接受写法（按优先级降序）。 */
-export interface QualityToken {
-  /** token 稳定标识（供调试与 diff，不参与业务判定） */
-  id: string;
-  /** 该 token 代表的性质 AST */
-  ast: ChordQualityAst;
-  /**
-   * 可接受的**原始写法**（解析用）。数组首项同时作为渲染时的**首选全称**。
-   * 匹配时对「候选写法」与「输入」同时做大小写折叠比较——但只有在
-   * 表里显式列出过的大写变体才折叠，绝不会把 `M7`（大七）与 `m7`（小七）混为一谈：
-   * 两者是两个不同 token，各自列出自己的写法。
-   */
-  spellings: string[];
-  /** 是否参与「渲染时省略」推断：无五音写法的和弦（`Cm7` 而非 `Cm7♮5`） */
-  implicitFifth?: boolean;
-  /**
-   * 是否为**纯记谱写法**：表达的是「本该有的音被撤掉」，而非一个独立的配方。
-   *
-   * 解析/渲染必须认识它们（`Cno3` 是合法输入，且往返要原样还原），
-   * 但**识别端要排除**：音集里少一个音，既可能是「撤掉」也可能是「本来就没弹」，
-   * 从音集无法区分。把 `no3`/`no5` 放进候选只会制造无法证伪的歧义
-   * （实测：`{C, E}` 被读成 `Cno5` 而不是更常规的 `C`）。
-   */
-  notationOnly?: boolean;
-}
-
-/**
- * 性质 token 表。
- *
- * 组织原则：**一个 token = 一个 AST 配方**，写法只是它的多个入口。
- * 例如 `maj7` 一条 token 覆盖 `maj7 / Maj7 / M7 / Δ7 / ma7` 五种写法，
- * 而旧枚举为这五个写法开了五条互不相干的条目（其中三条语法表还漏了）。
- *
- * 顺序即优先级：解析时先匹配到的 token 胜出；渲染时用 `spellings[0]`。
- * 长写法排在前面，避免 `m` 抢走 `maj7` 的前缀。
- */
-export const QUALITY_TOKENS: QualityToken[] = [
-  // ---------- 三和弦 ----------
-  {
-    id: 'major',
-    ast: { third: 'maj3', fifth: 'perf5' },
-    // `Maj` 沿用旧 CHORD_QUALITIES 的写法集合。现在它已能靠大小写折叠认出来
-    // （`maj` 的折叠键已登记，见 canFoldToLower），显式列出是为了让
-    // `KNOWN_QUALITIES` 这类「列举全部写法」的用途不漏条目，而非解析所必需。
-    spellings: ['', 'maj', 'Maj', 'M', 'Δ', 'major'],
-  },
-  {
-    id: 'minor',
-    ast: { third: 'min3', fifth: 'perf5' },
-    spellings: ['m', 'min', '-', 'minor'],
-  },
-  {
-    id: 'dim',
-    ast: { third: 'min3', fifth: 'dim5' },
-    // `mb5` 系列是小三和弦降五的写法，与 `dim` 是**同一个配方**，故并入本 token。
-    // 旧实现把 `mb5` 拆成「性质 m + 张力音 b5」两个字段（张力正则的必然结果），
-    // 于是同一件事在数据里有两种形态：`Cdim` 与 `Cmb5`。归并后两者 AST 一致。
-    spellings: ['dim', '°', 'o', 'mb5', 'm(b5)', 'minb5', '-b5'],
-  },
-  {
-    id: 'aug',
-    ast: { third: 'maj3', fifth: 'aug5' },
-    // 同上：`#5` 是大三和弦升五，与 `aug` 同一配方（旧实现拆成 `+ 张力音 #5`）。
-    spellings: ['aug', '+', '#5', '+5'],
-  },
-  {
-    id: 'power',
-    ast: { third: 'none', fifth: 'perf5' },
-    spellings: ['5'],
-  },
-  // ---------- 挂留 ----------
-  {
-    id: 'sus4',
-    ast: { third: 'none', sus: 'sus4', fifth: 'perf5' },
-    spellings: ['sus4', 'sus'],
-  },
-  {
-    id: 'sus2',
-    ast: { third: 'none', sus: 'sus2', fifth: 'perf5' },
-    spellings: ['sus2'],
-  },
-  // ---------- 省略音 ----------
-  {
-    id: 'no3',
-    ast: { third: 'maj3', fifth: 'perf5', omitThird: true },
-    spellings: ['no3', '(no3)'],
-    notationOnly: true,
-  },
-  {
-    id: 'no5',
-    ast: { third: 'maj3', fifth: 'perf5', omitFifth: true },
-    spellings: ['no5', '(no5)'],
-    notationOnly: true,
-  },
-  // ---------- 六和弦 / 69 ----------
-  {
-    id: 'six',
-    ast: { third: 'maj3', fifth: 'perf5', extensions: [{ degree: '6', accidental: 0 }] },
-    spellings: ['6'],
-  },
-  {
-    id: 'm6',
-    ast: { third: 'min3', fifth: 'perf5', extensions: [{ degree: '6', accidental: 0 }] },
-    spellings: ['m6', 'min6', '-6'],
-  },
-  {
-    id: 'sixNine',
-    ast: {
-      third: 'maj3',
-      fifth: 'perf5',
-      extensions: [
-        { degree: '6', accidental: 0 },
-        { degree: '9', accidental: 0 },
-      ],
-    },
-    spellings: ['6/9', '69'],
-  },
-  {
-    id: 'm6Nine',
-    ast: {
-      third: 'min3',
-      fifth: 'perf5',
-      extensions: [
-        { degree: '6', accidental: 0 },
-        { degree: '9', accidental: 0 },
-      ],
-    },
-    spellings: ['m6/9', 'm69', 'min6/9'],
-  },
-  // ---------- 七和弦 ----------
-  {
-    id: 'dom7',
-    ast: { third: 'maj3', fifth: 'perf5', seventh: 'min7' },
-    spellings: ['7'],
-  },
-  {
-    id: 'maj7',
-    ast: { third: 'maj3', fifth: 'perf5', seventh: 'maj7' },
-    spellings: ['maj7', 'Maj7', 'M7', 'Δ7', 'ma7'],
-  },
-  {
-    id: 'min7',
-    ast: { third: 'min3', fifth: 'perf5', seventh: 'min7' },
-    spellings: ['m7', 'min7', '-7'],
-  },
-  {
-    id: 'minMaj7',
-    ast: { third: 'min3', fifth: 'perf5', seventh: 'maj7' },
-    spellings: ['mMaj7', 'mmaj7', 'minMaj7', 'mM7', 'mΔ7', '-M7', '-Δ7'],
-  },
-  {
-    id: 'halfDim7',
-    ast: { third: 'min3', fifth: 'dim5', seventh: 'min7' },
-    spellings: ['m7b5', 'm7(b5)', 'ø7', 'ø', 'min7b5', '-7b5'],
-  },
-  {
-    id: 'dim7',
-    ast: { third: 'min3', fifth: 'dim5', seventh: 'dim7' },
-    spellings: ['dim7', '°7', 'o7'],
-  },
-  {
-    id: 'dimMaj7',
-    ast: { third: 'min3', fifth: 'dim5', seventh: 'maj7' },
-    spellings: ['dimMaj7', 'dimmaj7', '°M7', '°Δ7'],
-  },
-  {
-    id: 'aug7',
-    ast: { third: 'maj3', fifth: 'aug5', seventh: 'min7' },
-    spellings: ['aug7', '+7', '7#5', '7(#5)'],
-  },
-  {
-    id: 'augMaj7',
-    ast: { third: 'maj3', fifth: 'aug5', seventh: 'maj7' },
-    spellings: ['augMaj7', 'augmaj7', '+M7', '+Δ7', 'M7#5', 'Maj7(#5)'],
-  },
-  {
-    id: 'dom7flat5',
-    ast: { third: 'maj3', fifth: 'dim5', seventh: 'min7' },
-    spellings: ['7b5', '7(b5)'],
-  },
-  {
-    id: 'maj7flat5',
-    ast: { third: 'maj3', fifth: 'dim5', seventh: 'maj7' },
-    spellings: ['Maj7(b5)', 'M7b5', 'Maj7b5'],
-  },
-  // ---------- sus 七和弦 ----------
-  {
-    id: 'sus4dom7',
-    ast: { third: 'none', sus: 'sus4', fifth: 'perf5', seventh: 'min7' },
-    spellings: ['7sus4', '7sus'],
-  },
-  {
-    id: 'sus2dom7',
-    ast: { third: 'none', sus: 'sus2', fifth: 'perf5', seventh: 'min7' },
-    spellings: ['7sus2'],
-  },
-  // ---------- add 家族 ----------
-  // `add2` / `add9` 与 `add4` / `add11` 各自同音，但**写法不同、渲染须还原**，故拆成独立 token。
-  // 解析时靠合并层做同义收敛（`add2` 的 AST 度数记为 9，与 add9 同音），
-  // 渲染时各自由 token 的首选写法输出，不会把 `Cadd2` 显示成 `Cadd9`。
-  {
-    id: 'add9',
-    ast: { third: 'maj3', fifth: 'perf5', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['add9'],
-  },
-  {
-    id: 'add2',
-    ast: { third: 'maj3', fifth: 'perf5', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['add2'],
-  },
-  {
-    id: 'add11',
-    ast: { third: 'maj3', fifth: 'perf5', extensions: [{ degree: '11', accidental: 0 }] },
-    spellings: ['add11'],
-  },
-  {
-    id: 'add4',
-    ast: { third: 'maj3', fifth: 'perf5', extensions: [{ degree: '11', accidental: 0 }] },
-    spellings: ['add4'],
-  },
-  {
-    id: 'add13',
-    ast: { third: 'maj3', fifth: 'perf5', extensions: [{ degree: '13', accidental: 0 }] },
-    spellings: ['add13'],
-  },
-  {
-    id: 'madd9',
-    ast: { third: 'min3', fifth: 'perf5', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['madd9', 'minadd9'],
-  },
-  {
-    id: 'madd2',
-    ast: { third: 'min3', fifth: 'perf5', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['madd2', 'minadd2'],
-  },
-  {
-    id: 'madd11',
-    ast: { third: 'min3', fifth: 'perf5', extensions: [{ degree: '11', accidental: 0 }] },
-    spellings: ['madd11', 'minadd11'],
-  },
-  {
-    id: 'madd4',
-    ast: { third: 'min3', fifth: 'perf5', extensions: [{ degree: '11', accidental: 0 }] },
-    spellings: ['madd4', 'minadd4'],
-  },
-  {
-    id: 'madd13',
-    ast: { third: 'min3', fifth: 'perf5', extensions: [{ degree: '13', accidental: 0 }] },
-    spellings: ['madd13', 'minadd13'],
-  },
-  // ---------- 属扩展 ----------
-  {
-    id: 'dom9',
-    ast: { third: 'maj3', fifth: 'perf5', seventh: 'min7', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['9'],
-  },
-  {
-    id: 'dom11',
-    ast: {
-      third: 'maj3',
-      fifth: 'perf5',
-      seventh: 'min7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 0 },
-      ],
-    },
-    spellings: ['11'],
-  },
-  {
-    id: 'dom13',
-    ast: {
-      third: 'maj3',
-      fifth: 'perf5',
-      seventh: 'min7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 0 },
-        { degree: '13', accidental: 0 },
-      ],
-    },
-    spellings: ['13'],
-  },
-  {
-    id: 'aug9',
-    ast: { third: 'maj3', fifth: 'aug5', seventh: 'min7', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['9#5', '9(#5)'],
-  },
-  {
-    id: 'aug13',
-    ast: {
-      third: 'maj3',
-      fifth: 'aug5',
-      seventh: 'min7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '13', accidental: 0 },
-      ],
-    },
-    spellings: ['13#5', '13(#5)'],
-  },
-  {
-    id: 'dom7flat13',
-    ast: { third: 'maj3', fifth: 'perf5', seventh: 'min7', extensions: [{ degree: '13', accidental: -1 }] },
-    spellings: ['7b13', '7(b13)'],
-  },
-  {
-    id: 'sus4dom9',
-    ast: { third: 'none', sus: 'sus4', fifth: 'perf5', seventh: 'min7', extensions: [{ degree: '9', accidental: 0 }] },
-    // `11sus4` 与 `9sus4` 是**同一配方**：sus4 的四音（5 半音）本身就是十一音，
-    // 所以 `11sus4` 只是「把 11 这个音说清楚」的写法，并不需要额外的扩展音。
-    // 旧枚举把两者当两条独立性质；归并到同一 token 后写法仍全部可解析（同义收敛）。
-    spellings: ['9sus4', '9sus', '11sus4', '11sus'],
-  },
-  {
-    id: 'sus2dom9',
-    // 9sus2 的「九音」与挂二音**同音**（都是 2 半音）：同一块音被声明两遍，属纯记谱写法。
-    // 同样的音集由 7sus2（无冗余声明）覆盖并稳定胜出，故不参与识别候选（同 no3/no5 的取舍）；
-    // 解析 / 渲染照常，输入 A9sus2 仍合法。对比 9sus4：九音与挂四音是两个不同的音，不冗余。
-    ast: { third: 'none', sus: 'sus2', fifth: 'perf5', seventh: 'min7', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['9sus2'],
-    notationOnly: true,
-  },
-  {
-    id: 'sus2dom11',
-    // sus2 的挂留音是二音（2 半音），**不是**十一音，故 `11sus2` 需要独立声明九音与十一音。
-    // 这与 `11sus4` 的情形正好相反，是 sus2 / sus4 不能共用一条配方的原因。
-    ast: {
-      third: 'none',
-      sus: 'sus2',
-      fifth: 'perf5',
-      seventh: 'min7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 0 },
-      ],
-    },
-    spellings: ['11sus2'],
-  },
-  {
-    id: 'sus4dom13',
-    ast: {
-      third: 'none',
-      sus: 'sus4',
-      fifth: 'perf5',
-      seventh: 'min7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '13', accidental: 0 },
-      ],
-    },
-    spellings: ['13sus4', '13sus'],
-  },
-  // ---------- 小扩展 ----------
-  {
-    id: 'min9',
-    ast: { third: 'min3', fifth: 'perf5', seventh: 'min7', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['m9', 'min9', '-9'],
-  },
-  {
-    id: 'min11',
-    ast: {
-      third: 'min3',
-      fifth: 'perf5',
-      seventh: 'min7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 0 },
-      ],
-    },
-    spellings: ['m11', 'min11', '-11'],
-  },
-  {
-    id: 'min13',
-    ast: {
-      third: 'min3',
-      fifth: 'perf5',
-      seventh: 'min7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 0 },
-        { degree: '13', accidental: 0 },
-      ],
-    },
-    spellings: ['m13', 'min13', '-13'],
-  },
-  {
-    id: 'minMaj9',
-    ast: { third: 'min3', fifth: 'perf5', seventh: 'maj7', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['mMaj9', 'mmaj9', 'minMaj9', 'mM9', 'mΔ9', '-M9', '-Δ9'],
-  },
-  {
-    id: 'minMaj11',
-    ast: {
-      third: 'min3',
-      fifth: 'perf5',
-      seventh: 'maj7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 0 },
-      ],
-    },
-    spellings: ['mMaj11', 'mmaj11', 'minMaj11', 'mM11', 'mΔ11', '-M11', '-Δ11'],
-  },
-  {
-    id: 'minMaj13',
-    ast: {
-      third: 'min3',
-      fifth: 'perf5',
-      seventh: 'maj7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 0 },
-        { degree: '13', accidental: 0 },
-      ],
-    },
-    spellings: ['mMaj13', 'mmaj13', 'minMaj13', 'mM13', 'mΔ13', '-M13', '-Δ13'],
-  },
-  {
-    id: 'min9flat5',
-    ast: { third: 'min3', fifth: 'dim5', seventh: 'min7', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['m9b5', 'm9(b5)', 'min9b5', 'ø9'],
-  },
-  // ---------- 大扩展 ----------
-  {
-    id: 'maj9',
-    ast: { third: 'maj3', fifth: 'perf5', seventh: 'maj7', extensions: [{ degree: '9', accidental: 0 }] },
-    spellings: ['maj9', 'Maj9', 'M9', 'Δ9'],
-  },
-  {
-    id: 'maj11',
-    ast: {
-      third: 'maj3',
-      fifth: 'perf5',
-      seventh: 'maj7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 0 },
-      ],
-    },
-    spellings: ['maj11', 'Maj11', 'M11', 'Δ11'],
-  },
-  {
-    id: 'maj13',
-    ast: {
-      third: 'maj3',
-      fifth: 'perf5',
-      seventh: 'maj7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 0 },
-        { degree: '13', accidental: 0 },
-      ],
-    },
-    spellings: ['maj13', 'Maj13', 'M13', 'Δ13'],
-  },
-  {
-    id: 'maj9sharp11',
-    ast: {
-      third: 'maj3',
-      fifth: 'perf5',
-      seventh: 'maj7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 1 },
-      ],
-    },
-    spellings: ['Maj9(#11)', 'M9#11'],
-  },
-  {
-    id: 'maj7sharp11',
-    ast: { third: 'maj3', fifth: 'perf5', seventh: 'maj7', extensions: [{ degree: '11', accidental: 1 }] },
-    spellings: ['Maj7(#11)', 'M7#11'],
-  },
-  // ---------- 变化属和弦 ----------
-  {
-    id: 'dom7sharp9',
-    ast: { third: 'maj3', fifth: 'perf5', seventh: 'min7', extensions: [{ degree: '9', accidental: 1 }] },
-    spellings: ['7#9', '7(#9)'],
-  },
-  {
-    id: 'dom7flat9',
-    ast: { third: 'maj3', fifth: 'perf5', seventh: 'min7', extensions: [{ degree: '9', accidental: -1 }] },
-    spellings: ['7b9', '7(b9)'],
-  },
-  {
-    id: 'dom7sharp11',
-    ast: { third: 'maj3', fifth: 'perf5', seventh: 'min7', extensions: [{ degree: '11', accidental: 1 }] },
-    spellings: ['7#11', '7(#11)'],
-  },
-  {
-    id: 'dom9sharp11',
-    ast: {
-      third: 'maj3',
-      fifth: 'perf5',
-      seventh: 'min7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 1 },
-      ],
-    },
-    spellings: ['9(#11)', '9#11'],
-  },
-  {
-    id: 'dom13sharp11',
-    ast: {
-      third: 'maj3',
-      fifth: 'perf5',
-      seventh: 'min7',
-      extensions: [
-        { degree: '9', accidental: 0 },
-        { degree: '11', accidental: 1 },
-        { degree: '13', accidental: 0 },
-      ],
-    },
-    spellings: ['13(#11)', '13#11'],
-  },
-  {
-    id: 'dom7alt',
-    ast: { third: 'maj3', fifth: 'perf5', seventh: 'min7', alt: true },
-    spellings: ['7alt', 'alt'],
-  },
-];
 
 /** 写法 → token 的查找表（精确匹配优先，回落大小写折叠）。 */
 const TOKEN_BY_SPELLING = new Map<string, QualityToken>();
@@ -852,29 +308,28 @@ const SPELLINGS_BY_LENGTH: string[] = [];
 
 {
   // 第一遍：登记精确写法
-  for (const token of QUALITY_TOKENS) {
-    for (const sp of token.spellings) {
+  for (const token of QUALITY_TOKENS)
+    for (const sp of token.spellings)
       // 只登记首次出现：`''` 只属于 major，`sus` 只属于 sus4
       if (!TOKEN_BY_SPELLING.has(sp)) TOKEN_BY_SPELLING.set(sp, token);
-    }
-  }
+
   // 第二遍：登记折叠键（需精确表已建好才能判「小写形态是否另有主人」）
-  for (const token of QUALITY_TOKENS) {
+  for (const token of QUALITY_TOKENS)
     for (const sp of token.spellings) {
       if (!canFoldToLower(sp, token)) continue;
       const key = foldKey(sp);
       if (!TOKEN_BY_SPELLING_CI.has(key)) TOKEN_BY_SPELLING_CI.set(key, token);
     }
-  }
+
   const seen = new Set<string>();
-  for (const token of QUALITY_TOKENS) {
+  for (const token of QUALITY_TOKENS)
     for (const sp of token.spellings) {
       // 空串不参与长度排序匹配：它由 matchQualityToken 的显式兜底处理
       if (!sp || seen.has(sp)) continue;
       seen.add(sp);
       SPELLINGS_BY_LENGTH.push(sp);
     }
-  }
+
   SPELLINGS_BY_LENGTH.sort((a, b) => b.length - a.length);
 }
 
@@ -889,6 +344,24 @@ export const findTokenBySpelling = (text: string): QualityToken | undefined => {
   if (exact) return exact;
   return TOKEN_BY_SPELLING_CI.get(text.toLowerCase());
 };
+
+/**
+ * 写法 → 罗马数字级数后缀（`maj7` → `maj7`、`m7` → `7`、`dim` → `°`）。
+ * 先落 token 级默认值，`romanSuffixBySpelling` 有覆盖则优先（如 halfDim7 的裸 `ø` 记作 `ø`）。
+ * 与上面的 token 查找同属「由表派生的查表设施」，故与本文件其余 token 索引放在一起。
+ */
+const ROMAN_SUFFIX_BY_SPELLING = new Map<string, string>();
+for (const token of QUALITY_TOKENS)
+  for (const spelling of token.spellings)
+    ROMAN_SUFFIX_BY_SPELLING.set(spelling, token.romanSuffixBySpelling?.[spelling] ?? token.romanSuffix);
+
+/**
+ * 按**原样写法**取罗马数字级数后缀；不在表内返回 `undefined`
+ * （调用方据此回落到「经 token 归一」那一层）。大小写敏感——与上面的 token 查找同口径：
+ * `M7` 与 `m7` 是两条不同记录。
+ */
+export const findRomanSuffixBySpelling = (spelling: string): string | undefined =>
+  ROMAN_SUFFIX_BY_SPELLING.get(spelling);
 
 /** 全部已登记写法（按长度降序），供解析器做前缀匹配。不含空串——空串由「无更长匹配」兜底。 */
 export const qualitySpellingsByLength = (): readonly string[] => SPELLINGS_BY_LENGTH;

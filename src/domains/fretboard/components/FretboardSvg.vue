@@ -232,6 +232,7 @@ import FretboardNote from './FretboardNote.vue';
 import {
   barreGeometryOf,
   computeDisplayBarres,
+  FRETBOARD_BLUE,
   getBarreFill as getBarreFillOf,
   getBarreStroke as getBarreStrokeOf,
   getStringNoteY as getStringNoteYOf,
@@ -284,12 +285,10 @@ const barreThickness = NOTE_DISPLAY.FINGER_DOT_RADIUS * 2;
  *  通过 style 绑定 height/y 使 CSS transition 生效（plain SVG attribute 不触发 transition，
  *  与 barreBeamStyle 同样约定）；显隐由模板 v-if="fretOffset === 0" 控制 */
 const NUT_BAR_HEIGHT = 14;
-const nutBarStyle = computed<CSSProperties>(() => {
-  return {
-    height: `${NUT_BAR_HEIGHT}px`,
-    y: `${CANVAS_CONFIG.OFFSET_Y_TOP - NUT_BAR_HEIGHT + FRETBOARD_LINE_WIDTH / 2}px`,
-  };
-});
+const nutBarStyle = computed<CSSProperties>(() => ({
+  height: `${NUT_BAR_HEIGHT}px`,
+  y: `${CANVAS_CONFIG.OFFSET_Y_TOP - NUT_BAR_HEIGHT + FRETBOARD_LINE_WIDTH / 2}px`,
+}));
 
 /**
  * 视觉渲染品数缓冲：
@@ -346,12 +345,11 @@ const boardAriaLabel = computed(
 /** 单根弦指位描述：弦序、品格与音名（v-for 内调用） */
 const stringNoteAriaLabel = (sIdx: number, str: GuitarStringEntity) => {
   const stringNum = strings.length - sIdx;
-  if (str.fret > 0) {
+  if (str.fret > 0)
     return `第 ${stringNum} 弦第 ${str.fret} 品，音名 ${formatStringLabel(sIdx, str.fret, str.preferFlat, fretOffset, activeBaseStrings)}`;
-  }
-  if (str.fret < 0) {
-    return `第 ${stringNum} 弦（静音）`;
-  }
+
+  if (str.fret < 0) return `第 ${stringNum} 弦（静音）`;
+
   return `第 ${stringNum} 弦（空弦 ${formatStringLabel(sIdx, 0, str.preferFlat, fretOffset, activeBaseStrings)}）`;
 };
 
@@ -385,9 +383,7 @@ watch(
 
     const changedIndices: number[] = [];
     newFrets.forEach((fret, idx) => {
-      if (fret !== oldFrets[idx]) {
-        changedIndices.push(idx);
-      }
+      if (fret !== oldFrets[idx]) changedIndices.push(idx);
     });
 
     if (changedIndices.length === 0) return;
@@ -490,17 +486,13 @@ const activeHoveredBarre = computed<DisplayBarre | null>(() => {
     const oldFret = parseBarreFretFromKey(activeHoveredBarreKey.value);
     const continued =
       oldFret === null ? undefined : displayBarres.value.find(b => b.fret === oldFret && isPointInBarre(hoverPoint, b));
-    if (continued) {
-      return continued;
-    }
+    if (continued) return continued;
   }
 
   // 若光标当前落在任一横按上，自动匹配激活
   if (hoverPoint) {
     const matched = displayBarres.value.find(b => isPointInBarre(hoverPoint, b));
-    if (matched) {
-      return matched;
-    }
+    if (matched) return matched;
   }
 
   return null;
@@ -570,9 +562,7 @@ const handleBarreMouseLeave = () => {
 
 /** 点击浮动气泡：派发切换事件，由于响应式计算，气泡内容将实时切换已标记/未标记 */
 const handleBarreBubbleClick = () => {
-  if (activeHoveredBarre.value) {
-    emit('toggle-barre', activeHoveredBarre.value);
-  }
+  if (activeHoveredBarre.value) emit('toggle-barre', activeHoveredBarre.value);
 };
 
 /** 悬浮气泡几何定位：处于该横按所在两弦中心水平位置，垂直上移至品丝线上方，远离音符并由箭头指向下方 */
@@ -611,7 +601,7 @@ const displayBubbleGeometry = computed(() => hoveredBarreGeometry.value ?? cache
 const barreArrowStyle = computed<CSSProperties>(() => {
   const b = displayBubbleBarre.value;
   if (!b) return {};
-  const isMarked = b.isMarked;
+  const { isMarked } = b;
   const isHovered = isBubbleElementHovered.value;
   const size = 12;
 
@@ -619,9 +609,7 @@ const barreArrowStyle = computed<CSSProperties>(() => {
 
   const borderColor = isMarked
     ? 'var(--color-primary)'
-    : isDarkMode
-      ? 'rgba(96, 165, 250, 0.4)'
-      : 'rgba(59, 130, 246, 0.4)';
+    : `rgba(${isDarkMode ? FRETBOARD_BLUE.dark : FRETBOARD_BLUE.light}, 0.4)`;
 
   const base = buildFloatingArrowStyle({
     arrowX: null,
@@ -653,11 +641,8 @@ const syncBarreHover = () => {
     return;
   }
   const matched = displayBarres.value.find(b => isPointInBarre(pt, b));
-  if (matched) {
-    handleBarreMouseEnter(matched);
-  } else {
-    handleBarreMouseLeave();
-  }
+  if (matched) handleBarreMouseEnter(matched);
+  else handleBarreMouseLeave();
 };
 
 // hover 坐标仅两个数字，用字符串签名判等即可：deep 遍历对象换不来额外信息，
@@ -694,9 +679,8 @@ const showEmptyHoverRing = computed(() => {
 const showEmptyFocusRing = computed(() => {
   const fp = focusPoint;
   if (!fp || fp.fretIndex <= 0 || fp.fretIndex > fretCount) return false;
-  if (hoverPoint && hoverPoint.stringIndex === fp.stringIndex && hoverPoint.fretIndex === fp.fretIndex) {
-    return false;
-  }
+  if (hoverPoint && hoverPoint.stringIndex === fp.stringIndex && hoverPoint.fretIndex === fp.fretIndex) return false;
+
   return !hasNoteAt(fp.stringIndex, fp.fretIndex);
 });
 </script>

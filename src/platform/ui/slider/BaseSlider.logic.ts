@@ -77,9 +77,8 @@ export const SLIDER_CONFIG: Record<'sm' | 'md' | 'lg', SliderSizeConfig> = {
 
 /** 拇指定位样式：按值百分比位置渲染（vertical 时从底部起算） */
 export const thumbPositionStyle = (pct: number, vertical: boolean): Record<string, string> => {
-  if (vertical) {
-    return { bottom: `${pct}%`, left: '50%' };
-  }
+  if (vertical) return { bottom: `${pct}%`, left: '50%' };
+
   return { left: `${pct}%`, top: '50%' };
 };
 
@@ -90,17 +89,16 @@ export const activeBarStyleOf = (
   vertical: boolean,
   fromOrigin: boolean
 ): Record<string, string> => {
-  if (vertical) {
+  if (vertical)
     return fromOrigin ? { bottom: '0%', height: `${length}%` } : { bottom: `${start}%`, height: `${length}%` };
-  }
+
   return fromOrigin ? { left: '0%', width: `${length}%` } : { left: `${start}%`, width: `${length}%` };
 };
 
 /** 刻度定位样式：按值换算百分比并居中平移 */
 export const tickPositionStyle = (pct: number, vertical: boolean): Record<string, string> => {
-  if (vertical) {
-    return { bottom: `${pct}%`, transform: 'translateY(50%)' };
-  }
+  if (vertical) return { bottom: `${pct}%`, transform: 'translateY(50%)' };
+
   return { left: `${pct}%`, transform: 'translateX(-50%)' };
 };
 
@@ -113,9 +111,8 @@ export const resolveMultiplier = (e?: { shiftKey?: boolean; altKey?: boolean }):
 
 /** 拖拽结束判断值是否变化：数组按分量比较，其余严格相等 */
 export const isValueEqual = (v1: unknown, v2: unknown): boolean => {
-  if (Array.isArray(v1) && Array.isArray(v2)) {
-    return v1[0] === v2[0] && v1[1] === v2[1];
-  }
+  if (Array.isArray(v1) && Array.isArray(v2)) return v1[0] === v2[0] && v1[1] === v2[1];
+
   return v1 === v2;
 };
 
@@ -129,12 +126,12 @@ export const computeTickValues = (opts: {
   snap: (val: number) => number;
 }): number[] => {
   const { marks, showTicks, min, max, step, snap } = opts;
-  if (marks && Object.keys(marks).length) {
+  if (marks && Object.keys(marks).length)
     return Object.keys(marks)
       .map(Number)
       .filter(v => v >= min && v <= max)
       .sort((a, b) => a - b);
-  }
+
   if (!showTicks || max <= min) return [];
   const stepVal = Math.max(step, (max - min) / 20);
   const out: number[] = [];

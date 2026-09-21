@@ -27,7 +27,7 @@ import type { Chord, ChordId, Group } from '@/domains/chord/types';
 import type { GuitarStringEntity } from '@/domains/fretboard/types';
 import type { ChordLineSlots, LineId, Song } from '@/domains/score/types';
 
-/** 六弦标准调弦各弦 MIDI 音高（与 theory 的 TUNING_MAPPING_STANDARD 同序） */
+/** 六弦标准调弦各弦 MIDI 音高（与 data/tunings.json 的 STANDARD 预设同序） */
 const STRING_MIDI = [40, 45, 50, 55, 59, 64] as const;
 
 const ROOT_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
@@ -149,9 +149,8 @@ const candidateFrets = (stringIndex: number, pitchClass: number, offset: number,
   const base = STRING_MIDI[stringIndex]!;
   const frets: number[] = [];
   if (base % 12 === pitchClass) frets.push(0);
-  for (let fret = 1; fret <= fretCount; fret++) {
-    if ((base + fret + offset) % 12 === pitchClass) frets.push(fret);
-  }
+  for (let fret = 1; fret <= fretCount; fret++) if ((base + fret + offset) % 12 === pitchClass) frets.push(fret);
+
   return frets;
 };
 
@@ -191,11 +190,9 @@ const buildFingering = (
     if (strings[s]!.fret !== -1) continue;
     if (rng() < 0.45) continue; // 静音：让数据里同时存在完整与稀疏的按法
     const pool: number[] = [];
-    for (const pitchClass of pitchClasses) {
-      for (const fret of candidateFrets(s, pitchClass, offset, fretCount)) {
-        if (!pool.includes(fret)) pool.push(fret);
-      }
-    }
+    for (const pitchClass of pitchClasses)
+      for (const fret of candidateFrets(s, pitchClass, offset, fretCount)) if (!pool.includes(fret)) pool.push(fret);
+
     if (pool.length > 0) strings[s] = { fret: pick(pool, rng), preferFlat };
   }
 
@@ -255,7 +252,7 @@ const buildChords = (groups: Group[], scale: DevTestDataScale): Chord[] => {
   const chords: Chord[] = [];
   const seen = new Set<string>();
 
-  for (let rootPitch = 0; rootPitch < 12; rootPitch++) {
+  for (let rootPitch = 0; rootPitch < 12; rootPitch++)
     for (const quality of QUALITIES) {
       const nameSegments = nameToSegments(`${ROOT_NAMES[rootPitch]!}${quality.suffix}`);
       if (!nameSegments) continue;
@@ -294,7 +291,6 @@ const buildChords = (groups: Group[], scale: DevTestDataScale): Chord[] => {
         );
       }
     }
-  }
 
   return chords;
 };
@@ -394,7 +390,7 @@ const buildSongs = (chords: Chord[], scale: DevTestDataScale, baseTime: number):
     const seedLines = buildSongLines(rng, chordRefs, targetLines);
     const lines = seedLines.map(line => line.text);
     const lyrics = lines.join('\n');
-    const lineIds = matchLineIds([], lines, []).lineIds;
+    const { lineIds } = matchLineIds([], lines, []);
 
     // 逐行绑定字符槽位：纯和弦行按和弦名首字符对齐，歌词行随机落 1~3 个，
     // 标记行与空行不绑（与真实谱面一致——那两类行上不会有和弦）
@@ -423,9 +419,8 @@ const buildSongs = (chords: Chord[], scale: DevTestDataScale, baseTime: number):
       if (seedLine.kind === 'marker' || seedLine.text.length === 0) continue;
       // 一行 1~3 个：贴近真实谱面密度，同时压住 chordMap 体积（单条槽位 key 近百字节）
       const bindCount = 1 + Math.floor(rng() * 3);
-      for (let bind = 0; bind < bindCount; bind++) {
+      for (let bind = 0; bind < bindCount; bind++)
         setChar(lineId, Math.floor(rng() * seedLine.text.length), pick(chordRefs, rng).id);
-      }
     }
 
     const title = `${pick(WORDS, rng)}${pick(WORDS, rng)}·压测 ${String(index + 1).padStart(4, '0')}`;

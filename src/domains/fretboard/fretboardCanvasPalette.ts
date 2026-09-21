@@ -49,9 +49,9 @@ const PALETTE_VAR_MAP: Record<keyof FretboardCanvasPalette, string> = {
 const readPaletteFrom = (root: Element): FretboardCanvasPalette => {
   const computedStyle = getComputedStyle(root);
   const palette = {} as FretboardCanvasPalette;
-  for (const [key, varName] of Object.entries(PALETTE_VAR_MAP)) {
+  for (const [key, varName] of Object.entries(PALETTE_VAR_MAP))
     palette[key as keyof FretboardCanvasPalette] = computedStyle.getPropertyValue(varName).trim();
-  }
+
   return palette;
 };
 
@@ -71,9 +71,8 @@ const paletteCache = new Map<string, FretboardCanvasPalette>();
 /** 空调色板（Node 测试环境无 DOM 时返回；调用方仅为导出 Worker，测试不消费颜色值） */
 const emptyPalette = (): FretboardCanvasPalette => {
   const palette = {} as Record<keyof FretboardCanvasPalette, string>;
-  for (const key of Object.keys(PALETTE_VAR_MAP)) {
-    palette[key as keyof FretboardCanvasPalette] = '';
-  }
+  for (const key of Object.keys(PALETTE_VAR_MAP)) palette[key as keyof FretboardCanvasPalette] = '';
+
   return palette;
 };
 
@@ -104,17 +103,20 @@ export const resolveFretboardCanvasPalette = (theme?: 'light' | 'dark' | 'high-c
   if (memo) return memo;
 
   let palette: FretboardCanvasPalette;
-  if (!theme) {
-    palette = readPaletteFrom(root);
-  } else {
+  if (!theme) palette = readPaletteFrom(root);
+  else {
     const prevTheme = root.getAttribute('data-theme');
     const prevDark = root.classList.contains('dark');
     root.setAttribute('data-theme', theme);
     root.classList.toggle('dark', theme === 'dark');
-    palette = readPaletteFrom(root);
-    if (prevTheme === null) root.removeAttribute('data-theme');
-    else root.setAttribute('data-theme', prevTheme);
-    root.classList.toggle('dark', prevDark);
+    try {
+      palette = readPaletteFrom(root);
+    } finally {
+      // 必须无条件复原：读取抛错时若跳过恢复，整个应用会停在导出用的亮/暗配色上
+      if (prevTheme === null) root.removeAttribute('data-theme');
+      else root.setAttribute('data-theme', prevTheme);
+      root.classList.toggle('dark', prevDark);
+    }
   }
 
   paletteCache.set(cacheKey, palette);

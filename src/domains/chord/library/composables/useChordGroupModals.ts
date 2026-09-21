@@ -113,9 +113,7 @@ export function useChordGroupModals() {
     // 歌曲槽位解绑与撤销回填由 chordStore 删除/恢复事件经应用层桥接完成
     const groupsSnapshot = chordStore.groups.map(g => ({ ...g }));
 
-    if (editorStore.isEditing && editorStore.draftChord.groupId === targetGid) {
-      editorStore.resetEditor();
-    }
+    if (editorStore.isEditing && editorStore.draftChord.groupId === targetGid) editorStore.resetEditor();
 
     chordStore.deleteGroup(targetGid);
 
@@ -216,11 +214,8 @@ export function useChordGroupModals() {
   /** 勾选/取消勾选一个待删除的变体指法 */
   const toggleVariantSelection = (chordId: string) => {
     const set = modalData.selectedVariantIds;
-    if (set.has(chordId)) {
-      set.delete(chordId);
-    } else {
-      set.add(chordId);
-    }
+    if (set.has(chordId)) set.delete(chordId);
+    else set.add(chordId);
   };
 
   /** 确认删除勾选的指法（走统一删除流程，可撤销） */

@@ -54,24 +54,27 @@
           />
         </div>
       </div>
-      <BaseScrollArea
-        :scrollbar="false"
-        :wheel="{ smooth: true }"
-        axis="x"
-        class="picker-group-pills-bar flex items-center scroll-smooth px-lg pt-sm"
-      >
-        <BaseSegmentedControl
-          v-model="selectedGroupId"
-          :options="groupTabOptions"
-          @change="handleGroupTabChange($event)"
-          tabbed
-          size="lg"
+      <div class="picker-group-pills-shell px-lg pt-sm">
+        <BaseScrollArea
+          :scrollbar="false"
+          :wheel="{ smooth: true }"
+          axis="x"
+          class="picker-group-pills-bar scroll-smooth"
         >
-          <template #item-suffix="{ option }">
-            <span class="group-count pl-1.5 text-2xs font-semibold">{{ option.count }}</span>
-          </template>
-        </BaseSegmentedControl>
-      </BaseScrollArea>
+          <BaseSegmentedControl
+            v-model="selectedGroupId"
+            :options="groupTabOptions"
+            @change="handleGroupTabChange($event)"
+            block
+            tabbed
+            size="lg"
+          >
+            <template #item-suffix="{ option }">
+              <span class="group-count pl-1.5 text-2xs font-semibold">{{ option.count }}</span>
+            </template>
+          </BaseSegmentedControl>
+        </BaseScrollArea>
+      </div>
     </div>
     <BaseScrollArea
       v-grid-nav="{ cols: PICKER_GRID_COLS, selector: '.picker-chord-card', onEdge: handleNavEdge }"
@@ -132,7 +135,7 @@
                 @mouseenter="handleCardHover($event, chord.id, true)"
                 @mouseleave="handleCardHover($event, chord.id, false)"
                 @pointerdown="handleCardPointerDown($event, chord)"
-                data-focusable-inline
+                data-focusable-outline
                 role="button"
                 tabindex="0"
               >
@@ -288,7 +291,7 @@ const pickerScale = 1.6;
 /** 和弦卡片类名（设定充足 min-h 与顶部呼吸空间，避免顶栏操作压住和弦名）。
  *  卡片只作拖动来源，不再有「当前已绑定」的激活态变体 */
 const CHORD_CARD_BASE_CLASS =
-  'picker-chord-card group relative z-card flex w-full cursor-grab flex-col items-center justify-center self-start rounded-md border border-border-light bg-surface-body px-2 pt-4 pb-2 transition-all duration-fast outline-none hover:border-primary hover:shadow-md active:scale-[0.97] active:cursor-grabbing [&:has(.picker-edit-btn:active)]:scale-100';
+  'picker-chord-card group relative z-card flex w-full cursor-grab flex-col items-center justify-center self-start rounded-md border border-border-light bg-surface-body px-2 pt-4 pb-2 transition-all duration-fast outline-none hover:shadow-md active:scale-[0.97] active:cursor-grabbing [&:has(.picker-edit-btn:active)]:scale-100';
 
 const visibleModel = computed({
   get: () => props.visible,
@@ -374,9 +377,8 @@ const saveUserPickerState = () => {
 const resetScrollTop = () => {
   const scrollEl = scrollWrapperRef.value;
   if (scrollEl) scrollEl.scrollTop = 0;
-  if (chordSections.value.length > 0) {
-    activeSectionId.value = chordSections.value[0]!.id;
-  }
+  if (chordSections.value.length > 0) activeSectionId.value = chordSections.value[0]!.id;
+
   nextTick(() => {
     updateActiveSection();
   });
@@ -391,9 +393,7 @@ const handleGroupTabChange = (newGid: string) => {
   saveUserPickerState();
 
   nextTick(() => {
-    if (chordSections.value.length > 0) {
-      activeSectionId.value = chordSections.value[0]?.id ?? null;
-    }
+    if (chordSections.value.length > 0) activeSectionId.value = chordSections.value[0]?.id ?? null;
   });
   resetScrollTop();
 };
@@ -450,9 +450,8 @@ watch(
     rebuildSectionEls();
     updateActiveSection();
     updateWindow();
-    if (chordSections.value.length > 0) {
-      activeSectionId.value = chordSections.value[0]?.id ?? null;
-    }
+    if (chordSections.value.length > 0) activeSectionId.value = chordSections.value[0]?.id ?? null;
+
     setTimeout(() => {
       rebuildSectionEls();
       updateActiveSection();
@@ -483,9 +482,8 @@ const filteredChords = computed(() => {
 /** 和弦名查表（按 id 缓存，避免模板重复解析名称；卡片无障碍标签用） */
 const chordNameMap = computed(() => {
   const map = new Map<string, string>();
-  for (const chord of filteredChords.value) {
-    map.set(chord.id, getChordName(chord));
-  }
+  for (const chord of filteredChords.value) map.set(chord.id, getChordName(chord));
+
   return map;
 });
 
@@ -613,9 +611,7 @@ const updateActiveSection = () => {
 
   for (const sec of sections) {
     const rect = sec.getBoundingClientRect();
-    if (rect.top - containerRect.top <= 80) {
-      currentId = sec.getAttribute('data-section-id');
-    }
+    if (rect.top - containerRect.top <= 80) currentId = sec.getAttribute('data-section-id');
   }
 
   activeSectionId.value = currentId ?? chordSections.value[0]!.id;
@@ -632,12 +628,9 @@ watch(
   chordSections,
   newSections => {
     if (newSections.length > 0) {
-      if (!newSections.some(s => s.id === activeSectionId.value)) {
-        activeSectionId.value = newSections[0]!.id;
-      }
-    } else {
-      activeSectionId.value = null;
-    }
+      if (!newSections.some(s => s.id === activeSectionId.value)) activeSectionId.value = newSections[0]!.id;
+    } else activeSectionId.value = null;
+
     nextTick(() => {
       updateActiveSection();
       updateWindow();
@@ -656,7 +649,7 @@ const handleNavEdge = (key: string, currentEl: HTMLElement) => {
   const scroller = scrollWrapperRef.value;
   const list = sectionsListRef.value;
   if (!scroller || !list) return;
-  const chordId = currentEl.dataset['chordId'];
+  const { chordId } = currentEl.dataset;
   if (!chordId) return;
   const sectionIndex = chordSections.value.findIndex(section => section.chords.some(c => c.id === chordId));
   const plan = sectionPlans.value[sectionIndex];
@@ -674,19 +667,15 @@ const handleNavEdge = (key: string, currentEl: HTMLElement) => {
   const scRect = scroller.getBoundingClientRect();
   const rowScreenTop = gridEl.getBoundingClientRect().top + targetRow.top;
   const margin = getPickerGridGapPx();
-  if (key === 'ArrowDown' && rowScreenTop + targetRow.height > scRect.bottom) {
+  if (key === 'ArrowDown' && rowScreenTop + targetRow.height > scRect.bottom)
     scroller.scrollTop += rowScreenTop + targetRow.height - scRect.bottom + margin;
-  } else if (key === 'ArrowUp' && rowScreenTop < scRect.top) {
-    scroller.scrollTop -= scRect.top - rowScreenTop + margin;
-  }
+  else if (key === 'ArrowUp' && rowScreenTop < scRect.top) scroller.scrollTop -= scRect.top - rowScreenTop + margin;
+
   // 两跳 rAF：滚动事件合帧 → 窗口更新渲染 → 目标卡可查询。偶尔仍未就绪再退避一帧重试
   const focusTarget = (retry = true) => {
     const el = list.querySelector<HTMLElement>(`[data-chord-id="${target.id}"]`);
-    if (el) {
-      el.focus({ preventScroll: true });
-    } else if (retry) {
-      requestAnimationFrame(() => focusTarget(false));
-    }
+    if (el) el.focus({ preventScroll: true });
+    else if (retry) requestAnimationFrame(() => focusTarget(false));
   };
   requestAnimationFrame(() => requestAnimationFrame(() => focusTarget()));
 };

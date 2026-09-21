@@ -152,13 +152,11 @@ export async function decryptSyncSettingsSecrets(
   const key = await deriveKey(passphrase, salt, resolveIterations(blob));
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv as BufferSource }, key, data as BufferSource);
   const parsed: unknown = JSON.parse(new TextDecoder().decode(plain));
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('解密结果非对象');
-  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('解密结果非对象');
+
   const result: Record<string, string> = {};
-  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-    if (typeof v === 'string') result[k] = v;
-  }
+  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) if (typeof v === 'string') result[k] = v;
+
   return result;
 }
 

@@ -164,7 +164,7 @@ const PANEL_META: Record<WorkbenchPanelId, { icon: IconName; title: string; desc
     export: {
       icon: 'image-down',
       title: '导出图片',
-      description: 'PNG 与背景',
+      description: '图片与背景',
       storageKey: STORAGE_KEYS.WORKBENCH_EXPORT_COLLAPSED,
     },
   };

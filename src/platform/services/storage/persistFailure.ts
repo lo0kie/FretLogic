@@ -46,9 +46,9 @@ export const onPersistFailure = (listener: PersistFailureListener): (() => void)
 
 /** 判断错误是否因存储配额超限；各浏览器 name 与文案有差异，故按名字与消息双重识别。 */
 export const isQuotaExceededError = (error: unknown): boolean => {
-  if (typeof DOMException !== 'undefined' && error instanceof DOMException) {
+  if (typeof DOMException !== 'undefined' && error instanceof DOMException)
     return error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED';
-  }
+
   return error instanceof Error && /quota/i.test(`${error.name}${error.message}`);
 };
 

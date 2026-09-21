@@ -1,5 +1,5 @@
 /**
- * 乐谱导出动作实现（懒加载模块，由 useScoreExportActions 状态壳动态 import）：
+ * 乐谱导出动作实现（懒加载模块，由 useScoreExport 状态壳动态 import）：
  * - 长图复制 / 下载（normal 模式）
  * - A4 分页 Zip 下载
  * - A4 分页 PDF 下载
@@ -7,13 +7,11 @@
  *
  * 独立成模块的原因：workerExportService / useScoreRenderPayload / pdf / print 等渲染链路
  * 只在用户点击导出时才需要，静态挂在 TopHeader 上会把整条链拖进首屏闭包
- * （见 useScoreExportActions 的动态 import 注释）。store 与 payload 上下文在模块首次加载时
+ * （见 useScoreExport 的动态 import 注释）。store 与 payload 上下文在模块首次加载时
  * 初始化一次（所依赖的 composable 均只读 store/computed，无生命周期钩子，可在组件外调用）。
  */
 import { storeToRefs } from 'pinia';
 
-import { computeChordFingerprint } from '@/domains/chord/theory/theory';
-import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
 import {
   DEFAULT_SCORE_TITLE,
   getScorePageSize,
@@ -23,18 +21,16 @@ import {
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { currentRenderData, readA4PageBlob } from '@/domains/score/preview/scorePreviewCache';
+import { buildScoreRenderCacheKey } from '@/domains/score/preview/scoreRenderCacheKey';
 import { runWorkerExport } from '@/domains/score/preview/services/workerExportService';
 import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
-import { isDark } from '@/platform/composables/useTheme';
 import { reencodeAsPng, writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { buildExportFileName, triggerBlobDownload } from '@/platform/utils/canvas';
-import { buildImagePdf } from '@/platform/utils/pdf';
-import { printImagePages } from '@/platform/utils/print';
+import { buildExportFileName, buildImagePdf, printImagePages, triggerBlobDownload } from '@/platform/utils/output';
 
-import type { PdfImagePage } from '@/platform/utils/pdf';
+import type { PdfImagePage } from '@/platform/utils/output';
 
 const scoreEditor = useScoreEditorStore();
 const settingsStore = useSettingsStore();
@@ -45,9 +41,9 @@ const { chordsLookupMap } = useScoreLinesData();
 
 /**
  * 长图结果单槽缓存：复制→下载这类连击（内容未变）直接复用上一次渲染产物，
- * 省掉一次约 2s 的 Worker 渲染。键覆盖与预览内容键相同的失效维度
- * （歌曲内容/元数据/版本 + 全部导出排版设置 + 主题明暗 + 槽位引用和弦指纹），
- * 任一变化即未命中并覆盖重渲染——只留最新一份，长图体积大（可达几十 MB）不宜多槽。
+ * 省掉一次约 2s 的 Worker 渲染。键即预览面板使用的同一个 `buildScoreRenderCacheKey`
+ * （同一份维度清单，见 scoreRenderCacheKey），任一维度变化即未命中并覆盖重渲染——
+ * 只留最新一份，长图体积大（可达几十 MB）不宜多槽。
  *
  * 同一份产物另外按需缓存一份 PNG（见 longImagePngBlob）：
  * Chrome 的 ClipboardItem 只接受 image/png，而 Worker 渲染产物恒为 JPEG，
@@ -59,47 +55,6 @@ let longImageCacheBlob: Blob | null = null;
 /** 长图 PNG 副本的键：与 longImageCacheKey 同口径，不同即视为失效（换歌/换设置后不会张冠李戴） */
 let longImagePngKey = '';
 let longImagePngBlob: Blob | null = null;
-
-const buildLongImageCacheKey = (): string => {
-  const song = scoreEditor.activeSong;
-  if (!song) return '';
-  // 槽位引用和弦指纹 + 横按签名：与 ScorePreviewPane.buildContentKey 真同口径。
-  // ⚠️ 此前只拼指纹漏了横按签名（computeChordFingerprint 不含 barres），而 song.version
-  // 只在乐谱自身被 touchSong 时递增、改和弦库实体不 bump 歌曲版本 ⇒ 只改横按时键不变，
-  // 单槽缓存直接回吐旧 blob——预览/PDF/ZIP 都刷新、唯独长图陈旧。
-  const refSignatures: string[] = [];
-  for (const slots of song.chordMap.values()) {
-    for (const chordId of [...slots.char.values(), ...slots.start, ...slots.end]) {
-      const chord = chordsLookupMap.value.get(chordId ?? '');
-      refSignatures.push(
-        chord ? `${computeChordFingerprint(chord)}:${computeBarresSignature(chord.barres)}` : `?${chordId}`
-      );
-    }
-  }
-  refSignatures.sort();
-  return [
-    song.id,
-    song.title,
-    song.singer,
-    song.playKey,
-    song.originalKey,
-    song.capo,
-    song.version,
-    song.lyrics,
-    settingsStore.scoreChordShorthand,
-    settingsStore.scoreLayoutAlign,
-    settingsStore.scoreShowBarre,
-    settingsStore.scoreLyricsFontWeight,
-    settingsStore.scoreExportQuality,
-    settingsStore.scorePageMargin,
-    settingsStore.scorePageSize,
-    settingsStore.scoreIgnoreEmptySpace,
-    scoreEditor.previewFontScale,
-    scoreEditor.previewFretboardScale,
-    isDark.value,
-    refSignatures.join('|'),
-  ].join('\u0001');
-};
 
 /**
  * 预览 tab 的导出：整曲经 Worker 离屏渲染为一张长图（normal 模式），
@@ -276,7 +231,7 @@ const getA4Blobs = async (): Promise<Blob[]> => {
 
 /** 取长图 Blob：优先命中单槽缓存（复制后紧接着下载即复用同一份产物），未命中才走 Worker 渲染 */
 const getLongImageBlob = async (): Promise<Blob> => {
-  const key = buildLongImageCacheKey();
+  const key = buildScoreRenderCacheKey(scoreEditor.activeSong, chordsLookupMap.value);
   if (key && key === longImageCacheKey && longImageCacheBlob) return longImageCacheBlob;
 
   const { blobs } = await runWorkerExport(buildRenderPayload('normal'));

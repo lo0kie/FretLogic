@@ -146,25 +146,22 @@ const TYPE_CONFIG_MAP: Record<FeedbackType, { icon: IconName; description: strin
 };
 
 // 开发期提示：type 新增枚举但漏加 TYPE_CONFIG_MAP 时给出警告，避免静默降级为默认图标/文案
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV)
   watch(
     () => props.type,
     t => {
-      if (t && !(t in TYPE_CONFIG_MAP)) {
+      if (t && !(t in TYPE_CONFIG_MAP))
         console.warn(`[Feedback] type "${t}" 未在 TYPE_CONFIG_MAP 中配置，已回退为默认图标/文案。`);
-      }
     },
     { immediate: true }
   );
-}
 
 const isLoadingState = computed(() => props.type === 'loading');
 
 const resolvedIcon = computed<IconName | Component>(() => {
   // loading 态强制走旋转图标：显式传 icon 时复用该图标旋转，否则用默认 loader-2
-  if (props.type === 'loading') {
-    return typeof props.icon === 'string' ? props.icon : 'loader-2';
-  }
+  if (props.type === 'loading') return typeof props.icon === 'string' ? props.icon : 'loader-2';
+
   if (props.icon) return props.icon;
   return TYPE_CONFIG_MAP[props.type]?.icon ?? 'inbox';
 });
@@ -227,15 +224,14 @@ const actionBtnSize = computed(() => sizeConfig.value.actionBtnSize);
 const zoneClass = computed(() => {
   // 加载态无需圆形底：旋转图标直接展示
   if (props.type === 'loading') return 'flex items-center justify-center';
-  if (props.image && !isImageError.value) {
+  if (props.image && !isImageError.value)
     // lg 下图标容器是 64px 圆形区；图片分支预留同尺寸，加载失败回退时不再有明显布局跳变
     return props.size === 'lg'
       ? 'flex min-h-16 min-w-16 items-center justify-center'
       : 'flex items-center justify-center';
-  }
-  if (props.size === 'lg') {
-    return 'w-16 h-16 rounded-full bg-surface-panel-hover flex items-center justify-center';
-  }
+
+  if (props.size === 'lg') return 'w-16 h-16 rounded-full bg-surface-panel-hover flex items-center justify-center';
+
   return 'flex items-center justify-center';
 });
 

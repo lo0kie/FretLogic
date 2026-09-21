@@ -35,7 +35,7 @@ import {
   FADE_OFFSET_PROP,
   FADE_OFFSET_TARGET_PROP,
   fadeTransition,
-} from '@/platform/utils/fadeMask';
+} from '@/platform/utils/dom';
 import { mergeTransitionItem, removeTransitionItems } from '@/platform/utils/motion';
 
 import type { Directive } from 'vue';
@@ -96,8 +96,8 @@ interface EdgeFadeState {
   appliedOffset: string;
   /** 平滑卸载的延时句柄：端点过渡回 0 后再摘 mask；重新挂载时取消 */
   clearTimer: ReturnType<typeof setTimeout> | null;
-  observer: ResizeObserver;
-  mutationObserver: MutationObserver;
+  /** 容器尺寸观察器；mounted 内创建，创建前为 null */
+  observer: ResizeObserver | null;
   /** 已被 observer 观察的直接子元素集合：childList 变化时增量增删，避免重复 observe */
   observedChildren: Set<Element>;
   cleanups: (() => void)[];
@@ -122,12 +122,11 @@ function resolveOptions(binding: EdgeFadeBinding, modifiers: Record<string, bool
   // 方向优先级：.y / .x 修饰符 > 选项对象 direction > undefined（按溢出自动判定两轴）
   const optionDirection = binding && typeof binding === 'object' ? binding.direction : undefined;
   const direction = modifiers['y'] ? 'y' : modifiers['x'] ? 'x' : optionDirection;
-  if (binding === false) {
-    return { enabled: false, size: DEFAULT_FADE_SIZE, flushEps: DEFAULT_FLUSH_EPS, direction };
-  }
-  if (typeof binding === 'number' || typeof binding === 'string') {
+  if (binding === false) return { enabled: false, size: DEFAULT_FADE_SIZE, flushEps: DEFAULT_FLUSH_EPS, direction };
+
+  if (typeof binding === 'number' || typeof binding === 'string')
     return { enabled: true, size: binding, flushEps: DEFAULT_FLUSH_EPS, direction };
-  }
+
   if (binding && typeof binding === 'object') {
     const { size = DEFAULT_FADE_SIZE, offset, flushEps = DEFAULT_FLUSH_EPS } = binding;
     return { enabled: true, size, offset, flushEps, direction };
@@ -140,9 +139,7 @@ function writeFade(el: HTMLElement, state: EdgeFadeState, values: Record<string,
   const sig = Object.values(values).join('|');
   if (state.lastFade === sig) return;
   state.lastFade = sig;
-  for (const [prop, value] of Object.entries(values)) {
-    el.style.setProperty(prop, String(value));
-  }
+  for (const [prop, value] of Object.entries(values)) el.style.setProperty(prop, String(value));
 }
 
 /** 下发起始缘内缩量：写在注册过的 --fade-offset 上，值变化由 transition 平滑过渡。
@@ -204,9 +201,8 @@ function endFades(el: HTMLElement, axis: EdgeFadeDirection, flushEps: number): [
  * auto 按两轴溢出独立判定——两轴均有溢出时双轴羽化，单轴溢出按该轴，均未溢出返回 false。
  */
 function resolveFadeMode(el: HTMLElement, options: ResolvedOptions): FadeMode | false {
-  if (options.direction) {
-    return overflowSize(el, options.direction) <= options.flushEps ? false : options.direction;
-  }
+  if (options.direction) return overflowSize(el, options.direction) <= options.flushEps ? false : options.direction;
+
   const overX = overflowSize(el, 'x') > options.flushEps;
   const overY = overflowSize(el, 'y') > options.flushEps;
   if (overX && overY) return 'dual';
@@ -227,20 +223,19 @@ function resolveFadeMode(el: HTMLElement, options: ResolvedOptions): FadeMode | 
  */
 function updateObservedChildren(el: HTMLElement, state: EdgeFadeState, mutations: MutationRecord[]): void {
   for (const mutation of mutations) {
-    for (const node of mutation.removedNodes) {
+    for (const node of mutation.removedNodes)
       if (node instanceof Element && state.observedChildren.has(node)) {
-        state.observer.unobserve(node);
+        state.observer?.unobserve(node);
         state.observedChildren.delete(node);
       }
-    }
-    for (const node of mutation.addedNodes) {
+
+    for (const node of mutation.addedNodes)
       // 只收直接子元素：subtree 下深层后代的增删不归本层观察，其宿主盒尺寸变化会经由
       // 已观察的直接子元素间接体现
       if (node.parentNode === el && node instanceof Element && !state.observedChildren.has(node)) {
-        state.observer.observe(node);
+        state.observer?.observe(node);
         state.observedChildren.add(node);
       }
-    }
   }
 }
 
@@ -395,8 +390,7 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
       offsetSwitchTimer: null,
       appliedOffset: '',
       clearTimer: null,
-      observer: undefined as unknown as ResizeObserver,
-      mutationObserver: undefined as unknown as MutationObserver,
+      observer: null,
       observedChildren: new Set(),
       cleanups: [],
       // 占位：排帧器回调要引用 state 自身，故只能在 state 建好后创建再回填，见下方赋值处
@@ -435,7 +429,6 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
       scheduleSync();
     });
     mutationObserver.observe(el, { childList: true, subtree: true, characterData: true });
-    state.mutationObserver = mutationObserver;
 
     state.cleanups.push(() => {
       el.removeEventListener('scroll', onScroll);

@@ -262,6 +262,13 @@
 .v-drawer-bottom-enter-active,
 .v-drawer-bottom-leave-active {
   transition: opacity $duration-slow $bezier-standard;
+
+  // 面板 transform 缓动必须在出场类里显式钉住，不能依赖静态 .drawer-panel 规则兜底：
+  // 出场期间用 bezier-sidebar（0.2, 0.8, 0.2, 1，即刻起步 + 单调减速），数学上无过冲点，
+  // 保证滑入/滑出绝无回弹；静态规则的 bezier-standard 仅服务非出场场景
+  .drawer-panel {
+    transition: transform $duration-slow $bezier-sidebar;
+  }
 }
 
 .v-drawer-right-enter-from,

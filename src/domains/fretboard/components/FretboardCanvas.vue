@@ -12,11 +12,11 @@ import {
   renderFretboardChordName,
   renderFretboardFretMarks,
 } from '@/domains/fretboard/components/renderFretboardCanvas';
-import { DEFAULT_FRET_COUNT, MIN_FRET_COUNT } from '@/domains/fretboard/constants';
+import { clampDrawFretCount } from '@/domains/fretboard/constants';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { activeTheme } from '@/platform/composables/useTheme';
+import { createLruCache } from '@/platform/utils/cache';
 import { observeVisibility } from '@/platform/utils/common';
-import { createLruCache } from '@/platform/utils/lruCache';
 
 import type { Chord } from '@/domains/chord/types';
 import type { RenderFretboardOptions } from '@/domains/fretboard/components/renderFretboardCanvas';
@@ -63,9 +63,7 @@ const bitmapCache = createLruCache<ImageBitmap | HTMLCanvasElement>(256, {
   // 位图本体即解码后的 RGBA 像素：w×h×4 字节（开发面板字节读数用）
   weigh: (_, item) => item.width * item.height * 4,
   onEvict: (_key, item) => {
-    if ('close' in item && typeof item.close === 'function') {
-      item.close();
-    }
+    if ('close' in item && typeof item.close === 'function') item.close();
   },
 });
 
@@ -73,9 +71,7 @@ const bitmapCache = createLruCache<ImageBitmap | HTMLCanvasElement>(256, {
 // HMR 未必会让已挂载的组件实例重建（找不到实例时 reload 被跳过），它可能继续用旧模块闭包里的
 // 这份缓存读写 —— 一旦反注册，那之后的写入就全部进不了开发面板（表现为「指板位图永远是 0」）。
 // 注册表那边另有一道闸门：新实例登记时把同名旧条目移出，故不会残留重复条目。
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => bitmapCache.clear());
-}
+if (import.meta.hot) import.meta.hot.dispose(() => bitmapCache.clear());
 
 /** 设备像素比下限：低于此值的屏幕也按此倍数渲染，保证 1x 屏的线条不发虚 */
 const DPR_FLOOR = 2.5;
@@ -163,7 +159,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 
-const fretCount = computed(() => Math.max(MIN_FRET_COUNT, props.chord.fretCount || DEFAULT_FRET_COUNT));
+const fretCount = computed(() => clampDrawFretCount(props.chord.fretCount));
 
 /** 名字位是否预留：显示名字时必然预留（几何即现状），隐藏名字时由 reserveChordName 显式要求 */
 const reserveName = computed(() => props.showChordName || props.reserveChordName);
@@ -290,7 +286,7 @@ function getBoardLayer(): CanvasImageSource | null {
   // 无论本消费方画不画名字 —— 这是与 picker 共用同一批条目的关键
   renderFretboardBody(ctx, bodyRenderOptions.value);
 
-  if (typeof createImageBitmap === 'function') {
+  if (typeof createImageBitmap === 'function')
     // 离屏画布在此之后不再被本实例引用的内容改写，故无需复核 key：它与 key 一一对应。
     // 但要防「同一 key 有两个 promise 在途」（同一帧内该实例被绘制两次，前一张位图尚未落地）：
     // 若后落地者直接覆盖，LRU 会 onEvict 掉前一张 —— 而前一张可能已被别的命中路径 drawImage 过，
@@ -307,10 +303,10 @@ function getBoardLayer(): CanvasImageSource | null {
       .catch(() => {
         if (!bitmapCache.has(cacheKey)) bitmapCache.set(cacheKey, layer);
       });
-  } else {
+  else
     // 不支持 createImageBitmap 的环境（如部分老浏览器）：直接把画布当位图源
     bitmapCache.set(cacheKey, layer);
-  }
+
   return layer;
 }
 

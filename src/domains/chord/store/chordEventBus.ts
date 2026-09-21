@@ -12,7 +12,13 @@ type ChordIdsListener = (chordIds: string[]) => void;
 /** 和弦合并事件参数：key 为被丢弃的重复和弦 id，value 为合并后保留的和弦 id */
 type ChordsMergedListener = (mapping: Map<string, string>) => void;
 
-/** 注意：必须用 type 而非 interface——mitt 泛型约束要求可满足 Record<string, unknown> 的索引签名 */
+/**
+ * 注意：必须用 type 而非 interface——mitt 的泛型约束是
+ * `Events extends Record<EventType, unknown>`（`EventType = string | symbol`），
+ * 而 TS 的隐式索引签名只赋予**对象字面量类型**，interface 因可被声明合并扩展而不参与：
+ * 一旦改成 interface，`mitt<ChordEvents>()` 会直接不满足约束。
+ */
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions -- 见上：interface 不获得隐式索引签名，会破坏 mitt 的泛型约束
 type ChordEvents = {
   removed: string[];
   restored: string[];

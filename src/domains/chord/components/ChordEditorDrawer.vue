@@ -66,7 +66,7 @@
         :key="group.id"
         :title="group.name"
         @click="selectedTargetGroupId = group.id"
-        data-focusable-inline
+        data-focusable-outline
         class="flex w-full min-w-0 cursor-pointer items-center rounded-md border border-border-base p-md text-xs font-bold transition-all duration-fast hover:border-primary"
       >
         <div v-marquee.fade>

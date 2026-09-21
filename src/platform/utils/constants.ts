@@ -26,11 +26,18 @@ export type FormComponentWidth = keyof typeof FORM_COMPONENT_WIDTH_MAP | (string
 export const resolveComponentWidth = (width?: FormComponentWidth): string | undefined => {
   if (width === undefined || width === null || width === '') return undefined;
   if (typeof width === 'number') return `${width}px`;
-  if (width in FORM_COMPONENT_WIDTH_MAP) {
+  if (width in FORM_COMPONENT_WIDTH_MAP)
     return FORM_COMPONENT_WIDTH_MAP[width as keyof typeof FORM_COMPONENT_WIDTH_MAP];
-  }
+
   return width;
 };
+
+// ===================== 持久化写入节奏 =====================
+
+/** 本地写入防抖窗口（ms）：连续编辑期间合并写入，避免每次按键都触发一次 IDB 事务 */
+export const PERSIST_DEBOUNCE_MS = 400;
+/** 防抖最长等待（ms）：输入不停时也在此刻强制落盘，防止「一直在打字就一直没保存」 */
+export const PERSIST_MAX_WAIT_MS = 1500;
 
 // ===================== 存储键 =====================
 

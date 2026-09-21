@@ -116,8 +116,91 @@ export default tseslint.config(
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+      // 对象类型定义统一用 interface（type X = { ... } → interface X { ... }）。
+      // 只约束「对象类型字面量」这一形态：联合 / 交叉 / 映射 / 条件类型本来就必须写 type，不受影响。
+      // ⚠️ 它的 --fix 是盲目文本改写、不判语义：TS 的隐式索引签名只赋予「对象字面量类型」，
+      //    interface 因可被声明合并扩展而不参与。故凡「type 别名需满足 Record<...> 约束」的写法
+      //    （如 mitt 的 `mitt<Events extends Record<EventType, unknown>>`），改成 interface 即编译不过。
+      //    这类点就地豁免，勿依赖 --fix；现例见 src/domains/chord/store/chordEventBus.ts 的 ChordEvents。
+      '@typescript-eslint/consistent-type-definitions': ['error', 'interface'],
       // 统一数组类型写法为 T[]（Array<T> 由 --fix 机械转换）
       '@typescript-eslint/array-type': ['error', { default: 'array' }],
+      // 箭头函数体只含一条 return 时强制简写为表达式体（() => { return x; } → () => x）。
+      // 判据是「块体恰好只有一条 return」——`() => { foo(); }` 这类无 return 的块不受影响：
+      // 简写会把它变成「返回 foo() 的返回值」，语义改变，故规则刻意放过。
+      // ⚠️ 首选项的默认值是 always（反向要求补花括号），与意图相反，必须显式写出 as-needed。
+      // 该规则可自动修复，且修复会保留块内注释（只删花括号与 return 关键字）。
+      'arrow-body-style': ['error', 'as-needed'],
+      // ---- 冗余写法收敛：同一意图的多种写法归一（以下全部可 --fix）----
+      // 属性与方法简写：{ foo: foo } → { foo }，foo: function () {} → foo() {}
+      'object-shorthand': ['error', 'always'],
+      // 删除函数末尾多余的裸 return;
+      'no-useless-return': 'error',
+      // 去掉已 return 的 if 之后多余的 else；else if 默认放行（allowElseIf 默认 true）
+      'no-else-return': 'error',
+      // else 块内只有一个 if 时提升为 else if
+      'no-lonely-if': 'error',
+      // x ? true : false → x；x ? x : y → x || y。
+      // ⚠️ 第二项的默认值是 defaultAssignment: true，会放过 x ? x : y，故须显式关掉才生效。
+      //    该改写语义等价（x 为 0 / '' / null 时两侧结果一致），纯属风格取向，改回 true 即恢复默认。
+      'no-unneeded-ternary': ['error', { defaultAssignment: false }],
+      // 算术与位运算自赋值：x = x + 1 → x += 1
+      'operator-assignment': ['error', 'always'],
+      // 逻辑自赋值：x = x || y → x ||= y（覆盖 ||= / &&= / ??=）
+      'logical-assignment-operators': ['error', 'always'],
+      // 去掉同名的重命名：import { foo as foo } / export { a as a } / const { b: b } = o
+      'no-useless-rename': 'error',
+      // 去掉无意义的计算属性键：{ ['a']: 1 } → { a: 1 }（class 成员一并覆盖）
+      'no-useless-computed-key': 'error',
+      // 声明后不再重新赋值的 let → const。
+      // 无初值的声明（let x; x = 1;）仍会报告，但规则刻意不提供 --fix
+      //（源码 prefer-const.js 第 460 行：Don't do a fix unless all variables in the declarations
+      // are initialized），故 --fix 不会产出非法的 `const x;`。
+      'prefer-const': 'error',
+      // 隐式类型转换改为显式调用：!!x → Boolean(x)、+x → Number(x)、'' + x → String(x)。
+      // 三项默认全开（boolean / number / string），故字符串拼接也一并纳入；
+      // !!x 不区分上下文，if (!!x) 同样会报（只想治理布尔上下文的话是另一条 no-extra-boolean-cast）；
+      // --fix 仅在 Boolean 未被局部遮蔽时才提供（规则源码据此判定），是安全的。
+      // ⚠️ 但 !!x → Boolean(x) 会破坏 TS 真值收窄：!!x 是收窄守卫，Boolean(x) 只是普通调用。
+      // 需要收窄的场合请写 x !== null / x !== undefined（曾把 BasePopover 的
+      // `!!leave && isPointerInRect(leave)` --fix 成 Boolean(leave) 后报「参数不能赋给类型」）。
+      'no-implicit-coercion': 'error',
+      // ---- 旧 API / 旧写法 → 等价的新语法（以下全部可 --fix）----
+      // 字符串拼接改用模板串：'a' + b → `a${b}`。
+      // 与上面 no-implicit-coercion 在 `'' + x` 上重叠（它改成 String(x)、本条改成模板串），
+      // 两者会命中同一节点，但 --fix 一轮即收敛：改完后另一种写法不再匹配，不会来回互改。
+      'prefer-template': 'error',
+      // Object.assign({}, o) → { ...o }。仅当首参是对象字面量时报，无附着属性/访问器语义差异。
+      'prefer-object-spread': 'error',
+      // Math.pow(a, b) → a ** b（ES2016 幂运算符，target ES2020 无碍）
+      'prefer-exponentiation-operator': 'error',
+      // 回调里的 function 表达式 → 箭头函数。
+      // 默认 { allowNamedFunctions: false, allowUnboundThis: true }：具名函数、以及函数体内
+      // 用到 this 的函数表达式都不报（保住依赖动态 this 绑定的回调）。
+      // 本仓不装 eslint-plugin-prettier，且 lint:fix 是「lint --fix」+「format」两步分开执行，
+      // 正是 eslint-config-prettier 认定可安全启用的前提——它只在 prettier.js 入口（配合
+      // prettier/prettier 规则时）才把这条与 arrow-body-style 置为 0，本仓用的是 /flat（= index.js），
+      // 不含这两条，故与上面已启用的 arrow-body-style 可安全共存。
+      'prefer-arrow-callback': 'error',
+      // 用解构取值：const x = o.x → const { x } = o；数组形态 const first = arr[0] → const [first] = arr。
+      // ⚠️ 此处刻意沿用默认值：array / object 均开，VariableDeclarator 与 AssignmentExpression 均开。
+      //    要收窄成「只治对象形态」，写成：
+      //    ['error', { VariableDeclarator: { array: false, object: true },
+      //                AssignmentExpression: { array: false, object: true } }]。
+      // ⚠️ --fix 覆盖面很窄：源码 shouldFix 只认「VariableDeclarator + 非计算属性 + 同名」这一种形态
+      //   （即 const x = o.x）。数组形态、赋值形态（x = o.x）、重命名形态（const y = o.x）都只报告、
+      //   不给 --fix，必须手改——所以 lint:fix 跑完仍会剩下一批，不是没生效。
+      'prefer-destructuring': ['error'],
+      // ⚠️ dot-notation（obj['a'] → obj.a）**不可开**，此处显式声明拒绝，防止后人顺手补上。
+      // 本仓 tsconfig.json:25 开了 noPropertyAccessFromIndexSignature：索引签名属性
+      //（Record<string, T>、ImportMetaEnv、迁移时的 RawRecord 等）**必须**写 obj['a']，
+      // 写成 obj.a 是 ts(4111) 编译错误。而核心 dot-notation 是纯语法规则、不看类型，
+      // 会把这类被编译器强制的写法一律判为违规，其 --fix 再把它们改回编译不过的点号形式
+      //（静态扫描约 260 处 / 59 个文件，抽样确认以索引签名访问与类型位置为主）。
+      // 能做这件事的只有 @typescript-eslint/dot-notation——它会直接读 tsconfig 的
+      // noPropertyAccessFromIndexSignature 并据此放行——但它 requiresTypeChecking，
+      // 需引入 projectService，与「全量类型检查交给 vue-tsc」的分工相悖。
+      'dot-notation': 'off',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-debugger': 'error',
       'vue/multi-word-component-names': 'off',
@@ -160,6 +243,15 @@ export default tseslint.config(
       'vue/prefer-true-attribute-shorthand': ['error', 'always'],
       // 强制事件处理器使用 inline 风格（函数调用必须显式带括号，且禁止内联箭头函数）
       'vue/v-on-handler-style': ['error', 'inline'],
+      // 事件绑定统一用 @ 简写（v-on:click → @click）
+      'vue/v-on-style': ['error', 'shorthand'],
+      // 插槽统一用 # 简写（v-slot:default → #default）
+      'vue/v-slot-style': ['error', 'shorthand'],
+      // 去掉无意义的 v-bind 包装（:foo="'bar'" → foo="bar"）。
+      // 布尔 prop 的 :foo="true" 已由上方 prefer-true-attribute-shorthand 单独管辖，两者互补不重叠。
+      'vue/no-useless-v-bind': 'error',
+      // 统一从 'vue' 导入（@vue/runtime-core 等内部包路径 → 'vue'）
+      'vue/prefer-import-from-vue': 'error',
       // defineEmits 必须用类型字面量声明（与项目类型优先风格一致）
       'vue/define-emits-declaration': ['error', 'type-based'],
       // defineProps 同样必须用类型字面量声明
@@ -291,5 +383,23 @@ export default tseslint.config(
   // 让 Prettier 独占格式化主导权，消除 eslint --fix 与 prettier --write 的反复互改。
   // 注：vue/attributes-order 需另行显式关闭（见上方 src 规则块），因属性顺序现由
   // prettier-plugin-organize-attributes 统一处理，而本配置默认不覆盖该规则。
-  prettier
+  // 注 2：curly 是本配置里唯一必须写在本对象**之后**的规则——官方把它列为 special rule
+  //（index.js:12 的值为 0，等价 off），写在上面任何块里都会被本对象静默覆盖成关闭。见文件末尾。
+  prettier,
+  {
+    // ⚠️ 本块的位置是功能性的，不要上移：eslint-config-prettier 把 curly 置为 0（= off），
+    // 而 flat config 的规则合并是「后面的对象覆盖前面的」，放进上面的 src 块会被覆盖成 off，
+    // 且不报任何错——规则会静默失效。eslint-config-prettier 官方 README 明确：
+    // curly 用 "all" 或 "multi" 与 Prettier 不冲突；只有 "multi-line" / "multi-or-nest" 才冲突
+    //（那两个允许单行体不写花括号，Prettier 又会把它排成多行，形成互改）。
+    files: ['src/**/*.{ts,vue}'],
+    rules: {
+      // 单语句块强制去掉花括号：if (x) { return; } → if (x) return;
+      // 判据是「语句条数」而非行数——单条语句的跨行块同样会被折叠，随后由 prettier 合回一行。
+      // 多条语句、空块，以及删括号会破坏语义或语法的情形（块内是词法声明 let/const/class/function，
+      // 或块后紧跟 else 而块内是悬垂 if）由规则内部的 areBracesNecessary 护栏保留花括号，
+      // 故 --fix 不会产出坏代码（ast-utils.js:2935-2940）。
+      curly: ['error', 'multi'],
+    },
+  }
 );

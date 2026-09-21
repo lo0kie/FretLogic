@@ -51,7 +51,7 @@
         @keydown.enter.prevent.stop="handleItemClick(item)"
         @keydown.space.prevent.stop="handleItemClick(item)"
         @mousedown="item.disabled && $event.preventDefault()"
-        data-focusable-inline
+        data-focusable-outline
         class="group relative flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left transition-colors duration-fast outline-none select-none enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover)) disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
         type="button"
       >
@@ -141,9 +141,7 @@ const itemEls = ref<(HTMLButtonElement | null)[]>([]);
 
 /** 收集菜单项 DOM（函数式 ref），供键盘导航聚焦 */
 const setItemEl = (el: unknown, index: number) => {
-  if (el instanceof HTMLButtonElement) {
-    itemEls.value[index] = el;
-  }
+  if (el instanceof HTMLButtonElement) itemEls.value[index] = el;
 };
 
 type MenuSubmenuInstance = InstanceType<typeof MenuSubmenu>;
@@ -172,9 +170,9 @@ const handleSubmenuOpen = (index: number) => {
     submenuInstances.value[index]?.close();
     return;
   }
-  if (lastOpenSubmenuIndex !== -1 && lastOpenSubmenuIndex !== index) {
+  if (lastOpenSubmenuIndex !== -1 && lastOpenSubmenuIndex !== index)
     submenuInstances.value[lastOpenSubmenuIndex]?.close();
-  }
+
   lastOpenSubmenuIndex = index;
 };
 

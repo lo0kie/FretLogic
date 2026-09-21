@@ -39,17 +39,12 @@ export const reconcileBarres = (
     let newTo = oldBarre.toString;
 
     // 智能边界收缩：如果横按最外侧的锚点音符被移除了，自动向内收缩边界
-    while (newFrom <= newTo && (newFrets[newFrom] ?? -1) !== oldBarre.fret) {
-      newFrom++;
-    }
-    while (newTo >= newFrom && (newFrets[newTo] ?? -1) !== oldBarre.fret) {
-      newTo--;
-    }
+    while (newFrom <= newTo && (newFrets[newFrom] ?? -1) !== oldBarre.fret) newFrom++;
+
+    while (newTo >= newFrom && (newFrets[newTo] ?? -1) !== oldBarre.fret) newTo--;
 
     // 收缩后为空（全部锚点消失）直接废弃
-    if (newFrom > newTo) {
-      return;
-    }
+    if (newFrom > newTo) return;
 
     const reconciled: BarreEntity = {
       fret: oldBarre.fret,
@@ -57,9 +52,7 @@ export const reconcileBarres = (
       toString: newTo as StringIndex,
       finger: oldBarre.finger,
     };
-    if (isBarreStillValid(newStrings, reconciled)) {
-      newBarres.push(reconciled);
-    }
+    if (isBarreStillValid(newStrings, reconciled)) newBarres.push(reconciled);
   });
 
   const merged = normalizeAndMergeBarres(newBarres, newStrings);
@@ -91,9 +84,8 @@ export const mergeAutoBarres = (
   const existing = (existingBarres ?? []).filter(b => isBarreStillValid(strings, b));
   const candidates = computeBarreCandidates(strings, fretCount).filter(c => {
     let noteCount = 0;
-    for (let s = c.fromString; s <= c.toString; s++) {
-      if (strings[s]?.fret === c.fret) noteCount++;
-    }
+    for (let s = c.fromString; s <= c.toString; s++) if (strings[s]?.fret === c.fret) noteCount++;
+
     return noteCount >= 3;
   });
 
@@ -108,20 +100,16 @@ export const pruneForFretCount = (
 ): void => {
   if (newVal >= oldVal) return;
   state.strings.forEach(str => {
-    if (str.fret > newVal) {
-      str.fret = -1;
-    }
+    if (str.fret > newVal) str.fret = -1;
   });
   // 根音所在弦被清除时，根标记一并失效
-  if (state.rootStringIndex !== null && (state.strings[state.rootStringIndex]?.fret ?? -1) < 0) {
+  if (state.rootStringIndex !== null && (state.strings[state.rootStringIndex]?.fret ?? -1) < 0)
     state.rootStringIndex = null;
-  }
+
   // 缩品位时同步清理越界横按
   if (state.barres) {
     const kept = state.barres.filter(b => b.fret <= newVal);
-    if (kept.length !== state.barres.length) {
-      state.barres = kept.length > 0 ? kept : undefined;
-    }
+    if (kept.length !== state.barres.length) state.barres = kept.length > 0 ? kept : undefined;
   }
 };
 
@@ -130,9 +118,8 @@ export const pruneForStringCount = (
   state: { rootStringIndex: StringIndex | null; barres?: BarreEntity[] },
   count: number
 ): void => {
-  if (state.rootStringIndex !== null && state.rootStringIndex >= count) {
-    state.rootStringIndex = null;
-  }
+  if (state.rootStringIndex !== null && state.rootStringIndex >= count) state.rootStringIndex = null;
+
   if (state.barres) {
     const kept = state.barres.filter(b => b.fromString < count && b.toString < count);
     state.barres = kept.length > 0 ? kept : undefined;

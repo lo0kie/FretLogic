@@ -1,6 +1,6 @@
 /**
  * 乐谱 Worker 渲染载荷的统一构建入口。
- * 预览面板（ScorePreviewPane）与 TopHeader 导出（useScoreExportActions）此前各自维护一份
+ * 预览面板（ScorePreviewPane）与 TopHeader 导出（useScoreExport）此前各自维护一份
  * 逐字相同的 15 参 payload 构造与全曲行索引逻辑，现收敛于此：设置项/编辑器状态读取单处维护，
  * 两侧只按模式取用。
  */
@@ -28,11 +28,13 @@ export const useScoreRenderPayload = () => {
 
   /**
    * 统一构造 Worker 渲染载荷（a4 分页 / normal 长图共用同一组设置项）。
-   * song 缺省取当前活动乐谱（调用方需自行保证非空，或先经 getAllLineIndices 判空）。
+   * song 缺省取当前活动乐谱；两者皆空即「无谱可渲染」，在此处显式失败，不留给下游解引用。
    */
-  const buildRenderPayload = (mode: 'normal' | 'a4', song: Song = scoreEditor.activeSong!): WorkerExportPayload =>
-    prepareWorkerExportPayload({
-      song,
+  const buildRenderPayload = (mode: 'normal' | 'a4', song?: Song): WorkerExportPayload => {
+    const target = song ?? scoreEditor.activeSong;
+    if (!target) throw new Error('当前没有打开的乐谱，无法渲染预览/导出');
+    return prepareWorkerExportPayload({
+      song: target,
       selectedIndices: getAllLineIndices(),
       chordsLookupMap: chordsLookupMap.value,
       mode,
@@ -48,6 +50,7 @@ export const useScoreRenderPayload = () => {
       pageSize: settingsStore.scorePageSize,
       ignoreEmptySpace: settingsStore.scoreIgnoreEmptySpace,
     });
+  };
 
   /**
    * 页脚合成：页面栅格不含页脚（见 services/footerOverlay），开关打开时在渲染线程按需叠加。

@@ -18,7 +18,8 @@
         :aria-label="computedAriaLabel"
         :class="[positionClass, alignClass, zIndexClass, fabSizeClass]"
         :style="positionStyle"
-        class="base-fab pointer-events-auto flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full border border-glass-border bg-surface-panel/95 shadow-lg backdrop-blur-xl select-none hover:ring-2 hover:ring-primary/70 active:scale-95"
+        data-focusable-outline
+        class="base-fab pointer-events-auto flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full border border-glass-border bg-surface-panel/95 shadow-lg backdrop-blur-xl select-none active:scale-95"
         type="button"
       >
         <slot>
@@ -122,12 +123,11 @@ const emit = defineEmits<{
 // left/right 与 top/bottom 的互斥规则分别落在 alignClass 与 positionStyle 两处、纯靠 !== undefined 约定。
 // 同时传入时高优先级一方胜出、另一方被静默忽略（无类型层约束）——开发期显式提示，避免调用方踩空。
 if (import.meta.env.DEV) {
-  if (props.left !== undefined && props.right !== undefined) {
+  if (props.left !== undefined && props.right !== undefined)
     logger.warn('BaseFab', 'left 与 right 同时传入：left 优先，right 被忽略');
-  }
-  if (props.top !== undefined && props.bottom !== undefined) {
+
+  if (props.top !== undefined && props.bottom !== undefined)
     logger.warn('BaseFab', 'top 与 bottom 同时传入：top 优先，bottom 被忽略');
-  }
 }
 
 const isViewActive = useKeepAliveVisible();

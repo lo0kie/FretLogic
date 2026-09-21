@@ -27,7 +27,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # pnpm@11.20.0 要求 Node ≥22.13（内建 node:sqlite）；低于此版本的 Node 会在
+          # pnpm install 时抛 ERR_UNKNOWN_BUILTIN_MODULE（实测 Node 20 部署失败）。
+          node-version: 22
       - name: Enable pnpm
         run: corepack enable && corepack prepare pnpm@11.20.0 --activate
       - name: Install dependencies

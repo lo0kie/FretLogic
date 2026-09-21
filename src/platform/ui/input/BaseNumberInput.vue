@@ -17,7 +17,8 @@
     :tabindex="disabled ? -1 : 0"
     @keydown="handleWrapperKeydown($event)"
     @wheel="handleWheel($event)"
-    class="group inline-flex items-center justify-between rounded-full border transition-all duration-fast select-none focus-within:ring-2 focus-within:ring-primary/70"
+    data-focusable-outline
+    class="group inline-flex items-center justify-between rounded-full border transition-all duration-fast select-none"
     ref="wrapperRef"
     role="spinbutton"
   >
@@ -101,6 +102,7 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { clamp } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { ComponentSize } from '@/platform/types';
@@ -186,19 +188,17 @@ const emit = defineEmits<{
 }>();
 
 // 仅在开发环境中提示非法区间，生产构建时被完全 Tree-shaking
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV)
   watch(
     () => [props.min, props.max] as const,
     ([min, max]) => {
-      if (min > max) {
+      if (min > max)
         console.warn(
           `[BaseNumberInput] min (${min}) 不应大于 max (${max})，此时 clamp 结果将恒为 max，步进与循环行为均不可预期。`
         );
-      }
     },
     { immediate: true }
   );
-}
 
 const isEditing = ref(false);
 const tempValue = ref('');
@@ -263,11 +263,11 @@ const alignToStep = (val: number): number => {
 
 /** 夹紧到 [min, max]，按需对齐步长并按精度取整 */
 const clampValue = (val: number): number => {
-  let v = Math.min(props.max, Math.max(props.min, val));
+  let v = clamp(val, props.min, props.max);
   if (props.stepStrictly) {
     // 对齐后可能溢出上界（min=0/step=10/max=25 输入 25 → round(2.5)=3 → 30），必须复夹
     v = alignToStep(v);
-    v = Math.min(props.max, Math.max(props.min, v));
+    v = clamp(v, props.min, props.max);
   }
   return roundToPrecision(v);
 };
@@ -316,9 +316,9 @@ const commitInput = () => {
   const nextVal = clampValue(parsed);
   if (nextVal !== modelValue.value) {
     // dev 提示：越界输入会被夹紧后写回，主动提示避免使用者误以为原值生效（与 BaseSlider 保持一致）
-    if (import.meta.env.DEV && (parsed < props.min || parsed > props.max)) {
+    if (import.meta.env.DEV && (parsed < props.min || parsed > props.max))
       console.warn(`[BaseNumberInput] 输入值 ${parsed} 超出范围 [${props.min}, ${props.max}]，已自动吸附到范围内。`);
-    }
+
     modelValue.value = nextVal;
     emit('change', nextVal);
   }
@@ -345,9 +345,7 @@ const handleStep = (sign: number, e?: { shiftKey?: boolean; altKey?: boolean }) 
   if (props.loopable) {
     if (nextVal > props.max) nextVal = props.min;
     else if (nextVal < props.min) nextVal = props.max;
-  } else {
-    nextVal = clampValue(nextVal);
-  }
+  } else nextVal = clampValue(nextVal);
 
   if (nextVal !== modelValue.value) {
     modelValue.value = nextVal;

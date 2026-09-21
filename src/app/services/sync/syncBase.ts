@@ -53,6 +53,20 @@ export const extractApiErrorDetail = async (response: Response): Promise<string>
   }
 };
 
+/**
+ * 「：详情」形式的错误后缀——Gitee 与 GitHub 两家的文案格式相同，故共用这一份。
+ * 无详情时返回空串（拼接后不留孤立标点）。自建服务器用「 (…)」形态，不走本函数。
+ */
+export const describeApiError = async (response: Response): Promise<string> =>
+  formatApiErrorDetail(await extractApiErrorDetail(response));
+
+/**
+ * 错误详情 → 文案后缀。与异步版本分开提供：调用方若需要先拿详情原文做判定
+ * （如 GitHub 靠 message 里是否出现 `sha` 区分「版本冲突」与「请求体校验失败」），
+ * 只能读一次 body，读完再拼接，不能二次调用 {@link describeApiError}。
+ */
+export const formatApiErrorDetail = (detail: string): string => (detail ? `：${detail}` : '');
+
 /** 创建共享基类实例：返回统一的请求函数与响应体解码校验函数，差异点由 deps 注入。 */
 export function createSyncProviderBase(deps: SyncBaseDeps) {
   const TIMEOUT_MS = SYNC_TIMEOUT_MS;
@@ -75,9 +89,8 @@ export function createSyncProviderBase(deps: SyncBaseDeps) {
         signal: controller.signal,
       });
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw new SyncError('TIMEOUT', '请求超时');
-      }
+      if (err instanceof Error && err.name === 'AbortError') throw new SyncError('TIMEOUT', '请求超时');
+
       throw classifyNetworkError(err);
     } finally {
       clearTimeout(timeoutId);
@@ -89,15 +102,13 @@ export function createSyncProviderBase(deps: SyncBaseDeps) {
     // payload 校验模块（含 zod）动态加载：仅拉取数据时才需要，保持其离开首屏闭包
     const { parseAndValidatePayload } = await import('@/app/services/validation/payload');
     const result = parseAndValidatePayload(await readRaw(response));
-    if (result.error === 'EMPTY') {
-      throw new SyncError('INVALID_CLOUD_DATA', '云端数据为空');
-    }
-    if (result.error === 'INVALID_JSON') {
-      throw new SyncError('INVALID_CLOUD_DATA', '云端数据不是合法的 JSON');
-    }
-    if (result.error === 'INVALID_SCHEMA' || !result.payload) {
+    if (result.error === 'EMPTY') throw new SyncError('INVALID_CLOUD_DATA', '云端数据为空');
+
+    if (result.error === 'INVALID_JSON') throw new SyncError('INVALID_CLOUD_DATA', '云端数据不是合法的 JSON');
+
+    if (result.error === 'INVALID_SCHEMA' || !result.payload)
       throw new SyncError('INVALID_CLOUD_DATA', '云端数据格式校验失败');
-    }
+
     return result.payload;
   };
 

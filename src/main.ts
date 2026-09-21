@@ -10,6 +10,7 @@ import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useTheme } from '@/platform/composables/useTheme';
+import { setupFocusOutlineRing } from '@/platform/ui/focus-ring/focusRingOverlay';
 import { logger } from '@/platform/utils/logger';
 
 import { vChordName } from './domains/chord/directives/vChordName.ts';
@@ -20,7 +21,7 @@ import { vEdgeFade } from './platform/directives/vEdgeFade.ts';
 import { vFocus } from './platform/directives/vFocus.ts';
 import { vGridNav } from './platform/directives/vGridNav.ts';
 import { vMarquee } from './platform/directives/vMarquee.ts';
-import { vScrollbar } from './platform/directives/vScrollbar.ts';
+import { vScrollbar } from './platform/directives/vScrollbar';
 import { vScrollIntoView } from './platform/directives/vScrollIntoView.ts';
 import { vTooltip } from './platform/directives/vTooltip.ts';
 import { vWheelScroll } from './platform/directives/vWheelScroll.ts';
@@ -97,6 +98,8 @@ const initApp = async () => {
   } finally {
     app.mount('#app');
     initializeEditor();
+    // 外扩聚焦环（JS overlay）：CSS 外扩 outline 会被父 overflow:hidden 裁剪，改由顶层跟随环渲染
+    setupFocusOutlineRing();
     // 启动后非阻塞比对云端数据校验和（dataMd5），不一致时 message 提示引导同步（懒加载，不进首屏闭包）
     // 补 .catch 兜底：避免探测异常（未预期的 promise rejection）在控制台成为 unhandled rejection
     void import('@/app/services/sync/syncActions')

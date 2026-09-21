@@ -31,8 +31,7 @@
       sizeClasses,
       variantAppearanceClasses,
       {
-        'cursor-pointer hover:-translate-y-px hover:opacity-85 active:translate-y-0 active:scale-95':
-          isClickable && !disabled,
+        'cursor-pointer hover:opacity-85': isClickable && !disabled,
         'cursor-not-allowed opacity-40': disabled,
         'px-0!': Boolean(width),
         'group hover:border-tint-danger-75! hover:bg-tint-danger-88! hover:text-danger! focus-visible:border-tint-danger-75! focus-visible:bg-tint-danger-88! focus-visible:text-danger!':
@@ -48,7 +47,7 @@
     :type="isNativeButton ? 'button' : undefined"
     @click="handleClick($event)"
     @keydown="handleKeydown($event)"
-    data-focusable-inline
+    data-focusable-outline
     class="base-badge inline-flex shrink-0 items-center justify-center rounded-full border border-transparent leading-none font-semibold tracking-tight whitespace-nowrap outline-none select-none"
   >
     <span v-if="hasDot" aria-hidden="true" class="size-1.5 shrink-0 rounded-full bg-current" />
@@ -94,8 +93,8 @@
 import { computed, useAttrs, useSlots, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { resolveTextTitle } from '@/platform/utils/dom';
 import { logger } from '@/platform/utils/logger';
-import { resolveTextTitle } from '@/platform/utils/slotText';
 
 import type { IconSizePreset, IconSizeValue } from '@/platform/ui/icons/iconSizes';
 
@@ -169,9 +168,8 @@ const hasTarget = computed(() => Boolean(slots['target']));
 watch(
   () => [props.offset, hasTarget.value] as const,
   ([offset, hasTargetVal]) => {
-    if (import.meta.env.DEV && offset && !hasTargetVal) {
+    if (import.meta.env.DEV && offset && !hasTargetVal)
       logger.warn('BaseBadge', 'offset 仅在提供 target 插槽（角标叠加）时生效，当前无锚点已被忽略');
-    }
   },
   { immediate: true }
 );
@@ -323,9 +321,7 @@ const handleClick = (e: MouseEvent | KeyboardEvent) => {
     emit('close', e);
     return;
   }
-  if (isClickable.value) {
-    emit('click', e);
-  }
+  if (isClickable.value) emit('click', e);
 };
 
 /** 非原生 button 的可点击态（closable + interactive 组合）：补齐 Enter / Space 键盘激活 */

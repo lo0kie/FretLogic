@@ -63,8 +63,8 @@ export function useStorage<T>(
   storageOrOptions?: StorageLike | UseStorageOptions<T>,
   maybeOptions?: UseStorageOptions<T>
 ): RemovableRef<T> {
-  if (storageOrOptions && typeof (storageOrOptions as StorageLike).getItem === 'function') {
+  if (storageOrOptions && typeof (storageOrOptions as StorageLike).getItem === 'function')
     return useVueStorage<T>(key, initial, storageOrOptions as StorageLike, maybeOptions);
-  }
+
   return useVueStorage<T>(key, initial, idbKvStorage, storageOrOptions as UseStorageOptions<T> | undefined);
 }

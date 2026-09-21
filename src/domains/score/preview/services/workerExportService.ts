@@ -111,8 +111,8 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     ignoreEmptySpace = false,
   } = input;
   const lyricsLines = song.lyrics.split('\n');
-  const chordMap = song.chordMap;
-  const lineIds = song.lineIds;
+  const { chordMap } = song;
+  const { lineIds } = song;
 
   const lines: ExportLineItem[] = [];
 
@@ -258,7 +258,7 @@ const scheduleIdleTerminate = () => {
 /** 创建（或复用）常驻渲染线程，并把消息回调接到当前在跑的任务上 */
 const ensureExportWorker = (): Worker => {
   if (exportWorker) return exportWorker;
-  const worker = new Worker(new URL('@/domains/score/preview/workers/scoreExportWorker', import.meta.url), {
+  const worker = new Worker(new URL('@/domains/score/preview/workers/scoreExportWorker/index.ts', import.meta.url), {
     type: 'module',
   });
 
@@ -271,11 +271,9 @@ const ensureExportWorker = (): Worker => {
       return;
     }
     inFlightRender = null;
-    if (msg.type === 'complete') {
-      item.resolve({ blobs: msg.blobs, pageLineRanges: msg.pageLineRanges ?? [] });
-    } else {
-      item.reject(new Error(msg.message));
-    }
+    if (msg.type === 'complete') item.resolve({ blobs: msg.blobs, pageLineRanges: msg.pageLineRanges ?? [] });
+    else item.reject(new Error(msg.message));
+
     pumpRenderQueue();
   };
 
@@ -320,8 +318,8 @@ const pumpRenderQueue = () => {
 export const runWorkerExport = (
   payload: WorkerExportPayload,
   options: RunWorkerExportOptions = {}
-): Promise<WorkerExportResult> => {
-  return new Promise((resolve, reject) => {
+): Promise<WorkerExportResult> =>
+  new Promise((resolve, reject) => {
     // 检查浏览器是否支持 OffscreenCanvas
     if (typeof OffscreenCanvas === 'undefined') {
       reject(new Error('当前浏览器环境不支持 OffscreenCanvas 离屏渲染'));
@@ -331,7 +329,6 @@ export const runWorkerExport = (
     renderQueue.push({ payload, options, resolve, reject });
     pumpRenderQueue();
   });
-};
 
 /** 页脚合成请求入参：页面栅格与页脚解耦（见 services/footerOverlay） */
 export interface FooterComposeInput {

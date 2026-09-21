@@ -33,15 +33,13 @@ export const setLineEdgeChords = (
   chordIds: ChordId[]
 ): void => {
   const slots = chordMap.get(lineId);
-  if (slots) {
-    slots[type] = [...chordIds];
-  } else {
+  if (slots) slots[type] = [...chordIds];
+  else
     chordMap.set(lineId, {
       char: new Map(),
       start: type === 'start' ? [...chordIds] : [],
       end: type === 'end' ? [...chordIds] : [],
     });
-  }
 };
 
 /** 取某行字符槽位的和弦 id（无返回 null） */
@@ -78,9 +76,6 @@ export const chordSlotKey = (lineId: string, type: EdgeSlotType, index: number):
 
 /** 字符槽位的存储 key */
 export const charKey = (lineId: string, index: number): SlotKey => `line_${lineId}_char_${index}` as SlotKey;
-
-/** 边和弦槽位的前缀，用于整体清除某行某侧的槽位 */
-export const edgeSlotPrefix = (lineId: string, type: EdgeSlotType): string => `line_${lineId}_${type}_`;
 
 /** 槽位 key 的结构化形态（构造器 chordSlotKey / charKey 的逆向） */
 export interface ParsedSlotKey {
@@ -119,7 +114,7 @@ const SIMILARITY_THRESHOLD = 0.45;
  *  大段粘贴时会在主线程上长时间阻塞。代价是这些行会拿到新 id、原有和弦被回收，
  *  故以 skippedSimilarMatch 回传给调用方向用户提示。 */
 const MAX_SIMILAR_MATCH_LINES = 60;
-const createLineId = (): string => 'l_' + generateUUID('', 8);
+const createLineId = (): string => `l_${generateUUID('', 8)}`;
 
 const matchExactLines = (
   oldLines: string[],
@@ -226,9 +221,7 @@ const matchSimilarLines = (
   }
 };
 
-const assignNewIds = (newIds: (string | null)[]): string[] => {
-  return newIds.map(id => id || createLineId());
-};
+const assignNewIds = (newIds: (string | null)[]): string[] => newIds.map(id => id || createLineId());
 
 /**
  * 行 id 匹配（旧歌词行 → 新歌词行），生成的 id 是 LineId 的唯一合法来源。
@@ -244,9 +237,8 @@ export const matchLineIds = (
   const { newIds, usedOldIndices } = matchExactLines(oldLines, newLines, oldLineIds);
   const unmatchedCount = newIds.reduce((count, id) => (id === null ? count + 1 : count), 0);
   const skippedSimilarMatch = unmatchedCount > MAX_SIMILAR_MATCH_LINES;
-  if (!skippedSimilarMatch) {
-    matchSimilarLines(oldLines, newLines, oldLineIds, newIds, usedOldIndices);
-  }
+  if (!skippedSimilarMatch) matchSimilarLines(oldLines, newLines, oldLineIds, newIds, usedOldIndices);
+
   return { lineIds: assignNewIds(newIds) as LineId[], skippedSimilarMatch };
 };
 
@@ -307,8 +299,8 @@ export const buildCharIndexRemap = (oldLine: string, newLine: string): number[] 
 };
 
 /** 歌词文本清洗：去制表符/回车、全角空格转半角、行首尾去空白（按行处理）。 */
-export const sanitizeLyricsText = (lyrics: string): string => {
-  return lyrics
+export const sanitizeLyricsText = (lyrics: string): string =>
+  lyrics
     .split('\n')
     .map(line =>
       line
@@ -317,14 +309,13 @@ export const sanitizeLyricsText = (lyrics: string): string => {
         .trim()
     )
     .join('\n');
-};
 
 /** 品牌 id 转换：SongId 品牌化（仅用于持久化边界与工厂函数） */
 export const toSongId = (value: string): SongId => value as SongId;
 
 /** 新建乐谱：统一 id 前缀与默认字段 */
 export const createSong = (title: string): Song => ({
-  id: toSongId('s_' + generateUUID().slice(0, 8)),
+  id: toSongId(`s_${generateUUID().slice(0, 8)}`),
   title: title.trim() || '未命名乐谱',
   singer: '',
   originalKey: '',
@@ -338,9 +329,3 @@ export const createSong = (title: string): Song => ({
   createdAt: Date.now(),
   updatedAt: Date.now(),
 });
-
-/** 乐谱模型不变量只读工具 */
-export const SongRecord = {
-  id: (song: Song): string => song.id,
-  hasLyrics: (song: Song): boolean => song.lyrics.trim().length > 0,
-};

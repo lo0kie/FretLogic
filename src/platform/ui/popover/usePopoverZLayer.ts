@@ -65,15 +65,13 @@ export function usePopoverZLayer(options: UsePopoverZLayerOptions) {
     // 层号池会单调爬到 ceiling 且「后开者在上」失效；先归还再取新号
     if (zOwned) releaseOwnedZ();
     let budget = Number.POSITIVE_INFINITY;
-    if (panelEl.value) {
+    if (panelEl.value)
       for (const entry of openedPopovers) {
         if (entry === ownLayerEntry || !entry.el) continue;
         const trigger = globalFloatingReferenceMap.get(entry.el);
-        if (trigger && panelEl.value.contains(trigger)) {
-          budget = Math.min(budget, entry.z);
-        }
+        if (trigger && panelEl.value.contains(trigger)) budget = Math.min(budget, entry.z);
       }
-    }
+
     floatingZIndex.value = acquireFloatingZ(budget === Number.POSITIVE_INFINITY ? undefined : budget - 1);
     ownLayerEntry.z = floatingZIndex.value;
     // 取得层号即视为「真正打开」：登记到打开中浮层表并置打开态（Set.add 幂等，重复获取无副作用）
@@ -104,16 +102,13 @@ export function usePopoverZLayer(options: UsePopoverZLayerOptions) {
   /** 判断本浮层是否为当前所有打开中浮层里 z 最高的（即最上层），用于 Escape 仅关闭最上层而非全部 */
   const isTopmostOpenPopover = (): boolean => {
     let topZ = -Infinity;
-    for (const entry of openedPopovers) {
-      if (entry.open) topZ = Math.max(topZ, entry.z);
-    }
+    for (const entry of openedPopovers) if (entry.open) topZ = Math.max(topZ, entry.z);
+
     if (floatingZIndex.value < topZ) return false;
     // 同号并列（退场动画期间旧层尚未摘除等）时只允许登记序首个匹配者胜出，避免一次 Esc 全关
-    if (floatingZIndex.value === topZ) {
-      for (const entry of openedPopovers) {
-        if (entry.open && entry.z === topZ) return entry === ownLayerEntry;
-      }
-    }
+    if (floatingZIndex.value === topZ)
+      for (const entry of openedPopovers) if (entry.open && entry.z === topZ) return entry === ownLayerEntry;
+
     return true;
   };
 

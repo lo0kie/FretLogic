@@ -34,11 +34,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # 发布验证门槛：verify.mjs 串行执行 format:check → lint → typecheck → test → build
-      # （步骤清单从 package.json 读取，此处不重复维护），build 产物直接供下一条上传。
-      # 此前 build job 只跑 pnpm build，与 ci.yml 的质量 job 无依赖关系——CI 红了发布照发。
-      - name: Verify (format · lint · typecheck · test · build)
-        run: node scripts/verify.mjs
+      # 质量门禁统一由 ci.yml 承担（Lint/Typecheck/Test/Coverage/Budget/Bench/Prettier）。
+      # 此处在 push 时不再重复 verify.mjs，否则每次提交 CI + Deploy 会各跑一套 lint/test/
+      # typecheck/build，白白翻倍。这里只构建产物供上传；质量失败由 ci.yml 的红灯暴露。
+      # 若需把 ci.yml 设为合并/推送强约束，请在仓库 Branch protection 中将其设为 required check。
+      - name: Build
+        run: pnpm build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

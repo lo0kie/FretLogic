@@ -31,7 +31,8 @@
         :tabindex="getTabindex(opt, i)"
         :title="opt.label"
         @click="select(opt, i)"
-        class="segmented-item relative z-float inline-flex h-full items-center justify-center self-stretch bg-transparent leading-none font-bold whitespace-nowrap text-fg-muted shadow-none transition-all duration-200 ease-out outline-none focus-visible:ring-2 focus-visible:ring-primary/70 enabled:cursor-pointer enabled:hover:text-fg-title disabled:cursor-not-allowed disabled:opacity-40"
+        data-focusable-outline
+        class="segmented-item relative z-float inline-flex h-full items-center justify-center self-stretch bg-transparent leading-none font-bold whitespace-nowrap text-fg-muted shadow-none transition-all duration-200 ease-out outline-none enabled:cursor-pointer enabled:hover:text-fg-title disabled:cursor-not-allowed disabled:opacity-40"
         role="radio"
         type="button"
       >
@@ -183,9 +184,7 @@ const items = ref<(HTMLElement | null)[]>([]);
 
 /** 收集选项 DOM（函数式 ref），供选中后聚焦与指示器测量使用 */
 const setItemRef = (el: unknown, index: number) => {
-  if (el) {
-    items.value[index] = toEl(el);
-  }
+  if (el) items.value[index] = toEl(el);
 };
 
 onBeforeUpdate(() => {
@@ -227,9 +226,8 @@ const isOptionIconOnly = (opt: SegmentOption<V>): boolean => Boolean(opt.icon &&
  */
 const normalizedOptions = computed<SegmentOption<V>[]>(() =>
   props.options.map(o => {
-    if (o !== null && typeof o === 'object' && 'value' in (o as object)) {
-      return o as unknown as SegmentOption<V>;
-    }
+    if (o !== null && typeof o === 'object' && 'value' in (o as object)) return o as unknown as SegmentOption<V>;
+
     return { label: String(o), value: o as unknown as V };
   })
 );
@@ -245,9 +243,8 @@ const firstFocusableIndex = computed(() => normalizedOptions.value.findIndex(o =
 /** roving tabindex：无选中时首个可用项可聚焦，有选中时仅选中项可聚焦 */
 const getTabindex = (opt: SegmentOption<V>, i: number): number => {
   if (props.disabled || opt.disabled) return -1;
-  if (activeIndex.value >= 0) {
-    return isSelected(opt.value) ? 0 : -1;
-  }
+  if (activeIndex.value >= 0) return isSelected(opt.value) ? 0 : -1;
+
   return i === firstFocusableIndex.value ? 0 : -1;
 };
 
@@ -259,7 +256,7 @@ const getTabindex = (opt: SegmentOption<V>, i: number): number => {
  * 松手后回落到测量位置并恢复类的 transition-all 过渡 */
 const indicatorStyle = computed(() => {
   const drag = dragPosition.value;
-  if (drag) {
+  if (drag)
     return {
       width: `${drag.width}px`,
       height: `${drag.height}px`,
@@ -278,7 +275,7 @@ const indicatorStyle = computed(() => {
           ? 'width 200ms ease-out'
           : 'width 200ms ease-out, height 200ms ease-out, top 200ms ease-out',
     };
-  }
+
   return {
     width: `${indicatorPosition.value.width}px`,
     height: `${indicatorPosition.value.height}px`,
@@ -323,7 +320,7 @@ const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<str
   // 容器有显式宽度（档位 / block / 自定义值）即让选项均分拉伸铺满；仅 auto（内容自适应）不拉伸
   const isExpand = resolvedWidth.value !== undefined;
 
-  if (visualVariant.value === 'pill') {
+  if (visualVariant.value === 'pill')
     return [
       sizeConfig.value.item,
       'rounded-full',
@@ -334,13 +331,13 @@ const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<str
         : 'enabled:hover:bg-surface-panel-hover/60',
       { 'flex-1': isExpand },
     ];
-  }
-  if (visualVariant.value === 'tabbed') {
+
+  if (visualVariant.value === 'tabbed')
     // 下划线 Tab：无填充底，仅选中项加主色文字强调
     // 底边框贯穿线由容器 border-b 提供（showInactiveBorder 时），激活主色线由滑块叠加其上，
     // 故此处 tab 自身不再单独加边框（否则会与容器线重叠成双线）
     return [sizeConfig.value.item, active ? 'text-primary! font-extrabold' : '', { 'flex-1': isExpand }];
-  }
+
   // text variant
   return [
     sizeConfig.value.textItem,
@@ -367,16 +364,13 @@ const updateIndicatorPosition = async (animate = true) => {
   }
 
   const activeButton = toEl(items.value[activeIndex.value]);
-  if (!activeButton || !containerRef.value) {
-    return;
-  }
+  if (!activeButton || !containerRef.value) return;
 
   const container = containerRef.value;
   const containerRect = container.getBoundingClientRect();
   const buttonRect = activeButton.getBoundingClientRect();
-  if (containerRect.width === 0 && containerRect.height === 0 && buttonRect.width === 0 && buttonRect.height === 0) {
+  if (containerRect.width === 0 && containerRect.height === 0 && buttonRect.width === 0 && buttonRect.height === 0)
     return;
-  }
 
   // 双路测量：祖先存在 scale 动画时（BaseModal / BasePopover 进场），rect 含祖先缩放而失真，
   // 回退为「rect 差值 ÷ 缩放比」还原布局坐标——滑块与按钮同源布局坐标，缩放全程自洽，
@@ -401,19 +395,16 @@ const updateIndicatorPosition = async (animate = true) => {
     : buttonRect.top - containerRect.top - borderWidthY;
   const width = ancestorScaled ? activeButton.offsetWidth : buttonRect.width;
   const height = ancestorScaled ? activeButton.offsetHeight : buttonRect.height;
-  if (width === 0 && height === 0) {
-    return;
-  }
+  if (width === 0 && height === 0) return;
 
   // 几何按生效形态换算：pill 取整段，tabbed 取贴段底部的主色细线（见 resolveIndicatorGeometry）
   const geometry = resolveIndicatorGeometry({ width, height, top: y });
   indicatorPosition.value = { ...geometry, x, opacity: 1 };
 
-  if (!isInitialized.value) {
+  if (!isInitialized.value)
     requestAnimationFrame(() => {
       isInitialized.value = true;
     });
-  }
 };
 
 /** 选中选项：closeable 时再点已选项取消选中；随后聚焦并更新指示器 */

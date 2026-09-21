@@ -191,9 +191,7 @@ const handleAfterLeave = () => {
 const handleEscape = (e: KeyboardEvent) => {
   if (e.key !== 'Escape' || !visibleModel.value) return;
   const panel = panelRef.value;
-  if (panel && document.activeElement && panel.contains(document.activeElement)) {
-    visibleModel.value = false;
-  }
+  if (panel && document.activeElement && panel.contains(document.activeElement)) visibleModel.value = false;
 };
 
 watch(
@@ -207,9 +205,8 @@ watch(
     // 离场动画未结束就被重新打开（快速关-开）时，旧号仍在手上且尚未释放：
     // 沿用现号即可——after-leave 只会跑最后一次，释放的正是这个沿用号；
     // 若此处无条件再取新号，旧号会悬空泄漏，而 after-leave 会误把新号放掉（面板 zIndex 掉 0）
-    if (!floatingZ.value) {
-      floatingZ.value = acquireFloatingZ();
-    }
+    if (!floatingZ.value) floatingZ.value = acquireFloatingZ();
+
     window.addEventListener('keydown', handleEscape);
     contentMounted.value = true;
     emit('open');

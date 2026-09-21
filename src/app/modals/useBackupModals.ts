@@ -6,8 +6,8 @@ import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useModalController } from '@/platform/store/useModalController';
 
-import type { BackupSelection } from '@/app/services/backup/useImportExportService';
 import type { ImportExportPayload } from '@/app/types';
+import type { BackupSelection } from '@/app/types/payload';
 import type { SyncSettingsBackup } from '@/platform/types';
 
 /** 同步目标的中文标签：按 kind 查表；缺失/未知值显式标「未知」，不再静默误标 GitHub */
@@ -69,6 +69,33 @@ const resolveImportAvailability = (p: ImportExportPayload | null): BackupSelecti
 
 /** 当前解析包（modalData.parsedPayload）的可用性视图，供面板与全选逻辑消费 */
 const importAvailability = computed(() => resolveImportAvailability(modalData.parsedPayload));
+
+/**
+ * 关闭导入/导出弹窗时清空勾选状态（不做保存），下次打开重新按可用项初始化。
+ * 模块级 modalData 在弹窗间共享，若关闭时不清理，上次勾选会残留在内存里；
+ * 归位到各自「打开时的默认值」而非保留用户操作，避免脏选择泄漏到下一次打开。
+ *
+ * 必须注册在模块作用域而非 composable 体内：清理的是模块级单例，守卫就得与单例同寿命。
+ * 放在 `useBackupModals()` 里会随宿主组件卸载而自动停止（弹窗容器换页/重建后凭据与解析包
+ * 再也清不掉），且每个调用方各注册一份重复守卫。
+ */
+watch(
+  () => [modals.export, modals.import],
+  () => {
+    if (!modals.export) {
+      modalData.exportSelection = { ...FULL_BACKUP_SELECTION, syncSettings: false };
+      // 密码不残留：关闭即丢弃，下次导出重新输入
+      modalData.exportPassphrase = '';
+    }
+    if (!modals.import) {
+      modalData.importSelection = { ...FULL_BACKUP_SELECTION, syncSettings: false };
+      modalData.parsedPayload = null;
+      modalData.fileName = '';
+      modalData.importPassphrase = '';
+      modalData.secretDecryptFailed = false;
+    }
+  }
+);
 
 /** 直接以载荷打开导入勾选面板（用于云端拉取、扫描等非文件流入口）。
  *  模块级导出：懒加载实现模块（backupModalActions）解析完成后经此打开面板。 */
@@ -133,8 +160,6 @@ export function useBackupModals() {
     preferences: true,
   }));
 
-  /** 备份包内各数据类别的实际可用性（导入面板据此禁用无效勾选；模块级单例，见文件顶部） */
-
   /** 备份包内各类数据的规模明细（导入面板 help 提示展示） */
   const importStats = computed(() => {
     const p = modalData.parsedPayload;
@@ -160,29 +185,6 @@ export function useBackupModals() {
     () => hasExportSelection.value && (!modalData.exportSelection.syncSettings || modalData.exportPassphrase.length > 0)
   );
 
-  /**
-   * 关闭导入/导出弹窗时清空勾选状态（不做保存），下次打开重新按可用项初始化。
-   * 模块级 modalData 在弹窗间共享，若关闭时不清理，上次勾选会残留在内存里；
-   * 归位到各自「打开时的默认值」而非保留用户操作，避免脏选择泄漏到下一次打开。
-   */
-  watch(
-    () => [modals.export, modals.import],
-    () => {
-      if (!modals.export) {
-        modalData.exportSelection = { ...FULL_BACKUP_SELECTION, syncSettings: false };
-        // 密码不残留：关闭即丢弃，下次导出重新输入
-        modalData.exportPassphrase = '';
-      }
-      if (!modals.import) {
-        modalData.importSelection = { ...FULL_BACKUP_SELECTION, syncSettings: false };
-        modalData.parsedPayload = null;
-        modalData.fileName = '';
-        modalData.importPassphrase = '';
-        modalData.secretDecryptFailed = false;
-      }
-    }
-  );
-
   /** 全选状态：业务类别全部勾选即视为全选（含凭据的 syncSettings 不参与判定——它必须显式勾选） */
   const isAllSelected = (sel: BackupSelection, availability: BackupSelection) =>
     (sel.chords || !availability.chords) &&
@@ -195,9 +197,9 @@ export function useBackupModals() {
 
   /** 全选按钮 toggle：全选状态下点击切换为全不选，否则勾选全部可用类别 */
   const toggleSelection = (selection: BackupSelection, availability: BackupSelection): BackupSelection => {
-    if (isAllSelected(selection, availability)) {
+    if (isAllSelected(selection, availability))
       return { chords: false, songs: false, syncSettings: false, preferences: false };
-    }
+
     // 全选不代勾含凭据的同步配置：知情门禁要求用户显式勾选（与 openExport 默认值一致）
     return { ...availability, syncSettings: false };
   };

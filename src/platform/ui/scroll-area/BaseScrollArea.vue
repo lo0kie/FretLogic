@@ -93,9 +93,8 @@ const fadeBinding = computed<EdgeFadeBinding>(() => {
   const value = props.fade;
   if (value === false) return false;
   if (value === true) return { direction: axisDirection.value };
-  if (typeof value === 'number' || typeof value === 'string') {
-    return { size: value, direction: axisDirection.value };
-  }
+  if (typeof value === 'number' || typeof value === 'string') return { size: value, direction: axisDirection.value };
+
   // 选项对象里显式写了 direction 时以它为准
   return { ...value, direction: value.direction ?? axisDirection.value };
 });
@@ -188,9 +187,7 @@ const observeChildren = () => {
   const el = rootRef.value;
   if (!el || !childrenObserver) return;
   childrenObserver.disconnect();
-  for (const child of el.children) {
-    childrenObserver.observe(child);
-  }
+  for (const child of el.children) childrenObserver.observe(child);
 };
 
 onMounted(() => {

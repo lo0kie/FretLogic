@@ -5,6 +5,7 @@ import {
   buildSyncCommitMessage,
   createSyncProviderBase,
   decodeBase64Envelope,
+  describeApiError,
   extractApiErrorDetail,
 } from './syncBase.ts';
 
@@ -34,12 +35,6 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
 
   const branchesUrl = () => `${GITEE_API_BASE}/repos/${config.owner}/${config.repo}/branches?per_page=100`;
 
-  /** Gitee 文案格式：错误详情前置「：」（提取逻辑见 syncBase.extractApiErrorDetail） */
-  const describeError = async (response: Response): Promise<string> => {
-    const detail = await extractApiErrorDetail(response);
-    return detail ? `：${detail}` : '';
-  };
-
   const { request, decodePayload } = createSyncProviderBase({
     // Gitee API v5 标准认证：Authorization: token <token> 请求头
     baseHeaders: config.token ? { Authorization: `token ${config.token}` } : undefined,
@@ -54,7 +49,7 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
       if (!response.ok)
         throw new SyncError(
           'REQUEST_FAILED',
-          `Gitee 返回错误状态码：${response.status}${await describeError(response)}`
+          `Gitee 返回错误状态码：${response.status}${await describeApiError(response)}`
         );
       return decodePayload(response);
     },
@@ -62,20 +57,21 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
       const response = await request({ method: 'GET' });
       if (response.ok) return true;
       if (response.status === 404) return false;
-      throw new SyncError('REQUEST_FAILED', `Gitee 返回错误状态码：${response.status}${await describeError(response)}`);
+      throw new SyncError(
+        'REQUEST_FAILED',
+        `Gitee 返回错误状态码：${response.status}${await describeApiError(response)}`
+      );
     },
     async push(payload) {
       // 探测远端文件：存在则取 blob sha（更新必需），404 表示需新建
       const existing = await request({ method: 'GET' });
       let sha = '';
-      if (existing.ok) {
-        sha = String((await existing.json()).sha ?? '');
-      } else if (existing.status !== 404) {
+      if (existing.ok) sha = String((await existing.json()).sha ?? '');
+      else if (existing.status !== 404)
         throw new SyncError(
           'REQUEST_FAILED',
-          `Gitee 返回错误状态码：${existing.status}${await describeError(existing)}`
+          `Gitee 返回错误状态码：${existing.status}${await describeApiError(existing)}`
         );
-      }
 
       // 新建（POST）与更新（PUT）是 Gitee 的两个独立接口
       const method = sha ? 'PUT' : 'POST';
@@ -92,37 +88,36 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
         },
         fileUrl()
       );
-      if (response.status === 409) {
+      if (response.status === 409)
         throw new SyncError(
           'CONFLICT',
-          `Gitee 提示版本冲突：云端文件已被修改，请先拉取最新数据${await describeError(response)}`
+          `Gitee 提示版本冲突：云端文件已被修改，请先拉取最新数据${await describeApiError(response)}`
         );
-      }
+
       if (response.status === 400) {
         const errDetail = await extractApiErrorDetail(response.clone());
-        if (errDetail.toLowerCase().includes('sha') || errDetail.includes('冲突')) {
+        if (errDetail.toLowerCase().includes('sha') || errDetail.includes('冲突'))
           throw new SyncError(
             'CONFLICT',
-            `Gitee 提示版本冲突：云端文件已被修改，请先拉取最新数据${await describeError(response)}`
+            `Gitee 提示版本冲突：云端文件已被修改，请先拉取最新数据${await describeApiError(response)}`
           );
-        }
       }
       if (!response.ok)
         throw new SyncError(
           'REQUEST_FAILED',
-          `Gitee 返回错误状态码：${response.status}${await describeError(response)}`
+          `Gitee 返回错误状态码：${response.status}${await describeApiError(response)}`
         );
       const body = await response.json();
       return { sha: String(body.commit?.sha ?? body.sha ?? '') };
     },
     async listBranches(): Promise<string[]> {
       const response = await request({ method: 'GET' }, branchesUrl());
-      if (!response.ok) {
+      if (!response.ok)
         throw new SyncError(
           'REQUEST_FAILED',
-          `获取分支失败，状态码：${response.status}${await describeError(response)}`
+          `获取分支失败，状态码：${response.status}${await describeApiError(response)}`
         );
-      }
+
       const branches: { name: string }[] = await response.json();
       return branches.map(b => b.name).filter(name => !name.startsWith('dependabot/'));
     },
@@ -132,13 +127,13 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
       if (!response.ok)
         throw new SyncError(
           'REQUEST_FAILED',
-          `Gitee 返回错误状态码：${response.status}${await describeError(response)}`
+          `Gitee 返回错误状态码：${response.status}${await describeApiError(response)}`
         );
       try {
         const parsed = JSON.parse(await decodeBase64Envelope(response)) as { md5?: unknown; updatedAt?: unknown };
-        if (typeof parsed.md5 === 'string' && typeof parsed.updatedAt === 'number') {
+        if (typeof parsed.md5 === 'string' && typeof parsed.updatedAt === 'number')
           return { md5: parsed.md5, updatedAt: parsed.updatedAt };
-        }
+
         return null;
       } catch {
         return null; // meta 损坏视为无 meta，引导重传
@@ -152,12 +147,12 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
       if (existing.ok) {
         const body = await existing.json();
         sha = String(Array.isArray(body) ? '' : (body.sha ?? ''));
-      } else if (existing.status !== 404) {
+      } else if (existing.status !== 404)
         throw new SyncError(
           'REQUEST_FAILED',
-          `Gitee 返回错误状态码：${existing.status}${await describeError(existing)}`
+          `Gitee 返回错误状态码：${existing.status}${await describeApiError(existing)}`
         );
-      }
+
       const method = sha ? 'PUT' : 'POST';
       const response = await request(
         {
@@ -175,23 +170,25 @@ export function createGiteeSyncProvider(config: GiteeSyncConfig): SyncBranchesPr
       if (!response.ok)
         throw new SyncError(
           'REQUEST_FAILED',
-          `Gitee meta 写入返回错误状态码：${response.status}${await describeError(response)}`
+          `Gitee meta 写入返回错误状态码：${response.status}${await describeApiError(response)}`
         );
     },
     async testConnection(): Promise<string> {
       const response = await request({ method: 'GET' }, repoUrl());
-      if (response.ok) {
-        return config.token ? 'Gitee 仓库可达，Token 有效' : 'Gitee 仓库可达（公开仓库，未配置 Token）';
-      }
+      if (response.ok) return config.token ? 'Gitee 仓库可达，Token 有效' : 'Gitee 仓库可达（公开仓库，未配置 Token）';
+
       if (response.status === 401)
-        throw new SyncError('REQUEST_FAILED', `Token 无效或已过期${await describeError(response)}`);
-      if (response.status === 404) {
+        throw new SyncError('REQUEST_FAILED', `Token 无效或已过期${await describeApiError(response)}`);
+      if (response.status === 404)
         throw new SyncError(
           'REQUEST_FAILED',
           config.token ? '仓库不存在，或 Token 无该仓库权限' : '仓库不存在或为私有仓库（私有需配置 Token）'
         );
-      }
-      throw new SyncError('REQUEST_FAILED', `Gitee 返回错误状态码：${response.status}${await describeError(response)}`);
+
+      throw new SyncError(
+        'REQUEST_FAILED',
+        `Gitee 返回错误状态码：${response.status}${await describeApiError(response)}`
+      );
     },
   };
 }

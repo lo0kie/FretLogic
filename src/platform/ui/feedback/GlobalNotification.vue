@@ -25,9 +25,10 @@
           <!-- 常驻通知段：notices 以 unshift 入队（最新在前），数组顺序即展示顺序 -->
           <div
             v-for="notice in displayedNotices"
+            :class="notice.message || notice.actionText ? 'items-start!' : ''"
             :key="`notice-${notice.id}`"
             :role="notice.type === 'error' || notice.type === 'warning' ? 'alert' : 'status'"
-            class="pointer-events-auto relative flex w-[20rem] max-w-[90vw] shrink-0 items-start gap-sm rounded-xl border border-glass-border bg-surface-panel px-md py-sm text-xs shadow-md transition-all duration-base outline-none"
+            class="pointer-events-auto relative flex w-[20rem] max-w-[90vw] shrink-0 items-center gap-sm rounded-xl border border-glass-border bg-surface-panel px-md py-sm text-xs shadow-md transition-all duration-base outline-none"
           >
             <span class="flex shrink-0 items-center justify-center self-center">
               <BaseIcon
@@ -81,7 +82,7 @@
             ]"
             :key="`message-${item.id}`"
             :role="item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'"
-            class="pointer-events-auto relative flex max-w-[22rem] shrink-0 items-center gap-sm rounded-pill border border-glass-border px-lg py-sm text-xs font-semibold shadow-md transition-all duration-base outline-none"
+            class="pointer-events-auto relative flex max-w-[22rem] shrink-0 items-center gap-sm rounded-pill border border-glass-border px-md py-sm text-xs font-semibold shadow-md transition-all duration-base outline-none"
           >
             <div :class="{ 'pt-3xs!': item.description }" class="flex shrink-0 items-center justify-center pt-0.5">
               <BaseIcon
@@ -125,6 +126,7 @@
               icon-only
               aria-label="关闭提示"
               icon="x"
+              icon-size="lg"
               icon-stroke="bold"
               size="sm"
               title="关闭"
@@ -285,9 +287,7 @@ const handleNoticeAction = async (notice: Notice) => {
 /** 反馈容器焦点移出（非内部子元素间移动）时恢复 Toast 销毁计时，满足 WCAG 2.2.1 可暂停 */
 const handleFeedFocusOut = (e: FocusEvent) => {
   const container = e.currentTarget as HTMLElement | null;
-  if (container && !container.contains(e.relatedTarget as Node | null)) {
-    store.resumeAllTimers();
-  }
+  if (container && !container.contains(e.relatedTarget as Node | null)) store.resumeAllTimers();
 };
 
 /** 离场卡片钉位：TransitionGroup 离场即转 absolute，此时依赖 flex「静态位置」不可靠——

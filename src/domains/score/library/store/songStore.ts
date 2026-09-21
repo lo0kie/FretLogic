@@ -112,9 +112,8 @@ export const useSongStore = defineStore('song', () => {
 
   const chordReferencesIndex = computed<ChordReferenceIndex>(() => {
     const index: ChordReferenceIndex = new Map();
-    for (const song of songs.value) {
-      mergeSongRefCounts(index, song, getSongRefCountShard(song.id).value);
-    }
+    for (const song of songs.value) mergeSongRefCounts(index, song, getSongRefCountShard(song.id).value);
+
     return index;
   });
 
@@ -125,9 +124,7 @@ export const useSongStore = defineStore('song', () => {
       // 显式声明为 Set<string>：ids 是品牌类型 SongId[]，而分片表的键是普通 string
       // （分片本身不关心 id 来源），不标注则 Set 被推断成 Set<SongId>，has(string) 过不了类型检查
       const live = new Set<string>(ids);
-      for (const id of [...songRefCountShards.keys()]) {
-        if (!live.has(id)) songRefCountShards.delete(id);
-      }
+      for (const id of [...songRefCountShards.keys()]) if (!live.has(id)) songRefCountShards.delete(id);
     },
     { flush: 'post' }
   );
@@ -144,13 +141,13 @@ export const useSongStore = defineStore('song', () => {
     kvSet(STORAGE_KEYS.SONGS_SORT_METHOD, method);
   };
   const sortedSongs = computed<Song[]>(() => {
-    if (songSortMethod.value === 'title') {
+    if (songSortMethod.value === 'title')
       // 拼音分组：由内置 Intl.Collator 统一驱动排序与分组键，二者天然一致，无需异步加载
       return [...songs.value].sort((a, b) => compareByPinyin(a.title, b.title));
-    }
-    if (songSortMethod.value === 'createdAt') {
+
+    if (songSortMethod.value === 'createdAt')
       return [...songs.value].sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-    }
+
     return songs.value;
   });
 
@@ -210,9 +207,7 @@ export const useSongStore = defineStore('song', () => {
     songs.value.splice(targetIndex, 0, song);
     markSongRestored(song.id);
     markIndexDirty();
-    if (lastDeletedSongInfo.value?.song.id === song.id) {
-      lastDeletedSongInfo.value = null;
-    }
+    if (lastDeletedSongInfo.value?.song.id === song.id) lastDeletedSongInfo.value = null;
   };
 
   /**

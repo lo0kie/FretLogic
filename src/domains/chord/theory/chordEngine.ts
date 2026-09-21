@@ -18,8 +18,8 @@
  * 分数口径、分档口径）与旧实现可比。分数仍是 0~1000 量级。
  */
 
+import { createLruCache } from '@/platform/utils/cache';
 import { estimateValueBytes } from '@/platform/utils/common';
-import { createLruCache } from '@/platform/utils/lruCache';
 
 import { chordQualityAstToIntervals, QUALITY_TOKENS } from './chordQualityAst';
 import { categoryOfAst, compositeTokens, recognizeByIntervals, rolesOfAst, weightOf } from './chordRecognitionAst';
@@ -303,10 +303,9 @@ function softScore(
   explicitRoot: boolean,
   recipe: Recipe
 ): number {
-  if (!isSlash || explicitRoot) {
+  if (!isSlash || explicitRoot)
     // 非斜杠，或用户**显式指定**了根音：低音就是根音，不构成「转位可疑」，不加不减
     return recognitionScore;
-  }
 
   const bassInCore = recipe.coreIntervals.includes(lowestInterval);
   const bassInExt = recipe.extensionIntervals.includes(lowestInterval);
@@ -396,16 +395,14 @@ function assignTiers(candidates: ChordCandidate[]): void {
   const topPurity = candidates[0]!.purity; // 排序保证首位纯度最高
   const topBandBestScore = Math.max(...candidates.filter(c => c.purity === topPurity).map(c => c.score));
 
-  for (const c of candidates) {
-    if (c.purity < MIN_PURITY) {
-      c.tier = 'low_confidence';
-    } else {
+  for (const c of candidates)
+    if (c.purity < MIN_PURITY) c.tier = 'low_confidence';
+    else {
       const gap = topBandBestScore - c.score;
       if (c.purity === topPurity && gap <= 0.5) c.tier = 'best';
       else if (gap <= BEST_GAP) c.tier = 'alternative';
       else c.tier = 'theoretical';
     }
-  }
 }
 
 // 分析结果缓存：键是和弦签名（根音+后缀+音集），单条含候选数组（KB 级）。
@@ -487,9 +484,7 @@ function collectNoteContext(notes: NoteInput[], explicitRootPitch: number | null
 
   if (normExplicit !== null) {
     const explicitNote = notes.find(n => normalizePitch(n.pitchIndex) === normExplicit);
-    if (explicitNote && explicitNote.label) {
-      labelByPitch[normExplicit] = explicitNote.label;
-    }
+    if (explicitNote && explicitNote.label) labelByPitch[normExplicit] = explicitNote.label;
   }
 
   for (const n of notes) {
@@ -498,9 +493,7 @@ function collectNoteContext(notes: NoteInput[], explicitRootPitch: number | null
     if (labelByPitch[p] === undefined && n.label) labelByPitch[p] = n.label;
   }
 
-  for (let p = 0; p < 12; p++) {
-    if (!labelByPitch[p]) labelByPitch[p] = STANDARD_ROOT_NAMES[p];
-  }
+  for (let p = 0; p < 12; p++) if (!labelByPitch[p]) labelByPitch[p] = STANDARD_ROOT_NAMES[p];
 
   return { pitchMask, labelByPitch, lowestNote };
 }
@@ -510,9 +503,8 @@ function resolveRootIntervals(relMask: number, relExplicitRoot: number): number[
   if (relExplicitRoot >= 0) return [relExplicitRoot];
 
   const rootIntervals: number[] = [];
-  for (let p = 0; p < 12; p++) {
-    if (relMask & (1 << p)) rootIntervals.push(p);
-  }
+  for (let p = 0; p < 12; p++) if (relMask & (1 << p)) rootIntervals.push(p);
+
   return rootIntervals;
 }
 
@@ -545,9 +537,7 @@ function collectRecipeHitsForRoot(
 
   // 输入音集旋转到「以该根音为 0」的相对半音列表，供识别器匹配
   const semitones: number[] = [];
-  for (let i = 0; i < 12; i++) {
-    if (relMask & (1 << i)) semitones.push(normalizePitch(i - rootInterval));
-  }
+  for (let i = 0; i < 12; i++) if (relMask & (1 << i)) semitones.push(normalizePitch(i - rootInterval));
 
   const hits: RelativeHit[] = [];
   for (const rec of recognizeByIntervals(semitones, {
@@ -623,9 +613,8 @@ function collectRelativeHits(relMask: number, relExplicitRoot: number): Relative
   const explicitRoot = relExplicitRoot >= 0;
   const hits: RelativeHit[] = [];
 
-  for (const rootInterval of rootIntervals) {
+  for (const rootInterval of rootIntervals)
     hits.push(...collectRecipeHitsForRoot(rootInterval, relMask, totalInputNotes, explicitRoot));
-  }
 
   return hits;
 }
@@ -761,9 +750,7 @@ export function analyzeChordGraph(
 
   // bassByPitch 必须入缓存键：同一组音集在两种低音口径下结果不同，不入键会互相命中
   let key = `${explicitRootPitch ?? 'auto'}:${bassByPitch ? 'p' : 's'}:`;
-  for (const n of notes) {
-    key += `${n.stringIndex}_${n.pitchIndex}_${n.label}|`;
-  }
+  for (const n of notes) key += `${n.stringIndex}_${n.pitchIndex}_${n.label}|`;
 
   const hit = cache.get(key);
   if (hit) return hit;

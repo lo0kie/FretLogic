@@ -1,18 +1,37 @@
 <template>
+  <!-- buttonized：直接用 ActionButton 渲染（勾选=subtle 浅主色高亮、未勾选=ghost），
+       复用其原生 button 的 mousedown 聚焦/键盘/禁用语义；点击驱动 toggle -->
+  <ActionButton
+    v-if="buttonized"
+    :disabled
+    :icon
+    :icon-only
+    :label
+    :size
+    :aria-checked="ariaCheckedState"
+    :aria-disabled="disabled || undefined"
+    :aria-label="ariaLabel || label"
+    :color="isChecked && !indeterminate ? color : 'default'"
+    :variant="isChecked && !indeterminate ? 'subtle' : 'ghost'"
+    @click="toggle()"
+    class="base-checkbox"
+    icon-size="lg"
+    role="checkbox"
+  >
+    <slot>{{ label }}</slot>
+  </ActionButton>
+
   <label
+    v-else
     :class="[
-      buttonized
-        ? ['inline-flex cursor-pointer items-center', { 'cursor-not-allowed opacity-50': disabled }]
-        : [
-            sizeConfig.containerClass,
-            hasDescription ? 'items-start' : 'items-center',
-            {
-              'cursor-not-allowed opacity-50': disabled,
-              'cursor-pointer': !disabled && !readonly,
-              'rounded-lg border border-border-base p-2.5 hover:bg-surface-panel-hover': bordered,
-              'bg-surface-panel-hover/50': bordered && isChecked,
-            },
-          ],
+      sizeConfig.containerClass,
+      hasDescription ? 'items-start' : 'items-center',
+      {
+        'cursor-not-allowed opacity-50': disabled,
+        'cursor-pointer': !disabled && !readonly,
+        'rounded-lg border border-border-base p-2.5 hover:bg-surface-panel-hover': bordered,
+        'bg-surface-panel-hover/50': bordered && isChecked,
+      },
     ]"
     :for="resolvedId"
     class="base-checkbox group relative inline-flex transition-colors duration-fast select-none"
@@ -37,92 +56,66 @@
       type="checkbox"
     />
 
-    <!-- buttonized：方形/胶囊高亮按钮，内容为图标 + 文本（无独立勾选框） -->
-    <template v-if="buttonized">
-      <span
-        v-wave="{ disabled: disabled || readonly }"
-        :class="[
-          rootButtonizedClass,
-          { 'peer-focus-visible:ring-2 peer-focus-visible:ring-primary/70': !disabled && !readonly },
-        ]"
-      >
-        <BaseIcon v-if="icon" :icon-size :icon-stroke="'regular'" :name="icon" class="shrink-0" />
-        <span v-if="label || $slots['default']" class="truncate whitespace-nowrap">
-          <slot>{{ label }}</slot>
-        </span>
-      </span>
-    </template>
+    <span
+      v-wave="{ disabled: disabled || readonly }"
+      :class="[
+        sizeConfig.boxClass,
+        hasDescription ? 'mt-0.5' : '',
+        isChecked || indeterminate ? colorConfig.checkedClass : colorConfig.uncheckedClass,
+      ]"
+      aria-hidden="true"
+      class="checkbox-box relative inline-flex shrink-0 items-center justify-center transition-all duration-fast"
+    >
+      <slot v-if="indeterminate" name="indeterminate-icon">
+        <BaseIcon
+          :icon-size="sizeConfig.iconSize"
+          class="scale-100 text-white transition-transform duration-fast"
+          name="minus"
+        />
+      </slot>
 
-    <template v-else>
-      <span
-        v-wave="{ disabled: disabled || readonly }"
-        :class="[
-          sizeConfig.boxClass,
-          hasDescription ? 'mt-0.5' : '',
-          isChecked || indeterminate ? colorConfig.checkedClass : colorConfig.uncheckedClass,
-          {
-            'peer-focus-visible:ring-2 peer-focus-visible:ring-primary/60 peer-focus-visible:ring-offset-1': !disabled,
-          },
-        ]"
-        aria-hidden="true"
-        class="checkbox-box relative inline-flex shrink-0 items-center justify-center transition-all duration-fast"
-      >
-        <slot v-if="indeterminate" name="indeterminate-icon">
-          <BaseIcon
-            :icon-size="sizeConfig.iconSize"
-            class="scale-100 text-white transition-transform duration-fast"
-            name="minus"
-          />
-        </slot>
+      <slot v-else-if="isChecked" name="icon">
+        <BaseIcon
+          :icon-size="sizeConfig.iconSize"
+          class="scale-100 text-white transition-transform duration-fast"
+          name="check"
+        />
+      </slot>
+    </span>
 
-        <slot v-else-if="isChecked" name="icon">
-          <BaseIcon
-            :icon-size="sizeConfig.iconSize"
-            class="scale-100 text-white transition-transform duration-fast"
-            name="check"
-          />
-        </slot>
+    <div
+      v-if="label || description || $slots['default'] || $slots['description']"
+      :class="sizeConfig.labelWrapperClass"
+      class="checkbox-content flex min-w-0 flex-col justify-center"
+    >
+      <span
+        v-if="label || $slots['default']"
+        :class="[
+          sizeConfig.labelClass,
+          isChecked ? 'font-medium text-fg-title' : 'text-fg-body',
+          hasDescription ? 'leading-tight' : 'leading-none',
+        ]"
+        class="checkbox-label transition-colors duration-fast"
+      >
+        <slot>{{ label }}</slot>
       </span>
 
-      <div
-        v-if="label || description || $slots['default'] || $slots['description']"
-        :class="sizeConfig.labelWrapperClass"
-        class="checkbox-content flex min-w-0 flex-col justify-center"
+      <span
+        v-if="description || $slots['description']"
+        :class="sizeConfig.descriptionClass"
+        class="checkbox-description text-fg-description mt-0.5 leading-normal"
       >
-        <span
-          v-if="label || $slots['default']"
-          :class="[
-            sizeConfig.labelClass,
-            isChecked ? 'font-medium text-fg-title' : 'text-fg-body',
-            hasDescription ? 'leading-tight' : 'leading-none',
-          ]"
-          class="checkbox-label transition-colors duration-fast"
-        >
-          <slot>{{ label }}</slot>
-        </span>
-
-        <span
-          v-if="description || $slots['description']"
-          :class="sizeConfig.descriptionClass"
-          class="checkbox-description text-fg-description mt-0.5 leading-normal"
-        >
-          <slot name="description">{{ description }}</slot>
-        </span>
-      </div>
-    </template>
+        <slot name="description">{{ description }}</slot>
+      </span>
+    </div>
   </label>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId, useSlots, useTemplateRef, watch } from 'vue';
+import { computed, ref, useId, useSlots, useTemplateRef } from 'vue';
 
+import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
-import {
-  BUTTON_GHOST_THEME_MAP,
-  BUTTON_ICON_ONLY_SIZE_MAP,
-  BUTTON_SIZE_MAP,
-  BUTTON_SUBTLE_THEME_MAP,
-} from '@/platform/ui/button/buttonThemes';
 import { ICON_SIZE_PRESETS } from '@/platform/ui/icons/iconSizes';
 
 import type { ComponentSize } from '@/platform/types';
@@ -246,96 +239,39 @@ const SIZE_CONFIGS = {
 const COLOR_CONFIGS = {
   primary: {
     checkedClass: 'border-primary bg-primary text-white group-hover:brightness-105',
-    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-primary/80 dark:bg-surface-surface',
+    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-primary/80 dark:bg-(--bg-surface)',
   },
   success: {
     checkedClass: 'border-success bg-success text-white group-hover:brightness-105',
-    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-success/80 dark:bg-surface-surface',
+    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-success/80 dark:bg-(--bg-surface)',
   },
   warning: {
     checkedClass: 'border-warning bg-warning text-white group-hover:brightness-105',
-    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-warning/80 dark:bg-surface-surface',
+    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-warning/80 dark:bg-(--bg-surface)',
   },
   danger: {
     checkedClass: 'border-danger bg-danger text-white group-hover:brightness-105',
-    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-danger/80 dark:bg-surface-surface',
+    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-danger/80 dark:bg-(--bg-surface)',
   },
 } as const;
 
 const sizeConfig = computed(() => SIZE_CONFIGS[size]);
 const colorConfig = computed(() => COLOR_CONFIGS[color]);
 
-// ===== buttonized（按钮化）形态：视觉对齐 ActionButton（共享 buttonThemes 单源） =====
-
-/** on（勾选）态取 subtle 色板、off 态取 ghost 色板，尺寸复用 ActionButton 的方形/胶囊映射 */
-const buttonizedConfig = computed(() => ({
-  text: BUTTON_SIZE_MAP[size] ?? BUTTON_SIZE_MAP['md'],
-  square: BUTTON_ICON_ONLY_SIZE_MAP[size] ?? BUTTON_ICON_ONLY_SIZE_MAP['md'],
-}));
-
-/** 是否含文本内容（label prop 或默认插槽），用于决定方形(iconOnly) / 胶囊(带文本) */
-const hasButtonizedText = computed(() => Boolean(label || slots['default']));
-/** 是否为方形图标按钮：显式 iconOnly，或仅有图标且无文本 */
-const isIconOnlySquare = computed(() => iconOnly || (Boolean(icon) && !hasButtonizedText.value));
-
-// 仅在开发环境中注册 a11y 警告，生产环境构建时被完全 Tree-shaking（对齐 ActionButton 的同类校验）
-if (import.meta.env.DEV) {
-  watch(
-    () => [isIconOnlySquare.value, ariaLabel, label] as const,
-    ([square, aria, text]) => {
-      if (square && !aria && !text) {
-        console.warn(
-          '[BaseCheckbox] buttonized 的 iconOnly 为 true 时应传入 ariaLabel（或 label），否则屏幕阅读器无法识别该复选框。'
-        );
-      }
-    },
-    { immediate: true }
-  );
-}
-
-/**
- * buttonized 内容外观：勾选=ActionButton subtle（浅主色高亮），未勾选=ActionButton ghost。
- * 宿主是 label（非 button），主题串的 hover:enabled: 前缀对 label 不生效，统一替换为 hover:；
- * 同时按需剥除主题里的 border-* 类（buttonized 为无边框形态，边框仅属于 ActionButton）
- */
-const rootButtonizedClass = computed(() => {
-  const sized = isIconOnlySquare.value ? buttonizedConfig.value.square : buttonizedConfig.value.text;
-  const theme =
-    // 未选中态刻意统一用 ghost 中性色，不随 color 变化（未选中无需强调色）；
-    // 仅选中态才按 color 取对应 subtle 色板
-    isChecked.value && !indeterminate.value
-      ? (BUTTON_SUBTLE_THEME_MAP[color] ?? BUTTON_SUBTLE_THEME_MAP['primary'])
-      : BUTTON_GHOST_THEME_MAP['default'];
-  const themePlain = theme
-    .replace(/hover:enabled:/g, 'hover:')
-    .split(' ')
-    .filter(token => !token.startsWith('border'))
-    .join(' ');
-  return [
-    sized,
-    themePlain,
-    'rounded-pill font-semibold align-middle duration-fast inline-flex items-center justify-center transition-all overflow-hidden select-none',
-  ].join(' ');
-});
-
-/** buttonized 图标尺寸（px），随组件 size 档位缩放 */
-const iconSize = computed(() => {
-  const map: Record<'sm' | 'md' | 'lg', number> = { sm: 14, md: 16, lg: 18 };
-  return map[size] ?? map['md'];
-});
+// ===== buttonized（按钮化）形态：直接渲染 ActionButton =====
+// 勾选→subtle（浅主色高亮）、未勾选→ghost；Appearance/尺寸/聚焦环/禁用/键盘等全部由
+// ActionButton 自身承载（原生 button 在 mousedown 即聚焦，聚焦环按下即显），不再手写样式。
+// 未选中态刻意统一用 ghost 中性色、不随 color 变化（未选中无需强调色），仅选中态按 color 取 subtle 色板。
 
 /** 当前选中态解析（自动兼容数组列表绑定、Set 集合、自定义 trueValue 与基础 boolean） */
 const isChecked = computed<boolean>(() => {
   const model = modelValue.value;
-  if (model === undefined) {
-    return innerChecked.value;
-  }
-  if (Array.isArray(model)) {
-    return model.includes(value);
-  }
-  if (model instanceof Set) {
-    return model.has(value);
-  }
+  if (model === undefined) return innerChecked.value;
+
+  if (Array.isArray(model)) return model.includes(value);
+
+  if (model instanceof Set) return model.has(value);
+
   return model === resolvedTrueValue.value;
 });
 
@@ -350,9 +286,7 @@ const toggle = () => {
   const currentChecked = isChecked.value;
   const nextChecked = indeterminate.value ? true : !currentChecked;
 
-  if (indeterminate.value) {
-    indeterminate.value = false;
-  }
+  if (indeterminate.value) indeterminate.value = false;
 
   const model = modelValue.value;
   let nextModelValue: unknown;
@@ -363,23 +297,17 @@ const toggle = () => {
   } else if (Array.isArray(model)) {
     const list = (model as unknown[]).slice();
     const idx = list.indexOf(value);
-    if (nextChecked && idx === -1) {
-      list.push(value);
-    } else if (!nextChecked && idx !== -1) {
-      list.splice(idx, 1);
-    }
+    if (nextChecked && idx === -1) list.push(value);
+    else if (!nextChecked && idx !== -1) list.splice(idx, 1);
+
     nextModelValue = list;
   } else if (model instanceof Set) {
     const set = new Set(model);
-    if (nextChecked) {
-      set.add(value);
-    } else {
-      set.delete(value);
-    }
+    if (nextChecked) set.add(value);
+    else set.delete(value);
+
     nextModelValue = set;
-  } else {
-    nextModelValue = nextChecked ? resolvedTrueValue.value : resolvedFalseValue.value;
-  }
+  } else nextModelValue = nextChecked ? resolvedTrueValue.value : resolvedFalseValue.value;
 
   modelValue.value = nextModelValue;
   emit('change', nextChecked, nextModelValue);

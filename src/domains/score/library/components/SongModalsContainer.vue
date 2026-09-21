@@ -35,9 +35,9 @@
       <BaseFormRow label="拍号 (Time)">
         <BaseSelector
           v-model="songModals.modalData.timeSignature"
-          :default-value="''"
           :options="SONG_TIME_SIGNATURES"
           clearable
+          default-value=""
           placeholder="未设置"
         />
       </BaseFormRow>

@@ -4,6 +4,7 @@
  * 本模块为零 store 依赖的纯函数，可直接单测；乐谱编解码（score/transfer/textCodec）
  * 复用本模块导出的字段编解码器。
  */
+import { createChord } from '@/domains/chord/theory/entityFactories';
 import {
   getChordName,
   getDefaultTuningForStringCount,
@@ -36,6 +37,24 @@ export interface PortableChord {
   strings: GuitarStringsModel;
   barres?: Chord['barres'];
 }
+
+/**
+ * 便携载荷 → 本实例和弦实体的**唯一**映射处（载荷新增字段只需改这里）。
+ * 原先四个入口各自展开同一份八字段映射（剪贴板草稿、分组导入、分享链接落库、乐谱导入建弦），
+ * 漏改一处就会让横按/把位在对应入口静默丢失，且没有任何报错——判等与指纹都基于已丢字段的实体。
+ * 归属由调用方给出：载入编辑器草稿传 ''（尚未入库），落库传目标分组 id。
+ */
+export const chordFromPortable = (p: PortableChord, groupId: string): Chord =>
+  createChord({
+    nameSegments: nameToSegments(p.name),
+    strings: p.strings,
+    fretCount: p.fretCount,
+    fretOffset: p.fretOffset,
+    groupId,
+    tuning: p.tuning,
+    rootStringIndex: p.rootStringIndex,
+    barres: p.barres,
+  });
 
 export type TextParseReason = 'UNKNOWN_FORMAT' | 'WRONG_TYPE' | 'INVALID_HEADER' | 'INVALID_NAME' | 'INVALID_FIELD';
 
@@ -124,9 +143,9 @@ export const parseChordFields = (fields: string): PortableChord | null => {
             !Number.isInteger(toString) ||
             toString < 0 ||
             toString >= stringCount
-          ) {
+          )
             return null;
-          }
+
           const fingerNum = Number(finger);
           return {
             fret,
@@ -235,9 +254,8 @@ export const parseGroupFromText = (text: string): TextParseResult<PortableGroup>
   const lines = text.split('\n').map(l => l.replace(/\r$/, ''));
   const header = lines[0]?.trim() ?? '';
   if (header === HEADER_CHORD || header === HEADER_SONG_MAGIC) return { ok: false, reason: 'WRONG_TYPE' };
-  if (header !== HEADER_GROUP) {
+  if (header !== HEADER_GROUP)
     return { ok: false, reason: header.startsWith(HEADER_GROUP_MAGIC) ? 'INVALID_HEADER' : 'UNKNOWN_FORMAT' };
-  }
 
   const name = lines[1]?.startsWith('NAME:') ? lines[1]!.slice(5).trim() : '';
   if (!name) return { ok: false, reason: 'INVALID_NAME' };

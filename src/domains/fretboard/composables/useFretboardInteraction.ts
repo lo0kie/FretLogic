@@ -79,9 +79,7 @@ export function useFretboardInteraction(
     if (fret >= 0) {
       const pitch = calcPitchIndex(sIdx, fret, props.chord.fretOffset, getActiveBaseStrings(props.chord.tuning));
       str.preferFlat = getDefaultPreferFlatForPitch(pitch);
-    } else {
-      str.preferFlat = false;
-    }
+    } else str.preferFlat = false;
   };
 
   /** 右击空白处/禁用空弦：直接设为可用(对应品位或空弦)并设为主音 */
@@ -124,12 +122,8 @@ export function useFretboardInteraction(
     // 空弦区
     if (fIdx === 0 && currentStringAsset !== undefined) {
       e.stopPropagation();
-      if (currentStringAsset.fret === 0) {
-        emitToggleRootString(sIdx);
-      } else {
-        setAvailableAndRoot(sIdx, 0);
-      }
-      return;
+      if (currentStringAsset.fret === 0) emitToggleRootString(sIdx);
+      else setAvailableAndRoot(sIdx, 0);
     }
   };
 
@@ -140,13 +134,9 @@ export function useFretboardInteraction(
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
       if (!str) return;
-      if (str.fret > 0) {
-        setStringFret(str, 0, sIdx);
-      } else if (isOpen(str)) {
-        setStringFret(str, -1, sIdx);
-      } else {
-        setStringFret(str, 0, sIdx);
-      }
+      if (str.fret > 0) setStringFret(str, 0, sIdx);
+      else if (isOpen(str)) setStringFret(str, -1, sIdx);
+      else setStringFret(str, 0, sIdx);
     });
   };
 
@@ -155,11 +145,8 @@ export function useFretboardInteraction(
     emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
       if (!str) return;
-      if (str.fret === fret) {
-        setStringFret(str, -1, sIdx);
-      } else {
-        setStringFret(str, fret, sIdx);
-      }
+      if (str.fret === fret) setStringFret(str, -1, sIdx);
+      else setStringFret(str, fret, sIdx);
     });
   };
 
@@ -206,10 +193,10 @@ export function useFretboardInteraction(
     if (mode === 'add') {
       // 添加：滑过同弦其他品位等效移动音符到当前品位（一弦一音）
       if (str.fret !== fIdx) setStringFret(str, fIdx, sIdx);
-    } else if (str.fret === fIdx) {
+    } else if (str.fret === fIdx)
       // 删除：仅抹掉滑动经过的音符格，空格保持原状
       setStringFret(str, -1, sIdx);
-    }
+
     onStringsChange(working);
   };
 
@@ -237,9 +224,8 @@ export function useFretboardInteraction(
       if (
         str &&
         canTogglePitchAccidental(sIdx, str.fret, props.chord.fretOffset, getActiveBaseStrings(props.chord.tuning))
-      ) {
+      )
         str.preferFlat = !str.preferFlat;
-      }
     });
   };
 

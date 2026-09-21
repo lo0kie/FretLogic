@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [main, master]
 
+# 最小权限：质量检查只需读取源码，不授予任何写权限
+permissions:
+  contents: read
+
+# 同一分支的连续提交只保留最新一次运行，取消过时的 CI，runner 不被历史提交占满
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     name: Lint · Typecheck · Test · Build
@@ -35,11 +44,10 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Unit tests
-        run: pnpm test
-
-      - name: Coverage check
-        run: pnpm exec vitest run --coverage
+      # 一步跑完：全量用例 + 覆盖率门槛。此前这里 `pnpm test` 与 `vitest run --coverage`
+      # 各跑一遍全套（测试执行两遍），coverage 模式本身已包含执行，无需再单列。
+      - name: Unit tests · Coverage
+        run: pnpm test:coverage
 
       - name: Build
         run: pnpm build

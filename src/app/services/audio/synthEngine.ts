@@ -57,14 +57,14 @@ const MAX_SUSTAIN_SECONDS = 30;
 const midiToFreq = (midiNote: number): number => {
   let freq = MIDI_TO_FREQ_CACHE.get(midiNote);
   if (freq === undefined) {
-    freq = AUDIO_CONFIG.A4_FREQ * Math.pow(2, (midiNote - AUDIO_CONFIG.A4_MIDI_NOTE) / 12);
+    freq = AUDIO_CONFIG.A4_FREQ * 2 ** ((midiNote - AUDIO_CONFIG.A4_MIDI_NOTE) / 12);
     MIDI_TO_FREQ_CACHE.set(midiNote, freq);
   }
   return freq;
 };
 
 /** dB → 线性增益 */
-const dbToGain = (db: number): number => Math.pow(10, db / 20);
+const dbToGain = (db: number): number => 10 ** (db / 20);
 
 /** 按弦序计算立体声声像：低音弦（弦 0）偏左 → 高音弦偏右，摆幅 PAN_SPREAD */
 const panForString = (stringIndex: number, stringCount: number): number => {
@@ -79,17 +79,13 @@ const createImpulseResponse = (ctx: BaseAudioContext, seconds: number, decayExp:
   const buffer = ctx.createBuffer(2, length, rate);
   for (let ch = 0; ch < 2; ch++) {
     const data = buffer.getChannelData(ch);
-    for (let i = 0; i < length; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decayExp);
-    }
+    for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length) ** decayExp;
   }
   return buffer;
 };
 
 /** 构建共享效果链：chorus → compressor → reverb → master → destination */
-const buildEffectChain = (): void => {
-  const ctx = audioCtx!;
-
+const buildEffectChain = (ctx: AudioContext): void => {
   // 混响：卷积 + 干湿交叉淡入（wet 由 appliedReverbWet 控制）
   const ir = createImpulseResponse(ctx, AUDIO_CONFIG.REVERB_DURATION, 2.5);
   reverbConvolver = ctx.createConvolver();
@@ -169,6 +165,7 @@ const ensureStringVoices = (count: number): void => {
  * @param sustain 为 true 时仅起音并保持延音（由 releaseSynthNotes 释放），否则按 duration 自动释放。
  */
 const triggerNote = (
+  ctx: AudioContext,
   frequency: number,
   startTime: number,
   duration: number,
@@ -177,7 +174,6 @@ const triggerNote = (
   panner: StereoPannerNode,
   sustain: boolean
 ): void => {
-  const ctx = audioCtx!;
   const carrier = ctx.createOscillator();
   carrier.type = preset.oscillatorType;
   carrier.frequency.setValueAtTime(frequency, startTime);
@@ -215,12 +211,12 @@ const triggerNote = (
   modulator.start(startTime);
 
   let stopAt: number;
-  if (sustain) {
+  if (sustain)
     // 延音保持：不自动释放，交由 releaseSynthNotes 做包络淡出。
     // 占位停止时间必须有限：松手事件丢失（pointercancel/窗外松开）时无人调用释放，
     // 有限的硬上限保证最坏情况延音有界、节点仍会自动结束并触发 onended 清理（1e9 会泄漏整条节点链）
     stopAt = startTime + MAX_SUSTAIN_SECONDS;
-  } else {
+  else {
     const releaseStart = startTime + Math.max(duration, attack + decay);
     ampEnv.gain.setValueAtTime(Math.max(0.0001, sustainLevel * peak), releaseStart);
     ampEnv.gain.linearRampToValueAtTime(0.0001, releaseStart + release);
@@ -251,14 +247,13 @@ export const initAudioEngine = async (): Promise<void> => {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    if (!audioCtx) {
-      const Ctor =
-        window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      audioCtx = new Ctor();
-    }
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const Ctor =
+      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = audioCtx ?? new Ctor();
+    audioCtx = ctx;
+    if (ctx.state === 'suspended') await ctx.resume();
 
-    buildEffectChain();
+    buildEffectChain(ctx);
     ensureStringVoices(6);
 
     isEngineInitialized = true;
@@ -283,9 +278,8 @@ export const ensureAudioReady = async (): Promise<boolean> => {
  */
 export const buildStrumOrder = (count: number, direction: StrumDirection): number[] => {
   if (count <= 0) return [];
-  if (direction === 'high') {
-    return Array.from({ length: count }, (_, i) => count - 1 - i);
-  }
+  if (direction === 'high') return Array.from({ length: count }, (_, i) => count - 1 - i);
+
   if (direction === 'inside-out') {
     const mid = Math.floor((count - 1) / 2);
     const order: number[] = [mid];
@@ -333,7 +327,7 @@ const resolveStrumParams = (
     velocityMin: options?.velocityMin ?? AUDIO_CONFIG.STRUM_VELOCITY_MIN,
     velocityRange: options?.velocityRange ?? AUDIO_CONFIG.STRUM_VELOCITY_RANGE,
     timingJitter: options?.timingJitter ?? 0,
-    triggerBaseTime: options?.startTime ?? audioCtx!.currentTime,
+    triggerBaseTime: options?.startTime ?? getAudioTime(),
   };
 };
 
@@ -351,7 +345,8 @@ export const triggerChordStrum = (
   },
   options?: ChordStrumOptions
 ): number => {
-  if (!guitarReady()) return 0;
+  const ctx = audioCtx;
+  if (!ctx || !guitarReady()) return 0;
   ensureStringVoices(chord.strings.length);
   const { baseStrings, delayStep, velocityMin, velocityRange, timingJitter, triggerBaseTime } = resolveStrumParams(
     options,
@@ -379,6 +374,7 @@ export const triggerChordStrum = (
     const jitterOffset = delayStep * (Math.random() * 2 - 1) * timingJitter;
 
     triggerNote(
+      ctx,
       frequency,
       triggerTime + jitterOffset,
       AUDIO_CONFIG.ENV_RELEASE,
@@ -407,7 +403,8 @@ export const triggerChordSustain = (
   },
   options?: ChordStrumOptions
 ): number => {
-  if (!guitarReady()) return 0;
+  const ctx = audioCtx;
+  if (!ctx || !guitarReady()) return 0;
   ensureStringVoices(chord.strings.length);
   const { baseStrings, delayStep, velocityMin, velocityRange, timingJitter, triggerBaseTime } = resolveStrumParams(
     options,
@@ -431,6 +428,7 @@ export const triggerChordSustain = (
     // 与 triggerChordStrum 相同的时序策略：固定基准 + 本弦局部抖动，不逐弦累进
     const jitterOffset = delayStep * (Math.random() * 2 - 1) * timingJitter;
     triggerNote(
+      ctx,
       frequency,
       triggerBaseTime + strumDelay + jitterOffset,
       0,
@@ -490,7 +488,7 @@ export const releaseSynthNotes = (): void => {
   const now = audioCtx.currentTime;
   const notes = activeNotes;
   activeNotes = [];
-  for (const n of notes) {
+  for (const n of notes)
     try {
       n.ampEnv.gain.cancelScheduledValues(now);
       n.ampEnv.gain.setTargetAtTime(0.0001, now, 0.02);
@@ -499,7 +497,6 @@ export const releaseSynthNotes = (): void => {
     } catch {
       /* 已停止 */
     }
-  }
 };
 
 /** 销毁底层音频引擎全部节点与状态 */
@@ -577,11 +574,10 @@ export const disposeSynthEngine = (): void => {
  * ------------------------------------------------------------------------- */
 if (typeof window !== 'undefined') {
   const unlockAudioContext = (): void => {
-    if (audioCtx && audioCtx.state === 'suspended') {
+    if (audioCtx && audioCtx.state === 'suspended')
       void audioCtx.resume().catch(() => {
         /* 唤醒失败由下次手势重试 */
       });
-    }
   };
   window.addEventListener('pointerdown', unlockAudioContext, { capture: true, passive: true });
   window.addEventListener('keydown', unlockAudioContext, { capture: true });

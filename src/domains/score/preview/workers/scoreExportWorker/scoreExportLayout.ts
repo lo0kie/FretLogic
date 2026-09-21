@@ -1,0 +1,449 @@
+/**
+ * 乐谱导出 Worker 的排版层：布局缩放、字体体系、字符量测与软折行。
+ *
+ * 从 scoreExportWorker.ts 抽出（原 103~534 行）。
+ *
+ * 职责边界：只做「算」不做「画」——字符列宽、和弦组宽度、行内容高度、软折行分段都在这里，
+ * 绘制指板与行/表头分别在 scoreExportFretboard / scoreExportRender。
+ * 依赖严格单向：types ← layout ← {fretboard, render, pages}。
+ */
+
+import { parseChordNameTokens as parseChordNameTokensCore } from '@/domains/chord/theory/chordNameTokens';
+import { clampDrawFretCount } from '@/domains/fretboard/constants';
+import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
+import { createLruCache } from '@/platform/utils/cache';
+
+import type { ExportCharItem, ExportChordData, ExportLineItem, RenderSegment } from './scoreExportTypes';
+import type { ChordNameToken } from '@/domains/chord/theory/chordNameTokens';
+
+/** 输出图固定编码质量（导出质量设置已移除，预览与后续入口统一使用） */
+export const EXPORT_JPEG_QUALITY = 0.95;
+
+// ---- 布局缩放（来自排列和弦配置：字号缩放 / 和弦缩放，作用于预览与导出图片生成） ----
+/** 随「和弦缩放」联动的布局键：指板几何 / 和弦名体系 / 和弦列间距 */
+const FRETBOARD_SCALED_KEYS = [
+  'FRETBOARD_WIDTH',
+  'STRING_SPACING',
+  'FRET_HEIGHT',
+  'FRETBOARD_GRID_TOP',
+  'FRETBOARD_LEFT_PAD',
+  'DOT_RADIUS',
+  'BARRE_THICKNESS',
+  'NUT_HEIGHT',
+  'CHORD_NAME_BASELINE_Y',
+  'MARKER_CENTER_Y',
+  'MUTE_CROSS_RADIUS',
+  'OPEN_CIRCLE_RADIUS',
+  'FRET_NUMBER_X_OFFSET',
+  'CHORD_NAME_FONT_SIZE',
+  'ACCIDENTAL_FONT_SIZE',
+  'ACCIDENTAL_SUPERSCRIPT_OFFSET',
+  'CAPO_TEXT_FONT_SIZE',
+  'INLINE_CHORD_GAP',
+  'CHORD_COLUMN_EXTRA_PAD',
+  'EDGE_CHORD_SECTION_GAP',
+  'CHORD_TO_LYRICS_GAP',
+] as const;
+/** 随「字号缩放」联动的布局键：歌词字号 / 字宽估算 / 行距 / 续行缩进 */
+const FONT_SCALED_KEYS = [
+  'LYRICS_FONT_SIZE',
+  'SPACE_CHAR_WIDTH',
+  'REGULAR_CHAR_WIDTH',
+  'WRAPPED_LINE_INDENT',
+  'WRAPPED_LINE_ROW_GAP',
+  'LINE_ROW_GAP',
+] as const;
+
+/** 参与缩放的布局键：与两组键表编译期对齐，新增缩放键必须归入其中一组 */
+type LayoutScaledKey = (typeof FRETBOARD_SCALED_KEYS)[number] | (typeof FONT_SCALED_KEYS)[number];
+
+/** 出厂基准值（每次渲染先按基准重算，避免缩放累积漂移） */
+const BASE_LAYOUT_VALUES: { [K in LayoutScaledKey]: number } = (() => {
+  const snapshot = {} as { [K in LayoutScaledKey]: number };
+  for (const key of [...FRETBOARD_SCALED_KEYS, ...FONT_SCALED_KEYS]) snapshot[key] = SCORE_EXPORT_CONFIG[key];
+
+  return snapshot;
+})();
+/** getExportFretboardWidth 的出厂实现（闭包字面量，不读可变常量，需单独包装缩放） */
+const BASE_GET_EXPORT_FRETBOARD_WIDTH = SCORE_EXPORT_CONFIG.getExportFretboardWidth;
+
+/** 布局视图的可写形态：去掉 readonly，并把字面量数值宽化成 number（缩放结果不再是出厂整数） */
+type MutableLayoutConfig = {
+  -readonly [K in keyof typeof SCORE_EXPORT_CONFIG]: (typeof SCORE_EXPORT_CONFIG)[K] extends number
+    ? number
+    : (typeof SCORE_EXPORT_CONFIG)[K];
+};
+
+/**
+ * Worker 排版层唯一的布局来源：SCORE_EXPORT_CONFIG 的私有可变副本。
+ *
+ * 缩放不能就地改出厂常量——它是主线程与 Worker 各自模块图里的同一份导出，
+ * 导出路径以外的读取方（页脚合成、配置弹窗预览）会拿到「上一次渲染缩放后」的残值；
+ * 而且它带 as const，逐键写入只能靠双重断言绕过类型层。副本只在渲染消息入口按基准重算，
+ * Worker 内的量测与绘制一律读这里。
+ */
+export const LAYOUT: MutableLayoutConfig = { ...SCORE_EXPORT_CONFIG };
+
+/** 取 2d 上下文：getContext 在显存压力/上下文丢失下会返回 null，此处一次性转成显式失败，
+ *  否则后续绘制处以 "Cannot read properties of null" 的形式爆开，看不出是画布没拿到 */
+export const requireContext2D = (canvas: OffscreenCanvas): OffscreenCanvasRenderingContext2D => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('OffscreenCanvas 2D 上下文创建失败');
+  return ctx;
+};
+
+/** 字体纪元：applyLayoutScales 每次执行自增，作为字体字符串缓存的失效信号 */
+let fontEpoch = 0;
+
+/** 按缩放系数重算布局常量（Worker 每收到渲染消息先调用；表头标题/元信息体系保持不缩放）。
+ *  fontScale/fretboardScale 以百分制传入（100 = 100%），此处换算为倍率后乘基准布局值 */
+export const applyLayoutScales = (fontScale: number, fretboardScale: number): void => {
+  const fontFactor = fontScale / 100;
+  const fretboardFactor = fretboardScale / 100;
+  for (const key of FRETBOARD_SCALED_KEYS) LAYOUT[key] = BASE_LAYOUT_VALUES[key] * fretboardFactor;
+
+  for (const key of FONT_SCALED_KEYS) LAYOUT[key] = BASE_LAYOUT_VALUES[key] * fontFactor;
+
+  LAYOUT.getExportFretboardWidth = (stringCount: number) =>
+    BASE_GET_EXPORT_FRETBOARD_WIDTH(stringCount) * fretboardFactor;
+  // 字体纪元自增：字号类布局键已重算，任何缓存的字体字符串（含弦名 / 升降号 / 品号 / 歌词）就此失效
+  fontEpoch++;
+};
+
+/** 模块级 Token 解析缓存，避免同曲目内重复出现的和弦名反复正则分割。
+ *  上限 1024：Worker 现在跨次渲染常驻，跨曲目累积的分片结果需要兜底回收（此前每次渲完即销毁，无需上限）。
+ *  单条仅几十字节，1024 条可忽略不计，足够覆盖一整个乐库的去重和弦名。 */
+const tokenCache = createLruCache<ChordNameToken[]>(1024);
+
+/** 带缓存的和弦名分片解析（核心实现见 utils/score/chordNameTokens） */
+export function parseChordNameTokens(chordName: string): ChordNameToken[] {
+  const cached = tokenCache.get(chordName);
+  if (cached) return cached;
+  const tokens = parseChordNameTokensCore(chordName);
+  tokenCache.set(chordName, tokens);
+  return tokens;
+}
+
+/** 分片文字绘制（居中，升降号上标）。当前唯一调用方是 drawFormattedChordName。
+ *  注意：表头元信息不经过这里 —— 它走 renderHeader 内独立的 measureValueTokens + 自带绘制循环，
+ *  修改本函数不会影响元信息排版。 */
+export function drawTokenizedText(
+  ctx: OffscreenCanvasRenderingContext2D,
+  centerX: number,
+  baselineY: number,
+  text: string,
+  color: string,
+  baseFont: string,
+  accFont: string,
+  superscriptOffset: number
+) {
+  const tokens = parseChordNameTokens(text);
+  if (tokens.length === 0) return;
+
+  // 预先测量各 Token 宽度以计算居中起始坐标；顺带把该 Token 选中的字体一并存下，
+  // 绘制阶段直接取用，不再重复做 isAccidental 判定与字体选择
+  let totalW = 0;
+  const measured: { text: string; isAccidental: boolean; width: number; font: string }[] = [];
+  for (const token of tokens) {
+    const font = token.isAccidental ? accFont : baseFont;
+    ctx.font = font;
+    const w = ctx.measureText(token.text).width;
+    totalW += w;
+    measured.push({ text: token.text, isAccidental: token.isAccidental, width: w, font });
+  }
+
+  // 居中依次绘制各分片
+  let curX = centerX - totalW / 2;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'left';
+  for (const item of measured) {
+    ctx.font = item.font;
+    const y = item.isAccidental ? baselineY + superscriptOffset : baselineY;
+    ctx.fillText(item.text, curX, y);
+    curX += item.width;
+  }
+}
+
+/**
+ * 字体字符串缓存（按「字体纪元」失效）。
+ *
+ * 字体串里只有 LAYOUT 的字号参与拼接，而这些字号仅在 applyLayoutScales 执行时变化；
+ * 该方法在每条渲染消息开头都会调用一次（缩放不变时写入的是同样的值），因此在其中自增纪元，
+ * 由这里按纪元重建缓存即可。收益集中在高频路径：drawTokenizedText / measureChordNameWidth 里
+ * 每个和弦名的每个分片都要取一次字体，缓存后不再重复拼模板串、不再产生短命字符串。
+ *
+ * 注：表头（标题 / 歌手 / 元信息）字体不随本缓存 —— 它们每次 renderHeader 只构造一次、
+ * 不在分片循环内，缓存收益可忽略，保持就地构造更直观。
+ */
+let fontsEpoch = -1;
+const fontCache = {
+  chordNameBase: '',
+  chordNameAccidental: '',
+  capo: '',
+};
+
+/** 取当前纪元的字体集（纪元未变则直接复用缓存对象） */
+const refreshFonts = () => {
+  if (fontsEpoch === fontEpoch) return fontCache;
+  fontCache.chordNameBase = `bold ${LAYOUT.CHORD_NAME_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
+  fontCache.chordNameAccidental = `bold ${LAYOUT.ACCIDENTAL_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
+  fontCache.capo = `bold ${LAYOUT.CAPO_TEXT_FONT_SIZE}px system-ui, sans-serif`;
+  fontsEpoch = fontEpoch;
+  return fontCache;
+};
+
+/** 和弦名正文字体（绘制与测量共用同一来源，避免两处字号漂移） */
+export const chordNameBaseFont = (): string => refreshFonts().chordNameBase;
+
+/** 和弦名上标升降号字体（同上） */
+export const chordNameAccidentalFont = (): string => refreshFonts().chordNameAccidental;
+
+/** 变调夹文本字体（指板图内 capo 标注使用） */
+export const capoFont = (): string => refreshFonts().capo;
+
+/** 歌词字体缓存：字号随「字号缩放」变化（纪元），字重随导出参数变化，故按二者联合记忆 */
+let lyricsFontKey = '';
+let lyricsFontValue = '';
+export const getLyricsFont = (weight: number): string => {
+  const key = `${fontEpoch}:${weight}`;
+  if (key !== lyricsFontKey) {
+    lyricsFontKey = key;
+    lyricsFontValue = `${weight} ${LAYOUT.LYRICS_FONT_SIZE}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+  }
+  return lyricsFontValue;
+};
+
+/** 量出和弦名分片后的总宽度（含上标升降号）：供指板位图留白与居中绘制共用 */
+export function measureChordNameWidth(ctx: OffscreenCanvasRenderingContext2D, chordName: string): number {
+  let total = 0;
+  for (const token of parseChordNameTokens(chordName)) {
+    ctx.font = token.isAccidental ? chordNameAccidentalFont() : chordNameBaseFont();
+    total += ctx.measureText(token.text).width;
+  }
+  return total;
+}
+
+/** 绘制带上标升降号（# / b / ♯ / ♭）的和弦名称，严格水平居中对齐 */
+export function drawFormattedChordName(
+  ctx: OffscreenCanvasRenderingContext2D,
+  centerX: number,
+  baselineY: number,
+  chordName: string,
+  color: string
+) {
+  drawTokenizedText(
+    ctx,
+    centerX,
+    baselineY,
+    chordName,
+    color,
+    chordNameBaseFont(),
+    chordNameAccidentalFont(),
+    LAYOUT.ACCIDENTAL_SUPERSCRIPT_OFFSET
+  );
+}
+
+/** 中文排版避头尾：禁止出现在行首的标点符号集合 */
+const NO_LINE_START_CHARS = new Set([
+  '，',
+  '。',
+  '！',
+  '？',
+  '、',
+  '；',
+  '：',
+  '）',
+  '》',
+  '」',
+  '』',
+  '”',
+  '’',
+  '…',
+  '—',
+  ',',
+  '.',
+  // 下一行是排版标点常量而非 Tailwind 类名，important 位置检查在此为误报
+  // eslint-disable-next-line better-tailwindcss/enforce-consistent-important-position
+  '!',
+  '?',
+  ';',
+  ':',
+  ')',
+  ']',
+  '}',
+  '>',
+]);
+
+/** 计算单个字符槽位所占用的总宽度（含半角/全角字符区分与指板图补偿）。
+ *  ignoreEmptySpace 必须由测量（软折行）与绘制两侧传入同一个值，否则折行宽度与实际绘制宽度会错位 */
+export function getCharColumnWidth(item: ExportCharItem, ignoreEmptySpace = false): number {
+  if (item.char === ' ' || item.char === '　') {
+    // 忽略无和弦空格：不占列宽（挂和弦的空格仍需占位以承载指板图）
+    if (!item.chord && ignoreEmptySpace) return 0;
+    const spaceW = LAYOUT.SPACE_CHAR_WIDTH;
+    return item.chord ? Math.max(LAYOUT.FRETBOARD_WIDTH + LAYOUT.CHORD_COLUMN_EXTRA_PAD, spaceW) : spaceW;
+  }
+  const code = item.char.charCodeAt(0);
+  // 半角 ASCII 字符（英文字母、数字、半角标点）：宽度约为全角汉字的 58%，排版更紧凑自然
+  const isHalfWidth = code <= 127;
+  const charW = isHalfWidth ? Math.round(LAYOUT.REGULAR_CHAR_WIDTH * 0.58) : LAYOUT.REGULAR_CHAR_WIDTH;
+
+  return item.chord ? Math.max(LAYOUT.FRETBOARD_WIDTH + LAYOUT.CHORD_COLUMN_EXTRA_PAD, charW) : charW;
+}
+
+/** 计算连续边和弦组所占用的总宽度 */
+export function getChordsGroupWidth(chords?: ExportChordData[]): number {
+  if (!chords || chords.length === 0) return 0;
+  return (
+    chords.length * LAYOUT.FRETBOARD_WIDTH +
+    (chords.length - 1) * LAYOUT.INLINE_CHORD_GAP +
+    LAYOUT.EDGE_CHORD_SECTION_GAP
+  );
+}
+
+/** 根据段的字符列表与边和弦计算纯内容高度（不含行间距）。使用迭代代替 spread + map 避免临时数组分配 */
+export function computeLineContentHeight(
+  chars: ExportCharItem[],
+  startChords?: ExportChordData[],
+  endChords?: ExportChordData[]
+): number {
+  let hasChords = false;
+  let maxFretCount = 0;
+
+  const accumFret = (c: ExportChordData) => {
+    hasChords = true;
+    const fc = clampDrawFretCount(c.fretCount);
+    if (fc > maxFretCount) maxFretCount = fc;
+  };
+
+  if (startChords) for (const c of startChords) accumFret(c);
+  if (endChords) for (const c of endChords) accumFret(c);
+  for (const item of chars) if (item.chord) accumFret(item.chord);
+
+  if (!hasChords) return LAYOUT.LYRICS_FONT_SIZE;
+  const fretCount = clampDrawFretCount(maxFretCount);
+  const fbHeight = LAYOUT.FRETBOARD_GRID_TOP + fretCount * LAYOUT.FRET_HEIGHT;
+  return fbHeight + LAYOUT.CHORD_TO_LYRICS_GAP + LAYOUT.LYRICS_FONT_SIZE;
+}
+
+/** 将原始歌词行根据最大可用宽度自动切分为软折行段落（含避头尾禁则与孤字控制） */
+export function wrapScoreLines(
+  lines: ExportLineItem[],
+  maxAvailableWidth: number,
+  ignoreEmptySpace = false
+): RenderSegment[] {
+  const allSegments: RenderSegment[] = [];
+
+  for (const line of lines) {
+    if (line.chars.length === 0) {
+      allSegments.push({
+        lineIdx: line.lineIdx,
+        chars: [],
+        startChords: line.startChords,
+        endChords: line.endChords,
+        isContinuation: false,
+        isLastSubLine: true,
+        contentHeight: computeLineContentHeight([], line.startChords, line.endChords),
+        width: getChordsGroupWidth(line.startChords) + getChordsGroupWidth(line.endChords),
+      });
+      continue;
+    }
+
+    const lineSegments: RenderSegment[] = [];
+    let curChars: ExportCharItem[] = [];
+    let isFirstSubLine = true;
+
+    const startChordsW = getChordsGroupWidth(line.startChords);
+    // curW = 当前段的水平占用：首行含段首和弦组宽度，续行不含缩进（缩进在段落入列时补上，
+    // 与渲染侧「续行缩进 + 字符列宽 + 边和弦」的口径一致），随字符入段同步累加，
+    // 因此段落宽度无需在渲染阶段再遍历一遍 chars 重算。
+    let curW = startChordsW;
+    const maxWForFirst = maxAvailableWidth;
+    const maxWForContinuation = maxAvailableWidth - LAYOUT.WRAPPED_LINE_INDENT;
+
+    for (let cIdx = 0; cIdx < line.chars.length; cIdx++) {
+      const charItem = line.chars[cIdx]!;
+      const charColW = getCharColumnWidth(charItem, ignoreEmptySpace);
+      const maxW = isFirstSubLine ? maxWForFirst : maxWForContinuation;
+
+      const isLastChar = cIdx === line.chars.length - 1;
+      const endChordsW = isLastChar ? getChordsGroupWidth(line.endChords) : 0;
+
+      if (curChars.length > 0 && curW + charColW + endChordsW > maxW) {
+        // 避头尾规则：如果即将排在新行首位的字符是禁止行首标点，且前一段末尾字符无和弦，则向前回借一字
+        let nextInitialChars = [charItem];
+        let nextInitialW = charColW;
+
+        if (NO_LINE_START_CHARS.has(charItem.char) && curChars.length > 1) {
+          const lastPrev = curChars[curChars.length - 1];
+          if (lastPrev && !lastPrev.chord) {
+            curChars.pop();
+            const borrowedW = getCharColumnWidth(lastPrev, ignoreEmptySpace);
+            curW -= borrowedW; // 回借给下一段的字符不再计入本段宽度
+            nextInitialChars = [lastPrev, charItem];
+            nextInitialW = borrowedW + charColW;
+          }
+        }
+
+        const segStartChords = isFirstSubLine ? line.startChords : undefined;
+        lineSegments.push({
+          lineIdx: line.lineIdx,
+          chars: curChars,
+          startChords: segStartChords,
+          isContinuation: !isFirstSubLine,
+          isLastSubLine: false,
+          contentHeight: computeLineContentHeight(curChars, segStartChords, undefined),
+          width: curW + (isFirstSubLine ? 0 : LAYOUT.WRAPPED_LINE_INDENT),
+        });
+        curChars = nextInitialChars;
+        curW = nextInitialW;
+        isFirstSubLine = false;
+      } else {
+        curChars.push(charItem);
+        curW += charColW;
+      }
+    }
+
+    // 孤字控制：若最后一行仅剩 1 个字符且不是唯的一行，尝试从上一段末尾借一个无和弦字符
+    if (curChars.length === 1 && lineSegments.length > 0) {
+      const prevSeg = lineSegments[lineSegments.length - 1]!;
+      if (prevSeg.chars.length > 2) {
+        const lastPrev = prevSeg.chars[prevSeg.chars.length - 1];
+        if (lastPrev && !lastPrev.chord) {
+          prevSeg.chars.pop();
+          const borrowedW = getCharColumnWidth(lastPrev, ignoreEmptySpace);
+          prevSeg.width -= borrowedW; // 与避头尾回借同理：宽度随字符一起转移
+          curW += borrowedW;
+          curChars.unshift(lastPrev);
+          prevSeg.contentHeight = computeLineContentHeight(prevSeg.chars, prevSeg.startChords, undefined);
+        }
+      }
+    }
+
+    if (curChars.length > 0) {
+      const segStartChords = isFirstSubLine ? line.startChords : undefined;
+      lineSegments.push({
+        lineIdx: line.lineIdx,
+        chars: curChars,
+        startChords: segStartChords,
+        endChords: line.endChords,
+        isContinuation: !isFirstSubLine,
+        isLastSubLine: true,
+        contentHeight: computeLineContentHeight(curChars, segStartChords, line.endChords),
+        width: curW + (isFirstSubLine ? 0 : LAYOUT.WRAPPED_LINE_INDENT) + getChordsGroupWidth(line.endChords),
+      });
+    } else if (lineSegments.length > 0) {
+      const lastSeg = lineSegments[lineSegments.length - 1]!;
+      lastSeg.endChords = line.endChords;
+      lastSeg.isLastSubLine = true;
+      lastSeg.contentHeight = computeLineContentHeight(lastSeg.chars, lastSeg.startChords, line.endChords);
+      lastSeg.width += getChordsGroupWidth(line.endChords);
+    }
+
+    if (lineSegments.length > 0) lineSegments[lineSegments.length - 1]!.isLastSubLine = true;
+
+    allSegments.push(...lineSegments);
+  }
+
+  return allSegments;
+}

@@ -92,9 +92,8 @@ const variantKey = (v: Chord, idx: number): string =>
 
 /** 判断某个变体是否为当前草稿和弦 */
 const isActiveVariant = (variant: Chord): boolean => {
-  if (variant.id && editorStore.draftChord.id && variant.id === editorStore.draftChord.id) {
-    return true;
-  }
+  if (variant.id && editorStore.draftChord.id && variant.id === editorStore.draftChord.id) return true;
+
   return (
     computeChordFingerprint(variant) === computeChordFingerprint(editorStore.draftChord) &&
     variant.fretOffset === editorStore.draftChord.fretOffset

@@ -91,9 +91,8 @@ const applyTransition = (el: HTMLElement, state: AutoHeightState): void => {
 /** 归一化指令配置 */
 const normalizeOptions = (value: AutoHeightBinding, modifiers?: Record<string, boolean>): AutoHeightOptions => {
   let opts: AutoHeightOptions;
-  if (typeof value === 'boolean') {
-    opts = { expanded: value, initialAuto: true, threshold: 2, disabled: false };
-  } else if (value && typeof value === 'object') {
+  if (typeof value === 'boolean') opts = { expanded: value, initialAuto: true, threshold: 2, disabled: false };
+  else if (value && typeof value === 'object')
     opts = {
       expanded: value.expanded !== false,
       initialAuto: value.initialAuto !== false,
@@ -102,9 +101,8 @@ const normalizeOptions = (value: AutoHeightBinding, modifiers?: Record<string, b
       disabled: Boolean(value.disabled),
       transition: value.transition,
     };
-  } else {
-    opts = { expanded: true, initialAuto: true, threshold: 2, disabled: false };
-  }
+  else opts = { expanded: true, initialAuto: true, threshold: 2, disabled: false };
+
   // 静态修饰符 .disabled（编译期固定，动态禁用请用绑定值 { disabled }）
   if (modifiers?.['disabled']) opts.disabled = true;
   return opts;
@@ -159,27 +157,26 @@ const updateObservedChildren = (state: AutoHeightState, mutations?: MutationReco
   const target = state.targetEl;
   if (!target) return;
   if (!mutations) {
-    for (const child of Array.from(target.children)) {
+    for (const child of Array.from(target.children))
       if (!state.observedChildren.has(child)) {
         state.observer?.observe(child);
         state.observedChildren.add(child);
       }
-    }
+
     return;
   }
   for (const mutation of mutations) {
-    for (const node of mutation.removedNodes) {
+    for (const node of mutation.removedNodes)
       if (node instanceof Element && state.observedChildren.has(node)) {
         state.observer?.unobserve(node);
         state.observedChildren.delete(node);
       }
-    }
-    for (const node of mutation.addedNodes) {
+
+    for (const node of mutation.addedNodes)
       if (node.parentNode === target && node instanceof Element && !state.observedChildren.has(node)) {
         state.observer?.observe(node);
         state.observedChildren.add(node);
       }
-    }
   }
 };
 
@@ -241,11 +238,8 @@ export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
 
     applyTransition(el, state);
 
-    if (!opts.expanded) {
-      el.style.height = '0px';
-    } else if (!opts.initialAuto) {
-      el.style.height = '0px';
-    }
+    if (!opts.expanded) el.style.height = '0px';
+    else if (!opts.initialAuto) el.style.height = '0px';
 
     observeTarget(el, state);
   },
@@ -291,11 +285,8 @@ export const vAutoHeight: Directive<HTMLElement, AutoHeightBinding> = {
     if (!currentExpanded) {
       el.style.height = '0px';
       state.lastMeasuredPx = 0;
-    } else if (!prevExpanded && currentExpanded) {
-      syncHeight(el, state, true);
-    } else {
-      syncHeight(el, state);
-    }
+    } else if (!prevExpanded && currentExpanded) syncHeight(el, state, true);
+    else syncHeight(el, state);
   },
 
   unmounted(el: HTMLElement) {

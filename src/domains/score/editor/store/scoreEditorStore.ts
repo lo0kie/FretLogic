@@ -21,7 +21,7 @@ import { lineCharChord, matchLineIds, sanitizeLyricsText } from '@/domains/score
 import { useStorage } from '@/platform/composables/useStorage';
 import { kvRemove, kvSet } from '@/platform/services/storage/idbKv';
 import { generateUUID } from '@/platform/utils/common';
-import { STORAGE_KEYS } from '@/platform/utils/constants';
+import { PERSIST_DEBOUNCE_MS, PERSIST_MAX_WAIT_MS, STORAGE_KEYS } from '@/platform/utils/constants';
 
 import { useScoreHistory } from './useScoreHistory';
 
@@ -65,20 +65,20 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   // 出图时要另一套排版比例，共用一份就会「调好编辑区，导出的图跟着变」。
   // 预览维度沿用旧键，老用户的既有设置继续生效。
   const previewFontScale = useStorage(STORAGE_KEYS.SCORE_FONT_SCALE, 100, {
-    eventFilter: debounceFilter(400, { maxWait: 1500 }),
+    eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
     serializer: percentScaleSerializer,
   });
   const previewFretboardScale = useStorage(STORAGE_KEYS.SCORE_FRETBOARD_SCALE, 100, {
-    eventFilter: debounceFilter(400, { maxWait: 1500 }),
+    eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
     serializer: percentScaleSerializer,
   });
   // 排列和弦维度用新键，默认值取预览维度的当前值：拆分后两侧都与原设置一致，不会「一夜回到 100%」
   const arrangeFontScale = useStorage(STORAGE_KEYS.SCORE_ARRANGE_FONT_SCALE, previewFontScale.value, {
-    eventFilter: debounceFilter(400, { maxWait: 1500 }),
+    eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
     serializer: percentScaleSerializer,
   });
   const arrangeFretboardScale = useStorage(STORAGE_KEYS.SCORE_ARRANGE_FRETBOARD_SCALE, previewFretboardScale.value, {
-    eventFilter: debounceFilter(400, { maxWait: 1500 }),
+    eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
     serializer: percentScaleSerializer,
   });
   /** 编辑视图（排列和弦）实际生效的缩放：ChordSlotCell / ScoreInteractiveArea 消费 */
@@ -118,6 +118,17 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   } = useScoreHistory({
     getActiveSong: () => activeSong.value,
     applyState: (id, state) => songStore.updateSongMeta(id, state),
+    /**
+     * 快照离栈（redo 分支被截断 / 超出容量 / 切换歌曲）→ 该步在库里自动新建的和弦再也回不到，
+     * 逐个确认「已无任何乐谱引用」后回收。不记这笔账的话「移调 → 撤销」会把每次自动建弦
+     * 永久留在用户和弦库里并跟着备份走。删除一律走 chordStore.removeChords（其删除事件由
+     * 应用层桥接负责解绑），本 store 不自行改写别的域的数据结构。
+     */
+    onSnapshotsDiscarded: states => {
+      const created = states.flatMap(s => s.createdChords ?? []);
+      const orphans = created.filter(c => songStore.getChordReferences([c.id]).length === 0);
+      if (orphans.length > 0) chordStore.removeChords(orphans);
+    },
   });
 
   watch(activeSong, newSong => handleHistorySongChange(newSong), { immediate: true });
@@ -176,9 +187,8 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
       chordMap: chordMapChanged ? (collectedChordMap as Map<LineId, ChordLineSlots>) : target.chordMap,
     });
     if (activeSong.value?.id === target.id) recordHistory();
-    if (activeSong.value?.id === target.id && !sanitizedLyrics.trim()) {
-      activeTabRef.value = 'edit';
-    }
+    if (activeSong.value?.id === target.id && !sanitizedLyrics.trim()) activeTabRef.value = 'edit';
+
     return { skippedSimilarMatch };
   };
 
@@ -246,27 +256,30 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
   const transposeActiveSong = (semitones: number) => {
     if (!activeSong.value || semitones === 0) return;
     recordHistory();
+    // 本步自动新建的和弦随「移调后」快照登记：redo 分支作废时由历史栈回收钩子清走，
+    // 否则「移调 → 撤销」会把这套指法永久留在库里并跟着备份走
+    const createdInStep: Chord[] = [];
     songStore.transposeSong(activeSong.value.id, semitones, {
       chordResolver: id => chordStore.savedChordsList.find(c => c.id === id),
-      chordFinder: (targetName, originalChord) => {
-        return chordStore.savedChordsList.find(c => {
+      chordFinder: (targetName, originalChord) =>
+        chordStore.savedChordsList.find(c => {
           if (c.tuning !== originalChord.tuning || c.strings.length !== originalChord.strings.length) return false;
           // 等音异名视为命中：transposeChordName 一律输出升号（Eb → D#），若只做字符串全等，
           // 库里既有的 Eb 指法永远匹配不上，每次移调都会再造一套同音异名的和弦。
           const name = getChordName(c);
           return name === targetName || areChordsEnharmonicallyEquivalent(name, targetName);
-        });
-      },
+        }),
       chordCreator: originalChord => {
         const created = transposeChordEntity(originalChord, semitones, {
           mode: 'update_name',
-          newId: toChordId('c_' + generateUUID().slice(0, 10)),
+          newId: toChordId(`c_${generateUUID().slice(0, 10)}`),
         });
         chordStore.addChord(created);
+        createdInStep.push(created);
         return created;
       },
     });
-    recordHistory();
+    recordHistory(undefined, createdInStep);
   };
 
   /** 增减当前歌曲的变调夹品位（包含撤销栈保护） */

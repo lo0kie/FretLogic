@@ -7,8 +7,8 @@ import type { Directive, DirectiveBinding } from 'vue';
 
 /**
  * v-scroll-into-view 指令：元素激活或挂载时自动平滑/即时滚入视口。
- * 支持布尔值、配置对象（{ active, direction, block, inline, behavior, delay, once }）
- * 与修饰符（.x/.horizontal, .y/.vertical, .center, .nearest, .smooth, .immediate, .once/.mountOnly）。
+ * 支持布尔值、配置对象（{ active, direction, block, inline, behavior, delay, once, skipMount }）
+ * 与修饰符（.x/.horizontal, .y/.vertical, .center, .nearest, .smooth, .immediate, .once/.mountOnly, .skipMount）。
  * 适用于多指法卡片、乐谱卡片、和弦分组卡片等列表项激活时的自动居中/视口定位。
  */
 
@@ -25,6 +25,7 @@ export type ScrollIntoViewModifiers =
   | 'immediate'
   | 'once'
   | 'mountOnly'
+  | 'skipMount'
   | 'keepAlive'
   | 'settle'
   | (string & Record<never, never>);
@@ -42,6 +43,16 @@ export interface ScrollIntoViewOptions {
   behavior?: ScrollBehavior;
   /** 是否仅在初次挂载时触发，后续激活态更新不重复触发 */
   once?: boolean;
+  /**
+   * 挂载时不触发滚动（也不开启尺寸自愈监视），只认挂载之后的激活态变化。
+   *
+   * 用于「激活态来自会话恢复而非用户动作」的场景：激活态是持久化的，重开容器（浮层 v-if 重建等）
+   * 时它在挂载那一刻就已经为真，指令的挂载分支会在 delay 之后把该元素滚回视口——而同一时刻
+   * 宿主往往正要把「上次停留的滚动位置」恢复回去，两者相撞，恢复好的位置被顶走（表现为
+   * 「重开后过了一会儿自己往上跳一段」，delay 越长越明显）。跳过挂载触发后，首次定位完全由
+   * 宿主自己的恢复逻辑负责，指令只负责后续「用户切到这一项」时的对焦。
+   */
+  skipMount?: boolean;
   /**
    * 是否在宿主组件被 KeepAlive 缓存后重新激活时再次滚动（需显式 .keep-alive 修饰符开启）
    */
@@ -80,45 +91,35 @@ const normalizeOptions = (
   modifiers?: Record<string, boolean>
 ): ScrollIntoViewOptions => {
   let opts: ScrollIntoViewOptions = {};
-  if (typeof bindingValue === 'boolean') {
-    opts.active = bindingValue;
-  } else if (bindingValue && typeof bindingValue === 'object') {
-    opts = { ...bindingValue };
-  } else {
-    opts.active = false;
-  }
+  if (typeof bindingValue === 'boolean') opts.active = bindingValue;
+  else if (bindingValue && typeof bindingValue === 'object') opts = { ...bindingValue };
+  else opts.active = false;
 
   if (modifiers) {
-    if (modifiers['x'] || modifiers['horizontal']) {
-      opts.direction = 'x';
-    } else if (modifiers['y'] || modifiers['vertical']) {
-      opts.direction = 'y';
-    }
+    if (modifiers['x'] || modifiers['horizontal']) opts.direction = 'x';
+    else if (modifiers['y'] || modifiers['vertical']) opts.direction = 'y';
 
-    if (modifiers['once'] || modifiers['mountOnly'] || modifiers['mount_only']) {
-      opts.once = true;
-    }
+    if (modifiers['once'] || modifiers['mountOnly'] || modifiers['mount_only']) opts.once = true;
+
+    // 跳过挂载触发（与 .once/.mountOnly 互为正反面）：激活态若是从持久化状态读出来的，
+    // 挂载即激活并不代表用户想去看它，此时该由宿主的滚动位置恢复说了算
+    if (modifiers['skipMount'] || modifiers['skip-mount'] || modifiers['skip_mount']) opts.skipMount = true;
 
     // 布局稳定后自动重滚（解决折叠/展开过渡期间触发导致定位到半展开位置的问题）
-    if (modifiers['settle']) {
-      opts.settle = true;
-    }
+    if (modifiers['settle']) opts.settle = true;
 
     // 延迟触发（毫秒）：等待折叠/展开过渡完成再滚动，避免量到中间态高度；.delay-220 → 220ms
     const delayKey = Object.keys(modifiers).find(k => k.startsWith('delay-'));
     const delayMatch = delayKey ? /^delay-(\d+)$/.exec(delayKey) : null;
-    if (delayMatch) {
-      opts.delay = Number(delayMatch[1]);
-    }
+    if (delayMatch) opts.delay = Number(delayMatch[1]);
 
     // 定位间距：.gap-16 → 16px；.gap-sm 等 spacing token → var(--spacing-sm)。
     // 经 scroll-margin 交给原生 scrollIntoView 消费
     const gapKey = Object.keys(modifiers).find(k => k.startsWith('gap-'));
     if (gapKey) {
       const gapMatch = /^gap-(\d+(?:\.\d+)?)$/.exec(gapKey);
-      if (gapMatch) {
-        opts.gap = Number(gapMatch[1]);
-      } else {
+      if (gapMatch) opts.gap = Number(gapMatch[1]);
+      else {
         const token = gapKey.slice(4);
         if (/^[a-z][a-z0-9]*$/i.test(token)) opts.gapToken = token;
       }
@@ -126,11 +127,9 @@ const normalizeOptions = (
 
     // KeepAlive 缓存激活后再次滚动需显式 .keep-alive 修饰符开启，不作默认行为。
     // 注意 Vue 的 binding.modifiers 保留修饰符字面键（.keep-alive → 'keep-alive'，不 camelize）
-    if (modifiers['keep-alive'] || modifiers['keepAlive'] || modifiers['keep_alive']) {
-      opts.keepAlive = true;
-    }
+    if (modifiers['keep-alive'] || modifiers['keepAlive'] || modifiers['keep_alive']) opts.keepAlive = true;
 
-    if (modifiers['center']) {
+    if (modifiers['center'])
       if (opts.direction === 'x') {
         opts.inline = 'center';
         opts.block = 'nearest';
@@ -141,30 +140,27 @@ const normalizeOptions = (
         opts.inline = 'center';
         opts.block = 'center';
       }
-    }
+
     if (modifiers['nearest']) {
-      opts.block = opts.block ?? 'nearest';
-      opts.inline = opts.inline ?? 'nearest';
+      opts.block ??= 'nearest';
+      opts.inline ??= 'nearest';
     }
-    if (modifiers['start']) {
+    if (modifiers['start'])
       if (opts.direction === 'x') opts.inline = 'start';
       else opts.block = 'start';
-    }
-    if (modifiers['end']) {
+
+    if (modifiers['end'])
       if (opts.direction === 'x') opts.inline = 'end';
       else opts.block = 'end';
-    }
-    if (modifiers['smooth']) {
-      opts.behavior = 'smooth';
-    }
-    if (modifiers['immediate']) {
-      opts.behavior = 'auto';
-    }
+
+    if (modifiers['smooth']) opts.behavior = 'smooth';
+
+    if (modifiers['immediate']) opts.behavior = 'auto';
   }
 
-  opts.direction = opts.direction ?? 'both';
-  opts.block = opts.block ?? 'nearest';
-  opts.inline = opts.inline ?? 'nearest';
+  opts.direction ??= 'both';
+  opts.block ??= 'nearest';
+  opts.inline ??= 'nearest';
   return opts;
 };
 
@@ -182,9 +178,7 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
     if (opts.gapToken) {
       el.style.scrollMargin = `var(--spacing-${opts.gapToken})`;
       gap = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
-    } else if (gap > 0) {
-      el.style.scrollMargin = `${gap}px`;
-    }
+    } else if (gap > 0) el.style.scrollMargin = `${gap}px`;
 
     // 纯横向模式：直接在最近的横向滚动容器内按 scrollLeft 滚动，绝不冒泡触发外层纵向视口跳动
     if (opts.direction === 'x') {
@@ -198,17 +192,10 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
           const cardCenter = elRect.left + elRect.width / 2;
           const containerCenter = containerRect.left + containerRect.width / 2;
           scrollTarget += cardCenter - containerCenter;
-        } else if (opts.inline === 'start') {
-          scrollTarget += elRect.left - containerRect.left - gap;
-        } else if (opts.inline === 'end') {
-          scrollTarget += elRect.right - containerRect.right + gap;
-        } else {
-          if (elRect.left < containerRect.left + gap) {
-            scrollTarget += elRect.left - containerRect.left - gap;
-          } else if (elRect.right > containerRect.right - gap) {
-            scrollTarget += elRect.right - containerRect.right + gap;
-          }
-        }
+        } else if (opts.inline === 'start') scrollTarget += elRect.left - containerRect.left - gap;
+        else if (opts.inline === 'end') scrollTarget += elRect.right - containerRect.right + gap;
+        else if (elRect.left < containerRect.left + gap) scrollTarget += elRect.left - containerRect.left - gap;
+        else if (elRect.right > containerRect.right - gap) scrollTarget += elRect.right - containerRect.right + gap;
 
         const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
         container.scrollTo({
@@ -227,13 +214,11 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
     });
   };
 
-  if (opts.delay && opts.delay > 0) {
-    window.setTimeout(doScroll, opts.delay);
-  } else {
+  if (opts.delay && opts.delay > 0) window.setTimeout(doScroll, opts.delay);
+  else
     nextTick(() => {
       requestAnimationFrame(doScroll);
     });
-  }
 };
 
 // ==================== .settle：异步布局稳定后自愈重滚 ====================
@@ -258,9 +243,7 @@ const settleStart = (el: HTMLElement, opts: ScrollIntoViewOptions) => {
   if (!tracker) {
     tracker = { ro: null, debounceTimer: null, optsRef: { current: opts } };
     settleMap.set(el, tracker);
-  } else {
-    tracker.optsRef.current = opts;
-  }
+  } else tracker.optsRef.current = opts;
 
   // 未开启 settle、once 模式或处于非激活态时，不响应尺寸变化
   if (!opts.settle || opts.once || !opts.active) return;
@@ -292,9 +275,8 @@ const settleUpdate = (el: HTMLElement, opts: ScrollIntoViewOptions) => {
   const tracker = settleMap.get(el);
   if (!tracker) return;
   tracker.optsRef.current = opts;
-  if (!opts.settle || opts.once || !opts.active) {
-    settleStop(el);
-  } else if (tracker.ro) {
+  if (!opts.settle || opts.once || !opts.active) settleStop(el);
+  else if (tracker.ro) {
     // 已激活并已观察：仅刷新配置即可，无需重建
   }
 };
@@ -317,20 +299,20 @@ const settleStop = (el: HTMLElement) => {
 // KeepAlive 直接子组件实例的 activated 钩子数组感知「组件被缓存后重新激活」。此为 Vue 运行时
 // 的稳定内部结构，升级 Vue 时需回归校验；若结构变更，退化为仅 mounted/updated 触发。
 
-type HookableInstance = {
+interface HookableInstance {
   parent: HookableInstance | null;
   vnode?: { type?: { __isKeepAlive?: boolean } };
   a?: (() => void)[];
-};
+}
 
 // 元素 → 已注册的 keepalive 激活回调，避免重复注册并便于卸载时移除。
 // bindingRef 用可变容器持有指令绑定的引用：mounted 时闭包进 callback 的 binding 对象此后不会被
 // Vue 更新（updated 传入的是全新对象），故用容器承接、每次 updated 时回写最新 binding，保证激活回调取到实时状态。
-type ActivatedRegistration = {
+interface ActivatedRegistration {
   instance: HookableInstance;
   callback: () => void;
   bindingRef: { current: DirectiveBinding<ScrollIntoViewBinding, ScrollIntoViewModifiers> };
-};
+}
 const activatedRegistrations = new WeakMap<HTMLElement, ActivatedRegistration>();
 
 /** 沿父链向上找到「父级是 KeepAlive」的组件实例：该实例被缓存激活时其 activated 钩子会被调用 */
@@ -338,9 +320,8 @@ const findKeepAliveHost = (instance: HookableInstance | null | undefined): Hooka
   let current = instance;
   while (current && current.parent) {
     const parentType = current.parent.vnode?.type as { __isKeepAlive?: boolean } | undefined;
-    if (parentType?.__isKeepAlive) {
-      return current;
-    }
+    if (parentType?.__isKeepAlive) return current;
+
     current = current.parent;
   }
   return null;
@@ -374,11 +355,9 @@ const registerKeepAliveActivation = (
     // 插入完成后执行，并由 doScroll 自带的 isConnected 防御误判，交给它决定即可。
     executeScroll(el, { ...latest, behavior: 'auto' }, false);
   };
-  if (!Array.isArray(target.a)) {
-    target.a = [callback];
-  } else {
-    target.a.push(callback);
-  }
+  if (!Array.isArray(target.a)) target.a = [callback];
+  else target.a.push(callback);
+
   activatedRegistrations.set(el, { instance: target, callback, bindingRef });
 };
 
@@ -395,8 +374,10 @@ const unregisterKeepAliveActivation = (el: HTMLElement) => {
 
 export const vScrollIntoView: Directive<HTMLElement, ScrollIntoViewBinding, ScrollIntoViewModifiers> = {
   mounted(el, binding) {
-    if (isActive(binding.value)) {
-      const opts = normalizeOptions(binding.value, binding.modifiers);
+    const opts = normalizeOptions(binding.value, binding.modifiers);
+    // .skipMount 时连 settleStart 也一并跳过：尺寸自愈同样以挂载时的激活态重滚一次，
+    // 留着它等于把刚被跳过的挂载滚动从另一个入口放回来
+    if (!opts.skipMount && isActive(binding.value)) {
       executeScroll(el, opts, true);
       settleStart(el, opts);
     }
@@ -406,9 +387,7 @@ export const vScrollIntoView: Directive<HTMLElement, ScrollIntoViewBinding, Scro
     // 把最新 binding 回写进可变更容器，同步 KeepAlive 激活回调读取的绑定态（场景：会话中首次点选
     // 某项时 mounted 捕获的是 active:false 旧对象，updated 传入新对象，若不回写则激活回调读到陈旧态。）
     const registration = activatedRegistrations.get(el);
-    if (registration) {
-      registration.bindingRef.current = binding;
-    }
+    if (registration) registration.bindingRef.current = binding;
 
     const opts = normalizeOptions(binding.value, binding.modifiers);
     settleUpdate(el, opts);

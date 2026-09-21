@@ -81,9 +81,9 @@ export const useFretboardWheel = (options: FretboardWheelOptions) => {
         (fIdx > 0 && fIdx <= getFretCount() && currentStr?.fret === fIdx) ||
         (fIdx === 0 && currentStr !== undefined && isOpen(currentStr));
       if (isHoveringActiveNote && currentStr !== undefined) {
-        if (canTogglePitchAccidental(sIdx, currentStr.fret, getFretOffset(), getActiveBaseStrings(getTuning()))) {
+        if (canTogglePitchAccidental(sIdx, currentStr.fret, getFretOffset(), getActiveBaseStrings(getTuning())))
           onTogglePitchName(sIdx);
-        }
+
         // 命中音符分支不消费偏移增量：清掉累加值，防止指针随后移出音符区时
         // 一次性跳多格（P1 审计 N 系）
         wheelAccumulator = 0;

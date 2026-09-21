@@ -17,9 +17,9 @@ export const LINE_HIT_VERTICAL_TOLERANCE = 12;
 export const SLOT_HIT_HORIZONTAL_TOLERANCE = 12;
 
 export interface HoverLine {
-  /** 命中的歌词行元素（[data-line-idx]） */
+  /** 命中的歌词行元素（[data-line-index]） */
   el: HTMLElement;
-  /** 所属歌词行 id（data-line-idx），可能缺失 */
+  /** 所属歌词行 id（data-line-index），可能缺失 */
   lineId: string | null;
 }
 
@@ -47,7 +47,7 @@ export function resolveHoverLine(lines: HTMLElement[], y: number): HoverLine | n
     }
   }
   if (!bestLine) return null;
-  return { el: bestLine, lineId: bestLine.dataset['lineIdx'] ?? null };
+  return { el: bestLine, lineId: bestLine.dataset['lineIndex'] ?? null };
 }
 
 /**
@@ -75,9 +75,8 @@ export function snapToSlotInLine(hovered: HoverLine, x: number): SnappedSlot | n
       bestSlot = slot;
     }
   }
-  if (!bestSlot || x < minLeft - SLOT_HIT_HORIZONTAL_TOLERANCE || x > maxRight + SLOT_HIT_HORIZONTAL_TOLERANCE) {
+  if (!bestSlot || x < minLeft - SLOT_HIT_HORIZONTAL_TOLERANCE || x > maxRight + SLOT_HIT_HORIZONTAL_TOLERANCE)
     return null;
-  }
 
   const key = bestSlot.dataset['slotKey'];
   if (!key) return null;

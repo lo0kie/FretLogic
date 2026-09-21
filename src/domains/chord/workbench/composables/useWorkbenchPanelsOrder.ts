@@ -28,11 +28,8 @@ export function sanitizePanelOrder(raw: unknown): WorkbenchPanelId[] {
     DEFAULT_WORKBENCH_PANEL_ORDER.includes(id as WorkbenchPanelId)
   );
   const unique = Array.from(new Set(valid));
-  for (const defaultId of DEFAULT_WORKBENCH_PANEL_ORDER) {
-    if (!unique.includes(defaultId)) {
-      unique.push(defaultId);
-    }
-  }
+  for (const defaultId of DEFAULT_WORKBENCH_PANEL_ORDER) if (!unique.includes(defaultId)) unique.push(defaultId);
+
   return unique;
 }
 
@@ -57,21 +54,19 @@ export function useWorkbenchPanelsOrder(): UseWorkbenchPanelsOrderReturn {
     storedOrder,
     newVal => {
       const sanitized = sanitizePanelOrder(newVal);
-      if (JSON.stringify(sanitized) !== JSON.stringify(panels.value)) {
-        panels.value = sanitized;
-      }
+      if (JSON.stringify(sanitized) !== JSON.stringify(panels.value)) panels.value = sanitized;
     },
     { deep: true }
   );
 
-  const syncToStorage = (newOrder: WorkbenchPanelId[]) => {
+  const persistToStorage = (newOrder: WorkbenchPanelId[]) => {
     const sanitized = sanitizePanelOrder(newOrder);
     panels.value = sanitized;
     storedOrder.value = [...sanitized];
   };
 
   const setOrder = (newOrder: WorkbenchPanelId[]) => {
-    syncToStorage(newOrder);
+    persistToStorage(newOrder);
   };
 
   return {

@@ -10,13 +10,13 @@
  * 页面栅格不含页脚页码：页脚是独立合成层（services/footerOverlay），展示时由组件叠一层画布，
  * 导出/复制时按开关在渲染线程合成——因此「显示页脚」不进内容键，同一首歌不会因该开关多存一份。
  *
- * 以内容键（content key）为索引做 LRU 容量驱逐（复用 platform/utils/lruCache），
+ * 以内容键（content key）为索引做 LRU 容量驱逐（复用 platform/utils/cache），
  * 另设「每首歌最多 MAX_VERSIONS_PER_SONG 个版本」的子上限，避免连续编辑把容量占成单曲历史；
  * 驱逐时回收所有 object URL；currentRenderData 为响应式当前乐谱渲染数据，UI 层订阅即可。
  */
 import { ref, shallowRef } from 'vue';
 
-import { createLruCache } from '@/platform/utils/lruCache';
+import { createLruCache } from '@/platform/utils/cache';
 
 export interface PreviewRenderData {
   /** A4 分页各页 image/jpeg 的 object URL（预览展示用） */

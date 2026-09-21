@@ -26,8 +26,8 @@ export const computePayloadMd5 = (payload: ImportExportPayload): string => {
  */
 export const computePayloadMaxUpdatedAt = (payload: ImportExportPayload): number => {
   let max = 0;
-  for (const entity of [...payload.groups, ...payload.chords, ...(payload.songs ?? [])]) {
+  for (const entity of [...payload.groups, ...payload.chords, ...(payload.songs ?? [])])
     if (typeof entity.updatedAt === 'number' && entity.updatedAt > max) max = entity.updatedAt;
-  }
+
   return max;
 };

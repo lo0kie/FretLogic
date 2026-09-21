@@ -15,8 +15,8 @@
     @pointerdown="handlePointerDown($event)"
     @pointerleave="handlePointerLeave($event)"
     @pointerup="handlePointerUp($event)"
-    data-focusable-inline
-    class="action-button inline-flex shrink-0 cursor-pointer items-center justify-center border border-solid font-semibold outline-none select-none focus-visible:ring-2 focus-visible:ring-primary/70 active:not-disabled:brightness-95 disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
+    data-focusable-outline
+    class="action-button inline-flex shrink-0 cursor-pointer items-center justify-center border border-solid font-semibold outline-none select-none active:not-disabled:brightness-95 disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
   >
     <BaseIcon
       v-if="loading"
@@ -81,7 +81,7 @@ import {
   BUTTON_SUBTLE_THEME_MAP,
   BUTTON_TEXT_THEME_MAP,
 } from '@/platform/ui/button/buttonThemes';
-import { resolveTextTitle } from '@/platform/utils/slotText';
+import { resolveTextTitle } from '@/platform/utils/dom';
 
 import type { ComponentSize, ThemeColor } from '@/platform/types';
 import type { BaseIconProps } from '@/platform/ui/icons/BaseIcon.vue';
@@ -246,9 +246,7 @@ const endHoldPress = (cancelled: boolean, event?: PointerEvent) => {
     isHolding = false;
     suppressClick = true;
     emit('hold-end');
-  } else if (cancelled) {
-    suppressClick = true;
-  }
+  } else if (cancelled) suppressClick = true;
 };
 
 const handlePointerUp = (event: PointerEvent) => endHoldPress(false, event);
@@ -277,14 +275,14 @@ const handleInternalClick = (e: MouseEvent) => {
     e.stopImmediatePropagation();
     return;
   }
-  if (holdable) {
+  if (holdable)
     if (suppressClick) {
       suppressClick = false;
       e.preventDefault();
       e.stopPropagation();
       return;
     }
-  }
+
   emit('click', e);
 };
 
@@ -314,23 +312,21 @@ const ICON_SIZE_BY_BUTTON_SIZE: Record<ComponentSize, IconSizePreset> = { sm: 's
 const resolvedIconSize = computed<IconSizeValue>(() => iconSize ?? ICON_SIZE_BY_BUTTON_SIZE[size] ?? 'md');
 
 // 仅在开发环境中注册 a11y 警告监听，生产环境构建时被完全 Tree-shaking
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV)
   watch(
     () => [isIconOnly.value, ariaLabel] as const,
     ([io, label]) => {
-      if (io && !label) {
+      if (io && !label)
         console.warn('[ActionButton] iconOnly 为 true 时应传入 ariaLabel，否则屏幕阅读器无法识别该按钮。');
-      }
     },
     { immediate: true }
   );
-}
 
 const sizeClasses = computed(() => {
-  if (isIconOnly.value) {
+  if (isIconOnly.value)
     // iconOnly 已通过 p-0! 强制方形无内边距，compacted 不再叠加
     return BUTTON_ICON_ONLY_SIZE_MAP[size] ?? BUTTON_ICON_ONLY_SIZE_MAP['md'];
-  }
+
   const map = compacted ? BUTTON_COMPACTED_SIZE_MAP : BUTTON_SIZE_MAP;
   return map[size] ?? map['md'];
 });
@@ -339,27 +335,23 @@ const loaderSizeClass = computed(() => BUTTON_LOADER_SIZE_MAP[size] ?? BUTTON_LO
 const roundedClasses = computed(() => BUTTON_ROUNDED_MAP[rounded] ?? BUTTON_ROUNDED_MAP['full']);
 
 const themeVariantClasses = computed(() => {
-  if (variant === 'ghost') {
-    return `bg-transparent border-transparent ${BUTTON_GHOST_THEME_MAP[resolvedColor.value]}`;
-  }
-  if (variant === 'subtle') {
-    return BUTTON_SUBTLE_THEME_MAP[resolvedColor.value];
-  }
-  if (variant === 'text') {
+  if (variant === 'ghost') return `bg-transparent border-transparent ${BUTTON_GHOST_THEME_MAP[resolvedColor.value]}`;
+
+  if (variant === 'subtle') return BUTTON_SUBTLE_THEME_MAP[resolvedColor.value];
+
+  if (variant === 'text')
     // 紧凑模式下进一步收紧文字按钮的左右内边距（类名必须以完整字面量出现，供 Tailwind 静态扫描）
-    return `${compacted ? 'px-[0.15rem]' : 'px-[0.3rem]'} bg-transparent! border-transparent focus:border-primary active:enabled:border-primary focus-visible:border-primary focus-visible:ring-2 ${BUTTON_TEXT_THEME_MAP[resolvedColor.value]}`;
-  }
+    return `${compacted ? 'px-[0.15rem]' : 'px-[0.3rem]'} bg-transparent! border-transparent focus:border-primary active:enabled:border-primary focus-visible:border-primary ${BUTTON_TEXT_THEME_MAP[resolvedColor.value]}`;
+
   return BUTTON_DEFAULT_THEME_MAP[resolvedColor.value];
 });
 
 const normalizedStyle = computed(() => {
   const style: Record<string, string> = {};
-  if (width !== undefined) {
-    style['width'] = typeof width === 'number' ? `${width}px` : width;
-  }
-  if (height !== undefined) {
-    style['height'] = typeof height === 'number' ? `${height}px` : height;
-  }
+  if (width !== undefined) style['width'] = typeof width === 'number' ? `${width}px` : width;
+
+  if (height !== undefined) style['height'] = typeof height === 'number' ? `${height}px` : height;
+
   return style;
 });
 </script>

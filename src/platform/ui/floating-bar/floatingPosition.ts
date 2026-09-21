@@ -35,21 +35,17 @@ export function useFloatingPosition(props: FloatingPositionProps, scope: string)
   const positionStyle = computed<Record<string, string | number>>(() => {
     const style: Record<string, string | number> = {};
     // 垂直：优先 top，否则 bottom（叠加底部安全区）
-    if (props.top !== undefined) {
-      style['top'] = toPositionLength(props.top, scope);
-    } else if (props.bottom !== undefined) {
+    if (props.top !== undefined) style['top'] = toPositionLength(props.top, scope);
+    else if (props.bottom !== undefined) {
       const b = toPositionLength(props.bottom, scope);
       style['bottom'] = props.safeAreaInset ? `calc(${b} + env(safe-area-inset-bottom, 0px))` : b;
     }
     // 水平：显式 left/right 时钉边，否则交由 alignClass 决定
-    if (props.left !== undefined) {
-      style['left'] = toPositionLength(props.left, scope);
-    } else if (props.right !== undefined) {
-      style['right'] = toPositionLength(props.right, scope);
-    }
-    if (typeof props.zIndex === 'number') {
-      style['zIndex'] = props.zIndex;
-    }
+    if (props.left !== undefined) style['left'] = toPositionLength(props.left, scope);
+    else if (props.right !== undefined) style['right'] = toPositionLength(props.right, scope);
+
+    if (typeof props.zIndex === 'number') style['zIndex'] = props.zIndex;
+
     return style;
   });
 

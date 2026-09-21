@@ -30,7 +30,7 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
    * （折叠本组 / 切到其他组都满足；重新展开本组继续编辑则不受影响）。自由草稿与新建态一律不处理。
    */
   const executeGroupToggle = (group: Group) => {
-    chordStore.toggleGroupCollapsed(group.id);
+    chordStore.toggleGroupExpansion(group.id);
     const draftLeftVisibleGroup =
       editorStore.isEditing && editorStore.draftChord.groupId !== chordStore.expandedGroupId;
     if (draftLeftVisibleGroup) editorStore.resetEditor();
@@ -42,9 +42,7 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
 
     chordStore.removeChords(chords);
 
-    if (editorStore.isEditing && chords.some(c => c.id === editorStore.draftChord.id)) {
-      editorStore.resetEditor();
-    }
+    if (editorStore.isEditing && chords.some(c => c.id === editorStore.draftChord.id)) editorStore.resetEditor();
 
     // 通知而非常驻 Message：撤销入口随 toast 飘走就没了，用户必须能回看并补做
     uiStore.notice.info({
@@ -98,11 +96,9 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
       uiStore.message.success(`和弦已保存${groupTip}`);
     }
     // 立即落盘（绕过 useStorage 防抖），保证保存后刷新不丢失横按等数据
-    chordStore.flushChordsToStorage();
+    void chordStore.persistAll();
 
-    if (result.warn) {
-      uiStore.message.warning(result.warn);
-    }
+    if (result.warn) uiStore.message.warning(result.warn);
 
     editorStore.resetEditor();
     uiStore.clearActionMessages();

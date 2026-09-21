@@ -13,13 +13,13 @@ export type ScrollEdge = 'top' | 'bottom' | 'left' | 'right';
 export interface UseEdgeScrollOptions {
   /** 判定“未贴边”的阈值(px)，默认 8 */
   threshold?: number;
-  /** 需要跟踪的边；决定暴露哪些 visible 状态与 scrollToX。默认仅 ['bottom'] */
+  /** 需要跟踪的边；决定暴露哪些 visible 状态与可滚至的边。默认仅 ['bottom'] */
   edges?: ScrollEdge[];
 }
 
 /**
  * 边缘滚动 composable：绑定可滚容器，随其滚动/尺寸变化刷新各边的 `visible`
- * （内容溢出可视区且未贴该边才为真），并暴露 `scrollToX` 平滑滚至对应边。
+ * （内容溢出可视区且未贴该边才为真），并暴露 `scrollToEdge` 平滑滚至指定边。
  * 与 UI 解耦，供浮动按钮、自动加载等场景复用；`edges` 支持任意方向组合。
  */
 export const useEdgeScroll = (target: MaybeRef<HTMLElement | null>, options: UseEdgeScrollOptions = {}) => {
@@ -84,7 +84,7 @@ export const useEdgeScroll = (target: MaybeRef<HTMLElement | null>, options: Use
     const el = toValue(target);
     if (!el) return;
     const scrollBehavior = resolveBehavior(behavior);
-    if (typeof el.scrollTo === 'function') {
+    if (typeof el.scrollTo === 'function')
       switch (edge) {
         case 'bottom':
           el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior });
@@ -99,7 +99,7 @@ export const useEdgeScroll = (target: MaybeRef<HTMLElement | null>, options: Use
           el.scrollTo({ left: 0, behavior: scrollBehavior });
           break;
       }
-    } else {
+    else
       switch (edge) {
         case 'bottom':
           el.scrollTop = el.scrollHeight;
@@ -114,7 +114,6 @@ export const useEdgeScroll = (target: MaybeRef<HTMLElement | null>, options: Use
           el.scrollLeft = 0;
           break;
       }
-    }
   };
 
   return {

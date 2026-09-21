@@ -12,20 +12,19 @@ const withCause = (message: string, cause: unknown): Error => {
 
 /** 把剪贴板权限/安全类错误映射为中文引导提示 */
 const clipboardErrorHint = (err: unknown): string => {
-  if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
+  if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'SecurityError'))
     return '剪贴板权限被拒绝，请在浏览器设置中允许';
-  }
+
   return err instanceof Error ? err.message : '未知错误';
 };
 
 /** 写入文本到剪贴板；不支持/失焦/权限拒绝时抛中文错误 */
 export const writeTextToClipboard = async (text: string): Promise<void> => {
-  if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+  if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function')
     throw new Error('当前浏览器环境不支持复制文本到剪贴板');
-  }
-  if (!document.hasFocus()) {
-    throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
-  }
+
+  if (!document.hasFocus()) throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
+
   try {
     await navigator.clipboard.writeText(text);
   } catch (err) {
@@ -35,9 +34,9 @@ export const writeTextToClipboard = async (text: string): Promise<void> => {
 
 /** 从剪贴板读取文本；不支持/权限拒绝/为空时抛中文错误 */
 export const readTextFromClipboard = async (): Promise<string> => {
-  if (!navigator.clipboard || typeof navigator.clipboard.readText !== 'function') {
+  if (!navigator.clipboard || typeof navigator.clipboard.readText !== 'function')
     throw new Error('当前浏览器环境不支持读取剪贴板');
-  }
+
   let text: string;
   try {
     text = await navigator.clipboard.readText();
@@ -95,7 +94,7 @@ const reencodeAsPngInWorker = (blob: Blob): Promise<Blob> =>
  * Worker 不可用（创建失败/超时/转码异常）时退回主线程 OffscreenCanvas——慢但能出结果。
  *
  * 对外导出：长图这类大产物每次复制都转码一遍代价过高（解码 + 重绘 + 重编码整张图），
- * 调用方可自行缓存转码结果（见 scoreExportHandlers 的长图单槽缓存）。
+ * 调用方可自行缓存转码结果（见 scoreExportActions 的长图单槽缓存）。
  */
 export const reencodeAsPng = async (blob: Blob): Promise<Blob> => {
   try {
@@ -131,12 +130,10 @@ export const reencodeAsPng = async (blob: Blob): Promise<Blob> => {
  * 唯一可靠的降级是把图片真正转码为 PNG（剪贴板事实标准）再重试，而非改声明。
  */
 export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
-  if (!navigator.clipboard || typeof navigator.clipboard.write !== 'function' || typeof ClipboardItem === 'undefined') {
+  if (!navigator.clipboard || typeof navigator.clipboard.write !== 'function' || typeof ClipboardItem === 'undefined')
     throw new Error('当前浏览器环境不支持复制图片到剪贴板');
-  }
-  if (!document.hasFocus()) {
-    throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
-  }
+
+  if (!document.hasFocus()) throw new Error('页面已失去焦点，请保持窗口激活后重新尝试');
 
   const writeItem = (item: Blob, mime: string) => navigator.clipboard.write([new ClipboardItem({ [mime]: item })]);
 
@@ -146,15 +143,14 @@ export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
   const supportsType = (mime: string): boolean =>
     typeof ClipboardItem.supports === 'function' ? ClipboardItem.supports(mime) : true;
 
-  if (supportsType(mimeType)) {
+  if (supportsType(mimeType))
     try {
       await writeItem(blob, mimeType);
       return;
     } catch (originalErr) {
       // 已是最兼容的 PNG 且写入仍失败（权限/焦点等），无可降级空间，直接抛出
-      if (mimeType === 'image/png') {
-        throw withCause(`复制图片失败：${clipboardErrorHint(originalErr)}`, originalErr);
-      }
+      if (mimeType === 'image/png') throw withCause(`复制图片失败：${clipboardErrorHint(originalErr)}`, originalErr);
+
       // 非 PNG 且首选写入被拒：转码为 PNG 后重试一次
       try {
         const pngBlob = await reencodeAsPng(blob);
@@ -164,7 +160,6 @@ export const writeBlobToClipboard = async (blob: Blob): Promise<void> => {
       }
       return;
     }
-  }
 
   // 探测明确不支持首选类型（如 Chrome 下的 image/jpeg）：直接转码为 PNG 再写入
   try {

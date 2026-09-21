@@ -12,18 +12,12 @@
   --color-warning: var(--color-warning);
   --color-danger: var(--color-danger);
 
-  --color-color-primary: var(--color-primary);
-  --color-color-success: var(--color-success);
-  --color-color-warning: var(--color-warning);
-  --color-color-danger: var(--color-danger);
-
   /* 页面层级背景色：颜色名不带属性角色词，避免 bg-bg-* 叠加 */
   --color-surface-main: var(--bg-main);
   --color-surface-body: var(--bg-body);
   --color-surface-panel: var(--bg-panel);
   --color-surface-panel-hover: var(--bg-panel-hover);
   --color-surface-elevated: var(--bg-elevated);
-  --color-surface-surface: var(--bg-surface);
 
   --color-glass-border: var(--glass-border);
   --color-border-light: var(--border-light);

@@ -50,9 +50,7 @@ export function useRafThrottle<T = void>(callback: (payload: T) => void) {
   };
 
   // 指令等非组件上下文中调用时不注册卸载钩子
-  if (getCurrentInstance()) {
-    onBeforeUnmount(cancel);
-  }
+  if (getCurrentInstance()) onBeforeUnmount(cancel);
 
   return { schedule, flush, cancel };
 }

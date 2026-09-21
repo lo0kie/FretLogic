@@ -90,9 +90,7 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
       const [v0, v1] = getRangeValues();
       if (thumbIdx === 0) applyValue([v0 + delta, v1], true);
       else applyValue([v0, v1 + delta], true);
-    } else {
-      applyValue(getSingleValue() + delta, true);
-    }
+    } else applyValue(getSingleValue() + delta, true);
   };
 
   /** 拇指键盘方向键步进 */
@@ -136,14 +134,9 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
     const val = calculateValueFromPointer(e);
     if (isRange()) {
       const [v0, v1] = getRangeValues();
-      if (isDragging.value === 0) {
-        applyValue([val, v1], false);
-      } else {
-        applyValue([v0, val], false);
-      }
-    } else {
-      applyValue(val, false);
-    }
+      if (isDragging.value === 0) applyValue([val, v1], false);
+      else applyValue([v0, val], false);
+    } else applyValue(val, false);
   };
 
   /** 拖拽结束：派发 drag-end，值有变化时补发 change，并解绑全局指针监听 */

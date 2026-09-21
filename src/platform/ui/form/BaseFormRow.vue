@@ -169,9 +169,8 @@ const controlStyle = computed(() => {
 });
 
 const feedbackStyle = computed(() => {
-  if (layout !== 'horizontal' || normalizedLabelWidth.value === undefined || controlAlign === 'end') {
-    return {};
-  }
+  if (layout !== 'horizontal' || normalizedLabelWidth.value === undefined || controlAlign === 'end') return {};
+
   // 补偿值必须与 form-row-main 的 gap-sm / gap-md 同源：直接引用 Tailwind @theme 注入的
   // --spacing-* 变量，间距 token 调整时此处的对齐缩进自动跟随，无需手工同步
   return {

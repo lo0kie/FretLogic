@@ -22,9 +22,12 @@ export function useFretboardLayout(
   let stringCount: MaybeRefOrGetter<number> = stringCountArg;
 
   if (optionsOrScale != null && typeof optionsOrScale === 'object' && !('value' in optionsOrScale)) {
-    if (optionsOrScale.scale !== undefined) scale = optionsOrScale.scale;
-    if (optionsOrScale.extraTopHeight !== undefined) extraTopHeight = optionsOrScale.extraTopHeight;
-    if (optionsOrScale.stringCount !== undefined) stringCount = optionsOrScale.stringCount;
+    // 先解构再赋值：赋值右侧不能直接是成员表达式（prefer-destructuring），
+    // 同时保留「显式传入才覆盖默认值」的语义。
+    const { scale: nextScale, extraTopHeight: nextExtraTopHeight, stringCount: nextStringCount } = optionsOrScale;
+    if (nextScale !== undefined) scale = nextScale;
+    if (nextExtraTopHeight !== undefined) extraTopHeight = nextExtraTopHeight;
+    if (nextStringCount !== undefined) stringCount = nextStringCount;
   } else if (optionsOrScale !== undefined) {
     scale = optionsOrScale as MaybeRefOrGetter<number>;
     if (extraTopHeightArg !== undefined) extraTopHeight = extraTopHeightArg;

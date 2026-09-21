@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildImagePdf } from '@/platform/utils/pdf';
+import { buildImagePdf } from '@/platform/utils/output';
 
-import type { PdfImagePage } from '@/platform/utils/pdf';
+import type { PdfImagePage } from '@/platform/utils/output';
 
 /** 造一个最小的“JPEG”——仅用于验证 PDF 字节结构层面，不做真实 jpeg 解码 */
 const fakeJpeg = (size: number): Uint8Array => Uint8Array.from({ length: size }, (_, i) => (i + 1) & 0xff);

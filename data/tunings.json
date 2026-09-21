@@ -1,0 +1,45 @@
+{
+  "_notes": [
+    "调弦预设表。id 必须与 src/domains/chord/theory/tuning.ts 的 Tuning 枚举成员逐字对应（枚举留在 TS：它是编译期键，且被持久化契约引用）；mapping 为各弦空弦 MIDI 音高，低弦 → 高弦。",
+    "新增/调整预设只改本文件：枚举补一个成员 + 这里补一条记录即可，不再有 14 个 TUNING_MAPPING_* 中间常量。",
+    "defaultByStringCount：弦数 → 默认预设 id；超出该表时由代码兜底为 6 弦标准。"
+  ],
+  "presets": [
+    { "id": "UKULELE_STANDARD", "name": "Ukulele Standard (GCEA)", "stringCount": 4, "mapping": [67, 60, 64, 69] },
+    { "id": "BASS_STANDARD", "name": "Bass Standard (EADG)", "stringCount": 4, "mapping": [28, 33, 38, 43] },
+    { "id": "BASS_DROP_D", "name": "Bass Drop D (DADG)", "stringCount": 4, "mapping": [26, 33, 38, 43] },
+    { "id": "STANDARD", "name": "Standard (EADGBE)", "stringCount": 6, "mapping": [40, 45, 50, 55, 59, 64] },
+    { "id": "DROP_D", "name": "Drop D (DADGBE)", "stringCount": 6, "mapping": [38, 45, 50, 55, 59, 64] },
+    { "id": "DADGAD", "name": "DADGAD", "stringCount": 6, "mapping": [38, 45, 50, 55, 57, 62] },
+    { "id": "OPEN_G", "name": "Open G (DGDGBD)", "stringCount": 6, "mapping": [38, 43, 50, 55, 59, 62] },
+    { "id": "HALF_STEP", "name": "Half Step Down", "stringCount": 6, "mapping": [39, 44, 49, 54, 58, 63] },
+    { "id": "OPEN_D", "name": "Open D (DADF#AD)", "stringCount": 6, "mapping": [38, 45, 50, 54, 57, 62] },
+    { "id": "OPEN_C", "name": "Open C (CGCGCE)", "stringCount": 6, "mapping": [36, 43, 48, 55, 60, 64] },
+    { "id": "DROP_C", "name": "Drop C (CGCFAD)", "stringCount": 6, "mapping": [36, 43, 48, 53, 57, 62] },
+    {
+      "id": "SEVEN_STANDARD",
+      "name": "7-String Standard (BEADGBE)",
+      "stringCount": 7,
+      "mapping": [35, 40, 45, 50, 55, 59, 64]
+    },
+    {
+      "id": "SEVEN_DROP_A",
+      "name": "7-String Drop A (AEADGBE)",
+      "stringCount": 7,
+      "mapping": [33, 40, 45, 50, 55, 59, 64]
+    },
+    {
+      "id": "EIGHT_STANDARD",
+      "name": "8-String Standard (F#BEADGBE)",
+      "stringCount": 8,
+      "mapping": [30, 35, 40, 45, 50, 55, 59, 64]
+    },
+    {
+      "id": "EIGHT_DROP_E",
+      "name": "8-String Drop E (EBEADGBE)",
+      "stringCount": 8,
+      "mapping": [28, 35, 40, 45, 50, 55, 59, 64]
+    }
+  ],
+  "defaultByStringCount": { "4": "UKULELE_STANDARD", "6": "STANDARD", "7": "SEVEN_STANDARD", "8": "EIGHT_STANDARD" }
+}

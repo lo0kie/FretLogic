@@ -2,7 +2,7 @@ import { buildGroupVariant } from '@/domains/chord/theory/entityFactories';
 import { normalizeChord } from '@/domains/chord/theory/normalizeChord';
 import { computeChordFingerprint, Tuning } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
-import { FRET_COUNTS } from '@/domains/fretboard/constants';
+import { DEFAULT_FRET_COUNT, FRET_COUNTS } from '@/domains/fretboard/constants';
 import {
   computeBarresSignature,
   isCapoValue,
@@ -17,7 +17,8 @@ import type { GuitarStringEntity } from '@/domains/fretboard/types';
 
 type RawRecord = Record<string, unknown>;
 
-const isRecord = (value: unknown): value is RawRecord => !!value && typeof value === 'object' && !Array.isArray(value);
+const isRecord = (value: unknown): value is RawRecord =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const isValidTimestamp = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0;
 const isBoundedNumber = (value: unknown, min: number, max: number): value is number =>
@@ -84,7 +85,7 @@ export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 
   // 品位上界取决于 fretCount（窗口相对语义），越界值由末端 normalizeChord 统一钳制
   const fretCount: Chord['fretCount'] = FRET_COUNTS.includes(raw['fretCount'] as Chord['fretCount'])
     ? (raw['fretCount'] as Chord['fretCount'])
-    : 3;
+    : DEFAULT_FRET_COUNT;
 
   if (mode === 'strict') {
     if (!raw['strings'].every(s => isValidStringEntity(s))) return null;
@@ -112,9 +113,8 @@ export const sanitizeChordEntity = (raw: unknown, options?: { mode?: 'strict' | 
   // 只有 chordName 的老数据：不预置 nameSegments（也不能压成 null），
   // 让 normalizeChord 的迁移分支从 chordName 派生 nameSegments——
   // 预先写 null 会把该分支判成死代码，老和弦名随后被静默丢弃
-  if (raw['nameSegments'] !== undefined) {
-    draft.nameSegments = raw['nameSegments'] as Chord['nameSegments'];
-  }
+  if (raw['nameSegments'] !== undefined) draft.nameSegments = raw['nameSegments'] as Chord['nameSegments'];
+
   const { chord } = normalizeChord(draft);
   return chord;
 };
@@ -246,19 +246,16 @@ export const chordRepository: ChordLibraryRepository = {
       const chordStore = get('chords');
       // toRaw：store 传入的可能是响应式代理，Proxy 无法被 IDB structuredClone（DataCloneError）。
       // 引用相同（上轮已落库且此后未被不可变替换）⇒ 内容未变 ⇒ 跳过深拷贝与 put
-      for (const group of snapshot.groups) {
+      for (const group of snapshot.groups)
         if (lastSavedGroups.get(group.id) !== group) groupStore.put(toPlainPersistable(group));
-      }
-      for (const chord of snapshot.chords) {
+
+      for (const chord of snapshot.chords)
         if (lastSavedChords.get(chord.id) !== chord) chordStore.put(toPlainPersistable(chord));
-      }
+
       // 镜像里有而快照里没有 ⇒ 本轮被删除
-      for (const id of lastSavedGroups.keys()) {
-        if (!snapshot.groups.some(g => g.id === id)) groupStore.delete(id);
-      }
-      for (const id of lastSavedChords.keys()) {
-        if (!snapshot.chords.some(c => c.id === id)) chordStore.delete(id);
-      }
+      for (const id of lastSavedGroups.keys()) if (!snapshot.groups.some(g => g.id === id)) groupStore.delete(id);
+
+      for (const id of lastSavedChords.keys()) if (!snapshot.chords.some(c => c.id === id)) chordStore.delete(id);
     });
     // 只在事务成功提交后更新镜像：失败时旧镜像保留，下一次 save 以旧镜像重试完整 diff，不漏写
     lastSavedGroups = new Map(snapshot.groups.map(g => [g.id, g]));

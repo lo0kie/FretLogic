@@ -33,9 +33,9 @@
 <script setup lang="ts">
 import { computed, ref, useSlots, watch } from 'vue';
 
-import { alignRollCells } from '@/platform/utils/rollingText';
+import { alignRollCells } from '@/platform/utils/motion';
 
-import type { RollCell } from '@/platform/utils/rollingText';
+import type { RollCell } from '@/platform/utils/motion';
 
 /**
  * BaseRollingText 翻页文本（逐字符 / 整块 合一）。
@@ -69,7 +69,7 @@ const props = defineProps<{
 
 const slots = useSlots();
 /** 整块模式：提供了富文本插槽，或显式要求整段滚动 */
-const blockMode = computed(() => !!slots['default'] || props.alwaysRoll === true);
+const blockMode = computed(() => Boolean(slots['default']) || props.alwaysRoll === true);
 
 /** 逐字符模式的字符单元序列：对位算法与滚动气泡读数共用（规则见 alignRollCells 的注释），
  *  本组件只负责把结果喂给响应式 cells——Vue 侧的翻页由 <Transition name="br-roll"> 驱动 */

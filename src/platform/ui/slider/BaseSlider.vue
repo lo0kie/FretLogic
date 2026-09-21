@@ -10,7 +10,8 @@
       { 'cursor-not-allowed opacity-45': disabled, 'w-full': resolvedWidth === '100%' },
     ]"
     :style="wrapperStyle"
-    class="base-slider inline-flex items-center justify-center gap-1 rounded-full border bg-surface-body transition-all duration-fast select-none has-focus-visible:ring-2 has-focus-visible:ring-primary/70"
+    data-focusable-outline
+    class="base-slider inline-flex items-center justify-center gap-1 rounded-full border bg-surface-body transition-all duration-fast select-none"
     ref="wrapperRef"
   >
     <span
@@ -65,7 +66,7 @@
       v-if="showButtons && !isRange && !vertical"
       :disabled="disabled || singleValue <= min"
       @click="stepBy(-1, $event)"
-      data-focusable-inline
+      data-focusable-outline
       aria-label="减少"
       class="flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-fg-disabled outline-none hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
       title="减少"
@@ -221,7 +222,7 @@
       v-if="showButtons && !isRange && !vertical"
       :disabled="disabled || singleValue >= max"
       @click="stepBy(1, $event)"
-      data-focusable-inline
+      data-focusable-outline
       aria-label="增加"
       class="flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-fg-disabled outline-none hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
       title="增加"
@@ -287,6 +288,7 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useSliderInteraction } from '@/platform/ui/slider/useSliderInteraction';
+import { clamp } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import {
@@ -396,7 +398,7 @@ const emit = defineEmits<{
   (e: 'drag-end', value: R extends true ? [number, number] : number): void;
 }>();
 /** lazy 修饰符：拖拽过程中只更新本地显示值，松手（drag-end）或按钮/编辑提交时才写回 model */
-const isLazy = computed(() => !!props.modelModifiers?.lazy);
+const isLazy = computed(() => Boolean(props.modelModifiers?.lazy));
 /** 尺寸解析：行内 props > BaseForm 注入上下文 > 默认 md */
 const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
 const resolvedSize = computed<ComponentSize>(() => props.size ?? controlContext?.size ?? 'md');
@@ -443,11 +445,8 @@ const restoreDefault = () => {
 
 // 数值文字点击：可编辑时进入编辑，否则（默认）恢复默认值
 const handleReadoutClick = () => {
-  if (props.editable && !props.disabled) {
-    startEdit();
-  } else if (props.restoreOnValueClick && !props.disabled) {
-    restoreDefault();
-  }
+  if (props.editable && !props.disabled) startEdit();
+  else if (props.restoreOnValueClick && !props.disabled) restoreDefault();
 };
 
 const wrapperRef = useTemplateRef<HTMLDivElement>('wrapperRef');
@@ -459,9 +458,8 @@ defineExpose({
   focus: () => wrapperRef.value?.querySelector<HTMLElement>('[role="slider"]')?.focus(),
   /** 组件持有焦点时主动失焦 */
   blur: () => {
-    if (wrapperRef.value?.contains(document.activeElement) && document.activeElement instanceof HTMLElement) {
+    if (wrapperRef.value?.contains(document.activeElement) && document.activeElement instanceof HTMLElement)
       document.activeElement.blur();
-    }
   },
 });
 
@@ -480,9 +478,8 @@ const singleValue = computed<number>(() =>
 );
 
 const rangeValues = computed<[number, number]>(() => {
-  if (Array.isArray(modelValue.value)) {
-    return [modelValue.value[0], modelValue.value[1]];
-  }
+  if (Array.isArray(modelValue.value)) return [modelValue.value[0], modelValue.value[1]];
+
   return [props.min, typeof modelValue.value === 'number' ? modelValue.value : props.max];
 });
 
@@ -537,10 +534,10 @@ const stepDecimals = computed(() => countDecimals(props.step));
 const snapToStep = (val: number): number => {
   if (!isFinite(val)) return props.min;
   const step = props.step > 0 ? props.step : 1;
-  const min = props.min;
+  const { min } = props;
   const steps = Math.round((val - min) / step);
   const rawSnapped = min + steps * step;
-  const clamped = Math.min(props.max, Math.max(props.min, rawSnapped));
+  const clamped = clamp(rawSnapped, props.min, props.max);
   const decimals = stepDecimals.value;
   const rounded = decimals === 0 ? Math.round(clamped) : Number(clamped.toFixed(decimals));
   return Object.is(rounded, -0) ? 0 : rounded;
@@ -592,13 +589,13 @@ const shouldShowRangeTooltip = (index: number) => {
   if (props.showTooltip === 'always') return true;
   // 滚轮步进只作用于 0 号拇指，故滚轮续显仅对 index 0 生效
   if (props.showTooltip === 'drag') return isDragging.value === index || (index === 0 && isWheelActive.value);
-  if (props.showTooltip === 'hover') {
+  if (props.showTooltip === 'hover')
     return (
       (index === 0 ? isHoveredThumb0.value : isHoveredThumb1.value) ||
       isTrackHovered.value ||
       isDragging.value === index
     );
-  }
+
   return false;
 };
 
@@ -666,9 +663,8 @@ const updateValue = (rawNextVal: number | [number, number], options?: { commit?:
   } else {
     const raw = typeof rawNextVal === 'number' ? rawNextVal : (rawNextVal[0] ?? props.min);
     const snapped = snapToStep(raw);
-    if (snapped !== modelValue.value) {
-      modelValue.value = snapped;
-    }
+    if (snapped !== modelValue.value) modelValue.value = snapped;
+
     if (options?.commit) {
       // lazy 模式下提交点（按钮/键盘/编辑/恢复默认）才真正写回 model
       if (isLazy.value) model.value = emitValue(snapped);
@@ -696,9 +692,7 @@ const { isDragging, stepBy, handleRangeKeydown, startDrag, handleTrackPointerDow
       // lazy 模式：拖拽结束作为提交点，把最终值写回 model
       if (isLazy.value) model.value = emitValue(modelValue.value);
       emit('drag-end', emitValue(modelValue.value));
-      if (!isValueEqual(startValue, currentValue)) {
-        emit('change', emitValue(modelValue.value));
-      }
+      if (!isValueEqual(startValue, currentValue)) emit('change', emitValue(modelValue.value));
     },
     pulseWheelTooltip,
     wheelable: () => props.wheelable ?? false,
@@ -712,17 +706,14 @@ const { isDragging, stepBy, handleRangeKeydown, startDrag, handleTrackPointerDow
 );
 
 // 仅在开发环境中提示非法区间，生产构建时被完全 Tree-shaking
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV)
   watch(
     () => [props.min, props.max] as const,
     ([min, max]) => {
-      if (min > max) {
-        console.warn(`[BaseSlider] min (${min}) 不应大于 max (${max})，滑块取值区间将坍缩为 max。`);
-      }
+      if (min > max) console.warn(`[BaseSlider] min (${min}) 不应大于 max (${max})，滑块取值区间将坍缩为 max。`);
     },
     { immediate: true }
   );
-}
 
 /** 进入精确数值编辑：预填当前值并聚焦全选输入框 */
 const startEdit = () => {
@@ -742,9 +733,9 @@ const commitEdit = () => {
   const parsed = parseFloat(editValue.value);
   if (isNaN(parsed)) return;
   // dev 提示：越界输入会被 updateValue 静默夹紧，主动提示避免使用者误以为原值生效
-  if (import.meta.env.DEV && (parsed < props.min || parsed > props.max)) {
+  if (import.meta.env.DEV && (parsed < props.min || parsed > props.max))
     console.warn(`[BaseSlider] 输入值 ${parsed} 超出范围 [${props.min}, ${props.max}]，将自动吸附到范围内。`);
-  }
+
   updateValue(parsed, { commit: true });
 };
 
