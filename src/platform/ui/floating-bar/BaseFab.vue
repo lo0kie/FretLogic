@@ -1,5 +1,10 @@
 <template>
   <Teleport :disabled="disabledTeleport" :to="teleportTo">
+    <!-- data-ring-occluder：FAB 是**内容层**的覆盖元件（默认 z-fab 40，远低于聚焦环 overlay 的
+         浮层基准层 9999），环挂在 body 顶层、层号越不过它 —— 只能由环侧把这块矩形擦掉，
+         不标就是「环画在 FAB 上」的穿帮。与自绘滚动条的拇指 / 滚动气泡同属一类**显式声明**的
+         遮挡物（位置特征推断不出它们），见 focusRingOverlay 的「遮挡物策略」。
+         注意标在这里不会影响「FAB 自己聚焦」：环只扫目标的**同层兄弟**，目标自身子树天然排除。 -->
     <Transition
       :name="transitionName"
       @after-enter="emit('after-enter', $event)"
@@ -19,7 +24,8 @@
         :class="[positionClass, alignClass, zIndexClass, fabSizeClass]"
         :style="positionStyle"
         data-focusable-outline
-        class="base-fab pointer-events-auto flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full border border-glass-border bg-surface-panel/95 shadow-lg backdrop-blur-xl select-none active:scale-95"
+        data-ring-occluder
+        class="base-fab pointer-events-auto flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full border border-glass-border bg-surface-panel shadow-lg select-none active:scale-95"
         type="button"
       >
         <slot>

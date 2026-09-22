@@ -17,7 +17,7 @@ import {
 
 import type { RawChord, RawGroup, RawSong } from './payloadRawShapes';
 import type { ChordDraft, GroupDraft, SongDraft } from './persistedData';
-import type { AppPreferencesBackup, ImportExportPayload, SyncSettingsBackup } from '@/app/types';
+import type { AppPreferencesBackup, ImportExportPayload, PayloadSection, SyncSettingsBackup } from '@/app/types';
 import type { ChordNameSegments, Group } from '@/domains/chord/types';
 import type { ChordLineSlots, LineId } from '@/domains/score/types';
 import type { EncryptedSyncSettingsBackup } from '@/platform/types/settings';
@@ -390,8 +390,22 @@ const sanitizeSyncSettings = (raw: unknown): SyncSettingsBackup | undefined => {
   return Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
 };
 
-/** 偏好设置字段（全部 boolean） */
-const PREFERENCE_BOOLEAN_FIELDS = ['workbenchChordShorthand', 'scoreChordShorthand'] as const;
+/**
+ * 偏好设置中「取值恒为 boolean」的字段。
+ * 这四处必须逐字对齐：platform/types 的 AppPreferencesBackup（类型）、buildBackupPayload 的导出、
+ * 本白名单、settingsStore.applyPreferencesBackup 的恢复读。少一处即双重静默丢失——
+ * 导出不写该字段，且 zod 白名单会把外来包里的该字段 strip 掉（P2 审计 #15：
+ * scoreShowBarre / scoreShowFooter / scoreLyricsFontWeight 三项跨设备恢复即此故）。
+ * 枚举型字段（scoreLayoutAlign / scoreLyricsFontWeight）不进本表，各自在下方面板 schema 单列。
+ */
+const PREFERENCE_BOOLEAN_FIELDS = [
+  'workbenchChordShorthand',
+  'scoreChordShorthand',
+  'scoreShowBarre',
+  'scoreTrimEmptyEdgeFrets',
+  'scoreShowFooter',
+  'scoreIgnoreEmptySpace',
+] as const;
 
 /**
  * 防御性清洗 preferences：偏好属辅助数据，字段损坏只丢弃该字段，
@@ -403,6 +417,7 @@ const preferencesSchema = z
       [K in (typeof PREFERENCE_BOOLEAN_FIELDS)[number]]: typeof optionalBooleanField;
     }),
     scoreLayoutAlign: z.enum(['start', 'center']).optional().catch(undefined),
+    scoreLyricsFontWeight: z.enum(['light', 'regular', 'bold']).optional().catch(undefined),
   })
   .transform(source => {
     const result: AppPreferencesBackup = {};
@@ -411,6 +426,7 @@ const preferencesSchema = z
       if (typeof value === 'boolean') result[field] = value;
     }
     if (source.scoreLayoutAlign !== undefined) result.scoreLayoutAlign = source.scoreLayoutAlign;
+    if (source.scoreLyricsFontWeight !== undefined) result.scoreLyricsFontWeight = source.scoreLyricsFontWeight;
 
     return result;
   });
@@ -463,6 +479,14 @@ export const validateImportExportPayload = (
   // 云端校验元数据随包透传（仅在拉取/导入含该字段时保留），供启动比对使用
   const dataMd5 = typeof migrated.dataMd5 === 'string' && migrated.dataMd5 ? migrated.dataMd5 : undefined;
   const dataUpdatedAt = typeof migrated.dataUpdatedAt === 'number' ? migrated.dataUpdatedAt : undefined;
+  // 删除水位线随包透传：接收方据此抬高本地水位线，保证 meta.updatedAt 单调（见 ImportExportPayload.deletedAt）
+  const deletedAt = typeof migrated.deletedAt === 'number' && migrated.deletedAt > 0 ? migrated.deletedAt : undefined;
+  // 缺分区标记：源包里「完全没有这个分区」（区别于显式空数组）。songs 是当前唯一能走到这里的缺失分区——
+  // groups/chords 缺失会在 sanitize 阶段记 issue，strict 模式随即按 INVALID_SCHEMA 整包拒绝；
+  // 但标记按「分区」表达而非 songs 专属，将来放宽某分区校验时消费侧无需再改。
+  // 不写这个标记，下游就只能看到「被兜底成 [] 的 songs」，把「包里没有」误当成「云端为空」并清空本地乐谱。
+  const absentSections: PayloadSection[] = [];
+  if (migrated.songs === undefined) absentSections.push('songs');
   if (issues.length > 0) return { isValid: false, issues, ...(warnings.length > 0 ? { warnings } : {}) };
 
   const validGroupIds = new Set(groups.map(g => g.id));
@@ -518,6 +542,8 @@ export const validateImportExportPayload = (
       ...(preferences ? { preferences } : {}),
       ...(dataMd5 ? { dataMd5 } : {}),
       ...(dataUpdatedAt !== undefined ? { dataUpdatedAt } : {}),
+      ...(deletedAt !== undefined ? { deletedAt } : {}),
+      ...(absentSections.length > 0 ? { absentSections } : {}),
     },
     issues: [],
   };

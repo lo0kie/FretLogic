@@ -15,6 +15,8 @@
   --bg-body: #ffffff;
   --bg-panel: #fbfbfd;
   --bg-panel-hover: #ebebef;
+  /* 面板上一档的浅填充（统计小格、勾选框选中、分段控件悬停）：= panel-hover 以 50% 合成到 panel 上 */
+  --bg-panel-subtle: #f3f3f6;
   --bg-elevated: #fbfbfd;
 
   --bg-surface: #fbfbfd;
@@ -82,21 +84,45 @@
   --shadow-xl: 0 16px 36px rgba(0, 0, 0, 0.1), 0 6px 12px rgba(0, 0, 0, 0.05);
   --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04);
   --shadow-floating: 0 20px 48px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.06);
-  --focus-ring: 0 0 0 2px var(--bg-panel), 0 0 0 4px color-mix(in srgb, var(--color-primary) 72%, transparent);
+  /* 外圈用实色 tint（原为 72% 半透明 primary）。半透明会透出下层内容，同一环叠在不同底色上
+     观感不一致，且与下方的 SOLID TINTS 实色体系口径分裂——统一取实色 token。 */
+  --focus-ring: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--tint-primary-20);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --overlay-bg: #919294; /* 原 rgba(0,0,0,0.4) 遮罩：按页面底色合成实色 */
+  /* 遮罩底色：全项目**唯一**保留半透明的通道。遮罩的职责就是「透出下层、把注意力压到弹层上」，
+     实色化后弹层直接变成一块看不见背景的板子（亮色下发灰发白、暗色下纯黑），语义就没了 ——
+     故本 token 不接受 SOLID TINTS 口径，取值就是组件历史上一直在用的 rgba(0,0,0,0.5)。
+     业务侧仍不得写 x/NN 半透明工具类；遮罩一律走 bg-overlay（即本 token），alpha 只许封装在这里。 */
+  --overlay-bg: rgba(0, 0, 0, 0.5);
 
-  /* ===== 动效时长 / 缓动 ===== */
+  /* ===== 动效时长 / 缓动：缓动曲线的唯一定义处 =====
+     三条引用通道全部以本组令牌为准，改手感只改这一处：
+       ① CSS / 工具类：需要 Tailwind 工具类的曲线由 tailwind.css 逐个 var() 转发（当前五条）；
+       ② SCSS：token-vars.scss 的 $bezier-* 同样改为 var() 转发（此前是同名不同值的字面量副本）；
+       ③ JS：WAAPI 的 easing 只认字面量、不认 var()，由 platform/utils/constants 镜像本组取值
+          （EASE_STANDARD ↔ --bezier-standard、MARQUEE_RESET_EASING ↔ --bezier-out-cubic），
+          这两条是全项目唯一无法用 var() 打通的通道，改本组取值时须同步改。
+     取值口径：向 SCSS 侧原有的 $bezier-* 对齐，而不是反过来 —— 那套取值编入 transitions.scss 时
+     带着明确的设计约束（例：sidebar 要求「即刻起步 + 单调减速、数学上无过冲点」，见 transitions.scss
+     第 7 节；bounce 只允许末端过冲）。此前 -- 与 $ 同名不同值，同一个动效走工具类与走全局过渡类
+     会呈现两条曲线。 */
   --duration-fast: 0.1s;
   --duration-base: 0.18s;
   --duration-slow: 0.35s;
+  --bezier-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
   --bezier-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --bezier-out: cubic-bezier(0.16, 1, 0.3, 1);
-  /* 以下三项供 tailwind.css 的 --ease-bounce/-standard/-sidebar 引用；
-     此前未定义导致 14 个 ease- 工具类 IACVT 落初始值（无缓动） */
-  --bezier-bounce: cubic-bezier(0.68, -0.55, 0.27, 1.55);
-  --bezier-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --bezier-sidebar: cubic-bezier(0.22, 1, 0.36, 1);
+  --bezier-bounce: cubic-bezier(0.34, 1.3, 0.64, 1);
+  --bezier-sidebar: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* 单调减速（无过冲）：供 tailwind.css 的 --ease-out（即 ease-out 工具类）与 transitions.scss 的
+     浮动条进出场过渡共用。原值 (0.16, 1, 0.3, 1) 全仓零消费者，此处改取实际在用的那一档，
+     于是「工具类的 ease-out」与「浮动条过渡」收敛为同一条曲线。 */
+  --bezier-out: cubic-bezier(0, 0, 0.2, 1);
+  /* 单调减速、起步即全速（easeOutCubic）：比 --bezier-out 释放得更早，用于「从任意位置短程回位」
+     这类要在 240ms 内立刻读成「松手」的复位（vMarquee 停用后的回位，此前是 JS 侧的孤立字面量）。
+     JS 侧镜像见 MARQUEE_RESET_EASING。 */
+  --bezier-out-cubic: cubic-bezier(0.33, 1, 0.68, 1);
+  /* 逐字符翻页（br-roll）专用：入 / 离场都快速出手、末端轻减速，短距离位移下才不拖沓。
+     此前直接裸写在 transitions.scss 的 .br-roll-*-active 里。 */
+  --bezier-roll: cubic-bezier(0.33, 0, 0.2, 1);
 
   /* ===== 背景模糊 ===== */
   --blur-xs: blur(4px);
@@ -111,6 +137,16 @@
   --z-card: 5; /* 卡片内浮起（原 z:5） */
   --z-panel: 10; /* 面板内浮层（原 z:10） */
   --z-float: 20; /* 面板内浮起元件（原 z:20）：滑块把手/数值气泡/悬停操作按钮等 */
+  /* 自绘滚动条 overlay（track / thumb / bubble）：挂在滚动宿主的**兄弟**位置（见 scrollbarCore.ts），
+     必须高于容器内一切内容；三档内部有序：轨道 < 拇指 < 气泡，且整体**低于吸附头**（见 --z-sticky）。
+     取值只在这里定，scrollbarCore.ts 注入的 CSS 用 var() 引用 */
+  --z-scrollbar-track: 29;
+  --z-scrollbar-thumb: 30;
+  --z-scrollbar-bubble: 31;
+  /* 吸附头（折叠面板标题行 sticky）：必须高于容器内**一切**滚动内容 —— 含上面的滚动条 overlay
+     与 z-float 的浮起元件。借 z-float 会与后者同层，同层时靠 DOM 顺序决出，靠后的内容会盖住吸附中的标题。
+     不变式：scrollbar-track < scrollbar-thumb < scrollbar-bubble < sticky < fab */
+  --z-sticky: 32;
   --z-sidebar: 50; /* 侧栏（原 z:50） */
   --z-fab: 40; /* 悬浮操作条（原 z:90） */
   --z-scrim: 99; /* 移动端抽屉遮罩（需高于顶栏，确保全屏遮罩可点击） */
@@ -123,18 +159,32 @@
   --z-toast: 13000; /* 全局提示（高于 popover、menu、modal 和动态池） */
 
   /* === SOLID TINTS LIGHT START === */
+  /* SOLID TINTS：半透明强调色的实色替身。生成口径与「背景 / 边框 / focus-ring 按底色
+     合成去掉透明」完全一致——tint-<色>-<NN> = 该色以 (100-NN)% 叠加在主题底色上、逐通道四舍五入。
+     （例外的只有遮罩：--overlay-bg 保持半透明，理由见其定义处——遮罩必须透出下层，
+     实色化等于把弹层变成一块看不见背景的板子。）
+     底色三档：亮色 #f2f2f7、深色 #1a1a1c、高对比同深色 #1a1a1c（本组取值可被该公式逐条复现，
+     校验见提交说明）。NN 越大越接近底色。业务侧禁止再写 x/NN 半透明色工具类，一律取本组实色。
+     三个主题必须各自定义**完整**一套（.dark 见下、高对比见 [data-theme='high-contrast'] 末段）：
+     任一档缺席即回落 :root 的亮色取值，浅色 tint 贴在深底上会直接坏掉（选中行 / 描边变成刺眼亮块）。 */
   --tint-borderbase-85: #ededf2;
   --tint-current-82: #d1d1d5;
   --tint-current-85: #d6d6db;
+  --tint-danger-20: #fc6058;
+  --tint-danger-50: #f89694;
+  --tint-danger-70: #f6bbbb;
   --tint-danger-75: #f5c4c5;
   --tint-danger-78: #f5cacb;
   --tint-danger-80: #f5cdcf;
   --tint-danger-82: #f4d1d3;
   --tint-danger-88: #f4dcdf;
   --tint-danger-90: #f3e0e3;
+  --tint-danger-95: #f3e9ed;
   --tint-panelhover-30: #ededf1;
   --tint-panelhover-50: #efeff3;
   --tint-primary-20: #3092fd;
+  --tint-primary-30: #499efd;
+  --tint-primary-40: #61aafc;
   --tint-primary-45: #6db0fb;
   --tint-primary-60: #91c2fa;
   --tint-primary-80: #c2daf9;
@@ -143,9 +193,12 @@
   --tint-primary-88: #d5e4f8;
   --tint-primary-90: #dae6f8;
   --tint-primary-92: #dfe8f8;
+  --tint-success-20: #5ad079;
   --tint-success-82: #d0eadb;
   --tint-success-88: #dbede4;
   --tint-texttitle-90: #dddde1;
+  --tint-warning-20: #fca831;
+  --tint-warning-40: #faba63;
   --tint-warning-65: #f7d1a1;
   --tint-warning-78: #f5dec1;
   --tint-warning-80: #f5dfc6;
@@ -161,6 +214,8 @@
   --bg-body: #1c1c1e;
   --bg-panel: #1c1c1e;
   --bg-panel-hover: #2c2c2e;
+  /* 面板上一档的浅填充：= panel-hover 以 50% 合成到 panel 上 */
+  --bg-panel-subtle: #242426;
   --bg-elevated: #1c1c1e;
 
   --bg-surface: #2c2c2e;
@@ -221,21 +276,27 @@
   --shadow-panel: 0 10px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
   --shadow-floating: 0 24px 56px rgba(0, 0, 0, 0.6), 0 8px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --overlay-bg: #0a0a0b; /* 原 rgba(0,0,0,0.6) 遮罩：按页面底色合成实色 */
+  --overlay-bg: rgba(0, 0, 0, 0.5); /* 同 :root：遮罩是三主题中唯一保留半透明的通道 */
 
   /* === SOLID TINTS DARK START === */
   --tint-borderbase-85: #1f1f21;
   --tint-current-82: #404043;
   --tint-current-85: #39393d;
+  --tint-danger-20: #d13c34;
+  --tint-danger-50: #8c302b;
+  --tint-danger-70: #5f2725;
   --tint-danger-75: #532524;
   --tint-danger-78: #4c2323;
   --tint-danger-80: #482322;
   --tint-danger-82: #432221;
   --tint-danger-88: #351f20;
   --tint-danger-90: #311e1f;
+  --tint-danger-95: #251c1e;
   --tint-panelhover-30: #272729;
   --tint-panelhover-50: #232325;
   --tint-primary-20: #0d6fd2;
+  --tint-primary-30: #0f64bb;
+  --tint-primary-40: #105aa4;
   --tint-primary-45: #115499;
   --tint-primary-60: #144477;
   --tint-primary-80: #172f49;
@@ -244,9 +305,12 @@
   --tint-primary-88: #182737;
   --tint-primary-90: #182533;
   --tint-primary-92: #19222e;
+  --tint-success-20: #2cac4c;
   --tint-success-82: #1e3b27;
   --tint-success-88: #1d3023;
   --tint-texttitle-90: #303032;
+  --tint-warning-20: #d1b00e;
+  --tint-warning-40: #a38b11;
   --tint-warning-65: #6a5c16;
   --tint-warning-78: #4c4318;
   --tint-warning-80: #484018;
@@ -254,7 +318,8 @@
   --tint-warning-88: #35311a;
   --tint-warning-90: #312d1a;
   /* === SOLID TINTS DARK END === */
-  --focus-ring: 0 0 0 2px var(--bg-panel), 0 0 0 4px color-mix(in srgb, var(--color-primary) 88%, transparent);
+  /* 与 :root 同口径：外圈实色 tint，不用 color-mix 半透明（见 :root 处说明） */
+  --focus-ring: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--tint-primary-20);
 }
 
 /* ===== 高对比主题：仅覆盖语义色，保持布局/动效/层级不变 ===== */
@@ -263,6 +328,8 @@
   --bg-body: #0a0a0c;
   --bg-panel: #121214;
   --bg-panel-hover: #1e1e22;
+  /* 面板上一档的浅填充：= panel-hover 以 50% 合成到 panel 上 */
+  --bg-panel-subtle: #18181b;
   --bg-elevated: #1a1a1e;
 
   --bg-surface: #1a1a1e;
@@ -284,7 +351,7 @@
   --color-danger: #ff6961;
 
   --text-on-accent: #000000;
-  --overlay-bg: #000000;
+  --overlay-bg: rgba(0, 0, 0, 0.5); /* 同 :root：HC 也不实色化遮罩，取值与前两主题一致（不改观感） */
 
   /* O9：高对比缺失项——不覆盖则回落 :root 亮色值，导致指板画布白字近白底、
      panelhover 色调与 HC 底色冲突（白底白字）。逐项对齐 .dark 基础上再提对比。 */
@@ -328,7 +395,52 @@
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.7);
   --focus-ring: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--color-primary);
 
-  /* panelhover 色调：对齐 HC 面板底色族，避免白底白字 */
+  /* === SOLID TINTS HC START === */
+  /* 生成口径同 :root（tint-<色>-<NN> = 该色以 (100-NN)% 叠加在底色 #1a1a1c 上、逐通道四舍五入）；
+     底色与 .dark 取同一档（HC 自己的 --bg-surface / --bg-elevated #1a1a1e 与之仅差 2），
+     强调色换用 HC 自身更亮的取值（primary #3da5ff / success #3ddc84 / warning #ffd60a / danger #ff6961），
+     于是同一 NN 档在 HC 下自动比 .dark 亮一档 —— 正是高对比要的效果。
+     此前 HC 未定义本组，整套回落 :root 亮色值（#d5e4f8 这类浅色）贴在深底上。
+     注：warning 一族与 .dark 逐字节相同，因为两主题的 --color-warning 取同值 #ffd60a。 */
+  --tint-borderbase-85: #26262a;
+  --tint-current-82: #414143;
+  --tint-current-85: #3a3a3d;
+  --tint-danger-20: #d15953;
+  --tint-danger-50: #8c423e;
+  --tint-danger-70: #5f3231;
+  --tint-danger-75: #532e2d;
+  --tint-danger-78: #4c2b2b;
+  --tint-danger-80: #482a2a;
+  --tint-danger-82: #432828;
+  --tint-danger-88: #352324;
+  --tint-danger-90: #312223;
+  --tint-danger-95: #251e1f;
+  /* panelhover 两档不走合成公式：HC 的悬停要看得见跳变，而合成值（#1d1d20 一类）贴着 HC 面板底
+     #121214 几乎读不出来，故按 HC 面板底色族手工提亮（原有取值，保留）。 */
   --tint-panelhover-30: #2a2a2e;
   --tint-panelhover-50: #26262a;
+  --tint-primary-20: #3689d2;
+  --tint-primary-30: #327bbb;
+  --tint-primary-40: #2f6da4;
+  --tint-primary-45: #2d6699;
+  --tint-primary-60: #285277;
+  --tint-primary-80: #213649;
+  --tint-primary-82: #203345;
+  --tint-primary-85: #1f2f3e;
+  --tint-primary-88: #1e2b37;
+  --tint-primary-90: #1e2833;
+  --tint-primary-92: #1d252e;
+  --tint-success-20: #36b56f;
+  --tint-success-82: #203d2f;
+  --tint-success-88: #1e3128;
+  --tint-texttitle-90: #313133;
+  --tint-warning-20: #d1b00e;
+  --tint-warning-40: #a38b11;
+  --tint-warning-65: #6a5c16;
+  --tint-warning-78: #4c4318;
+  --tint-warning-80: #484018;
+  --tint-warning-82: #433c19;
+  --tint-warning-88: #35311a;
+  --tint-warning-90: #312d1a;
+  /* === SOLID TINTS HC END === */
 }

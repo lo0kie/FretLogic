@@ -14,9 +14,16 @@ import { buildGroupVariant, createGroup, getGroupSortKey, toGroupId } from '@/do
 import { computeChordFingerprint, matchChordSearch, sortChordsByRule } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { registerExitFlusher } from '@/platform/services/lifecycle/exitFlush';
-import { clearPersistFailure, kvRemove, kvSet, reportPersistFailure } from '@/platform/services/storage';
+import {
+  clearPersistFailure,
+  kvRemove,
+  kvSet,
+  markDataDeleted,
+  reportPersistFailure,
+} from '@/platform/services/storage';
 import { cloneDeep, generateUUID } from '@/platform/utils/common';
 import { PERSIST_DEBOUNCE_MS, STORAGE_KEYS } from '@/platform/utils/constants';
+import { logger } from '@/platform/utils/logger';
 
 import { validateChordDraft } from './chordDraftValidation';
 import { createChordEventBus } from './chordEventBus';
@@ -32,6 +39,23 @@ const DEFAULT_SORT_RULE: GroupSortRule = GroupSortRule.ROOT_PITCH;
 export const CHORD_HISTORY_CAPACITY = 8;
 
 export type { ChordValidationResult } from './chordDraftValidation';
+
+/**
+ * 一次和弦删除的精确快照：记录每个被删实体及其在删除前列表中的下标。
+ * 「撤销」按原下标插回（见 restoreChords），不走撤销历史弹栈、不做整表快照覆盖——
+ * 删除与撤销之间夹着的其它改动不会被连带回滚，也不会撤掉不相关的操作。
+ */
+export interface ChordDeletionSnapshot {
+  /** 被删和弦与其删除前下标（按原列表顺序升序） */
+  entries: { chord: Chord; index: number }[];
+}
+
+/** 一次分组删除的精确快照：分组对象 + 原下标 + 名下和弦的删除快照 */
+export interface GroupDeletionSnapshot extends ChordDeletionSnapshot {
+  group: Group;
+  /** 被删分组在删除前分组列表中的下标，撤销时按原位插回 */
+  groupIndex: number;
+}
 
 export const useChordStore = defineStore('chord', () => {
   // 和弦列表体积大（大库下全量序列化达 MB 级），持久化不走 useStorage 的深度 watch：
@@ -127,6 +151,17 @@ export const useChordStore = defineStore('chord', () => {
       return;
     }
     hydrated = true;
+    // 窗口期保护：装配层给 hydrate 设了兜底超时（main.ts），超时即挂载，用户可能已在窗口内
+    // 做过改动（如经 replaceAllData 导入备份）。水合数据晚到时不代表更新——不能用磁盘快照
+    // 无条件覆盖用户已见的内存状态。内存里已有实体时跳过赋值，仅开启写回门禁让窗口期改动
+    // 照常落库；若磁盘快照更完整，用户可经云端拉取 / 备份导入自行恢复。
+    if (groups.value.length > 0 || savedChordsList.value.length > 0) {
+      suppressPersistWatch = false;
+      // 窗口期改动此前被写回抑制挡住，开门后立即刷盘一次，保证已见改动尽快落库
+      void persistAll();
+      logger.warn('chordStore', '水合数据晚到但窗口期内已有本地改动，跳过覆盖赋值');
+      return;
+    }
     pauseHistory();
     groups.value = snapshot.groups;
     savedChordsList.value = snapshot.chords;
@@ -323,22 +358,36 @@ export const useChordStore = defineStore('chord', () => {
   // ---- 跨领域副作用事件（机制见 chordEventBus） ----
   const eventBus = createChordEventBus();
 
-  /** 删除分组及其名下全部和弦，并联动清除展开/选中状态与「最近编辑分组」指针。 */
-  const deleteGroup = (groupId: string) => {
-    // 单趟同时完成「挑出待删 id」与「保留其余和弦」：拆成 filter + map + filter 是三次全量遍历
-    // （千级列表下纯属重复扫描），与 removeChords 的单趟写法对齐
-    const removedChordIds: string[] = [];
-    const keptChords: Chord[] = [];
-    for (const chord of savedChordsList.value)
-      if (chord.groupId === groupId) removedChordIds.push(chord.id);
-      else keptChords.push(chord);
+  /**
+   * 删除分组及其名下全部和弦，并联动清除展开/选中状态与「最近编辑分组」指针。
+   * 返回删除快照（分组对象 + 原下标 + 名下和弦各自的原下标），供「撤销」精确恢复；
+   * 分组不存在时返回 null。
+   */
+  const deleteGroup = (groupId: string): GroupDeletionSnapshot | null => {
+    const groupIndex = groups.value.findIndex(g => g.id === groupId);
+    if (groupIndex < 0) return null;
+    const group = groups.value[groupIndex]!;
 
-    savedChordsList.value = keptChords;
+    // 名下和弦走 removeChordsSnapshot：单趟完成「挑出待删」与「保留其余」，并广播解绑事件
+    const { entries } = removeChordsSnapshot(savedChordsList.value.filter(c => c.groupId === groupId));
+
     groups.value = groups.value.filter(g => g.id !== groupId);
     if (expandedGroupId.value === groupId) expandedGroupId.value = null;
     if (selectedGroupId.value === groupId) selectedGroupId.value = null;
 
-    eventBus.emitChordsRemoved(removedChordIds);
+    return { group, groupIndex, entries };
+  };
+
+  /**
+   * 撤销一次分组删除：分组按**原下标**插回（不整表覆盖分组列表——删除后新建的分组不受影响），
+   * 名下和弦同样按原下标精确插回；随后广播恢复事件，经应用层桥接回填乐谱槽位。
+   */
+  const restoreGroupDeletion = (snapshot: GroupDeletionSnapshot): void => {
+    const nextGroups = [...groups.value];
+    nextGroups.splice(Math.min(snapshot.groupIndex, nextGroups.length), 0, snapshot.group);
+    groups.value = nextGroups;
+    restoreChords(snapshot);
+    selectedGroupId.value = snapshot.group.id;
   };
 
   /**
@@ -411,6 +460,8 @@ export const useChordStore = defineStore('chord', () => {
     if (droppedIds.size === 0) return;
 
     savedChordsList.value = savedChordsList.value.filter(c => !droppedIds.has(c.id));
+    // 合并丢弃也是删除：同样抬高删除水位线
+    markDataDeleted();
     eventBus.emitChordsMerged(mergeMapping);
   };
 
@@ -447,11 +498,38 @@ export const useChordStore = defineStore('chord', () => {
   };
 
   /**
+   * 按 id 精确删除指定和弦列表，并返回删除快照（供「撤销」按原下标精确插回）。
+   *
+   * 必须严格按 id 匹配，不使用指纹兜底——避免两个指法相同但 id 不同的和弦
+   * 在用户只删其一时被连带误删。
+   */
+  const removeChordsSnapshot = (chords: Chord[]): ChordDeletionSnapshot => {
+    const targetIds = new Set<string>();
+    chords.forEach(c => {
+      targetIds.add(c.id);
+    });
+    if (targetIds.size === 0) return { entries: [] };
+    const entries: ChordDeletionSnapshot['entries'] = [];
+    savedChordsList.value.forEach((chord, index) => {
+      if (targetIds.has(chord.id)) entries.push({ chord, index });
+    });
+    savedChordsList.value = savedChordsList.value.filter(c => !targetIds.has(c.id));
+    // 抬高删除水位线：meta.updatedAt 只看存活实体，删除会让它回退、方向判定误判（见 deletionWatermark）
+    markDataDeleted();
+    // 广播删除事件：由应用层桥接解绑歌曲中的引用
+    eventBus.emitChordsRemoved([...targetIds]);
+    return { entries };
+  };
+
+  /**
    * 按 id 精确删除指定和弦列表。
    *
    * 必须严格按 id 匹配，不使用指纹兜底——避免两个指法相同但 id 不同的和弦
    * 在用户只删其一时被连带误删。
-   * 返回被删除的 id 集合，供调用方同步解绑歌曲中的引用。
+   *
+   * 返回被删除的 id 集合。⚠️ 歌曲中的引用解绑**不依赖**这个返回值——解绑由
+   * removeChordsSnapshot 广播的删除事件经应用层 chordScoreBridge 完成。全仓调用方
+   * （src 与 tests）均未消费它，保留仅为不破坏既有签名；不要据它写出"调用方必须消费"的用法。
    */
   const removeChords = (chords: Chord[]): Set<string> => {
     const targetIds = new Set<string>();
@@ -459,10 +537,23 @@ export const useChordStore = defineStore('chord', () => {
       targetIds.add(c.id);
     });
     if (targetIds.size === 0) return targetIds;
-    savedChordsList.value = savedChordsList.value.filter(c => !targetIds.has(c.id));
-    // 广播删除事件：由应用层桥接解绑乐谱槽位（返回值保留给需要显式感知的调用方）
-    eventBus.emitChordsRemoved([...targetIds]);
+    removeChordsSnapshot(chords);
     return targetIds;
+  };
+
+  /**
+   * 撤销一次删除：按快照记录的**原下标**从高到低插回（splice 位置精确还原，不整表覆盖——
+   * 删除与撤销之间若夹着其它改动，不受影响）。并广播恢复事件，经应用层桥接回填乐谱槽位。
+   */
+  const restoreChords = (snapshot: ChordDeletionSnapshot): void => {
+    if (snapshot.entries.length === 0) return;
+    const next = [...savedChordsList.value];
+    for (let i = snapshot.entries.length - 1; i >= 0; i -= 1) {
+      const { chord, index } = snapshot.entries[i]!;
+      next.splice(Math.min(index, next.length), 0, chord);
+    }
+    savedChordsList.value = next;
+    eventBus.emitChordsRestored(snapshot.entries.map(e => e.chord.id));
   };
 
   /**
@@ -503,8 +594,13 @@ export const useChordStore = defineStore('chord', () => {
     /** 即时刷盘（绕开防抖窗口）；调用方按需 `void persistAll()` */
     persistAll,
     moveVariantsByName,
+    /** 通用撤销（弹撤销历史栈顶 + 孤儿收容）。UI 撤销按钮已改为快照精确恢复（removeChordsSnapshot
+     *  + restoreChords / deleteGroup + restoreGroupDeletion），不再走此处；保留为通用撤销入口 */
     executeUndoRestore,
     removeChords,
+    removeChordsSnapshot,
+    restoreChords,
+    restoreGroupDeletion,
     onChordsRemoved: eventBus.onChordsRemoved,
     onChordsRestored: eventBus.onChordsRestored,
     onChordsMerged: eventBus.onChordsMerged,

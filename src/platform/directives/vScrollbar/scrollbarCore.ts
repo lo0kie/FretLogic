@@ -197,7 +197,7 @@ export const ensureGlobalStyle = (): void => {
     `.${HOST_CLASS}::-webkit-scrollbar{display:none;}` +
     `/* 轨道颜色固定不随状态变化；默认仅透明隐藏（保留 visibility，否则收不到 hover/点击），悬停拇指/轨道时由指令切换可见类。
        隐藏态必须 pointer-events:none：否则透明轨道常驻吞掉宿主内缘指针事件（点击/滚动被拦截，探针命中内缘 2~13px）；可见时恢复 */` +
-    `.v-scrollbar-track{position:absolute;z-index:29;pointer-events:none;cursor:pointer;` +
+    `.v-scrollbar-track{position:absolute;z-index:var(--z-scrollbar-track);pointer-events:none;cursor:pointer;` +
     `background:var(--border-light);opacity:0;border-radius:999px;` +
     `transition:opacity 250ms ease,width 150ms ease,height 150ms ease,transform 150ms ease;}` +
     `.v-scrollbar-track--visible{opacity:1;pointer-events:auto;}` +
@@ -208,7 +208,7 @@ export const ensureGlobalStyle = (): void => {
     `.v-scrollbar-thumb--x:hover ~ .v-scrollbar-track--x,.v-scrollbar-track--x:hover{height:${THICKNESS + 1}px;transform:translateY(-1px);}` +
     `/* 轨道热区四向外扩：粗细方向上边缘侧的 EDGE 间隙也纳入交互区，不留死角 */` +
     `.v-scrollbar-track::after{content:'';position:absolute;inset:-${HIT_AREA}px;}` +
-    `.v-scrollbar-thumb{position:absolute;z-index:30;border-radius:999px;pointer-events:auto;cursor:pointer;` +
+    `.v-scrollbar-thumb{position:absolute;z-index:var(--z-scrollbar-thumb);border-radius:999px;pointer-events:auto;cursor:pointer;` +
     `background:var(--v-scrollbar-thumb);opacity:0;visibility:hidden;` +
     `transition:opacity 250ms ease,background 150ms ease,visibility 0s linear 250ms,width 150ms ease,height 150ms ease,transform 150ms ease;}` +
     `/* 粗细维度由类控制（hover 向容器内侧加宽 1px），长度维度由指令内联设置 */` +
@@ -228,7 +228,7 @@ export const ensureGlobalStyle = (): void => {
        max-width:100%：超长自定义文案收敛在宿主可视区内（钳制按半高上界，见 BUBBLE_HALF_SIZE）；
        气泡自身 overflow:visible —— 箭头楔形朝滚动条一侧探出，若沿用 overflow:hidden 会被整个裁掉，
        故省略号另落内层 .v-scrollbar-bubble-text（读数本就写在它上面，见 applyBubble） */` +
-    `.v-scrollbar-bubble{position:absolute;z-index:31;pointer-events:none;white-space:nowrap;` +
+    `.v-scrollbar-bubble{position:absolute;z-index:var(--z-scrollbar-bubble);pointer-events:none;white-space:nowrap;` +
     `overflow:visible;max-width:100%;` +
     `border:1px solid var(--glass-border);` +
     `background:var(--bg-panel);box-shadow:var(--shadow-md);color:var(--text-title);` +

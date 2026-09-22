@@ -5,6 +5,7 @@ import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
+import { markDataDeleted } from '@/platform/services/storage/deletionWatermark';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { formatLocalTimestampForFile, serializeForStorage, wait } from '@/platform/utils/common';
@@ -28,6 +29,8 @@ export function useImportExportService() {
 
   /** 按勾选把清洗后的 payload 覆盖写入本地（入参是 validateImportExportPayload 的全新对象图，可直接接管） */
   const applyImportSelection = (data: ImportExportPayload, selection: BackupSelection) => {
+    // 吸收包内删除水位线（只前进不后退）：保证后续本地上传的 meta.updatedAt 不低于导入源
+    if (typeof data.deletedAt === 'number') markDataDeleted(data.deletedAt);
     if (selection.chords) {
       chordStore.replaceAllData({
         groups: data.groups,

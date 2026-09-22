@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import { FADE_OFFSET_TARGET_PROP, findScrollParent, resolveLengthToPx } from '@/platform/utils/dom';
 
@@ -14,8 +14,11 @@ import type { Ref } from 'vue';
  * 等于让展示组件去窥探宿主布局——既不可复用，也让每个头各自持有一套滚动监听与 ResizeObserver
  * （N 个头 = N 份监听）。放在业务侧统一做：一次发现容器、一次监听，批量判定后回传结果。
  *
- * 组件侧只保留两个纯输入：`stuckIds`（我吸附了吗）与 `insetPx`（容器让出多少 padding）。
- * 定位几何（sticky / top / z / 底色 / 露出带）与羽化内缩量都由业务经 class / 本 composable 下发。
+ * 对外只暴露两样：`stuckIds`（哪些头此刻正被吸附）与 `headBind(id)`（吸附头的整套接线：
+ * 宿主 id 钩子 + 滚动容器 + 定位 sticky/top/z）。定位几何原先要求每处宿主各写一遍（三处宿主连
+ * `'sticky z-sticky'` 都逐字重复），现由本 composable 单点下发；宿主仍可自行叠加额外 class。
+ * 注意这与「折叠组件不假设宿主布局」并不冲突：BaseCollapse 依旧只管展示，吸附是宿主侧机制，
+ * 本 composable 正是该机制的唯一归属。
  */
 export interface UseStickyHeadsOptions {
   /** 列表根元素（全部吸附头的共同祖先）：滚动容器沿其祖先链查找，尺寸变化也观察它 */
@@ -160,5 +163,33 @@ export function useStickyHeads(options: UseStickyHeadsOptions) {
 
   onBeforeUnmount(detach);
 
-  return { stuckIds, insetPx, container: containerRef, refresh: scheduleUpdate };
+  /**
+   * 吸附头的 `top` 值：容器 padding-top 的**负值**。
+   *
+   * sticky 以滚动容器的**内容盒**为原点，而容器若自带 padding-top，那条 padding 带属于可滚动区、
+   * 且在裁剪边界之内 —— 头用 top:0 会停在 padding 之下，滚过的内容会从头顶那条带里漏出来。
+   * 取负值让头齐平贴住容器**可视上沿**，头顶不留间隙，也就不需要任何遮挡片/伪元素
+   * （此前所有「边框/焦点环被挡」的坑都源自那条遮挡带）。
+   *
+   * 收在这里而不是各消费方各写一遍：它是 insetPx 的**唯一派生**，此前在 DevPanel 与 GroupSection 里逐字重复，
+   * 每多一处消费方就多一个漂移点。
+   */
+  const insetTop = computed(() => (insetPx.value ? `-${insetPx.value}px` : '0px'));
+
+  /**
+   * 吸附头的接线：一次给全「宿主 id 钩子 + 滚动容器 + 定位（sticky / top / z）」。
+   *
+   * 三处宿主（开发者面板、侧栏和弦库、设置弹层）此前各自把同一套四件套写一遍，连 `'sticky z-sticky'`
+   * 都是逐字重复；现收成单一来源 —— 宿主只需 `v-bind="headBind(id)"`，要额外 class 照旧自行叠加
+   * （Vue 会把 v-bind 的 class 与本地 class 合并）。
+   * z 取 `z-sticky`：吸附头必须高于容器内**一切**滚动内容（含滚动条 overlay），见 tokens.scss 的层次不变式。
+   */
+  const headBind = (id: string) => ({
+    [options.idAttribute]: id,
+    'scroll-container': containerRef.value,
+    'class': 'sticky z-sticky',
+    'style': { top: insetTop.value },
+  });
+
+  return { stuckIds, headBind };
 }

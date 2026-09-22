@@ -7,12 +7,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import { getChordName } from '@/domains/chord/theory/theory';
 import {
+  CHORD_NAME_EDGE_PAD,
   computeFretboardLayout,
   renderFretboardBody,
   renderFretboardChordName,
   renderFretboardFretMarks,
+  resolveFretWindow,
 } from '@/domains/fretboard/components/renderFretboardCanvas';
-import { clampDrawFretCount } from '@/domains/fretboard/constants';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { activeTheme } from '@/platform/composables/useTheme';
 import { createLruCache } from '@/platform/utils/cache';
@@ -56,7 +57,7 @@ import type { CSSProperties } from 'vue';
  * 几何，再与页面 PIXEL_RATIO 1:1 贴图；本缓存相反 —— 只存主体层（名字层/品号层每次现画）、
  * 固定参考分辨率存一份、显示时缩放。两者粒度都不同，故同一指板在两侧各光栅化一次、各占一份内存，
  * 互不命中，这是当前设计的结果。主线程消费方：ChordPickerPanel / ChordModalsContainer /
- * ChordSlotCell（乐谱编辑器槽位，与和弦库真共享）/ WorkbenchExportPanel / WorkbenchVariantsPanel。
+ * ChordSlot（乐谱编辑器槽位，与和弦库真共享）/ WorkbenchExportPanel / WorkbenchVariantsPanel。
  */
 const bitmapCache = createLruCache<ImageBitmap | HTMLCanvasElement>(256, {
   name: '指板位图',
@@ -127,6 +128,13 @@ interface Props {
   showBoldNut?: boolean;
   /** 是否绘制大横按（默认 true；false 时隐藏横按梁，仅保留按弦圆点） */
   showBarre?: boolean;
+  /**
+   * 是否忽略首末的空品格（默认 **false = 画满 fretCount 列的全指板**）。
+   *
+   * 必须由消费方**显式传入**才生效；开启后按实际用到的品位范围收紧品窗（不低于 MIN_FRET_COUNT 列）。
+   * 属几何量（改变网格列数与窗口起点），故由 fretWindow 统一喂给布局、位图键与绘制三处。
+   */
+  trimEmptyEdgeFrets?: boolean;
   /** 懒绘制：挂载后不立即绘制，等元素滚入视口才首绘一次；后续参数变化正常重绘。
    *  DOM 尺寸始终由本组件按 scale/fretCount 计算确定，无需外部占位与测量 */
   lazy?: boolean;
@@ -153,13 +161,21 @@ const props = withDefaults(defineProps<Props>(), {
   showFretNumbers: true,
   showBoldNut: true,
   showBarre: true,
+  trimEmptyEdgeFrets: false,
   lazy: false,
   mutableChord: false,
 });
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 
-const fretCount = computed(() => clampDrawFretCount(props.chord.fretCount));
+/**
+ * 实际品窗：开启收紧时按「实际用到的品位范围」收紧（不低于 MIN_FRET_COUNT 列），否则原样取 fretCount。
+ *
+ * 布局、位图键、绘制三处共用这一份。位图键里放的是**收紧结果**而非开关本身，于是几何本就无空列
+ * 可裁的指法在切换开关时 key 不变、位图不重渲 —— 这就是「阻止本身没有空品格的指法重渲染」的落点。
+ */
+const fretWindow = computed(() => resolveFretWindow(props.chord, props.trimEmptyEdgeFrets));
+const fretCount = computed(() => fretWindow.value.drawFretCount);
 
 /** 名字位是否预留：显示名字时必然预留（几何即现状），隐藏名字时由 reserveChordName 显式要求 */
 const reserveName = computed(() => props.showChordName || props.reserveChordName);
@@ -210,10 +226,17 @@ const renderOptions = computed<RenderFretboardOptions>(() => ({
   chordNameScale: props.chordNameScale,
   shorthand: props.shorthand,
   showChordName: props.showChordName,
+  // 名字可用宽度（逻辑 px）＝画布宽 − 两侧留白。本组件是**固定尺寸**的缩略图：宽度由布局
+  // （弦数 × 品数）定死，picker 三列网格、谱面行内槽位都靠这套等宽几何对齐，不能因为某个名字
+  // 太长就把画布加宽（那会顶开整列 / 让歌词字符错位）。故这里把可用宽交给名字层**缩字号贴合**，
+  // 而不是像导出 PNG 那样按名字宽度扩画布 —— 两边口径不同是有意的，理由见 CHORD_NAME_EDGE_PAD。
+  // 主体层与品号层不读本项（它只影响名字层），与 reserveChordName 一样不参与位图键。
+  chordNameMaxWidth: baseWidth.value - CHORD_NAME_EDGE_PAD * 2,
   showOpenStringNotes: props.showOpenStringNotes,
   showFretNumbers: props.showFretNumbers,
   showBoldNut: props.showBoldNut,
   showBarre: props.showBarre,
+  trimEmptyEdgeFrets: props.trimEmptyEdgeFrets,
 }));
 
 /**
@@ -261,7 +284,9 @@ function getCacheKey(): string {
   ]
     .map(f => (f ? 1 : 0))
     .join('');
-  return `${strings.length || 6}_f${fretCount.value}_${strSig}_${barreSig}_th${props.theme ?? activeTheme.value}_${flagSig}`;
+  // f 段取**实际列数**、t 段记首列右移量：二者共同确定品窗几何。这里放的是收紧结果而非
+  // trimEmptyEdgeFrets 开关本身 —— 于是「本就无空列可裁」的指法切换开关时 key 不变、不重渲。
+  return `${strings.length || 6}_f${fretCount.value}_t${fretWindow.value.leadTrim}_${strSig}_${barreSig}_th${props.theme ?? activeTheme.value}_${flagSig}`;
 }
 
 /**
@@ -414,6 +439,9 @@ watch(
     () => props.showFretNumbers,
     () => props.showBoldNut,
     () => props.showBarre,
+    // 收紧空品格改变品窗几何（列数与窗口起点）⇒ 必须重绘。缺这一条时开关只在
+    // 强制重建（刷新 / KeepAlive 重挂载）后才生效 —— 键变了但没人触发 draw()
+    () => props.trimEmptyEdgeFrets,
   ],
   () => {
     if (!hasDrawn.value) return;

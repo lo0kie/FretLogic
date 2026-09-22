@@ -116,11 +116,13 @@ export const restoreChordBindingsToSongs = (
       changedSongs.set(songId, target);
       return;
     }
-    // 边槽列表可能已缩短：钳到「追加到末位」；若目标位已被占用则跳过（下方统一判定）
+    // 边槽列表可能已缩短：钳到「追加到末位」。此处用**插入**（splice）而非 list[idx] = chordId 覆盖：
+    // 覆盖会挤掉撤销前用户又绑在同一下标上的和弦（连续撤销行首绑定即丢上一条），也与 char 分支
+    // 「目标位已占用则跳过，不覆盖用户后续编辑」的口径自相矛盾——原注释承诺跳过、代码却在覆盖
+    // （P1 审计 #6）。插入是「删除中间一条」的精确逆操作：目标位右侧的项右移回原序，双方都不丢。
     const list = getEdgeChords(target.chordMap, parsed.lineId, parsed.type);
     const idx = Math.min(parsed.index, list.length);
-    if (idx < list.length) list[idx] = chordId;
-    else list.push(chordId);
+    list.splice(idx, 0, chordId);
 
     setEdgeChords(target.chordMap, parsed.lineId, parsed.type, list);
     changedSongs.set(songId, target);

@@ -30,7 +30,7 @@
         'cursor-not-allowed opacity-50': disabled,
         'cursor-pointer': !disabled && !readonly,
         'rounded-lg border border-border-base p-2.5 hover:bg-surface-panel-hover': bordered,
-        'bg-surface-panel-hover/50': bordered && isChecked,
+        'bg-surface-panel-subtle': bordered && isChecked,
       },
     ]"
     :for="resolvedId"
@@ -239,19 +239,23 @@ const SIZE_CONFIGS = {
 const COLOR_CONFIGS = {
   primary: {
     checkedClass: 'border-primary bg-primary text-white group-hover:brightness-105',
-    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-primary/80 dark:bg-(--bg-surface)',
+    uncheckedClass:
+      'border border-border-base bg-surface-body group-hover:border-tint-primary-20 dark:bg-(--bg-surface)',
   },
   success: {
     checkedClass: 'border-success bg-success text-white group-hover:brightness-105',
-    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-success/80 dark:bg-(--bg-surface)',
+    uncheckedClass:
+      'border border-border-base bg-surface-body group-hover:border-tint-success-20 dark:bg-(--bg-surface)',
   },
   warning: {
     checkedClass: 'border-warning bg-warning text-white group-hover:brightness-105',
-    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-warning/80 dark:bg-(--bg-surface)',
+    uncheckedClass:
+      'border border-border-base bg-surface-body group-hover:border-tint-warning-20 dark:bg-(--bg-surface)',
   },
   danger: {
     checkedClass: 'border-danger bg-danger text-white group-hover:brightness-105',
-    uncheckedClass: 'border border-border-base bg-surface-body group-hover:border-danger/80 dark:bg-(--bg-surface)',
+    uncheckedClass:
+      'border border-border-base bg-surface-body group-hover:border-tint-danger-20 dark:bg-(--bg-surface)',
   },
 } as const;
 

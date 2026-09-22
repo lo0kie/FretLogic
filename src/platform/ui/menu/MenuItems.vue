@@ -22,81 +22,50 @@
         @open="handleSubmenuOpen(index)"
       />
 
-      <button
-        v-else
-        v-wave="{ disabled: item.disabled }"
-        :aria-checked="item.checked"
-        :aria-disabled="item.disabled"
-        :class="[
-          menuRowSizeClass(size),
-          item.danger
-            ? item.checked
-              ? 'bg-tint-danger-88! font-semibold text-danger!'
-              : 'text-danger enabled:hover:bg-tint-danger-88! enabled:focus-visible:bg-tint-danger-88!'
-            : item.color
-              ? item.checked
-                ? 'font-semibold'
-                : ''
-              : item.checked
-                ? 'bg-tint-primary-88! font-semibold text-primary!'
-                : 'text-fg-title',
-        ]"
-        :disabled="item.disabled"
-        :ref="el => setItemEl(el, index)"
-        :role="item.checked !== undefined ? 'menuitemradio' : 'menuitem'"
-        :style="getItemStyle(item)"
-        :tabindex="item.disabled ? -1 : 0"
-        :title="item.title ?? item.label"
-        @click.stop="handleItemClick(item)"
-        @keydown.enter.prevent.stop="handleItemClick(item)"
-        @keydown.space.prevent.stop="handleItemClick(item)"
-        @mousedown="item.disabled && $event.preventDefault()"
-        data-focusable-outline
-        class="group relative flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left transition-colors duration-fast outline-none select-none enabled:hover:bg-(--item-hover-bg,var(--bg-panel-hover)) enabled:focus-visible:bg-(--item-hover-bg,var(--bg-panel-hover)) disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
-        type="button"
-      >
+      <MenuRow v-else :item :size :ref="el => setItemEl(el, index)" @activate="handleItemClick(item)">
         <!-- 前导槽：勾选在左时 check 占据槽位（替换 icon），否则渲染 icon -->
-        <BaseIcon
-          v-if="item.checked && item.checkPosition !== 'right'"
-          aria-hidden="true"
-          class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
-          icon-size="md"
-          icon-stroke="bold"
-          name="check"
-        />
-        <BaseIcon
-          v-else-if="typeof item.icon === 'string'"
-          :name="item.icon"
-          aria-hidden="true"
-          class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
-          icon-size="md"
-          icon-stroke="bold"
-        />
-        <component
-          v-else-if="item.icon"
-          :is="item.icon"
-          aria-hidden="true"
-          class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
-          icon-size="md"
-          icon-stroke="bold"
-        />
+        <template #leading>
+          <BaseIcon
+            v-if="item.checked && item.checkPosition !== 'right'"
+            aria-hidden="true"
+            class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
+            icon-size="md"
+            icon-stroke="bold"
+            name="check"
+          />
+          <BaseIcon
+            v-else-if="typeof item.icon === 'string'"
+            :name="item.icon"
+            aria-hidden="true"
+            class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
+            icon-size="md"
+            icon-stroke="bold"
+          />
+          <component
+            v-else-if="item.icon"
+            :is="item.icon"
+            aria-hidden="true"
+            class="shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
+            icon-size="md"
+            icon-stroke="bold"
+          />
+        </template>
 
-        <span class="min-w-0 flex-1 whitespace-nowrap"> {{ item.label }} </span>
-
-        <span v-if="item.shortcut" class="ml-3 shrink-0 font-mono text-2xs tracking-tight opacity-45 select-none">
-          {{ item.shortcut }}
-        </span>
-
-        <!-- 勾选在右：行尾追加 check，不占前导图标槽 -->
-        <BaseIcon
-          v-if="item.checked && item.checkPosition === 'right'"
-          aria-hidden="true"
-          class="ml-3 shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
-          icon-size="md"
-          icon-stroke="bold"
-          name="check"
-        />
-      </button>
+        <template #trailing>
+          <span v-if="item.shortcut" class="ml-3 shrink-0 font-mono text-2xs tracking-tight opacity-45 select-none">
+            {{ item.shortcut }}
+          </span>
+          <!-- 勾选在右：行尾追加 check，不占前导图标槽 -->
+          <BaseIcon
+            v-if="item.checked && item.checkPosition === 'right'"
+            aria-hidden="true"
+            class="ml-3 shrink-0 opacity-85 transition-opacity duration-fast group-enabled:group-hover:opacity-100"
+            icon-size="md"
+            icon-stroke="bold"
+            name="check"
+          />
+        </template>
+      </MenuRow>
     </template>
   </div>
 </template>
@@ -107,8 +76,8 @@ import { onBeforeUnmount, onBeforeUpdate, ref, useTemplateRef } from 'vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 
+import MenuRow from './MenuRow.vue';
 import MenuSubmenu from './MenuSubmenu.vue';
-import { getItemStyle, menuRowSizeClass } from './menuRowStyle';
 import { registerSubmenuScrollGuard } from './submenuScrollGuard';
 
 import type { MenuItem } from './types';
@@ -140,9 +109,11 @@ const {
 
 const itemEls = ref<(HTMLButtonElement | null)[]>([]);
 
-/** 收集菜单项 DOM（函数式 ref），供键盘导航聚焦 */
+/** 收集菜单项 DOM（函数式 ref）：行已抽成 MenuRow 子组件，函数式 ref 到手的是它 defineExpose 的对象
+ *  （含 root），需解包出真正的根按钮元素，菜单的键盘导航才能 focus() */
 const setItemEl = (el: unknown, index: number) => {
-  if (el instanceof HTMLButtonElement) itemEls.value[index] = el;
+  const node = el && typeof el === 'object' && 'root' in el ? (el as { root?: HTMLElement }).root : el;
+  if (node instanceof HTMLButtonElement) itemEls.value[index] = node;
 };
 
 type MenuSubmenuInstance = InstanceType<typeof MenuSubmenu>;

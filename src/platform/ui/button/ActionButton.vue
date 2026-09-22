@@ -94,6 +94,7 @@ const {
   disabled = false,
   loading = false,
   iconOnly = false,
+  iconInset = 'none',
   icon = undefined,
   iconSize = undefined,
   iconStroke = 'regular',
@@ -124,6 +125,10 @@ const {
   loading?: boolean;
   /** 图标按钮模式：渲染为方形图标钮（label 不显示） */
   iconOnly?: boolean;
+  /** iconOnly 时的内边距档：默认 `none`（方形无内边距，与既有行为一致）；
+   *  `sm` 补一圈紧凑内边距 —— 抽屉 / 模态的关闭按钮需要在窄行里留出可点面积，
+   *  此前由消费方 `class="p-1.5!"` 硬压回来，与组件自身的 `p-0!` 对拉 */
+  iconInset?: 'none' | 'sm';
   /**
    * 图标名（注册表枚举）：无默认插槽时作为按钮主体（等同 iconOnly 方形图标钮），
    * 有默认插槽时作为前缀图标；#prefix 插槽优先于本属性。
@@ -323,9 +328,12 @@ if (import.meta.env.DEV)
   );
 
 const sizeClasses = computed(() => {
-  if (isIconOnly.value)
-    // iconOnly 已通过 p-0! 强制方形无内边距，compacted 不再叠加
-    return BUTTON_ICON_ONLY_SIZE_MAP[size] ?? BUTTON_ICON_ONLY_SIZE_MAP['md'];
+  if (isIconOnly.value) {
+    // iconOnly 走 BUTTON_ICON_ONLY_SIZE_MAP（内含 p-0! 强制方形无内边距），compacted 不再叠加；
+    // iconInset='sm' 时再补 p-1.5!：两者同为 important，由 Tailwind 的刻度顺序决定（1.5 在 0 之后）生效
+    const base = BUTTON_ICON_ONLY_SIZE_MAP[size] ?? BUTTON_ICON_ONLY_SIZE_MAP['md'];
+    return iconInset === 'sm' ? [base, 'p-1.5!'] : base;
+  }
 
   const map = compacted ? BUTTON_COMPACTED_SIZE_MAP : BUTTON_SIZE_MAP;
   return map[size] ?? map['md'];

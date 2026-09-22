@@ -136,8 +136,8 @@
               v-model="searchQuery"
               :placeholder="filterPlaceholder"
               @pointerdown.stop
-              @keydown.down.prevent="handleFilterKeydownDown()"
-              @keydown.enter.prevent="handleFilterKeydownEnter(close)"
+              @keydown.down="handleFilterKeydownDown($event)"
+              @keydown.enter="handleFilterKeydownEnter($event, close)"
               data-focusable-outline
               class="h-7 w-full rounded-sm border border-border-light bg-surface-body px-2 text-xs outline-none"
               ref="filterInputRef"
@@ -171,30 +171,18 @@
               <Feedback :description="filterable ? '无匹配结果' : '暂无选项'" size="sm" />
             </div>
             <template v-else>
-              <div
+              <BaseDropdownItem
                 v-for="(entry, index) in filteredEntries"
-                v-wave="{ disabled: isOptionDisabled(entry.option) }"
-                :aria-selected="isSelected(getOptionValue(entry.option))"
-                :class="[
-                  currentConfig.itemClass,
-                  isSelected(getOptionValue(entry.option))
-                    ? 'bg-tint-primary-88! font-bold text-primary!'
-                    : fontBlackItems
-                      ? 'font-black'
-                      : 'font-bold',
-                  { 'pointer-events-none cursor-not-allowed opacity-40': isOptionDisabled(entry.option) },
-                ]"
+                :active="isSelected(getOptionValue(entry.option))"
+                :disabled="isOptionDisabled(entry.option)"
+                :font-black="fontBlackItems"
                 :key="entry.key"
                 :ref="el => setOptionEl(el, index)"
-                :tabindex="isOptionDisabled(entry.option) ? -1 : 0"
+                :size="resolvedSize"
                 :title="getOptionTitle(entry.option)"
-                @click="handleSelect(entry.option, close)"
-                @keydown.enter.prevent.stop="handleSelect(entry.option, close)"
-                @keydown.space.prevent.stop="handleSelect(entry.option, close)"
-                class="flex min-w-0 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-md bg-transparent px-2.5 text-xs text-fg-body transition-colors outline-none hover:bg-surface-panel-hover hover:text-fg-title"
-                role="option"
+                @select="handleSelect(entry.option, close)"
               >
-                <span class="flex max-w-full min-w-0 flex-1 items-center gap-2">
+                <template #leading>
                   <BaseIcon
                     v-if="typeof getOptionIcon(entry.option) === 'string'"
                     :name="getOptionIcon(entry.option) as IconName"
@@ -211,21 +199,23 @@
                     icon-size="md"
                     icon-stroke="bold"
                   />
-                  <div v-marquee.fade class="min-w-0">
-                    <slot :index :option="entry.option" name="option">
-                      {{ formattedOption(entry.option) }}
-                    </slot>
-                  </div>
-                </span>
-                <BaseIcon
-                  v-if="isSelected(getOptionValue(entry.option))"
-                  aria-hidden="true"
-                  class="shrink-0 text-primary"
-                  icon-size="md"
-                  icon-stroke="bold"
-                  name="check"
-                />
-              </div>
+                </template>
+                <div v-marquee.fade class="min-w-0">
+                  <slot :index :option="entry.option" name="option">
+                    {{ formattedOption(entry.option) }}
+                  </slot>
+                </div>
+                <template #trailing>
+                  <BaseIcon
+                    v-if="isSelected(getOptionValue(entry.option))"
+                    aria-hidden="true"
+                    class="shrink-0 text-primary"
+                    icon-size="md"
+                    icon-stroke="bold"
+                    name="check"
+                  />
+                </template>
+              </BaseDropdownItem>
             </template>
           </BaseScrollArea>
         </div>
@@ -242,14 +232,16 @@
 // 对外的类型导出也只能放在本块
 import { computed, inject, nextTick, onBeforeUpdate, ref, useAttrs, useTemplateRef, watch } from 'vue';
 
+import BaseDropdownItem from '@/platform/ui/dropdown/BaseDropdownItem.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
+import { calcDropdownMaxHeight } from '@/platform/ui/dropdown/dropdownPanelHeight';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
-import { calcDropdownMaxHeight, createOptionHelpers, SELECTOR_CONFIG } from '@/platform/ui/selector/BaseSelector.logic';
+import { createOptionHelpers, SELECTOR_CONFIG } from '@/platform/ui/selector/BaseSelector.logic';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
 import type { ComponentSize } from '@/platform/types';
@@ -395,9 +387,12 @@ const optionEls = ref<(HTMLElement | null)[]>([]);
 const filterInputRef = useTemplateRef<HTMLInputElement>('filterInputRef');
 const searchQuery = ref('');
 
-/** 收集选项 DOM（函数式 ref），供键盘导航聚焦使用 */
+/** 收集选项 DOM（函数式 ref），供键盘导航聚焦使用。
+ *  下拉项已抽成 BaseDropdownItem 子组件，函数式 ref 到手的是它 defineExpose 的对象（含 root），
+ *  需解包出真正的根按钮元素再存入，才能被 handleDropdownKeydown / scrollToSelected 调用 focus() */
 const setOptionEl = (el: unknown, index: number) => {
-  if (el instanceof HTMLElement) optionEls.value[index] = el;
+  const node = el && typeof el === 'object' && 'root' in el ? (el as { root?: HTMLElement }).root : el;
+  if (node instanceof HTMLElement) optionEls.value[index] = node;
 };
 
 onBeforeUpdate(() => {
@@ -520,6 +515,8 @@ const dropdownMaxHeight = computed(() =>
   calcDropdownMaxHeight({
     optionCount: filteredOptions.value.length,
     displayItems,
+    // 面板纵向内边距合计：下拉容器的 p-xs = 0.375rem × 2（与搜索结果面板的 p-1 不同，不能共用）
+    paddingRem: 0.375 * 2,
     size: resolvedSize.value,
   })
 );
@@ -647,14 +644,27 @@ const handleTriggerKeydown = (e: KeyboardEvent) => {
   }
 };
 
+/**
+ * 过滤框的两个键处理都要在合成期放行 —— ↓/↑ 是输入法翻候选词、Enter 是确认候选词，
+ * 一旦 `preventDefault` 就会把翻页整段吞掉、并在确认候选词时顺带选中首个选项。
+ *
+ * 因此 `.prevent` 不能留在模板修饰符上（修饰符无法按条件生效），改由 handler 内先行判定。
+ * 与搜索面板同口径（见 useSearchResultsPanel.handleKeydown）；那边 Enter 在 keyup 才派发，
+ * 需用「keydown 定格标记」兜住，这里过滤框自身即合成目标、`e.isComposing` 可靠，不必复制那套。
+ */
+
 /** 搜索框按 ↓：聚焦首个可用选项 */
-const handleFilterKeydownDown = () => {
+const handleFilterKeydownDown = (e: KeyboardEvent) => {
+  if (e.isComposing) return;
+  e.preventDefault();
   const firstValidIndex = filteredOptions.value.findIndex(o => !isOptionDisabled(o));
   if (firstValidIndex !== -1) optionEls.value[firstValidIndex]?.focus();
 };
 
 /** 搜索框按回车：直接选中首个可用选项 */
-const handleFilterKeydownEnter = (close: () => void) => {
+const handleFilterKeydownEnter = (e: KeyboardEvent, close: () => void) => {
+  if (e.isComposing) return;
+  e.preventDefault();
   const firstValid = filteredOptions.value.find(o => !isOptionDisabled(o));
   if (firstValid) handleSelect(firstValid, close);
 };

@@ -40,7 +40,9 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
   const triggerDeleteChords = (chords: Chord[]) => {
     if (chords.length === 0) return;
 
-    chordStore.removeChords(chords);
+    // 记录精确删除快照：撤销时按原下标插回，不弹撤销历史栈顶
+    //（删除与撤销之间可能夹着其它操作，弹栈顶会撤错对象，也不会连带回滚无关改动）
+    const snapshot = chordStore.removeChordsSnapshot(chords);
 
     if (editorStore.isEditing && chords.some(c => c.id === editorStore.draftChord.id)) editorStore.resetEditor();
 
@@ -50,7 +52,7 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
       actionText: '撤销',
       onAction: () => {
         // 撤销恢复和弦后，乐谱槽位回填由 chordStore 恢复事件经应用层桥接完成
-        chordStore.executeUndoRestore();
+        chordStore.restoreChords(snapshot);
         uiStore.message.success('已恢复刚才删除的和弦');
       },
     });

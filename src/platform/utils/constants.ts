@@ -65,6 +65,8 @@ export const STORAGE_KEYS = {
   SYNC_MISMATCH_ACK: 'CHORD_LAB_SYNC_MISMATCH_ACK',
   /** 上次云端比对基准（同步目标 + 本地/云端 md5 + 校验时间），本地未变时跳过重复比对请求 */
   SYNC_COMPARE_BASELINE: 'CHORD_LAB_SYNC_COMPARE_BASELINE',
+  /** 数据删除水位线（最近一次实体删除的时间戳），随备份包 deletedAt 字段参与同步方向判定 */
+  DATA_DELETED_AT: 'CHORD_LAB_DATA_DELETED_AT',
 
   // ---- GitHub 同步配置 ----
   /** GitHub 仓库 owner */
@@ -167,6 +169,8 @@ export const STORAGE_KEYS = {
   SCORE_PREVIEW_ZOOM_PERCENT: 'CHORD_LAB_SCORE_PREVIEW_ZOOM_PERCENT_V1',
   /** 乐谱：是否绘制大横按 */
   SCORE_SHOW_BARRE: 'CHORD_LAB_SCORE_SHOW_BARRE_V1',
+  /** 乐谱：指板位图是否忽略首末的空品格（收紧品窗） */
+  SCORE_TRIM_EMPTY_EDGE_FRETS: 'CHORD_LAB_SCORE_TRIM_EMPTY_EDGE_FRETS_V1',
   /** 预览/导出：是否显示页脚页码 */
   SCORE_SHOW_FOOTER: 'CHORD_LAB_SCORE_SHOW_FOOTER_V1',
   /** 预览/导出：忽略无和弦空格（canvas 中该空格不占列宽，整行更紧凑） */
@@ -227,7 +231,8 @@ export const MARQUEE_DEFAULT_FADE_WIDTH = 16;
 export const MARQUEE_FAST_SPEED_MULTIPLIER = 2;
 /** 跑马灯停用后平滑复位到起始位的动画时长（ms） */
 export const MARQUEE_RESET_DURATION_MS = 240;
-/** 跑马灯平滑复位缓动（ease-out-cubic，起步快收尾缓） */
+/** 跑马灯平滑复位缓动（ease-out-cubic，起步快收尾缓）：JS 侧镜像 tokens 的 --bezier-out-cubic。
+ *  与 EASE_STANDARD 一样受「WAAPI 不认 var()」限制，取镜像而非引用（见其注释）。 */
 export const MARQUEE_RESET_EASING = 'cubic-bezier(0.33, 1, 0.68, 1)';
 /** 跑马灯两端羽化的过渡时长（ms）：贴边/离开贴边时渐隐以该时长平滑淡入淡出 */
 export const MARQUEE_FADE_TRANSITION_MS = 200;
@@ -248,8 +253,22 @@ export const COLLAPSE_CONTENT_RETENTION_MS = 220;
 
 /** 右键菜单已打开时换位动画时长（ms，WAAPI 实现） */
 export const CONTEXT_MENU_REPOSITION_DURATION_MS = 80;
-/** 右键菜单换位动画缓动（与 tokens.scss 的 $bezier-standard 一致） */
-export const CONTEXT_MENU_REPOSITION_EASING = 'cubic-bezier(0.25, 0.1, 0.25, 1)';
+
+/**
+ * 标准缓动曲线：tokens.scss 的 --bezier-standard 在 JS 侧的镜像字面量。
+ *
+ * 为什么 JS 侧还留一份字面量：WAAPI 的 `easing` 只接受 cubic-bezier / 关键字，不认 var()
+ * （CSS 通道一律直接写 var(--bezier-standard)，不必经过本常量）。这是全项目唯一无法用 var()
+ * 打通的通道，因此 JS 侧共两条镜像字面量，逐条对应 tokens 的一条令牌、必须同步：
+ *   - EASE_STANDARD          ↔ --bezier-standard
+ *   - MARQUEE_RESET_EASING   ↔ --bezier-out-cubic
+ * 除这两条外，JS 侧不应再出现任何 cubic-bezier 字面量（`linear` 等关键字不算曲线，不在此列）。
+ * 拼 CSS transition 串的场所（如 useSortableList/order.ts）能写 var() 就写 var()，优先走令牌。
+ */
+export const EASE_STANDARD = 'cubic-bezier(0.25, 0.1, 0.25, 1)';
+
+/** 右键菜单换位动画缓动（WAAPI，取全局标准曲线） */
+export const CONTEXT_MENU_REPOSITION_EASING = EASE_STANDARD;
 
 // ===================== 浮层默认延时 =====================
 /** Popover 悬停关闭默认延迟（ms） */

@@ -17,7 +17,12 @@
   --color-surface-body: var(--bg-body);
   --color-surface-panel: var(--bg-panel);
   --color-surface-panel-hover: var(--bg-panel-hover);
+  --color-surface-panel-subtle: var(--bg-panel-subtle);
   --color-surface-elevated: var(--bg-elevated);
+  /* 模态 / 抽屉遮罩底色：tokens 的 --overlay-bg 是**唯一**保留半透明的通道（遮罩靠透出下层
+     把注意力压到弹层上，实色化会让弹层变成看不见背景的板子），组件侧一律走 bg-overlay，
+     不得再写 bg-black/NN。 */
+  --color-overlay: var(--overlay-bg);
 
   --color-glass-border: var(--glass-border);
   --color-border-light: var(--border-light);
@@ -36,6 +41,11 @@
   --color-fg-disabled: var(--text-disabled);
   --color-fg-on-accent: var(--text-on-accent);
 
+  /* SOLID TINTS 转发：业务侧禁用 x/NN 半透明色工具类，需要「淡一点的强调色」时取本组实色。
+     NN = 底色占比（越大越接近底色），取值口径见 tokens.scss 的 SOLID TINTS 块。 */
+  --color-tint-primary-20: var(--tint-primary-20);
+  --color-tint-primary-30: var(--tint-primary-30);
+  --color-tint-primary-40: var(--tint-primary-40);
   --color-tint-primary-45: var(--tint-primary-45);
   --color-tint-primary-60: var(--tint-primary-60);
   --color-tint-primary-80: var(--tint-primary-80);
@@ -45,9 +55,12 @@
   --color-tint-primary-90: var(--tint-primary-90);
   --color-tint-primary-92: var(--tint-primary-92);
 
+  --color-tint-success-20: var(--tint-success-20);
   --color-tint-success-82: var(--tint-success-82);
   --color-tint-success-88: var(--tint-success-88);
 
+  --color-tint-warning-20: var(--tint-warning-20);
+  --color-tint-warning-40: var(--tint-warning-40);
   --color-tint-warning-65: var(--tint-warning-65);
   --color-tint-warning-78: var(--tint-warning-78);
   --color-tint-warning-80: var(--tint-warning-80);
@@ -55,12 +68,16 @@
   --color-tint-warning-88: var(--tint-warning-88);
   --color-tint-warning-90: var(--tint-warning-90);
 
+  --color-tint-danger-20: var(--tint-danger-20);
+  --color-tint-danger-50: var(--tint-danger-50);
+  --color-tint-danger-70: var(--tint-danger-70);
   --color-tint-danger-75: var(--tint-danger-75);
   --color-tint-danger-78: var(--tint-danger-78);
   --color-tint-danger-80: var(--tint-danger-80);
   --color-tint-danger-82: var(--tint-danger-82);
   --color-tint-danger-88: var(--tint-danger-88);
   --color-tint-danger-90: var(--tint-danger-90);
+  --color-tint-danger-95: var(--tint-danger-95);
 
   --color-tint-current-82: var(--tint-current-82);
   --color-tint-current-85: var(--tint-current-85);
@@ -112,6 +129,15 @@
   --ease-bounce: var(--bezier-bounce);
   --ease-standard: var(--bezier-standard);
   --ease-sidebar: var(--bezier-sidebar);
+  /* ease-out 此前取 Tailwind 内置值 cubic-bezier(0, 0, .2, 1)，与 tokens 的 --bezier-out 是
+     同一条曲线的两处定义；收归令牌后取值不变（tokens 已对齐到该取值），于是 ease-out 工具类与
+     transitions.scss 的浮动条进出场过渡同源。 */
+  --ease-out: var(--bezier-out);
+
+  /* 默认过渡曲线：没写 ease-* 的 transition-* 工具类（全站几十处）都取它。
+     它此前是 Tailwind 内置的 cubic-bezier(0.4, 0, 0.2, 1)——与 tokens 的 --bezier-standard
+     同值、却是另一处定义：改令牌时这些过渡不会跟着变。指到同一处令牌后曲线只此一个来源。 */
+  --default-transition-timing-function: var(--bezier-standard);
 
   /* v4 的 duration 工具类主题命名空间是 --transition-duration-*，
      值引用 tokens.scss 的 --duration-* 变量，保持单一令牌来源 */
@@ -125,6 +151,10 @@
   --z-index-card: var(--z-card);
   --z-index-panel: var(--z-panel);
   --z-index-float: var(--z-float);
+  --z-index-scrollbar-track: var(--z-scrollbar-track);
+  --z-index-scrollbar-thumb: var(--z-scrollbar-thumb);
+  --z-index-scrollbar-bubble: var(--z-scrollbar-bubble);
+  --z-index-sticky: var(--z-sticky);
   --z-index-fab: var(--z-fab);
   --z-index-sidebar: var(--z-sidebar);
   --z-index-scrim: var(--z-scrim);

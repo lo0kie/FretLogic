@@ -1,31 +1,23 @@
 /**
- * 歌词拖拽高亮：管理拖拽源/落点槽位的 DOM class 高亮（is-drop-target / is-drag-source）
- * 与当前落点槽位判定（落地动作由槽位是否已占用和弦决定，与指针在槽内的位置无关）。
+ * 歌词拖拽落点解析：维护「当前落点槽位 / 当前悬停行」两个响应式状态，供宿主转发给槽外壳——
+ * 落点与撑开的全部视觉由 SlotShell 自己按这两个状态渲染，本模块不碰槽的 DOM。
+ * 唯一保留的 DOM 标记是拖拽源槽位（is-dragging-source）。
+ * 落地动作由槽位是否已占用和弦决定，与指针在槽内的位置无关。
  */
 import { ref } from 'vue';
 
 import { resolveHoverLine, snapToSlotInLine } from './dropGeometry';
 
-/** 拖拽高亮管理：源槽位与落点槽位的 DOM class 标记 */
+/** 拖拽落点解析：落点 / 悬停行状态，以及拖拽源槽位的 DOM class 标记 */
 export function useDragHighlight() {
   const dragOverSlotKey = ref<string | null>(null);
   /** 当前悬停的歌词行 ID（只要指针在行内，跨越字符间隙时保持恒定，避免行状态高频抖动闪烁） */
   const activeDropLineId = ref<string | null>(null);
-  let currentDropKey: string | null = null;
   let sourceKey: string | null = null;
   let sourceClass: string | null = null;
 
-  /** 按 slot key 查找所有匹配的槽位元素 */
+  /** 按 slot key 查找所有匹配的槽位元素（仅拖拽源高亮使用：落点视觉走状态） */
   const findSlotEls = (key: string) => document.querySelectorAll<HTMLElement>(`[data-slot-key="${CSS.escape(key)}"]`);
-
-  /** 切换落点高亮：仅在目标变化时增删 class，避免重复 DOM 操作 */
-  const applyDropHighlight = (key: string | null) => {
-    if (key === currentDropKey) return;
-    if (currentDropKey !== null) findSlotEls(currentDropKey).forEach(el => el.classList.remove('is-drop-target'));
-
-    currentDropKey = key;
-    if (key !== null) findSlotEls(key).forEach(el => el.classList.add('is-drop-target'));
-  };
 
   /** 标记拖拽源槽位：className 由调用方给出（当前拖拽语义唯一为「移动」，源槽虚化 is-dragging-source） */
   const markDragSource = (key: string, className: string) => {
@@ -36,7 +28,6 @@ export function useDragHighlight() {
 
   /** 清除全部拖拽相关高亮与状态 */
   const clearDragClasses = () => {
-    applyDropHighlight(null);
     if (sourceKey !== null && sourceClass !== null) {
       findSlotEls(sourceKey).forEach(el => el.classList.remove(sourceClass!));
       sourceKey = null;
@@ -50,7 +41,6 @@ export function useDragHighlight() {
   const clearDropTarget = (): null => {
     dragOverSlotKey.value = null;
     activeDropLineId.value = null;
-    applyDropHighlight(null);
     return null;
   };
 
@@ -65,7 +55,6 @@ export function useDragHighlight() {
       const key = slotEl.dataset['slotKey'] ?? null;
       dragOverSlotKey.value = key;
       activeDropLineId.value = slotEl.closest<HTMLElement>('[data-line-index]')?.dataset['lineIndex'] ?? null;
-      applyDropHighlight(key);
       return key;
     }
 
@@ -85,7 +74,6 @@ export function useDragHighlight() {
 
     dragOverSlotKey.value = snapped?.key ?? null;
     activeDropLineId.value = hoveredLine?.lineId ?? null;
-    applyDropHighlight(snapped?.key ?? null);
     return snapped?.key ?? null;
   };
 
@@ -97,7 +85,6 @@ export function useDragHighlight() {
   const setExternalDropTarget = (key: string | null, lineId: string | null) => {
     dragOverSlotKey.value = key;
     activeDropLineId.value = lineId;
-    applyDropHighlight(key);
   };
 
   return {

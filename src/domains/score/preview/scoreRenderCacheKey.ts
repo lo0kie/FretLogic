@@ -57,6 +57,7 @@ export const buildScoreRenderCacheKey = (song: Song | null, chordLookup: Map<str
     isDark.value,
     settingsStore.scoreChordShorthand,
     settingsStore.scoreShowBarre,
+    settingsStore.scoreTrimEmptyEdgeFrets,
     settingsStore.scoreLayoutAlign,
     settingsStore.scoreLyricsFontWeight,
     settingsStore.scoreExportQuality,

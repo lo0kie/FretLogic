@@ -13,9 +13,15 @@ import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { useStorage } from '@/platform/composables/useStorage';
+import { markDataDeleted } from '@/platform/services/storage/deletionWatermark';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import { MESSAGE_WARNING_DURATION_MS, STORAGE_KEYS } from '@/platform/utils/constants';
+import {
+  GITEE_SYNC_CONFIG,
+  GITHUB_SYNC_CONFIG,
+  MESSAGE_WARNING_DURATION_MS,
+  STORAGE_KEYS,
+} from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 
 import { computePayloadMaxUpdatedAt, computePayloadMd5 } from './payloadChecksum';
@@ -148,7 +154,26 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
         // meta 随 push 传入：server 侧拼 query 需要 md5，复用这里算好的值，
         // 避免 serverSyncProvider 内部为拼 query 把整包再 stringify 一遍
         await provider.push(payload, meta);
-        await provider.pushMeta(meta);
+        try {
+          await provider.pushMeta(meta);
+        } catch (metaError) {
+          // pushMeta 是数据本体之外的第二次独立写请求（github/gitee/webdav 的 meta 各是一个文件，
+          // 协议上无法与数据同请求原子落盘）。它失败时数据已上传成功，但云端 meta 停在旧值——
+          // 其他设备启动比对会把「云端较旧」误判为真，用旧数据覆盖上传，把刚推上去的这份数据顶掉。
+          // 因此不能止步于报错：挂常驻通知 + 一键重试（重试即完整重传一遍，内容相同、幂等安全）。
+          logger.error('sync', '校验标记写入失败（数据本体已上传）', metaError);
+          uiStore.notice.warning({
+            title: '数据已上传，但同步标记写入失败',
+            message:
+              '其他设备可能因此误判云端版本并用旧数据覆盖这次上传。建议点击「重试上传」补写标记；重试会重新上传一遍相同数据，是安全的。',
+            actionText: '重试上传',
+            onAction: async () => {
+              await syncToRemote();
+            },
+          });
+          // 继续抛出：本次同步仍按失败收场（返回 false），不把半成品状态伪装成成功
+          throw metaError;
+        }
       },
     });
     if (ok === null) return false;
@@ -174,13 +199,20 @@ export const pullFromRemote = async (target?: SyncProviderKind): Promise<ImportE
 /** 用云端数据完全覆盖本地实体与偏好设置，并复位指板编辑草稿 */
 export const applyOverwriteWithCloud = (cloudData: ImportExportPayload) => {
   // 入参是 provider 校验后的产物（全新对象图），可直接被 store 接管
-  chordStore.replaceAllData({
-    groups: cloudData.groups ?? [],
-    chords: cloudData.chords ?? [],
-  });
+  // 「缺分区」与「显式空数组」必须区别对待：前者代表该分区不在本包范围内（旧版本云端包没有 songs
+  // 字段），按「不越权代改」保持本地原样；后者才是「云端确实没有数据」，才按完全覆盖语义清空。
+  // 校验层会把缺失分区兜底成 []，故必须靠它留下的 absentSections 标记还原真实语义。
+  const absent = new Set(cloudData.absentSections ?? []);
+  // 另一层兜底面向未经校验层的调用方：类型上分区必填，运行时却可能真的缺（校验层是唯一兜底点）
+  const hasChords = !absent.has('chords') && cloudData.groups !== undefined && cloudData.chords !== undefined;
+  const hasSongs = !absent.has('songs') && cloudData.songs !== undefined;
 
-  const songs = cloudData.songs ?? [];
-  if (cloudData.songs) songStore.overwriteSongs(songs);
+  if (hasChords) chordStore.replaceAllData({ groups: cloudData.groups, chords: cloudData.chords });
+
+  if (hasSongs) songStore.overwriteSongs(cloudData.songs);
+  // 吸收云端包的删除水位线（只前进不后退）：拉取后本地再上传时，meta.updatedAt 不得低于
+  // 拉取源——否则「云端删过最新实体」的时间信息丢失，方向判定又会回退误判
+  if (typeof cloudData.deletedAt === 'number') markDataDeleted(cloudData.deletedAt);
   // v6 起云端包携带偏好设置（不含凭据），拉取时一并恢复
   settingsStore.applyPreferencesBackup(cloudData.preferences);
   uiStore.message.success('已使用云端数据完全覆盖本地');
@@ -220,6 +252,40 @@ const isSyncConfigured = (): boolean => {
       return settingsStore.webdavServerUrl.trim() !== '';
   }
 };
+
+/**
+ * 当前同步目标是否仍指向内置默认数据源（项目作者的公开仓库 / 线上默认服务端）。
+ * 出厂状态下 syncTarget 默认就是 gitee + 作者仓库，启动探测因此会「替用户」访问作者的数据源。
+ * 该访问本身无害（只读探测、不写数据），但提示文案必须点明数据归属——否则用户会把作者示例数据
+ * 造成的不一致当成自己的数据出了问题，甚至一键「拉取云端覆盖本地」把示例数据写进自己的库。
+ */
+const isUsingBuiltinAuthorTarget = (): boolean => {
+  switch (settingsStore.syncTarget) {
+    case 'github':
+      return (
+        (settingsStore.githubOwner.trim() || GITHUB_SYNC_CONFIG.DEFAULT_OWNER) === GITHUB_SYNC_CONFIG.DEFAULT_OWNER &&
+        (settingsStore.githubRepo.trim() || GITHUB_SYNC_CONFIG.DEFAULT_REPO) === GITHUB_SYNC_CONFIG.DEFAULT_REPO
+      );
+    case 'gitee':
+      return (
+        (settingsStore.giteeOwner.trim() || GITEE_SYNC_CONFIG.DEFAULT_OWNER) === GITEE_SYNC_CONFIG.DEFAULT_OWNER &&
+        (settingsStore.giteeRepo.trim() || GITEE_SYNC_CONFIG.DEFAULT_REPO) === GITEE_SYNC_CONFIG.DEFAULT_REPO
+      );
+    case 'server':
+      // 空地址即回落到构建环境注入的线上默认服务端（见 serverSyncProvider 的 serverUrl 兜底）
+      return settingsStore.serverUrl.trim() === '';
+    case 'webdav':
+      // WebDAV 无内置默认地址；未填地址时 isSyncConfigured 已提前短路
+      return false;
+  }
+};
+
+/** 不一致常驻通知里的归属说明（比 toast 可稍长，但需克制，避免撑满通知区） */
+const BUILTIN_AUTHOR_TARGET_MESSAGE =
+  '当前同步的是项目作者的默认数据源（示例数据）。如需同步自己的数据，请在同步设置中更换仓库地址。';
+
+/** 一次性 toast 的归属后缀（短文案，避免长句撑爆提示条） */
+const BUILTIN_AUTHOR_TARGET_SUFFIX = '（当前为内置默认数据源，属于项目作者）';
 
 /** 云端与本地的不一致方向：按「本地/云端最新修改时间戳」判定，时间戳不可比时为 unknown */
 type SyncDirection = 'local-newer' | 'cloud-newer' | 'unknown';
@@ -283,7 +349,9 @@ const CLOUD_COMPARE_TTL_MS = 10 * 60 * 1000;
 const compareBaseline = useStorage<CloudCompareBaseline | null>(STORAGE_KEYS.SYNC_COMPARE_BASELINE, null, localStorage);
 
 /** 不一致时以常驻 notice 提示（留痕可回看 + 一键修正），避免 toast 飘走后操作入口消失。
- *  同一签名（同一同步目标 + 同一对本地/云端校验和）只提示一次，已提示过的重启后静默跳过。 */
+ *  同一签名（同一同步目标 + 同一对本地/云端校验和）只提示一次，已提示过的重启后静默跳过。
+ *  目标仍是内置默认数据源时额外附一段归属说明：此时不一致几乎必然来自作者示例数据，
+ *  用户需要知道「这不是我的数据出了问题」，否则会误操作一键覆盖本地。 */
 const notifyCloudMismatch = (
   localMd5: string,
   cloudMd5: string,
@@ -297,6 +365,7 @@ const notifyCloudMismatch = (
   acknowledgedMismatch.value = signature;
   uiStore.notice.warning({
     title: SYNC_DIRECTION_TEXT[direction],
+    ...(isUsingBuiltinAuthorTarget() ? { message: BUILTIN_AUTHOR_TARGET_MESSAGE } : {}),
     ...(action ? { actionText: action.actionText, onAction: action.onAction } : {}),
   });
 };
@@ -306,9 +375,13 @@ const notifyCloudMismatch = (
  * 不一致时结合 meta.updatedAt 判断「本地 / 云端」哪边更新，以常驻 notice 提示：
  * 本地较新可一键上传、云端较新可一键拉取覆盖，方向不明则引导手动同步（留痕可回看）。
  * 云端无校验数据（旧数据 / 从未上传）时提示先行上传；目标未配置或探测异常则静默跳过。
+ * 目标仍为内置默认数据源（项目作者仓库）时，两处 toast 与不一致通知都会点明数据归属：
+ * 探测请求照常发出（只读、且用户在设置里可改），但用户必须能分辨「这是作者的数据」。
  */
 export const checkCloudDataChange = async (): Promise<void> => {
   if (!isSyncConfigured()) return;
+  // 归属提示后缀：目标仍是内置默认数据源时非空；不一致通知内部自行判定，共用同一 helper
+  const authorSuffix = isUsingBuiltinAuthorTarget() ? BUILTIN_AUTHOR_TARGET_SUFFIX : '';
   const provider = resolveProvider('同步检测', settingsStore.syncTarget);
   if (!provider) return;
   try {
@@ -336,7 +409,7 @@ export const checkCloudDataChange = async (): Promise<void> => {
     // 四种 provider 均支持独立 meta：只拉最小元数据，避免每次启动下载全量数据源
     const meta = await provider.fetchMeta();
     if (!meta) {
-      uiStore.message.warning('无法检测云端一致性，请先上传数据', {
+      uiStore.message.warning(`无法检测云端一致性，请先上传数据${authorSuffix}`, {
         duration: MESSAGE_WARNING_DURATION_MS,
       });
       return;
@@ -353,7 +426,7 @@ export const checkCloudDataChange = async (): Promise<void> => {
   } catch (error) {
     // 云端从未上传过数据（无文件）：提示引导首次上传建立校验基准；其余启动期异常静默跳过
     if (error instanceof SyncError && error.code === 'FILE_NOT_FOUND') {
-      uiStore.message.warning('云端暂无同步数据，请先上传数据', {
+      uiStore.message.warning(`云端暂无同步数据，请先上传数据${authorSuffix}`, {
         duration: MESSAGE_WARNING_DURATION_MS,
       });
       return;

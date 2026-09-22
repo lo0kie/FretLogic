@@ -63,8 +63,20 @@ export function removeChordFromSlot(chordMap: Map<string, ChordLineSlots>, slotK
   setLineEdgeChords(chordMap, lineId, type, list);
   return removed ?? null;
 }
-/** 向槽位绑定新和弦：字符槽位直接覆盖；边和弦槽位按索引覆盖/追加（行尾扩展、行首前插）。 */
-export function bindNewChordToSlot(chordMap: Map<string, ChordLineSlots>, slotKey: SlotKey, chordId: ChordId): void {
+/**
+ * 向槽位绑定新和弦：字符槽位直接覆盖；边和弦槽位按索引覆盖，下标越界时按 `overflow` 落位。
+ *
+ * `overflow` 区分两种调用场景（唯一差别就在「下标越界」这一支）：
+ * - `'front-insert'`（默认，UI 语义）：行首边槽前插 —— 用户在行首继续加和弦，新和弦排在最前；
+ * - `'append'`（导入语义）：一律追加到末位 —— 导入是按文件顺序升序重放整批槽位，若沿用前插语义，
+ *   行首的多个和弦会被逐条倒序（导出再导入不互逆，P1 审计 #7）。
+ */
+export function bindNewChordToSlot(
+  chordMap: Map<string, ChordLineSlots>,
+  slotKey: SlotKey,
+  chordId: ChordId,
+  overflow: 'front-insert' | 'append' = 'front-insert'
+): void {
   const parsed = parseSlotKey(slotKey);
   if (!parsed) return;
   if (parsed.type === 'char') {
@@ -73,10 +85,9 @@ export function bindNewChordToSlot(chordMap: Map<string, ChordLineSlots>, slotKe
   }
   const { lineId, type, index } = parsed;
   const list = getEdgeChords(chordMap, lineId, type);
-  if (index >= list.length)
-    if (type === 'start') list.unshift(chordId);
-    else list.push(chordId);
-  else list[index] = chordId;
+  if (index < list.length) list[index] = chordId;
+  else if (overflow === 'front-insert' && type === 'start') list.unshift(chordId);
+  else list.push(chordId);
   setEdgeChords(chordMap, lineId, type, list);
 }
 

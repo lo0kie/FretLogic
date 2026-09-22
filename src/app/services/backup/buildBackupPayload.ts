@@ -3,6 +3,7 @@
  */
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { getDataDeletedAt } from '@/platform/services/storage/deletionWatermark';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { logger } from '@/platform/utils/logger';
 
@@ -106,12 +107,21 @@ export async function buildBackupPayloadResult(options?: BuildBackupOptions): Pr
       })()
     : undefined;
 
-  // 偏好设置不含凭据，本地导出与云端推送均携带（v6 起）
+  // 偏好设置不含凭据，本地导出与云端推送均携带（v6 起）。
+  // 字段必须与 platform/types 的 AppPreferencesBackup（类型）、validation/payload 的
+  // preferencesSchema 白名单、settingsStore.applyPreferencesBackup（恢复读）四处逐字对齐：
+  // 此前这里只导出 3 个字段、白名单也只认 3 个，而恢复读认 6 个 →
+  // scoreShowBarre / scoreShowFooter / scoreLyricsFontWeight 跨设备恢复静默丢失（P2 审计 #15）。
   const preferences = selection.preferences
     ? {
         workbenchChordShorthand: settingsStore.workbenchChordShorthand,
         scoreChordShorthand: settingsStore.scoreChordShorthand,
         scoreLayoutAlign: settingsStore.scoreLayoutAlign,
+        scoreShowBarre: settingsStore.scoreShowBarre,
+        scoreTrimEmptyEdgeFrets: settingsStore.scoreTrimEmptyEdgeFrets,
+        scoreLyricsFontWeight: settingsStore.scoreLyricsFontWeight,
+        scoreShowFooter: settingsStore.scoreShowFooter,
+        scoreIgnoreEmptySpace: settingsStore.scoreIgnoreEmptySpace,
       }
     : undefined;
 
@@ -120,6 +130,8 @@ export async function buildBackupPayloadResult(options?: BuildBackupOptions): Pr
     groups,
     chords,
     songs,
+    // 删除水位线随包携带：接收方据此抬高本地水位，meta.updatedAt 因此单调（见 ImportExportPayload.deletedAt）
+    ...(getDataDeletedAt() > 0 ? { deletedAt: getDataDeletedAt() } : {}),
     ...(syncSettings ? { syncSettings } : {}),
     ...(preferences ? { preferences } : {}),
   };

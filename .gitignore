@@ -36,6 +36,18 @@ coverage/
 .workbuddy-ai/
 .trae/
 .wrangler/
+.pp-probe/
 
+# 环境变量文件
+# .env.development：本地开发覆盖（deploy-worker.mjs 默认/--dev 读取），不入库。
 .env.development
+# .env.production：部署凭据 —— CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID / SERVER_TOKEN。
+# worker/scripts/deploy-worker.mjs 的注释声称它「已被 git 忽略」，但此前 .gitignore 里
+# 只有 .env.development（`git check-ignore .env.production` 无匹配）→ 一次生产部署即入公开仓库。
+# 注意 .env 本身已被跟踪（仅两个 VITE_ 公开值，尚无泄漏）；gitignore 对已跟踪文件无效，
+# 若将来要往 .env 里放任何密钥，必须先 `git rm --cached .env`。
+.env.production
+.env.production.*
+.env.local
+.env.*.local
 .zcodeignore

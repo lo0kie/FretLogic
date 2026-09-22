@@ -37,6 +37,11 @@
             // 其余行全程命中 memo 缓存，绝不触发全量重排掉帧
             isLineActiveDrop(lineData.lineId),
             isLineActiveDrop(lineData.lineId) ? lineDropTargetKey(lineData.lineId) : null,
+            // 面板目标高亮同样按行归约：只有「目标所在行」的 dep 会从 null 变成具体槽位键，
+            // 其余行恒为 null 继续命中缓存。此前这里漏了它——面板关闭时 pickerTargetSlotKey 已归 null，
+            // 但本行 memo 因依赖未变而命中，is-picker-target 的虚线框要等鼠标移出本行
+            // （hoveredLineKey 在依赖里）触发重渲染才消失。
+            linePickerTargetKey(lineData.lineId),
           ]"
           :key="lineData.lineId"
           class="line-row flex w-max min-w-full items-stretch"
@@ -46,134 +51,107 @@
             :data-line-index="lineData.lineId"
             @mouseenter="hoveredLineKey = lineData.lineId"
             @mouseleave="hoveredLineKey = null"
-            class="lyrics-line relative flex w-max min-w-0 flex-[1_1_auto] flex-nowrap items-stretch gap-0 rounded-md border border-transparent px-sm py-xs transition-all duration-base select-none focus-within:border-border-base focus-within:bg-surface-panel-hover hover:border-border-base hover:bg-surface-panel-hover"
+            class="lyrics-line relative flex min-h-0 w-max min-w-0 flex-[1_1_auto] flex-nowrap items-stretch gap-0 rounded-md border border-transparent px-sm py-xs transition-all duration-base ease-standard select-none focus-within:border-border-base focus-within:bg-surface-panel-hover hover:border-border-base hover:bg-surface-panel-hover"
           >
+            <!-- 行号承担长谱面的扫读定位（「第几行」），不是装饰性文本，故用次级文字色 muted
+                 而非禁用色 disabled：后者语义是「不可用/失效」，且暗色下比重明显偏轻，
+                 谱面一长，数行号反而更费眼 -->
             <div class="mr-2 flex shrink-0 items-end pb-0.5 select-none">
-              <span
-                class="rounded-lg px-xs py-2xs font-mono text-2xs font-bold text-fg-disabled transition-colors duration-fast"
-              >
+              <span class="rounded-lg font-mono text-2xs font-bold text-fg-muted transition-colors duration-fast">
                 {{ formatLineIndex(lineData.lineIdx) }}
               </span>
             </div>
             <div class="flex shrink-0 items-stretch gap-0">
-              <ChordSlotCell
-                :is-active-drop-line="isLineActiveDrop(lineData.lineId)"
+              <AddSlot
                 :is-drag-active="isDragging"
+                :is-drop-line="isLineActiveDrop(lineData.lineId)"
                 :is-drop-target="isSlotDropTarget(lineData.nextStartKey)"
+                :is-picker-target="isPickerTarget(lineData.nextStartKey)"
                 :line-hovered="hoveredLineKey === lineData.lineId"
-                :scroll-root="scoreZoneRef"
                 :slot-key="lineData.nextStartKey"
-                @click="handleTogglePicker()"
-                @pointerdown="handlePointerDown($event)"
-                @remove="scoreEditor.removeSlotChord($event)"
+                @click="handleOpenPicker(lineData.nextStartKey)"
                 add-placeholder-title="点击添加行首和弦"
-                variant="add"
               />
-              <ChordSlotCell
+
+              <ChordSlot
                 v-for="item in lineData.startChords"
                 :chord="item.chord"
-                :is-active-drop-line="isLineActiveDrop(lineData.lineId)"
                 :is-drag-active="isDragging"
                 :is-drop-target="isSlotDropTarget(item.slotKey)"
+                :is-picker-target="isPickerTarget(item.slotKey)"
                 :key="item.slotKey"
-                :line-hovered="hoveredLineKey === lineData.lineId"
-                :scroll-root="scoreZoneRef"
                 :slot-key="item.slotKey"
-                @click="handleTogglePicker()"
+                @click="handleOpenPicker(item.slotKey)"
                 @pointerdown="handlePointerDown($event)"
                 @remove="scoreEditor.removeSlotChord($event)"
-                variant="edge"
               />
             </div>
 
             <template v-for="(item, index) in lineData.chars" :key="item.slotKey">
-              <!-- 胖槽位：已分配和弦的槽位，实例化全功能 ChordSlotCell 组件 -->
-              <ChordSlotCell
+              <!-- 胖槽位：已分配和弦的槽位，实例化全功能 ChordSlot 组件 -->
+              <ChordSlot
                 v-if="getCharChord(item.slotKey)"
                 :char="item.char"
                 :chord="getCharChord(item.slotKey) ?? undefined"
-                :is-active-drop-line="isLineActiveDrop(lineData.lineId)"
                 :is-drag-active="isDragging"
                 :is-drop-target="isSlotDropTarget(item.slotKey)"
+                :is-picker-target="isPickerTarget(item.slotKey)"
                 :key="item.slotKey"
                 :left-chord-gap="isLeftAdjacentChord(lineData, index)"
-                :line-hovered="hoveredLineKey === lineData.lineId"
-                :scroll-root="scoreZoneRef"
                 :slot-key="item.slotKey"
-                @click="handleTogglePicker()"
+                @click="handleOpenPicker(item.slotKey)"
                 @pointerdown="handlePointerDown($event)"
                 @remove="scoreEditor.removeSlotChord($event)"
-                variant="char"
               />
 
-              <!-- 瘦槽位：未分配和弦的普通字符槽位，直接以高性能原生 DOM 渲染（带完整交互能力与统一视觉样式） -->
-              <div
-                v-action-card
+              <!-- 瘦槽位：未分配和弦的普通字符槽位。外壳、激活/键盘/指针协议、落点与面板目标高亮、
+                   槽盒子的全部几何（内边距 / 内容↔字符行间距）统一由 SlotShell 承担，与和弦槽
+                   （胖槽）同源——此前这里是内联 DOM，与 ChordSlot 各写一份，同一个状态标记
+                   要同步两处、漏一边就漂移，连 padding 也各写一档。 -->
+              <SlotShell
                 v-else
-                v-wave="{}"
-                :aria-label="`字符 ${item.char === ' ' ? '空格' : item.char}，未分配和弦，按 Enter 开关和弦面板`"
-                :class="[
-                  'char-box group relative flex cursor-pointer [touch-action:pan-x_pan-y] flex-col items-center justify-start self-stretch rounded-sm p-0.5 px-0.5 transition-all duration-fast outline-none hover:bg-tint-primary-88',
-                  { 'is-drop-widened': isLineActiveDrop(lineData.lineId) },
-                ]"
-                :data-slot-key="item.slotKey"
-                @click="handleTogglePicker()"
-                data-focusable-outline
-                title="点击开关和弦面板"
+                :aria-label="`字符 ${item.char === ' ' ? '空格' : item.char}，未分配和弦，按 Enter 打开和弦面板`"
+                :is-drag-active="isDragging"
+                :is-drop-line="isLineActiveDrop(lineData.lineId)"
+                :is-drop-target="isSlotDropTarget(item.slotKey)"
+                :is-picker-target="isPickerTarget(item.slotKey)"
+                :slot-key="item.slotKey"
+                @click="handleOpenPicker(item.slotKey)"
+                title="点击打开和弦面板"
               >
-                <!-- 瘦槽位作为落点时的轻量绝对定位提示层：只给一圈主题色边框、不铺底色、不遮挡字符。
-                     过渡改由本元素自身的类切换承担（原外层 <Transition> 每槽位会多实例化 Transition +
-                     BaseTransition 两个组件，纯装饰性提示不值得付组件开销；原 enter/leave 的 scale
-                     两端都是 100，实际只有 opacity 在变，故 transition-property 收敛为 opacity,visibility） -->
-                <div
-                  :class="isSlotDropTarget(item.slotKey) ? 'visible opacity-100' : 'invisible opacity-0'"
-                  aria-hidden="true"
-                  class="pointer-events-none absolute inset-[2px] z-3 rounded-[5px] border-2 border-primary transition-[opacity,visibility] duration-fast"
-                />
-
-                <div class="chord-display-slot flex w-full flex-1 items-start justify-center" />
-                <span
-                  :class="[
-                    item.char === '|' || item.char === '｜'
-                      ? 'font-normal text-fg-muted'
-                      : 'font-semibold text-fg-title',
-                  ]"
-                  class="char-text mt-auto inline-flex min-h-[calc(1.15rem*var(--score-font-scale,1))] items-center justify-center px-0.5 text-[calc(var(--score-font-scale,1)*0.875rem)]/[1.15rem] whitespace-pre transition-all duration-fast group-hover:text-primary"
-                >
-                  {{ item.char === ' ' ? '\u00A0' : item.char }}
-                </span>
-              </div>
+                <!-- 瘦槽位只有字符层：盒子、状态与落点视觉全在外壳，字形由 SlotGlyph 提供。
+                     拖拽态取自外壳下发的插槽参数（不再是宿主自己传一遍——此前这里漏传，
+                     拖拽中字形仍会染 hover 主题色，与和弦槽不一致）。 -->
+                <template #char="{ dragActive }">
+                  <SlotGlyph :char="item.char" :is-drag-active="dragActive" />
+                </template>
+              </SlotShell>
             </template>
 
             <div class="flex shrink-0 items-stretch gap-0">
-              <ChordSlotCell
+              <ChordSlot
                 v-for="(item, index) in lineData.endChords"
                 :chord="item.chord"
-                :is-active-drop-line="isLineActiveDrop(lineData.lineId)"
                 :is-drag-active="isDragging"
                 :is-drop-target="isSlotDropTarget(item.slotKey)"
+                :is-picker-target="isPickerTarget(item.slotKey)"
                 :key="item.slotKey"
                 :left-chord-gap="isEndEdgeGap(lineData, index)"
-                :line-hovered="hoveredLineKey === lineData.lineId"
-                :scroll-root="scoreZoneRef"
                 :slot-key="item.slotKey"
-                @click="handleTogglePicker()"
+                @click="handleOpenPicker(item.slotKey)"
                 @pointerdown="handlePointerDown($event)"
                 @remove="scoreEditor.removeSlotChord($event)"
-                variant="edge"
               />
-              <ChordSlotCell
-                :is-active-drop-line="isLineActiveDrop(lineData.lineId)"
+
+              <AddSlot
                 :is-drag-active="isDragging"
+                :is-drop-line="isLineActiveDrop(lineData.lineId)"
                 :is-drop-target="isSlotDropTarget(lineData.nextEndKey)"
+                :is-picker-target="isPickerTarget(lineData.nextEndKey)"
                 :line-hovered="hoveredLineKey === lineData.lineId"
-                :scroll-root="scoreZoneRef"
                 :slot-key="lineData.nextEndKey"
-                @click="handleTogglePicker()"
-                @pointerdown="handlePointerDown($event)"
-                @remove="scoreEditor.removeSlotChord($event)"
+                @click="handleOpenPicker(lineData.nextEndKey)"
                 add-placeholder-title="点击添加行尾和弦"
-                variant="add"
               />
             </div>
 
@@ -215,7 +193,7 @@
         class="pointer-events-none fixed top-0 left-0 z-top will-change-transform"
       >
         <div
-          class="flex -translate-1/2 scale-105 items-center justify-center rounded-md border-[1.5px] border-primary bg-surface-panel/95 px-md py-sm shadow-floating backdrop-blur-md"
+          class="flex -translate-1/2 scale-105 items-center justify-center rounded-md border-[1.5px] border-primary bg-surface-panel px-md py-sm shadow-floating"
         >
           <span class="text-sm leading-none font-extrabold text-primary">
             {{ ghostChordName }}
@@ -246,7 +224,8 @@
     />
 
     <!-- 和弦选择面板（chord 域装配，外壳为 platform/ui 的 BaseFloatingPanel）：贴右侧、非模态，
-         面板只作拖动来源，把卡片拖到字符槽即完成绑定；开关由点击字符槽切换；
+         面板只作拖动来源，把卡片拖到字符槽即完成绑定；面板由点击字符槽开启、
+         关闭靠外壳本身的关闭按钮 / Escape 手动完成；
          面板与视口上/右/下三条留白由外壳的 intercept 能力接管指针事件。
          context-key 传当前乐谱 id：换歌时清空面板的选择记忆（面板不读本域 store，保持与宿主解耦） -->
     <ChordPickerPanel
@@ -254,6 +233,7 @@
       :is-dragging
       :context-key="scoreEditor.activeSongId"
       :drag-chord-starter="startExternalChordDrag"
+      @select="handlePickerSelect($event)"
     />
   </BaseScrollArea>
 </template>
@@ -284,7 +264,10 @@ import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
-import ChordSlotCell from './ChordSlotCell.vue';
+import AddSlot from './slot/AddSlot.vue';
+import ChordSlot from './slot/ChordSlot.vue';
+import SlotGlyph from './slot/SlotGlyph.vue';
+import SlotShell from './slot/SlotShell.vue';
 
 import type { Chord } from '@/domains/chord/types';
 import type { LineData } from '@/domains/score/preview/services/scoreExportCanvas';
@@ -708,11 +691,48 @@ watch(
   }
 );
 
-/** 用户点击字符槽：切换选器和弦浮动面板的开关（面板只作拖动来源，不再关心是哪个槽）；
+/**
+ * 打开面板时点中的目标槽位：面板内点击卡片即把和弦落到这里。
+ * 面板仍是拖拽落位的主路径（可拖到任意槽），这里补的是「点一下就填」的直给路径——
+ * 此前点击卡片在本宿主下完全没有反应（只注入了 drag-chord-starter，从未接 select），
+ * 新用户面对「点开一个面板、然后要去拖东西」的两步操作无从下手。
+ * 置 null 表示面板不是由槽位点击打开的，此时点卡片不落位。
+ */
+const pickerTargetSlotKey = ref<SlotKey | null>(null);
+
+/** 面板关闭（关闭按钮 / Escape / 离开本区）即清空目标高亮：避免面板已收、字符仍高亮的残留状态 */
+watch(isPickerPanelOpen, open => {
+  if (!open) pickerTargetSlotKey.value = null;
+});
+
+/** 面板目标按行归约（供 v-memo 按行粒度失效）：目标槽位属于本行时给出该槽位键，否则 null。
+ *  与 lineDropTargetKey 同构，但**必须带上槽位键本身、不能只给行号**——面板开着时在同一行内把目标从
+ *  一个字符切到另一个字符，只比行号会让本行 memo 继续命中，高亮不跟着挪窝。
+ *  前缀判定不精确时最多让本行多失效一次（真正决定高亮落哪一格的是 isPickerTarget 的精确相等），无害。 */
+const linePickerTargetKey = (lineId: string): string | null =>
+  pickerTargetSlotKey.value?.startsWith(`line_${lineId}_`) ? pickerTargetSlotKey.value : null;
+
+/** 用户点击字符槽：打开选器和弦浮动面板并记住本次点中的槽位。
+ *  面板已开时再点槽位只把目标切到新槽、不切换开关；关闭走手动（外壳关闭按钮 / Escape）。
  *  拖拽中或点击抑制期忽略，避免拖拽松手误触发 */
-const handleTogglePicker = () => {
+const handleOpenPicker = (slotKey?: SlotKey) => {
   if (isDragging.value || isSuppressingClick.value) return;
-  isPickerPanelOpen.value = !isPickerPanelOpen.value;
+  isPickerPanelOpen.value = true;
+  pickerTargetSlotKey.value = slotKey ?? null;
+};
+
+/** 本槽位是否为当前选器和弦面板的目标（驱动其高亮提示「卡片会写进哪一格」） */
+const isPickerTarget = (slotKey: SlotKey): boolean => pickerTargetSlotKey.value === slotKey;
+
+/**
+ * 面板内点击 / 回车选中卡片：把和弦落到当前目标槽位，然后保持面板打开。
+ * 目标槽位（高亮的字符）不随填充移动，再点卡片会覆盖它；要换填别的字符需先点对应字符把高亮切过去。
+ * 全靠高亮告诉用户「现在会写进哪一格」，配合新的"点击字符不关面板"，覆盖是显式可见、非静默的。
+ */
+const handlePickerSelect = (chord: Chord) => {
+  const slotKey = pickerTargetSlotKey.value;
+  if (!slotKey) return;
+  scoreEditor.setSlotChord(slotKey, chord);
 };
 
 /** 本行是否为当前拖拽落点所在的行（由稳定的 activeDropLineId 驱动，跨越字符间隙时恒定为 true，绝无间距闪烁） */
@@ -734,37 +754,17 @@ defineExpose({ scoreZoneRef, expandNextBatch, handleScrollToBottom });
   contain-intrinsic-size: auto 120px;
 }
 
-/* 歌词行显式声明过渡（覆盖 transition-all 对 min-height/min-width 的不确定性），
-   空行随 body.is-global-dragging 撑到 116px、以及松手后回落的高度，都必须平滑过渡。
-   关键：基类 min-height 显式归零为 0（数字），让 116px↔0 是「长度↔长度」可插值；
-   若落到默认 auto，auto 无法插值，空行撑开/收起会瞬间跳变。 */
-.lyrics-line {
-  min-height: 0;
-  transition: all 0.18s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-
-/* 字符盒 min-* 基线显式归零：min-width/min-height 初始值为 auto，
-   auto 与长度之间无法插值（过渡按离散翻转，表现为瞬间跳变）；
-   归零后 .is-drop-widened 的 0.12s 撑开过渡才能真实生效（收拢回落到本基线同样平滑） */
-.char-box {
-  min-width: 0;
-  min-height: 0;
-  /* 关键：min-width/min-height 过渡必须落在基类上——松开拖拽时 .is-drop-widened 被摘除，
-     过渡若只写在状态类里会在同一帧随类一起消失，导致收拢瞬间跳回原宽而无过渡。
-     box-sizing 恒定 content-box，避免收拢时宽度口径翻转造成离散跳变（撑开/收拢始终平滑）。 */
-  box-sizing: content-box;
-  transition: all 0.12s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-
-/* 拖拽期间仅当前活动落点行空字符槽/添加槽统一撑开：尺寸走基类的 all 过渡，撑开与收拢双向往返均平滑 */
-.is-drop-widened {
-  min-width: 58px;
-  min-height: 108px;
-}
-
 /* 拖拽期间全局 body.is-global-dragging 驱动纯空行自动撑高，
-   保证纯空行行首/行尾和弦有足够落点高度，无需 Vue 响应式参与，0 重排掉帧 */
+   保证纯空行行首/行尾和弦有足够落点高度，无需 Vue 响应式参与，0 重排掉帧。
+   行的过渡与 min-height 归零（116px↔0 需「长度↔长度」才可插值，落到默认 auto 无法插值、
+   撑开/收起会瞬间跳变）都写成 .lyrics-line 上的工具类：transition-all duration-base
+   ease-standard min-h-0——曲线与时长取 tokens 令牌，不再另写一份裸值。
+   本规则特异性 0,3,2 高于 min-h-0 的 0,1,0，撑高稳赢、与 Tailwind 编译顺序无关。 */
 :global(body.is-global-dragging) .lyrics-line.is-empty-line {
   min-height: 116px;
 }
+
+/* 槽级样式（.char-box 基线、.is-drop-line*、.is-picker-target、拖拽源 / 按压态）与字形样式
+   （.char-text 那行）都已收敛到 SlotShell / SlotGlyph：本组件的槽元素由前者渲染，字形由后者
+   渲染，无需在此重复定义。 */
 </style>

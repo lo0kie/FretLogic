@@ -1,9 +1,11 @@
 /**
- * BaseSelector 纯逻辑模块：选项字段访问、值比较、尺寸配置与下拉高度计算。
+ * BaseSelector 纯逻辑模块：选项字段访问、值比较与尺寸配置。
  * 与响应式解耦，键名/比较器等依赖通过工厂参数注入，组件内仅保留状态与事件。
+ * 下拉高度计算已迁至共享下拉模块（BaseInput 搜索结果面板同用），需用时直接从
+ * `platform/ui/dropdown/dropdownPanelHeight` 导入，此处不再转发。
  */
-import { CONTROL_HEIGHT_CLASSES, CONTROL_HEIGHT_PRESETS } from '@/platform/ui/controlSizes';
-import { clamp } from '@/platform/utils/common';
+import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { ITEM_TEXT_CLASSES } from '@/platform/ui/dropdown/dropdownPanelHeight';
 
 import type { ControlSize } from '@/platform/ui/controlSizes';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
@@ -28,34 +30,12 @@ export interface BaseSelectorOption<V = unknown> {
 /** 从选项类型中提取对应的绑值类型 */
 export type OptionValue<Opt> = Opt extends { value: infer V } ? V : Opt;
 
-/** 尺寸档位样式表：触发器与下拉选项共用一套高度基线 */
-export const SELECTOR_CONFIG: Record<'sm' | 'md' | 'lg', { triggerClass: string; itemClass: string }> = {
-  sm: { triggerClass: `${CONTROL_HEIGHT_CLASSES.sm} px-2 text-2xs`, itemClass: `${CONTROL_HEIGHT_CLASSES.sm}` },
-  md: { triggerClass: `${CONTROL_HEIGHT_CLASSES.md} px-2.5 text-xs`, itemClass: `${CONTROL_HEIGHT_CLASSES.md}` },
-  lg: { triggerClass: `${CONTROL_HEIGHT_CLASSES.lg} px-3.5 text-xs`, itemClass: `${CONTROL_HEIGHT_CLASSES.lg}` },
-};
-
-/** 下拉面板行高（rem）：数值直接由尺寸标尺换算，避免与 CONTROL_HEIGHT_PRESETS 各记一份高度 */
-export const ITEM_HEIGHT: Record<ControlSize, number> = {
-  sm: Number.parseFloat(CONTROL_HEIGHT_PRESETS.sm),
-  md: Number.parseFloat(CONTROL_HEIGHT_PRESETS.md),
-  lg: Number.parseFloat(CONTROL_HEIGHT_PRESETS.lg),
-};
-/** 面板行间距与纵向内边距（rem）：与行高一起构成下拉面板总高 */
-export const GAP_REM = 0.125;
-export const PADDING_REM = 0.375 * 2;
-
-/** 下拉面板最大高度：按可见选项数与尺寸档位估算（rem 字符串） */
-export const calcDropdownMaxHeight = (opts: {
-  optionCount: number;
-  displayItems: number;
-  size: 'sm' | 'md' | 'lg';
-}): string => {
-  const { optionCount, displayItems, size } = opts;
-  if (optionCount === 0) return '6rem';
-  const visibleCount = clamp(displayItems, 1, optionCount);
-  const total = visibleCount * ITEM_HEIGHT[size] + (visibleCount - 1) * GAP_REM + PADDING_REM;
-  return `${total}rem`;
+/** 触发器尺寸档位样式表：下拉项的行高与字号已由共享 BaseDropdownItem 按 size 承担，
+ *  触发器字号与下拉项共用 ITEM_TEXT_CLASSES，两处不各记一份 */
+export const SELECTOR_CONFIG: Record<ControlSize, { triggerClass: string }> = {
+  sm: { triggerClass: `${CONTROL_HEIGHT_CLASSES.sm} px-2 ${ITEM_TEXT_CLASSES.sm}` },
+  md: { triggerClass: `${CONTROL_HEIGHT_CLASSES.md} px-2.5 ${ITEM_TEXT_CLASSES.md}` },
+  lg: { triggerClass: `${CONTROL_HEIGHT_CLASSES.lg} px-3.5 ${ITEM_TEXT_CLASSES.lg}` },
 };
 
 interface OptionHelperOptions<V> {

@@ -183,9 +183,16 @@ export const areChordsEnharmonicallyEquivalent = (
   if (pitchA !== pitchB) return false;
 
   // 4. 比较和弦性质（quality 与 unknownQuality 统合）
-  const qualityA = (segsA.quality ?? segsA.unknownQuality ?? '').trim().toLowerCase();
-  const qualityB = (segsB.quality ?? segsB.unknownQuality ?? '').trim().toLowerCase();
-  if (qualityA !== qualityB) return false;
+  // 大小写在此**承载语义**（m=小三 / M=大三），而 nameToSegments 仅在整词命中时把性质归一到
+  // 标准拼写、组合写法（m7#9 / M7#9）原样保留 spelling（见 chordName.ts:178-183、以及
+  // chordQualityAstParse 中「tokenId 只在整词命中给出」的契约）。此前统一 toLowerCase 会把
+  // Dm7#9 与 DM7#9 判成同一和弦 → 移调/候选选中据此写回错误指法（P1 审计 #11）。
+  // 故：两侧都是已知性质（quality）时精确比对；仅「未知性质」（自由拼写兜底）才折叠大小写。
+  const qualityA = (segsA.quality ?? segsA.unknownQuality ?? '').trim();
+  const qualityB = (segsB.quality ?? segsB.unknownQuality ?? '').trim();
+  if (segsA.quality !== undefined && segsB.quality !== undefined) {
+    if (qualityA !== qualityB) return false;
+  } else if (qualityA.toLowerCase() !== qualityB.toLowerCase()) return false;
 
   // 5. 比较斜杠低音（若存在，比较音高 mod 12）
   const hasBassA = Boolean(segsA.bass);

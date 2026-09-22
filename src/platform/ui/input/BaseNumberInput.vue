@@ -9,7 +9,7 @@
       currentConfig.wrapperClass,
       variant === 'glass'
         ? // 毛玻璃形态：常用于悬浮容器（如缩放胶囊）内部，自身不投影，阴影由外层容器统一提供
-          'border-glass-border bg-surface-panel/95 backdrop-blur-xl'
+          'border-glass-border bg-surface-panel'
         : 'border-border-light bg-surface-body hover:border-border-base',
       { 'w-full': resolvedWidth === '100%' },
     ]"

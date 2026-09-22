@@ -9,12 +9,13 @@
  */
 
 import { parseChordNameTokens as parseChordNameTokensCore } from '@/domains/chord/theory/chordNameTokens';
-import { clampDrawFretCount } from '@/domains/fretboard/constants';
+import { resolveFretWindowFromUsed } from '@/domains/fretboard/components/renderFretboardCanvas';
 import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
 import { createLruCache } from '@/platform/utils/cache';
 
 import type { ExportCharItem, ExportChordData, ExportLineItem, RenderSegment } from './scoreExportTypes';
 import type { ChordNameToken } from '@/domains/chord/theory/chordNameTokens';
+import type { FretWindow } from '@/domains/fretboard/components/renderFretboardCanvas';
 
 /** 输出图固定编码质量（导出质量设置已移除，预览与后续入口统一使用） */
 export const EXPORT_JPEG_QUALITY = 0.95;
@@ -110,6 +111,38 @@ export const applyLayoutScales = (fontScale: number, fretboardScale: number): vo
   fontEpoch++;
 };
 
+/**
+ * 本次渲染是否忽略首末的空品格 —— 与 LAYOUT 同为「一次渲染一份」的模块级状态：
+ * 渲染消息入口设定，Worker 内所有量测与绘制都读它。
+ *
+ * 为什么不逐函数透传：品窗收紧会同时改变**行内容高**（computeLineContentHeight，5 处装箱 / 分段
+ * 调用点都在本文件内）与**指板绘制**，逐层透传要动整条装箱链；而 Worker 一次只处理一条渲染消息，
+ * 本状态的生命周期与 LAYOUT 完全一致。
+ */
+let trimEmptyEdgeFretsMode = false;
+
+/** 设定本次渲染的品窗收紧档位（渲染消息入口调用，与 applyLayoutScales 同一时机） */
+export const setTrimEmptyEdgeFrets = (enabled: boolean): void => {
+  trimEmptyEdgeFretsMode = enabled;
+};
+
+/** 从导出用的紧凑和弦形态抽出「占用列号」：空弦(0) / 静音(-1) 不占列 */
+const usedFretColumns = (chord: ExportChordData): number[] => {
+  const used: number[] = [];
+  for (const s of chord.strings ?? []) if (s && s[0] >= 1) used.push(s[0]);
+  for (const b of chord.barres ?? []) if (b.fret >= 1) used.push(b.fret);
+  return used;
+};
+
+/**
+ * 实际品窗 —— 导出侧唯一入口：与主线程共用 resolveFretWindowFromUsed 的收紧口径，两侧不各写一套。
+ *
+ * 行内容高、指板绘制的 Y、栅格键三处**必须**取同一个值：否则会出现「位图变矮但垂直位置不动」
+ * ——行高与 Y 按原列数算、绘制按收紧列数画，位图底边被钉在原地、与歌词之间留缝。
+ */
+export const fretWindowOfExportChord = (chord: ExportChordData): FretWindow =>
+  resolveFretWindowFromUsed(chord.fretCount, usedFretColumns(chord), trimEmptyEdgeFretsMode);
+
 /** 模块级 Token 解析缓存，避免同曲目内重复出现的和弦名反复正则分割。
  *  上限 1024：Worker 现在跨次渲染常驻，跨曲目累积的分片结果需要兜底回收（此前每次渲完即销毁，无需上限）。
  *  单条仅几十字节，1024 条可忽略不计，足够覆盖一整个乐库的去重和弦名。 */
@@ -169,11 +202,12 @@ export function drawTokenizedText(
  *
  * 字体串里只有 LAYOUT 的字号参与拼接，而这些字号仅在 applyLayoutScales 执行时变化；
  * 该方法在每条渲染消息开头都会调用一次（缩放不变时写入的是同样的值），因此在其中自增纪元，
- * 由这里按纪元重建缓存即可。收益集中在高频路径：drawTokenizedText / measureChordNameWidth 里
- * 每个和弦名的每个分片都要取一次字体，缓存后不再重复拼模板串、不再产生短命字符串。
+ * 由这里按纪元重建缓存即可。收益集中在高频路径：常规字号下的和弦名（正名 + 上标）每绘制一次
+ * 就要取一次字体，缓存后不再重复拼模板串。
  *
- * 注：表头（标题 / 歌手 / 元信息）字体不随本缓存 —— 它们每次 renderHeader 只构造一次、
+ * 注 1：表头（标题 / 歌手 / 元信息）字体不随本缓存 —— 它们每次 renderHeader 只构造一次、
  * 不在分片循环内，缓存收益可忽略，保持就地构造更直观。
+ * 注 2：**贴合求解**（长名缩字号）那一路字号逐轮变化，本就无从缓存，走 chordNameFontOfSize 现拼。
  */
 let fontsEpoch = -1;
 const fontCache = {
@@ -182,11 +216,14 @@ const fontCache = {
   capo: '',
 };
 
+/** 按字号拼和弦名字体串：纪元缓存与「贴合缩字号」现拼共用同一模板，避免两处字号口径漂移 */
+const chordNameFontOfSize = (size: number): string => `bold ${size}px system-ui, -apple-system, sans-serif`;
+
 /** 取当前纪元的字体集（纪元未变则直接复用缓存对象） */
 const refreshFonts = () => {
   if (fontsEpoch === fontEpoch) return fontCache;
-  fontCache.chordNameBase = `bold ${LAYOUT.CHORD_NAME_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
-  fontCache.chordNameAccidental = `bold ${LAYOUT.ACCIDENTAL_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
+  fontCache.chordNameBase = chordNameFontOfSize(LAYOUT.CHORD_NAME_FONT_SIZE);
+  fontCache.chordNameAccidental = chordNameFontOfSize(LAYOUT.ACCIDENTAL_FONT_SIZE);
   fontCache.capo = `bold ${LAYOUT.CAPO_TEXT_FONT_SIZE}px system-ui, sans-serif`;
   fontsEpoch = fontEpoch;
   return fontCache;
@@ -213,24 +250,102 @@ export const getLyricsFont = (weight: number): string => {
   return lyricsFontValue;
 };
 
-/** 量出和弦名分片后的总宽度（含上标升降号）：供指板位图留白与居中绘制共用 */
-export function measureChordNameWidth(ctx: OffscreenCanvasRenderingContext2D, chordName: string): number {
+/**
+ * 量出和弦名分片后的总宽度（含上标升降号）：供贴合求解与居中绘制共用。
+ * 字号缺省取当前纪元的全局值（绝大多数调用走这一档）；显式传值即按该字号实测，
+ * 供贴合求解逐轮试算（见 fitChordNameFonts）。
+ */
+function measureChordNameWidth(
+  ctx: OffscreenCanvasRenderingContext2D,
+  chordName: string,
+  baseFontSize = LAYOUT.CHORD_NAME_FONT_SIZE,
+  accidentalFontSize = LAYOUT.ACCIDENTAL_FONT_SIZE
+): number {
+  const baseFont = chordNameFontOfSize(baseFontSize);
+  const accFont = chordNameFontOfSize(accidentalFontSize);
   let total = 0;
   for (const token of parseChordNameTokens(chordName)) {
-    ctx.font = token.isAccidental ? chordNameAccidentalFont() : chordNameBaseFont();
+    ctx.font = token.isAccidental ? accFont : baseFont;
     total += ctx.measureText(token.text).width;
   }
   return total;
 }
 
-/** 绘制带上标升降号（# / b / ♯ / ♭）的和弦名称，严格水平居中对齐 */
+/** 贴合迭代上限：宽度对字号近似线性，一轮即落到目标附近；字号取整会留「分片数 × 0.5px」的残差，再收 1~2 轮 */
+const NAME_FIT_MAX_ROUNDS = 4;
+/** 每轮留 0.5% 余量：宁可小一丝，也不要卡在浮点边界上正好越出零点几像素 */
+const NAME_FIT_SAFETY = 0.995;
+/** 整档下探步数上限：覆盖 16px → 1px 的极端收缩，正常名字一两步即收敛 */
+const NAME_FIT_MAX_STEPS = 24;
+
+/**
+ * 求解贴合 maxWidth 的和弦名字号（调用方保证进入时确实放不下）：**只缩字号，不做横向压缩**。
+ *
+ * 上标偏移按**最终实际字号**等比推导 —— 若仍按原始比例算，字号缩小时升降号会从「上标」
+ * 沉成「大号平排」（两者同源才成立）。
+ * 两步收敛：先按「目标宽 / 实测宽」线性估（宽度对字号近似线性，一轮即到位），再按整数字号
+ * 逐档下探补足 —— 字号取整会产生台阶，等比估算可能差口气地停在目标上方，而取整后再乘比例
+ * 已经压不动了；下探以整数字号为单位，步数有限，必然收敛。
+ */
+function fitChordNameFonts(
+  ctx: OffscreenCanvasRenderingContext2D,
+  chordName: string,
+  maxWidth: number
+): { baseFont: string; accFont: string; superOffset: number } {
+  /** 上标字号与正名字号的名义比（下探时按它同步收窄，保持两者的比例关系） */
+  const accidentalRatio = LAYOUT.ACCIDENTAL_FONT_SIZE / LAYOUT.CHORD_NAME_FONT_SIZE;
+  let basePx = LAYOUT.CHORD_NAME_FONT_SIZE;
+  let accPx = LAYOUT.ACCIDENTAL_FONT_SIZE;
+  // 首轮用纪元字体测（与「够放」快速路径同源），故判定口径完全一致
+  let width = measureChordNameWidth(ctx, chordName);
+
+  for (let round = 0; round < NAME_FIT_MAX_ROUNDS && width > maxWidth; round++) {
+    const ratio = (maxWidth / width) * NAME_FIT_SAFETY;
+    const nextBase = Math.max(1, Math.round(basePx * ratio));
+    const nextAcc = Math.max(1, Math.round(accPx * ratio));
+    const nextWidth = measureChordNameWidth(ctx, chordName, nextBase, nextAcc);
+    // 取整台阶已卡住：再乘同一个比例也只是空转，交给下面按整档下探
+    if (nextWidth >= width) break;
+    basePx = nextBase;
+    accPx = nextAcc;
+    width = nextWidth;
+  }
+
+  for (let step = 0; step < NAME_FIT_MAX_STEPS && width > maxWidth && basePx > 1; step++) {
+    basePx = Math.max(1, Math.round(basePx) - 1);
+    accPx = Math.max(1, Math.round(basePx * accidentalRatio));
+    width = measureChordNameWidth(ctx, chordName, basePx, accPx);
+  }
+
+  return {
+    baseFont: chordNameFontOfSize(basePx),
+    accFont: chordNameFontOfSize(accPx),
+    superOffset: Math.round(LAYOUT.ACCIDENTAL_SUPERSCRIPT_OFFSET * (basePx / LAYOUT.CHORD_NAME_FONT_SIZE)),
+  };
+}
+
+/**
+ * 绘制带上标升降号（# / b / ♯ / ♭）的和弦名称，严格水平居中对齐。
+ *
+ * 传了 maxWidth（名字可用宽度，逻辑 px）即启用自适应：**只等比缩字号**到放得下为止。
+ * 刻意不做横向压缩 —— canvas 的 `fillText(..., maxWidth)` 是只压 X 轴的非等比缩放，字形会被
+ * 压扁，且压缩量没有下限（名字越长压得越扁），极端情况糊成一团，比字小一号更糟。
+ * 不传则按全局字号原样绘制，此时调用方必须自行保证留白够宽，否则越界部分会被位图边界硬裁。
+ */
 export function drawFormattedChordName(
   ctx: OffscreenCanvasRenderingContext2D,
   centerX: number,
   baselineY: number,
   chordName: string,
-  color: string
+  color: string,
+  maxWidth?: number
 ) {
+  if (maxWidth !== undefined && maxWidth > 0 && measureChordNameWidth(ctx, chordName) > maxWidth) {
+    const fit = fitChordNameFonts(ctx, chordName, maxWidth);
+    drawTokenizedText(ctx, centerX, baselineY, chordName, color, fit.baseFont, fit.accFont, fit.superOffset);
+    return;
+  }
+  // 够放：走纪元缓存字体，逐像素与「无 maxWidth」的历史行为一致
   drawTokenizedText(
     ctx,
     centerX,
@@ -310,9 +425,11 @@ export function computeLineContentHeight(
   let hasChords = false;
   let maxFretCount = 0;
 
+  // 列数取**实际品窗**（收紧后的），与指板绘制、栅格键同一来源：否则行高按原列数算，
+  // 收紧后位图变矮却仍按原高度占位，底边被钉在原地、与歌词之间留缝
   const accumFret = (c: ExportChordData) => {
     hasChords = true;
-    const fc = clampDrawFretCount(c.fretCount);
+    const fc = fretWindowOfExportChord(c).drawFretCount;
     if (fc > maxFretCount) maxFretCount = fc;
   };
 
@@ -321,8 +438,7 @@ export function computeLineContentHeight(
   for (const item of chars) if (item.chord) accumFret(item.chord);
 
   if (!hasChords) return LAYOUT.LYRICS_FONT_SIZE;
-  const fretCount = clampDrawFretCount(maxFretCount);
-  const fbHeight = LAYOUT.FRETBOARD_GRID_TOP + fretCount * LAYOUT.FRET_HEIGHT;
+  const fbHeight = LAYOUT.FRETBOARD_GRID_TOP + maxFretCount * LAYOUT.FRET_HEIGHT;
   return fbHeight + LAYOUT.CHORD_TO_LYRICS_GAP + LAYOUT.LYRICS_FONT_SIZE;
 }
 

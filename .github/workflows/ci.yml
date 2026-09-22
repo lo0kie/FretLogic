@@ -44,6 +44,12 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # tests 侧类型此前只有本地 scripts/verify.mjs 把守（tsconfig.tests.json 单独一套严格选项：
+      # 夹具的品牌类型、缺字段与越界索引），CI 从不校验 —— 而 vitest 只转译不做类型检查，
+      # 故测试里的类型错误能一路过 CI。补成与 typecheck 并列的一步。
+      - name: Typecheck (tests)
+        run: pnpm typecheck:tests
+
       # 一步跑完：全量用例 + 覆盖率门槛。此前这里 `pnpm test` 与 `vitest run --coverage`
       # 各跑一遍全套（测试执行两遍），coverage 模式本身已包含执行，无需再单列。
       - name: Unit tests · Coverage

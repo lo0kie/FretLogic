@@ -20,9 +20,11 @@ import {
 import { createSong as createSongEntity, lineCharChord, toSongId } from '@/domains/score/model/scoreModel';
 import { songRepository } from '@/domains/score/model/songRepository';
 import { registerExitFlusher } from '@/platform/services/lifecycle/exitFlush';
+import { markDataDeleted } from '@/platform/services/storage/deletionWatermark';
 import { kvGet, kvSet } from '@/platform/services/storage/idbKv';
 import { clamp } from '@/platform/utils/common';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
+import { logger } from '@/platform/utils/logger';
 import { compareByPinyin } from '@/platform/utils/pinyin';
 
 import {
@@ -39,8 +41,8 @@ import type { ChordReferenceIndex } from './songIndex';
 import type { ChordId } from '@/domains/chord/types';
 import type { SlotKey, Song } from '@/domains/score/types';
 
-/** 乐谱排序方式：manual 手动（拖拽顺序）/ title 按标题 / createdAt 按创建时间 */
-export type SongSortMethod = 'manual' | 'title' | 'createdAt';
+/** 乐谱排序方式：manual 手动（拖拽顺序）/ title 按标题 / createdAt 按创建时间 / updatedAt 按最近编辑 */
+export type SongSortMethod = 'manual' | 'title' | 'createdAt' | 'updatedAt';
 
 /** 歌手筛选项的排序比较器（模块级单例）：localeCompare 每次调用都要重新解析 locale 与选项 */
 const SINGER_COLLATOR = new Intl.Collator('zh-Hans-CN');
@@ -48,7 +50,7 @@ const SINGER_COLLATOR = new Intl.Collator('zh-Hans-CN');
 /** 读取持久化的乐谱排序方式（kv 镜像同步读）；值非法时回退为手动排序。 */
 const readSongSortMethod = (): SongSortMethod => {
   const raw = kvGet(STORAGE_KEYS.SONGS_SORT_METHOD);
-  return raw === 'title' || raw === 'createdAt' ? raw : 'manual';
+  return raw === 'title' || raw === 'createdAt' || raw === 'updatedAt' ? raw : 'manual';
 };
 
 export const useSongStore = defineStore('song', () => {
@@ -70,7 +72,16 @@ export const useSongStore = defineStore('song', () => {
     // 加载失败时会让本会话的排序索引覆盖真实索引（丢手动排序）
     if (hydrating) return hydrating;
     hydrating = (async () => {
-      songs.value = await loadInitialSongs();
+      const loaded = await loadInitialSongs();
+      // 窗口期保护：装配层给 hydrate 设了兜底超时（main.ts），超时即挂载。乐谱持久化不走
+      // hydrated 门禁，窗口内的编辑已直接落盘——水合数据晚到时若无条件赋值，会把用户已编辑的
+      // 内存状态顶回磁盘快照（且此赋值不再触发写回，等于把落盘的编辑也"看不见"了）。
+      // 内存已有歌曲时跳过赋值；磁盘快照若更完整，用户可经云端拉取 / 备份导入恢复。
+      if (songs.value.length > 0) {
+        logger.warn('songStore', '水合数据晚到但窗口期内已有本地改动，跳过覆盖赋值');
+        return;
+      }
+      songs.value = loaded;
       hydrated = true;
     })();
     try {
@@ -150,6 +161,11 @@ export const useSongStore = defineStore('song', () => {
     if (songSortMethod.value === 'createdAt')
       return [...songs.value].sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
 
+    // 最近编辑取**倒序**（新在前）：这一档的存在意义就是「刚改过的那几首在最上面」，
+    // 与创建时间档的升序不冲突——后者是从头听起的顺序感，前者是回头接着改的找入口。
+    if (songSortMethod.value === 'updatedAt')
+      return [...songs.value].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+
     return songs.value;
   });
 
@@ -200,6 +216,8 @@ export const useSongStore = defineStore('song', () => {
     songs.value = songs.value.filter(s => s.id !== id);
     markSongRemoved(toSongId(id));
     markIndexDirty();
+    // 抬高删除水位线：meta.updatedAt 只看存活实体，删除会让它回退、方向判定误判（见 deletionWatermark）
+    markDataDeleted();
   };
 
   /** 恢复指定歌曲到列表指定位置（或末尾）并重标记脏落盘。 */

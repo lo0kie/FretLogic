@@ -15,7 +15,7 @@
         :style="{ zIndex: overlayZ > 0 ? overlayZ : undefined }"
         @click.self="handleMaskClick($event)"
         @mousedown="handleMaskMousedown($event)"
-        class="modal-overlay-container fixed inset-0 z-overlay flex overflow-y-auto bg-black/50 p-md"
+        class="modal-overlay-container fixed inset-0 z-overlay flex overflow-y-auto bg-overlay p-md"
         ref="overlayRef"
       >
         <!-- 关闭（leave）期间禁用高度接管：expanded 联动 visible，避免退场动画进行中卡片被高度压 0 裁没 -->
@@ -58,8 +58,8 @@
                     @click="close('close')"
                     icon-only
                     aria-label="关闭"
-                    class="p-1.5!"
                     icon="x"
+                    icon-inset="sm"
                     icon-size="xl"
                     icon-stroke="bold"
                     size="sm"

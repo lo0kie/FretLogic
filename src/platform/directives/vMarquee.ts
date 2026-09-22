@@ -36,6 +36,15 @@ export interface MarqueeOptions {
   fade?: boolean | number;
   /** 是否只滚动一次：溢出时播放单个循环后停在终帧，不再无限循环（默认 false）。配合 mode:'always' 常用于一次性提示（如 toast） */
   once?: boolean;
+  /**
+   * hover / focus 的**触发宿主**：默认 `'self'` 指指令元素自身；给 CSS 选择器时改用自元素向上
+   * `closest()` 命中的最近祖先（含自身）。
+   *
+   * 用于把「悬停才开始滚动」的判定范围从文字本体放大到整行 / 整卡 —— 列表项里文字只占该行一条，
+   * 鼠标停在同行空白处（甚至卡片任意位置）时同样该开始滚。找不到匹配祖先时回退到自身，
+   * 不会静默失去触发。
+   */
+  trigger?: 'self' | string;
   /** 生命周期回调 */
   onStart?: () => void;
   onEnd?: () => void;
@@ -71,6 +80,7 @@ const DEFAULTS: Required<Omit<MarqueeOptions, 'onStart' | 'onEnd' | 'onOverflowC
   pauseDuration: 1000,
   fade: false,
   once: false,
+  trigger: 'self',
   onStart: undefined,
   onEnd: undefined,
   onOverflowChange: undefined,
@@ -97,6 +107,10 @@ interface MarqueeState {
   lastFade: string | null;
   /** 停止尺寸观察的清理函数（observeResize 返回）；null 表示尚未挂载观察者 */
   stopResize: (() => void) | null;
+  /** hover / focus 事件的实际宿主（options.trigger 的解析结果）：'self' 时即 el 自身，给选择器时为命中的祖先 */
+  host: HTMLElement;
+  /** 解绑当前宿主上的四个事件监听（trigger 变更 / 卸载时调用） */
+  detachHostEvents: () => void;
   cleanups: (() => void)[];
 }
 
@@ -514,6 +528,52 @@ const getReducedMotionMql = (): MediaQueryList => {
   return mql;
 };
 
+/** 解析 hover / focus 的触发宿主：'self'（或未给）即指令元素自身；其余按 CSS 选择器向上 closest，找不到回退自身。 */
+function resolveTriggerHost(el: HTMLElement, trigger: string | undefined): HTMLElement {
+  if (!trigger || trigger === 'self') return el;
+  return el.closest(trigger) ?? el;
+}
+
+/**
+ * 把 hover / focus 四个监听挂到**解析出的宿主**上，返回解绑函数。
+ *
+ * 宿主与 el 分离是为了支持「委托上级节点触发」：跑马灯挂在列表项的文字本体上，而文字只占该行
+ * 一小条，鼠标停在同行空白处（甚至整张卡片任意位置）时同样该开始滚动 —— 判定范围由 trigger
+ * 选择器放大到祖先。监听仍只有一条（挂在祖先上），不随行内元素数量增长。
+ *
+ * 命中失败时回退到自身：宁可退化成「只在文字上触发」，也不要静默不触发。
+ */
+function attachHostEvents(el: HTMLElement, state: MarqueeState): () => void {
+  const host = resolveTriggerHost(el, state.options.trigger);
+  state.host = host;
+  const onEnter = () => {
+    state.hovered = true;
+    update(el);
+  };
+  const onLeave = () => {
+    state.hovered = false;
+    update(el);
+  };
+  const onFocusIn = () => {
+    state.focused = true;
+    update(el);
+  };
+  const onFocusOut = () => {
+    state.focused = false;
+    update(el);
+  };
+  host.addEventListener('mouseenter', onEnter);
+  host.addEventListener('mouseleave', onLeave);
+  host.addEventListener('focusin', onFocusIn);
+  host.addEventListener('focusout', onFocusOut);
+  return () => {
+    host.removeEventListener('mouseenter', onEnter);
+    host.removeEventListener('mouseleave', onLeave);
+    host.removeEventListener('focusin', onFocusIn);
+    host.removeEventListener('focusout', onFocusOut);
+  };
+}
+
 export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> = {
   mounted(el, binding) {
     const options = resolveOptions(binding.value, binding.modifiers);
@@ -545,6 +605,8 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       maskRaf: 0,
       lastFade: null,
       stopResize: null,
+      host: el,
+      detachHostEvents: () => {},
       cleanups: [],
     };
     STATES.set(el, state);
@@ -554,26 +616,9 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     MQL_STATES.add(state);
     state.reducedMotion = mql.matches;
 
-    const onEnter = () => {
-      state.hovered = true;
-      update(el);
-    };
-    const onLeave = () => {
-      state.hovered = false;
-      update(el);
-    };
-    const onFocusIn = () => {
-      state.focused = true;
-      update(el);
-    };
-    const onFocusOut = () => {
-      state.focused = false;
-      update(el);
-    };
-    el.addEventListener('mouseenter', onEnter);
-    el.addEventListener('mouseleave', onLeave);
-    el.addEventListener('focusin', onFocusIn);
-    el.addEventListener('focusout', onFocusOut);
+    // 触发宿主由 options.trigger 决定（默认自身；给选择器则委托上级节点），挂载期解析一次。
+    // 宿主变更的检测在 updated 里：宿主换了而监听还留在原元素上，「悬停整行触发」会静默失效。
+    state.detachHostEvents = attachHostEvents(el, state);
 
     // 重点：同时监听容器 el 与内部内容 inner，确保内部文本变化时也能立即触发测量。
     // 观察者取共享单例（各元素之间无隔离需求），实例数不随列表长度增长
@@ -585,10 +630,7 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     };
 
     state.cleanups.push(() => {
-      el.removeEventListener('mouseenter', onEnter);
-      el.removeEventListener('mouseleave', onLeave);
-      el.removeEventListener('focusin', onFocusIn);
-      el.removeEventListener('focusout', onFocusOut);
+      state.detachHostEvents();
       MQL_STATES.delete(state);
       // 共享观察者不能 disconnect：只摘掉本元素自己的两个观测目标
       state.stopResize?.();
@@ -635,6 +677,13 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     //    纯尺寸 / 文本变化由 mounted 注册的 ResizeObserver 覆盖（它同时观察 el 与 inner，回调在
     //    layout 之后、paint 之前触发，不会漏帧），这里无需重复兜底。
     if (optionsChanged || hasStrayChildren) measure(el);
+
+    // 4. trigger 变更 → 宿主不再是当前元素时重挂事件。宿主换了而监听还留在原元素上，
+    //    「悬停整行触发」就静默失效了。宿主解析走 closest，所以该判断对 DOM 结构变化同样兜底。
+    if (resolveTriggerHost(el, state.options.trigger) !== state.host) {
+      state.detachHostEvents();
+      state.detachHostEvents = attachHostEvents(el, state);
+    }
   },
 
   unmounted(el) {

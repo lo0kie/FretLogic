@@ -139,7 +139,8 @@
       :virtual-ref="searchVirtualRef"
       match-trigger-width
       aria-label="搜索结果"
-      panel-class="base-input-search-panel rounded-xl! p-0! overflow-hidden shadow-floating"
+      panel-class="base-input-search-panel overflow-hidden"
+      panel-radius="xl"
       placement="bottom-start"
       ref="searchPopoverRef"
     >
@@ -147,6 +148,7 @@
         v-auto-height="{ transition: 'height var(--duration-base) var(--ease-sidebar, var(--bezier-sidebar, ease))' }"
         :class="searchMaxHeightClass"
         :scrollbar="{ showTrack: false, endInset: 8 }"
+        :style="{ maxHeight: searchPanelMaxHeight }"
         @mousedown.stop
         @mouseleave="setSearchActiveIndex(-1)"
         axis="y"
@@ -169,28 +171,39 @@
             key="search-guide"
             size="sm"
           />
-          <div v-else-if="showSearchSlot" class="v-fade-in-quick flex flex-col gap-0.5">
-            <!-- 托管结果行：外壳样式（min-h / 圆角 / 内边距 / 悬停与键盘活跃高亮）统一收敛于此，
+          <!-- role 仅在托管结果行时下发：此时子节点全是 BaseDropdownItem（role=option），
+               需要 listbox 属主才算合法 ARIA；自管插槽分支的标记由调用方自己负责 -->
+          <div
+            v-else-if="showSearchSlot"
+            :role="searchItems ? 'listbox' : undefined"
+            class="v-fade-in-quick flex flex-col gap-0.5"
+          >
+            <!-- 托管结果行：复用 BaseDropdownItem 的行壳（布局/行高/悬停/光标/选中高亮/点击选中）统一收敛于此，
                行内容由 #search-item 插槽决定；点击行与键盘 Enter 走同一条 select-search-index 路径
-               （selectIndex 内部：派发选中 + 收起面板） -->
+               （selectIndex 内部：派发选中 + 收起面板）
+               两档高亮必须分开下发：active 只给「当前已选中」（持久，主题色），
+               highlighted 只给键盘/悬停光标（瞬态，中性底）——合并成一个 prop 会让划过一行
+               看起来与真正选中的那行完全相同（插槽内的对勾是唯一区别，扫视时读不出来） -->
             <template v-if="searchItems">
-              <button
-                v-wave
+              <BaseDropdownItem
                 v-for="(item, index) in searchItems"
-                :class="
-                  index === searchActiveIndex
-                    ? 'bg-primary/12 text-primary'
-                    : 'text-fg-title hover:bg-surface-panel-hover'
-                "
+                :active="isSearchItemSelected(item)"
+                :highlighted="index === searchActiveIndex"
                 :key="index"
+                :size="resolvedSize"
                 :title="searchItemTitle?.(item)"
-                @click="selectIndex(index)"
                 @mouseenter="setSearchActiveIndex(index)"
-                class="flex min-h-[2rem] w-full cursor-pointer items-center justify-between gap-2 rounded-md border-none px-2.5 py-1 text-left transition-colors duration-fast ease-out outline-none select-none"
-                type="button"
+                @select="selectIndex(index)"
+                class="w-full"
               >
-                <slot :index :item :active="index === searchActiveIndex" name="search-item" />
-              </button>
+                <slot
+                  :index
+                  :item
+                  :active="index === searchActiveIndex"
+                  :selected="isSearchItemSelected(item)"
+                  name="search-item"
+                />
+              </BaseDropdownItem>
             </template>
             <!-- 未传 searchItems 的调用方：仍走自管插槽（结果行样式与交互自行负责） -->
             <slot
@@ -239,11 +252,13 @@ import {
   watch,
 } from 'vue';
 
+import BaseDropdownItem from '@/platform/ui/dropdown/BaseDropdownItem.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BasePopover from '@/platform/ui/popover/BasePopover.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
+import { calcDropdownMaxHeight } from '@/platform/ui/dropdown/dropdownPanelHeight';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
 import { useSearchResultsPanel } from '@/platform/ui/input/useSearchResultsPanel';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
@@ -268,7 +283,9 @@ const {
   searchItemCount = undefined,
   searchItems = undefined,
   searchItemTitle = undefined,
-  searchMaxHeightClass = 'max-h-64',
+  searchItemSelected = undefined,
+  searchMaxHeightClass = undefined,
+  searchMaxItems = 6,
   searchGuideText = undefined,
   searchSynced = true,
   searchLoadingText = undefined,
@@ -310,8 +327,16 @@ const {
   searchItems?: readonly T[];
   /** 托管结果行的悬停提示文案生成器（可选项；不传则行无 title） */
   searchItemTitle?: (item: T) => string;
-  /** 搜索结果面板最大高度类，默认 'max-h-64' */
+  /** 托管结果行里「当前已选中」的判定（可选项）：命中即常驻高亮，并经 #search-item 的 selected 下发。
+   *  与键盘/悬停的活跃项（内部 searchActiveIndex）相互独立 —— 后者在鼠标移出面板时会重置为 -1，
+   *  而「当前选中」是宿主的常驻状态（如搜索结果对应编辑器正在编辑的和弦） */
+  searchItemSelected?: (item: T) => boolean;
+  /** 搜索结果面板最大高度类（自定义封顶时用；有值时接管封顶，不再按 searchMaxItems 自动估算 ——
+   *  内联 maxHeight 优先级高于类，两者同时下发会把本项压成空转） */
   searchMaxHeightClass?: string;
+  /** 搜索结果面板最多直接可见的结果行数：按「行数 × 行高 + 行距 + 内边距」自动计算面板最大高度，
+   *  与下拉选项（BaseSelector）共用同一套高度口径，默认 6 */
+  searchMaxItems?: number;
   /** 未输入时的引导文案；传入即启用**回退态托管**——「引导 / 正在搜索 / 无结果」由组件渲染，
    *  #search-results 插槽只在有可显示结果时挂载；未传时插槽原样渲染（完全自管，向后兼容） */
   searchGuideText?: string;
@@ -380,7 +405,7 @@ defineSlots<{
     query: string;
     setActiveIndex: (index: number) => void;
   }) => unknown;
-  'search-item'?: (props: { active: boolean; index: number; item: T }) => unknown;
+  'search-item'?: (props: { active: boolean; index: number; item: T; selected: boolean }) => unknown;
 }>();
 const attrs = useAttrs();
 const inputAttrs = computed(() => {
@@ -444,6 +469,22 @@ const {
 /** 结果条目数：托管列表模式取 items 长度，否则退回计数 prop */
 const resolvedSearchItemCount = computed(() => (searchItems ? searchItems.length : (searchItemCount ?? 0)));
 
+/** 搜索结果面板最大高度：可见行数 × 行高 + 行距 + 内边距 自动估算，
+ *  与下拉选项面板（BaseSelector）共用同一套高度口径，行数由 searchMaxItems 控制。
+ *  searchMaxHeightClass 有值时整体交回类控制 —— 内联 maxHeight 优先级高于类，
+ *  两者同时下发会把自定义封顶类压成空转 */
+const searchPanelMaxHeight = computed(() =>
+  searchMaxHeightClass
+    ? undefined
+    : calcDropdownMaxHeight({
+        optionCount: resolvedSearchItemCount.value,
+        displayItems: searchMaxItems,
+        // 面板纵向内边距合计：结果容器内层的 p-1 = 0.25rem × 2（与下拉面板的 p-xs 不同，不能共用）
+        paddingRem: 0.25 * 2,
+        size: resolvedSize.value,
+      })
+);
+
 const handleInputClick = (e: MouseEvent) => {
   openResults();
   emit('click', e);
@@ -451,11 +492,28 @@ const handleInputClick = (e: MouseEvent) => {
 
 /** searchable 面板的 keydown 已把 Enter 用于选中活跃项时，keyup 不再派发 enter（避免一键两事） */
 let searchEnterConsumed = false;
+/**
+ * 本次 Enter 的 keydown 是否落在 IME 合成期。
+ *
+ * 必须在 keydown 时定格：Enter 也是「确认候选词」的键，合成期按下后浏览器先派发 compositionend
+ * 再补 keyup —— keyup 到达时 isComposing 已复位，实时读它判不出来，于是拼音输入法里选词那一下
+ * 会顺带派发 enter（宿主当成提交）。用标记把 keydown 的判定带到 keyup，与浏览器的事件顺序无关。
+ * 同目录 BaseEditableText 写在 keydown 里直接 return（`:162` 合成期 Enter 不得当作提交），
+ * 本组件以 keyup 派发 enter，故改用该标记落地同一口径（P1 审计 #10）。
+ */
+let enterComposingKeydown = false;
 const wrappedKeydown = (e: KeyboardEvent) => {
+  // isComposing ref 声明在下方输入同步段（两处都读，兼容个别不置 e.isComposing 的输入法）
+  if (e.key === 'Enter') enterComposingKeydown = e.isComposing || isComposing.value;
   searchEnterConsumed = e.key === 'Enter' && searchable && resultsOpen.value && searchActiveIndex.value >= 0;
   handleKeydown(e);
 };
 const handleEnterKeyup = () => {
+  // 合成期的 Enter 只用于确认候选词，不得当作提交
+  if (enterComposingKeydown) {
+    enterComposingKeydown = false;
+    return;
+  }
   if (searchEnterConsumed) {
     searchEnterConsumed = false;
     return;
@@ -474,6 +532,8 @@ const isPasswordMode = computed(() => isPassword || type === 'password');
 const searchQueryText = computed(() => localValue.value?.trim() ?? '');
 /** 托管开关：传了引导文案即接管三态；未传时插槽原样渲染（向后兼容） */
 const searchFallbackManaged = computed(() => searchable && searchGuideText !== undefined);
+/** 「当前已选中」判定：宿主不传时恒为 false（只影响常驻高亮，与键盘/悬停的活跃项无关） */
+const isSearchItemSelected = (item: T): boolean => searchItemSelected?.(item) ?? false;
 /** 结果插槽是否挂载：托管模式下「查询非空且有结果（含防抖窗口内的过期结果）」；
  *  过期结果保留展示是实现「渐进收窄不闪」的关键——精修查询词时旧列表保持到新结果就绪 */
 const showSearchSlot = computed(

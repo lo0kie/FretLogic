@@ -67,9 +67,13 @@ export interface AppPreferencesBackup {
   scoreChordShorthand?: boolean;
   scoreLayoutAlign?: 'start' | 'center';
   scoreShowBarre?: boolean;
+  /** 指板位图是否忽略首末的空品格（按实际用到的品位收紧品窗，不低于 MIN_FRET_COUNT 列） */
+  scoreTrimEmptyEdgeFrets?: boolean;
   scoreLyricsFontWeight?: ScoreLyricsFontWeight;
   /** 预览/导出：是否显示页脚页码 */
   scoreShowFooter?: boolean;
+  /** 预览/导出：无和弦空格是否零宽（该空格不占列宽，整行更紧凑） */
+  scoreIgnoreEmptySpace?: boolean;
 }
 
 /** 预览/导出歌词字重（细/常规/粗） */

@@ -27,34 +27,32 @@
            因此绝不使用 sm:/md: 这类视口断点——那会让同一块面板在宽屏与窄屏下变成两套布局。
            搜索独占一行铺满（宽度 100% 跟随面板），排序规则与调式键在下一行左对齐成组：
            三者同取 sm 控件档位（1.6rem）保证同行同高；排序组永不压缩，窄面板下也不挤压 -->
-      <div class="picker-controls-row flex flex-col gap-md px-lg pt-2xs pb-md">
+      <div class="picker-controls-row flex gap-xs px-lg py-2xs">
         <BaseInput
           v-model="pickerSearchQuery"
           :maxlength="15"
           clearable
-          show-count
           aria-label="搜索和弦"
           font-size="xs"
-          placeholder="搜索和弦名称..."
           prefix-icon="search"
           width="full"
         />
-        <div class="sort-action-group flex shrink-0 items-center gap-md">
-          <BaseSegmentedControl
-            v-model="sortOverride"
-            :options="SORT_RULE_CONFIG"
-            @update:model-value="handleSortRuleChange($event)"
-            width="auto"
-          />
-          <KeySelector
-            v-model="tempSortKey"
-            :disabled="sortOverride !== GroupSortRule.KEY_DEGREE"
-            @update:model-value="handleSortKeyChange($event)"
-            width="sm"
-          />
-        </div>
+        <BaseSegmentedControl
+          v-model="sortOverride"
+          :options="SORT_RULE_CONFIG"
+          @update:model-value="handleSortRuleChange($event)"
+          compacted
+          width="auto"
+        />
+        <KeySelector
+          v-model="tempSortKey"
+          :disabled="sortOverride !== GroupSortRule.KEY_DEGREE"
+          @update:model-value="handleSortKeyChange($event)"
+          width="sm"
+        />
       </div>
-      <div class="picker-group-pills-shell px-lg pt-sm">
+
+      <div class="picker-group-pills-shell px-lg py-2xs">
         <BaseScrollArea
           :scrollbar="false"
           :wheel="{ smooth: true }"
@@ -100,7 +98,15 @@
           :key="section.id"
           class="picker-section-block flex flex-col gap-sm"
         >
-          <div class="picker-section-header flex items-center gap-md py-xs select-none">
+          <!-- 分区标题吸顶：定位（sticky / top / z）由 useStickyHeads 经 pickerHeadBind 统一下发，不手写 ——
+               容器自带 pt-sm，头用 top:0 会停在 padding 之下、滚过的卡片从头顶那条带里漏出来，
+               故 top 取容器 padding 的负值，让头齐平贴住容器可视上沿；底色必须不透明，否则
+               卡片会从标题底下透出。id 钩子用 data-head-section-id 而非 data-section-id：后者是
+               分区定位与滚动高亮（scrollToSection / updateActiveSection）的选择器，挂到头会多匹配一批元素 -->
+          <div
+            v-bind="pickerHeadBind(section.id)"
+            class="picker-section-header flex items-center gap-md bg-surface-panel py-xs select-none"
+          >
             <span
               v-chord-name="section.title"
               class="picker-section-title text-sm font-extrabold tracking-tight text-fg-title"
@@ -125,7 +131,7 @@
               <div
                 v-wave
                 v-for="chord in row.items"
-                :aria-label="`和弦 ${chordNameMap.get(chord.id) ?? ''}`"
+                :aria-label="`和弦 ${getPickerChordName(chord)}`"
                 :class="CHORD_CARD_BASE_CLASS"
                 :data-chord-id="chord.id"
                 :key="chord.id"
@@ -139,6 +145,11 @@
                 role="button"
                 tabindex="0"
               >
+                <!-- 编辑钮：与左上角的「来源分组角标」统一为同一套圆角描边胶囊语汇。
+                     原先是无底无边的裸 ghost 图标 —— 同一张卡片两个角上放「贴纸」和「裸图标」
+                     两种语汇，卡角视觉重量失衡。此处换成 subtle 中性胶囊（border-light 描边 +
+                     中性底色 + rounded-sm，与左侧角标同形），图标留在中性色阶、不抢指板；
+                     仍是 hover/focus 才浮现，不占卡面常驻视觉。 -->
                 <ActionButton
                   :tabindex="-1"
                   @mousedown.stop
@@ -148,18 +159,19 @@
                   icon-only
                   aria-label="去修改该和弦"
                   class="picker-edit-btn pointer-events-auto absolute top-1 right-1 z-float p-1.5! opacity-0 transition-opacity duration-fast group-focus-within:opacity-100 group-hover:opacity-100 focus:opacity-100"
-                  color="primary"
+                  color="default"
                   icon="pencil"
                   icon-size="sm"
                   icon-stroke="thin"
+                  rounded="sm"
                   size="sm"
                   title="去修改该和弦"
-                  variant="ghost"
+                  variant="subtle"
                 />
                 <span
                   v-if="selectedGroupId === 'ALL' && getSourceGroupName(chord)"
                   :title="getSourceGroupName(chord)"
-                  class="picker-source-group pointer-events-none absolute top-1 left-1 z-panel max-w-[60%] truncate rounded-sm border border-border-light bg-surface-panel/90 px-1 py-0.5 text-2xs leading-none font-semibold text-fg-muted select-none"
+                  class="picker-source-group pointer-events-none absolute top-1 left-1 z-panel max-w-[60%] truncate rounded-sm border border-border-light bg-surface-panel px-1 py-0.5 text-2xs leading-none font-semibold text-fg-muted select-none"
                 >
                   {{ getSourceGroupName(chord) }}
                 </span>
@@ -242,17 +254,23 @@ import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
-import { getChordName, SORT_RULE_CONFIG } from '@/domains/chord/theory/theory';
+import { SORT_RULE_CONFIG } from '@/domains/chord/theory/theory';
 import { GroupSortRule } from '@/domains/chord/types';
 import { useEdgeScroll } from '@/platform/composables/useEdgeScroll';
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { useRowWindowing } from '@/platform/composables/useRowWindowing';
+import { useStickyHeads } from '@/platform/composables/useStickyHeads';
 import { isDark } from '@/platform/composables/useTheme';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { resolveScrollBehavior } from '@/platform/utils/motion';
 
 import ChordEditorDrawer from './ChordEditorDrawer.vue';
-import { buildChordSections, buildPickerRowPlan, getPickerGridGapPx } from './ChordPickerPanel.logic';
+import {
+  buildChordSections,
+  buildPickerRowPlan,
+  getPickerChordName,
+  getPickerGridGapPx,
+} from './ChordPickerPanel.logic';
 
 import type { ChordPickerSection } from './ChordPickerPanel.logic';
 import type { Chord } from '@/domains/chord/types';
@@ -428,6 +446,9 @@ watch(
   async val => {
     if (!val) {
       scrollWrapperRef.value?.removeEventListener('scroll', handleScroll);
+      // 关闭时把已排队的合帧回调一并取消：否则面板关闭后还会跑一次「算高亮 + 算窗口」，
+      // 读的是 display:none 下的零矩形，白算且可能把窗口写成空
+      cancelActiveSectionUpdate();
       activeSectionId.value = null;
       // 同步收起内嵌的「新建 / 编辑和弦」抽屉：它同样 Teleport 到 body，若只关面板不关它，
       // 宿主被 KeepAlive 停用（切路由 / 切页签）后该抽屉会失去所属面板上下文独自残留
@@ -447,13 +468,19 @@ watch(
     }
 
     await nextTick();
+    // 快速「开 → 关」时本分支的续体会在关闭之后才跑到：此时补挂监听会在面板关闭态留下一条
+    // scroll 监听（display:none 不派发 scroll，功能上无害，但属真实竞态），故落地前复检一次
+    if (!props.visible) return;
     scrollWrapperRef.value?.addEventListener('scroll', handleScroll, { passive: true });
     rebuildSectionEls();
     updateActiveSection();
     updateWindow();
     if (chordSections.value.length > 0) activeSectionId.value = chordSections.value[0]?.id ?? null;
 
+    // 面板刚挂载/刚显形时内容高度可能还没落定（外壳进场是纯横向位移，纵向几何已终值，但
+    // 首帧的字形度量与滚动条注入仍会改高度），故补一次重测。与上面同样的理由：跑之前复检可见性
     setTimeout(() => {
+      if (!props.visible) return;
       rebuildSectionEls();
       updateActiveSection();
       updateWindow();
@@ -480,15 +507,7 @@ const filteredChords = computed(() => {
   });
 });
 
-/** 和弦名查表（按 id 缓存，避免模板重复解析名称；卡片无障碍标签用） */
-const chordNameMap = computed(() => {
-  const map = new Map<string, string>();
-  for (const chord of filteredChords.value) map.set(chord.id, getChordName(chord));
-
-  return map;
-});
-
-/** 根音类别解析与分区构建：纯逻辑见 ChordPickerPanel.logic.ts */
+/** 根音类别解析与分区构建：纯逻辑见 ChordPickerPanel.logic.ts（含卡片 aria-label 的和弦名按需解析） */
 
 const chordSections = computed<ChordPickerSection[]>(() => buildChordSections(filteredChords.value));
 
@@ -507,14 +526,73 @@ const sectionPlans = computed<VirtualSectionPlan<Chord>[]>(() =>
 
 const sectionsListRef = useTemplateRef<HTMLElement>('sectionsListRef');
 
+/* ---- 滚动帧的元素缓存 ----
+   分区壳常驻，元素集合只在「分区增删」与「列表被 v-if 重建」两类事件上变，却原本每滚动帧
+   各查一遍：updateWindow 查一次 .picker-cards-grid、updateActiveSection 再查一次 [data-section-id]，
+   而两次查询都要遍历整棵子树（含已挂载卡片的全部节点）。改为查一次、缓存复用：
+   计数守卫发现分区数与缓存不符即重查，其余帧零 DOM 查询。 */
+const sectionElsCache: HTMLElement[] = [];
+const gridElsCache: HTMLElement[] = [];
+
+/** 重建分区 / 网格元素缓存：分区集合变化、面板打开时调用（计数守卫也会兜底调它） */
+const rebuildSectionEls = () => {
+  sectionElsCache.length = 0;
+  gridElsCache.length = 0;
+  const list = sectionsListRef.value;
+  if (!list) return;
+  for (const el of list.querySelectorAll<HTMLElement>('[data-section-id]')) sectionElsCache.push(el);
+  for (const el of list.querySelectorAll<HTMLElement>('.picker-cards-grid')) gridElsCache.push(el);
+};
+
+/** 计数守卫：分区数与缓存不符（含列表刚从空态重建）就重查，否则直接用缓存 */
+const ensureSectionEls = () => {
+  if (sectionElsCache.length !== chordSections.value.length) rebuildSectionEls();
+};
+
 /** 分区行窗口化：滚动时重算各分区可见行区间 [first, last]，分区壳常驻、网格行按窗口挂载 */
 const { updateWindow, visibleRows } = useRowWindowing<Chord>({
   getScroller: () => scrollWrapperRef.value,
   getList: () => sectionsListRef.value,
   getPlans: () => sectionPlans.value,
   gridSelector: '.picker-cards-grid',
+  // 回传缓存：窗口计算每帧都要按顺序取各分区网格元素，走缓存省掉一次子树查询
+  getGridEls: () => {
+    ensureSectionEls();
+    return gridElsCache;
+  },
   overscanPx: OVERSCAN_PX,
 });
+
+/** 分区标题吸顶：与侧栏和弦库分组、设置弹层、开发者面板同源 ——
+ *  发现滚动容器、监听滚动与尺寸变化、批量判定哪些头被顶在吸附线上、按吸附头实测高度
+ *  让开容器顶部羽化带（否则吸附中的标题会被顶部羽化冲淡）统一交给 useStickyHeads；
+ *  头/段的 DOM 结构用面板自己的类名钩子，id 用 data-head-section-id（不与分区定位的
+ *  data-section-id 争用同一属性）。 */
+const { headBind } = useStickyHeads({
+  listRef: sectionsListRef,
+  headSelector: '.picker-section-header',
+  idAttribute: 'data-head-section-id',
+  sectionSelector: '.picker-section-block',
+  // 吸附线 = 容器可视上沿：头的 top 由 headBind 取容器 padding 的负值抵消，头顶不留缝隙
+  offset: '0px',
+  fadeOffset: true,
+});
+
+/**
+ * 吸附头的接线：headBind 一次给全「id 钩子 + 定位（sticky / top / z）+ 滚动容器」，
+ * 其中 `scroll-container` 是喂给 BaseCollapse 的**组件 prop**（另外三处宿主都是折叠组件，
+ * 折叠头用它做收起时的滚动补偿）。本面板的头是普通 div、没有这条 prop 可接 ——
+ * 直接 v-bind 会把它落成一个值为 "[object HTMLElement]" 的 DOM 属性，故此处摘掉，其余照旧。
+ */
+const pickerHeadBind = (id: string) => {
+  const { 'scroll-container': _unusedForPlainDiv, ...rest } = headBind(id);
+  return rest;
+};
+
+/** 吸顶分区标题的实测高度（px）：键盘导航把目标行顶到容器上沿时要按它让位。
+ *  只在「方向键到窗口边缘」这条按键路径上求值，不进滚动帧，故直接量一次即可 */
+const getStickyHeadPx = (): number =>
+  sectionsListRef.value?.querySelector<HTMLElement>('.picker-section-header')?.offsetHeight ?? 0;
 
 /** 和弦卡片按下：交给宿主拖拽系统登记外部拖拽会话（移动超阈值起拖，落点与落地动作由宿主决定）。
  *  宿主未注入 dragChordStarter 时卡片不参与拖拽，交互退化为点击派发 select */
@@ -580,9 +658,6 @@ const scrollToSection = (sectionId: string) => {
   scrollEl.scrollTo({ top, behavior: resolveScrollBehavior('smooth') });
 };
 
-/** 预留的分区元素重建钩子，当前为空实现 */
-const rebuildSectionEls = () => {};
-
 /** 按滚动位置计算当前应高亮的分区：顶部取首区、底部取末区，否则取最接近容器顶部的分区 */
 const updateActiveSection = () => {
   const scrollEl = scrollWrapperRef.value;
@@ -601,7 +676,9 @@ const updateActiveSection = () => {
     return;
   }
 
-  const sections = Array.from(scrollEl.querySelectorAll<HTMLElement>('[data-section-id]'));
+  // 分区元素走缓存（计数守卫兜底重查），不再每帧 querySelectorAll
+  ensureSectionEls();
+  const sections = sectionElsCache;
   if (sections.length === 0) {
     activeSectionId.value = chordSections.value[0]!.id;
     return;
@@ -632,7 +709,9 @@ watch(
       if (!newSections.some(s => s.id === activeSectionId.value)) activeSectionId.value = newSections[0]!.id;
     } else activeSectionId.value = null;
 
+    // 分区集合变化 ⇒ 元素缓存失效：先重查再算窗口与高亮（顺序不能反，否则这一帧仍按旧元素算）
     nextTick(() => {
+      rebuildSectionEls();
       updateActiveSection();
       updateWindow();
     });
@@ -670,7 +749,10 @@ const handleNavEdge = (key: string, currentEl: HTMLElement) => {
   const margin = getPickerGridGapPx();
   if (key === 'ArrowDown' && rowScreenTop + targetRow.height > scRect.bottom)
     scroller.scrollTop += rowScreenTop + targetRow.height - scRect.bottom + margin;
-  else if (key === 'ArrowUp' && rowScreenTop < scRect.top) scroller.scrollTop -= scRect.top - rowScreenTop + margin;
+  else if (key === 'ArrowUp' && rowScreenTop < scRect.top)
+    // 向上时额外让开吸顶的分区标题：只留行间距会把目标行顶到标题底下，而卡片顶部的和弦名
+    // 正是画在那一带（分区标题吸在容器上沿，遮挡带恒为头高）
+    scroller.scrollTop -= scRect.top - rowScreenTop + margin + getStickyHeadPx();
 
   // 两跳 rAF：滚动事件合帧 → 窗口更新渲染 → 目标卡可查询。偶尔仍未就绪再退避一帧重试
   const focusTarget = (retry = true) => {

@@ -25,7 +25,9 @@
  * - 容器自身尺寸变化（ResizeObserver，如窗口缩放/容器换绑）；
  * - 直接子元素尺寸变化（ResizeObserver 逐个观察子节点，如手风琴折叠展开、列表项高度变化
  *   —— 这类变化不改变容器自身盒尺寸，也不产生 childList/characterData 变更，必须单独观察）；
- * - 子元素增删 / 文本增删（MutationObserver，如搜索过滤、contenteditable 输入）。
+ * - 子元素增删 / 文本增删（MutationObserver，如搜索过滤、contenteditable 输入）；
+ * - 上述任一触发之后的**收尾补帧**：每串活动的最后一帧再重测一次，用来收下「与本次重测同帧、
+ *   但排在本指令之后才写入」的宿主状态（典型：宿主按吸附态改写的内缩量目标值）。见 syncEdgeFade。
  */
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import {
@@ -94,6 +96,8 @@ interface EdgeFadeState {
   offsetSwitchTimer: ReturnType<typeof setTimeout> | null;
   /** 已应用的内缩量目标值（与宿主写的 --fade-offset-target 比对，不同才启动切换时序） */
   appliedOffset: string;
+  /** 自上次重测以来是否收到过触发信号：决定要不要收尾补一帧，见 syncEdgeFade */
+  signalSinceSync: boolean;
   /** 平滑卸载的延时句柄：端点过渡回 0 后再摘 mask；重新挂载时取消 */
   clearTimer: ReturnType<typeof setTimeout> | null;
   /** 容器尺寸观察器；mounted 内创建，创建前为 null */
@@ -248,6 +252,12 @@ const templateKey = (mode: FadeMode, options: ResolvedOptions): string => `${mod
  * （比闪更显眼）。利用「两端点均为 0 时整条渐变不透明、内缩量怎么动都看不见」这一点，
  * 把位置变化藏在羽化的淡出—淡入之间：看到的是羽化在原处收起、在新处展开，中间没有平移。
  *
+ * 终值以**收尾时重新读到的目标**为准，不是启动那一刻捕获的那个：淡出的这 170ms 里宿主的吸附
+ * 判定会继续跑（快速滚动时每个分组接缝都会翻一次目标——接缝瞬间无头吸附 → 0px，越过接缝立刻
+ * 又有头吸附 → 头高）。拿启动时的旧值收尾等于把中间态当成终值写死，而这条路径结束后不会再有任何
+ * 事件来纠正它：表现就是「飞快滚到底、头明明还吸附着，羽化却停在无吸附的顶部位置」。时序期间
+ * 到达的新目标一律不处理（不打断，免得看见平移），全部由收尾那次重读统一收敛。
+ *
  * @returns 本次端点已由时序接管（调用方不要再写端点）
  */
 function switchFadeOffset(el: HTMLElement, state: EdgeFadeState, mode: FadeMode): boolean {
@@ -255,11 +265,10 @@ function switchFadeOffset(el: HTMLElement, state: EdgeFadeState, mode: FadeMode)
   const target = el.style.getPropertyValue(FADE_OFFSET_TARGET_PROP).trim();
   if (!target || target === state.appliedOffset) return false;
 
-  state.appliedOffset = target;
-
   const values = computeFadeValues(el, mode, state.options.flushEps);
   // 当前根本没有羽化（两端点都是 0）：位置变化不可见，直接改、不必走时序
   if (Object.values(values).every(v => v === 0)) {
+    state.appliedOffset = target;
     applyFadeOffsetInstantly(el, target);
     return false;
   }
@@ -271,8 +280,11 @@ function switchFadeOffset(el: HTMLElement, state: EdgeFadeState, mode: FadeMode)
   // 若位置与淡出同时开始，就会看到羽化带一边变淡一边平移——这正是要避免的观感
   state.offsetSwitchTimer = setTimeout(() => {
     state.offsetSwitchTimer = null;
+    // 收尾重读宿主目标（见上方说明）：此刻才判定「终值到底是哪个」
+    const latest = el.style.getPropertyValue(FADE_OFFSET_TARGET_PROP).trim() || target;
+    state.appliedOffset = latest;
     // 此刻羽化不可见，位置瞬时到位（过渡与否都看不见，瞬时最省事也最保险）
-    applyFadeOffsetInstantly(el, target);
+    applyFadeOffsetInstantly(el, latest);
     writeFade(el, state, computeFadeValues(el, mode, state.options.flushEps)); // 在新位置淡入
   }, FADE_TRANSITION_MS + 20);
   return true;
@@ -347,12 +359,34 @@ function mountFadeMask(el: HTMLElement, state: EdgeFadeState, mode: FadeMode): v
 }
 
 /**
+ * 帧末重测 + **收尾补帧**。`syncEdgeFadeNow` 只负责这一次同步，本函数负责「要不要再补一帧」。
+ *
+ * 为什么要补：宿主把「此刻该让开多少」写成 `--fade-offset-target` 之后，本指令**下一帧**才读到它。
+ * 两边都是监听同一个滚动容器的帧末 rAF，谁先跑取决于监听的注册顺序——宿主（useStickyHeads）写在
+ * 指令所在组件的**祖先**里时，指令的 mounted 先于宿主的 onMounted，于是宿主排在本指令之后：同一帧
+ * 内本指令先跑、宿主后跑，本帧读到的永远是宿主上一帧写下的值。滚动持续时无所谓（下一帧就追上了），
+ * 但滚动**停在**某一帧时，那一帧写入的终值再也没人读——羽化永久停在上一帧的位置（现象：飞快滚到底、
+ * 分组头明明还吸附着，羽化却留在无吸附的顶部位置）。
+ *
+ * 补帧判据用「本次重测消费到了触发信号」：任何一次滚动 / 尺寸变化 / 子节点变化的**最后一帧**都会
+ * 被多看一眼，信号一断就自然停下——链长恒为 1，不会自锁成每帧空转的循环。宿主写目标值与本指令读
+ * 目标值由同一批事件驱动（同一个容器的 scroll、同一批 ResizeObserver 交付），所以「宿主写了新值」
+ * 的那一帧必定带着信号，补帧必然发生；若注册顺序恰好有利（宿主先跑），这多出来的一帧只是空转一次。
+ */
+function syncEdgeFade(el: HTMLElement, state: EdgeFadeState): void {
+  const signalled = state.signalSinceSync;
+  state.signalSinceSync = false;
+  syncEdgeFadeNow(el, state);
+  if (signalled) state.scheduleSync();
+}
+
+/**
  * 按当前滚动位置与溢出轴同步羽化：
  * - 未溢出：清除遮罩（内容完整可见，无需羽化）；
  * - 单轴溢出：该轴贴边一侧渐隐量 0，被裁切一侧 1；
  * - 双轴溢出：两轴各自独立按滚动位置驱动端点，mask 以 intersect 合成。
  */
-function syncEdgeFade(el: HTMLElement, state: EdgeFadeState): void {
+function syncEdgeFadeNow(el: HTMLElement, state: EdgeFadeState): void {
   const { options } = state;
   if (!options.enabled) {
     clearFade(el, state);
@@ -389,6 +423,7 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
       lastOffset: null,
       offsetSwitchTimer: null,
       appliedOffset: '',
+      signalSinceSync: false,
       clearTimer: null,
       observer: null,
       observedChildren: new Set(),
@@ -409,11 +444,18 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
     const { schedule: scheduleSync, cancel: cancelSync } = useRafThrottle(() => syncEdgeFade(el, state));
     state.scheduleSync = scheduleSync;
 
-    const onScroll = () => scheduleSync();
+    /** 标记「收到了触发信号」并排帧。信号是收尾补帧的依据（见 syncEdgeFade），
+     *  故触发路径一律走它，只有补帧自身用 scheduleSync（补帧不再产生信号，链才会终止） */
+    const requestSync = () => {
+      state.signalSinceSync = true;
+      scheduleSync();
+    };
+
+    const onScroll = () => requestSync();
     el.addEventListener('scroll', onScroll, { passive: true });
 
     // 容器自身与直接子元素共用同一个 observer：任一盒尺寸变化都触发重测
-    const observer = new ResizeObserver(() => scheduleSync());
+    const observer = new ResizeObserver(() => requestSync());
     observer.observe(el);
     for (const child of Array.from(el.children)) {
       observer.observe(child);
@@ -426,7 +468,7 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
     // 需 MutationObserver 兜底重测
     const mutationObserver = new MutationObserver(mutations => {
       updateObservedChildren(el, state, mutations);
-      scheduleSync();
+      requestSync();
     });
     mutationObserver.observe(el, { childList: true, subtree: true, characterData: true });
 
@@ -449,6 +491,7 @@ export const vEdgeFade: Directive<HTMLElement, EdgeFadeBinding, EdgeFadeModifier
     // 且很可能被紧随其后的 DOM 变更作废、下一轮 patch 再算一次——正是本文件开头
     // 「重测一律走帧末合帧」要避免的情形。选项变更属低频事件，延后一帧在视觉上不可辨；
     // rAF 回调仍早于下一帧绘制，不会出现无羽化的闪帧。
+    state.signalSinceSync = true;
     state.scheduleSync();
   },
 

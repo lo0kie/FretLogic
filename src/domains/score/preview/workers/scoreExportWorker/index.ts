@@ -12,7 +12,13 @@
 import { getScorePageSize } from '@/domains/score/constants';
 
 import { syncFretboardStyleKey } from './scoreExportFretboard';
-import { applyLayoutScales, EXPORT_JPEG_QUALITY, LAYOUT, wrapScoreLines } from './scoreExportLayout';
+import {
+  applyLayoutScales,
+  EXPORT_JPEG_QUALITY,
+  LAYOUT,
+  setTrimEmptyEdgeFrets,
+  wrapScoreLines,
+} from './scoreExportLayout';
 import {
   composeFooterPages,
   computePageLineRanges,
@@ -56,6 +62,7 @@ if (typeof self !== 'undefined')
         fontScale = 100,
         fretboardScale = 100,
         showBarre = true,
+        trimEmptyEdgeFrets = false,
         ignoreEmptySpace: ignoreEmptySpaceMode = false,
         lyricsFontWeight: lyricsFontWeightMode = 'regular',
         exportQuality = EXPORT_JPEG_QUALITY,
@@ -74,6 +81,9 @@ if (typeof self !== 'undefined')
 
       // 排列和弦配置的缩放参数先于任何布局计算生效
       applyLayoutScales(fontScale, fretboardScale);
+      // 品窗收紧档位与布局缩放同为「一次渲染一份」的模块级状态：在消息入口一次设定，
+      // 之后行内容高（装箱链）与指板绘制读的是同一份，不会各算一套
+      setTrimEmptyEdgeFrets(trimEmptyEdgeFrets);
 
       // 样式纪元（主题配色 + 缩放后几何）变化即清空指板位图缓存：旧位图画法已不成立，
       // 留着只会被 LRU 顶替而白占内存（缩放滑块连续拖动会产生一串新纪元）

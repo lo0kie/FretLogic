@@ -109,9 +109,11 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
   const legacySongs = parseJson(entries.get(STORAGE_KEYS.SONGS));
   if (Array.isArray(legacySongs)) rawSongs.push(...legacySongs);
 
-  // N2：chordRepository.save 是「同一事务内 clear() + 全量 put」——只在确有和弦库旧键
-  // （GROUPS / CHORD_LIST）时才允许走它；仅残留歌曲旧键时若照搬全量写，会把 IDB 里
-  // 已有的分组/和弦库清成 0（expected=0 让回读核验恒真，删源键后无退路）。
+  // N2：仅确有和弦库旧键（GROUPS / CHORD_LIST）时才允许走和弦库写回。
+  // 备注（P2 审计 #22 修订）：此处曾以「save 是同一事务内 clear() + 全量 put」为理由，save 现已改
+  // 为「同事务 + 按引用 diff」（见 chordRepository.save，无 clear()），但**结论不变**——diff 的语义
+  // 仍是以传入快照为准：快照里没有的实体被判为删除。故仅残留歌曲旧键时若照搬空快照写回，
+  // 仍会把 IDB 里已有的分组/和弦库删成 0（expected=0 让回读核验恒真，删源键后无退路）。
   const hasChordLibraryKeys = entries.has(STORAGE_KEYS.GROUPS) || entries.has(STORAGE_KEYS.CHORD_LIST);
   const hasEntityData = hasChordLibraryKeys || rawSongs.length > 0;
 
@@ -210,8 +212,9 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
 
   // ── 删除前的诚实核验：本流程唯一不可逆动作的守门 ──────────────────────────────
   // 写入层有两种情况会把「失败」伪装成成功，都不能作为可删依据：
-  //   ① 配额熔断期：idb.put 直接 `return Promise.resolve('')`（见 idb.ts 的 isPersistBlocked 分支），
-  //      kv 落盘在 flushNow 里被整段跳过，而事务照常 complete、Promise 照常 resolve；
+  //   ① 配额熔断期：idb 的写入型操作会抛错（idb.ts 的 isPersistBlocked 分支），但 kv 侧的
+  //      flushNow 内部 catch 后只上报、不向外抛（idbKv），故 flushIdbKv() 照常 resolve——
+  //      这批偏好键实际没落盘，调用方看不出来；
   //   ② 本轮写入自身刚把熔断器打开：reportPersistFailure 收到 QuotaExceeded 即置位，
   //      此后 kvSet / flushIdbKv 全部静默失效（RETIRED_FLAG_KEY 也写不进去）。
   // 若在这种状态下照旧 removeItem，就是真删掉用户唯一的本地副本且下次启动已无可重试的源数据。
