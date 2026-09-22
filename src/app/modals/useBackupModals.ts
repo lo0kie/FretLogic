@@ -199,15 +199,14 @@ export function useBackupModals() {
   };
 
   /** 打开导出弹窗，默认勾选本地可用类别（敏感凭据 syncSettings 默认不勾选） */
-  const openExport = () => {
+  const openExport = () =>
     // 默认勾选全部本地可用的业务类别；出于安全考量，含凭据的同步配置默认不勾选，需用户显式选择
-    open('export', {
+    void open('export', {
       exportSelection: {
         ...exportAvailability.value,
         syncSettings: false,
       },
     });
-  };
 
   /** header-extra 全选：导出面板在全部可用类别间切换 */
   const handleExportSelectAll = () => {
@@ -233,14 +232,10 @@ export function useBackupModals() {
   };
 
   /** 确认导出：实现懒加载（triggerFullExport 含载荷构建/加密/下载整条链） */
-  const handleExportConfirm = async () => {
-    await (await import('./backupModalActions')).handleExportConfirm();
-  };
+  const handleExportConfirm = async () => void (await (await import('./backupModalActions')).handleExportConfirm());
 
   /** 确认导入：实现懒加载（按勾选覆盖写入 + 加密凭据解密） */
-  const handleImportConfirm = async () => {
-    await (await import('./backupModalActions')).handleImportConfirm();
-  };
+  const handleImportConfirm = async () => void (await (await import('./backupModalActions')).handleImportConfirm());
 
   /** 预取备份动作实现模块（只拉取不执行）：弹窗容器挂载时调用，消除确认按钮的 chunk 拉取死区 */
   const preloadBackupActions = (): Promise<unknown> => import('./backupModalActions');

@@ -118,15 +118,12 @@ export const NOTE_DISPLAY = {
   /** 指板手指音符基础字号（px） */
   FINGER_FONT_SIZE: 40,
   /** 升降号相对基础字号的缩放比例（两者共用） */
-  ACCIDENTAL_SCALE: 0.62,
+  ACCIDENTAL_SCALE: 0.6,
   /** 指板升降号相对基础字号的垂直上移比例（正值向上） */
-  ACCIDENTAL_RAISE_RATIO: 0.28,
+  ACCIDENTAL_RAISE_RATIO: 0.3,
 } as const;
 
 /** 指板圆点/空弦配色已迁移至 tokens.scss 的 --fb-* CSS 变量（FretboardNote 消费 var()，明暗主题随 tokens 切换） */
-
-/** 横按提示箭头颜色过渡时长（ms，FretboardSvg 计算样式） */
-export const BARRE_ARROW_TRANSITION_MS = 150;
 
 /** 离屏指板图 Canvas 渲染专用尺寸与主题配色（供 FretboardCanvas 与导出渲染使用） */
 export const FRETBOARD_CANVAS_CONFIG = {

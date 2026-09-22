@@ -49,15 +49,16 @@ export interface FloatingArrowStyleInput {
   borderColor: string;
   /** 箭头相对面板的堆叠层级，默认 0（垫在面板之下） */
   zIndex?: number;
-  /** 箭头方块边长（px），默认 8；贴边偏移自动按 -(size/2 - 1) 计算 */
+  /** 箭头方块边长（px），默认 12；贴边偏移自动按 -(size/2) + 1 - borderWidth 计算 */
   size?: number;
   borderWidth?: number;
 }
 
 /**
- * 构建浮层箭头的样式：方块旋转 45°（默认 8px，可传 size 调整，楔形顶部自动插入面板 1px），
+ * 构建浮层箭头的样式：方块旋转 45°（默认 12px，可传 size 调整，楔形顶部自动插入面板 1px），
  * 由 floating-ui arrow middleware 提供定位，按 placement 决定贴边方向与保留的边框。
- * BasePopover（声明式绑定）与 vTooltip（命令式赋值）共用，保证两者的箭头渲染完全一致。
+ * 四个消费方共用，保证箭头渲染完全一致：BasePopover 与指板横按胶囊走模板 :style 绑定，
+ * vTooltip 与 v-scrollbar 读数气泡走 applyFloatingArrowStyle 命令式赋值。
  */
 export function buildFloatingArrowStyle({
   arrowX,
@@ -103,4 +104,18 @@ export function buildFloatingArrowStyle({
     borderLeftWidth: keepB === 'left' ? '1px' : '0px',
     borderRightWidth: keepB === 'right' ? '1px' : '0px',
   } as CSSProperties;
+}
+
+/**
+ * 把箭头样式写入元素：按 camelCase 直赋。
+ *
+ * buildFloatingArrowStyle 产出的键都是标准 camelCase（不再有 -webkit- 前缀键），
+ * 故无需 setProperty 的 kebab 形态。两个命令式消费方（vTooltip 单例、v-scrollbar 读数气泡）
+ * 此前各写一份逐字相同的循环；BasePopover / 指板横按胶囊走模板 :style 绑定，不经此函数。
+ */
+export function applyFloatingArrowStyle(el: HTMLElement, style: CSSProperties): void {
+  for (const [key, value] of Object.entries(style)) {
+    if (value == null) continue;
+    (el.style as unknown as Record<string, string>)[key] = String(value);
+  }
 }

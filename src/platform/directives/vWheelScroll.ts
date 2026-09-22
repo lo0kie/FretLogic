@@ -201,9 +201,7 @@ const smoothStateMap = new WeakMap<HTMLElement, SmoothScrollState>();
 const wheelScrollSeenEvents = new WeakSet<WheelEvent>();
 
 /** 登记「本事件已进入某处生效中的 v-wheel-scroll 策略」——策略的取舍（消费或放行）即最终结论 */
-export const markWheelScrollSeen = (e: WheelEvent): void => {
-  wheelScrollSeenEvents.add(e);
-};
+export const markWheelScrollSeen = (e: WheelEvent): void => void wheelScrollSeenEvents.add(e);
 
 /** 本事件是否已被某处生效中的 v-wheel-scroll 策略看过（v-scrollbar 的 overlay 兜底据此决定是否接手） */
 export const isWheelScrollSeen = (e: WheelEvent): boolean => wheelScrollSeenEvents.has(e);
@@ -240,9 +238,8 @@ const maxOffset = (el: HTMLElement, axis: 'x' | 'y'): number =>
  * smooth 模式退化成每个事件只挪一小步。'instant' 强制瞬时到位，绕开 CSS 动画，
  * 使「像素位移 × 倍率」成为确定结果（自带 rAF 缓动也才能正确插值）。
  */
-const setScrollOffset = (el: HTMLElement, axis: 'x' | 'y', value: number) => {
-  el.scrollTo(axis === 'y' ? { top: value, behavior: 'instant' } : { left: value, behavior: 'instant' });
-};
+const setScrollOffset = (el: HTMLElement, axis: 'x' | 'y', value: number) =>
+  void el.scrollTo(axis === 'y' ? { top: value, behavior: 'instant' } : { left: value, behavior: 'instant' });
 
 /** 该容器在该轴上还能否按 delta 的方向继续位移（余量判据与 onWheel 内的一致，留 1px 子像素容差）。 */
 const canScrollBy = (el: HTMLElement, axis: 'x' | 'y', delta: number): boolean => {

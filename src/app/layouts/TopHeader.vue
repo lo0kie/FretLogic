@@ -237,7 +237,7 @@
         </template>
       </BaseMenu>
 
-      <BaseMenu :items="themeMenuItems">
+      <BaseMenu :items="themeMenuItems" :model="themePreference" @pick="pickTheme($event)">
         <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
             :aria-expanded="isOpen"
@@ -301,12 +301,10 @@
     confirm-text="确认上传"
     title="确认上传至云端"
   >
-    <div class="py-xs">
-      <p class="m-0 text-xs/relaxed text-fg-body">
-        确定要将本地数据（和弦库、乐谱库与设置）上传至
-        <strong class="text-fg-title">{{ currentSchemeName }}</strong> 吗？
-      </p>
-    </div>
+    <p class="m-0 py-xs text-xs/relaxed text-fg-body">
+      确定要将本地数据（和弦库、乐谱库与设置）上传至
+      <strong class="text-fg-title">{{ currentSchemeName }}</strong> 吗？
+    </p>
   </BaseModal>
 
   <BaseModal
@@ -318,13 +316,11 @@
     confirm-text="确认拉取"
     title="确认从云端拉取"
   >
-    <div class="py-xs">
-      <p class="m-0 text-xs/relaxed text-fg-body">
-        确定要从
-        <strong class="text-fg-title">{{ currentSchemeName }}</strong>
-        拉取云端备份数据吗？拉取完成后将进入导入面板供您勾选应用。
-      </p>
-    </div>
+    <p class="m-0 py-xs text-xs/relaxed text-fg-body">
+      确定要从
+      <strong class="text-fg-title">{{ currentSchemeName }}</strong>
+      拉取云端备份数据吗？拉取完成后将进入导入面板供您勾选应用。
+    </p>
   </BaseModal>
 
   <BaseModal
@@ -334,12 +330,10 @@
     confirm-text="仍要导入"
     title="导入确认"
   >
-    <div class="py-xs">
-      <p class="m-0 text-xs/relaxed text-fg-body">
-        这段文字未包含可识别的和弦或标题结构，确定仍按
-        <strong class="text-fg-title">纯歌词</strong>新建乐谱吗？
-      </p>
-    </div>
+    <p class="m-0 py-xs text-xs/relaxed text-fg-body">
+      这段文字未包含可识别的和弦或标题结构，确定仍按
+      <strong class="text-fg-title">纯歌词</strong>新建乐谱吗？
+    </p>
   </BaseModal>
 
   <SyncModalContainer v-model:is-sync-modal-open="isSyncModalOpen" />
@@ -386,6 +380,7 @@ import HeaderConfigPopover from './HeaderConfigPopover.vue';
 import type { ScoreActiveTab } from '@/domains/score/editor/store/scoreEditorStore';
 import type { PortableSong } from '@/domains/score/transfer/textCodec';
 import type { PasteSongOutcome } from '@/domains/score/transfer/useTextTransfer';
+import type { ThemePreference } from '@/platform/composables/useTheme';
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
 
@@ -482,9 +477,8 @@ const handleConfirmLyricsImport = () => {
 };
 
 /** 打开开源仓库主页（GitHub），使用 noopener 安全新标签页 */
-const openSourceRepository = () => {
-  window.open('https://github.com/lo0kie/FretLogic', '_blank', 'noopener,noreferrer');
-};
+const openSourceRepository = () =>
+  void window.open('https://github.com/lo0kie/FretLogic', '_blank', 'noopener,noreferrer');
 
 const activeNavPath = computed(() => {
   const matched = NAV_OPTIONS.find(opt => opt.value === route.path);
@@ -514,35 +508,15 @@ const { isDark, setTheme, preference: themePreference } = useTheme();
 const themeTriggerIcon = computed(() => (isDark.value ? 'moon' : 'sun'));
 const themeTriggerIconClass = computed(() => (isDark.value ? 'text-primary' : 'text-warning'));
 
-const themeMenuItems = computed<MenuItem[]>(() => [
-  {
-    label: '浅色模式',
-    icon: 'sun',
-    color: 'var(--color-warning)',
-    checked: themePreference.value === 'light',
-    action: () => {
-      setTheme('light');
-    },
-  },
-  {
-    label: '深色模式',
-    icon: 'moon',
-    color: 'var(--color-primary)',
-    checked: themePreference.value === 'dark',
-    action: () => {
-      setTheme('dark');
-    },
-  },
-  {
-    label: '跟随系统',
-    icon: 'laptop',
-    color: 'var(--text-title)',
-    checked: themePreference.value === 'auto',
-    action: () => {
-      setTheme('auto');
-    },
-  },
-]);
+/** 主题菜单：勾选态与点击都由菜单层的 `model` / `pick` 派生，这里只描述「有哪些项」 */
+const themeMenuItems: MenuItem[] = [
+  { label: '浅色模式', icon: 'sun', color: 'var(--color-warning)', value: 'light' },
+  { label: '深色模式', icon: 'moon', color: 'var(--color-primary)', value: 'dark' },
+  { label: '跟随系统', icon: 'laptop', color: 'var(--text-title)', value: 'auto' },
+];
+
+/** 菜单项 value 是 string，这里收窄回主题偏好联合类型 */
+const pickTheme = (value: string): void => void setTheme(value as ThemePreference);
 
 const { triggerGlobalSync, pullFromRemote, resolvePushCredentialIssue, isSyncing, isPulling } = useSyncService();
 // 空闲时预取各懒加载动作链的 chunk（同步/导出/试听/复制粘贴）：
@@ -597,9 +571,7 @@ const handleSyncMenuClick = () => {
     uiStore.notice.warning({
       title: issue,
       actionText: '去配置',
-      onAction: () => {
-        openSyncSettings();
-      },
+      onAction: () => void openSyncSettings(),
     });
     return;
   }
@@ -624,14 +596,18 @@ const syncMenuItems = computed<MenuItem[]>(() => [
   {
     label: '同步目标',
     icon: getSyncProviderMeta(settingsStore.syncTarget).icon,
+    // 子菜单是单选组：勾选态与点击由本层的 model / onPick 派生，子项只描述 label/icon/value。
+    // 收窄用 find 而非 as 断言 —— 非法值直接忽略，不会静默写坏 syncTarget
+    model: settingsStore.syncTarget,
+    onPick: value => {
+      const kind = SYNC_PROVIDER_ORDER.find(k => k === value);
+      if (kind !== undefined) settingsStore.syncTarget = kind;
+    },
     children: SYNC_PROVIDER_ORDER.map(kind => ({
       label: SYNC_PROVIDER_META[kind].label,
       icon: SYNC_PROVIDER_META[kind].icon,
-      checked: settingsStore.syncTarget === kind,
+      value: kind,
       keepOpen: true,
-      action: () => {
-        settingsStore.syncTarget = kind;
-      },
     })),
   },
   // 同步设置入口放在一级：「同步目标」子菜单只负责切换「推送 / 拉取」使用的云端方案，
@@ -678,9 +654,7 @@ const scoreModeOptions = computed<SegmentOption<ScoreActiveTab>[]>(() => [
 ]);
 
 /** 乐谱页切 Tab：委托 useScoreRouteSync 统一写 Store 并镜像 URL（push 产生历史，可后退回放） */
-const handleScoreTabChange = (val: ScoreActiveTab) => {
-  void scoreRouteSync.switchTab(val);
-};
+const handleScoreTabChange = (val: ScoreActiveTab) => void scoreRouteSync.switchTab(val);
 
 const isSyncModalOpen = ref(false);
 /** 开发面板（仅 dev 构建挂载）：构建信息 / 数据概览 / 缓存与存储操作 */

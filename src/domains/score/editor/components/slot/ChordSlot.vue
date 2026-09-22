@@ -10,9 +10,9 @@
     :is-drag-active
     :is-drop-target
     :is-picker-target
+    :left-chord-gap
     :slot-key
     :aria-label="ariaLabelText"
-    :is-left-adjacent="leftChordGap"
     :title="slotTitle"
     @click="emit('click')"
     @pointerdown="handleSlotPointerDown($event)"

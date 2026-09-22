@@ -216,10 +216,7 @@ const executeScroll = (el: HTMLElement, opts: ScrollIntoViewOptions, isMount: bo
   };
 
   if (opts.delay && opts.delay > 0) window.setTimeout(doScroll, opts.delay);
-  else
-    nextTick(() => {
-      requestAnimationFrame(doScroll);
-    });
+  else nextTick(() => void requestAnimationFrame(doScroll));
 };
 
 // ==================== .settle：异步布局稳定后自愈重滚 ====================
@@ -388,12 +385,18 @@ export const vScrollIntoView: Directive<HTMLElement, ScrollIntoViewBinding, Scro
     const registration = activatedRegistrations.get(el);
     if (registration) registration.bindingRef.current = binding;
 
+    // 快速通道：本指令挂在**每个列表项**上，宿主每次重渲染都会把所有条目过一遍 updated，而其中真正
+    // 要滚动的只有极少数（「未激活 → 激活」的那一个）。下面两条判据都不需要解析完整配置：
+    //   ① settle 观察者不在表里 —— settleUpdate 在没有 tracker 时本就早退，此刻解析出的 opts 无人消费；
+    //   ② 值没有发生「未激活 → 激活」的翻转 —— 唯一会真正执行滚动的情形。
+    // 两者都不成立时，本次 updated 除了上面的 binding 回写之外没有任何可做的动作。
+    const currentActive = isActive(binding.value);
+    const previousActive = isActive(binding.oldValue);
+    if (!settleMap.has(el) && !(currentActive && !previousActive)) return;
+
     const opts = normalizeOptions(binding.value, binding.modifiers);
     settleUpdate(el, opts);
     if (opts.once) return;
-
-    const currentActive = isActive(binding.value);
-    const previousActive = isActive(binding.oldValue);
 
     if (currentActive && !previousActive) {
       executeScroll(el, opts, false);

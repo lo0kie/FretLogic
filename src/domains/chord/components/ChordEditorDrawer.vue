@@ -169,9 +169,7 @@ watch(
 );
 
 /** 重置：回到全新空白草稿（编辑态下等同放弃修改） */
-const handleReset = () => {
-  editorStore.resetEditor();
-};
+const handleReset = () => void editorStore.resetEditor();
 
 const uiStore = useUiStore();
 

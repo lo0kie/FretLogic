@@ -13,8 +13,7 @@
  */
 import { logger } from './logger';
 
-export const prefetch = (loader: () => Promise<unknown>, scope: string): void => {
-  void loader().catch((error: unknown) => {
-    logger.debug(scope, '预取 chunk 失败，将在首次使用时按需重新加载', error);
-  });
-};
+export const prefetch = (loader: () => Promise<unknown>, scope: string): void =>
+  void loader().catch(
+    (error: unknown) => void logger.debug(scope, '预取 chunk 失败，将在首次使用时按需重新加载', error)
+  );

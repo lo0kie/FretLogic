@@ -58,11 +58,26 @@ import type { CSSProperties } from 'vue';
  * 固定参考分辨率存一份、显示时缩放。两者粒度都不同，故同一指板在两侧各光栅化一次、各占一份内存，
  * 互不命中，这是当前设计的结果。主线程消费方：ChordPickerPanel / ChordModalsContainer /
  * ChordSlot（乐谱编辑器槽位，与和弦库真共享）/ WorkbenchExportPanel / WorkbenchVariantsPanel。
+ *
+ * 【内存配额】位图缓存另设一条字节口径上限，与上面的条数上限**并列**生效，任一先到即驱逐。
+ *
+ * 补这条口径的原因：条数只说得出「同时画过多少张」，说不出「占了多少内存」。单条按 w×h×4 算，
+ * 5 品指板约 0.38MB、24 品指板能到 2MB 以上（差一个量级），于是同样 256 条，真实占用可在
+ * 70MB 到 500MB 之间漂 —— 配额把天花板钉在字节上，条目多大都不越界。
+ *
+ * 96MiB 的来由：约等于上面「容量 256」那段估出的最坏值（256 条 × 单条 5 品 0.38MB ≈ 98MB）。
+ * 实测平均约 280KB/条（256 条 ≈ 70MB），故常规尺寸下配额**不介入**、不新增淘汰；
+ * 只有条目显著偏大（长品窗 / 高 DPR）时才提前挡一刀。它是一道显式的内存天花板，
+ * 不是一次「顺手压内存」的收紧 —— 要主动降内存仍请动 REFERENCE_DISPLAY_SCALE，
+ * 不要靠调小本值去换 churn（理由见上）。
  */
+const BITMAP_CACHE_MAX_BYTES = 96 * 1024 * 1024;
+
 const bitmapCache = createLruCache<ImageBitmap | HTMLCanvasElement>(256, {
   name: '指板位图',
-  // 位图本体即解码后的 RGBA 像素：w×h×4 字节（开发面板字节读数用）
+  // 位图本体即解码后的 RGBA 像素：w×h×4 字节（开发面板字节读数 + 内存配额口径）
   weigh: (_, item) => item.width * item.height * 4,
+  maxBytes: BITMAP_CACHE_MAX_BYTES,
   onEvict: (_key, item) => {
     if ('close' in item && typeof item.close === 'function') item.close();
   },

@@ -174,9 +174,7 @@ const PANEL_CLASS =
   'floating-panel fixed top-lg right-lg bottom-lg flex flex-col overflow-hidden rounded-lg border border-border-light bg-surface-panel shadow-floating transition-transform duration-slow ease-out';
 
 /** 离场开始：派发 close（位移端点已由 Transition 的 leave-to class 接管） */
-const handleBeforeLeave = () => {
-  emit('close');
-};
+const handleBeforeLeave = () => void emit('close');
 
 /** 离场动画结束：释放层号供后续浮层复用，并派发 closed */
 const handleAfterLeave = () => {

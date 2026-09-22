@@ -46,9 +46,7 @@ export function setupChordScoreBridge(): void {
   });
 
   /** 和弦合并（移动时去重）：被丢弃的重复项引用重定向到保留项，避免槽位死引用 */
-  chordStore.onChordsMerged(mapping => {
-    songStore.remapChordBindings(mapping);
-  });
+  chordStore.onChordsMerged(mapping => void songStore.remapChordBindings(mapping));
 
   // 水合期清洗去重丢弃的重复项同样要重定向：水合先于本桥接装配，事件已错过，取暂存映射补偿
   const pendingMerged = chordStore.consumeHydrateMergeMapping();

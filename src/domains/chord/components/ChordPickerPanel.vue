@@ -398,9 +398,7 @@ const resetScrollTop = () => {
   if (scrollEl) scrollEl.scrollTop = 0;
   if (chordSections.value.length > 0) activeSectionId.value = chordSections.value[0]!.id;
 
-  nextTick(() => {
-    updateActiveSection();
-  });
+  nextTick(() => void updateActiveSection());
 };
 
 /** 用户切换分组页签：应用该组默认排序、记录状态并回到顶部 */
@@ -596,14 +594,10 @@ const getStickyHeadPx = (): number =>
 
 /** 和弦卡片按下：交给宿主拖拽系统登记外部拖拽会话（移动超阈值起拖，落点与落地动作由宿主决定）。
  *  宿主未注入 dragChordStarter 时卡片不参与拖拽，交互退化为点击派发 select */
-const handleCardPointerDown = (event: PointerEvent, chord: Chord) => {
-  props.dragChordStarter?.(chord, event);
-};
+const handleCardPointerDown = (event: PointerEvent, chord: Chord) => void props.dragChordStarter?.(chord, event);
 
 /** 卡片点击 / 回车 / 空格：派发 select 给宿主（拖拽起手后指针已移开，卡片收不到 click，不会误触发） */
-const handleCardSelect = (chord: Chord) => {
-  emit('select', chord);
-};
+const handleCardSelect = (chord: Chord) => void emit('select', chord);
 
 /**
  * 用户点击"新建和弦"：就地打开和弦编辑抽屉（不跳转任何页面）；

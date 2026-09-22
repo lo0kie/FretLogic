@@ -82,9 +82,9 @@ export function useSongModals() {
   };
 
   /** 打开乐谱配置弹窗，回填当前标题/歌手/原调/拍号/调性/变调夹 */
-  const openConfig = (song: Song) => {
+  const openConfig = (song: Song) =>
     // key 由 playKey + capo 实时派生，无需单独读取持久化字段
-    open('config', {
+    void open('config', {
       activeSong: song,
       title: song.title,
       singer: song.singer ?? '',
@@ -93,7 +93,6 @@ export function useSongModals() {
       playKey: song.playKey || 'C',
       capo: song.capo || 0,
     });
-  };
 
   /** 确认保存乐谱配置 */
   const handleConfigSong = () => {
@@ -114,9 +113,7 @@ export function useSongModals() {
   };
 
   /** 打开清空和弦确认弹窗 */
-  const openClear = (song: Song) => {
-    open('clear', { activeSong: song });
-  };
+  const openClear = (song: Song) => void open('clear', { activeSong: song });
 
   /** 确认清空该乐谱的全部和弦槽位 */
   const handleClearChords = () => {

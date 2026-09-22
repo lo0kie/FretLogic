@@ -83,15 +83,14 @@ export function useFretboardInteraction(
   };
 
   /** 右击空白处/禁用空弦：直接设为可用(对应品位或空弦)并设为主音 */
-  const setAvailableAndRoot = (sIdx: number, fret: number) => {
-    emitStringsUpdate(
+  const setAvailableAndRoot = (sIdx: number, fret: number) =>
+    void emitStringsUpdate(
       cloned => {
         const str = cloned[sIdx];
         if (str) setStringFret(str, fret, sIdx);
       },
       () => sIdx
     );
-  };
 
   /** 右键：命中已有音符则切换主音，空品位/空弦则设为可用音符并标记为主音 */
   const handleRightClickRoot = (e: MouseEvent) => {
@@ -141,22 +140,20 @@ export function useFretboardInteraction(
   };
 
   /** 切换某弦某品位的音符：该品位已有音符则清除为静音，否则按下到该品位（指针点击与键盘 Enter 共用） */
-  const toggleNoteAt = (sIdx: number, fret: number) => {
-    emitStringsUpdate(cloned => {
+  const toggleNoteAt = (sIdx: number, fret: number) =>
+    void emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
       if (!str) return;
       if (str.fret === fret) setStringFret(str, -1, sIdx);
       else setStringFret(str, fret, sIdx);
     });
-  };
 
   /** 清除某弦音符（置为静音），键盘 Delete/Backspace 使用 */
-  const muteString = (sIdx: number) => {
-    emitStringsUpdate(cloned => {
+  const muteString = (sIdx: number) =>
+    void emitStringsUpdate(cloned => {
       const str = cloned[sIdx];
       if (str) setStringFret(str, -1, sIdx);
     });
-  };
 
   // ===== 滑动绘制：按住左键滑过品位格连续添加/删除音符 =====
   // 按下处已有音符 → 本次滑动为「删除」模式（经过的音符被抹掉）；空白处 → 「添加」模式（经过的品位按上音符）。

@@ -4,12 +4,6 @@
   "version": "1.0.0",
   "type": "module",
   "packageManager": "pnpm@11.20.0",
-  "pnpm": {
-    "patches": [
-      "patches/@ianvs__prettier-plugin-sort-imports.patch",
-      "patches/prettier-plugin-organize-attributes.patch"
-    ]
-  },
   "scripts": {
     "dev": "vite",
     "dev:proxy": "node scripts/dev-webdav-proxy.mjs",

@@ -12,7 +12,7 @@ export interface ScrollbarOptions {
    *  独立的、模板内无子节点的稳定容器——把外来节点追加进 Vue 会 diff 的容器，
    *  会破坏补丁锚点（切换子节点时触发 insertBefore NotFoundError） */
   overlayParent?: HTMLElement | null | (() => HTMLElement | null | undefined);
-  /** 是否启用指令；false 时整体惰性——不注入样式、不挂 overlay、不注册状态（默认 true）。
+  /** 是否启用指令；false 时整体惰性——不注入变量桥、不挂 overlay、不注册状态（默认 true）。
    *  供「指令必须常驻模板、启用与否由运行时 prop 决定」的宿主（如 BasePopover 面板）使用，
    *  避免在 <Transition> 内用 v-if/v-else 双分支切换指令挂载（会触发锚点补丁错误） */
   enabled?: boolean;
@@ -75,7 +75,7 @@ export interface ScrollbarBubbleOptions {
   onlyInteractive?: boolean;
 }
 
-/** 气泡观感档位：'sm' 紧凑读数（默认）/ 'md' 放大一档；两档均在注入样式里各有一条规则，见 ensureGlobalStyle */
+/** 气泡观感档位：'sm' 紧凑读数（默认）/ 'md' 放大一档；两档在 vScrollbar.scss 里各有一条规则（.v-scrollbar-bubble--sm / --md） */
 export type ScrollbarBubbleSize = 'sm' | 'md';
 
 export type ScrollbarBinding = ScrollbarOptions | null | undefined;

@@ -8,13 +8,11 @@
     confirm-text="拉取数据"
     title="从线上拉取数据"
   >
-    <div class="py-xs">
-      <p class="m-0 text-sm/relaxed text-fg-body">
-        首次使用，是否从
-        <strong class="text-fg-title">{{ schemeName }}</strong>
-        拉取云端数据？
-      </p>
-    </div>
+    <p class="m-0 py-xs text-sm/relaxed text-fg-body">
+      首次使用，是否从
+      <strong class="text-fg-title">{{ schemeName }}</strong>
+      拉取云端数据？
+    </p>
   </BaseModal>
 </template>
 

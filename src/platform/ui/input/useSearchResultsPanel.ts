@@ -96,14 +96,13 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
     searchActiveIndex.value = -1;
   };
 
-  const scrollActiveItemIntoView = () => {
-    nextTick(() => {
+  const scrollActiveItemIntoView = () =>
+    void nextTick(() => {
       if (!scrollEl.value || searchActiveIndex.value < 0) return;
       const items = scrollEl.value.querySelectorAll<HTMLElement>('button, [role="button"], [data-search-item]');
       const activeEl = items[searchActiveIndex.value];
       activeEl?.scrollIntoView({ block: 'nearest', behavior: resolveScrollBehavior('smooth') });
     });
-  };
 
   /** 键盘导航：↓/↑ 环绕移动活跃项，Enter 选中，Escape 收起面板 */
   const handleKeydown = (e: KeyboardEvent) => {

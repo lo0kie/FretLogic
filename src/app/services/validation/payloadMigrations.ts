@@ -36,10 +36,10 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: ImportExportPayload) => void>
     // v1 -> v2：isRoot/label/isAccidental/isInverted/fingerprint 等派生字段已移除，
     // 由 normalizeChord 在 sanitize 阶段统一清理，此处无需额外处理。
   },
-  2: (payload: ImportExportPayload) => {
+  2: (payload: ImportExportPayload) =>
     // v2 -> v3：把历史混合写法（元组 / 对象 / 缺字段）统一收敛为对象数组 [{fret, preferFlat}]，
     // 同时把历史遗留的数字 id 规范化为字符串（songs.chordMap 引用均为字符串，需保持匹配）
-    forEachRecord(payload.chords, chord => {
+    void forEachRecord(payload.chords, chord => {
       if (!chord || typeof chord !== 'object') return;
       const legacyChord = chord as { id?: unknown };
       if (typeof legacyChord.id === 'number') legacyChord.id = String(legacyChord.id);
@@ -55,12 +55,11 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: ImportExportPayload) => void>
           const legacy = (s !== null && typeof s === 'object' ? s : {}) as { fret?: unknown; preferFlat?: unknown };
           return { fret: typeof legacy.fret === 'number' ? legacy.fret : -1, preferFlat: Boolean(legacy.preferFlat) };
         }) as Chord['strings'];
-    });
-  },
-  3: (payload: ImportExportPayload) => {
+    }),
+  3: (payload: ImportExportPayload) =>
     // v3 -> v4：song.key 移除，改由 playKey + capo 实时派生。
     // sanitizeSongs 会兜底 playKey 并丢弃 key，此处防御性清理旧数据。
-    forEachRecord(payload.songs, song => {
+    void forEachRecord(payload.songs, song => {
       if (song && typeof song === 'object' && 'key' in song) {
         const legacy = song as unknown as RawSong;
         if (typeof legacy.playKey !== 'string' || !legacy.playKey)
@@ -68,8 +67,7 @@ const PAYLOAD_MIGRATIONS: Record<number, (payload: ImportExportPayload) => void>
 
         delete legacy['key'];
       }
-    });
-  },
+    }),
   4: () => {
     // v4 -> v5：新增可选 syncSettings（云端同步配置随备份导出/导入），旧包无此字段，无需处理。
   },

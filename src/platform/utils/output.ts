@@ -20,9 +20,10 @@ const URL_REVOKE_DELAY_MS = 1000;
 
 /** Canvas 转 Blob 的 Promise 封装。 */
 export const canvasToBlob = (canvas: HTMLCanvasElement, type = 'image/png', quality = 0.95): Promise<Blob> =>
-  new Promise((resolve, reject) => {
-    canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Canvas 转 Blob 失败'))), type, quality);
-  });
+  new Promise(
+    (resolve, reject) =>
+      void canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Canvas 转 Blob 失败'))), type, quality)
+  );
 
 /** 标题转安全文件名：剔除路径非法字符与多余空白，供下载命名使用。 */
 export const buildExportFileName = (title: string): string => {
@@ -110,9 +111,7 @@ export function buildImagePdf(pages: PdfImagePage[]): Uint8Array {
     offsets[num] = size;
     pushText(`${num} 0 obj\n`);
   };
-  const endObj = (): void => {
-    pushText('endobj\n');
-  };
+  const endObj = (): void => void pushText('endobj\n');
   /** 数值序列化：整数直接输出，否则保留两位小数 */
   const num = (value: number): string => (Number.isInteger(value) ? String(value) : value.toFixed(2));
 

@@ -115,10 +115,10 @@ const muteStrokeWidth = computed(() => 3);
 
 const SVG_FONT_SIZE_RATIO = 0.9;
 const svgFontSize = computed(() => NOTE_DISPLAY.FINGER_FONT_SIZE * SVG_FONT_SIZE_RATIO);
-const svgAccidentalFontSize = computed(() => svgFontSize.value * 0.6);
+const svgAccidentalFontSize = computed(() => svgFontSize.value * NOTE_DISPLAY.ACCIDENTAL_SCALE);
 const labelVerticalOffset = computed(() => svgFontSize.value * 0.35);
 const accidentalDx = computed(() => svgFontSize.value * 0.03);
-const accidentalDy = computed(() => -svgFontSize.value * 0.3);
+const accidentalDy = computed(() => -svgFontSize.value * NOTE_DISPLAY.ACCIDENTAL_RAISE_RATIO);
 const hoverFillColor = computed(() => 'var(--fb-hover)');
 
 const noteBgColor = computed(() => {

@@ -106,9 +106,7 @@ export const attachTrackClick = (state: ScrollbarState, axis: 'x' | 'y'): void =
     state.trackPressPointer = { clientX: e.clientX, clientY: e.clientY };
     jumpToPointer(state, axis, e, 'smooth');
   };
-  const onMove = (e: PointerEvent): void => {
-    reJump(e);
-  };
+  const onMove = (e: PointerEvent): void => void reJump(e);
   const endPress = (e: PointerEvent): void => {
     cancelLongPress();
     if (!longPressActive) return;

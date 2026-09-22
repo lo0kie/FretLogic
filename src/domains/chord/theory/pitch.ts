@@ -2,10 +2,10 @@
  * 音高 / 音名层：空弦基准音、MIDI 音高、音级索引、音名（含升降号）标签与格式化。
  *
  * 从 theory.ts 抽出（原 32~153 行，剔除仅 chordSort 使用的 `isChordToneRelative`）。
- * 共享符号 NOTES_SHARP / NOTES_FLAT 来自 theory.shared；其余私有常量本文件自持。
+ * 私有常量本文件自持（原先从 theory.shared 取的 NOTES_SHARP / NOTES_FLAT 只被已删除的
+ * 死码 calcNoteLabel 使用，已随之一并移除；这两个符号在 transpose.ts 中仍在使用）。
  */
 
-import { NOTES_FLAT, NOTES_SHARP } from './theory.shared';
 import { DEFAULT_TUNING_MAPPING } from './tuning';
 
 import type { GuitarStringEntity } from '@/domains/fretboard/types';
@@ -73,7 +73,7 @@ export const formatStringLabel = (
   return composeNoteLabel(label, isAccidental, preferFlat);
 };
 
-/** 组装显示用音名：label + isAccidental + preferFlat 拼装（与 calcNoteLabel 一致，使用 #/b） */
+/** 组装显示用音名：label + isAccidental + preferFlat 拼装（使用 #/b） */
 export const composeNoteLabel = (label: string, isAccidental: boolean, preferFlat: boolean): string =>
   isAccidental ? label + (preferFlat ? 'b' : '#') : label;
 
@@ -111,17 +111,4 @@ export const canTogglePitchAccidental = (
   if (fretVal < 0) return false;
   const pitchIndex = calcPitchIndex(sIdx, fretVal, fretOffset, baseStrings);
   return isAccidentalNote(pitchIndex);
-};
-
-/** 计算某弦某品的音名标签（按 preferFlat 选择升号/降号记法），静音弦返回 ✕。 */
-export const calcNoteLabel = (
-  sIdx: number,
-  fretVal: number,
-  fretOffset: number = 0,
-  preferFlat: boolean = false,
-  baseStrings: readonly number[] = DEFAULT_TUNING_MAPPING
-): string => {
-  if (fretVal === -1) return '✕';
-  const noteIndex = calcPitchIndex(sIdx, fretVal, fretOffset, baseStrings);
-  return preferFlat ? (NOTES_FLAT[noteIndex] ?? '') : (NOTES_SHARP[noteIndex] ?? '');
 };

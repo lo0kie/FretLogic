@@ -167,9 +167,7 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
             message:
               '其他设备可能因此误判云端版本并用旧数据覆盖这次上传。建议点击「重试上传」补写标记；重试会重新上传一遍相同数据，是安全的。',
             actionText: '重试上传',
-            onAction: async () => {
-              await syncToRemote();
-            },
+            onAction: async () => void (await syncToRemote()),
           });
           // 继续抛出：本次同步仍按失败收场（返回 false），不把半成品状态伪装成成功
           throw metaError;
@@ -312,9 +310,7 @@ const buildSyncFixAction = (
   if (direction === 'local-newer')
     return {
       actionText: '上传至云端',
-      onAction: async () => {
-        await syncToRemote();
-      },
+      onAction: async () => void (await syncToRemote()),
     };
 
   if (direction === 'cloud-newer')

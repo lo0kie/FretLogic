@@ -49,9 +49,10 @@ export const readTextFromClipboard = async (): Promise<string> => {
 
 /** Canvas 转 Blob 的 Promise 封装 */
 const canvasToBlob = (canvas: HTMLCanvasElement, type = 'image/png', quality = 0.95): Promise<Blob> =>
-  new Promise((resolve, reject) => {
-    canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Canvas 转 Blob 失败'))), type, quality);
-  });
+  new Promise(
+    (resolve, reject) =>
+      void canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Canvas 转 Blob 失败'))), type, quality)
+  );
 
 /**
  * PNG 转码 Worker 版：解码、重绘与编码全部在独立线程，主线程零阻塞
@@ -81,9 +82,7 @@ const reencodeAsPngInWorker = (blob: Blob): Promise<Blob> =>
       }
       finish(() => resolve(msg.png!));
     };
-    worker.onerror = event => {
-      finish(() => reject(new Error(event.message || 'PNG 转码线程异常')));
-    };
+    worker.onerror = event => void finish(() => void reject(new Error(event.message || 'PNG 转码线程异常')));
     worker.postMessage({ blob });
   });
 

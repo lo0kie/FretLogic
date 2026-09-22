@@ -260,6 +260,7 @@ import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { calcDropdownMaxHeight } from '@/platform/ui/dropdown/dropdownPanelHeight';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { useFormRowControlId } from '@/platform/ui/form/formRowContext';
 import { useSearchResultsPanel } from '@/platform/ui/input/useSearchResultsPanel';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { resolveComponentWidth } from '@/platform/utils/constants';
@@ -413,6 +414,10 @@ const inputAttrs = computed(() => {
   return rest;
 });
 const id = useId();
+// 上报原生 input 的 id 给所在 BaseFormRow：行的 label 据此输出 for。
+// 注意外部传入的 id 无效——模板里 :id 排在 v-bind="inputAttrs" 之后，内部生成的 id 恒定覆盖它，
+// 故上报的必须是这里生成的 id，才能与元素实际 id 一致。
+useFormRowControlId(() => id);
 const slots = useSlots();
 /** 尺寸解析：行内 props > BaseForm 注入上下文 > 默认 md */
 const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
@@ -521,9 +526,7 @@ const handleEnterKeyup = () => {
   emit('enter');
 };
 
-watch(localValue, () => {
-  resetActiveIndex();
-});
+watch(localValue, () => void resetActiveIndex());
 
 const isPasswordMode = computed(() => isPassword || type === 'password');
 

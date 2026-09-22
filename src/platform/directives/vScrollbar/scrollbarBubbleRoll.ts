@@ -12,7 +12,7 @@
 
 import type { RollCell } from '@/platform/utils/motion';
 
-/** 气泡读数单次翻页的时长（ms）：注入样式把它写成读数节点上的 --br-duration，
+/** 气泡读数单次翻页的时长（ms）：vScrollbar.scss 把它写成读数节点上的 --br-duration，
  *  供全局 .br-roll-*（与 BaseRollingText 共用的那份过渡规则）读取——不复用其兜底值，
  *  免得时长这个数字在两处各写一份。与 BaseRollingText 的默认 duration 一致 */
 export const BUBBLE_ROLL_MS = 200;
@@ -23,7 +23,7 @@ const ROLL_ENTER_FROM_CLASS = 'br-roll-enter-from';
 const ROLL_ENTER_ACTIVE_CLASS = 'br-roll-enter-active';
 const ROLL_LEAVE_ACTIVE_CLASS = 'br-roll-leave-active';
 const ROLL_LEAVE_TO_CLASS = 'br-roll-leave-to';
-/** 翻页单元与字符的类名（静态样式在注入样式里；结构对齐 BaseRollingText 的逐字符窗口） */
+/** 翻页单元与字符的类名（静态样式在 vScrollbar.scss 里；结构对齐 BaseRollingText 的逐字符窗口） */
 const BUBBLE_CELL_CLASS = 'v-scrollbar-bubble-cell';
 const BUBBLE_CHAR_CLASS = 'v-scrollbar-bubble-char';
 

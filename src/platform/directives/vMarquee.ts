@@ -103,13 +103,23 @@ interface MarqueeState {
   resetAnim: Animation | null;
   /** 动画激活期间的逐帧遮罩同步循环（rAF id，0 表示未运行） */
   maskRaf: number;
-  /** 遮罩状态签名（羽化量 "start|end" 或 null=未启用）：相同则跳过重复样式写入 */
+  /** 遮罩端点值签名（羽化量 "start|end" 或 null=尚未写入）：相同则跳过重复样式写入 */
   lastFade: string | null;
+  /**
+   * 遮罩模板是否已铺在元素上。与 lastFade **分开**记：早前「铺过没有」与「端点值是多少」
+   * 共用 lastFade 一个字段，而逐帧循环也会写端点值 —— 只要写过，该字段就不再为 null，
+   * 于是遮罩被撤下后重新启用时会跳过「铺模板」分支，羽化静默失效。
+   */
+  maskApplied: boolean;
+  /** 是否已做过首次测量：挂载期的 rAF 兜底据此去重（共享 RO 的初始回调通常已先测过） */
+  measured: boolean;
   /** 停止尺寸观察的清理函数（observeResize 返回）；null 表示尚未挂载观察者 */
   stopResize: (() => void) | null;
   /** hover / focus 事件的实际宿主（options.trigger 的解析结果）：'self' 时即 el 自身，给选择器时为命中的祖先 */
   host: HTMLElement;
-  /** 解绑当前宿主上的四个事件监听（trigger 变更 / 卸载时调用） */
+  /** 当前是否真的挂着宿主监听：只有「会滚的 hover 模式」元素才挂，其余元素不需要 hover 判定 */
+  hostAttached: boolean;
+  /** 解绑当前宿主上的四个事件监听（trigger 变更 / 卸载 / 溢出消失时调用） */
   detachHostEvents: () => void;
   cleanups: (() => void)[];
 }
@@ -175,7 +185,8 @@ function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
   const { fade, direction } = state.options;
   if (!fade || !state.overflowing) {
     // 未启用羽化或内容未溢出：彻底清除遮罩与羽化量（溢出消失时同步回收）
-    if (state.lastFade !== null) {
+    if (state.maskApplied) {
+      state.maskApplied = false;
       state.lastFade = null;
       el.style.maskImage = '';
       el.style.setProperty('-webkit-mask-image', '');
@@ -186,13 +197,14 @@ function applyFadeMask(el: HTMLElement, state: MarqueeState): void {
     return;
   }
   ensureFadeProperties();
-  if (state.lastFade === null) {
-    // 首次启用：铺常驻遮罩模板（端点透明度由自定义属性控制，全程黑 = 无羽化效果）
+  if (!state.maskApplied) {
+    // 尚未铺（首次启用，或撤下后重新启用）：铺常驻遮罩模板（端点透明度由自定义属性控制，全程黑 = 无羽化效果）
     const fadeWidth = typeof fade === 'number' ? fade : MARQUEE_DEFAULT_FADE_WIDTH;
     const mask = buildEdgeFadeMask('x', fadeWidth);
     el.style.maskImage = mask;
     el.style.setProperty('-webkit-mask-image', mask);
     el.style.transition = fadeTransition(MARQUEE_FADE_TRANSITION_MS);
+    state.maskApplied = true;
   }
   const active = state.overflowing && !state.reducedMotion && shouldAnimate(state);
   let start: number;
@@ -295,6 +307,7 @@ function stopMaskLoop(state: MarqueeState): void {
 function measure(el: HTMLElement): void {
   const state = STATES.get(el);
   if (!state) return;
+  state.measured = true;
   const { inner, options } = state;
 
   const dist = Math.max(0, inner.scrollWidth - el.clientWidth);
@@ -451,6 +464,8 @@ function startPingpong(el: HTMLElement, state: MarqueeState): void {
 function update(el: HTMLElement): void {
   const state = STATES.get(el);
   if (!state) return;
+  // 监听挂/摘跟着溢出状态走，且排在 active 计算之前：正悬停时内容才变窄/变宽的情形本帧就能接上
+  syncHostEvents(state);
   const { inner, options, overflowing } = state;
 
   const active = overflowing && !state.reducedMotion && shouldAnimate(state);
@@ -494,8 +509,9 @@ function update(el: HTMLElement): void {
       startContinuous(el, state);
     } else startPingpong(el, state);
 
-    // 动画激活期间逐帧同步遮罩：起点/终点贴边的一侧不渐隐
-    startMaskLoop(state, maskDist, travelDist);
+    // 动画激活期间逐帧同步遮罩：起点/终点贴边的一侧不渐隐。
+    // 未开羽化时整个逐帧循环没必要存在 —— 它每帧只为写两个没有被任何 mask 引用的自定义属性
+    if (options.fade) startMaskLoop(state, maskDist, travelDist);
   }
 
   if (active && !state.wasActive) emit(el, 'marquee-start', undefined, options.onStart);
@@ -574,6 +590,38 @@ function attachHostEvents(el: HTMLElement, state: MarqueeState): () => void {
   };
 }
 
+/**
+ * 按「是否真的会滚」挂/摘宿主监听 —— 不溢出元素的主要成本闸门。
+ *
+ * 只有 `mode:'hover'` 且**已溢出**的元素才需要 hover/focus 判定：`always` 模式根本不看这两个
+ * 状态（shouldAnimate 直接返回 true），`none` 永不滚，未溢出的元素连动画都不会有。
+ * 早前是每项都无条件挂四个监听，代价是鼠标扫过一列卡片时，每张卡（含全部静态短标题）
+ * 都要走一遍 update → deactivateMarquee → 两次内联样式写。
+ *
+ * 溢出状态翻转必由共享 ResizeObserver 触发 measure（el 宽度与 inner 内容宽都在观测目标里），
+ * 所以「变宽/变窄才开始需要监听」这条路径不会漏。
+ *
+ * 摘监听时把 hovered/focused 归零：事件不会再回来，留着这两个 true 会让元素下次溢出时
+ * 「没人悬停却在滚」。反向（本应挂、且此刻正悬停/正聚焦）用 :hover / activeElement 采样补齐，
+ * 否则「悬停中窗口变窄」要等鼠标重新进出才生效。
+ */
+function syncHostEvents(state: MarqueeState): void {
+  const wanted = state.overflowing && state.options.mode === 'hover';
+  if (wanted === state.hostAttached) return;
+  if (wanted) {
+    state.detachHostEvents = attachHostEvents(state.el, state);
+    state.hostAttached = true;
+    if (state.host.matches(':hover')) state.hovered = true;
+    if (state.host.contains(document.activeElement)) state.focused = true;
+  } else {
+    state.detachHostEvents();
+    state.detachHostEvents = () => {};
+    state.hostAttached = false;
+    state.hovered = false;
+    state.focused = false;
+  }
+}
+
 export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> = {
   mounted(el, binding) {
     const options = resolveOptions(binding.value, binding.modifiers);
@@ -604,8 +652,11 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
       resetAnim: null,
       maskRaf: 0,
       lastFade: null,
+      maskApplied: false,
+      measured: false,
       stopResize: null,
       host: el,
+      hostAttached: false,
       detachHostEvents: () => {},
       cleanups: [],
     };
@@ -616,9 +667,11 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     MQL_STATES.add(state);
     state.reducedMotion = mql.matches;
 
-    // 触发宿主由 options.trigger 决定（默认自身；给选择器则委托上级节点），挂载期解析一次。
-    // 宿主变更的检测在 updated 里：宿主换了而监听还留在原元素上，「悬停整行触发」会静默失效。
-    state.detachHostEvents = attachHostEvents(el, state);
+    // 触发宿主由 options.trigger 决定（默认自身；给选择器则委托上级节点）。
+    // 挂载期**不**直接挂监听：本指令挂在列表的每一项上，而绝大多数项是静态短文本（根本不溢出），
+    // 它们连 hover/focus 判定都不需要 —— 挂上去的唯一效果是鼠标每次扫过都触发一次 update，
+    // 在 deactivateMarquee 里白写两次内联样式。改由 syncHostEvents「确认会滚」时才挂：
+    // 首次测量（RO 初始回调或下面的 rAF 兜底）走完 update 即会补挂，宿主漂移仍由 updated 兜底。
 
     // 重点：同时监听容器 el 与内部内容 inner，确保内部文本变化时也能立即触发测量。
     // 观察者取共享单例（各元素之间无隔离需求），实例数不随列表长度增长
@@ -646,8 +699,12 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     // （典型 layout thrashing），开合大分组时那点轻微延迟主要来自这里。
     // 延到 rAF 后，同帧挂载的条目在同一批回调里测量：第一次读算完布局，后续读都落在干净布局上
     // （measure 写入的是 mask 端点 / transform / animation，都不使布局失效），一帧只重排一次。
-    // 实际首测通常由共享 ResizeObserver 的初始回调先完成——它本就发生在布局之后，同样安全
-    const firstMeasureRaf = requestAnimationFrame(() => measure(el));
+    // 实际首测通常由共享 ResizeObserver 的初始回调先完成——它本就发生在布局之后，同样安全。
+    // 故这里先看 measured：RO 已测过就直接跳过，省掉重复的一次布局读与一次 update
+    // （列表挂载是数百项规模，这笔重复对首屏开合分组是有感的）。
+    const firstMeasureRaf = requestAnimationFrame(() => {
+      if (!state.measured) measure(el);
+    });
     state.cleanups.push(() => cancelAnimationFrame(firstMeasureRaf));
   },
 
@@ -678,11 +735,16 @@ export const vMarquee: Directive<HTMLElement, MarqueeBinding, MarqueeModifiers> 
     //    layout 之后、paint 之前触发，不会漏帧），这里无需重复兜底。
     if (optionsChanged || hasStrayChildren) measure(el);
 
-    // 4. trigger 变更 → 宿主不再是当前元素时重挂事件。宿主换了而监听还留在原元素上，
+    // 4. 只在**真的挂着监听**时才处理宿主漂移：宿主换了而监听还留在原元素上，
     //    「悬停整行触发」就静默失效了。宿主解析走 closest，所以该判断对 DOM 结构变化同样兜底。
-    if (resolveTriggerHost(el, state.options.trigger) !== state.host) {
+    //    未挂监听（不溢出的静态项）时宿主漂移无所谓：下次溢出时 syncHostEvents 会按当时的 DOM
+    //    重新解析，没必要为它们每次都做一遍 closest。
+    if (state.hostAttached && resolveTriggerHost(el, state.options.trigger) !== state.host) {
       state.detachHostEvents();
-      state.detachHostEvents = attachHostEvents(el, state);
+      state.hostAttached = false;
+      state.detachHostEvents = () => {};
+      // 摘掉后立刻按新宿主重挂（syncHostEvents 只在「该挂而未挂」时才动手，宿主此刻已解析到最新）
+      syncHostEvents(state);
     }
   },
 

@@ -1,12 +1,10 @@
-import { autoUpdate, computePosition } from '@floating-ui/dom';
-
-import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
-import { buildFloatingMiddlewares } from '@/platform/ui/popover/floatingCore';
+import { applyFloatingArrowStyle, buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
+import { buildFloatingMiddlewares, createFloatingController } from '@/platform/ui/popover/floatingCore';
 import { acquireFloatingZ, releaseFloatingZ } from '@/platform/ui/popover/floatingZ';
 import { TOOLTIP_HIDE_CLEANUP_DELAY_MS, TOOLTIP_INTERACTIVE_MIN_HIDE_DELAY_MS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 
-import type { Placement } from '@floating-ui/dom';
+import type { ComputePositionReturn, Placement } from '@floating-ui/dom';
 import type { Directive } from 'vue';
 
 import './vTooltip.scss';
@@ -176,13 +174,13 @@ export const normalize = (value: TooltipBinding, modifiers?: Record<string, bool
 };
 
 // 全局单例 DOM 与状态
-// 结构：box（仅负责 fixed 定位，透明） > content（真正的视觉样式）+ arrow（sibling，z-index 更低，
-// 与 content 重叠的一半会被 content 的不透明背景盖住，只露出朝外的尖角）
+// 结构：box（仅负责 fixed 定位，透明） > content（真正的视觉样式）+ arrow（sibling）
+// 层序：arrow 取 z-index:2、content 取 z-index:1 —— 箭头高一层，探入面板的 1px 楔形才能压住
+// 面板边框与箭头之间的抗锯齿缝隙；插入面板的那一半由 clip-path 物理裁掉，不靠 content 的背景遮挡。
 let globalBox: HTMLDivElement | null = null;
 let globalContent: HTMLDivElement | null = null;
 let globalArrow: HTMLDivElement | null = null;
 let currentTargetEl: HTMLElement | null = null;
-let cleanupAutoUpdate: (() => void) | null = null;
 let showTimer: ReturnType<typeof setTimeout> | null = null;
 /** showTimer 归属的宿主元素：卸载时据以判断挂起的延时显示是否属于本实例（单例定时器的归属标记） */
 let showTimerEl: HTMLElement | null = null;
@@ -233,7 +231,9 @@ const getOrCreateGlobalBox = (): HTMLDivElement | null => {
 
     globalArrow = document.createElement('div');
     globalArrow.className = 'v-tooltip-arrow';
-    globalArrow.style.cssText = 'position:absolute;z-index:2;width:8px;height:8px;pointer-events:none;display:none;';
+    // 尺寸/配色/贴边全部由 buildFloatingArrowStyle 在每次定位时写入，此处只保留不随 placement 变化的骨架。
+    // 初始 display:none，首次显示前必然已写入样式，故不声明尺寸兜底值（避免与默认 size=12 不一致的残留）。
+    globalArrow.style.cssText = 'position:absolute;z-index:2;pointer-events:none;display:none;';
     globalBox.appendChild(globalArrow);
 
     // 交互式 tooltip：鼠标移入浮层本身时不收起，移出才收起
@@ -260,52 +260,68 @@ const releaseBoxZ = () => {
   boxZOwned = false;
 };
 
-/** 用 floating-ui 计算并写入定位与箭头样式；锚点已切换时丢弃本次结果。 */
-const updatePosition = async (el: HTMLElement, opts: TooltipOptions): Promise<void> => {
-  if (!globalBox || !isClient) return;
+/**
+ * 本次定位使用的提示配置：控制器 getter 读它，每次 updatePosition 前刷新。
+ *
+ * 由此 autoUpdate 的跟随帧总是用**最新**配置（show 与 updated 两条路径都会刷新），不再像原先
+ * 那样把首次 show 时的 opts 捕获进 autoUpdate 闭包——那时 updated 改了方位/间距之后，
+ * 滚动跟随仍按旧配置重算。
+ */
+let activeOpts: TooltipOptions | null = null;
 
-  const middleware = buildFloatingMiddlewares({
-    offsetDistance: opts.offset ?? 12,
-    showArrow: opts.showArrow,
-    getArrowEl: () => globalArrow,
-  });
-
-  // try/catch 兜底：computePosition 是异步计算，若锚点/参考 DOM 在计算期间被移除等极端场景会 reject。
-  // 这里吞掉而非上抛——否则 executeShow / autoUpdate 回调 / updated 钩子里的 fire-and-forget 调用
-  // 都会留下未处理的 rejected Promise。
-  let result: Awaited<ReturnType<typeof computePosition>>;
-  try {
-    result = await computePosition(el, globalBox, {
-      placement: opts.placement ?? 'bottom',
-      strategy: 'fixed',
-      middleware,
-    });
-  } catch {
-    return;
-  }
+/** 写回定位结果：box 的 left/top + 箭头样式（与 BasePopover 共用同一份箭头构建逻辑）。 */
+const applyFloatingResult = (result: ComputePositionReturn): void => {
   const { x, y, placement, middlewareData } = result;
-
-  if (!globalBox || currentTargetEl !== el) return;
+  if (!globalBox) return;
   globalBox.style.left = `${x}px`;
   globalBox.style.top = `${y}px`;
 
-  if (globalArrow)
-    if (opts.showArrow && middlewareData.arrow) {
-      // 与 BasePopover 共用同一份箭头构建逻辑（zIndex: 2 垫在 content 之下）
-      const style = buildFloatingArrowStyle({
+  if (!globalArrow) return;
+  // zIndex: 2 高于 content 的 z-index:1——箭头高一层，探入面板的 1px 楔形才能压住面板边框与
+  // 箭头之间的抗锯齿缝隙；插入面板的那一半由 buildFloatingArrowStyle 的 clip-path 物理裁掉
+  if (activeOpts?.showArrow && middlewareData.arrow) {
+    applyFloatingArrowStyle(
+      globalArrow,
+      buildFloatingArrowStyle({
         arrowX: middlewareData.arrow.x,
         arrowY: middlewareData.arrow.y,
         placement,
         background: 'var(--bg-panel)',
         borderColor: 'var(--glass-border)',
         zIndex: 2,
-      });
-      globalArrow.style.display = 'block';
-      for (const [key, value] of Object.entries(style)) {
-        if (value == null) continue;
-        (globalArrow.style as unknown as Record<string, string>)[key] = value;
-      }
-    } else globalArrow.style.display = 'none';
+      })
+    );
+    globalArrow.style.display = 'block';
+  } else globalArrow.style.display = 'none';
+};
+
+/**
+ * 定位与跟随统一走 floatingCore 的控制器（computePosition + 竞态守卫 + autoUpdate 生命周期），
+ * 与 BasePopover 经 useFloatingPosition 走的是同一份实现：锚点取 currentTargetEl，竞态守卫
+ * 即「计算期间锚点是否已切换」，与原先手写的 `currentTargetEl !== el` 等价。
+ */
+const floatingController = createFloatingController({
+  getReference: () => currentTargetEl,
+  getFloating: () => globalBox,
+  getPlacement: () => activeOpts?.placement ?? 'bottom',
+  getMiddleware: () =>
+    buildFloatingMiddlewares({
+      offsetDistance: activeOpts?.offset ?? 12,
+      showArrow: activeOpts?.showArrow,
+      getArrowEl: () => globalArrow,
+    }),
+  onResult: applyFloatingResult,
+});
+
+/**
+ * 刷新配置并重算一次定位。
+ *
+ * 返回 Promise：显示路径要 await 它（先定位再显隐，杜绝从 (0,0) 闪入）；updated 钩子与
+ * autoUpdate 回调则裸调用——控制器内部吞掉 rejection，不存在未处理的 rejection。
+ */
+const updatePosition = (opts: TooltipOptions): Promise<void> => {
+  activeOpts = opts;
+  return floatingController.compute();
 };
 
 /** 清空显示/隐藏的延时定时器（含淡出后的清理定时器）。 */
@@ -421,7 +437,7 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
   setTooltipContent(globalContent, opts);
 
   // 关键：先计算准确坐标，完成后再显隐，杜绝 (0, 0) 闪烁 (FOUC)
-  await updatePosition(el, opts);
+  await updatePosition(opts);
 
   if (currentTargetEl === el) {
     // 每次显示都从「入场前态」开始：连续滑过多个 trigger 时，上一次 hide 定时器会被
@@ -438,8 +454,7 @@ const executeShow = async (el: HTMLElement, opts: TooltipOptions) => {
     box.style.opacity = '1';
     box.style.transform = 'scale(1)';
 
-    cleanupAutoUpdate?.();
-    cleanupAutoUpdate = autoUpdate(el, box, () => updatePosition(el, opts));
+    floatingController.attach();
     startScrollListening();
   }
 };
@@ -487,8 +502,7 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
         globalBox.style.opacity = '0';
         globalBox.style.transform = 'scale(0.95)';
         releaseBoxZ();
-        cleanupAutoUpdate?.();
-        cleanupAutoUpdate = null;
+        floatingController.detach();
 
         // 淡出动画结束后的补设 visibility:hidden：存引用并纳入 clearTimers 统一清理，
         // 避免窗口期（动画播放中）触发元素被卸载后仍留下游离定时器访问模块单例
@@ -516,8 +530,7 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
       globalBox.style.transform = 'scale(0.95)';
     }
     releaseBoxZ();
-    cleanupAutoUpdate?.();
-    cleanupAutoUpdate = null;
+    floatingController.detach();
     currentTargetEl = null;
     stopScrollListening();
   }
@@ -639,7 +652,7 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
         else if (globalContent) {
           // 显示中：同步最新内容与定位
           setTooltipContent(globalContent, handler.opts);
-          updatePosition(el, handler.opts);
+          updatePosition(handler.opts);
         }
       } else if (currentTargetEl === el)
         // 非即时隐藏：manualFade 会播放淡出出场动画
@@ -652,7 +665,7 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
       if (handler.opts.disabled || !hasTooltipContent(handler.opts)) hideTooltip(el, true);
       else if (globalContent) {
         setTooltipContent(globalContent, handler.opts);
-        updatePosition(el, handler.opts);
+        updatePosition(handler.opts);
       }
   },
   unmounted(el) {

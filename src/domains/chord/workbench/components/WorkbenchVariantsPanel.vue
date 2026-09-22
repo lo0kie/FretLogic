@@ -88,7 +88,5 @@ const isActiveVariant = (variant: Chord): boolean => {
 };
 
 /** 切换当前选中的指法变体：激活态变化自动触发卡片上的 v-scroll-into-view.x.center 进行纯横向平滑居中 */
-const handleSelectVariant = (variant: Chord) => {
-  editorStore.setEditor(variant);
-};
+const handleSelectVariant = (variant: Chord) => void editorStore.setEditor(variant);
 </script>

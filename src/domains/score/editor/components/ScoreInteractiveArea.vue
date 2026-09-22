@@ -402,9 +402,7 @@ const setupSentinelObserver = () => {
   sentinelObserver.observe(sentinel);
 };
 
-watch(sentinelRef, () => {
-  setupSentinelObserver();
-});
+watch(sentinelRef, () => void setupSentinelObserver());
 
 /** 同一首歌内编辑歌词导致行数缩减时钳制渲染窗口：
  *  renderedLineCount 只在切歌时重置（onActivated / activeSongId watch），歌内删行后窗口
@@ -440,9 +438,7 @@ const ensureSufficientRenderedLines = async () => {
   refreshEdgeVisibility();
 };
 
-onMounted(() => {
-  void ensureSufficientRenderedLines();
-});
+onMounted(() => void ensureSufficientRenderedLines());
 
 /** 快速拖拽滚动条或大幅度滚动时的兜底预加载扩容 */
 const handleScroll = () => {

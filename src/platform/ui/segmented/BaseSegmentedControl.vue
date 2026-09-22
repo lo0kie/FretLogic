@@ -2,6 +2,7 @@
   <div
     :aria-label
     :aria-disabled="disabled || undefined"
+    :aria-labelledby="ariaLabel ? undefined : rowLabelId"
     :class="controlClasses"
     :style="resolvedWidth ? { width: resolvedWidth } : undefined"
     @click.capture="handleClickCapture($event)"
@@ -86,6 +87,7 @@ import {
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { useFormRowLabelId } from '@/platform/ui/form/formRowContext';
 import { useSegmentedDrag } from '@/platform/ui/segmented/useSegmentedDrag';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
@@ -214,6 +216,8 @@ const isSelected = (val: unknown) => Object.is(modelValue.value, val);
 // 尺寸解析：行内 props > BaseForm 注入上下文 > 默认 md
 const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
 const resolvedSize = computed<ComponentSize>(() => props.size ?? controlContext?.size ?? 'md');
+/** 所在 BaseFormRow 的标签 id：根元素是 role=radiogroup 的 div，label 的 for 指不到，改用 aria-labelledby 命名整组 */
+const rowLabelId = useFormRowLabelId();
 
 const sizeConfig = computed(() =>
   props.compacted ? COMPACTED_SIZE_MAP[resolvedSize.value] : SIZE_MAP[resolvedSize.value]
@@ -471,21 +475,13 @@ const { isDragging, dragPosition, dragOverIndex, handlePointerDown, handleClickC
     modelValue.value = value as V;
     emit('change', emitValue(value as V));
   },
-  focusItem: index => {
-    items.value[index]?.focus();
-  },
+  focusItem: index => void items.value[index]?.focus(),
   remeasure: () => updateIndicatorPosition(),
   resolveIndicatorGeometry,
 });
 
 // 监听值与禁用状态变化实时更新滑块位置
-watch(
-  [() => modelValue.value, () => props.disabled],
-  () => {
-    updateIndicatorPosition();
-  },
-  { immediate: true }
-);
+watch([() => modelValue.value, () => props.disabled], () => void updateIndicatorPosition(), { immediate: true });
 
 // 同时观察容器与每个子项，使用 requestAnimationFrame 进行防抖合并
 let ro: ResizeObserver | null = null;

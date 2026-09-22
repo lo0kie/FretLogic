@@ -463,13 +463,12 @@ const pickViaInput = (options: PickFileOptions): Promise<File | null> =>
 
     // 结果只落定一次：change / cancel / 旧环境 focus 兜底三方竞争，先到先得
     let settled = false;
-    const cleanup = () => {
+    const cleanup = () =>
       // 微任务回收：先清空 value（允许同一文件重复选择），再从 DOM 移除并释放引用
-      queueMicrotask(() => {
+      void queueMicrotask(() => {
         input.value = '';
         input.remove();
       });
-    };
     const settle = (value: File | null) => {
       if (settled) return;
       settled = true;
@@ -487,9 +486,7 @@ const pickViaInput = (options: PickFileOptions): Promise<File | null> =>
 
     // 旧环境兜底：取消选择框不派发 cancel 也不派发 change，Promise 会永久挂起。
     // 选择框关闭必然伴随窗口重新聚焦，聚焦后延时仍无结果则视为取消（给 change 留出竞速窗口）。
-    const onWindowFocus = () => {
-      window.setTimeout(() => settle(null), 1000);
-    };
+    const onWindowFocus = () => void window.setTimeout(() => void settle(null), 1000);
     window.addEventListener('focus', onWindowFocus, { once: true });
 
     input.click();

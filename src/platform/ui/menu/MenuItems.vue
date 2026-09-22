@@ -1,5 +1,11 @@
 <template>
-  <div class="flex flex-col gap-xs p-xs" ref="rootRef">
+  <div v-bind="$attrs" class="flex flex-col gap-xs p-xs" ref="rootRef">
+    <!-- inheritAttrs:false + $attrs 重定向（与 BaseCollapse 同款）：调用方的 class / data-* / aria-* 落到
+         列表根容器本体。面板根是真实元素，attrs 只有落在这里才有意义 —— 落不到 Teleport 出去的浮层上。
+
+         ⚠️ 本条注释必须留在**元素内部**：模板根元素之前若有注释，dev 模式下注释会被保留成 vnode，
+         根随即退化为 fragment（实测：注释写在根元素之前会编译出 _Fragment 根，写在元素内部则是单元素根）。
+         注：此处不可出现 HTML 注释的起止字面量，否则会触发 vue/no-parsing-error 的 nested-comment。 -->
     <template v-if="title">
       <div class="truncate px-md text-2xs leading-tight font-semibold text-fg-disabled select-none">
         {{ title }}
@@ -7,7 +13,7 @@
       <BaseDivider class="opacity-60" inset="0.25rem" />
     </template>
 
-    <template v-for="(item, index) in items" :key="item.label + index">
+    <template v-for="(item, index) in resolvedItems" :key="item.label + index">
       <BaseDivider v-if="item.divided" class="my-0.5 opacity-60" inset="0.25rem" />
 
       <MenuSubmenu
@@ -71,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onBeforeUpdate, ref, useTemplateRef } from 'vue';
+import { computed, onBeforeUnmount, onBeforeUpdate, ref, useTemplateRef } from 'vue';
 
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
@@ -91,6 +97,8 @@ const {
   size = 'md',
   panelClass = 'context-menu-box',
   panelScrollbar = false,
+  model = undefined,
+  onPick = undefined,
   onSelect = undefined,
 } = defineProps<{
   /** 菜单项数据列表（children 级联项委托给 MenuSubmenu 渲染） */
@@ -103,9 +111,30 @@ const {
   panelClass?: string;
   /** 级联子菜单面板是否用 v-scrollbar 自绘滚动条（透传 MenuSubmenu → BasePopover） */
   panelScrollbar?: boolean;
+  /**
+   * 本层单选组的当前值：给出后，带 `value` 的菜单项勾选态一律由 `item.value === model`
+   * 现算（显式 `checked` 被覆盖）。不带 `value` 的项不受影响 —— 单选项与普通项可同层混排。
+   * 不传则完全退回 `item.checked` 语义。
+   */
+  model?: string;
+  /**
+   * 本层单选组的选中回调：被点中的项带 `value` 时调用。
+   * 顶层由 BaseMenu 接上（转发为 `pick` 事件）；级联子菜单那层由 MenuSubmenu 接上 `item.onPick`。
+   */
+  onPick?: (value: string) => void;
   /** 菜单项选中回调：由容器统一处理（执行 action、关闭浮层等） */
   onSelect?: (item: MenuItem) => void;
 }>();
+
+/**
+ * 本层实际渲染的菜单项：单选组（传了 `model`）下，把带 `value` 的项的勾选态现算出来。
+ * 只覆盖带 `value` 的项 —— 同层的普通项（显式 `checked`、或压根不勾选）原样保留，
+ * 因此单选项与普通项可以同层混排。
+ */
+const resolvedItems = computed<MenuItem[]>(() => {
+  if (model === undefined) return items;
+  return items.map(item => (item.value === undefined ? item : { ...item, checked: item.value === model }));
+});
 
 const itemEls = ref<(HTMLButtonElement | null)[]>([]);
 
@@ -188,10 +217,11 @@ const closeAllSubmenus = (byScroll = false) => {
 // 守卫会连同已脱离文档的 root 一起留在登记表里
 onBeforeUnmount(releaseScrollGuard);
 
-/** 菜单项点击 / 回车：禁用态忽略，调用 onSelect 回调交给容器处理 */
+/** 菜单项点击 / 回车：禁用态忽略 → 上抛给容器 → 本层若是单选组则回调选中值 */
 const handleItemClick = (item: MenuItem) => {
   if (item.disabled) return;
   onSelect?.(item);
+  if (item.value !== undefined) onPick?.(item.value);
 };
 
 /** 聚焦第一个可用菜单项 */

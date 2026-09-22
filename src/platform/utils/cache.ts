@@ -16,6 +16,8 @@ export interface CacheStat {
   name: string;
   /** 容量上限；无上限的 memo 类缓存为 null */
   limit: number | null;
+  /** 内存配额（字节）：与条数上限并列生效。给出后开发面板按两条口径中先到者判满载 */
+  maxBytes?: number;
   /** 当前条数（**实时读数**：每次调用返回当刻值，面板靠反复采样取数） */
   size: () => number;
   /** 可选字节估算（**实时读数**）：不提供则开发面板只显示条数 */
@@ -143,6 +145,7 @@ const aggregate = (list: CacheEntry[]): CacheStat => {
   return {
     name: stats[0]!.name,
     limit: stats[0]!.limit,
+    maxBytes: stats[0]!.maxBytes,
     instances: stats.length,
     size: sum(stat => stat.size),
     bytes: allWeighed ? sum(stat => stat.bytes) : undefined,
@@ -240,19 +243,42 @@ export const createCacheSampler = (): (() => CacheStat[] | null) => {
 // ──────────────────────────── 以下原 lruCache.ts ────────────────────────────
 
 /**
- * 有上限的 LRU 缓存：超出容量时按插入顺序淘汰最旧条目。
+ * 有上限的 LRU 缓存：超限时淘汰最旧条目。
+ *
+ * 两条上限口径**并列成立、任一超限即驱逐**：
+ * - `limit`（条数）：适合「条目小、尺寸均匀」的场景（解析结果、名字分词）；
+ * - `maxBytes`（内存配额）：适合「单条尺寸悬殊、条数说明不了占用」的场景（位图、预览页图）——
+ *   同是 256 条，5 品指板与 24 品指板能差一个量级，只有按字节设限才真正框住内存。
+ *
  * 用于替换各处手写的 "size >= N 时删最旧 key" 样板。
  */
 
-export interface LruCacheOptions<K, V> {
-  /** 条目被淘汰、覆盖或清空时的销毁回调（用于释放 ImageBitmap 等底层原生资源） */
+interface LruCacheCommonOptions<K, V> {
+  /** 条目被淘汰、覆盖或清空时的销毁回调（用于释放 ImageBitmap 等底层原生资源）。
+   *  覆盖为**同一个值**时不触发（资源并未易主） */
   onEvict?: (key: K, value: V) => void;
   /** 开发面板展示名：传入后（仅 DEV）自动登记到 cacheRegistry，供开发面板查看条数/字节/清空 */
   name?: string;
   /** 单条 value 的字节估算（如位图按 w×h×4、普通数据用 common 的 estimateValueBytes）。
-   *  仅在传入 name 时用于开发面板展示；不传则该缓存只显示条数 */
+   *  给出后：开发面板显示字节读数；配合 maxBytes 时它就是驱逐口径 */
   weigh?: (key: K, value: V) => number;
 }
+
+/** 只按条数设限（此时 weigh 可给可不给：给了只是让开发面板多一项字节读数） */
+export interface CountBoundedLruOptions<K, V> extends LruCacheCommonOptions<K, V> {
+  maxBytes?: undefined;
+}
+
+/** 按内存配额设限：称重口径与配额**强制成对**。
+ *  类型上堵死「给了 maxBytes 却没给 weigh」—— 那种组合不报错，但配额永远算不出来、永远不驱逐，
+ *  等于对外声称有护栏而实际没有，正是本项目最忌讳的静默失效 */
+export interface ByteBoundedLruOptions<K, V> extends LruCacheCommonOptions<K, V> {
+  weigh: (key: K, value: V) => number;
+  /** 内存配额（字节）：条目字节合计超过即驱逐最旧项 */
+  maxBytes: number;
+}
+
+export type LruCacheOptions<K, V> = CountBoundedLruOptions<K, V> | ByteBoundedLruOptions<K, V>;
 
 export interface LruCache<K, V> {
   get(key: K): V | undefined;
@@ -268,69 +294,102 @@ export interface LruCache<K, V> {
   readonly hits: number;
   /** 未命中次数：get 未取到值时累加 */
   readonly misses: number;
+  /** 当前字节合计：给出 weigh 时随写入 / 删除 / 淘汰 / 清空增量维护；无称重口径时恒为 0 */
+  readonly bytes: number;
 }
 
-/** 创建字符串键的 LRU 缓存实例：get/set 均刷新位置，超限淘汰最旧条目，支持生命周期释放回调。 */
+/** 创建字符串键的 LRU 缓存实例：get/set 均刷新位置，超限（条数或内存配额）淘汰最旧条目，
+ *  支持生命周期释放回调。 */
 export function createLruCache<V>(limit: number, options?: LruCacheOptions<string, V>): LruCache<string, V> {
-  const map = new Map<string, V>();
+  /** 条目 = 值 + 写入时称得的字节权重。
+   *  为什么把权重随条目存下、而不是每次淘汰时重称：淘汰路径必须精确减掉该条的量，
+   *  重称等于额外要求 weigh 是纯函数、且对同一对象永远给同一个数；存下来则「加多少减多少」
+   *  天然自洽，日后 weigh 换成更精确的口径也不会在合计里留下历史漂移。 */
+  const map = new Map<string, { value: V; bytes: number }>();
+  const weigh = options?.weigh;
+  const maxBytes = options?.maxBytes;
   // 反注册句柄（仅 DEV 有值），由 dispose 消费
   let unregister: (() => void) | null = null;
-  // 字节合计的脏标记：只有会改变合计的写入才置脏（get 只改访问顺序、不影响合计）。
-  // 开发面板每秒采样一次，此前每次都要对全部条目递归估算一遍（4096 条的解析结果级结构 =
-  // 每秒数万个临时对象），而稳态下条数没变、结果完全一样。
-  // 约定：缓存内的 value 视为不可变快照（写入即新对象），若调用方原地改写已存入的对象，
-  // 读数会滞后到下一次写入 —— 这与开发面板「相对参考」的定位一致，不额外做深比较。
-  let bytesDirty = true;
+  /** 字节合计：写入 / 删除 / 淘汰 / 清空时增量维护（get 只改访问顺序、不动合计）。
+   *  它不再只是开发面板的读数 —— 内存配额驱逐必须随时知道当前占用，故称重只在写入时发生一次，
+   *  采样与访问都是 O(1)（旧实现在这里靠脏标记 + 全表重估，本就是为了绕开每秒数万个临时对象）。
+   *  约定：缓存内的 value 视为不可变快照（写入即新对象）。权重在写入时定格，
+   *  若调用方原地改写已存入的对象，合计数会与真实占用脱节，直到该键被重写。 */
   let bytesTotal = 0;
   // 命中统计：只反映「查表结果」，用于开发面板判断缓存是否真在生效。
   // 条数天然不变的全命中缓存与完全没被使用的缓存，读数完全一样，只有命中数能区分。
   let hits = 0;
   let misses = 0;
+
+  /** 摘掉一条并归还其底层资源：合计先减、再回调。
+   *  顺序不可颠倒 —— onEvict 里可能同步发起新的读写（如预览缓存回收 object URL 后立刻重渲）。 */
+  const remove = (key: string) => {
+    const entry = map.get(key);
+    if (entry === undefined) return;
+    map.delete(key);
+    bytesTotal -= entry.bytes;
+    options?.onEvict?.(key, entry.value);
+  };
+
+  /**
+   * 驱逐到两条上限都不再超出。
+   *
+   * 两条口径的兜底程度刻意不同：
+   * - 条数上限**可以驱逐到空**（limit = 0 即等效于不缓存，与旧实现一致）；
+   * - 内存配额**至少留下最后写入的那一条**：单条就超出配额的条目（一页超长乐谱、超大指板）
+   *   若也被驱逐，调用方刚算出来的结果当场丢失、下次照样得重算 —— 内存省不下来，
+   *   只是把成本转成了反复重算。代价是稳态占用可能比配额多出「一条」，换来的是不空转。
+   */
+  const trim = () => {
+    while (map.size > limit) {
+      const oldest = map.keys().next().value;
+      if (oldest === undefined) return;
+      remove(oldest);
+    }
+    while (maxBytes !== undefined && bytesTotal > maxBytes && map.size > 1) {
+      const oldest = map.keys().next().value;
+      if (oldest === undefined) return;
+      remove(oldest);
+    }
+  };
   const cache: LruCache<string, V> = {
     get: key => {
-      if (!map.has(key)) {
+      const entry = map.get(key);
+      if (entry === undefined) {
         misses++;
         return undefined;
       }
       hits++;
-      const val = map.get(key)!;
+      // 读到即刷新为最近使用：Map 按插入序迭代，故摘掉再放回即浮到队尾
       map.delete(key);
-      map.set(key, val);
-      return val;
+      map.set(key, entry);
+      return entry.value;
     },
     has: key => map.has(key),
     delete: key => {
       if (!map.has(key)) return false;
-      const val = map.get(key);
-      map.delete(key);
-      if (val !== undefined) options?.onEvict?.(key, val);
-
-      bytesDirty = true;
+      remove(key);
       return true;
     },
     set: (key, value) => {
-      // 已存在则先删除再插入，刷新到最新位置（访问序 LRU 语义）
-      if (map.has(key)) {
-        const oldVal = map.get(key);
+      const existing = map.get(key);
+      if (existing !== undefined) {
+        // 已存在则先摘掉再插入，刷新到最新位置（访问序 LRU 语义）；
+        // 值确实换了才回调归还旧值资源 —— 覆盖为同一个对象时资源并未易主
         map.delete(key);
-        if (oldVal !== undefined && oldVal !== value) options?.onEvict?.(key, oldVal);
+        bytesTotal -= existing.bytes;
+        if (existing.value !== value) options?.onEvict?.(key, existing.value);
       }
-      map.set(key, value);
-      if (map.size > limit) {
-        const oldestKey = map.keys().next().value;
-        if (oldestKey !== undefined) {
-          const oldestVal = map.get(oldestKey);
-          map.delete(oldestKey);
-          if (oldestVal !== undefined) options?.onEvict?.(oldestKey, oldestVal);
-        }
-      }
-      bytesDirty = true;
+      const bytes = weigh ? weigh(key, value) : 0;
+      map.set(key, { value, bytes });
+      bytesTotal += bytes;
+      trim();
     },
     clear: () => {
-      if (options?.onEvict) for (const [k, v] of map.entries()) options.onEvict(k, v);
+      if (options?.onEvict) for (const [key, entry] of map) options.onEvict(key, entry.value);
 
       map.clear();
-      bytesDirty = true;
+      bytesTotal = 0;
     },
     dispose: () => {
       cache.clear();
@@ -346,30 +405,23 @@ export function createLruCache<V>(limit: number, options?: LruCacheOptions<strin
     get misses() {
       return misses;
     },
+    get bytes() {
+      return bytesTotal;
+    },
   };
-  if (options?.name) {
-    const { weigh } = options;
+  if (options?.name)
     unregister = registerCache({
       name: options.name,
       limit,
+      maxBytes,
       size: () => cache.size,
       // 命中统计随每次 get 变化，是面板「缓存到底有没有在生效」的直接读数
       hits: () => cache.hits,
       misses: () => cache.misses,
-      // 惰性重算：仅在写入置脏后的首次读取时逐条累加，稳态采样直接返回上次结果
-      bytes: weigh
-        ? () => {
-            if (bytesDirty) {
-              let total = 0;
-              for (const [key, value] of map) total += weigh(key, value);
-              bytesTotal = total;
-              bytesDirty = false;
-            }
-            return bytesTotal;
-          }
-        : undefined,
+      // 写入时即记账，读数是 O(1)：面板每秒采样不再逐条重估；无称重口径则不登记，只显示条数
+      bytes: weigh ? () => bytesTotal : undefined,
       clear: () => cache.clear(),
     });
-  }
+
   return cache;
 }

@@ -15,7 +15,8 @@
       ]"
       class="form-row-main flex w-full"
     >
-      <label
+      <!-- 元素类型由 labelTag 决定：可关联控件时是 <label>，否则退化为 <span>（理由见 labelTag 说明） -->
+      <component
         v-if="label || $slots['label']"
         :class="[
           'form-row-label shrink-0 truncate font-semibold select-none',
@@ -24,12 +25,14 @@
           required ? 'flex items-center gap-1' : '',
           resolvedLabelTone === 'muted' ? 'text-fg-muted' : 'text-fg-body',
         ]"
-        :for="effectiveForId"
+        :for="labelTag === 'label' ? effectiveForId : undefined"
+        :id="labelId"
+        :is="labelTag"
         :style="layout === 'horizontal' ? labelStyle : undefined"
       >
         <slot name="label"> {{ label }} </slot>
         <span v-if="required" aria-hidden="true" class="leading-none text-danger">*</span>
-      </label>
+      </component>
 
       <div
         :class="[
@@ -62,14 +65,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, useId } from 'vue';
+import { computed, inject, provide, shallowRef, useId } from 'vue';
 
 // 行高引用控件高度标尺契约（md 档），与全工程控件单一真理源保持一致
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
-import { FORM_ROW_DENSITY_KEY } from '@/platform/ui/form/formRowContext';
+import { FORM_ROW_DENSITY_KEY, FORM_ROW_LABELLING_KEY } from '@/platform/ui/form/formRowContext';
 import { resolveComponentWidth } from '@/platform/utils/constants';
 
-import type { FormRowDensityContext } from '@/platform/ui/form/formRowContext';
+import type { FormRowDensityContext, FormRowLabelling } from '@/platform/ui/form/formRowContext';
 import type { FormComponentWidth } from '@/platform/utils/constants';
 
 const {
@@ -118,14 +121,30 @@ const {
    * 'xs'（默认）| '2xs' 缩小（弱化层级让分组标题更突出）| 'sm' / 'md' / 'lg' 逐级放大
    */
   labelSize?: '2xs' | 'xs' | 'sm' | 'md' | 'lg';
-  /** 语义关联：显式指定关联控件 id */
+  /**
+   * 语义关联：显式指定关联控件 id。
+   * 显式传值即强制渲染 <label for>，故目标必须是可标签化元素（input / select / textarea / button…）；
+   * 指向 div 类 ARIA 控件只会换回浏览器告警，那种场景应改用自动关联（aria-labelledby）。
+   */
   for?: string;
-  /** 自动关联控件 id；与 for 二选一 */
+  /** 自动关联控件 id；与 for 二选一（约束同 for） */
   inputId?: string;
 }>();
 
 // 使用 Vue 3.5 useId 保证 SSR 与客户端水合一致
 const autoId = useId();
+
+/** 行标签元素 id：非可标签化控件（role=slider / radiogroup / combobox / spinbutton）据此用 aria-labelledby 取到名称 */
+const labelId = `form-row-label-${autoId}`;
+/** 行内控件上报的实际控件 id：label 的 for 只在收到上报后才输出（详见 formRowContext 的关联绑定说明） */
+const reportedControlId = shallowRef<string | undefined>();
+const labelling: FormRowLabelling = {
+  labelId,
+  report: id => {
+    reportedControlId.value = id;
+  },
+};
+provide(FORM_ROW_LABELLING_KEY, labelling);
 
 // 密度上下文：BaseForm 等容器注入默认值，行内显式 props 优先
 const densityContext = inject<FormRowDensityContext | null>(FORM_ROW_DENSITY_KEY, null);
@@ -145,12 +164,39 @@ const LABEL_SIZE_CLASSES: Record<'2xs' | 'xs' | 'sm' | 'md' | 'lg', string> = {
   'md': 'text-base',
   'lg': 'text-lg',
 };
-/** 供默认插槽接收的控件 id（自动生成一个稳定 id，便于需要自接 id 的控件使用） */
+/**
+ * 供默认插槽接收的控件 id。行内自动关联（控件自行上报 id）已覆盖绝大多数场景，本项保留为
+ * 「控件不吃自动关联、调用方需自行绑 id」时的显式出口。
+ */
 const slotControlId = computed(() => forProp || inputId || `form-row-control-${autoId}`);
-// label 的 for 仅在调用方显式给出 for/inputId 时才输出：多数控件（BaseInput/BaseSwitch）用各自的
-// useId() 自管原生 id，并不会接收此自动生成的 id，悬空关联会触发浏览器告警
-// （Incorrect use of <label for="...">）
-const effectiveForId = computed(() => forProp || inputId || undefined);
+/**
+ * label 的 for：显式 for / inputId > 行内控件上报的 id > 不输出。
+ *
+ * 默认不输出是关键——for 指向不存在的元素属悬空关联（浏览器告警，且点击标签无反应），
+ * 故只有当行内确有控件（BaseInput / BaseTextarea / BaseSwitch / BaseCheckbox…）上报了自己的
+ * 元素 id 时才输出；该上报由控件侧 useFormRowControlId 完成，关联因此无需调用方手工接线。
+ *
+ * 注意「不输出」同时会降级标签元素——此时根本没有可关联的控件，标签元素不该是 label（见 labelTag）。
+ */
+const effectiveForId = computed(() => forProp || inputId || reportedControlId.value);
+
+/**
+ * 标签元素的类型：只在**确有可标签化控件可关联**时渲染 <label>，否则退化为 <span>。
+ *
+ * HTML 的 label 只有两种成立方式 —— for 指向一个可标签化表单元素（input / select / textarea /
+ * button / meter / output / progress），或把该元素包在自己内部。两者都不满足时，label 就是个
+ * 「没关联任何控件的空壳」，Chrome 会在控制台逐行报 FormLabelHasNeitherForNorNestedInput。
+ *
+ * 行内的 role=slider / radiogroup / combobox / spinbutton 控件（BaseSlider / BaseSegmentedControl /
+ * BaseSelector / BaseNumberInput）是 div：label 的 for 指不到它们（指到了也无效，Chrome 只认标签化元素），
+ * 它们又在兄弟节点而非 label 内部 —— 正是上面那种空壳。这类行的无障碍名走 aria-labelledby
+ * （控件侧 useFormRowLabelId 取 labelId），而 aria-labelledby 可以指向任意元素，所以标签元素退成
+ * span 之后**关联完全不受影响**（span 照样带 id），只是不再是一个没关联任何控件的 label。
+ *
+ * 两种元素共用同一套 class / id / 布局类，外观无差：本行是 flex 容器，两种标签都会被 blockify，
+ * 且全仓没有任何以 label 标签名为选择器的样式（类名 form-row-label 才是外观来源）。
+ */
+const labelTag = computed(() => (effectiveForId.value ? 'label' : 'span'));
 
 const normalizedLabelWidth = computed(() => {
   const width = resolvedLabelWidth.value;

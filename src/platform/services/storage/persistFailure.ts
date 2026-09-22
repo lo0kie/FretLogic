@@ -41,9 +41,7 @@ export const isPersistBlocked = (): boolean => quotaBlocked;
 /** 订阅持久化失败；返回取消订阅函数。 */
 export const onPersistFailure = (listener: PersistFailureListener): (() => void) => {
   listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+  return () => void listeners.delete(listener);
 };
 
 /**
@@ -83,6 +81,4 @@ export const reportPersistFailure = (key: string, error: unknown): void => {
 };
 
 /** 写入成功后调用：立即解除该键的冷却，使后续再次失败能马上上报（可选优化，非正确性依赖）。 */
-export const clearPersistFailure = (key: string): void => {
-  failedKeys.delete(key);
-};
+export const clearPersistFailure = (key: string): void => void failedKeys.delete(key);

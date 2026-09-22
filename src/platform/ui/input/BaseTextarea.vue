@@ -39,6 +39,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, useAttrs, useId, useTemplateRef, watch } from 'vue';
 
+import { useFormRowControlId } from '@/platform/ui/form/formRowContext';
+
 import type { CSSProperties } from 'vue';
 
 /**
@@ -106,6 +108,9 @@ const emit = defineEmits<{
   (e: 'clear'): void;
 }>();
 const id = useId();
+// 上报原生 textarea 的 id 给所在 BaseFormRow：行的 label 据此输出 for。
+// 与 BaseInput 同理，外部传入的 id 会被内联 :id 覆盖，故上报这里生成的 id。
+useFormRowControlId(() => id);
 /** lazy 修饰符：输入期间只更新本地显示值，change/blur 等提交点才写回 model */
 const isLazy = computed(() => Boolean(props.modelModifiers?.lazy));
 /** 本地即时值：lazy 模式下输入中间态先落在这里，避免逐键写回 model（初值为一次性快照，后续由 watch 同步；AST 规则误报豁免） */
@@ -171,9 +176,7 @@ const handleCompositionEnd = (e: Event) => {
   commitLocal((e.target as HTMLTextAreaElement).value);
 };
 
-const handleFocus = (e: FocusEvent) => {
-  emit('focus', e);
-};
+const handleFocus = (e: FocusEvent) => void emit('focus', e);
 
 /** 失焦：补提交合成中未同步的内容，lazy 模式下失焦也是提交点，随后透传 blur */
 const handleBlur = (e: FocusEvent) => {

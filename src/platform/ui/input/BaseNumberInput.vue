@@ -1,6 +1,7 @@
 <template>
   <div
     :aria-disabled="disabled || undefined"
+    :aria-labelledby="rowLabelId"
     :aria-valuemax="max"
     :aria-valuemin="min"
     :aria-valuenow="modelValue"
@@ -102,6 +103,7 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { CONTROL_HEIGHT_CLASSES } from '@/platform/ui/controlSizes';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { useFormRowLabelId } from '@/platform/ui/form/formRowContext';
 import { countDecimals } from '@/platform/ui/slider/BaseSlider.logic';
 import { clamp } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
@@ -209,6 +211,8 @@ const resolvedWidth = computed(() => resolveComponentWidth(props.width));
 /** 尺寸解析优先级：行内 size props > BaseForm 下发的 FormControlContext > 默认 md */
 const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
 const resolvedSize = computed<ComponentSize>(() => props.size ?? controlContext?.size ?? 'md');
+/** 所在 BaseFormRow 的标签 id：根元素是 role=spinbutton 的 div，label 的 for 指不到，只能靠 aria-labelledby 关联 */
+const rowLabelId = useFormRowLabelId();
 
 const NUMBER_INPUT_CONFIG: Record<'sm' | 'md' | 'lg', { wrapperClass: string; btnClass: string; textClass: string }> = {
   sm: {
@@ -403,7 +407,5 @@ const handleWrapperKeydown = (e: KeyboardEvent) => {
   }
 };
 
-onBeforeUnmount(() => {
-  stopContinuousStep();
-});
+onBeforeUnmount(() => void stopContinuousStep());
 </script>

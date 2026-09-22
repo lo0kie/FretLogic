@@ -41,17 +41,16 @@
             name="grip-vertical"
           />
 
-          <template v-if="row.song.singer">
-            <BaseBadge
-              :appearance="selected ? 'subtle' : 'filled'"
-              :aria-label="`歌手 ${row.song.singer}`"
-              :title="`歌手：${row.song.singer}`"
-              size="2xs"
-              variant="neutral"
-            >
-              <span class="block max-w-[7rem] truncate">{{ row.song.singer }}</span>
-            </BaseBadge>
-          </template>
+          <BaseBadge
+            v-if="row.song.singer"
+            :appearance="selected ? 'subtle' : 'filled'"
+            :aria-label="`歌手 ${row.song.singer}`"
+            :title="`歌手：${row.song.singer}`"
+            size="2xs"
+            variant="neutral"
+          >
+            <span class="block max-w-[7rem] truncate">{{ row.song.singer }}</span>
+          </BaseBadge>
 
           <template v-else>
             <BaseBadge

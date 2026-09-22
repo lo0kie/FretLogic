@@ -81,6 +81,7 @@
 import { computed, inject, ref, useId, useTemplateRef } from 'vue';
 
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { useFormRowControlId } from '@/platform/ui/form/formRowContext';
 import { clamp } from '@/platform/utils/common';
 
 import type { ComponentSize } from '@/platform/types';
@@ -195,6 +196,8 @@ const resolvedInactiveValue = computed<T>(() => props.inactiveValue ?? DEFAULT_I
 
 const autoId = useId();
 const resolvedId = computed(() => props.id || autoId);
+// 上报切换按钮（button 属可标签化元素）的 id 给所在 BaseFormRow：行的 label 据此输出 for
+useFormRowControlId(() => resolvedId.value);
 
 const switchBtnRef = useTemplateRef<HTMLButtonElement>('switchBtnRef');
 const trackRef = useTemplateRef<HTMLElement>('trackRef');

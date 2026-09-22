@@ -10,7 +10,8 @@
  * 页面栅格不含页脚页码：页脚是独立合成层（services/footerOverlay），展示时由组件叠一层画布，
  * 导出/复制时按开关在渲染线程合成——因此「显示页脚」不进内容键，同一首歌不会因该开关多存一份。
  *
- * 以内容键（content key）为索引做 LRU 容量驱逐（复用 platform/utils/cache），
+ * 以内容键（content key）为索引做 LRU 驱逐：条数（CACHE_MAX）与内存配额（CACHE_MAX_BYTES）
+ * 两条上限并列，任一先到即驱逐（复用 platform/utils/cache）；
  * 另设「每首歌最多 MAX_VERSIONS_PER_SONG 个版本」的子上限，避免连续编辑把容量占成单曲历史；
  * 驱逐时回收所有 object URL；currentRenderData 为响应式当前乐谱渲染数据，UI 层订阅即可。
  */
@@ -37,6 +38,19 @@ export interface PreviewRenderData {
  * （实测约 0.3~3MB/首，随曲长与页数变化），48 首合计约 15~140MB；放宽到 48 让「来回翻几十首」
  * 也不再重渲染 Worker。另有每首 MAX_VERSIONS_PER_SONG 的子上限兜住「连续编辑同一首」的占用。 */
 const CACHE_MAX = 48;
+
+/**
+ * 预览缓存的内存配额（字节）。与 CACHE_MAX 的条数上限**并列**生效，任一先到即驱逐。
+ *
+ * 为什么条数不够用：单首占用随「页数 × 页图分辨率」变化，而上面那句估出的 15~140MB 是个
+ * 五倍以上的区间 —— 真正吃内存的是几十页的长曲，条数完全表达不出这件事。
+ * 配额把最坏情况压到 96MiB：典型短曲（约 0.3MB/首，48 首 ≈ 15MB）配额根本不介入，
+ * 只有「多首长曲连开」才会提前驱逐。
+ *
+ * 驱逐即回收页图 object URL（onEvict → revokeAll）。被驱逐的是最久未用的内容键：
+ * 正在看的那首歌刚被 get/set 过、排在队尾最后才会被驱逐，与按条数驱逐时的风险完全相同。
+ */
+const CACHE_MAX_BYTES = 96 * 1024 * 1024;
 
 /** 同一首歌（按 song.id 归组）最多保留的渲染版本数。
  *  编辑过程中每改一次内容就产生一个新内容键，若不加限制，连续编辑一小时能把这 48 个坑
@@ -68,8 +82,9 @@ const forgetKey = (key: string) => {
 /** 内容键 → 渲染数据（LRU：get/set 均刷新最近使用序，超限驱逐最旧项并回收其 URL） */
 const cache = createLruCache<PreviewRenderData>(CACHE_MAX, {
   name: '预览渲染页',
-  // 字节读数 = 各页 JPEG 字节数之和（object URL 背后的 blob 即内存占用主体）
+  // 各页 JPEG 字节数之和：object URL 背后的 blob 既是大头，也是配额口径
   weigh: (_, data) => data.a4Sizes.reduce((sum, bytes) => sum + bytes, 0),
+  maxBytes: CACHE_MAX_BYTES,
   onEvict: (key, data) => {
     revokeAll(data);
     forgetKey(key);

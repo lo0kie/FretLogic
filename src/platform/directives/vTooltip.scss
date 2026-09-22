@@ -1,6 +1,7 @@
 // directives/vTooltip.scss
 @use '@/assets/token-vars' as *;
 
+// 提示气泡基类：默认观感（玻璃面板 + 标题字）。紧凑读数档作为修饰类嵌在本类内（`&.v-tooltip-compact`）。
 .v-tooltip-box {
   box-shadow: $shadow-lg;
   border: 1px solid var(--glass-border);
@@ -16,12 +17,29 @@
   text-align: center;
   white-space: nowrap;
   word-break: normal;
+
+  // 紧凑数字读数气泡（滑块 tooltip 经 customClass 挂载）：覆盖默认玻璃标题提示的观感。
+  // 全部观感与度量取自 tokens.scss 的 --bubble-* 语义层（该气泡用的是 sm 档度量），
+  // 与 v-scrollbar 的读数气泡（vScrollbar.scss 的 .v-scrollbar-bubble--sm）同源。
+  // 两处如今都是 SCSS，仍只共享 CSS 变量层、不 @use 互通：这里要的是**随主题解析的语义令牌**
+  // （--bubble-* 三个主题各一档），SCSS 变量会在编译期内联成字面量，主题切换即失效。
+  // 边框不在此声明：沿用基类 .v-tooltip-box 的 1px solid var(--glass-border)，与 --bubble-border-color 同值。
+  &.v-tooltip-compact {
+    box-shadow: var(--bubble-shadow);
+    border-radius: var(--bubble-radius-sm);
+    background-color: var(--bubble-bg);
+    padding: var(--bubble-padding-sm);
+    color: var(--bubble-text);
+    font-weight: var(--bubble-font-weight);
+    font-size: var(--bubble-font-size-sm);
+    line-height: var(--bubble-line-height);
+  }
 }
 
 .v-tooltip-line {
   white-space: nowrap;
 
-  & + .v-tooltip-line {
+  & + & {
     margin-top: 2px;
   }
 }
@@ -32,26 +50,14 @@
     opacity $duration-base $bezier-standard,
     transform $duration-base $bezier-bounce;
   will-change: opacity, transform;
+
+  // 即时隐藏路径（滚动 / 失焦 / 卸载）关闭过渡，避免跟随锚点漂移时还淡出
+  &.v-tooltip-instant {
+    transition: none !important;
+  }
 }
 
-// 即时隐藏路径（滚动 / 失焦 / 卸载）关闭过渡，避免跟随锚点漂移时还淡出
-.v-tooltip-root.v-tooltip-instant {
-  transition: none !important;
-}
-
-.v-tooltip-arrow {
-  //
-}
-
-// 紧凑数字读数气泡（滑块 tooltip 经 customClass 挂载）：覆盖默认玻璃标题提示的观感
-// 背景对齐 --bg-panel，保证与浮层指示箭头（默认取 --bg-panel）颜色一致
-.v-tooltip-box.v-tooltip-compact {
-  box-shadow: $shadow-md;
-  border-radius: $radius-sm;
-  background-color: var(--bg-panel);
-  padding: $space-2xs $space-sm;
-  color: var(--text-title);
-  font-weight: 700;
-  font-size: $fs-2xs;
-  line-height: 1.25;
-}
+// .v-tooltip-arrow 没有样式规则：箭头的方块尺寸 / 旋转 / 楔形裁剪 / 保留边框 / 贴边偏移全部由
+// buildFloatingArrowStyle 在每次定位时内联写入（与 BasePopover、v-scrollbar 读数气泡同一份逻辑），
+// 此处原有一条空规则，容易让人以为箭头样式定义在这里，故改记为注释。
+// 类名本身保留：它是箭头元素的标识（见 vTooltip.ts 的 globalArrow.className）。

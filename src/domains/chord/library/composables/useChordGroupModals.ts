@@ -50,9 +50,7 @@ export function useChordGroupModals() {
   const chordActions = useChordActions();
 
   /** 打开新建分组弹窗，清空上次输入 */
-  const openCreate = () => {
-    open('create', { inputValue: '' });
-  };
+  const openCreate = () => void open('create', { inputValue: '' });
 
   /** 确认创建分组：校验非空与重名后写入 chordStore */
   const handleCreateGroup = () => {
@@ -71,9 +69,7 @@ export function useChordGroupModals() {
   };
 
   /** 打开重命名弹窗并预填当前分组名 */
-  const openRename = (group: Group) => {
-    open('rename', { activeGroup: group, inputValue: group.name });
-  };
+  const openRename = (group: Group) => void open('rename', { activeGroup: group, inputValue: group.name });
 
   /** 确认重命名分组 */
   const handleRenameGroup = () => {
@@ -100,9 +96,7 @@ export function useChordGroupModals() {
   };
 
   /** 打开删除分组确认弹窗 */
-  const openDelete = (group: Group) => {
-    open('delete', { activeGroup: group });
-  };
+  const openDelete = (group: Group) => void open('delete', { activeGroup: group });
 
   /** 确认删除分组：联动编辑器复位与歌曲解绑（删除/撤销事件经应用层桥接），message 提供 4 秒撤销 */
   const handleDeleteGroup = () => {
@@ -131,9 +125,7 @@ export function useChordGroupModals() {
   };
 
   /** 打开移动和弦弹窗，重置目标分组选择 */
-  const openMove = (chord: Chord) => {
-    open('move', { activeChord: chord, moveTargetId: '' });
-  };
+  const openMove = (chord: Chord) => void open('move', { activeChord: chord, moveTargetId: '' });
 
   /** 确认移动：按和弦名把该分组下所有变体指法移到目标分组 */
   const handleMoveChord = () => {
@@ -161,13 +153,12 @@ export function useChordGroupModals() {
   };
 
   /** 打开排序配置弹窗，回填分组当前的排序规则 */
-  const openSort = (group: Group) => {
-    open('sort', {
+  const openSort = (group: Group) =>
+    void open('sort', {
       activeGroup: group,
       sortRule: group.sortRule || DEFAULT_GROUP_SORT_RULE,
       sortKey: getGroupSortKey(group) || DEFAULT_SORT_KEY,
     });
-  };
 
   /** 确认保存排序配置 */
   const handleSaveSort = () => {
@@ -195,13 +186,12 @@ export function useChordGroupModals() {
   /** 打开批量删除指法弹窗，清空上次的勾选。
    *  referenceChordName 必须一并写入：modalData 是所有弹窗共用的单份对象，标题读它却不在 patch 里
    *  就会显示上一个弹窗残留的和弦名（弹窗常驻不卸载，表现为「名字不更新」） */
-  const openChordVariantsDelete = (cardData: GroupedChordCard) => {
-    open('chordVariantsDelete', {
+  const openChordVariantsDelete = (cardData: GroupedChordCard) =>
+    void open('chordVariantsDelete', {
       activeGroupCard: cardData,
       selectedVariantIds: new Set<string>(),
       referenceChordName: getChordName(cardData.mainChord),
     });
-  };
 
   /** 勾选/取消勾选一个待删除的变体指法 */
   const toggleVariantSelection = (chordId: string) => {

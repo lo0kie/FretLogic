@@ -1,6 +1,15 @@
-import { flip, arrow as floatingArrow, limitShift, offset, shift, size } from '@floating-ui/dom';
+import {
+  autoUpdate,
+  computePosition,
+  flip,
+  arrow as floatingArrow,
+  limitShift,
+  offset,
+  shift,
+  size,
+} from '@floating-ui/dom';
 
-import type { Middleware, Placement } from '@floating-ui/dom';
+import type { ComputePositionReturn, Middleware, Placement, ReferenceElement, Strategy } from '@floating-ui/dom';
 
 /**
  * floating-ui 定位编排的唯一实现处。
@@ -10,6 +19,7 @@ import type { Middleware, Placement } from '@floating-ui/dom';
  * computePosition（BasePopover 经 useFloatingPosition 取响应式定位，vTooltip 直接调用）：
  * - buildFloatingMiddlewares：中间件列表（两消费方通用，中间件实现同源于 @floating-ui/core）
  * - createVirtualElementRect：以鼠标坐标 / 任意点构造零尺寸虚拟锚点
+ * - createFloatingController：computePosition + 竞态守卫 + autoUpdate 生命周期的唯一实现处
  */
 
 /** 显示箭头时浮层与锚点的最小间距（px）：箭头外露量约 size·√2/2 - 1（size=14 → ≈9px），
@@ -137,4 +147,93 @@ export const computePanelTransformOrigin = (placement: Placement): string => {
         : 'center';
 
   return mainIsVertical ? `${mainPart} ${crossPart}` : `${crossPart} ${mainPart}`;
+};
+
+export interface FloatingControllerOptions {
+  /**
+   * 取当前锚点（真实元素或虚拟元素，如鼠标坐标构造的定位点）。
+   * 每次计算前取一次并留作比对：异步计算期间锚点若已切换，本次结果对应的是旧元素。
+   */
+  getReference: () => ReferenceElement | null | undefined;
+  /** 取当前浮层元素；语义同上 */
+  getFloating: () => HTMLElement | null | undefined;
+  /** 取期望方位（flip 后的实际方位在结果里） */
+  getPlacement: () => Placement;
+  /** 取中间件链（如 buildFloatingMiddlewares 的产物） */
+  getMiddleware: () => Middleware[];
+  /** 定位策略，默认 fixed */
+  strategy?: Strategy;
+  /** 计算成功且未过期时写回（组件侧写 ref、指令侧写 style） */
+  onResult: (result: ComputePositionReturn) => void;
+}
+
+export interface FloatingController {
+  /** 计算一次并等待完成：需要在显隐前先拿到坐标时用（如首次显示，避免从 (0,0) 闪入） */
+  compute: () => Promise<void>;
+  /** 计算一次，fire-and-forget（与 compute 同一实现）：滚动 / resize 跟随等高频路径用 */
+  update: () => void;
+  /** 按当前两端元素重新交接 autoUpdate（先停旧的；任一缺失则停用） */
+  attach: () => void;
+  /** 停用 autoUpdate（隐藏 / 卸载时调用） */
+  detach: () => void;
+}
+
+/**
+ * 浮层定位控制器：`computePosition` + 竞态守卫 + `autoUpdate` 生命周期的**唯一实现处**。
+ *
+ * BasePopover（经 useFloatingPosition 转成响应式值）与 vTooltip（命令式单例）此前各写一份
+ * 「异步计算 + 竞态守卫 + 启停 autoUpdate」，两处逐段等价、只在「结果写到哪里」上不同：
+ * 组件写 ref、指令写 style。本控制器只负责算与跟随，写回交给 onResult。
+ *
+ * 三处刻意的口径（两处原实现一致，合并时保留）：
+ * 1. **吞掉 rejection**：计算期间锚点/浮层被移除等极端场景会 reject。本控制器会被 autoUpdate
+ *    回调、打开流程等多处 fire-and-forget 调用，上抛会留下未处理的 rejected Promise；
+ * 2. **竞态守卫**：异步计算期间锚点或浮层已换，本次结果对应旧元素，写回会把浮层闪回旧位置。
+ *    丢弃是安全的——元素变化会触发 attach()，autoUpdate 随即发起一次新计算；
+ * 3. **两个计算入口**：compute 返回 Promise（首次显示要先定位再显隐，不能等一帧）；
+ *    update 只是 `void compute()` —— 滚动跟随等调用点既有 ResizeObserver 回调也有裸语句调用，
+ *    返回 Promise 会引出未处理 rejection 与误用 async 回调的告警，而内部本就吞掉了 rejection、无需等待。
+ */
+export const createFloatingController = (options: FloatingControllerOptions): FloatingController => {
+  /** autoUpdate 的停用函数；锚点或浮层缺失（未挂载 / 已卸载）时为 undefined */
+  let stopAutoUpdate: (() => void) | undefined;
+
+  const run = async (): Promise<void> => {
+    const referenceEl = options.getReference();
+    const floatingEl = options.getFloating();
+    if (!referenceEl || !floatingEl) return;
+
+    let result: ComputePositionReturn;
+    try {
+      result = await computePosition(referenceEl, floatingEl, {
+        placement: options.getPlacement(),
+        strategy: options.strategy ?? 'fixed',
+        middleware: options.getMiddleware(),
+      });
+    } catch {
+      return;
+    }
+
+    if (options.getReference() !== referenceEl || options.getFloating() !== floatingEl) return;
+
+    options.onResult(result);
+  };
+
+  return {
+    compute: run,
+    update: () => void run(),
+    attach: () => {
+      stopAutoUpdate?.();
+      stopAutoUpdate = undefined;
+      const referenceEl = options.getReference();
+      const floatingEl = options.getFloating();
+      if (!referenceEl || !floatingEl) return;
+      // 两端元素齐备才交接 autoUpdate（滚动 / resize 跟随）
+      stopAutoUpdate = autoUpdate(referenceEl, floatingEl, () => void run());
+    },
+    detach: () => {
+      stopAutoUpdate?.();
+      stopAutoUpdate = undefined;
+    },
+  };
 };

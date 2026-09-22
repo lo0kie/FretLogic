@@ -121,14 +121,26 @@ export function useWorkbenchRouteSync() {
     return true;
   };
 
-  /** URL → Store 回灌；无效参数与被脏草稿拒绝的参数都从 URL 纠偏移除 */
-  const syncRouteToStore = () => {
+  /**
+   * URL → Store 回灌；无效参数与被脏草稿拒绝的参数都从 URL 纠偏移除。
+   *
+   * @param activated 本次同步来自 KeepAlive 重新激活（onActivated）而非路由变化。
+   *   激活同样是一次「进入本页」：它是渲染后置钩子，晚于 pre 冲刷的路由 watcher 运行，
+   *   那时 currentPath 已被那次调用更新成同一个 path —— 只看 path 会把这次进入误判为
+   *   「页内 URL 编辑」，于是下面「URL 无 group 地址即清空选中」的分支会把刚切回时仍有效的
+   *   展开分组误清。分组塌缩、随后又展开会重启分块补挂，侧栏可滚动量骤降，宿主正在恢复的
+   *   滚动位置被浏览器钳到当时的偏小上限（表现：切回工作台偶现丢侧栏滚动位置）。
+   */
+  const syncRouteToStore = (activated = false) => {
     // 无路由环境（组件单测）不触碰 route，与 score 侧守卫顺序一致
     if (!hasRouter) return;
     const prevPath = currentPath;
     currentPath = route.path;
     if (route.path !== ROUTE_PATHS.WORKBENCH) return;
-    const freshEntry = route.path !== prevPath;
+    /** 本次是否由路由 path 变化触发（页内 URL 编辑为 false） */
+    const pathChanged = route.path !== prevPath;
+    /** 本次是否属于「刚进入本页」：path 变化与缓存重激活都算，两者都要挡掉「缺 group 即清空」 */
+    const freshEntry = pathChanged || activated;
     const queryGroup = route.query['group'];
     const queryChord = route.query['chord'];
     const queryV = route.query['v'];
@@ -136,7 +148,9 @@ export function useWorkbenchRouteSync() {
     // 中段重新进入本页（resumed 已置位 = 非冷启动）：导航清空 query 时，以内存选中为权威回灌 URL，
     // 令「URL=状态」延续，避免下面的「缺 group 即清空」把仍有效的选中误清（丢 URL 根因）。
     // 冷启动（resumed=false）跳过此回灌，让深链参数与 LAST_GROUP 回灌先说话，绝不覆盖深链。
-    if (freshEntry && resumed) mirrorStoreToUrl();
+    // 判据用 pathChanged 而非 freshEntry：重激活时这次回灌早已由 pre 冲刷的那次 watcher 发起
+    // （其 replace 尚未落地，route.query 仍是空的），此处再发一次只是重复导航。
+    if (pathChanged && resumed) mirrorStoreToUrl();
 
     // 0. 冷启动回灌（本页会话仅首次，resumed 置位后不再回灌）：仅当 URL 完全没有 group/chord 地址时，
     //    用「最近编辑分组」指针补位一次，令 URL 仍是唯一数据源；URL 已有地址时直接消耗本次回灌机会，
@@ -182,7 +196,8 @@ export function useWorkbenchRouteSync() {
     () => (hasRouter ? ([route.path, route.query] as const) : null),
     () => syncRouteToStore()
   );
-  onActivated(syncRouteToStore);
+  // 重激活同样算「进入本页」，否则会走到「缺 group 即清空」（见 syncRouteToStore 的注释）
+  onActivated(() => syncRouteToStore(true));
 
   /** 时序保证：先做一次 URL→Store 回灌，再启动 Store→URL 镜像 watcher，
    *  避免镜像在回灌前用持久化草稿覆盖深链参数（如 #/workbench?chord=x 被改回旧值） */

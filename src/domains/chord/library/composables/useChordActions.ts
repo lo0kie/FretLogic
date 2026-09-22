@@ -21,9 +21,7 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
   const uiStore = useUiStore();
 
   /** 把和弦载入指板编辑器 */
-  const loadChordToEditor = (chord: Chord) => {
-    editorStore.setEditor(chord);
-  };
+  const loadChordToEditor = (chord: Chord) => void editorStore.setEditor(chord);
 
   /**
    * 切换分组折叠/展开：仅在编辑现有和弦、且操作后草稿所属分组不再是当前展开的分组时复位编辑器
@@ -59,9 +57,7 @@ export function useChordActions(draftStore: ChordEditorStore = useActiveChordEdi
   };
 
   /** 删除单个指法（批量删除的单数封装） */
-  const triggerDeleteChord = (chord: Chord) => {
-    triggerDeleteChords([chord]);
-  };
+  const triggerDeleteChord = (chord: Chord) => void triggerDeleteChords([chord]);
 
   /** 保存/更新当前编辑草稿：构建校验后的 payload；未变更时仅提示，成功后立即落盘防刷新丢失。返回是否保存成功（校验失败返回 false） */
   const persistCurrentChord = (): boolean => {

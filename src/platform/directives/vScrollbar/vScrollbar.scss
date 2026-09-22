@@ -1,0 +1,254 @@
+// directives/vScrollbar/vScrollbar.scss
+// v-scrollbar overlay 的类规则：隐藏宿主原生滚动条 + 轨道 / 拇指 / 读数气泡的视觉与显隐。
+//
+// 为什么是独立 SCSS 而不是 TS 里的注入串：这段样式曾以 `style.textContent = …` 拼在 scrollbarCore.ts 里
+// （53 个片段、约 5KB，其中 36% 是注释），代价是——原样进 JS 产物、不经压缩与 autoprefixer，首次挂载时
+// 被 CSS 解析器逐字解析一遍，prettier / 编辑器语法高亮 / Tailwind 扫描都看不到它。现由构建管线统一处理。
+//
+// 嵌套口径（本文件与 vTooltip.scss 一致）：
+//   · **同一元素的修饰 / 状态 / 伪元素**一律用 `&` 嵌在宿主类里（`&--y` / `&--visible` / `&:hover` / `&::after`）。
+//     代价是 grep 具体修饰类名（`.v-scrollbar-thumb--y`）在 SCSS 里搜不到，要改搜宿主类名。
+//   · **独立元素类保持顶层扁平**：`.v-scrollbar-bubble-text` / `-cell` / `-char` / `-arrow` 是各自独立的
+//     DOM 节点，类名在 scrollbarOverlay.ts / scrollbarBubbleRoll.ts 里逐字写出，必须可 grep。
+//     同理四个宿主类本身（host / track / thumb / bubble）各占顶层一段。
+//   · 嵌套不改变特异性，也不会重排声明 —— 改写前后编译产物逐值一致。
+//
+// 仍需运行时注入的只有三个**数字**（见 scrollbarCore 的 ensureGlobalStyle）：
+//   --v-scrollbar-thickness     轨道 / 拇指粗细（TS 的 THICKNESS）
+//   --v-scrollbar-hit-area      交互热区外扩量（TS 的 HIT_AREA）
+//   --v-scrollbar-roll-duration 逐字符翻页时长（TS 的 BUBBLE_ROLL_MS）
+// 数字留在 TS 不是「因为测试要读」——本仓 tests/ 目前完全不引用滚动条。真实原因是它们同时参与运行时逻辑：
+// THICKNESS 参与轨道/拇指的贴边偏移计算（scrollbarCore 的定位写入、scrollbarGeometry 的 rail 推导），
+// BUBBLE_ROLL_MS 参与翻页定时与节流判定；HIT_AREA 虽只服务 CSS，但三个量同属一套滚动条度量，
+// 留在同一处免得「哪个文件拥有这些数字」出现分歧。故 SCSS 侧一律 var() 消费，不写第二份字面量。
+// 主题令牌（--v-scrollbar-thumb / -hover、--z-scrollbar-*、--bubble-*）一律来自 tokens.scss。
+//
+// 类名与 TS 是两份字面量：宿主类来自 scrollbarCore 的 HOST_CLASS，显隐类来自同文件的 *-CLASS 常量，
+// 轴（--x / --y）与档位（--sm / --md）后缀由 index.ts / scrollbarOverlay.ts 拼接。改类名要同时改两处。
+
+// 宿主标记类（TS 的 HOST_CLASS）：隐藏原生滚动条。伪元素无法内联设置，必须走样式表。
+.v-scrollbar-host {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+// 轨道颜色固定不随状态变化；默认仅透明隐藏（保留 visibility，否则收不到 hover/点击），
+// 悬停拇指/轨道时由指令切换可见类。
+// 隐藏态必须 pointer-events:none：否则透明轨道常驻吞掉宿主内缘指针事件（点击/滚动被拦截，探针命中内缘 2~13px）；可见时恢复。
+.v-scrollbar-track {
+  position: absolute;
+  opacity: 0;
+  z-index: var(--z-scrollbar-track);
+  transition:
+    opacity 250ms ease,
+    width 150ms ease,
+    height 150ms ease,
+    transform 150ms ease;
+  cursor: pointer;
+  border-radius: 999px;
+  background: var(--border-light);
+  pointer-events: none;
+
+  &--visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  // 轨道粗细由类控制，与拇指同步加宽内移（thumb:hover ~ track 兄弟选择器，保持同心）
+  &--y {
+    width: var(--v-scrollbar-thickness);
+  }
+
+  &--x {
+    height: var(--v-scrollbar-thickness);
+  }
+
+  // 兄弟选择器写在前面：与搬迁前的选择器清单顺序一致，便于逐值比对（同一规则内先后不影响结果）
+  .v-scrollbar-thumb--y:hover ~ &--y,
+  &--y:hover {
+    transform: translateX(-1px);
+    width: calc(var(--v-scrollbar-thickness) + 1px);
+  }
+
+  .v-scrollbar-thumb--x:hover ~ &--x,
+  &--x:hover {
+    transform: translateY(-1px);
+    height: calc(var(--v-scrollbar-thickness) + 1px);
+  }
+
+  // 轨道热区四向外扩：粗细方向上边缘侧的 EDGE 间隙也纳入交互区，不留死角
+  &::after {
+    position: absolute;
+    inset: calc(-1 * var(--v-scrollbar-hit-area));
+    content: '';
+  }
+}
+
+.v-scrollbar-thumb {
+  position: absolute;
+  visibility: hidden;
+  opacity: 0;
+  z-index: var(--z-scrollbar-thumb);
+  transition:
+    opacity 250ms ease,
+    background 150ms ease,
+    visibility 0s linear 250ms,
+    width 150ms ease,
+    height 150ms ease,
+    transform 150ms ease;
+  cursor: pointer;
+  border-radius: 999px;
+  background: var(--v-scrollbar-thumb);
+  pointer-events: auto;
+
+  // 粗细维度由类控制（hover 向容器内侧加宽 1px），长度维度由指令内联设置
+  &--y {
+    width: var(--v-scrollbar-thickness);
+  }
+
+  &--x {
+    height: var(--v-scrollbar-thickness);
+  }
+
+  &--y:hover {
+    transform: translateX(-1px);
+    background: var(--v-scrollbar-thumb-hover);
+    width: calc(var(--v-scrollbar-thickness) + 1px);
+  }
+
+  &--x:hover {
+    transform: translateY(-1px);
+    background: var(--v-scrollbar-thumb-hover);
+    height: calc(var(--v-scrollbar-thickness) + 1px);
+  }
+
+  // 交互热区：可视粗细不变，四向外扩提升可点性
+  &::after {
+    position: absolute;
+    inset: calc(-1 * var(--v-scrollbar-hit-area));
+    content: '';
+  }
+
+  // overlay 是宿主的兄弟节点而非后代，显隐必须由指令直接切换可见类；visibility 延迟生效避免截断淡出
+  &--visible {
+    visibility: visible;
+    opacity: 1;
+    transition:
+      opacity 250ms ease,
+      background 150ms ease,
+      visibility 0s;
+  }
+
+  // 无可滚动区域：结构性隐藏，优先级高于可见类
+  &--off {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
+
+// 滚动气泡提示：同为 overlay 兄弟节点（绝对定位参照宿主父元素），随拇指中位移动；
+// 观感与 v-tooltip 的 compact 紧凑读数一致——底色/描边/阴影/字重/行高与两档度量全部取自 tokens.scss 的
+// --bubble-* 语义层，此处不逐值手抄。
+// 刻意不复用 tooltip 单例：tooltip 在任意 scroll 事件上都会立即隐藏（vTooltip 的 window 捕获监听），
+// 承担不了「滚动期间持续可见」的读数职责。
+// max-width:100%：超长自定义文案收敛在父元素可视区内（落点两轴各自按气泡实测尺寸钳制在滚动容器范围内，
+// 见 scrollbarGeometry 的 computeBubblePosition）；
+// 气泡自身 overflow:visible —— 箭头楔形朝滚动条一侧探出，若沿用 overflow:hidden 会被整个裁掉，
+// 故省略号另落内层 .v-scrollbar-bubble-text（读数本就写在它上面，见 applyBubble）。
+.v-scrollbar-bubble {
+  position: absolute;
+  visibility: hidden;
+  opacity: 0;
+  z-index: var(--z-scrollbar-bubble);
+  transition:
+    opacity 150ms ease,
+    visibility 0s linear 150ms;
+  box-shadow: var(--bubble-shadow);
+  border: var(--bubble-border);
+  background: var(--bubble-bg);
+  max-width: 100%;
+  overflow: visible;
+  pointer-events: none;
+  color: var(--bubble-text);
+  font-weight: var(--bubble-font-weight);
+  line-height: var(--bubble-line-height);
+  white-space: nowrap;
+
+  // 档位只管度量（字号/留白/圆角）：底色描边等观感两档共用，取值见 tokens.scss 的 --bubble-*
+  &--sm {
+    border-radius: var(--bubble-radius-sm);
+    padding: var(--bubble-padding-sm);
+    font-size: var(--bubble-font-size-sm);
+  }
+
+  &--md {
+    border-radius: var(--bubble-radius-md);
+    padding: var(--bubble-padding-md);
+    font-size: var(--bubble-font-size-md);
+  }
+
+  &--visible {
+    visibility: visible;
+    opacity: 1;
+    transition:
+      opacity 150ms ease,
+      visibility 0s;
+  }
+
+  // 伸缩方向：纵向滚动条贴容器右缘，气泡整宽向左展开；横向滚动条贴容器下缘，气泡向上展开
+  &--y {
+    transform: translate(-100%, -50%);
+  }
+
+  &--x {
+    transform: translate(-50%, -100%);
+  }
+
+  // 所属轴无溢出（与拇指同一判据）：结构性隐藏，优先级高于可见类
+  &--off {
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+}
+
+// 以下四个是气泡内的**独立元素**（各是不同 DOM 节点，非 .v-scrollbar-bubble 的修饰），故不嵌套：
+// 类名在 TS 里逐字写出（applyBubble / makeBubbleCell / renderBubbleText），必须可 grep。
+
+// 读数承载节点（renderBubbleText 的写入目标）：省略号落在这里，气泡本体才能保持 overflow:visible；
+// 开启翻页时它是单元节点的宿主，关闭时就是一个纯文本节点。
+// --br-duration 写在这里：全局 .br-roll-* 用它定时长，别处不再重复这个数字
+.v-scrollbar-bubble-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  --br-duration: var(--v-scrollbar-roll-duration);
+}
+
+// 逐字符翻页的单元/字符两层：结构同 BaseRollingText 的逐字符模式（inline-block 窗口 + overflow:hidden
+// 裁切上下滑行），line-height 继承气泡（窗口高即行高，字形位置与不开翻页时逐像素一致）；
+// 过渡类 .br-roll-* 在 transitions.scss——与组件共用的唯一来源，此处刻意不重复声明。
+.v-scrollbar-bubble-cell {
+  display: inline-block;
+  position: relative;
+  vertical-align: top;
+  overflow: hidden;
+  line-height: inherit;
+  white-space: pre;
+}
+
+.v-scrollbar-bubble-char {
+  display: inline-block;
+}
+
+// 指向箭头：方块尺寸/旋转/裁剪楔形/保留边框全部由 buildFloatingArrowStyle 内联写入
+// （与 BasePopover、vTooltip 同一份逻辑），交叉轴居中偏移也在创建时按边长内联算出
+.v-scrollbar-bubble-arrow {
+  pointer-events: none;
+}
