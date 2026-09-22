@@ -116,6 +116,7 @@ import { computed, ref, useId, useSlots, useTemplateRef } from 'vue';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
+import { useFormRowControlId } from '@/platform/ui/form/formRowContext';
 import { ICON_SIZE_PRESETS } from '@/platform/ui/icons/iconSizes';
 
 import type { ComponentSize } from '@/platform/types';
@@ -196,6 +197,20 @@ const hasDescription = computed(() => Boolean(description || slots['description'
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
 const generatedId = useId();
 const resolvedId = computed(() => id || generatedId);
+/** 是否自带标签文案（label prop 或默认插槽）——决定它能否自我命名 */
+const hasOwnLabelText = computed(() => Boolean(label || slots['default']));
+
+/**
+ * 上报原生 checkbox 的 id 给所在 BaseFormRow：行的 label 据此输出 for。两种情形不上报
+ * （行标签随之降级为 span、不输出 for）：
+ *  - buttonized：渲染的是 ActionButton（role=checkbox，非可标签化元素），行的 for 指不到会悬空；
+ *  - 自身已有标签文案：控件用 <label for> 包着 input 自我命名，若行的 label 再指向同一个 input，
+ *    无障碍名会按树序拼接成「行标签 + 自身标签」，读屏把同一件事念两遍。此时行标签只是分组名，
+ *    名字交给控件自身更准。
+ * 只有「裸复选框」（无自身文案、行内仅一个勾选框）才依赖行的 for 取得无障碍名。
+ */
+const shouldReportIdToRow = computed(() => !buttonized && !hasOwnLabelText.value);
+useFormRowControlId(() => (shouldReportIdToRow.value ? resolvedId.value : undefined));
 
 const resolvedTrueValue = computed(() => (trueValue !== undefined ? trueValue : true));
 const resolvedFalseValue = computed(() => (falseValue !== undefined ? falseValue : false));

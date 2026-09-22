@@ -101,7 +101,7 @@ const fadeBinding = computed<EdgeFadeBinding>(() => {
 
 const scrollbarBinding = computed<ScrollbarBinding>(() => {
   const value = props.scrollbar;
-  // false：指令保持常驻模板但整体惰性（不注入样式、不挂 overlay），避免用 v-if 双分支切换指令挂载
+  // false：指令保持常驻模板但整体惰性（不注入变量桥、不挂 overlay），避免用 v-if 双分支切换指令挂载
   if (value === false) return { enabled: false };
   if (value === true) return { direction: axisDirection.value };
   return { ...value, direction: value.direction ?? axisDirection.value };

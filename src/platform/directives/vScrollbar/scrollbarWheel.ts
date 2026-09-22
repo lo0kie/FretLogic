@@ -95,7 +95,7 @@ const isHostOverscrollContained = (state: ScrollbarState, axis: 'x' | 'y'): bool
 
 /** overlay 的 wheel 转发：wheel 不会冒泡到宿主（兄弟节点），同参重派发到宿主元素由指令按策略消费；
  *  宿主侧**没有生效策略**时才由自身兜底驱动本轴（有策略而选择放行时不得二次驱动，见下）。 */
-export const attachOverlayWheelForward = (state: ScrollbarState, axis: 'x' | 'y', el: HTMLElement): void => {
+export const attachOverlayWheelForward = (state: ScrollbarState, axis: 'x' | 'y', el: HTMLElement): void =>
   // 三种归宿，按序判定：
   // ① 宿主侧消费（defaultPrevented）→ 把消费决定镜像回真实事件，抑制其默认滚动；
   // ② 宿主侧有生效策略但刻意放行（如 v-wheel-scroll 的 overscroll:'auto' 在边界处让位、
@@ -109,7 +109,7 @@ export const attachOverlayWheelForward = (state: ScrollbarState, axis: 'x' | 'y'
   // ctrl/meta/alt 交还浏览器默认（缩放等组合键）；
   // 合成事件刻意 bubbles:false：只投递给宿主自身消费，不向上冒泡，
   // 避免宿主祖先上依赖 wheel 冒泡的委托（若存在）被这份转发事件二次处理。
-  el.addEventListener(
+  void el.addEventListener(
     'wheel',
     (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -182,4 +182,3 @@ export const attachOverlayWheelForward = (state: ScrollbarState, axis: 'x' | 'y'
     },
     { passive: false }
   );
-};

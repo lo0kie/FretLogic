@@ -57,7 +57,5 @@ export const setupExitFlush = (): (() => void) => {
 export const registerExitFlusher = (flush: ExitFlusher): (() => void) => {
   flushers.add(flush);
   setupExitFlush();
-  return () => {
-    flushers.delete(flush);
-  };
+  return () => void flushers.delete(flush);
 };

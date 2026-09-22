@@ -10,7 +10,6 @@
   <div class="config-popover-card relative flex max-h-80 w-[360px] flex-col py-md">
     <BaseScrollArea
       :scrollbar="{ endInset: 8 }"
-      @scroll="handleScroll()"
       axis="y"
       class="min-h-0 flex-auto px-md outline-none"
       ref="scrollAreaRef"
@@ -115,11 +114,9 @@
                 <BaseSwitch v-model="settingsStore.scoreTrimEmptyEdgeFrets" aria-label="指板图是否忽略首末的空品格" />
               </BaseFormRow>
 
-              <template v-if="isPreviewTab">
-                <BaseFormRow help="A4 分页预览底部居中显示页码" label="显示页脚">
-                  <BaseSwitch v-model="settingsStore.scoreShowFooter" aria-label="是否显示页脚页码" />
-                </BaseFormRow>
-              </template>
+              <BaseFormRow v-if="isPreviewTab" help="A4 分页预览底部居中显示页码" label="显示页脚">
+                <BaseSwitch v-model="settingsStore.scoreShowFooter" aria-label="是否显示页脚页码" />
+              </BaseFormRow>
             </BaseForm>
           </BaseCollapse>
 
@@ -286,7 +283,7 @@
 // 双 script 块：imports 整体置于首个块顶部（import/first）；
 // 折叠分组展开态声明于模块作用域（而非 <script setup> 体内），实现会话级记忆——重开设置弹窗
 // 仍停留上次展开的分组，且乐谱/工作台两 tab 各自独立、互不干扰；<script setup> 经别名暴露给模板。
-import { computed, ref, useTemplateRef, watch } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 
 import { useRoute } from 'vue-router';
 
@@ -299,6 +296,7 @@ import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { SCORE_PAGE_MARGIN_PRESETS, SCORE_PAGE_SIZE_PRESETS } from '@/domains/score/constants';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { useScrollMemory } from '@/platform/composables/useScrollMemory';
 import { useStickyHeads } from '@/platform/composables/useStickyHeads';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { usePopoverPin } from '@/platform/ui/popover/popoverPin';
@@ -320,9 +318,6 @@ const scoreEditOpenGroups = ref<Set<ScoreGroupName>>(new Set(['layout', 'display
 const scorePreviewOpenGroups = ref<Set<ScoreGroupName>>(new Set(['layout', 'display', 'export']));
 /** 工作台页折叠分组展开项（可多开，同上）。原第三组「显示」仅含和弦简写一项，已迁入工作台指板设置面板 */
 const workbenchOpenGroups = ref<Set<WorkbenchGroupName>>(new Set(['timbre', 'effect']));
-/** 会话级滚动位置记忆：关闭/重开设置弹窗仍返回上次滚动位置（浮层 v-if 销毁重建容器，避免"闪回顶部"） */
-const scoreScrollTopState = ref(0);
-const workbenchScrollTopState = ref(0);
 </script>
 
 <script setup lang="ts">
@@ -420,29 +415,35 @@ function toggleWorkbenchGroup(group: WorkbenchGroupName, value: boolean) {
  *
  * 各处都挂 .skip-mount（指令只在挂载后的激活态变化时才滚动）：展开态是会话级记忆，重开弹层时
  * 默认分组在挂载那一刻就已经是 true，指令的挂载分支（同样走 .delay-220，落在入场动画之后）
- * 会把该分组段滚回视口，把下方 watch 刚恢复好的停留位置顶掉——现象就是「重开、动画结束后自己
+ * 会把该分组段滚回视口，把下方 useScrollMemory 刚贴回的停留位置顶掉——现象就是「重开、动画结束后自己
  * 往上跳一段」。跳过挂载触发后，首次定位完全归滚动位置恢复，指令只管用户点开另一组时的对焦。
  */
 const isScoreGroupOpen = (group: ScoreGroupName): boolean => scoreOpenGroups.value.has(group);
 const isWorkbenchGroupOpen = (group: WorkbenchGroupName): boolean => workbenchOpenGroup.value.has(group);
 
-/** 按当前路由维度读取会话级滚动位置（乐谱/工作台各自独立记忆，高度不同避免交错钳位） */
-const getSessionScrollTop = () => (isScoreRoute.value ? scoreScrollTopState : workbenchScrollTopState).value;
-/** 写入当前路由维度对应的会话级滚动位置 */
-const setSessionScrollTop = (top: number) => {
-  (isScoreRoute.value ? scoreScrollTopState : workbenchScrollTopState).value = top;
-};
+/** 面板内容的档位全集：路由种类 × 乐谱页 tab，各占一份滚动记忆（activeKey 的类型由此收窄） */
+const PANEL_KEYS = ['score:edit', 'score:preview', 'workbench'] as const;
+type PanelKey = (typeof PANEL_KEYS)[number];
 
-/** 滚动时维护会话级滚动位置（边缘渐隐由 v-edge-fade 指令自动处理，无需手动同步） */
-function handleScroll() {
-  const el = scrollRef.value;
-  if (el) setSessionScrollTop(el.scrollTop);
-}
+/** 当前档位：乐谱页「排列和弦」/「预览」两个 tab 与工作台页各一份（面板内容一变就换档） */
+const activeKey = computed<PanelKey>(() =>
+  isScoreRoute.value ? (isPreviewTab.value ? 'score:preview' : 'score:edit') : 'workbench'
+);
 
 /**
- * 浮层以 v-if 在重建/换绑容器后默认 scrollTop=0，这里在容器重建（scrollRef 换绑）后立即恢复
- * 会话级滚动位置，保证重新打开时不闪回顶部。
- * 恢复是重开时**唯一**的定位动作：分组头上的 v-scroll-into-view 一律 .skip-mount，
+ * 会话级滚动位置记忆：关闭 / 重开设置弹层仍返回上次滚动位置（浮层以 v-if 销毁重建容器，
+ * 默认 scrollTop=0，不记就会「闪回顶部」）。
+ *
+ * 档位键（activeKey）按**面板内容**分，而不是只按路由分：乐谱页「排列和弦」与「预览」两个 tab
+ * 的面板内容并不一样（预览多出对齐 / 忽略空格 / 页脚 / 版面几组），高度差可达数百像素。
+ * 共用一份记忆时，切到矮的那个 tab 会把容器钳到它的上限，把另一个 tab 记的位置写坏
+ * ——现象就是「切个 tab 位置就丢了」。展开态（scoreEditOpenGroups / scorePreviewOpenGroups）
+ * 本来就是按这两个 tab 分开记的，滚动位置同理。
+ *
+ * 滚动时的持续记录与容器换绑后的贴回都由 useScrollMemory 内部完成
+ *（边缘渐隐仍由 v-edge-fade 指令自行处理，无需手动同步）。
+ *
+ * 贴回是重开时**唯一**的定位动作：分组头上的 v-scroll-into-view 一律 .skip-mount，
  * 不会在挂载后（哪怕延迟 220ms）再来把它顶走。
  *
  * 历史说明：此处曾有一套「MutationObserver 监听 -leave- 类 + rAF 逐帧贴回 scrollTop」的离场保持机制，
@@ -450,12 +451,13 @@ function handleScroll() {
  * computed overflow-y）证明该假设不成立：关闭期间 scroll 事件正常派发、可滚动空间始终充裕，
  * 真正原因是 v-scrollbar 卸载时摘掉内联 overflow-y，导致元素 scrolling box 被销毁、scrollTop 随之丢弃。
  * 根因已在 vScrollbar.ts 修复，故这套逐帧纠偏机制一并移除。
+ *（这也正是 useScrollMemory 用「滚动时持续记录」而非「换档时现读」的原因：销毁那一刻不派发 scroll，
+ * 持续记录保住的是销毁前最后一个真实位置。）
  */
-watch(
-  scrollRef,
-  el => {
-    if (el) el.scrollTop = getSessionScrollTop();
-  },
-  { flush: 'post' }
-);
+useScrollMemory({
+  scope: 'header-config-popover',
+  keys: PANEL_KEYS,
+  activeKey,
+  target: scrollRef,
+});
 </script>

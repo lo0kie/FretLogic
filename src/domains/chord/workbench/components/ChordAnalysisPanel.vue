@@ -1,89 +1,88 @@
 <template>
-  <template v-if="hasNotes">
+  <div
+    v-if="hasNotes"
+    :class="candidatesOnly ? 'grid-cols-1' : 'grid-cols-[56%_auto_1fr]'"
+    class="grid min-h-0 w-full gap-xs overflow-hidden"
+  >
     <!-- 行高取两列内容高度之大者，分两种情形（候选是否为空）：
          · 候选为空：左列空态留在流中，按自身高度参与行高 → 容器由左侧撑开（不被右列压缩）；
          · 候选非空：左列内容脱离流、不参与行高，行高由右侧按音列独占决定，超出则由左列自身滚动 -->
-    <div
-      :class="candidatesOnly ? 'grid-cols-1' : 'grid-cols-[56%_auto_1fr]'"
-      class="grid min-h-0 w-full gap-xs overflow-hidden"
-    >
-      <!-- 左列占位壳：只作定位上下文与滚动条 overlay 的挂载点，自身不提供内容高度 -->
-      <div class="relative min-h-0 min-w-0" ref="candidatePaneRef">
-        <!-- 候选非空：内容层绝对定位脱离流 → 不参与 grid 行高计算，行高由右列独占决定；超出则本区滚动。
-             候选为空：留在流中，空态框按自身高度撑开左列行高（矮右列压不扁它），此时无须滚动 -->
-        <BaseScrollArea
-          v-grid-nav
-          :class="!candidatesOnly && candidates.length > 0 ? 'absolute inset-0' : undefined"
-          :fade="{ size: 12 }"
-          :scrollbar="{ overlayParent: candidateOverlayParent }"
-          axis="y"
-          class="flex flex-wrap content-start gap-1"
-        >
-          <template v-if="candidates.length > 0">
-            <BaseBadge
-              v-wave
-              v-for="candidate in candidates"
-              :appearance="isCandidateActive(candidate) ? 'filled' : 'subtle'"
-              :key="candidate.chordName"
-              :title="candidate.chordName"
-              :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
-              @click="handleSelectCandidate(candidate)"
-              interactive
-            >
-              <span v-chord-name="{ segments: candidate.segments, name: candidate.chordName, shorthand }" />
-            </BaseBadge>
-          </template>
-
-          <Feedback v-else bordered description="暂无匹配和弦" icon="search-x" size="sm" />
-        </BaseScrollArea>
-      </div>
-
-      <template v-if="!candidatesOnly">
-        <BaseDivider orientation="vertical" />
-
-        <!-- 右列：按音列表在流中，独占决定整行高度（左列已脱离流） -->
-        <div class="flex min-h-0 min-w-0 flex-col gap-1">
-          <div
+    <!-- 左列占位壳：只作定位上下文与滚动条 overlay 的挂载点，自身不提供内容高度 -->
+    <div class="relative min-h-0 min-w-0" ref="candidatePaneRef">
+      <!-- 候选非空：内容层绝对定位脱离流 → 不参与 grid 行高计算，行高由右列独占决定；超出则本区滚动。
+           候选为空：留在流中，空态框按自身高度撑开左列行高（矮右列压不扁它），此时无须滚动 -->
+      <BaseScrollArea
+        v-grid-nav
+        :class="!candidatesOnly && candidates.length > 0 ? 'absolute inset-0' : undefined"
+        :fade="{ size: 12 }"
+        :scrollbar="{ overlayParent: candidateOverlayParent }"
+        axis="y"
+        class="flex flex-wrap content-start gap-1"
+      >
+        <template v-if="candidates.length > 0">
+          <BaseBadge
             v-wave
-            v-for="note in notes"
-            :class="[
-              note.isRoot
-                ? 'border-tint-warning-65 bg-tint-warning-90 hover:border-tint-warning-78 hover:bg-tint-warning-88'
-                : 'border-border-light bg-surface-body hover:border-border-base hover:bg-surface-panel-hover',
-            ]"
-            :key="note.stringIndex"
-            class="flex min-w-0 shrink-0 items-center justify-between gap-1.5 rounded-md border px-1.5 py-1 transition-colors select-none"
+            v-for="candidate in candidates"
+            :appearance="isCandidateActive(candidate) ? 'filled' : 'subtle'"
+            :key="candidate.chordName"
+            :title="candidate.chordName"
+            :variant="isCandidateActive(candidate) ? 'primary' : 'neutral'"
+            @click="handleSelectCandidate(candidate)"
+            interactive
           >
-            <div class="flex min-w-0 shrink-0 items-center gap-1">
-              <span
-                :class="note.isRoot ? 'font-bold text-warning' : 'text-fg-disabled'"
-                class="shrink-0 text-2xs font-semibold whitespace-nowrap"
-              >
-                {{ stringCount - note.stringIndex }}弦
-              </span>
-              <span
-                :class="note.isRoot ? 'font-extrabold text-warning' : 'font-bold text-fg-title'"
-                class="shrink-0 text-xs whitespace-nowrap"
-              >
-                <span v-chord-name="note.label" />
-              </span>
-            </div>
+            <span v-chord-name="{ segments: candidate.segments, name: candidate.chordName, shorthand }" />
+          </BaseBadge>
+        </template>
 
-            <BaseBadge
-              :appearance="note.isRoot ? 'filled' : 'subtle'"
-              :class="note.isRoot ? 'shadow-[0_1px_4px_rgba(255,149,0,0.5)]' : undefined"
-              :title="`${stringCount - note.stringIndex}弦 音级`"
-              :variant="note.isRoot ? 'warning' : 'neutral'"
-              class="font-mono tabular-nums"
-              size="xs"
-            >
-              <span v-chord-name="{ degrees: noteDegrees(note) }" class="font-bold" />
-            </BaseBadge>
-          </div>
-        </div>
-      </template>
+        <Feedback v-else bordered description="暂无匹配和弦" icon="search-x" size="sm" />
+      </BaseScrollArea>
     </div>
-  </template>
+
+    <template v-if="!candidatesOnly">
+      <BaseDivider orientation="vertical" />
+
+      <!-- 右列：按音列表在流中，独占决定整行高度（左列已脱离流） -->
+      <div class="flex min-h-0 min-w-0 flex-col gap-1">
+        <div
+          v-wave
+          v-for="note in notes"
+          :class="[
+            note.isRoot
+              ? 'border-tint-warning-65 bg-tint-warning-90 hover:border-tint-warning-78 hover:bg-tint-warning-88'
+              : 'border-border-light bg-surface-body hover:border-border-base hover:bg-surface-panel-hover',
+          ]"
+          :key="note.stringIndex"
+          class="flex min-w-0 shrink-0 items-center justify-between gap-1.5 rounded-md border px-1.5 py-1 transition-colors select-none"
+        >
+          <div class="flex min-w-0 shrink-0 items-center gap-1">
+            <span
+              :class="note.isRoot ? 'font-bold text-warning' : 'text-fg-disabled'"
+              class="shrink-0 text-2xs font-semibold whitespace-nowrap"
+            >
+              {{ stringCount - note.stringIndex }}弦
+            </span>
+            <span
+              :class="note.isRoot ? 'font-extrabold text-warning' : 'font-bold text-fg-title'"
+              class="shrink-0 text-xs whitespace-nowrap"
+            >
+              <span v-chord-name="note.label" />
+            </span>
+          </div>
+
+          <BaseBadge
+            :appearance="note.isRoot ? 'filled' : 'subtle'"
+            :class="note.isRoot ? 'shadow-[0_1px_4px_rgba(255,149,0,0.5)]' : undefined"
+            :title="`${stringCount - note.stringIndex}弦 音级`"
+            :variant="note.isRoot ? 'warning' : 'neutral'"
+            class="font-mono tabular-nums"
+            size="xs"
+          >
+            <span v-chord-name="{ degrees: noteDegrees(note) }" class="font-bold" />
+          </BaseBadge>
+        </div>
+      </div>
+    </template>
+  </div>
 
   <Feedback v-else description="在指板上按出音符后，这里会显示和弦名称与候选分析'" size="sm" />
 </template>

@@ -217,9 +217,7 @@ const {
   handleTogglePitchName,
 } = useFretboardInteraction(
   props,
-  fretOffset => {
-    emit('update:fret-offset', fretOffset);
-  },
+  fretOffset => void emit('update:fret-offset', fretOffset),
   strings => emit('update:strings', strings),
   index => emit('update:root-string-index', index)
 );

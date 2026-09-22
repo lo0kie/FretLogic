@@ -1,6 +1,6 @@
 <template>
   <div class="pointer-events-auto absolute inset-0 z-content overflow-hidden">
-    <div class="relative flex size-full items-start overflow-auto px-2xl pt-2xl pb-3xl">
+    <div class="relative flex size-full items-start overflow-auto p-2xl">
       <!-- 交互指板卡片：点击/编辑即写和弦草稿，含横按标记与和弦名直改 -->
       <div
         class="pointer-events-auto relative z-base mx-auto flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel px-2xl py-xl shadow-panel transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg hover:delay-150"
@@ -21,20 +21,51 @@
            · 未滚动（scrollTop===0）时顶部不遮罩 → 首卡完整可见、与指板顶对齐
            · 上滚后顶部渐隐显示，柔化滚出内容的切口
            · 底部仅未滚到底时渐隐，滚到底自动取消 → 末卡不被遮挡
-           列顶 top-8（32px）与指板同高，滚动时卡片最多上移到 32px，不会比指板更高 -->
-      <div class="pointer-events-auto absolute inset-y-2xl right-8 z-panel">
-        <BaseScrollArea :scrollbar="{ endInset: 12 }" close-popovers axis="y" class="flex size-full w-72 flex-col">
-          <!-- 面板列表：拖拽排序容器，其直接子元素即五张面板卡片。
+           列顶 32px 与指板同高：未滚动时首卡顶边距父容器上下缘均为 32px。宿主盒上缘另行上移到
+           父容器内 8px 处（见下），故滚动时卡片理论上可上移到 8px，但该段落在 20px 羽化带内，
+           观感仍是「升到列顶即淡出」。
+
+           卡片投影四周留白：宿主是卡片祖先链上唯一的 overflow!=visible 节点（v-scrollbar 注入的
+           overflow-y:auto），它在自己的内容盒边界裁掉后代的一切绘制；而 overflow 只裁内容与后代、
+           不裁元素自身，投影也不可能挪到宿主盒外去画。唯一出路是让宿主盒比内容盒大：宿主盒向外
+           扩 P，内容再补等量 padding 把卡片拉回原位——可视区与 scrollHeight 同时 +2P，可滚量与
+           卡片位置逐像素不变，空出来的那段 P 正好给投影落地。横向两处、纵向两处必须成对同步，
+           漏改任一处卡片位置都会漂移：
+           · 横向 P=32：宿主盒右缘贴父容器（right-8→right-0）、w-72→w-88、补 px-2xl；
+             滚动条 edgeOffset 同步 +32 才停在原处。
+           · 纵向 P=24：宿主盒上下各内缩 32-P（inset-y-2xl→inset-y-sm）、内容补 py-xl；
+             滚动条 endInset 12→36（盒高增 48 的一半）才停在原处（轨道顶 8+36=44＝原 32+12）。
+           P 只需 ≥ 卡片投影在该轴上的最大延展（shadow-md：纵向 4+14=18、横向 14）；横向 32 由原本
+           right-8 的内缩决定、不必再收，纵向取最近的 spacing token 24。 -->
+      <div class="pointer-events-auto absolute inset-y-sm right-0 z-panel">
+        <BaseScrollArea
+          :scrollbar="{ endInset: 44, edgeOffset: EDGE_OFFSET + 44 }"
+          close-popovers
+          axis="y"
+          class="flex size-full w-88 flex-col px-2xl"
+        >
+          <!-- 面板列表：拖拽排序容器，其直接子元素即四张面板卡片。
                刻意不把排序容器与滚动宿主合并：滚动宿主是 v-scrollbar 的书写目标（加宿主类 + 写内联
                overflow），而 Sortable 会把容器的直接子元素一律当成可排序项，两种语义不该共用一个节点。
                shrink-0 必需——本容器是滚动宿主的唯一 flex 子项，若能收缩则永远滚不动。 -->
-          <div class="flex w-full shrink-0 flex-col items-stretch gap-lg *:shrink-0" ref="panelListRef">
+          <!-- 纵向留白的下半：py-xl（24）把卡片拉回宿主盒外扩前的原位，同时把这 24px 计入
+               scrollHeight，于是两端各多出 24px 空白可供投影落地——滚到底时末卡底边距可视化下缘
+               仍有 24px，底部投影不再断在裁切线上；未滚动时首卡上方的 24px 也让顶部投影首次可见。
+               留白必须落在内容上、而不是给滚动宿主加 padding：宿主 height 被外层 inset 锁定且是
+               border-box，padding 只会压缩内容盒（可视内容白白少一截），而 scrollHeight 的增量两者
+               完全相同。也不必逐卡套 padding 壳：卡间距 gap-lg(16) 与纵向投影的下延展（浅色 16、
+               深色/高对比 18）同量级，卡间那段横跨空白本就容得下投影，纵深溢出的 2px 尾端落在下一张
+               卡片的不透明背景之下、肉眼不可见，所以每张卡外面再包一层 padding 壳买不到任何东西，
+               两端留白用本容器的 padding 一次给足即可。
+               加在本容器上等同末尾占位块，但不新增节点，也不会让 Sortable 多认一项（padding 不产生
+               子元素）。 -->
+          <div class="flex w-full shrink-0 flex-col items-stretch gap-lg py-xl *:shrink-0" ref="panelListRef">
             <!-- 面板卡片外壳：由 View 统一封装（卡片 chrome + 折叠 + 展开态持久化），各业务面板保持纯内容。
        useWorkbenchPanelExpanded 为 composable（内部封装 useStorage），在此调用符合项目约束 -->
             <div
               v-for="panelId in panels"
               :key="panelId"
-              class="group/panel w-full overflow-hidden rounded-xl border border-glass-border bg-surface-panel p-xs"
+              class="group/panel w-full overflow-hidden rounded-xl border border-glass-border bg-surface-panel p-xs shadow-md"
             >
               <BaseCollapse
                 :description="panelDescription(panelId)"
@@ -139,6 +170,7 @@ import { useWorkbenchPanelsOrder } from '@/domains/chord/workbench/composables/u
 import { useWorkbenchRouteSync } from '@/domains/chord/workbench/composables/useWorkbenchRouteSync';
 import { getFloatingBarBottom } from '@/domains/fretboard/constants';
 import { useSortableList } from '@/platform/composables/useSortableList';
+import { EDGE_OFFSET } from '@/platform/directives/vScrollbar';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { STORAGE_KEYS } from '@/platform/utils/constants';
 

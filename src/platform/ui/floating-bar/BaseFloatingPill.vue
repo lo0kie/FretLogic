@@ -112,10 +112,16 @@ const sizeClass = computed(() => SIZE_CLASS_MAP[props.size] ?? SIZE_CLASS_MAP.md
 </script>
 
 <style scoped lang="scss">
-/* 常态 hover 过渡：只影响底色/边框/阴影，不与进出场动画抢 transition-property。
-   进出场动画 v-floating-bar-slide-* 收拢于 assets/transitions.scss（与 BaseFab 共用） */
+/* 常态过渡：hover 反馈（底色/边框/阴影）+ 垂直定位。
+   - 垂直定位必须纳入：bottom/top 由调用方按内容高度动态给出（工作台随「当前品数」换档，
+     5rem → 3.5rem → 2.5rem），不写 transition 就是 24px 级别的瞬跳；
+   - 水平方向刻意不走过渡：左/右来自 align 的 class，切换对齐应当瞬移而不是滑行；
+   - 不与进出场动画抢 transition-property：.v-floating-bar-slide-*-active 的 transition
+     带 !important（见 assets/transitions.scss），enter/leave 期间整体接管，本组自动让位。 */
 .base-floating-pill {
   transition:
+    bottom var(--duration-base) var(--bezier-standard),
+    top var(--duration-base) var(--bezier-standard),
     background-color 0.15s ease,
     border-color 0.15s ease,
     box-shadow 0.15s ease;

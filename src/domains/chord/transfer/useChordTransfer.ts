@@ -79,14 +79,13 @@ export function useChordTransfer() {
     encodeShareToken(buildGroupPayload(group, chords));
 
   /** 复制单个和弦到剪贴板（载体：裸 token，可在另一实例粘贴导入） */
-  const copyChordText = async (chord: Chord): Promise<void> => {
-    await runBusyAction({
+  const copyChordText = async (chord: Chord): Promise<void> =>
+    void (await runBusyAction({
       busy: isCopying,
       errorFallback: '复制失败',
       successText: '已复制和弦到剪贴板',
       run: async () => writeTextToClipboard(await buildChordToken(chord)),
-    });
-  };
+    }));
 
   /** 和弦卡片右键「复制」：复用单和弦复制 */
   const copyChordCardText = copyChordText;
@@ -104,8 +103,8 @@ export function useChordTransfer() {
 
   /** 工作台粘贴：解析文字载入编辑器草稿（切「新建」态，不静默改写库中既有和弦）；
    *  剪贴板为 FLGROUP 分组文本时改走分组导入（新建分组 + 组内全部和弦） */
-  const pasteChordFromClipboard = async (): Promise<void> => {
-    await runBusyAction({
+  const pasteChordFromClipboard = async (): Promise<void> =>
+    void (await runBusyAction({
       busy: isCopying,
       errorFallback: '粘贴失败',
       run: async () => {
@@ -139,8 +138,7 @@ export function useChordTransfer() {
         // 剪贴板粘贴与分享链接共用同一落地实现，只是深度不同（粘贴不落库）
         landPortableChord(result.data, false);
       },
-    });
-  };
+    }));
 
   /**
    * 便携分组载荷落地：新建分组（保留排序规则与调式主音）并导入组内全部和弦。
@@ -226,14 +224,13 @@ export function useChordTransfer() {
   const importSharedChord = (p: PortableChord): void => landPortableChord(p, true);
 
   /** 生成并复制和弦分享链接（token 外面包一层地址，链接打开后自动导入该和弦） */
-  const shareChordLink = async (chord: Chord): Promise<void> => {
-    await runBusyAction({
+  const shareChordLink = async (chord: Chord): Promise<void> =>
+    void (await runBusyAction({
       busy: isCopying,
       errorFallback: '生成分享链接失败',
       successText: `已复制和弦「${getChordName(chord)}」的分享链接`,
       run: async () => writeTextToClipboard(buildShareUrl(ROUTE_PATHS.WORKBENCH, await buildChordToken(chord))),
-    });
-  };
+    }));
 
   /** 生成并复制分组分享链接（token 外面包一层地址，链接打开后自动导入该分组及其全部和弦） */
   const shareGroupLink = async (group: Group): Promise<void> => {

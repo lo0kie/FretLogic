@@ -65,9 +65,7 @@ export function useWorkbenchPanelsOrder(): UseWorkbenchPanelsOrderReturn {
     storedOrder.value = [...sanitized];
   };
 
-  const setOrder = (newOrder: WorkbenchPanelId[]) => {
-    persistToStorage(newOrder);
-  };
+  const setOrder = (newOrder: WorkbenchPanelId[]) => void persistToStorage(newOrder);
 
   return {
     panels,

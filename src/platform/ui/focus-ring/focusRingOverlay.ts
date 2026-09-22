@@ -12,6 +12,15 @@
  * 跟随策略：focus 期间每帧用 getBoundingClientRect 重算（开销极小），天然覆盖滚动 / 平移 / 尺寸变化，
  * 无需为每个可能的滚动祖先逐一个绑定 scroll。
  *
+ * 画布尺寸策略：画布**只覆盖环的外轮廓**（四边各留一点吸附余量），不是整视口。整视口画布在 2K@2x 下
+ * 每帧要清约 1500 万像素，而真正画上去的像素（环带 + 擦除块）恒落在环的外轮廓之内 —— 擦除只会让
+ * 像素更少。按环盒开辟后绘制量降到万级像素（约三个数量级）。
+ * 划小之后坐标系不再与视口重合，但**绘制代码不必跟着改造**：给上下文设一次带平移的变换
+ * （`setTransform(dpr,0,0,dpr,-left*dpr,-top*dpr)`）就把视口坐标翻译到画布原点，本模块其余部分
+ * 继续用视口坐标书写。画布原点与尺寸都吸附到设备像素线 —— 本模块所有几何都是「已吸附的视口坐标」，
+ * 原点若落在半像素上，它们落到画布上就不再逐像素对齐，`destination-out` 那套「像素要么整块在内、
+ * 要么整块在外」的前提随之失效（切口会重新长出半透明残线）。
+ *
  * 层级策略：不写死高层号。向上找出焦点目标所在的那一层，overlay 取「该层层号 + 1」，环刚好压住它：
  * - 浮层容器（Popover/Drawer/Modal/Tooltip）的层号由 floatingZ 池分配、写在**内联 style** 上
  *   → 逐帧向上找内联 z-index（池号会在聚焦期间随上层浮层开合而重排，需跟随）；
@@ -73,6 +82,14 @@
  * 收集方式是沿目标的祖先链逐层看**同层兄弟**（含目标自己的兄弟与各祖先的兄弟，后者覆盖
  * 「sticky 在滚动容器之外、吸在视口上」的情形），兄弟盒子与环的外轮廓不相交时整棵子树跳过——
  * sticky 元素受包含块约束、跑不出自己的父盒，跳过是安全的。
+ * 但「同层」不能靠「沿祖先链一路走到 body」兑现：目标在浮层内时面板是 Teleport 到 body 的，
+ * 祖先链走到尽头再往上取兄弟，就把整个应用根（#app）当成了同层兄弟扫一遍——内容层的滚动条拇指、
+ * 吸顶头于是被当成遮挡物从环上擦掉，而它们整块压在浮层之下、根本够不着环，擦出来的孔正对浮层面板，
+ * 看着就是「环被分组的滚动条穿透挖了个口子」。故扫描以**目标所在层的边界**为上限：向上找到第一个
+ * 建立浮层 / 静态高层的祖先（inline 或 computed z ≥ FLOATING_Z_BASE，与环号同源判定）即停，
+ * 不再看它的兄弟——边界之外的元素整体处于低层，永远盖不住环。目标在页面内容层时不存在这条边界，
+ * 扫描照旧上到 body（吸顶页头、FAB 这些覆盖元件都落在这一档里）。它同时挡掉一笔白开销：
+ * 从浮层内的目标出发，原先每帧都要把 #app 整棵树连同几百张卡片逐个读矩形做剪枝。
  * 收集**逐帧做、不缓存**：判据「与环的外轮廓相交」是滚动位置的函数，与聚焦那一刻无关。若在聚焦时
  * 快照，头还停在静态位置（与首行卡片之间隔着网格的 padding）离环更远，当场被剪枝掉，之后无论怎么滚
  * 都不会再被看一眼——环就永远压在吸附头上。逐帧收集时收集判据与擦除判据完全同一（只有相交才需要擦），
@@ -103,7 +120,9 @@ const RING_PUNCHOUT_SELECTOR = '[data-ring-punchout]';
  *  与 data-ring-punchout 的分工：挖孔只扫**目标子树内**的外凸装饰，而这类覆盖元素在目标之外
  *  （滚动条挂在滚动容器的兄弟位置），只有沿祖先链的遮挡物收集才够得着。
  *  标了属性 ≠ 永远要擦：元素**当前不可见**时不擦（见 isElementVisible）——这条属性声明的是
- *  「我在内容层且会盖住东西」，而不是「我此刻在屏幕上」。 */
+ *  「我在内容层且会盖住东西」，而不是「我此刻在屏幕上」。
+ *  另有一道**层边界**：目标在浮层内时它们整体处于低层、盖不住环，扫描根本走不到它们
+ *  （见 resolveLayerBoundary）。本属性只声明「同层时会盖住东西」。 */
 const RING_OCCLUDER_ATTR = 'data-ring-occluder';
 /** 环边框粗细（px） */
 const RING_WIDTH = 2;
@@ -124,6 +143,25 @@ interface Rect {
   top: number;
   right: number;
   bottom: number;
+}
+
+/** 一块待擦除区域：最终矩形（含外扩量）+ 圆角半径 */
+interface RingCut {
+  rect: Rect;
+  radius: number;
+}
+
+/** 一帧绘制所需的全部读数：既是绘制输入，也是「本帧要不要重绘」的判据（见 collectRingPaint） */
+interface RingPaint {
+  dpr: number;
+  /** 绘制区（可见区外扩 RING_OUTSET，已吸附设备像素）：内容恒被它裁剪在内 */
+  area: Rect;
+  /** 环的外轮廓：画环带用它，判断「这块有没有被别的东西盖住」用它，**画布盒也由它决定** */
+  region: Rect;
+  radius: number;
+  color: string;
+  punches: RingCut[];
+  occluders: RingCut[];
 }
 
 /**
@@ -176,8 +214,10 @@ export function setupFocusOutlineRing(): () => void {
   const ring = document.createElement('div');
   ring.style.cssText = 'position:absolute;inset:0;opacity:0;transition:opacity 140ms ease-out;';
 
+  // 画布盒（left/top/width/height）由 syncCanvasBox 逐帧按环的外轮廓下发，这里只给定位基准：
+  // 它落在 ring（inset:0，即整视口）的坐标系里，所以下发的 left/top 就是视口坐标，不必再换算
   const canvas = document.createElement('canvas');
-  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+  canvas.style.cssText = 'position:absolute;left:0;top:0;';
   ring.appendChild(canvas);
 
   // 颜色探针：先把 var(--color-primary) 交给 CSS 引擎解析、再读计算值。canvas 的 fillStyle 对
@@ -211,11 +251,25 @@ export function setupFocusOutlineRing(): () => void {
   let lastAlpha = -1;
   /** 本帧擦除的 sticky 条：逐帧重收集，这里只留最后一帧供控制台查看（擦除本身不依赖历史） */
   let lastOccluders: HTMLElement[] = [];
+  /**
+   * 上一帧的绘制签名（`paintKeyOf` 压出的数列）：逐项全等即整帧跳过重绘。
+   * 空数组代表「画布内容未知/已清空」——清画布的动作必须一并作废它，否则会跳过重绘留下空白。
+   */
+  let lastPaintKey: number[] = [];
+  /** 上一帧的环色（computed 颜色串，不进数值签名，单独比一档） */
+  let lastRingColor = '';
   let raf = 0;
   /** 目标所处**静态高层**的层号（toast 等只写工具类的高层；每次 show() 解析一次，见 resolveStaticLayerZ） */
   let staticLayerZ = 0;
+  /** 目标所在层的边界元素（浮层宿主 / 静态高层容器；每次 show() 解析一次，见 resolveLayerBoundary） */
+  let layerBoundary: HTMLElement | null = null;
   /** overlay 当前生效层号（避免每帧重复写同值触发无谓的样式失效） */
   let appliedZ = FLOATING_Z_BASE - 1;
+  /**
+   * 画布盒当前生效的几何（已吸附的视口原点 + 设备像素尺寸 + dpr）：与目标盒一致时一个字节都不写。
+   * 尺寸变化会重建后备存储（等于清空），因此这套写入只发生在重绘路径里，重建后紧接着就重画。
+   */
+  let appliedCanvasBox = { dpr: 0, left: 0, top: 0, deviceW: 0, deviceH: 0 };
   /** 排查开关：置真后停画（不会在下一帧被写回），用于二分判定某条线是不是本环画的 */
   let killed = false;
 
@@ -223,6 +277,9 @@ export function setupFocusOutlineRing(): () => void {
   const clearCanvas = () => {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // 画布已整体清空：签名必须同步作废 —— 否则下一帧只要读数没变就会跳过重绘，
+    // 屏幕上留下一片空白（环整个消失，且要等到几何真正变化才恢复）
+    lastPaintKey = [];
   };
 
   /**
@@ -238,6 +295,47 @@ export function setupFocusOutlineRing(): () => void {
     ctx.arcTo(x, y + h, x, y, rr);
     ctx.arcTo(x, y, x + w, y, rr);
     ctx.closePath();
+  };
+
+  /**
+   * 同步画布盒到「环的外轮廓」，并把绘制坐标系翻译到画布原点（见模块头「画布尺寸策略」）。
+   *
+   * 为什么画布可以只覆盖环盒：真正落在画布上的像素只有环带与擦除块两类，而擦除只会让像素更少，
+   * 所以画布内容恒在环的外轮廓之内。整视口画布在 2K@2x 下每帧要清约 1500 万像素，按环盒开辟后
+   * 降到万级。
+   *
+   * 原点与尺寸都吸附到设备像素线：本模块所有几何都是「已吸附的视口坐标」，画布原点若落在半像素上，
+   * 它们落到画布上就不再逐像素对齐，`destination-out` 那套「像素要么整块在内、要么整块在外」的
+   * 前提随之失效（切口会重新长出半透明残线）。
+   *
+   * 盒没变就一个字节都不写 —— 逐帧调用时绝大多数帧（页面静止）都在这里短路。
+   */
+  const syncCanvasBox = (p: RingPaint) => {
+    const { dpr, region } = p;
+    const left = Math.floor(region.left * dpr) / dpr;
+    const top = Math.floor(region.top * dpr) / dpr;
+    // 尺寸直接在设备像素域上取整（左/上 floor、右/下 ceil 向外），再换算回 CSS 尺寸下发，
+    // 保证 CSS 尺寸 × dpr 恰好等于设备尺寸 —— 否则后备存储会被拉伸采样，边框粗细跟着变
+    const deviceW = Math.max(1, Math.ceil(region.right * dpr) - Math.floor(region.left * dpr));
+    const deviceH = Math.max(1, Math.ceil(region.bottom * dpr) - Math.floor(region.top * dpr));
+    if (
+      appliedCanvasBox.dpr !== dpr ||
+      appliedCanvasBox.left !== left ||
+      appliedCanvasBox.top !== top ||
+      appliedCanvasBox.deviceW !== deviceW ||
+      appliedCanvasBox.deviceH !== deviceH
+    ) {
+      canvas.style.left = `${left}px`;
+      canvas.style.top = `${top}px`;
+      canvas.style.width = `${deviceW / dpr}px`;
+      canvas.style.height = `${deviceH / dpr}px`;
+      canvas.width = deviceW;
+      canvas.height = deviceH;
+      appliedCanvasBox = { dpr, left, top, deviceW, deviceH };
+    }
+    // 视口 CSS 坐标 → 画布设备像素：平移把画布原点搬到 (0,0)，再按 dpr 放大。
+    // 本模块其余全部绘制代码因而继续用视口坐标书写，一行不必改
+    ctx.setTransform(dpr, 0, 0, dpr, -left * dpr, -top * dpr);
   };
 
   /**
@@ -269,6 +367,30 @@ export function setupFocusOutlineRing(): () => void {
       cur = cur.parentElement;
     }
     return 0;
+  };
+
+  /**
+   * 目标所在层的**边界元素**：向上第一个建立浮层 / 静态高层（z ≥ FLOATING_Z_BASE）的祖先，无则 null。
+   *
+   * 用途只有一个：给遮挡物收集划上限（见模块头「遮挡物策略」与 collectOccluders）。取 z ≥ 基准层
+   * 而不是「有内联层号就停」，因为后者会把内容层的层号一并认下——本仓内容层写的是工具类
+   * （z-card / z-panel / z-sticky / z-fab，全在基准层之下），**只有浮层宿主**把池号写在
+   * 内联 style 上；静态高层（z-top / z-toast）则只有 computed 值。两处都查一遍，与
+   * `resolveInlineZ` + `resolveStaticLayerZ` 认下侧同一口径。
+   *
+   * 返回元素而非层号：本判据问的是「兄弟在不在同一层」，即 DOM 边界，不是数值大小。
+   * 内联值先查（不触发样式计算），未命中再读 computed——与 show() 里那两个 resolve 同序。
+   */
+  const resolveLayerBoundary = (el: HTMLElement): HTMLElement | null => {
+    let cur: HTMLElement | null = el.parentElement;
+    while (cur && cur !== document.body) {
+      const inline = Number.parseInt(cur.style.zIndex, 10);
+      if (Number.isFinite(inline) && inline >= FLOATING_Z_BASE) return cur;
+      const z = Number.parseInt(getComputedStyle(cur).zIndex, 10);
+      if (Number.isFinite(z) && z >= FLOATING_Z_BASE) return cur;
+      cur = cur.parentElement;
+    }
+    return null;
   };
 
   /**
@@ -388,19 +510,25 @@ export function setupFocusOutlineRing(): () => void {
    * 「遮挡物策略」：判据与滚动位置有关，聚焦时快照会漏掉之后才滑到环下面的头。
    *
    * 上到 body 为止，因此既能覆盖滚动容器内的吸顶分组标题 / 吸底操作条，
-   * 也能覆盖「sticky 在滚动容器之外、吸在视口上」的页头。
+   * 也能覆盖「sticky 在滚动容器之外、吸在视口上」的页头。但**上到 body 为止 ≠ 同层**：
+   * 目标在浮层内时（面板 Teleport 到 body），再往上取兄弟就把 #app 当成了同层兄弟，内容层的
+   * 滚动条拇指 / 吸顶头会被误擦。故以 boundary（见 resolveLayerBoundary）为上限：走到它即停，
+   * **不看它的兄弟** —— 边界之外的元素整体处于低层，盖不住环。boundary 为 null（目标在内容层）
+   * 时行为与原先完全一致。
    *
    * 只走兄弟、不判祖先链上的元素本身：目标自己是 sticky 时（或它的祖先 sticky 时）它们随目标一起移动，
    * 属于目标的一部分，不构成遮挡。也正因为只看兄弟，目标自身子树天然被排除在扫描之外。
+   * 层边界同样只对**兄弟**起作用：边界元素自身及其子树仍是扫描对象，浮层自己的滚动条拇指
+   * （挂在面板内的 scrollbar-layer 上）照旧被擦。
    *
    * 成本：每层把该层兄弟的盒子读一遍，相交才深入。层数 = 目标祖先链长；兄弟数在卡片网格那层最大
    * （一组上百张卡片，逐个取矩形做剪枝，全是只读矩形）；`getComputedStyle` 只落在与环相交的那一两个
    * 元素上。只在环可见期间每帧跑，量级远小于同帧的画布重绘。
    */
-  const collectOccluders = (el: HTMLElement, box: Rect): HTMLElement[] => {
+  const collectOccluders = (el: HTMLElement, box: Rect, boundary: HTMLElement | null): HTMLElement[] => {
     const found = new Set<HTMLElement>();
     let cur: HTMLElement | null = el;
-    while (cur && cur !== document.body) {
+    while (cur && cur !== document.body && cur !== boundary) {
       const parent: HTMLElement | null = cur.parentElement;
       if (parent)
         for (const sibling of parent.children) {
@@ -440,6 +568,7 @@ export function setupFocusOutlineRing(): () => void {
     clipAncestors = [];
     lastOccluders = [];
     staticLayerZ = 0;
+    layerBoundary = null;
     alphaSources = [];
     lastAlpha = -1;
     if (raf) {
@@ -450,20 +579,20 @@ export function setupFocusOutlineRing(): () => void {
   };
 
   /**
-   * 一次几何重绘（rAF 循环内每帧调用）。
-   * `r` 与 `clip` 由 apply() 传进来，避免同一帧把几何读两遍。
+   * 收集一帧绘制所需的全部读数：绘制区 / 环盒 / 环色 / 待擦除块（挖孔、遮挡物）。画布盒由环盒推出
+   * （见 syncCanvasBox），不单独读。
+   *
+   * 为什么要与绘制分开：这些读数**同时**是「本帧要不要真的重绘」的判据（见 paintKeyOf）。绘制本身即便
+   * 已按环盒划小，仍是「清像素 + 光栅化一条抗锯齿环带 + 逐块做 destination-out 擦除」的全套动作，
+   * 而读数在布局没动时近乎免费：聚焦一个输入框打字、或点了卡片后不再动鼠标时，读数逐帧全等，
+   * 重绘就能整帧跳过。
+   *
+   * 遮挡物收集留在本函数里、每帧重来一遍：判据是「与环的外轮廓相交」，而相交与否只取决于滚动位置——
+   * 聚焦时快照的话，头还停在静态位置时就会被剪枝掉，之后滚到环下面也没人再检查它。
    */
-  const draw = (el: HTMLElement, r: Rect, clip: Rect) => {
+  const collectRingPaint = (el: HTMLElement, r: Rect, clip: Rect): RingPaint => {
     // 画布按设备像素开辟，坐标系仍换算回 CSS 像素：后面的几何全部用视口 CSS 坐标书写。
     const dpr = window.devicePixelRatio || 1;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    if (canvas.width !== Math.round(vw * dpr) || canvas.height !== Math.round(vh * dpr)) {
-      canvas.width = Math.max(1, Math.round(vw * dpr));
-      canvas.height = Math.max(1, Math.round(vh * dpr));
-    }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, vw, vh);
 
     // 绘制区 = 可见区域各自外扩 RING_OUTSET。外扩的理由：目标贴着容器边但完整可见时，它的环本来
     // 就要长出容器 4px，裁掉就不成其为「外扩环」了；而目标滚出容器后，环超出可见区域以外的那部分
@@ -477,10 +606,6 @@ export function setupFocusOutlineRing(): () => void {
       },
       dpr
     );
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(area.left, area.top, area.right - area.left, area.bottom - area.top);
-    ctx.clip();
 
     // 环的外轮廓（视口坐标）：画环带用它，判断「这块有没有被别的东西盖住」也用它
     const region: Rect = {
@@ -489,16 +614,111 @@ export function setupFocusOutlineRing(): () => void {
       right: r.right + RING_OUTSET,
       bottom: r.bottom + RING_OUTSET,
     };
-    const w = region.right - region.left;
-    const h = region.bottom - region.top;
     const radius = cornerRadius(el) + RING_OUTSET;
 
+    // 挖孔：让目标内骑出边界的外凸装饰（data-ring-punchout）从环上方透出。
+    // 与遮挡物擦除共用一道可见性判定，理由也同一个：装饰被 CSS 隐藏（opacity / visibility）却仍
+    // 留在 DOM 里时，照挖会在环上留一个对不上任何东西的缺口。判在尺寸之后 —— display:none 的装饰
+    // 盒子为零、在这一步就被挡掉，不必为它多读一次样式（见 isElementVisible）。
+    const punches: RingCut[] = [];
+    for (const punch of punchTargets) {
+      if (!punch.isConnected) continue;
+      const b = punch.getBoundingClientRect();
+      if (b.width <= 0 || b.height <= 0) continue;
+      if (!isElementVisible(punch)) continue;
+      punches.push({
+        rect: {
+          left: b.left - PUNCH_INFLATE,
+          top: b.top - PUNCH_INFLATE,
+          right: b.right + PUNCH_INFLATE,
+          bottom: b.bottom + PUNCH_INFLATE,
+        },
+        radius: cornerRadius(punch) + PUNCH_INFLATE,
+      });
+    }
+
+    // sticky 遮挡：吸顶标题这类定位层元素按绘制顺序盖住同容器内的静态内容，而环的层号远高于它们，
+    // 不擦就会画在它们之上（视觉上「环穿过了吸顶条」）。逐块清零，多块重叠也不会像 clip 的
+    // even-odd / nonzero 那样在重叠区「减两次又填回来」。
+    // 可见性（opacity / visibility）已在收集侧过滤掉，此处不必重判：收集与擦除同帧，不存在
+    // 「收的时候可见、擦的时候已淡出」的窗口。
+    lastOccluders = collectOccluders(el, region, layerBoundary);
+    const occluders: RingCut[] = [];
+    for (const occluder of lastOccluders) {
+      if (!occluder.isConnected) continue;
+      const b = occluder.getBoundingClientRect();
+      if (b.width <= 0 || b.height <= 0) continue;
+      const rect: Rect = { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
+      if (!overlaps(rect, region)) continue;
+      occluders.push({ rect, radius: cornerRadius(occluder) });
+    }
+
+    return {
+      dpr,
+      area,
+      region,
+      radius,
+      color: getComputedStyle(colorProbe).color,
+      punches,
+      occluders,
+    };
+  };
+
+  /**
+   * 帧签名：把收集到的读数压成一条可逐项比较的数列。
+   *
+   * 画布上除「环带 + 擦除块」之外没有任何像素（两者都被绘制区裁过），而这两者的形状完全由这些读数
+   * 决定 —— 读数全等就画不出任何差别，上一帧的像素原样有效。颜色是 computed 串、不进数值签名，
+   * 由调用处单独比一档（免得为了比较去分配字符串）。
+   */
+  const paintKeyOf = (p: RingPaint): number[] => {
+    const key = [
+      p.dpr,
+      p.area.left,
+      p.area.top,
+      p.area.right,
+      p.area.bottom,
+      p.region.left,
+      p.region.top,
+      p.region.right,
+      p.region.bottom,
+      p.radius,
+      p.punches.length,
+    ];
+    for (const cut of p.punches) key.push(cut.rect.left, cut.rect.top, cut.rect.right, cut.rect.bottom, cut.radius);
+    key.push(p.occluders.length);
+    for (const cut of p.occluders) key.push(cut.rect.left, cut.rect.top, cut.rect.right, cut.rect.bottom, cut.radius);
+    return key;
+  };
+
+  /**
+   * 按收集结果落笔（rAF 循环内按需调用，不再每帧无条件重绘）。
+   * `r` 与 `clip` 的读取在 collectRingPaint 里完成，本函数只消费读数。
+   */
+  const paintRing = (p: RingPaint) => {
+    const { dpr, area, region, radius, color } = p;
+    // 整块清空：画布只有环盒大小，整块清就是最省的做法，不必再算「上一帧区 ∪ 本帧区」。
+    // 必须用恒等变换清 —— 此刻上下文还带着上一帧的平移，直接清会清到错位的地方去
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // 同步画布盒并翻译坐标系。尺寸变化会重建后备存储（等于又清了一次，上面那步就白做了）——
+    // 反正紧接着就要重画，不需要为这次重叠的清理做任何额外处理
+    syncCanvasBox(p);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(area.left, area.top, area.right - area.left, area.bottom - area.top);
+    ctx.clip();
+
+    const w = region.right - region.left;
+    const h = region.bottom - region.top;
+
     /** 擦掉一块矩形（吸附到设备像素线后整块清零）。挖孔与 sticky 遮挡共用这同一个动作 */
-    const erase = (rect: Rect, cornerR: number) => {
-      const cut = snapOut(rect, dpr);
-      if (cut.right <= cut.left || cut.bottom <= cut.top) return;
+    const erase = (cut: RingCut) => {
+      const r = snapOut(cut.rect, dpr);
+      if (r.right <= r.left || r.bottom <= r.top) return;
       ctx.beginPath();
-      roundRectPath(cut.left, cut.top, cut.right - cut.left, cut.bottom - cut.top, cornerR);
+      roundRectPath(r.left, r.top, r.right - r.left, r.bottom - r.top, cut.radius);
       ctx.fill();
     };
 
@@ -513,49 +733,15 @@ export function setupFocusOutlineRing(): () => void {
       h - RING_WIDTH * 2,
       radius - RING_WIDTH
     );
-    ctx.fillStyle = getComputedStyle(colorProbe).color;
+    ctx.fillStyle = color;
     ctx.fill('evenodd');
 
     // 以下是「擦」：destination-out 逐像素把 alpha 乘成 0，不会留下任何半透明残余；擦除边界吸附到
     // 设备像素线后每个像素要么整块在内、要么整块在外，连「被切开一半」的像素都没有，残线无处落脚。
     ctx.globalCompositeOperation = 'destination-out';
 
-    // 挖孔：让目标内骑出边界的外凸装饰（data-ring-punchout）从环上方透出。
-    // 与遮挡物擦除共用一道可见性判定，理由也同一个：装饰被 CSS 隐藏（opacity / visibility）却仍
-    // 留在 DOM 里时，照挖会在环上留一个对不上任何东西的缺口。判在尺寸之后 —— display:none 的装饰
-    // 盒子为零、在这一行就被挡掉，不必为它多读一次样式（见 isElementVisible）。
-    for (const punch of punchTargets) {
-      if (!punch.isConnected) continue;
-      const b = punch.getBoundingClientRect();
-      if (b.width <= 0 || b.height <= 0) continue;
-      if (!isElementVisible(punch)) continue;
-      erase(
-        {
-          left: b.left - PUNCH_INFLATE,
-          top: b.top - PUNCH_INFLATE,
-          right: b.right + PUNCH_INFLATE,
-          bottom: b.bottom + PUNCH_INFLATE,
-        },
-        cornerRadius(punch) + PUNCH_INFLATE
-      );
-    }
-
-    // sticky 遮挡：吸顶标题这类定位层元素按绘制顺序盖住同容器内的静态内容，而环的层号远高于它们，
-    // 不擦就会画在它们之上（视觉上「环穿过了吸顶条」）。逐块清零，多块重叠也不会像 clip 的
-    // even-odd / nonzero 那样在重叠区「减两次又填回来」。
-    // 收集放在这里、每帧重来一遍：判据是「与环的外轮廓相交」，而相交与否只取决于滚动位置——
-    // 聚焦时快照的话，头还停在静态位置时就会被剪枝掉，之后滚到环下面也没人再检查它。
-    // 可见性（opacity / visibility）也已在收集侧过滤掉，此处不必重判：收集与擦除同帧，不存在
-    // 「收的时候可见、擦的时候已淡出」的窗口。
-    lastOccluders = collectOccluders(el, region);
-    for (const occluder of lastOccluders) {
-      if (!occluder.isConnected) continue;
-      const b = occluder.getBoundingClientRect();
-      if (b.width <= 0 || b.height <= 0) continue;
-      const cut: Rect = { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
-      if (!overlaps(cut, region)) continue;
-      erase(cut, cornerRadius(occluder));
-    }
+    for (const cut of p.punches) erase(cut);
+    for (const cut of p.occluders) erase(cut);
 
     ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
@@ -619,7 +805,17 @@ export function setupFocusOutlineRing(): () => void {
       clearCanvas();
       return;
     }
-    draw(el, r, clip);
+    // 先收集读数（它同时是判据），读数与上一帧全等就整帧跳过重绘：
+    // 聚焦期间每帧都会走到这里，而绝大多数帧里页面根本没动（打字、点了卡片后鼠标不动、动画停住）
+    const paint = collectRingPaint(el, r, clip);
+    const key = paintKeyOf(paint);
+    const moved =
+      paint.color !== lastRingColor || key.length !== lastPaintKey.length || key.some((v, i) => v !== lastPaintKey[i]);
+    if (moved) {
+      paintRing(paint);
+      lastPaintKey = key;
+      lastRingColor = paint.color;
+    }
     ring.style.opacity = '1';
   };
 
@@ -641,7 +837,10 @@ export function setupFocusOutlineRing(): () => void {
     lastAlpha = -1;
     // 静态高层（toast / z-top）要读 computed style，代价落在祖先链上，故只在这里解析一次
     staticLayerZ = resolveStaticLayerZ(el);
-    // 遮挡物不在这里收集：它的判据是「与环相交」，随滚动位置每帧都在变（见 draw()）
+    // 层边界同理只解析一次：它由 DOM 结构决定，聚焦期间不会变（宿主被替换则目标一并被替换，
+    // 那时 focusin/focusout 会重新 show()，不存在「边界元素失效而目标还在」的窗口）
+    layerBoundary = resolveLayerBoundary(el);
+    // 遮挡物不在这里收集：它的判据是「与环相交」，随滚动位置每帧都在变（见 collectRingPaint）
     // 不显式复位 opacity：hide() 已置 0，淡入自然发生；而「环已可见时在相邻目标间移动焦点」
     // （focusout 因 relatedTarget 同族而不收起）保持不闪。
     if (!raf) raf = requestAnimationFrame(tick);
@@ -687,6 +886,17 @@ export function setupFocusOutlineRing(): () => void {
       punchTargets: () => punchTargets,
       clipAncestors: () => clipAncestors,
       occluders: () => lastOccluders,
+      /**
+       * 遮挡物扫描的层边界（null = 目标在页面内容层，扫描上到 body）。
+       * 排查「浮层里的环被下层元素挖掉一块」时看它：为 null 说明没认出目标所在的浮层。
+       */
+      layerBoundary: () => layerBoundary,
+      /**
+       * 画布盒（已下发的几何：视口原点 / 设备像素尺寸 / dpr）与上一帧的绘制签名。
+       * 排查「环画在错位的地方 / 被裁掉一角」时看这对：盒应与环的外轮廓一致，签名为空数组表示画布上无像素。
+       */
+      canvasBox: () => appliedCanvasBox,
+      paintKey: () => lastPaintKey,
       /** 可见透明度的读数来源与当前值（排查「淡出时环没跟」用：看链上哪个祖先拖了后腿） */
       alphaSources: () => alphaSources,
       effectiveAlpha: readEffectiveAlpha,

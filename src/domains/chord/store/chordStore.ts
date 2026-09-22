@@ -505,9 +505,7 @@ export const useChordStore = defineStore('chord', () => {
    */
   const removeChordsSnapshot = (chords: Chord[]): ChordDeletionSnapshot => {
     const targetIds = new Set<string>();
-    chords.forEach(c => {
-      targetIds.add(c.id);
-    });
+    chords.forEach(c => void targetIds.add(c.id));
     if (targetIds.size === 0) return { entries: [] };
     const entries: ChordDeletionSnapshot['entries'] = [];
     savedChordsList.value.forEach((chord, index) => {
@@ -533,9 +531,7 @@ export const useChordStore = defineStore('chord', () => {
    */
   const removeChords = (chords: Chord[]): Set<string> => {
     const targetIds = new Set<string>();
-    chords.forEach(c => {
-      targetIds.add(c.id);
-    });
+    chords.forEach(c => void targetIds.add(c.id));
     if (targetIds.size === 0) return targetIds;
     removeChordsSnapshot(chords);
     return targetIds;

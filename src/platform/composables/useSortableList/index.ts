@@ -179,20 +179,21 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
     }
     const target = (source?.target ?? null) as Element | null;
     if (!(target instanceof Element) || !target.isConnected) return;
-    queueMicrotask(() => {
-      target.dispatchEvent(
-        new MouseEvent('click', {
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-          view: window,
-          detail: 1,
-          button: 0,
-          clientX: source?.clientX ?? 0,
-          clientY: source?.clientY ?? 0,
-        })
-      );
-    });
+    queueMicrotask(
+      () =>
+        void target.dispatchEvent(
+          new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            view: window,
+            detail: 1,
+            button: 0,
+            clientX: source?.clientX ?? 0,
+            clientY: source?.clientY ?? 0,
+          })
+        )
+    );
   };
 
   /**

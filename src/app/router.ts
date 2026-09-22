@@ -29,10 +29,5 @@ router.beforeEach((to, from, next) => {
   next();
 });
 
-router.afterEach(() => {
-  NProgress.done();
-});
-
-router.onError(() => {
-  NProgress.done();
-});
+router.afterEach(() => void NProgress.done());
+router.onError(() => void NProgress.done());

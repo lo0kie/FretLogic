@@ -10,14 +10,20 @@ import { clamp } from '@/platform/utils/common';
 
 /** 拇指可视粗细（px） */
 export const THICKNESS = 6;
-/** 气泡单行读数的半高上界（px）：仅用于两端钳制——单行 nowrap 读数实际半高更小，
- *  取上界可保证钳制后气泡完整落在宿主可视区内（宁可多留白，不可越界被裁） */
-const BUBBLE_HALF_SIZE = 16;
+/** 气泡落点钳制时距滚动容器边缘的留白（px）：与拇指/轨道的边缘间隙同量级，
+ *  滚到顶/底时气泡既不越界被裁、也不贴死容器边缘 */
+const BUBBLE_EDGE_PADDING = 4;
 
 /** 宿主在父元素内的布局坐标与可视尺寸（一次读数，双轴共用） */
 export interface HostOffset {
   left: number;
   top: number;
+  width: number;
+  height: number;
+}
+
+/** 气泡自身盒子尺寸（border-box，含 1px 边框）：落点两轴的钳制量按它算，故与宿主几何分开定义 */
+export interface BoxSize {
   width: number;
   height: number;
 }
@@ -99,35 +105,56 @@ export const computeThumbGeometry = (
 };
 
 /**
- * 纯几何：滚动气泡在 overlay 坐标系中的落点（元素自身用 left/top 定位，伸缩方向由类上的
- * translate 固定：纵向滚动条贴容器右缘、气泡整宽向左展开；横向滚动条贴下缘、气泡向上展开）。
+ * 纯几何：滚动气泡在 overlay 坐标系中的落点。
  *
- * 沿轴坐标吸附在拇指中位，并按 BUBBLE_HALF_SIZE 两端钳制：滚到顶/底时气泡改贴宿主边缘而不越界
- * ——overlay 的父元素常带 overflow:hidden，越界即被裁掉半个气泡。
+ * 元素自身用 left/top 定位，伸缩方向由类上的 translate 固定，落点在气泡上的含义随之确定：
+ *  - 纵向滚动条（--y）：translate(-100%,-50%) → 落点是气泡**右缘**与**纵向中位**，
+ *    气泡整宽向左展开、纵向以落点居中；
+ *  - 横向滚动条（--x）：translate(-50%,-100%) → 落点是气泡**横向中位**与**下缘**，
+ *    气泡整高向上展开、横向以落点居中。
+ *
+ * 两个坐标**各自**钳制在滚动容器的范围内，两端各留 BUBBLE_EDGE_PADDING：overlay 的父元素常带
+ * overflow:hidden，越界即被裁掉半个气泡（纵向滚动条上的宽读数会被裁掉文字开头，横向的会被裁掉左右两端）。
+ * 钳制量由气泡在该轴上的**实测尺寸**决定——读数宽度随文案长度无界，固定上界挡不住长读数
+ * （如乐谱页码「12 / 120」）；纵向读数虽小，同样按实测值收敛。
+ * 用整尺寸还是用一半，取决于 translate 把气泡放在落点的哪一侧：整边落在落点上的轴
+ * （--y 的 x、--x 的 y）用整宽/整高，以落点居中的轴（--y 的 y、--x 的 x）用一半。
  */
 export const computeBubblePosition = (
   axis: 'x' | 'y',
   off: HostOffset,
   m: Pick<AxisMetrics, 'thumbSize' | 'thumbOffset'>,
+  box: BoxSize,
   opts: { endInset: number; edgeOffset: number; offset: number }
 ): { left: number; top: number } => {
   const { endInset, edgeOffset, offset } = opts;
   const thumbCenter = m.thumbOffset + m.thumbSize / 2;
+  // 钳制边界 = 容器实边两端各内缩留白；轨道基准与吸附基准仍取容器实边（off），不受留白影响
+  const boundLeft = off.left + BUBBLE_EDGE_PADDING;
+  const boundTop = off.top + BUBBLE_EDGE_PADDING;
+  const boundRight = off.left + off.width - BUBBLE_EDGE_PADDING;
+  const boundBottom = off.top + off.height - BUBBLE_EDGE_PADDING;
   if (axis === 'y') {
     // 轨道/拇指贴容器右缘，几何与 applyAxis 的 track.left 同源
     const railLeft = off.left + off.width - THICKNESS - edgeOffset;
+    // 居中轴的钳制区间：气泡比容器还高时下界会越过上界，先把上界抬到不低于下界
+    // （区间退化为下界一点）——与另一轴的 Math.max 同向：始终保住文字开头，而不是被推到某一侧把它截掉
+    const minTop = boundTop + box.height / 2;
+    const maxTop = Math.max(minTop, boundBottom - box.height / 2);
     return {
-      left: railLeft - offset,
-      top: clamp(off.top + endInset + thumbCenter, off.top + BUBBLE_HALF_SIZE, off.top + off.height - BUBBLE_HALF_SIZE),
+      // 气泡整宽在落点左侧：把落点右推到「左缘留出留白」为止（宁可盖住轨道，不可被裁）
+      left: Math.max(railLeft - offset, boundLeft + box.width),
+      // 纵向以落点居中：两端各留半个自身高度（吸附基准是拇指中位，不加留白）
+      top: clamp(off.top + endInset + thumbCenter, minTop, maxTop),
     };
   }
   const railTop = off.top + off.height - THICKNESS - edgeOffset;
+  // 同上：气泡比容器还宽时区间退化为下界一点，保住左缘（文字开头）
+  const minLeft = boundLeft + box.width / 2;
+  const maxLeft = Math.max(minLeft, boundRight - box.width / 2);
   return {
-    left: clamp(
-      off.left + endInset + thumbCenter,
-      off.left + BUBBLE_HALF_SIZE,
-      off.left + off.width - BUBBLE_HALF_SIZE
-    ),
-    top: railTop - offset,
+    left: clamp(off.left + endInset + thumbCenter, minLeft, maxLeft),
+    // 气泡整高在落点上方：把落点下推到「上缘留出留白」为止
+    top: Math.max(railTop - offset, boundTop + box.height),
   };
 };

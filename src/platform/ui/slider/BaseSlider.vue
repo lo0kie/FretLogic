@@ -126,6 +126,7 @@
           v-if="!isRange"
           v-tooltip.manual.compact="singleTooltipOpts"
           :aria-disabled="disabled || undefined"
+          :aria-labelledby="rowLabelId"
           :aria-valuemax="max"
           :aria-valuemin="min"
           :aria-valuenow="singleValue"
@@ -150,6 +151,7 @@
         <template v-else>
           <div
             v-tooltip.compact.manual="rangeTooltip0Opts"
+            :aria-labelledby="rowLabelId"
             :aria-valuemax="rangeValues[1]"
             :aria-valuemin="min"
             :aria-valuenow="rangeValues[0]"
@@ -173,6 +175,7 @@
 
           <div
             v-tooltip="rangeTooltip1Opts"
+            :aria-labelledby="rowLabelId"
             :aria-valuemax="max"
             :aria-valuemin="rangeValues[0]"
             :aria-valuenow="rangeValues[1]"
@@ -287,6 +290,7 @@ import { computed, inject, nextTick, onBeforeUnmount, ref, useTemplateRef, watch
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { useFormRowLabelId } from '@/platform/ui/form/formRowContext';
 import { useSliderInteraction } from '@/platform/ui/slider/useSliderInteraction';
 import { clamp } from '@/platform/utils/common';
 import { resolveComponentWidth } from '@/platform/utils/constants';
@@ -402,6 +406,8 @@ const isLazy = computed(() => Boolean(props.modelModifiers?.lazy));
 /** 尺寸解析：行内 props > BaseForm 注入上下文 > 默认 md */
 const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
 const resolvedSize = computed<ComponentSize>(() => props.size ?? controlContext?.size ?? 'md');
+/** 所在 BaseFormRow 的标签 id：滑块是 role=slider 的 div，label 的 for 指不到，只能靠 aria-labelledby 关联 */
+const rowLabelId = useFormRowLabelId();
 /** 内部即时值：lazy 模式下拖拽中间态先落在这里，避免逐帧写回 model（初值为一次性快照，后续由 watch 同步；AST 规则误报豁免） */
 // eslint-disable-next-line vue/no-ref-object-reactivity-loss
 const localValue = ref<SliderValue>(model.value as SliderValue);

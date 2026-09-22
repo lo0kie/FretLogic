@@ -66,7 +66,8 @@ src/
   `<span>A</span> <span>B</span>` 之间的源码空格来产生视觉间距，所有行内/块级元素间距一律由 CSS `gap-*` 或 `margin`
   精确控制
 - 样式优先使用设计系统 token（`tokens.scss` 中的 SCSS 变量与 Tailwind 语义类）
-- 提交信息遵循 Conventional Commits 风格（`feat:` / `fix:` / `refactor:` / `chore:` 等）
+- 提交信息：`<type>: <主题>，<主题>…`（多主题用全角逗号分隔，单行不折行）+ 空行 + 每条一个改动的扁平要点列表（`- <主题>：<是什么>`）。**只写「改了什么」，不写「怎么实现的」**—— 根因、机制与取舍记在
+  `CHANGELOG.md` 与代码注释里，不搬进提交信息。不写 markdown 标题、不写 scope。
 
 ## 测试
 

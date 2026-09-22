@@ -9,6 +9,12 @@
    要调整整体密度 / 圆润度 / 字号层级，改这一份即可。
    ============================================================ */
 
+/* 显式引入 SCSS 变量层：本文件被 scripts/scss-inject.mjs 按文件名**跳过**（该注入只面向组件样式，
+   注入到本文件会在每个 <style scoped> 里复制一份），故需要刻度值时必须自己 @use。
+   用途目前只有一处：--bubble-* 的度量档取自 $space-* / $radius-* / $fs-*，
+   免得同一组数字（0.125rem / 0.5rem / 0.375rem / 0.625rem）在刻度层之外再出现一份副本。 */
+@use '@/assets/token-vars' as *;
+
 :root {
   /* ===== 背景（实色：原为半透明玻璃面板，按页面底色合成去掉透明） ===== */
   --bg-main: #f2f2f7;
@@ -27,10 +33,14 @@
   --control-border: #d1d1d7;
   --separator: #dcdce1;
 
-  /* ===== 文字（更接近系统语义） ===== */
+  /* ===== 文字（更接近系统语义，由深到浅四档：title > body > muted > disabled） ===== */
   --text-title: #1c1c1e;
   --text-body: #3a3a3c;
-  --text-muted: #8e8e93;
+  /* muted 承担次级文案（说明 / 标签 / 行号）。原值 #8e8e93（systemGray）在亮底上仅 2.92:1，
+     明显淡于深色的 6.05:1 与高对比的 9.62:1，故压深：与底色对比 bg-main 4.75:1 / 面板 5.13:1 /
+     纯白 5.30:1 —— 取的是「在最深的亮色底 bg-main 上仍过 WCAG AA 4.5」的最浅一档，
+     既保住四档层次，也维持 systemGray 家族的色偏（b − r = 5，与 title / body 一致）。 */
+  --text-muted: #6b6b70;
   --text-disabled: #c7c7cc;
 
   /* ===== 功能色 ===== */
@@ -94,6 +104,37 @@
      业务侧仍不得写 x/NN 半透明工具类；遮罩一律走 bg-overlay（即本 token），alpha 只许封装在这里。 */
   --overlay-bg: rgba(0, 0, 0, 0.5);
 
+  /* ===== 气泡（紧凑读数浮层）语义层 =====
+     两个消费方的观感必须逐值一致，却分处两种语言：
+       ① v-tooltip 的 compact 档 —— vTooltip.scss 的 .v-tooltip-box.v-tooltip-compact
+       ② v-scrollbar 的读数气泡 —— vScrollbar.scss 的 .v-scrollbar-bubble--sm
+     两个消费方分处两份 SCSS，仍只共享 CSS 变量层、不 @use 互通：这里要的是随主题解析的语义令牌
+     （三主题各一档），SCSS 变量会在编译期内联成字面量。此前 ② 逐值手抄 ① 的
+     字面量（0.375rem / 0.125rem 0.5rem / 0.625rem / 700 / 1.25），改一处观感要改两处；本组是唯一来源。
+     档位只负责度量（留白 / 圆角 / 字号）：sm 为 tooltip compact 与 v-scrollbar 的 size:'sm' 共用，
+     md 仅 v-scrollbar 的 size:'md'；底色 / 描边 / 阴影 / 字重 / 行高两档共用。
+     度量档取自 token-vars.scss 的刻度（$space-* / $radius-* / $fs-*，经 SCSS 插值在编译期内联为字面量），
+     与 SCSS 侧同源，不在本文件重复写死第二份数字。
+     ⚠️ 不要改写成 Tailwind 的 --spacing-* / --text-*：--text-* 命名空间**按用量裁剪**（产物里
+     --text-sup 就已被裁掉），手写 CSS 引用它会随工具类用量变化而静默失效（var() 落空 → 属性退化为继承值）。
+     ⚠️ 本组只声明在 :root —— 三个主题的主题类与 data-theme 都挂在 documentElement（useTheme.ts:62-70），
+     与 :root 是同一个元素，故其中的 var() 转发会在该元素上按当前主题解析。
+     若将来主题选择器改挂 body，本组必须随之在 .dark / [data-theme='high-contrast'] 各复制一份，
+     否则子元素继承到的是冻结在亮色档的旧值。 */
+  --bubble-bg: var(--bg-panel);
+  --bubble-border-color: var(--glass-border);
+  --bubble-border: 1px solid var(--bubble-border-color);
+  --bubble-text: var(--text-title);
+  --bubble-shadow: var(--shadow-md);
+  --bubble-font-weight: 700;
+  --bubble-line-height: 1.25;
+  --bubble-padding-sm: #{$space-2xs} #{$space-sm};
+  --bubble-radius-sm: #{$radius-sm};
+  --bubble-font-size-sm: #{$fs-2xs};
+  --bubble-padding-md: 0.25rem #{$space-md}; /* 纵向 0.25rem 不在 $space-* 刻度内（2xs = 0.125 / sm = 0.5） */
+  --bubble-radius-md: 0.5rem; /* 不在 $radius-* 刻度内（sm = 0.375 / md = 0.625） */
+  --bubble-font-size-md: #{$fs-xs};
+
   /* ===== 动效时长 / 缓动：缓动曲线的唯一定义处 =====
      三条引用通道全部以本组令牌为准，改手感只改这一处：
        ① CSS / 工具类：需要 Tailwind 工具类的曲线由 tailwind.css 逐个 var() 转发（当前五条）；
@@ -139,7 +180,7 @@
   --z-float: 20; /* 面板内浮起元件（原 z:20）：滑块把手/数值气泡/悬停操作按钮等 */
   /* 自绘滚动条 overlay（track / thumb / bubble）：挂在滚动宿主的**兄弟**位置（见 scrollbarCore.ts），
      必须高于容器内一切内容；三档内部有序：轨道 < 拇指 < 气泡，且整体**低于吸附头**（见 --z-sticky）。
-     取值只在这里定，scrollbarCore.ts 注入的 CSS 用 var() 引用 */
+     取值只在这里定，vScrollbar.scss 用 var() 引用 */
   --z-scrollbar-track: 29;
   --z-scrollbar-thumb: 30;
   --z-scrollbar-bubble: 31;
@@ -157,6 +198,15 @@
   /* 动态池（floatingZ.ts）在 9999 基础上「最高占用 +1」递增，软上限 11000（见 FLOATING_Z_CEILING） */
   --z-top: 12000; /* 最高静态层：拖拽幽灵 / 谱面导出抽屉等（高于动态池上限） */
   --z-toast: 13000; /* 全局提示（高于 popover、menu、modal 和动态池） */
+
+  /* ===== 自绘滚动条拇指配色 =====
+     不复用 --text-disabled / --text-muted：暗色下后者因无障碍对比度被提亮，两态会几乎同色。
+     三档必须齐备（本处亮色 / .dark / 高对比）——高对比缺档会回落本处亮色值，
+     在近黑底上表现为「悬停反而变暗」，与 .dark 的方向相反。
+     此前这两条只写在 scrollbarCore.ts 运行时注入的样式串里，正是因此漏了高对比档；
+     注入串里放主题令牌等于绕开本文件「三档齐备」的约束，故一律归本文件。 */
+  --v-scrollbar-thumb: #c7c7cc;
+  --v-scrollbar-thumb-hover: #8e8e93;
 
   /* === SOLID TINTS LIGHT START === */
   /* SOLID TINTS：半透明强调色的实色替身。生成口径与「背景 / 边框 / focus-ring 按底色
@@ -278,6 +328,9 @@
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
   --overlay-bg: rgba(0, 0, 0, 0.5); /* 同 :root：遮罩是三主题中唯一保留半透明的通道 */
 
+  --v-scrollbar-thumb: #55555a; /* 滚动条拇指，见 :root 处说明 */
+  --v-scrollbar-thumb-hover: #a3a3ab;
+
   /* === SOLID TINTS DARK START === */
   --tint-borderbase-85: #1f1f21;
   --tint-current-82: #404043;
@@ -352,6 +405,11 @@
 
   --text-on-accent: #000000;
   --overlay-bg: rgba(0, 0, 0, 0.5); /* 同 :root：HC 也不实色化遮罩，取值与前两主题一致（不改观感） */
+
+  /* 滚动条拇指：高对比此前缺档，回落 :root 亮色值 → 在近黑底上「悬停反而变暗」，与 .dark 方向相反。
+     取本主题既有的 --border-base / --text-muted 取值：比 .dark 亮一档，悬停方向与 .dark 一致（变亮）。 */
+  --v-scrollbar-thumb: #6b6b76;
+  --v-scrollbar-thumb-hover: #b9b9c4;
 
   /* O9：高对比缺失项——不覆盖则回落 :root 亮色值，导致指板画布白字近白底、
      panelhover 色调与 HC 底色冲突（白底白字）。逐项对齐 .dark 基础上再提对比。 */

@@ -27,99 +27,91 @@
             <h3 class="panel-title m-0 text-xs font-semibold text-fg-body">云端同步</h3>
           </div>
 
-          <template v-if="selectedProvider === 'server'">
-            <div class="flex flex-col gap-sm py-xs">
-              <BaseInput
-                v-model="settingsStore.serverToken"
-                :disabled="isBusy"
-                :maxlength="100"
-                clearable
-                is-password
-                show-count
-                placeholder="服务器 Token"
-                width="auto"
-              />
-              <p class="form-hint m-0">
-                上传数据时通过 Authorization 请求头携带 Token；拉取与测试连接无需 Token。Token
-                仅本次会话内存持有，刷新页面后需重新填写。
-              </p>
-            </div>
-          </template>
+          <div v-if="selectedProvider === 'server'" class="flex flex-col gap-sm py-xs">
+            <BaseInput
+              v-model="settingsStore.serverToken"
+              :disabled="isBusy"
+              :maxlength="100"
+              clearable
+              is-password
+              show-count
+              placeholder="服务器 Token"
+              width="auto"
+            />
+            <p class="form-hint m-0">
+              上传数据时通过 Authorization 请求头携带 Token；拉取与测试连接无需 Token。Token
+              仅本次会话内存持有，刷新页面后需重新填写。
+            </p>
+          </div>
 
-          <template v-else-if="selectedProvider === 'github'">
-            <div class="flex flex-col gap-sm py-xs">
-              <BaseInput
-                v-model="settingsStore.githubToken"
-                :disabled="isBusy"
-                :maxlength="100"
-                clearable
-                is-password
-                show-count
-                placeholder="GitHub Token (ghp_...)"
-                width="auto"
-              />
+          <div v-else-if="selectedProvider === 'github'" class="flex flex-col gap-sm py-xs">
+            <BaseInput
+              v-model="settingsStore.githubToken"
+              :disabled="isBusy"
+              :maxlength="100"
+              clearable
+              is-password
+              show-count
+              placeholder="GitHub Token (ghp_...)"
+              width="auto"
+            />
 
-              <p class="form-hint m-0">提示：推送写回分支需配置 Token；拉取公开分支无需 Token。</p>
-            </div>
-          </template>
+            <p class="form-hint m-0">提示：推送写回分支需配置 Token；拉取公开分支无需 Token。</p>
+          </div>
 
-          <template v-else-if="selectedProvider === 'gitee'">
-            <div class="flex flex-col gap-sm py-xs">
-              <BaseInput
-                v-model="settingsStore.giteeToken"
-                :disabled="isBusy"
-                :maxlength="100"
-                clearable
-                is-password
-                show-count
-                placeholder="Gitee 私人令牌 (Token)"
-                width="auto"
-              />
+          <div v-else-if="selectedProvider === 'gitee'" class="flex flex-col gap-sm py-xs">
+            <BaseInput
+              v-model="settingsStore.giteeToken"
+              :disabled="isBusy"
+              :maxlength="100"
+              clearable
+              is-password
+              show-count
+              placeholder="Gitee 私人令牌 (Token)"
+              width="auto"
+            />
 
-              <p class="form-hint m-0">
-                提示：数据同步至 Gitee 仓库 {{ giteeTarget }}。需先在 Gitee 「私人令牌」页创建
-                Token；私有仓库拉取同样需要 Token。
-              </p>
-              <p class="form-hint m-0">
-                安全说明：Token 仅在浏览器本地存储，通过 Authorization 请求头经 HTTPS 加密传输，不经由 URL 参数暴露。
-              </p>
-            </div>
-          </template>
+            <p class="form-hint m-0">
+              提示：数据同步至 Gitee 仓库 {{ giteeTarget }}。需先在 Gitee 「私人令牌」页创建 Token；私有仓库拉取同样需要
+              Token。
+            </p>
+            <p class="form-hint m-0">
+              安全说明：Token 仅在浏览器本地存储，通过 Authorization 请求头经 HTTPS 加密传输，不经由 URL 参数暴露。
+            </p>
+          </div>
 
-          <template v-else-if="selectedProvider === 'webdav'">
-            <div class="flex flex-col gap-sm py-xs">
-              <BaseInput
-                v-model="settingsStore.webdavServerUrl"
-                :disabled="isBusy"
-                :maxlength="200"
-                clearable
-                show-count
-                placeholder="WebDAV 服务器根地址 (例如 https://dav.example.com)"
-                width="auto"
-              />
+          <div v-else-if="selectedProvider === 'webdav'" class="flex flex-col gap-sm py-xs">
+            <BaseInput
+              v-model="settingsStore.webdavServerUrl"
+              :disabled="isBusy"
+              :maxlength="200"
+              clearable
+              show-count
+              placeholder="WebDAV 服务器根地址 (例如 https://dav.example.com)"
+              width="auto"
+            />
 
-              <BaseInput
-                v-model="settingsStore.webdavUsername"
-                :disabled="isBusy"
-                :maxlength="100"
-                clearable
-                show-count
-                placeholder="用户名 (可选)"
-                width="auto"
-              />
+            <BaseInput
+              v-model="settingsStore.webdavUsername"
+              :disabled="isBusy"
+              :maxlength="100"
+              clearable
+              show-count
+              placeholder="用户名 (可选)"
+              width="auto"
+            />
 
-              <BaseInput
-                v-model="settingsStore.webdavPassword"
-                :disabled="isBusy"
-                :maxlength="100"
-                clearable
-                is-password
-                show-count
-                placeholder="密码"
-                width="auto"
-              />
-            </div>
-          </template>
+            <BaseInput
+              v-model="settingsStore.webdavPassword"
+              :disabled="isBusy"
+              :maxlength="100"
+              clearable
+              is-password
+              show-count
+              placeholder="密码"
+              width="auto"
+            />
+          </div>
         </div>
 
         <div v-if="selectedProvider === 'webdav'" class="flex flex-col gap-xs px-xs">
@@ -257,9 +249,7 @@ const isSyncDisabled = computed(() => {
 });
 
 /** 用户点击"测试连接"：对当前选中的方案做连通性验证（不读写数据） */
-const handleTestConnectionClick = async () => {
-  await testConnection(selectedProvider.value);
-};
+const handleTestConnectionClick = async () => void (await testConnection(selectedProvider.value));
 
 // 测试连接禁用判断：WebDAV 需填服务器地址，服务器与预设 GitHub 随时可测
 const isTestDisabled = computed(() => {

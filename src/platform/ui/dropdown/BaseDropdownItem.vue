@@ -110,9 +110,7 @@ const sizeClasses = computed(() => [
 ]);
 
 /** 点击/回车/空格统一点击 select：按钮原生 Enter/Space 即触发 click，无需额外 keydown 绑定 */
-const handleSelect = () => {
-  emit('select');
-};
+const handleSelect = () => void emit('select');
 
 const rootRef = useTemplateRef<HTMLElement>('rootRef');
 /** 暴露根按钮元素，供下拉键盘导航 / 滚动定位时直接调用 focus()、getBoundingClientRect() 等原生能力 */

@@ -11,36 +11,43 @@
        过滤或换排序时它们要逐个卸载与重渲染 —— 这是列表掉帧的主要固定成本，与动画无关。
        改由容器上的 contextmenu 按 data-song-id 反查目标乐谱，再驱动列表外那个单例菜单
        按鼠标坐标打开，实例数从「一卡一个」降为「整列一个」。 -->
-  <div v-else v-grid-nav.stop="{ cols: 1, selector: '.song-card-item' }" @contextmenu="handleListContextMenu($event)">
-    <TransitionGroup
-      @leave="onSongLeave($event)"
-      class="draggable-list relative flex flex-col gap-sm"
-      name="song-sort"
-      ref="songListRef"
-      tag="div"
-    >
-      <div v-for="row in songRows" :key="row.key" class="flex w-full flex-col">
-        <div v-if="row.type === 'group'" aria-hidden="true" class="song-group-header px-sm pb-2xs">
-          <span class="text-xs leading-none font-bold tracking-widest text-fg-disabled">{{ row.label }}</span>
-        </div>
-
-        <SongCard
-          v-else
-          :row
-          :draggable="isDragEnabled"
-          :menu-target="isMenuTarget(row.song.id)"
-          @select="handleSelectSong(row.song.id)"
-        />
+  <TransitionGroup
+    v-else
+    v-grid-nav.stop="{ cols: 1, selector: '.song-card-item' }"
+    @contextmenu="handleListContextMenu($event)"
+    @leave="onSongLeave($event)"
+    class="draggable-list relative flex flex-col gap-sm"
+    name="song-sort"
+    ref="songListRef"
+    tag="div"
+  >
+    <div v-for="row in songRows" :key="row.key" class="flex w-full flex-col">
+      <div v-if="row.type === 'group'" aria-hidden="true" class="song-group-header px-sm pb-2xs">
+        <span class="text-xs leading-none font-bold tracking-widest text-fg-disabled">{{ row.label }}</span>
       </div>
-    </TransitionGroup>
-  </div>
+
+      <SongCard
+        v-else
+        :row
+        :draggable="isDragEnabled"
+        :menu-target="isMenuTarget(row.song.id)"
+        @select="handleSelectSong(row.song.id)"
+      />
+    </div>
+  </TransitionGroup>
 
   <!-- 列表级右键菜单（单例）：默认插槽为空，完全由 handleListContextMenu 以鼠标坐标驱动打开 -->
-  <BaseMenu :items="songMenuItems" @close="isContextMenuOpen = false" ref="songContextMenuRef" trigger="contextmenu" />
+  <BaseMenu
+    :context-trigger-el="contextMenuTriggerEl"
+    :items="songMenuItems"
+    @close="closeSongContextMenu()"
+    ref="songContextMenuRef"
+    trigger="contextmenu"
+  />
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
+import { computed, ref, useTemplateRef, watch, watchEffect } from 'vue';
 
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
@@ -51,6 +58,7 @@ import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useTextTransfer } from '@/domains/score/transfer/useTextTransfer';
 import { useSortableList } from '@/platform/composables/useSortableList';
 import { useUiStore } from '@/platform/store/uiStore';
+import { useTargetMenu } from '@/platform/ui/menu/useTargetMenu';
 import { pinyinGroupKey } from '@/platform/utils/pinyin';
 
 import SongCard from './SongCard.vue';
@@ -140,31 +148,23 @@ const getSongMenuItems = (song: Song): MenuItem[] => {
     {
       label: '复制乐谱',
       icon: 'copy',
-      action: () => {
-        void copySongText(song);
-      },
+      action: () => void copySongText(song),
     },
     {
       // 分享：与「复制乐谱」同一份载体（token），只是外面套了一条可直接打开的地址
       label: '分享乐谱',
       icon: 'share-2',
-      action: () => {
-        void shareSongLink(song);
-      },
+      action: () => void shareSongLink(song),
     },
     {
       label: '修改属性',
       icon: 'sliders-horizontal',
-      action: () => {
-        emit('open-config', song);
-      },
+      action: () => void emit('open-config', song),
     },
     {
       label: '清空和弦',
       icon: 'eraser',
-      action: () => {
-        emit('open-clear', song);
-      },
+      action: () => void emit('open-clear', song),
     },
     {
       label: '删除乐谱',
@@ -195,32 +195,47 @@ const getSongMenuItems = (song: Song): MenuItem[] => {
 };
 
 /** 用户点击乐谱卡：再次点击取消选中；URL 以 replace 镜像（选歌不产生历史），滚动对焦由卡片上的 v-scroll-into-view 声明式完成 */
-const handleSelectSong = (songId: string) => {
-  selectSong(scoreEditor.activeSongId === songId ? null : songId);
-};
+const handleSelectSong = (songId: string) => void selectSong(scoreEditor.activeSongId === songId ? null : songId);
 
 /* ---- 列表级右键菜单（单例）：取代原先「每张卡片一个 BaseMenu」的写法 ---- */
 const songContextMenuRef = useTemplateRef<InstanceType<typeof BaseMenu>>('songContextMenuRef');
-/** 最近一次右键命中的乐谱 id；菜单关闭后仍保留，避免淡出途中菜单项被清空导致内容闪断 */
-const contextMenuSongId = ref<string | null>(null);
-/** 菜单是否打开：仅用于还原原先 BaseMenu 的 isOpen 作用域槽给的那点样式 */
-const isContextMenuOpen = ref(false);
 
-const contextMenuSong = computed(() =>
-  contextMenuSongId.value ? (songStore.songs.find(s => s.id === contextMenuSongId.value) ?? null) : null
-);
-/** 单例菜单的数据源：未命中任何乐谱时为空数组（BaseMenu 会据此拒绝打开） */
-const songMenuItems = computed<MenuItem[]>(() => {
-  const song = contextMenuSong.value;
-  return song ? getSongMenuItems(song) : [];
+/**
+ * 右键「触发区域」＝列表容器本身（透传给 BaseMenu 的 contextTriggerEl）。
+ *
+ * 本菜单是挂在列表外的单例、右键由容器委托处理（见下方 handleListContextMenu），因此 BaseMenu
+ * 内部那个只包默认插槽的包裹层是空的。而 BasePopover 的全局 contextmenu 外点判定走**捕获阶段**，
+ * 早于容器上的委托执行：不把列表容器报给菜单，落在卡片上的右键就会被判成「区域外」先关闭，
+ * 委托随后才 openMenuAt —— 那时 wasOpen 已是 false，走的是首次打开。表现即「右键不换位、
+ * 而是把菜单整个重开一遍（重放入场动画）」。
+ *
+ * 容器是 TransitionGroup 的 $el（列表为空时该组件不渲染，此处为 null，退回内部包裹层）。
+ */
+const contextMenuTriggerEl = ref<HTMLElement | null>(null);
+watchEffect(() => {
+  contextMenuTriggerEl.value = (songListRef.value?.$el as HTMLElement | undefined) ?? null;
 });
+
+/** 单例菜单的数据源：目标为**乐谱 id**，菜单项按 id 现查乐谱构建（不缓存乐谱对象）；
+ *  未命中任何乐谱时为空数组，BaseMenu 会据此拒绝打开。
+ *  「必须等 nextTick」「关闭后保留目标」两个不变量由 useTargetMenu 统一保证。 */
+const {
+  target: contextMenuSongId,
+  isOpen: isContextMenuOpen,
+  items: songMenuItems,
+  openAt: openSongContextMenuAt,
+  close: closeSongContextMenu,
+} = useTargetMenu<string>(songId => {
+  const song = songStore.songs.find(s => s.id === songId);
+  return song ? getSongMenuItems(song) : [];
+}, songContextMenuRef);
+
 /** 卡片「菜单正针对我」的样式判据，等价原先 BaseMenu 的 isOpen 作用域槽 */
 const isMenuTarget = (songId: string): boolean => isContextMenuOpen.value && contextMenuSongId.value === songId;
 
 /**
- * 右键委托：从事件目标反查 data-song-id，记录目标后等一拍再打开单例菜单。
- * 必须等 nextTick —— openMenuAt 内部先判 items 是否为空，而 items 由 computed 提供，
- * 需等本次响应式更新把新目标同步进 props，否则会被上一次（或空）的 items 拦下。
+ * 右键委托：从事件目标反查 data-song-id，把命中的乐谱交给 useTargetMenu 在光标处打开
+ * （「写目标 → 等一拍 → openMenuAt」的时序由 composable 保证，见 useTargetMenu 的 ②）。
  */
 const handleListContextMenu = (e: MouseEvent): void => {
   const host = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-song-id]');
@@ -228,12 +243,7 @@ const handleListContextMenu = (e: MouseEvent): void => {
   if (!songId) return;
   e.preventDefault();
   e.stopPropagation();
-  // 两个 ref 同批写入：分两次写会让列表各重渲染一次
-  contextMenuSongId.value = songId;
-  isContextMenuOpen.value = true;
-  void nextTick().then(() => {
-    void songContextMenuRef.value?.openMenuAt(e.clientX, e.clientY);
-  });
+  openSongContextMenuAt(e, songId);
 };
 
 /* ---- 切换排序方法时让 FLIP 早退 ----

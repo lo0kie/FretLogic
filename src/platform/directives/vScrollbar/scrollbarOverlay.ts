@@ -5,7 +5,7 @@
  * 处在依赖图次顶层：单向依赖 core / geometry / drag / wheel / track，只被 vScrollbar 的挂载流程调用。
  */
 
-import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
+import { applyFloatingArrowStyle, buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
 import { clamp } from '@/platform/utils/common';
 import { SCROLL_INTERACTIVE_WINDOW_MS } from '@/platform/utils/constants';
 
@@ -124,7 +124,7 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
   // 却在滚动时被 showBubble 加上可见类——一枚空气泡滞留在父元素左上角。显式写错轴时宁可不建。
   if (state.options.bubble.enabled && state.axes.includes(state.options.bubble.axis)) {
     const { axis, size } = state.options.bubble;
-    // 档位类两档都写在注入样式里（各管一套度量），此处按解出的档位直接挂上，无需分支
+    // 档位类两档都写在 vScrollbar.scss 里（各管一套度量），此处按解出的档位直接挂上，无需分支
     const bubble = makeEl(`v-scrollbar-bubble v-scrollbar-bubble--${axis} v-scrollbar-bubble--${size}`, true);
     // 纯视觉读数：同一信息消费端可由滚动位置得到，重复播报只会干扰读屏
     bubble.setAttribute('aria-hidden', 'true');
@@ -147,7 +147,7 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
     // 指向箭头：贴在气泡朝滚动条的那条边，随气泡一起被 showBubble/hideBubble 控制显隐
     const arrow = document.createElement('div');
     arrow.className = 'v-scrollbar-bubble-arrow';
-    applyArrowStyle(arrow, buildBubbleArrowStyle(axis, BUBBLE_ARROW_SIZE[size]));
+    applyFloatingArrowStyle(arrow, buildBubbleArrowStyle(axis, BUBBLE_ARROW_SIZE[size]));
     bubble.appendChild(arrow);
     state.bubble = bubble;
   }
@@ -156,6 +156,8 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
 /**
  * 气泡指向箭头的样式：**复用 Popover/Tooltip 的浮层箭头逻辑**（buildFloatingArrowStyle——
  * 45° 旋转方块 + 裁掉插入面板内的那一半 + 只保留楔形两侧边框），保证三处箭头观感一致。
+ * 取色走 --bubble-* 语义层（tokens.scss），与气泡表面同源——箭头的背景必须与气泡底色逐像素相同，
+ * 否则接缝处会露出一条异色。
  *
  * 与那两处不同，气泡方位是恒定的（纵向滚动条的气泡恒在轨道左侧、横向的恒在轨道上方），不存在 flip，
  * 因此不需要 floating-ui 的 arrow middleware：用假 placement 表达「贴哪条边」即可——
@@ -165,8 +167,8 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
 const buildBubbleArrowStyle = (axis: 'x' | 'y', size: number): CSSProperties => {
   const style = buildFloatingArrowStyle({
     placement: axis === 'y' ? 'left' : 'top',
-    background: 'var(--bg-panel)',
-    borderColor: 'var(--glass-border)',
+    background: 'var(--bubble-bg)',
+    borderColor: 'var(--bubble-border-color)',
     size,
     // 气泡自带 1px 边框，与 BasePopover 传同款修正，把箭头原点对齐回 border-box 边缘
     borderWidth: 1,
@@ -175,14 +177,6 @@ const buildBubbleArrowStyle = (axis: 'x' | 'y', size: number): CSSProperties => 
   if (axis === 'y') style.top = `calc(50% - ${size / 2}px)`;
   else style.left = `calc(50% - ${size / 2}px)`;
   return style;
-};
-
-/** 把箭头样式对象写入元素：按 camelCase 直赋（buildFloatingArrowStyle 不再产出 -webkit- 前缀键） */
-const applyArrowStyle = (el: HTMLElement, style: CSSProperties): void => {
-  for (const [key, value] of Object.entries(style)) {
-    if (value == null) continue;
-    (el.style as unknown as Record<string, string>)[key] = String(value);
-  }
 };
 
 /** 宿主 scroll 监听：刷新几何 + 显示拇指 + 对外派发滚动明细（interactive 区分用户手势与程序化设位）。 */

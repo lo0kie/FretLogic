@@ -46,9 +46,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   } = useRafThrottle<{ x: number; y: number }>(pos => updateDropTarget(pos.x, pos.y));
 
   /** 落点命中检测按帧合帧，避免 pointermove 高频执行 elementFromPoint */
-  const scheduleDropTargetUpdate = (x: number, y: number) => {
-    scheduleDropFrame({ x, y });
-  };
+  const scheduleDropTargetUpdate = (x: number, y: number) => void scheduleDropFrame({ x, y });
 
   const { checkAutoScroll, stopAutoScroll } = useDragAutoScroll();
 
@@ -68,9 +66,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   const LONG_PRESS_DELAY = 280;
 
   /** 模板 ref 挂载 ghost 元素，并定位到当前指针位置 */
-  const setGhostEl = (el: Element | ComponentPublicInstance | null) => {
-    setGhostElInternal(el, currentPointerPos);
-  };
+  const setGhostEl = (el: Element | ComponentPublicInstance | null) => void setGhostElInternal(el, currentPointerPos);
 
   /** 短暂抑制拖拽结束后的 click，避免松手误触发槽位点击 */
   const triggerClickSuppression = () => {
@@ -235,9 +231,11 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       resolveExternalDropTarget(e.clientX, e.clientY);
 
     // 每次 move 都喂最新指针位置：循环进行中会只更新位置不叠加 rAF（见 useDragAutoScroll）
-    checkAutoScroll(scrollContainerRef?.value, currentPointerPos, () => {
-      scheduleDropTargetUpdate(currentPointerPos.x, currentPointerPos.y);
-    });
+    checkAutoScroll(
+      scrollContainerRef?.value,
+      currentPointerPos,
+      () => void scheduleDropTargetUpdate(currentPointerPos.x, currentPointerPos.y)
+    );
   };
 
   /** 全局抬起：按当前落点执行落地（空槽移动 / 占用替换），随后统一收尾 */

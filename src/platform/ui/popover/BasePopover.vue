@@ -70,8 +70,6 @@
 // 下方 <script setup> 直接复用这些绑定
 import { computed, nextTick, onBeforeUnmount, provide, ref, unref, useTemplateRef, watch } from 'vue';
 
-import { useEventListener } from '@vueuse/core';
-
 import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
 import {
   buildFloatingMiddlewares,
@@ -518,10 +516,44 @@ const isEventInside = (target: EventTarget | null): boolean => {
   return false;
 };
 
+// ─── 全局监听随浮层开合挂/摘 ───
+// 下面五条都是 window 捕获监听，每实例各一份（实例数与 BaseMenu / BaseSelector / 输入框搜索面板
+// 一一对应，几十个）。原先是 setup 期无条件注册、只靠回调里那句「没打开就早退」兜住 —— 关着的浮层
+// 白挂五条全局监听没有任何作用。这里改为按开合挂/摘，且**每条挂上去的时机都取自它回调里已有的那句
+// 判据**，于是「关着收不到事件」与「收到了也被早退」完全等价，行为不变。
+//
+// 为什么不用 useEventListener：它的响应式目标做的是「换目标时摘旧挂新」，而这里需要的是「判据为假时
+// 干脆不挂」；且 window 只命中「target: Window」那条重载（该重载的目标是常量），改传 getter 会落到
+// 通用目标重载上、与 PointerEvent 这类具名监听器签名对不上。故用一个语义相同（挂/摘 + 卸载清理）的
+// 本地小助手。
+const bindGlobalListener = <E extends keyof WindowEventMap>(
+  isOn: () => boolean,
+  event: E,
+  listener: (e: WindowEventMap[E]) => void
+) => {
+  const attach = () => window.addEventListener(event, listener, true);
+  const detach = () => window.removeEventListener(event, listener, true);
+  // immediate 同步一次初始态（多半是「关着」→ 不挂）；翻转发生在交互回调里，pre flush 保证在下一帧
+  // 渲染前就挂好，同一次交互后续派发的事件不会漏。watch 随组件作用域自动停止，摘除另走卸载钩子。
+  watch(isOn, on => (on ? attach() : detach()), { immediate: true });
+  onBeforeUnmount(detach);
+};
+
+/** 外点关闭类监听（左键按下 / 右键）的开启判据：与两条回调里的早退条件逐字对应 */
+const globalDismissActive = computed(() => closeOnClickOutside && model.value && isShown.value);
+/** Esc 关闭：不吃 closeOnClickOutside，单独一档（同样与回调判据逐字对应） */
+const globalEscActive = computed(() => closeOnEsc && model.value);
+/**
+ * 按下守卫（pointerup / pointercancel）：它的职责只是把 isPointerDown 归零，故只在按住期间挂 ——
+ * 挂载区间与标记为真的区间严格重合，不会出现「摘掉监听时标记还留在 true」的 stale 状态
+ * （那会让之后所有 focusout 都不再关闭面板，且没有任何报错，属静默失效）。
+ */
+const globalPressActive = computed(() => isPointerDown.value);
+
 // ─── 关键：用 pointerdown 做 outside，而不是 click ───
 // 只有「按下点」在外部才关闭 → 内按下、外松开不会关
-useEventListener(
-  window,
+bindGlobalListener(
+  () => globalDismissActive.value,
   'pointerdown',
   (e: PointerEvent) => {
     if (!closeOnClickOutside || !model.value || !isShown.value) return;
@@ -537,45 +569,42 @@ useEventListener(
       return;
     }
     close('outside-pointerdown');
-  },
-  true
+  }
 );
 
 // 右键不参与 pointerdown 外点关闭（避免与触发新菜单的 contextmenu 事件竞争），
 // 改由全局 contextmenu 捕获阶段负责：右键落在合法区域外时关闭本浮层。
 // contextTriggerEl（虚拟锚点模式下承载右键的真实触发元素）仅对右键视为「内部」——
 // 右键它应走复用换位重开而非关闭；左键它则仍由 pointerdown 路径正常关闭
-useEventListener(
-  window,
+bindGlobalListener(
+  () => globalDismissActive.value,
   'contextmenu',
   (e: MouseEvent) => {
     if (!closeOnClickOutside || !model.value || !isShown.value) return;
     if (isEventInside(e.target) || contextTriggerEl?.contains(e.target as Node)) return;
     close('outside-contextmenu');
-  },
-  true
+  }
 );
 
-useEventListener(
-  window,
+// pointerup / pointercancel 只为归零按下守卫（见 globalPressActive 的说明）
+bindGlobalListener(
+  () => globalPressActive.value,
   'pointerup',
   () => {
     isPointerDown.value = false;
-  },
-  true
+  }
 );
 
-useEventListener(
-  window,
+bindGlobalListener(
+  () => globalPressActive.value,
   'pointercancel',
   () => {
     isPointerDown.value = false;
-  },
-  true
+  }
 );
 
-useEventListener(
-  window,
+bindGlobalListener(
+  () => globalEscActive.value,
   'keydown',
   (e: KeyboardEvent) => {
     if (!model.value || !closeOnEsc) return;
@@ -584,8 +613,7 @@ useEventListener(
     if (!isTopmostOpenPopover()) return;
     e.stopPropagation();
     close('esc');
-  },
-  { capture: true }
+  }
 );
 
 /** 面板内失焦：焦点移出合法区域时关闭（拖拽过程中忽略） */

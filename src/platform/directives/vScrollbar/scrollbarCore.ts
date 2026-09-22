@@ -24,13 +24,15 @@ import {
 import { BUBBLE_OFFSET } from './scrollbarTypes';
 
 import type { BubbleRoller } from './scrollbarBubbleRoll';
-import type { AxisMetrics, HostOffset } from './scrollbarGeometry';
+import type { AxisMetrics, BoxSize, HostOffset } from './scrollbarGeometry';
 import type {
   ScrollbarBubbleOptions,
   ScrollbarBubbleSize,
   ScrollbarOptions,
   ScrollbarScrollDetail,
 } from './scrollbarTypes';
+
+import './vScrollbar.scss';
 
 /** 气泡闲置自动隐藏的兜底时长（ms）：autoHide 为 false（拇指常显）时的默认值 */
 const BUBBLE_FALLBACK_HIDE_MS = 1200;
@@ -181,81 +183,33 @@ export interface ScrollbarState {
 }
 
 export const states = new WeakMap<HTMLElement, ScrollbarState>();
-/** 宿主标记类：隐藏原生滚动条的伪元素规则靠它兜底（伪元素无法内联设置），挂载/卸载路径共用 */
+/** 宿主标记类：隐藏原生滚动条的伪元素规则靠它兜底（伪元素无法内联设置）。
+ *  类名在 vScrollbar.scss 里另有一份字面量（选择器），改一处要改两处。 */
 export const HOST_CLASS = 'v-scrollbar-host';
 
-/** 注入一次性的全局样式：隐藏宿主原生滚动条 + 轨道/拇指视觉（伪元素无法内联设置） */
+/**
+ * 注入运行时才知情的三个几何常量：轨道 / 拇指粗细、交互热区外扩量、逐字符翻页时长。
+ *
+ * 类规则本身在 vScrollbar.scss（本模块顶部 import，由构建管线压缩与前缀处理），这里只补 CSS 变量桥。
+ * 为什么这三个数字不走 tokens.scss：它们同时参与运行时逻辑 —— THICKNESS 参与轨道/拇指的贴边偏移计算
+ * （本文件的定位写入、scrollbarGeometry 的 rail 推导），BUBBLE_ROLL_MS 参与翻页定时与节流判定；
+ * HIT_AREA 虽只服务 CSS，但三个量同属一套滚动条度量，留在同一处免得「哪个文件拥有这些数字」出现分歧。
+ * SCSS 侧一律 var() 消费，不写第二份字面量。
+ * 主题令牌（配色、层级、气泡表面）则相反 —— 一律归 tokens.scss，本函数不碰。
+ *
+ * 幂等：按 id 判重。必须在 createAxisOverlays 之前调用（见 index.ts 的挂载流程）：
+ * overlay 一旦创建就会读到这些变量，而缺变量时 calc(var(…)) 整条声明失效，宽度与热区会静默归零。
+ */
 export const ensureGlobalStyle = (): void => {
-  if (typeof document === 'undefined' || document.getElementById('v-scrollbar-style')) return;
+  if (typeof document === 'undefined' || document.getElementById('v-scrollbar-vars')) return;
   const style = document.createElement('style');
-  style.id = 'v-scrollbar-style';
+  style.id = 'v-scrollbar-vars';
   style.textContent =
-    `.${HOST_CLASS}{scrollbar-width:none;-ms-overflow-style:none;}` +
-    `/* 滚动条专用拇指色：不复用 --text-disabled/--text-muted——暗色下后者因无障碍对比度被提亮导致两态几乎同色 */` +
-    `:root{--v-scrollbar-thumb:#c7c7cc;--v-scrollbar-thumb-hover:#8e8e93;}` +
-    `.dark{--v-scrollbar-thumb:#55555a;--v-scrollbar-thumb-hover:#a3a3ab;}` +
-    `.${HOST_CLASS}::-webkit-scrollbar{display:none;}` +
-    `/* 轨道颜色固定不随状态变化；默认仅透明隐藏（保留 visibility，否则收不到 hover/点击），悬停拇指/轨道时由指令切换可见类。
-       隐藏态必须 pointer-events:none：否则透明轨道常驻吞掉宿主内缘指针事件（点击/滚动被拦截，探针命中内缘 2~13px）；可见时恢复 */` +
-    `.v-scrollbar-track{position:absolute;z-index:var(--z-scrollbar-track);pointer-events:none;cursor:pointer;` +
-    `background:var(--border-light);opacity:0;border-radius:999px;` +
-    `transition:opacity 250ms ease,width 150ms ease,height 150ms ease,transform 150ms ease;}` +
-    `.v-scrollbar-track--visible{opacity:1;pointer-events:auto;}` +
-    `/* 轨道粗细由类控制，与拇指同步加宽内移（thumb:hover ~ track 兄弟选择器，保持同心） */` +
-    `.v-scrollbar-track--y{width:${THICKNESS}px;}` +
-    `.v-scrollbar-track--x{height:${THICKNESS}px;}` +
-    `.v-scrollbar-thumb--y:hover ~ .v-scrollbar-track--y,.v-scrollbar-track--y:hover{width:${THICKNESS + 1}px;transform:translateX(-1px);}` +
-    `.v-scrollbar-thumb--x:hover ~ .v-scrollbar-track--x,.v-scrollbar-track--x:hover{height:${THICKNESS + 1}px;transform:translateY(-1px);}` +
-    `/* 轨道热区四向外扩：粗细方向上边缘侧的 EDGE 间隙也纳入交互区，不留死角 */` +
-    `.v-scrollbar-track::after{content:'';position:absolute;inset:-${HIT_AREA}px;}` +
-    `.v-scrollbar-thumb{position:absolute;z-index:var(--z-scrollbar-thumb);border-radius:999px;pointer-events:auto;cursor:pointer;` +
-    `background:var(--v-scrollbar-thumb);opacity:0;visibility:hidden;` +
-    `transition:opacity 250ms ease,background 150ms ease,visibility 0s linear 250ms,width 150ms ease,height 150ms ease,transform 150ms ease;}` +
-    `/* 粗细维度由类控制（hover 向容器内侧加宽 1px），长度维度由指令内联设置 */` +
-    `.v-scrollbar-thumb--y{width:${THICKNESS}px;}` +
-    `.v-scrollbar-thumb--x{height:${THICKNESS}px;}` +
-    `.v-scrollbar-thumb--y:hover{width:${THICKNESS + 1}px;transform:translateX(-1px);background:var(--v-scrollbar-thumb-hover);}` +
-    `.v-scrollbar-thumb--x:hover{height:${THICKNESS + 1}px;transform:translateY(-1px);background:var(--v-scrollbar-thumb-hover);}` +
-    `/* 交互热区：可视粗细不变，四向外扩 HIT_AREA 提升可点性 */` +
-    `.v-scrollbar-thumb::after{content:'';position:absolute;inset:-${HIT_AREA}px;}` +
-    `/* overlay 是宿主的兄弟节点而非后代，显隐必须由指令直接切换可见类；visibility 延迟生效避免截断淡出 */` +
-    `.v-scrollbar-thumb--visible{opacity:1;visibility:visible;transition:opacity 250ms ease,background 150ms ease,visibility 0s;}` +
-    `/* 无可滚动区域：结构性隐藏，优先级高于可见类 */` +
-    `.v-scrollbar-thumb--off{opacity:0 !important;visibility:hidden !important;pointer-events:none !important;}` +
-    `/* 滚动气泡提示：同为 overlay 兄弟节点（绝对定位参照宿主父元素），随拇指中位移动；
-       观感对齐 v-tooltip 的 compact 紧凑读数（同底色/描边/圆角/字号字重 + 同源的指向箭头），但刻意不复用 tooltip 单例——
-       tooltip 在任意 scroll 事件上都会立即隐藏（vTooltip 的 window 捕获监听），承担不了「滚动期间持续可见」的读数职责。
-       max-width:100%：超长自定义文案收敛在宿主可视区内（钳制按半高上界，见 BUBBLE_HALF_SIZE）；
-       气泡自身 overflow:visible —— 箭头楔形朝滚动条一侧探出，若沿用 overflow:hidden 会被整个裁掉，
-       故省略号另落内层 .v-scrollbar-bubble-text（读数本就写在它上面，见 applyBubble） */` +
-    `.v-scrollbar-bubble{position:absolute;z-index:var(--z-scrollbar-bubble);pointer-events:none;white-space:nowrap;` +
-    `overflow:visible;max-width:100%;` +
-    `border:1px solid var(--glass-border);` +
-    `background:var(--bg-panel);box-shadow:var(--shadow-md);color:var(--text-title);` +
-    `font-weight:700;line-height:1.25;` +
-    `opacity:0;visibility:hidden;transition:opacity 150ms ease,visibility 0s linear 150ms;}` +
-    `/* 档位只管度量（字号/留白/圆角）：底色描边等观感两档共用，与 tooltip compact 逐值对齐（sm） */` +
-    `.v-scrollbar-bubble--sm{padding:0.125rem 0.5rem;border-radius:0.375rem;font-size:0.625rem;}` +
-    `.v-scrollbar-bubble--md{padding:0.25rem 0.75rem;border-radius:0.5rem;font-size:0.75rem;}` +
-    `/* 读数承载节点（renderBubbleText 的写入目标）：省略号落在这里，气泡本体才能保持 overflow:visible；
-       开启翻页时它是单元节点的宿主，关闭时就是一个纯文本节点。
-       --br-duration 写在这里：全局 .br-roll-* 用它定时长，别处不再重复这个数字 */` +
-    `.v-scrollbar-bubble-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;` +
-    `--br-duration:${BUBBLE_ROLL_MS / 1000}s;}` +
-    `/* 逐字符翻页的单元/字符两层：结构同 BaseRollingText 的逐字符模式（inline-block 窗口 + overflow:hidden 裁切上下滑行），
-       line-height 继承气泡（窗口高即行高，字形位置与不开翻页时逐像素一致）；
-       过渡类 .br-roll-* 在 transitions.scss——与组件共用的唯一来源，此处刻意不重复声明 */` +
-    `.v-scrollbar-bubble-cell{position:relative;display:inline-block;overflow:hidden;white-space:pre;line-height:inherit;vertical-align:top;}` +
-    `.v-scrollbar-bubble-char{display:inline-block;}` +
-    `/* 指向箭头：方块尺寸/旋转/裁剪楔形/保留边框全部由 buildFloatingArrowStyle 内联写入
-       （与 BasePopover、vTooltip 同一份逻辑），交叉轴居中偏移也在创建时按边长内联算出 */` +
-    `.v-scrollbar-bubble-arrow{pointer-events:none;}` +
-    `.v-scrollbar-bubble--visible{opacity:1;visibility:visible;transition:opacity 150ms ease,visibility 0s;}` +
-    `/* 伸缩方向：纵向滚动条贴容器右缘，气泡整宽向左展开；横向滚动条贴容器下缘，气泡向上展开 */` +
-    `.v-scrollbar-bubble--y{transform:translate(-100%,-50%);}` +
-    `.v-scrollbar-bubble--x{transform:translate(-50%,-100%);}` +
-    `/* 所属轴无溢出（与拇指同一判据）：结构性隐藏，优先级高于可见类 */` +
-    `.v-scrollbar-bubble--off{opacity:0 !important;visibility:hidden !important;}`;
+    `:root{` +
+    `--v-scrollbar-thickness:${THICKNESS}px;` +
+    `--v-scrollbar-hit-area:${HIT_AREA}px;` +
+    `--v-scrollbar-roll-duration:${BUBBLE_ROLL_MS / 1000}s;` +
+    `}`;
   document.head.appendChild(style);
 };
 
@@ -296,8 +250,24 @@ const measureAxis = (state: ScrollbarState, axis: 'x' | 'y'): AxisMetrics | null
   };
 };
 
+/**
+ * 读数阶段：气泡自身盒子尺寸（border-box，含 1px 边框）。
+ *
+ * 与其它读数同批取（同一次布局刷新，不额外触发回流），供 applyBubble 把落点钳制在滚动容器范围内：
+ * 气泡沿轴能走多远由它自己的宽/高决定，而读数宽度随文案长度无界。`visibility:hidden`（--off 类）
+ * 不改变布局，故隐藏态量到的仍是真实尺寸。
+ *
+ * 量到的是**上一帧写入的文案**对应的尺寸（本次文案要到写入阶段才写），差一帧：文案只在数值位数
+ * 变化时改宽（「9 / 12」→「10 / 12」），而钳制只在滚到两端时才起作用，这一帧误差不可见。
+ */
+const measureBubbleBox = (state: ScrollbarState): BoxSize => {
+  const { bubble } = state;
+  if (!bubble) return { width: 0, height: 0 };
+  return { width: bubble.offsetWidth, height: bubble.offsetHeight };
+};
+
 /** 写入阶段：按读数写 overlay 几何（overlay 覆盖宿主可视区；拇指位置按滚动比例映射；no-track 模式下跳过轨道定位）。
- *  本函数只做 style / class 写入，中间不再读任何布局属性——读全在 measureAxis 完成，见 refreshAll 注释。 */
+ *  本函数只做 style / class 写入，中间不再读任何布局属性——读全在读数阶段完成（measureAxis / measureBubbleBox），见 refreshAll 注释。 */
 const applyAxis = (state: ScrollbarState, axis: 'x' | 'y', off: HostOffset, m: AxisMetrics): void => {
   const { endInset, edgeOffset } = state.options;
   const thumb = state.thumbs[axis]!;
@@ -426,18 +396,18 @@ const buildBubbleDetail = (state: ScrollbarState, metrics: (AxisMetrics | null)[
 /**
  * 写入阶段：几何 + 文案。
  *
- * 与 applyAxis 同属「只写不读」——位置全部来自已测读数，文本仅在内容变化时赋值
- * （textContent 每次赋值都会让该节点失效，而滚动帧内读数常常连续多帧不变）。
+ * 与 applyAxis 同属「只写不读」——位置全部来自已测读数（含 box：气泡自身尺寸，见 measureBubbleBox），
+ * 文本仅在内容变化时赋值（textContent 每次赋值都会让该节点失效，而滚动帧内读数常常连续多帧不变）。
  * 所属轴无溢出时与拇指一同结构性隐藏，避免气泡孤零零停在无滚动条的容器旁。
  */
-const applyBubble = (state: ScrollbarState, off: HostOffset, metrics: (AxisMetrics | null)[]): void => {
+const applyBubble = (state: ScrollbarState, off: HostOffset, metrics: (AxisMetrics | null)[], box: BoxSize): void => {
   const { bubble } = state;
   if (!bubble) return;
   const { axis, offset, format } = state.options.bubble;
   const m = metrics[state.axes.indexOf(axis)];
   if (!m) return;
   bubble.classList.toggle(BUBBLE_OFF_CLASS, m.hidden);
-  const pos = computeBubblePosition(axis, off, m, {
+  const pos = computeBubblePosition(axis, off, m, box, {
     endInset: state.options.endInset,
     edgeOffset: state.options.edgeOffset,
     offset,
@@ -456,7 +426,7 @@ const applyBubble = (state: ScrollbarState, off: HostOffset, metrics: (AxisMetri
  *
  * refreshAll 挂在宿主 scroll 事件上（全指令调用频率最高的路径）。若按轴「读 → 写 → 读 → 写」，
  * 双轴时两次布局读之间夹着上一轴写下的 style，浏览器无法沿用上一次布局结果，两次读各要强制同步回流一次。
- * 读操作（宿主偏移 + 各轴滚动尺寸/位置）与轴无关地先取齐，写入阶段就只剩 style / class 赋值。
+ * 读操作（宿主偏移 + 各轴滚动尺寸/位置 + 气泡自身尺寸）与轴无关地先取齐，写入阶段就只剩 style / class 赋值。
  * 宿主偏移沿 offsetParent 链累加，与轴无关，双轴共用一次即可（原来每轴各算一遍）。
  */
 export const refreshAll = (state: ScrollbarState): void => {
@@ -464,12 +434,14 @@ export const refreshAll = (state: ScrollbarState): void => {
   // overlay 挂在宿主父元素上（absolute 定位参照父元素），坐标为父元素相对布局坐标
   const off = getHostOffset(state.host, state.parent);
   const metrics = state.axes.map(axis => measureAxis(state, axis));
+  // 气泡盒尺寸：同样只在读阶段取，写入阶段据此把落点钳制在容器范围内（未启用时零开销）
+  const box = measureBubbleBox(state);
   for (let i = 0; i < state.axes.length; i++) {
     const m = metrics[i];
     if (m) applyAxis(state, state.axes[i]!, off, m);
   }
   // 气泡几何/文案随滚动与尺寸变化同步刷新：未启用时 state.bubble 为 null，热路径上零开销
-  applyBubble(state, off, metrics);
+  applyBubble(state, off, metrics, box);
 };
 
 /**

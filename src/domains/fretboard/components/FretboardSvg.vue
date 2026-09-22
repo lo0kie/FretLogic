@@ -32,8 +32,13 @@
           <BaseIcon v-else icon-size="md" icon-stroke="bold" name="plus" />
           <span>{{ displayBubbleBarre.isMarked ? '取消标记' : '标记为横按' }}</span>
 
-          <!-- 直接复用项目统一的 buildFloatingArrowStyle 箭头组件与样式 -->
-          <div :style="barreArrowStyle" class="popover-arrow pointer-events-none" />
+          <!-- 箭头：方块/旋转/楔形裁剪/贴边偏移由 barreArrowStyle 经 buildFloatingArrowStyle 内联写入。
+               过渡用与面板**同一组工具类**（transition-[…] + duration-fast）——箭头与面板必须在
+               悬停/标记变色时同速同曲线，各自写一份时长会留下一帧的接缝异色 -->
+          <div
+            :style="barreArrowStyle"
+            class="popover-arrow pointer-events-none transition-[background-color,border-color] duration-fast"
+          />
         </div>
       </Transition>
     </div>
@@ -220,19 +225,13 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import { computeStringLabelAccidental, formatStringLabel } from '@/domains/chord/theory/theory';
-import {
-  BARRE_ARROW_TRANSITION_MS,
-  CANVAS_CONFIG,
-  FRETBOARD_LINE_WIDTH,
-  NOTE_DISPLAY,
-} from '@/domains/fretboard/constants';
+import { CANVAS_CONFIG, FRETBOARD_LINE_WIDTH, NOTE_DISPLAY } from '@/domains/fretboard/constants';
 import { buildFloatingArrowStyle } from '@/platform/ui/popover/floatingArrow';
 
 import FretboardNote from './FretboardNote.vue';
 import {
   barreGeometryOf,
   computeDisplayBarres,
-  FRETBOARD_BLUE,
   getBarreFill as getBarreFillOf,
   getBarreStroke as getBarreStrokeOf,
   getStringNoteY as getStringNoteYOf,
@@ -597,7 +596,16 @@ watch(
 const displayBubbleBarre = computed(() => activeHoveredBarre.value ?? cachedBarre.value);
 const displayBubbleGeometry = computed(() => hoveredBarreGeometry.value ?? cachedGeometry.value);
 
-/** 复用项目统一的 buildFloatingArrowStyle 箭头算法：朝下加大为 12px 且带边框，与面板同源 0 色差 */
+/**
+ * 复用项目统一的 buildFloatingArrowStyle 箭头算法：朝下、加大为 12px 且带边框。
+ *
+ * 取色必须与气泡面板**同一来源**，否则楔形两条斜边与面板描边会在接缝处阶跃变色：
+ * 面板未标记时是 border-tint-primary-60 / bg-surface-panel / hover:bg-tint-primary-88，
+ * 已标记时是 border-primary / bg-primary —— 故此处逐个取同一条令牌，不另造色。
+ * （FretboardSvg.logic 的 FRETBOARD_BLUE 是给 canvas 与 SVG 横按梁用的：那两处读不到 var()，
+ *   只能写 rgba 分量；DOM 侧的箭头没有这个限制，不得把那套半透明色搬过来。）
+ * 过渡也不在此写死：时长与曲线交给模板上与面板相同的工具类，避免两处各自漂移。
+ */
 const barreArrowStyle = computed<CSSProperties>(() => {
   const b = displayBubbleBarre.value;
   if (!b) return {};
@@ -606,10 +614,7 @@ const barreArrowStyle = computed<CSSProperties>(() => {
   const size = 12;
 
   const background = isMarked ? 'var(--color-primary)' : isHovered ? 'var(--tint-primary-88)' : 'var(--bg-panel)';
-
-  const borderColor = isMarked
-    ? 'var(--color-primary)'
-    : `rgba(${isDarkMode ? FRETBOARD_BLUE.dark : FRETBOARD_BLUE.light}, 0.4)`;
+  const borderColor = isMarked ? 'var(--color-primary)' : 'var(--tint-primary-60)';
 
   const base = buildFloatingArrowStyle({
     arrowX: null,
@@ -625,7 +630,6 @@ const barreArrowStyle = computed<CSSProperties>(() => {
   return {
     ...base,
     left: `calc(50% - ${size / 2}px)`,
-    transition: `background-color ${BARRE_ARROW_TRANSITION_MS}ms ease, border-color ${BARRE_ARROW_TRANSITION_MS}ms ease`,
   };
 });
 

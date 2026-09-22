@@ -11,7 +11,18 @@
     trigger="hover"
   >
     <template #trigger="{ isOpen: isSubOpen, pinToggle }">
-      <MenuRow :item :size :expanded="isSubOpen" :ref="itemRefCb" @activate="handleTriggerClick(pinToggle)" has-popup>
+      <!-- inheritAttrs:false + $attrs 重定向：级联项的「触发器本体」是这行 MenuRow（其根为真实 button），
+           调用方的 class / data-* / aria-* 必须落在它上面；落在本组件的根（BasePopover）无效——
+           那是 fragment 根（v-if 的触发包裹 div + Teleport 浮层），attrs 无法自动透传。 -->
+      <MenuRow
+        v-bind="$attrs"
+        :item
+        :size
+        :expanded="isSubOpen"
+        :ref="itemRefCb"
+        @activate="handleTriggerClick(pinToggle)"
+        has-popup
+      >
         <template #trailing>
           <!-- 自定义内容项（如指板预览）是叶子：不渲染级联箭头，点击行为为选中 -->
           <BaseIcon
@@ -29,7 +40,7 @@
     <template #default>
       <!-- content 优先：提供渲染函数时面板渲染自定义内容（如和弦指板 Canvas），否则渲染 children 列表 -->
       <component v-if="item.content" :is="item.content" />
-      <MenuItems v-else :on-select :size :items="item.children" />
+      <MenuItems v-else :on-select :size :items="item.children" :model="item.model" :on-pick="item.onPick" />
     </template>
   </BasePopover>
 </template>

@@ -69,9 +69,8 @@ const applyRemoteKvUpdate = async (keys: string[]): Promise<void> => {
   }
 };
 
-const reportKvFailure = (key: string, error: unknown): void => {
-  reportPersistFailure(`kv:${key}`, error instanceof Error ? error : errors.storage('IDB kv 写入失败'));
-};
+const reportKvFailure = (key: string, error: unknown): void =>
+  void reportPersistFailure(`kv:${key}`, error instanceof Error ? error : errors.storage('IDB kv 写入失败'));
 
 const cancelPendingFlush = (): void => {
   if (flushTimer !== null) {
@@ -154,11 +153,10 @@ export const hydrateIdbKv = async (): Promise<void> => {
 export const flushIdbKv = (): Promise<void> => flushNow();
 
 /** 供页面退出/切后台兜底（fire-and-forget，不阻塞生命周期） */
-export const flushIdbKvOnExit = (): void => {
+export const flushIdbKvOnExit = (): void =>
   void flushNow().catch(() => {
     /* 退出路径静默 */
   });
-};
 
 if (typeof window !== 'undefined') {
   // 退出落盘兜底：登记进全局唯一的退出落盘注册表（platform/services/lifecycle/exitFlush.ts），

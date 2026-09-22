@@ -261,7 +261,7 @@ export const startScorePlayback = async (
   if (isScorePlaying.value) stopScorePlayback();
   // 引擎就绪可能因自动播放策略拒绝 resume() 而 reject（synthEngine 的 initAudioEngine 不吞该异常，
   // 刻意让失败可见并可在下次用户手势后重试）。此处是唯一没有 try 包住的调用点：漏包会让
-  // startScorePlayback 返回 rejected promise，调用方（TopHeader）不接 → 未处理拒绝。故显式兜底。
+  // startScorePlayback 返回 rejected promise，调用方均不接返回值 → 未处理拒绝。故显式兜底。
   try {
     if (!(await ensureAudioReady())) return;
   } catch (error) {

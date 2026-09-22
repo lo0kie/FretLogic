@@ -43,9 +43,10 @@ body {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* 聚焦样式统一由 JS 注入（src/platform/ui/focus-ring/focusRingOverlay.ts）：

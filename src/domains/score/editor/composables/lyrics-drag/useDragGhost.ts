@@ -32,9 +32,7 @@ export function useDragGhost() {
   };
 
   /** 记录新指针位置并按帧合帧应用 */
-  const scheduleGhostPos = (x: number, y: number) => {
-    scheduleGhostFrame({ x, y });
-  };
+  const scheduleGhostPos = (x: number, y: number) => void scheduleGhostFrame({ x, y });
 
   /** 设置 ghost 显示的和弦名 */
   const setGhostChord = (chord: Chord) => {

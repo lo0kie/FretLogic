@@ -17,9 +17,8 @@ interface OpenPopoverEntry {
 const openPopovers = new Set<OpenPopoverEntry>();
 
 /** 登记打开中浮层；getAnchor 省略时该浮层不参与「按容器」的精确关闭 */
-export const registerOpenPopover = (close: (reason?: string) => void, getAnchor?: () => HTMLElement | null) => {
-  openPopovers.add({ close, getAnchor: getAnchor ?? (() => null) });
-};
+export const registerOpenPopover = (close: (reason?: string) => void, getAnchor?: () => HTMLElement | null) =>
+  void openPopovers.add({ close, getAnchor: getAnchor ?? (() => null) });
 
 /** 移除登记（关闭或卸载时调用）：按关闭函数身份删除，与是否登记锚点无关 */
 export const unregisterOpenPopover = (close: (reason?: string) => void) => {

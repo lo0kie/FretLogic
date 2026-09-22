@@ -292,8 +292,8 @@ describe.skipIf(NO_REGISTRY)('createLruCache 的字节读数（开发面板采�
     cache.dispose();
   });
 
-  it('字节合计惰性重算：稳态采样与 get 访问都不重估，写入 / 删除 / 清空后重估', () => {
-    const name = uniqueName('惰性');
+  it('字节合计增量维护：称重只在写入时发生一次，采样 / 访问 / 删除都不回头重估', () => {
+    const name = uniqueName('增量');
     const weigh = vi.fn((_key: string, value: number) => value);
     const cache = createLruCache<number>(10, { name, weigh });
     const bytes = () => findStat(name)?.bytes?.();
@@ -307,25 +307,25 @@ describe.skipIf(NO_REGISTRY)('createLruCache 的字节读数（开发面板采�
     expect(bytes()).toBe(10);
     expect(weigh).toHaveBeenCalledTimes(2);
 
-    // 稳态：面板每秒采样一次，条数没变就不该逐个重估（本改动的全部意义所在）
+    // 稳态：面板每秒采样一次，条数没变就不该逐个重估（本条用例的全部意义所在）
     expect(bytes()).toBe(10);
     expect(bytes()).toBe(10);
     expect(weigh).toHaveBeenCalledTimes(2);
 
-    // get 只改访问顺序、不改字节合计 → 不置脏
+    // get 只改访问顺序、不改字节合计
     expect(cache.get('a')).toBe(4);
     expect(bytes()).toBe(10);
     expect(weigh).toHaveBeenCalledTimes(2);
 
-    // delete 置脏后重估（此时表内只剩 a）
+    // delete 直接减掉该条写入时称得的量，绝不回头重估剩余条目（旧实现此处要全表重算一遍）
     expect(cache.delete('b')).toBe(true);
     expect(bytes()).toBe(4);
-    expect(weigh).toHaveBeenCalledTimes(3);
+    expect(weigh).toHaveBeenCalledTimes(2);
 
-    // 同键同值重复写入：整体重算而非累加，读数不得翻倍
+    // 同键同值重复写入：先减旧量再加新量，读数不得翻倍
     cache.set('a', 4);
     expect(bytes()).toBe(4);
-    expect(weigh).toHaveBeenCalledTimes(4);
+    expect(weigh).toHaveBeenCalledTimes(3);
 
     cache.clear();
     expect(bytes()).toBe(0);

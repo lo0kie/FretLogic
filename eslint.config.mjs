@@ -10,6 +10,13 @@ import vue from 'eslint-plugin-vue';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+// 下方 no-restricted-syntax 用的选择器前缀：「箭头函数块体里唯一一条语句」。
+// 用 :first-child:last-child 表达「唯一」——esquery 不支持 :only-child，写了会抛
+// Unknown class name 而让整份配置直接报错。
+const SINGLE_STMT_IN_ARROW = 'ArrowFunctionExpression > BlockStatement > ExpressionStatement:first-child:last-child';
+const ARROW_CALL_SHORTHAND_MSG =
+  '箭头函数块体只有一次函数调用时请写成简写体，并用 void 包裹：() => { foo(); } → () => void foo()。';
+
 export default tseslint.config(
   {
     ignores: [
@@ -128,7 +135,8 @@ export default tseslint.config(
       '@typescript-eslint/array-type': ['error', { default: 'array' }],
       // 箭头函数体只含一条 return 时强制简写为表达式体（() => { return x; } → () => x）。
       // 判据是「块体恰好只有一条 return」——`() => { foo(); }` 这类无 return 的块不受影响：
-      // 简写会把它变成「返回 foo() 的返回值」，语义改变，故规则刻意放过。
+      // 简写会把它变成「返回 foo() 的返回值」，语义改变，故规则刻意放过
+      //（其中「只有一次函数调用」的形态另由本块下方 no-restricted-syntax 的六条选择器强制，两者分工不重叠）。
       // ⚠️ 首选项的默认值是 always（反向要求补花括号），与意图相反，必须显式写出 as-needed。
       // 该规则可自动修复，且修复会保留块内注释（只删花括号与 return 关键字）。
       'arrow-body-style': ['error', 'as-needed'],
@@ -306,6 +314,42 @@ export default tseslint.config(
         {
           selector: "CallExpression > Literal[value='update:modelValue']",
           message: "双向绑定请用 defineModel()，不要手写 emit('update:modelValue')。",
+        },
+        // 箭头函数块体「只有一次函数调用」时强制简写体：() => { foo(); } → () => void foo()。
+        // ⚠️ **必须带 void** —— 块体的返回类型是 void，直接去花括号会让返回类型变成 foo() 的
+        // 返回类型（Promise<void> / boolean / …），把类型契约改掉；void 包裹才与原块体等价。
+        // 判据刻意收窄到「调用」这一种形态：块体里是赋值（x.value = 1）等非调用表达式时不约束
+        //（存量里赋值占 67/165，那类简写的收益也不明显）。
+        // 上方的 arrow-body-style(as-needed) 管不到这些形态 —— 它的源码只处理「块体恰好一条 return」。
+        // 拆成六条而不是一条 :matches(...)：esquery 的 :matches 内层不支持组合器（实测
+        // `> :matches(CallExpression, UnaryExpression > CallExpression)` 对 void / await 包裹的调用
+        // 静默不命中，会假绿），拆开写才不会漏。
+        // 两个正交维度：① 包装 = 无 / void / await（后两者同样是「一次调用」，一并纳入）；
+        // ② 调用形态 = 裸调用 / 可选链调用 —— 可选链在 ESTree 里被包成 ChainExpression
+        //（a?.b() → ChainExpression > CallExpression），TS AST 里没有这层，漏掉这一维会静默漏报
+        //（实测 GroupSection.vue 就因此少报 2 处）。
+        // ⚠️ 与 arrow-body-style 分工不重叠：那条管 return 体、这六条管非 return 的单调用体。
+        // ⚠️ 本规则**无 fixer**（no-restricted-syntax 不提供），--fix 不会改动这些点，只能人工改。
+        // 存量已于 2026-09-22 全部迁移完毕（79 处 / 47 文件）。批量迁移的做法记在这里，免得下次
+        // 重走一遍：① 另写一个 fixable 的临时插件规则（选择器判据与本块逐字一致）跑 --fix，
+        // 先把「块体 → 简写体」机械做掉（块内含注释的会被保守跳过，剩十来处人工收）；
+        // ② 补 void 时**不能**对全仓简写体一律加 —— 项目里本来就有有意返回值的写法
+        //（如 computed(() => foo())），一律加会把功能改坏；正确做法是先用 git diff 把
+        // 「上一步由块体改出来的」行号挑出来，只对这些位置 insertTextBefore(body, 'void ')。
+        { selector: `${SINGLE_STMT_IN_ARROW} > CallExpression`, message: ARROW_CALL_SHORTHAND_MSG },
+        { selector: `${SINGLE_STMT_IN_ARROW} > ChainExpression > CallExpression`, message: ARROW_CALL_SHORTHAND_MSG },
+        {
+          selector: `${SINGLE_STMT_IN_ARROW} > UnaryExpression[operator="void"] > CallExpression`,
+          message: ARROW_CALL_SHORTHAND_MSG,
+        },
+        {
+          selector: `${SINGLE_STMT_IN_ARROW} > UnaryExpression[operator="void"] > ChainExpression > CallExpression`,
+          message: ARROW_CALL_SHORTHAND_MSG,
+        },
+        { selector: `${SINGLE_STMT_IN_ARROW} > AwaitExpression > CallExpression`, message: ARROW_CALL_SHORTHAND_MSG },
+        {
+          selector: `${SINGLE_STMT_IN_ARROW} > AwaitExpression > ChainExpression > CallExpression`,
+          message: ARROW_CALL_SHORTHAND_MSG,
         },
       ],
       // 禁止空的 template/script/style 块

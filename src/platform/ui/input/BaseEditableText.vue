@@ -111,9 +111,7 @@ watch(
 // 关键：immediate watch 在 setup 阶段执行时 editorRef 尚未挂载（为 null），setText 是空操作；
 // 若 modelValue 此后不再变化，DOM 不会被回填（典型：刷新后草稿名已就绪，input 却空白）。
 // 因此元素真正挂载后再按 modelValue 回填一次，保证初始即显示正确文本。
-onMounted(() => {
-  setText(modelValue.value);
-});
+onMounted(() => void setText(modelValue.value));
 
 const handleFocus = () => {
   if (isEditing.value) return;

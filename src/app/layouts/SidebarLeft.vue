@@ -139,7 +139,12 @@
             </template>
           </BaseMenu>
 
-          <BaseMenu :items="songSortMenuItems" placement="bottom">
+          <BaseMenu
+            :items="SONG_SORT_OPTIONS"
+            :model="songStore.songSortMethod"
+            @pick="pickSort($event)"
+            placement="bottom"
+          >
             <template #trigger="{ isOpen, pinToggle }">
               <ActionButton
                 :aria-expanded="isOpen"
@@ -221,7 +226,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, provide, ref, useTemplateRef, watch } from 'vue';
+import { computed, provide, ref, useTemplateRef, watch } from 'vue';
 
 import { refDebounced } from '@vueuse/core';
 import { useRoute } from 'vue-router';
@@ -248,12 +253,14 @@ import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { useSongModals } from '@/domains/score/library/composables/useSongModals';
 import { useSongStore } from '@/domains/score/library/store/songStore';
+import { useScrollMemory } from '@/platform/composables/useScrollMemory';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { LEFT_SIDEBAR_WIDTH_PIXEL, ROUTE_PATHS } from '@/platform/utils/constants';
 import { pickFile } from '@/platform/utils/transfer';
 
 import type { GroupedChordCard } from '@/domains/chord/types';
+import type { SongSortMethod } from '@/domains/score/library/store/songStore';
 import type { IconName } from '@/platform/ui/icons/icons.registry';
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { ScrollAreaHandle } from '@/platform/ui/scroll-area/scrollAreaHandle';
@@ -297,31 +304,17 @@ const chordStore = useChordStore();
 const songStore = useSongStore();
 
 // 两个 section（KeepAlive）共用同一个滚动容器，滚动位置无法随组件 DOM 天然保持：
-// 按路由 key 手动缓存 scrollTop，切走时保存、切回时在内容重挂载后恢复
-const SCROLL_CACHE = new Map<string, number>();
-
-watch(
-  () => route.path,
-  (next, prev) => {
-    if (prev) SCROLL_CACHE.set(prev, scrollRef.value?.scrollTop ?? 0);
-    // 恢复 scrollTop 会触发 scroll 事件 → v-edge-fade 自动重测渐隐，无需手动同步
-    nextTick(() => {
-      const el = scrollRef.value;
-      if (!el) return;
-      el.scrollTop = SCROLL_CACHE.get(next) ?? 0;
-    });
-  }
-);
+// 交给 useScrollMemory 按路由档位记忆（滚动时持续记录，换档 / 重挂后贴回）。
+// 档位空间是开放的（任意路由路径都要各记一份），故不声明 keys，activeKey 直接取 route.path。
+// 恢复 scrollTop 会触发 scroll 事件 → v-edge-fade 自动重测渐隐，无需手动同步
+const scrollMemory = useScrollMemory({ scope: 'sidebar-left', activeKey: () => route.path, target: scrollRef });
 
 watch(
   () => uiStore.isLeftOpen,
   isOpen => {
-    // 侧栏重开时容器尺寸 0→实际值，v-edge-fade 的 ResizeObserver 自动触发重测
-    if (isOpen)
-      nextTick(() => {
-        const el = scrollRef.value;
-        if (el) el.scrollTop = SCROLL_CACHE.get(route.path) ?? el.scrollTop;
-      });
+    // 侧栏重开时容器尺寸 0→实际值，此前被钳掉的位置补一次贴回
+    //（v-edge-fade 的 ResizeObserver 会自动触发渐隐重测）
+    if (isOpen) scrollMemory.restore();
   }
 );
 
@@ -384,50 +377,48 @@ const handleImportTrigger = async () => {
   await backupModals.handleFileChange(file, () => {});
 };
 
-/** 乐谱排序菜单（交互参考主题切换：Popover + 菜单项，选中项带勾选标记） */
-/** 乐谱过滤级联菜单：全部乐谱 / 按歌手 / 按拍号；子项带选中态，选择即生效（会话内状态，不持久化） */
-const songFilterMenuItems = computed<MenuItem[]>(() => {
-  const clearBoth = () => songStore.setSongFilters('', '');
-  const singerChildren: MenuItem[] = [
-    {
-      label: '全部',
-      checked: songStore.singerFilter === '',
-      checkPosition: 'right',
-      action: () => songStore.setSongFilters('', songStore.timeSignatureFilter),
-    },
-    ...songStore.availableSingerFilters.map(singer => ({
-      label: singer,
-      checked: songStore.singerFilter === singer,
-      checkPosition: 'right' as const,
-      action: () => songStore.setSongFilters(singer, songStore.timeSignatureFilter),
-    })),
-  ];
-  const timeSigChildren: MenuItem[] = [
-    {
-      label: '全部',
-      checked: songStore.timeSignatureFilter === '',
-      checkPosition: 'right',
-      action: () => songStore.setSongFilters(songStore.singerFilter, ''),
-    },
-    ...songStore.availableTimeSignatureFilters.map(sig => ({
-      label: sig,
-      checked: songStore.timeSignatureFilter === sig,
-      checkPosition: 'right' as const,
-      action: () => songStore.setSongFilters(songStore.singerFilter, sig),
-    })),
-  ];
-  return [
-    {
-      label: '全部乐谱',
-      icon: 'inbox',
-      checked: !songStore.hasSongFilter,
-      disabled: !songStore.hasSongFilter,
-      action: clearBoth,
-    },
-    { label: '按歌手', icon: 'mic', children: singerChildren },
-    { label: '按拍号', icon: 'clock', children: timeSigChildren },
-  ];
-});
+/** 过滤子菜单项：'全部' + 值列表；'全部' 即空串（与 store 的「无过滤」口径一致）。
+ *
+ *  ⚠️ `(v): MenuItem =>` 这个显式返回类型**不能省**：`.map()` 的结果被**展开进数组字面量**时，
+ *  外层 `MenuItem[]` 的上下文类型传不进 map 的回调（对比直接 `return values.map(...)` 或
+ *  `children: values.map(...)` 都能传进去），少了它 `checkPosition: 'right'` 会被拓宽成 `string`
+ *  而报「不能将 string 分配给 "left" | "right" | undefined」。 */
+const buildFilterChildren = (values: readonly string[]): MenuItem[] => [
+  { label: '全部', value: '', checkPosition: 'right' },
+  ...values.map((v): MenuItem => ({ label: v, value: v, checkPosition: 'right' })),
+];
+
+/** 乐谱过滤级联菜单：全部乐谱 / 按歌手 / 按拍号；子项带选中态，选择即生效（会话内状态，不持久化）。
+ *
+ *  ⚠️ **「全部乐谱」是动作项，不是选项** —— 它同时清两维，没有单一 `model` 值可绑，故用 `action`；
+ *  其状态**只用 `disabled` 表达**（无过滤时点它没有意义），不写 `checked`。
+ *  理由：「当前无过滤」这件事已由下面两个子菜单各自的「全部」子项勾选态表达；若这里再挂一个
+ *  条件完全相同的 `checked`，等于同一判据驱动两个语义 —— 勾选态与禁用态永远同时出现或同时消失，
+ *  其中必有一个是冗余表达。选项态在本项目只有一条路：`model` + `onPick`（见另两项）。 */
+const songFilterMenuItems = computed<MenuItem[]>(() => [
+  {
+    label: '全部乐谱',
+    icon: 'inbox',
+    disabled: !songStore.hasSongFilter,
+    action: () => void songStore.setSongFilters('', ''),
+  },
+  // 两个子菜单各是单选组、各管一维：勾选与点击由 model / onPick 派生，子项只描述 label/value。
+  // 每一维只改自己那一维 —— 另一维过滤器原样带回
+  {
+    label: '按歌手',
+    icon: 'mic',
+    model: songStore.singerFilter,
+    onPick: value => void songStore.setSongFilters(value, songStore.timeSignatureFilter),
+    children: buildFilterChildren(songStore.availableSingerFilters),
+  },
+  {
+    label: '按拍号',
+    icon: 'clock',
+    model: songStore.timeSignatureFilter,
+    onPick: value => void songStore.setSongFilters(songStore.singerFilter, value),
+    children: buildFilterChildren(songStore.availableTimeSignatureFilters),
+  },
+]);
 
 /** 过滤按钮悬停提示：无过滤时说明入口，激活时展示当前条件 */
 const songFilterButtonTitle = computed(() =>
@@ -441,41 +432,28 @@ const songFilterButtonTitle = computed(() =>
         .join(' · ')}`
 );
 
-const songSortMenuItems = computed<MenuItem[]>(() => [
-  {
-    label: '手动排序',
-    icon: 'list',
-    checked: songStore.songSortMethod === 'manual',
-    action: () => songStore.setSongSortMethod('manual'),
-  },
-  {
-    label: '拼音分组',
-    icon: 'type',
-    checked: songStore.songSortMethod === 'title',
-    action: () => songStore.setSongSortMethod('title'),
-  },
-  {
-    label: '创建时间',
-    icon: 'clock',
-    checked: songStore.songSortMethod === 'createdAt',
-    action: () => songStore.setSongSortMethod('createdAt'),
-  },
-  {
-    // 经常回头改同一批歌时，「最近编辑」比「创建时间」更贴近找歌需求：
-    // createdAt 一旦定了就不再变化，时间一长就失去排序意义
-    label: '最近编辑',
-    icon: 'pencil',
-    checked: songStore.songSortMethod === 'updatedAt',
-    action: () => songStore.setSongSortMethod('updatedAt'),
-  },
-]);
+/**
+ * 排序菜单：既是菜单项本身、也是排序按钮图标的来源 —— 一份数据两用。
+ * 勾选态与点击由菜单层的 `model` / `pick` 派生（见 BaseMenu），这里只描述「有哪些项」。
+ * 此前 icon 在菜单项里内联一份、另有一张 SORT_ICON_MAP 供按钮用，同一份映射存两处 ——
+ * 新增排序方式时漏改任一处，就会出现「菜单图标与按钮图标不一致」。
+ */
+const SONG_SORT_OPTIONS: MenuItem[] = [
+  { label: '手动排序', icon: 'list', value: 'manual' },
+  { label: '拼音分组', icon: 'type', value: 'title' },
+  { label: '创建时间', icon: 'clock', value: 'createdAt' },
+  // 经常回头改同一批歌时，「最近编辑」比「创建时间」更贴近找歌需求：
+  // createdAt 一旦定了就不再变化，时间一长就失去排序意义
+  { label: '最近编辑', icon: 'pencil', value: 'updatedAt' },
+];
 
-const SORT_ICON_MAP: Record<string, IconName> = {
-  title: 'type',
-  createdAt: 'clock',
-  updatedAt: 'pencil',
-};
+/** 菜单项 value 是 string，这里收窄回排序方式联合类型 */
+const pickSort = (value: string): void => songStore.setSongSortMethod(value as SongSortMethod);
 
-/** 排序按钮图标随当前排序方式切换（与菜单项图标一致），颜色保持默认不换 */
-const currentSortIcon = computed<IconName>(() => SORT_ICON_MAP[songStore.songSortMethod] ?? 'list');
+/** 排序按钮图标随当前排序方式切换（与菜单项同源），颜色保持默认不换 */
+const currentSortIcon = computed<IconName>(() => {
+  const found = SONG_SORT_OPTIONS.find(o => o.value === songStore.songSortMethod);
+  // icon 的类型含组件形态，取字符串那一支即可
+  return (typeof found?.icon === 'string' ? found.icon : undefined) ?? 'list';
+});
 </script>

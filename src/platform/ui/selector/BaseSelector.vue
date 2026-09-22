@@ -14,6 +14,7 @@
         v-wave="{ disabled }"
         :aria-disabled="disabled || undefined"
         :aria-expanded="_isOpen"
+        :aria-labelledby="rowLabelId"
         :class="[
           currentConfig.triggerClass,
           _isOpen ? 'border-primary ring-1 ring-primary' : '',
@@ -134,6 +135,7 @@
           <div v-if="filterable" class="px-2 py-1.5">
             <input
               v-model="searchQuery"
+              :aria-label="filterAriaLabel"
               :placeholder="filterPlaceholder"
               @pointerdown.stop
               @keydown.down="handleFilterKeydownDown($event)"
@@ -240,6 +242,7 @@ import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { calcDropdownMaxHeight } from '@/platform/ui/dropdown/dropdownPanelHeight';
 import { FORM_CONTROL_CONTEXT_KEY } from '@/platform/ui/form/formControlContext';
+import { useFormRowLabelId } from '@/platform/ui/form/formRowContext';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { createOptionHelpers, SELECTOR_CONFIG } from '@/platform/ui/selector/BaseSelector.logic';
 import { resolveComponentWidth } from '@/platform/utils/constants';
@@ -281,6 +284,7 @@ const {
   fieldNames = undefined,
   filterable = false,
   filterPlaceholder = '搜索...',
+  filterAriaLabel = '搜索选项',
   filterMethod = undefined,
   valueComparator = undefined,
   highlightNonDefault = false,
@@ -326,6 +330,11 @@ const {
   filterable?: boolean;
   /** 搜索过滤输入框的占位提示文本 */
   filterPlaceholder?: string;
+  /**
+   * 搜索过滤输入框的无障碍名。该输入框没有可见标签，而 placeholder 不能充当无障碍名
+   * （读屏可读性差、一旦输入即消失），故必须显式给出 aria-label；需要更具体时由调用方覆盖。
+   */
+  filterAriaLabel?: string;
   /** 自定义过滤函数（默认按展示文本包含关键字过滤） */
   filterMethod?: (query: string, option: AnyOption) => boolean;
   /** 自定义值相等比较器 */
@@ -348,6 +357,8 @@ const attrs = useAttrs();
 /** 尺寸解析优先级：行内 size props > BaseForm 下发的 FormControlContext > 默认 md */
 const controlContext = inject<FormControlContext | null>(FORM_CONTROL_CONTEXT_KEY, null);
 const resolvedSize = computed<ComponentSize>(() => size ?? controlContext?.size ?? 'md');
+/** 所在 BaseFormRow 的标签 id：触发器是 role=combobox 的 div，label 的 for 指不到，只能靠 aria-labelledby 关联 */
+const rowLabelId = useFormRowLabelId();
 /** 选项访问器：字段名映射 / 比较器 / 格式化注入到纯逻辑工厂（见 BaseSelector.logic.ts） */
 const {
   getOptionLabel,

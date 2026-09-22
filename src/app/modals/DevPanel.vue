@@ -385,13 +385,11 @@
     confirm-text="清空"
     title="清空 IndexedDB"
   >
-    <div class="py-xs">
-      <p class="m-0 text-xs/relaxed text-fg-body">
-        将删除
-        <strong class="text-fg-title">fret-logic-v2</strong> 中全部对象库（和弦、分组、乐谱、同步元数据、偏好键值）。
-        此操作不可恢复，确定继续吗？
-      </p>
-    </div>
+    <p class="m-0 py-xs text-xs/relaxed text-fg-body">
+      将删除
+      <strong class="text-fg-title">fret-logic-v2</strong> 中全部对象库（和弦、分组、乐谱、同步元数据、偏好键值）。
+      此操作不可恢复，确定继续吗？
+    </p>
   </BaseModal>
 
   <BaseModal
@@ -402,12 +400,10 @@
     confirm-text="覆盖"
     title="生成并覆盖测试数据"
   >
-    <div class="py-xs">
-      <p class="m-0 text-xs/relaxed text-fg-body">
-        将用 <strong class="text-fg-title">{{ seedSummaryText }}</strong>
-        整体替换现有全部和弦库与乐谱。现有数据不可恢复，确定继续吗？
-      </p>
-    </div>
+    <p class="m-0 py-xs text-xs/relaxed text-fg-body">
+      将用 <strong class="text-fg-title">{{ seedSummaryText }}</strong>
+      整体替换现有全部和弦库与乐谱。现有数据不可恢复，确定继续吗？
+    </p>
   </BaseModal>
 </template>
 
@@ -564,16 +560,20 @@ onBeforeUnmount(stopCacheSampling);
 /** 缓存行：条长按各缓存自身容量占用率（无上限的按当前最大条数折算）；
  *  容量与字节都渲染成徽标（容量按是否满载转预警色）；
  *  字节读数来自各缓存注册时提供的估算器（位图按 w×h×4，数据类按结构粗估）——
- *  逐条估算成本随条数增长（如拼音记忆表上万条），故只算一次并在行内携带结果供合计复用 */
+ *  逐条估算成本随条数增长（如拼音记忆表上万条），故只算一次并在行内携带结果供合计复用。
+ *  自带内存配额（maxBytes）的缓存（位图 / 预览页图）另按配额口径参与占用率与满载判定 ——
+ *  它们的条数上限与内存上限是两条独立护栏，只看条数会漏掉「配额已在驱逐」这件事 */
 const memoryCacheRows = computed(() => {
   const maxSize = Math.max(...memoryCaches.value.map(cache => cache.size()), 0);
   return memoryCaches.value.map(cache => {
     const size = cache.size();
     const base = cache.limit ?? Math.max(maxSize, 1);
     const bytes = cache.bytes?.();
-    // 满载（含多实例聚合后的溢出）即不再有新条目能被留住，值得警示
-    const full = cache.limit !== null && size >= cache.limit;
-    const pct = clamp(Math.round((size / base) * 100), size > 0 ? 4 : 0, 100);
+    // 配额占用率：条数没满也可能已被配额驱逐，故占用率取两条口径中较大的那个
+    const bytePct = bytes === undefined || !cache.maxBytes ? 0 : (bytes / cache.maxBytes) * 100;
+    // 满载（含多实例聚合后的溢出、或配额到顶）即不再有新条目能被留住，值得警示
+    const full = (cache.limit !== null && size >= cache.limit) || bytePct >= 100;
+    const pct = clamp(Math.round(Math.max((size / base) * 100, bytePct)), size > 0 ? 4 : 0, 100);
 
     // 命中率：条数天然不变的全命中缓存（如尺寸/名字变化都不作废位图）与「一次都没被用过」的缓存
     // 读数完全相同，只靠条数无从分辨 —— 命中数是判断缓存是否真在生效的直接证据
@@ -597,14 +597,25 @@ const memoryCacheRows = computed(() => {
         ? `同名缓存共 ${instances} 份实例（热替换会留下旧实例，其数据仍在内存中）：本行读数取自最近活跃的一份，「清空」会逐份回收`
         : undefined;
 
+    // 有配额的缓存把分子分母一起给出：只报当前占用时看不出「离上限还有多远」
+    const quota = cache.maxBytes;
+    const quotaSuffix = quota === undefined ? '' : ` / ${formatBytes(quota)}`;
+    const bytesText = bytes === undefined ? '' : `${formatBytes(bytes)}${quotaSuffix}`;
+    const bytesHint =
+      bytes === undefined
+        ? undefined
+        : quota === undefined
+          ? `内存占用估算 ${bytes.toLocaleString('zh-CN')} 字节`
+          : `内存占用估算 ${bytes.toLocaleString('zh-CN')} 字节，配额 ${quota.toLocaleString('zh-CN')}`;
+
     return {
       ...cache,
       text: `${size} / ${cache.limit ?? '∞'}`,
       full,
       countHint: `${size} 条 / 上限 ${cache.limit ?? '无上限'}（当前占用 ${pct}%）`,
       bytesValue: bytes,
-      bytesText: bytes === undefined ? '' : formatBytes(bytes),
-      bytesHint: bytes === undefined ? undefined : `内存占用估算 ${bytes.toLocaleString('zh-CN')} 字节`,
+      bytesText,
+      bytesHint,
       hitRateText,
       hitRateHint,
       instancesText,
@@ -801,9 +812,8 @@ const isWipeIdbConfirmOpen = ref(false);
 const isWipingIdb = ref(false);
 
 /** 清空全部对象库（SCHEMA 声明的每一库）：wipe 确认框与 wipe+reload 两个动作共用 */
-const clearAllIdbStores = async () => {
-  await Promise.all((Object.keys(SCHEMA) as StoreName[]).map(name => idb.clear(name)));
-};
+const clearAllIdbStores = async () =>
+  void (await Promise.all((Object.keys(SCHEMA) as StoreName[]).map(name => void idb.clear(name))));
 
 const handleWipeIdb = async () => {
   isWipingIdb.value = true;

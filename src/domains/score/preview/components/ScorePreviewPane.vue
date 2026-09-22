@@ -31,6 +31,7 @@
         <div
           :class="isTallerThanViewport ? 'min-h-full items-start' : 'h-full items-center'"
           class="mx-auto flex w-max gap-lg"
+          ref="previewPagesRef"
         >
           <!-- 首帧渲染中 -->
           <Feedback v-if="isRendering && pages.length === 0" description="正在生成预览..." size="lg" type="loading" />
@@ -53,7 +54,7 @@
           <div
             v-for="(url, index) in pages"
             :class="[
-              menuTargetIndex === index ? 'outline-primary' : 'outline-transparent',
+              isPageMenuTarget(index) ? 'outline-primary' : 'outline-transparent',
               containerHeight > 0
                 ? 'transition-[outline,box-shadow,ring-color,height]'
                 : 'transition-[outline,box-shadow,ring-color]',
@@ -140,9 +141,10 @@
     <!-- 右键单页的上下文菜单：复制 / 下载当前页（零尺寸挂载于根层，不参与滚动内容）；
          标题行展示当前乐谱标题 + 页码 + 当前页图片大小预估 -->
     <BaseMenu
+      :context-trigger-el="previewPagesRef"
       :items="pageMenuItems"
       :title="menuTitle"
-      @close="menuTargetIndex = -1"
+      @close="closePageMenu()"
       ref="previewMenuRef"
       trigger="contextmenu"
     />
@@ -210,11 +212,11 @@ import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPay
 import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
+import { useTargetMenu } from '@/platform/ui/menu/useTargetMenu';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
 import { clamp, formatBytes } from '@/platform/utils/common';
 
 import type { PreviewRenderData } from '@/domains/score/preview/scorePreviewCache';
-import type { MenuItem } from '@/platform/ui/menu/types';
 import type { ScrollAreaHandle, ScrollAreaScrollbar } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
 defineOptions({ name: 'ScorePreviewPane' });
@@ -345,7 +347,39 @@ const cancelPendingExport = () => {
 
 // ===== 单页右键菜单：复制 / 下载当前页图 =====
 const previewMenuRef = ref<InstanceType<typeof BaseMenu> | null>(null);
-const menuTargetIndex = ref(-1);
+/**
+ * 单页右键菜单：目标为**页码**。
+ * 菜单项在打开时按该页码构建 —— copyPage / downloadPage 声明在本行下方，闭包到右键那一刻才求值，
+ * 故无先后依赖；且 action 捕获的是**打开时的页码**，不再回头读「当前目标」。
+ * 无目标时为空数组（BaseMenu 据此拒绝打开）；「必须等 nextTick」「关闭后保留目标」由 useTargetMenu 保证。
+ */
+const {
+  target: menuTargetIndex,
+  isOpen: isPageMenuOpen,
+  items: pageMenuItems,
+  openAt: openPageMenuAt,
+  close: closePageMenu,
+} = useTargetMenu<number>(
+  index => [
+    { label: '复制本页', icon: 'copy', action: () => void copyPage(index) },
+    { label: '下载本页', icon: 'download', action: () => void downloadPage(index) },
+  ],
+  previewMenuRef
+);
+
+/** 页面「菜单正针对我」的描边判据：菜单关闭即失效，故与 isOpen 合判（不能只看目标） */
+const isPageMenuTarget = (index: number): boolean => isPageMenuOpen.value && menuTargetIndex.value === index;
+
+/**
+ * 右键「触发区域」＝页面行容器（透传给 BaseMenu 的 contextTriggerEl，机制见该 prop 注释）。
+ *
+ * 本菜单是挂在预览根层的单例、默认插槽为空，不报触发区域时，右键页面会被外点判定的捕获阶段
+ * 先关掉，随后 handlePageContextMenu 里的 openMenuAt 只能走首次打开 —— 表现为菜单重放入场动画，
+ * 而不是复用同一实例从旧坐标滑到新坐标。
+ *
+ * 该容器同时被用作浮层锚点，供平台「锚点随所在滚动容器滚动而关闭」的机制识别（它在预览滚动区内）。
+ */
+const previewPagesRef = useTemplateRef<HTMLElement>('previewPagesRef');
 /**
  * 各页图片字节数：直接读共享缓存 currentRenderData（含 a4Sizes），不另立缓存结构，
  * 随预览渲染/切歌同步刷新、随 LRU 驱逐回收。
@@ -355,7 +389,7 @@ const menuTargetIndex = ref(-1);
 const menuPageSize = computed(() => {
   const i = menuTargetIndex.value;
   const data = currentRenderData.value;
-  return data && i >= 0 && i < data.a4Sizes.length ? data.a4Sizes[i] : null;
+  return data && i !== null && i >= 0 && i < data.a4Sizes.length ? data.a4Sizes[i] : null;
 });
 
 /** 右键菜单标题：当前页图片大小预估 */
@@ -368,9 +402,9 @@ const menuTitle = computed(() => {
 const previewAreaRef = useTemplateRef<ScrollAreaHandle>('previewAreaRef');
 const previewScrollRef = useScrollAreaElement(previewAreaRef);
 /**
- * 预览滚动时收起单页右键菜单：该菜单锚点是零尺寸 contextmenu 包裹层，挂在预览根层（BaseScrollArea 之外），
- * 平台 closePopovers 机制按「锚点是否在滚动区内」精确关闭收不到它，故在此手动联动。
- * 右键菜单弹出期间滚动预览，菜单应随内容一起消失，避免悬在错位位置。
+ * 预览滚动时收起单页右键菜单：右键菜单弹出期间滚动预览，菜单应随内容一起消失，避免悬在错位位置。
+ * 菜单锚点是 previewPagesRef（页面行容器，落在预览滚动区内），平台的「锚点随所在滚动容器滚动而关闭」
+ * 本可覆盖；这里保留直接监听作同源的即时保障，不依赖注册表的遍历时机。
  */
 const closeMenuOnPreviewScroll = () => previewMenuRef.value?.closeMenu('preview-scroll');
 watch(previewScrollRef, (el, prev) => {
@@ -473,11 +507,8 @@ useEventListener(
   { passive: false }
 );
 
-/** 右键某页：记录目标页码并在光标处打开上下文菜单（单页大小已在共享缓存 currentRenderData 中，无需额外取数） */
-const handlePageContextMenu = (e: MouseEvent, index: number) => {
-  menuTargetIndex.value = index;
-  void previewMenuRef.value?.openMenuAt(e.clientX, e.clientY);
-};
+/** 右键某页：把命中的页码交给 useTargetMenu 在光标处打开（单页大小已在共享缓存 currentRenderData 中，无需额外取数） */
+const handlePageContextMenu = (e: MouseEvent, index: number) => void openPageMenuAt(e, index);
 
 // ===== 页码读数：挂在横向滚动条上的滚动气泡 =====
 /** 页码读数自动淡出时延（ms）：滚动停顿超过该时长即淡出。
@@ -550,23 +581,6 @@ const downloadPage = async (index: number) => {
   triggerBlobDownload(blob, `${baseName}_${index + 1}.jpg`);
   uiStore.message.success('已开始下载');
 };
-
-const pageMenuItems = computed<MenuItem[]>(() => [
-  {
-    label: '复制本页',
-    icon: 'copy',
-    action: () => {
-      void copyPage(menuTargetIndex.value);
-    },
-  },
-  {
-    label: '下载本页',
-    icon: 'download',
-    action: () => {
-      void downloadPage(menuTargetIndex.value);
-    },
-  },
-]);
 
 /**
  * 监听当前歌曲 ID 切换：

@@ -21,9 +21,13 @@ $text-title: var(--text-title);
 $text-body: var(--text-body);
 $text-subtitle: var(--text-muted);
 
-/* ===== 间距系统：4px 节奏（收敛为协调的 8 档，2px 用于极紧间隙） ===== */
+/* ===== 间距系统：4px 节奏（收敛为协调的 8 档，2px 用于极紧间隙） =====
+   ⚠️ 与 Tailwind --spacing-*（tailwind.css:95-103）同名不同值：本表底部两档整体错开一档
+   （$space-2xs 2px = Tailwind 3xs，原 $space-xs 4px = Tailwind 2xs），Tailwind 的 xs(6px)
+   在本表无对应档；sm 及以上两者同值。
+   原 $space-xs 已删除 —— 它值 4px 却叫 xs，与工具类 px-xs(6px) 撞名，是最易写错的一档；
+   需要 6px 请用工具类 px-xs，不要在 SCSS 侧找对应档位。 */
 $space-2xs: 0.125rem; /* 2px  */
-$space-xs: 0.25rem; /* 4px  */
 $space-sm: 0.5rem; /* 8px  */
 $space-md: 0.75rem; /* 12px */
 $space-lg: 1rem; /* 16px */

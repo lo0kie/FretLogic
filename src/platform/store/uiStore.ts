@@ -70,15 +70,14 @@ export const useUiStore = defineStore('ui', () => {
     type === MessageType.LOADING || type === MessageType.NEUTRAL;
 
   /** 恢复所有 Message 的销毁倒计时（常驻型 Message 除外）。 */
-  const resumeAllTimers = () => {
-    messages.value.forEach(message => {
+  const resumeAllTimers = () =>
+    void messages.value.forEach(message => {
       if (!isPersistentMessage(message.type))
         scheduleMessageRemoval(
           message.id,
           remainingMap.get(message.id) ?? message.duration ?? MESSAGE_DEFAULT_DURATION_MS
         );
     });
-  };
 
   let messageIdCounter = 0;
 
@@ -180,11 +179,10 @@ export const useUiStore = defineStore('ui', () => {
   };
 
   /** 全部已读 */
-  const markAllNoticesRead = () => {
-    notices.value.forEach(n => {
+  const markAllNoticesRead = () =>
+    void notices.value.forEach(n => {
       n.read = true;
     });
-  };
 
   /** 通知等级快捷入口（与 message 风格一致，但持久不自动消失） */
   const notice = {

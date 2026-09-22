@@ -62,9 +62,8 @@ export const setLineCharChord = (
 };
 
 /** 删除某行全部槽位（歌词行删除时的 GC） */
-export const deleteLineSlots = (chordMap: Map<string, ChordLineSlots>, lineId: string): void => {
-  chordMap.delete(lineId);
-};
+export const deleteLineSlots = (chordMap: Map<string, ChordLineSlots>, lineId: string): void =>
+  void chordMap.delete(lineId);
 
 // ===== 以下为兼容层：旧扁平槽位 key（line_{lineId}_{char|start|end}_{index}）的构造/解析 ====
 // v7 起内存结构已按行分组，这些仅用于：文本编解码的 SLOTS 段、旧备份迁移读取、以及

@@ -18,11 +18,21 @@
     ref="popoverRef"
   >
     <template #trigger="{ isOpen: slotIsOpen, pinToggle }">
-      <slot :pin-toggle :is-open="slotIsOpen" name="trigger" />
+      <slot v-bind="$attrs" :pin-toggle :is-open="slotIsOpen" name="trigger" />
     </template>
 
     <div :class="panelInnerClass" @keydown="handleMenuKeydown($event)" ref="menuBoxRef" role="menu" tabindex="-1">
-      <MenuItems :items :panel-class :panel-scrollbar :size :title :on-select="handleItemSelect" ref="itemsRef" />
+      <MenuItems
+        :items
+        :model
+        :panel-class
+        :panel-scrollbar
+        :size
+        :title
+        :on-pick="handlePick"
+        :on-select="handleItemSelect"
+        ref="itemsRef"
+      />
     </div>
   </BasePopover>
 
@@ -34,7 +44,9 @@
       class="context-menu-trigger-wrapper contents"
       ref="triggerWrapperRef"
     >
-      <slot :is-open />
+      <!-- $attrs 以插槽 props 下发（本层是 display:contents，class 落在这里对布局无效）：
+           调用方用 `#="{ isOpen, ...rest }"` 收下，再 `v-bind="rest"` 落到自己触发器的目标元素上 -->
+      <slot v-bind="$attrs" :is-open />
     </div>
 
     <BasePopover
@@ -48,13 +60,23 @@
       :placement
       :virtual-ref
       :auto-focus="false"
-      :context-trigger-el="triggerWrapperRef"
+      :context-trigger-el="contextTriggerEl ?? triggerWrapperRef"
       @close="handlePopoverClose()"
       aria-label="菜单"
       ref="popoverRef"
     >
       <div :class="panelInnerClass" @keydown="handleMenuKeydown($event)" ref="menuBoxRef" role="menu" tabindex="-1">
-        <MenuItems :items :panel-class :panel-scrollbar :size :title :on-select="handleItemSelect" ref="itemsRef" />
+        <MenuItems
+          :items
+          :model
+          :panel-class
+          :panel-scrollbar
+          :size
+          :title
+          :on-pick="handlePick"
+          :on-select="handleItemSelect"
+          ref="itemsRef"
+        />
       </div>
     </BasePopover>
   </template>
@@ -80,10 +102,19 @@ const mutexCloseRef = ref<((reason?: string) => void) | null>(null);
 </script>
 
 <script setup lang="ts">
+// inheritAttrs:false + 把 $attrs 经**插槽 props** 下发（两个分支的触发器插槽各绑一次，见模板）：
+// 本组件没有能承接 attrs 的单一 DOM 落点 ——
+//   ① 触发器始终由调用方经插槽自带（isRadioTrigger 分支是 `trigger` 插槽，contextmenu 分支是默认插槽）；
+//   ② contextmenu 分支的包裹层是 `display: contents`（不生成盒子），class 落上去对布局无效，
+//      aria-* 落在 contents 元素上在辅助技术里也不可靠；
+//   ③ 面板是 Teleport 到 body 的浮层，调用方的 class 更不该落到那里。
+// 故把 attrs 作为插槽 props 交给调用方，由它决定落到自己触发器的哪个元素上：
+// `#="{ isOpen, ...rest }"` + 在目标元素上 `v-bind="rest"`。
 defineOptions({ name: 'BaseMenu', inheritAttrs: false });
 
 const {
   items,
+  model = undefined,
   trigger = 'hover',
   placement: placementProp = undefined,
   size = 'md',
@@ -96,9 +127,16 @@ const {
   panelStyle = {},
   closeOnContextTriggerClick = true,
   panelScrollbar = false,
+  contextTriggerEl = null,
 } = defineProps<{
   /** 菜单项数据列表（支持 children 级联子菜单） */
   items: MenuItem[];
+  /**
+   * 单选组：本层当前值。给出后，带 `value` 的菜单项勾选态由 `item.value === model` 现算，
+   * 点击时抛 `pick` 事件 —— 调用方只需描述「有哪些项」，勾选与点击都不必逐项手写。
+   * 不传则完全退回 `item.checked` / `item.action` 语义。
+   */
+  model?: string;
   /** 触发方式：hover（悬停，含点击钉住） | click（左键点击） | contextmenu（右键） */
   trigger?: 'hover' | 'click' | 'contextmenu';
   /** 浮层相对锚点的定位方位；默认 contextmenu→bottom-start（鼠标坐标），其余→bottom-end */
@@ -121,12 +159,24 @@ const {
   panelStyle?: CSSProperties;
   /** 右键分支：左键点击触发区内部时是否关闭浮层 */
   closeOnContextTriggerClick?: boolean;
+  /**
+   * 右键分支：承载右键的「触发区域」元素。
+   *
+   * 默认退化为内部包裹层（.context-menu-trigger-wrapper），它只包住默认插槽 —— 于是「插槽为空」
+   * 的用法（菜单单例挂在列表外、右键由容器 contextmenu 委托处理的列表级场景）判定恒为区域外。
+   * BasePopover 的全局 contextmenu 走**捕获阶段**，早于容器上的委托处理，会先把菜单关掉，
+   * 委托再调用 openMenuAt 时 wasOpen 已是 false → 表现为菜单重放入场动画，而不是复用同一实例
+   * 从旧坐标滑到新坐标。这类用法必须把真实容器传进来。
+   */
+  contextTriggerEl?: HTMLElement | null;
   /** 面板与级联子面板是否用 v-scrollbar 自绘滚动条（替换原生滚动条）；透传 BasePopover / MenuItems */
   panelScrollbar?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'select', item: MenuItem): void;
+  /** 单选组：被点中的项带 `value` 时抛出，参数即该项的 value（`select` 仍照常抛） */
+  (e: 'pick', value: string): void;
   (e: 'close'): void;
 }>();
 
@@ -161,9 +211,7 @@ const panelInnerClass = computed(() => [menuSizeClass.value, 'context-menu-inner
 const virtualRef = computed(() => (trigger === 'contextmenu' ? createVirtualElementRect(x.value, y.value) : null));
 
 /** 关闭本菜单并清理全局互斥记录 */
-const closeMenu = (reason = 'unmarked') => {
-  popoverRef.value?.close(`menu:${reason}`);
-};
+const closeMenu = (reason = 'unmarked') => void popoverRef.value?.close(`menu:${reason}`);
 
 /** 互斥登记：打开时关掉其他菜单并登记自己，关闭时清空指向自己的登记 */
 watch(isOpen, val => {
@@ -188,6 +236,9 @@ const handlePopoverClose = () => {
 
   emit('close');
 };
+
+/** 单选组选中值：转发给调用方（由 MenuItems 的 onPick 触发，级联子层则走 item.onPick 不上抛） */
+const handlePick = (value: string) => emit('pick', value);
 
 /** 菜单项选中：向上派发 → 执行动作 → 非 keepOpen 项关闭浮层 */
 const handleItemSelect = (item: MenuItem) => {
