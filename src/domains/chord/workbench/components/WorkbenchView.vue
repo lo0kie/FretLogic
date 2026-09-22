@@ -3,7 +3,7 @@
     <div class="relative flex size-full items-start overflow-auto px-2xl pt-2xl pb-3xl">
       <!-- 交互指板卡片：点击/编辑即写和弦草稿，含横按标记与和弦名直改 -->
       <div
-        class="pointer-events-auto relative z-base mx-auto flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel/90 px-2xl py-xl shadow-panel backdrop-blur-lg transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg hover:delay-150"
+        class="pointer-events-auto relative z-base mx-auto flex shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel px-2xl py-xl shadow-panel transition-[border-color,box-shadow] duration-slow ease-sidebar hover:border-border-base hover:shadow-lg hover:delay-150"
       >
         <Fretboard
           :chord="editorStore.draftChord"
@@ -34,10 +34,11 @@
             <div
               v-for="panelId in panels"
               :key="panelId"
-              class="w-full overflow-hidden rounded-xl border border-glass-border bg-surface-panel p-xs"
+              class="group/panel w-full overflow-hidden rounded-xl border border-glass-border bg-surface-panel p-xs"
             >
               <BaseCollapse
-                :description="PANEL_META[panelId].description"
+                :description="panelDescription(panelId)"
+                :emphasize-on-expand="false"
                 :expanded="getPanelExpanded(panelId)"
                 :icon="PANEL_META[panelId].icon"
                 :title="PANEL_META[panelId].title"
@@ -45,6 +46,25 @@
                 initial-auto
                 class="panel-title-row"
               >
+                <!-- 拖拽把手的可发现性线索：排序的 handle 就是这个折叠头（见下方 useSortableList 的
+                     handle: '.panel-title-row'），但折叠头外观与普通折叠头毫无差别，用户无从得知
+                     标题栏可以拖。悬停整张面板卡片时在标题后淡入抓手图标（卡片带 group/panel）——
+                     只悬停头部触发的话可发现性仍受限于「用户先注意到头部」，整卡悬停的命中面大得多。
+                     常驻会污染四个面板头，故默认 opacity-0，悬停整卡时淡入（图标占位始终保留，
+                     不产生布局跳动）。
+                     过渡只留 opacity、位移已去掉：位移原本写 translate-x-1 → 0，但 Tailwind v4 的
+                     translate-x-* 落在 `translate` 独立属性上，而 transition-[opacity,transform] 并不
+                     覆盖它 —— 位移从头到尾没有真正过渡过，hover 时是瞬跳 4px（淡入平滑、位置突跳，
+                     观感就像掉帧）。去掉后零视觉损失（非 hover 态本就不可见、占位也不变），
+                     过渡属性还从两个收窄为一个合成属性。
+                     注：触屏没有 hover 状态，此线索对触屏无效，触屏仍依赖长按拖拽。 -->
+                <template #trailing>
+                  <BaseIcon
+                    class="shrink-0 cursor-grab text-fg-muted opacity-0 transition-opacity duration-base ease-out group-hover/panel:opacity-100"
+                    icon-size="sm"
+                    name="grip-vertical"
+                  />
+                </template>
                 <!-- 简写偏好显式传给「和弦分析」面板（其余面板传 undefined 不产生多余属性）：
                    简写只对工作台场景开放，由本视图按场景传入，组件与指令均不自行读取设置 -->
                 <component
@@ -105,6 +125,7 @@ import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import BaseFloatingPill from '@/platform/ui/floating-bar/BaseFloatingPill.vue';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
@@ -112,6 +133,7 @@ import {
   useChordDraftEditing,
   useChordDraftSaveState,
 } from '@/domains/chord/workbench/composables/useChordDraftEditing';
+import { useChordVariants } from '@/domains/chord/workbench/composables/useChordVariants';
 import { useWorkbenchPanelExpanded } from '@/domains/chord/workbench/composables/useWorkbenchPanelExpanded';
 import { useWorkbenchPanelsOrder } from '@/domains/chord/workbench/composables/useWorkbenchPanelsOrder';
 import { useWorkbenchRouteSync } from '@/domains/chord/workbench/composables/useWorkbenchRouteSync';
@@ -168,6 +190,20 @@ const PANEL_META: Record<WorkbenchPanelId, { icon: IconName; title: string; desc
       storageKey: STORAGE_KEYS.WORKBENCH_EXPORT_COLLAPSED,
     },
   };
+
+/**
+ * 折叠头 description：多指法面板额外带上候选总数。
+ * 该面板是横向滚动列表，边缘渐隐（BaseScrollArea 的 fade）提示很弱——变体数只比可视区宽一点点时
+ * 几乎看不出来，用户会以为「就这么多」而漏看后面的变体；标题上给出总数即可消除这个误判。
+ * 与列表渲染共用同一份判定（useChordVariants），避免标题数与实际卡片数漂移。
+ */
+const { variants, hasVariants } = useChordVariants();
+
+const panelDescription = (panelId: WorkbenchPanelId): string => {
+  const base = PANEL_META[panelId].description;
+  if (panelId !== 'variants' || !hasVariants.value) return base;
+  return `${base} · 共 ${variants.value.length} 个`;
+};
 
 /** 展开态持久化：每面板独立实例（v-for 循环内不能调用 hook，故按 panelId 逐一索引调用） */
 const panelExpanded: Record<WorkbenchPanelId, Ref<boolean>> = {

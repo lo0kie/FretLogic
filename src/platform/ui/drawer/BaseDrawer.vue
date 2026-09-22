@@ -11,7 +11,7 @@
         v-bind="$attrs"
         v-if="destroyOnClose ? visible : true"
         v-show="visible"
-        :class="[overlayAlignClass, mask ? 'bg-black/50' : 'pointer-events-none bg-transparent']"
+        :class="[overlayAlignClass, mask ? 'bg-overlay' : 'pointer-events-none bg-transparent']"
         :style="{ zIndex: overlayZ > 0 ? overlayZ : undefined }"
         @click.self="handleMaskClick($event)"
         @mousedown="handleMaskMousedown($event)"
@@ -54,8 +54,8 @@
                 @click="close('close')"
                 icon-only
                 aria-label="关闭"
-                class="p-1.5!"
                 icon="x"
+                icon-inset="sm"
                 icon-size="xl"
                 icon-stroke="bold"
                 size="sm"

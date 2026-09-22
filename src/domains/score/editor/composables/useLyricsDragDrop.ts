@@ -1,7 +1,6 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import { parseSlotKey } from '@/domains/score/model/chordSlots';
 import { useRafThrottle } from '@/platform/composables/useRafThrottle';
 import { logger } from '@/platform/utils/logger';
 
@@ -136,7 +135,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     return true;
   };
 
-  /** 按当前落点执行落地（空槽=移动、占用槽=替换），无有效目标返回 false */
+  /** 按当前落点执行落地（空槽=移动、占用槽=交换），无有效目标返回 false */
   const resolveLandingAction = (): boolean => {
     if (!isDragging.value || !dragOverSlotKey.value || !scoreEditor.activeSong) return false;
 
@@ -151,21 +150,13 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
     if (draggingSlotKey.value === targetKey || !activeChord) return false;
 
-    // 同行同类边和弦（行首/行尾）拖拽是列表内重排，必须走 swapOrMoveSlotChords，
-    // 否则 moveSlotChord 的「源清空 + 目标覆盖」会破坏边和弦列表（[A,B] 拖 start_0→start_1 只剩 [A]）
-    const sourceParsed = parseSlotKey(draggingSlotKey.value);
-    const targetParsed = parseSlotKey(targetKey);
-    const isEdgeReorder =
-      sourceParsed &&
-      targetParsed &&
-      sourceParsed.type !== 'char' &&
-      targetParsed.type !== 'char' &&
-      sourceParsed.lineId === targetParsed.lineId &&
-      sourceParsed.type === targetParsed.type;
-    if (isEdgeReorder) scoreEditor.swapSlotChords(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
-    else
-      // 其它落点保留「移动」语义：空槽搬移、占用槽覆盖（替换），数据层同为「目标覆盖 + 源清空」
-      scoreEditor.moveSlotChord(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
+    // 槽位间拖拽统一走 swapOrMoveSlotChords，由它按落点分派：
+    // - 落点已有和弦 → 交换（两处互换，**源槽位不落空**）；
+    // - 落点为空 → 移动（源清空）；
+    // - 同行同类边和弦（行首/行尾）→ 列表内插入式重排（避免「目标覆盖 + 源清空」把边和弦列表缩短）。
+    // 此前只有第三种情况走本函数，前两种落到 moveSlotChord —— 那是「目标覆盖 + 源清空」，
+    // 拖到占用槽会把源槽位清掉，与「交换」预期不符，故改为无条件走本函数。
+    scoreEditor.swapSlotChords(draggingSlotKey.value as SlotKey, targetKey as SlotKey);
 
     return true;
   };
@@ -224,9 +215,12 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
 
       if (startPointer.pointerType === 'touch') {
         if (distance > 10 && longPressTimer) {
+          // 手指滑动超阈值：放弃长按起拖意图并释放按压态（activeChord 复位）。
+          // 释放必须做——touchmove 守卫按 activeChord 判定，不复位的话这次手势
+          // 会一直被 preventDefault，用户从此无法从槽位上滑动滚动歌词。
           clearTimeout(longPressTimer);
           longPressTimer = null;
-          setPressArming(false);
+          resetDragState();
         }
       } else if (distance >= DRAG_THRESHOLD) startDrag(e.clientX, e.clientY);
 
@@ -351,11 +345,23 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
       armLongPressStart(currentPointerPos.x, currentPointerPos.y);
   };
 
+  /**
+   * 触摸滚动守卫：长按等待期与拖拽进行中，阻止浏览器把这次触摸接管成页面滚动。
+   * 槽位是 touch-action: pan-x pan-y（平时要能滑动滚歌词），浏览器一旦起滚就派发
+   * pointercancel，长按拖拽直接被杀——这是触摸端拖拽不可用的根因。
+   * 在首个 touchmove 上 preventDefault（非被动监听）即可阻止本次手势起滚；
+   * 前提是起滚尚未发生（长按要求 10px 内静止，通常成立）。按压态释放后守卫自动放行。
+   */
+  const handleTouchMove = (e: TouchEvent) => {
+    if (activeChord !== null) e.preventDefault();
+  };
+
   onMounted(() => {
     window.addEventListener('pointermove', handleGlobalPointerMove, { passive: false });
     window.addEventListener('pointerup', handleGlobalPointerUp);
     window.addEventListener('pointercancel', handleGlobalPointerCancel);
     window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
   });
 
   onBeforeUnmount(() => {
@@ -363,6 +369,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     window.removeEventListener('pointerup', handleGlobalPointerUp);
     window.removeEventListener('pointercancel', handleGlobalPointerCancel);
     window.removeEventListener('blur', handleWindowBlur);
+    window.removeEventListener('touchmove', handleTouchMove);
     window.removeEventListener('contextmenu', preventContextMenu, true);
     if (longPressTimer) clearTimeout(longPressTimer);
     stopAutoScroll();

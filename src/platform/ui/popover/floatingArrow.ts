@@ -47,8 +47,6 @@ export interface FloatingArrowStyleInput {
   background: string;
   /** 箭头边框色（与面板边框同源） */
   borderColor: string;
-  /** 面板若有 backdrop-blur，箭头必须同步，否则半透明背景下面板与箭头出现色差 */
-  backdropFilter?: string;
   /** 箭头相对面板的堆叠层级，默认 0（垫在面板之下） */
   zIndex?: number;
   /** 箭头方块边长（px），默认 8；贴边偏移自动按 -(size/2 - 1) 计算 */
@@ -67,7 +65,6 @@ export function buildFloatingArrowStyle({
   placement,
   background,
   borderColor,
-  backdropFilter,
   zIndex = 0,
   size = 12,
   borderWidth = 0, // 新增默认值 0
@@ -96,8 +93,6 @@ export function buildFloatingArrowStyle({
     borderColor,
     transform: 'rotate(45deg)',
     clipPath: ARROW_CLIP[staticSide],
-    backdropFilter,
-    WebkitBackdropFilter: backdropFilter,
     left: finalX != null ? `${finalX}px` : '',
     top: finalY != null ? `${finalY}px` : '',
     right: '',

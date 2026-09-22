@@ -5,6 +5,8 @@
  * 纯声明、零运行时依赖（对 sortablejs 只取 type），被 order / preview / index 共同引用。
  */
 
+import { EASE_STANDARD } from '@/platform/utils/constants';
+
 import type Sortable from 'sortablejs';
 import type { ComponentPublicInstance, MaybeRefOrGetter } from 'vue';
 
@@ -22,8 +24,9 @@ export const ACTIVE_CLASS = 'drag-active-style';
 export const DRAG_ACTIVATE_THRESHOLD = 5;
 /** 自建拖拽影像：拖拽期间挂在 body 上跟随指针，样式见 main.scss 的 .drag-preview */
 export const PREVIEW_CLASS = 'drag-preview';
-/** 复位动画缓动，与 tokens.scss 的 $bezier-standard 一致（JS 侧拿不到 SCSS 变量，只能落字面量） */
-export const PREVIEW_SETTLE_EASING = 'cubic-bezier(0.25, 0.1, 0.25, 1)';
+/** 复位动画缓动：取全局标准曲线（JS 侧唯一的字面量定义在 EASE_STANDARD，见其注释）。
+ *  本常量有两个通道：order.ts 用它拼 CSS transition 串、preview.ts 用它喂 WAAPI —— 同源一份 */
+export const PREVIEW_SETTLE_EASING = EASE_STANDARD;
 /** 拖拽时影像的放大倍数；由 applyPreviewTransform 写进 transform，main.scss 不再设独立 scale 属性 */
 export const PREVIEW_SCALE = 1.02;
 /** Sortable 自带 fallback 克隆的隐藏类：只用它做几何载体，视觉一律交给 .drag-preview */

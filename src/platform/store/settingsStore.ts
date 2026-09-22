@@ -83,6 +83,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 乐谱乐理显示偏好：是否绘制大横按（排列和弦/预览共用）
   const scoreShowBarre = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_BARRE, true);
+  // 指板位图是否忽略首末的空品格（排列和弦/预览共用）。缺省 false = 画满 fretCount 列的全指板，
+  // 与既有视觉零差异；开启后按实际用到的品位收紧品窗（不低于 MIN_FRET_COUNT 列）
+  const scoreTrimEmptyEdgeFrets = useStorage<boolean>(STORAGE_KEYS.SCORE_TRIM_EMPTY_EDGE_FRETS, false);
 
   // 预览/导出：是否显示页脚页码（仅 A4 分页预览生效）
   const scoreShowFooter = useStorage<boolean>(STORAGE_KEYS.SCORE_SHOW_FOOTER, true);
@@ -214,7 +217,10 @@ export const useSettingsStore = defineStore('settings', () => {
     if (prefs.scoreLayoutAlign === 'start' || prefs.scoreLayoutAlign === 'center')
       scoreLayoutAlign.value = prefs.scoreLayoutAlign;
     if (typeof prefs.scoreShowBarre === 'boolean') scoreShowBarre.value = prefs.scoreShowBarre;
+    if (typeof prefs.scoreTrimEmptyEdgeFrets === 'boolean')
+      scoreTrimEmptyEdgeFrets.value = prefs.scoreTrimEmptyEdgeFrets;
     if (typeof prefs.scoreShowFooter === 'boolean') scoreShowFooter.value = prefs.scoreShowFooter;
+    if (typeof prefs.scoreIgnoreEmptySpace === 'boolean') scoreIgnoreEmptySpace.value = prefs.scoreIgnoreEmptySpace;
     if (
       prefs.scoreLyricsFontWeight === 'light' ||
       prefs.scoreLyricsFontWeight === 'regular' ||
@@ -246,6 +252,7 @@ export const useSettingsStore = defineStore('settings', () => {
     scoreChordShorthand,
     scoreLayoutAlign,
     scoreShowBarre,
+    scoreTrimEmptyEdgeFrets,
     scoreShowFooter,
     scoreIgnoreEmptySpace,
     scoreLyricsFontWeight,

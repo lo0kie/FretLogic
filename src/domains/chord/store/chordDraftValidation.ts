@@ -1,7 +1,7 @@
 /**
  * 和弦编辑草稿的保存前校验（纯逻辑，与 store 无关）：
  * 依次校验名称非空、语法合法、分组存在且已选中；编辑模式下识别无修改并保留 createdAt；
- * 同分组内指纹重复视为重复和弦；返回值带低音弦一致性警告。
+ * 同分组内「指纹 + 横按（含指序）」均相同才视为重复和弦；返回值带低音弦一致性警告。
  */
 import { createChord } from '@/domains/chord/theory/entityFactories';
 import {
@@ -90,9 +90,15 @@ export const validateChordDraft = (draft: Chord, isEditing: boolean, ctx: ChordD
     payload.updatedAt = Date.now();
   }
 
+  // 去重口径与 D26 全局一致：指纹不含 barres，必须补比横按（含指序），否则
+  // 「同指法不同横按」会被这里判成重复而拒存，却又能通过读库去重（chordRepository）与
+  // 合并去重（chordMergeOps）——三处口径不一致时，界面拒存而底层允许共存，用户无从理解。
   const isDuplicate = ctx.savedChords.some(
     existing =>
-      existing.id !== id && existing.groupId === payload.groupId && computeChordFingerprint(existing) === fingerprint
+      existing.id !== id &&
+      existing.groupId === payload.groupId &&
+      computeChordFingerprint(existing) === fingerprint &&
+      areBarresEqual(existing.barres, payload.barres)
   );
   if (isDuplicate) return { ok: false, reason: 'DUPLICATE_FINGERPRINT', cleanName };
 

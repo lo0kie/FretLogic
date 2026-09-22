@@ -33,13 +33,57 @@ import type {
  */
 let pagePool: { canvas: OffscreenCanvas; ctx: OffscreenCanvasRenderingContext2D } | null = null;
 
-/** 取整页画布与上下文（需要时按新尺寸重建），返回前已重置变换、清底交由调用方填充背景 */
+/**
+ * 浏览器单张画布的尺寸硬上限（Blink 判定 canvas 位图是否合法的口径：单边 65535px，总面积 2^28）。
+ *
+ * 超限的画布会被判为非法尺寸——出问题的那个维度在设置时被丢弃、留在 0，画布从此不可用，
+ * 之后任何 convertToBlob 都抛「The size of the OffscreenCanvas is zero」：报错指向「零尺寸」，
+ * 真实原因却是尺寸超限。故必须在**构造之前**挡住，不能等它在编码时以零尺寸的形态爆开。
+ *
+ * 长图是本项目唯一高度随内容无界增长的画布：A4 分页固定 794×1123，长图宽度也被
+ * NORMAL_CONTENT_MAX_WIDTH（880）钳在 992 逻辑 px 内，所以总面积上限（约 2.68 亿 px）
+ * 永远不会先于单边上限触发——只查单边即可。
+ */
+const MAX_CANVAS_EDGE = 65535;
+
+/**
+ * 长图渲染比的下限。0.5 是「和弦名不小于 8px 设备像素」的可读性底线（原始字号 16px）：
+ * 再低就该显式失败并引导分页导出，而不是产出一张放大也看不清的图。
+ */
+const MIN_LONG_IMAGE_RATIO = 0.5;
+
+/**
+ * 按内容逻辑尺寸反推长图渲染比：优先保留 PIXEL_RATIO 的超采样，放不下才逐级往下降，
+ * 保证画布尺寸在任何内容长度下都合法；跌破下限即显式失败（见 MIN_LONG_IMAGE_RATIO）。
+ *
+ * 比例小于 1 时**不**重光栅化指板位图：位图缓存固定按 PIXEL_RATIO 光栅化，贴图时由 canvas
+ * 统一降采样。缓存分辨率与渲染比解耦是必须的——否则每次比例变化都要清空整条位图缓存，
+ * 跨次渲染复用（改歌词不换和弦即命中）就没了。
+ *
+ * device 尺寸是 Math.round(逻辑 × 比例)，留 1px 余量避免取整后正好顶到上限被判非法。
+ */
+function resolveLongImageRatio(width: number, height: number): number {
+  const ratio = Math.min(LAYOUT.PIXEL_RATIO, (MAX_CANVAS_EDGE - 1) / Math.max(width, height));
+  if (ratio >= MIN_LONG_IMAGE_RATIO) return ratio;
+
+  throw new Error(
+    `乐谱过长：长图即使在最小可读比例（${MIN_LONG_IMAGE_RATIO}×）下也需 ` +
+      `${Math.ceil(height * MIN_LONG_IMAGE_RATIO)}px 高度，超出浏览器单张图片上限（${MAX_CANVAS_EDGE}px）。` +
+      '请改用「下载为 PDF」或「下载为 ZIP」分页导出。'
+  );
+}
+
+/**
+ * 取整页画布与上下文（需要时按新尺寸重建），返回前已重置变换、清底交由调用方填充背景。
+ * ratio 缺省为 PIXEL_RATIO 的超采样；长图高度无界，由调用方传入按内容反推的合法比例。
+ */
 function acquirePageCanvas(
   width: number,
-  height: number
+  height: number,
+  ratio: number = LAYOUT.PIXEL_RATIO
 ): { canvas: OffscreenCanvas; ctx: OffscreenCanvasRenderingContext2D } {
-  const deviceW = Math.round(width * LAYOUT.PIXEL_RATIO);
-  const deviceH = Math.round(height * LAYOUT.PIXEL_RATIO);
+  const deviceW = Math.round(width * ratio);
+  const deviceH = Math.round(height * ratio);
   let pool = pagePool;
   if (!pool || pool.canvas.width !== deviceW || pool.canvas.height !== deviceH) {
     const canvas = new OffscreenCanvas(deviceW, deviceH);
@@ -48,7 +92,7 @@ function acquirePageCanvas(
   }
   const { canvas, ctx } = pool;
   // 必须 setTransform 而非 scale：复用画布要重置变换，否则缩放逐页累乘
-  ctx.setTransform(LAYOUT.PIXEL_RATIO, 0, 0, LAYOUT.PIXEL_RATIO, 0, 0);
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   return { canvas, ctx };
 }
 
@@ -97,6 +141,10 @@ export async function composeFooterPages(payload: FooterComposePayload): Promise
  * 长图模式离屏渲染：自适应最宽行宽度绘制整曲为单张 JPEG，返回 Blob。
  * 供「下载为长图」导出与「预估文件尺寸」估算两处复用——估算即真实渲染后取 blob.size，
  * 因此预估值与最终导出文件字节数一致（仅取整误差）。
+ *
+ * 与 A4 分页的本质区别是**高度无界**（随行数增长），而浏览器对单张画布有硬尺寸上限，
+ * 故这里不固定 PIXEL_RATIO 超采样，而是按内容反推一个合法渲染比（见 resolveLongImageRatio）：
+ * 常规长度下与固定超采样逐像素等价，超长内容才逐级降比例，降无可降则显式失败。
  */
 export async function renderLongImageBlob(
   lines: ExportLineItem[],
@@ -132,7 +180,9 @@ export async function renderLongImageBlob(
   const canvasW = Math.max(LAYOUT.NORMAL_CANVAS_MIN_WIDTH, Math.round(maxSegmentW + pageMargin * 2));
   const canvasH = pageMargin + headerH + totalContentH + totalGapsH + pageMargin;
 
-  const { canvas, ctx } = acquirePageCanvas(canvasW, canvasH);
+  // 先按内容尺寸反推合法渲染比再建画布：尺寸超限的画布会在 convertToBlob 处以「零尺寸」的
+  // 形态爆开、看不出真实原因（见 MAX_CANVAS_EDGE），必须挡在构造之前
+  const { canvas, ctx } = acquirePageCanvas(canvasW, canvasH, resolveLongImageRatio(canvasW, canvasH));
 
   // 清底后铺背景：画布复用，背景色若含透明度则需先清掉上一页残留
   ctx.clearRect(0, 0, canvasW, canvasH);

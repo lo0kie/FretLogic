@@ -81,7 +81,7 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     eventFilter: debounceFilter(PERSIST_DEBOUNCE_MS, { maxWait: PERSIST_MAX_WAIT_MS }),
     serializer: percentScaleSerializer,
   });
-  /** 编辑视图（排列和弦）实际生效的缩放：ChordSlotCell / ScoreInteractiveArea 消费 */
+  /** 编辑视图（排列和弦）实际生效的缩放：ChordSlot / ScoreInteractiveArea 消费 */
   const effectiveFontScale = computed(() => arrangeFontScale.value);
   const effectiveFretboardScale = computed(() => arrangeFretboardScale.value);
 

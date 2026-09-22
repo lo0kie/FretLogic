@@ -28,17 +28,21 @@
            高度上限仍由 panelClass 提供。指令经 enabled 绑定值惰性启停，面板保持单分支——
            禁止改回 Transition 内 v-if/v-else 双分支（分支切换会触发 insertBefore 补丁错误） -->
       <Transition :name="transitionName" @after-leave="handleAfterLeave()" appear>
+        <!-- 面板**不得**带 z-index：面板一旦成为层叠上下文，内部的吸附头（z-sticky）就被封在里面，
+             永远压不过兄弟节点 scrollbar-layer（z-panel）→ 滚动条会横穿吸附中的分组标题。
+             去掉 z-index 后面板仍在流内、位于 layer 之下（layer 有 z-index 且 DOM 更靠后），
+             滚动条照旧盖在面板底色与内容之上，而吸附头能逃出面板、压在滚动条之上 -->
         <div
           v-if="isShown"
           v-scrollbar="panelScrollbarBinding"
           :aria-label
           :aria-modal="false"
-          :class="panelClass"
+          :class="[panelClass, panelRadius === 'xl' ? 'rounded-xl' : 'rounded-md']"
           :style="mergedPanelStyle"
           @focusout="handleFocusOut($event)"
           @mouseenter="handlePanelMouseEnter()"
           @mouseleave="handlePanelMouseLeave($event)"
-          class="popover-panel relative z-panel rounded-md border border-glass-border bg-surface-elevated shadow-floating backdrop-blur-xl outline-none"
+          class="popover-panel relative border border-glass-border bg-surface-elevated shadow-floating outline-none"
           ref="panelRef"
           role="dialog"
           tabindex="-1"
@@ -115,6 +119,7 @@ const {
   disabledTeleport = false,
   ariaLabel = '弹出面板',
   panelClass = '',
+  panelRadius = 'md',
   panelStyle = {},
   transitionName = 'v-transition-scale',
   virtualRef = null,
@@ -157,6 +162,9 @@ const {
   ariaLabel?: string;
   /** 附加到浮层面板上的类名 */
   panelClass?: string | string[] | Record<string, boolean>;
+  /** 面板圆角档位：默认 `md`；搜索面板等需要更大圆角时传 `xl`
+   *  （此前消费方只能拿 `rounded-xl!` 硬压组件默认值 —— 那是「组件缺变体」的症状） */
+  panelRadius?: 'md' | 'xl';
   /** 附加到浮层面板上的内联样式 */
   panelStyle?: CSSProperties;
   /** 浮层进出场过渡动画名 */
@@ -264,7 +272,6 @@ const arrowStyle = computed<CSSProperties>(() => {
     placement: currentPlacement.value || placement,
     background: 'var(--color-surface-elevated)',
     borderColor: 'var(--color-glass-border)',
-    backdropFilter: 'var(--blur-xl)',
     borderWidth: 1, // 直接告诉构建函数：父容器有 1px 边框，帮我修掉偏差
   });
 });

@@ -26,6 +26,8 @@
  * 挖孔策略：目标内标记 data-ring-punchout 的外凸装饰（如和弦卡片右上角骑缝的变体徽标）
  * 会与外扩环带重叠，而它们与目标同处页面内容层，z-index 无法越过 body 顶层的环；
  * 逐帧把这些元素的矩形从环上擦除（挖孔），装饰即从环上方透出。
+ * 擦除按**盒子几何**动手，所以与下面的遮挡物一样，只对**当前可见**的装饰挖孔（见 isElementVisible）：
+ * 被 CSS 隐藏却仍留在 DOM 里的装饰，挖出的孔对不上任何东西，看着就是环上平白缺了一块。
  *
  * 可见区域策略：环挂在 body 顶层、**不受任何容器 overflow 裁剪**——这既是它存在的理由
  * （贴边目标的 4px 外扩圈不被容器切掉），也是它的副作用：目标滚出滚动容器后环不会跟着消失，
@@ -38,11 +40,36 @@
  *   那是聚焦 / 失焦的淡入淡出语义，而滚出视窗是同一聚焦态内的几何变化，闪一次渐变反而突兀）。
  *   判据用环的外轮廓而非目标本身，否则「贴着容器边、完整可见」的目标会被误杀。
  *
+ * 透明度跟随策略：环挂在 body 顶层，**不在目标的任何祖先子树里**——而 opacity 只沿**后代**做分组
+ * 相乘，所以目标自己（或其浮层容器）淡出时，祖先上的 opacity 完全传播不到环上：面板淡到三成，环
+ * 还是全不透明，看起来就是「面板走了，环还孤零零飘在原处」。这条规律没有 CSS 解法，只能在 JS 侧
+ * 补一次乘法：show() 时把目标自身到 body 的样式对象快照下来（getComputedStyle 返回**活对象**，
+ * 缓存它、逐帧读 .opacity 即得当前插值），逐帧相乘后写到 **canvas** 的 opacity 上。
+ *
+ * 既然是逐帧直写，就绝不能写进 ring 自己的 opacity——那条 140ms 过渡会因每帧重设起点而永远追不上
+ * 终点，焦点切换变成拖尾。故分两层，由合成器自动相乘：
+ *
+ *   ring    opacity = 焦点语义的 0/1（带 140ms 过渡）
+ *     └ canvas opacity = 目标可见透明度的乘积（无过渡，逐帧直写）
+ *
+ * 快照**不做预判筛选**（如「只收带 opacity 过渡的」）：离场过渡的 transition 只存在于过渡期间
+ * （v-transition-scale-* 是过渡期才挂上的类名），面板静止时的 computed transition-property 并不含
+ * opacity，聚焦那一刻筛一遍必然把面板漏掉，之后它怎么淡都轮不到被读。全链收下来最坏也只是每帧
+ * 十来次属性读取（活对象已缓存，不必重取），远小于同帧的画布重绘。整棵树淡到近乎不可见时
+ * 直接清画布，与「滚出视窗」「禁用」同一语义——同一聚焦态内目标自己变了样子，不走 opacity 过渡。
+ *
  * 遮挡物策略：滚动容器内还有一类「视觉上盖住内容、却不在裁剪祖先里」的元素——sticky 条
  * （折叠面板 / 分组列表的吸顶标题、吸底操作条、吸边列）。它们位于定位层，绘制顺序天然盖住同容器内的
  * 静态内容，而环挂在 body 顶层、层号远高于它们，于是目标滑到 sticky 下面时环反而画在 sticky 之上。
  * 所以把 sticky 元素的矩形也从环上擦除（与挖孔共用同一套 destination-out 动作，
  * 天然支持多块重叠——用 clip 做减法会在重叠区「减两次又填回来」）。
+ * 同类还有「既不 sticky、也不在裁剪祖先里」的覆盖元素——自绘滚动条的拇指与滚动气泡：它们挂在滚动容器的
+ * 兄弟位置、层号 29-31，同样越不过顶层环。这类没法由位置特征推断，改为**显式声明**：打
+ * data-ring-occluder 即纳入同一套擦除（轨道不标——它是贴边整条的长条，擦了会把环的整条边吃掉，
+ * 比「轨道被环压住」更刺眼）。
+ * 擦除只对**当前可见**的遮挡物做：滚动条靠 `opacity:0; visibility:hidden` 隐藏（overlay 是宿主的
+ * 兄弟节点，不能用 display:none，否则收不到 hover），盒子仍在、矩形照旧非零，不判可见性就会在
+ * 容器根本没溢出、或滚动条已自动淡出时，从环上挖掉一块空气（观感是「环缺了一角」）。
  * 收集方式是沿目标的祖先链逐层看**同层兄弟**（含目标自己的兄弟与各祖先的兄弟，后者覆盖
  * 「sticky 在滚动容器之外、吸在视口上」的情形），兄弟盒子与环的外轮廓不相交时整棵子树跳过——
  * sticky 元素受包含块约束、跑不出自己的父盒，跳过是安全的。
@@ -71,6 +98,13 @@ import { clamp } from '@/platform/utils/common';
 const FOCUSABLE_OUTLINE_SELECTOR = '[data-focusable-outline]';
 /** 环上需要挖孔让位的外凸装饰标记（与目标同层渲染、但几何上骑出目标边界的元素） */
 const RING_PUNCHOUT_SELECTOR = '[data-ring-punchout]';
+/** 显式声明的遮挡物属性：内容层里「视觉上盖住内容」的覆盖元素（如自绘滚动条的拇指与滚动气泡）。
+ *  它们与目标同处内容层、z-index 越不过 body 顶层的环，只能由环侧擦除（与 sticky 共用同一套动作）。
+ *  与 data-ring-punchout 的分工：挖孔只扫**目标子树内**的外凸装饰，而这类覆盖元素在目标之外
+ *  （滚动条挂在滚动容器的兄弟位置），只有沿祖先链的遮挡物收集才够得着。
+ *  标了属性 ≠ 永远要擦：元素**当前不可见**时不擦（见 isElementVisible）——这条属性声明的是
+ *  「我在内容层且会盖住东西」，而不是「我此刻在屏幕上」。 */
+const RING_OCCLUDER_ATTR = 'data-ring-occluder';
 /** 环边框粗细（px） */
 const RING_WIDTH = 2;
 /** 环相对目标矩形向外扩出的距离（px）：略大于描边宽，形成清晰的悬浮外圈 */
@@ -78,6 +112,11 @@ const RING_OUTSET = 4;
 /** 挖孔矩形相对装饰矩形的四周外扩（px）：getBoundingClientRect 不含 box-shadow，
  *  取 4 略大于 shadow-sm 的外扩量（blur 2 + offset-y 1），把装饰的阴影一并让到孔外。 */
 const PUNCH_INFLATE = 4;
+/** 可见透明度低于该值即视为不可见：整棵祖先链相乘后剩这么点，画出来只是一层看不出的薄雾，
+ *  继续重绘纯属白烧帧——与「滚出视窗」一样直接清画布。
+ *  同一阈值也用于判定**遮挡物 / 骑缝装饰**是否还看得见（见 isElementVisible）：两处的语义都是
+ *  「淡到这个程度就等于没有」，没有必要各定一档。 */
+const ALPHA_EPSILON = 0.005;
 
 /** 视口绝对坐标下的矩形（left/top/right/bottom）；只用几何数值，不依赖 DOMRect 实例 */
 interface Rect {
@@ -166,6 +205,10 @@ export function setupFocusOutlineRing(): () => void {
   let punchTargets: HTMLElement[] = [];
   /** 当前目标的裁剪祖先（overflow 非 visible 的祖先；show 时快照 DOM 成员，几何每帧实测） */
   let clipAncestors: HTMLElement[] = [];
+  /** 目标自身到 body 的样式对象快照（**活对象**，逐帧读 .opacity 得当前插值；见模块头「透明度跟随策略」） */
+  let alphaSources: CSSStyleDeclaration[] = [];
+  /** 上一次写进 canvas 的可见透明度：同值不重写，免得白刷新样式 */
+  let lastAlpha = -1;
   /** 本帧擦除的 sticky 条：逐帧重收集，这里只留最后一帧供控制台查看（擦除本身不依赖历史） */
   let lastOccluders: HTMLElement[] = [];
   let raf = 0;
@@ -248,23 +291,101 @@ export function setupFocusOutlineRing(): () => void {
   };
 
   /**
-   * 收集与 box 相交的子树里的 sticky 元素。
+   * 快照「可见透明度」的读数来源：目标自身 + 一路到 body 的每个祖先，各取其**活**样式对象。
    *
-   * 剪枝：子树根的盒子与 box 不相交就整棵跳过——sticky 元素受包含块约束（只能在父盒子范围内偏移），
-   * 父盒子都够不着 box，它更够不着。剪枝让遍历只碰极少数元素：同级几百张卡片里，只有与环重叠的
-   * 那一两张会被真正深入。
+   * 为什么不留筛选、把整条链全收下：唯一便宜的筛法是「computed 上带 opacity 过渡的才留」，但离场
+   * 过渡的 transition 只存在于过渡期间（v-transition-scale-leave-active 是过渡期才挂上的类名），
+   * 面板静止时 computed transition-property 并不含 opacity —— 聚焦那一刻按它筛，面板必然被漏掉，
+   * 之后无论怎么淡都读不到。收全链最坏是每帧十几次属性读取（活对象已缓存，不必重取），量级远小于
+   * 同帧的画布重绘，不值得为省这点去冒漏判的风险。
+   *
+   * 从目标自身起算：目标自己的 opacity（如禁用外的淡显）同样是它的可见透明度的一部分。
    */
-  const collectStickyWithin = (el: HTMLElement, box: Rect, out: Set<HTMLElement>) => {
-    const b = el.getBoundingClientRect();
-    if (b.right <= box.left || b.left >= box.right || b.bottom <= box.top || b.top >= box.bottom) return;
-    if (getComputedStyle(el).position === 'sticky') out.add(el);
-    for (const child of el.children) collectStickyWithin(child as HTMLElement, box, out);
+  const collectAlphaSources = (el: HTMLElement): CSSStyleDeclaration[] => {
+    const list: CSSStyleDeclaration[] = [];
+    let cur: HTMLElement | null = el;
+    while (cur && cur !== document.body) {
+      list.push(getComputedStyle(cur));
+      cur = cur.parentElement;
+    }
+    return list;
   };
 
   /**
-   * 收集会遮挡环的 sticky 元素：沿目标的祖先链逐层看**同层兄弟**，对每个兄弟做「相交才深入」的
-   * 子树扫描。**每帧调用**（box 传环的外轮廓）——见模块头的「遮挡物策略」：判据与滚动位置有关，
-   * 聚焦时快照会漏掉之后才滑到环下面的头。
+   * 目标当前的**可见透明度** = 自身到 body 每个祖先前 opacity 的乘积。
+   * 浏览器只对**后代**做这层分组相乘（环挂在 body 顶层，不在目标的子树里），所以要自己再乘一遍。
+   *
+   * 返回 0 表示目标已不可见：整棵链乘到 ALPHA_EPSILON 以下，或目标的有效 visibility 非 visible
+   * （visibility 是继承属性，目标自己的 computed 值就是最终生效的那个，不必逐祖先查）。
+   * 读不到数值时按 1 兜底（宁可不透明，也不要因一次异常读数把环整帧擦掉）。
+   */
+  const readEffectiveAlpha = (): number => {
+    if (alphaSources[0] && alphaSources[0].visibility !== 'visible') return 0;
+    let alpha = 1;
+    for (const cs of alphaSources) {
+      const v = Number.parseFloat(cs.opacity);
+      alpha *= Number.isFinite(v) ? v : 1;
+      if (alpha <= ALPHA_EPSILON) return 0;
+    }
+    return alpha;
+  };
+
+  /**
+   * 元素当前是否可见：不可见的元素不该再从环上擦掉一块（挖孔与遮挡物擦除**共用**这一判定）。
+   *
+   * 两条路径都需要它，原因是同一个：`erase` 只按**盒子几何**动手，而本仓的「不可见」普遍不是用
+   * display:none 表达的 —— 盒子仍在文档流里，`getBoundingClientRect` 照旧返回非零矩形。
+   *
+   * - 遮挡物侧，典型是自绘滚动条：它用 `opacity:0; visibility:hidden` 隐藏（overlay 挂在宿主
+   *   **兄弟**位置，不能用 display:none —— 那样连 hover 都收不到），几何还停在最后一次 refreshAll
+   *   写入的位置。于是容器根本没有可滚内容、或滚动条已自动淡出之后，环仍会在滚动条的位置被挖掉
+   *   一块，观感是「环缺了一角」。
+   * - 挖孔侧，骑缝装饰被 CSS 隐藏却仍留在 DOM 里时，环上会多出一个对不上任何东西的缺口。
+   *
+   * 两个属性都要判：本仓存在「只把 opacity 归零、visibility 保持 visible 好继续收 hover」的隐藏
+   * 方式（滚动条轨道即如此，注释见 scrollbarCore 的 ensureGlobalStyle），只判 visibility 会漏。
+   *
+   * 阈值取 ALPHA_EPSILON 而不是「任何小于 1 就算不可见」：滚动条淡出过渡有 250ms，这期间它是半透明
+   * **可见**的，环压在正在淡出的滚动条上同样是穿帮，照擦才对；等它淡到看不出时才停手。
+   *
+   * 只判元素**自身**的 computed：visibility 是继承属性，自身值即最终生效值；opacity 不继承但会沿
+   * 祖先相乘，而本仓的隐藏动作都落在元素自己身上（滚动条显隐类、装饰的 v-show），故不必逐祖先查——
+   * 真按祖先链相乘就得每帧多读一串样式，代价远大于它挡下的那点误判。
+   */
+  const isElementVisible = (el: HTMLElement): boolean => {
+    const cs = getComputedStyle(el);
+    if (cs.visibility !== 'visible') return false;
+    const alpha = Number.parseFloat(cs.opacity);
+    // 读不到数值时按可见兜底：宁多擦一块，也不要因一次异常读数让遮挡物重新被环压住
+    return !Number.isFinite(alpha) || alpha > ALPHA_EPSILON;
+  };
+
+  /**
+   * 收集与 box 相交、且**当前可见**的遮挡物：sticky 元素，以及显式声明 data-ring-occluder 的覆盖元素
+   * （自绘滚动条的拇指 / 滚动气泡 —— 见 RING_OCCLUDER_ATTR）。
+   *
+   * 剪枝：子树根的盒子与 box 不相交就整棵跳过——sticky 元素受包含块约束（只能在父盒子范围内偏移），
+   * 父盒子都够不着 box，它更够不着。剪枝让遍历只碰极少数元素：同级几百张卡片里，只有与环重叠的
+   * 那一两张会被真正深入。显式声明的遮挡物同样满足这条剪枝：与环不相交时它本就不需要被擦除。
+   *
+   * 可见性过滤放在这里而不是擦除循环里：收集本就**逐帧重来**（见 collectOccluders 注释），
+   * 两处判据同帧生效、不会出现「收的时候可见、擦的时候不可见」的窗口；放在收集侧还能顺带
+   * 把它挡在 lastOccluders 之外，省下每帧一次多余的矩形读取与相交判定。
+   */
+  const collectOccludersWithin = (el: HTMLElement, box: Rect, out: Set<HTMLElement>) => {
+    const b = el.getBoundingClientRect();
+    if (b.right <= box.left || b.left >= box.right || b.bottom <= box.top || b.top >= box.bottom) return;
+    // 先查属性再算 computed：属性读取不触发样式计算，绝大多数元素在这一步就短路掉。
+    // 命中候选后还得**当前真的看得见**（见 isElementVisible）——与 box 相交只是「需要擦」的必要条件
+    if ((el.hasAttribute(RING_OCCLUDER_ATTR) || getComputedStyle(el).position === 'sticky') && isElementVisible(el))
+      out.add(el);
+    for (const child of el.children) collectOccludersWithin(child as HTMLElement, box, out);
+  };
+
+  /**
+   * 收集会遮挡环的元素（sticky 与 data-ring-occluder）：沿目标的祖先链逐层看**同层兄弟**，
+   * 对每个兄弟做「相交才深入」的子树扫描。**每帧调用**（box 传环的外轮廓）——见模块头的
+   * 「遮挡物策略」：判据与滚动位置有关，聚焦时快照会漏掉之后才滑到环下面的头。
    *
    * 上到 body 为止，因此既能覆盖滚动容器内的吸顶分组标题 / 吸底操作条，
    * 也能覆盖「sticky 在滚动容器之外、吸在视口上」的页头。
@@ -284,7 +405,7 @@ export function setupFocusOutlineRing(): () => void {
       if (parent)
         for (const sibling of parent.children) {
           if (sibling === cur) continue;
-          collectStickyWithin(sibling as HTMLElement, box, found);
+          collectOccludersWithin(sibling as HTMLElement, box, found);
         }
 
       cur = parent;
@@ -319,6 +440,8 @@ export function setupFocusOutlineRing(): () => void {
     clipAncestors = [];
     lastOccluders = [];
     staticLayerZ = 0;
+    alphaSources = [];
+    lastAlpha = -1;
     if (raf) {
       cancelAnimationFrame(raf);
       raf = 0;
@@ -397,11 +520,15 @@ export function setupFocusOutlineRing(): () => void {
     // 设备像素线后每个像素要么整块在内、要么整块在外，连「被切开一半」的像素都没有，残线无处落脚。
     ctx.globalCompositeOperation = 'destination-out';
 
-    // 挖孔：让目标内骑出边界的外凸装饰（data-ring-punchout）从环上方透出
+    // 挖孔：让目标内骑出边界的外凸装饰（data-ring-punchout）从环上方透出。
+    // 与遮挡物擦除共用一道可见性判定，理由也同一个：装饰被 CSS 隐藏（opacity / visibility）却仍
+    // 留在 DOM 里时，照挖会在环上留一个对不上任何东西的缺口。判在尺寸之后 —— display:none 的装饰
+    // 盒子为零、在这一行就被挡掉，不必为它多读一次样式（见 isElementVisible）。
     for (const punch of punchTargets) {
       if (!punch.isConnected) continue;
       const b = punch.getBoundingClientRect();
       if (b.width <= 0 || b.height <= 0) continue;
+      if (!isElementVisible(punch)) continue;
       erase(
         {
           left: b.left - PUNCH_INFLATE,
@@ -418,6 +545,8 @@ export function setupFocusOutlineRing(): () => void {
     // even-odd / nonzero 那样在重叠区「减两次又填回来」。
     // 收集放在这里、每帧重来一遍：判据是「与环的外轮廓相交」，而相交与否只取决于滚动位置——
     // 聚焦时快照的话，头还停在静态位置时就会被剪枝掉，之后滚到环下面也没人再检查它。
+    // 可见性（opacity / visibility）也已在收集侧过滤掉，此处不必重判：收集与擦除同帧，不存在
+    // 「收的时候可见、擦的时候已淡出」的窗口。
     lastOccluders = collectOccluders(el, region);
     for (const occluder of lastOccluders) {
       if (!occluder.isConnected) continue;
@@ -457,6 +586,22 @@ export function setupFocusOutlineRing(): () => void {
       clearCanvas();
       return;
     }
+    // 透明度跟随：目标所在子树淡出（浮层离场过渡）时环跟着淡——祖先的 opacity 传不到 body 顶层的环上，
+    // 只能自己乘一遍。乘积写在 **canvas** 上（它没有声明过渡），ring 那条 140ms 焦点过渡原样保留，
+    // 两者由合成器自动相乘；若写进 ring 就会让过渡每帧被重置起点、永远追不上终点（焦点切换变拖尾）。
+    const alpha = readEffectiveAlpha();
+    if (alpha === 0) {
+      // 与「滚出视窗」「禁用」同一规则：这是同一聚焦态内目标自己变了样子，不是焦点进出，
+      // 不走 opacity 过渡（否则会闪一次多余的渐隐）。canvas 置 0 是必须的——下次淡回来时它还在那儿。
+      canvas.style.opacity = '0';
+      lastAlpha = 0;
+      clearCanvas();
+      return;
+    }
+    if (alpha !== lastAlpha) {
+      canvas.style.opacity = `${alpha}`;
+      lastAlpha = alpha;
+    }
     // 可见区域判定：环是 body 顶层浮层、没有任何容器裁它，目标滚出滚动容器后必须自己收起。
     // 判据用**环的外轮廓**（目标矩形外扩 RING_OUTSET）与可见区域是否相交，而不是目标本身——
     // 目标贴着容器边、完整可见时它的环本来就要长出容器 4px，用目标本身判会把这种情况误杀。
@@ -491,6 +636,9 @@ export function setupFocusOutlineRing(): () => void {
     target = el;
     punchTargets = Array.from(el.querySelectorAll<HTMLElement>(RING_PUNCHOUT_SELECTOR));
     clipAncestors = collectClipAncestors(el);
+    alphaSources = collectAlphaSources(el);
+    // 目标换了：下一帧必须把新的可见透明度写下去（canvas 上可能还留着上一个目标的读数）
+    lastAlpha = -1;
     // 静态高层（toast / z-top）要读 computed style，代价落在祖先链上，故只在这里解析一次
     staticLayerZ = resolveStaticLayerZ(el);
     // 遮挡物不在这里收集：它的判据是「与环相交」，随滚动位置每帧都在变（见 draw()）
@@ -539,6 +687,9 @@ export function setupFocusOutlineRing(): () => void {
       punchTargets: () => punchTargets,
       clipAncestors: () => clipAncestors,
       occluders: () => lastOccluders,
+      /** 可见透明度的读数来源与当前值（排查「淡出时环没跟」用：看链上哪个祖先拖了后腿） */
+      alphaSources: () => alphaSources,
+      effectiveAlpha: readEffectiveAlpha,
       clipRectOf,
       kill,
       revive,

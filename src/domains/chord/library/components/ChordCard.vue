@@ -6,21 +6,24 @@
         <div
           v-action-card
           v-wave
+          v-scroll-into-view.y.once="selected"
           :aria-label
-          :aria-pressed="isActive"
-          :class="{
-            'border-tint-primary-45! bg-tint-primary-92! shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.25)] hover:border-primary! hover:bg-tint-primary-80! hover:shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.4)]':
-              isActive,
-            'border-border-base bg-surface-panel-hover': isOpen,
-          }"
+          :aria-pressed="selected"
+          :class="
+            selected
+              ? 'border-tint-primary-45 bg-tint-primary-92 shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.25)] hover:border-primary hover:bg-tint-primary-80 hover:shadow-[0_0_0_1px_rgba(var(--color-primary-rgb),0.4)] active:border-tint-primary-45 active:bg-tint-primary-92'
+              : isOpen
+                ? 'border-border-base bg-surface-panel-hover active:border-border-base active:bg-surface-panel-hover'
+                : 'border-border-light bg-surface-body hover:border-border-base hover:bg-surface-panel-hover active:border-border-base active:bg-surface-panel-hover'
+          "
           @click="handleCardClick()"
           data-focusable-outline
-          class="chord-thumb-card relative flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border border-border-light bg-surface-body px-2 transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover active:border-border-base active:bg-surface-panel-hover"
+          class="chord-thumb-card relative flex h-[2.2rem] w-full cursor-pointer items-center justify-between rounded-md border px-2 transition-all duration-fast outline-none"
         >
           <BaseBadge
             v-if="cardData.hasVariants"
             :title="variantBadgeTitle"
-            :variant="isActive ? 'primary' : 'neutral'"
+            :variant="selected ? 'primary' : 'neutral'"
             @click.stop="toggleVariantsDropdown()"
             data-ring-punchout
             appearance="filled"
@@ -28,17 +31,18 @@
             size="2xs"
           >
             <BaseRollingText
-              v-if="isActive"
+              v-if="selected"
               :text="`${activeVariantIndex + 1}/${cardData.variantCount}`"
               class="tabular-nums"
             />
             <BaseRollingText v-else :text="`${cardData.variantCount}`" class="tabular-nums" />
           </BaseBadge>
 
-          <div v-marquee.fade class="min-w-0 flex-1">
+          <!-- 触发宿主委托给整张卡（.chord-thumb-card）：和弦名只占卡内一条，与乐谱卡同一套做法 -->
+          <div v-marquee.fade="{ trigger: '.chord-thumb-card' }" class="min-w-0 flex-1">
             <span
               v-chord-name="{ chord: activeChord, shorthand: settingsStore.workbenchChordShorthand }"
-              :class="isActive ? 'text-primary' : 'text-fg-body'"
+              :class="selected ? 'text-primary' : 'text-fg-body'"
               class="pointer-events-none text-xs font-bold tracking-tight"
             />
           </div>
@@ -65,7 +69,6 @@ import type { MenuItem } from '@/platform/ui/menu/types';
 
 const props = defineProps<{
   cardData: GroupedChordCard;
-  isActive: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -82,10 +85,25 @@ const { copyChordCardText, shareChordLink } = useChordTransfer();
 // 引用反查能力由应用层注入（桥接乐谱域）；未注入时按无引用处理
 const lookupChordReferences = inject(CHORD_REFERENCE_LOOKUP, () => 0);
 
+/** 本卡是否为「当前编辑中」：草稿命中本卡任一变体，或编辑中且同名同组（草稿尚未落库时按名匹配）。
+ *  判定归卡片自己（与乐谱列表的 SongCard 同口径）—— 此前由列表算出主卡 id 再下发，
+ *  且每次判定都要扫一遍组内所有卡片、对每张取一次和弦名。 */
+const selected = computed(() => {
+  const draft = editorStore.draftChord;
+  if (draft.id && props.cardData.variants.some(v => v.id === draft.id)) return true;
+  if (!editorStore.isEditing) return false;
+  const draftName = getChordName(draft).trim().toLowerCase();
+  return (
+    Boolean(draftName) &&
+    props.cardData.mainChord.groupId === draft.groupId &&
+    getChordName(props.cardData.mainChord).trim().toLowerCase() === draftName
+  );
+});
+
 const localVariantIndex = ref(0);
 
 const activeVariantIndex = computed(() => {
-  if (props.isActive) {
+  if (selected.value) {
     const idx = props.cardData.variants.findIndex(v => v.id === editorStore.draftChord.id);
     return idx >= 0 ? idx : localVariantIndex.value;
   }
@@ -94,7 +112,7 @@ const activeVariantIndex = computed(() => {
 
 /** 指法徽标悬停提示：当前展示的第几个指法 */
 const variantBadgeTitle = computed(() =>
-  props.isActive
+  selected.value
     ? `第 ${activeVariantIndex.value + 1}/${props.cardData.variantCount} 指法`
     : `${props.cardData.variantCount} 个指法`
 );
@@ -108,7 +126,7 @@ const handleCardClick = () => {
 
 /** 切换到指定下标的指法：激活卡片直接更新编辑器草稿，非激活卡仅切换本地预览 */
 const switchVariant = (newIndex: number) => {
-  if (props.isActive) {
+  if (selected.value) {
     const target = props.cardData.variants[newIndex];
     if (target) editorStore.setEditor(target);
   } else localVariantIndex.value = newIndex;

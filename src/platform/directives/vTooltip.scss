@@ -2,8 +2,6 @@
 @use '@/assets/token-vars' as *;
 
 .v-tooltip-box {
-  backdrop-filter: var(--blur-xl);
-  -webkit-backdrop-filter: var(--blur-xl);
   box-shadow: $shadow-lg;
   border: 1px solid var(--glass-border);
   border-radius: $radius-md;

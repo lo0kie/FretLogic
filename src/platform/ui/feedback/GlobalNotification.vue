@@ -25,10 +25,10 @@
           <!-- 常驻通知段：notices 以 unshift 入队（最新在前），数组顺序即展示顺序 -->
           <div
             v-for="notice in displayedNotices"
-            :class="notice.message || notice.actionText ? 'items-start!' : ''"
+            :class="notice.message || notice.actionText ? 'items-start' : 'items-center'"
             :key="`notice-${notice.id}`"
             :role="notice.type === 'error' || notice.type === 'warning' ? 'alert' : 'status'"
-            class="pointer-events-auto relative flex w-[20rem] max-w-[90vw] shrink-0 items-center gap-sm rounded-xl border border-glass-border bg-surface-panel px-md py-sm text-xs shadow-md transition-all duration-base outline-none"
+            class="pointer-events-auto relative flex w-[20rem] max-w-[90vw] shrink-0 gap-sm rounded-xl border border-glass-border bg-surface-panel px-md py-sm text-xs shadow-md transition-all duration-base outline-none"
           >
             <span class="flex shrink-0 items-center justify-center self-center">
               <BaseIcon
@@ -76,15 +76,18 @@
             v-for="(item, index) in displayedMessages"
             :class="[
               'bg-surface-panel text-fg-title',
-              item.description ? 'w-auto! items-start! rounded-xl! py-md!' : '',
+              // 有描述时切成多行卡片形态：条件写在分支里，而不是用 ! 去压基类的单行胶囊形态
+              item.description
+                ? 'w-auto items-start rounded-xl py-md'
+                : 'max-w-[22rem] items-center rounded-pill py-sm',
               messageStack && index < displayedMessages.length - 1 ? 'scale-[0.98] opacity-90' : '',
               item.customClass,
             ]"
             :key="`message-${item.id}`"
             :role="item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'"
-            class="pointer-events-auto relative flex max-w-[22rem] shrink-0 items-center gap-sm rounded-pill border border-glass-border px-md py-sm text-xs font-semibold shadow-md transition-all duration-base outline-none"
+            class="pointer-events-auto relative flex shrink-0 gap-sm border border-glass-border px-md text-xs font-semibold shadow-md transition-all duration-base outline-none"
           >
-            <div :class="{ 'pt-3xs!': item.description }" class="flex shrink-0 items-center justify-center pt-0.5">
+            <div :class="item.description ? 'pt-3xs' : 'pt-0.5'" class="flex shrink-0 items-center justify-center">
               <BaseIcon
                 :class="messageIconClass(item)"
                 :name="messageIconName(item)"
@@ -121,7 +124,7 @@
 
             <ActionButton
               v-if="item.closable"
-              :class="item.description ? 'self-start! pt-3xs!' : 'self-center'"
+              :class="item.description ? 'self-start pt-3xs' : 'self-center'"
               @click="store.removeMessage(item.id)"
               icon-only
               aria-label="关闭提示"

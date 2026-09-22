@@ -62,6 +62,23 @@ export const getChordRootCategory = (chord: Chord): { key: string; label: string
   return result;
 };
 
+/**
+ * 取和弦标准全称（供卡片无障碍标签等展示用途），按和弦实例缓存。
+ *
+ * 面板此前为整屏构建 `id → 名称` 映射：每次键入（filteredChords 变化）都要为**全库**每个和弦
+ * 拼一次名称，而唯一消费方只是当前挂载的那十几张卡片的 aria-label —— 775 条里七百多条白算。
+ * 改为按需调用 + 引用级缓存后，开销随「真正渲染出来的卡片数」而非库容量增长。
+ * 前提与同文件的 getChordRootCategory 一致：保存路径总是整对象替换，按引用缓存不会读到过期名称。
+ */
+const chordNameCache = new WeakMap<Chord, string>();
+export const getPickerChordName = (chord: Chord): string => {
+  const cached = chordNameCache.get(chord);
+  if (cached !== undefined) return cached;
+  const name = getChordName(chord);
+  chordNameCache.set(chord, name);
+  return name;
+};
+
 /** 按根音类别把和弦列表分区（保持首次出现顺序） */
 export const buildChordSections = (chords: Chord[]): ChordPickerSection[] => {
   if (chords.length === 0) return [];

@@ -10,7 +10,7 @@
         <!-- 交互指板：点击/编辑即写和弦草稿（写入逻辑与工作台共用 useChordDraftEditing），
              品数/偏移/调音等设置内建于 Fretboard 组件自身 -->
         <div
-          class="pointer-events-auto relative flex w-fit shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel/90 px-2xl py-xl backdrop-blur-lg transition-[border-color] duration-slow ease-sidebar hover:border-border-base"
+          class="pointer-events-auto relative flex w-fit shrink-0 flex-col items-center justify-evenly rounded-md border border-glass-border bg-surface-panel px-2xl py-xl transition-[border-color] duration-slow ease-sidebar hover:border-border-base"
         >
           <Fretboard
             :chord="editorStore.draftChord"
@@ -24,7 +24,7 @@
         </div>
 
         <div
-          class="flex h-[20vh] w-full min-w-0 shrink-0 flex-col gap-sm rounded-md border border-glass-border bg-surface-panel/70 px-lg py-sm backdrop-blur-lg contain-inline-size"
+          class="flex h-[20vh] w-full min-w-0 shrink-0 flex-col gap-sm rounded-md border border-glass-border bg-surface-panel px-lg py-sm contain-inline-size"
         >
           <span class="shrink-0 text-xs font-bold tracking-tight text-fg-title">和弦候选</span>
           <ChordAnalysisPanel candidates-only class="min-h-0 min-w-0 flex-1" />
@@ -53,7 +53,13 @@
   <!-- 新建和弦时的目标分组选择：复用「移动至新分组」的交互与外观
        （层号由 BaseModal 自行从浮层池取号，天然高于抽屉，无需外部注入） -->
   <BaseModal v-model:visible="groupModalOpen" @confirm="handleConfirmGroupSelect()" title="选择保存分组">
-    <div v-grid-nav="3" class="no-scrollbar grid max-h-[50vh] grid-cols-3 gap-md">
+    <BaseScrollArea
+      v-grid-nav="3"
+      :fade="false"
+      :scrollbar="false"
+      axis="y"
+      class="grid max-h-[50vh] grid-cols-3 gap-md"
+    >
       <button
         v-wave
         v-for="group in chordStore.groups"
@@ -69,14 +75,16 @@
         data-focusable-outline
         class="flex w-full min-w-0 cursor-pointer items-center rounded-md border border-border-base p-md text-xs font-bold transition-all duration-fast hover:border-primary"
       >
-        <div v-marquee.fade>
+        <!-- 触发宿主委托给整行按钮：分组名只占行首一条，鼠标停在行内空白处（如计数那一侧）时
+             同样该开始滚动。该行没有具名类，用 closest('button') 命中的就是这个按钮本身 -->
+        <div v-marquee.fade="{ trigger: 'button' }">
           <span> {{ group.name }} </span>
-          <span :class="selectedTargetGroupId === group.id ? 'text-fg-on-accent/70' : 'text-fg-disabled'" class="pl-1"
-            >({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})</span
-          >
+          <span :class="selectedTargetGroupId === group.id ? 'text-fg-on-accent' : 'text-fg-disabled'" class="pl-1">
+            ({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})
+          </span>
         </div>
       </button>
-    </div>
+    </BaseScrollArea>
   </BaseModal>
 </template>
 
@@ -88,6 +96,7 @@ import Fretboard from '@/domains/fretboard/components/Fretboard.vue';
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
 import BaseDrawer from '@/platform/ui/drawer/BaseDrawer.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
+import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
 import { CHORD_EDITOR_STORE_KEY, useDrawerChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';

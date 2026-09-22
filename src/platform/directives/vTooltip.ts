@@ -33,6 +33,15 @@ export interface TooltipOptions {
    */
   interactive?: boolean;
   /**
+   * hover / focus 的**触发宿主**：默认 `'self'` 指指令元素自身；给 CSS 选择器时改用自元素向上
+   * `closest()` 命中的最近祖先（含自身）。
+   *
+   * 用于把「悬停才显示」的判定范围从图标 / 截断文字本体的那一小块放大到整行 / 整卡。
+   * **注意**：同一容器内若有多个带 tooltip 的元素，委托到同一宿主会让它们同时弹出 ——
+   * 只在该容器内 tooltip 唯一时才用。找不到匹配祖先时回退到自身，不会静默失去触发。
+   */
+  trigger?: 'self' | string;
+  /**
    * 手动控制模式：为 true 时忽略鼠标悬停/聚焦的自动显隐，仅由 visible 驱动。
    * 用于需要外部以编程方式控制 tooltip 显隐的场景（如滑块拖拽数值气泡）。
    */
@@ -160,6 +169,9 @@ export const normalize = (value: TooltipBinding, modifiers?: Record<string, bool
   // 紧凑读数默认 false；显式传了 compact 以对象为准，否则用 .compact 修饰符开启
   if (base.compact === undefined) base.compact = Boolean(modifiers?.['compact']);
 
+  // 触发宿主默认自身；选择器形式只能走对象选项 —— 修饰符承载不了字符串（v-tooltip.foo 只能表达开关）
+  if (base.trigger === undefined) base.trigger = 'self';
+
   return base;
 };
 
@@ -286,14 +298,12 @@ const updatePosition = async (el: HTMLElement, opts: TooltipOptions): Promise<vo
         placement,
         background: 'var(--bg-panel)',
         borderColor: 'var(--glass-border)',
-        backdropFilter: 'var(--blur-xl)',
         zIndex: 2,
       });
       globalArrow.style.display = 'block';
       for (const [key, value] of Object.entries(style)) {
         if (value == null) continue;
-        if (key === 'WebkitBackdropFilter') globalArrow.style.setProperty('-webkit-backdrop-filter', value);
-        else (globalArrow.style as unknown as Record<string, string>)[key] = value;
+        (globalArrow.style as unknown as Record<string, string>)[key] = value;
       }
     } else globalArrow.style.display = 'none';
 };
@@ -515,6 +525,10 @@ const hideTooltip = (el: HTMLElement, immediate = false) => {
 
 interface TooltipHandler {
   opts: TooltipOptions;
+  /** hover / focus 事件的实际宿主（opts.trigger 的解析结果）：'self' 时即 el 自身，给选择器时为命中的祖先 */
+  host: HTMLElement;
+  /** 解绑当前宿主上的四个事件监听（trigger 变更 / 卸载时调用） */
+  detachHostEvents: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onFocus: () => void;
@@ -532,12 +546,49 @@ export const hideTooltipInside = (container?: HTMLElement | null) => {
   if (container === currentTargetEl || container.contains(currentTargetEl)) hideTooltip(currentTargetEl, true);
 };
 
+/** 解析 hover / focus 的触发宿主：'self'（或未给）即指令元素自身；其余按 CSS 选择器向上 closest，找不到回退自身。 */
+const resolveTriggerHost = (el: HTMLElement, trigger: string | undefined): HTMLElement => {
+  if (!trigger || trigger === 'self') return el;
+  return el.closest(trigger) ?? el;
+};
+
+/**
+ * 把 hover / focus 四个监听挂到**解析出的宿主**上，返回解绑函数。
+ *
+ * 宿主与 el 分离是为了支持「委托上级节点触发」：tooltip 常挂在图标 / 截断文字本体上，命中面只有
+ * 那一小块；委托后鼠标停在整行 / 整卡任意位置即显示。**定位锚点仍是 el** —— 提示描述的是它，
+ * 内容与箭头都该贴着它，被放大的只有触发范围。
+ *
+ * 命中失败时回退到自身：宁可退化成「只在原元素上触发」，也不要静默不触发。
+ */
+const attachHostEvents = (el: HTMLElement, handler: TooltipHandler): (() => void) => {
+  const host = resolveTriggerHost(el, handler.opts.trigger);
+  handler.host = host;
+  // 焦点事件分两种写法：委托宿主是**容器**，焦点通常落在其后代上，而 focus / blur 不冒泡、
+  // 容器上永远收不到，故委托时改用冒泡版 focusin / focusout；self 场景沿用 focus / blur，
+  // 与接入前逐字一致（不因改成冒泡版而把「后代聚焦」也纳入触发）。
+  const focusEvent = host === el ? 'focus' : 'focusin';
+  const blurEvent = host === el ? 'blur' : 'focusout';
+  host.addEventListener('mouseenter', handler.onMouseEnter);
+  host.addEventListener('mouseleave', handler.onMouseLeave);
+  host.addEventListener(focusEvent, handler.onFocus);
+  host.addEventListener(blurEvent, handler.onBlur);
+  return () => {
+    host.removeEventListener('mouseenter', handler.onMouseEnter);
+    host.removeEventListener('mouseleave', handler.onMouseLeave);
+    host.removeEventListener(focusEvent, handler.onFocus);
+    host.removeEventListener(blurEvent, handler.onBlur);
+  };
+};
+
 export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> = {
   mounted(el, binding) {
     if (!isClient) return;
     const opts = normalize(binding.value, binding.modifiers);
     const handler: TooltipHandler = {
       opts,
+      host: el,
+      detachHostEvents: () => {},
       onMouseEnter: () => {
         // 手动模式下忽略悬停，显隐完全交由 visible 驱动
         if (!handler.opts.manual) showTooltip(el, handler.opts, false);
@@ -555,15 +606,15 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     };
 
     handlerMap.set(el, handler);
-    el.addEventListener('mouseenter', handler.onMouseEnter);
-    el.addEventListener('mouseleave', handler.onMouseLeave);
-    el.addEventListener('focus', handler.onFocus);
-    el.addEventListener('blur', handler.onBlur);
+    // 触发宿主由 opts.trigger 决定（默认自身；给选择器则委托上级节点），挂载期解析一次。
+    // 宿主变更的检测在 updated 里：宿主换了而监听还留在原元素上，「悬停整行显示」会静默失效。
+    handler.detachHostEvents = attachHostEvents(el, handler);
 
     if (opts.manual && opts.visible)
       // 手动模式初始即显示
       showTooltip(el, handler.opts, true);
-    else if (el.matches?.(':hover')) showTooltip(el, handler.opts, false);
+    // 初始 hover 检查必须用宿主：委托场景下鼠标可能已停在祖先上，而 el 自身并未被命中
+    else if (handler.host.matches?.(':hover')) showTooltip(el, handler.opts, false);
   },
   updated(el, binding) {
     if (!isClient) return;
@@ -571,6 +622,13 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     if (!handler) return;
     handler.opts = normalize(binding.value, binding.modifiers);
     const { manual, visible } = handler.opts;
+
+    // trigger 变更 → 宿主不再是当前元素时重挂事件。宿主换了而监听还留在原元素上，
+    // 「悬停整行显示」就静默失效了。宿主解析走 closest，所以该判断对 DOM 结构变化同样兜底。
+    if (resolveTriggerHost(el, handler.opts.trigger) !== handler.host) {
+      handler.detachHostEvents();
+      handler.detachHostEvents = attachHostEvents(el, handler);
+    }
 
     if (manual) {
       // 手动模式：显隐完全由 visible 驱动，并随内容变化实时刷新
@@ -601,10 +659,7 @@ export const vTooltip: Directive<HTMLElement, TooltipBinding, TooltipModifiers> 
     if (!isClient) return;
     const handler = handlerMap.get(el);
     if (handler) {
-      el.removeEventListener('mouseenter', handler.onMouseEnter);
-      el.removeEventListener('mouseleave', handler.onMouseLeave);
-      el.removeEventListener('focus', handler.onFocus);
-      el.removeEventListener('blur', handler.onBlur);
+      handler.detachHostEvents();
       handlerMap.delete(el);
     }
     // 挂起中的延时显示若属于本实例必须摘除：否则定时器稍后触发会把浮层打在 (0,0) 无人收起

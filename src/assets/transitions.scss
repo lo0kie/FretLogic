@@ -23,6 +23,21 @@
 // 实测就是这样在过渡尾部抖一下。挂在子元素自身的 class 上则全程恒定。
 .stack-slot {
   grid-area: 1 / 1;
+
+  // 两轴 min 归零是槽位契约的一部分，不是可选加固 —— 网格项在两个轴上的 `min-*: auto` 都是
+  // 「内容最小尺寸」语义（flex 项只在主轴如此），槽位内容一宽，就把隐式 `auto` 轨道顶到内容宽度。
+  // 后果不是「滚动条变丑」而是滚动宿主整体失效：轨道 = 内容宽 → 宿主 clientWidth === scrollWidth
+  // → 横向滚不动、自绘滚动条判定为「无溢出」而不出现，且槽位内 `position: absolute` 的右下角
+  // 浮条（如预览页的缩放胶囊）被一并推到视口右侧之外。
+  //
+  // 为什么此前不需要：容器原本是 flex-col，横向属交叉轴、`min-width: auto` 退化为 0，
+  // 于是只有纵向（主轴）需要各面板自己写 min-h-0。改为「单行网格」后两轴都成了内容最小尺寸，
+  // 横向必须一并归零。回归现场：乐谱预览页的页流是 `w-max`，12 页 ≈ 9500px 把列顶宽。
+  //
+  // 注：`grid-cols-1`（= minmax(0, 1fr)）**不能**替代本条 —— 它只钉住轨道，
+  // 网格项自身的 min-width 仍是内容最小尺寸，项照旧会溢出轨道。
+  min-width: 0;
+  min-height: 0;
 }
 
 // =============================================================================
@@ -186,9 +201,13 @@
 }
 
 // =============================================================================
-// 5b. 向上飞出淡出 (Fly Up) - 顶部浮层离场：明确向上飞出视口并淡出
-//     与 slide-down 的区别仅在离场方向：leave-to 直接 translateY(-120%) 飞出，
-//     而不是 slide-down 那种 -8px 微缩，给用户「向上飘走」的明确方向感。
+// 5b. 向上飘走淡出 (Fly Up) - 顶部浮层离场：向上微升并淡出
+//     leave-to 的位移取 translateY(-16px)，与 enter-from 同值：入场自 -16px 落下、出场回
+//     -16px 淡出，一来一回走同一条轨迹，「向上飘走」的方向感由方向本身给出，不靠距离堆。
+//     曾用 translateY(-120%)（整卡飞出视口）：顶部堆叠里这条位移明显过冲 —— 矮的 Toast 胶囊
+//     要飞自身 1.2 倍高，高的通知卡（标题 + 描述 + 操作按钮）更是上百像素，观感拖沓。
+//     注：如此与 slide-down 的离场（-8px 微缩）只差位移量，但 slide-down 当前无消费方，
+//     不构成冲突；日后若真要给顶部横幅一个更「贴边」的离场再单独调。
 // =============================================================================
 // -move 必须声明在 enter/leave-active 之前（原因同第 4 节注释）
 .v-transition-fly-up-move {
@@ -214,7 +233,7 @@
 }
 
 .v-transition-fly-up-leave-to {
-  transform: translateY(-120%) scale(0.92);
+  transform: translateY(-16px) scale(0.92);
   opacity: 0;
 }
 
@@ -325,12 +344,13 @@
 // 此前两组件各维护一份逐字节相同的 :global 规则，收拢至此为唯一来源。
 // !important 确保在 enter/leave 阶段强制覆盖 transition-property，
 // 否则容器任意 transition-* 工具类都会把 opacity/transform 排除导致动画瞬时完成。
+// 缓动走 tokens 令牌 --bezier-out（与 ease-out 工具类同一条曲线），不再写裸值。
 // ============================================================
 .v-floating-bar-slide-enter-active,
 .v-floating-bar-slide-leave-active {
   transition:
-    opacity 0.25s cubic-bezier(0, 0, 0.2, 1),
-    transform 0.25s cubic-bezier(0, 0, 0.2, 1) !important;
+    opacity 0.25s var(--bezier-out),
+    transform 0.25s var(--bezier-out) !important;
 }
 
 .v-floating-bar-slide-enter-from,
@@ -355,11 +375,12 @@
 // prefers-reduced-motion 的退化由 main.scss 的全局
 // `*, ::before, ::after { transition-duration: 0.01ms !important }` 兜住，不再单列一份。
 // ============================================================
+// 缓动取 tokens 令牌 --bezier-roll（此前是裸写在规则里的 cubic-bezier，令牌表外的一条曲线）。
 .br-roll-enter-active,
 .br-roll-leave-active {
   transition:
-    transform var(--br-duration, 0.2s) cubic-bezier(0.33, 0, 0.2, 1),
-    opacity var(--br-duration, 0.2s) cubic-bezier(0.33, 0, 0.2, 1);
+    transform var(--br-duration, 0.2s) var(--bezier-roll),
+    opacity var(--br-duration, 0.2s) var(--bezier-roll);
 }
 
 .br-roll-enter-from {

@@ -114,7 +114,7 @@ export const getChordIsInverted = (chord: Chord): boolean => buildSortMeta(chord
 
 /** 分组排序规则选项（供 BaseSegmentedControl 等 UI 使用） */
 export const SORT_RULE_CONFIG = <SegmentOption<GroupSortRule>[]>[
-  { label: '调内级数', value: GroupSortRule.KEY_DEGREE },
+  { label: '级数', value: GroupSortRule.KEY_DEGREE },
   { label: 'C-B', value: GroupSortRule.ROOT_PITCH },
   { label: 'A-Z', value: GroupSortRule.NAME_ASC },
 ];

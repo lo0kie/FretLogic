@@ -133,7 +133,7 @@
           :class="[
             vertical ? 'left-1/2 -translate-1/2' : 'top-1/2 -translate-1/2',
             isDragging === 0
-              ? 'z-float scale-125 ring-2 ring-primary/70'
+              ? 'z-float scale-125 ring-2 ring-tint-primary-30'
               : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
             currentConfig.thumbClass,
           ]"
@@ -157,7 +157,7 @@
             :class="[
               vertical ? 'left-1/2 -translate-1/2' : 'top-1/2 -translate-1/2',
               isDragging === 0
-                ? 'z-float scale-125 ring-2 ring-primary/70'
+                ? 'z-float scale-125 ring-2 ring-tint-primary-30'
                 : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
               currentConfig.thumbClass,
             ]"
@@ -180,7 +180,7 @@
             :class="[
               vertical ? 'left-1/2 -translate-1/2' : 'top-1/2 -translate-1/2',
               isDragging === 1
-                ? 'z-float scale-125 ring-2 ring-primary/70'
+                ? 'z-float scale-125 ring-2 ring-tint-primary-30'
                 : 'z-panel transition-[left,top,bottom,transform] duration-150 ease-out',
               currentConfig.thumbClass,
             ]"

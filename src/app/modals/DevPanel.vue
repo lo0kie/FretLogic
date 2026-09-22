@@ -3,18 +3,17 @@
     <div class="flex flex-col gap-1.5 text-xs/relaxed text-fg-body" ref="devListRef">
       <!-- 构建 -->
       <BaseCollapse
+        v-bind="headBind('build')"
         v-model:expanded="buildOpen"
-        :style="{ top: stickyTopCss }"
+        :emphasize-on-expand="false"
         initial-auto
-        class="sticky z-panel bg-surface-panel"
-        data-dev-section="build"
         description="当前产物"
         icon="wrench"
         title="构建"
       >
         <!-- 状态用徽标（附语义色），提交号/构建时间是标识符，保留等宽文本便于比对 -->
         <div class="grid grid-cols-3 gap-xs">
-          <div class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
+          <div class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">模式</div>
             <BaseBadge
               :content="CLOUD_SYNC_CONFIG.MODE"
@@ -25,11 +24,11 @@
               title="当前构建模式"
             />
           </div>
-          <div class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
+          <div class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">提交</div>
             <div :title="buildCommit" class="mt-0.5 truncate font-mono text-fg-title">{{ shortCommit }}</div>
           </div>
-          <div class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
+          <div class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">构建时间</div>
             <div :title="builtAt" class="mt-0.5 truncate font-mono text-fg-title">{{ shortBuiltAt }}</div>
           </div>
@@ -56,15 +55,14 @@
 
       <!-- 数据概览 -->
       <BaseCollapse
-        :style="{ top: stickyTopCss }"
-        class="sticky z-panel bg-surface-panel"
-        data-dev-section="data"
+        v-bind="headBind('data')"
+        :emphasize-on-expand="false"
         description="本机内容"
         icon="list"
         title="数据"
       >
         <div class="grid grid-cols-3 gap-xs">
-          <div v-for="item in dataRows" :key="item.label" class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
+          <div v-for="item in dataRows" :key="item.label" class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">{{ item.label }}</div>
             <!-- 条目数即数值读数，统一走徽标（中性色：面板内读数不占用主色，否则满屏品牌色胶囊） -->
             <BaseBadge :content="item.value" appearance="subtle" class="mt-1" size="2xs" variant="neutral" />
@@ -74,9 +72,8 @@
 
       <!-- 内存缓存 -->
       <BaseCollapse
-        :style="{ top: stickyTopCss }"
-        class="sticky z-panel bg-surface-panel"
-        data-dev-section="cache"
+        v-bind="headBind('cache')"
+        :emphasize-on-expand="false"
         description="刷新即失"
         icon="chart-column"
         title="内存缓存"
@@ -147,7 +144,7 @@
             </div>
             <div class="h-0.5 w-full overflow-hidden rounded-full bg-surface-panel-hover">
               <div
-                :class="cache.full ? 'bg-warning/60' : 'bg-primary/40'"
+                :class="cache.full ? 'bg-tint-warning-40' : 'bg-tint-primary-60'"
                 :style="{ width: `${cache.pct}%` }"
                 class="h-full rounded-full"
               />
@@ -159,16 +156,15 @@
 
       <!-- 存储占用 -->
       <BaseCollapse
-        :style="{ top: stickyTopCss }"
-        class="sticky z-panel bg-surface-panel"
-        data-dev-section="storage"
+        v-bind="headBind('storage')"
+        :emphasize-on-expand="false"
         description="持久化"
         icon="folder-open"
         title="存储占用"
       >
         <!-- 指标卡：站点总用量 / 配额（容量读数走徽标） -->
         <div class="grid grid-cols-2 gap-xs">
-          <div class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
+          <div class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">站点总用量</div>
             <BaseBadge
               :content="originUsageText"
@@ -179,7 +175,7 @@
               variant="neutral"
             />
           </div>
-          <div class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
+          <div class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">配额</div>
             <BaseBadge :content="originQuotaText" appearance="outline" class="mt-1" size="2xs" variant="neutral" />
           </div>
@@ -190,7 +186,7 @@
         <!-- 配额占用条：用量 / 配额（接近上限转警示色） -->
         <div class="h-1 w-full overflow-hidden rounded-full bg-surface-panel-hover">
           <div
-            :class="originUsageAlert ? 'bg-warning/60' : 'bg-primary/60'"
+            :class="originUsageAlert ? 'bg-tint-warning-40' : 'bg-tint-primary-40'"
             :style="{ width: `${originUsagePct}%` }"
             class="h-full rounded-full"
           />
@@ -225,7 +221,7 @@
               <BaseBadge :content="entry.text" appearance="subtle" size="2xs" variant="neutral" />
             </div>
             <div class="h-0.5 w-full overflow-hidden rounded-full bg-surface-panel-hover">
-              <div :style="{ width: `${entry.pct}%` }" class="h-full rounded-full bg-primary/40" />
+              <div :style="{ width: `${entry.pct}%` }" class="h-full rounded-full bg-tint-primary-60" />
             </div>
           </div>
           <p v-if="lsEntries.length === 0" class="m-0 text-fg-muted">无写入</p>
@@ -238,15 +234,14 @@
 
       <!-- 预览缓存 -->
       <BaseCollapse
-        :style="{ top: stickyTopCss }"
-        class="sticky z-panel bg-surface-panel"
-        data-dev-section="preview"
+        v-bind="headBind('preview')"
+        :emphasize-on-expand="false"
         description="当前乐谱"
         icon="image"
         title="预览缓存"
       >
         <div class="grid grid-cols-2 gap-xs">
-          <div class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
+          <div class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">页数</div>
             <BaseBadge
               :appearance="previewValueAppearance"
@@ -257,7 +252,7 @@
               variant="neutral"
             />
           </div>
-          <div class="rounded-md bg-surface-panel-hover/50 px-sm py-1.5">
+          <div class="rounded-md bg-surface-panel-subtle px-sm py-1.5">
             <div class="text-2xs text-fg-muted">体积</div>
             <BaseBadge
               :appearance="previewValueAppearance"
@@ -281,7 +276,7 @@
                 <BaseBadge :content="page.text" appearance="subtle" size="2xs" variant="neutral" />
               </div>
               <div class="h-0.5 w-full overflow-hidden rounded-full bg-surface-panel-hover">
-                <div :style="{ width: `${page.pct}%` }" class="h-full rounded-full bg-primary/40" />
+                <div :style="{ width: `${page.pct}%` }" class="h-full rounded-full bg-tint-primary-60" />
               </div>
             </div>
           </div>
@@ -303,9 +298,8 @@
 
       <!-- 路由跳转 -->
       <BaseCollapse
-        :style="{ top: stickyTopCss }"
-        class="sticky z-panel bg-surface-panel"
-        data-dev-section="route"
+        v-bind="headBind('route')"
+        :emphasize-on-expand="false"
         description="快捷跳转"
         icon="move"
         title="路由"
@@ -329,9 +323,8 @@
 
       <!-- 测试数据：一键生成大规模数据集并整体覆盖（仅 dev 构建可见） -->
       <BaseCollapse
-        :style="{ top: stickyTopCss }"
-        class="sticky z-panel bg-surface-panel"
-        data-dev-section="seed"
+        v-bind="headBind('seed')"
+        :emphasize-on-expand="false"
         description="一键覆盖"
         icon="server"
         title="测试数据"
@@ -355,14 +348,13 @@
 
       <!-- 危险区：红色语义卡片包裹，与上方常规区块在视觉上强区分 -->
       <BaseCollapse
-        :style="{ top: stickyTopCss }"
-        class="sticky z-panel bg-surface-panel"
-        data-dev-section="danger"
+        v-bind="headBind('danger')"
+        :emphasize-on-expand="false"
         description="不可恢复"
         icon="alert-triangle"
         title="危险区"
       >
-        <div class="flex flex-col gap-xs rounded-md border border-danger/30 bg-danger/5 p-sm">
+        <div class="flex flex-col gap-xs rounded-md border border-tint-danger-70 bg-tint-danger-95 p-sm">
           <ActionButton @click="handleDumpStorageKeys()" icon="eraser" size="sm" variant="subtle">
             导出 IDB 键清单
           </ActionButton>
@@ -465,7 +457,7 @@ const devListRef = useTemplateRef<HTMLElement>('devListRef');
  * 滚动钳位补偿由 BaseCollapse 自带的平台 composable 负责，这里不必接线。
  * id 取各段头上的 data-dev-section（DevPanel 是排查工具，顺带给每段一个稳定的 DOM 钩子）。
  */
-const { insetPx: stickyInsetPx } = useStickyHeads({
+const { headBind } = useStickyHeads({
   listRef: devListRef,
   idAttribute: 'data-dev-section',
   // 吸附线 = 容器可视上沿：头顶不留间隙，滚过的内容直接被头部自身遮住
@@ -473,10 +465,6 @@ const { insetPx: stickyInsetPx } = useStickyHeads({
   // 有头吸附时：容器顶部羽化带内缩一个头高，让开吸附中的头
   fadeOffset: true,
 });
-
-/** 吸附线：sticky 以滚动容器的**内容盒**为原点，抽屉 body 自带 padding-top，需从 top 里减掉才能
- *  贴住可视上沿——否则那条 padding 带属于可滚动区、且在裁剪边界之内，会一直漏着滚过的内容 */
-const stickyTopCss = computed(() => `-${stickyInsetPx.value}px`);
 
 const ROUTE_OPTIONS = [
   { label: '工作台', path: ROUTE_PATHS.WORKBENCH },
@@ -757,7 +745,8 @@ const activeSeedScale = computed(
 /** 档位摘要：和弦实际条数取决于指法反推的命中与去重，故只承诺乐谱数，和弦数由生成后回报 */
 const seedSummaryText = computed(() => {
   const scale = activeSeedScale.value;
-  return `${scale.songCount} 首乐谱 · ${scale.groupCount} 个分组 · 指法密度 ×${scale.variantsPerQuality} · 每首 ${scale.linesPerSong[0]}~${scale.linesPerSong[1]} 行`;
+  const lineChars = `${scale.longLineWords[0] * 2}~${scale.longLineWords[1] * 2} 字`;
+  return `${scale.songCount} 首乐谱 · ${scale.groupCount} 个分组 · 指法密度 ×${scale.variantsPerQuality} · 每首 ${scale.linesPerSong[0]}~${scale.linesPerSong[1]} 行（长句 ${lineChars} · 行内和弦 ${scale.chordsPerLyricLine[0]}~${scale.chordsPerLyricLine[1]} 个）`;
 });
 
 /**

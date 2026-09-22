@@ -5,7 +5,7 @@ export * from './library/composables/useSongModals';
 export * from './library/store/songStore';
 export { default as ScoreView } from './editor/components/ScoreView.vue';
 export { default as ScoreInteractiveArea } from './editor/components/ScoreInteractiveArea.vue';
-export { default as ChordSlotCell } from './editor/components/ChordSlotCell.vue';
+export { default as ChordSlot } from './editor/components/slot/ChordSlot.vue';
 export { default as ScoreLyricsEditor } from './editor/components/ScoreLyricsEditor.vue';
 export * from './editor/composables/useLyricsDragDrop';
 export * from './editor/composables/useScoreLinesData';

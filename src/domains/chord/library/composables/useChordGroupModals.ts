@@ -109,13 +109,14 @@ export function useChordGroupModals() {
     if (!modalData.activeGroup) return;
     const targetGid = modalData.activeGroup.id;
     const groupName = modalData.activeGroup.name;
-    // 分组对象是扁平结构，浅拷贝即可作为撤销快照；和弦列表走 chordStore 自身的撤销历史；
+    // 记录精确删除快照（分组 + 原下标 + 名下和弦各自的原下标）：
+    // 撤销时按原位插回——不走整表分组快照覆盖（删除后新建的分组不被抹掉）、
+    // 不弹撤销历史栈顶（删除与撤销之间夹着的其它操作不受影响）；
     // 歌曲槽位解绑与撤销回填由 chordStore 删除/恢复事件经应用层桥接完成
-    const groupsSnapshot = chordStore.groups.map(g => ({ ...g }));
+    const deletion = chordStore.deleteGroup(targetGid);
+    if (!deletion) return;
 
     if (editorStore.isEditing && editorStore.draftChord.groupId === targetGid) editorStore.resetEditor();
-
-    chordStore.deleteGroup(targetGid);
 
     close('delete');
     // 通知而非常驻 Message：撤销入口随 toast 飘走就没了，用户必须能回看并补做
@@ -123,9 +124,7 @@ export function useChordGroupModals() {
       title: `已删除分组 "${groupName}"`,
       actionText: '撤销',
       onAction: () => {
-        chordStore.overwriteGroups(groupsSnapshot);
-        chordStore.executeUndoRestore();
-        chordStore.selectedGroupId = targetGid;
+        chordStore.restoreGroupDeletion(deletion);
         uiStore.message.success(`已恢复分组 "${groupName}"`);
       },
     });
@@ -159,13 +158,6 @@ export function useChordGroupModals() {
     uiStore.clearActionMessages();
     close('move');
     uiStore.message.success(MESSAGES.SUCCESS_OPERATION);
-  };
-
-  /** 移动弹窗中目标分组的样式态：源分组禁用、已选中高亮、其余常态 */
-  const getGroupClass = (groupId: string) => {
-    if (groupId === modalData.activeChord?.groupId) return 'is-disabled';
-    if (modalData.moveTargetId === groupId) return 'is-selected';
-    return 'is-normal';
   };
 
   /** 打开排序配置弹窗，回填分组当前的排序规则 */
@@ -253,7 +245,6 @@ export function useChordGroupModals() {
     handleDeleteGroup,
     openMove,
     handleMoveChord,
-    getGroupClass,
     openSort,
     handleSaveSort,
     openChordVariantsDelete,

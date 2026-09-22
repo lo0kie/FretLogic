@@ -81,6 +81,8 @@ export interface WorkerExportPayloadInput {
   fretboardScale?: number;
   /** 是否绘制横按符号 */
   showBarre?: boolean;
+  /** 指板图是否忽略首末的空品格（缺省 false = 画满 fretCount 列的全指板） */
+  trimEmptyEdgeFrets?: boolean;
   /** 歌词字重档位 */
   lyricsFontWeight?: ScoreLyricsFontWeight;
   /** JPEG 导出质量百分制（30~100） */
@@ -105,6 +107,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     fontScale = 100,
     fretboardScale = 100,
     showBarre = true,
+    trimEmptyEdgeFrets = false,
     lyricsFontWeight = 'regular',
     exportQualityPct = 95,
     pageMarginPx = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
@@ -187,6 +190,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     fontScale,
     fretboardScale,
     showBarre,
+    trimEmptyEdgeFrets,
     lyricsFontWeight,
     // 导出质量：百分制（30~100）转为 0.3~1 的比例值，由 Worker 侧 clamp 兜底
     exportQuality: clamp(exportQualityPct / 100, 0.3, 1),

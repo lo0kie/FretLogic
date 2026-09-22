@@ -46,12 +46,29 @@ export const onPersistFailure = (listener: PersistFailureListener): (() => void)
   };
 };
 
-/** 判断错误是否因存储配额超限；各浏览器 name 与文案有差异，故按名字与消息双重识别。 */
+/**
+ * 判断错误是否因存储配额超限；各浏览器 name 与文案有差异，故按名字与消息双重识别。
+ *
+ * ⚠️ 必须**沿 cause 链下探**：`idb.ts` 的 `guard()`（第 187-193 行）把对象库抛出的原生
+ * DOMException 统一包成 `AppError`，原始 `QuotaExceededError` 只存在于 `cause` 上。
+ * 此前只比对最外层，导致 `quotaBlocked` 永不置位 —— `idb.ts:212/228/251/290` 的四处
+ * `isPersistBlocked()` 熔断守卫、`idbKv` 的 flush 跳过、以及「存储配额已超限，写入已暂停」
+ * 提示全部成为不可达死码，`migrateLegacy` 删源前的守门也恒为假（P1 审计 #1）。
+ * 写法与同目录 `idb.ts:136` 的 `isVersionError` 对齐（它正是走 cause 的）。
+ */
 export const isQuotaExceededError = (error: unknown): boolean => {
-  if (typeof DOMException !== 'undefined' && error instanceof DOMException)
-    return error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED';
-
-  return error instanceof Error && /quota/i.test(`${error.name}${error.message}`);
+  let current: unknown = error;
+  while (current instanceof Error) {
+    if (
+      typeof DOMException !== 'undefined' &&
+      current instanceof DOMException &&
+      (current.name === 'QuotaExceededError' || current.name === 'NS_ERROR_DOM_QUOTA_REACHED')
+    )
+      return true;
+    if (/quota/i.test(`${current.name}${current.message}`)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 };
 
 /** 上报一次写入失败：始终落日志；同键在冷却窗口内不重复通知订阅方；配额超限额外触发熔断。 */

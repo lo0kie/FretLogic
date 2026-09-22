@@ -37,9 +37,15 @@ export const resolveOverlayParent = (host: HTMLElement, options: ScrollbarOption
 
 /** 创建各轴 overlay（拇指/轨道）并挂事件：轨道点击与长按跟随、overlay 悬停显隐、wheel 同参重派发到宿主。 */
 export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): void => {
-  const makeEl = (cls: string) => {
+  /**
+   * @param ringOccluder 是否声明为聚焦环遮挡物。拇指与气泡会盖住内容、又处在内容层，
+   *   外扩聚焦环（挂在 body 顶层）压在它们上时会把它们糊掉，故打标后由环侧擦除。
+   *   轨道**不标**：它是贴边整条的长条，标了会让环的整条边被擦掉，比「被环压住」更刺眼。
+   */
+  const makeEl = (cls: string, ringOccluder = false) => {
     const el = document.createElement('div');
     el.className = cls;
+    if (ringOccluder) el.setAttribute('data-ring-occluder', '');
     parent.appendChild(el);
     return el;
   };
@@ -49,12 +55,12 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
     // no-track 模式：不创建轨道 overlay，只保留拇指（轨道点击/长按跟随随之不可用）
     if (state.options.showTrack) {
       // 拇指在前、轨道在后：z-index 控制层叠（拇指在上），兄弟选择器 thumb:hover ~ track 依赖此顺序
-      state.thumbs[axis] = makeEl(`v-scrollbar-thumb v-scrollbar-thumb--${axis}`);
+      state.thumbs[axis] = makeEl(`v-scrollbar-thumb v-scrollbar-thumb--${axis}`, true);
       state.tracks[axis] = makeEl(`v-scrollbar-track v-scrollbar-track--${axis}`);
       // trackClick:'none'：轨道纯视觉，永久撤掉指针事件（可见类的 pointer-events:auto 不覆盖内联样式）
       if (state.options.trackClick === 'none') state.tracks[axis]!.style.pointerEvents = 'none';
       attachTrackClick(state, axis);
-    } else state.thumbs[axis] = makeEl(`v-scrollbar-thumb v-scrollbar-thumb--${axis}`);
+    } else state.thumbs[axis] = makeEl(`v-scrollbar-thumb v-scrollbar-thumb--${axis}`, true);
 
     attachThumbDrag(state, axis);
 
@@ -119,7 +125,7 @@ export const createAxisOverlays = (state: ScrollbarState, parent: HTMLElement): 
   if (state.options.bubble.enabled && state.axes.includes(state.options.bubble.axis)) {
     const { axis, size } = state.options.bubble;
     // 档位类两档都写在注入样式里（各管一套度量），此处按解出的档位直接挂上，无需分支
-    const bubble = makeEl(`v-scrollbar-bubble v-scrollbar-bubble--${axis} v-scrollbar-bubble--${size}`);
+    const bubble = makeEl(`v-scrollbar-bubble v-scrollbar-bubble--${axis} v-scrollbar-bubble--${size}`, true);
     // 纯视觉读数：同一信息消费端可由滚动位置得到，重复播报只会干扰读屏
     bubble.setAttribute('aria-hidden', 'true');
     // 读数节点：气泡本体保持 overflow:visible 供箭头探出，省略号与文本都落在它身上（见 renderBubbleText）
@@ -171,12 +177,11 @@ const buildBubbleArrowStyle = (axis: 'x' | 'y', size: number): CSSProperties => 
   return style;
 };
 
-/** 把箭头样式对象写入元素：写法与 vTooltip 一致（-webkit- 前缀属性只能走 setProperty，其余按 camelCase 直赋） */
+/** 把箭头样式对象写入元素：按 camelCase 直赋（buildFloatingArrowStyle 不再产出 -webkit- 前缀键） */
 const applyArrowStyle = (el: HTMLElement, style: CSSProperties): void => {
   for (const [key, value] of Object.entries(style)) {
     if (value == null) continue;
-    if (key === 'WebkitBackdropFilter') el.style.setProperty('-webkit-backdrop-filter', String(value));
-    else (el.style as unknown as Record<string, string>)[key] = String(value);
+    (el.style as unknown as Record<string, string>)[key] = String(value);
   }
 };
 

@@ -11,10 +11,17 @@
       v-bind="$attrs"
       :aria-expanded="expanded"
       :class="[
-        // 底色、吸附（sticky / top / z）等布局属性一概由业务经 class 下发——折叠组件不假设宿主布局。
+        // 底色内聚到组件：头部自带面板底色（--color-surface-panel）—— 吸附 / 覆盖时不会透出
+        // 滚过的内容，业务不再各自下发（此前 5 个消费方各写一遍，且吸附态还得按
+        // 「是否被顶在吸附线上」条件切换）。
+        // 展开态叠主题 tint，由 emphasizeOnExpand 控制（默认开）：tint 必须带 ! 才能压过
+        // hover 基底（同工具类里 hover 变体在样式表靠后）。
+        // 吸附（sticky / top / z）等**布局**属性仍由业务经 class 下发——折叠组件不假设宿主布局。
         // 焦点环走覆盖子元素而非 ring/box-shadow：ring 画在背景相位，会被头部内任何带底色的
         // 子元素（业务自绘的吸附露出带等）盖住；覆盖子元素在定位层绘制，永远在最上
-        'group/head relative flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-out outline-none select-none hover:bg-surface-panel-hover hover:delay-100',
+        'group/head relative flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-out outline-none select-none',
+        'bg-surface-panel hover:bg-surface-panel-hover hover:delay-100',
+        expanded && emphasizeOnExpand ? 'bg-tint-panelhover-50!' : '',
       ]"
       :title="headTooltip"
       @click="expanded = !expanded"
@@ -27,7 +34,7 @@
            overflow 裁掉上边（吸附时头部正贴着容器可视上沿，外环的上半圈落在容器外） -->
       <span
         aria-hidden="true"
-        class="pointer-events-none absolute inset-0 rounded-md opacity-0 ring-2 ring-primary/60 ring-inset group-focus-visible/head:opacity-100"
+        class="pointer-events-none absolute inset-0 rounded-md opacity-0 ring-2 ring-tint-primary-40 ring-inset group-focus-visible/head:opacity-100"
       />
       <!-- 传入 #icon 插槽时优先使用插槽内容（Vue 插槽默认内容的天然规则）；
            未提供插槽才回退到下方解析 icon prop 渲染前导图标 -->
@@ -79,7 +86,7 @@
       <!-- 内容元素单独取 ref：收起补偿要把它在盒内上移（盒下移 + 内容上移相抵），
            视窗里的内容才不会被换成段首那几行。位移目标必须是内容而非折叠体盒本身：
            盒是随 height 收缩的裁剪盒，动它会连带把裁剪边界上移 -->
-      <div :class="unpadded ? '' : 'flex flex-col gap-3 px-3 py-1.5'" ref="collapseInnerRef">
+      <div :class="unpadded ? '' : 'flex flex-col gap-2 p-2'" ref="collapseInnerRef">
         <slot />
       </div>
     </div>
@@ -126,6 +133,10 @@ const props = withDefaults(
     /** 挂载即展开时初始高度直接采用 auto 而非 0→N 展开动画：
      *  用于容器整体展开（如设置弹层首次打开）时默认展开的分组无需播放首帧高度过渡 */
     initialAuto?: boolean;
+    /** 展开时是否叠主题强调 tint（默认开）。
+     *  关掉的场景：宿主里「展开」本就由别处表达（如工作台面板、开发抽屉），
+     *  再叠一层 tint 会与常驻底色形成无意义的两级 */
+    emphasizeOnExpand?: boolean;
     /** 业务显式注入的滚动容器（收起时的滚动钳位补偿用）：业务本就知道自己的滚动容器，
      *  注入后免去找容器的开销；不传时由平台补偿逻辑沿祖先链查找 */
     scrollContainer?: HTMLElement | null;
@@ -138,6 +149,7 @@ const props = withDefaults(
     iconStroke: 'regular',
     unpadded: false,
     initialAuto: false,
+    emphasizeOnExpand: true,
     scrollContainer: null,
   }
 );

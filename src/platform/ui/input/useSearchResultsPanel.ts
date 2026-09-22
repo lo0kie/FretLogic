@@ -107,6 +107,10 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
 
   /** 键盘导航：↓/↑ 环绕移动活跃项，Enter 选中，Escape 收起面板 */
   const handleKeydown = (e: KeyboardEvent) => {
+    // IME 合成期一律放行：↓/↑ 正是输入法翻候选词的键，preventDefault 会把翻页整段吞掉，
+    // 中文输入法下搜索面板一开就没法选词。Enter 由 BaseInput 的 enterComposingKeydown 兜住
+    // （合成期 Enter 只确认候选词，不派发 enter）——两处同口径，合成期不抢键（P1 审计 #10）。
+    if (e.isComposing) return;
     if (!isSearchable() || !resultsOpen.value) return;
     const count = itemCount();
     if (count > 0) {

@@ -5,11 +5,10 @@
  * 依赖 layout（量测/字体）、fretboard（指板合成）、types；被 pages 单向依赖。
  */
 
-import { clampDrawFretCount } from '@/domains/fretboard/constants';
-
 import { drawFretboard } from './scoreExportFretboard';
 import {
   computeLineContentHeight,
+  fretWindowOfExportChord,
   getCharColumnWidth,
   getLyricsFont,
   LAYOUT,
@@ -46,8 +45,8 @@ export function renderScoreLine(
   // 和弦指板图底部对齐：以本行最大品格数的指板底部为基准，使各和弦图底部统一紧贴歌词
   const rowFbBottomY = y + fbHeight;
   const getChordY = (chord: ExportChordData) => {
-    const chordFretCount = clampDrawFretCount(chord.fretCount);
-    const thisFbHeight = LAYOUT.FRETBOARD_GRID_TOP + chordFretCount * LAYOUT.FRET_HEIGHT;
+    // 高度按**实际品窗**算，与行内容高 / 绘制同一来源；否则收紧后位图变矮、Y 仍按原高度上推
+    const thisFbHeight = LAYOUT.FRETBOARD_GRID_TOP + fretWindowOfExportChord(chord).drawFretCount * LAYOUT.FRET_HEIGHT;
     return rowFbBottomY - thisFbHeight;
   };
 

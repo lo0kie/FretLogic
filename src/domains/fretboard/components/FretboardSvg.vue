@@ -18,7 +18,7 @@
           :class="[
             displayBubbleBarre.isMarked
               ? 'border-primary bg-primary text-white shadow-[0_2px_8px_rgba(var(--color-primary-rgb),0.28)]'
-              : 'border-primary/40 bg-surface-panel text-primary shadow-[0_2px_8px_rgba(0,0,0,0.12)] hover:bg-tint-primary-88 dark:shadow-[0_2px_10px_rgba(0,0,0,0.3)]',
+              : 'border-tint-primary-60 bg-surface-panel text-primary shadow-[0_2px_8px_rgba(0,0,0,0.12)] hover:bg-tint-primary-88 dark:shadow-[0_2px_10px_rgba(0,0,0,0.3)]',
           ]"
           @mousedown.prevent.stop
           @pointerdown.prevent.stop

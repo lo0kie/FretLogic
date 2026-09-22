@@ -18,7 +18,7 @@
       v-scroll-into-view.x.center.keep-alive="isActiveVariant(variant)"
       :class="[
         isActiveVariant(variant)
-          ? 'border-primary bg-tint-primary-90! ring-1 ring-primary/40 ring-inset'
+          ? 'border-primary bg-tint-primary-90! ring-1 ring-tint-primary-60 ring-inset'
           : 'border-border-light bg-surface-body hover:border-border-base hover:bg-surface-panel-hover',
       ]"
       :key="variantKey(variant, index)"
@@ -59,32 +59,19 @@ import FretboardCanvas from '@/domains/fretboard/components/FretboardCanvas.vue'
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
-import { useChordStore } from '@/domains/chord/store/chordStore';
-import { computeChordFingerprint, getChordName } from '@/domains/chord/theory/theory';
+import { computeChordFingerprint } from '@/domains/chord/theory/theory';
+import { useChordVariants } from '@/domains/chord/workbench/composables/useChordVariants';
 import { isDark } from '@/platform/composables/useTheme';
 
 import type { Chord } from '@/domains/chord/types';
 
 const editorStore = useChordEditorStore();
-const chordStore = useChordStore();
 
 const isChordOpened = computed(() => Boolean(editorStore.draftChord.id));
 
-const chordName = computed(() => getChordName(editorStore.draftChord).trim());
-
-/** 获取当前和弦的多指法变体：严格限定在当前分组内查找，不跨分组混入同名指法；
- *  且仅当草稿是库中已保存的和弦（有 id + groupId）时才查找——手动在指板按出的同名
- *  指法不得借 selectedGroupId 回退关联库中和弦，否则变体会被加载并可在点击时覆盖手动输入 */
-const variants = computed<Chord[]>(() => {
-  const chord = editorStore.draftChord;
-  const name = chordName.value;
-  if (!chord.id || !chord.groupId || !name) return [];
-
-  const grouped = chordStore.getMultiFingering(chord.groupId, name);
-  return grouped?.variants ?? [];
-});
-
-const hasVariants = computed(() => variants.value.length > 1);
+/** 多指法变体与「是否有变体」：判定与折叠头的「共 N 个」总数共用同一份来源
+ *（见 useChordVariants 的说明），避免标题数与实际卡片数漂移 */
+const { variants, hasVariants } = useChordVariants();
 
 /** 保证变体稳定 key，避免 DOM 重建导致横向滚动偏移复位 */
 const variantKey = (v: Chord, idx: number): string =>

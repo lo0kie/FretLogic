@@ -14,6 +14,7 @@
  *    (把位, 品数, 根音弦) 组合天然构成多指法变体，用于压测变体面板 / 分组卡片 / 指板位图缓存。
  *  - **乐谱**：按段落组织的谱面（标记行 / 长短歌词句 / 纯和弦行 / 空行）＋ 逐行字符槽位绑定
  *    上一步的和弦 id，用于压测列表滚动、拼音排序、和弦反查歌曲的倒排索引、预览分页渲染与页缓存。
+ *    行的长度与行内和弦密度由档位给定（见 DevTestDataScale）：前三档同一套基线，extreme 档独立拉满。
  *
  * 随机数用固定种子的 LCG（不用 Math.random）：同一档位每次生成结果完全一致，便于复现问题。
  */
@@ -141,6 +142,10 @@ const createRng = (seed: number) => {
 
 const pick = <T>(list: readonly T[], rng: () => number): T => list[Math.floor(rng() * list.length)]!;
 
+/** 闭区间取整随机：档位里的区间一律按闭区间理解，与原先散在各处的 `a + floor(rng() * (b - a + 1))` 同口径同消耗（1 次 rng） */
+const pickRange = (range: readonly [number, number], rng: () => number): number =>
+  range[0] + Math.floor(rng() * (range[1] - range[0] + 1));
+
 /**
  * 某根弦在给定把位窗口内能弹出目标音级的全部品位。
  * 与 calcNoteMidi 的语义对齐：品位 0 恒为空弦（不随 fretOffset 移动），1..fretCount 额外加偏移。
@@ -211,19 +216,70 @@ export interface DevTestDataScale {
   songCount: number;
   /** 每首乐谱的总行数区间（含段落标记行与空行，非纯歌词行） */
   linesPerSong: readonly [number, number];
+  /**
+   * 短句行 / 长句行的词数区间（闭区间）。词库每词 2 字，故字符数 = 词数 × 2。
+   * 单行字符数须留在 MAX_SEED_LINE_CHARS（100，与编辑器的单行上限同值）以内 —— 更长的行是编辑器里
+   * 根本输入不出来的状态，放进来等于压测一个不存在的形态。
+   */
+  shortLineWords: readonly [number, number];
+  longLineWords: readonly [number, number];
+  /** 单个歌词行绑定的和弦数区间：行内槽位密度。同一字符位重复绑定会被覆盖，故实际条数可能略少 */
+  chordsPerLyricLine: readonly [number, number];
+  /** 纯和弦行（间奏 / 扫弦提示行）的和弦数区间；实际条数还会被行字符预算（MAX_SEED_LINE_CHARS）截断 */
+  chordsPerChordLine: readonly [number, number];
   groupCount: number;
 }
 
 export const DEV_TEST_SCALES: readonly DevTestDataScale[] = [
-  { key: 'medium', label: '中等', variantsPerQuality: 3, songCount: 120, linesPerSong: [30, 56], groupCount: 12 },
-  { key: 'large', label: '大', variantsPerQuality: 9, songCount: 300, linesPerSong: [40, 80], groupCount: 18 },
-  { key: 'huge', label: '巨大', variantsPerQuality: 20, songCount: 420, linesPerSong: [28, 56], groupCount: 24 },
+  // 前三档只放大规模，行形态与密度共用同一套基线，便于横向比较「行数增长」这一项的开销
+  {
+    key: 'medium',
+    label: '中等',
+    variantsPerQuality: 3,
+    songCount: 120,
+    linesPerSong: [30, 56],
+    shortLineWords: [2, 4],
+    longLineWords: [5, 11],
+    chordsPerLyricLine: [1, 3],
+    chordsPerChordLine: [3, 6],
+    groupCount: 12,
+  },
+  {
+    key: 'large',
+    label: '大',
+    variantsPerQuality: 9,
+    songCount: 300,
+    linesPerSong: [40, 80],
+    shortLineWords: [2, 4],
+    longLineWords: [5, 11],
+    chordsPerLyricLine: [1, 3],
+    chordsPerChordLine: [3, 6],
+    groupCount: 18,
+  },
+  {
+    key: 'huge',
+    label: '巨大',
+    variantsPerQuality: 20,
+    songCount: 420,
+    linesPerSong: [28, 56],
+    shortLineWords: [2, 4],
+    longLineWords: [5, 11],
+    chordsPerLyricLine: [1, 3],
+    chordsPerChordLine: [3, 6],
+    groupCount: 24,
+  },
   {
     key: 'extreme',
     label: '极端',
     variantsPerQuality: 20,
     songCount: 90,
     linesPerSong: [160, 240],
+    // 行形态独立加压：长句 40~90 字（贴 100 字上限，逼出多次软折行与超宽行）、
+    // 短句 8~18 字；行内和弦 6~12 个（短句上会直接撑满字符位），纯和弦行 8~16 个。
+    shortLineWords: [4, 9],
+    longLineWords: [20, 45],
+    chordsPerLyricLine: [6, 12],
+    chordsPerChordLine: [8, 16],
     groupCount: 24,
   },
 ];
@@ -301,6 +357,14 @@ const SECTION_MARKERS = ['[主歌]', '[副歌]', '[预副歌]', '[桥段]', '[�
 /** 纯和弦行里相邻和弦名之间的空格数（槽位按字符下标绑定，故需固定间距以对齐） */
 const CHORD_LINE_GAP = 2;
 
+/**
+ * 谱面单行字符上限，与 ScoreLyricsEditor 的 MAX_LINE_LENGTH 同值（那边是组件内的局部常量，取不到）。
+ * 生成出来的每一行都必须落在这个上限内：更长的行是编辑器里根本输入不出来的状态，压它没有意义。
+ * 歌词行天然满足（词库每词 2 字，档位按词数给区间）；纯和弦行因和弦名长度不一（"C#madd9" 最长 7 字），
+ * 需在 buildChordLine 里按预算截断。
+ */
+const MAX_SEED_LINE_CHARS = 100;
+
 /** 可绑定到谱面的和弦引用（纯和弦行需要把名字写进文本，故要带名字） */
 interface ChordRef {
   id: ChordId;
@@ -328,18 +392,28 @@ const buildLyricLine = (rng: () => number, minWords: number, maxWords: number): 
   return line;
 };
 
-/** 纯和弦行进（间奏 / 扫弦提示行）：文本即和弦名，槽位落在每个和弦名的首字符上 */
-const buildChordLine = (rng: () => number, chordRefs: readonly ChordRef[]): SeedLine => {
-  const count = 3 + Math.floor(rng() * 4);
-  const refs = Array.from({ length: count }, () => pick(chordRefs, rng));
+/**
+ * 纯和弦行进（间奏 / 扫弦提示行）：文本即和弦名，槽位落在每个和弦名的首字符上。
+ * 实际条数取档位区间与「行字符预算」的较小者：极端档拉到 16 个时，长名和弦会先撞满 100 字上限，
+ * 于是这一档的纯和弦行稳定落在「尽可能长」附近，而不是列表被撑爆。
+ */
+const buildChordLine = (
+  rng: () => number,
+  chordRefs: readonly ChordRef[],
+  countRange: readonly [number, number]
+): SeedLine => {
+  const count = pickRange(countRange, rng);
+  const refs: ChordRef[] = [];
   const offsets: number[] = [];
   let cursor = 0;
-  const parts = refs.map(ref => {
+  while (refs.length < count) {
+    const ref = pick(chordRefs, rng);
+    if (cursor + ref.name.length > MAX_SEED_LINE_CHARS) break;
     offsets.push(cursor);
     cursor += ref.name.length + CHORD_LINE_GAP;
-    return ref.name;
-  });
-  return { text: parts.join(' '.repeat(CHORD_LINE_GAP)), kind: 'chord', offsets, chords: refs };
+    refs.push(ref);
+  }
+  return { text: refs.map(ref => ref.name).join(' '.repeat(CHORD_LINE_GAP)), kind: 'chord', offsets, chords: refs };
 };
 
 /**
@@ -347,8 +421,15 @@ const buildChordLine = (rng: () => number, chordRefs: readonly ChordRef[]): Seed
  *
  * 目的是让测试数据覆盖真实谱面的全部行形态：空行（行高坍塌 / 分页）、标记行（无和弦绑定的
  * 长文本行）、短句行（行内槽位密集）、纯和弦行（字符下标与和弦名对齐）。
+ * 行的长度与行内和弦密度取自档位（scale）——extreme 档把长句拉到数十上百字、行内和弦拉到
+ * 十余个，专门压「超宽行软折行」与「行内密集槽位」这两条路径。
  */
-const buildSongLines = (rng: () => number, chordRefs: readonly ChordRef[], targetLines: number): SeedLine[] => {
+const buildSongLines = (
+  rng: () => number,
+  chordRefs: readonly ChordRef[],
+  targetLines: number,
+  scale: DevTestDataScale
+): SeedLine[] => {
   const lines: SeedLine[] = [];
   let markerIndex = Math.floor(rng() * SECTION_MARKERS.length);
 
@@ -359,9 +440,9 @@ const buildSongLines = (rng: () => number, chordRefs: readonly ChordRef[], targe
     const sectionLines = 3 + Math.floor(rng() * 6);
     for (let i = 0; i < sectionLines && lines.length < targetLines; i++) {
       const roll = rng();
-      if (roll < 0.12) lines.push(buildChordLine(rng, chordRefs));
-      else if (roll < 0.34) lines.push({ text: buildLyricLine(rng, 2, 4), kind: 'lyric' });
-      else lines.push({ text: buildLyricLine(rng, 5, 11), kind: 'lyric' });
+      if (roll < 0.12) lines.push(buildChordLine(rng, chordRefs, scale.chordsPerChordLine));
+      else if (roll < 0.34) lines.push({ text: buildLyricLine(rng, ...scale.shortLineWords), kind: 'lyric' });
+      else lines.push({ text: buildLyricLine(rng, ...scale.longLineWords), kind: 'lyric' });
     }
 
     if (lines.length < targetLines) lines.push({ text: '', kind: 'blank' });
@@ -386,13 +467,13 @@ const buildSongs = (chords: Chord[], scale: DevTestDataScale, baseTime: number):
   const songs: Song[] = [];
 
   for (let index = 0; index < scale.songCount; index++) {
-    const targetLines = scale.linesPerSong[0] + Math.floor(rng() * (scale.linesPerSong[1] - scale.linesPerSong[0] + 1));
-    const seedLines = buildSongLines(rng, chordRefs, targetLines);
+    const targetLines = pickRange(scale.linesPerSong, rng);
+    const seedLines = buildSongLines(rng, chordRefs, targetLines, scale);
     const lines = seedLines.map(line => line.text);
     const lyrics = lines.join('\n');
     const { lineIds } = matchLineIds([], lines, []);
 
-    // 逐行绑定字符槽位：纯和弦行按和弦名首字符对齐，歌词行随机落 1~3 个，
+    // 逐行绑定字符槽位：纯和弦行按和弦名首字符对齐，歌词行按档位给定的密度随机落点，
     // 标记行与空行不绑（与真实谱面一致——那两类行上不会有和弦）
     const chordMap = new Map<LineId, ChordLineSlots>();
     const setChar = (lineId: LineId, index: number, chordId: ChordId) => {
@@ -417,8 +498,9 @@ const buildSongs = (chords: Chord[], scale: DevTestDataScale, baseTime: number):
       }
 
       if (seedLine.kind === 'marker' || seedLine.text.length === 0) continue;
-      // 一行 1~3 个：贴近真实谱面密度，同时压住 chordMap 体积（单条槽位 key 近百字节）
-      const bindCount = 1 + Math.floor(rng() * 3);
+      // 行内密度取自档位：低档 1~3 个，贴近真实谱面密度、同时压住 chordMap 体积（单条槽位 key 近百字节）；
+      // 极端档 6~12 个，短句行上会直接把字符位撑满。落点仍是随机，同一字符位重复绑定会被覆盖。
+      const bindCount = pickRange(scale.chordsPerLyricLine, rng);
       for (let bind = 0; bind < bindCount; bind++)
         setChar(lineId, Math.floor(rng() * seedLine.text.length), pick(chordRefs, rng).id);
     }

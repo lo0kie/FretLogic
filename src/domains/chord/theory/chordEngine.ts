@@ -21,9 +21,15 @@
 import { createLruCache } from '@/platform/utils/cache';
 import { estimateValueBytes } from '@/platform/utils/common';
 
+// 必须从 ./chordName 直连，**不得**从桶 ./theory 取：桶第 23 行重导出了 ./chordSearch，
+// 而 chordSearch.ts:11 又值导入本模块 → chordEngine → theory(桶) → chordSearch → chordEngine
+// 构成 5 模块运行时环（bassConsistency / chordEngine / chordSearch / chordSort / theory）。
+// 改用直连后该环完全消失（已用 Tarjan 算 SCC 验证：运行时 SCC 由 1 个降为 0）。
+// 两个符号的实现都在 chordName.ts（:87 parsePitchSegment / :119 nameToSegments），
+// 换的是取用路径、不是函数；桶的公开 API 不变，其余调用点不受影响。
+import { nameToSegments, parsePitchSegment } from './chordName';
 import { chordQualityAstToIntervals, QUALITY_TOKENS } from './chordQualityAst';
 import { categoryOfAst, compositeTokens, recognizeByIntervals, rolesOfAst, weightOf } from './chordRecognitionAst';
-import { nameToSegments, parsePitchSegment } from './theory';
 
 import type { ChordQualityAst } from './chordQualityAst';
 import type { CategoryOfAst } from './chordRecognitionAst';

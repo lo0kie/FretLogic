@@ -23,76 +23,14 @@
         <div v-if="row.type === 'group'" aria-hidden="true" class="song-group-header px-sm pb-2xs">
           <span class="text-xs leading-none font-bold tracking-widest text-fg-disabled">{{ row.label }}</span>
         </div>
-        <div
-          v-action-card
+
+        <SongCard
           v-else
-          v-wave
-          v-scroll-into-view.y="isSongActive(row.song.id)"
-          :aria-label="isSongActive(row.song.id) ? `${row.cardAriaLabel}，已选中` : row.cardAriaLabel"
-          :aria-pressed="isSongActive(row.song.id)"
-          :class="{
-            'border-tint-primary-60! bg-tint-primary-92! hover:border-primary! hover:bg-tint-primary-82! hover:shadow-[0_0_0_1px_var(--color-primary)]':
-              isSongActive(row.song.id),
-            'border-border-base bg-surface-panel-hover': isMenuTarget(row.song.id),
-          }"
-          :data-song-id="row.song.id"
-          :title="row.song.title"
-          @click="handleSelectSong(row.song.id)"
-          data-focusable-outline
-          class="song-card-item w-full cursor-pointer rounded-md border border-border-light bg-surface-body p-sm px-md transition-all duration-fast outline-none hover:border-border-base hover:bg-surface-panel-hover"
-        >
-          <div class="flex w-full flex-col gap-2xs">
-            <div class="flex w-full items-center justify-between gap-sm">
-              <div v-marquee.fade class="min-w-0 flex-1">
-                <span
-                  :class="isSongActive(row.song.id) ? 'font-bold text-primary!' : 'text-fg-title'"
-                  class="text-xs font-semibold"
-                >
-                  {{ row.song.title }}
-                </span>
-              </div>
-
-              <div class="flex shrink-0 gap-xs">
-                <template v-if="row.song.singer">
-                  <BaseBadge
-                    :appearance="isSongActive(row.song.id) ? 'subtle' : 'filled'"
-                    :aria-label="`歌手 ${row.song.singer}`"
-                    :title="`歌手：${row.song.singer}`"
-                    size="2xs"
-                    variant="neutral"
-                  >
-                    <span class="block max-w-[7rem] truncate">{{ row.song.singer }}</span>
-                  </BaseBadge>
-                </template>
-
-                <template v-else>
-                  <BaseBadge
-                    :appearance="isSongActive(row.song.id) ? 'subtle' : 'filled'"
-                    :aria-label="row.keyAriaLabel"
-                    :title="row.keyTitle"
-                    size="2xs"
-                    variant="neutral"
-                    width="2rem"
-                  >
-                    <!-- 「调」走 suffix 显式声明：拼进 name 会让整串解析失败、升降号退化成普通字符 -->
-                    <span v-chord-name="{ name: row.songKeyText, suffix: '调' }" />
-                  </BaseBadge>
-
-                  <BaseBadge
-                    :appearance="isSongActive(row.song.id) ? 'subtle' : 'filled'"
-                    :aria-label="`变调夹 capo ${row.song.capo} 品`"
-                    :title="`变调夹 ${row.song.capo} 品`"
-                    size="2xs"
-                    variant="neutral"
-                    width="2.8rem"
-                  >
-                    Capo {{ row.song.capo }}
-                  </BaseBadge>
-                </template>
-              </div>
-            </div>
-          </div>
-        </div>
+          :row
+          :draggable="isDragEnabled"
+          :menu-target="isMenuTarget(row.song.id)"
+          @select="handleSelectSong(row.song.id)"
+        />
       </div>
     </TransitionGroup>
   </div>
@@ -104,7 +42,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 
-import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import { computeSongKey } from '@/domains/chord/theory/theory';
@@ -116,6 +53,9 @@ import { useSortableList } from '@/platform/composables/useSortableList';
 import { useUiStore } from '@/platform/store/uiStore';
 import { pinyinGroupKey } from '@/platform/utils/pinyin';
 
+import SongCard from './SongCard.vue';
+
+import type { SongItemRow } from './songCardRow';
 import type { Song } from '@/domains/score/types';
 import type { MenuItem } from '@/platform/ui/menu/types';
 import type { ComponentPublicInstance } from 'vue';
@@ -139,11 +79,16 @@ const songListRef = useTemplateRef<ComponentPublicInstance>('songListRef');
 // 非手动排序或过滤激活时禁用（过滤后 DOM 序与全量数组序不一致，按索引重排会错位）。
 // 空列表守卫、容器就绪后再初始化、以及 disabled 的响应式跟随都由 useSortableList 承担。
 // 列表自身的 TransitionGroup 只管增删与排序方法切换的 enter/leave/move：拖拽松手时 DOM
-// 已被 Sortable 摆成最终顺序，patch 前后位置一致、它的 FLIP 位移为 0，不会与拖拽动画打架
+// 已被 Sortable 摆成最终顺序，patch 前后位置一致、它的 FLIP 位移为 0，不会与拖拽动画打架。
+//
+// 抽成具名 computed 而不内联：卡片上的拖拽把手线索（SongCard 的 draggable）必须与这里同源，
+// 各写一份条件迟早分叉 —— 把手还在、拖动已失效（或反之）是最难归因的那类不一致
+const isDragEnabled = computed(() => songStore.songSortMethod === 'manual' && !songStore.hasSongFilter);
+
 useSortableList<Song>({
   target: songListRef,
   items: () => songStore.songs,
-  enabled: computed(() => songStore.songSortMethod === 'manual' && !songStore.hasSongFilter),
+  enabled: isDragEnabled,
   onReorder: next => songStore.reorderSongs(next),
 });
 
@@ -152,19 +97,6 @@ interface SongGroupRow {
   key: string;
   type: 'group';
   label: string;
-}
-
-/** 歌曲行。派生量在构建期一次算完（computeSongKey 此前每行被调 3 次）：
- *  调性串与三段 aria/title 都只依赖 song 自身字段，纯派生；isSongActive/isMenuTarget
- *  依赖响应式状态、且只是字符串比较，保留为模板内函数调用 */
-interface SongItemRow {
-  key: string;
-  type: 'song';
-  song: Song;
-  songKeyText: string;
-  cardAriaLabel: string;
-  keyAriaLabel: string;
-  keyTitle: string;
 }
 
 type SongListRow = SongGroupRow | SongItemRow;
@@ -201,9 +133,6 @@ const songRows = computed<SongListRow[]>(() => {
   }
   return rows;
 });
-
-/** 乐谱是否为当前打开的乐谱 */
-const isSongActive = (songId: string) => scoreEditor.activeSongId === songId;
 
 // 乐谱右键菜单项：按需构建（仅在右键命中某张卡片后构建一次），不缓存
 const getSongMenuItems = (song: Song): MenuItem[] => {
@@ -398,7 +327,8 @@ const onSongLeave = (el: Element): void => {
    enter/leave 用于分组小标题的显隐（切换进/出拼音分组模式、歌曲增删时同样生效）：
    leave 置 absolute 使其脱离 flex 流，其余行由 move 过渡平滑上移 */
 .song-sort-move {
-  transition: transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* 缓动取 tokens 令牌（与全局过渡类、ease-standard 工具类同一条曲线），不写裸值 */
+  transition: transform 0.3s var(--bezier-standard);
 }
 .song-sort-enter-active {
   transition:

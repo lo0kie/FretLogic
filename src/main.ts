@@ -81,13 +81,22 @@ const initApp = async () => {
   }
 
   // 主题初始化挪到转录之后：首帧观感由 index.html 内联脚本（读 cookie）保障，不闪白；
-  // 这里同步重读偏好（cookie 缺失时可从 kv 镜像迁移历史持久化值）并落 cookie
-  useTheme().initTheme();
+  // 这里同步重读偏好（cookie 缺失时可从 kv 镜像迁移历史持久化值）并落 cookie。
+  // 必须兜底：initTheme 内的 writeCookie 是裸 `document.cookie=`（useTheme.ts:32，无 try），
+  // 浏览器禁用 cookie / 沙箱 iframe 下会抛。此前它是两个 try 之间的裸调用，一旦抛出即成为
+  // unhandled rejection → 下方 finally 里的 app.mount 永远到不了 → 永久白屏（且全 src 无 errorHandler）。
+  // 与上下两段同口径：初始化失败不阻断启动。
+  try {
+    useTheme().initTheme();
+  } catch (error) {
+    logger.error('main', '主题初始化失败', error);
+  }
 
   // 数据域水合：挂载前完成，首帧即有数据。
   // 与上方 bootstrap 同款超时兜底：hydrate 同样打 IDB（open 被其它标签页阻塞时可永久挂起），
-  // 裸 await 会让 finally 里的 mount 永远到不了——整屏空白零报错。超时即挂载（水合 Promise
-  // 不取消，晚到时 store 各自的响应式赋值仍会把数据补进已挂载的 UI）
+  // 裸 await 会让 finally 里的 mount 永远到不了——整屏空白零报错。超时即挂载；晚到的水合数据
+  // 由各 store 的「窗口期保护」处理：窗口内已有本地改动时跳过覆盖赋值，避免把用户已编辑的
+  // 内存状态顶回磁盘快照（见 chordStore.hydrate / songStore.hydrate）
   try {
     const HYDRATE_TIMEOUT_MS = 8000;
     await Promise.race([

@@ -10,7 +10,7 @@
       pointerEvents: uiStore.isLeftOpen ? 'auto' : 'none',
       boxShadow: uiStore.isLeftOpen ? 'var(--shadow-panel)' : 'none',
     }"
-    class="panel-left absolute inset-y-0 left-0 z-sidebar flex h-full flex-col overflow-hidden border-r border-glass-border bg-surface-panel/90 backdrop-blur-xl transition-[transform,opacity] duration-slow ease-sidebar will-change-transform"
+    class="panel-left absolute inset-y-0 left-0 z-sidebar flex h-full flex-col overflow-hidden border-r border-glass-border bg-surface-panel transition-[transform,opacity] duration-slow ease-sidebar will-change-transform"
   >
     <div class="panel-header flex h-10 shrink-0 items-center justify-between gap-sm border-b border-glass-border px-lg">
       <div
@@ -20,6 +20,7 @@
       >
         <BaseInput
           v-model="searchQuery"
+          :search-item-selected="item => isCardActive(item.card)"
           :search-item-title="getSearchItemTitle"
           :search-items="searchResults"
           :search-no-result-text="noResultText"
@@ -35,11 +36,13 @@
           title="搜索和弦（支持名称与和弦级数检索）"
           width="full"
         >
-          <template #search-item="{ item }">
+          <template #search-item="{ item, selected }">
             <!-- 只负责行内容；行外壳（高度/圆角/悬停/键盘活跃高亮/点击选中）由 BaseInput 统一渲染 -->
             <!-- 左侧：和弦名（首字绝对左对齐） -->
             <span class="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 leading-normal">
-              <span v-marquee.fade class="max-w-[90px] text-xs/normal font-semibold">
+              <!-- 跑马灯触发宿主委托给整行（行外壳是 BaseDropdownItem 的 <button>）：和弦名限宽 90px、
+                   分组名限宽 48px，鼠标停在同行空白处时同样该开始滚动 -->
+              <span v-marquee.fade="{ trigger: 'button' }" class="max-w-[90px] text-xs/normal font-semibold">
                 <span v-chord-name="{ chord: item.card.mainChord }" />
               </span>
             </span>
@@ -56,13 +59,31 @@
                 <BaseRollingText :text="`${item.card.variantCount}指法`" class="tabular-nums" />
               </BaseBadge>
 
+              <!-- 所属分组：常态弱化为次要信息；行处于选中态时一并跟随强调 ——
+                   判定直接用插槽下发的 selected（与行外壳的常驻高亮同源），不另算一份。
+                   实色而非透明度混合：本项目文字色是 title > body > muted > disabled 四档实色
+                   （见 tailwind.css 的 fg 档位说明），且选中行底本身就是主题 tint，
+                   半透明文字叠上去会得到一块既非灰也非主题色的混色 -->
               <span
-                v-marquee.fade
+                v-marquee.fade="{ trigger: 'button' }"
+                :class="[
+                  'max-w-[48px] py-0.5 text-2xs/normal font-semibold',
+                  selected ? 'text-primary' : 'text-fg-disabled',
+                ]"
                 :title="`所属分组：${item.groupName}`"
-                class="max-w-[48px] py-0.5 text-2xs/normal font-semibold text-fg-disabled"
               >
                 {{ item.groupName }}
               </span>
+
+              <!-- 当前选中（编辑器正在编辑的和弦）：与行外壳的常驻高亮同一判定，右侧补一枚对勾 -->
+              <BaseIcon
+                v-if="selected"
+                aria-hidden="true"
+                class="shrink-0 text-primary"
+                icon-size="md"
+                icon-stroke="bold"
+                name="check"
+              />
             </span>
           </template>
         </BaseInput>
@@ -88,8 +109,13 @@
       >
         <div class="header-title-zone flex min-w-0 items-center gap-sm">
           <span class="sidebar-title text-xs font-bold tracking-tight whitespace-nowrap text-fg-title">乐谱列表</span>
-          <BaseBadge appearance="filled" size="xs" title="乐谱数量" variant="neutral">
-            <BaseRollingText :text="`${songStore.songs.length}`" class="tabular-nums" />
+          <BaseBadge
+            :title="songStore.hasSongFilter ? '当前筛选结果数量' : '乐谱数量'"
+            appearance="filled"
+            size="xs"
+            variant="neutral"
+          >
+            <BaseRollingText :text="`${songStore.filteredSongs.length}`" class="tabular-nums" />
           </BaseBadge>
         </div>
 
@@ -434,11 +460,20 @@ const songSortMenuItems = computed<MenuItem[]>(() => [
     checked: songStore.songSortMethod === 'createdAt',
     action: () => songStore.setSongSortMethod('createdAt'),
   },
+  {
+    // 经常回头改同一批歌时，「最近编辑」比「创建时间」更贴近找歌需求：
+    // createdAt 一旦定了就不再变化，时间一长就失去排序意义
+    label: '最近编辑',
+    icon: 'pencil',
+    checked: songStore.songSortMethod === 'updatedAt',
+    action: () => songStore.setSongSortMethod('updatedAt'),
+  },
 ]);
 
 const SORT_ICON_MAP: Record<string, IconName> = {
   title: 'type',
   createdAt: 'clock',
+  updatedAt: 'pencil',
 };
 
 /** 排序按钮图标随当前排序方式切换（与菜单项图标一致），颜色保持默认不换 */

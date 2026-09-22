@@ -21,6 +21,11 @@
     />
 
     <template v-for="(opt, i) in normalizedOptions" :key="String(opt.value)">
+      <!-- 项只需压过自己的滑块（z-0）→ z-content(1) 足够。**不要**改成 z-float：那是
+           「面板内浮起元件」档（滑块把手 / 数值气泡 / 悬停操作按钮这类瞬时浮起件），
+           而折叠面板的吸附头也用这一档 —— 本控件在 DOM 里位于折叠标题之后，同层时后出现的赢，
+           分段控件就会盖住吸附中的折叠标题（DevPanel 的标题只有 z-panel，更是被恒定压住）。
+           本控件是常驻在流内容，不占浮起档，层叠只在控件内部成立 -->
       <button
         v-wave="{ disabled: disabled || opt.disabled }"
         :aria-checked="isSelected(opt.value)"
@@ -32,7 +37,7 @@
         :title="opt.label"
         @click="select(opt, i)"
         data-focusable-outline
-        class="segmented-item relative z-float inline-flex h-full items-center justify-center self-stretch bg-transparent leading-none font-bold whitespace-nowrap text-fg-muted shadow-none transition-all duration-200 ease-out outline-none enabled:cursor-pointer enabled:hover:text-fg-title disabled:cursor-not-allowed disabled:opacity-40"
+        class="segmented-item relative z-content inline-flex h-full items-center justify-center self-stretch bg-transparent leading-none font-bold whitespace-nowrap text-fg-muted shadow-none transition-all duration-200 ease-out outline-none enabled:cursor-pointer enabled:hover:text-fg-title disabled:cursor-not-allowed disabled:opacity-40"
         role="radio"
         type="button"
       >
@@ -324,11 +329,12 @@ const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<str
     return [
       sizeConfig.value.item,
       'rounded-full',
-      // 未选中段 hover 提亮底色做「悬浮胶囊」预览；选中段 hover 叠更深一档的主色底
-      // （tint-primary-80 半透明压在滑块 tint-primary-88 上形成可见加深，文字强调不变）
+      // 未选中段 hover 提亮底色做「悬浮胶囊」预览；选中段 hover 取更深一档的主色底
+      // （tint-primary-82 即原「tint-primary-80 以 70% 压在滑块 tint-primary-88 上」的实色等效值，
+      //   逐通道差 ≤2；改实色后不再随叠层底色漂移）
       active
-        ? 'text-primary! font-extrabold enabled:hover:bg-tint-primary-80/70'
-        : 'enabled:hover:bg-surface-panel-hover/60',
+        ? 'text-primary! font-extrabold enabled:hover:bg-tint-primary-82'
+        : 'enabled:hover:bg-surface-panel-subtle',
       { 'flex-1': isExpand },
     ];
 
@@ -343,8 +349,8 @@ const itemClasses = (opt: SegmentOption<V>, index: number): (string | Record<str
     sizeConfig.value.textItem,
     'rounded-lg font-medium',
     active
-      ? 'text-primary font-semibold bg-primary/10'
-      : 'text-fg-muted enabled:hover:text-fg-title enabled:hover:bg-surface-panel-hover/50',
+      ? 'text-primary font-semibold bg-tint-primary-90'
+      : 'text-fg-muted enabled:hover:text-fg-title enabled:hover:bg-surface-panel-subtle',
     { 'flex-1': isExpand },
   ];
 };

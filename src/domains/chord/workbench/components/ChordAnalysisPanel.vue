@@ -1,16 +1,19 @@
 <template>
   <template v-if="hasNotes">
-    <!-- 两列高度以右侧按音列为准：左列内容绝对定位脱离流、不参与行高计算，超出时自身滚动 -->
+    <!-- 行高取两列内容高度之大者，分两种情形（候选是否为空）：
+         · 候选为空：左列空态留在流中，按自身高度参与行高 → 容器由左侧撑开（不被右列压缩）；
+         · 候选非空：左列内容脱离流、不参与行高，行高由右侧按音列独占决定，超出则由左列自身滚动 -->
     <div
       :class="candidatesOnly ? 'grid-cols-1' : 'grid-cols-[56%_auto_1fr]'"
       class="grid min-h-0 w-full gap-xs overflow-hidden"
     >
       <!-- 左列占位壳：只作定位上下文与滚动条 overlay 的挂载点，自身不提供内容高度 -->
       <div class="relative min-h-0 min-w-0" ref="candidatePaneRef">
-        <!-- 内容层绝对定位脱离流 → 不参与 grid 行高计算，行高由右列独占决定；超出则本区滚动 -->
+        <!-- 候选非空：内容层绝对定位脱离流 → 不参与 grid 行高计算，行高由右列独占决定；超出则本区滚动。
+             候选为空：留在流中，空态框按自身高度撑开左列行高（矮右列压不扁它），此时无须滚动 -->
         <BaseScrollArea
           v-grid-nav
-          :class="candidatesOnly ? undefined : 'absolute inset-0'"
+          :class="!candidatesOnly && candidates.length > 0 ? 'absolute inset-0' : undefined"
           :fade="{ size: 12 }"
           :scrollbar="{ overlayParent: candidateOverlayParent }"
           axis="y"

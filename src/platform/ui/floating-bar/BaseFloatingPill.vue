@@ -1,5 +1,9 @@
 <template>
   <Teleport :disabled="disabledTeleport" :to="teleportTo">
+    <!-- data-ring-occluder：与 BaseFab 同因 —— 浮动胶囊也是**内容层**的覆盖元件（默认 z-fab 40，
+         远低于聚焦环 overlay 的浮层基准层），环挂在 body 顶层、层号越不过它，不声明就会被环画在
+         上面（穿帮）。见 focusRingOverlay 的「遮挡物策略」。标在容器上不影响胶囊内按钮自己聚焦：
+         环只扫目标的**同层兄弟**，目标所在的那条祖先链（含本胶囊）天然排除在扫描之外。 -->
     <Transition
       :name="transitionName"
       @after-enter="emit('after-enter', $event)"
@@ -17,7 +21,8 @@
         :aria-label="ariaLabel ?? '浮动胶囊'"
         :class="[positionClass, alignClass, zIndexClass, sizeClass]"
         :style="positionStyle"
-        class="base-floating-pill pointer-events-auto flex w-max max-w-[calc(100vw-2rem)] items-center rounded-full border border-glass-border bg-surface-panel/95 shadow-floating backdrop-blur-xl hover:ring-2 hover:ring-primary/70"
+        data-ring-occluder
+        class="base-floating-pill pointer-events-auto flex w-max max-w-[calc(100vw-2rem)] items-center rounded-full border border-glass-border bg-surface-panel shadow-floating hover:ring-2 hover:ring-tint-primary-30"
         role="toolbar"
         tabindex="-1"
       >

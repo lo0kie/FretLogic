@@ -91,6 +91,8 @@ export interface RowWindowRange {
  * @param getList 分区列表根元素（querySelector 定位各分区网格容器）
  * @param getPlans 各分区的行规划（与模板 v-for 同源；其变化后调用方须自行调 updateWindow）
  * @param gridSelector 分区网格容器的选择器（顺序与 plans 对应）
+ * @param getGridEls 分区网格元素提供者：宿主若已缓存这批元素（分区壳常驻，集合只在分区增删时变），
+ *                   回传它即可省掉每滚动帧一次子树 querySelectorAll；不传则每帧现查，与改造前一致
  * @param overscanPx 视口上下各多渲染的像素量，滚动无感的缓冲
  */
 export const useRowWindowing = <T>(options: {
@@ -98,6 +100,7 @@ export const useRowWindowing = <T>(options: {
   getList: () => HTMLElement | null;
   getPlans: () => VirtualSectionPlan<T>[];
   gridSelector: string;
+  getGridEls?: () => ArrayLike<HTMLElement>;
   overscanPx?: number;
 }) => {
   const overscanPx = options.overscanPx ?? 260;
@@ -111,7 +114,9 @@ export const useRowWindowing = <T>(options: {
     const top = scRect.top - overscanPx;
     const bottom = scRect.bottom + overscanPx;
     const plans = options.getPlans();
-    const gridEls = list.querySelectorAll<HTMLElement>(options.gridSelector);
+    const gridEls: ArrayLike<HTMLElement> = options.getGridEls
+      ? options.getGridEls()
+      : list.querySelectorAll<HTMLElement>(options.gridSelector);
     const next: RowWindowRange[] = [];
     for (let si = 0; si < plans.length; si++) {
       const plan = plans[si]!;

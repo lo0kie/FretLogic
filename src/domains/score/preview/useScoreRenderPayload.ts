@@ -45,6 +45,7 @@ export const useScoreRenderPayload = () => {
       fontScale: scoreEditor.previewFontScale,
       fretboardScale: scoreEditor.previewFretboardScale,
       showBarre: settingsStore.scoreShowBarre,
+      trimEmptyEdgeFrets: settingsStore.scoreTrimEmptyEdgeFrets,
       lyricsFontWeight: settingsStore.scoreLyricsFontWeight,
       exportQualityPct: settingsStore.scoreExportQuality,
       pageMarginPx: settingsStore.scorePageMargin,

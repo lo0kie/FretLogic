@@ -1,6 +1,12 @@
 <template>
   <BaseModal v-model:visible="groupModals.modals.move" @confirm="groupModals.handleMoveChord" title="移动至新分组">
-    <div v-grid-nav="3" class="no-scrollbar grid max-h-[50vh] grid-cols-3 gap-md">
+    <BaseScrollArea
+      v-grid-nav="3"
+      :fade="false"
+      :scrollbar="false"
+      axis="y"
+      class="grid max-h-[50vh] grid-cols-3 gap-md"
+    >
       <button
         v-wave
         v-for="group in chordStore.groups"
@@ -17,12 +23,14 @@
         data-focusable-outline
         class="flex w-full min-w-0 cursor-pointer items-center rounded-md border border-border-base p-md text-xs font-bold transition-all duration-fast disabled:cursor-not-allowed disabled:border-border-light disabled:bg-surface-main disabled:text-fg-disabled disabled:opacity-50"
       >
-        <div v-marquee.fade>
+        <!-- 触发宿主委托给整行按钮：分组名只占行首一条，鼠标停在行内空白处（如计数那一侧）时
+             同样该开始滚动。该行没有具名类，用 closest('button') 命中的就是这个按钮本身 -->
+        <div v-marquee.fade="{ trigger: 'button' }">
           <span> {{ group.name }} </span>
           <span class="pl-1 text-fg-disabled">({{ chordStore.groupChordMap.get(group.id)?.length ?? 0 }})</span>
         </div>
       </button>
-    </div>
+    </BaseScrollArea>
   </BaseModal>
 
   <BaseModal v-model:visible="groupModals.modals.chordVariantsDelete" :show-footer="false" width="xl">
@@ -69,9 +77,8 @@
           :aria-checked="groupModals.modalData.selectedVariantIds.has(variant.id)"
           :aria-label="`指法 偏移 ${variant.fretOffset}`"
           :class="{
-            'border-danger! bg-tint-danger-90! ring-1 ring-danger/50': groupModals.modalData.selectedVariantIds.has(
-              variant.id
-            ),
+            'border-danger! bg-tint-danger-90! ring-1 ring-tint-danger-50':
+              groupModals.modalData.selectedVariantIds.has(variant.id),
           }"
           :key="variant.id"
           @click="groupModals.toggleVariantSelection(variant.id)"

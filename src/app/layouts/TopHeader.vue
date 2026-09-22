@@ -1,6 +1,6 @@
 <template>
   <header
-    class="relative z-header flex min-h-10 w-full shrink-0 items-center justify-between border-b border-glass-border bg-surface-panel/90 px-4 backdrop-blur-lg select-none wco:min-h-[max(2.5rem,env(titlebar-area-height,2.5rem))] wco:pr-[max(env(titlebar-area-inset-right,0px),1rem)] wco:pl-[max(env(titlebar-area-inset-left,0px),1rem)] wco:[-webkit-app-region:drag] wco:[app-region:drag]"
+    class="relative z-header flex min-h-10 w-full shrink-0 items-center justify-between border-b border-glass-border bg-surface-panel px-4 select-none wco:min-h-[max(2.5rem,env(titlebar-area-height,2.5rem))] wco:pr-[max(env(titlebar-area-inset-right,0px),1rem)] wco:pl-[max(env(titlebar-area-inset-left,0px),1rem)] wco:[-webkit-app-region:drag] wco:[app-region:drag]"
   >
     <div :class="NO_DRAG_REGION_CLASS" class="flex min-w-0 flex-1 items-center justify-start">
       <BaseCheckbox
@@ -22,20 +22,14 @@
       />
 
       <div class="flex items-center gap-md">
-        <button
-          v-tooltip="'回到工作台'"
-          @click="router.push(ROUTE_PATHS.WORKBENCH)"
-          data-focusable-outline
-          aria-label="Fret Logic 首页"
-          class="group flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors outline-none select-none"
-          type="button"
+        <!-- 品牌文字恒为纯展示：右侧分段导航已常驻「和弦 / 乐谱」两个入口，
+             再让 logo 可点去工作台就与导航项完全重复（同一个目的地两套入口）。
+             纯展示也顺带去掉了它自己那层焦点环与 aria 语义（不再是一个可操作控件）。 -->
+        <span
+          class="font-features-['ss01'_1] text-xs font-extrabold tracking-tight whitespace-nowrap text-fg-title select-none"
         >
-          <span
-            class="font-features-['ss01'_1] text-xs font-extrabold tracking-tight whitespace-nowrap text-fg-title transition-colors group-hover:text-primary"
-          >
-            Fret Logic
-          </span>
-        </button>
+          Fret Logic
+        </span>
         <BaseSegmentedControl
           :model-value="activeNavPath"
           :options="NAV_OPTIONS"
@@ -200,14 +194,19 @@
         orientation="vertical"
       />
 
-      <BasePopover :disabled="!canUseHeaderSettings" placement="bottom-end" ref="settingsPopoverRef" trigger="hover">
+      <BasePopover
+        :disabled="!canUseHeaderSettings"
+        :trigger="canHover ? 'hover' : 'click'"
+        placement="bottom-end"
+        ref="settingsPopoverRef"
+      >
         <template #trigger="{ isOpen, pinToggle }">
           <ActionButton
             :aria-expanded="isOpen"
             :color="isOpen ? 'primary' : 'default'"
             :disabled="!canUseHeaderSettings"
             :variant="isOpen ? 'subtle' : 'ghost'"
-            @click="pinToggle()"
+            @click="canHover && pinToggle()"
             icon-only
             aria-haspopup="true"
             aria-label="偏好设置"
@@ -349,6 +348,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, ref, useTemplateRef, watch } from 'vue';
 
+import { useMediaQuery } from '@vueuse/core';
 import { useRoute, useRouter } from 'vue-router';
 
 import ActionButton from '@/platform/ui/button/ActionButton.vue';
@@ -391,6 +391,15 @@ import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
 
 const route = useRoute();
 const router = useRouter();
+
+/**
+ * 设置浮层的触发方式：仅在设备**有悬停能力**时才用 hover。
+ * 触屏上不存在 hover 态，hover 触发只能靠浏览器在 tap 时合成的 mouseenter 侥幸生效，
+ * 而"钉住/关闭"还依赖合成的 mouseleave——不同内核表现不一致，设置入口可能根本进不去。
+ * 用 (hover: hover) 而不是 (pointer: coarse)：二合一设备接上鼠标后是 hover，不会误降级。
+ */
+const canHover = useMediaQuery('(hover: hover)');
+
 const editorStore = useChordEditorStore();
 const scoreEditor = useScoreEditorStore();
 const uiStore = useUiStore();

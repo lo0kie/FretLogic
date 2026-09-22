@@ -6,6 +6,7 @@
  * 本指令在元素宽度因内容增减产生跳变时，利用 FLIP 思想由 WAAPI 从旧宽补间到新宽。
  * 针对动画过程中尺寸不断变化并反复触发 RO 的情况，做了防抖与接力（relay）保护。
  */
+import { EASE_STANDARD } from '@/platform/utils/constants';
 import { observeResize } from '@/platform/utils/dom';
 
 import type { Directive, DirectiveBinding } from 'vue';
@@ -13,7 +14,7 @@ import type { Directive, DirectiveBinding } from 'vue';
 export interface AutoWidthOptions {
   /** 补间动画持续时间（ms），默认 160 */
   duration?: number;
-  /** 缓动曲线，默认 'cubic-bezier(0.25, 0.1, 0.25, 1)' */
+  /** 缓动曲线，默认取全局标准曲线（platform/utils/constants 的 EASE_STANDARD，即 tokens 的 --bezier-standard） */
   easing?: string;
   /** 触发过渡的最小宽度差阈值（px），默认 0.5 */
   threshold?: number;
@@ -39,7 +40,7 @@ const stateMap = new WeakMap<HTMLElement, AutoWidthState>();
 const normalizeOptions = (value: AutoWidthBinding, modifiers?: Record<string, boolean>): AutoWidthOptions => {
   const opts: AutoWidthOptions = {
     duration: 160,
-    easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+    easing: EASE_STANDARD,
     threshold: 0.5,
     disabled: false,
   };
@@ -60,7 +61,7 @@ const normalizeOptions = (value: AutoWidthBinding, modifiers?: Record<string, bo
 
 /** 旧宽到新宽的 WAAPI 补间；动画期间内容再变则在结束后接力到最新目标 */
 const startWidthAnim = (el: HTMLElement, state: AutoWidthState, from: number, to: number) => {
-  const { duration = 160, easing = 'cubic-bezier(0.25, 0.1, 0.25, 1)' } = state.opts;
+  const { duration = 160, easing = EASE_STANDARD } = state.opts;
   const anim = el.animate([{ width: `${from}px` }, { width: `${to}px` }], {
     duration,
     easing,

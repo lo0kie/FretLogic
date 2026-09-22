@@ -2,41 +2,39 @@
   <Feedback v-if="chordStore.groups.length === 0" description="还没有添加分组" icon="folder-open" />
   <div v-else v-grid-nav.stop="{ cols: 1, selector: '.group-title-row' }">
     <div class="draggable-list flex flex-col gap-sm" ref="groupListRef">
-      <div v-for="(group, index) in chordStore.groups" :key="group.id">
+      <div v-for="(group, index) in chordStore.groups" :key="group.id" class="group/group-row">
         <BaseMenu #="{ isOpen }" :items="getGroupMenuItems(group)" trigger="contextmenu">
           <!-- 头部复用 BaseCollapse：点击/键盘切换、aria-expanded、chevron 旋转全部内聚在组件内；
                class/data-*/aria-* 经 $attrs 落到头部按钮本体（拖拽把手、键盘导航标记、状态 tint）。
                px-3 覆盖内置 px-2：Tailwind 同工具类按数值升序产出，px-3 必然在样式表中靠后 -->
           <BaseCollapse
+            v-bind="headBind(group.id)"
             v-scroll-into-view.y.settle.gap-sm="group.id === editorStore.draftChord.groupId"
             :aria-label="groupTitleAriaLabel(group)"
             :class="[
-              // 吸附是宿主列表的布局决策，全部由业务下发：定位（sticky/top/z）与底色。
+              // 吸附是宿主列表的布局决策，全部由业务下发：定位（sticky/top/z）由 useStickyHeads.headBind
+              // 统一给（吸附头必须压住容器内一切滚动内容，含滚动条 overlay）。
               // 头部**齐平贴住容器可视上沿**（top 抵消容器 padding），头顶不留间隙 → 没有露出带，
               // 也就不需要任何遮挡片/伪元素：此前所有「边框/焦点环被挡」的坑都源自那条遮挡带。
-              // z-float 高于卡片网格的 z-panel：两者同层时网格在 DOM 里靠后，会把吸附头盖住。
               // 不再自带 border：焦点环已画在头部盒内（ring-inset），再叠一圈边框就是双边框。
               // 也不挂 data-focusable-inline：全局那条规则给的是**外扩** box-shadow 焦点环
               // （--focus-ring 4px 外扩），头部齐平贴住容器上沿时它的上半圈必被 overflow 裁掉；
-              // 焦点态统一交给折叠组件画在盒内的环（键盘聚焦时出现，不会被裁）
-              'group-title-row sticky z-float h-[2.4rem] px-3 transition-all duration-fast',
-              isGroupContentOpen(group)
-                ? 'bg-tint-panelhover-50!'
-                : stuckGroupIds.has(group.id)
-                  ? 'bg-surface-panel'
-                  : '',
+              // 焦点态统一交给折叠组件画在盒内的环（键盘聚焦时出现，不会被裁）。
+              // 底色与展开态 tint 已由 BaseCollapse 自带；此处只剩「本组右键菜单开着」这一项
+              // —— 它属消费方状态，折叠组件无从得知
+              'group-title-row h-[2.4rem] px-3 transition-all duration-fast',
               isOpen ? 'bg-tint-panelhover-30!' : '',
             ]"
-            :data-group-id="group.id"
             :expanded="isGroupContentOpen(group)"
-            :scroll-container="stickyContainer"
-            :style="{ top: stickyTopCss }"
+            :title="groupHeadTooltip"
             @update:expanded="chordActions.executeGroupToggle(group)"
             initial-auto
             unpadded
           >
             <template #title>
-              <div v-marquee.fade title="点击折叠/展开分组">
+              <!-- 跑马灯的触发宿主委托给整个分组头（.group-title-row 是 BaseCollapse 的头部按钮类）：
+                   分组名只占头部左侧一条，鼠标停在头部空白处（或计数徽标那一侧）时同样该开始滚动 -->
+              <div v-marquee.fade="{ trigger: '.group-title-row' }">
                 <span class="text-xs font-bold text-fg-title">
                   {{ group.name }}
                 </span>
@@ -45,6 +43,28 @@
 
             <template #trailing>
               <div class="flex shrink-0 items-center gap-sm">
+                <!-- 拖拽把手的可发现性线索：分组头就是排序的 handle（见下方 useSortableList 的
+                     handle: '.group-title-row'），但它的外观与普通折叠头毫无差别，用户无从得知
+                     标题栏可以拖。悬停整行时在计数徽标右侧淡入抓手图标 —— 与工作台面板列表同一套
+                     写法：只悬停头部触发的话，可发现性仍受限于「用户先注意到头部」，整行悬停的命中
+                     面大得多。常驻会污染每一行，故默认 opacity-0，悬停整行时淡入（图标占位始终保留，
+                     不产生布局跳动）。过渡只留 opacity、位移已去掉，原因见 WorkbenchView 的抓手注释。
+                     显隐跟随**可拖条件**（全部分组收起）而非仅悬停：展开态下行高会错位、拖拽是静默
+                     失效的，此时挂一个拖不动的把手比不挂更糟；不能拖时由头部 tooltip 说破解除条件
+                     （见 groupHeadTooltip）。
+                     可拖条件**走 class 而非 v-if**：v-if 是瞬间增删节点，展开分组时抓手会当场消失、
+                     没有任何淡出（而 hover 淡入是平滑的，两者观感对不上）。改由 opacity 驱动后，消失
+                     与出现走同一条过渡；代价是图标恒占位 —— 正好让计数徽标在开合分组之间不再左右挪。
+                     不可拖时补 pointer-events-none：图标虽不可见，仍会吃掉命中测试、把光标变成 grab，
+                     等于承诺一个不存在的拖拽。
+                     注：触屏没有 hover，此线索对触屏无效，触屏仍靠长按拖拽。 -->
+                <BaseIcon
+                  :class="isAllCollapsed ? 'group-hover/group-row:opacity-100' : 'pointer-events-none'"
+                  class="shrink-0 cursor-grab text-fg-muted opacity-0 transition-opacity duration-base ease-out"
+                  icon-size="sm"
+                  name="grip-vertical"
+                />
+
                 <BaseBadge
                   :aria-label="`按${getSortLabel(group)}自动排序`"
                   appearance="outline"
@@ -92,9 +112,7 @@
               >
                 <ChordCard
                   v-for="cardData in chunked.slice(cardsOf(group), group.id)"
-                  v-scroll-into-view.y.once="cardData.mainChord.id === activeMainIdOf(group)"
                   :card-data
-                  :is-active="cardData.mainChord.id === activeMainIdOf(group)"
                   :key="cardData.mainChord.id"
                   @delete="handleLocalDeleteChord($event)"
                   @delete-variants="emit('open-delete-variants', $event)"
@@ -119,13 +137,13 @@ import ChordCard from '@/domains/chord/library/components/ChordCard.vue';
 import BaseBadge from '@/platform/ui/badge/BaseBadge.vue';
 import BaseCollapse from '@/platform/ui/collapse/BaseCollapse.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
+import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import { useChordActions } from '@/domains/chord/library/composables/useChordActions';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getGroupSortKey } from '@/domains/chord/theory/entityFactories';
-import { getChordName } from '@/domains/chord/theory/theory';
 import { useChordTransfer } from '@/domains/chord/transfer/useChordTransfer';
 import { createChunkedMount } from '@/platform/composables/useChunkedMount';
 import { useSortableList } from '@/platform/composables/useSortableList';
@@ -154,15 +172,11 @@ const groupListRef = useTemplateRef<HTMLElement>('groupListRef');
 
 // 分组头的吸附是「宿主环境相关」的能力，全部由业务侧承担：
 // useStickyHeads 统一发现滚动容器、批量判定哪些头此刻被顶在吸附线上（一次监听，而非每个头一套），
-// 并按吸附头的实测高度让开容器顶部羽化带；定位几何（sticky / top）则由本组件经 class 与 style
-// 下发给折叠头——折叠组件本身不假设宿主布局。
+// 并按吸附头的实测高度让开容器顶部羽化带；吸附头的接线（id 钩子 / 滚动容器 / 定位 sticky、top、z）
+// 由它回传的 headBind 统一下发 —— 折叠组件本身不假设宿主布局。
 // 收起时「把头按回吸附线」的补偿与滚动钳位补偿由 BaseCollapse 自带的平台 composable 负责
 // （只读折叠头与折叠段的相对位置，未吸附的折叠自然零副作用），此处不必再接线。
-const {
-  stuckIds: stuckGroupIds,
-  insetPx: stickyInsetPx,
-  container: stickyContainer,
-} = useStickyHeads({
+const { headBind } = useStickyHeads({
   listRef: groupListRef,
   // id 取分组头上的 data-group-id；头/段容器用 BaseCollapse 暴露的稳定钩子，不依赖内部类名
   idAttribute: 'data-group-id',
@@ -171,12 +185,6 @@ const {
   // 有头吸附时：容器顶部羽化带内缩一个头高，让开吸附中的头
   fadeOffset: true,
 });
-
-/** 吸附线：sticky 以滚动容器的**内容盒**为原点，容器若仍有 padding-top，需从 top 里减掉才能
- *  贴住可视上沿——否则那条 padding 带属于可滚动区、且在裁剪边界之内，会一直漏着滚过的内容。
- *  左栏的留白已移到滚动容器之外（见 SidebarLeft），此处量得 0、表达式退化为 0px；
- *  保留补偿是为了容器回归带 padding 时不用改这里 */
-const stickyTopCss = computed(() => `-${stickyInsetPx.value}px`);
 
 const contentOuterComponentEls = new Map<number, ComponentPublicInstance | Element | null>();
 
@@ -194,47 +202,35 @@ const GRID_COLS = 3;
 /** 空卡片列表的稳定引用：模板直接消费，避免每次求值都新建数组让 TransitionGroup 误判为整表更新 */
 const EMPTY_CARDS: GroupedChordCard[] = [];
 
-/** 当前激活卡片的主和弦 id：草稿是某变体时映射回主卡；编辑中同名同组草稿也视为激活 */
-const resolveActiveMainId = (cards: GroupedChordCard[]): string | null => {
-  const draft = editorStore.draftChord;
-  if (draft.id) for (const card of cards) if (card.variants.some(v => v.id === draft.id)) return card.mainChord.id;
-
-  if (editorStore.isEditing) {
-    const draftName = getChordName(draft).trim().toLowerCase();
-    if (draftName)
-      for (const card of cards)
-        if (card.mainChord.groupId === draft.groupId && getChordName(card.mainChord).trim().toLowerCase() === draftName)
-          return card.mainChord.id;
-  }
-  return null;
-};
-
 /**
- * 分组 id → { 卡片列表, 激活主卡 id } 派生表。
+ * 分组 id → 卡片列表 派生表：每组只算一遍，模板按 group.id 做 O(1) 取值。
  *
- * 此前模板里直接调函数：`getGroupedCards` 被 v-if 与 v-for 各调一次，而每张卡片又要调
- * 两次 `getActiveMainId` —— 后者自己全量扫一遍组内卡片、对每张卡取一次和弦名，于是单次渲染
- * 是 O(卡片数²) 次取名字；而它在依赖链上挂着编辑草稿（拖动/输入时每帧变化），等于每帧重跑。
- * 现在每组只算一遍，模板按 group.id 做 O(1) 取值。
+ * 此前模板里直接调函数（`getGroupedCards` 被 v-if 与 v-for 各调一次）。本表原先还缓存
+ * 「激活主卡 id」，随「当前编辑中」的判定归位到 ChordCard 自己而删除 —— 与乐谱列表的
+ * SongCard 同口径：卡片自己读编辑器状态，列表不下发。
  */
 const groupViews = computed(() => {
-  const views = new Map<string, { cards: GroupedChordCard[]; activeMainId: string | null }>();
-  for (const group of chordStore.groups) {
-    const cards = chordStore.getGroupedCards(group.id);
-    views.set(group.id, { cards, activeMainId: resolveActiveMainId(cards) });
-  }
+  const views = new Map<string, GroupedChordCard[]>();
+  for (const group of chordStore.groups) views.set(group.id, chordStore.getGroupedCards(group.id));
   return views;
 });
 
 /** 组内分组卡片数据（取派生结果，O(1)） */
-const cardsOf = (group: Group): GroupedChordCard[] => groupViews.value.get(group.id)?.cards ?? EMPTY_CARDS;
-
-/** 当前激活卡片的主和弦 id（取派生结果，O(1)） */
-const activeMainIdOf = (group: Group): string | null => groupViews.value.get(group.id)?.activeMainId ?? null;
+const cardsOf = (group: Group): GroupedChordCard[] => groupViews.value.get(group.id) ?? EMPTY_CARDS;
 
 /** 分组内容是否展开（store 正向展开判定） */
 const isGroupContentOpen = (group: Group): boolean => chordStore.isGroupExpanded(group.id);
 const isAllCollapsed = computed(() => chordStore.groups.every(g => !chordStore.isGroupExpanded(g.id)));
+
+/**
+ * 分组头部的悬停提示（BaseCollapse 的 title prop → 头部原生 tooltip）。
+ * 拖拽排版的启用条件是「全部分组收起」（见下方 useSortableList 的 enabled）：展开态下行高会错位，
+ * 所以那时拖拽是**静默失效**的——用户拖动没反应，只能以为功能坏了或压根不存在。
+ * 这里把状态说破：能拖时点出能力（顺带做发现性），不能拖时点出解除条件。
+ */
+const groupHeadTooltip = computed(() =>
+  isAllCollapsed.value ? '点击折叠/展开分组 · 拖动可调整分组顺序' : '点击折叠/展开分组 · 收起全部分组后可拖动排序'
+);
 
 // ==================== 组内容的挂载门控 ====================
 // 侧栏是全应用唯一「把整库和弦全部挂出来」的地方：单展开模式下只有一组可见可交互，其余分组的卡片

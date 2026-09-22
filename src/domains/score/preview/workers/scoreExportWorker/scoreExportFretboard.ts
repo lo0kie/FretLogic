@@ -9,11 +9,16 @@
  * 而绘制次数是它的数倍，页数越多、和弦重复越多，收益越大。
  */
 
-import { clampDrawFretCount } from '@/domains/fretboard/constants';
 import { isBarreStillValid } from '@/domains/fretboard/model/coordinates';
 import { createLruCache } from '@/platform/utils/cache';
 
-import { capoFont, drawFormattedChordName, LAYOUT, measureChordNameWidth, requireContext2D } from './scoreExportLayout';
+import {
+  capoFont,
+  drawFormattedChordName,
+  fretWindowOfExportChord,
+  LAYOUT,
+  requireContext2D,
+} from './scoreExportLayout';
 
 import type { ExportChordData, ThemeColors } from './scoreExportTypes';
 
@@ -103,20 +108,18 @@ function buildChordRasterKey(chord: ExportChordData, showBarre: boolean): string
   for (const s of strings) fretSig += `${s ? s[0] : 0},`;
   let barreSig = '';
   if (chord.barres) for (const b of chord.barres) barreSig += `${b.fret}:${b.fromString}-${b.toString},`;
-  // 品数归一化到绘制实际使用的值：fretCount 3 与 0/1/2 画出来完全一样，不该各占一条
-  const fretCount = clampDrawFretCount(chord.fretCount);
+  // 列数归一化到绘制实际使用的值：fretCount 3 与 0/1/2 画出来完全一样，不该各占一条。
+  // 取的是**收紧后的实际列数**并另记首列右移量 —— 放收紧结果而非开关本身，于是几何本就
+  // 无空列可裁的指法在切换开关时键不变、位图不重光栅化
+  const { drawFretCount: fretCount, leadTrim } = fretWindowOfExportChord(chord);
   const offset = chord.fretOffset ?? 0;
-  return `${chord.chordName}|${strings.length}|${fretCount}|${offset}|${fretSig}|${barreSig}|${showBarre ? 1 : 0}`;
+  return `${chord.chordName}|${strings.length}|${fretCount}|${offset}|${leadTrim}|${fretSig}|${barreSig}|${showBarre ? 1 : 0}`;
 }
 
-/** 光栅化一张指板位图（ctx 仅用于测量和弦名宽度，measureText 不受 ctx 变换影响） */
-function createFretboardRaster(
-  ctx: OffscreenCanvasRenderingContext2D,
-  chord: ExportChordData,
-  colors: ThemeColors,
-  showBarre: boolean
-): FretboardRaster {
-  const fretCount = clampDrawFretCount(chord.fretCount);
+/** 光栅化一张指板位图 */
+function createFretboardRaster(chord: ExportChordData, colors: ThemeColors, showBarre: boolean): FretboardRaster {
+  // 尺寸按**实际品窗**算，否则收紧后右侧会多留一段空网格
+  const { drawFretCount: fretCount } = fretWindowOfExportChord(chord);
   const stringCount = chord.strings?.length || 6;
   const fbWidth = LAYOUT.getExportFretboardWidth(stringCount);
   // 内容高度口径与 computeLineContentHeight 一致：网格顶部偏移 + 品数 × 品高
@@ -129,11 +132,11 @@ function createFretboardRaster(
   );
   const padTop = Math.ceil(Math.max(0, -nameTop)) + 1;
 
-  // 左右留白：和弦名比指板框宽时两侧同时溢出（长名 / 多扩展音 / 斜杠低音），留白不足会被裁掉；
-  // 溢出量的一半各归一侧，另加 2px 抗锯齿余量。左侧下限取 FRETBOARD_LEFT_PAD
-  // —— 品号是右对齐在首弦左侧的，已由该留白容纳。
-  const nameW = measureChordNameWidth(ctx, chord.chordName);
-  const padX = Math.max(LAYOUT.FRETBOARD_LEFT_PAD, Math.ceil(Math.max(0, nameW - fbWidth) / 2) + 2);
+  // 左右留白：定值 FRETBOARD_LEFT_PAD —— 品号右对齐在首弦左侧，由该留白容纳。
+  // 不再随名字宽度扩留白：同行的相邻指板紧挨着排（边和弦间距 INLINE_CHORD_GAP = 0），
+  // 一侧变宽就等于把位图压进邻居的版面 —— 名字超宽改由名字层缩字号解决
+  // （见 drawFretboardVector 传给 drawFormattedChordName 的 maxWidth）。
+  const padX = LAYOUT.FRETBOARD_LEFT_PAD;
 
   const width = Math.ceil(fbWidth) + padX * 2;
   // 下边只到网格底（无内容低于网格），留 1px 抗锯齿余量即可
@@ -170,7 +173,7 @@ export function drawFretboard(
   const key = `${fretboardStyleKey}|${buildChordRasterKey(chord, showBarre)}`;
   let raster = fretboardRasterCache.get(key);
   if (!raster) {
-    raster = createFretboardRaster(ctx, chord, colors, showBarre);
+    raster = createFretboardRaster(chord, colors, showBarre);
     fretboardRasterCache.set(key, raster);
   }
   // 目标位置对齐到整设备像素：避免半像素相位差让 drawImage 走重采样而糊边
@@ -189,7 +192,8 @@ function drawFretboardVector(
   colors: ThemeColors,
   showBarre: boolean
 ) {
-  const fretCount = clampDrawFretCount(chord.fretCount);
+  // 实际品窗：收紧时列数与窗口起点必须同步右移（见 renderFretboardCanvas 的 resolveFretWindowFromUsed）
+  const { drawFretCount: fretCount, leadTrim } = fretWindowOfExportChord(chord);
   const stringCount = chord.strings?.length || 6;
   const fbWidth = LAYOUT.getExportFretboardWidth(stringCount);
   const startStrX = x + LAYOUT.FRETBOARD_LEFT_PAD;
@@ -198,7 +202,10 @@ function drawFretboardVector(
   const gridRight = startStrX + (stringCount - 1) * LAYOUT.STRING_SPACING;
 
   // 1. 和弦名称（顶部加粗居中，升降号采用上标形式；基线与独立指板图渲染器保持一致）
-  drawFormattedChordName(ctx, x + fbWidth / 2, y + LAYOUT.CHORD_NAME_BASELINE_Y, chord.chordName, colors.TEXT);
+  //    可用宽取**指板框宽**：同一行相邻指板紧挨着排（边和弦间距 INLINE_CHORD_GAP = 0，
+  //    挂和弦字符列也只比框宽出 CHORD_COLUMN_EXTRA_PAD = 4、两侧各 2），名字一旦宽过框宽
+  //    就必然压到邻居的名字上。故这里让它缩字号贴合，而不是像导出 PNG 那样把画布扩宽。
+  drawFormattedChordName(ctx, x + fbWidth / 2, y + LAYOUT.CHORD_NAME_BASELINE_Y, chord.chordName, colors.TEXT, fbWidth);
 
   // 2. 空弦 / 静音标记（中性色，不使用红色）
   const markerY = y + LAYOUT.MARKER_CENTER_Y;
@@ -250,7 +257,9 @@ function drawFretboardVector(
   }
 
   // 4. 弦枕（offset 为 0 时绘制）与品号（除首末所有品，对齐品丝）
-  const offset = chord.fretOffset ?? 0;
+  // 品号层用「原窗口起点 + 首列右移量」标注绝对品位：收紧后新窗口首列对应的绝对品位随之上移，
+  // 于是「收紧到不再从第 1 品开始」的指法会自动改画品号而非弦枕
+  const offset = (chord.fretOffset ?? 0) + leadTrim;
   if (offset === 0) {
     // 0 品位偏移即从 1 品起步，绘制加粗枕条
     ctx.fillStyle = colors.FB_NUT;
@@ -282,11 +291,13 @@ function drawFretboardVector(
     // 指法破坏的横按不绘制。线格式是 [fret, preferFlat] 元组，判据要琴弦模型，按原值还原即可。
     const stringModel = (chord.strings ?? []).map(s => ({ fret: s ? s[0] : 0, preferFlat: s ? s[1] : false }));
     for (const b of chord.barres) {
-      if (b.fret < 1 || b.fret > fretCount) continue;
+      // 存储的横按品位是原窗口内相对品位；收紧后要减去首列右移量才落在新窗口的正确行上
+      const relFret = b.fret - leadTrim;
+      if (relFret < 1 || relFret > fretCount) continue;
       if (!isBarreStillValid(stringModel, b)) continue;
       const bx1 = startStrX + b.fromString * LAYOUT.STRING_SPACING;
       const bx2 = startStrX + b.toString * LAYOUT.STRING_SPACING;
-      const by = gridTop + (b.fret - 0.5) * LAYOUT.FRET_HEIGHT;
+      const by = gridTop + (relFret - 0.5) * LAYOUT.FRET_HEIGHT;
       const minX = Math.min(bx1, bx2) - barreHalfH;
       const w = Math.abs(bx2 - bx1) + LAYOUT.BARRE_THICKNESS;
 
@@ -300,7 +311,8 @@ function drawFretboardVector(
   // 6. 按弦圆点（Finger Dots）——统一音符色彩，不额外强调主音
   for (let s = 0; s < stringCount; s++) {
     const strData = chord.strings[s];
-    const fret = strData ? strData[0] : 0;
+    // 存储的品位是原窗口内相对品位；收紧后要减去首列右移量才落在新窗口的正确行上
+    const fret = (strData ? strData[0] : 0) - leadTrim;
     if (fret > 0) {
       const cx = startStrX + s * LAYOUT.STRING_SPACING;
       const cy = gridTop + (fret - 0.5) * LAYOUT.FRET_HEIGHT;
