@@ -235,6 +235,7 @@ const {
   middlewareData,
   placement: currentPlacement,
   update,
+  compute,
 } = useFloatingPosition({
   reference: activeReference,
   floating: floatingRef,
@@ -372,6 +373,9 @@ watch(model, async val => {
     clearHoverTimer();
     isShown.value = false;
   } else {
+    // 记录打开前的焦点元素供关闭时归还（见 restoreFocus）。此处仍在同步阶段：
+    // 点击触发时焦点已落在触发器上，正是要归还的目标。
+    previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     // v-model 外部置 true 的打开路径不经过 open()，必须在这里补层级分配，
     // 否则浮层停留在兜底层号 9999，会被任何已打开的浮层压住
     if (!isZOwned()) acquireOwnedZ();
@@ -383,8 +387,15 @@ watch(model, async val => {
       return;
     }
     isMounted.value = true;
+    // 宿主先就位：面板还没上屏（v-if="isShown"），这一次算出的坐标只为让宿主先落到锚点，
+    // 避免面板上屏时从 (0,0) 闪入 —— 此时浮层尺寸还是 0，翻转/限位判定并不成立
     update();
     isShown.value = true;
+    // 面板上屏后尺寸才真实，翻转/限位才判得对，故显式复算一次。
+    // 不能只靠 ResizeObserver 纠正：它的投递时机在渲染步内、内容异步渲染时会晚到，
+    // 面板会先按「未翻转」的坐标画一帧；这里等一拍让面板进 DOM 再算，时序不依赖它。
+    await nextTick();
+    await compute();
     if (autoFocus) {
       await nextTick();
       const firstFocusable = panelRef.value?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
@@ -427,11 +438,31 @@ const close = (reason = 'unmarked') => {
   emit('close');
 };
 
-/** 离场动画结束后的清理：卸载宿主节点并归还层级 */
+/** 打开前的焦点元素：关闭并卸载面板后归还，避免焦点掉到 body（键盘用户每开一次浮层都要从头 Tab） */
+let previouslyFocused: HTMLElement | null = null;
+
+/**
+ * 归还焦点。只在两种情形下动手，其余一律不碰：
+ *  - 焦点已丢（`document.activeElement` 为 body / null）——面板卸载时被移除的正是原焦点元素；
+ *  - 焦点仍留在面板内（面板已被卸载，理论上不会，留作防御）。
+ * 用户已把焦点移到别处（点了另一个控件、Tab 走了）时强行归还等于抢焦点。
+ */
+const restoreFocus = () => {
+  const target = previouslyFocused;
+  previouslyFocused = null;
+  if (!target || !target.isConnected) return;
+  const active = document.activeElement;
+  const focusInPanel = active instanceof Node && Boolean(panelRef.value?.contains(active));
+  if (active !== null && active !== document.body && !focusInPanel) return;
+  target.focus();
+};
+
+/** 离场动画结束后的清理：卸载宿主节点并归还层级与焦点 */
 const handleAfterLeave = () => {
   if (model.value || isShown.value) return;
   isMounted.value = false;
   dispose();
+  restoreFocus();
 };
 
 /** 切换开关状态 */
@@ -660,5 +691,7 @@ onBeforeUnmount(() => {
   dispose();
 });
 
-defineExpose({ open, close, toggle, pinToggle, update });
+// update / compute 是一对：前者 fire-and-forget（滚动跟随、尺寸变化后重排），
+// 后者返回 Promise，供「必须先拿到新落点」的调用方用（见 BaseMenu 的换锚点位移动画）
+defineExpose({ open, close, toggle, pinToggle, update, compute });
 </script>

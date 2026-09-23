@@ -1,7 +1,7 @@
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
 import { plainToChordMap } from '@/domains/score/model/chordSlots';
-import { charKey, chordSlotKey, lineEdgeChords } from '@/domains/score/model/scoreModel';
+import { charKey, chordSlotKey, lineEdgeChords, resolveLineIdAt } from '@/domains/score/model/scoreModel';
 
 import type { Chord, ChordId } from '@/domains/chord/types';
 import type { ChordLineSlots, SlotKey } from '@/domains/score/types';
@@ -85,7 +85,7 @@ export function buildLyricsLinesWithEdges(
   const rawLines = lyrics.split('\n');
   const activeIds = new Set<string>();
   const result = rawLines.map((lineText, lineIdx) => {
-    const lineId = existingLineIds[lineIdx] || String(lineIdx);
+    const lineId = resolveLineIdAt(existingLineIds, lineIdx);
     activeIds.add(lineId);
     const { chords: startChords, nextKey: nextStartKey } = getEdgeChordsWithNextKey(
       lineEdgeChords(normalizedChordMap, lineId, 'start'),

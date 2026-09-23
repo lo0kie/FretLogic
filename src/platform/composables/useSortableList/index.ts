@@ -61,6 +61,24 @@ import type { ComponentPublicInstance } from 'vue';
 
 export type { UseSortableListOptions } from './constants';
 
+/**
+ * 取 Sortable 事件上的原始原生事件（`originalEvent`）。
+ *
+ * **@types/sortablejs 未声明该字段**，但运行时确实存在：fallback 通道下 onStart / onEnd 拿到的是
+ * CustomEvent，坐标与键位只能从它上面的原生事件取。这里用 `in` 收窄 + `instanceof` 取真类型，
+ * 而不是断言出一个类型系统不认识的字段。
+ */
+const readOriginalEvent = (event: Sortable.SortableEvent): Event | undefined => {
+  const raw = 'originalEvent' in event ? event.originalEvent : undefined;
+  return raw instanceof Event ? raw : undefined;
+};
+
+/** 同上，但只取鼠标类事件（mouseup / pointerup 都是 MouseEvent 的子类） */
+const readOriginalMouseEvent = (event: Sortable.SortableEvent): MouseEvent | undefined => {
+  const raw = readOriginalEvent(event);
+  return raw instanceof MouseEvent ? raw : undefined;
+};
+
 /** 初始化列表拖拽排序，返回生命周期句柄（多数宿主无需消费返回值） */
 export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
   // swapThreshold 保持 Sortable 官方默认 1（指针进入目标即交换）；调小会产生条目边缘死区，理由见接口注释
@@ -143,6 +161,39 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
   /** 起拖时的指针位置：onEnd 用于区分「真拖」与「把手上的纯点击」 */
   let dragStartX = 0;
   let dragStartY = 0;
+  /** 拖拽进行中（onStart 起、onEnd / destroy 止）：右键兜底只在此期间生效 */
+  let dragActive = false;
+  /**
+   * 本轮拖拽已按「取消」处理（右键）。置位后 onEnd 只复位顺序、不落定、不补派 click。
+   * 由 onEnd 自身按松手键位识别，另在 contextmenu 兜底置位（见 onContextMenu）。
+   */
+  let dropCancelled = false;
+
+  /**
+   * 把容器子元素按**起拖时的顺序**放回原位（右键复位用）。
+   *
+   * 逐个 appendChild 即可复位：每次追加都把元素移到末尾，按 originElements 顺序走一遍后，
+   * 容器内这些元素的相对顺序必然等于起拖时。拖拽克隆挂在 body（fallbackOnBody）、不在容器内，
+   * 由 sortable 自己的收尾移除，无需在此处理。
+   */
+  const restoreOriginOrder = () => {
+    const container = resolveTarget();
+    if (!container || !originElements) return;
+    for (const element of originElements) container.appendChild(element);
+  };
+
+  /**
+   * 按住期间的右键兜底：把本轮标记为「已取消」。
+   *
+   * 主路径在 onEnd（按松手键位识别，见该处说明）；这里只兜「右键的 pointerup 被原生菜单吞掉」
+   * 的平台 —— 那时 sortable 的拖拽会一直挂到下一次无关的松手，若照常落定就会把拖到一半的顺序
+   * 确认掉。置位后无论哪个松手事件先到，onEnd 都只复位不落定。
+   * 刻意不拦右键菜单：右键在本应用里同时是「打开卡片菜单」的手势，这里只负责让排序复位。
+   */
+  const onContextMenu = () => {
+    if (!dragActive) return;
+    dropCancelled = true;
+  };
 
   const handleDocumentClick = (event: MouseEvent) => {
     if (!swallowNextClick) return;
@@ -167,7 +218,8 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
    * 吞掉浏览器补派的 click（见该字段注释）。
    */
   const settleClickAfterDrop = (_event: Sortable.SortableEvent, originalEvent?: Event) => {
-    const source = originalEvent as (MouseEvent & { type: string }) | undefined;
+    // 松手通道可能是 mouseup / pointerup（都是 MouseEvent 子类），也可能没有 originalEvent
+    const source = originalEvent instanceof MouseEvent ? originalEvent : undefined;
     const moved = Math.hypot((source?.clientX ?? 0) - dragStartX, (source?.clientY ?? 0) - dragStartY);
     if (moved >= DRAG_ACTIVATE_THRESHOLD) {
       // 真拖：吞掉浏览器补派的 click。松手通道可能是 mouseup（sortable 也可能开
@@ -210,12 +262,14 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
     document.addEventListener('pointerdown', onPointerDown, { capture: true, passive: true });
     document.addEventListener('pointermove', preview.handlePointerMove, { capture: true, passive: true });
     document.addEventListener('click', handleDocumentClick, { capture: true });
+    document.addEventListener('contextmenu', onContextMenu, { capture: true, passive: true });
   };
 
   const unbindPointerWatchers = () => {
     document.removeEventListener('pointerdown', onPointerDown, { capture: true });
     document.removeEventListener('pointermove', preview.handlePointerMove, { capture: true });
     document.removeEventListener('click', handleDocumentClick, { capture: true });
+    document.removeEventListener('contextmenu', onContextMenu, { capture: true });
   };
 
   const destroy = () => {
@@ -233,6 +287,8 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
     cancelFlip(flipTimers);
     // 实例销毁后不会再有对应的 click 到来，别让残留的标志误吞下一次无关点击
     swallowNextClick = false;
+    dragActive = false;
+    dropCancelled = false;
     unbindPointerWatchers();
   };
 
@@ -285,9 +341,12 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
         moveSnapshot = null;
         // fallback 通道下 onStart/onEnd 是 CustomEvent，事件对象上没有 clientX，
         // 坐标要从 originalEvent（mousedown / 松手事件）上取
-        const source = (event as unknown as { originalEvent?: MouseEvent }).originalEvent;
+        const source = readOriginalMouseEvent(event);
         dragStartX = source?.clientX ?? 0;
         dragStartY = source?.clientY ?? 0;
+        dragActive = true;
+        // 上一轮若是取消收尾，标志已在 onEnd 里消费掉；这里再兜一次，避免异常路径把它带进来
+        dropCancelled = false;
       },
       // 拖拽中的换位：onMove 早于 Sortable 搬 DOM（三处插入路径都在 insertBefore 之前），
       // 此刻缓存的正是「换位前的视觉位置」；onChange 时 DOM 已搬好，据此播过渡。
@@ -301,13 +360,31 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
       },
       // 本组合式自持重排：不传 list/modelValue，故 Sortable 不会去动数据，只负责搬 DOM
       onEnd: event => {
-        // @types/sortablejs 未声明 originalEvent，运行时存在（原生事件对象）
-        const { originalEvent } = event as unknown as { originalEvent?: Event };
-        settleClickAfterDrop(event, originalEvent);
+        const originalEvent = readOriginalEvent(event);
+        const source = originalEvent instanceof MouseEvent ? originalEvent : undefined;
+        dragActive = false;
+        /**
+         * 右键松手视为「取消这次排序」，直接复位。
+         *
+         * sortable 的松手监听不按 button 过滤（`on(ownerDocument, 'pointerup', _onDrop)`），
+         * 故按住左键起拖后再按右键，右键的松手同样会走到这里；若照常落定，用户按右键的意图
+         * 就被当成「确认落位」，把拖到一半的顺序直接写回数据。故视为松手但只复位：
+         * 把顺序还原成起拖时，不写回数据、也不补派 click。
+         * 判定用 `button === 2`（次要键）而非 `!== 0`：pointercancel 的 button 是 -1、
+         * touchend 是 0，那两条既有取消路径不该被并进来。
+         * 复位后这次「松手」不再解析任何新顺序（见下方 `cancelDrop ? null : …`）：
+         * 既不走 DOM 真源，也不走 oldIndex/newIndex 兜底——那两个值都是在复位之前取样的。
+         */
+        const cancelDrop = source?.button === 2 || dropCancelled;
+        dropCancelled = false;
+        if (cancelDrop) restoreOriginOrder();
+        else settleClickAfterDrop(event, originalEvent);
         const { oldIndex, newIndex } = event;
-        // 以 DOM 为真源算新顺序；取不到（列表在拖拽期间被增删过）才退回下标运算
-        let next = resolveNextOrder(resolveTarget(), originElements, originItems);
-        if (!next && oldIndex != null && newIndex != null && oldIndex !== newIndex) {
+        // 以 DOM 为真源算新顺序；取不到（列表在拖拽期间被增删过）才退回下标运算。
+        // 取消（右键复位）时两条都不走：顺序已在上面还原，而 _onDrop 的 oldIndex/newIndex 是在
+        // 还原**之前**取样的，拿它做下标运算会把拖到一半的顺序又算回来。
+        let next = cancelDrop ? null : resolveNextOrder(resolveTarget(), originElements, originItems);
+        if (!cancelDrop && !next && oldIndex != null && newIndex != null && oldIndex !== newIndex) {
           const candidate = [...readItems()];
           const [moved] = candidate.splice(oldIndex, 1);
           if (moved !== undefined) {
@@ -321,7 +398,8 @@ export const useSortableList = <T>(options: UseSortableListOptions<T>) => {
 
         // 记下此刻的视觉位置：最后一次换位可能还在飞，元素在半路，松手后要接着跑完
         const before = capturePositions(resolveTarget(), event.item);
-        // 不撤销 Sortable 对 DOM 的搬动。它搬完的顺序就是用户松手时看到的结果，拉回旧序
+        // 正常落定不撤销 Sortable 对 DOM 的搬动（右键取消那条路径已在上方主动还原成起拖顺序）。
+        // 它搬完的顺序就是用户松手时看到的结果，拉回旧序
         // 会让所有位置动画的起点失真（元素先闪回旧位、再滑回新位）。不拉回还顺带解决了
         // 与宿主 FLIP 的冲突：Vue patch 前后位置一致，TransitionGroup 的位移为 0，
         // 不会插进来再补一段（.song-sort-move 与拖拽动画打架就是这么来的）。

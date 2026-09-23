@@ -28,9 +28,10 @@ const failedKeys = new Map<string, number>();
 const DEDUPE_COOLDOWN_MS = 30_000;
 /**
  * 配额熔断标记：一旦确认配额超限置位，写入型操作随即停摆——两层的落地方式不同：
- * `idb` 的 put/bulkPut/replaceAll/读写事务直接抛「存储配额已超限，写入已暂停」（调用方按既有
- * 写失败路径处理），`idbKv` 的 flush 则跳过这批 put（内存镜像仍持有新值，读侧不受影响）。
- * 删除/清空类操作不受阻断（用户清理空间后可写）。
+ * `idb` 的 put/bulkPut/replaceAll 以及 runTx 事务内的 put/add 直接抛「存储配额已超限，写入已暂停」
+ * （调用方按既有写失败路径处理），`idbKv` 的 flush 则跳过这批 put（内存镜像仍持有新值，读侧不受影响）。
+ * 删除/清空类操作不受阻断（用户清理空间后可写）——runTx 的守卫按**单个操作**而非整个事务下放
+ * （见 idb.ts 的 withQuotaGuard），正是为了让「删数据腾空间」这条自愈路径在熔断期仍然可用。
  * 仅模块内有效：页面刷新即复位，用户整理空间后可自然恢复写入。
  */
 let quotaBlocked = false;

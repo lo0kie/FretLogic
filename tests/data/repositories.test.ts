@@ -74,10 +74,11 @@ describe('IDB 数据仓储（chordRepository / songRepository）', () => {
   it('chordRepository：groups 与 chords 单事务同生共死（含失败注入）', async () => {
     await chordRepository.save({ groups: [group], chords: [chord] });
 
-    // ① 机制：两个 store 必须在同一次 readwrite 事务里一起传入——这才是「同生共死」的实现依据
+    // ① 机制：两个 store 必须在同一次事务里一起传入——这才是「同生共死」的实现依据
+    // （事务模式不再经实参传入：runTx 只服务写入型事务，readwrite 在内部固定，见其签名注释）
     const txSpy = vi.spyOn(idb, 'runTx');
     await chordRepository.save({ groups: [], chords: [] });
-    expect(txSpy).toHaveBeenCalledWith(['groups', 'chords'], 'readwrite', expect.any(Function));
+    expect(txSpy).toHaveBeenCalledWith(['groups', 'chords'], expect.any(Function));
     txSpy.mockRestore();
     expect((await chordRepository.load()).groups).toEqual([]);
 

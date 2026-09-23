@@ -175,6 +175,7 @@ import BaseSelector from '@/platform/ui/selector/BaseSelector.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { SYNC_PROVIDER_META, SYNC_PROVIDER_ORDER } from '@/app/services/sync/providerMeta';
+import { getBuiltinAuthorTargetNotice } from '@/app/services/sync/syncTargetConfig';
 import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
@@ -265,12 +266,13 @@ const testConnectionTooltip = computed(() => {
   return '验证云端地址与凭据（不读写数据）';
 });
 
-/** 拉取按钮提示：按拉取状态与配置完整性给说明 */
+/** 拉取按钮提示：按拉取状态与配置完整性给说明；目标仍是内置默认数据源时附上数据归属 */
 const pullTooltip = computed(() => {
   if (isPulling.value) return '同步中';
   if (isBusy.value) return '其他操作进行中';
   if (isPullDisabled.value) return '请先填写 WebDAV 服务器地址';
-  return '从云端获取数据并弹窗确认导入';
+  const authorNotice = getBuiltinAuthorTargetNotice();
+  return authorNotice ? `从云端获取数据并弹窗确认导入。${authorNotice}` : '从云端获取数据并弹窗确认导入';
 });
 
 /** 同步按钮提示：按同步状态与配置完整性给说明 */

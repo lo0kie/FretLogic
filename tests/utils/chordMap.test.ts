@@ -66,8 +66,17 @@ describe('chordMap: 边缘和弦读写（嵌套结构）', () => {
   it('removeChordFromSlot 删除并返回原值', () => {
     const map = buildMap({ l1: { char: { 2: 'c1' } } });
     expect(removeChordFromSlot(map, slotKey('line_l1_char_2'))).toBe('c1');
-    expect(map.get('l1')?.char.size).toBe(0);
+    // 槽位删空 ⇒ 整行容器一并回收（见 chordSlots.ts 的 isLineSlotsEmpty）：空容器会让
+    // chordMapsEqual 的 size 比较把「删空后」与「从未有过该行」判成两种状态，凭空造出撤销条目。
+    // 此处原先断言 `char.size === 0`（容器仍在），是回收行为落地前的旧口径
+    expect(map.has('l1')).toBe(false);
     expect(removeChordFromSlot(map, slotKey('line_l1_char_2'))).toBeNull();
+  });
+
+  it('removeChordFromSlot 清空行首列表后同样回收整行容器', () => {
+    const map = buildMap({ l1: { start: ['a'] } });
+    expect(removeChordFromSlot(map, slotKey('line_l1_start_0'))).toBe('a');
+    expect(map.has('l1')).toBe(false);
   });
 
   it('swapOrMoveSlotChords 拖动到行首添加按钮时插入到已有和弦的左侧(0位)', () => {

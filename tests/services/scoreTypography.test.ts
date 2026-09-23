@@ -51,8 +51,9 @@ describe('乐谱排版与折行引擎算法测试', () => {
     expect(englishWidth).toBeLessThan(hanziWidth);
     expect(numberWidth).toBeLessThan(hanziWidth);
     expect(barWidth).toBeLessThan(hanziWidth);
-    // 半角 ASCII 共用同一列宽（实现按 code <= 127 判定），且约为全角的六成——
-    // 只钉「半角互等 + 比例落在带宽内」，不把实现里的 0.58 抄进断言
+    // 半角 ASCII 共用同一列宽（实现按 code <= 127 判定），比例约三分之二
+    // （字形典型推进宽 + 与全角汉字相同的字间隙）——
+    // 只钉「半角互等 + 比例落在带宽内」，不把实现里的具体系数抄进断言
     expect(englishWidth).toBe(numberWidth);
     expect(englishWidth).toBe(barWidth);
     expect(englishWidth / hanziWidth).toBeGreaterThan(0.5);

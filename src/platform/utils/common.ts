@@ -7,11 +7,12 @@ export const generateUUID = (prefix: string = '', length = 8): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
     return (prefix ? `${prefix}_` : '') + crypto.randomUUID().slice(0, length);
 
-  const randomStr = Math.random()
-    .toString(36)
-    .substring(2, 2 + length);
+  // 时间戳必须真的进入结果：此前写作 (randomStr + timeStr).slice(0, length)，而 randomStr 本就有
+  // length 位，slice 会把时间戳整段切掉——兜底 id 实际退化成纯随机串，时间维度完全没参与。
+  // 改为时间戳在前、随机串补足余位。
   const timeStr = Date.now().toString(36).slice(-4);
-  return (prefix ? `${prefix}_` : '') + (randomStr + timeStr).slice(0, length);
+  const randomStr = Math.random().toString(36).substring(2);
+  return (prefix ? `${prefix}_` : '') + (timeStr + randomStr).slice(0, length);
 };
 
 // ===== cloneDeep: 深拷贝 =====
@@ -53,19 +54,42 @@ export function cloneDeep<T>(value: T): T {
  * （JSON 会把 Map 变 {}，静默丢数据）。写入 IndexedDB 前必须经此转换——Proxy 无法被克隆。
  */
 export function toPlainPersistable<T>(value: T): T {
+  // 断言只此一处：实现全程在 unknown 上作业（见 plainClone），对外只承诺「输入 T，产出等价 T」
+  return plainClone(value) as T;
+}
+
+/**
+ * 把外部读来的值当作「宽松记录」读：非对象（null / 原始值）与数组一律给空记录兜底。
+ *
+ * 用于**数据边界**（备份包、旧格式、JSON 导入）：那里的值只有运行时形状，TS 只看到 `unknown`。
+ * 与其在每个字段处 `as unknown as SomeShape`（假装知道形状），不如在这里做一次**带运行时检查**的
+ * 收窄，之后按索引签名逐字段读、逐字段 `typeof` 收窄 —— 形状假设只此一处，且它是被检查过的。
+ */
+export const asRawRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+/**
+ * `toPlainPersistable` 的实现体：逐层剥离响应式代理，产出普通值。
+ *
+ * 分两层是为了**把断言收口到一处**：递归的每一层都知道自己产出什么，但那是实现细节，
+ * 不值得在每一层都对外声明一次（旧写法每层一个 `as unknown as T`，5 处）；
+ * 真正的类型承诺只有公开签名那一条，故只在那一处断言。
+ */
+function plainClone(value: unknown): unknown {
   if (value === null || typeof value !== 'object') return value;
-  const raw: unknown = isProxy(value) ? toRaw(value) : value;
-  if (isRef(raw)) return toPlainPersistable(unref(raw)) as T;
-  if (raw instanceof Map) return new Map([...raw].map(([k, v]) => [k, toPlainPersistable(v)])) as unknown as T;
+  // 到这里 value 已收窄为 object，toRaw 的泛型据此保形，无需断言
+  const raw: object = isProxy(value) ? toRaw(value) : value;
+  if (isRef(raw)) return plainClone(unref(raw));
+  // 回调显式标返回类型：被展开进 new Map(...) 的表达式不在返回位置上，上下文类型传不进去
+  if (raw instanceof Map) return new Map([...raw].map(([k, v]): [unknown, unknown] => [k, plainClone(v)]));
+  if (raw instanceof Set) return new Set([...raw].map(v => plainClone(v)));
+  if (raw instanceof Date || raw instanceof RegExp) return raw;
+  if (Array.isArray(raw)) return raw.map(v => plainClone(v));
 
-  if (raw instanceof Set) return new Set([...raw].map(v => toPlainPersistable(v))) as unknown as T;
-
-  if (raw instanceof Date || raw instanceof RegExp) return raw as unknown as T;
-  if (Array.isArray(raw)) return raw.map(v => toPlainPersistable(v)) as unknown as T;
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) out[k] = toPlainPersistable(v);
+  for (const [k, v] of Object.entries(raw)) out[k] = plainClone(v);
 
-  return out as T;
+  return out;
 }
 
 /**

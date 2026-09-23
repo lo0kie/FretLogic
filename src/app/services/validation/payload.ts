@@ -465,28 +465,31 @@ export const validateImportExportPayload = (
   const warnings: string[] = [];
   const raw = cloneDeep(data as Record<string, unknown>);
   // 先迁移旧版本到当前格式，再做结构校验（校验只认当前格式）
-  const migrated = migratePayloadVersion(raw as unknown as ImportExportPayload);
+  const migrated = migratePayloadVersion(raw);
   const now = Date.now();
   // Group 为判别联合，交叉类型无法被 TS 自动收敛，时间戳补齐后信任收窄（校验边界）
-  const groups = fillMissingTimestamps(sanitizeGroups(migrated.groups, issues, warnings, mode), now) as Group[];
-  const chords = fillMissingTimestamps(sanitizeChords(migrated.chords, issues, warnings, mode), now);
+  // migrated 是「原始记录」（见 migratePayloadVersion）：索引签名属性一律走方括号
+  // （tsconfig 开了 noPropertyAccessFromIndexSignature，写点号是编译错误）
+  const groups = fillMissingTimestamps(sanitizeGroups(migrated['groups'], issues, warnings, mode), now) as Group[];
+  const chords = fillMissingTimestamps(sanitizeChords(migrated['chords'], issues, warnings, mode), now);
   const songs =
-    migrated.songs !== undefined
-      ? fillMissingTimestamps(sanitizeSongs(migrated.songs, issues, warnings, mode), now)
+    migrated['songs'] !== undefined
+      ? fillMissingTimestamps(sanitizeSongs(migrated['songs'], issues, warnings, mode), now)
       : [];
-  const syncSettings = sanitizeSyncSettings(migrated.syncSettings);
-  const preferences = sanitizePreferences(migrated.preferences);
+  const syncSettings = sanitizeSyncSettings(migrated['syncSettings']);
+  const preferences = sanitizePreferences(migrated['preferences']);
   // 云端校验元数据随包透传（仅在拉取/导入含该字段时保留），供启动比对使用
-  const dataMd5 = typeof migrated.dataMd5 === 'string' && migrated.dataMd5 ? migrated.dataMd5 : undefined;
-  const dataUpdatedAt = typeof migrated.dataUpdatedAt === 'number' ? migrated.dataUpdatedAt : undefined;
+  const dataMd5 = typeof migrated['dataMd5'] === 'string' && migrated['dataMd5'] ? migrated['dataMd5'] : undefined;
+  const dataUpdatedAt = typeof migrated['dataUpdatedAt'] === 'number' ? migrated['dataUpdatedAt'] : undefined;
   // 删除水位线随包透传：接收方据此抬高本地水位线，保证 meta.updatedAt 单调（见 ImportExportPayload.deletedAt）
-  const deletedAt = typeof migrated.deletedAt === 'number' && migrated.deletedAt > 0 ? migrated.deletedAt : undefined;
+  const deletedAt =
+    typeof migrated['deletedAt'] === 'number' && migrated['deletedAt'] > 0 ? migrated['deletedAt'] : undefined;
   // 缺分区标记：源包里「完全没有这个分区」（区别于显式空数组）。songs 是当前唯一能走到这里的缺失分区——
   // groups/chords 缺失会在 sanitize 阶段记 issue，strict 模式随即按 INVALID_SCHEMA 整包拒绝；
   // 但标记按「分区」表达而非 songs 专属，将来放宽某分区校验时消费侧无需再改。
   // 不写这个标记，下游就只能看到「被兜底成 [] 的 songs」，把「包里没有」误当成「云端为空」并清空本地乐谱。
   const absentSections: PayloadSection[] = [];
-  if (migrated.songs === undefined) absentSections.push('songs');
+  if (migrated['songs'] === undefined) absentSections.push('songs');
   if (issues.length > 0) return { isValid: false, issues, ...(warnings.length > 0 ? { warnings } : {}) };
 
   const validGroupIds = new Set(groups.map(g => g.id));

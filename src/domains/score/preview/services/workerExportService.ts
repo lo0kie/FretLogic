@@ -6,7 +6,7 @@
 import { computeSongKey, getChordName } from '@/domains/chord/theory/theory';
 import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { DEFAULT_SCORE_TITLE, SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
-import { lineCharChord, lineEdgeChords } from '@/domains/score/model/scoreModel';
+import { lineCharChord, lineEdgeChords, resolveLineIdAt } from '@/domains/score/model/scoreModel';
 import { clamp } from '@/platform/utils/common';
 
 import type { Chord } from '@/domains/chord/types';
@@ -122,7 +122,7 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
 
   for (const idx of selectedIndices) {
     const rawText = lyricsLines[idx] ?? '';
-    const lineId = lineIds[idx] ?? `line_${idx}`;
+    const lineId = resolveLineIdAt(lineIds, idx);
 
     // 收集行首和弦（嵌套结构下行级直读，O(1)）
     const startIds = lineEdgeChords(chordMap, lineId, 'start');

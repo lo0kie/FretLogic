@@ -53,13 +53,17 @@ describe('localStorage 退役转录（transcribeLegacyLocalStorage）', () => {
     await hydrateIdbKv();
   });
 
-  it('空旧数据：转录为空结果，清空 localStorage 并写入完成标记', async () => {
-    localStorage.setItem('some-preference', 'value');
+  it('空旧数据：转录为空结果，只清除自家键并写入完成标记', async () => {
+    localStorage.setItem(STORAGE_KEYS.EDITING_ID, 'value');
+    // 同源共域可能部署了别的应用：无 CHORD_LAB_ 前缀的键既不转录进 kv、也不得被清除
+    localStorage.setItem('other-app-preference', 'value');
 
     const result = await transcribeLegacyLocalStorage();
 
     expect(result).toEqual({ groups: 0, chords: 0, songs: 0, kvKeys: 1 });
-    expect(localStorage.getItem('some-preference')).toBeNull();
+    expect(kvGet(STORAGE_KEYS.EDITING_ID)).toBe('value');
+    expect(localStorage.getItem(STORAGE_KEYS.EDITING_ID)).toBeNull();
+    expect(localStorage.getItem('other-app-preference')).toBe('value');
     expect(kvGet(RETIRED_FLAG_KEY)).toBe('1');
   });
 

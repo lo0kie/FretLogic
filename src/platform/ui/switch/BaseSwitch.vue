@@ -28,7 +28,7 @@
       <span
         v-if="$slots['checked-text'] || $slots['unchecked-text']"
         :class="isChecked ? 'justify-start' : 'justify-end'"
-        class="pointer-events-none absolute inset-0 flex items-center overflow-hidden px-1.5 text-2xs leading-none font-bold text-white select-none"
+        class="pointer-events-none absolute inset-0 flex items-center overflow-hidden px-1.5 text-2xs leading-none font-bold text-fg-on-accent select-none"
       >
         <span class="inline-block max-w-[calc(100%-1.1rem)] truncate">
           <slot v-if="isChecked" name="checked-text" />
@@ -43,7 +43,7 @@
           isPressed && !isDragging && !hasMovedSignificantly && 'scale-y-[0.82]',
         ]"
         :style="dragThumbStyle"
-        class="switch-thumb pointer-events-none inline-flex items-center justify-center rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] transition-transform duration-base ease-spring"
+        class="switch-thumb pointer-events-none inline-flex items-center justify-center rounded-full bg-(--switch-thumb-bg) shadow-(--switch-thumb-shadow) transition-transform duration-base ease-spring"
         ref="thumbRef"
       >
         <slot v-if="isChecked" name="checked-icon" />

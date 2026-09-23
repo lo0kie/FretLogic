@@ -10,12 +10,15 @@
  */
 
 import { getScorePageSize } from '@/domains/score/constants';
+import { SCORE_FOOTER_FONT_WEIGHT } from '@/domains/score/preview/services/footerOverlay';
+import { ensureScoreFontsReady } from '@/domains/score/preview/services/scoreFonts';
 
 import { syncFretboardStyleKey } from './scoreExportFretboard';
 import {
   applyLayoutScales,
   EXPORT_JPEG_QUALITY,
   LAYOUT,
+  SCORE_BASE_FONT_WEIGHTS,
   setTrimEmptyEdgeFrets,
   wrapScoreLines,
 } from './scoreExportLayout';
@@ -37,6 +40,10 @@ if (typeof self !== 'undefined')
     // 页脚合成请求：只做「贴图 + 画页码 + 重编码」，与整谱渲染共用渲染线程（服务层同一队列串行下发）
     if (payload.kind === 'footer-compose') {
       try {
+        // 页码文字也走乐谱字体栈（见 services/footerOverlay），故本分支同样要先装字体：页图会被预览
+        // 缓存留着，所以合成请求可能在渲染之后很久才到，而 Worker 空闲 60s 即被回收 —— 冷启动时若
+        // 只依赖渲染分支的装载，页码就会按回落字体画出来。
+        await ensureScoreFontsReady([SCORE_FOOTER_FONT_WEIGHT]);
         const blobs = await composeFooterPages(payload);
         self.postMessage({ type: 'complete', blobs } as WorkerExportMessage);
       } catch (err) {
@@ -75,6 +82,13 @@ if (typeof self !== 'undefined')
 
       // 歌词字重映射为 canvas 数值字重（light 300 / regular 400 / bold 700）
       const lyricsFontWeight = lyricsFontWeightMode === 'light' ? 300 : lyricsFontWeightMode === 'bold' ? 700 : 400;
+
+      // 乐谱字体（随包分发的 Sarasa 子集，整张谱共用一份族栈）就绪后再进入排版：量宽（measureText）与
+      // 绘制必须用同一份字体，否则首次导出会按回落字体量宽、再按注册后的字体绘制，列宽与字形对不上。
+      // 只装载本次会用到的字重：固定部分来自 SCORE_BASE_FONT_WEIGHTS（标题 / 和弦名 / 元信息），歌词
+      // 字重随导出参数变化 —— Light 仅在歌词选 light 时才请求，默认导出不为它多下 1MB
+      //（见 services/scoreFonts）。页脚那档不在这里：它由上面的页脚合成分支自己装载。
+      await ensureScoreFontsReady([...SCORE_BASE_FONT_WEIGHTS, lyricsFontWeight]);
 
       // 导出 JPEG 压缩质量：限制在 [0.3, 1] 区间（对应「导出质量」设置 30~100）
       const jpegQuality = Math.min(1, Math.max(0.3, exportQuality));

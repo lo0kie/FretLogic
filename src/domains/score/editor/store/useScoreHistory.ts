@@ -3,13 +3,12 @@
  * 以「歌词 / 行序 / 和弦映射 / 调性 / 变调夹」为快照粒度，容量有限（默认 20），
  * 相邻重复快照不记录；撤销-重做窗口内暂停记录，避免恢复过程被再次入栈。
  */
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import { wait } from '@/platform/utils/common';
 
 import type { Chord } from '@/domains/chord/types';
 import type { Capo, ChordLineSlots, LineId, Song } from '@/domains/score/types';
-import type { Ref } from 'vue';
 
 export interface HistoryState {
   lyrics: string;
@@ -84,7 +83,16 @@ export interface ScoreHistoryOptions {
 export const useScoreHistory = (options: ScoreHistoryOptions) => {
   const { getActiveSong, applyState, onSnapshotsDiscarded, capacity = 20 } = options;
 
-  const isUndoRedoAction: Ref<boolean> = ref(false);
+  /**
+   * 撤销-重做进行中的**嵌套深度**（计数，不是布尔）。
+   *
+   * 为什么必须是计数：窗口的解除发生在 `await settleReactivePropagation()` 之后。若两次
+   * undo/redo 重叠（第一次的宏任务边界尚未到期，第二次已经进来），布尔标志会被**先到期的那次**
+   * 提前清掉，第二次仍在窗口内派生的写入于是被记入撤销栈 —— 表现为「跳步 / 幽灵历史」，
+   * 正是下面 settleReactivePropagation 那段注释想消灭的现象。计数保证只有最后一层退出时才真正解除。
+   */
+  const undoRedoDepth = ref(0);
+  const isUndoRedoAction = computed(() => undoRedoDepth.value > 0);
   const historyStack: HistoryState[] = [];
   let historyIndex = -1;
   let currentSongId: string | null = null;
@@ -168,13 +176,18 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
    * 返回是否真正执行了回退（无可撤销快照时为 false，供调用方避免空操作提示）。 */
   const undo = async (): Promise<boolean> => {
     if (historyIndex > 0 && getActiveSong()) {
-      isUndoRedoAction.value = true;
-      historyIndex--;
-      // 快照可能被 songStore 以引用方式接管（chordMap 会被原地修改），恢复时必须克隆
-      const state = cloneHistoryState(historyStack[historyIndex]!);
-      applyState(getActiveSong()!.id, state);
-      await settleReactivePropagation();
-      isUndoRedoAction.value = false;
+      undoRedoDepth.value += 1;
+      try {
+        historyIndex--;
+        // 快照可能被 songStore 以引用方式接管（chordMap 会被原地修改），恢复时必须克隆
+        const state = cloneHistoryState(historyStack[historyIndex]!);
+        applyState(getActiveSong()!.id, state);
+        await settleReactivePropagation();
+      } finally {
+        // 递减必须放在 finally：applyState 抛错时若把窗口留在打开状态，之后所有编辑都不再入栈
+        //（历史静默停摆，且没有任何提示）
+        undoRedoDepth.value -= 1;
+      }
       return true;
     }
     return false;
@@ -183,12 +196,15 @@ export const useScoreHistory = (options: ScoreHistoryOptions) => {
   /** 重做：前进到下一快照并写回歌曲数据；标记撤销期以避免恢复过程被再次记录。 */
   const redo = async () => {
     if (historyIndex < historyStack.length - 1 && getActiveSong()) {
-      isUndoRedoAction.value = true;
-      historyIndex++;
-      const state = cloneHistoryState(historyStack[historyIndex]!);
-      applyState(getActiveSong()!.id, state);
-      await settleReactivePropagation();
-      isUndoRedoAction.value = false;
+      undoRedoDepth.value += 1;
+      try {
+        historyIndex++;
+        const state = cloneHistoryState(historyStack[historyIndex]!);
+        applyState(getActiveSong()!.id, state);
+        await settleReactivePropagation();
+      } finally {
+        undoRedoDepth.value -= 1;
+      }
     }
   };
 

@@ -60,16 +60,13 @@ export const BUTTON_TEXT_THEME_MAP: Record<ButtonThemeType, string> = {
   default: 'text-fg-body hover:enabled:bg-surface-panel-hover',
 };
 
-/** ghost 变体（透明底 + 主题色前景） */
+/** ghost 变体（透明底 + 主题色前景）。悬停前景取 SOLID SHADES 档（= 该语义色与纯黑 88:12 混合），
+ *  原先由 `color-mix(in srgb, … 88%, black)` 在工具类里现算，比例散落在字符串里且产物色值无法审查。 */
 export const BUTTON_GHOST_THEME_MAP: Record<ButtonThemeType, string> = {
-  primary:
-    'text-primary hover:enabled:bg-surface-panel-hover hover:enabled:text-[color-mix(in_srgb,var(--color-primary)_88%,black)]',
-  danger:
-    'text-danger hover:enabled:bg-surface-panel-hover hover:enabled:text-[color-mix(in_srgb,var(--color-danger)_88%,black)]',
-  warning:
-    'text-warning hover:enabled:bg-surface-panel-hover hover:enabled:text-[color-mix(in_srgb,var(--color-warning)_88%,black)]',
-  success:
-    'text-success hover:enabled:bg-surface-panel-hover hover:enabled:text-[color-mix(in_srgb,var(--color-success)_88%,black)]',
+  primary: 'text-primary hover:enabled:bg-surface-panel-hover hover:enabled:text-shade-primary-12',
+  danger: 'text-danger hover:enabled:bg-surface-panel-hover hover:enabled:text-shade-danger-12',
+  warning: 'text-warning hover:enabled:bg-surface-panel-hover hover:enabled:text-shade-warning-12',
+  success: 'text-success hover:enabled:bg-surface-panel-hover hover:enabled:text-shade-success-12',
   default: 'text-fg-disabled hover:enabled:bg-surface-panel-hover hover:enabled:text-fg-body',
 };
 
@@ -82,14 +79,14 @@ export const BUTTON_SUBTLE_THEME_MAP: Record<ButtonThemeType, string> = {
   default: 'border-border-light bg-surface-panel-hover text-fg-body hover:enabled:bg-border-base',
 };
 
-/** default 变体（实心底） */
+/** default 变体（实心底）。强调投影取同色分量令牌，随主题取该主题的功能色，不再手抄浅色档的 rgb */
 export const BUTTON_DEFAULT_THEME_MAP: Record<ButtonThemeType, string> = {
   primary:
-    'border-transparent bg-primary text-fg-on-accent shadow-[0_1px_4px_rgba(0,122,255,0.3)] hover:enabled:opacity-90',
+    'border-transparent bg-primary text-fg-on-accent shadow-[0_1px_4px_rgba(var(--color-primary-rgb),0.3)] hover:enabled:opacity-90',
   danger: 'border-transparent bg-tint-danger-88 text-danger hover:enabled:bg-tint-danger-78',
   warning: 'border-transparent bg-tint-warning-88 text-warning hover:enabled:bg-tint-warning-78',
   success:
-    'border-transparent bg-success text-fg-on-accent shadow-[0_1px_4px_rgba(52,199,89,0.3)] hover:enabled:opacity-90',
+    'border-transparent bg-success text-fg-on-accent shadow-[0_1px_4px_rgba(var(--color-success-rgb),0.3)] hover:enabled:opacity-90',
   default:
     'border-border-light bg-surface-body text-fg-body hover:enabled:border-border-base hover:enabled:bg-surface-panel-hover hover:enabled:text-fg-title hover:enabled:shadow-xs',
 };

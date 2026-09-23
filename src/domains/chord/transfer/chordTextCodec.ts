@@ -110,6 +110,11 @@ export const parseChordFields = (fields: string): PortableChord | null => {
   // 每弦自带 -1 静音占位），段数在 3..10 合法域内时以它为准；预设 stringCount 只作
   // 调弦不匹配时的兜底——否则非 6 弦和弦跨载体往返会被强行改弦数（P1 审计 N 系）
   const tuning = TUNING_KEYS.includes(tuningStr as Tuning) ? (tuningStr as Tuning) : getDefaultTuningForStringCount(6);
+  // STRINGS 段缺失/为空即判非法：序列化侧**必定**写出该段（每弦至少一个 `-1,0` 占位，见 encodeString），
+  // 故空段只可能来自手工编辑或被截断的载荷。此前会静默落成一条「全静音」占位和弦 —— 而全静音在本仓
+  // 是有确切含义的状态（智能歌词谱导入的「有和弦名、无指法」，见 score/transfer 的 createFallbackPortableChord），
+  // 于是坏数据被伪装成合法状态，并会在入库时按「同名同调弦」的降级分支匹配到真实和弦上。
+  if ((stringsStr ?? '').trim() === '') return null;
   const rawStrings = (stringsStr ?? '').split('|');
   const rawCount = rawStrings.length;
   const stringCount = rawCount >= 3 && rawCount <= 10 ? rawCount : (TUNING_PRESETS[tuning]?.stringCount ?? 6);

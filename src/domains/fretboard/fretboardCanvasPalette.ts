@@ -1,13 +1,13 @@
 /**
  * 离屏指板画布/导出图的配色解析。
  *
- * 颜色单一来源是 tokens.scss 的 --fbc-* CSS 变量（明暗主题块各自定义）；
+ * 颜色单一来源是 tokens/ 的 --fbc-* CSS 变量（明暗主题块各自定义）；
  * canvas 2D 与 Worker 无法直接消费 var()，故在主线程运行时解析为具体色值：
  * - FretboardCanvas.vue：主题切换时重新解析并重绘
  * - scoreExportWorker：主线程解析后随导出消息传入（Worker 内无 DOM）
  */
 
-/** 画布/导出配色（键与 tokens.scss 的 --fbc-* 后缀一一对应） */
+/** 画布/导出配色（键与 tokens/ 的 --fbc-* 后缀一一对应） */
 export interface FretboardCanvasPalette {
   /** 画布背景 */
   BG: string;
@@ -56,6 +56,16 @@ const readPaletteFrom = (root: Element): FretboardCanvasPalette => {
 };
 
 /**
+ * 读取根元素上**单条**颜色令牌的当前值。
+ *
+ * 与 resolveFretboardCanvasPalette 同一条约束（canvas 2D / Worker 消费不了 var()，导出时必须落到
+ * 字面色值），区别是它要整套 --fbc-*，这里只要一条不属于画布调色板的令牌（导出纸张色）。
+ * 只用于浏览器侧的用户动作路径，故不设无 DOM 环境的兜底：读到空串会静默导出成透明底，不如直接抛。
+ */
+export const readRootColorVar = (varName: string): string =>
+  getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+
+/**
  * 调色板记忆：主题键 → 已解析配色。
  *
  * readPaletteFrom 会触发 getComputedStyle(root)（强制同步样式重算），而 FretboardCanvas 是
@@ -79,7 +89,7 @@ const emptyPalette = (): FretboardCanvasPalette => {
 /**
  * 解析指定主题的画布配色。
  *
- * 约束：--fbc-* 变量在 tokens.scss 的 :root 必有定义，正常返回值恒非空；
+ * 约束：--fbc-* 变量在 tokens/ 的 :root 必有定义，正常返回值恒非空；
  * 仅在无样式表的测试环境（jsdom）下可能得到空串，调用方无需 fallback。
  *
  * @param theme 缺省时读取当前生效主题（FretboardCanvas 主题切换重绘场景）；

@@ -159,10 +159,7 @@ watch(
       if (props.presetGroupId && props.presetGroupId !== 'ALL') {
         chordStore.selectAndExpandGroup(props.presetGroupId);
         editorStore.draftChord.groupId = toGroupId(props.presetGroupId);
-      } else {
-        chordStore.collapseAllGroups();
-        chordStore.setSelectedGroupId(null);
-      }
+      } else chordStore.collapseAllGroups();
     }
   },
   { immediate: true }

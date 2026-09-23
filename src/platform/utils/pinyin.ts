@@ -21,19 +21,20 @@ const PINYIN_OVERRIDES = rawPinyinOverrides as Readonly<Record<string, string>>;
 
 const collator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'variant' });
 
-/** data/pinyin-boundaries.json 的形状：JSON 导入推导出的是 `string[][]`，此处收敛为只读元组对 */
-interface PinyinBoundariesJson {
-  boundaries: readonly (readonly [string, string])[];
-}
-
 /**
  * 拼音首字母边界锚点（无 I/U/V：普通话无对应音节声母）：每个锚点取该字母拼音序最靠前的常用字，
  * collator 顺序即拼音序，故锚点已按 A→Z 升序。
  *
  * 与生成脚本 `scripts/generate-pinyin-overrides.mjs` **共用** `data/pinyin-boundaries.json`：
  * 生成覆盖表靠的就是「用同一套锚点算 ICU 分组键」，此前两处各硬编码一份、靠注释要求人工同步。
+ *
+ * 数据文件里是 `string[][]`（JSON 推导不出元组），故加载时收成只读元组对；长度不足的记录直接丢弃 ——
+ * 与其断言成元组（那只是把「数据文件写错了」藏起来），不如让它在消费端自然缺席。
  */
-const PINYIN_BOUNDARIES = (rawPinyinBoundaries as unknown as PinyinBoundariesJson).boundaries;
+const PINYIN_BOUNDARIES: readonly (readonly [string, string])[] = rawPinyinBoundaries.boundaries.flatMap(
+  ([letter, anchor]): readonly (readonly [string, string])[] =>
+    letter !== undefined && anchor !== undefined ? [[letter, anchor]] : []
+);
 
 const ASCII_LETTER_RE = /^[a-zA-Z]$/;
 const CJK_RE = /^[一-龥]$/;

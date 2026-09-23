@@ -136,7 +136,7 @@ export const songRepository: SongRepository = {
     return keys.filter((key): key is string => typeof key === 'string').map(toSongId);
   },
   async flushChanges({ removedIds, dirtySongs, orderIds }) {
-    await idb.runTx(['songs', 'syncMeta'], 'readwrite', get => {
+    await idb.runTx(['songs', 'syncMeta'], get => {
       const songStore = get('songs');
       for (const id of removedIds) songStore.delete(id);
       for (const song of dirtySongs) songStore.put(toPlainPersistable(song));

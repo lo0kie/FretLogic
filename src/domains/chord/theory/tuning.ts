@@ -54,10 +54,14 @@ interface RawTuningPreset {
   mapping: number[];
 }
 
-const RAW_TUNINGS = rawTunings as unknown as {
+/**
+ * 数据文件的形状。**用带类型标注的赋值而不是断言**：JSON 导入推导出的字段类型与这里一致，
+ * 标出来是为了让「字段名写错 / 值类型不符」在编译期就报错，而不是靠断言把差异抹掉。
+ */
+const RAW_TUNINGS: {
   presets: RawTuningPreset[];
   defaultByStringCount: Record<string, string>;
-};
+} = rawTunings;
 
 /** 把数据文件里的 id 收窄为 `Tuning`；不在枚举中即抛错 */
 const toTuning = (id: string, where: string): Tuning => {

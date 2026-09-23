@@ -48,18 +48,18 @@ import Feedback from '@/platform/ui/feedback/Feedback.vue';
 import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
+import { CHORD_GROUP_MODALS } from '@/domains/chord/library/injectionKeys';
 import { buildScoreQuery } from '@/domains/score/editor/composables/useScoreRouteSync';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { injectModalController } from '@/platform/store/useModalController';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
 
-import type { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
 import type { Song } from '@/domains/score/types';
 
 // 引用反查是「和弦 × 乐谱」的跨领域特性，弹窗由应用层承载：
 // 复用侧边栏注入的 groupModals 控制器，数据查询与跳转在此处合法地依赖两个领域。
-const groupModals = injectModalController<ReturnType<typeof useChordGroupModals>>('groupModals');
+const groupModals = injectModalController(CHORD_GROUP_MODALS);
 
 const router = useRouter();
 const songStore = useSongStore();

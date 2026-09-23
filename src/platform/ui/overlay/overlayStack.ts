@@ -35,9 +35,6 @@ export const unregisterOverlay = (el: HTMLElement) => {
   updateOverlayInertState();
 };
 
-/** 当前登记的阻断层数量，用于滚动锁是否应保持开启 */
-export const hasActiveOverlays = (): number => activeOverlays.size;
-
 /**
  * 判断某元素是否为栈顶阻断层。
  * 刚打开还未完成 nextTick 入栈（DOM 已挂载但尚未登记）时视为栈顶。

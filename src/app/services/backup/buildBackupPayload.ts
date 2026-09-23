@@ -1,6 +1,7 @@
 /**
  * 备份包构造器：把当前 store 快照组装为可导出 / 可推送的 ImportExportPayload。
  */
+import { CURRENT_PAYLOAD_VERSION } from '@/app/services/validation/payloadMigrations';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { getDataDeletedAt } from '@/platform/services/storage/deletionWatermark';
@@ -126,7 +127,12 @@ export async function buildBackupPayloadResult(options?: BuildBackupOptions): Pr
     : undefined;
 
   const raw = {
-    version: 1,
+    // 写**当前**版本号而不是 1：下面 validateImportExportPayload 会把声明的版本号当作「这份包是从哪一版
+    // 升上来的」起点，逐档跑 PAYLOAD_MIGRATIONS 到当前版本。写 1 意味着每个刚构建的包都要重放整条
+    // 1→7 迁移链（6 档）——现存各档对当前形态恰好幂等才没出事，一旦新增非幂等迁移就会静默改写每个新包。
+    // 静态引入 payloadMigrations 是安全的：该模块只引 parseSlotKey 与类型，不含 zod
+    //（zod 在 payload.ts 里，那条路径仍走下方动态 import）。
+    version: CURRENT_PAYLOAD_VERSION,
     groups,
     chords,
     songs,

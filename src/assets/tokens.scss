@@ -1,12 +1,22 @@
 /* ============================================================
-   CSS 设计令牌规则层（单一来源，集中管理）
+   CSS 设计令牌规则层（**非颜色**部分，单一来源）
    只包含 :root / .dark / [data-theme='high-contrast'] 的 CSS 自定义属性规则，
    由 main.scss 引入恰好一次——不要把本文件 @use 进任何 <style scoped>：
    scoped 会把 :root 改写为 :root[data-v-x] 永不命中（死规则），并在每个组件里复制一份。
 
+   ⚠️ 颜色不在本文件。一切带字面色值的自定义属性（背景 / 边框 / 文字 / 功能色 /
+   指板绘制色 / 画布导出色 / 阴影 / 遮罩 / 滚动条拇指 / SOLID TINTS 族）的单一来源是
+   **仓库根的 tokens/ 目录**：由 culori 在构建期派生，经 vite 插件以 virtual:color-tokens.css
+   注入（生成逻辑 tokens/index.ts，接线 scripts/vite-plugin-color-tokens.ts）。
+   本文件只保留两类：
+     ① 非颜色令牌 —— z-index / blur / 动效时长与缓动 / 气泡度量；
+     ② 纯 var() 转发 —— 自身不含字面色值，取值由 tokens/ 决定
+        （--fb-root / --fbc-text / --focus-ring / --bubble-*）。
+   判定口径很简单：值里出现 #hex 或 rgb()/rgba() 的，一律归 tokens/。
+
    SCSS 变量层（$space-* / $radius-* / $fs-* 等，经 vite additionalData 全局注入）
    见 token-vars.scss——该文件不得包含任何 CSS 规则，两份各司其职。
-   要调整整体密度 / 圆润度 / 字号层级，改这一份即可。
+   要调整整体密度 / 圆润度 / 字号层级，改那一份即可。
    ============================================================ */
 
 /* 显式引入 SCSS 变量层：本文件被 scripts/scss-inject.mjs 按文件名**跳过**（该注入只面向组件样式，
@@ -16,93 +26,13 @@
 @use '@/assets/token-vars' as *;
 
 :root {
-  /* ===== 背景（实色：原为半透明玻璃面板，按页面底色合成去掉透明） ===== */
-  --bg-main: #f2f2f7;
-  --bg-body: #ffffff;
-  --bg-panel: #fbfbfd;
-  --bg-panel-hover: #ebebef;
-  /* 面板上一档的浅填充（统计小格、勾选框选中、分段控件悬停）：= panel-hover 以 50% 合成到 panel 上 */
-  --bg-panel-subtle: #f3f3f6;
-  --bg-elevated: #fbfbfd;
-
-  --bg-surface: #fbfbfd;
-  /* ===== 边框 / 分隔（实色：按面板底色合成去掉透明） ===== */
-  --glass-border: #dfdfe3;
-  --border-light: #dcdce1;
-  --border-base: #d1d1d7;
-  --control-border: #d1d1d7;
-  --separator: #dcdce1;
-
-  /* ===== 文字（更接近系统语义，由深到浅四档：title > body > muted > disabled） ===== */
-  --text-title: #1c1c1e;
-  --text-body: #3a3a3c;
-  /* muted 承担次级文案（说明 / 标签 / 行号）。原值 #8e8e93（systemGray）在亮底上仅 2.92:1，
-     明显淡于深色的 6.05:1 与高对比的 9.62:1，故压深：与底色对比 bg-main 4.75:1 / 面板 5.13:1 /
-     纯白 5.30:1 —— 取的是「在最深的亮色底 bg-main 上仍过 WCAG AA 4.5」的最浅一档，
-     既保住四档层次，也维持 systemGray 家族的色偏（b − r = 5，与 title / body 一致）。 */
-  --text-muted: #6b6b70;
-  --text-disabled: #c7c7cc;
-
-  /* ===== 功能色 ===== */
-  --color-primary: #007aff;
-  --color-primary-rgb: 0, 122, 255; /* primary 的 R,G,B 分量，供 rgba(var(--color-primary-rgb),α) 使用 */
-  --color-success: #34c759;
-  --color-warning: #ff9500;
-  --color-danger: #ff3b30;
-
-  /* 强调色（按钮 / 徽章 / 标签）上的文字，默认白 */
-  --text-on-accent: #ffffff;
-
-  /* 指板画布调色板：跟随主题切换的绘制色 */
-  --fb-line: #a1a1aa; /* 主网格 / 品丝（对齐 canvas 导出配色的柔和灰） */
-  --fb-line-dim: #d4d4d8; /* 次要网格 */
-  --fb-nut: #18181b; /* 上琴枕加粗带（比品丝更深，对齐 canvas 琴枕色） */
-  --fb-note: #0f172a; /* 音符填充 */
-  --fb-hover: #ffffff; /* hover 高亮填充（浅色底） */
-  --fb-label: #475569; /* 品位数字（浅色态） */
+  /* ===== 颜色别名与聚焦环（纯 var() 转发：色值本体见 tokens/） ===== */
   --fb-root: var(--color-warning); /* 根音圆点（跟随主题强调色） */
-  --fb-dot: #2563eb; /* 普通音符圆点 */
-  --fb-root-text: #fff7ed; /* 根音圆点文字 */
-  --fb-open-bg: #ebf4ff; /* 空弦普通音符底 */
-  --fb-open-border: #b3d7ff; /* 空弦普通音符描边 */
-  --fb-open-root-bg: #fff7ed; /* 空弦根音底 */
-  --fb-open-root-border: #fed7aa; /* 空弦根音描边 */
-  --fb-open-muted-bg: #ffefee; /* 空弦静音底 */
-  --fb-open-muted-border: #ffc4c1; /* 空弦静音描边 */
+  --fbc-text: var(--text-title); /* 导出图 / 离屏画布的和弦名主文字 */
 
-  /* 离屏指板画布/导出图配色（canvas 2D 无法消费 var()，由 resolveFretboardCanvasPalette 运行时解析） */
-  --fbc-bg: #fbfbfd; /* 画布背景 */
-  --fbc-text: var(--text-title); /* 和弦名主文字 */
-  --fbc-sub-text: #71717a; /* 品号等次级文字 */
-  --fbc-divider: #e4e4e7; /* 分隔线 */
-  --fbc-line: #a1a1aa; /* 指板网格线 */
-  --fbc-nut: #18181b; /* 琴枕 */
-  --fbc-note: #18181b; /* 音符标记 */
-  --fbc-open: #18181b; /* 空弦圆圈 */
-  --fbc-barre: #18181b; /* 横按梁 */
-  --fbc-mute: #18181b; /* 静音叉 */
-
-  /* ===== 其他 ===== */
-  --theme-btn-color: #ff9500;
-  --theme-btn-bg: #ebebef;
-  --root-glow: 0 0 20px rgba(255, 209, 153, 0.6);
-
-  /* 阴影更轻、更清晰 */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
-  --shadow-xl: 0 16px 36px rgba(0, 0, 0, 0.1), 0 6px 12px rgba(0, 0, 0, 0.05);
-  --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --shadow-floating: 0 20px 48px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.06);
   /* 外圈用实色 tint（原为 72% 半透明 primary）。半透明会透出下层内容，同一环叠在不同底色上
-     观感不一致，且与下方的 SOLID TINTS 实色体系口径分裂——统一取实色 token。 */
+     观感不一致，且与 tokens/ 的 SOLID TINTS 实色体系口径分裂——统一取实色 token。 */
   --focus-ring: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--tint-primary-20);
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
-  /* 遮罩底色：全项目**唯一**保留半透明的通道。遮罩的职责就是「透出下层、把注意力压到弹层上」，
-     实色化后弹层直接变成一块看不见背景的板子（亮色下发灰发白、暗色下纯黑），语义就没了 ——
-     故本 token 不接受 SOLID TINTS 口径，取值就是组件历史上一直在用的 rgba(0,0,0,0.5)。
-     业务侧仍不得写 x/NN 半透明工具类；遮罩一律走 bg-overlay（即本 token），alpha 只许封装在这里。 */
-  --overlay-bg: rgba(0, 0, 0, 0.5);
 
   /* ===== 气泡（紧凑读数浮层）语义层 =====
      两个消费方的观感必须逐值一致，却分处两种语言：
@@ -198,307 +128,20 @@
   /* 动态池（floatingZ.ts）在 9999 基础上「最高占用 +1」递增，软上限 11000（见 FLOATING_Z_CEILING） */
   --z-top: 12000; /* 最高静态层：拖拽幽灵 / 谱面导出抽屉等（高于动态池上限） */
   --z-toast: 13000; /* 全局提示（高于 popover、menu、modal 和动态池） */
-
-  /* ===== 自绘滚动条拇指配色 =====
-     不复用 --text-disabled / --text-muted：暗色下后者因无障碍对比度被提亮，两态会几乎同色。
-     三档必须齐备（本处亮色 / .dark / 高对比）——高对比缺档会回落本处亮色值，
-     在近黑底上表现为「悬停反而变暗」，与 .dark 的方向相反。
-     此前这两条只写在 scrollbarCore.ts 运行时注入的样式串里，正是因此漏了高对比档；
-     注入串里放主题令牌等于绕开本文件「三档齐备」的约束，故一律归本文件。 */
-  --v-scrollbar-thumb: #c7c7cc;
-  --v-scrollbar-thumb-hover: #8e8e93;
-
-  /* === SOLID TINTS LIGHT START === */
-  /* SOLID TINTS：半透明强调色的实色替身。生成口径与「背景 / 边框 / focus-ring 按底色
-     合成去掉透明」完全一致——tint-<色>-<NN> = 该色以 (100-NN)% 叠加在主题底色上、逐通道四舍五入。
-     （例外的只有遮罩：--overlay-bg 保持半透明，理由见其定义处——遮罩必须透出下层，
-     实色化等于把弹层变成一块看不见背景的板子。）
-     底色三档：亮色 #f2f2f7、深色 #1a1a1c、高对比同深色 #1a1a1c（本组取值可被该公式逐条复现，
-     校验见提交说明）。NN 越大越接近底色。业务侧禁止再写 x/NN 半透明色工具类，一律取本组实色。
-     三个主题必须各自定义**完整**一套（.dark 见下、高对比见 [data-theme='high-contrast'] 末段）：
-     任一档缺席即回落 :root 的亮色取值，浅色 tint 贴在深底上会直接坏掉（选中行 / 描边变成刺眼亮块）。 */
-  --tint-borderbase-85: #ededf2;
-  --tint-current-82: #d1d1d5;
-  --tint-current-85: #d6d6db;
-  --tint-danger-20: #fc6058;
-  --tint-danger-50: #f89694;
-  --tint-danger-70: #f6bbbb;
-  --tint-danger-75: #f5c4c5;
-  --tint-danger-78: #f5cacb;
-  --tint-danger-80: #f5cdcf;
-  --tint-danger-82: #f4d1d3;
-  --tint-danger-88: #f4dcdf;
-  --tint-danger-90: #f3e0e3;
-  --tint-danger-95: #f3e9ed;
-  --tint-panelhover-30: #ededf1;
-  --tint-panelhover-50: #efeff3;
-  --tint-primary-20: #3092fd;
-  --tint-primary-30: #499efd;
-  --tint-primary-40: #61aafc;
-  --tint-primary-45: #6db0fb;
-  --tint-primary-60: #91c2fa;
-  --tint-primary-80: #c2daf9;
-  --tint-primary-82: #c6dcf8;
-  --tint-primary-85: #cee0f8;
-  --tint-primary-88: #d5e4f8;
-  --tint-primary-90: #dae6f8;
-  --tint-primary-92: #dfe8f8;
-  --tint-success-20: #5ad079;
-  --tint-success-82: #d0eadb;
-  --tint-success-88: #dbede4;
-  --tint-texttitle-90: #dddde1;
-  --tint-warning-20: #fca831;
-  --tint-warning-40: #faba63;
-  --tint-warning-65: #f7d1a1;
-  --tint-warning-78: #f5dec1;
-  --tint-warning-80: #f5dfc6;
-  --tint-warning-82: #f4e1cb;
-  --tint-warning-88: #f4e7d9;
-  --tint-warning-90: #f3e9de;
-
-  /* === SOLID TINTS LIGHT END === */
 }
 
 .dark {
-  --bg-main: #000000;
-  --bg-body: #1c1c1e;
-  --bg-panel: #1c1c1e;
-  --bg-panel-hover: #2c2c2e;
-  /* 面板上一档的浅填充：= panel-hover 以 50% 合成到 panel 上 */
-  --bg-panel-subtle: #242426;
-  --bg-elevated: #1c1c1e;
-
-  --bg-surface: #2c2c2e;
-  --glass-border: #2c2c2e;
-  --border-light: #343437;
-  --border-base: #3a3a3d;
-  --control-border: #3a3a3d;
-  --separator: #3a3a3d;
-
-  --text-title: #f5f5f7;
-  --text-body: #ebebf5;
-  --text-muted: #98989d;
-  /* 暗色下需满足 4.5:1 对比（axe color-contrast）：#636366 在深底上仅 2.9:1，提升至 #8e8e96（≈5.3:1） */
-  --text-disabled: #8e8e96;
-
-  --color-primary: #0a84ff;
-  --color-primary-rgb: 10, 132, 255; /* primary 的 R,G,B 分量，供 rgba(var(--color-primary-rgb),α) 使用 */
-  --color-success: #30d158;
-  --color-warning: #ffd60a;
-  --color-danger: #ff453a;
-
-  --text-on-accent: #ffffff;
-  --fb-line: #52525b;
-  --fb-line-dim: #3f3f46;
-  --fb-nut: #f4f4f5;
-  --fb-note: #ffffff;
-  --fb-hover: #28282a;
-  --fb-label: #e2e8f0;
+  /* 颜色别名与聚焦环：与 :root 同口径（外圈实色 tint，不用 color-mix 半透明），
+     转发目标（--color-warning / --text-title / --bg-panel / --tint-primary-20）在 tokens/ 里按本主题解析。 */
   --fb-root: var(--color-warning);
-  --fb-dot: #3b82f6;
-  --fb-root-text: #29323d;
-  --fb-open-bg: #182737;
-  --fb-open-border: #144477;
-  --fb-open-root-bg: #2d2012;
-  --fb-open-root-border: #6b4712;
-  --fb-open-muted-bg: #351f20;
-  --fb-open-muted-border: #762b28;
-
-  --fbc-bg: #18181a;
   --fbc-text: var(--text-title);
-  --fbc-sub-text: #a1a1aa;
-  --fbc-divider: #27272a;
-  --fbc-line: #52525b;
-  --fbc-nut: #f4f4f5;
-  --fbc-note: #f4f4f5;
-  --fbc-open: #f4f4f5;
-  --fbc-barre: #f4f4f5;
-  --fbc-mute: #f4f4f5;
-
-  --theme-btn-color: #64d2ff;
-  --theme-btn-bg: #2c2c2e;
-  --root-glow: 0 0 24px rgba(128, 107, 5, 0.5);
-
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  --shadow-panel: 0 10px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  --shadow-floating: 0 24px 56px rgba(0, 0, 0, 0.6), 0 8px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --overlay-bg: rgba(0, 0, 0, 0.5); /* 同 :root：遮罩是三主题中唯一保留半透明的通道 */
-
-  --v-scrollbar-thumb: #55555a; /* 滚动条拇指，见 :root 处说明 */
-  --v-scrollbar-thumb-hover: #a3a3ab;
-
-  /* === SOLID TINTS DARK START === */
-  --tint-borderbase-85: #1f1f21;
-  --tint-current-82: #404043;
-  --tint-current-85: #39393d;
-  --tint-danger-20: #d13c34;
-  --tint-danger-50: #8c302b;
-  --tint-danger-70: #5f2725;
-  --tint-danger-75: #532524;
-  --tint-danger-78: #4c2323;
-  --tint-danger-80: #482322;
-  --tint-danger-82: #432221;
-  --tint-danger-88: #351f20;
-  --tint-danger-90: #311e1f;
-  --tint-danger-95: #251c1e;
-  --tint-panelhover-30: #272729;
-  --tint-panelhover-50: #232325;
-  --tint-primary-20: #0d6fd2;
-  --tint-primary-30: #0f64bb;
-  --tint-primary-40: #105aa4;
-  --tint-primary-45: #115499;
-  --tint-primary-60: #144477;
-  --tint-primary-80: #172f49;
-  --tint-primary-82: #172d45;
-  --tint-primary-85: #182a3e;
-  --tint-primary-88: #182737;
-  --tint-primary-90: #182533;
-  --tint-primary-92: #19222e;
-  --tint-success-20: #2cac4c;
-  --tint-success-82: #1e3b27;
-  --tint-success-88: #1d3023;
-  --tint-texttitle-90: #303032;
-  --tint-warning-20: #d1b00e;
-  --tint-warning-40: #a38b11;
-  --tint-warning-65: #6a5c16;
-  --tint-warning-78: #4c4318;
-  --tint-warning-80: #484018;
-  --tint-warning-82: #433c19;
-  --tint-warning-88: #35311a;
-  --tint-warning-90: #312d1a;
-  /* === SOLID TINTS DARK END === */
-  /* 与 :root 同口径：外圈实色 tint，不用 color-mix 半透明（见 :root 处说明） */
   --focus-ring: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--tint-primary-20);
 }
 
-/* ===== 高对比主题：仅覆盖语义色，保持布局/动效/层级不变 ===== */
+/* ===== 高对比主题：仅覆盖语义色，保持布局/动效/层级不变 =====
+   注：本主题的颜色覆盖（含 SOLID TINTS 一族）同样在 tokens/，此处只剩两条转发。
+   聚焦环例外地取 --color-primary 而非 tint-primary-20：高对比下要的是一圈高饱和实环。 */
 [data-theme='high-contrast'] {
-  --bg-main: #000000;
-  --bg-body: #0a0a0c;
-  --bg-panel: #121214;
-  --bg-panel-hover: #1e1e22;
-  /* 面板上一档的浅填充：= panel-hover 以 50% 合成到 panel 上 */
-  --bg-panel-subtle: #18181b;
-  --bg-elevated: #1a1a1e;
-
-  --bg-surface: #1a1a1e;
-  --glass-border: #ffffff;
-  --border-light: #4a4a52;
-  --border-base: #6b6b76;
-  --control-border: #6b6b76;
-  --separator: #4a4a52;
-
-  --text-title: #ffffff;
-  --text-body: #f2f2f7;
-  --text-muted: #b9b9c4;
-  --text-disabled: #8e8e96;
-
-  --color-primary: #3da5ff;
-  --color-primary-rgb: 61, 165, 255; /* primary 的 R,G,B 分量，供 rgba(var(--color-primary-rgb),α) 使用 */
-  --color-success: #3ddc84;
-  --color-warning: #ffd60a;
-  --color-danger: #ff6961;
-
-  --text-on-accent: #000000;
-  --overlay-bg: rgba(0, 0, 0, 0.5); /* 同 :root：HC 也不实色化遮罩，取值与前两主题一致（不改观感） */
-
-  /* 滚动条拇指：高对比此前缺档，回落 :root 亮色值 → 在近黑底上「悬停反而变暗」，与 .dark 方向相反。
-     取本主题既有的 --border-base / --text-muted 取值：比 .dark 亮一档，悬停方向与 .dark 一致（变亮）。 */
-  --v-scrollbar-thumb: #6b6b76;
-  --v-scrollbar-thumb-hover: #b9b9c4;
-
-  /* O9：高对比缺失项——不覆盖则回落 :root 亮色值，导致指板画布白字近白底、
-     panelhover 色调与 HC 底色冲突（白底白字）。逐项对齐 .dark 基础上再提对比。 */
-  /* 指板画布配色（对齐 .dark：深底白字） */
-  --fbc-bg: #0a0a0c;
-  --fbc-sub-text: #d4d4dc;
-  --fbc-divider: #3a3a42;
-  --fbc-line: #8e8e96;
-  --fbc-nut: #ffffff;
-  --fbc-note: #ffffff;
-  --fbc-open: #ffffff;
-  --fbc-barre: #ffffff;
-  --fbc-mute: #ffffff;
-
-  /* 实时 SVG 指板配色（--fb-*）：HC 不挂 .dark，若不覆盖会回落 :root 亮色值，
-     使琴枕 / 音符（深色 #18181b / #0f172a）贴在 HC 深底上近不可见。逐项对齐 .dark，
-     并把网格线 / 次要线 / hover 对齐 HC 自身已提高的 --fbc-* / border / panelhover 色阶。 */
-  --fb-line: #8e8e96;
-  --fb-line-dim: #4a4a52;
-  --fb-nut: #ffffff;
-  --fb-note: #ffffff;
-  --fb-hover: #2a2a2e;
-  --fb-label: #e2e8f0;
   --fb-root: var(--color-warning);
-  --fb-dot: #3b82f6;
-  --fb-root-text: #29323d;
-  --fb-open-bg: #182737;
-  --fb-open-border: #144477;
-  --fb-open-root-bg: #2d2012;
-  --fb-open-root-border: #6b4712;
-  --fb-open-muted-bg: #351f20;
-  --fb-open-muted-border: #762b28;
-
-  /* 阴影：HC 靠边框而非阴影区分层次，阴影加深保证可见 */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.18);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.2);
-  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.22);
-  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.22);
-  --shadow-panel: 0 10px 28px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.2);
-  --shadow-floating: 0 24px 56px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.22);
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.7);
   --focus-ring: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--color-primary);
-
-  /* === SOLID TINTS HC START === */
-  /* 生成口径同 :root（tint-<色>-<NN> = 该色以 (100-NN)% 叠加在底色 #1a1a1c 上、逐通道四舍五入）；
-     底色与 .dark 取同一档（HC 自己的 --bg-surface / --bg-elevated #1a1a1e 与之仅差 2），
-     强调色换用 HC 自身更亮的取值（primary #3da5ff / success #3ddc84 / warning #ffd60a / danger #ff6961），
-     于是同一 NN 档在 HC 下自动比 .dark 亮一档 —— 正是高对比要的效果。
-     此前 HC 未定义本组，整套回落 :root 亮色值（#d5e4f8 这类浅色）贴在深底上。
-     注：warning 一族与 .dark 逐字节相同，因为两主题的 --color-warning 取同值 #ffd60a。 */
-  --tint-borderbase-85: #26262a;
-  --tint-current-82: #414143;
-  --tint-current-85: #3a3a3d;
-  --tint-danger-20: #d15953;
-  --tint-danger-50: #8c423e;
-  --tint-danger-70: #5f3231;
-  --tint-danger-75: #532e2d;
-  --tint-danger-78: #4c2b2b;
-  --tint-danger-80: #482a2a;
-  --tint-danger-82: #432828;
-  --tint-danger-88: #352324;
-  --tint-danger-90: #312223;
-  --tint-danger-95: #251e1f;
-  /* panelhover 两档不走合成公式：HC 的悬停要看得见跳变，而合成值（#1d1d20 一类）贴着 HC 面板底
-     #121214 几乎读不出来，故按 HC 面板底色族手工提亮（原有取值，保留）。 */
-  --tint-panelhover-30: #2a2a2e;
-  --tint-panelhover-50: #26262a;
-  --tint-primary-20: #3689d2;
-  --tint-primary-30: #327bbb;
-  --tint-primary-40: #2f6da4;
-  --tint-primary-45: #2d6699;
-  --tint-primary-60: #285277;
-  --tint-primary-80: #213649;
-  --tint-primary-82: #203345;
-  --tint-primary-85: #1f2f3e;
-  --tint-primary-88: #1e2b37;
-  --tint-primary-90: #1e2833;
-  --tint-primary-92: #1d252e;
-  --tint-success-20: #36b56f;
-  --tint-success-82: #203d2f;
-  --tint-success-88: #1e3128;
-  --tint-texttitle-90: #313133;
-  --tint-warning-20: #d1b00e;
-  --tint-warning-40: #a38b11;
-  --tint-warning-65: #6a5c16;
-  --tint-warning-78: #4c4318;
-  --tint-warning-80: #484018;
-  --tint-warning-82: #433c19;
-  --tint-warning-88: #35311a;
-  --tint-warning-90: #312d1a;
-  /* === SOLID TINTS HC END === */
 }

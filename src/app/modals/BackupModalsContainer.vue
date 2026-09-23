@@ -184,12 +184,11 @@ import BaseIcon from '@/platform/ui/icons/BaseIcon.vue';
 import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseSwitch from '@/platform/ui/switch/BaseSwitch.vue';
+import { BACKUP_MODALS } from '@/app/modals/injectionKeys';
 import { injectModalController } from '@/platform/store/useModalController';
 import { prefetch } from '@/platform/utils/prefetch';
 
-import type { useBackupModals } from '@/app/modals/useBackupModals';
-
-const backupModals = injectModalController<ReturnType<typeof useBackupModals>>('backupModals');
+const backupModals = injectModalController(BACKUP_MODALS);
 
 // 弹窗打开即预取备份动作 chunk：点「确认导出/导入」时模块已在缓存，loading 立即出现。
 // 经 prefetch 吞掉失败：预取失败不应产生未处理 rejection，点击时会按原路径重新加载。

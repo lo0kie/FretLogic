@@ -149,14 +149,15 @@ describe('自定义弦数架构 (Custom String Count Architecture)', () => {
     });
 
     it('getExportFretboardWidth 应按弦数动态等比伸缩宽度', () => {
+      const { getExportFretboardWidth, FRETBOARD_WIDTH, FRETBOARD_LEFT_PAD, STRING_SPACING } = SCORE_EXPORT_CONFIG;
       // 6 弦结果必须与声明的标准指板宽度常量一致（单一来源，防两处声明漂移）
-      expect(SCORE_EXPORT_CONFIG.getExportFretboardWidth(6)).toBe(SCORE_EXPORT_CONFIG.FRETBOARD_WIDTH);
-      // 4 弦 = 14*2 + 3*9.8 = 57.4
-      expect(SCORE_EXPORT_CONFIG.getExportFretboardWidth(4)).toBeCloseTo(57.4);
-      // 7 弦 = 14*2 + 6*9.8 = 86.8
-      expect(SCORE_EXPORT_CONFIG.getExportFretboardWidth(7)).toBeCloseTo(86.8);
+      expect(getExportFretboardWidth(6)).toBe(FRETBOARD_WIDTH);
+      // 期望值一律由几何常量推导，不写死 57.4 / 86.8 —— 否则改间距或留白时本用例会假红
+      // 4 弦 = 基准宽 − 2 段弦距；7 弦 = 基准宽 + 1 段弦距
+      expect(getExportFretboardWidth(4)).toBeCloseTo(FRETBOARD_WIDTH - 2 * STRING_SPACING);
+      expect(getExportFretboardWidth(7)).toBeCloseTo(FRETBOARD_WIDTH + STRING_SPACING);
       // 1 弦走 Math.max 钳制分支：按 1 段弦距计（而非 0 段）
-      expect(SCORE_EXPORT_CONFIG.getExportFretboardWidth(1)).toBeCloseTo(14 * 2 + 9.8);
+      expect(getExportFretboardWidth(1)).toBeCloseTo(FRETBOARD_LEFT_PAD * 2 + STRING_SPACING);
     });
 
     it('getTuningsByStringCount 能够准确按弦数筛选选项', () => {

@@ -6,9 +6,13 @@
            原先两者共用一个 background 属性是过渡不了的——棋盘格是 background-image、
            白/暗是 background-color，二者之间无法插值，只能硬切。
            另外透明的底色刻意写成「白但 alpha 为 0」（bg-white/0）而不是默认 transparent：
-           后者等于 rgba(0,0,0,0)，从白或暗渐变过去中途会发灰。 -->
+           后者等于 rgba(0,0,0,0)，从白或暗渐变过去中途会发灰。
+           白/暗两档的底色不走工具类：白底是导出纸张色令牌，暗底必须取「暗色画布配色」的底
+           （与导出图逐像素同源，而不是当前应用主题的 --fbc-bg，否则浅色主题下预览会画错），
+           两者都只能在运行时解析，故走行内样式；棋盘格的两格则是纯色令牌，可直接用工具类。 -->
       <div
-        :class="previewBg === 'white' ? 'bg-white' : previewBg === 'dark' ? 'bg-[#18181a]' : 'bg-white/0'"
+        :class="previewBg === 'transparent' ? 'bg-white/0' : ''"
+        :style="previewPanelStyle"
         class="relative inline-block overflow-hidden rounded-md p-2 shadow-inner transition-colors duration-base"
       >
         <!-- 棋盘格（表示透明）：刻意用真实图层而不是 ::before + 负 z-index。
@@ -18,7 +22,7 @@
              改成独立图层 + 指板图 relative 抬升后，绘制顺序只由 DOM 顺序决定，与祖先 transform 无关 -->
         <div
           :class="previewBg === 'transparent' ? 'opacity-100' : 'opacity-0'"
-          class="pointer-events-none absolute inset-0 bg-[repeating-conic-gradient(#ccc_0%_25%,#fff_0%_50%)] bg-size-[12px_12px] transition-opacity duration-base"
+          class="pointer-events-none absolute inset-0 bg-[repeating-conic-gradient(var(--export-checker)_0%_25%,var(--export-paper)_0%_50%)] bg-size-[12px_12px] transition-opacity duration-base"
         />
         <FretboardCanvas
           v-bind="fretBoardConfig"
@@ -73,7 +77,7 @@ import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.v
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { renderFretboardToCanvas } from '@/domains/fretboard/components/renderFretboardCanvas';
-import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
+import { readRootColorVar, resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import { runBusyAction } from '@/platform/composables/runBusyAction';
 import { writeBlobToClipboard } from '@/platform/services/clipboard/clipboard';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -82,6 +86,7 @@ import { buildExportFileName, canvasToBlob, triggerBlobDownload } from '@/platfo
 
 import type { ExportBgMode } from '@/platform/types';
 import type { SegmentOption } from '@/platform/ui/segmented/segmentOption';
+import type { CSSProperties } from 'vue';
 
 const editorStore = useChordEditorStore();
 const settingsStore = useSettingsStore();
@@ -103,13 +108,32 @@ const previewBg = toRef(settingsStore, 'workbenchExportBg');
 const previewTheme = computed<'light' | 'dark'>(() => (previewBg.value === 'dark' ? 'dark' : 'light'));
 const previewIsDark = computed(() => previewBg.value === 'dark');
 
+/**
+ * 预览底板底色。白底取导出纸张色令牌（与导出的 PNG 同一来源）；
+ * 暗底取**暗色画布配色**的底，而不是当前应用主题的 --fbc-bg —— 暗底预览要展示的是暗色导出图，
+ * 浅色主题下取应用主题值会画成亮色面板（见 previewTheme 的注释）。
+ * 透明底返回空样式（不设任何内联底色），由模板上的 bg-white/0 承担「白但 alpha 0」的过渡起点。
+ */
+const previewPanelStyle = computed<CSSProperties>(() => {
+  if (previewBg.value === 'white') return { backgroundColor: 'var(--export-paper)' };
+  if (previewBg.value === 'dark') return { backgroundColor: resolveFretboardCanvasPalette('dark').BG };
+
+  return {};
+});
+
 // ---- 导出辅助 ----
 const isActing = ref(false);
 
 function buildCanvas(): HTMLCanvasElement {
-  // 与预览完全一致：配色只由背景决定（见 previewTheme），透明底导出的是透明 PNG、用 light 配色
+  // 与预览完全一致：配色只由背景决定（见 previewTheme），透明底导出的是透明 PNG、用 light 配色。
+  // 白底取纸张色令牌：canvas 消费不了 var()，与 palette 同一条约束（见 readRootColorVar）
   const palette = resolveFretboardCanvasPalette(previewTheme.value);
-  const bgColor = previewBg.value === 'white' ? '#ffffff' : previewBg.value === 'dark' ? palette.BG : undefined;
+  const bgColor =
+    previewBg.value === 'white'
+      ? readRootColorVar('--export-paper')
+      : previewBg.value === 'dark'
+        ? palette.BG
+        : undefined;
   return renderFretboardToCanvas(editorStore.draftChord, {
     scale: 4,
     colors: palette,

@@ -31,7 +31,7 @@ vi.mock('@/platform/services/storage/idb', async importOriginal => {
       put: vi.fn(async () => 0),
       delete: vi.fn(async () => undefined),
       clear: vi.fn(async () => undefined),
-      runTx: vi.fn(async (_names: string[], _mode: string, fn: (get: (n: string) => unknown) => void) => {
+      runTx: vi.fn(async (_names: string[], fn: (get: (n: string) => unknown) => void) => {
         fn(() => ({}));
       }),
     },

@@ -468,6 +468,8 @@ const {
   inputRef,
   scrollEl: searchScrollRef,
   itemCount: () => resolvedSearchItemCount.value,
+  // 与下方 handleKeydown 的 Enter 判定同口径（isComposing ref 声明在输入同步段，此处只传取值器）
+  isComposing: () => isComposing.value,
   onSelectActive: index => emit('select-search-index', index),
 });
 

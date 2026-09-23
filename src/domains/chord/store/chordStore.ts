@@ -275,16 +275,17 @@ export const useChordStore = defineStore('chord', () => {
     selectedGroupId.value = id;
   };
 
-  /** 折叠全部分组（选中/展开态都置空）。 */
+  /** 折叠全部分组并清空选中态：两者是「全部收起」的一体两面——留着选中会让侧栏仍高亮一个已折叠的分组。
+   *  此前注释这么写、函数只清 expandedGroupId，两个调用方各自补一次 setSelectedGroupId(null)。 */
   const collapseAllGroups = () => {
     expandedGroupId.value = null;
+    selectedGroupId.value = null;
   };
 
   /** 选中并展开指定分组；传 null 时取消选中并折叠全部分组。 */
   const selectAndExpandGroup = (id: string | null) => {
     if (!id) {
       collapseAllGroups();
-      selectedGroupId.value = null;
       return;
     }
     expandedGroupId.value = id;
@@ -368,8 +369,12 @@ export const useChordStore = defineStore('chord', () => {
     if (groupIndex < 0) return null;
     const group = groups.value[groupIndex]!;
 
-    // 名下和弦走 removeChordsSnapshot：单趟完成「挑出待删」与「保留其余」，并广播解绑事件
+    // 名下和弦走 removeChordsSnapshot：单趟完成「挑出待删」与「保留其余」，并广播解绑事件。
+    // 空分组必须在这里自行补一次水位线：removeChordsSnapshot 在空集时提前返回、不抬水位线，
+    // 而分组本身照样被删掉了——若被删的空分组恰是全库 updatedAt 最大者（刚新建/刚改名），
+    // meta.updatedAt 会因此回退，一次「拉取云端」就把已删分组复活（见 deletionWatermark）。
     const { entries } = removeChordsSnapshot(savedChordsList.value.filter(c => c.groupId === groupId));
+    markDataDeleted();
 
     groups.value = groups.value.filter(g => g.id !== groupId);
     if (expandedGroupId.value === groupId) expandedGroupId.value = null;
@@ -383,9 +388,14 @@ export const useChordStore = defineStore('chord', () => {
    * 名下和弦同样按原下标精确插回；随后广播恢复事件，经应用层桥接回填乐谱槽位。
    */
   const restoreGroupDeletion = (snapshot: GroupDeletionSnapshot): void => {
-    const nextGroups = [...groups.value];
-    nextGroups.splice(Math.min(snapshot.groupIndex, nextGroups.length), 0, snapshot.group);
-    groups.value = nextGroups;
+    // 分组已在库中就不重复插回：连删连撤销时（两份通知都还活着）会拿到同一份快照两次，
+    // 无守卫地插回会让列表里出现同 id 的两个分组——下游按 id 查找与 Vue 的 keyed diff 都会错乱。
+    // 名下和弦照旧走 restoreChords（它自身也有同款 id 守卫，重复调用安全）。
+    if (!groups.value.some(g => g.id === snapshot.group.id)) {
+      const nextGroups = [...groups.value];
+      nextGroups.splice(Math.min(snapshot.groupIndex, nextGroups.length), 0, snapshot.group);
+      groups.value = nextGroups;
+    }
     restoreChords(snapshot);
     selectedGroupId.value = snapshot.group.id;
   };
@@ -415,6 +425,18 @@ export const useChordStore = defineStore('chord', () => {
   /** 将和弦插入列表头部（新和弦优先展示）。 */
   const addChord = (chord: Chord) => {
     savedChordsList.value = [chord, ...savedChordsList.value];
+  };
+
+  /**
+   * 将一批和弦**按给定顺序追加到列表尾部**（组导入等批量落地用）。
+   *
+   * 与 addChord 的头插语义正好相反，且这不是风格差异：批量导入的顺序是**载荷声明的一部分**
+   * （chordTextCodec 的 CHORDS 段明写「保序」），逐条 addChord 会把整组倒过来 ——
+   * 同指纹并列的变体在分组卡片里的 1/N 编号随之翻转。
+   */
+  const appendChords = (chords: Chord[]) => {
+    if (chords.length === 0) return;
+    savedChordsList.value = [...savedChordsList.value, ...chords];
   };
 
   /** 按 id 替换更新指定和弦；id 不存在时返回 false（调用方据以提示而非假成功）。 */
@@ -543,13 +565,18 @@ export const useChordStore = defineStore('chord', () => {
    */
   const restoreChords = (snapshot: ChordDeletionSnapshot): void => {
     if (snapshot.entries.length === 0) return;
+    // 已在库中的 id 不再插回：连删连撤销时（两份通知都还活着）会拿到指向同一批 id 的两份快照，
+    // 无守卫地插回会在同一列表里出现重复 id —— 下游按 id 查找、去重与 Vue 的 keyed diff 都会错乱。
+    const existingIds = new Set(savedChordsList.value.map(c => c.id));
+    const entries = snapshot.entries.filter(entry => !existingIds.has(entry.chord.id));
+    if (entries.length === 0) return;
     const next = [...savedChordsList.value];
-    for (let i = snapshot.entries.length - 1; i >= 0; i -= 1) {
-      const { chord, index } = snapshot.entries[i]!;
+    for (let i = entries.length - 1; i >= 0; i -= 1) {
+      const { chord, index } = entries[i]!;
       next.splice(Math.min(index, next.length), 0, chord);
     }
     savedChordsList.value = next;
-    eventBus.emitChordsRestored(snapshot.entries.map(e => e.chord.id));
+    eventBus.emitChordsRestored(entries.map(e => e.chord.id));
   };
 
   /**
@@ -586,6 +613,7 @@ export const useChordStore = defineStore('chord', () => {
     updateGroupSort,
     deleteGroup,
     addChord,
+    appendChords,
     updateChord,
     /** 即时刷盘（绕开防抖窗口）；调用方按需 `void persistAll()` */
     persistAll,

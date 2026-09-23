@@ -1,7 +1,6 @@
 import { effectScope, onActivated, watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
-import { z } from 'zod';
 
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
@@ -38,9 +37,27 @@ export const buildScoreQuery = (songId: string | null, tab: ScoreActiveTab): Rec
   tab: songId && tab !== 'edit' ? tab : undefined,
 });
 
-// URL query 参数 schema：id 为非空串；tab 限定合法值域（替代手写 typeof 守卫与枚举 cast）
-const QUERY_ID = z.string().min(1);
-const QUERY_TAB = z.enum(TAB_QUERY_VALUES);
+/**
+ * URL query 参数校验：id 为非空串；tab 限定合法值域。
+ *
+ * 手写而不用 zod：本模块被 TopHeader 静态引用（属首屏闭包，见 check-bundle 的 220KB 预算），
+ * 而 zod 是几十 KB 级依赖——为一个「非空串」与「三值枚举」把它拖进首屏不值得。
+ * 真正需要 zod 的是备份包校验（app/services/validation/payload.ts），那里本就是动态 import。
+ * 保留 `{ success, data }` 的返回形状，故全部调用点无需改动。
+ */
+type QueryParseResult<T> = { success: true; data: T } | { success: false };
+
+const QUERY_ID = {
+  safeParse: (value: unknown): QueryParseResult<string> =>
+    typeof value === 'string' && value.length > 0 ? { success: true, data: value } : { success: false },
+};
+
+const QUERY_TAB = {
+  safeParse: (value: unknown): QueryParseResult<ScoreActiveTab> =>
+    typeof value === 'string' && (TAB_QUERY_VALUES as readonly string[]).includes(value)
+      ? { success: true, data: value as ScoreActiveTab }
+      : { success: false },
+};
 
 interface ScoreRouteSyncApi {
   syncRouteToStore: () => void;

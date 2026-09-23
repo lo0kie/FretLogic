@@ -137,7 +137,11 @@ const createChordEditorSetup = (persist: boolean) => () => {
   const setMultiFingeringIndex = (index: number) => {
     const chord = currentMultiFingeringChords.value[index];
     if (!chord) return;
+    // 与 setEditor / resetEditor 同款：**整体替换草稿**必须挂程序性标记，否则下面那条
+    // 「指板音符变化」watcher（flush: 'sync'）会把变体自带的横按当作用户改弦而重算/清除。
+    isProgrammaticStringsChange = true;
     draftChord.value = cloneDeep(toRaw(chord));
+    isProgrammaticStringsChange = false;
     isCreating.value = false;
     isEditing.value = true;
   };

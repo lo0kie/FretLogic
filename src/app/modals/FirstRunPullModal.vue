@@ -13,6 +13,7 @@
       <strong class="text-fg-title">{{ schemeName }}</strong>
       拉取云端数据？
     </p>
+    <p v-if="authorNotice" class="m-0 py-xs text-xs/relaxed text-fg-muted">{{ authorNotice }}</p>
   </BaseModal>
 </template>
 
@@ -22,6 +23,7 @@ import { computed, onMounted, ref } from 'vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { getSyncProviderLabel } from '@/app/services/sync/providerMeta';
+import { getBuiltinAuthorTargetNotice, isSyncConfigured } from '@/app/services/sync/syncTargetConfig';
 import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
 import { useStorage } from '@/platform/composables/useStorage';
 import { useSettingsStore } from '@/platform/store/settingsStore';
@@ -45,8 +47,16 @@ onMounted(() => prefetch(preloadSyncActions, 'FirstRunPullModal'));
 /** 同步方案展示名（首访时 syncTarget 为默认值 gitee，见 GITEE_SYNC_CONFIG 预设） */
 const schemeName = computed(() => getSyncProviderLabel(settingsStore.syncTarget));
 
+/**
+ * 数据归属提示：首访时 syncTarget 就是出厂默认的 gitee + 作者仓库，故用户点「拉取数据」拿到的
+ * 是**项目作者的示例数据**。这里必须与启动检测、顶栏菜单、同步设置弹窗共用同一判据与文案，
+ * 否则用户会把示例数据当成自己的基线。
+ */
+const authorNotice = computed(() => getBuiltinAuthorTargetNotice());
+
 const isFirstVisit = !hasVisited.value;
-const isOpen = ref(isFirstVisit);
+// 未配置的目标（当前只有「WebDAV 未填地址」这一种）不弹拉取引导，与启动检测同一门槛
+const isOpen = ref(isFirstVisit && isSyncConfigured());
 
 // 首访先落标记再展示：用户即便不看弹窗直接刷新，也不会反复被拦截
 if (isFirstVisit) hasVisited.value = true;

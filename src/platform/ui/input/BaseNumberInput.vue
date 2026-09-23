@@ -49,8 +49,10 @@
       :placeholder
       :class="currentConfig.textClass"
       @blur="commitInput()"
-      @keydown.enter="commitInput()"
-      @keydown.esc="cancelInput()"
+      @compositionend="isComposing = false"
+      @compositionstart="isComposing = true"
+      @keydown.enter="handleEnterKey($event)"
+      @keydown.esc="handleEscapeKey($event)"
       class="m-0 w-0 flex-1 [appearance:textfield] border-none bg-transparent p-0 text-center font-[inherit] font-bold text-primary outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       inputmode="numeric"
       ref="inputRef"
@@ -205,6 +207,12 @@ if (import.meta.env.DEV)
 
 const isEditing = ref(false);
 const tempValue = ref('');
+/**
+ * 输入法合成态。行内编辑的 Enter / Esc 都必须先看它：合成期按 Enter 是「确认候选词」，
+ * 此时 `v-model` 尚未上屏（Vue 的 vModelText 在 composing 期间不更新），直接提交会拿旧值写回并退出编辑。
+ * 与 BaseInput、BaseEditableText 同口径：`e.isComposing` 与本地 ref 都读——个别输入法不置事件字段。
+ */
+const isComposing = ref(false);
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
 const wrapperRef = useTemplateRef<HTMLDivElement>('wrapperRef');
 const resolvedWidth = computed(() => resolveComponentWidth(props.width));
@@ -281,6 +289,18 @@ const parseValue = (raw: string): number | null => {
   }
   const n = parseFloat(raw);
   return isNaN(n) ? null : n;
+};
+
+/** 行内编辑的 Enter：合成期放行（见 isComposing 说明），否则提交 */
+const handleEnterKey = (e: KeyboardEvent) => {
+  if (e.isComposing || isComposing.value) return;
+  commitInput();
+};
+
+/** 行内编辑的 Esc：合成期放行——Esc 正是取消候选词的键，此时退出编辑会连带丢掉正在输入的内容 */
+const handleEscapeKey = (e: KeyboardEvent) => {
+  if (e.isComposing || isComposing.value) return;
+  cancelInput();
 };
 
 /** 进入编辑：预填当前值并聚焦全选 */

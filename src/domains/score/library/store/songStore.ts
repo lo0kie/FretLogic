@@ -291,7 +291,10 @@ export const useSongStore = defineStore('song', () => {
   const swapSongSlotChords = (songId: string, sourceKey: SlotKey, targetKey: SlotKey) => {
     const target = songMap.value.get(songId);
     if (!target) return;
-    swapOrMoveSlotChords(target.chordMap, sourceKey, targetKey);
+    // 与 setSlotChord / removeCharChord 同款守卫：空操作（同键、源槽位为空、落位未变）不 touch、不标脏。
+    // 否则一次失败的拖拽也会推高 song.version —— 而它是渲染缓存键的维度（见 scoreRenderCacheKey），
+    // 无谓标脏会触发整页重渲染。
+    if (!swapOrMoveSlotChords(target.chordMap, sourceKey, targetKey)) return;
     target.chordMap = new Map(target.chordMap);
     touchSong(target);
     markSongDirty(toSongId(songId));

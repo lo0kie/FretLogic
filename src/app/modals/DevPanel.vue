@@ -645,9 +645,13 @@ const hasPreviewCache = computed(() => Boolean(currentRenderData.value));
 const previewPageCount = computed(() => (currentRenderData.value ? `${currentRenderData.value.a4Urls.length}` : '—'));
 
 const previewSizeText = computed(() => {
-  const sizes = currentRenderData.value?.a4Sizes;
-  if (!sizes || sizes.length === 0) return currentRenderData.value ? '0 B' : '—';
-  return formatBytes(sizes.reduce((sum, n) => sum + n, 0));
+  const data = currentRenderData.value;
+  const sizes = data?.a4Sizes;
+  if (!sizes || sizes.length === 0) return data ? '0 B' : '—';
+  // 含页脚合成层（若已生成）：它是同一批页面的第二份 JPEG，漏掉就会把实际占用报成一半
+  // （与缓存内存配额记账同口径，见 scorePreviewCache 的 weigh）
+  const footerBytes = (data?.footerBlobs ?? []).reduce((sum, blob) => sum + blob.size, 0);
+  return formatBytes(sizes.reduce((sum, n) => sum + n, 0) + footerBytes);
 });
 
 /** 指标读数徽标的形态：有缓存走实底（主读数），无缓存时的占位「—」走描边弱化。
@@ -812,8 +816,13 @@ const isWipeIdbConfirmOpen = ref(false);
 const isWipingIdb = ref(false);
 
 /** 清空全部对象库（SCHEMA 声明的每一库）：wipe 确认框与 wipe+reload 两个动作共用 */
-const clearAllIdbStores = async () =>
-  void (await Promise.all((Object.keys(SCHEMA) as StoreName[]).map(name => void idb.clear(name))));
+const clearAllIdbStores = async (): Promise<void> => {
+  const storeNames = Object.keys(SCHEMA) as StoreName[];
+  // 内层不能写成 `map(name => void idb.clear(name))`：void 运算符把每个元素求值成 undefined，
+  // Promise.all 收到 undefined[] 会在下一个微任务即 resolve、不等任何 clear 完成——
+  // 「已清空」提示早于删除落地，各 clear 的 rejection 还成为游离 Promise，下方 try/catch 永不捕获。
+  await Promise.all(storeNames.map(name => idb.clear(name)));
+};
 
 const handleWipeIdb = async () => {
   isWipingIdb.value = true;

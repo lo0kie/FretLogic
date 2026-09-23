@@ -183,11 +183,22 @@ app.post('*', async c => {
     return c.json({ error: `载荷过大（上限 ${Math.floor(MAX_PAYLOAD_BYTES / 1024 / 1024)}MB）` }, 413);
   }
   const now = Date.now();
-  JSON.parse(payloadText);
-  // data_md5 不再信任客户端提交值：用落库 payload 文本现场重算。前端 computePayloadMd5 即
-  // md5(serializeForStorage(payload))，而 push 的 body 正是同一 serializeForStorage(payload)，
-  // 故服务端 md5(body) 与前端值逐字节一致。客户端值仅用于比对，不一致时记日志，落库以重算为准。
-  const serverMd5 = md5(payloadText);
+  // 解析载荷（同时作为 md5 的规范化输入）：非法 JSON 在此抛出，与旧行为一致
+  const parsedPayload = JSON.parse(payloadText);
+  // data_md5 不再信任客户端提交值：用**与前端 computePayloadMd5 同一口径**现场重算。
+  // 前端算的是「剥掉元数据字段后的 serializeForStorage」——dataMd5 / dataUpdatedAt /
+  // absentSections / deletedAt 四个字段先 delete 再序列化（见 payloadChecksum.ts）。
+  // 这里曾经直接 md5(payloadText)（整包字节），依据是「push 的 body 就是同一个
+  // serializeForStorage(payload)，故与前端值逐字节一致」——该等式自包内开始携带
+  // deletedAt 删除水位线起就不再成立（前端剥掉它、整包字节里却带着），于是只要任一设备
+  // 删过东西两侧必然不等：/meta 回读的 md5 与本地值恒不匹配，启动比对永久短路。
+  // 键序无需额外处理：body 由同一 payload 序列化而来，JSON.parse 保留原序，
+  // 删键后重序列化得到的就是前端 serializeForStorage(content) 的字节。
+  delete parsedPayload.dataMd5;
+  delete parsedPayload.dataUpdatedAt;
+  delete parsedPayload.absentSections;
+  delete parsedPayload.deletedAt;
+  const serverMd5 = md5(JSON.stringify(parsedPayload));
   const clientMd5 = c.req.query('md5') || null;
   if (clientMd5 && clientMd5 !== serverMd5) {
     console.warn(`[sync] 客户端 md5 与重算不一致：client=${clientMd5} server=${serverMd5}`);

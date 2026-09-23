@@ -3,7 +3,7 @@
  * 在其之上保留本项目的三层定制：
  * 1. SCHEMA 声明表驱动的 upgrade（含「陈旧索引清理」与「缺库自愈 bump 重开」）；
  * 2. AppDBSchema 编译期绑定（storeName ↔ 记录类型，见下方类型区）；
- * 3. runTx 跨库单事务 + 统一错误包装（AppError.storage）。
+ * 3. runTx 跨库原子写事务 + 统一错误包装（AppError.storage）。
  *
  * 数据库：fret-logic-v2，对象库见 SCHEMA。调用方负责错误处理（统一抛 AppError）。
  */
@@ -192,6 +192,43 @@ async function guard<T>(op: string, context: Record<string, unknown>, fn: () => 
   }
 }
 
+/**
+ * 事务内可用的对象库：**只声明消费方用到的能力**，不冒充原生 IDBObjectStore。
+ *
+ * 为什么不能是原生签名：底层是 idb 包装过的对象库，put / delete 被就地覆写成返回 Promise
+ * （而非 IDBRequest），与原生签名不兼容。硬断言回原生类型（`as unknown as IDBObjectStore`）
+ * 等于把这一层的类型检查整个关掉 —— 而消费方（chordRepository / songRepository / idbKv）
+ * 只用 put / delete、且一律不取返回值，把能力声明到「够用」即可，不必假装是原生对象库。
+ */
+export interface TxObjectStore {
+  put(value: unknown, key?: unknown): unknown;
+  delete(key: unknown): unknown;
+}
+
+/**
+ * 熔断期的对象库代理：拦截 put/add 并抛错，其余操作（delete / clear / get / getAll / index…）原样放行。
+ *
+ * 为什么按操作而不是按事务拦：`runTx` 曾对 `mode === 'readwrite'` 一律抛错，于是配额熔断期间
+ * **连删除都写不进去**——而删除正是用户释放空间、恢复可写的唯一手段，熔断因此变成不可自愈的死锁
+ * （idbKv.flushNow 里那句「删除类操作放行以释放空间」与 persistFailure 的「删除/清空类操作不受阻断」
+ * 都成了空话，回调内的 `!isPersistBlocked()` 分支也永不可达：守卫在进入回调前就抛了）。
+ * 写入仍必须抛错而非静默跳过：静默会让 chordRepository.save（事务后更新镜像）、
+ * songPersistence.flushSongsNow（catch 只在抛错时恢复脏集合）误判提交成功，内存与 IDB 永久分叉
+ * （P0 审计 #1）。判据在**每次取用时**求值——熔断可能就在本次事务执行期间被打开。
+ */
+const withQuotaGuard = (store: TxObjectStore, storeNames: string[], mode: IDBTransactionMode): TxObjectStore =>
+  new Proxy(store, {
+    get(target, prop) {
+      if (isPersistBlocked() && (prop === 'put' || prop === 'add'))
+        return () => {
+          throw errors.storage('存储配额已超限，写入已暂停', { context: { storeNames, mode } });
+        };
+      const value = Reflect.get(target, prop) as unknown;
+      // 原生方法必须绑回真实对象调用，否则触发 Illegal invocation
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+    },
+  });
+
 export const idb = {
   async get<K extends StoreName>(
     storeName: K,
@@ -275,20 +312,18 @@ export const idb = {
     return guard('主键列举', { storeName }, () => db.getAllKeys(storeName)) as Promise<AppDBSchema[K]['key'][]>;
   },
   /**
-   * 跨对象库单事务：fn 内经 get(storeName) 拿各库 objectStore 操作，
+   * 跨对象库单事务（**写入型**）：fn 内经 get(storeName) 拿各库 objectStore 操作，
    * 任一抛错即 abort 整个事务（如 groups/chords 的「同生共死」原子写）。
+   *
+   * 只做 readwrite：本函数的用途就是多库原子写，读型多库事务用不到这层封装（逐库 idb.get 即可）。
+   * 收窄成字面量还让 idb 不再把 put/delete 标成可选（它按 mode 联合把只读事务的写操作声明为
+   * undefined），因此无需对对象库类型做任何断言 —— 见 TxObjectStore。
    */
-  async runTx(
-    storeNames: string[],
-    mode: IDBTransactionMode,
-    fn: (get: (storeName: string) => IDBObjectStore) => void
-  ): Promise<void> {
-    // 配额熔断：写型事务不再冲击已满存储（与 put/bulkPut 同口径）；但必须抛错让调用方感知失败——
-    // 静默 return 会让 chordRepository.save（事务后更新镜像）、songPersistence.flushSongsNow（catch 只
-    // 在抛错时恢复脏集合）误判提交成功，导致内存与 IDB 永久分叉、编辑被标「已落盘」（P0 审计 #1）。
-    // 改为抛错：上层 catch 据以保留脏标记 / 镜像并重试。读型事务不受熔断影响（本身不写）。
-    if (mode === 'readwrite' && isPersistBlocked())
-      throw errors.storage('存储配额已超限，写入已暂停', { context: { storeNames, mode } });
+  async runTx(storeNames: string[], fn: (get: (storeName: string) => TxObjectStore) => void): Promise<void> {
+    // 必须留字面量类型：注解成 IDBTransactionMode 会把类型推宽回联合，idb 随即又把写操作标成可选
+    const mode = 'readwrite';
+    // 配额熔断的处置下移到单个操作（见 withQuotaGuard）：写入型操作抛错让调用方感知失败，
+    // 删除/清空类放行以便用户腾空间。整段事务一律抛错会把熔断变成不可自愈的死锁。
     const db = await openDb();
     await guard('事务', { storeNames }, async () => {
       const transaction = db.transaction(storeNames, mode);
@@ -298,8 +333,7 @@ export const idb = {
         fn(name => {
           const store = stores.get(name);
           if (!store) throw errors.storage(`事务中不存在对象库 ${name}`, { context: { storeNames } });
-          // idb 包装类型按 mode 联合把 put/delete 标成可选；消费者均不取返回值，断言回原生签名
-          return store as unknown as IDBObjectStore;
+          return withQuotaGuard(store, storeNames, mode);
         });
       } catch (error) {
         failure = error;

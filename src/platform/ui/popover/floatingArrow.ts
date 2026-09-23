@@ -106,16 +106,22 @@ export function buildFloatingArrowStyle({
   } as CSSProperties;
 }
 
+/** camelCase → kebab-case（CSS 自定义属性以 `--` 开头、不含大写字母，转换后原样不变） */
+const toKebabCase = (key: string): string => key.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`);
+
 /**
- * 把箭头样式写入元素：按 camelCase 直赋。
+ * 把箭头样式写入元素。
  *
- * buildFloatingArrowStyle 产出的键都是标准 camelCase（不再有 -webkit- 前缀键），
- * 故无需 setProperty 的 kebab 形态。两个命令式消费方（vTooltip 单例、v-scrollbar 读数气泡）
- * 此前各写一份逐字相同的循环；BasePopover / 指板横按胶囊走模板 :style 绑定，不经此函数。
+ * 走 `style.setProperty` 而非「按 camelCase 直赋」：直赋要把 `CSSStyleDeclaration` 断言成
+ * 字符串索引对象（`as unknown as Record<string, string>`），而它本就有按属性名写入的公开 API。
+ * buildFloatingArrowStyle 产出的键是标准 camelCase（不再有 -webkit- 前缀键），故此处转 kebab 后写入
+ * —— 标准属性与 `--*` 自定义属性走同一条路。
+ * 两个命令式消费方（vTooltip 单例、v-scrollbar 读数气泡）此前各写一份逐字相同的循环；
+ * BasePopover / 指板横按胶囊走模板 :style 绑定，不经此函数。
  */
 export function applyFloatingArrowStyle(el: HTMLElement, style: CSSProperties): void {
   for (const [key, value] of Object.entries(style)) {
     if (value == null) continue;
-    (el.style as unknown as Record<string, string>)[key] = String(value);
+    el.style.setProperty(toKebabCase(key), String(value));
   }
 }

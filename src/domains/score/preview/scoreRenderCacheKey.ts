@@ -7,14 +7,14 @@
  * 键维度一旦分叉就没有第二条线索，故只允许存在一处定义。
  *
  * 维度清单：歌曲内容与元数据（id / 标题 / 歌者 / 选调 / 原调 / 拍号 / 变调夹 / 版本 / 歌词）
- * + 全部影响排版的导出设置 + 预览缩放档位 + 主题明暗 + 各槽位引用和弦的「指纹:横按签名」。
- * 刻意不含「显示页脚」：页脚是独立合成层（见 services/footerOverlay），开关只叠在页图之上，
- * 既不该触发重渲染，也不该为同一首歌多存一份缓存。
+ * + 全部影响排版的导出设置 + 预览缩放档位 + **生效主题** + 各槽位引用和弦的「指纹:横按签名」。
+ * 刻意不含「显示页脚」：页脚是独立合成层（见 services/footerOverlay），开关只是在页流的两套展示源
+ * 之间切换（渲染线程合成好的带页码页图 / 无页脚原图），既不触发乐谱重渲染，也不为同一首歌多存一份缓存。
  */
 import { computeChordFingerprint } from '@/domains/chord/theory/theory';
 import { computeBarresSignature } from '@/domains/fretboard/model/coordinates';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import { isDark } from '@/platform/composables/useTheme';
+import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 
 import type { Chord } from '@/domains/chord/types';
@@ -54,7 +54,11 @@ export const buildScoreRenderCacheKey = (song: Song | null, chordLookup: Map<str
     song.capo,
     song.version,
     song.lyrics,
-    isDark.value,
+    // 主题维度必须取**生效主题**而不是 isDark：isDark = activeTheme !== 'light'，dark 与
+    // high-contrast 同为 true ⇒ 切到高对比主题时键不变、命中旧缓存，预览/长图/PDF 仍是旧墨色
+    // （--fbc-* 在 dark 与 HC 下是不同字面色：dark.ts vs high-contrast.ts）。
+    // FretboardCanvas 的位图缓存键用的就是完整 activeTheme，此处与它同口径。
+    activeTheme.value,
     settingsStore.scoreChordShorthand,
     settingsStore.scoreShowBarre,
     settingsStore.scoreTrimEmptyEdgeFrets,

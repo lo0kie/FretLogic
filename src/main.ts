@@ -32,6 +32,9 @@ import { vWheelScroll } from './platform/directives/vWheelScroll';
 import '@/app/services/storage/appDbSchema';
 import '@/assets/tailwind.css';
 import '@/assets/main.scss';
+// 颜色令牌（单一来源在仓库根 tokens/，构建期由 culori 派生）。经 Vite 虚拟模块注入，与其余样式同走 CSS 管线。
+// 刻意排在样式之后：注入内容不包 @layer，而未分层声明优先于 Tailwind @theme 所在的 @layer。
+import 'virtual:color-tokens.css';
 
 const app = createApp(App);
 const pinia = createPinia();

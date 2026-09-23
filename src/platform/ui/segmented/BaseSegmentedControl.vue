@@ -28,6 +28,7 @@
            分段控件就会盖住吸附中的折叠标题（DevPanel 的标题只有 z-panel，更是被恒定压住）。
            本控件是常驻在流内容，不占浮起档，层叠只在控件内部成立 -->
       <button
+        v-scroll-into-view.x.nearest="scrollIntoViewBinding(isSelected(opt.value))"
         v-wave="{ disabled: disabled || opt.disabled }"
         :aria-checked="isSelected(opt.value)"
         :aria-label="isOptionIconOnly(opt) ? opt.label : undefined"
@@ -100,6 +101,7 @@ import {
 } from './BaseSegmentedControl.logic';
 
 import type { SegmentOption, SegmentOptionValue } from './segmentOption';
+import type { ScrollIntoViewOptions } from '@/platform/directives/vScrollIntoView';
 import type { ComponentSize } from '@/platform/types';
 import type { FormControlContext } from '@/platform/ui/form/formControlContext';
 import type { IconSizeValue, IconStrokeValue } from '@/platform/ui/icons/iconSizes';
@@ -482,6 +484,20 @@ const { isDragging, dragPosition, dragOverIndex, handlePointerDown, handleClickC
 
 // 监听值与禁用状态变化实时更新滑块位置
 watch([() => modelValue.value, () => props.disabled], () => void updateIndicatorPosition(), { immediate: true });
+
+/** 选中项与滚动容器可视边之间的最小留白（px）：贴着边线会被裁掉半个，也看不出还有前后项 */
+const SCROLL_INTO_VIEW_GAP_PX = 8;
+
+/* 选中项滚进可视区：交给平台的 v-scroll-into-view 指令，不再自己算 scrollLeft。
+   本控件常被放进横向滚动容器里（和弦选择面板的分区定位条、分组页签条…），而控件本身不感知
+   外面那条横滚轴：选中靠后的选项时滑块移过去了、选项却在视窗之外（表现为「高亮没滚进视窗」）。
+   指令的 direction:'x' 分支正是「在最近的横向滚动容器内按 scrollLeft 定位」，并自带
+   gap（经 scroll-margin，内联样式随元素存续）/ clamp 到 maxScroll / reduced-motion 降级 /
+   center·start·end 对齐。自己手写一份等价逻辑只会多一个漂移点，不值得。 */
+
+/** 选中项的滚动定位绑定：定向横向、nearest 对齐（已可见即不产生滚动）、留 8px 边距 */
+const scrollIntoViewBinding = (active: boolean): ScrollIntoViewOptions | false =>
+  active ? { direction: 'x', inline: 'nearest', block: 'nearest', gap: SCROLL_INTO_VIEW_GAP_PX } : false;
 
 // 同时观察容器与每个子项，使用 requestAnimationFrame 进行防抖合并
 let ro: ResizeObserver | null = null;

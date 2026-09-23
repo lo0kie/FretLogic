@@ -24,6 +24,10 @@
           layout === 'horizontal' && align === 'top' ? labelTopPaddingClass : '',
           required ? 'flex items-center gap-1' : '',
           resolvedLabelTone === 'muted' ? 'text-fg-muted' : 'text-fg-body',
+          // 手型只在标签确实能触发控件时给（labelTag === 'label' 即有 for 关联）。
+          // 退化为 span 的行（BaseSelector / BaseSlider / BaseSegmentedControl / BaseNumberInput）
+          // 标签不可点击，给手型是假暗示。禁用态与 BaseSwitch / BaseCheckbox 口径一致。
+          labelTag === 'label' ? (disabled ? 'cursor-not-allowed' : 'cursor-pointer') : '',
         ]"
         :for="labelTag === 'label' ? effectiveForId : undefined"
         :id="labelId"

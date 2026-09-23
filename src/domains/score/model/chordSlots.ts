@@ -43,6 +43,16 @@ export function setEdgeChords(
 ): void {
   setLineEdgeChords(chordMap, lineId, type, chordIds);
 }
+/**
+ * 行容器是否已空（三个槽位都无内容）。
+ *
+ * 空容器必须从 chordMap 中删掉：`chordMapsEqual` 先比 `a.size !== b.size`，
+ * 留着空容器会让「删空后」与「从未有过该行」被判成两份不同状态，从而产生幽灵撤销条目
+ * （其他路径如 pruneOrphanChordRefs / garbageCollectChordMap 本就回收空容器，此处与之对齐）。
+ */
+const isLineSlotsEmpty = (slots: ChordLineSlots): boolean =>
+  slots.char.size === 0 && slots.start.length === 0 && slots.end.length === 0;
+
 /** 从槽位移除和弦：字符槽位直接删除；边和弦槽位从列表中摘除并回写，返回被移除的 id。 */
 export function removeChordFromSlot(chordMap: Map<string, ChordLineSlots>, slotKey: SlotKey): ChordId | null {
   const parsed = parseSlotKey(slotKey);
@@ -51,7 +61,9 @@ export function removeChordFromSlot(chordMap: Map<string, ChordLineSlots>, slotK
   if (type === 'char') {
     const removed = lineCharChord(chordMap, lineId, index);
     if (removed === null) return null;
-    chordMap.get(lineId)?.char.delete(index);
+    const slots = chordMap.get(lineId);
+    slots?.char.delete(index);
+    if (slots && isLineSlotsEmpty(slots)) chordMap.delete(lineId);
     return removed;
   }
 
@@ -61,6 +73,7 @@ export function removeChordFromSlot(chordMap: Map<string, ChordLineSlots>, slotK
   if (index < 0 || index >= list.length) return null;
   const [removed] = list.splice(index, 1);
   setLineEdgeChords(chordMap, lineId, type, list);
+  if (isLineSlotsEmpty(slots)) chordMap.delete(lineId);
   return removed ?? null;
 }
 /**
@@ -91,16 +104,21 @@ export function bindNewChordToSlot(
   setEdgeChords(chordMap, lineId, type, list);
 }
 
-/** 交换或移动两个槽位的和弦：同行同类边槽位内做插入式重排；跨槽位时两处有值则互换，目标为空则移动。 */
+/**
+ * 交换或移动两个槽位的和弦：同行同类边槽位内做插入式重排；跨槽位时两处有值则互换，目标为空则移动。
+ *
+ * @returns 是否真的改动了槽位内容。空操作（同键、键不可解析、源槽位为空、边槽位落位未变）一律 false ——
+ *          调用方据此决定要不要标脏：`song.version` 是渲染缓存键的维度，无谓标脏会让整页重渲染。
+ */
 export function swapOrMoveSlotChords(
   chordMap: Map<string, ChordLineSlots>,
   sourceKey: SlotKey,
   targetKey: SlotKey
-): void {
-  if (sourceKey === targetKey) return;
+): boolean {
+  if (sourceKey === targetKey) return false;
   const sourceParsed = parseSlotKey(sourceKey);
   const targetParsed = parseSlotKey(targetKey);
-  if (!sourceParsed || !targetParsed) return;
+  if (!sourceParsed || !targetParsed) return false;
 
   if (
     sourceParsed.lineId === targetParsed.lineId &&
@@ -112,13 +130,15 @@ export function swapOrMoveSlotChords(
     const tgtIdx = targetParsed.index;
     if (srcIdx >= 0 && srcIdx < list.length) {
       const [movedChordId] = list.splice(srcIdx, 1);
-      if (movedChordId === undefined) return;
+      if (movedChordId === undefined) return false;
       // 在剩余列表中按目标视觉索引落位（拖到"添加"占位符即追加到末尾），朴素数组移动保证最终位置正确
       const insertIdx = clamp(tgtIdx, 0, list.length);
       list.splice(insertIdx, 0, movedChordId);
       setEdgeChords(chordMap, sourceParsed.lineId, sourceParsed.type, list);
+      // 落位与取出位置相同 ⇒ 内容未变（拖回原处）
+      return insertIdx !== srcIdx;
     }
-    return;
+    return false;
   }
   /** 只读探测某结构化槽位当前绑定的和弦 id；空槽位返回 null。 */
   const peekChordId = (parsed: ParsedSlotKey): ChordId | null => {
@@ -127,7 +147,7 @@ export function swapOrMoveSlotChords(
     return list[parsed.index] || null;
   };
   const sourceChordId = peekChordId(sourceParsed);
-  if (!sourceChordId) return;
+  if (!sourceChordId) return false;
   const targetChordId = peekChordId(targetParsed);
 
   // 2. 两处都有和弦：纯 SWAP（原地互换位置内容，绝不缩减或打乱边和弦列表顺序）
@@ -146,12 +166,13 @@ export function swapOrMoveSlotChords(
 
     setSlotChordDirect(sourceParsed, targetChordId);
     setSlotChordDirect(targetParsed, sourceChordId);
-    return;
+    return true;
   }
 
   // 3. 目标槽位为空：MOVE（从源槽位移出，并插入到目标槽位）
   removeChordFromSlot(chordMap, sourceKey);
   insertChordAtParsedLocation(chordMap, targetParsed, sourceChordId);
+  return true;
 }
 /**
  * 将边和弦目标索引解析为实际插入位置：
@@ -454,7 +475,12 @@ export const extractSongChordSequence = (
   song: Song,
   chordResolver: (id: ChordId) => Chord | undefined
 ): ScoreChordStep[] => {
-  if (!song || !song.chordMap || song.chordMap.size === 0) return [];
+  if (!song || !song.chordMap) return [];
+  // 序列化边界守卫，与 scoreExportCanvas 的那处同款：内存契约要求 chordMap 为嵌套 Map，
+  // 若从持久化 / 同步链路拿到普通对象，`for...of` 会直接抛，且 `.size` 恒为 undefined
+  // ⇒ 下面那句「空表早退」也一并失效。纯等价转换，不改语义。
+  const chordMap = song.chordMap instanceof Map ? song.chordMap : plainToChordMap(song.chordMap);
+  if (chordMap.size === 0) return [];
 
   const lineIndexMap = new Map<string, number>();
   (song.lineIds ?? []).forEach((id, idx) => lineIndexMap.set(id, idx));
@@ -467,7 +493,7 @@ export const extractSongChordSequence = (
 
   const steps: ScoreChordStep[] = [];
 
-  for (const [lineId, slots] of song.chordMap) {
+  for (const [lineId, slots] of chordMap) {
     slots.start.forEach((chordId, index) => {
       if (!chordId) return;
       const chord = chordResolver(chordId);
@@ -488,18 +514,14 @@ export const extractSongChordSequence = (
     });
   }
 
-  // 按阅读时间排序
-  steps.sort((a, b) => {
-    const lineA = lineIndexMap.get(a.lineId) ?? 9999;
-    const lineB = lineIndexMap.get(b.lineId) ?? 9999;
-    if (lineA !== lineB) return lineA - lineB;
+  // 按阅读时间排序：先给每步预计算 (行序, 类型序) 排序键，把 lineIndexMap 查找从
+  // O(n log n) 次降到 O(n) 次，比较器本身退化为纯数值比较。
+  const decorated = steps.map(step => ({
+    step,
+    line: lineIndexMap.get(step.lineId) ?? 9999,
+    type: typePriority[step.type],
+  }));
+  decorated.sort((a, b) => a.line - b.line || a.type - b.type || a.step.index - b.step.index);
 
-    const typeA = typePriority[a.type] ?? 1;
-    const typeB = typePriority[b.type] ?? 1;
-    if (typeA !== typeB) return typeA - typeB;
-
-    return a.index - b.index;
-  });
-
-  return steps;
+  return decorated.map(d => d.step);
 };

@@ -120,12 +120,10 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   /** 判定事件是否属于当前拖拽会话的活动指针（多指/鼠标混用时忽略非活动指针） */
   const isEventForActivePointer = (e: PointerEvent): boolean => {
     if (activeChord === null && !isDragging.value) return false;
-    if (
-      startPointer.pointerId !== -1 &&
-      startPointer.pointerId !== e.pointerId &&
-      e.pointerType !== 'mouse' &&
-      !isDragging.value
-    )
+    // 活动指针判定与「是否已进入拖拽态」无关：此前带 `&& !isDragging.value`，于是一旦开始拖拽就
+    // 放行任意 pointerId，第二根手指的 pointermove 会改写 ghost 与落点。鼠标仍豁免——
+    // 鼠标只有一个指针，且个别环境下其 pointerId 会变。
+    if (startPointer.pointerId !== -1 && startPointer.pointerId !== e.pointerId && e.pointerType !== 'mouse')
       return false;
 
     return true;

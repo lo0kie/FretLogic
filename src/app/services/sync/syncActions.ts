@@ -16,18 +16,19 @@ import { useStorage } from '@/platform/composables/useStorage';
 import { markDataDeleted } from '@/platform/services/storage/deletionWatermark';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
-import {
-  GITEE_SYNC_CONFIG,
-  GITHUB_SYNC_CONFIG,
-  MESSAGE_WARNING_DURATION_MS,
-  STORAGE_KEYS,
-} from '@/platform/utils/constants';
+import { MESSAGE_WARNING_DURATION_MS, STORAGE_KEYS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 
 import { computePayloadMaxUpdatedAt, computePayloadMd5 } from './payloadChecksum';
 import { SyncError } from './provider';
 import { syncProviderRegistry } from './registry';
 import { isPulling, isSyncing, isTestingConnection } from './syncState';
+import {
+  BUILTIN_AUTHOR_TARGET_MESSAGE,
+  BUILTIN_AUTHOR_TARGET_SUFFIX,
+  isSyncConfigured,
+  isUsingBuiltinAuthorTarget,
+} from './syncTargetConfig';
 import { resolvePushCredentialIssue } from './useSyncService';
 
 import type { SyncConfig, SyncMeta, SyncProvider, SyncProviderKind } from './provider';
@@ -113,7 +114,11 @@ const runCloudAction = async <T>(opts: {
 
 /** 推送本地数据到云端（不含凭据类同步配置），全程互斥防重入；返回是否成功 */
 export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> => {
-  if (isSyncing.value) return false;
+  // 重入守卫交给 runBusyAction：它同步完成「检查 + 置位 busy」（见 runBusyAction.ts:40-41），
+  // 而此前这里是一句裸 `if (isSyncing.value) return false`，真正置位 busy 的 runBusyAction 却排在
+  // `await buildBackupPayloadResult` **之后** —— 双击/重试时两次调用都能越过那道检查、各自把整包
+  // 构建一遍（第二次才被 runBusyAction 挡下，白构建一次）。故载荷构建也一并挪进 run 内，
+  // 让「守卫 → 构建 → 上传」落在同一段互斥区间里。
   // 凭据缺失时不发起任何请求，仅提示
   const credentialIssue = resolvePushCredentialIssue(target);
   if (credentialIssue) {
@@ -122,29 +127,31 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
   }
   const provider = resolveProvider('同步失败', target ?? settingsStore.syncTarget);
   if (!provider) return false;
-  // 云端推送不携带同步配置（含 Token/密码等凭据），仅手动备份导出才包含；采用宽容模式避免单条脏记录阻断同步
-  const { payload, issues, warnings } = await buildBackupPayloadResult({
-    selection: { ...FULL_BACKUP_SELECTION, syncSettings: false },
-  });
-  if (!payload) {
-    const reason = issues.length > 0 ? `：${issues.slice(0, 2).join('; ')}` : '';
-    uiStore.message.error(`数据校验失败，已取消同步${reason}`);
-    return false;
-  }
-  if (warnings.length > 0) logger.warn('sync', '数据清洗提示', warnings);
 
   // 上传：四种 provider 均支持独立 meta（server 的 pushMeta 为 no-op，md5 随 push 的 query 上传）。
   // 校验元数据分开写，数据源不带元数据，启动检测只拉最小 meta。
   {
-    const meta: SyncMeta = {
-      md5: computePayloadMd5(payload),
-      updatedAt: computePayloadMaxUpdatedAt(payload),
-    };
     const ok = await runCloudAction({
       busy: isSyncing,
       loadingText: '正在后台上传至云端...',
       errorPrefix: '同步失败',
       run: async () => {
+        // 云端推送不携带同步配置（含 Token/密码等凭据），仅手动备份导出才包含；采用宽容模式避免单条脏记录阻断同步。
+        // 构建放在互斥区间内 —— 理由见函数头。
+        const { payload, issues, warnings } = await buildBackupPayloadResult({
+          selection: { ...FULL_BACKUP_SELECTION, syncSettings: false },
+        });
+        if (!payload) {
+          const reason = issues.length > 0 ? `：${issues.slice(0, 2).join('; ')}` : '';
+          uiStore.message.error(`数据校验失败，已取消同步${reason}`);
+          return false;
+        }
+        if (warnings.length > 0) logger.warn('sync', '数据清洗提示', warnings);
+        const meta: SyncMeta = {
+          md5: computePayloadMd5(payload),
+          updatedAt: computePayloadMaxUpdatedAt(payload),
+        };
+
         // T2 最小防线：推送前重取云端 meta，若云端比本次负载新，说明其他设备在本地基线之后
         // 已更新过——直接覆盖会静默丢他们的数据，改为显式冲突让用户先拉取。
         const remoteMeta = await provider.fetchMeta();
@@ -172,9 +179,11 @@ export const syncToRemote = async (target?: SyncProviderKind): Promise<boolean> 
           // 继续抛出：本次同步仍按失败收场（返回 false），不把半成品状态伪装成成功
           throw metaError;
         }
+        return true;
       },
     });
-    if (ok === null) return false;
+    // ok 为 null（重入被挡 / 抛错）或 false（载荷校验失败，已单独提示过）都按失败收场
+    if (ok !== true) return false;
   }
   uiStore.message.success('成功上传至云端');
   return true;
@@ -236,54 +245,9 @@ export const testConnection = async (target: SyncProviderKind): Promise<boolean>
   return true;
 };
 
-/** 当前同步目标是否具备可用于拉取探测的配置（探测只读不写，公开仓库无需 Token） */
-const isSyncConfigured = (): boolean => {
-  switch (settingsStore.syncTarget) {
-    case 'server':
-      // 服务器地址由构建环境注入，视为始终已配置
-      return true;
-    case 'github':
-    case 'gitee':
-      // 仓库定位（owner/repo）有默认值，公开仓库拉取无需 Token
-      return true;
-    case 'webdav':
-      return settingsStore.webdavServerUrl.trim() !== '';
-  }
-};
-
-/**
- * 当前同步目标是否仍指向内置默认数据源（项目作者的公开仓库 / 线上默认服务端）。
- * 出厂状态下 syncTarget 默认就是 gitee + 作者仓库，启动探测因此会「替用户」访问作者的数据源。
- * 该访问本身无害（只读探测、不写数据），但提示文案必须点明数据归属——否则用户会把作者示例数据
- * 造成的不一致当成自己的数据出了问题，甚至一键「拉取云端覆盖本地」把示例数据写进自己的库。
- */
-const isUsingBuiltinAuthorTarget = (): boolean => {
-  switch (settingsStore.syncTarget) {
-    case 'github':
-      return (
-        (settingsStore.githubOwner.trim() || GITHUB_SYNC_CONFIG.DEFAULT_OWNER) === GITHUB_SYNC_CONFIG.DEFAULT_OWNER &&
-        (settingsStore.githubRepo.trim() || GITHUB_SYNC_CONFIG.DEFAULT_REPO) === GITHUB_SYNC_CONFIG.DEFAULT_REPO
-      );
-    case 'gitee':
-      return (
-        (settingsStore.giteeOwner.trim() || GITEE_SYNC_CONFIG.DEFAULT_OWNER) === GITEE_SYNC_CONFIG.DEFAULT_OWNER &&
-        (settingsStore.giteeRepo.trim() || GITEE_SYNC_CONFIG.DEFAULT_REPO) === GITEE_SYNC_CONFIG.DEFAULT_REPO
-      );
-    case 'server':
-      // 空地址即回落到构建环境注入的线上默认服务端（见 serverSyncProvider 的 serverUrl 兜底）
-      return settingsStore.serverUrl.trim() === '';
-    case 'webdav':
-      // WebDAV 无内置默认地址；未填地址时 isSyncConfigured 已提前短路
-      return false;
-  }
-};
-
-/** 不一致常驻通知里的归属说明（比 toast 可稍长，但需克制，避免撑满通知区） */
-const BUILTIN_AUTHOR_TARGET_MESSAGE =
-  '当前同步的是项目作者的默认数据源（示例数据）。如需同步自己的数据，请在同步设置中更换仓库地址。';
-
-/** 一次性 toast 的归属后缀（短文案，避免长句撑爆提示条） */
-const BUILTIN_AUTHOR_TARGET_SUFFIX = '（当前为内置默认数据源，属于项目作者）';
+// isSyncConfigured / isUsingBuiltinAuthorTarget 与两条归属提示文案已下沉到 syncTargetConfig.ts：
+// 那两处判定要在**四个拉取入口**（启动检测、首访引导、顶栏菜单、同步设置弹窗）共用，而其中三个
+// 属首屏闭包；本模块是动态 chunk，从首屏组件静态引它会拖进整条同步实现。此处仅消费。
 
 /** 云端与本地的不一致方向：按「本地/云端最新修改时间戳」判定，时间戳不可比时为 unknown */
 type SyncDirection = 'local-newer' | 'cloud-newer' | 'unknown';

@@ -47,12 +47,12 @@ export const validateChordDraft = (draft: Chord, isEditing: boolean, ctx: ChordD
 
   if (ctx.groups.length === 0) return { ok: false, reason: 'NO_GROUPS' };
 
-  if (!ctx.selectedGroupId) return { ok: false, reason: 'NO_SELECTED_GROUP' };
-
   const id = isEditing ? draft.id : null;
-  const targetGroupId = isEditing
-    ? ctx.savedChords.find(c => c.id === id)?.groupId || ctx.selectedGroupId
-    : ctx.selectedGroupId;
+  // 纯更新优先沿用**原实体自己的分组**：此时用户完全可能已经取消选中分组，
+  // 若仍按「必须选中分组」拦下，就是「改个名字都存不了」。只有确实没有可继承的分组时才拦。
+  const targetGroupId =
+    (isEditing ? ctx.savedChords.find(c => c.id === id)?.groupId : undefined) ?? ctx.selectedGroupId;
+  if (!targetGroupId) return { ok: false, reason: 'NO_SELECTED_GROUP' };
 
   const currentStrings = cloneGuitarStrings(draft.strings);
   // 根音标记须指向有效且已按音的弦，否则按未指定处理

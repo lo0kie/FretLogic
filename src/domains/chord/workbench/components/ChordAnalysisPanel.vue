@@ -71,7 +71,7 @@
 
           <BaseBadge
             :appearance="note.isRoot ? 'filled' : 'subtle'"
-            :class="note.isRoot ? 'shadow-[0_1px_4px_rgba(255,149,0,0.5)]' : undefined"
+            :class="note.isRoot ? 'shadow-[0_1px_4px_rgba(var(--color-warning-rgb),0.5)]' : undefined"
             :title="`${stringCount - note.stringIndex}弦 音级`"
             :variant="note.isRoot ? 'warning' : 'neutral'"
             class="font-mono tabular-nums"
