@@ -222,9 +222,17 @@ watch(isOpen, val => {
   } else if (mutexCloseRef.value === closeMenu) mutexCloseRef.value = null;
 });
 
-/** 打开后自动聚焦面板内首个可用项（三态通用） */
+/**
+ * 打开后自动聚焦面板内首个可用项（三态通用）。
+ *
+ * 必须等**两拍**：BasePopover 的打开 watcher 自身也要 `await nextTick()` 才置 isShown，且它在本组件
+ * 之后注册（父先于子），于是第一拍后 isShown 才置真、面板要到再下一拍才渲染完成 —— 只等一拍时
+ * itemsRef 仍是 null，这段聚焦一直是空转：键盘打开菜单后焦点留在触发器上，而 ↑↓ 处理挂在面板上
+ * （根本收不到事件），菜单对纯键盘用户等于不可操作。
+ */
 watch(isOpen, async val => {
   if (val) {
+    await nextTick();
     await nextTick();
     itemsRef.value?.focusFirstItem();
   }
@@ -247,37 +255,69 @@ const handleItemSelect = (item: MenuItem) => {
   if (!item.keepOpen) closeMenu('item-select');
 };
 
-/** 在指定坐标打开菜单：先互斥关闭其他菜单，再定位、打开并聚焦首个可用项 */
+/** 浮层宿主：floating-ui 把定位 transform 写在 `[data-floating-layer]` 这层上（面板是它的子节点） */
+const floatingHostEl = (): HTMLElement | null =>
+  menuBoxRef.value?.closest<HTMLElement>('[data-floating-layer]') ?? null;
+
+/** 在途的换锚点位移（同一实例同时最多一条）：下一次换锚点前先让它落到终点 */
+let repositionAnim: Animation | null = null;
+
+/** 收束在途位移到终点：finish 后宿主的 transform 回到 floating-ui 写的那份，量到的才是真落点 */
+const finishReposition = () => {
+  repositionAnim?.finish();
+  repositionAnim = null;
+};
+
+/**
+ * 在指定坐标打开菜单：先互斥关闭其他菜单，再定位、打开并聚焦首个可用项。
+ * 已打开时换锚点要平滑滑到新落点（首次打开走 Transition 入场）。
+ */
 const openMenuAt = async (clientX: number, clientY: number) => {
   if (disabled || !items?.length) return;
   const wasOpen = isOpen.value;
-  const prevX = x.value;
-  const prevY = y.value;
+  const host = wasOpen ? floatingHostEl() : null;
+
+  finishReposition();
+  // 旧落点必须在改坐标之前量：x/y 一改，定位就开始重算了
+  const prevRect = host?.getBoundingClientRect() ?? null;
 
   x.value = clientX;
   y.value = clientY;
   isOpen.value = true;
 
   await nextTick();
-  popoverRef.value?.update();
+  // 等新坐标真的算出来再量落点：update 是 fire-and-forget，只调它的话量到的仍是旧 transform
+  await popoverRef.value?.compute();
+  // 再等一次：坐标是经 floatingStyles 这个 computed 落到宿主 style 上的，中间隔一次渲染 flush
+  await nextTick();
 
-  // 已打开时切换锚点：定位更新后用 WAAPI 从旧坐标平滑滑到新坐标（首次打开走 Transition 入场）
-  if (wasOpen) animateReposition(prevX, prevY);
+  if (prevRect && host) animateReposition(host, prevRect);
 };
 
-/** 换位动画：对浮层宿主做 FLIP 位移（从旧坐标偏移归零），尊重系统减弱动态效果偏好 */
-const animateReposition = (prevX: number, prevY: number) => {
+/**
+ * 换位动画：对浮层宿主做 FLIP 位移（从旧落点偏移归零），尊重系统减弱动态效果偏好。
+ *
+ * 位移取**宿主前后落点之差**，不能取锚点坐标之差：flip（翻转）与 shift（限位）都会改变
+ * 「面板相对锚点的偏移」，那时锚点差值不再等于面板位移 —— 面板会先从错误的位置起跑再滑过去。
+ * 视口下缘右键、面板翻到光标上方时最明显：按锚点差值算，起点会被再抬高整整一个「锚点位移」。
+ *
+ * 这里刻意用 rect（含 transform）而非 offset 链：与 vScrollbar 的 getHostOffset 正好相反 ——
+ * 那里要避开 transform（过渡期的中间态会让 overlay 偏），而宿主的**定位本身就是 transform**，
+ * 量到的才是它此刻真实落点。量之前先 finish 在途动画，正是为了避开「量到中间态」。
+ */
+const animateReposition = (host: HTMLElement, prevRect: DOMRect) => {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const host = menuBoxRef.value?.closest<HTMLElement>('[data-floating-layer]');
-  if (!host) return;
-  host.animate(
-    [{ transform: `translate(${prevX - x.value}px, ${prevY - y.value}px)` }, { transform: 'translate(0, 0)' }],
-    {
-      composite: 'add', // floating-ui 用 transform 定位宿主，动画必须叠加而非替换，否则会瞬移到原点
-      duration: CONTEXT_MENU_REPOSITION_DURATION_MS,
-      easing: CONTEXT_MENU_REPOSITION_EASING,
-    }
-  );
+
+  const nextRect = host.getBoundingClientRect();
+  const dx = prevRect.left - nextRect.left;
+  const dy = prevRect.top - nextRect.top;
+  if (dx === 0 && dy === 0) return;
+
+  repositionAnim = host.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0, 0)' }], {
+    composite: 'add', // floating-ui 用 transform 定位宿主，动画必须叠加而非替换，否则会瞬移到原点
+    duration: CONTEXT_MENU_REPOSITION_DURATION_MS,
+    easing: CONTEXT_MENU_REPOSITION_EASING,
+  });
 };
 
 /** 右键事件入口：阻断默认菜单并在鼠标位置打开（右键分支专用） */

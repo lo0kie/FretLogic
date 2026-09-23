@@ -51,6 +51,10 @@
                测量完成回落到实际比例——带过渡会回放“从大缩小”的闪动，未测量期禁用后同帧落位无动画 -->
           <!-- content-visibility:auto：屏外页跳过渲染与位图解码（每页 794×1123@DPR2 ≈14MB 解码，
                20 页全部即刻解码峰值可达数百 MB）；contain-intrinsic-size 兜住估算高度防滚动条跳动 -->
+          <!-- key 必须取**序号**而非 url：页脚开关会在两套 URL（合成图 / 无页脚原图）间整体换源，
+               按 url 作 key 会让每一页的节点被销毁重建（整屏闪白 + 全部重新解码），
+               等于把「开关只换 src」又变成一次整图重绘。按序号复用节点后，换源只改 img 的 src，
+               浏览器在新图解码完成前继续显示旧图，切换无缝 -->
           <div
             v-for="(url, index) in pages"
             :class="[
@@ -59,7 +63,7 @@
                 ? 'transition-[outline,box-shadow,ring-color,height]'
                 : 'transition-[outline,box-shadow,ring-color]',
             ]"
-            :key="url"
+            :key="index"
             :style="{
               height: renderedPageHeight,
               contentVisibility: 'auto',
@@ -68,23 +72,14 @@
             @contextmenu.prevent="handlePageContextMenu($event, index)"
             class="relative block w-auto overflow-hidden rounded-sm shadow-panel ring-1 ring-transparent outline-2 -outline-offset-2 duration-fast ease-out select-none hover:shadow-floating hover:ring-glass-border"
           >
+            <!-- 页图：页脚开关打开时 src 指向渲染线程合成好的「带页码」页图，否则指向无页脚原图。
+                 两套 URL 同尺寸同坐标系，切换只换 src，不重排、不重渲染乐谱 -->
             <img
               :alt="`乐谱预览第 ${index + 1} 页`"
               :src="url"
               class="block h-full w-auto select-none"
               decoding="async"
               draggable="false"
-            />
-
-            <!-- 页脚页码合成层：页图不含页码，此处按开关叠加（与导出走同一绘制函数，逐像素同源） -->
-            <ScorePageFooter
-              v-if="settingsStore.scoreShowFooter"
-              :color="footerMarkColor"
-              :page-height="previewPageSize.height"
-              :page-index="index"
-              :page-margin="settingsStore.scorePageMargin"
-              :page-width="previewPageSize.width"
-              :scale="activePercent / 100"
             />
           </div>
         </div>
@@ -174,7 +169,6 @@ import {
 
 import { useDebounceFn, useElementSize, useEventListener } from '@vueuse/core';
 
-import ScorePageFooter from '@/domains/score/preview/components/ScorePageFooter.vue';
 import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseDivider from '@/platform/ui/divider/BaseDivider.vue';
 import Feedback from '@/platform/ui/feedback/Feedback.vue';
@@ -182,7 +176,6 @@ import BaseFloatingPill from '@/platform/ui/floating-bar/BaseFloatingPill.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
 import BaseSlider from '@/platform/ui/slider/BaseSlider.vue';
-import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
 import {
   getScorePageSize,
   PREVIEW_DEFAULT_ZOOM_PERCENT,
@@ -209,7 +202,6 @@ import {
 } from '@/domains/score/preview/services/scoreExportCanvas';
 import { runWorkerExport } from '@/domains/score/preview/services/workerExportService';
 import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
-import { activeTheme } from '@/platform/composables/useTheme';
 import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useTargetMenu } from '@/platform/ui/menu/useTargetMenu';
@@ -228,7 +220,47 @@ let rememberedContainerHeight = 0;
  *  右键菜单标题直接读数；同时写入共享缓存供 TopHeader 下载菜单复用，避免重复渲染 */
 const applyEntry = (data: PreviewRenderData | null) => {
   setCurrentRender(data);
-  pages.value = data ? data.a4Urls : [];
+  applyDisplayUrls(data);
+  void ensureFooterComposed(data);
+};
+
+/**
+ * 页流展示源：页脚打开且合成层已就绪时用「带页码」页图，否则用无页脚原图。
+ * 合成层是懒生成的，未就绪的短暂窗口内先按无页脚展示，合成完成后再切一次。
+ */
+const applyDisplayUrls = (data: PreviewRenderData | null) => {
+  pages.value = !data ? [] : settingsStore.scoreShowFooter && data.footerUrls ? data.footerUrls : data.a4Urls;
+};
+
+/** 已在途的页脚合成条目：开关连点 / 重复调用不会对同一批页面并发合成 */
+const footerComposeInFlight = new WeakSet<PreviewRenderData>();
+
+/**
+ * 页脚合成层（懒生成）：页面栅格不含页码，开关打开时向渲染线程请求一次
+ * 「贴回整页 → 画页码 → 重编码」，结果按条目缓存在 footerUrls 上。
+ * 于是开关页脚**不触发任何乐谱重渲染**——首次打开合成一次，之后来回切只是换展示源。
+ *
+ * 合成与整谱渲染共用渲染线程的同一条串行队列，故本条目的合成必定先于「下一次渲染完成」结束；
+ * 而缓存驱逐只发生在渲染完成写入时 —— 因此不存在「合成在途时条目已被驱逐、产出的 URL 无人回收」。
+ * @param data 目标渲染条目；缺省 / 已合成 / 页脚未开 / 无页面时直接返回
+ */
+const ensureFooterComposed = async (data: PreviewRenderData | null) => {
+  if (!data || !settingsStore.scoreShowFooter || data.footerUrls || data.a4Blobs.length === 0) return;
+  if (footerComposeInFlight.has(data)) return;
+  footerComposeInFlight.add(data);
+  try {
+    // 纸张档位与页边距按条目记录值传（非实时设置）：改设置在途窗口内两者可能不一致
+    const composed = await composePageFooter(data.a4Blobs, undefined, data.pageSize, data.pageMargin);
+    data.footerUrls = composed.map(blob => URL.createObjectURL(blob));
+    data.footerBlobs = composed;
+    // 该条目仍是当前展示项才刷新页流；已被换走的只入库，切回时直接复用
+    if (currentRenderData.value === data) applyDisplayUrls(data);
+  } catch {
+    // 合成失败（如环境不支持 OffscreenCanvas）退回无页脚展示，不打断预览
+    uiStore.message.warning('页脚合成失败，已按无页脚显示');
+  } finally {
+    footerComposeInFlight.delete(data);
+  }
 };
 
 const scoreEditor = useScoreEditorStore();
@@ -478,12 +510,19 @@ const renderedPageHeightPx = computed(() =>
 /** 页面渲染高度（内联样式）：真值统一由 renderedPageHeightPx 提供，此处只做单位拼接 */
 const renderedPageHeight = computed(() => `${renderedPageHeightPx.value}px`);
 
-/** 页脚页码层的文字色：取值同导出配色的弱化文字色（页图会因主题变化重渲，两者同步） */
-const footerMarkColor = ref(resolveFretboardCanvasPalette().SUB_TEXT);
-// 主题切换后重新解析 --fbc-*；仅靠 isDark 接不住 light ↔ high-contrast（两者都算非 dark）
-watch(activeTheme, () => {
-  footerMarkColor.value = resolveFretboardCanvasPalette().SUB_TEXT;
-});
+/**
+ * 页脚开关：只切页流展示源，**不重渲染乐谱**（页脚不进内容键，也不进缓存条目）。
+ * 首次打开由 ensureFooterComposed 向渲染线程请求一次合成，结果按条目缓存，之后来回切零开销。
+ * 页码文字色随主题变化：主题是内容键维度，换主题会整谱重渲 → 新条目 → 合成层按新配色重新生成。
+ */
+watch(
+  () => settingsStore.scoreShowFooter,
+  () => {
+    const data = currentRenderData.value;
+    applyDisplayUrls(data);
+    void ensureFooterComposed(data);
+  }
+);
 
 /** 页面是否超出视口可用高度：决定顶部对齐、纵向滚动浏览与禁用横向翻页滚轮。
  *  判据是「实际显示高度 > 真实内容盒高」——两侧同为 px、无百分比取整回环，故不会抖动；
@@ -538,21 +577,21 @@ const previewScrollbar = computed<ScrollAreaScrollbar>(() => ({
   },
 }));
 
-/** 读取指定页的原始 Blob（统一走缓存模块的 object URL 读回）。
+/** 读取指定页的 Blob（统一走缓存模块的 object URL 读回）。
  *  缓存页面不含页脚，故按开关合成后再交给剪贴板 / 下载，产物与预览所见一致。 */
 const fetchPageBlob = async (index: number): Promise<Blob | null> => {
-  const url = pages.value[index];
-  if (!url) return null;
-  const blob = await readA4PageBlob(url);
+  const data = currentRenderData.value;
+  // 取**无页脚原图**的 URL：pages 里可能是合成后的带页码图，拿它再合成会叠两行页码
+  const rawUrl = data?.a4Urls[index];
+  if (!rawUrl) return null;
+  // 页脚合成层已就绪（预览开着页脚时）直接复用同一份 Blob，免去重复合成；未就绪才现合成
+  const composed = settingsStore.scoreShowFooter ? data?.footerBlobs?.[index] : undefined;
+  if (composed) return composed;
+  const blob = await readA4PageBlob(rawUrl);
   if (!blob) return null;
   // 页脚按缓存渲染时的纸张档位与边距合成，不读实时设置（改设置在途窗口内两者可能不一致）
-  const [composed] = await composePageFooter(
-    [blob],
-    [index],
-    currentRenderData.value?.pageSize,
-    currentRenderData.value?.pageMargin
-  );
-  return composed ?? blob;
+  const [result] = await composePageFooter([blob], [index], data?.pageSize, data?.pageMargin);
+  return result ?? blob;
 };
 
 /** 复制指定页到系统剪贴板（JPEG 不兼容时自动转 PNG 写入） */

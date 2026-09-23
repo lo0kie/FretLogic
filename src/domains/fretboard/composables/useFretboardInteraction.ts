@@ -336,8 +336,9 @@ export function useFretboardInteraction(
     };
   };
 
-  /** 失焦：隐藏焦点框，并连同落点一起清空——否则下次聚焦会在旧位置凭空复现焦点环
-   *  （handleFocus 只在 focusPoint 为空时给默认位置），清空后每次聚焦都从默认落点重新开始 */
+  /** 失焦：隐藏焦点框，并连同落点一起清空——避免残留落点被其它读取方当成「当前焦点位置」。
+   *  注意 handleFocus 是**无条件**把落点置为默认值 {0,0}，并非「仅在 focusPoint 为空时」兜底
+   *  （旧注释这么写，与实现相反）。 */
   const handleBlur = () => {
     isFocused.value = false;
     focusPoint.value = null;

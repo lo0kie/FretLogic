@@ -32,8 +32,17 @@
       "@data/*": ["./data/*"]
     }
   },
-  // 检查范围：src + 构建与脚本 TS 文件（vite.config / scripts/*.ts，需 node types）。
+  // 检查范围：src + 构建期 TS 文件（vite.config / scripts/*.ts / tokens/*.ts，需 node types）。
+  // tokens/ 是颜色令牌源（构建输入，不进浏览器 bundle），与 scripts/ 同属工装侧，故一并纳入检查。
   // tests 不进这条链（保持 `pnpm typecheck` 秒级），由 tsconfig.tests.json / `pnpm typecheck:tests`
   // 以同一套严格选项单独把守——测试夹具的品牌类型、缺字段与越界索引在那边归零，不靠 IDE 提示兜底。
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue", "vite.config.ts", "scripts/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
+    "vite.config.ts",
+    "scripts/**/*.ts",
+    "tokens/**/*.ts"
+  ]
 }

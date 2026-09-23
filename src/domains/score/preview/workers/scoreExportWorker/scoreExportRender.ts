@@ -5,6 +5,8 @@
  * 依赖 layout（量测/字体）、fretboard（指板合成）、types；被 pages 单向依赖。
  */
 
+import { scoreFont } from '@/domains/score/preview/services/scoreFonts';
+
 import { drawFretboard } from './scoreExportFretboard';
 import {
   computeLineContentHeight,
@@ -134,7 +136,7 @@ export function renderHeader(
   const centerX = width / 2;
 
   // 1. 标题（严格以 centerX 为轴水平居中）
-  ctx.font = `bold ${LAYOUT.TITLE_FONT_SIZE}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+  ctx.font = scoreFont('bold', LAYOUT.TITLE_FONT_SIZE);
   ctx.fillStyle = colors.TEXT;
   ctx.textAlign = 'center';
   ctx.fillText(title, centerX, y + LAYOUT.TITLE_FONT_SIZE);
@@ -142,7 +144,7 @@ export function renderHeader(
 
   // 1.5 歌手副标题（仅 singer 非空时绘制：标题下居中，弱化色与元信息行一致）
   if (singer) {
-    ctx.font = `500 ${LAYOUT.SINGER_SUBTITLE_FONT_SIZE}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+    ctx.font = scoreFont(500, LAYOUT.SINGER_SUBTITLE_FONT_SIZE);
     ctx.fillStyle = colors.SUB_TEXT;
     ctx.textAlign = 'center';
     ctx.fillText(singer, centerX, y + LAYOUT.SINGER_SUBTITLE_FONT_SIZE);
@@ -151,9 +153,9 @@ export function renderHeader(
 
   // 2. 元信息行（方案 A：原调 → Capo → 选调 推导链 + 拍号，各项之间用竖线分隔，整体水平居中）
   const baselineY = y + LAYOUT.META_FONT_SIZE;
-  const metaBaseFont = `500 ${LAYOUT.META_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
-  const metaAccFont = `bold ${LAYOUT.META_ACCIDENTAL_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
-  const metaLabelFont = `400 ${LAYOUT.META_FONT_SIZE - 2}px system-ui, -apple-system, sans-serif`;
+  const metaBaseFont = scoreFont(500, LAYOUT.META_FONT_SIZE);
+  const metaAccFont = scoreFont('bold', LAYOUT.META_ACCIDENTAL_FONT_SIZE);
+  const metaLabelFont = scoreFont(400, LAYOUT.META_FONT_SIZE - 2);
   const META_GAP = 10;
 
   // 统一的 meta 项结构：弱化标签 + 值 token（升降号上标），所有项同一字重与颜色

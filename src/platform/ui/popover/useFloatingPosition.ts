@@ -35,7 +35,9 @@ export interface UseFloatingPositionOptions {
  * - floatingStyles：写进浮层宿主 style 的定位样式（transform 定位 + DPR 对齐）
  * - placement：flip 之后的实际方位（用于入场缩放原点、箭头朝向）
  * - middlewareData：中间件产出（箭头坐标等）
- * - update：手动触发一次重算（打开时先定位后显隐，避免从 (0,0) 闪入）
+ * - update：手动触发一次重算（fire-and-forget，滚动跟随等高频路径用）
+ * - compute：同上但返回 Promise，供**必须等新坐标算出来**的场景用（如换锚点后的位移 FLIP：
+ *   要先拿到新落点，才能算出「从旧落点滑过去」的位移量；早一帧量到的是旧坐标）
  */
 export const useFloatingPosition = (options: UseFloatingPositionOptions) => {
   const { reference, floating, placement, middleware, strategy = 'fixed' } = options;
@@ -87,5 +89,11 @@ export const useFloatingPosition = (options: UseFloatingPositionOptions) => {
     };
   });
 
-  return { floatingStyles, middlewareData, placement: resolvedPlacement, update: controller.update };
+  return {
+    floatingStyles,
+    middlewareData,
+    placement: resolvedPlacement,
+    update: controller.update,
+    compute: controller.compute,
+  };
 };

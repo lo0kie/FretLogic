@@ -115,24 +115,33 @@ export function useScrollMemory<K extends string = string>(options: UseScrollMem
 
   const { keys } = options;
   /** 声明的档位全集（已去重）；未声明则不做越界校验。
-   *  显式标 `Set<string>` 而非让 `new Set(keys)` 推成 `Set<K>`：下面 `has(key)` 传的是运行时
-   *  的 `string`（档位键来自 `activeKey` 的求值结果），`Set<K>.has` 只收 `K` 会报「string 不能
-   *  赋给 K」——K 是调用方推出来的字面量联合，收窄在这里只会挡住自己的校验代码。 */
-  const declaredKeys: Set<string> | null = keys ? new Set<string>(keys) : null;
-  if (keys && declaredKeys) {
-    // 重复声明按一份处理（Set 已去重），但要报出来：多半是复制粘贴漏改，
-    // 而它恰好会造出「两个视图共用一份记忆」——正是本函数最想防的那类错
-    if (declaredKeys.size !== keys.length) {
-      const duplicated = keys.filter((key, index) => keys.indexOf(key) !== index);
+   *  显式标 `Set<string>` 而非 `Set<K>`：`validateKey` 拿的是运行时求出的 `string` 去 `has`，
+   *  而 `Set<K>.has` 只收 `K`（K 是调用方推出来的字面量联合）——收窄在这里只会挡住自己的校验代码。
+   *
+   *  去重、找重复、预建槽位并作一趟：任一把键再次出现即为重复声明（多半是复制粘贴漏改，
+   *  而它恰好会造出「两个视图共用一份记忆」——正是本函数最想防的那类错）；未访问过的档位
+   *  也先建出槽位，让记忆表一眼看全量，而不是「访问过才有」。
+   *
+   *  判存在用 `if (keys)` 而非 `keys?.length`：「声明为空数组」是有效声明，得到的是**非 null
+   *  的空集合**，于是任何 activeKey 都会被 validateKey 判越界；写成 `?.length` 会把「声明为空」
+   *  悄悄降级成「完全不校验」。 */
+  let declaredKeys: Set<string> | null = null;
+
+  if (keys) {
+    declaredKeys = new Set<string>();
+    const duplicated: string[] = [];
+
+    for (const key of keys) {
+      if (declaredKeys.has(key)) duplicated.push(key);
+      else declaredKeys.add(key);
+      if (!store.has(key)) store.set(key, 0);
+    }
+
+    if (duplicated.length > 0)
       logger.warn('scrollMemory', `keys 里有重复档位：${duplicated.join('、')}（重复项共用同一份记忆）`, {
         scope: options.scope,
         declaredKeys: [...declaredKeys],
       });
-    }
-    // 未访问过的档位也先建出槽位：记忆表一眼看全量，而不是「访问过才有」
-    declaredKeys.forEach(key => {
-      if (!store.has(key)) store.set(key, 0);
-    });
   }
 
   /** 已报过警的档位键：同一把键反复进出（如来回切 tab）只报一次，避免刷屏 */

@@ -172,7 +172,16 @@ export const useScoreEditorStore = defineStore('scoreEditor', () => {
     const oldLines = target.lyrics.split('\n');
     const newLines = sanitizedLyrics.split('\n');
     const oldIds = target.lineIds ?? [];
-    const { lineIds: newIds, skippedSimilarMatch } = matchLineIds(oldLines, newLines, oldIds);
+    // 内容相同的重复行无法从文本区分（删第 0 行与删第 1 行产出的新歌词逐字节相同），
+    // 故把「哪些旧行带和弦」交给匹配器做保守偏好：存活行优先认领带和弦的那一条，
+    // 避免它认领到被删行的 id、随后 garbageCollectChordMap 把带和弦的那条整行清掉
+    const preferredOldIndices = new Set<number>();
+    oldIds.forEach((id, idx) => {
+      const slots = target.chordMap.get(id);
+      if (slots && (slots.char.size > 0 || slots.start.length > 0 || slots.end.length > 0))
+        preferredOldIndices.add(idx);
+    });
+    const { lineIds: newIds, skippedSimilarMatch } = matchLineIds(oldLines, newLines, oldIds, preferredOldIndices);
     // 先平移、再回收：顺序不能反 —— 越界判定按新行长进行，平移后越界的槽位会在同一步被清掉
     const shifted = shiftCharSlotsForEditedLines(target.chordMap, oldLines, newLines, oldIds, newIds);
     const { map: collectedChordMap, changed: collected } = garbageCollectChordMap(

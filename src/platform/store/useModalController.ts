@@ -1,5 +1,7 @@
 import { inject, reactive } from 'vue';
 
+import type { InjectionKey } from 'vue';
+
 /**
  * 模态控制器：统一「弹窗开关集合 + 弹窗数据」的声明与打开/关闭样板。
  * 分组/乐谱/备份三类模态 composable 复用；各自的业务动作（校验/写 store/message）仍留在调用方。
@@ -31,9 +33,11 @@ export function useModalController<F extends Record<string, boolean>, D extends 
   return { modals, modalData, open, close };
 }
 
-/** 容器组件注入模态控制器：封装 inject<T>(key)! 的类型体操，注入缺失时给出明确报错 */
-export function injectModalController<T>(key: string): T {
-  const controller = inject<T>(key);
-  if (controller == null) throw new Error(`模态控制器未注入：容器组件缺少 provide('${key}', ...)`);
+/** 容器组件注入模态控制器：键是**类型化 InjectionKey**（provide 与 inject 两端共用同一符号，
+ *  不再各写字符串字面量），注入缺失时给出明确报错 */
+export function injectModalController<T>(key: InjectionKey<T>): T {
+  const controller = inject(key);
+  if (controller == null)
+    throw new Error(`模态控制器未注入：容器组件缺少 provide(${String(key.description ?? String(key))}, ...)`);
   return controller;
 }

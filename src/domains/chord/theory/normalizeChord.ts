@@ -7,6 +7,7 @@ import {
   normalizeBarres,
   toFretOffset,
 } from '@/domains/fretboard/model/coordinates';
+import { asRawRecord } from '@/platform/utils/common';
 
 import type { ChordDraft, ChordNameSegments, ExtensionSegment } from '@/domains/chord/types';
 import type { BarreEntity, FretOffset, GuitarStringsModel, StringIndex } from '@/domains/fretboard/types';
@@ -75,7 +76,7 @@ const barresForCompare = (barres: BarreEntity[] | undefined): string =>
  * @returns 规范化结果与是否发生变更（未变更时原样返回引用，避免无谓的深拷贝/写盘）
  */
 export const normalizeChord = <T extends ChordDraft>(chord: T): { chord: T; changed: boolean } => {
-  const rawChord = chord as unknown as Record<string, unknown>;
+  const rawChord = asRawRecord(chord);
   const fretOffset = isFretOffsetValue(rawChord['fretOffset'])
     ? (rawChord['fretOffset'] as FretOffset)
     : isCapoValue(rawChord['capo'])
@@ -131,13 +132,9 @@ export const normalizeChord = <T extends ChordDraft>(chord: T): { chord: T; chan
   )
     rootStringIndex = null;
 
-  // 清理旧字段：和弦级 isInverted / fingerprint / chordName（现已由 nameSegments 替代）及旧的 capo
-  const legacyChord = chord as unknown as {
-    isInverted?: boolean;
-    fingerprint?: string;
-    chordName?: string;
-    capo?: unknown;
-  };
+  // 清理旧字段：和弦级 isInverted / fingerprint / chordName（现已由 nameSegments 替代）及旧的 capo。
+  // 按宽松记录读：这些字段在 `ChordDraft` 里并不存在，写点号是编译错误（noPropertyAccessFromIndexSignature）
+  const legacyChord = asRawRecord(chord);
   let fieldsCleaned = false;
   if (
     'isInverted' in legacyChord ||
@@ -146,9 +143,9 @@ export const normalizeChord = <T extends ChordDraft>(chord: T): { chord: T; chan
     'capo' in legacyChord
   ) {
     fieldsCleaned = true;
-    delete legacyChord.isInverted;
-    delete legacyChord.fingerprint;
-    delete legacyChord.capo;
+    delete legacyChord['isInverted'];
+    delete legacyChord['fingerprint'];
+    delete legacyChord['capo'];
   }
 
   // 横按规范化：过滤非法条目与物理非法项，合并重叠与包含关系
@@ -162,7 +159,7 @@ export const normalizeChord = <T extends ChordDraft>(chord: T): { chord: T; chan
   let nameRepaired = false;
   if (nameSegments === undefined) {
     nameMigrated = true;
-    const rawName = legacyChord.chordName?.trim() || '';
+    const rawName = typeof legacyChord['chordName'] === 'string' ? legacyChord['chordName'].trim() : '';
     nameSegments = rawName ? (nameToSegments(rawName) ?? null) : null;
   } else if (nameSegments) {
     // 存量修复：extensions 可能因历史缺陷被落盘成 {0,1} 普通对象，载入即重建为元组，
@@ -200,7 +197,8 @@ export const normalizeChord = <T extends ChordDraft>(chord: T): { chord: T; chan
       }
     }
   }
-  delete legacyChord.chordName;
+
+  delete legacyChord['chordName'];
 
   /** 回写判据分两类：清洗步骤就地置位的脏标记，与字段级归一结果同入参的差异。任一命中即数据形态已变 */
   const dirtyFromCleaning =

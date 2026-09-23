@@ -4,11 +4,23 @@
  */
 import { parseChordNameTokens } from '@/domains/chord/theory/chordNameTokens';
 import { getChordName } from '@/domains/chord/theory/theory';
-import { clampDrawFretCount, FRETBOARD_CANVAS_CONFIG, MIN_FRET_COUNT } from '@/domains/fretboard/constants';
-import { isBarreStillValid } from '@/domains/fretboard/model/coordinates';
+import { FRETBOARD_CANVAS_CONFIG } from '@/domains/fretboard/constants';
+import {
+  drawBarres,
+  drawFretNumbers,
+  drawGridLines,
+  drawMeasuredChordName,
+  drawNut,
+  drawOpenStringMarkers,
+  drawPressedDots,
+  measureChordNameTokens,
+} from '@/domains/fretboard/fretboardDrawCore';
+import { resolveFretWindowFromUsed } from '@/domains/fretboard/model/fretWindow';
 
 import type { Chord } from '@/domains/chord/types';
 import type { FretboardCanvasPalette } from '@/domains/fretboard/fretboardCanvasPalette';
+import type { FretboardDrawChord, FretboardDrawGeometry } from '@/domains/fretboard/fretboardDrawCore';
+import type { FretWindow } from '@/domains/fretboard/model/fretWindow';
 
 export type FretboardThemeColors = FretboardCanvasPalette;
 
@@ -75,6 +87,10 @@ export interface RenderFretboardOptions {
  */
 export const CHORD_NAME_EDGE_PAD = 4;
 
+/** 品号字体：与和弦名同走系统字体栈（屏幕指板不参与等宽栅格排版，故不加载 Sarasa 子集；
+ *  导出 Worker 侧改走 scoreFont，两侧字体差异由 fretboardDrawCore 的字体注入承担） */
+const CAPO_FONT = `bold ${FRETBOARD_CANVAS_CONFIG.CAPO_TEXT_FONT_SIZE}px system-ui, sans-serif`;
+
 /**
  * 按字号缩放比推导名字层的字体度量：测量与绘制共用，避免两处各算一份字体串。
  *
@@ -102,13 +118,13 @@ function resolveChordNameFonts(fontScale: number) {
  */
 function measureChordNameLayout(ctx: CanvasRenderingContext2D, chordName: string, fontScale = 1.0) {
   const fonts = resolveChordNameFonts(fontScale);
-  let totalWidth = 0;
-  const measured = parseChordNameTokens(chordName).map(token => {
-    ctx.font = token.isAccidental ? fonts.accFont : fonts.baseFont;
-    const { width } = ctx.measureText(token.text);
-    totalWidth += width;
-    return { ...token, width };
-  });
+  // 量宽叶子与导出 Worker 共用（见 fretboardDrawCore）；字体由本侧注入
+  const { measured, totalWidth } = measureChordNameTokens(
+    ctx,
+    parseChordNameTokens(chordName),
+    fonts.baseFont,
+    fonts.accFont
+  );
   return { measured, totalWidth, fonts };
 }
 
@@ -170,21 +186,16 @@ function drawFormattedChordName(
   fontScale = 1.0,
   maxWidth?: number
 ) {
-  let { measured, totalWidth, fonts } = measureChordNameLayout(ctx, chordName, fontScale);
-  if (measured.length === 0) return;
+  const base = measureChordNameLayout(ctx, chordName, fontScale);
+  if (base.measured.length === 0) return;
 
-  if (maxWidth !== undefined && maxWidth > 0 && totalWidth > maxWidth)
-    ({ measured, totalWidth, fonts } = fitChordNameLayout(ctx, chordName, fontScale, maxWidth));
+  // 放不下才启用「缩字号贴合」（只缩字号，不做横向压缩）；贴合结果与原布局同形
+  const fitted =
+    maxWidth !== undefined && maxWidth > 0 && base.totalWidth > maxWidth
+      ? fitChordNameLayout(ctx, chordName, fontScale, maxWidth)
+      : base;
 
-  let curX = centerX - totalWidth / 2;
-  ctx.fillStyle = color;
-  ctx.textAlign = 'left';
-  for (const item of measured) {
-    ctx.font = item.isAccidental ? fonts.accFont : fonts.baseFont;
-    const y = item.isAccidental ? baselineY + fonts.superOffset : baselineY;
-    ctx.fillText(item.text, curX, y);
-    curX += item.width;
-  }
+  drawMeasuredChordName(ctx, centerX, baselineY, fitted.measured, fitted.fonts.superOffset, color);
 }
 
 // ---- 布局计算 ----
@@ -198,66 +209,7 @@ const CHORD_NAME_BLOCK_H = 18;
 /** 空弦/静音标记区块高度（px，直径 + 上下间隙） */
 const MARKER_BLOCK_H = 8.4;
 
-/**
- * 实际绘制的品窗 —— 相对和弦自身存储的 fretCount 窗口收紧后的结果。
- *
- * 口径：`chord.strings[].fret` 是**窗口内相对品位**（`fretOffset` 决定窗口起点，品号层按
- * `fretOffset + f` 标注绝对品位）。所以收紧品窗 = 减列数 **且**把窗口起点一起右移，
- * 二者必须同步，否则圆点与横按梁会落到错误的品上。
- */
-export interface FretWindow {
-  /** 实际绘制列数（≥ MIN_FRET_COUNT） */
-  drawFretCount: number;
-  /** 窗口首列相对原窗口右移的列数（= 裁掉的首部空列数）；0 表示首部未裁 */
-  leadTrim: number;
-  /**
-   * 收紧是否真的改变了几何。
-   *
-   * false ⇒ 本指法的位图与「未开启收紧」时逐像素相同。消费方的位图键应放
-   * drawFretCount / leadTrim 而**不是**开关本身，于是切换开关时只有几何真会变的指法才作废重画
-   * —— 这就是「阻止本身没有空品格的指法重渲染」的落点。
-   */
-  trimmed: boolean;
-}
-
-/**
- * 收紧口径的**唯一实现**：由「存储列数 + 占用列号」算出实际品窗。
- *
- * 与 Chord 的具体形态解耦，是为了让导出 Worker 共用同一份口径 —— 它的和弦是紧凑元组形态
- * （`strings: [fret, preferFlat][]`），若各写一套，两处的收紧规则迟早分叉。
- *
- * 未开启收紧、无占用列、或窗口首末本就无空列时原样返回。列数下限取 MIN_FRET_COUNT：
- * 单列/双列的指板图会显得残缺（如全部音都落在同一品），且与现有品数标尺同口径；
- * 下限只约束**列数**、不阻止起点右移 —— 例：fretCount=5 而只用到第 4 品时，
- * 结果为「起点右移 1 列 + 共 3 列」，即第 2~4 品。
- *
- * **必须显式开启才生效**：`trimEmptyEdgeFrets` 缺省 false，即默认仍画满存储列数（全指板）。
- */
-export function resolveFretWindowFromUsed(
-  storedFretCount: number,
-  usedFrets: Iterable<number>,
-  trimEmptyEdgeFrets = false
-): FretWindow {
-  const storedCount = clampDrawFretCount(storedFretCount);
-  const intact: FretWindow = { drawFretCount: storedCount, leadTrim: 0, trimmed: false };
-  if (!trimEmptyEdgeFrets) return intact;
-
-  // 占用的窗口内列号（1 基）：空弦(0) / 静音(-1) 不占列
-  const used = [...usedFrets].filter(f => f >= 1);
-  if (used.length === 0) return intact;
-
-  const first = Math.min(...used);
-  const last = Math.max(...used);
-  if (first === 1 && last === storedCount) return intact;
-
-  // 起点右移到首个占用列，但不晚于「末列往前数 MIN_FRET_COUNT 列」：下限只抬高起点，
-  // 不会让窗口越过最后一个占用列
-  const leadTrim = Math.min(first - 1, Math.max(0, last - MIN_FRET_COUNT));
-  const drawFretCount = Math.min(storedCount - leadTrim, Math.max(MIN_FRET_COUNT, last - leadTrim));
-  return { drawFretCount, leadTrim, trimmed: leadTrim !== 0 || drawFretCount !== storedCount };
-}
-
-/** 从和弦抽出占用列号（弦品位 + 横按品位），套用上面的收紧口径 */
+/** 从和弦抽出占用列号（弦品位 + 横按品位），套用 `model/fretWindow` 的收紧口径 */
 export function resolveFretWindow(chord: Chord, trimEmptyEdgeFrets = false): FretWindow {
   const used: number[] = [];
   for (const s of chord.strings ?? []) if (s && s.fret >= 1) used.push(s.fret);
@@ -371,165 +323,6 @@ export function computeFretboardLayout(opts: {
   };
 }
 
-/** 空弦 / 静音标记（○ 空弦圆点、× 静音叉号） */
-function drawOpenStringMarkers(
-  ctx: CanvasRenderingContext2D,
-  chord: Chord,
-  startStrX: number,
-  markerCenterY: number,
-  stringCount: number,
-  colors: FretboardCanvasPalette
-): void {
-  const markerY = markerCenterY;
-  for (let s = 0; s < stringCount; s++) {
-    const sx = startStrX + s * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
-    const strData = chord.strings[s];
-    const fret = strData ? strData.fret : 0;
-
-    if (fret === -1) {
-      ctx.strokeStyle = colors.FB_MUTE;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(sx - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
-      ctx.lineTo(sx + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
-      ctx.moveTo(sx + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
-      ctx.lineTo(sx - FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS, markerY + FRETBOARD_CANVAS_CONFIG.MUTE_CROSS_RADIUS);
-      ctx.stroke();
-    } else if (fret === 0) {
-      ctx.strokeStyle = colors.FB_OPEN;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.arc(sx, markerY, FRETBOARD_CANVAS_CONFIG.OPEN_CIRCLE_RADIUS, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  }
-}
-
-/** 网格线（琴弦竖线 + 品丝横线） */
-function drawGridLines(
-  ctx: CanvasRenderingContext2D,
-  startStrX: number,
-  gridTop: number,
-  gridBottom: number,
-  gridRight: number,
-  stringCount: number,
-  fretCount: number,
-  colors: FretboardCanvasPalette
-): void {
-  ctx.strokeStyle = colors.FB_LINE;
-  ctx.lineWidth = 1;
-  for (let s = 0; s < stringCount; s++) {
-    const sx = startStrX + s * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
-    ctx.beginPath();
-    ctx.moveTo(sx, gridTop);
-    ctx.lineTo(sx, gridBottom);
-    ctx.stroke();
-  }
-  for (let f = 0; f <= fretCount; f++) {
-    const fy = gridTop + f * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
-    ctx.beginPath();
-    ctx.moveTo(startStrX, fy);
-    ctx.lineTo(gridRight, fy);
-    ctx.stroke();
-  }
-}
-
-/** 弦枕（仅零品绘制）：showBoldNut=true 画粗弦枕块；false 时零品仅留普通品丝线条粗细 */
-function drawNut(
-  ctx: CanvasRenderingContext2D,
-  startStrX: number,
-  gridTop: number,
-  stringCount: number,
-  fretOffset: number,
-  showBoldNut: boolean,
-  colors: FretboardCanvasPalette
-): void {
-  if (fretOffset !== 0 || !showBoldNut) return;
-  ctx.fillStyle = colors.FB_NUT;
-  ctx.fillRect(
-    startStrX - 0.5,
-    gridTop - FRETBOARD_CANVAS_CONFIG.NUT_HEIGHT,
-    (stringCount - 1) * FRETBOARD_CANVAS_CONFIG.STRING_SPACING + 1,
-    FRETBOARD_CANVAS_CONFIG.NUT_HEIGHT
-  );
-}
-
-/** 品号（偏移时显示实际品位 = offset + 品序） */
-function drawFretNumbers(
-  ctx: CanvasRenderingContext2D,
-  startStrX: number,
-  gridTop: number,
-  fretCount: number,
-  fretOffset: number,
-  colors: FretboardCanvasPalette
-): void {
-  ctx.font = `bold ${FRETBOARD_CANVAS_CONFIG.CAPO_TEXT_FONT_SIZE}px system-ui, sans-serif`;
-  ctx.fillStyle = colors.SUB_TEXT;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'middle';
-  for (let f = 1; f < fretCount; f++) {
-    const fy = gridTop + f * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
-    const fretNumber = fretOffset > 0 ? fretOffset + f : f;
-    ctx.fillText(String(fretNumber), startStrX - FRETBOARD_CANVAS_CONFIG.FRET_NUMBER_X_OFFSET, fy);
-  }
-  ctx.textBaseline = 'alphabetic';
-}
-
-/** 大横按梁（圆角矩形）。leadTrim = 品窗收紧时首列右移的列数，用于把存储的相对品位换算到新窗口 */
-function drawBarres(
-  ctx: CanvasRenderingContext2D,
-  chord: Chord,
-  startStrX: number,
-  gridTop: number,
-  fretCount: number,
-  leadTrim: number,
-  colors: FretboardCanvasPalette
-): void {
-  if (!chord.barres || chord.barres.length === 0) return;
-  const barreHalfH = FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS / 2;
-  for (const b of chord.barres) {
-    // 与 SVG 侧同判据（computeDisplayBarres）：无效横按或越出可见品位窗口的不绘制，
-    // 避免库卡/乐谱/导出画出编辑器里不显示的越界梁
-    const relFret = b.fret - leadTrim;
-    if (relFret < 1 || relFret > fretCount) continue;
-    if (!isBarreStillValid(chord.strings, b)) continue;
-    const bx1 = startStrX + b.fromString * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
-    const bx2 = startStrX + b.toString * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
-    const by = gridTop + (relFret - 0.5) * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
-    const minX = Math.min(bx1, bx2) - barreHalfH;
-    const w = Math.abs(bx2 - bx1) + FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS;
-    ctx.fillStyle = colors.FB_BARRE;
-    ctx.beginPath();
-    ctx.roundRect(minX, by - barreHalfH, w, FRETBOARD_CANVAS_CONFIG.BARRE_THICKNESS, barreHalfH);
-    ctx.fill();
-  }
-}
-
-/** 按弦圆点 */
-function drawPressedDots(
-  ctx: CanvasRenderingContext2D,
-  chord: Chord,
-  startStrX: number,
-  gridTop: number,
-  stringCount: number,
-  leadTrim: number,
-  colors: FretboardCanvasPalette
-): void {
-  for (let s = 0; s < stringCount; s++) {
-    const strData = chord.strings[s];
-    // 存储的品位是原窗口内的相对品位；品窗收紧后需减去首列右移量，才落在新窗口的正确行上
-    const fret = (strData ? strData.fret : 0) - leadTrim;
-    if (fret > 0) {
-      const cx = startStrX + s * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
-      const cy = gridTop + (fret - 0.5) * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT;
-      ctx.beginPath();
-      ctx.arc(cx, cy, FRETBOARD_CANVAS_CONFIG.DOT_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = colors.FB_NOTE;
-      ctx.fill();
-    }
-  }
-}
-
 /** 由渲染选项推出几何：三层渲染共用同一套推导（纯算术，重复调用无成本）。
  *  fretCount 一律取**实际品窗**（resolveFretWindow 收紧后的结果），故三层共享同一套几何。 */
 function resolveGeometry(chord: Chord, opts: RenderFretboardOptions) {
@@ -547,7 +340,27 @@ function resolveGeometry(chord: Chord, opts: RenderFretboardOptions) {
     showFretNumbers,
     showBoldNut,
   });
-  const boardWidth = (stringCount - 1) * FRETBOARD_CANVAS_CONFIG.STRING_SPACING;
+  const cfg = FRETBOARD_CANVAS_CONFIG;
+  const boardWidth = (stringCount - 1) * cfg.STRING_SPACING;
+  // 跨线程共享内核的入参：几何 + 归一弦数据（与导出 Worker 共用同一套绘制原语，见 fretboardDrawCore）
+  const drawGeometry: FretboardDrawGeometry = {
+    startStrX: layout.startStrX,
+    gridTop: layout.gridTop,
+    stringSpacing: cfg.STRING_SPACING,
+    fretHeight: cfg.FRET_HEIGHT,
+    nutHeight: cfg.NUT_HEIGHT,
+    markerCenterY: layout.markerCenterY,
+    muteCrossRadius: cfg.MUTE_CROSS_RADIUS,
+    openCircleRadius: cfg.OPEN_CIRCLE_RADIUS,
+    dotRadius: cfg.DOT_RADIUS,
+    barreThickness: cfg.BARRE_THICKNESS,
+    fretNumberXOffset: cfg.FRET_NUMBER_X_OFFSET,
+    showBoldNut,
+  };
+  const drawChord: FretboardDrawChord = {
+    strings: (chord.strings ?? []).map(s => (s ? ([s.fret, s.preferFlat] as const) : undefined)),
+    barres: chord.barres,
+  };
   return {
     fretCount,
     leadTrim,
@@ -555,10 +368,14 @@ function resolveGeometry(chord: Chord, opts: RenderFretboardOptions) {
     layout,
     // 指板水平中心（和弦名居中基准）
     boardCenterX: layout.startStrX + boardWidth / 2,
-    gridBottom: layout.gridTop + fretCount * FRETBOARD_CANVAS_CONFIG.FRET_HEIGHT,
-    gridRight: layout.startStrX + boardWidth,
+    drawGeometry,
+    drawChord,
   };
 }
+
+/** `resolveGeometry` 的返回类型。三层渲染共享同一份几何（由 `renderFretboard` 算一次下传），
+ *  避免每层各调一次 `resolveGeometry`（内含遍历 strings+barres 的 resolveFretWindow）。 */
+export type FretboardGeometry = ReturnType<typeof resolveGeometry>;
 
 /**
  * 名字层：和弦名（含简写与名字缩放）。
@@ -569,10 +386,14 @@ function resolveGeometry(chord: Chord, opts: RenderFretboardOptions) {
  * 整图渲染时本层必须最先画：它位于顶部区块，与空弦/静音标记纵向相邻但先画，
  * 保证任何重叠处标记压住名字下伸部（与改造前的绘制顺序一致）。
  */
-export function renderFretboardChordName(ctx: CanvasRenderingContext2D, opts: RenderFretboardOptions): void {
+export function renderFretboardChordName(
+  ctx: CanvasRenderingContext2D,
+  opts: RenderFretboardOptions,
+  geometry?: FretboardGeometry
+): void {
   const { chord, colors, chordNameScale = 1.0, shorthand = false, showChordName = true, chordNameMaxWidth } = opts;
   if (!showChordName) return;
-  const { boardCenterX, layout } = resolveGeometry(chord, opts);
+  const { boardCenterX, layout } = geometry ?? resolveGeometry(chord, opts);
   drawFormattedChordName(
     ctx,
     boardCenterX,
@@ -592,17 +413,20 @@ export function renderFretboardChordName(ctx: CanvasRenderingContext2D, opts: Re
  * 同一指法无论显示多大、配哪个名字、落在哪个品位窗口，都共用这一张图。
  * （「实际品窗」由 resolveFretWindow 给出，含是否开启收紧空品格的档位。）
  */
-export function renderFretboardBody(ctx: CanvasRenderingContext2D, opts: RenderFretboardOptions): void {
+export function renderFretboardBody(
+  ctx: CanvasRenderingContext2D,
+  opts: RenderFretboardOptions,
+  geometry?: FretboardGeometry
+): void {
   const { chord, colors, showOpenStringNotes = true, showBarre = true } = opts;
-  const { stringCount, fretCount, leadTrim, layout, gridBottom, gridRight } = resolveGeometry(chord, opts);
+  const { stringCount, fretCount, leadTrim, drawGeometry, drawChord } = geometry ?? resolveGeometry(chord, opts);
 
-  if (showOpenStringNotes)
-    drawOpenStringMarkers(ctx, chord, layout.startStrX, layout.markerCenterY, stringCount, colors);
+  if (showOpenStringNotes) drawOpenStringMarkers(ctx, drawChord, drawGeometry, stringCount, colors);
 
-  drawGridLines(ctx, layout.startStrX, layout.gridTop, gridBottom, gridRight, stringCount, fretCount, colors);
-  if (showBarre) drawBarres(ctx, chord, layout.startStrX, layout.gridTop, fretCount, leadTrim, colors);
+  drawGridLines(ctx, drawGeometry, stringCount, fretCount, colors);
+  if (showBarre) drawBarres(ctx, drawChord, drawGeometry, fretCount, leadTrim, colors);
 
-  drawPressedDots(ctx, chord, layout.startStrX, layout.gridTop, stringCount, leadTrim, colors);
+  drawPressedDots(ctx, drawChord, drawGeometry, stringCount, leadTrim, colors);
 }
 
 /**
@@ -611,15 +435,19 @@ export function renderFretboardBody(ctx: CanvasRenderingContext2D, opts: RenderF
  * 依赖 fretOffset，故同样不进位图缓存，每次绘制现画。弦枕占位在网格顶线之上、
  * 按弦圆点与横按梁都在其下，故本层整层压在主体层之上不会遮挡任何内容。
  */
-export function renderFretboardFretMarks(ctx: CanvasRenderingContext2D, opts: RenderFretboardOptions): void {
-  const { chord, colors, showFretNumbers = true, showBoldNut = true } = opts;
-  const { stringCount, fretCount, leadTrim, layout } = resolveGeometry(chord, opts);
+export function renderFretboardFretMarks(
+  ctx: CanvasRenderingContext2D,
+  opts: RenderFretboardOptions,
+  geometry?: FretboardGeometry
+): void {
+  const { chord, colors, showFretNumbers = true } = opts;
+  const { stringCount, fretCount, leadTrim, drawGeometry } = geometry ?? resolveGeometry(chord, opts);
   // 品号层用「原窗口起点 + 首列右移量」标注绝对品位：收紧后新窗口首列对应的绝对品位随之上移，
   // 于是「收紧到不再从第 1 品开始」的指法会自动改画品号而非弦枕（drawNut 只认 offset === 0）
   const fretOffset = (chord.fretOffset ?? 0) + leadTrim;
 
-  drawNut(ctx, layout.startStrX, layout.gridTop, stringCount, fretOffset, showBoldNut, colors);
-  if (showFretNumbers) drawFretNumbers(ctx, layout.startStrX, layout.gridTop, fretCount, fretOffset, colors);
+  drawNut(ctx, drawGeometry, stringCount, fretOffset, colors);
+  if (showFretNumbers) drawFretNumbers(ctx, drawGeometry, fretCount, fretOffset, CAPO_FONT, colors);
 }
 
 /**
@@ -627,9 +455,12 @@ export function renderFretboardFretMarks(ctx: CanvasRenderingContext2D, opts: Re
  * 调用者负责 clearRect、scale 等前置准备；此函数不清空画布，也不做背景填充。
  */
 export function renderFretboard(ctx: CanvasRenderingContext2D, opts: RenderFretboardOptions): void {
-  renderFretboardChordName(ctx, opts);
-  renderFretboardBody(ctx, opts);
-  renderFretboardFretMarks(ctx, opts);
+  // 三层共享同一份几何：此前每层各调一次 resolveGeometry（内含 resolveFretWindow 遍历
+  // strings+barres 与 computeFretboardLayout），一次整图渲染白算 2 遍。
+  const geometry = resolveGeometry(opts.chord, opts);
+  renderFretboardChordName(ctx, opts, geometry);
+  renderFretboardBody(ctx, opts, geometry);
+  renderFretboardFretMarks(ctx, opts, geometry);
 }
 
 /** 导出渲染参数：复用 RenderFretboardOptions 的公共字段，仅扩展导出专属项 */

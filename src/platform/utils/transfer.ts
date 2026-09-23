@@ -395,10 +395,6 @@ export interface PickFileOptions {
 }
 
 /** 判定浏览器是否具备 File System Access API（隐式 Feature Detection，避免直接引用未定义全局） */
-const supportsShowOpenFilePicker = (): boolean =>
-  typeof window !== 'undefined' &&
-  typeof (window as unknown as { showOpenFilePicker?: unknown }).showOpenFilePicker === 'function';
-
 /** 常见扩展名 → MIME 映射：showOpenFilePicker 的 types 需要显式 MIME，不能直接给扩展名 */
 const EXTENSION_MIME_MAP: Record<string, string> = {
   '.json': 'application/json',
@@ -500,17 +496,12 @@ const pickViaInput = (options: PickFileOptions): Promise<File | null> =>
 export async function pickFile(options: PickFileOptions = {}): Promise<File | null> {
   const { accept } = options;
 
-  // 优先：File System Access API（仅限用户手势中调用；本函数默认在点击处理里触发）
-  if (supportsShowOpenFilePicker())
+  // 优先：File System Access API（仅限用户手势中调用；本函数默认在点击处理里触发）。
+  // 该入口不在 lib.dom 中，类型由 vite-env.d.ts 补声明为可选 —— 取到局部变量后即可收窄，
+  // 无需再断言出这个属性（Firefox / Safari 上为 undefined，自然落到下面的动态 input 兜底）
+  const picker = typeof window === 'undefined' ? undefined : window.showOpenFilePicker;
+  if (picker)
     try {
-      const picker = (
-        window as unknown as {
-          showOpenFilePicker: (config?: {
-            multiple?: boolean;
-            types?: { description?: string; accept: Record<string, string[]> }[];
-          }) => Promise<{ getFile: () => Promise<File> }[]>;
-        }
-      ).showOpenFilePicker;
       const types = accept ? derivePickerTypes(accept) : null;
       const handles = await picker({ multiple: false, ...(types ? { types } : {}) });
       if (!handles?.length) return null;

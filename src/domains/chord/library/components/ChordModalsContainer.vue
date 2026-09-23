@@ -135,13 +135,12 @@ import BaseCheckbox from '@/platform/ui/checkbox/BaseCheckbox.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
+import { CHORD_GROUP_MODALS } from '@/domains/chord/library/injectionKeys';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { isDark } from '@/platform/composables/useTheme';
 import { injectModalController } from '@/platform/store/useModalController';
 
-import type { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
-
-const groupModals = injectModalController<ReturnType<typeof useChordGroupModals>>('groupModals');
+const groupModals = injectModalController(CHORD_GROUP_MODALS);
 
 const chordStore = useChordStore();
 

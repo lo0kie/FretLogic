@@ -293,6 +293,10 @@ export function resolveTextTitle(
  *
  * 注意边界：`vGridNav` 的 `DEFAULT_SELECTOR` 不在此列，它问的是「哪些节点可作方向键导航候选」
  * （须容纳不带 tabindex 的 `[data-focusable-outline]` 格子），是另一件事，不要合并进来。
+ *
+ * contenteditable 用 `[contenteditable]:not([contenteditable="false"])` 而不是
+ * `[contenteditable="true"]`：后者漏掉 `plaintext-only`（BaseEditableText 用的就是它）
+ * 与空值写法（`contenteditable=""` 同样可编辑），而它们都是真实可聚焦的可编辑元素。
  */
 export const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable]:not([contenteditable="false"])';

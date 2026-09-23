@@ -7,6 +7,7 @@ import { ref } from 'vue';
 import { defineStore } from 'pinia';
 
 import { useStorage } from '@/platform/composables/useStorage';
+import { asRawRecord } from '@/platform/utils/common';
 import {
   AUDIO_SETTINGS_DEFAULTS,
   GITEE_SYNC_CONFIG,
@@ -131,47 +132,31 @@ export const useSettingsStore = defineStore('settings', () => {
   /** 从备份包恢复同步配置（导入备份/云端拉取时调用）。 */
   const applySyncBackup = (sync?: SyncSettingsBackup) => {
     if (!sync) return;
-    // 兼容旧备份：v7 前为平铺 { syncTarget, githubToken, ... } 形态
-    const legacy = sync as unknown as {
-      syncTarget?: SyncProviderKind;
-      githubToken?: string;
-      githubOwner?: string;
-      githubRepo?: string;
-      githubBranch?: string;
-      githubPath?: string;
-      giteeToken?: string;
-      giteeOwner?: string;
-      giteeRepo?: string;
-      giteeBranch?: string;
-      giteePath?: string;
-      webdavServerUrl?: string;
-      webdavUsername?: string;
-      webdavPassword?: string;
-      webdavUseDefaultProxy?: boolean;
-      webdavProxyUrl?: string;
-      serverUrl?: string;
-      serverToken?: string;
-    };
-    if (!('kind' in sync) && legacy.syncTarget) {
-      const t = legacy.syncTarget;
+    // 兼容旧备份：v7 前为平铺 { syncTarget, githubToken, ... } 形态。
+    // 旧形态只有运行时形状（`SyncSettingsBackup` 里没有这些字段），故按宽松记录读、逐字段 typeof 收窄，
+    // 而不是就地断言出那 18 个字段（见 platform/utils/common 的 asRawRecord）
+    const legacy = asRawRecord(sync);
+    if (!('kind' in sync) && legacy['syncTarget']) {
+      const t = legacy['syncTarget'];
       if (t === 'github' || t === 'gitee' || t === 'webdav' || t === 'server') syncTarget.value = t;
-      if (typeof legacy.githubToken === 'string') githubToken.value = legacy.githubToken;
-      if (typeof legacy.githubOwner === 'string') githubOwner.value = legacy.githubOwner;
-      if (typeof legacy.githubRepo === 'string') githubRepo.value = legacy.githubRepo;
-      if (typeof legacy.githubBranch === 'string') githubBranch.value = legacy.githubBranch;
-      if (typeof legacy.githubPath === 'string') githubPath.value = legacy.githubPath;
-      if (typeof legacy.giteeToken === 'string') giteeToken.value = legacy.giteeToken;
-      if (typeof legacy.giteeOwner === 'string') giteeOwner.value = legacy.giteeOwner;
-      if (typeof legacy.giteeRepo === 'string') giteeRepo.value = legacy.giteeRepo;
-      if (typeof legacy.giteeBranch === 'string') giteeBranch.value = legacy.giteeBranch;
-      if (typeof legacy.giteePath === 'string') giteePath.value = legacy.giteePath;
-      if (typeof legacy.webdavServerUrl === 'string') webdavServerUrl.value = legacy.webdavServerUrl;
-      if (typeof legacy.webdavUsername === 'string') webdavUsername.value = legacy.webdavUsername;
-      if (typeof legacy.webdavPassword === 'string') webdavPassword.value = legacy.webdavPassword;
-      if (typeof legacy.webdavUseDefaultProxy === 'boolean') webdavUseDefaultProxy.value = legacy.webdavUseDefaultProxy;
-      if (typeof legacy.webdavProxyUrl === 'string') webdavProxyUrl.value = legacy.webdavProxyUrl;
-      if (typeof legacy.serverUrl === 'string') serverUrl.value = legacy.serverUrl;
-      if (typeof legacy.serverToken === 'string') serverToken.value = legacy.serverToken;
+      if (typeof legacy['githubToken'] === 'string') githubToken.value = legacy['githubToken'];
+      if (typeof legacy['githubOwner'] === 'string') githubOwner.value = legacy['githubOwner'];
+      if (typeof legacy['githubRepo'] === 'string') githubRepo.value = legacy['githubRepo'];
+      if (typeof legacy['githubBranch'] === 'string') githubBranch.value = legacy['githubBranch'];
+      if (typeof legacy['githubPath'] === 'string') githubPath.value = legacy['githubPath'];
+      if (typeof legacy['giteeToken'] === 'string') giteeToken.value = legacy['giteeToken'];
+      if (typeof legacy['giteeOwner'] === 'string') giteeOwner.value = legacy['giteeOwner'];
+      if (typeof legacy['giteeRepo'] === 'string') giteeRepo.value = legacy['giteeRepo'];
+      if (typeof legacy['giteeBranch'] === 'string') giteeBranch.value = legacy['giteeBranch'];
+      if (typeof legacy['giteePath'] === 'string') giteePath.value = legacy['giteePath'];
+      if (typeof legacy['webdavServerUrl'] === 'string') webdavServerUrl.value = legacy['webdavServerUrl'];
+      if (typeof legacy['webdavUsername'] === 'string') webdavUsername.value = legacy['webdavUsername'];
+      if (typeof legacy['webdavPassword'] === 'string') webdavPassword.value = legacy['webdavPassword'];
+      if (typeof legacy['webdavUseDefaultProxy'] === 'boolean')
+        webdavUseDefaultProxy.value = legacy['webdavUseDefaultProxy'];
+      if (typeof legacy['webdavProxyUrl'] === 'string') webdavProxyUrl.value = legacy['webdavProxyUrl'];
+      if (typeof legacy['serverUrl'] === 'string') serverUrl.value = legacy['serverUrl'];
+      if (typeof legacy['serverToken'] === 'string') serverToken.value = legacy['serverToken'];
       return;
     }
     // 新结构：按 kind 判别联合分支恢复

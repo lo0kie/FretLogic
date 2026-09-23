@@ -18,6 +18,11 @@ interface UseSearchResultsPanelOptions {
   scrollEl: Ref<HTMLElement | null>;
   /** 结果项总数（键盘导航的环绕边界） */
   itemCount: () => number;
+  /**
+   * 宿主自己的合成态（BaseInput 的 isComposing ref）。必须与 `e.isComposing` 一起读：
+   * 个别输入法不置 `e.isComposing`，只读事件字段会在这些输入法下于合成期抢走 ↓/↑。
+   */
+  isComposing?: () => boolean;
   /** Enter 选中活跃项（宿主派发 select-search-index） */
   onSelectActive: (index: number) => void;
 }
@@ -29,7 +34,8 @@ interface UseSearchResultsPanelOptions {
  * 结果渲染与选中业务语义留在宿主，本 composable 只拥有面板的「开合与导航」时序。
  */
 export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
-  const { isSearchable, isDisabled, isReadonly, rootRef, inputRef, scrollEl, itemCount, onSelectActive } = options;
+  const { isSearchable, isDisabled, isReadonly, rootRef, inputRef, scrollEl, itemCount, isComposing, onSelectActive } =
+    options;
 
   const resultsOpen = ref(false);
   /** 键盘导航的活跃项下标；-1 = 无活跃项 */
@@ -108,8 +114,10 @@ export function useSearchResultsPanel(options: UseSearchResultsPanelOptions) {
   const handleKeydown = (e: KeyboardEvent) => {
     // IME 合成期一律放行：↓/↑ 正是输入法翻候选词的键，preventDefault 会把翻页整段吞掉，
     // 中文输入法下搜索面板一开就没法选词。Enter 由 BaseInput 的 enterComposingKeydown 兜住
-    // （合成期 Enter 只确认候选词，不派发 enter）——两处同口径，合成期不抢键（P1 审计 #10）。
-    if (e.isComposing) return;
+    // （合成期 Enter 只确认候选词，不派发 enter）。
+    // 判据必须与 BaseInput 完全一致：`e.isComposing || 宿主 ref` —— 个别输入法不置 e.isComposing，
+    // 只读事件字段会在这些输入法下仍然抢键（此前注释自称「两处同口径」，实际只读了一半）。
+    if (e.isComposing || isComposing?.()) return;
     if (!isSearchable() || !resultsOpen.value) return;
     const count = itemCount();
     if (count > 0) {

@@ -138,8 +138,8 @@
                 @click="handleCardSelect(chord)"
                 @keydown.enter.prevent="handleCardSelect(chord)"
                 @keydown.space.prevent="handleCardSelect(chord)"
-                @mouseenter="handleCardHover($event, chord.id, true)"
-                @mouseleave="handleCardHover($event, chord.id, false)"
+                @mouseenter="handleCardHover($event, true)"
+                @mouseleave="handleCardHover($event, false)"
                 @pointerdown="handleCardPointerDown($event, chord)"
                 data-focusable-outline
                 role="button"
@@ -207,27 +207,36 @@
     />
 
     <template #footer>
-      <BaseScrollArea
-        :fade="false"
-        :scrollbar="false"
-        :wheel="{ smooth: true }"
-        aria-label="和弦分区定位"
-        axis="x"
-        class="picker-section-nav flex w-full shrink-0 items-center scroll-smooth px-2xl pt-lg pb-lg"
-        role="navigation"
-      >
-        <!-- w-max + min-w-full：分区少时整条居中，分区多时横向滚动且左端可达 -->
-        <div class="flex w-max min-w-full justify-center">
-          <BaseSegmentedControl
-            v-model="activeSectionValue"
-            :disabled="chordSections.length <= 1"
-            :options="sectionOptions"
-            aria-label="切换和弦分区"
-            size="sm"
-            width="auto"
-          />
-        </div>
-      </BaseScrollArea>
+      <!-- 横向留白贴在**滚动容器的外面**（自带 padding 的包裹元素），绝不做成宿主自己的 px-*：
+           横向滚动容器一旦带 padding-left，content box 与 scroll origin 就不再重合 ——
+           scrollLeft=0 时内容左缘并不贴容器内缘，scrollWidth 还把 padding 计进可滚动区，
+           两端必然一端露出一截、另一端反而对齐（滚动前后各溢出一次）。
+           与侧栏「顶部留白放在滚动容器外」同一条理由：padding 不许落在滚动轴上。 -->
+      <div class="w-full shrink-0 px-lg">
+        <BaseScrollArea
+          :scrollbar="false"
+          :wheel="{ smooth: true }"
+          aria-label="和弦分区定位"
+          axis="x"
+          class="picker-section-nav flex w-full items-center scroll-smooth pt-lg pb-lg"
+          role="navigation"
+        >
+          <!-- 居中与横向滚动不能靠 min-w-full：它的百分比解析的是容器**内容盒**宽度，
+               内层一旦再带内边距就恒超出内容盒，只会被 overflow-x 白裁掉。
+               改 w-max + mx-auto：宽度只由内容决定，分区少时自动居中，
+               分区多时撑开横向滚动且左端可达（溢出后 auto margin 按 0 处理，不切左端）。 -->
+          <div class="mx-auto flex w-max justify-center">
+            <BaseSegmentedControl
+              v-model="activeSectionValue"
+              :disabled="chordSections.length <= 1"
+              :options="sectionOptions"
+              aria-label="切换和弦分区"
+              size="sm"
+              width="auto"
+            />
+          </div>
+        </BaseScrollArea>
+      </div>
     </template>
   </BaseFloatingPanel>
 
@@ -334,16 +343,16 @@ const scrollTopVisible = computed(() => edgeVisible.top);
 const scrollBottomVisible = computed(() => edgeVisible.bottom);
 
 /**
- * 卡片悬停记录（**非响应式**）：hover 只影响「编辑按钮可否 Tab 聚焦」这一件事。
+ * 卡片悬停：只影响「编辑按钮可否 Tab 聚焦」这一件事，**不做任何记忆**。
  * 曾用 reactive Map + 模板 :tabindex 读取 —— 任意卡片的 mouseenter/mouseleave 都会让
  * 整个面板重渲染（所有分区与卡片 vnode 全量重建再 diff，775 卡下每次悬停都是一次
  * 全量 vnode 创建），而视觉上的按钮显隐本就由 CSS group-hover 承担，响应式纯属浪费。
- * 改为直接写按钮 DOM 的 tabIndex（初次渲染静态 tabindex="-1"），Map 仅用于去重。
+ * 改为直接写按钮 DOM 的 tabIndex（初次渲染静态 tabindex="-1"）。
+ * 也不再保留「已处理」去重表：行窗口化会让卡片在悬停中随滚动卸载，mouseleave 不再触发，
+ * 表里残留的 true 会让重挂载后的 mouseenter 被早退跳过，按钮永久停在 tabindex="-1"（悬停也 Tab 不到）。
+ * 直接写 DOM 本就幂等，不需要去重。
  */
-const editHoverMap = new Map<string, boolean>();
-const handleCardHover = (e: MouseEvent, chordId: string, entering: boolean) => {
-  if (editHoverMap.get(chordId) === entering) return;
-  editHoverMap.set(chordId, entering);
+const handleCardHover = (e: MouseEvent, entering: boolean) => {
   const btn = (e.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('.picker-edit-btn');
   if (btn) btn.tabIndex = entering ? 0 : -1;
 };
@@ -447,6 +456,9 @@ watch(
       // 关闭时把已排队的合帧回调一并取消：否则面板关闭后还会跑一次「算高亮 + 算窗口」，
       // 读的是 display:none 下的零矩形，白算且可能把窗口写成空
       cancelActiveSectionUpdate();
+      // 冻结态不能跨开关存活：面板关了但 sectionSyncFrozen 还留着的话，下次打开后
+      // 滚动推导会处于停摆状态（高亮不再跟随滚动），且 rAF/超时监听白白挂到到期
+      releaseSectionSync();
       activeSectionId.value = null;
       // 同步收起内嵌的「新建 / 编辑和弦」抽屉：它同样 Teleport 到 body，若只关面板不关它，
       // 宿主被 KeepAlive 停用（切路由 / 切页签）后该抽屉会失去所属面板上下文独自残留
@@ -619,6 +631,74 @@ const openEditDrawer = (chord: Chord) => {
 /** 当前激活分区 id：由列表滚动位置推导（顶部=首区、底部=末区、否则最靠近容器顶部的分区） */
 const activeSectionId = ref<string | null>(null);
 
+/** 目标位置与当前位置之差在此容差内即视为「无需滚动」：既免去一次空滚动，也避免挂上下一次
+ *  永不派发的 scroll 事件（那样冻结状态就没人来解，用户之后的手动滚动高亮会永久停摆） */
+const SETTLE_EPSILON_PX = 1;
+
+/** 平滑滚动的兜底解冻时限：scrollend 与轮询两条路都断了也要把推导交还回去 */
+const SCROLL_SETTLE_TIMEOUT_MS = 1200;
+
+/**
+ * 点选期间冻结「滚动推导高亮」的状态机。
+ *
+ * 为什么需要它：底部定位条有两套写入 activeSectionId 的来源 —— 用户点选（明确意图，应立刻生效）
+ * 与 scroll 事件按视口反推（随滚动连续变化）。平滑滚动会连续派发 scroll，若不放后者停手，
+ * 刚点下的高亮会在滚动途中被途经分区的判定逐帧覆盖、抵达目标才回来，表现为「高亮不连贯」。
+ *
+ * 解冻条件取「滚动落定」而非固定时长：scrollend 为主（Chromium 支持），
+ * rAF 轮询重读 scrollTop 为辅（老引擎缺该事件时兜底），超时兜底第三条，
+ * 三条都断裂会留下永久冻结，故宁可早解也不晚解。
+ */
+let sectionSyncFrozen = false;
+let frozenScrollTop = 0;
+let settleRafId = 0;
+let settleTimerId: ReturnType<typeof setTimeout> | null = null;
+
+const releaseSectionSync = () => {
+  sectionSyncFrozen = false;
+  if (settleRafId) {
+    cancelAnimationFrame(settleRafId);
+    settleRafId = 0;
+  }
+  if (settleTimerId !== null) {
+    clearTimeout(settleTimerId);
+    settleTimerId = null;
+  }
+  // scrollend 必须显式摘除：三条解冻路径谁先到都算数，若由轮询/超时先解冻而把这条留着，
+  // 它会在未来某次滚动结束时才触发（那时早已解冻，属残留监听）
+  scrollWrapperRef.value?.removeEventListener('scrollend', releaseSectionSync);
+};
+
+/** 轮询等待滚动落定：连续两帧 scrollTop 不变即认为到位 */
+const pollScrollSettled = () => {
+  const el = scrollWrapperRef.value;
+  if (!sectionSyncFrozen || !el) {
+    releaseSectionSync();
+    return;
+  }
+  if (el.scrollTop === frozenScrollTop) {
+    releaseSectionSync();
+    // 落定后再按最终视口补算一次：滚动途中被冻结的推导在此归位，高亮与视口严格一致
+    updateActiveSection();
+    return;
+  }
+  frozenScrollTop = el.scrollTop;
+  settleRafId = requestAnimationFrame(pollScrollSettled);
+};
+
+const freezeSectionSync = () => {
+  const el = scrollWrapperRef.value;
+  if (!el) return;
+  releaseSectionSync();
+  sectionSyncFrozen = true;
+  frozenScrollTop = el.scrollTop;
+  settleRafId = requestAnimationFrame(pollScrollSettled);
+  settleTimerId = setTimeout(releaseSectionSync, SCROLL_SETTLE_TIMEOUT_MS);
+  // scrollend 是首选信号：它精确对应「滚动真的停了」，比轮询与超时都更早、更准。
+  // 不用 { once: true } —— 解冻要能把这条监听摘干净（见 releaseSectionSync）
+  el.addEventListener('scrollend', releaseSectionSync);
+};
+
 /** 底部定位分段控制的选项：每个根音类别（分区）一段 */
 const sectionOptions = computed(() => chordSections.value.map(s => ({ label: s.title, value: s.id })));
 
@@ -634,7 +714,14 @@ const activeSectionValue = computed({
   },
 });
 
-/** 点击底部定位分段控制的某一段：平滑滚动到该分区并将其标记为激活 */
+/**
+ * 点击底部定位分段控制的某一段：平滑滚动到该分区并将其标记为激活。
+ *
+ * 滚动期间必须**冻结**滚动推导（见 scrollSettlingBoundary）：本函数的 scrollTo 会连续派发
+ * scroll，若放 updateActiveSection 每帧按视口重算，刚点下的高亮会在滚动途中被中间分区的
+ * 判定逐帧改掉，直到抵达目标才回来 —— 视觉上就是「高亮不连贯、来回跳」。
+ * 点选是明确的用户意图，滚动途中它说了算；落定后才交还给滚动推导。
+ */
 const scrollToSection = (sectionId: string) => {
   const scrollEl = scrollWrapperRef.value;
   if (!scrollEl) return;
@@ -642,6 +729,7 @@ const scrollToSection = (sectionId: string) => {
   if (!target) return;
 
   activeSectionId.value = sectionId;
+  freezeSectionSync();
 
   // 不用 scrollIntoView(block:'start')：它把分区顶齐到滚动容器最顶端，吞掉了分区列表
   // 的 gap-xl 间距，视觉上多滚一段。改为手动定位：目标绝对偏移减去列表行间距（gap），
@@ -649,11 +737,23 @@ const scrollToSection = (sectionId: string) => {
   const list = sectionsListRef.value;
   const gap = list ? parseFloat(getComputedStyle(list).rowGap) || 0 : 0;
   const top = target.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop - gap;
+
+  // 目标已在当前视口顶部（含容差）：不会产生任何滚动，也就没有 scroll / scrollend 事件来解冻，
+  // 必须就地解冻，否则下一次用户手动滚动的高亮会永久停摆
+  if (Math.abs(top - scrollEl.scrollTop) <= SETTLE_EPSILON_PX) {
+    releaseSectionSync();
+    return;
+  }
+
   scrollEl.scrollTo({ top, behavior: resolveScrollBehavior('smooth') });
 };
 
 /** 按滚动位置计算当前应高亮的分区：顶部取首区、底部取末区，否则取最接近容器顶部的分区 */
 const updateActiveSection = () => {
+  // 点选平滑滚动途中：本函数每帧都会被 scroll 唤起，但此期间高亮由用户意图说了算，
+  // 按视口重算只会把点选的段改掉（高亮不连贯的成因，见 freezeSectionSync 的说明）
+  if (sectionSyncFrozen) return;
+
   const scrollEl = scrollWrapperRef.value;
   if (!scrollEl || chordSections.value.length === 0) {
     activeSectionId.value = null;
@@ -759,11 +859,13 @@ const handleNavEdge = (key: string, currentEl: HTMLElement) => {
 
 onDeactivated(() => {
   cancelActiveSectionUpdate();
+  releaseSectionSync();
   scrollWrapperRef.value?.removeEventListener('scroll', handleScroll);
 });
 
 onBeforeUnmount(() => {
   cancelActiveSectionUpdate();
+  releaseSectionSync();
   scrollWrapperRef.value?.removeEventListener('scroll', handleScroll);
 });
 </script>

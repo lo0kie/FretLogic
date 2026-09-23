@@ -86,6 +86,13 @@
   --color-tint-panelhover-30: var(--tint-panelhover-30);
   --color-tint-panelhover-50: var(--tint-panelhover-50);
 
+  /* SOLID SHADES 转发：强调色的「压深一档」，用于悬停时比常态色再深一点的文字。
+     口径与取值见 tokens/ 的 shade 族（= 语义色与纯黑 88:12 混合）。 */
+  --color-shade-primary-12: var(--shade-primary-12);
+  --color-shade-danger-12: var(--shade-danger-12);
+  --color-shade-warning-12: var(--shade-warning-12);
+  --color-shade-success-12: var(--shade-success-12);
+
   --color-fb-line: var(--fb-line);
   --color-fb-line-dim: var(--fb-line-dim);
   --color-fb-note: var(--fb-note);

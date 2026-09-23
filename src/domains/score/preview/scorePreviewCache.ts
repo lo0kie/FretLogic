@@ -7,8 +7,9 @@
  * - TopHeader 下载菜单：读 A4 各页字节数累加（标题展示「预估文件尺寸」），并复用已渲染的
  *   Blob 做 PDF / ZIP 导出（长图下载按需另渲，不在此缓存）。
  *
- * 页面栅格不含页脚页码：页脚是独立合成层（services/footerOverlay），展示时由组件叠一层画布，
- * 导出/复制时按开关在渲染线程合成——因此「显示页脚」不进内容键，同一首歌不会因该开关多存一份。
+ * 页面栅格不含页脚页码：页脚是独立合成层（services/footerOverlay），预览展示与导出/复制都按开关
+ * 在**渲染线程**把页码合成到页图上（Worker composeFooterPages）——因此「显示页脚」不进内容键，
+ * 同一首歌不会因该开关多存一份；合成结果另存为懒生成的 footerUrls（见下），关掉即弃用。
  *
  * 以内容键（content key）为索引做 LRU 驱逐：条数（CACHE_MAX）与内存配额（CACHE_MAX_BYTES）
  * 两条上限并列，任一先到即驱逐（复用 platform/utils/cache）；
@@ -32,6 +33,18 @@ export interface PreviewRenderData {
   /** A4 分页各页原始 Blob（与 a4Urls 同序）：PDF / ZIP 导出与「复制本页」直接取用，
    *  免去对 blob: URL 再发一次 fetch。object URL 本身已持有该 Blob，这里只是多存一份引用，不增加内存 */
   a4Blobs: Blob[];
+  /**
+   * 页脚合成后的各页 object URL（与 a4Urls 同序，**懒生成**：仅在「显示页脚」打开时向渲染线程
+   * 请求一次合成，结果挂在这里）。预览页流按开关在 a4Urls / footerUrls 之间切换展示源，
+   * 故开关本身零渲染、零 Worker 调用（首次打开合成一次，之后来回切只是换 URL）。
+   *
+   * a4Urls / a4Blobs 仍是唯一真源：导出与「复制/下载本页」按开关自行合成，不读这里 ——
+   * 否则关掉页脚再导出会拿到带页码的图（与设置不符）。
+   */
+  footerUrls?: string[];
+  /** 页脚合成后的各页 Blob（与 footerUrls 同序）：与 a4Blobs 同理由——「复制 / 下载本页」直接取用，
+   *  既免去对 blob: URL 再 fetch，也免去为同一页再合成一次（复用同一份引用不增加内存） */
+  footerBlobs?: Blob[];
 }
 
 /** 缓存容量：按乐谱内容键保留最近渲染的预览结果。单首 A4 预览（每页一张 JPEG）内存占用不大
@@ -58,9 +71,11 @@ const CACHE_MAX_BYTES = 96 * 1024 * 1024;
  *  留 3 份足够覆盖「撤销一步 / 来回切换两种排版」这类回退，其余容量让给别的歌。 */
 const MAX_VERSIONS_PER_SONG = 3;
 
-/** 回收一条渲染数据的全部 object URL（LRU 驱逐 / 覆盖 / 清空时统一由 onEvict 触发） */
+/** 回收一条渲染数据的全部 object URL（LRU 驱逐 / 覆盖 / 清空时统一由 onEvict 触发）。
+ *  页脚合成层随条目一并回收——它挂在条目上，条目被驱逐后就再无人引用，漏掉即泄漏 */
 const revokeAll = (data: PreviewRenderData) => {
   for (const url of data.a4Urls) URL.revokeObjectURL(url);
+  for (const url of data.footerUrls ?? []) URL.revokeObjectURL(url);
 };
 
 /** 内容键 → 所属歌曲 id（子上限记账用；条目被驱逐/覆盖/清空时同步摘除） */
@@ -82,8 +97,12 @@ const forgetKey = (key: string) => {
 /** 内容键 → 渲染数据（LRU：get/set 均刷新最近使用序，超限驱逐最旧项并回收其 URL） */
 const cache = createLruCache<PreviewRenderData>(CACHE_MAX, {
   name: '预览渲染页',
-  // 各页 JPEG 字节数之和：object URL 背后的 blob 既是大头，也是配额口径
-  weigh: (_, data) => data.a4Sizes.reduce((sum, bytes) => sum + bytes, 0),
+  // 各页 JPEG 字节数之和：object URL 背后的 blob 既是大头，也是配额口径。
+  // 页脚合成层（若已生成）同样计入——它是同一批页面的第二份 JPEG，不计就等于把最坏情况
+  // 按一半报给配额（开关打开过的条目会实际占用两倍）
+  weigh: (_, data) =>
+    data.a4Sizes.reduce((sum, bytes) => sum + bytes, 0) +
+    (data.footerBlobs ?? []).reduce((sum, blob) => sum + blob.size, 0),
   maxBytes: CACHE_MAX_BYTES,
   onEvict: (key, data) => {
     revokeAll(data);

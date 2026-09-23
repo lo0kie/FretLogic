@@ -38,6 +38,13 @@ export const PERSIST_MAX_WAIT_MS = 1500;
 
 // ===================== 存储键 =====================
 
+/**
+ * 本应用存储键的公共前缀：下方 STORAGE_KEYS 的**全部**取值都带它。
+ * 单独导出是因为旧数据转录（migrateLegacy）需要用它把作用域限制在自家键上——
+ * 同源共域可能部署了别的应用（子路径），它们的键既不该被抄进本应用 kv 镜像，更不该被删掉。
+ */
+export const STORAGE_KEY_PREFIX = 'CHORD_LAB_';
+
 /** 存储键统一管理（避免魔法字符串散落）。键名沿用历史命名，现作为 IDB kv 库的 key；
  *  运行时后端为 IDB：偏好/UI 态走 kv 镜像（idbKv.ts），实体走 IDB 对象库（SONGS_INDEX /
  *  SONG_ENTRY / SONGS 三个键仅旧数据转录 migrateLegacy.ts 解析历史数据时使用）。 */

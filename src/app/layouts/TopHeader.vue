@@ -321,6 +321,7 @@
       <strong class="text-fg-title">{{ currentSchemeName }}</strong>
       拉取云端备份数据吗？拉取完成后将进入导入面板供您勾选应用。
     </p>
+    <p v-if="pullAuthorNotice" class="m-0 py-xs text-xs/relaxed text-fg-muted">{{ pullAuthorNotice }}</p>
   </BaseModal>
 
   <BaseModal
@@ -362,6 +363,7 @@ import {
   SYNC_PROVIDER_META,
   SYNC_PROVIDER_ORDER,
 } from '@/app/services/sync/providerMeta';
+import { getBuiltinAuthorTargetNotice } from '@/app/services/sync/syncTargetConfig';
 import { preloadSyncActions, useSyncService } from '@/app/services/sync/useSyncService';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { getChordName } from '@/domains/chord/theory/theory';
@@ -542,6 +544,12 @@ const isSyncConfirmOpen = ref(false);
 const isPullConfirmOpen = ref(false);
 
 const currentSchemeName = computed(() => getSyncProviderLabel(settingsStore.syncTarget));
+
+/**
+ * 拉取确认里的数据归属提示：目标仍是出厂默认的 gitee + 作者仓库时非空。
+ * 与启动检测、首访引导、同步设置弹窗共用同一判据——否则用户会把作者示例数据当成自己的基线拉进来。
+ */
+const pullAuthorNotice = computed(() => getBuiltinAuthorTargetNotice());
 
 /** 用户确认上传：执行全局同步，成功后关闭确认弹窗 */
 const handleConfirmSync = async () => {

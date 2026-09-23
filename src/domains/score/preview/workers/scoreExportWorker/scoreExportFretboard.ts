@@ -9,7 +9,14 @@
  * 而绘制次数是它的数倍，页数越多、和弦重复越多，收益越大。
  */
 
-import { isBarreStillValid } from '@/domains/fretboard/model/coordinates';
+import {
+  drawBarres,
+  drawFretNumbers,
+  drawGridLines,
+  drawNut,
+  drawOpenStringMarkers,
+  drawPressedDots,
+} from '@/domains/fretboard/fretboardDrawCore';
 import { createLruCache } from '@/platform/utils/cache';
 
 import {
@@ -21,6 +28,7 @@ import {
 } from './scoreExportLayout';
 
 import type { ExportChordData, ThemeColors } from './scoreExportTypes';
+import type { FretboardDrawChord, FretboardDrawGeometry } from '@/domains/fretboard/fretboardDrawCore';
 
 interface FretboardRaster {
   /** 光栅化结果（设备像素） */
@@ -192,14 +200,29 @@ function drawFretboardVector(
   colors: ThemeColors,
   showBarre: boolean
 ) {
-  // 实际品窗：收紧时列数与窗口起点必须同步右移（见 renderFretboardCanvas 的 resolveFretWindowFromUsed）
+  // 实际品窗：收紧时列数与窗口起点必须同步右移（见 fretboard/model/fretWindow 的 resolveFretWindowFromUsed）
   const { drawFretCount: fretCount, leadTrim } = fretWindowOfExportChord(chord);
   const stringCount = chord.strings?.length || 6;
   const fbWidth = LAYOUT.getExportFretboardWidth(stringCount);
-  const startStrX = x + LAYOUT.FRETBOARD_LEFT_PAD;
-  const gridTop = y + LAYOUT.FRETBOARD_GRID_TOP;
-  const gridBottom = gridTop + fretCount * LAYOUT.FRET_HEIGHT;
-  const gridRight = startStrX + (stringCount - 1) * LAYOUT.STRING_SPACING;
+
+  // 几何由本侧构造（缩放后的 LAYOUT + 内容原点）；绘制算法与主线程屏幕指板共用 fretboardDrawCore
+  const geometry: FretboardDrawGeometry = {
+    startStrX: x + LAYOUT.FRETBOARD_LEFT_PAD,
+    gridTop: y + LAYOUT.FRETBOARD_GRID_TOP,
+    stringSpacing: LAYOUT.STRING_SPACING,
+    fretHeight: LAYOUT.FRET_HEIGHT,
+    nutHeight: LAYOUT.NUT_HEIGHT,
+    markerCenterY: y + LAYOUT.MARKER_CENTER_Y,
+    muteCrossRadius: LAYOUT.MUTE_CROSS_RADIUS,
+    openCircleRadius: LAYOUT.OPEN_CIRCLE_RADIUS,
+    dotRadius: LAYOUT.DOT_RADIUS,
+    barreThickness: LAYOUT.BARRE_THICKNESS,
+    fretNumberXOffset: LAYOUT.FRET_NUMBER_X_OFFSET,
+    // 导出侧没有「不画加粗弦枕」这一档，恒画（与拆分前一致）
+    showBoldNut: true,
+  };
+  const drawChord: FretboardDrawChord = { strings: chord.strings ?? [], barres: chord.barres };
+  const offset = (chord.fretOffset ?? 0) + leadTrim;
 
   // 1. 和弦名称（顶部加粗居中，升降号采用上标形式；基线与独立指板图渲染器保持一致）
   //    可用宽取**指板框宽**：同一行相邻指板紧挨着排（边和弦间距 INLINE_CHORD_GAP = 0，
@@ -208,119 +231,20 @@ function drawFretboardVector(
   drawFormattedChordName(ctx, x + fbWidth / 2, y + LAYOUT.CHORD_NAME_BASELINE_Y, chord.chordName, colors.TEXT, fbWidth);
 
   // 2. 空弦 / 静音标记（中性色，不使用红色）
-  const markerY = y + LAYOUT.MARKER_CENTER_Y;
-  for (let s = 0; s < stringCount; s++) {
-    const sx = startStrX + s * LAYOUT.STRING_SPACING;
-    const strData = chord.strings[s];
-    const fret = strData ? strData[0] : 0;
-
-    if (fret === -1) {
-      // ✕ 静音标记（中性灰，不喧宾夺主）
-      ctx.strokeStyle = colors.FB_MUTE;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(sx - LAYOUT.MUTE_CROSS_RADIUS, markerY - LAYOUT.MUTE_CROSS_RADIUS);
-      ctx.lineTo(sx + LAYOUT.MUTE_CROSS_RADIUS, markerY + LAYOUT.MUTE_CROSS_RADIUS);
-      ctx.moveTo(sx + LAYOUT.MUTE_CROSS_RADIUS, markerY - LAYOUT.MUTE_CROSS_RADIUS);
-      ctx.lineTo(sx - LAYOUT.MUTE_CROSS_RADIUS, markerY + LAYOUT.MUTE_CROSS_RADIUS);
-      ctx.stroke();
-    } else if (fret === 0) {
-      // ○ 空弦标记（独立于按品音符颜色的 FB_OPEN，可单独配置）
-      ctx.strokeStyle = colors.FB_OPEN;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.arc(sx, markerY, LAYOUT.OPEN_CIRCLE_RADIUS, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  }
+  drawOpenStringMarkers(ctx, drawChord, geometry, stringCount, colors);
 
   // 3. 指板网格线（琴弦竖线 + (fretCount + 1) 根品丝）
-  ctx.strokeStyle = colors.FB_LINE;
-  ctx.lineWidth = 1;
-
-  // 竖线（琴弦）
-  for (let s = 0; s < stringCount; s++) {
-    const sx = startStrX + s * LAYOUT.STRING_SPACING;
-    ctx.beginPath();
-    ctx.moveTo(sx, gridTop);
-    ctx.lineTo(sx, gridBottom);
-    ctx.stroke();
-  }
-
-  // 横线（品格）
-  for (let f = 0; f <= fretCount; f++) {
-    const fy = gridTop + f * LAYOUT.FRET_HEIGHT;
-    ctx.beginPath();
-    ctx.moveTo(startStrX, fy);
-    ctx.lineTo(gridRight, fy);
-    ctx.stroke();
-  }
+  drawGridLines(ctx, geometry, stringCount, fretCount, colors);
 
   // 4. 弦枕（offset 为 0 时绘制）与品号（除首末所有品，对齐品丝）
   // 品号层用「原窗口起点 + 首列右移量」标注绝对品位：收紧后新窗口首列对应的绝对品位随之上移，
-  // 于是「收紧到不再从第 1 品开始」的指法会自动改画品号而非弦枕
-  const offset = (chord.fretOffset ?? 0) + leadTrim;
-  if (offset === 0) {
-    // 0 品位偏移即从 1 品起步，绘制加粗枕条
-    ctx.fillStyle = colors.FB_NUT;
-    ctx.fillRect(
-      startStrX - 0.5,
-      gridTop - LAYOUT.NUT_HEIGHT,
-      (stringCount - 1) * LAYOUT.STRING_SPACING + 1,
-      LAYOUT.NUT_HEIGHT
-    );
-  }
-
-  // 左侧显示除首末（0品与最后一品）的所有品号，严格垂直居中对齐品丝
-  // 品号字体在绘制循环外预构造（走字体缓存，缩放纪元变化才重建）
-  ctx.font = capoFont();
-  ctx.fillStyle = colors.SUB_TEXT;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'middle';
-  for (let f = 1; f < fretCount; f++) {
-    const fy = gridTop + f * LAYOUT.FRET_HEIGHT;
-    const fretNumber = offset > 0 ? offset + f : f;
-    ctx.fillText(String(fretNumber), startStrX - LAYOUT.FRET_NUMBER_X_OFFSET, fy);
-  }
-  ctx.textBaseline = 'alphabetic';
+  // 于是「收紧到不再从第 1 品开始」的指法会自动改画品号而非弦枕（drawNut 只认 offset === 0）
+  drawNut(ctx, geometry, stringCount, offset, colors);
+  drawFretNumbers(ctx, geometry, fretCount, offset, capoFont(), colors);
 
   // 5. 大横按（Barres）——两端带饱满圆角，完全覆盖音符点；showBarre=false 时隐藏横按梁
-  if (showBarre && chord.barres && chord.barres.length > 0) {
-    const barreHalfH = LAYOUT.BARRE_THICKNESS / 2;
-    // 与两处屏幕渲染器同判据（computeDisplayBarres / drawBarresOnCanvas）：越出可视品位窗口或已被
-    // 指法破坏的横按不绘制。线格式是 [fret, preferFlat] 元组，判据要琴弦模型，按原值还原即可。
-    const stringModel = (chord.strings ?? []).map(s => ({ fret: s ? s[0] : 0, preferFlat: s ? s[1] : false }));
-    for (const b of chord.barres) {
-      // 存储的横按品位是原窗口内相对品位；收紧后要减去首列右移量才落在新窗口的正确行上
-      const relFret = b.fret - leadTrim;
-      if (relFret < 1 || relFret > fretCount) continue;
-      if (!isBarreStillValid(stringModel, b)) continue;
-      const bx1 = startStrX + b.fromString * LAYOUT.STRING_SPACING;
-      const bx2 = startStrX + b.toString * LAYOUT.STRING_SPACING;
-      const by = gridTop + (relFret - 0.5) * LAYOUT.FRET_HEIGHT;
-      const minX = Math.min(bx1, bx2) - barreHalfH;
-      const w = Math.abs(bx2 - bx1) + LAYOUT.BARRE_THICKNESS;
-
-      ctx.fillStyle = colors.FB_BARRE;
-      ctx.beginPath();
-      ctx.roundRect(minX, by - barreHalfH, w, LAYOUT.BARRE_THICKNESS, barreHalfH);
-      ctx.fill();
-    }
-  }
+  if (showBarre) drawBarres(ctx, drawChord, geometry, fretCount, leadTrim, colors);
 
   // 6. 按弦圆点（Finger Dots）——统一音符色彩，不额外强调主音
-  for (let s = 0; s < stringCount; s++) {
-    const strData = chord.strings[s];
-    // 存储的品位是原窗口内相对品位；收紧后要减去首列右移量才落在新窗口的正确行上
-    const fret = (strData ? strData[0] : 0) - leadTrim;
-    if (fret > 0) {
-      const cx = startStrX + s * LAYOUT.STRING_SPACING;
-      const cy = gridTop + (fret - 0.5) * LAYOUT.FRET_HEIGHT;
-
-      ctx.beginPath();
-      ctx.arc(cx, cy, LAYOUT.DOT_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = colors.FB_NOTE;
-      ctx.fill();
-    }
-  }
+  drawPressedDots(ctx, drawChord, geometry, stringCount, leadTrim, colors);
 }

@@ -89,7 +89,7 @@ const flushNow = async (): Promise<void> => {
   // 先在事务回调内逐键摘除成功项，事务 complete 后统一收口。
   const writtenKeys: string[] = [];
   try {
-    await idb.runTx([KV_STORE], 'readwrite', get => {
+    await idb.runTx([KV_STORE], get => {
       const store = get(KV_STORE);
       for (const key of keys) {
         const value = memory.get(key);

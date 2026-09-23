@@ -17,8 +17,8 @@
           v-if="activeHoveredBarre && displayBubbleBarre"
           :class="[
             displayBubbleBarre.isMarked
-              ? 'border-primary bg-primary text-white shadow-[0_2px_8px_rgba(var(--color-primary-rgb),0.28)]'
-              : 'border-tint-primary-60 bg-surface-panel text-primary shadow-[0_2px_8px_rgba(0,0,0,0.12)] hover:bg-tint-primary-88 dark:shadow-[0_2px_10px_rgba(0,0,0,0.3)]',
+              ? 'border-primary bg-primary text-fg-on-accent shadow-[0_2px_8px_rgba(var(--color-primary-rgb),0.28)]'
+              : 'border-tint-primary-60 bg-surface-panel text-primary shadow-md hover:bg-tint-primary-88',
           ]"
           @mousedown.prevent.stop
           @pointerdown.prevent.stop
@@ -253,6 +253,7 @@ const {
   fretCount,
   fretOffset = 0,
   isDarkMode,
+  isHighContrast = false,
   barres = [],
   boardWidth,
 } = defineProps<{
@@ -262,6 +263,9 @@ const {
   activeBaseStrings: readonly number[];
   rootStringIndex?: number | null;
   isDarkMode: boolean;
+  /** 是否高对比主题。必须与 isDarkMode 分开传：HC 也算「非 light」即 isDarkMode=true，
+   *  但它的横按源色沿用明色档、底色却是近黑，沿用暗色档的 alpha 会让未标记横按不可见 */
+  isHighContrast?: boolean;
   stringXPositions: number[];
   hoverPoint?: { stringIndex: number; fretIndex: number } | null;
   focusPoint?: { stringIndex: number; fretIndex: number } | null;
@@ -292,9 +296,14 @@ const nutBarStyle = computed<CSSProperties>(() => ({
 /**
  * 视觉渲染品数缓冲：
  * - 增加品数（3 -> 4）：立即扩展内部 SVG 画布与品丝，由外层 div overflow-y-clip 从下往上平滑展开显现；
- * - 减少品数（4 -> 3）：外层 div 立即向目标 3 品高度平滑收起（duration-slow 300ms），内部 SVG 与品丝保持在 4 品，
+ * - 减少品数（4 -> 3）：外层 div 立即向目标 3 品高度平滑收起（duration-slow，当前 0.35s），内部 SVG 与品丝保持在 4 品，
  *   使第 4 品网格被外层底边自下而上平滑裁切遮蔽吞没，待动画结束后再清理多余品丝，消除 4->3 品瞬间闪断无动画的问题。
  */
+
+/** 缩减品数后清理多余品丝的延时：必须**严格大于** CSS `--duration-slow`（当前 0.35s），
+ *  否则清理与收起动画同时结束，第 4 品网格会在裁切完成前被抹掉（闪一下）。
+ *  该 token 从 0.3s 调到 0.35s 后，原先写死的 350 恰好与动画等长、安全余量归零，故显式留 30ms 余量。 */
+const FRET_RETRACT_DELAY_MS = 380;
 const visualFretCount = ref(fretCount);
 let fretRetractTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -312,7 +321,7 @@ watch(
       fretRetractTimer = setTimeout(() => {
         visualFretCount.value = newVal;
         fretRetractTimer = null;
-      }, 350); // 略大于 CSS duration-slow (300ms)
+      }, FRET_RETRACT_DELAY_MS);
     }
   }
 );
@@ -456,10 +465,10 @@ const barreHotspotStyle = (barre: BarreEntity): CSSProperties => {
 /** 展示用横按集合（推导候选 + 已标记合并，纯函数见 FretboardSvg.logic.ts） */
 const displayBarres = computed<DisplayBarre[]>(() => computeDisplayBarres(strings, barres, fretCount));
 
-/** 横按梁填充色 / 边框色：暗色模式差异由纯函数处理 */
-const getBarreFill = (isMarked: boolean) => getBarreFillOf(isMarked, isDarkMode);
+/** 横按梁填充色 / 边框色：暗色模式与高对比主题的差异由纯函数处理 */
+const getBarreFill = (isMarked: boolean) => getBarreFillOf(isMarked, isDarkMode, isHighContrast);
 
-const getBarreStroke = (isMarked: boolean) => getBarreStrokeOf(isMarked, isDarkMode);
+const getBarreStroke = (isMarked: boolean) => getBarreStrokeOf(isMarked, isDarkMode, isHighContrast);
 
 // ==================== 浮动横按操作气泡交互 ====================
 const activeHoveredBarreKey = ref<string | null>(null);
@@ -575,7 +584,8 @@ const hoveredBarreGeometry = computed(() => {
   return {
     centerX,
     topY,
-    label: `${6 - b.fromString}～${6 - b.toString}弦`,
+    // 弦号按**实际弦数**换算（索引 0 = 最低音粗弦）：写死 6 会在 7/8 弦等非 6 弦指法上整体报错弦号
+    label: `${strings.length - b.fromString}～${strings.length - b.toString}弦`,
   };
 });
 
@@ -602,8 +612,8 @@ const displayBubbleGeometry = computed(() => hoveredBarreGeometry.value ?? cache
  * 取色必须与气泡面板**同一来源**，否则楔形两条斜边与面板描边会在接缝处阶跃变色：
  * 面板未标记时是 border-tint-primary-60 / bg-surface-panel / hover:bg-tint-primary-88，
  * 已标记时是 border-primary / bg-primary —— 故此处逐个取同一条令牌，不另造色。
- * （FretboardSvg.logic 的 FRETBOARD_BLUE 是给 canvas 与 SVG 横按梁用的：那两处读不到 var()，
- *   只能写 rgba 分量；DOM 侧的箭头没有这个限制，不得把那套半透明色搬过来。）
+ * （横按梁的蓝色不是本气泡的取色来源：梁由 FretboardSvg.logic 以 `rgba(var(--fb-barre-rgb), α)`
+ *   分档表达，属「同一源色的不同透明度」，与面板的实色 token 体系不同路，不得把那套搬过来。）
  * 过渡也不在此写死：时长与曲线交给模板上与面板相同的工具类，避免两处各自漂移。
  */
 const barreArrowStyle = computed<CSSProperties>(() => {

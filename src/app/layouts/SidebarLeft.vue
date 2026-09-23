@@ -245,13 +245,15 @@ import BaseInput from '@/platform/ui/input/BaseInput.vue';
 import BaseMenu from '@/platform/ui/menu/BaseMenu.vue';
 import BaseRollingText from '@/platform/ui/rolling-text/BaseRollingText.vue';
 import BaseScrollArea from '@/platform/ui/scroll-area/BaseScrollArea.vue';
+import { BACKUP_MODALS } from '@/app/modals/injectionKeys';
 import { useBackupModals } from '@/app/modals/useBackupModals';
 import { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
-import { CHORD_REFERENCE_LOOKUP } from '@/domains/chord/library/injectionKeys';
+import { CHORD_GROUP_MODALS, CHORD_REFERENCE_LOOKUP } from '@/domains/chord/library/injectionKeys';
 import { useChordEditorStore } from '@/domains/chord/store/chordEditorStore';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { getChordName } from '@/domains/chord/theory/theory';
 import { useSongModals } from '@/domains/score/library/composables/useSongModals';
+import { SONG_MODALS } from '@/domains/score/library/injectionKeys';
 import { useSongStore } from '@/domains/score/library/store/songStore';
 import { useScrollMemory } from '@/platform/composables/useScrollMemory';
 import { useUiStore } from '@/platform/store/uiStore';
@@ -364,11 +366,11 @@ const selectSearchResult = (card: GroupedChordCard) => {
   chordStore.selectAndExpandGroup(card.mainChord.groupId);
 };
 
-provide('groupModals', groupModals);
+provide(CHORD_GROUP_MODALS, groupModals);
 // 跨领域桥接：和弦卡「引用反查」的能力实现由应用层注入（内部走乐谱域 songStore）
 provide(CHORD_REFERENCE_LOOKUP, (chordIds: string[]) => songStore.getChordReferences(chordIds).length);
-provide('songModals', songModals);
-provide('backupModals', backupModals);
+provide(SONG_MODALS, songModals);
+provide(BACKUP_MODALS, backupModals);
 
 /** 用户点击"导入备份"：pickFile 打开系统文件选择框，选出 .json 备份后交给备份流程处理 */
 const handleImportTrigger = async () => {

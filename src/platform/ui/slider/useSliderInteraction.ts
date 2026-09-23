@@ -34,7 +34,7 @@ interface UseSliderInteractionOptions {
    */
   onDragEnd: (startValue: SliderValue, currentValue: SliderValue) => void;
   /** 滚轮步进后浮出数值气泡（宿主的短延时续显逻辑） */
-  pulseWheelTooltip: () => void;
+  pulseWheelTooltip: (thumbIdx?: number) => void;
   /** 滚轮步进开关：wheelable 需焦点；wheelOnHover 悬停即生效 */
   wheelable: () => boolean;
   wheelOnHover: () => boolean;
@@ -188,13 +188,26 @@ export function useSliderInteraction(options: UseSliderInteractionOptions) {
     }
   };
 
+  /**
+   * 区间模式下当前聚焦的拇指下标；未聚焦（或单值模式）回落 0 —— 与键盘路径的默认拇指一致。
+   * 指针路径（就近选拇指）与键盘路径都会先 focusThumb，故 activeElement 就是「用户正在操作的那个」。
+   */
+  const focusedThumbIndex = (): number => {
+    if (!isRange()) return 0;
+    const thumbs = wrapperRef.value?.querySelectorAll<HTMLElement>('[role="slider"]') ?? [];
+    return thumbs[1] === document.activeElement ? 1 : 0;
+  };
+
   /** 滚轮 deltaY → 步进方向：上滚加值、下滚减值（修饰键倍率见 resolveMultiplier）；reverseWheel 时方向取反 */
   const applyWheelStep = (e: WheelEvent) => {
     if (e.deltaY === 0) return;
     const direction = e.deltaY > 0 ? -1 : 1;
-    stepBy(reverseWheel() ? -direction : direction, e);
-    // 滚轮改值与拖拽一样浮出数值气泡（离散事件，靠短延时续显）
-    pulseWheelTooltip();
+    // 区间模式必须作用于**聚焦的那个拇指**：此前固定传 0，于是聚焦上限拇指滚动滚轮时动的却是下限，
+    // 数值气泡也跟着跳到 0 号拇指上（指针与键盘两条路径本就都会先选拇指）。
+    const thumbIdx = focusedThumbIndex();
+    stepBy(reverseWheel() ? -direction : direction, e, thumbIdx);
+    // 滚轮改值与拖拽一样浮出数值气泡（离散事件，靠短延时续显）；下标一并下发，气泡才落在正确的拇指上
+    pulseWheelTooltip(thumbIdx);
   };
 
   /**

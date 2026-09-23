@@ -69,7 +69,7 @@
       <slot v-if="indeterminate" name="indeterminate-icon">
         <BaseIcon
           :icon-size="sizeConfig.iconSize"
-          class="scale-100 text-white transition-transform duration-fast"
+          class="scale-100 text-fg-on-accent transition-transform duration-fast"
           name="minus"
         />
       </slot>
@@ -77,7 +77,7 @@
       <slot v-else-if="isChecked" name="icon">
         <BaseIcon
           :icon-size="sizeConfig.iconSize"
-          class="scale-100 text-white transition-transform duration-fast"
+          class="scale-100 text-fg-on-accent transition-transform duration-fast"
           name="check"
         />
       </slot>
@@ -253,22 +253,22 @@ const SIZE_CONFIGS = {
 
 const COLOR_CONFIGS = {
   primary: {
-    checkedClass: 'border-primary bg-primary text-white group-hover:brightness-105',
+    checkedClass: 'border-primary bg-primary text-fg-on-accent group-hover:brightness-105',
     uncheckedClass:
       'border border-border-base bg-surface-body group-hover:border-tint-primary-20 dark:bg-(--bg-surface)',
   },
   success: {
-    checkedClass: 'border-success bg-success text-white group-hover:brightness-105',
+    checkedClass: 'border-success bg-success text-fg-on-accent group-hover:brightness-105',
     uncheckedClass:
       'border border-border-base bg-surface-body group-hover:border-tint-success-20 dark:bg-(--bg-surface)',
   },
   warning: {
-    checkedClass: 'border-warning bg-warning text-white group-hover:brightness-105',
+    checkedClass: 'border-warning bg-warning text-fg-on-accent group-hover:brightness-105',
     uncheckedClass:
       'border border-border-base bg-surface-body group-hover:border-tint-warning-20 dark:bg-(--bg-surface)',
   },
   danger: {
-    checkedClass: 'border-danger bg-danger text-white group-hover:brightness-105',
+    checkedClass: 'border-danger bg-danger text-fg-on-accent group-hover:brightness-105',
     uncheckedClass:
       'border border-border-base bg-surface-body group-hover:border-tint-danger-20 dark:bg-(--bg-surface)',
   },

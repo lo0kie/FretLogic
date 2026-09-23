@@ -199,6 +199,11 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
     const lineRaw = raw.replace(/^\s+/, '');
     let cleanLine = '';
     let lastIndex = 0;
+    // 行首连续和弦（`[C][G]歌词`）的序号：这些和弦清出的 cleanLine 长度恒为 0，若一律发 index:0，
+    // 重放侧 bindNewChordToSlot 的 'append' 只在**越界**分支与 'front-insert' 有别，第二个会落进
+    // 「in-range 覆盖」分支把 list[0] 直接改写掉 —— 每行只剩最后一个行首和弦。改为按序号递增发
+    // 0,1,2…，与导出侧 SLOTS 段写 start 槽位下标的既有口径一致。
+    let startOrdinal = 0;
     let match: RegExpExecArray | null;
     BRACKET_CHORD_REGEX.lastIndex = 0;
 
@@ -208,10 +213,11 @@ const parseSmartSongFromText = (text: string): PortableSong | null => {
         hasValidChords = true;
         cleanLine += lineRaw.slice(lastIndex, match.index);
         const charIdx = cleanLine.length;
+        const isLineStart = charIdx === 0;
         slots.push({
           lineIdx,
-          type: charIdx === 0 ? 'start' : 'char',
-          index: charIdx,
+          type: isLineStart ? 'start' : 'char',
+          index: isLineStart ? startOrdinal++ : charIdx,
           chord: createFallbackPortableChord(chordName),
         });
         lastIndex = match.index + match[0].length;

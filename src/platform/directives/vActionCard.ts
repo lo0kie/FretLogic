@@ -26,9 +26,16 @@ const isDisabled = (value?: ActionCardBinding): boolean => {
   return false;
 };
 
+/**
+ * 元素 → 解析后的综合禁用态。**存在模块级 WeakMap 而非元素属性上**：往 HTMLElement 上挂
+ * `__actionCardDisabled` 需要每处读写都断言出一个不存在的属性（旧写法 3 处 `as unknown as`），
+ * 而 WeakMap 天然是「按元素存的私有状态」—— 键随元素回收，也不必在 unmounted 里手动清干净。
+ * 同类先例见 vAutoWidth 的 stateMap。
+ */
+const disabledState = new WeakMap<HTMLElement, boolean>();
+
 /** 读取挂载/更新时解析好的综合禁用态（修饰符 disabled 或绑定对象 disabled 任一为真即禁用） */
-const resolveDisabled = (el: HTMLElement): boolean =>
-  Boolean((el as unknown as { __actionCardDisabled?: boolean }).__actionCardDisabled);
+const resolveDisabled = (el: HTMLElement): boolean => disabledState.get(el) === true;
 
 const KEYDOWN_HANDLER = 'data-action-card-handler';
 
@@ -63,12 +70,10 @@ export const vActionCard: Directive<HTMLElement, ActionCardBinding> = {
   unmounted(el) {
     el.removeEventListener('keydown', handleCardKeydown, true);
     el.removeAttribute(KEYDOWN_HANDLER);
-    (el as unknown as { __actionCardDisabled?: boolean }).__actionCardDisabled = undefined;
+    disabledState.delete(el);
   },
 };
 
 /** 综合修饰符 .disabled 与绑定对象 disabled，缓存解析后的禁用态供捕获阶段处理器读取 */
-const syncDisabled = (el: HTMLElement, binding: DirectiveBinding<ActionCardBinding>): void => {
-  (el as unknown as { __actionCardDisabled?: boolean }).__actionCardDisabled =
-    Boolean(binding.modifiers?.['disabled']) || isDisabled(binding.value);
-};
+const syncDisabled = (el: HTMLElement, binding: DirectiveBinding<ActionCardBinding>): void =>
+  void disabledState.set(el, Boolean(binding.modifiers?.['disabled']) || isDisabled(binding.value));

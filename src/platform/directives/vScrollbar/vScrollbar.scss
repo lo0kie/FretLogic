@@ -90,20 +90,22 @@
 
 .v-scrollbar-thumb {
   position: absolute;
-  visibility: hidden;
+  /* 隐藏态用 opacity 而非 visibility：拇指带 tabindex=0 与方向键处理（role=scrollbar + aria-controls），
+     而 visibility:hidden 会把它一并移出 Tab 序，那套键盘支持就永远不可达（只剩指针可达）。
+     opacity:0 同样不可点（pointer-events:none，与轨道同一处置，避免吞掉宿主内缘指针事件），
+     但可聚焦、也在无障碍树里。 */
   opacity: 0;
   z-index: var(--z-scrollbar-thumb);
   transition:
     opacity 250ms ease,
     background 150ms ease,
-    visibility 0s linear 250ms,
     width 150ms ease,
     height 150ms ease,
     transform 150ms ease;
   cursor: pointer;
   border-radius: 999px;
   background: var(--v-scrollbar-thumb);
-  pointer-events: auto;
+  pointer-events: none;
 
   // 粗细维度由类控制（hover 向容器内侧加宽 1px），长度维度由指令内联设置
   &--y {
@@ -133,14 +135,13 @@
     content: '';
   }
 
-  // overlay 是宿主的兄弟节点而非后代，显隐必须由指令直接切换可见类；visibility 延迟生效避免截断淡出
-  &--visible {
-    visibility: visible;
+  // overlay 是宿主的兄弟节点而非后代，显隐必须由指令直接切换可见类。
+  // 可见 = 指令切换的 --visible（hover / 滚动 / 交互期间）或键盘聚焦：后者是让下方那套
+  // 「tabindex + 方向键滚动」真正可用的必要条件（见 .v-scrollbar-thumb 的隐藏态说明）。
+  &--visible,
+  &:focus-visible {
     opacity: 1;
-    transition:
-      opacity 250ms ease,
-      background 150ms ease,
-      visibility 0s;
+    pointer-events: auto;
   }
 
   // 无可滚动区域：结构性隐藏，优先级高于可见类

@@ -29,9 +29,14 @@ export {
 };
 
 /**
- * 清洗持久化数据（旧存储转录 / 导入备份等启动入口共用）：
- * 分组/和弦/歌曲逐层清洗补齐时间戳；和弦指向不存在分组时剔除；
+ * 清洗持久化数据：分组/和弦/歌曲逐层清洗补齐时间戳；和弦指向不存在分组时剔除；
  * 歌曲内指向不存在和弦的引用剪除（未知和弦 id 因快照可能缺失而保留）。
+ *
+ * ⚠️ 当前**没有生产调用方**：旧存储转录（migrateLegacy）走 validateImportExportPayload，
+ * 导入备份走同一条校验链，仓储侧另有各自的清洗——本函数只剩单测覆盖
+ * （tests/sanitizePersistedData.test.ts 与 payloadValidation.test.ts）。
+ * 保留是因为它是「持久化数据清洗」这条口径的独立锚点；旧注释写作
+ * 「旧存储转录 / 导入备份等启动入口共用」，描述的是已不存在的消费者。
  */
 export const sanitizePersistedData = (data: { groups?: unknown; chords?: unknown | null; songs?: unknown }) => {
   const now = Date.now();

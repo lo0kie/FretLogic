@@ -247,8 +247,8 @@ export const initAudioEngine = async (): Promise<void> => {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    const Ctor =
-      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    // 厂商前缀属性在 vite-env.d.ts 的 declare global 里声明（本仓不引 webkit 类型包）
+    const Ctor = window.AudioContext || window.webkitAudioContext;
     const ctx = audioCtx ?? new Ctor();
     audioCtx = ctx;
     if (ctx.state === 'suspended') await ctx.resume();

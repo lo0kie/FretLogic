@@ -13,7 +13,7 @@ import { chordRepository, songRepository } from '@/app/services/data/repositorie
 import { toSongId } from '@/domains/score/model/scoreModel';
 import { idb, isPersistBlocked } from '@/platform/services/storage';
 import { flushIdbKv, kvGet, kvSet } from '@/platform/services/storage/idbKv';
-import { STORAGE_KEYS } from '@/platform/utils/constants';
+import { STORAGE_KEY_PREFIX, STORAGE_KEYS } from '@/platform/utils/constants';
 import { logger } from '@/platform/utils/logger';
 
 import type { Chord, Group } from '@/domains/chord/types';
@@ -26,6 +26,27 @@ const RETIRED_FLAG_KEY = 'localStorage-retired';
 const EXCLUDED_KEYS: ReadonlySet<string> = new Set([STORAGE_KEYS.WEBDAV_PASSWORD, STORAGE_KEYS.SERVER_TOKEN]);
 
 const SONG_ENTRY_PREFIX = `${STORAGE_KEYS.SONG_ENTRY}:`;
+
+/**
+ * 按 id 合并「库中已有」与「本次转录快照」：同 id 取 updatedAt **严格更新**的一条，
+ * 库中独有的实体原样保留（绝不删除）。
+ *
+ * 存在的理由：转录是「任一道守门失败即保留 localStorage、下次启动重试」的设计，故同一份陈旧快照
+ * 可能被反复写回。而 chordRepository.save 的语义是「以传入快照为准」——快照里没有的 id 判为删除、
+ * 同 id 一律 put。直接写回就会把「上次转录之后用户改过的和弦」整条回退、并把已删的复活；核验又只看
+ * 数量与主键存在性、察觉不到内容回退，随后退役标记落盘、localStorage 被清 ⇒ 陈旧快照就此固化。
+ * 合并之后重跑只补缺失、不回退，注释里那句「重跑幂等」才真正成立。
+ */
+const mergeByUpdatedAt = <T extends { id: string; updatedAt?: number }>(current: T[], incoming: T[]): T[] => {
+  const pending = new Map<string, T>(incoming.map(e => [e.id, e]));
+  const merged = current.map(e => {
+    const next = pending.get(e.id);
+    if (!next) return e;
+    pending.delete(e.id);
+    return (next.updatedAt ?? 0) > (e.updatedAt ?? 0) ? next : e;
+  });
+  return [...merged, ...pending.values()];
+};
 
 const parseJson = (raw: string | undefined): unknown => {
   if (!raw) return undefined;
@@ -168,10 +189,18 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
     
 
     // 实体先落库（成功后才清空 localStorage）：歌曲与顺序索引走单事务原子写入。
-    // 和弦库仅在有旧键时全量写（见上方 N2 说明）；歌曲路径 flushChanges 按 id diff、从不 clear，
-    // 空列表不会波及 IDB 既有记录，可安全调用
-    if (hasChordLibraryKeys) 
-      await chordRepository.save({ groups, chords });
+    // 和弦库仅在确有旧键时才允许写回（见上方 N2 说明）；歌曲路径 flushChanges 按 id diff、从不 clear，
+    // 空列表不会波及 IDB 既有记录，可安全调用。
+    // 写回前先 load 当前库并按 updatedAt 合并（见 mergeByUpdatedAt）：把 localStorage 快照整份
+    // save 回去会让重跑变成回退。load 顺带把仓储镜像初始化为库中实体的同一批引用，故合并结果里
+    // 取自库中的那部分会被 diff 跳过，只有真正新增/更新的条目落盘。
+    if (hasChordLibraryKeys) {
+      const persisted = await chordRepository.load();
+      await chordRepository.save({
+        groups: mergeByUpdatedAt(persisted.groups, groups),
+        chords: mergeByUpdatedAt(persisted.chords, chords),
+      });
+    }
     
     if (songs.length > 0) {
       // 顺序索引：优先取旧分片索引中仍存在的 id，未被索引覆盖的歌曲由读侧兜底追加尾部
@@ -197,9 +226,11 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
   // 其余键原样写入 kv 镜像（偏好/UI 态字符串），敏感键丢弃；
   // 已消费的键记录下来，最后只做精准清除——不使用 localStorage.clear()，
   // 避免同源域名下部署其他应用（子路径共域）时连带清空它们的存储。
+  // 同理，转录本身也必须按前缀限定作用域：只认自家键，别人的键既不抄进本应用 kv、也不删。
   const consumedKeys = new Set<string>([...EXCLUDED_KEYS, STORAGE_KEYS.SONGS_INDEX]);
   let kvKeys = 0;
   for (const [key, value] of entries) {
+    if (!key.startsWith(STORAGE_KEY_PREFIX)) continue;
     if (EXCLUDED_KEYS.has(key)) continue;
     if (key === STORAGE_KEYS.GROUPS || key === STORAGE_KEYS.CHORD_LIST) continue;
     if (key === STORAGE_KEYS.SONGS || key.startsWith(SONG_ENTRY_PREFIX) || key === STORAGE_KEYS.SONGS_INDEX) continue;
@@ -234,7 +265,8 @@ export async function transcribeLegacyLocalStorage(): Promise<TranscriptionResul
 
   // 核验通过才落退役标记：顺序若颠倒（标记先于守门），回读失败这一路会把「半截迁移」永久固化——
   // 顶部 kvGet(RETIRED_FLAG_KEY) 的短路让下次启动不再重试，而运行时已不回读 localStorage。
-  // 若这次 flush 自身触发熔断导致标记未落，下次启动重跑一遍幂等转录即可，属安全方向。
+  // 若这次 flush 自身触发熔断导致标记未落，下次启动重跑一遍转录即可：和弦库写回已按 updatedAt
+  // 合并（见 mergeByUpdatedAt），重跑只补缺失、不回退迁移后的编辑，属安全方向。
   kvSet(RETIRED_FLAG_KEY, '1');
   await flushIdbKv();
 

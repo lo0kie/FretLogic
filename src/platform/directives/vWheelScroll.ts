@@ -275,6 +275,8 @@ const scrollBy = (el: HTMLElement, axis: 'x' | 'y', delta: number, smooth?: bool
  * 可滚，正是原生链会去的地方）。每层按「先纵后横」试轴：横向条带嵌在纵向容器里是绝大多数
  * 形态，且触边后用户继续滚时的鼠标滚轮增量本就落在 deltaY 上（原生链也是这么穿透的）；
  * 横向那条留给「横向轮播嵌在横向页面里」的形态。全靠 canScrollBy 判定，走不动就继续往上。
+ * 例外是**文档级节点**（html / body / scrollingElement）：它们的 computed overflow 常是 hidden
+ * （本项目 body 就是 `overflow-y: hidden`），故改按实际可滚性判定，否则整条文档链永不入选。
  *
  * 取舍：不缓存祖先节点——内容增删会在一次手势中途改变链上可滚性，逐条事件重走一遍最稳；
  * 只在让位 / 无货可滚这两条路径触发，且每层的判定都是布局读，量级可控。
@@ -288,15 +290,22 @@ const handOffToOuter = (el: HTMLElement, e: WheelEvent, opts: WheelScrollOptions
   const multiplier = scrollMultiplier(opts);
   let node: HTMLElement | null = el.parentElement;
   while (node) {
-    const style = getComputedStyle(node);
-    if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+    // 文档级滚动容器（html / body / scrollingElement）必须按**实际可滚性**判定，不能看 computed
+    // overflow：本项目 main.scss 给 body 设了 `overflow-y: hidden`（横向留给窄视口），
+    // 只看 overflow 会让整条文档链永不入选 —— 纵向滚轮于是既交不出去、默认行为又被上面
+    // preventDefault 拦掉，形成「滚轮压在条带上什么都不动」的死区。
+    // 非文档级祖先仍按 overflow 判定：`overflow: hidden` 的节点原生链也不会滚它，不该成为交接目标。
+    const isDocScroller =
+      node === document.scrollingElement || node === document.body || node === document.documentElement;
+    const style = isDocScroller ? null : getComputedStyle(node);
+    if (isDocScroller || style!.overflowY === 'auto' || style!.overflowY === 'scroll') {
       const delta = toPixelDelta(e, e.deltaY, node, 'y') * multiplier;
       if (delta !== 0 && canScrollBy(node, 'y', delta)) {
         scrollBy(node, 'y', delta, smooth);
         return true;
       }
     }
-    if (style.overflowX === 'auto' || style.overflowX === 'scroll') {
+    if (style && (style.overflowX === 'auto' || style.overflowX === 'scroll')) {
       const delta = toPixelDelta(e, e.deltaX, node, 'x') * multiplier;
       if (delta !== 0 && canScrollBy(node, 'x', delta)) {
         scrollBy(node, 'x', delta, smooth);
@@ -436,10 +445,9 @@ export const vWheelScroll: Directive<HTMLElement, WheelScrollBinding, WheelScrol
         // 横向内容可滚的条带上会「什么都不动」。prevent:false 时无权代驱动（guard 也不会设置），
         // 照旧把默认行为留给原生链
         if (maxScrollLeft <= 1) {
-          if (handler.opts.prevent) {
-            handOffToOuter(el, e, handler.opts);
-            e.preventDefault();
-          }
+          // 只有真的交出去了才 preventDefault：handOffToOuter 返回 false 表示上层整条链都无处可滚，
+          // 此时拦掉默认行为就成了「滚轮压在条带上什么都不动」的死区。交不出去就把这条还给原生链。
+          if (handler.opts.prevent && handOffToOuter(el, e, handler.opts)) e.preventDefault();
           return;
         }
 

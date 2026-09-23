@@ -244,7 +244,7 @@ export const chordRepository: ChordLibraryRepository = {
     return snapshot;
   },
   async save(snapshot) {
-    await idb.runTx(['groups', 'chords'], 'readwrite', get => {
+    await idb.runTx(['groups', 'chords'], get => {
       const groupStore = get('groups');
       const chordStore = get('chords');
       // toRaw：store 传入的可能是响应式代理，Proxy 无法被 IDB structuredClone（DataCloneError）。

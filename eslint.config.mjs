@@ -226,13 +226,15 @@ export default tseslint.config(
       'import/newline-after-import': 'error',
       // 防御性规则：禁止模块自引用
       'import/no-self-import': 'error',
-      // 模块说明符统一**不写** .ts 后缀（.vue / .css / .scss / .json 例外，见下 pattern）。
+      // 模块说明符统一**不写** .ts 后缀（.vue / .css / .scss / .json / .woff2 例外，见下 pattern）。
       // 现状曾是混杂的：main.ts 的 11 条指令导入带 .ts，而 vScrollbar 那条不带。
       //
-      // ⚠️ pattern 必须显式列出 vue/css/scss/json：规则对「未列出的扩展名」一律回落到
-      // defaultConfig（此处 'never'），不列就会反过来要求把 .vue、.json 后缀**删掉**——
-      // 而它们是解析所必需的（Vite 的 resolve.extensions 不含 .vue；@data/*.json 靠后缀定位），
-      // 删了直接构建失败。判断依据在源码 extensions.js:157-159 的 getModifier()。
+      // ⚠️ pattern 必须显式列出 vue/css/scss/json/woff2：规则对「未列出的扩展名」一律回落到
+      // defaultConfig（此处 'never'），不列就会反过来要求把 .vue、.json、.woff2 后缀**删掉**——
+      // 而它们是解析所必需的（Vite 的 resolve.extensions 不含 .vue；@data/*.json 与
+      // @data/fonts/*.woff2 都靠后缀定位），删了直接构建失败。判断依据在源码 extensions.js:157-159
+      // 的 getModifier()。woff2 写进 pattern 还有一层好处：让它成为显式约束，不依赖下面
+      // isResolvableWithoutExtension() 那条「去掉后缀仍能解析才报」的护栏来兜底。
       //
       // ⚠️ checkTypeImports 必须显式打开：规则默认**跳过 `import type`**
       //（extensions.js:200-204，importKind === 'type' 直接 return），而本仓 type-only 导入
@@ -250,7 +252,7 @@ export default tseslint.config(
         'error',
         'never',
         {
-          pattern: { vue: 'always', css: 'always', scss: 'always', json: 'always' },
+          pattern: { vue: 'always', css: 'always', scss: 'always', json: 'always', woff2: 'always' },
           checkTypeImports: true,
           fix: true,
         },
@@ -413,11 +415,12 @@ export default tseslint.config(
     },
   },
   {
-    // Node 侧脚本与配置文件——files 已收窄，不再匹配 src/**/*.ts，
+    // Node 侧脚本、构建输入与配置文件——files 已收窄，不再匹配 src/**/*.ts，
     // 故不会用 Node globals（process/require/__dirname）污染浏览器代码作用域，
     // 也不会用 no-console:'off' 覆盖浏览器块对 console 的告警。
     // 与上方 src 块互斥：src/**/*.ts 只命中浏览器块。
-    files: ['**/*.{cjs,mjs,js}', 'scripts/**/*.ts', '*.config.{ts,js,mjs}'],
+    // tokens/**/*.ts 是颜色令牌源（构建输入，由 vite 在 node 侧加载，不进浏览器 bundle），属工装侧，故并入本块。
+    files: ['**/*.{cjs,mjs,js}', 'scripts/**/*.ts', 'tokens/**/*.ts', '*.config.{ts,js,mjs}'],
     languageOptions: {
       globals: { ...globals.node },
     },

@@ -14,6 +14,9 @@ import type { WheelScrollBinding, WheelScrollModifiers } from './platform/direct
 import type { IVWaveDirectiveOptions } from 'v-wave';
 import type { ComponentPublicInstance, VNode } from 'vue';
 
+/** Vite 虚拟模块：颜色令牌 CSS（颜色单一来源在仓库根 tokens/，构建期由 culori 派生后注入） */
+declare module 'virtual:color-tokens.css';
+
 // 由 vite.config.ts 的 define 注入的构建信息（打包时生成）
 declare global {
   const __BUILD_INFO__: {
@@ -22,6 +25,39 @@ declare global {
     /** 当前 git 提交短 SHA（非 git 环境为 unknown） */
     commit: string;
   };
+
+  /**
+   * Worker 侧字体集（`WorkerGlobalScope.fonts`，即 `self.fonts`）。
+   *
+   * 为什么需要：DOM lib 把字体集挂在 `Document` 上（`document.fonts`），`Window` 没有；而渲染 Worker
+   * 的 OffscreenCanvas 只认**自己环境**的 FontFaceSet，故 Worker 内必须读 `self.fonts`。本项目不引
+   * webworker lib（会与 DOM 的同名声明冲突），故在此给全局对象补上该属性。
+   *
+   * 为何是 `var` 而非 `const`：只有 `var` / `function` 声明才会成为 `globalThis` 的属性（TS 对经
+   * `globalThis` 访问 BlockScoped 全局变量直接报错），而本项必须经 `globalThis.fonts` 读取 ——
+   * 主线程上该属性不存在，读取得 undefined，调用方据此回落到 `document.fonts`。
+   */
+  var fonts: FontFaceSet | undefined;
+
+  /**
+   * Safari 的厂商前缀 Web Audio 构造器。本仓不引 webkit 类型包，故在此声明。
+   *
+   * 声明为**非可选**：与 lib.dom 对 `AudioContext` 本身的处置一致（类型上恒在、运行时才可能缺失），
+   * 消费方用 `window.AudioContext || window.webkitAudioContext` 兜底，因此不必再就地断言出这个属性。
+   */
+  var webkitAudioContext: typeof AudioContext;
+
+  /**
+   * File System Access API 的入口函数。lib.dom 收录了 `FileSystemFileHandle` 等句柄类型，
+   * 却没有这个入口，故在此补声明。
+   * 声明为**可选**：Firefox / Safari 上不存在该属性，消费方据此降级到动态 input（见 transfer.pickFile）。
+   */
+  var showOpenFilePicker:
+    | ((config?: {
+        multiple?: boolean;
+        types?: { description?: string; accept: Record<string, string[]> }[];
+      }) => Promise<FileSystemFileHandle[]>)
+    | undefined;
 
   /** v-wheel-scroll 指令派发的自定义事件（扩展原生元素事件映射，供 addEventListener 类型推断） */
   interface HTMLElementEventMap {

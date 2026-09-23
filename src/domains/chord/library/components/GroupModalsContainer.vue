@@ -54,12 +54,11 @@ import BaseFormRow from '@/platform/ui/form/BaseFormRow.vue';
 import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import PromptInputModal from '@/platform/ui/prompt/PromptInputModal.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
+import { CHORD_GROUP_MODALS } from '@/domains/chord/library/injectionKeys';
 import { SORT_RULE_CONFIG } from '@/domains/chord/theory/theory';
 import { injectModalController } from '@/platform/store/useModalController';
 
-import type { useChordGroupModals } from '@/domains/chord/library/composables/useChordGroupModals';
-
-const groupModals = injectModalController<ReturnType<typeof useChordGroupModals>>('groupModals');
+const groupModals = injectModalController(CHORD_GROUP_MODALS);
 
 /** 表单行统一 Label 宽度：由 BaseForm 容器下发，各行无需重复声明 */
 const FORM_LABEL_WIDTH = '4.2rem';

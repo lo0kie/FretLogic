@@ -10,6 +10,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { configDefaults, coverageConfigDefaults, defineConfig } from 'vitest/config';
 
 import { injectScssTokens } from './scripts/scss-inject.mjs';
+import { colorTokensPlugin } from './scripts/vite-plugin-color-tokens';
+import { generateColorTokensCss, resolveColorToken } from './tokens/index';
 
 import type { ViteUserConfig } from 'vitest/config';
 
@@ -163,6 +165,10 @@ const testConfig: ViteUserConfig = {
   },
 };
 
+// 颜色令牌源目录（仓库根 tokens/）：dev 下作为文件监视目标交给注入插件，
+// 改色值即触发 CSS 热更新；见 scripts/vite-plugin-color-tokens.ts
+const colorTokensDir = resolve(__dirname, 'tokens');
+
 export default defineConfig(({ command, mode }) => {
   // 相对 base：产物可在任意根路径部署（GitHub Pages 子路径 /FretLogic/、EdgeOne 根路径等），
   // 配合 hash 路由无需平台级路径重写，`pnpm build` 单命令通吃所有托管平台。
@@ -183,6 +189,8 @@ export default defineConfig(({ command, mode }) => {
       // 官方要求排在 vue() 之前；插件自带 enforce: 'pre' 已保证执行序，这里靠前只是与文档一致
       ...(enableVueDevTools ? [VueDevTools()] : []),
       tailwindcss(),
+      // 颜色令牌注入：产出 virtual:color-tokens.css（颜色单一来源在仓库根 tokens/，派生值由 culori 构建期算出）
+      colorTokensPlugin({ tokensDir: colorTokensDir, css: generateColorTokensCss() }),
       vue({
         template: {
           compilerOptions: {
@@ -221,8 +229,9 @@ export default defineConfig(({ command, mode }) => {
           name: 'Fret Logic', // 应用完整名称
           short_name: 'FretLogic', // 应用简短名称（显示在桌面上）
           description: '你的吉他与乐谱助手',
-          theme_color: '#007aff', // 主题颜色
-          background_color: '#f2f2f7', // 背景色
+          // 直接取浅色主题的令牌值，与页面同源（此前手抄 hex，改令牌时 manifest 不会跟着变）
+          theme_color: resolveColorToken('light', '--color-primary'), // 主题颜色
+          background_color: resolveColorToken('light', '--bg-main'), // 背景色
           display: 'standalone', // 独立应用模式（隐藏浏览器地址栏）
           display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
           start_url: './', // 启动路径

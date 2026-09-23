@@ -1,5 +1,5 @@
 <template>
-  <div v-bind="$attrs" class="flex flex-col gap-xs p-xs" ref="rootRef">
+  <div v-bind="$attrs" @keydown="handleListKeydown($event)" class="flex flex-col gap-xs p-xs" ref="rootRef">
     <!-- inheritAttrs:false + $attrs 重定向（与 BaseCollapse 同款）：调用方的 class / data-* / aria-* 落到
          列表根容器本体。面板根是真实元素，attrs 只有落在这里才有意义 —— 落不到 Teleport 出去的浮层上。
 
@@ -26,7 +26,21 @@
         :item-ref-cb="el => setItemEl(el, index)"
         :ref="el => setSubmenuInstance(el, index)"
         @open="handleSubmenuOpen(index)"
-      />
+      >
+        <!-- 子面板里的列表由本组件**自引用**递归渲染（<script setup> 按文件名自引用，无需 import）：
+             MenuSubmenu 因此不必 import MenuItems，两文件之间的静态环解开，也不引入异步组件与额外 chunk -->
+        <template #children="{ item: childItem }">
+          <MenuItems
+            :on-select
+            :size
+            :aria-label="childItem.label"
+            :items="childItem.children"
+            :model="childItem.model"
+            :on-pick="childItem.onPick"
+            role="menu"
+          />
+        </template>
+      </MenuSubmenu>
 
       <MenuRow v-else :item :size :ref="el => setItemEl(el, index)" @activate="handleItemClick(item)">
         <!-- 前导槽：勾选在左时 check 占据槽位（替换 icon），否则渲染 icon -->
@@ -222,6 +236,23 @@ const handleItemClick = (item: MenuItem) => {
   if (item.disabled) return;
   onSelect?.(item);
   if (item.value !== undefined) onPick?.(item.value);
+};
+
+/**
+ * 列表键盘入口：→ 展开当前聚焦行的级联子面板并把焦点交给它（← 由子面板那层自行处理并归还焦点）。
+ *
+ * 为什么挂在这里而不是面板上：面板（BaseMenu 的 role="menu" 容器）只处理 ↑↓/Tab，而子面板经
+ * Teleport 到 body 后不再落在它的 @keydown 之内，子菜单项对键盘就永远没有入口。挂在本层列表根上
+ * 则顶层与各级子面板一视同仁（子面板里的列表同样是本组件的递归实例）。
+ */
+const handleListKeydown = (e: KeyboardEvent) => {
+  if (e.key !== 'ArrowRight') return;
+  const index = itemEls.value.findIndex(el => el === document.activeElement);
+  const instance = index >= 0 ? submenuInstances.value[index] : null;
+  if (!instance) return; // 焦点不在行上，或该行不是级联项
+  e.preventDefault();
+  e.stopPropagation();
+  void instance.openAndFocusFirst();
 };
 
 /** 聚焦第一个可用菜单项 */

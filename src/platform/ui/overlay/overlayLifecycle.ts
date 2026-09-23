@@ -8,15 +8,46 @@
  * 焦点管理为何属于这里：遮罩、滚动锁、inert 都只处理「鼠标与视觉」，焦点是独立的第三条通道，
  * 而且正是键盘/读屏用户唯一的通道——此前三条通道里唯一没被这条生命周期覆盖的就是它。
  */
-import { nextTick, onScopeDispose, ref, watch } from 'vue';
+import { nextTick, onScopeDispose, watch } from 'vue';
 
-import { useEventListener, useScrollLock } from '@vueuse/core';
+import { useEventListener } from '@vueuse/core';
 
 import { useFloatingZ } from '@/platform/ui/popover/floatingZ';
 
-import { hasActiveOverlays, isClient, registerOverlay, unregisterOverlay } from './overlayStack';
+import { isClient, registerOverlay, unregisterOverlay } from './overlayStack';
 
 import type { Ref } from 'vue';
+
+/**
+ * 模块级 body 滚动锁引用计数。
+ * 原先每个浮层实例各自建一个 vueuse useScrollLock：其 isLocked 无跨实例协调，多浮层叠加时会出现三类问题——
+ * ① 后开的浮层误以为自己已锁（A 持锁期间 B 创建，immediate watch 读到 body 已是 hidden，直接把自己的
+ *   isLocked 置 true）；② 先关的浮层把后开的活锁摘掉（B 卸载时 vueuse 的 cleanup 早于本模块 onScopeDispose，
+ *   先把 body 还原，本模块重算 isBodyLocked 置 false）；③ A 关后 B 单独开着时背景仍可滚。
+ * 改为全局计数：每打开一个 locksBody 的浮层 +1、关闭/卸载 -1，仅当计数归零才真正还原 body 的 overflow。
+ * 与 vueuse 同款：只动 document.body.style.overflow，无滚动条宽度补偿等隐藏成本，替掉它没有额外负担。
+ */
+let bodyLockCount = 0;
+let bodyOriginalOverflow = '';
+
+const lockBodyScroll = () => {
+  if (!isClient) return;
+  bodyLockCount += 1;
+  if (bodyLockCount === 1) {
+    bodyOriginalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+};
+
+const unlockBodyScroll = () => {
+  if (!isClient) return;
+  if (bodyLockCount === 0) return;
+  bodyLockCount -= 1;
+  if (bodyLockCount === 0) {
+    document.body.style.overflow = bodyOriginalOverflow;
+    bodyOriginalOverflow = '';
+  }
+};
 
 export interface OverlayLifecycleOptions {
   /** 浮层开关（v-model:visible） */
@@ -39,7 +70,8 @@ export interface OverlayLifecycleOptions {
 }
 
 export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
-  const isBodyLocked = isClient ? useScrollLock(document.body) : ref(false);
+  /** 本实例是否持有 body 滚动锁：仅 locksBody() 为 true 的浮层在打开时 +1 计数、关闭/卸载时 -1（全局计数见上方） */
+  let holdsBodyLock = false;
 
   // ---------- 动态层号：打开即取号，离场动画结束才释放（保证退场期间仍压住下层浮层） ----------
   const { z: overlayZ, acquire, release: releaseZ } = useFloatingZ();
@@ -101,8 +133,11 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
         clearListeners();
         if (opts.overlayRef.value) unregisterOverlay(opts.overlayRef.value);
 
-        // 仅参与滚动锁的浮层（遮罩模式）复位锁：栈内还有其它阻断层时保持锁定
-        isBodyLocked.value = opts.locksBody() && hasActiveOverlays() > 0;
+        // 仅参与滚动锁的浮层（遮罩模式）在关闭时释放本实例持有的锁；计数归零才真正解锁 body
+        if (holdsBodyLock) {
+          unlockBodyScroll();
+          holdsBodyLock = false;
+        }
         // 归还时机取「关闭瞬间」而非离场动画结束：面板随后即被移除，届时焦点会被浏览器丢给 body，
         // 读屏用户就「掉」在了页面开头。
         restoreFocus();
@@ -111,7 +146,11 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
         const active = isClient ? document.activeElement : null;
         previouslyFocused = active instanceof HTMLElement ? active : null;
         opts.onOpen?.();
-        isBodyLocked.value = opts.locksBody();
+        // 打开即持锁：计数 +1（仅 locksBody 的浮层参与，非遮罩 Drawer 不动 body）
+        if (opts.locksBody()) {
+          lockBodyScroll();
+          holdsBodyLock = true;
+        }
         // 层号在打开瞬间即刻分配（早于内容渲染）：保证与并发打开的浮层时序严格一致
         acquire();
         stopKeydownListener = useEventListener(window, 'keydown', opts.onEscape);
@@ -139,7 +178,11 @@ export function useOverlayLifecycle(opts: OverlayLifecycleOptions) {
     releaseZ();
     if (opts.overlayRef.value) unregisterOverlay(opts.overlayRef.value);
 
-    isBodyLocked.value = opts.locksBody() && hasActiveOverlays() > 0;
+    // 打开状态被卸载时释放本实例持有的锁（计数归零才真正解锁 body）
+    if (holdsBodyLock) {
+      unlockBodyScroll();
+      holdsBodyLock = false;
+    }
     // 组件在打开状态被卸载（父级销毁）时也归还焦点，否则键盘用户同样会「掉」在页面里
     restoreFocus();
   });

@@ -68,24 +68,28 @@ export const parseBarreFretFromKey = (key: string): number | null => {
   return match ? Number(match[1]) : null;
 };
 
-/** 指板主题蓝的 RGB 分量（浅色 / 深色）：供 `rgba(分量, α)` 复用，避免硬编码散落多处 */
-export const FRETBOARD_BLUE = {
-  light: '59, 130, 246',
-  dark: '96, 165, 250',
-} as const;
-
-/** 横按梁填充色：已标记加深蓝色，推导未标记为更淡的蓝色 */
-export const getBarreFill = (isMarked: boolean, isDarkMode: boolean): string => {
-  const c = isDarkMode ? FRETBOARD_BLUE.dark : FRETBOARD_BLUE.light;
+/**
+ * 横按梁填充色：已标记加深蓝色，推导未标记为更淡的蓝色。
+ *
+ * 色值本体是令牌 `--fb-barre-rgb`（明/暗两档见 tokens/ 的 --fb-barre-rgb），此处只决定 alpha——
+ * 亮度差由 alpha 表达，而不是另存一组深浅色值：同一族梁的四个状态（标记/未标记 × 明/暗）
+ * 共用一条源色，改源色时四者同步。
+ *
+ * 高对比主题必须单独一档：HC 的 `--fb-barre-rgb` 刻意沿用明色档（见 tokens/themes/light.ts 的说明），
+ * 而底色是近黑 `#0a0a0c`，沿用暗色档的 0.16 叠出来几乎不可见——未标记横按在编辑器里等于消失。
+ * （导出侧画的是不透明 `--fbc-barre`，HC 下为纯白，两端口径本就相差最大。）
+ */
+export const getBarreFill = (isMarked: boolean, isDarkMode: boolean, isHighContrast = false): string => {
+  if (isHighContrast) return `rgba(var(--fb-barre-rgb), ${isMarked ? 0.92 : 0.55})`;
   const a = isMarked ? (isDarkMode ? 0.62 : 0.58) : isDarkMode ? 0.16 : 0.14;
-  return `rgba(${c}, ${a})`;
+  return `rgba(var(--fb-barre-rgb), ${a})`;
 };
 
-/** 横按梁边框色：已标记为深色清晰描边，未标记为虚线更淡描边 */
-export const getBarreStroke = (isMarked: boolean, isDarkMode: boolean): string => {
-  const c = isDarkMode ? FRETBOARD_BLUE.dark : FRETBOARD_BLUE.light;
+/** 横按梁边框色：已标记为深色清晰描边，未标记为虚线更淡描边（源色同 getBarreFill，高对比档同理） */
+export const getBarreStroke = (isMarked: boolean, isDarkMode: boolean, isHighContrast = false): string => {
+  if (isHighContrast) return `rgba(var(--fb-barre-rgb), ${isMarked ? 1 : 0.8})`;
   const a = isMarked ? (isDarkMode ? 0.9 : 0.85) : isDarkMode ? 0.38 : 0.35;
-  return `rgba(${c}, ${a})`;
+  return `rgba(var(--fb-barre-rgb), ${a})`;
 };
 
 /** 指位是否落在横按覆盖范围内（同品且弦序位于跨度内） */

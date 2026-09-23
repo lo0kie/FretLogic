@@ -9,15 +9,19 @@
  */
 
 import { parseChordNameTokens as parseChordNameTokensCore } from '@/domains/chord/theory/chordNameTokens';
-import { resolveFretWindowFromUsed } from '@/domains/fretboard/components/renderFretboardCanvas';
+import { drawMeasuredChordName, measureChordNameTokens } from '@/domains/fretboard/fretboardDrawCore';
+import { resolveFretWindowFromUsed } from '@/domains/fretboard/model/fretWindow';
 import { SCORE_EXPORT_CONFIG } from '@/domains/score/constants';
+import { scoreFont } from '@/domains/score/preview/services/scoreFonts';
 import { createLruCache } from '@/platform/utils/cache';
 
 import type { ExportCharItem, ExportChordData, ExportLineItem, RenderSegment } from './scoreExportTypes';
 import type { ChordNameToken } from '@/domains/chord/theory/chordNameTokens';
-import type { FretWindow } from '@/domains/fretboard/components/renderFretboardCanvas';
+import type { FretWindow } from '@/domains/fretboard/model/fretWindow';
 
-/** 输出图固定编码质量（导出质量设置已移除，预览与后续入口统一使用） */
+/** 输出图 JPEG 质量的**兜底值**：导出质量设置仍全程生效（`payload.exportQuality` 优先，
+ *  见 scoreExportPages 的 `payload.exportQuality ?? EXPORT_JPEG_QUALITY`），只有载荷未携带该项时才用此默认。
+ *  （此前注释写作「导出质量设置已移除」，与事实相反——设置项在 HeaderConfigPopover → 渲染载荷 → 本模块一直在用。） */
 export const EXPORT_JPEG_QUALITY = 0.95;
 
 // ---- 布局缩放（来自排列和弦配置：字号缩放 / 和弦缩放，作用于预览与导出图片生成） ----
@@ -170,32 +174,21 @@ export function drawTokenizedText(
   accFont: string,
   superscriptOffset: number
 ) {
-  const tokens = parseChordNameTokens(text);
-  if (tokens.length === 0) return;
-
-  // 预先测量各 Token 宽度以计算居中起始坐标；顺带把该 Token 选中的字体一并存下，
-  // 绘制阶段直接取用，不再重复做 isAccidental 判定与字体选择
-  let totalW = 0;
-  const measured: { text: string; isAccidental: boolean; width: number; font: string }[] = [];
-  for (const token of tokens) {
-    const font = token.isAccidental ? accFont : baseFont;
-    ctx.font = font;
-    const w = ctx.measureText(token.text).width;
-    totalW += w;
-    measured.push({ text: token.text, isAccidental: token.isAccidental, width: w, font });
-  }
-
-  // 居中依次绘制各分片
-  let curX = centerX - totalW / 2;
-  ctx.fillStyle = color;
-  ctx.textAlign = 'left';
-  for (const item of measured) {
-    ctx.font = item.font;
-    const y = item.isAccidental ? baselineY + superscriptOffset : baselineY;
-    ctx.fillText(item.text, curX, y);
-    curX += item.width;
-  }
+  // 量宽 + 居中绘制两个叶子与主线程屏幕指板共用（见 fretboardDrawCore），字体由本侧注入
+  const { measured } = measureChordNameTokens(ctx, parseChordNameTokens(text), baseFont, accFont);
+  drawMeasuredChordName(ctx, centerX, baselineY, measured, superscriptOffset, color);
 }
+
+/** 乐谱字体（族名 / 族栈 / 按需装载）见 services/scoreFonts —— **跨环境唯一来源**：预览层（页面的
+ *  document.fonts）与渲染 Worker（self.fonts）装同一份子集、同一个族名。本模块内所有字体串都由
+ *  scoreFont 拼出，族栈改一处即全谱生效。 */
+
+/** 乐谱固定用到的**字体文件字重**：标题 / 和弦名 / capo 与品号取 700，元信息标签取 400，歌手与
+ *  元信息正文取 500（按 CSS 匹配落到 400）。歌词字重随导出参数变化，由入口补入。
+ *
+ *  供入口**按需装载**（见 services/scoreFonts）：Sarasa 的 Light（300）只在歌词字重选 light 时才
+ *  需要，默认导出不必为它多下 1MB、多解一份字体。新增 scoreFont 调用点时同步此表。 */
+export const SCORE_BASE_FONT_WEIGHTS = [400, 700] as const;
 
 /**
  * 字体字符串缓存（按「字体纪元」失效）。
@@ -217,14 +210,14 @@ const fontCache = {
 };
 
 /** 按字号拼和弦名字体串：纪元缓存与「贴合缩字号」现拼共用同一模板，避免两处字号口径漂移 */
-const chordNameFontOfSize = (size: number): string => `bold ${size}px system-ui, -apple-system, sans-serif`;
+const chordNameFontOfSize = (size: number): string => scoreFont('bold', size);
 
 /** 取当前纪元的字体集（纪元未变则直接复用缓存对象） */
 const refreshFonts = () => {
   if (fontsEpoch === fontEpoch) return fontCache;
   fontCache.chordNameBase = chordNameFontOfSize(LAYOUT.CHORD_NAME_FONT_SIZE);
   fontCache.chordNameAccidental = chordNameFontOfSize(LAYOUT.ACCIDENTAL_FONT_SIZE);
-  fontCache.capo = `bold ${LAYOUT.CAPO_TEXT_FONT_SIZE}px system-ui, sans-serif`;
+  fontCache.capo = scoreFont('bold', LAYOUT.CAPO_TEXT_FONT_SIZE);
   fontsEpoch = fontEpoch;
   return fontCache;
 };
@@ -238,14 +231,15 @@ export const chordNameAccidentalFont = (): string => refreshFonts().chordNameAcc
 /** 变调夹文本字体（指板图内 capo 标注使用） */
 export const capoFont = (): string => refreshFonts().capo;
 
-/** 歌词字体缓存：字号随「字号缩放」变化（纪元），字重随导出参数变化，故按二者联合记忆 */
+/** 歌词字体缓存：字号随「字号缩放」变化（纪元），字重随导出参数变化，故按二者联合记忆。
+ *  歌词与全谱共用同一份族栈（见 scoreFont），这里的缓存只为省掉逐行重复拼串。 */
 let lyricsFontKey = '';
 let lyricsFontValue = '';
 export const getLyricsFont = (weight: number): string => {
   const key = `${fontEpoch}:${weight}`;
   if (key !== lyricsFontKey) {
     lyricsFontKey = key;
-    lyricsFontValue = `${weight} ${LAYOUT.LYRICS_FONT_SIZE}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+    lyricsFontValue = scoreFont(weight, LAYOUT.LYRICS_FONT_SIZE);
   }
   return lyricsFontValue;
 };
@@ -261,14 +255,13 @@ function measureChordNameWidth(
   baseFontSize = LAYOUT.CHORD_NAME_FONT_SIZE,
   accidentalFontSize = LAYOUT.ACCIDENTAL_FONT_SIZE
 ): number {
-  const baseFont = chordNameFontOfSize(baseFontSize);
-  const accFont = chordNameFontOfSize(accidentalFontSize);
-  let total = 0;
-  for (const token of parseChordNameTokens(chordName)) {
-    ctx.font = token.isAccidental ? accFont : baseFont;
-    total += ctx.measureText(token.text).width;
-  }
-  return total;
+  const { totalWidth } = measureChordNameTokens(
+    ctx,
+    parseChordNameTokens(chordName),
+    chordNameFontOfSize(baseFontSize),
+    chordNameFontOfSize(accidentalFontSize)
+  );
+  return totalWidth;
 }
 
 /** 贴合迭代上限：宽度对字号近似线性，一轮即落到目标附近；字号取整会留「分片数 × 0.5px」的残差，再收 1~2 轮 */
@@ -389,6 +382,29 @@ const NO_LINE_START_CHARS = new Set([
   '>',
 ]);
 
+/** 半角 ASCII 字形的推进宽比例：歌词主用等宽字体（见 SCORE_FONT_FAMILY），等宽族的推进宽是
+ *  恒定的设计值而非均值。首选 Sarasa Mono SC 实测为 0.5em（upem=1000，ASCII 全为 500），故取
+ *  0.5 —— 与汉字那 1em 恰好 2:1，两种文字的列内空隙因此逐字相同。
+ *
+ *  取小是安全的：列宽 = 0.5em 字号 + 字间隙（30 − 23 = 7px，即 0.304em 字号）≈ 0.804em，
+ *  高于任何常见等宽字形的推进宽（上限约 0.6em）。故 Sarasa 取不到（离线且缓存未命中）而回落
+ *  到 Consolas（0.55em）或 Menlo / SF Mono（0.6em）时也不会叠字，只是字距比汉字那份略紧。 */
+const HALF_WIDTH_ADVANCE_RATIO = 0.5;
+
+/** 半角 ASCII 字符的列宽 = 典型字形推进宽 + 与全角汉字**同一个**字间隙。
+ *
+ *  汉字列宽里的字间隙 = REGULAR_CHAR_WIDTH − LYRICS_FONT_SIZE（全角字推进宽恰为 1em，即字号
+ *  本身），这里直接沿用同一个空隙，使两种文字的肉眼字距一致。此前是「汉字列宽 × 0.58」的定值
+ *  比例，它把字形宽与字间隙一并按比例压掉：23px 字号 + 30px 列宽下每字只剩 17px，而小写实测
+ *  推进宽就有 12~13px、大写与 m / w 到 16~20px —— 后者已超出自己的列宽，相邻字母直接贴住，
+ *  观感上「英文比汉字挤很多」。列宽与字间隙分离后，宽字形最多吃掉自己的那份空隙，不再压邻居；
+ *  歌词换等宽（SCORE_FONT_FAMILY）后 ASCII 推进宽恒等，字距进一步变成逐字相同。
+ *
+ *  每次求值、不提成模块常量：两个入参都在 FONT_SCALED_KEYS 里，随「字号缩放」在
+ *  applyLayoutScales 内重算，提前算死会把缩放后的值冻在出厂基准上。 */
+const halfWidthCharWidth = (): number =>
+  LAYOUT.LYRICS_FONT_SIZE * HALF_WIDTH_ADVANCE_RATIO + (LAYOUT.REGULAR_CHAR_WIDTH - LAYOUT.LYRICS_FONT_SIZE);
+
 /** 计算单个字符槽位所占用的总宽度（含半角/全角字符区分与指板图补偿）。
  *  ignoreEmptySpace 必须由测量（软折行）与绘制两侧传入同一个值，否则折行宽度与实际绘制宽度会错位 */
 export function getCharColumnWidth(item: ExportCharItem, ignoreEmptySpace = false): number {
@@ -399,9 +415,8 @@ export function getCharColumnWidth(item: ExportCharItem, ignoreEmptySpace = fals
     return item.chord ? Math.max(LAYOUT.FRETBOARD_WIDTH + LAYOUT.CHORD_COLUMN_EXTRA_PAD, spaceW) : spaceW;
   }
   const code = item.char.charCodeAt(0);
-  // 半角 ASCII 字符（英文字母、数字、半角标点）：宽度约为全角汉字的 58%，排版更紧凑自然
   const isHalfWidth = code <= 127;
-  const charW = isHalfWidth ? Math.round(LAYOUT.REGULAR_CHAR_WIDTH * 0.58) : LAYOUT.REGULAR_CHAR_WIDTH;
+  const charW = isHalfWidth ? Math.round(halfWidthCharWidth()) : LAYOUT.REGULAR_CHAR_WIDTH;
 
   return item.chord ? Math.max(LAYOUT.FRETBOARD_WIDTH + LAYOUT.CHORD_COLUMN_EXTRA_PAD, charW) : charW;
 }

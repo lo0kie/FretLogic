@@ -52,8 +52,8 @@ const emit = defineEmits<{
   (e: 'update:editing', value: boolean): void;
   /** 失焦（点击其它区域或按 Enter）时提交当前文本 */
   (e: 'commit', value: string): void;
-  /** 按 Esc 取消编辑：组件已把内容恢复为 modelValue，该次失焦不会再触发 commit */
-  (e: 'cancel'): void;
+  /** 按 Esc 取消编辑：组件已把内容恢复为进入编辑前的文本（changed 表示用户是否真改动了内容，供消费方决定提示） */
+  (e: 'cancel', changed: boolean): void;
 }>();
 
 const attrs = useAttrs();
@@ -66,6 +66,8 @@ const editorRef = ref<HTMLDivElement | null>(null);
 const isEditing = ref(false);
 /** Esc 取消标记：置位后紧随的 blur 不派发 commit */
 const isCancelling = ref(false);
+/** 进入编辑前记录的文本快照：Esc 取消时据此回滚，而非回滚到已被 handleInput 写脏的 modelValue */
+const editSnapshot = ref('');
 
 /** 读取当前文本内容 */
 const readText = (): string => editorRef.value?.textContent ?? '';
@@ -117,6 +119,8 @@ const handleFocus = () => {
   if (isEditing.value) return;
   isEditing.value = true;
   isCancelling.value = false;
+  // 记录进入编辑前的文本；handleInput 每键都会写回 modelValue，Esc 时必须用这份快照还原
+  editSnapshot.value = modelValue.value;
   emit('update:editing', true);
 };
 
@@ -165,9 +169,13 @@ const handleKeydown = (e: KeyboardEvent) => {
   } else if (e.key === 'Escape') {
     e.preventDefault();
     isCancelling.value = true;
-    // 内容回滚到外部 modelValue（即取消本次输入）；父级侧值未变化，无需再写回
-    setText(modelValue.value);
-    emit('cancel');
+    // 真正回滚：handleInput 已把 modelValue 改成编辑中的值，直接读 modelValue 等于「回滚到已改动的值」，
+    // 所以必须回到进入编辑前记录的 editSnapshot（同时写回 DOM，避免回滚后视图仍显示脏文本）。
+    const original = editSnapshot.value;
+    const changed = original.trim() !== readText().trim();
+    modelValue.value = original;
+    setText(original);
+    emit('cancel', changed);
     editorRef.value?.blur();
   }
 };

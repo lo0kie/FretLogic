@@ -18,12 +18,27 @@ export type EdgeSlotType = 'start' | 'end';
 export const lineSlots = (chordMap: ReadonlyMap<string, ChordLineSlots>, lineId: string): ChordLineSlots =>
   chordMap.get(lineId) ?? { char: new Map(), start: [], end: [] };
 
-/** 取某行某侧的边和弦列表（只读快照副本） */
+/**
+ * 取某行某侧的边和弦列表。
+ *
+ * ⚠️ 返回的是**容器内的活数组**而非副本：调用方普遍就地改写它（`list[index] = …` / `push` / `unshift`）
+ * 再 `setLineEdgeChords` 写回，改成副本会让这些调用点静默失效。只有「行不存在」时返回的才是空壳里的新数组。
+ */
 export const lineEdgeChords = (
   chordMap: ReadonlyMap<string, ChordLineSlots>,
   lineId: string,
   type: EdgeSlotType
 ): ChordId[] => lineSlots(chordMap, lineId)[type];
+
+/**
+ * 取某行的 lineId；`lineIds` 比歌词行短（数据漂移）时回落到「按行下标的兜底 id」。
+ *
+ * 导出侧两条路径（预览/长图 canvas 与 worker 载荷）**必须共用这一处**：此前各写一份假 id
+ * （`String(i)` 与 `line_${i}`），同一个漂移在两端口径不同——一旦有代码把槽位按兜底 id 写入，
+ * 另一端就查不到，表现为「预览里有和弦、导出图里没有」，且只在其中一个入口复现。
+ */
+export const resolveLineIdAt = (lineIds: readonly string[] | undefined, index: number): string =>
+  lineIds?.[index] ?? `line_${index}`;
 
 /** 重写某行行首/行尾的和弦列表（就地写新数组引用） */
 export const setLineEdgeChords = (
@@ -115,10 +130,20 @@ const SIMILARITY_THRESHOLD = 0.45;
 const MAX_SIMILAR_MATCH_LINES = 60;
 const createLineId = (): string => `l_${generateUUID('', 8)}`;
 
+/**
+ * 精确匹配：内容相同的行认领旧行 id。
+ *
+ * 内容完全相同的重复行**无法从文本区分**（删掉第 0 行与删掉第 1 行产出的新歌词逐字节相同），
+ * 故这里只做「优先认领带和弦的那一行」这一条保守偏好：旧行里同时存在带和弦与不带和弦的同名行时，
+ * 让存活行保住和弦，避免「删掉一条没有和弦的重复行、却把另一条的和弦一起清掉」。
+ * 两侧都带和弦（或都不带）时偏好不生效，仍沿用「按旧下标升序推进游标」的确定性口径——
+ * 这一残差无法从入参消除，属已知取舍。
+ */
 const matchExactLines = (
   oldLines: string[],
   newLines: string[],
-  oldIds: string[]
+  oldIds: string[],
+  preferredOldIndices?: ReadonlySet<number>
 ): { newIds: (string | null)[]; usedOldIndices: Set<number> } => {
   const newIds: (string | null)[] = new Array(newLines.length).fill(null);
   const usedOldIndices = new Set<number>();
@@ -138,15 +163,22 @@ const matchExactLines = (
     const indices = contentToIndices.get(content);
     if (!indices) continue;
 
+    // 不变式：consumed = [0, cursor)，故未消费的候选恒为 k >= cursor
     const cursor = cursors.get(content) ?? 0;
-    if (cursor < indices.length) {
-      const j = indices[cursor]!;
-      const oldId = oldIds[j];
-      if (oldId !== undefined) {
-        newIds[i] = oldId;
-        usedOldIndices.add(j);
-        cursors.set(content, cursor + 1);
-      }
+    if (cursor >= indices.length) continue;
+
+    let pick = cursor;
+    if (preferredOldIndices) {
+      const preferred = indices.findIndex((j, k) => k >= cursor && preferredOldIndices.has(j));
+      if (preferred !== -1) pick = preferred;
+    }
+
+    const j = indices[pick]!;
+    const oldId = oldIds[j];
+    if (oldId !== undefined) {
+      newIds[i] = oldId;
+      usedOldIndices.add(j);
+      cursors.set(content, pick + 1);
     }
   }
 
@@ -225,15 +257,18 @@ const assignNewIds = (newIds: (string | null)[]): string[] => newIds.map(id => i
 /**
  * 行 id 匹配（旧歌词行 → 新歌词行），生成的 id 是 LineId 的唯一合法来源。
  *
+ * @param preferredOldIndices 旧行序里「带和弦槽位」的行下标。内容相同的重复行无法从文本区分，
+ *          传它可让存活行优先认领带和弦的那一条（见 matchExactLines 的说明）；缺省不影响既有行为。
  * @returns lineIds 与 newLines 一一对应；skippedSimilarMatch 为 true 表示未匹配行数超阈值、
  *          模糊匹配被整体跳过（大段粘贴），这些行会拿到新 id 并丢掉原有和弦，调用方应提示用户。
  */
 export const matchLineIds = (
   oldLines: string[],
   newLines: string[],
-  oldLineIds: string[]
+  oldLineIds: string[],
+  preferredOldIndices?: ReadonlySet<number>
 ): { lineIds: LineId[]; skippedSimilarMatch: boolean } => {
-  const { newIds, usedOldIndices } = matchExactLines(oldLines, newLines, oldLineIds);
+  const { newIds, usedOldIndices } = matchExactLines(oldLines, newLines, oldLineIds, preferredOldIndices);
   const unmatchedCount = newIds.reduce((count, id) => (id === null ? count + 1 : count), 0);
   const skippedSimilarMatch = unmatchedCount > MAX_SIMILAR_MATCH_LINES;
   if (!skippedSimilarMatch) matchSimilarLines(oldLines, newLines, oldLineIds, newIds, usedOldIndices);

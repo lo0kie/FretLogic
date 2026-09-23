@@ -153,7 +153,9 @@ export function useChordTransfer() {
 
     const group = chordStore.addGroup(finalName, sortRule);
     if (sortRule === GroupSortRule.KEY_DEGREE && sortKey) chordStore.updateGroupSort(group.id, sortRule, sortKey);
-    for (const p of chords) chordStore.addChord(chordFromPortable(p, group.id));
+    // 保序追加：addChord 是头插（新和弦优先展示），逐条调用会把整组倒序，
+    // 与 chordTextCodec 声明的「组内和弦（保序）」相反（同指纹并列时变体 1/N 编号会翻）
+    chordStore.appendChords(chords.map(p => chordFromPortable(p, group.id)));
 
     // 批量写入属关键动作：立即同步落盘，避免整批数据停在 400ms 防抖窗口内被刷新吃掉
     if (chords.length > 0) void chordStore.persistAll();

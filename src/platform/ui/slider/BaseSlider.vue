@@ -523,13 +523,15 @@ const isTrackHovered = ref(false);
  * 用短延时在最后一次滚动后把气泡多留片刻，使 wheelable / wheelOnHover 下改值也能看到当前数值。
  */
 const WHEEL_TOOLTIP_LINGER_MS = 700;
-const isWheelActive = ref(false);
+/** 滚轮步进作用的拇指下标（区间模式）；null = 无滚轮续显。必须是下标而不是布尔——
+ *  区间模式下滚轮作用于**聚焦的那个拇指**，用布尔会让气泡永远挂在 0 号上（见 useSliderInteraction） */
+const wheelActiveThumb = ref<number | null>(null);
 let wheelTooltipTimer: ReturnType<typeof setTimeout> | null = null;
-const pulseWheelTooltip = () => {
-  isWheelActive.value = true;
+const pulseWheelTooltip = (thumbIdx = 0) => {
+  wheelActiveThumb.value = thumbIdx;
   if (wheelTooltipTimer !== null) clearTimeout(wheelTooltipTimer);
   wheelTooltipTimer = setTimeout(() => {
-    isWheelActive.value = false;
+    wheelActiveThumb.value = null;
     wheelTooltipTimer = null;
   }, WHEEL_TOOLTIP_LINGER_MS);
 };
@@ -584,7 +586,7 @@ const activeBarStyle = computed(() => {
 const shouldShowTooltip = (index: number) => {
   if (props.showTooltip === 'never') return false;
   if (props.showTooltip === 'always') return true;
-  if (props.showTooltip === 'drag') return isDragging.value === index || isWheelActive.value;
+  if (props.showTooltip === 'drag') return isDragging.value === index || wheelActiveThumb.value !== null;
   if (props.showTooltip === 'hover') return isHovered.value || isTrackHovered.value || isDragging.value === index;
   return false;
 };
@@ -593,8 +595,8 @@ const shouldShowTooltip = (index: number) => {
 const shouldShowRangeTooltip = (index: number) => {
   if (props.showTooltip === 'never') return false;
   if (props.showTooltip === 'always') return true;
-  // 滚轮步进只作用于 0 号拇指，故滚轮续显仅对 index 0 生效
-  if (props.showTooltip === 'drag') return isDragging.value === index || (index === 0 && isWheelActive.value);
+  // 滚轮续显只对**被滚轮作用的那个拇指**生效（与滚轮实际改值的拇指同源，见 useSliderInteraction）
+  if (props.showTooltip === 'drag') return isDragging.value === index || wheelActiveThumb.value === index;
   if (props.showTooltip === 'hover')
     return (
       (index === 0 ? isHoveredThumb0.value : isHoveredThumb1.value) ||

@@ -31,7 +31,7 @@
           v-model:editing="isInputFocused"
           :maxlength="MAX_CHORD_NAME_LENGTH"
           :style="chordNameFontSizeStyle"
-          @cancel="handleEscape()"
+          @cancel="handleEscape($event)"
           @commit="commitOrRevert($event)"
           aria-label="和弦名称"
           class="no-scrollbar flex size-full min-h-0 max-w-full cursor-text items-center justify-center-safe overflow-x-auto overflow-y-hidden px-0.5 text-center font-[Helvetica_Neue,Arial,sans-serif] leading-[1.15] font-bold whitespace-nowrap text-fg-title"
@@ -42,6 +42,7 @@
       <FretboardSvg
         :board-width
         :hover-point
+        :is-high-contrast
         :string-x-positions
         :active-base-strings="getActiveBaseStrings(chord.tuning)"
         :barres="effectiveBarres"
@@ -72,7 +73,7 @@ import {
 } from '@/domains/chord/theory/theory';
 import { useFretboardInteraction } from '@/domains/fretboard/composables/useFretboardInteraction';
 import { CANVAS_CONFIG, CHORD_NAME_FONT_SIZE } from '@/domains/fretboard/constants';
-import { isDark } from '@/platform/composables/useTheme';
+import { activeTheme, isDark } from '@/platform/composables/useTheme';
 import { useUiStore } from '@/platform/store/uiStore';
 
 import type { Chord, ChordNameSegments } from '@/domains/chord/types';
@@ -98,6 +99,9 @@ const uiStore = useUiStore();
 
 /** 生效横按：仅采用显式手动标记（不做自动推导） */
 const effectiveBarres = computed<BarreEntity[]>(() => props.chord.barres ?? []);
+
+/** 高对比主题：横按源色沿用明色档而底色近黑，必须与 isDarkMode 分开告知 FretboardSvg（见其 props 说明） */
+const isHighContrast = computed(() => activeTheme.value === 'high-contrast');
 
 /** 点击横按梁切换标记状态：已标记则移除，未标记则添加并派发更新 */
 const handleToggleBarre = (barre: BarreEntity) => {
@@ -178,11 +182,10 @@ const commitOrRevert = (rawText: string) => {
   inputChordName.value = currentName;
 };
 
-/** Esc 取消编辑：恢复修改前的有效名称（组件负责回填 DOM 并抑制随后的 commit） */
-const handleEscape = () => {
-  const isChanged = inputChordName.value.trim() !== displayChordName.value.trim();
-  inputChordName.value = displayChordName.value;
-  if (isChanged) uiStore.message.info('已取消编辑');
+/** Esc 取消编辑：文本与 modelValue 的回滚已由 BaseEditableText 在 cancel 时完成（还原到进入编辑前的快照），
+ *  这里仅依据组件告知的 changed 决定是否提示「已取消编辑」 */
+const handleEscape = (changed: boolean) => {
+  if (changed) uiStore.message.info('已取消编辑');
 };
 
 /**
