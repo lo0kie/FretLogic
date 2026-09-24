@@ -227,14 +227,18 @@ export type ValidationResult<T> =
   { isValid: true; data: T; errors: string[] } | { isValid: false; data: Partial<T>; errors: string[] };
 
 /** 字段校验规则：声明式描述单个配置项如何清洗与校验，核心据此统一跑流程。 */
-interface FieldRule {
+/**
+ * 一条字段清洗规则。
+ *
+ * `required` 与 `requiredMsg` 用**判别联合**绑在一起：必填却给不出文案，会让校验核心在
+ * `rule.required && !checkValue` 分支里无事可做 —— 静默放行一个必填字段（而调用方拿到
+ * `isValid: true` 与一份空值）。把「必填必有文案」抬到类型层，这种规则表在编译期就写不出来。
+ */
+type FieldRule = {
   /** 源载荷字段名 */
   key: string;
   /** 清洗后写入的目标字段名（默认与 key 相同） */
   as?: string;
-  /** 是否必填：留空时推送 requiredMsg */
-  required?: boolean;
-  requiredMsg?: string;
   /** 格式校验：正则，或「合法判定」谓词（返回 true 表示合法） */
   pattern?: RegExp | ((value: string) => boolean);
   patternMsg?: string;
@@ -244,7 +248,10 @@ interface FieldRule {
   defaultOnEmpty?: string;
   /** 清洗方式：trim（默认）/ none（原样，密码）/ trimOrUndefined（空转 undefined） */
   transform?: 'trim' | 'none' | 'trimOrUndefined';
-}
+} & (
+  | { required: true; /** 必填字段留空时推送的提示文案 */ requiredMsg: string }
+  | { required?: false; requiredMsg?: string }
+);
 
 const applyTransform = (rule: FieldRule, raw: unknown): string | undefined => {
   if (rule.transform === 'none') return raw == null ? undefined : (raw as string);
@@ -273,9 +280,9 @@ const validateByRules = (
     const cleaned = applyTransform(rule, payload[rule.key]);
     const checkValue = cleaned ?? '';
 
-    if (rule.required && !checkValue) {
-      if (rule.requiredMsg) errors.push(rule.requiredMsg);
-    } else if (rule.pattern && (!rule.patternOnlyIfFilled || checkValue))
+    // required 为真时 requiredMsg 必然在（类型层已绑定），无需再判空 —— 否则漏写文案会静默放行
+    if (rule.required && !checkValue) errors.push(rule.requiredMsg);
+    else if (rule.pattern && (!rule.patternOnlyIfFilled || checkValue))
       if (!isPatternValid(rule.pattern, checkValue) && rule.patternMsg) errors.push(rule.patternMsg);
 
     const isEmpty = checkValue === '';

@@ -20,14 +20,6 @@ export interface FretWindow {
   drawFretCount: number;
   /** 窗口首列相对原窗口右移的列数（= 裁掉的首部空列数）；0 表示首部未裁 */
   leadTrim: number;
-  /**
-   * 收紧是否真的改变了几何。
-   *
-   * false ⇒ 本指法的位图与「未开启收紧」时逐像素相同。消费方的位图键应放
-   * drawFretCount / leadTrim 而**不是**开关本身，于是切换开关时只有几何真会变的指法才作废重画
-   * —— 这就是「阻止本身没有空品格的指法重渲染」的落点。
-   */
-  trimmed: boolean;
 }
 
 /**
@@ -42,6 +34,11 @@ export interface FretWindow {
  * 结果为「起点右移 1 列 + 共 3 列」，即第 2~4 品。
  *
  * **必须显式开启才生效**：`trimEmptyEdgeFrets` 缺省 false，即默认仍画满存储列数（全指板）。
+ *
+ * 返回值刻意只含 `drawFretCount` / `leadTrim` 两个**几何量**，不含「开关是否真的改变了什么」这类布尔：
+ * 消费方的位图键应放这两个数而**不是**开关本身，于是切换开关时只有几何真会变的指法才作废重画
+ * —— 这就是「阻止本身没有空品格的指法重渲染」的落点，且不必多出一个恒等于
+ * `leadTrim !== 0 || drawFretCount !== storedCount` 的派生字段。
  */
 export function resolveFretWindowFromUsed(
   storedFretCount: number,
@@ -49,7 +46,7 @@ export function resolveFretWindowFromUsed(
   trimEmptyEdgeFrets = false
 ): FretWindow {
   const storedCount = clampDrawFretCount(storedFretCount);
-  const intact: FretWindow = { drawFretCount: storedCount, leadTrim: 0, trimmed: false };
+  const intact: FretWindow = { drawFretCount: storedCount, leadTrim: 0 };
   if (!trimEmptyEdgeFrets) return intact;
 
   // 占用的窗口内列号（1 基）：空弦(0) / 静音(-1) 不占列
@@ -64,5 +61,5 @@ export function resolveFretWindowFromUsed(
   // 不会让窗口越过最后一个占用列
   const leadTrim = Math.min(first - 1, Math.max(0, last - MIN_FRET_COUNT));
   const drawFretCount = Math.min(storedCount - leadTrim, Math.max(MIN_FRET_COUNT, last - leadTrim));
-  return { drawFretCount, leadTrim, trimmed: leadTrim !== 0 || drawFretCount !== storedCount };
+  return { drawFretCount, leadTrim };
 }

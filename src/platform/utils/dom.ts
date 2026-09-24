@@ -49,8 +49,7 @@ export const resolveLengthToPx = (value: string): number => {
  * 共享 ResizeObserver：指令/组合式挂在大量元素上时（乐谱卡标题、和弦卡、别名标签…）复用同一个
  * 观察者实例，避免每元素各建一个 ResizeObserver（过滤时数百元素同时卸载 = 同时 disconnect 数百个观察者）。
  *
- * 形态对齐 common.ts 的 observeVisibility（共享 IntersectionObserver）：按元素维度维护回调集合，
- * 同元素可被多个消费方各自观察、回调互不干扰；返回停止观察的清理函数。
+ * 按元素维度维护回调集合，同元素可被多个消费方各自观察、回调互不干扰；返回停止观察的清理函数。
  * vMarquee / vAutoWidth 此前各写了一份同构的单例，现统一走这里。
  */
 

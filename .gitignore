@@ -50,4 +50,8 @@ coverage/
 .env.production.*
 .env.local
 .env.*.local
+# worker/.dev.vars：wrangler 本地开发密钥（SERVER_TOKEN 等）。wrangler 自身只认这个文件名，
+# 不跟随 .env.* 通配，故必须单独列一行——否则一次 `wrangler dev` 的本地凭据就会被提交。
+worker/.dev.vars
+worker/.dev.vars.*
 .zcodeignore

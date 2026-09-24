@@ -7,7 +7,7 @@
  */
 
 import { chordQualityAstOfName } from './chordName';
-import { qualityKindOfAst } from './chordQualityAst';
+import { isDimFlavored, isMinorFlavored, qualityKindOfAst } from './chordQualityAst';
 
 // 半音音名表（升号 / 降号）：pitch 与 transpose 共用
 export const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -25,19 +25,23 @@ export const MINOR_DIATONIC_DEGREE_MAP = Object.freeze([1, 1, 2, 3, 3, 4, 4, 5, 
  * 性质口味判定：读 AST 字段，取代旧实现对「拼接出来的 suffix 字符串」跑正则
  * （`/^(maj|M|Δ)/`、`/^(dim|°|ø|m7b5)/` …），与解析器是两套独立事实源容易漂移。
  * chordSort（buildSortMeta 的 qualityRank）与 chordDegree（isMinorChord / isDim 判定）共用。
+ *
+ * 判据本体在 `chordQualityAst`（`isMinorFlavored` / `isDimFlavored`），此处只做「性质串 → AST」的取用；
+ * 不在此处另写一套字段判断——`C7b5` 这类「大三音 + 减五」的变化属和弦一旦被算进小调或减系，
+ * 级数会直接标成小写，`isDimFlavored` 的注释里记了这条踩坑史。
  */
 export const isMinorFlavoredQuality = (quality?: string): boolean => {
   if (!quality) return false;
   const ast = chordQualityAstOfName(quality);
   if (!ast) return false;
-  return ast.third === 'min3' || ast.fifth === 'dim5' || ast.seventh === 'dim7';
+  return isMinorFlavored(ast);
 };
 
 export const isDimFlavoredQuality = (quality?: string): boolean => {
   if (!quality) return false;
   const ast = chordQualityAstOfName(quality);
   if (!ast) return false;
-  return ast.fifth === 'dim5' || ast.seventh === 'dim7';
+  return isDimFlavored(ast);
 };
 
 /** 调内性质归类：减/半减 → dim，小调类 → min，其余 → maj。与识别层共用同一份 AST 判据。 */

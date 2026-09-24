@@ -113,8 +113,20 @@ export interface GroupedChordCard {
 /** 键盘/指板识别输入音符 */
 export interface NoteInput {
   stringIndex: number;
+  /** 音级（0~11，八度无关）；仅当需要「哪个音更低」时不够用，须配合 midi */
   pitchIndex: number;
   label: string;
+  /**
+   * 完整 MIDI 音高（可选）。
+   *
+   * 为什么要有它：`pitchIndex` 丢了八度，在其上取 min 得到的**不是**最低音——
+   * 开放和弦 G（320003）各弦音级为 G7 B11 D2 G7 B11 G7，音级 min 得 D，而物理最低音是 G2。
+   * 凡是要判定「最低音」的地方（转位、斜杠低音、重入定弦下的根音锚点）都必须按 MIDI 比。
+   *
+   * 可选而非必填：只有 chordSearch.collectChordNotes 这一个生产方能给出真实 MIDI，
+   * 消费方（chordEngine.collectNoteContext）在缺失时退回 pitchIndex，保持旧行为。
+   */
+  midi?: number;
 }
 
 /** 和弦推导识别引擎结果候选 */

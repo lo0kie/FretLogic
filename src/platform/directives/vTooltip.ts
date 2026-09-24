@@ -550,15 +550,6 @@ interface TooltipHandler {
 
 const handlerMap = new WeakMap<HTMLElement, TooltipHandler>();
 
-/**
- * 立即隐藏 container 内部（含自身）元素正在显示的 tooltip。
- * 供浮层组件在面板打开时调用，避免触发元素上的 tooltip 与面板叠加显示。
- */
-export const hideTooltipInside = (container?: HTMLElement | null) => {
-  if (!container || !isClient || !currentTargetEl) return;
-  if (container === currentTargetEl || container.contains(currentTargetEl)) hideTooltip(currentTargetEl, true);
-};
-
 /** 解析 hover / focus 的触发宿主：'self'（或未给）即指令元素自身；其余按 CSS 选择器向上 closest，找不到回退自身。 */
 const resolveTriggerHost = (el: HTMLElement, trigger: string | undefined): HTMLElement => {
   if (!trigger || trigger === 'self') return el;

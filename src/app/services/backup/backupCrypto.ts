@@ -99,6 +99,9 @@ const collectSecrets = (settings: SyncSettingsBackup): Record<string, string> | 
 /**
  * 加密同步配置中的敏感字段：返回剥除明文敏感字段、附带 secrets 块的新配置对象。
  * 无敏感字段时原样返回（附一个 secrets 字段都没有）；加密失败抛错由调用方提示。
+ *
+ * 返回类型是宽联合（分支特有字段从类型上不可见）：调用方若要读自己刚传进去的 owner / serverUrl，
+ * 先按 `kind` 收窄即可 —— 加密不改变分支。
  */
 export async function encryptSyncSettingsSecrets(
   settings: SyncSettingsBackup,

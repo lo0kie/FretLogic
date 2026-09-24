@@ -482,8 +482,14 @@ function getPreferredRootLabel(
 function collectNoteContext(notes: NoteInput[], explicitRootPitch: number | null, bassByPitch = false) {
   let pitchMask = 0;
   const labelByPitch: (string | undefined)[] = new Array(12);
+  // bassByPitch 语义是「取物理最低音」，必须按完整 MIDI 比：在音级（0~11）上取 min 得到的是
+  // 音级最小的那个音，不是最低的那个音（开放 G 320003 会选出 D 而不是低 E 弦 3 品的 G）。
+  // 与 chordSearch.collectChordNotes 的最低音判定同口径，否则同一和弦两条路结论相反。
+  // 未提供 midi 的 NoteInput（非本生产方的输入）退回音级比较，行为与改动前一致。
+  const pitchOf = (n: NoteInput): number =>
+    typeof n.midi === 'number' && Number.isFinite(n.midi) ? n.midi : n.pitchIndex;
   const lowestNote = bassByPitch
-    ? notes.reduce((min, n) => (n.pitchIndex < min.pitchIndex ? n : min), notes[0]!)
+    ? notes.reduce((min, n) => (pitchOf(n) < pitchOf(min) ? n : min), notes[0]!)
     : notes.reduce((min, n) => (n.stringIndex < min.stringIndex ? n : min), notes[0]!);
 
   const normExplicit = explicitRootPitch !== null ? normalizePitch(explicitRootPitch) : null;

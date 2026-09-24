@@ -3,7 +3,7 @@
 </template>
 
 <script lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 import { getChordName } from '@/domains/chord/theory/theory';
 import {
@@ -19,7 +19,6 @@ import { resolveFretboardCanvasPalette } from '@/domains/fretboard/fretboardCanv
 import { absoluteFretOffsetOf } from '@/domains/fretboard/model/fretGeometry';
 import { activeTheme } from '@/platform/composables/useTheme';
 import { createLruCache } from '@/platform/utils/cache';
-import { observeVisibility } from '@/platform/utils/common';
 
 import type { Chord } from '@/domains/chord/types';
 import type { RenderFretboardOptions } from '@/domains/fretboard/components/renderFretboardCanvas';
@@ -160,9 +159,6 @@ interface Props {
    * 属几何量（改变网格列数与窗口起点），故由 fretWindow 统一喂给布局、位图键与绘制三处。
    */
   trimEmptyEdgeFrets?: boolean;
-  /** 懒绘制：挂载后不立即绘制，等元素滚入视口才首绘一次；后续参数变化正常重绘。
-   *  DOM 尺寸始终由本组件按 scale/fretCount 计算确定，无需外部占位与测量 */
-  lazy?: boolean;
   /**
    * `chord` 是否会被**就地修改**（引用不变、字段被逐个改写），需要深监听才能捕获。
    *
@@ -186,7 +182,6 @@ const props = withDefaults(defineProps<Props>(), {
   showBoldNut: true,
   showBarre: true,
   trimEmptyEdgeFrets: false,
-  lazy: false,
   mutableChord: false,
 });
 
@@ -408,41 +403,12 @@ function draw() {
   ctx.restore();
 }
 
-// 懒绘制状态：lazy 模式下首绘前为 false，期间参数变化不触发绘制（画了也看不见）
-const hasDrawn = ref(!props.lazy);
-let stopLazyObserver: (() => void) | null = null;
-
-onMounted(() => {
-  if (!props.lazy) {
-    draw();
-    return;
-  }
-  // 滚入视口才首绘；IntersectionObserver 会考虑祖先滚动容器的裁剪，
-  // 故无需向调用方索要滚动根。首绘后停止观察，后续重绘走 watch 与 LRU 缓存
-  const el = canvasRef.value;
-  if (!el) {
-    hasDrawn.value = true;
-    draw();
-    return;
-  }
-  stopLazyObserver = observeVisibility(el, visible => {
-    if (!visible) return;
-    stopLazyObserver?.();
-    stopLazyObserver = null;
-    hasDrawn.value = true;
-    draw();
-  });
-});
-
-onBeforeUnmount(() => {
-  stopLazyObserver?.();
-  stopLazyObserver = null;
-});
+onMounted(() => draw());
 
 // 主题切换时重新解析配色再重绘（应用主题变化经 isDarkMode 联动；显式 theme 由导出面板传入）
 watch([() => props.isDarkMode, () => props.theme], () => {
   themeColors.value = resolveThemeColors();
-  if (hasDrawn.value) draw();
+  draw();
 });
 
 // 未显式指定 theme 时配色跟随应用主题。仅靠 isDarkMode 监听接不住 light ↔ high-contrast：
@@ -451,7 +417,7 @@ watch([() => props.isDarkMode, () => props.theme], () => {
 watch(activeTheme, () => {
   if (props.theme) return;
   themeColors.value = resolveThemeColors();
-  if (hasDrawn.value) draw();
+  draw();
 });
 
 // 尺寸（scale）变化也在其中：位图与尺寸无关，故这里只重画名字/品号层 + 缩放贴图。
@@ -472,10 +438,7 @@ watch(
     // 强制重建（刷新 / KeepAlive 重挂载）后才生效 —— 键变了但没人触发 draw()
     () => props.trimEmptyEdgeFrets,
   ],
-  () => {
-    if (!hasDrawn.value) return;
-    draw();
-  },
+  () => void draw(),
   { deep: props.mutableChord }
 );
 </script>

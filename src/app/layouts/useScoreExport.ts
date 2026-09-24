@@ -12,7 +12,12 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import { currentRenderData, isPreviewRendering } from '@/domains/score/preview/scorePreviewCache';
+import {
+  currentRenderData,
+  inPlaceIndexes,
+  isPreviewRendering,
+  pagesBytes,
+} from '@/domains/score/preview/scorePreviewCache';
 import { formatBytes } from '@/platform/utils/common';
 import { ROUTE_PATHS } from '@/platform/utils/constants';
 
@@ -44,10 +49,11 @@ export const useScoreExport = () => {
   const downloadMenuTitle = computed(() => {
     if (!isPreviewExportMode.value) return '';
     const data = currentRenderData.value;
-    if (!data || data.a4Urls.length === 0) return isPreviewRendering.value ? '预估文件尺寸计算中…' : '预估文件尺寸';
+    // 条目允许有洞：一页都没到位时与「无缓存」同样只报占位文案，避免把「渲染中」说成「0 B」
+    if (!data || inPlaceIndexes(data).length === 0)
+      return isPreviewRendering.value ? '预估文件尺寸计算中…' : '预估文件尺寸';
 
-    const total = data.a4Sizes.reduce((sum, n) => sum + n, 0);
-    return `预估文件 ${formatBytes(total)}`;
+    return `预估文件 ${formatBytes(pagesBytes(data))}`;
   });
 
   /** 下载菜单：长图 / 分页 PDF / 分页 Zip 三个下载入口，末项为打印（直接调系统打印对话框，不产出文件） */

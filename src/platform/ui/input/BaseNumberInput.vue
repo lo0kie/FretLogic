@@ -291,13 +291,33 @@ const parseValue = (raw: string): number | null => {
   return isNaN(n) ? null : n;
 };
 
-/** 行内编辑的 Enter：合成期放行（见 isComposing 说明），否则提交 */
+/**
+ * 行内编辑的 Enter：合成期放行（见 isComposing 说明），否则提交。
+ *
+ * `stopPropagation` 不是可选修饰，是这条链路成立的必要条件：input 是外层 wrapper 的子节点，
+ * 而 wrapper 上有 `@keydown="handleWrapperKeydown"`。commitInput() 把 isEditing 置 false 之后，
+ * 事件继续冒泡到 wrapper——它的守卫 `if (props.disabled || isEditing.value) return` 此刻看到的
+ * 已经是不是编辑态了，于是落到末尾的 `Enter/空格 → startEditing()`，把刚退出的编辑又开起来：
+ * 回车提交后输入框不消失、光标还在，再按一次才动（且第二次的 Enter 又走同一圈）。
+ *
+ * 断在源头而非在 wrapper 里补判据：wrapper 那层拿不到「这次 keydown 来自行内 input」的信息
+ * （isEditing 已被清），任何基于状态的补判都会与「焦点在别处按 Enter 进入编辑」的正常路径相撞。
+ */
 const handleEnterKey = (e: KeyboardEvent) => {
   if (e.isComposing || isComposing.value) return;
+  e.stopPropagation();
   commitInput();
 };
 
-/** 行内编辑的 Esc：合成期放行——Esc 正是取消候选词的键，此时退出编辑会连带丢掉正在输入的内容 */
+/**
+ * 行内编辑的 Esc：合成期放行——Esc 正是取消候选词的键，此时退出编辑会连带丢掉正在输入的内容。
+ *
+ * **刻意不 stopPropagation**，与上方 Enter 相反：wrapper 没有 Esc 分支，冒泡过去也不会把编辑
+ * 重新开起来（那类回环只有 Enter/空格这两条「进入编辑」的分支会触发），故这里不存在需要断掉的
+ * 回环。反过来，Esc 有**全局消费者**——浮层在 window 上挂了关闭监听（overlayLifecycle 的
+ * onEscape / overlayGuards / escapeDispatcher），断掉传播会让「在浮层里编辑数字时按 Esc 关不掉
+ * 浮层」，得按两次。保留冒泡才是一次 Esc 取消编辑、两次关闭浮层的常规层级。
+ */
 const handleEscapeKey = (e: KeyboardEvent) => {
   if (e.isComposing || isComposing.value) return;
   cancelInput();

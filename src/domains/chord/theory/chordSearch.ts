@@ -11,7 +11,7 @@ import { estimateValueBytes } from '@/platform/utils/common';
 
 import { analyzeBestRootPitch } from './chordEngine';
 import { getChordName, getChordRootPitch } from './chordName';
-import { calcPitchIndex, composeNoteLabel, computeStringLabelAccidental } from './pitch';
+import { calcNoteMidi, calcPitchIndex, composeNoteLabel, computeStringLabelAccidental } from './pitch';
 import { transposeChordName } from './transpose';
 import { getBaseStringsFor, isReentrantTuning, Tuning } from './tuning';
 
@@ -126,11 +126,19 @@ export const collectChordNotes = (
 ): { notes: NoteInput[]; bassPitch: number } => {
   const notes: NoteInput[] = [];
   // 低音取实际最低音高，而非「最先按下的弦」：重入定弦（尤克里里 GCEA）下弦序最外的弦并不最低，
-  // 与 chordEngine.collectNoteContext 的 bassByPitch 同口径，否则同一和弦两条路转位/斜杠低音判定相反
-  let bassPitch = -1;
+  // 与 chordEngine.collectNoteContext 的 bassByPitch 同口径，否则同一和弦两条路转位/斜杠低音判定相反。
+  //
+  // 比较必须用**完整 MIDI**，不能在音级（0~11）上取 min：音级丢掉了八度，最小值不等于最低音的音级。
+  // 开放和弦是重灾区——G（320003）各弦音级为 G7 B11 D2 G7 B11 G7，音级 min 得 D2，
+  // 而物理最低音是低 E 弦 3 品的 G2（MIDI 43，全场最小）。于是「最低音是 D」这个错误结论
+  // 传下去：computeIsInverted 判 G 为转位、validateBassConsistency 给 G 报低音不一致警告，
+  // 指纹里的 isInverted 位也随之失真。
+  // 故这里先按 MIDI 取最小、最后再归一成音级返回（对外契约不变：仍是 0~11 的音级，无音为 -1）。
+  let bassMidi = Number.POSITIVE_INFINITY;
   for (let sIdx = 0; sIdx < strings.length; sIdx++) {
     const str = strings[sIdx];
     if (!str || str.fret < 0) continue;
+    const midi = calcNoteMidi(sIdx, str.fret, fretOffset, baseStrings);
     const pitch = calcPitchIndex(sIdx, str.fret, fretOffset, baseStrings);
     const { label: naturalLabel, isAccidental } = computeStringLabelAccidental(
       sIdx,
@@ -143,9 +151,12 @@ export const collectChordNotes = (
       stringIndex: sIdx,
       pitchIndex: pitch,
       label: composeNoteLabel(naturalLabel, isAccidental, str.preferFlat),
+      // 带上完整 MIDI：下游 chordEngine 判定最低音时要用（音级 min 不是最低音，见上方说明）
+      midi,
     });
-    if (bassPitch === -1 || pitch < bassPitch) bassPitch = pitch;
+    if (midi < bassMidi) bassMidi = midi;
   }
+  const bassPitch = Number.isFinite(bassMidi) ? ((bassMidi % 12) + 12) % 12 : -1;
   return { notes, bassPitch };
 };
 

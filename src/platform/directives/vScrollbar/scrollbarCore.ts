@@ -280,14 +280,14 @@ const applyAxis = (state: ScrollbarState, axis: 'x' | 'y', off: HostOffset, m: A
   state.thumbLens[axis] = thumbSize;
   // 无可滚动区域时结构性隐藏（off 类硬切）；有滚动区域时交给可见类做淡入淡出
   thumb.classList.toggle(THUMB_OFF_CLASS, hidden);
-  // a11y（V11）：role=scrollbar 的动态值随每次几何刷新同步
+  // a11y（V11）：role=scrollbar 的动态值随每次几何刷新同步。
+  // 三个数一律取**读数阶段**的产物，不在此重新量 DOM —— 本函数位于写入阶段，中途插一次
+  // `getLength` 会强制同步布局，把整批写入的合帧收益抵消掉（applyAxis 的契约就是「只写不读」）。
   if (hidden) thumb.setAttribute('aria-valuenow', '0');
   else {
-    const scrollLength = getLength(state.host, axis, 'scroll');
-    const clientLength = getLength(state.host, axis, 'client');
-    const max = Math.max(0, scrollLength - clientLength);
+    const max = Math.max(0, m.scrollLength - m.clientLength);
     thumb.setAttribute('aria-valuemax', String(max));
-    thumb.setAttribute('aria-valuenow', String(Math.round(getScrollPos(state.host, axis))));
+    thumb.setAttribute('aria-valuenow', String(Math.round(m.scrollPos)));
   }
 
   if (axis === 'y') {

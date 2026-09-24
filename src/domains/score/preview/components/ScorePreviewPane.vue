@@ -34,9 +34,9 @@
           ref="previewPagesRef"
         >
           <!-- 首帧渲染中：文案按渲染线程上报的阶段分档（等字体子集 / 排版出图），见 loadingDescription。
-               骨架槽位一铺开（pendingSlots > 0）就让位 —— 那时已有更精确的「第 n / 共 N 页」读数 -->
+               骨架槽位一铺开（页流非空）就让位 —— 那时已有更精确的「第 n / 共 N 页」读数 -->
           <Feedback
-            v-if="isRendering && pages.length === 0 && pendingSlots === 0"
+            v-if="isRendering && pageSlots.length === 0"
             :description="loadingDescription"
             size="lg"
             type="loading"
@@ -44,7 +44,7 @@
 
           <!-- 渲染失败（无任何页） -->
           <Feedback
-            v-else-if="!isRendering && errorMessage && pages.length === 0"
+            v-else-if="!isRendering && errorMessage && pageSlots.length === 0"
             :description="errorMessage"
             @action="generate(true)"
             action-text="重试"
@@ -52,22 +52,29 @@
             type="error"
           />
 
-          <!-- 分页页流：按缩放模式决定高度（自适应=容器内容盒高，自定义=按百分比等比），横向排列。
+          <!-- 分页页流：**一格一页**，在位的页出图、未就位的页出骨架（下标＝页序，洞是合法状态）。
+               骨架从 pages-planned（纯排版结束、第 1 页还没画）那一刻起就铺开：超长谱的等待因此从
+               「白屏等整批」变成「N 个槽位逐个填」。槽位与页图**共用 renderedPageWidth/Height 同一对
+               取值**，页流总长恒为 `页数 × 单页宽 + 间距`：填充不过是把等宽盒子换个皮，横向不重排、
+               滚动条不动。
                容器首次测量前（containerHeight=0）禁用高度过渡：此时自适应页高回退整页高会先渲染放大尺寸，
                测量完成回落到实际比例——带过渡会回放“从大缩小”的闪动，未测量期禁用后同帧落位无动画 -->
           <!-- content-visibility:auto：屏外页跳过渲染与位图解码（每页 794×1123@DPR2 ≈14MB 解码，
                20 页全部即刻解码峰值可达数百 MB）。代价是「被跳过的元素宽度不再由内容决定」，故
                页宽必须显式给（见 renderedPageWidth），同时把 contain-intrinsic-size 的两轴都写实，
                让跳过态与渲染态的盒子尺寸逐像素一致 —— 否则页流总长会随「已出图页数」变化，
-               横向滚动条一路缩，骨架占位就白铺了 -->
+               横向滚动条一路缩，骨架占位就白铺了。骨架格没有内容可跳，这层开销对它恒为零 -->
           <!-- key 必须取**序号**而非 url：页脚开关会在两套 URL（合成图 / 无页脚原图）间整体换源，
                按 url 作 key 会让每一页的节点被销毁重建（整屏闪白 + 全部重新解码），
                等于把「开关只换 src」又变成一次整图重绘。按序号复用节点后，换源只改 img 的 src，
                浏览器在新图解码完成前继续显示旧图，切换无缝 -->
           <div
-            v-for="(url, index) in pages"
+            v-for="(url, index) in pageSlots"
             :class="[
-              isPageMenuTarget(index) ? 'outline-primary' : 'outline-transparent',
+              url
+                ? 'block overflow-hidden rounded-sm shadow-panel ring-1 ring-transparent hover:shadow-floating hover:ring-glass-border'
+                : 'flex items-center justify-center rounded-sm border border-dashed border-border-light bg-surface-panel',
+              url && isPageMenuTarget(index) ? 'outline-primary' : 'outline-transparent',
               containerHeight > 0
                 ? 'transition-[outline,box-shadow,ring-color,height,width]'
                 : 'transition-[outline,box-shadow,ring-color]',
@@ -79,34 +86,22 @@
               contentVisibility: 'auto',
               containIntrinsicSize: `${renderedPageWidth} ${renderedPageHeight}`,
             }"
-            @contextmenu.prevent="handlePageContextMenu($event, index)"
-            class="relative block overflow-hidden rounded-sm shadow-panel ring-1 ring-transparent outline-2 -outline-offset-2 duration-fast ease-out select-none hover:shadow-floating hover:ring-glass-border"
+            @contextmenu="handlePageContextMenu($event, index)"
+            class="relative outline-2 -outline-offset-2 duration-fast ease-out select-none"
           >
             <!-- 页图：页脚开关打开时 src 指向渲染线程合成好的「带页码」页图，否则指向无页脚原图。
                  两套 URL 同尺寸同坐标系，切换只换 src，不重排、不重渲染乐谱 -->
             <img
+              v-if="url"
               :alt="`乐谱预览第 ${index + 1} 页`"
               :src="url"
               class="block h-full w-auto select-none"
               decoding="async"
               draggable="false"
             />
-          </div>
-
-          <!-- 尚未出图的分页槽位（骨架占位）：渲染线程在**排版结束、第 1 页还没画**时就把总页数报回来，
-               故骨架从那一刻起就铺开，不必等任何一页完成 —— 超长谱（几十页）的等待因此从「白屏等整批」
-               变成「N 个槽位逐个填」。逐页上报按下标递增，故已完成部分恒在数组前段、骨架恒在尾部。
-               槽位与页图**共用 renderedPageWidth/Height 同一对取值**，页流总长恒为
-               `页数 × 单页宽 + 间距`：填充不过是把等宽盒子换个皮，横向不重排、滚动条不动。
-               槽位刻意不带 content-visibility：它没有内容可跳，盒子必须始终按显式尺寸占位 -->
-          <div
-            v-for="n in pendingSlots"
-            :key="`slot-${n}`"
-            :style="{ height: renderedPageHeight, width: renderedPageWidth }"
-            class="flex items-center justify-center rounded-sm border border-dashed border-border-light bg-surface-panel select-none"
-          >
-            <span class="text-2xs font-semibold text-fg-muted tabular-nums">
-              {{ pages.length + n }} / {{ streamTotal }}
+            <!-- 尚未出图的槽位：读数恒按**总页数**报，与页流长度一致 -->
+            <span v-else class="text-2xs font-semibold text-fg-muted tabular-nums">
+              {{ index + 1 }} / {{ pageSlots.length }}
             </span>
           </div>
         </div>
@@ -188,7 +183,6 @@ import {
   onActivated,
   onBeforeUnmount,
   onDeactivated,
-  onScopeDispose,
   ref,
   toRef,
   useTemplateRef,
@@ -214,15 +208,26 @@ import {
 } from '@/domains/score/constants';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
+import { buildScoreLineFingerprints } from '@/domains/score/preview/scoreLineFingerprints';
 import {
   currentRenderData,
+  dropEntry,
+  dropIdleFooterPages,
+  ensureEntry,
+  findInheritSource,
   getCachedRender,
+  inheritableIndexes,
+  inPlaceIndexes,
+  isComplete,
   isPreviewRendering,
-  putCachedRender,
-  readA4PageBlob,
+  movePages,
+  pageBlob,
+  pageUrl,
   setCurrentRender,
+  writeFooterPages,
+  writePage,
 } from '@/domains/score/preview/scorePreviewCache';
-import { buildScoreRenderCacheKey } from '@/domains/score/preview/scoreRenderCacheKey';
+import { buildScorePageLevelKey, buildScoreRenderCacheKey } from '@/domains/score/preview/scoreRenderCacheKey';
 import {
   buildExportFileName,
   triggerBlobDownload,
@@ -239,10 +244,9 @@ import { useSettingsStore } from '@/platform/store/settingsStore';
 import { useUiStore } from '@/platform/store/uiStore';
 import { useTargetMenu } from '@/platform/ui/menu/useTargetMenu';
 import { useScrollAreaElement } from '@/platform/ui/scroll-area/scrollAreaHandle';
-import { registerCache } from '@/platform/utils/cache';
 import { clamp, formatBytes } from '@/platform/utils/common';
 
-import type { PreviewRenderData } from '@/domains/score/preview/scorePreviewCache';
+import type { PreviewPage, PreviewRenderData } from '@/domains/score/preview/scorePreviewCache';
 import type { WorkerRenderStage } from '@/domains/score/preview/workers/scoreExportWorker';
 import type { ScrollAreaHandle, ScrollAreaScrollbar } from '@/platform/ui/scroll-area/scrollAreaHandle';
 
@@ -252,130 +256,52 @@ defineOptions({ name: 'ScorePreviewPane' });
 let rememberedContainerHeight = 0;
 
 /**
- * 半成品登记表：内容键 → 已被打断、但已出图的前段页（下标＝页序）。「中断后续跑」的基础设施。
- *
- * 【为什么需要它】预览缓存的写入是**整批原子**的（putCachedRender 只在 complete 之后调一次），
- * 于是一轮渲染被中断时，已经画好的前几页除了屏上那几张图之外没有任何去处 —— 下一轮无论是不是
- * 同一首歌，都从第 0 页重画；几十页的长谱来回切一次就白等一整轮。
- *
- * 【两件东西的分工】
- * - screenHoldsPartial：屏上的页流是不是「尚未提交的半成品」。它决定下一轮起手要不要清屏 ——
- *   编辑歌词时屏上挂着的是**已提交**的旧图（必须留着，否则每敲一个字都先闪一屏骨架），
- *   被中断的半成品则必须清掉（它属旧内容，又不归任何缓存条目）。
- * - partialsByKey：被中断的那一轮在此登记已出图的前段，下一轮同键起手接回去当起点 —— 请求带
- *   resumeFrom，渲染线程照常重算排版但跳过这些页的绘制与 JPEG 编码（整笔里最贵的一段）。
- *
- * 【所有权三条规则】页图 URL 只能有一个主人，否则不是泄漏就是破图：
- * 1. 登记表里的条目**从不在屏上** —— 起手接续即 takePartial 出表（所有权移交该轮），
- *    故驱逐 / 覆盖时可以安全地即刻 revoke。严格说这条在「本轮被中断、finally 就地登记」那一刻不成立
- *    （那批页还挂在屏上，要到下一轮起手清屏 / 接续才移出屏面）；之所以仍安全，是因为登记只发生在收尾、
- *    驱逐由登记自身触发，而刚入表的是最近使用，不会被这一次驱逐挑中（trimPartials 另有「至少留一份」兜底）；
- * 2. 本轮若提交成功，那批 URL 归缓存条目，本表不得再持有；
- * 3. 本轮若未提交（被作废 / 失败 / 判废），就地登记回来留给下一轮；判废的则直接回收。
+ * 【为什么这里没有「半成品登记表」了】逐页化之后，**缓存条目自己就是半成品登记表**：页在画出来的
+ * 那一刻就写进条目（见 scorePreviewCache 的 writePage），条目允许有洞。于是「渲染被中断」不再等于
+ * 「这一轮的产物全部作废」—— 已画好的页留在条目里，下一轮同内容键重发时带上 havePages 跳过它们。
+ * 本组件只负责展示与派发，不再持有任何页 URL（所有权全在条目，屏上那批也一样）。
  */
-interface PartialRender {
-  /** 上次排版得到的总页数：接续前必须与本次 pages-planned 相符，否则前段页序不可信 */
-  total: number;
-  /** 已出图的页（前段密集，下标＝页序）；url 与 blob 同源，成对移交 */
-  pages: { url: string; blob: Blob }[];
-  /** 页字节合计（登记时定格）：容量判定用，避免每次驱逐重算 */
-  bytes: number;
-}
 
-/** 半成品登记的容量：条数与内存配额并列，任一先到即驱逐最旧档（口径同 scorePreviewCache） */
-const PARTIAL_MAX_ENTRIES = 4;
-const PARTIAL_MAX_BYTES = 32 * 1024 * 1024;
-
-/** 屏上页流是否为「未提交的半成品」（见上）；applyEntry 写入任何正式来源（条目 / 清空）时复位 */
-let screenHoldsPartial = false;
-
-/** 组件已销毁：此后不再登记半成品 —— 没人再来接续，登记只会漏掉一批 object URL。
- *  在途轮次收尾时据此改走「就地回收」（见 generate 的 finally） */
-let partialsDisposed = false;
-
-const partialsByKey = new Map<string, PartialRender>();
-let partialBytesTotal = 0;
-
-/** 回收一组页 URL */
-const revokePages = (pages: { url: string }[]) => {
-  for (const page of pages) URL.revokeObjectURL(page.url);
-};
-
-/** 页字节合计（与预览缓存的称重口径一致：页图 JPEG 就是占用本身） */
-const weightOfPages = (pages: { blob: Blob }[]) => pages.reduce((sum, page) => sum + page.blob.size, 0);
-
-/** 摘除一份半成品；revoke 决定是否顺手回收其页 URL（所有权已移交调用方时必须传 false） */
-const dropPartial = (key: string, revoke: boolean) => {
-  const partial = partialsByKey.get(key);
-  if (!partial) return;
-  partialsByKey.delete(key);
-  partialBytesTotal -= partial.bytes;
-  if (revoke) revokePages(partial.pages);
-};
-
-/** 取用并摘除：出表即不受容量驱逐管辖，其 URL 由调用方负责转移或回收 */
-const takePartial = (key: string): PartialRender | undefined => {
-  const partial = partialsByKey.get(key);
-  if (!partial) return undefined;
-  dropPartial(key, false);
-  return partial;
-};
-
-/** 驱逐到容量之内：条数与内存配额任一超出即丢最旧档。
- *  内存配额那一路**至少留一份**（口径同 LRU）：单条就超配额的超长谱若也被驱逐，下一轮照样从头重画。 */
-const trimPartials = () => {
-  while (partialsByKey.size > PARTIAL_MAX_ENTRIES || partialBytesTotal > PARTIAL_MAX_BYTES) {
-    const oldest = partialsByKey.keys().next().value;
-    if (oldest === undefined || partialsByKey.size <= 1) return;
-    dropPartial(oldest, true);
-  }
-};
-
-/** 登记一份半成品（同键旧档直接作废，故登记即刷新为最近使用）：登记后按容量驱逐最旧档 */
-const depositPartial = (key: string, pages: { url: string; blob: Blob }[], total: number) => {
-  dropPartial(key, true);
-  const bytes = weightOfPages(pages);
-  partialsByKey.set(key, { total, pages, bytes });
-  partialBytesTotal += bytes;
-  trimPartials();
-};
-
-// 半成品压着的是整页 JPEG（可到几十 MB），故与预览缓存同样登记进开发面板的内存读数 ——
-// 否则这块占用在面板上完全不可见，正是「内存去哪了」最难查的那种
-const unregisterPartialCache = registerCache({
-  name: '预览半成品页',
-  limit: PARTIAL_MAX_ENTRIES,
-  maxBytes: PARTIAL_MAX_BYTES,
-  size: () => partialsByKey.size,
-  bytes: () => partialBytesTotal,
-  clear: () => {
-    for (const key of [...partialsByKey.keys()]) dropPartial(key, true);
-  },
-});
-
-/** 界面上这条登记表随组件存亡：页图 object URL 不会因组件销毁自动回收（非 KeepAlive 休眠时） */
-onScopeDispose(() => {
-  partialsDisposed = true;
-  for (const key of [...partialsByKey.keys()]) dropPartial(key, true);
-  unregisterPartialCache();
-});
-
-/** 当前展示页流对应的渲染数据（含各页字节数 + 长图产物）：切歌/生成时由 applyEntry 同步更新，
+/** 当前展示页流对应的渲染数据：切歌/生成时由 applyEntry 同步更新，
  *  右键菜单标题直接读数；同时写入共享缓存供 TopHeader 下载菜单复用，避免重复渲染 */
 const applyEntry = (data: PreviewRenderData | null) => {
-  // 屏上换成了正式来源（缓存条目）或清空：不再是「未提交的半成品」
-  screenHoldsPartial = false;
   setCurrentRender(data);
   applyDisplayUrls(data);
   void ensureFooterComposed(data);
 };
 
 /**
- * 页流展示源：页脚打开且合成层已就绪时用「带页码」页图，否则用无页脚原图。
- * 合成层是懒生成的，未就绪的短暂窗口内先按无页脚展示，合成完成后再切一次。
+ * 页流展示源：页脚打开且**该页**合成层已就绪时用「带页码」页图，否则用无页脚原图。
+ * 合成层逐页懒生成（见 ensureFooterComposed），故这里也逐页取源：尚未合成的页先按无页脚展示，
+ * 合成完成后再切一次。**洞**（该页未出图）保持 undefined，由模板铺骨架。
  */
 const applyDisplayUrls = (data: PreviewRenderData | null) => {
-  pages.value = !data ? [] : settingsStore.scoreShowFooter && data.footerUrls ? data.footerUrls : data.a4Urls;
+  if (!data) {
+    pages.value = [];
+    return;
+  }
+  const footer = settingsStore.scoreShowFooter ? data.footerPages : undefined;
+  pages.value = Array.from({ length: data.total }, (_, index) => footer?.[index]?.url ?? pageUrl(data, index));
+};
+
+/**
+ * 采纳一页页脚合成图：先落账到条目（页图与页脚层在缓存里是**两份**数据，关掉开关时回落页图），
+ * 再在该条目正被展示时就地换上带页码的源。
+ *
+ * 只改一格而不是整表重算（applyDisplayUrls）：两个生产者都会高频调它 —— 整谱渲染逐页顺带合成、
+ * 页脚合成分支逐页回传 —— 整表重算等于每页都把全部槽位重建一遍。
+ *
+ * @param live 该条目此刻就是屏上的页流来源。渲染流式路径传 canStream：那一刻 currentRenderData
+ *        还没被换成本轮条目（换值发生在整轮收尾的 applyEntry），拿它比对会恒假、页码又得等到最后。
+ *        合成路径传 currentRenderData 比对（那条路径上条目确实已是展示项）。
+ */
+const adoptFooterPage = (data: PreviewRenderData, index: number, blob: Blob, live: boolean) => {
+  // 稠密数组（fill）：稀疏数组的 every / map 会跳过洞，而这里的洞正是「该页还没合成页脚」
+  const footerPages: (PreviewPage | undefined)[] = data.footerPages ?? new Array(data.total).fill(undefined);
+  footerPages[index] = { url: URL.createObjectURL(blob), blob };
+  // 必须经 writeFooterPages 落账（重新称重），不能直接赋值：LRU 的字节合计只在写入时更新
+  writeFooterPages(data, footerPages);
+  if (live) pages.value[index] = footerPages[index]!.url;
 };
 
 /** 已在途的页脚合成条目：开关连点 / 重复调用不会对同一批页面并发合成 */
@@ -383,7 +309,7 @@ const footerComposeInFlight = new WeakSet<PreviewRenderData>();
 
 /**
  * 页脚合成层（懒生成）：页面栅格不含页码，开关打开时向渲染线程请求一次
- * 「贴回整页 → 画页码 → 重编码」，结果按条目缓存在 footerUrls 上。
+ * 「贴回整页 → 画页码 → 重编码」，结果按条目逐页缓存在 footerPages 上。
  * 于是开关页脚**不触发任何乐谱重渲染**——首次打开合成一次，之后来回切只是换展示源。
  *
  * 合成与整谱渲染共用渲染线程的同一条串行队列，故本条目的合成必定先于「下一次渲染完成」结束；
@@ -392,24 +318,41 @@ const footerComposeInFlight = new WeakSet<PreviewRenderData>();
  * **可作废**：判据是「发起时那首歌已不是当前歌」。切歌后这份合成连归属都换了人（结果只会入库给
  * 一首不再展示的谱），却要逐页贴图 + 重编码、还占着新歌渲染前面的队列位置，故交给渲染线程中断，
  * 见下方 isObsolete。同一首改内容**不**作废：结果仍属该歌，合成完了照样能用。
- * @param data 目标渲染条目；缺省 / 已合成 / 页脚未开 / 无页面时直接返回
+ * @param data 目标渲染条目；缺省 / 页脚未开 / 该条目已无缺页脚的在位页时直接返回
  */
 const ensureFooterComposed = async (data: PreviewRenderData | null) => {
-  if (!data || !settingsStore.scoreShowFooter || data.footerUrls || data.a4Blobs.length === 0) return;
-  if (footerComposeInFlight.has(data)) return;
+  if (!data || !settingsStore.scoreShowFooter || footerComposeInFlight.has(data)) return;
+  // 判据是「**缺哪几页**」而不是「有没有合成过」：条目允许有洞、也允许在渲染中逐页长出新页，
+  // 只看一个布尔标志的话，一轮渲染补齐的后几页会永远拿不到页码
+  const inPlace = inPlaceIndexes(data);
+  const missing = inPlace.filter(index => !data.footerPages?.[index]);
+  if (missing.length === 0) return;
   footerComposeInFlight.add(data);
   // 发起时的歌曲 id（判据见函数头）。不读内容键：内容键在切歌与同歌改内容两种情况下都会变，
   // 而只有前者该作废 —— 用 id 才分得开。
   const songId = scoreEditor.activeSong?.id;
   try {
     // 纸张档位与页边距按条目记录值传（非实时设置）：改设置在途窗口内两者可能不一致
-    const composed = await composePageFooter(data.a4Blobs, undefined, data.pageSize, data.pageMargin, {
-      isObsolete: () => scoreEditor.activeSong?.id !== songId,
+    // 逐页落账 + 逐页换源：整批一次落账会让页码在全部页合成完那一刻一起跳出来（14 页实测 ≈ 400ms），
+    // 而单页合成只有 ~22ms。逐页写就能让第 1 页的页码立刻到位；被中断时已落账的页留在条目里，
+    // 比整批作废更省（那几页的解码 + 编码成本已经付过了）。
+    const composed = await composePageFooter(
+      missing.map(index => pageBlob(data, index)!),
+      missing,
+      data.pageSize,
+      data.pageMargin,
+      {
+        isObsolete: () => scoreEditor.activeSong?.id !== songId,
+        onFooterPage: (index, blob) => adoptFooterPage(data, index, blob, currentRenderData.value === data),
+      }
+    );
+    // 兜底：逐页回调一个都没到（或漏了某页）时，才用整批结果补齐尚未落账的那些页。
+    // 已落账的页必须跳过 —— 同一页再建一个 object URL，旧的那个就再无人回收。
+    const live = currentRenderData.value === data;
+    missing.forEach((index, k) => {
+      const blob = composed[k];
+      if (blob && !data.footerPages?.[index]) adoptFooterPage(data, index, blob, live);
     });
-    data.footerUrls = composed.map(blob => URL.createObjectURL(blob));
-    data.footerBlobs = composed;
-    // 该条目仍是当前展示项才刷新页流；已被换走的只入库，切回时直接复用
-    if (currentRenderData.value === data) applyDisplayUrls(data);
   } catch (err) {
     // 被切歌作废（非失败）：结果本就没人要，静默收工 —— 否则切一次歌就弹一句「页脚合成失败」。
     // 判据是渲染线程中断点与服务层排队作废共用的同一条文案常量（见 RENDER_ABORT_MESSAGE）。
@@ -434,14 +377,25 @@ const { getAllLineIndices, buildRenderPayload, composePageFooter } = useScoreRen
 /** 整曲全部行索引：预览始终覆盖全曲（不随选中行变化） */
 const allLineIndices = computed<number[]>(() => getAllLineIndices());
 
-const pages = ref<string[]>([]);
+/** 屏上页流：下标＝页序，值为该页的展示 URL；**未就位的页为 undefined（洞）**。
+ *  洞是合法状态（被打断的那一轮、渲染进行中的尾巴），模板据此在该格铺骨架。
+ *  这里只持有引用 —— 页 URL 的所有权全在缓存条目（见 scorePreviewCache 的文件头） */
+const pages = ref<(string | undefined)[]>([]);
 const isRendering = ref(false);
 const errorMessage = ref('');
 /**
- * 本轮流式分页的槽位总数（渲染线程排版结束后上报；0 = 未知，即不铺骨架）。
- * 只作展示读数：尾部据此铺 `pendingSlots` 个占位，每出一页填一个。
+ * 本轮**计划总页数**（渲染线程排版结束后上报；0 = 未知）。
+ * 页流槽位数取它与「已到位页数」的较大者，故它一到就铺满骨架格。
  */
 const streamTotal = ref(0);
+
+/** 页流槽位（下标＝页序）：值是该页的展示 URL，未就位的页为 undefined（洞 → 骨架格）。
+ *  长度取「计划总页数」与「已到位数组长度」的较大者：pages-planned 之前 streamTotal 为 0，
+ *  此时靠已到位页数兜底（缓存命中后直接展示的场景）。 */
+const pageSlots = computed<(string | undefined)[]>(() => {
+  const count = Math.max(streamTotal.value, pages.value.length);
+  return Array.from({ length: count }, (_, index) => pages.value[index]);
+});
 
 /**
  * 渲染线程当前阶段：只用于分档加载文案。取值有两个来源 ——
@@ -496,15 +450,13 @@ const dismissUpdateMessage = () => {
 
 /**
  * 采纳一份已渲染缓存：把页流交给展示层、认下内容键、退出渲染态，并撤掉「更新中」Message。
+ * 条目**允许有洞**：这里照常展示（未就位的页由模板铺骨架），是否继续补齐由调用方判断。
  *
  * 三处调用点（generate 的命中早退、切歌 watch、onActivated 唤醒守卫）此前各写一遍这几行，
  * 且只有第一处带 `dismissUpdateMessage()`。统一带上不改变行为：它按 id 移除且幂等，
  * 另两处调用前都已由 `cancelPendingExport()` 撤掉提示（切歌与 onDeactivated 各一处）。
  */
 const adoptCachedRender = (entry: PreviewRenderData, contentKey: string): void => {
-  // 同键半成品对已就位的完整条目再无意义（条目覆盖全部页），顺手回收：它可能压着几十 MB 页图，
-  // 白等到容量驱逐才释放
-  dropPartial(contentKey, true);
   applyEntry(entry);
   currentContentKey = contentKey;
   isRendering.value = false;
@@ -518,9 +470,43 @@ const buildContentKey = () => buildScoreRenderCacheKey(scoreEditor.activeSong, c
 /** 响应式内容键：内容/排版任一依赖变化即重算，作为「重渲染触发」的单一 watch 源 */
 const reactiveContentKey = computed(() => buildContentKey());
 
+/**
+ * 键的页级段（见 scoreRenderCacheKey.buildScorePageLevelKey）：标题 / 歌者 / 调性 / 主题 / 各项排版
+ * 设置这一批「整页共有、与具体某一行无关」的维度。与 lineFingerprints 一起构成「上一版能否按页
+ * 继承」的两道判据（见 generate 的继承分支）。
+ */
+const pageLevelKey = computed(() => buildScorePageLevelKey(scoreEditor.activeSong));
+
+/**
+ * 各原始歌词行的渲染输入指纹（下标＝行序号）：编辑歌词后按页最小重建的判据，见 generate。
+ * 与内容键同源同口径，但拆到行粒度 —— 改排版设置时它不重算（只依赖歌曲内容与和弦库）。
+ */
+const lineFingerprints = computed(() => buildScoreLineFingerprints(scoreEditor.activeSong, chordsLookupMap.value));
+
+/**
+ * 条目里已在位的那几页是否仍属于本次排版：页数与逐页行范围逐项相等。
+ *
+ * 内容键是「已在位页还属于这套排版」的**唯一凭据**，但它可能漏掉某个影响分页的维度（键与排版结果
+ * 脱钩）；pages-planned 回带的行范围是渲染线程刚算出来的权威读数，两者不符即判废重画。
+ */
+const sameLayout = (data: PreviewRenderData, total: number, pageLineRanges: number[][]): boolean => {
+  if (data.total !== total || data.pageLineRanges.length !== pageLineRanges.length) return false;
+  return pageLineRanges.every((range, index) => {
+    const prev = data.pageLineRanges[index];
+    return prev !== undefined && prev.length === range.length && prev.every((line, k) => line === range[k]);
+  });
+};
+
 /** 整曲渲染：Worker 离屏渲染 A4 分页（预览展示 / 右键下载本页 / Header 的 PDF·ZIP 下载均复用此结果），
- *  结果一次写入共享缓存，UI 层（预览页流 / 右键菜单 / Header 下载菜单）直接读数，不再各算各的 */
-const generate = async (force = false) => {
+ *  结果**逐页写入共享缓存条目**，UI 层（预览页流 / 右键菜单 / Header 下载菜单）直接读数，不再各算各的。
+ *
+ *  页的复用有两条路径，都不必重画：① 同内容键的半成品（上一轮被打断，洞由 havePages 跳过）；
+ *  ② 编辑歌词后上一版中内容未受影响的那几页（内容键已换代，靠页级段 + 行指纹找出它们，见下方
+ *  inheritSource）。两条路径都只影响「本轮派发哪些页不画」，页的落账与上屏机制完全一致。
+ *  @param force 忽略缓存与在途轮次，从零重跑（重试按钮 / 收尾发现条目有洞时的自愈）
+ *  @param streamOnReplace 屏上挂着**另一内容键**的旧图时也逐页覆盖上屏（见下方 canStream）：
+ *         只有「改排版设置」那条来路传 true —— 旧图是按旧设置画的，留着它没有意义 */
+const generate = async (force = false, streamOnReplace = false) => {
   const song = scoreEditor.activeSong;
   if (!song || allLineIndices.value.length === 0) {
     applyEntry(null);
@@ -531,11 +517,12 @@ const generate = async (force = false) => {
   // 读响应式内容键（computed 缓存）：同一 tick 内已被 watch 求值过则直接取用，不再重建整串
   const contentKey = reactiveContentKey.value;
 
-  // 命中缓存：直接展示已渲染的页流（同内容来回切换/重进预览标签零重复渲染）
-  const cached = getCachedRender(contentKey);
-  if (!force && cached && cached.a4Urls.length > 0) {
+  // 命中缓存：条目里只要有**任何一页**在位就先展示（同内容来回切换 / 重进预览标签零重复渲染）。
+  // 完整条目到此即收工；有洞的继续往下走 —— 那些洞正是本轮的活儿（上一轮被打断时留下的）。
+  const cached = force ? null : getCachedRender(contentKey);
+  if (cached && inPlaceIndexes(cached).length > 0) {
     adoptCachedRender(cached, contentKey);
-    return;
+    if (isComplete(cached)) return;
   }
 
   // 同一内容键已有在途轮次：复用它，不再另起一轮（见 inFlightContentKey 的说明）。
@@ -551,46 +538,47 @@ const generate = async (force = false) => {
   isPreviewRendering.value = true;
   errorMessage.value = '';
 
-  // 「起手时屏上是否有**已提交的旧图**」：既是「旧图继续显示、整批换新」的判据，也是「更新中」Message
-  // 该不该弹的判据。必须在下方任何改写 pages 的动作之前拍快照 —— 续跑分支会立刻把接回来的前段页填进
-  // pages，拿那之后的 pages 去判，会把「本轮自己的前段」误当成「正在被更新的旧内容」（切歌后接续半成品
-  // 就此白弹一次提示）；screenHoldsPartial 为真说明屏上那批是上一轮被打断的半成品，同样不算「旧内容」。
-  const hadCommittedPages = pages.value.length > 0 && !screenHoldsPartial;
+  // 「屏上是否正挂着**本内容键**的条目」：是则本轮直接往它里面填页、逐页上屏（含骨架格）。
+  // 屏上是空（首次预览 / 切歌后）也走流式；屏上若是**另一内容键**的旧图则默认整批换新
+  // —— 那种情况要保持「旧图继续显示、收尾一次换上」，否则页流一清就是一屏骨架。
+  // 必须在下方任何改写 pages 的动作之前拍快照：本轮接手的条目会立刻把页填进 pages。
+  const showingOwnEntry = currentRenderData.value !== null && currentContentKey === contentKey;
+  /**
+   * 本轮是否逐页上屏。三条来路：
+   * - 屏上是空（首次预览 / 切歌后）⇒ 流式：骨架格铺满，逐页填；
+   * - 屏上正挂着**本内容键**的条目 ⇒ 流式：续跑，或页脚开关重开的那一轮（已在位页由 havePages 跳过）；
+   * - 屏上挂着**另一内容键**的旧图 ⇒ 默认整批换新（旧图是上一版**完整**的图，留着比半新半旧可读），
+   *   唯独「改排版设置」那条来路（streamOnReplace）例外 —— 旧图是按**旧设置**画的，留着它没有意义，
+   *   用户正盯着预览调字号/和弦缩放，逐格换成新页才有反馈，不该等整篇重建完才换图。
+   */
+  const canStream = pages.value.length === 0 || showingOwnEntry || streamOnReplace;
+  /** 「屏上挂着**别人**的旧图」：该弹「更新中」Message（首屏加载框与骨架格各管一边）。
+   *  逐页覆盖时也弹：过渡期间屏上是半新半旧，这条提示正是那副样子的说明 */
+  const hadCommittedPages = pages.value.length > 0 && !showingOwnEntry;
 
-  // ---- 半成品接续（中断后续跑）----
-  // 同一内容键上一次被打断时已出图的页登记在 partialsByKey 里，接回来当本轮的前段：请求带上
-  // resumeFrom，渲染线程照常重算排版，但跳过这些页的绘制与 JPEG 编码（整笔里最贵的一段）、只补剩下的。
-  // 只有两种情形不接续：force（用户点重试就是要从零重跑）、同键没有半成品（首次预览）。
-  // takePartial 是**取用即出表**：所有权移交本轮，此后由下方的提交 / 登记 / 回收三条出口负责。
-  const partial = force ? undefined : takePartial(contentKey);
-  const run = {
-    /** 本轮派发时声明的续跑起点（＝接回来的前段页数） */
-    resumeFrom: partial ? partial.pages.length : 0,
-    /** 本轮计划总页数：先沿用半成品记录的读数，收到 pages-planned 后改以渲染线程报的为准 */
-    total: partial ? partial.total : 0,
-    /** 本轮页累加器（下标＝页序，前段密集）：起手是接回来的前段，之后由 onPage 逐页补 */
-    pages: partial ? partial.pages : [],
-    /** 本轮已判废（前段页序与本轮排版不符 / 续跑结果拼不齐）：既不入缓存，也不登记为半成品 */
-    discarded: false,
-    /** 本轮已把页 URL 交割给缓存条目（所有权已转移，收尾时不得再回收或登记） */
-    committed: false,
-  };
-  if (partial) {
-    // 前段立刻上屏：它们本就是这首歌、这套排版下的图，没有理由让用户重新等一遍；
-    // streamTotal 也先按它的读数铺骨架尾巴，等 pages-planned 再校正
-    pages.value = partial.pages.map(page => page.url);
-    streamTotal.value = partial.total;
-    screenHoldsPartial = true;
-  } else {
-    // 屏上是上一轮被打断的半成品而本轮不接续它（内容已变 / 强制重跑）：清空，免得旧内容留在屏上。
-    // 屏上若是**已提交**的旧图则不动 —— 那要保持「旧图继续显示、整批换新」（见下方 canStream）
-    if (screenHoldsPartial) pages.value = [];
-    screenHoldsPartial = false;
-    streamTotal.value = 0;
-  }
-  // 本轮是否走流式填充（骨架 + 逐页上屏）：起手无「已提交的旧图」时启用 —— 首次预览 / 切歌后 /
-  // 接续续跑三种。编辑歌词那种增量更新不走（旧图继续显示、整批换新），否则每敲一个字都先闪一屏骨架。
-  const canStream = pages.value.length === 0 || run.resumeFrom > 0;
+  /**
+   * 「上一版能否按页继承」（编辑歌词后的最小重建）：命中不到同键条目时，在同歌的旧版本里找一版
+   * 页级段相同、且只有若干行内容变了的条目 —— 那些行没覆盖到的页本轮不必重画。
+   *
+   * 【为什么是乐观声明】havePages 必须在**派发前**给出，而「继承来的那几页是否仍属于本次排版」
+   * 只能等 pages-planned 回带行范围才知道。故这里按来源条目自己的 pageLineRanges 先声明出去，
+   * 排版结果一到立刻用 sameLayout 复核，不符即整段判废重跑（见 onPagesPlanned）—— 最坏情况
+   * 白跑一轮排版，与本功能存在之前「一律整谱重画」的代价相同，不会更坏。
+   */
+  const fingerprints = lineFingerprints.value;
+  const inheritSource =
+    force || cached ? null : findInheritSource(song.id, contentKey, pageLevelKey.value, fingerprints);
+  const inheritIndexes = inheritSource ? inheritableIndexes(inheritSource.entry, inheritSource.dirtyLines) : [];
+
+  /**
+   * 本轮派发给渲染线程的 havePages：条目里**已在位**的页由渲染线程跳过绘制与 JPEG 编码 ——
+   * 那是整笔渲染里最贵的一段。force 恒为空数组：用户点重试就是要从零重跑，本轮也刻意不吃缓存。
+   * 无同键条目时退而用继承页（上一版中内容未受影响的那几页，同样是「我手上已有图」）。
+   */
+  const havePages = cached ? inPlaceIndexes(cached) : inheritIndexes;
+  /** 本轮页落账的条目（pages-planned 时定格）：在此之前没有任何页可写 */
+  let entry: PreviewRenderData | null = null;
+
   // 加载文案的起点：渲染线程还没建立（本会话第一次预览 / 空闲回收后 / 异常废弃）时，本次请求必然要下载
   // 字体子集，于是**首帧**就按「正在加载字体」起，不等 worker 那条上报 —— 上报要等线程跑起来，而命中 HTTP
   // 缓存时子集解析只有几十毫秒，往往整段落在同一帧里，一次都画不出来（见 isRenderWorkerCold）。
@@ -600,115 +588,110 @@ const generate = async (force = false) => {
   // 稳态值自然回到 render。唯一的例外是「本轮根本到不了 worker」的失败路径，由下方 catch 显式复位。
   if (isRenderWorkerCold()) renderStage.value = 'fonts';
   // 只有「屏上挂着已提交旧图、本轮整批换新」才弹「更新中」Message：首次构建（无页）留给内容区居中
-  // 加载框，续跑接续（屏上就是本轮接回来的前段）留给骨架尾巴 —— 两者都不该多出一条常驻提示
+  // 加载框，同键续跑（屏上就是本轮要接着填的那个条目）留给骨架格 —— 两者都不该多出一条常驻提示
   if (hadCommittedPages) showUpdateMessage();
+
   /**
-   * 判废本轮接续的前段，并立刻从零重跑一轮（前段页序与本轮排版不符、或续跑结果拼不齐时走这里）。
-   *
-   * 内容键是「前段还属于这套排版」的唯一凭据：一旦它与排版结果脱钩（键漏了某个影响分页的维度），
-   * 前段页图就属于另一套排版，硬拼会把旧页贴到新谱上 —— 宁可重跑。本轮标 discarded，收尾时既不提交
-   * 也不登记（前段已就地回收）。
+   * 判废本轮已接手的页并立刻从零重跑一轮。三条触发路径：
+   * - 已在位的页与本次排版不符（见 sameLayout）：那几页属于另一套排版，硬拼会把旧页贴到新谱上；
+   * - 按页继承的来源与本次排版不符：同上，只是「那几页」来自上一版而非本键的在途页；
+   * - 收尾时发现条目仍有洞（声明已在位的那几页已从条目里消失，或渲染线程少画了页）：页流错位会让
+   *   「复制本页」静默拿错页。
+   * force ⇒ 不吃缓存、不声明 havePages ⇒ 全页重画，故必然收敛，不会来回重跑。
    */
-  const restartFromScratch = () => {
-    run.discarded = true;
-    revokePages(run.pages);
-    run.pages = [];
-    pages.value = [];
-    screenHoldsPartial = false;
-    streamTotal.value = 0;
-    // force：既不吃缓存、也不接续半成品（半成品刚被判废，下一轮不该再碰上它）
-    void generate(true);
-  };
+  const restartFromScratch = () => void generate(true);
 
   try {
     // isObsolete 双重职责：排队中的过期渲染在开跑前即被判废；已开跑的那一笔也靠它作判据被中断
     //（见本轮起手与 cancelPendingExport 里的 cancelObsoleteInFlightRender）
-    const a4Result = await runWorkerExport(buildRenderPayload('a4', song, run.resumeFrom), {
+    await runWorkerExport(buildRenderPayload('a4', song, havePages, settingsStore.scoreShowFooter), {
       isObsolete: () => token !== runToken,
       // 阶段镜像不做 token 过滤：正在占用渲染线程的可能就是上一轮（见 renderStage 声明处）
       onStage: stage => {
         renderStage.value = stage;
       },
-      // 页数一到就铺骨架：这是流式渲染的**第一拍**，早于任何一页出图（纯排版阶段结束即有）。
-      // 本轮若已有真图在展示（canStream=false）则忽略：那种情况整批换新，不闪骨架
-      onPagesPlanned: total => {
+      // 页数一到就**定格条目**：页数、逐页行范围、纸张档位与页边距一次写死（被打断的条目照样要在屏上
+      // 展示、照样可能被导出消费，而 complete 永远不会来），骨架也在此刻铺满 —— 这是流式渲染的
+      // **第一拍**，早于任何一页出图（纯排版阶段结束即有）。
+      // 本轮屏上若是别的键的旧图（canStream=false）则只定格、不铺骨架：那种情况整批换新，不闪骨架。
+      onPagesPlanned: (total, pageLineRanges) => {
         if (token !== runToken) return;
-        // 接续的前段必须与本次排版同页数：不符说明内容键漏了某个影响分页的维度，前段页序已不可信
-        if (run.resumeFrom > 0 && total !== run.total) {
+        // 已在位的那几页必须仍属于本次排版：不符说明内容键漏了某个影响分页的维度，宁可整段判废重跑
+        if (cached && inPlaceIndexes(cached).length > 0 && !sameLayout(cached, total, pageLineRanges)) {
+          dropEntry(contentKey);
+          if (showingOwnEntry) applyEntry(null);
           restartFromScratch();
           return;
         }
-        run.total = total;
-        if (canStream) streamTotal.value = total;
+        // 继承同理，且这一条更该当场判掉：来源条目与本次排版不一致说明那几行的改动挪动了分页边界，
+        // 继承来的页会贴到错的页位上。渲染线程已按 havePages 跳过那几页（声明在排版之前，无从预知），
+        // 只能整段判废重跑 —— 代价与本功能存在之前「一律整谱重画」完全相同。
+        if (inheritSource && !sameLayout(inheritSource.entry, total, pageLineRanges)) {
+          restartFromScratch();
+          return;
+        }
+        entry = ensureEntry(
+          contentKey,
+          song.id,
+          total,
+          pageLineRanges,
+          settingsStore.scorePageSize,
+          settingsStore.scorePageMargin,
+          pageLevelKey.value,
+          fingerprints
+        );
+        // 排版已确认与来源逐页一致：把那几页的页图与页脚合成层接收过来（渲染线程跳过的那几页
+        // 正是在这里补齐 —— 收尾的 isComplete 校验要求条目无洞）
+        if (inheritSource) movePages(entry, inheritSource.entry, inheritIndexes);
+        if (canStream) {
+          streamTotal.value = total;
+          // 逐页覆盖时屏上可能还挂着上一版的尾巴（本轮页数更少）：页数一到就截到新总数 ——
+          // 不截的话多出来的格子会一直挂着旧页图，要等收尾 applyEntry 才消失。只丢引用、不撤 URL：
+          // 那几张仍归旧条目所有（它此刻还是展示项，撤了屏上就是破图）
+          if (pages.value.length > total) pages.value = pages.value.slice(0, total);
+        }
       },
-      // 每出一页立刻上屏（下标＝页序，到达顺序即渲染顺序）。URL 在这里建、并留给缓存条目复用，
-      // 不在 complete 时重建（重建会让每张图重新取 blob 解码 → 整屏白闪）
+      // 每出一页先落账到条目、再上屏（下标＝页序，到达顺序即渲染顺序）。URL 在这里建、随页一起进条目，
+      // 不在 complete 时重建（重建会让每张图重新取 blob 解码 → 整屏白闪）。
+      // **不论屏上是否在流式展示都写条目**：条目是页唯一的家 —— 「被打断的那一轮已画好的页」
+      // 正是靠它留下来，给下一轮同键续跑。
       onPage: (index, blob) => {
-        if (!canStream || token !== runToken) return;
-        const url = URL.createObjectURL(blob);
-        run.pages[index] = { url, blob };
-        pages.value[index] = url;
-        // 屏上现在挂着的是「未提交的页」：下一轮若不吃这一批，得先把它们清掉
-        screenHoldsPartial = true;
+        if (token !== runToken || !entry) return;
+        writePage(entry, index, { url: URL.createObjectURL(blob), blob });
+        if (canStream) pages.value[index] = pageUrl(entry, index);
+      },
+      // 逐页页脚层（本轮开了页脚时渲染线程顺带合成）：与 onPage 是同一页的两份数据，紧跟其后到达。
+      // 落账 + 就地换源都在 adoptFooterPage 里；live 传 canStream 而非 currentRenderData 比对 ——
+      // 流式期间 currentRenderData 还是上一轮那条（换值在整轮收尾的 applyEntry），拿它比对会恒假。
+      onFooterPage: (index, blob) => {
+        if (token !== runToken || !entry) return;
+        adoptFooterPage(entry, index, blob, canStream);
       },
     });
     if (token !== runToken) return;
-    // 空批不等于失败：接回来的前段若已铺满整轮（resumeFrom 等于总页数），渲染线程本就不产出任何新页
-    // —— 循环 [resumeFrom, 总页数) 空转、blobs 为空是正常收尾。只有「既没回新页、手上也没有前段」
-    // 才是真的什么都没画出来。
-    if (a4Result.blobs.length === 0 && run.pages.length === 0) throw new Error('未能生成有效的预览数据');
-
-    // ---- 结果拼装：前段（run.pages，含接回来的） + 尾段（渲染线程只回了 resumeFrom 之后的页）----
-    const resumed = a4Result.resumedFrom;
-    const totalPages = resumed + a4Result.blobs.length;
-    // 每一格都必须到位：前段由接续 seed，尾段由 onPage 逐页填。缺格只可能是渲染线程少报了一页，
-    // 那种错位页流会让「复制本页」静默拿错页 —— 宁可判废重跑；resumed 与派发值不符同理。
-    let aligned = resumed === run.resumeFrom && run.pages.length === totalPages;
-    for (let i = 0; aligned && i < totalPages; i++) aligned = Boolean(run.pages[i]);
-
-    if (run.resumeFrom > 0 && !aligned) {
-      // 续跑拼不齐：前段页图无从补齐（a4Result 只带尾段），整段判废重跑
+    // 条目必须已定格且**至少有一页**：前者说明 pages-planned 到了（请求若在抵达 worker 前就被判废则不到），
+    // 后者排掉「渲染线程一页都没画出来」。两者都是真的什么都没画出来，按失败处理。
+    // 空批本身不等于失败：本轮声明的在位页若已铺满整轮（havePages 覆盖全部页），渲染线程本就不产出新页。
+    const target = entry;
+    if (!target || inPlaceIndexes(target).length === 0) throw new Error('未能生成有效的预览数据');
+    // 收尾校验：一轮成功收尾后条目必须**无洞** —— 声明已在位的页应仍在条目里（条目在途中被驱逐或被
+    // 同键新对象取代时会丢），其余每一页都由本轮画出来。缺任何一格都是错位页流（「复制本页」会静默
+    // 拿错页），宁可整段判废重跑（见 restartFromScratch）。
+    if (!isComplete(target)) {
       restartFromScratch();
       return;
     }
-    if (!aligned) {
-      // 非续跑（屏上挂着已提交的旧图、本轮不流式）走整批路径：此刻才第一次建 URL。
-      // 已上屏的那批（理论上不该出现，见上）本身就不完整，就地回收
-      revokePages(run.pages);
-      run.pages = [];
-    }
 
-    // 页 URL 一律**沿用**流式过程中已上屏的那批（换新 URL = 整屏重新解码白闪）；非流式才由 blobs 现建
-    const a4Urls = aligned ? run.pages.map(page => page.url) : a4Result.blobs.map(blob => URL.createObjectURL(blob));
-    // 各页原始 Blob 与字节数随渲染数据一并缓存（Blob 此刻就在内存，直接取用免二次 fetch）：
-    // 接续回来的那几页也在其中 —— 它们被登记保存，正是为了有朝一日以完整条目身份入缓存
-    const a4Blobs = aligned ? run.pages.map(page => page.blob) : a4Result.blobs;
-    const a4Sizes = a4Blobs.map(blob => blob.size);
-
-    const entry: PreviewRenderData = {
-      a4Urls,
-      a4Sizes,
-      a4Blobs,
-      pageSize: settingsStore.scorePageSize,
-      pageMargin: settingsStore.scorePageMargin,
-    };
-    run.committed = true;
-    // 登记表里同键若还留着别的（更早一轮被作废时登记的、与本条目 URL 无交集的那份），一并作废：
-    // 它的内容已被本条目取代，留着既不会被接续，又要等容量驱逐才回收
-    dropPartial(contentKey, true);
     currentContentKey = contentKey;
-    putCachedRender(contentKey, entry, song.id);
-    applyEntry(entry);
+    // 页已在渲染过程中逐页落账，这里只需把屏上页流与条目对齐 —— 非流式路径正是靠这一步整批换新
+    applyEntry(target);
   } catch (err) {
     if (token === runToken) {
       errorMessage.value = err instanceof Error ? err.message : '预览生成失败';
       // 流式路径可能已把前几页放上屏：错误态要看得见，就地清空页流。那几页的 URL **不在这里回收**
-      // —— 由下方 finally 登记成半成品，留给下一轮续跑（用户点重试即从这批页接上）。
+      // —— 它们归缓存条目所有，下一轮同键重试（用户点「重试」）直接接着用，不必重画。
       // 非流式（旧图还在展示）不动 —— 那有「更新中」Message 提示失败。
-      if (canStream) {
-        pages.value = [];
-        screenHoldsPartial = false;
-      }
+      if (canStream) pages.value = [];
       // 「fonts」这一档是**单向闩**：它只在 worker 走到字体 await 之后的那次无条件上报里才会被改回
       // render（见 renderStage 声明处）。本轮若在到达 worker 之前就失败 —— OffscreenCanvas 不可用、
       // 排队期间被判作废、或 worker onerror 被丢弃 —— 那次上报永远不会来，闩就一直停在 fonts。
@@ -716,21 +699,12 @@ const generate = async (force = false) => {
       renderStage.value = 'render';
     }
   } finally {
-    // 本轮的页图所有权在此了结，三条出口互斥：
-    // - 已提交：URL 已随缓存条目交割，什么都不做；
-    // - 判废：前段页序不可信，就地回收；
-    // - 其余（被作废 / 渲染失败）：登记成半成品留给下一轮同键续跑 —— 「中断后不再全量重建」的落点。
-    //   组件已销毁时不登记（没人再来接续），改走就地回收，否则那批 object URL 会一直悬着。
-    if (!run.committed) {
-      const reclaim = run.discarded || partialsDisposed;
-      if (reclaim) revokePages(run.pages);
-      else if (run.pages.length > 0 && run.total > 0) depositPartial(contentKey, run.pages, run.total);
-    }
+    // 页图所有权全在缓存条目，收尾**没有任何 URL 要交接或回收** —— 这正是逐页化换来的简化。
     // 本轮登记的键只在「仍归本轮所有」时才清：token 换代说明已有更新的轮次接手，它可能登记的正是同一个键，
     // 替它清掉会让第三轮重复触发再起一轮（force 重试与在途轮次同键时就会走到这里）
     if (inFlightContentKey === contentKey && token === runToken) inFlightContentKey = '';
     if (token === runToken) {
-      // 本轮已终结：撤掉骨架尾巴（成功的已由 applyEntry 换成整批真图，失败的页流已清空）
+      // 本轮已终结：收起骨架格（成功的已由 applyEntry 换成条目里的页，失败的页流已清空）
       streamTotal.value = 0;
       isRendering.value = false;
       isPreviewRendering.value = false;
@@ -739,15 +713,41 @@ const generate = async (force = false) => {
   }
 };
 
-const debouncedGenerate = useDebounceFn(() => generate(), SCORE_PREVIEW_DEBOUNCE_MS);
+const debouncedGenerate = useDebounceFn(
+  (streamOnReplace = false) => generate(false, streamOnReplace),
+  SCORE_PREVIEW_DEBOUNCE_MS
+);
+
+/**
+ * 作废在途轮次并中断渲染线程上那一笔，**但不重开、也不动 UI 状态**。
+ *
+ * 与 cancelPendingExport 的分工：那一位归「切歌 / 切走 / 卸载」用，连骨架格、「更新中」提示与
+ * 计划页数一起收掉（接下来不一定还有活儿）；这里只掐掉**已无人要的那一轮**，因为调用方紧接着
+ * 就会开新一轮 —— 骨架、计划页数、提示都该原样留着，一收一放只会闪一下。
+ *
+ * 【为什么内容一变就得**立刻**调，而不是等防抖到点】防抖（SCORE_PREVIEW_DEBOUNCE_MS）只该延后
+ * 「开新一轮」（连续编辑合并成一次），不该让旧轮在这段窗口里继续画：键已换代，它剩下的页注定被
+ * token 丢掉，却仍占着渲染线程，让新一轮排在它后面 —— 用户看到的就是「改了设置，旧构建照常跑完
+ * 才开始新的重建」。切歌早已是这个待遇（见 cancelPendingExport），这里把它补齐给设置与内容变更。
+ *
+ * 本函数只负责作废，**不撤销任何页 URL**：屏上的页全部归缓存条目（在途轮次已画好的页照样留着，
+ * 供新一轮同键续跑），本组件一个 URL 都不持有。
+ */
+const invalidateInFlightRender = () => {
+  runToken++;
+  // token 已换代 ⇒ 在途轮次的 isObsolete 此刻必为真，服务层据此才肯中断（它按任务自带的判据决定，
+  // 不会误伤用户正等着的导出，见 cancelObsoleteInFlightRender）
+  cancelObsoleteInFlightRender();
+  // 登记一并作废：否则新一轮同键起手会被 generate 误判成「重复触发」而不起跑
+  inFlightContentKey = '';
+};
 
 /** 作废进行中的异步导出：runToken 自增使过期 token 的回写被丢弃；切歌/切走与真卸载共用 */
 const cancelPendingExport = () => {
   debouncedGenerate.cancel();
-  // 不 revoke：屏上的页 URL 要么归缓存条目（切回预览可复用，内存由 LRU 容量控制），要么属于这一轮
-  // 被中断的半成品 —— 后者由它自己的 finally 登记回 partialsByKey，留给下一轮同键续跑。
-  // 屏上那几张也不在这里撤：撤回会让还在显示的页变破图；留待下一轮 generate 起手决定接续还是清屏。
-  // 骨架尾巴则随本轮终结即刻收起。
+  // 不 revoke 任何页 URL：屏上的页全部归缓存条目（切回预览可复用，内存由 LRU 容量控制），
+  // 本组件一个 URL 都不持有。屏上那几张也不在这里撤：撤回会让还在显示的页变破图；
+  // 留待下一轮 generate 起手决定接续（同键）还是整批换新。骨架格则随本轮终结即刻收起。
   runToken++;
   // token 已换代 ⇒ 在途的预览轮次其 isObsolete 此刻必为真，顺势中断它：切歌时上一首没画完的页没必要
   // 再画，新歌也不必排它后面等一整轮（渲染线程没有抢占能力，不中断就只能等它自己跑完）。
@@ -797,16 +797,13 @@ const isPageMenuTarget = (index: number): boolean => isPageMenuOpen.value && men
  * 该容器同时被用作浮层锚点，供平台「锚点随所在滚动容器滚动而关闭」的机制识别（它在预览滚动区内）。
  */
 const previewPagesRef = useTemplateRef<HTMLElement>('previewPagesRef');
-/**
- * 各页图片字节数：直接读共享缓存 currentRenderData（含 a4Sizes），不另立缓存结构，
- * 随预览渲染/切歌同步刷新、随 LRU 驱逐回收。
- */
 
-/** 当前右键页的字节数，未取回前为 null（currentRenderData 由 applyEntry 在切歌/生成时同步设定） */
+/** 当前右键页的字节数，未取回前为 null（currentRenderData 由 applyEntry 在切歌/生成时同步设定）。
+ *  该页尚未出图（洞）时同样为 null */
 const menuPageSize = computed(() => {
-  const i = menuTargetIndex.value;
+  const index = menuTargetIndex.value;
   const data = currentRenderData.value;
-  return data && i !== null && i >= 0 && i < data.a4Sizes.length ? data.a4Sizes[i] : null;
+  return data && index !== null ? (pageBlob(data, index)?.size ?? null) : null;
 });
 
 /** 右键菜单标题：当前页图片大小预估 */
@@ -914,20 +911,46 @@ const renderedPageWidth = computed(
   () => `${Math.round(renderedPageHeightPx.value * (previewPageSize.value.width / previewPageSize.value.height))}px`
 );
 
-/** 尚未出图的骨架槽位数（总页数已知时为正；未知 / 已完成时为 0，尾部不占位） */
-const pendingSlots = computed(() => Math.max(0, streamTotal.value - pages.value.length));
+/**
+ * 缓存被**外部**清空（开发面板「清空预览缓存」）时同步撤下页流：那批页 URL 已随清空回收，
+ * 留在屏上就是整屏破图。正常的换源路径（applyEntry）本就会改写 pages，此处只兜外部清空这一种；
+ * 同一 tick 内若紧接着又 applyEntry(新条目)，watch 回调拿到的是最新值，不会误清。
+ */
+watch(currentRenderData, data => {
+  if (!data) pages.value = [];
+});
 
 /**
- * 页脚开关：只切页流展示源，**不重渲染乐谱**（页脚不进内容键，也不进缓存条目）。
+ * 页脚开关：只切页流展示源，**不重渲染乐谱**（页脚不进内容键，也不进缓存条目的页图）。
  * 首次打开由 ensureFooterComposed 向渲染线程请求一次合成，结果按条目缓存，之后来回切零开销。
  * 页码文字色随主题变化：主题是内容键维度，换主题会整谱重渲 → 新条目 → 合成层按新配色重新生成。
+ *
+ * 【构建在途时开关怎么办】在途轮次是按**发起那一刻**的开关值派发的（embedFooterPages）：
+ * - 轮次「不开页脚」而开关被打开 ⇒ 它跑完也拿不到页码，页码只能等它结束后另起一笔合成；
+ * - 轮次「开页脚」而开关被关掉 ⇒ 剩下每一页都白算一次页脚层。
+ * 两种情况都是「派发参数已与当前设置不符」，故与切歌同待遇：作废在途轮次、按新开关值重开一轮
+ * （不开页脚时它只是白跑，开了页脚时它连页码都补不上，而合成只能排在同一队列的它后面）。
+ * 重开那一轮起手就会把**已在位的页**交给 havePages 跳过，而缺页脚的那几页由 generate 命中分支里的
+ * ensureFooterComposed 先排进队列（同一条队列 FIFO，合成先跑）——于是页码逐页到位，而不是等整谱
+ * 构建完再补一遍。
  */
 watch(
   () => settingsStore.scoreShowFooter,
-  () => {
+  show => {
     const data = currentRenderData.value;
+    // 只在「在途轮次就是当前内容键那一轮」时重开：别的键在途说明内容也变了，那条路径自会重开，
+    // 这里再插一轮只会多跑一遍。页脚合成在途（inFlightContentKey 为空）也不算 —— 那笔合成正是
+    // 本次开关要的产物，作废它等于白扔。
+    if (inFlightContentKey !== '' && inFlightContentKey === reactiveContentKey.value) {
+      invalidateInFlightRender();
+      debouncedGenerate();
+    }
     applyDisplayUrls(data);
     void ensureFooterComposed(data);
+    // 关掉页脚：其余条目的合成层此后多半再也用不到，却照旧计入缓存重量（weightOf 把两层相加），
+    // 在 96MiB / 48 条的配额下等于把别的歌挤出去。展示项留着（开关再打开零成本切回），
+    // 别的条目真要用到时重合成一次（~22ms/页）—— 见 scorePreviewCache 的 dropIdleFooterPages。
+    if (!show) dropIdleFooterPages();
   }
 );
 
@@ -953,8 +976,13 @@ useEventListener(
   { passive: false }
 );
 
-/** 右键某页：把命中的页码交给 useTargetMenu 在光标处打开（单页大小已在共享缓存 currentRenderData 中，无需额外取数） */
-const handlePageContextMenu = (e: MouseEvent, index: number) => void openPageMenuAt(e, index);
+/** 右键某页：把命中的页码交给 useTargetMenu 在光标处打开（单页大小已在共享缓存 currentRenderData 中，无需额外取数）。
+ *  骨架格（该页尚未出图）不拦右键 —— 没有图可复制/下载，原生菜单照旧可用 */
+const handlePageContextMenu = (e: MouseEvent, index: number) => {
+  if (!pages.value[index]) return;
+  e.preventDefault();
+  void openPageMenuAt(e, index);
+};
 
 // ===== 页码读数：挂在横向滚动条上的滚动气泡 =====
 /** 页码读数自动淡出时延（ms）：滚动停顿超过该时长即淡出。
@@ -985,21 +1013,20 @@ const previewScrollbar = computed<ScrollAreaScrollbar>(() => ({
   },
 }));
 
-/** 读取指定页的 Blob（统一走缓存模块的 object URL 读回）。
- *  缓存页面不含页脚，故按开关合成后再交给剪贴板 / 下载，产物与预览所见一致。 */
+/** 读取指定页的 Blob（页图与原始 Blob 同存于缓存条目，零成本直取）。
+ *  缓存页不含页脚，故按开关合成后再交给剪贴板 / 下载，产物与预览所见一致。 */
 const fetchPageBlob = async (index: number): Promise<Blob | null> => {
   const data = currentRenderData.value;
-  // 取**无页脚原图**的 URL：pages 里可能是合成后的带页码图，拿它再合成会叠两行页码
-  const rawUrl = data?.a4Urls[index];
-  if (!rawUrl) return null;
+  if (!data) return null;
+  // 取**无页脚原图**：footerPages 里是合成后的带页码图，拿它再合成会叠两行页码
+  const raw = pageBlob(data, index);
+  if (!raw) return null;
   // 页脚合成层已就绪（预览开着页脚时）直接复用同一份 Blob，免去重复合成；未就绪才现合成
-  const composed = settingsStore.scoreShowFooter ? data?.footerBlobs?.[index] : undefined;
+  const composed = settingsStore.scoreShowFooter ? data.footerPages?.[index]?.blob : undefined;
   if (composed) return composed;
-  const blob = await readA4PageBlob(rawUrl);
-  if (!blob) return null;
   // 页脚按缓存渲染时的纸张档位与边距合成，不读实时设置（改设置在途窗口内两者可能不一致）
-  const [result] = await composePageFooter([blob], [index], data?.pageSize, data?.pageMargin);
-  return result ?? blob;
+  const [result] = await composePageFooter([raw], [index], data.pageSize, data.pageMargin);
+  return result ?? raw;
 };
 
 /** 复制指定页到系统剪贴板（JPEG 不兼容时自动转 PNG 写入） */
@@ -1063,11 +1090,14 @@ watch(
 
     const contentKey = reactiveContentKey.value;
     const cached = getCachedRender(contentKey);
-    // 缓存命中直接消费，重新生成由 generate 完成后消费
-    if (cached && cached.a4Urls.length > 0) adoptCachedRender(cached, contentKey);
+    // 完整条目直接消费；有洞的（上一轮被打断）交给 generate —— 它会先把已有的页放上屏、再补缺的几页；
+    // 无命中则立即清空进 loading 态，绝不带着上一张乐谱等待异步渲染
+    if (cached && isComplete(cached)) adoptCachedRender(cached, contentKey);
     else {
-      applyEntry(null);
-      currentContentKey = '';
+      if (!cached) {
+        applyEntry(null);
+        currentContentKey = '';
+      }
       void generate();
     }
   }
@@ -1086,7 +1116,15 @@ watch(
   activeContentKey,
   key => {
     if (!key) return;
-    debouncedGenerate();
+    // 键一变，在途那一轮（若是别的键）就已无人要：**立刻**作废并中断，不等这 150ms 防抖到点 ——
+    // 与切歌同待遇（见 invalidateInFlightRender）。防抖只负责延后「开新一轮」，不该让旧轮继续画
+    // 它注定被丢掉的页，还让新一轮排在它后面。在途就是本键时不动：那是「首次激活时 onActivated
+    // 与防抖各起一轮」的重复触发，交给 generate 起手的复用分支收工即可。
+    if (inFlightContentKey !== '' && inFlightContentKey !== key) invalidateInFlightRender();
+    // 面板激活时键变了 ⇒ 来路基本只可能是**改排版设置**（歌词/元数据/切歌都发生在别的标签，
+    // 那会先失活；切歌另有自己的 watch）：这一轮传「逐页覆盖」，让屏上的旧图被逐格换成新页，
+    // 而不是等整篇重建完才一次换图 —— 用户正盯着预览调字号/缩放，要的是马上看到新排版。
+    debouncedGenerate(true);
   },
   { immediate: false }
 );
@@ -1097,13 +1135,17 @@ onActivated(async () => {
   // 唤醒守卫：如果休眠（在其他 Tab）期间切过歌或改过内容，先与已渲染内容比对
   if (contentKey !== currentContentKey) {
     const cached = contentKey ? getCachedRender(contentKey) : null;
-    if (cached && cached.a4Urls.length > 0) adoptCachedRender(cached, contentKey);
+    if (cached && isComplete(cached)) adoptCachedRender(cached, contentKey);
     else {
-      applyEntry(null);
-      currentContentKey = '';
+      if (!cached) {
+        applyEntry(null);
+        currentContentKey = '';
+      }
       await generate();
     }
-  } else if (pages.value.length === 0 && hasLyricsText.value) await generate();
+    // 键没变但屏上条目不完整（休眠期间那一轮被中断，缺页留在条目里）：同样要把缺的页补上
+  } else if ((!currentRenderData.value || !isComplete(currentRenderData.value)) && hasLyricsText.value)
+    await generate();
 
   await nextTick();
   // 恢复滚动位置（双轴）：浏览器在 detach→attach 时清零 scrollTop/scrollLeft，与「排列」区同源问题

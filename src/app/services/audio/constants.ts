@@ -2,7 +2,8 @@ import { AUDIO_SETTINGS_DEFAULTS } from '@/platform/utils/constants';
 
 import type { AudioTimbreId } from '@/platform/types';
 
-/** 音频（Tone.js 相关参数）配置 */
+/** 音频参数配置：引擎是**原生 Web Audio 手写实现**（见 synthEngine.ts，本项目不依赖 Tone.js），
+ *  参数命名沿用 Tone.js 的词汇（dB / wet / harmonicity / modulationIndex / 包络 等）便于对照 */
 export const AUDIO_CONFIG = {
   /** 标准音 A4 频率（Hz） */
   A4_FREQ: 440,

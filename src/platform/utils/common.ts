@@ -141,55 +141,6 @@ export const getEditDistance = (a: string, b: string): number => {
   return prevRow[b.length];
 };
 
-// ===== observeVisibility: 共享可见性观察 =====
-
-/**
- * 共享 IntersectionObserver：同一 root 下的大量元素（谱面字符槽、选择器卡片等）
- * 复用同一个 observer 实例，避免每个元素各建一个 observer 的开销。
- * 按 root 元素维度复用；root 传 null 表示使用视口。
- */
-type VisibilityCallback = (visible: boolean) => void;
-
-/** 单个共享 observer 及其专属回调表：回调按 root 维度隔离，同一元素被不同 root 观察时互不覆盖 */
-interface SharedVisibilityObserver {
-  observer: IntersectionObserver;
-  callbacks: WeakMap<Element, VisibilityCallback>;
-}
-
-const sharedObservers = new Map<Element | null, SharedVisibilityObserver>();
-
-/** 取（或创建）绑定到指定 root 的共享 IntersectionObserver 实例及其回调表。 */
-const getObserverForRoot = (root: Element | null): SharedVisibilityObserver => {
-  let shared = sharedObservers.get(root);
-  if (!shared) {
-    const callbacks = new WeakMap<Element, VisibilityCallback>();
-    const observer = new IntersectionObserver(
-      entries => {
-        for (const entry of entries) callbacks.get(entry.target)?.(entry.isIntersecting);
-      },
-      { root }
-    );
-    shared = { observer, callbacks };
-    sharedObservers.set(root, shared);
-  }
-  return shared;
-};
-
-/**
- * 观察元素可见性，返回停止观察的清理函数。
- * 回调可能被多次调用（滚动进出视口），调用方自行决定何时 stop。
- * 同一元素可被不同 root 各自观察，回调互不干扰；同一元素在同一 root 下重复观察以最后一次为准。
- */
-export function observeVisibility(el: Element, cb: VisibilityCallback, root?: Element | null): () => void {
-  const shared = getObserverForRoot(root ?? null);
-  shared.callbacks.set(el, cb);
-  shared.observer.observe(el);
-  return () => {
-    shared.callbacks.delete(el);
-    shared.observer.unobserve(el);
-  };
-}
-
 // ===== base64: UTF-8 安全的 base64 编解码（替代 js-base64）=====
 
 /**

@@ -91,18 +91,72 @@ function acquirePageCanvas(
   return { canvas, ctx };
 }
 
+/** 单页页脚合成的绘制参数（纸张尺寸已在调用方解析好，避免每页重解析一次档位） */
+export interface FooterPageOptions {
+  width: number;
+  height: number;
+  pageMargin: number;
+  /** 页码文字色（导出配色 SUB_TEXT） */
+  color: string;
+  /** 输出 JPEG 质量（0.3~1） */
+  quality: number;
+}
+
+/**
+ * 合成**单页**页脚：把无页脚页图贴回整页画布 → 画页码 → 重编码为 JPEG。
+ *
+ * 两个调用方共用这一份实现：页脚合成分支（拿到的是一批页图）与整谱渲染循环
+ * （`embedFooterPages` 为真时，每画完一页就顺手合成该页）。
+ *
+ * **两者共用同一张整页画布**（acquirePageCanvas 的模块级 pagePool），故调用方必须保证它们不重叠 ——
+ * 现状由两条共同保证：渲染循环内是**顺序 await**，跨任务则由「同一条串行队列」保证。
+ * 这也是「页脚不能作为另一笔任务与渲染并行」的根因（并行会互相清掉对方的画布内容）。
+ */
+export async function composeFooterPage(page: Blob, pageIndex: number, opts: FooterPageOptions): Promise<Blob> {
+  const { canvas, ctx } = acquirePageCanvas(opts.width, opts.height);
+  // 页图为设备像素（逻辑尺寸 × PIXEL_RATIO），贴图用恒等变换保证 1:1 不重采样
+  const bitmap = await createImageBitmap(page);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  // 回到逻辑坐标系画页码：与预览展示层共用同一绘制函数，字号/位置逐像素同源
+  ctx.setTransform(LAYOUT.PIXEL_RATIO, 0, 0, LAYOUT.PIXEL_RATIO, 0, 0);
+  drawFooterMark(ctx, {
+    pageIndex,
+    width: opts.width,
+    height: opts.height,
+    pageMargin: opts.pageMargin,
+    color: opts.color,
+  });
+
+  return canvas.convertToBlob({ type: 'image/jpeg', quality: opts.quality });
+}
+
 /**
  * 页脚合成：把无页脚的页面图贴回整页画布 → 画页码 → 重编码为 JPEG。
  *
  * 页面栅格与页脚解耦的原因：若页脚画进页面栅格，「显示页脚」便成了内容的一部分，
  * 预览缓存必须为开关两态各存一份（同一首歌两份条目、字节数翻倍）。改为合成层后只留一份
  * 无页脚页面；代价是导出时多一次 JPEG 编码（质量档位与页面渲染相同，视觉无损级）。
+ *
+ * @param onFooterPage 逐页上报（可选）。整批一次回传会让页码在全部页合成完那一刻一起跳出来
+ *        （14 页实测 ≈ 400ms），而单页合成只有 ~22ms。逐页回传后第 1 页的页码立刻到位，
+ *        且被中断时已上报的页仍归调用方。
  */
-export async function composeFooterPages(payload: FooterComposePayload): Promise<Blob[]> {
+export async function composeFooterPages(
+  payload: FooterComposePayload,
+  onFooterPage?: (index: number, blob: Blob) => void
+): Promise<Blob[]> {
   const { width, height } = getScorePageSize(payload.pageSize ?? 'a4');
-  const pageMargin = payload.pageMargin ?? LAYOUT.PAGE_MARGIN;
-  const quality = Math.min(1, Math.max(0.3, payload.exportQuality ?? EXPORT_JPEG_QUALITY));
-  const { canvas, ctx } = acquirePageCanvas(width, height);
+  const opts: FooterPageOptions = {
+    width,
+    height,
+    pageMargin: payload.pageMargin ?? LAYOUT.PAGE_MARGIN,
+    color: payload.color,
+    quality: Math.min(1, Math.max(0.3, payload.exportQuality ?? EXPORT_JPEG_QUALITY)),
+  };
 
   const blobs: Blob[] = [];
   for (let i = 0; i < payload.pages.length; i++) {
@@ -111,24 +165,11 @@ export async function composeFooterPages(payload: FooterComposePayload): Promise
     // 本层是唯一能拦住页脚合成的地方 —— 它对整谱渲染不是「派生的展示料」而是同一条串行队列上的
     // 一大段编码，不中断就会把新歌的渲染整段挡在后面。
     throwIfAborted();
-    // 页图为设备像素（逻辑尺寸 × PIXEL_RATIO），贴图用恒等变换保证 1:1 不重采样
-    const bitmap = await createImageBitmap(payload.pages[i]!);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(bitmap, 0, 0);
-    bitmap.close();
-
-    // 回到逻辑坐标系画页码：与预览展示层共用同一绘制函数，字号/位置逐像素同源
-    ctx.setTransform(LAYOUT.PIXEL_RATIO, 0, 0, LAYOUT.PIXEL_RATIO, 0, 0);
-    drawFooterMark(ctx, {
-      pageIndex: payload.pageIndexes?.[i] ?? i,
-      width,
-      height,
-      pageMargin,
-      color: payload.color,
-    });
-
-    blobs.push(await canvas.convertToBlob({ type: 'image/jpeg', quality }));
+    // 页序取**真实页序**而非数组下标 —— 合成批只覆盖「缺页脚的那几页」，下标与页序不是一回事
+    const pageIndex = payload.pageIndexes?.[i] ?? i;
+    const blob = await composeFooterPage(payload.pages[i]!, pageIndex, opts);
+    blobs.push(blob);
+    onFooterPage?.(pageIndex, blob);
   }
   return blobs;
 }

@@ -29,9 +29,10 @@
            · 未滚动（scrollTop===0）时顶部不遮罩 → 首卡完整可见、与指板顶对齐
            · 上滚后顶部渐隐显示，柔化滚出内容的切口
            · 底部仅未滚到底时渐隐，滚到底自动取消 → 末卡不被遮挡
-           列顶 32px 与指板同高：未滚动时首卡顶边距父容器上下缘均为 32px。宿主盒上缘另行上移到
-           父容器内 8px 处（见下），故滚动时卡片理论上可上移到 8px，但该段落在 20px 羽化带内，
-           观感仍是「升到列顶即淡出」。
+           列顶与指板卡同高：宿主盒纵向内缩取「画布留白 − 内容补白」（见 panelColumnInsetStyle），
+           与内容上的 py-xl 相加恰为画布留白 edgePad —— 未滚动时首卡顶边距父容器上缘即 edgePad，
+           与左侧指板卡顶边齐平。宿主盒上缘仍在父容器内（内缩 = 留白 − 补白），故滚动时卡片理论上
+           可上移到该处，但该段落在 20px 羽化带内，观感仍是「升到列顶即淡出」。
 
            卡片投影四周留白：宿主是卡片祖先链上唯一的 overflow!=visible 节点（v-scrollbar 注入的
            overflow-y:auto），它在自己的内容盒边界裁掉后代的一切绘制；而 overflow 只裁内容与后代、
@@ -41,11 +42,11 @@
            漏改任一处卡片位置都会漂移：
            · 横向 P=32：宿主盒右缘贴父容器（right-8→right-0）、w-72→w-88、补 px-2xl；
              滚动条 edgeOffset 同步 +32 才停在原处。
-           · 纵向 P=24：宿主盒上下各内缩 32-P（inset-y-2xl→inset-y-sm）、内容补 py-xl；
-             滚动条 endInset 12→36（盒高增 48 的一半）才停在原处（轨道顶 8+36=44＝原 32+12）。
+           · 纵向 P=xl：宿主盒上下各内缩「画布留白 − P」、内容补 py-xl；滚动条 endInset 不必动 ——
+             它钉在宿主盒内，列整体下移时滚动条随宿主盒一起走，相对卡片的位置逐像素不变。
            P 只需 ≥ 卡片投影在该轴上的最大延展（shadow-md：纵向 4+14=18、横向 14）；横向 32 由原本
            right-8 的内缩决定、不必再收，纵向取最近的 spacing token 24。 -->
-      <div class="pointer-events-auto absolute inset-y-sm right-0 z-panel">
+      <div :style="panelColumnInsetStyle" class="pointer-events-auto absolute right-0 z-panel">
         <BaseScrollArea
           :scrollbar="{ endInset: 44, edgeOffset: EDGE_OFFSET + 44 }"
           close-popovers
@@ -201,6 +202,22 @@ import type { Component, CSSProperties, Ref } from 'vue';
  */
 const workbenchGutterStyle: CSSProperties = {
   padding: `${INTERACTIVE_GEOMETRY.edgePad}px ${INTERACTIVE_GEOMETRY.leftPad}px`,
+};
+
+/**
+ * 右侧面板列**宿主盒的纵向内缩** = 画布留白 − 内容补白（内容上是 py-xl，见模板）。
+ *
+ * 之所以是「减」：宿主盒要比卡片区向外扩 P，卡片投影才落得下（完整推导见模板注释），
+ * 内容再补等量 padding 把卡片拉回原位 —— 故「宿主盒顶 + 内容补白」才是卡片顶边。
+ * 要让首卡顶边与左侧指板卡顶边齐平（两者都取 edgePad），宿主盒顶就只能内缩 edgePad − P。
+ * 横向是同一件事的另一半：宿主盒右缘贴父容器（right-0）、内容补 px-2xl。
+ *
+ * 用 calc 表达而不是写死像素：spacing token 是 rem，根字号 22.25px 下 1.5rem = 33.375px，
+ * 写死一个数就等于把「内容补白」抄了第二份，日后调档位两处必然漂移。
+ */
+const panelColumnInsetStyle: CSSProperties = {
+  top: `calc(${INTERACTIVE_GEOMETRY.edgePad}px - var(--spacing-xl))`,
+  bottom: `calc(${INTERACTIVE_GEOMETRY.edgePad}px - var(--spacing-xl))`,
 };
 
 const PANEL_COMPONENT_MAP: Record<WorkbenchPanelId, Component> = {

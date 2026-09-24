@@ -95,9 +95,12 @@ export interface WorkerExportPayloadInput {
   pageSize?: string;
   /** 忽略无和弦空格：canvas 中该空格不占列宽 */
   ignoreEmptySpace?: boolean;
-  /** 续跑起点（页序，仅 a4 分页模式有意义）：前若干页的图调用方已持有，本线程从这一页开始画。
-   *  语义与正确性前提见 WorkerExportPayload.resumeFrom（协议层是唯一口径） */
-  resumeFrom?: number;
+  /** 已在缓存中就位的页序（缺省空数组 = 全部页都要画）：这些页的绘制与编码本线程直接跳过。
+   *  语义与正确性前提见 WorkerExportPayload.havePages（协议层是唯一口径） */
+  havePages?: number[];
+  /** 逐页随渲染顺带合成页脚层（缺省 false）：预览专用，导出恒为 false。
+   *  语义与理由见 WorkerExportPayload.embedFooterPages（协议层是唯一口径） */
+  embedFooterPages?: boolean;
 }
 
 /** 将歌曲模型与选中行转换为 Worker 专用的轻量渲染结构（options 对象入参，避免多位置参数逐位对齐） */
@@ -118,7 +121,8 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     pageMarginPx = SCORE_EXPORT_CONFIG.PAGE_MARGIN,
     pageSize = 'a4',
     ignoreEmptySpace = false,
-    resumeFrom = 0,
+    havePages = [],
+    embedFooterPages = false,
   } = input;
   const lyricsLines = song.lyrics.split('\n');
   const { chordMap } = song;
@@ -206,18 +210,22 @@ export const prepareWorkerExportPayload = (input: WorkerExportPayloadInput): Wor
     pageSize,
     // 忽略无和弦空格：canvas 中该空格不占列宽（缺省关闭，保持既有排版）
     ignoreEmptySpace,
-    // 续跑起点（页序）：>0 时 Worker 跳过前若干页的绘制与编码，只回报剩下的页
-    resumeFrom,
+    // 已在缓存中就位的页序：Worker 跳过这些页的绘制与编码，只回报剩下的页
+    havePages,
+    // 逐页随渲染顺带合成页脚层（预览专用；导出恒 false）
+    embedFooterPages,
   };
 };
 
-/** Worker 导出结果：各页 Blob + a4 模式下每页覆盖的原始歌词行序号（供按页重组内容） */
+/** Worker 导出结果：本次画出来的各页 Blob + a4 模式下每页覆盖的原始歌词行序号（供按页重组内容） */
 export interface WorkerExportResult {
+  /** 本次实际绘制的页图，与 renderedPages **同序**：被 havePages 跳过的页不在其中。
+   *  不假定从第 0 页起连续 —— 逐页化之后「洞」是常态，调用方必须按 renderedPages 逐页归位 */
   blobs: Blob[];
   pageLineRanges: number[][];
-  /** 本次实际跳过的前导页数（见 WorkerExportPayload.resumeFrom）：blobs[0] 即第 resumedFrom 页。
-   *  取 Worker 回带的**实际值**而非调用方派发值 —— 它是拼装完整页流时的权威偏移量 */
-  resumedFrom: number;
+  /** 本次实际绘制并回传的页序（与 blobs 同序）。取 Worker 回带的**实际值**而非调用方派发的
+   *  havePages —— 它是把 blobs 拼回完整页流时的权威下标来源 */
+  renderedPages: number[];
 }
 
 /** 单次渲染请求的可选项 */
@@ -230,14 +238,23 @@ export interface RunWorkerExportOptions {
    *
    * 与 onStage 同属**过程信息**：给调用方一个「先铺骨架」的机会 —— 页数一旦知道，超长谱的等待就从
    * 「白屏等整批」变成「N 个占位 + 逐个填」。不关心流式的调用方（导出 / 合成）不传即可。
+   *
+   * 行范围与总数同批给出（与 complete 的读数恒等，只是早一步）：调用方要在**任何一页画出来之前**
+   * 用它校验自己那份已在位的页序是否仍属于本次排版，不符即整段判废重跑。
    */
-  onPagesPlanned?: (total: number) => void;
+  onPagesPlanned?: (total: number, pageLineRanges: number[][]) => void;
   /**
    * 单页出图（流式）：与 Promise 结果里的 blobs 同序、同批，只是早一步到达；下标从 0 起，
    * 到达顺序即渲染顺序（渲染线程串行 + 端口有序），故可直接按到达次序追加。
    * 只作展示用途 —— 需要「全部页面」的调用方仍应 await 返回值，别在这里攒。
    */
   onPage?: (index: number, blob: Blob) => void;
+  /**
+   * 单页页脚合成图（流式）：与 `onPage` 是**两份**数据（无页脚页图 vs 叠了页码的合成层），
+   * 两个生产者都会发它 —— 整谱渲染（`embedFooterPages` 为真时逐页顺带合成）与页脚合成分支。
+   * 只作展示与落账用途；需要「全部页脚」的调用方仍应 await 返回值。
+   */
+  onFooterPage?: (index: number, blob: Blob) => void;
   /** 排队中的任务在真正开跑前询问一次：返回 true 表示调用方已不需要这次结果（切歌 / 又改了内容），
    *  直接作废、不占用渲染线程。它也是**中断在途任务**的判据 —— 调用方判废后调一次
    *  cancelObsoleteInFlightRender，服务层据此（而非无条件）中断渲染线程上那一笔。
@@ -298,22 +315,26 @@ const ensureExportWorker = (): Worker => {
     const item = inFlightRender;
     if (!item) return;
     const msg = e.data;
-    // 阶段 / 页数 / 单页都是「过程信息」：就地转给调用方，不进入下面的 resolve / reject 分支
+    // 阶段 / 页数 / 单页 / 单页页脚都是「过程信息」：就地转给调用方，不进入下面的 resolve / reject 分支
     if (msg.type === 'stage') {
       item.options.onStage?.(msg.stage);
       return;
     }
     if (msg.type === 'pages-planned') {
-      item.options.onPagesPlanned?.(msg.total);
+      item.options.onPagesPlanned?.(msg.total, msg.pageLineRanges);
       return;
     }
     if (msg.type === 'page') {
       item.options.onPage?.(msg.index, msg.blob);
       return;
     }
+    if (msg.type === 'footer-page') {
+      item.options.onFooterPage?.(msg.index, msg.blob);
+      return;
+    }
     inFlightRender = null;
     if (msg.type === 'complete')
-      item.resolve({ blobs: msg.blobs, pageLineRanges: msg.pageLineRanges ?? [], resumedFrom: msg.resumedFrom });
+      item.resolve({ blobs: msg.blobs, pageLineRanges: msg.pageLineRanges ?? [], renderedPages: msg.renderedPages });
     else item.reject(new Error(msg.message));
 
     pumpRenderQueue();

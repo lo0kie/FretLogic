@@ -31,11 +31,20 @@ export const useScoreRenderPayload = () => {
   /**
    * 统一构造 Worker 渲染载荷（a4 分页 / normal 长图共用同一组设置项）。
    * song 缺省取当前活动乐谱；两者皆空即「无谱可渲染」，在此处显式失败，不留给下游解引用。
-   * @param resumeFrom a4 分页的续跑起点（页序，缺省 0）：前若干页的图调用方已持有，渲染线程从这一页
-   *        开始画。只由预览面板在「同一内容键的半成品可以接续」时传；导出路径恒用 0 —— 它每次都是
-   *        用户显式发起的完整产物，没有「前几页已经在手」这回事（语义见 WorkerExportPayload.resumeFrom）
+   * @param havePages 已在缓存中就位的页序（缺省空数组 = 全部页都要画）：渲染线程跳过这些页的绘制与
+   *        编码，只补剩下的。只由预览面板在「同一内容键的半成品可以接续」时传；导出路径恒用空数组 ——
+   *        它每次都是用户显式发起的完整产物，没有「前几页已经在手」这回事
+   *        （语义与正确性前提见 WorkerExportPayload.havePages）
+   * @param embedFooterPages 逐页随渲染顺带合成页脚层（缺省 false）：只由预览面板按「显示页脚」开关传，
+   *        导出路径恒 false（它要的是无页脚页图，页脚由 composePageFooter 显式合成）
+   *        （语义与理由见 WorkerExportPayload.embedFooterPages）
    */
-  const buildRenderPayload = (mode: 'normal' | 'a4', song?: Song, resumeFrom = 0): WorkerExportPayload => {
+  const buildRenderPayload = (
+    mode: 'normal' | 'a4',
+    song?: Song,
+    havePages: number[] = [],
+    embedFooterPages = false
+  ): WorkerExportPayload => {
     const target = song ?? scoreEditor.activeSong;
     if (!target) throw new Error('当前没有打开的乐谱，无法渲染预览/导出');
     return prepareWorkerExportPayload({
@@ -55,7 +64,8 @@ export const useScoreRenderPayload = () => {
       pageMarginPx: settingsStore.scorePageMargin,
       pageSize: settingsStore.scorePageSize,
       ignoreEmptySpace: settingsStore.scoreIgnoreEmptySpace,
-      resumeFrom,
+      havePages,
+      embedFooterPages,
     });
   };
 

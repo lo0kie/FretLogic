@@ -79,7 +79,7 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
   /** 拖拽会话期间屏蔽右键菜单；拖拽中右键视为取消本次拖拽 */
   const preventContextMenu = (e: MouseEvent) => {
     // 拖拽中右键：退出本次拖拽（先取消，再按拖拽会话屏蔽菜单）
-    if (isDragging.value) handleGlobalPointerCancel(new PointerEvent('pointercancel'));
+    if (isDragging.value) cancelActiveSession();
 
     if (isDragging.value || wasDraggingInSession) {
       e.preventDefault();
@@ -261,10 +261,20 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     }
   };
 
-  /** 全局取消（pointercancel / 右键）：中止拖拽并恢复状态 */
-  const handleGlobalPointerCancel = (e: PointerEvent) => {
-    if (!isEventForActivePointer(e)) return;
-
+  /**
+   * 拖拽会话的取消收尾（原生 pointercancel / 右键 / 窗口失焦共用）。
+   *
+   * 刻意**不接收 PointerEvent**：三个触发源里有两个根本没有真实指针事件，此前各自
+   * `new PointerEvent('pointercancel')` 伪造一个再走 handleGlobalPointerCancel，而伪造事件的
+   * pointerId 恒为 0、pointerType 恒为 ''，过不了 isEventForActivePointer 的活动指针比对
+   * （Chromium 鼠标 pointerId=1、触摸 ≥2），两条兜底**从来没真正执行过**——拖到一半切走窗口再
+   * 回来，拖拽态、ghost、自动滚动与 body 上的 is-global-dragging 全部悬挂，且此后 pointermove
+   * 因 activeChord 仍在而被 preventDefault，歌词行也滑不动了。
+   *
+   * 「只认活动指针」这一层过滤只属于原生 pointercancel 监听（多指场景：第二根手指的 cancel
+   * 不该杀掉第一根手指的拖拽），故留在调用侧，不进本函数。
+   */
+  const cancelActiveSession = () => {
     clearLongPressTimer();
 
     const hadDrag = isDragging.value || wasDraggingInSession;
@@ -282,10 +292,16 @@ export function useLyricsDragDrop(scrollContainerRef?: Ref<HTMLElement | null>) 
     }
   };
 
+  /** 全局取消（原生 pointercancel）：只认活动指针，其余一律忽略 */
+  const handleGlobalPointerCancel = (e: PointerEvent) => {
+    if (!isEventForActivePointer(e)) return;
+
+    cancelActiveSession();
+  };
+
   /** 窗口失焦（如切换应用）视为拖拽取消，防止状态悬挂 */
   const handleWindowBlur = () => {
-    if (isDragging.value || activeSourceKey !== null || activeChord !== null)
-      handleGlobalPointerCancel(new PointerEvent('pointercancel'));
+    if (isDragging.value || activeSourceKey !== null || activeChord !== null) cancelActiveSession();
   };
 
   /**

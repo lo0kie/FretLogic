@@ -24,6 +24,7 @@ import {
   wrapScoreLines,
 } from './scoreExportLayout';
 import {
+  composeFooterPage,
   composeFooterPages,
   computePageLineRanges,
   packA4Pages,
@@ -32,6 +33,7 @@ import {
 } from './scoreExportPages';
 import { getHeaderHeight } from './scoreExportRender';
 
+import type { FooterPageOptions } from './scoreExportPages';
 import type { ScoreWorkerRequest, WorkerExportMessage } from './scoreExportTypes';
 
 /** 统一的错误信封：页脚合成分支与整谱渲染分支的 `catch` 逐字同形，收在此处一处维护。
@@ -42,13 +44,19 @@ const postError = (err: unknown): void =>
     message: err instanceof Error ? err.message : String(err),
   } as WorkerExportMessage);
 
-/** 分页总数已定（排版结束、逐页出图之前）：主线程据此先铺骨架，不必等第一页出图。 */
-const postPagesPlanned = (total: number): void =>
-  void self.postMessage({ type: 'pages-planned', total } as WorkerExportMessage);
+/** 分页总数已定（排版结束、逐页出图之前）：主线程据此先铺骨架，不必等第一页出图。
+ *  连同**逐页覆盖的歌词行序号**一并回带：主线程要在任何一页画出来之前，用它校验「同内容键下
+ *  已在位的那几页是否仍属于本次排版」（页数相同但分页边界挪了也能当场发现，代价为零）。 */
+const postPagesPlanned = (total: number, pageLineRanges: number[][]): void =>
+  void self.postMessage({ type: 'pages-planned', total, pageLineRanges } as WorkerExportMessage);
 
 /** 单页出图（流式上报）：与随后的 complete 是**同一批** blobs，只是早一步到达，供边出边显示。 */
 const postPage = (index: number, blob: Blob): void =>
   void self.postMessage({ type: 'page', index, blob } as WorkerExportMessage);
+
+/** 单页页脚合成图（流式上报）：与 `page` 分开成两条消息 —— 两者在缓存里是两份数据（见 scoreExportTypes） */
+const postFooterPage = (index: number, blob: Blob): void =>
+  void self.postMessage({ type: 'footer-page', index, blob } as WorkerExportMessage);
 
 /**
  * 「当下这一笔渲染已被作废」标志位与中断点都在 scoreExportAbort（消息入口与分页层共用同一个闸），
@@ -73,8 +81,11 @@ if (typeof self !== 'undefined')
         // 缓存留着，所以合成请求可能在渲染之后很久才到，而 Worker 空闲 60s 即被回收 —— 冷启动时若
         // 只依赖渲染分支的装载，页码就会按回落字体画出来。
         await ensureScoreFontsReady([SCORE_FOOTER_FONT_WEIGHT]);
-        const blobs = await composeFooterPages(payload);
-        self.postMessage({ type: 'complete', blobs, resumedFrom: 0 } as WorkerExportMessage);
+        const blobs = await composeFooterPages(payload, (index, blob) => postFooterPage(index, blob));
+        // 页脚合成不走 havePages（每次都是用户显式发起的完整合成）：blobs 与入参 pages 同序，
+        // 故页序就是入参的 pageIndexes（缺省即下标）—— 上面逐页上报用的是同一个值。
+        const renderedPages = payload.pages.map((_, i) => payload.pageIndexes?.[i] ?? i);
+        self.postMessage({ type: 'complete', blobs, renderedPages } as WorkerExportMessage);
       } catch (err) {
         postError(err);
       }
@@ -101,7 +112,8 @@ if (typeof self !== 'undefined')
         exportQuality = EXPORT_JPEG_QUALITY,
         pageMargin = LAYOUT.PAGE_MARGIN,
         pageSize = 'a4',
-        resumeFrom: resumeFromRequested = 0,
+        havePages = [],
+        embedFooterPages = false,
       } = payload;
 
       // 导出单页尺寸：按档位解析宽高（A4 / A5 / Letter），仅 A4 分页模式使用
@@ -142,8 +154,13 @@ if (typeof self !== 'undefined')
       const blobs: Blob[] = [];
       // a4 模式下每页覆盖的原始歌词行序号；normal 模式不产出
       let pageLineRanges: number[][] | undefined;
-      // a4 模式下本次实际跳过的前导页数（续跑）；normal 模式恒为 0（它只有一页）
-      let resumedFromPages = 0;
+      // 本次实际画出来的页序（与 blobs 同序）：被 havePages 跳过的页不在其中。调用方据此把 blobs
+      // 逐页归位，而不是假定它们从第 0 页起连续 —— 逐页化之后「洞」是常态。
+      const renderedPages: number[] = [];
+      // 调用方声明「这几页的图已在我手上」（同内容键）：直接跳过它们的绘制与 JPEG 编码 ——
+      // 那是整笔渲染里最贵的一段。这里只认页序，页数与逐页内容是否仍与本次排版一致，由调用方
+      // 按 pages-planned 回带的行范围自己判定（见 scoreExportTypes 的 havePages）。
+      const have = new Set(havePages);
 
       if (mode === 'a4') {
         // ===== 单页分页模式（尺寸按档位 A4 / A5 / Letter） =====
@@ -163,18 +180,25 @@ if (typeof self !== 'undefined')
         // 每页覆盖的原始歌词行序号（升序去重）
         pageLineRanges = computePageLineRanges(pages);
 
+        // 预览开着页脚时逐页顺带合成（见 WorkerExportPayload.embedFooterPages）：
+        // 页码色与页脚合成分支同源（导出配色 SUB_TEXT），质量与页面渲染同档
+        const footerOpts: FooterPageOptions = {
+          width: pageW,
+          height: pageH,
+          pageMargin,
+          color: colors.SUB_TEXT,
+          quality: jpegQuality,
+        };
+
         // 页数先报出去：装箱是纯排版、逐页出图才是耗时大头，故「有 N 页」这件事远早于「第 1 页画好」。
         // 主线程收到即铺 N 个骨架槽位，之后每出一页填一个 —— 超长谱不必再等整批。
-        // 续跑时它仍是**总页数**（而非待画页数）：调用方要靠它与自己那份半成品记录的页数比对，
-        // 不符即判「前段页序已失效」（内容键漏了某个影响分页的维度）并整段从零重跑。
-        postPagesPlanned(pages.length);
+        // 行范围与页数同批送出：调用方要靠它校验自己那份已在位的页序是否仍属于本次排版，不符即整段
+        // 从零重跑（内容键漏了某个影响分页的维度时，这是唯一的兜底）。
+        postPagesPlanned(pages.length, pageLineRanges);
 
-        // 续跑起点：前若干页的图在调用方手上，这里只补 [resumeFrom, pages.length) —— 逐页绘制与
-        // JPEG 编码是整笔里最贵的一段，跳过它才叫真的续跑。夹到页数内只是不越界；越界/不符的真相
-        // 由调用方按上面的总页数判定，这里不自作聪明。
-        resumedFromPages = Math.max(0, Math.min(resumeFromRequested, pages.length));
-
-        for (let pIdx = resumedFromPages; pIdx < pages.length; pIdx++) {
+        for (let pIdx = 0; pIdx < pages.length; pIdx++) {
+          // 调用方手上已有这一页：本轮它根本没有活儿可干（不绘制、不编码、不产生 await 边界）
+          if (have.has(pIdx)) continue;
           // 每页开画前查一次：拦住「上一页编码期间（或更早）被作废」—— 切歌后这一笔的产物必然丢弃，
           // 没必要把剩下的页继续画完、继续占着渲染线程。中断只能落在 await 边界上，逐页的
           // convertToBlob 就是本循环仅有的边界（循环末尾那次见下）。
@@ -202,37 +226,49 @@ if (typeof self !== 'undefined')
           // 不必克隆过线程再让主线程按 token 丢掉 —— 中断在这里比拖到下一轮页边界更省一次结构化克隆
           throwIfAborted();
           blobs.push(blob);
+          renderedPages.push(pIdx);
           // 出一页报一页（与上面那句「页数先报」配对）：主线程收到即把对应骨架换成真图
           postPage(pIdx, blob);
+          // 顺带合成页脚（预览专用）：页脚层与页图在缓存里是两份数据，故两个都发 —— 页图先发
+          // （页面立刻上屏），页脚层随后到（页码随即补上）。整批另起一笔合成的老做法会让页码
+          // 等到整谱渲染**结束之后**才开始出现（两者共用同一张整页画布，不可能并行）。
+          // 顺序 await 是硬约束：并行会互相清掉对方的画布内容。
+          if (embedFooterPages) {
+            throwIfAborted();
+            postFooterPage(pIdx, await composeFooterPage(blob, pIdx, footerOpts));
+          }
         }
       } else {
         // ===== 普通长图模式（画布宽度自适应实际最宽行，左右对称 pageMargin 页边距，彻底消除右侧空白） =====
         // 长图恒为一页，故这里没有「先报总数」的信息价值；两条上报只为与分页模式的调用口径统一，
-        // 消费方不必按模式分支判断「会不会收到流式消息」
-        postPagesPlanned(1);
-        const blob = await renderLongImageBlob(
-          lines,
-          title,
-          singer,
-          keyText,
-          capoText,
-          timeSignatureText,
-          colors,
-          layoutAlign ?? 'start',
-          showBarre,
-          lyricsFontWeight,
-          jpegQuality,
-          pageMargin,
-          ignoreEmptySpaceMode
-        );
-        blobs.push(blob);
-        postPage(0, blob);
+        // 消费方不必按模式分支判断「会不会收到流式消息」。行范围给空数组：长图不分页，无行序可谈。
+        postPagesPlanned(1, []);
+        if (!have.has(0)) {
+          const blob = await renderLongImageBlob(
+            lines,
+            title,
+            singer,
+            keyText,
+            capoText,
+            timeSignatureText,
+            colors,
+            layoutAlign ?? 'start',
+            showBarre,
+            lyricsFontWeight,
+            jpegQuality,
+            pageMargin,
+            ignoreEmptySpaceMode
+          );
+          blobs.push(blob);
+          renderedPages.push(0);
+          postPage(0, blob);
+        }
       }
 
       self.postMessage({
         type: 'complete',
         blobs,
-        resumedFrom: resumedFromPages,
+        renderedPages,
         pageLineRanges,
       } as WorkerExportMessage);
     } catch (err) {

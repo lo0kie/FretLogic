@@ -16,10 +16,11 @@
  *   脚本会原样转发 method / headers（含 Authorization）/ body 到目标。
  *
  * 安全默认值（仅本地开发，勿暴露公网）：
- *   - 默认只绑定 127.0.0.1（PROXY_HOST 可改）
+ *   - 默认双栈监听 `::`（IPv6 与 IPv4-mapped 都收，见下方 HOST 处说明；PROXY_HOST 可收窄到 127.0.0.1）
  *   - 默认拒绝转发到内网/回环目标（SSRF 防护；PROXY_ALLOW_PRIVATE=1 放开）
  *   - CORS 仅对 localhost 来源回显（PROXY_ALLOWED_ORIGINS 可加白名单）
  *   - PROXY_ALLOWED_HOSTS 可进一步把目标限制到指定主机
+ *   - 跨 host 重定向时剥离 Authorization，避免凭据随重定向外泄
  */
 import http from 'node:http';
 import https from 'node:https';
@@ -130,7 +131,7 @@ async function forward(req, res) {
   const reqUrl = new URL(req.url ?? '/', 'http://localhost');
   const target = reqUrl.searchParams.get('url');
   if (!target) {
-    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.writeHead(400, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
     res.end('Missing "url" query parameter');
     return;
   }
@@ -139,17 +140,17 @@ async function forward(req, res) {
   try {
     parsed = new URL(target);
   } catch {
-    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.writeHead(400, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
     res.end('Invalid "url"');
     return;
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.writeHead(400, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
     res.end('Only http(s) targets allowed');
     return;
   }
   if (ALLOWED_HOSTS.length && !ALLOWED_HOSTS.includes(parsed.host)) {
-    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.writeHead(403, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
     res.end(`Target host not allowed: ${parsed.host}`);
     return;
   }
@@ -261,7 +262,7 @@ const server = http.createServer((req, res) => {
   forward(req, res).catch(err => {
     // forward 内部已处理可预期错误，这里只兜底未捕获异常，避免进程崩溃
     if (!res.headersSent) {
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.writeHead(500, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
     }
     res.end(`Proxy internal error: ${err.message}`);
   });

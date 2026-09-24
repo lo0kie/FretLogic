@@ -20,7 +20,7 @@ import {
 } from '@/domains/score/constants';
 import { useScoreLinesData } from '@/domains/score/editor/composables/useScoreLinesData';
 import { useScoreEditorStore } from '@/domains/score/editor/store/scoreEditorStore';
-import { currentRenderData, readA4PageBlob } from '@/domains/score/preview/scorePreviewCache';
+import { currentRenderData, inPlaceIndexes, isComplete, pageBlob } from '@/domains/score/preview/scorePreviewCache';
 import { buildScoreRenderCacheKey } from '@/domains/score/preview/scoreRenderCacheKey';
 import { runWorkerExport } from '@/domains/score/preview/services/workerExportService';
 import { useScoreRenderPayload } from '@/domains/score/preview/useScoreRenderPayload';
@@ -210,19 +210,12 @@ export const handleScorePrint = () => {
 /** 取 A4 分页 Blob（PDF / ZIP 导出复用预览已渲染结果 + 按需合成页脚） */
 const getA4Blobs = async (): Promise<Blob[]> => {
   const data = currentRenderData.value;
-  if (data && data.a4Urls.length > 0) {
-    const cached = await Promise.all(data.a4Urls.map(readA4PageBlob));
-    // 必须把幸存页的真实下标传给页脚合成：只传过滤后数组会让少一页之后的所有页码整体前移
-    const pageIndexes = cached.reduce<number[]>((acc, blob, idx) => {
-      if (blob !== null) acc.push(idx);
-      return acc;
-    }, []);
-    return composePageFooter(
-      cached.filter((blob): blob is Blob => blob !== null),
-      pageIndexes,
-      data.pageSize,
-      data.pageMargin
-    );
+  // 只有**完整**条目才配直接充当导出产物：逐页化之后条目允许有洞（被打断的那一轮留下的），
+  // 拿缺页的条目去导出会静默少几页 —— 宁可重渲染一次换整批。完整即无洞，故页序就是 [0, total)。
+  if (data && isComplete(data)) {
+    const indexes = inPlaceIndexes(data);
+    const blobs = indexes.map(index => pageBlob(data, index)!);
+    return composePageFooter(blobs, indexes, data.pageSize, data.pageMargin);
   }
   const { blobs } = await runWorkerExport(buildRenderPayload('a4'));
   if (blobs.length === 0) throw new Error('未能生成有效的导出图片');

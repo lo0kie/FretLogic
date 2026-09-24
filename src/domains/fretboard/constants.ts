@@ -52,16 +52,17 @@ export const clampDrawFretCount = (fretCount: number | null | undefined): number
 
 /** 各品数下浮动操作栏的 bottom 定位（画布随品数增高，栏位随之贴近底部） */
 export const FRET_COUNT_BAR_BOTTOM_MAP: Record<number, string> = {
-  3: '5rem',
-  4: '3.5rem',
-  5: '2.5rem',
+  3: '3rem',
+  4: '2.5rem',
+  5: '1.5rem',
 };
 /** 取品数对应的浮动栏 bottom；未登记的品数回退到最高档（画布最高，栏位最贴底） */
 export const getFloatingBarBottom = (fretCount: number): string => {
   const exact = FRET_COUNT_BAR_BOTTOM_MAP[fretCount];
   if (exact) return exact;
   const tallest = Math.max(...FRET_COUNTS);
-  return FRET_COUNT_BAR_BOTTOM_MAP[tallest] ?? '3.5rem';
+
+  return FRET_COUNT_BAR_BOTTOM_MAP[tallest] ?? '3rem';
 };
 
 /** 基准琴弦间距（px）：先提出为独立常量，供宽度推导引用（对象字面量内部取不到自身字段） */

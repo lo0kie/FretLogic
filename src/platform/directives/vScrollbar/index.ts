@@ -104,6 +104,37 @@ const buildState = (
   };
 };
 
+/**
+ * 本指令补过 `position: relative` 的父元素及其**持有计数**。
+ *
+ * 补的是**内联**样式，而父元素并非指令所有 —— 卸载时必须归还，否则宿主父元素被永久改成定位容器
+ * （其后代里任何 `position: absolute` 都会改以它为基准，而它本不该是）。计数是为「多宿主共用同一
+ * 父元素」的场合：只有最后一个持有者撤出时才撤，否则先卸载的那个会把仍在用的定位上下文抽走。
+ */
+const overlayPositionOwners = new WeakMap<HTMLElement, number>();
+
+/** 取用父元素的定位上下文；页面本就把父元素定为定位容器时不接管（不计数，故也不归还） */
+const acquireOverlayPosition = (parent: HTMLElement): void => {
+  const owned = overlayPositionOwners.get(parent) ?? 0;
+  if (owned === 0) {
+    if (getComputedStyle(parent).position !== 'static') return;
+    parent.style.position = 'relative';
+  }
+  overlayPositionOwners.set(parent, owned + 1);
+};
+
+/** 归还定位上下文；最后一个持有者撤出时才摘掉内联 position */
+const releaseOverlayPosition = (parent: HTMLElement): void => {
+  const owned = overlayPositionOwners.get(parent) ?? 0;
+  if (owned === 0) return;
+  if (owned > 1) {
+    overlayPositionOwners.set(parent, owned - 1);
+    return;
+  }
+  overlayPositionOwners.delete(parent);
+  parent.style.removeProperty('position');
+};
+
 const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?: Record<string, boolean>): void => {
   const options = binding ?? {};
   const parent = resolveOverlayParent(host, options);
@@ -113,9 +144,8 @@ const mountScrollbar = (host: HTMLElement, binding: ScrollbarBinding, modifiers?
   const state = buildState(host, parent, binding, modifiers);
   states.set(host, state);
 
-  // overlay 元素挂宿主父元素；父元素需为定位容器（static 时补 relative）
-  const pos = getComputedStyle(parent).position;
-  if (pos === 'static') parent.style.position = 'relative';
+  // overlay 元素挂宿主父元素；父元素需为定位容器（static 时补 relative，卸载时归还，见 acquireOverlayPosition）
+  acquireOverlayPosition(parent);
   host.classList.add(HOST_CLASS);
   // 内联隐藏原生滚动条：Vue patch 会重写 className 抹掉宿主类（切换 tab 时原生滚动条闪现），
   // 内联属性不受 patch 影响；::-webkit-scrollbar 仍靠宿主类兜底（伪元素无法内联设置）
@@ -179,6 +209,8 @@ const unmountScrollbar = (host: HTMLElement): void => {
   // scrolling box 并丢弃 scrollTop。而卸载发生时元素往往仍在 DOM 中、且正在播放离场动画
   // （如浮层关闭的 scale 淡出），内容会瞬间跳回顶部，肉眼可见。
   // 元素即将被移除，这些内联样式本就随节点一起消失，保留它们没有副作用。
+  // 定位上下文是例外：它补在**父元素**上（不是宿主自己），不随宿主移除而消失，必须显式归还。
+  releaseOverlayPosition(state.parent);
   states.delete(host);
 };
 

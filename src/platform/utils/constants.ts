@@ -122,12 +122,6 @@ export const STORAGE_KEYS = {
   IS_CREATING: 'CHORD_LAB_IS_CREATING',
   /** 横按自动标记开关（持久化，刷新后保留） */
   AUTO_BARRE: 'CHORD_LAB_AUTO_BARRE',
-  /** 是否处于多指法选择模式 */
-  IS_MULTI_FINGERING: 'CHORD_LAB_IS_MULTI_FINGERING',
-  /** 多指法当前选中索引 */
-  MULTI_FINGERING_INDEX: 'CHORD_LAB_MULTI_FINGERING_INDEX',
-  /** 多指法候选和弦列表 */
-  MULTI_FINGERING_CHORDS: 'CHORD_LAB_MULTI_FINGERING_CHORDS',
 
   // ---- 应用级偏好 ----
   /** 工作台：是否启用和弦名简写（如 maj7->M7, dim->° 等） */
@@ -190,18 +184,6 @@ export const STORAGE_KEYS = {
   SCORE_PAGE_MARGIN: 'CHORD_LAB_SCORE_PAGE_MARGIN_V1',
   /** 预览/导出：标准单页尺寸档位（a4 / a5 / letter，默认 a4） */
   SCORE_PAGE_SIZE: 'CHORD_LAB_SCORE_PAGE_SIZE_V1',
-  /** 谱面字号缩放 */
-  SCORE_SCALE: 'CHORD_LAB_SCORE_SCALE_V1',
-  /** 谱面行高缩放 */
-  SCORE_LINE_HEIGHT_SCALE: 'CHORD_LAB_SCORE_LINE_HEIGHT_SCALE_V1',
-  /** 谱面网格对齐（和弦自动吸附到字符正上方） */
-  SCORE_SNAP_TO_GRID: 'CHORD_LAB_SCORE_SNAP_TO_GRID_V1',
-  /** 谱面行间距基准（rem） */
-  SCORE_LINE_GAP: 'CHORD_LAB_SCORE_LINE_GAP_V1',
-  /** 谱面段落间距基准（rem） */
-  SCORE_SECTION_GAP: 'CHORD_LAB_SCORE_SECTION_GAP_V1',
-  /** 谱面左右边距基准（rem） */
-  SCORE_PAGE_PADDING: 'CHORD_LAB_SCORE_PAGE_PADDING_V1',
   /** 左侧栏开合状态 */
   UI_LEFT_OPEN: 'CHORD_LAB_UI_LEFT_OPEN',
 

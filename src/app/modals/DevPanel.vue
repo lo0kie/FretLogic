@@ -421,7 +421,13 @@ import BaseModal from '@/platform/ui/modal/BaseModal.vue';
 import BaseSegmentedControl from '@/platform/ui/segmented/BaseSegmentedControl.vue';
 import { useChordStore } from '@/domains/chord/store/chordStore';
 import { useSongStore } from '@/domains/score/library/store/songStore';
-import { clearPreviewCache, currentRenderData } from '@/domains/score/preview/scorePreviewCache';
+import {
+  clearPreviewCache,
+  currentRenderData,
+  entryBytes,
+  inPlaceIndexes,
+  pageBlob,
+} from '@/domains/score/preview/scorePreviewCache';
 import { useStickyHeads } from '@/platform/composables/useStickyHeads';
 import { idb, SCHEMA } from '@/platform/services/storage/idb';
 import { useUiStore } from '@/platform/store/uiStore';
@@ -642,36 +648,40 @@ const clearMemoryCache = (cache: CacheStat) => {
 
 const hasPreviewCache = computed(() => Boolean(currentRenderData.value));
 
-const previewPageCount = computed(() => (currentRenderData.value ? `${currentRenderData.value.a4Urls.length}` : '—'));
+const previewPageCount = computed(() => (currentRenderData.value ? `${currentRenderData.value.total}` : '—'));
 
 const previewSizeText = computed(() => {
   const data = currentRenderData.value;
-  const sizes = data?.a4Sizes;
-  if (!sizes || sizes.length === 0) return data ? '0 B' : '—';
-  // 含页脚合成层（若已生成）：它是同一批页面的第二份 JPEG，漏掉就会把实际占用报成一半
-  // （与缓存内存配额记账同口径，见 scorePreviewCache 的 weigh）
-  const footerBytes = (data?.footerBlobs ?? []).reduce((sum, blob) => sum + blob.size, 0);
-  return formatBytes(sizes.reduce((sum, n) => sum + n, 0) + footerBytes);
+  if (!data) return '—';
+  // entryBytes 含页脚合成层（若已生成）：它是同一批页面的第二份 JPEG，漏掉就会把实际占用报成一半；
+  // 另含逐行指纹这类纯文本判据（量级极小，但同属条目占用）。与缓存内存配额记账同口径，
+  // 见 scorePreviewCache 的 weigh
+  return formatBytes(entryBytes(data));
 });
 
 /** 指标读数徽标的形态：有缓存走实底（主读数），无缓存时的占位「—」走描边弱化。
  *  语义色统一中性——面板内读数不用主色 */
 const previewValueAppearance = computed(() => (hasPreviewCache.value ? 'subtle' : 'outline'));
 
-/** 分页明细：条长按各页相对最大页的比例（最小 4% 保证小页仍可见） */
+/** 分页明细：条长按各页相对最大页的比例（最小 4% 保证小页仍可见）。
+ *  只列**已在位**的页：逐页化之后条目允许有洞，洞没有字节数可报 */
 const previewPages = computed(() => {
-  const sizes = currentRenderData.value?.a4Sizes ?? [];
-  const max = Math.max(...sizes, 0);
-  return sizes.map((bytes, i) => ({
-    label: `第 ${i + 1} 页`,
+  const data = currentRenderData.value;
+  if (!data) return [];
+  const sizes = inPlaceIndexes(data).map(index => ({ index, bytes: pageBlob(data, index)?.size ?? 0 }));
+  const max = sizes.reduce((acc, item) => Math.max(acc, item.bytes), 0);
+  return sizes.map(({ index, bytes }) => ({
+    label: `第 ${index + 1} 页`,
     text: formatBytes(bytes),
     pct: max > 0 ? Math.max(4, Math.round((bytes / max) * 100)) : 4,
   }));
 });
 
 const previewHintText = computed(() => {
-  if (!currentRenderData.value) return '暂无渲染结果';
-  return `共 ${currentRenderData.value.a4Urls.length} 页，占内存（非磁盘存储）`;
+  const data = currentRenderData.value;
+  if (!data) return '暂无渲染结果';
+  const holes = data.total - inPlaceIndexes(data).length;
+  return `共 ${data.total} 页${holes > 0 ? `（${holes} 页待渲染）` : ''}，占内存（非磁盘存储）`;
 });
 
 const handleClearPreviewCache = () => {
